@@ -133,9 +133,10 @@ data: [DONE]                                                             → 终
 | `Messages[mrAssistant].pkText` | `{type:"text"}` 块 |
 | `pkThinking` | `{type:"thinking", thinking, signature}`（signature 原样透传，见 Q-A3） |
 | `pkToolCall` | `{type:"tool_use", id, name, input:<折叠后的 JSON 对象>}` |
-| `Messages[mrTool].pkToolResult` | 归并为**一条** `{role:"user", content:[{type:"tool_result", tool_use_id, content, is_error}]}`（Q-A4 分组规则） |
+| `Messages[mrTool].pkToolResult` | 归并为**一条** `{role:"user", content:[{type:"tool_result", tool_use_id, content}]}`（Q-A4 分组规则）；`is_error` 遵循哨兵纪律仅失败时上送 true |
 | `Tools` 非空（AReq.Tools） | `tools:[{name, description, input_schema}]`；空数组不上送字段 |
 | `Temperature` ≥0 | `temperature` |
+| `TopP` ≥0 | `top_p` |
 | `Seed` ≠ CSeedUnset | 无对应参数：忽略 + debug 日志（与 ParallelToolCalls 同规则）|
 | `StopSequences` | `stop_sequences` |
 | `Thinking` 三态 / Budget | `thinking:{"type":"enabled","budget_tokens":N}`；tsFalse 显式 `{"type":"disabled"}`；tsUnset 不上送；**tsTrue 而 Budget unset → aecConfig**（anthropic 强制 budget_tokens）|

@@ -11,14 +11,14 @@ uses
   nextpas.core.agent.intf,
   nextpas.core.agent.fold,
   nextpas.core.agent.provider.openai,
+  nextpas.core.agent.provider.anthropic,
   agent.testkit,
   nextpas.core.test;
 
-{ 公开编解码器（D13；TESTING §3 test_codecs 行，openai 部分）：
-  wire→Decode→词表→Encode 语义等价往返（Extra 保真）、未映射枚举→零值+
-  agent.unmapped.*+warn、协议违例抛 aecProtocol 带 RawBodySnippet、
-  跨断裂帧与 Finalize 双序等价、网关式双角色并行解码互不污染。
-  anthropic 对应条目随 W2 落位 }
+{ 公开编解码器（D13；TESTING §3 test_codecs 行）：wire→Decode→词表→Encode
+  语义等价往返（Extra 保真）、未映射枚举→零值+agent.unmapped.*+warn、协议
+  违例抛 aecProtocol 带 RawBodySnippet、跨断裂帧与 Finalize 双序等价、
+  网关式双角色并行解码互不污染。openai 与 anthropic 各自成套 }
 
 const
   CWireRich =
@@ -253,6 +253,217 @@ begin
   CheckEqual('r2', A2[0].MessageId, 'no cross pollution');
 end;
 
+{ ---- anthropic 套件（WIRE-MAPPINGS §2；D13 编解码器契约同表）---- }
+
+const
+  CWireAnthropicRich =
+    '{"id":"rt-a","type":"message","role":"assistant","model":"cm",' +
+    '"container":{"x":1},' +
+    '"content":[{"type":"text","text":"plan:"},' +
+    '{"type":"tool_use","id":"toolu_a","name":"calc","input":{"n":1}}],' +
+    '"stop_reason":"tool_use","stop_sequence":null,' +
+    '"usage":{"input_tokens":9,"output_tokens":11}}';
+
+procedure FeedEv(D: IAgentWireDecoder; const AEvent, AData: string;
+  var AAll: TStreamDeltaArray);
+var
+  Arr: TStreamDeltaArray;
+  E: TWireSSEEvent;
+  I: Integer;
+begin
+  E := Default(TWireSSEEvent);
+  E.Event := AEvent;
+  E.Data := AData;
+  D.DecodeEvent(E, Arr);
+  for I := 0 to High(Arr) do
+  begin
+    SetLength(AAll, Length(AAll) + 1);
+    AAll[High(AAll)] := Arr[I];
+  end;
+end;
+
+procedure TestAnthropicRoundtripExtraFidelity;
+var
+  M: TMessage;
+  Req: TCompletionRequest;
+  Encoded: IJsonDocument;
+  LAsst, LBlocks: TJsonValue;
+begin
+  DecodeAnthropicResponse(CWireAnthropicRich, M, nil);
+  CheckEqual('plan:', MessageText(M), 'decode text');
+  Check(M.FinishReason = frToolCalls, 'decode finish');
+
+  { 词表作为历史 → 编码回 wire：语义等价 + Extra 保真 }
+  Req := TCompletionRequest.New('cm');
+  Req.MaxTokens := 64;
+  SetLength(Req.Messages, 1);
+  Req.Messages[0] := M;
+  Encoded := JsonParse(EncodeAnthropicRequest(Req, False));
+  Check(not Encoded.HasError, 're-encode parses');
+  LAsst := Encoded.Root.Get('messages').ArrayGet(0);
+  CheckEqual('assistant', LAsst.Get('role').AsStr.ToString, 'role kept');
+  LBlocks := LAsst.Get('content');
+  CheckEqual('plan:',
+    LBlocks.ArrayGet(0).Get('text').AsStr.ToString, 'text kept');
+  CheckEqual('calc',
+    LBlocks.ArrayGet(1).Get('name').AsStr.ToString, 'tool name kept');
+  CheckEqual('{"n":1}',
+    JsonStringify(LBlocks.ArrayGet(1).Get('input')),
+    'input stays a real object (no re-quoting)');
+  { root 未消费键无损并入消息级 Extra 回注 }
+  Check(Pos('"container"', JsonStringify(LAsst)) > 0,
+    'root-level extra reinjected into message');
+end;
+
+procedure TestAnthropicViolationCarriesSnippet;
+var
+  M: TMessage;
+  Arr: TStreamDeltaArray;
+  E: TWireSSEEvent;
+  OkBody, OkFrame: Boolean;
+begin
+  OkBody := False;
+  try
+    DecodeAnthropicResponse('{broken', M, nil);
+  except
+    on Ex: EAgentError do
+      OkBody := (Ex.ErrorCode = aecProtocol) and
+        (Ex.RawBodySnippet = '{broken');
+  end;
+  Check(OkBody, 'body violation carries raw snippet');
+
+  OkFrame := False;
+  E := Default(TWireSSEEvent);
+  E.Event := 'message_start';
+  E.Data := '[1,2]';
+  try
+    NewAnthropicWireDecoder(nil).DecodeEvent(E, Arr);
+  except
+    on Ex: EAgentError do
+      OkFrame := (Ex.ErrorCode = aecProtocol) and
+        (Ex.RawBodySnippet = '[1,2]');
+  end;
+  Check(OkFrame, 'frame violation carries frame snippet');
+end;
+
+procedure TestAnthropicCrossBrokenFrameEquivalence;
+var
+  D1, D2: IAgentWireDecoder;
+  A1, A2: TStreamDeltaArray;
+  I: Integer;
+  Same: Boolean;
+begin
+  { 同一逻辑事件：单行 data vs 在 JSON 空白处断裂成多行 —— 归约等价 }
+  D1 := NewAnthropicWireDecoder(nil);
+  D2 := NewAnthropicWireDecoder(nil);
+  A1 := nil;
+  A2 := nil;
+  FeedEv(D1, 'message_start',
+    '{"type":"message_start","message":{"id":"k","model":"km"}}', A1);
+  FeedEv(D2, 'message_start',
+    '{"type":"message_start",'#10'"message":{'#10'"id":"k","model":"km"}}',
+    A2);
+  Same := Length(A1) = Length(A2);
+  if Same then
+    for I := 0 to High(A1) do
+      if (A1[I].Kind <> A2[I].Kind) or
+        (A1[I].MessageId <> A2[I].MessageId) then
+        Same := False;
+  Check(Same and (Length(A1) = 1), 'broken-frame events reduce equally');
+end;
+
+procedure TestAnthropicFinalizeOrderEquivalence;
+var
+  D1, D2: IAgentWireDecoder;
+  A1, A2, Fin: TStreamDeltaArray;
+  M1, M2: TMessage;
+
+  procedure RunSeq(D: IAgentWireDecoder; ADeltaEarly: Boolean;
+    out AArr: TStreamDeltaArray);
+  begin
+    AArr := nil;
+    FeedEv(D, 'message_start',
+      '{"type":"message_start","message":{"id":"o","model":"om",' +
+      '"usage":{"input_tokens":6}}}', AArr);
+    FeedEv(D, 'content_block_start',
+      '{"type":"content_block_start","index":0,' +
+      '"content_block":{"type":"text","text":""}}', AArr);
+    FeedEv(D, 'content_block_delta',
+      '{"type":"content_block_delta","index":0,' +
+      '"delta":{"type":"text_delta","text":"t"}}', AArr);
+    if ADeltaEarly then
+      { message_delta 提前到块收尾之前：stash 语义下必须等价 }
+      FeedEv(D, 'message_delta',
+        '{"type":"message_delta","delta":{"stop_reason":"end_turn"},' +
+        '"usage":{"output_tokens":8}}', AArr);
+    FeedEv(D, 'content_block_stop',
+      '{"type":"content_block_stop","index":0}', AArr);
+    if not ADeltaEarly then
+      FeedEv(D, 'message_delta',
+        '{"type":"message_delta","delta":{"stop_reason":"end_turn"},' +
+        '"usage":{"output_tokens":8}}', AArr);
+    FeedEv(D, 'message_stop', '{"type":"message_stop"}', AArr);
+    D.Finalize(Fin);
+    AppendAll(AArr, Fin);
+  end;
+
+begin
+  D1 := NewAnthropicWireDecoder(nil);
+  D2 := NewAnthropicWireDecoder(nil);
+  RunSeq(D1, True, A1);
+  RunSeq(D2, False, A2);
+  FoldDeltas(A1, M1);
+  FoldDeltas(A2, M2);
+  Check(MessageText(M1) = MessageText(M2), 'text order-independent');
+  Check((M1.FinishReason = frStop) and (M2.FinishReason = frStop),
+    'stashed stop_reason applies in both orders');
+  Check((M1.Usage.InputTokens = 6) and (M2.Usage.InputTokens = 6) and
+    (M1.Usage.OutputTokens = 8) and (M2.Usage.OutputTokens = 8),
+    'Q-A2 dual-source usage order-independent');
+end;
+
+procedure TestAnthropicParallelDecodersIndependent;
+var
+  D1, D2: IAgentWireDecoder;
+  A1, A2: TStreamDeltaArray;
+  I: Integer;
+  T1, T2: string;
+begin
+  { 网关双角色：两个 anthropic 解码器交错喂帧，状态互不污染 }
+  D1 := NewAnthropicWireDecoder(nil);
+  D2 := NewAnthropicWireDecoder(nil);
+  A1 := nil;
+  A2 := nil;
+  FeedEv(D1, 'message_start',
+    '{"type":"message_start","message":{"id":"r1","model":"m"}}', A1);
+  FeedEv(D2, 'message_start',
+    '{"type":"message_start","message":{"id":"r2","model":"m"}}', A2);
+  FeedEv(D1, 'content_block_start',
+    '{"type":"content_block_start","index":0,' +
+    '"content_block":{"type":"text","text":""}}', A1);
+  FeedEv(D2, 'content_block_start',
+    '{"type":"content_block_start","index":0,' +
+    '"content_block":{"type":"text","text":""}}', A2);
+  FeedEv(D1, 'content_block_delta',
+    '{"type":"content_block_delta","index":0,' +
+    '"delta":{"type":"text_delta","text":"1a"}}', A1);
+  FeedEv(D2, 'content_block_delta',
+    '{"type":"content_block_delta","index":0,' +
+    '"delta":{"type":"text_delta","text":"2b"}}', A2);
+  T1 := '';
+  T2 := '';
+  for I := 0 to High(A1) do
+    if A1[I].Kind = sdkTextDelta then
+      T1 := T1 + A1[I].TextDelta;
+  for I := 0 to High(A2) do
+    if A2[I].Kind = sdkTextDelta then
+      T2 := T2 + A2[I].TextDelta;
+  CheckEqual('1a', T1, 'decoder one stream intact');
+  CheckEqual('2b', T2, 'decoder two stream intact');
+  CheckEqual('r1', A1[0].MessageId, 'envelope ownership kept');
+  CheckEqual('r2', A2[0].MessageId, 'no cross pollution');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -263,5 +474,15 @@ begin
   T.Test('cross broken frame equivalence', @TestCrossBrokenFrameEquivalence);
   T.Test('finalize order equivalence', @TestFinalizeOrderEquivalence);
   T.Test('parallel decoders independent', @TestParallelDecodersIndependent);
+  T.Test('anthropic roundtrip extra fidelity',
+    @TestAnthropicRoundtripExtraFidelity);
+  T.Test('anthropic violation carries snippet',
+    @TestAnthropicViolationCarriesSnippet);
+  T.Test('anthropic cross broken frame equivalence',
+    @TestAnthropicCrossBrokenFrameEquivalence);
+  T.Test('anthropic finalize order equivalence',
+    @TestAnthropicFinalizeOrderEquivalence);
+  T.Test('anthropic parallel decoders independent',
+    @TestAnthropicParallelDecodersIndependent);
   if not T.Run then Halt(1);
 end.

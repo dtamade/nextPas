@@ -58,7 +58,7 @@
 | `nextpas.core.agent.transport.http.pas` | 传输 | 生产 IAgentTransport：http client 发请求；非流式读全响应体；流式经 IReader 逐块喂 agent.sse | intf, http.client, sse, errors |
 | `nextpas.core.agent.provider.common.pas` | 适配支撑 | 适配器共享 helper：wire JSON 组装/读取、SSE data 帧→delta 的公共骨架、Extra 无损捕获、帧序 FSM 骨架 | base, errors, json, intf |
 | `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-O1..O7 全部落码+gate | base, errors, intf, common, transport, fold, json, json.builder, text.builder, os.env |
-| `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；同上公开编解码器 | common, transport, intf |
+| `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-A1..A8 全部落码+gate（含 Q-A8 截断 fail-closed 与流中途 error→sdkError） | base, errors, intf, common, transport, fold, json, json.builder, text.builder, text.conv, os.env |
 | `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold, json |
 | `nextpas.core.agent.tools.pas` | 工具 | 参数校验（§1.5 规范）、结果截断信封、executor 包装（超时/取消） | base, intf, json, text |
 | `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转/引导收尾；全部工具经 IThreadPool（LIFECYCLE §5，D14/C9） | intf, fold, tools, errors, thread, json |

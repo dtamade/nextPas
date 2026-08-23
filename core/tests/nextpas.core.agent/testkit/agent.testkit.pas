@@ -38,6 +38,7 @@ type
   private
     FResponses: TScriptResponseArray;
     FNext: Integer;
+    FServed: Integer;
     FLastRequest: TWireRequest;
     FProviderName: string;           { 上游错误归因名（生产为适配器传入）}
     function PopNext: TScriptResponse;
@@ -46,6 +47,8 @@ type
     procedure Add(const AResp: TScriptResponse);
     { 最近一次请求快照（URL/头/体断言用）}
     function LastRequest: TWireRequest;
+    { 已发出的 wire 请求数（拒绝路径"未发请求"断言用）}
+    function ServedCount: Integer;
     property ProviderName: string read FProviderName write FProviderName;
     { IAgentTransport }
     procedure RoundTrip(const AReq: TWireRequest; out AResp: TWireResponse);
@@ -120,6 +123,11 @@ begin
   Result := FLastRequest;
 end;
 
+function TScriptedTransport.ServedCount: Integer;
+begin
+  Result := FServed;
+end;
+
 procedure TScriptedTransport.Add(const AResp: TScriptResponse);
 var
   LN: Integer;
@@ -143,6 +151,7 @@ procedure TScriptedTransport.RoundTrip(const AReq: TWireRequest;
 var
   LScript: TScriptResponse;
 begin
+  Inc(FServed);
   FLastRequest := AReq;
   LScript := PopNext;
   if LScript.RaiseUpstream and (LScript.Status <> 200) then
@@ -159,6 +168,7 @@ function TScriptedTransport.OpenStream(
 var
   LScript: TScriptResponse;
 begin
+  Inc(FServed);
   FLastRequest := AReq;
   LScript := PopNext;
   if LScript.RaiseUpstream and (LScript.Status <> 200) then

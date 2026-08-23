@@ -21,7 +21,8 @@ uses
   nextpas.core.agent.clock,
   nextpas.core.agent.retry,
   nextpas.core.agent.provider.common,
-  nextpas.core.agent.provider.openai;
+  nextpas.core.agent.provider.openai,
+  nextpas.core.agent.provider.anthropic;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
@@ -53,6 +54,19 @@ function NewOpenAIProviderFromEnv: IAgentProvider; inline;
 function BuildGrokUrl(const ABaseUrl: string): string; inline;
 function NewGrokProvider(const AOpts: TGrokOptions): IAgentProvider; inline;
 function NewGrokProviderFromEnv: IAgentProvider; inline;
+
+{ ---- Anthropic Messages 适配器（API.md §7/§8）---- }
+
+function EncodeAnthropicRequest(const AReq: TCompletionRequest;
+  AStream: Boolean): TJsonText; inline;
+procedure DecodeAnthropicResponse(const ABody: TJsonText;
+  out AMsg: TMessage; const ALog: ILogger = nil); inline;
+function NewAnthropicWireDecoder(
+  const ALog: ILogger = nil): IAgentWireDecoder; inline;
+function BuildAnthropicUrl(const ABaseUrl: string): string; inline;
+function NewAnthropicProvider(
+  const AOpts: TAnthropicOptions): IAgentProvider; inline;
+function NewAnthropicProviderFromEnv: IAgentProvider; inline;
 
 implementation
 
@@ -118,6 +132,41 @@ end;
 function NewGrokProviderFromEnv: IAgentProvider;
 begin
   Result := nextpas.core.agent.provider.openai.NewGrokProviderFromEnv;
+end;
+
+function EncodeAnthropicRequest(const AReq: TCompletionRequest;
+  AStream: Boolean): TJsonText;
+begin
+  Result := nextpas.core.agent.provider.anthropic.EncodeAnthropicRequest(
+    AReq, AStream);
+end;
+
+procedure DecodeAnthropicResponse(const ABody: TJsonText;
+  out AMsg: TMessage; const ALog: ILogger);
+begin
+  nextpas.core.agent.provider.anthropic.DecodeAnthropicResponse(
+    ABody, AMsg, ALog);
+end;
+
+function NewAnthropicWireDecoder(const ALog: ILogger): IAgentWireDecoder;
+begin
+  Result := nextpas.core.agent.provider.anthropic.NewAnthropicWireDecoder(
+    ALog);
+end;
+
+function BuildAnthropicUrl(const ABaseUrl: string): string;
+begin
+  Result := nextpas.core.agent.provider.anthropic.BuildAnthropicUrl(ABaseUrl);
+end;
+
+function NewAnthropicProvider(const AOpts: TAnthropicOptions): IAgentProvider;
+begin
+  Result := nextpas.core.agent.provider.anthropic.NewAnthropicProvider(AOpts);
+end;
+
+function NewAnthropicProviderFromEnv: IAgentProvider;
+begin
+  Result := nextpas.core.agent.provider.anthropic.NewAnthropicProviderFromEnv;
 end;
 
 function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;

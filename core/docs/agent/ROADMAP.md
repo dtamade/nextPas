@@ -34,6 +34,15 @@
   SkipBodyBuffer/CancelToken）全部落在临时副本上——非流式碰巧能跑（直接读响应
   对象），**流式真增量从未生效**；gate 全走 scripted transport 故 W1 未暴露。
   已改链式赋值修复；test_transport_stream 新增回环硬取消两测作为真装配证据。
+- **W2 anthropic 波次发现并修复 W1/W2 内存缺陷**：两 wire 解码器持有的
+  TWireToolSlotPool 无析构（FSlots 数组含 string/IStringBuilder 托管字段，
+  对象释放不会自动终结数组），每次流式补全泄漏整池；测试侧 TCapturingLogger
+  以类变量承接 TInterfacedObject 实例（引用计数永不归零）。均由 HEAPTRC_GATE=1
+  暴露；补池析构 + 测试改接口持有后 provider 两 gate 泄漏门双绿。
+- 已知未清（后续独立 slice）：test_retry / test_transport_stream 功能全绿但
+  HEAPTRC_GATE 报少量未释放块（retry 约 37 小块；transport_stream 5 块、含
+  回环线程读缓冲 10KB×2），疑与流 worker/线程生命周期相关，修复需独立验证，
+  不并入 anthropic 提交。
 
 ## Inbox（活动输入池，非承诺）
 
