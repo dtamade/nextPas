@@ -507,7 +507,8 @@ function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   （不经曲线）。
 - 累计退避超过 `MaxTotalRetryMs` → 停止重试，抛最后一次原始错误。
 - `OnAttempt(AAttempt=即将开始的尝试序号从 1 起, ADelayMs=本次尝试前的睡眠时长,
-  首次尝试为 0, ALastError=上一次失败)`。
+  首次尝试为 0, ALastError=上一次失败)`。ALastError 实例仅在钩子调用期内
+  有效，不得留存（实现按失败快照重建等价异常）。
 - 取消优先于一切：令牌在睡眠/尝试边界触发 → 抛 `EAgentCancelled`
   （不吞为成功、不还原成原始错误）。
 - 流式作用域：装饰器只重试到**拿到流且收到首个 delta** 为止；流中途失败原样

@@ -23,7 +23,8 @@ uses
 type
   { 单个脚本响应：非流式取 BodyText；流式按 Chunks 序列投喂。
     RaiseUpstream=True 时按生产 transport 同款算法把非 2xx 归约为
-    EAgentError 抛出（含 Provider 归因与 retry-after 解析）}
+    EAgentError 抛出（含 Provider 归因与 retry-after 解析）——非流式在
+    RoundTrip 即抛，流式与生产一致延迟到首个 NextEvent 才抛 }
   TScriptResponse = record
     Status: Integer;
     Headers: TWireHeaderArray;
@@ -64,6 +65,21 @@ type
   public
     constructor Create(const AChunks: TStringArray);
     destructor Destroy; override;
+    function NextEvent(out AEvent: TWireSSEEvent): Boolean;
+    procedure Cancel;
+    function GetCancelled: Boolean;
+  end;
+
+  { 上游错误流：首个 NextEvent 抛脚本指定的 EAgentError，此后终态幂等重抛
+    （生产 TWireStream 的 wmkError 行为镜像；WithRetry 首 delta 门测试用）}
+  TScriptedFailStream = class(TInterfacedObject, IAgentWireStream)
+  private
+    FErrCode: TAgentErrorCode;
+    FErrMsg: string;
+    FDone: Boolean;
+    procedure NextEventRaise;
+  public
+    constructor Create(const AErr: EAgentError);
     function NextEvent(out AEvent: TWireSSEEvent): Boolean;
     procedure Cancel;
     function GetCancelled: Boolean;
@@ -145,7 +161,46 @@ var
 begin
   FLastRequest := AReq;
   LScript := PopNext;
+  if LScript.RaiseUpstream and (LScript.Status <> 200) then
+    Exit(TScriptedFailStream.Create(BuildUpstreamError(FProviderName,
+      LScript.BodyText, LScript.Status, LScript.Headers)));
   Result := TScriptedWireStream.Create(LScript.Chunks);
+end;
+
+{ ---- TScriptedFailStream ---- }
+
+constructor TScriptedFailStream.Create(const AErr: EAgentError);
+begin
+  inherited Create;
+  FErrCode := AErr.ErrorCode;
+  FErrMsg := AErr.Message;
+  FDone := False;
+  AErr.Free;
+end;
+
+procedure TScriptedFailStream.NextEventRaise;
+begin
+  raise EAgentError.CreateLocal(FErrCode, FErrMsg);
+end;
+
+function TScriptedFailStream.NextEvent(out AEvent: TWireSSEEvent): Boolean;
+begin
+  { 生产 TWireStream 同款终态幂等：错误后重复调用重抛同一错误 }
+  if FDone then
+    NextEventRaise;
+  FDone := True;
+  NextEventRaise;
+  Result := False;                   { 不可达 }
+end;
+
+procedure TScriptedFailStream.Cancel;
+begin
+  FDone := True;
+end;
+
+function TScriptedFailStream.GetCancelled: Boolean;
+begin
+  Result := False;
 end;
 
 { ---- TScriptedWireStream ---- }

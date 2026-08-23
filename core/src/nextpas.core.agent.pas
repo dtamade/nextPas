@@ -18,12 +18,23 @@ uses
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
+  nextpas.core.agent.clock,
+  nextpas.core.agent.retry,
   nextpas.core.agent.provider.common,
   nextpas.core.agent.provider.openai;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
 function AgentErrorCodeName(ACode: TAgentErrorCode): string; inline;
+
+{ ---- 重试装饰器与时钟（API.md §3/§5）---- }
+
+function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
+  const AClock: IAgentClock): IAgentProvider; overload; inline;
+function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
+  const AClock: IAgentClock;
+  const AToken: IAsyncCancellationToken): IAgentProvider; overload; inline;
+function NewSystemClock: IAgentClock; inline;
 
 { ---- OpenAI Chat Completions 适配器（API.md §7/§8）---- }
 
@@ -107,6 +118,25 @@ end;
 function NewGrokProviderFromEnv: IAgentProvider;
 begin
   Result := nextpas.core.agent.provider.openai.NewGrokProviderFromEnv;
+end;
+
+function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
+  const AClock: IAgentClock): IAgentProvider;
+begin
+  Result := nextpas.core.agent.retry.WithRetry(AInner, APolicy, AClock);
+end;
+
+function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
+  const AClock: IAgentClock;
+  const AToken: IAsyncCancellationToken): IAgentProvider;
+begin
+  Result := nextpas.core.agent.retry.WithRetry(
+    AInner, APolicy, AClock, AToken);
+end;
+
+function NewSystemClock: IAgentClock;
+begin
+  Result := nextpas.core.agent.clock.NewSystemClock;
 end;
 
 end.
