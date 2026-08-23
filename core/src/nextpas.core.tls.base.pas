@@ -767,6 +767,25 @@ type
   end;
 
   {**
+   * ISSLStreamConnectionAccess - 流内连接访问接口（可选）
+   *
+   * TSSLStream 将 ISSLConnection 封装为 IStream。调用方只持有 IStream 时，
+   * 通过此可选接口取回底层连接，进行会话恢复、early-data 等连接级操作。
+   * 不要把接口指针硬转型回具体类：接口指针与对象基址不保证相同。
+   *
+   * 使用方法：
+   *   if Supports(AStream, ISSLStreamConnectionAccess, Access) then
+   *     Conn := Access.GetConnection;
+   *}
+  ISSLStreamConnectionAccess = interface
+    ['{E7A9C1D3-4F5B-6C7D-8E9F-0A1B2C3D4E5F}']
+
+    {** 获取流封装的底层连接
+        @returns 底层 ISSLConnection（TSSLStream 生命周期内非空） *}
+    function GetConnection: ISSLConnection;
+  end;
+
+  {**
    * ISSLHttpHooksAccess - HTTP 传输 hooks 访问接口（可选）
    *
    * nextpas.core.tls 不实现网络通信。任何依赖 HTTP 的功能（例如 OCSP 在线检查、CT log list 下载）

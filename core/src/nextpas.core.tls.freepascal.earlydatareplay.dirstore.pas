@@ -482,11 +482,14 @@ begin
   try
     LStream := FsOpen(AFileName, [fmRead]);
     try
-      LStream.Read(LVersion, SizeOf(Integer));
+      // IStream.Read 在 EOF 短读返回而不抛异常：返回字节数必须逐一校验
+      if LStream.Read(LVersion, SizeOf(Integer)) <> SizeOf(Integer) then
+        Exit(False);
       if LVersion <> FREEPASCAL_DIRECTORY_REPLAY_STORE_VERSION then
         Exit(False);
 
-      LStream.Read(AEntry.ExpiresAt, SizeOf(TDateTime));
+      if LStream.Read(AEntry.ExpiresAt, SizeOf(TDateTime)) <> SizeOf(TDateTime) then
+        Exit(False);
       if LStream.Position <> LStream.Size then
         Exit(False);
 

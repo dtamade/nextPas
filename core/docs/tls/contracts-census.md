@@ -209,17 +209,17 @@
   与编译单元路径现代化；gate 已可端到端运行（157s），内部尚有红组见下
 - `test_context_builder_try.pas` mock 类补齐 IStream 重载（接口演进）
 
-## 七、剩余已知积压（10 个）
+## 七、剩余已知积压
 
 | 契约 | 状态 | 备注 |
 |------|------|------|
-| test_freepascal_tls13_completeness_gate_contract.sh | gate 本体 17/18 组绿；契约仅剩 ci.yml 段红 | 契约要求 ci.yml 存在 `freepascal-tls13-completeness` job，该 job 在全部 git 历史中从未存在（`git log -S` 为空），需 CI 预算 owner 决策后补建 |
-| test_freepascal_tls13_early_data（gate 内部组） | 连接器 early-data 子测试 AV | `TSSLStream` 实例字段被相邻堆块越界覆写（VMT 合法、引用计数/字段被踩、崩溃点随构建布局漂移；gdb watch + heaptrc 取证）。测试侧悬垂指针生命周期 bug 已修（`LTLSStream: TSSLStream` 裸指针持有改为 `IStream` 接口持有）；剩余为纯 Pascal 加密/记录层深层越界写，需专人专项 |
+| test_freepascal_tls13_completeness_gate_contract.sh | gate 本体 18/18 组绿；契约仅剩 ci.yml 段红 | 契约要求 ci.yml 存在 `freepascal-tls13-completeness` job，该 job 在全部 git 历史中从未存在（`git log -S` 为空），需 CI 预算 owner 决策后补建 |
 | test_tls13_interop_matrix.sh / test_tls13_advanced_interop.sh | 运行时互操作失败 | TLS1.3 client-cert 握手等场景，需真实 s_server 调试 |
 | test_freepascal_tls12_interop_matrix.sh | 8 过 1 败 | 单套件待查 |
 | test_cross_backend_interop.sh / server_groups_interop.sh | 编译错误 | 冒烟程序需 API 现代化 |
 | test_freepascal_tls13_client_e2e.sh | 超时(143) | 加密层 7 过，后续段依赖外部服务 |
 | test_mbedtls_framework_owner_surface_contract.sh | 二进制 80.2% 通过（35 败） | legacy framework 测试程序深层对账 |
+| benchmarks/examples 5 处 `TSSLStream(TLSI)` 硬转型 | 该工具链下潜伏崩溃 | benchmark_tls_handshake(.pas/_diagnostic)、test_real_websites×3；不在门禁执行集，需统一改走 ISSLStreamConnectionAccess |
 
 ## 完整性门战果（2026-08-23 第二批）
 
@@ -231,6 +231,16 @@
 | `TASN1Writer.WriteLength` 长格式分支把标记字节写入 `LenBytes[0]`，覆写最低有效长度字节（357→386 类破坏），任何 ≥128 字节的原始类型 DER 写入均损坏 | 标记字节改存 `LenBytes[NumBytes]`；openssl asn1parse 与独立复现程序双重验证 | 1（ct_sct OCSP-delivered SCT） |
 | `TLS12ReadExact` 让 `IoReadFull` 的 EIOError 逃逸，违反 Try 契约（空流上 Connect 应返回 False 并可查错误） | EOF 转 False；补 uses nextpas.core.exception | 1（backend_basic） |
 
+### 第三批（2026-08-23）：17/18 → 18/18
+
+early_data 连接器子测试的"深层越界写"假设被证伪。gdb 硬件观察点在真实字段地址全程零写入，崩溃时测试持有的接口变量为 `base+0x28` 而对象基址是 `base`——不是内存被踩，是**接口指针本身偏移**：
+
+- 本机工具链 FPC trunk（2026-01 fpcupdeluxe dirty 构建）接口 ABI：`TObject.InstanceSize=16`（含 `_MonitorData`）、`TInterfacedObject.InstanceSize=32`、单接口类隐式 对象→接口 赋值实测 delta=32（最小探针）。接口指针≠对象基址，`TSSLStream(intf)` 硬转型得到假 Self，getter 读 `[假基址+0x20]` 越界出垃圾（0x1f）。
+- 修复：`TSSLStream` 增加查询接口可达的能力接口 `ISSLStreamConnectionAccess.GetConnection`（沿用 `ISSLNativeHandleAccess` 先例），early_data 测试 5 处硬转型全部改走 `Supports`。生产代码全仓扫描无同类硬转型。
+- 连锁发现（被 AV 掩盖的第二层红）：重放存储 `LoadEntries`/`TryLoadEntry` 不校验 `IStream.Read` 返回字节数，EOF 短读静默接受垃圾字段，`Position=Size` 校验对截断失明，损坏 `.bak` 回退未 fail-closed。7 个流读取点逐一校验后，截断/损坏五模式全部拒绝。
+
+**门禁结果：18 PASS / 0 FAIL**（报告：test-reports/freepascal_tls13_completeness_*.md，运行后清理）。
+
 ## 变更记录
 
 | 日期 | 内容 |
@@ -238,3 +248,4 @@
 | 2026-08-23 | 首次全量普查；删除纯文档死目标 71；机械路径修复转绿 12 |
 | 2026-08-23 | 第二轮路径清零 PASS 30→83；第三轮内容对账 PASS 83→174，删死契约 73，反哺修复 3 个迁移受损工具 |
 | 2026-08-23 | 完整性门 6/18→17/18：cwd 规则修复 10 组；修复 TASN1Writer.WriteLength 长格式长度覆写核心 bug；修复 TLS12 IO 层 EOF 异常逃逸；early_data 测试侧悬垂接口修复并登记深层越界写积压 |
+| 2026-08-23 | 完整性门 17/18→18/18：gdb 取证证实工具链接口 ABI 偏移（非越界写），新增 ISSLStreamConnectionAccess 能力接口替换全部硬转型；修复重放存储短读 fail-closed 沦陷；登记 benchmarks/examples 5 处同类硬转型积压 |

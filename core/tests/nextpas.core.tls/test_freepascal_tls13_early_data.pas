@@ -3137,6 +3137,8 @@ var
   LRejectStream: TScriptedEarlyDataServerStream;
   LSession: ISSLSession;
   LConnector: TSSLConnector;
+  LConnAccess: ISSLStreamConnectionAccess;
+  LConn: ISSLConnection;
   // Hold the IStream interface so the underlying TSSLStream stays alive:
   // casting to the raw class would drop the only reference and free it immediately.
   LTLSStream: IStream;
@@ -3151,8 +3153,10 @@ begin
     LTLSStream := LConnector.ConnectStream(
       TStreamWrapper.Create(LInitialStream, False), 'example.com');
     try
+      AssertTrue(Supports(LTLSStream, ISSLStreamConnectionAccess, LConnAccess),
+        'Initial connector stream should expose connection access interface');
       LSession := RequireSessionResumption(
-        TSSLStream(LTLSStream).Connection,
+        LConnAccess.GetConnection,
         'Initial connector handshake connection should expose session-resumption owner path'
       ).GetSession;
       AssertTrue(LSession <> nil, 'Initial connector handshake should capture resumable session');
@@ -3179,9 +3183,12 @@ begin
       .WithEarlyData(BytesOf('PING'));
     LTLSStream := LConnector.ConnectStream(TStreamWrapper.Create(LAcceptStream, False), 'example.com');
     AssertTrue(LTLSStream <> nil, 'Connector accepted early-data handshake should succeed');
-    AssertTrue(Supports(TSSLStream(LTLSStream).Connection, ISSLEarlyDataConnection, LEarlyConn),
+    AssertTrue(Supports(LTLSStream, ISSLStreamConnectionAccess, LConnAccess),
+      'Connector accepted-path stream should expose connection access interface');
+    LConn := LConnAccess.GetConnection;
+    AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Connector accepted-path connection should expose early-data connection interface');
-    if Supports(TSSLStream(LTLSStream).Connection, ISSLEarlyDataConnection, LEarlyConn) then
+    if Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
       AssertTrue(LEarlyConn.GetEarlyDataStatus = sslEarlyDataAccepted,
         'Connector accepted-path client should report accepted early-data status');
     AssertTrue(BytesEqual(BytesOf('PING'), LAcceptStream.CapturedEarlyData),
@@ -3201,9 +3208,12 @@ begin
       .WithEarlyData(BytesOf('NOPE'));
     LTLSStream := LConnector.ConnectStream(TStreamWrapper.Create(LRejectStream, False), 'example.com');
     AssertTrue(LTLSStream <> nil, 'Connector rejected early-data handshake should still succeed');
-    AssertTrue(Supports(TSSLStream(LTLSStream).Connection, ISSLEarlyDataConnection, LEarlyConn),
+    AssertTrue(Supports(LTLSStream, ISSLStreamConnectionAccess, LConnAccess),
+      'Connector rejected-path stream should expose connection access interface');
+    LConn := LConnAccess.GetConnection;
+    AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Connector rejected-path connection should expose early-data connection interface');
-    if Supports(TSSLStream(LTLSStream).Connection, ISSLEarlyDataConnection, LEarlyConn) then
+    if Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
       AssertTrue(LEarlyConn.GetEarlyDataStatus = sslEarlyDataRejected,
         'Connector rejected-path client should report rejected early-data status');
     AssertTrue(Length(LRejectStream.CapturedEarlyData) = 0,

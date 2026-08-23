@@ -36,7 +36,7 @@ uses
 
 type
   { TSSLStream - 将 ISSLConnection 封装为 IStream }
-  TSSLStream = class(TInterfacedObject, IStream)
+  TSSLStream = class(TInterfacedObject, IStream, ISSLStreamConnectionAccess)
   private
     FConnection: ISSLConnection;
   public
@@ -56,6 +56,9 @@ type
     procedure SetReadTimeout(AMs: Integer);
     procedure SetWriteTimeout(AMs: Integer);
     function GetSelectedALPN: string;
+
+    { ISSLStreamConnectionAccess }
+    function GetConnection: ISSLConnection;
 
     property Connection: ISSLConnection read FConnection;
   end;
@@ -205,6 +208,11 @@ begin
       'TSSLStream.Create'
     );
   FConnection := AConnection;
+end;
+
+function TSSLStream.GetConnection: ISSLConnection;
+begin
+  Result := FConnection;
 end;
 
 destructor TSSLStream.Destroy;
