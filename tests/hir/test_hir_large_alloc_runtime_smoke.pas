@@ -3,8 +3,8 @@ program test_hir_large_alloc_runtime_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, SysUtils, Process, nextpas.compiler.sema.semantic_model, np_hir_builder,
-  np_hir_llvm_emitter;
+  Classes, SysUtils, Process, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.builder,
+  nextpas.compiler.ir.hir.llvm_emitter;
 
 const
   LargeThreshold = 65536;

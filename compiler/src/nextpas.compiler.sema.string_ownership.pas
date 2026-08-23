@@ -23,7 +23,7 @@ unit nextpas.compiler.sema.string_ownership;
 interface
 
 uses
-  nextpas.compiler.syntax.green_tree, nextpas.compiler.sema.semantic_model, np_hir_types,
+  nextpas.compiler.syntax.green_tree, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types,
   nextpas.compiler.diagnostics.sink, np_base_types, nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.frontend.unit_graph, nextpas.compiler.sema.runtime_vars, nextpas.compiler.frontend.source_database,
   nextpas.compiler.sema.overload;

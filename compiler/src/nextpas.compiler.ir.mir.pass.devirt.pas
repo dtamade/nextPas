@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_devirt.pas — MIR Devirtualization Pass
+ * nextpas.compiler.ir.mir.pass.devirt.pas — MIR Devirtualization Pass
  *
  * 将虚调用替换为直接调用。
  *
@@ -11,14 +11,14 @@
  * 对标：rustc mir::transform::devirtualize, LLVM DevirtSCCRepeatedPass
  *}
 
-unit np_mir_pass_devirt;
+unit nextpas.compiler.ir.mir.pass.devirt;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_mir_model, np_mir_optimize;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize;
 
 type
   TMirDevirtPass = class(TInterfacedObject, IMirOptimizationPass)

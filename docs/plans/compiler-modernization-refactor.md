@@ -4,8 +4,8 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.13：N4 落地+门禁例外登记；
-v2.12：P0 计时探针落地+相位实测表；
+创建：2026-08-23　最后更新：2026-08-23（v2.14：N5 落地 63/66；
+v2.13：N4 落地+门禁例外登记；v2.12：P0 计时探针落地+相位实测表；
 v2.11：N3 落地；v2.9：顶部状态仪表盘+风险编号 R1-R8+验收门精确命令；
 v2.8：§3.5 顶尖基准；v2.7：接口立项清单；
 v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
@@ -13,12 +13,12 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 ## 0. 状态仪表盘（每批落地时更新此块）
 
 ```
-迁移进度  █████████████░░░  N1✅ N2✅ N3✅(+收尾) N4✅ │ 37/66 单元 │ compiler/src 38 pas+55 inc
+迁移进度  ███████████████░  N1✅ N2✅ N3✅ N4✅ N5✅ │ 63/66 单元 │ 仅剩 toolchain ×3
 性能批次  ██░░░░░░░░░░░░░░  P0✅ 计时探针落地 │ tree mini: sema 占 99%·播种占 80%·i17 开销仅 1.6%
 正确性    residual 0/0 ✅   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅   FPC rebuild ✅   np 自举 tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    N5 ir×24+backend 迁移 → P1 播种路径索引分配
+下一口    N6 toolchain×3+壳层 nextpas.driver.*+make verify 收口 → P1 播种索引分配
 ```
 
 ---
@@ -136,9 +136,8 @@ tools/stage0/ 14 nextpas_* + 2 杂项   →  N6 后改 nextpas.driver.*
 
 生产单元总数 **66 = 65 个 `np_` 前缀 + 1 个 `nextpas_` 前缀(json_helpers)**。
 inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自然分组可读）。
-迁移现状（N4 后）：diagnostics/targets/syntax/frontend/sema/lower 六目录
-已清空，src 持 38 pas+55 inc；实时进度以顶部 §0 仪表盘与
-`§2.0 复现块`第二条命令为准。
+迁移现状（N5 后）：仅剩 toolchain 三单元未迁，src 持 64 pas+71 inc；
+实时进度以顶部 §0 仪表盘与 `§2.0 复现块`第二条命令为准。
 
 ## 3. 四支柱方案
 
@@ -294,7 +293,7 @@ IInterface ×12（COM 基础设施支持用户代码）。考量：
 | N2 | syntax ×5 + 11 inc + 清理 units 陈旧遮蔽副本 ×19 | 同上 | ✅ a9d8c054c |
 | N3 | frontend ×14 | 同上 | ✅ 34986b475 |
 | N4 | sema ×12 + ir.hir.lowering | +mini-regress | ✅ 门禁例外两类登记（I/O 族 FsExists/FsStat、sema→ir 上行边 R9）；十三探针回归见提交说明 |
-| N5 | ir ×25 + backend.plan | +全量 residual 对比 | ⬜ |
+| N5 | ir ×25 + backend.plan | +全量 residual 对比 | ✅ 门禁例外+1（backend.plan I/O 族 FsDir）；全量 residual 对比归 N6 收口轮统一跑（本轮十三探针+tree mini 代替） |
 | N6 | toolchain ×3 + stage0 壳层 nextpas.driver.* + 配置收口 | make verify 全量 | ⬜ |
 
 每批模板：git mv → unit 头改写 → 全仓 uses 同步（含 build 探针源）→
@@ -356,10 +355,10 @@ git diff --check && make hygiene
 ## 5. 完整映射表（66 单元；✅=已落地）
 
 生产单元总计 **66**（65 个 `np_` 前缀 + json_helpers）；
-已落地 **37**（N1-N4），待迁 **29**。src 现状：38 pas + 55 inc
+已落地 **63**（N1-N5），待迁 **3**（toolchain）。src 现状：64 pas + 71 inc
 （含 phase_timing 探针单元，不计入 66 生产单元口径）。
 
-### 已完成 ✅（N1-N4，37 单元 + 55 inc）
+### 已完成 ✅（N1-N5，63 单元 + 71 inc）
 
 | 新名 | 原位置 | 批 |
 |------|--------|----|
@@ -400,47 +399,42 @@ git diff --check && make hygiene
 | nextpas.compiler.sema.property_meta_vec | sema/np_semantic_property_meta_vec | N4 |
 | nextpas.compiler.sema.vmt_slot_vec | sema/np_semantic_vmt_slot_vec | N4 |
 | nextpas.compiler.ir.hir.lowering | lower/np_hir_lowering | N4 |
+| nextpas.compiler.ir.hir.types | ir/np_hir_types | N5 |
+| nextpas.compiler.ir.hir.model | ir/np_hir_model | N5 |
+| nextpas.compiler.ir.hir.builder | ir/np_hir_builder | N5 |
+| nextpas.compiler.ir.hir.printer | ir/np_hir_printer | N5 |
+| nextpas.compiler.ir.hir.verifier | ir/np_hir_verifier | N5 |
+| nextpas.compiler.ir.hir.to_mir | ir/np_hir_to_mir | N5 |
+| nextpas.compiler.ir.hir.llvm_emitter | ir/np_hir_llvm_emitter | N5 |
+| nextpas.compiler.ir.system_contracts | ir/np_system_contracts | N5 |
+| nextpas.compiler.ir.mir.model | ir/np_mir_model | N5 |
+| nextpas.compiler.ir.mir.optimize | ir/np_mir_optimize | N5 |
+| nextpas.compiler.ir.mir.opt_level | ir/np_mir_opt_level | N5 |
+| nextpas.compiler.ir.mir.pass.registry | ir/np_mir_pass_registry | N5 |
+| nextpas.compiler.ir.mir.pass.constfold | ir/np_mir_pass_constfold | N5 |
+| nextpas.compiler.ir.mir.pass.cse | ir/np_mir_pass_cse | N5 |
+| nextpas.compiler.ir.mir.pass.dce | ir/np_mir_pass_dce | N5 |
+| nextpas.compiler.ir.mir.pass.deadarg | ir/np_mir_pass_deadarg | N5 |
+| nextpas.compiler.ir.mir.pass.devirt | ir/np_mir_pass_devirt | N5 |
+| nextpas.compiler.ir.mir.pass.escape | ir/np_mir_pass_escape | N5 |
+| nextpas.compiler.ir.mir.pass.inline_heuristic | ir/np_mir_pass_inline_heuristic | N5 |
+| nextpas.compiler.ir.mir.pass.inline | ir/np_mir_pass_inline | N5 |
+| nextpas.compiler.ir.mir.pass.licm | ir/np_mir_pass_licm | N5 |
+| nextpas.compiler.ir.mir.pass.strength_red | ir/np_mir_pass_strength_red | N5 |
+| nextpas.compiler.ir.mir.pass.tailcall | ir/np_mir_pass_tailcall | N5 |
+| nextpas.compiler.ir.mir.pass.vectorize | ir/np_mir_pass_vectorize | N5 |
+| nextpas.compiler.ir.mir.to_llvm | ir/np_mir_to_llvm | N5 |
+| nextpas.compiler.backend.plan | backend/np_backend_plan | N5 |
 
 inc 随宿主迁入不改名：syntax 家族 ×11、sink accessors ×1、frontend ×7、
-sema 家族 ×33、hir_lowering 家族 ×3。
+sema 家族 ×33、hir_lowering 家族 ×3、ir 家族 ×15、backend accessors ×1。
 
-### 待迁移（29 单元）
+### 待迁移（3 单元）
 
-#### ir(24) → nextpas.compiler.ir.*（N5 批）
-
-| 现名 | 新名 | 批 |
-|------|------|----|
-| np_hir_types | …ir.hir.types | N5 |
-| np_hir_model | …ir.hir.model | N5 |
-| np_hir_builder | …ir.hir.builder | N5 |
-| np_hir_printer | …ir.hir.printer | N5 |
-| np_hir_verifier | …ir.hir.verifier | N5 |
-| np_hir_to_mir | …ir.hir.to_mir | N5 |
-| np_hir_llvm_emitter | …ir.hir.llvm_emitter | N5 |
-| np_system_contracts | …ir.system_contracts | N5 |
-| np_mir_model | …ir.mir.model | N5 |
-| np_mir_optimize | …ir.mir.optimize | N5 |
-| np_mir_opt_level | …ir.mir.opt_level | N5 |
-| np_mir_pass_registry | …ir.mir.pass.registry | N5 |
-| np_mir_pass_constfold | …ir.mir.pass.constfold | N5 |
-| np_mir_pass_cse | …ir.mir.pass.cse | N5 |
-| np_mir_pass_dce | …ir.mir.pass.dce | N5 |
-| np_mir_pass_deadarg | …ir.mir.pass.deadarg | N5 |
-| np_mir_pass_devirt | …ir.mir.pass.devirt | N5 |
-| np_mir_pass_escape | …ir.mir.pass.escape | N5 |
-| np_mir_pass_inline | …ir.mir.pass.inline | N5 |
-| np_mir_pass_inline_heuristic | …ir.mir.pass.inline_heuristic | N5 |
-| np_mir_pass_licm | …ir.mir.pass.licm | N5 |
-| np_mir_pass_strength_red | …ir.mir.pass.strength_red | N5 |
-| np_mir_pass_tailcall | …ir.mir.pass.tailcall | N5 |
-| np_mir_pass_vectorize | …ir.mir.pass.vectorize | N5 |
-| np_mir_to_llvm | …ir.mir.to_llvm | N5 |
-
-#### backend(1) + toolchain(3)（N5/N6 批）
+#### toolchain(3) → nextpas.compiler.toolchain.*（N6 批）
 
 | 现名 | 新名 | 批 |
 |------|------|----|
-| np_backend_plan | …backend.plan | N5 |
 | np_toolchain_runner | …toolchain.runner | N6 |
 | np_toolchain_profiles | …toolchain.profiles | N6 |
 | np_toolchain_plan | …toolchain.plan | N6 |
@@ -529,7 +523,8 @@ P0 基线数字，回滚判据客观化。
 | v2.10 | 326585e07 | 总控确认轮：内部模块化全量依赖审计（127 边）——推翻「唯一反向依赖」旧表述，实测 6 条上行违规+sema↔ir 双向耦合；R9 结构债立项；支柱三修正；N3-N5 验收门加 FAIL 处置要求；台账 D13。回答「模块化是否足够好」：及格但未达顶尖，结构债已全部登记在案 |
 | v2.11 | 1440adc69 | N3 落地：frontend 14 单元+7 inc 迁入 src（累计 24/66）；仪表盘刷新；台账 D14 记 zsh 分词工具教训 |
 | v2.12 | ba84edf37 | P0 落地+N3 收尾（门禁扩至 23 名+漏网改名 21 处，05ef72669）：phase_timing 探针五相接线；§2.3 实测相位表——tree mini sema 占 99%/播种占 80%，i17 开销 +4.8s(1.6%) 非主要矛盾；perf top-10 受阻登记归 P1；仪表盘/批次表同步 |
-| v2.13 | （本提交） | N4 落地：sema 12 单元+hir_lowering 迁入 src（累计 37/66，src 38 pas+55 inc）；门禁清单扩至 36 名+两类显式例外登记（sema.analyzer I/O 族 FsExists/FsStat 播种新鲜度检查、sema.analyzer/sema.string_ownership→ir 上行边 R9/N7）；台账 D16 点分文件名纪律；§5 映射表重写为 N1-N4 全量状态 |
+| v2.13 | 92dbb1556 | N4 落地：sema 12 单元+hir_lowering 迁入 src（累计 37/66，src 38 pas+55 inc）；门禁清单扩至 36 名+两类显式例外登记（sema.analyzer I/O 族 FsExists/FsStat 播种新鲜度检查、sema.analyzer/sema.string_ownership→ir 上行边 R9/N7）；台账 D16 点分文件名纪律；§5 映射表重写为 N1-N4 全量状态 |
+| v2.14 | （本提交） | N5 落地：ir 25 单元+backend.plan 迁入 src（累计 63/66，仅剩 toolchain ×3；src 64 pas+71 inc）；门禁清单扩至 62 名+例外+1（backend.plan FsDir）+上行边登记扩至 frontend.compilation_session→ir/backend 全族；全量 residual 对比诚实改挂 N6 收口轮（本轮以十三探针+tree mini 代证） |
 
 ## 10. 文档维护规则
 

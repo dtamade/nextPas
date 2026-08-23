@@ -1,4 +1,4 @@
-unit np_system_contracts;
+unit nextpas.compiler.ir.system_contracts;
 
 {$mode objfpc}{$H+}
 

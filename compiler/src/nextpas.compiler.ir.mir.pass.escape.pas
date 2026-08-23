@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_escape.pas — MIR Escape Analysis Pass
+ * nextpas.compiler.ir.mir.pass.escape.pas — MIR Escape Analysis Pass
  *
  * 分析哪些局部变量的地址逃逸到堆或全局作用域。
  * 未逃逸的变量可以栈分配（alloca → stack slot）。
@@ -15,7 +15,7 @@
  * 对标：Go escape analysis, rustc mir::transform::escape
  *}
 
-unit np_mir_pass_escape;
+unit nextpas.compiler.ir.mir.pass.escape;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -23,7 +23,7 @@ unit np_mir_pass_escape;
 interface
 
 uses
-  np_mir_model, np_mir_optimize,
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

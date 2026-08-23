@@ -19,19 +19,19 @@ uses
   nextpas.core.time, nextpas.core.base.utils, nextpas.core.compiler.mem,
   nextpas.core.mem.intf, nextpas.core.mem.allocator.arena,
   nextpas.core.collections.vec,
-  nextpas.compiler.syntax.ast_facade, np_backend_plan, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.green_tree,
-  nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.preprocessor, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_printer, np_hir_llvm_emitter, nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts,
+  nextpas.compiler.syntax.ast_facade, nextpas.compiler.backend.plan, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.preprocessor, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.builder,
+  nextpas.compiler.ir.hir.printer, nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   nextpas.compiler.frontend.unit_graph, nextpas.compiler.frontend.unit_resolver,
   nextpas.compiler.sema.semantic_model, nextpas.compiler.sema.analyzer, nextpas.compiler.frontend.workspace_model,
-  nextpas.compiler.frontend.compiler_phase, np_mir_model, np_hir_to_mir, np_mir_optimize,
+  nextpas.compiler.frontend.compiler_phase, nextpas.compiler.ir.mir.model, nextpas.compiler.ir.hir.to_mir, nextpas.compiler.ir.mir.optimize,
   nextpas.compiler.frontend.query_database,
   nextpas.compiler.frontend.file_change_detector,
   nextpas.compiler.frontend.parallel_scheduler,
   nextpas.compiler.frontend.incremental_cache,
   nextpas.compiler.frontend.phase_timing,
-  np_mir_to_llvm, nextpas.compiler.diagnostics.json_helpers;
+  nextpas.compiler.ir.mir.to_llvm, nextpas.compiler.diagnostics.json_helpers;
 
 type
   TBuildContext = record

@@ -1,5 +1,5 @@
 {**
- * np_mir_model.pas — Mid-level IR (MIR) data structures
+ * nextpas.compiler.ir.mir.model.pas — Mid-level IR (MIR) data structures
  *
  * 对标 rustc MIR (control-flow graph + SSA basic blocks).
  * MIR 是类型擦除的中间表示，位于 HIR 和 LLVM IR 之间。
@@ -11,7 +11,7 @@
  *   - 所有优化 pass 在此层操作
  *}
 
-unit np_mir_model;
+unit nextpas.compiler.ir.mir.model;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}

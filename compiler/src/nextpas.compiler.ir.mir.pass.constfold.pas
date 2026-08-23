@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_constfold.pas — MIR Constant Folding Pass
+ * nextpas.compiler.ir.mir.pass.constfold.pas — MIR Constant Folding Pass
  *
  * 编译时计算常量表达式。
  *
@@ -17,14 +17,14 @@
  * 对标：rustc mir::transform::const_prop
  *}
 
-unit np_mir_pass_constfold;
+unit nextpas.compiler.ir.mir.pass.constfold;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_mir_model, np_mir_optimize;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize;
 
 type
   TMirConstFoldPass = class(TInterfacedObject, IMirOptimizationPass)

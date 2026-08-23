@@ -3,8 +3,8 @@ program test_hir_object_free_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.compiler.sema.semantic_model, np_hir_types, np_hir_model, np_system_contracts,
-  np_hir_builder, np_hir_llvm_emitter, np_hir_verifier;
+  SysUtils, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.system_contracts,
+  nextpas.compiler.ir.hir.builder, nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.ir.hir.verifier;
 
 var
   SemaModel: TSemanticModel;

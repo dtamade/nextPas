@@ -1,4 +1,4 @@
-unit np_hir_types;
+unit nextpas.compiler.ir.hir.types;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}

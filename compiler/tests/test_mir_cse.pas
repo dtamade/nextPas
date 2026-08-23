@@ -4,7 +4,7 @@ program test_mir_cse;
 
 uses
   SysUtils,
-  np_mir_model, np_mir_optimize, np_mir_pass_cse;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize, nextpas.compiler.ir.mir.pass.cse;
 
 procedure Fail(const AMsg: string);
 begin

@@ -3,10 +3,10 @@ program test_hir_builder_structured_widths;
 {$mode objfpc}{$H+}
 
 uses
-  np_hir_builder,
-  np_hir_llvm_emitter,
-  np_hir_model,
-  np_hir_types,
+  nextpas.compiler.ir.hir.builder,
+  nextpas.compiler.ir.hir.llvm_emitter,
+  nextpas.compiler.ir.hir.model,
+  nextpas.compiler.ir.hir.types,
   nextpas.compiler.sema.semantic_model;
 
 var

@@ -24,7 +24,7 @@ uses
   nextpas.compiler.sema.builtins,
   nextpas.compiler.sema.type_check,
   nextpas.compiler.sema.runtime_vars,
-  np_hir_model,
+  nextpas.compiler.ir.hir.model,
   nextpas.compiler.frontend.source_database,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.sema.overload,

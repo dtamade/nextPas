@@ -6,7 +6,7 @@ unit nextpas.compiler.sema.semantic_model;
 interface
 
 uses
-  nextpas.compiler.syntax.green_tree, np_hir_types,
+  nextpas.compiler.syntax.green_tree, nextpas.compiler.ir.hir.types,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.vec,
   nextpas.compiler.sema.field_meta_vec,

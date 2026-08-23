@@ -7,14 +7,14 @@ uses
   nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,
-  np_hir_builder,
-  np_hir_llvm_emitter,
-  np_hir_model,
-  np_hir_types,
+  nextpas.compiler.ir.hir.builder,
+  nextpas.compiler.ir.hir.llvm_emitter,
+  nextpas.compiler.ir.hir.model,
+  nextpas.compiler.ir.hir.types,
   nextpas.compiler.syntax.lexer,
   nextpas.compiler.sema.analyzer,
   nextpas.compiler.sema.semantic_model,
-  np_system_contracts,
+  nextpas.compiler.ir.system_contracts,
   nextpas.compiler.frontend.unit_graph;
 
 const

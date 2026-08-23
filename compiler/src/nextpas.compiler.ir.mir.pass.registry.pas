@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_registry.pas — MIR Pass 注册表
+ * nextpas.compiler.ir.mir.pass.registry.pas — MIR Pass 注册表
  *
  * 创建并注册所有 MIR 优化 Pass 到 TMirPassManager。
  *
@@ -10,27 +10,27 @@
  *   PM.Free;
  *}
 
-unit np_mir_pass_registry;
+unit nextpas.compiler.ir.mir.pass.registry;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_mir_optimize,
-  np_mir_pass_constfold,
-  np_mir_pass_dce,
-  np_mir_pass_strength_red,
-  np_mir_pass_inline,
-  np_mir_pass_cse,
-  np_mir_pass_deadarg,
-  np_mir_pass_licm,
-  np_mir_pass_escape,
-  np_mir_pass_tailcall,
-  np_mir_pass_devirt,
-  np_mir_pass_inline_heuristic,
-  np_mir_pass_vectorize,
-  np_mir_opt_level;
+  nextpas.compiler.ir.mir.optimize,
+  nextpas.compiler.ir.mir.pass.constfold,
+  nextpas.compiler.ir.mir.pass.dce,
+  nextpas.compiler.ir.mir.pass.strength_red,
+  nextpas.compiler.ir.mir.pass.inline,
+  nextpas.compiler.ir.mir.pass.cse,
+  nextpas.compiler.ir.mir.pass.deadarg,
+  nextpas.compiler.ir.mir.pass.licm,
+  nextpas.compiler.ir.mir.pass.escape,
+  nextpas.compiler.ir.mir.pass.tailcall,
+  nextpas.compiler.ir.mir.pass.devirt,
+  nextpas.compiler.ir.mir.pass.inline_heuristic,
+  nextpas.compiler.ir.mir.pass.vectorize,
+  nextpas.compiler.ir.mir.opt_level;
 
 { 注册所有 MIR 优化 Pass（默认 O2） }
 procedure RegisterAllMirPasses(AManager: TMirPassManager);

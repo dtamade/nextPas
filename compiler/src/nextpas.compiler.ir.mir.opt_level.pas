@@ -1,5 +1,5 @@
 {**
- * np_mir_opt_level.pas — MIR Optimization Level Scheduler
+ * nextpas.compiler.ir.mir.opt_level.pas — MIR Optimization Level Scheduler
  *
  * 根据优化级别选择哪些 pass 运行。
  *
@@ -10,14 +10,14 @@
  * 对标：LLVM PassManagerBuilder, rustc -C opt-level
  *}
 
-unit np_mir_opt_level;
+unit nextpas.compiler.ir.mir.opt_level;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_mir_optimize;
+  nextpas.compiler.ir.mir.optimize;
 
 type
   { 优化级别 }
@@ -41,18 +41,18 @@ implementation
 
 uses
   SysUtils,
-  np_mir_pass_constfold,
-  np_mir_pass_dce,
-  np_mir_pass_strength_red,
-  np_mir_pass_inline,
-  np_mir_pass_cse,
-  np_mir_pass_deadarg,
-  np_mir_pass_licm,
-  np_mir_pass_escape,
-  np_mir_pass_tailcall,
-  np_mir_pass_devirt,
-  np_mir_pass_inline_heuristic,
-  np_mir_pass_vectorize;
+  nextpas.compiler.ir.mir.pass.constfold,
+  nextpas.compiler.ir.mir.pass.dce,
+  nextpas.compiler.ir.mir.pass.strength_red,
+  nextpas.compiler.ir.mir.pass.inline,
+  nextpas.compiler.ir.mir.pass.cse,
+  nextpas.compiler.ir.mir.pass.deadarg,
+  nextpas.compiler.ir.mir.pass.licm,
+  nextpas.compiler.ir.mir.pass.escape,
+  nextpas.compiler.ir.mir.pass.tailcall,
+  nextpas.compiler.ir.mir.pass.devirt,
+  nextpas.compiler.ir.mir.pass.inline_heuristic,
+  nextpas.compiler.ir.mir.pass.vectorize;
 
 function ParseOptLevel(const AStr: string): TMirOptLevel;
 begin

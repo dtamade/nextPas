@@ -22,6 +22,14 @@ migrated=(
   np_semantic_field_meta_vec np_semantic_interface_slot_vec
   np_semantic_property_meta_vec np_semantic_vmt_slot_vec
   np_hir_lowering
+  np_hir_types np_hir_model np_hir_builder np_hir_printer
+  np_hir_verifier np_hir_to_mir np_hir_llvm_emitter
+  np_system_contracts np_mir_model np_mir_optimize np_mir_opt_level
+  np_mir_pass_registry np_mir_pass_constfold np_mir_pass_cse
+  np_mir_pass_dce np_mir_pass_deadarg np_mir_pass_devirt
+  np_mir_pass_escape np_mir_pass_inline_heuristic np_mir_pass_inline
+  np_mir_pass_licm np_mir_pass_strength_red np_mir_pass_tailcall
+  np_mir_pass_vectorize np_mir_to_llvm np_backend_plan
 )
 for name in "${migrated[@]}"; do
   hits=$(grep -rl "\b${name}\b" compiler tools tests --include='*.pas' \
@@ -74,8 +82,10 @@ layer_of() {
 # 轴 B/C I/O 族显式例外（一行一单元；理由见 docs/plans/compiler-modernization-refactor.md R9/§3）：
 # - syntax.preprocessor: include 解析需读源文件（N2 登记）
 # - sema.analyzer: 播种期对导入单元源文件做 FsExists/FsStat 新鲜度检查（N4 登记，收口归 N7 评估）
+# - backend.plan: 规划期 FsDir 目录探测（N5 登记，收口归 N7/P2 评估）
 io_exempt="nextpas.compiler.syntax.preprocessor
-nextpas.compiler.sema.analyzer"
+nextpas.compiler.sema.analyzer
+nextpas.compiler.backend.plan"
 
 for f in compiler/src/*.pas; do
   unit=$(grep -m1 '^unit ' "$f" | sed 's/^unit \([a-z_.]*\);.*/\1/')
@@ -88,10 +98,14 @@ for f in compiler/src/*.pas; do
       nextpas.compiler.*)
         dlayer=$(layer_of "$dep")
         if [ "$dlayer" -ge 0 ] && [ "$dlayer" -gt "$ulayer" ]; then
-          # R9 结构债(N7 手术清单)：typed-HIR 所有权迁出 sema 前的已知上行边，逐条登记
+          # R9 结构债(N7 手术清单)：typed-HIR/MIR 所有权迁出 sema/frontend 前
+          # 的已知上行边（N4/N5 逐条登记）
           case "$unit|$dep" in
             nextpas.compiler.sema.analyzer|nextpas.compiler.ir*|\
-            nextpas.compiler.sema.string_ownership|nextpas.compiler.ir*) ;;
+            nextpas.compiler.sema.string_ownership|nextpas.compiler.ir*|\
+            nextpas.compiler.sema.semantic_model|nextpas.compiler.ir*|\
+            nextpas.compiler.frontend.compilation_session|nextpas.compiler.ir*|\
+            nextpas.compiler.frontend.compilation_session|nextpas.compiler.backend*) ;;
             *)
               echo "FAIL(layer-A): $unit($ulayer) -> $dep($dlayer) upward"
               fail=1

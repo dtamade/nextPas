@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_inline.pas — MIR Function Inlining Pass
+ * nextpas.compiler.ir.mir.pass.inline.pas — MIR Function Inlining Pass
  *
  * 将小函数体内联到调用点。
  *
@@ -13,7 +13,7 @@
  * 对标：rustc mir::transform::inline, LLVM InlinePass
  *}
 
-unit np_mir_pass_inline;
+unit nextpas.compiler.ir.mir.pass.inline;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -21,7 +21,7 @@ unit np_mir_pass_inline;
 interface
 
 uses
-  np_mir_model, np_mir_optimize,
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

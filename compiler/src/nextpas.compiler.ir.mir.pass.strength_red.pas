@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_strength_red.pas — MIR Strength Reduction Pass
+ * nextpas.compiler.ir.mir.pass.strength_red.pas — MIR Strength Reduction Pass
  *
  * 将高成本操作替换为等价低成本操作。
  *
@@ -12,14 +12,14 @@
  * 对标：LLVM InstCombine, rustc mir::transform
  *}
 
-unit np_mir_pass_strength_red;
+unit nextpas.compiler.ir.mir.pass.strength_red;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_mir_model, np_mir_optimize;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize;
 
 type
   TMirStrengthRedPass = class(TInterfacedObject, IMirOptimizationPass)

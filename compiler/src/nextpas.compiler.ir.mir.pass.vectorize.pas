@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_vectorize.pas — MIR Vectorization Recognition Pass
+ * nextpas.compiler.ir.mir.pass.vectorize.pas — MIR Vectorization Recognition Pass
  *
  * 识别可向量化的循环模式并标注，供 LLVM 后端自动向量化。
  *
@@ -13,14 +13,14 @@
  * 对标：LLVM LoopVectorize, rustc mir::transform::autovectorize
  *}
 
-unit np_mir_pass_vectorize;
+unit nextpas.compiler.ir.mir.pass.vectorize;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_mir_model, np_mir_optimize;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize;
 
 type
   TMirVectorizePass = class(TInterfacedObject, IMirOptimizationPass)

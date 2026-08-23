@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_deadarg.pas — MIR Dead Argument Elimination Pass
+ * nextpas.compiler.ir.mir.pass.deadarg.pas — MIR Dead Argument Elimination Pass
  *
  * 移除未被使用的函数参数，同时更新所有调用点。
  *
@@ -14,7 +14,7 @@
  * 对标：rustc mir::transform::dead_args, LLVM DeadArgElimination
  *}
 
-unit np_mir_pass_deadarg;
+unit nextpas.compiler.ir.mir.pass.deadarg;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -22,7 +22,7 @@ unit np_mir_pass_deadarg;
 interface
 
 uses
-  np_mir_model, np_mir_optimize,
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

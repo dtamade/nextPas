@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_inline_heuristic.pas — MIR Inline Heuristic Enhancement Pass
+ * nextpas.compiler.ir.mir.pass.inline_heuristic.pas — MIR Inline Heuristic Enhancement Pass
  *
  * 增强内联决策：在简单 inline pass 基础上增加成本模型。
  *
@@ -12,14 +12,14 @@
  * 对标：LLVM InlineCost, rustc mir::transform::inline cost model
  *}
 
-unit np_mir_pass_inline_heuristic;
+unit nextpas.compiler.ir.mir.pass.inline_heuristic;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_mir_model, np_mir_optimize;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize;
 
 const
   MAX_INLINE_STMTS_HEURISTIC = 50;

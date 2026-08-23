@@ -4,9 +4,9 @@ program test_hir_builder_structured_address;
 
 uses
   nextpas.core.text.conv,
-  np_hir_builder,
-  np_hir_model,
-  np_hir_types,
+  nextpas.compiler.ir.hir.builder,
+  nextpas.compiler.ir.hir.model,
+  nextpas.compiler.ir.hir.types,
   nextpas.compiler.sema.semantic_model;
 
 var

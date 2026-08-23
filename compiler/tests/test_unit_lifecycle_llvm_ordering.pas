@@ -8,8 +8,8 @@ program test_unit_lifecycle_llvm_ordering;
   host-free executable multi-unit runtime success. }
 
 uses
-  nextpas.compiler.sema.semantic_model, np_hir_builder, np_hir_model, np_hir_types,
-  np_hir_llvm_emitter;
+  nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.builder, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.types,
+  nextpas.compiler.ir.hir.llvm_emitter;
 
 function RequireOrder(const AText, AFirst, ASecond, ALabel: string): Boolean;
 var

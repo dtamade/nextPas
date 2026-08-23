@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_cse.pas — MIR Common Subexpression Elimination Pass
+ * nextpas.compiler.ir.mir.pass.cse.pas — MIR Common Subexpression Elimination Pass
  *
  * 消除重复计算。
  *
@@ -14,7 +14,7 @@
  * 对标：rustc mir::transform::cse, LLVM EarlyCSE
  *}
 
-unit np_mir_pass_cse;
+unit nextpas.compiler.ir.mir.pass.cse;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -22,7 +22,7 @@ unit np_mir_pass_cse;
 interface
 
 uses
-  np_mir_model, np_mir_optimize,
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

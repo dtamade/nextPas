@@ -13,7 +13,7 @@ uses
   nextpas.compiler.syntax.ast_facade, np_base_types, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.preprocessor,
   nextpas.compiler.frontend.source_database, nextpas.compiler.frontend.unit_graph, nextpas.compiler.sema.semantic_model, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
   nextpas.compiler.frontend.phase_timing,
-  np_hir_types, nextpas.compiler.sema.name_set, nextpas.compiler.sema.builtins, nextpas.compiler.sema.overload,
+  nextpas.compiler.ir.hir.types, nextpas.compiler.sema.name_set, nextpas.compiler.sema.builtins, nextpas.compiler.sema.overload,
   nextpas.compiler.sema.type_check, nextpas.compiler.ir.hir.lowering, nextpas.compiler.sema.runtime_vars,
   nextpas.compiler.sema.string_ownership,
   nextpas.core.mem.intf,

@@ -15,7 +15,7 @@ program toolchain_contract_smoke;
 {$UNITPATH ../../tools/stage0}
 
 uses
-  Classes, SysUtils, BaseUnix, target_config, np_backend_plan,
+  Classes, SysUtils, BaseUnix, target_config, nextpas.compiler.backend.plan,
   nextpas.compiler.diagnostics.sink, nextpas.compiler.frontend.package_manifest, nextpas.compiler.frontend.package_workflow,
   nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts, np_toolchain_plan, nextpas.compiler.frontend.unit_resolver,
   nextpas.compiler.frontend.workspace_model, np_toolchain_runner;

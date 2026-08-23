@@ -1,5 +1,5 @@
 {**
- * np_hir_to_mir.pas — HIR → MIR lowering pass
+ * nextpas.compiler.ir.hir.to_mir.pas — HIR → MIR lowering pass
  *
  * 将 HIR（高层类型化 AST）降级为 MIR（中层级控制流图）。
  * 这是 MIR 管线的入口点。
@@ -12,7 +12,7 @@
  * MIR module itself stays on the default heap (lives past scratch Reset).
  *}
 
-unit np_hir_to_mir;
+unit nextpas.compiler.ir.hir.to_mir;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -20,7 +20,7 @@ unit np_hir_to_mir;
 interface
 
 uses
-  np_hir_model, np_hir_types, np_mir_model,
+  nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.mir.model,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

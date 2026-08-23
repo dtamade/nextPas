@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_tailcall.pas — MIR Tail Call Optimization Pass
+ * nextpas.compiler.ir.mir.pass.tailcall.pas — MIR Tail Call Optimization Pass
  *
  * 将尾递归调用转换为循环（jump 到函数入口）。
  *
@@ -15,14 +15,14 @@
  * 对标：LLVM TailCallElim, rustc mir::transform::tailcall
  *}
 
-unit np_mir_pass_tailcall;
+unit nextpas.compiler.ir.mir.pass.tailcall;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_mir_model, np_mir_optimize;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize;
 
 type
   TMirTailCallPass = class(TInterfacedObject, IMirOptimizationPass)

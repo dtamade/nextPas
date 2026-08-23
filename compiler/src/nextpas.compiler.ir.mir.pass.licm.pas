@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_licm.pas — MIR Loop-Invariant Code Motion Pass
+ * nextpas.compiler.ir.mir.pass.licm.pas — MIR Loop-Invariant Code Motion Pass
  *
  * 将循环不变量提升到循环外，减少重复计算。
  *
@@ -13,7 +13,7 @@
  * 对标：LLVM LICM, rustc mir::transform::licm
  *}
 
-unit np_mir_pass_licm;
+unit nextpas.compiler.ir.mir.pass.licm;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -21,7 +21,7 @@ unit np_mir_pass_licm;
 interface
 
 uses
-  np_mir_model, np_mir_optimize,
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

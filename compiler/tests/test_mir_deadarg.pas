@@ -4,8 +4,8 @@ program test_mir_deadarg;
 
 uses
   SysUtils,
-  np_mir_model, np_mir_optimize,
-  np_mir_pass_deadarg;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
+  nextpas.compiler.ir.mir.pass.deadarg;
 
 procedure Fail(const AMessage: string);
 begin

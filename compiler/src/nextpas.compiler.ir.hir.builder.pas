@@ -1,4 +1,4 @@
-unit np_hir_builder;
+unit nextpas.compiler.ir.hir.builder;
 
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
@@ -7,7 +7,7 @@ unit np_hir_builder;
 interface
 
 uses
-  nextpas.compiler.sema.semantic_model, np_hir_types, np_hir_model, nextpas.compiler.frontend.source_database,
+  nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.frontend.source_database,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 
@@ -337,7 +337,7 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv, np_system_contracts;
+  nextpas.core.text.conv, nextpas.compiler.ir.system_contracts;
 
 procedure TExprStack.Init(AAllocator: IAllocator);
 begin

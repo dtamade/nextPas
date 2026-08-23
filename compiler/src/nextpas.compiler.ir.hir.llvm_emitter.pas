@@ -1,4 +1,4 @@
-unit np_hir_llvm_emitter;
+unit nextpas.compiler.ir.hir.llvm_emitter;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -6,7 +6,7 @@ unit np_hir_llvm_emitter;
 interface
 
 uses
-  np_hir_types, np_hir_model,
+  nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

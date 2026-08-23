@@ -4,7 +4,7 @@ program test_mir_strength_red;
 
 uses
   SysUtils,
-  np_mir_model, np_mir_optimize, np_mir_pass_strength_red;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize, nextpas.compiler.ir.mir.pass.strength_red;
 
 procedure Fail(const AMsg: string);
 begin

@@ -1,4 +1,4 @@
-unit np_backend_plan;
+unit nextpas.compiler.backend.plan;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../ir}
@@ -13,10 +13,10 @@ uses
   nextpas.core.mem.intf, nextpas.core.compiler.mem,
   nextpas.core.collections.vec,
   nextpas.compiler.targets.facts,
-  nextpas.compiler.sema.semantic_model, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_llvm_emitter, nextpas.compiler.diagnostics.json_helpers,
-  np_hir_to_mir, np_mir_model, np_mir_to_llvm,
-  np_mir_optimize, np_mir_pass_registry;
+  nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.builder,
+  nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.diagnostics.json_helpers,
+  nextpas.compiler.ir.hir.to_mir, nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.to_llvm,
+  nextpas.compiler.ir.mir.optimize, nextpas.compiler.ir.mir.pass.registry;
 
 type
   TBackendArtifact = record

@@ -1,5 +1,5 @@
 {**
- * np_mir_to_llvm.pas — MIR → LLVM IR translation
+ * nextpas.compiler.ir.mir.to_llvm.pas — MIR → LLVM IR translation
  *
  * 将 MIR 模块翻译为 LLVM IR 文本。
  * 对标 rustc_codegen_llvm。
@@ -9,7 +9,7 @@
  * 避免二次字符串拼接；调用方传入 PhaseScratch / FScratchAllocator。
  *}
 
-unit np_mir_to_llvm;
+unit nextpas.compiler.ir.mir.to_llvm;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -17,7 +17,7 @@ unit np_mir_to_llvm;
 interface
 
 uses
-  np_mir_model,
+  nextpas.compiler.ir.mir.model,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

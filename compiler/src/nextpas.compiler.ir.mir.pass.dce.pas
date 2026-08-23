@@ -1,5 +1,5 @@
 {**
- * np_mir_pass_dce.pas — MIR Dead Code Elimination Pass
+ * nextpas.compiler.ir.mir.pass.dce.pas — MIR Dead Code Elimination Pass
  *
  * 消除无用的赋值语句。
  *
@@ -13,7 +13,7 @@
  * 对标：rustc mir::transform::dce
  *}
 
-unit np_mir_pass_dce;
+unit nextpas.compiler.ir.mir.pass.dce;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -21,7 +21,7 @@ unit np_mir_pass_dce;
 interface
 
 uses
-  np_mir_model, np_mir_optimize,
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

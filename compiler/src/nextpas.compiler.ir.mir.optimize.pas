@@ -1,5 +1,5 @@
 {**
- * np_mir_optimize.pas — MIR optimization pass framework
+ * nextpas.compiler.ir.mir.optimize.pas — MIR optimization pass framework
  *
  * 对标 rustc MIR optimization passes。
  * 提供 Pass 注册/调度框架。具体优化 pass 在阶段 3 实现。
@@ -15,7 +15,7 @@
  * FPasses 表可挂 phase-scratch IAllocator（backend PhaseScratch）。
  *}
 
-unit np_mir_optimize;
+unit nextpas.compiler.ir.mir.optimize;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -23,7 +23,7 @@ unit np_mir_optimize;
 interface
 
 uses
-  np_mir_model,
+  nextpas.compiler.ir.mir.model,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

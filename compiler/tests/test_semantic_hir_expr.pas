@@ -3,7 +3,7 @@ program test_semantic_hir_expr;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.compiler.sema.semantic_model, np_hir_types;
+  nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types;
 
 var
   Model: TSemanticModel;

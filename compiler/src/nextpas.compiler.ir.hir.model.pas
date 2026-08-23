@@ -1,4 +1,4 @@
-unit np_hir_model;
+unit nextpas.compiler.ir.hir.model;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -7,7 +7,7 @@ interface
 
 uses
   nextpas.core.collections.vec,
-  np_hir_types, np_system_contracts;
+  nextpas.compiler.ir.hir.types, nextpas.compiler.ir.system_contracts;
 
 type
   THIRValueId = LongInt;

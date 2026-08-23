@@ -1,4 +1,4 @@
-unit np_hir_verifier;
+unit nextpas.compiler.ir.hir.verifier;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -8,7 +8,7 @@ interface
 uses
   nextpas.core.mem.intf,
   nextpas.core.collections.vec,
-  np_hir_types, np_hir_model;
+  nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model;
 
 type
   THIRVerifyError = record
@@ -45,7 +45,7 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv, np_system_contracts;
+  nextpas.core.text.conv, nextpas.compiler.ir.system_contracts;
 
 constructor THIRVerifier.Create(AModule: THIRModule; AAllocator: IAllocator);
 begin
