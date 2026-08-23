@@ -310,7 +310,17 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
-| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ⬜ |
+| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ⬜ 静态侦察已就绪（见下行 P1 侦察块） |
+
+**P1 静态侦察（2026-08-23，只读 grep，数字可复现）**：播种热区字符串
+操作点共 **140 处**——`np_sema_seed_function_bodies.inc` ×63、
+`np_sema_call_binding.inc` ×62、analyzer ×12、overload_lookup ×3；
+其中最高频模式是循环内 `SameText(X.Text, 'String'/'AnsiString')`
+对**常量字面量**做逐字符大小写折叠（seed 文件内 ≥8 组），P1 首刀即此：
+常量比较改廉价精确匹配或预折叠缓存；次刀=THashMap 当前仅 3 个 sema
+文件使用，body 名索引扩容接 swiss.str；第三刀=FProcedureBodies 多趟
+全表扫描（477/504/517/528 行四趟）合并。THashMap 消费面与 i17 的
+LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
 | P2 | sema/HIR 接 compiler.mem UnitScope/SessionScope | RSS 显著降 | ⬜ |
 | P3 | 单元级并行 sema（parallel_scheduler+sync.waitgroup） | **前置：分区 ID 语义设计 spike（L2）**；通过后端到端 ≥2×（44 逻辑核，seed 相目标近线性） | ⬜ 受 L2 约束 |
 | P4 | backend cache 单元级复用 | 基线刷新脱离 2 小时级 | ⬜ |
