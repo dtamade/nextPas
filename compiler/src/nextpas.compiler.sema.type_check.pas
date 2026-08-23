@@ -110,7 +110,7 @@ function TypeSymbolForTypeId(const AModel: TSemanticModel; const ATypeId: LongIn
   out ASymbol: TSemanticSymbol): Boolean;
 var
   Index: LongInt;
-  Symbol: TSemanticSymbol;
+  P: PSemanticSymbol;
 begin
   ASymbol.SymbolId := 0;
   ASymbol.Name := '';
@@ -124,12 +124,14 @@ begin
   Result := False;
   if (ATypeId <= 0) or (ATypeId > AModel.TypeCount) then
     Exit;
+  { Pointer scan, TypeId compared first: identical first-match semantics as
+    the former SymbolAt loop without a managed record copy per symbol. }
   for Index := 0 to AModel.SymbolCount - 1 do
   begin
-    Symbol := AModel.SymbolAt(Index);
-    if SameText(Symbol.Kind, 'type') and (Symbol.TypeId = ATypeId) then
+    P := AModel.SymbolPtr(Index);
+    if (P <> nil) and (P^.TypeId = ATypeId) and SameText(P^.Kind, 'type') then
     begin
-      ASymbol := Symbol;
+      ASymbol := P^;
       Exit(True);
     end;
   end;

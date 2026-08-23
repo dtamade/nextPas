@@ -20,6 +20,13 @@ begin
   Result := FSymbols[SizeUInt(AIndex)];
 end;
 
+function TSemanticModel.SymbolPtr(const AIndex: LongInt): PSemanticSymbol;
+begin
+  if (AIndex < 0) or (AIndex >= LongInt(FSymbols.Count)) then
+    Exit(nil);
+  Result := FSymbols.GetPtrUnchecked(SizeUInt(AIndex));
+end;
+
 function TSemanticModel.FindTypeByName(const AName: string): LongInt;
 begin
   if not FTypeNameIndex.TryGetValue(LowerCase(AName), Result) then

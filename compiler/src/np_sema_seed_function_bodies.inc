@@ -563,23 +563,20 @@ var
     fails. Freestanding LLVM still uses zeroed local allocas (no static link). }
   function FindOuterDeclOf(const ANested: TGreenNode): TGreenNode;
   var
-    BI, BJ: LongInt;
-    Cand, NestChild: TGreenNode;
+    BI: LongInt;
+    Cand: TGreenNode;
   begin
     Result := nil;
     if ANested = nil then
       Exit;
     for BI := 0 to LongInt(FProcedureBodies.Count) - 1 do
     begin
-      Cand := FProcedureBodies[BI].Decl;
+      { In-place entry access: indexing copies the whole managed record. }
+      Cand := FProcedureBodies.GetPtrUnchecked(BI)^.Decl;
       if Cand = nil then
         Continue;
-      for BJ := 0 to Cand.ChildCount - 1 do
-      begin
-        NestChild := Cand.ChildAt(BJ);
-        if NestChild = ANested then
-          Exit(Cand);
-      end;
+      if Cand.ChildIndexOf(ANested) >= 0 then
+        Exit(Cand);
     end;
   end;
 

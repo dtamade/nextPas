@@ -141,6 +141,10 @@ type
       nextpas.core.text SameText). }
     function TextLen: LongInt;
     function TextEquals(const AValue: string; AIgnoreCase: Boolean = False): Boolean;
+    { Zero-copy membership probe: index of ANode among Self's children, or
+      -1. Mirrors ChildAt traversal (including the cyclic self-child skip)
+      without materializing facade records. }
+    function ChildIndexOf(const ANode: TGreenNode): LongInt;
     function IsNil: Boolean; inline;
     property NodeKind: TGreenNodeKind read GetNodeKind write SetNodeKind;
     property ByteOffset: LongInt read GetByteOffset;

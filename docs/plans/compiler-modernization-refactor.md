@@ -4,8 +4,10 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-24（v2.21：P1 刀⑥ ResolveTypeIdForOwner
-同名链游走落地 seed -73%（A/B 实证迄今最大单刀）+mini tree 探针 API 漂移修复；
+创建：2026-08-23　最后更新：2026-08-24（v2.22：P1 刀⑦ 模型/绿树按值访问
+消除落地 seed 再 -69%（59.1s→17.9/18.2s，今日累计 -91.8%）+gdb 复剖析
+驱动选靶；v2.21：P1 刀⑥ ResolveTypeIdForOwner 同名链游走落地 seed -73%
+（A/B 实证迄今最大单刀）+mini tree 探针 API 漂移修复；
 v2.20：P1 刀⑤ 绿树零分配文本 API 落地 seed 累计 -8%；v2.19：seed 子相归因
 96%=encode+gdb 剖析解锁+刀④噪声级落地+刀①③ D20 降级；v2.18：P1 刀② 落地
 seed -1.5%/-2.4%；
@@ -21,11 +23,11 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
-性能批次  ███░░░░░░░░░░░░░  P0✅ │ P1: 刀②⑤✅累计-8%·刀⑥✅seed -73%(A/B 实证,220.5s→58.0/60.0s) │ 声明处理扫描区已削
+性能批次  ████▏░░░░░░░░░░░  P0✅ │ P1: 刀⑥✅seed -73%·刀⑦✅seed 再-69%(59.1→17.9/18.2s) │ 今日累计 -91.8%
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅
-顶尖差距  冷编译 ~900×→刀⑥后大幅收敛      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    P1 复剖析(gdb 重采样定位新榜首) → swiss 接线 → P2 arena
+顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
+下一口    P1 复剖析第三轮(gdb 重采样,encode 内字符串构造为候选) → swiss 接线 → P2 arena
 ```
 
 ---
@@ -149,6 +151,33 @@ SymbolId=存储下标+1 ⇒ 链收集后倒序回填=插入序子序列，tie-br
 内部；相位总 seed 里还有 ~163s 在未探针的导入单元声明注册区，被
 「encode 占 96%」结论掩盖，本轮 A/B 直接暴露。教训：子相探针必须先与
 相位总量对账再下结论；跨日对比前先跑当日基线腿。
+
+**复剖析第一轮→刀⑦**（2026-08-24，stage0-debug 重建含刀⑥，
+tree mini llvm 绑定+每 2s gdb 批采样 49 样本）：叶帧 fpc_copy 26.5%+
+fpc_ansistr_assign 14.3%（托管拷贝机器仍主导），**GetItem
+(vec.pas:1038 按值记录返回) 单独 14.3%，其调用方归因=SymbolAt 家族
+合计 16/49≈33%**——头号 `TypeSymbolForTypeId`(type_check.pas) 全表扫
+10 样本、次号 `FindOuterDeclOf`(seed_function_bodies.inc)+ChildAt ~7
+样本、零星 GetTypeMeta×3/InstantiateGenericType 等。刀⑦ 即按此选靶：
+
+| 腿 | seed | sema |
+|----|-----:|-----:|
+| 基线（HEAD=0e32906da 刀⑥ 状态，同日重建） | 59100 ms | 76870 ms |
+| 刀⑦ 两轮 | **17903 / 18231 ms** | **36174 / 36191 ms** |
+
+Δ = seed **-69.7%/-69.2%（约 -41s）**、sema **约 -53%（-40.7s）**；
+两轮方差 1.8%。encode 子相自身 54s→14.5s——两靶都在编码循环内部，
+与剖析归因吻合。**今日累计 seed 220.5s→17.9s = -91.8%**。
+
+**刀⑦ 落地内容**：①`TSemanticModel.SymbolPtr`（PSemanticSymbol 零拷贝
+访问器，越界返回 nil）；`TypeSymbolForTypeId` 改指针扫+谓词重排
+（TypeId 整数比较前置，SameText 仅对命中者付）——首匹配语义不变。
+②绿树 `ChildIndexOf(ANode)` 零拷贝成员探测（镜像 ChildAt 遍历含循环
+自孩子跳过；身份=(FOwner,FIndex) 见 =(A,B) 运算符）；`FindOuterDeclOf`
+改 `GetPtrUnchecked(BI)^.Decl` 就地取条目+ChildIndexOf——原先每候选
+体付整条 TProcedureBodyEntry 托管记录拷贝+每孩子 32B 数据+16B 门面双份
+拷贝。遗留靶：GetTypeMeta(TSemanticType 按值)×3 样本、encode 内字符串
+构造。
 
 **P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
 `np_sema_seed_function_bodies.inc`；一轮 tree mini）：
@@ -381,7 +410,7 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
-| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②✅+刀⑤✅+刀⑥✅（刀⑥ seed -73%，A/B 实证）+子相探针+gdb 剖析基建✅；刀①③ D20 降级挂起；下一靶=复剖析重采样定位新榜首 |
+| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②⑤⑥⑦✅（⑥ -73%、⑦ 再 -69%，今日累计 seed -91.8%）+子相探针+gdb 剖析基建✅；刀①③ D20 降级挂起；下一靶=复剖析第三轮重采样 |
 
 **P1 静态侦察（2026-08-23，只读 grep，数字可复现）**：播种热区字符串
 操作点共 **140 处**——`np_sema_seed_function_bodies.inc` ×63、
@@ -458,6 +487,16 @@ LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
   TGreenRootKind 枚举非法（此前靠 gnu 绑定路径的陈旧 ppu 遮蔽假性通过，
   fixture 刷新缓存后暴露）→改 `grkUnknown` 比较。遗留靶：encode 相内部
   字符串构造仍待削（gdb 复采样定位新榜首）。
+- **刀⑦ 模型/绿树按值访问消除（✅ 已落地，复剖析驱动）**：选靶=剖析
+  第一轮重采样（49 样本）：SymbolAt 家族 33%（头号 TypeSymbolForTypeId
+  全表扫）、FindOuterDeclOf+ChildAt ~14%。①`SymbolPtr` 访问器+
+  `TypeSymbolForTypeId` 指针扫+谓词重排（TypeId 整数前置；首匹配语义
+  不变）；②绿树 `ChildIndexOf` 零拷贝成员探测+`FindOuterDeclOf`
+  GetPtrUnchecked 就地取条目（原每候选体付整条 TProcedureBodyEntry
+  托管拷贝+每孩子双份记录拷贝）。**实测 A/B（同日 stash 对照）：seed
+  59.1s→17.9/18.2s（-69%）、sema 76.9→36.2s（-53%）**，encode 子相
+  54→14.5s 证实两靶在编码循环内。今日累计 seed -91.8%。遗留靶：
+  GetTypeMeta 按值×3 样本、encode 内字符串构造。
 - **度量协议**：每刀落地后 `NEXTPAS_PHASE_TIMING=1` tree mini 两轮，
   seed 相对 §2.3 基线 235s/238s 对比；验收=总分钟数降+residual 0/0
   保持+十三探针零新回归。（D21 补充：跨日对比先跑当日基线腿；子相

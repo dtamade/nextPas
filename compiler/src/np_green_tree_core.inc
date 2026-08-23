@@ -499,3 +499,34 @@ begin
   else
     Result := nil;
 end;
+
+function TGreenNode.ChildIndexOf(const ANode: TGreenNode): LongInt;
+var
+  D: TGreenNodeData;
+  ChildLinkIndex: LongInt;
+  ChildNodeIndex: LongInt;
+  I: LongInt;
+begin
+  Result := -1;
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit;
+  { Identity is (FOwner, FIndex); a foreign-tree node can never match. }
+  if ANode.FOwner <> FOwner then
+    Exit;
+  D := FOwner.FNodes[FIndex];
+  if (D.ChildStart < 0) then
+    Exit;
+  for I := 0 to D.ChildCount - 1 do
+  begin
+    ChildLinkIndex := D.ChildStart + I;
+    if (ChildLinkIndex < 0) or
+      (ChildLinkIndex >= FOwner.FChildIndices.Count) then
+      Exit;
+    ChildNodeIndex := FOwner.FChildIndices[ChildLinkIndex];
+    { Skip the cyclic self-child that ChildAt nils out. }
+    if ChildNodeIndex = FIndex then
+      Continue;
+    if ChildNodeIndex = ANode.FIndex then
+      Exit(I);
+  end;
+end;

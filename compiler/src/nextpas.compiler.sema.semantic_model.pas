@@ -95,6 +95,9 @@ type
       at the newest head; walk NextSameNameId for all overloads O(k). }
     NextSameNameId: LongInt;
   end;
+  { Read-only in-place access into symbol storage. The pointer is valid only
+    until the next FSymbols mutation (Push/realloc) — never store it. }
+  PSemanticSymbol = ^TSemanticSymbol;
 
   TGenericParentRef = record
     TemplateTypeId: LongInt;
@@ -371,6 +374,8 @@ type
     ): LongInt;
     function SymbolCount: LongInt;
     function SymbolAt(const AIndex: LongInt): TSemanticSymbol;
+    { Zero-copy twin of SymbolAt for hot scans; nil when out of range. }
+    function SymbolPtr(const AIndex: LongInt): PSemanticSymbol;
     function FindTypeByName(const AName: string): LongInt;
     function FindSymbolByName(const AName: string): LongInt;
     { First (newest) SymbolId for AName, or 0. Walk with NextSymbolIdSameName. }
