@@ -155,7 +155,12 @@ begin
   if FNoFold then
   begin
     SemaTrace('SeedFunctionBodies...');
-    SeedFunctionBodies;
+    PhaseBegin('seed');
+    try
+      SeedFunctionBodies;
+    finally
+      PhaseEnd('seed');
+    end;
     SemaTrace('SeedUnitLifecycleBodies...');
     SeedUnitLifecycleBodies;
   end;

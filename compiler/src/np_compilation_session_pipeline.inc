@@ -370,6 +370,7 @@ var
   PathLen: SizeUInt;
   ScratchSize: SizeUInt;
 begin
+  PhaseBegin('syntax');
   { Unit phase over session VirtualArena: MemAlloc scratch, UnitEnd bulk-reclaims. }
   FMemScope.UnitBegin;
   try
@@ -413,6 +414,7 @@ begin
       FSyntaxStatus := 'ready';
   finally
     FMemScope.UnitEnd;
+    PhaseEnd('syntax');
   end;
 end;
 
@@ -424,6 +426,7 @@ var
   PathLen: SizeUInt;
   ScratchUsed: SizeUInt;
 begin
+  PhaseBegin('resolution');
   { Unit phase: resolution scratch on session arena; UnitEnd records peak. }
   FMemScope.UnitBegin;
   try
@@ -479,6 +482,7 @@ begin
     ResetScratchAllocator;
   finally
     FMemScope.UnitEnd;
+    PhaseEnd('resolution');
   end;
 end;
 
@@ -490,6 +494,7 @@ var
   DiskModel: TSemanticModel;
   PhaseScratch: Pointer;
 begin
+  PhaseBegin('sema');
   { Query cache: if we already analyzed this file, skip }
   CacheKey := 'semantic:' + FSourceDatabase.RootSourceCanonicalPath;
   CachedModel := FQueryDB.Get(CacheKey, nil);
@@ -596,6 +601,7 @@ begin
     FMemScope.UnitEnd;
     WriteLn(StdErr, '[pipe] after UnitEnd');
     Flush(StdErr);
+    PhaseEnd('sema');
   end;
   WriteLn(StdErr, '[pipe] AnalyzeSemantics return');
   Flush(StdErr);
@@ -611,6 +617,7 @@ var
   LlvmOutput: string;
   PhaseScratch: Pointer;
 begin
+  PhaseBegin('mir');
   WriteLn(StdErr, '[pipe] LowerToMir begin');
   Flush(StdErr);
   FMemScope.UnitBegin;
@@ -681,6 +688,7 @@ begin
     end;
   finally
     FMemScope.UnitEnd;
+    PhaseEnd('mir');
   end;
   WriteLn(StdErr, '[pipe] LowerToMir end status=', FMirStatus);
   Flush(StdErr);

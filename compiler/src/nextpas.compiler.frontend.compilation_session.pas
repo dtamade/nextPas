@@ -30,6 +30,7 @@ uses
   nextpas.compiler.frontend.file_change_detector,
   nextpas.compiler.frontend.parallel_scheduler,
   nextpas.compiler.frontend.incremental_cache,
+  nextpas.compiler.frontend.phase_timing,
   np_mir_to_llvm, nextpas.compiler.diagnostics.json_helpers;
 
 type

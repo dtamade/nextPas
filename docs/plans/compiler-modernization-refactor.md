@@ -4,19 +4,20 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.9：顶部状态仪表盘+风险编号
-R1-R8+验收门精确命令；v2.8：§3.5 顶尖基准；v2.7：接口立项清单；
+创建：2026-08-23　最后更新：2026-08-23（v2.12：P0 计时探针落地+相位实测表；
+v2.11：N3 落地；v2.9：顶部状态仪表盘+风险编号 R1-R8+验收门精确命令；
+v2.8：§3.5 顶尖基准；v2.7：接口立项清单；
 v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 
 ## 0. 状态仪表盘（每批落地时更新此块）
 
 ```
-迁移进度  ██████████░░░░░░  N1✅ N2✅ N3✅ │ 24/66 单元 │ compiler/src 43 文件
-性能批次  ░░░░░░░░░░░░░░░░░  P0 待启动（下一插入点）
+迁移进度  ██████████░░░░░░  N1✅ N2✅ N3✅(+收尾) │ 24/66 单元 │ compiler/src 44 文件
+性能批次  ██░░░░░░░░░░░░░░░  P0✅ 计时探针落地 │ tree mini: sema 占 99%·播种占 80%·i17 开销仅 1.6%
 正确性    residual 0/0 ✅   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅   FPC rebuild ✅   np 自举 tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    P0 阶段计时探针 → N4 sema×12+lowering
+下一口    N4 sema×12+lowering 迁移 → mini-regress 13 探针
 ```
 
 ---
@@ -87,7 +88,33 @@ core THashMap（修正早期 O(n²) 判断），但每次查找现场 LowerCase(
 
 单线程 100% 单核、~3.3 函数体/秒、RSS 1.4 GB、15.6k 函数体；
 全量一轮 ~130-155 分钟（FPC 编同一棵树 ~75 秒，差两个数量级）。
-精确阶段耗时分布未知——P0 前禁止凭感觉优化。
+
+**P0 阶段计时实测**（2026-08-23，探针 `nextpas.compiler.frontend.phase_timing`，
+env `NEXTPAS_PHASE_TIMING=1`，TSV `/tmp/m2-phase-timing.tsv`；tree mini
+`build/m2_mini_tree.pas` 两次运行，方差全部 <2%）：
+
+| 相位 | Run1 | Run2 | 占比（对四相合计 ~301s） |
+|------|-----:|-----:|------|
+| syntax | 1 ms | 1 ms | ~0% |
+| resolution | 4744 ms | 4666 ms | ~1.6% |
+| seed（嵌套于 sema） | **235366 ms** | **238748 ms** | **~79%** |
+| sema（含 seed） | **296080 ms** | **299292 ms** | **~99%** |
+| mir | 0 ms | 0 ms | 0%（NEXTPAS_MIR 路径） |
+
+结论：**瓶颈高度集中——sema 相占 tree mini 全程 ~99%，其中
+SeedFunctionBodies 播种独占 ~80%**。P1 索引分配优化的主战场即播种路径；
+resolution 的 4.7s 为次要目标；syntax/mir 可忽略。
+
+**b4b-i17 开销量化**（同输入 A/B：正向=含 i17 的 LookupProcedureBody
+实例名扫描，反向=`git apply -R` a3e71253c 的 +9 行后重编译）：
+
+| 口径 | 有 i17（两轮均值） | 无 i17 | i17 开销 |
+|------|-----:|-----:|------|
+| seed | 237057 ms | 232525 ms | **+4532 ms (~1.9%)** |
+| sema 合计 | 297686 ms | 292906 ms | **+4780 ms (~1.6%)** |
+
+i17 名字扫描代价 ~5s/次 tree mini，量级可接受非主要矛盾；反向组 exit=1
+同时复现了 i17 修复前行为，交叉验证补丁有效性。
 
 ### 2.4 目录形态对照
 
@@ -279,7 +306,7 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
-| P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ⬜ 下一起点 |
+| P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
 | P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ⬜ |
 | P2 | sema/HIR 接 compiler.mem UnitScope/SessionScope | RSS 显著降 | ⬜ |
 | P3 | 单元级并行 sema（parallel_scheduler+sync.waitgroup） | **前置：分区 ID 语义设计 spike（L2）**；通过后端到端 ≥2×（44 逻辑核，seed 相目标近线性） | ⬜ 受 L2 约束 |
@@ -288,19 +315,24 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 节奏：N1→N2→**P0**→N3→N4→P1→N5→P2→N6→P3→P4（各阶段量化目标见 §3.5，
 P5+ 地平线批次见 §3.5.3）。
 
-### 4.2.1 P0 阶段计时探针设计草案
+### 4.2.1 P0 阶段计时探针（已落地 2026-08-23）
 
-- **打点位置**（复用 SemaTrace 冷路径先例——写文件不算热 walk）：
-  `lex`（lexer 进入/退出）、`parse`（green_tree 构建）、`resolution`
-  （unit_resolver 全程）、`seed`（SeedFunctionBodies 进度已有日志，改为
-  带时间戳）、`sema-per-unit`、`hir-build`、`emit-llvm`、尾部
-  `opt -O2 / verify` 由 residual 脚本计时；
-- **输出**：`/tmp/m2-phase-timing.tsv`（phase,unit?,ms），会话结束汇总一行
-  进构建日志；默认关闭，环境变量 `NEXTPAS_PHASE_TIMING=1` 开启；
-- **交付物**：①各相耗时占比表进本文件 §2.3 与 ROADMAP 新列；
-  ②perf record 采样 top-10 热函数清单；③b4b-i17 LookupProcedureBody
-  开销专项数字（对比 i16 探针二进制同输入耗时）；
-- **验收**：三件套齐 + 数字可复现（同输入两次运行偏差 <10%）。
+- **实现**：新单元 `nextpas.compiler.frontend.phase_timing`（env
+  `NEXTPAS_PHASE_TIMING=1/true/on` 门控，`PhaseBegin/PhaseEnd` 名字匹配
+  栈式嵌套，每 PhaseEnd 追加一行 TSV 到 `/tmp/m2-phase-timing.tsv`，
+  Append/Rewrite 回退沿用 SemaTrace 冷路径模式；默认关=每次边界一次布尔判断）；
+- **实际打点**：`syntax`（AnalyzeSyntax 全程）、`resolution`
+  （ResolveUnits 全程）、`sema`（AnalyzeSemantics 全程）、`seed`
+  （SeedFunctionBodies，嵌套于 sema）、`mir`（LowerToMir）——五处接线于
+  `np_compilation_session_pipeline.inc` 与 `np_sema_seed_foreign_procedures.inc`；
+- **与原设计的偏差**：lex/parse 合并为 syntax 单相；sema-per-unit、
+  hir-build、emit-llvm 细分打点未做（相位级答案已定位主战场，细分留待
+  P1 需要时加）；opt -O2/verify 尾部仍由 residual 脚本计时；
+- **交付物**：①相位占比表→§2.3+ROADMAP ✅；②perf top-10 热函数——**受阻**：
+  `perf_event_paranoid≥2` 无 root + 探针二进制 strip 无符号；解法归
+  P1 启动时处理（stage0 flags 加 `-g` 重链或 sysctl 放宽）；
+  ③i17 开销 A/B ✅（反向补丁 a3e71253c 实测 +4.8s/~1.6%，见 §2.3）；
+- **验收**：数字可复现达成（同输入两轮偏差全部 <2% <10% 阈值）。
 
 ### 4.3 验收门定义（每批必过）
 
@@ -448,6 +480,7 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 | D12 | 总控目标 | 增补 §3.5 顶尖编译器基准与路线：Go 锚点本机一手实测（net/http 冷 8.65s/热 0.19s）对比全量自举 ~900× 差距；量化目标表（分钟数 130-155→≤45→≤15、RSS→≤600MB→≤400MB、正确性红线恒定）；P5+ 地平线批次（诊断现代化/query spike/LSP 工具链/fuzz 进门禁）；顶尖定义可证伪——每个数字附测量方法 |
 | D13 | 总控确认轮 | 内部模块化全量审计（127 条内部依赖边）：推翻「ir→sema 唯一反向依赖」旧表述——实测上行违规 6 条+sema↔ir 双向耦合 14 边；根因=typed-HIR 在 sema 内构建（架构级信号：HIR 构建职责可能本应在 ir 层，归 N7 裁决）；意外发现 syntax.green_tree 反向依赖 frontend.source_database、unit_resolver 依赖 toolchain_profiles；处置入 R9：N3-N5 每批验收门必须处置进门禁射程的新增 FAIL |
 | D14 | N3 | 工具教训：zsh 不对裸变量做字段分词——N3 首次用 `$files` 变量传文件清单导致 sed 整串当单文件名、清扫大面积空转（残留 90）；N1/N2 的内联 `$(grep -rl …)` 恰好可分词故未暴露。修复=回归内联模式，残留清零。后续批次统一内联或 `${=var}` |
+| D15 | P0 | 工具教训：探针副本陈旧伪装回归——A/B 实测后恢复 i17 并 rebuild 了 build/stage0-bootstrap/nextpas，但忘记重拷 `./nextpas-m2-l3-probe`，收尾 tree mini 用了无-i17 的 B 组二进制报 SyncDataPtr undefined exit 1。鉴别=源码 diff 干净+重建后刷新探针即 PASS。纪律：**每次 rebuild 后凡跑 mini 必先重拷探针**（§4.3 命令块已含此步，执行时不可跳） |
 
 ## 7. 风险登记册
 
@@ -501,7 +534,8 @@ P0 基线数字，回滚判据客观化。
 | v2.8 | 80b8575ac | 总控目标：新增 §3.5 顶尖编译器基准与路线——Go 锚点一手实测（冷 8.65s/热 0.19s，~900× 差距锚定）、量化目标表、P5+ 地平线批次（诊断/查询式增量/LSP/fuzz）；台账 D12 |
 | v2.9 | e32964a74 | 可用性收尾轮：§0 顶部状态仪表盘（每批更新）、风险册编号 R1-R7b-R8、§4.3 验收门精确复现命令（tree mini 全命令）、§2.4 迁移现状标注——此后文档冻结进执行节奏，边际工作转向 N3/P0 |
 | v2.10 | 326585e07 | 总控确认轮：内部模块化全量依赖审计（127 边）——推翻「唯一反向依赖」旧表述，实测 6 条上行违规+sema↔ir 双向耦合；R9 结构债立项；支柱三修正；N3-N5 验收门加 FAIL 处置要求；台账 D13。回答「模块化是否足够好」：及格但未达顶尖，结构债已全部登记在案 |
-| v2.11 | （本提交） | N3 落地：frontend 14 单元+7 inc 迁入 src（累计 24/66）；仪表盘刷新；台账 D14 记 zsh 分词工具教训 |
+| v2.11 | 1440adc69 | N3 落地：frontend 14 单元+7 inc 迁入 src（累计 24/66）；仪表盘刷新；台账 D14 记 zsh 分词工具教训 |
+| v2.12 | （本提交） | P0 落地+N3 收尾（门禁扩至 23 名+漏网改名 21 处，05ef72669）：phase_timing 探针五相接线；§2.3 实测相位表——tree mini sema 占 99%/播种占 80%，i17 开销 +4.8s(1.6%) 非主要矛盾；perf top-10 受阻登记归 P1；仪表盘/批次表同步 |
 
 ## 10. 文档维护规则
 
