@@ -4,6 +4,10 @@ unit nextpas.core.http.middleware.requestid;
  *       X-Request-Id header for distributed tracing and debugging.
  *       Preserves existing X-Request-Id from proxies/clients.
  *       Generates a new UUID v4 if not present.
+ *       The resolved id is also stashed into the request context bag
+ *       (key CONTEXT_REQUEST_ID) when a context middleware ran before
+ *       this one, so downstream code (logger extras, recovery, handlers)
+ *       can correlate logs without parsing response headers.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -12,6 +16,11 @@ interface
 
 uses
   nextpas.core.http.intf;
+
+const
+  {** Context-bag key for the resolved request id; read via
+      HttpContextGetString(HttpContextOf(AReq), CONTEXT_REQUEST_ID). }
+  CONTEXT_REQUEST_ID = 'request_id';
 
 type
   {** Callback type for custom request ID generation.
@@ -34,7 +43,8 @@ implementation
 
 uses
   nextpas.core.platform.random,
-  nextpas.core.http.middleware;
+  nextpas.core.http.middleware,
+  nextpas.core.http.middleware.context;
 
 const
   HEX_CHARS: array[0..15] of Char = '0123456789abcdef';
@@ -109,11 +119,17 @@ begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
       LRequestId: string;
+      LCtx: IHttpContext;
     begin
       LRequestId := AReq.GetHeaders.Get(LHeader);
       if LRequestId = '' then
         LRequestId := LGen();
       AW.GetHeaders.SetHeader(LHeader, LRequestId);
+      { 有上下文袋则落袋，供下游（logger extras / recovery / handler）
+        做日志关联；无袋（context 中间件不在外层）时优雅跳过。 }
+      LCtx := HttpContextOf(AReq);
+      if LCtx <> nil then
+        HttpContextSetString(LCtx, CONTEXT_REQUEST_ID, LRequestId);
       ANext.ServeHTTP(AReq, AW);
     end);
   end);
