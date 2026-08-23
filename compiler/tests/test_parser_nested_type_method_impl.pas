@@ -3,7 +3,7 @@ program test_parser_nested_type_method_impl;
 {$mode objfpc}{$H+}
 
 uses
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_lexer;
 

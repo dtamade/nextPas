@@ -4,7 +4,7 @@ program test_green_tree_child_adjacency;
 
 uses
   SysUtils,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_lexer;
 

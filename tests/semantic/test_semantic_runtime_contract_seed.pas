@@ -5,7 +5,7 @@ program test_semantic_runtime_contract_seed;
 uses
   SysUtils,
   np_ast_facade,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_lexer,
   np_semantic_analyzer,

@@ -22,7 +22,7 @@ unit np_error_recovery;
 interface
 
 uses
-  np_lexer, np_diagnostics_sink, np_base_types;
+  np_lexer, nextpas.compiler.diagnostics.sink, np_base_types;
 
 type
   {**

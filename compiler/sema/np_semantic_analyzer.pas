@@ -10,7 +10,7 @@ unit np_semantic_analyzer;
 interface
 
 uses
-  np_ast_facade, np_base_types, np_diagnostics_sink, np_preprocessor,
+  np_ast_facade, np_base_types, nextpas.compiler.diagnostics.sink, np_preprocessor,
   np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer,
   np_hir_types, np_sema_name_set, np_sema_builtins, np_sema_overload,
   np_sema_type_check, np_hir_lowering, np_sema_runtime_vars,
@@ -25,7 +25,7 @@ implementation
 
 uses
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
-  nextpas.core.system.contracts, np_symbol_cache, np_diagnostics_enhanced;
+  nextpas.core.system.contracts, np_symbol_cache, nextpas.compiler.diagnostics.enhanced;
 
 type
   TStringArray = array of string;

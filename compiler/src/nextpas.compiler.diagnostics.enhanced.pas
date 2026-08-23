@@ -1,5 +1,5 @@
 {**
- * np_diagnostics_enhanced.pas — Enhanced Diagnostic Helpers
+ * nextpas.compiler.diagnostics.enhanced.pas — Enhanced Diagnostic Helpers
  *
  * 提供 rustc 风格的诊断增强：
  *   1. 错误代码体系 (E0001-E9999)
@@ -7,7 +7,7 @@
  *   3. 编辑距离计算
  *}
 
-unit np_diagnostics_enhanced;
+unit nextpas.compiler.diagnostics.enhanced;
 
 {$mode objfpc}{$H+}
 
@@ -15,7 +15,7 @@ interface
 
 uses
   SysUtils,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_base_types;
 
 { === 错误代码体系 === }

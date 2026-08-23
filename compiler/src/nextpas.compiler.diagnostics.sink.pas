@@ -1,4 +1,4 @@
-unit np_diagnostics_sink;
+unit nextpas.compiler.diagnostics.sink;
 
 {$mode objfpc}{$H+}
 {$UNITPATH .}
@@ -11,7 +11,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.collections.vec,
   np_base_types,
-  nextpas_json_helpers;
+  nextpas.compiler.diagnostics.json_helpers;
 
 type
   TDiagnosticsPolicy = record

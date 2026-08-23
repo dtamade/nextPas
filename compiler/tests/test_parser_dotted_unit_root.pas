@@ -4,7 +4,7 @@ program test_parser_dotted_unit_root;
 
 uses
   np_ast_facade,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_lexer;
 

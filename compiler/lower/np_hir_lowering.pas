@@ -26,7 +26,7 @@ uses
   np_sema_runtime_vars,
   np_hir_model,
   np_source_database,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_sema_overload,
   np_base_types;
 

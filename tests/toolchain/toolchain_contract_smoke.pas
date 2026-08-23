@@ -16,8 +16,8 @@ program toolchain_contract_smoke;
 
 uses
   Classes, SysUtils, BaseUnix, target_config, np_backend_plan,
-  np_diagnostics_sink, np_package_manifest, np_package_workflow,
-  np_source_database, np_target_facts, np_toolchain_plan, np_unit_resolver,
+  nextpas.compiler.diagnostics.sink, np_package_manifest, np_package_workflow,
+  np_source_database, nextpas.compiler.targets.facts, np_toolchain_plan, np_unit_resolver,
   np_workspace_model, np_toolchain_runner;
 
 function BuildFactsFromConfig(const AConfig: TTargetConfig): TTargetFactsView;

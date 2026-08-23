@@ -5,7 +5,7 @@ program test_hir_string_call_argument_ownership_contract;
 uses
   SysUtils,
   np_ast_facade,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_lexer,
   np_semantic_analyzer,

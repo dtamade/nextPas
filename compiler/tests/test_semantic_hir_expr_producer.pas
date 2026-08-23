@@ -5,7 +5,7 @@ program test_semantic_hir_expr_producer;
 uses
   nextpas.core.text.conv,
   np_ast_facade,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_hir_builder,
   np_hir_llvm_emitter,

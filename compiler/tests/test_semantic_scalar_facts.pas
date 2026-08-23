@@ -4,7 +4,7 @@ program test_semantic_scalar_facts;
 
 uses
   np_ast_facade,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_lexer,
   np_semantic_analyzer,

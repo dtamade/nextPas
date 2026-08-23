@@ -8,12 +8,12 @@ uses
   nextpas.core.path,
   nextpas.core.text.conv,
   np_ast_facade,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_lexer,
   np_package_manifest,
   np_source_database,
-  np_target_facts,
+  nextpas.compiler.targets.facts,
   np_unit_resolver;
 
 procedure WriteTextFile(const APath: string; const AText: string);

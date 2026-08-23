@@ -12,7 +12,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.collections.vec,
   np_base_types,
-  np_diagnostics_sink;
+  nextpas.compiler.diagnostics.sink;
 
 type
   TTokenKind = (

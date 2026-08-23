@@ -1,5 +1,5 @@
 {**
- * np_diagnostics_json.pas — JSON Diagnostic Output
+ * nextpas.compiler.diagnostics.json.pas — JSON Diagnostic Output
  *
  * 对标 rustc --error-format=json。
  *
@@ -7,7 +7,7 @@
  * 完整 JSONL 格式需要 TDiagnosticsSink 暴露 DiagnosticCount/DiagnosticAt。
  *}
 
-unit np_diagnostics_json;
+unit nextpas.compiler.diagnostics.json;
 
 {$mode objfpc}{$H+}
 
@@ -15,7 +15,7 @@ interface
 
 uses
   SysUtils,
-  np_diagnostics_sink;
+  nextpas.compiler.diagnostics.sink;
 
 type
   TDiagnosticsJson = class

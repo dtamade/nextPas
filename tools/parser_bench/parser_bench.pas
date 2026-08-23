@@ -34,7 +34,7 @@ program parser_bench;
 
 uses
   SysUtils, Classes,
-  np_lexer, np_green_tree, np_diagnostics_sink, np_source_database,
+  np_lexer, np_green_tree, nextpas.compiler.diagnostics.sink, np_source_database,
   np_bench_timing;
 
 const

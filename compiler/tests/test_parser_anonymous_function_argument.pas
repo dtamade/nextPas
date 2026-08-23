@@ -3,7 +3,7 @@ program test_parser_anonymous_function_argument;
 {$mode objfpc}{$H+}
 
 uses
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_lexer;
 

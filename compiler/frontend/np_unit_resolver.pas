@@ -15,9 +15,9 @@ uses
   nextpas.core.fs.util, nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.time, nextpas.core.mem.intf,
   nextpas.core.collections.vec,
-  np_ast_facade, np_diagnostics_sink, np_green_tree, np_lexer,
+  np_ast_facade, nextpas.compiler.diagnostics.sink, np_green_tree, np_lexer,
   np_package_manifest, np_preprocessor, np_source_database,
-  np_target_facts, np_text_primitives, np_toolchain_profiles, np_unit_graph;
+  nextpas.compiler.targets.facts, np_text_primitives, np_toolchain_profiles, np_unit_graph;
 
 type
   TUnitResolverStringVec = specialize TVec<string>;

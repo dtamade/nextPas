@@ -1,4 +1,4 @@
-unit np_target_facts;
+unit nextpas.compiler.targets.facts;
 
 {$mode objfpc}{$H+}
 

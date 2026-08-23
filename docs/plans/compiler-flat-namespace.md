@@ -128,7 +128,7 @@ P 批验证门=residual 保持 0/0+compiler-pass+全量分钟数对比。
 
 | 批 | 内容 | 单元数 | 验证门 |
 |----|------|--------|--------|
-| N1 | base.types + targets + diagnostics（最底层） | 6 | rebuild + compiler-pass 58/58 + contract grep |
+| N1 | targets + diagnostics（最底层，5 单元 + sink accessors inc） | 5 | contract 脚本 + rebuild + compiler-pass 58/58 + tree mini(np 自举解析点分名) |
 | N2 | syntax | 5 | 同上 |
 | N3 | frontend | 14 | 同上 |
 | N4 | sema + ir.hir.lowering | 13 | 同上 + mini-regress |
@@ -166,15 +166,16 @@ P 批验证门=residual 保持 0/0+compiler-pass+全量分钟数对比。
 
 | 现名 | 新名 |
 |------|------|
-| np_base_types* | nextpas.compiler.base.types |
 | np_lexer | nextpas.compiler.syntax.lexer |
 | np_green_tree | nextpas.compiler.syntax.green_tree |
 | np_preprocessor | nextpas.compiler.syntax.preprocessor |
 | np_ast_facade | nextpas.compiler.syntax.ast_facade |
 | np_error_recovery | nextpas.compiler.syntax.error_recovery |
 
-\* `np_base_types` 位于 sema 目录但被 syntax/sema 共用，是事实上的 L0，
-提升为 `nextpas.compiler.base.types`。
+\* 勘误（N1 实测）：原表中 `np_base_types` 行已移除——它实际位于
+`rtl/core/base/`，是 rtl 层资产（同目录还有 np_text_primitives/np_process/
+np_classes 等 np_ 家族），编译器只是消费方；其改名归 rtl lane 处理，
+不在 compiler lane 映射表内。
 
 ### frontend (14)
 

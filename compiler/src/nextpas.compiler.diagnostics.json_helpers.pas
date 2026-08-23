@@ -1,4 +1,4 @@
-unit nextpas_json_helpers;
+unit nextpas.compiler.diagnostics.json_helpers;
 
 {$mode objfpc}{$H+}
 

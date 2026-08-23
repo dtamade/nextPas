@@ -7,7 +7,7 @@ uses
   nextpas.core.path,
   nextpas.core.text.conv,
   np_compilation_session,
-  np_target_facts,
+  nextpas.compiler.targets.facts,
   np_workspace_model;
 
 procedure Fail(const AMessage: string);

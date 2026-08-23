@@ -19,9 +19,9 @@ uses
   nextpas.core.time, nextpas.core.base.utils, nextpas.core.compiler.mem,
   nextpas.core.mem.intf, nextpas.core.mem.allocator.arena,
   nextpas.core.collections.vec,
-  np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
+  np_ast_facade, np_backend_plan, nextpas.compiler.diagnostics.sink, np_green_tree,
   np_lexer, np_preprocessor, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_printer, np_hir_llvm_emitter, np_source_database, np_target_facts,
+  np_hir_printer, np_hir_llvm_emitter, np_source_database, nextpas.compiler.targets.facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   np_unit_graph, np_unit_resolver,
   np_semantic_model, np_semantic_analyzer, np_workspace_model,
@@ -30,7 +30,7 @@ uses
   np_file_change_detector,
   np_parallel_scheduler,
   np_incremental_cache,
-  np_mir_to_llvm, nextpas_json_helpers;
+  np_mir_to_llvm, nextpas.compiler.diagnostics.json_helpers;
 
 type
   TBuildContext = record

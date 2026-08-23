@@ -24,7 +24,7 @@ interface
 
 uses
   np_green_tree, np_semantic_model, np_hir_types,
-  np_diagnostics_sink, np_base_types, np_ast_facade,
+  nextpas.compiler.diagnostics.sink, np_base_types, np_ast_facade,
   np_unit_graph, np_sema_runtime_vars, np_source_database,
   np_sema_overload;
 

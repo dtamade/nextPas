@@ -5,7 +5,7 @@ program test_hir_field_dynarray_release_runtime_smoke;
 uses
   Classes, Process, SysUtils,
   np_ast_facade,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_hir_builder,
   np_hir_llvm_emitter,

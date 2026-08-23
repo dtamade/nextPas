@@ -5,7 +5,7 @@ program test_hir_dynarray_release_contract;
 uses
   SysUtils,
   np_ast_facade,
-  np_diagnostics_sink,
+  nextpas.compiler.diagnostics.sink,
   np_green_tree,
   np_hir_builder,
   np_hir_llvm_emitter,
