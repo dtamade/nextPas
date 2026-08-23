@@ -122,6 +122,12 @@ procedure Sleep(AMilliseconds: Cardinal);
 function SysErrorMessage(AErrorCode: Integer): string;
 function GetLastOSError: Integer;
 
+{ Exception backtrace — thin pass-through over the RTL raiseframe chain,
+  so diagnostics can print stack traces without direct SysUtils use. }
+function ExceptAddr: Pointer;
+function ExceptFrameCount: LongInt;
+function ExceptFrameAt(const AIndex: LongInt): CodePointer;
+
 implementation
 
 uses
@@ -551,6 +557,21 @@ end;
 function GetLastOSError: Integer;
 begin
   Result := SysUtils.GetLastOSError;
+end;
+
+function ExceptAddr: Pointer;
+begin
+  Result := SysUtils.ExceptAddr;
+end;
+
+function ExceptFrameCount: LongInt;
+begin
+  Result := SysUtils.ExceptFrameCount;
+end;
+
+function ExceptFrameAt(const AIndex: LongInt): CodePointer;
+begin
+  Result := SysUtils.ExceptFrames[AIndex];
 end;
 
 end.
