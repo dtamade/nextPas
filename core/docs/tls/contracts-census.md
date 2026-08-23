@@ -307,6 +307,26 @@ cross_backend_interop、server_groups_interop。
 
 **普查积压清零**：第七节不再有登记项。
 
+### set -e/pipefail 脚本地雷专项扫荡（2026-08-24 续三）
+
+cross_backend/e2e 两起地雷同源，全仓普查同类模式（399 个含 `set -e` 脚本 →
+359 个叠加 `pipefail` → 39 个管道内 `grep -q` 候选逐一审计）：
+
+- **裸 wait 类**：全仓仅剩 1 处且在 `if` 条件内（set -e 安全），已无裸雷。
+- **s_client 管道接 `grep -q`**（上游非零退出污染 pipefail 判定）：
+  test_freepascal_tls13_interop.sh 探测段——此前通过纯属该场景 s_client
+  恰好退出 0 的侥幸；改为落盘+豁免+文件 grep（与 cross_backend 同法）。
+- **测试二进制 `| tee | grep -q`**：go_interop 与 psk_interop 两处。双雷：
+  grep 早退 SIGPIPE 截断二进制输出；二进制崩溃但未打印 FAIL 时管道非零
+  被当作"无 FAIL"→ 静默 PASS。改为落盘 + 显式 BIN_RC 判定，崩溃即 FAIL。
+- **`grep | head | grep -q`**（多匹配时 head 早退 SIGPIPE 上游）：
+  collections-contract-check.sh 存在性判定改单命令 `grep -ql`。
+- **工具探测管道**：collect_nonx86_native_evidence.sh 的 lazbuild --help
+  探测改命令替换内豁免。
+
+修复后运行实证：tls13 interop PASS、go interop 9 断言 PASS、psk interop
+9 断言 PASS、collections 契约 62 过 0 失败、simd 证据脚本保持设计跳过语义。
+
 ## 变更记录
 
 | 日期 | 内容 |
@@ -320,3 +340,4 @@ cross_backend_interop、server_groups_interop。
 | 2026-08-24 | TLS1.2/1.3 互操作收官：签名器区分语境放行 pkcs1 SKE（TLS1.3 CV 验证侧拒绝不变）；修复 ServerHello 压缩方法向量误编码（构建器+解析器双侧归正）；cross_backend 4/4（修 set -e wait 中止 + pipefail 管道污染双层地雷）；server_groups 3/3（路径现代化 + 示例 10 去 fafafa.ssl 补后端注册）；OCSP fixture 时区错位修复；门 18/18 |
 | 2026-08-24 | 积压表清零至单条：client_e2e 超时定性为 set -e wait 地雷误诊（无外部服务依赖），全绿 7+1；mbedtls framework "35 败" 定性为 cwd 伪象（正确 cwd 下 252/252），契约改测试目录运行，家族 10/10 |
 | 2026-08-24 | 积压清零：ci.yml 补建 freepascal-tls13-completeness job（trunk 缓存模式 + wolfssl/mbedtls 后端覆盖），门契约全段绿；普查第七节不再有登记项 |
+| 2026-08-24 | set -e/pipefail 地雷专项扫荡：5 站点修复（s_client 探测管道、go/psk 二进制 tee 管道崩溃静默 PASS、grep\|head SIGPIPE、lazbuild 探测），裸 wait 类全仓清零；5 脚本运行实证全绿 |

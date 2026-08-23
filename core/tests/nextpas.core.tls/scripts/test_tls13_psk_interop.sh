@@ -48,10 +48,17 @@ fi
 
 echo "=== TLS 1.3 PSK Session Resumption Interop ==="
 
-if "$BIN" "$PORT" 2>&1 | tee "$TMPDIR/output.log" | grep -q "FAIL"; then
+# 落盘后判定：grep -q 早退会 SIGPIPE 截断测试二进制输出；pipefail 下二进制
+# 非零退出也会污染管道状态——崩溃无 FAIL 串时会被误判为通过
+set +e
+"$BIN" "$PORT" > "$TMPDIR/output.log" 2>&1
+BIN_RC=$?
+set -e
+
+if [[ $BIN_RC -ne 0 ]] || grep -q "FAIL" "$TMPDIR/output.log"; then
   echo ""
-  echo "[FAIL] PSK resumption interop failed"
-  grep "FAIL" "$TMPDIR/output.log"
+  echo "[FAIL] PSK resumption interop failed (exit=$BIN_RC)"
+  grep "FAIL" "$TMPDIR/output.log" || true
   exit 1
 fi
 
