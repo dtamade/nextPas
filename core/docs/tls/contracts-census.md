@@ -163,8 +163,66 @@
 - 断言「残留直调集合」的契约（isslcertificateverification residual 系）：
   rg glob 必须带模块前缀且目录参数无尾斜杠形态也要覆盖。
 
+## 六、第三轮：内容级对账（2026-08-23 续）
+
+对第二轮积压 174 个（CONTENT-FAIL 142 + OTHER 32）逐簇对账，
+按「断言过期→更新现树真值 / 实现回归→修实现 / 死目标→删」三判例处置：
+
+| 终态 | 数量 | 说明 |
+|------|------|------|
+| PASS | **174** | 第二轮末 83 → 净增 91 |
+| CONTENT-FAIL | 5 | 见下方已知积压 |
+| OTHER-rc1/rc143 | 4+1 | 运行时互操作与环境依赖类 |
+| 存活契约总数 | 184 | 本轮删除 73 个死契约 |
+
+本轮删除（累计 96 → 169）：
+- 纯 legacy 文档/workflows 树断言 42（含 6 个变量拼接形态的 workflow 契约）
+- 未迁移工具守护契约 18（verify_examples_compile、run_phase2_*、
+  run_minimal_ci_gate、run_all_module_tests、run_winssl_tests.ps1 等）
+- transport-first 门面再导出枢纽契约 7（门面已按 rustls/go 叙事重构，
+  类型由 owner 单元直接提供，"facade must re-export X" 契约整体过时）
+- 断言已消失 legacy 示例树的契约 2（digital_signature 示例、
+  scan_active_docs_noise_draft 工具）
+- 断言未迁移测试程序清单的 run_unit_tests.sh 死运行器 1
+- 混合契约裁剪后空壳若干
+
+关键复活修复（断言更新到现树真值）：
+- FPC 相对 `-Fu` 按**主文件目录**解析而非 cwd——所有编译型契约
+  单元路径统一改为 `"$PWD/..."` 绝对形式
+- 根行深度归一化：`$SCRIPT_DIR/../..` 家族（含小写 repo_root）重建为四层
+- wolfssl 流工厂参数 AStream→LTransport；winssl 会话 ID 从 SysUtils.Format
+  迁至 nextpas.core.text.format.TextFormat；OpenSSL/WolfSSL 子类矩阵
+  CreateConnection 参数 TStream→IStream
+- 能力落地翻转：FreePascal SupportsPasswordProtectedKeys False→True
+  （PKCS#8/OpenSSL PEM 已实现），口令拒绝断言相应撤除
+- 版本常量更名 NEXTPAS_SSL_VERSION_STRING→SSL_VERSION_STRING（值不变）
+- api_reference 清单重定向到活源码并改声明名干匹配（对签名演进稳健）
+- residual 分类四件套按 rg 真值重建期望集（legacy mirror 文件已退役）
+
+反哺修复（迁移受损的工具自身 bug）：
+- `scripts/tls/cleanup_fast_local_outputs.sh`：显式相对 --tmp-root 应按
+  cwd 解析而非工具位置；PROJECT_ROOT 深度随 scripts/tls 迁移修正
+- `core/tests/nextpas.core.tls/benchmarks/run_all_benchmarks.sh`：同族
+  路径修正 + BENCHMARKS_DIR 回归脚本同源 + 编译单元路径现代化 +
+  benchmark_cert_verify_cache 测试证书路径更新
+- `scripts/tls/run_freepascal_tls13_completeness_gate.sh`：PROJECT_ROOT
+  与编译单元路径现代化；gate 已可端到端运行（157s），内部尚有红组见下
+- `test_context_builder_try.pas` mock 类补齐 IStream 重载（接口演进）
+
+## 七、剩余已知积压（10 个）
+
+| 契约 | 状态 | 备注 |
+|------|------|------|
+| test_freepascal_tls13_completeness_gate_contract.sh | gate 可运行但内部 12 组红 | 需逐组修 test_freepascal_* 程序 |
+| test_tls13_interop_matrix.sh / test_tls13_advanced_interop.sh | 运行时互操作失败 | TLS1.3 client-cert 握手等场景，需真实 s_server 调试 |
+| test_freepascal_tls12_interop_matrix.sh | 8 过 1 败 | 单套件待查 |
+| test_cross_backend_interop.sh / server_groups_interop.sh | 编译错误 | 冒烟程序需 API 现代化 |
+| test_freepascal_tls13_client_e2e.sh | 超时(143) | 加密层 7 过，后续段依赖外部服务 |
+| test_mbedtls_framework_owner_surface_contract.sh | 二进制 80.2% 通过（35 败） | legacy framework 测试程序深层对账 |
+
 ## 变更记录
 
 | 日期 | 内容 |
 |------|------|
 | 2026-08-23 | 首次全量普查；删除纯文档死目标 71；机械路径修复转绿 12 |
+| 2026-08-23 | 第二轮路径清零 PASS 30→83；第三轮内容对账 PASS 83→174，删死契约 73，反哺修复 3 个迁移受损工具 |

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -12,11 +12,11 @@ mkdir -p tmp/test_mbedtls_framework_owner_surface_contract
 log_file="tmp/test_mbedtls_framework_owner_surface_contract/build.log"
 binary="tmp/test_mbedtls_framework_owner_surface_contract/test_mbedtls_framework"
 
-fpc -B -Fu./src -Fu./tests -Fu./tests/framework \
+fpc -B -Fu"$PWD/core/src" -Fu"$PWD/core/tests/nextpas.core.tls/framework" \
   -FUtmp/test_mbedtls_framework_owner_surface_contract \
   -FEtmp/test_mbedtls_framework_owner_surface_contract \
   -o"$binary" \
-  tests/test_mbedtls_framework.pas >"$log_file" 2>&1
+  core/tests/nextpas.core.tls/test_mbedtls_framework.pas >"$log_file" 2>&1
 
 declare -a forbidden_patterns=(
   'test_mbedtls_framework\.pas\([0-9]+,[0-9]+\) Warning: Symbol "ISSLContext\.SetServerName" is deprecated'

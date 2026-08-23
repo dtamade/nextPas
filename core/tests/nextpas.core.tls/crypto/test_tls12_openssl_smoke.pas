@@ -4,6 +4,7 @@ program test_tls12_openssl_smoke;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
+  nextpas.core.tls.socket_stream,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.ciphersuite,
   nextpas.core.tls.tls12.recordcrypto,
@@ -12,6 +13,7 @@ uses
 var
   LPort: Word;
   LSocket: TInetSocket;
+  LStream: IStream;
   LState: TTLS12ClientState;
   LError: string;
   LOk: Boolean;
@@ -43,7 +45,8 @@ begin
 
   try
     LProtos[0] := 'http/1.1';
-    LOk := TryTLS12ClientHandshake(LSocket, 'localhost', LProtos, LState, LError);
+    LStream := SocketHandleAsIStream(LSocket.Handle);
+    LOk := TryTLS12ClientHandshake(LStream, 'localhost', LProtos, LState, LError);
 
     if not LOk then
     begin

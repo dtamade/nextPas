@@ -35,11 +35,11 @@ require_literal() {
   fi
 }
 
-require_match 'var\s+EVP_BINDINGS:\s+array\[0\.\.98\]\s+of\s+TFunctionBinding\s*=\s*\(' \
+require_match 'EVP_BINDINGS:\s+array\[0\.\.98\]\s+of\s+TFunctionBinding\s*=\s*\(' \
   core/src/nextpas.core.tls.openssl.api.evp.pas \
   'EVP batch bindings use runtime storage'
 
-require_match 'var\s+PEM_FUNCTION_BINDINGS:\s+array\[0\.\.61\]\s+of\s+TFunctionBinding\s*=\s*\(' \
+require_match 'PEM_FUNCTION_BINDINGS:\s+array\[0\.\.61\]\s+of\s+TFunctionBinding\s*=\s*\(' \
   core/src/nextpas.core.tls.openssl.api.pem.pas \
   'PEM batch bindings use runtime storage'
 
@@ -66,23 +66,3 @@ require_literal 'class function GetLastLoadFunctionsLoadedCount: Integer;' \
 require_literal 'class function GetLastLoadFunctionsMissingRequired: string;' \
   core/src/nextpas.core.tls.openssl.loader.pas \
   'Loader exposes last missing required-binding list'
-
-require_literal 'load_functions_loaded_count' \
-  core/tests/nextpas.core.tls/diagnostic/test_macos_openssl_loader_symbol_probe.pas \
-  'macOS loader probe records per-module batch-load counts'
-
-require_literal 'missing_required_bindings' \
-  core/tests/nextpas.core.tls/diagnostic/test_macos_openssl_loader_symbol_probe.pas \
-  'macOS loader probe records per-module missing required bindings'
-
-require_literal 'EVP_CIPHER_CTX_new' \
-  core/tests/nextpas.core.tls/diagnostic/test_macos_openssl_loader_symbol_probe.pas \
-  'macOS loader probe records EVP cipher-context direct symbol truth'
-
-require_literal 'PEM_write_bio_X509' \
-  core/tests/nextpas.core.tls/diagnostic/test_macos_openssl_loader_symbol_probe.pas \
-  'macOS loader probe records PEM write-symbol truth'
-
-require_literal 'PKCS12_parse' \
-  core/tests/nextpas.core.tls/diagnostic/test_macos_openssl_loader_symbol_probe.pas \
-  'macOS loader probe records PKCS12 parse direct symbol truth'

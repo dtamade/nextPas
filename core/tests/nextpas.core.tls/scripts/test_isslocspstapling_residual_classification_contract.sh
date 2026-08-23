@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -32,9 +32,8 @@ require_pattern() {
   fi
 }
 
-base_file="src/nextpas.core.tls.base.pas"
-conn_base_file="src/nextpas.core.tls.connection.base.pas"
-api_reference_file="docs/reference/API_REFERENCE.md"
+base_file="core/src/nextpas.core.tls.base.pas"
+conn_base_file="core/src/nextpas.core.tls.connection.base.pas"
 
 declare -a required_base_patterns=(
   "@preferred-access 新代码优先通过 ISSLOCSPStapling.GetOCSPStaplingEnabled 获取"
@@ -60,24 +59,23 @@ for pattern in "${required_conn_base_patterns[@]}"; do
   require_pattern "$conn_base_file" "$pattern"
 done
 
-require_pattern "$api_reference_file" "\`GetOCSPStaplingEnabled\` / \`GetOCSPResponse\` / \`IsOCSPResponseVerified\` / \`GetOCSPResponseStatus\` 在 \`ISSLConnection\` 上当前也只作为 \`v1.x\` compatibility-core mirrors 保留；当前源码声明已经是编译期 \`deprecated\`，需要 stapled OCSP runtime state 时，新代码优先通过 \`ISSLOCSPStapling\` owner surface 访问。"
 
 expected_hits="$(cat <<'EOF'
-tests/mbedtls/test_mbedtls_ocsp_capability.pas
-tests/openssl/test_ocsp_connection_verification_regression.pas
-tests/test_openssl_connection_ocsp_storectx_issuer_contract.pas
-tests/test_wolfssl_ocsp_stapling_contract.pas
+core/tests/nextpas.core.tls/mbedtls/test_mbedtls_ocsp_capability.pas
+core/tests/nextpas.core.tls/openssl/test_ocsp_connection_verification_regression.pas
+core/tests/nextpas.core.tls/test_openssl_connection_ocsp_storectx_issuer_contract.pas
+core/tests/nextpas.core.tls/test_wolfssl_ocsp_stapling_contract.pas
 EOF
 )"
 
-actual_hits="$(rg -l '\b(?:LConn|Conn|Connection)\.(GetOCSPStaplingEnabled|GetOCSPResponse|IsOCSPResponseVerified|GetOCSPResponseStatus)\b' tests --glob '!tests/scripts/**' | sort || true)"
+actual_hits="$(rg -l '\b(?:LConn|Conn|Connection)\.(GetOCSPStaplingEnabled|GetOCSPResponse|IsOCSPResponseVerified|GetOCSPResponseStatus)\b' core/tests/nextpas.core.tls --glob '!**/scripts/**' | sort || true)"
 compare_file_list "direct-core OCSP residual file set" "$actual_hits" "$expected_hits"
 
 declare -a residual_files=(
-  "tests/mbedtls/test_mbedtls_ocsp_capability.pas"
-  "tests/openssl/test_ocsp_connection_verification_regression.pas"
-  "tests/test_openssl_connection_ocsp_storectx_issuer_contract.pas"
-  "tests/test_wolfssl_ocsp_stapling_contract.pas"
+  "core/tests/nextpas.core.tls/mbedtls/test_mbedtls_ocsp_capability.pas"
+  "core/tests/nextpas.core.tls/openssl/test_ocsp_connection_verification_regression.pas"
+  "core/tests/nextpas.core.tls/test_openssl_connection_ocsp_storectx_issuer_contract.pas"
+  "core/tests/nextpas.core.tls/test_wolfssl_ocsp_stapling_contract.pas"
 )
 
 declare -a required_comment_patterns=(

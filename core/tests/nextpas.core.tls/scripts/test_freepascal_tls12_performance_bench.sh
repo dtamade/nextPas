@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # P10 Performance benchmark: TLS 1.2 handshake latency
 set -euo pipefail
+SERVER_PID=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
@@ -23,9 +24,9 @@ openssl req -x509 -newkey rsa:2048 -keyout "$TMPDIR/server.key" \
 
 # Compile
 mkdir -p tmp/tls12smoke_units tmp/tls12smoke_bin
-"$FPC" -B -O2 -Fu./src -Fu./tests -Fu./tests/framework \
+"$FPC" -B -O2 -Fu"$PWD/core/src" -Fu"$PWD/core/tests/nextpas.core.tls/framework" \
   -FUtmp/tls12smoke_units -FEtmp/tls12smoke_bin \
-  tests/crypto/test_tls12_openssl_smoke.pas 2>&1 | tail -1
+  core/tests/nextpas.core.tls/crypto/test_tls12_openssl_smoke.pas 2>&1 | tail -1
 
 BIN=tmp/tls12smoke_bin/test_tls12_openssl_smoke
 if [[ ! -f "$BIN" ]]; then

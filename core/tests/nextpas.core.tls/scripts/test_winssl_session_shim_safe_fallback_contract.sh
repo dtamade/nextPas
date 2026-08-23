@@ -51,7 +51,7 @@ require_absent "$session_file" \
   'WinSSL compatibility shim no longer references the risky session-info attribute directly'
 
 require_match "$session_file" \
-  'LSessionID := Format\('"'winssl-session-%p'"', \[Pointer\(AContext\)\]\);' \
+  'LSessionID := nextpas\.core\.text\.format\.TextFormat\('"'"'winssl-session-0x%x'"'"', \[PtrUInt\(AContext\)\]\);' \
   'WinSSL compatibility shim now falls back to the conservative pointer-based session id'
 
 require_match "$session_file" \

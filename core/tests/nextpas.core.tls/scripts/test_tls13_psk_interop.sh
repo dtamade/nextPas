@@ -2,9 +2,10 @@
 # TLS 1.3 PSK Session Resumption Interop Test
 # FreePascal client vs OpenSSL s_server
 set -euo pipefail
+SPID=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
@@ -24,8 +25,8 @@ openssl req -x509 -newkey rsa:2048 -keyout "$TMPDIR/key.pem" \
 
 # Compile PSK test binary
 mkdir -p tmp/psk_gate_units tmp/psk_gate_bin
-"$FPC" -B -Fu./src -FUtmp/psk_gate_units -FEtmp/psk_gate_bin \
-  tests/crypto/test_tls13_psk_openssl.pas 2>&1 | tail -1
+"$FPC" -B -Fu"$PWD/core/src" -FUtmp/psk_gate_units -FEtmp/psk_gate_bin \
+  core/tests/nextpas.core.tls/crypto/test_tls13_psk_openssl.pas 2>&1 | tail -1
 
 BIN=tmp/psk_gate_bin/test_tls13_psk_openssl
 if [[ ! -f "$BIN" ]]; then

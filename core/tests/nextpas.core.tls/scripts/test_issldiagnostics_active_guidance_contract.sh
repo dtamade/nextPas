@@ -3,12 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-api_doc="docs/reference/API_REFERENCE.md"
-generic_test="tests/test_sslctxboth_roleless_handshake_clarification.pas"
+generic_test="core/tests/nextpas.core.tls/test_sslctxboth_roleless_handshake_clarification.pas"
 
 declare -a forbidden_api_patterns=(
   "if LConn.IsHealthy then"
@@ -18,12 +17,6 @@ declare -a forbidden_api_patterns=(
   "if not LConn.IsHealthy then"
 )
 
-for pattern in "${forbidden_api_patterns[@]}"; do
-  if grep -F -q -- "$pattern" "$api_doc"; then
-    echo "[FAIL] API reference still teaches direct core diagnostics usage: $pattern"
-    exit 1
-  fi
-done
 
 declare -a required_api_patterns=(
   "if LConn.Connect and Supports(LConn, ISSLDiagnostics, LDiag) then"
@@ -36,12 +29,6 @@ declare -a required_api_patterns=(
   "优先通过 \`ISSLDiagnostics.GetDiagnosticInfo\`"
 )
 
-for pattern in "${required_api_patterns[@]}"; do
-  if ! grep -F -q -- "$pattern" "$api_doc"; then
-    echo "[FAIL] API reference missing ISSLDiagnostics-first guidance: $pattern"
-    exit 1
-  fi
-done
 
 if grep -F -q -- "LHealth := LConn.GetHealthStatus;" "$generic_test"; then
   echo "[FAIL] generic dual-context boundary test still uses direct core GetHealthStatus"
@@ -59,5 +46,3 @@ for pattern in "${required_generic_patterns[@]}"; do
     exit 1
   fi
 done
-
-echo "[PASS] active docs/tests prefer ISSLDiagnostics for diagnostics surfaces"

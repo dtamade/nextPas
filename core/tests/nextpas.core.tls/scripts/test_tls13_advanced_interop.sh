@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
@@ -63,14 +63,14 @@ openssl req -x509 -new -key "$TMPDIR/server_ec.key" \
 mkdir -p tmp/tls13adv_units tmp/tls13adv_bin
 
 echo "=== Compiling test binaries ==="
-"$FPC" -B -Fu./src -FUtmp/tls13adv_units -FEtmp/tls13adv_bin \
-  tests/crypto/test_tls13_client_cert.pas 2>&1 | tail -1
+"$FPC" -B -Fu"$PWD/core/src" -FUtmp/tls13adv_units -FEtmp/tls13adv_bin \
+  core/tests/nextpas.core.tls/crypto/test_tls13_client_cert.pas 2>&1 | tail -1
 
-"$FPC" -Fu./src -FUtmp/tls13adv_units -FEtmp/tls13adv_bin \
-  tests/crypto/test_tls13_keyupdate.pas 2>&1 | tail -1
+"$FPC" -Fu"$PWD/core/src" -FUtmp/tls13adv_units -FEtmp/tls13adv_bin \
+  core/tests/nextpas.core.tls/crypto/test_tls13_keyupdate.pas 2>&1 | tail -1
 
-"$FPC" -Fu./src -FUtmp/tls13adv_units -FEtmp/tls13adv_bin \
-  tests/crypto/test_tls13_early_data_interop.pas 2>&1 | tail -1
+"$FPC" -Fu"$PWD/core/src" -FUtmp/tls13adv_units -FEtmp/tls13adv_bin \
+  core/tests/nextpas.core.tls/crypto/test_tls13_early_data_interop.pas 2>&1 | tail -1
 
 CLIENT_CERT_BIN=tmp/tls13adv_bin/test_tls13_client_cert
 KEYUPDATE_BIN=tmp/tls13adv_bin/test_tls13_keyupdate

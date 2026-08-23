@@ -77,7 +77,7 @@ var
   bio: PBIO;
   CertPath: string;
 begin
-  CertPath := ResolveProjectFile('tests/certificate/test_certs/signer_cert.pem');
+  CertPath := ResolveProjectFile('core/tests/nextpas.core.tls/certificate/test_certs/signer_cert.pem');
 
   bio := BIO_new_file(PAnsiChar(AnsiString(CertPath)), 'r');
   if bio = nil then

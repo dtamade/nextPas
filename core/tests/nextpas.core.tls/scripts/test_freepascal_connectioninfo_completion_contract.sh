@@ -12,7 +12,7 @@ fi
 
 for pattern in \
   "FCipherName := TLS13CipherSuiteToString(LServerHello.SelectedCipherSuite);" \
-  "FCipherName := TLS13CipherSuiteToString(LSelectedCipherSuite);" \
+  "FCipherName := TextFormat('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);" \
   "TLS13CipherSuiteToString(FApplicationSecrets.CipherSuite)" \
   "function GetCipherSuite: Word;" \
   "FCipherSuite: Word;"

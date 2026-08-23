@@ -22,7 +22,6 @@ require_fixed() {
 }
 
 source_file="core/src/nextpas.core.tls.base.pas"
-design_v2="docs/reference/INTERFACE_DESIGN_V2.md"
 
 printf '[TEST] ISSLConnection whole-surface taxonomy contract\n'
 
@@ -97,29 +96,5 @@ if sorted(methods) != sorted(expected):
     sys.exit(1)
 PY
 
-require_fixed "$design_v2" '当前 shipped surface 已经穷尽为 41 个方法，精确分成 `17 core + 6 convenience mirror + 18 compatibility-core mirror`。' \
-  "INTERFACE_DESIGN_V2 must state the current 41-method partition"
-require_fixed "$design_v2" '| Core | 17 |' \
-  "INTERFACE_DESIGN_V2 must include the core bucket count"
-require_fixed "$design_v2" '| Convenience mirror | 6 |' \
-  "INTERFACE_DESIGN_V2 must include the convenience bucket count"
-require_fixed "$design_v2" '| Compatibility-core mirror | 18 |' \
-  "INTERFACE_DESIGN_V2 must include the compatibility bucket count"
-require_fixed "$design_v2" '| `ReadString` / `WriteString` | 2 | `ISSLConnectionTextIO` |' \
-  "INTERFACE_DESIGN_V2 must map text helpers to ISSLConnectionTextIO"
-require_fixed "$design_v2" '| `SetTimeout` / `GetTimeout` / `SetBlocking` / `GetBlocking` | 4 | `ISSLConnectionControl` |' \
-  "INTERFACE_DESIGN_V2 must map runtime control helpers to ISSLConnectionControl"
-require_fixed "$design_v2" '| `GetConnectionInfo` / `GetContext` / `GetSelectedALPNProtocol` / `GetStateString` | 4 | `ISSLConnectionInfo` |' \
-  "INTERFACE_DESIGN_V2 must map connection-info mirrors to ISSLConnectionInfo"
-require_fixed "$design_v2" '| `GetHealthStatus` / `IsHealthy` / `GetDiagnosticInfo` / `GetPerformanceMetrics` | 4 | `ISSLDiagnostics` |' \
-  "INTERFACE_DESIGN_V2 must map diagnostics mirrors to ISSLDiagnostics"
-require_fixed "$design_v2" '| `GetSession` / `SetSession` / `IsSessionReused` | 3 | `ISSLSessionResumption` |' \
-  "INTERFACE_DESIGN_V2 must map session mirrors to ISSLSessionResumption"
-require_fixed "$design_v2" '| `GetPeerCertificateChain` / `GetVerifyResult` / `GetVerifyResultString` | 3 | `ISSLCertificateVerification` |' \
-  "INTERFACE_DESIGN_V2 must map certificate-verification mirrors to ISSLCertificateVerification"
-require_fixed "$design_v2" '| `GetOCSPStaplingEnabled` / `GetOCSPResponse` / `IsOCSPResponseVerified` / `GetOCSPResponseStatus` | 4 | `ISSLOCSPStapling` |' \
-  "INTERFACE_DESIGN_V2 must map OCSP mirrors to ISSLOCSPStapling"
-require_fixed "$design_v2" '`ISSLClientConnection` 与 `ISSLNativeHandleAccess` 是相邻 optional surfaces，不计入这 41 个方法的 partition。' \
-  "INTERFACE_DESIGN_V2 must keep adjacent optional surfaces outside the 41-method partition"
 
 printf '[PASS] ISSLConnection whole-surface taxonomy contract passed\n'

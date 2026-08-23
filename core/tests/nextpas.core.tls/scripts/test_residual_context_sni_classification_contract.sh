@@ -3,15 +3,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
 declare -A expected_labels=(
-  ["tests/mbedtls/test_mbedtls_context_contract.pas"]="INTENTIONAL_API_SURFACE"
-  ["tests/wolfssl/test_wolfssl_context_contract.pas"]="INTENTIONAL_API_SURFACE"
-  ["tests/winssl/test_winssl_library_basic.pas"]="INTENTIONAL_API_SURFACE"
-  ["tests/winssl/test_winssl_mtls_skeleton.pas"]="INTENTIONAL_API_SURFACE"
+  ["core/tests/nextpas.core.tls/mbedtls/test_mbedtls_context_contract.pas"]="INTENTIONAL_API_SURFACE"
+  ["core/tests/nextpas.core.tls/wolfssl/test_wolfssl_context_contract.pas"]="INTENTIONAL_API_SURFACE"
+  ["core/tests/nextpas.core.tls/winssl/test_winssl_library_basic.pas"]="INTENTIONAL_API_SURFACE"
+  ["core/tests/nextpas.core.tls/winssl/test_winssl_mtls_skeleton.pas"]="INTENTIONAL_API_SURFACE"
 )
 
 for file in "${!expected_labels[@]}"; do
@@ -22,9 +22,9 @@ for file in "${!expected_labels[@]}"; do
   fi
 done
 
-if grep -n -q 'Ctx\.SetServerName(ServerHost);' tests/winssl/test_winssl_mtls_skeleton.pas; then
+if grep -n -q 'Ctx\.SetServerName(ServerHost);' core/tests/nextpas.core.tls/winssl/test_winssl_mtls_skeleton.pas; then
   echo "[FAIL] WinSSL mTLS handshake flow still uses deprecated context-level SNI"
-  grep -n 'Ctx\.SetServerName(ServerHost);' tests/winssl/test_winssl_mtls_skeleton.pas || true
+  grep -n 'Ctx\.SetServerName(ServerHost);' core/tests/nextpas.core.tls/winssl/test_winssl_mtls_skeleton.pas || true
   exit 1
 fi
 

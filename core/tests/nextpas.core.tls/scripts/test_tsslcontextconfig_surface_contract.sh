@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 fail() {
@@ -18,11 +18,9 @@ require_fixed() {
   fi
 }
 
-base_file="src/nextpas.core.tls.base.pas"
-facade_file="src/nextpas.core.tls.pas"
-factory_file="src/nextpas.core.tls.factory.pas"
-api_ref="docs/reference/API_REFERENCE.md"
-contract_src="tests/test_tsslcontextconfig_surface.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
+factory_file="core/src/nextpas.core.tls.factory.pas"
+contract_src="core/tests/nextpas.core.tls/test_tsslcontextconfig_surface.pas"
 build_root="tmp/test_tsslcontextconfig_surface"
 units_dir="$build_root/units"
 bin_dir="$build_root/bin"
@@ -39,25 +37,13 @@ require_fixed "$base_file" "function ContextConfigFromSSLConfig(const AConfig: T
 require_fixed "$base_file" "function SSLConfigFromContextConfig(const AConfig: TSSLContextConfig): TSSLConfig;" \
   "base source must expose SSLConfigFromContextConfig"
 
-require_fixed "$facade_file" "TSSLContextConfig = nextpas.core.tls.base.TSSLContextConfig;" \
-  "facade must re-export TSSLContextConfig"
-require_fixed "$facade_file" "function CreateDefaultContextConfig(AContextType: TSSLContextType = sslCtxClient): TSSLContextConfig;" \
-  "facade must re-export CreateDefaultContextConfig"
-require_fixed "$facade_file" "function ContextConfigFromSSLConfig(const AConfig: TSSLConfig): TSSLContextConfig;" \
-  "facade must re-export ContextConfigFromSSLConfig"
-require_fixed "$facade_file" "function SSLConfigFromContextConfig(const AConfig: TSSLContextConfig): TSSLConfig;" \
-  "facade must re-export SSLConfigFromContextConfig"
 
 require_fixed "$factory_file" "class function CreateContext(const AConfig: TSSLContextConfig): ISSLContext; overload;" \
   "factory must accept TSSLContextConfig directly"
 
-require_fixed "$api_ref" '## Context-Safe Config Surface Note' \
-  "API reference must describe the additive context-safe config surface"
-require_fixed "$api_ref" '`TSSLContextConfig` 是 `TSSLConfig` scope surgery 的第一条 additive surface。' \
-  "API reference must explain why TSSLContextConfig exists"
 
 mkdir -p "$units_dir" "$bin_dir"
-fpc -B -Fu./src -Fu./tests -Fu./tests/framework -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
+fpc -B -Fu"$PWD/core/src" -Fu"$PWD/core/tests/nextpas.core.tls/framework" -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
 if [[ ! -x "$binary" ]]; then
   fail "TSSLContextConfig runtime probe must compile"
 fi

@@ -3,12 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-base_file="src/nextpas.core.tls.connection.base.pas"
-winssl_file="src/nextpas.core.tls.winssl.connection.pas"
+base_file="core/src/nextpas.core.tls.connection.base.pas"
+winssl_file="core/src/nextpas.core.tls.winssl.connection.pas"
 
 if ! grep -F -q -- "Result := inherited GetConnectionInfo;" "$winssl_file"; then
   echo "[FAIL] WinSSL GetConnectionInfo no longer starts from shared connection-info truth"

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -16,7 +16,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 set +e
 output="$(
   fpc -B \
-    -Fu./src \
+    -Fu"$PWD/core/src" \
     -FU"$TMP_DIR/units" \
     -Mobjfpc \
     -Scgi \
@@ -24,7 +24,7 @@ output="$(
     -g \
     -gl \
     -vewnhi \
-    src/nextpas.core.tls.tls.pas 2>&1
+    core/src/nextpas.core.tls.tls.pas 2>&1
 )"
 exit_code=$?
 set -e

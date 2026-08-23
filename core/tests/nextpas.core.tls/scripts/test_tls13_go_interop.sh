@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
@@ -89,8 +89,8 @@ fi
 
 # Compile FreePascal PSK test
 mkdir -p tmp/go_interop_units tmp/go_interop_bin
-"$FPC" -B -Fu./src -FUtmp/go_interop_units -FEtmp/go_interop_bin \
-  tests/crypto/test_tls13_psk_openssl.pas 2>&1 | tail -1
+"$FPC" -B -Fu"$PWD/core/src" -FUtmp/go_interop_units -FEtmp/go_interop_bin \
+  core/tests/nextpas.core.tls/crypto/test_tls13_psk_openssl.pas 2>&1 | tail -1
 
 BIN=tmp/go_interop_bin/test_tls13_psk_openssl
 

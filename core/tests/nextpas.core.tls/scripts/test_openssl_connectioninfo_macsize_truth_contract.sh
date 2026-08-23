@@ -3,13 +3,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-ssl_api_file="src/nextpas.core.tls.openssl.api.ssl.pas"
-evp_api_file="src/nextpas.core.tls.openssl.api.evp.pas"
-conn_file="src/nextpas.core.tls.openssl.connection.pas"
+ssl_api_file="core/src/nextpas.core.tls.openssl.api.ssl.pas"
+evp_api_file="core/src/nextpas.core.tls.openssl.api.evp.pas"
+conn_file="core/src/nextpas.core.tls.openssl.connection.pas"
 
 if ! grep -F -q -- "SSL_CIPHER_get_digest_nid: TSSL_CIPHER_get_digest_nid;" "$ssl_api_file"; then
   echo "[FAIL] OpenSSL SSL API is missing SSL_CIPHER_get_digest_nid export"

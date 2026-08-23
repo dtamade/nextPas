@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 DRY_RUN=false
 FAST_LOCAL=false
@@ -96,24 +96,24 @@ TEST_NAMES=(
 )
 
 TEST_FILES=(
-  "tests/test_tls13_posthandshake.pas"
-  "tests/test_tls13_resumption.pas"
-  "tests/test_rfc8448_psk_binder.pas"
-  "tests/test_tls13_clienthello_parser.pas"
-  "tests/test_tls13_servercertverify.pas"
-  "tests/test_freepascal_revocation_fast_contracts.pas"
-  "tests/test_freepascal_client_certificateverify_runtime.pas"
-  "tests/test_freepascal_client_chain_trust_runtime.pas"
-  "tests/test_freepascal_client_ocsp_stapling_runtime.pas"
-  "tests/test_freepascal_server_ocsp_stapling_runtime.pas"
-  "tests/test_freepascal_client_online_ocsp_runtime.pas"
-  "tests/test_freepascal_client_ct_sct_surface.pas"
-  "tests/test_freepascal_client_cert_verify_flags_runtime.pas"
-  "tests/test_freepascal_client_session_resumption.pas"
-  "tests/test_freepascal_server_session_resumption.pas"
-  "tests/test_freepascal_tls13_early_data.pas"
-  "tests/test_freepascal_backend_basic.pas"
-  "tests/test_capability_cache.pas"
+  "core/tests/nextpas.core.tls/test_tls13_posthandshake.pas"
+  "core/tests/nextpas.core.tls/test_tls13_resumption.pas"
+  "core/tests/nextpas.core.tls/test_rfc8448_psk_binder.pas"
+  "core/tests/nextpas.core.tls/test_tls13_clienthello_parser.pas"
+  "core/tests/nextpas.core.tls/test_tls13_servercertverify.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_revocation_fast_contracts.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_client_certificateverify_runtime.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_client_chain_trust_runtime.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_client_ocsp_stapling_runtime.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_server_ocsp_stapling_runtime.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_client_online_ocsp_runtime.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_client_ct_sct_surface.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_client_cert_verify_flags_runtime.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_client_session_resumption.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_server_session_resumption.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_tls13_early_data.pas"
+  "core/tests/nextpas.core.tls/test_freepascal_backend_basic.pas"
+  "core/tests/nextpas.core.tls/test_capability_cache.pas"
 )
 
 shell_join() {
@@ -135,9 +135,9 @@ run_test_case() {
   local compile_cmd_words=(
     "$FPC_EXE"
     -B
-    -Fu./src
-    -Fu./tests
-    -Fu./tests/framework
+    -Fu"$PROJECT_ROOT/core/src"
+    -Fu"$PROJECT_ROOT/core/tests/nextpas.core.tls"
+    -Fu"$PROJECT_ROOT/core/tests/nextpas.core.tls/framework"
     "-FU$units_dir"
     "-FE$bin_dir"
     "-o$exe_path"

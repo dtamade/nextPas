@@ -3,11 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-TARGET="src/nextpas.core.tls.context.builder.pas"
+TARGET="core/src/nextpas.core.tls.context.builder.pas"
 MESSAGE="Use per-connection hostname via TSSLConnectionBuilder.WithHostname or ISSLClientConnection.SetServerName"
 
 count=$(perl -0ne "

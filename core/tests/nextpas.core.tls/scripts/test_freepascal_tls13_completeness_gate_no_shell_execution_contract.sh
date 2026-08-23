@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$ROOT_DIR/scripts/run_freepascal_tls13_completeness_gate.sh"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+SCRIPT="$ROOT_DIR/scripts/tls/run_freepascal_tls13_completeness_gate.sh"
 
 fail() {
   echo "[FAIL] $1"

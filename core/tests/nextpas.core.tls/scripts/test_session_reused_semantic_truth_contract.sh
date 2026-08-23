@@ -3,15 +3,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-winssl_file="src/nextpas.core.tls.winssl.connection.pas"
-mbedtls_file="src/nextpas.core.tls.mbedtls.connection.pas"
-openssl_file="src/nextpas.core.tls.openssl.connection.pas"
-wolfssl_file="src/nextpas.core.tls.wolfssl.connection.pas"
-freepascal_file="src/nextpas.core.tls.freepascal.connection.pas"
+winssl_file="core/src/nextpas.core.tls.winssl.connection.pas"
+mbedtls_file="core/src/nextpas.core.tls.mbedtls.connection.pas"
+openssl_file="core/src/nextpas.core.tls.openssl.connection.pas"
+wolfssl_file="core/src/nextpas.core.tls.wolfssl.connection.pas"
+freepascal_file="core/src/nextpas.core.tls.freepascal.connection.pas"
 
 winssl_setsession_body="$(sed -n '/^procedure TWinSSLConnection.DoSetSession/,/^end;$/p' "$winssl_file")"
 mbedtls_setsession_body="$(sed -n '/^procedure TMbedTLSConnection.DoSetSession/,/^end;$/p' "$mbedtls_file")"

@@ -3,12 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-doc_file="docs/reference/INTERFACE_DESIGN_V2.md"
-source_base="src/nextpas.core.tls.connection.base.pas"
+source_base="core/src/nextpas.core.tls.connection.base.pas"
 
 require_multiline() {
   local file="$1"
@@ -38,27 +37,13 @@ declare -a forbidden_patterns=(
   '| GetSelectedALPNProtocol | ISSLClientConnection | 客户端特有 |'
 )
 
-for pattern in "${forbidden_patterns[@]}"; do
-  if grep -F -q "$pattern" "$doc_file"; then
-    echo "[FAIL] ISSLConnectionInfo migration doc still contains stale target: $pattern"
-    exit 1
-  fi
-done
 
-forbid_multiline \
-  "$doc_file" \
-  'TBaseSSLConnection = class\(TInterfacedObject,\s*ISSLConnection,\s*ISSLClientConnection,\s*ISSLConnectionControl,\s*ISSLConnectionInfo,\s*ISSLDiagnostics,\s*ISSLSessionResumption,\s*ISSLCertificateVerification,\s*ISSLOCSPStapling\)' \
-  "INTERFACE_DESIGN_V2 still describes TBaseSSLConnection as directly implementing client/native OCSP optional interfaces"
 
 require_multiline \
   "$source_base" \
   'TBaseSSLConnection = class\(TInterfacedObject,\s*ISSLConnection,\s*ISSLConnectionTextIO,\s*ISSLConnectionControl,\s*ISSLDiagnostics,\s*ISSLSessionResumption,\s*ISSLCertificateVerification,\s*ISSLConnectionInfo\)' \
   "source base-connection declaration no longer matches the expected shared owner/mirror interface set"
 
-require_multiline \
-  "$doc_file" \
-  'TBaseSSLConnection = class\(TInterfacedObject,\s*ISSLConnection,\s*ISSLConnectionTextIO,\s*ISSLConnectionControl,\s*ISSLDiagnostics,\s*ISSLSessionResumption,\s*ISSLCertificateVerification,\s*ISSLConnectionInfo\)' \
-  "INTERFACE_DESIGN_V2 no longer mirrors the current TBaseSSLConnection shared owner/mirror interface set"
 
 declare -a required_patterns=(
   '├── ISSLConnectionInfo (连接信息 mirrors)'
@@ -84,11 +69,5 @@ declare -a required_patterns=(
   '3. **Phase 3**: 由 backend connection subclasses 按 capability 挂上 `ISSLClientConnection` / `ISSLNativeHandleAccess` / `ISSLOCSPStapling`'
 )
 
-for pattern in "${required_patterns[@]}"; do
-  if ! grep -F -q "$pattern" "$doc_file"; then
-    echo "[FAIL] ISSLConnectionInfo migration doc missing required truth: $pattern"
-    exit 1
-  fi
-done
 
 echo "[PASS] ISSLConnectionInfo migration targets match the current slimming roadmap"

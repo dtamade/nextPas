@@ -3,16 +3,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
 declare -a backend_files=(
-  "src/nextpas.core.tls.openssl.backed.pas"
-  "src/nextpas.core.tls.freepascal.lib.pas"
-  "src/nextpas.core.tls.winssl.lib.pas"
-  "src/nextpas.core.tls.mbedtls.lib.pas"
-  "src/nextpas.core.tls.wolfssl.lib.pas"
+  "core/src/nextpas.core.tls.openssl.backed.pas"
+  "core/src/nextpas.core.tls.freepascal.lib.pas"
+  "core/src/nextpas.core.tls.winssl.lib.pas"
+  "core/src/nextpas.core.tls.mbedtls.lib.pas"
+  "core/src/nextpas.core.tls.wolfssl.lib.pas"
 )
 
 declare -a legacy_fields=(

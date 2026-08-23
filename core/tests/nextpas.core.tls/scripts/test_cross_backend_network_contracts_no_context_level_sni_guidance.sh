@@ -3,13 +3,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
 declare -a files=(
-  "tests/integration/test_cross_backend_consistency_contract.pas"
-  "tests/integration/test_cross_backend_errors_contract.pas"
+  "core/tests/nextpas.core.tls/integration/test_cross_backend_consistency_contract.pas"
+  "core/tests/nextpas.core.tls/integration/test_cross_backend_errors_contract.pas"
 )
 
 for file in "${files[@]}"; do

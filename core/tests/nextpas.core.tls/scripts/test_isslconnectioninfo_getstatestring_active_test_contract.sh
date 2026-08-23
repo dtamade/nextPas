@@ -3,12 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-basic_test="tests/connection/test_connection_basic.pas"
-integration_test="tests/integration/test_real_https_connection.pas"
+basic_test="core/tests/nextpas.core.tls/connection/test_connection_basic.pas"
+integration_test="core/tests/nextpas.core.tls/integration/test_real_https_connection.pas"
 
 declare -a forbidden_basic_patterns=(
   "LConnection.GetStateString"

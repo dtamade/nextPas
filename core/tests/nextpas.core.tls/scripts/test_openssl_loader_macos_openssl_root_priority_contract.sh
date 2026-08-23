@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-SOURCE_FILE="${REPO_ROOT}/src/nextpas.core.tls.openssl.loader.pas"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+SOURCE_FILE="${REPO_ROOT}/core/src/nextpas.core.tls.openssl.loader.pas"
 
 fail() {
   echo "[FAIL] $*" >&2
@@ -12,7 +12,7 @@ fail() {
 
 [[ -f "${SOURCE_FILE}" ]] || fail "missing source file: ${SOURCE_FILE}"
 
-rg -F "GetEnvironmentVariable('OPENSSL_ROOT')" "${SOURCE_FILE}" >/dev/null \
+rg -F "GetEnv('OPENSSL_ROOT')" "${SOURCE_FILE}" >/dev/null \
   || fail "loader must read OPENSSL_ROOT before generic library fallback"
 
 rg -F "TryLoadLibraryFromOpenSSLRoot(osslLibCrypto)" "${SOURCE_FILE}" >/dev/null \
@@ -21,7 +21,7 @@ rg -F "TryLoadLibraryFromOpenSSLRoot(osslLibCrypto)" "${SOURCE_FILE}" >/dev/null
 rg -F "TryLoadLibraryFromOpenSSLRoot(osslLibSSL)" "${SOURCE_FILE}" >/dev/null \
   || fail "loader must try OPENSSL_ROOT-backed libssl candidates first"
 
-rg -F "IncludeTrailingPathDelimiter(LRoot) + 'lib' + PathDelim" "${SOURCE_FILE}" >/dev/null \
+rg -F "PathJoin([LRoot, 'lib'])" "${SOURCE_FILE}" >/dev/null \
   || fail "loader must build absolute OPENSSL_ROOT/lib candidates"
 
 for symbol in \

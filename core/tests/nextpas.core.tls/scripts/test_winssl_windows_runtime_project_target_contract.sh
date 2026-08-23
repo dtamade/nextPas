@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 
 fail() {
   echo "[FAIL] $1"
@@ -17,14 +17,14 @@ import xml.etree.ElementTree as ET
 
 root = Path(sys.argv[1])
 projects = [
-    root / "tests/winssl/test_winssl_certificate_loading.lpi",
-    root / "tests/winssl/test_winssl_unit_comprehensive.lpi",
-    root / "tests/winssl/test_winssl_integration_multi.lpi",
-    root / "tests/winssl/test_winssl_session_resumption.lpi",
-    root / "tests/integration/test_backend_comparison.lpi",
-    root / "tests/winssl/test_winssl_performance.lpi",
-    root / "tests/winssl/test_winssl_handshake_debug.lpi",
-    root / "tests/winssl/test_winssl_https_client.lpi",
+    root / "core/tests/nextpas.core.tls/winssl/test_winssl_certificate_loading.lpi",
+    root / "core/tests/nextpas.core.tls/winssl/test_winssl_unit_comprehensive.lpi",
+    root / "core/tests/nextpas.core.tls/winssl/test_winssl_integration_multi.lpi",
+    root / "core/tests/nextpas.core.tls/winssl/test_winssl_session_resumption.lpi",
+    root / "core/tests/nextpas.core.tls/integration/test_backend_comparison.lpi",
+    root / "core/tests/nextpas.core.tls/winssl/test_winssl_performance.lpi",
+    root / "core/tests/nextpas.core.tls/winssl/test_winssl_handshake_debug.lpi",
+    root / "core/tests/nextpas.core.tls/winssl/test_winssl_https_client.lpi",
 ]
 
 allowed_target_os = {None, "", "win64"}

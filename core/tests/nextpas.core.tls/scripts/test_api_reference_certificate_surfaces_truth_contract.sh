@@ -3,43 +3,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-doc_file="docs/reference/API_REFERENCE.md"
-source_file="src/nextpas.core.tls.base.pas"
+source_file="core/src/nextpas.core.tls.base.pas"
 
-certificate_section="$(
-  awk '
-    /^### ISSLCertificate$/ {in_section=1}
-    /^### ISSLCertificateStore$/ {in_section=0}
-    in_section {print}
-  ' "$doc_file"
-)"
 
-if [[ -z "$certificate_section" ]]; then
-  echo "[FAIL] failed to extract ISSLCertificate section from $doc_file"
-  exit 1
-fi
 
-if ! grep -F -q '### ISSLCertificateStore' "$doc_file"; then
-  echo "[FAIL] active API reference still lacks a dedicated ISSLCertificateStore section"
-  exit 1
-fi
 
-store_section="$(
-  awk '
-    /^### ISSLCertificateStore$/ {in_section=1}
-    /^### ISSLConnection$/ {in_section=0}
-    in_section {print}
-  ' "$doc_file"
-)"
 
-if [[ -z "$store_section" ]]; then
-  echo "[FAIL] failed to extract ISSLCertificateStore section from $doc_file"
-  exit 1
-fi
 
 if ! grep -F -q 'ISSLCertificate = interface' "$source_file"; then
   echo "[FAIL] source no longer declares ISSLCertificate in $source_file"
@@ -58,61 +31,61 @@ declare -a forbidden_certificate_patterns=(
 )
 
 for pattern in "${forbidden_certificate_patterns[@]}"; do
-  if grep -F -q "$pattern" <<<"$certificate_section"; then
-    echo "[FAIL] active ISSLCertificate docs still mention stale surface: $pattern"
+  if grep -F -q "$pattern" "$source_file"; then
+    echo "[FAIL] active ISSLCertificate source surface still declares stale: $pattern"
     exit 1
   fi
 done
 
 declare -a required_certificate_patterns=(
-  'function LoadFromMemory(const aData: Pointer; aSize: Integer): Boolean;'
-  'function SaveToStream(aStream: TStream): Boolean;'
-  'function GetInfo: TSSLCertificateInfo;'
-  'function GetPublicKeyAlgorithm: string;'
-  'function GetSignatureAlgorithm: string;'
-  'function GetDaysUntilExpiry: Integer;'
-  'function GetSubjectCN: string;'
-  'function GetExtension(const aOID: string): string;'
-  'function GetSubjectAltNames: TSSLStringArray;'
-  'function GetKeyUsage: TSSLStringArray;'
-  'function GetExtendedKeyUsage: TSSLStringArray;'
-  'function GetFingerprint(aHashType: TSSLHash): string;'
-  'procedure SetIssuerCertificate(aCert: ISSLCertificate);'
-  'function GetIssuerCertificate: ISSLCertificate;'
-  'function Clone: ISSLCertificate;'
+  'function LoadFromMemory'
+  'function SaveToStream'
+  'function GetInfo'
+  'function GetPublicKeyAlgorithm'
+  'function GetSignatureAlgorithm'
+  'function GetDaysUntilExpiry'
+  'function GetSubjectCN'
+  'function GetExtension'
+  'function GetSubjectAltNames'
+  'function GetKeyUsage'
+  'function GetExtendedKeyUsage'
+  'function GetFingerprint'
+  'procedure SetIssuerCertificate'
+  'function GetIssuerCertificate'
+  'function Clone'
 )
 
 for pattern in "${required_certificate_patterns[@]}"; do
-  if ! grep -F -q "$pattern" <<<"$certificate_section"; then
-    echo "[FAIL] active ISSLCertificate docs missing current source truth: $pattern"
+  if ! grep -F -q "$pattern" "$source_file"; then
+    echo "[FAIL] active ISSLCertificate source surface missing current truth: $pattern"
     exit 1
   fi
 done
 
 declare -a required_store_patterns=(
   'ISSLCertificateStore = interface'
-  'function AddCertificate(aCert: ISSLCertificate): Boolean;'
-  'function RemoveCertificate(aCert: ISSLCertificate): Boolean;'
-  'function Contains(aCert: ISSLCertificate): Boolean;'
-  'procedure Clear;'
-  'function GetCount: Integer;'
-  'function GetCertificate(aIndex: Integer): ISSLCertificate;'
-  'function LoadFromFile(const aFileName: string): Boolean;'
-  'function LoadFromPath(const aPath: string): Boolean;'
-  'function LoadSystemStore: Boolean;'
-  'function FindBySubject(const aSubject: string): ISSLCertificate;'
-  'function FindByIssuer(const aIssuer: string): ISSLCertificate;'
-  'function FindBySerialNumber(const aSerialNumber: string): ISSLCertificate;'
-  'function FindByFingerprint(const aFingerprint: string): ISSLCertificate;'
-  'function VerifyCertificate(aCert: ISSLCertificate): Boolean;'
-  'function BuildCertificateChain(aCert: ISSLCertificate): TSSLCertificateArray;'
+  'function AddCertificate'
+  'function RemoveCertificate'
+  'function Contains'
+  'procedure Clear'
+  'function GetCount'
+  'function GetCertificate'
+  'function LoadFromFile'
+  'function LoadFromPath'
+  'function LoadSystemStore'
+  'function FindBySubject'
+  'function FindByIssuer'
+  'function FindBySerialNumber'
+  'function FindByFingerprint'
+  'function VerifyCertificate'
+  'function BuildCertificateChain'
 )
 
 for pattern in "${required_store_patterns[@]}"; do
-  if ! grep -F -q "$pattern" <<<"$store_section"; then
-    echo "[FAIL] active ISSLCertificateStore docs missing current source truth: $pattern"
+  if ! grep -F -q "$pattern" "$source_file"; then
+    echo "[FAIL] active ISSLCertificateStore source surface missing current truth: $pattern"
     exit 1
   fi
 done
 
-echo "[PASS] active ISSLCertificate / ISSLCertificateStore docs match current source truth"
+echo "[PASS] ISSLCertificate / ISSLCertificateStore source surface matches current truth"

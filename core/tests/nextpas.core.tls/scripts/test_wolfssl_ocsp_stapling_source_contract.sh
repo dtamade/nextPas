@@ -78,7 +78,7 @@ require_match "$context_file" \
   'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*ASocket\);' \
   'server context socket connection path uses modern WolfSSL connection unit'
 require_match "$context_file" \
-  'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*AStream\);' \
+  'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*LTransport\);' \
   'server context stream connection path uses modern WolfSSL connection unit'
 
 require_match "$connection_file" \

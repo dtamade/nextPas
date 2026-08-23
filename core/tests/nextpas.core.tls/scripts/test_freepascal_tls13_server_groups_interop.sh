@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
@@ -29,7 +29,7 @@ openssl req -x509 -newkey rsa:2048 -keyout server.key \
   -out server.crt -days 1 -nodes -subj "/CN=localhost" 2>/dev/null
 
 echo "=== Compiling FreePascal TLS 1.3 server ==="
-"$FPC" -B -Fu./src -Fu./src/crypto -Fu./src/tls12 -Fu./src/tls13 \
+"$FPC" -B -Fu"$PWD/core/src" -Fu./src/crypto -Fu./src/tls12 -Fu./src/tls13 \
   -Fu./src/freepascal -Fu./src/openssl -Fu./src/mbedtls -Fu./examples \
   -FUtmp/srv_interop_units -FEtmp/srv_interop_bin \
   examples/10_freepascal_tls13_server.pas 2>&1 | tail -1

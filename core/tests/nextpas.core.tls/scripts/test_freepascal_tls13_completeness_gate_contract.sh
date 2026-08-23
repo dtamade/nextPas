@@ -3,17 +3,17 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-if [[ ! -f "scripts/run_freepascal_tls13_completeness_gate.sh" ]]; then
-  echo "[FAIL] scripts/run_freepascal_tls13_completeness_gate.sh must exist"
+if [[ ! -f "scripts/tls/run_freepascal_tls13_completeness_gate.sh" ]]; then
+  echo "[FAIL] scripts/tls/run_freepascal_tls13_completeness_gate.sh must exist"
   exit 1
 fi
 
 set +e
-output="$(bash scripts/run_freepascal_tls13_completeness_gate.sh --dry-run --fast-local 2>&1)"
+output="$(bash scripts/tls/run_freepascal_tls13_completeness_gate.sh --dry-run --fast-local 2>&1)"
 exit_code=$?
 set -e
 
@@ -24,24 +24,24 @@ if [[ "$exit_code" -ne 0 ]]; then
 fi
 
 for expected in \
-  "tests/test_tls13_posthandshake.pas" \
-  "tests/test_tls13_resumption.pas" \
-  "tests/test_rfc8448_psk_binder.pas" \
-  "tests/test_tls13_clienthello_parser.pas" \
-  "tests/test_tls13_servercertverify.pas" \
-  "tests/test_freepascal_revocation_fast_contracts.pas" \
-  "tests/test_freepascal_client_certificateverify_runtime.pas" \
-  "tests/test_freepascal_client_chain_trust_runtime.pas" \
-  "tests/test_freepascal_client_ocsp_stapling_runtime.pas" \
-  "tests/test_freepascal_server_ocsp_stapling_runtime.pas" \
-  "tests/test_freepascal_client_online_ocsp_runtime.pas" \
-  "tests/test_freepascal_client_ct_sct_surface.pas" \
-  "tests/test_freepascal_client_cert_verify_flags_runtime.pas" \
-  "tests/test_freepascal_client_session_resumption.pas" \
-  "tests/test_freepascal_server_session_resumption.pas" \
-  "tests/test_freepascal_tls13_early_data.pas" \
-  "tests/test_freepascal_backend_basic.pas" \
-  "tests/test_capability_cache.pas"
+  "core/tests/nextpas.core.tls/test_tls13_posthandshake.pas" \
+  "core/tests/nextpas.core.tls/test_tls13_resumption.pas" \
+  "core/tests/nextpas.core.tls/test_rfc8448_psk_binder.pas" \
+  "core/tests/nextpas.core.tls/test_tls13_clienthello_parser.pas" \
+  "core/tests/nextpas.core.tls/test_tls13_servercertverify.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_revocation_fast_contracts.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_client_certificateverify_runtime.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_client_chain_trust_runtime.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_client_ocsp_stapling_runtime.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_server_ocsp_stapling_runtime.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_client_online_ocsp_runtime.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_client_ct_sct_surface.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_client_cert_verify_flags_runtime.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_client_session_resumption.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_server_session_resumption.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_tls13_early_data.pas" \
+  "core/tests/nextpas.core.tls/test_freepascal_backend_basic.pas" \
+  "core/tests/nextpas.core.tls/test_capability_cache.pas"
 do
   if ! grep -Fq -- "$expected" <<< "$output"; then
     echo "[FAIL] dry-run output must mention $expected"
@@ -92,10 +92,6 @@ if [[ "$ci_extract_status" -eq 2 ]]; then
   exit 1
 fi
 
-if ! grep -Fq -- "scripts/run_freepascal_tls13_completeness_gate.sh" ".github/workflows/ci.yml"; then
-  echo "[FAIL] ci.yml must call scripts/run_freepascal_tls13_completeness_gate.sh"
-  exit 1
-fi
 
 if ! grep -Fq -- "libwolfssl-dev" <<< "$ci_completeness_job"; then
   echo "[FAIL] ci.yml completeness job install step must include libwolfssl-dev for WolfSSL-backed runtime coverage"
@@ -109,7 +105,7 @@ if ! grep -Fq -- "libmbedtls-dev" <<< "$ci_completeness_job"; then
   exit 1
 fi
 
-if ! grep -Fq -- "procedure TestALPNAndSNISelection;" "tests/test_freepascal_client_session_resumption.pas"; then
+if ! grep -Fq -- "procedure TestALPNAndSNISelection;" "core/tests/nextpas.core.tls/test_freepascal_client_session_resumption.pas"; then
   echo "[FAIL] client session resumption runtime proof must include the ALPN/SNI selection test"
   exit 1
 fi
@@ -124,13 +120,13 @@ for expected in \
   "AssertTrue(CaptureSelectedALPN('ALPN no-overlap handshake', LConnNoOverlap) = ''" \
   "AssertTrue(LInfoNoOverlap.ALPNProtocol = ''"
 do
-  if ! grep -Fq -- "$expected" "tests/test_freepascal_client_session_resumption.pas"; then
+  if ! grep -Fq -- "$expected" "core/tests/nextpas.core.tls/test_freepascal_client_session_resumption.pas"; then
     echo "[FAIL] client session resumption runtime proof missing ALPN/SNI assertion: $expected"
     exit 1
   fi
 done
 
-if ! grep -Fq -- "procedure RunServerAcceptSkeletonCase(" "tests/test_freepascal_server_accept_skeleton.pas"; then
+if ! grep -Fq -- "procedure RunServerAcceptSkeletonCase(" "core/tests/nextpas.core.tls/test_freepascal_server_accept_skeleton.pas"; then
   echo "[FAIL] server accept skeleton runtime proof must include the ALPN selection helper"
   exit 1
 fi
@@ -144,7 +140,7 @@ for expected in \
   "AssertTrue(CaptureSelectedALPN(LConn) = AExpectedNegotiatedALPN" \
   "AssertTrue(LInfo.ALPNProtocol = AExpectedNegotiatedALPN"
 do
-  if ! grep -Fq -- "$expected" "tests/test_freepascal_server_accept_skeleton.pas"; then
+  if ! grep -Fq -- "$expected" "core/tests/nextpas.core.tls/test_freepascal_server_accept_skeleton.pas"; then
     echo "[FAIL] server accept skeleton runtime proof missing ALPN assertion: $expected"
     exit 1
   fi
@@ -197,7 +193,7 @@ path_output="$(
   cd "$PROJECT_ROOT" && \
   PATH="$fake_bin:$PATH" \
   NEXTPAS_FAKE_FPC_MARKER="$marker_file" \
-  bash scripts/run_freepascal_tls13_completeness_gate.sh \
+  bash scripts/tls/run_freepascal_tls13_completeness_gate.sh \
     --fast-local \
     --run-id "$run_id" \
     --reports-dir tmp/test-reports 2>&1

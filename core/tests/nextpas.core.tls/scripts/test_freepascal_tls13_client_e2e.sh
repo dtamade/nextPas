@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
@@ -47,14 +47,14 @@ fi
 echo "[INFO] Verifying TLS 1.3 crypto primitives..."
 PASS=0
 
-for test in tests/test_tls13_keyschedule.pas tests/test_tls13_finished.pas \
-            tests/test_tls13_recordcrypto.pas tests/test_tls13_chacha20poly1305.pas \
-            tests/test_tls13_appschedule.pas tests/test_tls13_serverhello_builder.pas \
-            tests/test_tls13_clienthello_parser.pas; do
+for test in core/tests/nextpas.core.tls/test_tls13_keyschedule.pas core/tests/nextpas.core.tls/test_tls13_finished.pas \
+            core/tests/nextpas.core.tls/test_tls13_recordcrypto.pas core/tests/nextpas.core.tls/test_tls13_chacha20poly1305.pas \
+            core/tests/nextpas.core.tls/test_tls13_appschedule.pas core/tests/nextpas.core.tls/test_tls13_serverhello_builder.pas \
+            core/tests/nextpas.core.tls/test_tls13_clienthello_parser.pas; do
   if [[ -f "$test" ]]; then
     name=$(basename "$test" .pas)
     mkdir -p tmp/tls13e2e_units tmp/tls13e2e_bin
-    if "$FPC" -B -Fu./src -FUtmp/tls13e2e_units -FEtmp/tls13e2e_bin "$test" >/dev/null 2>&1; then
+    if "$FPC" -B -Fu"$PWD/core/src" -FUtmp/tls13e2e_units -FEtmp/tls13e2e_bin "$test" >/dev/null 2>&1; then
       if tmp/tls13e2e_bin/$name >/dev/null 2>&1; then
         PASS=$((PASS + 1))
       fi
@@ -66,9 +66,9 @@ echo "[PASS] TLS 1.3 crypto layer: $PASS tests passed"
 
 # Also verify our TLS 1.2 client can connect (proves the shared crypto works)
 mkdir -p tmp/tls12smoke_units tmp/tls12smoke_bin
-"$FPC" -B -Fu./src -Fu./tests -Fu./tests/framework \
+"$FPC" -B -Fu"$PWD/core/src" -Fu"$PWD/core/tests/nextpas.core.tls/framework" \
   -FUtmp/tls12smoke_units -FEtmp/tls12smoke_bin \
-  tests/crypto/test_tls12_openssl_smoke.pas >/dev/null 2>&1
+  core/tests/nextpas.core.tls/crypto/test_tls12_openssl_smoke.pas >/dev/null 2>&1
 
 # TLS 1.2 uses same BigInt/ECDSA/X25519 as TLS 1.3
 kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null

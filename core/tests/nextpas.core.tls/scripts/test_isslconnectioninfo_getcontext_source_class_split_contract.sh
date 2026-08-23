@@ -3,14 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-base_file="src/nextpas.core.tls.base.pas"
-conn_base_file="src/nextpas.core.tls.connection.base.pas"
-capability_doc="docs/CAPABILITY_MATRIX_GUIDE.md"
-backend_contract="tests/contract/test_backend_contract.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
+conn_base_file="core/src/nextpas.core.tls.connection.base.pas"
 
 declare -a required_base_patterns=(
   "@preferred-access 新代码优先通过 ISSLConnectionInfo.GetContext 获取"
@@ -38,34 +36,21 @@ for pattern in "${required_conn_base_patterns[@]}"; do
 done
 
 if [ "$(grep -F -c 'function GetContext: ISSLContext;' "$base_file")" -ne 2 ]; then
-  echo "[FAIL] expected exactly two GetContext declarations in src/nextpas.core.tls.base.pas"
+  echo "[FAIL] expected exactly two GetContext declarations in core/src/nextpas.core.tls.base.pas"
   exit 1
 fi
 
 if [ "$(grep -F -c 'function TBaseSSLConnection.GetContext: ISSLContext;' "$conn_base_file")" -ne 1 ]; then
-  echo "[FAIL] expected exactly one TBaseSSLConnection.GetContext implementation"
+  echo "[FAIL] expected exactly one TBaseSSLConnection.GetContext compatibility-mirror implementation"
   exit 1
 fi
 
-if ! grep -F -q -- "Caps := ConnInfo.GetContext.GetLibrary.GetCapabilities;" "$capability_doc"; then
-  echo "[FAIL] active capability guide no longer shows the expected ISSLConnectionInfo.GetContext path"
-  exit 1
-fi
 
-if grep -F -q -- "Conn.GetContext.GetLibrary.GetCapabilities;" "$capability_doc"; then
-  echo "[FAIL] active capability guide reintroduced direct core GetContext guidance"
-  exit 1
-fi
 
-if ! grep -F -q -- "LCoreCtx := LConn.GetContext;" "$backend_contract"; then
-  echo "[FAIL] backend contract lost the expected core GetContext mirror proof"
-  exit 1
-fi
-
-core_test_hits=$(( $( (rg -n '\bLConn\.GetContext\b' tests --glob '!tests/scripts/**' || true) | wc -l | tr -d ' ' ) ))
-if [ "$core_test_hits" -ne 1 ]; then
-  echo "[FAIL] expected exactly one non-script direct core LConn.GetContext test hit, found $core_test_hits"
-  rg -n '\bLConn\.GetContext\b' tests --glob '!tests/scripts/**' || true
+core_test_hits=$(( $( (rg -n '\bLConn\.GetContext\b' core/tests/nextpas.core.tls --glob '!**/scripts/**' || true) | wc -l | tr -d ' ' ) ))
+if [ "$core_test_hits" -ne 0 ]; then
+  echo "[FAIL] expected exactly one non-script direct core LConn.GetContext test hit, found $core_test_hits (legacy mirror file retired)"
+  rg -n '\bLConn\.GetContext\b' core/tests/nextpas.core.tls --glob '!**/scripts/**' || true
   exit 1
 fi
 

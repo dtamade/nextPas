@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-base_file="$ROOT_DIR/src/nextpas.core.tls.mbedtls.base.pas"
-api_file="$ROOT_DIR/src/nextpas.core.tls.mbedtls.api.pas"
-conn_file="$ROOT_DIR/src/nextpas.core.tls.mbedtls.connection.pas"
-shared_file="$ROOT_DIR/src/nextpas.core.tls.connection.base.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+base_file="$ROOT_DIR/core/src/nextpas.core.tls.mbedtls.base.pas"
+api_file="$ROOT_DIR/core/src/nextpas.core.tls.mbedtls.api.pas"
+conn_file="$ROOT_DIR/core/src/nextpas.core.tls.mbedtls.connection.pas"
+shared_file="$ROOT_DIR/core/src/nextpas.core.tls.connection.base.pas"
 
 if ! grep -F -q -- "MBEDTLS_MD_RIPEMD160 = 4;" "$base_file"; then
   echo "[FAIL] MbedTLS base constants no longer match RIPEMD160 md type truth"
@@ -43,10 +43,10 @@ do
 done
 
 for pattern in \
-  "GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite_id')" \
-  "GetProc(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite_id_from_ssl')" \
-  "GetProc(GMbedTLSHandle, 'mbedtls_ssl_ciphersuite_from_id')" \
-  "GetProc(GMbedTLSHandle, 'mbedtls_ssl_ciphersuite_get_cipher_key_bitlen')"
+  "GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite_id')" \
+  "GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_get_ciphersuite_id_from_ssl')" \
+  "GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_ciphersuite_from_id')" \
+  "GetProcSym(GMbedTLSHandle, 'mbedtls_ssl_ciphersuite_get_cipher_key_bitlen')"
 do
   if ! grep -F -q -- "$pattern" "$api_file"; then
     echo "[FAIL] MbedTLS API no longer binds expected ciphersuite-info helper: $pattern"

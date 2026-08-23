@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Cross-backend interop: FreePascal TLS 1.2 client ↔ FreePascal TLS 1.2 server
 set -euo pipefail
+SRV_PID=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
@@ -25,12 +26,12 @@ openssl req -x509 -newkey rsa:2048 -keyout "$TMPDIR/rsa.key" \
 
 # Compile binaries
 mkdir -p tmp/interop_units tmp/interop_bin
-"$FPC" -B -Fu./src -Fu./tests -Fu./tests/framework \
+"$FPC" -B -Fu"$PWD/core/src" -Fu"$PWD/core/tests/nextpas.core.tls/framework" \
   -FUtmp/interop_units -FEtmp/interop_bin \
-  tests/crypto/test_tls12_openssl_smoke.pas 2>&1 | tail -1
-"$FPC" -B -Fu./src -Fu./tests -Fu./tests/framework \
+  core/tests/nextpas.core.tls/crypto/test_tls12_openssl_smoke.pas 2>&1 | tail -1
+"$FPC" -B -Fu"$PWD/core/src" -Fu"$PWD/core/tests/nextpas.core.tls/framework" \
   -FUtmp/interop_units -FEtmp/interop_bin \
-  tests/crypto/test_tls12_server_smoke.pas 2>&1 | tail -1
+  core/tests/nextpas.core.tls/crypto/test_tls12_server_smoke.pas 2>&1 | tail -1
 
 echo "=== Cross-Backend Interop Matrix ==="
 echo ""
