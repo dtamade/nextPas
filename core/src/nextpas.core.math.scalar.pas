@@ -43,16 +43,16 @@ function Min(AA, AB: SizeUInt): SizeUInt; overload; inline;
 function Max(AA, AB: SizeUInt): SizeUInt; overload; inline;
 
 function Min(AA, AB: SizeInt): SizeInt; overload; inline;
-function Max(AA, AB: SizeInt): SizeInt; overload; inline;
+function Max(AA, AB: SizeInt): SizeInt; overload;
 { Int32 overloads: SizeInt is 64-bit on x86_64, so plain Integer arguments
   would otherwise widen to SizeInt and lose the exact-type match. }
 {$IF DEFINED(CPU64)}
 function Min(AA, AB: Int32): Int32; overload; inline;
-function Max(AA, AB: Int32): Int32; overload; inline;
+function Max(AA, AB: Int32): Int32; overload;
 {$ENDIF}
 function Min(AA, AB: Double): Double; overload; inline;
 function Max(AA, AB: Double): Double; overload; inline;
-function Min(AA, AB: Single): Single; overload; inline;
+function Min(AA, AB: Single): Single; overload;
 function Max(AA, AB: Single): Single; overload;
 
 {** * Constrains a value to lie within a given range.
@@ -62,7 +62,7 @@ function Max(AA, AB: Single): Single; overload;
  * @return AValue clamped to [AMin, AMax]
  *}
 function Clamp(const AValue, AMin, AMax: Double): Double; overload; inline;
-function Clamp(const AValue, AMin, AMax: Single): Single; overload; inline;
+function Clamp(const AValue, AMin, AMax: Single): Single; overload;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; overload; inline;
 function Lerp(const AA, AB, AT: Double): Double; overload;
 function Lerp(const AA, AB, AT: Single): Single; overload;
@@ -113,7 +113,7 @@ function Frac(const AValue: Single): Single; overload;
  * @return |AValue|
  *}
 function Abs(const AValue: Double): Double; overload; inline;
-function Abs(const AValue: Single): Single; overload; inline;
+function Abs(const AValue: Single): Single; overload;
 function Abs(const AValue: Int32): Int32; overload; inline;
 function Abs(const AValue: Int64): Int64; overload; inline;
 
@@ -122,7 +122,7 @@ function Abs(const AValue: Int64): Int64; overload; inline;
  * @return sqrt(AValue)
  *}
 function Sqrt(const AValue: Double): Double; overload; inline;
-function Sqrt(const AValue: Single): Single; overload; inline;
+function Sqrt(const AValue: Single): Single; overload;
 
 {** * Returns e raised to the power of AValue.
  * @param AValue The exponent
@@ -150,14 +150,14 @@ function Sign(const AValue: Int64): Int64; overload; inline;
  * @return True if AValue is NaN
  *}
 function IsNaN(const AValue: Double): Boolean; overload; inline;
-function IsNaN(const AValue: Single): Boolean; overload; inline;
+function IsNaN(const AValue: Single): Boolean; overload;
 
 {** * Tests whether AValue is positive or negative infinity.
  * @param AValue The value to test
  * @return True if AValue is infinite
  *}
 function IsInfinite(const AValue: Double): Boolean; overload; inline;
-function IsInfinite(const AValue: Single): Boolean; overload; inline;
+function IsInfinite(const AValue: Single): Boolean; overload;
 
 {** * IEEE special values with FPC Math-compatible names (Double payloads).
  * Built from bit patterns — no exception-raising division.

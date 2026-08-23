@@ -335,7 +335,7 @@ function Log10(const AX: Single): Single; overload; inline;
 function Power(const ABase, AExponent: Double): Double; overload; inline;
 function Power(const ABase, AExponent: Single): Single; overload; inline;
 function Sqrt(const AX: Double): Double; overload; inline;
-function Sqrt(const AX: Single): Single; overload; inline;
+function Sqrt(const AX: Single): Single; overload;
 
 function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Single): TMat4f; overload; inline;
 function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Double): TMat4d; overload; inline;

@@ -104,7 +104,7 @@ function Power(const ABase, AExponent: Single): Single; overload; inline;
  * @return sqrt(AX), or NaN if AX is negative
  *}
 function Sqrt(const AX: Double): Double; overload; inline;
-function Sqrt(const AX: Single): Single; overload; inline;
+function Sqrt(const AX: Single): Single; overload;
 
 implementation
 

@@ -14,7 +14,7 @@ const
 {** @desc 将 timespec 转换为纳秒（UInt64 版本）
     @param ATime timespec 指针
     @return 纳秒值，溢出返回 High(UInt64) *}
-function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64; inline;
+function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64;
 
 {** @desc 向 timespec 添加纳秒
     @param ATime 输入/输出 timespec
@@ -79,7 +79,7 @@ function platform_posix_wait_stop_code(const ASignal: Int32): Int32; inline;
 
 implementation
 
-function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64; inline;
+function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64;
 var
   LSecNs: UInt64;
   LNsec: UInt64;
