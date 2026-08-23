@@ -51,6 +51,41 @@
     end;
     Index := NextBodyIndexForNameLocal(Index);
   end;
+  { Prefer the class-declaration symbol (method/constructor/destructor) over
+    the routine-body stub when both exist for QualifiedName: call bindings
+    must target the declaration carrying TypeId/param metadata; the body
+    symbol is an implementation stub (TypeId=0, ParamCount=-1). Signature-
+    matched against AArgSignature so same-arity overloads stay disambiguated;
+    ambiguous (>1) or signature-less cases keep the body-path result.
+    Name-index walk only (O(overloads)) — never the full symbol table. }
+  if (BodyExactMatchCount > 0) or (BodyCompatibleMatchCount > 0) then
+  begin
+    DeclSymbolId := FModel.FirstSymbolIdByName(QualifiedName);
+    while DeclSymbolId > 0 do
+    begin
+      Symbol := FModel.SymbolAt(DeclSymbolId - 1);
+      if SameText(Symbol.Kind, 'method') or
+        SameText(Symbol.Kind, 'constructor') or
+        SameText(Symbol.Kind, 'destructor') then
+      begin
+        AMethodNameFound := True;
+        if ((AArgCount >= Symbol.MinParamCount) and
+            (AArgCount <= Symbol.ParamCount)) and
+           ((not AHasArgSignature) or
+            ((Symbol.ParamSignature <> '') and
+             SameText(Symbol.ParamSignature, AArgSignature))) then
+        begin
+          Inc(DeclCandidateCount);
+          DeclCandidateId := DeclSymbolId;
+        end;
+      end;
+      DeclSymbolId := FModel.NextSymbolIdSameName(DeclSymbolId);
+    end;
+    if DeclCandidateCount = 1 then
+      Exit(DeclCandidateId);
+    DeclCandidateCount := 0;
+    DeclCandidateId := 0;
+  end;
   if HasArgTypeIds and
     ((BodyExactMatchCount > 0) or (BodyCompatibleMatchCount > 0)) then
   begin

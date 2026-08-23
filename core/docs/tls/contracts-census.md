@@ -327,6 +327,36 @@ cross_backend/e2e 两起地雷同源，全仓普查同类模式（399 个含 `se
 修复后运行实证：tls13 interop PASS、go interop 9 断言 PASS、psk interop
 9 断言 PASS、collections 契约 62 过 0 失败、simd 证据脚本保持设计跳过语义。
 
+### make verify 全量基线巡检（2026-08-24 续四）
+
+首次对 `make verify` 做基线巡检，暴露两类问题并分别处置：
+
+**已修复（本批落地）**：
+- **生产 bug：sema 成员调用绑定指向体实现符号**。`TDog.Create` 等类方法在模型中
+  有双符号——声明符号（kind=method，携带 TypeId/参数元数据）与函数体实现符号
+  （kind=procedure 存根，TypeId=0/ParamCount=-1）；`MethodSymbolIdForExactClassTypeMember`
+  的 body 索引快路径把调用绑定到后者。修复：body 路径命中时优先查找同名
+  method/constructor/destructor 声明符号（ParamSignature+arity 双重匹配防同 arity
+  重载误配；名字索引 O(overloads) 不引入全表扫描；>1 候选或签名不匹配时保守回退
+  体路径结果）。test_semantic_constructor_type_infer 由红转绿。
+- **verify_local.sh 单元路径漂移**：HIR 三步缺 `-Fucompiler/frontend`
+  （np_hir_builder 依赖 np_source_database），全部含 sema 的步骤缺
+  `-Fucompiler/lower`（np_semantic_analyzer 依赖 np_hir_lowering）——这些步骤因此
+  编译失败被长期掩埋。统一补齐后步骤复活。
+- **class_alloc 测试过期断言现代化**：测试字面匹配 legacy `'class_alloc'`，
+  生产自契约系统落地后发 typed sckObjectAlloc（语义名 `np.system.object_alloc`，
+  emitter 注释明示裸串为 legacy 兼容路径）。改用 IsSystemContract 契约 API 断言。
+
+**登记的预存红点（非本批引入，stash 对照实验证实）**：
+- `hir-string-call-argument-ownership-contract` 失败于
+  `virtual-owned-string-temp-consumer-must-fail-closed`：sema 对虚拟所有权参数
+  未产出 `sema.c6h4-owned-string-return-deferred-consumer` fail-closed 诊断。
+  属字符串所有权诊断的产品行为缺口，需 compiler lane 实现或修订契约。
+  该步之后 harness 尚有大量未执行步骤（共 213 步），可能还有同类掩埋项。
+
+**基线现状**：verify 四个编译器目标全绿（constructor-typing 由本批修复转绿）、
+incremental gate 绿、verify_local.sh 推进至所有权契约处红（上述登记项）。
+
 ## 变更记录
 
 | 日期 | 内容 |
@@ -341,3 +371,4 @@ cross_backend/e2e 两起地雷同源，全仓普查同类模式（399 个含 `se
 | 2026-08-24 | 积压表清零至单条：client_e2e 超时定性为 set -e wait 地雷误诊（无外部服务依赖），全绿 7+1；mbedtls framework "35 败" 定性为 cwd 伪象（正确 cwd 下 252/252），契约改测试目录运行，家族 10/10 |
 | 2026-08-24 | 积压清零：ci.yml 补建 freepascal-tls13-completeness job（trunk 缓存模式 + wolfssl/mbedtls 后端覆盖），门契约全段绿；普查第七节不再有登记项 |
 | 2026-08-24 | set -e/pipefail 地雷专项扫荡：5 站点修复（s_client 探测管道、go/psk 二进制 tee 管道崩溃静默 PASS、grep\|head SIGPIPE、lazbuild 探测），裸 wait 类全仓清零；5 脚本运行实证全绿 |
+| 2026-08-24 | make verify 基线巡检：修复 sema 成员调用绑定指向体存根符号的生产 bug（constructor-typing 转绿）；修复 verify_local.sh frontend/lower 单元路径漂移复活被掩埋 HIR 步骤；class_alloc 测试断言现代化至契约 API；登记预存红点 hir-string-call-argument-ownership-contract（c6h4 fail-closed 诊断缺失，stash 实验证实非本批引入） |
