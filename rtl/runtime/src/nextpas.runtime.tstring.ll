@@ -464,6 +464,85 @@ do_copy:
 }
 
 ; ============================================================
+; np_tstring_setchar — S[idx] := ch (1 基 idx, CoW ensure-unique)
+; 越界静默忽略(与无 RangeCheck 的宿主语义对齐); refcount<0 的
+; literal 头与共享头一律走复制, 绝不原地改共享 payload。
+; ============================================================
+define void @np_tstring_setchar(ptr %s, i64 %idx, i64 %ch) {
+entry:
+  %len = call i64 @np_tstring_len(ptr %s)
+  %ge1 = icmp sge i64 %idx, 1
+  %le_len = icmp sle i64 %idx, %len
+  %in_bounds = and i1 %ge1, %le_len
+  br i1 %in_bounds, label %dispatch, label %done
+
+dispatch:
+  %tag_ptr = getelementptr i8, ptr %s, i64 0
+  %tag = load i8, ptr %tag_ptr
+  %is_heap = icmp eq i8 %tag, -1
+  br i1 %is_heap, label %heap_path, label %sso_path
+
+sso_path:
+  ; SSO 数据在 offset 2: 地址 = s + 2 + (idx-1) = s + idx + 1
+  %adj_s = add i64 %idx, 1
+  %p_s = getelementptr i8, ptr %s, i64 %adj_s
+  %ch8_s = trunc i64 %ch to i8
+  store i8 %ch8_s, ptr %p_s
+  br label %done
+
+heap_path:
+  %hdr_ptr_ptr = getelementptr i8, ptr %s, i64 8
+  %hdr = load ptr, ptr %hdr_ptr_ptr
+  %hdr_null = icmp eq ptr %hdr, null
+  br i1 %hdr_null, label %done, label %check_ref
+
+check_ref:
+  %ref_ptr = getelementptr i8, ptr %hdr, i64 0
+  %ref = load i32, ptr %ref_ptr
+  %exclusive = icmp eq i32 %ref, 1
+  br i1 %exclusive, label %write_heap, label %make_unique
+
+make_unique:
+  ; 同容量新块: 总分配 = 8(header) + cap + 1(NUL), 与 fini 的释放尺寸一致
+  %cap_ptr = getelementptr i8, ptr %hdr, i64 4
+  %cap = load i32, ptr %cap_ptr
+  %cap64 = zext i32 %cap to i64
+  %total = add i64 %cap64, 9
+  %new_hdr = call ptr @np_alloc(i64 %total)
+  %src_pay = getelementptr i8, ptr %hdr, i64 8
+  %dst_pay = getelementptr i8, ptr %new_hdr, i64 8
+  %copy_len = add i64 %cap64, 1
+  call void @llvm.memcpy.p0.p0.i64(ptr %dst_pay, ptr %src_pay, i64 %copy_len, i1 false)
+  %new_ref_ptr = getelementptr i8, ptr %new_hdr, i64 0
+  store i32 1, ptr %new_ref_ptr
+  %new_cap_ptr = getelementptr i8, ptr %new_hdr, i64 4
+  store i32 %cap, ptr %new_cap_ptr
+  ; 旧引用原子递减, 归零释放
+  %old_ref = atomicrmw sub ptr %ref_ptr, i32 1 seq_cst
+  %was_one = icmp eq i32 %old_ref, 1
+  br i1 %was_one, label %free_old, label %install
+
+free_old:
+  call void @np_free(ptr %hdr, i64 %total)
+  br label %install
+
+install:
+  store ptr %new_hdr, ptr %hdr_ptr_ptr
+  br label %write_heap
+
+write_heap:
+  %hdr_use = phi ptr [ %hdr, %check_ref ], [ %new_hdr, %install ]
+  %adj_h = add i64 %idx, 7
+  %p_h = getelementptr i8, ptr %hdr_use, i64 %adj_h
+  %ch8_h = trunc i64 %ch to i8
+  store i8 %ch8_h, ptr %p_h
+  br label %done
+
+done:
+  ret void
+}
+
+; ============================================================
 ; np_tstring_from_int — i64 转 TString
 ; ============================================================
 define void @np_tstring_from_int(ptr %dst, i64 %val) {

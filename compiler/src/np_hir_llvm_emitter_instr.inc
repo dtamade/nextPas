@@ -968,6 +968,19 @@ begin
               OperandTypeToLlvm(AInstr.Operands[3],
                 ValueLlvmType(AInstr.Operands[3].ValueId, 'i64'))) + ')');
       end
+      else if AInstr.IntrinsicName = 'tstring_setchar' then
+      begin
+        FNeedsTStringRuntime := True;
+        if Length(AInstr.Operands) >= 3 then
+          Emit('  call void @np_tstring_setchar(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'i64',
+              'tssetchr.idx.' + IntToStr(AInstr.Operands[1].ValueId),
+              OperandTypeToLlvm(AInstr.Operands[1], 'i64')) + ', i64 ' +
+            EmitCastValueToLlvmType(AInstr.Operands[2].ValueId, 'i64',
+              'tssetchr.val.' + IntToStr(AInstr.Operands[2].ValueId),
+              OperandTypeToLlvm(AInstr.Operands[2], 'i64')) + ')');
+      end
       else if AInstr.IntrinsicName = 'tstring_concat' then
       begin
         FNeedsTStringRuntime := True;

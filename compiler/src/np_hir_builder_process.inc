@@ -598,6 +598,8 @@ begin
       ProcessAssignTStringConcat(ANode);
     hnkAssignTStringFieldLoadRuntime:
       ProcessAssignTStringFieldLoad(ANode);
+    hnkTStringSetCharRuntime:
+      ProcessTStringSetChar(ANode);
     hnkFieldStoreTStringRuntime:
       ProcessFieldStoreTString(ANode);
     hnkAssignRuntime:

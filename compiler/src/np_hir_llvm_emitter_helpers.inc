@@ -155,6 +155,7 @@ begin
   Emit('declare void @np_tstring_from_literal(ptr %dst, ptr %lit, i64 %len)');
   Emit('declare void @np_tstring_concat(ptr %dst, ptr %a, ptr %b)');
   Emit('declare void @np_tstring_copy(ptr %dst, ptr %src, i64 %start, i64 %count)');
+  Emit('declare void @np_tstring_setchar(ptr %s, i64 %idx, i64 %ch)');
   Emit('declare void @np_tstring_from_int(ptr %dst, i64 %val)');
   Emit('declare i64 @np_tstring_equal(ptr %a, ptr %b)');
   Emit('declare i64 @np_tstring_compare(ptr %a, ptr %b)');

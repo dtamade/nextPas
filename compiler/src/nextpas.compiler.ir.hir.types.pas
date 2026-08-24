@@ -110,6 +110,7 @@ type
     hnkAssignTStringCallRuntime,
     hnkAssignTStringConcatRuntime,
     hnkAssignTStringFieldLoadRuntime,
+    hnkTStringSetCharRuntime,
     hnkTStringCleanupRuntime,
     hnkFieldStoreTStringRuntime,
     hnkRetTStringRuntime,
@@ -270,6 +271,7 @@ begin
     'assign-tstring-copy-runtime': Result := hnkAssignTStringCopyRuntime;
     'assign-tstring-call-runtime': Result := hnkAssignTStringCallRuntime;
     'assign-tstring-concat-runtime': Result := hnkAssignTStringConcatRuntime;
+    'tstring-setchar-runtime': Result := hnkTStringSetCharRuntime;
     'assign-tstring-field-load-runtime': Result := hnkAssignTStringFieldLoadRuntime;
     'tstring-cleanup-runtime': Result := hnkTStringCleanupRuntime;
     'field-store-tstring-runtime': Result := hnkFieldStoreTStringRuntime;

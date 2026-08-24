@@ -5,6 +5,7 @@ var
   Operand: string;
   Value, CondValue, Folded: Int64;
   Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
+  StrVarName: string;
   MemberName: string;
   UsedExcMemberArg: Boolean;
   AncestorName: string;
@@ -929,6 +930,39 @@ begin
               Decoded + #9 + Operand + #9 + 'var ' + FuncName + #10
             );
           end;
+        end;
+        Continue;
+      end;
+      if FNoFold and
+        (Child.ChildCount >= 2) and
+        (Child.ChildAt(0).NodeKind = gnkArrayAccess) and
+        (Child.ChildAt(0).ChildCount >= 2) and
+        (Child.ChildAt(0).ChildAt(0) <> nil) and
+        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+        IsRuntimeStrVar(Child.ChildAt(0).ChildAt(0).Text) then
+      begin
+        { S[I] := <char> — byte store through tstring runtime setchar.
+          Historically fell through to whole-string literal assign,
+          destroying the string (mc_c C1=X family). }
+        StrVarName := Child.ChildAt(0).ChildAt(0).Text;
+        RhsNode := Child.ChildAt(1);
+        if (RhsNode <> nil) and
+          EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) then
+        begin
+          if (RhsNode.NodeKind = gnkCharLiteral) and
+            (Length(DecodePascalStringLiteral(RhsNode.Text)) >= 1) then
+            StringValue := 'int ' +
+              IntToStr(Ord(DecodePascalStringLiteral(RhsNode.Text)[1]))
+          else if EvaluateStringConstant(RhsNode, FuncName) and
+            (Length(FuncName) >= 1) then
+            StringValue := 'int ' + IntToStr(Ord(FuncName[1]))
+          else if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+            { numeric char code }
+          else
+            StringValue := '';
+          if StringValue <> '' then
+            FModel.AddTypedHirNode('tstring-setchar-runtime', StrVarName,
+              0, 0, StrVarName + #9 + Operand + #9 + StringValue);
         end;
         Continue;
       end;
@@ -2065,6 +2099,31 @@ begin
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', ArgName, 0, 0, Operand
               )
+            else if (RhsNode.NodeKind = gnkArrayAccess) and
+              (RhsNode.ChildCount >= 2) and
+              (RhsNode.ChildAt(0) <> nil) and
+              (RhsNode.ChildAt(0).NodeKind = gnkIdentifier) and
+              IsRuntimeStrVar(RhsNode.ChildAt(0).Text) and
+              EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), Operand) then
+            begin
+              { S[I] char read → 1-char slice temp via np_tstring_copy.
+                Historically fell through to write-int which printed the
+                bare index value (mc_c C0=2 family). }
+              Inc(FBlockLabelCounter);
+              FuncName := '$chr_tmp_' + IntToStr(FBlockLabelCounter);
+              RegisterRuntimeVar(FuncName);
+              RegisterRuntimeStrVar(FuncName);
+              FModel.AddTypedHirNode('var-decl-tstring-runtime', FuncName,
+                0, 0, FuncName);
+              FModel.AddTypedHirNode('tstring-copy-runtime', '', 0, 0,
+                FuncName + #9 + RhsNode.ChildAt(0).Text + #9 + Operand +
+                #9 + 'int 1');
+              FRuntimeVars.QueuePendingStringTempRelease(FuncName, FuncName);
+              FModel.AddTypedHirNode(
+                'write-str-var-runtime', ArgName, 0, 0, FuncName
+              );
+              EmitPendingStringTempReleases;
+            end
             else if (RhsNode.NodeKind = gnkIdentifier) and
               LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
               IsRuntimeStrVar(RhsNode.Text) then

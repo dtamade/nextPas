@@ -235,6 +235,65 @@ begin
   EmitTStringAssign(DstPtr, SrcPtr);
 end;
 
+{ S[I] := <char> — runtime setchar (1-based idx, CoW ensure-unique inside
+  np_tstring_setchar; never inlines a raw store because heap payloads are
+  shared across TString copies). Operand = strvar #9 idxblob #9 valblob. }
+procedure THIRBuilder.ProcessTStringSetChar(const ANode: TTypedHirNode);
+var
+  StrName, Rest, IdxBlob, ValBlob: string;
+  TabPos: LongInt;
+  Slot, IdxVal, ValVal: THIRValueId;
+  VT: THIRTypeId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then
+  begin
+    DebugTStringDrop('tstring-setchar',
+      'operand has no tab separator; operand=' + ANode.Operand);
+    Exit;
+  end;
+  StrName := Copy(ANode.Operand, 1, TabPos - 1);
+  Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then
+  begin
+    DebugTStringDrop('tstring-setchar',
+      'missing value tab; operand=' + ANode.Operand);
+    Exit;
+  end;
+  IdxBlob := Copy(Rest, 1, TabPos - 1);
+  ValBlob := Copy(Rest, TabPos + 1, Length(Rest));
+  Slot := FindAlloca(StrName + '$ts');
+  if Slot = 0 then
+  begin
+    DebugTStringDrop('tstring-setchar', 'missing $ts slot; str=' + StrName);
+    Exit;
+  end;
+  IdxVal := LowerNodeExprOrBlobTyped(ANode, IdxBlob, VT);
+  if IdxVal = 0 then
+    IdxVal := ParseIntExprArg(IdxBlob);
+  ValVal := LowerNodeExprOrBlobTyped(ANode, ValBlob, VT);
+  if ValVal = 0 then
+    ValVal := ParseIntExprArg(ValBlob);
+  if (IdxVal = 0) or (ValVal = 0) then
+  begin
+    DebugTStringDrop('tstring-setchar',
+      'unresolvable idx/val; str=' + StrName);
+    Exit;
+  end;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.IntrinsicName := 'tstring_setchar';
+  SetLength(Instr.Operands, 3);
+  Instr.Operands[0] := MakeTypedOperand(Slot, GetPtrType);
+  { np_tstring_setchar ABI is (ptr, i64 idx, i64 ch). }
+  Instr.Operands[1] := MakeTypedOperand(IdxVal, GetIntTypeByWidth(64, True));
+  Instr.Operands[2] := MakeTypedOperand(ValVal, GetIntTypeByWidth(64, True));
+  EmitInstr(Instr);
+end;
+
 procedure THIRBuilder.ProcessAssignTStringConcat(const ANode: TTypedHirNode);
 var
   DstName, LhsOp, RhsOp: string;

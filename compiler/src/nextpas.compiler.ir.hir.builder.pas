@@ -314,6 +314,7 @@ type
     procedure ProcessAssignTStringConcat(const ANode: TTypedHirNode);
     procedure ProcessAssignTStringCall(const ANode: TTypedHirNode);
     procedure ProcessAssignTStringFieldLoad(const ANode: TTypedHirNode);
+    procedure ProcessTStringSetChar(const ANode: TTypedHirNode);
     procedure ProcessFieldStoreTString(const ANode: TTypedHirNode);
     procedure ProcessRetTString(const ANode: TTypedHirNode);
     procedure EmitTStringInit(const AName: string);
