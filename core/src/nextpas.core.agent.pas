@@ -15,6 +15,7 @@ uses
   nextpas.core.base,
   nextpas.core.log.intf,
   nextpas.core.async.cancellation,
+  nextpas.core.thread,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
@@ -25,7 +26,8 @@ uses
   nextpas.core.agent.provider.anthropic,
   nextpas.core.agent.tools,
   nextpas.core.agent.loop,
-  nextpas.core.agent.session;
+  nextpas.core.agent.session,
+  nextpas.core.agent.resilience;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
@@ -89,6 +91,14 @@ type
 
 function NewJsonlTranscriptStore(const ARootDir: string;
   ASyncEachAppend: Boolean = True): IAgentTranscriptStore; inline;
+
+{ ---- 韧性原语（自 code888 韧弧 K69-K75 提炼反哺）---- }
+
+function StreamHasError(const ADeltas: TStreamDeltaArray;
+  ACode: TAgentErrorCode): Boolean; inline;
+function WaitCancelMs(const ASource: ICancellationSource;
+  ADelayMs: Int64): Boolean; inline;
+function ClampHintMs(AHintMs, ACapMs: Int64): Int64; inline;
 
 implementation
 
@@ -240,6 +250,23 @@ function NewJsonlTranscriptStore(const ARootDir: string;
 begin
   Result := nextpas.core.agent.session.NewJsonlTranscriptStore(
     ARootDir, ASyncEachAppend);
+end;
+
+function StreamHasError(const ADeltas: TStreamDeltaArray;
+  ACode: TAgentErrorCode): Boolean;
+begin
+  Result := nextpas.core.agent.resilience.StreamHasError(ADeltas, ACode);
+end;
+
+function WaitCancelMs(const ASource: ICancellationSource;
+  ADelayMs: Int64): Boolean;
+begin
+  Result := nextpas.core.agent.resilience.WaitCancelMs(ASource, ADelayMs);
+end;
+
+function ClampHintMs(AHintMs, ACapMs: Int64): Int64;
+begin
+  Result := nextpas.core.agent.resilience.ClampHintMs(AHintMs, ACapMs);
 end;
 
 end.
