@@ -67,7 +67,7 @@ var
   LDecoder: THPackDecoder;
   LBlock: AnsiString;
   LOutput: array[0..9] of THPackHeader;
-  LI: Integer;
+  LI, LJ: Integer;
   LTotalNs: Int64;
   LHeaders: array[0..4] of THPackHeader;
 begin
@@ -83,7 +83,14 @@ begin
   BenchStart;
   for LI := 1 to ITERATIONS do
   begin
-    FillChar(LOutput, SizeOf(LOutput), 0);
+    { THPackHeader holds AnsiStrings: clearing the array with FillChar
+      would drop the references without DecRef and leak every iteration
+      (PH33 P5f). Assign empty strings instead. }
+    for LJ := 0 to High(LOutput) do
+    begin
+      LOutput[LJ].Name := '';
+      LOutput[LJ].Value := '';
+    end;
     LDecoder.Decode(LBlock, LOutput);
   end;
   LTotalNs := BenchElapsedNs;

@@ -407,16 +407,12 @@ begin
   Check(LAll.IsDone, 'all done');
 end;
 
-var
-  GAllPassed: Boolean = False;
-
 {$IFDEF UNIX}
 procedure SigAbrtHandler(ASig: cint); cdecl;
 begin
-  if GAllPassed then
-    do_syscall(syscall_nr_exit_group, 0)
-  else
-    do_syscall(syscall_nr_exit_group, 1);
+  { Watchdog path only: a hang that got SIGABRT'd is a failure regardless
+    of any earlier suite result (PH33 P5f). }
+  do_syscall(syscall_nr_exit_group, 1);
 end;
 {$ENDIF}
 
@@ -445,9 +441,9 @@ begin
   T.Test('Channel receive timeout', @TestChannelReceiveTimeout);
   T.Test('FutureVoid basic', @TestFutureVoid);
   T.Test('WhenAll', @TestWhenAll);
-  GAllPassed := T.Run;
+  { Single Run, then leave via normal RTL shutdown — the raw
+    exit_group call here used to bypass heaptrc's exit dump and made the
+    leak gate fail-closed on this suite; it also ran the suite twice
+    (PH33 P5f). }
   if not T.Run then Halt(1);
-  {$IFDEF UNIX}
-  do_syscall(syscall_nr_exit_group, 0);
-  {$ENDIF}
 end.
