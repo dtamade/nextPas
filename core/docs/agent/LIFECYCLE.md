@@ -85,17 +85,22 @@ Run()（阻塞直至终态）:
 
 ## 5. 工具执行设施与超时/弃置语义（决策 D14，经 SELECTION C9 修订）
 
-- **决定**：全部工具调用（串行批次同样）经 L1 `IThreadPool.SubmitBatch` 提交 +
-  轮线程 `WaitAllTimeout(批内最大 TimeoutMs + 宽限)` 汇合；池实例由 loop 构造注入
-  （默认共享进程池）。统一执行路径使超时语义对串/并行一致。
+- **决定**：全部工具调用（串行批次同样）经 L1 线程池直提（`SubmitDirect`
+  逐任务 + `SignalWorkers`），轮线程以 `WaitAllTimeout(200µs 切片)` 轮询汇合，
+  并做时钟感知的逐项截止判定——每项到期即当场合成，不等整批；截止基准在
+  提交前采样，时钟可注入（fake clock 由桩工具在执行体内 Advance 驱动确定性
+  超时）。池实例由 loop 构造注入（未注入则构造自有池随实例 Shutdown）。
+  统一执行路径使超时语义对串/并行一致。（W3 施工修订：原 SubmitBatch +
+  批级一次汇合措辞与实现不符。）
 - **为何不是 async.taskgroup**：已核实其工厂绑定 `TAsyncLoop`，面向事件循环
   runtime；同步阻塞的工具批次用它需凭空造 Loop，属设施错配。
 - **失败隔离**：每工具持有父令牌的子令牌（async.cancellation.CreateChildToken），
   单工具失败/超时不取消兄弟任务，各自合成 result 回喂。
-- **超时是合成不是抢占**：Pascal 无法安全杀死线程。`WaitAllTimeout` 到期后，
-  未完成调用的槽位合成 timeout error result 回喂模型，**工作线程被弃置**——
+- **超时是合成不是抢占**：Pascal 无法安全杀死线程。某项截止到期后，该槽位
+  合成 timeout error result 回喂模型并 Cancel 其子令牌，**工作线程被弃置**——
   继续后台运行直至自然结束或进程退出（文档化代价：不协作工具可泄漏 CPU/IO
-  至其自然终点）。协作式取消（令牌）始终是首选路径。
+  至其自然终点）；其迟到结果经写权仲裁不回读已合成载荷。协作式取消（令牌）
+  始终是首选路径。
 - **跨线程中断机制**：流读取被另一线程 Cancel 时，transport.Cancel 关闭 socket，
   阻塞中的 IReader.Read 以错误返回，由执行读的线程自身完成清理与连接归还——
   满足"资源不得跨线程释放"。

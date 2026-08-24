@@ -43,6 +43,16 @@
   HEAPTRC_GATE 报少量未释放块（retry 约 37 小块；transport_stream 5 块、含
   回环线程读缓冲 10KB×2），疑与流 worker/线程生命周期相关，修复需独立验证，
   不并入 anthropic 提交。
+- **W3 loop 波次发现并修复一参构造漏建池**：TAgentLoop.Create(AProvider) 未
+  创建自有 IThreadPool，FPool=nil；首次工具执行 SubmitDirect 即 AV。既有 gate
+  要么显式传池要么直连 RunToolBatch，故 W2 未暴露；test_loop 全部走一参构造，
+  首跑即抓出。已改构造即建池（随实例 Shutdown）。
+- **W3 loop 波次发现并修复异常所有权缺陷**：轮失败路径 `R.WLastError := Ex`
+  存储了 RTL 在 except 块结束时自动释放的异常对象——悬挂指针（读 Message 即
+  AV、析构二次释放、HEAPTRC 连带假阳性）。两处失败路径（轮内 + 引导轮）均补
+  AcquireExceptionObject 移交所有权给 TLoopRun（析构 Free）。
+- LIFECYCLE §5 措辞已按实现修订：SubmitDirect 直提 + WaitAllTimeout 200µs
+  切片轮询 + 逐项时钟感知截止合成（原 SubmitBatch + 批级一次汇合措辞不符）。
 
 ## Inbox（活动输入池，非承诺）
 

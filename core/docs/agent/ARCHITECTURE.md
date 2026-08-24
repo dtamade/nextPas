@@ -60,8 +60,8 @@
 | `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-O1..O7 全部落码+gate | base, errors, intf, common, transport, fold, json, json.builder, text.builder, os.env |
 | `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-A1..A8 全部落码+gate（含 Q-A8 截断 fail-closed 与流中途 error→sdkError） | base, errors, intf, common, transport, fold, json, json.builder, text.builder, text.conv, os.env |
 | `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold, json |
-| `nextpas.core.agent.tools.pas` | 工具 | 参数校验（§1.5 规范）、结果截断信封、executor 包装（超时/取消） | base, intf, json, text |
-| `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转/引导收尾；全部工具经 IThreadPool（LIFECYCLE §5，D14/C9） | intf, fold, tools, errors, thread, json |
+| `nextpas.core.agent.tools.pas` | 工具 | 名称/schema 注册校验（aecConfig）、§1.5 参数校验失败→error result、结果截断信封（UTF-8 安全切）、RunToolBatch 批执行器（时钟感知超时/取消合成/异常兜底 aecToolFailed/WriteGuard 迟到写仲裁） | base, intf, clock, errors, atomic, json, text, cancellation |
+| `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转/引导收尾；全部工具经 IThreadPool（LIFECYCLE §5，D14/C9） | base, intf, clock, errors, tools, thread(pool), json, log, cancellation |
 | `nextpas.core.agent.session.pas` | 会话 | IAgentTranscriptStore 接口 + 内存实现（W4 起）；JSONL 实现后置独立 wave | base, intf, fs |
 
 体积指引：单文件 >800 行必须拆分（provider.openai 与 anthropic 预期各 ~500-700 行，

@@ -22,7 +22,9 @@ uses
   nextpas.core.agent.retry,
   nextpas.core.agent.provider.common,
   nextpas.core.agent.provider.openai,
-  nextpas.core.agent.provider.anthropic;
+  nextpas.core.agent.provider.anthropic,
+  nextpas.core.agent.tools,
+  nextpas.core.agent.loop;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
@@ -67,6 +69,16 @@ function BuildAnthropicUrl(const ABaseUrl: string): string; inline;
 function NewAnthropicProvider(
   const AOpts: TAnthropicOptions): IAgentProvider; inline;
 function NewAnthropicProviderFromEnv: IAgentProvider; inline;
+
+{ ---- 工具设施（API.md §1.5；TAgentLoop 经 uses 直接可用）---- }
+
+procedure ValidateToolSpec(const ASpec: TToolSpec); inline;
+function ValidateToolArguments(const ASpec: TToolSpec;
+  const AArgsJson: TJsonText): TToolResult; inline;
+function EnvelopeTruncation(const AResult: TToolResult;
+  AMaxLines, AMaxBytes: Integer): TToolResult; inline;
+function NewToolContext(const AToken: IAsyncCancellationToken;
+  ACallIndex: Integer): IToolContext; inline;
 
 implementation
 
@@ -167,6 +179,31 @@ end;
 function NewAnthropicProviderFromEnv: IAgentProvider;
 begin
   Result := nextpas.core.agent.provider.anthropic.NewAnthropicProviderFromEnv;
+end;
+
+procedure ValidateToolSpec(const ASpec: TToolSpec);
+begin
+  nextpas.core.agent.tools.ValidateToolSpec(ASpec);
+end;
+
+function ValidateToolArguments(const ASpec: TToolSpec;
+  const AArgsJson: TJsonText): TToolResult;
+begin
+  Result := nextpas.core.agent.tools.ValidateToolArguments(
+    ASpec, AArgsJson);
+end;
+
+function EnvelopeTruncation(const AResult: TToolResult;
+  AMaxLines, AMaxBytes: Integer): TToolResult;
+begin
+  Result := nextpas.core.agent.tools.EnvelopeTruncation(
+    AResult, AMaxLines, AMaxBytes);
+end;
+
+function NewToolContext(const AToken: IAsyncCancellationToken;
+  ACallIndex: Integer): IToolContext;
+begin
+  Result := nextpas.core.agent.tools.NewToolContext(AToken, ACallIndex);
 end;
 
 function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
