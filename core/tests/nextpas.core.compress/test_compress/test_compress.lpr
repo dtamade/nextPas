@@ -49,6 +49,68 @@ begin
   Check(Length(LC) > 0, 'clBest');
 end;
 
+procedure TestRawDeflateRoundTrip;
+var
+  LSrc, LCompressed, LDecompressed: TBytes;
+  LI: Integer;
+begin
+  SetLength(LSrc, 1000);
+  for LI := 0 to 999 do LSrc[LI] := Byte((LI * 31 + (LI shr 5)));
+  LCompressed := RawDeflateCompress(LSrc);
+  Check(Length(LCompressed) > 0, 'raw compressed not empty');
+  Check(Length(LCompressed) < Length(LSrc), 'raw compressed smaller');
+  { RFC 1951 裸流：不得携带 zlib 包装头（CMF=0x78） }
+  Check(LCompressed[0] <> $78, 'no zlib wrapper byte');
+  LDecompressed := RawDeflateDecompress(LCompressed);
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LDecompressed)), 'same length');
+  for LI := 0 to 999 do
+    if LSrc[LI] <> LDecompressed[LI] then
+    begin
+      Check(False, 'data mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'data matches');
+end;
+
+procedure TestRawDeflateEmpty;
+var
+  LCompressed, LDecompressed: TBytes;
+begin
+  { 空输入的完整 raw 流是固定两字节终结块 }
+  LCompressed := RawDeflateCompress(nil);
+  CheckEqual(Int64(2), Int64(Length(LCompressed)), 'empty raw deflate is 2 bytes');
+  Check((LCompressed[0] = $03) and (LCompressed[1] = $00), 'final fixed block $03 $00');
+  LDecompressed := RawDeflateDecompress(LCompressed);
+  CheckEqual(Int64(0), Int64(Length(LDecompressed)), 'round-trips to empty');
+end;
+
+procedure TestRawDeflateCorruptAndLimit;
+var
+  LSrc, LCompressed: TBytes;
+  LI: Integer;
+begin
+  SetLength(LSrc, 4096);
+  for LI := 0 to High(LSrc) do LSrc[LI] := Byte(LI mod 7);  { 高可压 }
+  LCompressed := RawDeflateCompress(LSrc);
+  LCompressed[High(LCompressed) div 2] := LCompressed[High(LCompressed) div 2] xor $FF;
+  try
+    RawDeflateDecompress(LCompressed);
+    Check(False, 'corrupt raw stream must raise');
+  except
+    on E: Exception do
+      Check(Pos('EIOError', E.ClassName) > 0, 'corrupt raises EIOError');
+  end;
+
+  LCompressed := RawDeflateCompress(LSrc);
+  try
+    RawDeflateDecompressWithMaxOutputSize(LCompressed, 16);
+    Check(False, 'over-limit raw stream must raise');
+  except
+    on E: Exception do
+      Check(Pos('EIOError', E.ClassName) > 0, 'over limit raises EIOError');
+  end;
+end;
+
 procedure TestDeflateEmpty;
 var
   LR: TBytes;
@@ -614,6 +676,9 @@ begin
   T.Test('Deflate levels', @TestDeflateLevels);
   T.Test('Deflate empty', @TestDeflateEmpty);
   T.Test('Deflate 1MB', @TestDeflateLarge);
+  T.Test('RawDeflate round-trip', @TestRawDeflateRoundTrip);
+  T.Test('RawDeflate empty vector', @TestRawDeflateEmpty);
+  T.Test('RawDeflate corrupt and limit', @TestRawDeflateCorruptAndLimit);
   T.Test('Gzip round-trip', @TestGzipRoundTrip);
   T.Test('Gzip interop', @TestGzipInterop);
   T.Test('LZ4 round-trip', @TestLz4RoundTrip);

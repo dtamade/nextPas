@@ -9,6 +9,7 @@ Compression and decompression for Deflate, Gzip, and LZ4 formats.
 | Deflate | Yes      | Yes        | Yes       | zlib-wrapped Deflate stream (RFC 1950) |
 | Gzip    | Yes      | Yes        | Yes       | Gzip wrapper (RFC 1952) |
 | LZ4     | Yes      | Yes        | No        | Block format, optional native FFI |
+| RawDeflate | Yes   | Yes        | No        | RFC 1951 one-shot (`RawDeflate*`), full final block; ZIP method=8 payload |
 
 ## API
 

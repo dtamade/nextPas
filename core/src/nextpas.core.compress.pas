@@ -42,6 +42,11 @@ function DeflateCompress(const AData: TBytes;
 function DeflateDecompress(const AData: TBytes): TBytes; inline;
 function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes; inline;
+function RawDeflateCompress(const AData: TBytes;
+  const ALevel: TCompressionLevel = clDefault): TBytes; inline;
+function RawDeflateDecompress(const AData: TBytes): TBytes; inline;
+function RawDeflateDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes; inline;
 function GzipCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes; inline;
 function GzipDecompress(const AData: TBytes): TBytes; inline;
@@ -109,6 +114,24 @@ function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes;
 begin
   Result := nextpas.core.compress.deflate.DeflateDecompressWithMaxOutputSize(
+    AData, AMaxOutputSize);
+end;
+
+function RawDeflateCompress(const AData: TBytes;
+  const ALevel: TCompressionLevel): TBytes;
+begin
+  Result := nextpas.core.compress.deflate.RawDeflateCompress(AData, ALevel);
+end;
+
+function RawDeflateDecompress(const AData: TBytes): TBytes;
+begin
+  Result := nextpas.core.compress.deflate.RawDeflateDecompress(AData);
+end;
+
+function RawDeflateDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes;
+begin
+  Result := nextpas.core.compress.deflate.RawDeflateDecompressWithMaxOutputSize(
     AData, AMaxOutputSize);
 end;
 
