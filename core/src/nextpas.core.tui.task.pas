@@ -210,7 +210,11 @@ var
   I: Integer;
 begin
   for I := 0 to MAX_CONCURRENT_TASKS - 1 do
-    if FActive[I].Done then
+    { Only a fully reaped slot (Done and no pending joinable handle) may be
+      reused: Done is set by the worker inside OnThreadComplete before its
+      pthread terminates, so a slot can look free while its handle still
+      needs a final wait — clearing that handle would leak it (PH33 P5e). }
+    if FActive[I].Done and (FActive[I].Handle.Handle = nil) then
       Exit(I);
   Result := -1;
 end;
