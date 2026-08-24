@@ -42,7 +42,8 @@ type
     FProgram: TRegexProgram;
     FTeddy: TTeddyMatcher;
     FValid: Boolean;
-    FDfaCache: Pointer;  { PDfaCache — lazily allocated, reused across IsMatch calls }
+    FDfaCache: Pointer;  { hot-path alias into FDfaCacheRef's block; nil until first DFA use }
+    FDfaCacheRef: IDfaCacheHandle;  { refcounted owner — managed field gives the record value semantics }
   public
     class function Compile(const APattern: string): TRegex; static;
     class function Compile(const APattern: string; AFlags: TRegexFlags): TRegex; static;
@@ -92,6 +93,7 @@ begin
   Result.FValid := False;
   Result.FTeddy.PatternCount := 0;
   Result.FDfaCache := nil;
+  Result.FDfaCacheRef := nil;
   LAst := nil;
   try
     LAst := RegexParse(APattern, LNumCaptures, LFlags);
@@ -120,6 +122,7 @@ begin
   Result.FValid := False;
   Result.FTeddy.PatternCount := 0;
   Result.FDfaCache := nil;
+  Result.FDfaCacheRef := nil;
   LAst := nil;
   try
     LAst := RegexParse(APattern, LNumCaptures, LFlags);
@@ -147,6 +150,9 @@ begin
       ARegex.FProgram.Code := nil;
       ARegex.FProgram.Classes := nil;
       ARegex.FValid := False;
+      ARegex.FTeddy.PatternCount := 0;
+      ARegex.FDfaCache := nil;
+      ARegex.FDfaCacheRef := nil;
       AError := E.Message;
       Result := False;
     end;
@@ -204,8 +210,9 @@ begin
   { Lazy-allocate DFA cache for reuse across calls }
   if FDfaCache = nil then
   begin
-    FDfaCache := AllocMem(SizeOf(TDfaCache));
-    DfaCacheInit(PDfaCache(FDfaCache)^, Length(FProgram.Code));
+    if FDfaCacheRef = nil then
+      FDfaCacheRef := NewDfaCacheHandle;
+    FDfaCache := FDfaCacheRef.Acquire(Length(FProgram.Code));
   end;
   Result := DfaIsMatchCached(FProgram, PAnsiChar(AInput), Length(AInput),
     PDfaCache(FDfaCache)^);
@@ -346,8 +353,9 @@ begin
   begin
     if FDfaCache = nil then
     begin
-      FDfaCache := AllocMem(SizeOf(TDfaCache));
-      DfaCacheInit(PDfaCache(FDfaCache)^, Length(FProgram.Code));
+      if FDfaCacheRef = nil then
+        FDfaCacheRef := NewDfaCacheHandle;
+      FDfaCache := FDfaCacheRef.Acquire(Length(FProgram.Code));
     end;
     Result := DfaFindAllCached(FProgram, PAnsiChar(AInput), Length(AInput),
       PDfaCache(FDfaCache)^, AMaxMatches);
@@ -606,13 +614,13 @@ end;
 
 procedure TRegex.Free;
 begin
-  if FDfaCache <> nil then
+  { Release this instance's reference to the DFA cache. Record copies hold
+    their own reference, so the cache outlives any copy whose siblings were
+    freed and dies with the last one — the dangling-pointer and double-free
+    hazards of the old raw-pointer field cannot recur. }
+  if FDfaCacheRef <> nil then
   begin
-    { Finalize managed types inside PDfaCache before freeing the block.
-      TDfaCache contains dynamic arrays (Seen, CloseList, NextPCs, Stack)
-      and TDfaState.PCs which must be released. }
-    Finalize(PDfaCache(FDfaCache)^);
-    FreeMem(FDfaCache, SizeOf(TDfaCache));
+    FDfaCacheRef := nil;
     FDfaCache := nil;
   end;
 end;
