@@ -81,6 +81,7 @@ opts])` 已透出。契约见 CONTRACT §2.11。门禁仅驱动管理器
 |---|---|
 | [CONTRACT.md](CONTRACT.md) | **契约总纲**（必读）：家族布局、逐能力契约、后端差异登记、门禁清单 |
 | [sqlite-guide.md](sqlite-guide.md) | sqlite 使用指南 |
+| [national-db-guide.md](national-db-guide.md) | 国产数据库兼容指南：openGauss/KingbaseES/OceanBase/TiDB/DM8 等接入路径、能力预期与上线前验证清单 |
 | [sqlite.md](sqlite.md) / [pg.md](pg.md) | 后端单元参考 |
 | [../plans/2026-08-23-db-v2-architecture.md](../plans/2026-08-23-db-v2-architecture.md) | v2 架构基线（设计决策、对标批评、缺口账本） |
 | [../plans/2026-08-23-db-v2-increment-go-rust.md](../plans/2026-08-23-db-v2-increment-go-rust.md) | Go/Rust 对标增量（INC 清单与落地注记） |
