@@ -4,11 +4,6 @@ unit nextpas.core.lockfree.msqueue;
 
 {$I nextpas.core.settings.inc}
 
-{ 填充字段刻意零引用;5029 Note 在类解析结束后的阶段发射,
-  per-field PUSH/POP 窗口先于发射被 POP 还原,压不住 ——
-  只能单元级关闭(本单元其余私有字段本就要求显式使用) }
-{$WARN 5029 OFF}
-
 interface
 
 uses
@@ -321,6 +316,12 @@ begin
   if ACapacity > MaxInt div SizeOf(TNode) then
     raise EArgumentError.Create('TLockFreeMsQueue: capacity exceeds allocation limit');
   inherited Create;
+  { 填充字段写零:5029 Note 归各消费单元的特化点发射,任何生产侧
+    指令都盖不全;真实引用一次即根因消除。仅构造期三次定长写,
+    不在热路径 }
+  FPadHeader := Default(TCacheLinePad);
+  FPadTail := Default(TCacheLinePad);
+  FPadHead := Default(TCacheLinePad);
   SetLength(FNodes, ACapacity);
   for I := 0 to ACapacity - 1 do
     if I + MSQUEUE_OP_STRIPES < ACapacity then
