@@ -335,10 +335,12 @@ KingbaseES 等）的 D4 备选接入路径。契约要点：
   码（IM002→decConnection、IM001/HYC00→decNotSupported、HY001/
   HY013→decCapacity、HYT00/HYT01/HY008→decTimeout）+ ISO 类前缀
   兜底（08 连接/23 完整性/25,40 事务/28 授权/42 语法/0A 不支持/
-  53,54 容量/58 系统错误）；NativeError 跨驱动无可移植语义，只透传
-  BackendCode 不参与分类（宁可欠归一不错归一）。已知缺口：MySQL 系
-  驱动把约束违约报 HY000+1062 → decUnknown，登记 D 线 flavor 感知
-  细化。
+  53,54 容量/58 系统错误）；NativeError 跨驱动无可移植语义，默认只
+  透传 BackendCode 不参与分类（宁可欠归一不错归一）。唯一例外：
+  建连期经 SQL_DRIVER_NAME / SQL_DBMS_NAME 探测命中 mysql/mariadb
+  词元的 MySQL 系驱动启用 ClassifyOdbcEx 码位单调提精——基础欠归一
+  时采纳码位类目、同类泛约束只补细分、永不降级矛盾；原 HY000+1062
+  → decUnknown 缺口就此收口，非 MySQL 驱动行为不变。
 - **事务控制面**：Begin = AUTOCOMMIT OFF，Commit/Rollback =
   SQLEndTran + 恢复 AUTOCOMMIT ON（先恢复状态再上抛，防连接卡死在
   手动提交）；TXN_CAPABLE=SQL_TC_NONE 的驱动 BeginTxn fail-fast
