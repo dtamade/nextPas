@@ -12,7 +12,7 @@
 | **W2 可靠性** | retry 装饰器（含 fake clock 生产单元）；anthropic 适配器（含公开编解码器）；取消贯穿 transport/provider；usage 全字段映射 | test_retry / test_provider_anthropic / test_codecs(anthropic) 绿 |
 | **W3 循环** | tools 校验/截断/超时包装；TAgentLoop（预算/钩子/事件/防打转/引导收尾）| test_tools / test_loop 绿 |
 | **W4 收口** | examples（01_quickstart / 02_streaming / 03_tool_loop / 04_offline_test_pattern）；benchmarks 三件套；docs/agent/BENCHMARKS.md + API_COVERAGE.md 建立；README 状态 draft→stable(draft truth) | 全 gates + benches；`git diff --check`；`make hygiene`；Ready 报告 |
-| **W5（后置，按需立项）** | JSONL event-sourced transcript store（fork/crash 恢复语义先出独立设计）；agent.sse 反哺晋升 http.sse 的跨模块 slice | 各自独立 Ready 报告 |
+| **W5 session 域（2026-08-25 总控立项）** | JSONL event-sourced transcript store——独立设计见 [`SESSION.md`](SESSION.md)（fork/crash 恢复语义、fsync 节奏、行格式 schema v1）；实现 `nextpas.core.agent.session` + `test_session` 门 | SESSION.md §10 测试计划全绿 + Ready 报告。子项"agent.sse 反哺晋升 http.sse"维持单列：http lane 有他人在途工作，跨模块 slice 待其收敛后另行立项 |
 
 ## Wave 内顺序约束
 
