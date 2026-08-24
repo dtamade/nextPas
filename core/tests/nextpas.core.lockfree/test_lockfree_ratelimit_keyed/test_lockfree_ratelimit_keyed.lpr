@@ -271,6 +271,87 @@ begin
   end;
 end;
 
+{ 冷却窗（F-11）：cooldown=3s——burst 耗尽拒绝后进入冷却；
+  +1s（令牌本已恢复）仍拒且 Retry-After=剩余冷却；+3s 期满恢复放行。 }
+procedure TestCooldownForcesFullWait;
+var
+  LLimiter: TKeyedTokenBucketLimiter;
+  LRetry: Int64;
+begin
+  GNow := 0;
+  LLimiter := TKeyedTokenBucketLimiter.Create(60.0, 1.0, 16, @FakeNowNs, 3);
+  try
+    Check(LLimiter.TryAcquire('a@x', LRetry), 'first granted');
+    Check(not LLimiter.TryAcquire('a@x', LRetry), 'second denied (empty)');
+    CheckEqual(3, LRetry, 'deny retry-after = cooldown');
+    GNow := 1000000000;            { +1s：令牌已回满但冷却未满 }
+    Check(not LLimiter.TryAcquire('a@x', LRetry),
+      'cooldown blocks despite refilled tokens');
+    CheckEqual(2, LRetry, 'retry-after = remaining cooldown');
+    GNow := 3000000000;            { 恰好期满 }
+    Check(LLimiter.TryAcquire('a@x', LRetry), 'granted after cooldown elapses');
+    { 期满后令牌恢复照常：+1s 回满（rate=60 → burst 上限）。 }
+    GNow := 4000000000;
+    Check(LLimiter.TryAcquire('a@x', LRetry), 'refill continues after expiry');
+  finally
+    LLimiter.Free;
+  end;
+end;
+
+{ 默认 cooldown=0 向后兼容：拒绝后令牌恢复即可再取，无冷却强制。 }
+procedure TestNoCooldownByDefault;
+var
+  LLimiter: TKeyedTokenBucketLimiter;
+  LRetry: Int64;
+begin
+  GNow := 0;
+  LLimiter := TKeyedTokenBucketLimiter.Create(60.0, 1.0, 16, @FakeNowNs);
+  try
+    Check(LLimiter.TryAcquire('a@x', LRetry), 'first granted');
+    Check(not LLimiter.TryAcquire('a@x', LRetry), 'denied when empty');
+    GNow := 1000000000;            { +1s：令牌恢复即放行 }
+    Check(LLimiter.TryAcquire('a@x', LRetry),
+      'no forced wait without cooldown');
+  finally
+    LLimiter.Free;
+  end;
+end;
+
+{ 冷却独立于 key 隔离：a 在冷却期不影响 b 的全新桶。 }
+procedure TestCooldownPerKey;
+var
+  LLimiter: TKeyedTokenBucketLimiter;
+  LRetry: Int64;
+begin
+  GNow := 0;
+  LLimiter := TKeyedTokenBucketLimiter.Create(60.0, 1.0, 16, @FakeNowNs, 5);
+  try
+    Check(LLimiter.TryAcquire('a@x', LRetry), 'a first granted');
+    Check(not LLimiter.TryAcquire('a@x', LRetry), 'a denied, cooling');
+    Check(LLimiter.TryAcquire('b@x', LRetry), 'b unaffected by a cooldown');
+  finally
+    LLimiter.Free;
+  end;
+end;
+
+{ 负冷却参数构造拒绝。 }
+procedure TestNegativeCooldownRejected;
+var
+  LLimiter: TKeyedTokenBucketLimiter;
+begin
+  LLimiter := nil;
+  try
+    try
+      LLimiter := TKeyedTokenBucketLimiter.Create(1.0, 1.0, 16, nil, -1);
+      Check(False, 'cooldown<0 must raise');
+    except
+      on E: EArgumentError do ;
+    end;
+  finally
+    LLimiter.Free;
+  end;
+end;
+
 begin
   GNow := 0;
   T := TTestSuite.Create('keyed token bucket rate limiter');
@@ -283,6 +364,10 @@ begin
   T.Test('retry-after precision', @TestRetryAfterSeconds);
   T.Test('constructor validation', @TestConstructorValidation);
   T.Test('reset empties table', @TestReset);
+  T.Test('cooldown forces full wait', @TestCooldownForcesFullWait);
+  T.Test('no cooldown by default', @TestNoCooldownByDefault);
+  T.Test('cooldown is per key', @TestCooldownPerKey);
+  T.Test('negative cooldown rejected', @TestNegativeCooldownRejected);
   T.Test('concurrent acquire stays bounded', @TestConcurrentAcquire);
   if not T.Run then Halt(1);
 end.
