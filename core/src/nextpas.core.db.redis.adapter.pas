@@ -60,11 +60,18 @@ function ConnectRedis(const AAddr: string;
   const APassword: string; const ADbIndex: Integer;
   const AOptions: TDbConnectOptions): IDbConnection; overload;
 
+{ 选项重载：AOptions 携带 UseTls/TlsServerName/Password 等扩展面；
+  地址串仍解析 host[:port][/db]，非空字段覆盖。 }
+function ConnectRedis(const AAddr: string;
+  const AOptions: TDbRedisConnectOptions): IDbConnection; overload;
+
 { 测试/DI 接缝：以注入传输建连（离线门禁用脚本化 transport）；
   握手语义与 ConnectRedis 一致；AProbeInfo=true 时执行 INFO 探测。 }
 function ConnectRedisWithTransport(const ATransport: IRedisTransport;
   const APassword: string = ''; const ADbIndex: Integer = 0;
   const AProbeInfo: Boolean = False): IDbConnection;
+
+
 
 implementation
 
@@ -235,8 +242,10 @@ type
 
 procedure BridgeNetError(E: Exception);
 begin
-  raise EDbError.CreateSimple(dbkRedis,
-    'redis connect: ' + E.Message);
+  { 传输层拨号失败（TCP/TLS）语义上是连接类错误；ErrType 槽放
+    'NET' 标记非服务端回复、源自本地传输栈 }
+  raise EDbError.CreateFullRedis('NET',
+    'redis connect: ' + E.Message, decConnection, dckNone);
 end;
 
 function ConnectRedis(const AAddr: string): IDbConnection;
@@ -265,6 +274,31 @@ begin
   end;
   Result := TDbRedisConnection.Create(LTransport, APassword, ADbIndex,
     LOpts.ProbeInfo);
+end;
+
+function ConnectRedis(const AAddr: string;
+  const AOptions: TDbRedisConnectOptions): IDbConnection;
+var
+  LConnOpts: TDbConnectOptions;
+  LOpts: TDbRedisConnectOptions;
+begin
+  if AAddr = '' then
+    raise EDbError.CreateSimple(dbkRedis, 'empty address');
+  LConnOpts := TDbConnectOptions.Default;
+  ParseRedisAddr(AAddr, LConnOpts, LOpts);
+  if AOptions.Password <> '' then
+    LOpts.Password := AOptions.Password;
+  LOpts.UseTls := AOptions.UseTls;
+  if AOptions.TlsServerName <> '' then
+    LOpts.TlsServerName := AOptions.TlsServerName;
+  LOpts.ProbeInfo := True;
+  try
+    Result := TDbRedisConnection.Create(NewNetRedisTransport(LOpts),
+      LOpts.Password, LOpts.DbIndex, True);
+  except
+    on E: Exception do
+      BridgeNetError(E);
+  end;
 end;
 
 function ConnectRedisWithTransport(const ATransport: IRedisTransport;

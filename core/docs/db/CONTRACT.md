@@ -413,6 +413,19 @@ opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
   下界。TimeoutMs advisory 忽略（§2.6b 惯例）。
 - **观测钩子**：§2.12 同构接线（attach-catch-up、首执行窗口、错误
   类目透传）。
+- **连接选项重载（A5.1b）**：`ConnectRedis(AAddr,
+  TDbRedisConnectOptions)`——Host/Port/Password/DbIndex/
+  ConnectTimeoutMs/IoTimeoutMs 之外新增 UseTls 与 TlsServerName；
+  地址串解析结果与选项字段合并时选项侧非默认值优先。
+- **TLS 变体**：UseTls=True 走 `nextpas.core.tls.TLSDial`（DNS+TCP+
+  TLS 一体阻塞），SNI 取 TlsServerName 否则 Host；传输拨号失败
+  （TCP/TLS，含证书类）统一桥接为 EDbError(dbkRedis) decConnection，
+  ErrType 槽放 'NET' 标记非服务端回复。
+- **INFO 版本探测（A5.1）**：真实建连默认发 INFO server 尽力取
+  `redis_version`（valkey 回退 `valkey_version`），经
+  IDbCapabilities.ProductVersion 暴露；探测失败保守降级为空版本、
+  连接不受影响。离线门控 live env：NEXTPAS_REDIS_TEST_TLS_CONN /
+  NEXTPAS_REDIS_TEST_TLS_PASSWORD。
 
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
