@@ -4,7 +4,9 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-24（v2.26：llvm 链接步骤动态链接器
+创建：2026-08-23　最后更新：2026-08-24（v2.27：llvm 探针 SIGSEGV 归因
+完成——opt noreturn 级联源自 core 原子包装种子参数错配，跨模块移交
+core lane；v2.26：llvm 链接步骤动态链接器
 override 落地——native-link/llvm-link 共用 AppendDynamicLinkerOverrideArg，
 tryenv mini 直接执行成功；v2.25：emitter-temp-placement 正确性线
 收官——HIR alloca 发射器级入口提升+except handler 变量绑定+E.Message 字符串
@@ -35,7 +37,7 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅   tryenv mini 双步 opt+运行 ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    llvm 探针运行期 SIGSEGV 归因(cmpmid/tvec/hashmap 新暴露) → P1 刀⑨静窗复测 或 concat-swap(b4b-i16) → P2 arena
+下一口    llvm 探针 SIGSEGV 根因移交 core lane(CAS 包装参数错配) 或 concat-swap(b4b-i16) 或 swiss 接线 → P1 刀⑨静窗复测
 ```
 
 ---
@@ -245,6 +247,24 @@ SEMA 层的块内提升逻辑对劈分不设防。
 本 host 无此文件无法直接执行；探针协议只验 opt 从未执行产物故未暴露）——
 需 link 计划按 host 补 --dynamic-linker /lib64/ld-linux-x86-64.so.2，
 独立工具链 slice。
+
+**v2.27 llvm 探针 SIGSEGV 归因（2026-08-24；诊断完成，修复移交 core lane）**：
+cmpmid/tvec/hashmap 直接执行 SIGSEGV（exit 139），gdb 定位
+`np_unit_init_nextpas_core_simd` 无尾声跌落下一函数→ret 取栈垃圾跳转。
+机器码↔.ll 对拍（直接 llc 正常 vs 构建管线损坏）锁定破坏发生在 **opt -O2**
+阶段：`_start` 被推断 noreturn 并删除其后全部主体（main/fini 全没了），
+多个函数体删成 `ret undef`。noreturn 级联源头=core 原子包装种子缺陷：
+`atomic_compare_exchange_strong$iii` 定义签名 (ptr,ptr,ptr)，而调用点传
+`(i64 0, i64 0, i64, i64, i64)`——字面 0 常量+参数个数错配（mangled 重载
+解析失败退化为任意形状调用）；opt 内联后 CAS 恒失败路径被证明支配，
+raise/unreachable 随之支配全函数。证据：tvec .ll:3631/7948/8718 三处
+5 参调用、EnsureBuilt bb240、opt 后 IR `_start #0(noreturn)+unreachable`。
+**归属判定=跨模块（core mem/heap 单元种子）**：按 worktree 纪律不本 lane
+单改 core，登记移交 core-db lane；compiler lane 可做的防御性后续=
+residual 调用参数个数/类型与被调签名一致性检查（encode 层早失败优于
+opt 层静默误编译）。D25 教训：双步 opt PASS 只证 IR 结构合法，不证
+语义正确——noreturn/unreachable 是合法但致命的传播源，执行验证面
+（动态链接器解锁后）必须进探针协议。
 
 **P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
 `np_sema_seed_function_bodies.inc`；一轮 tree mini）：
@@ -812,6 +832,7 @@ P0 基线数字，回滚判据客观化。
 | v2.20 | （本提交） | P1 刀⑤ 落地：绿树零分配文本 API `TextLen`+`TextEquals`（镜像 GetText 有效性与 SameText 折叠语义）；seed 文件 26 判空+5 组字面量、walk_halt_calls 45 组 BFS 路径全量转换；实测 seed 221.6/219.0s 对刀② -4.5%/-6.0%、对 P0 基线累计 -5.9%/-8.3%=迄今最大单刀；遗留靶=SymbolAt/ResolveTypeIdForOwner 按值记录返回 |
 | v2.25 | （本提交） | emitter-temp-placement 正确性线收官（三层修复）：①发射器级 hikAlloca 入口提升——EmitFunction 预扫全函数 alloca 渲染进序言缓冲、首块标签后冲刷、主扫跳过（D24 教训：异常发射劈分 HIR entry 块，EnsureAlloca 的 FEntryBlockId 提升不等于函数序言）；②except handler 绑定——LowerRuntimeTryExceptStatement 识别 gnkExceptionHandler，注册 handler 变量（var-decl-ptr-runtime + exc_load 赋值），`on E: C do`/裸 `on E do` 双形状；③E.Message 字符串 ABI——EncodeExceptionMemberStrTemp 物化 tstring 字段加载临时按 strvar (ptr,len) 传参并跳过结构化 ExprId 附加；mini tryenv 复现（build/m2_mini_tryenv.pas）双步 opt PASS+运行语义正确（fail msg=cfg broken）；十五探针 13 OPT-PASS+cap/cmpgen/puny 已知挂账零新回归；新挂账=llvm 产物动态链接器 /lib/ld64.so.1 本 host 缺失（探针只验 opt 从未执行故未暴露）；concat-swap 挂账新增可运行实证（mini len=0） |
 | v2.26 | （本提交） | llvm 链接动态链接器 override 落地：AppendDynamicLinkerOverrideArg 共享助手（gnu-ld/lld profile 的 target-default-with-override 策略消费），native-link 与 llvm-link 两链接步骤统一 pin `--dynamic-linker /lib64/ld-linux-x86-64.so.2`（linux-x86_64）；tryenv mini 直接 `./` 执行成功语义正确；**解锁 llvm 产物真执行验证面**：cmpmid/tvec/hashmap 三探针首次可执行即暴露运行期 SIGSEGV（_start 跳栈地址，llvm 代码生成层既有缺陷——gnu 绑定下历来通过，坏解释器此前掩盖；解释器选择本身不影响合法 ELF 执行，非本批引入），逐探针调试转下批挂账；验证=contract pass+rebuild+compiler-pass 58/58（native-link 原路径回归通过）+tree/tryenv 双步 opt PASS+hygiene |
+| v2.27 | （本提交） | llvm 探针 SIGSEGV 根因诊断收官（docs-only）：机器码↔.ll 对拍锁定破坏层=opt -O2 noreturn 级联——`_start` 被删主体、init 尾声消失跌落下一函数；级联源头=core 原子包装种子缺陷（atomic_compare_exchange_strong$iii 定义 (ptr,ptr,ptr) vs 调用点字面 0+5 参错配，tvec .ll:3631/7948/8718 实证）；跨模块归属移交 core-db lane+compiler lane 后续防御=encode 层调用签名一致性检查；D25 教训入档（双步 opt PASS 只证结构合法，noreturn 是合法但致命的传播源；执行验证应进探针协议） |
 
 ## 10. 文档维护规则
 
