@@ -318,6 +318,49 @@ begin
   LTok := S.NextToken; Check(LTok.Kind = ytkStreamEnd, 'end');
 end;
 
+procedure TestIndentedNestedSeqEmitsBlockEnd;
+var
+  S: TYamlScanner;
+  LTok: TYamlToken;
+  LInput: string;
+  LBlockEndBeforeSecondOuter: Boolean;
+  LOuterDashes: Integer;
+begin
+  { Second outer '-' is indented. UnwindIndentsTo must emit BlockEnd for the
+    inner seq before that dash, otherwise the parser absorbs it. }
+  LInput :=
+    '  - task: a' + #10 +
+    '    items:' + #10 +
+    '      - x' + #10 +
+    '      - y' + #10 +
+    '  - task: b' + #10;
+  S.Init(@LInput[1], Length(LInput));
+  LTok := S.NextToken;
+  Check(LTok.Kind = ytkStreamStart, 'start');
+  LBlockEndBeforeSecondOuter := False;
+  LOuterDashes := 0;
+  repeat
+    LTok := S.NextToken;
+    if LTok.Kind = ytkBlockSeqStart then
+    begin
+      if LTok.Col = 3 then
+      begin
+        Inc(LOuterDashes);
+        if (LOuterDashes = 2) and not LBlockEndBeforeSecondOuter then
+          Check(False, 'BlockEnd missing before second outer dash');
+      end;
+    end
+    else if LTok.Kind = ytkBlockEnd then
+    begin
+      if LOuterDashes = 1 then
+        LBlockEndBeforeSecondOuter := True;
+    end;
+  until (LTok.Kind = ytkStreamEnd) or (LTok.Kind = ytkError);
+  Check(LTok.Kind = ytkStreamEnd, 'stream end');
+  CheckEqual(Int64(2), Int64(LOuterDashes), 'two outer dashes');
+  Check(LBlockEndBeforeSecondOuter, 'inner seq closed before second outer dash');
+end;
+
 procedure TestPlainScalarEdgeCases;
 var
   S: TYamlScanner;
@@ -350,6 +393,7 @@ begin
   T.Test('Quoted bang strings remain scalars', @TestQuotedBangStringsRemainScalars);
   T.Test('Nested flow', @TestNestedFlow);
   T.Test('Block seq indicator', @TestBlockSeqIndicator);
+  T.Test('Indented nested seq emits BlockEnd', @TestIndentedNestedSeqEmitsBlockEnd);
   T.Test('Plain scalar edge', @TestPlainScalarEdgeCases);
   if not T.Run then Halt(1);
 end.

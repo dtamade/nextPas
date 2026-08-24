@@ -222,27 +222,33 @@ end;
 
 procedure FlattenYamlNode(ACfg: TConfig; const APrefix: string; const ANode: TYamlValue);
 var
-  LI, LCount: UInt32;
+  LI: UInt32;
+  LChild, LVal: TYamlValue;
 begin
+  { Walk FirstChild/NextSibling — SeqGet/MapKeyAt restart from the head, O(n²). }
   if ANode.IsMap then
   begin
-    LCount := ANode.MapLen;
-    LI := 0;
-    while LI < LCount do
+    LChild := ANode.FirstChild;
+    while LChild.IsValid do
     begin
+      LVal := LChild.NextSibling;
       FlattenYamlNode(ACfg,
-        JoinFlattenedKey('YAML', APrefix, ANode.MapKeyAt(LI).ToString),
-        ANode.MapValueAt(LI));
-      Inc(LI);
+        JoinFlattenedKey('YAML', APrefix, LChild.AsStr.ToString),
+        LVal);
+      if LVal.IsValid then
+        LChild := LVal.NextSibling
+      else
+        Break;
     end;
   end
   else if ANode.IsSeq then
   begin
-    LCount := ANode.SeqLen;
+    LChild := ANode.FirstChild;
     LI := 0;
-    while LI < LCount do
+    while LChild.IsValid do
     begin
-      FlattenYamlNode(ACfg, JoinKey(APrefix, UIntToStr(LI)), ANode.SeqGet(LI));
+      FlattenYamlNode(ACfg, JoinKey(APrefix, UIntToStr(LI)), LChild);
+      LChild := LChild.NextSibling;
       Inc(LI);
     end;
   end

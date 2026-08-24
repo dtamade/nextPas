@@ -786,6 +786,7 @@ function ParseBlockSequence(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
 var
   LIdx, LFirst, LPrev, LChild: UInt32;
   LCount: UInt32;
+  LSeqCol: UInt32;
 begin
   LIdx := ADoc.AddNode;
   if LIdx = YAML_NODE_NONE then
@@ -795,9 +796,14 @@ begin
   LFirst := YAML_NODE_NONE;
   LPrev := YAML_NODE_NONE;
   LCount := 0;
+  LSeqCol := ACurToken.Col;
 
   while ACurToken.Kind = ytkBlockSeqStart do
   begin
+    { Sibling entries share the '-' column. A different column is a nested or
+      outer sequence — do not absorb it even if the scanner omitted BlockEnd. }
+    if ACurToken.Col <> LSeqCol then
+      Break;
     ACurToken := AScanner.NextToken; // consume - indicator
     LChild := ParseNode(ADoc, AScanner, ACurToken);
     if ADoc.FHasError then begin Result := LIdx; Exit; end;

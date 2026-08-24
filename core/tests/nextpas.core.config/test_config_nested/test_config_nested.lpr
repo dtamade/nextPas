@@ -9,6 +9,7 @@ program test_config_nested;
 uses
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.time,
   nextpas.core.config,
   nextpas.core.test;
 
@@ -162,6 +163,92 @@ begin
       '    port: 5432' + #10);
     CheckEqual('dbhost', LCfg.GetString('app.db.host'), 'yaml deep host');
     CheckEqual(Int64(5432), LCfg.GetInt('app.db.port'), 'yaml deep port');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestYamlSeqOfMapsWithNestedSeq;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromYaml(
+      'domain_weights:' + #10 +
+      '  - task: latency' + #10 +
+      '    items:' + #10 +
+      '      - domain: example.com' + #10 +
+      '        weight: 2' + #10 +
+      '      - domain: foo.com' + #10 +
+      '        weight: 1' + #10 +
+      '  - task: dns' + #10 +
+      '    items:' + #10 +
+      '      - domain: bar.com' + #10 +
+      '        weight: 3' + #10);
+    CheckEqual('latency', LCfg.GetString('domain_weights.0.task'), 'item0 task');
+    CheckEqual('example.com',
+      LCfg.GetString('domain_weights.0.items.0.domain'), 'item0.items0');
+    CheckEqual('foo.com',
+      LCfg.GetString('domain_weights.0.items.1.domain'), 'item0.items1');
+    CheckEqual('dns', LCfg.GetString('domain_weights.1.task'), 'item1 task');
+    CheckEqual('bar.com',
+      LCfg.GetString('domain_weights.1.items.0.domain'), 'item1.items0');
+    CheckEqual(Int64(3), LCfg.GetInt('domain_weights.1.items.0.weight'),
+      'item1.items0.weight');
+    CheckEqual(False, LCfg.Has('domain_weights.0.items.2.task'),
+      'second outer item is not rolled into first nested seq');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure AppendYamlChunk(var ABuf: string; var ALen: Integer; const ASrc: string);
+var
+  LAdd: Integer;
+begin
+  LAdd := Length(ASrc);
+  if ALen + LAdd > Length(ABuf) then
+  begin
+    if Length(ABuf) = 0 then
+      SetLength(ABuf, 4096)
+    else
+      SetLength(ABuf, (ALen + LAdd) * 2);
+  end;
+  if LAdd > 0 then
+    Move(ASrc[1], ABuf[ALen + 1], LAdd);
+  Inc(ALen, LAdd);
+end;
+
+procedure TestYamlLargeObjectArrayLinear;
+const
+  N = 12000;
+  MAX_MS = 2000;
+var
+  LCfg: TConfig;
+  LInput: string;
+  LLen, LI: Integer;
+  LStart, LElapsed: UInt64;
+begin
+  LLen := 0;
+  SetLength(LInput, 8 + N * 24);
+  AppendYamlChunk(LInput, LLen, 'items:' + #10);
+  for LI := 0 to N - 1 do
+    AppendYamlChunk(LInput, LLen, '  - name: n' + IntToStr(LI) + #10);
+  SetLength(LInput, LLen);
+
+  LCfg := TConfig.Create;
+  try
+    LStart := GetTickCount64;
+    LCfg.LoadFromYaml(LInput);
+    LElapsed := GetTickCount64 - LStart;
+    CheckEqual(Int64(N), Int64(LCfg.Count), 'flattened key count');
+    CheckEqual('n0', LCfg.GetString('items.0.name'), 'first item');
+    CheckEqual('n' + IntToStr(N - 1),
+      LCfg.GetString('items.' + IntToStr(N - 1) + '.name'), 'last item');
+    Check(LElapsed < MAX_MS,
+      'LoadFromYaml of ' + IntToStr(N) + ' object-array items took ' +
+      IntToStr(LElapsed) + 'ms (budget ' + IntToStr(MAX_MS) + 'ms)');
   finally
     LCfg.Free;
   end;
@@ -1018,6 +1105,8 @@ begin
   T.Test('Yaml.NestedMapping', @TestYamlNestedMapping);
   T.Test('Yaml.Sequence', @TestYamlSequence);
   T.Test('Yaml.DeepNesting', @TestYamlDeepNesting);
+  T.Test('Yaml.SeqOfMapsWithNestedSeq', @TestYamlSeqOfMapsWithNestedSeq);
+  T.Test('Yaml.LargeObjectArrayLinear', @TestYamlLargeObjectArrayLinear);
   T.Test('Toml.NestedTable', @TestTomlNestedTable);
   T.Test('Toml.Array', @TestTomlArray);
   T.Test('Toml.InlineTable', @TestTomlInlineTable);

@@ -471,15 +471,16 @@ begin
     Exit;
   end;
 
-  // Skip whitespace and newlines
+  // Skip whitespace and newlines.
+  // Indent spaces/tabs must NOT clear FAtLineStart: UnwindIndentsTo runs only
+  // at line start, using the column of the first content character. Clearing
+  // the flag on indent would swallow a lesser-indent '-' into an inner
+  // block sequence (nested seq-of-maps with nested seq).
   while not AtEnd do
   begin
     LCh := Peek;
     if (LCh = 32) or (LCh = 9) then
-    begin
-      Advance;
-      FAtLineStart := False;
-    end
+      Advance
     else if (LCh = 10) then
     begin
       Advance;
