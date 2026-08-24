@@ -32,6 +32,9 @@
                      collections, base, errors
 ```
 
+> 注：session 域接口先行——`IAgentTranscriptStore` 现居 `nextpas.core.agent.intf`
+> 词表；独立单元与实现（含 JSONL store）随 W5 session 立项落位。
+
 铁律：
 
 1. `base`/`errors`/`intf` 不依赖本模块任何其他实现单元（errors 只依赖 base）；
@@ -62,7 +65,7 @@
 | `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold, json |
 | `nextpas.core.agent.tools.pas` | 工具 | 名称/schema 注册校验（aecConfig）、§1.5 参数校验失败→error result、结果截断信封（UTF-8 安全切）、RunToolBatch 批执行器（时钟感知超时/取消合成/异常兜底 aecToolFailed/WriteGuard 迟到写仲裁） | base, intf, clock, errors, atomic, json, text, cancellation |
 | `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转/引导收尾；全部工具经 IThreadPool（LIFECYCLE §5，D14/C9） | base, intf, clock, errors, tools, thread(pool), json, log, cancellation |
-| `nextpas.core.agent.session.pas` | 会话 | IAgentTranscriptStore 接口 + 内存实现（W4 起）；JSONL 实现后置独立 wave | base, intf, fs |
+| （无独立单元）| 会话 | **接口先行**：`IAgentTranscriptStore` 位于 `nextpas.core.agent.intf` 词表（Append/Load/Delete）；无内存实现、无门面构造入口；JSONL store 与独立单元随 W5 session 立项 | — |
 
 体积指引：单文件 >800 行必须拆分（provider.openai 与 anthropic 预期各 ~500-700 行，
 含 wire 映射注释；超出即拆 `provider.<name>.<aspect>` 子模块）。
