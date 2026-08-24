@@ -397,7 +397,12 @@ begin
   if pq_status(FConn) <> CONNECTION_OK then
   begin
     try
-      raise EPgError.Create(string(AnsiString(pq_errorMessage(FConn))));
+      { 建连失败恒为连接类：SQLSTATE 08000（connection_exception，
+        libpq 细分码 08001/08006 需服务端协商后才有，此处拿不到——
+        用 ISO 通用码保证 ClassifyPg 落 decConnection） }
+      raise EPgError.Create(
+        string(AnsiString(pq_errorMessage(FConn))),
+        '08000', 'ERROR', '');
     finally
       pq_finish(FConn);
       FConn := nil;
