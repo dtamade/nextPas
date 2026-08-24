@@ -4,8 +4,8 @@ unit nextpas.core.db.pg.base;
        Raw libpq ABI declarations live in nextpas.core.db.pg.ffi (resolved
        at runtime via nextpas.core.db.pg.loader, dlopen on libpq.so.5).
        The friendly surface (TPgConn / TPgQuery / EPgError) lives in
-       nextpas.core.db.pg.conn and is re-exported by the nextpas.core.pg
-       facade. EPgError lives here so the loader can raise it too. *}
+       nextpas.core.db.pg.conn and is re-exported by the nextpas.core.db.pg
+       family facade. EPgError lives here so the loader can raise it too. *}
 
 {$I nextpas.core.settings.inc}
 

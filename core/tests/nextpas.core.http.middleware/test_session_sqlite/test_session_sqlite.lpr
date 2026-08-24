@@ -7,8 +7,7 @@ uses
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.fs,
-  nextpas.core.db.sqlite,
-  nextpas.core.db.sqlite.pool,
+  nextpas.core.db,
   nextpas.core.time,
   nextpas.core.http.middleware.session,
   nextpas.core.http.middleware.session.sqlite;
@@ -22,12 +21,23 @@ begin
   Result := GDbPath;
 end;
 
+{ 单连接池夹具（G2：v1 TSqlitePool 已退役，统一走 db.pool）}
+function MakePool: TDbPool;
+begin
+  Result := TDbPool.Create(
+    function: IDbConnection
+    begin
+      Result := ConnectSqlite(TempDbPath);
+    end,
+    TDbPoolPolicy.Default);
+end;
+
 { ==== tests ==== }
 
 procedure TestFactoryValidation;
 var
   LRaised: Boolean;
-  LPool: TSqlitePool;
+  LPool: TDbPool;
 begin
   LRaised := False;
   try
@@ -38,26 +48,29 @@ begin
   end;
   Check(LRaised, 'nil pool raises');
 
-  LPool := TSqlitePool.Create(TempDbPath, 1);
-  LRaised := False;
+  LPool := MakePool;
   try
-    NewSqliteSessionStore(LPool, 0);
-  except
-    on E: Exception do
-      LRaised := True;
+    LRaised := False;
+    try
+      NewSqliteSessionStore(LPool, 0);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'non-positive MaxAgeMs raises');
+  finally
+    LPool.Free;
   end;
-  LPool.Free;
-  Check(LRaised, 'non-positive MaxAgeMs raises');
 end;
 
 procedure TestTableEnsured;
 var
-  LPool: TSqlitePool;
+  LPool: TDbPool;
   LStore: ISessionStore;
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
 begin
-  LPool := TSqlitePool.Create(TempDbPath, 1);
+  LPool := MakePool;
   try
     LStore := NewSqliteSessionStore(LPool, 60000);
     CheckNotNil(LStore, 'factory builds store');
@@ -69,10 +82,10 @@ begin
         Check(Q.Step, 'sqlite_master query steps');
         CheckEqual(Int64(1), Q.GetInt64(0), '_sessions table ensured');
       finally
-        Q.Free;
+        Q := nil;
       end;
     finally
-      LPool.Release(Conn);
+      Conn := nil;
     end;
   finally
     LPool.Free;
@@ -81,11 +94,11 @@ end;
 
 procedure TestSaveLoadRoundTrip;
 var
-  LPool: TSqlitePool;
+  LPool: TDbPool;
   LStore: ISessionStore;
   LData, LLoaded: TSessionData;
 begin
-  LPool := TSqlitePool.Create(TempDbPath, 1);
+  LPool := MakePool;
   try
     LStore := NewSqliteSessionStore(LPool, 60000);
     LData := TSessionData.Create('k-1');
@@ -107,10 +120,10 @@ end;
 
 procedure TestLoadMissingNil;
 var
-  LPool: TSqlitePool;
+  LPool: TDbPool;
   LStore: ISessionStore;
 begin
-  LPool := TSqlitePool.Create(TempDbPath, 1);
+  LPool := MakePool;
   try
     LStore := NewSqliteSessionStore(LPool, 60000);
     Check(LStore.Load('no-such-key') = nil, 'missing key loads nil');
@@ -122,24 +135,28 @@ end;
 
 procedure TestLoadExpiredNil;
 var
-  LPool: TSqlitePool;
+  LPool: TDbPool;
   LStore: ISessionStore;
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
 begin
-  LPool := TSqlitePool.Create(TempDbPath, 1);
+  LPool := MakePool;
   try
     LStore := NewSqliteSessionStore(LPool, 60000);
     Conn := LPool.Writer;
-    Q := Conn.Query(
-      'INSERT INTO _sessions (session_id, data, expires_at) VALUES (?1, ?2, ?3)');
     try
-      Q.BindText(1, 'k-expired');
-      Q.BindText(2, '{user_id=u-old}');
-      Q.BindInt64(3, DateTimeToUnix(DateTimeUtcNow) - 100);
-      Q.Step;
+      Q := Conn.Query(
+        'INSERT INTO _sessions (session_id, data, expires_at) VALUES (?1, ?2, ?3)');
+      try
+        Q.BindText(1, 'k-expired');
+        Q.BindText(2, '{user_id=u-old}');
+        Q.BindInt64(3, DateTimeToUnix(DateTimeUtcNow) - 100);
+        Q.Step;
+      finally
+        Q := nil;
+      end;
     finally
-      Q.Free;
+      Conn := nil;
     end;
     Check(LStore.Load('k-expired') = nil,
       'expired row treated as absent');
@@ -150,13 +167,13 @@ end;
 
 procedure TestCleanupExpired;
 var
-  LPool: TSqlitePool;
+  LPool: TDbPool;
   LStore: ISessionStore;
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
   LData, LLoaded: TSessionData;
 begin
-  LPool := TSqlitePool.Create(TempDbPath, 1);
+  LPool := MakePool;
   try
     LStore := NewSqliteSessionStore(LPool, 60000);
     LData := TSessionData.Create('k-valid');
@@ -165,15 +182,19 @@ begin
     LData.Free;
 
     Conn := LPool.Writer;
-    Q := Conn.Query(
-      'INSERT INTO _sessions (session_id, data, expires_at) VALUES (?1, ?2, ?3)');
     try
-      Q.BindText(1, 'k-stale');
-      Q.BindText(2, '{user_id=u-stale}');
-      Q.BindInt64(3, DateTimeToUnix(DateTimeUtcNow) - 100);
-      Q.Step;
+      Q := Conn.Query(
+        'INSERT INTO _sessions (session_id, data, expires_at) VALUES (?1, ?2, ?3)');
+      try
+        Q.BindText(1, 'k-stale');
+        Q.BindText(2, '{user_id=u-stale}');
+        Q.BindInt64(3, DateTimeToUnix(DateTimeUtcNow) - 100);
+        Q.Step;
+      finally
+        Q := nil;
+      end;
     finally
-      Q.Free;
+      Conn := nil;
     end;
 
     LStore.CleanupExpired;
@@ -189,11 +210,11 @@ end;
 
 procedure TestDelete;
 var
-  LPool: TSqlitePool;
+  LPool: TDbPool;
   LStore: ISessionStore;
   LData, LLoaded: TSessionData;
 begin
-  LPool := TSqlitePool.Create(TempDbPath, 1);
+  LPool := MakePool;
   try
     LStore := NewSqliteSessionStore(LPool, 60000);
     LData := TSessionData.Create('k-del');
@@ -218,26 +239,30 @@ end;
 
 procedure TestLegacyFormatCompatible;
 var
-  LPool: TSqlitePool;
+  LPool: TDbPool;
   LStore: ISessionStore;
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
   LLoaded: TSessionData;
 begin
   { Legacy pascn '_sessions.data' wire format '{k=v\n...}'. }
-  LPool := TSqlitePool.Create(TempDbPath, 1);
+  LPool := MakePool;
   try
     LStore := NewSqliteSessionStore(LPool, 60000);
     Conn := LPool.Writer;
-    Q := Conn.Query(
-      'INSERT INTO _sessions (session_id, data, expires_at) VALUES (?1, ?2, ?3)');
     try
-      Q.BindText(1, 'k-legacy');
-      Q.BindText(2, '{user_id=u-legacy'#10'oauth_state=state-1}');
-      Q.BindInt64(3, DateTimeToUnix(DateTimeUtcNow) + 600);
-      Q.Step;
+      Q := Conn.Query(
+        'INSERT INTO _sessions (session_id, data, expires_at) VALUES (?1, ?2, ?3)');
+      try
+        Q.BindText(1, 'k-legacy');
+        Q.BindText(2, '{user_id=u-legacy'#10'oauth_state=state-1}');
+        Q.BindInt64(3, DateTimeToUnix(DateTimeUtcNow) + 600);
+        Q.Step;
+      finally
+        Q := nil;
+      end;
     finally
-      Q.Free;
+      Conn := nil;
     end;
     LLoaded := LStore.Load('k-legacy');
     CheckNotNil(LLoaded, 'legacy row loads');
@@ -253,12 +278,12 @@ end;
 
 procedure TestCustomTableName;
 var
-  LPool: TSqlitePool;
+  LPool: TDbPool;
   LStore: ISessionStore;
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
 begin
-  LPool := TSqlitePool.Create(TempDbPath, 1);
+  LPool := MakePool;
   try
     LStore := NewSqliteSessionStore(LPool, 60000, 'my_sessions');
     Conn := LPool.Acquire;
@@ -269,10 +294,10 @@ begin
         Check(Q.Step, 'sqlite_master query steps');
         CheckEqual(Int64(1), Q.GetInt64(0), 'custom table name used');
       finally
-        Q.Free;
+        Q := nil;
       end;
     finally
-      LPool.Release(Conn);
+      Conn := nil;
     end;
   finally
     LPool.Free;

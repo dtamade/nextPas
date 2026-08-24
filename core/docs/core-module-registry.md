@@ -72,14 +72,14 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `oauth` | L3 | OAuth2 authorization-code client + PKCE (RFC 6749 §4.1 / RFC 7636; `nextpas.core.oauth.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
-| `pg` | L2 backend of `db` | PostgreSQL database (libpq FFI, dlopen); units live at `nextpas.core.db.pg.*` (old `nextpas.core.pg.*` unit names are deprecated shims) | yes | L0-L1; platform.dl | focused-runtime |
+| `pg` | L2 backend of `db` | PostgreSQL database (libpq FFI, dlopen); units live at `nextpas.core.db.pg.*` (legacy `nextpas.core.pg.*` shims deleted in the G2 sweep) | yes | L0-L1; platform.dl | focused-runtime |
 | `platform` | L0 | host ABI and OS semantics | yes | host owner `platform.*.base/ffi`, L0 only | source-contract + focused-runtime |
 | `process` | L2 | process management | yes | L0-L1 | focused-runtime |
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
-| `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (old `nextpas.core.sqlite.*` unit names are deprecated shims) | yes | L0-L1 | focused-runtime |
+| `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy `nextpas.core.sqlite.*` shims deleted in the G2 sweep) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
@@ -99,9 +99,9 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 
 Database family: `sqlite` and `pg` are L2 backend implementations inside the
 `db` (L3) family; their units physically live under `nextpas.core.db.sqlite.*`
-and `nextpas.core.db.pg.*`. Old `nextpas.core.sqlite.*` / `nextpas.core.pg.*`
-unit names remain only as deprecated re-export shims pending consumer sweep;
-removal conditions in `core/docs/db/CONTRACT.md`. Design record:
+and `nextpas.core.db.pg.*`. The legacy `nextpas.core.sqlite.*` /
+`nextpas.core.pg.*` unit names were deleted in the G2 consumer sweep
+(2026-08-25); the ffi units never had shims. Design record:
 `core/docs/plans/2026-08-23-db-module-boundary.md`.
 
 ## Gate policy

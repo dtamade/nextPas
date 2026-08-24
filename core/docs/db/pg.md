@@ -3,7 +3,7 @@
 **模块路径**：`core/src/nextpas.core.db.pg*.pas`（5 个源文件，nextpas.core.db 家族 PostgreSQL 后端子模块）
 **层级**：L2 实现（挂在 L3 `nextpas.core.db` 家族下；依赖 L0-L1: platform.dl, exception, text.conv）
 **Owner**：token888 反哺；与 proxy888 联合评审；2026-08-23 起由 core-db lane 收编维护
-**最后更新**：2026-08-23（物理收编进 db 家族；单元名 nextpas.core.pg.* → nextpas.core.db.pg.*）
+**最后更新**：2026-08-25（G2 收口：旧名 nextpas.core.pg.* shim 已删除，仅存 nextpas.core.db.pg.*）
 **版本**：1.1（收编版）
 
 ---

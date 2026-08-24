@@ -493,7 +493,7 @@ test_db_unified 的嵌套用例按 §5.1 新语义改写（"内层失败捕获�
 | V2-S6 | migrate 增强：批次 checksum 防篡改 + dry-run（✅ 已落地：三列版本表 + 规范形 CRC32 防篡改 + 旧两列表探测升级与自愈回填 + MigrateDryRun 结构化预览零写入；语义规格见 §5.4） | test_db_migrate_v2 ✅ |
 | V2-S7 | IDbLargeObject：pg lo_* + sqlite3_blob_* 增量读写（INC-8）（✅ 已落地：统一 IDbBlobStream 流面 + 按模型分面开启能力 + 事务耦合 fail-fast；见增量文档 INC-8 落地注记） | test_db_largeobject ✅ + bench_db_blob_stream RSS 探针 ✅ |
 | V2-S8 | 完善性收尾：INC-6 dbcBool 列类型精化 + INC-7 连接选项/查询超时 + G5 pg 错误定位字段（✅ 已落地：NULL 行级信号两后端统一、bool GetInt64 归一 1/0、语义诚实表入契约；缺口账本 G1/G4/G5 关闭，新登记 G8-G10 及处置） | conformance×2 ✅（bool 往返 + 双后端超时用例） |
-| G2 | 消费方重构窗口：9 项目切 `nextpas.core.db.*` → 删 shim | 全仓 focused sweep |
+| G2 | 消费方重构窗口：9 项目切 `nextpas.core.db.*` → 删 shim（✅ 已落地 2026-08-25：10 个 re-export shim 删除；db.sqlite/db.pg 门面去穿 shim 直连实现；基准 bench_db_adapter_overhead 切新名；v1 TSqlitePool 与 db.sqlite.migrate 后端类表面随消费方迁移整体退役——session.sqlite 中间件迁 db.pool 通用池、迁移消费方统一走 db.migrate；test_db_pool/test_db_migrate 两 v1 门禁同步退役） | 全仓 focused sweep ✅ + test_session_sqlite 迁移后全绿 |
 
 每片独立可 landing；lane 纪律与 landing 流程同仓库规范。
 

@@ -81,6 +81,7 @@ opts])` 已透出。契约见 CONTRACT §2.11。门禁仅驱动管理器
 |---|---|
 | [CONTRACT.md](CONTRACT.md) | **契约总纲**（必读）：家族布局、逐能力契约、后端差异登记、门禁清单 |
 | [sqlite-guide.md](sqlite-guide.md) | sqlite 使用指南 |
+| [national-db-guide.md](national-db-guide.md) | 国产数据库兼容指南：openGauss/KingbaseES/OceanBase/TiDB/DM8 等接入路径、能力预期与上线前验证清单 |
 | [sqlite.md](sqlite.md) / [pg.md](pg.md) | 后端单元参考 |
 | [../plans/2026-08-23-db-v2-architecture.md](../plans/2026-08-23-db-v2-architecture.md) | v2 架构基线（设计决策、对标批评、缺口账本） |
 | [../plans/2026-08-23-db-v2-increment-go-rust.md](../plans/2026-08-23-db-v2-increment-go-rust.md) | Go/Rust 对标增量（INC 清单与落地注记） |
@@ -97,8 +98,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_v2           # 统一层�
 pg/mysql 相关门禁需要本地实例（Makefile `ensure-db` 自动建测试库，
 `NEXTPAS_PG_TEST_CONN` 覆盖连接串）。
 
-## 兼容 shim（deprecated）
+## 兼容 shim（已删除）
 
-`nextpas.core.sqlite.*` 与 `nextpas.core.pg.*` 为纯 re-export shim，
-新代码禁止使用（CONTRACT §3）；删除条件 = 消费方全部切换（G2 窗口）
-+ 总控批准。
+旧单元名 `nextpas.core.sqlite.*` / `nextpas.core.pg.*` 已在 G2 消费方
+清扫中删除（CONTRACT §3）；一律使用 `nextpas.core.db.*` 家族单元名。

@@ -1,7 +1,7 @@
 unit nextpas.core.db.pg.ffi;
 
 {** @desc Raw libpq C ABI as cdecl procedure types.
-       Unlike nextpas.core.sqlite.ffi (compile-time `external`), libpq
+       Unlike nextpas.core.db.sqlite.ffi (compile-time `external`), libpq
        is loaded at runtime: the build host only ships libpq.so.5 (no
        unversioned dev symlink), so `external 'pq'` would not link.
        nextpas.core.db.pg.loader binds these vars to dlsym addresses via
