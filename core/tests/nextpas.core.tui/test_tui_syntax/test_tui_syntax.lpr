@@ -4,6 +4,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
+  nextpas.core.errors,
   nextpas.core.tui.widget.syntax,
   nextpas.core.test;
 
@@ -363,6 +364,7 @@ begin
   Helper.Lines[2] := 'end';
   Doc := TSyntaxDoc.Create(HL, 3, @Helper.GetLine);
   Check(Doc.LineCount = 3, 'LineCount is 3');
+  Doc.Free;
 end;
 
 procedure TestSyntaxDocGetTokens;
@@ -385,6 +387,7 @@ begin
   Doc.GetTokens(1, Ptr, Count);
   Check(Count >= 1, 'line 1 has tokens');
   Check(Ptr^.Kind = tkKeyword, 'line 1 first token is keyword');
+  Doc.Free;
 end;
 
 procedure TestSyntaxDocSetLineCount;
@@ -403,6 +406,7 @@ begin
   Helper.Lines[3] := 'y := 2;';
   Doc.SetLineCount(4);
   Check(Doc.LineCount = 4, 'LineCount is 4 after SetLineCount');
+  Doc.Free;
 end;
 
 procedure TestSyntaxDocInvalidate;
@@ -422,6 +426,7 @@ begin
   Doc.Invalidate(0);
   Doc.GetTokens(0, Ptr, Count);
   Check(Count >= 1, 'has tokens after invalidate + re-tokenize');
+  Doc.Free;
 end;
 
 procedure TestSyntaxDocNotifyInsert;
@@ -443,6 +448,7 @@ begin
   Check(Doc.LineCount = 3, 'LineCount is 3 after insert');
   Doc.GetTokens(1, Ptr, Count);
   Check(Count >= 1, 'inserted line has tokens');
+  Doc.Free;
 end;
 
 procedure TestSyntaxDocNotifyDelete;
@@ -460,6 +466,7 @@ begin
   Helper.Lines[1] := 'end.';
   Doc.NotifyDelete(1, 1);
   Check(Doc.LineCount = 2, 'LineCount is 2 after delete');
+  Doc.Free;
 end;
 
 procedure TestSyntaxDocEnsureCleanTo;
@@ -480,9 +487,64 @@ begin
   Doc.EnsureCleanTo(2, 10);
   Doc.GetTokens(2, Ptr, Count);
   Check(Count >= 1, 'EnsureCleanTo tokenizes up to line 2');
+  Doc.Free;
 end;
 
 { === TSyntaxTheme === }
+
+procedure RaiseDocNilHighlighter;
+var LDoc: TSyntaxDoc;
+begin
+  LDoc := TSyntaxDoc.Create(nil, 3, @Helper.GetLine);
+  LDoc.Free;
+end;
+
+procedure RaiseDocNilCallback;
+var
+  LHL: IHighlighter;
+  LDoc: TSyntaxDoc;
+begin
+  LHL := TPascalHighlighter.Create;
+  LDoc := TSyntaxDoc.Create(LHL, 3, nil);
+  LDoc.Free;
+end;
+
+procedure TestSyntaxDocNilHighlighter;
+begin
+  CheckRaises(EArgumentError, @RaiseDocNilHighlighter,
+    'highlighter must not be nil');
+end;
+
+procedure TestSyntaxDocNilCallback;
+begin
+  CheckRaises(EArgumentError, @RaiseDocNilCallback,
+    'get-line callback must not be nil');
+end;
+
+procedure TestSyntaxDocLifecycleFree;
+var
+  LHL: IHighlighter;
+  LDoc: TSyntaxDoc;
+  LPtr: PToken;
+  LCount: Integer;
+  I, R: Integer;
+begin
+  SetLength(Helper.Lines, 3);
+  Helper.Lines[0] := 'program Test;';
+  Helper.Lines[1] := 'var X: Integer; // note';
+  Helper.Lines[2] := 'end.';
+  for R := 1 to 8 do
+  begin
+    LHL := TPascalHighlighter.Create;
+    LDoc := TSyntaxDoc.Create(LHL, 3, @Helper.GetLine);
+    for I := 0 to 2 do
+      LDoc.GetTokens(I, LPtr, LCount);
+    Check(LCount >= 1, 'lifecycle pass retokenizes line 2');
+    Check(LPtr^.Kind = tkKeyword, 'lifecycle pass line 2 keyword');
+    LDoc.Free;
+    LHL := nil;
+  end;
+end;
 
 procedure TestSyntaxThemeDefault;
 var Theme: TSyntaxTheme;
@@ -685,6 +747,9 @@ begin
     T.Test('syntax doc NotifyInsert', @TestSyntaxDocNotifyInsert);
     T.Test('syntax doc NotifyDelete', @TestSyntaxDocNotifyDelete);
     T.Test('syntax doc EnsureCleanTo', @TestSyntaxDocEnsureCleanTo);
+    T.Test('syntax doc nil highlighter guard (PH33 P5d)', @TestSyntaxDocNilHighlighter);
+    T.Test('syntax doc nil callback guard (PH33 P5d)', @TestSyntaxDocNilCallback);
+    T.Test('syntax doc lifecycle free (PH33 P5d)', @TestSyntaxDocLifecycleFree);
 
     { TSyntaxTheme }
     T.Test('syntax theme default', @TestSyntaxThemeDefault);

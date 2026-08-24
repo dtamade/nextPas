@@ -66,6 +66,10 @@ type
     function LangId: AnsiString;
   end;
 
+  { Lazy tokenized document. GetTokens(LineIndex) tokenizes on demand up to
+    LineIndex; lines are computed only when requested — a partial or
+    out-of-order scan never marks uncomputed lines clean (PH33 P5d).
+    The get-line callback and highlighter are required and checked in Create. }
   TSyntaxDoc = class
   private
     FHighlighter: IHighlighter;
@@ -110,7 +114,7 @@ function IsPascalKeywordP(P: PAnsiChar; Len: Integer): Boolean;
 implementation
 
 uses
-  nextpas.core.text.grapheme;
+  nextpas.core.errors, nextpas.core.text.grapheme;
 
 
 { Zero-allocation keyword hash table.
@@ -457,6 +461,10 @@ constructor TSyntaxDoc.Create(AHighlighter: IHighlighter; ALineCount: Integer;
   AGetLine: TGetLineFunc);
 var Cap: Integer;
 begin
+  if AHighlighter = nil then
+    raise EArgumentError.Create('TSyntaxDoc.Create: highlighter must not be nil');
+  if not Assigned(AGetLine) then
+    raise EArgumentError.Create('TSyntaxDoc.Create: get-line callback must not be nil');
   inherited Create;
   FHighlighter := AHighlighter;
   FGetLine := AGetLine;
@@ -592,14 +600,20 @@ begin
     TokenizeLineInto(FDirtyFrom, P, Len);
     Inc(FDirtyFrom);
     Inc(Processed);
+    { State-stable shortcut: only valid when the next line already has
+      cached tokens — otherwise lines past ToLine were never computed and
+      must not be marked clean (PH33 P5d). }
     if (FDirtyFrom > ToLine) and (FDirtyFrom <= FLineCount) and
+       (FLineTokenLen[FDirtyFrom] > 0) and
        (CompareByte(FLineStates[FDirtyFrom], OldState, SizeOf(TLineState)) = 0) then
     begin
       FDirtyFrom := High(Integer);
       Exit;
     end;
   end;
-  if FDirtyFrom > ToLine then
+  { Mark the whole doc clean only after the last line was actually scanned;
+    stopping at ToLine leaves the tail dirty for later requests (PH33 P5d). }
+  if FDirtyFrom >= FLineCount then
     FDirtyFrom := High(Integer);
 end;
 
