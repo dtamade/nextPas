@@ -72,4 +72,4 @@ wire、256KiB 预检、UTF-8 截断边界、误用守卫、Extra 上限）；深
 
 - ~~session 域（IAgentTranscriptStore 实现）~~ 已清偿：W5 立项落地
   （2026-08-25），`nextpas.core.agent.session` + `test_session`。
-- http.sse 同口径参照基准：随 agent.sse 反哺 slice 补齐（ROADMAP inbox）。
+- http.sse 同口径参照基准：两引擎输入域不同（bytes/text）不合基准；如需对照由 http lane 自立。

@@ -38,6 +38,9 @@
   已核实缺口只在解析器（IReader 本身支持增量读）。`agent.sse` 行为稳定后提请
   反哺晋升进 http.sse（跨模块 slice，需总控批准）——先例：code888 曾把 SSE
   parser 下沉进 core。
+  （2026-08-25 审计注：http lane 已以 K61 自行落地 feed 式 TSSEFeeder，
+  ParseSSE 委托单一引擎——原"提请反哺晋升"目标达成，无需跨模块 slice；
+  agent.sse 因字节域输入差异保留，见 ARCHITECTURE §3.2。）
 
 ### D4 无全局注册表，构造函数装配
 - **决定**：`NewXxxProvider()` 工厂函数；消费方持有实例；loop 内置实例作用域工具表。
@@ -133,6 +136,8 @@
 
 ## 4. 与底座的关系（反哺清单）
 
-1. `agent.sse` → 候选晋升 `http.sse` 增量解析器（D3，跨模块需报批）。
+1. ~~`agent.sse` → 候选晋升 `http.sse` 增量解析器~~ 已达成：http lane 以
+   K61 自落 TSSEFeeder（2026-08-25 审计确认）；两引擎输入域不同
+   （bytes/text），合并不立项。
 2. 若 H2 路径响应体 IReader 增量读存在缺口 → 凭证据提 Needs Review，不在本 lane 私改 http。
 3. 务实级 JSON-Schema 校验若长出完整能力 → 评估上移 validation/json 域。

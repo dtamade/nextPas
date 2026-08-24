@@ -28,8 +28,9 @@ benchmark 禁止触公网 LLM API（TESTING 铁律）——三基准全部进程
   （共享池注入，不含建池）；脚本体积极小，provider 解析占比有限。
 - **sse-feed**：解析器每 op 新建（摊销可忽略）；StdDev 偏高源于长迭代
   下的频率波动，回归对比一律用 p50。
-- http.sse 同口径参照基准尚不存在（ROADMAP inbox：agent.sse 反哺晋升
-  后补齐），"同等数量级"主张暂以绝对值 176 MB/s 记录存证。
+- http.sse 同口径参照基准尚不存在（两引擎输入域不同：agent.sse 字节域、
+  http.sse 文本行域，不做合并基准；如需对照由 http lane 自立），
+  "同等数量级"主张暂以绝对值 176 MB/s 记录存证。
 
 ## 4. 回归规则（PERFORMANCE §5）
 
