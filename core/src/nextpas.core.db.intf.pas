@@ -47,8 +47,10 @@ type
 
   {** 事务控制面。由支持事务的连接适配器实现；泛化事务助手
       （nextpas.core.db.tx）经 QueryInterface 取用。
-      语义与 db.sqlite.tx 一致：计数式嵌套，Begin 加深、内层 Commit
-      只降计数、任意深度 Rollback 回滚整事务并清簿记。 *}
+      手动控制面语义（v1 计数式，与自动助手 savepoint 模型分工见
+      CONTRACT.md §2.3）：Begin 加深计数、内层 Commit 只降计数、
+      任意深度 Rollback 回滚整个事务并清簿记。
+      TxDepth = 真实 SQL 事务深度（savepoint 层不计入）。 *}
   IDbTxControl = interface
     ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE002}']
     procedure BeginTxn(const AImmediate: Boolean = False);
@@ -56,9 +58,150 @@ type
     procedure RollbackTxn;
     function InTransaction: Boolean;
     function TxDepth: Integer;
-    { 恢复簿记深度（不开新事务、不动数据库状态）。仅供泛化事务
-      助手实现嵌套失败路径使用，消费方不要直接调用。 }
-    procedure RestoreDepth(const ADepth: Integer);
+  end;
+
+  {** 保存点控制（可选能力；两后端原生支持 SAVEPOINT）。
+      与 IDbTxControl 组合实现嵌套事务的部分回滚语义：
+        Savepoint(A) -> 出错段 -> RollbackTo(A) 撤销出错段 ->
+        ReleaseTo(A) 并入父事务。
+      命名约束 [A-Za-z0-9_]+，违规抛 EDbError。 *}
+  IDbSavepointControl = interface
+    ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE004}']
+    { 建立命名保存点 }
+    procedure Savepoint(const AName: string);
+    { 回滚到保存点（保存点本身保留，可继续 RollbackTo） }
+    procedure RollbackTo(const AName: string);
+    { 释放保存点（其后的变更并入父事务） }
+    procedure ReleaseTo(const AName: string);
+  end;
+
+  {** 批量执行（可选能力）。单事务内顺序执行完整 SQL 步骤：
+      任一步失败整批回滚并重抛首个错误；空列表为无操作成功。
+      可嵌套——已在外层事务内时按计数语义并入外层（失败由最外层
+      定夺）。实现注记：pg 侧合并为单次往返，sqlite 侧逐条执行，
+      语义两端一致。 *}
+  IDbBatchExecutor = interface
+    ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE005}']
+    procedure ExecuteBatch(const ASteps: TDbSqlSteps);
+  end;
+
+  {** 语句缓存控制能力（连接实现按需支持，经 QueryInterface 探测）：
+      预编译语句缓存对消费方完全透明（Query 内部复用空闲句柄，
+      借出即移除——同 SQL 并发活动查询各自持有独立实例），本接口仅供
+      失效控制与诊断。DDL/迁移后建议整体失效；Migrate 应用成功后
+      自动调用 Clear。 *}
+  IDbStmtCacheControl = interface
+    ['{7C9D2E18-3A64-4B7F-9E25-D81C04FA67B9}']
+    procedure Clear;            { DDL/迁移后整体失效 }
+    function Size: Integer;     { 当前空闲缓存条数（不含在途借出） }
+    function HitRate: Double;   { 命中率 0..1；诊断用，不做行为依据 }
+  end;
+
+  {** 打开的大对象流（INC-8，两后端统一流面）：接口释放即关闭。
+      Read 返回实读字节数（0 = EOF）；Write 短写即异常。
+      后端差异显式入契约：sqlite 为行内 blob 单元定长区间（写不得
+      越过单元末尾，占位经 zeroblob(N) 预留；行更新/schema 变更使
+      句柄失效须重新打开）；pg 为 large object OID 句柄（可扩容；
+      描述符在事务结束时失效，操作须存活于事务内）。 *}
+  IDbBlobStream = interface
+    ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE00A}']
+    function Read(ABuf: PByte; ACount: SizeUInt): SizeUInt;
+    procedure Write(ABuf: PByte; ACount: SizeUInt);
+    function Seek(AOffset: Int64; AOrigin: TDbSeekOrigin): Int64;
+    function Size: Int64;
+  end;
+
+  {** pg 大对象控制能力（OID 存储模型）：CreateLO 建空对象返回 OID，
+      OpenLO 开流，UnlinkLO 删除。事务耦合不对称（libpq 实现决定）：
+      CreateLO/OpenLO 要求活动事务——描述符在事务结束时失效，消费方
+      以 WithTransaction 包裹；UnlinkLO 反之要求**事务外**调用——
+      其客户端实现自管 BEGIN/END，事务内调用会提前终结外部事务。
+      两者均 fail-fast 强制。sqlite 走 IDbRowBlobControl（cell 模型），
+      两模型不互仿。 *}
+  IDbLargeObjectControl = interface
+    ['{E5A1C7D2-94B3-46F8-A0C6-31B7D95E02F4}']
+    function CreateLO: Int64;
+    function OpenLO(const AOid: Int64; const AReadWrite: Boolean): IDbBlobStream;
+    procedure UnlinkLO(const AOid: Int64);
+  end;
+
+  {** sqlite 行内 blob 流能力（cell 存储模型）：打开既有行的 blob 列
+      （rowid 寻址）。pg 无对应机制（协议层不支持单元级流读），探测
+      失败即降级 GetBlob 全量路径——两模型分面是诚实契约而非缺陷。 *}
+  IDbRowBlobControl = interface
+    ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE00B}']
+    function OpenRowBlob(const ATable, AColumn: string;
+      const ARowId: Int64; const AReadWrite: Boolean): IDbBlobStream;
+  end;
+
+  {** 后端能力自述（V3-B1）：只描述统一层契约内的能力面，不做元数据
+      全家桶。可选能力接口——QueryInterface 探测，未实现 = 连接来自
+      早于本契约的适配器；门面 DbCapabilities 统一探测并允许 nil。
+      布尔项与可选接口存在性必须互证为真（conformance 钉死）：
+      SupportsBatchExecutor ⇔ IDbBatchExecutor、SupportsStmtCacheControl
+      ⇔ IDbStmtCacheControl、SupportsLargeObjects ⇔ IDbLargeObjectControl、
+      SupportsSavepoints ⇔ IDbSavepointControl。 *}
+  IDbCapabilities = interface
+    ['{5B3E9C71-8A24-46D3-B7F0-C92E14AD6038}']
+    function Kind: TDbKind;
+    { 服务端产品名/版本串：'SQLite'/'PostgreSQL'/'MySQL'/'MariaDB' +
+      库报告的版本号原文；诊断展示用，不做行为依据 }
+    function ProductName: string;
+    function ProductVersion: string;
+    function SupportsSavepoints: Boolean;
+    function SupportsBatchExecutor: Boolean;
+    function SupportsStmtCacheControl: Boolean;
+    function SupportsLargeObjects: Boolean;
+    { 原生布尔列类型：pg bool(OID16)=True；sqlite 靠声明亲和、
+      mysql 靠 TINYINT(1) 约定 = False }
+    function SupportsNativeBool: Boolean;
+    { 单次 Exec 多语句（mysql 需连接期 CLIENT_MULTI_STATEMENTS） }
+    function SupportsMultiStatementExec: Boolean;
+    { StatementTimeoutMs 连接选项在本后端真实生效（pg 会话级 /
+      mysql Oracle≥8.0 探测后；sqlite 恒 False 不冒充） }
+    function SupportsStatementTimeout: Boolean;
+    { 未加引号标识符大小写敏感（sqlite 保留声明形式 True；
+      pg 折叠小写 / mysql 列名不敏感 = False） }
+    function CaseSensitiveIdentifiers: Boolean;
+    { 单语句占位符上限的保守下界：sqlite=999（跨版本保证值，
+      新栈实际更高）、pg/mysql 协议上限 65535 }
+    function MaxPlaceholders: Integer;
+  end;
+
+  {** 观测钩子监听器（V3-B3）：连接生命周期与执行事件的同步回调面。
+      语义契约（CONTRACT §2.12 同文）：
+      - OnAcquire 在监听器挂载（SetListener 非 nil）时同步补发一次，
+        语义 = "本连接已建立"（建连先于挂载的常驻场景由此可观测）；
+        OnRelease = 连接关闭（析构内）。同一监听器的一次挂载对应
+        析构时恰好一次 OnRelease。池化场景内层连接常驻，租约借还
+        不在本面——池侧观测走 db.pool 既有诊断（C3）。
+      - OnQuery(DurationMs, Summary) = 成功执行一次：Exec 计全程；
+        查询计"首个 Step 全程"（绑定+服务端执行+首行，惰性执行模型
+        的统一执行窗口），同周期后续 Step 不再发，Reset 后重计。
+      - OnError(Category, Summary) = 执行路径失败；此时不发 OnQuery。
+        覆盖 Exec/查询首 Step 抛出的 EDbError（绑定索引等编程错误
+        不在内）。Category 直透 EDbError.Category 归一枚举。
+      - Summary 是折叠空白并截断到 DB_TRACE_SQL_SUMMARY_MAX 的 SQL
+        摘要（防日志爆炸）；参数值从不进入摘要（占位符原文保留，
+        注入安全）。
+      - 回调在调用线程同步执行（诚实模型，无后台线程）；实现不得
+        重入本连接。 *}
+  IDbTraceListener = interface
+    ['{C7A4D2E8-51B9-4F63-9E0A-88D3B21F70C1}']
+    procedure OnAcquire;
+    procedure OnRelease;
+    procedure OnQuery(const ADurationMs: Int64;
+      const ASqlSummary: string);
+    procedure OnError(const ACategory: TDbErrorCategory;
+      const ASqlSummary: string);
+  end;
+
+  {** 追踪控制面（可选能力）：SetListener(nil) 关闭。默认零成本：
+    无监听器时适配器不取时间戳、不做摘要、不发事件。 }
+  IDbTraceControl = interface
+    ['{C7A4D2E8-51B9-4F63-9E0A-88D3B21F70C2}']
+    procedure SetListener(const AListener: IDbTraceListener);
+    function HasListener: Boolean;
   end;
 
   {** 统一连接表面。 *}
@@ -66,9 +209,16 @@ type
     ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE003}']
     function Kind: TDbKind;
     { 多语句 DDL/DML；SQL 原文透传，不做占位符翻译 }
-    procedure Exec(const ASql: string);
+    procedure Exec(const ASql: string); overload;
+    { 查询级选项版（V3-B2）：TimeoutMs 为建议值——后端有可安全
+      应用的机制则生效（超时归一 decTimeout），否则忽略不报错；
+      逐后端语义登记 CONTRACT §2.6/§2.11 与 TDbExecOptions 注记 }
+    procedure Exec(const ASql: string;
+      const AOptions: TDbExecOptions); overload;
     { 参数化查询；SQL 用顺序 ? 占位符 }
-    function Query(const ASql: string): IDbQuery;
+    function Query(const ASql: string): IDbQuery; overload;
+    function Query(const ASql: string;
+      const AOptions: TDbExecOptions): IDbQuery; overload;
     { 最近一次写入影响行数 }
     function Changes: Int64;
     { 原生句柄逃生舱：sqlite3* / PGconn*。仅限 LastInsertRowId、

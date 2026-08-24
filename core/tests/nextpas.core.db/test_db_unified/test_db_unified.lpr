@@ -232,8 +232,8 @@ procedure TestNestedInnerFailureKeepsOuterCommitable;
 var
   Conn: IDbConnection;
 begin
-  { sqlite.tx 嵌套语义：内层失败只回滚到外层入口前的簿记状态由外层
-    定夺；回调内捕获内层异常后，外层可继续提交内层之前的写入。 }
+  { V2-S2 savepoint 混合语义：内层失败真正只撤销内层写入（ROLLBACK TO）；
+    回调内捕获内层异常后，外层可继续提交自己的写入。 }
   Conn := ConnectSqlite(':memory:');
   Conn.Exec('CREATE TABLE t (v INTEGER)');
   WithTransaction(Conn, procedure
@@ -248,9 +248,10 @@ begin
       except
         on ENextPasError do ;   { 吞掉内层异常，外层继续 }
       end;
+      Conn.Exec('INSERT INTO t VALUES (3)');
     end);
   CheckEqual(Int64(2), CountRows(Conn, 'SELECT COUNT(*) FROM t'),
-    'outer commit persists pre-inner write and inner write (inner failure only restored bookkeeping; both writes were inside the still-open outer txn)');
+    'outer commit persists outer writes only; inner write undone by its own rollback');
 end;
 
 procedure TestNestedOuterRollbackUndoesInner;

@@ -17,22 +17,121 @@ uses
   nextpas.core.exception,
   nextpas.core.db.base,
   nextpas.core.db.intf,
+  nextpas.core.db.trace,
   nextpas.core.db.sqlite.base,
   nextpas.core.db.sqlite.conn;
 
 { 创建 sqlite 连接并返回统一接口（':memory:' 可用）。
-  失败抛 EDbError（BackendCode 携带原生结果码）。 }
-function ConnectSqlite(const APath: string): IDbConnection;
+  失败抛 EDbError（BackendCode 携带原生结果码）。
+  AStmtCacheCapacity：透明预编译语句缓存的空闲容量（LRU，键 = 原始
+  SQL 文本）；<= 0 关闭缓存走直通路径。默认开启。 }
+function ConnectSqlite(const APath: string;
+  const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
+  IDbConnection;
+{ INC-7：带连接选项版本。BusyTimeoutMs 应用 PRAGMA busy_timeout
+  （锁等待上限）；sqlite 无语句超时机制，StatementTimeoutMs 非 0
+  被忽略（不冒充）。 }
+function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
+  IDbConnection;
 
 implementation
 
 uses
-  nextpas.core.db.sqlite.tx;
+  SysUtils,
+  nextpas.core.db.err,
+  { 直接用 lrucache 子单元：collections 门面对泛型接口名不可透传
+    （实证），且本处需具名特化类型作字段类型 }
+  nextpas.core.collections.lrucache.intf,
+  nextpas.core.collections.lrucache,
+  nextpas.core.db.sqlite.ffi,
+  nextpas.core.db.sqlite.tx,
+  { 统一层 tx 后声明：裸名 WithTransaction 绑定到 IDbConnection 版本
+    （db.sqlite.tx 的 TSqliteDb 版重载仅经全限定名使用） }
+  nextpas.core.db.tx;
+
+type
+  {** 空闲语句持有者：LRU 的值形态。用接口而非裸对象指针——驱逐/
+    Clear/缓存析构路径由编译器引用计数释放底层 stmt（S4 同款托管
+    纪律，杜绝容器裸搬移泄漏）。 *}
+  ISqliteStmtHolder = interface
+    ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE008}']
+    { 所有权移交：返回底层语句并清空持有（未被 Detach 的语句在
+      holder 析构时释放 = 驱逐/清空路径） }
+    function Detach: TSqliteQuery;
+  end;
+
+  TSqliteStmtHolder = class(TInterfacedObject, ISqliteStmtHolder)
+  private
+    FStmt: TSqliteQuery;
+  public
+    constructor Create(AStmt: TSqliteQuery);   { 取得所有权 }
+    destructor Destroy; override;
+    function Detach: TSqliteQuery;
+  end;
+
+  {** 查询→连接的归还通道。查询持本接口强引用：即使消费方先释放
+    连接接口再释放查询，连接仍存活可安全回插（对抗序安全；无环——
+    连接只缓存空闲语句，从不引用在途查询）。 *}
+  ISqliteStmtHome = interface
+    ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE009}']
+    procedure ReturnStmt(const ASql: string; AStmt: TSqliteQuery);
+  end;
+
+  ISqliteStmtCache = specialize ILruCache<string, ISqliteStmtHolder>;
+
+  {** sqlite 行内 blob 单元流（INC-8，IDbBlobStream）：sqlite3_blob_*
+      薄包装。定长模型——Size 即单元字节数，写不得越过末尾；位置由
+      本对象维护（原生 API 每次调用显式带 offset）。接口释放即
+      blob_close。 *}
+  TDbSqliteBlobStream = class(TInterfacedObject, IDbBlobStream)
+  private
+    FHandle: TSqliteHandle;
+    FBlob: TSqliteBlob;    { nil = 已关闭 }
+    FSize: Int64;
+    FPos: Int64;
+  public
+    constructor Create(AHandle: TSqliteHandle; const ATable, AColumn: string;
+      const ARowId: Int64; const AReadWrite: Boolean);
+    destructor Destroy; override;
+    function Read(ABuf: PByte; ACount: SizeUInt): SizeUInt;
+    procedure Write(ABuf: PByte; ACount: SizeUInt);
+    function Seek(AOffset: Int64; AOrigin: TDbSeekOrigin): Int64;
+    function Size: Int64;
+  end;
 
 procedure RaiseSqliteAsDb(const AE: ESqliteError);
+var
+  LCategory: TDbErrorCategory;
+  LConstraint: TDbConstraintKind;
 begin
-  raise EDbError.CreateSqlite(AE.ErrorCode, AE.ExtendedErrorCode,
-    AE.Message);
+  ClassifySqlite(AE.ErrorCode, AE.ExtendedErrorCode, LCategory, LConstraint);
+  raise EDbError.CreateFullSqlite(AE.ErrorCode, AE.ExtendedErrorCode,
+    LCategory, LConstraint, AE.Message);
+end;
+
+function SqliteCategoryOf(const AE: ESqliteError): TDbErrorCategory;
+var
+  LConstraint: TDbConstraintKind;
+begin
+  { 观测钩子（V3-B3）用：抛前取归一类目，与 RaiseSqliteAsDb 同表 }
+  ClassifySqlite(AE.ErrorCode, AE.ExtendedErrorCode, Result, LConstraint);
+end;
+
+{ blob I/O 结果码检查：从原生句柄取诊断并走统一错误模型。
+  注意必须单次直接构造并 raise——若先建 ESqliteError 再转抛 EDbError，
+  手工创建的临时异常对象会因异常对象非引用计数而泄漏（实证）。 }
+procedure BlobCheck(AHandle: TSqliteHandle; ARC: Integer); inline;
+var
+  LCategory: TDbErrorCategory;
+  LConstraint: TDbConstraintKind;
+begin
+  if ARC = SQLITE_OK then
+    Exit;
+  ClassifySqlite(ARC, sqlite3_extended_errcode(AHandle),
+    LCategory, LConstraint);
+  raise EDbError.CreateFullSqlite(ARC, sqlite3_extended_errcode(AHandle),
+    LCategory, LConstraint, string(AnsiString(sqlite3_errmsg(AHandle))));
 end;
 
 function MapColumnType(const ASqliteType: Integer): TDbColumnType;
@@ -50,9 +149,16 @@ end;
 type
   TDbSqliteQuery = class(TInterfacedObject, IDbQuery)
   private
+    FHome: ISqliteStmtHome;   { 归还通道；nil = 无缓存直通路径 }
+    FSql: string;             { 回插键 = 原始 SQL 文本 }
     FQuery: TSqliteQuery;
+    { 观测钩子（V3-B3）：nil = 无枢纽；FEmitted = 本执行周期已发
+      OnQuery（首 Step 计时，同周期后续 Step 不再发）}
+    FTrace: TDbTraceHub;
+    FEmitted: Boolean;
   public
-    constructor Create(AQuery: TSqliteQuery);   { 取得所有权 }
+    constructor Create(const AHome: ISqliteStmtHome; const ASql: string;
+      AQuery: TSqliteQuery; ATrace: TDbTraceHub);    { 取得语句所有权 }
     destructor Destroy; override;
 
     procedure BindText(AIndex: Integer; const AValue: string);
@@ -73,16 +179,34 @@ type
     function GetBlob(AIndex: Integer): TBytes;
   end;
 
-  TDbSqliteConnection = class(TInterfacedObject, IDbConnection, IDbTxControl)
+  TDbSqliteConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
+    IDbSavepointControl, IDbBatchExecutor, IDbStmtCacheControl,
+    IDbRowBlobControl, IDbCapabilities, IDbTraceControl, ISqliteStmtHome)
   private
     FDb: TSqliteDb;
+    { 空闲预编译语句池：键 = 原始 SQL，借出即移除（同 SQL 并发活动
+      查询各持独立实例），归还回插；LRU 只管空闲驱逐。
+      nil = 缓存关闭直通。单连接单逻辑线程（CONTRACT §2.1），
+      无需并发防护。 }
+    FCache: ISqliteStmtCache;
+    { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
+    FTrace: TDbTraceHub;
   public
-    constructor Create(ADb: TSqliteDb);         { 取得所有权 }
+    constructor Create(ADb: TSqliteDb;
+      const AStmtCacheCapacity: Integer);     { 取得所有权 }
     destructor Destroy; override;
 
+    { IDbTraceControl }
+    procedure SetListener(const AListener: IDbTraceListener);
+    function HasListener: Boolean;
+
     function Kind: TDbKind;
-    procedure Exec(const ASql: string);
-    function Query(const ASql: string): IDbQuery;
+    procedure Exec(const ASql: string); overload;
+    procedure Exec(const ASql: string;
+      const AOptions: TDbExecOptions); overload;
+    function Query(const ASql: string): IDbQuery; overload;
+    function Query(const ASql: string;
+      const AOptions: TDbExecOptions): IDbQuery; overload;
     function Changes: Int64;
     function Raw: Pointer;
 
@@ -92,20 +216,167 @@ type
     procedure RollbackTxn;
     function InTransaction: Boolean;
     function TxDepth: Integer;
-    procedure RestoreDepth(const ADepth: Integer);
+
+    { IDbSavepointControl }
+    procedure Savepoint(const AName: string);
+    procedure RollbackTo(const AName: string);
+    procedure ReleaseTo(const AName: string);
+
+    { IDbBatchExecutor }
+    procedure ExecuteBatch(const ASteps: TDbSqlSteps);
+
+    { IDbStmtCacheControl：语句缓存失效控制与诊断 }
+    procedure Clear;
+    function Size: Integer;
+    function HitRate: Double;
+
+    { IDbCapabilities（V3-B1）——Kind 由 IDbConnection.Kind 承担 }
+    function ProductName: string;
+    function ProductVersion: string;
+    function SupportsSavepoints: Boolean;
+    function SupportsBatchExecutor: Boolean;
+    function SupportsStmtCacheControl: Boolean;
+    function SupportsLargeObjects: Boolean;
+    function SupportsNativeBool: Boolean;
+    function SupportsMultiStatementExec: Boolean;
+    function SupportsStatementTimeout: Boolean;
+    function CaseSensitiveIdentifiers: Boolean;
+    function MaxPlaceholders: Integer;
+
+    { ISqliteStmtHome：查询析构的归还通道（实现区接口，单元内可见） }
+    procedure ReturnStmt(const ASql: string; AStmt: TSqliteQuery);
+
+    { IDbRowBlobControl：行内 blob 单元流（INC-8） }
+    function OpenRowBlob(const ATable, AColumn: string;
+      const ARowId: Int64; const AReadWrite: Boolean): IDbBlobStream;
   end;
+
+{ ---- TSqliteStmtHolder ---- }
+
+constructor TSqliteStmtHolder.Create(AStmt: TSqliteQuery);
+begin
+  inherited Create;
+  FStmt := AStmt;
+end;
+
+destructor TSqliteStmtHolder.Destroy;
+begin
+  FStmt.Free;                          { 未 Detach 的空闲语句在此关闭 }
+  inherited Destroy;
+end;
+
+function TSqliteStmtHolder.Detach: TSqliteQuery;
+begin
+  Result := FStmt;
+  FStmt := nil;                        { 所有权移交借出方 }
+end;
+
+{ ---- TDbSqliteBlobStream ---- }
+
+constructor TDbSqliteBlobStream.Create(AHandle: TSqliteHandle;
+  const ATable, AColumn: string; const ARowId: Int64;
+  const AReadWrite: Boolean);
+var
+  LFlags: Integer;
+begin
+  inherited Create;
+  FHandle := AHandle;
+  if AReadWrite then
+    LFlags := SQLITE_OPEN_READWRITE
+  else
+    LFlags := SQLITE_OPEN_READONLY;
+  BlobCheck(FHandle, sqlite3_blob_open(FHandle, 'main',
+    PAnsiChar(AnsiString(ATable)), PAnsiChar(AnsiString(AColumn)),
+    ARowId, LFlags, FBlob));
+  FSize := sqlite3_blob_bytes(FBlob);
+  FPos := 0;
+end;
+
+destructor TDbSqliteBlobStream.Destroy;
+begin
+  if FBlob <> nil then
+  begin
+    sqlite3_blob_close(FBlob);         { 接口释放即关闭；析构内不抛 }
+    FBlob := nil;
+  end;
+  inherited Destroy;
+end;
+
+function TDbSqliteBlobStream.Read(ABuf: PByte; ACount: SizeUInt): SizeUInt;
+var
+  N: SizeUInt;
+begin
+  Result := 0;
+  if FPos >= FSize then
+    Exit;                              { EOF }
+  N := SizeUInt(FSize - FPos);        { 可读余量 }
+  if ACount < N then
+    N := ACount;
+  if N > SizeUInt(MaxInt) then
+    N := SizeUInt(MaxInt);             { 原生 API 单次 32 位上限 }
+  BlobCheck(FHandle, sqlite3_blob_read(FBlob, ABuf, Integer(N), FPos));
+  Inc(FPos, N);
+  Result := N;
+end;
+
+procedure TDbSqliteBlobStream.Write(ABuf: PByte; ACount: SizeUInt);
+var
+  N: SizeUInt;
+begin
+  if FPos + Int64(ACount) > FSize then
+    raise EDbError.CreateSimple(dbkSqlite,
+      'blob write beyond end of fixed cell (reserve via zeroblob(N))');
+  N := ACount;
+  if N > SizeUInt(MaxInt) then
+    N := SizeUInt(MaxInt);
+  BlobCheck(FHandle, sqlite3_blob_write(FBlob, ABuf, Integer(N), FPos));
+  Inc(FPos, N);
+end;
+
+function TDbSqliteBlobStream.Seek(AOffset: Int64;
+  AOrigin: TDbSeekOrigin): Int64;
+var
+  NP: Int64;
+begin
+  case AOrigin of
+    dsoBegin:   NP := AOffset;
+    dsoCurrent: NP := FPos + AOffset;
+    dsoEnd:     NP := FSize + AOffset;
+  else
+    NP := AOffset;
+  end;
+  if (NP < 0) or (NP > FSize) then
+    raise EDbError.CreateSimple(dbkSqlite,
+      'blob seek out of range [0..' + IntToStr(FSize) + ']');
+  FPos := NP;
+  Result := FPos;
+end;
+
+function TDbSqliteBlobStream.Size: Int64;
+begin
+  Result := FSize;
+end;
 
 { ---- TDbSqliteQuery ---- }
 
-constructor TDbSqliteQuery.Create(AQuery: TSqliteQuery);
+constructor TDbSqliteQuery.Create(const AHome: ISqliteStmtHome;
+  const ASql: string; AQuery: TSqliteQuery; ATrace: TDbTraceHub);
 begin
   inherited Create;
+  FHome := AHome;
+  FSql := ASql;
   FQuery := AQuery;
+  FTrace := ATrace;
+  FEmitted := False;
 end;
 
 destructor TDbSqliteQuery.Destroy;
 begin
-  FQuery.Free;
+  if (FHome <> nil) and (FQuery <> nil) then
+    FHome.ReturnStmt(FSql, FQuery)     { 归还回插（Reset+ClearBindings 在通道内） }
+  else
+    FQuery.Free;                       { 兜底：无通道即直接释放 }
+  FQuery := nil;
   inherited Destroy;
 end;
 
@@ -155,16 +426,33 @@ begin
 end;
 
 function TDbSqliteQuery.Step: Boolean;
+var
+  LT0: QWord;
+  LTimed: Boolean;
 begin
+  { 观测窗口 = 本执行周期首个 Step（绑定+执行+首行），见 §2.12 }
+  LT0 := 0;
+  LTimed := (FTrace <> nil) and (not FEmitted) and FTrace.BeginOp(LT0);
   try
     Result := FQuery.Step;
+    if LTimed then
+    begin
+      FEmitted := True;
+      FTrace.NotifyQuery(LT0, FSql);
+    end;
   except
-    on E: ESqliteError do RaiseSqliteAsDb(E);
+    on E: EDbError do
+    begin
+      if LTimed then
+        FTrace.NotifyError(E.Category, FSql);
+      raise;
+    end;
   end;
 end;
 
 procedure TDbSqliteQuery.Reset;
 begin
+  FEmitted := False;   { 重执行周期重新计时 }
   try
     FQuery.Reset;
   except
@@ -191,9 +479,26 @@ begin
 end;
 
 function TDbSqliteQuery.ColumnType(AIndex: Integer): TDbColumnType;
+var
+  LT: Integer;
 begin
   try
-    Result := MapColumnType(FQuery.ColumnType(AIndex));
+    { 四层规则：无声明（表达式/聚合）→ 行值类型；有声明且值为 NULL →
+      dbcNull（行级信号，Is* 契约）；声明含 BOOL → dbcBool（INC-6，
+      亲和规则把 BOOLEAN 归 INTEGER 前的显式拦截）；否则声明亲和
+      （静态、空结果集可读） }
+    if Pos('BOOL', FQuery.ColumnDeclaredTypeName(AIndex)) > 0 then
+    begin
+      if FQuery.ColumnType(AIndex) = SQLITE_NULL then
+        Exit(dbcNull);
+      Exit(dbcBool);
+    end;
+    LT := FQuery.ColumnDeclaredType(AIndex);
+    if LT < 0 then
+      LT := FQuery.ColumnType(AIndex)
+    else if FQuery.ColumnType(AIndex) = SQLITE_NULL then
+      LT := SQLITE_NULL;
+    Result := MapColumnType(LT);
   except
     on E: ESqliteError do RaiseSqliteAsDb(E);
   end;
@@ -202,6 +507,7 @@ end;
 function TDbSqliteQuery.IsNull(AIndex: Integer): Boolean;
 begin
   try
+    { 判空必须用行值类型，不能用声明亲和 }
     Result := FQuery.ColumnType(AIndex) = SQLITE_NULL;
   except
     on E: ESqliteError do RaiseSqliteAsDb(E);
@@ -246,16 +552,36 @@ end;
 
 { ---- TDbSqliteConnection ---- }
 
-constructor TDbSqliteConnection.Create(ADb: TSqliteDb);
+constructor TDbSqliteConnection.Create(ADb: TSqliteDb;
+  const AStmtCacheCapacity: Integer);
 begin
   inherited Create;
   FDb := ADb;
+  if AStmtCacheCapacity > 0 then
+    FCache := specialize TLruCache<string, ISqliteStmtHolder>.Create(
+      SizeUInt(AStmtCacheCapacity));
+  FTrace := TDbTraceHub.Create;
+  { OnAcquire 由 SetListener 挂载时补发（§2.12），ctor 不预发 }
 end;
 
 destructor TDbSqliteConnection.Destroy;
 begin
+  FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
+  FreeAndNil(FTrace);
+  FCache := nil;                       { Clear：空闲 holder 全部释放 }
   FDb.Free;
   inherited Destroy;
+end;
+
+procedure TDbSqliteConnection.SetListener(
+  const AListener: IDbTraceListener);
+begin
+  FTrace.SetListener(AListener);
+end;
+
+function TDbSqliteConnection.HasListener: Boolean;
+begin
+  Result := FTrace.Active;
 end;
 
 function TDbSqliteConnection.Kind: TDbKind;
@@ -264,24 +590,185 @@ begin
 end;
 
 procedure TDbSqliteConnection.Exec(const ASql: string);
+var
+  LT0: QWord;
+  LTimed: Boolean;
 begin
+  LT0 := 0;
+  LTimed := FTrace.BeginOp(LT0);
   try
     FDb.Exec(ASql);
+    if LTimed then
+      FTrace.NotifyQuery(LT0, ASql);
   except
-    on E: ESqliteError do RaiseSqliteAsDb(E);
+    on E: ESqliteError do
+    begin
+      if LTimed then
+        FTrace.NotifyError(SqliteCategoryOf(E), ASql);
+      RaiseSqliteAsDb(E);
+    end;
   end;
+end;
+
+procedure TDbSqliteConnection.Exec(const ASql: string;
+  const AOptions: TDbExecOptions);
+begin
+  { TimeoutMs advisory 忽略（INC-7 同款诚实登记：sqlite 无语句级
+    超时机制，连接级 busy_timeout 已有）；其余选项未来扩展位 }
+  Exec(ASql);
 end;
 
 function TDbSqliteConnection.Query(const ASql: string): IDbQuery;
 var
-  Q: TSqliteQuery;
+  Stmt: TSqliteQuery;
+  Holder: ISqliteStmtHolder;
 begin
-  try
-    Q := FDb.Query(ASql);
-  except
-    on E: ESqliteError do RaiseSqliteAsDb(E);
+  Stmt := nil;
+  if FCache <> nil then
+  begin
+    { 借出即移除：Get 取引用并更新热度，Remove 放缓存侧的手——
+      同 SQL 的第二个活动查询必然 miss，各持独立实例（嵌套安全） }
+    if FCache.Get(ASql, Holder) then
+    begin
+      FCache.Remove(ASql);
+      Stmt := Holder.Detach;
+      Holder := nil;
+    end;
   end;
-  Result := TDbSqliteQuery.Create(Q);
+  if Stmt = nil then
+  begin
+    try
+      Stmt := FDb.Query(ASql);         { miss / 直通路径 }
+    except
+      on E: ESqliteError do RaiseSqliteAsDb(E);
+    end;
+  end;
+  Result := TDbSqliteQuery.Create(Self, ASql, Stmt, FTrace);
+end;
+
+function TDbSqliteConnection.Query(const ASql: string;
+  const AOptions: TDbExecOptions): IDbQuery;
+begin
+  { TimeoutMs advisory 忽略（INC-7 同款诚实登记）}
+  Result := Query(ASql);
+end;
+
+{ ---- ISqliteStmtHome ---- }
+
+procedure TDbSqliteConnection.ReturnStmt(const ASql: string; AStmt: TSqliteQuery);
+begin
+  if AStmt = nil then
+    Exit;
+  if FCache <> nil then
+  begin
+    try
+      AStmt.Reset;                     { 复位执行状态 }
+      AStmt.ClearBindings;             { 清绑定：下次借出从干净状态开始 }
+    except
+      on E: ESqliteError do
+      begin
+        { 复位失败 = 状态不可信：弃置不回池 }
+        AStmt.Free;
+        Exit;
+      end;
+    end;
+    FCache.Put(ASql, TSqliteStmtHolder.Create(AStmt));
+    { 容量满时 Put 驱逐 LRU：被驱逐 holder 析构即释放其语句 }
+  end
+  else
+    AStmt.Free;
+end;
+
+{ ---- IDbStmtCacheControl ---- }
+
+procedure TDbSqliteConnection.Clear;
+begin
+  if FCache <> nil then
+    FCache.Clear;
+end;
+
+function TDbSqliteConnection.Size: Integer;
+begin
+  if FCache <> nil then
+    Result := Integer(FCache.GetSize)
+  else
+    Result := 0;
+end;
+
+function TDbSqliteConnection.HitRate: Double;
+begin
+  if FCache <> nil then
+    Result := FCache.GetHitRate
+  else
+    Result := 0.0;
+end;
+
+{ ---- IDbCapabilities（V3-B1）---- }
+
+function TDbSqliteConnection.ProductName: string;
+begin
+  Result := 'SQLite';
+end;
+
+function TDbSqliteConnection.ProductVersion: string;
+begin
+  Result := string(AnsiString(sqlite3_libversion));
+end;
+
+function TDbSqliteConnection.SupportsSavepoints: Boolean;
+begin
+  Result := True;
+end;
+
+function TDbSqliteConnection.SupportsBatchExecutor: Boolean;
+begin
+  Result := True;
+end;
+
+function TDbSqliteConnection.SupportsStmtCacheControl: Boolean;
+begin
+  Result := True;
+end;
+
+function TDbSqliteConnection.SupportsLargeObjects: Boolean;
+begin
+  Result := False;   { cell 模型走 IDbRowBlobControl，无 lo_* 等价面 }
+end;
+
+function TDbSqliteConnection.SupportsNativeBool: Boolean;
+begin
+  Result := False;   { 声明亲和模拟（含 BOOL 声明的列），非原生类型 }
+end;
+
+function TDbSqliteConnection.SupportsMultiStatementExec: Boolean;
+begin
+  Result := True;    { sqlite3_exec 语义原生多语句 }
+end;
+
+function TDbSqliteConnection.SupportsStatementTimeout: Boolean;
+begin
+  Result := False;   { busy_timeout 是锁等待上限；语句超时被诚实忽略 }
+end;
+
+function TDbSqliteConnection.CaseSensitiveIdentifiers: Boolean;
+begin
+  Result := True;    { 保留声明形式（§2.6） }
+end;
+
+function TDbSqliteConnection.MaxPlaceholders: Integer;
+begin
+  { SQLITE_MAX_VARIABLE_NUMBER 跨版本保守下界：999 自古保证；
+    libsqlite3 ≥3.32 实际默认 32766。消费方按 ≤999 编码全后端安全。 }
+  Result := 999;
+end;
+
+{ ---- IDbRowBlobControl ---- }
+
+function TDbSqliteConnection.OpenRowBlob(const ATable, AColumn: string;
+  const ARowId: Int64; const AReadWrite: Boolean): IDbBlobStream;
+begin
+  Result := TDbSqliteBlobStream.Create(FDb.Handle, ATable, AColumn,
+    ARowId, AReadWrite);
 end;
 
 function TDbSqliteConnection.Changes: Int64;
@@ -338,28 +825,65 @@ begin
   Result := nextpas.core.db.sqlite.tx.TxDepth(FDb);
 end;
 
-procedure TDbSqliteConnection.RestoreDepth(const ADepth: Integer);
+procedure TDbSqliteConnection.Savepoint(const AName: string);
 begin
-  try
-    nextpas.core.db.sqlite.tx.SetTxnDepth(FDb, ADepth);
-  except
-    on E: ESqliteTxError do
-      raise EDbError.CreateSimple(dbkSqlite, E.Message);
-  end;
+  ValidateDbSavepointName(dbkSqlite, AName);
+  Exec('SAVEPOINT ' + AName);
+end;
+
+procedure TDbSqliteConnection.RollbackTo(const AName: string);
+begin
+  ValidateDbSavepointName(dbkSqlite, AName);
+  Exec('ROLLBACK TO ' + AName);
+end;
+
+procedure TDbSqliteConnection.ReleaseTo(const AName: string);
+begin
+  ValidateDbSavepointName(dbkSqlite, AName);
+  Exec('RELEASE ' + AName);
+end;
+
+procedure TDbSqliteConnection.ExecuteBatch(const ASteps: TDbSqlSteps);
+var
+  K: Integer;
+begin
+  if Length(ASteps) = 0 then
+    Exit;
+  { 本地引擎无往返税：逐条执行保留精确到步骤的错误定位。
+    计数器为捕获变量，FPC 禁其用于 for，故用 while }
+  WithTransaction(Self, procedure
+  begin
+    K := 0;
+    while K <= High(ASteps) do
+    begin
+      Exec(ASteps[K]);
+      Inc(K);
+    end;
+  end);
 end;
 
 { ---- 工厂 ---- }
 
-function ConnectSqlite(const APath: string): IDbConnection;
+function ConnectSqlite(const APath: string;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  Result := ConnectSqlite(APath, TDbConnectOptions.Default, AStmtCacheCapacity);
+end;
+
+function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
 var
   Db: TSqliteDb;
 begin
   try
     Db := TSqliteDb.Create(APath);
+    { 锁等待上限（INC-7）：非语句执行超时，语义见 db.base 注释 }
+    if AOptions.BusyTimeoutMs > 0 then
+      Db.Exec('PRAGMA busy_timeout = ' + IntToStr(AOptions.BusyTimeoutMs));
   except
     on E: ESqliteError do RaiseSqliteAsDb(E);
   end;
-  Result := TDbSqliteConnection.Create(Db);
+  Result := TDbSqliteConnection.Create(Db, AStmtCacheCapacity);
 end;
 
 end.

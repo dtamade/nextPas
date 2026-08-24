@@ -26,16 +26,44 @@ uses
 { 创建 postgres 连接并返回统一接口（libpq key=value 连接串）。
   失败抛 EDbError（SqlState 等字段携带 libpq 诊断）。 }
 function ConnectPostgres(const AConnInfo: string): IDbConnection;
+{ INC-7：带连接选项版本。BusyTimeoutMs 映射 connect_timeout（建连
+  超时）；StatementTimeoutMs 建连后 SET statement_timeout（会话级）。 }
+function ConnectPostgres(const AConnInfo: string;
+  const AOptions: TDbConnectOptions): IDbConnection;
+{ V3-C1：再带语句缓存容量（服务端 prepared statement；0 = 关闭）。
+  migrate 的 INC-3 联动钩子经 IDbStmtCacheControl 自动失效缓存。 }
+function ConnectPostgres(const AConnInfo: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
 
 implementation
 
 uses
   SysUtils,
-  nextpas.core.sync;
+  nextpas.core.db.err,
+  nextpas.core.db.trace,
+  nextpas.core.db.pg.ffi,
+  nextpas.core.db.tx,
+  nextpas.core.sync,
+  nextpas.core.text.builder;
 
 procedure RaisePgAsDb(const AE: EPgError);
+var
+  LCategory: TDbErrorCategory;
+  LConstraint: TDbConstraintKind;
 begin
-  raise EDbError.CreatePg(AE.SqlState, AE.Severity, AE.Detail, AE.Message);
+  ClassifyPg(AE.SqlState, LCategory, LConstraint);
+  raise EDbError.CreateFullPg(AE.SqlState, AE.Severity, AE.Detail,
+    AE.Message, LCategory, LConstraint,
+    AE.SchemaName, AE.TableName, AE.ColumnName);
+end;
+
+function PgCategoryOf(const AE: EPgError): TDbErrorCategory;
+var
+  LConstraint: TDbConstraintKind;
+begin
+  { 观测钩子（V3-B3）用：抛前取归一类目，与 RaisePgAsDb 同表 }
+  ClassifyPg(AE.SqlState, Result, LConstraint);
 end;
 
 {** @desc 统一占位符翻译：把统一契约的 ?（或显式编号 ?N）翻译为
@@ -46,14 +74,14 @@ end;
        - ?N -> 直接映射 $N（不扰动顺序计数） *}
 function TranslatePlaceholders(const ASql: string): string;
 var
-  LB: string;
+  LB: IStringBuilder;
   I: Integer;
   C: Char;
   InStr, InDq, InLineC, InBlockC: Boolean;
   N: Integer;
   Seq: Integer;
 begin
-  LB := '';
+  LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
   Seq := 0;
   InStr := False;
   InDq := False;
@@ -65,28 +93,28 @@ begin
     C := ASql[I];
     if InLineC then
     begin
-      LB := LB + C;
+      LB.AppendChar(C);
       if C = #10 then
         InLineC := False;
     end
     else if InBlockC then
     begin
-      LB := LB + C;
+      LB.AppendChar(C);
       if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
       begin
-        LB := LB + '/';
+        LB.AppendChar('/');
         InBlockC := False;
         Inc(I);
       end;
     end
     else if InStr then
     begin
-      LB := LB + C;
+      LB.AppendChar(C);
       if C = '''' then
       begin
         if (I < Length(ASql)) and (ASql[I + 1] = '''') then
         begin
-          LB := LB + '''';
+          LB.AppendChar('''');
           Inc(I);
         end
         else
@@ -95,12 +123,12 @@ begin
     end
     else if InDq then
     begin
-      LB := LB + C;
+      LB.AppendChar(C);
       if C = '"' then
       begin
         if (I < Length(ASql)) and (ASql[I + 1] = '"') then
         begin
-          LB := LB + '"';
+          LB.AppendChar('"');
           Inc(I);
         end
         else
@@ -113,18 +141,18 @@ begin
         '''' :
           begin
             InStr := True;
-            LB := LB + C;
+            LB.AppendChar(C);
           end;
         '"' :
           begin
             InDq := True;
-            LB := LB + C;
+            LB.AppendChar(C);
           end;
         '-' :
           begin
             if (I < Length(ASql)) and (ASql[I + 1] = '-') then
               InLineC := True;
-            LB := LB + C;
+            LB.AppendChar(C);
           end;
         '/' :
           begin
@@ -134,7 +162,7 @@ begin
               Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
               Continue;
             end;
-            LB := LB + C;
+            LB.AppendChar(C);
           end;
         '?' :
           begin
@@ -145,22 +173,22 @@ begin
               N := N * 10 + (Ord(ASql[I]) - Ord('0'));
               Inc(I);
             end;
-            if N > 0 then
-              LB := LB + '$' + IntToStr(N)
-            else
+            if N = 0 then
             begin
               Inc(Seq);
-              LB := LB + '$' + IntToStr(Seq);
+              N := Seq;
             end;
+            LB.AppendChar('$');
+            LB.AppendInt(N);
             Continue;
           end;
       else
-        LB := LB + C;
+        LB.AppendChar(C);
       end;
     end;
     Inc(I);
   end;
-  Result := LB;
+  Result := LB.ToString;
 end;
 
 { 结果列类型：按 PQftype OID 归入统一列类型；未知类型一律 dbcText
@@ -168,6 +196,7 @@ end;
 function MapColumnType(const AOid: Cardinal): TDbColumnType;
 begin
   case AOid of
+    16:                       Result := dbcBool;     { bool（INC-6） }
     17:                       Result := dbcBlob;     { bytea }
     20, 21, 23:               Result := dbcInteger;  { int8/int2/int4 }
     700, 701, 1700:           Result := dbcFloat;    { float4/float8/numeric }
@@ -180,8 +209,23 @@ type
   TDbPgQuery = class(TInterfacedObject, IDbQuery)
   private
     FQuery: TPgQuery;
+    { 查询级超时恢复钩（V3-B2）：pg 仅有会话级 statement_timeout 且
+      执行惰性（首个 Step），故 Query(opts) 建对象时 SET 新值并记住
+      原值，生效窗口 = 本查询对象存活期，析构时恢复原值。析构内只
+      做直线 SQL 调用、失败吞掉（不涉闭包回调——C3 硬边界）。 }
+    FRestoreConn: TPgConn;     { nil = 无恢复义务 }
+    FRestoreSql: string;
+    { 观测钩子（V3-B3）：nil = 无枢纽；FEmitted = 本执行周期已发
+      OnQuery（首 Step 计时，同周期后续 Step 不再发）}
+    FTrace: TDbTraceHub;
+    FSql: string;              { 统一契约原文（占位符不翻译进摘要）}
+    FEmitted: Boolean;
   public
-    constructor Create(AQuery: TPgQuery);       { 取得所有权 }
+    constructor Create(AQuery: TPgQuery; const ASql: string;
+      ATrace: TDbTraceHub); overload;
+    constructor Create(AQuery: TPgQuery; ARestoreConn: TPgConn;
+      const ARestoreSql: string; const ASql: string;
+      ATrace: TDbTraceHub); overload;
     destructor Destroy; override;
 
     procedure BindText(AIndex: Integer; const AValue: string);
@@ -202,19 +246,52 @@ type
     function GetBlob(AIndex: Integer): TBytes;
   end;
 
-  TDbPgConnection = class(TInterfacedObject, IDbConnection, IDbTxControl)
+  {** pg 大对象流（INC-8，IDbBlobStream）：lo_* fastpath 薄包装。
+      位置由服务端 fd 权威维护；接口释放即 lo_close。描述符在事务
+      结束时失效——后续调用返回错误码，统一抛 EDbError。 *}
+  TDbPgBlobStream = class(TInterfacedObject, IDbBlobStream)
+  private
+    FConnH: PGconn;
+    FFd: Integer;          { <0 = 已关闭 }
+  public
+    constructor Create(AConnHandle: PGconn; const AOid: Int64;
+      const AReadWrite: Boolean);
+    destructor Destroy; override;
+    function Read(ABuf: PByte; ACount: SizeUInt): SizeUInt;
+    procedure Write(ABuf: PByte; ACount: SizeUInt);
+    function Seek(AOffset: Int64; AOrigin: TDbSeekOrigin): Int64;
+    function Size: Int64;
+  end;
+
+  TDbPgConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
+    IDbSavepointControl, IDbBatchExecutor, IDbLargeObjectControl,
+    IDbStmtCacheControl, IDbCapabilities, IDbTraceControl)
   private
     FConn: TPgConn;
     FLock: INativeMutex;
     FDepth: Integer;
+    { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
+    FTrace: TDbTraceHub;
     procedure PgExec(const ASql: string);
+    { SHOW 会话变量原文（EPgError → EDbError 归一）；B2 超时恢复用 }
+    function PgShowVar(const AName: string): string;
+    { LO 句柄与事务耦合：无活动事务直接 fail-fast，防静默坏句柄 }
+    procedure RequireActiveTxn;
   public
-    constructor Create(AConn: TPgConn);         { 取得所有权 }
+    constructor Create(AConn: TPgConn);          { 取得所有权 }
     destructor Destroy; override;
 
+    { IDbTraceControl }
+    procedure SetListener(const AListener: IDbTraceListener);
+    function HasListener: Boolean;
+
     function Kind: TDbKind;
-    procedure Exec(const ASql: string);
-    function Query(const ASql: string): IDbQuery;
+    procedure Exec(const ASql: string); overload;
+    procedure Exec(const ASql: string;
+      const AOptions: TDbExecOptions); overload;
+    function Query(const ASql: string): IDbQuery; overload;
+    function Query(const ASql: string;
+      const AOptions: TDbExecOptions): IDbQuery; overload;
     function Changes: Int64;
     function Raw: Pointer;
 
@@ -224,19 +301,75 @@ type
     procedure RollbackTxn;
     function InTransaction: Boolean;
     function TxDepth: Integer;
-    procedure RestoreDepth(const ADepth: Integer);
+
+    { IDbSavepointControl }
+    procedure Savepoint(const AName: string);
+    procedure RollbackTo(const AName: string);
+    procedure ReleaseTo(const AName: string);
+
+    { IDbBatchExecutor }
+    procedure ExecuteBatch(const ASteps: TDbSqlSteps);
+
+    { IDbLargeObjectControl：OID 模型大对象（INC-8） }
+    function CreateLO: Int64;
+    function OpenLO(const AOid: Int64; const AReadWrite: Boolean): IDbBlobStream;
+    procedure UnlinkLO(const AOid: Int64);
+
+    { IDbStmtCacheControl（V3-C1）}
+    procedure Clear;
+    function Size: Integer;
+    function HitRate: Double;
+
+    { IDbCapabilities（V3-B1）——Kind 由 IDbConnection.Kind 承担 }
+    function ProductName: string;
+    function ProductVersion: string;
+    function SupportsSavepoints: Boolean;
+    function SupportsBatchExecutor: Boolean;
+    function SupportsStmtCacheControl: Boolean;
+    function SupportsLargeObjects: Boolean;
+    function SupportsNativeBool: Boolean;
+    function SupportsMultiStatementExec: Boolean;
+    function SupportsStatementTimeout: Boolean;
+    function CaseSensitiveIdentifiers: Boolean;
+    function MaxPlaceholders: Integer;
   end;
 
 { ---- TDbPgQuery ---- }
 
-constructor TDbPgQuery.Create(AQuery: TPgQuery);
+constructor TDbPgQuery.Create(AQuery: TPgQuery; const ASql: string;
+  ATrace: TDbTraceHub);
 begin
   inherited Create;
   FQuery := AQuery;
+  FRestoreConn := nil;
+  FRestoreSql := '';
+  FSql := ASql;
+  FTrace := ATrace;
+  FEmitted := False;
+end;
+
+constructor TDbPgQuery.Create(AQuery: TPgQuery; ARestoreConn: TPgConn;
+  const ARestoreSql: string; const ASql: string; ATrace: TDbTraceHub);
+begin
+  inherited Create;
+  FQuery := AQuery;
+  FRestoreConn := ARestoreConn;
+  FRestoreSql := ARestoreSql;
+  FSql := ASql;
+  FTrace := ATrace;
+  FEmitted := False;
 end;
 
 destructor TDbPgQuery.Destroy;
 begin
+  if FRestoreConn <> nil then
+  begin
+    try
+      FRestoreConn.Exec(FRestoreSql);   { 恢复会话超时原值；失败吞掉 }
+    except
+    end;
+    FRestoreConn := nil;
+  end;
   FQuery.Free;
   inherited Destroy;
 end;
@@ -287,16 +420,33 @@ begin
 end;
 
 function TDbPgQuery.Step: Boolean;
+var
+  LT0: QWord;
+  LTimed: Boolean;
 begin
+  { 观测窗口 = 本执行周期首个 Step（绑定+服务端执行+首行），见 §2.12 }
+  LT0 := 0;
+  LTimed := (FTrace <> nil) and (not FEmitted) and FTrace.BeginOp(LT0);
   try
     Result := FQuery.Step;
+    if LTimed then
+    begin
+      FEmitted := True;
+      FTrace.NotifyQuery(LT0, FSql);
+    end;
   except
-    on E: EPgError do RaisePgAsDb(E);
+    on E: EPgError do
+    begin
+      if LTimed then
+        FTrace.NotifyError(PgCategoryOf(E), FSql);
+      RaisePgAsDb(E);
+    end;
   end;
 end;
 
 procedure TDbPgQuery.Reset;
 begin
+  FEmitted := False;   { 重执行周期重新计时 }
   try
     FQuery.Reset;
   except
@@ -325,6 +475,10 @@ end;
 function TDbPgQuery.ColumnType(AIndex: Integer): TDbColumnType;
 begin
   try
+    { NULL 是行级信号（与 sqlite 声明列同契约）：值空一律 dbcNull，
+      非空才回落列 OID 类型 }
+    if FQuery.IsNull(AIndex) then
+      Exit(dbcNull);
     Result := MapColumnType(FQuery.ColumnFieldOid(AIndex));
   except
     on E: EPgError do RaisePgAsDb(E);
@@ -343,6 +497,10 @@ end;
 function TDbPgQuery.GetInt64(AIndex: Integer): Int64;
 begin
   try
+    { bool 列归一：libpq 文本协议给出 't'/'f'，统一层按 INC-6 映射
+      1/0（与 sqlite INTEGER 布尔约定一致）；GetText 保持原文。 }
+    if FQuery.ColumnFieldOid(AIndex) = PG_BOOLOID then
+      Exit(Ord(FQuery.GetText(AIndex) = 't'));
     Result := FQuery.GetInt64(AIndex);
   except
     on E: EPgError do RaisePgAsDb(E);
@@ -384,10 +542,101 @@ begin
   FConn := AConn;
   FLock := nextpas.core.sync.Mutex;
   FDepth := 0;
+  FTrace := TDbTraceHub.Create;
+  { OnAcquire 由 SetListener 挂载时补发（§2.12），ctor 不预发 }
+end;
+
+{ ---- IDbTraceControl（V3-B3）---- }
+
+procedure TDbPgConnection.SetListener(
+  const AListener: IDbTraceListener);
+begin
+  FTrace.SetListener(AListener);
+end;
+
+function TDbPgConnection.HasListener: Boolean;
+begin
+  Result := FTrace.Active;
+end;
+
+{ ---- IDbStmtCacheControl（V3-C1）---- }
+
+procedure TDbPgConnection.Clear;
+begin
+  FConn.ClearPrepared;                     { DEALLOCATE ALL + 清簿记 }
+end;
+
+function TDbPgConnection.Size: Integer;
+begin
+  Result := FConn.PreparedCount;
+end;
+
+function TDbPgConnection.HitRate: Double;
+begin
+  Result := FConn.PreparedHitRate;
+end;
+
+{ ---- IDbCapabilities（V3-B1）---- }
+
+function TDbPgConnection.ProductName: string;
+begin
+  Result := 'PostgreSQL';
+end;
+
+function TDbPgConnection.ProductVersion: string;
+begin
+  Result := IntToStr(FConn.ServerVersion);
+end;
+
+function TDbPgConnection.SupportsSavepoints: Boolean;
+begin
+  Result := True;
+end;
+
+function TDbPgConnection.SupportsBatchExecutor: Boolean;
+begin
+  Result := True;
+end;
+
+function TDbPgConnection.SupportsStmtCacheControl: Boolean;
+begin
+  Result := True;
+end;
+
+function TDbPgConnection.SupportsLargeObjects: Boolean;
+begin
+  Result := True;
+end;
+
+function TDbPgConnection.SupportsNativeBool: Boolean;
+begin
+  Result := True;   { bool OID16，INC-6 }
+end;
+
+function TDbPgConnection.SupportsMultiStatementExec: Boolean;
+begin
+  Result := True;   { libpq 单次 Exec 原生多语句 }
+end;
+
+function TDbPgConnection.SupportsStatementTimeout: Boolean;
+begin
+  Result := True;   { 会话级 statement_timeout（INC-7 诚实表） }
+end;
+
+function TDbPgConnection.CaseSensitiveIdentifiers: Boolean;
+begin
+  Result := False;  { 未加引号标识符折叠小写（§2.6） }
+end;
+
+function TDbPgConnection.MaxPlaceholders: Integer;
+begin
+  Result := 65535;  { 扩展协议参数上限 }
 end;
 
 destructor TDbPgConnection.Destroy;
 begin
+  FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
+  FreeAndNil(FTrace);
   FConn.Free;
   inherited Destroy;
 end;
@@ -407,8 +656,75 @@ begin
 end;
 
 procedure TDbPgConnection.Exec(const ASql: string);
+var
+  LT0: QWord;
+  LTimed: Boolean;
 begin
-  PgExec(ASql);
+  LT0 := 0;
+  LTimed := FTrace.BeginOp(LT0);
+  try
+    PgExec(ASql);
+    if LTimed then
+      FTrace.NotifyQuery(LT0, ASql);
+  except
+    on E: EDbError do
+    begin
+      if LTimed then
+        FTrace.NotifyError(E.Category, ASql);
+      raise;
+    end;
+  end;
+end;
+
+procedure TDbPgConnection.Exec(const ASql: string;
+  const AOptions: TDbExecOptions);
+var
+  LPrev: string;
+  LT0: QWord;
+  LTimed: Boolean;
+begin
+  if AOptions.TimeoutMs <= 0 then
+  begin
+    Exec(ASql);   { advisory：0 = 不设置（委托已插桩路径，无双发）}
+    Exit;
+  end;
+  { pq_exec 同步执行窗口内会话级 SET/恢复（SHOW 原样回写，免解析
+    'ms'/'s'/'min' 单位形态）；超时触发 57014 → decTimeout。
+    观测窗口只包用户语句（SET 机制开销不计），见 §2.12 }
+  LPrev := PgShowVar('statement_timeout');
+  try
+    PgExec('SET statement_timeout = ' + IntToStr(AOptions.TimeoutMs));
+    LT0 := 0;
+    LTimed := FTrace.BeginOp(LT0);
+    try
+      PgExec(ASql);
+      if LTimed then
+        FTrace.NotifyQuery(LT0, ASql);
+    except
+      on E: EDbError do
+      begin
+        if LTimed then
+          FTrace.NotifyError(E.Category, ASql);
+        raise;
+      end;
+    end;
+  finally
+    try
+      PgExec('SET statement_timeout = ' + LPrev);
+    except
+    end;
+  end;
+end;
+
+function TDbPgConnection.PgShowVar(const AName: string): string;
+begin
+  { SHOW 经底层 TPgConn.ShowVar；EPgError → EDbError 归一 }
+  Result := '';
+  try
+    Result := FConn.ShowVar(AName);
+  except
+    on E: EPgError do RaisePgAsDb(E);
+  end;
 end;
 
 function TDbPgConnection.Query(const ASql: string): IDbQuery;
@@ -420,7 +736,40 @@ begin
   except
     on E: EPgError do RaisePgAsDb(E);
   end;
-  Result := TDbPgQuery.Create(Q);
+  Result := TDbPgQuery.Create(Q, ASql, FTrace);
+end;
+
+function TDbPgConnection.Query(const ASql: string;
+  const AOptions: TDbExecOptions): IDbQuery;
+var
+  LPrev: string;
+  LSet: Boolean;
+  Q: TPgQuery;
+begin
+  if AOptions.TimeoutMs <= 0 then
+    Exit(Query(ASql));
+  { 执行惰性 → 会话级机制只能以查询对象存活期为生效窗口：
+    SET 新值 + 记住原值，TDbPgQuery 析构时恢复。建连失败路径在
+    本层先恢复再抛，成功路径恢复义务移交查询对象。 }
+  LPrev := PgShowVar('statement_timeout');
+  LSet := False;
+  try
+    PgExec('SET statement_timeout = ' + IntToStr(AOptions.TimeoutMs));
+    LSet := True;
+    Q := FConn.Query(TranslatePlaceholders(ASql));
+  except
+    on E: EPgError do
+    begin
+      if LSet then
+        try
+          PgExec('SET statement_timeout = ' + LPrev);
+        except
+        end;
+      RaisePgAsDb(E);
+    end;
+  end;
+  Result := TDbPgQuery.Create(Q, FConn,
+    'SET statement_timeout = ' + LPrev, ASql, FTrace);
 end;
 
 function TDbPgConnection.Changes: Int64;
@@ -480,7 +829,9 @@ begin
     if FDepth = 0 then
       raise EDbError.CreateSimple(dbkPostgres,
         'RollbackTxn without a matching BeginTxn on this connection');
-    { 回滚失败吞掉（服务端可能已自行中止事务）；原异常由调用方重抛。 }
+    { 任意深度 = 回滚整个事务（对齐 sqlite 侧与 SQL 语义；V2-S2 起
+      统一，此前深度 > 1 只降簿记不真回滚）。回滚失败吞掉（服务端
+      可能已自行中止事务）；原异常由调用方重抛。 }
     try
       FConn.Exec('ROLLBACK');
     except
@@ -506,28 +857,214 @@ begin
   end;
 end;
 
-procedure TDbPgConnection.RestoreDepth(const ADepth: Integer);
+procedure TDbPgConnection.Savepoint(const AName: string);
 begin
-  FLock.Acquire;
-  try
-    FDepth := ADepth;
-  finally
-    FLock.Release;
+  ValidateDbSavepointName(dbkPostgres, AName);
+  PgExec('SAVEPOINT ' + AName);
+end;
+
+procedure TDbPgConnection.RollbackTo(const AName: string);
+begin
+  ValidateDbSavepointName(dbkPostgres, AName);
+  PgExec('ROLLBACK TO ' + AName);
+end;
+
+procedure TDbPgConnection.ReleaseTo(const AName: string);
+begin
+  ValidateDbSavepointName(dbkPostgres, AName);
+  PgExec('RELEASE ' + AName);
+end;
+
+procedure TDbPgConnection.ExecuteBatch(const ASteps: TDbSqlSteps);
+var
+  K: Integer;
+  LJoined: IStringBuilder;
+begin
+  if Length(ASteps) = 0 then
+    Exit;
+  { 网络协议按往返计价：合并为单次 Exec（libpq 原生多语句），
+    N 步 = 1 往返。步骤契约是完整独立语句，';' 连接不改语义 }
+  LJoined := MakeStringBuilder(256);
+  K := 0;
+  while K <= High(ASteps) do
+  begin
+    if K > 0 then
+      LJoined.AppendStr(';'#10);
+    LJoined.AppendStr(ASteps[K]);
+    Inc(K);
   end;
+  WithTransaction(Self, procedure
+  begin
+    Exec(LJoined.ToString);
+  end);
 end;
 
 { ---- 工厂 ---- }
 
 function ConnectPostgres(const AConnInfo: string): IDbConnection;
+begin
+  Result := ConnectPostgres(AConnInfo, TDbConnectOptions.Default,
+    DEFAULT_PG_STMT_CACHE_CAPACITY);
+end;
+
+function ConnectPostgres(const AConnInfo: string;
+  const AOptions: TDbConnectOptions): IDbConnection;
+begin
+  Result := ConnectPostgres(AConnInfo, AOptions,
+    DEFAULT_PG_STMT_CACHE_CAPACITY);
+end;
+
+function ConnectPostgres(const AConnInfo: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
 var
   Conn: TPgConn;
+  LConnInfo: string;
 begin
+  LConnInfo := AConnInfo;
+  if AOptions.BusyTimeoutMs > 0 then
+    LConnInfo := LConnInfo + ' connect_timeout=' +
+      IntToStr(AOptions.BusyTimeoutMs);
   try
-    Conn := TPgConn.Create(AConnInfo);
+    Conn := TPgConn.Create(LConnInfo, AStmtCacheCapacity);
+    { 会话级语句超时（INC-7）：触发时 SQLSTATE 57014 → decTimeout。
+      SET 本身无参数，不进语句缓存路径。 }
+    if AOptions.StatementTimeoutMs > 0 then
+      Conn.Exec('SET statement_timeout = ' + IntToStr(AOptions.StatementTimeoutMs));
   except
     on E: EPgError do RaisePgAsDb(E);
   end;
   Result := TDbPgConnection.Create(Conn);
+end;
+
+{ ---- TDbPgBlobStream ---- }
+
+constructor TDbPgBlobStream.Create(AConnHandle: PGconn; const AOid: Int64;
+  const AReadWrite: Boolean);
+var
+  LMode: Integer;
+begin
+  inherited Create;
+  FConnH := AConnHandle;
+  LMode := INV_READ;
+  if AReadWrite then
+    Inc(LMode, INV_WRITE);
+  FFd := lo_open(FConnH, TOid(AOid), LMode);
+  if FFd < 0 then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'lo_open failed: ' + string(AnsiString(pq_errorMessage(FConnH))));
+end;
+
+destructor TDbPgBlobStream.Destroy;
+begin
+  if FFd >= 0 then
+  begin
+    lo_close(FConnH, FFd);             { 接口释放即关闭；析构内不抛 }
+    FFd := -1;
+  end;
+  inherited Destroy;
+end;
+
+function TDbPgBlobStream.Read(ABuf: PByte; ACount: SizeUInt): SizeUInt;
+var
+  N: SizeInt;
+begin
+  N := lo_read(FConnH, FFd, PAnsiChar(ABuf), SizeInt(ACount));
+  if N < 0 then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'lo_read failed: ' + string(AnsiString(pq_errorMessage(FConnH))));
+  Result := SizeUInt(N);
+end;
+
+procedure TDbPgBlobStream.Write(ABuf: PByte; ACount: SizeUInt);
+var
+  N: SizeInt;
+begin
+  if ACount > SizeUInt(High(SizeInt)) then
+    raise EDbError.CreateSimple(dbkPostgres, 'lo_write chunk too large');
+  N := lo_write(FConnH, FFd, PAnsiChar(ABuf), SizeInt(ACount));
+  if (N < 0) or (SizeUInt(N) <> ACount) then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'lo_write short write: ' + string(AnsiString(pq_errorMessage(FConnH))));
+end;
+
+function TDbPgBlobStream.Seek(AOffset: Int64; AOrigin: TDbSeekOrigin): Int64;
+var
+  R: Int64;
+  LWhence: Integer;
+begin
+  case AOrigin of
+    dsoBegin:   LWhence := PG_SEEK_SET;
+    dsoCurrent: LWhence := PG_SEEK_CUR;
+    dsoEnd:     LWhence := PG_SEEK_END;
+  else
+    LWhence := PG_SEEK_SET;
+  end;
+  R := lo_lseek64(FConnH, FFd, AOffset, LWhence);
+  if R < 0 then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'lo_lseek64 failed: ' + string(AnsiString(pq_errorMessage(FConnH))));
+  Result := R;
+end;
+
+function TDbPgBlobStream.Size: Int64;
+var
+  LCur, LEnd: Int64;
+begin
+  LCur := lo_tell64(FConnH, FFd);
+  if LCur < 0 then
+    raise EDbError.CreateSimple(dbkPostgres, 'lo_tell64 failed');
+  LEnd := lo_lseek64(FConnH, FFd, 0, PG_SEEK_END);
+  if LEnd < 0 then
+    raise EDbError.CreateSimple(dbkPostgres, 'lo_lseek64(END) failed');
+  if lo_lseek64(FConnH, FFd, LCur, PG_SEEK_SET) < 0 then
+    raise EDbError.CreateSimple(dbkPostgres, 'lo position restore failed');
+  Result := LEnd;
+end;
+
+{ ---- IDbLargeObjectControl ---- }
+
+procedure TDbPgConnection.RequireActiveTxn;
+begin
+  if TxDepth = 0 then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'large object operations require an active transaction ' +
+      '(use WithTransaction)');
+end;
+
+function TDbPgConnection.CreateLO: Int64;
+var
+  Oid: TOid;
+begin
+  RequireActiveTxn;
+  Oid := lo_creat(FConn.Handle, INV_READ or INV_WRITE);
+  if Oid = PG_INVALID_OID then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'lo_creat failed: ' + string(AnsiString(pq_errorMessage(FConn.Handle))));
+  Result := Int64(Oid);
+end;
+
+function TDbPgConnection.OpenLO(const AOid: Int64;
+  const AReadWrite: Boolean): IDbBlobStream;
+begin
+  RequireActiveTxn;
+  Result := TDbPgBlobStream.Create(FConn.Handle, AOid, AReadWrite);
+end;
+
+procedure TDbPgConnection.UnlinkLO(const AOid: Int64);
+begin
+  { 反向契约：libpq 的 lo_unlink 非 fastpath，客户端实现自管
+    BEGIN/END 执行清理 SQL——事务内调用会嵌套 BEGIN 并提前终结
+    外部事务。故强制在事务外调用（fail-fast 防静默提交破坏）。 }
+  if TxDepth > 0 then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'lo_unlink manages its own transaction: call it OUTSIDE ' +
+      'WithTransaction');
+  { 注意返回值语义：lo_unlink 成功 = 1，失败 = -1（非 0/负惯例） }
+  if lo_unlink(FConn.Handle, TOid(AOid)) < 0 then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'lo_unlink failed: ' +
+        string(AnsiString(pq_errorMessage(FConn.Handle))));
 end;
 
 end.

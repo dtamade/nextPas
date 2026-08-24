@@ -48,6 +48,9 @@ type
     FCastIdx: array of Integer;
     FExecuted: Boolean;
     procedure ExecuteOnce;
+    { V3-C1 服务端 prepared 路径 }
+    procedure PrepareNamed(const AName, ASql: string);
+    procedure ExecutePrepared(const AName: string);
     procedure AddCastIndex(const AIndex: Integer);
   public
     constructor Create(const AConn: TPgConn; const ASql: string);
@@ -79,13 +82,29 @@ type
        SQL; transactions are caller-managed via Exec('BEGIN'/'COMMIT'/
        'ROLLBACK') exactly like the sqlite module. No connection pool:
        that stays in the consuming application's db layer. *}
+  TPgPreparedEntry = record
+    Sql: string;              { bytea cast 后的规范形（缓存键） }
+    Name: string;             { 服务端 prepared statement 名 }
+  end;
+
   TPgConn = class
   private
     FConn: PGconn;
     FLastCmdTuples: Int64;
+    { V3-C1 服务端 prepared statement 注册表（LRU 顺序 = 数组序，
+      头最旧）。容量 <=0 = 关闭直通。单连接单逻辑线程（CONTRACT
+      §2.1），无需并发防护。PREPARE 是事务性的：事务回滚会撤销
+      服务端语句，靠执行期 26000 自愈重建；驱逐 DEALLOCATE 同样
+      事务性，靠 prepare 期 42P05 自愈兜底。 }
+    FStmtCapacity: Integer;
+    FStmts: array of TPgPreparedEntry;
+    FStmtSeq: Integer;        { 名字单调递增不复用 }
+    FStmtHits: Int64;
+    FStmtMisses: Int64;
     procedure CheckResultStatus(const ARes: PGresult);
   public
-    constructor Create(const AConnInfo: string);
+    constructor Create(const AConnInfo: string;
+      const AStmtCacheCapacity: Integer = 0);
     destructor Destroy; override;
 
     procedure Exec(const ASql: string);
@@ -94,6 +113,21 @@ type
     function Version: string;
     function ServerVersion: Integer;
     function ErrorMessage: string;
+    { SHOW <name> 单行单列原文读回（V3-B2 查询级超时恢复用）}
+    function ShowVar(const AName: string): string;
+    { 原生 PGconn*——供大对象 fastpath（lo_*）等直接 ffi 面
+      （对齐 TSqliteDb.Handle 先例） }
+    property Handle: PGconn read FConn;
+
+    { ---- V3-C1 语句缓存内部面（TPgQuery 与适配器使用） ---- }
+    function LookupPrepared(const ASql: string): string;
+    function NextPreparedName: string;
+    procedure RegisterPrepared(const ASql, AName: string);
+    procedure ForgetPrepared(const ASql: string);
+    procedure EvictPreparedIfFull;
+    procedure ClearPrepared;
+    function PreparedCount: Integer;
+    function PreparedHitRate: Double;
   end;
 
 { Open a PostgreSQL connection. AConnInfo uses libpq key=value syntax,
@@ -102,6 +136,12 @@ type
 function PgOpen(const AConnInfo: string): TPgConn;
 
 implementation
+
+uses
+  nextpas.core.encoding.base,
+  nextpas.core.encoding.hex,
+  nextpas.core.exception,
+  nextpas.core.text.builder;
 
 { ===== helpers ===== }
 
@@ -124,7 +164,9 @@ begin
   if LMsg = '' then
     LMsg := 'PostgreSQL 执行失败';
   raise EPgError.Create(LMsg, ErrField(ARes, PG_DIAG_SQLSTATE),
-    ErrField(ARes, PG_DIAG_SEVERITY), ErrField(ARes, PG_DIAG_DETAIL));
+    ErrField(ARes, PG_DIAG_SEVERITY), ErrField(ARes, PG_DIAG_DETAIL),
+    ErrField(ARes, PG_DIAG_SCHEMA_NAME), ErrField(ARes, PG_DIAG_TABLE_NAME),
+    ErrField(ARes, PG_DIAG_COLUMN_NAME));
 end;
 
 {** @desc Maximum $N parameter index referenced by ASql, skipping single-
@@ -215,80 +257,20 @@ begin
   end;
 end;
 
-{ ===== bytea hex helpers ===== }
-
-function HexDigit(const ANibble: Byte): AnsiChar;
-begin
-  if ANibble < 10 then
-    Result := AnsiChar(Ord('0') + ANibble)
-  else
-    Result := AnsiChar(Ord('a') + ANibble - 10);
-end;
-
-function HexValue(const AC: AnsiChar): Integer;
-begin
-  case AC of
-    '0'..'9': Result := Ord(AC) - Ord('0');
-    'a'..'f': Result := Ord(AC) - Ord('a') + 10;
-    'A'..'F': Result := Ord(AC) - Ord('A') + 10;
-  else
-    Result := -1;
-  end;
-end;
-
-{ TBytes -> '\x…' bytea hex 字面量（空数组 = '\x'）。 }
-function BytesToPgHexText(const AValue: TBytes): string;
-var
-  LText: AnsiString;
-  I: Integer;
-  P: Integer;
-begin
-  SetLength(LText, 2 + Length(AValue) * 2);
-  LText[1] := '\';
-  LText[2] := 'x';
-  P := 3;
-  for I := 0 to High(AValue) do
-  begin
-    LText[P] := HexDigit(AValue[I] shr 4);
-    LText[P + 1] := HexDigit(AValue[I] and $F);
-    Inc(P, 2);
-  end;
-  Result := string(LText);
-end;
-
-{ bytea hex 文本（不含 \x 前缀）-> TBytes；非法字符抛 EPgError。 }
-function PgHexToBytes(const AHex: string): TBytes;
-var
-  I: Integer;
-  HI, LO: Integer;
-begin
-  if Length(AHex) mod 2 <> 0 then
-    raise EPgError.Create('bytea hex 长度不是偶数');
-  SetLength(Result, Length(AHex) div 2);
-  for I := 0 to High(Result) do
-  begin
-    HI := HexValue(AnsiString(AHex)[I * 2 + 1]);
-    LO := HexValue(AnsiString(AHex)[I * 2 + 2]);
-    if (HI < 0) or (LO < 0) then
-      raise EPgError.CreateFmt('bytea hex 含非法字符（偏移 %d）', [I * 2]);
-    Result[I] := Byte(HI shl 4 or LO);
-  end;
-end;
-
 {** @desc 对 ASql 中列出的 $N 参数追加 ::bytea cast。扫描状态机与
        MaxParamIndex 完全一致（跳过字面量/注释），保证索引对齐；
        dollar-quote 体不识别——与 MaxParamIndex 同一受控边界。 *}
 function AppendByteaCasts(const ASql: string;
   const AIndexes: array of Integer): string;
 var
-  LB: string;
+  LB: IStringBuilder;
   I: Integer;
   C: Char;
   InStr, InDq, InLineC, InBlockC: Boolean;
   N, K: Integer;
   Matched: Boolean;
 begin
-  LB := '';
+  LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
   InStr := False;
   InDq := False;
   InLineC := False;
@@ -299,28 +281,28 @@ begin
     C := ASql[I];
     if InLineC then
     begin
-      LB := LB + C;
+      LB.AppendChar(C);
       if C = #10 then
         InLineC := False;
     end
     else if InBlockC then
     begin
-      LB := LB + C;
+      LB.AppendChar(C);
       if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
       begin
-        LB := LB + '/';
+        LB.AppendChar('/');
         InBlockC := False;
         Inc(I);
       end;
     end
     else if InStr then
     begin
-      LB := LB + C;
+      LB.AppendChar(C);
       if C = '''' then
       begin
         if (I < Length(ASql)) and (ASql[I + 1] = '''') then
         begin
-          LB := LB + '''';
+          LB.AppendChar('''');
           Inc(I);
         end
         else
@@ -329,12 +311,12 @@ begin
     end
     else if InDq then
     begin
-      LB := LB + C;
+      LB.AppendChar(C);
       if C = '"' then
       begin
         if (I < Length(ASql)) and (ASql[I + 1] = '"') then
         begin
-          LB := LB + '"';
+          LB.AppendChar('"');
           Inc(I);
         end
         else
@@ -347,18 +329,18 @@ begin
         '''' :
           begin
             InStr := True;
-            LB := LB + C;
+            LB.AppendChar(C);
           end;
         '"' :
           begin
             InDq := True;
-            LB := LB + C;
+            LB.AppendChar(C);
           end;
         '-' :
           begin
             if (I < Length(ASql)) and (ASql[I + 1] = '-') then
               InLineC := True;
-            LB := LB + C;
+            LB.AppendChar(C);
           end;
         '/' :
           begin
@@ -368,16 +350,16 @@ begin
               Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
               Continue;
             end;
-            LB := LB + C;
+            LB.AppendChar(C);
           end;
         '$' :
           begin
-            LB := LB + C;
+            LB.AppendChar('$');
             Inc(I);
             N := 0;
             while (I <= Length(ASql)) and (ASql[I] in ['0'..'9']) do
             begin
-              LB := LB + ASql[I];
+              LB.AppendChar(ASql[I]);
               N := N * 10 + (Ord(ASql[I]) - Ord('0'));
               Inc(I);
             end;
@@ -389,24 +371,26 @@ begin
                 Break;
               end;
             if Matched and (N > 0) then
-              LB := LB + '::bytea';
+              LB.AppendStr('::bytea');
             Continue;
           end;
       else
-        LB := LB + C;
+        LB.AppendChar(C);
       end;
     end;
     Inc(I);
   end;
-  Result := LB;
+  Result := LB.ToString;
 end;
 
 { ===== TPgConn ===== }
 
-constructor TPgConn.Create(const AConnInfo: string);
+constructor TPgConn.Create(const AConnInfo: string;
+  const AStmtCacheCapacity: Integer);
 begin
   inherited Create;
   PgEnsureLoaded;
+  FStmtCapacity := AStmtCacheCapacity;
   FConn := pq_connectdb(PAnsiChar(AnsiString(AConnInfo)));
   if FConn = nil then
     raise EPgError.Create('PQconnectdb 返回空连接（内存不足）');
@@ -423,9 +407,86 @@ end;
 
 destructor TPgConn.Destroy;
 begin
+  { 服务端 prepared statements 随会话结束自动消亡，无需显式 DEALLOCATE }
   if FConn <> nil then
     pq_finish(FConn);
   inherited;
+end;
+
+{ ===== V3-C1 语句缓存内部面 ===== }
+
+function TPgConn.LookupPrepared(const ASql: string): string;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FStmts) do
+    if FStmts[I].Sql = ASql then
+    begin
+      Result := FStmts[I].Name;
+      Inc(FStmtHits);
+      Exit;
+    end;
+  Result := '';
+  Inc(FStmtMisses);
+end;
+
+function TPgConn.NextPreparedName: string;
+begin
+  Inc(FStmtSeq);
+  Result := 'np_db_stmt_' + IntToStr(FStmtSeq);
+end;
+
+procedure TPgConn.RegisterPrepared(const ASql, AName: string);
+begin
+  SetLength(FStmts, Length(FStmts) + 1);
+  FStmts[High(FStmts)].Sql := ASql;
+  FStmts[High(FStmts)].Name := AName;
+end;
+
+procedure TPgConn.ForgetPrepared(const ASql: string);
+var
+  I, K: Integer;
+begin
+  for I := 0 to High(FStmts) do
+    if FStmts[I].Sql = ASql then
+    begin
+      for K := I to High(FStmts) - 1 do
+        FStmts[K] := FStmts[K + 1];
+      SetLength(FStmts, Length(FStmts) - 1);
+      Exit;
+    end;
+end;
+
+procedure TPgConn.EvictPreparedIfFull;
+begin
+  if (FStmtCapacity <= 0) or (Length(FStmts) <= FStmtCapacity) then
+    Exit;
+  { 头 = 最旧；DEALLOCATE 与 PREPARE 同为事务性——若驱逐发生在
+    回滚的事务内，服务端语句复活而登记已删，后续 prepare 撞 42P05
+    由 prepare 侧自愈兜底。 }
+  Exec('DEALLOCATE ' + FStmts[0].Name);
+  ForgetPrepared(FStmts[0].Sql);
+end;
+
+procedure TPgConn.ClearPrepared;
+begin
+  if Length(FStmts) > 0 then
+    Exec('DEALLOCATE ALL');
+  SetLength(FStmts, 0);
+  FStmtHits := 0;
+  FStmtMisses := 0;
+end;
+
+function TPgConn.PreparedCount: Integer;
+begin
+  Result := Length(FStmts);
+end;
+
+function TPgConn.PreparedHitRate: Double;
+begin
+  if FStmtHits + FStmtMisses = 0 then
+    Exit(0.0);
+  Result := FStmtHits / (FStmtHits + FStmtMisses);
 end;
 
 procedure TPgConn.CheckResultStatus(const ARes: PGresult);
@@ -475,6 +536,23 @@ end;
 function TPgConn.ErrorMessage: string;
 begin
   Result := string(AnsiString(pq_errorMessage(FConn)));
+end;
+
+function TPgConn.ShowVar(const AName: string): string;
+var
+  LRes: PGresult;
+begin
+  { SHOW <name> 单行单列原文读回（V3-B2 查询级超时恢复用）。
+    PAnsiChar 转串一律 AnsiPtrToStr（硬边界纪律，不引 FPC RTL）。 }
+  LRes := pq_exec(FConn, PAnsiChar(AnsiString('SHOW ' + AName)));
+  try
+    CheckResultStatus(LRes);
+    if (pq_ntuples(LRes) < 1) or (pq_nfields(LRes) < 1) then
+      raise EPgError.Create('SHOW ' + AName + ': empty result');
+    Result := AnsiPtrToStr(pq_getvalue(LRes, 0, 0));
+  finally
+    pq_clear(LRes);
+  end;
 end;
 
 function PgOpen(const AConnInfo: string): TPgConn;
@@ -536,7 +614,7 @@ procedure TPgQuery.BindBlob(const AIndex: Integer; const AValue: TBytes);
 begin
   if (AIndex < 1) or (AIndex > FParamCount) then
     raise EPgError.CreateFmt('绑定参数 %d 越界（共 %d 个占位符）', [AIndex, FParamCount]);
-  FParamStorage[AIndex - 1] := BytesToPgHexText(AValue);
+  FParamStorage[AIndex - 1] := '\x' + HexEncode(AValue, hcLower);
   FParamValues[AIndex - 1] := PAnsiChar(AnsiString(FParamStorage[AIndex - 1]));
   AddCastIndex(AIndex);
 end;
@@ -549,15 +627,93 @@ begin
   FParamValues[AIndex - 1] := nil;   { nil pointer = SQL NULL in text format }
 end;
 
+procedure TPgQuery.PrepareNamed(const AName, ASql: string);
+var
+  LRes: PGresult;
+begin
+  LRes := pq_prepare(FConn.FConn, PAnsiChar(AnsiString(AName)),
+    PAnsiChar(AnsiString(ASql)), FParamCount, nil);
+  try
+    FConn.CheckResultStatus(LRes);
+  finally
+    pq_clear(LRes);
+  end;
+end;
+
+procedure TPgQuery.ExecutePrepared(const AName: string);
+var
+  LRes: PGresult;
+begin
+  LRes := pq_execPrepared(FConn.FConn, PAnsiChar(AnsiString(AName)),
+    FParamCount, PPAnsiChar(@FParamValues[0]), nil, nil, 0);
+  try
+    FConn.CheckResultStatus(LRes);
+    FRows := pq_ntuples(LRes);
+    FCols := pq_nfields(LRes);
+    FRes := LRes;
+  except
+    pq_clear(LRes);
+    raise;
+  end;
+  FRow := -1;
+  FExecuted := True;
+end;
+
 procedure TPgQuery.ExecuteOnce;
 var
   LRes: PGresult;
   LCmd: string;
+  LName: string;
 begin
   if Length(FCastIdx) > 0 then
     LCmd := AppendByteaCasts(FSql, FCastIdx)
   else
     LCmd := FSql;
+
+  { V3-C1 语句缓存：仅参数化语句入缓存（无参 DDL/DML 解析收益小、
+    形态多变，直通）。键 = cast 后规范形——同一 SQL 不同绑定形态
+    （blob ::bytea cast 有无）自然分键，防撞名错配。
+    自愈双保险：执行期 26000（PREPARE 随事务回滚被撤销/外部
+    DEALLOCATE）→ 忘登记、换新名重建（本次命中计数已付，统计失真
+    方向无害）；prepare 期 42P05（驱逐 DEALLOCATE 发生在已回滚事务
+    内致服务端语句复活）→ 先 DEALLOCATE 再重试。 }
+  if (FParamCount > 0) and (FConn.FStmtCapacity > 0) then
+  begin
+    LName := FConn.LookupPrepared(LCmd);
+    if LName <> '' then
+    begin
+      try
+        ExecutePrepared(LName);
+        Exit;
+      except
+        on E: EPgError do
+        begin
+          if E.SqlState <> '26000' then
+            raise;
+          FConn.ForgetPrepared(LCmd);
+          LName := FConn.NextPreparedName;
+        end;
+      end;
+    end
+    else
+      LName := FConn.NextPreparedName;
+    try
+      PrepareNamed(LName, LCmd);
+    except
+      on E: EPgError do
+      begin
+        if E.SqlState <> '42P05' then
+          raise;
+        FConn.Exec('DEALLOCATE ' + LName);
+        PrepareNamed(LName, LCmd);
+      end;
+    end;
+    FConn.RegisterPrepared(LCmd, LName);
+    FConn.EvictPreparedIfFull;
+    ExecutePrepared(LName);
+    Exit;
+  end;
+
   if FParamCount = 0 then
     LRes := pq_execParams(FConn.FConn, PAnsiChar(AnsiString(LCmd)), 0, nil, nil, nil, nil, 0)
   else
@@ -669,7 +825,15 @@ begin
     Exit(nil);
   LS := GetText(AIndex);
   if (Length(LS) >= 2) and (LS[1] = '\') and (LS[2] = 'x') then
-    Result := PgHexToBytes(Copy(LS, 3, Length(LS) - 2))
+  begin
+    { HexDecode 对非法输入抛 EConvertError；包装回本模块边界错误类型 }
+    try
+      Result := HexDecode(Copy(LS, 3, Length(LS) - 2));
+    except
+      on E: EConvertError do
+        raise EPgError.CreateFmt('列 %d bytea hex 解码失败: %s', [AIndex, E.Message]);
+    end;
+  end
   else
     raise EPgError.CreateFmt('列 %d 不是 bytea hex 输出，无法按 Blob 读取', [AIndex]);
 end;
