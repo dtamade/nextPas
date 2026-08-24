@@ -54,6 +54,7 @@ end;
 | 查询/锁超时（TDbConnectOptions） | busy_timeout | connect/statement_timeout | INC-7 |
 | 查询级超时（Exec/Query + TDbExecOptions，advisory） | 忽略（诚实登记） | ✅ exec/query 双路径 | §2.6b |
 | 观测钩子（IDbTraceListener/IDbTraceControl，四后端同构接线） | ✅ | ✅ | §2.12 |
+| Redis 原生后端（RESP2 无 C 库依赖，键值面映射统一层） | ✅ | ✅ | §2.13 |
 | 错误归一（Category+Constraint 双码位） | ✅ | ✅ 含定位字段 | §2.2 |
 
 上表已运行时自述化（V3-B1）：`DbCapabilities(Conn)` 返回

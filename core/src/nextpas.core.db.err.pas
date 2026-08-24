@@ -108,6 +108,14 @@ procedure ClassifyOdbcEx(const ASqlState: string;
   const ANativeCode: Integer; const AMyFlavor: Boolean;
   out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
 
+{ redis：错误回复首词 → 类目细分（V3-A5）。
+  RESP 错误无数字码位，唯一信号是首词（ERR/Wrongpass/MOVED…，
+  调用方经 RespErrorType 大写化后传入）。词元精确匹配，未识别
+  一律 decUnknown（宁可欠归一不错归一）；约束细分对键值模型
+  不适用（dckNone 恒定）。 }
+procedure ClassifyRedis(const AErrType: string;
+  out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
+
 { IDbSavepointControl 契约输入守卫：名字必须 [A-Za-z0-9_]+
   （会被内插进 SAVEPOINT 语句），违规 fail-closed 抛 EDbError。 }
 procedure ValidateDbSavepointName(const ABackend: TDbKind; const AName: string);
@@ -390,6 +398,27 @@ begin
   ClassifyOdbc(ASqlState, ACategory, AConstraint);
   if AMyFlavor and (ANativeCode <> 0) then
     RefineWithMyCode(ANativeCode, ACategory, AConstraint);
+end;
+
+procedure ClassifyRedis(const AErrType: string;
+  out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
+begin
+  ACategory := decUnknown;
+  AConstraint := dckNone;
+  if AErrType = 'ERR' then
+    ACategory := decSyntax              { unknown cmd / arity / 非法值 }
+  else if (AErrType = 'WRONGPASS') or (AErrType = 'NOAUTH') then
+    ACategory := decAuth
+  else if (AErrType = 'MOVED') or (AErrType = 'ASK') or
+          (AErrType = 'CLUSTERDOWN') or (AErrType = 'READONLY') then
+    ACategory := decConnection          { 集群路由/副本拒写 }
+  else if (AErrType = 'LOADING') or (AErrType = 'BUSY') or
+          (AErrType = 'MASTERDOWN') then
+    ACategory := decCapacity            { 服务端瞬态资源态 }
+  else if AErrType = 'EXECABORT' then
+    ACategory := decTransaction         { MULTI 队列被 watch/语法否决 }
+  else if AErrType = 'NOSCRIPT' then
+    ACategory := decNotSupported;
 end;
 
 procedure ValidateDbSavepointName(const ABackend: TDbKind;

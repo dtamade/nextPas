@@ -78,6 +78,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
+| `redis` | L2 backend of `db` | Redis native client (RESP2, no C library; transport over `nextpas.core.net` blocking TCP); units live at `nextpas.core.db.redis.{base,resp,transport,adapter}` plus facade `nextpas.core.db.redis` | yes | L0-L1 plus same-layer one-way `net`/`time`/`sync` | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
 | `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy `nextpas.core.sqlite.*` shims deleted in the G2 sweep) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
@@ -97,12 +98,13 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
 
-Database family: `sqlite` and `pg` are L2 backend implementations inside the
-`db` (L3) family; their units physically live under `nextpas.core.db.sqlite.*`
-and `nextpas.core.db.pg.*`. The legacy `nextpas.core.sqlite.*` /
+Database family: backends are L2 implementations inside the `db` family —
+currently `sqlite`, `pg`, `mysql`, `odbc` and `redis`, physically under
+`nextpas.core.db.<backend>.*`. The legacy `nextpas.core.sqlite.*` /
 `nextpas.core.pg.*` unit names were deleted in the G2 consumer sweep
 (2026-08-25); the ffi units never had shims. Design record:
-`core/docs/plans/2026-08-23-db-module-boundary.md`.
+`core/docs/plans/2026-08-23-db-module-boundary.md`; backend contracts:
+`core/docs/db/CONTRACT.md`.
 
 ## Gate policy
 

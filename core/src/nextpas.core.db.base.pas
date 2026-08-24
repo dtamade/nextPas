@@ -29,8 +29,10 @@ type  { 数据库后端种类 }
     dbkSqlite,
     dbkPostgres,
     dbkMysql,       { V3-A2：尾部追加，枚举序号稳定契约 }
-    dbkOdbc         { V3-A4：尾部追加，枚举序号稳定契约（ODBC 网关，
+    dbkOdbc,        { V3-A4：尾部追加，枚举序号稳定契约（ODBC 网关，
                       覆盖达梦等提供 ODBC 驱动的国产库——路线图 D4） }
+    dbkRedis        { V3-A5：尾部追加，枚举序号稳定契约（RESP 协议
+                      原生客户端，键值面映射统一层） }
   );
 
   { 统一列类型（对齐两后端原生分类的公共最小集） }
@@ -162,6 +164,13 @@ type  { 数据库后端种类 }
       const ASqlState, AMessage: string; const ACategory: TDbErrorCategory;
       const AConstraint: TDbConstraintKind); overload;
 
+    { V3-A5：Redis 全量构造（db.err ClassifyRedis 归一后的标准
+      入口）。AErrType = 错误回复首词（ERR/Wrongpass/MOVED…），
+      存 SqlState 槽；BackendCode 恒 0（RESP 无数字码位）。 }
+    constructor CreateFullRedis(const AErrType, AMessage: string;
+      const ACategory: TDbErrorCategory;
+      const AConstraint: TDbConstraintKind); overload;
+
     property Backend: TDbKind read FBackend;
     { sqlite 结果码；非 sqlite 引发时为 0 }
     property BackendCode: Integer read FBackendCode;
@@ -280,6 +289,18 @@ begin
   FBackend := dbkOdbc;
   FBackendCode := ANativeCode;
   FSqlState := ASqlState;
+  FCategory := ACategory;
+  FConstraint := AConstraint;
+end;
+
+constructor EDbError.CreateFullRedis(const AErrType, AMessage: string;
+  const ACategory: TDbErrorCategory;
+  const AConstraint: TDbConstraintKind);
+begin
+  inherited Create(AMessage);
+  FBackend := dbkRedis;
+  FBackendCode := 0;      { RESP 错误无数字码位 }
+  FSqlState := AErrType;
   FCategory := ACategory;
   FConstraint := AConstraint;
 end;
