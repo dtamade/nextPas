@@ -125,6 +125,9 @@ LProvider := WithRetry(LProvider, TRetryPolicy.Default, NewSystemClock);
 LReply := LProvider.Complete(
   TCompletionRequest.New('gpt-4o').WithUserText('hi'));
 
+// 3.5) 可选：会话转录持久化（W5 JSONL store；权限边界见 SECURITY §6）
+LStore := NewJsonlTranscriptStore('/var/lib/myapp/transcripts');
+
 // 4) 测试离线：NewFakeProvider 脚本回放，CI 零网络零睡眠
 ```
 
