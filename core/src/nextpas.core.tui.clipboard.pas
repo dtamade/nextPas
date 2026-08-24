@@ -66,6 +66,9 @@ uses
   nextpas.core.platform.process.base
   {$IFDEF NEXTPAS_UNIX}
     , nextpas.core.platform.posix.base       { TPollFd/POLLIN:限时捕获管道轮询 }
+    , nextpas.core.platform.posix.ffi        { host poll:dual-IO owner-only 后的合规通道 }
+    , nextpas.core.platform.posix.errno
+    , nextpas.core.platform.error            { PLATFORM_ERR_INTR:EINTR 重试判定 }
     , nextpas.core.platform                  { platform_monotonic_ns:截止时钟 }
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
@@ -227,6 +230,27 @@ begin
   end;
 end;
 
+{ 本地 EINTR 重试 poll（经 platform.posix.ffi）。platform_io_poll 自 F5
+  收官起为 dual-IO 所有者（platform.process）专属；非所有者消费者一律走
+  此形态——与 nextpas.core.process.pipe.PipePoll 同款。 }
+{$IFDEF NEXTPAS_UNIX}
+function ClipboardPoll(AFds: Pointer; ACount: Int32; ATimeoutMs: Int32): Int32;
+var
+  LPollResult: Int32;
+begin
+  if (AFds = nil) or (ACount <= 0) then
+    Exit(-1);
+  repeat
+    LPollResult := poll(AFds, cuint(ACount), cint(ATimeoutMs));
+    if LPollResult >= 0 then
+      Exit(LPollResult);
+    if platform_get_errno = PLATFORM_ERR_INTR then
+      Continue;
+    Exit(-1);
+  until False;
+end;
+{$ENDIF}
+
 { Run a tool and capture its stdout.  Returns the captured text.
   POSIX 限时版:platform_process_run 无超时参数,粘贴路径若遇挂死的
   xclip -o(死 X socket)会永久冻住 TUI —— poll 带截止时钟读管道,
@@ -276,7 +300,7 @@ begin
       LFd.events := POLLIN;
       LFd.revents := 0;
       { 就绪数 0=本段超时(下轮循环判截止),<0=poll 错误(放弃) }
-      if platform_io_poll(@LFd, 1, LRemainMs) <= 0 then Continue;
+      if ClipboardPoll(@LFd, 1, LRemainMs) <= 0 then Continue;
       LErr := platform_process_read_stdout_ex(LPipes.StdoutRead,
         @LChunk[0], SizeOf(LChunk), LN);
       if LErr <> 0 then Break;

@@ -402,7 +402,9 @@ begin
   TBByte(LSHBody, Byte(Length(LInfo.LegacySessionID)));
   TB(LSHBody, LInfo.LegacySessionID);
   TBU16(LSHBody, cSuiteAes128);
-  TBByte(LSHBody, 1);
+  { legacy_compression_method：单字节 null 压缩（RFC 8446 §4.1.3）。
+    此前误写向量式 [len=1][0]，与旧解析器的同错实现互相抵消；
+    解析器归正单字节语义后此处必须只写方法字节。 }
   TBByte(LSHBody, 0);
   TBU16(LSHBody, Word(Length(LExtList)));
   TB(LSHBody, LExtList);

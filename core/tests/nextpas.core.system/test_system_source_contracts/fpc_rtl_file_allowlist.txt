@@ -93,3 +93,6 @@ SysUtils|nextpas.core.numa.windows.pas
 Windows|nextpas.core.numa.windows.pas
 # 2026-07-23 D2 M0: pre-existing main debt (net async UDP uses SysUtils)
 SysUtils|nextpas.core.net.async.udp.pas
+# 2026-08-24 baseline sweep: pre-existing main debt (db pg adapter IntToStr in
+# extended-protocol param typing; pending text.conv migration by db lane)
+SysUtils|nextpas.core.db.pg.adapter.pas

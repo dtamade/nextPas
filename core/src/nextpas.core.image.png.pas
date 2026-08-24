@@ -272,8 +272,11 @@ begin
           Result[(Y * AWidth + X) * 4 + 3] := $FF;
         end;
         2:
-        for C := 0 to 2 do
-          Result[(Y * AWidth + X) * 4 + C] := LRow[X * 3 + C];
+        begin
+          for C := 0 to 2 do
+            Result[(Y * AWidth + X) * 4 + C] := LRow[X * 3 + C];
+          Result[(Y * AWidth + X) * 4 + 3] := $FF;
+        end;
         else
         for C := 0 to 3 do
           Result[(Y * AWidth + X) * 4 + C] := LRow[X * 4 + C];

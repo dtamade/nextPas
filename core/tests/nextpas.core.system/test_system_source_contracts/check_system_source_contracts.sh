@@ -420,6 +420,8 @@ function StrToInt
 function StrToInt64
 function TryStrToInt
 function TryStrToInt64
+function StrToIntDef
+function StrToInt64Def
 function StrToFloat
 function FloatToStr
 function CurrToStr
@@ -472,6 +474,9 @@ function GetProcessID
 procedure Sleep
 function SysErrorMessage
 function GetLastOSError
+function ExceptAddr
+function ExceptFrameCount
+function ExceptFrameAt
 EOF
 )"
   require_facade_surface_allowlist "sysutils facade" "$actual" "$expected"

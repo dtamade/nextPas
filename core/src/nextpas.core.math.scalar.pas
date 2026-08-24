@@ -326,17 +326,19 @@ function TotalVariance(const AData: array of Single): Single; overload;
 function SumSquaredDeviations(const AData: array of Double): Double; overload;
 function SumSquaredDeviations(const AData: array of Single): Single; overload;
 
-const
-  { Largest finite value representable by each floating-point type
-    (replaces RTL Math MaxDouble / MaxSingle). }
-  MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
-  MAX_SINGLE_VALUE: Single = 3.40282346638528859812e38;
-
 implementation
 
 uses
   nextpas.core.errors,
   nextpas.core.math.impl.scalar;
+
+const
+  { Largest finite value representable by each floating-point type
+    (replaces RTL Math MaxDouble / MaxSingle). Implementation-private:
+    public surface here would demand a root-facade re-export that the
+    closed root const set forbids (api-surface contract). }
+  MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
+  MAX_SINGLE_VALUE: Single = 3.40282346638528859812e38;
 
 { RoundTo - rounds AValue to ADecimals decimal places }
 function RoundTo(const AValue: Double; const ADecimals: Integer): Double;

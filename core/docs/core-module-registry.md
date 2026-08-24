@@ -48,6 +48,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `fs` | L2 | filesystem | yes | L0-L1; platform owns raw OS truth | focused-runtime |
 | `geoip` | L2 | IP→country GeoIP lookup | yes | L0-L2 | focused-runtime |
 | `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
+| `graph` | L3 | Microsoft Graph REST mail client (`nextpas.core.graph.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |
 | `html` | L2 | HTML text extraction/entity decode | yes | L0-L1 | focused-runtime |
@@ -57,6 +58,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `ini` | L2 | INI format | yes | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller abstractions | yes | L0 plus approved L1 | focused-runtime |
 | `json` | L2 | JSON parser/writer | yes | L0-L1 | focused-runtime |
+| `jwt` | L2 | JWT RFC 7519 HS256 sign/verify (`nextpas.core.jwt`; `auth` family standalone unit) | yes | L0-L1 plus crypto/json owners | focused-runtime |
 | `lockfree` | L1 | lock-free structures | yes | L0 plus approved L1 | focused-runtime |
 | `log` | L3 | logging runtime | yes | L0-L2; `log.intf` is L0 seam | focused-runtime |
 | `mail` | L3 | mail/SMTP domain | yes | L0-L2 | focused-runtime |
@@ -66,6 +68,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `multipart` | L2 | multipart format | yes | L0-L1 | focused-runtime |
 | `net` | L2 | networking | yes | L0-L1 | focused-runtime |
 | `numa` | L2 | NUMA topology/alloc | yes | L0-L1; host units debt | draft |
+| `oauth` | L3 | OAuth2 authorization-code client + PKCE (RFC 6749 §4.1 / RFC 7636; `nextpas.core.oauth.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
 | `pg` | L2 backend of `db` | PostgreSQL database (libpq FFI, dlopen); units live at `nextpas.core.db.pg.*` (old `nextpas.core.pg.*` unit names are deprecated shims) | yes | L0-L1; platform.dl | focused-runtime |

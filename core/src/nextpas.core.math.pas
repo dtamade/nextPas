@@ -230,6 +230,12 @@ function Min(AA, AB: SizeUInt): SizeUInt; overload; inline;
 function Max(AA, AB: SizeUInt): SizeUInt; overload; inline;
 function Min(AA, AB: SizeInt): SizeInt; overload; inline;
 function Max(AA, AB: SizeInt): SizeInt; overload; inline;
+{ Int32 overloads: SizeInt is 64-bit on x86_64, so plain Integer arguments
+  would otherwise widen to SizeInt and lose the exact-type match. }
+{$IF DEFINED(CPU64)}
+function Min(AA, AB: Int32): Int32; overload; inline;
+function Max(AA, AB: Int32): Int32; overload; inline;
+{$ENDIF}
 function Min(AA, AB: Double): Double; overload; inline;
 function Max(AA, AB: Double): Double; overload; inline;
 function Min(AA, AB: Single): Single; overload; inline;
@@ -852,6 +858,18 @@ function Max(AA, AB: SizeInt): SizeInt;
 begin
   Result := nextpas.core.math.scalar.Max(AA, AB);
 end;
+
+{$IF DEFINED(CPU64)}
+function Min(AA, AB: Int32): Int32;
+begin
+  Result := nextpas.core.math.scalar.Min(AA, AB);
+end;
+
+function Max(AA, AB: Int32): Int32;
+begin
+  Result := nextpas.core.math.scalar.Max(AA, AB);
+end;
+{$ENDIF}
 
 function Min(AA, AB: Single): Single;
 begin
