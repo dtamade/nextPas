@@ -298,6 +298,8 @@ type
   TLineState = nextpas.core.tui.widget.syntax.TLineState;
   TGetLineFunc = nextpas.core.tui.widget.syntax.TGetLineFunc;
   TPascalHighlighter = nextpas.core.tui.widget.syntax.TPascalHighlighter;
+  TJsonHighlighter = nextpas.core.tui.widget.syntax.TJsonHighlighter;    { PH33 P5c }
+  TTomlHighlighter = nextpas.core.tui.widget.syntax.TTomlHighlighter;    { PH33 P5c }
   TSyntaxDoc = nextpas.core.tui.widget.syntax.TSyntaxDoc;
   TSyntaxTheme = nextpas.core.tui.widget.syntax.TSyntaxTheme;
   TToastPosition = nextpas.core.tui.widget.toast.TToastPosition;
