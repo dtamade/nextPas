@@ -1,7 +1,8 @@
 # CONTRACT: nextpas.core.deliverability(L2)
 
-状态:v1.0(draft→landing 冻结)| 日期:2026-08-17 | 归属:批次 5
-边界设计:`docs/plans/2026-08-17-deliverability-module-boundary.md`
+状态:v1.1(v1.0 冻结 + 签名增量)| 日期:2026-08-25 | 归属:批次 5
+边界设计:`docs/plans/2026-08-17-deliverability-module-boundary.md`;
+签名增量:`docs/plans/2026-08-25-deliverability-dkim-sign.md`
 
 ## 1. 职责与边界
 
@@ -87,6 +88,23 @@ function DkimSign(const AHdrHashInput: TBytes; const AAlgo: TDkimAlgo;
   const AEd25519PrivateKey: TBytes; out ASignature: TBytes;
   out AError: string): Boolean;
 
+{ RSA 私钥 PEM 加载(v1.1): 无加密 PKCS#8 "BEGIN PRIVATE KEY" 与传统
+  PKCS#1 "BEGIN RSA PRIVATE KEY"; 加密块/非 RSA OID/坏 DER → False }
+function DkimLoadRsaPrivateKey(const APemText: string; out AModulus,
+  APrivateExponent: TBytes; out AError: string): Boolean;
+
+{ DKIM 签名组装(v1.1, RFC 6376 §3.5/§3.7): bh → 构造 DKIM-Signature
+  (物理第一个头, b= 空占位)→ 底层签名 → 填 b= 输出完整邮件;
+  h= 须含 from。线格式钉死: 单物理行, tag 序 v,a,c,d,s,h,bh,b, "; "
+  分隔, 不加 t=/x=(确定性输出, 黄金向量依赖); Ed25519 私钥为 32 字节
+  seed 直传(无 PEM 形态) }
+function DkimSignMail(const ARawMail: string; const ADomain,
+  ASelector: string; const ASignedHeaders: array of string;
+  const ACanonHeader, ACanonBody: TCanonMode; const AAlgo: TDkimAlgo;
+  const ARsaModulus, ARsaPrivateExponent: TBytes;
+  const AEd25519PrivateKey: TBytes; out ASignedMail: string;
+  out AError: string): Boolean;
+
 { DMARC 记录解析/校验 }
 function DmarcParseRecord(const ARecord: string; out ADmarc: TDmarcRecord;
   out AError: string): Boolean;
@@ -117,6 +135,11 @@ function NewDeliverabilityDns(const ADns: IDnsResolver): IDeliverabilityDns;
   ed25519 分支需 `AEd25519PrivateKey`(32 字节);`AAlgo` 决定使用哪个参数。
 - `DkimVerify` 失败(非 pass/neutral)时 `AError` 给原因串
   (body-mismatch/bad-b64/key-not-found/revoked/unsupported-algo/…)。
+- `DkimLoadRsaPrivateKey`(v1.1)失败时 `AError` 给原因串
+  (pem-parse/encrypted/not-supported/invalid-der);加密私钥明确拒绝,
+  不做口令解密(口令来源属装配层策略)。
+- `DkimSignMail`(v1.1)`h=` 缺 from 或 domain/selector 空 → False;
+  组装规则与线格式见 plan 2026-08-25 D1(黄金向量逐字节锁定)。
 
 ## 4. 不变量(INV-*)
 

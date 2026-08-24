@@ -273,6 +273,19 @@ def main():
     n = bytes.fromhex(n_hex)
     e = int(e_hex, 16)
     d = bytes.fromhex(d_hex)
+
+    # 密钥加载(缺失时降级: 仅规范化向量; 恢复引导见 plan 文档 D3)
+    rsa_priv = None
+    pem_path = '/tmp/dkim_tv/rsa.pem'
+    if os.path.exists(pem_path):
+        with open(pem_path, 'rb') as f:
+            rsa_priv = serialization.load_pem_private_key(f.read(), password=None)
+        # 一致性: 加载的私钥 n 必须等于 N_HEX
+        n_loaded = rsa_priv.public_key().public_numbers().n
+        assert n_loaded == int(n_hex, 16), 'rsa_key.pem 与 N_HEX 不匹配'
+    else:
+        print('[selfcheck] 缺 %s, RSA 签名向量降级为规范化向量' % pem_path,
+              file=sys.stderr)
     # SPKI DER
     from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
     pub = RSAPublicNumbers(e, int.from_bytes(n, 'big')).public_key()
@@ -283,6 +296,22 @@ def main():
     w('  DKV_RSA_E_HEX: string = %s;' % pstr(e_hex.encode()))
     w('  DKV_RSA_D_HEX: string = %s;' % pstr(d_hex.encode()))
     w('  DKV_RSA_SPKI_B64: string = %s;' % pstr(pb64(spki).encode()))
+
+    # ── 3b. 私钥 PEM 形态(PKCS#8 + 传统 PKCS#1; CRLF 规范化) ──
+    # DkimLoadRsaPrivateKey 双形态加载正例的输入
+    if rsa_priv is not None:
+        pem_pkcs8 = rsa_priv.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption())
+        pem_pkcs1 = rsa_priv.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption())
+        w('  DKV_RSA_PEM_PKCS8: string = %s;' %
+          pstr(pem_pkcs8.replace(b'\n', b'\r\n')))
+        w('  DKV_RSA_PEM_PKCS1: string = %s;' %
+          pstr(pem_pkcs1.replace(b'\n', b'\r\n')))
 
     # ── 4. 完整邮件 + hash input + 签名(RSA) ──
     # c=relaxed/simple; h=from:to:subject(x-date 缺失 → null input)
@@ -330,18 +359,6 @@ def main():
         headers[dkim_idx] = dkim_final
         mail = b'\r\n'.join(headers) + b'\r\n\r\n' + body
         return mail, hdrin, sig
-
-    rsa_priv = None
-    pem_path = '/tmp/dkim_tv/rsa.pem'
-    if os.path.exists(pem_path):
-        with open(pem_path, 'rb') as f:
-            rsa_priv = serialization.load_pem_private_key(f.read(), password=None)
-        # 一致性: 加载的私钥 n 必须等于 N_HEX
-        n_loaded = rsa_priv.public_key().public_numbers().n
-        assert n_loaded == int(n_hex, 16), 'rsa_key.pem 与 N_HEX 不匹配'
-    else:
-        print('[selfcheck] 缺 %s, RSA 签名向量降级为规范化向量' % pem_path,
-              file=sys.stderr)
 
     mail_rsa = None
     hdrin_rsa = None
@@ -409,6 +426,44 @@ def main():
     w('  DKV_REMOVEBVAL: string = %s;' % pstr(remove_b_value(dk_val)))
     dk_val2 = b'v=1;a=rsa-sha256;bh=qq;b=AAbb ;h=from'
     w('  DKV_REMOVEBVAL2: string = %s;' % pstr(remove_b_value(dk_val2)))
+
+    # ── 8. DkimSignMail 黄金向量(plan 2026-08-25 D1 线格式独立实现) ──
+    # 组装规则: 单物理行头, tag 序 v,a,c,d,s,h,bh,b, "; " 分隔, 无 t=/x=,
+    # 签名头插为物理第一个头, 原邮件逐字节不动, b= 追加签名。
+    if rsa_priv is not None:
+        sm_input = (b'From: Alice <alice@example.com>\r\n'
+                    b'To: Bob <bob@example.net>\r\n'
+                    b'Subject: outbound  with  spaces\r\n'
+                    b'X-Folded: one\r\n\t two\r\n'
+                    b'\r\n'
+                    b'Body line 1\r\nBody line 2\r\n')
+        sm_h = ['from', 'to', 'subject', 'x-date']   # x-date 缺失 → null input
+        sm_ch, sm_cb = 'relaxed', 'simple'
+        body_c = canon_body_simple(b'Body line 1\r\nBody line 2\r\n') \
+            if sm_cb == 'simple' else canon_body_relaxed(b'Body line 1\r\nBody line 2\r\n')
+        sm_bh = pb64(hashlib.sha256(body_c).digest())
+        sm_val = ('v=1; a=rsa-sha256; c=%s/%s; d=example.com; s=sel; h=%s; '
+                  'bh=%s; b=' % (sm_ch, sm_cb, ':'.join(sm_h), sm_bh))
+        sm_hdrline = b'DKIM-Signature: ' + sm_val.encode()
+        sm_nob = sm_hdrline + b'\r\n' + sm_input
+        sm_hdrs = extract_headers(sm_nob)            # 签名头在 idx 0
+        sm_hdrin = build_header_hash_input(
+            sm_hdrs, sm_h, canon_header_relaxed, 0)
+        sm_sig = rsa_priv.sign(sm_hdrin, padding.PKCS1v15(), hashes.SHA256())
+        # openssl 对拍自检(与 §4 同款纪律)
+        with open('/tmp/dkim_tv/sm_hdr_in.bin', 'wb') as f:
+            f.write(sm_hdrin)
+        _r = subprocess.run(
+            ['openssl', 'dgst', '-sha256', '-sign', pem_path,
+             '-out', '/tmp/dkim_tv/sm_openssl_sig.bin',
+             '/tmp/dkim_tv/sm_hdr_in.bin'], capture_output=True)
+        assert _r.returncode == 0, _r.stderr
+        with open('/tmp/dkim_tv/sm_openssl_sig.bin', 'rb') as f:
+            assert f.read() == sm_sig, 'openssl 与 cryptography 签名不一致'
+        print('[selfcheck] signmail openssl dgst 对拍一致', file=sys.stderr)
+        sm_expected = sm_hdrline + pb64(sm_sig).encode() + sm_nob[len(sm_hdrline):]
+        w('  DKV_SIGNMAIL_INPUT: string = %s;' % pstr(sm_input))
+        w('  DKV_SIGNMAIL_EXPECTED: string = %s;' % pstr(sm_expected))
 
     print('\n'.join(lines))
 
