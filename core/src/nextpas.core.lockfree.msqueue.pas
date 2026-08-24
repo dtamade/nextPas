@@ -4,6 +4,11 @@ unit nextpas.core.lockfree.msqueue;
 
 {$I nextpas.core.settings.inc}
 
+{ 填充字段刻意零引用;5029 Note 在类解析结束后的阶段发射,
+  per-field PUSH/POP 窗口先于发射被 POP 还原,压不住 ——
+  只能单元级关闭(本单元其余私有字段本就要求显式使用) }
+{$WARN 5029 OFF}
+
 interface
 
 uses
@@ -66,22 +71,16 @@ type
       padded off the hot RMW lines below (F-032 rule). }
     FNodes: array of TNode;
     FCapacity: Int32;
-    {$PUSH} {$WARN 5029 OFF} // padding field for cache-line isolation
-    FPadHeader: TCacheLinePad;
-    {$POP}
+    FPadHeader: TCacheLinePad;   // padding for cache-line isolation
     // Producer line: tail pointer + enqueued counter, both RMW'd by every
     // successful enqueue (same writer population, F-033 rule).
     FTail: Int64;        // packed: (index:32 | aba:32)
     FEnqueued: Int64;
-    {$PUSH} {$WARN 5029 OFF} // padding field for cache-line isolation
-    FPadTail: TCacheLinePad;
-    {$POP}
+    FPadTail: TCacheLinePad;   // padding for cache-line isolation
     // Consumer line (mirror): head pointer + dequeued counter.
     FHead: Int64;        // packed: (index:32 | aba:32)
     FDequeued: Int64;
-    {$PUSH} {$WARN 5029 OFF} // padding field for cache-line isolation
-    FPadHead: TCacheLinePad;
-    {$POP}
+    FPadHead: TCacheLinePad;   // padding for cache-line isolation
     // Free list striped by the SAME thread-id hash as the op guard (the
     // caller passes its already-computed op stripe): alloc on enqueue and
     // recycle on dequeue from differently-hashed threads land on separate
