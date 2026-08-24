@@ -158,6 +158,12 @@ begin
   CheckEqual(Int64(8), Int64(LStrategy.GetGrowSize(4, 5)), 'DoublingGrow should double capacity');
 end;
 
+procedure TestFacadeExportsSlotRegistry;
+begin
+  CheckEqual(Int64(64), Int64(SLOT_REGISTRY_DEFAULT_CAPACITY),
+    'facade re-exports slot registry default cap');
+end;
+
 procedure TestFacadeHashMapFactoriesForwardCallbacks;
 var
   LValue: Integer;
@@ -323,6 +329,7 @@ begin
   T := TTestSuite.Create('nextpas.core.collections.facade');
   T.Test('facade factories return public interfaces', @TestFacadeFactoriesReturnPublicInterfaces);
   T.Test('facade exports growth strategies', @TestFacadeExportsGrowthStrategies);
+  T.Test('facade exports slot registry constant', @TestFacadeExportsSlotRegistry);
   T.Test('facade hash map factories forward callbacks', @TestFacadeHashMapFactoriesForwardCallbacks);
   T.Test('facade default semantic MakeMap MakeSet', @TestFacadeDefaultSemanticFactories);
   T.Test('facade remaining MakeXxx smoke', @TestFacadeRemainingFactorySmoke);

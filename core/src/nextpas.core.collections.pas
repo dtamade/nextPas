@@ -1,6 +1,6 @@
 unit nextpas.core.collections;
 {**
- * @desc 容器门面：Vec、HashMap、Deque、BTree、LRU、Pool。
+ * @desc 容器门面：Vec、HashMap、Deque、BTree、LRU、Pool、SlotRegistry。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -74,6 +74,7 @@ uses
   nextpas.core.collections.stack,
   nextpas.core.collections.list,
   nextpas.core.collections.circularbuffer,
+  nextpas.core.collections.slotregistry,
   nextpas.core.collections.element_manager,
   // HashMap / HashSet (OA default)
   nextpas.core.collections.hashmap,
@@ -106,6 +107,7 @@ type
   // 统一对外导出的关键接口类型
   ICollection = nextpas.core.collections.intf.ICollection;
   IBitSet = nextpas.core.collections.bitset.intf.IBitSet;
+  ISlotRegistryItem = nextpas.core.collections.slotregistry.ISlotRegistryItem;
 
   // 非泛型公共载体类型
   PPtrIter = nextpas.core.collections.base.PPtrIter;
@@ -187,6 +189,8 @@ const
   SKIPLIST_P = nextpas.core.collections.skiplist.base.SKIPLIST_P;
   BITSET_BITS_PER_WORD = nextpas.core.collections.bitset.base.BITSET_BITS_PER_WORD;
   BITSET_DEFAULT_CAPACITY = nextpas.core.collections.bitset.base.BITSET_DEFAULT_CAPACITY;
+  SLOT_REGISTRY_DEFAULT_CAPACITY =
+    nextpas.core.collections.slotregistry.SLOT_REGISTRY_DEFAULT_CAPACITY;
   PRIORITYQUEUE_DEFAULT_CAPACITY = nextpas.core.collections.priorityqueue.base.PRIORITYQUEUE_DEFAULT_CAPACITY;
   PRIORITYQUEUE_MIN_CAPACITY = nextpas.core.collections.priorityqueue.base.PRIORITYQUEUE_MIN_CAPACITY;
   SMALLVEC_MIN_HEAP_CAPACITY = nextpas.core.collections.smallvec.base.SMALLVEC_MIN_HEAP_CAPACITY;

@@ -1,6 +1,6 @@
 # nextpas.core.collections 代码契约
 
-**模块路径**：`core/src/nextpas.core.collections*.pas`（约 83 个单元）
+**模块路径**：`core/src/nextpas.core.collections*.pas`（约 84 个单元）
 **层级**：L1（依赖 L0：`base`、`mem`、`errors`/`exception`）
 **Owner**：collections lane（本 worktree）
 **最后更新**：2026-07-20
@@ -105,6 +105,7 @@ ICollection                          非泛型根（Count / Clear / IsEmpty / Pt
 | LruCache | `ILruCache` | `lrucache` | Swiss map + 双向链表 | `MakeLruCache` |
 | BitSet | `IBitSet` | `bitset` | 位数组 | `MakeBitSet` |
 | ConcurrentHashMap | `IConcurrentMap` | `concurrent.hashmap` | 分片 | `MakeConcurrentHashMap` |
+| SlotRegistry | `ISlotRegistryItem` + 具体类 `TSlotRegistry<T>` | `slotregistry` | 稀疏槽 + 空闲栈 LIFO + tail-swap | 无 `Make*`（专家直构；`uses collections.slotregistry` 后 specialize。FPC 3.3.1 不能对限定名泛型做子类别名） |
 
 ### 1.3 Map 词表（HashMap / TreeMap / SkipList / Trie / RBTreeMap 等）
 
@@ -241,7 +242,7 @@ LruCache 的 `Get` 是缓存命中/近用语义，**不要**按上表改名或�
 
 ### 6.1 Focused suites（`core/tests/nextpas.core.collections/`）
 
-`test_base`, `test_bitset`, `test_btree_custom_comparer`, `test_btree_managed_lifecycle`, `test_btree_managed_returns`, `test_btreemap`, `test_btreeset`, `test_circularbuffer`, `test_collections_killer`, `test_concurrent_hashmap`, `test_concurrent_hashmap_managed_returns`, `test_contracts`, `test_deque`, `test_error_paths`, `test_facade`, `test_forwardlist`, `test_forwardlist_managed_zero`, `test_hashmap`, `test_hashset`, `test_linkedhashmap`, `test_linkedhashset`, `test_list`, `test_lrucache`, `test_managed_stress`, `test_managed_types`, `test_multimap`, `test_multiset`, `test_priorityqueue`, `test_queue`, `test_rbtreemap_custom_comparer_data`, `test_rbtreemap_range_managed_state`, `test_skiplist`, `test_slice_contract`, `test_smallvec`, `test_stack`, `test_swiss_adapter`, `test_swisstable`, `test_swisstable_custom_callbacks`, `test_swisstable_managed_returns`, `test_treemap`, `test_treeset`, `test_trie`, `test_vec`, `test_vecdeque_full`
+`test_base`, `test_bitset`, `test_btree_custom_comparer`, `test_btree_managed_lifecycle`, `test_btree_managed_returns`, `test_btreemap`, `test_btreeset`, `test_circularbuffer`, `test_collections_killer`, `test_concurrent_hashmap`, `test_concurrent_hashmap_managed_returns`, `test_contracts`, `test_deque`, `test_error_paths`, `test_facade`, `test_forwardlist`, `test_forwardlist_managed_zero`, `test_hashmap`, `test_hashset`, `test_linkedhashmap`, `test_linkedhashset`, `test_list`, `test_lrucache`, `test_managed_stress`, `test_managed_types`, `test_multimap`, `test_multiset`, `test_priorityqueue`, `test_queue`, `test_rbtreemap_custom_comparer_data`, `test_rbtreemap_range_managed_state`, `test_skiplist`, `test_slice_contract`, `test_slotregistry`, `test_smallvec`, `test_stack`, `test_swiss_adapter`, `test_swisstable`, `test_swisstable_custom_callbacks`, `test_swisstable_managed_returns`, `test_treemap`, `test_treeset`, `test_trie`, `test_vec`, `test_vecdeque_full`
 
 ### 6.2 门禁
 

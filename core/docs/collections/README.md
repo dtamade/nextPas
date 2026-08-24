@@ -76,6 +76,7 @@ end;
   优先队列 → MakePriorityQueue
   位集 → MakeBitSet
   环形缓冲 → MakeCircularBuffer
+  元素自持下标的稀疏槽登记簿 → 直构 TSlotRegistry（uses collections.slotregistry）
 ```
 
 ### Hash 默认叙事
