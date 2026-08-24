@@ -987,6 +987,10 @@ begin
   SecureZeroBytes(FTLS12State.ClientWriteMACKey);
   SecureZeroBytes(FTLS12State.ServerWriteMACKey);
   SecureZeroBytes(FTLS12State.MasterSecret);
+  { 对端证书对象仅在握手成功路径被释放（见 TLS12 恢复/完成分支）——
+    验证失败等路径滞留的 PeerCertificate 在此统一兜底，防止整证书
+    （FRawCertificate/TBS 副本及解析字段）随连接对象泄漏 }
+  FreeAndNil(FTLS12State.PeerCertificate);
   inherited Destroy;
 end;
 
@@ -3256,6 +3260,10 @@ begin
         ) then
         begin
           SetHandshakeError(sslErrHandshake, 'TLS 1.2 fallback handshake failed: ' + LError);
+          { 失败路径同样回收局部握手状态中的对端证书——Certificate 消息
+            解析阶段即已创建（成功路径下方 FreeAndNil 同款）；否则每次
+            「收到证书后握手失败」都孤儿化一整张证书及其解析字段 }
+          FreeAndNil(LState.PeerCertificate);
           Exit;
         end;
 

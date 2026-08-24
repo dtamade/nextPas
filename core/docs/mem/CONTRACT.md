@@ -290,7 +290,10 @@ IArena 实现：
 
 ### 5.3 Leak-free 保证
 
-- **heaptrc 测试**：所有测试套件启用 `-gh`（heaptrc），报告未释放内存
+- **heaptrc 测试**：测试套件经 `tests/common.mk` 默认以 `-gh`（heaptrc）
+  fail-closed 门禁运行，报告未释放内存；唯一文档化例外
+  `test_boundary_cases`（其 RTL 尺寸边界探测与 heaptrc 的块簿记在
+  SizeUInt 上回绕冲突，见该套件 Makefile 注释）
 - **异常路径**：构造函数中的异常不会泄漏已分配资源（try/except/finally）
 - **Destroy 完整性**：所有 `Destroy` 释放 `Create` 分配的所有资源
 - **内联 fallback 保证**：`FAllocator` 永远非 nil，避免 nil 解引用泄漏
