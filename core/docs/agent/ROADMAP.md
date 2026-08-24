@@ -8,7 +8,7 @@
 | Wave | 内容 | 出口证据 |
 |------|------|---------|
 | **W0 骨架** | registry 登记 `agent` family（draft）；空门面+base+errors 编译 gate；本文档转正 | `test_compile_skeleton` 绿；hygiene 绿 |
-| **W1 协议与传输** | base/errors/intf 全量词表；fold.pas；agent.sse 增量解析器；transport.http；provider.common + provider.openai（含公开编解码器）+ provider.fake；clock | test_protocol / test_errors / test_sse / test_transport_stream / test_provider_openai / test_codecs(openai) / test_fake_provider 绿 |
+| **W1 协议与传输** | base/errors/intf 全量词表；fold.pas；agent.sse 增量解析器；transport.http；provider.common + provider.openai（含公开编解码器）+ provider.fake；clock | test_protocol / test_compile_skeleton（含错误分类器断言）/ test_clock / test_sse / test_transport_stream / test_provider_openai / test_codecs(openai) / test_fake_provider 绿 |
 | **W2 可靠性** | retry 装饰器（含 fake clock 生产单元）；anthropic 适配器（含公开编解码器）；取消贯穿 transport/provider；usage 全字段映射 | test_retry / test_provider_anthropic / test_codecs(anthropic) 绿 |
 | **W3 循环** | tools 校验/截断/超时包装；TAgentLoop（预算/钩子/事件/防打转/引导收尾）| test_tools / test_loop 绿 |
 | **W4 收口** | examples（01_quickstart / 02_streaming / 03_tool_loop / 04_offline_test_pattern）；benchmarks 三件套；docs/agent/BENCHMARKS.md + API_COVERAGE.md 建立；README 状态 draft→stable(draft truth) | 全 gates + benches；`git diff --check`；`make hygiene`；Ready 报告 |
@@ -73,6 +73,18 @@
 
 提升候选按"架构已预留扩展位 / 需新立项"分两组；每项标注触发条件。
 立项 = 先改对应规格文档，再动代码。
+
+### 审计记录（2026-08-25 交接审计）
+
+- **错误分类器两子项缺直接用例**【测试债】——TESTING.md 曾以从未存在的
+  `test_errors` 门声称覆盖"RetryAfterMs 解析（秒级头/date 拒绝→unknown）"与
+  "超窗措辞全集识别"；实际仅 retry-after-ms 整数头经 test_retry 真链路覆盖
+  （7500ms 用例），秒级头/HTTP-date 形态与 MatchesOverflowPhrases 措辞全集均
+  无用例。文档口径已同轮修正为事实；补齐属小 slice，落点（挂
+  test_compile_skeleton 或独立门）待总控定。
+- 同轮文档修正：TESTING.md gate 表删除重复 anthropic 行并补登记真实存在的
+  `test_clock`（5 测）；ARCHITECTURE.md 撤除从未落地的
+  `agent.session.pas`"内存实现（W4 起）"表述，改为 intf 词表接口先行的如实记载。
 
 ### 组 A：装饰器/接口扩展位已预留，落地即插即用
 
