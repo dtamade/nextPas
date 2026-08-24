@@ -50,6 +50,11 @@ function RespValueToText(const AValue: TRespValue): string;
 { 载荷字节 → 文本（SetString 直拷，无转码假设）}
 function RespBytesToStr(const ABuf: TBytes): string;
 
+{ INFO 文本载荷取段键值：按 CRLF 行扫 section:key=value，命中首个
+  AKey 返回 value，未命中空串。ASection 非 '#' 行即全局段。 }
+function RespInfoFieldValue(const APayload: TBytes;
+  const AKey: string): string;
+
 implementation
 
 { 注意：本单元所有 uses 集中在接口段——SysUtils 亦声明 TBytes，
@@ -390,6 +395,37 @@ begin
   else
     raise EDbError.CreateSimple(dbkRedis,
       'resp: unknown reply type byte $' + IntToHex(Ord(C), 2));
+  end;
+end;
+
+function RespInfoFieldValue(const APayload: TBytes;
+  const AKey: string): string;
+var
+  S, Line, RK: string;
+  P, Q, R: Integer;
+begin
+  Result := '';
+  S := RespBytesToStr(APayload);
+  P := 1;
+  while P <= Length(S) do
+  begin
+    Q := P;
+    while (Q <= Length(S)) and not ((S[Q] = #13) and
+      (Q < Length(S)) and (S[Q + 1] = #10)) do
+      Inc(Q);
+    Line := Copy(S, P, Q - P);
+    if Q > Length(S) then
+      P := Q + 1
+    else
+      P := Q + 2;
+    if (Line <> '') and (Line[1] = '#') then
+      Continue;                       { 段头跳过 }
+    Q := Pos(':', Line);
+    if Q = 0 then
+      Continue;
+    RK := Copy(Line, 1, Q - 1);
+    if RK = AKey then
+      Exit(Copy(Line, Q + 1, MaxInt));
   end;
 end;
 

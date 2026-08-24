@@ -414,11 +414,14 @@ opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
 - **观测钩子**：§2.12 同构接线（attach-catch-up、首执行窗口、错误
   类目透传）。
 
-## 3. 兼容 shim（已删除，G2 收口）
+## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
-旧单元名 `nextpas.core.sqlite{,.base,.conn,.pool,.tx,.migrate}` 与
-`nextpas.core.pg{,.base,.loader,.conn}` 曾以纯 re-export shim 过渡
-（G2 窗口）。2026-08-25 治理 slice 已将其删除：
+旧入口名 `nextpas.core.sqlite` / `nextpas.core.pg` 曾在 G2 全量删除；
+因并行存量项目仍 uses 旧名无法编译，同日恢复**两个薄 re-export shim**
+（转发到 db.sqlite / db.pg 门面现存公开面），迁移窗口重开——存量项目
+零改动即可编译，新代码一律 uses nextpas.core.db 家族。G2 删除的
+`.base/.conn/.tx/.pool/.migrate/.loader` 子单元名不恢复：
+v1 TSqlitePool 与后端专用 migrate 面已退役，无处可指。原删除记录：
 
 - **前置核查**：全仓扫描确认仓内消费方全部切至 `nextpas.core.db.*`
   （家族门面 `db.sqlite`/`db.pg` 自身的穿 shim 委托一并改为直连

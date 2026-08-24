@@ -20,9 +20,11 @@ uses
   nextpas.core.base,
   nextpas.core.db.base,
   nextpas.core.db.redis.base,
+  nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.net.tcp,
-  nextpas.core.time;
+  nextpas.core.time,
+  nextpas.core.tls;
 
 type
   IRedisTransport = interface
@@ -35,11 +37,28 @@ type
     procedure Close;
   end;
 
+{ 按选项选管道（TCP 或 TLS）；建连失败抛 net/tls 原生异常，
+  由 adapter 统一桥接为 EDbError }
+function NewNetRedisTransport(
+  const AOptions: TDbRedisConnectOptions): IRedisTransport;
+
 type
   { 默认 TCP 实现 }
   TNetRedisTransport = class(TInterfacedObject, IRedisTransport)
   private
     FStream: ITcpStream;
+  public
+    constructor Create(const AOptions: TDbRedisConnectOptions);
+    destructor Destroy; override;
+    procedure Send(const ABuf: TBytes);
+    function Recv(ABuf: Pointer; AMax: Integer): Integer;
+    procedure Close;
+  end;
+
+  { TLS 实现：TLSDial（DNS+TCP+TLS 一体阻塞），IStream 承载 }
+  TTlsRedisTransport = class(TInterfacedObject, IRedisTransport)
+  private
+    FStream: IStream;
   public
     constructor Create(const AOptions: TDbRedisConnectOptions);
     destructor Destroy; override;
@@ -96,6 +115,56 @@ begin
     FStream.Close;
     FStream := nil;
   end;
+end;
+
+{ TTlsRedisTransport }
+
+constructor TTlsRedisTransport.Create(
+  const AOptions: TDbRedisConnectOptions);
+var
+  LSNI: string;
+begin
+  inherited Create;
+  LSNI := AOptions.TlsServerName;
+  if LSNI = '' then
+    LSNI := AOptions.Host;
+  { TLSDial 失败抛 tls/net 异常族——桥接在 adapter.ConnectRedis }
+  FStream := nextpas.core.tls.TLSDial(LSNI, AOptions.Port);
+end;
+
+destructor TTlsRedisTransport.Destroy;
+begin
+  Close;
+  inherited Destroy;
+end;
+
+procedure TTlsRedisTransport.Send(const ABuf: TBytes);
+begin
+  if (ABuf <> nil) and (Length(ABuf) > 0) then
+    FStream.Write(ABuf[0], Length(ABuf));
+end;
+
+function TTlsRedisTransport.Recv(ABuf: Pointer; AMax: Integer): Integer;
+begin
+  Result := FStream.Read(ABuf^, AMax);
+end;
+
+procedure TTlsRedisTransport.Close;
+begin
+  if FStream <> nil then
+  begin
+    FStream.Close;
+    FStream := nil;
+  end;
+end;
+
+function NewNetRedisTransport(
+  const AOptions: TDbRedisConnectOptions): IRedisTransport;
+begin
+  if AOptions.UseTls then
+    Result := TTlsRedisTransport.Create(AOptions)
+  else
+    Result := TNetRedisTransport.Create(AOptions);
 end;
 
 end.
