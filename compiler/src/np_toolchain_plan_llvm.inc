@@ -1,3 +1,18 @@
+procedure TToolchainPlanner.AppendDynamicLinkerOverrideArg(
+  const AStepIndex: LongInt);
+begin
+  { gnu-ld/lld profiles declare dynamic_linker_policy=
+    target-default-with-override. The host ld's built-in default interpreter
+    is not guaranteed to exist on the target system (homebrew/FPC legacy
+    /lib/ld64.so.1 vs /lib64/ld-linux-x86-64.so.2), so both link steps pin
+    it explicitly for linux-x86_64. }
+  if nextpas.core.text.SameText(FTargetFacts.TargetId, 'linux-x86_64') then
+  begin
+    FPlan.AddStepArg(AStepIndex, '--dynamic-linker');
+    FPlan.AddStepArg(AStepIndex, '/lib64/ld-linux-x86-64.so.2');
+  end;
+end;
+
 procedure TToolchainPlanner.PlanLlvmIrOptObjectLink;
 var
   ArtifactPath: string;
@@ -176,6 +191,7 @@ begin
     LinkerProfile.Id,
     BuildSysrootRef
   );
+  AppendDynamicLinkerOverrideArg(LinkStep);
   FPlan.AddStepArg(LinkStep, '-o');
   FPlan.AddStepArg(LinkStep, ExpandFileName(ArtifactPath));
   FPlan.AddStepArg(LinkStep, ExpandFileName(ObjectArtifactPath));

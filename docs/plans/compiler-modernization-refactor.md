@@ -4,7 +4,9 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-24（v2.25：emitter-temp-placement 正确性线
+创建：2026-08-23　最后更新：2026-08-24（v2.26：llvm 链接步骤动态链接器
+override 落地——native-link/llvm-link 共用 AppendDynamicLinkerOverrideArg，
+tryenv mini 直接执行成功；v2.25：emitter-temp-placement 正确性线
 收官——HIR alloca 发射器级入口提升+except handler 变量绑定+E.Message 字符串
 ABI 三层修复，mini tryenv 复现双步 opt PASS+运行语义正确；v2.24：P1 刀⑨ 扫描家族收官
 （InstantiateGenericType 体查找接刀② 索引+前缀扫机械化）静窗疑似
@@ -33,7 +35,7 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅   tryenv mini 双步 opt+运行 ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    P1 刀⑨静窗复测 → llvm 产物动态链接器挂账 或 swiss 接线 或 concat-swap(b4b-i16) → P2 arena
+下一口    llvm 探针运行期 SIGSEGV 归因(cmpmid/tvec/hashmap 新暴露) → P1 刀⑨静窗复测 或 concat-swap(b4b-i16) → P2 arena
 ```
 
 ---
@@ -809,6 +811,7 @@ P0 基线数字，回滚判据客观化。
 | v2.19 | （本提交） | seed 子相探针（reach/plan/encode）落地：**encode 占 seed ~96%**，刀③四趟扫描所在 reach/plan <3%；gdb 符号化采样法解锁 perf 受阻（stage0-debug -g 版+135 样本）：fpc_copy 38.5%+ansistr_assign 16.3%=托管拷贝风暴，真靶=encode 字符串构造；刀④ mark/scan 17 处 RMW→GetPtrUnchecked 就地化（噪声级如实记零）；D20 教训=归因必须先映射相位再选靶，刀①③静态降级挂起；刀⑤ encode 字符串构造立项 |
 | v2.20 | （本提交） | P1 刀⑤ 落地：绿树零分配文本 API `TextLen`+`TextEquals`（镜像 GetText 有效性与 SameText 折叠语义）；seed 文件 26 判空+5 组字面量、walk_halt_calls 45 组 BFS 路径全量转换；实测 seed 221.6/219.0s 对刀② -4.5%/-6.0%、对 P0 基线累计 -5.9%/-8.3%=迄今最大单刀；遗留靶=SymbolAt/ResolveTypeIdForOwner 按值记录返回 |
 | v2.25 | （本提交） | emitter-temp-placement 正确性线收官（三层修复）：①发射器级 hikAlloca 入口提升——EmitFunction 预扫全函数 alloca 渲染进序言缓冲、首块标签后冲刷、主扫跳过（D24 教训：异常发射劈分 HIR entry 块，EnsureAlloca 的 FEntryBlockId 提升不等于函数序言）；②except handler 绑定——LowerRuntimeTryExceptStatement 识别 gnkExceptionHandler，注册 handler 变量（var-decl-ptr-runtime + exc_load 赋值），`on E: C do`/裸 `on E do` 双形状；③E.Message 字符串 ABI——EncodeExceptionMemberStrTemp 物化 tstring 字段加载临时按 strvar (ptr,len) 传参并跳过结构化 ExprId 附加；mini tryenv 复现（build/m2_mini_tryenv.pas）双步 opt PASS+运行语义正确（fail msg=cfg broken）；十五探针 13 OPT-PASS+cap/cmpgen/puny 已知挂账零新回归；新挂账=llvm 产物动态链接器 /lib/ld64.so.1 本 host 缺失（探针只验 opt 从未执行故未暴露）；concat-swap 挂账新增可运行实证（mini len=0） |
+| v2.26 | （本提交） | llvm 链接动态链接器 override 落地：AppendDynamicLinkerOverrideArg 共享助手（gnu-ld/lld profile 的 target-default-with-override 策略消费），native-link 与 llvm-link 两链接步骤统一 pin `--dynamic-linker /lib64/ld-linux-x86-64.so.2`（linux-x86_64）；tryenv mini 直接 `./` 执行成功语义正确；**解锁 llvm 产物真执行验证面**：cmpmid/tvec/hashmap 三探针首次可执行即暴露运行期 SIGSEGV（_start 跳栈地址，llvm 代码生成层既有缺陷——gnu 绑定下历来通过，坏解释器此前掩盖；解释器选择本身不影响合法 ELF 执行，非本批引入），逐探针调试转下批挂账；验证=contract pass+rebuild+compiler-pass 58/58（native-link 原路径回归通过）+tree/tryenv 双步 opt PASS+hygiene |
 
 ## 10. 文档维护规则
 

@@ -229,6 +229,11 @@ type
     function PrepareLlvmContract: Boolean;
     procedure AppendBackendLogicalLibraryRequests;
     procedure AppendDirectLinkLibraryArgs(const AStepIndex: LongInt);
+    { gnu-ld/lld 的 dynamic_linker_policy=target-default-with-override：
+      本机 ld 默认解释器可能是 /lib/ld64.so.1（FPC 遗留路径），目标系统
+      实际用 /lib64/ld-linux-x86-64.so.2。native-link 与 llvm-link 两步
+      共用此 override。 }
+    procedure AppendDynamicLinkerOverrideArg(const AStepIndex: LongInt);
     procedure AppendUnitSearchRoots(
       const AStepIndex: LongInt;
       const AUnitsFlag: string

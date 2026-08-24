@@ -263,12 +263,11 @@ begin
   FPlan.AddStepArg(StepIndex, '-lc');
   { Override FPC's default interpreter path (/lib/ld64.so.1) with the
     system's actual dynamic linker. FPC hardcodes /lib/ld64.so.1 for
-    Linux x86_64, but many modern systems use /lib64/ld-linux-x86-64.so.2. }
-  if nextpas.core.text.SameText(FTargetFacts.TargetId, 'linux-x86_64') then
-  begin
-    FPlan.AddStepArg(StepIndex, '--dynamic-linker');
-    FPlan.AddStepArg(StepIndex, '/lib64/ld-linux-x86-64.so.2');
-  end;
+    Linux x86_64, but many modern systems use /lib64/ld-linux-x86-64.so.2.
+    Same default-interpreter hazard applies to direct `ld` links from the
+    llvm binding (homebrew ld defaults to /lib/ld64.so.1 too) — shared
+    helper keeps both link steps consistent. }
+  AppendDynamicLinkerOverrideArg(StepIndex);
   FPlan.AddStepArg(StepIndex, '-o');
   FPlan.AddStepArg(StepIndex, ExpandFileName(ArtifactPath));
   FPlan.AddStepArg(StepIndex, '-T');
