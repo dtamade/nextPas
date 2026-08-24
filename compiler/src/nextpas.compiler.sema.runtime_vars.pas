@@ -39,6 +39,9 @@ type
     FBorrowedRuntimeArrVarNames: TStringVec;
     FClassVarNames: TStringVec;
     FClassVarTypes: TStringVec;
+    { Class vars whose epilogue object-free must be skipped: construction
+      temps consumed by a raise (ownership transferred to the runtime). }
+    FNoCleanupClassVarNames: TStringVec;
     FRecordVarNames: TStringVec;
     FRecordVarTypes: TStringVec;
     FManagedRecordVarNames: TStringVec;
@@ -87,6 +90,8 @@ type
     procedure RegisterClassVar(const AName, AClassName: string);
     function LookupClassVar(const AName: string): string;
     function GetClassVarNames: TStringArray;
+    procedure SuppressClassVarCleanup(const AName: string);
+    function IsClassVarCleanupSuppressed(const AName: string): Boolean;
     function GetClassVarTypes: TStringArray;
 
     procedure RegisterRecordVar(const AName, ATypeName: string);
@@ -164,6 +169,7 @@ begin
   FBorrowedRuntimeArrVarNames := CreateStringVec;
   FClassVarNames := CreateStringVec;
   FClassVarTypes := CreateStringVec;
+  FNoCleanupClassVarNames := CreateStringVec;
   FRecordVarNames := CreateStringVec;
   FRecordVarTypes := CreateStringVec;
   FManagedRecordVarNames := CreateStringVec;
@@ -188,6 +194,7 @@ begin
   FBorrowedRuntimeArrVarNames.Free;
   FClassVarNames.Free;
   FClassVarTypes.Free;
+  FNoCleanupClassVarNames.Free;
   FRecordVarNames.Free;
   FRecordVarTypes.Free;
   FManagedRecordVarNames.Free;

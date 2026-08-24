@@ -16,6 +16,7 @@ var
   DotPos, K: LongInt;
   TemplatePrefix: string;
   PTemplateEntry: ^TProcedureBodyEntry;
+  BeforeRaiseClassVars: TStringArray;
 
   procedure AttachRuntimeScalarExpr(const AHirNodeId: LongInt;
     const AExprNode: TGreenNode);
@@ -108,9 +109,11 @@ var
       RegisterRuntimeStrVar(ATempName);
       FModel.AddTypedHirNode(
         'var-decl-tstring-runtime', ATempName, 0, 0, ATempName);
+      { Builder contract: DisplayName=dst, Operand=left#9right. }
       FModel.AddTypedHirNode(
         'assign-tstring-concat-runtime',
-        LeftName + #9 + RightName, 0, 0, ATempName);
+        ATempName, 0, 0,
+        LeftName + #9 + RightName);
       Exit(True);
     end;
     Result := False;
@@ -381,6 +384,31 @@ var
     else
       Result := '-';
   end;
+
+  { Suppress epilogue object-free for class temps newly registered while
+    encoding a raise expression: their ownership transfers to the runtime
+    at exc_store/raise, so an end-of-function free would read an unstored
+    alloca on non-raising paths and be dead code on the raising one. }
+  procedure SuppressNewClassVarCleanup(const ABefore: TStringArray);
+  var
+    SI, SJ: LongInt;
+    Curr: TStringArray;
+    Known: Boolean;
+  begin
+    Curr := FRuntimeVars.GetClassVarNames;
+    for SI := 0 to Length(Curr) - 1 do
+    begin
+      Known := False;
+      for SJ := 0 to Length(ABefore) - 1 do
+        if SameText(Curr[SI], ABefore[SJ]) then
+        begin
+          Known := True;
+          Break;
+        end;
+      if not Known then
+        FRuntimeVars.SuppressClassVarCleanup(Curr[SI]);
+    end;
+  end;
 begin
   if ANode = nil then
     Exit;
@@ -475,10 +503,12 @@ begin
     begin
       if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) then
       begin
+        BeforeRaiseClassVars := FRuntimeVars.GetClassVarNames;
         if EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
           FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, Operand)
         else
           FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
+        SuppressNewClassVarCleanup(BeforeRaiseClassVars);
       end
       else
         FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
@@ -1325,8 +1355,12 @@ begin
                 FModel.AddTypedHirNode('var-decl-tstring-runtime', FuncName,
                   0, 0, FuncName);
                 FModel.AddTypedHirNode(
+                  { Builder contract: DisplayName=dst, Operand=left#9right.
+                    The old leading dst segment made Pos(#9,Operand) split
+                    off the dst itself and leave a tab inside RhsOp, so
+                    FindAlloca missed and the concat silently dropped. }
                   'assign-tstring-concat-runtime', FuncName, 0, 0,
-                  FuncName + #9 + StringValue + #9 + Operand
+                  StringValue + #9 + Operand
                 );
                 EmitPendingStringTempReleases;
                 FModel.AddTypedHirNode(
@@ -1539,19 +1573,18 @@ begin
               Operand := EmitStrConcatOperand(Arg.ChildAt(1), Decoded);
               if Operand <> '' then
               begin
-                if IsOwnedRuntimeStrVar(Decoded) then
-                  FModel.AddTypedHirNode(
-                    'assign-tstring-concat-runtime',
-                    Decoded,
-                    0, 0,
-                    StringValue + #9 + Operand
-                  )
-                else
-                  FModel.AddTypedHirNode(
-                    'assign-tstring-concat-runtime',
-                    StringValue + #9 + Operand,
-                    0, 0, Decoded
-                  );
+                { Builder contract: DisplayName=dst, Operand=left#9right.
+                  One shape for owned and borrowed targets alike — the old
+                  inverted else form (DisplayName=left#9right, Operand=dst)
+                  hit ProcessAssignTStringConcat with Pos(#9,Operand)=0 and
+                  silently dropped the whole concat (b4b-i16 ret_move of an
+                  empty slot). }
+                FModel.AddTypedHirNode(
+                  'assign-tstring-concat-runtime',
+                  Decoded,
+                  0, 0,
+                  StringValue + #9 + Operand
+                );
                 EmitPendingStringTempReleases;
               end;
             end;

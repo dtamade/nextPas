@@ -611,6 +611,11 @@ begin
       Continue;
     if TypeMetaSize(ClsName) = 1 then
       Continue;
+    { Raise-consumed construction temps: ownership moved to the runtime at
+      exc_store; a free here would load an unstored alloca on non-raising
+      paths and be unreachable on the raising one. }
+    if FRuntimeVars.IsClassVarCleanupSuppressed(VarName) then
+      Continue;
     DestroyFuncName := ClsName + '.Destroy';
     Value := TypeMetaVmtSlot(ClsName, 'Destroy');
     if (Value >= 0) and FModel.LookupStringConstValue(
@@ -927,6 +932,8 @@ var
   ArgIndex, ParamIndex: LongInt;
   ArgNode: TGreenNode;
   Decoded, SourceName, TempName: string;
+  ConstOrdinal: Int64;
+  FieldIdx: LongInt;
 begin
   Result := ACallName;
   FLastCallArgsUsedExcMember := False;
@@ -945,6 +952,17 @@ begin
       IsVarParamAtPosition(ADeclNode, ParamIndex) and
       IsRuntimeVar(ArgNode.Text) then
       Result := Result + #9 + 'varref ' + ArgNode.Text + #10
+    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+      IsVarParamAtPosition(ADeclNode, ParamIndex) and
+      (FCurrentMethodClass <> '') and
+      (TypeMetaFieldIndex(FCurrentMethodClass, ArgNode.Text) >= 0) then
+    begin
+      { By-ref field arg: implicit-self field has no runtime-var alloca —
+        pass the field address via self+field_ref (v2.28 campaign). }
+      FieldIdx := TypeMetaFieldIndex(FCurrentMethodClass, ArgNode.Text);
+      Result := Result + #9 + 'var self' + #10 + 'field_ref ' +
+        IntToStr(FieldIdx) + #10;
+    end
     else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
       IsRuntimeStrVar(ArgNode.Text) then
       Result := Result + #9 + 'strvar ' + ArgNode.Text + #10
@@ -985,6 +1003,12 @@ begin
       EncodeExceptionMemberStrTemp(
         ArgNode.ChildAt(0).Text, ArgNode.ChildAt(1).Text, TempName) then
       Result := Result + #9 + 'strvar ' + TempName + #10
+    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+      FModel.LookupConstValue(ArgNode.Text, ConstOrdinal) then
+      { Enum/const identifier folds here at the source: the FoldCore fallback
+        emits 'expr N' tokens that push nothing in cond-br consumption —
+        the call then underflows its declared arity (v2.28 campaign). }
+      Result := Result + #9 + 'int ' + IntToStr(ConstOrdinal) + #10
     else if (ArgNode <> nil) and EncodeRuntimeIntExprFold(ArgNode, Decoded) then
       Result := Result + #9 + Decoded;
     Inc(ArgIndex);

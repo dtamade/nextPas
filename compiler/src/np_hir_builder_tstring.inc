@@ -1,3 +1,12 @@
+{ Diagnostics for silently dropped typed nodes: gated behind NEXTPAS_DEBUG=1
+  so default builds stay quiet. Surfaces shape bugs like concat operands
+  without a tab (b4b-i16 family) as stderr warnings instead of silence. }
+procedure DebugTStringDrop(const AWhere, ADetail: string);
+begin
+  if GetEnvDefault('NEXTPAS_DEBUG', '') = '1' then
+    WriteLn(StdErr, '[hir-builder] ', AWhere, ': ', ADetail);
+end;
+
 procedure THIRBuilder.ProcessVarDeclTString(const ANode: TTypedHirNode);
 var
   ParamIdx: LongInt;
@@ -214,7 +223,12 @@ begin
   if SameText(SrcName, DstName) then Exit;
   SrcPtr := FindAlloca(SrcName + '$ts');
   DstPtr := FindAlloca(DstName + '$ts');
-  if (SrcPtr = 0) or (DstPtr = 0) then Exit;
+  if (SrcPtr = 0) or (DstPtr = 0) then
+  begin
+    DebugTStringDrop('assign-tstring-copy',
+      'missing $ts alloca; src=' + SrcName + ' dst=' + DstName);
+    Exit;
+  end;
   EmitTStringAssign(DstPtr, SrcPtr);
 end;
 
@@ -227,13 +241,25 @@ var
 begin
   DstName := ANode.DisplayName;
   TabPos := Pos(#9, ANode.Operand);
-  if TabPos = 0 then Exit;
+  if TabPos = 0 then
+  begin
+    DebugTStringDrop('assign-tstring-concat',
+      'operand has no tab separator; dst=' + DstName +
+      ' operand=' + ANode.Operand);
+    Exit;
+  end;
   LhsOp := Copy(ANode.Operand, 1, TabPos - 1);
   RhsOp := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
   DstPtr := FindAlloca(DstName + '$ts');
   LhsPtr := FindAlloca(LhsOp + '$ts');
   RhsPtr := FindAlloca(RhsOp + '$ts');
-  if (DstPtr = 0) or (LhsPtr = 0) or (RhsPtr = 0) then Exit;
+  if (DstPtr = 0) or (LhsPtr = 0) or (RhsPtr = 0) then
+  begin
+    DebugTStringDrop('assign-tstring-concat',
+      'missing $ts alloca; dst=' + DstName + ' lhs=' + LhsOp +
+      ' rhs=' + RhsOp);
+    Exit;
+  end;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.Kind := hikIntrinsic;
   Instr.IntrinsicName := 'tstring_concat';
@@ -276,7 +302,11 @@ begin
 
   DstPtr := FindAlloca(DstName + '$ts');
   if DstPtr = 0 then
+  begin
+    DebugTStringDrop('assign-tstring-call',
+      'missing $ts alloca; dst=' + DstName + ' callee=' + FuncName);
     Exit;
+  end;
 
   IsDynamicDispatch := False;
   IsInterfaceDispatch := False;

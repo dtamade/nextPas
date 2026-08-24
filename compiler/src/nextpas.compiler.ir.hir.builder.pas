@@ -337,7 +337,7 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv, nextpas.compiler.ir.system_contracts;
+  nextpas.core.text.conv, nextpas.core.os.env, nextpas.compiler.ir.system_contracts;
 
 procedure TExprStack.Init(AAllocator: IAllocator);
 begin

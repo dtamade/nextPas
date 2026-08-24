@@ -83,10 +83,12 @@ begin
         Ctx.RegisterRuntimeVar(Ctx.CallbackCtx, Result);
         Ctx.RegisterRuntimeStrVar(Ctx.CallbackCtx, Result);
         Ctx.Model.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
+        { Builder contract: DisplayName=dst, Operand=left#9right. }
         Ctx.Model.AddTypedHirNode(
           'assign-tstring-concat-runtime',
-          LitValue + #9 + TempName,
-          0, 0, Result
+          Result,
+          0, 0,
+          LitValue + #9 + TempName
         );
         Exit;
       end;

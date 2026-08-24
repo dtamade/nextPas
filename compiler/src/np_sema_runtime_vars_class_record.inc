@@ -28,6 +28,16 @@ begin
   Result := StringVecToArray(FClassVarNames);
 end;
 
+procedure TSemaRuntimeVarRegistry.SuppressClassVarCleanup(const AName: string);
+begin
+  RegisterUniqueName(FNoCleanupClassVarNames, AName);
+end;
+
+function TSemaRuntimeVarRegistry.IsClassVarCleanupSuppressed(const AName: string): Boolean;
+begin
+  Result := ContainsName(FNoCleanupClassVarNames, AName);
+end;
+
 function TSemaRuntimeVarRegistry.GetClassVarTypes: TStringArray;
 begin
   Result := StringVecToArray(FClassVarTypes);
@@ -131,16 +141,20 @@ end;
 
 procedure TSemaRuntimeVarRegistry.Reset;
 begin
+  { Per-body trackers only. FOwnedStringReturnFuncNames is a cross-body
+    program-global registry seeded by PreRegisterOwnedStringReturnConsumers
+    before SeedFunctionBodies; clearing it here made every per-body
+    IsOwnedStringReturnFunc lookup miss (b4b-i16 concat-swap root cause). }
   FRuntimeVarNames.Clear;
   FRuntimeStrVarNames.Clear;
   FOwnedRuntimeStrVarNames.Clear;
   FBorrowedRuntimeStrVarNames.Clear;
-  FOwnedStringReturnFuncNames.Clear;
   ClearPendingStringTempReleases;
   FRuntimeArrVarNames.Clear;
   FBorrowedRuntimeArrVarNames.Clear;
   FClassVarNames.Clear;
   FClassVarTypes.Clear;
+  FNoCleanupClassVarNames.Clear;
   FRecordVarNames.Clear;
   FRecordVarTypes.Clear;
   FManagedRecordVarNames.Clear;

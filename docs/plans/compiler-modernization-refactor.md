@@ -4,7 +4,10 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-25（v2.28：调用签名一致性战役开局——
+创建：2026-08-23　最后更新：2026-08-25（v2.29：concat-swap b4b-i16 修复——
+四处发射点倒置归一 builder 契约 DisplayName=dst/Operand=左#9右+Reset 清理
+范围收敛保住预注册 owned-func 名册+raise 构造临时免尾声 free，
+tryenv mini ok len=0→7；v2.28：调用签名一致性战役开局——
 arity 感知选重载修复 CAS 个数错配+发射器 strict 计量器 env 门控落地，
 缓存 .ll 全量扫描暴露 residual 层 ~148/探针、L3 1893 处错形存量，
 tree 首次真执行 exit139 经基线对照证明先于本批；v2.27：llvm 探针 SIGSEGV 归因
@@ -37,10 +40,10 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
 性能批次  ████▏░░░░░░░░░░░  P0✅ │ P1: 刀⑥✅seed -73%·刀⑦✅seed 再-69%(59.1→17.9/18.2s) │ 今日累计 -91.8%
-正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)
+正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)   concat-swap b4b-i16 已修✅(v2.29 tryenv len=7)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅   tryenv mini 双步 opt+运行 ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    residual 调用形状清理战役（阶段A=类型漂移+字面0物化；阶段B=方法重载坍缩如 ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；或 concat-swap(b4b-i16) 或 swiss 接线 → P1 刀⑨静窗复测
+下一口    residual 调用形状清理战役（阶段A=类型漂移+字面0物化；阶段B=方法重载坍缩如 ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；或 swiss 接线 → P1 刀⑨静窗复测
 ```
 
 ---
@@ -855,6 +858,7 @@ P0 基线数字，回滚判据客观化。
 | v2.26 | （本提交） | llvm 链接动态链接器 override 落地：AppendDynamicLinkerOverrideArg 共享助手（gnu-ld/lld profile 的 target-default-with-override 策略消费），native-link 与 llvm-link 两链接步骤统一 pin `--dynamic-linker /lib64/ld-linux-x86-64.so.2`（linux-x86_64）；tryenv mini 直接 `./` 执行成功语义正确；**解锁 llvm 产物真执行验证面**：cmpmid/tvec/hashmap 三探针首次可执行即暴露运行期 SIGSEGV（_start 跳栈地址，llvm 代码生成层既有缺陷——gnu 绑定下历来通过，坏解释器此前掩盖；解释器选择本身不影响合法 ELF 执行，非本批引入），逐探针调试转下批挂账；验证=contract pass+rebuild+compiler-pass 58/58（native-link 原路径回归通过）+tree/tryenv 双步 opt PASS+hygiene |
 | v2.27 | （本提交） | llvm 探针 SIGSEGV 根因诊断收官（docs-only）：机器码↔.ll 对拍锁定破坏层=opt -O2 noreturn 级联——`_start` 被删主体、init 尾声消失跌落下一函数；级联源头=core 原子包装种子缺陷（atomic_compare_exchange_strong$iii 定义 (ptr,ptr,ptr) vs 调用点字面 0+5 参错配，tvec .ll:3631/7948/8718 实证）；跨模块归属移交 core-db lane+compiler lane 后续防御=encode 层调用签名一致性检查；D25 教训入档（双步 opt PASS 只证结构合法，noreturn 是合法但致命的传播源；执行验证应进探针协议） |
 | v2.28 | （本提交） | 调用签名一致性战役开局：①归因修正——core 5 参重载声明合法，调用侧退化是编译器缺陷（EffectiveRuntimeCalleeName 首体选择无 arity 感知）；②修复=EffectiveRuntimeCalleeName 增可选 AArgCount（默认 -1 逐位不变）按 DeclAcceptsArgCount 选体，值位置普通调用两点传实元个数，IR 实证 strong_64 五参调用改打 $iiipp 个数对齐；③发射器 strict 计量器 NEXTPAS_EMIT_STRICT_CALLS 门控（默认关），阳性对照 isep 抓 IsSep formals=1 args=2；④存量扫描=裸名错形每 mini ~148 处、L3 1893 处+类型漂移与方法重载坍缩未计→战役立项（阶段A 类型漂移/阶段B 方法重载）；⑤tree 首次真执行 exit139 经 stash 基线对照证明先于本批非回归；D26 教训入档（处方落地前先量存量规模） |
+| v2.29 | （本提交） | concat-swap b4b-i16 收官（`Result := A + '.ext'` 走 NoFold 运行时路径 ret_move 搬空槽，tryenv ok len=0）：①时序根因=TSemaRuntimeVarRegistry.Reset 每函数体清 FOwnedStringReturnFuncNames，把 PreregisterOwnedStringReturnConsumers 在 seeding 前注册好的 owned-func 名册一并抹掉→seed 时 IsOwnedStringReturnFunc 恒 False→Result 不注册 owned→concat 落倒置 else 分支；修复=Reset 只清每体 tracker、名册属跨体全局知识；②形状根因=三处发射点参数倒置（walk_halt_calls Result-concat else 分支/EmitStringFieldStoreRhsTemp/concat.inc 二元'+'递归）DisplayName=左#9右+Operand=dst，builder ProcessAssignTStringConcat 按 Pos(#9,Operand) 拆串 TabPos=0 静默 Exit；另核 field-store concat 三段 Operand（dst#9左#9右）与 builder 两段解析错配；四处统一归一契约 DisplayName=dst/Operand=左#9右（deferred.inc 与 encode_runtime_expr.inc 两处既有正确形状为参照）；③排查 object_free(%436) 错位=实为尾声 EmitClassVarFreeCleanupNodes 对 raise 构造临时（$new_tmp 经 RegisterClassVar）的清理：ok 路径 load 未存 alloca 参与 nil-guard icmp 属 UB、raise 路径不可达死代码；修复=注册表增免清理名册，raise 表达式编码前后差分新注册类变量并抑制其尾声 free（所有权随 exc_store 转移运行时）；④builder 静默 Exit 加 NEXTPAS_DEBUG=1 门控 stderr 告警（assign-tstring-concat/copy/call 缺 tab 或缺 $ts alloca 三族），默认零输出；验证=contract pass+rebuild pass 426315 行+compiler-pass 58/58+tryenv mini ok len=7/bad=fail msg=cfg broken+LoadCfg .ll tstring_concat×1/object_free×0+NEXTPAS_DEBUG 空告警+21 探针全量双步 opt PASS 仅 cap/cmpgen/puny 已知挂账零新回归+hygiene pass+diff-check(本批文件)；D27 教训=探针循环与 make test 并发跑共享 .nextpas 缓存会写坏产生假 BUILD-FAIL（编译器本体 EAccessViolation exit217 同族假象），重门禁须串行或隔离缓存目录 |
 
 ## 10. 文档维护规则
 
