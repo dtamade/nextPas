@@ -512,9 +512,9 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `IAsyncUdpSocket` / `AsyncUdpBind` in `net.async.udp` (IPv4, matches sync `NetUdpBind`).
 - `AsyncSendTo` / `AsyncRecvFrom` (+ Timeout) via poller `AsyncSendTo`/`AsyncRecvFrom`.
 - Reactors: epoll + kqueue ops; **io_uring backend uses epoll sidecar** for datagram; IOCP via WSASendTo/WSARecvFrom.
-- UDP full-duplex: `AsyncSendTo` tries `sendto`/`WSASendTo` first. On Linux/BSD a successful send does **not** register or `DEL` the fd, so an armed `RecvFrom` on the same socket stays live (QUIC/hysteria2). Only EAGAIN/EINTR waits for `EPOLLOUT`/`EVFILT_WRITE`.
+- Full-duplex: epoll keeps one IN op and one OUT op per fd (`EPOLLIN|EPOLLOUT`, `data.u64` = fd). Completing one direction re-arms the other and immediately probes (ET+ONESHOT). `AsyncSend`/`AsyncWrite`/`AsyncSendTo` try the syscall first; only EAGAIN/EINTR waits for writable. kqueue keeps independent `EVFILT_READ`/`WRITE` and deletes only the completed filter.
 - `IUdpSocketRuntime` exposes native fd for async layer.
-- Evidence: `test_net_async_udp` loopback + timeout + same-socket send-while-recv + 0 leak; `test_epoll_reactor` SendTo while RecvFrom armed.
+- Evidence: `test_net_async_udp` loopback + timeout + same-socket send-while-recv + 0 leak; `test_epoll_reactor` UDP send-while-recv + socketpair EAGAIN full-duplex.
 - Not: IPv6 UDP, multicast, connected UDP API.
 
 ### Connection pool async acquire (Q16)

@@ -24,6 +24,8 @@ var
   GUdpSendCount: Int32;
   GUdpRecvA: Int32;
   GUdpRecvB: Int32;
+  GDuplexSend: Int32;
+  GDuplexRecv: Int32;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
@@ -96,6 +98,17 @@ end;
 procedure OnUdpRecvB(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 begin
   GUdpRecvB := AResult;
+end;
+
+procedure OnDuplexSend(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  Inc(GDuplexSend);
+  GLastResult := AResult;
+end;
+
+procedure OnDuplexRecv(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GDuplexRecv := AResult;
 end;
 
 procedure OnCompleteReenterClose(AUserData: UInt64; AResult: Int32; AContext: Pointer);
@@ -752,6 +765,95 @@ begin
   end;
 end;
 
+procedure TestSendWhileRecvArmedEagain;
+{ 塞满 socketpair 发送缓冲迫使 send EAGAIN，同时 Recv 已挂。
+  旧实现 ADD EPOLLOUT 撞 EEXIST 或 CompleteOp RemoveFd 拆掉 recv。 }
+var
+  LR: TEpollReactor;
+  LPair: array[0..1] of Int32;
+  LBuf: array[0..4095] of Byte;
+  LRx: array[0..15] of Byte;
+  LTx: array[0..15] of Byte;
+  LFlags, LFill, LCount, LNread: Int32;
+  LReady: Boolean;
+begin
+  LReady := False;
+  LPair[0] := -1;
+  LPair[1] := -1;
+  GDuplexSend := 0;
+  GDuplexRecv := 0;
+  GLastResult := 0;
+  LR := TEpollReactor.Create(16);
+  Check(LR.IsValid, 'valid');
+  try
+    Check(socketpair(AF_UNIX, SOCK_STREAM, 0, @LPair[0]) = 0, 'socketpair');
+    LReady := True;
+    LFlags := fcntl(LPair[0], F_GETFL, 0);
+    Check(fcntl(LPair[0], F_SETFL, LFlags or O_NONBLOCK) >= 0, 'A nonblock');
+    LFlags := fcntl(LPair[1], F_GETFL, 0);
+    Check(fcntl(LPair[1], F_SETFL, LFlags or O_NONBLOCK) >= 0, 'B nonblock');
+    FillChar(LBuf, SizeOf(LBuf), $AB);
+    LFill := 0;
+    while True do
+    begin
+      LNread := Int32(nextpas.core.platform.posix.ffi.write(LPair[0],
+        @LBuf[0], SizeOf(LBuf)));
+      if LNread < 0 then
+        Break;
+      LFill := LFill + LNread;
+      if LFill > 8 * 1024 * 1024 then
+        Break;
+    end;
+    Check(LFill > 0, 'filled send buffer');
+
+    FillChar(LRx, SizeOf(LRx), 0);
+    FillChar(LTx, SizeOf(LTx), $CD);
+    Check(LR.AsyncRecv(LPair[0], @LRx[0], SizeOf(LRx), 0, @OnDuplexRecv, nil),
+      'recv armed first');
+    Check(LR.HasPending, 'recv pending');
+    Check(LR.AsyncSend(LPair[0], @LTx[0], SizeOf(LTx), 0, @OnDuplexSend, nil),
+      'send while recv armed and buffer full');
+    CheckEqual(Int64(0), Int64(GDuplexSend), 'send waits for EPOLLOUT');
+    Check(LR.HasPending, 'both directions pending');
+    CheckEqual(Int64(0), Int64(GDuplexRecv), 'recv must not fire on send submit');
+
+    repeat
+      LNread := Int32(nextpas.core.platform.posix.ffi.read(LPair[1],
+        @LBuf[0], SizeOf(LBuf)));
+    until LNread <= 0;
+
+    LCount := 0;
+    while (GDuplexSend = 0) and (LCount < 200) do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    Check(GDuplexSend >= 1, 'send completed after drain');
+    Check(GLastResult > 0, 'sent some bytes');
+    CheckEqual(Int64(0), Int64(GDuplexRecv), 'recv not stolen by send complete');
+    Check(LR.HasPending, 'recv still pending after send');
+
+    LBuf[0] := $42;
+    Check(nextpas.core.platform.posix.ffi.write(LPair[1], @LBuf[0], 1) = 1,
+      'peer writes for recv');
+    LCount := 0;
+    while (GDuplexRecv = 0) and (LCount < 200) do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    Check(GDuplexRecv > 0, 'recv survived send');
+    CheckEqual(Int64($42), Int64(LRx[0]), 'recv payload');
+  finally
+    if LReady then
+    begin
+      nextpas.core.platform.posix.ffi.close(LPair[0]);
+      nextpas.core.platform.posix.ffi.close(LPair[1]);
+    end;
+    LR.Close;
+  end;
+end;
+
 procedure TestPostCloseSubmissionsAreRejected;
 var
   LR: TEpollReactor;
@@ -829,5 +931,7 @@ begin
     @TestPostCloseSubmissionsAreRejected);
   T.Test('SendTo while RecvFrom armed (UDP full-duplex)',
     @TestSendToWhileRecvFromArmed);
+  T.Test('Send while Recv armed (EAGAIN full-duplex)',
+    @TestSendWhileRecvArmedEagain);
   if not T.Run then Halt(1);
 end.

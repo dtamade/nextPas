@@ -371,7 +371,7 @@ begin
     begin
       LRes := read(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_READ);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -381,7 +381,7 @@ begin
     begin
       LRes := write(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_WRITE);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -397,7 +397,7 @@ begin
       end
       else
         LRes32 := KqueueResultFromSyscall(-1);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_READ);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -414,7 +414,7 @@ begin
         LRes32 := 0
       else
         LRes32 := -LOptVal;
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_WRITE);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -424,7 +424,7 @@ begin
     begin
       LRes := send(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_WRITE);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -434,7 +434,7 @@ begin
     begin
       LRes := recv(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_READ);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -457,7 +457,7 @@ begin
       LRes := recvfrom(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
         FOps[AIdx].Flags, FOps[AIdx].Addr, FOps[AIdx].AddrLen);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_READ);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -521,6 +521,8 @@ function TKqueueReactor.AsyncWrite(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   AOffset: Int64; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then
   begin
@@ -535,6 +537,15 @@ begin
   if not SetNonBlocking(AFd) then
   begin
     Result := False;
+    Exit;
+  end;
+  LRes := write(AFd, ABuf, ALen);
+  LRes32 := KqueueResultFromSyscall(LRes);
+  if (LRes32 <> -ESysEAGAIN) and (LRes32 <> -EINTR_LOCAL) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
     Exit;
   end;
   LIdx := AllocOp(opWrite, AFd, ABuf, ALen, AOffset, 0, nil, nil, 0,
@@ -611,6 +622,8 @@ function TKqueueReactor.AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   AFlags: Int32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then
   begin
@@ -620,6 +633,15 @@ begin
   if not SetNonBlocking(AFd) then
   begin
     Result := False;
+    Exit;
+  end;
+  LRes := send(AFd, ABuf, ALen, AFlags);
+  LRes32 := KqueueResultFromSyscall(LRes);
+  if (LRes32 <> -ESysEAGAIN) and (LRes32 <> -EINTR_LOCAL) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
     Exit;
   end;
   LIdx := AllocOp(opSend, AFd, ABuf, ALen, -1, AFlags, nil, nil, 0,
