@@ -316,6 +316,38 @@ begin
     'SHA384 Sum nil+positive');
 end;
 
+procedure TestSHAKE128Vectors;
+var
+  LOut: TBytes;
+  LS: TSHAKE128;
+  ABC: array[0..2] of Byte;
+begin
+  ABC[0] := Ord('a'); ABC[1] := Ord('b'); ABC[2] := Ord('c');
+  LOut := SHAKE128Of(GNilByte^, 0, 32);
+  CheckEqual(
+    '7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26',
+    DigestToHex(LOut[0], 32),
+    'SHAKE128 empty 32');
+  LOut := SHAKE128Of(ABC[0], 3, 32);
+  CheckEqual(
+    '5881092dd818bf5cf8a3ddb793fbcba74097d5c526a6d35f97b83351940f2cc8',
+    DigestToHex(LOut[0], 32),
+    'SHAKE128 abc 32');
+  LS := TSHAKE128.Create;
+  try
+    LS.Write(ABC[0], 3);
+    SetLength(LOut, 32);
+    LS.Read(LOut[0], 16);
+    LS.Read(LOut[16], 16);
+    CheckEqual(
+      '5881092dd818bf5cf8a3ddb793fbcba74097d5c526a6d35f97b83351940f2cc8',
+      DigestToHex(LOut[0], 32),
+      'SHAKE128 streaming two reads');
+  finally
+    LS.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.hash');
   T.Test('SHA256 vectors', @TestSHA256Vectors);
@@ -324,5 +356,6 @@ begin
   T.Test('MD5 and SHA1 vectors', @TestMD5AndSHA1Vectors);
   T.Test('streaming hasher', @TestStreamingHasher);
   T.Test('nil buffer contract', @TestNilBufferContract);
+  T.Test('SHAKE128 vectors', @TestSHAKE128Vectors);
   if not T.Run then Halt(1);
 end.

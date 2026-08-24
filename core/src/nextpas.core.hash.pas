@@ -4,8 +4,8 @@ unit nextpas.core.hash;
 
 { nextpas.core.hash — 哈希模块门面
 
-  L2 系统能力模块。提供 SHA-224/256/384/512、MD5 与 BLAKE2b-256
-  （RFC 7693 无密钥）哈希原语。IHasher 继承 IWriter，可直接与 io 层集成。
+  L2 系统能力模块。提供 SHA-224/256/384/512、MD5、BLAKE2b-256
+  与 SHAKE128 XOF。IHasher 继承 IWriter，可直接与 io 层集成。
 
   用法：
     uses nextpas.core.hash;
@@ -19,6 +19,7 @@ unit nextpas.core.hash;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash.md5,
@@ -26,6 +27,7 @@ uses
   nextpas.core.hash.sha256,
   nextpas.core.hash.sha512,
   nextpas.core.hash.blake2b,
+  nextpas.core.hash.shake128,
   nextpas.core.hash.util,
   nextpas.core.hash.files,
   nextpas.core.hash.wyhash;
@@ -40,6 +42,7 @@ type
   TSHA384Digest = nextpas.core.hash.base.TSHA384Digest;
   TSHA512Digest = nextpas.core.hash.base.TSHA512Digest;
   TBLAKE2b256Digest = nextpas.core.hash.blake2b.TBLAKE2b256Digest;
+  TSHAKE128 = nextpas.core.hash.shake128.TSHAKE128;
 
 const
   haMD5 = nextpas.core.hash.base.haMD5;
@@ -73,6 +76,8 @@ function NewSHA384: IHasher; inline;
 function NewSHA512: IHasher; inline;
 function NewBLAKE2b256: IHasher; inline;
 function BLAKE2b256Of(const ABuf; ALen: SizeUInt): TBLAKE2b256Digest;
+function NewSHAKE128: TSHAKE128; inline;
+function SHAKE128Of(const ABuf; ALen: SizeUInt; AOutLen: SizeUInt): TBytes;
 function NewHasher(AAlgo: THashAlgorithm): IHasher;
 function GetDigestSize(AAlgo: THashAlgorithm): SizeUInt; inline;
 function GetBlockSize(AAlgo: THashAlgorithm): SizeUInt; inline;
@@ -136,6 +141,16 @@ end;
 function BLAKE2b256Of(const ABuf; ALen: SizeUInt): TBLAKE2b256Digest;
 begin
   Result := nextpas.core.hash.blake2b.BLAKE2b256Of(ABuf, ALen);
+end;
+
+function NewSHAKE128: TSHAKE128;
+begin
+  Result := nextpas.core.hash.shake128.NewSHAKE128;
+end;
+
+function SHAKE128Of(const ABuf; ALen: SizeUInt; AOutLen: SizeUInt): TBytes;
+begin
+  Result := nextpas.core.hash.shake128.SHAKE128Of(ABuf, ALen, AOutLen);
 end;
 
 function GetDigestSize(AAlgo: THashAlgorithm): SizeUInt;

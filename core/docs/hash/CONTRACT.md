@@ -4,7 +4,7 @@
 **层级**：L2（可被 crypto 单向依赖；不得依赖 crypto/tls）
 **Owner**：hash / crypto / tls lane
 **最后更新**：2026-08-24
-**版本**：1.4
+**版本**：1.5
 
 ---
 
@@ -42,6 +42,8 @@ THashAlgorithm = (haMD5, haSHA1, haSHA256, haSHA384, haSHA512, haBLAKE2b256, haS
 
 function NewSHA256: IHasher;
 function NewSHA224: IHasher;
+function NewSHAKE128: TSHAKE128;
+function SHAKE128Of(...; AOutLen): TBytes;
 function NewSHA384: IHasher;
 function NewSHA512: IHasher;
 function NewSHA1: IHasher;
@@ -78,6 +80,7 @@ make focused FOCUS=core/tests/nextpas.core.hash/test_facade
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-08-24 | 1.5 | SHAKE128 XOF（FIPS 202）；HMAC `NewHMAC(THasherFactory, key)` 嵌套入口 |
 | 2026-08-24 | 1.4 | SHA-224（SHA-256 同引擎换 IV + 28 字节截断；`haSHA224` 枚举末尾追加） |
 | 2026-08-24 | 1.3 | `haBLAKE2b256` 进入 `NewHasher` / `HashFileHex` / `crypto.hash` 适配层 |
 | 2026-08-24 | 1.2 | 纯 Pascal BLAKE2b-256（RFC 7693 无密钥；hysteria2 Salamander） |
