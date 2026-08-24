@@ -97,8 +97,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_v2           # 统一层�
 pg/mysql 相关门禁需要本地实例（Makefile `ensure-db` 自动建测试库，
 `NEXTPAS_PG_TEST_CONN` 覆盖连接串）。
 
-## 兼容 shim（deprecated）
+## 兼容 shim（已删除）
 
-`nextpas.core.sqlite.*` 与 `nextpas.core.pg.*` 为纯 re-export shim，
-新代码禁止使用（CONTRACT §3）；删除条件 = 消费方全部切换（G2 窗口）
-+ 总控批准。
+旧单元名 `nextpas.core.sqlite.*` / `nextpas.core.pg.*` 已在 G2 消费方
+清扫中删除（CONTRACT §3）；一律使用 `nextpas.core.db.*` 家族单元名。

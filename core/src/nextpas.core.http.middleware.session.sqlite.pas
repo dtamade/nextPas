@@ -17,9 +17,10 @@ unit nextpas.core.http.middleware.session.sqlite;
  *
  *       Usage:
  *         LOpts.Store := NewSqliteSessionStore(FPool, 30 * 60 * 1000);
+ *       The pool is the unified db.pool (G2：v1 TSqlitePool 已退役)。
  *       Writes go through the pool Writer connection (single-writer
- *       semantics); reads via Acquire/Release.
- *}
+ *       semantics); reads via Acquire. Lease release = 置空接口引用
+ *       （代理归还，无手工 Release）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -27,12 +28,12 @@ interface
 
 uses
   nextpas.core.http.middleware.session,
-  nextpas.core.db.sqlite.pool;
+  nextpas.core.db;
 
 {** @desc Build a sqlite-backed session store. Ensures the session table.
-   AMaxAgeMs is the server-side session TTL. ATableName defaults to
-   '_sessions' for compatibility with legacy pascn data. }
-function NewSqliteSessionStore(APool: TSqlitePool; const AMaxAgeMs: Int64;
+    AMaxAgeMs is the server-side session TTL. ATableName defaults to
+    '_sessions' for compatibility with legacy pascn data. }
+function NewSqliteSessionStore(APool: TDbPool; const AMaxAgeMs: Int64;
   const ATableName: string = '_sessions'): ISessionStore;
 
 implementation
@@ -40,18 +41,17 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.http.base,
-  nextpas.core.db.sqlite,
   nextpas.core.time;
 
 type
   TSqliteSessionStore = class(TInterfacedObject, ISessionStore)
   private
-    FPool: TSqlitePool;
+    FPool: TDbPool;
     FMaxAgeMs: Int64;
     FTableName: string;
     procedure EnsureTable;
   public
-    constructor Create(APool: TSqlitePool; const AMaxAgeMs: Int64;
+    constructor Create(APool: TDbPool; const AMaxAgeMs: Int64;
       const ATableName: string);
     function Load(const AToken: string): TSessionData;
     procedure Save(const AToken: string; AData: TSessionData);
@@ -59,10 +59,15 @@ type
     procedure CleanupExpired;
   end;
 
-constructor TSqliteSessionStore.Create(APool: TSqlitePool;
+constructor TSqliteSessionStore.Create(APool: TDbPool;
   const AMaxAgeMs: Int64; const ATableName: string);
 begin
   inherited Create;
+  if APool = nil then
+    raise EHttpError.Create(hekArgument, 'nil pool');
+  if AMaxAgeMs <= 0 then
+    raise EHttpError.Create(hekArgument,
+      'AMaxAgeMs must be positive');
   FPool := APool;
   FMaxAgeMs := AMaxAgeMs;
   FTableName := ATableName;
@@ -73,20 +78,24 @@ end;
 
 procedure TSqliteSessionStore.EnsureTable;
 var
-  Conn: TSqliteDb;
+  Conn: IDbConnection;
 begin
   Conn := FPool.Writer;
-  Conn.Exec(
-    'CREATE TABLE IF NOT EXISTS ' + FTableName + ' (' +
-    'session_id TEXT PRIMARY KEY, ' +
-    'data TEXT NOT NULL, ' +
-    'expires_at INTEGER NOT NULL)');
+  try
+    Conn.Exec(
+      'CREATE TABLE IF NOT EXISTS ' + FTableName + ' (' +
+      'session_id TEXT PRIMARY KEY, ' +
+      'data TEXT NOT NULL, ' +
+      'expires_at INTEGER NOT NULL)');
+  finally
+    Conn := nil;   { 代理归还 = 租约释放 }
+  end;
 end;
 
 function TSqliteSessionStore.Load(const AToken: string): TSessionData;
 var
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
   DataText: string;
   ExpiresAt: Int64;
 begin
@@ -110,76 +119,82 @@ begin
         Result := TSessionData.Deserialize(DataText, AToken);
       end;
     finally
-      Q.Free;
+      Q := nil;
     end;
   finally
-    FPool.Release(Conn);
+    Conn := nil;
   end;
 end;
 
 procedure TSqliteSessionStore.Save(const AToken: string; AData: TSessionData);
 var
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
   ExpiresAt: Int64;
 begin
   if AToken = '' then
     Exit;
   ExpiresAt := DateTimeToUnix(DateTimeUtcNow) + (FMaxAgeMs div 1000);
   Conn := FPool.Writer;
-  Q := Conn.Query('INSERT OR REPLACE INTO ' + FTableName +
-    ' (session_id, data, expires_at) VALUES (?1, ?2, ?3)');
   try
-    Q.BindText(1, AToken);
-    Q.BindText(2, AData.Serialize);
-    Q.BindInt64(3, ExpiresAt);
-    Q.Step;
+    Q := Conn.Query('INSERT OR REPLACE INTO ' + FTableName +
+      ' (session_id, data, expires_at) VALUES (?1, ?2, ?3)');
+    try
+      Q.BindText(1, AToken);
+      Q.BindText(2, AData.Serialize);
+      Q.BindInt64(3, ExpiresAt);
+      Q.Step;
+    finally
+      Q := nil;
+    end;
   finally
-    Q.Free;
+    Conn := nil;
   end;
 end;
 
 procedure TSqliteSessionStore.Delete(const AToken: string);
 var
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
 begin
   if AToken = '' then
     Exit;
   Conn := FPool.Writer;
-  Q := Conn.Query('DELETE FROM ' + FTableName + ' WHERE session_id = ?1');
   try
-    Q.BindText(1, AToken);
-    Q.Step;
+    Q := Conn.Query('DELETE FROM ' + FTableName + ' WHERE session_id = ?1');
+    try
+      Q.BindText(1, AToken);
+      Q.Step;
+    finally
+      Q := nil;
+    end;
   finally
-    Q.Free;
+    Conn := nil;
   end;
 end;
 
 procedure TSqliteSessionStore.CleanupExpired;
 var
-  Conn: TSqliteDb;
-  Q: TSqliteQuery;
+  Conn: IDbConnection;
+  Q: IDbQuery;
 begin
   Conn := FPool.Writer;
-  Q := Conn.Query('DELETE FROM ' + FTableName + ' WHERE expires_at < ?1');
   try
-    Q.BindInt64(1, DateTimeToUnix(DateTimeUtcNow));
-    Q.Step;
+    Q := Conn.Query('DELETE FROM ' + FTableName + ' WHERE expires_at < ?1');
+    try
+      Q.BindInt64(1, DateTimeToUnix(DateTimeUtcNow));
+      Q.Step;
+    finally
+      Q := nil;
+    end;
   finally
-    Q.Free;
+    Conn := nil;
   end;
 end;
 
-function NewSqliteSessionStore(APool: TSqlitePool; const AMaxAgeMs: Int64;
+function NewSqliteSessionStore(APool: TDbPool; const AMaxAgeMs: Int64;
   const ATableName: string): ISessionStore;
 begin
-  if APool = nil then
-    raise EHttpError.Create(hekArgument,
-      'sqlite session store requires a pool');
-  if AMaxAgeMs <= 0 then
-    raise EHttpError.Create(hekArgument,
-      'sqlite session store requires MaxAgeMs > 0');
   Result := TSqliteSessionStore.Create(APool, AMaxAgeMs, ATableName);
 end;
 

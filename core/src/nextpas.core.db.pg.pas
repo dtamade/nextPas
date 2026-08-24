@@ -13,21 +13,21 @@ unit nextpas.core.db.pg;
 interface
 
 uses
-  nextpas.core.pg.base,
-  nextpas.core.pg.conn;
+  nextpas.core.db.pg.base,
+  nextpas.core.db.pg.conn;
 
 type
-  EPgError = nextpas.core.pg.base.EPgError;
-  TPgConn  = nextpas.core.pg.conn.TPgConn;
-  TPgQuery = nextpas.core.pg.conn.TPgQuery;
+  EPgError = nextpas.core.db.pg.base.EPgError;
+  TPgConn  = nextpas.core.db.pg.conn.TPgConn;
+  TPgQuery = nextpas.core.db.pg.conn.TPgQuery;
 
 const
-  CONNECTION_OK        = nextpas.core.pg.base.CONNECTION_OK;
-  CONNECTION_BAD       = nextpas.core.pg.base.CONNECTION_BAD;
-  PGRES_EMPTY_QUERY    = nextpas.core.pg.base.PGRES_EMPTY_QUERY;
-  PGRES_COMMAND_OK     = nextpas.core.pg.base.PGRES_COMMAND_OK;
-  PGRES_TUPLES_OK      = nextpas.core.pg.base.PGRES_TUPLES_OK;
-  PGRES_FATAL_ERROR    = nextpas.core.pg.base.PGRES_FATAL_ERROR;
+  CONNECTION_OK        = nextpas.core.db.pg.base.CONNECTION_OK;
+  CONNECTION_BAD       = nextpas.core.db.pg.base.CONNECTION_BAD;
+  PGRES_EMPTY_QUERY    = nextpas.core.db.pg.base.PGRES_EMPTY_QUERY;
+  PGRES_COMMAND_OK     = nextpas.core.db.pg.base.PGRES_COMMAND_OK;
+  PGRES_TUPLES_OK      = nextpas.core.db.pg.base.PGRES_TUPLES_OK;
+  PGRES_FATAL_ERROR    = nextpas.core.db.pg.base.PGRES_FATAL_ERROR;
 
 function PgOpen(const AConnInfo: string): TPgConn; inline;
 
@@ -35,7 +35,7 @@ implementation
 
 function PgOpen(const AConnInfo: string): TPgConn;
 begin
-  Result := nextpas.core.pg.conn.PgOpen(AConnInfo);
+  Result := nextpas.core.db.pg.conn.PgOpen(AConnInfo);
 end;
 
 end.

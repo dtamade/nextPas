@@ -121,7 +121,8 @@ ClassifySqlite/ClassifyPg 纯函数表产出（宁可欠归一不错归一），
 
 ### 2.4 迁移（db.migrate）
 
-`Migrate(AConn, Migrations)` 为 `db.sqlite.migrate` 的跨后端泛化版：
+`Migrate(AConn, Migrations)` 是唯一的迁移面（G2 起旧 `db.sqlite.migrate`
+后端类表面已退役，消费方统一走本单元）：
 版本表 `schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT,
 checksum TEXT)`，DDL 两引擎通用；applied_at 由本单元显式写入 ISO8601
 UTC 文本。幂等、每批一个事务（走泛化 WithTransaction）、上下限校验同
@@ -382,27 +383,29 @@ DoExec/DoQuery 单点天然无双发。门禁 `test_db_trace`：离线 sqlite
 全量契约 + 摘要纯函数 + pg 真机段（decSyntax 直透、占位符保真、
 opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
 
-## 3. 兼容 shim（deprecated）
+## 3. 兼容 shim（已删除，G2 收口）
 
-以下旧单元名保留为纯 re-export shim，新代码禁止使用：
+旧单元名 `nextpas.core.sqlite{,.base,.conn,.pool,.tx,.migrate}` 与
+`nextpas.core.pg{,.base,.loader,.conn}` 曾以纯 re-export shim 过渡
+（G2 窗口）。2026-08-25 治理 slice 已将其删除：
 
-```
-nextpas.core.sqlite{,.base,.conn,.pool,.tx,.migrate}
-nextpas.core.pg{,.base,.loader,.conn}
-```
-
-- **例外**：`nextpas.core.sqlite.ffi` / `nextpas.core.pg.ffi` 无 shim——
-  cdecl external 函数与 dlsym 变量无法用类型别名忠实转出口；仓内无直接
-  消费者。外部若有直连 FFI 的代码必须改用新单元名。
-- **删除条件**：仓内消费方全部切换 + 并行 lane 的活跃工作不再引用旧名 +
-  总控批准治理 slice。
+- **前置核查**：全仓扫描确认仓内消费方全部切至 `nextpas.core.db.*`
+  （家族门面 `db.sqlite`/`db.pg` 自身的穿 shim 委托一并改为直连
+  实现单元）；并行 lane 无活跃工作引用旧名（warning-hygiene 的命中
+  经核实为陈旧基线文件、未做本地改动，收敛时自动继承新名）。
+- **ffi 无过渡期**：`nextpas.core.db.sqlite.ffi` / `nextpas.core.db.pg.ffi`
+  从未有过 shim——cdecl external 函数与 dlsym 变量无法用类型别名忠实
+  转出口；直连 FFI 的代码从一开始就必须用新单元名。
+- **外部消费方**：若仓外代码仍引用旧名，迁移即改单元名——两代单元
+  的公开 API 面完全一致（shim 时代保证），无行为差异。
+- 设计记录：`core/docs/plans/2026-08-23-db-module-boundary.md`。
 
 ## 4. 消费方路由
 
 | 需求 | 用哪个 |
 |---|---|
 | 可移植存储访问（推荐默认） | `nextpas.core.db` 门面 |
-| sqlite 连接池（读池 + 单写连接） | `nextpas.core.db.sqlite.pool` |
+| 连接池（读池 + 单写者，跨后端） | `nextpas.core.db.pool`（G2 起 v1 `TSqlitePool` 已退役） |
 | savepoint 式精细事务控制 | `nextpas.core.db.sqlite.tx`（sqlite 专属） |
 | libpq 原生能力（$N 原生语法等） | `nextpas.core.db.pg` 门面 |
 
@@ -414,13 +417,11 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlite    # sqlite 后端
 make focused FOCUS=core/tests/nextpas.core.db/test_db_tx        # sqlite 事务助手（低层，v1 计数语义）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_tx_v2     # 统一层 savepoint 混合模型（V2-S2）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_retry     # 瞬时错误重试助手（V3-B5）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_pool      # sqlite 连接池（v1，G2 删除）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_migrate   # sqlite 迁移助手
+make focused FOCUS=core/tests/nextpas.core.db/test_db_pool_v2   # db.pool 通用池（INC-1；v1 TSqlitePool 已随 G2 退役）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_migrate_v2  # 迁移完整性：checksum + dry-run（真机双后端）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_pg        # pg 后端（真机，需本地 PG）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_v2        # 统一层 v2 门面（真机双后端）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_conformance  # 跨后端一致性契约（真机双后端）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_pool_v2   # db.pool 通用池（INC-1）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_stmt_cache   # 透明语句缓存（INC-3，sqlite）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_largeobject # 大对象流（INC-8，真机双后端）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql      # MySQL 基础三件套 loader 门禁（V3-A1，离线可跑）

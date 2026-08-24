@@ -1,7 +1,7 @@
 program db_bench;
 {$mode ObjFPC}{$H+}
 {$modeswitch functionreferences}{$modeswitch anonymousfunctions}
-uses SysUtils, Classes, nextpas.core.base, nextpas.core.sqlite, nextpas.core.db;
+uses SysUtils, Classes, nextpas.core.base, nextpas.core.db.sqlite, nextpas.core.db;
 var
   T0, T1: QWord;
   GK: Int64;   { 匿名方法内禁捕获循环计数器，借用全局 }

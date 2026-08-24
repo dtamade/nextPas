@@ -5,46 +5,58 @@
 
 ## 1. 概览
 
-B7 之前 core 只提供连接表面（`TSqliteDb`/`TSqliteQuery`）。B7 新增三个 L2 助手，全部经
-`nextpas.core.db.sqlite` 门面 re-export：
+B7 之前 core 只提供连接表面（`TSqliteDb`/`TSqliteQuery`）。B7 新增的 L2 助手中，
+事务助手经 `nextpas.core.db.sqlite` 门面 re-export；连接池与迁移已分别由
+统一层 `nextpas.core.db.pool` / `nextpas.core.db.migrate` 承担
+（G2 起 v1 `TSqlitePool` 与 `db.sqlite.migrate` 后端类表面退役）：
 
 | 模块 | 资产 | 解决什么 |
 |------|------|----------|
-| `sqlite.pool` | `TSqlitePool` | 读连接按需创建/复用、硬容量上限、统一 WAL+busy_timeout、单写者形式化 |
+| `db.pool` | `TDbPool` | 跨后端读池+单写者：接口租约代理、等待队列、惰性回收、探活、泄漏检测 |
 | `sqlite.tx` | `WithTransaction`/`BeginTxn`… | procedure 式事务体自动提交/回滚、嵌套保护、防裸事务混用 |
-| `sqlite.migrate` | `Migrate`/`TSqliteMigration` | schema 版本化：幂等迁移、每批一个事务、版本上下限校验 |
+| `db.migrate` | `Migrate`/`TDbMigration` | schema 版本化（跨后端）：幂等迁移、每批一个事务、checksum 防篡改 + dry-run |
 
-三个助手之间的组合约定：
+组合约定：
 
-- **写**：`pool.Writer` 拿专用写连接，事务用 `WithTransaction`（写连接上天然单写者，无需额外锁）。
-- **读**：`pool.Acquire`…`pool.Release`，读不包事务（WAL 快照下读到一致数据）。
-- **建库**：启动时 `Migrate(writer, migrations)` 跑 schema 版本。
+- **写**：`pool.Writer` 拿单写连接代理，事务用统一层 `WithTransaction(AConn)`
+  （写连接上天然单写者，无需额外锁）。
+- **读**：`pool.Acquire` 取代理，用完置空接口引用即归还；读不包事务
+  （WAL 快照下读到一致数据）。
+- **建库**：启动时 `Migrate(writerConn, migrations)` 跑 schema 版本。
 
-## 2. 连接池 `TSqlitePool`
+## 2. 连接池（`nextpas.core.db.pool`）
 
 ```pascal
 var
-  Pool: TSqlitePool;
-  R: TSqliteDb;
+  Pool: TDbPool;
+  Conn: IDbConnection;
 begin
-  Pool := TSqlitePool.Create('/var/data/gw.db',  { 路径 }
-    16,        { 读连接硬上限（容量） }
-    5000,      { busy_timeout ms，对所有连接统一设置 }
-    True);     { 统一开启 WAL }
+  Pool := TDbPool.Create(
+    function: IDbConnection               { 连接工厂 }
+    begin
+      Result := ConnectSqlite('/var/data/gw.db');
+    end,
+    TDbPoolPolicy.Default);
   try
-    R := Pool.Acquire;
+    Conn := Pool.Acquire;                 { 读：接口代理租约 }
     try
-      Q := R.Query('SELECT ...'); ...
+      var Q := Conn.Query('SELECT ...');
+      ...
+      Q := nil;                           { 归还 = 置空引用 }
     finally
-      Pool.Release(R);
+      Conn := nil;
     end;
-    { 写走专用写连接： }
-    WithTransaction(Pool.Writer, procedure
-      begin
-        Pool.Writer.Exec('INSERT INTO ...');
-      end);
+    { 写走专用写连接：先取一次租约，回调内复用同一连接 }
+    var W := Pool.Writer;
+    try
+      WithTransaction(W, procedure            { 统一层 savepoint 混合模型 }
+        begin
+          W.Exec('INSERT INTO ...');          { 回调内不得再取 Pool.Writer——会自等超时 }
+        end);
+    finally
+      W := nil;
+    end;
   finally
-    Pool.Close;
     Pool.Free;
   end;
 end;
@@ -52,17 +64,14 @@ end;
 
 边界（务必知道）：
 
-- `Acquire` **非阻塞**：达到 `AMaxConnections` 且无空闲连接时抛 `ESqlitePoolError`（消息含
-  `exhausted`）。薄池不做等待队列入池——请按读并发度配容量，读密集场景配足。
-- 写连接由池所有、懒创建，**不可 `Release`**（会抛错），只能随 `Pool.Close` 释放。
-- `Close` 幂等：释放空闲连接与写连接；关闭后 `Acquire`/`Writer` 抛错。**已借出的连接**仍归
-  调用方所有，`Release` 时被直接销毁——所以借出后务必归还。
-- `Release` 只接受 `Acquire` 借出的连接（池不追踪身份，误传给陌生连接会造成 double-use）。
-- `TotalConnections` 只统计读连接（不含写连接）。
-- WAL 对 `':memory:'` 无意义，自动跳过；`AWal=False` 可整体关掉。
+- 租约是**接口代理**：归还 = 置空接口引用，无手工 Release；误持长租会触发
+  泄漏检测报告（可开关）。
+- `Writer` 全池仅一条，被占用期间再次 `Writer` 按 `AcquireTimeoutMs` 排队或抛
+  `decCapacity`。
+- WAL/busy_timeout 经 `TDbConnectOptions` 在工厂里设置（`ConnectSqlite(path,
+  opts)`），不再由池代设。
 - 单写者语义：池内所有连接指向**同一 DB 文件**；并发写必须在同一时刻只有一个事务持有者。
-  `WithTransaction(Pool.Writer, …)` 天然满足——不同线程同时对该连接做事务控制是不支持的
-  （FULLMUTEX 保证语句安全，不保证事务状态协调）。
+  完整策略面（容量/等待队列/探活/泄漏检测）见 CONTRACT §2.7。
 
 ## 3. 事务助手 `sqlite.tx`
 
@@ -114,16 +123,13 @@ end;
 - 一条连接的事务控制同一时刻只允许一个线程（见池的单写者约定）。
 - 回调里 `Db` 必须活得比 `WithTransaction` 久；回调不得在事务中 `Free` 连接。
 
-## 4. 迁移助手 `sqlite.migrate`
+## 4. 迁移（`nextpas.core.db.migrate`，统一面）
 
 ```pascal
-const
-  MIGRATIONS: TSqliteMigrations = ...  { 见下 }
-
 var
   Applied: Integer;
 begin
-  Applied := Migrate(WriterDb, MIGRATIONS);
+  Applied := Migrate(WriterConn, MIGRATIONS);   { AConn: IDbConnection }
   if Applied > 0 then WriteLn(Applied, ' new migrations applied');
 end;
 ```
@@ -132,49 +138,64 @@ end;
 
 ```pascal
 var
-  M: TSqliteMigrations;
+  M: TDbMigrations;
 begin
   M := MakeMigrations([
-    TSqliteMigration.Create(1, ['CREATE TABLE messages (id INTEGER PRIMARY KEY, ...)']),
-    TSqliteMigration.Create(2, ['CREATE INDEX idx_messages_mbox ON messages (mailbox_id)',
+    TDbMigration.Create(1, ['CREATE TABLE messages (id INTEGER PRIMARY KEY, ...)']),
+    TDbMigration.Create(2, ['CREATE INDEX idx_messages_mbox ON messages (mailbox_id)',
                                 'INSERT INTO messages (id) VALUES (0)']),
-    TSqliteMigration.Create(3, ['ALTER TABLE messages ADD COLUMN flags INT NOT NULL DEFAULT 0'])]);
+    TDbMigration.Create(3, ['ALTER TABLE messages ADD COLUMN flags INT NOT NULL DEFAULT 0'])]);
 end;
 ```
 
 语义：
 
-- 版本表固定名 `schema_migrations`（`version INTEGER PRIMARY KEY, applied_at TEXT`）。
-- 列表必须**严格升序且无重复**，否则 `ESqliteMigrateError`。
+- 版本表固定名 `schema_migrations`（`version INTEGER PRIMARY KEY,
+  applied_at TEXT, checksum TEXT`）。
+- 列表必须**严格升序且无重复**，否则抛错。
 - **幂等**：已应用版本跳过；同一列表跑两遍，第二次返回 0，库状态不变。
-- **每批迁移在一个事务内**（经由 `WithTransaction`），版本行同批写入：任一步失败整批回滚、
-  版本不记录，修复后重跑即可。
+- **每批迁移在一个事务内**（经由统一层 WithTransaction），版本行同批写入：
+  任一步失败整批回滚、版本不记录，修复后重跑即可。
+- **checksum 防篡改**：已应用版本的记录校验和与当前列表不符即拒绝；
+  历史空 checksum 条目自动自愈回填。
+- **dry-run**：`MigrateDryRun` 返回结构化计划（将应用/已应用/不匹配），零写入。
 - **版本校验（上下限）**：已应用版本不在列表即拒绝——
-  - 高于列表最大 ⇒ 库超前于代码（`ahead`，防降级/忘带迁移）；
-  - 低于列表最小 ⇒ 旧迁移被删过（`below`）；
-  - 中空 ⇒ 对应版本缺失（`missing`）。
-  错误对象带 `Version` 属性（引发问题的版本号）。
-- `MigrationVersion(ADb)` 返回当前最高已应用版本（无表/空表 = 0）。
+  - 高于列表最大 ⇒ 库超前于代码（防降级/忘带迁移）；
+  - 低于列表最小 ⇒ 旧迁移被删过。
 
 边界：
 
 - 迁移列表**只增不改**：发布新代码只追加版本，不得改写旧版本内容。
 - 版本号用 `Int64`（可用单调递增整数或时间戳），不承诺语义排序之外的任何约定。
+- 完整契约见 CONTRACT §2.4；G2 起旧 `db.sqlite.migrate` 后端类表面已退役，
+  一律走本统一面。
 
 ## 5. 组合示例（网关 storage 启动序列）
 
 ```pascal
-Pool := TSqlitePool.Create(DataDir + 'gateway.db', 16, 5000, True);
-try
-  WithTransaction(Pool.Writer, procedure
+var
+  Opts: TDbConnectOptions;
+begin
+  Opts := TDbConnectOptions.Default;
+  Opts.BusyTimeoutMs := 5000;
+  Pool := TDbPool.Create(
+    function: IDbConnection
     begin
-      Pool.Writer.Exec('PRAGMA foreign_keys = ON');   { 每连接会话级，写连接上设置即可 }
-    end);
-  Migrate(Pool.Writer, Migrations);
-  { 之后：读用 Acquire/Release，脚本/投递写用 WithTransaction(Pool.Writer, …) }
-finally
-  Pool.Close;
-  Pool.Free;
+      Result := ConnectSqlite(DataDir + 'gateway.db', Opts);
+    end,
+    TDbPoolPolicy.Default);
+  try
+    W := Pool.Writer;
+    try
+      W.Exec('PRAGMA foreign_keys = ON');   { 每连接会话级，写连接上设置即可 }
+      Migrate(W, Migrations);               { 统一迁移面 }
+    finally
+      W := nil;
+    end;
+    { 之后：读用 Acquire（置空归还），脚本/投递写用 WithTransaction(Pool.Writer 取一次的租约, …) }
+  finally
+    Pool.Free;
+  end;
 end;
 ```
 
