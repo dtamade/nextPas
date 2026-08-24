@@ -660,15 +660,17 @@ var LI: IInput; LBuf: TBuffer; LS: TInputState; LI2: Integer;
 begin
   { 用专属背景色标记选区,与默认光标的 mbReversed 区分 }
   LI := TInput.New.WithSelectionStyle(TStyle.Default.WithBg(IndexedColor(5)));
-  { 视口 4 列,文本 10 字符全选:可见 4 格全部高亮,不越界 }
+  { 视口 4 列,文本 10 字符全选:可见 3 个字形格高亮,不越界、
+    不补满文尾后的空白列(高亮只盖实际字形) }
   LS := TInputState.WithText('abcdefghij');
   LS.BeginSelect(0);
   LS.UpdateSelect(10);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
   try
     LI.RenderStateful(TRect.Make(0, 0, 4, 1), LBuf, LS);
-    for LI2 := 0 to 3 do
-      Check(CellSel(LBuf, LI2, 0), 'visible cell highlighted');
+    for LI2 := 0 to 2 do
+      Check(CellSel(LBuf, LI2, 0), 'visible glyph cell highlighted');
+    Check(not CellSel(LBuf, 3, 0), 'no tail fill past last glyph');
   finally LBuf.Free; end;
   { 选区完全滚出视口左侧:无高亮、不越界 }
   LS := TInputState.WithText('abcdefghijklmnop');

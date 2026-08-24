@@ -668,8 +668,6 @@ begin
       HF := ColWidthUpTo(DisplayText, AState.SelFrom()) - ScrollCol;
       HT := ColWidthUpTo(DisplayText, AState.SelTo()) - ScrollCol;
     end;
-    { 选区触达文本末尾时高亮补满视口余量(HTML 输入框同款观感) }
-    if AState.SelTo() >= Length(AState.Text) then HT := VisibleW;
     if HF < 0 then HF := 0;
     if HT > VisibleW then HT := VisibleW;
     if HT > HF then
