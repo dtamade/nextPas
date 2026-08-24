@@ -304,6 +304,9 @@ end;
   or in finalization as safety net for suites that are never run.
   R6-08: NOT thread-safe — all access must be from the main thread only. }
 var
+  { FIX-B: safety-net registry for table payloads (mirrors GStubRegistry R6-08) }
+  GTableCases: specialize TArray<Pointer>;
+  GTableProcs: specialize TArray<Pointer>;
   GStubRegistry: specialize TArray<Pointer>;
   { Parallel array tracking fixture objects from DiscoverTests.
     Only non-nil for stubs registered by discovery. Freed in finalization
@@ -633,6 +636,12 @@ begin
     LPCase^ := ACases[I];
     New(LPProc);
     LPProc^ := AProc;
+    { FIX-B: track payloads so finalization can dispose them even when the
+      owning suite record is dropped without CleanupTableAllocations }
+    SetLength(GTableCases, Length(GTableCases) + 1);
+    GTableCases[High(GTableCases)] := LPCase;
+    SetLength(GTableProcs, Length(GTableProcs) + 1);
+    GTableProcs[High(GTableProcs)] := LPProc;
 
     ClearEntry(LEntry);
     LEntry.Name      := AName + '/' + ACases[I].Name;
@@ -1936,7 +1945,7 @@ end;
 
 procedure TTestSuite.CleanupTableAllocations;
 var
-  I: Integer;
+  I, J: Integer;
 begin
   if FCleanupDone then Exit;
   FCleanupDone := True;
@@ -1946,11 +1955,23 @@ begin
     begin
       if Tests[I].TableCase <> nil then
       begin
+        for J := 0 to High(GTableCases) do
+          if GTableCases[J] = Tests[I].TableCase then
+          begin
+            GTableCases[J] := nil;
+            Break;
+          end;
         Dispose(PTestCase(Tests[I].TableCase));
         Tests[I].TableCase := nil;
       end;
       if Tests[I].TableProc <> nil then
       begin
+        for J := 0 to High(GTableProcs) do
+          if GTableProcs[J] = Tests[I].TableProc then
+          begin
+            GTableProcs[J] := nil;
+            Break;
+          end;
         Dispose(PTestCaseProc(Tests[I].TableProc));
         Tests[I].TableProc := nil;
       end;
@@ -1990,5 +2011,14 @@ finalization
       GFixtureRegistry[GStubCleanupI].Free;
   GStubRegistry := nil;
   GFixtureRegistry := nil;
+  { FIX-B: dispose any table payloads whose suite was never cleaned }
+  for GStubCleanupI := 0 to High(GTableCases) do
+    if GTableCases[GStubCleanupI] <> nil then
+      Dispose(PTestCase(GTableCases[GStubCleanupI]));
+  GTableCases := nil;
+  for GStubCleanupI := 0 to High(GTableProcs) do
+    if GTableProcs[GStubCleanupI] <> nil then
+      Dispose(PTestCaseProc(GTableProcs[GStubCleanupI]));
+  GTableProcs := nil;
 
 end.

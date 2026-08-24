@@ -47,6 +47,10 @@ begin
     Result.HasLeaks := LTrackerObj.HasLeaks;
     Result.Report := LTrackerObj.ReportLeaks;
   finally
+    { 归还被测夹具故意不释放的块（上方已对账完毕），真实堆干净退出——
+      常开泄漏门禁下套件自身必须零残留。显式调用而非 Destroy 自动释放，
+      共享链场景语义安全。 }
+    LTrackerObj.ReleaseTracked;
     LTracker := nil;
   end;
 end;

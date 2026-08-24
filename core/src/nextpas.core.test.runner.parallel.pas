@@ -548,27 +548,26 @@ begin
 
       P2 fix: wrap in try-except to prevent cleanup EAccessViolation from
       propagating to the outer except handler, which would double-count the
-      test as both pass and fail. For ekTableTest, LSubCtx is never assigned
-      (stack garbage) — LSubCtx := nil may trigger EAccessViolation when FPC
-      tries to finalize the old value. }
+      test as both pass and fail. For ekTableTest, LSubCtx stays nil
+      (explicitly initialized at function entry). }
     try
       SetCurrentTestContext(nil);
+      { FIX-A1: the context lives only in a plain object var here — no
+        interface reference was ever taken, so `LSubCtx := nil` cannot free
+        it. Destroy explicitly (refcount is 0, no interface owner). }
+      LSubCtx.Free;
       LSubCtx := nil;
     except
       { Swallow cleanup errors — the test result is already committed. }
     end;
-  end;
-  { Separate finally for GExecState — must run even if TTestContext
-    cleanup raises (e.g., a cleanup callback throws). The thread-local
-    GExecState would otherwise leak, accumulating in long parallel runs. }
-  try
+    { FIX-A2: dispose GExecState INSIDE this finally. Statements placed
+      after this finally's `end` do NOT run during exception unwinding,
+      so every raising test leaked its GExecState here. }
     if GExecState <> nil then
     begin
       Dispose(GExecState);
       GExecState := nil;
     end;
-  except
-    { Nothing we can do — GExecState may leak, but the worker is dying }
   end;
   except
     { Top-level catch: prevent worker thread exceptions from crashing the process.

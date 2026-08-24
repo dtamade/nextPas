@@ -143,7 +143,8 @@ implementation
 uses
   nextpas.core.math.scalar,    { IsNan / IsInfinite for Double guards }
   nextpas.core.regex,          { RegexIsMatch for ToMatch }
-  nextpas.core.test.snapshot;  { CheckSnapshot — shared L1, not via check }
+  nextpas.core.test.snapshot,  { CheckSnapshot — shared L1, not via check }
+  nextpas.core.platform.thread;{ platform_thread_id for main-thread pool guard }
 
 { ── Local helpers ─────────────────────────────────────────────────────────── }
 
@@ -337,6 +338,9 @@ threadvar
   { Thread-local pool — each thread gets its own pool instance }
   ThreadPool: TExpectationPool;
 
+var
+  GMainThreadTid: UInt64;  { captured in initialization }
+
 procedure TExpectationPool.Init;
 var
   I: Integer;
@@ -395,7 +399,9 @@ begin
   Result := FRefCount;
   if Result = 0 then
   begin
-    if ThreadPool.Count < MAX_POOL_SIZE then
+    { FIX-A3: pool only on the main thread — unit finalization never runs for
+      spawned worker threads, so their thread-local pool would leak. }
+    if (ThreadPool.Count < MAX_POOL_SIZE) and (platform_thread_id = GMainThreadTid) then
     begin
       { Return to pool: finalize managed types, then store pointer }
       (Self as TExpectation).ResetState;
@@ -1749,7 +1755,10 @@ begin
   Result := TExpectation.AllocStrArray(AValues);
 end;
 
-{ ── Finalization ──────────────────────────────────────────────────────────── }
+{ ── Initialization / Finalization ────────────────────────────────────────── }
+
+initialization
+  GMainThreadTid := platform_thread_id;
 
 finalization
 begin

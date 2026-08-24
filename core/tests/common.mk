@@ -37,19 +37,17 @@ build: clean-src
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
-# Leak gate: default-ON for the TUI test subtree (tests/nextpas.core.tui*,
-# phase 1 of staged defaulting — P5e proved the whole subtree leak-free),
-# opt-in everywhere else via HEAPTRC_GATE=1. Opt out of the default with
-# HEAPTRC_GATE= (empty) or HEAPTRC_GATE=0.
+# Leak gate: default-ON for every suite built via this file (staged
+# defaulting complete — phase 1 covered the TUI subtree 2026-08-25, phase 2
+# extends the default to all modules once the TRegex design debt was
+# cleared). Opt out per invocation with HEAPTRC_GATE= (empty) or
+# HEAPTRC_GATE=0; opt back in explicitly with HEAPTRC_GATE=1.
 # FPC trunk 3.3.1 never delivers the heaptrc exit dump to the console, so
 # grepping test output for leaks is vacuous. The env channels still work:
 # haltonnotreleased turns unfreed blocks into exit code 203, log= writes the
 # dump to a file. The dump pins below also fail closed when heaptrc did not
 # run at all.
-GATE_INCLUDER := $(lastword $(filter-out $(abspath $(lastword $(MAKEFILE_LIST))),$(abspath $(MAKEFILE_LIST))))
-ifneq ($(findstring /nextpas.core.tui,$(dir $(GATE_INCLUDER))),)
 HEAPTRC_GATE ?= 1
-endif
 # Resolve at the consumer, not by reassignment: a command-line HEAPTRC_GATE=0
 # outranks any makefile assignment, so "0" must read as off where it is used.
 HEAPTRC_ENABLED := $(HEAPTRC_GATE)

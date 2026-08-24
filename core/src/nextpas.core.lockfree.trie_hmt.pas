@@ -342,6 +342,10 @@ begin
       if ANode^.LeafKey = AKey then
       begin
         ANew := nil;
+        { 被移除的叶节点自此脱离树结构，就地释放（Dispose 终结
+          LeafKey/LeafValue），与 Insert 替换路径的 FreeNode 对称；
+          父臂此后对 LChild 仅做 nil 比较、不再解引用 }
+        FreeNode(ANode);
         Exit(hmtOk);
       end;
       ANew := ANode;
