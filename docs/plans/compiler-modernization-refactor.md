@@ -4,7 +4,10 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-24（v2.27：llvm 探针 SIGSEGV 归因
+创建：2026-08-23　最后更新：2026-08-25（v2.28：调用签名一致性战役开局——
+arity 感知选重载修复 CAS 个数错配+发射器 strict 计量器 env 门控落地，
+缓存 .ll 全量扫描暴露 residual 层 ~148/探针、L3 1893 处错形存量，
+tree 首次真执行 exit139 经基线对照证明先于本批；v2.27：llvm 探针 SIGSEGV 归因
 完成——opt noreturn 级联源自 core 原子包装种子参数错配，跨模块移交
 core lane；v2.26：llvm 链接步骤动态链接器
 override 落地——native-link/llvm-link 共用 AppendDynamicLinkerOverrideArg，
@@ -37,7 +40,7 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅   tryenv mini 双步 opt+运行 ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    llvm 探针 SIGSEGV 根因移交 core lane(CAS 包装参数错配) 或 concat-swap(b4b-i16) 或 swiss 接线 → P1 刀⑨静窗复测
+下一口    residual 调用形状清理战役（阶段A=类型漂移+字面0物化；阶段B=方法重载坍缩如 ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；或 concat-swap(b4b-i16) 或 swiss 接线 → P1 刀⑨静窗复测
 ```
 
 ---
@@ -265,6 +268,24 @@ residual 调用参数个数/类型与被调签名一致性检查（encode 层早
 opt 层静默误编译）。D25 教训：双步 opt PASS 只证 IR 结构合法，不证
 语义正确——noreturn/unreachable 是合法但致命的传播源，执行验证面
 （动态链接器解锁后）必须进探针协议。
+
+**v2.28 调用签名一致性战役开局（2026-08-25）**：v2.27 处方落地+归因修正。
+
+| 项 | 内容 |
+|----|------|
+| 归因修正 | v2.27「级联源头=core 包装种子」不完整——core 的 5 参重载声明本身合法（nextpas.core.atomic.pas:350+），错配的调用侧退化是编译器缺陷：`EffectiveRuntimeCalleeName` 经 `LookupProcedureBody`=首体选择，无 arity 感知，值位置重载调用一律打向首个注册体的 mangled 名 |
+| 修复① arity 感知选重载 | `EffectiveRuntimeCalleeName` 增可选 `AArgCount`（默认 -1=行为逐位不变）；值位置普通调用两处传 `ChildCount-1`；HasOverload 时按 DeclAcceptsArgCount 过滤同名链取首个可接受体，无匹配回退原路径。IR 实证：strong_64 五参调用点从 `$iii`(3 形参) 改打 `$iiipp`(5 形参)，个数对齐 |
+| 修复② strict 计量器 | 发射器普通调用路径 arity 对账，`NEXTPAS_EMIT_STRICT_CALLS=1` 时 raise call-signature-mismatch(target,formals,args)；默认关。阳性对照=isep strict 抓 `IsSep formals=1 args=2` exit217；阴性=默认 off exit0（D19 纪律） |
+| 存量扫描（战役规模） | 缓存 .ll 全量对账（裸名调用 vs 同文件 define 形参个数）：每 mini ~148 处、puny 26、isep 2、L3 nextpas.ll **1893** 处（Copy 多形状/CloneBackendArray/ArcTan$p/AddRuntimeContract 等）；类型级漂移（ptr/i64/字面0 物化）与点名方法重载坍缩（ENextPasError.CreateFmt 单一 8 形参裸 define vs 多形状调用点）未计 |
+| 执行面新证据 | tree mini 首次真执行 exit139（_start 跳栈地址=v2.27 同族特征）；stash 基线对照同样 139 ⇒ **先于本批存在非回归**，同时实证 D25：该探针历来只过双步 opt 未真跑 |
+
+D26 教训：处方落地前先量存量规模——「一致性检查常开」在 148/1893 现状下
+会让全部门禁全红，改 env 门控计量器作为战役验收工具；新检查器除阳性对照
+（D19）外还须先扫存量定口径。
+验证：rebuild pass(426297 行)+compiler-flat-contract pass+compiler-pass
+58/58+tree 双步 opt PASS+strict 计量器阳/阴对照+hygiene pass+diff-check
+（本批文件）。遗留=阶段A/B 战役（见仪表盘下一口）；core lane 移交条目
+收窄为「包装种子 define 形状是否另有 core 侧问题」待 core-db 复核。
 
 **P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
 `np_sema_seed_function_bodies.inc`；一轮 tree mini）：
@@ -833,6 +854,7 @@ P0 基线数字，回滚判据客观化。
 | v2.25 | （本提交） | emitter-temp-placement 正确性线收官（三层修复）：①发射器级 hikAlloca 入口提升——EmitFunction 预扫全函数 alloca 渲染进序言缓冲、首块标签后冲刷、主扫跳过（D24 教训：异常发射劈分 HIR entry 块，EnsureAlloca 的 FEntryBlockId 提升不等于函数序言）；②except handler 绑定——LowerRuntimeTryExceptStatement 识别 gnkExceptionHandler，注册 handler 变量（var-decl-ptr-runtime + exc_load 赋值），`on E: C do`/裸 `on E do` 双形状；③E.Message 字符串 ABI——EncodeExceptionMemberStrTemp 物化 tstring 字段加载临时按 strvar (ptr,len) 传参并跳过结构化 ExprId 附加；mini tryenv 复现（build/m2_mini_tryenv.pas）双步 opt PASS+运行语义正确（fail msg=cfg broken）；十五探针 13 OPT-PASS+cap/cmpgen/puny 已知挂账零新回归；新挂账=llvm 产物动态链接器 /lib/ld64.so.1 本 host 缺失（探针只验 opt 从未执行故未暴露）；concat-swap 挂账新增可运行实证（mini len=0） |
 | v2.26 | （本提交） | llvm 链接动态链接器 override 落地：AppendDynamicLinkerOverrideArg 共享助手（gnu-ld/lld profile 的 target-default-with-override 策略消费），native-link 与 llvm-link 两链接步骤统一 pin `--dynamic-linker /lib64/ld-linux-x86-64.so.2`（linux-x86_64）；tryenv mini 直接 `./` 执行成功语义正确；**解锁 llvm 产物真执行验证面**：cmpmid/tvec/hashmap 三探针首次可执行即暴露运行期 SIGSEGV（_start 跳栈地址，llvm 代码生成层既有缺陷——gnu 绑定下历来通过，坏解释器此前掩盖；解释器选择本身不影响合法 ELF 执行，非本批引入），逐探针调试转下批挂账；验证=contract pass+rebuild+compiler-pass 58/58（native-link 原路径回归通过）+tree/tryenv 双步 opt PASS+hygiene |
 | v2.27 | （本提交） | llvm 探针 SIGSEGV 根因诊断收官（docs-only）：机器码↔.ll 对拍锁定破坏层=opt -O2 noreturn 级联——`_start` 被删主体、init 尾声消失跌落下一函数；级联源头=core 原子包装种子缺陷（atomic_compare_exchange_strong$iii 定义 (ptr,ptr,ptr) vs 调用点字面 0+5 参错配，tvec .ll:3631/7948/8718 实证）；跨模块归属移交 core-db lane+compiler lane 后续防御=encode 层调用签名一致性检查；D25 教训入档（双步 opt PASS 只证结构合法，noreturn 是合法但致命的传播源；执行验证应进探针协议） |
+| v2.28 | （本提交） | 调用签名一致性战役开局：①归因修正——core 5 参重载声明合法，调用侧退化是编译器缺陷（EffectiveRuntimeCalleeName 首体选择无 arity 感知）；②修复=EffectiveRuntimeCalleeName 增可选 AArgCount（默认 -1 逐位不变）按 DeclAcceptsArgCount 选体，值位置普通调用两点传实元个数，IR 实证 strong_64 五参调用改打 $iiipp 个数对齐；③发射器 strict 计量器 NEXTPAS_EMIT_STRICT_CALLS 门控（默认关），阳性对照 isep 抓 IsSep formals=1 args=2；④存量扫描=裸名错形每 mini ~148 处、L3 1893 处+类型漂移与方法重载坍缩未计→战役立项（阶段A 类型漂移/阶段B 方法重载）；⑤tree 首次真执行 exit139 经 stash 基线对照证明先于本批非回归；D26 教训入档（处方落地前先量存量规模） |
 
 ## 10. 文档维护规则
 

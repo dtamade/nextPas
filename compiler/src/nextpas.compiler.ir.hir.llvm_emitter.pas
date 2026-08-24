@@ -60,6 +60,9 @@ type
     FNeedsProcessLifecycle: Boolean;
     FProcessFiniEmitted: Boolean;
     FUnitInitCallsEmitted: Boolean;
+    { NEXTPAS_EMIT_STRICT_CALLS=1 → raise on ordinary-call arity mismatch
+      (call-signature cleanup campaign meter, v2.27 follow-up). }
+    FStrictCalls: Boolean;
     FUnitFiniCallsEmitted: Boolean;
     FTryCounter: LongInt;
     { ResultId -> actual LLVM type for the current function (1-based ValueId).
@@ -203,6 +206,8 @@ begin
   FProcessFiniEmitted := False;
   FUnitInitCallsEmitted := False;
   FUnitFiniCallsEmitted := False;
+  { Strict call-shape meter: on only when the campaign env gate is set. }
+  FStrictCalls := GetEnvironmentVariable('NEXTPAS_EMIT_STRICT_CALLS') <> '';
   FTryCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;

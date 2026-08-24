@@ -11,12 +11,13 @@ begin
 end;
 
 function TSemanticAnalyzer.EffectiveRuntimeCalleeName(const AName: string;
-  const ADecl: TGreenNode): string;
+  const ADecl: TGreenNode; const AArgCount: LongInt): string;
 var
   BodyNode, DeclNode: TGreenNode;
   Sig, DeclBare: string;
-  I: LongInt;
+  I, BodyIndex: LongInt;
   Binding: TSemanticForeignProcedureBinding;
+
 begin
   Result := AName;
   if AName = '' then
@@ -30,6 +31,26 @@ begin
       if Binding.ExternalSymbolName <> '' then
         Exit(Binding.ExternalSymbolName);
       Exit(AName);
+    end;
+  end;
+  { Arity-aware overload pick: SeedFunctionBodies mangles each overload by
+    its own signature, so a call site passing N raw operands must target the
+    overload whose decl accepts N. First-body pick emitted mismatched-shape
+    calls (atomic_compare_exchange_strong_64 5-arg sites hit the $iii
+    3-param define; opt -O2 turned them into noreturn cascades — v2.27/D25).
+    No arity match → legacy path below (emitter signature check catches it). }
+  if (AArgCount >= 0) and HasOverload(AName) then
+  begin
+    BodyIndex := FirstBodyIndexForName(FProcedureBodies, AName);
+    while BodyIndex >= 0 do
+    begin
+      if (FProcedureBodies[BodyIndex].Decl <> nil) and
+        DeclAcceptsArgCount(FProcedureBodies[BodyIndex].Decl, AArgCount) then
+      begin
+        Sig := GetParamSignature(FProcedureBodies[BodyIndex].Decl);
+        Exit(MangledNameSig(AName, Sig));
+      end;
+      BodyIndex := NextBodyIndexForName(FProcedureBodies, AName, BodyIndex);
     end;
   end;
   DeclNode := ADecl;

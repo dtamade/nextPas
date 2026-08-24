@@ -1605,13 +1605,16 @@ begin
       end
       else
         ABlob := ABlob + 'call ' +
-          EffectiveRuntimeCalleeName(ANode.ChildAt(0).Text, DeclNode) + ' ' +
+          EffectiveRuntimeCalleeName(ANode.ChildAt(0).Text, DeclNode,
+            ANode.ChildCount - 1) + ' ' +
           IntToStr(StrCallArgCount) + #10;
     end
     else
-      { Always align with SeedFunctionBodies EffName (HasOverload → mangled). }
+      { Always align with SeedFunctionBodies EffName (HasOverload → mangled);
+        arity-aware so non-first overloads bind their own shape. }
       ABlob := ABlob + 'call ' +
-        EffectiveRuntimeCalleeName(ANode.ChildAt(0).Text, DeclNode) + ' ' +
+        EffectiveRuntimeCalleeName(ANode.ChildAt(0).Text, DeclNode,
+          ANode.ChildCount - 1) + ' ' +
         IntToStr(StrCallArgCount) + #10;
     Exit(True);
   end;

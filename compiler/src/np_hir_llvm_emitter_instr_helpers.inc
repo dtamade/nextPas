@@ -674,6 +674,16 @@ begin
   end;
   { Ordinary calls: prefer noted SSA type for casts; ArgTy follows operand
     TypeId when set (residual i64 ABI), else noted type, else i64. }
+  { Call-signature consistency meter (v2.27 defensive follow-up). Strict
+    raise is env-gated (NEXTPAS_EMIT_STRICT_CALLS=1): the residual layer
+    still carries ~148 shape-drifted bare-name calls per probe (~1893 in
+    the L3 build, 0825 cache scan), so always-on would red every gate.
+    This meter is the acceptance tool for that cleanup campaign. }
+  if FStrictCalls and HaveCallee and (Callee.Params <> nil) and
+    (Length(AInstr.Operands) <> LongInt(Callee.Params.Count)) then
+    raise Exception.Create('call-signature-mismatch:' + AInstr.CallTarget +
+      ' formals=' + IntToStr(LongInt(Callee.Params.Count)) +
+      ' args=' + IntToStr(Length(AInstr.Operands)));
   if LlvmType = 'void' then
     Op := '  call void ' + LlvmGlobalRef(AInstr.CallTarget) + '('
   else
