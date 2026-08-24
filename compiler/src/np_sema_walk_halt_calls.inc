@@ -12,6 +12,8 @@ var
   InhTypeId, InhParentId: LongInt;
   InhMethodName, InhParentName: string;
   DotPos, K: LongInt;
+  TemplatePrefix: string;
+  PTemplateEntry: ^TProcedureBodyEntry;
 
   procedure AttachRuntimeScalarExpr(const AHirNodeId: LongInt;
     const AExprNode: TGreenNode);
@@ -1900,15 +1902,19 @@ begin
           ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', True), ',', '$', True);
           if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
           begin
+            TemplatePrefix := FuncName + '<';
             for K := 0 to LongInt(FProcedureBodies.Count) - 1 do
-              if (Pos(FuncName + '<', FProcedureBodies[K].Name) = 1) then
+            begin
+              PTemplateEntry := FProcedureBodies.GetPtrUnchecked(K);
+              if (Pos(TemplatePrefix, PTemplateEntry^.Name) = 1) then
               begin
                 RegisterProcedureBody(ArgName,
-                  FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
-                  FProcedureBodies[K].OwnerUnitId);
+                  PTemplateEntry^.Body, PTemplateEntry^.Decl,
+                  PTemplateEntry^.OwnerUnitId);
                 FGenericWorkQueue.Push(LongInt(FProcedureBodies.Count) - 1);
                 Break;
               end;
+            end;
           end;
           Decoded := ArgName;
           Operand := ArgName;

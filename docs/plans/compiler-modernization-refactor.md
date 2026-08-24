@@ -4,8 +4,11 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-24（v2.23：P1 刀⑧ 泛型实例化 O(N²)
-清扫落地噪声级如实记零+D22 教训=debug 画像≠release 现实；v2.22：P1 刀⑦
+创建：2026-08-23　最后更新：2026-08-24（v2.24：P1 刀⑨ 扫描家族收官
+（InstantiateGenericType 体查找接刀② 索引+前缀扫机械化）静窗疑似
+-6% 但确认腿遇高载窗口待复测+优化平价剖析法落地；v2.23：P1 刀⑧
+泛型实例化 O(N²) 清扫落地噪声级如实记零+D22 教训=debug 画像≠release
+现实；v2.22：P1 刀⑦
 模型/绿树按值访问消除落地 seed 再 -69%（59.1s→17.9/18.2s，今日累计
 -91.8%）+gdb 复剖析驱动选靶；v2.21：P1 刀⑥ ResolveTypeIdForOwner 同名链游走落地 seed -73%
 （A/B 实证迄今最大单刀）+mini tree 探针 API 漂移修复；
@@ -28,7 +31,7 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    P1 复剖析第三轮(gdb 重采样,encode 内字符串构造为候选) → swiss 接线 → P2 arena
+下一口    P1 扫描家族收官(刀⑨待静窗复测) → emitter-temp-placement 正确性线 或 swiss 接线 → P2 arena
 ```
 
 ---
@@ -199,6 +202,24 @@ release 中成本骤降；后续选靶应以 release A/B 为最终裁判，debug
 升序 tie-break）+链式成员探测+AddSymbol 前字段快照（Push 可能 realloc
 使指针悬垂）；②字段传播扫 SymbolPtr 化；③FindFunctionReturnType
 GetPtrUnchecked 化。
+
+**复剖析第三轮（优化平价法）→刀⑨**（2026-08-24）：D22 后的方法论补全
+——构建「release 同参+仅加 `-g`」剖析版（build/stage0-prof，实测比
+release 慢 ~65%，比 -O1 -g 版更接近），25 样本画像：GetItem 残余 24%
+但调用方**散布六个不同点**（FixupAliasMethodSymbols/GetTypeMeta/
+SymbolAt/GetFieldMetaByName/LookupStringConstValue/FunctionAt 各 1）
+——按值访问家族到达平坦底部，无单点可削。刀⑨=收官清扫：
+①InstantiateGenericType 体查找接刀② 名字索引
+（FirstBodyIndexForNameLocal，索引在 Push 处无遗漏注册、缺席=-1，
+首条目=最低索引与原线性扫一致）替代残留线性扫（每迭代托管记录拷贝+
+拼接重算）；②walk_halt_calls 泛型模板前缀扫提升不变串+就地读。
+**实测**：静窗两轮 seed **16790/16770ms、sema 31586/31752ms**，对当日
+五点静窗基线带（17.9-18.2s）疑似 **-6.5%/-12%**；但确认基线腿恰遇
+core-db lane 并发高载窗口（load≈31，seed 21567/sema 51306ms），
+同窗交错 A/B/A（18.5/19.5s vs 18.1s）方差淹没无法解析。**定案=疑似
+小幅正收益待静窗复测归档精确数字**；机制严格少工作+复用既有索引，
+保留。D23 教训：并行 lane 会话并发构建时（load>30），±10% 级效应
+不可测——测量前必查 `uptime` 与 ppcx64 并发，交错法只能救同量级窗口。
 
 **P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
 `np_sema_seed_function_bodies.inc`；一轮 tree mini）：
@@ -431,7 +452,7 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
-| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②⑤⑥⑦✅（⑥ -73%、⑦ 再 -69%，今日累计 seed -91.8%）+刀⑧✅噪声级记零（D22）+剖析基建✅；刀①③ D20 降级挂起；下一靶=encode 字符串构造（release A/B 裁判） |
+| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②⑤⑥⑦✅（⑥ -73%、⑦ 再 -69%，今日累计 seed 静窗口径 -91.8%）+刀⑧✅噪声级记零（D22）+刀⑨✅疑似-6% 待静窗复测（D23 高载窗口不可测教训）+剖析基建✅；刀①③ D20 降级挂起；下一口=encode 字符串构造（release A/B 裁判）或转 emitter-temp-placement 正确性线 |
 
 **P1 静态侦察（2026-08-23，只读 grep，数字可复现）**：播种热区字符串
 操作点共 **140 处**——`np_sema_seed_function_bodies.inc` ×63、

@@ -2498,15 +2498,12 @@ begin
       SubstSig := '';
       if (ParamNames.Count > 0) and (ArgTypes.Count >= ParamNames.Count) then
       begin
+        { Same-name chain lookup (index built at registration; first entry =
+          lowest index, matching the former linear scan). }
         Decl := nil;
-        for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
-        begin
-          if SameText(FProcedureBodies[BodyIdx].Name, GenericName + '.' + MethodShortName) then
-          begin
-            Decl := FProcedureBodies[BodyIdx].Decl;
-            Break;
-          end;
-        end;
+        BodyIdx := FirstBodyIndexForNameLocal(GenericName + '.' + MethodShortName);
+        if BodyIdx >= 0 then
+          Decl := FProcedureBodies.GetPtrUnchecked(BodyIdx)^.Decl;
         if Decl <> nil then
           SubstSig := GetSubstitutedParamSignature(Decl, ParamNames.ToArray, ArgTypes.ToArray)
         else
