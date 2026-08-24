@@ -97,9 +97,11 @@ Stream(req, tools)
        → GetMessage()/GetUsage() 可用
 ```
 
-关键点：`agent.sse` 是 feed 式增量解析器。现有 `http.sse.ParseSSE` 是整包语义，
-不满足首 token 延迟要求（这是 code888 的已核实短板）。`agent.sse` 为内部实现，
-行为稳定后作为反哺提案申请晋升进 `http.sse`（需总控批准的跨模块 slice）。
+关键点：`agent.sse` 是 feed 式**字节域**解析器（TByteSpan 进；UTF-8 序列
+跨块边界与 BOM 在内；DoS 上限触发抛 aecProtocol）。`http.sse` 已由 http lane
+以 K61 独立完成 feed 式改造——TSSEFeeder 单一引擎、ParseSSE 委托之（WHATWG
+规格对齐，text 行域）。两引擎输入域不同（bytes vs text），合并不立项；
+本单元原"http.sse 晋升候选"主张就此关闭。
 
 ### 3.3 工具循环
 

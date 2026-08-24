@@ -49,7 +49,7 @@
 | Bench | 度量 | 回归阈值（首版基线落地后冻结）|
 |-------|------|------|
 | `bench_fold` | 10k delta（含 50 工具槽参数片段）FoldDeltas 总耗时 | ns/op；无 per-delta SetLength 回归（分配次数随行数线性封顶）|
-| `bench_sse_feed` | 16MB SSE 流分 32KB 块 Feed | MB/s ≥ http.sse 整包解析器的同等数量级 |
+| `bench_sse_feed` | 16MB SSE 流分 32KB 块 Feed | MB/s 绝对值基线 176（BENCHMARKS §2；http.sse 为文本行域引擎，无同口径对照）|
 | `bench_loop_overhead` | fake provider 下 10 轮纯文本 run 总开销 | µs/run 级；证明抽象零税 |
 
 纪律：-O2 运行；禁止自定义计时/内循环/手算统计（design-conventions §12）。
