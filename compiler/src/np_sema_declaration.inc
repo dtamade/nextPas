@@ -2327,6 +2327,12 @@ var
   ParentName: string;
   ParentSym: TSemanticSymbol;
   AlreadyExists: Boolean;
+  InstCtorName, ParCtorName: string;
+  ParCandIds: array of LongInt;
+  SymId, Mid, ParCount: LongInt;
+  CandOffset, CandParamCount, CandMinParamCount: LongInt;
+  CandSig: string;
+  P, Q: PSemanticSymbol;
   Entry: TPendingSignatureEntry;
   InstBodyName: string;
   BodyEntry: TProcedureBodyEntry;
@@ -2521,58 +2527,83 @@ begin
   { L5: Propagate constructors from parent types.
     When a generic class inherits from a base class, the base class constructors
     must be accessible through the specialized type. Walk the parent chain and
-    copy constructor symbols to the instance type. }
+    copy constructor symbols to the instance type.
+    Candidates come from the same-name chain (membership = SameText match,
+    ASCII identifiers); reversed collection restores ascending-index order so
+    overload tie-breaks see candidates exactly like the former full scans. }
+  InstCtorName := InstanceName + '.Create';
   ParentTypeId := FModel.TypeAt(GenericTypeId - 1).ParentTypeId;
   while (ParentTypeId > 0) and (ParentTypeId <= FModel.TypeCount) do
   begin
-    ParentName := FModel.TypeAt(ParentTypeId - 1).Name;
-    for I := 0 to FModel.SymbolCount - 1 do
+    ParCtorName := FModel.TypeAt(ParentTypeId - 1).Name + '.Create';
+    ParCount := 0;
+    SymId := FModel.FirstSymbolIdByName(ParCtorName);
+    while SymId > 0 do
     begin
-      ParentSym := FModel.SymbolAt(I);
-      if SameText(ParentSym.Name, ParentName + '.Create') and
-        SameText(ParentSym.Kind, 'constructor') then
+      Inc(ParCount);
+      SymId := FModel.NextSymbolIdSameName(SymId);
+    end;
+    SetLength(ParCandIds, ParCount);
+    SymId := FModel.FirstSymbolIdByName(ParCtorName);
+    for K := ParCount - 1 downto 0 do
+    begin
+      ParCandIds[K] := SymId;
+      SymId := FModel.NextSymbolIdSameName(SymId);
+    end;
+    for K := 0 to ParCount - 1 do
+    begin
+      P := FModel.SymbolPtr(ParCandIds[K] - 1);
+      if (P = nil) or not SameText(P^.Kind, 'constructor') then
+        Continue;
+      { Check if instance already has this constructor }
+      AlreadyExists := False;
+      Mid := FModel.FirstSymbolIdByName(InstCtorName);
+      while Mid > 0 do
       begin
-        { Check if instance already has this constructor }
-        AlreadyExists := False;
-        for J := 0 to FModel.SymbolCount - 1 do
+        Q := FModel.SymbolPtr(Mid - 1);
+        if Q = nil then
+          Break;
+        if SameText(Q^.Kind, 'constructor') then
         begin
-          if SameText(FModel.SymbolAt(J).Name, InstanceName + '.Create') and
-            SameText(FModel.SymbolAt(J).Kind, 'constructor') then
-          begin
-            AlreadyExists := True;
-            Break;
-          end;
+          AlreadyExists := True;
+          Break;
         end;
-        if not AlreadyExists then
-        begin
-          NewSymbolId := FModel.AddSymbol(
-            InstanceName + '.Create',
-            'constructor', AOwnerUnitId, AInstanceTypeId, ParentSym.ByteOffset);
-          FModel.SetSymbolParamCount(NewSymbolId, ParentSym.ParamCount);
-          FModel.SetSymbolMinParamCount(NewSymbolId, ParentSym.MinParamCount);
-          FModel.SetSymbolParamSignature(NewSymbolId, ParentSym.ParamSignature);
-        end;
+        Mid := FModel.NextSymbolIdSameName(Mid);
+      end;
+      if not AlreadyExists then
+      begin
+        { Snapshot before AddSymbol: Push may realloc symbol storage. }
+        CandOffset := P^.ByteOffset;
+        CandParamCount := P^.ParamCount;
+        CandMinParamCount := P^.MinParamCount;
+        CandSig := P^.ParamSignature;
+        NewSymbolId := FModel.AddSymbol(
+          InstCtorName,
+          'constructor', AOwnerUnitId, AInstanceTypeId, CandOffset);
+        FModel.SetSymbolParamCount(NewSymbolId, CandParamCount);
+        FModel.SetSymbolMinParamCount(NewSymbolId, CandMinParamCount);
+        FModel.SetSymbolParamSignature(NewSymbolId, CandSig);
       end;
     end;
     ParentTypeId := FModel.TypeAt(ParentTypeId - 1).ParentTypeId;
   end;
   for I := 0 to FModel.SymbolCount - 1 do
   begin
-    Symbol := FModel.SymbolAt(I);
-    if (Pos(QualPrefix, Symbol.Name) = 1) and
-      SameText(Symbol.Kind, 'field') then
-    begin
-      MethodShortName := Copy(Symbol.Name, Length(QualPrefix) + 1, MaxInt);
-      FModel.AddSymbol(InstanceName + '.' + MethodShortName,
-        'field', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
-      SizeVal := TypeMetaFieldIndex(GenericName, MethodShortName);
-      if SizeVal >= 0 then
-        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$idx', SizeVal);
-      if TypeMetaFieldIsStr(GenericName, MethodShortName) then
-        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$str', 1);
-      if TypeMetaFieldIsPtr(GenericName, MethodShortName) then
-        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$ptr', 1);
-    end;
+    P := FModel.SymbolPtr(I);
+    if (P = nil) or (Pos(QualPrefix, P^.Name) <> 1) or
+      not SameText(P^.Kind, 'field') then
+      Continue;
+    MethodShortName := Copy(P^.Name, Length(QualPrefix) + 1, MaxInt);
+    CandOffset := P^.ByteOffset;
+    FModel.AddSymbol(InstanceName + '.' + MethodShortName,
+      'field', AOwnerUnitId, AInstanceTypeId, CandOffset);
+    SizeVal := TypeMetaFieldIndex(GenericName, MethodShortName);
+    if SizeVal >= 0 then
+      FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$idx', SizeVal);
+    if TypeMetaFieldIsStr(GenericName, MethodShortName) then
+      FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$str', 1);
+    if TypeMetaFieldIsPtr(GenericName, MethodShortName) then
+      FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$ptr', 1);
   end;
   { Copy TypeMetadata (Fields array) from generic type to instance type.
     Field symbols use unqualified names (e.g. 'FHashFunc'), so the loop above

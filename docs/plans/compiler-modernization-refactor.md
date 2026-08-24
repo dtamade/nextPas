@@ -4,9 +4,10 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-24（v2.22：P1 刀⑦ 模型/绿树按值访问
-消除落地 seed 再 -69%（59.1s→17.9/18.2s，今日累计 -91.8%）+gdb 复剖析
-驱动选靶；v2.21：P1 刀⑥ ResolveTypeIdForOwner 同名链游走落地 seed -73%
+创建：2026-08-23　最后更新：2026-08-24（v2.23：P1 刀⑧ 泛型实例化 O(N²)
+清扫落地噪声级如实记零+D22 教训=debug 画像≠release 现实；v2.22：P1 刀⑦
+模型/绿树按值访问消除落地 seed 再 -69%（59.1s→17.9/18.2s，今日累计
+-91.8%）+gdb 复剖析驱动选靶；v2.21：P1 刀⑥ ResolveTypeIdForOwner 同名链游走落地 seed -73%
 （A/B 实证迄今最大单刀）+mini tree 探针 API 漂移修复；
 v2.20：P1 刀⑤ 绿树零分配文本 API 落地 seed 累计 -8%；v2.19：seed 子相归因
 96%=encode+gdb 剖析解锁+刀④噪声级落地+刀①③ D20 降级；v2.18：P1 刀② 落地
@@ -178,6 +179,26 @@ fpc_ansistr_assign 14.3%（托管拷贝机器仍主导），**GetItem
 体付整条 TProcedureBodyEntry 托管记录拷贝+每孩子 32B 数据+16B 门面双份
 拷贝。遗留靶：GetTypeMeta(TSemanticType 按值)×3 样本、encode 内字符串
 构造。
+
+**复剖析第二轮→刀⑧**（2026-08-24，stage0-debug 含刀⑦，24 样本）：画像
+趋平——GetItem 残余调用方散点（FunctionAt/SymbolAt/AddConstValue）、
+InstantiateGenericType 构造器传播 ~12%、fpc_copy+ansistr_assign 合计
+~29%。刀⑧ 靶=InstantiateGenericType 的 O(N²)（外层全表扫嵌套内层全表
+扫+循环不变串拼接每迭代重算）与 FindFunctionReturnType 双份记录拷贝：
+
+| 腿 | seed | sema |
+|----|-----:|-----:|
+| 基线（HEAD=4385294d6 刀⑦ 状态） | 17963 ms | 35960 ms |
+| 刀⑧ 两轮 | 18064 / 18036 ms | 35930 / 36015 ms |
+
+**Δ = ±0.6% 以内 = 噪声级，如实记零**（刀④ 先例：改动严格少工作、
+全门禁绿、保留）。**D22 教训：debug(-O1 -g) 画像 ≠ release(-O3) 现实**
+——SameText/小函数在 release 下被优化内联后，调试版里显形的调用点在
+release 中成本骤降；后续选靶应以 release A/B 为最终裁判，debug 剖析
+只做候选发现。刀⑧ 落地内容：①构造器传播改同名链候选（倒序收集保持
+升序 tie-break）+链式成员探测+AddSymbol 前字段快照（Push 可能 realloc
+使指针悬垂）；②字段传播扫 SymbolPtr 化；③FindFunctionReturnType
+GetPtrUnchecked 化。
 
 **P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
 `np_sema_seed_function_bodies.inc`；一轮 tree mini）：
@@ -410,7 +431,7 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
-| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②⑤⑥⑦✅（⑥ -73%、⑦ 再 -69%，今日累计 seed -91.8%）+子相探针+gdb 剖析基建✅；刀①③ D20 降级挂起；下一靶=复剖析第三轮重采样 |
+| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②⑤⑥⑦✅（⑥ -73%、⑦ 再 -69%，今日累计 seed -91.8%）+刀⑧✅噪声级记零（D22）+剖析基建✅；刀①③ D20 降级挂起；下一靶=encode 字符串构造（release A/B 裁判） |
 
 **P1 静态侦察（2026-08-23，只读 grep，数字可复现）**：播种热区字符串
 操作点共 **140 处**——`np_sema_seed_function_bodies.inc` ×63、
@@ -497,6 +518,14 @@ LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
   59.1s→17.9/18.2s（-69%）、sema 76.9→36.2s（-53%）**，encode 子相
   54→14.5s 证实两靶在编码循环内。今日累计 seed -91.8%。遗留靶：
   GetTypeMeta 按值×3 样本、encode 内字符串构造。
+- **刀⑧ 泛型实例化 O(N²) 清扫（✅ 已落地，噪声级如实记零）**：靶=
+  InstantiateGenericType 构造器传播的外层全表扫嵌套内层全表扫+循环
+  不变串拼接重算、FindFunctionReturnType 双份记录拷贝。实现=同名链
+  候选（倒序收集保持升序 tie-break）+链式成员探测+AddSymbol 前字段
+  快照（Push 可能 realloc 悬垂指针）+SymbolPtr/GetPtrUnchecked 就地化。
+  **实测 ±0.6% 噪声级**。**D22 教训：debug(-O1) 画像≠release(-O3)
+  现实**——调试版显形的 SameText 类调用点在 release 被优化内联；
+  后续选靶以 release A/B 为最终裁判，debug 剖析只做候选发现。
 - **度量协议**：每刀落地后 `NEXTPAS_PHASE_TIMING=1` tree mini 两轮，
   seed 相对 §2.3 基线 235s/238s 对比；验收=总分钟数降+residual 0/0
   保持+十三探针零新回归。（D21 补充：跨日对比先跑当日基线腿；子相

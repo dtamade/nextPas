@@ -930,10 +930,14 @@ end;
 function THIRModule.FindFunctionReturnType(const AName: string): THIRTypeId;
 var
   I: LongInt;
+  PF: ^THIRFunction;
 begin
   for I := 0 to LongInt(FFunctions.Count) - 1 do
-    if FFunctions[SizeUInt(I)].Name = AName then
-      Exit(FFunctions[SizeUInt(I)].ReturnTypeId);
+  begin
+    PF := FFunctions.GetPtrUnchecked(SizeUInt(I));
+    if PF^.Name = AName then
+      Exit(PF^.ReturnTypeId);
+  end;
   Result := 0;
 end;
 
