@@ -1103,7 +1103,9 @@ end;
 
 procedure SleepMs(AMilliseconds: Integer);
 begin
-  TSleep.ForDuration(TDuration.FromMilliseconds(AMilliseconds));
+  if AMilliseconds <= 0 then
+    Exit;
+  MsSleep(UInt64(AMilliseconds));
 end;
 
 initialization

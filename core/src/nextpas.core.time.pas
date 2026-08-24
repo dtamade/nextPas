@@ -55,6 +55,7 @@ function TryParseISO8601DateTime(const AStr: string; out ADT: nextpas.core.time.
 function FormatDateTime(const APattern: string; const ADT: TDateTime): string; inline;
 function DateTimeToStr(const ADT: TDateTime): string; inline;
 function GetTickCount64: UInt64; inline;
+procedure MsSleep(const AMilliseconds: UInt64); inline;
 function DateToStr(const ADT: TDateTime): string; inline;
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
 { UTC 时间桶键：epoch 秒 → 定宽补零字符串（字典序=时间序）。 }
@@ -184,6 +185,11 @@ end;
 function GetTickCount64: UInt64;
 begin
   Result := nextpas.core.time.cpu.GetTickCount64;
+end;
+
+procedure MsSleep(const AMilliseconds: UInt64);
+begin
+  nextpas.core.time.sleep.MsSleep(AMilliseconds);
 end;
 
 function TimeBucketKey(const AUnixSeconds: Int64;

@@ -299,6 +299,17 @@ begin
   Check(DateTimeToUnix(DateTimeUtcNow) > 1577836800, 'current time > 2020');
 end;
 
+procedure TestMsSleep;
+var
+  LBefore, LAfter: UInt64;
+begin
+  MsSleep(0);
+  LBefore := GetTickCount64;
+  MsSleep(20);
+  LAfter := GetTickCount64;
+  Check(LAfter >= LBefore + 15, 'MsSleep(20) blocks ~20ms');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.time');
   T.Test('Duration zero', @TestDurationZero);
@@ -319,5 +330,6 @@ begin
   T.Test('DateTime math', @TestDateTimeMath);
   T.Test('DaysBetween', @TestDaysBetween);
   T.Test('DateTimeToUnix/UnixToDateTime', @TestDateTimeToUnix);
+  T.Test('MsSleep blocks', @TestMsSleep);
   if not T.Run then Halt(1);
 end.
