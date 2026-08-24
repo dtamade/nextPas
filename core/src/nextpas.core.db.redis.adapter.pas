@@ -51,19 +51,20 @@ uses
   nextpas.core.db.redis.resp,
   nextpas.core.db.redis.transport;
 
-{ 连接 Redis 并完成握手（AUTH → SELECT）。AAddr 形如
+{ 连接 Redis 并完成握手（AUTH → SELECT → INFO 探测）。AAddr 形如
   'host[:port][/db]'；APassword 空 = 不发 AUTH；ADbIndex 0 = 不发
-  SELECT。失败抛 EDbError（Backend=dbkRedis）。 }
+  SELECT；INFO server 版本探测 best-effort（对齐 odbc 能力探测惯例：
+  失败保守降级不破坏建连）。失败抛 EDbError（Backend=dbkRedis）。 }
 function ConnectRedis(const AAddr: string): IDbConnection; overload;
 function ConnectRedis(const AAddr: string;
   const APassword: string; const ADbIndex: Integer;
   const AOptions: TDbConnectOptions): IDbConnection; overload;
 
 { 测试/DI 接缝：以注入传输建连（离线门禁用脚本化 transport）；
-  握手语义与 ConnectRedis 一致。 }
+  握手语义与 ConnectRedis 一致；AProbeInfo=true 时执行 INFO 探测。 }
 function ConnectRedisWithTransport(const ATransport: IRedisTransport;
-  const APassword: string = ''; const ADbIndex: Integer = 0)
-  : IDbConnection;
+  const APassword: string = ''; const ADbIndex: Integer = 0;
+  const AProbeInfo: Boolean = False): IDbConnection;
 
 implementation
 
@@ -142,12 +143,15 @@ type
     FDepth: Integer;
     FBuf: TBytes;          { 接收缓冲（跨 Recv 追加）}
     FTrace: TDbTraceHub;
+    FProductVersion: string;   { INFO server 探测（best-effort，可空）}
     procedure Handshake(const APassword: string; const ADbIndex: Integer);
+    procedure ProbeInfo;
     function LockedExecute(const AArgs: TRespArgs): TRespValue;
     function ReadReply: TRespValue;
   public
     constructor Create(const ATransport: IRedisTransport;
-      const APassword: string; const ADbIndex: Integer);
+      const APassword: string; const ADbIndex: Integer;
+      const AProbeInfo: Boolean);
     destructor Destroy; override;
 
     { IDbTraceControl }
@@ -250,23 +254,30 @@ begin
   if AAddr = '' then
     raise EDbError.CreateSimple(dbkRedis, 'empty address');
   ParseRedisAddr(AAddr, AOptions, LOpts);
+  LOpts.ProbeInfo := True;   { 真实建连默认探测版本 }
   try
-    LTransport := TNetRedisTransport.Create(LOpts);
+    LTransport := NewNetRedisTransport(LOpts);
   except
-    on E: ENetworkError do
+    { net/tls 异常族统一桥接（ENetworkError/TlsException 均为
+      ENextPasError 后代，保留原文仅换类型）}
+    on E: Exception do
       BridgeNetError(E);
   end;
-  Result := TDbRedisConnection.Create(LTransport, APassword, ADbIndex);
+  Result := TDbRedisConnection.Create(LTransport, APassword, ADbIndex,
+    LOpts.ProbeInfo);
 end;
 
 function ConnectRedisWithTransport(const ATransport: IRedisTransport;
-  const APassword: string; const ADbIndex: Integer): IDbConnection;
+  const APassword: string; const ADbIndex: Integer;
+  const AProbeInfo: Boolean): IDbConnection;
 begin
-  Result := TDbRedisConnection.Create(ATransport, APassword, ADbIndex);
+  Result := TDbRedisConnection.Create(ATransport, APassword, ADbIndex,
+    AProbeInfo);
 end;
 
 constructor TDbRedisConnection.Create(const ATransport: IRedisTransport;
-  const APassword: string; const ADbIndex: Integer);
+  const APassword: string; const ADbIndex: Integer;
+  const AProbeInfo: Boolean);
 begin
   inherited Create;
   FTransport := ATransport;
@@ -275,6 +286,8 @@ begin
   FTrace := TDbTraceHub.Create;
   { OnAcquire 由 SetListener 挂载时补发（§2.12），ctor 不预发 }
   Handshake(APassword, ADbIndex);
+  if AProbeInfo then
+    ProbeInfo;
 end;
 
 destructor TDbRedisConnection.Destroy;
@@ -311,6 +324,29 @@ begin
     LockedExecute(TRespArgs.Create(
       BytesFromText('SELECT'),
       BytesFromText(IntToStr(ADbIndex))));
+end;
+
+procedure TDbRedisConnection.ProbeInfo;
+var
+  LR: TRespValue;
+  LV: string;
+begin
+  { best-effort（odbc ProbeCapabilities 同惯例）：探测失败保守降级，
+    不让诊断性查询破坏建连 }
+  try
+    LR := LockedExecute(TRespArgs.Create(
+      BytesFromText('INFO'), BytesFromText('server')));
+    if LR.Kind in [rvkBulk, rvkSimple] then
+    begin
+      LV := RespInfoFieldValue(LR.Data, 'redis_version');
+      if LV = '' then
+        LV := RespInfoFieldValue(LR.Data, 'valkey_version');
+      FProductVersion := LV;
+    end;
+  except
+    on E: EDbError do
+      FProductVersion := '';
+  end;
 end;
 
 function TDbRedisConnection.ReadReply: TRespValue;
@@ -557,7 +593,7 @@ end;
 
 function TDbRedisConnection.ProductVersion: string;
 begin
-  Result := '';   { v1 不做 INFO 探测（诚实空值）}
+  Result := FProductVersion;   { INFO server 探测；失败保守空值 }
 end;
 
 function TDbRedisConnection.SupportsSavepoints: Boolean;

@@ -515,6 +515,61 @@ begin
 
 end;
 
+function ConnPingWorks(AConn: IDbConnection): Boolean;
+var
+  LQ: IDbQuery;
+begin
+  LQ := AConn.Query('PING');
+  Result := LQ.Step and (LQ.GetText(0) = 'PONG');
+  LQ := nil;
+end;
+
+{ ===== A5.1：INFO 版本探测（seam 显式开启）===== }
+
+procedure TestInfoProbeSurfacesVersion;
+var
+  LTrans: TScriptedTransport;
+  LConn: IDbConnection;
+  LC: IDbCapabilities;
+begin
+  LTrans := TScriptedTransport.Create;
+  LTrans.Script('$39'#13#10'# Server'#13#10'redis_version:7.2.4'#13#10 +
+    'os:Linux'#13#10);
+  LConn := ConnectRedisWithTransport(LTrans, '', 0, True);
+  Supports(LConn, IDbCapabilities, LC);
+  Check(LC.ProductVersion = '7.2.4', 'probed version surfaced');
+
+  { 探测后连接仍可用 }
+  LTrans.Script('+OK'#13#10);
+  LConn.Exec('PING');
+  LConn := nil;
+end;
+
+procedure TestInfoProbeValkeyFallbackAndTolerant;
+var
+  LTrans: TScriptedTransport;
+  LConn: IDbConnection;
+  LC: IDbCapabilities;
+begin
+  { valkey 回退键 }
+  LTrans := TScriptedTransport.Create;
+  LTrans.Script('$20'#13#10'valkey_version:8.0.0'#13#10);
+  LConn := ConnectRedisWithTransport(LTrans, '', 0, True);
+  Supports(LConn, IDbCapabilities, LC);
+  Check(LC.ProductVersion = '8.0.0', 'valkey fallback version');
+  LConn := nil;
+
+  { 探测失败保守降级：错误回复吞掉，版本空，连接可用 }
+  LTrans := TScriptedTransport.Create;
+  LTrans.Script('-ERR unknown command ''INFO'''#13#10);
+  LConn := ConnectRedisWithTransport(LTrans, '', 0, True);
+  Supports(LConn, IDbCapabilities, LC);
+  Check(LC.ProductVersion = '', 'probe failure keeps empty');
+  LTrans.Script('+PONG'#13#10);
+  Check(ConnPingWorks(LConn), 'conn usable after failed probe');
+  LConn := nil;
+end;
+
 { ===== live（env 门控）===== }
 
 procedure TestLiveRoundtrip;
@@ -568,6 +623,8 @@ begin
   T.Test('batch pipeline', @TestBatchPipeline);
   T.Test('capabilities matrix', @TestCapabilitiesMatrix);
   T.Test('trace pairing', @TestTracePairing);
+  T.Test('info probe surfaces version', @TestInfoProbeSurfacesVersion);
+  T.Test('info probe valkey fallback and tolerant', @TestInfoProbeValkeyFallbackAndTolerant);
   T.Test('live roundtrip', @TestLiveRoundtrip);
   if not T.Run then Halt(1);
 end.

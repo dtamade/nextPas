@@ -51,6 +51,9 @@ type
     DbIndex: Integer;       { 0..15；0 = 不发 SELECT }
     ConnectTimeoutMs: Integer;   { 0 = NetTcpConnect 缺省 }
     IoTimeoutMs: Integer;        { >0 设读写 deadline（advisory）}
+    UseTls: Boolean;             { true = TLSDial（DNS+TCP+TLS 一体）}
+    TlsServerName: string;       { 空 = 取 Host（SNI/证书名校验名）}
+    ProbeInfo: Boolean;          { 建连后 INFO server 探测版本（best-effort）}
     class function Default: TDbRedisConnectOptions; static;
   end;
 
@@ -64,6 +67,9 @@ begin
   Result.DbIndex := 0;
   Result.ConnectTimeoutMs := 0;
   Result.IoTimeoutMs := 0;
+  Result.UseTls := False;
+  Result.TlsServerName := '';
+  Result.ProbeInfo := False;
 end;
 
 end.
