@@ -338,12 +338,13 @@ function TDbSqliteBlobStream.Seek(AOffset: Int64;
 var
   NP: Int64;
 begin
+  // 事前兜底缺省（未来扩枚举时防御）；三分支显式全覆盖——原写法的
+  // else 分支在枚举全覆盖下静态不可达（FPC 6018）
+  NP := AOffset;
   case AOrigin of
     dsoBegin:   NP := AOffset;
     dsoCurrent: NP := FPos + AOffset;
     dsoEnd:     NP := FSize + AOffset;
-  else
-    NP := AOffset;
   end;
   if (NP < 0) or (NP > FSize) then
     raise EDbError.CreateSimple(dbkSqlite,
