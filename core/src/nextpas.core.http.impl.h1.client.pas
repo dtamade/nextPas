@@ -51,7 +51,8 @@ implementation
 
 uses
   nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors,
-  nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
+  nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.io.memory,
+  nextpas.core.net,
   nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.time,
   nextpas.core.text.conv,
   nextpas.core.encoding,
@@ -560,6 +561,13 @@ begin
     (LParser.GetStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS);
 
   LBodyReader := LParser.NewBodyReader;
+  { F8（pascn backfeed）：无体响应（204/304/HEAD/Content-Length:0）的 Body
+    语义是「空」而非「无」——补空读取器，IHttpResponse.Body 恒非 nil，
+    消费方 ReadAll(Body) 无需 nil 防御。流式 sink 模式（ASkipBodyBuffer）
+    体已分派、Body=nil 契约不变；错误/未完成路径交上层异常处理，不补。 }
+  if (LBodyReader = nil) and (not ASkipBodyBuffer) and
+     LParser.IsComplete and (not LParser.HasError) and (LParser.GetBodySize = 0) then
+    LBodyReader := CreateBytesStreamFrom(nil) as IReader;
   if LBodyReader <> nil then
   begin
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders,

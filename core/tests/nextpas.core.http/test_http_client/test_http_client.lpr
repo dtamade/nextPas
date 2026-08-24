@@ -2712,8 +2712,62 @@ begin
   end;
 end;
 
-procedure TestClientSendRejectsNilRequest;
+{ F8（pascn backfeed）：无体响应的 Body 语义是「空」而非「无」——
+  IHttpResponse.Body 恒非 nil，消费方直接 ReadAll(Body) 无需 nil 防御。
+  覆盖三形态：204 No Content / 200 + Content-Length:0 / HEAD。 }
+procedure TestBodylessResponsesHaveEmptyBodyReader;
 var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/no-content', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+  end);
+  LRouter.Get('/empty-ok', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LRouter.Handle(hmHead, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.SetHeader('content-length', '5');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+
+    { 204：Body 恒非 nil，ReadAll 安全读出 0 字节 }
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/no-content');
+    CheckEqual(Int64(204), Int64(LResp.StatusCode), '204 status');
+    Check(LResp.Body <> nil, '204 Body is not nil (F8)');
+    if LResp.Body <> nil then
+      CheckEqual('', ReadReaderStr(LResp.Body), '204 body reads empty');
+
+    { Content-Length: 0：同一契约 }
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/empty-ok');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'CL:0 status');
+    Check(LResp.Body <> nil, 'CL:0 Body is not nil (F8)');
+    if LResp.Body <> nil then
+      CheckEqual('', ReadReaderStr(LResp.Body), 'CL:0 body reads empty');
+
+    { HEAD：RFC 无体，同样空读取器 }
+    LResp := LClient.Head('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'HEAD status');
+    Check(LResp.Body <> nil, 'HEAD Body is not nil (F8)');
+    CheckEqual('', ReadBodyStr(LResp), 'HEAD body reads empty');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientSendRejectsNilRequest;var
   LClient: IHttpClient;
   LReq: IHttpRequest;
   LRaised: Boolean;
@@ -9348,5 +9402,7 @@ begin
     @TestClientSkipBodyBufferStreamsWithoutRetaining);
   T.Test('Client zero-body stream completes at headers (status-split)',
     @TestClientZeroBodyStreamCompletesAtHeaders);
+  T.Test('Client bodyless responses have empty body reader (F8)',
+    @TestBodylessResponsesHaveEmptyBodyReader);
   if not T.Run then Halt(1);
 end.
