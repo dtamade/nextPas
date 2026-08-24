@@ -493,6 +493,140 @@ begin
   Check(R = dkPass, 'sign-verify loop pass: ' + DkimResultToString(R) + ' ' + LE);
 end;
 
+{ ── 私钥 PEM 加载(plan 2026-08-25 D2) ──────────────────────── }
+
+function StrArr(const AItems: array of string): TDeliverabilityStringArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(AItems));
+  for I := 0 to High(AItems) do
+    Result[I] := AItems[I];
+end;
+
+function SameBytes(const AA, AB: TBytes): Boolean;
+begin
+  Result := (Length(AA) = Length(AB)) and
+    ((Length(AA) = 0) or CompareMem(@AA[0], @AB[0], Length(AA)));
+end;
+
+procedure TestLoadKeyPemForms;
+var
+  LN, LD: TBytes;
+  LE: string;
+begin
+  Check(DkimLoadRsaPrivateKey(DKV_RSA_PEM_PKCS1, LN, LD, LE),
+    'pkcs1 load: ' + LE);
+  Check(SameBytes(LN, HexToBytes(DKV_RSA_N_HEX)), 'pkcs1 n matches vector');
+  Check(SameBytes(LD, HexToBytes(DKV_RSA_D_HEX)), 'pkcs1 d matches vector');
+
+  Check(DkimLoadRsaPrivateKey(DKV_RSA_PEM_PKCS8, LN, LD, LE),
+    'pkcs8 load: ' + LE);
+  Check(SameBytes(LN, HexToBytes(DKV_RSA_N_HEX)), 'pkcs8 n matches vector');
+  Check(SameBytes(LD, HexToBytes(DKV_RSA_D_HEX)), 'pkcs8 d matches vector');
+end;
+
+procedure TestLoadKeyBadPem;
+var
+  LN, LD: TBytes;
+  LE: string;
+begin
+  LN := nil;
+  LD := nil;
+  Check(not DkimLoadRsaPrivateKey('not a pem at all', LN, LD, LE),
+    'garbage rejected');
+  Check(LE <> '', 'error text set');
+  Check(not DkimLoadRsaPrivateKey(
+    '-----BEGIN CERTIFICATE-----'#13#10'AQIDBA=='#13#10 +
+    '-----END CERTIFICATE-----'#13#10, LN, LD, LE), 'cert-only rejected');
+  Check(not DkimLoadRsaPrivateKey(
+    '-----BEGIN PRIVATE KEY-----'#13#10'AQIDBA=='#13#10 +
+    '-----END PRIVATE KEY-----'#13#10, LN, LD, LE),
+    'pkcs8 non-rsa der rejected: ' + LE);
+end;
+
+{ ── DkimSignMail 组装(plan 2026-08-25 D1) ──────────────────── }
+
+procedure TestSignMailGolden;
+var
+  LOut1, LOut2, LE: string;
+begin
+  Check(DkimSignMail(DKV_SIGNMAIL_INPUT, 'example.com', 'sel',
+    StrArr(['from', 'to', 'subject', 'x-date']), cmRelaxed, cmSimple,
+    daRsaSha256, HexToBytes(DKV_RSA_N_HEX), HexToBytes(DKV_RSA_D_HEX), nil,
+    LOut1, LE), 'signmail ok: ' + LE);
+  Check(LOut1 = DKV_SIGNMAIL_EXPECTED, 'signmail golden bytes match');
+  { 无 t=/x=: 同输入两次签名输出逐字节一致; h= 大小写/空白归一 }
+  Check(DkimSignMail(DKV_SIGNMAIL_INPUT, 'example.com', 'sel',
+    StrArr(['FROM', 'To', 'SUBJECT', ' X-Date ']), cmRelaxed, cmSimple,
+    daRsaSha256, HexToBytes(DKV_RSA_N_HEX), HexToBytes(DKV_RSA_D_HEX), nil,
+    LOut2, LE), 'signmail 2nd ok');
+  Check(LOut2 = LOut1, 'signmail deterministic + h= 归一');
+end;
+
+procedure TestSignMailLoopbackRsa;
+var
+  D: TMockDeliverabilityDns;
+  I: IDeliverabilityDns;
+  LOut, LE: string;
+  R: TDkimResult;
+begin
+  D := TMockDeliverabilityDns.Create;
+  I := D;
+  D.AddTXT('sel._domainkey.example.com', 'v=DKIM1; p=' + DKV_RSA_SPKI_B64);
+  Check(DkimSignMail(DKV_SIGNMAIL_INPUT, 'example.com', 'sel',
+    StrArr(['from', 'to', 'subject']), cmRelaxed, cmSimple,
+    daRsaSha256, HexToBytes(DKV_RSA_N_HEX), HexToBytes(DKV_RSA_D_HEX), nil,
+    LOut, LE), 'sign: ' + LE);
+  Check(Pos('DKIM-Signature: ', LOut) = 1, 'signature is physical first header');
+  Check(Pos(DKV_SIGNMAIL_INPUT, LOut) =
+    Length(LOut) - Length(DKV_SIGNMAIL_INPUT) + 1, 'original mail untouched');
+  R := DkimVerify(I, LOut, 1000, LE);
+  Check(R = dkPass, 'signmail->verify loop pass: ' +
+    DkimResultToString(R) + ' ' + LE);
+end;
+
+procedure TestSignMailLoopbackEd25519;
+var
+  D: TMockDeliverabilityDns;
+  I: IDeliverabilityDns;
+  LOut, LE: string;
+  R: TDkimResult;
+begin
+  D := TMockDeliverabilityDns.Create;
+  I := D;
+  D.AddTXT('sel._domainkey.example.com',
+    'v=DKIM1; k=ed25519; p=' + Base64Encode(HexToBytes(DKV_ED25519_PUB_HEX)));
+  Check(DkimSignMail(
+    'From: alice@example.com'#13#10'To: b@example.net'#13#10#13#10'hi',
+    'example.com', 'sel', StrArr(['from', 'to']),
+    cmSimple, cmSimple, daEd25519Sha256, nil, nil,
+    HexToBytes(DKV_ED25519_PRIV_HEX), LOut, LE), 'ed sign: ' + LE);
+  R := DkimVerify(I, LOut, 1000, LE);
+  Check(R = dkPass, 'ed25519 loop pass: ' + DkimResultToString(R) + ' ' + LE);
+end;
+
+procedure TestSignMailErrors;
+var
+  LOut, LE: string;
+begin
+  { h= 缺 from(RFC 6376 §3.5 必签 From) }
+  Check(not DkimSignMail(DKV_SIGNMAIL_INPUT, 'example.com', 'sel',
+    StrArr(['to', 'subject']), cmRelaxed, cmSimple,
+    daRsaSha256, HexToBytes(DKV_RSA_N_HEX), HexToBytes(DKV_RSA_D_HEX), nil,
+    LOut, LE), 'h= without from rejected');
+  Check(LE = 'h= must include from', 'error text');
+  { 空 domain / selector }
+  Check(not DkimSignMail(DKV_SIGNMAIL_INPUT, '', 'sel',
+    StrArr(['from']), cmRelaxed, cmSimple, daRsaSha256,
+    HexToBytes(DKV_RSA_N_HEX), HexToBytes(DKV_RSA_D_HEX), nil, LOut, LE),
+    'empty domain rejected');
+  Check(not DkimSignMail(DKV_SIGNMAIL_INPUT, 'example.com', '',
+    StrArr(['from']), cmRelaxed, cmSimple, daRsaSha256,
+    HexToBytes(DKV_RSA_N_HEX), HexToBytes(DKV_RSA_D_HEX), nil, LOut, LE),
+    'empty selector rejected');
+end;
+
 var
   T: TTestSuite;
 
@@ -520,6 +654,12 @@ begin
   T.Test('SignRsaVector', @TestSignRsaVector);
   T.Test('SignEd25519Vector', @TestSignEd25519Vector);
   T.Test('SignThenVerify', @TestSignThenVerify);
+  T.Test('LoadKeyPemForms', @TestLoadKeyPemForms);
+  T.Test('LoadKeyBadPem', @TestLoadKeyBadPem);
+  T.Test('SignMailGolden', @TestSignMailGolden);
+  T.Test('SignMailLoopbackRsa', @TestSignMailLoopbackRsa);
+  T.Test('SignMailLoopbackEd25519', @TestSignMailLoopbackEd25519);
+  T.Test('SignMailErrors', @TestSignMailErrors);
   if not T.Run then
     Halt(1);
 end.

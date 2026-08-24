@@ -44,6 +44,21 @@ function DkimExtractSignatureValue(const ARawMail: string;
 { DKIM-Signature 值中 b= 的值置空(RFC 6376 §3.7), 其余 tag 原样; 避开 bh= }
 function DkimRemoveBValue(const AValue: string): string;
 
+{ 加载 RSA 私钥 PEM(无加密 PKCS#8 "BEGIN PRIVATE KEY" 与传统 PKCS#1
+  "BEGIN RSA PRIVATE KEY"); 取 n/d; 加密块/非 RSA/坏 DER → False }
+function DkimLoadRsaPrivateKey(const APemText: string; out AModulus,
+  APrivateExponent: TBytes; out AError: string): Boolean;
+
+{ 签名组装(RFC 6376 §3.5/§3.7): bh → 构造 DKIM-Signature(物理第一个
+  头, b= 空占位)→ DkimBuildHeaderHashInput + DkimSign → 填 b= 输出完整
+  邮件; h= 须含 from; 线格式钉死见契约 §3(plan 2026-08-25) }
+function DkimSignMail(const ARawMail: string; const ADomain,
+  ASelector: string; const ASignedHeaders: TDeliverabilityStringArray;
+  const ACanonHeader, ACanonBody: TCanonMode; const AAlgo: TDkimAlgo;
+  const ARsaModulus, ARsaPrivateExponent: TBytes;
+  const AEd25519PrivateKey: TBytes; out ASignedMail: string;
+  out AError: string): Boolean;
+
 implementation
 
 uses
@@ -52,8 +67,10 @@ uses
   nextpas.core.crypto.constant_time,
   nextpas.core.crypto.ed25519,
   nextpas.core.encoding.base64,
+  nextpas.core.exception,
   nextpas.core.hash,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.tls.pem;
 
 const
   SHA256_DIGEST_INFO: array[0..18] of Byte = (
@@ -717,7 +734,17 @@ begin
   Result := True;
 end;
 
-{ ── 公钥解析 ─────────────────────────────────────────────────── }
+{ ── 密钥解析 ─────────────────────────────────────────────────── }
+
+{ DER INTEGER 符号位前导 00 → 数值无符号表示 }
+procedure StripIntegerPad(var AData: TBytes);
+begin
+  if (Length(AData) > 1) and (AData[0] = 0) then
+  begin
+    Move(AData[1], AData[0], Length(AData) - 1);
+    SetLength(AData, Length(AData) - 1);
+  end;
+end;
 
 { SPKI DER → RSA n/e(INTEGER 原始字节) }
 function TryParseRsaSpki(const ADer: TBytes; out AModulus,
@@ -758,16 +785,8 @@ begin
     AModulus := LN.AsBigInteger;
     AExponent := LE.AsBigInteger;
     { DER INTEGER 符号位前导 00 → 数值无符号表示(模长按实际位宽) }
-    if (Length(AModulus) > 1) and (AModulus[0] = 0) then
-    begin
-      Move(AModulus[1], AModulus[0], Length(AModulus) - 1);
-      SetLength(AModulus, Length(AModulus) - 1);
-    end;
-    if (Length(AExponent) > 1) and (AExponent[0] = 0) then
-    begin
-      Move(AExponent[1], AExponent[0], Length(AExponent) - 1);
-      SetLength(AExponent, Length(AExponent) - 1);
-    end;
+    StripIntegerPad(AModulus);
+    StripIntegerPad(AExponent);
     if (Length(AModulus) = 0) or (Length(AExponent) = 0) then
       Exit;
     Result := True;
@@ -776,6 +795,235 @@ begin
     LKeySeq.Free;
     LReader.Free;
   end;
+end;
+
+{ RSAPrivateKey DER: SEQUENCE 内 version=0, n, e, d, p… → 取 n/d }
+function TryParseRsaPkcs1Private(const ADer: TBytes; out AModulus,
+  APrivateExponent: TBytes): Boolean;
+var
+  LReader: TASN1Reader;
+  LRoot, LVer, LN, LD: TASN1Node;
+begin
+  Result := False;
+  LRoot := nil;
+  LReader := TASN1Reader.Create(ADer);
+  try
+    LRoot := LReader.Parse;
+    if (LRoot = nil) or (not LRoot.IsSequence) or (LRoot.ChildCount < 4) then
+      Exit;
+    LVer := LRoot.GetChild(0);
+    if (LVer = nil) or (not LVer.IsInteger) or (LVer.AsInteger <> 0) then
+      Exit;                        { 仅 PKCS#1 v1.5 单素数形态(RFC 8017) }
+    LN := LRoot.GetChild(1);
+    LD := LRoot.GetChild(3);
+    if (LN = nil) or (LD = nil) or (not LN.IsInteger) or
+      (not LD.IsInteger) then
+      Exit;
+    AModulus := LN.AsBigInteger;
+    APrivateExponent := LD.AsBigInteger;
+    StripIntegerPad(AModulus);
+    StripIntegerPad(APrivateExponent);
+    Result := (Length(AModulus) > 0) and (Length(APrivateExponent) > 0);
+  finally
+    LRoot.Free;
+    LReader.Free;
+  end;
+end;
+
+{ PKCS#8 PrivateKeyInfo DER → 内层 RSAPrivateKey 的 n/d;
+  algorithm OID 必须 rsaEncryption(非 RSA 私钥拒绝) }
+function TryUnwrapPkcs8RsaPrivate(const ADer: TBytes; out AModulus,
+  APrivateExponent: TBytes): Boolean;
+var
+  LReader: TASN1Reader;
+  LRoot, LAlgoSeq, LOid, LOctet: TASN1Node;
+  LKeyDer: TBytes;
+begin
+  Result := False;
+  LRoot := nil;
+  LReader := TASN1Reader.Create(ADer);
+  try
+    LRoot := LReader.Parse;
+    if (LRoot = nil) or (not LRoot.IsSequence) or (LRoot.ChildCount < 3) then
+      Exit;
+    if (not LRoot.GetChild(0).IsInteger) or
+      (LRoot.GetChild(0).AsInteger <> 0) then
+      Exit;
+    LAlgoSeq := LRoot.GetChild(1);
+    if (LAlgoSeq = nil) or (not LAlgoSeq.IsSequence) or
+      (LAlgoSeq.ChildCount < 1) then
+      Exit;
+    LOid := LAlgoSeq.GetChild(0);
+    if (LOid = nil) or (not LOid.IsOID) then
+      Exit;
+    if LOid.AsOID <> '1.2.840.113549.1.1.1' then
+      Exit;                        { rsaEncryption 以外不支持 }
+    LOctet := LRoot.GetChild(2);
+    if (LOctet = nil) or (not LOctet.IsOctetString) then
+      Exit;
+    LKeyDer := LOctet.AsOctetString;
+    Result := TryParseRsaPkcs1Private(LKeyDer, AModulus, APrivateExponent);
+  finally
+    LRoot.Free;
+    LReader.Free;
+  end;
+end;
+
+function DkimLoadRsaPrivateKey(const APemText: string; out AModulus,
+  APrivateExponent: TBytes; out AError: string): Boolean;
+var
+  LRdr: TPEMReader;
+  LBlock: TPEMBlock;
+begin
+  Result := False;
+  AError := '';
+  AModulus := nil;
+  APrivateExponent := nil;
+  LRdr := TPEMReader.Create;
+  try
+    try
+      LRdr.LoadFromString(APemText);
+    except
+      on LE: Exception do
+      begin
+        AError := 'pem parse failed: ' + LE.Message;
+        Exit;
+      end;
+    end;
+    { PKCS#8 优先, 传统 PKCS#1 兜底; 加密块明确报错不做解密 }
+    LBlock := LRdr.GetFirstBlockOfType(pemPrivateKey);
+    if Length(LBlock.Data) = 0 then
+      LBlock := LRdr.GetFirstBlockOfType(pemRSAPrivateKey);
+    if Length(LBlock.Data) = 0 then
+    begin
+      if Length(LRdr.GetFirstBlockOfType(pemEncryptedPrivateKey).Data) > 0 then
+        AError := 'encrypted private key not supported'
+      else
+        AError := 'no rsa private key pem block';
+      Exit;
+    end;
+    if LBlock.IsEncrypted then
+    begin
+      AError := 'encrypted private key not supported';
+      Exit;
+    end;
+    try
+      if LBlock.BlockType = pemPrivateKey then
+        Result := TryUnwrapPkcs8RsaPrivate(LBlock.Data, AModulus,
+          APrivateExponent)
+      else
+        Result := TryParseRsaPkcs1Private(LBlock.Data, AModulus,
+          APrivateExponent);
+    except
+      on LE: Exception do
+      begin
+        AError := 'asn1 parse failed: ' + LE.Message;
+        Exit;
+      end;
+    end;
+    if not Result then
+      AError := 'invalid rsa private key der';
+  finally
+    LRdr.Free;
+  end;
+end;
+
+{ ── 签名组装(plan 2026-08-25 D1) ───────────────────────────── }
+
+function DkimSignMail(const ARawMail: string; const ADomain,
+  ASelector: string; const ASignedHeaders: TDeliverabilityStringArray;
+  const ACanonHeader, ACanonBody: TCanonMode; const AAlgo: TDkimAlgo;
+  const ARsaModulus, ARsaPrivateExponent: TBytes;
+  const AEd25519PrivateKey: TBytes; out ASignedMail: string;
+  out AError: string): Boolean;
+var
+  LI: Integer;
+  LHNames: TDeliverabilityStringArray;
+  LHasFrom: Boolean;
+  LBody: string;
+  LHasBody: Boolean;
+  LBh: TBytes;
+  LHdrs, LAlgoStr, LCh, LCb: string;
+  LValue, LHdrLine, LSigB64: string;
+  LMailNoB: string;
+  LSigRec: TDkimSignature;
+  LHashInput, LSigBytes: TBytes;
+begin
+  Result := False;
+  AError := '';
+  ASignedMail := '';
+
+  { RFC 6376 §3.5: from 必签; 域/选择器必填 }
+  SetLength(LHNames, Length(ASignedHeaders));
+  LHasFrom := False;
+  for LI := 0 to High(ASignedHeaders) do
+  begin
+    LHNames[LI] := LowerAscii(TrimAscii(ASignedHeaders[LI]));
+    if LHNames[LI] = 'from' then
+      LHasFrom := True;
+  end;
+  if not LHasFrom then
+  begin
+    AError := 'h= must include from';
+    Exit;
+  end;
+  if (TrimAscii(ADomain) = '') or (TrimAscii(ASelector) = '') then
+  begin
+    AError := 'domain and selector required';
+    Exit;
+  end;
+
+  { bh = SHA-256(canonicalize(body))(RFC 6376 §3.7 步骤 5.1/5.2) }
+  ExtractHeadersSection(ARawMail, LBody, LHasBody);
+  LBh := Sha256Of(StrToBytes(DkimCanonicalizeBody(LBody, ACanonBody)));
+
+  { 头值(b= 空占位, 单物理行); tag 顺序 v,a,c,d,s,h,bh,b 钉死 }
+  LHdrs := '';
+  for LI := 0 to High(LHNames) do
+  begin
+    if LI > 0 then
+      LHdrs := LHdrs + ':';
+    LHdrs := LHdrs + LHNames[LI];
+  end;
+  if AAlgo = daRsaSha256 then
+    LAlgoStr := 'rsa-sha256'
+  else
+    LAlgoStr := 'ed25519-sha256';
+  if ACanonHeader = cmRelaxed then
+    LCh := 'relaxed'
+  else
+    LCh := 'simple';
+  if ACanonBody = cmRelaxed then
+    LCb := 'relaxed'
+  else
+    LCb := 'simple';
+  LValue := 'v=1; a=' + LAlgoStr + '; c=' + LCh + '/' + LCb +
+    '; d=' + ADomain + '; s=' + ASelector + '; h=' + LHdrs +
+    '; bh=' + Base64Encode(LBh) + '; b=';
+  LHdrLine := 'DKIM-Signature: ' + LValue;
+  { 物理第一个头插入; 原邮件逐字节不动 }
+  LMailNoB := LHdrLine + #13#10 + ARawMail;
+
+  { 两段哈希出签(b= 置空语义由 DkimBuildHeaderHashInput 处理) }
+  LSigRec.Algo := AAlgo;
+  LSigRec.Domain := ADomain;
+  LSigRec.Selector := ASelector;
+  LSigRec.SignedHeaders := LHNames;
+  LSigRec.CanonHeader := ACanonHeader;
+  LSigRec.CanonBody := ACanonBody;
+  LSigRec.Signature := nil;
+  LSigRec.BodyHash := LBh;
+  if not DkimBuildHeaderHashInput(LMailNoB, LSigRec, LHashInput, AError) then
+    Exit;
+  if not DkimSign(LHashInput, AAlgo, ARsaModulus, ARsaPrivateExponent,
+    AEd25519PrivateKey, LSigBytes, AError) then
+    Exit;
+
+  { b= 追加签名得到最终邮件 }
+  LSigB64 := Base64Encode(LSigBytes);
+  ASignedMail := LHdrLine + LSigB64 +
+    Copy(LMailNoB, Length(LHdrLine) + 1, MaxInt);
+  Result := True;
 end;
 
 { ── 验签 ─────────────────────────────────────────────────────── }
