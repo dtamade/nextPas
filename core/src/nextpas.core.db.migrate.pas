@@ -342,13 +342,16 @@ begin
     if FindApplied(AMigrations[I].Version, LApplied) >= 0 then
       Continue;               { 幂等：同版本跳过 }
     LM := AMigrations[I];
-    WithTransaction(AConn, procedure
+    { 参数化形态（B13）：连接由框架作实参传入，闭包零捕获——池化
+      写租约随语句结束归还，消费方在 Migrate 之后立即可再借 writer。 }
+    WithTransaction(AConn,
+      procedure(const C: IDbConnection)
       var
         K: Integer;
       begin
         for K := 0 to High(LM.Sql) do
-          AConn.Exec(LM.Sql[K]);
-        AConn.Exec('INSERT INTO ' + DB_MIGRATIONS_TABLE +
+          C.Exec(LM.Sql[K]);
+        C.Exec('INSERT INTO ' + DB_MIGRATIONS_TABLE +
           ' (version, applied_at, checksum) VALUES (' +
           IntToStr(LM.Version) +
           ', ''' + FormatISO8601UTC(DateTimeToUnix(DateTimeUtcNow())) +

@@ -294,7 +294,7 @@ begin
     end, 'rollback without begin raises');
   ExpectDbError(procedure
     begin
-      WithTransaction(Conn, nil);
+      WithTransaction(Conn, TDbTxProc(nil));
     end, 'nil callback raises');
 end;
 

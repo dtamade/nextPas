@@ -12,6 +12,8 @@ program test_db_tx_v2;
     6 嵌套要求 savepoint 能力：无该能力的连接 fail-fast，
       且外层照常回滚收尾（TFakeTxConn mock）
     7 守卫回归：nil 连接 / nil 回调 / 无事务控制能力
+    8 参数化回调形态零捕获：池化写租约即时归还（B13）
+    9 参数化重试形态：重试结束即归还池化租约（B13）
   pg 侧同核心语义由 test_db_conformance 双后端覆盖。 }
 
 {$I nextpas.core.settings.inc}
@@ -440,7 +442,78 @@ begin
   end;
 end;
 
-{ 7 }
+{ 8 B13 回归锁 }
+{ 参数化形态零捕获——池化写租约在调用语句结束即可再借。
+  缺陷形态（捕获式回调引用连接）会把租约保持到闭包销毁，单写者池
+  上后续 Writer 借用超时。 }
+procedure TestParameterizedFormReleasesPooledLease;
+var
+  Policy: TDbPoolPolicy;
+  Pool: TDbPool;
+  W, Again: IDbConnection;
+begin
+  Policy := TDbPoolPolicy.Default;
+  Policy.MaxReadConnections := 1;
+  Policy.AcquireTimeoutMs := 1000;
+  Pool := TDbPool.Create(
+    function: IDbConnection
+    begin
+      Result := ConnectSqlite(':memory:');
+    end, Policy);
+  try
+    W := Pool.Writer;
+    WithTransaction(W,
+      procedure(const C: IDbConnection)
+      begin
+        C.Exec('CREATE TABLE t_b13 (a int)');
+      end);
+    W := nil;
+    Again := Pool.Writer;
+    try
+      Check(Assigned(Again), 'param form: writer reacquirable immediately');
+    finally
+      Again := nil;
+    end;
+  finally
+    Pool.Free;
+  end;
+end;
+
+{ 9 B13 回归锁：参数化重试形态同样在重试结束即归还池化租约。 }
+procedure TestParameterizedRetryReleasesPooledLease;
+var
+  Policy: TDbPoolPolicy;
+  Pool: TDbPool;
+  W, Again: IDbConnection;
+begin
+  Policy := TDbPoolPolicy.Default;
+  Policy.MaxReadConnections := 1;
+  Policy.AcquireTimeoutMs := 1000;
+  Pool := TDbPool.Create(
+    function: IDbConnection
+    begin
+      Result := ConnectSqlite(':memory:');
+    end, Policy);
+  try
+    W := Pool.Writer;
+    WithTransactionRetry(W,
+      procedure(const C: IDbConnection)
+      begin
+        C.Exec('CREATE TABLE t_b13r (a int)');
+      end);
+    W := nil;
+    Again := Pool.Writer;
+    try
+      Check(Assigned(Again), 'param retry: writer reacquirable immediately');
+    finally
+      Again := nil;
+    end;
+  finally
+    Pool.Free;
+  end;
+end;
+
+{ 7 守卫回归 }
 procedure TestGuards;
 var
   Conn: IDbConnection;
@@ -460,7 +533,7 @@ begin
   try
     Raised := False;
     try
-      WithTransaction(Conn, nil);
+      WithTransaction(Conn, TDbTxProc(nil));
     except
       on E: EDbError do
         Raised := Pos('nil transaction callback', E.Message) > 0;
@@ -491,5 +564,9 @@ begin
   T.Test('sibling inner scopes reuse name safely', @TestSiblingInnerScopesReuseNameSafely);
   T.Test('nested requires savepoint capability', @TestNestedRequiresSavepointCapability);
   T.Test('guards', @TestGuards);
+  T.Test('parameterized form releases pooled lease',
+    @TestParameterizedFormReleasesPooledLease);
+  T.Test('parameterized retry releases pooled lease',
+    @TestParameterizedRetryReleasesPooledLease);
   if not T.Run then Halt(1);
 end.

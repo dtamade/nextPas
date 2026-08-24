@@ -67,6 +67,10 @@ while Q.Step do ...;                          // 接口引用计数自动释放
   后静默降级）有对应机制；sqlite 非 0 被忽略不冒充。0 = 不设置。
   mysql DSN 形态：空格分隔 key=value（host/port/user/password/db/socket，
   值可用引号包裹），socket 存在时优先于 host。
+  **F-10 提示**：sqlite 文件库的并发读写靠 busy_timeout 排队，缺省
+  0 = 立即 SQLITE_BUSY——生产文件库建议显式非零（工厂 OpenSqlitePool
+  便利形态缺省烘入 `DefaultSqliteBusyTimeoutMs`）；`:memory:` 库无
+  文件锁竞争，0 无害。
 - **线程亲和性**：一个 IDbConnection 同时只能被一个逻辑线程使用
   （Exec/Query/Step 无并发防护，互斥锁只保护事务簿记）；跨线程并发
   访问经 db.pool 分发（每线程独占 Acquire 的连接）。IDbQuery 生命周期
@@ -96,7 +100,8 @@ ClassifySqlite/ClassifyPg 纯函数表产出（宁可欠归一不错归一），
 
 | 入口 | 模型 | 语义 |
 |---|---|---|
-| `WithTransaction(Conn, Proc)` | 自动 savepoint 混合 | 深度 1 = 真 BEGIN/COMMIT/ROLLBACK；深度 ≥2 = `SAVEPOINT np_db_sp_<N>`，成功 RELEASE 并入父事务，失败 ROLLBACK TO **真正只撤销内层写入**后 RELEASE——外层捕获异常可继续（部分提交语义）。 |
+| `WithTransaction(Conn, Body: TDbConnProc)` **B13 推荐** | 自动 savepoint 混合 | 连接由框架作实参传入回调，回调体零捕获。深度/savepoint 语义见下行；池化租约在本调用语句结束即归还。 |
+| `WithTransaction(Conn, Proc: TDbTxProc)` ⚠ | 自动 savepoint 混合 | 深度 1 = 真 BEGIN/COMMIT/ROLLBACK；深度 ≥2 = `SAVEPOINT np_db_sp_<N>`，成功 RELEASE 并入父事务，失败 ROLLBACK TO **真正只撤销内层写入**后 RELEASE——外层捕获异常可继续（部分提交语义）。⚠ 捕获纪律见下。 |
 | 手动 `BeginTxn/CommitTxn/RollbackTxn` | v1 计数（精细控制面） | Begin 加深、内层 Commit 只降计数、**任意深度 Rollback 回滚整个事务并清簿记**（pg 侧 V2-S2 起对齐 sqlite：此前深度 >1 只降簿记不真回滚）。 |
 
 - 嵌套的 `WithTransaction` 要求连接实现 `IDbSavepointControl`（两内置
@@ -107,8 +112,15 @@ ClassifySqlite/ClassifyPg 纯函数表产出（宁可欠归一不错归一），
   （`np_db_sp_<层级>`），兄弟层级顺序复用安全。
 - 手动 savepoint 面不变：`IDbSavepointControl.Savepoint/RollbackTo/
   ReleaseTo`，命名 `[A-Za-z0-9_]+`，违规抛 EDbError。
+- **池化租约纪律（B13）**：闭包对托管变量（含连接）的真实捕获会把该
+  引用保持到闭包销毁——实测可迟至外层例程退出，期间 db.pool 出借的
+  租约（尤其单写者槽位）被滞留过语句边界。池化连接一律用参数化形态
+  `WithTransaction(Conn, procedure(const C: IDbConnection) ...)`
+  （框架传实参、零捕获、语句结束即归还）；捕获形态仅限非池化/专用
+  连接。`WithTransactionRetry` 同样提供参数化重载，租约在重试结束
+  归还。
 - **瞬时错误重试（V3-B5）**：`WithTransactionRetry(Conn, Proc[,
-  Policy])`——仅整事务重跑，绝不部分重试；**幂等责任在回调**（同一
+  Policy])`（另有参数化 `Body: TDbConnProc` 重载，见上条）——仅整事务重跑，绝不部分重试；**幂等责任在回调**（同一
   副作用可能被执行多次）。缺省段位 `DbRetryableDefault`：死锁/序列化
   冲突（decTransaction）与 sqlite 锁竞争（decTimeout 且 BUSY/LOCKED
   码位）可重试；pg 语句超时（查询真慢）、连接断亡（需重连，池的
@@ -211,6 +223,12 @@ MySQL/MariaDB 后端（V3-A2）方言差异：
 
 `TDbPool` 对任意后端 `IDbConnection` 池化，后端特化经连接工厂闭包注入，
 池体不懂方言：
+
+- **开箱工厂（B13 配套）**：`OpenSqlitePool(Path, MaxRead)`（便利形态：
+  缺省策略仅覆盖读上限，busy_timeout 烘入生产级缺省）与
+  `OpenSqlitePool(Path, Policy, Options)`（全控形态：策略与连接选项
+  逐字采用），组合 db.pool × sqlite 统一适配器，经 nextpas.core.db
+  再导出；消费方不再各自手拼策略与连接选项。
 
 - **释放即归还**：Acquire/Writer 返回代理接口，消费方释放引用（出作用
   域或置 nil）即自动归还，零手工 Free。代理经 QueryInterface 透传底层
