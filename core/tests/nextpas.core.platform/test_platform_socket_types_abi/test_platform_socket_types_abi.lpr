@@ -89,6 +89,14 @@ begin
     'EAGAIN is not a socket timeout');
 end;
 
+procedure TestSocketInterruptedErrorClassifier;
+begin
+  Check(platform_socket_error_interrupted(ESysEINTR),
+    'EINTR is a socket interrupt');
+  Check(not platform_socket_error_interrupted(ESysEAGAIN),
+    'EAGAIN is not a socket interrupt');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket_types_abi');
   T.Test('in_addr size', @TestInAddrSize);
@@ -104,5 +112,6 @@ begin
   T.Test('IPPROTO_* constants', @TestIPPROTOConstants);
   T.Test('MSG_* constants', @TestMSGConstants);
   T.Test('socket timeout error classifier', @TestSocketTimeoutErrorClassifier);
+  T.Test('socket interrupted error classifier', @TestSocketInterruptedErrorClassifier);
   if not T.Run then Halt(1);
 end.

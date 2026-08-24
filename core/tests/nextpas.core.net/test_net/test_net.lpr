@@ -75,6 +75,30 @@ begin
     'blocking Write raises a dedicated zero-progress error');
 end;
 
+procedure TestTcpStreamEintrRetrySourceContract;
+var
+  LSource: string;
+  LRead: string;
+  LWrite: string;
+  LAccept: string;
+begin
+  LSource := ReadTextFile('../../../src/nextpas.core.net.tcp.pas');
+  LRead := ExtractSourceRange(LSource, 'function ttcpstream.read',
+    'function ttcpstream.write', 'TTcpStream.Read implementation');
+  LWrite := ExtractSourceRange(LSource, 'function ttcpstream.write',
+    'procedure ttcpstream.close', 'TTcpStream.Write implementation');
+  LAccept := ExtractSourceRange(LSource, 'function ttcplistener.accept',
+    'function ttcplistener.localaddr', 'TTcpListener.Accept implementation');
+  CheckSourceContains(LRead, 'platform_socket_error_interrupted',
+    'Read retries EINTR instead of raising tcp read failed');
+  CheckSourceContains(LWrite, 'platform_socket_error_interrupted',
+    'Write retries EINTR instead of raising tcp write failed');
+  CheckSourceContains(LAccept, 'platform_socket_error_interrupted',
+    'Accept retries EINTR instead of raising tcp accept failed');
+  Check(Pos('tcp read failed', LRead) > 0,
+    'Read still raises hard errors after interrupt retry');
+end;
+
 { TCP echo test — uses port 0 (OS assigns) }
 
 var
@@ -1177,6 +1201,8 @@ begin
   T := TTestSuite.Create('nextpas.core.net');
   T.Test('TCP stream write zero-progress source contract',
     @TestTcpStreamWriteZeroProgressSourceContract);
+  T.Test('TCP stream EINTR retry source contract',
+    @TestTcpStreamEintrRetrySourceContract);
   T.Test('TCP echo', @TestTcpEcho);
   T.Test('TCP large data', @TestTcpLargeData);
   T.Test('UDP send/recv', @TestUdpSendRecv);

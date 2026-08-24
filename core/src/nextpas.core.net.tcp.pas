@@ -2,6 +2,8 @@ unit nextpas.core.net.tcp;
 {**
  * @desc TCP 实现：TTcpStream（带 deadline 超时）+ TTcpListener。
  *       SO_REUSEADDR 默认启用，支持 SetNoDelay/SetKeepAlive。
+ *       Read/Write/Accept 对 EINTR（信号打断）重试，沿用 poll/deadline
+ *       语义，不把瞬时中断误报为硬失败。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -310,6 +312,15 @@ begin
     LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
     if LResult = 0 then
       Exit(SizeUInt(LRecvd));
+    { EINTR：瞬时，必须重试 WaitIO+recv。不能并入 would_block/timed_out
+      分支——该分支在无 cancel token 时即使 deadline 未到期也会抬超时。 }
+    if platform_socket_error_interrupted(LResult) then
+    begin
+      ThrowIfCanceled;
+      if (not FReadDeadline.IsInfinite) and FReadDeadline.IsExpired then
+        raise ETimeoutError.Create('read deadline exceeded');
+      Continue;
+    end;
     if platform_socket_error_would_block(LResult) or
        platform_socket_error_timed_out(LResult) then
     begin
@@ -365,6 +376,13 @@ begin
     LResult := platform_socket_send(FSocket, LPtr, LChunk, LFlags, LSent);
     if LResult <> 0 then
     begin
+      if platform_socket_error_interrupted(LResult) then
+      begin
+        ThrowIfCanceled;
+        if (not FWriteDeadline.IsInfinite) and FWriteDeadline.IsExpired then
+          raise ETimeoutError.Create('write deadline exceeded');
+        Continue;
+      end;
       if platform_socket_error_would_block(LResult) or
          platform_socket_error_timed_out(LResult) then
       begin
@@ -488,7 +506,8 @@ begin
       Exit(tsiorClosed);
     Exit(tsiorOk);
   end;
-  if platform_socket_error_would_block(LResult) then
+  if platform_socket_error_would_block(LResult) or
+     platform_socket_error_interrupted(LResult) then
     Exit(tsiorWouldBlock);
   raise ENetworkError.Create('tcp read failed (' + IntToStr(LResult) + ')');
 end;
@@ -517,7 +536,8 @@ begin
       Exit(tsiorClosed);
     Exit(tsiorOk);
   end;
-  if platform_socket_error_would_block(LResult) then
+  if platform_socket_error_would_block(LResult) or
+     platform_socket_error_interrupted(LResult) then
     Exit(tsiorWouldBlock);
   raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
 end;
@@ -637,11 +657,17 @@ var
   LLocal: TNetAddress;
 begin
   EnsureOpen('accept');
-  LAddr.Clear;
-  LAddrLen := SizeOf(LAddr.Storage);
-  LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
-  if LResult <> 0 then
+  while True do
+  begin
+    LAddr.Clear;
+    LAddrLen := SizeOf(LAddr.Storage);
+    LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
+    if LResult = 0 then
+      Break;
+    if platform_socket_error_interrupted(LResult) then
+      Continue;
     raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
+  end;
   LAddr.Len := UInt32(LAddrLen);
   LLocalAddr.Clear;
   LAddrLen := SizeOf(LLocalAddr.Storage);
@@ -711,7 +737,8 @@ begin
     AConn := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
     Exit(tarAccepted);
   end;
-  if platform_socket_error_would_block(LResult) then
+  if platform_socket_error_would_block(LResult) or
+     platform_socket_error_interrupted(LResult) then
     Exit(tarWouldBlock);
   { EMFILE/ENFILE: process or system fd table full. Treat as temporary
     backpressure (same as would-block for readiness loops) so one bad accept

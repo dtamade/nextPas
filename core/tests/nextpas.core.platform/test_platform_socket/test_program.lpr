@@ -131,6 +131,18 @@ begin
     '0 must not be timed-out');
 end;
 
+procedure TestSocketErrorInterrupted;
+begin
+  Check(platform_socket_error_interrupted(ESysEINTR) = True,
+    'EINTR must be interrupted');
+  Check(platform_socket_error_interrupted(PLATFORM_ERR_INTR) = True,
+    'PLATFORM_ERR_INTR must be interrupted');
+  Check(platform_socket_error_interrupted(0) = False,
+    '0 must not be interrupted');
+  Check(platform_socket_error_interrupted(ESysEAGAIN) = False,
+    'EAGAIN must not be interrupted');
+end;
+
 procedure TestSocketBindListen;
 var
   LSock: TPlatformSocket;
@@ -260,6 +272,7 @@ begin
   T.Test('set timeout', @TestSocketSetTimeout);
   T.Test('error would block', @TestSocketErrorWouldBlock);
   T.Test('error timed out', @TestSocketErrorTimedOut);
+  T.Test('error interrupted', @TestSocketErrorInterrupted);
   T.Test('bind/listen', @TestSocketBindListen);
   T.Test('getsockname', @TestSocketGetSockName);
   T.Test('shutdown', @TestSocketShutdown);

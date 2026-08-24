@@ -339,6 +339,11 @@ function platform_socket_error_timed_out(const AError: Int32): Boolean;
     @return True 表示 connect 仍在进行 *}
 function platform_socket_error_in_progress(const AError: Int32): Boolean;
 
+{** @desc 判断错误是否为信号打断（EINTR / WSAEINTR / PLATFORM_ERR_INTR）
+    @param AError 错误码
+    @return True 表示应重试同一系统调用（poll/deadline 语义保持） *}
+function platform_socket_error_interrupted(const AError: Int32): Boolean;
+
 const
   { poll event bits for platform_socket_poll }
 {$IFDEF NEXTPAS_WINDOWS}
@@ -674,7 +679,8 @@ begin
   if LRc = 0 then
     Exit(LN > 0);            { 0 字节 = 对端已 FIN → False；有数据 → True }
   if platform_socket_error_would_block(LRc) or
-     platform_socket_error_timed_out(LRc) or (LRc = ESysEINTR) then
+     platform_socket_error_timed_out(LRc) or
+     platform_socket_error_interrupted(LRc) then
     Exit(True);              { 无数据 / 被中断：存活或无法判定，保守 True }
   Exit(False);               { RESET/NOTCONN/BADF 等：连接已坏 }
 end;
@@ -875,6 +881,11 @@ begin
     platform_socket_error_would_block(AError);
 end;
 
+function platform_socket_error_interrupted(const AError: Int32): Boolean;
+begin
+  Result := (AError = ESysEINTR) or (AError = PLATFORM_ERR_INTR);
+end;
+
 function platform_socket_poll(const ASocket: TPlatformSocket;
   const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
 var
@@ -894,7 +905,7 @@ begin
       ARevents := Int32(LPfd.revents);
       Exit(1);
     end;
-    if platform_get_errno = ESysEINTR then
+    if platform_socket_error_interrupted(platform_get_errno) then
       Continue;
     Exit(-platform_get_errno);
   until False;
@@ -931,7 +942,7 @@ begin
       end;
       Exit(0);
     end;
-    if platform_get_errno = ESysEINTR then
+    if platform_socket_error_interrupted(platform_get_errno) then
       Continue;
     Exit(-platform_get_errno);
   until False;
@@ -1641,19 +1652,30 @@ begin
     (AError = WSAEINPROGRESS) or (AError = WSAEWOULDBLOCK);
 end;
 
+function platform_socket_error_interrupted(const AError: Int32): Boolean;
+begin
+  Result := (AError = PLATFORM_ERR_INTR) or (AError = WSAEINTR);
+end;
+
 function platform_socket_poll(const ASocket: TPlatformSocket;
   const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
 var
   LPfd: TWSAPollFd;
   LNready: LongInt;
+  LErr: Int32;
 begin
   ARevents := 0;
   FillChar(LPfd, SizeOf(LPfd), 0);
   LPfd.fd := TSocket(ASocket.Value);
   LPfd.events := SmallInt(AEvents);
-  LNready := WSAPoll(@LPfd, 1, ATimeoutMs);
-  if LNready < 0 then
-    Exit(-platform_get_last_error);
+  repeat
+    LNready := WSAPoll(@LPfd, 1, ATimeoutMs);
+    if LNready >= 0 then
+      Break;
+    LErr := platform_get_last_error;
+    if not platform_socket_error_interrupted(LErr) then
+      Exit(-LErr);
+  until False;
   if LNready = 0 then
     Exit(0);
   ARevents := Int32(LPfd.revents);
@@ -1666,6 +1688,7 @@ function platform_socket_poll_or_wake(const ASocket: TPlatformSocket;
 var
   LPfds: array[0..1] of TWSAPollFd;
   LNready: LongInt;
+  LErr: Int32;
 begin
   ARevents := 0;
   FillChar(LPfds[0], SizeOf(LPfds), 0);
@@ -1673,9 +1696,14 @@ begin
   LPfds[0].events := SmallInt(AEvents);
   LPfds[1].fd := TSocket(AWake.Value);
   LPfds[1].events := SmallInt(PLATFORM_POLL_IN);
-  LNready := WSAPoll(@LPfds[0], 2, ATimeoutMs);
-  if LNready < 0 then
-    Exit(-platform_get_last_error);
+  repeat
+    LNready := WSAPoll(@LPfds[0], 2, ATimeoutMs);
+    if LNready >= 0 then
+      Break;
+    LErr := platform_get_last_error;
+    if not platform_socket_error_interrupted(LErr) then
+      Exit(-LErr);
+  until False;
   if LNready = 0 then
     Exit(0);
   if (LPfds[1].revents and SmallInt(PLATFORM_POLL_IN or PLATFORM_POLL_HUP or
@@ -2077,6 +2105,7 @@ function platform_socket_error_would_block(const AError: Int32): Boolean; begin 
 function platform_socket_error_resource_limit(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_in_progress(const AError: Int32): Boolean; begin Result := False; end;
+function platform_socket_error_interrupted(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_poll(const ASocket: TPlatformSocket; const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_poll_or_wake(const ASocket: TPlatformSocket; const AEvents: Int32; const AWake: TPlatformSocket; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_pair(ADomain, AType, AProtocol: Int32; out ASocket1, ASocket2: TPlatformSocket): Int32; begin ASocket1.Value := -1; ASocket2.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;

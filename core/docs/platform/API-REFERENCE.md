@@ -296,6 +296,7 @@
 | `platform_socket_get_error(ASocket, out AError): Int32` | 获取 SO_ERROR 待处理错误 |
 | `platform_socket_error_would_block(AError): Boolean` | 是否为阻塞错误 |
 | `platform_socket_error_timed_out(AError): Boolean` | 是否为超时错误 |
+| `platform_socket_error_interrupted(AError): Boolean` | 是否为信号打断（EINTR / WSAEINTR，调用方应重试） |
 | `platform_sockaddr_ipv4(APort, AAddr): TPlatformSockAddr` | 构造 IPv4 地址 |
 
 ## 21. sync — 同步原语

@@ -79,10 +79,16 @@ begin
   if nextpas.core.platform.socket.platform_sockaddr_ipv4(AAddr.Port,
     platform_ipv4_parse(AAddr.IP), LSa) <> 0 then
     raise ENetworkError.Create('udp sendto: invalid address');
-  LResult := platform_socket_sendto(FSocket, @ABuf, Int32(ACount), 0,
-    @LSa.Storage[0], Int32(LSa.Len), LSent);
-  if LResult <> 0 then
+  while True do
+  begin
+    LResult := platform_socket_sendto(FSocket, @ABuf, Int32(ACount), 0,
+      @LSa.Storage[0], Int32(LSa.Len), LSent);
+    if LResult = 0 then
+      Break;
+    if platform_socket_error_interrupted(LResult) then
+      Continue;
     raise ENetworkError.Create('udp sendto failed (' + IntToStr(LResult) + ')');
+  end;
   Result := SizeUInt(LSent);
 end;
 
@@ -97,11 +103,17 @@ var
 begin
   EnsureOpen('recvfrom');
   LSa.Clear;
-  LSaLen := SizeOf(LSa.Storage);
-  LResult := platform_socket_recvfrom(FSocket, @ABuf, Int32(ACount), 0,
-    @LSa.Storage[0], @LSaLen, LRecvd);
-  if LResult <> 0 then
+  while True do
+  begin
+    LSaLen := SizeOf(LSa.Storage);
+    LResult := platform_socket_recvfrom(FSocket, @ABuf, Int32(ACount), 0,
+      @LSa.Storage[0], @LSaLen, LRecvd);
+    if LResult = 0 then
+      Break;
+    if platform_socket_error_interrupted(LResult) then
+      Continue;
     raise ENetworkError.Create('udp recvfrom failed (' + IntToStr(LResult) + ')');
+  end;
   LSa.Len := UInt32(LSaLen);
   platform_sockaddr_ipv4_extract(LSa, LIP, LPort);
   AAddr.IP := platform_ipv4_to_string(platform_ntohl(LIP));
