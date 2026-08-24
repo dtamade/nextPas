@@ -513,6 +513,20 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `AsyncSendTo` / `AsyncRecvFrom` (+ Timeout) via poller `AsyncSendTo`/`AsyncRecvFrom`.
 - Reactors: epoll + kqueue ops; **io_uring backend uses epoll sidecar** for datagram; IOCP via WSASendTo/WSARecvFrom.
 - Full-duplex: epoll keeps one IN op and one OUT op per fd (`EPOLLIN|EPOLLOUT`, `data.u64` = fd). Completing one direction re-arms the other and immediately probes (ET+ONESHOT). `AsyncSend`/`AsyncWrite`/`AsyncSendTo` try the syscall first; only EAGAIN/EINTR waits for writable. kqueue keeps independent `EVFILT_READ`/`WRITE` and deletes only the completed filter.
+
+### Write buffer lifetime（C-10）
+
+热路径**零拷贝**：`AsyncWrite` / `AsyncSend` / `AsyncSendTo` 把调用方 `ABuf` 裸指针存进 pending op，**不 memcpy**。提交成功到写回调返回前，调用方必须保持该缓冲有效（短写续发期间同样有效）。读路径对称：`AsyncRead`/`AsyncRecv` 的接收缓冲也须活到回调。
+
+短写语义（与阻塞 `write()` 循环不同，也不同于 sing-box `net.Conn.Write` 写满才返回）：
+
+- 回调 `AResult > 0` = **本次 syscall 实际送达字节**，可能 `< ALen`。
+- **不自动续发**；一 op 一回调。剩余字节由调用方再次 `AsyncSend`（EPOLLONESHOT 下须重新提交）。
+- `AResult < 0` = `-errno`；`AResult = 0` 对写少见，按失败处理。
+
+对照：sing-box `WriteBuffer` 在阻塞 Write 上转移 `*buf.Buffer` 所有权并 `Release`；Go 标准库 Write 内部循环写满。我们是事件循环 IO 模型，不能在反应器里循环 `send()`（会卡住 loop）。调用方持有 + 短写续发（proxy888 `FTxBuf`）才是热路径正确形态。**不提供默认 `AsyncWriteCopy`**：每发送一次 memcpy 比零拷贝持有更差，短包握手由调用方字段持有即可。
+
+Evidence: `test_epoll_reactor` write-buffer source contract + short-write one-shot.
 - `IUdpSocketRuntime` exposes native fd for async layer.
 - Evidence: `test_net_async_udp` loopback + timeout + same-socket send-while-recv + 0 leak; `test_epoll_reactor` UDP send-while-recv + socketpair EAGAIN full-duplex.
 - Not: IPv6 UDP, multicast, connected UDP API.

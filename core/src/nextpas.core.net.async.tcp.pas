@@ -21,7 +21,8 @@ type
     function AsyncReadRef(ABuf: Pointer; ALen: UInt32;
       ACallback: TIoCompletionRef; AContext: Pointer = nil): Boolean;
 
-    { 异步写入 }
+    { 异步写入。不拷贝：ABuf 须保持有效直到回调。短写回调 AResult 为
+      本次实际送达（可能 < ALen），不自动续发；一 op 一回调。 }
     function AsyncWrite(ABuf: Pointer; ALen: UInt32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncWriteRef(ABuf: Pointer; ALen: UInt32;

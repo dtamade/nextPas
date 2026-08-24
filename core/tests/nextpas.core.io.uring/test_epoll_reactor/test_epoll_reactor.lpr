@@ -537,6 +537,82 @@ begin
   end;
 end;
 
+procedure TestEpollWriteBufferContractSourceContract;
+var
+  LSource: string;
+  LTcp: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.io.reactor.epoll.pas');
+  LTcp := LoadSourceText('src/nextpas.core.net.async.tcp.pas');
+  CheckSourceContains(LSource, 'fops[lidx].buf := abuf',
+    'pending write op stores caller buffer pointer (no copy)');
+  CheckSourceContains(LSource, 'lres := send(fops[aidx].fd, fops[aidx].buf',
+    'deferred send uses the stored caller pointer');
+  CheckSourceContains(LSource, '不拷贝调用方缓冲',
+    'epoll unit documents zero-copy hold contract');
+  CheckSourceContains(LSource, '不自动续发',
+    'epoll unit documents one-op one-callback short-write');
+  CheckSourceContains(LTcp, '须保持有效直到回调',
+    'IAsyncTcpStream.AsyncWrite documents hold-until-callback');
+end;
+
+procedure TestAsyncSendShortWriteOneShot;
+const
+  kSend = 262144;
+  kSolSocket = 1;
+  kSoSndBuf = 7;
+var
+  LR: TEpollReactor;
+  LPair: array[0..1] of Int32;
+  LTx: array[0..kSend - 1] of Byte;
+  LBufBytes: Int32;
+  LFlags, LCount: Int32;
+  LReady: Boolean;
+begin
+  { 钳制发送缓冲后一次 AsyncSend 大块：send() 短写应立即回调实际送达数，
+    反应器不得循环写满（事件循环不能阻塞）。 }
+  GCallbackCount := 0;
+  GLastResult := 0;
+  LReady := False;
+  LPair[0] := -1;
+  LPair[1] := -1;
+  LBufBytes := 4096;
+  LR := TEpollReactor.Create(16);
+  Check(LR.IsValid, 'valid');
+  try
+    Check(socketpair(AF_UNIX, SOCK_STREAM, 0, @LPair[0]) = 0, 'socketpair');
+    LReady := True;
+    Check(setsockopt(LPair[0], kSolSocket, kSoSndBuf, @LBufBytes,
+      SizeOf(LBufBytes)) = 0, 'SO_SNDBUF');
+    LFlags := fcntl(LPair[0], F_GETFL, 0);
+    Check(fcntl(LPair[0], F_SETFL, LFlags or O_NONBLOCK) >= 0, 'A nonblock');
+    LFlags := fcntl(LPair[1], F_GETFL, 0);
+    Check(fcntl(LPair[1], F_SETFL, LFlags or O_NONBLOCK) >= 0, 'B nonblock');
+    FillChar(LTx, SizeOf(LTx), $CD);
+    Check(LR.AsyncSend(LPair[0], @LTx[0], UInt32(SizeOf(LTx)), 0,
+      @OnComplete, nil), 'AsyncSend large payload');
+    CheckEqual(Int64(1), Int64(GCallbackCount), 'exactly one send callback');
+    Check(GLastResult > 0, 'short-write reports bytes sent');
+    Check(GLastResult < SizeOf(LTx),
+      'did not auto-complete the full payload in one op');
+    LCount := 0;
+    while LCount < 8 do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    CheckEqual(Int64(1), Int64(GCallbackCount),
+      'reactor does not auto-retry remaining bytes');
+  finally
+    if LReady then
+    begin
+      nextpas.core.platform.posix.ffi.close(LPair[0]);
+      nextpas.core.platform.posix.ffi.close(LPair[1]);
+    end;
+    LR.Close;
+  end;
+end;
+
 procedure TestEpollSyscallErrorModelSourceContract;
 var
   LSource: string;
@@ -923,6 +999,10 @@ begin
     @TestAsyncCloseInvalidFdReturnsErrno);
   T.Test('epoll syscall error model source contract',
     @TestEpollSyscallErrorModelSourceContract);
+  T.Test('write buffer hold + no-copy source contract',
+    @TestEpollWriteBufferContractSourceContract);
+  T.Test('AsyncSend short-write is one-shot (no auto-retry)',
+    @TestAsyncSendShortWriteOneShot);
   T.Test('Close dispatches all aborts when callback raises',
     @TestCloseDispatchesAllAbortsWhenCallbackRaises);
   T.Test('Completion re-enter Close does not abort again',

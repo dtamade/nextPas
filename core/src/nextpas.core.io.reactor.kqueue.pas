@@ -1,5 +1,8 @@
 unit nextpas.core.io.reactor.kqueue;
 
+{** @desc kqueue 反应器。写路径不拷贝：ABuf 须保持有效直到回调。
+       短写回调 AResult=本次实际送达，不自动续发；一 op 一回调。 *}
+
 {$I nextpas.core.settings.inc}
 
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}

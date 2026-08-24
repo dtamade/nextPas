@@ -73,7 +73,9 @@ type
       AContext: Pointer = nil): TAsyncTimerHandle;
     function CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
 
-    { I/O delegates }
+    { I/O delegates。写路径不拷贝调用方缓冲：提交成功到写回调返回前
+      ABuf 必须保持有效。短写回调 AResult=本次实际送达（可能 < ALen），
+      不自动续发；一 op 一回调。 }
     function AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncWrite(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;

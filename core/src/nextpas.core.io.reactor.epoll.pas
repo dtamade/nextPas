@@ -1,5 +1,10 @@
 unit nextpas.core.io.reactor.epoll;
 
+{** @desc Linux epoll 反应器。
+       缓冲契约：AsyncWrite/AsyncSend/AsyncSendTo 不拷贝调用方缓冲，
+       提交成功到写回调返回前 ABuf 必须保持有效。短写回调 AResult=本次
+       实际送达字节（可能 < ALen），不自动续发；一 op 一回调。 *}
+
 {$I nextpas.core.settings.inc}
 
 interface
