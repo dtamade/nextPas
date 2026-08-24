@@ -570,6 +570,30 @@ begin
   LConn := nil;
 end;
 
+{ ===== A5.1b：TLS 变体 ===== }
+
+procedure TestTlsNegativePathOffline;
+var
+  LOpts: TDbRedisConnectOptions;
+  LRaised: Boolean;
+begin
+  { 离线可跑：UseTls 指向不可达端点 → TLSDial 失败桥接为统一
+    EDbError(dbkRedis)，不漏裸 net/tls 异常 }
+  LOpts := TDbRedisConnectOptions.Default;
+  LOpts.UseTls := True;
+  LRaised := False;
+  try
+    ConnectRedis('127.0.0.1:1', LOpts);
+  except
+    on E: EDbError do
+    begin
+      LRaised := (E.Backend = dbkRedis);
+      Check(E.Category = decConnection, 'tls negative categorized');
+    end;
+  end;
+  Check(LRaised, 'tls dial failure bridges to EDbError');
+end;
+
 { ===== live（env 门控）===== }
 
 procedure TestLiveRoundtrip;
@@ -611,6 +635,32 @@ begin
   LConn := nil;
 end;
 
+procedure TestLiveTlsRoundtrip;
+var
+  LEnv, LAddr, LPwd: string;
+  LOpts: TDbRedisConnectOptions;
+  LConn: IDbConnection;
+  LQ: IDbQuery;
+begin
+  LEnv := GetEnvironmentVariable('NEXTPAS_REDIS_TEST_TLS_CONN');
+  if LEnv = '' then
+  begin
+    Writeln('[live-tls] NEXTPAS_REDIS_TEST_TLS_CONN not set - skipped');
+    Exit;
+  end;
+  LAddr := LEnv;
+  LPwd := GetEnvironmentVariable('NEXTPAS_REDIS_TEST_TLS_PASSWORD');
+  LOpts := TDbRedisConnectOptions.Default;
+  LOpts.UseTls := True;
+  LOpts.Password := LPwd;
+  LConn := ConnectRedis(LAddr, LOpts);
+  LQ := LConn.Query('PING');
+  Assert(LQ.Step);
+  Check(LQ.GetText(0) = 'PONG', 'live-tls PONG');
+  LQ := nil;
+  LConn := nil;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.db.redis.adapter');
   T.Test('handshake order', @TestHandshakeOrder);
@@ -625,6 +675,8 @@ begin
   T.Test('trace pairing', @TestTracePairing);
   T.Test('info probe surfaces version', @TestInfoProbeSurfacesVersion);
   T.Test('info probe valkey fallback and tolerant', @TestInfoProbeValkeyFallbackAndTolerant);
+  T.Test('tls negative path offline', @TestTlsNegativePathOffline);
   T.Test('live roundtrip', @TestLiveRoundtrip);
+  T.Test('live tls roundtrip', @TestLiveTlsRoundtrip);
   if not T.Run then Halt(1);
 end.
