@@ -48,7 +48,7 @@ function ClassifyUpstreamError(Status, Headers, Body):
     Code := aecContextOverflow                    { 覆盖 400 归因 }
   if Status = 429:
     RetryAfterMs := ParseRetryAfter(Headers)      { retry-after-ms > retry-after(秒);
-                                                     HTTP-date 不解析 → CRetryAfterUnknown }
+                                                     负值/HTTP-date 不信任 → CRetryAfterUnknown }
   raise EAgentError(Code, Msg, Retryable=IsRetryable(Code),
                     Provider=<name>, RequestId=ProbeRequestIdHeaders(Headers),
                     RawBodySnippet=Snippet)

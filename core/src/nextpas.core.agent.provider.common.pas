@@ -120,8 +120,8 @@ function Utf8SafeTruncate(const S: string; AMaxBytes: Integer): string;
 { 超窗措辞识别（不区分大小写；WIRE-MAPPINGS §0 全集）}
 function MatchesOverflowPhrases(const AMsg: string): Boolean;
 
-{ retry-after-ms 头优先，其次秒级 retry-after；HTTP-date 形态不解析
-  → CRetryAfterUnknown（不臆造）}
+{ retry-after-ms 头优先，其次秒级 retry-after；负值与 HTTP-date 形态
+  一律不信任 → CRetryAfterUnknown（不臆造，防恶意头绕过重试总预算）}
 function ParseRetryAfterMs(const AHeaders: TWireHeaderArray): Int64;
 
 { x-request-id / request-id / anthropic-request-id 依次探测，未命中空串 }
@@ -206,7 +206,7 @@ var
   LSecs: Int64;
 begin
   LRaw := WireHeaderValue(AHeaders, 'retry-after-ms');
-  if ParsePlainInt64(Trim(LRaw), Result) then
+  if ParsePlainInt64(Trim(LRaw), Result) and (Result >= 0) then
     Exit;
   LRaw := Trim(WireHeaderValue(AHeaders, 'retry-after'));
   if ParsePlainInt64(LRaw, LSecs) and (LSecs >= 0) then
