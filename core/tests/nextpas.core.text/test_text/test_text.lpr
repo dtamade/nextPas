@@ -172,6 +172,10 @@ begin
   CheckEqual(Int64(-1), Int64(TextIndexOf('hello', 'z')), 'not found');
   CheckEqual(Int64(2), Int64(TextIndexOf('hello', 'llo')), 'substring');
   CheckEqual(Int64(0), Int64(TextIndexOf('hello', '')), 'empty substring');
+  CheckEqual(Int64(1), Int64(TextIndexOf('a b c', ' ', 0)), 'from 0 first space');
+  CheckEqual(Int64(3), Int64(TextIndexOf('a b c', ' ', 2)), 'from after first space');
+  CheckEqual(Int64(-1), Int64(TextIndexOf('a b c', ' ', 4)), 'from last char no space');
+  CheckEqual(Int64(-1), Int64(TextIndexOf('hello', 'h', 1)), 'skip first char');
 end;
 
 procedure TestLastIndexOf;

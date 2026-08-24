@@ -71,7 +71,8 @@ function TextPadRight(const AValue: string; const AWidth: Integer; const APadCha
 
 function TextRepeat(const AValue: string; const ACount: Integer): string; inline;
 
-function TextIndexOf(const AValue, ASubStr: string): Integer; inline;
+function TextIndexOf(const AValue, ASubStr: string): Integer; inline; overload;
+function TextIndexOf(const AValue, ASubStr: string; AFrom: Integer): Integer; inline; overload;
 function TextLastIndexOf(const AValue, ASubStr: string): Integer; inline;
 
 function TextIsEmpty(const AValue: string): Boolean; inline;
@@ -214,6 +215,11 @@ end;
 function TextIndexOf(const AValue, ASubStr: string): Integer;
 begin
   Result := Integer(nextpas.core.text.view.IndexOfStr(AValue, ASubStr));
+end;
+
+function TextIndexOf(const AValue, ASubStr: string; AFrom: Integer): Integer;
+begin
+  Result := Integer(nextpas.core.text.view.IndexOfStr(AValue, ASubStr, AFrom));
 end;
 
 function TextLastIndexOf(const AValue, ASubStr: string): Integer;

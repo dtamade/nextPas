@@ -36,7 +36,8 @@ type
 
     function IndexOf(const ACh: AnsiChar): PtrInt;
     function LastIndexOf(const ACh: AnsiChar): PtrInt;
-    function IndexOfStr(const ANeedle: TStringView): PtrInt;
+    function IndexOfStr(const ANeedle: TStringView): PtrInt; overload;
+    function IndexOfStr(const ANeedle: TStringView; AFrom: PtrInt): PtrInt; overload;
     function Contains(const ACh: AnsiChar): Boolean; inline;
     function CountChar(const ACh: AnsiChar): SizeUInt;
     function SplitFirst(const ASep: AnsiChar; out ALeft, ARight: TStringView): Boolean;
@@ -49,7 +50,8 @@ type
     function ToSpan: TByteSpan; inline;
   end;
 
-function IndexOfStr(const AValue, ASubStr: string): PtrInt;
+function IndexOfStr(const AValue, ASubStr: string): PtrInt; overload;
+function IndexOfStr(const AValue, ASubStr: string; AFrom: PtrInt): PtrInt; overload;
 function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
 
 implementation
@@ -300,6 +302,26 @@ begin
   Result := -1;
 end;
 
+function TStringView.IndexOfStr(const ANeedle: TStringView; AFrom: PtrInt): PtrInt;
+var
+  LRest: TStringView;
+begin
+  if AFrom < 0 then
+    AFrom := 0;
+  if SizeUInt(AFrom) > FLen then
+    Exit(-1);
+  if SizeUInt(AFrom) = FLen then
+  begin
+    if ANeedle.FLen = 0 then
+      Exit(AFrom);
+    Exit(-1);
+  end;
+  LRest := Slice(SizeUInt(AFrom), FLen - SizeUInt(AFrom));
+  Result := LRest.IndexOfStr(ANeedle);
+  if Result >= 0 then
+    Inc(Result, AFrom);
+end;
+
 function TStringView.Contains(const ACh: AnsiChar): Boolean;
 begin
   Result := IndexOf(ACh) >= 0;
@@ -393,6 +415,11 @@ end;
 function IndexOfStr(const AValue, ASubStr: string): PtrInt;
 begin
   Result := TStringView.FromStr(AValue).IndexOfStr(TStringView.FromStr(ASubStr));
+end;
+
+function IndexOfStr(const AValue, ASubStr: string; AFrom: PtrInt): PtrInt;
+begin
+  Result := TStringView.FromStr(AValue).IndexOfStr(TStringView.FromStr(ASubStr), AFrom);
 end;
 
 function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
