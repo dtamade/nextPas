@@ -385,6 +385,35 @@ DoExec/DoQuery 单点天然无双发。门禁 `test_db_trace`：离线 sqlite
 全量契约 + 摘要纯函数 + pg 真机段（decSyntax 直透、占位符保真、
 opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
 
+### 2.13 Redis 原生后端（V3-A5）
+
+`nextpas.core.db.redis` 家族：RESP2 协议原生客户端（无 C 库依赖，
+传输经 `nextpas.core.net` 阻塞 TCP，接口化可注入）。分层 L2→L2
+同层单向依赖（design-conventions 允许）。
+
+- **命令面**：命令文本 = 空白分词命令行；? 顺序槽 / ?N 显式槽替换
+  为独立 bulk 参数——RESP 长度前缀二进制安全，注入安全由协议构造
+  保证。'...' 引号包裹剥壳取内容；'?x' 非占位符语法按字面键保留。
+- **回复 → 行映射**：array 每元素一行；simple/bulk/integer 一行；
+  null（$-1 / *-1 / RESP3 `_`）零行；error 回复在执行点抛。
+  单列，列名 'reply'，integer 回复列型 dbcInteger 其余文本。
+- **执行模型**：IDbQuery 惰性执行（首个 Step 发命令）；Reset 重臂
+  重发（对齐 odbc Reset 语义）；错误类目经 db.err ClassifyRedis
+  （ERR→syntax、WRONGPASS/NOAUTH→auth、MOVED/ASK/CLUSTERDOWN/
+  READONLY→connection、LOADING/BUSY/MASTERDOWN→capacity、
+  EXECABORT→transaction、NOSCRIPT→not-supported、未识别欠归一）；
+  错误首词存 SqlState 槽，RESP 无数字码位 BackendCode 恒 0。
+- **事务控制面**：MULTI/EXEC/DISCARD 直映；MULTI 期间消费方收到
+  +QUEUED 标记（Redis 固有语义）；CommitTxn 校验 EXEC 数组内错误
+  元素后丢弃载荷；EXECABORT → decTransaction；AImmediate no-op。
+- **能力降级矩阵**：Savepoints/StmtCache/LargeObjects/NativeBool/
+  MultiStatementExec/StatementTimeout=False 不假装；
+  BatchExecutor=True（真流水线：单次写 burst + N 读，精确到步错误
+  定位）；CaseSensitiveIdentifiers=True；MaxPlaceholders=999 保守
+  下界。TimeoutMs advisory 忽略（§2.6b 惯例）。
+- **观测钩子**：§2.12 同构接线（attach-catch-up、首执行窗口、错误
+  类目透传）。
+
 ## 3. 兼容 shim（已删除，G2 收口）
 
 旧单元名 `nextpas.core.sqlite{,.base,.conn,.pool,.tx,.migrate}` 与
