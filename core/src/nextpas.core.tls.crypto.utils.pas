@@ -81,6 +81,7 @@ const
   HASH_SHA384 = nextpas.core.hash.base.haSHA384;
   HASH_SHA512 = nextpas.core.hash.base.haSHA512;
   HASH_BLAKE2B256 = nextpas.core.hash.base.haBLAKE2b256;
+  HASH_SHA224 = nextpas.core.hash.base.haSHA224;
 
 type
   {**
@@ -789,6 +790,7 @@ begin
     HASH_SHA1: Result := EVP_sha1();
     HASH_MD5: Result := EVP_md5();
     HASH_BLAKE2B256: Result := nil;
+    HASH_SHA224: Result := EVP_sha224();
   end;
 end;
 
@@ -2080,6 +2082,7 @@ begin
     HASH_SHA1: FHashSize := 20;
     HASH_MD5: FHashSize := 16;
     HASH_BLAKE2B256: FHashSize := 32;
+    HASH_SHA224: FHashSize := 28;
   end;
 
   FCtx := EVP_MD_CTX_new();
@@ -2445,6 +2448,7 @@ begin
     HASH_SHA1: Result := 'SHA-1';
     HASH_MD5: Result := 'MD5';
     HASH_BLAKE2B256: Result := 'BLAKE2b-256';
+    HASH_SHA224: Result := 'SHA-224';
   end;
 end;
 
@@ -2466,6 +2470,8 @@ begin
   else if (LName = 'BLAKE2B256') or (LName = 'BLAKE2B-256') or
     (LName = 'BLAKE2B_256') then
     Result := HASH_BLAKE2B256
+  else if (LName = 'SHA224') or (LName = 'SHA-224') then
+    Result := HASH_SHA224
   else
     RaiseInvalidParameter('hash algorithm name');
 end;

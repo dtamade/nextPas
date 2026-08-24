@@ -86,6 +86,7 @@ begin
     Ord(haSHA384): Result := HashFileWithHasherHex(APath, NewSHA384);
     Ord(haSHA512): Result := HashFileWithHasherHex(APath, NewSHA512);
     Ord(haBLAKE2b256): Result := HashFileWithHasherHex(APath, NewBLAKE2b256);
+    Ord(haSHA224): Result := HashFileWithHasherHex(APath, NewSHA224);
   else
     raise EArgumentError.Create('HashFileHex: invalid hash algorithm');
   end;

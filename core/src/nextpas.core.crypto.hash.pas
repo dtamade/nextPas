@@ -30,6 +30,7 @@ const
   haSHA384 = nextpas.core.hash.base.haSHA384;
   haSHA512 = nextpas.core.hash.base.haSHA512;
   haBLAKE2b256 = nextpas.core.hash.base.haBLAKE2b256;
+  haSHA224 = nextpas.core.hash.base.haSHA224;
 
 type
   THashContext = class
@@ -99,6 +100,14 @@ type
     class function AlgorithmName: string; override;
   end;
 
+  TSHA224Context = class(THashContext)
+  public
+    constructor Create;
+    class function DigestSize: Integer; override;
+    class function BlockSize: Integer; override;
+    class function AlgorithmName: string; override;
+  end;
+
 function MD5(const AData: TBytes): TBytes; overload;
 function MD5(const AData: string): TBytes; overload;
 function SHA1(const AData: TBytes): TBytes; overload;
@@ -111,6 +120,8 @@ function SHA512(const AData: TBytes): TBytes; overload;
 function SHA512(const AData: string): TBytes; overload;
 function BLAKE2b256(const AData: TBytes): TBytes; overload;
 function BLAKE2b256(const AData: string): TBytes; overload;
+function SHA224(const AData: TBytes): TBytes; overload;
+function SHA224(const AData: string): TBytes; overload;
 
 function HashToHex(const AHash: TBytes): string;
 
@@ -339,6 +350,29 @@ begin
   Result := 'BLAKE2b-256';
 end;
 
+{ TSHA224Context }
+
+constructor TSHA224Context.Create;
+begin
+  inherited Create;
+  BindInner(nextpas.core.hash.sha256.NewSHA224);
+end;
+
+class function TSHA224Context.DigestSize: Integer;
+begin
+  Result := 28;
+end;
+
+class function TSHA224Context.BlockSize: Integer;
+begin
+  Result := 64;
+end;
+
+class function TSHA224Context.AlgorithmName: string;
+begin
+  Result := 'SHA-224';
+end;
+
 function MD5(const AData: TBytes): TBytes;
 begin
   Result := HashOf(nextpas.core.hash.md5.NewMD5, AData);
@@ -399,6 +433,16 @@ begin
   Result := BLAKE2b256(StringToBytes(AData));
 end;
 
+function SHA224(const AData: TBytes): TBytes;
+begin
+  Result := HashOf(nextpas.core.hash.sha256.NewSHA224, AData);
+end;
+
+function SHA224(const AData: string): TBytes;
+begin
+  Result := SHA224(StringToBytes(AData));
+end;
+
 function HashToHex(const AHash: TBytes): string;
 begin
   if Length(AHash) = 0 then
@@ -420,6 +464,7 @@ begin
     haSHA384: Result := TSHA384Context.Create;
     haSHA512: Result := TSHA512Context.Create;
     haBLAKE2b256: Result := TBLAKE2b256Context.Create;
+    haSHA224: Result := TSHA224Context.Create;
   end;
 end;
 
@@ -433,6 +478,7 @@ begin
     haSHA384: Result := 48;
     haSHA512: Result := 64;
     haBLAKE2b256: Result := 32;
+    haSHA224: Result := 28;
   end;
 end;
 
@@ -440,7 +486,7 @@ function GetHashBlockSize(AAlgorithm: THashAlgorithm): Integer;
 begin
   Result := 0; { 防御非法强转 }
   case AAlgorithm of
-    haMD5, haSHA1, haSHA256: Result := 64;
+    haMD5, haSHA1, haSHA256, haSHA224: Result := 64;
     haSHA384, haSHA512, haBLAKE2b256: Result := 128;
   end;
 end;
@@ -455,6 +501,7 @@ begin
     haSHA384: Result := 'SHA-384';
     haSHA512: Result := 'SHA-512';
     haBLAKE2b256: Result := 'BLAKE2b-256';
+    haSHA224: Result := 'SHA-224';
   end;
 end;
 

@@ -4,7 +4,7 @@
 **层级**：L2（可被 crypto 单向依赖；不得依赖 crypto/tls）
 **Owner**：hash / crypto / tls lane
 **最后更新**：2026-08-24
-**版本**：1.3
+**版本**：1.4
 
 ---
 
@@ -38,9 +38,10 @@ end;
 ### 1.3 工厂
 
 ```pascal
-THashAlgorithm = (haMD5, haSHA1, haSHA256, haSHA384, haSHA512, haBLAKE2b256);
+THashAlgorithm = (haMD5, haSHA1, haSHA256, haSHA384, haSHA512, haBLAKE2b256, haSHA224);
 
 function NewSHA256: IHasher;
+function NewSHA224: IHasher;
 function NewSHA384: IHasher;
 function NewSHA512: IHasher;
 function NewSHA1: IHasher;
@@ -59,7 +60,7 @@ function SHA256Of(...): TSHA256Digest;  // one-shot
 - **[INV-1]** 算法实现只存在于本模块；`crypto.hash` 仅为兼容适配层
 - **[INV-2]** 本模块不得 `uses nextpas.core.crypto` 或 `tls`
 - **[INV-3]** `Sum` / `SumBytes` 不破坏可继续 `Write` 的语义（与测试一致）
-- **[INV-4]** digest 长度：MD5=16, SHA1=20, SHA256=32, SHA384=48, SHA512=64, BLAKE2b-256=32
+- **[INV-4]** digest 长度：MD5=16, SHA1=20, SHA224=28, SHA256=32, SHA384=48, SHA512=64, BLAKE2b-256=32
 
 ---
 
@@ -77,6 +78,7 @@ make focused FOCUS=core/tests/nextpas.core.hash/test_facade
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-08-24 | 1.4 | SHA-224（SHA-256 同引擎换 IV + 28 字节截断；`haSHA224` 枚举末尾追加） |
 | 2026-08-24 | 1.3 | `haBLAKE2b256` 进入 `NewHasher` / `HashFileHex` / `crypto.hash` 适配层 |
 | 2026-08-24 | 1.2 | 纯 Pascal BLAKE2b-256（RFC 7693 无密钥；hysteria2 Salamander） |
 | 2026-07-20 | 1.1 | 层级修正为 L2；明确唯一实现 owner |

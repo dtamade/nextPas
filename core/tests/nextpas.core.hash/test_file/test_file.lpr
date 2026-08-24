@@ -135,6 +135,7 @@ const
     '2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f';
   BLAKE2B256_EXPECTED =
     'bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319';
+  SHA224_EXPECTED = '23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7';
 var
   LPath: string;
 begin
@@ -148,6 +149,8 @@ begin
   CheckEqual(SHA512_EXPECTED, HashFileHex(haSHA512, LPath), 'HashFileHex SHA512 abc vector');
   CheckEqual(BLAKE2B256_EXPECTED, HashFileHex(haBLAKE2b256, LPath),
     'HashFileHex BLAKE2b256 abc vector');
+  CheckEqual(SHA224_EXPECTED, HashFileHex(haSHA224, LPath),
+    'HashFileHex SHA224 abc vector');
 end;
 
 procedure TestHashFileHexEmptyFileByAlgorithm;
@@ -163,6 +166,7 @@ const
     '47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e';
   BLAKE2B256_EXPECTED =
     '0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8';
+  SHA224_EXPECTED = 'd14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f';
 var
   LPath: string;
 begin
@@ -176,6 +180,8 @@ begin
   CheckEqual(SHA512_EXPECTED, HashFileHex(haSHA512, LPath), 'HashFileHex SHA512 empty vector');
   CheckEqual(BLAKE2B256_EXPECTED, HashFileHex(haBLAKE2b256, LPath),
     'HashFileHex BLAKE2b256 empty vector');
+  CheckEqual(SHA224_EXPECTED, HashFileHex(haSHA224, LPath),
+    'HashFileHex SHA224 empty vector');
 end;
 
 procedure CallHashFileHexInvalidAlgorithm;

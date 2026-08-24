@@ -77,6 +77,28 @@ begin
     'SHA256 448-bit');
 end;
 
+function SHA224Hex(const ABuf; ASize: SizeUInt): string;
+var
+  LDigest: TSHA224Digest;
+begin
+  LDigest := SHA224Of(ABuf, ASize);
+  Result := DigestToHex(LDigest[0], SizeOf(LDigest));
+end;
+
+procedure TestSHA224Vectors;
+const
+  ABC: array[0..2] of Byte = (Ord('a'), Ord('b'), Ord('c'));
+begin
+  CheckEqual(
+    'd14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f',
+    SHA224Hex(GNilByte^, 0),
+    'SHA224 empty');
+  CheckEqual(
+    '23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7',
+    SHA224Hex(ABC[0], SizeOf(ABC)),
+    'SHA224 abc');
+end;
+
 procedure TestMD5AndSHA1Vectors;
 const
   ABC: array[0..2] of Byte = (Ord('a'), Ord('b'), Ord('c'));
@@ -297,6 +319,7 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.hash');
   T.Test('SHA256 vectors', @TestSHA256Vectors);
+  T.Test('SHA224 vectors', @TestSHA224Vectors);
   T.Test('BLAKE2b-256 vectors', @TestBLAKE2b256Vectors);
   T.Test('MD5 and SHA1 vectors', @TestMD5AndSHA1Vectors);
   T.Test('streaming hasher', @TestStreamingHasher);

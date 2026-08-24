@@ -40,6 +40,7 @@ begin
     H := NewHasher(haSHA384); CheckEqual(48, H.DigestSize); CheckEqual(128, H.BlockSize);
     H := NewHasher(haSHA512); CheckEqual(64, H.DigestSize); CheckEqual(128, H.BlockSize);
     H := NewHasher(haBLAKE2b256); CheckEqual(32, H.DigestSize); CheckEqual(128, H.BlockSize);
+    H := NewHasher(haSHA224); CheckEqual(28, H.DigestSize); CheckEqual(64, H.BlockSize);
     H := NewBLAKE2b256; CheckEqual(32, H.DigestSize); CheckEqual(128, H.BlockSize);
   end);
 

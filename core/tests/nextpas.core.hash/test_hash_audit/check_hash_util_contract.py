@@ -449,6 +449,7 @@ def main() -> int:
         "HashFileHex SHA384 empty vector",
         "HashFileHex SHA512 empty vector",
         "HashFileHex BLAKE2b256 empty vector",
+        "HashFileHex SHA224 empty vector",
     ):
         if marker not in file_test_source:
             errors.append(f"hash file empty vector test must pin {marker}")
@@ -469,7 +470,7 @@ def main() -> int:
     )
     if hash_file_hex_files_decl not in file_source:
         errors.append("hash files unit must expose HashFileHex(AAlgo, APath)")
-    for algo in ("haMD5", "haSHA1", "haSHA256", "haSHA384", "haSHA512", "haBLAKE2b256"):
+    for algo in ("haMD5", "haSHA1", "haSHA256", "haSHA384", "haSHA512", "haBLAKE2b256", "haSHA224"):
         if f"Ord({algo})" not in file_source:
             errors.append(f"HashFileHex(AAlgo, APath) must support {algo}")
 
