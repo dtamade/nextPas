@@ -78,6 +78,53 @@ begin
     CheckTrue(not Ed25519Verify(LPub, LMsg, LSig));
   end);
 
+  { 回归：ScMulAdd 进位链曾在罕见进位条件下丢失高位进位，
+    导致约 1/400 的签名非法（首个已知失败：83 字节交替填充消息）。
+    扫描跨 SHA-512 边界的多种长度/填充组合，签验必须全部自洽。 }
+  LSuite.Test('sign/verify roundtrip across message lengths', procedure
+  var
+    LSeed1, LSeed2, LPub1, LPub2, LMsg, LSig: TBytes;
+    I, J: Integer;
+  begin
+    SetLength(LSeed1, 32);
+    SetLength(LSeed2, 32);
+    for J := 0 to 31 do
+    begin
+      LSeed1[J] := $3D;
+      LSeed2[J] := Byte((J * 11 + 7) and $FF);
+    end;
+    LPub1 := Ed25519PublicKeyFromPrivate(LSeed1);
+    LPub2 := Ed25519PublicKeyFromPrivate(LSeed2);
+    for I := 0 to 320 do
+    begin
+      SetLength(LMsg, I);
+      for J := 0 to I - 1 do
+        if J mod 2 = 0 then
+          LMsg[J] := $11
+        else
+          LMsg[J] := Byte((J * 7 + I) and $FF);
+      CheckTrue(Ed25519Sign(LSeed1, LMsg, LSig));
+      if not Ed25519Verify(LPub1, LMsg, LSig) then
+      begin
+        CheckTrue(False, 'roundtrip seed1 len=' + IntToStr(I));
+        Exit;
+      end;
+    end;
+    { 第二把密钥，$FF 填充（全 0xFF 内容曾触发另一类进位路径） }
+    for I := 0 to 200 do
+    begin
+      SetLength(LMsg, I);
+      for J := 0 to I - 1 do
+        LMsg[J] := $FF;
+      CheckTrue(Ed25519Sign(LSeed2, LMsg, LSig));
+      if not Ed25519Verify(LPub2, LMsg, LSig) then
+      begin
+        CheckTrue(False, 'roundtrip seed2 len=' + IntToStr(I));
+        Exit;
+      end;
+    end;
+  end);
+
   LRunner := TSuiteRunner.Create('nextpas.core.crypto.ed25519');
   LRunner.Add(LSuite);
   LRunner.RunAll;

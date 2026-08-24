@@ -27,6 +27,9 @@ function Ed25519TestFePow2523(const AInput: TBytes): TBytes;
 function Ed25519TestFeSq(const AInput: TBytes): TBytes;
 function Ed25519TestFeMul(const A, B: TBytes): TBytes;
 function Ed25519TestPointDouble(const APoint: TBytes): TBytes;
+function Ed25519TestBasePointMul(const AScalar: TBytes): TBytes;
+function Ed25519TestScalarMulPoint(const AScalar, APoint: TBytes): TBytes;
+function Ed25519TestPointAdd(const A, B: TBytes): TBytes;
 
 implementation
 
@@ -134,6 +137,7 @@ begin
 end;
 
 procedure EdPointDouble(out R: TEdPoint; const P: TEdPoint);
+
 var
   A, B, C, E, F, G, HH: TFe25519;
 begin
@@ -450,6 +454,49 @@ begin
   EdPointToBytes(Result, R);
 end;
 
+function Ed25519TestBasePointMul(const AScalar: TBytes): TBytes;
+var
+  LBuf: array[0..63] of Byte;
+  I: Integer;
+begin
+  FillChar(LBuf, 64, 0);
+  for I := 0 to High(AScalar) do
+    if I < 64 then LBuf[I] := AScalar[I];
+  EdPointToBytes(Result, EdBasePointMul(LBuf));
+end;
+
+function Ed25519TestScalarMulPoint(const AScalar, APoint: TBytes): TBytes;
+var
+  LBuf: array[0..63] of Byte;
+  P: TEdPoint;
+  I: Integer;
+begin
+  FillChar(LBuf, 64, 0);
+  for I := 0 to High(AScalar) do
+    if I < 64 then LBuf[I] := AScalar[I];
+  if not EdPointDecode(P, APoint, 0) then
+  begin
+    SetLength(Result, 32);
+    FillChar(Result[0], 32, 0);
+    Exit;
+  end;
+  EdPointToBytes(Result, EdScalarMulPoint(LBuf, P));
+end;
+
+function Ed25519TestPointAdd(const A, B: TBytes): TBytes;
+var
+  PA, PB, R: TEdPoint;
+begin
+  if (not EdPointDecode(PA, A, 0)) or (not EdPointDecode(PB, B, 0)) then
+  begin
+    SetLength(Result, 32);
+    FillChar(Result[0], 32, 0);
+    Exit;
+  end;
+  EdPointAdd(R, PA, PB);
+  EdPointToBytes(Result, R);
+end;
+
 function Ed25519Verify(const APublicKey: TBytes; const AMessage: TBytes;
   const ASignature: TBytes): Boolean;
 var
@@ -508,31 +555,33 @@ end;
 procedure ScMulAdd(out S: array of Byte; const A, B, C: array of Byte);
 var
   LProduct: array[0..63] of Byte;
-  I, J: Integer;
+  I, J, K: Integer;
   LCarry: UInt32;
   LSum: UInt32;
 begin
-  // Compute A*B as 64-byte product (schoolbook multiply in bytes)
+  // Compute A*B as 64-byte product (schoolbook multiply in bytes).
+  // Row-wise accumulation: per row I, add A[I]*B[J] plus a running carry.
+  // Per-step max = 255 + 255*255 + 255 < 2^16, so no overflow in UInt32.
   FillChar(LProduct, 64, 0);
   for I := 0 to 31 do
+  begin
+    LCarry := 0;
     for J := 0 to 31 do
     begin
-      LCarry := UInt32(LProduct[I + J]) + UInt32(A[I]) * UInt32(B[J]);
-      LProduct[I + J] := Byte(LCarry);
-      LCarry := LCarry shr 8;
-      if LCarry > 0 then
-      begin
-        LSum := UInt32(LProduct[I + J + 1]) + LCarry;
-        LProduct[I + J + 1] := Byte(LSum);
-        if LSum > 255 then
-        begin
-          LSum := UInt32(LProduct[I + J + 2]) + (LSum shr 8);
-          LProduct[I + J + 2] := Byte(LSum);
-          if LSum > 255 then
-            LProduct[I + J + 3] := LProduct[I + J + 3] + Byte(LSum shr 8);
-        end;
-      end;
+      LSum := UInt32(LProduct[I + J]) + UInt32(A[I]) * UInt32(B[J]) + LCarry;
+      LProduct[I + J] := Byte(LSum);
+      LCarry := LSum shr 8;
     end;
+    { 进位必须沿乘积高位一路传播，不能中途丢弃 }
+    K := I + 32;
+    while (LCarry > 0) and (K < 64) do
+    begin
+      LSum := UInt32(LProduct[K]) + LCarry;
+      LProduct[K] := Byte(LSum);
+      LCarry := LSum shr 8;
+      Inc(K);
+    end;
+  end;
 
   // Add C
   LCarry := 0;
