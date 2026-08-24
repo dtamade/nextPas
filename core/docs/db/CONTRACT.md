@@ -427,6 +427,35 @@ opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
   连接不受影响。离线门控 live env：NEXTPAS_REDIS_TEST_TLS_CONN /
   NEXTPAS_REDIS_TEST_TLS_PASSWORD。
 
+### 2.14 统一驱动工厂与 Open 即池（V3-A5 收口）
+
+`nextpas.core.db.factory`：Go `database/sql` 的
+`sql.Register`/`sql.Open` 与 ADO.NET `DbProviderFactory` 的对位物。
+
+- **IDbDriver**：Name（注册键，注册时归一小写）/ Kind（内建枚举
+  归属；第三方适配器诚实返回 dbkUnknown，不冒充内建后端）/
+  Open(Dsn, TDbConnectOptions)。
+- **注册制**：内建五驱动 sqlite/postgres/mysql/odbc/redis 单元
+  初始化自注册；第三方 `DbRegisterDriver` 注入即接入全套入口。
+  nil/空名/重复名 fail-closed 抛 EDbError(dbkUnknown)（对齐
+  sql.Register 同名 panic 防静默覆盖）。`DbRegisteredDrivers`
+  返回排序快照供诊断。实现注记：参数托管传参、锁内单出口——
+  规避 FPC trunk「const 接口临时实参 + 锁内提前退出」的临时值
+  生命周期缺陷（该组合实测泄漏调用方临时对象）。
+- **入口**：`DbOpen(name|kind, dsn[, opts])`；kind 先按内建规范名
+  命中、再按注册表 Kind 声明兜底扫描；dbkUnknown 且无第三方声明
+  时 EDbNotSupported fail-closed。DSN 形态沿用各后端现行约定
+  （pg conninfo / mysql dsn / odbc connstr 原文透传、sqlite 路径、
+  redis addr）；redis:// 富 URL 解析不进本版，细控走 ConnectRedis
+  options 重载。
+- **Open 即池**：`DbOpenPool(name|kind, dsn, policy)` 以 DbOpen 为
+  工厂闭包构建既有 V3-C3 池 TDbPool——对齐 Go "*sql.DB 天生是池"
+  核心体验；连接选项取 Default（细控场景直接 TDbPool.Create 自组
+  工厂闭包）。
+- **错误透传**：后端连接错误原样上抛保留各自 Backend 归属；
+  pg 建连失败恒带 SQLSTATE '08000'（connection_exception）→
+  decConnection。TDbConnectOptions 为 advisory 语义（§2.6b 惯例）。
+
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
 旧入口名 `nextpas.core.sqlite` / `nextpas.core.pg` 曾在 G2 全量删除；

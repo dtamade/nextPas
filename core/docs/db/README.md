@@ -35,6 +35,26 @@ end;
 所有权模型：对外一律 interface（COM 引用计数），消费方不手写 Free；
 连接不可跨线程并发使用，并发经 `nextpas.core.db.pool` 分发。
 
+### 统一入口（Go sql.Open 形态，V3-A5 收口）
+
+```pascal
+uses nextpas.core.db.factory;
+
+var Conn: IDbConnection;
+begin
+  // 注册制驱动入口：内建五驱动 sqlite/postgres/mysql/odbc/redis 自注册
+  Conn := DbOpen('sqlite', ':memory:');
+  Conn := DbOpen(dbkPostgres, 'host=/var/run/postgresql dbname=myapp user=app');
+
+  // Open 即池：返回工业级连接池（Go *sql.DB 形态）
+  var P := DbOpenPool('postgres',
+    'host=/var/run/postgresql dbname=myapp user=app', TDbPoolPolicy.Default);
+end.
+```
+
+第三方驱动实现 `IDbDriver` 后 `DbRegisterDriver` 注入即接入
+DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
+
 ## 特性矩阵
 
 | 能力 | sqlite | PostgreSQL | 契约 |
@@ -56,6 +76,7 @@ end;
 | 观测钩子（IDbTraceListener/IDbTraceControl，四后端同构接线） | ✅ | ✅ | §2.12 |
 | Redis 原生后端（RESP2 无 C 库依赖，键值面映射统一层） | ✅ | ✅ | §2.13 |
 | 错误归一（Category+Constraint 双码位） | ✅ | ✅ 含定位字段 | §2.2 |
+| 统一驱动工厂（注册制 DbOpen + Open 即池 DbOpenPool） | ✅ | ✅ 五后端+可插拔 | §2.14 |
 
 上表已运行时自述化（V3-B1）：`DbCapabilities(Conn)` 返回
 `IDbCapabilities`，消费方按能力探测降级而非按后端名分支；契约语义见
@@ -87,19 +108,23 @@ opts])` 已透出。契约见 CONTRACT §2.11。门禁仅驱动管理器
 | [../plans/2026-08-23-db-v2-architecture.md](../plans/2026-08-23-db-v2-architecture.md) | v2 架构基线（设计决策、对标批评、缺口账本） |
 | [../plans/2026-08-23-db-v2-increment-go-rust.md](../plans/2026-08-23-db-v2-increment-go-rust.md) | Go/Rust 对标增量（INC 清单与落地注记） |
 | [../plans/2026-08-23-db-v3-industrial-roadmap.md](../plans/2026-08-23-db-v3-industrial-roadmap.md) | **V3 工业级路线图**：后端扩张/架构收口/性能工业化三主线 |
+| [../plans/2026-08-25-db-industrial-parity.md](../plans/2026-08-25-db-industrial-parity.md) | Go/Rust 能力对照矩阵与剩余缺口分片（P0/P1/P2） |
 
 ## 门禁速查
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.db/test_db_conformance  # 跨后端一致性契约
 make focused FOCUS=core/tests/nextpas.core.db/test_db_v2           # 统一层全 API 面
+make focused FOCUS=core/tests/nextpas.core.db/test_db_factory      # 统一驱动工厂
 # 全部门禁清单见 CONTRACT §5；每个含 heaptrc 0 unfreed 硬门槛
 ```
 
 pg/mysql 相关门禁需要本地实例（Makefile `ensure-db` 自动建测试库，
 `NEXTPAS_PG_TEST_CONN` 覆盖连接串）。
 
-## 兼容 shim（已删除）
+## 兼容 shim（恢复为最小面，2026-08-25）
 
-旧单元名 `nextpas.core.sqlite.*` / `nextpas.core.pg.*` 已在 G2 消费方
-清扫中删除（CONTRACT §3）；一律使用 `nextpas.core.db.*` 家族单元名。
+旧入口名 `nextpas.core.sqlite` / `nextpas.core.pg` 曾在 G2 全量删除；
+因并行存量项目仍 uses 旧名无法编译，同日恢复为两个薄 re-export shim
+（CONTRACT §3）。迁移窗口重开：存量项目零改动即可编译，**新代码一律
+使用 `nextpas.core.db.*` 家族单元名**。
