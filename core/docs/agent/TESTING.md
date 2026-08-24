@@ -24,6 +24,7 @@
 | `test_codecs` | 公开编解码器（D13） | 快照 wire → Decode → 词表 → Encode 语义等价往返（Extra 保真）；未映射枚举值→零值+`agent.unmapped.*`+warn；WireDecoder 跨断裂帧与 Finalize 双序（usage 先/后）等价、anthropic 无 message_stop 的 EOF 抛 aecProtocol（Q-A8）；协议违例输入抛 aecProtocol 带 RawBodySnippet；网关式双角色并行解码互不污染 |
 | `test_clock` | IAgentClock 实现 | TFakeClock 零睡眠记录（LastSleepRequestMs）+ Advance 虚拟推进、已取消令牌 SleepMs=False 且仍记录请求、经接口引用驱动可用；SystemClock NowMs 单调、自然睡眠耗时匹配请求、预取消长睡立即返回 False 不真等 |
 | `test_retry` | WithRetry + fake clock | 429 按 Retry-After 重试成功；指数退避曲线+抖动边界；MaxAttempts 耗尽抛原始错误；白名单外错误直通不睡；取消打断退避（fake clock 推进+令牌触发）；全程零真实睡眠 |
+| `test_resilience` | 韧性纯函数三件 | StreamHasError 断流帧指纹判定；WaitCancelMs 取消感知等待（预取消 True、nil 源吸收、非正延迟跳过、ms→ns 超界守卫不挂死）；ClampHintMs 服务端提示与本地退避同帽收敛、负哨兵透传 |
 | `test_tools` | 校验/截断/包装 | 名称/schema 注册校验 aecConfig；§1.5 参数校验全集（256KiB 预检、深度上限、required 存在性、string/number/boolean 类型核对）失败→error result；行/字节截断信封（UTF-8 安全切、双限兜底）；超时包装经 fake clock 驱动虚拟截止且迟到结果不回读；中途取消合成 cancelled error；工具异常兜底 'tool raised' 归因；ctx 令牌/序号贯通 |
 | `test_loop` | TAgentLoop 全语义 | OnEvent 事件序快照（runStart..runEnd 全轨迹）；并行证明批（原子闸门桩：真并行时 B 放行 A，退化串行即饿死暴露）；80% 预算预警一次性+roBudgetExhausted 引导收尾（引导轮 Tools=nil 断言）；防打转阈值 roDoomLoop+引导文本逐字断言；MaxToolCalls 批裁剪至余量；roRoundsExhausted；pre-hook hvBlock 合成错误回喂/hvStop 即终点不回喂；post-hook 只见截断后载荷；未知工具合成错误回喂；provider 失败→roFailed+LastError 保真不冒泡；轮界取消 roCancelled 无 FinalMessage；回调异常直接冒出 Run |
 | `test_fake_provider` | fake/scripted 自身 | 脚本回放顺序、耗尽再调抛错、echo 桩 |
