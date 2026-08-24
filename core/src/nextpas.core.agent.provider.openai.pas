@@ -106,7 +106,8 @@ uses
 const
   { 已映射字段黑名单：捕获时跳过。未列出的键一律无损进 ExtraJson
     （含 refusal/logprobs/annotations 等本适配器 v1 未消费的字段）}
-  CKNOWN_ROOT: array[0..3] of string = ('id', 'object', 'choices', 'usage');
+  CKNOWN_ROOT: array[0..4] of string = ('id', 'object', 'choices', 'usage',
+    'model');
   CKNOWN_CHOICE: array[0..2] of string = ('index', 'message', 'finish_reason');
   CKNOWN_MESSAGE: array[0..3] of string =
     ('role', 'content', 'tool_calls', 'reasoning_content');

@@ -605,6 +605,13 @@ begin
       'tool spec name travels to request');
     CheckLength(3, Length(Prov.RequestAt(1).Messages),
       'second request sees transcript incl tool turn');
+    { 厂商 prompt cache 前缀稳定性（PERFORMANCE §6）：历史消息跨轮
+      字节不变、只追加 }
+    CheckEqual(Prov.RequestAt(0).Messages[0].Parts[0].Text,
+      Prov.RequestAt(1).Messages[0].Parts[0].Text,
+      'seed user message byte-stable across rounds');
+    CheckLength(1, Length(Prov.RequestAt(1).Tools),
+      'tools section constant across rounds');
 
     TR := Run.Transcript;
     CheckLength(4, Length(TR), 'transcript user/asst/tool/asst');

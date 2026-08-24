@@ -4,8 +4,10 @@
 重试/取消、用量核算。**通用的、可复用的、接口优雅的、高性能的**——不绑定任何
 具体应用语义（不是 coding agent，不含任何内置业务工具）。
 
-> **Status: draft（W0 阶段）。本目录文档是实施蓝图，按图施工；
-> API 以 `API.md` 为契约权威，落地后按 CONTRACT 纪律维护。**
+> **Status: stable(draft truth)。W0-W4 已落地：协议/传输/两适配器/重试/
+> 工具循环/示例/基准全部带 gate；session 域接口先行（实现 W5 按需立项）。
+> API 以 `API.md` 为契约权威，覆盖率对照见 `API_COVERAGE.md`，
+> 性能基线见 `BENCHMARKS.md`。**
 
 ## 定位
 

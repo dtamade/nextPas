@@ -53,6 +53,13 @@
   AcquireExceptionObject 移交所有权给 TLoopRun（析构 Free）。
 - LIFECYCLE §5 措辞已按实现修订：SubmitDirect 直提 + WaitAllTimeout 200µs
   切片轮询 + 逐项时钟感知截止合成（原 SubmitBatch + 批级一次汇合措辞不符）。
+- **W4 收口发现并修复 openai 根级已知键漏 'model'**：CKNOWN_ROOT 未含
+  model，已知字段（AMsg.Model 已映射）被二次捕获进 ExtraJson——挤占
+  64 键捕获预算且污染回注。test_security 的 Extra 上限断言暴露；已补。
+  anthropic 根级表核对无此缺口。
+- **W4 装配门教训**：loop 恒走流路径——scripted transport 喂非流式体时
+  流路径折叠为空消息（不报错）。test_assembly 以 SSE 块脚本供给并在注释
+  记录该形态约定；provider 级非流式 e2e 仍归 test_provider_* 门。
 
 ## Inbox（活动输入池，非承诺）
 

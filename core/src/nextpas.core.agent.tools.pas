@@ -45,7 +45,7 @@ function ValidateToolArguments(const ASpec: TToolSpec;
   const AArgsJson: TJsonText): TToolResult;
 
 { 结果截断信封：未超限原样返回；超限按 UTF-8 安全切文本投影产出合法 JSON
-  包裹 {"truncated":true,"content":"<切后>"} 并置 Truncated=True。
+  包裹（truncated=true、content=切后文本）并置 Truncated=True。
   AMaxLines/AMaxBytes ≤0 视为关闭该项 }
 function EnvelopeTruncation(const AResult: TToolResult;
   AMaxLines, AMaxBytes: Integer): TToolResult;
@@ -182,6 +182,7 @@ var
   I: Integer;
   LKey: string;
 begin
+  Result := Default(TToolResult);      { 成功路径的显式初始化 }
   if Length(AArgsJson) > CTOOLS_MAX_ARGS_BYTES then
   begin
     MakeErrInto(Result, 'arguments exceed 256 KiB precheck limit');
@@ -248,8 +249,6 @@ begin
         end;
       end;
   end;
-
-  Result := Default(TToolResult);
 end;
 
 { UTF-8 安全截断（provider.common 有同源孪生；合并候选进 inbox）：
@@ -418,7 +417,7 @@ procedure RunToolBatch(const AJobs: array of TToolJob;
 var
   I: Integer;
   LStart, LNow: Int64;
-  LAllDone, LCancelled: Boolean;
+  LCancelled: Boolean;
   LTimedOut: array of Boolean;
   LPending: Integer;
 begin
