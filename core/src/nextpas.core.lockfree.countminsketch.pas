@@ -51,23 +51,15 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.checksum;
 
 function Fnv1aHash(const AData: Pointer; ALength: Int32; ASeed: UInt32): UInt32;
-const
-  FNV_PRIME = 16777619;
-var
-  I: Int32;
-  LByte: PByte;
 begin
-  Result := ASeed;
-  LByte := PByte(AData);
-  for I := 0 to ALength - 1 do
-  begin
-    Result := Result xor LByte^;
-    Result := Result * FNV_PRIME;
-    Inc(LByte);
-  end;
+  if ALength <= 0 then
+    Result := ASeed
+  else
+    Result := Fnv1a32Update(ASeed, AData, SizeUInt(ALength));
 end;
 
 constructor TCountMinSketch.Create(ADepth, AWidth: Int32);
