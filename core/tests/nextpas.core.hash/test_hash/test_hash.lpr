@@ -92,6 +92,47 @@ begin
     SHA1Hex(ABC[0], SizeOf(ABC)), 'SHA1 abc');
 end;
 
+function BLAKE2b256Hex(const ABuf; ASize: SizeUInt): string;
+var
+  LDigest: TBLAKE2b256Digest;
+begin
+  LDigest := BLAKE2b256Of(ABuf, ASize);
+  Result := DigestToHex(LDigest[0], SizeOf(LDigest));
+end;
+
+procedure TestBLAKE2b256Vectors;
+const
+  ABC: array[0..2] of Byte = (Ord('a'), Ord('b'), Ord('c'));
+  LONG_MSG = 'abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq';
+var
+  LLong: TBytes;
+  LH: IHasher;
+  LDigest: TBLAKE2b256Digest;
+begin
+  CheckEqual(
+    '0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8',
+    BLAKE2b256Hex(GNilByte^, 0),
+    'BLAKE2b-256 empty');
+  CheckEqual(
+    'bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319',
+    BLAKE2b256Hex(ABC[0], SizeOf(ABC)),
+    'BLAKE2b-256 abc');
+  LLong := BytesOf(LONG_MSG);
+  CheckEqual(
+    '5f7a93da9c5621583f22e49e8e91a40cbba37536622235a380f434b9f68e49c4',
+    BLAKE2b256Hex(LLong[0], Length(LLong)),
+    'BLAKE2b-256 448-bit');
+  LH := NewBLAKE2b256;
+  LH.Write(ABC[0], 1);
+  LH.Write(ABC[1], 1);
+  LH.Write(ABC[2], 1);
+  LH.Sum(LDigest[0], SizeOf(LDigest));
+  CheckEqual(
+    'bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319',
+    DigestToHex(LDigest[0], SizeOf(LDigest)),
+    'BLAKE2b-256 streaming abc');
+end;
+
 procedure TestStreamingHasher;
 var
   LH: IHasher;
@@ -122,6 +163,19 @@ end;
 procedure CallSHA256OfNilPositive;
 begin
   SHA256Of(GNilByte^, 1);
+end;
+
+procedure CallBLAKE2b256OfNilPositive;
+begin
+  BLAKE2b256Of(GNilByte^, 1);
+end;
+
+procedure CallBLAKE2b256WriteNilPositive;
+var
+  LH: IHasher;
+begin
+  LH := NewBLAKE2b256;
+  LH.Write(GNilByte^, 1);
 end;
 
 procedure CallMD5WriteNilPositive;
@@ -216,6 +270,10 @@ begin
     'DigestToHex nil+positive');
   CheckRaisesArgumentError(@CallSHA256OfNilPositive,
     'SHA256Of nil+positive');
+  CheckRaisesArgumentError(@CallBLAKE2b256OfNilPositive,
+    'BLAKE2b256Of nil+positive');
+  CheckRaisesArgumentError(@CallBLAKE2b256WriteNilPositive,
+    'BLAKE2b256 Write nil+positive');
   CheckRaisesArgumentError(@CallMD5WriteNilPositive,
     'MD5 Write nil+positive');
   CheckRaisesArgumentError(@CallSHA1WriteNilPositive,
@@ -239,6 +297,7 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.hash');
   T.Test('SHA256 vectors', @TestSHA256Vectors);
+  T.Test('BLAKE2b-256 vectors', @TestBLAKE2b256Vectors);
   T.Test('MD5 and SHA1 vectors', @TestMD5AndSHA1Vectors);
   T.Test('streaming hasher', @TestStreamingHasher);
   T.Test('nil buffer contract', @TestNilBufferContract);

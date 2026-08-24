@@ -4,8 +4,8 @@ unit nextpas.core.hash;
 
 { nextpas.core.hash — 哈希模块门面
 
-  L2 系统能力模块。提供 SHA-256/384/512 和 MD5 哈希原语。
-  IHasher 继承 IWriter，可直接与 io 层集成。
+  L2 系统能力模块。提供 SHA-256/384/512、MD5 与 BLAKE2b-256
+  （RFC 7693 无密钥）哈希原语。IHasher 继承 IWriter，可直接与 io 层集成。
 
   用法：
     uses nextpas.core.hash;
@@ -25,6 +25,7 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.hash.sha256,
   nextpas.core.hash.sha512,
+  nextpas.core.hash.blake2b,
   nextpas.core.hash.util,
   nextpas.core.hash.files,
   nextpas.core.hash.wyhash;
@@ -37,6 +38,7 @@ type
   TSHA256Digest = nextpas.core.hash.base.TSHA256Digest;
   TSHA384Digest = nextpas.core.hash.base.TSHA384Digest;
   TSHA512Digest = nextpas.core.hash.base.TSHA512Digest;
+  TBLAKE2b256Digest = nextpas.core.hash.blake2b.TBLAKE2b256Digest;
 
 const
   haMD5 = nextpas.core.hash.base.haMD5;
@@ -56,12 +58,15 @@ const
   SHA256_BLOCK_SIZE = nextpas.core.hash.base.SHA256_BLOCK_SIZE;
   SHA384_BLOCK_SIZE = nextpas.core.hash.base.SHA384_BLOCK_SIZE;
   SHA512_BLOCK_SIZE = nextpas.core.hash.base.SHA512_BLOCK_SIZE;
+  BLAKE2B256_DIGEST_SIZE = nextpas.core.hash.blake2b.BLAKE2B256_DIGEST_SIZE;
 
 function NewMD5: IHasher; inline;
 function NewSHA1: IHasher; inline;
 function NewSHA256: IHasher; inline;
 function NewSHA384: IHasher; inline;
 function NewSHA512: IHasher; inline;
+function NewBLAKE2b256: IHasher; inline;
+function BLAKE2b256Of(const ABuf; ALen: SizeUInt): TBLAKE2b256Digest;
 function NewHasher(AAlgo: THashAlgorithm): IHasher;
 function GetDigestSize(AAlgo: THashAlgorithm): SizeUInt; inline;
 function GetBlockSize(AAlgo: THashAlgorithm): SizeUInt; inline;
@@ -109,6 +114,16 @@ end;
 function NewSHA512: IHasher;
 begin
   Result := nextpas.core.hash.sha512.NewSHA512;
+end;
+
+function NewBLAKE2b256: IHasher;
+begin
+  Result := nextpas.core.hash.blake2b.NewBLAKE2b256;
+end;
+
+function BLAKE2b256Of(const ABuf; ALen: SizeUInt): TBLAKE2b256Digest;
+begin
+  Result := nextpas.core.hash.blake2b.BLAKE2b256Of(ABuf, ALen);
 end;
 
 function GetDigestSize(AAlgo: THashAlgorithm): SizeUInt;
