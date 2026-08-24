@@ -511,10 +511,11 @@ atsCancelled: TAsyncTaskStatus = 5;
 ### Async UDP (Q15)
 - `IAsyncUdpSocket` / `AsyncUdpBind` in `net.async.udp` (IPv4, matches sync `NetUdpBind`).
 - `AsyncSendTo` / `AsyncRecvFrom` (+ Timeout) via poller `AsyncSendTo`/`AsyncRecvFrom`.
-- Reactors: epoll + kqueue ops; **io_uring backend uses epoll sidecar** for datagram; IOCP not implemented (returns False).
+- Reactors: epoll + kqueue ops; **io_uring backend uses epoll sidecar** for datagram; IOCP via WSASendTo/WSARecvFrom.
+- UDP full-duplex: `AsyncSendTo` tries `sendto`/`WSASendTo` first. On Linux/BSD a successful send does **not** register or `DEL` the fd, so an armed `RecvFrom` on the same socket stays live (QUIC/hysteria2). Only EAGAIN/EINTR waits for `EPOLLOUT`/`EVFILT_WRITE`.
 - `IUdpSocketRuntime` exposes native fd for async layer.
-- Evidence: `test_net_async_udp` loopback + timeout + 0 leak.
-- Not: IPv6 UDP, multicast, connected UDP API, IOCP datagram.
+- Evidence: `test_net_async_udp` loopback + timeout + same-socket send-while-recv + 0 leak; `test_epoll_reactor` SendTo while RecvFrom armed.
+- Not: IPv6 UDP, multicast, connected UDP API.
 
 ### Connection pool async acquire (Q16)
 - `IConnectionPool.AcquireAsync(host, port, cb, ctx, token?)`: prefer idle; else `AsyncTcpDial` (HE).

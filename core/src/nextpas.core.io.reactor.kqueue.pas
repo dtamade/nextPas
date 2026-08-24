@@ -71,6 +71,7 @@ type
     procedure FreeOp(AIdx: Int32);
     function SetNonBlocking(AFd: Int32): Boolean;
     function RegisterFilter(AFd: Int32; AFilter: Int16; AData: UInt64): Boolean;
+    procedure RemoveFilter(AFd: Int32; AFilter: Int16);
     procedure RemoveFd(AFd: Int32);
     procedure ReleasePendingOps(AResult: Int32);
     procedure DispatchEvent(const AEv: TKEvent);
@@ -263,6 +264,19 @@ begin
   Result := kevent(FKqFd, @LChange, 1, nil, 0, nil) >= 0;
 end;
 
+procedure TKqueueReactor.RemoveFilter(AFd: Int32; AFilter: Int16);
+var
+  LChange: TKEvent;
+begin
+  if FKqFd < 0 then
+    Exit;
+  FillChar(LChange, SizeOf(LChange), 0);
+  LChange.Ident := PtrUInt(AFd);
+  LChange.Filter := AFilter;
+  LChange.Flags := EV_DELETE;
+  kevent(FKqFd, @LChange, 1, nil, 0, nil);
+end;
+
 procedure TKqueueReactor.RemoveFd(AFd: Int32);
 var
   LChanges: array[0..1] of TKEvent;
@@ -431,7 +445,8 @@ begin
       LRes := sendto(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
         FOps[AIdx].Flags, FOps[AIdx].Addr, socklen_t(FOps[AIdx].AddrLenVal));
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      { 只摘 WRITE：同一 UDP fd 上 EVFILT_READ 的 RecvFrom 必须留下 }
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_WRITE);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -641,6 +656,8 @@ function TKqueueReactor.AsyncSendTo(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then
   begin
@@ -655,6 +672,17 @@ begin
   if not SetNonBlocking(AFd) then
   begin
     Result := False;
+    Exit;
+  end;
+  { 与 epoll 同：先 sendto，成功不动 kqueue，避免 EVFILT_WRITE 完成时
+    RemoveFd 把 EVFILT_READ 一并删掉。 }
+  LRes := sendto(AFd, ABuf, ALen, AFlags, AAddr, socklen_t(AAddrLen));
+  LRes32 := KqueueResultFromSyscall(LRes);
+  if (LRes32 <> -ESysEAGAIN) and (LRes32 <> -EINTR_LOCAL) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
     Exit;
   end;
   LIdx := AllocOp(opSendTo, AFd, ABuf, ALen, -1, AFlags, AAddr, nil, AAddrLen,

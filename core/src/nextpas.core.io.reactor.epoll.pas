@@ -670,16 +670,28 @@ function TEpollReactor.AsyncSendTo(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then begin Result := False; Exit; end;
   if (AAddr = nil) or (AAddrLen = 0) then begin Result := False; Exit; end;
   if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
+  { UDP 全双工：同一 fd 常挂 RecvFrom（EPOLLIN ADD）。先 sendto，成功则
+    不动 epoll——避免 ADD 撞 EEXIST 丢包，也避免成功路径 CompleteOp
+    RemoveFd 拆掉 recv。仅 EAGAIN/EINTR 才挂 EPOLLOUT。 }
+  LRes := sendto(AFd, ABuf, ALen, AFlags, AAddr, socklen_t(AAddrLen));
+  LRes32 := EpollResultFromSyscall(LRes);
+  if (LRes32 <> -EAGAIN) and (LRes32 <> -EINTR) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
+    Exit;
+  end;
   LIdx := AllocOp(opSendTo, AFd, ABuf, ALen, -1, AFlags, AAddr, nil, AAddrLen,
     ACallback, AContext);
   Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if Result then
-    TryOpImmediately(LIdx)
-  else
+  if not Result then
     FreeOp(LIdx);
 end;
 

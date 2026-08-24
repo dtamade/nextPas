@@ -21,6 +21,7 @@ var
   GBytes: Int32;
   GFrom: TNetAddress;
   GPayload: string;
+  GPeerB: IAsyncUdpSocket;
 
 procedure StopCb(AContext: Pointer);
 begin
@@ -107,6 +108,83 @@ begin
   end;
 end;
 
+procedure OnSendNop(AResult: Int32; ABytes: Int32; AContext: Pointer);
+begin
+  if AResult < 0 then
+    GResult := AResult;
+end;
+
+procedure OnRecvA(AResult: Int32; ABytes: Int32; const AFrom: TNetAddress;
+  AContext: Pointer);
+var
+  LBuf: PAnsiChar;
+begin
+  if (AResult >= 0) and (ABytes > 0) and (AContext <> nil) then
+  begin
+    LBuf := PAnsiChar(AContext);
+    SetString(GPayload, LBuf, ABytes);
+  end;
+  GDone := True;
+  GLoop.Stop;
+end;
+
+procedure OnRecvBThenReply(AResult: Int32; ABytes: Int32;
+  const AFrom: TNetAddress; AContext: Pointer);
+var
+  LReply: AnsiString;
+begin
+  if AResult < 0 then
+  begin
+    GResult := AResult;
+    GLoop.Stop;
+    Exit;
+  end;
+  GBytes := ABytes;
+  LReply := 'hy2-ack';
+  if not GPeerB.AsyncSendTo(@LReply[1], Length(LReply), AFrom, @OnSendNop, nil) then
+    GResult := -1;
+end;
+
+procedure TestSameSocketSendWhileRecv;
+{ hysteria2/QUIC：同一 socket 先 RecvFrom 再 SendTo，对端回包必须仍能收到。 }
+var
+  LA, LB: IAsyncUdpSocket;
+  LMsg: AnsiString;
+  LBufA, LBufB: array[0..63] of AnsiChar;
+  LToB: TNetAddress;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GResult := 0;
+    GBytes := 0;
+    GPayload := '';
+    LA := AsyncUdpBind(GLoop, '127.0.0.1', 0);
+    LB := AsyncUdpBind(GLoop, '127.0.0.1', 0);
+    GPeerB := LB;
+    LMsg := 'hy2-get';
+    FillChar(LBufA[0], SizeOf(LBufA), 0);
+    FillChar(LBufB[0], SizeOf(LBufB), 0);
+    LToB := TNetAddress.IPv4('127.0.0.1', LB.LocalAddr.Port);
+    Check(LA.AsyncRecvFrom(@LBufA[0], SizeOf(LBufA), @OnRecvA, @LBufA[0]),
+      'A recv armed first');
+    Check(LA.AsyncSendTo(@LMsg[1], Length(LMsg), LToB, @OnSendNop, nil),
+      'A send while recv armed');
+    CheckEqual(Int64(0), Int64(GResult), 'send must not fail');
+    Check(LB.AsyncRecvFrom(@LBufB[0], SizeOf(LBufB), @OnRecvBThenReply, nil),
+      'B recv');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'A got reply (recv survived send)');
+    Check(GPayload = 'hy2-ack', 'A payload');
+    LA.Close;
+    LB.Close;
+  finally
+    GPeerB := nil;
+    GLoop.Free;
+  end;
+end;
+
 procedure TestRecvTimeout;
 var
   LSock: IAsyncUdpSocket;
@@ -136,6 +214,7 @@ begin
   T := TTestSuite.Create('net_async_udp');
   T.Test('BindLocal', @TestBindLocal);
   T.Test('LoopbackSendRecv', @TestLoopbackSendRecv);
+  T.Test('SameSocketSendWhileRecv', @TestSameSocketSendWhileRecv);
   T.Test('RecvTimeout', @TestRecvTimeout);
   if not T.Run then
     Halt(1);

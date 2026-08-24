@@ -21,6 +21,9 @@ var
   GLastCloseResult: Int32;
   GRaisingCallbackCount: Int32;
   GRaisingAbortCount: Int32;
+  GUdpSendCount: Int32;
+  GUdpRecvA: Int32;
+  GUdpRecvB: Int32;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
@@ -77,6 +80,22 @@ begin
     Inc(GRaisingAbortCount);
   if GRaisingCallbackCount = 1 then
     raise Exception.Create('epoll reactor close callback failure');
+end;
+
+procedure OnUdpSend(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  Inc(GUdpSendCount);
+  GLastResult := AResult;
+end;
+
+procedure OnUdpRecvA(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GUdpRecvA := AResult;
+end;
+
+procedure OnUdpRecvB(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GUdpRecvB := AResult;
 end;
 
 procedure OnCompleteReenterClose(AUserData: UInt64; AResult: Int32; AContext: Pointer);
@@ -634,6 +653,105 @@ begin
   end;
 end;
 
+procedure BindLoopbackUdp(out AFd: Int32; out AAddr: sockaddr_in);
+var
+  LLen: socklen_t;
+begin
+  AFd := nextpas.core.platform.posix.ffi.socket(AF_INET, SOCK_DGRAM, 0);
+  Check(AFd >= 0, 'udp socket');
+  FillChar(AAddr, SizeOf(AAddr), 0);
+  AAddr.sin_family := AF_INET;
+  AAddr.sin_port := 0;
+  AAddr.sin_addr.s_bytes[1] := 127;
+  AAddr.sin_addr.s_bytes[2] := 0;
+  AAddr.sin_addr.s_bytes[3] := 0;
+  AAddr.sin_addr.s_bytes[4] := 1;
+  Check(nextpas.core.platform.posix.ffi.bind(AFd, @AAddr, SizeOf(AAddr)) = 0,
+    'udp bind');
+  LLen := SizeOf(AAddr);
+  Check(nextpas.core.platform.posix.ffi.getsockname(AFd, @AAddr, @LLen) = 0,
+    'udp getsockname');
+end;
+
+procedure TestSendToWhileRecvFromArmed;
+{ QUIC/hysteria2：同一 UDP fd 先挂 RecvFrom，再 AsyncSendTo。
+  旧实现 EPOLL_CTL_ADD(EPOLLOUT) 撞 EEXIST，数据报未发出。 }
+var
+  LR: TEpollReactor;
+  LFdA, LFdB: Int32;
+  LAddrA, LAddrB, LFrom: sockaddr_in;
+  LFromLen: socklen_t;
+  LMsg: array[0..6] of AnsiChar;
+  LRxA, LRxB: array[0..31] of AnsiChar;
+  LCount: Int32;
+  LReady: Boolean;
+begin
+  LReady := False;
+  LFdA := -1;
+  LFdB := -1;
+  GUdpSendCount := 0;
+  GUdpRecvA := 0;
+  GUdpRecvB := 0;
+  GLastResult := 0;
+  LR := TEpollReactor.Create(16);
+  Check(LR.IsValid, 'valid');
+  try
+    BindLoopbackUdp(LFdA, LAddrA);
+    BindLoopbackUdp(LFdB, LAddrB);
+    LReady := True;
+    LMsg[0] := 'h'; LMsg[1] := 'y'; LMsg[2] := '2'; LMsg[3] := '-';
+    LMsg[4] := 'g'; LMsg[5] := 'e'; LMsg[6] := 't';
+    FillChar(LRxA, SizeOf(LRxA), 0);
+    FillChar(LRxB, SizeOf(LRxB), 0);
+    FillChar(LFrom, SizeOf(LFrom), 0);
+    LFromLen := SizeOf(LFrom);
+
+    Check(LR.AsyncRecvFrom(LFdA, @LRxA[0], SizeOf(LRxA), 0, @LFrom, @LFromLen,
+      @OnUdpRecvA, nil), 'A recv armed first');
+    Check(LR.HasPending, 'recv is pending');
+
+    Check(LR.AsyncSendTo(LFdA, @LMsg[0], 7, 0, @LAddrB, SizeOf(LAddrB),
+      @OnUdpSend, nil), 'A send while recv armed');
+    CheckEqual(Int64(1), Int64(GUdpSendCount), 'send completed (not EEXIST)');
+    CheckEqual(Int64(7), Int64(GLastResult), 'sent 7 bytes');
+    Check(LR.HasPending, 'recv still pending after send');
+    CheckEqual(Int64(0), Int64(GUdpRecvA), 'A recv must not fire on send');
+
+    Check(LR.AsyncRecvFrom(LFdB, @LRxB[0], SizeOf(LRxB), 0, @LFrom, @LFromLen,
+      @OnUdpRecvB, nil), 'B recv');
+
+    LCount := 0;
+    while (GUdpRecvB = 0) and (LCount < 100) do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    CheckEqual(Int64(7), Int64(GUdpRecvB), 'B got datagram');
+    Check((LRxB[0] = 'h') and (LRxB[1] = 'y') and (LRxB[2] = '2'),
+      'B payload');
+
+    { 回包：证明 A 的 RecvFrom 没被 send 的 RemoveFd 拆掉 }
+    Check(LR.AsyncSendTo(LFdB, @LMsg[0], 7, 0, @LAddrA, SizeOf(LAddrA),
+      @OnUdpSend, nil), 'B reply');
+
+    LCount := 0;
+    while (GUdpRecvA = 0) and (LCount < 100) do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    CheckEqual(Int64(7), Int64(GUdpRecvA), 'A recv survived send');
+    Check((LRxA[0] = 'h') and (LRxA[6] = 't'), 'A payload');
+  finally
+    if LReady then
+    begin
+      nextpas.core.platform.posix.ffi.close(LFdA);
+      nextpas.core.platform.posix.ffi.close(LFdB);
+    end;
+    LR.Close;
+  end;
+end;
+
 procedure TestPostCloseSubmissionsAreRejected;
 var
   LR: TEpollReactor;
@@ -709,5 +827,7 @@ begin
     @TestCompletionReenterCloseDoesNotAbortAgain);
   T.Test('Post-close submissions are rejected',
     @TestPostCloseSubmissionsAreRejected);
+  T.Test('SendTo while RecvFrom armed (UDP full-duplex)',
+    @TestSendToWhileRecvFromArmed);
   if not T.Run then Halt(1);
 end.
