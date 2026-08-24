@@ -43,6 +43,7 @@ begin
   GAttempts := nil;
   GDelays := nil;
   GCodes := nil;
+  GTokForHook := nil;                { 全局接口持有必须随用例复位释放 }
 end;
 
 procedure ObsHook(const AAttempt: Integer; const ADelayMs: Int64;
@@ -463,12 +464,14 @@ procedure TestConfigGuards;
 var
   TP: TScriptedTransport;
   CK: TFakeClock;
+  CKHold: IAgentClock;               { 接口持有：守卫路径不会接管时钟 }
   P: TRetryPolicy;
   Inner: IAgentProvider;
   Ok: Boolean;
 begin
   TP := TScriptedTransport.Create;
   CK := TFakeClock.Create;
+  CKHold := CK;
   P := TRetryPolicy.Default;
   Inner := WithKeyTransport(TP);
 
@@ -541,7 +544,7 @@ begin
   T.Test('max delay cap', @TestMaxDelayCap);
   T.Test('total budget stops retries', @TestTotalBudgetStopsRetries);
   T.Test('jitter bounds', @TestJitterBounds);
-  T.Test('cancel during sleep wins', @TestCancelDuringSleepWins);
+    T.Test('cancel during sleep wins', @TestCancelDuringSleepWins);
   T.Test('stream retried until first delta', @TestStreamRetriedUntilFirstDelta);
   T.Test('mid-stream failure not retried', @TestMidStreamFailureNotRetried);
   T.Test('config guards', @TestConfigGuards);

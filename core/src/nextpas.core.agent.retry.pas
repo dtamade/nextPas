@@ -25,7 +25,8 @@ uses
 
 type
   { 每次尝试前上报（含首次：ADelayMs=0、ALastError=nil）；
-    AAttempt=即将开始的尝试序号从 1 起 }
+    AAttempt=即将开始的尝试序号从 1 起。
+    ALastError 为借用引用：仅回调期内有效，不得留存（通知对象随调用释放）}
   TRetryAttemptHook = reference to procedure(const AAttempt: Integer;
     const ADelayMs: Int64; const ALastError: EAgentError);
 
@@ -285,6 +286,7 @@ function TRetryProvider.GateAttempt(AHaveFail: Boolean;
   const APrior: TFailure; ASleptMs: Int64): Int64;
 var
   LDelay: Int64;
+  LNoti: EAgentError;
 begin
   if not AHaveFail then
   begin
@@ -301,7 +303,15 @@ begin
   if (LDelay > 0) and (ASleptMs + LDelay > FPolicy.MaxTotalRetryMs) then
     raise APrior.Rebuild;
   if FPolicy.OnAttempt <> nil then
-    FPolicy.OnAttempt(APrior.AttemptNo + 1, LDelay, APrior.Rebuild);
+  begin
+    { 钩子只借用（const）：通知对象随调用结束释放，留存即悬挂 }
+    LNoti := APrior.Rebuild;
+    try
+      FPolicy.OnAttempt(APrior.AttemptNo + 1, LDelay, LNoti);
+    finally
+      LNoti.Free;
+    end;
+  end;
   Result := LDelay;
 end;
 

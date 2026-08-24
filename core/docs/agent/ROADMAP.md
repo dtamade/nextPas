@@ -39,10 +39,18 @@
   对象释放不会自动终结数组），每次流式补全泄漏整池；测试侧 TCapturingLogger
   以类变量承接 TInterfacedObject 实例（引用计数永不归零）。均由 HEAPTRC_GATE=1
   暴露；补池析构 + 测试改接口持有后 provider 两 gate 泄漏门双绿。
-- 已知未清（后续独立 slice）：test_retry / test_transport_stream 功能全绿但
-  HEAPTRC_GATE 报少量未释放块（retry 约 37 小块；transport_stream 5 块、含
-  回环线程读缓冲 10KB×2），疑与流 worker/线程生命周期相关，修复需独立验证，
-  不并入 anthropic 提交。
+- **W4 后独立 slice 清零两处存量 HEAPTRC 泄漏**（此前"已知未清"项）：
+  test_retry 根因有二——①GateAttempt 每次 OnAttempt 通知经 `APrior.Rebuild`
+  新建 EAgentError 无人释放（37 小块主体），已改调用方 try/finally Free 并在
+  TRetryAttemptHook 注释固化借用契约；②测试侧三守卫用例以类变量持有
+  TFakeClock，构造器在 FClock 赋值前抛出即孤儿，改接口持有。
+  test_transport_stream 根因：TWireStream 以裸类引用持有 TWireMsgChannel
+  （TInterfacedObject 后代，引用计数永不生效），Destroy 只收 worker/parser
+  不 Free 通道——每流泄漏通道对象+256×40B 环形缓冲（观测的 10256B+280B 对），
+  已补 FChannel.Free（对齐 log 域 sink 析构顺序）。定位路径留档：BISECT3
+  （仅起停回环+裸连接喂 Accept）证明 net/线程设施零泄漏；http client 大套件
+  166 测同款回环路径 HEAPTRC OK 排除底座；块尺寸 256×40B+16B 头与环形缓冲
+  严丝合缝定根因。两 gate 现功能绿且泄漏门双清零。
 - **W3 loop 波次发现并修复一参构造漏建池**：TAgentLoop.Create(AProvider) 未
   创建自有 IThreadPool，FPool=nil；首次工具执行 SubmitDirect 即 AV。既有 gate
   要么显式传池要么直连 RunToolBatch，故 W2 未暴露；test_loop 全部走一参构造，

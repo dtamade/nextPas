@@ -347,6 +347,9 @@ begin
     FWorker := nil;
   end;
   FParser.Free;
+  { 通道是裸类引用（非接口持有），必须显式释放：对象 + 内部环形缓冲
+    （256×40B）每流约 10.3KB，漏 Free 即每流泄漏一对块 }
+  FChannel.Free;
   inherited Destroy;
 end;
 
