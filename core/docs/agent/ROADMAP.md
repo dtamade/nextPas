@@ -80,8 +80,11 @@
   `test_errors` 门声称覆盖"RetryAfterMs 解析（秒级头/date 拒绝→unknown）"与
   "超窗措辞全集识别"；实际仅 retry-after-ms 整数头经 test_retry 真链路覆盖
   （7500ms 用例），秒级头/HTTP-date 形态与 MatchesOverflowPhrases 措辞全集均
-  无用例。文档口径已同轮修正为事实；补齐属小 slice，落点（挂
-  test_compile_skeleton 或独立门）待总控定。
+  无用例。文档口径已同轮修正为事实。
+  【已清偿 2026-08-25】新门 `test_provider_common`（9 测，含 HEAPTRC 泄漏门）
+  补齐全部直接用例；写测时发现 ParseRetryAfterMs 的 ms 路径缺负值守卫
+  （秒级路径有 `>=0` 而 ms 路径没有），恶意负值 retry-after-ms 头可绕过
+  WithRetry 总预算上限检查（`LDelay > 0` 才检查）——已补守卫，TDD 红→绿留痕。
 - 同轮文档修正：TESTING.md gate 表删除重复 anthropic 行并补登记真实存在的
   `test_clock`（5 测）；ARCHITECTURE.md 撤除从未落地的
   `agent.session.pas`"内存实现（W4 起）"表述，改为 intf 词表接口先行的如实记载。
