@@ -349,6 +349,10 @@ procedure BIO_set_flags(b: PBIO; flags: Integer); cdecl;
 { BIO_flush is a macro in OpenSSL }
 function BIO_flush(b: PBIO): Integer; cdecl;
 
+{ BIO_set_mem_eof_return is a macro: empty mem BIO must return WANT_READ
+  not EOF. v=-1 is the non-blocking memory-BIO contract. }
+function BIO_set_mem_eof_return(b: PBIO; v: Integer): Integer; cdecl;
+
 { BIO_get_mem_data is a macro in OpenSSL }
 function BIO_get_mem_data(b: PBIO; pp: PPAnsiChar): Integer; cdecl;
 
@@ -517,6 +521,16 @@ const
 begin
   if Assigned(BIO_ctrl) then
     Result := Integer(BIO_ctrl(b, BIO_CTRL_FLUSH, 0, nil))
+  else
+    Result := 0;
+end;
+
+function BIO_set_mem_eof_return(b: PBIO; v: Integer): Integer; cdecl;
+const
+  BIO_C_SET_BUF_MEM_EOF_RETURN = 130;
+begin
+  if Assigned(BIO_ctrl) then
+    Result := Integer(BIO_ctrl(b, BIO_C_SET_BUF_MEM_EOF_RETURN, v, nil))
   else
     Result := 0;
 end;
