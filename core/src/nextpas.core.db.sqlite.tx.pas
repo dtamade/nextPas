@@ -45,9 +45,6 @@ type
   function TxDepth(const ADb: TSqliteDb): Integer;
   { 原子执行 AProc：成功自动提交；异常自动回滚并重抛。嵌套安全。 }
   procedure WithTransaction(const ADb: TSqliteDb; const AProc: TSqliteTxProc);
-  { 恢复助手簿记深度（不开新事务、不动数据库状态）。供泛化事务层
-    （nextpas.core.db.tx）实现嵌套失败路径，消费方不要直接调用。 }
-  procedure SetTxnDepth(const ADb: TSqliteDb; const ADepth: Integer);
 
 implementation
 
@@ -224,11 +221,6 @@ end;
 function InTransaction(const ADb: TSqliteDb): Boolean;
 begin
   Result := TxDepth(ADb) > 0;
-end;
-
-procedure SetTxnDepth(const ADb: TSqliteDb; const ADepth: Integer);
-begin
-  SetDepth(ADb, ADepth);
 end;
 
 procedure WithTransaction(const ADb: TSqliteDb; const AProc: TSqliteTxProc);

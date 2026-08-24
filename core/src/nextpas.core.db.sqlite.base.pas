@@ -60,6 +60,7 @@ const
 type
   TSqliteHandle = Pointer;   // sqlite3*
   TSqliteStmt   = Pointer;   // sqlite3_stmt*
+  TSqliteBlob   = Pointer;   // sqlite3_blob*（INC-8 增量 blob I/O 句柄）
 
   { Bindable parameter value }
   TSqliteValue = record

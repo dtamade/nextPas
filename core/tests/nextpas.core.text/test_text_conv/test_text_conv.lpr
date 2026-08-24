@@ -377,6 +377,22 @@ begin
   CheckEqual('Hi', BigEndianUnicodeBytesToString(BytesOf([$00, $48, $00, $69])));
 end;
 
+procedure TestAnsiPtrToStr;
+var
+  LBuf: array[0..7] of AnsiChar;
+begin
+  { nil 安全 }
+  CheckEqual(AnsiPtrToStr(nil), '', 'nil pointer yields empty');
+  { NUL 结尾常规读回 }
+  LBuf[0] := 'o'; LBuf[1] := 'd'; LBuf[2] := 'b'; LBuf[3] := 'c';
+  LBuf[4] := #0;
+  CheckEqual(AnsiPtrToStr(@LBuf[0]), 'odbc', 'reads until NUL');
+  { 空串指针（首字符即 NUL）}
+  CheckEqual(AnsiPtrToStr(@LBuf[4]), '', 'empty c-string yields empty');
+  { 静态字面量路径 }
+  CheckEqual(AnsiPtrToStr('IM002'), 'IM002', 'literal path');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.conv+format');
 
@@ -411,6 +427,7 @@ begin
   T.Test('UTF8 round-trip', @TestUTF8RoundTrip);
   T.Test('ASCII bytes round-trip', @TestASCIIBytesRoundTrip);
   T.Test('Big-endian Unicode', @TestBigEndianUnicode);
+  T.Test('AnsiPtrToStr', @TestAnsiPtrToStr);
 
   if not T.Run then Halt(1);
 end.

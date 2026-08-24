@@ -27,6 +27,17 @@ type
   TPQresultStatus = function(ARes: PGresult): Integer; cdecl;
   TPQresultErrorMessage = function(ARes: PGresult): PAnsiChar; cdecl;
   TPQresultErrorField   = function(ARes: PGresult; AFieldCode: Integer): PAnsiChar; cdecl;
+  { V3-C1 语句缓存：服务端 prepared statement 两件套。
+    PQprepare(conn, stmtName, query, nParams, paramTypes)；paramTypes
+    传 nil = 服务端推断（与 PQexecParams 现状同口径）。
+    PQexecPrepared 的 paramValues 编组与 PQexecParams 完全一致。 }
+  TPQprepare        = function(AConn: PGconn; const AStmtName: PAnsiChar;
+    const AQuery: PAnsiChar; ANParams: Integer;
+    const AParamTypes: PInteger): PGresult; cdecl;
+  TPQexecPrepared   = function(AConn: PGconn; const AStmtName: PAnsiChar;
+    ANParams: Integer; const AParamValues: PPAnsiChar;
+    const AParamLengths: PInteger; const AParamFormats: PInteger;
+    AResultFormat: Integer): PGresult; cdecl;
   TPQntuples      = function(ARes: PGresult): Integer; cdecl;
   TPQnfields      = function(ARes: PGresult): Integer; cdecl;
   TPQfname        = function(ARes: PGresult; AColumnNumber: Integer): PAnsiChar; cdecl;
@@ -42,6 +53,19 @@ type
   TPQlibVersion   = function: Integer; cdecl;
   TPQserverVersion = function(AConn: PGconn): Integer; cdecl;
 
+  { INC-8 大对象 fastpath（lo_* 系；lseek/tell 用 64 位变体支持 >2GB） }
+  TPQloOpen    = function(AConn: PGconn; AOid: TOid; AMode: Integer): Integer; cdecl;
+  TPQloClose   = function(AConn: PGconn; AFd: Integer): Integer; cdecl;
+  TPQloRead    = function(AConn: PGconn; AFd: Integer; ABuf: PAnsiChar;
+    ALen: SizeInt): SizeInt; cdecl;
+  TPQloWrite   = function(AConn: PGconn; AFd: Integer;
+    const ABuf: PAnsiChar; ALen: SizeInt): SizeInt; cdecl;
+  TPQloLseek64 = function(AConn: PGconn; AFd: Integer; AOffset: Int64;
+    AWhence: Integer): Int64; cdecl;
+  TPQloTell64  = function(AConn: PGconn; AFd: Integer): Int64; cdecl;
+  TPQloCreat   = function(AConn: PGconn; AMode: Integer): TOid; cdecl;
+  TPQloUnlink  = function(AConn: PGconn; AOid: TOid): Integer; cdecl;
+
 var
   { Bound by nextpas.core.db.pg.loader; callers must PgEnsureLoaded first
     (TPgConn.Create does it). Never call while nil. }
@@ -54,6 +78,8 @@ var
   pq_resultStatus: TPQresultStatus;
   pq_resultErrorMessage: TPQresultErrorMessage;
   pq_resultErrorField:   TPQresultErrorField;
+  pq_prepare:      TPQprepare;
+  pq_execPrepared: TPQexecPrepared;
   pq_ntuples:      TPQntuples;
   pq_nfields:      TPQnfields;
   pq_fname:        TPQfname;
@@ -65,6 +91,14 @@ var
   pq_clear:        TPQclear;
   pq_libVersion:   TPQlibVersion;
   pq_serverVersion: TPQserverVersion;
+  lo_open:    TPQloOpen;
+  lo_close:   TPQloClose;
+  lo_read:    TPQloRead;
+  lo_write:   TPQloWrite;
+  lo_lseek64: TPQloLseek64;
+  lo_tell64:  TPQloTell64;
+  lo_creat:   TPQloCreat;
+  lo_unlink:  TPQloUnlink;
 
 implementation
 

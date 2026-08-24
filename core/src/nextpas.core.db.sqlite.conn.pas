@@ -50,9 +50,16 @@ type
     procedure BindNull(const AIndex: Integer);
     function Step: Boolean;
     procedure Reset;
+    { 清除全部绑定（语句复用前的干净状态保障） }
+    procedure ClearBindings;
     function ColumnCount: Integer;
     function ColumnName(const AIndex: Integer): string;
     function ColumnType(const AIndex: Integer): Integer;
+    { 声明亲和类型（静态）；-1 = 无声明（表达式/聚合） }
+    function ColumnDeclaredType(const AIndex: Integer): Integer;
+    { 原始声明类型文本（大写化；空串 = 无声明）。供 adapter 做亲和
+      规则之外的子串判定（如 INC-6 的 BOOLEAN）。 }
+    function ColumnDeclaredTypeName(const AIndex: Integer): string;
     function GetInt64(const AIndex: Integer): Int64;
     function GetDouble(const AIndex: Integer): Double;
     function GetText(const AIndex: Integer): string;
@@ -280,6 +287,12 @@ begin
     RaiseError(sqlite3_errcode(FDb), FDb);
 end;
 
+procedure TSqliteQuery.ClearBindings;
+begin
+  if sqlite3_clear_bindings(FStmt) <> SQLITE_OK then
+    RaiseError(sqlite3_errcode(FDb), FDb);
+end;
+
 function TSqliteQuery.ColumnCount: Integer;
 begin
   Result := sqlite3_column_count(FStmt);
@@ -290,9 +303,55 @@ begin
   Result := string(AnsiString(sqlite3_column_name(FStmt, AIndex)));
 end;
 
+{ ASCII 大写（避免为本文件引入 SysUtils 依赖） }
+function UpCaseAscii(const ASrc: string): string;
+var
+  I: Integer;
+begin
+  Result := ASrc;
+  for I := 1 to Length(Result) do
+    if Result[I] in ['a'..'z'] then
+      Dec(Result[I], 32);
+end;
+
 function TSqliteQuery.ColumnType(const AIndex: Integer): Integer;
 begin
   Result := sqlite3_column_type(FStmt, AIndex);
+end;
+
+{ 声明亲和类型（静态，空结果集亦可读，对齐 pg 静态 OID 行为）。
+  返回 -1 = 无声明（表达式/聚合），由调用方回落到行值类型。
+  亲和子串规则依 sqlite3 文档（datatype3.html）。 }
+function TSqliteQuery.ColumnDeclaredType(const AIndex: Integer): Integer;
+var
+  LDecl: PAnsiChar;
+  LU: string;
+begin
+  Result := -1;
+  LDecl := sqlite3_column_decltype(FStmt, AIndex);
+  if LDecl = nil then
+    Exit;
+  LU := UpCaseAscii(string(AnsiString(LDecl)));
+  if Pos('INT', LU) > 0 then
+    Exit(SQLITE_INTEGER);
+  if (Pos('CHAR', LU) > 0) or (Pos('CLOB', LU) > 0)
+    or (Pos('TEXT', LU) > 0) then
+    Exit(SQLITE_TEXT);
+  if (LU = '') or (Pos('BLOB', LU) > 0) then
+    Exit(SQLITE_BLOB);
+  if (Pos('REAL', LU) > 0) or (Pos('FLOA', LU) > 0)
+    or (Pos('DOUB', LU) > 0) then
+    Exit(SQLITE_FLOAT);
+end;
+
+function TSqliteQuery.ColumnDeclaredTypeName(const AIndex: Integer): string;
+var
+  LDecl: PAnsiChar;
+begin
+  LDecl := sqlite3_column_decltype(FStmt, AIndex);
+  if LDecl = nil then
+    Exit('');
+  Result := UpCaseAscii(string(AnsiString(LDecl)));
 end;
 
 function TSqliteQuery.GetInt64(const AIndex: Integer): Int64;

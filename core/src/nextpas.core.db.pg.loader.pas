@@ -61,6 +61,8 @@ begin
   pq_resultStatus := TPQresultStatus(LoadSym('PQresultStatus'));
   pq_resultErrorMessage := TPQresultErrorMessage(LoadSym('PQresultErrorMessage'));
   pq_resultErrorField   := TPQresultErrorField(LoadSym('PQresultErrorField'));
+  pq_prepare      := TPQprepare(LoadSym('PQprepare'));
+  pq_execPrepared := TPQexecPrepared(LoadSym('PQexecPrepared'));
   pq_ntuples      := TPQntuples(LoadSym('PQntuples'));
   pq_nfields      := TPQnfields(LoadSym('PQnfields'));
   pq_fname        := TPQfname(LoadSym('PQfname'));
@@ -72,6 +74,14 @@ begin
   pq_clear        := TPQclear(LoadSym('PQclear'));
   pq_libVersion   := TPQlibVersion(LoadSym('PQlibVersion'));
   pq_serverVersion := TPQserverVersion(LoadSym('PQserverVersion'));
+  lo_open    := TPQloOpen(LoadSym('lo_open'));
+  lo_close   := TPQloClose(LoadSym('lo_close'));
+  lo_read    := TPQloRead(LoadSym('lo_read'));
+  lo_write   := TPQloWrite(LoadSym('lo_write'));
+  lo_lseek64 := TPQloLseek64(LoadSym('lo_lseek64'));
+  lo_tell64  := TPQloTell64(LoadSym('lo_tell64'));
+  lo_creat   := TPQloCreat(LoadSym('lo_creat'));
+  lo_unlink  := TPQloUnlink(LoadSym('lo_unlink'));
 end;
 
 procedure PgEnsureLoaded;

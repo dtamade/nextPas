@@ -56,6 +56,13 @@ function SameText(const A, B: string): Boolean; inline;
     Returns 0 if none of the characters are found. }
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;
 
+{== Pointer-based conversion ==}
+{** NUL-terminated PAnsiChar → string；nil 安全（返回空串）。
+    C ABI 字符串读回的统一入口：本工具链上 string(AnsiString(ptr))
+    强转在返回托管记录数组的函数内会损坏临时管理（db 家族实证的
+    工具链硬边界），消费方一律经本函数而非直接强转。 }
+function AnsiPtrToStr(const AStr: PAnsiChar): string;
+
 implementation
 
 uses
@@ -434,6 +441,24 @@ begin
     for J := 1 to Length(ADelimiters) do
       if S[I] = ADelimiters[J] then
         Exit(I);
+end;
+
+function AnsiPtrToStr(const AStr: PAnsiChar): string;
+var
+  LP: PAnsiChar;
+  LLen: Integer;
+begin
+  Result := '';
+  if AStr = nil then
+    Exit;
+  LP := AStr;
+  while LP^ <> #0 do
+    Inc(LP);
+  LLen := Integer(LP - AStr);
+  if LLen = 0 then
+    Exit;
+  SetLength(Result, LLen);
+  Move(AStr^, Result[1], SizeUInt(LLen));
 end;
 
 end.
