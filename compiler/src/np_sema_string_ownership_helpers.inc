@@ -307,6 +307,7 @@ var
 begin
   FillOwnershipContext(Ctx);
   Result := nextpas.compiler.sema.string_ownership.EmitOwnedStringConcatLengthTemp(Ctx, ANode, ABlob);
+  FBlockLabelCounter := Ctx.BlockLabelCounter;
 end;
 
 
@@ -337,6 +338,7 @@ var
 begin
   FillOwnershipContext(Ctx);
   Result := nextpas.compiler.sema.string_ownership.EmitOwnedStringCopyTemp(Ctx, ACopyNode, ADestName, ATempName);
+  FBlockLabelCounter := Ctx.BlockLabelCounter;
 end;
 
 
@@ -367,6 +369,7 @@ var
 begin
   FillOwnershipContext(Ctx);
   Result := nextpas.compiler.sema.string_ownership.EmitOwnedStringWriteTemp(Ctx, ANode, ATempName);
+  FBlockLabelCounter := Ctx.BlockLabelCounter;
 end;
 
 
@@ -377,6 +380,7 @@ var
 begin
   FillOwnershipContext(Ctx);
   Result := nextpas.compiler.sema.string_ownership.EmitOwnedStringConcatWriteTemp(Ctx, ANode, ATempName);
+  FBlockLabelCounter := Ctx.BlockLabelCounter;
 end;
 
 
@@ -744,6 +748,11 @@ var
 begin
   FillOwnershipContext(Ctx);
   Result := nextpas.compiler.sema.string_ownership.EmitStrConcatOperand(Ctx, ANode, ADestVar);
+  { Write the context counter back: the delegated emitter Inc's its local
+    copy for every $str_tmp materialized. Without this, consecutive wrapper
+    calls re-seed from the stale analyzer field and reuse one temp name —
+    later literal-assigns overwrite earlier args (b4b-i16 follow-up). }
+  FBlockLabelCounter := Ctx.BlockLabelCounter;
 end;
 
 
@@ -784,6 +793,7 @@ var
 begin
   FillOwnershipContext(Ctx);
   Result := nextpas.compiler.sema.string_ownership.EmitStrCompareOperand(Ctx, ANode, AAllowOwnedStringReturn, ABlob);
+  FBlockLabelCounter := Ctx.BlockLabelCounter;
 end;
 
 

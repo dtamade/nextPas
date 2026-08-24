@@ -4,7 +4,13 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-25（v2.30：residual 调用形状清理战役
+创建：2026-08-23　最后更新：2026-08-25（v2.31：b4b-i16 追加刀——
+ownership context 计数器按值副本不回写修复（六包装器统一
+FBlockLabelCounter:=Ctx.BlockLabelCounter），EncodeStrCallArgs 多字面量
+实参同名临时互覆消灭，llvm 绑定执行面实证 nest/two concat 全对；
+新挂账=stub SysUtils Result[I] 字符索引 llvm 绑定降级恒等
+（UpperCase/LowerCase），先在于本批；
+v2.30：residual 调用形状清理战役
 阶段A 首刀——by-ref 实参地址通道+enum/const 源头折叠落地，IR 实证
 atomic_load 标识符类调用点全数 ptr 级修正（含 global_ref）+Cas 五参全
 ABI+字面0 消灭；arity 扫描器对类型级修复盲视，A/B 总数持平 169；
@@ -47,7 +53,7 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)   concat-swap b4b-i16 已修✅(v2.29 tryenv len=7)   residual 标识符类 by-ref 调用点地址化 ✅(v2.30·字面0消灭·DotAccess 类挂账)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅   tryenv mini 双步 opt+运行 ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    residual 战役阶段A 续刀：DotAccess by-ref 目标（atomic_store 剩 45=AReactor.FPendingDone 类字段链寻址）+ SSE2Shift*Raw/Copy/Delete/SpanInit 多形状家族解剖 + L3 1893 存量新缓存复测；阶段B=方法重载坍缩（ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；或 swiss 接线 → P1 刀⑨静窗复测
+下一口    residual 战役阶段A 续刀：DotAccess by-ref 目标（atomic_store 剩 45=AReactor.FPendingDone 类字段链寻址）+ SSE2Shift*Raw/Copy/Delete/SpanInit 多形状家族解剖 + L3 1893 存量新缓存复测；阶段B=方法重载坍缩（ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；llvm 执行面验证 lane（v2.31 挂账：stub SysUtils Result[I] 字符索引恒等→UpperCase/LowerCase 失效，与 tree exit139 同族）；或 swiss 接线 → P1 刀⑨静窗复测
 ```
 
 ---
@@ -884,6 +890,7 @@ P0 基线数字，回滚判据客观化。
 | v2.28 | （本提交） | 调用签名一致性战役开局：①归因修正——core 5 参重载声明合法，调用侧退化是编译器缺陷（EffectiveRuntimeCalleeName 首体选择无 arity 感知）；②修复=EffectiveRuntimeCalleeName 增可选 AArgCount（默认 -1 逐位不变）按 DeclAcceptsArgCount 选体，值位置普通调用两点传实元个数，IR 实证 strong_64 五参调用改打 $iiipp 个数对齐；③发射器 strict 计量器 NEXTPAS_EMIT_STRICT_CALLS 门控（默认关），阳性对照 isep 抓 IsSep formals=1 args=2；④存量扫描=裸名错形每 mini ~148 处、L3 1893 处+类型漂移与方法重载坍缩未计→战役立项（阶段A 类型漂移/阶段B 方法重载）；⑤tree 首次真执行 exit139 经 stash 基线对照证明先于本批非回归；D26 教训入档（处方落地前先量存量规模） |
 | v2.29 | （本提交） | concat-swap b4b-i16 收官（`Result := A + '.ext'` 走 NoFold 运行时路径 ret_move 搬空槽，tryenv ok len=0）：①时序根因=TSemaRuntimeVarRegistry.Reset 每函数体清 FOwnedStringReturnFuncNames，把 PreregisterOwnedStringReturnConsumers 在 seeding 前注册好的 owned-func 名册一并抹掉→seed 时 IsOwnedStringReturnFunc 恒 False→Result 不注册 owned→concat 落倒置 else 分支；修复=Reset 只清每体 tracker、名册属跨体全局知识；②形状根因=三处发射点参数倒置（walk_halt_calls Result-concat else 分支/EmitStringFieldStoreRhsTemp/concat.inc 二元'+'递归）DisplayName=左#9右+Operand=dst，builder ProcessAssignTStringConcat 按 Pos(#9,Operand) 拆串 TabPos=0 静默 Exit；另核 field-store concat 三段 Operand（dst#9左#9右）与 builder 两段解析错配；四处统一归一契约 DisplayName=dst/Operand=左#9右（deferred.inc 与 encode_runtime_expr.inc 两处既有正确形状为参照）；③排查 object_free(%436) 错位=实为尾声 EmitClassVarFreeCleanupNodes 对 raise 构造临时（$new_tmp 经 RegisterClassVar）的清理：ok 路径 load 未存 alloca 参与 nil-guard icmp 属 UB、raise 路径不可达死代码；修复=注册表增免清理名册，raise 表达式编码前后差分新注册类变量并抑制其尾声 free（所有权随 exc_store 转移运行时）；④builder 静默 Exit 加 NEXTPAS_DEBUG=1 门控 stderr 告警（assign-tstring-concat/copy/call 缺 tab 或缺 $ts alloca 三族），默认零输出；验证=contract pass+rebuild pass 426315 行+compiler-pass 58/58+tryenv mini ok len=7/bad=fail msg=cfg broken+LoadCfg .ll tstring_concat×1/object_free×0+NEXTPAS_DEBUG 空告警+21 探针全量双步 opt PASS 仅 cap/cmpgen/puny 已知挂账零新回归+hygiene pass+diff-check(本批文件)；D27 教训=探针循环与 make test 并发跑共享 .nextpas 缓存会写坏产生假 BUILD-FAIL（编译器本体 EAccessViolation exit217 同族假象），重门禁须串行或隔离缓存目录 |
 | v2.30 | （本提交） | residual 调用形状清理战役阶段A首刀：①根因=expr-N 实参饥饿（FoldCore 结构化回退发 expr N，cond-br 消费不压栈，EmitExprCall 按 Count 弹栈零填充=字面0 物化源头）+by-ref 实参无地址通道（var 形参收到值加载非地址）；②修复=FoldCore 调用点前置 callee 形参元数据（ParamNameIsByRef 逐参扫描）+by-ref 标识符合并分支（field→var self+field_ref，其余→varref 走 builder alloca/var-param/global_ref 三通道，interlocked 既有形状同构），语句位 EncodeCallStatementArgs 同构补齐；③IR 实证=AtomicCas64 五参全 ABI 对齐+探针执行过、GetOrd 序数 3 折叠、atomic_load 标识符类 12 处全数 ptr 级（含 global_ref）字面0 消灭；④计量勘误=锁定口径 arity A/B 169=169 持平（修复属类型级，arity 扫描器结构性盲视；上会话 135→106 复测不可现存疑不裁）；⑤helpers.inc 两分支经 13e84e60d 搭车入库归属勘误+D28 教训（共享 worktree 并行提交禁 -A）；遗留=DotAccess（本批实证 2 处）/SSE2Shift/Copy/Delete/SpanInit/构造族阶段B 重载坍缩/L3 复测/类型级第二检查器立项 |
+| v2.31 | （本提交） | b4b-i16 追加刀·计数器回写：①新缺陷实证=SemaTrace 抓 EncodeStrCallArgs 字面量实参两次调用 temp=$str_tmp_1 counter=0 恒定——FillOwnershipContext 将 FBlockLabelCounter **按值**种子进 TSemaOwnershipContext，concat.inc 内 Inc 的是局部副本返回即丢，跨包装调用同名临时互覆（两实参同值='DoeDoe' 族），llvm 绑定执行暴露（gnu 绑定后端 strlit 直传常量掩盖，故 compiler-pass 历来绿）；前缀二进制对照证明先在性非 Fix A 引入（Fix A 使 concat 真发射才可见）；②修复=六个包装器统一回写 FBlockLabelCounter:=Ctx.BlockLabelCounter（EmitStrConcatOperand/EmitOwnedStringCopyTemp/WriteTemp/ConcatWriteTemp/ConcatLengthTemp/StrCompareOperand）；③实证=mini_cat3 nest=[John Doe]8/two=[JohnDoe]7 全对+mini_args 保持正确+tryenv len=7 保持+21 探针与基线逐项一致零回归+compiler-pass 58/58；④新挂账（llvm 执行面）=stub SysUtils Result[I] 字符索引循环 llvm 绑定降级残缺（循环界读未初始化 alloca+循环体削空）→UpperCase/LowerCase 恒等变换，string_concat_owned_pass 在 llvm 绑定 Halt(6)（gnu 绿）——先在于本批（与 concat 无关，字符索引降级缺口），归 llvm 执行面验证 lane 与 tree exit139 同族排队 |
 
 ## 10. 文档维护规则
 
