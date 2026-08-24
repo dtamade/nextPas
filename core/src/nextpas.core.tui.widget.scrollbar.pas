@@ -21,8 +21,12 @@ type
     function WithTotal(N: Integer): IScrollbar;
     function WithVisible(N: Integer): IScrollbar;
     function WithOffset(N: Integer): IScrollbar;
-    function WithTrackChar(C: AnsiChar): IScrollbar;
-    function WithThumbChar(C: AnsiChar): IScrollbar;
+    { 符号收 AnsiString:块字符 █/▓ 等多字节字形是滚动条常态
+      (单字节 AsciiChar 装不下,消费方被迫绕开 Render 手绘);
+      单字符入参源码兼容,行为不变。符号须为单格宽字形,
+      宽字形属调用方错误,按宽度 1 写入保网格一致 }
+    function WithTrackChar(const ASymbol: AnsiString): IScrollbar;
+    function WithThumbChar(const ASymbol: AnsiString): IScrollbar;
     function WithTrackStyle(const S: TStyle): IScrollbar;
     function WithThumbStyle(const S: TStyle): IScrollbar;
     function ThumbStart(ATrackHeight: Integer): Integer;
@@ -41,8 +45,8 @@ type
     FTotalItems: Integer;
     FVisibleItems: Integer;
     FScrollOffset: Integer;
-    FTrackChar: AnsiChar;
-    FThumbChar: AnsiChar;
+    FTrackChar: AnsiString;
+    FThumbChar: AnsiString;
     FTrackStyle: TStyle;
     FThumbStyle: TStyle;
   public
@@ -51,8 +55,8 @@ type
     function WithTotal(N: Integer): IScrollbar;
     function WithVisible(N: Integer): IScrollbar;
     function WithOffset(N: Integer): IScrollbar;
-    function WithTrackChar(C: AnsiChar): IScrollbar;
-    function WithThumbChar(C: AnsiChar): IScrollbar;
+    function WithTrackChar(const ASymbol: AnsiString): IScrollbar;
+    function WithThumbChar(const ASymbol: AnsiString): IScrollbar;
     function WithTrackStyle(const S: TStyle): IScrollbar;
     function WithThumbStyle(const S: TStyle): IScrollbar;
     function ThumbStart(ATrackHeight: Integer): Integer;
@@ -94,11 +98,11 @@ begin FVisibleItems := N; Result := Self; end;
 function TScrollbar.WithOffset(N: Integer): IScrollbar;
 begin FScrollOffset := N; Result := Self; end;
 
-function TScrollbar.WithTrackChar(C: AnsiChar): IScrollbar;
-begin FTrackChar := C; Result := Self; end;
+function TScrollbar.WithTrackChar(const ASymbol: AnsiString): IScrollbar;
+begin FTrackChar := ASymbol; Result := Self; end;
 
-function TScrollbar.WithThumbChar(C: AnsiChar): IScrollbar;
-begin FThumbChar := C; Result := Self; end;
+function TScrollbar.WithThumbChar(const ASymbol: AnsiString): IScrollbar;
+begin FThumbChar := ASymbol; Result := Self; end;
 
 function TScrollbar.WithTrackStyle(const S: TStyle): IScrollbar;
 begin FTrackStyle := S; Result := Self; end;
@@ -206,12 +210,16 @@ begin
     LC := CELL_EMPTY;
     if (LY >= LTS) and (LY < LTS + LTSz) then
     begin
-      CellSetSymbolAscii(LC, FThumbChar);
+      { 多字节符号走字节通路(█ 等块字符);>255 属病态入参,
+        静默跳过防 Byte 截断回绕;空符号留空格底 }
+      if (Length(FThumbChar) > 0) and (Length(FThumbChar) <= 255) then
+        CellSetSymbolBytes(LC, PAnsiChar(FThumbChar)^, Length(FThumbChar), 1);
       CellApplyStyle(LC, FThumbStyle);
     end
     else
     begin
-      CellSetSymbolAscii(LC, FTrackChar);
+      if (Length(FTrackChar) > 0) and (Length(FTrackChar) <= 255) then
+        CellSetSymbolBytes(LC, PAnsiChar(FTrackChar)^, Length(FTrackChar), 1);
       CellApplyStyle(LC, FTrackStyle);
     end;
     LP := ABuffer.CellAt(AArea.X, AArea.Y + LY);
