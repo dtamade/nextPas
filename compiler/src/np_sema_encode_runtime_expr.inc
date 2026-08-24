@@ -343,6 +343,9 @@ var
   TargetTypeId, SourceExprId, CastExprId: LongInt;
   CastChildren: array of LongInt;
   BranchNode, DeclNode, RhsNode, BaseNode: TGreenNode;
+  ParamNode: TGreenNode;
+  CallFormalByRef: array of Boolean;
+  CallHasFormalMeta: Boolean;
   Operand, PropName, BaseNodeName: string;
   FldMeta: TFieldMeta;
 begin
@@ -1388,6 +1391,43 @@ begin
     end;
     if TryEncodeInterlockedValueCall(ANode, ABlob) then
       Exit(True);
+    { Callee formal meta BEFORE arg encoding: by-ref formals need the variable
+      ADDRESS ('varref'), not a value load — define-side ABI expects ptr for
+      `var` params while residual 'var X' pushes the loaded value (v2.28). }
+    CallHasFormalMeta := False;
+    SetLength(CallFormalByRef, 0);
+    if (ANode.ChildCount >= 1) and (ANode.ChildAt(0) <> nil) then
+    begin
+      BranchNode := nil;
+      DeclNode := nil;
+      if LookupProcedureBody(ANode.ChildAt(0).Text, BranchNode, DeclNode) and
+        (DeclNode <> nil) then
+      begin
+        SetLength(CallFormalByRef, ANode.ChildCount - 1);
+        for K := 0 to Length(CallFormalByRef) - 1 do
+          CallFormalByRef[K] := False;
+        ArgIndex := 0;
+        for K := 0 to DeclNode.ChildCount - 1 do
+        begin
+          RhsNode := DeclNode.ChildAt(K);
+          if (RhsNode = nil) or
+            (RhsNode.NodeKind <> gnkParameterList) then
+            Continue;
+          for StrExprId := 0 to RhsNode.ChildCount - 1 do
+          begin
+            if ArgIndex >= Length(CallFormalByRef) then
+              Break;
+            ParamNode := RhsNode.ChildAt(StrExprId);
+            if (ParamNode = nil) or
+              (ParamNode.NodeKind <> gnkParameterDecl) then
+              Continue;
+            CallFormalByRef[ArgIndex] := ParamNameIsByRef(ParamNode.Text);
+            Inc(ArgIndex);
+          end;
+        end;
+        CallHasFormalMeta := True;
+      end;
+    end;
     ABlob := '';
     StrCallArgCount := 0;
     for StrCallIdx := 1 to ANode.ChildCount - 1 do
@@ -1421,6 +1461,36 @@ begin
       begin
         ABlob := ABlob + 'arrvar ' + ANode.ChildAt(StrCallIdx).Text + #10;
         Inc(StrCallArgCount, 2);
+      end
+      else if CallHasFormalMeta and CallFormalByRef[StrCallIdx - 1] and
+        (ANode.ChildAt(StrCallIdx) <> nil) and
+        (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) then
+      begin
+        { By-ref formal + identifier arg → address channel, never a value
+          load. Implicit-self fields go via self+field_ref; every other name
+          via varref (builder resolves alloca / var-param deref / global_ref
+          — same shape as the interlocked encoder above). }
+        if (FCurrentMethodClass <> '') and
+          (TypeMetaFieldIndex(FCurrentMethodClass,
+            ANode.ChildAt(StrCallIdx).Text) >= 0) then
+          ABlob := ABlob + 'var self' + #10 + 'field_ref ' +
+            IntToStr(TypeMetaFieldIndex(FCurrentMethodClass,
+              ANode.ChildAt(StrCallIdx).Text)) + #10
+        else
+          ABlob := ABlob + 'varref ' +
+            ANode.ChildAt(StrCallIdx).Text + #10;
+        Inc(StrCallArgCount);
+      end
+      else if (ANode.ChildAt(StrCallIdx) <> nil) and
+        (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
+        FModel.LookupConstValue(ANode.ChildAt(StrCallIdx).Text, Folded) then
+      begin
+        { Enum/const identifiers fold here at the source: FoldCore's
+          structured-expr fallback emits 'expr N' tokens that push nothing in
+          cond-br blob consumption — the call then underflows its declared
+          arity and opt sees zero-padded operands (v2.28 campaign). }
+        ABlob := ABlob + 'int ' + IntToStr(Folded) + #10;
+        Inc(StrCallArgCount);
       end
       else if EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), FuncName) then
       begin

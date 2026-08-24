@@ -4,7 +4,11 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-25（v2.29：concat-swap b4b-i16 修复——
+创建：2026-08-23　最后更新：2026-08-25（v2.30：residual 调用形状清理战役
+阶段A 首刀——by-ref 实参地址通道+enum/const 源头折叠落地，IR 实证
+atomic_load 标识符类调用点全数 ptr 级修正（含 global_ref）+Cas 五参全
+ABI+字面0 消灭；arity 扫描器对类型级修复盲视，A/B 总数持平 169；
+v2.29：concat-swap b4b-i16 修复——
 四处发射点倒置归一 builder 契约 DisplayName=dst/Operand=左#9右+Reset 清理
 范围收敛保住预注册 owned-func 名册+raise 构造临时免尾声 free，
 tryenv mini ok len=0→7；v2.28：调用签名一致性战役开局——
@@ -40,10 +44,10 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
 性能批次  ████▏░░░░░░░░░░░  P0✅ │ P1: 刀⑥✅seed -73%·刀⑦✅seed 再-69%(59.1→17.9/18.2s) │ 今日累计 -91.8%
-正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)   concat-swap b4b-i16 已修✅(v2.29 tryenv len=7)
+正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)   concat-swap b4b-i16 已修✅(v2.29 tryenv len=7)   residual 标识符类 by-ref 调用点地址化 ✅(v2.30·字面0消灭·DotAccess 类挂账)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅   tryenv mini 双步 opt+运行 ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    residual 调用形状清理战役（阶段A=类型漂移+字面0物化；阶段B=方法重载坍缩如 ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；或 swiss 接线 → P1 刀⑨静窗复测
+下一口    residual 战役阶段A 续刀：DotAccess by-ref 目标（atomic_store 剩 45=AReactor.FPendingDone 类字段链寻址）+ SSE2Shift*Raw/Copy/Delete/SpanInit 多形状家族解剖 + L3 1893 存量新缓存复测；阶段B=方法重载坍缩（ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；或 swiss 接线 → P1 刀⑨静窗复测
 ```
 
 ---
@@ -289,6 +293,26 @@ D26 教训：处方落地前先量存量规模——「一致性检查常开」�
 58/58+tree 双步 opt PASS+strict 计量器阳/阴对照+hygiene pass+diff-check
 （本批文件）。遗留=阶段A/B 战役（见仪表盘下一口）；core lane 移交条目
 收窄为「包装种子 define 形状是否另有 core 侧问题」待 core-db 复核。
+
+**v2.30 residual 调用形状清理战役·阶段A 首刀（2026-08-25）**：v2.28 立项
+的第一口落地，字面 0/实参饥饿类根因修复。
+
+| 项 | 内容 |
+|----|------|
+| 根因① expr-N 实参饥饿 | enum/const 标识符实参走 FoldCore 结构化回退发 `expr N` token；cond-br blob 消费对 lower 失败的 expr 不压栈直接跳过，`EmitExprCall` 仍按声明 Count 弹栈→不足位静默补 0（opt 层看到字面 0 物化的源头） |
+| 根因② by-ref 无地址通道 | `var` 形参 define 侧 ABI 期待 ptr 地址，调用侧却发值加载 `var X`——CAS/store 类原子操作拿到值而非地址 |
+| 修复① FoldCore 调用点形参元数据 | 值位置参数循环前置 callee formal meta（LookupProcedureBody→gnkParameterList/gnkParameterDecl 逐参 ParamNameIsByRef）；by-ref+标识符实参合并单分支：隐式 self 字段→`var self`+`field_ref N`，其余一律 `varref X`（builder 解析 alloca/var-param 解引/global_ref，与本文件 interlocked 编码器既有形状同构）——局部/参数/全局/字段四类标识符全数地址化 |
+| 修复② 语句位置同构 | EncodeCallStatementArgs 同步补 field_ref 与 const-fold 两分支（其 varref 分支此前已有）；该文件现挂并行会话 WIP trace 行，本批未再动它 |
+| 微观实证（本批 IR） | AtomicCas64 五参调用=`AtomicCas64(ptr @g_GState, ptr @g_GExpected, i64 %v17, i64 %v18, i64 %v19)` 与 define (ptr,ptr,i64,i64,i64) 全对齐且探针执行 exit0；GetOrd(mo_acq_rel) 调用点 `%v21=add i64 3,0` 序数 3 折叠正确；atomic_load 标识符类调用点 12 处全数 ptr 级（含 `ptr @g_GProcessRouteState` 等 global_ref），字面0 填充消灭；余 2 处值传递=DotAccess gep+offset 链（非裸标识符，阶段A 出界） |
+| 计量口径勘误 | 锁定扫描器 A/B（HEAD vs HEAD+slice 同法同输入）：arity 总数 169=169 持平、逐族零 delta——**本刀修复是类型级（操作数次序/序数值/地址化 vs 字面0），arity 扫描器结构性盲视**；strict 计量器同理只对个数负责；上一会话 135→106 曲线在 v2.29 落地后的今日复测不可复现（旧口径未锁定或 v2.29 改道，存疑不裁），战役后续需第二检查器（类型级对账）补盲 |
+| 归属勘误 | helpers.inc 两分支随并行会话 v2.29 concat-swap 提交（13e84e60d）搭车落库（共享 worktree 下 git add 未按文件收窄），代码注释带 "(v2.28 campaign)" 锚点可溯；**D28 教训：共享 worktree 并行会话提交必须按文件清单 add，禁止 -A 扫尾** |
+| 遗留家族 | DotAccess by-ref 目标（本批实证 2 处 gep+offset 值传递，需字段链寻址）、SSE2Shift*Raw（1 实参 vs 3 形参）、Copy/Delete/SpanInit/RegisterBackend 多 arity 坍缩、ENextPasError.CreateFmt 18/EAllocError.Create 7 等构造族（阶段B 重载坍缩）、L3 1893 基线待新缓存复测 |
+
+验证：rebuild pass+tree 双步 opt PASS+strict 计量器阳性对照仍红（IsSep
+formals=1 args=2 exit217）+compiler-pass 58/58+contract pass+casdrift/
+enumfold2 探针执行双绿+锁定口径 arity A/B（169=169 持平）+hygiene pass+
+diff-check(本批文件)。core-db 移交条目再收窄：core 5 参重载声明合法已证，
+调用侧退化根因已修，无需 core 侧动作。
 
 **P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
 `np_sema_seed_function_bodies.inc`；一轮 tree mini）：
@@ -859,6 +883,7 @@ P0 基线数字，回滚判据客观化。
 | v2.27 | （本提交） | llvm 探针 SIGSEGV 根因诊断收官（docs-only）：机器码↔.ll 对拍锁定破坏层=opt -O2 noreturn 级联——`_start` 被删主体、init 尾声消失跌落下一函数；级联源头=core 原子包装种子缺陷（atomic_compare_exchange_strong$iii 定义 (ptr,ptr,ptr) vs 调用点字面 0+5 参错配，tvec .ll:3631/7948/8718 实证）；跨模块归属移交 core-db lane+compiler lane 后续防御=encode 层调用签名一致性检查；D25 教训入档（双步 opt PASS 只证结构合法，noreturn 是合法但致命的传播源；执行验证应进探针协议） |
 | v2.28 | （本提交） | 调用签名一致性战役开局：①归因修正——core 5 参重载声明合法，调用侧退化是编译器缺陷（EffectiveRuntimeCalleeName 首体选择无 arity 感知）；②修复=EffectiveRuntimeCalleeName 增可选 AArgCount（默认 -1 逐位不变）按 DeclAcceptsArgCount 选体，值位置普通调用两点传实元个数，IR 实证 strong_64 五参调用改打 $iiipp 个数对齐；③发射器 strict 计量器 NEXTPAS_EMIT_STRICT_CALLS 门控（默认关），阳性对照 isep 抓 IsSep formals=1 args=2；④存量扫描=裸名错形每 mini ~148 处、L3 1893 处+类型漂移与方法重载坍缩未计→战役立项（阶段A 类型漂移/阶段B 方法重载）；⑤tree 首次真执行 exit139 经 stash 基线对照证明先于本批非回归；D26 教训入档（处方落地前先量存量规模） |
 | v2.29 | （本提交） | concat-swap b4b-i16 收官（`Result := A + '.ext'` 走 NoFold 运行时路径 ret_move 搬空槽，tryenv ok len=0）：①时序根因=TSemaRuntimeVarRegistry.Reset 每函数体清 FOwnedStringReturnFuncNames，把 PreregisterOwnedStringReturnConsumers 在 seeding 前注册好的 owned-func 名册一并抹掉→seed 时 IsOwnedStringReturnFunc 恒 False→Result 不注册 owned→concat 落倒置 else 分支；修复=Reset 只清每体 tracker、名册属跨体全局知识；②形状根因=三处发射点参数倒置（walk_halt_calls Result-concat else 分支/EmitStringFieldStoreRhsTemp/concat.inc 二元'+'递归）DisplayName=左#9右+Operand=dst，builder ProcessAssignTStringConcat 按 Pos(#9,Operand) 拆串 TabPos=0 静默 Exit；另核 field-store concat 三段 Operand（dst#9左#9右）与 builder 两段解析错配；四处统一归一契约 DisplayName=dst/Operand=左#9右（deferred.inc 与 encode_runtime_expr.inc 两处既有正确形状为参照）；③排查 object_free(%436) 错位=实为尾声 EmitClassVarFreeCleanupNodes 对 raise 构造临时（$new_tmp 经 RegisterClassVar）的清理：ok 路径 load 未存 alloca 参与 nil-guard icmp 属 UB、raise 路径不可达死代码；修复=注册表增免清理名册，raise 表达式编码前后差分新注册类变量并抑制其尾声 free（所有权随 exc_store 转移运行时）；④builder 静默 Exit 加 NEXTPAS_DEBUG=1 门控 stderr 告警（assign-tstring-concat/copy/call 缺 tab 或缺 $ts alloca 三族），默认零输出；验证=contract pass+rebuild pass 426315 行+compiler-pass 58/58+tryenv mini ok len=7/bad=fail msg=cfg broken+LoadCfg .ll tstring_concat×1/object_free×0+NEXTPAS_DEBUG 空告警+21 探针全量双步 opt PASS 仅 cap/cmpgen/puny 已知挂账零新回归+hygiene pass+diff-check(本批文件)；D27 教训=探针循环与 make test 并发跑共享 .nextpas 缓存会写坏产生假 BUILD-FAIL（编译器本体 EAccessViolation exit217 同族假象），重门禁须串行或隔离缓存目录 |
+| v2.30 | （本提交） | residual 调用形状清理战役阶段A首刀：①根因=expr-N 实参饥饿（FoldCore 结构化回退发 expr N，cond-br 消费不压栈，EmitExprCall 按 Count 弹栈零填充=字面0 物化源头）+by-ref 实参无地址通道（var 形参收到值加载非地址）；②修复=FoldCore 调用点前置 callee 形参元数据（ParamNameIsByRef 逐参扫描）+by-ref 标识符合并分支（field→var self+field_ref，其余→varref 走 builder alloca/var-param/global_ref 三通道，interlocked 既有形状同构），语句位 EncodeCallStatementArgs 同构补齐；③IR 实证=AtomicCas64 五参全 ABI 对齐+探针执行过、GetOrd 序数 3 折叠、atomic_load 标识符类 12 处全数 ptr 级（含 global_ref）字面0 消灭；④计量勘误=锁定口径 arity A/B 169=169 持平（修复属类型级，arity 扫描器结构性盲视；上会话 135→106 复测不可现存疑不裁）；⑤helpers.inc 两分支经 13e84e60d 搭车入库归属勘误+D28 教训（共享 worktree 并行提交禁 -A）；遗留=DotAccess（本批实证 2 处）/SSE2Shift/Copy/Delete/SpanInit/构造族阶段B 重载坍缩/L3 复测/类型级第二检查器立项 |
 
 ## 10. 文档维护规则
 
