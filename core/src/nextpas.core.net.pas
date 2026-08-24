@@ -9,6 +9,7 @@ unit nextpas.core.net;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.net.base,
   nextpas.core.net.errors,
   nextpas.core.net.intf,
@@ -84,7 +85,9 @@ function TcpConnect(const AAddr: string; const APort: UInt16;
 function UdpBind(const AAddr: string; const APort: UInt16): IUdpSocket; inline;
 function Resolve(const AHost: string): TNetAddress; inline;
 function StripHostBrackets(const AHost: string): string; inline;
-function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; inline;
+function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; overload; inline;
+function TryParseIPv4(const AIP: string; out AOctets: TBytes): Boolean; overload; inline;
+function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean; inline;
 function IsIPv4Literal(const AHost: string): Boolean; inline;
 function IsIPv6Literal(const AHost: string): Boolean; inline;
 function HostIsIpLiteral(const AHost: string): Boolean; inline;
@@ -183,6 +186,16 @@ end;
 function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean;
 begin
   Result := nextpas.core.net.resolve.TryParseIPv4(AIP, ANet);
+end;
+
+function TryParseIPv4(const AIP: string; out AOctets: TBytes): Boolean;
+begin
+  Result := nextpas.core.net.resolve.TryParseIPv4(AIP, AOctets);
+end;
+
+function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean;
+begin
+  Result := nextpas.core.net.resolve.TryParseIPv6(AIP, AOctets);
 end;
 
 function IsIPv4Literal(const AHost: string): Boolean;

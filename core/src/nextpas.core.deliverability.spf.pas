@@ -21,6 +21,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.net.resolve,
   nextpas.core.text.conv,
   nextpas.core.time.offsetdatetime;
 
@@ -68,146 +69,14 @@ begin
       Inc(Result[I], 32);
 end;
 
-function HexWordValue(const ACh: Char): Integer;
-begin
-  case ACh of
-    '0'..'9': Result := Ord(ACh) - Ord('0');
-    'a'..'f': Result := Ord(ACh) - Ord('a') + 10;
-    'A'..'F': Result := Ord(ACh) - Ord('A') + 10;
-  else
-    Result := -1;
-  end;
-end;
-
-{ TryParseIPv4: 'a.b.c.d' → 4B 大端; 失败 False }
 function TryParseIPv4(const AText: string; out ABytes: TBytes): Boolean;
-var
-  LText: string;
-  LPos, LSegStart, LSegLen, LI, LDigit, LSegValue, LSeg: Integer;
 begin
-  Result := False;
-  LText := TrimAscii(AText);
-  LPos := 1;
-  LSegStart := 1;
-  LSeg := 0;
-  SetLength(ABytes, 0);
-  while LPos <= Length(LText) + 1 do
-  begin
-    if (LPos > Length(LText)) or (LText[LPos] = '.') then
-    begin
-      LSegLen := LPos - LSegStart;
-      if (LSegLen < 1) or (LSegLen > 3) then
-        Exit;
-      LSegValue := 0;
-      for LI := LSegStart to LSegStart + LSegLen - 1 do
-      begin
-        LDigit := Ord(LText[LI]) - Ord('0');
-        if (LDigit < 0) or (LDigit > 9) then
-          Exit;
-        LSegValue := LSegValue * 10 + LDigit;
-      end;
-      if LSegValue > 255 then
-        Exit;
-      Inc(LSeg);
-      SetLength(ABytes, LSeg);
-      ABytes[LSeg - 1] := Byte(LSegValue);
-      LSegStart := LPos + 1;
-    end;
-    Inc(LPos);
-  end;
-  Result := LSeg = 4;
+  Result := nextpas.core.net.resolve.TryParseIPv4(TrimAscii(AText), ABytes);
 end;
 
-{ TryParseIPv6: RFC 5952 文本(含 :: 压缩, 尾部 v4 内嵌) → 16B }
 function TryParseIPv6(const AText: string; out AOctets: TBytes): Boolean;
-var
-  LText, LPart: string;
-  LV4: TBytes;
-  LI, LJ, LSegCount, LDouble, LValue, LNC: Integer;
-  LSections: array[0..7] of UInt16;
 begin
-  Result := False;
-  LText := TrimAscii(AText);
-  LDouble := -1;
-  LSegCount := 0;
-  SetLength(AOctets, 0);
-  LI := 1;
-  while LI <= Length(LText) do
-  begin
-    if LText[LI] = ':' then
-    begin
-      if (LI + 1 <= Length(LText)) and (LText[LI + 1] = ':') then
-      begin
-        if LDouble <> -1 then
-          Exit;                  { 多个 '::' }
-        LDouble := LSegCount;
-        Inc(LI, 2);
-      end
-      else if LI = Length(LText) then
-        Exit                     { 尾 ':' 非法(单冒号) }
-      else
-        Inc(LI);                 { 段分隔符 }
-      Continue;
-    end;
-    { 读段 }
-    LPart := '';
-    while (LI <= Length(LText)) and (LText[LI] <> ':') do
-    begin
-      LPart := LPart + LText[LI];
-      Inc(LI);
-    end;
-    if Pos('.', LPart) > 0 then
-    begin
-      if not TryParseIPv4(LPart, LV4) then
-        Exit;
-      if LSegCount + 2 > 8 then
-        Exit;
-      LSections[LSegCount] := (UInt16(LV4[0]) shl 8) or LV4[1];
-      LSections[LSegCount + 1] := (UInt16(LV4[2]) shl 8) or LV4[3];
-      Inc(LSegCount, 2);
-    end
-    else
-    begin
-      if (Length(LPart) < 1) or (Length(LPart) > 4) then
-        Exit;
-      LValue := 0;
-      for LJ := 1 to Length(LPart) do
-      begin
-        LNC := HexWordValue(LPart[LJ]);
-        if LNC < 0 then
-          Exit;
-        LValue := (LValue shl 4) or LNC;
-      end;
-      if LSegCount >= 8 then
-        Exit;
-      LSections[LSegCount] := UInt16(LValue);
-      Inc(LSegCount);
-    end;
-  end;
-
-  if LDouble = -1 then
-  begin
-    if LSegCount <> 8 then
-      Exit;
-  end
-  else
-  begin
-    if LSegCount >= 8 then
-      Exit;
-    LNC := 8 - LSegCount;        { 展开零段数 }
-    for LJ := 7 downto LDouble + LNC do
-      LSections[LJ] := LSections[LJ - LNC];
-    for LJ := LDouble to LDouble + LNC - 1 do
-      LSections[LJ] := 0;
-  end;
-
-  SetLength(AOctets, 16);
-  for LI := 0 to 7 do
-  begin
-    AOctets[LI * 2] := Byte(LSections[LI] shr 8);
-    AOctets[LI * 2 + 1] := Byte(LSections[LI] and $FF);
-  end;
-  Result := True;
+  Result := nextpas.core.net.resolve.TryParseIPv6(TrimAscii(AText), AOctets);
 end;
 
 { 客户端 IP 解析; 非法 → False(INV-12: 空/坏 IP → permerror) }

@@ -11,6 +11,7 @@ unit nextpas.core.net.resolve;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.net.base;
 
 function NetResolve(const AHost: string): TNetAddress;
@@ -20,10 +21,14 @@ function NetResolveIPv4(const AIP: string): UInt32;
 { 剥 IPv6 方括号：'[::1]' → '::1'；其余原样。 }
 function StripHostBrackets(const AHost: string): string;
 { 点分四段 0..255；拒绝前导零（'01'）；不剥括号。 }
-function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean;
+function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; overload;
+{ 同上，产出 4 字节网络序（首 octet = 高位地址段）。 }
+function TryParseIPv4(const AIP: string; out AOctets: TBytes): Boolean; overload;
+{ RFC 4291 §2.2：:: 至多一次、内嵌 IPv4 尾、剥括号；拒 %zone / 空组 / 超 4 位。 }
+function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean;
 { 剥括号后可 TryParseIPv4。 }
 function IsIPv4Literal(const AHost: string): Boolean;
-{ 剥括号后含冒号即视为 v6 字面量。 }
+{ 剥括号后 RFC 4291 解析成功。 }
 function IsIPv6Literal(const AHost: string): Boolean;
 function HostIsIpLiteral(const AHost: string): Boolean;
 
@@ -123,6 +128,146 @@ begin
   Result := True;
 end;
 
+function TryParseIPv4(const AIP: string; out AOctets: TBytes): Boolean;
+var
+  LNet: UInt32;
+begin
+  Result := TryParseIPv4(AIP, LNet);
+  if not Result then
+  begin
+    AOctets := nil;
+    Exit;
+  end;
+  SetLength(AOctets, 4);
+  AOctets[0] := Byte(LNet);
+  AOctets[1] := Byte(LNet shr 8);
+  AOctets[2] := Byte(LNet shr 16);
+  AOctets[3] := Byte(LNet shr 24);
+end;
+
+function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean;
+var
+  LFront, LBack, LGroups: array[0..7] of Word;
+  LFCount, LBCount, LI, LGV, LDigits, LTot, LBackBase: Integer;
+  LText: string;
+  LV4: TBytes;
+  LHaveV4, LHaveZip, LJustGroup: Boolean;
+begin
+  { RFC 4291 §2.2（对齐 Go net.ParseIP）：:: 至多一次、内嵌 IPv4 尾占末两组；
+    拒绝 %zone、单组 >4 位、空组（除 ::）、总组数不符。前/后段分收，中段填零。 }
+  Result := False;
+  AOctets := nil;
+  LText := StripHostBrackets(AIP);
+  if LText = '' then
+    Exit;
+  LHaveV4 := False;
+  LI := Length(LText);
+  while (LI >= 1) and (LText[LI] <> ':') do
+    Dec(LI);
+  if Pos('.', Copy(LText, LI + 1, MaxInt)) > 0 then
+  begin
+    if LI < 2 then
+      Exit;
+    if not TryParseIPv4(Copy(LText, LI + 1, MaxInt), LV4) then
+      Exit;
+    LText := Copy(LText, 1, LI);
+    LHaveV4 := True;
+  end;
+  LFCount := 0;
+  LBCount := 0;
+  LHaveZip := False;
+  LJustGroup := False;
+  LI := 1;
+  while LI <= Length(LText) do
+  begin
+    if LText[LI] = ':' then
+    begin
+      if (LI < Length(LText)) and (LText[LI + 1] = ':') then
+      begin
+        if LHaveZip then
+          Exit;
+        LHaveZip := True;
+        LJustGroup := False;
+        Inc(LI, 2);
+      end
+      else if LJustGroup then
+      begin
+        LJustGroup := False;
+        Inc(LI);
+      end
+      else
+        Exit;
+    end
+    else
+    begin
+      LGV := 0;
+      LDigits := 0;
+      while (LI <= Length(LText)) and (LText[LI] <> ':') do
+      begin
+        case LText[LI] of
+          '0'..'9': LGV := LGV * 16 + (Ord(LText[LI]) - Ord('0'));
+          'a'..'f': LGV := LGV * 16 + (Ord(LText[LI]) - Ord('a') + 10);
+          'A'..'F': LGV := LGV * 16 + (Ord(LText[LI]) - Ord('A') + 10);
+        else
+          Exit;
+        end;
+        Inc(LDigits);
+        if LDigits > 4 then
+          Exit;
+        Inc(LI);
+      end;
+      if LHaveZip then
+      begin
+        if LBCount > 7 then
+          Exit;
+        LBack[LBCount] := Word(LGV);
+        Inc(LBCount);
+      end
+      else
+      begin
+        if LFCount > 7 then
+          Exit;
+        LFront[LFCount] := Word(LGV);
+        Inc(LFCount);
+      end;
+      LJustGroup := True;
+    end;
+  end;
+  if (not LHaveV4) and (Length(LText) > 0) and (LText[Length(LText)] = ':') and
+     ((Length(LText) < 2) or (LText[Length(LText) - 1] <> ':')) then
+    Exit;
+  LTot := LFCount + LBCount;
+  if LHaveV4 then
+    Inc(LTot, 2);
+  if LHaveZip then
+  begin
+    if LTot >= 8 then
+      Exit;
+  end
+  else if LTot <> 8 then
+    Exit;
+  FillChar(LGroups, SizeOf(LGroups), 0);
+  for LI := 0 to LFCount - 1 do
+    LGroups[LI] := LFront[LI];
+  LBackBase := 8 - LBCount;
+  if LHaveV4 then
+    Dec(LBackBase, 2);
+  for LI := 0 to LBCount - 1 do
+    LGroups[LBackBase + LI] := LBack[LI];
+  if LHaveV4 then
+  begin
+    LGroups[6] := (Word(LV4[0]) shl 8) or Word(LV4[1]);
+    LGroups[7] := (Word(LV4[2]) shl 8) or Word(LV4[3]);
+  end;
+  SetLength(AOctets, 16);
+  for LI := 0 to 7 do
+  begin
+    AOctets[LI * 2] := Byte(LGroups[LI] shr 8);
+    AOctets[LI * 2 + 1] := Byte(LGroups[LI]);
+  end;
+  Result := True;
+end;
+
 function NetResolveIPv4(const AIP: string): UInt32;
 begin
   if not TryParseIPv4(AIP, Result) then
@@ -146,10 +291,9 @@ end;
 
 function IsIPv6Literal(const AHost: string): Boolean;
 var
-  H: string;
+  Dummy: TBytes;
 begin
-  H := StripHostBrackets(AHost);
-  Result := (H <> '') and (Pos(':', H) > 0);
+  Result := TryParseIPv6(AHost, Dummy);
 end;
 
 function HostIsIpLiteral(const AHost: string): Boolean;

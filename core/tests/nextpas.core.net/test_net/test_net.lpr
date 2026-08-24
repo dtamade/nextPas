@@ -282,6 +282,54 @@ begin
   Check(not HostIsIpLiteral('hy.example.com'), 'domain is name');
   Check(TryParseIPv4('8.8.8.8', LNet), 'TryParseIPv4 ok');
   Check(not TryParseIPv4('8.8.8', LNet), 'TryParseIPv4 incomplete');
+  Check(not IsIPv6Literal('not-a-host:443'), 'colon hostname is not v6');
+end;
+
+procedure TestTryParseIPv6;
+var
+  B: TBytes;
+
+  function Hex16(const A: TBytes): string;
+  var
+    I: Integer;
+  begin
+    Result := '';
+    for I := 0 to High(A) do
+      Result := Result + IntToHex(A[I], 2);
+  end;
+
+begin
+  Check(TryParseIPv6('::1', B), '::1');
+  CheckEqual('00000000000000000000000000000001', Hex16(B), '::1 bytes');
+  Check(TryParseIPv6('[::1]', B), 'bracket ::1');
+  CheckEqual('00000000000000000000000000000001', Hex16(B), 'bracket bytes');
+  Check(TryParseIPv6('::', B), 'all zeros');
+  CheckEqual('00000000000000000000000000000000', Hex16(B), ':: bytes');
+  Check(TryParseIPv6('1::', B), 'headonly');
+  CheckEqual('00010000000000000000000000000000', Hex16(B), '1:: bytes');
+  Check(TryParseIPv6('1::2', B), 'zip');
+  CheckEqual('00010000000000000000000000000002', Hex16(B), '1::2 bytes');
+  Check(TryParseIPv6('fe80::1', B), 'fe80');
+  CheckEqual('FE800000000000000000000000000001', Hex16(B), 'fe80 bytes');
+  Check(TryParseIPv6('FE80::1', B) and TryParseIPv6('fe80::1', B), 'case');
+  Check(TryParseIPv6('1:2:3:4:5:6:7:8', B), 'fullform');
+  CheckEqual('00010002000300040005000600070008', Hex16(B), 'fullform bytes');
+  Check(TryParseIPv6('2001:db8::1', B), 'doc');
+  CheckEqual('20010DB8000000000000000000000001', Hex16(B), 'doc bytes');
+  Check(TryParseIPv6('::ffff:192.168.1.1', B), 'v4mapped');
+  CheckEqual('00000000000000000000FFFFC0A80101', Hex16(B), 'v4mapped bytes');
+  Check(TryParseIPv6('1:2:3:4:5:6:1.2.3.4', B), 'v4mix');
+  CheckEqual('00010002000300040005000601020304', Hex16(B), 'v4mix bytes');
+  Check(not TryParseIPv6('fe80::1%eth0', B), 'zone rejected');
+  Check(not TryParseIPv6('1:2:3:4:5:6:7:8:9', B), '9 groups');
+  Check(not TryParseIPv6('1::2::3', B), 'double zip');
+  Check(not TryParseIPv6('1:::2', B), 'triple colon');
+  Check(not TryParseIPv6(':1::2', B), 'leading single colon');
+  Check(not TryParseIPv6('1::2:', B), 'trailing single colon');
+  Check(not TryParseIPv6('12345::1', B), '5 hex digits');
+  Check(not TryParseIPv6('g::1', B), 'bad digit');
+  Check(not TryParseIPv6('127.0.0.1', B), 'v4 is not v6');
+  Check(not TryParseIPv6('', B), 'empty');
 end;
 
 procedure TestSplitHostPort;
@@ -1116,6 +1164,7 @@ begin
   T.Test('Resolve DNS', @TestResolveDNS);
   T.Test('NetAddress', @TestNetAddress);
   T.Test('Host IP literal helpers', @TestHostIsIpLiteral);
+  T.Test('TryParseIPv6 RFC 4291', @TestTryParseIPv6);
   T.Test('SplitHostPort / JoinHostPort', @TestSplitHostPort);
   T.Test('TCP listen invalid host', @TestTcpListenInvalidHost);
   T.Test('TCP listen bind error message', @TestTcpListenBindErrorMessage);
