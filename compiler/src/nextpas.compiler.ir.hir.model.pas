@@ -178,6 +178,9 @@ type
     InitStr: string;
     HasInit: Boolean;
     IsThreadVar: Boolean;
+    { TString globals use inline 24B %TString storage, not a ptr slot:
+      runtime tstring calls read/write them as inline structs. }
+    IsTStringStorage: Boolean;
   end;
 
   PHirFunction = ^THIRFunction;
@@ -233,7 +236,8 @@ type
       const ATerm: THIRTerminator);
 
     procedure AddGlobal(const AName: string; ATypeId: THIRTypeId;
-      AIsThreadVar: Boolean = False);
+      AIsThreadVar: Boolean = False;
+      AIsTStringStorage: Boolean = False);
 
     function FunctionCount: LongInt;
     function FunctionAt(AIndex: LongInt): THIRFunction;
@@ -896,7 +900,7 @@ begin
 end;
 
 procedure THIRModule.AddGlobal(const AName: string; ATypeId: THIRTypeId;
-  AIsThreadVar: Boolean);
+  AIsThreadVar: Boolean; AIsTStringStorage: Boolean);
 var
   Global: THIRGlobal;
   I: SizeInt;
@@ -912,6 +916,7 @@ begin
   Global.ValueId := NewValue;
   Global.HasInit := False;
   Global.IsThreadVar := AIsThreadVar;
+  Global.IsTStringStorage := AIsTStringStorage;
   FGlobals.Push(Global);
 end;
 

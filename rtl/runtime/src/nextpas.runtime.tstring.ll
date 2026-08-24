@@ -305,8 +305,34 @@ entry:
 ; ============================================================
 ; np_tstring_concat — CoW concat: dst := a + b
 ; ============================================================
-define void @np_tstring_concat(ptr %dst, ptr %a, ptr %b) {
+define void @np_tstring_concat(ptr %dst, ptr %a0, ptr %b0) {
 entry:
+  ; dst 别名防护: S := S + X 形态下 dst 与 a/b 同槽, 而 fini(dst) 会先
+  ; 释放/清零旧值再读操作数数据 → 腐坏。检测到别名时先把该操作数整体
+  ; 暂存进栈临时(assign 为 CoW 安全), 再走原路径。
+  %stage_a = alloca [24 x i8], align 8
+  %stage_b = alloca [24 x i8], align 8
+  %alias_a = icmp eq ptr %dst, %a0
+  br i1 %alias_a, label %stash_a, label %test_alias_b
+
+stash_a:
+  call void @np_tstring_init(ptr %stage_a)
+  call void @np_tstring_assign(ptr %stage_a, ptr %a0)
+  br label %test_alias_b
+
+test_alias_b:
+  %a = phi ptr [ %stage_a, %stash_a ], [ %a0, %entry ]
+  %alias_b = icmp eq ptr %dst, %b0
+  br i1 %alias_b, label %stash_b, label %staged
+
+stash_b:
+  call void @np_tstring_init(ptr %stage_b)
+  call void @np_tstring_assign(ptr %stage_b, ptr %b0)
+  br label %staged
+
+staged:
+  %b = phi ptr [ %stage_b, %stash_b ], [ %b0, %test_alias_b ]
+
   ; 获取 a 和 b 的长度和数据
   %a_len = call i64 @np_tstring_len(ptr %a)
   %b_len = call i64 @np_tstring_len(ptr %b)

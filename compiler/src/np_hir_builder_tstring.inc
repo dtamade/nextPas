@@ -54,9 +54,12 @@ begin
     (ANode.Operand[1] <> '$') then
   begin
     { True program-level string global. Compiler temps ($str_len_tmp_*,
-      $str_arg_*) must stay function-local 24B allocas so sret + Length work. }
+      $str_arg_*) must stay function-local 24B allocas so sret + Length work.
+      Storage is inline 24B %TString: every tstring runtime call takes the
+      global's address as an inline struct, so a ptr-sized slot overflowed
+      16 bytes into adjacent globals (mc_e loop-var clobber family). }
     RegisterGlobal(ANode.Operand + '$ts', GetPtrType);
-    FModule.AddGlobal(ANode.Operand + '$ts', GetPtrType);
+    FModule.AddGlobal(ANode.Operand + '$ts', GetPtrType, False, True);
   end
   else
   begin

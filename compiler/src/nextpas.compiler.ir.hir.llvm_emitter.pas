@@ -285,7 +285,12 @@ begin
     end
     else
     begin
-      if GType.Kind = htkPointer then
+      { Inline 24B storage: tstring runtime calls take the global's address
+        as an inline TString; a ptr-sized slot overflowed into adjacent
+        globals (mc_e loop var clobber). }
+      if G.IsTStringStorage then
+        Emit('@g_' + G.Name + ' = internal global %TString zeroinitializer, align 8')
+      else if GType.Kind = htkPointer then
         Emit('@g_' + G.Name + ' = internal global ptr null')
       else
       begin

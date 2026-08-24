@@ -4,7 +4,13 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-25（v2.31：b4b-i16 追加刀——
+创建：2026-08-23　最后更新：2026-08-25（v2.32：字符串全局 24B 内联存储修复——
+程序级 string 全局误发 8 字节 ptr 槽而 tstring 运行时按内联 24B 结构读写，
+溢出 16 字节踩相邻全局（mc_e 循环变量 I 打 0,0,0,120 且多跑一轮）；
+THIRGlobal.IsTStringStorage 标志+发射 %TString zeroinitializer align 8；
+rtl np_tstring_concat dst 别名暂存防护（跨模块）；
+新挂账精确化=值位置 concat 表达式退化为 data 指针整数加法（mini_cat2）；
+v2.31：b4b-i16 追加刀——
 ownership context 计数器按值副本不回写修复（六包装器统一
 FBlockLabelCounter:=Ctx.BlockLabelCounter），EncodeStrCallArgs 多字面量
 实参同名临时互覆消灭，llvm 绑定执行面实证 nest/two concat 全对；
@@ -50,10 +56,10 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
 性能批次  ████▏░░░░░░░░░░░  P0✅ │ P1: 刀⑥✅seed -73%·刀⑦✅seed 再-69%(59.1→17.9/18.2s) │ 今日累计 -91.8%
-正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)   concat-swap b4b-i16 已修✅(v2.29 tryenv len=7)   residual 标识符类 by-ref 调用点地址化 ✅(v2.30·字面0消灭·DotAccess 类挂账)
+正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)   concat-swap b4b-i16 已修✅(v2.29 tryenv len=7)   residual 标识符类 by-ref 调用点地址化 ✅(v2.30·字面0消灭·DotAccess 类挂账)   字符串全局 24B 内联存储 ✅(v2.32·mc_e 循环变量踩踏根除)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅   tryenv mini 双步 opt+运行 ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    residual 战役阶段A 续刀：DotAccess by-ref 目标（atomic_store 剩 45=AReactor.FPendingDone 类字段链寻址）+ SSE2Shift*Raw/Copy/Delete/SpanInit 多形状家族解剖 + L3 1893 存量新缓存复测；阶段B=方法重载坍缩（ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；llvm 执行面验证 lane（v2.31 挂账：stub SysUtils Result[I] 字符索引恒等→UpperCase/LowerCase 失效，与 tree exit139 同族）；或 swiss 接线 → P1 刀⑨静窗复测
+下一口    residual 战役阶段A 续刀：DotAccess by-ref 目标（atomic_store 剩 45=AReactor.FPendingDone 类字段链寻址）+ SSE2Shift*Raw/Copy/Delete/SpanInit 多形状家族解剖 + L3 1893 存量新缓存复测；阶段B=方法重载坍缩（ENextPasError.CreateFmt 8 形参裸 define）→ strict 计量器归零后常开；llvm 执行面验证 lane（v2.31/v2.32 挂账：stub SysUtils Result[I] 字符索引恒等→UpperCase/LowerCase 失效+mc_c S[I] 读发索引/写退化整串替换；mini_cat2 值位置 concat 表达式退化=data 指针 ptrtoint 整数加法，字符字面量折叠序数值相加——均与 tree exit139 同族）；或 swiss 接线 → P1 刀⑨静窗复测
 ```
 
 ---
@@ -891,6 +897,7 @@ P0 基线数字，回滚判据客观化。
 | v2.29 | （本提交） | concat-swap b4b-i16 收官（`Result := A + '.ext'` 走 NoFold 运行时路径 ret_move 搬空槽，tryenv ok len=0）：①时序根因=TSemaRuntimeVarRegistry.Reset 每函数体清 FOwnedStringReturnFuncNames，把 PreregisterOwnedStringReturnConsumers 在 seeding 前注册好的 owned-func 名册一并抹掉→seed 时 IsOwnedStringReturnFunc 恒 False→Result 不注册 owned→concat 落倒置 else 分支；修复=Reset 只清每体 tracker、名册属跨体全局知识；②形状根因=三处发射点参数倒置（walk_halt_calls Result-concat else 分支/EmitStringFieldStoreRhsTemp/concat.inc 二元'+'递归）DisplayName=左#9右+Operand=dst，builder ProcessAssignTStringConcat 按 Pos(#9,Operand) 拆串 TabPos=0 静默 Exit；另核 field-store concat 三段 Operand（dst#9左#9右）与 builder 两段解析错配；四处统一归一契约 DisplayName=dst/Operand=左#9右（deferred.inc 与 encode_runtime_expr.inc 两处既有正确形状为参照）；③排查 object_free(%436) 错位=实为尾声 EmitClassVarFreeCleanupNodes 对 raise 构造临时（$new_tmp 经 RegisterClassVar）的清理：ok 路径 load 未存 alloca 参与 nil-guard icmp 属 UB、raise 路径不可达死代码；修复=注册表增免清理名册，raise 表达式编码前后差分新注册类变量并抑制其尾声 free（所有权随 exc_store 转移运行时）；④builder 静默 Exit 加 NEXTPAS_DEBUG=1 门控 stderr 告警（assign-tstring-concat/copy/call 缺 tab 或缺 $ts alloca 三族），默认零输出；验证=contract pass+rebuild pass 426315 行+compiler-pass 58/58+tryenv mini ok len=7/bad=fail msg=cfg broken+LoadCfg .ll tstring_concat×1/object_free×0+NEXTPAS_DEBUG 空告警+21 探针全量双步 opt PASS 仅 cap/cmpgen/puny 已知挂账零新回归+hygiene pass+diff-check(本批文件)；D27 教训=探针循环与 make test 并发跑共享 .nextpas 缓存会写坏产生假 BUILD-FAIL（编译器本体 EAccessViolation exit217 同族假象），重门禁须串行或隔离缓存目录 |
 | v2.30 | （本提交） | residual 调用形状清理战役阶段A首刀：①根因=expr-N 实参饥饿（FoldCore 结构化回退发 expr N，cond-br 消费不压栈，EmitExprCall 按 Count 弹栈零填充=字面0 物化源头）+by-ref 实参无地址通道（var 形参收到值加载非地址）；②修复=FoldCore 调用点前置 callee 形参元数据（ParamNameIsByRef 逐参扫描）+by-ref 标识符合并分支（field→var self+field_ref，其余→varref 走 builder alloca/var-param/global_ref 三通道，interlocked 既有形状同构），语句位 EncodeCallStatementArgs 同构补齐；③IR 实证=AtomicCas64 五参全 ABI 对齐+探针执行过、GetOrd 序数 3 折叠、atomic_load 标识符类 12 处全数 ptr 级（含 global_ref）字面0 消灭；④计量勘误=锁定口径 arity A/B 169=169 持平（修复属类型级，arity 扫描器结构性盲视；上会话 135→106 复测不可现存疑不裁）；⑤helpers.inc 两分支经 13e84e60d 搭车入库归属勘误+D28 教训（共享 worktree 并行提交禁 -A）；遗留=DotAccess（本批实证 2 处）/SSE2Shift/Copy/Delete/SpanInit/构造族阶段B 重载坍缩/L3 复测/类型级第二检查器立项 |
 | v2.31 | （本提交） | b4b-i16 追加刀·计数器回写：①新缺陷实证=SemaTrace 抓 EncodeStrCallArgs 字面量实参两次调用 temp=$str_tmp_1 counter=0 恒定——FillOwnershipContext 将 FBlockLabelCounter **按值**种子进 TSemaOwnershipContext，concat.inc 内 Inc 的是局部副本返回即丢，跨包装调用同名临时互覆（两实参同值='DoeDoe' 族），llvm 绑定执行暴露（gnu 绑定后端 strlit 直传常量掩盖，故 compiler-pass 历来绿）；前缀二进制对照证明先在性非 Fix A 引入（Fix A 使 concat 真发射才可见）；②修复=六个包装器统一回写 FBlockLabelCounter:=Ctx.BlockLabelCounter（EmitStrConcatOperand/EmitOwnedStringCopyTemp/WriteTemp/ConcatWriteTemp/ConcatLengthTemp/StrCompareOperand）；③实证=mini_cat3 nest=[John Doe]8/two=[JohnDoe]7 全对+mini_args 保持正确+tryenv len=7 保持+21 探针与基线逐项一致零回归+compiler-pass 58/58；④新挂账（llvm 执行面）=stub SysUtils Result[I] 字符索引循环 llvm 绑定降级残缺（循环界读未初始化 alloca+循环体削空）→UpperCase/LowerCase 恒等变换，string_concat_owned_pass 在 llvm 绑定 Halt(6)（gnu 绿）——先在于本批（与 concat 无关，字符索引降级缺口），归 llvm 执行面验证 lane 与 tree exit139 同族排队 |
+| v2.32 | （本提交） | 字符串全局 24B 内联存储修复+rtl concat 别名防护：①新缺陷实证=mc_a/mc_e for 循环 `S:=S+'x'` 场景循环跑 4 轮（应 3）且循环变量 I 打印 0,0,0,120（120=ord('x')）——根因=ProcessVarDeclTString 程序级全局分支以 GetPtrType 调 FModule.AddGlobal→发射 `@g_X$ts = internal global ptr null`（**8 字节槽**），而全部 tstring 运行时（from_literal/concat/assign/init/fini/len/data）把该地址当内联 24B TString 结构读写，每次写溢出 16 字节踩相邻全局；数值吻合实证=SSO 数据区第 7 字节落位 @g_I（len≤6 该字节为 0、len=7 为末位 'x'=120），Inc(I) 读被踩 0 加 1 恒 ≤3 故多跑一轮；局部变量走 EmitTStringInit alloca [24 x i8] 历来正确唯全局错；②修复=THIRGlobal 增 IsTStringStorage 标志（AddGlobal 可选参数默认 False 全部旧调用点不变），EmitModule 对该类全局发 `internal global %TString zeroinitializer, align 8`（%TString=[24 x i8] 发射端既有命名类型）；不走数组类型注册路线因 TypeToLlvm 对复合类型映射 'ptr'（按引用 ABI）；③受控跨模块 rtl/runtime=nextpas.runtime.tstring.ll np_tstring_concat 签名不变语义增强，dst 与 a/b 同址时 entry alloca 暂存两操作数再拼接（phi 选路），根除自拼 `S:=S+'x'` 别名腐坏（mc_d 直线序列 [abcx][abcxx][abcxxx] 实证），理由=builder 端四处契约归一（v2.29）后该形状成主路径而运行时未设防、不改则 core 执行面正确性目标受阻，风险=纯函数内新增栈暂存零 ABI 变化；④中途教训=首刀误将 %TString 文本置入 thread_local 分支致普通字符串全局变 TLS 变量 SIGSEGV exit139，立即定位修正（TLS 字符串全局维持原状不在范围）；⑤新挂账精确化（llvm 执行面值位置家族）=mini_cat2 `WriteLn(P+Q)` 表达式位置 concat 走通用二元加法路径=np_tstring_data 两指针 ptrtoint 后整数相加打印、字符字面量折叠序数值（120/32）相加；mc_c S[I] 读发索引值/S[1]:='X' 写退化为整串字面量替换（IR 无字节级 gep+store）——与 v2.31 UpperCase/LowerCase 恒等同族归 lane 排队；验证=rebuild pass 426562 行+hygiene 随构建 pass+mc_e 恰 3 轮 I=1,2,3 内容长度全对 exit0+mg1 双字符串全局夹整型布局全对+mc_a/b/d 全对+tryenv ok len=7 保持/bad msg 传播+21 探针逐项一致仅 cap/cmpgen/puny 已知挂账+compiler-pass 58/58+contract pass+diff-check(本批文件)；并行会话脏文件（np_sema_encode_runtime_expr.inc/MIXUSE-AUDIT.md）按 D28 纪律排除在外且经惰性核验（其 by-ref+DotAccess 分支对本批 fixture 不触发） |
 
 ## 10. 文档维护规则
 
