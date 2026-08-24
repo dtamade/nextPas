@@ -363,6 +363,33 @@ begin
   Check(RespErrorType(nil) = '', 'errtype empty payload');
 end;
 
+procedure TestInfoFieldValue;
+var
+  LP: TBytes;
+
+  function V(const AKey: string): string;
+  begin
+    Result := RespInfoFieldValue(LP, AKey);
+  end;
+
+begin
+  LP := SToB('# Server'#13#10'redis_version:7.2.4'#13#10 +
+    'redis_mode:standalone'#13#10'os:Linux 6.1.0'#13#10);
+  Check(V('redis_version') = '7.2.4', 'info redis_version');
+  Check(V('redis_mode') = 'standalone', 'info redis_mode');
+  Check(V('os') = 'Linux 6.1.0', 'info os value');
+  Check(V('missing') = '', 'info missing key');
+  Check(V('version') = '', 'info no prefix match');
+
+  { 无段头 + 无尾 CRLF }
+  LP := SToB('valkey_version:8.0.0');
+  Check(V('valkey_version') = '8.0.0', 'info tailless line');
+
+  { 空载荷 }
+  LP := nil;
+  Check(V('redis_version') = '', 'info empty payload');
+end;
+
 { ===== 6 ===== }
 
 procedure TestClassifyRedisTable;
@@ -406,6 +433,7 @@ begin
   T.Test('incremental parse', @TestIncrementalParse);
   T.Test('parse fail-fast', @TestParseFailFast);
   T.Test('error type', @TestErrorType);
+  T.Test('info field value', @TestInfoFieldValue);
   T.Test('classify redis table', @TestClassifyRedisTable);
   if not T.Run then Halt(1);
 end.

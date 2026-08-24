@@ -29,6 +29,7 @@
 | `test_fake_provider` | fake/scripted 自身 | 脚本回放顺序、耗尽再调抛错、echo 桩 |
 | `test_assembly` | **真实装配链** | 经生产装配函数组装 provider（注入 scripted transport）跑通完整一轮——防"门测走 canned 绕过装配点"事故复发（code888 刀 56 教训） |
 | `test_security` | SECURITY 验收项落 CI | 捕获型 ILogger（testkit）断言脱敏表：鉴权头/请求体/RawBodySnippet 全文不入日志；256KiB 参数预检；64 键 Extra 上限；FromEnv 缺 env 返回 nil；mime 白名单 aecConfig；Utf8SafeTruncate 边界；Active 期 GetMessage 抛 EAgentMisuse |
+| `test_session` | W5 JSONL 转录存储 | 全词表无损往返（thinking+signature+tool_call+tool_result is_error+image+extra）；跨实例持久；torn tail 丢弃；损坏行/未知版本/未知 kind fail-closed 含行号；Delete 幂等；缺失线程空载；ThreadId 校验全集防路径穿越；Fork 干净快照且拒绝已存在目标/自 fork；双同步模式；Unicode 与转义往返；usage unknown 不伪造 0 |
 
 ## 3. 测试基建
 
@@ -48,7 +49,7 @@
 | Bench | 度量 | 回归阈值（首版基线落地后冻结）|
 |-------|------|------|
 | `bench_fold` | 10k delta（含 50 工具槽参数片段）FoldDeltas 总耗时 | ns/op；无 per-delta SetLength 回归（分配次数随行数线性封顶）|
-| `bench_sse_feed` | 16MB SSE 流分 32KB 块 Feed | MB/s ≥ http.sse 整包解析器的同等数量级 |
+| `bench_sse_feed` | 16MB SSE 流分 32KB 块 Feed | MB/s 绝对值基线 176（BENCHMARKS §2；http.sse 为文本行域引擎，无同口径对照）|
 | `bench_loop_overhead` | fake provider 下 10 轮纯文本 run 总开销 | µs/run 级；证明抽象零税 |
 
 纪律：-O2 运行；禁止自定义计时/内循环/手算统计（design-conventions §12）。

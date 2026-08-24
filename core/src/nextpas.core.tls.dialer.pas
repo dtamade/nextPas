@@ -78,7 +78,11 @@ begin
     Exit;
   end;
 
-  LErr := platform_sockaddr_ipv4(APort, LAddrIpv4, LSockAddr);
+  { platform_socket_resolve_ipv4 输出网络字节序（契约如此），
+    platform_sockaddr_ipv4 入参要求主机字节序，此处必须转换；
+    漏转会把 127.0.0.1 连成 1.0.0.127 }
+  LErr := platform_sockaddr_ipv4(APort, platform_ntohl(LAddrIpv4),
+    LSockAddr);
   if LErr <> 0 then
   begin
     platform_socket_close(LSock);

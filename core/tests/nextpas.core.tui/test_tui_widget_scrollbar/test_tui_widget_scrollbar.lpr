@@ -215,6 +215,76 @@ begin
   finally LBuf.Free; end;
 end;
 
+{ === 多字节符号:块字符 █/│ 经 Render 直出,消费方不再绕开手绘 === }
+
+procedure TestScrollbarMultibyteGlyphs;
+var LS: IScrollbar; LBuf: TBuffer;
+begin
+  { 100/10 溢出:track 高 8 → ThumbSize = 8*10 div 100 = 0 钳 1,
+    offset 0 → 行 0 是 thumb,其余是 track }
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0)
+    .WithTrackChar('│').WithThumbChar('█');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 8));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 8), LBuf);
+    Check(CellGlyphAsString(LBuf.CellAt(0, 0)^) = '█',
+      'multibyte thumb glyph rendered');
+    Check(CellGlyphAsString(LBuf.CellAt(0, 5)^) = '│',
+      'multibyte track glyph rendered');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarAsciiCompat;
+var LS: IScrollbar; LBuf: TBuffer;
+begin
+  { 单字符入参走拓宽后的同一通路,行为与 AnsiChar 时代一致 }
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0)
+    .WithTrackChar('.').WithThumbChar('#');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 8));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 8), LBuf);
+    Check(CellGlyphAsString(LBuf.CellAt(0, 0)^) = '#',
+      'ascii thumb glyph unchanged');
+    Check(CellGlyphAsString(LBuf.CellAt(0, 7)^) = '.',
+      'ascii track glyph unchanged');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarSymbolStyles;
+var
+  LS: IScrollbar; LBuf: TBuffer;
+  LP: PCell;
+begin
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0)
+    .WithTrackChar('│').WithThumbChar('█')
+    .WithTrackStyle(TStyle.Default.WithFg(IndexedColor(240)))
+    .WithThumbStyle(TStyle.Default.WithFg(IndexedColor(196)));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 8));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 8), LBuf);
+    LP := LBuf.CellAt(0, 0);
+    Check((LP <> nil) and ColorIsSet(LP^.Fg),
+      'thumb cell carries style');
+    LP := LBuf.CellAt(0, 6);
+    Check((LP <> nil) and ColorIsSet(LP^.Fg),
+      'track cell carries style');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarEmptySymbol;
+var LS: IScrollbar; LBuf: TBuffer;
+begin
+  { 空符号留空格底,不崩溃不写垃圾字节 }
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0)
+    .WithTrackChar('').WithThumbChar('');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 8));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 8), LBuf);
+    Check(CellGlyphAsString(LBuf.CellAt(0, 3)^) = ' ',
+      'empty symbol leaves blank cell');
+  finally LBuf.Free; end;
+end;
+
 procedure TestScrollbarAsIWidget;
 var LS: IScrollbar; LW: IWidget;
 begin
@@ -263,6 +333,10 @@ begin
 
     { Render }
     T.Test('Scrollbar render', @TestScrollbarRender);
+    T.Test('Scrollbar multibyte glyphs', @TestScrollbarMultibyteGlyphs);
+    T.Test('Scrollbar ascii compat', @TestScrollbarAsciiCompat);
+    T.Test('Scrollbar symbol styles', @TestScrollbarSymbolStyles);
+    T.Test('Scrollbar empty symbol', @TestScrollbarEmptySymbol);
     T.Test('Scrollbar as IWidget', @TestScrollbarAsIWidget);
 
     WriteLn;

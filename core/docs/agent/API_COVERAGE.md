@@ -17,7 +17,7 @@
 | EAgentError 族 + aec* 分类 | test_retry（白名单/归因）、两 provider gate（上游状态归约）、test_security（fail-closed 路径）|
 | EAgentMisuse | test_security（GetMessage before EOF）；decoder 复用守卫见 test_codecs |
 
-## §3 接缝接口 → `nextpas.core.agent.intf` — 落地（session 域除外）
+## §3 接缝接口 → `nextpas.core.agent.intf` — 落地
 
 | 接口 | 实现 | 证据 |
 |------|------|------|
@@ -26,7 +26,7 @@
 | IAgentWireDecoder（D13 公开） | 两适配器解码器 | test_codecs |
 | IToolContext / IAgentTool | tools 单元 + 消费方注入 | test_tools / test_loop |
 | IAgentClock | agent.clock（真实+fake） | test_retry / test_tools（超时确定性）|
-| **IAgentTranscriptStore** | **无（W5 后置）** | **接口先行，session 域未立项** |
+| IAgentTranscriptStore | agent.session（W5：JSONL 落地，SESSION.md） | test_session |
 
 ## §4 协议域纯函数 fold → `nextpas.core.agent.fold` — 落地
 
@@ -70,5 +70,6 @@ wire、256KiB 预检、UTF-8 截断边界、误用守卫、Extra 上限）；深
 
 ## 已知缺口
 
-- **session 域**（IAgentTranscriptStore 实现）：接口先行，W5 按需立项。
-- http.sse 同口径参照基准：随 agent.sse 反哺 slice 补齐（ROADMAP inbox）。
+- ~~session 域（IAgentTranscriptStore 实现）~~ 已清偿：W5 立项落地
+  （2026-08-25），`nextpas.core.agent.session` + `test_session`。
+- http.sse 同口径参照基准：两引擎输入域不同（bytes/text）不合基准；如需对照由 http lane 自立。

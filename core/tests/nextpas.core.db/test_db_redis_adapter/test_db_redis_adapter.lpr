@@ -515,6 +515,85 @@ begin
 
 end;
 
+function ConnPingWorks(AConn: IDbConnection): Boolean;
+var
+  LQ: IDbQuery;
+begin
+  LQ := AConn.Query('PING');
+  Result := LQ.Step and (LQ.GetText(0) = 'PONG');
+  LQ := nil;
+end;
+
+{ ===== A5.1：INFO 版本探测（seam 显式开启）===== }
+
+procedure TestInfoProbeSurfacesVersion;
+var
+  LTrans: TScriptedTransport;
+  LConn: IDbConnection;
+  LC: IDbCapabilities;
+begin
+  LTrans := TScriptedTransport.Create;
+  LTrans.Script('$39'#13#10'# Server'#13#10'redis_version:7.2.4'#13#10 +
+    'os:Linux'#13#10);
+  LConn := ConnectRedisWithTransport(LTrans, '', 0, True);
+  Supports(LConn, IDbCapabilities, LC);
+  Check(LC.ProductVersion = '7.2.4', 'probed version surfaced');
+
+  { 探测后连接仍可用 }
+  LTrans.Script('+OK'#13#10);
+  LConn.Exec('PING');
+  LConn := nil;
+end;
+
+procedure TestInfoProbeValkeyFallbackAndTolerant;
+var
+  LTrans: TScriptedTransport;
+  LConn: IDbConnection;
+  LC: IDbCapabilities;
+begin
+  { valkey 回退键 }
+  LTrans := TScriptedTransport.Create;
+  LTrans.Script('$20'#13#10'valkey_version:8.0.0'#13#10);
+  LConn := ConnectRedisWithTransport(LTrans, '', 0, True);
+  Supports(LConn, IDbCapabilities, LC);
+  Check(LC.ProductVersion = '8.0.0', 'valkey fallback version');
+  LConn := nil;
+
+  { 探测失败保守降级：错误回复吞掉，版本空，连接可用 }
+  LTrans := TScriptedTransport.Create;
+  LTrans.Script('-ERR unknown command ''INFO'''#13#10);
+  LConn := ConnectRedisWithTransport(LTrans, '', 0, True);
+  Supports(LConn, IDbCapabilities, LC);
+  Check(LC.ProductVersion = '', 'probe failure keeps empty');
+  LTrans.Script('+PONG'#13#10);
+  Check(ConnPingWorks(LConn), 'conn usable after failed probe');
+  LConn := nil;
+end;
+
+{ ===== A5.1b：TLS 变体 ===== }
+
+procedure TestTlsNegativePathOffline;
+var
+  LOpts: TDbRedisConnectOptions;
+  LRaised: Boolean;
+begin
+  { 离线可跑：UseTls 指向不可达端点 → TLSDial 失败桥接为统一
+    EDbError(dbkRedis)，不漏裸 net/tls 异常 }
+  LOpts := TDbRedisConnectOptions.Default;
+  LOpts.UseTls := True;
+  LRaised := False;
+  try
+    ConnectRedis('127.0.0.1:1', LOpts);
+  except
+    on E: EDbError do
+    begin
+      LRaised := (E.Backend = dbkRedis);
+      Check(E.Category = decConnection, 'tls negative categorized');
+    end;
+  end;
+  Check(LRaised, 'tls dial failure bridges to EDbError');
+end;
+
 { ===== live（env 门控）===== }
 
 procedure TestLiveRoundtrip;
@@ -556,6 +635,32 @@ begin
   LConn := nil;
 end;
 
+procedure TestLiveTlsRoundtrip;
+var
+  LEnv, LAddr, LPwd: string;
+  LOpts: TDbRedisConnectOptions;
+  LConn: IDbConnection;
+  LQ: IDbQuery;
+begin
+  LEnv := GetEnvironmentVariable('NEXTPAS_REDIS_TEST_TLS_CONN');
+  if LEnv = '' then
+  begin
+    Writeln('[live-tls] NEXTPAS_REDIS_TEST_TLS_CONN not set - skipped');
+    Exit;
+  end;
+  LAddr := LEnv;
+  LPwd := GetEnvironmentVariable('NEXTPAS_REDIS_TEST_TLS_PASSWORD');
+  LOpts := TDbRedisConnectOptions.Default;
+  LOpts.UseTls := True;
+  LOpts.Password := LPwd;
+  LConn := ConnectRedis(LAddr, LOpts);
+  LQ := LConn.Query('PING');
+  Assert(LQ.Step);
+  Check(LQ.GetText(0) = 'PONG', 'live-tls PONG');
+  LQ := nil;
+  LConn := nil;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.db.redis.adapter');
   T.Test('handshake order', @TestHandshakeOrder);
@@ -568,6 +673,10 @@ begin
   T.Test('batch pipeline', @TestBatchPipeline);
   T.Test('capabilities matrix', @TestCapabilitiesMatrix);
   T.Test('trace pairing', @TestTracePairing);
+  T.Test('info probe surfaces version', @TestInfoProbeSurfacesVersion);
+  T.Test('info probe valkey fallback and tolerant', @TestInfoProbeValkeyFallbackAndTolerant);
+  T.Test('tls negative path offline', @TestTlsNegativePathOffline);
   T.Test('live roundtrip', @TestLiveRoundtrip);
+  T.Test('live tls roundtrip', @TestLiveTlsRoundtrip);
   if not T.Run then Halt(1);
 end.

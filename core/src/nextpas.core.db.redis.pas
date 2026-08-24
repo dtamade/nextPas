@@ -25,6 +25,8 @@ function ConnectRedis(const AAddr: string): IDbConnection; inline; overload;
 function ConnectRedis(const AAddr: string;
   const APassword: string; const ADbIndex: Integer;
   const AOptions: TDbConnectOptions): IDbConnection; inline; overload;
+function ConnectRedis(const AAddr: string;
+  const AOptions: TDbRedisConnectOptions): IDbConnection; inline; overload;
 
 implementation
 
@@ -39,6 +41,12 @@ function ConnectRedis(const AAddr: string;
 begin
   Result := nextpas.core.db.redis.adapter.ConnectRedis(AAddr, APassword,
     ADbIndex, AOptions);
+end;
+
+function ConnectRedis(const AAddr: string;
+  const AOptions: TDbRedisConnectOptions): IDbConnection;
+begin
+  Result := nextpas.core.db.redis.adapter.ConnectRedis(AAddr, AOptions);
 end;
 
 end.
