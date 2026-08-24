@@ -358,7 +358,10 @@ begin
   FLock.Acquire;
   try
     for I := 0 to MAX_CONCURRENT_TASKS - 1 do
-      if platform_thread_is_alive(FActive[I].Handle) and FActive[I].Done then
+      { Reclaim on a non-nil handle, not is_alive: a finished joinable thread
+        stops being "alive" before anything joins it — gating on is_alive
+        leaks its TPlatformPThreadState forever (PH33 P5e). }
+      if (FActive[I].Handle.Handle <> nil) and FActive[I].Done then
       begin
         LHandles[LCount] := FActive[I].Handle;
         FActive[I].Handle.Handle := nil;
@@ -660,7 +663,10 @@ begin
     FShuttingDown := True;
     for I := 0 to MAX_CONCURRENT_TASKS - 1 do
     begin
-      if platform_thread_is_alive(FActive[I].Handle) then
+      { Same non-nil-handle rule as ReapFinished: is_alive already turned
+        False for threads that finished un-reaped, and their joinable state
+        still needs a final wait (PH33 P5e). }
+      if FActive[I].Handle.Handle <> nil then
       begin
         InterlockedExchange(FActive[I].Cancel.FCancelled, 1);
         LHandles[LCount] := FActive[I].Handle;
