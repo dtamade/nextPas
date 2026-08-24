@@ -24,7 +24,8 @@ uses
   nextpas.core.agent.provider.openai,
   nextpas.core.agent.provider.anthropic,
   nextpas.core.agent.tools,
-  nextpas.core.agent.loop;
+  nextpas.core.agent.loop,
+  nextpas.core.agent.session;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
@@ -79,6 +80,15 @@ function EnvelopeTruncation(const AResult: TToolResult;
   AMaxLines, AMaxBytes: Integer): TToolResult; inline;
 function NewToolContext(const AToken: IAsyncCancellationToken;
   ACallIndex: Integer): IToolContext; inline;
+
+{ ---- 会话存储（API.md §3；W5，设计权威 SESSION.md）---- }
+
+type
+  TJsonlTranscriptStore = nextpas.core.agent.session.TJsonlTranscriptStore;
+  ETranscriptCorrupt = nextpas.core.agent.session.ETranscriptCorrupt;
+
+function NewJsonlTranscriptStore(const ARootDir: string;
+  ASyncEachAppend: Boolean = True): IAgentTranscriptStore; inline;
 
 implementation
 
@@ -223,6 +233,13 @@ end;
 function NewSystemClock: IAgentClock;
 begin
   Result := nextpas.core.agent.clock.NewSystemClock;
+end;
+
+function NewJsonlTranscriptStore(const ARootDir: string;
+  ASyncEachAppend: Boolean = True): IAgentTranscriptStore;
+begin
+  Result := nextpas.core.agent.session.NewJsonlTranscriptStore(
+    ARootDir, ASyncEachAppend);
 end;
 
 end.

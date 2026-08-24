@@ -402,6 +402,23 @@ type
     function VirtualNowMs: Int64;
     function LastSleepRequestMs: Int64;         { 最近一次被请求的睡眠时长 }
   end;
+
+{ 会话存储构造（nextpas.core.agent.session；W5 立项，设计权威 SESSION.md）}
+function NewJsonlTranscriptStore(const ARootDir: string;
+  ASyncEachAppend: Boolean = True): IAgentTranscriptStore;
+
+type
+  { JSONL 落地 store：一线程一文件 <RootDir>/<ThreadId>.jsonl；torn-tail
+    崩溃恢复、SyncEachAppend fsync 节奏选项（默认每追加落盘）。
+    Fork 为实例方法——接口 Append/Load/Delete 三方法面保持冻结不变。
+    ETranscriptCorrupt（aecProtocol 固定码，消息含行号）为损坏 fail-closed
+    异常；ThreadId 非法抛 EAgentMisuse }
+  TJsonlTranscriptStore = class(TInterfacedObject, IAgentTranscriptStore)
+  public
+    procedure Fork(const ASrcThreadId, ADstThreadId: string);
+    property RootDir: string read FRootDir;
+    property SyncEachAppend: Boolean read FSyncEachAppend;
+  end;
 ```
 
 无全局注册表、无可变单例（决策 D4）：实例由消费方持有，库形态多 agent 宿主安全。

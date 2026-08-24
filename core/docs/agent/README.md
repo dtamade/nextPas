@@ -5,8 +5,9 @@
 具体应用语义（不是 coding agent，不含任何内置业务工具）。
 
 > **Status: stable(draft truth)。W0-W4 已落地：协议/传输/两适配器/重试/
-> 工具循环/示例/基准全部带 gate；session 域接口先行（实现 W5 按需立项）。
-> API 以 `API.md` 为契约权威，覆盖率对照见 `API_COVERAGE.md`，
+> 工具循环/示例/基准全部带 gate；W5 session 存储已立项（2026-08-25）：
+> JSONL 落地实现见 [`SESSION.md`](SESSION.md)。API 以 `API.md` 为契约权威，
+> 覆盖率对照见 `API_COVERAGE.md`，
 > 性能基线见 `BENCHMARKS.md`。**
 
 ## 定位
@@ -103,6 +104,7 @@ if LProvider = nil then
 | 文档 | 角色 |
 |------|------|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 分层、单元清单、数据流、并发/取消/内存所有权模型 |
+| [`SESSION.md`](SESSION.md) | **W5 会话存储设计权威**：JSONL schema、崩溃恢复、fsync 节奏、Fork 语义 |
 | [`API.md`](API.md) | **公开 API 契约权威**：全部类型/接口签名与语义 |
 | [`WIRE-MAPPINGS.md`](WIRE-MAPPINGS.md) | 各厂商线级协议映射真相源（含怪癖清单） |
 | [`DESIGN.md`](DESIGN.md) | 对标分析与决策记录（为何这样设计） |
