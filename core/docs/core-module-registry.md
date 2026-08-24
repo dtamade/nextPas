@@ -72,15 +72,12 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `oauth` | L3 | OAuth2 authorization-code client + PKCE (RFC 6749 §4.1 / RFC 7636; `nextpas.core.oauth.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
-| `pg` | L2 backend of `db` | PostgreSQL database (libpq FFI, dlopen); units live at `nextpas.core.db.pg.*` (legacy `nextpas.core.pg.*` shims deleted in the G2 sweep) | yes | L0-L1; platform.dl | focused-runtime |
 | `platform` | L0 | host ABI and OS semantics | yes | host owner `platform.*.base/ffi`, L0 only | source-contract + focused-runtime |
 | `process` | L2 | process management | yes | L0-L1 | focused-runtime |
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
-| `redis` | L2 backend of `db` | Redis native client (RESP2, no C library; transport over `nextpas.core.net` blocking TCP); units live at `nextpas.core.db.redis.{base,resp,transport,adapter}` plus facade `nextpas.core.db.redis` | yes | L0-L1 plus same-layer one-way `net`/`time`/`sync` | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
-| `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy `nextpas.core.sqlite.*` shims deleted in the G2 sweep) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
@@ -97,12 +94,15 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
+| `zip` | L2 | ZIP archive writer (store entries, Zip32 limits, UTF-8 names, zip-slip rejection) | yes | L0-L1 | focused-runtime |
 
 Database family: backends are L2 implementations inside the `db` family —
 currently `sqlite`, `pg`, `mysql`, `odbc` and `redis`, physically under
 `nextpas.core.db.<backend>.*`. The legacy `nextpas.core.sqlite.*` /
 `nextpas.core.pg.*` unit names were deleted in the G2 consumer sweep
-(2026-08-25); the ffi units never had shims. Design record:
+(2026-08-25); the ffi units never had shims. Backend-specific dependency
+facts: `redis` adds same-layer one-way `net`/`time`/`sync`; the FFI loaders
+(`pg`, `mysql`, `odbc`) use `platform.dl`. Design record:
 `core/docs/plans/2026-08-23-db-module-boundary.md`; backend contracts:
 `core/docs/db/CONTRACT.md`.
 
