@@ -53,6 +53,77 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFoldCore(
     Result := AFieldIndex >= 0;
   end;
 
+  { Address blob for a by-ref formal receiving a field-access argument:
+    P^.F via pointer-var registry, or B.F when B resolves as a pointer var.
+    Emits base ptr + 'field_ref' (gep, no load) — the value paths append
+    arr_load instead, which starves the callee's address expectation.
+    Var-param record bases (APool.F) need param-type registration that
+    does not exist yet; they fall through unchanged. }
+  function TryByRefFieldAddressBlob(const ALocalNode: TGreenNode;
+    out ABlob: string): Boolean;
+  var
+    BaseName, FieldName: string;
+    TypeNameK: string;
+    FieldIdx: Int64;
+    SymbolIdTmp, TypeIdTmp: LongInt;
+  begin
+    ABlob := '';
+    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkDotAccess) or
+      (ALocalNode.ChildCount < 2) then
+      Exit(False);
+    if TryPointerFieldAccess(ALocalNode, BaseName, TypeNameK, FieldName,
+      FieldIdx) then
+    begin
+      ABlob := 'var ' + BaseName + #10 + 'field_ref ' +
+        IntToStr(FieldIdx) + #10;
+      Exit(True);
+    end;
+    if (ALocalNode.ChildAt(0) <> nil) and
+      (ALocalNode.ChildAt(0).NodeKind = gnkIdentifier) and
+      (ALocalNode.ChildAt(1) <> nil) and
+      (ALocalNode.ChildAt(1).NodeKind = gnkIdentifier) then
+    begin
+      BaseName := ALocalNode.ChildAt(0).Text;
+      FieldName := ALocalNode.ChildAt(1).Text;
+      { Pointer-var base: slot holds the pointer, plain load yields it. }
+      TypeNameK := LookupPointerVar(BaseName);
+      if TypeNameK <> '' then
+      begin
+        FieldIdx := TypeMetaFieldIndex(TypeNameK, FieldName);
+        if FieldIdx >= 0 then
+        begin
+          ABlob := 'var ' + BaseName + #10 + 'field_ref ' +
+            IntToStr(FieldIdx) + #10;
+          Exit(True);
+        end;
+      end;
+      { Record-typed base (var-param/local/global record): address channel is
+        'varref' — builder pushes the alloca, or single-derefs var-param
+        allocas to the caller record pointer (never the double-deref value
+        that 'var' would give). Symbol table supplies the declared type. }
+      SymbolIdTmp := FModel.FindSymbolByName(BaseName);
+      if SymbolIdTmp > 0 then
+      begin
+        TypeIdTmp := FModel.SymbolTypeId(SymbolIdTmp);
+        if TypeIdTmp > 0 then
+        begin
+          TypeNameK := FModel.TypeAt(TypeIdTmp - 1).Name;
+          if (TypeNameK <> '') and TypeMetaIsRecord(TypeNameK) then
+          begin
+            FieldIdx := TypeMetaFieldIndex(TypeNameK, FieldName);
+            if FieldIdx >= 0 then
+            begin
+              ABlob := 'varref ' + BaseName + #10 + 'field_ref ' +
+                IntToStr(FieldIdx) + #10;
+              Exit(True);
+            end;
+          end;
+        end;
+      end;
+    end;
+    Result := False;
+  end;
+
   { Element byte size of a pointer pointee (PInt32 → alias target Int32 → 4).
     PChar/… stay 1; anything unresolved defaults to 1. }
   function PointeeElemSizeCode(const ATypeName: string): Int64;
@@ -1479,6 +1550,14 @@ begin
         else
           ABlob := ABlob + 'varref ' +
             ANode.ChildAt(StrCallIdx).Text + #10;
+        Inc(StrCallArgCount);
+      end
+      else if CallHasFormalMeta and CallFormalByRef[StrCallIdx - 1] and
+        (ANode.ChildAt(StrCallIdx) <> nil) and
+        TryByRefFieldAddressBlob(ANode.ChildAt(StrCallIdx), Operand) then
+      begin
+        { By-ref formal + field-access arg → field address (gep, no load). }
+        ABlob := ABlob + Operand;
         Inc(StrCallArgCount);
       end
       else if (ANode.ChildAt(StrCallIdx) <> nil) and

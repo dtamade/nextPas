@@ -1005,17 +1005,31 @@ begin
           if ScalarSymbolId <= 0 then
             Exit(False);
           ScalarTypeId := FModel.SymbolTypeId(ScalarSymbolId);
-          if (ScalarTypeId <= 0) or
-            (not FModel.GetTypeScalarFact(ScalarTypeId, Fact)) or
-            not (Fact.Kind in [sskBool, sskInt, sskPointer]) then
-            Exit(False);
-          SetLength(Children, 0);
-          AExprId := FModel.AddHirExpr(
-            shekSymbolAddress, ScalarTypeId, ScalarSymbolId, Children,
-    0,
-    0.0, '', '', 0, shvcAddress
-          );
-          Exit(AExprId > 0);
+          if (ScalarTypeId > 0) and
+            FModel.GetTypeScalarFact(ScalarTypeId, Fact) and
+            (Fact.Kind in [sskBool, sskInt, sskPointer]) then
+          begin
+            SetLength(Children, 0);
+            AExprId := FModel.AddHirExpr(
+              shekSymbolAddress, ScalarTypeId, ScalarSymbolId, Children,
+              0,
+              0.0, '', '', 0, shvcAddress
+            );
+            Exit(AExprId > 0);
+          end;
+          { Non-scalar runtime vars (var-param/local records): the record base
+            address itself — LowerSymbolAddressExpr single-derefs var-param
+            allocas, matching the define-side by-ref ABI. Without this the
+            whole structured call contract bails and callers degrade to value
+            loads for atomic/CAS-style targets (v2.31 campaign). }
+          if ScalarTypeId > 0 then
+          begin
+            RecordTypeName := FModel.TypeAt(ScalarTypeId - 1).Name;
+            if (RecordTypeName <> '') and TypeMetaIsRecord(RecordTypeName) then
+              Exit(BuildRecordBaseAddressExpr(BaseName, RecordTypeName,
+                AExprId));
+          end;
+          Exit(False);
         end;
         Result := False;
       end;
