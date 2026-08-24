@@ -1,0 +1,1191 @@
+program test_ssh_session;
+
+{$I nextpas.core.settings.inc}
+
+{ S4 gate：全栈回环。
+ * 测试内实现最小 SSH 服务端（独立服务端逻辑路径：版本交换 → KEXINIT →
+ * curve25519 ECDH + ed25519 签名 REPLY → NEWKEYS 切换 → service/userauth →
+ * channel open/exec/data/exit-status/close），与真实客户端实现在内存管道上
+ * 跑完 握手→认证→exec→关闭 全流程。
+ * 覆盖：密码认证正/负路径、publickey 签名认证、known_hosts 策略（严格模式
+ * 未知拒绝 / 文件命中放行）、窗口回补帧容忍、stdout/stderr/exit-code 收集。}
+
+uses
+  cthreads,
+  nextpas.core.system.sysutils,
+  nextpas.core.io.intf,
+  nextpas.core.ssh.base,
+  nextpas.core.ssh.errors,
+  nextpas.core.ssh.buffer,
+  nextpas.core.ssh.cipher,
+  nextpas.core.ssh.kex,
+  nextpas.core.ssh.hostkey,
+  nextpas.core.ssh.keys,
+  nextpas.core.ssh.auth,
+  nextpas.core.ssh.transport,
+  nextpas.core.ssh.channel,
+  nextpas.core.ssh.session,
+  nextpas.core.crypto.x25519,
+  nextpas.core.crypto.ed25519,
+  nextpas.core.crypto.hash,
+  nextpas.core.encoding.base64,
+  nextpas.core.platform.files.text,
+  nextpas.core.test;
+
+{ ── 线程安全阻塞内存管道 ───────────────────────────────────────── }
+
+type
+  TPipeShared = record
+    Lock: TRTLCriticalSection;
+  end;
+  PPipeShared = ^TPipeShared;
+
+  TMemPipeEnd = class(TInterfacedObject, IReadWriteCloser)
+  private
+    FPeer: TMemPipeEnd;
+    FShared: PPipeShared;
+    FIncoming: TBytes;
+    FReadPos: SizeUInt;
+    FClosed: Boolean;
+    FDataEvent: PRTLEvent;
+    procedure AppendLocked(const ASrc; ACount: SizeUInt);
+  public
+    constructor Create(AShared: PPipeShared);
+    destructor Destroy; override;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+    procedure SetPeer(APeer: TMemPipeEnd);
+    { 阻塞等待数据后取走全部已到达字节；无数据最多等 ATimeoutMs }
+    procedure Drain(out ADest: TBytes; ATimeoutMs: Cardinal);
+    { 回退读位置 ACount 字节（粘包场景）}
+    procedure Rewind(ACount: SizeUInt);
+    { 非引用计数生命周期：由测试手工管理 }
+    function QueryInterface(constref IID: TGUID; out Obj): HResult; cdecl;
+    function _AddRef: LongInt; cdecl;
+    function _Release: LongInt; cdecl;
+    property Closed: Boolean read FClosed;
+  end;
+
+procedure TMemPipeEnd.Rewind(ACount: SizeUInt);
+begin
+  EnterCriticalSection(FShared^.Lock);
+  Dec(FReadPos, ACount);
+  LeaveCriticalSection(FShared^.Lock);
+end;
+
+constructor TMemPipeEnd.Create(AShared: PPipeShared);
+begin
+  inherited Create;
+  FShared := AShared;
+  FDataEvent := RTLEventCreate;
+end;
+
+destructor TMemPipeEnd.Destroy;
+begin
+  RTLEventDestroy(FDataEvent);
+  inherited Destroy;
+end;
+
+function TMemPipeEnd.QueryInterface(constref IID: TGUID; out Obj): HResult; cdecl;
+begin
+  if GetInterface(IID, Obj) then
+    Result := S_OK
+  else
+    Result := E_NOINTERFACE;
+end;
+
+function TMemPipeEnd._AddRef: LongInt; cdecl;
+begin
+  Result := -1;
+end;
+
+function TMemPipeEnd._Release: LongInt; cdecl;
+begin
+  Result := -1;
+end;
+
+procedure TMemPipeEnd.SetPeer(APeer: TMemPipeEnd);
+begin
+  FPeer := APeer;
+end;
+
+procedure TMemPipeEnd.AppendLocked(const ASrc; ACount: SizeUInt);
+var
+  LOld: SizeUInt;
+begin
+  LOld := SizeUInt(Length(FIncoming));
+  SetLength(FIncoming, LOld + ACount);
+  Move(ASrc, FIncoming[LOld], ACount);
+end;
+
+function TMemPipeEnd.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvail: SizeUInt;
+  LWaits: Integer;
+begin
+  Result := 0;
+  LWaits := 0;
+  while True do
+  begin
+    EnterCriticalSection(FShared^.Lock);
+    LAvail := SizeUInt(Length(FIncoming)) - FReadPos;
+    if LAvail > ACount then
+      LAvail := ACount;
+    if LAvail > 0 then
+    begin
+      Move(FIncoming[FReadPos], ABuf, LAvail);
+      Inc(FReadPos, LAvail);
+    end;
+    LeaveCriticalSection(FShared^.Lock);
+    if LAvail > 0 then
+      Exit(LAvail);
+    { 阻塞流语义：自身或对端已关闭且无数据 → EOF }
+    if FClosed or FPeer.FClosed then
+      Exit(0);
+    RTLeventResetEvent(FDataEvent);
+    { 双检避免信号丢失 }
+    EnterCriticalSection(FShared^.Lock);
+    LAvail := SizeUInt(Length(FIncoming)) - FReadPos;
+    LeaveCriticalSection(FShared^.Lock);
+    if (LAvail = 0) and not FClosed and not FPeer.FClosed then
+    begin
+      Inc(LWaits);
+      if LWaits > 40 then            { ~20s 静默按 EOF，避免测试挂死 }
+        Exit(0);
+      RTLEventWaitFor(FDataEvent, 500);
+    end;
+  end;
+end;
+
+function TMemPipeEnd.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+  if FClosed or (FPeer = nil) or FPeer.FClosed then
+    Exit;
+  EnterCriticalSection(FShared^.Lock);
+  FPeer.AppendLocked(ABuf, ACount);
+  LeaveCriticalSection(FShared^.Lock);
+  RTLeventSetEvent(FPeer.FDataEvent);
+  Result := ACount;
+end;
+
+procedure TMemPipeEnd.Close;
+begin
+  FClosed := True;
+  RTLeventSetEvent(FDataEvent);
+end;
+
+procedure TMemPipeEnd.Drain(out ADest: TBytes; ATimeoutMs: Cardinal);
+var
+  LRemain: SizeUInt;
+begin
+  ADest := nil;
+  EnterCriticalSection(FShared^.Lock);
+  LRemain := SizeUInt(Length(FIncoming)) - FReadPos;
+  LeaveCriticalSection(FShared^.Lock);
+  if LRemain = 0 then
+  begin
+    RTLeventResetEvent(FDataEvent);
+    { 双检避免信号丢失 }
+    EnterCriticalSection(FShared^.Lock);
+    LRemain := SizeUInt(Length(FIncoming)) - FReadPos;
+    LeaveCriticalSection(FShared^.Lock);
+    if (LRemain = 0) and not FClosed then
+      RTLEventWaitFor(FDataEvent, ATimeoutMs);
+  end;
+  EnterCriticalSection(FShared^.Lock);
+  LRemain := SizeUInt(Length(FIncoming)) - FReadPos;
+  SetLength(ADest, LRemain);
+  if LRemain > 0 then
+  begin
+    Move(FIncoming[FReadPos], ADest[0], LRemain);
+    Inc(FReadPos, LRemain);
+  end;
+  LeaveCriticalSection(FShared^.Lock);
+end;
+
+procedure MakePipe(out AClientSide, AServerSide: TMemPipeEnd;
+  out AShared: PPipeShared);
+begin
+  New(AShared);
+  InitCriticalSection(AShared^.Lock);
+  AClientSide := TMemPipeEnd.Create(AShared);
+  AServerSide := TMemPipeEnd.Create(AShared);
+  AClientSide.SetPeer(AServerSide);
+  AServerSide.SetPeer(AClientSide);
+end;
+
+{ ── 小工具 ───────────────────────────────────────────────────── }
+
+function StringToBytes(const AText: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AText));
+  if Length(AText) > 0 then
+    Move(PByte(PChar(AText))^, Result[0], SizeUInt(Length(AText)));
+end;
+
+function BytesToText(const AData: TBytes): string;
+begin
+  Result := '';
+  SetLength(Result, Length(AData));
+  if Length(AData) > 0 then
+    Move(AData[0], PByte(PChar(Result))^, SizeUInt(Length(AData)));
+end;
+
+function PatternBytes(APattern: Byte; ACount: Integer): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, ACount);
+  if ACount > 0 then
+    FillChar(Result[0], SizeUInt(ACount), APattern);
+end;
+
+function ConcatAll(const AParts: array of TBytes): TBytes;
+var
+  I: Integer;
+  LTot, LPos: SizeUInt;
+begin
+  Result := nil;
+  LTot := 0;
+  for I := 0 to High(AParts) do
+    Inc(LTot, SizeUInt(Length(AParts[I])));
+  SetLength(Result, LTot);
+  LPos := 0;
+  for I := 0 to High(AParts) do
+    if Length(AParts[I]) > 0 then
+    begin
+      Move(AParts[I][0], Result[LPos], SizeUInt(Length(AParts[I])));
+      Inc(LPos, SizeUInt(Length(AParts[I])));
+    end;
+end;
+
+function ConcatBytes(const A, B: TBytes): TBytes;
+begin
+  Result := ConcatAll([A, B]);
+end;
+
+function SigBlobOf(const AAlgName: string; const ARawSig: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(128);
+  try
+    LW.PutStringText(AAlgName);
+    LW.PutStringBytes(ARawSig);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
+function SingleBytePayloadOf(AMsg: Byte): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, 1);
+  Result[0] := AMsg;
+end;
+
+function Ed25519PubBlob(const APub: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(64);
+  try
+    LW.PutStringText('ssh-ed25519');
+    LW.PutStringBytes(APub);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
+const
+  CHACHA_ALG = 'chacha20-poly1305@openssh.com';
+  SERVER_IDENT = 'SSH-2.0-NextPas-LoopServer';
+  CLIENT_HOST_NAME = 'loopback.local';
+  SRV_CHANNEL_ID = 7;
+  SRV_RECV_WINDOW = 2097152;
+  SRV_READ_TIMEOUT_MS = 8000;
+
+type
+  { 服务端场景配置与结果（堆上分配，主线程与服务线程共享）}
+  PSshLoopServerScenario = ^TSshLoopServerScenario;
+  TSshLoopServerScenario = record
+    AcceptUser: string;
+    AcceptPassword: string;
+    PasswordOk: Boolean;
+    PubKeyOk: Boolean;
+    StdOut1: TBytes;
+    StdOut2: TBytes;
+    StdErr: TBytes;
+    ExitCode: UInt32;
+    HostSeed: TBytes;
+    Failed: Boolean;
+    FailMsg: string;
+    Done: Boolean;
+    { 竞争诊断：服务端收包计数与首包形态 }
+    MsgCount: Integer;
+    Msg1Type: Byte;
+    Msg1Len: Integer;
+  end;
+
+  { 独立服务端逻辑路径 }
+  TSshLoopServer = class
+  private
+    FEnd: TMemPipeEnd;
+    FSc: PSshLoopServerScenario;
+    FRecvSeq, FSendSeq: UInt32;
+    FRecv: ISshPacketReceiver;     { c→s 解码 }
+    FSend: ISshPacketSender;       { s→c 编码 }
+    FEncrypted: Boolean;
+    FSessionId: TBytes;
+    procedure SendPlainPayload(const APayload: TBytes);
+    function RecvRaw(out AData: TBytes): Boolean;
+    function ReadPlainFrameBody: TBytes;
+    function ReadAnyPayload: TBytes;
+    procedure ReplyPayload(const APayload: TBytes);
+    procedure Handshake;
+    procedure ServeApp;
+    procedure Fail(const AMsg: string);
+  public
+    constructor Create(AEnd: TMemPipeEnd; ASc: PSshLoopServerScenario);
+    procedure Run;
+  end;
+
+constructor TSshLoopServer.Create(AEnd: TMemPipeEnd; ASc: PSshLoopServerScenario);
+begin
+  inherited Create;
+  FEnd := AEnd;
+  FSc := ASc;
+  FEncrypted := False;
+end;
+
+procedure TSshLoopServer.Fail(const AMsg: string);
+begin
+  if not FSc^.Failed then
+  begin
+    FSc^.Failed := True;
+    FSc^.FailMsg := AMsg;
+  end;
+end;
+
+procedure TSshLoopServer.SendPlainPayload(const APayload: TBytes);
+var
+  LW: TsshWriter;
+  LPad, I: Integer;
+  LWire: TBytes;
+begin
+  LPad := 8 - ((4 + 1 + Length(APayload)) mod 8);
+  if LPad < SSH_MIN_PADDING then
+    Inc(LPad, 8);
+  LW := TsshWriter.Create(64 + Length(APayload));
+  try
+    LW.PutUInt32(UInt32(1 + Length(APayload) + SizeUInt(LPad)));
+    LW.PutByte(Byte(LPad));
+    LW.PutRaw(APayload);
+    for I := 1 to LPad do
+      LW.PutByte($30);
+    LWire := LW.ToBytes;
+    FEnd.Write(LWire[0], SizeUInt(Length(LWire)));
+  finally
+    LW.Free;
+  end;
+end;
+
+function TSshLoopServer.RecvRaw(out AData: TBytes): Boolean;
+begin
+  FEnd.Drain(AData, SRV_READ_TIMEOUT_MS);
+  Result := Length(AData) > 0;
+end;
+
+{ 未加密阶段：读一帧并返回未加密载荷；对端消失返回 nil }
+function TSshLoopServer.ReadPlainFrameBody: TBytes;
+var
+  LWire, LMore: TBytes;
+  LLen, LPadLen: UInt32;
+begin
+  Result := nil;
+  if not RecvRaw(LWire) then
+    Exit;
+  if Length(LWire) < 4 then
+  begin
+    while (Length(LWire) < 4) and RecvRaw(LMore) do
+      LWire := ConcatBytes(LWire, LMore);
+    if Length(LWire) < 4 then
+      Exit;
+  end;
+  LLen := (UInt32(LWire[0]) shl 24) or (UInt32(LWire[1]) shl 16)
+    or (UInt32(LWire[2]) shl 8) or UInt32(LWire[3]);
+  while SizeUInt(Length(LWire)) < 4 + LLen do
+  begin
+    if not RecvRaw(LMore) then
+      Exit;
+    LWire := ConcatBytes(LWire, LMore);
+  end;
+  { 帧内可能粘包：只消费本帧，剩余留给下一次（回退读位置）}
+  FEnd.Rewind(SizeUInt(Length(LWire)) - (4 + LLen));
+  LPadLen := LWire[4];
+  SetLength(Result, LLen - 1 - LPadLen);
+  if Length(Result) > 0 then
+    Move(LWire[5], Result[0], Length(Result));
+end;
+
+{ 加密阶段读一帧载荷 }
+{ 加密阶段读一帧载荷：解密并剥离 padlen，返回纯载荷 }
+function TSshLoopServer.ReadAnyPayload: TBytes;
+var
+  LBuf, LHeader, LTrailer, LPacket, LBody: TBytes;
+  LBodyLen: UInt32;
+  LPadLen: Byte;
+begin
+  Result := nil;
+  if not FEncrypted then
+  begin
+    Result := ReadPlainFrameBody;
+    Exit;
+  end;
+  if not RecvRaw(LBuf) then
+    Exit;
+  LHeader := LBuf;
+  while SizeUInt(Length(LHeader)) < 4 do
+  begin
+    if not RecvRaw(LBuf) then
+      Exit;
+    LHeader := ConcatBytes(LHeader, LBuf);
+  end;
+  LBodyLen := FRecv.BodyLengthFromHeader(FRecvSeq, Copy(LHeader, 0, 4));
+  SetLength(LTrailer, FRecv.TrailerSize(LBodyLen));
+  while SizeUInt(Length(LHeader)) < 4 + SizeUInt(Length(LTrailer)) do
+  begin
+    if not RecvRaw(LBuf) then
+      Exit;
+    LHeader := ConcatBytes(LHeader, LBuf);
+  end;
+  LPacket := Copy(LHeader, 0, 4 + SizeInt(Length(LTrailer)));
+  FEnd.Rewind(SizeUInt(Length(LHeader))
+    - (4 + SizeUInt(Length(LTrailer))));
+  { codec 契约：Unprotect 返回完整 body（padlen ‖ 载荷 ‖ 填充）}
+  LBody := FRecv.Unprotect(FRecvSeq, LPacket);
+  Inc(FRecvSeq);
+  if SizeUInt(Length(LBody)) < 1 then
+    Exit;
+  LPadLen := LBody[0];
+  if UInt32(LPadLen) >= LBodyLen then
+    Exit;
+  SetLength(Result, LBodyLen - 1 - LPadLen);
+  if Length(Result) > 0 then
+    Move(LBody[1], Result[0], Length(Result));
+end;
+
+procedure TSshLoopServer.ReplyPayload(const APayload: TBytes);
+var
+  LWire, LBody: TBytes;
+  LPad, I: Integer;
+  LW: TsshWriter;
+begin
+  if FEncrypted then
+  begin
+    { 与 transport.SendPacket 同构：body = padlen ‖ 载荷 ‖ 填充 }
+    LPad := 8 - ((4 + 1 + SizeUInt(Length(APayload))) mod 8);
+    if LPad < SSH_MIN_PADDING then
+      Inc(LPad, 8);
+    LW := TsshWriter.Create(8 + Length(APayload));
+    try
+      LW.PutByte(Byte(LPad));
+      LW.PutRaw(APayload);
+      for I := 1 to LPad do
+        LW.PutByte($30);
+      LBody := LW.ToBytes;
+    finally
+      LW.Free;
+    end;
+    LWire := FSend.Protect(LBody, FSendSeq);
+    Inc(FSendSeq);
+    FEnd.Write(LWire[0], SizeUInt(Length(LWire)));
+  end
+  else
+  begin
+    SendPlainPayload(APayload);
+  end;
+end;
+
+procedure TSshLoopServer.Handshake;
+var
+  LLine, LVc, LMyInit, LClientInit, LInit, LMsg, LReply: TBytes;
+  LR: TsshReader;
+  LEphemeral, LShared, LKmpint, LHInput, LH, LSig64, LSigBlob: TBytes;
+  LXErr: AnsiString;
+  LHostPub: TBytes;
+  LXPriv, LXPub: TBytes;
+  LIvCs, LIvSc, LKeyCs, LKeySc, LMacCs, LMacSc: TBytes;
+  LW: TsshWriter;
+  LText: string;
+  LNl: Integer;
+begin
+  { 版本串是裸文本，不走二进制帧 }
+  LLine := StringToBytes(SERVER_IDENT + #13#10);
+  FEnd.Write(LLine[0], SizeUInt(Length(LLine)));
+  LVc := nil;
+  repeat
+    if not RecvRaw(LLine) then
+    begin
+      Fail('server: no version line');
+      Exit;
+    end;
+    LText := BytesToText(LLine);
+    LNl := Pos(#10, LText);
+    if LNl > 0 then
+    begin
+      { 关键：同一 Drain 可能带入后续帧的首批字节，必须退回管道 }
+      FEnd.Rewind(SizeUInt(Length(LLine)) - SizeUInt(LNL));
+      LText := Trim(Copy(LText, 1, LNl));
+      if Copy(LText, 1, 4) = 'SSH-' then
+        LVc := StringToBytes(LText);
+    end;
+  until Length(LVc) > 0;
+
+  LClientInit := ReadPlainFrameBody;
+  if (Length(LClientInit) = 0) or (LClientInit[0] <> SSH_MSG_KEXINIT) then
+  begin
+    Fail('server: expected KEXINIT');
+    Exit;
+  end;
+
+  LMyInit := SshBuildKexInitPayload(PatternBytes($EE, 16));
+  SendPlainPayload(LMyInit);
+
+  LInit := ReadPlainFrameBody;
+  if (Length(LInit) = 0) or (LInit[0] <> SSH_MSG_KEX_ECDH_INIT) then
+  begin
+    Fail('server: expected ECDH INIT');
+    Exit;
+  end;
+
+  LHostPub := Ed25519PublicKeyFromPrivate(FSc^.HostSeed);
+
+  LR := TsshReader.Create(LInit);
+  try
+    LR.ReadByte;
+    LEphemeral := LR.ReadStringBytes;
+  finally
+    LR.Free;
+  end;
+
+  GenerateX25519KeyPair(LXPriv, LXPub);
+  if not TryX25519ComputeSharedSecret(LXPriv, LEphemeral, LShared, LXErr) then
+  begin
+    Fail('server: x25519 failed');
+    Exit;
+  end;
+
+  LW := TsshWriter.Create(80);
+  try
+    LW.PutMPInt(LShared);
+    LKmpint := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+
+  LHInput := ConcatAll([
+    LVc,
+    StringToBytes(SERVER_IDENT),
+    LClientInit,
+    LMyInit,
+    Ed25519PubBlob(LHostPub),
+    LEphemeral,
+    LXPub,
+    LKmpint]);
+  LH := SHA256(LHInput);
+  FSessionId := LH;
+
+  if not Ed25519Sign(FSc^.HostSeed, LH, LSig64) then
+  begin
+    Fail('server: host sign failed');
+    Exit;
+  end;
+  LSigBlob := SigBlobOf('ssh-ed25519', LSig64);
+
+  LW := TsshWriter.Create(256);
+  try
+    LW.PutByte(SSH_MSG_KEX_ECDH_REPLY);
+    LW.PutStringBytes(Ed25519PubBlob(LHostPub));
+    LW.PutStringBytes(LXPub);
+    LW.PutStringBytes(LSigBlob);
+    LReply := LW.ToBytes;
+    SendPlainPayload(LReply);
+  finally
+    LW.Free;
+  end;
+
+  { NEWKEYS 往返（均为明文帧）}
+  LMsg := ReadPlainFrameBody;
+  if Length(LMsg) = 0 then
+    Exit;
+  if LMsg[0] = SSH_MSG_DISCONNECT then
+    Exit;                          { 对端主动放弃（如主机密钥策略拒绝）}
+  if LMsg[0] <> SSH_MSG_NEWKEYS then
+  begin
+    Fail('server: expected NEWKEYS');
+    Exit;
+  end;
+  SendPlainPayload(SingleBytePayloadOf(SSH_MSG_NEWKEYS));
+
+  { RFC 4253 §7.2：服务端方向取 Sc 字母 }
+  LIvCs := SshKdfSha256(LKmpint, LH, Ord('A'), FSessionId, SshCipherIvSize(CHACHA_ALG));
+  LIvSc := SshKdfSha256(LKmpint, LH, Ord('B'), FSessionId, SshCipherIvSize(CHACHA_ALG));
+  LKeyCs := SshKdfSha256(LKmpint, LH, Ord('C'), FSessionId, SshCipherKeySize(CHACHA_ALG));
+  LKeySc := SshKdfSha256(LKmpint, LH, Ord('D'), FSessionId, SshCipherKeySize(CHACHA_ALG));
+  LMacCs := SshKdfSha256(LKmpint, LH, Ord('E'), FSessionId, SshMacKeySize(''));
+  LMacSc := SshKdfSha256(LKmpint, LH, Ord('F'), FSessionId, SshMacKeySize(''));
+
+  FRecv := CreateSshPacketReceiver(CHACHA_ALG, '', LKeyCs, LIvCs, LMacCs);
+  FSend := CreateSshPacketSender(CHACHA_ALG, '', LKeySc, LIvSc, LMacSc);
+  { RFC 4253 §6.4：序列号跨 NEWKEYS 连续，不清零。
+    本端已收客户端明文帧 ×3（KEXINIT/ECDH_INIT/NEWKEYS），
+    已发明文帧 ×3（KEXINIT/REPLY/NEWKEYS）。}
+  FRecvSeq := 3;
+  FSendSeq := 3;
+  FEncrypted := True;
+end;
+
+procedure TSshLoopServer.ServeApp;
+var
+  LMsg: TBytes;
+  LR: TsshReader;
+  LUser, LMethod, LPass, LAlg, LReqName: string;
+  LPassOk, LWantReply: Boolean;
+  LPubBlob, LSigBlob, LSigRaw, LSignedData: TBytes;
+  LRid: UInt32;
+  LRAlg: TsshReader;
+  LW: TsshWriter;
+begin
+  while True do
+  begin
+    LMsg := ReadAnyPayload;
+    if Length(LMsg) = 0 then
+      Exit;
+    Inc(FSc^.MsgCount);
+    if FSc^.MsgCount = 1 then
+    begin
+      FSc^.Msg1Type := LMsg[0];
+      FSc^.Msg1Len := Length(LMsg);
+    end;
+    case LMsg[0] of
+      SSH_MSG_DISCONNECT:
+        Exit;
+
+      SSH_MSG_SERVICE_REQUEST:
+        begin
+          LW := TsshWriter.Create(32);
+          try
+            LW.PutByte(SSH_MSG_SERVICE_ACCEPT);
+            LW.PutStringText(SSH_SERVICE_USERAUTH);
+            ReplyPayload(LW.ToBytes);
+          finally
+            LW.Free;
+          end;
+        end;
+
+      SSH_MSG_USERAUTH_REQUEST:
+        begin
+          LR := TsshReader.Create(LMsg);
+          try
+            LR.ReadByte;
+            LUser := LR.ReadStringText;
+            LR.ReadStringText;                 { service }
+            LMethod := LR.ReadStringText;
+            LPassOk := False;
+            if LMethod = 'password' then
+            begin
+              LR.ReadBoolean;                  { 不改密标志 }
+              LPass := LR.ReadStringText;
+              LPassOk := (LUser = FSc^.AcceptUser)
+                and FSc^.PasswordOk and (LPass = FSc^.AcceptPassword);
+            end
+            else if LMethod = 'publickey' then
+            begin
+              LR.ReadBoolean;                  { 有签名 }
+              LAlg := LR.ReadStringText;
+              LPubBlob := LR.ReadStringBytes;
+              LSigBlob := LR.ReadStringBytes;
+              if FSc^.PubKeyOk and (LAlg = 'ssh-ed25519')
+                and (Length(LSigBlob) > 0) then
+              begin
+                LSigRaw := nil;
+                LRAlg := TsshReader.Create(LSigBlob);
+                try
+                  LRAlg.ReadStringText;
+                  LSigRaw := LRAlg.ReadStringBytes;
+                finally
+                  LRAlg.Free;
+                end;
+                LSignedData := SshAuthSignedData(FSessionId, LUser,
+                  'ssh-ed25519', LPubBlob);
+                { 动态数组 Copy 是 0 基索引：起点必须是 Length-32，
+                  否则只剩 31 字节，Verify 长度检查直接失败 }
+                LPassOk := Ed25519Verify(Copy(LPubBlob,
+                  Length(LPubBlob) - 32, 32), LSignedData, LSigRaw);
+              end;
+            end;
+          finally
+            LR.Free;
+          end;
+          if LPassOk then
+          begin
+            ReplyPayload(SingleBytePayloadOf(SSH_MSG_USERAUTH_SUCCESS));
+          end
+          else
+          begin
+            LW := TsshWriter.Create(48);
+            try
+              LW.PutByte(SSH_MSG_USERAUTH_FAILURE);
+              LW.PutStringText('password,publickey');
+              LW.PutBoolean(False);
+              ReplyPayload(LW.ToBytes);
+            finally
+              LW.Free;
+            end;
+          end;
+        end;
+
+      SSH_MSG_CHANNEL_OPEN:
+        begin
+          LR := TsshReader.Create(LMsg);
+          try
+            LR.ReadByte;
+            LR.ReadStringText;                 { 'session' }
+            LRid := LR.ReadUInt32;
+          finally
+            LR.Free;
+          end;
+          LW := TsshWriter.Create(48);
+          try
+            LW.PutByte(SSH_MSG_CHANNEL_OPEN_CONFIRMATION);
+            LW.PutUInt32(LRid);
+            LW.PutUInt32(SRV_CHANNEL_ID);
+            LW.PutUInt32(SRV_RECV_WINDOW);
+            LW.PutUInt32(32768);
+            ReplyPayload(LW.ToBytes);
+          finally
+            LW.Free;
+          end;
+        end;
+
+      SSH_MSG_CHANNEL_REQUEST:
+        begin
+          LR := TsshReader.Create(LMsg);
+          try
+            LR.ReadByte;
+            LR.ReadUInt32;
+            LReqName := LR.ReadStringText;
+            LWantReply := LR.ReadBoolean;
+            if LReqName = SSH_REQ_EXEC then
+            begin
+              if LWantReply then
+                ReplyPayload(ChannelReplyPayload(SRV_CHANNEL_ID, True));
+              { 推送输出计划：两段 stdout、一段 stderr、exit-status }
+              LW := TsshWriter.Create(64);
+              try
+                LW.PutByte(SSH_MSG_CHANNEL_DATA);
+                LW.PutUInt32(SRV_CHANNEL_ID);
+                LW.PutStringBytes(FSc^.StdOut1);
+                ReplyPayload(LW.ToBytes);
+              finally
+                LW.Free;
+              end;
+              LW := TsshWriter.Create(64);
+              try
+                LW.PutByte(SSH_MSG_CHANNEL_DATA);
+                LW.PutUInt32(SRV_CHANNEL_ID);
+                LW.PutStringBytes(FSc^.StdOut2);
+                ReplyPayload(LW.ToBytes);
+              finally
+                LW.Free;
+              end;
+              LW := TsshWriter.Create(64);
+              try
+                LW.PutByte(SSH_MSG_CHANNEL_EXTENDED_DATA);
+                LW.PutUInt32(SRV_CHANNEL_ID);
+                LW.PutUInt32(SSH_EXTENDED_DATA_STDERR);
+                LW.PutStringBytes(FSc^.StdErr);
+                ReplyPayload(LW.ToBytes);
+              finally
+                LW.Free;
+              end;
+              LW := TsshWriter.Create(32);
+              try
+                LW.PutByte(SSH_MSG_CHANNEL_REQUEST);
+                LW.PutUInt32(SRV_CHANNEL_ID);
+                LW.PutStringText(SSH_REQ_EXIT_STATUS);
+                LW.PutBoolean(True);
+                LW.PutUInt32(FSc^.ExitCode);
+                ReplyPayload(LW.ToBytes);
+              finally
+                LW.Free;
+              end;
+              { OpenSSH 语义：命令结束即关闭通道 }
+              ReplyPayload(SingleBytePayloadOf(SSH_MSG_CHANNEL_CLOSE));
+            end
+            else if LWantReply then
+              ReplyPayload(ChannelReplyPayload(SRV_CHANNEL_ID, False));
+          finally
+            LR.Free;
+          end;
+        end;
+
+      SSH_MSG_CHANNEL_WINDOW_ADJUST, SSH_MSG_CHANNEL_EOF, SSH_MSG_CHANNEL_SUCCESS:
+        ;                                { 回补/EOF/exit-ack 帧容忍 }
+
+      SSH_MSG_CHANNEL_CLOSE:
+        begin
+          ReplyPayload(SingleBytePayloadOf(SSH_MSG_CHANNEL_CLOSE));
+          Exit;
+        end;
+    end;
+  end;
+end;
+
+procedure TSshLoopServer.Run;
+begin
+  try
+    Handshake;
+    if FEncrypted then
+      ServeApp;
+  except
+    on E: Exception do
+      Fail(E.Message);
+  end;
+  FSc^.Done := True;
+end;
+
+{ ── 场景驱动 ─────────────────────────────────────────────────── }
+
+type
+  PSync = ^TSync;
+  TSync = record
+    Scenario: PSshLoopServerScenario;
+    ServerEnd: TMemPipeEnd;
+    ThreadDone: Boolean;
+    DoneEvent: PRTLEvent;
+  end;
+
+function ServerThreadMain(AParam: Pointer): PtrInt;
+var
+  LSrv: TSshLoopServer;
+begin
+  Result := 0;
+  LSrv := TSshLoopServer.Create(PSync(AParam)^.ServerEnd, PSync(AParam)^.Scenario);
+  try
+    LSrv.Run;
+  finally
+    LSrv.Free;
+    PSync(AParam)^.ThreadDone := True;
+    RTLEventSetEvent(PSync(AParam)^.DoneEvent);
+  end;
+end;
+
+const
+  CLIENT_USER = 'alice';
+  CLIENT_PASSWORD = 's3cret!';
+  HOST_SEED_HEX = 'e7d3f1a209c84b5b6d2e8a70913c4455aabbccddeeff01233455667788990011';
+
+{ ── 客户端私钥 PEM（openssh-key-v1 未加密 ed25519，与 test_ssh_keys 同构）── }
+
+{ 私段：checkint x2 || string(keytype) || string(pub) || string(seed||pub) || comment }
+function MakePrivSection(const AKeyType: string; ACheck: UInt32;
+  const APub, ASeed: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(256);
+  try
+    LW.PutUInt32(ACheck);
+    LW.PutUInt32(ACheck);
+    LW.PutStringText(AKeyType);
+    LW.PutStringBytes(Copy(APub, 0, 32));
+    LW.PutStringBytes(ConcatBytes(ASeed, Copy(APub, 0, 32)));
+    LW.PutStringText('loop client key');
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
+{ 容器：magic || cipher || kdf || kdfoptions || nkeys || pubkey || privsection }
+function CraftContainer(const APubBlob, APrivSection: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(512);
+  try
+    LW.PutRaw(StringToBytes('openssh-key-v1'));
+    LW.PutByte(0);
+    LW.PutStringText('none');
+    LW.PutStringText('none');
+    LW.PutStringText('');
+    LW.PutUInt32(1);
+    LW.PutStringBytes(APubBlob);
+    LW.PutStringBytes(APrivSection);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
+function Base64Chunked(const AData: TBytes): string;
+var
+  LB64: string;
+  I: Integer;
+begin
+  LB64 := Base64Encode(AData);
+  Result := '';
+  for I := 1 to Length(LB64) do
+  begin
+    Result := Result + LB64[I];
+    if (I mod 70) = 0 then
+      Result := Result + #10;
+  end;
+end;
+
+function PemOf(const AContainer: TBytes): string;
+begin
+  Result := '-----BEGIN OPENSSH PRIVATE KEY-----' + #10
+    + Base64Chunked(AContainer)
+    + '-----END OPENSSH PRIVATE KEY-----' + #10;
+end;
+
+{ ── 回环驱动 ─────────────────────────────────────────────────── }
+
+const
+  LOOP_PASSWORD = 0;
+  LOOP_PUBKEY = 1;
+  KH_PATH = '/tmp/nextpas_ssh_session_known_hosts';
+
+type
+  TLoopResult = record
+    ClientFailed: Boolean;
+    ClientErrKind: TSshErrorKind;
+    ClientErrMsg: string;
+    ServerFailed: Boolean;
+    ServerErrMsg: string;
+    ServerMsgCount: Integer;
+    ServerMsg1Type: Byte;
+    ServerMsg1Len: Integer;
+    ServerVersion: string;
+    Fingerprint: string;
+    Exec: TSshExecResult;
+  end;
+
+{ 起服务线程，跑一轮真实客户端：握手 → 认证 → exec → 关闭 }
+function RunLoopback(AMode: Integer; APasswordOk, APubKeyOk: Boolean;
+  const AKnownHostsFile: string; AStrictHostKey: Boolean): TLoopResult;
+var
+  LSc: PSshLoopServerScenario;
+  LSync: PSync;
+  LShared: PPipeShared;
+  LClientEnd, LServerEnd: TMemPipeEnd;
+  LThreadId: TThreadID;
+  LOpts: TSshConnectOptions;
+  LSession: ISshSession;
+  LSeed, LPub, LContainer: TBytes;
+  LWaitMs: Integer;
+begin
+  Result := Default(TLoopResult);
+  LClientEnd := nil;
+  LServerEnd := nil;
+  LShared := nil;
+  New(LSc);
+  New(LSync);
+  try
+    LSc^.AcceptUser := CLIENT_USER;
+    LSc^.AcceptPassword := CLIENT_PASSWORD;
+    LSc^.PasswordOk := APasswordOk;
+    LSc^.PubKeyOk := APubKeyOk;
+    LSc^.StdOut1 := StringToBytes('stdout-part-one|');
+    LSc^.StdOut2 := StringToBytes('stdout-part-two!');
+    LSc^.StdErr := StringToBytes('warn: loop stderr');
+    LSc^.ExitCode := 7;
+    LSc^.HostSeed := PatternBytes($E7, 32);
+    LSc^.Failed := False;
+    LSc^.FailMsg := '';
+    LSc^.Done := False;
+    LSc^.MsgCount := 0;
+    LSc^.Msg1Type := 0;
+    LSc^.Msg1Len := 0;
+
+    LSync^.Scenario := LSc;
+    LSync^.ServerEnd := nil;
+    LSync^.ThreadDone := False;
+    LSync^.DoneEvent := RTLEventCreate;
+    try
+      MakePipe(LClientEnd, LServerEnd, LShared);
+      LSync^.ServerEnd := LServerEnd;
+      BeginThread(@ServerThreadMain, Pointer(LSync), LThreadId);
+
+      LOpts := DefaultSshConnectOptions(CLIENT_HOST_NAME);
+      LOpts.User := CLIENT_USER;
+      if AMode = LOOP_PASSWORD then
+        LOpts.Password := CLIENT_PASSWORD
+      else
+      begin
+        LSeed := PatternBytes($3D, 32);
+        LPub := Ed25519PublicKeyFromPrivate(LSeed);
+        LContainer := CraftContainer(
+          Ed25519PubBlob(LPub),
+          MakePrivSection('ssh-ed25519', $A1B2C3D4, LPub, LSeed));
+        LOpts.PrivateKeyData := PemOf(LContainer);
+      end;
+      LOpts.KnownHostsFile := AKnownHostsFile;
+      LOpts.StrictHostKeyChecking := AStrictHostKey;
+      LOpts.ExecTimeoutMs := 30000;
+      LOpts.InitialWindowSize := 16;   { 迫使客户端发送 WINDOW_ADJUST }
+
+      try
+        LSession := SshConnectOn(LClientEnd, LOpts);
+        try
+          Result.ServerVersion := LSession.ServerVersion;
+          Result.Fingerprint := LSession.ServerHostKeyFingerprint;
+          Result.Exec := LSession.Exec('echo loop');
+        finally
+          LSession.Close;
+          LSession := nil;
+        end;
+      except
+        on E: ESSHError do
+        begin
+          Result.ClientFailed := True;
+          Result.ClientErrKind := E.Kind;
+          Result.ClientErrMsg := E.Message;
+        end;
+        on E: Exception do
+        begin
+          Result.ClientFailed := True;
+          Result.ClientErrMsg := E.ClassName + ': ' + E.Message;
+        end;
+      end;
+
+      { 等服务线程收尾（最长 20s）}
+      LWaitMs := 0;
+      while (not LSync^.ThreadDone) and (LWaitMs < 20000) do
+      begin
+        RTLEventWaitFor(LSync^.DoneEvent, 100);
+        Inc(LWaitMs, 100);
+      end;
+      Result.ServerFailed := LSc^.Failed;
+      Result.ServerErrMsg := LSc^.FailMsg;
+      Result.ServerMsgCount := LSc^.MsgCount;
+      Result.ServerMsg1Type := LSc^.Msg1Type;
+      Result.ServerMsg1Len := LSc^.Msg1Len;
+    finally
+      RTLEventDestroy(LSync^.DoneEvent);
+      LClientEnd.Free;
+      LServerEnd.Free;
+      if LShared <> nil then
+      begin
+        DoneCriticalSection(LShared^.Lock);
+        Dispose(LShared);
+      end;
+      Dispose(LSync);
+    end;
+  finally
+    Dispose(LSc);
+  end;
+end;
+
+var
+  GRunner: TSuiteRunner;
+  GSuite: TTestSuite;
+
+begin
+  GSuite := TTestSuite.Create('ssh session');
+
+  { 场景一：密码认证正路径全栈回环 }
+  GSuite.Test('password auth loopback: exec collects stdout/stderr/exit-code', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PASSWORD, True, False, '', False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckTrue(Pos('NextPas-LoopServer', LR.ServerVersion) > 0,
+      'server version observed: "' + LR.ServerVersion + '"');
+    CheckTrue(Copy(LR.Fingerprint, 1, 7) = 'SHA256:',
+      'fingerprint shape: ' + LR.Fingerprint);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+    CheckEqual('stdout-part-one|stdout-part-two!', LR.Exec.StdOutText, 'stdout');
+    CheckEqual('warn: loop stderr', LR.Exec.StdErrText, 'stderr');
+  end);
+
+  { 场景二：密码被拒 → sekAuth，服务端优雅走 DISCONNECT }
+  GSuite.Test('wrong password rejected as sekAuth', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PASSWORD, False, False, '', False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(LR.ClientFailed, 'client must fail');
+    CheckEqual(Ord(sekAuth), Ord(LR.ClientErrKind), 'error kind');
+  end);
+
+  { 场景三：publickey 签名认证全栈回环 }
+  GSuite.Test('publickey auth loopback', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PUBKEY, True, True, '', False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  { 场景四：严格模式 + known_hosts 未命中 → sekHostKey }
+  GSuite.Test('strict host key rejects unknown server', procedure
+  var
+    LR: TLoopResult;
+    LOtherPub: TBytes;
+  begin
+    { 合法的其他主机密钥：确保拒绝原因是"未收录"而非"条目坏" }
+    LOtherPub := Ed25519PublicKeyFromPrivate(PatternBytes($99, 32));
+    FileWriteAllText(KH_PATH, 'loopback.otherhost ssh-ed25519 '
+      + Base64Encode(Ed25519PubBlob(LOtherPub)) + #10);
+    try
+      LR := RunLoopback(LOOP_PASSWORD, True, False, KH_PATH, True);
+      CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+      CheckTrue(LR.ClientFailed, 'client must fail');
+      CheckEqual(Ord(sekHostKey), Ord(LR.ClientErrKind), 'error kind');
+    finally
+      DeleteFile(KH_PATH);
+    end;
+  end);
+
+  { 场景五：known_hosts 命中后严格模式放行 }
+  GSuite.Test('strict host key passes on known_hosts hit', procedure
+  var
+    LR: TLoopResult;
+    LPub: TBytes;
+  begin
+    LPub := Ed25519PublicKeyFromPrivate(PatternBytes($E7, 32));
+    FileWriteAllText(KH_PATH, CLIENT_HOST_NAME + ' ssh-ed25519 '
+      + Base64Encode(Ed25519PubBlob(LPub)) + #10);
+    try
+      LR := RunLoopback(LOOP_PASSWORD, True, False, KH_PATH, True);
+      CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+      CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+      CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+    finally
+      DeleteFile(KH_PATH);
+    end;
+  end);
+
+  GRunner := TSuiteRunner.Create('nextpas.core.ssh.session');
+  GRunner.Add(GSuite);
+  GRunner.RunAll;
+  GRunner.Summary;
+  if not GRunner.AllPassed then Halt(1);
+end.
