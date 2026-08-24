@@ -512,6 +512,126 @@ begin
     'keyword and comment have different colors in default theme');
 end;
 
+{ ===== PH33 P5c：JSON/TOML 高亮器 ===== }
+
+function HlTokens(AHl: IHighlighter; const ALine: AnsiString): TTokenArray;
+var
+  LBuf: array[0..63] of TToken;
+  LIn, LOut: TLineState;
+  LN, I: Integer;
+begin
+  LIn := Default(TLineState);
+  LN := AHl.TokenizeLine(PAnsiChar(ALine), Length(ALine), LIn, LOut,
+    @LBuf[0], Length(LBuf));
+  if LN > Length(LBuf) then LN := Length(LBuf);
+  SetLength(Result, LN);
+  for I := 0 to LN - 1 do Result[I] := LBuf[I];
+end;
+
+procedure TestJsonKeyVsValueString;
+var Tokens: TTokenArray;
+begin
+  Tokens := HlTokens(TJsonHighlighter.Create, '{"key": "value"}');
+  Check(Length(Tokens) = 5, 'json line token count');
+  Check(Tokens[0].Kind = tkSymbol, '{ is symbol');
+  Check(Tokens[1].Kind = tkKeyword, '"key" followed by : is key (tkKeyword)');
+  Check(Tokens[2].Kind = tkSymbol, ': is symbol');
+  Check(Tokens[3].Kind = tkString, '"value" is value string');
+  Check(Tokens[4].Kind = tkSymbol, '} is symbol');
+end;
+
+procedure TestJsonStringEscapeAndUnterminated;
+var Tokens: TTokenArray;
+begin
+  Tokens := HlTokens(TJsonHighlighter.Create, '"a\"b"');
+  Check(Length(Tokens) = 1, 'escaped quote stays in one string');
+  Check((Tokens[0].Kind = tkString) and (Tokens[0].Len = 6), 'escape span');
+  Tokens := HlTokens(TJsonHighlighter.Create, '"abc');
+  Check(Length(Tokens) = 1, 'unterminated string runs to EOL');
+  Check(Tokens[0].Len = 4, 'unterminated span to EOL');
+end;
+
+procedure TestJsonNumberForms;
+var Tokens: TTokenArray;
+begin
+  Tokens := HlTokens(TJsonHighlighter.Create, '-1.5e+3');
+  Check(Length(Tokens) = 1, 'signed float exp is one number');
+  Check(Tokens[0].Kind = tkNumber, 'number kind');
+  Check(Tokens[0].Len = 7, 'full number span');
+end;
+
+procedure TestJsonLiteralWords;
+var Tokens: TTokenArray;
+begin
+  Tokens := HlTokens(TJsonHighlighter.Create, 'true false null truex');
+  Check(Length(Tokens) = 4, 'four words');
+  Check(Tokens[0].Kind = tkKeyword, 'true literal');
+  Check(Tokens[1].Kind = tkKeyword, 'false literal');
+  Check(Tokens[2].Kind = tkKeyword, 'null literal');
+  Check(Tokens[3].Kind = tkNormal, 'truex is plain word not literal');
+end;
+
+procedure TestTomlCommentAndTableHeader;
+var Tokens: TTokenArray;
+begin
+  Tokens := HlTokens(TTomlHighlighter.Create, '[server]');
+  Check(Length(Tokens) = 1, 'table header one directive');
+  Check(Tokens[0].Kind = tkDirective, '[server] is directive');
+  Tokens := HlTokens(TTomlHighlighter.Create, '  [db.x]');
+  Check((Length(Tokens) = 1) and (Tokens[0].Kind = tkDirective),
+    'indented line-head still table header');
+  Tokens := HlTokens(TTomlHighlighter.Create, 'k = 1 # tail');
+  Check(Length(Tokens) = 4, 'k = 1 # tail token count');
+  Check(Tokens[0].Kind = tkKeyword, 'word before = is key');
+  Check(Tokens[3].Kind = tkComment, '# tail is comment');
+end;
+
+procedure TestTomlArrayTableHeader;
+var Tokens: TTokenArray;
+begin
+  Tokens := HlTokens(TTomlHighlighter.Create, '[[items]]');
+  Check(Length(Tokens) = 1, 'array table one directive');
+  Check((Tokens[0].Kind = tkDirective) and (Tokens[0].Len = 9),
+    'double bracket span includes both closes');
+end;
+
+procedure TestCfgOverflowClamp;
+var
+  LHl: IHighlighter;
+  LBuf: array[0..1] of TToken;
+  LIn, LOut: TLineState;
+  LN: Integer;
+begin
+  LHl := TJsonHighlighter.Create;
+  LIn := Default(TLineState);
+  { '{"a":1}' = 6 token 位；Max=2 → 只写 2、返回 clamp 到 2 }
+  LN := LHl.TokenizeLine(PAnsiChar(AnsiString('{"a":1}')), 7, LIn, LOut,
+    @LBuf[0], 2);
+  Check(LN = 2, 'overflow returns clamped count');
+end;
+
+procedure TestCfgLangId;
+var LJ, LT: IHighlighter;
+begin
+  LJ := TJsonHighlighter.Create;
+  Check(LJ.LangId = 'json', 'json langid');
+  LT := TTomlHighlighter.Create;
+  Check(LT.LangId = 'toml', 'toml langid');
+end;
+
+procedure TestCfgStatelessIdentity;
+var
+  LIn, LOut: TLineState;
+  LBuf: array[0..15] of TToken;
+  LHl: IHighlighter;
+begin
+  LHl := TTomlHighlighter.Create;
+  LIn := Default(TLineState);
+  LHl.TokenizeLine(PAnsiChar(AnsiString('a = "x"')), 7, LIn, LOut, @LBuf[0], 16);
+  Check((LOut.InBlockComment = LIn.InBlockComment) and
+    (LOut.InString = LIn.InString), 'no cross-line state: StateOut=StateIn');
+end;
+
 begin
   T := TTestSuite.Create('test_tui_syntax');
   Helper := TSyntaxTestHelper.Create;
@@ -570,6 +690,15 @@ begin
     T.Test('syntax theme default', @TestSyntaxThemeDefault);
     T.Test('syntax theme nord', @TestSyntaxThemeNord);
     T.Test('syntax theme styles differ', @TestSyntaxThemeStyleForDiffers);
+    T.Test('json key vs value string (PH33 P5c)', @TestJsonKeyVsValueString);
+    T.Test('json string escape/unterminated (PH33 P5c)', @TestJsonStringEscapeAndUnterminated);
+    T.Test('json number forms (PH33 P5c)', @TestJsonNumberForms);
+    T.Test('json literal words (PH33 P5c)', @TestJsonLiteralWords);
+    T.Test('toml comment/table/key= (PH33 P5c)', @TestTomlCommentAndTableHeader);
+    T.Test('toml array table header (PH33 P5c)', @TestTomlArrayTableHeader);
+    T.Test('cfg overflow clamp (PH33 P5c)', @TestCfgOverflowClamp);
+    T.Test('cfg langid (PH33 P5c)', @TestCfgLangId);
+    T.Test('cfg stateless identity (PH33 P5c)', @TestCfgStatelessIdentity);
 
     WriteLn;
   if not T.Run then Halt(1);
