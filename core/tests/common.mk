@@ -37,16 +37,29 @@ build: clean-src
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
-# Opt-in leak gate (HEAPTRC_GATE=1, e.g. as a sub-make argument): FPC trunk
-# 3.3.1 never delivers the heaptrc exit dump to the console, so grepping test
-# output for leaks is vacuous. The env channels still work: haltonnotreleased
-# turns unfreed blocks into exit code 203, log= writes the dump to a file. The
-# dump pins below also fail closed when heaptrc did not run at all.
-HEAPTRC_GATE ?=
+# Leak gate: default-ON for the TUI test subtree (tests/nextpas.core.tui*,
+# phase 1 of staged defaulting — P5e proved the whole subtree leak-free),
+# opt-in everywhere else via HEAPTRC_GATE=1. Opt out of the default with
+# HEAPTRC_GATE= (empty) or HEAPTRC_GATE=0.
+# FPC trunk 3.3.1 never delivers the heaptrc exit dump to the console, so
+# grepping test output for leaks is vacuous. The env channels still work:
+# haltonnotreleased turns unfreed blocks into exit code 203, log= writes the
+# dump to a file. The dump pins below also fail closed when heaptrc did not
+# run at all.
+GATE_INCLUDER := $(lastword $(filter-out $(abspath $(lastword $(MAKEFILE_LIST))),$(abspath $(MAKEFILE_LIST))))
+ifneq ($(findstring /nextpas.core.tui,$(dir $(GATE_INCLUDER))),)
+HEAPTRC_GATE ?= 1
+endif
+# Resolve at the consumer, not by reassignment: a command-line HEAPTRC_GATE=0
+# outranks any makefile assignment, so "0" must read as off where it is used.
+HEAPTRC_ENABLED := $(HEAPTRC_GATE)
+ifeq ($(HEAPTRC_GATE),0)
+HEAPTRC_ENABLED :=
+endif
 HEAPTRC_DUMP ?= $(BUILD_DIR)/$(PROGRAM).heaptrc
 
 run: build
-	@if [ -n "$(HEAPTRC_GATE)" ]; then \
+	@if [ -n "$(HEAPTRC_ENABLED)" ]; then \
 		rm -f $(HEAPTRC_DUMP); \
 		HEAPTRC='haltonnotreleased,log=$(HEAPTRC_DUMP)' $(BUILD_DIR)/$(PROGRAM); \
 		grep -q '^Heap dump by heaptrc unit' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: no heap dump written ($(HEAPTRC_DUMP))"; exit 1; }; \
