@@ -537,6 +537,10 @@ begin
     cmWin32:
       Result := Win32SetClipboardText(Text);
     {$ENDIF}
+  else
+    { 非 Windows 构建下 cmWin32 分支被编译排除, case 因枚举不穷尽而告警;
+      Detect 在该平台恒不返回 cmWin32, 此兜底仅为穷尽性与防御 }
+    Result := False;
   end;
 end;
 
@@ -569,6 +573,9 @@ begin
     cmWin32:
       Result := Win32GetClipboardText;
     {$ENDIF}
+  else
+    { 同 Copy: 非 Windows 构建的穷尽性兜底, Result 已是初值 '' }
+    Result := '';
   end;
 end;
 
