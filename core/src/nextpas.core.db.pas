@@ -61,6 +61,7 @@ type
 
   { tx }
   TDbTxProc = nextpas.core.db.tx.TDbTxProc;
+  TDbConnProc = nextpas.core.db.tx.TDbConnProc;
   TDbRetryShouldRetry = nextpas.core.db.tx.TDbRetryShouldRetry;
   TDbRetryPolicy = nextpas.core.db.tx.TDbRetryPolicy;
 
@@ -102,6 +103,15 @@ function ConnectOdbc(const ADsn: string): IDbConnection; inline;
 function ConnectOdbc(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection; inline;
 
+{ ---- 池工厂（开箱组合：池策略 × 后端连接选项）---- }
+{ 便利形态：缺省策略仅覆盖读上限，busy_timeout 烘入生产级缺省
+  （DefaultSqliteBusyTimeoutMs，F-10）。 }
+function OpenSqlitePool(const APath: string;
+  AMaxReadConnections: Integer): TDbPool; inline; overload;
+{ 全控形态：池策略与连接选项逐字采用。 }
+function OpenSqlitePool(const APath: string; const APolicy: TDbPoolPolicy;
+  const AOptions: TDbConnectOptions): TDbPool; inline; overload;
+
 { ---- 能力矩阵（V3-B1）---- }
 { 统一能力自述探测：连接实现 IDbCapabilities 则返回之，否则 nil
   （无值用 nil 表达——仓库错误处理策略）。布尔项与可选接口存在性
@@ -115,13 +125,23 @@ function DbCapabilities(const AConn: IDbConnection): IDbCapabilities; inline;
 function DbTraceControl(const AConn: IDbConnection): IDbTraceControl; inline;
 
 { ---- tx 透传 ---- }
+{ 捕获形态：回调若引用池化连接，租约滞留至闭包销毁（B13）——
+  池化连接一律改用参数化形态。 }
 procedure WithTransaction(const AConn: IDbConnection;
-  const AProc: TDbTxProc); inline;
+  const AProc: TDbTxProc); inline; overload;
+{ 参数化形态（B13 零捕获）：连接由框架作实参传入，
+  本调用语句结束即归还租约。事务语义与捕获形态一致。 }
+procedure WithTransaction(const AConn: IDbConnection;
+  const ABody: TDbConnProc); inline; overload;
 function DbRetryableDefault(const AE: EDbError): Boolean; inline;
 procedure WithTransactionRetry(const AConn: IDbConnection;
   const AProc: TDbTxProc); inline; overload;
 procedure WithTransactionRetry(const AConn: IDbConnection;
   const AProc: TDbTxProc; const APolicy: TDbRetryPolicy); inline; overload;
+procedure WithTransactionRetry(const AConn: IDbConnection;
+  const ABody: TDbConnProc); inline; overload;
+procedure WithTransactionRetry(const AConn: IDbConnection;
+  const ABody: TDbConnProc; const APolicy: TDbRetryPolicy); inline; overload;
 
 { ---- migrate 透传 ---- }
 function MakeMigrations(const AMigrations: array of TDbMigration): TDbMigrations; inline;
@@ -136,6 +156,7 @@ implementation
 uses
   SysUtils,
   nextpas.core.db.sqlite.adapter,
+  nextpas.core.db.sqlite.pool,
   nextpas.core.db.pg.adapter,
   nextpas.core.db.mysql.adapter,
   nextpas.core.db.odbc.adapter;
@@ -195,6 +216,20 @@ begin
   Result := nextpas.core.db.odbc.adapter.ConnectOdbc(ADsn, AOptions);
 end;
 
+function OpenSqlitePool(const APath: string;
+  AMaxReadConnections: Integer): TDbPool;
+begin
+  Result := nextpas.core.db.sqlite.pool.OpenSqlitePool(APath,
+    AMaxReadConnections);
+end;
+
+function OpenSqlitePool(const APath: string; const APolicy: TDbPoolPolicy;
+  const AOptions: TDbConnectOptions): TDbPool;
+begin
+  Result := nextpas.core.db.sqlite.pool.OpenSqlitePool(APath, APolicy,
+    AOptions);
+end;
+
 function DbCapabilities(const AConn: IDbConnection): IDbCapabilities;
 begin
   Result := nil;
@@ -217,9 +252,27 @@ begin
   nextpas.core.db.tx.WithTransaction(AConn, AProc);
 end;
 
+procedure WithTransaction(const AConn: IDbConnection;
+  const ABody: TDbConnProc);
+begin
+  nextpas.core.db.tx.WithTransaction(AConn, ABody);
+end;
+
 function DbRetryableDefault(const AE: EDbError): Boolean;
 begin
   Result := nextpas.core.db.tx.DbRetryableDefault(AE);
+end;
+
+procedure WithTransactionRetry(const AConn: IDbConnection;
+  const ABody: TDbConnProc);
+begin
+  nextpas.core.db.tx.WithTransactionRetry(AConn, ABody);
+end;
+
+procedure WithTransactionRetry(const AConn: IDbConnection;
+  const ABody: TDbConnProc; const APolicy: TDbRetryPolicy);
+begin
+  nextpas.core.db.tx.WithTransactionRetry(AConn, ABody, APolicy);
 end;
 
 procedure WithTransactionRetry(const AConn: IDbConnection;

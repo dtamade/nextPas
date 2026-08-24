@@ -22,6 +22,7 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.db,
   nextpas.core.db.base,
   nextpas.core.db.intf,
@@ -364,6 +365,49 @@ begin
 end;
 
 { 9 }
+procedure TestPooledWriterLeaseReacquirable;
+var
+  Pool: TDbPool;
+  Policy: TDbPoolPolicy;
+  Conn, Again: IDbConnection;
+  DbPath: string;
+begin
+  { 回归锁（反哺 B13/F-9）：把池写租约传入 Migrate，返回后租约必须
+    立即可再借。缺陷形态：迁移批事务以匿名闭包捕获连接参数，租约
+    引用随闭包存活超出 Migrate 生命周期，单写者槽位随之滞留——
+    消费方在 Migrate 之后立即借 writer（如会话存储建表）即超时。 }
+  DbPath := GetTempDir + 'db_migrate_lease_' + IntToStr(GetProcessID) + '.db';
+  DeleteFile(DbPath);
+  Policy := TDbPoolPolicy.Default;
+  Policy.MaxReadConnections := 1;
+  Policy.AcquireTimeoutMs := 1000;
+  Pool := TDbPool.Create(
+    function: IDbConnection
+    begin
+      Result := ConnectSqlite(DbPath);
+    end, Policy);
+  try
+    Conn := Pool.Writer;
+    try
+      Migrate(Conn, MakeMigrations([
+        TDbMigration.Create(1, [C_SQL_1, C_SQL_2]) ]));
+      Check(MigrationVersion(Conn) = 1, 'lease: migration applied');
+    finally
+      Conn := nil;                       { 归还写租约 }
+    end;
+    { 缺陷下此处超时抛 EDbError：写槽位仍被滞留引用占用 }
+    Again := Pool.Writer;
+    try
+      Check(MigrationVersion(Again) = 1, 'slot reacquired and version visible');
+    finally
+      Again := nil;
+    end;
+  finally
+    Pool.Free;
+    DeleteFile(DbPath);
+  end;
+end;
+
 procedure TestPostgresParity;
 var
   Conn: IDbConnection;
@@ -433,6 +477,7 @@ begin
   T.Test('legacy table self-heals', @TestLegacyTableSelfHeals);
   T.Test('empty list against rows rejected', @TestEmptyListAgainstRowsRejected);
   T.Test('descending list rejected', @TestDescendingListRejected);
+  T.Test('pooled writer lease reacquirable', @TestPooledWriterLeaseReacquirable);
   T.Test('postgres parity', @TestPostgresParity);
   if not T.Run then Halt(1);
 end.

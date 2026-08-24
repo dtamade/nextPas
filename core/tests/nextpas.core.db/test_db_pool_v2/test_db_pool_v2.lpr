@@ -18,7 +18,9 @@ program test_db_pool_v2;
       冲刷 / Warned 一次
    12 writer 租约同受检（读路径检查点发现写泄漏，报告含角色）
    13 DebugAcquireStack：报告附栈帧线索（'$' 地址行）
-   14 默认关：阈值 0 时回调零触发 }
+   14 默认关：阈值 0 时回调零触发
+   15 OpenSqlitePool 工厂（B13 配套）：MaxRead 生效 / 文件库落盘 /
+      参数化事务后写租约即时归还 / 数据跨池存活 }
 
 {$I nextpas.core.settings.inc}
 
@@ -27,6 +29,7 @@ uses
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.db,
   nextpas.core.db.base,
   nextpas.core.db.intf,
@@ -542,6 +545,64 @@ begin
   end;
 end;
 
+{ 15：OpenSqlitePool 便利形态——策略覆盖、参数化事务租约纪律、
+  文件库落盘与跨池存活 }
+procedure TestOpenSqlitePoolFactory;
+var
+  LPath: string;
+  LPool: TDbPool;
+  R: IDbConnection;
+  Q: IDbQuery;
+begin
+  LPath := GetTempDir + 'np_db_pool_factory_' + IntToStr(GetProcessID) + '.db';
+  DeleteFile(LPath);
+  try
+    LPool := OpenSqlitePool(LPath, 1);
+    try
+      Check(LPool.Policy.MaxReadConnections = 1, 'factory: MaxRead honored');
+
+      WithTransaction(LPool.Writer,
+        procedure(const C: IDbConnection)
+        begin
+          C.Exec('CREATE TABLE t_fac (v TEXT)');
+          C.Exec('INSERT INTO t_fac (v) VALUES (''kept'')');
+        end);
+
+      { 写租约已随语句归还（B13 纪律经工厂形态保持）：立即可再借 }
+      R := LPool.Acquire;
+      try
+        Q := R.Query('SELECT COUNT(*) FROM t_fac');
+        try
+          Check(Q.Step and (Q.GetInt64(0) = 1),
+            'factory: read path sees written row');
+        finally
+          Q := nil;
+        end;
+      finally
+        R := nil;
+      end;
+    finally
+      LPool.Free;
+    end;
+
+    { 文件库证据：池销毁后直连仍见数据（非 :memory:）}
+    R := ConnectSqlite(LPath);
+    try
+      Q := R.Query('SELECT COUNT(*) FROM t_fac WHERE v = ''kept''');
+      try
+        Check(Q.Step and (Q.GetInt64(0) = 1),
+          'factory: file persists across pools');
+      finally
+        Q := nil;
+      end;
+    finally
+      R := nil;
+    end;
+  finally
+    DeleteFile(LPath);
+  end;
+end;
+
 begin
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.pool.v2');
@@ -562,5 +623,6 @@ begin
   T.Test('debug acquire stack frames in report',
     @TestDebugAcquireStackFramesInReport);
   T.Test('leak detection off by default', @TestLeakDetectionOffByDefault);
+  T.Test('OpenSqlitePool factory', @TestOpenSqlitePoolFactory);
   if not T.Run then Halt(1);
 end.
