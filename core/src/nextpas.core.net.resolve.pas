@@ -1,7 +1,9 @@
 unit nextpas.core.net.resolve;
 {**
- * @desc DNS/地址解析：主机名→IP 列表、IPv4 字面量解析。
+ * @desc DNS/地址解析：主机名→IP 列表、IP 字面量判定。
  *       NetResolveAll 走 platform multi-A / dual-stack；NetResolve 返回首条。
+ *       HostIsIpLiteral 供 UDP/QUIC 等「字面量直发 / 域名走 DNS」分路复用，
+ *       避免各协议自写一套（proxy888 hy2 反哺）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -14,6 +16,16 @@ uses
 function NetResolve(const AHost: string): TNetAddress;
 function NetResolveAll(const AHost: string): specialize TArray<TNetAddress>;
 function NetResolveIPv4(const AIP: string): UInt32;
+
+{ 剥 IPv6 方括号：'[::1]' → '::1'；其余原样。 }
+function StripHostBrackets(const AHost: string): string;
+{ 点分四段 0..255；不剥括号（括号交给 StripHostBrackets）。 }
+function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean;
+{ 剥括号后可 TryParseIPv4。 }
+function IsIPv4Literal(const AHost: string): Boolean;
+{ 剥括号后含冒号即视为 v6 字面量。 }
+function IsIPv6Literal(const AHost: string): Boolean;
+function HostIsIpLiteral(const AHost: string): Boolean;
 
 implementation
 
@@ -57,12 +69,17 @@ begin
     IntToStr((ANet shr 24) and $FF);
 end;
 
-function NetResolveIPv4(const AIP: string): UInt32;
+function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean;
 var
   LParts: array[0..3] of Byte;
-  LI, LStart, LPart, LVal: Integer;
+  LI, LStart, LPart: Integer;
+  LVal: Int64;
   LS: string;
 begin
+  Result := False;
+  ANet := 0;
+  if AIP = '' then
+    Exit;
   FillChar(LParts, SizeOf(LParts), 0);
   LStart := 1;
   LPart := 0;
@@ -71,36 +88,58 @@ begin
     if (LI > Length(AIP)) or (AIP[LI] = '.') then
     begin
       if LPart > 3 then
-        raise EArgumentError.Create('invalid IPv4: ' + AIP);
+        Exit;
       LS := Copy(AIP, LStart, LI - LStart);
-      LVal := StrToInt(LS);
+      if (LS = '') or (not TryStrToInt(LS, LVal)) then
+        Exit;
       if (LVal < 0) or (LVal > 255) then
-        raise EArgumentError.Create('invalid IPv4 octet: ' + AIP);
+        Exit;
       LParts[LPart] := Byte(LVal);
       Inc(LPart);
       LStart := LI + 1;
-    end;
+    end
+    else if (AIP[LI] < '0') or (AIP[LI] > '9') then
+      Exit;
   end;
   if LPart <> 4 then
-    raise EArgumentError.Create('invalid IPv4: ' + AIP);
-  Result := UInt32(LParts[0]) or (UInt32(LParts[1]) shl 8)
+    Exit;
+  ANet := UInt32(LParts[0]) or (UInt32(LParts[1]) shl 8)
     or (UInt32(LParts[2]) shl 16) or (UInt32(LParts[3]) shl 24);
+  Result := True;
+end;
+
+function NetResolveIPv4(const AIP: string): UInt32;
+begin
+  if not TryParseIPv4(AIP, Result) then
+    raise EArgumentError.Create('invalid IPv4: ' + AIP);
+end;
+
+function StripHostBrackets(const AHost: string): string;
+begin
+  Result := AHost;
+  if (Length(Result) >= 2) and (Result[1] = '[') and
+    (Result[Length(Result)] = ']') then
+    Result := Copy(Result, 2, Length(Result) - 2);
 end;
 
 function IsIPv4Literal(const AHost: string): Boolean;
 var
-  LI: Integer;
+  Dummy: UInt32;
 begin
-  if Length(AHost) = 0 then Exit(False);
-  for LI := 1 to Length(AHost) do
-    if not (AHost[LI] in ['0'..'9', '.']) then
-      Exit(False);
-  Result := True;
+  Result := TryParseIPv4(StripHostBrackets(AHost), Dummy);
 end;
 
 function IsIPv6Literal(const AHost: string): Boolean;
+var
+  H: string;
 begin
-  Result := Pos(':', AHost) > 0;
+  H := StripHostBrackets(AHost);
+  Result := (H <> '') and (Pos(':', H) > 0);
+end;
+
+function HostIsIpLiteral(const AHost: string): Boolean;
+begin
+  Result := IsIPv4Literal(AHost) or IsIPv6Literal(AHost);
 end;
 
 function NetResolveAll(const AHost: string): specialize TArray<TNetAddress>;
@@ -110,31 +149,33 @@ var
   LRes: Int32;
   LI, LJ: Integer;
   LHost: AnsiString;
+  LBare: string;
 begin
   Result := nil;
   SetLength(Result, 0);
-  if (AHost = '') or (AHost = 'localhost') then
+  LBare := StripHostBrackets(AHost);
+  if (LBare = '') or (LBare = 'localhost') then
   begin
     SetLength(Result, 1);
     Result[0] := TNetAddress.IPv4('127.0.0.1', 0);
     Exit;
   end;
 
-  if IsIPv4Literal(AHost) then
+  if IsIPv4Literal(LBare) then
   begin
     SetLength(Result, 1);
-    Result[0] := TNetAddress.IPv4(AHost, 0);
+    Result[0] := TNetAddress.IPv4(LBare, 0);
     Exit;
   end;
 
-  if IsIPv6Literal(AHost) then
+  if IsIPv6Literal(LBare) then
   begin
     SetLength(Result, 1);
-    Result[0] := TNetAddress.IPv6(AHost, 0);
+    Result[0] := TNetAddress.IPv6(LBare, 0);
     Exit;
   end;
 
-  LHost := AHost;
+  LHost := LBare;
   LRes := platform_socket_resolve_stream(PAnsiChar(LHost), @LRaw[0],
     PLATFORM_RESOLVE_MAX, LCount);
   if (LRes <> 0) or (LCount <= 0) then

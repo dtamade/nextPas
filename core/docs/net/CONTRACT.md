@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.net*.pas`（14 个源文件）
 **层级**：L2（依赖 L0-L1, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-24
+**版本**：1.1
 
 ---
 
@@ -59,4 +59,5 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-08-24 | 1.1 | 导出 StripHostBrackets / HostIsIpLiteral / TryParseIPv4；TDnsResult.PreferredAddress；TNetAddress.WithPort | proxy888 反哺 |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |

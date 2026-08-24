@@ -57,6 +57,24 @@ Addr := Resolve('example.com');
 // Addr.IP, Addr.Port, Addr.IsIPv6
 ```
 
+### Host classification and pick
+
+UDP/QUIC 等「字面量直发 / 域名走 DNS」分路用这些 helper，不要在业务里自写一套。
+
+```pascal
+if HostIsIpLiteral(Host) then
+  Addr := TNetAddress.Create(StripHostBrackets(Host), Port)
+else
+  { AsyncResolve callback: }
+  Addr := DnsResult.PreferredAddress(True).WithPort(Port); { IPv4 first }
+```
+
+- `StripHostBrackets('[::1]')` → `'::1'`
+- `IsIPv4Literal` / `TryParseIPv4`：四段 0..255，拒绝 `1.2.3` / `256.1.1.1`
+- `IsIPv6Literal`：剥括号后含冒号
+- `TDnsResult.PreferredAddress(True)`：先 A，无 A 再退第一条
+- `TNetAddress.WithPort`：拷贝后改端口，不改 IP/族
+
 ## Interfaces
 
 - `ITcpStream` — extends IStream with LocalAddr, RemoteAddr, Shutdown, SetNoDelay, SetKeepAlive, SetReadDeadline, SetWriteDeadline, SetCancelToken

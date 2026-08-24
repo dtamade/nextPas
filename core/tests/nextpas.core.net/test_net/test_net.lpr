@@ -252,6 +252,34 @@ begin
   LA := TNetAddress.IPv6('::1', 443);
   CheckEqual('[::1]:443', LA.ToString, 'ipv6 toString');
   Check(LA.IsIPv6, 'is ipv6');
+  LA := TNetAddress.IPv4('10.0.0.1', 0).WithPort(443);
+  CheckEqual(Int64(443), Int64(LA.Port), 'WithPort keeps IP');
+  CheckEqual('10.0.0.1', LA.IP, 'WithPort IP unchanged');
+end;
+
+procedure TestHostIsIpLiteral;
+var
+  LNet: UInt32;
+begin
+  CheckEqual('::1', StripHostBrackets('[::1]'), 'strip v6 brackets');
+  CheckEqual('127.0.0.1', StripHostBrackets('127.0.0.1'), 'strip v4 unchanged');
+  Check(IsIPv4Literal('127.0.0.1'), 'v4 literal');
+  Check(IsIPv4Literal('255.255.255.255'), 'v4 max octet');
+  Check(not IsIPv4Literal('1.2.3'), 'incomplete v4');
+  Check(not IsIPv4Literal('1.2.3.4.5'), 'extra v4 octet');
+  Check(not IsIPv4Literal('256.1.1.1'), 'v4 octet overflow');
+  Check(not IsIPv4Literal('1..2.3'), 'empty v4 octet');
+  Check(not IsIPv4Literal('localhost'), 'localhost is not v4');
+  Check(IsIPv6Literal('::1'), 'v6 literal');
+  Check(IsIPv6Literal('[2001:db8::1]'), 'bracket v6');
+  Check(not IsIPv6Literal('127.0.0.1'), 'v4 is not v6');
+  Check(HostIsIpLiteral('127.0.0.1'), 'host v4');
+  Check(HostIsIpLiteral('::1'), 'host v6');
+  Check(HostIsIpLiteral('[::1]'), 'host bracket v6');
+  Check(not HostIsIpLiteral('localhost'), 'localhost is name');
+  Check(not HostIsIpLiteral('hy.example.com'), 'domain is name');
+  Check(TryParseIPv4('8.8.8.8', LNet), 'TryParseIPv4 ok');
+  Check(not TryParseIPv4('8.8.8', LNet), 'TryParseIPv4 incomplete');
 end;
 
 { 非法 host 不能静默绑 0.0.0.0：platform_ipv4_parse 解析失败返回 0（与合法
@@ -1055,6 +1083,7 @@ begin
   T.Test('Resolve', @TestResolve);
   T.Test('Resolve DNS', @TestResolveDNS);
   T.Test('NetAddress', @TestNetAddress);
+  T.Test('Host IP literal helpers', @TestHostIsIpLiteral);
   T.Test('TCP listen invalid host', @TestTcpListenInvalidHost);
   T.Test('TCP listen bind error message', @TestTcpListenBindErrorMessage);
   T.Test('Connect refused', @TestConnectRefused);

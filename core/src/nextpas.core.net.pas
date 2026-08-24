@@ -83,6 +83,11 @@ function TcpConnect(const AAddr: string; const APort: UInt16;
   const ATimeoutMs: Int64): ITcpStream; inline;
 function UdpBind(const AAddr: string; const APort: UInt16): IUdpSocket; inline;
 function Resolve(const AHost: string): TNetAddress; inline;
+function StripHostBrackets(const AHost: string): string; inline;
+function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; inline;
+function IsIPv4Literal(const AHost: string): Boolean; inline;
+function IsIPv6Literal(const AHost: string): Boolean; inline;
+function HostIsIpLiteral(const AHost: string): Boolean; inline;
 function NewNetCancelToken: INetCancelController; inline;
 
 function CreateBackpressureController(
@@ -161,6 +166,31 @@ end;
 function Resolve(const AHost: string): TNetAddress;
 begin
   Result := nextpas.core.net.resolve.NetResolve(AHost);
+end;
+
+function StripHostBrackets(const AHost: string): string;
+begin
+  Result := nextpas.core.net.resolve.StripHostBrackets(AHost);
+end;
+
+function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean;
+begin
+  Result := nextpas.core.net.resolve.TryParseIPv4(AIP, ANet);
+end;
+
+function IsIPv4Literal(const AHost: string): Boolean;
+begin
+  Result := nextpas.core.net.resolve.IsIPv4Literal(AHost);
+end;
+
+function IsIPv6Literal(const AHost: string): Boolean;
+begin
+  Result := nextpas.core.net.resolve.IsIPv6Literal(AHost);
+end;
+
+function HostIsIpLiteral(const AHost: string): Boolean;
+begin
+  Result := nextpas.core.net.resolve.HostIsIpLiteral(AHost);
 end;
 
 function NewNetCancelToken: INetCancelController;
