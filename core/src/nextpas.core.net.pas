@@ -87,7 +87,8 @@ function Resolve(const AHost: string): TNetAddress; inline;
 function StripHostBrackets(const AHost: string): string; inline;
 function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; overload; inline;
 function TryParseIPv4(const AIP: string; out AOctets: TBytes): Boolean; overload; inline;
-function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean; inline;
+function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean; overload; inline;
+function TryParseIPv6(const AIP: string; AAddr: PByte): Boolean; overload; inline;
 function IsIPv4Literal(const AHost: string): Boolean; inline;
 function IsIPv6Literal(const AHost: string): Boolean; inline;
 function HostIsIpLiteral(const AHost: string): Boolean; inline;
@@ -196,6 +197,11 @@ end;
 function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean;
 begin
   Result := nextpas.core.net.resolve.TryParseIPv6(AIP, AOctets);
+end;
+
+function TryParseIPv6(const AIP: string; AAddr: PByte): Boolean;
+begin
+  Result := nextpas.core.net.resolve.TryParseIPv6(AIP, AAddr);
 end;
 
 function IsIPv4Literal(const AHost: string): Boolean;

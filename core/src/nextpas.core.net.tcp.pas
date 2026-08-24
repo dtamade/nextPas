@@ -796,47 +796,6 @@ begin
   Result := NetTcpConnect(AAddr, APort, 0);
 end;
 
-{ Parse FormatIPv6Addr-style "xxxx:xxxx:..." (8 groups of 4 hex) into 16 bytes. }
-function ParseIPv6HexGroups(const AIP: string; ABytes: PByte): Boolean;
-var
-  LGroup, LNibble, LPos, LVal: Integer;
-  LC: Char;
-begin
-  Result := False;
-  if ABytes = nil then
-    Exit;
-  FillChar(ABytes^, 16, 0);
-  LPos := 1;
-  for LGroup := 0 to 7 do
-  begin
-    if LGroup > 0 then
-    begin
-      if (LPos > Length(AIP)) or (AIP[LPos] <> ':') then
-        Exit;
-      Inc(LPos);
-    end;
-    LVal := 0;
-    for LNibble := 0 to 3 do
-    begin
-      if LPos > Length(AIP) then
-        Exit;
-      LC := AIP[LPos];
-      Inc(LPos);
-      if LC in ['0'..'9'] then
-        LVal := (LVal shl 4) or (Ord(LC) - Ord('0'))
-      else if LC in ['a'..'f'] then
-        LVal := (LVal shl 4) or (Ord(LC) - Ord('a') + 10)
-      else if LC in ['A'..'F'] then
-        LVal := (LVal shl 4) or (Ord(LC) - Ord('A') + 10)
-      else
-        Exit;
-    end;
-    ABytes[LGroup * 2] := Byte((LVal shr 8) and $FF);
-    ABytes[LGroup * 2 + 1] := Byte(LVal and $FF);
-  end;
-  Result := LPos > Length(AIP);
-end;
-
 function BuildConnectSockAddr(const ARemote: TNetAddress;
   out ASa: TPlatformSockAddr): Boolean;
 var
@@ -847,7 +806,8 @@ begin
   FillChar(ASa, SizeOf(ASa), 0);
   if ARemote.IsIPv6 then
   begin
-    if not ParseIPv6HexGroups(ARemote.IP, @LBytes[0]) then
+    { RFC 4291 压缩形态（::1 / 2001:db8::1），不再只认 8 组 4 位 hex。 }
+    if not TryParseIPv6(ARemote.IP, @LBytes[0]) then
       Exit;
     Result := platform_sockaddr_ipv6(ARemote.Port, @LBytes[0], 0, ASa) = 0;
   end

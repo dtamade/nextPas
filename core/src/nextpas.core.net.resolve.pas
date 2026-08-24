@@ -25,7 +25,9 @@ function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; overload;
 { 同上，产出 4 字节网络序（首 octet = 高位地址段）。 }
 function TryParseIPv4(const AIP: string; out AOctets: TBytes): Boolean; overload;
 { RFC 4291 §2.2：:: 至多一次、内嵌 IPv4 尾、剥括号；拒 %zone / 空组 / 超 4 位。 }
-function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean;
+function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean; overload;
+{ 写入调用方 16 字节缓冲（AAddr 不可空）；失败不保证缓冲内容。 }
+function TryParseIPv6(const AIP: string; AAddr: PByte): Boolean; overload;
 { 剥括号后可 TryParseIPv4。 }
 function IsIPv4Literal(const AHost: string): Boolean;
 { 剥括号后 RFC 4291 解析成功。 }
@@ -265,6 +267,19 @@ begin
     AOctets[LI * 2] := Byte(LGroups[LI] shr 8);
     AOctets[LI * 2 + 1] := Byte(LGroups[LI]);
   end;
+  Result := True;
+end;
+
+function TryParseIPv6(const AIP: string; AAddr: PByte): Boolean;
+var
+  LOctets: TBytes;
+begin
+  Result := False;
+  if AAddr = nil then
+    Exit;
+  if not TryParseIPv6(AIP, LOctets) then
+    Exit;
+  Move(LOctets[0], AAddr^, 16);
   Result := True;
 end;
 

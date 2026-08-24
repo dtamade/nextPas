@@ -15,6 +15,7 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.net.tcp,
+  nextpas.core.platform.socket,
   nextpas.core.net.udp,
   nextpas.core.net.resolve,
   nextpas.core.net,
@@ -288,6 +289,7 @@ end;
 procedure TestTryParseIPv6;
 var
   B: TBytes;
+  LRaw: array[0..15] of Byte;
 
   function Hex16(const A: TBytes): string;
   var
@@ -330,6 +332,10 @@ begin
   Check(not TryParseIPv6('g::1', B), 'bad digit');
   Check(not TryParseIPv6('127.0.0.1', B), 'v4 is not v6');
   Check(not TryParseIPv6('', B), 'empty');
+  FillChar(LRaw[0], 16, $FF);
+  Check(TryParseIPv6('::1', @LRaw[0]), 'PByte ::1');
+  CheckEqual(Int64(1), Int64(LRaw[15]), 'PByte ::1 last octet');
+  CheckEqual(Int64(0), Int64(LRaw[0]), 'PByte ::1 first octet');
 end;
 
 procedure TestSplitHostPort;
@@ -360,6 +366,21 @@ begin
   CheckEqual('[::1]:443', JoinHostPort('::1', 443), 'join v6');
   CheckEqual('[::1]:443', JoinHostPort('[::1]', 443), 'join already bracketed');
   CheckEqual('example.org:443', JoinHostPort('example.org', 443), 'join domain');
+end;
+
+procedure TestBuildConnectSockAddrCompressedIPv6;
+var
+  LSa: TPlatformSockAddr;
+  LA: TNetAddress;
+begin
+  LA := TNetAddress.IPv6('::1', 443);
+  Check(NetBuildConnectSockAddr(LA, LSa), 'compressed ::1 sockaddr');
+  LA := TNetAddress.IPv6('2001:db8::1', 80);
+  Check(NetBuildConnectSockAddr(LA, LSa), 'compressed db8 sockaddr');
+  LA := TNetAddress.IPv6('fe80::1', 22);
+  Check(NetBuildConnectSockAddr(LA, LSa), 'link-local sockaddr');
+  LA := TNetAddress.IPv6('not-an-ip', 80);
+  Check(not NetBuildConnectSockAddr(LA, LSa), 'invalid v6 rejected');
 end;
 
 { 非法 host 不能静默绑 0.0.0.0：platform_ipv4_parse 解析失败返回 0（与合法
@@ -1166,6 +1187,8 @@ begin
   T.Test('Host IP literal helpers', @TestHostIsIpLiteral);
   T.Test('TryParseIPv6 RFC 4291', @TestTryParseIPv6);
   T.Test('SplitHostPort / JoinHostPort', @TestSplitHostPort);
+  T.Test('Connect sockaddr accepts compressed IPv6',
+    @TestBuildConnectSockAddrCompressedIPv6);
   T.Test('TCP listen invalid host', @TestTcpListenInvalidHost);
   T.Test('TCP listen bind error message', @TestTcpListenBindErrorMessage);
   T.Test('Connect refused', @TestConnectRefused);
