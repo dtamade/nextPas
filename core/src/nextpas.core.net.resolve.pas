@@ -19,13 +19,27 @@ function NetResolveIPv4(const AIP: string): UInt32;
 
 { 剥 IPv6 方括号：'[::1]' → '::1'；其余原样。 }
 function StripHostBrackets(const AHost: string): string;
-{ 点分四段 0..255；不剥括号（括号交给 StripHostBrackets）。 }
+{ 点分四段 0..255；拒绝前导零（'01'）；不剥括号。 }
 function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean;
 { 剥括号后可 TryParseIPv4。 }
 function IsIPv4Literal(const AHost: string): Boolean;
 { 剥括号后含冒号即视为 v6 字面量。 }
 function IsIPv6Literal(const AHost: string): Boolean;
 function HostIsIpLiteral(const AHost: string): Boolean;
+
+{ 网络序 IPv4 / 16 字节 IPv6 → 文本。 }
+function FormatIPv4(ANet: UInt32): string;
+function FormatIPv6(AAddr: PByte): string;
+
+{ host:port / [ipv6]:port。无显式端口 → APort=ADefaultPort（0 可作「缺端口」探测）。
+  显式端口必须 1..65535；空 host / 裸 IPv6（无括号）拒绝。 }
+function SplitHostPort(const AText: string; ADefaultPort: UInt16;
+  out AHost: string; out APort: UInt16): Boolean;
+{ 必须带端口（1..65535）。 }
+function SplitHostPort(const AText: string; out AHost: string;
+  out APort: UInt16): Boolean;
+{ IPv6 自动加括号。 }
+function JoinHostPort(const AHost: string; APort: UInt16): string;
 
 implementation
 
@@ -34,8 +48,7 @@ uses
   nextpas.core.errors,
   nextpas.core.platform.socket;
 
-{ 格式化 IPv6 地址字节为字符串 }
-function FormatIPv6Addr(AAddr: PByte): string;
+function FormatIPv6(AAddr: PByte): string;
 const
   HexChars: array[0..15] of Char = '0123456789abcdef';
 var
@@ -61,7 +74,7 @@ begin
   SetString(Result, @LBuf[0], LPos);
 end;
 
-function IPv4NetToString(ANet: UInt32): string;
+function FormatIPv4(ANet: UInt32): string;
 begin
   Result := IntToStr(ANet and $FF) + '.' +
     IntToStr((ANet shr 8) and $FF) + '.' +
@@ -90,9 +103,11 @@ begin
       if LPart > 3 then
         Exit;
       LS := Copy(AIP, LStart, LI - LStart);
-      if (LS = '') or (not TryStrToInt(LS, LVal)) then
+      if (LS = '') or (Length(LS) > 3) then
         Exit;
-      if (LVal < 0) or (LVal > 255) then
+      if (Length(LS) > 1) and (LS[1] = '0') then
+        Exit;
+      if (not TryStrToInt(LS, LVal)) or (LVal < 0) or (LVal > 255) then
         Exit;
       LParts[LPart] := Byte(LVal);
       Inc(LPart);
@@ -186,7 +201,7 @@ begin
   for LJ := 0 to LCount - 1 do
     if not LRaw[LJ].IsIPv6 then
     begin
-      Result[LI].IP := IPv4NetToString(LRaw[LJ].IPv4);
+      Result[LI].IP := FormatIPv4(LRaw[LJ].IPv4);
       Result[LI].Port := 0;
       Result[LI].IsIPv6 := False;
       Inc(LI);
@@ -194,7 +209,7 @@ begin
   for LJ := 0 to LCount - 1 do
     if LRaw[LJ].IsIPv6 then
     begin
-      Result[LI].IP := FormatIPv6Addr(@LRaw[LJ].IPv6[0]);
+      Result[LI].IP := FormatIPv6(@LRaw[LJ].IPv6[0]);
       Result[LI].Port := 0;
       Result[LI].IsIPv6 := True;
       Inc(LI);
@@ -209,6 +224,84 @@ begin
   if Length(LAll) = 0 then
     raise ENetworkError.Create('DNS resolve failed for: ' + AHost);
   Result := LAll[0];
+end;
+
+function SplitHostPort(const AText: string; ADefaultPort: UInt16;
+  out AHost: string; out APort: UInt16): Boolean;
+var
+  LColon, LEnd, LI: Integer;
+  LPortText: string;
+  LVal: Int64;
+begin
+  Result := False;
+  AHost := '';
+  APort := ADefaultPort;
+  LPortText := '';
+  if AText = '' then
+    Exit;
+  if AText[1] = '[' then
+  begin
+    LEnd := Pos(']', AText);
+    if LEnd = 0 then
+      Exit;
+    AHost := Copy(AText, 2, LEnd - 2);
+    if AHost = '' then
+      Exit;
+    if LEnd + 1 > Length(AText) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    if AText[LEnd + 1] <> ':' then
+      Exit;
+    LPortText := Copy(AText, LEnd + 2, Length(AText) - LEnd - 1);
+  end
+  else
+  begin
+    LColon := 0;
+    for LI := Length(AText) downto 1 do
+      if AText[LI] = ':' then
+      begin
+        LColon := LI;
+        Break;
+      end;
+    if LColon = 0 then
+    begin
+      AHost := AText;
+      if AHost <> '' then
+        Result := True;
+      Exit;
+    end;
+    AHost := Copy(AText, 1, LColon - 1);
+    LPortText := Copy(AText, LColon + 1, Length(AText) - LColon);
+    if Pos(':', AHost) <> 0 then
+      Exit;
+  end;
+  if (AHost = '') or (LPortText = '') then
+    Exit;
+  if not TryStrToInt(LPortText, LVal) then
+    Exit;
+  if (LVal < 1) or (LVal > 65535) then
+    Exit;
+  APort := UInt16(LVal);
+  Result := True;
+end;
+
+function SplitHostPort(const AText: string; out AHost: string;
+  out APort: UInt16): Boolean;
+begin
+  Result := SplitHostPort(AText, 0, AHost, APort) and (APort <> 0);
+end;
+
+function JoinHostPort(const AHost: string; APort: UInt16): string;
+var
+  H: string;
+begin
+  H := StripHostBrackets(AHost);
+  if IsIPv6Literal(H) then
+    Result := '[' + H + ']:' + IntToStr(APort)
+  else
+    Result := H + ':' + IntToStr(APort);
 end;
 
 end.

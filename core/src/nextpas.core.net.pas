@@ -88,6 +88,13 @@ function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; inline;
 function IsIPv4Literal(const AHost: string): Boolean; inline;
 function IsIPv6Literal(const AHost: string): Boolean; inline;
 function HostIsIpLiteral(const AHost: string): Boolean; inline;
+function FormatIPv4(ANet: UInt32): string; inline;
+function FormatIPv6(AAddr: PByte): string; inline;
+function SplitHostPort(const AText: string; ADefaultPort: UInt16;
+  out AHost: string; out APort: UInt16): Boolean; inline;
+function SplitHostPort(const AText: string; out AHost: string;
+  out APort: UInt16): Boolean; inline;
+function JoinHostPort(const AHost: string; APort: UInt16): string; inline;
 function NewNetCancelToken: INetCancelController; inline;
 
 function CreateBackpressureController(
@@ -191,6 +198,33 @@ end;
 function HostIsIpLiteral(const AHost: string): Boolean;
 begin
   Result := nextpas.core.net.resolve.HostIsIpLiteral(AHost);
+end;
+
+function FormatIPv4(ANet: UInt32): string;
+begin
+  Result := nextpas.core.net.resolve.FormatIPv4(ANet);
+end;
+
+function FormatIPv6(AAddr: PByte): string;
+begin
+  Result := nextpas.core.net.resolve.FormatIPv6(AAddr);
+end;
+
+function SplitHostPort(const AText: string; ADefaultPort: UInt16;
+  out AHost: string; out APort: UInt16): Boolean;
+begin
+  Result := nextpas.core.net.resolve.SplitHostPort(AText, ADefaultPort, AHost, APort);
+end;
+
+function SplitHostPort(const AText: string; out AHost: string;
+  out APort: UInt16): Boolean;
+begin
+  Result := nextpas.core.net.resolve.SplitHostPort(AText, AHost, APort);
+end;
+
+function JoinHostPort(const AHost: string; APort: UInt16): string;
+begin
+  Result := nextpas.core.net.resolve.JoinHostPort(AHost, APort);
 end;
 
 function NewNetCancelToken: INetCancelController;

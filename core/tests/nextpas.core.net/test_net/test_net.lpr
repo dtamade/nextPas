@@ -269,6 +269,8 @@ begin
   Check(not IsIPv4Literal('1.2.3.4.5'), 'extra v4 octet');
   Check(not IsIPv4Literal('256.1.1.1'), 'v4 octet overflow');
   Check(not IsIPv4Literal('1..2.3'), 'empty v4 octet');
+  Check(not IsIPv4Literal('1.2.3.04'), 'v4 leading zero');
+  Check(IsIPv4Literal('0.0.0.0'), 'v4 zero octet');
   Check(not IsIPv4Literal('localhost'), 'localhost is not v4');
   Check(IsIPv6Literal('::1'), 'v6 literal');
   Check(IsIPv6Literal('[2001:db8::1]'), 'bracket v6');
@@ -280,6 +282,36 @@ begin
   Check(not HostIsIpLiteral('hy.example.com'), 'domain is name');
   Check(TryParseIPv4('8.8.8.8', LNet), 'TryParseIPv4 ok');
   Check(not TryParseIPv4('8.8.8', LNet), 'TryParseIPv4 incomplete');
+end;
+
+procedure TestSplitHostPort;
+var
+  LHost: string;
+  LPort: UInt16;
+begin
+  Check(SplitHostPort('[2001:db8::2]:9443', 0, LHost, LPort), 'bracket v6');
+  CheckEqual('2001:db8::2', LHost, 'bracket v6 host');
+  CheckEqual(Int64(9443), Int64(LPort), 'bracket v6 port');
+  Check(SplitHostPort('[::1]', 1080, LHost, LPort), 'v6 default port');
+  CheckEqual('::1', LHost, 'v6 default host');
+  CheckEqual(Int64(1080), Int64(LPort), 'v6 default port value');
+  Check(SplitHostPort('example.org', 443, LHost, LPort), 'host default');
+  CheckEqual('example.org', LHost, 'host default name');
+  CheckEqual(Int64(443), Int64(LPort), 'host default port');
+  Check(SplitHostPort('example.org', 0, LHost, LPort), 'missing port probe');
+  CheckEqual(Int64(0), Int64(LPort), 'missing port is 0');
+  Check(not SplitHostPort('example.org', LHost, LPort), 'required port rejects missing');
+  Check(SplitHostPort('example.org:8080', 443, LHost, LPort), 'explicit overrides default');
+  CheckEqual(Int64(8080), Int64(LPort), 'explicit port');
+  Check(not SplitHostPort('::1:80', 0, LHost, LPort), 'bare v6 rejected');
+  Check(not SplitHostPort('example.org:0', 0, LHost, LPort), 'port 0 rejected');
+  Check(not SplitHostPort('example.org:65536', 0, LHost, LPort), 'port overflow');
+  Check(not SplitHostPort('example.org:abc', 0, LHost, LPort), 'port junk');
+  Check(not SplitHostPort(':80', 80, LHost, LPort), 'empty host');
+  Check(not SplitHostPort('', 80, LHost, LPort), 'empty text');
+  CheckEqual('[::1]:443', JoinHostPort('::1', 443), 'join v6');
+  CheckEqual('[::1]:443', JoinHostPort('[::1]', 443), 'join already bracketed');
+  CheckEqual('example.org:443', JoinHostPort('example.org', 443), 'join domain');
 end;
 
 { 非法 host 不能静默绑 0.0.0.0：platform_ipv4_parse 解析失败返回 0（与合法
@@ -1084,6 +1116,7 @@ begin
   T.Test('Resolve DNS', @TestResolveDNS);
   T.Test('NetAddress', @TestNetAddress);
   T.Test('Host IP literal helpers', @TestHostIsIpLiteral);
+  T.Test('SplitHostPort / JoinHostPort', @TestSplitHostPort);
   T.Test('TCP listen invalid host', @TestTcpListenInvalidHost);
   T.Test('TCP listen bind error message', @TestTcpListenBindErrorMessage);
   T.Test('Connect refused', @TestConnectRefused);

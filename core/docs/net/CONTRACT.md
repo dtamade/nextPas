@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-08-24
-**版本**：1.1
+**版本**：1.2
 
 ---
 
@@ -59,5 +59,6 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-08-24 | 1.2 | SplitHostPort / JoinHostPort / FormatIPv4 / FormatIPv6；TryParseIPv4 拒绝前导零 | proxy888 反哺 R8-02 |
 | 2026-08-24 | 1.1 | 导出 StripHostBrackets / HostIsIpLiteral / TryParseIPv4；TDnsResult.PreferredAddress；TNetAddress.WithPort | proxy888 反哺 |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |

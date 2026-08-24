@@ -74,6 +74,8 @@ else
 - `IsIPv6Literal`：剥括号后含冒号
 - `TDnsResult.PreferredAddress(True)`：先 A，无 A 再退第一条
 - `TNetAddress.WithPort`：拷贝后改端口，不改 IP/族
+- `SplitHostPort(text, defaultPort, host, port)`：`host:port` / `[v6]:port`，裸 IPv6 拒绝
+- `JoinHostPort(host, port)`：v6 自动加括号
 
 ## Interfaces
 
