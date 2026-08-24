@@ -112,6 +112,28 @@ type
       var AState: TInputState);
   end;
 
+{ ---- 选区几何纯函数(宿主自定义多行/分段输入复用;零分配)----
+  自 agentman888 Chat 输入框反哺:窗口化的列↔字节映射与高亮列段,
+  与 TInputState 的排他端点约定(SelTo 不含端点)一致 }
+
+{ 字节偏移前的显示列宽(图素感知):横向滚动基列换算用 }
+function InputColOfBytes(const S: AnsiString; ABytes: Integer): Integer;
+
+{ 可见窗 [AWinFrom, AWinFrom+AWinLen)(0-based 字节)内的点击列 →
+  排他选区头字节:落点在某图素列内夹其起始字节,末字形之后返回窗末。
+  负列返回窗首;空窗返回 AWinFrom }
+function InputHeadAtCol(const S: AnsiString; AWinFrom, AWinLen,
+  ACol: Integer): Integer;
+
+{ 选区 [ASelFrom, ASelTo)(排他端点)∩ 可见窗 的显示列段(相对窗首):
+  AColsFrom=首选中字形列、AColsWidth=选中字形总宽。无可见交集或宽为 0
+  返回 False。单遍扫描零分配,渲染热路径安全 }
+function InputSelColsInWindow(const S: AnsiString; AWinFrom, AWinLen,
+  ASelFrom, ASelTo: Integer; out AColsFrom, AColsWidth: Integer): Boolean;
+
+{ 向左回退到图素起始字节(continuation 前跳);Pos 为 0-based 字节偏移 }
+function PrevGraphemeByte(const S: AnsiString; Pos: Integer): Integer;
+
 implementation
 
 uses
@@ -165,6 +187,69 @@ begin
   while (P > 0) and ((Byte(S[P + 1]) and $C0) = $80) do Dec(P);
   if P < 0 then P := 0;
   Result := P;
+end;
+
+function InputColOfBytes(const S: AnsiString; ABytes: Integer): Integer;
+var P, N, W: Integer; Adv: TInputAdv;
+begin
+  Result := 0;
+  N := Length(S);
+  P := 0;
+  W := 0;
+  while (P < N) and (P < ABytes) do
+  begin
+    Adv := InputGraphemeAt(S[1], N, P);
+    Inc(W, Adv.Width);
+    Inc(P, Adv.ByteLen);
+  end;
+  Result := W;
+end;
+
+function InputHeadAtCol(const S: AnsiString; AWinFrom, AWinLen,
+  ACol: Integer): Integer;
+var P, WEnd: Integer; GR: TGraphemeResult;
+begin
+  Result := AWinFrom;
+  if AWinLen <= 0 then Exit;
+  P := AWinFrom;
+  WEnd := AWinFrom + AWinLen;
+  while P < WEnd do
+  begin
+    GR := GraphemeNext(@S[P + 1], WEnd - P);
+    if GR.ByteLen <= 0 then Break;
+    if ACol < GR.Width then Exit(P);
+    Dec(ACol, GR.Width);
+    Inc(P, GR.ByteLen);
+  end;
+  Result := WEnd;   { 点在末字形之后:排他头 = 窗末 }
+end;
+
+function InputSelColsInWindow(const S: AnsiString; AWinFrom, AWinLen,
+  ASelFrom, ASelTo: Integer; out AColsFrom, AColsWidth: Integer): Boolean;
+var P, WEnd, CF, W: Integer; GR: TGraphemeResult;
+begin
+  Result := False;
+  AColsFrom := 0;
+  AColsWidth := 0;
+  if (AWinLen <= 0) or (ASelTo <= ASelFrom) then Exit;
+  P := AWinFrom;
+  WEnd := AWinFrom + AWinLen;
+  if (ASelFrom >= WEnd) or (ASelTo <= P) then Exit;
+  CF := -1;
+  W := 0;
+  while P < WEnd do
+  begin
+    if P >= ASelTo then Break;
+    if (CF < 0) and (P >= ASelFrom) then CF := W;
+    GR := GraphemeNext(@S[P + 1], WEnd - P);
+    if GR.ByteLen <= 0 then Break;
+    Inc(W, GR.Width);
+    Inc(P, GR.ByteLen);
+  end;
+  if CF < 0 then Exit;
+  AColsFrom := CF;
+  AColsWidth := W - CF;
+  Result := AColsWidth > 0;
 end;
 
 function GraphemeCount(const S: AnsiString): Integer;

@@ -701,6 +701,51 @@ begin
   finally LBuf.Free; end;
 end;
 
+{ === 选区几何纯函数(自 agentman888 Chat 输入框反哺)=== }
+
+procedure TestInputColOfBytes;
+begin
+  CheckEqual(0, InputColOfBytes('abc', 0), 'zero bytes zero cols');
+  CheckEqual(2, InputColOfBytes('abc', 2), 'ascii bytes equal cols');
+  CheckEqual(0, InputColOfBytes('', 5), 'empty text zero cols');
+  Check(InputColOfBytes('ab你', 5) = 4, 'wide char counts double width');
+end;
+
+procedure TestInputHeadAtCol;
+var S: AnsiString;
+begin
+  S := 'hello';
+  Check(InputHeadAtCol(S, 0, 5, 0) = 0, 'col0 at first byte');
+  Check(InputHeadAtCol(S, 0, 5, -1) = 0, 'negative col pins to window start');
+  Check(InputHeadAtCol(S, 0, 5, 9) = 5, 'past end returns exclusive window end');
+  { 窗口化:子窗 [2..5)='llo',列 1 → 'l' 起始字节 3 }
+  Check(InputHeadAtCol(S, 2, 3, 1) = 3, 'windowed col maps inside window');
+  Check(InputHeadAtCol(S, 7, 0, 3) = 7, 'empty window returns window from');
+  S := 'ab你';
+  Check(InputHeadAtCol(S, 0, 5, 3) = 2, 'wide char middle clamps to its head');
+end;
+
+procedure TestInputSelColsInWindow;
+var CF, W: Integer;
+begin
+  { 全窗:'bc' 选区 → 列 1 宽 2 }
+  Check(InputSelColsInWindow('abcd', 0, 4, 1, 3, CF, W), 'basic intersection');
+  CheckEqual(1, CF, 'cols from');
+  CheckEqual(2, W, 'cols width');
+  { 无交集:选区在窗右外 }
+  Check(not InputSelColsInWindow('abcd', 0, 2, 2, 4, CF, W), 'right-out no hit');
+  { 无交集:空选区 }
+  Check(not InputSelColsInWindow('abcd', 0, 4, 2, 2, CF, W), 'empty sel no hit');
+  { 跨窗左缘:选区 [-侧起,3) 与子窗 [1,4) 相交 → 相对窗首列 0 起 }
+  Check(InputSelColsInWindow('abcd', 1, 3, 0, 3, CF, W), 'left overlap');
+  CheckEqual(0, CF, 'left overlap starts at window head col');
+  CheckEqual(2, W, 'left overlap width b..c');
+  { CJK 宽字形:'a你b' 选 [1,4)=你 → 列 1 宽 2 }
+  Check(InputSelColsInWindow('a你b', 0, 6, 1, 4, CF, W), 'cjk glyph range');
+  CheckEqual(1, CF, 'cjk col from');
+  CheckEqual(2, W, 'cjk width');
+end;
+
 begin
   T := TTestSuite.Create('test_tui_widget_input');
   try
@@ -757,8 +802,12 @@ begin
     T.Test('HandleKey DeleteSelectionKeys', @TestHandleKeyDeleteSelectionKeys);
     T.Test('Render Highlight', @TestRenderHighlight);
     T.Test('Render Highlight ClipsToViewport', @TestRenderHighlightClipsToViewport);
-    T.Test('Render Highlight Masked', @TestRenderHighlightMasked);
 
+
+
+    T.Test('InputColOfBytes', @TestInputColOfBytes);
+    T.Test('InputHeadAtCol', @TestInputHeadAtCol);
+    T.Test('InputSelColsInWindow', @TestInputSelColsInWindow);
     WriteLn;
   if not T.Run then Halt(1);
   finally
