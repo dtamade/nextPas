@@ -88,10 +88,24 @@ procedure ClassifyMy(const ACode: Integer; const ASqlState: string;
   ODBC 网关的统一可信信号是 5 字符 SQLSTATE（管理器与驱动按 ISO
   标准填写，含管理器族 IM*/HY*）；NativeError 是驱动专属整数、跨
   驱动无一致语义，本表不消费它（只透传到 EDbError.BackendCode）。
-  MySQL 系驱动把约束违约报成 HY000+1062 的场景属已知欠归一缺口，
-  登记路线图由 D 线 flavor 感知细化。精确码优先，类前缀兜底；
+  MySQL 系驱动的欠归一缺口（HY000+1062）由 ClassifyOdbcEx 的
+  flavor 感知细化收口。精确码优先，类前缀兜底；
   未识别一律 decUnknown（宁可欠归一不错归一）。 }
 procedure ClassifyOdbc(const ASqlState: string;
+  out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
+
+{ odbc + 驱动 flavor 感知归一（D 线收口）：先按 ISO SQLSTATE 归一，
+  再在调用方确认驱动为 MySQL 系（SQL_DRIVER_NAME / SQL_DBMS_NAME
+  探测命中 mysql/mariadb 词元）时用 NativeError 对照 MySQL 服务端
+  码位表做单调提精——
+    - 基础归一 decUnknown 且码位可识别 → 采纳 MySQL 类目/细分；
+    - 基础已 decConstraint 但泛码（如 23000 无细分）且码位给出
+      约束细分 → 只补细分；
+    - 其余一律维持基础结果（永不降级、永不矛盾）。
+  非 MySQL 驱动（达梦/GBase 等 native code 自成体系）行为与
+  ClassifyOdbc 完全一致。 }
+procedure ClassifyOdbcEx(const ASqlState: string;
+  const ANativeCode: Integer; const AMyFlavor: Boolean;
   out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
 
 { IDbSavepointControl 契约输入守卫：名字必须 [A-Za-z0-9_]+
@@ -346,6 +360,36 @@ begin
       end;
     end;
   end;
+end;
+
+{ MySQL 码位表单调提精（仅 ClassifyOdbcEx 消费）。
+  ClassifyMy 第二参传空串：跳过其 SQLSTATE 兜底分支，纯码位判定。 }
+procedure RefineWithMyCode(const ANativeCode: Integer;
+  var ACategory: TDbErrorCategory; var AConstraint: TDbConstraintKind);
+var
+  LCat: TDbErrorCategory;
+  LCon: TDbConstraintKind;
+begin
+  ClassifyMy(ANativeCode, '', LCat, LCon);
+  if LCat = decUnknown then
+    Exit;                                { 未识别码位：维持基础归一 }
+  if ACategory = decUnknown then
+  begin
+    ACategory := LCat;                   { 欠归一 → 采纳码位类目 }
+    AConstraint := LCon;
+  end
+  else if (ACategory = LCat) and (AConstraint = dckNone) and
+          (LCon <> dckNone) then
+    AConstraint := LCon;                 { 同类泛约束 → 只补细分 }
+end;
+
+procedure ClassifyOdbcEx(const ASqlState: string;
+  const ANativeCode: Integer; const AMyFlavor: Boolean;
+  out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
+begin
+  ClassifyOdbc(ASqlState, ACategory, AConstraint);
+  if AMyFlavor and (ANativeCode <> 0) then
+    RefineWithMyCode(ANativeCode, ACategory, AConstraint);
 end;
 
 procedure ValidateDbSavepointName(const ABackend: TDbKind;

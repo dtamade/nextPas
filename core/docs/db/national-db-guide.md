@@ -114,9 +114,12 @@ SQLDriverConnect，本层不解析不改写。个别驱动拒绝 `SQL_ATTR_QUERY
 | 大对象流 | ✅ lo_*（待逐库验证） | ❌ | ❌ |
 | 占位符上限 | 65535 | 65535 | 999 保守下界 |
 
-已知归一缺口（D 线账本）：MySQL 协议系驱动把约束违约报
-`HY000+1062` 时 ODBC 路径归一 decUnknown（§2.11 登记）；pg 协议系
-不受影响。
+错误归一现状（原 D 线账本缺口已收口）：MySQL 协议系驱动经 ODBC
+把约束违约报 `HY000+1062` 时，由 ClassifyOdbcEx 按 NativeError
+单调提精为 decConstraint/unique——仅当建连期驱动名/DBMS 名探测
+命中 MySQL 词元才启用；达梦/GBase 等 native code 自成体系的驱动
+仍保持 SQLSTATE 欠归一（不错归一）；pg 协议系不受影响。真机回归
+时以 conformance + trace 门禁的 OnError 分类快照核对各库实际类目。
 
 ## 4. 真机验证步骤（每库上线前必做）
 

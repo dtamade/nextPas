@@ -123,10 +123,28 @@ type
 { ---- 错误桥接 ---- }
 { 惯例：异常对象非引用计数——单次直接构造最终 EDbError 并 raise，
   不经中间异常对象（防孤儿）。Message 恒为后端原始消息（首条诊断
-  原文），上下文只进无诊断时的兜底文案。 }
+  原文），上下文只进无诊断时的兜底文案。AMyFlavor 由连接建连期
+  驱动名探测给出，仅 MySQL 系驱动允许 NativeError 码位提精
+  （db.err ClassifyOdbcEx；非 MySQL 驱动 NativeError 无可移植
+  语义，保持欠归一）。 }
+
+{ MySQL 系驱动名判定：DRIVER_NAME / DBMS_NAME 命中 mysql/mariadb
+  词元（大小写不敏感，ASCII）。命中才允许 NativeError 按 MySQL
+  服务端码位提精；其余驱动（达梦/GBase 等码位自成体系）保持
+  SQLSTATE 欠归一。 }
+function IsMyFlavorName(const AName: string): Boolean;
+var
+  LUp: string;
+  I: Integer;
+begin
+  LUp := AName;
+  for I := 1 to Length(LUp) do
+    LUp[I] := UpCase(LUp[I]);
+  Result := (Pos('MYSQL', LUp) > 0) or (Pos('MARIADB', LUp) > 0);
+end;
 
 procedure RaiseOdbcH(AHandleType: SmallInt; AHandle: Pointer;
-  ARetCode: SmallInt; const AContext: string);
+  ARetCode: SmallInt; AMyFlavor: Boolean; const AContext: string);
 var
   LDiag: TOdbcDiagRecs;
   LMsg, LSs: string;
@@ -151,13 +169,13 @@ begin
     LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
-  ClassifyOdbc(LSs, LCategory, LConstraint);
+  ClassifyOdbcEx(LSs, LNative, AMyFlavor, LCategory, LConstraint);
   raise EDbError.CreateFullOdbc(LNative, LSs, LMsg, LCategory, LConstraint);
 end;
 
 { 读走 stmt 错误后关闭句柄再抛（防句柄泄漏） }
 procedure RaiseOdbcStmtClose(AStmt: Pointer; ARetCode: SmallInt;
-  const AContext: string);
+  AMyFlavor: Boolean; const AContext: string);
 var
   LDiag: TOdbcDiagRecs;
   LMsg, LSs: string;
@@ -183,7 +201,7 @@ begin
       [AContext, ARetCode]);
   end;
   sql_freeHandle(SQL_HANDLE_STMT, AStmt);
-  ClassifyOdbc(LSs, LCategory, LConstraint);
+  ClassifyOdbcEx(LSs, LNative, AMyFlavor, LCategory, LConstraint);
   raise EDbError.CreateFullOdbc(LNative, LSs, LMsg, LCategory, LConstraint);
 end;
 
@@ -367,6 +385,7 @@ type
     FTrace: TDbTraceHub;
     FSql: string;                     { 统一契约原文（? 原样进摘要）}
     FEmitted: Boolean;
+    FMyFlavor: Boolean;               { MySQL 系驱动：允许码位提精 }
     procedure CheckIndex(const AIndex: Integer);
     procedure ExecuteIfNeeded;
     procedure MarshalParams;
@@ -381,7 +400,7 @@ type
   public
     constructor Create(ADbc: Pointer; AStmt: Pointer;
       const ASlots: TIntArray; AServerParamCount: Integer;
-      const ASql: string; ATrace: TDbTraceHub);
+      const ASql: string; ATrace: TDbTraceHub; AMyFlavor: Boolean);
     destructor Destroy; override;
 
     procedure BindText(AIndex: Integer; const AValue: string);
@@ -404,13 +423,14 @@ type
 
 constructor TDbOdbcQuery.Create(ADbc: Pointer; AStmt: Pointer;
   const ASlots: TIntArray; AServerParamCount: Integer;
-  const ASql: string; ATrace: TDbTraceHub);
+  const ASql: string; ATrace: TDbTraceHub; AMyFlavor: Boolean);
 var
   I: Integer;
 begin
   inherited Create;
   FDbc := ADbc;
   FStmt := AStmt;
+  FMyFlavor := AMyFlavor;
   FParamCount := AServerParamCount;
   SetLength(FSlots, Length(ASlots));
   for I := 0 to High(ASlots) do
@@ -591,7 +611,7 @@ begin
       end;
     end;
     if LRc = SQL_ERROR then
-      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc,
+      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor,
         'SQLBindParameter(' + IntToStr(I + 1) + ')');
   end;
 end;
@@ -612,7 +632,7 @@ begin
     MarshalParams;
   LRc := sql_execute(FStmt);
   if LRc = SQL_ERROR then
-    RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, 'SQLExecute');
+    RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor, 'SQLExecute');
   FExecuted := True;
 end;
 
@@ -629,7 +649,7 @@ begin
   LN := 0;
   LRc := sql_numResultCols(FStmt, LN);
   if LRc = SQL_ERROR then
-    RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, 'SQLNumResultCols');
+    RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor, 'SQLNumResultCols');
   FFieldCount := Integer(LN);
   if FFieldCount = 0 then
   begin
@@ -648,7 +668,7 @@ begin
     LRc := sql_describeCol(FStmt, Word(I + 1), @LNameBuf[0], C_NAME_BUF,
       LNameLen, FColMeta[I].SqlType, LSize, LDigits, LNullable);
     if LRc = SQL_ERROR then
-      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc,
+      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor,
         'SQLDescribeCol(' + IntToStr(I + 1) + ')');
     { 硬边界：PAnsiChar 转串一律 StrPas }
     FColMeta[I].Name := StrPas(PAnsiChar(@LNameBuf[0]));
@@ -684,7 +704,7 @@ begin
     SQL_NO_DATA:
       FHasRow := False;
     SQL_ERROR:
-      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, 'SQLFetch');
+      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor, 'SQLFetch');
   else
     raise EDbError.CreateSimple(dbkOdbc,
       'unexpected SQLFetch retcode: ' + IntToStr(LRc));
@@ -731,7 +751,7 @@ begin
     LRc := sql_getData(FStmt, Word(AIndex + 1), LTarget, LBuf,
       Int64(LCap), LInd);
     if LRc = SQL_ERROR then
-      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc,
+      RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor,
         'SQLGetData(' + IntToStr(AIndex + 1) + ')');
     if LInd = SQL_NULL_DATA then
       LCell.NullFlag := True
@@ -757,7 +777,7 @@ begin
         LRc := sql_getData(FStmt, Word(AIndex + 1), LTarget, LBuf,
           Int64(LCap), LInd);
         if LRc = SQL_ERROR then
-          RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc,
+          RaiseOdbcH(SQL_HANDLE_STMT, FStmt, LRc, FMyFlavor,
             'SQLGetData(' + IntToStr(AIndex + 1) + ', retry)');
         if LInd = SQL_NULL_DATA then
         begin
@@ -1013,6 +1033,8 @@ type
     FIdentifierCase: SmallInt;  { SQL_IC_*；探测失败 0 }
     FProductName: string;
     FProductVersion: string;
+    FDriverName: string;        { SQL_DRIVER_NAME（诊断 + flavor 判定）}
+    FMyFlavor: Boolean;         { MySQL 系驱动：错误码位可提精 }
     FStmtTimeoutSec: Integer;   { 0 = 关；>0 每语句设 QUERY_TIMEOUT }
     { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
     FTrace: TDbTraceHub;
@@ -1146,6 +1168,10 @@ begin
   { 探测失败逐项保守降级，不让诊断性查询破坏建连 }
   FProductName := GetInfoStr(SQL_DBMS_NAME);
   FProductVersion := GetInfoStr(SQL_DBMS_VER);
+  FDriverName := GetInfoStr(SQL_DRIVER_NAME);
+  { flavor 感知：驱动名或 DBMS 名命中 MySQL 词元才允许错误码位提精；
+    探测失败（空串）保守 False，行为等同旧 ClassifyOdbc }
+  FMyFlavor := IsMyFlavorName(FDriverName) or IsMyFlavorName(FProductName);
   if GetInfoSmall(SQL_IDENTIFIER_CASE, LVal) then
     FIdentifierCase := LVal;
   if GetInfoSmall(SQL_TXN_CAPABLE, LVal) then
@@ -1159,7 +1185,7 @@ begin
   LRc := sql_setConnectAttr(FDbc, SQL_ATTR_AUTOCOMMIT,
     Pointer(PtrInt(Ord(AOn))), 0);
   if LRc = SQL_ERROR then
-    RaiseOdbcH(SQL_HANDLE_DBC, FDbc, LRc,
+    RaiseOdbcH(SQL_HANDLE_DBC, FDbc, LRc, FMyFlavor,
       'SQLSetConnectAttr(SQL_ATTR_AUTOCOMMIT)');
 end;
 
@@ -1190,7 +1216,7 @@ begin
   S := nil;
   LRc := sql_allocHandle(SQL_HANDLE_STMT, FDbc, S);
   if LRc = SQL_ERROR then
-    RaiseOdbcH(SQL_HANDLE_DBC, FDbc, LRc, 'SQLAllocHandle(STMT)');
+    RaiseOdbcH(SQL_HANDLE_DBC, FDbc, LRc, FMyFlavor, 'SQLAllocHandle(STMT)');
   { 观测单点：Exec 两重载都经此，天然无双发（§2.12）}
   LT0 := 0;
   LTimed := FTrace.BeginOp(LT0);
@@ -1203,7 +1229,7 @@ begin
       LRc := sql_execDirect(S, PAnsiChar(AnsiString(ASql)),
         Integer(Length(ASql)));
       if LRc = SQL_ERROR then
-        RaiseOdbcH(SQL_HANDLE_STMT, S, LRc, 'SQLExecDirect');
+        RaiseOdbcH(SQL_HANDLE_STMT, S, LRc, FMyFlavor, 'SQLExecDirect');
       { 影响行数在句柄释放前捕获（Changes 契约 = 最近一次 Exec）}
       LCnt := 0;
       if sql_rowCount(S, LCnt) = SQL_SUCCESS then
@@ -1267,7 +1293,7 @@ begin
   S := nil;
   LRc := sql_allocHandle(SQL_HANDLE_STMT, FDbc, S);
   if LRc = SQL_ERROR then
-    RaiseOdbcH(SQL_HANDLE_DBC, FDbc, LRc, 'SQLAllocHandle(STMT)');
+    RaiseOdbcH(SQL_HANDLE_DBC, FDbc, LRc, FMyFlavor, 'SQLAllocHandle(STMT)');
   { 语句级超时：秒粒度向上取整，属性随句柄消亡；个别驱动拒绝属
     环境降级（best effort）}
   if ATimeoutSec > 0 then
@@ -1276,14 +1302,14 @@ begin
   LRc := sql_prepare(S, PAnsiChar(AnsiString(LRewritten)),
     Integer(Length(LRewritten)));
   if LRc = SQL_ERROR then
-    RaiseOdbcStmtClose(S, LRc, 'SQLPrepare');
+    RaiseOdbcStmtClose(S, LRc, FMyFlavor, 'SQLPrepare');
   LN := 0;
   LRc := sql_numParams(S, LN);
   if LRc = SQL_ERROR then
-    RaiseOdbcStmtClose(S, LRc, 'SQLNumParams');
+    RaiseOdbcStmtClose(S, LRc, FMyFlavor, 'SQLNumParams');
   { 成功路径句柄移交 TDbOdbcQuery；其构造期槽位失配会自清句柄 }
   Result := TDbOdbcQuery.Create(FDbc, S, LSlots, Integer(LN), ASql,
-    FTrace);
+    FTrace, FMyFlavor);
 end;
 
 function TDbOdbcConnection.Query(const ASql: string): IDbQuery;
@@ -1341,7 +1367,7 @@ begin
       LRc := sql_endTran(SQL_HANDLE_DBC, FDbc, SQL_COMMIT);
       RestoreAutoCommitOn;   { 先恢复状态再抛，防连接卡在手动提交 }
       if LRc = SQL_ERROR then
-        RaiseOdbcH(SQL_HANDLE_DBC, FDbc, LRc, 'SQLEndTran(COMMIT)');
+        RaiseOdbcH(SQL_HANDLE_DBC, FDbc, LRc, FMyFlavor, 'SQLEndTran(COMMIT)');
       FDepth := 0;
     end;
   finally
@@ -1506,7 +1532,9 @@ begin
       LRc := sql_driverConnect(LDbc, nil, PAnsiChar(AnsiString(ADsn)),
         SQL_NTS, @LOut[0], C_OUT_CONN_STR, LOutLen, SQL_DRIVER_NOPROMPT);
       if LRc = SQL_ERROR then
-        RaiseOdbcH(SQL_HANDLE_DBC, LDbc, LRc, 'SQLDriverConnect');
+        { 建连失败：连接对象未建、flavor 未探测，恒按 ISO SQLSTATE
+          归一（连接类错误本就不依赖码位提精） }
+        RaiseOdbcH(SQL_HANDLE_DBC, LDbc, LRc, False, 'SQLDriverConnect');
       { 句柄所有权在此移交连接对象；构造期不再抛错（探测全为
         best effort），故移交后无双重释放窗口 }
       Result := TDbOdbcConnection.Create(LEnv, LDbc, AOptions);

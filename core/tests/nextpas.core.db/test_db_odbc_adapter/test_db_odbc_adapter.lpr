@@ -140,6 +140,78 @@ begin
   Check(LCat = decUnknown, 'short state unknown');
 end;
 
+{ D 线收口：flavor 感知细化（HY000+1062 缺口回归钉死） }
+procedure ExpectEx(const AState: string; const ANative: Integer;
+  const AMyFlavor: Boolean; const ACategory: TDbErrorCategory;
+  const AConstraint: TDbConstraintKind; const ATag: string);
+var
+  LCat: TDbErrorCategory;
+  LCon: TDbConstraintKind;
+begin
+  ClassifyOdbcEx(AState, ANative, AMyFlavor, LCat, LCon);
+  Check((LCat = ACategory) and (LCon = AConstraint),
+    ATag + ': expected cat=' + IntToStr(Ord(ACategory)) + '/con=' +
+    IntToStr(Ord(AConstraint)) + ' got cat=' + IntToStr(Ord(LCat)) +
+    '/con=' + IntToStr(Ord(LCon)));
+end;
+
+procedure TestClassifyOdbcExFlavor;
+begin
+  { 头条缺口：MySQL 系驱动 HY000+1062 → unique 约束 }
+  ExpectEx('HY000', 1062, True, decConstraint, dckUnique,
+    'my HY000+1062 dup-entry');
+
+  { MySQL 码位表全族采纳（基础欠归一时）}
+  ExpectEx('HY000', 1022, True, decConstraint, dckUnique,
+    'my 1022 dup-key');
+  ExpectEx('HY000', 1216, True, decConstraint, dckForeignKey,
+    'my 1216 fk-child');
+  ExpectEx('HY000', 1451, True, decConstraint, dckForeignKey,
+    'my 1451 fk-parent');
+  ExpectEx('HY000', 1048, True, decConstraint, dckNotNull,
+    'my 1048 notnull');
+  ExpectEx('HY000', 3819, True, decConstraint, dckCheck,
+    'my 3819 check');
+  ExpectEx('HY000', 1213, True, decTransaction, dckNone,
+    'my 1213 deadlock');
+  ExpectEx('HY000', 1205, True, decTimeout, dckNone,
+    'my 1205 lock-wait-timeout');
+  ExpectEx('HY000', 3024, True, decTimeout, dckNone,
+    'my 3024 max-exec-time');
+  ExpectEx('HY000', 1045, True, decAuth, dckNone,
+    'my 1045 access-denied');
+  ExpectEx('HY000', 1064, True, decSyntax, dckNone,
+    'my 1064 parse-error');
+  ExpectEx('HY000', 1146, True, decSyntax, dckNone,
+    'my 1146 no-such-table');
+  ExpectEx('HY000', 1235, True, decNotSupported, dckNone,
+    'my 1235 not-supported-yet');
+  ExpectEx('HY000', 2008, True, decCapacity, dckNone,
+    'my CR 2008 out-of-memory');
+
+  { 同类泛约束只补细分：ISO 23000 泛码 + 码位 → unique }
+  ExpectEx('23000', 1062, True, decConstraint, dckUnique,
+    'my 23000+1062 refine kind');
+
+  { 永不矛盾：精确 SQLSTATE 分类不被码位覆盖 }
+  ExpectEx('23505', 999999, True, decConstraint, dckUnique,
+    'exact state wins over native');
+  ExpectEx('40001', 1213, True, decTransaction, dckNone,
+    'serialization stays, no downgrade');
+
+  { flavor 关闭：行为与旧 ClassifyOdbc 完全一致（达梦/GBase 路径）}
+  ExpectEx('HY000', 1062, False, decUnknown, dckNone,
+    'no-flavor keeps under-classified');
+
+  { flavor 开但码位不可识别：维持欠归一 }
+  ExpectEx('HY000', 999999, True, decUnknown, dckNone,
+    'unknown native code ignored');
+  ExpectEx('HY000', -6607, True, decUnknown, dckNone,
+    'negative foreign code ignored');
+  ExpectEx('HY000', 0, True, decUnknown, dckNone,
+    'zero native code no-op');
+end;
+
 { ===== 3 ===== }
 
 procedure ExpectSlots(const ASql: string; const AExpectCount: Integer;
@@ -392,6 +464,7 @@ begin
   T := TTestSuite.Create('nextpas.core.db.odbc.adapter');
   T.Test('getinfo constants', @TestGetInfoConstants);
   T.Test('classify table', @TestClassifyOdbcTable);
+  T.Test('classify ex flavor', @TestClassifyOdbcExFlavor);
   T.Test('placeholder plan', @TestPlaceholderPlan);
   T.Test('empty dsn fail-fast', @TestEmptyDsnFailFast);
   T.Test('negative connect normalized', @TestNegativeConnectNormalized);
