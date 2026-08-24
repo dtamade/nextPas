@@ -66,20 +66,20 @@ type
       padded off the hot RMW lines below (F-032 rule). }
     FNodes: array of TNode;
     FCapacity: Int32;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    {$PUSH} {$WARN 5029 OFF} // padding field for cache-line isolation
     FPadHeader: TCacheLinePad;
     {$POP}
     // Producer line: tail pointer + enqueued counter, both RMW'd by every
     // successful enqueue (same writer population, F-033 rule).
     FTail: Int64;        // packed: (index:32 | aba:32)
     FEnqueued: Int64;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    {$PUSH} {$WARN 5029 OFF} // padding field for cache-line isolation
     FPadTail: TCacheLinePad;
     {$POP}
     // Consumer line (mirror): head pointer + dequeued counter.
     FHead: Int64;        // packed: (index:32 | aba:32)
     FDequeued: Int64;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    {$PUSH} {$WARN 5029 OFF} // padding field for cache-line isolation
     FPadHead: TCacheLinePad;
     {$POP}
     // Free list striped by the SAME thread-id hash as the op guard (the
