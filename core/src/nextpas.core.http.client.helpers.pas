@@ -16,8 +16,11 @@ uses
   nextpas.core.json,
   nextpas.core.http.intf;
 
-{ Shared by THttpClient redirect path and free helpers. }
-function FormatHttpClientError(const AMethod, AUrl, ADetail: string): string;
+{ Shared by THttpClient redirect path and free helpers.
+  TUrl 重载走 Redacted（剥 userinfo/query/fragment），错误面不回流凭据。 }
+function FormatHttpClientError(const AMethod, AUrl, ADetail: string): string; overload;
+function FormatHttpClientError(const AMethod: string; const AUrl: TUrl;
+  const ADetail: string): string; overload;
 procedure ReleaseResponseBody(const AResp: IHttpResponse);
 procedure ReleaseResponseBodyIgnoringErrors(const AResp: IHttpResponse);
 
@@ -134,6 +137,12 @@ begin
     Result := LCtx
   else
     Result := LCtx + ': ' + ADetail;
+end;
+
+function FormatHttpClientError(const AMethod: string; const AUrl: TUrl;
+  const ADetail: string): string;
+begin
+  Result := FormatHttpClientError(AMethod, AUrl.Redacted, ADetail);
 end;
 
 function FormatHttpStatusFailure(const AMethod, AUrl: string;

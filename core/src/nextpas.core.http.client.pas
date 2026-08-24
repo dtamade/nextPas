@@ -304,7 +304,7 @@ begin
   LResp := FTransport.RoundTrip(AReq);
   if LResp = nil then
     raise EHttpError.CreateOp(hekConnect, 'round_trip',
-      FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+      FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
         'HTTP transport returned no response'));
 
   // Determine redirect behavior: per-request override or client default
@@ -326,7 +326,7 @@ begin
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.CreateOp(hekRedirect, 'redirect',
-        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
           'too many redirects'));
     end;
 
@@ -335,7 +335,7 @@ begin
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.CreateOp(hekRedirect, 'redirect',
-        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
           'redirect with no response headers'));
     end;
 
@@ -344,7 +344,7 @@ begin
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.CreateOp(hekRedirect, 'redirect',
-        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
           'redirect with duplicate Location headers'));
     end;
 
@@ -356,7 +356,7 @@ begin
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.CreateOp(hekRedirect, 'redirect',
-        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
           'redirect with no Location header'));
     end;
 
@@ -368,7 +368,7 @@ begin
         ReleaseResponseBodyIgnoringErrors(LResp);
         if E.Kind = hekRedirect then
           raise EHttpError.CreateOp(hekRedirect, 'redirect',
-            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
               E.Message))
         else
           raise;
@@ -399,7 +399,7 @@ begin
       except
         on E: EHttpError do
           raise EHttpError.CreateOp(E.Kind, 'redirect',
-            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
               E.Message));
         else
           raise;

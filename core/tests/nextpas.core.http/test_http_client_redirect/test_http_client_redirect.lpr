@@ -4122,6 +4122,39 @@ begin
     'WithMaxRedirects(0) raises too many redirects');
 end;
 
+procedure TestRedirectErrorRedactsCredentials;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LMsg: string;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  LMsg := '';
+  try
+    LClient.WithMaxRedirects(0).Get(
+      'https://user:s3cret@sub.example.com:8443/clash?token=abcd1234#frag');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check(LCaught, 'too many redirects raises');
+  Check(Pos('too many redirects', LMsg) > 0, 'detail present');
+  Check(Pos('s3cret', LMsg) = 0, 'userinfo secret not in error');
+  Check(Pos('user:', LMsg) = 0, 'userinfo not in error');
+  Check(Pos('token=', LMsg) = 0, 'query not in error');
+  Check(Pos('#frag', LMsg) = 0, 'fragment not in error');
+  Check(Pos('/clash', LMsg) = 0, 'path not in error');
+  Check(Pos('https://sub.example.com:8443', LMsg) > 0, 'origin remains');
+end;
+
 procedure TestWithFollowRedirectsChain;
 var
   LTransport: TRedirectCaptureTransport;
@@ -4358,6 +4391,8 @@ begin
     @TestWithFollowRedirectsFalse);
   T.Test('WithMaxRedirects(0) raises too many redirects',
     @TestWithMaxRedirectsZero);
+  T.Test('Redirect error redacts userinfo/query',
+    @TestRedirectErrorRedactsCredentials);
   T.Test('WithFollowRedirects chains with WithHeader',
     @TestWithFollowRedirectsChain);
   T.Test('WithFollowRedirects(false) overrides client default',

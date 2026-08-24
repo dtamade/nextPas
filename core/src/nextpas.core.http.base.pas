@@ -71,6 +71,8 @@ type
     class function Parse(const ARaw: string): TUrl; static;
     class function ParseRequestTarget(const ARaw: string): TUrl; static;
     function ToString: string;
+    { scheme://host[:port]；剥 userinfo/path/query/fragment。日志/错误面用。 }
+    function Redacted: string;
     function HostPort: string;
     function AddQuery(const AName, AValue: string): TUrl;
     function WithQuery(const ARawQuery: string): TUrl;
@@ -835,6 +837,14 @@ begin
   if Fragment <> '' then
     LResult := LResult + '#' + Fragment;
   Result := LResult;
+end;
+
+function TUrl.Redacted: string;
+begin
+  if Scheme <> '' then
+    Result := Scheme + '://' + HostPort
+  else
+    Result := HostPort;
 end;
 
 function TUrl.HostPort: string;
