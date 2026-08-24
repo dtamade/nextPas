@@ -85,8 +85,21 @@ begin
 end;
 
 procedure EnsureVersionTable(const ADb: TSqliteDb);
+var
+  LQ: TSqliteQuery;
 begin
-  ADb.Exec('CREATE TABLE IF NOT EXISTS ' + SQLITE_MIGRATIONS_TABLE +
+  { 先读后建：CREATE TABLE IF NOT EXISTS 即便表已存在也会取写锁——
+    外部连接持读锁时（如工具正查询该库）整个 Migrate 会卡成 BUSY。
+    纯读探测可与任何读锁共存，仅表确实缺失时才发 DDL。 }
+  LQ := ADb.Query('SELECT 1 FROM sqlite_master WHERE type = ''table''' +
+    ' AND name = ''' + SQLITE_MIGRATIONS_TABLE + '''');
+  try
+    if LQ.Step then
+      Exit;
+  finally
+    LQ.Free;
+  end;
+  ADb.Exec('CREATE TABLE ' + SQLITE_MIGRATIONS_TABLE +
     ' (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT ' +
     '(strftime(''%Y-%m-%dT%H:%M:%fZ'', ''now'')))');
 end;
