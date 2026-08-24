@@ -32,8 +32,8 @@
                      collections, base, errors
 ```
 
-> 注：session 域接口先行——`IAgentTranscriptStore` 现居 `nextpas.core.agent.intf`
-> 词表；独立单元与实现（含 JSONL store）随 W5 session 立项落位。
+> 注：session 域已立项落地（W5，2026-08-25）——`nextpas.core.agent.session`
+> 提供 `IAgentTranscriptStore` 的 JSONL 实现，设计权威见 [`SESSION.md`](SESSION.md)。
 
 铁律：
 

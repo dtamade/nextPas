@@ -29,6 +29,7 @@
 | `test_fake_provider` | fake/scripted 自身 | 脚本回放顺序、耗尽再调抛错、echo 桩 |
 | `test_assembly` | **真实装配链** | 经生产装配函数组装 provider（注入 scripted transport）跑通完整一轮——防"门测走 canned 绕过装配点"事故复发（code888 刀 56 教训） |
 | `test_security` | SECURITY 验收项落 CI | 捕获型 ILogger（testkit）断言脱敏表：鉴权头/请求体/RawBodySnippet 全文不入日志；256KiB 参数预检；64 键 Extra 上限；FromEnv 缺 env 返回 nil；mime 白名单 aecConfig；Utf8SafeTruncate 边界；Active 期 GetMessage 抛 EAgentMisuse |
+| `test_session` | W5 JSONL 转录存储 | 全词表无损往返（thinking+signature+tool_call+tool_result is_error+image+extra）；跨实例持久；torn tail 丢弃；损坏行/未知版本/未知 kind fail-closed 含行号；Delete 幂等；缺失线程空载；ThreadId 校验全集防路径穿越；Fork 干净快照且拒绝已存在目标/自 fork；双同步模式；Unicode 与转义往返；usage unknown 不伪造 0 |
 
 ## 3. 测试基建
 
