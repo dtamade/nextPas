@@ -72,12 +72,28 @@ nextpas.core.respack.dirsource.pas ← 从 nextpas.core.fs 目录枚举条目（
 `reader`/`writer` 不依赖 fs/bytes/io：输入输出一律 `(PByte, SizeUInt)` 或调用方提供的
 目标缓冲，保持格式层可被任何宿主复用。
 
-### 内容哈希
+### 完整性双档
 
-每条目可选携带 FNV-1a 32 位哈希（flag 位控制有效性），供 HTTP ETag、增量比对使用。
-算法约十行，**内联实现于 `base`，不依赖 `checksum` 模块**——避免为六行代码建立
-L2→L2 依赖；若未来 checksum 升到 L1 再收敛。选择 FNV-1a 与仓库现有
-`checksum.fnv32` 保持一致。
+对标 asar（每文件 SHA-256 全量+分块）与 Tauri（CSP 哈希注入）后的分层决策：
+
+| 档 | 算法 | 用途 | 成本 |
+|----|------|------|------|
+| 条目 hash | FNV-1a 32，内联实现于 `base` | HTTP ETag、去重候选键 | 近零 |
+| digest 区（可选） | **不透明 32 字节**，算法由调用方注入（典型 SHA-256） | 供应链完整性、发布审计 | 打包期一次 |
+
+digest 算法不进格式的理由：SHA-256 属 L2 hash/crypto 域，而本模块仅依赖 L0——
+writer 经注入的摘要函数生产摘要，校验助手放消费侧 hash 模块。分块哈希
+（asar blockSize/blocks 对等物）推迟至有部分校验真实需求。
+
+### 内容去重与压缩槽位
+
+- **内容去重**：writer 可选开关；fnv32 候选 + 字节级回验后才复用槽位（同 asar 策略，
+  杜绝碰撞错误共享）。适合 node_modules 式重复内容的依赖树打包
+- **codecId 槽位**：条目级编码标识，v1 只定义 `0=store`。压缩不进 v1 是有意决策：
+  Tauri brotli 读时解压需分配、破坏零拷贝；HTTP 内容编码归 http.static。
+  未来 zstd/brotli 经 compress 模块 seam 走登记表立项
+
+逐项对标证据见 [PARITY-go-rust.md](PARITY-go-rust.md)。
 
 ## 嵌入载体
 
@@ -101,8 +117,10 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 ```
 
 - round-trip：目录样例 → build → open → 逐字节比对全部条目
-- reader：magic/version/越界/路径不规范/截断 每类损坏一个拒绝用例
-- writer：乱序输入自动排序、重复路径报错、对齐断言、golden 字节快照
+- reader：FORMAT.md 校验清单每条规则至少一个拒绝用例（magic/version/越界/未知
+  codecId/路径不规范/截断/digest 边界）
+- writer：乱序输入自动排序、重复路径报错、对齐断言、golden 字节快照、
+  去重开启时碰撞回验与共享槽位断言、digest 区内容与注入函数一致
 - 全部 gate 要求 heaptrc 零泄漏
 
 ## 设计决策记录
@@ -112,12 +130,16 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 | 纯格式模块，仅依赖 L0 | 工具链/安装器可复用；格式层不该背 IO 抽象 |
 | reader 输入是 `(指针,长度)` 而非接口 | 同一 API 覆盖 const 数组/堆/mmap 三种来源，零适配 |
 | FNV-1a 内联而非依赖 checksum | 六行算法不值得建 seam；与仓库算法选型一致 |
+| digest 区存不透明摘要、算法注入 | SHA-256 属 hash 域；格式零加密依赖（对标 asar integrity 的依赖倒置版） |
 | 目录隐式表达，不存目录条目 | 省空间；List 由路径前缀推导 |
 | modTime 秒级精度 | 主要消费者是 HTTP If-Modified-Since，本身就是秒粒度 |
 | dirsource 是唯一 fs 引用点 | 把 L2→L2 依赖压缩到一个可审计单元 |
+| 路径语法全盘采纳 Go ValidPath | 业界事实标准，含 `.` 根特例与反斜杠规则 |
+| 压缩只留 codecId 槽位 | Tauri brotli 读时分配破坏零拷贝；HTTP 编码归 http.static |
 
 ## 关联文档
 
 - [FORMAT.md](FORMAT.md) — 线格式 v1 权威定义（字节布局、校验规则、扩展策略）
+- [PARITY-go-rust.md](PARITY-go-rust.md) — asar/Tauri/rust-embed/include_dir/Go embed 对标矩阵与来源
 - [`core/docs/vfs/README.md`](../vfs/README.md) — 消费本格式的树视图模块
 - [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../docs/plans/2026-08-25-respack-vfs-modules-plan.md) — 实施计划
