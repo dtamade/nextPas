@@ -4,7 +4,9 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-24（v2.24：P1 刀⑨ 扫描家族收官
+创建：2026-08-23　最后更新：2026-08-24（v2.25：emitter-temp-placement 正确性线
+收官——HIR alloca 发射器级入口提升+except handler 变量绑定+E.Message 字符串
+ABI 三层修复，mini tryenv 复现双步 opt PASS+运行语义正确；v2.24：P1 刀⑨ 扫描家族收官
 （InstantiateGenericType 体查找接刀② 索引+前缀扫机械化）静窗疑似
 -6% 但确认腿遇高载窗口待复测+优化平价剖析法落地；v2.23：P1 刀⑧
 泛型实例化 O(N²) 清扫落地噪声级如实记零+D22 教训=debug 画像≠release
@@ -28,10 +30,10 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
 性能批次  ████▏░░░░░░░░░░░  P0✅ │ P1: 刀⑥✅seed -73%·刀⑦✅seed 再-69%(59.1→17.9/18.2s) │ 今日累计 -91.8%
-正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
-门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅
+正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错支配性违规已修✅(v2.25 三层修复)
+门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅   tryenv mini 双步 opt+运行 ✅
 顶尖差距  冷编译 ~900×→已收敛一个数量级    RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    P1 扫描家族收官(刀⑨待静窗复测) → emitter-temp-placement 正确性线 或 swiss 接线 → P2 arena
+下一口    P1 刀⑨静窗复测 → llvm 产物动态链接器挂账 或 swiss 接线 或 concat-swap(b4b-i16) → P2 arena
 ```
 
 ---
@@ -220,6 +222,27 @@ core-db lane 并发高载窗口（load≈31，seed 21567/sema 51306ms），
 小幅正收益待静窗复测归档精确数字**；机制严格少工作+复用既有索引，
 保留。D23 教训：并行 lane 会话并发构建时（load>30），±10% 级效应
 不可测——测量前必查 `uptime` 与 ppcx64 并发，交错法只能救同量级窗口。
+
+**v2.25 emitter-temp-placement 正确性线**（2026-08-24；mini 复现
+`build/m2_mini_tryenv.pas`：try/except on E + FailLike(E.Message)）：
+
+| 层 | 缺陷 | 修复 |
+|----|------|------|
+| 发射器 | 异常发射在 HIR entry 块中段 setjmp 劈分（bb64→try.body），劈点后 hikAlloca 落 try body 不支配 except 块 load（EnsureAlloca 的 FEntryBlockId 提升只保证进首块、不保证函数序言） | EmitFunction 预扫全函数 alloca 渲染序言缓冲，首块标签后冲刷，主扫跳过 hikAlloca |
+| SEMA handler | `on E: C do Body` 的 gnkExceptionHandler 子树被当普通语句直走：E 未注册、无 exc_load 绑定、无类过滤 | LowerRuntimeTryExceptStatement 识别 handler 双形状（child0=标识符→类名），注册 runtime var+class var 映射，发 var-decl-ptr-runtime+assign exc_load |
+| SEMA 编码 | E.Message 经 EncodeRuntimeIntExpr DotAccess 兜底成 `var E.Message` 整数槽（builder EmitExprVar 对未知点名就地造 alloca+i64 错 ABI） | EncodeExceptionMemberStrTemp：$read 属性→裸字段→F 前缀三级解析（基类 Exception 兜底），物化 tstring 字段加载临时按 strvar (ptr,len) ABI 传参；命中时跳过结构化 ExprId 附加（否则降级 @Cls.Member getter 残余调用） |
+
+**验证**：mini 双步 opt PASS+运行语义正确（fail msg=cfg broken 正确传播；
+len=0 为既有 concat-swap 挂账 b4b-i16 新增可运行实证）；十五探针
+13 OPT-PASS+cap/cmpgen/puny 已知挂账零新回归；tree mini 双步 opt PASS；
+contract pass+rebuild+compiler-pass 58/58+hygiene。
+D24 教训：HIR entry 块不是不变量——异常/finally 发射会在块中段劈分标签，
+「提升到 FEntryBlockId」≠「函数序言」；支配性保证必须落在发射器结构层，
+SEMA 层的块内提升逻辑对劈分不设防。
+新挂账：llvm 绑定产物 ELF interpreter=/lib/ld64.so.1（FPC 默认遗留路径，
+本 host 无此文件无法直接执行；探针协议只验 opt 从未执行产物故未暴露）——
+需 link 计划按 host 补 --dynamic-linker /lib64/ld-linux-x86-64.so.2，
+独立工具链 slice。
 
 **P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
 `np_sema_seed_function_bodies.inc`；一轮 tree mini）：
@@ -452,7 +475,7 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
-| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②⑤⑥⑦✅（⑥ -73%、⑦ 再 -69%，今日累计 seed 静窗口径 -91.8%）+刀⑧✅噪声级记零（D22）+刀⑨✅疑似-6% 待静窗复测（D23 高载窗口不可测教训）+剖析基建✅；刀①③ D20 降级挂起；下一口=encode 字符串构造（release A/B 裁判）或转 emitter-temp-placement 正确性线 |
+| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②⑤⑥⑦✅（⑥ -73%、⑦ 再 -69%，今日累计 seed 静窗口径 -91.8%）+刀⑧✅噪声级记零（D22）+刀⑨✅疑似-6% 待静窗复测（D23 高载窗口不可测教训）+剖析基建✅；刀①③ D20 降级挂起；emitter-temp-placement 正确性线已转 ✅（v2.25）；下一口=encode 字符串构造（release A/B 裁判）或 swiss 接线 |
 
 **P1 静态侦察（2026-08-23，只读 grep，数字可复现）**：播种热区字符串
 操作点共 **140 处**——`np_sema_seed_function_bodies.inc` ×63、
@@ -785,6 +808,7 @@ P0 基线数字，回滚判据客观化。
 | v2.18 | （本提交） | P1 刀② 落地：共享 FoldAsciiInto（sema.overload）+analyzer FBodyLookupScratch+Context PString 借用；两查找点消 LowerCase 分配；Index 侧不改（Put 键别名）；实测 seed 235/238s→232/233s（-1.5%/-2.4%，轮间方差 0.4%）；穷举 65k 字节组合折叠等价 failures=0+SetLength 十万次 alloc-delta=0 两项前置实证 |
 | v2.19 | （本提交） | seed 子相探针（reach/plan/encode）落地：**encode 占 seed ~96%**，刀③四趟扫描所在 reach/plan <3%；gdb 符号化采样法解锁 perf 受阻（stage0-debug -g 版+135 样本）：fpc_copy 38.5%+ansistr_assign 16.3%=托管拷贝风暴，真靶=encode 字符串构造；刀④ mark/scan 17 处 RMW→GetPtrUnchecked 就地化（噪声级如实记零）；D20 教训=归因必须先映射相位再选靶，刀①③静态降级挂起；刀⑤ encode 字符串构造立项 |
 | v2.20 | （本提交） | P1 刀⑤ 落地：绿树零分配文本 API `TextLen`+`TextEquals`（镜像 GetText 有效性与 SameText 折叠语义）；seed 文件 26 判空+5 组字面量、walk_halt_calls 45 组 BFS 路径全量转换；实测 seed 221.6/219.0s 对刀② -4.5%/-6.0%、对 P0 基线累计 -5.9%/-8.3%=迄今最大单刀；遗留靶=SymbolAt/ResolveTypeIdForOwner 按值记录返回 |
+| v2.25 | （本提交） | emitter-temp-placement 正确性线收官（三层修复）：①发射器级 hikAlloca 入口提升——EmitFunction 预扫全函数 alloca 渲染进序言缓冲、首块标签后冲刷、主扫跳过（D24 教训：异常发射劈分 HIR entry 块，EnsureAlloca 的 FEntryBlockId 提升不等于函数序言）；②except handler 绑定——LowerRuntimeTryExceptStatement 识别 gnkExceptionHandler，注册 handler 变量（var-decl-ptr-runtime + exc_load 赋值），`on E: C do`/裸 `on E do` 双形状；③E.Message 字符串 ABI——EncodeExceptionMemberStrTemp 物化 tstring 字段加载临时按 strvar (ptr,len) 传参并跳过结构化 ExprId 附加；mini tryenv 复现（build/m2_mini_tryenv.pas）双步 opt PASS+运行语义正确（fail msg=cfg broken）；十五探针 13 OPT-PASS+cap/cmpgen/puny 已知挂账零新回归；新挂账=llvm 产物动态链接器 /lib/ld64.so.1 本 host 缺失（探针只验 opt 从未执行故未暴露）；concat-swap 挂账新增可运行实证（mini len=0） |
 
 ## 10. 文档维护规则
 

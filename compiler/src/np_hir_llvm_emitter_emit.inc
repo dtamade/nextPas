@@ -167,17 +167,38 @@ begin
     Emit('define ' + RetStr + ' ' + LlvmGlobalRef(AFunc.Name) +
       '(' + ParamStr + ') #0 {');
 
+  { Entry-prologue pre-pass: render every hikAlloca of this function so the
+    main block walk can skip them (hikAlloca case in EmitInstr is a no-op).
+    Exception lowering splits HIR blocks mid-stream at the setjmp branch;
+    hoisting all allocas above any split keeps except-block loads dominated. }
+  SetLength(FEntryAllocaLines, 0);
+  if AFunc.Blocks <> nil then
+    for I := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+      if AFunc.Blocks[SizeUInt(I)].Instrs <> nil then
+        for J := 0 to LongInt(AFunc.Blocks[SizeUInt(I)].Instrs.Count) - 1 do
+          if AFunc.Blocks[SizeUInt(I)].Instrs[SizeUInt(J)].Kind = hikAlloca then
+          begin
+            SetLength(FEntryAllocaLines, Length(FEntryAllocaLines) + 1);
+            FEntryAllocaLines[High(FEntryAllocaLines)] :=
+              RenderAllocaLine(AFunc.Blocks[SizeUInt(I)].Instrs[SizeUInt(J)]);
+          end;
+
   if AFunc.Blocks <> nil then
     for I := 0 to LongInt(AFunc.Blocks.Count) - 1 do
     begin
       Emit('bb' + IntToStr(AFunc.Blocks[SizeUInt(I)].Id) + ':');
+      if I = 0 then
+        for J := 0 to High(FEntryAllocaLines) do
+          Emit(FEntryAllocaLines[J]);
       if AFunc.Blocks[SizeUInt(I)].Instrs <> nil then
         for J := 0 to LongInt(AFunc.Blocks[SizeUInt(I)].Instrs.Count) - 1 do
-          EmitInstr(AFunc.Blocks[SizeUInt(I)].Instrs[SizeUInt(J)]);
+          if AFunc.Blocks[SizeUInt(I)].Instrs[SizeUInt(J)].Kind <> hikAlloca then
+            EmitInstr(AFunc.Blocks[SizeUInt(I)].Instrs[SizeUInt(J)]);
       if not BlockEndsWithIntrinsicReturn(AFunc.Blocks[SizeUInt(I)]) then
         EmitTerminator(AFunc.Blocks[SizeUInt(I)].Terminator);
     end;
 
+  SetLength(FEntryAllocaLines, 0);
   Emit('}');
 end;
 

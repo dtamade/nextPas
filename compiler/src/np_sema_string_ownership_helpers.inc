@@ -862,6 +862,65 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.IsExceptionHandlerVar(const AName: string): Boolean;
+var
+  I: SizeUInt;
+begin
+  Result := False;
+  if (FExceptionHandlerVars = nil) or (FExceptionHandlerVars.Count = 0) then
+    Exit;
+  for I := 0 to FExceptionHandlerVars.Count - 1 do
+    if SameText(FExceptionHandlerVars[I], AName) then
+      Exit(True);
+end;
+
+function TSemanticAnalyzer.EncodeExceptionMemberStrTemp(const ABaseName,
+  AMemberName: string; out ATempName: string): Boolean;
+var
+  ClsName, FieldName: string;
+  FieldIdx: Int64;
+
+  function ResolveFieldIdx(const AType, AMember: string; out AFieldName: string): Int64;
+  begin
+    { 属性 read 目标优先，其次裸字段名，最后 Pascal 惯例 F 前缀字段 }
+    if FModel.LookupStringConstValue(AType + '.' + AMember + '$read', AFieldName) and
+      (TypeMetaFieldIndex(AType, AFieldName) >= 0) then
+      Exit(TypeMetaFieldIndex(AType, AFieldName));
+    AFieldName := AMember;
+    Result := TypeMetaFieldIndex(AType, AMember);
+    if Result < 0 then
+    begin
+      AFieldName := 'F' + AMember;
+      Result := TypeMetaFieldIndex(AType, AFieldName);
+    end;
+  end;
+
+begin
+  ATempName := '';
+  ClsName := LookupClassVar(ABaseName);
+  if ClsName = '' then
+    Exit(False);
+  FieldIdx := ResolveFieldIdx(ClsName, AMemberName, FieldName);
+  if (FieldIdx < 0) or (not TypeMetaFieldIsStr(ClsName, FieldName)) then
+  begin
+    { 空子类可能未重注册继承字段——异常对象前缀布局对所有子类一致，
+      直接按基类 Exception 解析槽位 }
+    ClsName := 'Exception';
+    FieldIdx := ResolveFieldIdx(ClsName, AMemberName, FieldName);
+    if (FieldIdx < 0) or (not TypeMetaFieldIsStr(ClsName, FieldName)) then
+      Exit(False);
+  end;
+  Inc(FBlockLabelCounter);
+  ATempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
+  RegisterRuntimeVar(ATempName);
+  RegisterRuntimeStrVar(ATempName);
+  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0, ATempName);
+  FModel.AddTypedHirNode('assign-tstring-field-load-runtime', ATempName, 0, 0,
+    ABaseName + #9 + IntToStr(FieldIdx));
+  FLastCallArgsUsedExcMember := True;
+  Result := True;
+end;
+
 function TSemanticAnalyzer.EncodeCallStatementArgs(
   const ACallName: string; const ACallNode, ADeclNode: TGreenNode): string;
 var
@@ -870,6 +929,7 @@ var
   Decoded, SourceName, TempName: string;
 begin
   Result := ACallName;
+  FLastCallArgsUsedExcMember := False;
   ClearPendingStringTempReleases;
   if ACallNode = nil then
     Exit;
@@ -917,6 +977,14 @@ begin
         EncodePascalStringLiteral(Decoded) + #10
     else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkStringLiteral) then
       Result := Result + #9 + 'strlit ' + ArgNode.Text + #10
+    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkDotAccess) and
+      (ArgNode.ChildCount >= 2) and
+      (ArgNode.ChildAt(0).NodeKind = gnkIdentifier) and
+      (ArgNode.ChildAt(1).NodeKind = gnkIdentifier) and
+      IsExceptionHandlerVar(ArgNode.ChildAt(0).Text) and
+      EncodeExceptionMemberStrTemp(
+        ArgNode.ChildAt(0).Text, ArgNode.ChildAt(1).Text, TempName) then
+      Result := Result + #9 + 'strvar ' + TempName + #10
     else if (ArgNode <> nil) and EncodeRuntimeIntExprFold(ArgNode, Decoded) then
       Result := Result + #9 + Decoded;
     Inc(ArgIndex);
@@ -955,6 +1023,7 @@ begin
   FContinueLabels.Free;
   { FVarParamNames now managed by FRuntimeVars }
   FInliningStack.Free;
+  FExceptionHandlerVars.Free;
   FGenericCache.Free;
   FCompilerProcNames.Free;
   FGenericWorkQueue.Free;

@@ -5,6 +5,8 @@ var
   Operand: string;
   Value, CondValue, Folded: Int64;
   Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
+  MemberName: string;
+  UsedExcMemberArg: Boolean;
   AncestorName: string;
   OwnerClassName: string;
   ReceiverName: string;
@@ -2134,9 +2136,18 @@ begin
                 FuncName := LookupRecordVar(RhsNode.ChildAt(0).Text);
               if FuncName <> '' then
                 FuncName := ResolveRecordAliasTypeName(FuncName);
-              if TypeMetaFieldIsStr(FuncName, RhsNode.ChildAt(1).Text) then
+              { 属性 read 目标解析（Message → FMessage）：字段名直查不中时
+                走 $read 注册，否则类属性会掉进 VmtSlot 分支被丢弃。 }
+              MemberName := RhsNode.ChildAt(1).Text;
+              if (FuncName <> '') and
+                (not TypeMetaFieldIsStr(FuncName, MemberName)) and
+                FModel.LookupStringConstValue(
+                  FuncName + '.' + MemberName + '$read', Decoded) and
+                TypeMetaFieldIsStr(FuncName, Decoded) then
+                MemberName := Decoded;
+              if TypeMetaFieldIsStr(FuncName, MemberName) then
               begin
-                Value := TypeMetaFieldIndex(FuncName, RhsNode.ChildAt(1).Text);
+                Value := TypeMetaFieldIndex(FuncName, MemberName);
                 if Value >= 0 then
                 begin
                   Inc(FBlockLabelCounter);
@@ -3220,8 +3231,13 @@ begin
         Operand := EffectiveRuntimeCalleeName(Child.Text, DeclNode);
         if Arg <> nil then
           Operand := EncodeCallStatementArgs(Operand, Arg, DeclNode);
+        UsedExcMemberArg := FLastCallArgsUsedExcMember;
         NodeId := FModel.AddTypedHirNode('call-runtime', Child.Text, 0, 0, Operand);
-        AttachStatementCallExpr(NodeId, Child);
+        { 参数含异常成员 tstring 临时物化时跳过结构化 ExprId 附加：
+          结构化路径会把 E.Message 解析成 @Cls.Member 属性 getter 残余
+          调用，而 blob 路径已给出正确 strvar (ptr,len) 操作数。 }
+        if not UsedExcMemberArg then
+          AttachStatementCallExpr(NodeId, Child);
         EmitPendingStringTempReleases;
         Continue;
       end;

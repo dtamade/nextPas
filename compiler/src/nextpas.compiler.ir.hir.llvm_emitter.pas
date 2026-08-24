@@ -71,7 +71,14 @@ type
     FCurrentDISubprogram: LongInt;  { metadata index of current function's DISubprogram }
     FDIFileIndex: LongInt;          { metadata index of the DIFile }
     FDICUIndex: LongInt;            { metadata index of the DICompileUnit }
+    { Per-function entry-block alloca prologue. Exception lowering splits the
+      HIR entry block mid-stream (setjmp branch), so allocas emitted after the
+      split point would not dominate except-block loads. All hikAlloca instrs
+      are rendered here in EmitFunction's pre-pass and flushed right after
+      the first block label. }
+    FEntryAllocaLines: array of string;
     procedure ClearGlobalRefs;
+    function RenderAllocaLine(const AInstr: THIRInstr): string;
     function AddDebugMetadata(const AMetadata: string): LongInt;
     function EmitDILocation(ALine, ACol: LongInt): LongInt;
     procedure EmitDebugMetadataSection;

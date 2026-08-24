@@ -66,6 +66,14 @@ type
       InstantiateGenericType-driven encoding. }
     FCurrentGenericInstance: string;
     FInliningStack: TStringVec;
+    { except-handler 变量名 (on E: C do …)，由 LowerRuntimeTryExceptStatement
+      注册；EncodeCallStatementArgs 据此把 E.Message 编码为 tstring 字段
+      加载而非残余 `var E.Message` 整数槽 (支配性违规挂账根因)。 }
+    FExceptionHandlerVars: TStringVec;
+    { EncodeExceptionMemberStrTemp 命中时置位：该调用的参数含异常成员
+      tstring 临时物化，必须走 operand-blob 路径，跳过结构化 ExprId
+      附加（否则 E.Message 被降成 @Cls.Member 属性 getter 残余调用）。 }
+    FLastCallArgsUsedExcMember: Boolean;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
     FCurrentScopeId: LongInt;
@@ -206,6 +214,9 @@ type
     function EncodePosConcatOperand(const ANode: TGreenNode): string;
     function EncodeCallStatementArgs(
       const ACallName: string; const ACallNode, ADeclNode: TGreenNode): string;
+    function IsExceptionHandlerVar(const AName: string): Boolean;
+    function EncodeExceptionMemberStrTemp(const ABaseName,
+      AMemberName: string; out ATempName: string): Boolean;
     function NewBlockLabel(const APrefix: string): string;
     procedure FillOwnershipContext(out Ctx: TSemaOwnershipContext);
     procedure EmitBlockLabel(const ALabel: string);

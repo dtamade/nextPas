@@ -1,3 +1,26 @@
+function THIRLlvmEmitter.RenderAllocaLine(const AInstr: THIRInstr): string;
+var
+  LlvmType: string;
+begin
+  LlvmType := TypeToLlvm(AInstr.TypeId);
+  if (AInstr.IntrinsicName <> '') and
+    (Copy(AInstr.IntrinsicName, 1, 7) = 'record:') then
+    Result := '  ' + ValueRef(AInstr.ResultId) + ' = alloca [' +
+      Copy(AInstr.IntrinsicName, 8, Length(AInstr.IntrinsicName)) +
+      ' x i64]'
+  else if AInstr.IntrinsicName = 'tstring' then
+  begin
+    FNeedsTStringRuntime := True;
+    Result := '  ' + ValueRef(AInstr.ResultId) + ' = alloca [24 x i8], align 8';
+  end
+  else
+    Result := '  ' + ValueRef(AInstr.ResultId) + ' = alloca ' + LlvmType;
+  if AInstr.CallTarget <> '' then
+    Result := Result + ' ; ' + AInstr.CallTarget;
+  { Alloca result is always ptr — note so icmp/load casts can see it. }
+  NoteValueLlvmType(AInstr.ResultId, 'ptr');
+end;
+
 procedure THIRLlvmEmitter.EmitInstr(const AInstr: THIRInstr);
 var
   LlvmType, Op, LTruncVal: string;
@@ -17,35 +40,10 @@ begin
 
   case AInstr.Kind of
     hikAlloca:
-    begin
-      if (AInstr.IntrinsicName <> '') and
-        (Copy(AInstr.IntrinsicName, 1, 7) = 'record:') then
-      begin
-        Op := '  ' + ValueRef(AInstr.ResultId) + ' = alloca [' +
-          Copy(AInstr.IntrinsicName, 8, Length(AInstr.IntrinsicName)) +
-          ' x i64]';
-        if AInstr.CallTarget <> '' then
-          Op := Op + ' ; ' + AInstr.CallTarget;
-        Emit(Op);
-      end
-      else if AInstr.IntrinsicName = 'tstring' then
-      begin
-        FNeedsTStringRuntime := True;
-        Op := '  ' + ValueRef(AInstr.ResultId) + ' = alloca [24 x i8], align 8';
-        if AInstr.CallTarget <> '' then
-          Op := Op + ' ; ' + AInstr.CallTarget;
-        Emit(Op);
-      end
-      else
-      begin
-        Op := '  ' + ValueRef(AInstr.ResultId) + ' = alloca ' + LlvmType;
-        if AInstr.CallTarget <> '' then
-          Op := Op + ' ; ' + AInstr.CallTarget;
-        Emit(Op);
-      end;
-      { Alloca result is always ptr — note so icmp/load casts can see it. }
-      NoteValueLlvmType(AInstr.ResultId, 'ptr');
-    end;
+      { Already rendered into the entry prologue by EmitFunction's pre-pass;
+        emitting here would land after the exception setjmp split and break
+        dominance for except-block loads. }
+      ;
     hikLoad:
     begin
       { TypeId 0 maps to void; cannot load void. Prefer i64 for scalar residual. }

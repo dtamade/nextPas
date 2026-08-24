@@ -569,6 +569,7 @@ begin
 
     // Reset for void function with no params — 全部 13 个 tracker 清零
     FRuntimeVars.Reset;
+    FExceptionHandlerVars.Clear;
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
     FCurrentBlockTerminated := False;

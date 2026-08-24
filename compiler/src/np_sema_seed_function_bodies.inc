@@ -882,6 +882,7 @@ begin
     if Entry.Encoded then
       Continue;
     FRuntimeVars.Reset;
+    FExceptionHandlerVars.Clear;
     if HasOverload(Entry.Name) then
       EffName := MangledNameSig(Entry.Name, GetParamSignature(Entry.Decl))
     else

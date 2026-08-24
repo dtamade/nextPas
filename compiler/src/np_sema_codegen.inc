@@ -1684,7 +1684,9 @@ procedure TSemanticAnalyzer.LowerRuntimeTryExceptStatement(const ANode: TGreenNo
 var
   TryBody, HandlerBody: TGreenNode;
   ExceptLabel, EndLabel: string;
-  I: LongInt;
+  I, J, K: LongInt;
+  HandlerVarName, ExcClassName: string;
+  AlreadyRegistered: Boolean;
 begin
   if (ANode = nil) or (ANode.ChildCount < 2) then Exit;
   TryBody := ANode.ChildAt(0);
@@ -1702,8 +1704,56 @@ begin
   for I := 1 to ANode.ChildCount - 1 do
   begin
     HandlerBody := ANode.ChildAt(I);
-    if HandlerBody <> nil then
-      WalkHaltCalls(HandlerBody);
+    if HandlerBody = nil then
+      Continue;
+    { on E: ExcClass do Body — 绑定 handler 变量到 __np_exc_object。
+      此前 handler 子树被当普通语句直走，E 从未注册为 runtime var，
+      E.Message 落进 `var E.Message` 残余整数槽（alloca 迟到 + 单 i64
+      错 ABI）。类过滤（InheritsFrom dispatch）仍挂账未实现。 }
+    if HandlerBody.NodeKind = gnkExceptionHandler then
+    begin
+      HandlerVarName := HandlerBody.Text;
+      ExcClassName := '';
+      J := 0;
+      if (HandlerBody.ChildCount >= 1) and (HandlerBody.ChildAt(0) <> nil) and
+        (HandlerBody.ChildAt(0).NodeKind = gnkIdentifier) then
+      begin
+        { `on E: ExcClass do` 形状——child 0 是类名；裸 `on E do` 无此子。 }
+        ExcClassName := HandlerBody.ChildAt(0).Text;
+        J := 1;
+      end;
+      if (ExcClassName <> '') and (FModel.FindTypeByName(ExcClassName) <= 0) then
+        ExcClassName := 'Exception';
+      if ExcClassName = '' then
+        ExcClassName := 'Exception';
+      if (HandlerVarName <> '') and (J < HandlerBody.ChildCount) then
+      begin
+        RegisterRuntimeVar(HandlerVarName);
+        RegisterClassVar(HandlerVarName, ExcClassName);
+        AlreadyRegistered := False;
+        for K := 0 to LongInt(FExceptionHandlerVars.Count) - 1 do
+          if SameText(FExceptionHandlerVars[SizeUInt(K)], HandlerVarName) then
+          begin
+            AlreadyRegistered := True;
+            Break;
+          end;
+        if not AlreadyRegistered then
+          FExceptionHandlerVars.Push(HandlerVarName);
+        FModel.AddTypedHirNode(
+          'var-decl-ptr-runtime', HandlerVarName, 0, 0, HandlerVarName);
+        FModel.AddTypedHirNode(
+          'assign-runtime', HandlerVarName, 0, 0,
+          HandlerVarName + #9 + 'exc_load' + #10);
+      end;
+      while J < HandlerBody.ChildCount do
+      begin
+        if HandlerBody.ChildAt(J) <> nil then
+          WalkHaltCalls(HandlerBody.ChildAt(J));
+        Inc(J);
+      end;
+      Continue;
+    end;
+    WalkHaltCalls(HandlerBody);
   end;
   FModel.AddTypedHirNode('except-end-runtime', '', 0, 0, '');
   EmitGotoLabel(EndLabel);

@@ -372,6 +372,7 @@ begin
     FBreakLabels := specialize TVec<string>.Create(0, FAllocator);
     FContinueLabels := specialize TVec<string>.Create(0, FAllocator);
     FInliningStack := specialize TVec<string>.Create(0, FAllocator);
+    FExceptionHandlerVars := specialize TVec<string>.Create(0, FAllocator);
     FGenericCache := specialize TVec<TGenericCacheEntry>.Create(0, FAllocator);
     FCompilerProcNames := specialize TVec<string>.Create(0, FAllocator);
     FGenericWorkQueue := specialize TVec<LongInt>.Create(0, FAllocator);
@@ -388,6 +389,7 @@ begin
     FContinueLabels := specialize TVec<string>.Create;
     { FVarParamNames now managed by FRuntimeVars }
     FInliningStack := specialize TVec<string>.Create;
+    FExceptionHandlerVars := specialize TVec<string>.Create;
     FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
     FCompilerProcNames := specialize TVec<string>.Create;
     FGenericWorkQueue := specialize TVec<LongInt>.Create;
