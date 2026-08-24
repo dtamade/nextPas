@@ -64,7 +64,40 @@ begin
   Result := True;
 end;
 
-function ConcatExpressionConsumesOwnedStringReturnDeferred(const Ctx: TSemaOwnershipContext; 
+{ Write-position concat over plain operands only (runtime str vars,
+  literals, nested '+', IntToStr) — no owned-string-return call in the
+  tree. Without this, WriteLn(P + Q) falls through to write-int and the
+  emitter adds np_tstring_data pointers as integers (mini_cat2 family).
+  Owned-return trees stay reserved for EmitOwnedStringConcatWriteTemp. }
+function EmitPlainStringConcatWriteTemp(var Ctx: TSemaOwnershipContext;
+  const ANode: TGreenNode; out ATempName: string): Boolean;
+var
+  LeftName, RightName: string;
+begin
+  ATempName := '';
+  Result := False;
+  if (ANode = nil) or (ANode.NodeKind <> gnkBinaryExpression) or
+    (ANode.Text <> '+') or (ANode.ChildCount < 2) or
+    (not CanEmitStrConcatOperand(Ctx, ANode)) or
+    ConcatTreeHasSupportedOwnedStringReturn(Ctx, ANode) then
+    Exit;
+  LeftName := EmitStrConcatOperand(Ctx, ANode.ChildAt(0), '');
+  RightName := EmitStrConcatOperand(Ctx, ANode.ChildAt(1), '');
+  if (LeftName = '') or (RightName = '') then
+    Exit;
+  Inc(Ctx.BlockLabelCounter);
+  ATempName := '$str_wrt_cat_tmp_' + IntToStr(Ctx.BlockLabelCounter);
+  Ctx.RegisterRuntimeVar(Ctx.CallbackCtx, ATempName);
+  Ctx.RegisterRuntimeStrVar(Ctx.CallbackCtx, ATempName);
+  Ctx.Model.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
+    ATempName);
+  Ctx.Model.AddTypedHirNode('assign-tstring-concat-runtime', ATempName, 0, 0,
+    LeftName + #9 + RightName);
+  Ctx.RuntimeVars.QueuePendingStringTempRelease(ATempName, ATempName);
+  Result := True;
+end;
+
+function ConcatExpressionConsumesOwnedStringReturnDeferred(const Ctx: TSemaOwnershipContext;
   const ANode: TGreenNode; const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
 var
   I: LongInt;

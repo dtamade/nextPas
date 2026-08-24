@@ -383,6 +383,16 @@ begin
   FBlockLabelCounter := Ctx.BlockLabelCounter;
 end;
 
+function TSemanticAnalyzer.EmitPlainStringConcatWriteTemp(
+  const ANode: TGreenNode; out ATempName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
+begin
+  FillOwnershipContext(Ctx);
+  Result := nextpas.compiler.sema.string_ownership.EmitPlainStringConcatWriteTemp(Ctx, ANode, ATempName);
+  FBlockLabelCounter := Ctx.BlockLabelCounter;
+end;
+
 
 function TSemanticAnalyzer.ConcatOperandOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;

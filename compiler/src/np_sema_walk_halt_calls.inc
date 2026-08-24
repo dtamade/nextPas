@@ -2061,6 +2061,10 @@ begin
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', ArgName, 0, 0, Operand
               )
+            else if EmitPlainStringConcatWriteTemp(RhsNode, Operand) then
+              FModel.AddTypedHirNode(
+                'write-str-var-runtime', ArgName, 0, 0, Operand
+              )
             else if (RhsNode.NodeKind = gnkIdentifier) and
               LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
               IsRuntimeStrVar(RhsNode.Text) then

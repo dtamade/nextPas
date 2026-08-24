@@ -161,6 +161,8 @@ type
       const ANode: TGreenNode; out ATempName: string): Boolean;
     function EmitOwnedStringConcatWriteTemp(
       const ANode: TGreenNode; out ATempName: string): Boolean;
+    function EmitPlainStringConcatWriteTemp(
+      const ANode: TGreenNode; out ATempName: string): Boolean;
     function ConcatOperandOwnsStringReturn(
       const ANode: TGreenNode; out AFuncName: string): Boolean;
     function IsSupportedOwnedStringReturnConcatOperand(

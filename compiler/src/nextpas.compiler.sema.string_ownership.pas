@@ -174,7 +174,9 @@ function IsSupportedOwnedStringReturnCompareOperand(
 { === B3: Deferred ownership analysis + Concat/Compare support === }
 function EmitOwnedStringConcatLengthTemp(var Ctx: TSemaOwnershipContext; 
   const ANode: TGreenNode; out ABlob: string): Boolean;
-function EmitOwnedStringConcatWriteTemp(var Ctx: TSemaOwnershipContext; 
+function EmitOwnedStringConcatWriteTemp(var Ctx: TSemaOwnershipContext;
+  const ANode: TGreenNode; out ATempName: string): Boolean;
+function EmitPlainStringConcatWriteTemp(var Ctx: TSemaOwnershipContext;
   const ANode: TGreenNode; out ATempName: string): Boolean;
 function ConcatExpressionConsumesOwnedStringReturnDeferred(const Ctx: TSemaOwnershipContext; 
   const ANode: TGreenNode; const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
