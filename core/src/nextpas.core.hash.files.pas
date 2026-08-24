@@ -31,6 +31,7 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.hash.sha256,
   nextpas.core.hash.sha512,
+  nextpas.core.hash.blake2b,
   nextpas.core.hash.util;
 
 function HashFileWithHasherHex(const APath: string; const AHasher: IHasher): string;
@@ -84,6 +85,7 @@ begin
     Ord(haSHA256): Result := HashFileWithHasherHex(APath, NewSHA256);
     Ord(haSHA384): Result := HashFileWithHasherHex(APath, NewSHA384);
     Ord(haSHA512): Result := HashFileWithHasherHex(APath, NewSHA512);
+    Ord(haBLAKE2b256): Result := HashFileWithHasherHex(APath, NewBLAKE2b256);
   else
     raise EArgumentError.Create('HashFileHex: invalid hash algorithm');
   end;

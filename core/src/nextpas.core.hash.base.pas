@@ -16,7 +16,8 @@ type
     haSHA1,
     haSHA256,
     haSHA384,
-    haSHA512
+    haSHA512,
+    haBLAKE2b256
   );
 
   TMD5Digest    = array[0..15] of Byte;
@@ -54,6 +55,7 @@ begin
     Ord(haSHA256): Result := SHA256_DIGEST_SIZE;
     Ord(haSHA384): Result := SHA384_DIGEST_SIZE;
     Ord(haSHA512): Result := SHA512_DIGEST_SIZE;
+    Ord(haBLAKE2b256): Result := 32;
   else
     raise EArgumentError.Create('GetDigestSize: invalid hash algorithm');
   end;
@@ -67,6 +69,7 @@ begin
     Ord(haSHA256): Result := SHA256_BLOCK_SIZE;
     Ord(haSHA384): Result := SHA384_BLOCK_SIZE;
     Ord(haSHA512): Result := SHA512_BLOCK_SIZE;
+    Ord(haBLAKE2b256): Result := 128;
   else
     raise EArgumentError.Create('GetBlockSize: invalid hash algorithm');
   end;

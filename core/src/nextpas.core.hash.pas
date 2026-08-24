@@ -46,6 +46,7 @@ const
   haSHA256 = nextpas.core.hash.base.haSHA256;
   haSHA384 = nextpas.core.hash.base.haSHA384;
   haSHA512 = nextpas.core.hash.base.haSHA512;
+  haBLAKE2b256 = nextpas.core.hash.base.haBLAKE2b256;
 
   MD5_DIGEST_SIZE = nextpas.core.hash.base.MD5_DIGEST_SIZE;
   SHA1_DIGEST_SIZE = nextpas.core.hash.base.SHA1_DIGEST_SIZE;
@@ -224,6 +225,7 @@ begin
     Ord(haSHA256): Result := nextpas.core.hash.sha256.NewSHA256;
     Ord(haSHA384): Result := nextpas.core.hash.sha512.NewSHA384;
     Ord(haSHA512): Result := nextpas.core.hash.sha512.NewSHA512;
+    Ord(haBLAKE2b256): Result := nextpas.core.hash.blake2b.NewBLAKE2b256;
   else
     raise EArgumentError.Create('NewHasher: invalid hash algorithm');
   end;
