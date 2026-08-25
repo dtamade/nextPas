@@ -3,8 +3,10 @@
 L2 资源打包格式模块。把一棵文件树打包成单个带索引的二进制 blob（pack），支持
 零拷贝随机读取，是前端资源嵌入程序/动态库场景的格式层。
 
-**状态：设计阶段（S0）。本模块尚未实现；本目录即权威设计文档。**
-实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
+**状态：S1 格式层 + S2 解析/打包/目录收集已实现并有 gate 覆盖**
+（`base`/`writer`/`reader`/`dirsource`/门面，五个测试 gate 全绿、heaptrc 零泄漏）。
+`vfs.embedded` 接入（S3）、嵌入工具链（S4）、http.static 对接（S5）未开始。
+计划见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 
 ## 模块定位
 
@@ -136,6 +138,14 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 | dirsource 是唯一 fs 引用点 | 把 L2→L2 依赖压缩到一个可审计单元 |
 | 路径语法全盘采纳 Go ValidPath | 业界事实标准，含 `.` 根特例与反斜杠规则 |
 | 压缩只留 codecId 槽位 | Tauri brotli 读时分配破坏零拷贝；HTTP 编码归 http.static |
+
+### 实现期发现的 FPC trunk 注意事项（S1/S2 实测，后续模块同样适用）
+
+| 陷阱 | 症状 | 规避 |
+|------|------|------|
+| 常量标识符实参 + inline 函数的 u64 参数 | 常量传播把函数体按 32 位折叠（`shr 32` 后 high:=low），写出 `0x0000002800000028` 类错值 | u64 写入一律显式 `UInt64(常量)`；见 writer 内注释 |
+| `Pos('', S)` 返回值 | FPC 返回 0（Delphi 语义为 1），`Pos(Prefix,S)=1` 式前缀判断对空前缀全错 | 前缀判断用显式 `StartsWith` 助手，空前缀恒真 |
+| `for I := 0 to N - 1 do`（N: SizeUInt） | N=0 时上界回绕为 `$FFFFFFFF`，循环体以垃圾下标执行 → AV/总线错误 | 循环前守卫 `N > 0`，或改 `while I < N`；Hoare 分区类算法下标一律 Int64 |
 
 ## FPC RTL 隔离与反哺
 

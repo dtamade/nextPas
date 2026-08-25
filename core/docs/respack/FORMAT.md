@@ -81,6 +81,9 @@ HTTP 场景的 gzip/brotli 属内容编码，归 http.static 职责。槽位保�
 
 - 内容：全部路径的 UTF-8 编码按 index 顺序拼接，无分隔符、无 NUL、无对齐要求
 - 边界完全由 `(pathOffset, pathLen)` 描述
+- **边界为推导值**（header 无显式长度字段）：基址 = `indexOffset + entryCount×40`
+  （紧随 index）；上界 = 所有条目 `dataOffset` 的最小值（无条目时为 `blobTotal`）。
+  reader 校验即按此推导边界断言每个路径段不越界
 - v1 不做路径去重共享（每条目独占一段）；未来如需可加 flag 引入字典段
 
 ## Data Section 与内容去重
@@ -130,12 +133,15 @@ header flags bit1 置位时存在：`entryCount × 32` 字节数组，与 index 
 2. `version = 1`；header `flags` 未知位全 0；bit1 置位时 `digestOffset ≠ 0`
 3. `indexOffset ≥ 40` 且 `indexOffset + entryCount×40 ≤ blobTotal`
 4. 缓冲实际长度 ≥ `blobTotal`（允许多余尾部字节，供追加场景）
-5. digest 存在时：`digestOffset ≥ dataEnd` 且 `digestOffset + entryCount×32 ≤ blobTotal`
-6. 每个 entry：`reserved` 全零、`codecId` 在登记表内、entry flags 未知位 0、
-   `pathLen > 0`、`pathOffset + pathLen ≤ stringTableSize`、
-   `dataOffset % 16 = 0`、`dataOffset + size ≤ blobTotal`
+5. 每个 entry：`reserved` 全零、`codecId` 在登记表内、entry flags 未知位 0、
+   `pathLen > 0`、`dataOffset % 16 = 0`、`dataOffset + size ≤ blobTotal`；
+   同时记录 `minDataOffset = min(各条目 dataOffset)`（无条目时取 `blobTotal`）
+6. 路径段落在推导的 string table 边界内：
+   `indexOffset + entryCount×40 + pathOffset + pathLen ≤ minDataOffset`（空包免检）
 7. index 有序且无重复路径（校验即免费得到二分前提）
-8. 路径逐段符合 canonical grammar（严格模式；宽松模式仅去前导 `/` 后重校验）
+8. 路径逐段符合 canonical grammar（严格模式；宽松模式仅去前导 `/` 后重校验）；
+   digest 存在时：`digestOffset ≥ minDataOffset` 且
+   `digestOffset + entryCount×32 ≤ blobTotal`
 
 校验全部通过后才对外暴露任何查找结果；不存在"半信任"状态。
 

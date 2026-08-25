@@ -1,0 +1,549 @@
+unit nextpas.core.vfs.memtree;
+
+{** @desc 内存不可变树：Builder（可变期）→ Freeze → IVfs 快照。
+  fstest.MapFS 对等物；embedded 后端底座与测试替身。目录由路径隐含推导（INV-V8），
+  文件与同名子树重叠在 Freeze 时拒绝，保持模型干净。 }
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.base,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
+  nextpas.core.vfs.base,
+  nextpas.core.vfs.errors,
+  nextpas.core.vfs.intf;
+
+type
+  TVfsMemEntry = record
+    Name: string;      { 规范虚拟路径 }
+    Data: TBytes;
+    ModTime: Int64;
+    Hash: UInt32;
+  end;
+
+  { 可变构造期对象；Freeze 后不可复用 }
+  TVfsTreeBuilder = class
+  private
+    FItems: array of TVfsMemEntry;
+    FFrozen: Boolean;
+    procedure CheckMutable; inline;
+  public
+    destructor Destroy; override;
+    { AHash=0 表示不提供内容哈希 }
+    procedure AddFile(const APath: string; const AData: TBytes;
+      const AModTime: Int64; AHash: UInt32 = 0);
+    { 排序、查重、文件/子树重叠检查后产出不可变快照 }
+    function Freeze: IVfs;
+  end;
+
+{ 便捷入口：等价于 Builder+AddFile…+Freeze }
+function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
+
+implementation
+
+type
+  TMemVfs = class(TInterfacedObject, IVfs)
+  private
+    FFiles: array of TVfsMemEntry;
+    function LowerBound(const AName: string): SizeUInt;
+    function FindExact(const AName: string): SizeUInt; { Count 当未命中 }
+    function HasSubtree(const ADirPrefix: string): Boolean;
+    procedure StatInto(const APath: string; out AInfo: TStatInfo);
+  public
+    constructor Create(AItems: array of TVfsMemEntry);
+    destructor Destroy; override;
+    function Exists(const APath: string): Boolean;
+    function Stat(const APath: string): TStatInfo;
+    function List(const ADirPath: string): TEntryArray;
+    function OpenRead(const APath: string): IStream;
+    function CaseSensitive: Boolean;
+  end;
+
+  TMemStream = class(TInterfacedObject, IStream, IReaderAt)
+  private
+    FData: TBytes;
+    FPos: Int64;
+    FClosed: Boolean;
+    FPath: string;
+    procedure CheckOpen; inline;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+  public
+    constructor Create(const AData: TBytes; const APath: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function ReadAt(var ABuf; const ACount: SizeUInt;
+      const AOffset: Int64): SizeUInt;
+    property Size: Int64 read GetSize;
+    property Position: Int64 read GetPosition write SetPosition;
+  end;
+
+{ ── 局部工具 ── }
+
+{ 空前缀恒真：FPC 的 Pos('',S) 返回值与 Delphi 不一致（实测为 0），
+  不能用 Pos(Prefix,S)=1 表达"以 Prefix 开头" }
+function StartsWith(const AStr, APrefix: string): Boolean;
+begin
+  if Length(APrefix) = 0 then
+    Exit(True);
+  Result := (Length(AStr) >= Length(APrefix))
+    and (Pos(APrefix, AStr) = 1);
+end;
+
+function NameCompare(const AA, AB: string): Integer;
+var
+  I, N: Integer;
+begin
+  N := Length(AA);
+  if Length(AB) < N then
+    N := Length(AB);
+  for I := 1 to N do
+  begin
+    if Byte(AA[I]) < Byte(AB[I]) then Exit(-1);
+    if Byte(AA[I]) > Byte(AB[I]) then Exit(1);
+  end;
+  if Length(AA) < Length(AB) then Exit(-1);
+  if Length(AA) > Length(AB) then Exit(1);
+  Result := 0;
+end;
+
+{ 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（见 respack.writer 同款注释）。
+  与 writer 排序结构重复，属有意保守：抽公共 sort 进 collections 是后续反哺项。 }
+procedure QuickSortEntries(var AItems: array of TVfsMemEntry;
+  ALow, AHigh: Int64);
+var
+  L, R: Int64;
+  P, Tmp: TVfsMemEntry;
+begin
+  while ALow < AHigh do
+  begin
+    if AHigh - ALow = 1 then
+    begin
+      if NameCompare(AItems[ALow].Name, AItems[AHigh].Name) > 0 then
+      begin
+        P := AItems[ALow]; AItems[ALow] := AItems[AHigh]; AItems[AHigh] := P;
+      end;
+      Exit;
+    end;
+    P := AItems[(ALow + AHigh) shr 1];
+    L := ALow; R := AHigh;
+    while L <= R do
+    begin
+      while NameCompare(AItems[L].Name, P.Name) < 0 do Inc(L);
+      while NameCompare(AItems[R].Name, P.Name) > 0 do Dec(R);
+      if L <= R then
+      begin
+        if L < R then
+        begin
+          Tmp := AItems[L]; AItems[L] := AItems[R]; AItems[R] := Tmp;
+        end;
+        Inc(L); Dec(R);
+      end;
+    end;
+    if R - ALow < AHigh - L then
+    begin
+      if ALow < R then QuickSortEntries(AItems, ALow, R);
+      ALow := L;
+    end
+    else
+    begin
+      if L < AHigh then QuickSortEntries(AItems, L, AHigh);
+      AHigh := R;
+    end;
+  end;
+end;
+
+procedure QuickSortInfos(var AItems: TEntryArray; ALow, AHigh: Int64);
+var
+  L, R: Int64;
+  P: string;
+  Tmp: TEntryInfo;
+begin
+  while ALow < AHigh do
+  begin
+    if AHigh - ALow = 1 then
+    begin
+      if NameCompare(AItems[ALow].Name, AItems[AHigh].Name) > 0 then
+      begin
+        Tmp := AItems[ALow]; AItems[ALow] := AItems[AHigh]; AItems[AHigh] := Tmp;
+      end;
+      Exit;
+    end;
+    P := AItems[(ALow + AHigh) shr 1].Name;
+    L := ALow; R := AHigh;
+    while L <= R do
+    begin
+      while NameCompare(AItems[L].Name, P) < 0 do Inc(L);
+      while NameCompare(AItems[R].Name, P) > 0 do Dec(R);
+      if L <= R then
+      begin
+        if L < R then
+        begin
+          Tmp := AItems[L]; AItems[L] := AItems[R]; AItems[R] := Tmp;
+        end;
+        Inc(L); Dec(R);
+      end;
+    end;
+    if R - ALow < AHigh - L then
+    begin
+      if ALow < R then QuickSortInfos(AItems, ALow, R);
+      ALow := L;
+    end
+    else
+    begin
+      if L < AHigh then QuickSortInfos(AItems, L, AHigh);
+      AHigh := R;
+    end;
+  end;
+end;
+
+{ ── TVfsTreeBuilder ── }
+
+destructor TVfsTreeBuilder.Destroy;
+begin
+  inherited Destroy;
+end;
+
+procedure TVfsTreeBuilder.CheckMutable;
+begin
+  if FFrozen then
+    raise EVfsClosed.CreateCtx('add', '', 'memtree builder already frozen');
+end;
+
+procedure TVfsTreeBuilder.AddFile(const APath: string; const AData: TBytes;
+  const AModTime: Int64; AHash: UInt32);
+var
+  N: SizeUInt;
+begin
+  CheckMutable;
+  if not VfsValidPath(APath, True) then
+    raise EVfsInvalidPath.CreateCtx('add', APath,
+      'invalid virtual path');
+  N := SizeUInt(Length(FItems));
+  SetLength(FItems, N + 1);
+  FItems[N].Name := APath;
+  FItems[N].Data := AData;
+  FItems[N].ModTime := AModTime;
+  FItems[N].Hash := AHash;
+end;
+
+function TVfsTreeBuilder.Freeze: IVfs;
+var
+  I: SizeUInt;
+begin
+  CheckMutable;
+  if SizeUInt(Length(FItems)) > 1 then
+  begin
+    QuickSortEntries(FItems, 0, Int64(Length(FItems)) - 1);
+    { 查重/重叠检查：Length-1 在 SizeUInt 上回绕 ⇒ 仅在 >1 时执行 }
+    for I := 1 to SizeUInt(Length(FItems)) - 1 do
+    begin
+      if NameCompare(FItems[I - 1].Name, FItems[I].Name) = 0 then
+        raise EVfsError.CreateCtx('freeze', FItems[I].Name,
+          'duplicate path in memtree');
+      if (Length(FItems[I].Name) > Length(FItems[I - 1].Name))
+        and (Pos(FItems[I - 1].Name + '/', FItems[I].Name) = 1) then
+        raise EVfsError.CreateCtx('freeze', FItems[I - 1].Name,
+          'file overlaps directory subtree');
+    end;
+  end;
+  FFrozen := True;
+  Result := TMemVfs.Create(FItems);
+end;
+
+function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
+var
+  B: TVfsTreeBuilder;
+  I: SizeUInt;
+begin
+  B := TVfsTreeBuilder.Create;
+  try
+    if SizeUInt(Length(AItems)) > 0 then
+      for I := 0 to SizeUInt(Length(AItems)) - 1 do
+        B.AddFile(AItems[I].Name, AItems[I].Data, AItems[I].ModTime,
+          AItems[I].Hash);
+    Result := B.Freeze;
+  finally
+    B.Free;
+  end;
+end;
+
+{ ── TMemVfs ── }
+
+constructor TMemVfs.Create(AItems: array of TVfsMemEntry);
+var
+  I: SizeUInt;
+begin
+  inherited Create;
+  SetLength(FFiles, Length(AItems));
+  if SizeUInt(Length(AItems)) > 0 then
+    for I := 0 to SizeUInt(Length(AItems)) - 1 do
+      FFiles[I] := AItems[I];
+end;
+
+destructor TMemVfs.Destroy;
+begin
+  SetLength(FFiles, 0);
+  inherited Destroy;
+end;
+
+function TMemVfs.LowerBound(const AName: string): SizeUInt;
+var
+  Lo, Hi, Mid: SizeUInt;
+begin
+  Lo := 0;
+  Hi := SizeUInt(Length(FFiles));
+  while Lo < Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    if NameCompare(FFiles[Mid].Name, AName) < 0 then
+      Lo := Mid + 1
+    else
+      Hi := Mid;
+  end;
+  Result := Lo;
+end;
+
+function TMemVfs.FindExact(const AName: string): SizeUInt;
+var
+  I: SizeUInt;
+begin
+  Result := SizeUInt(Length(FFiles));
+  I := LowerBound(AName);
+  if (I < SizeUInt(Length(FFiles)))
+    and (NameCompare(FFiles[I].Name, AName) = 0) then
+    Result := I;
+end;
+
+function TMemVfs.HasSubtree(const ADirPrefix: string): Boolean;
+var
+  I: SizeUInt;
+  L: Integer;
+begin
+  Result := False;
+  L := Length(ADirPrefix);
+  I := LowerBound(ADirPrefix);
+  if (I < SizeUInt(Length(FFiles)))
+    and StartsWith(FFiles[I].Name, ADirPrefix)
+    and (Length(FFiles[I].Name) > L) then
+    Result := True;
+end;
+
+function TMemVfs.Exists(const APath: string): Boolean;
+begin
+  if VfsIsRoot(APath) then
+    Exit(True);
+  if not VfsValidPath(APath, False) then
+    Exit(False);
+  if FindExact(APath) < SizeUInt(Length(FFiles)) then
+    Exit(True);
+  Result := HasSubtree(APath + '/');
+end;
+
+procedure TMemVfs.StatInto(const APath: string; out AInfo: TStatInfo);
+var
+  Idx: SizeUInt;
+begin
+  Idx := FindExact(APath);
+  if Idx < SizeUInt(Length(FFiles)) then
+  begin
+    AInfo.Info.Name := FFiles[Idx].Name;
+    AInfo.Info.Size := Length(FFiles[Idx].Data);
+    AInfo.Info.ModTime := FFiles[Idx].ModTime;
+    AInfo.Info.IsDir := False;
+    AInfo.ContentHash := FFiles[Idx].Hash;
+  end
+  else if VfsIsRoot(APath) or HasSubtree(APath + '/') then
+  begin
+    AInfo.Info.Name := APath;
+    AInfo.Info.Size := 0;
+    AInfo.Info.ModTime := 0;
+    AInfo.Info.IsDir := True;
+    AInfo.ContentHash := 0;
+  end
+  else
+    raise EVfsNotFound.CreateCtx('stat', APath, 'not found');
+end;
+
+function TMemVfs.Stat(const APath: string): TStatInfo;
+begin
+  if not VfsValidPath(APath, True) then
+    raise EVfsInvalidPath.CreateCtx('stat', APath, 'invalid virtual path');
+  StatInto(APath, Result);
+end;
+
+function TMemVfs.List(const ADirPath: string): TEntryArray;
+var
+  Prefix: string;
+  DirIdx: SizeUInt;
+  I, N, SegEnd: SizeUInt;
+  Child, Tail: string;
+  Seen: array of string;
+  SeenN: SizeUInt;
+  Info: TStatInfo;
+begin
+  if not VfsValidPath(ADirPath, True) then
+    raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
+  if VfsIsRoot(ADirPath) then
+    Prefix := ''
+  else
+  begin
+    DirIdx := FindExact(ADirPath);
+    if DirIdx < SizeUInt(Length(FFiles)) then
+      raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is a file');
+    if not HasSubtree(ADirPath + '/') then
+      raise EVfsNotFound.CreateCtx('list', ADirPath, 'not found');
+    Prefix := ADirPath + '/';
+  end;
+
+  Result := nil;
+  Seen := nil;
+  SeenN := 0;
+  N := SizeUInt(Length(FFiles));
+  I := LowerBound(Prefix);
+  while I < N do
+  begin
+    if (Length(FFiles[I].Name) <= Length(Prefix))
+      or (not StartsWith(FFiles[I].Name, Prefix)) then
+      Break;
+    Tail := Copy(FFiles[I].Name, Length(Prefix) + 1, MaxInt);
+    SegEnd := Pos('/', Tail);
+    if SegEnd > 0 then
+      Child := Prefix + Copy(Tail, 1, SegEnd - 1)
+    else
+      Child := FFiles[I].Name;
+    if (SeenN = 0) or (Seen[SeenN - 1] <> Child) then
+    begin
+      SetLength(Seen, SeenN + 1);
+      Seen[SeenN] := Child;
+      Inc(SeenN);
+    end;
+    Inc(I);
+  end;
+
+  SetLength(Result, SeenN);
+  if SeenN > 0 then
+    for I := 0 to SeenN - 1 do
+    begin
+      StatInto(Seen[I], Info);
+      Result[I] := Info.Info;
+    end;
+  if SeenN > 1 then
+    QuickSortInfos(Result, 0, Int64(SeenN) - 1);
+end;
+
+function TMemVfs.OpenRead(const APath: string): IStream;
+var
+  Idx: SizeUInt;
+begin
+  if not VfsValidPath(APath, True) then
+    raise EVfsInvalidPath.CreateCtx('open', APath, 'invalid virtual path');
+  Idx := FindExact(APath);
+  if (Idx >= SizeUInt(Length(FFiles)))
+    and (VfsIsRoot(APath) or HasSubtree(APath + '/')) then
+    raise EVfsIsADirectory.CreateCtx('open', APath, 'target is a directory');
+  if Idx >= SizeUInt(Length(FFiles)) then
+    raise EVfsNotFound.CreateCtx('open', APath, 'not found');
+  Result := TMemStream.Create(FFiles[Idx].Data, APath);
+end;
+
+function TMemVfs.CaseSensitive: Boolean;
+begin
+  Result := True;
+end;
+
+{ ── TMemStream ── }
+
+constructor TMemStream.Create(const AData: TBytes; const APath: string);
+begin
+  inherited Create;
+  FData := AData;
+  FPath := APath;
+  FPos := 0;
+end;
+
+procedure TMemStream.CheckOpen;
+begin
+  if FClosed then
+    raise EVfsClosed.CreateCtx('read', FPath, 'stream closed');
+end;
+
+function TMemStream.GetSize: Int64;
+begin
+  CheckOpen;
+  Result := Length(FData);
+end;
+
+function TMemStream.GetPosition: Int64;
+begin
+  CheckOpen;
+  Result := FPos;
+end;
+
+procedure TMemStream.SetPosition(const AValue: Int64);
+begin
+  CheckOpen;
+  FPos := AValue;
+end;
+
+function TMemStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  Avail: SizeUInt;
+begin
+  CheckOpen;
+  if FPos >= Length(FData) then
+    Exit(0);
+  Avail := SizeUInt(Length(FData)) - SizeUInt(FPos);
+  if ACount < Avail then
+    Avail := ACount;
+  if Avail > 0 then
+    Move(FData[FPos], ABuf, Avail);
+  Inc(FPos, Int64(Avail));
+  Result := Avail;
+end;
+
+function TMemStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;  { 只读流：写入一律抛错，返回值仅为满足签名 }
+  raise EVfsError.CreateCtx('write', FPath, 'stream is read-only');
+end;
+
+function TMemStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+begin
+  CheckOpen;
+  case AOrigin of
+    soBeginning: FPos := AOffset;
+    soCurrent:   FPos := FPos + AOffset;
+    soEnd:       FPos := Length(FData) + AOffset;
+  end;
+  Result := FPos;
+end;
+
+procedure TMemStream.Close;
+begin
+  FClosed := True;
+end;
+
+function TMemStream.ReadAt(var ABuf; const ACount: SizeUInt;
+  const AOffset: Int64): SizeUInt;
+var
+  Avail: SizeUInt;
+begin
+  CheckOpen;
+  if (AOffset < 0) or (AOffset >= Length(FData)) then
+    Exit(0);
+  Avail := SizeUInt(Length(FData)) - SizeUInt(AOffset);
+  if ACount < Avail then
+    Avail := ACount;
+  if Avail > 0 then
+    Move(FData[AOffset], ABuf, Avail);
+  Result := Avail;
+end;
+
+end.

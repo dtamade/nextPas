@@ -41,7 +41,9 @@ respack.pas       ← 门面 re-export
 - **[INV-R1]** 线格式与 [`FORMAT.md`](FORMAT.md) 唯一对应；改格式先改文档升版本
 - **[INV-R2]** Open 完成八步校验清单后才暴露任何查找；不存在"半信任"句柄
 - **[INV-R3]** Find/Stat 只在已通过校验的 index 上做二分，路径比较为字节序精确比较
-- **[INV-R4]** reader 全程零堆分配（Find/Stat/EntryAt）；Open 本身零拷贝（不复制 blob）
+- **[INV-R4]** reader 查询操作（Find/Stat/EntryAt）零堆分配，只返回定长 record；
+  路径物化（PathOf）每次调用恰好构造一个 string。Open 零拷贝（不复制 blob），
+  校验期对每条目各做一次路径物化用于语法断言
 - **[INV-R5]** writer 输出确定性：同输入同选项 ⇒ 字节级相同 blob（含 DOS 纪元下限式
   时间戳钳制策略，对齐 zip 单元先例）；golden 快照锁定该性质
 - **[INV-R6]** 去重开启时，槽位复用必须 fnv 候选命中且逐字节回验相等

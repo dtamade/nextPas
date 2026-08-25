@@ -95,6 +95,8 @@ IVfs = interface
   function Stat(const APath: string): TStatInfo;
   function List(const ADirPath: string): TEntryArray;
   function OpenRead(const APath: string): IStream;
+  { 后端大小写敏感性内省：供上层折叠/匹配策略决策（memtree=True，os 按平台） }
+  function CaseSensitive: Boolean;
 end;
 
 TEntryInfo = record
@@ -197,7 +199,7 @@ rust-embed 在 debug 构建默认直接读磁盘（免"改一行重编全部资�
 | 决策 | 理由 |
 |------|------|
 | v1 只读契约 | 匹配资源嵌入主场景；写入走 fs；避免空实现污染接口 |
-| IVfs 固定四操作而非 Go 式最小核+能力接口 | **有意偏离并记录**：三个后端全能高效实现四操作，无需运行期能力探测；批量操作保持门面函数。若出现只能部分实现的第 4 后端再引入能力拆分 |
+| IVfs 四读操作 + CaseSensitive 内省，而非 Go 式最小核+能力接口 | **有意偏离并记录**：三个后端全能高效实现 Exists/Stat/List/OpenRead 四个读操作，CaseSensitive 是后端固有属性的内省（供大小写折叠策略决策），无需运行期能力探测；批量操作保持门面函数。若出现只能部分实现的第 4 后端再引入能力拆分 |
 | 自有 `TEntryInfo` 不复用 `fs.base` | 守住 "L2 仅依赖 L0-L1"；嵌入域字段需求远小于 fs；转换成本收口在 os 后端一个单元 |
 | `IStream` 复用 io 词汇 | 流词汇 owner 是 io，不自造第二套 |
 | 错误带 Op/Path 上下文 | Go PathError 是企业级错误定位的事实标准 |
