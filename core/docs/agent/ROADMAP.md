@@ -17,7 +17,8 @@ TSSEFeeder feed 式引擎（ParseSSE 委托单一引擎，WHATWG 对齐），目
 跨模块 slice；两引擎输入域不同（agent.sse 字节域含 UTF-8 跨块/BOM/DoS 上限，
 http.sse 文本行域），合并经审计判定不立项 |
 | **W6 结构化输出与工具选择（v1.1 第一批，2026-08-25 立项）** | 词表 `TToolChoiceMode`/`ToolChoiceName` + `ResponseSchemaJson` 启用；openai 族 json_schema strict 编码 + tool_choice 四形态；anthropic tool_choice 映射（required→any、none→省略 tools 转译）+ schema fail-fast；WIRE-MAPPINGS §1.7 立 strict 节 | test_provider_openai / test_provider_anthropic / test_codecs / test_fake_provider 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准无回归 + Ready 报告 |
-| **W7 推理力度与流式空闲卫生（v1.1 第二批，2026-08-25 立项）** | 词表 `TReasoningEffort`（openai reasoning_effort 编码，anthropic 忽略+warn 待遇对齐）；传输层 `ReadIdleTimeoutMs` 流式块间空闲超时（回环时序验证，aecTimeout 合成不污染取消标志） | test_provider_openai / test_provider_anthropic / test_transport_stream 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准 A/B 无回归 + Ready 报告 |
+| **W7 推理力度与流式空闲卫生（v1.1 第二批，2026-08-25 立项）** | 词表 `TReasoningEffort`（openai reasoning_effort 编码，anthropic 忽略+warn 待遇对齐）；传输层 `ReadIdleTimeoutMs` 流式块间空闲超时（回环时序验证，aecTimeout 合成不污染取消标志）；新增 `test_e2e_live` 真实端点 opt-in 门 | test_provider_openai / test_provider_anthropic / test_transport_stream / test_e2e_live 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准 A/B 无回归 + Ready 报告 |
+| **W8 可靠性装饰器套件（v1.1 第三批，2026-08-25 立项）** | `WithFallback` 多供应商容灾链（白名单切换、首 delta 门、最后原始错误透传、取消即止、OnSwitch 观测）+ `WithThrottle` 客户端限流（`IAgentRateGate` 细接口对接 core.lockfree.ratelimit 标准库，clock 注入零睡眠等待，超窗本地 aecRateLimited 带 RetryAfterMs） | test_fallback / test_throttle 全绿（含 HEAPTRC 泄漏门）+ 三基准 A/B 零回归 + Ready 报告 |
 
 ## Wave 内顺序约束
 
@@ -101,8 +102,10 @@ http.sse 文本行域），合并经审计判定不立项 |
   【已立项 2026-08-25 → W7 落地】
 - **WithFallback 装饰器**（多 provider 容灾链：主路错误码命中白名单→次路重放）——
   纯组合 `IAgentProvider` 即可实现，~百行级。触发：任一客户表达多供应商容灾需求。
+  【已立项 2026-08-25 → W8 落地】
 - **WithThrottle 装饰器**（客户端限流防 429，消费 core.ratelimit 令牌桶）——
   与 ratelimit 模块的标准库协同故事。触发：客户出现持续 429 场景。
+  【已立项 2026-08-25 → W8 落地】
 - **IdleGuard 装饰器**（code888 空闲超时 408 语义）——待 code888 Phase 1 接入时
   评估上移为通用 transport 装饰器。
 - **WithHedge 对冲装饰器**（延迟敏感场景 T 毫秒后并发第二请求取先达）——

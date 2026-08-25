@@ -392,6 +392,13 @@ end;
 function NewOpenAIProvider(const AOpts: TOpenAIOptions): IAgentProvider;
 function NewAnthropicProvider(const AOpts: TAnthropicOptions): IAgentProvider;
 function NewFakeProvider(const AScriptJson: TJsonText): IAgentProvider;
+{ W8 可靠性装饰器（语义权威=本文件 §装饰器组合）}
+function NewFallbackProvider(const AChain: array of IAgentProvider;
+  const APolicy: TFallbackPolicy): IAgentProvider;
+function NewThrottledProvider(const AInner: IAgentProvider;
+  const AGate: IAgentRateGate; const AClock: IAgentClock;
+  const APolicy: TThrottlePolicy): IAgentProvider;
+function NewTokenBucketGate(ARatePerSecond, ABurst: Double): IAgentRateGate;
 function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   const AClock: IAgentClock): IAgentProvider;
 
@@ -552,6 +559,52 @@ function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   （不吞为成功、不还原成原始错误）。
 - 流式作用域：装饰器只重试到**拿到流且收到首个 delta** 为止；流中途失败原样
   上抛（重放意味着向消费方重复投递 delta——禁止）。
+
+{ ---- W8 可靠性装饰器（与 WithRetry 同层纯组合；语义可断言）---- }
+
+TFallbackSwitchHook = reference to procedure(AIndex: Integer;
+  const AProviderName: string; AErrCode: TAgentErrorCode;
+  const AErrMsg: string);
+  { 切换发生时上报：AIndex=即将尝试的链内序号（0 起）；实例仅调用期有效 }
+
+TFallbackPolicy = record
+  FailOn: TAgentErrorCodes;        { 触发降级的错误码集；默认同 retry 四码 }
+  OnSwitch: TFallbackSwitchHook;   { nil=静默 }
+  class function Default: TFallbackPolicy; static;
+end;
+
+IAgentRateGate = interface
+  { TryAcquire：True=放行；False=拒绝并给出建议等待毫秒（0=未指明）。
+    细接口——core.lockfree.ratelimit 经 NewTokenBucketGate 接入，
+    测试用 fake gate 自由编排拒绝序列 }
+  function TryAcquire(out ARetryAfterMs: Int64): Boolean;
+end;
+
+TThrottlePolicy = record
+  MaxWaitMs: Int64;                { 单次调用累计等待上限；超限→本地 aecRateLimited
+                                     （RetryAfterMs=gate 最近建议值），默认 30_000 }
+  MaxAcquires: Integer;            { 等待-重取循环上限，防御性封顶，默认 64 }
+  OnWait: TThrottleWaitHook;       { nil=静默；(ANextRetryAfterMs)每次等待前上报 }
+  class function Default: TThrottlePolicy; static;
+end;
+
+TThrottleWaitHook = reference to procedure(AWaitNo: Integer;
+  ANextRetryAfterMs: Int64);
+
+NewFallbackProvider 语义：
+- 链内单尝试逐家切换：AChain[0] 抛出且 ErrorCode ∈ FailOn ∩ IsRetryable →
+  试 AChain[1]……全链耗尽 → **透传最后一次原始错误**（不包装不改码，
+  对齐 WithRetry 哲学）；白名单外首错立即上抛不切换。
+- 流式：仅**拿到流且收到首个 delta 前**允许降级（对齐 retry 首 delta 门）。
+- 取消优先于一切：令牌已触发 → 不再切换，原样上抛。
+- Complete/Stream 的请求对象按值传给每一家——各 provider 自行编码互不干扰。
+
+NewThrottledProvider 语义：
+- 每次 Complete/Stream 先 gate.TryAcquire；拒绝→在 AClock.SleepMs 上取消感知
+  等待 RetryAfterMs 后重取；累计等待 > MaxWaitMs 或重取次数 > MaxAcquires →
+  本地抛 aecRateLimited（RetryAfterMs=最近 gate 建议值）。归因分离：本地整形
+  与上游 429 都落 aecRateLimited，但本地路径 Message 带 'throttled: ' 前缀、
+  从未触网。取消打断等待立即以 EAgentCancelled 上抛。
 
 ## 6. 循环（nextpas.core.agent.loop）
 

@@ -118,7 +118,12 @@ if LProvider = nil then
   raise EAgentError.Create(aecConfig, 0, 'NEXTPAS_AGENT_OPENAI_* 未配置');
   { 演示代码才允许降级 fake；生产路径绝不静默回退（§3）}
 
-// 2) 可靠性（一行装饰）
+// 2) 可靠性（一行装饰；W8 起可叠装——顺序即语义：限流在最外先整形，
+//    重试护单家，容灾链兜底切供应商）
+LProvider := WithThrottle(LProvider,
+  NewTokenBucketGate(0.5, 5), NewSystemClock, TThrottlePolicy.Default);
+LProvider := WithFallback([LProvider, LBackupProvider],
+  TFallbackPolicy.Default);
 LProvider := WithRetry(LProvider, TRetryPolicy.Default, NewSystemClock);
 
 // 3) 调用：一行全量 或 pull 式流式（工具随请求携带）
