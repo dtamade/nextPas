@@ -523,6 +523,47 @@ opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
   （journal_mode=WAL 会持久化进文件头，统一入口静默改写会波及
   非本模块工具）；调优走本节直接入口。
 
+### 2.16 参数级批量绑定（V3-C2，IDbArrayBinding）
+
+单条参数化 SQL 的每个 `?` 绑一个**列数组**（非标量），一次执行由
+服务端展开为 N 行。pg 走 unnest 数组展开路径：10K 行单次往返，
+实测 pg batch_insert 四路对照中 array ≈ batch（见 benchmarks.md）。
+与 IDbBatchExecutor 分工：那是"多语句往返压缩"的通用路径（任意
+SQL 序列、全后端可用）；本面是"单语句参数级批量"的快路径（v1 仅
+pg）。探测对象是 **IDbQuery**（门面 `DbArrayBinding(Q)`，未支持
+返回 nil）；能力布尔 `SupportsArrayBinding ⇔ 接口存在性` 互证。
+
+```pascal
+Q := Conn.Query('INSERT INTO t(a, b) SELECT * FROM unnest(?::bigint[], ?::text[])');
+B := DbArrayBinding(Q);
+B.BeginBind(N);                 // 先声明行数，必填
+B.BindInt64Column(1, Ids);
+B.BindTextColumn(2, Names, Masks);   // NULL 掩码可选重载
+Q.Step;                          // 单次往返完成 N 行
+```
+
+- **目标类型 cast 写在消费方 SQL 里**（`?::bigint[]` 等）：显式、
+  可审计；适配器只做 `? → $N` 翻译，不改写语义。
+- **fail-fast 全客户端侧**（不触网执行）：BeginBind 缺失 / 负行数 /
+  任一列长度 ≠ 声明行数 / 掩码长度失配 / 同批同列重复绑定 / 文本
+  元素含 NUL(#0)——文本协议在 NUL 截断，拒绝静默损坏。
+- **全覆盖检查**：数组模式激活后 Step 强制所有占位符已绑定（标量
+  与列绑定并集），防 unnest(NULL) 静默零行；标量+数组可混绑（常量
+  列 × 展开列），标量后绑替换同位列绑定（last-wins）。
+- **NULL 掩码**：True = 该行 NULL，值被忽略；空串与 NULL 可区分
+  （text 元素恒加引号转义，NULL 用裸令牌）。
+- **编码**：int64 十进制；bool t/f；double 经 core.text.number
+  Schubfach 最短往返（区域设置无关，NaN/±Inf 原生输出）；文本双引号
+  包裹 + `\`/`"` 转义。字面量形态对消费方透明。
+- **执行语义与既有面正交**：Reset + Step 同批重执行；RETURNING 正常
+  读回展开行；语句缓存/事务/观测钩子路径不受影响（数组参数就是普通
+  文本参数）。
+- **使用前置**：先探能力（`Cap.SupportsArrayBinding` 或探测 nil）
+  再构建方言 SQL——sqlite 的 Query 急切 prepare，pg 方言 SQL 在
+  不支持后端会于构建期抛语法错（诚实失败，但应避免）。
+- **后端矩阵**：pg = True；sqlite/mysql/odbc/redis = False（诚实缺
+  席，conformance 钉死互证；后续若实现须走同一契约面）。
+
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
 旧入口名 `nextpas.core.sqlite` / `nextpas.core.pg` 曾在 G2 全量删除；
@@ -576,6 +617,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_base    # Redis 帧�
 make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_adapter  # Redis 适配器（V3-A5/A5.1b，离线全契约 + TLS 负路径 + live env 门控）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_factory     # 统一驱动工厂（V3-A5 收口，离线）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlite_pragmas  # C5 调优预设（离线）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_array_bind  # C2 参数级批量绑定（sqlite 离线诚实契约 + pg 真机段）
 make focused FOCUS=core/tests/nextpas.core.http.middleware/test_session_sqlite  # 消费方回归
 ```
 
