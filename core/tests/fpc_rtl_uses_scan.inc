@@ -126,7 +126,36 @@ begin
     (AUnitLower = 'objects') or
     (AUnitLower = 'variants') or
     (AUnitLower = 'typinfo') or
-    (AUnitLower = 'ctypes');
+    (AUnitLower = 'ctypes') or
+    { 引导/运行时管理类: 线程初始化一律经 nextpas.core.thread.init,
+      堆/宽字符管理由框架统一裁决, 源码不得直接引用 }
+    (AUnitLower = 'cthreads') or
+    (AUnitLower = 'cmem') or
+    (AUnitLower = 'cwstring') or
+    (AUnitLower = 'cwstrings') or
+    (AUnitLower = 'pthreads') or
+    (AUnitLower = 'initc') or
+    (AUnitLower = 'system') or
+    (AUnitLower = 'objpas') or
+    { 平台直调类: 经 nextpas.core.platform.* 封装 }
+    (AUnitLower = 'unixtype') or
+    (AUnitLower = 'unixutil') or
+    (AUnitLower = 'linux') or
+    (AUnitLower = 'errors') or
+    (AUnitLower = 'termio') or
+    (AUnitLower = 'sockets') or
+    (AUnitLower = 'serial') or
+    (AUnitLower = 'syscall') or
+    (AUnitLower = 'cpu') or
+    (AUnitLower = 'mmx') or
+    { 终端原语类: 经 nextpas.core.tui.* / backend 封装 }
+    (AUnitLower = 'keyboard') or
+    (AUnitLower = 'mouse') or
+    (AUnitLower = 'video') or
+    { 调试辅助类: 由构建开关注入, 源码不得直接引用 }
+    (AUnitLower = 'heaptrc') or
+    (AUnitLower = 'lineinfo') or
+    (AUnitLower = 'lnfodwrf');
 end;
 
 { True if any uses-clause lists a bare FPC RTL unit name. }
