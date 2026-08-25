@@ -13,6 +13,8 @@
 | 流式空闲卫生 | aecTimeout | ReadIdleTimeoutMs 启用时块间空闲超限合成 aecTimeout 终止流（GetCancelled 保持 False 可区分取消）；仅流路径 |
 | provider.fake | aecProtocol | 脚本耗尽后再调用 |
 | WithRetry | （透传最后一次原始错误）| 重试耗尽不包装、不改码、不丢 RetryAfterMs |
+| WithFallback | （透传最后一次原始错误）| 全链耗尽不包装不改码；白名单外首错立即直通 |
+| WithThrottle | aecRateLimited | 本地整形拒绝（Message 带 'throttled: ' 前缀、从未触网）；gate 最近建议值保真进 RetryAfterMs |
 | agent.sse | aecProtocol | 正常解析仅产帧不抛错；触发 DoS 上限（SECURITY §3）直接抛 aecProtocol 终止流 |
 | loop | aecToolFailed, aecBudgetExhausted（收尾态）, aecCancelled, aecConfig | 工具异常兜底；预算走 RunOutcome 而非异常（见 §5）|
 | 词表/fold | aecProtocol | delta 序列违反折叠规则 |
