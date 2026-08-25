@@ -23,6 +23,7 @@ completion claim.
 | `base` | L0 | root values/contracts | `nextpas.core.base` | RTL, exception root | focused-runtime |
 | `bench` | Support | benchmark helpers | `nextpas.core.bench` | explicit test/bench only | source-contract |
 | `bytes` | L1 | byte containers | `nextpas.core.bytes` | L0, documented text/encoding seam | focused-runtime |
+| `cbor` | L2 | CBOR format (RFC 8949 deterministic subset) | `nextpas.core.cbor` | L0-L1 | focused-runtime |
 | `collections` | L1 | data structures | `nextpas.core.collections` | L0 | focused-runtime |
 | `compress` | L2 | compression formats | `nextpas.core.compress` | L0-L1, provider FFI | focused-runtime |
 | `config` | L3 | config facade | `nextpas.core.config` | L0-L2 formats | focused-runtime |
