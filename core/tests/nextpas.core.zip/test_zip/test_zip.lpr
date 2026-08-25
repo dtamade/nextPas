@@ -15,7 +15,7 @@ var
 
 { python3 zipfile 交叉验证脚本：argv[1]=zip 路径 argv[2]=清单路径。
   清单行格式：'TIME y m d h n s'（可选，全体条目期望 date_time）或
-  'name\tsize\tcrc32hex'。逐条目断言：文件名、method=store、UTF-8 flag、
+  'name\tmethod\tsize\tcrc32hex'。逐条目断言：文件名、压缩方法、UTF-8 flag、
   尺寸、zlib.crc32；整体断言条目数与 testzip() 通过。 }
 const
   C_PY_CHECK =
@@ -27,15 +27,15 @@ const
     '    if not line: continue'#10 +
     '    if line.startswith(''TIME ''):'#10 +
     '        expect_time = tuple(int(x) for x in line.split('' '')[1:]); continue'#10 +
-    '    name, size, crc = line.split(''\t'')'#10 +
-    '    rows.append((name, int(size), int(crc, 16)))'#10 +
+    '    name, method, size, crc = line.split(''\t'')'#10 +
+    '    rows.append((name, int(method), int(size), int(crc, 16)))'#10 +
     'z = zipfile.ZipFile(zpath)'#10 +
     'assert z.testzip() is None, ''testzip failed'''#10 +
     'infos = z.infolist()'#10 +
     'assert len(infos) == len(rows), f''count {len(infos)} != {len(rows)}'''#10 +
-    'for info, (name, size, crc) in zip(infos, rows):'#10 +
+    'for info, (name, method, size, crc) in zip(infos, rows):'#10 +
     '    assert info.filename == name, f''name {info.filename!r} != {name!r}'''#10 +
-    '    assert info.compress_type == zipfile.ZIP_STORED, ''not stored'''#10 +
+    '    assert info.compress_type == method, f''method {info.compress_type} != {method}'''#10 +
     '    assert info.flag_bits & 0x800, ''utf8 flag missing'''#10 +
     '    data = z.read(info)'#10 +
     '    assert len(data) == size, f''size {len(data)} != {size}'''#10 +
@@ -176,7 +176,7 @@ begin
   LDir := NewTempCaseDir;
   try
     WriteFile(LDir + '/case.zip', LZip);
-    WriteManifest(LDir, 'hello.txt'#9'5'#9'3610a686'#10);
+    WriteManifest(LDir, 'hello.txt'#9'0'#9'5'#9'3610a686'#10);
     CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
   finally
     RemoveAll(LDir);
@@ -200,10 +200,10 @@ begin
   try
     WriteFile(LDir + '/case.zip', LZip);
     WriteManifest(LDir,
-      'a.txt'#9'5'#9 + Hex32(Crc32OfBytes(BytesOfStr('alpha'))) + #10 +
-      '图片/图像.png'#9 + IntToStr(Length(BytesOfStr(#$89'PNG-fake-图像'))) + #9 +
+      'a.txt'#9'0'#9'5'#9 + Hex32(Crc32OfBytes(BytesOfStr('alpha'))) + #10 +
+      '图片/图像.png'#9'0'#9 + IntToStr(Length(BytesOfStr(#$89'PNG-fake-图像'))) + #9 +
         Hex32(Crc32OfBytes(BytesOfStr(#$89'PNG-fake-图像'))) + #10 +
-      'deep/path/b.bin'#9'0'#9'00000000'#10);
+      'deep/path/b.bin'#9'0'#9'0'#9'00000000'#10);
     CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
   finally
     RemoveAll(LDir);
@@ -230,7 +230,7 @@ begin
   try
     WriteFile(LDir + '/case.zip', LZip);
     WriteManifest(LDir, 'TIME 2026 8 24 12 34 56'#10 +
-      'timed.txt'#9'1'#9 + Hex32(Crc32OfBytes(BytesOfStr('x'))) + #10);
+      'timed.txt'#9'0'#9'1'#9 + Hex32(Crc32OfBytes(BytesOfStr('x'))) + #10);
     CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
   finally
     RemoveAll(LDir);
@@ -355,8 +355,98 @@ begin
   LDir := NewTempCaseDir;
   try
     WriteFile(LDir + '/case.zip', LZip);
-    WriteManifest(LDir, 'big.bin'#9 + IntToStr(Length(LPayload)) + #9 +
+    WriteManifest(LDir, 'big.bin'#9'0'#9 + IntToStr(Length(LPayload)) + #9 +
       Hex32(Crc32OfBytes(LPayload)) + #10);
+    CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
+procedure TestDeflateEntryStructure;
+var
+  LW: IZipWriter;
+  LR: IZipReader;
+  LPayload, LZip, LGot: TBytes;
+  LDir: string;
+  LI: Integer;
+begin
+  SetLength(LPayload, 4096);
+  for LI := 0 to High(LPayload) do
+    LPayload[LI] := Byte(LI mod 13);  { 高可压模式 }
+  LW := NewZipWriter;
+  LW.AddEntryDeflate('comp.bin', LPayload);
+  LZip := LW.Finish;
+
+  CheckEqual(Int64(8), Int64(LE16At(LZip, 8)), 'local method field is 8');
+  CheckEqual(Int64(Crc32OfBytes(LPayload)), Int64(LE32At(LZip, 14)),
+    'crc over uncompressed payload');
+  CheckEqual(Int64(4096), Int64(LE32At(LZip, 22)), 'uncompressed size');
+  Check(Int64(LE32At(LZip, 18)) < 4096, 'compressed size smaller');
+
+  { 自家读器往返还原 }
+  LR := NewZipReader(LZip);
+  LGot := LR.ExtractToBytesByName('comp.bin');
+  Check(SameBytes(LGot, LPayload), 'deflate roundtrip equality');
+
+  LDir := NewTempCaseDir;
+  try
+    WriteFile(LDir + '/case.zip', LZip);
+    WriteManifest(LDir, 'comp.bin'#9'8'#9'4096'#9 +
+      Hex32(Crc32OfBytes(LPayload)) + #10);
+    CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
+procedure TestDeflateDeterminism;
+var
+  LA, LB: IZipWriter;
+  LPayload: TBytes;
+  LI: Integer;
+begin
+  SetLength(LPayload, 2048);
+  for LI := 0 to High(LPayload) do
+    LPayload[LI] := Byte((LI * 7) mod 251);
+  LA := NewZipWriter;
+  LB := NewZipWriter;
+  LA.AddEntryDeflate('d.bin', LPayload);
+  LB.AddEntryDeflate('d.bin', LPayload);
+  Check(SameBytes(LA.Finish, LB.Finish),
+    'same deflate inputs yield identical archive bytes');
+end;
+
+procedure TestDirectoryEntries;
+var
+  LW: IZipWriter;
+  LR: IZipReader;
+  LZip: TBytes;
+  LDir: string;
+begin
+  LW := NewZipWriter;
+  LW.AddDirectory('assets');
+  LW.AddDirectoryWithTime('assets/sub', 1787574896);
+  LW.AddEntryWithTime('assets/sub/f.txt', BytesOfStr('x'), 1787574896);
+  LZip := LW.Finish;
+
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(3), Int64(LR.EntryCount), 'two dirs plus one file');
+  Check(LR.Entry(0).IsDirectory, 'assets flagged directory');
+  Check(LR.Entry(1).IsDirectory, 'assets/sub flagged directory');
+  Check(not LR.Entry(2).IsDirectory, 'file not flagged directory');
+  CheckEqual(Int64(-1), Int64(LR.Find('assets')),
+    'bare name not stored; trailing slash normalized');
+  Check(SameBytes(LR.ExtractToBytesByName('assets/'), nil),
+    'directory extracts empty');
+
+  LDir := NewTempCaseDir;
+  try
+    WriteFile(LDir + '/case.zip', LZip);
+    WriteManifest(LDir,
+      'assets/'#9'0'#9'0'#9'00000000'#10 +
+      'assets/sub/'#9'0'#9'0'#9'00000000'#10 +
+      'assets/sub/f.txt'#9'0'#9'1'#9 + Hex32(Crc32OfBytes(BytesOfStr('x'))) + #10);
     CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
   finally
     RemoveAll(LDir);
@@ -375,5 +465,8 @@ begin
   T.Test('State guards', @TestStateGuards);
   T.Test('Entry limit', @TestEntryLimit);
   T.Test('Large payload', @TestLargePayload);
+  T.Test('Deflate entry structure', @TestDeflateEntryStructure);
+  T.Test('Deflate determinism', @TestDeflateDeterminism);
+  T.Test('Directory entries', @TestDirectoryEntries);
   if not T.Run then Halt(1);
 end.
