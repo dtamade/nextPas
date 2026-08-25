@@ -173,5 +173,8 @@ SHA-256 digest，modTime 已知。字节序比较 `'a' < 'i'`，故 app.js 在�
 
 - 加字段：优先用 `reserved`、flag 位与登记表机制；reader 拒绝未知置位保证不会静默
   误解新格式
+- **预留位登记**：header flags **bit2 = hash-index 区**（未来 O(1) 路径查找索引，
+  对标 Tauri phf 完美哈希的扩展槽）。v1 reader 见 bit2 置位即拒绝；启用须伴随本表
+  更新与版本评审，不动既有布局
 - 改布局/语义：`version` 递增；reader 只接受自己认识的版本集合 `{1}`
 - 新压缩编解码：走 `codecId` 登记表 + compress 模块 seam，独立立项

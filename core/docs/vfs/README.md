@@ -47,6 +47,13 @@ Bytes := VfsReadAllBytes(Fs, 'assets/app.js');
 // 重定根视图（Go fs.Sub 对等物）
 var Web := CreateSubVfs(Fs, 'wwwroot');
 
+// 全树确定性遍历（Go fs.WalkDir 对等物）
+VfsWalk(Fs, '',
+  procedure(const APath: string; const AInfo: TEntryInfo; var AStop: Boolean)
+  begin
+    Log(APath);
+  end);
+
 // 后端装配视角
 FsEmbedded := CreateEmbeddedVfs(ResPackOpen(@Blob[0], Length(Blob)));  // 嵌入包
 FsDisk     := CreateOsVfs('/srv/app');                                 // 真实目录
@@ -56,14 +63,14 @@ FsMem      := CreateMemTreeVfs(Tree);                                  // 测试
 ## 架构
 
 ```
-nextpas.core.vfs.pas            ← 门面：re-export + 便利函数 inline 转发
+nextpas.core.vfs.pas            ← 门面：re-export + 便利函数（ReadAll/Walk/Stat/List）inline 转发
 nextpas.core.vfs.base.pas       ← TEntryInfo/TStatInfo record、规范路径工具、常量
 nextpas.core.vfs.intf.pas       ← IVfs 接口契约
 nextpas.core.vfs.errors.pas     ← EVfsError(含 Op/Path) 及子类
 nextpas.core.vfs.memtree.pas    ← 内存不可变树（embedded 底座 + 测试替身）+ Builder
 nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片
 nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转换在此收口）
-nextpas.core.vfs.sub.pas        ← CreateSubView：任意 IVfs 的重定根包装
+nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
 nextpas.core.vfs.mount.pas      ← （推迟）挂载表/overlay
 ```
 
@@ -176,7 +183,7 @@ rust-embed 在 debug 构建默认直接读磁盘（免"改一行重编全部资�
 
 | # | 属性（来源 fstest.go） |
 |---|------------------------|
-| P1 | 从根遍历枚举结果 == 期望文件集（checkDir 递归走全树） |
+| P1 | 根可打开可列（`List('.')`），且从根遍历枚举结果 == 期望文件集（checkDir 递归走全树） |
 | P2 | 每个列出的子名合法：非空、非 `.`/`..`、不含 `/` 与 `\` |
 | P3 | `Stat(path)` 与父目录 List 条目一致（size/IsDir/modTime 三方一致） |
 | P4 | 期望存在的文件 Open 可读且逐字节相等；不存在的路径行为符合错误表 |

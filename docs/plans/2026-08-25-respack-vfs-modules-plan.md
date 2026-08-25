@@ -24,8 +24,9 @@
 ## 对标驱动的关键设计决策（已定稿，证据见 PARITY 文档）
 
 0. **语义基线取自 Go io/fs**：ValidPath 路径语法（含 `.` 根特例）、PathError 式
-   Op/Path 错误上下文、fs.Sub 重定根视图、fstest 级一致性属性电池——四件全盘采纳；
-   接口最小化策略有意偏离并记录理由。
+   Op/Path 错误上下文、fs.Sub 重定根视图、fstest 级一致性属性电池、WalkDir 对等物
+   `VfsWalk` 与包级辅助函数、MapFS 对等物 memtree——全盘采纳；接口最小化策略与
+   phf O(1) 索引为有意偏离并记录理由（后者留 flag bit2 扩展槽）。
 1. **respack 仅依赖 L0**（base/errors）：纯格式层；FNV-1a 内联不依赖 checksum；
    digest 区存**不透明 32 字节摘要、算法由调用方注入**（SHA-256 属 hash 域，
    依赖倒置）；目录扫描收口在 `dirsource` 单元（唯一 L2→L2 seam）。
@@ -111,7 +112,8 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
 1. `nextpas.core.vfs.embedded.pas` — 零拷贝切片 + `AOwnsBlob` 生命期语义
 2. `nextpas.core.vfs.os.pas` — fs/path 适配与类型转换
 3. `nextpas.core.vfs.sub.pas` — CreateSubVfs 重定根视图（Go fs.Sub 对等物）
-4. 门面便利函数 `VfsReadAllBytes/VfsReadAllText`
+4. 门面便利函数：`VfsReadAllBytes/VfsReadAllText` + `VfsWalk`（Go WalkDir 对等物）+
+   `VfsStat/VfsList` 包级辅助
 5. source-contract 测试锁定依赖白名单
 
 验证门：
@@ -122,16 +124,17 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance   # fstest �
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contracts
 ```
-出口条件：conformance P1–P8 全过（三后端 × 整树/Sub 视图）；零拷贝地址断言生效；
-source-contract 含 uses 白名单断言（含禁 SysUtils/Classes/OS 单元直引）；
-registry 增加 `vfs` 行。
+出口条件：conformance P1–P8 全过（三后端 × 整树/Sub 视图，含 VfsWalk 遍历一致性）；
+零拷贝地址断言生效；source-contract 含 uses 白名单断言（含禁 SysUtils/Classes/OS
+单元直引）；registry 增加 `vfs` 行。
 
 ### S4 — 嵌入工具链
 
 任务：
 1. `.inc` 生成器（把 blob 转成 typed const Pascal 单元），放工具侧
 2. 工具过滤/映射选项（对标 rust-embed derive 属性与 asar unpack-dir）：
-   include/exclude glob、路径 prefix 映射、去重开关、digest 开关（算法选择）
+   include/exclude glob、路径 prefix 映射、去重开关、digest 开关（算法选择）、
+   extract-to-dir（include_dir extract 对等物，调试/迁移用）
 3. 示例：最小 app 打包前端资源并用 os/embedded 双后端跑通（开发态/发布态切换演示）
 4. 大小基准：const 数组 vs .pack 读入的编译时间/启动时间对比数据；writer 内存上限
    （512MB 声明）实测

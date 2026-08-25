@@ -31,6 +31,8 @@ vfs.pas       ← 门面 re-export + 便利函数
 | 装配 | `CreateEmbeddedVfs(APack: TResPack; AOwnsBlob: Boolean): IVfs` | 零拷贝后端 |
 | 装配 | `CreateOsVfs(const ARoot: string): IVfs` | 真实目录后端 |
 | 视图 | `CreateSubVfs(AFs: IVfs; const ASubRoot: string): IVfs` | 重定根，不改底层实例 |
+| 遍历 | `VfsWalk(AFs: IVfs; const ARoot: string; ACallback): Boolean` | 字典序全树遍历（Go WalkDir 对等物）；回调可置 AStop 中止 |
+| 便利 | `VfsStat(AFs; APath): TStatInfo` / `VfsList(AFs; ADir): TEntryArray` | 门面包函数，与 Go 包级辅助同构 |
 | 便利 | `VfsReadAllBytes(AFs; APath): TBytes` / `VfsReadAllText(...): string` | 门面函数，非接口方法 |
 
 ```pascal
@@ -63,6 +65,10 @@ end;
 - **[INV-V8]** List 结果按路径字节序升序；目录条目由文件路径推导，不要求存储存在
 - **[INV-V9]** Sub 视图不改变底层生命期与并发性质；`ASubRoot` 必须是已存在的目录路径
 - **[INV-V10]** os 后端大小写敏感性跟随平台并在实例上可查询；embedded/memtree 恒敏感
+- **[INV-V11]** VfsWalk 确定性：字典序访问、每路径恰好一次、由不可变快照保证无环；
+  回调置 AStop 后立即停止且不再进入子树
+- **[INV-V12]** OpenRead 返回的流 SHOULD 同时实现 `io.intf.IReaderAt`（三后端均可
+  提供 positioned 读）；consumer 经 Supports 探测，缺省退化 Seek+Read
 
 ---
 
@@ -108,6 +114,7 @@ end;
 | List（embedded） | 有序区间扫描，一次数组分配 |
 | OpenRead（os） | 经 fs.Open，句柄级开销 |
 | Sub 视图转发 | O(1) 包装，无树复制 |
+| VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 |
 
 ---
 

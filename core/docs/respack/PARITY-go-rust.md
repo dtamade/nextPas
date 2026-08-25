@@ -55,7 +55,62 @@
 | MIME 推断 | net/http 按扩展名 | rust-embed 独立 mime_guess crate | 保持消费侧（http.static）职责 |
 | 零拷贝 | embed.FS 文件实现 Seeker+ReaderAt，指向静态数据 | Tauri Cow::Borrowed 切片 | 维持设计：切片直指 blob，接口持引用保活 |
 
-## 三、评分卡（自评，设计期）
+## 三、Essential API 覆盖矩阵（符号级，2026-08-25 深化）
+
+图例：`定稿`（设计已锁）/ `Partial` / `Deferred`（显式推迟有据）/ `N/A`
+
+### Go `io/fs` 逐符号
+
+| Go API | nextpas 对应物 | 状态 | 说明 |
+|--------|----------------|------|------|
+| `fs.FS.Open` | `IVfs.OpenRead`（+Exists/Stat/List 富化） | 定稿 | 只读域四操作合一 |
+| `fs.ValidPath` | `vfs.base` 规范路径校验 | 定稿 | 全盘采纳含 `.` 根 |
+| `fs.File{Stat,Read,Close}` | `IStream`（io.intf） | 定稿 | 句柄级 Stat 推迟：只读场景经 `IVfs.Stat` 已足 |
+| `io.Seeker` / `io.ReaderAt` 能力文件 | `IStream.Seek`；`IReaderAt` 经 Supports 可选能力 | 定稿 | embedded/memtree/os 均可提供 ReaderAt，写入 SHOULD 不变量 |
+| `fs.DirEntry` / `fs.FileInfo` | `TEntryInfo` / `TStatInfo` | 定稿 | record 替代接口（值语义） |
+| `fs.ReadDirFile.ReadDir(n)` 流式 | `List` 整表返回 | Deferred | 流式目录迭代器待 >10k 条目场景立项；整表符合当前规模 |
+| ReadDirFS / ReadFileFS / StatFS 能力接口 | 有意收敛为固定四操作 | 定稿偏离 | 三后端全能高效实现；理由见 vfs README 决策记录 |
+| `fs.Sub` | `CreateSubVfs`（vfs.sub 单元） | 定稿 | fstest 强制测 Sub 往返，同构 |
+| `fs.WalkDir` | **`VfsWalk(AFs; ARoot; ACallback)`**（本轮补齐） | 定稿 | 字典序确定性遍历；纯 IVfs 组合无新依赖 |
+| `fs.Glob` | — | Deferred | 匹配器在 fs.glob/path 域；出现真实需求时以 path seam 接入，不提前建依赖 |
+| 包级 `fs.ReadFile/Stat/ReadDir` 辅助 | 门面 `VfsReadAllBytes/Text` + **`VfsStat/VfsList`**（本轮补齐） | 定稿 | 与 Go"包函数优化路径"同构 |
+| sentinel errors（ErrNotExist 等） | 异常类分层 EVfsNotFound 等 | 定稿 | 异常 vs 返回值为仓库既定风格 |
+| `fs.PathError{Op,Path}` | `EVfsError.Op/Path` | 定稿 | |
+
+### Go `embed` / `testing/fstest` 逐符号
+
+| Go API | nextpas 对应物 | 状态 | 说明 |
+|--------|---------------|------|------|
+| `//go:embed` 指令 | S4 pack CLI + `.inc` 生成器 | Deferred→S4 | Pascal 无宏；构建工具承担 |
+| `embed.FS` | `IVfs`（embedded 后端） | 定稿 | |
+| `embed.FS.ReadDir/ReadFile` 方法 | 门面 `VfsList/VfsReadAllBytes` | 定稿 | 包函数而非类型方法，等价能力 |
+| `fstest.TestFS` 属性电池 | `test_vfs_conformance` P1–P8 × 后端矩阵 | 定稿 | 强度对齐：根打开/子名合法/Stat↔List 一致/Sub 往返 |
+| `fstest.MapFS` | `vfs.memtree`（Builder+Freeze） | 定稿 | 测试替身定位完全一致 |
+
+### Rust 侧逐项
+
+| rust-embed / include_dir / Tauri | nextpas 对应物 | 状态 | 说明 |
+|----------------------------------|----------------|------|------|
+| `#[folder/prefix/include/exclude]` | S4 工具选项同名能力 | Deferred→S4 | 工具层过滤映射 |
+| debug 构建读磁盘 | os/embedded 双态工厂切换 | 定稿 | consumer 零改动，conformance 强制双态同结果 |
+| `metadata_only` | index-only 枚举天然支持 | 定稿 | reader 不触内容即可 Count/枚举 |
+| web 框架 handlers（axum/actix…） | http.static IVfs 内容源（S5） | Deferred→S5 | 跨模块 slice 单独立项 |
+| include_dir `extract()` | 工具 extract-to-dir 选项 | Deferred→S4 | 调试/迁移用途 |
+| Tauri phf 完美哈希 O(1) | 排序数组二分 O(log n) | 定稿偏离 | 10k 条目 ≤14 次缓存友好比较；FORMAT 预留 flag bit2 hash-index 区，超大规模再启用 |
+| Tauri brotli / include-flate | codecId 登记表槽位 | Deferred | 读时分配破坏零拷贝；HTTP 编码归 http.static |
+
+## 四、安全与威胁模型（企业级增补）
+
+| 威胁 | 缓解 | 出处 |
+|------|------|------|
+| 路径穿越（zip-slip 类） | canonical grammar 拒绝 `..`/绝对路径/反斜杠；reader 校验存储形态 | FORMAT 路径规范；与 zip 单元纪律同源 |
+| 符号链接逃逸 | 格式无 symlink/device 条目类型——按构造不存在 | FORMAT entry 布局 |
+| 资源耗尽（恶意超大包） | Open 仅建索引视图零内容拷贝；entryCount/blobTotal 上限校验；writer 显式 512MB raise | CONTRACT INV-R10 |
+| 数据被篡改/供应链投毒 | digest 区（注入算法，推荐 SHA-256）；发布审计流程消费 | FORMAT digest 区；asar integrity 同类 |
+| 数据被当代码执行 | blob 恒为数据段；嵌入载体 typed const 无执行语义 | `.inc` 载体设计 |
+| 哈希碰撞错误共享 | 去重必须字节级回验 | CONTRACT INV-R6 |
+
+## 五、评分卡（自评，设计期）
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
@@ -65,7 +120,7 @@
 
 目标线：实现落地后质量 ≥ 9.0 维持；conformance 门为硬出口条件。
 
-## 四、来源清单
+## 六、来源清单
 
 - https://raw.githubusercontent.com/golang/go/master/src/io/fs/fs.go
 - https://raw.githubusercontent.com/golang/go/master/src/embed/embed.go
