@@ -97,6 +97,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
+| `zip` | L2 | ZIP archive container (store/deflate, Zip64, dir pack/extract) | yes | L0-L2 (compress/fs/checksum owners) | focused-runtime |
 
 Database family: backends are L2 implementations inside the `db` family —
 currently `sqlite`, `pg`, `mysql`, `odbc` and `redis`, physically under
