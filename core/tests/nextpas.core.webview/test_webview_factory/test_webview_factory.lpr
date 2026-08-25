@@ -13,12 +13,22 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
+  nextpas.core.webview.gtk.loader,
   nextpas.core.webview.factory;
+
+function GtkProbeUsable: Boolean;
+var
+  LInfo: TGtkLoadInfo;
+begin
+  Result := TryLoadGtkWebkit(LInfo);
+end;
 
 procedure TestBackendAvailabilityFacts;
 begin
   Check(WebviewBackendAvailable(wvFake), 'fake always available');
-  Check(not WebviewBackendAvailable(wvGtk), 'gtk lands in S3/S4');
+  { S3 起 gtk 按探测结果可用（幂等缓存）；与 loader 直探保持一致 }
+  CheckEqual(GtkProbeUsable(), WebviewBackendAvailable(wvGtk),
+    'gtk availability matches loader probe');
   Check(not WebviewBackendAvailable(wvWebview2), 'webview2 lands in W2');
   Check(not WebviewBackendAvailable(wvWk), 'wk lands in W3');
   CheckEqual(Ord(wvFake), Ord(DefaultWebviewKind));
@@ -27,7 +37,21 @@ end;
 procedure TestUnavailableBackendFailsFast;
 var
   LRaised: Boolean;
+  LQuick: IWebviewWindow;
 begin
+  if GtkProbeUsable() then
+  begin
+    { 可用环境：构造+立即 Close，验证工厂路径本身（不留活跃窗口——
+      泄漏会让 RunLoop 进入真实 gtk_main 死等，S3 曾实锤此坑） }
+    LQuick := CreateWebviewOf(wvGtk, DefaultWebviewOptions);
+    try
+      LQuick.Close;
+    finally
+      LQuick := nil;
+    end;
+    Check(True, '');
+    Exit;
+  end;
   LRaised := False;
   try
     CreateWebviewOf(wvGtk, DefaultWebviewOptions);
