@@ -12,11 +12,13 @@ uses
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.binary,
-  nextpas.core.bytes.builder;
+  nextpas.core.bytes.builder,
+  nextpas.core.bytes.cursor;
 
 type
   TEndianness = nextpas.core.bytes.base.TEndianness;
   IBytesBuilder = nextpas.core.bytes.builder.IBytesBuilder;
+  IByteCursor = nextpas.core.bytes.cursor.IByteCursor;
 
 const
   endLittle = nextpas.core.bytes.base.endLittle;
@@ -25,6 +27,10 @@ const
 
 { Builder }
 function CreateBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder; inline;
+
+{ Cursor }
+function NewByteCursor(const AData: TBytes): IByteCursor; inline;
+function NewByteCursorAt(const AData: PByte; ALen: SizeUInt): IByteCursor; inline;
 
 { Span ops }
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
@@ -102,6 +108,18 @@ implementation
 function CreateBytesBuilder(const AInitialCapacity: SizeUInt): IBytesBuilder;
 begin
   Result := nextpas.core.bytes.builder.CreateBytesBuilder(AInitialCapacity);
+end;
+
+{ Cursor }
+
+function NewByteCursor(const AData: TBytes): IByteCursor;
+begin
+  Result := nextpas.core.bytes.cursor.NewByteCursor(AData);
+end;
+
+function NewByteCursorAt(const AData: PByte; ALen: SizeUInt): IByteCursor;
+begin
+  Result := nextpas.core.bytes.cursor.NewByteCursorAt(AData, ALen);
 end;
 
 { Span ops }
