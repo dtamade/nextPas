@@ -277,6 +277,7 @@ begin
   Check(Pos('[INV-8]', LContract) > 0, 'contract has INV-8 (size hint)');
   Check(Pos('[INV-9]', LContract) > 0, 'contract has INV-9 (dir finalize)');
   Check(Pos('[INV-10]', LContract) > 0, 'contract has INV-10 (symlinks)');
+  Check(Pos('[INV-11]', LContract) > 0, 'contract has INV-11 (streaming)');
   Check(Pos('test_zip_contract', LContract) > 0,
     'contract lists this gate as entry');
   Check(Pos('RawDeflate', LContract) > 0, 'contract names RAW DEFLATE API');
@@ -284,6 +285,12 @@ begin
     'contract documents add options');
   Check(Pos('TZipExtractOptions', LContract) > 0,
     'contract documents extract options');
+  Check(Pos('AddEntryStream', LContract) > 0,
+    'contract documents streaming write API');
+  Check(Pos('OpenEntry', LContract) > 0,
+    'contract documents streaming read API');
+  Check(Pos('CopyEntryTo', LContract) > 0,
+    'contract documents entry pump API');
 
   LReadme := ReadText('docs/zip/README.md');
   Check(Pos('Zip64', LReadme) > 0, 'readme covers Zip64');
@@ -292,6 +299,10 @@ begin
   Check(Pos('RestoreMode', LReadme) > 0, 'readme covers permission restore');
   Check(Pos('SkipSymlinks', LReadme) > 0, 'readme covers symlink policy');
   Check(Pos('compare_go', LReadme) > 0, 'readme points at Go comparison');
+  Check(Pos('AddEntryStream', LReadme) > 0,
+    'readme covers streaming write');
+  Check(Pos('IDecompressReader', LReadme) > 0,
+    'readme covers streaming read');
 
   LRegistry := ReadText('docs/core-module-registry.md');
   Check(Pos('| `zip` |', LRegistry) > 0, 'module registry has zip row');

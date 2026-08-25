@@ -23,9 +23,10 @@ ZIP archive container: read, write, filesystem pack/extract.
 | UTF-8 names | Yes (flag bit 11) | Yes | Names are raw byte strings; surfaced as stored |
 | Unix mode words | Yes (`TZipAddOptions.Mode`) | Yes | `TZipEntryInfo.ExternalAttrs` / `.IsSymlink`; helpers `ZipUnixModeOf` / `ZipRegularMode` / `ZipDirectoryMode` |
 | Data descriptors | Not written | Tolerated on read | Streaming-writer archives (local flag bit 3) extract using central-directory sizes |
+| Streaming entries (`IStream` family) | Yes (`AddEntryStream` → `ICompressWriter`) | Yes (`OpenEntry*` → `IDecompressReader`, `CopyEntryTo`) | Incremental CRC32+deflate on write; pull-style decode with EOF size+CRC32 verification on read |
 
 Not supported by design: encryption (flag bit 0 raises), multi-disk archives,
-data descriptors on write (sizes are known up front), streaming entry API.
+data descriptors on write (sizes are known up front).
 
 ## API
 
@@ -56,6 +57,26 @@ identical bytes (determinism). A non-zero `Mode` whose format bits declare a
 directory (`$4000`) makes the entry a directory and appends the trailing slash
 (same semantics as Go's archive/zip).
 
+### Streaming write
+
+```pascal
+var S: ICompressWriter;
+Opts := DefaultZipAddOptions;
+Opts.Method := zmDeflate;
+S := W.AddEntryStream('big.bin', Opts);
+while HasChunk do
+  S.Write(Chunk[0], Length(Chunk));   // incremental CRC32 + raw deflate
+S.Close;                              // finalizes the entry
+```
+
+The payload never has to be materialized; memory is bounded by one entry's
+compressed output. Streams integrate with the house `IStream` family
+(`nextpas.core.io.intf`): an `AddEntryStream` sink is an `ICompressWriter`,
+so any compressor/reader adapter can be chained on top. Multiple streams may
+be open at once; each lands in its own `Close` order. Abandoning a stream
+(dropping the last reference without `Close`) excludes its entry from the
+archive. `Finish` raises while any stream is still open.
+
 ### Read
 
 ```pascal
@@ -71,6 +92,27 @@ Entries expose `ExternalAttrs` (raw central value) and `IsSymlink`
 declared size with a compression-ratio bound against hostile declarations.
 `NewZipReaderWithOptions` takes a per-entry output cap
 (`TZipReadOptions.MaxOutputSize`, default 1 GiB) to bound zip bombs.
+
+### Streaming read
+
+```pascal
+var S: IDecompressReader;
+S := R.OpenEntryByName('big.bin');            // or OpenEntry(Index)
+repeat
+  N := S.Read(Buf[0], SizeOf(Buf));           // pull-style incremental decode
+  if N = 0 then Break;
+  Consume(Buf, N);
+until False;
+S.Close;
+
+N := R.CopyEntryTo(R.Find('log.txt'), AnyIWriter);  // pump whole entry, verified at EOF
+```
+
+Streams decode incrementally without materializing the output; several can be
+open concurrently on the same reader. Reading to EOF (a `Read` returning 0)
+forces decompressed-size and CRC32 verification; abandoning a stream before
+EOF skips verification by design. `MaxOutputSize` applies mid-stream: an
+over-limit entry raises `EIOError` during decode instead of after allocation.
 
 ### Filesystem
 
