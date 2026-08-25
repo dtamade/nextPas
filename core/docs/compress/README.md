@@ -1,6 +1,6 @@
 # nextpas.core.compress
 
-Compression and decompression for Deflate, Gzip, and LZ4 formats.
+Compression and decompression for Deflate, Gzip, LZ4, and Zstd formats.
 
 ## Supported Formats
 
@@ -9,6 +9,7 @@ Compression and decompression for Deflate, Gzip, and LZ4 formats.
 | Deflate | Yes      | Yes        | Yes       | zlib-wrapped Deflate stream (RFC 1950) |
 | Gzip    | Yes      | Yes        | Yes       | Gzip wrapper (RFC 1952) |
 | LZ4     | Yes      | Yes        | No        | Block format, optional native FFI |
+| Zstd    | Yes      | Yes        | Yes       | libzstd FFI (auto-generated bindings); one-shot with DStream streaming fallback for frames without a known content size |
 
 ## API
 
@@ -26,6 +27,9 @@ Original := GzipDecompress(Compressed);
 
 Compressed := Lz4Compress(Data);
 Original := Lz4Decompress(Compressed, OriginalSize);
+
+Compressed := ZstdCompress(Data);          // default level 3
+Original := ZstdDecompress(Compressed);
 ```
 
 Runnable example: [compress_roundtrip.lpr](../../examples/nextpas.core.compress/compress_roundtrip/compress_roundtrip.lpr)

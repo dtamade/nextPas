@@ -14,7 +14,8 @@ uses
   nextpas.core.compress.intf,
   nextpas.core.compress.deflate,
   nextpas.core.compress.gzip,
-  nextpas.core.compress.tar
+  nextpas.core.compress.tar,
+  nextpas.core.compress.zstd
   {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
   , nextpas.core.compress.lz4.native
   {$ENDIF}
@@ -57,6 +58,12 @@ function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 function Lz4DecompressWithMaxOutputSize(const AData: TBytes;
   const AOriginalSize: Int32; const AMaxOutputSize: SizeUInt): TBytes; inline;
 function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt; inline;
+
+function ZstdCompress(const AData: TBytes;
+  ALevel: Integer = nextpas.core.compress.zstd.ZSTD_DEFAULT_LEVEL): TBytes; inline;
+function ZstdDecompress(const AData: TBytes): TBytes; inline;
+function ZstdCompressBound(const AInputSize: SizeUInt): SizeUInt; inline;
+function ZstdVersionString: string; inline;
 
 implementation
 
@@ -174,6 +181,27 @@ begin
   {$ELSE}
   Result := nextpas.core.compress.lz4.Lz4CompressBound(AInputSize);
   {$ENDIF}
+end;
+
+function ZstdCompress(const AData: TBytes;
+  ALevel: Integer): TBytes;
+begin
+  Result := nextpas.core.compress.zstd.ZstdCompress(AData, ALevel);
+end;
+
+function ZstdDecompress(const AData: TBytes): TBytes;
+begin
+  Result := nextpas.core.compress.zstd.ZstdDecompress(AData);
+end;
+
+function ZstdCompressBound(const AInputSize: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.compress.zstd.ZstdCompressBound(AInputSize);
+end;
+
+function ZstdVersionString: string;
+begin
+  Result := nextpas.core.compress.zstd.ZstdVersionString;
 end;
 
 end.
