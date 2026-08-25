@@ -28,7 +28,7 @@ HikariCP、ADO.NET `DbProviderFactory`。✅=已落地有门禁证据；
 | 10 | 观测钩子 | otelsql / Hikari metrics | IDbTraceListener 四后端同构 + Hub | ✅ B3 |
 | 11 | 错误归一 | pgx pgconn.PgError；MySQL SQLState | Classify{Sqlite,Pg,My,Odbc(+Ex),Redis} 词元/码位表 | ✅ |
 | 12 | 查询超时 | context deadline | TDbExecOptions advisory（pg SET 窗口/mysql max_execution_time/odbc QUERY_TIMEOUT/sqlite 忽略） | 🟡 语义成文 |
-| 13 | 取消 | ctx 取消传播 | 同步模型无取消；B6 异步挂载未启动 | ❌ B6 |
+| 13 | 取消 | ctx 取消传播 | ✅ B6：TDbAsyncExecutor 令牌级联 → IDbCancelControl（pg PQcancel / sqlite progress handler），归一 decTimeout；句柄直呼 Cancel 同面；同步模型本身仍无取消（契约明示） | ✅ B6 |
 | 14 | LISTEN/NOTIFY | pgx notification | 未做（依赖 B6 取消语义） | ❌ B7 |
 | 15 | TLS 一等公民 | sslmode/verify-full | pg conninfo 透传事实存在、redis UseTls 已落；**契约未成文** | 🟡 B4 文档片 |
 | 16 | 迁移框架 | sqlx migrate/golang-migrate | db.migrate 版本表+dry-run | ✅ |

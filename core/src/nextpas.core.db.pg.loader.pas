@@ -82,6 +82,9 @@ begin
   lo_tell64  := TPQloTell64(LoadSym('lo_tell64'));
   lo_creat   := TPQloCreat(LoadSym('lo_creat'));
   lo_unlink  := TPQloUnlink(LoadSym('lo_unlink'));
+  pq_getCancel  := TPQgetCancel(LoadSym('PQgetCancel'));
+  pq_freeCancel := TPQfreeCancel(LoadSym('PQfreeCancel'));
+  pq_cancel     := TPQcancel(LoadSym('PQcancel'));
 end;
 
 procedure PgEnsureLoaded;

@@ -47,7 +47,10 @@ function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv,
+  nextpas.core.text.scan,
+  nextpas.core.atomic,
   nextpas.core.db.err,
   { 直接用 lrucache 子单元：collections 门面对泛型接口名不可透传
     （实证），且本处需具名特化类型作字段类型 }
@@ -190,9 +193,13 @@ type
 
   TDbSqliteConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
     IDbSavepointControl, IDbBatchExecutor, IDbStmtCacheControl,
-    IDbRowBlobControl, IDbCapabilities, IDbTraceControl, ISqliteStmtHome)
+    IDbRowBlobControl, IDbCapabilities, IDbTraceControl, ISqliteStmtHome,
+    IDbCancelControl)
   private
     FDb: TSqliteDb;
+    { V3-B6 取消标志：0 = 无取消；1 = RequestCancel 已请求。原子访问
+      （跨线程写、progress handler 在 sqlite 工作线程读）。 }
+    FCancelFlag: Integer;
     { 空闲预编译语句池：键 = 原始 SQL，借出即移除（同 SQL 并发活动
       查询各持独立实例），归还回插；LRU 只管空闲驱逐。
       nil = 缓存关闭直通。单连接单逻辑线程（CONTRACT §2.1），
@@ -259,6 +266,13 @@ type
     { IDbRowBlobControl：行内 blob 单元流（INC-8） }
     function OpenRowBlob(const ATable, AColumn: string;
       const ARowId: Int64; const AReadWrite: Boolean): IDbBlobStream;
+
+    { IDbCancelControl（V3-B6）：db.async 取消映射面。
+      FCancelFlag 由任意线程经 RequestCancel 原子置位；progress
+      handler（Arm 期间安装）读到非零即中断在途 step。 }
+    function ArmCancel: Boolean;
+    procedure DisarmCancel;
+    procedure RequestCancel;
   end;
 
 { ---- TSqliteStmtHolder ---- }
@@ -492,13 +506,15 @@ end;
 function TDbSqliteQuery.ColumnType(AIndex: Integer): TDbColumnType;
 var
   LT: Integer;
+  LDecl: string;
 begin
   try
     { 四层规则：无声明（表达式/聚合）→ 行值类型；有声明且值为 NULL →
       dbcNull（行级信号，Is* 契约）；声明含 BOOL → dbcBool（INC-6，
       亲和规则把 BOOLEAN 归 INTEGER 前的显式拦截）；否则声明亲和
       （静态、空结果集可读） }
-    if Pos('BOOL', FQuery.ColumnDeclaredTypeName(AIndex)) > 0 then
+    LDecl := FQuery.ColumnDeclaredTypeName(AIndex);
+    if ScanFindSubstringCI(PChar(LDecl), Length(LDecl), 'BOOL', 4) >= 0 then
     begin
       if FQuery.ColumnType(AIndex) = SQLITE_NULL then
         Exit(dbcNull);
@@ -577,6 +593,7 @@ end;
 
 destructor TDbSqliteConnection.Destroy;
 begin
+  DisarmCancel;                        { handler 指向本对象，先于 close 卸载 }
   FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
   FreeAndNil(FTrace);
   FCache := nil;                       { Clear：空闲 holder 全部释放 }
@@ -751,6 +768,37 @@ begin
   Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
 end;
 
+{ ---- IDbCancelControl（V3-B6）---- }
+
+{ progress handler 桩：探测连接的原子取消标志（非零 = 中断）。
+  sqlite 在执行线程回调；RequestCancel 可从任意线程写标志。 }
+function SqliteCancelProbe(AUser: Pointer): Integer; cdecl;
+begin
+  Result := Ord(atomic_load(PInteger(AUser)^, mo_acquire) <> 0);
+end;
+
+function TDbSqliteConnection.ArmCancel: Boolean;
+begin
+  FCancelFlag := 0;
+  sqlite3_progress_handler(FDb.Handle, 10000,
+    @SqliteCancelProbe, @FCancelFlag);
+  Result := True;
+end;
+
+procedure TDbSqliteConnection.DisarmCancel;
+begin
+  atomic_exchange(FCancelFlag, 0, mo_acq_rel);
+  sqlite3_progress_handler(FDb.Handle, 0, nil, nil);
+end;
+
+procedure TDbSqliteConnection.RequestCancel;
+begin
+  { 线程安全：仅原子置位；handler 未武装时置位无害（Arm 会先清零，
+    但消费方须保证 Arm→在途→RequestCancel→Disarm 的窗口纪律，见
+    db.intf 注记）。已武装时下一次 VM 计数到期即中断。 }
+  atomic_exchange(FCancelFlag, 1, mo_acq_rel);
+end;
+
 function TDbSqliteConnection.SupportsNativeBool: Boolean;
 begin
   Result := False;   { 声明亲和模拟（含 BOOL 声明的列），非原生类型 }
@@ -906,7 +954,8 @@ var
   LGot: string;
 begin
   LMem := (APath = ':memory:') or
-    (Pos('mode=memory', LowerCase(APath)) > 0);
+    (ScanFindSubstringCI(PChar(APath), Length(APath),
+      'mode=memory', 11) >= 0);
   if (AP.JournalMode <> sjmUnset) and (not LMem) then
   begin
     Db.Exec('PRAGMA journal_mode = ' + JStr[AP.JournalMode]);

@@ -33,6 +33,17 @@ function sqlite3_finalize(AStmt: TSqliteStmt): Integer; cdecl; external SQLITE3_
 function sqlite3_reset(AStmt: TSqliteStmt): Integer; cdecl; external SQLITE3_LIB;
 function sqlite3_clear_bindings(AStmt: TSqliteStmt): Integer; cdecl; external SQLITE3_LIB;
 
+{ V3-B6 异步取消原语。sqlite3_interrupt 线程安全（可从任意线程调用，
+  使在途 sqlite3_step 以 SQLITE_INTERRUPT 收场）。progress_handler：
+  每 ANOps 条虚拟机指令回调一次，返回非零 = 中断；nil handler = 注销。
+  handler 仅在有取消令牌挂载时安装（零成本默认，见 db.async）。 }
+type
+  TSqliteProgressHandler = function(AUser: Pointer): Integer; cdecl;
+
+procedure sqlite3_interrupt(ADb: TSqliteHandle); cdecl; external SQLITE3_LIB;
+procedure sqlite3_progress_handler(ADb: TSqliteHandle; ANOps: Integer;
+  AHandler: TSqliteProgressHandler; AUser: Pointer); cdecl; external SQLITE3_LIB;
+
 { INC-8 增量 blob I/O：行内单元定长区间读写。offset 为 32 位（单句柄
   操作上限 2GB，sqlite API 契约）；flags = SQLITE_OPEN_READONLY(1) /
   SQLITE_OPEN_READWRITE(2)。schema 变更或行更新会使句柄失效

@@ -59,6 +59,7 @@ const
 type
   PGconn   = Pointer;   { PGconn*   }
   PGresult = Pointer;   { PGresult* }
+  PGcancel = Pointer;   { PGcancel*（V3-B6 取消令牌，PQgetCancel 产物） }
   TOid     = Cardinal;  { PostgreSQL object identifier }
 
   {** @desc PostgreSQL error, carries libpq diagnostics.

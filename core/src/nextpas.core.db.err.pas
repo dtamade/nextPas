@@ -21,6 +21,7 @@ const
     此处自带常量以保持 db.err 无后端依赖） }
   DB_SQLITE_BUSY        = 5;
   DB_SQLITE_LOCKED      = 6;
+  DB_SQLITE_INTERRUPT   = 9;   { V3-B6：progress handler/中断触发 }
   DB_SQLITE_CANTOPEN    = 14;
   DB_SQLITE_AUTH        = 23;
   DB_SQLITE_NOMEM       = 7;
@@ -145,6 +146,8 @@ begin
   case ACode of
     DB_SQLITE_BUSY, DB_SQLITE_LOCKED:
       ACategory := decTimeout;         { 锁竞争 }
+    DB_SQLITE_INTERRUPT:
+      ACategory := decTimeout;         { V3-B6：查询取消（与 pg 57014 同归一） }
     DB_SQLITE_CANTOPEN:
       ACategory := decConnection;      { 库文件打不开 }
     DB_SQLITE_AUTH:

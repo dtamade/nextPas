@@ -39,7 +39,8 @@ function ConnectPostgres(const AConnInfo: string;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.pg.ffi,
@@ -419,11 +420,15 @@ type
 
   TDbPgConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
     IDbSavepointControl, IDbBatchExecutor, IDbLargeObjectControl,
-    IDbStmtCacheControl, IDbCapabilities, IDbTraceControl)
+    IDbStmtCacheControl, IDbCapabilities, IDbTraceControl,
+    IDbCancelControl)
   private
     FConn: TPgConn;
     FLock: INativeMutex;
     FDepth: Integer;
+    { V3-B6 取消句柄：建连线程 PQgetCancel 一次，RequestCancel 从
+      任意线程 PQcancel（libpq 文档明示线程安全）。nil = 已释放。 }
+    FPGCancel: PGcancel;
     { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
     FTrace: TDbTraceHub;
     procedure PgExec(const ASql: string);
@@ -489,6 +494,12 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+
+    { IDbCancelControl（V3-B6）：Arm/Disarm 为无操作（PQcancel 无需
+      武装），RequestCancel 经 PQcancel 尽力中断 }
+    function ArmCancel: Boolean;
+    procedure DisarmCancel;
+    procedure RequestCancel;
   end;
 
 { ---- TDbPgQuery ---- }
@@ -849,6 +860,12 @@ begin
   FConn := AConn;
   FLock := nextpas.core.sync.Mutex;
   FDepth := 0;
+  { V3-B6：取消句柄建连期取一次（PQgetCancel 失败 = 不支持取消，
+    RequestCancel 退化为无害 no-op，诚实降级不报错） }
+  if pq_getcancel <> nil then
+    FPGCancel := pq_getcancel(AConn.Handle)
+  else
+    FPGCancel := nil;
   FTrace := TDbTraceHub.Create;
   { OnAcquire 由 SetListener 挂载时补发（§2.12），ctor 不预发 }
 end;
@@ -920,6 +937,29 @@ begin
   Result := True;   { unnest 数组展开路径，V3-C2 }
 end;
 
+{ ---- IDbCancelControl（V3-B6）---- }
+
+function TDbPgConnection.ArmCancel: Boolean;
+begin
+  Result := True;    { PQcancel 无需武装：句柄建连期已备 }
+end;
+
+procedure TDbPgConnection.DisarmCancel;
+begin
+  { 无操作（对称性保留） }
+end;
+
+procedure TDbPgConnection.RequestCancel;
+var
+  LErr: array[0..255] of AnsiChar;
+begin
+  { 线程安全（libpq 文档明示）；失败尽力而为——连接已断等场景下
+    在途调用本就会以 decConnection 收场。PQcancel 返回值不作为
+    取消成功依据：取消是否生效由在途语句的错误码（57014）说话。 }
+  if FPGCancel <> nil then
+    pq_cancel(FPGCancel, @LErr[0], SizeOf(LErr));
+end;
+
 function TDbPgConnection.SupportsNativeBool: Boolean;
 begin
   Result := True;   { bool OID16，INC-6 }
@@ -947,6 +987,12 @@ end;
 
 destructor TDbPgConnection.Destroy;
 begin
+  { V3-B6：取消句柄先于连接关闭释放（PQcancel 不得引用已关连接） }
+  if FPGCancel <> nil then
+  begin
+    pq_freeCancel(FPGCancel);
+    FPGCancel := nil;
+  end;
   FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
   FreeAndNil(FTrace);
   FConn.Free;

@@ -16,4 +16,4 @@ ensure-db:
 	psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$(PG_TEST_DB)'" | grep -q 1 || createdb $(PG_TEST_DB)
 
 test: ensure-db
-	$(MAKE) run RUN_ENV=NEXTPAS_PG_TEST_CONN='$(PG_TEST_CONN)'
+	$(MAKE) run RUN_ENV="NEXTPAS_PG_TEST_CONN='$(PG_TEST_CONN)'"
