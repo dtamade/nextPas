@@ -111,15 +111,15 @@ function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; inline;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; inline;
 
-function HTonN(AValue: Word): Word; overload;
-function HTonN(AValue: LongWord): LongWord; overload;
-function NToHs(AValue: Word): Word; overload;
-function NToHs(AValue: LongWord): LongWord; overload;
+function HTonN(AValue: Word): Word; overload; inline;
+function HTonN(AValue: LongWord): LongWord; overload; inline;
+function NToHs(AValue: Word): Word; overload; inline;
+function NToHs(AValue: LongWord): LongWord; overload; inline;
 
-function VarType(const V: Variant): TVarType;
-function VarIsNull(const V: Variant): Boolean;
-function VarIsEmpty(const V: Variant): Boolean;
-function VarIsClear(const V: Variant): Boolean;
+function VarType(const V: Variant): TVarType; inline;
+function VarIsNull(const V: Variant): Boolean; inline;
+function VarIsEmpty(const V: Variant): Boolean; inline;
+function VarIsClear(const V: Variant): Boolean; inline;
 
 implementation
 

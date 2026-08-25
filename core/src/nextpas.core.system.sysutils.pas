@@ -29,104 +29,105 @@ type
   TStringArray = nextpas.core.base.TStringArray;
 
 { Text formatting }
+{ Format 无 inline：路由体含回退扫描，内联会把扫描器复制进每个调用点。 }
 function Format(const AFmt: string; const AArgs: array of const): string;
-function CompareStr(const A, B: string): Integer;
-function SameText(const A, B: string): Boolean;
+function CompareStr(const A, B: string): Integer; inline;
+function SameText(const A, B: string): Boolean; inline;
 
 { Numeric conversion }
-function IntToStr(const AValue: Int64): string;
-function Int64ToStr(const AValue: Int64): string;
-function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
-function StrToInt(const AStr: string): Integer;
-function StrToInt64(const AStr: string): Int64;
-function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
-function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean;
-function StrToIntDef(const AStr: string; const ADefault: Integer): Integer;
-function StrToInt64Def(const AStr: string; const ADefault: Int64): Int64;
-function StrToFloat(const AStr: string): Double;
-function FloatToStr(const AValue: Double): string;
-function CurrToStr(const AValue: Currency): string;
-function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string;
+function IntToStr(const AValue: Int64): string; inline;
+function Int64ToStr(const AValue: Int64): string; inline;
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string; inline;
+function StrToInt(const AStr: string): Integer; inline;
+function StrToInt64(const AStr: string): Int64; inline;
+function TryStrToInt(const AStr: string; out AValue: Integer): Boolean; inline;
+function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean; inline;
+function StrToIntDef(const AStr: string; const ADefault: Integer): Integer; inline;
+function StrToInt64Def(const AStr: string; const ADefault: Int64): Int64; inline;
+function StrToFloat(const AStr: string): Double; inline;
+function FloatToStr(const AValue: Double): string; inline;
+function CurrToStr(const AValue: Currency): string; inline;
+function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string; inline;
 
 { Bytes helpers (SysUtils-compat for tests / facades) }
-function BytesOf(const AStr: string): TBytes;
-function StringOf(const ABytes: TBytes): string;
-function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
-function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; overload;
-function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; overload;
+function BytesOf(const AStr: string): TBytes; inline;
+function StringOf(const ABytes: TBytes): string; inline;
+function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
+function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; overload; inline;
+function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; overload; inline;
 
 { String manipulation }
-function Trim(const AStr: string): string;
-function TrimLeft(const AStr: string): string;
-function TrimRight(const AStr: string): string;
-function UpperCase(const AStr: string): string;
-function LowerCase(const AStr: string): string;
+function Trim(const AStr: string): string; inline;
+function TrimLeft(const AStr: string): string; inline;
+function TrimRight(const AStr: string): string; inline;
+function UpperCase(const AStr: string): string; inline;
+function LowerCase(const AStr: string): string; inline;
 
 { String search }
-function Pos(const ASubStr, AStr: string): Integer;
+function Pos(const ASubStr, AStr: string): Integer; inline;
 
 { Date/Time }
-function Now: TDateTime;
-function Date: TDateTime;
-function Time: TDateTime;
-function DateTimeToStr(const AValue: TDateTime): string;
-function DateToStr(const AValue: TDateTime): string;
-function TimeToStr(const AValue: TDateTime): string;
-function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
-function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
+function Now: TDateTime; inline;
+function Date: TDateTime; inline;
+function Time: TDateTime; inline;
+function DateTimeToStr(const AValue: TDateTime): string; inline;
+function DateToStr(const AValue: TDateTime): string; inline;
+function TimeToStr(const AValue: TDateTime): string; inline;
+function FormatDateTime(const AFmt: string; AValue: TDateTime): string; inline;
+function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime; inline;
 
 { File system }
-function FileExists(const AFileName: string): Boolean;
-function DirectoryExists(const ADirectory: string): Boolean;
-function CreateDir(const ADir: string): Boolean;
-function RemoveDir(const ADir: string): Boolean;
-function ForceDirectories(const ADir: string): Boolean;
-function DeleteFile(const AFileName: string): Boolean;
-function RenameFile(const AOldName, ANewName: string): Boolean;
-function CopyFile(const ASrcName, ADestName: string): Boolean;
+function FileExists(const AFileName: string): Boolean; inline;
+function DirectoryExists(const ADirectory: string): Boolean; inline;
+function CreateDir(const ADir: string): Boolean; inline;
+function RemoveDir(const ADir: string): Boolean; inline;
+function ForceDirectories(const ADir: string): Boolean; inline;
+function DeleteFile(const AFileName: string): Boolean; inline;
+function RenameFile(const AOldName, ANewName: string): Boolean; inline;
+function CopyFile(const ASrcName, ADestName: string): Boolean; inline;
 
 { Path manipulation }
 const
   PathDelim = {$IFDEF WINDOWS}'\'{$ELSE}'/'{$ENDIF};
 
-function ExtractFilePath(const AFileName: string): string;
-function ExtractFileName(const AFileName: string): string;
-function ExtractFileExt(const AFileName: string): string;
-function ExtractFileDir(const AFileName: string): string;
-function ExtractFileDrive(const AFileName: string): string;
-function ChangeFileExt(const AFileName, ANewExt: string): string;
-function IncludeTrailingPathDelimiter(const APath: string): string;
-function ExcludeTrailingPathDelimiter(const APath: string): string;
-function ExpandFileName(const AFileName: string): string;
-function GetTempDir: string; overload;
-function GetTempDir(Global: Boolean): string; overload;
+function ExtractFilePath(const AFileName: string): string; inline;
+function ExtractFileName(const AFileName: string): string; inline;
+function ExtractFileExt(const AFileName: string): string; inline;
+function ExtractFileDir(const AFileName: string): string; inline;
+function ExtractFileDrive(const AFileName: string): string; inline;
+function ChangeFileExt(const AFileName, ANewExt: string): string; inline;
+function IncludeTrailingPathDelimiter(const APath: string): string; inline;
+function ExcludeTrailingPathDelimiter(const APath: string): string; inline;
+function ExpandFileName(const AFileName: string): string; inline;
+function GetTempDir: string; overload; inline;
+function GetTempDir(Global: Boolean): string; overload; inline;
 
 { Working directory }
-function GetCurrentDir: string;
-function SetCurrentDir(const ADir: string): Boolean;
+function GetCurrentDir: string; inline;
+function SetCurrentDir(const ADir: string): Boolean; inline;
 
 { Command line }
-function ParamCount: Integer;
-function ParamStr(AIndex: Integer): string;
+function ParamCount: Integer; inline;
+function ParamStr(AIndex: Integer): string; inline;
 
 { Environment }
-function GetEnvironmentVariable(const AName: string): string;
+function GetEnvironmentVariable(const AName: string): string; inline;
 
 { Process }
-function GetProcessID: SizeUInt;
+function GetProcessID: SizeUInt; inline;
 
 { Timing }
-procedure Sleep(AMilliseconds: Cardinal);
+procedure Sleep(AMilliseconds: Cardinal); inline;
 
 { Error handling }
-function SysErrorMessage(AErrorCode: Integer): string;
-function GetLastOSError: Integer;
+function SysErrorMessage(AErrorCode: Integer): string; inline;
+function GetLastOSError: Integer; inline;
 
 { Exception backtrace — thin pass-through over the RTL raiseframe chain,
   so diagnostics can print stack traces without direct SysUtils use. }
-function ExceptAddr: Pointer;
-function ExceptFrameCount: LongInt;
-function ExceptFrameAt(const AIndex: LongInt): CodePointer;
+function ExceptAddr: Pointer; inline;
+function ExceptFrameCount: LongInt; inline;
+function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 
 implementation
 
@@ -144,7 +145,7 @@ uses
   precision). Such format strings fall back to the RTL SysUtils implementation,
   whose printf-style surface (e/g/c/m/n/p, indexed args, dynamic * width, ...)
   TextFormat does not cover. }
-function FormatNeedsSysUtilsFallback(const AFmt: string): Boolean;
+function FormatNeedsSysUtilsFallback(const AFmt: string): Boolean; inline;
 var
   LIdx, LLen: Integer;
 begin

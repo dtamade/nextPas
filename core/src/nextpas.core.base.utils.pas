@@ -7,7 +7,7 @@ interface
 uses nextpas.core.base;
 
 {** 对象生命周期工具 *}
-procedure FreeAndNil(var AObj);
+procedure FreeAndNil(var AObj); inline;
 procedure SafeFree(var AObj); inline;
 
 {** 内存操作（System 内建的包装，确保接口一致） *}
@@ -24,7 +24,7 @@ function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
 procedure CheckSizeRange(const AOffset, ALength, ASize: SizeUInt);
 
 {** 接口查询 *}
-procedure ClearOutInterface(out AIntf);
+procedure ClearOutInterface(out AIntf); inline;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 
