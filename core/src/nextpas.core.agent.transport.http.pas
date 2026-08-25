@@ -22,6 +22,7 @@ uses
   nextpas.core.base,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
+  nextpas.core.stopwatch,
   nextpas.core.io.intf,
   nextpas.core.thread.base,
   nextpas.core.thread.channel,
@@ -133,6 +134,12 @@ type
       FDone: Boolean;
       FLastErrCode: TAgentErrorCode; { aecNone=自然 EOF；否则重复抛 }
       FLastErrMsg: string;
+      { ---- 流式空闲卫生（W7，WIRE-MAPPINGS §0）----
+        FSw Create 后仅读；FLastProgressMs worker 写/消费方读，
+        8 字节对齐读写两平台均原子；FReadIdleMs Start 冻结后只读 }
+      FSw: TStopwatch;
+      FLastProgressMs: Int64;
+      FReadIdleMs: Int64;
       procedure PushMsg(const AMsg: TTWireMsg);
       procedure DrainParser;
       procedure PushErrorObj(const AErr: EAgentError);
@@ -362,6 +369,10 @@ begin
   FChannel := TWireMsgChannel.Create(256);
   FParser := TSSEParser.Create;
   FHttpCancel := NewHttpCancelToken;
+  { W7 空闲卫生：计时起点=Start（覆盖连接与首响应头等待期）}
+  FReadIdleMs := AReq.ReadIdleTimeoutMs;
+  FLastProgressMs := 0;
+  FSw := TStopwatch.StartNew;
   { builder 方法返回修改副本：链式接住返回值（同 BuildPostRequest 注释）}
   B := THttpRequestBuilder.Create(hmPost, AReq.Url)
     .ContentType('application/json');
@@ -420,6 +431,7 @@ end;
 
 procedure TWireStream.OnResponseStatus(const AStatus: THttpStatus);
 begin
+  FLastProgressMs := FSw.ElapsedMs;   { W7：响应头到达即进展 }
   FStatus := Integer(AStatus);
   FIsErrorResp := (FStatus < 200) or (FStatus > 299);
   PushMsg(MsgStatus(FStatus));
@@ -427,6 +439,7 @@ end;
 
 procedure TWireStream.OnBodyChunk(const AData: PByte; ASize: SizeUInt);
 begin
+  FLastProgressMs := FSw.ElapsedMs;   { W7：任何字节到达即进展（含错误体）}
   if FDead then
     Exit;                            { 失败后到尾的 chunk 一律弃置 }
   if FIsErrorResp then
@@ -536,6 +549,21 @@ begin
     begin
       FDone := True;                 { 取消即终态：后续调用直接 False }
       Exit(False);                   { 取消优先于一切后续事件 }
+    end;
+    { W7 空闲卫生：取消判定之后——对端僵死不冒充消费方取消。
+      硬中断在途 IO 回收 worker，但不置 FCancelled，GetCancelled 保持
+      False 供消费方区分"我取消"与"对端僵死" }
+    if (FReadIdleMs > CTimeoutDefault) and
+       ((FSw.ElapsedMs - FLastProgressMs) > FReadIdleMs) then
+    begin
+      FDone := True;
+      FLastErrCode := aecTimeout;
+      FLastErrMsg := 'http transport: no stream data for ' +
+        IntToStr(FReadIdleMs) + 'ms (read idle timeout)';
+      if FHttpCancel <> nil then
+        FHttpCancel.Cancel;
+      FChannel.Close;                { 唤醒阻塞中的 ReceiveTimeout }
+      raise EAgentError.CreateLocal(FLastErrCode, FLastErrMsg);
     end;
   end;
 end;

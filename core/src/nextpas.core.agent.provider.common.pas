@@ -32,6 +32,8 @@ type
     Model: string;                   { 回退默认；生效序 request.Model > 本值 }
     ConnectTimeoutMs: Int64;         { 默认 10_000 }
     TotalTimeoutMs: Int64;           { 默认 300_000（LLM 长尾合理值）}
+    ReadIdleTimeoutMs: Int64;        { CTimeoutDefault=0 禁用；流式块间空闲
+                                       超时（W7，WIRE-MAPPINGS §0）}
     Transport: IAgentTransport;
     Logger: ILogger;                 { nil → NullLogger 零开销 }
     ExtraHeaders: TWireHeaderArray;

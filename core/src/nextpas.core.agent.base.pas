@@ -42,6 +42,10 @@ type
     wire 映射：openai §1.1 / anthropic §2.1（required→any、none→省略 tools）}
   TToolChoiceMode = (tcmUnset, tcmAuto, tcmNone, tcmRequired, tcmNamed);
 
+  { 推理力度旋钮（W7）：reUnset 不上送。openai → reasoning_effort；
+    anthropic 无对应参数 → 忽略 + warn（Q-A5 同规则），力度走 Thinking/Budget }
+  TReasoningEffort = (reUnset, reMinimal, reLow, reMedium, reHigh);
+
   TStreamDeltaKind = (
     sdkTextDelta,        { TextDelta 追加正文 }
     sdkThinkingDelta,    { TextDelta 追加思考内容；Signature 携带签名透传 }
@@ -176,6 +180,8 @@ type
                                        物理头由 transport/http client 补全 }
     ConnectTimeoutMs: Int64;         { CTimeoutDefault }
     TotalTimeoutMs: Int64;           { CTimeoutDefault }
+    ReadIdleTimeoutMs: Int64;        { CTimeoutDefault=0 禁用；流式块间空闲
+                                       超时（W7，WIRE-MAPPINGS §0）}
   end;
 
   TWireResponse = record
@@ -210,6 +216,7 @@ type
     ParallelToolCalls: TTriState;    { tsUnset 不上送 }
     ToolChoice: TToolChoiceMode;     { tcmUnset 不上送；§1.1/§2.1 映射 }
     ToolChoiceName: string;          { 仅 tcmNamed 有效；缺名 aecConfig }
+    ReasoningEffort: TReasoningEffort; { reUnset 不上送；openai reasoning_effort }
     Thinking: TTriState;             { 扩展思考开关；tsUnset 不上送 }
     ThinkingBudgetTokens: Int64;     { CMaxTokensUnset；Thinking=tsTrue 时生效 }
     ExtraJson: TJsonText;            { 逃生舱：浅合并进请求根对象 }
@@ -224,6 +231,7 @@ type
     function WithResponseSchema(const ASchemaJson: string): TCompletionRequest;
     function WithToolChoice(AMode: TToolChoiceMode;
       const AName: string = ''): TCompletionRequest;
+    function WithReasoningEffort(AEffort: TReasoningEffort): TCompletionRequest;
       { builder 全部返回修改后的副本（record 值语义链式书写）}
   end;
 
@@ -370,6 +378,13 @@ begin
   Result := Self;
   Result.ToolChoice := AMode;
   Result.ToolChoiceName := AName;
+end;
+
+function TCompletionRequest.WithReasoningEffort(
+  AEffort: TReasoningEffort): TCompletionRequest;
+begin
+  Result := Self;
+  Result.ReasoningEffort := AEffort;
 end;
 
 function MergeExtraJson(const ATexts: array of TJsonText): TJsonText;

@@ -708,6 +708,40 @@ begin
   Check(Raised, 'truncated trajectory fails closed');
 end;
 
+{ W7：ReasoningEffort 无厂商参数——忽略 + warn 日志（Q-A5 同规则），
+  补全不受影响 }
+procedure TestReasoningEffortIgnoredW7;
+var
+  T: TScriptedTransport;
+  Opts: TAnthropicOptions;
+  P: IAgentProvider;
+  M: TMessage;
+  Cap: TCapturingLogger;
+  Log: ILogger;
+  I: Integer;
+  Found: Boolean;
+begin
+  T := TScriptedTransport.Create;
+  T.ProviderName := 'anthropic';
+  T.Add(ScriptResp(200, CBodyFull));
+  Cap := TCapturingLogger.Create;
+  Log := Cap;
+  Opts := TAnthropicOptions.New('');
+  Opts.Common.ApiKey := 'ak-test';
+  Opts.Common.Model := 'fallback-m';
+  Opts.Common.Transport := T;
+  Opts.Common.Logger := Log;
+  P := NewAnthropicProvider(Opts);
+  M := P.Complete(TCompletionRequest.New('').WithMaxTokens(128)
+    .WithUserText('go').WithReasoningEffort(reHigh));
+  CheckEqual('Hi there', MessageText(M), 'complete unaffected by ignore');
+  Found := False;
+  for I := 0 to Cap.Count - 1 do
+    if Pos('reasoning_effort', Cap.Lines[I]) > 0 then
+      Found := True;
+  Check(Found, 'warn logged mentioning reasoning_effort');
+end;
+
 procedure TestProviderCompleteEndToEnd;
 var
   T: TScriptedTransport;
@@ -921,6 +955,7 @@ begin
   T.Test('encode tool choice W6', @TestEncodeToolChoiceW6);
   T.Test('encode none omits tools W6', @TestEncodeNoneOmitsToolsW6);
   T.Test('encode rejects W6', @TestEncodeRejectsW6);
+  T.Test('reasoning effort ignored W7', @TestReasoningEffortIgnoredW7);
   T.Test('encode image sources', @TestEncodeImageSources);
   T.Test('decode non-stream full', @TestDecodeNonStreamFull);
   T.Test('decode unmapped stop and block', @TestDecodeUnmappedStopAndBlock);

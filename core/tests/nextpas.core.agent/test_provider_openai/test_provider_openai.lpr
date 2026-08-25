@@ -250,6 +250,36 @@ begin
   Check(not Doc.Root.ObjectHas('tool_choice'), 'unset absent');
 end;
 
+procedure TestReasoningEffortW7;
+var
+  R: TCompletionRequest;
+  Doc: IJsonDocument;
+begin
+  R := TCompletionRequest.New('o3').WithUserText('think')
+    .WithMaxTokens(64);
+
+  Doc := JsonParse(EncodeOpenAIRequest(R.WithReasoningEffort(reMinimal), False));
+  CheckEqual('minimal',
+    Doc.Root.Get('reasoning_effort').AsStr.ToString, 'minimal');
+
+  Doc := JsonParse(EncodeOpenAIRequest(R.WithReasoningEffort(reLow), False));
+  CheckEqual('low', Doc.Root.Get('reasoning_effort').AsStr.ToString, 'low');
+
+  Doc := JsonParse(EncodeOpenAIRequest(R.WithReasoningEffort(reMedium), False));
+  CheckEqual('medium', Doc.Root.Get('reasoning_effort').AsStr.ToString, 'medium');
+
+  Doc := JsonParse(EncodeOpenAIRequest(R.WithReasoningEffort(reHigh), False));
+  CheckEqual('high', Doc.Root.Get('reasoning_effort').AsStr.ToString, 'high');
+
+  { unset 不上送（哨兵纪律）；流式同编码 }
+  Doc := JsonParse(EncodeOpenAIRequest(R, False));
+  Check(not Doc.Root.ObjectHas('reasoning_effort'), 'unset absent');
+  Doc := JsonParse(EncodeOpenAIRequest(
+    R.WithReasoningEffort(reHigh), True));
+  CheckEqual('high',
+    Doc.Root.Get('reasoning_effort').AsStr.ToString, 'streaming same');
+end;
+
 procedure TestEncodeRejectsW6;
 var
   Code: TAgentErrorCode;
@@ -911,6 +941,7 @@ begin
   T.Test('encode structured output W6', @TestEncodeStructuredOutputW6);
   T.Test('encode tool choice W6', @TestEncodeToolChoiceW6);
   T.Test('encode rejects W6', @TestEncodeRejectsW6);
+  T.Test('reasoning effort W7', @TestReasoningEffortW7);
   T.Test('decode non-stream full', @TestDecodeNonStreamFull);
   T.Test('decode unmapped finish', @TestDecodeUnmappedFinish);
   T.Test('decode violations', @TestDecodeViolations);

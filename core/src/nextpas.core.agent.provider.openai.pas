@@ -561,6 +561,32 @@ begin
       ;                        { 不上送（哨兵纪律）}
   end;
 
+  { ReasoningEffort（§1.1）：仅推理族模型接受，其余上游 400 自然归因 }
+  case AReq.ReasoningEffort of
+    reMinimal:
+      begin
+        B.Key('reasoning_effort');
+        B.Str('minimal');
+      end;
+    reLow:
+      begin
+        B.Key('reasoning_effort');
+        B.Str('low');
+      end;
+    reMedium:
+      begin
+        B.Key('reasoning_effort');
+        B.Str('medium');
+      end;
+    reHigh:
+      begin
+        B.Key('reasoning_effort');
+        B.Str('high');
+      end;
+    reUnset:
+      ;                        { 不上送（哨兵纪律）}
+  end;
+
   { ResponseSchemaJson（§1.7）：入口已校验 JSON object，此处原文透传 }
   if AReq.ResponseSchemaJson <> '' then
   begin
@@ -597,7 +623,8 @@ begin
   WriteExtraFields(B, AReq.ExtraJson,
     ['model', 'messages', 'max_tokens', 'max_completion_tokens',
      'temperature', 'top_p', 'seed', 'stop', 'parallel_tool_calls',
-     'tools', 'tool_choice', 'response_format', 'stream', 'stream_options']);
+     'tools', 'tool_choice', 'response_format', 'reasoning_effort',
+     'stream', 'stream_options']);
 
   B.EndObject;
   Result := B.ToString;
@@ -1135,6 +1162,7 @@ begin
   Result := Default(TWireRequest);
   Result.Url := BuildOpenAIUrl(FOpts.Common.BaseUrl);
   Result.BodyJson := EncodeOpenAIRequest(LReq, AStream);
+  Result.ReadIdleTimeoutMs := FOpts.Common.ReadIdleTimeoutMs;   { W7 }
   SetLength(Result.Headers, 0);
   N := Length(Result.Headers);
   SetLength(Result.Headers, N + 1);
