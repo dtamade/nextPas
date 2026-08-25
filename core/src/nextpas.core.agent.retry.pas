@@ -21,7 +21,8 @@ uses
   nextpas.core.async.cancellation,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
-  nextpas.core.agent.intf;
+  nextpas.core.agent.intf,
+  nextpas.core.agent.provider.common;
 
 type
   { 每次尝试前上报（含首次：ADelayMs=0、ALastError=nil）；
@@ -62,52 +63,19 @@ const
   CTWO_POW_64: Double = 18446744073709551616.0;
 
 type
-  { 失败快照：FPC 异常实例生命周期限于 handler，出块后按快照重建等价异常
-    （全部公共字段保真：码/消息/retry-after/归因/请求 id/体摘要）}
-  TFailure = record
-    Code: TAgentErrorCode;
-    Msg: string;
-    RetryAfterMs: Int64;
-    Provider: string;
-    RequestId: string;
-    RawBodySnippet: string;
-    AttemptNo: Integer;              { 已完成的尝试次数（含本次失败）}
-    procedure Capture(const AErr: EAgentError);
-    function Rebuild: EAgentError;
-  end;
-
-  { 流式首 delta 门：装饰器已替消费方拉走首个增量，回放后透传其余行为 }
-  TFirstGateCompletion = class(TInterfacedObject, IAgentCompletion)
-  private
-    FInner: IAgentCompletion;
-    FFirst: TStreamDelta;
-    FHasFirst: Boolean;
-  public
-    constructor Create(const AInner: IAgentCompletion;
-      const AFirst: TStreamDelta; AHasFirst: Boolean);
-    function NextDelta(out ADelta: TStreamDelta): Boolean;
-    procedure Cancel;
-    function GetCancelled: Boolean;
-    function GetMessage: TMessage;
-    function GetUsage: TTokenUsage;
-  end;
-
   TRetryProvider = class(TInterfacedObject, IAgentProvider)
   private
     FInner: IAgentProvider;
     FPolicy: TRetryPolicy;
     FClock: IAgentClock;
     FAmbientToken: IAsyncCancellationToken;
-    function EffectiveToken(
-      const ACallToken: IAsyncCancellationToken): IAsyncCancellationToken;
-    procedure CheckCancelled(const AToken: IAsyncCancellationToken);
     function ShouldRetry(AErr: EAgentError): Boolean;
     { 退避曲线（不含 Retry-After 直取路径）：min(initial×m^(n-1), max)×jitter }
     function BackoffDelayMs(ARetryNo: Integer): Int64;
     { 尝试前通知；AHaveFail=False 时传 0/nil。返回本尝试前应睡时长；
       超累计退避上限抛最后一次原始错误（此时不发通知——尝试未开始）}
-    function GateAttempt(AHaveFail: Boolean; const APrior: TFailure;
-      ASleptMs: Int64): Int64;
+    function GateAttempt(AHaveFail: Boolean; const APrior: TProviderFailure;
+      AAttemptsDone: Integer; ASleptMs: Int64): Int64;
     function GetName: string;
     function Complete(const AReq: TCompletionRequest): TMessage; overload;
     function Complete(const AReq: TCompletionRequest;
@@ -145,69 +113,6 @@ begin
   Result.OnAttempt := AHook;
 end;
 
-{ ---- TFailure ---- }
-
-procedure TFailure.Capture(const AErr: EAgentError);
-begin
-  Code := AErr.ErrorCode;
-  Msg := AErr.Message;
-  RetryAfterMs := AErr.RetryAfterMs;
-  Provider := AErr.Provider;
-  RequestId := AErr.RequestId;
-  RawBodySnippet := AErr.RawBodySnippet;
-end;
-
-function TFailure.Rebuild: EAgentError;
-begin
-  if Provider <> '' then
-    Result := EAgentError.CreateUpstream(Code, Provider, Msg,
-      RequestId, RawBodySnippet, RetryAfterMs)
-  else
-    Result := EAgentError.CreateLocal(Code, Msg);
-end;
-
-{ ---- TFirstGateCompletion ---- }
-
-constructor TFirstGateCompletion.Create(const AInner: IAgentCompletion;
-  const AFirst: TStreamDelta; AHasFirst: Boolean);
-begin
-  inherited Create;
-  FInner := AInner;
-  FFirst := AFirst;
-  FHasFirst := AHasFirst;
-end;
-
-function TFirstGateCompletion.NextDelta(out ADelta: TStreamDelta): Boolean;
-begin
-  if FHasFirst then
-  begin
-    FHasFirst := False;
-    ADelta := FFirst;
-    Exit(True);
-  end;
-  Result := FInner.NextDelta(ADelta);
-end;
-
-procedure TFirstGateCompletion.Cancel;
-begin
-  FInner.Cancel;
-end;
-
-function TFirstGateCompletion.GetCancelled: Boolean;
-begin
-  Result := FInner.GetCancelled;
-end;
-
-function TFirstGateCompletion.GetMessage: TMessage;
-begin
-  Result := FInner.GetMessage;
-end;
-
-function TFirstGateCompletion.GetUsage: TTokenUsage;
-begin
-  Result := FInner.GetUsage;
-end;
-
 { ---- TRetryProvider ---- }
 
 constructor TRetryProvider.Create(const AInner: IAgentProvider;
@@ -231,21 +136,6 @@ end;
 function TRetryProvider.GetName: string;
 begin
   Result := FInner.GetName;
-end;
-
-function TRetryProvider.EffectiveToken(
-  const ACallToken: IAsyncCancellationToken): IAsyncCancellationToken;
-begin
-  if ACallToken <> nil then
-    Exit(ACallToken);
-  Result := FAmbientToken;
-end;
-
-procedure TRetryProvider.CheckCancelled(
-  const AToken: IAsyncCancellationToken);
-begin
-  if (AToken <> nil) and AToken.IsCancelled then
-    raise EAgentCancelled.Create;
 end;
 
 function TRetryProvider.ShouldRetry(AErr: EAgentError): Boolean;
@@ -283,7 +173,8 @@ begin
 end;
 
 function TRetryProvider.GateAttempt(AHaveFail: Boolean;
-  const APrior: TFailure; ASleptMs: Int64): Int64;
+  const APrior: TProviderFailure; AAttemptsDone: Integer;
+  ASleptMs: Int64): Int64;
 var
   LDelay: Int64;
   LNoti: EAgentError;
@@ -298,7 +189,7 @@ begin
      (APrior.RetryAfterMs <> CRetryAfterUnknown) then
     LDelay := APrior.RetryAfterMs
   else
-    LDelay := BackoffDelayMs(APrior.AttemptNo);
+    LDelay := BackoffDelayMs(AAttemptsDone);
   { 累计退避超限：尝试不开始、不发通知，抛最后一次原始错误 }
   if (LDelay > 0) and (ASleptMs + LDelay > FPolicy.MaxTotalRetryMs) then
     raise APrior.Rebuild;
@@ -307,7 +198,7 @@ begin
     { 钩子只借用（const）：通知对象随调用结束释放，留存即悬挂 }
     LNoti := APrior.Rebuild;
     try
-      FPolicy.OnAttempt(APrior.AttemptNo + 1, LDelay, LNoti);
+      FPolicy.OnAttempt(AAttemptsDone + 1, LDelay, LNoti);
     finally
       LNoti.Free;
     end;
@@ -324,19 +215,21 @@ function TRetryProvider.Complete(const AReq: TCompletionRequest;
   const AToken: IAsyncCancellationToken): TMessage;
 var
   LToken: IAsyncCancellationToken;
-  LFail: TFailure;
+  LFail: TProviderFailure;
   LHaveFail: Boolean;
+  LAttempts: Integer;
   LDelay, LSleptMs: Int64;
 begin
-  LToken := EffectiveToken(AToken);
+  LToken := MergeCancellationTokens(FAmbientToken, AToken);
   LHaveFail := False;
+  LAttempts := 0;
   LSleptMs := 0;
-  LFail := Default(TFailure);
+  LFail := Default(TProviderFailure);
   while True do
   begin
-    CheckCancelled(LToken);
+    RequireNotCancelled(LToken);
     { 时序：算延迟→通知→睡眠→尝试。通知里的 ADelayMs 即本尝试前实睡时长 }
-    LDelay := GateAttempt(LHaveFail, LFail, LSleptMs);
+    LDelay := GateAttempt(LHaveFail, LFail, LAttempts, LSleptMs);
     if not FClock.SleepMs(LDelay, LToken) then
       raise EAgentCancelled.Create;
     LSleptMs := LSleptMs + LDelay;
@@ -348,9 +241,9 @@ begin
       begin
         LFail.Capture(E);
         LHaveFail := True;
-        Inc(LFail.AttemptNo);
+        Inc(LAttempts);
         if (not ShouldRetry(E)) or
-           (LFail.AttemptNo >= FPolicy.MaxAttempts) then
+           (LAttempts >= FPolicy.MaxAttempts) then
           raise;                     { 抛最后一次原始错误 }
       end;
     end;
@@ -367,21 +260,23 @@ function TRetryProvider.Stream(const AReq: TCompletionRequest;
   const AToken: IAsyncCancellationToken): IAgentCompletion;
 var
   LToken: IAsyncCancellationToken;
-  LFail: TFailure;
+  LFail: TProviderFailure;
   LHaveFail: Boolean;
+  LAttempts: Integer;
   LDelay, LSleptMs: Int64;
   LComp: IAgentCompletion;
   LD: TStreamDelta;
   LHaveFirst: Boolean;
 begin
-  LToken := EffectiveToken(AToken);
+  LToken := MergeCancellationTokens(FAmbientToken, AToken);
   LHaveFail := False;
+  LAttempts := 0;
   LSleptMs := 0;
-  LFail := Default(TFailure);
+  LFail := Default(TProviderFailure);
   while True do
   begin
-    CheckCancelled(LToken);
-    LDelay := GateAttempt(LHaveFail, LFail, LSleptMs);
+    RequireNotCancelled(LToken);
+    LDelay := GateAttempt(LHaveFail, LFail, LAttempts, LSleptMs);
     if not FClock.SleepMs(LDelay, LToken) then
       raise EAgentCancelled.Create;
     LSleptMs := LSleptMs + LDelay;
@@ -397,9 +292,9 @@ begin
       begin
         LFail.Capture(E);
         LHaveFail := True;
-        Inc(LFail.AttemptNo);
+        Inc(LAttempts);
         if (not ShouldRetry(E)) or
-           (LFail.AttemptNo >= FPolicy.MaxAttempts) then
+           (LAttempts >= FPolicy.MaxAttempts) then
         begin
           if LComp <> nil then
             LComp.Cancel;

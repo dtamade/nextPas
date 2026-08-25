@@ -148,6 +148,46 @@ function CaptureExtraJson(const AValue: TJsonValue;
 procedure WriteExtraFields(const ABld: IJsonBuilder;
   const AExtraJson: TJsonText; const AKnownNames: array of string);
 
+{ ---- 装饰器公共基建（retry/fallback/throttle 共享；W8 提取）---- }
+
+{ 失败快照：FPC 异常实例生命周期限于 handler，出块后按快照重建等价异常
+  （全部公共字段保真：码/消息/retry-after/归因/请求 id/体摘要）}
+type
+  TProviderFailure = record
+    Code: TAgentErrorCode;
+    Msg: string;
+    RetryAfterMs: Int64;
+    Provider: string;
+    RequestId: string;
+    RawBodySnippet: string;
+    procedure Capture(const AErr: EAgentError);
+    function Rebuild: EAgentError;
+  end;
+
+  { 流式首 delta 门：装饰器已替消费方拉走首个增量，回放后透传其余行为。
+    retry（重试）与 fallback（降级）共用同一"投递不重复"语义 }
+  TFirstGateCompletion = class(TInterfacedObject, IAgentCompletion)
+  private
+    FInner: IAgentCompletion;
+    FFirst: TStreamDelta;
+    FHasFirst: Boolean;
+  public
+    constructor Create(const AInner: IAgentCompletion;
+      const AFirst: TStreamDelta; AHasFirst: Boolean);
+    function NextDelta(out ADelta: TStreamDelta): Boolean;
+    procedure Cancel;
+    function GetCancelled: Boolean;
+    function GetMessage: TMessage;
+    function GetUsage: TTokenUsage;
+  end;
+
+{ 环境令牌与调用令牌合并：调用令牌优先，皆空返回 nil }
+function MergeCancellationTokens(
+  const AAmbient, ACall: IAsyncCancellationToken): IAsyncCancellationToken;
+
+{ 令牌已取消即抛 EAgentCancelled（装饰器边界统一检查点）}
+procedure RequireNotCancelled(const AToken: IAsyncCancellationToken);
+
 implementation
 
 uses
@@ -580,6 +620,81 @@ begin
   if not FFolded then
     raise EAgentMisuse.Create('GetUsage before EOF');
   Result := FMsg.Usage;
+end;
+
+{ ---- 装饰器公共基建 ---- }
+
+procedure TProviderFailure.Capture(const AErr: EAgentError);
+begin
+  Code := AErr.ErrorCode;
+  Msg := AErr.Message;
+  RetryAfterMs := AErr.RetryAfterMs;
+  Provider := AErr.Provider;
+  RequestId := AErr.RequestId;
+  RawBodySnippet := AErr.RawBodySnippet;
+end;
+
+function TProviderFailure.Rebuild: EAgentError;
+begin
+  if Provider <> '' then
+    Result := EAgentError.CreateUpstream(Code, Provider, Msg,
+      RequestId, RawBodySnippet, RetryAfterMs)
+  else
+    Result := EAgentError.CreateLocal(Code, Msg);
+end;
+
+constructor TFirstGateCompletion.Create(const AInner: IAgentCompletion;
+  const AFirst: TStreamDelta; AHasFirst: Boolean);
+begin
+  inherited Create;
+  FInner := AInner;
+  FFirst := AFirst;
+  FHasFirst := AHasFirst;
+end;
+
+function TFirstGateCompletion.NextDelta(out ADelta: TStreamDelta): Boolean;
+begin
+  if FHasFirst then
+  begin
+    FHasFirst := False;
+    ADelta := FFirst;
+    Exit(True);
+  end;
+  Result := FInner.NextDelta(ADelta);
+end;
+
+procedure TFirstGateCompletion.Cancel;
+begin
+  FInner.Cancel;
+end;
+
+function TFirstGateCompletion.GetCancelled: Boolean;
+begin
+  Result := FInner.GetCancelled;
+end;
+
+function TFirstGateCompletion.GetMessage: TMessage;
+begin
+  Result := FInner.GetMessage;
+end;
+
+function TFirstGateCompletion.GetUsage: TTokenUsage;
+begin
+  Result := FInner.GetUsage;
+end;
+
+function MergeCancellationTokens(
+  const AAmbient, ACall: IAsyncCancellationToken): IAsyncCancellationToken;
+begin
+  if ACall <> nil then
+    Exit(ACall);
+  Result := AAmbient;
+end;
+
+procedure RequireNotCancelled(const AToken: IAsyncCancellationToken);
+begin
+  if (AToken <> nil) and AToken.IsCancelled then
+    raise EAgentCancelled.Create;
 end;
 
 end.
