@@ -564,6 +564,55 @@ Q.Step;                          // 单次往返完成 N 行
 - **后端矩阵**：pg = True；sqlite/mysql/odbc/redis = False（诚实缺
   席，conformance 钉死互证；后续若实现须走同一契约面）。
 
+### 2.17 异步挂载与取消（V3-B6 / INC-4，nextpas.core.db.async）
+
+把阻塞 db 调用投递到**专用执行线程**，立即返回可等待、可取消的句柄。
+硬规则落地（路线图 D8/G3）：**连接仍一连接一线程**——一个执行器绑定
+一个连接租约、单飞模型（同一时刻至多一个在途调用），异步的是"等待"
+不是"并发复用"；不做连接内多路复用。
+
+```pascal
+Exec := TDbAsyncExecutor.Create(Conn);
+H := Exec.Submit(procedure begin Conn.Exec(LongSql) end, Token);
+{ 主线程让出：可做 UI/调度等他事 }
+if H.WaitFor(30000) and (H.ErrorObj = nil) then ...   // 成功取结果
+H.Cancel;                        // 任意线程；尽力中断在途查询
+```
+
+- **不经 db 门面**：本面是 class 直构入口（`nextpas.core.db.async`
+  直接 uses），不进门面 re-export——避免把执行线程依赖传染给不用
+  异步的门面消费者（默认零成本）。
+
+- **底座零平行宇宙**：执行线程 = `nextpas.core.thread.pool` 单工池；
+  运行时初始化 = `nextpas.core.thread.init`（cthreads 的正替，消费方
+  程序须将其放 uses 首位）；等待/互斥 = `nextpas.core.sync`；取消 =
+  `nextpas.core.async.cancellation` 子令牌级联；异常基座 =
+  `nextpas.core.errors`。本单元不直接引任何 FPC RTL 单元。
+- **取消链路**：消费方令牌 `Submit(Work, Token)` → 执行器创建子令牌并
+  注册回调桥 → `IDbCancelControl`（可选能力，`QueryInterface` 探测，
+  pg = `PQcancel`，sqlite = progress handler 中断）→ 后端中断引发的
+  失败统一归一 **decTimeout**（"查询取消"语义位，pg SQLSTATE 57014 /
+  sqlite SQLITE_INTERRUPT 同归一）。句柄直呼 `Cancel` 走同一取消面，
+  不需要令牌。
+- **时序不变式**：子令牌回调注册与取消面挂载先于工作体入队——否则
+  极小工作体可能在注册完成前已跑完并释放 op 记录。取消面只在异步
+  操作期间安装、finalize 即摘除：同连接的同步直调路径不受进度回调
+  污染（默认零成本）。
+- **状态语义**：`IsDone` = 已终态；`ErrorObj` 非 nil 即失败，对象由
+  句柄持有并在句柄析构时销毁（消费方不得手动 Free）；`IsCanceled`
+  = 请求过取消**且以失败收场**——仅请求但自然成功时不置位。
+- **生命周期契约**：连接必须活得比执行器久；执行器析构先
+  `WaitAll` 等在途调用自然收尾（诚实语义，不半途丢弃），再关停工作
+  线程，不留后台线程；消费方可先行丢弃句柄（op 记录托管保活至
+  finalize）。
+- **单飞纪律**：上一调用未收尾前再提交抛 EDbError（"单飞模型"）。
+  并发读应使用 db.pool 的多连接读池，每连接各自挂执行器。
+- **性能事实与使用指引**（benchmarks.md 入册）：异步挂载每次往返的
+  固定成本 ≈ 两次跨线程唤醒（实测 ~15–20µs）。操作本身耗时与此同
+  量级（内存库微查询 ~2µs）时劣化显著（10×+），**不要为此类负载
+  异步挂载**；适用域是长查询/阻塞场景的主线程让出与取消能力（真机
+  pg 取消 50M 行聚合 ~200ms 内中断，自然完成需秒级）。
+
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
 旧入口名 `nextpas.core.sqlite` / `nextpas.core.pg` 曾在 G2 全量删除；
@@ -618,6 +667,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_adapter  # Redis 适
 make focused FOCUS=core/tests/nextpas.core.db/test_db_factory     # 统一驱动工厂（V3-A5 收口，离线）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlite_pragmas  # C5 调优预设（离线）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_array_bind  # C2 参数级批量绑定（sqlite 离线诚实契约 + pg 真机段）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_async      # B6 异步挂载与取消（sqlite 离线 + pg 真机 PQcancel 段）
 make focused FOCUS=core/tests/nextpas.core.http.middleware/test_session_sqlite  # 消费方回归
 ```
 
