@@ -79,6 +79,23 @@ while Q.Step do ...;                          // 接口引用计数自动释放
 - **Blob**：接口含 BindBlob/GetBlob。pg 侧经 hex 文本 + `::bytea` cast 实现，
   真机门禁覆盖；sqlite 侧原生透传。
 
+#### TLS（V3-B4 成文）
+
+责任表：TLS 建立与证书校验归各自传输栈，统一层不二次包装、不提供
+跨后端证书面（诚实边界——强校验模式由消费方在 DSN/选项中显式选择）。
+
+| 后端 | 路径 | 配置样例 | 校验责任 |
+|---|---|---|---|
+| postgres | libpq conninfo 原文透传（适配器零 TLS 代码） | `sslmode=verify-full sslrootcert=/etc/ca.pem host=db.example.com` | libpq 按所选模式执行；推荐 verify-full |
+| redis | `ConnectRedis(addr, TDbRedisConnectOptions)` UseTls/TlsServerName（A5.1b，TLSDial 一体阻塞） | `UseTls=True; TlsServerName='db.example.com'` | nextpas.core.tls 栈标准校验；SNI 取显式名否则 Host |
+| odbc | connstr 原文透传，加密键随驱动 | `Encrypt=yes;TrustServerCertificate=no`（MS 驱动系） | 各 ODBC 驱动 |
+| mysql | **v1 未支持**：DSN 解析器不识别 ssl 键，透传不生效——升级路径已登记（B4 余项），不假装支持 | — | — |
+| sqlite | N/A（进程内库） | — | — |
+
+诚实注记：pg 的 `sslmode=require` 只加密不验证书（libpq 语义），
+生产环境应显式 verify-full + rootcert。redis TLS 负路径（不可达/
+握手失败）桥接为 EDbError decConnection、ErrType='NET'（§2.13）。
+
 ### 2.2 错误模型——双码位并存
 
 适配器把后端异常转译为 `EDbError`：
@@ -474,6 +491,29 @@ opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
   pg 建连失败恒带 SQLSTATE '08000'（connection_exception）→
   decConnection。TDbConnectOptions 为 advisory 语义（§2.6b 惯例）。
 
+### 2.15 sqlite 调优预设（V3-C5）
+
+`ConnectSqlite(path, opts, TDbSqlitePragmas[, cacheCap])` 新重载；
+类型在 `nextpas.core.db.sqlite.base`。**不带 pragmas 的旧入口行为
+零变化**（全 unset = sqlite 原生缺省）。
+
+- **词汇**：JournalMode（sjmUnset/Delete/Truncate/Persist/Memory/Wal）、
+  Synchronous（sysUnset/Off/Normal/Full）、ForeignKeys 三态
+  （fkUnset/Off/On——sqlite 缺省 OFF 是著名陷阱，但默认改写会惊吓
+  存量语义，故显式表达）、CacheSize（0=不设置；负=KiB）、MmapSize
+  （<0=不设置；0=显式禁用）。
+- **安全缺省**（`TDbSqlitePragmas.Default`，文件库）：WAL +
+  synchronous=NORMAL + foreign_keys=ON——仅在显式传入时生效。
+- **:memory: 过滤**：journal_mode 恒跳过（WAL 对内存库无意义），
+  其余 PRAGMA 照常。
+- **fail-closed 回读校验**：journal_mode 应用后回读比对，不符抛
+  EDbError decNotSupported——网络 FS 等场景下 sqlite 会静默保持
+  原模式，静默降级 = 消费方误信读写并发安全。mmap_size 为 advisory
+  （部分构建编译期禁用 SQLITE_MAX_MMAP_SIZE，设置无效不报错）。
+- **工厂边界**：`DbOpen` 的内建 sqlite 驱动不烘入任何 PRAGMA
+  （journal_mode=WAL 会持久化进文件头，统一入口静默改写会波及
+  非本模块工具）；调优走本节直接入口。
+
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
 旧入口名 `nextpas.core.sqlite` / `nextpas.core.pg` 曾在 G2 全量删除；
@@ -523,6 +563,10 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql_adapter  # MySQL 适
 make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_base  # ODBC base/ffi/loader（V3-A3，仅驱动管理器即可全绿；live 段 NEXTPAS_ODBC_TEST_CONN 门控）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_adapter  # ODBC 适配器（V3-A4，五组离线全绿；live 段 NEXTPAS_ODBC_TEST_CONN 门控）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_trace      # 观测钩子（V3-B3，sqlite 全量离线 + pg 真机段 + mysql/odbc live 探针）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_base    # Redis 帧级/解析/归一表（V3-A5，离线）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_adapter  # Redis 适配器（V3-A5/A5.1b，离线全契约 + TLS 负路径 + live env 门控）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_factory     # 统一驱动工厂（V3-A5 收口，离线）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlite_pragmas  # C5 调优预设（离线）
 make focused FOCUS=core/tests/nextpas.core.http.middleware/test_session_sqlite  # 消费方回归
 ```
 

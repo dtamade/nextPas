@@ -25,7 +25,8 @@ uses
   nextpas.core.db.intf,
   nextpas.core.db.tx,
   nextpas.core.db.migrate,
-  nextpas.core.db.pool;
+  nextpas.core.db.pool,
+  nextpas.core.db.sqlite.base;
 
 type
   { base }
@@ -86,6 +87,13 @@ function ConnectSqlite(const APath: string;
   const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
   IDbConnection; inline;
 function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
+  IDbConnection; inline;
+{ C5 调优预设：TDbSqlitePragmas 连接级 PRAGMA 受控面（类型来自
+  db.sqlite.base，本单元随用随透出）。语义与 fail-closed 回读校验
+  见 adapter 同名重载注记。 }
+function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+  const APragmas: TDbSqlitePragmas;
   const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
   IDbConnection; inline;
 function ConnectPostgres(const AConnInfo: string): IDbConnection; inline;
@@ -173,6 +181,14 @@ function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
 begin
   Result := nextpas.core.db.sqlite.adapter.ConnectSqlite(APath, AOptions,
     AStmtCacheCapacity);
+end;
+
+function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+  const APragmas: TDbSqlitePragmas;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  Result := nextpas.core.db.sqlite.adapter.ConnectSqlite(APath, AOptions,
+    APragmas, AStmtCacheCapacity);
 end;
 
 function ConnectPostgres(const AConnInfo: string): IDbConnection;

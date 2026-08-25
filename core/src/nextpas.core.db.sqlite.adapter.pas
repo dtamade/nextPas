@@ -34,6 +34,15 @@ function ConnectSqlite(const APath: string;
 function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
   const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
   IDbConnection;
+{ C5 调优预设：连接级 PRAGMA 受控面（journal/sync/fk/cache/mmap）。
+  语义：unset 字段不设置；:memory: 库过滤 journal_mode（WAL 对内存
+  库无意义）；journal_mode 应用后回读校验——文件系统不支持 WAL 时
+  sqlite 会静默保持原模式，此处 fail-closed 抛 decNotSupported，
+  绝不静默降级（静默降级 = 消费方误信并发安全）。 }
+function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+  const APragmas: TDbSqlitePragmas;
+  const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
+  IDbConnection;
 
 implementation
 
@@ -865,13 +874,66 @@ end;
 
 { ---- 工厂 ---- }
 
-function ConnectSqlite(const APath: string;
-  const AStmtCacheCapacity: Integer): IDbConnection;
+{ C5 全不设置形态：旧重载经此保持 sqlite 原生缺省，行为零变化 }
+function SqlitePragmasUnset: TDbSqlitePragmas;
 begin
-  Result := ConnectSqlite(APath, TDbConnectOptions.Default, AStmtCacheCapacity);
+  Result.JournalMode := sjmUnset;
+  Result.Synchronous := sysUnset;
+  Result.ForeignKeys := fkUnset;
+  Result.CacheSize := 0;      { 0 = 不设置 }
+  Result.MmapSize := -1;      { <0 = 不设置；0 = 显式禁用 mmap }
 end;
 
-function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+{ C5：应用调优 PRAGMA。journal_mode 应用后回读校验——文件系统不支持
+  WAL 时 sqlite 静默保持原模式，此处 fail-closed 抛 decNotSupported，
+  绝不静默降级（静默降级 = 消费方误信读写并发安全）。:memory: 库
+  过滤 journal_mode（WAL 对内存库无意义，其余 PRAGMA 照常）。 }
+procedure ApplySqlitePragmas(Db: TSqliteDb; const APath: string;
+  const AP: TDbSqlitePragmas);
+const
+  JStr: array[TDbSqliteJournalMode] of string = ('', 'delete', 'truncate',
+    'persist', 'memory', 'wal');
+  SStr: array[TDbSqliteSync] of string = ('', 'off', 'normal', 'full');
+var
+  LMem: Boolean;
+  LQ: TSqliteQuery;
+  LGot: string;
+begin
+  LMem := (APath = ':memory:') or
+    (Pos('mode=memory', LowerCase(APath)) > 0);
+  if (AP.JournalMode <> sjmUnset) and (not LMem) then
+  begin
+    Db.Exec('PRAGMA journal_mode = ' + JStr[AP.JournalMode]);
+    LGot := '';
+    LQ := Db.Query('PRAGMA journal_mode');
+    try
+      if LQ.Step then
+        LGot := LowerCase(LQ.GetText(0));
+    finally
+      LQ.Free;
+    end;
+    if LGot <> JStr[AP.JournalMode] then
+      raise EDbError.CreateFullSqlite(SQLITE_ERROR, SQLITE_ERROR,
+        decNotSupported, dckNone,
+        'sqlite journal_mode=' + JStr[AP.JournalMode] +
+        ' rejected (got "' + LGot + '"); filesystem may not support WAL');
+  end;
+  case AP.Synchronous of
+    sysOff, sysNormal, sysFull:
+      Db.Exec('PRAGMA synchronous = ' + SStr[AP.Synchronous]);
+  end;
+  case AP.ForeignKeys of
+    fkOff: Db.Exec('PRAGMA foreign_keys = off');
+    fkOn:  Db.Exec('PRAGMA foreign_keys = on');
+  end;
+  if AP.CacheSize <> 0 then
+    Db.Exec('PRAGMA cache_size = ' + IntToStr(AP.CacheSize));
+  if AP.MmapSize >= 0 then
+    Db.Exec('PRAGMA mmap_size = ' + IntToStr(AP.MmapSize));
+end;
+
+function InternalConnectSqlite(const APath: string;
+  const AOptions: TDbConnectOptions; const APragmas: TDbSqlitePragmas;
   const AStmtCacheCapacity: Integer): IDbConnection;
 var
   Db: TSqliteDb;
@@ -881,10 +943,33 @@ begin
     { 锁等待上限（INC-7）：非语句执行超时，语义见 db.base 注释 }
     if AOptions.BusyTimeoutMs > 0 then
       Db.Exec('PRAGMA busy_timeout = ' + IntToStr(AOptions.BusyTimeoutMs));
+    ApplySqlitePragmas(Db, APath, APragmas);
   except
     on E: ESqliteError do RaiseSqliteAsDb(E);
   end;
   Result := TDbSqliteConnection.Create(Db, AStmtCacheCapacity);
+end;
+
+function ConnectSqlite(const APath: string;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  Result := ConnectSqlite(APath, TDbConnectOptions.Default, AStmtCacheCapacity);
+end;
+
+function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  { 不带 pragmas 的旧入口保持 sqlite 原生缺省（全 unset），行为零变化 }
+  Result := InternalConnectSqlite(APath, AOptions, SqlitePragmasUnset,
+    AStmtCacheCapacity);
+end;
+
+function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
+  const APragmas: TDbSqlitePragmas;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  Result := InternalConnectSqlite(APath, AOptions, APragmas,
+    AStmtCacheCapacity);
 end;
 
 end.
