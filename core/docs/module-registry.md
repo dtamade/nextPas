@@ -59,6 +59,7 @@ completion claim.
 | `props` | L3 | app property helpers | `nextpas.core.props` | L0-L2 | focused-runtime |
 | `reflect` | Support | reflection experiment | `nextpas.core.reflect` | system/typinfo owner only | source-contract |
 | `regex` | L2 | regular expressions | `nextpas.core.regex` | L0-L1, optional simd | focused-runtime |
+| `respack` | L2 | resource pack container (embed assets, asar/Tauri parity) | `nextpas.core.respack` | L0; dirsource is the single fs seam | focused-runtime, source-contract |
 | `simd` | L0 | SIMD ABI/backends | `nextpas.core.simd` | L0, platform CPU/file probes, allowlisted host/os probes | focused-runtime, source-contract |
 | `sse` | Support | legacy SIMD surface | `nextpas.core.sse` | simd owner only | source-contract |
 | `stopwatch` | L1 | timing helper | `nextpas.core.stopwatch` | L0, platform time | focused-runtime |
@@ -73,6 +74,7 @@ completion claim.
 | `toml` | L2 | TOML format | `nextpas.core.toml` | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI | `nextpas.core.tui` | L0-L2 | focused-runtime partial |
 | `validation` | L2 | validation helpers | `nextpas.core.validation` | L0-L1 | focused-runtime |
+| `vfs` | L2 | read-only virtual filesystem (memtree now; embedded/os/sub per plan) | `nextpas.core.vfs` | L0-L1; os backend adds fs/path seam when landed | focused-runtime, source-contract |
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML format | `nextpas.core.yaml` | L0-L1 | focused-runtime |
