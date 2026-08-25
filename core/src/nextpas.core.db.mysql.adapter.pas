@@ -545,6 +545,7 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
+    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
@@ -1450,6 +1451,11 @@ end;
 function TDbMyConnection.SupportsLargeObjects: Boolean;
 begin
   Result := False;  { 统一层无 LO 面（协议无 lo_* 对应物） }
+end;
+
+function TDbMyConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
 end;
 
 function TDbMyConnection.SupportsNativeBool: Boolean;

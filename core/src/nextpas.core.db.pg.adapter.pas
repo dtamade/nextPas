@@ -205,8 +205,129 @@ begin
   end;
 end;
 
+{ ---- V3-C2 数组字面量编码（pg 文本格式数组输入）----
+  形态 = 花括号包裹、逗号分隔的元素串（如 1,2,3 加花括号）。NULL 掩码
+  True 的行写裸 NULL 令牌（任何类型数组输入都接受）。文本元素恒加
+  双引号并转义（反斜杠与双引号前置反斜杠）；引号内换行/制表等控制
+  字符由文本协议原样承载。双精度经 core.text.number Schubfach 最短
+  往返格式化（区域设置无关，NaN/Inf 原生输出，pg float8 输入均接受）。 }
+
+procedure PgRejectNul(const AElem: string);
+var
+  I: Integer;
+begin
+  for I := 1 to Length(AElem) do
+    if AElem[I] = #0 then
+      raise EDbError.CreateSimple(dbkPostgres,
+        'array bind: text 元素含 NUL(#0)——文本协议在 NUL 处截断，拒绝静默损坏');
+end;
+
+function PgTextArrayLiteral(const AValues: TDbStringArray;
+  const ANullMask: TDbBoolArray): string;
+var
+  LB: IStringBuilder;
+  K, I: Integer;
+  LCap: Integer;
+begin
+  { 容量精确预估：括号 + 逗号 + 每元素两引号与原文长度（转义只增不减） }
+  LCap := 2;
+  if Length(AValues) > 1 then
+    Inc(LCap, Length(AValues) - 1);
+  for K := 0 to High(AValues) do
+    Inc(LCap, Length(AValues[K]) + 2);
+  LB := MakeStringBuilder(SizeUInt(LCap));
+  LB.AppendChar('{');
+  for K := 0 to High(AValues) do
+  begin
+    if K > 0 then
+      LB.AppendChar(',');
+    if (ANullMask <> nil) and ANullMask[K] then
+      LB.AppendStr('NULL')
+    else
+    begin
+      PgRejectNul(AValues[K]);
+      LB.AppendChar('"');
+      for I := 1 to Length(AValues[K]) do
+        case AValues[K][I] of
+          '\': LB.AppendStr('\\');
+          '"': LB.AppendStr('\"');
+        else
+          LB.AppendChar(AValues[K][I]);
+        end;
+      LB.AppendChar('"');
+    end;
+  end;
+  LB.AppendChar('}');
+  Result := LB.ToString;
+end;
+
+function PgInt64ArrayLiteral(const AValues: TDbInt64Array;
+  const ANullMask: TDbBoolArray): string;
+var
+  LB: IStringBuilder;
+  K: Integer;
+begin
+  LB := MakeStringBuilder(SizeUInt(Length(AValues)) * 21 + 4);
+  LB.AppendChar('{');
+  for K := 0 to High(AValues) do
+  begin
+    if K > 0 then
+      LB.AppendChar(',');
+    if (ANullMask <> nil) and ANullMask[K] then
+      LB.AppendStr('NULL')
+    else
+      LB.AppendInt(AValues[K]);
+  end;
+  LB.AppendChar('}');
+  Result := LB.ToString;
+end;
+
+function PgDoubleArrayLiteral(const AValues: TDbDoubleArray;
+  const ANullMask: TDbBoolArray): string;
+var
+  LB: IStringBuilder;
+  K: Integer;
+begin
+  LB := MakeStringBuilder(SizeUInt(Length(AValues)) * 25 + 4);
+  LB.AppendChar('{');
+  for K := 0 to High(AValues) do
+  begin
+    if K > 0 then
+      LB.AppendChar(',');
+    if (ANullMask <> nil) and ANullMask[K] then
+      LB.AppendStr('NULL')
+    else
+      LB.AppendFloat(AValues[K]);
+  end;
+  LB.AppendChar('}');
+  Result := LB.ToString;
+end;
+
+function PgBoolArrayLiteral(const AValues: TDbBoolArray;
+  const ANullMask: TDbBoolArray): string;
+var
+  LB: IStringBuilder;
+  K: Integer;
+begin
+  LB := MakeStringBuilder(SizeUInt(Length(AValues)) * 6 + 4);
+  LB.AppendChar('{');
+  for K := 0 to High(AValues) do
+  begin
+    if K > 0 then
+      LB.AppendChar(',');
+    if (ANullMask <> nil) and ANullMask[K] then
+      LB.AppendStr('NULL')
+    else if AValues[K] then
+      LB.AppendStr('t')
+    else
+      LB.AppendStr('f');
+  end;
+  LB.AppendChar('}');
+  Result := LB.ToString;
+end;
+
 type
-  TDbPgQuery = class(TInterfacedObject, IDbQuery)
+  TDbPgQuery = class(TInterfacedObject, IDbQuery, IDbArrayBinding)
   private
     FQuery: TPgQuery;
     { 查询级超时恢复钩（V3-B2）：pg 仅有会话级 statement_timeout 且
@@ -220,6 +341,20 @@ type
     FTrace: TDbTraceHub;
     FSql: string;              { 统一契约原文（占位符不翻译进摘要）}
     FEmitted: Boolean;
+    { V3-C2 数组绑定状态：FScalarMask = 标量绑定覆盖位图（持久），
+      FColMask = 列绑定位图（每次 BeginBind 清零）；两掩码并集是
+      Step 全覆盖检查依据。FArrayActive/FArrayRows = 数组模式开关与
+      BeginBind 声明的行数。 }
+    FScalarMask: array of Boolean;
+    FColMask: array of Boolean;
+    FArrayRows: Integer;
+    FArrayActive: Boolean;
+    procedure MarkScalarBound(const AIndex: Integer);
+    procedure RequireArrayMode;
+    procedure ValidateColumnBind(const AIndex, ACount: Integer;
+      const ANullMask: TDbBoolArray);
+    procedure CheckCoverageOrFail;
+    procedure SetParamLiteral(const AIndex: Integer; const ALiteral: string);
   public
     constructor Create(AQuery: TPgQuery; const ASql: string;
       ATrace: TDbTraceHub); overload;
@@ -233,6 +368,25 @@ type
     procedure BindDouble(AIndex: Integer; const AValue: Double);
     procedure BindBlob(AIndex: Integer; const AValue: TBytes);
     procedure BindNull(AIndex: Integer);
+
+    { IDbArrayBinding（V3-C2）：参数级批量绑定，unnest 数组展开路径 }
+    procedure BeginBind(const ARows: Integer);
+    procedure BindInt64Column(const AIndex: Integer;
+      const AValues: TDbInt64Array); overload;
+    procedure BindInt64Column(const AIndex: Integer;
+      const AValues: TDbInt64Array; const ANullMask: TDbBoolArray); overload;
+    procedure BindDoubleColumn(const AIndex: Integer;
+      const AValues: TDbDoubleArray); overload;
+    procedure BindDoubleColumn(const AIndex: Integer;
+      const AValues: TDbDoubleArray; const ANullMask: TDbBoolArray); overload;
+    procedure BindTextColumn(const AIndex: Integer;
+      const AValues: TDbStringArray); overload;
+    procedure BindTextColumn(const AIndex: Integer;
+      const AValues: TDbStringArray; const ANullMask: TDbBoolArray); overload;
+    procedure BindBoolColumn(const AIndex: Integer;
+      const AValues: TDbBoolArray); overload;
+    procedure BindBoolColumn(const AIndex: Integer;
+      const AValues: TDbBoolArray; const ANullMask: TDbBoolArray); overload;
 
     function Step: Boolean;
     procedure Reset;
@@ -327,6 +481,9 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
+    function SupportsArrayBinding: Boolean;
+    { 原生布尔列类型：pg bool(OID16)=True；sqlite 靠声明亲和、
+      mysql 靠 TINYINT(1) 约定 = False }
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
@@ -346,6 +503,12 @@ begin
   FSql := ASql;
   FTrace := ATrace;
   FEmitted := False;
+  { V3-C2：覆盖位图按语句参数个数分配（TPgQuery 构造时已从 SQL
+    扫描出 $N 计数）。 }
+  SetLength(FScalarMask, FQuery.ParamCount);
+  SetLength(FColMask, FQuery.ParamCount);
+  FArrayActive := False;
+  FArrayRows := 0;
 end;
 
 constructor TDbPgQuery.Create(AQuery: TPgQuery; ARestoreConn: TPgConn;
@@ -358,6 +521,21 @@ begin
   FSql := ASql;
   FTrace := ATrace;
   FEmitted := False;
+  SetLength(FScalarMask, FQuery.ParamCount);
+  SetLength(FColMask, FQuery.ParamCount);
+  FArrayActive := False;
+  FArrayRows := 0;
+end;
+
+{ 标量绑定打点：置标量位并清除同位列位（显式标量替换列绑定，
+  last-wins）。 }
+procedure TDbPgQuery.MarkScalarBound(const AIndex: Integer);
+begin
+  if (AIndex >= 1) and (AIndex <= Length(FScalarMask)) then
+  begin
+    FScalarMask[AIndex - 1] := True;
+    FColMask[AIndex - 1] := False;
+  end;
 end;
 
 destructor TDbPgQuery.Destroy;
@@ -378,6 +556,7 @@ procedure TDbPgQuery.BindText(AIndex: Integer; const AValue: string);
 begin
   try
     FQuery.BindText(AIndex, AValue);
+    MarkScalarBound(AIndex);   { V3-C2 覆盖位图打点 }
   except
     on E: EPgError do RaisePgAsDb(E);
   end;
@@ -387,6 +566,7 @@ procedure TDbPgQuery.BindInt64(AIndex: Integer; const AValue: Int64);
 begin
   try
     FQuery.BindInt64(AIndex, AValue);
+    MarkScalarBound(AIndex);   { V3-C2 覆盖位图打点 }
   except
     on E: EPgError do RaisePgAsDb(E);
   end;
@@ -396,6 +576,7 @@ procedure TDbPgQuery.BindDouble(AIndex: Integer; const AValue: Double);
 begin
   try
     FQuery.BindDouble(AIndex, AValue);
+    MarkScalarBound(AIndex);   { V3-C2 覆盖位图打点 }
   except
     on E: EPgError do RaisePgAsDb(E);
   end;
@@ -405,6 +586,7 @@ procedure TDbPgQuery.BindBlob(AIndex: Integer; const AValue: TBytes);
 begin
   try
     FQuery.BindBlob(AIndex, AValue);
+    MarkScalarBound(AIndex);   { V3-C2 覆盖位图打点 }
   except
     on E: EPgError do RaisePgAsDb(E);
   end;
@@ -414,9 +596,131 @@ procedure TDbPgQuery.BindNull(AIndex: Integer);
 begin
   try
     FQuery.BindNull(AIndex);
+    MarkScalarBound(AIndex);   { V3-C2 覆盖位图打点 }
   except
     on E: EPgError do RaisePgAsDb(E);
   end;
+end;
+
+{ ---- IDbArrayBinding（V3-C2）---- }
+
+procedure TDbPgQuery.RequireArrayMode;
+begin
+  if not FArrayActive then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'array bind: BeginBind 未调用——先声明本批行数再绑列');
+end;
+
+procedure TDbPgQuery.ValidateColumnBind(const AIndex, ACount: Integer;
+  const ANullMask: TDbBoolArray);
+begin
+  RequireArrayMode;
+  if (AIndex < 1) or (AIndex > Length(FColMask)) then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'array bind: 列索引 ' + IntToStr(AIndex) + ' 越界（本语句占位符共 ' +
+      IntToStr(Length(FColMask)) + ' 个）');
+  if FColMask[AIndex - 1] then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'array bind: 列 ' + IntToStr(AIndex) + ' 在本批已绑定（重复绑定拒绝）');
+  if ACount <> FArrayRows then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'array bind: 列 ' + IntToStr(AIndex) + ' 元素个数 ' + IntToStr(ACount) +
+      ' ≠ BeginBind 声明的行数 ' + IntToStr(FArrayRows));
+  if (ANullMask <> nil) and (Length(ANullMask) <> ACount) then
+    raise EDbError.CreateSimple(dbkPostgres,
+      'array bind: 列 ' + IntToStr(AIndex) + ' 的 NULL 掩码长度 ' +
+      IntToStr(Length(ANullMask)) + ' ≠ 元素个数 ' + IntToStr(ACount));
+end;
+
+procedure TDbPgQuery.CheckCoverageOrFail;
+var
+  I: Integer;
+begin
+  if not FArrayActive then
+    Exit;
+  for I := 0 to High(FScalarMask) do
+    if not (FScalarMask[I] or FColMask[I]) then
+      raise EDbError.CreateSimple(dbkPostgres,
+        'array bind: 参数 ' + IntToStr(I + 1) + ' 未绑定——数组模式强制全覆盖' +
+        '（防 unnest(NULL) 静默零行）');
+end;
+
+procedure TDbPgQuery.SetParamLiteral(const AIndex: Integer;
+  const ALiteral: string);
+begin
+  try
+    FQuery.BindText(AIndex, ALiteral);
+  except
+    on E: EPgError do RaisePgAsDb(E);
+  end;
+end;
+
+procedure TDbPgQuery.BeginBind(const ARows: Integer);
+begin
+  if ARows < 0 then
+    raise EDbError.CreateSimple(dbkPostgres, 'array bind: 行数不能为负');
+  FArrayRows := ARows;
+  FArrayActive := True;
+  { 新开批：清列标记；标量位保留（常量列跨批仍有效）。
+    零占位符语句位图本就为空，跳过。 }
+  if Length(FColMask) > 0 then
+    FillChar(FColMask[0], Length(FColMask), 0);
+end;
+
+procedure TDbPgQuery.BindInt64Column(const AIndex: Integer;
+  const AValues: TDbInt64Array);
+begin
+  BindInt64Column(AIndex, AValues, nil);
+end;
+
+procedure TDbPgQuery.BindInt64Column(const AIndex: Integer;
+  const AValues: TDbInt64Array; const ANullMask: TDbBoolArray);
+begin
+  ValidateColumnBind(AIndex, Length(AValues), ANullMask);
+  SetParamLiteral(AIndex, PgInt64ArrayLiteral(AValues, ANullMask));
+  FColMask[AIndex - 1] := True;
+end;
+
+procedure TDbPgQuery.BindDoubleColumn(const AIndex: Integer;
+  const AValues: TDbDoubleArray);
+begin
+  BindDoubleColumn(AIndex, AValues, nil);
+end;
+
+procedure TDbPgQuery.BindDoubleColumn(const AIndex: Integer;
+  const AValues: TDbDoubleArray; const ANullMask: TDbBoolArray);
+begin
+  ValidateColumnBind(AIndex, Length(AValues), ANullMask);
+  SetParamLiteral(AIndex, PgDoubleArrayLiteral(AValues, ANullMask));
+  FColMask[AIndex - 1] := True;
+end;
+
+procedure TDbPgQuery.BindTextColumn(const AIndex: Integer;
+  const AValues: TDbStringArray);
+begin
+  BindTextColumn(AIndex, AValues, nil);
+end;
+
+procedure TDbPgQuery.BindTextColumn(const AIndex: Integer;
+  const AValues: TDbStringArray; const ANullMask: TDbBoolArray);
+begin
+  ValidateColumnBind(AIndex, Length(AValues), ANullMask);
+  SetParamLiteral(AIndex, PgTextArrayLiteral(AValues, ANullMask));
+  FColMask[AIndex - 1] := True;
+end;
+
+procedure TDbPgQuery.BindBoolColumn(const AIndex: Integer;
+  const AValues: TDbBoolArray);
+begin
+  BindBoolColumn(AIndex, AValues, nil);
+end;
+
+procedure TDbPgQuery.BindBoolColumn(const AIndex: Integer;
+  const AValues: TDbBoolArray; const ANullMask: TDbBoolArray);
+begin
+  ValidateColumnBind(AIndex, Length(AValues), ANullMask);
+  SetParamLiteral(AIndex, PgBoolArrayLiteral(AValues, ANullMask));
+  FColMask[AIndex - 1] := True;
 end;
 
 function TDbPgQuery.Step: Boolean;
@@ -424,6 +728,9 @@ var
   LT0: QWord;
   LTimed: Boolean;
 begin
+  { V3-C2 数组模式全覆盖检查：纯客户端校验（编程错误不进观测窗口，
+    与 §2.12 口径一致），先于计时开始 }
+  CheckCoverageOrFail;
   { 观测窗口 = 本执行周期首个 Step（绑定+服务端执行+首行），见 §2.12 }
   LT0 := 0;
   LTimed := (FTrace <> nil) and (not FEmitted) and FTrace.BeginOp(LT0);
@@ -606,6 +913,11 @@ end;
 function TDbPgConnection.SupportsLargeObjects: Boolean;
 begin
   Result := True;
+end;
+
+function TDbPgConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := True;   { unnest 数组展开路径，V3-C2 }
 end;
 
 function TDbPgConnection.SupportsNativeBool: Boolean;

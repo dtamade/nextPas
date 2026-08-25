@@ -246,6 +246,7 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
+    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
@@ -743,6 +744,11 @@ end;
 function TDbSqliteConnection.SupportsLargeObjects: Boolean;
 begin
   Result := False;   { cell 模型走 IDbRowBlobControl，无 lo_* 等价面 }
+end;
+
+function TDbSqliteConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
 end;
 
 function TDbSqliteConnection.SupportsNativeBool: Boolean;

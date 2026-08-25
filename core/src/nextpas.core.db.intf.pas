@@ -97,6 +97,52 @@ type
     function HitRate: Double;   { 命中率 0..1；诊断用，不做行为依据 }
   end;
 
+  {** 参数级批量绑定（V3-C2，可选能力，QueryInterface 于 IDbQuery
+      对象探测；门面 DbArrayBinding 统一探测并允许 nil）。语义：
+      单条参数化 SQL 的每个 ? 绑一个"列数组"而非标量，一次执行由
+      服务端展开为 N 行——pg 走 unnest 数组展开路径，10K 行单次
+      往返（对照 IDbBatchExecutor：那是多语句往返压缩的通用路径；
+      本面是单语句参数级快路径，两者分工见 CONTRACT §2.16）。
+      用法（SQL 由消费方显式写目标类型 cast）：
+        INSERT INTO t(a, b) SELECT * FROM unnest(?::bigint[], ?::text[])
+        BeginBind(N); BindInt64Column(1, ...); BindTextColumn(2, ...); Step;
+      契约钉死项：
+      - BeginBind 先行且必填：声明本批行数；此后每列长度与之全等，
+        违者 fail-fast（客户端侧拒绝，不触网）。
+      - 标量绑定与数组绑定可混用（常量列 + 展开列）；数组模式激活
+        后 Step 强制全覆盖检查——任何占位符未绑定即抛，防 unnest(NULL)
+        静默零行。
+      - NULL 掩码（可选重载）：True = 该行 NULL，值被忽略；掩码长度
+        同样必须与行数全等。
+      - Reset + Step 重执行同一批（参数持久）；INSERT ... RETURNING
+        可读回展开行。
+      - 文本元素含 NUL(#0) 拒绝（文本协议会在 NUL 截断，静默损坏
+        不可接受）；转义规则（引号加倍/反斜杠）由实现负责，对消费方
+        透明。
+      仅 pg 实现（v1）；sqlite/mysql/odbc/redis 探测失败 = 未支持，
+      能力布尔 SupportsArrayBinding 与接口存在性互证（conformance 钉死）。 *}
+  IDbArrayBinding = interface
+    ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE00C}']
+    { 声明本批行数（后续每列长度必须与之全等）；可重复调用重新开批 }
+    procedure BeginBind(const ARows: Integer);
+    procedure BindInt64Column(const AIndex: Integer;
+      const AValues: TDbInt64Array); overload;
+    procedure BindInt64Column(const AIndex: Integer;
+      const AValues: TDbInt64Array; const ANullMask: TDbBoolArray); overload;
+    procedure BindDoubleColumn(const AIndex: Integer;
+      const AValues: TDbDoubleArray); overload;
+    procedure BindDoubleColumn(const AIndex: Integer;
+      const AValues: TDbDoubleArray; const ANullMask: TDbBoolArray); overload;
+    procedure BindTextColumn(const AIndex: Integer;
+      const AValues: TDbStringArray); overload;
+    procedure BindTextColumn(const AIndex: Integer;
+      const AValues: TDbStringArray; const ANullMask: TDbBoolArray); overload;
+    procedure BindBoolColumn(const AIndex: Integer;
+      const AValues: TDbBoolArray); overload;
+    procedure BindBoolColumn(const AIndex: Integer;
+      const AValues: TDbBoolArray; const ANullMask: TDbBoolArray); overload;
+  end;
+
   {** 打开的大对象流（INC-8，两后端统一流面）：接口释放即关闭。
       Read 返回实读字节数（0 = EOF）；Write 短写即异常。
       后端差异显式入契约：sqlite 为行内 blob 单元定长区间（写不得
@@ -140,7 +186,8 @@ type
       布尔项与可选接口存在性必须互证为真（conformance 钉死）：
       SupportsBatchExecutor ⇔ IDbBatchExecutor、SupportsStmtCacheControl
       ⇔ IDbStmtCacheControl、SupportsLargeObjects ⇔ IDbLargeObjectControl、
-      SupportsSavepoints ⇔ IDbSavepointControl。 *}
+      SupportsSavepoints ⇔ IDbSavepointControl、SupportsArrayBinding
+      ⇔ IDbArrayBinding（后者探测对象是 IDbQuery，非连接）。 *}
   IDbCapabilities = interface
     ['{5B3E9C71-8A24-46D3-B7F0-C92E14AD6038}']
     function Kind: TDbKind;
@@ -152,6 +199,9 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
+    { 参数级批量绑定（V3-C2）：本连接的 Query 对象可探测到
+      IDbArrayBinding；pg unnest 路径 = True }
+    function SupportsArrayBinding: Boolean;
     { 原生布尔列类型：pg bool(OID16)=True；sqlite 靠声明亲和、
       mysql 靠 TINYINT(1) 约定 = False }
     function SupportsNativeBool: Boolean;
