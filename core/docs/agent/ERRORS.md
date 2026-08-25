@@ -10,6 +10,7 @@
 |----|--------------|------|
 | transport.http | aecTransport, aecTimeout, aecServer, aecRateLimited, aecAuthentication, aecNotFound, aecInvalidRequest | 连接/读写失败与超时由传输直接产生；HTTP 状态码经公共分类器归约（非 2xx 一律在此转错误码，adapter 见不到裸状态码） |
 | provider.openai / anthropic | aecProtocol, aecConfig, aecContextOverflow | 编解码违例；本地装配缺失/非法（MaxTokens/key、schema 非 JSON object、tcmNamed 缺名）；超窗措辞识别 |
+| 流式空闲卫生 | aecTimeout | ReadIdleTimeoutMs 启用时块间空闲超限合成 aecTimeout 终止流（GetCancelled 保持 False 可区分取消）；仅流路径 |
 | provider.fake | aecProtocol | 脚本耗尽后再调用 |
 | WithRetry | （透传最后一次原始错误）| 重试耗尽不包装、不改码、不丢 RetryAfterMs |
 | agent.sse | aecProtocol | 正常解析仅产帧不抛错；触发 DoS 上限（SECURITY §3）直接抛 aecProtocol 终止流 |

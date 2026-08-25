@@ -233,6 +233,155 @@ begin
   Result.TotalTimeoutMs := 60000;
 end;
 
+{ ---- W7 空闲卫生：burst-then-stall 源——发 2 帧后长静默，
+  客户端 ReadIdleTimeoutMs 应在静默窗内合成 aecTimeout ---- }
+
+var
+  GStallListener: ITcpListener = nil;
+  GStallPort: UInt16 = 0;
+  GStallHandle: TPlatformThreadHandle;
+
+function StallSSEThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LP: SizeInt;
+  I: Integer;
+  LOut: string;
+begin
+  Result := nil;
+  LConn := nil;
+  try
+    try
+      LConn := GStallListener.Accept;
+      if LConn = nil then
+        Exit;
+      LAccum := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN = 0 then
+          Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        LP := Pos(#13#10#13#10, LAccum);
+      until LP > 0;
+      if LP <= 0 then
+        Exit;
+      LOut := 'HTTP/1.1 200 OK'#13#10 +
+        'Content-Type: text/event-stream'#13#10 +
+        'Transfer-Encoding: chunked'#13#10#13#10;
+      LConn.Write(LOut[1], SizeUInt(Length(LOut)));
+      for I := 1 to 2 do                    { burst：两帧后长静默 }
+      begin
+        LOut := CSSEFrameLenHex + #13#10 + 'data: t' +
+          Chr(48 + I div 10) + Chr(48 + I mod 10) + #13#10#13#10 + #13#10;
+        LConn.Write(LOut[1], SizeUInt(Length(LOut)));
+        platform_thread_sleep_ns(20 * 1000 * 1000);
+      end;
+      for I := 1 to 60 do                   { stall 6s；对端断管即退 }
+        platform_thread_sleep_ns(100 * 1000 * 1000);
+      LOut := '0'#13#10#13#10;
+      try
+        LConn.Write(LOut[1], SizeUInt(Length(LOut)));
+      except
+        { 客户端已超时断连：静默 }
+      end;
+    except
+      { 断管收线程 }
+    end;
+  finally
+    if LConn <> nil then
+      LConn.Close;
+  end;
+end;
+
+function StartStallLoopback: Boolean;
+var
+  LDummy: Pointer;
+begin
+  GStallListener := NetTcpListen('127.0.0.1', 0);
+  if GStallListener = nil then
+    Exit(False);
+  GStallPort := GStallListener.LocalAddr.Port;
+  GStallHandle := Default(TPlatformThreadHandle);
+  platform_thread_create(GStallHandle, @StallSSEThread, nil);
+  Result := True;
+end;
+
+procedure StopStallLoopback;
+var
+  LDummy: Pointer;
+begin
+  if GStallListener = nil then
+    Exit;
+  platform_thread_join(GStallHandle, LDummy);
+  GStallListener := nil;
+end;
+
+{ W7：burst 两帧正常消费，静默超限抛 aecTimeout——不挂满 TotalTimeout、
+  不污染取消标志（GetCancelled=False 可区分"我取消"与"对端僵死"）}
+procedure TestReadIdleTimeoutAbortsStalledStream;
+var
+  Tr: IAgentTransport;
+  W: IAgentWireStream;
+  Ev: TWireSSEEvent;
+  CK: IAgentClock;
+  Req: TWireRequest;
+  LT0, LElapsedMs, LFrames: Integer;
+  GotTimeout: Boolean;
+begin
+  if not StartStallLoopback then
+  begin
+    Check(False, 'stall loopback server failed to start');
+    Exit;
+  end;
+  try
+    Tr := NewHttpTransport('openai');
+    Req := Default(TWireRequest);
+    Req.Url := 'http://127.0.0.1:' + IntToStr(GStallPort) + '/sse';
+    Req.BodyJson := '{}';
+    Req.TotalTimeoutMs := 60000;
+    Req.ReadIdleTimeoutMs := 150;            { burst 间隔 20ms 不误伤 }
+    W := Tr.OpenStream(Req);
+    CK := NewSystemClock;
+    LT0 := CK.NowMs;
+    LFrames := 0;
+    GotTimeout := False;
+    while True do
+    begin
+      try
+        if not W.NextEvent(Ev) then
+          Break;
+        Inc(LFrames);
+      except
+        on E: EAgentError do
+        begin
+          if (E.ErrorCode = aecTimeout) and
+            (Pos('read idle timeout', E.Message) > 0) then
+          begin
+            GotTimeout := True;
+            Break;
+          end;
+          raise;
+        end;
+      end;
+    end;
+    LElapsedMs := CK.NowMs - LT0;
+    Check(LFrames >= 2, 'burst frames consumed before stall (' +
+      IntToStr(LFrames) + ')');
+    Check(GotTimeout, 'idle timeout raised with aecTimeout');
+    Check(not W.GetCancelled,
+      'cancel flag untouched by idle abort (distinguishable)');
+    Check(LElapsedMs < 5000, 'aborted promptly (took ' +
+      IntToStr(LElapsedMs) + 'ms, not TotalTimeout)');
+  finally
+    W := nil;
+    StopStallLoopback;
+  end;
+end;
+
 { Cancel 后 NextEvent 必须在 IO 切片级返回 False，而非等满请求超时 }
 procedure TestHardCancelAbortsInflightSend;
 var
@@ -303,5 +452,7 @@ begin
   T2.Test('round trip scripted', @TestRoundTripScripted);
   T2.Test('hard cancel aborts inflight send', @TestHardCancelAbortsInflightSend);
   T2.Test('destroy joins worker promptly', @TestDestroyJoinsWorkerPromptly);
+  T2.Test('read idle timeout aborts stalled stream',
+    @TestReadIdleTimeoutAbortsStalledStream);
   if not T2.Run then Halt(1);
 end.

@@ -134,6 +134,9 @@ LStore := NewJsonlTranscriptStore('/var/lib/myapp/transcripts');
 //   .WithUserText('extract: ...')
 //   .WithResponseSchema('{"type":"object","properties":{...}}'));
 
+// 3.7) 推荐：流式场景设空闲超时（W7）——上游僵死不必挂满 TotalTimeout
+// LOpts.Common.ReadIdleTimeoutMs := 60000;  // o1 系 reasoning 沉默期酌情放宽
+
 // 4) 测试离线：NewFakeProvider 脚本回放，CI 零网络零睡眠
 ```
 

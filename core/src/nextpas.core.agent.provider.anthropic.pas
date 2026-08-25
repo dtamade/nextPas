@@ -1327,6 +1327,10 @@ begin
       'anthropic: parallel_tool_calls has no wire parameter (Q-A5), ignored');
   if LReq.Seed <> CSeedUnset then
     DebugLog(FLog, 'anthropic: seed has no wire parameter, ignored');
+  if LReq.ReasoningEffort <> reUnset then
+    WarnLog(FLog,
+      'anthropic: reasoning_effort has no wire parameter (W7), ignored; ' +
+      'use Thinking/ThinkingBudgetTokens');
   if LReq.ToolChoice = tcmNone then
     DebugLog(FLog,
       'anthropic: tool_choice none translated to omitting tools (Q-A9)');
@@ -1334,6 +1338,7 @@ begin
   Result := Default(TWireRequest);
   Result.Url := BuildAnthropicUrl(FOpts.Common.BaseUrl);
   Result.BodyJson := EncodeAnthropicRequest(LReq, AStream);
+  Result.ReadIdleTimeoutMs := FOpts.Common.ReadIdleTimeoutMs;   { W7 }
   SetLength(Result.Headers, 0);
   N := Length(Result.Headers);
   SetLength(Result.Headers, N + 1);

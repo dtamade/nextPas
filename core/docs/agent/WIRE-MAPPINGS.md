@@ -20,6 +20,7 @@
 | BaseUrl 拼接 | 去尾部 `/` 后拼接端点路径；BaseUrl 已含 `/v1` 结尾则只追加 `/chat/completions` 或 `/messages`，否则追加完整默认路径（支持反代前缀部署）|
 | Extra 冲突 | 编码时 ExtraJson 键与已知字段同名：已知字段胜出（Extra 让位）；解码侧黑名单已排除，不产生冲突 |
 | 时间语义 | 一切毫秒时长 Int64；ms→ns 换算前做溢出防护 |
+| 流式空闲卫生 | `ReadIdleTimeoutMs`（TProviderOptions/TWireRequest，CTimeoutDefault=0 即禁用）：流式期间距最近一次到达字节（含响应头）超过该时长即合成 `aecTimeout` 终止流并硬中断在途 IO——上游僵死时消费方不必挂满 TotalTimeout。**不污染取消标志**：GetCancelled 保持 False，消费方可区分"我取消"与"对端僵死"。默认值取舍：o1 系 reasoning 阶段可长时间无增量输出，缺省禁用由消费方按模型族显式设置（推荐 60_000 起）。仅流路径；非流式由 http client TotalTimeout 覆盖 |
 
 ## 1. OpenAI Chat Completions 兼容适配器
 
@@ -47,6 +48,7 @@
 | `Tools` 非空（AReq.Tools） | `tools:[{type:"function", function:{name, description, parameters}}]`（parameters 为 JSON Schema 对象）；**空数组不上送字段** |
 | `ResponseSchemaJson` 非空 | `response_format:{type:"json_schema", json_schema:{name:"response", strict:true, schema:<原文透传>}}`（§1.7；schema 须可解析为 JSON object，违者本地 aecConfig） |
 | `ToolChoice` | tcmUnset 不上送；tcmAuto→`"auto"`；tcmNone→`"none"`；tcmRequired→`"required"`；tcmNamed→`{type:"function",function:{name:ToolChoiceName}}`（缺名或 Tools 空，本地 aecConfig） |
+| `ReasoningEffort` ≠ reUnset | `reasoning_effort:"minimal"\|"low"\|"medium"\|"high"`（W7）；仅推理族模型接受，其余上游 400 自然归因（Q-O1 同哲学，不做模型名预判）；Grok 同族适用 |
 | 流式调用 | 追加 `"stream":true, "stream_options":{"include_usage":true}`（quirk Q-O3） |
 | `ExtraJson` | 浅合并进请求根对象 |
 
@@ -115,8 +117,8 @@ data: [DONE]                                                             → 终
 - 编解码器/provider 复用 OpenAI 族实现：差异仅默认端点、归因名 `'grok'`、
   env 前缀 `NEXTPAS_AGENT_GROK_*`。
 - 适用怪癖全集 = §1.5（含 Q-O2 别名与 Q-O9 心跳帧）；structured output 与
-  tool_choice 编码同族适用（§1.7、§1.1）。
-- v1 inbox（未入词表）：`reasoning_effort` 参数、`x_search` 服务端工具、
+  tool_choice 编码同族适用（§1.7、§1.1）；`reasoning_effort` 已随 W7 入词表。
+- v1 inbox（未入词表）：`x_search` 服务端工具、
   Responses 族 encrypted_reasoning 重试语义。
 
 ### 1.7 Structured Output（json_schema strict 模式，W6/v1.1 第一批）
@@ -158,6 +160,7 @@ data: [DONE]                                                             → 终
 | `Temperature` ≥0 | `temperature` |
 | `TopP` ≥0 | `top_p` |
 | `Seed` ≠ CSeedUnset | 无对应参数：忽略 + debug 日志（与 ParallelToolCalls 同规则）|
+| `ReasoningEffort` ≠ reUnset | 无对应参数：忽略 + warn 日志（Q-A5 同规则；推理力度表达走本侧 Thinking/Budget 词表，W7 待遇对齐）|
 | `StopSequences` | `stop_sequences` |
 | `Thinking` 三态 / Budget | `thinking:{"type":"enabled","budget_tokens":N}`；tsFalse 显式 `{"type":"disabled"}`；tsUnset 不上送；**tsTrue 而 Budget unset → aecConfig**（anthropic 强制 budget_tokens）|
 | `ToolChoice` tcmAuto/tcmRequired/tcmNamed | `tool_choice:{"type":"auto"}` / `{"type":"any"}` / `{"type":"tool","name":ToolChoiceName}`（缺名或 Tools 空本地 aecConfig）；仅 Tools 非空时上送 |
@@ -222,8 +225,7 @@ id / model                            → Id / Model
 
 ## 3. 明确不做（v1 边界）
 
-OpenAI 侧：`logprobs`、audio/modality 参数、legacy `functions` 字段、
-`reasoning_effort` 推理力度旋钮（v1.1 候选 #3）。
+OpenAI 侧：`logprobs`、audio/modality 参数、legacy `functions` 字段。
 Anthropic 侧：`metadata.user_id`、citations、server-side tools（web_search 等）、
 `container`/code-execution、prompt caching 显式 `cache_control` 打点（缓存命中
 用量照常记录，但主动打点策略留给消费方经 ExtraJson 注入）、structured output
@@ -231,6 +233,7 @@ tool-based 转译（合成工具+强制 tool_choice 的完整方案为后续候�
 ResponseSchemaJson 在 anthropic 保持 fail-fast aecConfig，见 §2.1）。
 
 response_format/JSON mode 与 `tool_choice` 已随 W6（v1.1 第一批）落地：
-openai 族 §1.1/§1.7，anthropic §2.1。
+openai 族 §1.1/§1.7，anthropic §2.1。`reasoning_effort` 已随 W7（v1.1 第二批）
+入词表：openai 族 §1.1 编码、anthropic 忽略+warn。
 
 以上任一项进入实施范围时：先在本文件立节，再动代码。
