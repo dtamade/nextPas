@@ -3,6 +3,9 @@ unit nextpas.core.zip.reader;
  * @desc ZIP 归档读器实现：解析 EOCD/central directory（含 Zip64 定位记录与
  *       Zip64 extra 字段），按条目提取并强制 CRC32 与尺寸校验。
  *
+ * 性能：条目数组按 central count 一次性分配；解析经 bytes.cursor 边界受查
+ * 游标完成，无逐条目扩容。
+ *
  * 错误模型：结构损坏 → EParseError('zip: ...')；数据完整性失败（CRC/尺寸）→
  * EIOError；不支持的特性（加密、未知压缩方法、多盘归档）→ ENotSupportedError；
  * 索引越界 → EIndexOutOfRangeError；缺失条目 → ENotFoundError。
@@ -56,6 +59,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.bytes.cursor,
   nextpas.core.checksum.crc32,
   nextpas.core.compress.deflate;
 
@@ -71,16 +75,14 @@ type
   TZipReaderImpl = class(TInterfacedObject, IZipReader)
   private
     FData: TBytes;
+    FC: IByteCursor;
     FEntries: array of TZipEntryInfo;
     FFlags: array of Word;
     FMaxOutputSize: SizeUInt;
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
+    procedure NeedRange(APos, ALen: Int64; const AWhat: string);
     function ExtractIndex(AIndex: Integer): TBytes;
-    procedure NeedRange(APos, ALen: Int64; const AWhat: string); inline;
-    function LE16At(APos: Int64): Word; inline;
-    function LE32At(APos: Int64): LongWord; inline;
-    function LE64At(APos: Int64): UInt64;
   public
     constructor Create(const AData: TBytes; AMaxOutput: SizeUInt);
     function EntryCount: Integer;
@@ -115,75 +117,65 @@ constructor TZipReaderImpl.Create(const AData: TBytes; AMaxOutput: SizeUInt);
 begin
   inherited Create;
   FData := AData;
+  FC := NewByteCursor(AData);
   FMaxOutputSize := AMaxOutput;
   ParseCentralDirectory;
 end;
 
+{ 区间 [APos, APos+ALen) 必须落在缓冲区内，否则结构视为截断损坏 }
 procedure TZipReaderImpl.NeedRange(APos, ALen: Int64; const AWhat: string);
 begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(Length(FData))) then
+  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(FC.Length)) then
     raise EParseError.Create('zip: truncated ' + AWhat);
-end;
-
-function TZipReaderImpl.LE16At(APos: Int64): Word;
-begin
-  Result := Word(FData[APos]) or (Word(FData[APos + 1]) shl 8);
-end;
-
-function TZipReaderImpl.LE32At(APos: Int64): LongWord;
-begin
-  Result := LongWord(LE16At(APos)) or (LongWord(LE16At(APos + 2)) shl 16);
-end;
-
-function TZipReaderImpl.LE64At(APos: Int64): UInt64;
-begin
-  Result := UInt64(LE32At(APos)) or (UInt64(LE32At(APos + 4)) shl 32);
 end;
 
 procedure TZipReaderImpl.ParseCentralDirectory;
 var
   LI: Integer;
-  LEocdPos, LMinPos, LLocatorPos: Integer;
+  LEocdPos, LMinPos, LLocatorPos: Int64;
   LDiskNum, LCdStartDisk, LCount16, LCommentLen: Word;
   LCount: Int64;
   LCdSize, LCdOffset, LZ64EocdOffset: UInt64;
-  LP: Int64;
   LFlags, LMethodCode, LNameLen, LExtraLen, LCommentFieldLen: Word;
   LDosTime, LDosDate: Word;
   LCrc: LongWord;
   LExtAttrs: LongWord;
   LCSize, LUSize, LLho: UInt64;
   LName: string;
-  LExtraPos: Int64;
   LExtraLeft, LExtraUsed: Integer;
   LExtraId, LExtraSize: Word;
-  LInfo: TZipEntryInfo;
 begin
-  if Length(FData) < C_EOCD_MIN_LEN then
+  if FC.Length < C_EOCD_MIN_LEN then
     raise EParseError.Create('zip: truncated archive');
 
   { 从尾部向前找 EOCD 签名（注释区可含任意字节，取最靠后者） }
   LEocdPos := -1;
-  LMinPos := Length(FData) - C_EOCD_MIN_LEN - C_MAX_COMMENT_LEN;
+  LMinPos := Int64(FC.Length) - C_EOCD_MIN_LEN - C_MAX_COMMENT_LEN;
   if LMinPos < 0 then
     LMinPos := 0;
-  for LI := Length(FData) - C_EOCD_MIN_LEN downto LMinPos do
-    if LE32At(LI) = C_ZIP_EOCD_SIG then
+  LI := Int64(FC.Length) - C_EOCD_MIN_LEN;
+  while LI >= LMinPos do
+  begin
+    if FC.PeekU32LE(SizeUInt(LI)) = C_ZIP_EOCD_SIG then
     begin
       LEocdPos := LI;
       Break;
     end;
+    Dec(LI);
+  end;
   if LEocdPos < 0 then
     raise EParseError.Create('zip: end of central directory not found');
 
-  NeedRange(LEocdPos, C_EOCD_MIN_LEN, 'end of central directory');
-  LDiskNum := LE16At(LEocdPos + 4);
-  LCdStartDisk := LE16At(LEocdPos + 6);
-  LCount16 := LE16At(LEocdPos + 10);
-  LCdSize := LE32At(LEocdPos + 12);
-  LCdOffset := LE32At(LEocdPos + 16);
-  LCommentLen := LE16At(LEocdPos + 20);
-  if Int64(LEocdPos) + C_EOCD_MIN_LEN + LCommentLen > Int64(Length(FData)) then
+  FC.Seek(SizeUInt(LEocdPos));
+  FC.ReadU32LE;                       { EOCD 签名 }
+  LDiskNum := FC.ReadU16LE;
+  LCdStartDisk := FC.ReadU16LE;
+  FC.ReadU16LE;                       { 本盘条目数（多盘不支持，看总数即可） }
+  LCount16 := FC.ReadU16LE;
+  LCdSize := FC.ReadU32LE;
+  LCdOffset := FC.ReadU32LE;
+  LCommentLen := FC.ReadU16LE;
+  if LEocdPos + C_EOCD_MIN_LEN + LCommentLen > Int64(FC.Length) then
     raise EParseError.Create('zip: truncated archive comment');
   if (LDiskNum <> 0) or (LCdStartDisk <> 0) then
     raise ENotSupportedError.Create('zip: multi-disk archives not supported');
@@ -194,62 +186,80 @@ begin
   begin
     LLocatorPos := LEocdPos - C_ZIP64_LOCATOR_LEN;
     NeedRange(LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
-    if LE32At(LLocatorPos) <> C_ZIP64_EOCD_LOC_SIG then
+    FC.Seek(SizeUInt(LLocatorPos));
+    if FC.ReadU32LE <> C_ZIP64_EOCD_LOC_SIG then
       raise EParseError.Create('zip: zip64 records missing');
-    LZ64EocdOffset := LE64At(LLocatorPos + 8);
+    FC.ReadU32LE;                              { 本盘号 }
+    LZ64EocdOffset := FC.ReadU64LE;
     NeedRange(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
       'zip64 end of central directory');
-    if LE32At(Int64(LZ64EocdOffset)) <> C_ZIP64_EOCD_SIG then
+    FC.Seek(SizeUInt(LZ64EocdOffset));
+    if FC.ReadU32LE <> C_ZIP64_EOCD_SIG then
       raise EParseError.Create('zip: bad zip64 EOCD signature');
-    LCount := Int64(LE64At(Int64(LZ64EocdOffset) + 32));
-    LCdSize := LE64At(Int64(LZ64EocdOffset) + 40);
-    LCdOffset := LE64At(Int64(LZ64EocdOffset) + 48);
+    FC.ReadU64LE;                              { 记录体尺寸 }
+    FC.ReadU16LE;                              { version made by }
+    FC.ReadU16LE;                              { version needed }
+    FC.ReadU32LE;                              { 本盘号 }
+    FC.ReadU32LE;                              { central 起始盘号 }
+    FC.ReadU64LE;                              { 本盘条目数 }
+    LCount := Int64(FC.ReadU64LE);
+    LCdSize := FC.ReadU64LE;
+    LCdOffset := FC.ReadU64LE;
   end
   else
     LCount := LCount16;
 
-  if (LCdOffset > UInt64(Length(FData))) or
-     (Int64(LCdOffset) + Int64(LCdSize) > Int64(Length(FData))) then
+  if (LCdOffset > FC.Length) or
+     (Int64(LCdOffset) + Int64(LCdSize) > Int64(FC.Length)) then
     raise EParseError.Create('zip: central directory out of bounds');
 
-  SetLength(FEntries, 0);
-  SetLength(FFlags, 0);
-  LP := Int64(LCdOffset);
-  for LI := 1 to LCount do
+  { 条目数已知：一次性分配，避免逐条目扩容 }
+  if LCount > High(Integer) - 1 then
+    raise EParseError.Create('zip: entry count out of range');
+  SetLength(FEntries, LCount);
+  SetLength(FFlags, LCount);
+
+  FC.Seek(SizeUInt(LCdOffset));
+  for LI := 0 to LCount - 1 do
   begin
-    NeedRange(LP, C_CENTRAL_HEADER_LEN, 'central header');
-    if LE32At(LP) <> C_ZIP_CENTRAL_SIG then
+    NeedRange(Int64(FC.Position), C_CENTRAL_HEADER_LEN, 'central header');
+    if FC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
       raise EParseError.Create('zip: bad central header signature at ' +
-        IntToStr(LP));
-    LFlags := LE16At(LP + 8);
-    LMethodCode := LE16At(LP + 10);
-    LDosTime := LE16At(LP + 12);
-    LDosDate := LE16At(LP + 14);
-    LCrc := LE32At(LP + 16);
-    LCSize := LE32At(LP + 20);
-    LUSize := LE32At(LP + 24);
-    LNameLen := LE16At(LP + 28);
-    LExtraLen := LE16At(LP + 30);
-    LCommentFieldLen := LE16At(LP + 32);
-    LExtAttrs := LE32At(LP + 38);
-    LLho := LE32At(LP + 42);
-    Inc(LP, C_CENTRAL_HEADER_LEN);
-    NeedRange(LP, Int64(LNameLen) + LExtraLen + LCommentFieldLen,
-      'central entry body');
+        IntToStr(Int64(FC.Position) - 4));
+    FC.ReadU16LE;                              { version made by }
+    FC.ReadU16LE;                              { version needed }
+    LFlags := FC.ReadU16LE;
+    LMethodCode := FC.ReadU16LE;
+    LDosTime := FC.ReadU16LE;
+    LDosDate := FC.ReadU16LE;
+    LCrc := FC.ReadU32LE;
+    LCSize := FC.ReadU32LE;
+    LUSize := FC.ReadU32LE;
+    LNameLen := FC.ReadU16LE;
+    LExtraLen := FC.ReadU16LE;
+    LCommentFieldLen := FC.ReadU16LE;
+    FC.ReadU16LE;                              { disk number start }
+    FC.ReadU16LE;                              { internal attrs }
+    LExtAttrs := FC.ReadU32LE;
+    LLho := FC.ReadU32LE;
+
+    NeedRange(Int64(FC.Position),
+      Int64(LNameLen) + LExtraLen + LCommentFieldLen, 'central entry body');
 
     SetLength(LName, LNameLen);
     if LNameLen > 0 then
-      Move(FData[LP], LName[1], LNameLen);
-    Inc(LP, LNameLen);
+    begin
+      Move(FData[FC.Position], LName[1], LNameLen);
+      FC.Seek(FC.Position + SizeUInt(LNameLen));
+    end;
 
     { 扫描 extra 字段链，取 Zip64 宽度值替换经典字段的 $FFFFFFFF 占位。
       APPNOTE 规定 0x0001 内顺序固定为：原始尺寸、压缩尺寸、本地头偏移。 }
-    LExtraPos := LP;
     LExtraLeft := LExtraLen;
     while LExtraLeft >= 4 do
     begin
-      LExtraId := LE16At(LExtraPos);
-      LExtraSize := LE16At(LExtraPos + 2);
+      LExtraId := FC.ReadU16LE;
+      LExtraSize := FC.ReadU16LE;
       if Integer(LExtraSize) > LExtraLeft - 4 then
         raise EParseError.Create('zip: malformed extra field');
       if LExtraId = C_ZIP64_EXTRA_ID then
@@ -257,41 +267,43 @@ begin
         LExtraUsed := 0;
         if (LUSize = UInt64($FFFFFFFF)) and (LExtraSize - LExtraUsed >= 8) then
         begin
-          LUSize := LE64At(LExtraPos + 4 + LExtraUsed);
+          LUSize := FC.ReadU64LE;
           Inc(LExtraUsed, 8);
         end;
         if (LCSize = UInt64($FFFFFFFF)) and (LExtraSize - LExtraUsed >= 8) then
         begin
-          LCSize := LE64At(LExtraPos + 4 + LExtraUsed);
+          LCSize := FC.ReadU64LE;
           Inc(LExtraUsed, 8);
         end;
         if (LLho = UInt64($FFFFFFFF)) and (LExtraSize - LExtraUsed >= 8) then
-          LLho := LE64At(LExtraPos + 4 + LExtraUsed);
-      end;
-      Inc(LExtraPos, 4 + Integer(LExtraSize));
+          LLho := FC.ReadU64LE
+        else
+          FC.Seek(FC.Position + SizeUInt(LExtraSize - LExtraUsed));
+      end
+      else
+        FC.Seek(FC.Position + SizeUInt(LExtraSize));
       Dec(LExtraLeft, 4 + Integer(LExtraSize));
     end;
-    Inc(LP, LExtraLen + LCommentFieldLen);
+    FC.Seek(FC.Position + SizeUInt(LCommentFieldLen));
 
-    LInfo.Name := LName;
+    FEntries[LI].Name := LName;
     if LMethodCode = C_ZIP_METHOD_DEFLATE then
-      LInfo.Method := zmDeflate
+      FEntries[LI].Method := zmDeflate
     else
-      LInfo.Method := zmStore;
-    LInfo.MethodCode := LMethodCode;
-    LInfo.Crc32 := LCrc;
-    LInfo.CompressedSize := LCSize;
-    LInfo.UncompressedSize := LUSize;
-    LInfo.ModTimeUnixSec := UnixFromDosDateTime(LDosDate, LDosTime);
-    LInfo.LocalHeaderOffset := LLho;
-    LInfo.IsDirectory :=
+      FEntries[LI].Method := zmStore;
+    FEntries[LI].MethodCode := LMethodCode;
+    FEntries[LI].Crc32 := LCrc;
+    FEntries[LI].CompressedSize := LCSize;
+    FEntries[LI].UncompressedSize := LUSize;
+    FEntries[LI].ModTimeUnixSec := UnixFromDosDateTime(LDosDate, LDosTime);
+    FEntries[LI].LocalHeaderOffset := LLho;
+    FEntries[LI].IsDirectory :=
       ((LNameLen > 0) and (LName[LNameLen] = '/')) or
       (((LExtAttrs shr 16) and $F000) = $4000);
-
-    SetLength(FEntries, Length(FEntries) + 1);
-    SetLength(FFlags, Length(FFlags) + 1);
-    FEntries[High(FEntries)] := LInfo;
-    FFlags[High(FFlags)] := LFlags;
+    FEntries[LI].ExternalAttrs := LExtAttrs;
+    FEntries[LI].IsSymlink :=
+      ((LExtAttrs shr 16) and $F000) = C_ZIP_UNIX_MODE_SYMLINK;
+    FFlags[LI] := LFlags;
   end;
 end;
 
@@ -341,12 +353,23 @@ begin
 
   LLho := Int64(LE.LocalHeaderOffset);
   NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
-  if LE32At(LLho) <> C_ZIP_LOCAL_SIG then
+  FC.Seek(SizeUInt(LLho));
+  if FC.ReadU32LE <> C_ZIP_LOCAL_SIG then
     raise EParseError.Create('zip: bad local header signature');
-  LNameLen := LE16At(LLho + 26);
-  LExtraLen := LE16At(LLho + 28);
+  FC.ReadU16LE;                    { version needed }
+  FC.ReadU16LE;                    { flags（描述符置位的本地尺寸为占位，
+                                      尺寸以 central 为准，故天然容忍 bit3） }
+  FC.ReadU16LE;                    { method }
+  FC.ReadU16LE;                    { DOS time }
+  FC.ReadU16LE;                    { DOS date }
+  FC.ReadU32LE;                    { local crc }
+  FC.ReadU32LE;                    { local compressed size（描述符时为占位） }
+  FC.ReadU32LE;                    { local uncompressed size（同上） }
+  LNameLen := FC.ReadU16LE;
+  LExtraLen := FC.ReadU16LE;
   LDataOff := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
   NeedRange(LDataOff, Int64(LE.CompressedSize), 'entry payload');
+
   LPayload := Copy(FData, LDataOff, Int64(LE.CompressedSize));
 
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
