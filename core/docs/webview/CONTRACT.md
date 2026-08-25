@@ -4,8 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-25
-**版本**：1.0（源码家族已落地：base/intf/bridge/fake/factory/门面 +
-七个测试门；平台后端 gtk/webview2/wk 按波次推进，语义变更须升版本号）
+**版本**：1.1（S3——GTK 家族四单元 ffi/loader/win/backend 落地并过
+真实引擎 live 门禁；测试门扩至九个。语义变更须升版本号。）
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
@@ -41,6 +41,11 @@ gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
 - `*.loader` 只做装载与探测，是唯一允许触碰动态加载设施的后端侧单元；
   动态加载原语一律来自 `nextpas.core.platform.dl`，
   **禁止使用 FPC `DynLibs` 单元**（gate policy：raw host units 仅限 owner path）。
+
+**落地状态**（S3 后）：`base` / `intf` / `bridge` / `fake` / `factory` /
+门面与 `gtk.ffi` / `gtk.loader` / `gtk.win` / `gtk` 已全部落地；
+`gtk.win` 即 §1.1 预定的抽取预备缝（签名零 webview 概念）。
+webview2（W2）/ wk（W3）按波次接入同一 bridge 与 factory 位。
 
 ### 注册表时机
 

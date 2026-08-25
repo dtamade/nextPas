@@ -69,8 +69,19 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 
 资源：`webkit_web_context_register_uri_scheme`（须在首个 web view 创建前）。
 
-> 最终清单 S3 以官方头核对后冻结，并附 source-surface 对照说明
-> （参照 platform FFI import workflow 的取证方式）。
+> **S3 冻结注记**（落地实现对照 /usr/include/webkitgtk-4.1 官方头）：
+> - eval 双路径按符号存在性选择已实现（loader 能力位 `TGtkEvalPath`），
+>   `run_javascript_finish` 经 `WebKitJavascriptResult.get_js_value`
+>   统一解包为 JSCValue，两路径同构取回结果。
+> - 会话 context 三形态齐备：默认共享（get_default）/ ephemeral /
+>   DataDirectory（website_data_manager "base-data-directory"）；
+>   视图一律 `new_with_context` 创建，scheme 先于视图注册。
+> - eval 结果文本：null/undefined 诚实序列化为 'null'；不可 JSON 化
+>   值降级 JSC toString 文本。
+> - scheme 404 当前以正文诚实返回（finish text/html），HTTP 级错误码
+>   语义留待 GError 路径 S4 精化。
+> - IsMinimized 为本地跟踪（window-state-event 解析 S4 精化）；
+>   Maximized/Visible/几何均为引擎实时真值。
 
 ### 2.3 主线程唤醒
 
