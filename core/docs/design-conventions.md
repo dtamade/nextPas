@@ -121,6 +121,17 @@ end;
 end.
 ```
 
+### inline 标记的两条红线
+
+1. **索引元素喂 untyped 参数的函数禁 inline**。实现形如 `Move(AStr[1], Result[0], Length(AStr))`
+   的函数一旦标记 inline，FPC 会把常量串实参的 `AStr[1]` 经常量传播折叠成单字符值，
+   Move 从栈上临时拷出首字节之后的垃圾（valgrind + 反汇编实证，曾致 tls13 门红）。
+   `BytesOf`/`StringOf` 即因此去 inline。同类 sink：`FillChar`、`CompareMem`。
+2. **真实循环体 / SIMD 体 / 路由体禁 inline**。含扫描循环、回退路由、批量编码的函数
+   （如 Format 路由、json writer 的 Key/Str SIMD 扫描重载）保持外联，避免 I-Cache 复制膨胀。
+
+薄转发、状态翻转、冷抛守卫（`Require` 类）、小访问器适合 inline。
+
 ### 消费方引用粒度
 
 - 只需类型定义 → 引 `*.base.pas`
