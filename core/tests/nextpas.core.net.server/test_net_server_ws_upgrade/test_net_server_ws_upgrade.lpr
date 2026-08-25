@@ -68,6 +68,8 @@ type
     UpgradeFailedCount: Int32;
     Sink: TUpgradeTestSink;
     ResponseSent: Boolean;
+    { F-10：非空时走五参 handoff（Origin 回调裁决）；nil = 四参缺省路径。 }
+    CheckOrigin: TWebSocketOriginCheck;
     constructor Create(const ASink: TUpgradeTestSink);
     procedure ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
   end;
@@ -362,8 +364,12 @@ var
   LSession: IWebSocketFrameSession;
 begin
   try
-    LSession := UpgradeWebSocketHandoff(AReq, AW, Sink,
-      TNetWsFrameSessionOptions.Default);
+    if Assigned(CheckOrigin) then
+      LSession := UpgradeWebSocketHandoff(AReq, AW, Sink,
+        TNetWsFrameSessionOptions.Default, CheckOrigin)
+    else
+      LSession := UpgradeWebSocketHandoff(AReq, AW, Sink,
+        TNetWsFrameSessionOptions.Default);
     Inc(UpgradeCount);
     Sink.Session := LSession;
   except
@@ -874,6 +880,81 @@ begin
   end;
 end;
 
+{ F-10：五参 handoff 透传 OnCheckOrigin——回调允许白名单 Origin 时正常
+  101 升级（请求自带 Origin: http://localhost，回调精确放行该值）。 }
+function AllowLocalhostOrigin(const AOrigin: string): Boolean;
+begin
+  Result := AOrigin = 'http://localhost';
+end;
+
+procedure TestHandoffCheckOriginAllows;
+var
+  LHandler: TUpgradeTestHandler;
+  LSink: IWebSocketFrameSink;
+  LServer: THttpServer;
+  LThread: TPlatformThreadHandle;
+  LPort: UInt16;
+  LConn: ITcpStream;
+  LRespHead: string;
+  LReq: string;
+begin
+  LSink := TUpgradeTestSink.Create(usmRecord);
+  LHandler := TUpgradeTestHandler.Create(LSink as TUpgradeTestSink);
+  LHandler.CheckOrigin := @AllowLocalhostOrigin;
+  LThread := StartUpgradeServer(LHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LReq := BuildUpgradeRequest('');
+    LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+    LRespHead := ReadUpgradeResponseHead(LConn, 2000);
+    Check(Pos('HTTP/1.1 101', LRespHead) > 0, 'callback allow upgrades 101');
+    WaitForCount(LHandler.UpgradeCount, 1000);
+    Check(LHandler.UpgradeFailedCount = 0, 'no upgrade failures on allow');
+    LConn.Close;
+  finally
+    LHandler.Sink.Session := nil;
+    StopUpgradeServer(LServer, LThread);
+  end;
+end;
+
+{ F-10：回调拒绝时握手失败——非 101 响应且 handler 计入升级失败
+  （回调确实被握手层调用，缺口已闭合）。 }
+function DenyAllOrigins(const AOrigin: string): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TestHandoffCheckOriginDenies;
+var
+  LHandler: TUpgradeTestHandler;
+  LSink: IWebSocketFrameSink;
+  LServer: THttpServer;
+  LThread: TPlatformThreadHandle;
+  LPort: UInt16;
+  LConn: ITcpStream;
+  LRespHead: string;
+  LReq: string;
+begin
+  LSink := TUpgradeTestSink.Create(usmRecord);
+  LHandler := TUpgradeTestHandler.Create(LSink as TUpgradeTestSink);
+  LHandler.CheckOrigin := @DenyAllOrigins;
+  LThread := StartUpgradeServer(LHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LReq := BuildUpgradeRequest('');
+    LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+    LRespHead := ReadUpgradeResponseHead(LConn, 2000);
+    Check(Pos('HTTP/1.1 101', LRespHead) = 0,
+      'callback deny must not produce 101');
+    Check(LHandler.UpgradeFailedCount >= 1,
+      'denied handshake surfaces as upgrade failure');
+    LConn.Close;
+  finally
+    LHandler.Sink.Session := nil;
+    StopUpgradeServer(LServer, LThread);
+  end;
+end;
+
 { ==================== main ==================== }
 
 var
@@ -882,6 +963,8 @@ begin
   LTest := TTestSuite.Create('test_net_server_ws_upgrade');
   try
     LTest.Test('upgrade 101 without deflate extension', @TestUpgradeNoDeflate);
+    LTest.Test('handoff check-origin allows whitelisted', @TestHandoffCheckOriginAllows);
+    LTest.Test('handoff check-origin denies others', @TestHandoffCheckOriginDenies);
     LTest.Test('echo via worker push channel', @TestEchoViaWorkerPush);
     LTest.Test('same-packet residual via prepend TryRead', @TestSamePacketResidual);
     LTest.Test('ping auto pong', @TestPingPong);
