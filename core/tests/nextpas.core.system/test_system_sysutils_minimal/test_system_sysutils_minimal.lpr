@@ -246,6 +246,25 @@ begin
     'whole-day difference should span leap years');
 end;
 
+procedure TestBytesOfConstantArgumentContent;
+var
+  A, B: TBytes;
+  I: Integer;
+begin
+  { 回归防护：BytesOf 直收常量串实参。若实现恢复 inline，
+    FPC 常量传播会把 AStr[1] 折叠成单字符值，Move 拷出栈上垃圾。
+    内容必须逐字节等于字面量，不能只对长度和首字节成立。 }
+  A := nextpas.core.system.sysutils.BytesOf('-----BEGIN TEST KEY-----' + LineEnding + 'AQID');
+  Check(Length(A) = Length('-----BEGIN TEST KEY-----' + LineEnding + 'AQID'),
+    'BytesOf should preserve constant argument length');
+  for I := 0 to High(A) do
+    Check(A[I] = Ord(('-----BEGIN TEST KEY-----' + LineEnding + 'AQID')[I + 1]),
+      'BytesOf should copy every byte of a constant argument');
+  B := nextpas.core.system.sysutils.BytesOf(StringOf(A));
+  Check((Length(B) = Length(A)) and CompareMem(@B[0], @A[0], Length(A)),
+    'StringOf/BytesOf round trip should preserve bytes');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -261,6 +280,7 @@ begin
   T.Test('BoolToStr follows SysUtils semantics', @TestBoolToStrSysUtilsSemantics);
   T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
   T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
+  T.Test('BytesOf copies constant argument content', @TestBytesOfConstantArgumentContent);
   T.Test('Supports queries interfaces', @TestSupportsInterfaceQuery);
   T.Test('EncodeDate matches RTL epoch values', @TestEncodeDateMatchesRtlEpoch);
   T.Test('EncodeDate rejects invalid dates', @TestEncodeDateInvalidRaises);

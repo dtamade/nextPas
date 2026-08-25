@@ -33,7 +33,6 @@ type
 function Format(const AFmt: string; const AArgs: array of const): string;
 function CompareStr(const A, B: string): Integer; inline;
 function SameText(const A, B: string): Boolean; inline;
-
 { Numeric conversion }
 function IntToStr(const AValue: Int64): string; inline;
 function Int64ToStr(const AValue: Int64): string; inline;
@@ -50,8 +49,10 @@ function CurrToStr(const AValue: Currency): string; inline;
 function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string; inline;
 
 { Bytes helpers (SysUtils-compat for tests / facades) }
-function BytesOf(const AStr: string): TBytes; inline;
-function StringOf(const ABytes: TBytes): string; inline;
+{ BytesOf/StringOf 无 inline：实现用 Move(AStr[1], …) 拷贝；inline + 常量串实参
+  会被 FPC 常量传播折叠成单字符值，Move 拷出栈上垃圾（valgrind 实证）。 }
+function BytesOf(const AStr: string): TBytes;
+function StringOf(const ABytes: TBytes): string;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; overload; inline;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; overload; inline;
