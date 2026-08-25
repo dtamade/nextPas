@@ -22,7 +22,7 @@ HikariCP、ADO.NET `DbProviderFactory`。✅=已落地有门禁证据；
 | 4 | Open 即池 | `*sql.DB` 天生是池；Hikari 池即默认路径 | 池已工业级（V2-S4+C3），但**与统一入口脱节**——消费方手工拼工厂闭包 | ❌ P0-1（组合缝） |
 | 5 | 可插拔驱动 | `sql.Register` 第三方注入 | 无注册面 | ❌ P0-1 |
 | 6 | 预编译语句缓存 | pgx stmt cache / sqlx prepared | sqlite ✅(1.54×)、pg ✅ G8(2.22×)；mysql/odbc 未见缓存 | 🟡 C2/C4 评估 |
-| 7 | 参数级批量绑定 | pgx COPY / `unnest` Array DML | IDbBatchExecutor 多语句合并；参数级未做 | ❌ C2 |
+| 7 | 参数级批量绑定 | pgx COPY / `unnest` Array DML | ✅ C2：IDbArrayBinding unnest 路径（pg 10K 行 29ms vs batch 174ms = 6.0×）；其余后端诚实缺席 | ✅ C2 |
 | 8 | 事务 + 重试 | sqlx `BeginTxx` + 死锁重试库 | WithTransaction(+Retry) 瞬时段位退避 | ✅ B5 |
 | 9 | 连接池硬化 | HikariCP 探活/泄漏检测/寿命 | ValidateOnAcquire/LeakDetection/Lifetime/Idle 全有，15 组门禁 | ✅ C3 |
 | 10 | 观测钩子 | otelsql / Hikari metrics | IDbTraceListener 四后端同构 + Hub | ✅ B3 |
@@ -62,7 +62,7 @@ HikariCP、ADO.NET `DbProviderFactory`。✅=已落地有门禁证据；
 | C5 | sqlite PRAGMA 调优预设（WAL+NORMAL 安全缺省，:memory: 过滤 journal 类） | sqlx `SqliteConnectOptions.JournalMode` |
 | B4 | TLS 契约成文：§2.1 责任表 + 各后端样例（含 redis A5.1b 实证） | pgx sslmode 表 |
 | C4 | 基准口径入册 + 裸驱动开销比 ≤1.15× 护栏（bench 不进默认 verify） | Hikari 泄漏率判据思路 |
-| C2 | 参数级批量绑定：pg unnest 实测定 binary COPY 二选一；sqlite 如实不硬造 | pgx CopyFrom / FireDAC Array DML |
+| C2 | 参数级批量绑定 ✅：pg unnest 定案（binary COPY 留 P2 评估）；sqlite/mysql/odbc/redis 如实缺席；四路基准 array 29ms/10K 行稳态（batch 的 6.0×） | pgx CopyFrom / FireDAC Array DML |
 
 ### P2（依赖最晚就绪/外部环境）
 

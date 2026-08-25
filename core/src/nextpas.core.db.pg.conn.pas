@@ -67,6 +67,9 @@ type
     procedure Reset;
     function ColumnCount: Integer;
     function ColumnName(const AIndex: Integer): string;
+    { SQL 中扫描到的参数个数（$N 占位符；V3-C2 数组绑定全覆盖
+      检查与索引越界校验用）。 }
+    function ParamCount: Integer;
     { 结果列的 PostgreSQL 类型 OID（PQftype；未执行时返回 0）。 }
     function ColumnFieldOid(const AIndex: Integer): Cardinal;
     function IsNull(const AIndex: Integer): Boolean;
@@ -765,6 +768,11 @@ begin
   if FRes = nil then
     Exit(0);
   Result := pq_nfields(FRes);
+end;
+
+function TPgQuery.ParamCount: Integer;
+begin
+  Result := FParamCount;
 end;
 
 function TPgQuery.ColumnName(const AIndex: Integer): string;

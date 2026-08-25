@@ -49,6 +49,11 @@ type
   IDbBlobStream = nextpas.core.db.intf.IDbBlobStream;
   IDbLargeObjectControl = nextpas.core.db.intf.IDbLargeObjectControl;
   IDbRowBlobControl = nextpas.core.db.intf.IDbRowBlobControl;
+  IDbArrayBinding = nextpas.core.db.intf.IDbArrayBinding;
+  TDbInt64Array = nextpas.core.db.base.TDbInt64Array;
+  TDbDoubleArray = nextpas.core.db.base.TDbDoubleArray;
+  TDbStringArray = nextpas.core.db.base.TDbStringArray;
+  TDbBoolArray = nextpas.core.db.base.TDbBoolArray;
   IDbCapabilities = nextpas.core.db.intf.IDbCapabilities;
   IDbTraceListener = nextpas.core.db.intf.IDbTraceListener;
   IDbTraceControl = nextpas.core.db.intf.IDbTraceControl;
@@ -125,6 +130,12 @@ function OpenSqlitePool(const APath: string; const APolicy: TDbPoolPolicy;
   （无值用 nil 表达——仓库错误处理策略）。布尔项与可选接口存在性
   互证契约见 db.intf 注记与 CONTRACT §2.10。 }
 function DbCapabilities(const AConn: IDbConnection): IDbCapabilities; inline;
+
+{ ---- 参数级批量绑定（V3-C2）---- }
+{ 统一探测：查询对象实现 IDbArrayBinding 则返回之，否则 nil（无值用
+  nil 表达——后端未支持即降级通用路径）。语义与 fail-fast 契约见
+  db.intf 注记与 CONTRACT §2.16。 }
+function DbArrayBinding(const AQry: IDbQuery): IDbArrayBinding; inline;
 
 { ---- 观测钩子控制面（V3-B3）---- }
 { 统一探测：连接实现 IDbTraceControl 则返回之，否则 nil（无值用
@@ -252,6 +263,14 @@ begin
   if AConn = nil then
     Exit;
   Supports(AConn, IDbCapabilities, Result);
+end;
+
+function DbArrayBinding(const AQry: IDbQuery): IDbArrayBinding;
+begin
+  Result := nil;
+  if AQry = nil then
+    Exit;
+  Supports(AQry, IDbArrayBinding, Result);
 end;
 
 function DbTraceControl(const AConn: IDbConnection): IDbTraceControl;

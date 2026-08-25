@@ -583,6 +583,8 @@ var
   LCache: IDbStmtCacheControl;
   LLO: IDbLargeObjectControl;
   LSp: IDbSavepointControl;
+  LArrQ: IDbQuery;
+  LArr: IDbArrayBinding;
   LHas: Boolean;
 begin
   Cap := DbCapabilities(AConn);
@@ -610,6 +612,12 @@ begin
   LHas := Supports(AConn, IDbSavepointControl, LSp);
   Check(LHas = Cap.SupportsSavepoints,
     P + '/caps: savepoint flag ⇔ interface presence');
+  { V3-C2：数组绑定探测对象是 IDbQuery（构造即探测，不触服务端） }
+  LArrQ := AConn.Query('SELECT 1');
+  Supports(LArrQ, IDbArrayBinding, LArr);
+  Check((LArr <> nil) = Cap.SupportsArrayBinding,
+    P + '/caps: array-binding flag ⇔ query probe presence');
+  LArrQ := nil;
 
   { 行为验证：声明支持 savepoints ⇒ 探针保存点真实可用 }
   if Cap.SupportsSavepoints then

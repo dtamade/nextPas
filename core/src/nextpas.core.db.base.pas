@@ -55,6 +55,14 @@ type  { 数据库后端种类 }
   { 批执行步骤列表（完整独立 SQL 语句，非片段） }
   TDbSqlSteps = array of string;
 
+  { V3-C2 参数级批量绑定（数组 DML）载体：一列一个数组，一次执行
+    服务端展开 N 行。TDbBoolArray 双职——布尔列值 / NULL 掩码
+    （掩码 True = 该行 NULL，值被忽略）。 }
+  TDbInt64Array = array of Int64;
+  TDbDoubleArray = array of Double;
+  TDbStringArray = array of string;
+  TDbBoolArray = array of Boolean;
+
   { 连接选项（INC-7）。语义诚实表：
     - BusyTimeoutMs：sqlite = busy_timeout（锁等待上限）；pg/mysql 映射
       connect_timeout（建连超时，秒粒度向上取整）；odbc 映射

@@ -68,20 +68,25 @@ NEXTPAS_PG_TEST_CONN='host=/var/run/postgresql dbname=nextpas_pg_test user='"$US
 
 线性度成立（≈29 MB/s 量级）；SQL 文本远小于此规模，非热路径。
 
-### bench_db_batch_insert —— 批执行三模式（C2 的判据基线）
+### bench_db_batch_insert —— 批写入四模式（C4 基线 + C2 array）
 
 口径：N=10000 行、两列参数化 INSERT。autocommit=逐行自动提交；
 txloop=手动 BEGIN..COMMIT 包裹逐行；batch=`IDbBatchExecutor`
-多语句合并单次往返。
+多语句合并单次往返；array=`IDbArrayBinding` unnest 单语句参数级
+批量（V3-C2，绑定/编码计入计时口径）。array 段仅能力后端执行，
+sqlite 诚实缺席。
 
-| backend | autocommit | txloop | batch |
-|---|---|---|---|
-| sqlite | 34 ms | 18 ms | 23 ms |
-| postgres | 21,804 ms | 536 ms | **190 ms** |
+| backend | autocommit | txloop | batch | array |
+|---|---|---|---|---|
+| sqlite | 34 ms | 18 ms | 23 ms | —（未实现） |
+| postgres | 21,830 ms | 526 ms | 174 ms | **29 ms** |
 
-pg 上 batch 对 txloop **2.8×**、对 autocommit **115×**——参数级
-批量绑定（C2）的收益空间以此为基线登记：C2 目标是在 batch 之上
-再降往返数，判据 = 同口径 10K 行插入耗时进一步下降。
+pg 四路阶梯：array 在 batch 之上再 **6.0×**（对 txloop **18×**，对
+autocommit **~750×**），稳态 ≈345K 行/s——batch 合并往返但仍解析/
+规划 10K 条语句；array 单语句两参数，解析规划各一次 + 服务端 unnest
+展开。（2026-08-25 同日四路同采，Xeon E5-2696 v4；array 首轮冷启
+42ms，稳态两轮 29/29；历史 C4 采集中 batch 曾录得 190ms，均在登记
+噪声带口径内。）
 
 ### bench_db_stmt_cache —— 透明语句缓存（INC-3/C1）
 

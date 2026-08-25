@@ -192,6 +192,7 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
+    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
@@ -648,6 +649,11 @@ end;
 function TDbRedisConnection.SupportsLargeObjects: Boolean;
 begin
   Result := False;
+end;
+
+function TDbRedisConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
 end;
 
 function TDbRedisConnection.SupportsNativeBool: Boolean;

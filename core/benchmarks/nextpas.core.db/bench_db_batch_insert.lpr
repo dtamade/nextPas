@@ -1,9 +1,11 @@
 program bench_db_batch_insert;
 
-{ 批量写入三路基准（§12.4 验收判据的数据源）：
+{ 批量写入四路基准（§12.4 验收判据的数据源）：
     autocommit : 每行独立隐式事务（最差基线）
     txloop     : 单事务内逐条参数化执行
     batch      : IDbBatchExecutor（pg=单次往返合并；sqlite=单事务逐条）
+    array      : IDbArrayBinding 参数级批量（pg unnest 单语句单次
+                 往返；V3-C2。后端不支持则静默跳过）
   输出行格式：backend=<k> mode=<m> n=<rows> ms=<ms>
   sqlite 段总是执行；pg 段需要 NEXTPAS_PG_TEST_CONN。 }
 
@@ -95,6 +97,45 @@ begin
   Result := T1 - T0;
 end;
 
+{ V3-C2：参数级批量（unnest 数组展开）。绑定/编码计入计时口径——
+  消费方真实成本包含构造列数组与一次 BeginBind。
+  注意先探能力再建查询：sqlite Query 急切 prepare，pg 方言 SQL
+  会在构建期抛语法错。 }
+function BenchArrayInsert(const AConn: IDbConnection): Double;
+var
+  Q: IDbQuery;
+  B: IDbArrayBinding;
+  Cap: IDbCapabilities;
+  Ids: TDbInt64Array;
+  Vals: TDbInt64Array;
+  K: Integer;
+  T0, T1: QWord;
+begin
+  Supports(AConn, IDbCapabilities, Cap);
+  if (Cap = nil) or (not Cap.SupportsArrayBinding) then
+    Exit(-1);                            { 后端未支持：静默跳过 }
+  ResetTable(AConn);
+  SetLength(Ids, N);
+  SetLength(Vals, N);
+  for K := 0 to N - 1 do
+  begin
+    Ids[K] := K + 1;
+    Vals[K] := (K + 1) * 2;
+  end;
+  Q := AConn.Query(
+    'INSERT INTO t_bi SELECT * FROM unnest(?::bigint[], ?::bigint[])');
+  B := DbArrayBinding(Q);
+  T0 := GetTickCount64;
+  B.BeginBind(N);
+  B.BindInt64Column(1, Ids);
+  B.BindInt64Column(2, Vals);
+  while Q.Step do ;
+  T1 := GetTickCount64;
+  B := nil;
+  Q := nil;
+  Result := T1 - T0;
+end;
+
 procedure Report(const ABackend, AMode: string; const AMs: Double);
 begin
   WriteLn('backend=', ABackend, ' mode=', AMode, ' n=', N,
@@ -104,11 +145,15 @@ end;
 procedure BenchBackend(const AConn: IDbConnection; const AName: string);
 var
   Bx: IDbBatchExecutor;
+  LMs: Double;
 begin
   Report(AName, 'autocommit', BenchAutocommit(AConn));
   Report(AName, 'txloop', BenchTxLoop(AConn));
   if AConn.QueryInterface(IDbBatchExecutor, Bx) = 0 then
     Report(AName, 'batch', BenchBatch(AConn, Bx));
+  LMs := BenchArrayInsert(AConn);       { <0 = 后端未支持，静默跳过 }
+  if LMs >= 0 then
+    Report(AName, 'array', LMs);
 end;
 
 var
