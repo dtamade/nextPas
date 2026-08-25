@@ -4,8 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-25
-**版本**：1.0（源码家族已落地：base/intf/fake/factory/门面 + 六个测试门；
-bridge 与平台后端仍按波次推进，语义变更须升版本号）
+**版本**：1.0（源码家族已落地：base/intf/bridge/fake/factory/门面 +
+七个测试门；平台后端 gtk/webview2/wk 按波次推进，语义变更须升版本号）
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
@@ -164,7 +164,7 @@ EWebviewEvalFailed         = class(EWebviewError);  // Eval 执行失败（导�
                                                     // Close 时在途收尾）
 EWebviewTimeout            = class(EWebviewError);  // invoke pending 超时（预留，W1 不启用）
 EWebviewBadFrame           = class(EWebviewError);  // 无法解析的帧；生产路径静默忽略，
-                                                    // 本类供 fake 后端 FakeDeliverFrame
+                                                    // 本类供 fake 后端 DeliverFrame
                                                     // 校验测试入参使用
 EWebviewInvokeError        = class(EWebviewError);  // handler 内抛出的包装；
                                                     // 携带 Code/Message 回传前端 reject

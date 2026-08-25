@@ -1,6 +1,7 @@
 # nextpas.core.webview 注入桥协议 v1
 
-**状态**: Design（S0）
+**状态**: Live（S2 落地——`nextpas.core.webview.bridge` 为唯一权威实现；
+fake 后端已完整走协议栈，gtk/webview2/wk 后端按波次接入同一实现）
 **权威实现**: `nextpas.core.webview.bridge`（全后端唯一；后端只是 transport）
 
 ---
@@ -96,7 +97,7 @@ transport 上传递的是**一个 JSON 文本字符串**：
 非法帧（无法解析 / `v≠1` / 缺字段 / `cmd` 空）→ native 静默忽略；
 **不对坏帧回 reject**（此时可能连可靠回执通道都没有）。debug 构建下
 bridge 经 `log.intf` 输出诊断行（是否保留计数器属实现细节，不入契约）；
-测试侧需要构造非法帧时走 fake 后端 `FakeDeliverFrame`（非法 JSON 入参
+测试侧需要构造非法帧时走 fake 后端 `DeliverFrame`（非法帧入参
 抛 `EWebviewBadFrame`，见 CONTRACT §2.4）。
 
 ### 3.2 native → js（回执）
@@ -179,5 +180,14 @@ bridge script 末尾兑现 `window.__npw.ready`。此约定写入 starter 示例
 ## 8. fake 后端的协议职责
 
 fake 后端**完整走过 bridge**（不是绕开它直呼 handler）：测试用
-`FakeDeliverFrame(json)` 模拟页面来帧、`FakeCaptureEval()` 捕获 native 发出的
-Eval 文本并断言/手动兑现。这样契约测试覆盖的就是真实协议栈，而不是测试专用旁路。
+`DeliverFrame(json)` 模拟页面来帧（解码校验→按 id 关联回执）、
+`CaptureEvalAt(i)` 按序捕获 native 发出的回执 Eval 文本并断言；
+driver 面 `DeliverInvoke(cmd,payload)` 保持无帧直呼语义、不产生回执，
+两者对照构成协议路径与直呼路径的区分测试。这样契约测试覆盖的就是
+真实协议栈，而不是测试专用旁路。
+
+落地注记（S2）：`__resolve/__reject/__emit` 的 JSON 参数一律以
+"JSON 文本字符串"嵌入 Eval 脚本、JS 侧 `JSON.parse` 还原——与 §3.2
+resolve 语义一致，reject/emit 同构；注入脚本内 transport 探测顺序为
+WebKitGTK/WK 的 `window.webkit.messageHandlers.npw` 与 WebView2 的
+`window.chrome.webview`，均投递 JSON 字符串化帧。
