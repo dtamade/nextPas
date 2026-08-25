@@ -159,6 +159,7 @@ begin
       else if Token = 'is' then EmitExprIs(S, Arg)
       else if Token = 'arr_load' then EmitExprArrLoad(S)
       else if Token = 'arr_load_ptr' then EmitExprArrLoadPtr(S)
+      else if Token = 'str_chr' then EmitExprStrChr(S, Arg)
       else if Token = 'arr_elem_ref' then EmitExprArrElemRef(S, Arg)
       else if Token = 'pelem_load' then EmitExprPtrElemLoad(S, Arg)
       else if Token = 'field_ref' then EmitExprFieldRef(S, Arg)

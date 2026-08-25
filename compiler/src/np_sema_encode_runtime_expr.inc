@@ -563,26 +563,41 @@ begin
     (ANode.ChildAt(0) <> nil) and
     SameText(ANode.ChildAt(0).Text, 'Length') and
     (ANode.ChildAt(1) <> nil) and
-    (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-    (IsRuntimeStrVar(ANode.ChildAt(1).Text) or
-     IsRuntimeArrVar(ANode.ChildAt(1).Text)) then
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
   begin
-    if LookupProcedureBody(ANode.ChildAt(1).Text, BranchNode, DeclNode) then
+    { Result aliases the retvar name (registered under the function name);
+      without the remap Length(Result) folded empty and the loop bound
+      alloca was never stored (stub SysUtils for-loops). }
+    ReceiverVarName := ANode.ChildAt(1).Text;
+    if SameText(ReceiverVarName, 'Result') and (FCurrentRetVarName <> '') then
+      ReceiverVarName := FCurrentRetVarName;
+    if IsRuntimeStrVar(ReceiverVarName) or
+      IsRuntimeArrVar(ReceiverVarName) then
     begin
-      Inc(FBlockLabelCounter);
-      Operand := '$len_tmp_' + IntToStr(FBlockLabelCounter);
-      RegisterRuntimeVar(Operand);
-      RegisterRuntimeStrVar(Operand);
-      FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
-      FModel.AddTypedHirNode(
-        'assign-tstring-call-runtime',
-        EffectiveRuntimeCalleeName(ANode.ChildAt(1).Text, DeclNode), 0, 0, Operand
-      );
-      ABlob := 'var ' + Operand + '$len' + #10;
-    end
-    else
-      ABlob := 'var ' + ANode.ChildAt(1).Text + '$len' + #10;
-    Exit(True);
+      { Variable read wins: the retvar registers under the function's own
+        name, so LookupProcedureBody would find the enclosing function and
+        Length(Result) materialized as a self-call (mini_up SIGSEGV). }
+      if (FCurrentRetVarName = '') or
+        (not SameText(ReceiverVarName, FCurrentRetVarName)) then
+      begin
+        if LookupProcedureBody(ReceiverVarName, BranchNode, DeclNode) then
+        begin
+          Inc(FBlockLabelCounter);
+          Operand := '$len_tmp_' + IntToStr(FBlockLabelCounter);
+          RegisterRuntimeVar(Operand);
+          RegisterRuntimeStrVar(Operand);
+          FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
+          FModel.AddTypedHirNode(
+            'assign-tstring-call-runtime',
+            EffectiveRuntimeCalleeName(ReceiverVarName, DeclNode), 0, 0, Operand
+          );
+          ABlob := 'var ' + Operand + '$len' + #10;
+          Exit(True);
+        end;
+      end;
+      ABlob := 'var ' + ReceiverVarName + '$len' + #10;
+      Exit(True);
+    end;
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
@@ -870,6 +885,25 @@ begin
     if (ABlob <> '') and (FuncName <> '') then
     begin
       ABlob := ABlob + FuncName + 'strpos' + #10;
+      Exit(True);
+    end;
+  end;
+  { S[I] char read as a value: byte at tstring_data(S)[I-1] (str_chr token
+    pops the folded index). Base may be 'Result' — alias the retvar name
+    like assignments do, else the fold silently declines (stub SysUtils
+    `Result[I] in [...]` bodies were dropped whole). }
+  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1) <> nil) then
+  begin
+    ReceiverVarName := ANode.ChildAt(0).Text;
+    if SameText(ReceiverVarName, 'Result') and (FCurrentRetVarName <> '') then
+      ReceiverVarName := FCurrentRetVarName;
+    if IsRuntimeStrVar(ReceiverVarName) and
+      EncodeRuntimeIntExprFold(ANode.ChildAt(1), ABlob) then
+    begin
+      ABlob := ABlob + 'str_chr ' + ReceiverVarName + #10;
       Exit(True);
     end;
   end;

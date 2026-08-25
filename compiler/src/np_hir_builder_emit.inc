@@ -353,6 +353,39 @@ begin
   S.PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType);
 end;
 
+procedure THIRBuilder.EmitExprStrChr(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  IdxVal, Slot, Data, ChrPtr, Ch8: THIRValueId;
+begin
+  { Pascal strings are 1-based: byte address = data + (idx-1). Stack on
+    entry holds [idx]; push the constant then let BinOp pop Rhs,Lhs. }
+  S.Push(EmitConstInt(1));
+  EmitExprBinOp(S, hikSub);
+  IdxVal := S.Pop;
+  Slot := FindAlloca(AArg + '$ts');
+  if (Slot = 0) or (IdxVal = 0) then
+    Exit;
+  Data := EmitTStringData(Slot);
+  if Data = 0 then
+    Exit;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  { Byte-scaled GEP — gep_i64 would multiply the char index by 8. }
+  Instr.IntrinsicName := 'gep_i8';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(Data);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  ChrPtr := Instr.ResultId;
+  { Byte load then widen — the blob language is i64-domained. }
+  Ch8 := EmitLoad(GetIntTypeByWidth(8, False), ChrPtr);
+  S.PushTyped(Ch8, GetIntTypeByWidth(8, False));
+  EmitExprZext(S);
+end;
+
 procedure THIRBuilder.EmitExprArrElemRef(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;

@@ -1242,46 +1242,54 @@ begin
   Result := TSemanticAnalyzer(Ctx).EmitStrCompareOperand(ANode, AAllowOwned, ABlob);
 end;
 
+procedure TSemanticAnalyzer.FillHirLoweringContext(
+  out ACtx: TSemaHirLoweringContext);
+begin
+  { 先清零：指针字段（含回调）在栈局部里是垃圾值，必须显式归零 }
+  FillChar(ACtx, SizeOf(ACtx), 0);
+  { 数据成员 }
+  ACtx.Model := FModel;
+  ACtx.UnitGraph := FUnitGraph;
+  ACtx.RootAst := FRootAst;
+  ACtx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  ACtx.CurrentScopeId := FCurrentScopeId;
+  ACtx.ProcedureBodies := FProcedureBodies;
+  ACtx.ImportedUnitOwners := FImportedUnitOwners;
+  ACtx.ImportedUnitTrees := FImportedUnitTrees;
+  ACtx.BuiltinRegistry := FBuiltinRegistry;
+  ACtx.Diagnostics := FDiagnostics;
+  ACtx.RootFileId := FRootFileId;
+  ACtx.BlockLabelCounter := FBlockLabelCounter;
+  ACtx.CurrentMethodClass := FCurrentMethodClass;
+  ACtx.CurrentRetVarName := FCurrentRetVarName;
+  ACtx.RuntimeVars := FRuntimeVars;
+  ACtx.CurrentBlockTerminated := FCurrentBlockTerminated;
+  { 回调 — 尚未提取到独立模块的方法，全量接线 }
+  ACtx.CallbackCtx := Pointer(Self);
+  ACtx.BuildTargetAddressExpr := @SemaBridge_BuildTargetAddressExpr;
+  ACtx.BuildClassBaseAddressExpr := @SemaBridge_BuildClassBaseAddressExpr;
+  ACtx.BuildByRefArgumentAddressExpr := @SemaBridge_BuildByRefArgumentAddressExpr;
+  ACtx.BuildRuntimeArrayElementAddressHirExpr := @SemaBridge_BuildRuntimeArrayElementAddressHirExpr;
+  ACtx.EvaluateIntegerConstant := @SemaBridge_EvaluateIntegerConstant;
+  ACtx.InferExpressionType := @SemaBridge_InferExpressionType;
+  ACtx.TypeIdForVariable := @SemaBridge_TypeIdForVariable;
+  ACtx.TryGetDirectCallContract := @SemaBridge_TryGetDirectCallContract;
+  ACtx.TryGetDispatchedMemberCallContract := @SemaBridge_TryGetDispatchedMemberCallContract;
+  ACtx.TryGetOrdinaryMemberCallContract := @SemaBridge_TryGetOrdinaryMemberCallContract;
+  ACtx.TryGetTypeCastTargetTypeId := @SemaBridge_TryGetTypeCastTargetTypeId;
+  ACtx.TryGetIntrinsicExprName := @SemaBridge_TryGetIntrinsicExprName;
+  ACtx.ResolveTypeIdForOwner := @SemaBridge_ResolveTypeIdForOwner;
+  ACtx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
+  ACtx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
+  ACtx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
+end;
+
 function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
   out AExprId: LongInt): Boolean;
 var
   Ctx: TSemaHirLoweringContext;
 begin
-  { Fill context }
-  Ctx.Model := FModel;
-  Ctx.UnitGraph := FUnitGraph;
-  Ctx.RootAst := FRootAst;
-  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
-  Ctx.CurrentScopeId := FCurrentScopeId;
-  Ctx.ProcedureBodies := FProcedureBodies;
-  Ctx.ImportedUnitOwners := FImportedUnitOwners;
-  Ctx.ImportedUnitTrees := FImportedUnitTrees;
-  Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Ctx.Diagnostics := FDiagnostics;
-  Ctx.RootFileId := FRootFileId;
-  Ctx.BlockLabelCounter := FBlockLabelCounter;
-  Ctx.CurrentMethodClass := FCurrentMethodClass;
-  Ctx.CurrentRetVarName := FCurrentRetVarName;
-  Ctx.RuntimeVars := FRuntimeVars;
-  Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
-  { Fill callbacks }
-  Ctx.CallbackCtx := Pointer(Self);
-  Ctx.BuildTargetAddressExpr := @SemaBridge_BuildTargetAddressExpr;
-  Ctx.BuildClassBaseAddressExpr := @SemaBridge_BuildClassBaseAddressExpr;
-  Ctx.BuildByRefArgumentAddressExpr := @SemaBridge_BuildByRefArgumentAddressExpr;
-  Ctx.BuildRuntimeArrayElementAddressHirExpr := @SemaBridge_BuildRuntimeArrayElementAddressHirExpr;
-  Ctx.EvaluateIntegerConstant := @SemaBridge_EvaluateIntegerConstant;
-  Ctx.InferExpressionType := @SemaBridge_InferExpressionType;
-  Ctx.TypeIdForVariable := @SemaBridge_TypeIdForVariable;
-  Ctx.TryGetDirectCallContract := @SemaBridge_TryGetDirectCallContract;
-  Ctx.TryGetDispatchedMemberCallContract := @SemaBridge_TryGetDispatchedMemberCallContract;
-  Ctx.TryGetOrdinaryMemberCallContract := @SemaBridge_TryGetOrdinaryMemberCallContract;
-  Ctx.TryGetTypeCastTargetTypeId := @SemaBridge_TryGetTypeCastTargetTypeId;
-  Ctx.TryGetIntrinsicExprName := @SemaBridge_TryGetIntrinsicExprName;
-  Ctx.ResolveTypeIdForOwner := @SemaBridge_ResolveTypeIdForOwner;
-  Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
-  Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
-  Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
+  FillHirLoweringContext(Ctx);
   { Delegate }
   Result := nextpas.compiler.ir.hir.lowering.BuildRuntimeScalarHirExpr(Ctx, ANode, AExprId);
   { Sync mutable state back }
@@ -1339,12 +1347,9 @@ function TSemanticAnalyzer.EncodeRuntimeBoolExprFold(
 var
   Ctx: TSemaHirLoweringContext;
 begin
-  Ctx.Model := FModel;
-  Ctx.RuntimeVars := FRuntimeVars;
-  Ctx.CallbackCtx := Pointer(Self);
-  Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
-  Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
-  Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
+  { 全量接线：集合成员测试等折叠路径会触达 EvaluateIntegerConstant 等
+    回调，缺线即栈垃圾跳转（v2.36 iso_a 崩溃根因） }
+  FillHirLoweringContext(Ctx);
   Result := nextpas.compiler.ir.hir.lowering.EncodeRuntimeBoolExprFold(Ctx, ANode, ABlob,
     AAllowOwnedStringCompare);
 end;

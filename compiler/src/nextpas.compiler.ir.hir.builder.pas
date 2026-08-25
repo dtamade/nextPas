@@ -120,6 +120,8 @@ type
     procedure RegisterAllocaEntry(const AName: string; AValue: THIRValueId;
       AType: THIRTypeId; AIsVarParam: Boolean);
     function FindAlloca(const AName: string): THIRValueId;
+    { Local allocas only — no module-global fallback. Creation guards must
+      not mistake another unit's same-named global for an existing local. }
     function FindLocalAlloca(const AName: string): THIRValueId;
     function FindAllocaType(const AName: string): THIRTypeId;
     function IsVarParamAlloca(const AName: string): Boolean;
@@ -161,6 +163,8 @@ type
     procedure EmitExprIs(var S: TExprStack; const AArg: string);
     procedure EmitExprArrLoad(var S: TExprStack);
     procedure EmitExprArrLoadPtr(var S: TExprStack);
+    { S[I] char read: pop index, push byte at tstring_data(S)[I-1] as i64. }
+    procedure EmitExprStrChr(var S: TExprStack; const AArg: string);
     procedure EmitExprArrElemRef(var S: TExprStack; const AArg: string);
     procedure EmitExprPtrElemLoad(var S: TExprStack; const AArg: string);
     procedure EmitExprFieldRef(var S: TExprStack; const AArg: string);

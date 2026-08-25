@@ -74,7 +74,10 @@ var
   ContractDefinition: TSystemContractDefinition;
   SlotId: THIRValueId;
 begin
-  if FindAlloca(AName + '$ts') <> 0 then Exit;
+  { Local-only lookup: the global fallback here once let a stub-unit param
+    (SysUtils UpperCase S) resolve to another unit's same-named global slot,
+    skipping alloca creation entirely. }
+  if FindLocalAlloca(AName + '$ts') <> 0 then Exit;
   { alloca [24 x i8] — uses tstring IntrinsicName for emitter dispatch }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;

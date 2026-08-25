@@ -938,33 +938,40 @@ begin
         (Child.ChildAt(0).NodeKind = gnkArrayAccess) and
         (Child.ChildAt(0).ChildCount >= 2) and
         (Child.ChildAt(0).ChildAt(0) <> nil) and
-        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
-        IsRuntimeStrVar(Child.ChildAt(0).ChildAt(0).Text) then
+        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) then
       begin
         { S[I] := <char> — byte store through tstring runtime setchar.
           Historically fell through to whole-string literal assign,
-          destroying the string (mc_c C1=X family). }
+          destroying the string (mc_c C1=X family). Base may be 'Result' —
+          alias the retvar name like reads do, else seeded stub bodies
+          silently drop the write (UpperCase loop was identity). }
         StrVarName := Child.ChildAt(0).ChildAt(0).Text;
-        RhsNode := Child.ChildAt(1);
-        if (RhsNode <> nil) and
-          EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) then
+        if SameText(StrVarName, 'Result') and (FCurrentRetVarName <> '') then
+          StrVarName := FCurrentRetVarName;
+        RhsNode := nil;
+        if IsRuntimeStrVar(StrVarName) then
         begin
-          if (RhsNode.NodeKind = gnkCharLiteral) and
-            (Length(DecodePascalStringLiteral(RhsNode.Text)) >= 1) then
-            StringValue := 'int ' +
-              IntToStr(Ord(DecodePascalStringLiteral(RhsNode.Text)[1]))
-          else if EvaluateStringConstant(RhsNode, FuncName) and
-            (Length(FuncName) >= 1) then
-            StringValue := 'int ' + IntToStr(Ord(FuncName[1]))
-          else if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
-            { numeric char code }
-          else
-            StringValue := '';
-          if StringValue <> '' then
-            FModel.AddTypedHirNode('tstring-setchar-runtime', StrVarName,
-              0, 0, StrVarName + #9 + Operand + #9 + StringValue);
+          RhsNode := Child.ChildAt(1);
+          if (RhsNode <> nil) and
+            EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) then
+          begin
+            if (RhsNode.NodeKind = gnkCharLiteral) and
+              (Length(DecodePascalStringLiteral(RhsNode.Text)) >= 1) then
+              StringValue := 'int ' +
+                IntToStr(Ord(DecodePascalStringLiteral(RhsNode.Text)[1]))
+            else if EvaluateStringConstant(RhsNode, FuncName) and
+              (Length(FuncName) >= 1) then
+              StringValue := 'int ' + IntToStr(Ord(FuncName[1]))
+            else if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+              { numeric char code }
+            else
+              StringValue := '';
+            if StringValue <> '' then
+              FModel.AddTypedHirNode('tstring-setchar-runtime', StrVarName,
+                0, 0, StrVarName + #9 + Operand + #9 + StringValue);
+          end;
+          Continue;
         end;
-        Continue;
       end;
       if FNoFold and (FCurrentMethodClass <> '') and
         (Child.ChildCount >= 1) and

@@ -36,6 +36,34 @@ var
   RecNode: TGreenNode;
   LeftIsNil, RightIsNil: Boolean;
   FieldIdx: Int64;
+  SetNode, ElemNode: TGreenNode;
+  ItemIdx, ElemScan: LongInt;
+  ElemLo, ElemHi: Int64;
+
+  { Ordinal of a set-constructor bound: integer consts and single-char
+    quoted literals ('a' shape — the lowering unit has no literal-decode
+    helper, the lexeme carries its own quotes). }
+  function TrySetBoundOrdinal(const ABoundNode: TGreenNode;
+    out AOrd: Int64): Boolean;
+  begin
+    Result := False;
+    if ABoundNode = nil then
+      Exit;
+    { Defense in depth: contexts built through FillHirLoweringContext wire
+      every callback, so this is nil only on a future unwired path — fail
+      closed instead of jumping into garbage (v2.36 iso_a lesson). }
+    if Assigned(Ctx.EvaluateIntegerConstant) and
+      Ctx.EvaluateIntegerConstant(Ctx.CallbackCtx, ABoundNode, AOrd) then
+      Exit(True);
+    if (ABoundNode.NodeKind in [gnkCharLiteral, gnkStringLiteral]) and
+      (Length(ABoundNode.Text) >= 3) and (ABoundNode.Text[1] = '''') and
+      (ABoundNode.Text[3] = '''') then
+    begin
+      AOrd := Ord(ABoundNode.Text[2]);
+      Result := True;
+    end;
+  end;
+
 begin
   ABlob := '';
   if ANode = nil then
@@ -78,6 +106,49 @@ begin
     Exit(False);
   if ANode.ChildCount < 2 then
     Exit(False);
+  { x in [lo..hi, c, …] — ordinal set membership. The stack machine has no
+    pick/swap, so a buried operand copy cannot be reused after the first
+    cmp consumes it: every elementary comparison re-folds the left operand
+    instead of sharing one 'dup'. Range = (x>=lo)*(x<=hi) via mul,
+    singleton = (x=c); item results OR-combine via add (emitted after the
+    item blob — 'add' needs both operands stacked) and the chain
+    normalizes against zero. Unsupported element shapes decline, keeping
+    the previous drop-the-body behavior. }
+  if SameText(ANode.Text, 'in') and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkSetConstructor) then
+  begin
+    if not Ctx.EncodeRuntimeIntExprFold(Ctx.CallbackCtx, ANode.ChildAt(0),
+      LeftBlob) then
+      Exit(False);
+    ABlob := '';
+    ItemIdx := 0;
+    SetNode := ANode.ChildAt(1);
+    for ElemScan := 0 to LongInt(SetNode.ChildCount) - 1 do
+    begin
+      ElemNode := SetNode.ChildAt(ElemScan);
+      if (ElemNode <> nil) and (ElemNode.NodeKind = gnkRangeExpression) and
+        (ElemNode.ChildCount >= 2) and
+        TrySetBoundOrdinal(ElemNode.ChildAt(0), ElemLo) and
+        TrySetBoundOrdinal(ElemNode.ChildAt(1), ElemHi) then
+        ABlob := ABlob + LeftBlob + 'int ' + IntToStr(ElemLo) + #10 +
+          'cmp sge' + #10 + 'zext' + #10 +
+          LeftBlob + 'int ' + IntToStr(ElemHi) + #10 +
+          'cmp sle' + #10 + 'zext' + #10 + 'mul' + #10
+      else if TrySetBoundOrdinal(ElemNode, ElemLo) then
+        ABlob := ABlob + LeftBlob + 'int ' + IntToStr(ElemLo) + #10 +
+          'cmp eq' + #10 + 'zext' + #10
+      else
+        Exit(False);
+      Inc(ItemIdx);
+      if ItemIdx > 1 then
+        ABlob := ABlob + 'add' + #10;
+    end;
+    if ItemIdx = 0 then
+      ABlob := 'int 0' + #10;
+    ABlob := ABlob + 'int 0' + #10 + 'cmp ne' + #10;
+    Exit(True);
+  end;
   Op := ANode.Text;
   if Op = '=' then Pred := 'eq'
   else if Op = '<>' then Pred := 'ne'

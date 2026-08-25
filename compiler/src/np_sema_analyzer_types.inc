@@ -598,6 +598,10 @@ type
       out AExprId: LongInt): Boolean;
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
       out AExprId: LongInt): Boolean;
+    { 统一构造 HIR 降级上下文：数据成员与回调全量接线。
+      所有 TSemaHirLoweringContext 必须经此填充——先清零再接线，
+      保证漏接回调为 nil（Assigned 可守卫）而非栈垃圾。 }
+    procedure FillHirLoweringContext(out ACtx: TSemaHirLoweringContext);
     { 核心实现：同时产出 Blob 和 ExprId，避免从 Blob 解析 ExprId }
     function EncodeRuntimeIntExprFoldCore(const ANode: TGreenNode;
       out ABlob: string; out AExprId: LongInt): Boolean;
