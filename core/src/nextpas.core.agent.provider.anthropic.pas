@@ -475,9 +475,11 @@ var
   end;
 
 begin
+  { §2.1：厂商无结构化输出参数——fail-fast 而非静默降级 prompt 注入 }
   if AReq.ResponseSchemaJson <> '' then
     raise EAgentError.CreateLocal(aecConfig,
-      'anthropic: structured output is a v1.1 commitment, not available in v1');
+      'anthropic: ResponseSchemaJson has no vendor wire parameter; ' +
+      'use an OpenAI-family adapter for structured output');
   if AReq.MaxTokens <= CMaxTokensUnset then
     raise EAgentError.CreateLocal(aecConfig,
       'anthropic: max_tokens is required by the vendor (set MaxTokens)');
@@ -485,6 +487,13 @@ begin
     (AReq.ThinkingBudgetTokens <= CMaxTokensUnset) then
     raise EAgentError.CreateLocal(aecConfig,
       'anthropic: thinking=true requires ThinkingBudgetTokens');
+  { §2.1：装配矛盾显式暴露——要求选择工具却未携带工具词表 }
+  if (AReq.ToolChoice <> tcmUnset) and (Length(AReq.Tools) = 0) then
+    raise EAgentError.CreateLocal(aecConfig,
+      'anthropic: ToolChoice requires a non-empty Tools array');
+  if (AReq.ToolChoice = tcmNamed) and (AReq.ToolChoiceName = '') then
+    raise EAgentError.CreateLocal(aecConfig,
+      'anthropic: ToolChoice=tcmNamed requires ToolChoiceName');
 
   B := JsonBuilder;
   B.BeginObject;
@@ -559,8 +568,43 @@ begin
   end;
   B.EndArray;
 
-  if Length(AReq.Tools) > 0 then
-    WriteTools(B, AReq.Tools);       { 空数组不上送字段 }
+  { ToolChoice（§2.1）：tcmNone 无 none wire 形态——省略 tools 字段转译
+    等价禁用；其余形态 tools 照常上送并追加 tool_choice }
+  if AReq.ToolChoice <> tcmNone then
+  begin
+    if Length(AReq.Tools) > 0 then
+      WriteTools(B, AReq.Tools);     { 空数组不上送字段 }
+    case AReq.ToolChoice of
+      tcmAuto:
+        begin
+          B.Key('tool_choice');
+          B.BeginObject;
+          B.Key('type');
+          B.Str('auto');
+          B.EndObject;
+        end;
+      tcmRequired:                   { anthropic 对 required 的语义名是 any }
+        begin
+          B.Key('tool_choice');
+          B.BeginObject;
+          B.Key('type');
+          B.Str('any');
+          B.EndObject;
+        end;
+      tcmNamed:
+        begin
+          B.Key('tool_choice');
+          B.BeginObject;
+          B.Key('type');
+          B.Str('tool');
+          B.Key('name');
+          B.Str(AReq.ToolChoiceName);
+          B.EndObject;
+        end;
+      tcmNone, tcmUnset:
+        ;                            { 转译见上；unset 不上送（哨兵纪律）}
+    end;
+  end;
 
   if AReq.Temperature >= 0 then
   begin
@@ -613,8 +657,8 @@ begin
 
   { Extra 回注根对象（冲突键让位已知字段）}
   WriteExtraFields(B, AReq.ExtraJson,
-    ['model', 'max_tokens', 'system', 'messages', 'tools', 'temperature',
-     'top_p', 'stop_sequences', 'thinking', 'stream']);
+    ['model', 'max_tokens', 'system', 'messages', 'tools', 'tool_choice',
+     'temperature', 'top_p', 'stop_sequences', 'thinking', 'stream']);
 
   B.EndObject;
   Result := B.ToString;
@@ -1283,6 +1327,9 @@ begin
       'anthropic: parallel_tool_calls has no wire parameter (Q-A5), ignored');
   if LReq.Seed <> CSeedUnset then
     DebugLog(FLog, 'anthropic: seed has no wire parameter, ignored');
+  if LReq.ToolChoice = tcmNone then
+    DebugLog(FLog,
+      'anthropic: tool_choice none translated to omitting tools (Q-A9)');
 
   Result := Default(TWireRequest);
   Result.Url := BuildAnthropicUrl(FOpts.Common.BaseUrl);

@@ -38,6 +38,10 @@ type
   { 三态布尔：tsUnset 即不上送（Pascal 无 nullable 的诚实替代）}
   TTriState = (tsUnset, tsFalse, tsTrue);
 
+  { 工具选择模式（W6）：tcmUnset 不上送；tcmNamed 需配 ToolChoiceName。
+    wire 映射：openai §1.1 / anthropic §2.1（required→any、none→省略 tools）}
+  TToolChoiceMode = (tcmUnset, tcmAuto, tcmNone, tcmRequired, tcmNamed);
+
   TStreamDeltaKind = (
     sdkTextDelta,        { TextDelta 追加正文 }
     sdkThinkingDelta,    { TextDelta 追加思考内容；Signature 携带签名透传 }
@@ -195,13 +199,17 @@ type
     System: string;                  { 顶层 system 便利字段 }
     Messages: TMessageArray;         { 对话历史（不含本轮待发 user 时自行前置）}
     Tools: TToolSpecArray;           { 随请求携带（WithTools builder）}
-    ResponseSchemaJson: TJsonText;   { v1.1 保留位：v1 置非空即 aecConfig }
+    ResponseSchemaJson: TJsonText;   { 非空即结构化输出（W6）：openai 族 json_schema
+                                       strict（§1.7，须合法 JSON object 否则
+                                       aecConfig）；anthropic fail-fast aecConfig }
     MaxTokens: Int64;                { CMaxTokensUnset；anthropic 强制必填 }
     Temperature: Double;             { CTemperatureUnset }
     TopP: Double;                    { CTopPUnset }
     Seed: Int64;                     { CSeedUnset }
     StopSequences: TStringArray;
     ParallelToolCalls: TTriState;    { tsUnset 不上送 }
+    ToolChoice: TToolChoiceMode;     { tcmUnset 不上送；§1.1/§2.1 映射 }
+    ToolChoiceName: string;          { 仅 tcmNamed 有效；缺名 aecConfig }
     Thinking: TTriState;             { 扩展思考开关；tsUnset 不上送 }
     ThinkingBudgetTokens: Int64;     { CMaxTokensUnset；Thinking=tsTrue 时生效 }
     ExtraJson: TJsonText;            { 逃生舱：浅合并进请求根对象 }
@@ -213,6 +221,9 @@ type
     function WithTemperature(AValue: Double): TCompletionRequest;
     function WithStop(const ASeq: TStringArray): TCompletionRequest;
     function WithTools(const ASpecs: TToolSpecArray): TCompletionRequest;
+    function WithResponseSchema(const ASchemaJson: string): TCompletionRequest;
+    function WithToolChoice(AMode: TToolChoiceMode;
+      const AName: string = ''): TCompletionRequest;
       { builder 全部返回修改后的副本（record 值语义链式书写）}
   end;
 
@@ -344,6 +355,21 @@ function TCompletionRequest.WithTools(const ASpecs: TToolSpecArray): TCompletion
 begin
   Result := Self;
   Result.Tools := Copy(ASpecs, 0, Length(ASpecs));
+end;
+
+function TCompletionRequest.WithResponseSchema(
+  const ASchemaJson: string): TCompletionRequest;
+begin
+  Result := Self;
+  Result.ResponseSchemaJson := ASchemaJson;
+end;
+
+function TCompletionRequest.WithToolChoice(AMode: TToolChoiceMode;
+  const AName: string): TCompletionRequest;
+begin
+  Result := Self;
+  Result.ToolChoice := AMode;
+  Result.ToolChoiceName := AName;
 end;
 
 function MergeExtraJson(const ATexts: array of TJsonText): TJsonText;

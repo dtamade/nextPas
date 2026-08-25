@@ -463,11 +463,33 @@ begin
   CheckEqual('r1', A1[0].MessageId, 'envelope ownership kept');
   CheckEqual('r2', A2[0].MessageId, 'no cross pollution');
 end;
+{ W6：词表→wire 保真快照（response_format + tool_choice，字段序稳定）}
+procedure TestEncodeRequestW6Snapshot;
+const
+  CExpected =
+    '{"model":"m","messages":[{"role":"user","content":"hi"}],' +
+    '"tools":[{"type":"function","function":{"name":"f",' +
+    '"parameters":{}}}],"tool_choice":"required",' +
+    '"response_format":{"type":"json_schema","json_schema":' +
+    '{"name":"response","strict":true,"schema":{"type":"object"}}}}';
+var
+  R: TCompletionRequest;
+  Spec: TToolSpec;
+begin
+  Spec := Default(TToolSpec);
+  Spec.Name := 'f';
+  R := TCompletionRequest.New('m').WithUserText('hi')
+    .WithTools(TToolSpecArray.Create(Spec))
+    .WithToolChoice(tcmRequired)
+    .WithResponseSchema('{"type":"object"}');
+  CheckEqual(CExpected, EncodeOpenAIRequest(R, False), 'W6 encode snapshot');
+end;
 
 var
   T: TTestSuite;
 begin
   T := TTestSuite.Create('nextpas.core.agent.codecs');
+  T.Test('encode request W6 snapshot', @TestEncodeRequestW6Snapshot);
   T.Test('roundtrip extra fidelity', @TestRoundtripExtraFidelity);
   T.Test('unmapped enum zero and warn', @TestUnmappedEnumZeroAndWarn);
   T.Test('violation carries snippet', @TestViolationCarriesSnippet);
