@@ -107,6 +107,7 @@ opts])` 已透出。契约见 CONTRACT §2.11。门禁仅驱动管理器
 | [sqlite-guide.md](sqlite-guide.md) | sqlite 使用指南 |
 | [national-db-guide.md](national-db-guide.md) | 国产数据库兼容指南：openGauss/KingbaseES/OceanBase/TiDB/DM8 等接入路径、能力预期与上线前验证清单 |
 | [sqlite.md](sqlite.md) / [pg.md](pg.md) | 后端单元参考 |
+| [benchmarks.md](benchmarks.md) | **基准口径册**（C4）：逐 bench 口径/判据/最近采集；复跑方法 |
 | [../plans/2026-08-23-db-v2-architecture.md](../plans/2026-08-23-db-v2-architecture.md) | v2 架构基线（设计决策、对标批评、缺口账本） |
 | [../plans/2026-08-23-db-v2-increment-go-rust.md](../plans/2026-08-23-db-v2-increment-go-rust.md) | Go/Rust 对标增量（INC 清单与落地注记） |
 | [../plans/2026-08-23-db-v3-industrial-roadmap.md](../plans/2026-08-23-db-v3-industrial-roadmap.md) | **V3 工业级路线图**：后端扩张/架构收口/性能工业化三主线 |
