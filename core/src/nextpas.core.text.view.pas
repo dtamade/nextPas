@@ -54,6 +54,16 @@ function IndexOfStr(const AValue, ASubStr: string): PtrInt; overload;
 function IndexOfStr(const AValue, ASubStr: string; AFrom: PtrInt): PtrInt; overload;
 function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
 
+{ 一致切片即时拷贝（string→string）：等价
+  TStringView.FromStr(ASrc).Slice(AOffset, ALength).ToString，但单次
+  SetString、无中间 view 跨语句存活。存在理由：FPC 3.3.1-19195 对
+  「X := TStringView.FromStr(X).Slice(..).ToString」自赋值链生成坏码——
+  view 源缓冲在赋值期被提前失效，产出短一字符尾随 #0 的串（-O0 亦复现；
+  与 Int64(Double) 强转缺陷同类）。源串可能与目标同变量的场景一律用本
+  函数。越界钳制与 Slice 一致：AOffset >= Length(ASrc) → ''；ALength
+  超出 → 截到末尾。 }
+function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): string;
+
 implementation
 
 uses
@@ -440,6 +450,19 @@ begin
     if LValue.Slice(SizeUInt(I), LNeedle.Len).Equals(LNeedle) then
       Exit(I);
   Result := -1;
+end;
+
+function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): string;
+var
+  LSrcLen, LTake: SizeUInt;
+begin
+  LSrcLen := SizeUInt(Length(ASrc));
+  if AOffset >= LSrcLen then
+    Exit('');
+  LTake := ALength;
+  if LTake > LSrcLen - AOffset then
+    LTake := LSrcLen - AOffset;
+  SetString(Result, PAnsiChar(@ASrc[AOffset + 1]), PtrInt(LTake));
 end;
 
 end.

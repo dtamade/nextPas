@@ -3,6 +3,7 @@ program test_text_view;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.text,
   nextpas.core.text.view,
   nextpas.core.base,
   nextpas.core.test;
@@ -221,6 +222,40 @@ begin
   CheckEqual('', S, 'empty to string');
 end;
 
+{ SliceToStr：string→string 一致切片（即时拷贝版 Slice）。 }
+procedure TestSliceToStr;
+var
+  S: string;
+begin
+  S := 'abcdef';
+  CheckEqual('cde', nextpas.core.text.view.SliceToStr(S, 2, 3), 'basic');
+  CheckEqual('bcdef', nextpas.core.text.view.SliceToStr(S, 1, High(SizeUInt)),
+    'overflowed length clamps to end');
+  CheckEqual('', nextpas.core.text.view.SliceToStr(S, 6, 1), 'offset past end');
+  CheckEqual('', nextpas.core.text.view.SliceToStr(S, 0, 0), 'zero length');
+  CheckEqual('', nextpas.core.text.view.SliceToStr('', 0, 5), 'empty source');
+
+  { 自赋值安全锁（FPC -19195：view 链自赋值产出短一字符尾随 #0 坏串；
+    本函数一步 SetString，源=目标必须保持正确——回归不可删）。 }
+  S := '''val''';
+  S := nextpas.core.text.view.SliceToStr(S, 1, Length(S) - 2);
+  CheckEqual(Int64(3), Int64(Length(S)), 'self-assign length');
+  CheckEqual('val', S, 'self-assign content');
+
+end;
+
+procedure TestTextFacadeSlice;
+var
+  S: string;
+begin
+  { 门面 TextSlice 同语义；自赋值场景同权锁定。 }
+  S := 'abcdef';
+  CheckEqual('cde', TextSlice(S, 2, 3), 'facade basic');
+  S := 'abcdef';
+  S := TextSlice(S, 2, 3);
+  CheckEqual('cde', S, 'facade self-assign');
+end;
+
 procedure TestCountChar;
 var
   V: TStringView;
@@ -290,6 +325,8 @@ begin
   T.Test('string index helpers', @TestStringIndexOfHelpers);
   T.Test('advance cursor', @TestAdvanceCursor);
   T.Test('toString', @TestToString);
+  T.Test('slice to str', @TestSliceToStr);
+  T.Test('text facade slice', @TestTextFacadeSlice);
   T.Test('countChar', @TestCountChar);
   T.Test('lastIndexOf', @TestLastIndexOf);
   T.Test('splitFirst', @TestSplitFirst);

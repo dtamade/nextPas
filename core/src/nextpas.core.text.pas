@@ -74,6 +74,9 @@ function TextRepeat(const AValue: string; const ACount: Integer): string; inline
 function TextIndexOf(const AValue, ASubStr: string): Integer; inline; overload;
 function TextIndexOf(const AValue, ASubStr: string; AFrom: Integer): Integer; inline; overload;
 function TextLastIndexOf(const AValue, ASubStr: string): Integer; inline;
+{ 一致切片即时拷贝（0 基 offset，越界钳制）——自赋值安全版
+  （FPC -19195 自赋值 view 链缺陷的规避面，详见 text.view.SliceToStr）。 }
+function TextSlice(const ASrc: string; const AOffset, ALength: SizeUInt): string; inline;
 
 function TextIsEmpty(const AValue: string): Boolean; inline;
 function TextIsBlank(const AValue: string): Boolean; inline;
@@ -225,6 +228,11 @@ end;
 function TextLastIndexOf(const AValue, ASubStr: string): Integer;
 begin
   Result := Integer(nextpas.core.text.view.LastIndexOfStr(AValue, ASubStr));
+end;
+
+function TextSlice(const ASrc: string; const AOffset, ALength: SizeUInt): string;
+begin
+  Result := nextpas.core.text.view.SliceToStr(ASrc, AOffset, ALength);
 end;
 
 function TextIsEmpty(const AValue: string): Boolean;
