@@ -17,7 +17,8 @@ uses
   nextpas.core.base,
   nextpas.core.zip.base,
   nextpas.core.zip.writer,
-  nextpas.core.zip.reader;
+  nextpas.core.zip.reader,
+  nextpas.core.zip.fs;
 
 type
   TZipMethod = nextpas.core.zip.base.TZipMethod;
@@ -37,6 +38,11 @@ function DefaultZipReadOptions: TZipReadOptions; inline;
 function NewZipReader(const AData: TBytes): IZipReader; inline;
 function NewZipReaderWithOptions(const AData: TBytes;
   const AOptions: TZipReadOptions): IZipReader; inline;
+
+procedure ZipPackDirInto(const ADir: string; const AWriter: IZipWriter); inline;
+function ZipPackDir(const ADir: string): TBytes; inline;
+procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
+  const AMaxOutputSize: SizeUInt = 0); inline;
 
 implementation
 
@@ -69,6 +75,22 @@ function NewZipReaderWithOptions(const AData: TBytes;
   const AOptions: TZipReadOptions): IZipReader;
 begin
   Result := nextpas.core.zip.reader.NewZipReaderWithOptions(AData, AOptions);
+end;
+
+procedure ZipPackDirInto(const ADir: string; const AWriter: IZipWriter);
+begin
+  nextpas.core.zip.fs.ZipPackDirInto(ADir, AWriter);
+end;
+
+function ZipPackDir(const ADir: string): TBytes;
+begin
+  Result := nextpas.core.zip.fs.ZipPackDir(ADir);
+end;
+
+procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
+  const AMaxOutputSize: SizeUInt);
+begin
+  nextpas.core.zip.fs.ZipExtractToDir(AData, ADestDir, AMaxOutputSize);
 end;
 
 end.
