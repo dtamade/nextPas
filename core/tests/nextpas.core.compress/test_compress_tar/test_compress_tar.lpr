@@ -8,6 +8,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.io.intf,
+  nextpas.core.io.base,
+  nextpas.core.io.memory,
   nextpas.core.fs,
   nextpas.core.os.env,
   nextpas.core.process,
@@ -16,15 +18,6 @@ uses
 
 type
   TCheckProc = procedure;
-
-  { Minimal growing memory sink }
-  TMemWriter = class(TInterfacedObject, IWriter)
-  private
-    FBuf: TBytes;
-  public
-    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    function Data: TBytes;
-  end;
 
 var
   GDir: string;      // fixture root
@@ -68,20 +61,17 @@ begin
   Check(SameBytes(AExpected, AActual), AMessage);
 end;
 
-function TMemWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-var
-  OldLen: SizeInt;
+{ Snapshot the full contents of a memory stream (io.memory has no
+  direct ToBytes on IStream, so read back through the reader face) }
+function StreamSnapshot(const ASrc: IStream): TBytes;
 begin
-  OldLen := Length(FBuf);
-  SetLength(FBuf, OldLen + SizeInt(ACount));
-  if ACount > 0 then
-    Move(ABuf, FBuf[OldLen], ACount);
-  Result := ACount;
-end;
-
-function TMemWriter.Data: TBytes;
-begin
-  Result := FBuf;
+  SetLength(Result, ASrc.Size);
+  if Length(Result) > 0 then
+  begin
+    ASrc.Seek(0, soBeginning);
+    if ASrc.Read(Result[0], Length(Result)) <> Length(Result) then
+      raise EIOError.Create('short stream snapshot');
+  end;
 end;
 
 function LcgNext(var AState: Cardinal): Byte;
@@ -124,8 +114,7 @@ end;
 
 procedure TestWriterArchiveExtractedBySystemTar;
 var
-  W: TMemWriter;
-  WHold: IWriter;
+  S: IStream;
   TW: TTarWriter;
   Seed: Cardinal;
   D511, D512, D513, DBig: TBytes;
@@ -137,9 +126,9 @@ begin
   D513 := PatternedBytes(513, Seed);
   DBig := PatternedBytes(70000, Seed);
 
-  W := TMemWriter.Create;
-  WHold := W;   // interface reference keeps the sink alive past TW.Free
-  TW := TTarWriter.Create(W);
+  S := CreateBytesStream;
+  // IStream does not extend IWriter; bridge via runtime interface cast
+  TW := TTarWriter.Create((S as IWriter));
   TW.AddFile('empty.dat', nil);
   TW.AddFile('one.dat', BytesOfString('A'), $1A4, 1735689600);
   TW.AddFile('mid511.dat', D511);
@@ -150,9 +139,9 @@ begin
   TW.AddDir('sub2');
   TW.AddFile('sub2/deep.txt', BytesOfString('deep'#10));
   TW.Finish;
-  GArc := W.Data;
   TW.Free;
-  WHold := nil;
+  GArc := StreamSnapshot(S);
+  S := nil;
   CheckTrue(Length(GArc) mod 512 = 0, 'archive is block aligned');
 
   PutFile(PathJoin2(GDir, 'w.tar'), GArc);
@@ -250,8 +239,7 @@ var
   Fmt: string;
   R: TTarReader;
   H: TTarHeader;
-  W: TMemWriter;
-  WHold: IWriter;
+  S: IStream;
   TW: TTarWriter;
   SplitName, XDir: string;
 begin
@@ -279,14 +267,13 @@ begin
 
   // our writer must split >100 char names into ustar prefix fields
   SplitName := Rep('q', 80) + '/' + Rep('z', 60);
-  W := TMemWriter.Create;
-  WHold := W;
-  TW := TTarWriter.Create(W);
+  S := CreateBytesStream;
+  TW := TTarWriter.Create((S as IWriter));
   TW.AddFile(SplitName, Payload);
   TW.Finish;
-  PutFile(PathJoin2(GDir, 'split.tar'), W.Data);
   TW.Free;
-  WHold := nil;
+  PutFile(PathJoin2(GDir, 'split.tar'), StreamSnapshot(S));
+  S := nil;
   XDir := PathJoin2(GDir, 'xs');
   MkdirAll(XDir, PermDirDefault);
   RunInChecked('tar',
