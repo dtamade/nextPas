@@ -471,14 +471,16 @@ begin
   CheckAbsent(LDeflateLower, 'deflateinit2(fstream, alevel, z_deflated, -15',
     'streaming Deflate must not silently switch to raw mode');
 
-  CheckAbsent(LReadmeLower, 'raw deflate',
-    'docs must not claim raw Deflate output');
-  CheckAbsent(LReadmeLower, 'rfc 1951',
-    'docs must not cite raw Deflate as current output format');
+  { Deflate* 保持 zlib 包装输出；RawDeflate* 是显式命名的裸流 API（ZIP 等
+    容器格式的 method=8 载荷用）。文档必须把两者区分开，不得混称。 }
   CheckContains(LReadme, 'zlib-wrapped Deflate stream',
     'docs describe current Deflate format');
   CheckContains(LReadme, 'RFC 1950',
     'docs cite the zlib wrapper format standard');
+  CheckContains(LReadme, 'RawDeflate',
+    'docs list the explicit raw Deflate API');
+  CheckContains(LReadme, 'RFC 1951',
+    'docs cite the raw standard only for the explicit RawDeflate API');
 
   CheckContains(LGoBench, '"compress/zlib"',
     'Go Deflate comparator uses zlib wrapper package');

@@ -31,6 +31,15 @@ function RawDeflateMessageCompress(const AData: TBytes;
 function RawDeflateMessageDecompress(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes;
 
+{ RAW DEFLATE (RFC 1951) one-shot：windowBits=-15，完整终结块（Z_FINISH /
+  Z_STREAM_END 语义），供 ZIP 等容器格式承载 method=8 条目。与
+  RawDeflateMessage* 不同：不剥除、不补写尾部空块，不接受 SYNC_FLUSH 截断流。 }
+function RawDeflateCompress(const AData: TBytes;
+  const ALevel: TCompressionLevel = clDefault): TBytes;
+function RawDeflateDecompress(const AData: TBytes): TBytes;
+function RawDeflateDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes;
+
 implementation
 
 uses
@@ -751,4 +760,134 @@ begin
   end;
 end;
 
+function RawDeflateCompress(const AData: TBytes;
+  const ALevel: TCompressionLevel): TBytes;
+var
+  LStream: z_stream;
+  LOut: TBytes;
+  LOutLen, LCapacity: SizeUInt;
+  LRet: Int32;
+  LAvailOut: LongWord;
+  LEmpty: Byte;
+  LInput: pBytef;
+begin
+  { 完整 raw 流：Z_FINISH 直至 Z_STREAM_END，不剥尾部空块。 }
+  FillChar(LStream, SizeOf(LStream), 0);
+  if deflateInit2(LStream, LevelToZlib(ALevel), Z_DEFLATED, -15, 8,
+    Z_DEFAULT_STRATEGY) <> Z_OK then
+    raise EIOError.Create('raw deflateInit2 failed');
+  try
+    if Length(AData) = 0 then
+    begin
+      LEmpty := 0;
+      LInput := pBytef(@LEmpty);
+      LStream.avail_in := 0;
+    end
+    else
+    begin
+      LInput := pBytef(@AData[0]);
+      LStream.avail_in := ZlibInputSize(SizeUInt(Length(AData)));
+    end;
+    LStream.next_in := LInput;
+    LCapacity := SizeUInt(Length(AData)) + 64;
+    if LCapacity < 64 then
+      LCapacity := 64;
+    SetLength(LOut, LCapacity);
+    LOutLen := 0;
+    repeat
+      if LOutLen >= LCapacity then
+      begin
+        if LCapacity > High(SizeUInt) div 2 then
+          LCapacity := LCapacity + 65536
+        else
+          LCapacity := LCapacity * 2;
+        SetLength(LOut, LCapacity);
+      end;
+      LStream.next_out := @LOut[LOutLen];
+      LStream.avail_out := ZlibAvailChunk(LCapacity - LOutLen);
+      LAvailOut := LStream.avail_out;
+      LRet := deflate(LStream, Z_FINISH);
+      LOutLen := LOutLen + SizeUInt(LAvailOut - LStream.avail_out);
+      if LRet = Z_STREAM_END then
+        Break;
+      if (LRet <> Z_OK) and (LRet <> Z_BUF_ERROR) then
+        raise EIOError.Create('raw deflate failed (' + IntToStr(LRet) + ')');
+    until False;
+    SetLength(LOut, LOutLen);
+    Result := LOut;
+  finally
+    deflateEnd(LStream);
+  end;
+end;
+
+function RawDeflateDecompress(const AData: TBytes): TBytes;
+const
+  MAX_DECOMPRESS_SIZE = 256 * 1024 * 1024; // 与 DeflateDecompress 同默认上限
+begin
+  Result := RawDeflateDecompressWithMaxOutputSize(AData, MAX_DECOMPRESS_SIZE);
+end;
+
+function RawDeflateDecompressWithMaxOutputSize(const AData: TBytes;
+  const AMaxOutputSize: SizeUInt): TBytes;
+var
+  LStream: z_stream;
+  LCapacity, LOutLen: SizeUInt;
+  LAvailOut: LongWord;
+  LRet: Int32;
+begin
+  if AMaxOutputSize = 0 then
+    raise EIOError.Create('raw inflate: max output size must be > 0');
+  Result := nil;
+  FillChar(LStream, SizeOf(LStream), 0);
+  if Length(AData) > 0 then
+  begin
+    LStream.next_in := @AData[0];
+    LStream.avail_in := ZlibInputSize(SizeUInt(Length(AData)));
+  end;
+  if inflateInit2(LStream, -15) <> Z_OK then
+    raise EIOError.Create('raw inflateInit2 failed');
+  try
+    LCapacity := SizeUInt(Length(AData)) * 4;
+    if LCapacity < 64 then
+      LCapacity := 64;
+    if LCapacity > AMaxOutputSize then
+      LCapacity := AMaxOutputSize;
+    SetLength(Result, LCapacity);
+    LOutLen := 0;
+    repeat
+      if LOutLen >= LCapacity then
+      begin
+        if LCapacity >= AMaxOutputSize then
+          raise EIOError.Create('raw inflate: decompressed size exceeds limit');
+        if LCapacity > AMaxOutputSize div 2 then
+          LCapacity := AMaxOutputSize
+        else
+          LCapacity := LCapacity * 2;
+        SetLength(Result, LCapacity);
+      end;
+      LStream.next_out := @Result[LOutLen];
+      LStream.avail_out := ZlibAvailChunk(LCapacity - LOutLen);
+      LAvailOut := LStream.avail_out;
+      LRet := inflate(LStream, Z_NO_FLUSH);
+      if (LRet <> Z_OK) and (LRet <> Z_STREAM_END) and (LRet <> Z_BUF_ERROR) then
+      begin
+        if LRet = Z_DATA_ERROR then
+          raise EIOError.Create('raw inflate: corrupt stream');
+        raise EIOError.Create('raw inflate failed (' + IntToStr(LRet) + ')');
+      end;
+      LOutLen := LOutLen + SizeUInt(LAvailOut - LStream.avail_out);
+      if LRet = Z_STREAM_END then
+        Break;
+      if (LRet = Z_BUF_ERROR) and (LStream.avail_in = 0) and (LAvailOut > 0) then
+        raise EIOError.Create('raw inflate: truncated stream');
+    until False;
+    if LStream.avail_in <> 0 then
+      raise EIOError.Create('raw inflate: trailing bytes after stream');
+    SetLength(Result, LOutLen);
+  finally
+    inflateEnd(LStream);
+  end;
+end;
+
 end.
+

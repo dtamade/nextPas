@@ -47,6 +47,9 @@ end;
 | `GzipReaderWithMaxOutputSize(ASrc, AMax)` | 带大小限制的 Gzip 解压 |
 | `DeflateCompress(AData): TBytes` | 一次性压缩 |
 | `DeflateDecompress(AData): TBytes` | 一次性解压 |
+| `RawDeflateCompress(AData, ALevel): TBytes` | RAW DEFLATE (RFC 1951) 一次性压缩；完整终结块，ZIP method=8 载荷用 |
+| `RawDeflateDecompress(AData): TBytes` | RAW DEFLATE 一次性解压（默认 256 MB 上限） |
+| `RawDeflateDecompressWithMaxOutputSize(AData, AMax): TBytes` | 带大小限制的 RAW DEFLATE 解压 |
 | `GzipCompress(AData): TBytes` | 一次性 Gzip 压缩 |
 | `GzipDecompress(AData): TBytes` | 一次性 Gzip 解压 |
 | `Lz4Compress(AData): TBytes` | LZ4 压缩 |

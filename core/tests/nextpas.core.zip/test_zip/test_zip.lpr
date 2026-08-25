@@ -15,7 +15,7 @@ var
 
 { python3 zipfile 交叉验证脚本：argv[1]=zip 路径 argv[2]=清单路径。
   清单行格式：'TIME y m d h n s'（可选，全体条目期望 date_time）或
-  'name\tsize\tcrc32hex'。逐条目断言：文件名、method=store、UTF-8 flag、
+  'name\tmethod\tsize\tcrc32hex'。逐条目断言：文件名、压缩方法、UTF-8 flag、
   尺寸、zlib.crc32；整体断言条目数与 testzip() 通过。 }
 const
   C_PY_CHECK =
@@ -27,15 +27,15 @@ const
     '    if not line: continue'#10 +
     '    if line.startswith(''TIME ''):'#10 +
     '        expect_time = tuple(int(x) for x in line.split('' '')[1:]); continue'#10 +
-    '    name, size, crc = line.split(''\t'')'#10 +
-    '    rows.append((name, int(size), int(crc, 16)))'#10 +
+    '    name, method, size, crc = line.split(''\t'')'#10 +
+    '    rows.append((name, int(method), int(size), int(crc, 16)))'#10 +
     'z = zipfile.ZipFile(zpath)'#10 +
     'assert z.testzip() is None, ''testzip failed'''#10 +
     'infos = z.infolist()'#10 +
     'assert len(infos) == len(rows), f''count {len(infos)} != {len(rows)}'''#10 +
-    'for info, (name, size, crc) in zip(infos, rows):'#10 +
+    'for info, (name, method, size, crc) in zip(infos, rows):'#10 +
     '    assert info.filename == name, f''name {info.filename!r} != {name!r}'''#10 +
-    '    assert info.compress_type == zipfile.ZIP_STORED, ''not stored'''#10 +
+    '    assert info.compress_type == method, f''method {info.compress_type} != {method}'''#10 +
     '    assert info.flag_bits & 0x800, ''utf8 flag missing'''#10 +
     '    data = z.read(info)'#10 +
     '    assert len(data) == size, f''size {len(data)} != {size}'''#10 +
@@ -64,6 +64,11 @@ begin
   Result := 0;
   for LI := 3 downto 0 do
     Result := (Result shl 8) or AB[AOff + LI];
+end;
+
+function LE64At(const AB: TBytes; AOff: Integer): UInt64;
+begin
+  Result := UInt64(LE32At(AB, AOff)) or (UInt64(LE32At(AB, AOff + 4)) shl 32);
 end;
 
 function SameBytes(const A, B: TBytes): Boolean;
@@ -176,7 +181,7 @@ begin
   LDir := NewTempCaseDir;
   try
     WriteFile(LDir + '/case.zip', LZip);
-    WriteManifest(LDir, 'hello.txt'#9'5'#9'3610a686'#10);
+    WriteManifest(LDir, 'hello.txt'#9'0'#9'5'#9'3610a686'#10);
     CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
   finally
     RemoveAll(LDir);
@@ -200,10 +205,10 @@ begin
   try
     WriteFile(LDir + '/case.zip', LZip);
     WriteManifest(LDir,
-      'a.txt'#9'5'#9 + Hex32(Crc32OfBytes(BytesOfStr('alpha'))) + #10 +
-      '图片/图像.png'#9 + IntToStr(Length(BytesOfStr(#$89'PNG-fake-图像'))) + #9 +
+      'a.txt'#9'0'#9'5'#9 + Hex32(Crc32OfBytes(BytesOfStr('alpha'))) + #10 +
+      '图片/图像.png'#9'0'#9 + IntToStr(Length(BytesOfStr(#$89'PNG-fake-图像'))) + #9 +
         Hex32(Crc32OfBytes(BytesOfStr(#$89'PNG-fake-图像'))) + #10 +
-      'deep/path/b.bin'#9'0'#9'00000000'#10);
+      'deep/path/b.bin'#9'0'#9'0'#9'00000000'#10);
     CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
   finally
     RemoveAll(LDir);
@@ -230,7 +235,7 @@ begin
   try
     WriteFile(LDir + '/case.zip', LZip);
     WriteManifest(LDir, 'TIME 2026 8 24 12 34 56'#10 +
-      'timed.txt'#9'1'#9 + Hex32(Crc32OfBytes(BytesOfStr('x'))) + #10);
+      'timed.txt'#9'0'#9'1'#9 + Hex32(Crc32OfBytes(BytesOfStr('x'))) + #10);
     CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
   finally
     RemoveAll(LDir);
@@ -314,25 +319,97 @@ begin
   end;
 end;
 
-procedure TestEntryLimit;
+procedure TestZip64AutoByEntryCount;
 var
+  LOpts: TZipWriteOptions;
   LW: IZipWriter;
-  LI: Integer;
-  LOne: TBytes;
+  LR: IZipReader;
+  LZip, LOne: TBytes;
+  LI, LTail: Integer;
 begin
+  { >65535 条目自动启用 Zip64 EOCD；经典字段写占位值 }
   LOne := BytesOfStr('e');
-  LW := NewZipWriter;
-  for LI := 1 to 65535 do
+  LOpts.ForceZip64 := False;
+  LW := NewZipWriterWithOptions(LOpts);
+  for LI := 1 to 65600 do
     LW.AddEntry('e' + IntToStr(LI) + '.txt', LOne);
-  CheckEqual(Int64(65535), Int64(LW.EntryCount), 'limit entries accepted');
+  CheckEqual(Int64(65600), Int64(LW.EntryCount),
+    'entry count beyond 16-bit accepted');
+  LZip := LW.Finish;
+
+  { 布局：[central][zip64 EOCD(56)][locator(20)][EOCD(22)] }
+  LTail := Length(LZip);
+  CheckEqual(Int64($06054B50), Int64(LE32At(LZip, LTail - 22)), 'EOCD at tail');
+  CheckEqual(Int64($FFFF), Int64(LE16At(LZip, LTail - 14)),
+    'classic EOCD count placeholder');
+  CheckEqual(Int64($07064B50), Int64(LE32At(LZip, LTail - 42)),
+    'zip64 locator present');
+  CheckEqual(Int64($06064B50), Int64(LE32At(LZip, LTail - 98)),
+    'zip64 EOCD record present');
+
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(65600), Int64(LR.EntryCount), 'reader sees all entries');
+  Check(SameBytes(LR.ExtractToBytesByName('e65600.txt'), LOne),
+    'last entry extracts');
+end;
+
+procedure TestZip64ForcedStructures;
+var
+  LOpts: TZipWriteOptions;
+  LW: IZipWriter;
+  LR: IZipReader;
+  LPayload, LZip, LGot: TBytes;
+  LDir: string;
+  LI: Integer;
+begin
+  SetLength(LPayload, 4096);
+  for LI := 0 to High(LPayload) do
+    LPayload[LI] := Byte(LI mod 13);
+  LOpts.ForceZip64 := True;
+  LW := NewZipWriterWithOptions(LOpts);
+  LW.AddEntry('z64.bin', LPayload);
+  LW.AddEntryDeflate('z64c.bin', BytesOfStr('compress-me-compress-me'));
+  LZip := LW.Finish;
+
+  { 首条目 local 头：version 45、尺寸占位、Zip64 extra 宽度值 }
+  CheckEqual(Int64(45), Int64(LE16At(LZip, 4)), 'local version needed 45');
+  CheckEqual(Int64($FFFFFFFF), Int64(LE32At(LZip, 18)),
+    'compressed size placeholder');
+  CheckEqual(Int64($FFFFFFFF), Int64(LE32At(LZip, 22)),
+    'uncompressed size placeholder');
+  CheckEqual(Int64($0001), Int64(LE16At(LZip, 37)), 'zip64 extra id');
+  CheckEqual(Int64(16), Int64(LE16At(LZip, 39)), 'zip64 extra size');
+  CheckEqual(Int64(4096), Int64(LE64At(LZip, 41)), 'zip64 usize');
+  CheckEqual(Int64(4096), Int64(LE64At(LZip, 49)), 'zip64 csize');
+
+  { Force 下 zip64 EOCD 链无条件出现 }
+  CheckEqual(Int64($06064B50), Int64(LE32At(LZip, Length(LZip) - 98)),
+    'forced zip64 EOCD record');
+  CheckEqual(Int64($07064B50), Int64(LE32At(LZip, Length(LZip) - 42)),
+    'forced zip64 locator');
+
+  { 自家读器往返 }
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(2), Int64(LR.EntryCount), 'two entries');
+  LGot := LR.ExtractToBytesByName('z64.bin');
+  Check(SameBytes(LGot, LPayload), 'store z64 roundtrip');
+  LGot := LR.ExtractToBytesByName('z64c.bin');
+  Check(SameBytes(LGot, BytesOfStr('compress-me-compress-me')),
+    'deflate z64 roundtrip');
+
+  { python 独立读取 force_zip64 归档 }
+  LDir := NewTempCaseDir;
   try
-    LW.AddEntry('overflow.txt', LOne);
-    Check(False, 'entry 65536 must raise');
-  except
-    on E: EInvalidOperationError do
-      Check(True, 'entry count over ZIP32 limit raises');
+    WriteFile(LDir + '/case.zip', LZip);
+    WriteManifest(LDir,
+      'z64.bin'#9'0'#9'4096'#9 + Hex32(Crc32OfBytes(LPayload)) + #10 +
+      'z64c.bin'#9'8'#9 +
+        IntToStr(Length(BytesOfStr('compress-me-compress-me'))) + #9 +
+        Hex32(Crc32OfBytes(BytesOfStr('compress-me-compress-me'))) + #10);
+    CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
   end;
-  Check(Length(LW.Finish) > 0, 'archive at limit still finishes');
 end;
 
 procedure TestLargePayload;
@@ -355,8 +432,98 @@ begin
   LDir := NewTempCaseDir;
   try
     WriteFile(LDir + '/case.zip', LZip);
-    WriteManifest(LDir, 'big.bin'#9 + IntToStr(Length(LPayload)) + #9 +
+    WriteManifest(LDir, 'big.bin'#9'0'#9 + IntToStr(Length(LPayload)) + #9 +
       Hex32(Crc32OfBytes(LPayload)) + #10);
+    CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
+procedure TestDeflateEntryStructure;
+var
+  LW: IZipWriter;
+  LR: IZipReader;
+  LPayload, LZip, LGot: TBytes;
+  LDir: string;
+  LI: Integer;
+begin
+  SetLength(LPayload, 4096);
+  for LI := 0 to High(LPayload) do
+    LPayload[LI] := Byte(LI mod 13);  { 高可压模式 }
+  LW := NewZipWriter;
+  LW.AddEntryDeflate('comp.bin', LPayload);
+  LZip := LW.Finish;
+
+  CheckEqual(Int64(8), Int64(LE16At(LZip, 8)), 'local method field is 8');
+  CheckEqual(Int64(Crc32OfBytes(LPayload)), Int64(LE32At(LZip, 14)),
+    'crc over uncompressed payload');
+  CheckEqual(Int64(4096), Int64(LE32At(LZip, 22)), 'uncompressed size');
+  Check(Int64(LE32At(LZip, 18)) < 4096, 'compressed size smaller');
+
+  { 自家读器往返还原 }
+  LR := NewZipReader(LZip);
+  LGot := LR.ExtractToBytesByName('comp.bin');
+  Check(SameBytes(LGot, LPayload), 'deflate roundtrip equality');
+
+  LDir := NewTempCaseDir;
+  try
+    WriteFile(LDir + '/case.zip', LZip);
+    WriteManifest(LDir, 'comp.bin'#9'8'#9'4096'#9 +
+      Hex32(Crc32OfBytes(LPayload)) + #10);
+    CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
+procedure TestDeflateDeterminism;
+var
+  LA, LB: IZipWriter;
+  LPayload: TBytes;
+  LI: Integer;
+begin
+  SetLength(LPayload, 2048);
+  for LI := 0 to High(LPayload) do
+    LPayload[LI] := Byte((LI * 7) mod 251);
+  LA := NewZipWriter;
+  LB := NewZipWriter;
+  LA.AddEntryDeflate('d.bin', LPayload);
+  LB.AddEntryDeflate('d.bin', LPayload);
+  Check(SameBytes(LA.Finish, LB.Finish),
+    'same deflate inputs yield identical archive bytes');
+end;
+
+procedure TestDirectoryEntries;
+var
+  LW: IZipWriter;
+  LR: IZipReader;
+  LZip: TBytes;
+  LDir: string;
+begin
+  LW := NewZipWriter;
+  LW.AddDirectory('assets');
+  LW.AddDirectoryWithTime('assets/sub', 1787574896);
+  LW.AddEntryWithTime('assets/sub/f.txt', BytesOfStr('x'), 1787574896);
+  LZip := LW.Finish;
+
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(3), Int64(LR.EntryCount), 'two dirs plus one file');
+  Check(LR.Entry(0).IsDirectory, 'assets flagged directory');
+  Check(LR.Entry(1).IsDirectory, 'assets/sub flagged directory');
+  Check(not LR.Entry(2).IsDirectory, 'file not flagged directory');
+  CheckEqual(Int64(-1), Int64(LR.Find('assets')),
+    'bare name not stored; trailing slash normalized');
+  Check(SameBytes(LR.ExtractToBytesByName('assets/'), nil),
+    'directory extracts empty');
+
+  LDir := NewTempCaseDir;
+  try
+    WriteFile(LDir + '/case.zip', LZip);
+    WriteManifest(LDir,
+      'assets/'#9'0'#9'0'#9'00000000'#10 +
+      'assets/sub/'#9'0'#9'0'#9'00000000'#10 +
+      'assets/sub/f.txt'#9'0'#9'1'#9 + Hex32(Crc32OfBytes(BytesOfStr('x'))) + #10);
     CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
   finally
     RemoveAll(LDir);
@@ -373,7 +540,11 @@ begin
   T.Test('Determinism', @TestDeterminism);
   T.Test('Name guards', @TestNameGuards);
   T.Test('State guards', @TestStateGuards);
-  T.Test('Entry limit', @TestEntryLimit);
+  T.Test('Zip64 auto by entry count', @TestZip64AutoByEntryCount);
   T.Test('Large payload', @TestLargePayload);
+  T.Test('Deflate entry structure', @TestDeflateEntryStructure);
+  T.Test('Deflate determinism', @TestDeflateDeterminism);
+  T.Test('Directory entries', @TestDirectoryEntries);
+  T.Test('Zip64 forced structures', @TestZip64ForcedStructures);
   if not T.Run then Halt(1);
 end.
