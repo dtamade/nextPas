@@ -16,20 +16,46 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.zip.base,
-  nextpas.core.zip.writer;
+  nextpas.core.zip.writer,
+  nextpas.core.zip.reader;
 
 type
   TZipMethod = nextpas.core.zip.base.TZipMethod;
   TZipEntryInfo = nextpas.core.zip.base.TZipEntryInfo;
+  TZipReadOptions = nextpas.core.zip.reader.TZipReadOptions;
   IZipWriter = nextpas.core.zip.writer.IZipWriter;
+  IZipReader = nextpas.core.zip.reader.IZipReader;
+
+const
+  C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.reader.C_ZIP_DEFAULT_MAX_OUTPUT;
 
 function NewZipWriter: IZipWriter; inline;
+function DefaultZipReadOptions: TZipReadOptions; inline;
+function NewZipReader(const AData: TBytes): IZipReader; inline;
+function NewZipReaderWithOptions(const AData: TBytes;
+  const AOptions: TZipReadOptions): IZipReader; inline;
 
 implementation
 
 function NewZipWriter: IZipWriter;
 begin
   Result := nextpas.core.zip.writer.NewZipWriter;
+end;
+
+function DefaultZipReadOptions: TZipReadOptions;
+begin
+  Result := nextpas.core.zip.reader.DefaultZipReadOptions;
+end;
+
+function NewZipReader(const AData: TBytes): IZipReader;
+begin
+  Result := nextpas.core.zip.reader.NewZipReader(AData);
+end;
+
+function NewZipReaderWithOptions(const AData: TBytes;
+  const AOptions: TZipReadOptions): IZipReader;
+begin
+  Result := nextpas.core.zip.reader.NewZipReaderWithOptions(AData, AOptions);
 end;
 
 end.
