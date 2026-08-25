@@ -7,14 +7,14 @@ interface
 uses
   nextpas.core.base;
 
-function SpanEqual(const A, B: TByteSpan): Boolean;
+function SpanEqual(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer;
 
-function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt;
+function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
-function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean;
-function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
+function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
+function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean; inline;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);

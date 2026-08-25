@@ -198,11 +198,11 @@ const
   TRIE_ALPHABET_LAST_INDEX = nextpas.core.collections.trie.base.TRIE_ALPHABET_LAST_INDEX;
   TRIE_KEYS_GROWTH_STEP = nextpas.core.collections.trie.base.TRIE_KEYS_GROWTH_STEP;
 
-function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
-function FactorGrow(aFactor: Double): IGrowthStrategy;
-function DoublingGrow: IGrowthStrategy;
-function ExactGrow: IGrowthStrategy;
-function GoldenRatioGrow: IGrowthStrategy;
+function FixedGrow(aStep: SizeUInt): IGrowthStrategy; inline;
+function FactorGrow(aFactor: Double): IGrowthStrategy; inline;
+function DoublingGrow: IGrowthStrategy; inline;
+function ExactGrow: IGrowthStrategy; inline;
+function GoldenRatioGrow: IGrowthStrategy; inline;
 
 // 工厂函数（TDD：先声明，后实现；优先 MakeVec/MakeVecDeque/MakeArray）
 // 为减少调用方对实现细节的耦合，返回接口类型
