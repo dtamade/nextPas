@@ -14,8 +14,10 @@
 |------|------|
 | `core/docs/respack/README.md` | 格式模块定位、单元结构、依赖白名单、嵌入载体、完整性双档 |
 | `core/docs/respack/FORMAT.md` | 线格式 v1 权威定义：字节布局、校验清单、路径语法、扩展策略 |
+| `core/docs/respack/CONTRACT.md` | 代码契约：不变量 INV-R1..R10、错误表、性能契约（0.9 草案） |
 | `core/docs/respack/PARITY-go-rust.md` | Go/Rust 一手来源对标矩阵（asar/Tauri/rust-embed/include_dir/Go embed） |
 | `core/docs/vfs/README.md` | 树视图模块契约：IVfs、错误语义、后端矩阵、零拷贝与生命期规则 |
+| `core/docs/vfs/CONTRACT.md` | 代码契约：不变量 INV-V1..V10、错误表、conformance 目标（0.9 草案） |
 
 实现与文档冲突时，以设计文档为准并先修文档。
 

@@ -4,7 +4,7 @@ L2 资源打包格式模块。把一棵文件树打包成单个带索引的二�
 零拷贝随机读取，是前端资源嵌入程序/动态库场景的格式层。
 
 **状态：设计阶段（S0）。本模块尚未实现；本目录即权威设计文档。**
-实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
+实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 
 ## 模块定位
 
@@ -149,10 +149,12 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 | `nextpas.core.base` | `Windows`、`BaseUnix`、`Unix` 及一切 OS 单元 |
 | `nextpas.core.errors` / `exception`（经根模块桥接） | 任何其他 FPC RTL 单元 |
 
-- 异常类型继承 `nextpas.core.exception.Exception`。该根模块是全框架唯一允许触碰
-  `SysUtils.Exception` 的位置（FPC 下桥接、nextPas 编译器下原生实现）——本模块的
-  `EResPack*` 异常只认这个根
-- source-contract 测试逐单元断言 uses 清单，违例即红
+- 异常类型继承 `nextpas.core.exception.Exception`。异常词汇的桥接点收敛在 exception
+  根模块（FPC 下桥接、nextPas 编译器下原生实现）；仓库对 FPC RTL 直引的整体豁免面
+  见 fs CONTRACT INV-7（仅 system 根门面等治理特例），本模块不在豁免面内——
+  本模块的 `EResPack*` 异常只认 exception 根
+- source-contract 测试逐单元断言 uses 清单，违例即红。**复用既有门禁机制**
+  `core/tests/fpc_rtl_uses_scan.inc`（test_fs 已在用），不自造扫描器
 
 ### 反哺触发点（当前已知）
 
@@ -179,7 +181,8 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 
 ## 关联文档
 
+- [CONTRACT.md](CONTRACT.md) — 代码契约：不变量、错误表、线程安全、性能契约
 - [FORMAT.md](FORMAT.md) — 线格式 v1 权威定义（字节布局、校验规则、扩展策略）
 - [PARITY-go-rust.md](PARITY-go-rust.md) — asar/Tauri/rust-embed/include_dir/Go embed 对标矩阵与来源
 - [`core/docs/vfs/README.md`](../vfs/README.md) — 消费本格式的树视图模块
-- [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../docs/plans/2026-08-25-respack-vfs-modules-plan.md) — 实施计划
+- [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md) — 实施计划

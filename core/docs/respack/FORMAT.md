@@ -59,6 +59,13 @@ blobTotal      └────────────────────�
 index 数组按 `path` 的**字节序升序**排列（UTF-8 字节直接比较，不做语言敏感排序），
 支持二分查找。数组逻辑终点：`indexOffset + entryCount × 40`。
 
+### hash 有效性：header bit0 与 entry bit0 的关系
+
+entry 级 flag 是**权威**判定（逐条目独立）；header bit0 只是"全部条目 hash 均有效"
+的汇总提示，供 reader 跳过逐条判断的快速路径。二者必须一致（writer 保证）；
+reader 校验规则：header bit0 = 0 时允许部分条目 bit0 = 1；header bit0 = 1 时
+任何条目 bit0 = 0 即整包拒绝。
+
 ### codecId 登记表
 
 | 值 | 编码 | 状态 |

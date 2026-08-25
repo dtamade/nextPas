@@ -5,7 +5,7 @@ respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，�
 内嵌数据还是文件系统。
 
 **状态：设计阶段（S0）。本模块尚未实现；本目录即权威设计文档。**
-实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
+实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 对标依据见 [`core/docs/respack/PARITY-go-rust.md`](../respack/PARITY-go-rust.md)。
 
 ## 动机与对标
@@ -114,15 +114,15 @@ public
   property Op: string;     // 'stat' / 'open' / 'list' / 'read'
   property Path: string;   // 出错时的虚拟路径
 end;
-// 子类：EVfsNotFound（≈ErrNotExist）、EVfsNotADirectory、EVfsInvalidPath（≈ErrInvalid）、
-//       EVfsClosed（≈ErrClosed）
+// 子类：EVfsNotFound（≈ErrNotExist）、EVfsIsADirectory、EVfsNotADirectory、
+//       EVfsInvalidPath（≈ErrInvalid）、EVfsClosed（≈ErrClosed）
 ```
-
 | 场景 | 行为 |
 |------|------|
 | `Stat`/`OpenRead` 路径不存在 | raise `EVfsNotFound`，`Op='stat'/'open'` |
 | `List` 目标不是目录 | raise `EVfsNotADirectory`，`Op='list'` |
-| 对文件调用 `List`、对目录调用 `OpenRead` | raise `EVfsError` 子类 |
+| 对目录调用 `OpenRead` | raise `EVfsIsADirectory`，`Op='open'` |
+| 对文件调用 `List` | raise `EVfsNotADirectory`，`Op='list'` |
 | `Exists` 任何失败 | 返回 False，不 raise |
 | 路径无法通过 ValidPath 校验 | 统一 raise `EVfsInvalidPath`，不做猜测性修正 |
 
@@ -233,11 +233,13 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contracts
 | `nextpas.core.exception` / `errors`（异常根桥接） | 任何其他 FPC RTL 单元 |
 | `os` 后端另加 `fs`/`path`；`embedded` 另加 `respack.reader` | |
 
-- `EVfsError` 继承 `nextpas.core.exception.Exception`——全框架唯一允许触碰
-  `SysUtils.Exception` 的位置是 exception 根模块（FPC 下桥接、nextPas 下原生实现），
-  本模块只认这个根
+- `EVfsError` 继承 `nextpas.core.exception.Exception`——异常词汇的桥接点收敛在
+  exception 根模块（FPC 下桥接、nextPas 下原生实现）；仓库对 FPC RTL 直引的整体豁免面
+  见 fs CONTRACT INV-7（仅 system 根门面等治理特例），本模块不在豁免面内，
+  本模块只认 exception 根
 - 流词汇只用 `nextpas.core.io.intf.IStream`，绝不引 FPC `Classes.TStream`
-- source-contract 测试逐单元断言 uses 清单，违例即红
+- source-contract 测试逐单元断言 uses 清单，违例即红。**复用既有门禁机制**
+  `core/tests/fpc_rtl_uses_scan.inc`（test_fs 已在用），不自造扫描器
 
 ### 反哺触发点（当前已知）
 
@@ -256,7 +258,8 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contracts
 
 ## 关联文档
 
+- [CONTRACT.md](CONTRACT.md) — 代码契约：不变量、错误表、线程安全、性能契约
 - [`core/docs/respack/README.md`](../respack/README.md) — 格式层模块
 - [`core/docs/respack/FORMAT.md`](../respack/FORMAT.md) — 线格式权威定义
 - [`core/docs/respack/PARITY-go-rust.md`](../respack/PARITY-go-rust.md) — Go/Rust 对标矩阵与来源清单
-- [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../docs/plans/2026-08-25-respack-vfs-modules-plan.md) — 实施计划
+- [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md) — 实施计划
