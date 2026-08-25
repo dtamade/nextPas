@@ -4,7 +4,9 @@ L2 只读虚拟文件树模块。把"一棵文件树"抽象成统一接口：真
 respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，不关心内容来自二进制
 内嵌数据还是文件系统。
 
-**状态：设计阶段（S0）。本模块尚未实现；本目录即权威设计文档。**
+**状态：S3 已落地。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数全部实现；
+9 个验证门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
+`vfs.mount`（overlay/挂载表）推迟；S4 嵌入工具链、S5 http.static 对接未开始。
 实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 对标依据见 [`core/docs/respack/PARITY-go-rust.md`](../respack/PARITY-go-rust.md)。
 
@@ -31,7 +33,7 @@ Tauri 把前端资源编译期嵌进可执行文件，运行时经内存映射�
 **v1 契约刻意只读。** Tauri 资产同样只读；写入本来就该走 `core.fs`。把 Write/Delete/Rename
 塞进 `IVfs` 只会让 embedded 后端全是"不支持"。可写 overlay 属于将来 `vfs.mount` 议题。
 
-## 目标使用形态（未实现，设计签名）
+## 目标使用形态（已实现，签名即门面导出）
 
 ```pascal
 uses nextpas.core.vfs;
@@ -161,7 +163,7 @@ end;
 - conformance 门含地址断言：读取缓冲指针必须落在 `[blob, blob+blobTotal)` 区间内，
   锁死零拷贝不被回归破坏
 
-## 后端矩阵
+## 后端矩阵（三后端均已落地，语义一致性由 conformance 门强制）
 
 | 后端 | 单元 | 内容来源 | hash | 典型用途 |
 |------|------|----------|------|----------|
@@ -170,6 +172,8 @@ end;
 | os | `vfs.os` | 真实目录（经 `core.fs`） | 不提供（0） | 开发模式、磁盘部署 |
 
 同一 consumer 在开发态接 `os`、发布态接 `embedded`，行为一致——这正是引入抽象的理由。
+注意：**目录条目的 `Size` 是后端事实值**（os = 磁盘 inode 大小；memtree/embedded = 0），
+不属于可移植契约；文件 `Size`/`ModTime` 三后端一致。
 
 ### 开发态工作流（对标 rust-embed debug 行为）
 
@@ -178,9 +182,9 @@ rust-embed 在 debug 构建默认直接读磁盘（免"改一行重编全部资�
 切换是装配层一个工厂函数的事，consumer 代码零改动。该双态切换本身列入 conformance
 测试（同一用例集跑两后端必须同结果）。
 
-## 一致性测试（fstest.TestFS 对等物）
+## 一致性测试（fstest.TestFS 对等物，已落地）
 
-新增 `test_vfs_conformance` 门：属性电池以 **Go `testing/fstest` 的 TestFS 清单**为蓝本，
+`test_vfs_conformance` 门：属性电池以 **Go `testing/fstest` 的 TestFS 清单**为蓝本，
 跑满 `{memtree, embedded, os}` × `{整树, Sub 视图}` 矩阵：
 
 | # | 属性（来源 fstest.go） |
@@ -194,6 +198,8 @@ rust-embed 在 debug 构建默认直接读磁盘（免"改一行重编全部资�
 | P7 | `Sub('dir')` 视图内以新根重复 P1–P6（fstest 强制测 fs.Sub 往返） |
 | P8 | embedded 后端附加：读取缓冲地址落在 blob 区间内（零拷贝断言） |
 
+P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正确，三后端一致）。
+
 ## 设计决策记录
 
 | 决策 | 理由 |
@@ -203,23 +209,35 @@ rust-embed 在 debug 构建默认直接读磁盘（免"改一行重编全部资�
 | 自有 `TEntryInfo` 不复用 `fs.base` | 守住 "L2 仅依赖 L0-L1"；嵌入域字段需求远小于 fs；转换成本收口在 os 后端一个单元 |
 | `IStream` 复用 io 词汇 | 流词汇 owner 是 io，不自造第二套 |
 | 错误带 Op/Path 上下文 | Go PathError 是企业级错误定位的事实标准 |
+| os 后端错误映射两段式 | 先 `Stat` 探测区分 NotFound/NotADirectory 等精确错类，残余底层错误统一包 `EVfsError` 并保留原文——精确分类与不丢上下文兼得（INV-V4/V5） |
+| embedded 后端 `EResPackCorrupted` 原样透传，不再包一层 EVfsError | 损坏是格式层事实，respack 错误类本身已可定位；二次包装只会让 consumer 需要同时 catch 两棵异常树 |
+| 目录条目 Size 为后端事实值，不入可移植契约 | os 如实报告磁盘 inode 大小，memtree/embedded 无此概念报 0；Go io/fs 同样不约束目录 FileInfo 细节。文件 Size/ModTime 才是跨后端一致承诺（facade gate 树签名只比较可移植字段） |
 | 路径语法采纳 Go ValidPath 含 `.` 根 | 业界事实标准；respack/vfs 两模块共享同一节定义 |
 | Sub 视图独立单元而非核心方法 | Go 将 fs.Sub 作为自由函数；包装器不改核心契约即可测试（fstest 同样强制测它） |
 | mount/overlay 推迟 | 无已落地的双源消费场景；接口留位不留桩 |
 
-## 测试计划
+## 测试计划（9 门全绿，2026-08-25）
 
 ```bash
+# respack 格式层
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer      # 含 golden 逐字节快照
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_roundtrip   # 含 10k 条目 perf smoke
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
+# vfs 视图层
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_os
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance   # 属性电池 × 后端矩阵
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade        # 便利函数 + 双态切换
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contracts
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded            # 双态生命期 + 损坏透传
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance         # 属性电池 P1-P8+V12 × 后端矩阵
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade              # 便利函数 + 开发/发布态切换
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # uses 白名单门禁
 ```
 
 - 各后端单元门覆盖自身实现细节；conformance 门锁跨后端语义一致
-- `test_vfs_source_contracts`：源码契约检查，锁定依赖白名单（`vfs.*` 中除 `os` 外禁止
+- **设计偏离说明**：原计划的 `test_vfs_os` 独立门折叠进 conformance——os 后端的全部
+  行为断言（P1-P8、Sub、CaseSensitive、错误映射）在电池里以真实目录夹具覆盖，
+  独立门只会复制同一套夹具。os 实现细节（如 ns→s 时间换算）由 conformance 的
+  modTime 一致性属性间接锁定
+- `test_vfs_source_contract`：源码契约检查，锁定依赖白名单（`vfs.*` 中除 `os` 外禁止
   出现对 `fs`/`respack` 的 uses；全模块禁止 OS 单元），照 system 模块 source-contract 先例
 - 全部 gate 要求 heaptrc 零泄漏
 

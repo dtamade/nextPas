@@ -1,10 +1,10 @@
 # nextpas.core.vfs 代码契约
 
-**模块路径**：`core/src/nextpas.core.vfs*.pas`（8 个源文件，规划）
+**模块路径**：`core/src/nextpas.core.vfs*.pas`（9 个源文件）
 **层级**：L2（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-08-25
-**版本**：0.9（设计阶段草案；S3 落地时升 1.0 并按实现校准）
+**版本**：1.0（S3 落地，按实现校准）
 
 ---
 
@@ -28,7 +28,7 @@ vfs.pas       ← 门面 re-export + 便利函数
 | 领域 | 签名 | 说明 |
 |------|------|------|
 | 装配 | `CreateMemTreeVfs(ATree): IVfs` | Builder Freeze 产物 |
-| 装配 | `CreateEmbeddedVfs(APack: TResPack; AOwnsBlob: Boolean): IVfs` | 零拷贝后端 |
+| 装配 | `CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt; AOwnsBlob: Boolean): IVfs` | 零拷贝后端；`AOwnsBlob=True` 时 blob 归 VFS 所有 |
 | 装配 | `CreateOsVfs(const ARoot: string): IVfs` | 真实目录后端 |
 | 视图 | `CreateSubVfs(AFs: IVfs; const ASubRoot: string): IVfs` | 重定根，不改底层实例 |
 | 遍历 | `VfsWalk(AFs: IVfs; const ARoot: string; ACallback): Boolean` | 字典序全树遍历（Go WalkDir 对等物）；回调可置 AStop 中止 |
@@ -60,15 +60,21 @@ end;
   返回 False 不抛
 - **[INV-V6]** embedded 后端零拷贝：OpenRead 的读取地址必须落在 blob 区间内
   （conformance P8 断言）；接口持后备引用保活，const 段场景由调用方保证生命期
-- **[INV-V7]** 三后端语义一致：同一用例集在 memtree/embedded/os 上必须同结果
-  （test_vfs_conformance 强制）
+- **[INV-V7]** 三后端语义一致：同一用例集在 memtree/embedded/os 上必须同结果。
+  **验证**：`test_vfs_conformance` 属性电池 P1–P8 以同一夹具树跑满
+  `{三后端} × {整树, Sub}` 矩阵；`test_vfs_facade` 的树签名用例再以纯门面 API 复证
+  （开发态/发布态切换承诺）
 - **[INV-V8]** List 结果按路径字节序升序；目录条目由文件路径推导，不要求存储存在
 - **[INV-V9]** Sub 视图不改变底层生命期与并发性质；`ASubRoot` 必须是已存在的目录路径
-- **[INV-V10]** os 后端大小写敏感性跟随平台并在实例上可查询；embedded/memtree 恒敏感
+- **[INV-V10]** os 后端大小写敏感性跟随平台并在实例上可查询；embedded/memtree 恒敏感。
+  **验证**：conformance 各后端电池末尾的 `CaseSensitive` 断言（posix 下三后端均为 True）
 - **[INV-V11]** VfsWalk 确定性：字典序访问、每路径恰好一次、由不可变快照保证无环；
-  回调置 AStop 后立即停止且不再进入子树
+  回调置 AStop 后立即停止且不再进入子树。**验证**：conformance 全序列精确比对 +
+  facade gate 早停用例（恰好访问 2 个路径）
 - **[INV-V12]** OpenRead 返回的流 SHOULD 同时实现 `io.intf.IReaderAt`（三后端均可
-  提供 positioned 读）；consumer 经 Supports 探测，缺省退化 Seek+Read
+  提供 positioned 读）；consumer 经 Supports 探测，缺省退化 Seek+Read。
+  **验证**：conformance P4 内嵌断言——三后端流 QueryInterface(IReaderAt) 成功且
+  positioned 读逐字节正确
 
 ---
 
@@ -118,18 +124,19 @@ end;
 
 ---
 
-## 7. 测试覆盖（设计目标值，落地时校准）
+## 7. 测试覆盖（S3 实测校准，2026-08-25）
 
-| 测试目录 | 目标用例数 | 说明 |
-|----------|-----------|------|
-| test_vfs_memtree | ≥ 10 | Builder/Freeze/错误语义/`.` 根 |
-| test_vfs_embedded | ≥ 10 | 切片/AOwnsBlob/生命期/地址断言 |
-| test_vfs_os | ≥ 8 | 边界转换/平台大小写/错误映射 |
-| test_vfs_conformance | ≥ 40 | fstest 属性电池 P1–P8 × {3 后端} × {整树, Sub} |
-| test_vfs_facade | ≥ 6 | 便利函数 + 开发态/发布态工厂切换 |
-| test_vfs_source_contracts | — | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`） |
+| 测试目录 | 用例数 | 说明 |
+|----------|--------|------|
+| test_vfs_memtree | 14 | Builder/Freeze/错误语义/`.` 根/IReaderAt |
+| test_vfs_embedded | 6 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口 |
+| test_vfs_conformance | 7 | 属性电池 P1–P8+INV-V12 × {3 后端} × {整树, Sub}（一个用例跑满矩阵） |
+| test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 |
+| test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`） |
 
-heaptrc 0 leak 为所有 gate 门禁。
+- 原设计的独立 `test_vfs_os` 门折叠进 conformance：os 行为断言在电池里以真实目录
+  夹具全覆盖，独立门只会复制夹具（README 测试计划节有记录）
+- 全部 gate heaptrc 0 leak 为门禁
 
 ---
 
@@ -138,3 +145,4 @@ heaptrc 0 leak 为所有 gate 门禁。
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-08-25 | 0.9 | 设计阶段契约草案（随 S0 定稿） | AI |
+| 2026-08-25 | 1.0 | S3 落地：三后端+Sub+门面实现；INV-V7/V10/V11/V12 补验证方式；测试表按实测校准；os 门折叠进 conformance 的偏离记录 | AI |

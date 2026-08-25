@@ -3,9 +3,10 @@
 L2 资源打包格式模块。把一棵文件树打包成单个带索引的二进制 blob（pack），支持
 零拷贝随机读取，是前端资源嵌入程序/动态库场景的格式层。
 
-**状态：S1 格式层 + S2 解析/打包/目录收集已实现并有 gate 覆盖**
-（`base`/`writer`/`reader`/`dirsource`/门面，五个测试 gate 全绿、heaptrc 零泄漏）。
-`vfs.embedded` 接入（S3）、嵌入工具链（S4）、http.static 对接（S5）未开始。
+**状态：S1-S3 已实现并有 gate 覆盖**
+（`base`/`writer`/`reader`/`dirsource`/门面；五个测试 gate 全绿、heaptrc 零泄漏；
+writer 含 golden 逐字节快照门禁，roundtrip 含 10k 条目 perf smoke）。
+`vfs.embedded` 已接入（S3 落地）；嵌入工具链（S4）、http.static 对接（S5）未开始。
 计划见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 
 ## 模块定位

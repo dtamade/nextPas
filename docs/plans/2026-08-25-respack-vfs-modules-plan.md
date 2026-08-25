@@ -106,27 +106,38 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
 ```
 出口条件：错误语义表全覆盖（含 Op/Path 断言）；`.` 根特例；并发读 smoke；heaptrc 零泄漏。
 
-### S3 — vfs 后端与门面
+### S3 — vfs 后端与门面（已完成，2026-08-25）
 
 依赖 S1+S2。任务：
-1. `nextpas.core.vfs.embedded.pas` — 零拷贝切片 + `AOwnsBlob` 生命期语义
-2. `nextpas.core.vfs.os.pas` — fs/path 适配与类型转换
-3. `nextpas.core.vfs.sub.pas` — CreateSubVfs 重定根视图（Go fs.Sub 对等物）
-4. 门面便利函数：`VfsReadAllBytes/VfsReadAllText` + `VfsWalk`（Go WalkDir 对等物）+
-   `VfsStat/VfsList` 包级辅助
-5. source-contract 测试锁定依赖白名单
+- [x] `nextpas.core.vfs.embedded.pas` — 零拷贝切片 + `AOwnsBlob` 生命期语义
+- [x] `nextpas.core.vfs.os.pas` — fs/path 适配与类型转换
+- [x] `nextpas.core.vfs.sub.pas` — CreateSubVfs 重定根视图（Go fs.Sub 对等物）
+- [x] 门面便利函数：`VfsReadAllBytes/VfsReadAllText` + `VfsWalk`（Go WalkDir 对等物）+
+  `VfsStat/VfsList` 包级辅助
+- [x] source-contract 测试锁定依赖白名单
 
 验证门：
 ```bash
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_os
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_os            # 折叠进 conformance，见下
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance   # fstest 属性电池 × 后端矩阵
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contracts
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract
 ```
-出口条件：conformance P1–P8 全过（三后端 × 整树/Sub 视图，含 VfsWalk 遍历一致性）；
-零拷贝地址断言生效；source-contract 含 uses 白名单断言（含禁 SysUtils/Classes/OS
-单元直引）；registry 增加 `vfs` 行。
+
+出口条件（已满足）：conformance P1–P8 全过（三后端 × 整树/Sub 视图）+ INV-V12
+positioned 读断言；零拷贝地址断言生效（P8）；source-contract uses 白名单断言全绿；
+registry vfs 行更新为已落地形态。
+
+实现期决策记录：
+- **test_vfs_os 独立门折叠进 conformance**：os 后端全部行为断言在属性电池里以真实
+  目录夹具覆盖，独立门只会复制同一套夹具（README 测试计划节同步记录）
+- **新增 test_vfs_facade 门**：锁定"开发态/发布态工厂切换"承诺——同一纯门面 API
+  consumer 在三后端产出一致树签名；并覆盖 VfsWalk 早停与便利包装
+- **golden 快照**（writer gate）：固定输入集构建产物与提交的
+  `golden_respack_v1.inc` 逐字节比对，INV-R5 从"声称"变门禁；由 rp-check/gen_golden 生成
+- **perf smoke**（roundtrip gate）：10k 条目 build + 全量 Find 总耗时硬上限
+  （1000ms 宽松预算防 O(n²) 回归，非基准测试），stopwatch 计时 + 全量有序性抽查
 
 ### S4 — 嵌入工具链
 
@@ -167,7 +178,13 @@ If-Modified-Since 取 `ModTime`。
 ## 当前状态
 
 - S0 完成：设计文档定稿（含 2026-08-25 Go/Rust 一手来源对标修订，见
-  `core/docs/respack/PARITY-go-rust.md`），随本提交进入评审/landing 流程。
-- 对标后主要变更：Go ValidPath/PathError/fs.Sub/fstest 电池四件采纳；
-  digest 区 + 去重 + codecId 槽位入格式；压缩显式推迟并留槽。
-- 下一步：S1/S2 可并行开工。
+  `core/docs/respack/PARITY-go-rust.md`），已 landing。
+- S1 完成：respack 格式层（base/writer/reader/dirsource/门面）+ 4 gate 全绿，
+  已 landing main（b59258fe5）。
+- S2 完成：vfs 契约 + memtree + 门面便利函数，test_vfs_memtree 全绿，已 landing。
+- S3 完成（2026-08-25）：三后端 embedded/os/sub + conformance/embedded/facade/
+  source-contract 四个新门；writer golden 快照与 roundtrip perf smoke 补齐；
+  9 个 gate 全绿、heaptrc 零泄漏。实现期发现的 FPC trunk 陷阱沉淀在
+  `core/docs/respack/README.md`「实现期发现的 FPC trunk 注意事项」。
+- 下一步：S4 嵌入工具链（.inc 生成器、glob 过滤、示例与基准）；S5 http.static
+  跨模块 slice 另行立项。
