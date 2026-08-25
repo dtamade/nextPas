@@ -30,7 +30,8 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.webview.base,
-  nextpas.core.webview.intf;
+  nextpas.core.webview.intf,
+  nextpas.core.webview.bridge;
 
 type
   {** invoke 结果记录（断言用）。 *}
@@ -97,6 +98,8 @@ type
     FEvalResults: array of string; // 与 FEvalQueue 平行：成功 JSON 或错误消息
     FPendingEvals: array of TFakePendingEval;
     FOutcomes: TFakeInvokeOutcomes;
+    { DeliverFrame 协议路径产生的回执脚本（resolve/reject）捕获队列 }
+    FCapturedEvals: array of string;
     FEmits: array of record
       Event: string;
       PayloadJson: string;
@@ -116,6 +119,12 @@ type
     procedure RequireOpen;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
+    { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
+    procedure EnqueueReceipt(AFrameId: Int64; AIsError: Boolean;
+      const AResultJson, ACode, AMessage: string);
+    { DeliverInvoke/DeliverFrame 公共分发体；AFrameId < 0 表示无帧直呼 }
+    procedure DispatchInvoke(AFrameId: Int64; const ACmd,
+      APayloadJson: string);
     procedure PushHistory(const AUrl: string);
     procedure FireReadyHandlers;
     procedure AppendEvalScript(const AScript: string);
@@ -217,6 +226,15 @@ type
       marshal（需 Pump 兑现 outcome 记录）。 }
     procedure DeliverInvoke(const ACmd, APayloadJson: string);
 
+    { 协议入口（BRIDGE_PROTOCOL §8）：完整走过 bridge——解码校验帧后按
+      id 关联回执；非法帧抛 EWebviewBadFrame。成功/失败的 resolve/reject
+      Eval 脚本进捕获队列（异步路径在 Pump 兑现后入队）。 }
+    procedure DeliverFrame(const AFrameJson: string);
+
+    { 回执脚本捕获队列读取器 }
+    function CaptureEvalCount: Integer;
+    function CaptureEvalAt(AIndex: Integer): string;
+
     { 调用记录读取器 }
     function OutcomeCount: Integer;
     function OutcomeAt(AIndex: Integer): TFakeInvokeOutcome;
@@ -238,15 +256,11 @@ procedure FakePumpAll;
 
 implementation
 
-{ handler 异常 → 协议错误码映射（CONTRACT §3.3）：
-  EWebviewInvokeError.Code 为空补默认 npw.bad_request，非空透传；
-  其他异常一律 npw.handler_error（调用方分支）。 }
+{ handler 异常 → 协议错误码映射：唯一实现移至 bridge（NormalizeInvokeCode），
+  fake 与未来真实后端共用同一映射，避免双处定义漂移。 }
 function MapInvokeCode(const ACode: string): string;
 begin
-  if ACode = '' then
-    Result := 'npw.bad_request'
-  else
-    Result := ACode;
+  Result := NormalizeInvokeCode(ACode);
 end;
 
 { ---- 回调归一化（method/proc → reference）----
@@ -700,20 +714,24 @@ type
   private
     FWin: TObject;
     FCmd: string;
+    { 来源帧 id；<0 表示 driver 直呼（DeliverInvoke），不产生回执脚本 }
+    FFrameId: Int64;
     FDone: Boolean;
     procedure RecordViaDispatcher(AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
   public
-    constructor Create(AWin: TObject; const ACmd: string);
+    constructor Create(AWin: TObject; const ACmd: string; AFrameId: Int64);
     procedure Ok(const AResultJson: string);
     procedure Fail(const ACode, AMessage: string);
   end;
 
-constructor TFakeCompletion.Create(AWin: TObject; const ACmd: string);
+constructor TFakeCompletion.Create(AWin: TObject; const ACmd: string;
+  AFrameId: Int64);
 begin
   inherited Create;
   FWin := AWin;
   FCmd := ACmd;
+  FFrameId := AFrameId;
 end;
 
 procedure TFakeCompletion.RecordViaDispatcher(AIsError: Boolean;
@@ -721,15 +739,20 @@ procedure TFakeCompletion.RecordViaDispatcher(AIsError: Boolean;
 var
   LWin: TFakeWebview;
   LCmd: string;
+  LFrameId: Int64;
 begin
   { 闭包在 completion 释放后才由主线程泵执行，因此只捕获局部值拷贝
     （字符串随闭包帧存活），不捕获 Self 字段——对象指针不受引用计数保护 }
   LCmd := FCmd;
+  LFrameId := FFrameId;
   LWin := FWin as TFakeWebview;
   LWin.GetDispatcher.Post(
     procedure
     begin
       LWin.RecordOutcome(LCmd, AIsError, AResultJson, ACode, AMessage);
+      if LFrameId >= 0 then
+        LWin.EnqueueReceipt(LFrameId, AIsError, AResultJson,
+          NormalizeInvokeCode(ACode), AMessage);
     end);
 end;
 
@@ -1493,25 +1516,50 @@ begin
     FOnScaleChanged[I](ANewScale);
 end;
 
-procedure TFakeWebview.DeliverInvoke(const ACmd, APayloadJson: string);
+procedure TFakeWebview.EnqueueReceipt(AFrameId: Int64; AIsError: Boolean;
+  const AResultJson, ACode, AMessage: string);
+begin
+  SetLength(FCapturedEvals, Length(FCapturedEvals) + 1);
+  if AIsError then
+    FCapturedEvals[High(FCapturedEvals)] :=
+      BuildRejectScript(AFrameId, ACode, AMessage)
+  else
+    FCapturedEvals[High(FCapturedEvals)] :=
+      BuildResolveScript(AFrameId, AResultJson);
+end;
+
+function TFakeWebview.CaptureEvalCount: Integer;
+begin
+  Result := Length(FCapturedEvals);
+end;
+
+function TFakeWebview.CaptureEvalAt(AIndex: Integer): string;
+begin
+  Result := FCapturedEvals[AIndex];
+end;
+
+procedure TFakeWebview.DispatchInvoke(AFrameId: Int64; const ACmd,
+  APayloadJson: string);
 var
   LReg: TFakeInvokeRegistry;
   LIdx: Integer;
   LResultJson: string;
   LCompletion: IWebviewInvokeCompletion;
 begin
-  RequireOpen;
   LReg := TFakeInvokeRegistry(FInvokes);
   LIdx := LReg.IndexOf(ACmd);
   if LIdx < 0 then
   begin
-    RecordOutcome(ACmd, True, '', 'npw.handler_missing',
+    RecordOutcome(ACmd, True, '', NPW_CODE_HANDLER_MISSING,
       'no handler registered for cmd');
+    if AFrameId >= 0 then
+      EnqueueReceipt(AFrameId, True, '', NPW_CODE_HANDLER_MISSING,
+        'no handler registered for cmd');
     Exit;
   end;
   if LReg.FEntries[LIdx].IsAsync then
   begin
-    LCompletion := TFakeCompletion.Create(Self, ACmd);
+    LCompletion := TFakeCompletion.Create(Self, ACmd, AFrameId);
     try
       LReg.FEntries[LIdx].AsyncHandler(APayloadJson, LCompletion);
     except
@@ -1521,7 +1569,7 @@ begin
           RecordOutcome(ACmd, True, '',
             MapInvokeCode(EWebviewInvokeError(E).Code), E.Message)
         else
-          RecordOutcome(ACmd, True, '', 'npw.handler_error', E.Message);
+          RecordOutcome(ACmd, True, '', NPW_CODE_HANDLER_ERROR, E.Message);
       end;
     end;
   end
@@ -1530,17 +1578,46 @@ begin
     try
       LResultJson := LReg.FEntries[LIdx].SyncHandler(APayloadJson);
       RecordOutcome(ACmd, False, LResultJson, '', '');
+      if AFrameId >= 0 then
+        EnqueueReceipt(AFrameId, False, LResultJson, '', '');
     except
       on E: Exception do
       begin
         if E is EWebviewInvokeError then
+        begin
           RecordOutcome(ACmd, True, '',
-            MapInvokeCode(EWebviewInvokeError(E).Code), E.Message)
+            MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+          if AFrameId >= 0 then
+            EnqueueReceipt(AFrameId, True, '',
+              MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+        end
         else
-          RecordOutcome(ACmd, True, '', 'npw.handler_error', E.Message);
+        begin
+          RecordOutcome(ACmd, True, '', NPW_CODE_HANDLER_ERROR, E.Message);
+          if AFrameId >= 0 then
+            EnqueueReceipt(AFrameId, True, '', NPW_CODE_HANDLER_ERROR,
+              E.Message);
+        end;
       end;
     end;
   end;
+end;
+
+procedure TFakeWebview.DeliverInvoke(const ACmd, APayloadJson: string);
+begin
+  RequireOpen;
+  { driver 直呼：无帧 id，不产生回执脚本 }
+  DispatchInvoke(-1, ACmd, APayloadJson);
+end;
+
+procedure TFakeWebview.DeliverFrame(const AFrameJson: string);
+var
+  LFrame: TWebviewFrame;
+begin
+  RequireOpen;
+  if not TryDecodeFrame(AFrameJson, LFrame) then
+    raise EWebviewBadFrame.Create('malformed invoke frame');
+  DispatchInvoke(LFrame.Id, LFrame.Cmd, LFrame.PayloadJson);
 end;
 
 function TFakeWebview.OutcomeCount: Integer;
