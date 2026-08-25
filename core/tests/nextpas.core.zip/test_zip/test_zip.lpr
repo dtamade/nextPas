@@ -8,6 +8,7 @@ uses
   nextpas.core.checksum.crc32,
   nextpas.core.fs,
   nextpas.core.process,
+  nextpas.core.compress.intf,
   nextpas.core.zip,
   nextpas.core.zip.base;
 
@@ -596,6 +597,148 @@ begin
   end;
 end;
 
+{ 流式条目：deflate 不规则分块（含零长写）+ store 流式 + 零长流；
+  读回断言 + python zipfile 独立交叉验证 }
+procedure TestStreamedEntries;
+const
+  C_TS: Int64 = 1787574896;
+var
+  LW: IZipWriter;
+  LSink: ICompressWriter;
+  LOpts: TZipAddOptions;
+  LHello: TBytes;
+  LZip, LGot: TBytes;
+  LR: IZipReader;
+  LI: Integer;
+  LBig: TBytes;
+  LDir: string;
+begin
+  SetLength(LBig, 200000);
+  for LI := 0 to High(LBig) do
+    LBig[LI] := Byte((LI * 13 + LI shr 5) mod 251);
+  LHello := BytesOfStr('hello stream');
+
+  LW := NewZipWriter;
+
+  LOpts := DefaultZipAddOptions;
+  LOpts.Method := zmDeflate;
+  LOpts.ModTimeUnixSec := C_TS;
+  LSink := LW.AddEntryStream('big.bin', LOpts);
+  Check(LSink.Write(LBig[0], 70000) = 70000, 'stream chunk1 written');
+  Check(LSink.Write(LBig[70000], 0) = 0, 'zero-length write accepted');
+  Check(LSink.Write(LBig[70000], 130000) = 130000, 'stream chunk2 written');
+  LSink.Close;
+
+  LOpts.Method := zmStore;
+  LSink := LW.AddEntryStream('stored.txt', LOpts);
+  LSink.Write(LHello[0], Length(LHello));
+  LSink.Close;
+
+  LOpts.Method := zmDeflate;
+  LSink := LW.AddEntryStream('empty.bin', LOpts);
+  LSink.Close;
+
+  LZip := LW.Finish;
+
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(3), Int64(LR.EntryCount), 'three streamed entries');
+  LGot := LR.ExtractToBytesByName('big.bin');
+  Check(SameBytes(LGot, LBig), 'streamed deflate roundtrip content');
+  Check(SameBytes(LR.ExtractToBytesByName('stored.txt'), LHello),
+    'streamed store content');
+  CheckEqual(Int64(0), Int64(Length(LR.ExtractToBytesByName('empty.bin'))),
+    'streamed empty entry extracts empty');
+
+  LDir := NewTempCaseDir;
+  try
+    WriteFile(LDir + '/case.zip', LZip);
+    WriteManifest(LDir,
+      'big.bin'#9'8'#9'200000'#9 + Hex32(Crc32OfBytes(LBig)) + #10 +
+      'stored.txt'#9'0'#9'12'#9 + Hex32(Crc32OfBytes(LHello)) + #10 +
+      'empty.bin'#9'8'#9'0'#9'00000000'#10);
+    CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
+{ 流式 deflate 输出与一次性 API 字节级一致（同级别 zlib、同输入） }
+procedure TestStreamedMatchesOneShot;
+var
+  LW: IZipWriter;
+  LSink: ICompressWriter;
+  LOpts: TZipAddOptions;
+  LA, LB, LData: TBytes;
+  LI: Integer;
+begin
+  SetLength(LData, 50000);
+  for LI := 0 to High(LData) do
+    LData[LI] := Byte((LI * 3 + LI shr 7) mod 249);
+
+  LW := NewZipWriter;
+  LW.AddEntryDeflateWithTime('same.bin', LData, 1787574896);
+  LA := LW.Finish;
+
+  LW := NewZipWriter;
+  LOpts := DefaultZipAddOptions;
+  LOpts.Method := zmDeflate;
+  LOpts.ModTimeUnixSec := 1787574896;
+  LSink := LW.AddEntryStream('same.bin', LOpts);
+  LSink.Write(LData[0], 12345);
+  LSink.Write(LData[12345], Length(LData) - 12345);
+  LSink.Close;
+  LB := LW.Finish;
+
+  Check(SameBytes(LA, LB),
+    'streamed deflate output byte-identical to one-shot');
+end;
+
+{ 放弃未关闭的流：条目不落入归档；未关闭时 Finish 拒绝；关闭后写拒绝 }
+procedure TestStreamedGuards;
+var
+  LW: IZipWriter;
+  LSink, LAbandon: ICompressWriter;
+  LX: Byte;
+  LZip: TBytes;
+  LR: IZipReader;
+  LGot: Boolean;
+begin
+  LX := Ord('x');
+  LW := NewZipWriter;
+  LSink := LW.AddEntryStream('kept.bin', DefaultZipAddOptions);
+  LSink.Write(LX, 1);
+
+  LAbandon := LW.AddEntryStream('dropped.bin', DefaultZipAddOptions);
+  LAbandon.Write(LX, 1);
+  LAbandon := nil;   { 显式放弃：析构解除登记，条目不落入 }
+
+  LGot := False;
+  try
+    LW.Finish;
+  except
+    on E: Exception do
+      LGot := Pos('InvalidOperation', E.ClassName) > 0;
+  end;
+  Check(LGot, 'finish with open stream raises');
+
+  LSink.Close;
+  LZip := LW.Finish;
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(1), Int64(LR.EntryCount), 'only kept entry landed');
+  Check(LR.Find('dropped.bin') < 0, 'abandoned entry absent');
+  Check(SameBytes(LR.ExtractToBytesByName('kept.bin'), BytesOfStr('x')),
+    'kept entry intact');
+
+  LGot := False;
+  try
+    LSink.Write(LX, 1);
+  except
+    on E: Exception do
+      LGot := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGot, 'write after close raises');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip');
   T.Test('CRC vector', @TestCrcVector);
@@ -613,5 +756,8 @@ begin
   T.Test('Directory entries', @TestDirectoryEntries);
   T.Test('Zip64 forced structures', @TestZip64ForcedStructures);
   T.Test('Add entry with options', @TestAddEntryWithOptions);
+  T.Test('Streamed entries', @TestStreamedEntries);
+  T.Test('Streamed matches one-shot', @TestStreamedMatchesOneShot);
+  T.Test('Streamed guards', @TestStreamedGuards);
   if not T.Run then Halt(1);
 end.

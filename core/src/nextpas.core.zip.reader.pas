@@ -18,6 +18,8 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.compress.intf,
+  nextpas.core.io.intf,
   nextpas.core.zip.base;
 
 type
@@ -39,13 +41,20 @@ type
     function ExtractToBytes(AIndex: Integer): TBytes;
     {** 同上，按名；缺失 raise ENotFoundError *}
     function ExtractToBytesByName(const AName: string): TBytes;
+    {** 流式打开条目：pull 式读端，增量解压不物化整体输出；读到 EOF
+        （返回 0）时强制校验尺寸与 CRC32；MaxOutputSize 语义同提取路径。
+        可同时打开多个流；放弃未读完的流则跳过校验。 *}
+    function OpenEntry(AIndex: Integer): IDecompressReader;
+    {** 同上，按名；缺失 raise ENotFoundError *}
+    function OpenEntryByName(const AName: string): IDecompressReader;
+    {** 泵送整个条目到 ADst（EOF 处校验尺寸+CRC32），返回输出字节数 *}
+    function CopyEntryTo(AIndex: Integer; const ADst: IWriter): SizeUInt;
   end;
 
 const
   { 未显式配置时的单条目解压默认上限：1 GiB }
   C_ZIP_DEFAULT_MAX_OUTPUT = SizeUInt(1) shl 30;
 
-{** 默认读选项。 *}
 function DefaultZipReadOptions: TZipReadOptions; inline;
 
 {** 解析归档字节；结构非法立即 raise。 *}
@@ -82,6 +91,8 @@ type
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
     procedure NeedRange(APos, ALen: Int64; const AWhat: string);
+    { 加密/安全名守卫 + local header 走查，返回条目载荷起始偏移 }
+    function LocatePayload(AIndex: Integer): Int64;
     function ExtractIndex(AIndex: Integer): TBytes;
   public
     constructor Create(const AData: TBytes; AMaxOutput: SizeUInt);
@@ -90,7 +101,129 @@ type
     function Find(const AName: string): Integer;
     function ExtractToBytes(AIndex: Integer): TBytes;
     function ExtractToBytesByName(const AName: string): TBytes;
+    function OpenEntry(AIndex: Integer): IDecompressReader;
+    function OpenEntryByName(const AName: string): IDecompressReader;
+    function CopyEntryTo(AIndex: Integer; const ADst: IWriter): SizeUInt;
   end;
+
+
+{ 有界切片只读源：把归档缓冲的一段暴露为 IReader（流式解压的输入端） }
+type
+  TSliceReader = class(TInterfacedObject, IReader)
+  private
+    FBase: PByte;
+    FRemaining: SizeUInt;
+  public
+    constructor Create(const AData: TBytes; AOffset, ALength: SizeUInt);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+{ 校验包装读端：EOF 时强制比对尺寸与 CRC32；store 路径的输出上限在此执行。
+  声明于实现节：仅流式打开路径内部使用，不进入公共 API 面 }
+type
+  TZipVerifyReader = class(TInterfacedObject, IReader, IDecompressReader)
+  private
+    FInner: IReader;
+    FInnerCloser: IDecompressReader;   { inflate 路径非 nil }
+    FName: string;
+    FExpectedCrc: LongWord;
+    FExpectedSize: UInt64;
+    FCap: SizeUInt;
+    FSeen: UInt64;
+    FCrc: LongWord;
+    FClosed: Boolean;
+    procedure VerifyAtEof;
+  public
+    constructor Create(const AInner: IReader;
+      const AInnerCloser: IDecompressReader; const AName: string;
+      AExpectedCrc: LongWord; AExpectedSize: UInt64; ACap: SizeUInt);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+  end;
+
+{ TSliceReader }
+
+constructor TSliceReader.Create(const AData: TBytes; AOffset, ALength: SizeUInt);
+begin
+  inherited Create;
+  if Length(AData) = 0 then
+  begin
+    FBase := nil;
+    FRemaining := 0;
+    Exit;
+  end;
+  FBase := @AData[0];
+  Inc(FBase, AOffset);
+  FRemaining := ALength;
+end;
+
+function TSliceReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LN: SizeUInt;
+begin
+  LN := ACount;
+  if LN > FRemaining then
+    LN := FRemaining;
+  if LN > 0 then
+  begin
+    Move(FBase^, ABuf, LN);
+    Inc(FBase, LN);
+    Dec(FRemaining, LN);
+  end;
+  Result := LN;
+end;
+
+{ TZipVerifyReader }
+
+constructor TZipVerifyReader.Create(const AInner: IReader;
+  const AInnerCloser: IDecompressReader; const AName: string;
+  AExpectedCrc: LongWord; AExpectedSize: UInt64; ACap: SizeUInt);
+begin
+  inherited Create;
+  FInner := AInner;
+  FInnerCloser := AInnerCloser;
+  FName := AName;
+  FExpectedCrc := AExpectedCrc;
+  FExpectedSize := AExpectedSize;
+  FCap := ACap;
+  FCrc := 0;
+  FSeen := 0;
+  FClosed := False;
+end;
+
+function TZipVerifyReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  if FClosed then
+    raise EIOError.Create('zip entry stream: read after close');
+  Result := FInner.Read(ABuf, ACount);
+  if Result > 0 then
+  begin
+    Inc(FSeen, Result);
+    if (FCap > 0) and (FSeen > FCap) then
+      raise EIOError.Create('zip: decompressed size exceeds limit for ' + FName);
+    FCrc := Crc32Update(FCrc, @ABuf, Result);
+  end
+  else if not FClosed then
+    VerifyAtEof;
+end;
+
+procedure TZipVerifyReader.VerifyAtEof;
+begin
+  if UInt64(FSeen) <> FExpectedSize then
+    raise EIOError.Create('zip: decompressed size mismatch for ' + FName);
+  if FCrc <> FExpectedCrc then
+    raise EIOError.Create('zip: crc mismatch for ' + FName);
+end;
+
+procedure TZipVerifyReader.Close;
+begin
+  FClosed := True;
+  if FInnerCloser <> nil then
+  begin
+    FInnerCloser.Close;
+    FInnerCloser := nil;
+  end;
+end;
 
 function DefaultZipReadOptions: TZipReadOptions;
 begin
@@ -335,14 +468,13 @@ begin
   Result := -1;
 end;
 
-function TZipReaderImpl.ExtractIndex(AIndex: Integer): TBytes;
+{ 加密/安全名守卫 + local header 走查，返回条目载荷起始偏移。
+  本地头字段逐一消费：尺寸以 central 为准，天然容忍 data descriptor(bit3)。 }
+function TZipReaderImpl.LocatePayload(AIndex: Integer): Int64;
 var
   LE: TZipEntryInfo;
   LLho: Int64;
   LNameLen, LExtraLen: Word;
-  LDataOff: Int64;
-  LPayload: TBytes;
-  LHint: UInt64;
 begin
   LE := FEntries[CheckIndex(AIndex)];
   if (FFlags[AIndex] and C_ZIP_FLAG_ENCRYPTED) <> 0 then
@@ -358,8 +490,7 @@ begin
   if FC.ReadU32LE <> C_ZIP_LOCAL_SIG then
     raise EParseError.Create('zip: bad local header signature');
   FC.ReadU16LE;                    { version needed }
-  FC.ReadU16LE;                    { flags（描述符置位的本地尺寸为占位，
-                                      尺寸以 central 为准，故天然容忍 bit3） }
+  FC.ReadU16LE;                    { flags }
   FC.ReadU16LE;                    { method }
   FC.ReadU16LE;                    { DOS time }
   FC.ReadU16LE;                    { DOS date }
@@ -368,10 +499,18 @@ begin
   FC.ReadU32LE;                    { local uncompressed size（同上） }
   LNameLen := FC.ReadU16LE;
   LExtraLen := FC.ReadU16LE;
-  LDataOff := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
-  NeedRange(LDataOff, Int64(LE.CompressedSize), 'entry payload');
+  Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
+  NeedRange(Result, Int64(LE.CompressedSize), 'entry payload');
+end;
 
-  LPayload := Copy(FData, LDataOff, Int64(LE.CompressedSize));
+function TZipReaderImpl.ExtractIndex(AIndex: Integer): TBytes;
+var
+  LE: TZipEntryInfo;
+  LPayload: TBytes;
+  LHint: UInt64;
+begin
+  LE := FEntries[CheckIndex(AIndex)];
+  LPayload := Copy(FData, LocatePayload(AIndex), Int64(LE.CompressedSize));
 
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
   begin
@@ -409,6 +548,72 @@ begin
   if LIdx < 0 then
     raise ENotFoundError.Create('zip: entry not found: ' + AName);
   Result := ExtractIndex(LIdx);
+end;
+
+function TZipReaderImpl.OpenEntry(AIndex: Integer): IDecompressReader;
+var
+  LE: TZipEntryInfo;
+  LOfs: Int64;
+  LSlice: TSliceReader;
+  LInflate: IDecompressReader;
+  LInner: IReader;
+begin
+  LE := FEntries[CheckIndex(AIndex)];
+  LOfs := LocatePayload(AIndex);
+  LSlice := TSliceReader.Create(FData, SizeUInt(LOfs),
+    SizeUInt(LE.CompressedSize));
+  LInflate := nil;
+  if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
+  begin
+    LInflate := CreateRawDeflateReaderWithMaxOutputSize(LSlice,
+      FMaxOutputSize);
+    LInner := LInflate;
+  end
+  else if LE.MethodCode = C_ZIP_METHOD_STORE then
+    LInner := LSlice
+  else
+    raise ENotSupportedError.Create('zip: unsupported compression method ' +
+      IntToStr(LE.MethodCode) + ': ' + LE.Name);
+  Result := TZipVerifyReader.Create(LInner, LInflate, LE.Name, LE.Crc32,
+    LE.UncompressedSize, FMaxOutputSize);
+end;
+
+function TZipReaderImpl.OpenEntryByName(const AName: string): IDecompressReader;
+var
+  LIdx: Integer;
+begin
+  LIdx := Find(AName);
+  if LIdx < 0 then
+    raise ENotFoundError.Create('zip: entry not found: ' + AName);
+  Result := OpenEntry(LIdx);
+end;
+
+function TZipReaderImpl.CopyEntryTo(AIndex: Integer;
+  const ADst: IWriter): SizeUInt;
+const
+  C_BUF = 65536;
+var
+  LS: IDecompressReader;
+  LBuf: array[0..C_BUF - 1] of Byte;
+  LN: SizeUInt;
+begin
+  if ADst = nil then
+    raise EArgumentError.Create('zip: destination writer is nil');
+  Result := 0;
+  LS := OpenEntry(AIndex);
+  try
+    repeat
+      LN := LS.Read(LBuf[0], C_BUF);
+      if LN > 0 then
+      begin
+        if ADst.Write(LBuf[0], LN) <> LN then
+          raise EIOError.Create('zip: short write while pumping entry');
+        Inc(Result, LN);
+      end;
+    until LN = 0;
+  finally
+    LS.Close;
+  end;
 end;
 
 end.
