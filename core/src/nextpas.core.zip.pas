@@ -1,6 +1,8 @@
 unit nextpas.core.zip;
 {**
- * @desc ZIP 归档容器门面：写器（store/deflate 条目）、读器（解析/提取/校验）。
+ * @desc ZIP 归档容器门面：写器（store/deflate 条目、unix 权限位保留）、
+ *       读器（解析/提取/校验、外部属性与符号链接判定）、fs 便捷层
+ *       （目录打包、带权限/mtime 还原的解包）。
  *       结构为 local file header + central directory + EOCD，任何标准解压器
  *       （unzip / python zipfile / Go archive/zip）可直接读写。
  *
@@ -24,7 +26,9 @@ type
   TZipMethod = nextpas.core.zip.base.TZipMethod;
   TZipEntryInfo = nextpas.core.zip.base.TZipEntryInfo;
   TZipWriteOptions = nextpas.core.zip.writer.TZipWriteOptions;
+  TZipAddOptions = nextpas.core.zip.writer.TZipAddOptions;
   TZipReadOptions = nextpas.core.zip.reader.TZipReadOptions;
+  TZipExtractOptions = nextpas.core.zip.fs.TZipExtractOptions;
   IZipWriter = nextpas.core.zip.writer.IZipWriter;
   IZipReader = nextpas.core.zip.reader.IZipReader;
 
@@ -34,6 +38,7 @@ const
 function NewZipWriter: IZipWriter; inline;
 function DefaultZipWriteOptions: TZipWriteOptions; inline;
 function NewZipWriterWithOptions(const AOptions: TZipWriteOptions): IZipWriter; inline;
+function DefaultZipAddOptions: TZipAddOptions; inline;
 function DefaultZipReadOptions: TZipReadOptions; inline;
 function NewZipReader(const AData: TBytes): IZipReader; inline;
 function NewZipReaderWithOptions(const AData: TBytes;
@@ -41,6 +46,9 @@ function NewZipReaderWithOptions(const AData: TBytes;
 
 procedure ZipPackDirInto(const ADir: string; const AWriter: IZipWriter); inline;
 function ZipPackDir(const ADir: string): TBytes; inline;
+function DefaultZipExtractOptions: TZipExtractOptions; inline;
+procedure ZipExtractToDirWithOptions(const AData: TBytes;
+  const ADestDir: string; const AOptions: TZipExtractOptions); inline;
 procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
   const AMaxOutputSize: SizeUInt = 0); inline;
 
@@ -59,6 +67,11 @@ end;
 function NewZipWriterWithOptions(const AOptions: TZipWriteOptions): IZipWriter;
 begin
   Result := nextpas.core.zip.writer.NewZipWriterWithOptions(AOptions);
+end;
+
+function DefaultZipAddOptions: TZipAddOptions;
+begin
+  Result := nextpas.core.zip.writer.DefaultZipAddOptions;
 end;
 
 function DefaultZipReadOptions: TZipReadOptions;
@@ -85,6 +98,17 @@ end;
 function ZipPackDir(const ADir: string): TBytes;
 begin
   Result := nextpas.core.zip.fs.ZipPackDir(ADir);
+end;
+
+function DefaultZipExtractOptions: TZipExtractOptions;
+begin
+  Result := nextpas.core.zip.fs.DefaultZipExtractOptions;
+end;
+
+procedure ZipExtractToDirWithOptions(const AData: TBytes;
+  const ADestDir: string; const AOptions: TZipExtractOptions);
+begin
+  nextpas.core.zip.fs.ZipExtractToDirWithOptions(AData, ADestDir, AOptions);
 end;
 
 procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;

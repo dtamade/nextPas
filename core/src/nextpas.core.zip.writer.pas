@@ -24,9 +24,17 @@ type
     ForceZip64: Boolean;
   end;
 
+  {** @desc 单条目添加选项：Method 缺省 store；ModTimeUnixSec < 0 取 DOS 纪元
+       下限；Mode 为 unix 模式字（S_IFMT|rwx），0 取按条目类型的默认值 *}
+  TZipAddOptions = record
+    Method: TZipMethod;
+    ModTimeUnixSec: Int64;
+    Mode: Word;
+  end;
+
   {** @desc ZIP 归档写器（store/deflate 条目，顺序追加，Finish 一次性终结） *}
   IZipWriter = interface
-    ['{E7A14F63-52C9-4B0D-9E28-3F6D1A95C7B4}']
+    ['{A6E4F810-2D53-4B9C-8F71-5C0B9D24E3A8}']
     {** 添加 store 条目；时间戳取 DOS 下限（确定性输出） *}
     procedure AddEntry(const AName: string; const AData: TBytes);
     {** 添加 store 条目，AModTimeUnixSec 为 unix 秒（越界钳制到 DOS 区间） *}
@@ -42,6 +50,9 @@ type
     {** 同上，显式 unix 秒时间戳 *}
     procedure AddDirectoryWithTime(const AName: string;
       const AModTimeUnixSec: Int64);
+    {** 完整选项添加：方法/时间戳/unix 模式字一次给定 *}
+    procedure AddEntryWithOptions(const AName: string; const AData: TBytes;
+      const AOptions: TZipAddOptions);
     {** 已添加条目数 *}
     function EntryCount: Integer;
     {** 终结并返回完整归档字节；此后各添加方法与 Finish 均 raise *}
@@ -50,6 +61,9 @@ type
 
 {** 默认写选项。 *}
 function DefaultZipWriteOptions: TZipWriteOptions; inline;
+
+{** 默认单条目选项（store、确定性时间戳、默认属性）。 *}
+function DefaultZipAddOptions: TZipAddOptions; inline;
 
 function NewZipWriter: IZipWriter;
 
@@ -78,6 +92,7 @@ type
     FDosDate: Word;
     FLocalOffset: UInt64;
     FIsDir: Boolean;
+    FExtAttrs: LongWord;  { 外部属性（unix 模式字在高 16 位） }
     FNeedsZ64Sizes: Boolean;  { 尺寸走 Zip64 extra（含 Force 场景） }
   end;
 
@@ -85,12 +100,15 @@ type
   private
     FOut: IBytesBuilder;
     FEntries: array of TZipEntryMeta;
+    FCount: Integer;      { 有效条目数；FEntries 按 FCapacity 几何扩容 }
+    FCapacity: Integer;
     FFinished: Boolean;
     FForceZip64: Boolean;
     procedure CheckOpen;
+    procedure EnsureCapacity(AMinimum: Integer);
     procedure AddEntryInternal(const AName: string; const APayload,
       AData: TBytes; AMethod: Word; const AModTimeUnixSec: Int64;
-      AIsDir: Boolean);
+      AIsDir: Boolean; AMode: Word);
     procedure AddDirectoryInternal(const AName: string;
       const AModTimeUnixSec: Int64);
   public
@@ -104,6 +122,8 @@ type
     procedure AddDirectory(const AName: string);
     procedure AddDirectoryWithTime(const AName: string;
       const AModTimeUnixSec: Int64);
+    procedure AddEntryWithOptions(const AName: string; const AData: TBytes;
+      const AOptions: TZipAddOptions);
     function EntryCount: Integer;
     function Finish: TBytes;
   end;
@@ -111,6 +131,13 @@ type
 function DefaultZipWriteOptions: TZipWriteOptions;
 begin
   Result.ForceZip64 := False;
+end;
+
+function DefaultZipAddOptions: TZipAddOptions;
+begin
+  Result.Method := zmStore;
+  Result.ModTimeUnixSec := -1;
+  Result.Mode := 0;
 end;
 
 function NewZipWriter: IZipWriter;
@@ -127,6 +154,8 @@ constructor TZipWriter.Create(AForceZip64: Boolean);
 begin
   inherited Create;
   FOut := CreateBytesBuilder(256);
+  FCount := 0;
+  FCapacity := 0;
   FFinished := False;
   FForceZip64 := AForceZip64;
 end;
@@ -137,17 +166,49 @@ begin
     raise EInvalidOperationError.Create('zip writer already finished');
 end;
 
+procedure TZipWriter.EnsureCapacity(AMinimum: Integer);
+var
+  LNew: Integer;
+begin
+  if FCapacity >= AMinimum then
+    Exit;
+  LNew := 8;
+  while LNew < AMinimum do
+    LNew := LNew * 2;
+  SetLength(FEntries, LNew);
+  FCapacity := LNew;
+end;
+
 procedure TZipWriter.AddEntryInternal(const AName: string; const APayload,
   AData: TBytes; AMethod: Word; const AModTimeUnixSec: Int64;
-  AIsDir: Boolean);
+  AIsDir: Boolean; AMode: Word);
 var
   LCrc: LongWord;
   LDosDate, LDosTime: Word;
   LMeta: TZipEntryMeta;
   LVersion: Word;
+  LEffName: string;
+  LEffIsDir: Boolean;
 begin
   CheckOpen;
-  ValidateZipEntryName(AName);
+  { 模式字声明目录即按目录处理并补尾随 '/'（对齐 Go archive/zip 语义） }
+  LEffIsDir := AIsDir or ((AMode and $4000) <> 0);
+  LEffName := AName;
+  if LEffIsDir and ((LEffName = '') or (LEffName[Length(LEffName)] <> '/')) then
+    LEffName := LEffName + '/';
+  ValidateZipEntryName(LEffName);
+  if AMode = 0 then
+  begin
+    if LEffIsDir then
+      LMeta.FExtAttrs := C_ZIP_EXTERNAL_ATTR_DIRECTORY
+    else
+      LMeta.FExtAttrs := C_ZIP_EXTERNAL_ATTR_REGULAR;
+  end
+  else if LEffIsDir then
+    { 低字节 $10 为 MS-DOS 目录属性位，unzip 等工具据此识别目录条目 }
+    LMeta.FExtAttrs := (LongWord(AMode) shl 16) or $0010
+  else
+    LMeta.FExtAttrs := LongWord(AMode) shl 16;
 
   LMeta.FNeedsZ64Sizes := FForceZip64 or
     (UInt64(Length(AData)) > C_ZIP_MAX_SIZE32) or
@@ -156,7 +217,7 @@ begin
   LCrc := Crc32OfBytes(AData);
   DosDateTimeFromUnix(AModTimeUnixSec, LDosDate, LDosTime);
 
-  LMeta.FName := AName;
+  LMeta.FName := LEffName;
   LMeta.FMethod := AMethod;
   LMeta.FCrc := LCrc;
   LMeta.FUSize := Length(AData);
@@ -164,9 +225,11 @@ begin
   LMeta.FDosTime := LDosTime;
   LMeta.FDosDate := LDosDate;
   LMeta.FLocalOffset := FOut.Length;
-  LMeta.FIsDir := AIsDir;
-  SetLength(FEntries, Length(FEntries) + 1);
-  FEntries[High(FEntries)] := LMeta;
+  LMeta.FIsDir := LEffIsDir;
+
+  EnsureCapacity(FCount + 1);
+  FEntries[FCount] := LMeta;
+  Inc(FCount);
 
   if LMeta.FNeedsZ64Sizes then
     LVersion := C_ZIP_VERSION_ZIP64
@@ -190,13 +253,13 @@ begin
     FOut.AppendUInt32LE(LongWord(Length(APayload)));
     FOut.AppendUInt32LE(LongWord(Length(AData)));
   end;
-  FOut.AppendUInt16LE(Word(Length(AName)));
+  FOut.AppendUInt16LE(Word(Length(LEffName)));
   if LMeta.FNeedsZ64Sizes then
     FOut.AppendUInt16LE(C_ZIP64_LOCAL_EXTRA_LEN)
   else
     FOut.AppendUInt16LE(0);
-  if Length(AName) > 0 then
-    FOut.AppendBytes(PByte(Pointer(AName)), Length(AName));
+  if Length(LEffName) > 0 then
+    FOut.AppendBytes(PByte(Pointer(LEffName)), Length(LEffName));
   if LMeta.FNeedsZ64Sizes then
   begin
     FOut.AppendUInt16LE(C_ZIP64_EXTRA_ID);
@@ -212,14 +275,14 @@ procedure TZipWriter.AddEntry(const AName: string; const AData: TBytes);
 begin
   { DOS 纪元下限：确定性输出（同输入同字节），见单元头注释 }
   AddEntryInternal(AName, AData, AData, C_ZIP_METHOD_STORE, DosMinUnixSec,
-    False);
+    False, 0);
 end;
 
 procedure TZipWriter.AddEntryWithTime(const AName: string; const AData: TBytes;
   const AModTimeUnixSec: Int64);
 begin
   AddEntryInternal(AName, AData, AData, C_ZIP_METHOD_STORE, AModTimeUnixSec,
-    False);
+    False, 0);
 end;
 
 procedure TZipWriter.AddEntryDeflate(const AName: string; const AData: TBytes);
@@ -228,7 +291,7 @@ var
 begin
   LPayload := RawDeflateCompress(AData);
   AddEntryInternal(AName, LPayload, AData, C_ZIP_METHOD_DEFLATE,
-    DosMinUnixSec, False);
+    DosMinUnixSec, False, 0);
 end;
 
 procedure TZipWriter.AddEntryDeflateWithTime(const AName: string;
@@ -238,7 +301,32 @@ var
 begin
   LPayload := RawDeflateCompress(AData);
   AddEntryInternal(AName, LPayload, AData, C_ZIP_METHOD_DEFLATE,
-    AModTimeUnixSec, False);
+    AModTimeUnixSec, False, 0);
+end;
+
+procedure TZipWriter.AddEntryWithOptions(const AName: string;
+  const AData: TBytes; const AOptions: TZipAddOptions);
+var
+  LPayload: TBytes;
+  LMethod: Word;
+  LTime: Int64;
+begin
+  if AOptions.Method = zmDeflate then
+  begin
+    LPayload := RawDeflateCompress(AData);
+    LMethod := C_ZIP_METHOD_DEFLATE;
+  end
+  else
+  begin
+    LPayload := AData;
+    LMethod := C_ZIP_METHOD_STORE;
+  end;
+  if AOptions.ModTimeUnixSec < 0 then
+    LTime := DosMinUnixSec
+  else
+    LTime := AOptions.ModTimeUnixSec;
+  AddEntryInternal(AName, LPayload, AData, LMethod, LTime,
+    (Length(AName) > 0) and (AName[Length(AName)] = '/'), AOptions.Mode);
 end;
 
 procedure TZipWriter.AddDirectory(const AName: string);
@@ -260,12 +348,13 @@ begin
   LNorm := AName;
   if (LNorm <> '') and (LNorm[Length(LNorm)] <> '/') then
     LNorm := LNorm + '/';
-  AddEntryInternal(LNorm, nil, nil, C_ZIP_METHOD_STORE, AModTimeUnixSec, True);
+  AddEntryInternal(LNorm, nil, nil, C_ZIP_METHOD_STORE, AModTimeUnixSec, True,
+    0);
 end;
 
 function TZipWriter.EntryCount: Integer;
 begin
-  Result := Length(FEntries);
+  Result := FCount;
 end;
 
 function TZipWriter.Finish: TBytes;
@@ -281,7 +370,7 @@ var
 begin
   CheckOpen;
   LCDOffset := FOut.Length;
-  for LI := 0 to High(FEntries) do
+  for LI := 0 to FCount - 1 do
   begin
     LE := FEntries[LI];
     LNeedsZ64Offset := FForceZip64 or (LE.FLocalOffset > C_ZIP_MAX_SIZE32);
@@ -328,10 +417,7 @@ begin
     FOut.AppendUInt16LE(0);  { comment len }
     FOut.AppendUInt16LE(0);  { disk number start }
     FOut.AppendUInt16LE(0);  { internal attrs }
-    if LE.FIsDir then
-      FOut.AppendUInt32LE(C_ZIP_EXTERNAL_ATTR_DIRECTORY)
-    else
-      FOut.AppendUInt32LE(C_ZIP_EXTERNAL_ATTR_REGULAR);
+    FOut.AppendUInt32LE(LE.FExtAttrs);
     if LNeedsZ64Offset then
       FOut.AppendUInt32LE(C_ZIP_MAX_SIZE32)
     else
@@ -357,7 +443,8 @@ begin
   { central 尺寸必须在写 EOCD 前固化，否则会把 EOCD 自身前缀计入 }
   LCDEnd := FOut.Length;
   LCDSize := LCDEnd - LCDOffset;
-  LCount := Length(FEntries);
+  { 注意用有效条目数而非容量（几何扩容后 Length(FEntries) 可能偏大） }
+  LCount := FCount;
 
   LNeedZ64Eocd := FForceZip64 or (LCount > C_ZIP_MAX_ENTRIES32) or
     (LCDSize > C_ZIP_MAX_SIZE32) or (LCDOffset > C_ZIP_MAX_SIZE32);

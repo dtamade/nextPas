@@ -8,7 +8,8 @@ uses
   nextpas.core.fs,
   nextpas.core.process,
   nextpas.core.checksum.crc32,
-  nextpas.core.zip;
+  nextpas.core.zip,
+  nextpas.core.zip.base;
 
 var
   T: TTestSuite;
@@ -50,6 +51,17 @@ const
     'import zipfile, sys'#10 +
     'z = zipfile.ZipFile(sys.argv[1], "w")'#10 +
     'z.writestr("../evil.txt", b"x")'#10 +
+    'z.close()'#10;
+
+  { 符号链接条目（unix 外部属性 S_IFLNK）+ 同名目标文件 }
+  C_PY_LINK =
+    'import zipfile, sys'#10 +
+    'z = zipfile.ZipFile(sys.argv[1], "w")'#10 +
+    'z.writestr("real.txt", "target")'#10 +
+    'i = zipfile.ZipInfo("lnk")'#10 +
+    'i.create_system = 3'#10 +
+    'i.external_attr = (0o120777 << 16)'#10 +
+    'z.writestr(i, "real.txt")'#10 +
     'z.close()'#10;
 
 function BytesOfStr(const S: string): TBytes;
@@ -280,11 +292,92 @@ begin
   end;
 end;
 
+{ 权限位保留/还原：打包携带 unix 模式字，解包默认还原；
+  RestoreMode=False 时保持平台默认权限 }
+procedure TestPermissionRoundtrip;
+var
+  LRoot, LDst: string;
+  LZip: TBytes;
+  LR: IZipReader;
+  LI: Integer;
+  LOpts: TZipExtractOptions;
+begin
+  LRoot := NewCaseDir('perm');
+  LDst := NewCaseDir('permdst');
+  try
+    MkdirAll(LRoot + '/d', PermDirDefault);
+    WriteFileText(LRoot + '/d/f.txt', 'x');
+    Chmod(LRoot + '/d/f.txt', TFilePermission(&640));   { 0640 }
+    Chmod(LRoot + '/d', TFilePermission(&750));         { 0750 }
+    LZip := ZipPackDir(LRoot);
+
+    { 打包侧：模式字 = S_IFREG/S_IFDIR | 权限位 }
+    LR := NewZipReader(LZip);
+    LI := LR.Find('d/f.txt');
+    Check(LI >= 0, 'packed file present');
+    Check(ZipUnixModeOf(LR.Entry(LI)) = Word($8000 or &640),
+      'packed file keeps unix mode');
+    LI := LR.Find('d/');
+    Check(LI >= 0, 'packed dir present');
+    Check(ZipUnixModeOf(LR.Entry(LI)) = Word($4000 or &750),
+      'packed dir keeps unix mode');
+
+    ZipExtractToDir(LZip, LDst);
+    Check(Word(Stat(LDst + '/d/f.txt').Permission) and &777 = &640,
+      'file permission restored');
+    Check(Word(Stat(LDst + '/d').Permission) and &777 = &750,
+      'dir permission restored');
+
+    { RestoreMode=False：不还原，保持写文件时的平台默认 }
+    RemoveAll(LDst);
+    LOpts := DefaultZipExtractOptions;
+    LOpts.RestoreMode := False;
+    ZipExtractToDirWithOptions(LZip, LDst, LOpts);
+    Check(Word(Stat(LDst + '/d/f.txt').Permission) and &777 <> 0,
+      'RestoreMode=False leaves default perms');
+  finally
+    RemoveAll(LRoot);
+    RemoveAll(LDst);
+  end;
+end;
+
+{ 符号链接条目策略：默认跳过；SkipSymlinks=False 显式创建真实符号链接 }
+procedure TestSymlinkEntryPolicy;
+var
+  LDir, LDst: string;
+  LRaw: TBytes;
+  LOpts: TZipExtractOptions;
+begin
+  LDir := NewCaseDir('lnk');
+  LDst := NewCaseDir('lnkdst');
+  try
+    RunPy(C_PY_LINK, LDir + '/l.zip', '');
+    LRaw := ReadFile(LDir + '/l.zip');
+
+    ZipExtractToDir(LRaw, LDst);
+    Check(not FileExists(LDst + '/lnk'), 'symlink entry skipped by default');
+    Check(ReadFileText(LDst + '/real.txt') = 'target',
+      'regular sibling extracted');
+
+    RemoveAll(LDst);
+    LOpts := DefaultZipExtractOptions;
+    LOpts.SkipSymlinks := False;
+    ZipExtractToDirWithOptions(LRaw, LDst, LOpts);
+    Check(SameBytes(ReadFile(LDst + '/lnk'), BytesOfStr('target')),
+      'opt-in creates resolvable symlink');
+  finally
+    RemoveAll(LDir);
+    RemoveAll(LDst);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.fs');
   T.Test('Pack extract roundtrip', @TestPackExtractRoundtrip);
   T.Test('Python reads packed dir', @TestPythonReadsPackedDir);
   T.Test('Extract python archive to dir', @TestExtractPythonArchiveToDir);
   T.Test('Hostile entry refused before write', @TestHostileEntryRefusedBeforeWrite);
+  T.Test('Permission roundtrip', @TestPermissionRoundtrip);
+  T.Test('Symlink entry policy', @TestSymlinkEntryPolicy);
   if not T.Run then Halt(1);
 end.

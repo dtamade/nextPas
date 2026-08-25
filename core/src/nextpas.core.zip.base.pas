@@ -29,6 +29,8 @@ type
     ModTimeUnixSec: Int64;
     LocalHeaderOffset: UInt64;
     IsDirectory: Boolean;
+    ExternalAttrs: LongWord;     { central 的外部属性原值；unix 模式在高 16 位 }
+    IsSymlink: Boolean;          { unix 模式位判定 S_IFLNK }
   end;
 
 const
@@ -67,6 +69,9 @@ const
   C_ZIP_EXTERNAL_ATTR_REGULAR   = $81A4 shl 16;
   C_ZIP_EXTERNAL_ATTR_DIRECTORY = ($41ED shl 16) or $0010;
 
+  { unix 文件类型位（外部属性高字内） }
+  C_ZIP_UNIX_MODE_SYMLINK = $A000;
+
 {** 名称安全谓词：非空、非绝对路径、无盘符前缀、无反斜杠、无 '..' 段。
     尾随 '/'（目录条目）合法。 *}
 function IsSafeZipEntryName(const AName: string): Boolean;
@@ -79,6 +84,15 @@ procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
 
 {** DOS 纪元下限（1980-01-01T00:00:00Z）对应的 unix 秒；确定性时间戳默认值。 *}
 function DosMinUnixSec: Int64; inline;
+
+{** 从外部属性高 16 位取 unix 模式字（S_IFMT|rwx）。 *}
+function ZipUnixModeOf(const AEntry: TZipEntryInfo): Word; inline;
+
+{** 由 posix 权限位（低 12 位）构造常规文件的 unix 模式字。 *}
+function ZipRegularMode(APermissionBits: Word): Word; inline;
+
+{** 由 posix 权限位（低 12 位）构造目录的 unix 模式字。 *}
+function ZipDirectoryMode(APermissionBits: Word): Word; inline;
 
 {** DOS 日期/时间字 → unix 秒。 *}
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
@@ -154,6 +168,23 @@ end;
 function DosMinUnixSec: Int64;
 begin
   Result := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
+end;
+
+function ZipUnixModeOf(const AEntry: TZipEntryInfo): Word;
+begin
+  Result := Word(AEntry.ExternalAttrs shr 16);
+end;
+
+function ZipRegularMode(APermissionBits: Word): Word;
+begin
+  { S_IFREG | 权限位 }
+  Result := $8000 or (APermissionBits and $0FFF);
+end;
+
+function ZipDirectoryMode(APermissionBits: Word): Word;
+begin
+  { S_IFDIR | 权限位 }
+  Result := $4000 or (APermissionBits and $0FFF);
 end;
 
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;

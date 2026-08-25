@@ -8,7 +8,8 @@ uses
   nextpas.core.checksum.crc32,
   nextpas.core.fs,
   nextpas.core.process,
-  nextpas.core.zip;
+  nextpas.core.zip,
+  nextpas.core.zip.base;
 
 var
   T: TTestSuite;
@@ -530,6 +531,71 @@ begin
   end;
 end;
 
+{ AddEntryWithOptions：方法/时间戳/unix 模式字一次给定；目录名自动补 '/'；
+  外部属性经 python zipfile 独立断言 }
+procedure TestAddEntryWithOptions;
+const
+  C_TS: Int64 = 1787574896;
+  C_PY_ATTRCHECK =
+    'import sys, zipfile'#10 +
+    'infos = zipfile.ZipFile(sys.argv[1]).infolist()'#10 +
+    'd = {i.filename: i.external_attr for i in infos}'#10 +
+    'assert d[''m.txt''] == (0o100640 << 16), hex(d[''m.txt''])'#10 +
+    'assert d[''mydir/''] == ((0o040750 << 16) | 0x10), hex(d[''mydir/''])'#10 +
+    'print(''ATTRS OK'')'#10;
+var
+  LW: IZipWriter;
+  LOpts: TZipAddOptions;
+  LZip: TBytes;
+  LR: IZipReader;
+  LI: Integer;
+  LDir: string;
+  LPy: string;
+  LOut: TProcessOutput;
+begin
+  LW := NewZipWriter;
+  LOpts := DefaultZipAddOptions;
+  LOpts.Method := zmDeflate;
+  LOpts.ModTimeUnixSec := C_TS;
+  LOpts.Mode := Word($8000 or &640);   { S_IFREG|0640 }
+  LW.AddEntryWithOptions('m.txt', BytesOfStr('options payload'), LOpts);
+
+  LOpts.Method := zmStore;
+  LOpts.Mode := Word($4000 or &750);   { S_IFDIR|0750 }
+  LW.AddEntryWithOptions('mydir', nil, LOpts);
+  LZip := LW.Finish;
+
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(2), Int64(LR.EntryCount), 'two option entries');
+  LI := LR.Find('m.txt');
+  Check(LI >= 0, 'file entry present');
+  Check(LR.Entry(LI).Method = zmDeflate, 'option method deflate');
+  Check(ZipUnixModeOf(LR.Entry(LI)) = Word($8000 or &640),
+    'file mode word kept');
+  LI := LR.Find('mydir/');
+  Check(LI >= 0, 'dir name normalized with trailing slash');
+  Check(LR.Entry(LI).IsDirectory, 'custom-mode dir detected');
+  Check(ZipUnixModeOf(LR.Entry(LI)) = Word($4000 or &750),
+    'dir mode word kept');
+
+  LDir := NewTempCaseDir;
+  try
+    WriteFile(LDir + '/case.zip', LZip);
+    if not TryLookPath('python3', LPy) then
+    begin
+      Check(False, 'python3 unavailable for zip attr cross-validation');
+      Exit;
+    end;
+    LOut := Command(LPy).Arg('-c').Arg(C_PY_ATTRCHECK)
+      .Arg(LDir + '/case.zip').Output;
+    Check(ProcessSucceeded(LOut),
+      'python attr check exit ok: ' + Trim(LOut.StdErr));
+    Check(Pos('ATTRS OK', LOut.StdOut) > 0, 'python attr check marker');
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip');
   T.Test('CRC vector', @TestCrcVector);
@@ -546,5 +612,6 @@ begin
   T.Test('Deflate determinism', @TestDeflateDeterminism);
   T.Test('Directory entries', @TestDirectoryEntries);
   T.Test('Zip64 forced structures', @TestZip64ForcedStructures);
+  T.Test('Add entry with options', @TestAddEntryWithOptions);
   if not T.Run then Halt(1);
 end.

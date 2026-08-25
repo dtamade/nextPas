@@ -52,6 +52,20 @@ const
     '    f.write(b"hello zip64")'#10 +
     'z.close()'#10;
 
+  { unix 外部属性：符号链接条目 + 自定义权限常规文件 }
+  C_PY_ATTRS =
+    'import zipfile, sys'#10 +
+    'z = zipfile.ZipFile(sys.argv[1], "w")'#10 +
+    'i = zipfile.ZipInfo("lnk")'#10 +
+    'i.create_system = 3'#10 +
+    'i.external_attr = (0o120777 << 16)'#10 +
+    'z.writestr(i, "a.txt")'#10 +
+    'j = zipfile.ZipInfo("script.sh")'#10 +
+    'j.create_system = 3'#10 +
+    'j.external_attr = (0o100750 << 16)'#10 +
+    'z.writestr(j, b"#!/bin/sh\n")'#10 +
+    'z.close()'#10;
+
 function BytesOfStr(const S: string): TBytes;
 begin
   Result := nil;
@@ -426,6 +440,69 @@ begin
   Check(SameBytes(LGot, BytesOfStr('hello zip64')), 'forced-zip64 content');
 end;
 
+{ python 造 unix 属性条目：符号链接（S_IFLNK）与自定义权限常规文件 }
+procedure TestExternalAttrsAndSymlink;
+var
+  LDir, LZipPath: string;
+  LRaw: TBytes;
+  LR: IZipReader;
+  LI: Integer;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/attrs.zip';
+    RunPy(C_PY_ATTRS, LZipPath, '');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  LR := NewZipReader(LRaw);
+
+  LI := LR.Find('lnk');
+  Check(LI >= 0, 'symlink entry present');
+  Check(LR.Entry(LI).IsSymlink, 'IsSymlink detected from S_IFLNK');
+  Check(not LR.Entry(LI).IsDirectory, 'symlink is not a directory');
+  Check(ZipUnixModeOf(LR.Entry(LI)) = Word($A000 or &777),
+    'symlink mode word decoded');
+  Check(SameBytes(LR.ExtractToBytesByName('lnk'), BytesOfStr('a.txt')),
+    'symlink payload readable');
+
+  LI := LR.Find('script.sh');
+  Check(LI >= 0, 'mode-carrying file present');
+  Check(not LR.Entry(LI).IsSymlink, 'regular file not flagged symlink');
+  Check(ZipUnixModeOf(LR.Entry(LI)) = Word($8000 or &750),
+    'file mode 0750 decoded');
+end;
+
+{ 流式写器风格 data descriptor：本地头 bit3 置位、本地 crc/尺寸为占位零，
+  提取以 central 为权威值，必须天然容忍 }
+procedure TestDataDescriptorTolerance;
+var
+  W: IZipWriter;
+  LZip, LPatched, LGot: TBytes;
+  LR: IZipReader;
+  LI, LLho, LI2: Integer;
+begin
+  W := NewZipWriter;
+  W.AddEntryWithTime('d.txt', BytesOfStr('payload'), 1000000);
+  LZip := W.Finish;
+
+  LR := NewZipReader(LZip);
+  LI := LR.Find('d.txt');
+  Check(LI >= 0, 'descriptor fixture entry present');
+  LLho := Integer(LR.Entry(LI).LocalHeaderOffset);
+
+  LPatched := Copy(LZip, 0, Length(LZip));
+  LPatched[LLho + 6] := LPatched[LLho + 6] or $08;   { general flag bit3 }
+  for LI2 := LLho + 14 to LLho + 25 do               { 本地 crc/尺寸占位清零 }
+    LPatched[LI2] := 0;
+
+  LR := NewZipReader(LPatched);
+  LGot := LR.ExtractToBytesByName('d.txt');
+  Check(SameBytes(LGot, BytesOfStr('payload')),
+    'data-descriptor local headers tolerated');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.reader');
   T.Test('Empty archive reader', @TestEmptyArchiveReader);
@@ -439,5 +516,7 @@ begin
   T.Test('Unsafe name refused at extract', @TestUnsafeNameRefusedAtExtract);
   T.Test('Bomb guard by max output', @TestBombGuardByMaxOutput);
   T.Test('Index guards', @TestIndexGuards);
+  T.Test('External attrs and symlink', @TestExternalAttrsAndSymlink);
+  T.Test('Data descriptor tolerance', @TestDataDescriptorTolerance);
   if not T.Run then Halt(1);
 end.
