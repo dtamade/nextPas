@@ -16,6 +16,7 @@
 TSSEFeeder feed 式引擎（ParseSSE 委托单一引擎，WHATWG 对齐），目标达成无需
 跨模块 slice；两引擎输入域不同（agent.sse 字节域含 UTF-8 跨块/BOM/DoS 上限，
 http.sse 文本行域），合并经审计判定不立项 |
+| **W6 结构化输出与工具选择（v1.1 第一批，2026-08-25 立项）** | 词表 `TToolChoiceMode`/`ToolChoiceName` + `ResponseSchemaJson` 启用；openai 族 json_schema strict 编码 + tool_choice 四形态；anthropic tool_choice 映射（required→any、none→省略 tools 转译）+ schema fail-fast；WIRE-MAPPINGS §1.7 立 strict 节 | test_provider_openai / test_provider_anthropic / test_codecs / test_fake_provider 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准无回归 + Ready 报告 |
 
 ## Wave 内顺序约束
 
@@ -114,8 +115,10 @@ v1.1 第一批立项顺序：**Structured Output → tool_choice**（余项按�
 - **Structured Output**【v1.1 承诺位 #1】——词表保留位 `ResponseSchemaJson`
   已立（v1 置非空即 aecConfig，防破坏性变更）；立项 = WIRE-MAPPINGS 立 strict
   模式节 + 三方编码实现。行业已把它当核心能力而非可选件。
+  【已立项 2026-08-25 → W6 落地】
 - **tool_choice 控制**【v1.1 候选 #2】——auto/none/required/具名强制是 agent
   工作流基础控制（冷读评审判定）；词表加 `ToolChoice` 字段成本极低。
+  【已立项 2026-08-25 → W6 落地】
 - **ReasoningEffort 旋钮**【v1.1 候选 #3】——OpenAI 系 reasoning_effort 无落点、
   与 anthropic Thinking 待遇失衡（冷读评审指认）；anthropic 侧忽略+warn 有
   ParallelToolCalls 先例。
