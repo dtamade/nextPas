@@ -20,7 +20,9 @@ program test_db_pool_v2;
    13 DebugAcquireStack：报告附栈帧线索（'$' 地址行）
    14 默认关：阈值 0 时回调零触发
    15 OpenSqlitePool 工厂（B13 配套）：MaxRead 生效 / 文件库落盘 /
-      参数化事务后写租约即时归还 / 数据跨池存活 }
+      参数化事务后写租约即时归还 / 数据跨池存活
+   16 作用域租约助手（B13 续）：WithRead/WithWriter——租约约束在
+      实现内局部变量，回调结束即时归还；nil 回调 fail-fast }
 
 {$I nextpas.core.settings.inc}
 
@@ -603,6 +605,105 @@ begin
   end;
 end;
 
+{ 16：作用域租约助手——回调结束即时归还，随后直取 writer 立即可借。
+  回归锁背景：消费方把 Writer 函数结果内联喂 const 形参（如启动迁移）
+  时，FPC 例程级接口临时量会把租约拖过语句边界；WithWriter 把租约
+  锁在实现内局部变量上，从结构上消除该形态。 }
+procedure TestScopedWriterHelper;
+var
+  Pool: TDbPool;
+  P: TDbPoolPolicy;
+  W: IDbConnection;
+begin
+  P := TDbPoolPolicy.Default;
+  P.AcquireTimeoutMs := 300;
+  Pool := TDbPool.Create(SqliteFactory, P);
+  try
+    Pool.WithWriter(
+      procedure(const C: IDbConnection)
+      begin
+        C.Exec('CREATE TABLE t_scoped (v TEXT)');
+        C.Exec('INSERT INTO t_scoped (v) VALUES (''x'')');
+      end);
+
+    W := Pool.Writer;
+    try
+      Check(Assigned(W), 'scoped writer: reacquirable immediately');
+    finally
+      W := nil;
+    end;
+  finally
+    Pool.Free;
+  end;
+end;
+
+procedure TestScopedReadHelper;
+var
+  Pool: TDbPool;
+  P: TDbPoolPolicy;
+  W: IDbConnection;
+begin
+  P := TDbPoolPolicy.Default;
+  P.MaxReadConnections := 1;
+  P.AcquireTimeoutMs := 300;
+  Pool := TDbPool.Create(SqliteFactory, P);
+  try
+    Pool.WithRead(
+      procedure(const C: IDbConnection)
+      var
+        Q: IDbQuery;
+      begin
+        Q := C.Query('SELECT COUNT(*) FROM sqlite_master');
+        try
+          Check(Q.Step, 'scoped read: query stepped');
+        finally
+          Q := nil;
+        end;
+      end);
+
+    W := Pool.Writer;
+    try
+      Check(Assigned(W), 'scoped read: writer free after callback');
+    finally
+      W := nil;
+    end;
+  finally
+    Pool.Free;
+  end;
+end;
+
+procedure TestScopedNilBody;
+var
+  Pool: TDbPool;
+  P: TDbPoolPolicy;
+  Raised: Boolean;
+begin
+  P := TDbPoolPolicy.Default;
+  P.AcquireTimeoutMs := 300;
+  Pool := TDbPool.Create(SqliteFactory, P);
+  try
+    Raised := False;
+    try
+      Pool.WithWriter(nil);
+    except
+      on E: EDbError do
+        Raised := Pos('nil scoped-lease callback', E.Message) > 0;
+    end;
+    Check(Raised, 'scoped: nil body rejected (writer)');
+
+    Raised := False;
+    try
+      Pool.WithRead(nil);
+    except
+      on E: EDbError do
+        Raised := Pos('nil scoped-lease callback', E.Message) > 0;
+    end;
+    Check(Raised, 'scoped: nil body rejected (read)');
+  finally
+    Pool.Free;
+  end;
+end;
+
 begin
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.pool.v2');
@@ -624,5 +725,8 @@ begin
     @TestDebugAcquireStackFramesInReport);
   T.Test('leak detection off by default', @TestLeakDetectionOffByDefault);
   T.Test('OpenSqlitePool factory', @TestOpenSqlitePoolFactory);
+  T.Test('scoped writer helper releases lease', @TestScopedWriterHelper);
+  T.Test('scoped read helper releases lease', @TestScopedReadHelper);
+  T.Test('scoped lease nil body rejected', @TestScopedNilBody);
   if not T.Run then Halt(1);
 end.

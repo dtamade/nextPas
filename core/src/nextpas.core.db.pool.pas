@@ -35,7 +35,8 @@ uses
   nextpas.core.base,
   nextpas.core.sync,
   nextpas.core.db.base,
-  nextpas.core.db.intf;
+  nextpas.core.db.intf,
+  nextpas.core.db.tx;
 
 type
   { 连接工厂闭包：后端特化唯一入口 }
@@ -107,6 +108,15 @@ type
     { 单写连接：全池仅一条，被占用期间再次 Writer 按 AcquireTimeoutMs
       排队或抛 decCapacity }
     function Writer: IDbConnection;
+
+    { ===== 作用域租约（租约绑定纪律的结构化收口，B13 续）===== }
+    { FPC 接口临时量为例程级生命周期：Acquire/Writer 的函数结果一旦
+      直接内联传参（const 形参绑定）或经全局托管变量中转，池化租约
+      被隐藏引用拖过语句边界、直至所在例程退出（五格矩阵实证）。
+      WithRead/WithWriter 把租约约束在实现内的局部变量上
+      （try..finally 置空归还），消费方从结构上不可能滞留。 }
+    procedure WithRead(const ABody: TDbConnProc);
+    procedure WithWriter(const ABody: TDbConnProc);
     { 关闭并清空空闲连接与写连接，停止出借；已取出的代理归还时直接
       销毁其底层连接（排空语义，不等待）。幂等。 }
     procedure Close;
@@ -777,6 +787,34 @@ end;
 function TDbPool.Writer: IDbConnection;
 begin
   Result := FCore.AcquireWriter;
+end;
+
+procedure TDbPool.WithRead(const ABody: TDbConnProc);
+var
+  LConn: IDbConnection;
+begin
+  if ABody = nil then
+    raise EDbError.CreateSimple(dbkUnknown, 'pool: nil scoped-lease callback');
+  LConn := FCore.AcquireRead;
+  try
+    ABody(LConn);
+  finally
+    LConn := nil;                          { 局部变量置空 = 即时归还 }
+  end;
+end;
+
+procedure TDbPool.WithWriter(const ABody: TDbConnProc);
+var
+  LConn: IDbConnection;
+begin
+  if ABody = nil then
+    raise EDbError.CreateSimple(dbkUnknown, 'pool: nil scoped-lease callback');
+  LConn := FCore.AcquireWriter;
+  try
+    ABody(LConn);
+  finally
+    LConn := nil;                          { 局部变量置空 = 即时归还 }
+  end;
 end;
 
 procedure TDbPool.Close;

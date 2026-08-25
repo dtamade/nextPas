@@ -246,6 +246,15 @@ MySQL/MariaDB 后端（V3-A2）方言差异：
   `OpenSqlitePool(Path, Policy, Options)`（全控形态：策略与连接选项
   逐字采用），组合 db.pool × sqlite 统一适配器，经 nextpas.core.db
   再导出；消费方不再各自手拼策略与连接选项。
+- **租约绑定纪律（B13 续）**：FPC 接口临时量为例程级生命周期——
+  `Pool.Acquire` / `Pool.Writer` 的函数结果若**直接内联传参**
+  （const 形参绑定，如 `Migrate(Pool.Writer, …)`）或经**全局托管
+  变量**中转，隐藏引用会把租约拖过语句边界、直至所在例程退出
+  （单写者槽位期间不可再借；五格矩阵实证）。合规形态：
+  租约先绑定局部变量、用毕显式置空；或直接用作用域助手
+  `Pool.WithRead(…)` / `Pool.WithWriter(…)`——租约约束在实现内
+  局部变量上（try..finally 归还），消费方从结构上不可能滞留。
+  池化连接上的事务一律走参数化形态（§2.3）。
 
 - **释放即归还**：Acquire/Writer 返回代理接口，消费方释放引用（出作用
   域或置 nil）即自动归还，零手工 Free。代理经 QueryInterface 透传底层
