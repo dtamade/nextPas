@@ -96,23 +96,6 @@ begin
     and (Pos(APrefix, AStr) = 1);
 end;
 
-function NameCompare(const AA, AB: string): Integer;
-var
-  I, N: Integer;
-begin
-  N := Length(AA);
-  if Length(AB) < N then
-    N := Length(AB);
-  for I := 1 to N do
-  begin
-    if Byte(AA[I]) < Byte(AB[I]) then Exit(-1);
-    if Byte(AA[I]) > Byte(AB[I]) then Exit(1);
-  end;
-  if Length(AA) < Length(AB) then Exit(-1);
-  if Length(AA) > Length(AB) then Exit(1);
-  Result := 0;
-end;
-
 { 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（见 respack.writer 同款注释）。
   与 writer 排序结构重复，属有意保守：抽公共 sort 进 collections 是后续反哺项。 }
 procedure QuickSortEntries(var AItems: array of TVfsMemEntry;
@@ -125,7 +108,7 @@ begin
   begin
     if AHigh - ALow = 1 then
     begin
-      if NameCompare(AItems[ALow].Name, AItems[AHigh].Name) > 0 then
+      if VfsNameCompare(AItems[ALow].Name, AItems[AHigh].Name) > 0 then
       begin
         P := AItems[ALow]; AItems[ALow] := AItems[AHigh]; AItems[AHigh] := P;
       end;
@@ -135,8 +118,8 @@ begin
     L := ALow; R := AHigh;
     while L <= R do
     begin
-      while NameCompare(AItems[L].Name, P.Name) < 0 do Inc(L);
-      while NameCompare(AItems[R].Name, P.Name) > 0 do Dec(R);
+      while VfsNameCompare(AItems[L].Name, P.Name) < 0 do Inc(L);
+      while VfsNameCompare(AItems[R].Name, P.Name) > 0 do Dec(R);
       if L <= R then
       begin
         if L < R then
@@ -154,50 +137,6 @@ begin
     else
     begin
       if L < AHigh then QuickSortEntries(AItems, L, AHigh);
-      AHigh := R;
-    end;
-  end;
-end;
-
-procedure QuickSortInfos(var AItems: TEntryArray; ALow, AHigh: Int64);
-var
-  L, R: Int64;
-  P: string;
-  Tmp: TEntryInfo;
-begin
-  while ALow < AHigh do
-  begin
-    if AHigh - ALow = 1 then
-    begin
-      if NameCompare(AItems[ALow].Name, AItems[AHigh].Name) > 0 then
-      begin
-        Tmp := AItems[ALow]; AItems[ALow] := AItems[AHigh]; AItems[AHigh] := Tmp;
-      end;
-      Exit;
-    end;
-    P := AItems[(ALow + AHigh) shr 1].Name;
-    L := ALow; R := AHigh;
-    while L <= R do
-    begin
-      while NameCompare(AItems[L].Name, P) < 0 do Inc(L);
-      while NameCompare(AItems[R].Name, P) > 0 do Dec(R);
-      if L <= R then
-      begin
-        if L < R then
-        begin
-          Tmp := AItems[L]; AItems[L] := AItems[R]; AItems[R] := Tmp;
-        end;
-        Inc(L); Dec(R);
-      end;
-    end;
-    if R - ALow < AHigh - L then
-    begin
-      if ALow < R then QuickSortInfos(AItems, ALow, R);
-      ALow := L;
-    end
-    else
-    begin
-      if L < AHigh then QuickSortInfos(AItems, L, AHigh);
       AHigh := R;
     end;
   end;
@@ -244,7 +183,7 @@ begin
     { 查重/重叠检查：Length-1 在 SizeUInt 上回绕 ⇒ 仅在 >1 时执行 }
     for I := 1 to SizeUInt(Length(FItems)) - 1 do
     begin
-      if NameCompare(FItems[I - 1].Name, FItems[I].Name) = 0 then
+      if VfsNameCompare(FItems[I - 1].Name, FItems[I].Name) = 0 then
         raise EVfsError.CreateCtx('freeze', FItems[I].Name,
           'duplicate path in memtree');
       if (Length(FItems[I].Name) > Length(FItems[I - 1].Name))
@@ -302,7 +241,7 @@ begin
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    if NameCompare(FFiles[Mid].Name, AName) < 0 then
+    if VfsNameCompare(FFiles[Mid].Name, AName) < 0 then
       Lo := Mid + 1
     else
       Hi := Mid;
@@ -317,7 +256,7 @@ begin
   Result := SizeUInt(Length(FFiles));
   I := LowerBound(AName);
   if (I < SizeUInt(Length(FFiles)))
-    and (NameCompare(FFiles[I].Name, AName) = 0) then
+    and (VfsNameCompare(FFiles[I].Name, AName) = 0) then
     Result := I;
 end;
 
@@ -382,10 +321,8 @@ function TMemVfs.List(const ADirPath: string): TEntryArray;
 var
   Prefix: string;
   DirIdx: SizeUInt;
-  I, N, SegEnd: SizeUInt;
-  Child, Tail: string;
-  Seen: array of string;
-  SeenN: SizeUInt;
+  I: SizeUInt;
+  Names, Seen: TVfsNameArray;
   Info: TStatInfo;
 begin
   if not VfsValidPath(ADirPath, True) then
@@ -402,40 +339,23 @@ begin
     Prefix := ADirPath + '/';
   end;
 
+  { 子项推导统一走 vfs.base 共享例程（与 embedded 后端同一实现） }
   Result := nil;
-  Seen := nil;
-  SeenN := 0;
-  N := SizeUInt(Length(FFiles));
-  I := LowerBound(Prefix);
-  while I < N do
-  begin
-    if (Length(FFiles[I].Name) <= Length(Prefix))
-      or (not StartsWith(FFiles[I].Name, Prefix)) then
-      Break;
-    Tail := Copy(FFiles[I].Name, Length(Prefix) + 1, MaxInt);
-    SegEnd := Pos('/', Tail);
-    if SegEnd > 0 then
-      Child := Prefix + Copy(Tail, 1, SegEnd - 1)
-    else
-      Child := FFiles[I].Name;
-    if (SeenN = 0) or (Seen[SeenN - 1] <> Child) then
+  SetLength(Names, SizeUInt(Length(FFiles)));
+  if SizeUInt(Length(FFiles)) > 0 then
+    for I := 0 to SizeUInt(Length(FFiles)) - 1 do
     begin
-      SetLength(Seen, SeenN + 1);
-      Seen[SeenN] := Child;
-      Inc(SeenN);
+      Names[I] := FFiles[I].Name;
     end;
-    Inc(I);
-  end;
+  Seen := VfsDeriveChildNames(Names, Prefix);
 
-  SetLength(Result, SeenN);
-  if SeenN > 0 then
-    for I := 0 to SeenN - 1 do
-    begin
-      StatInto(Seen[I], Info);
-      Result[I] := Info.Info;
-    end;
-  if SeenN > 1 then
-    QuickSortInfos(Result, 0, Int64(SeenN) - 1);
+  SetLength(Result, SizeUInt(Length(Seen)));
+  for I := 0 to SizeUInt(Length(Seen)) - 1 do
+  begin
+    StatInto(Seen[I], Info);
+    Result[I] := Info.Info;
+  end;
+  VfsSortEntries(Result);
 end;
 
 function TMemVfs.OpenRead(const APath: string): IStream;

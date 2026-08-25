@@ -23,11 +23,25 @@ type
     ContentHash: UInt32;   { FNV-1a 32；0 = 后端未提供 }
   end;
 
+  TVfsNameArray = array of string;
+
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   特例整串 '.' 表根。AAllowRoot=False 时拒绝 '.'。 }
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 
 function VfsIsRoot(const APath: string): Boolean; inline;
+
+{ 路径字节序比较（'/' 分隔语义下与逐字节一致）；三后端共用同一序定义 }
+function VfsNameCompare(const AA, AB: string): Integer;
+
+{ 就地按 Name 字节序升序（INV-V8）；quick(Int64 下标)+小区间插入混合排序 }
+procedure VfsSortEntries(var AItems: TEntryArray);
+
+{ 从字节序有序的完整路径清单推导某目录的直接子项完整路径（有序、去重）。
+  输入只含文件路径（memtree/respack 均不存目录条目）；ADirPrefix 为
+  'dir/' 形式，根传 ''。O(n) 全量扫描：List 非热路径，换取调用方零预处理。 }
+function VfsDeriveChildNames(const ASortedPaths: array of string;
+  const ADirPrefix: string): TVfsNameArray;
 
 implementation
 
@@ -109,6 +123,128 @@ end;
 function VfsIsRoot(const APath: string): Boolean;
 begin
   Result := APath = '.';
+end;
+
+function VfsNameCompare(const AA, AB: string): Integer;
+var
+  I, N: Integer;
+begin
+  N := Length(AA);
+  if Length(AB) < N then
+    N := Length(AB);
+  for I := 1 to N do
+  begin
+    if Byte(AA[I]) < Byte(AB[I]) then Exit(-1);
+    if Byte(AA[I]) > Byte(AB[I]) then Exit(1);
+  end;
+  if Length(AA) < Length(AB) then Exit(-1);
+  if Length(AA) > Length(AB) then Exit(1);
+  Result := 0;
+end;
+
+{ 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（S1/S2 实测陷阱，
+  见 respack README「实现期发现的 FPC trunk 注意事项」）。 }
+procedure VfsQuickSortEntries(var AItems: array of TEntryInfo;
+  ALow, AHigh: Int64);
+var
+  L, R: Int64;
+  PivotName: string;
+  Tmp, Key: TEntryInfo;
+begin
+  while ALow < AHigh do
+  begin
+    if AHigh - ALow < 16 then
+    begin
+      { 小区间插入排序：稳定、无递归 }
+      L := ALow + 1;
+      while L <= AHigh do
+      begin
+        Key := AItems[L];
+        R := L - 1;
+        while (R >= ALow) and (VfsNameCompare(AItems[R].Name, Key.Name) > 0) do
+        begin
+          AItems[R + 1] := AItems[R];
+          Dec(R);
+        end;
+        AItems[R + 1] := Key;
+        Inc(L);
+      end;
+      Exit;
+    end;
+    PivotName := AItems[(ALow + AHigh) shr 1].Name;
+    L := ALow;
+    R := AHigh;
+    while L <= R do
+    begin
+      while VfsNameCompare(AItems[L].Name, PivotName) < 0 do Inc(L);
+      while VfsNameCompare(AItems[R].Name, PivotName) > 0 do Dec(R);
+      if L <= R then
+      begin
+        if L < R then
+        begin
+          Tmp := AItems[L];
+          AItems[L] := AItems[R];
+          AItems[R] := Tmp;
+        end;
+        Inc(L);
+        Dec(R);
+      end;
+    end;
+    if ALow < R then
+      VfsQuickSortEntries(AItems, ALow, R);
+    ALow := L;
+  end;
+end;
+
+procedure VfsSortEntries(var AItems: TEntryArray);
+begin
+  if SizeUInt(Length(AItems)) > 1 then
+    VfsQuickSortEntries(AItems, 0, Int64(Length(AItems)) - 1);
+end;
+
+function VfsDeriveChildNames(const ASortedPaths: array of string;
+  const ADirPrefix: string): TVfsNameArray;
+var
+  I, N, OutN: SizeUInt;
+  Tail: string;
+  SegEnd: SizeInt;
+  Child: string;
+begin
+  Result := nil;
+  SetLength(Result, SizeUInt(Length(ASortedPaths)));
+  OutN := 0;
+  N := SizeUInt(Length(ASortedPaths));
+  I := 0;
+  while I < N do
+  begin
+    { 前缀匹配显式处理空前缀（FPC Pos('',S)=0 陷阱）。
+      全量扫描不提前 Break：调用方可能传未按前缀定位的完整清单 }
+    if Length(ASortedPaths[I]) <= Length(ADirPrefix) then
+    begin
+      Inc(I);
+      Continue;
+    end;
+    if (Length(ADirPrefix) > 0)
+      and (Pos(ADirPrefix, ASortedPaths[I]) <> 1) then
+    begin
+      Inc(I);
+      Continue;
+    end;
+    Tail := Copy(ASortedPaths[I], Length(ADirPrefix) + 1,
+      Length(ASortedPaths[I]) - Length(ADirPrefix));
+    SegEnd := Pos('/', Tail);
+    if SegEnd > 0 then
+      Child := Copy(ASortedPaths[I], 1, Length(ADirPrefix) + SegEnd - 1)
+    else
+      Child := ASortedPaths[I];
+    if (OutN = 0) or (Result[OutN - 1] <> Child) then
+    begin
+      Result[OutN] := Child;
+      Inc(OutN);
+    end;
+    Inc(I);
+  end;
+  SetLength(Result, OutN);
 end;
 
 end.

@@ -5,7 +5,8 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.respack,
-  nextpas.core.respack.base;
+  nextpas.core.respack.base,
+  nextpas.core.stopwatch;
 
 var
   T: TTestSuite;
@@ -76,6 +77,12 @@ begin
   while Length(D) < 3 do
     D := '0' + D;
   Result := D;
+end;
+
+{ 固定宽度 4 前导零（perf smoke 用） }
+function Num4(AValue: Integer): string;
+begin
+  Result := '0' + Num3(AValue);
 end;
 
 { ── 用例 ── }
@@ -272,6 +279,65 @@ begin
   end;
 end;
 
+procedure TestPerfSmoke10k;
+{ Smoke 属性：防回归预算而非精度断言。10k 条目 build + 全量 Find 的总耗时
+  必须落在宽松硬上限内；若实现退化为 O(n²)（索引查找、排序、去重）会远超
+  该预算。阈值按 heaptrc 开启下的慢路径留足余量，勿收紧当作基准测试。
+  实测参考：本机 heaptrc -O2 约 350ms。 }
+const
+  ENTRY_COUNT = 10000;
+  BUDGET_MS = 1000;
+var
+  H: THolder;
+  B: TResPackBlob;
+  RP: TResPack;
+  SW: TStopwatch;
+  C: TBytes;
+  E: TResPackEntry;
+  I: Integer;
+  Ordered, FoundAll: Boolean;
+begin
+  { 预分配持活数组：避免 HoldAdd 逐条 SetLength 的 O(n²) 搬运污染计时 }
+  SetLength(H.Store, ENTRY_COUNT);
+  SetLength(H.Inputs, ENTRY_COUNT);
+  for I := 0 to ENTRY_COUNT - 1 do
+  begin
+    C := BytesOf(Num4(I) + '-0123456789abcdef0123456789abcdef' +
+      '0123456789abcdef0123456789abcdef');
+    H.Store[I] := C;
+    H.Inputs[I] := Default(TResPackInputEntry);
+    H.Inputs[I].Path := 'gen/pack/' + Num4(I) + '.dat';
+    H.Inputs[I].Data := @H.Store[I][0];
+    H.Inputs[I].DataSize := SizeUInt(Length(H.Store[I]));
+  end;
+
+  FoundAll := True;
+  SW := TStopwatch.StartNew;
+  B := ResPackBuild(H.Inputs, ResPackDefaultOptions);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    for I := 0 to ENTRY_COUNT - 1 do
+      if not RP.Find('gen/pack/' + Num4(I) + '.dat', E) then
+        FoundAll := False;
+    SW.Stop;
+    Check(RP.Count = ENTRY_COUNT, 'perf smoke count');
+    Check(FoundAll, 'perf smoke all found');
+
+    { 正确性抽查（不计入耗时）：全量严格有序 + 内容锚点 }
+    Ordered := True;
+    for I := 1 to ENTRY_COUNT - 1 do
+      if RP.PathOf(RP.EntryAt(I - 1)) >= RP.PathOf(RP.EntryAt(I)) then
+        Ordered := False;
+    Check(Ordered, 'perf pack strictly ordered');
+    Check(SameBytes(BytesOf('0042-'), PtrToBytes(
+      RP.ContentPtr(RP.Stat('gen/pack/0042.dat')), 5)), 'perf spot content');
+    Check(SW.ElapsedMs <= BUDGET_MS,
+      'perf smoke build+find within budget (smoke)');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.respack.roundtrip');
   T.Test('basic two files', @TestBasicRoundtrip);
@@ -281,5 +347,6 @@ begin
   T.Test('binary pattern 256', @TestBinaryPattern);
   T.Test('dedupe roundtrip', @TestDedupeRoundtrip);
   T.Test('digest roundtrip', @TestDigestRoundtrip);
+  T.Test('perf smoke 10k', @TestPerfSmoke10k);
   if not T.Run then Halt(1);
 end.

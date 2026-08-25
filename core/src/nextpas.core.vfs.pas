@@ -13,6 +13,9 @@ uses
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf,
   nextpas.core.vfs.memtree,
+  nextpas.core.vfs.os,
+  nextpas.core.vfs.embedded,
+  nextpas.core.vfs.sub,
   nextpas.core.vfs.util;
 
 type
@@ -32,9 +35,15 @@ type
   EVfsClosed = nextpas.core.vfs.errors.EVfsClosed;
 
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs; inline;
+function CreateOsVfs(const ARoot: string): IVfs; inline;
+function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
+  AOwnsBlob: Boolean): IVfs; inline;
+function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs; inline;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 function VfsIsRoot(const APath: string): Boolean; inline;
+function VfsNameCompare(const AA, AB: string): Integer; inline;
+procedure VfsSortEntries(var AItems: TEntryArray); inline;
 
 function VfsStat(const AFs: IVfs; const APath: string): TStatInfo; inline;
 function VfsList(const AFs: IVfs; const ADirPath: string): TEntryArray; inline;
@@ -50,6 +59,22 @@ begin
   Result := nextpas.core.vfs.memtree.CreateMemTreeVfs(AItems);
 end;
 
+function CreateOsVfs(const ARoot: string): IVfs;
+begin
+  Result := nextpas.core.vfs.os.CreateOsVfs(ARoot);
+end;
+
+function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
+  AOwnsBlob: Boolean): IVfs;
+begin
+  Result := nextpas.core.vfs.embedded.CreateEmbeddedVfs(AData, ASize, AOwnsBlob);
+end;
+
+function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs;
+begin
+  Result := nextpas.core.vfs.sub.CreateSubVfs(ABase, ASubRoot);
+end;
+
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 begin
   Result := nextpas.core.vfs.base.VfsValidPath(APath, AAllowRoot);
@@ -58,6 +83,16 @@ end;
 function VfsIsRoot(const APath: string): Boolean;
 begin
   Result := nextpas.core.vfs.base.VfsIsRoot(APath);
+end;
+
+function VfsNameCompare(const AA, AB: string): Integer;
+begin
+  Result := nextpas.core.vfs.base.VfsNameCompare(AA, AB);
+end;
+
+procedure VfsSortEntries(var AItems: TEntryArray);
+begin
+  nextpas.core.vfs.base.VfsSortEntries(AItems);
 end;
 
 function VfsStat(const AFs: IVfs; const APath: string): TStatInfo;

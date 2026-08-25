@@ -7,6 +7,8 @@ uses
   nextpas.core.respack,
   nextpas.core.respack.base;
 
+{$I golden_respack_v1.inc}
+
 var
   T: TTestSuite;
   { TResPackInputEntry 只持有内容指针，不拥有内存。测试辅助统一把传入的
@@ -384,6 +386,26 @@ begin
   end;
 end;
 
+procedure TestGoldenSnapshot;
+var
+  InA: array[0..3] of TResPackInputEntry;
+  B: TResPackBlob;
+begin
+  { 输入集必须与 golden_respack_v1.inc 头注释一致（由 rp-check/gen_golden 生成） }
+  InA[0] := Ent('assets/app.js', BytesOf('console.log(1);'), Int64(100));
+  InA[1] := Ent('docs/指南.md', BytesOf('# 指南'#10'中文内容'#10), Int64(200));
+  InA[2] := Ent('empty.txt', BytesOf(''), Int64(0));
+  InA[3] := Ent('index.html', BytesOf('<html>ok</html>'), Int64(0));
+  B := ResPackBuild(InA, ResPackDefaultOptions);
+  try
+    Check(B.Size = SizeUInt(GOLDEN_SIZE), 'golden size matches');
+    Check(SameBytesRaw(B.Data, @GOLDEN_BYTES[0], SizeUInt(GOLDEN_SIZE)),
+      'golden bytes match (INV-R5 determinism locked)');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 procedure TestHeaderFields;
 var
   InA: array[0..0] of TResPackInputEntry;
@@ -418,6 +440,7 @@ begin
   T.Test('modtime roundtrip', @TestModTime);
   T.Test('too large raises', @TestTooLargeWrapped);
   T.Test('empty pack opens', @TestEmptyPack);
+  T.Test('golden snapshot', @TestGoldenSnapshot);
   T.Test('header fields sane', @TestHeaderFields);
   if not T.Run then Halt(1);
 end.
