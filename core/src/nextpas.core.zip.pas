@@ -22,6 +22,7 @@ uses
 type
   TZipMethod = nextpas.core.zip.base.TZipMethod;
   TZipEntryInfo = nextpas.core.zip.base.TZipEntryInfo;
+  TZipWriteOptions = nextpas.core.zip.writer.TZipWriteOptions;
   TZipReadOptions = nextpas.core.zip.reader.TZipReadOptions;
   IZipWriter = nextpas.core.zip.writer.IZipWriter;
   IZipReader = nextpas.core.zip.reader.IZipReader;
@@ -30,6 +31,8 @@ const
   C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.reader.C_ZIP_DEFAULT_MAX_OUTPUT;
 
 function NewZipWriter: IZipWriter; inline;
+function DefaultZipWriteOptions: TZipWriteOptions; inline;
+function NewZipWriterWithOptions(const AOptions: TZipWriteOptions): IZipWriter; inline;
 function DefaultZipReadOptions: TZipReadOptions; inline;
 function NewZipReader(const AData: TBytes): IZipReader; inline;
 function NewZipReaderWithOptions(const AData: TBytes;
@@ -40,6 +43,16 @@ implementation
 function NewZipWriter: IZipWriter;
 begin
   Result := nextpas.core.zip.writer.NewZipWriter;
+end;
+
+function DefaultZipWriteOptions: TZipWriteOptions;
+begin
+  Result := nextpas.core.zip.writer.DefaultZipWriteOptions;
+end;
+
+function NewZipWriterWithOptions(const AOptions: TZipWriteOptions): IZipWriter;
+begin
+  Result := nextpas.core.zip.writer.NewZipWriterWithOptions(AOptions);
 end;
 
 function DefaultZipReadOptions: TZipReadOptions;

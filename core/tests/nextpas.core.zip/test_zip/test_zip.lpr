@@ -66,6 +66,11 @@ begin
     Result := (Result shl 8) or AB[AOff + LI];
 end;
 
+function LE64At(const AB: TBytes; AOff: Integer): UInt64;
+begin
+  Result := UInt64(LE32At(AB, AOff)) or (UInt64(LE32At(AB, AOff + 4)) shl 32);
+end;
+
 function SameBytes(const A, B: TBytes): Boolean;
 var
   LI: Integer;
@@ -314,25 +319,97 @@ begin
   end;
 end;
 
-procedure TestEntryLimit;
+procedure TestZip64AutoByEntryCount;
 var
+  LOpts: TZipWriteOptions;
   LW: IZipWriter;
-  LI: Integer;
-  LOne: TBytes;
+  LR: IZipReader;
+  LZip, LOne: TBytes;
+  LI, LTail: Integer;
 begin
+  { >65535 条目自动启用 Zip64 EOCD；经典字段写占位值 }
   LOne := BytesOfStr('e');
-  LW := NewZipWriter;
-  for LI := 1 to 65535 do
+  LOpts.ForceZip64 := False;
+  LW := NewZipWriterWithOptions(LOpts);
+  for LI := 1 to 65600 do
     LW.AddEntry('e' + IntToStr(LI) + '.txt', LOne);
-  CheckEqual(Int64(65535), Int64(LW.EntryCount), 'limit entries accepted');
+  CheckEqual(Int64(65600), Int64(LW.EntryCount),
+    'entry count beyond 16-bit accepted');
+  LZip := LW.Finish;
+
+  { 布局：[central][zip64 EOCD(56)][locator(20)][EOCD(22)] }
+  LTail := Length(LZip);
+  CheckEqual(Int64($06054B50), Int64(LE32At(LZip, LTail - 22)), 'EOCD at tail');
+  CheckEqual(Int64($FFFF), Int64(LE16At(LZip, LTail - 14)),
+    'classic EOCD count placeholder');
+  CheckEqual(Int64($07064B50), Int64(LE32At(LZip, LTail - 42)),
+    'zip64 locator present');
+  CheckEqual(Int64($06064B50), Int64(LE32At(LZip, LTail - 98)),
+    'zip64 EOCD record present');
+
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(65600), Int64(LR.EntryCount), 'reader sees all entries');
+  Check(SameBytes(LR.ExtractToBytesByName('e65600.txt'), LOne),
+    'last entry extracts');
+end;
+
+procedure TestZip64ForcedStructures;
+var
+  LOpts: TZipWriteOptions;
+  LW: IZipWriter;
+  LR: IZipReader;
+  LPayload, LZip, LGot: TBytes;
+  LDir: string;
+  LI: Integer;
+begin
+  SetLength(LPayload, 4096);
+  for LI := 0 to High(LPayload) do
+    LPayload[LI] := Byte(LI mod 13);
+  LOpts.ForceZip64 := True;
+  LW := NewZipWriterWithOptions(LOpts);
+  LW.AddEntry('z64.bin', LPayload);
+  LW.AddEntryDeflate('z64c.bin', BytesOfStr('compress-me-compress-me'));
+  LZip := LW.Finish;
+
+  { 首条目 local 头：version 45、尺寸占位、Zip64 extra 宽度值 }
+  CheckEqual(Int64(45), Int64(LE16At(LZip, 4)), 'local version needed 45');
+  CheckEqual(Int64($FFFFFFFF), Int64(LE32At(LZip, 18)),
+    'compressed size placeholder');
+  CheckEqual(Int64($FFFFFFFF), Int64(LE32At(LZip, 22)),
+    'uncompressed size placeholder');
+  CheckEqual(Int64($0001), Int64(LE16At(LZip, 37)), 'zip64 extra id');
+  CheckEqual(Int64(16), Int64(LE16At(LZip, 39)), 'zip64 extra size');
+  CheckEqual(Int64(4096), Int64(LE64At(LZip, 41)), 'zip64 usize');
+  CheckEqual(Int64(4096), Int64(LE64At(LZip, 49)), 'zip64 csize');
+
+  { Force 下 zip64 EOCD 链无条件出现 }
+  CheckEqual(Int64($06064B50), Int64(LE32At(LZip, Length(LZip) - 98)),
+    'forced zip64 EOCD record');
+  CheckEqual(Int64($07064B50), Int64(LE32At(LZip, Length(LZip) - 42)),
+    'forced zip64 locator');
+
+  { 自家读器往返 }
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(2), Int64(LR.EntryCount), 'two entries');
+  LGot := LR.ExtractToBytesByName('z64.bin');
+  Check(SameBytes(LGot, LPayload), 'store z64 roundtrip');
+  LGot := LR.ExtractToBytesByName('z64c.bin');
+  Check(SameBytes(LGot, BytesOfStr('compress-me-compress-me')),
+    'deflate z64 roundtrip');
+
+  { python 独立读取 force_zip64 归档 }
+  LDir := NewTempCaseDir;
   try
-    LW.AddEntry('overflow.txt', LOne);
-    Check(False, 'entry 65536 must raise');
-  except
-    on E: EInvalidOperationError do
-      Check(True, 'entry count over ZIP32 limit raises');
+    WriteFile(LDir + '/case.zip', LZip);
+    WriteManifest(LDir,
+      'z64.bin'#9'0'#9'4096'#9 + Hex32(Crc32OfBytes(LPayload)) + #10 +
+      'z64c.bin'#9'8'#9 +
+        IntToStr(Length(BytesOfStr('compress-me-compress-me'))) + #9 +
+        Hex32(Crc32OfBytes(BytesOfStr('compress-me-compress-me'))) + #10);
+    CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
   end;
-  Check(Length(LW.Finish) > 0, 'archive at limit still finishes');
 end;
 
 procedure TestLargePayload;
@@ -463,10 +540,11 @@ begin
   T.Test('Determinism', @TestDeterminism);
   T.Test('Name guards', @TestNameGuards);
   T.Test('State guards', @TestStateGuards);
-  T.Test('Entry limit', @TestEntryLimit);
+  T.Test('Zip64 auto by entry count', @TestZip64AutoByEntryCount);
   T.Test('Large payload', @TestLargePayload);
   T.Test('Deflate entry structure', @TestDeflateEntryStructure);
   T.Test('Deflate determinism', @TestDeflateDeterminism);
   T.Test('Directory entries', @TestDirectoryEntries);
+  T.Test('Zip64 forced structures', @TestZip64ForcedStructures);
   if not T.Run then Halt(1);
 end.

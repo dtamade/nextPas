@@ -44,6 +44,14 @@ const
     'z.writestr("zeros.bin", b"\x00" * (4 * 1024 * 1024))'#10 +
     'z.close()'#10;
 
+  { force_zip64：小载荷也写 Zip64 extra，覆盖读端 Zip64 宽度解析 }
+  C_PY_FORCEZ64 =
+    'import zipfile, sys'#10 +
+    'z = zipfile.ZipFile(sys.argv[1], "w")'#10 +
+    'with z.open("a.bin", "w", force_zip64=True) as f:'#10 +
+    '    f.write(b"hello zip64")'#10 +
+    'z.close()'#10;
+
 function BytesOfStr(const S: string): TBytes;
 begin
   Result := nil;
@@ -396,11 +404,34 @@ begin
   Check(LGot, 'extract-by-name missing raises not found');
 end;
 
+procedure TestPythonForceZip64;
+var
+  LDir, LZipPath: string;
+  LRaw, LGot: TBytes;
+  LR: IZipReader;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/force64.zip';
+    RunPy(C_PY_FORCEZ64, LZipPath, '');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  LR := NewZipReader(LRaw);
+  CheckEqual(Int64(1), Int64(LR.EntryCount), 'one forced-zip64 entry');
+  CheckEqual(Int64(11), Int64(LR.Entry(0).UncompressedSize),
+    'size decoded from zip64 extra');
+  LGot := LR.ExtractToBytesByName('a.bin');
+  Check(SameBytes(LGot, BytesOfStr('hello zip64')), 'forced-zip64 content');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.reader');
   T.Test('Empty archive reader', @TestEmptyArchiveReader);
   T.Test('Python deflate interop', @TestPythonDeflateInterop);
   T.Test('Python store interop', @TestPythonStoreInterop);
+  T.Test('Python force zip64', @TestPythonForceZip64);
   T.Test('Writer reader roundtrip', @TestWriterReaderRoundtrip);
   T.Test('CRC tamper detected', @TestCrcTamperDetected);
   T.Test('Truncated and garbage', @TestTruncatedAndGarbage);
