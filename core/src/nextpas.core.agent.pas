@@ -27,7 +27,9 @@ uses
   nextpas.core.agent.tools,
   nextpas.core.agent.loop,
   nextpas.core.agent.session,
-  nextpas.core.agent.resilience;
+  nextpas.core.agent.resilience,
+  nextpas.core.agent.fallback,
+  nextpas.core.agent.throttle;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
@@ -99,6 +101,23 @@ function StreamHasError(const ADeltas: TStreamDeltaArray;
 function WaitCancelMs(const ASource: ICancellationSource;
   ADelayMs: Int64): Boolean; inline;
 function ClampHintMs(AHintMs, ACapMs: Int64): Int64; inline;
+
+{ ---- 可靠性装饰器（W8；语义权威 API.md §装饰器组合）---- }
+
+type
+  TFallbackPolicy = nextpas.core.agent.fallback.TFallbackPolicy;
+  TFallbackSwitchHook = nextpas.core.agent.fallback.TFallbackSwitchHook;
+  IAgentRateGate = nextpas.core.agent.throttle.IAgentRateGate;
+  TThrottlePolicy = nextpas.core.agent.throttle.TThrottlePolicy;
+  TThrottleWaitHook = nextpas.core.agent.throttle.TThrottleWaitHook;
+
+function NewFallbackProvider(const AChain: array of IAgentProvider;
+  const APolicy: TFallbackPolicy): IAgentProvider; inline;
+function NewThrottledProvider(const AInner: IAgentProvider;
+  const AGate: IAgentRateGate; const AClock: IAgentClock;
+  const APolicy: TThrottlePolicy): IAgentProvider; inline;
+function NewTokenBucketGate(ARatePerSecond,
+  ABurst: Double): IAgentRateGate; inline;
 
 implementation
 
@@ -267,6 +286,27 @@ end;
 function ClampHintMs(AHintMs, ACapMs: Int64): Int64;
 begin
   Result := nextpas.core.agent.resilience.ClampHintMs(AHintMs, ACapMs);
+end;
+
+function NewFallbackProvider(const AChain: array of IAgentProvider;
+  const APolicy: TFallbackPolicy): IAgentProvider;
+begin
+  Result := nextpas.core.agent.fallback.NewFallbackProvider(AChain,
+    APolicy);
+end;
+
+function NewThrottledProvider(const AInner: IAgentProvider;
+  const AGate: IAgentRateGate; const AClock: IAgentClock;
+  const APolicy: TThrottlePolicy): IAgentProvider;
+begin
+  Result := nextpas.core.agent.throttle.NewThrottledProvider(AInner,
+    AGate, AClock, APolicy);
+end;
+
+function NewTokenBucketGate(ARatePerSecond, ABurst: Double): IAgentRateGate;
+begin
+  Result := nextpas.core.agent.throttle.NewTokenBucketGate(ARatePerSecond,
+    ABurst);
 end;
 
 end.
