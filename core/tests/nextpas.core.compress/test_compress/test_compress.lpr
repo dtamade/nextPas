@@ -670,6 +670,80 @@ begin
   Check(True, 'gzip reader double-close safe');
 end;
 
+{ RAW DEFLATE 流式变体：推式压缩 + 拉式解压 roundtrip（zip 流式条目的底座） }
+procedure TestRawDeflateStreamRoundtrip;
+var
+  LOut: IStream;
+  LW: ICompressWriter;
+  LR: IDecompressReader;
+  LData: TBytes;
+  LBuf: array[0..1023] of Byte;
+  LN, LTotal, LOffset: SizeUInt;
+  LI: Integer;
+begin
+  SetLength(LData, 100000);
+  for LI := 0 to High(LData) do
+    LData[LI] := Byte((LI * 31 + (LI shr 3)) mod 253);
+
+  LOut := CreateBytesStream;
+  LW := RawDeflateWriter(LOut as IWriter);
+  Check(LW.Write(LData[0], 40000) = 40000, 'raw stream chunk1 written');
+  Check(LW.Write(LData[40000], 60000) = 60000, 'raw stream chunk2 written');
+  LW.Close;
+
+  LOut.Position := 0;
+  LR := RawDeflateReader(LOut as IReader);
+  LTotal := 0;
+  repeat
+    LN := LR.Read(LBuf[0], SizeUInt(Length(LBuf)));
+    for LI := 0 to Integer(LN) - 1 do
+      if LBuf[LI] <> LData[LTotal + System.UInt64(LI)] then
+      begin
+        Check(False, 'raw stream roundtrip byte mismatch at ' +
+          IntToStr(LTotal + UInt64(LI)));
+        Exit;
+      end;
+    Inc(LTotal, LN);
+  until LN = 0;
+  Check(LTotal = Length(LData), 'raw stream roundtrip size');
+end;
+
+{ RAW DEFLATE 有界读端：超上限在读过程中即 raise，不等 EOF }
+procedure TestRawDeflateStreamBounded;
+var
+  LOut: IStream;
+  LW: ICompressWriter;
+  LR: IDecompressReader;
+  LData: TBytes;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LI: Integer;
+  LGot: Boolean;
+begin
+  SetLength(LData, 100000);
+  for LI := 0 to High(LData) do
+    LData[LI] := Byte((LI * 7) mod 251);
+
+  LOut := CreateBytesStream;
+  LW := RawDeflateWriter(LOut as IWriter);
+  LW.Write(LData[0], Length(LData));
+  LW.Close;
+
+  LOut.Position := 0;
+  LR := RawDeflateReaderWithMaxOutputSize(LOut as IReader, 1000);
+  LGot := False;
+  try
+    repeat
+      LN := LR.Read(LBuf[0], SizeUInt(Length(LBuf)));
+    until LN = 0;
+  except
+    on E: Exception do
+      LGot := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGot, 'bounded raw inflate raises past cap');
+  LR.Close;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.compress');
   T.Test('Deflate round-trip', @TestDeflateRoundTrip);
@@ -701,5 +775,7 @@ begin
   T.Test('Write after close', @TestWriteAfterClose);
   T.Test('Read after close', @TestReadAfterClose);
   T.Test('Double close', @TestDoubleClose);
+  T.Test('Raw deflate stream roundtrip', @TestRawDeflateStreamRoundtrip);
+  T.Test('Raw deflate stream bounded', @TestRawDeflateStreamBounded);
   if not T.Run then Halt(1);
 end.
