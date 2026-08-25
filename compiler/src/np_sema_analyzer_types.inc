@@ -216,6 +216,11 @@ type
     function EncodePosConcatOperand(const ANode: TGreenNode): string;
     function EncodeCallStatementArgs(
       const ACallName: string; const ACallNode, ADeclNode: TGreenNode): string;
+    function TryPointerFieldAccess(const ALocalNode: TGreenNode;
+      out APointerName, APointeeTypeName, AFieldName: string;
+      out AFieldIndex: Int64): Boolean;
+    function TryByRefFieldAddressBlob(const ALocalNode: TGreenNode;
+      out ABlob: string): Boolean;
     function IsExceptionHandlerVar(const AName: string): Boolean;
     function EncodeExceptionMemberStrTemp(const ABaseName,
       AMemberName: string; out ATempName: string): Boolean;

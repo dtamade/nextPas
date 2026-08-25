@@ -970,8 +970,18 @@ begin
     ArgNode := ACallNode.ChildAt(ArgIndex);
     if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
       IsVarParamAtPosition(ADeclNode, ParamIndex) and
-      IsRuntimeVar(ArgNode.Text) then
-      Result := Result + #9 + 'varref ' + ArgNode.Text + #10
+      (IsRuntimeVar(ArgNode.Text) or
+        (SameText(ArgNode.Text, 'Result') and (FCurrentRetVarName <> '') and
+          IsRuntimeVar(FCurrentRetVarName))) then
+    begin
+      { By-ref formal + identifier arg → address channel. Result aliases its
+        sret retvar alloca; every other name passes its own alloca or
+        var-param pointer (v2.28 campaign, tree-exit139 family). }
+      if SameText(ArgNode.Text, 'Result') and (FCurrentRetVarName <> '') then
+        Result := Result + #9 + 'varref ' + FCurrentRetVarName + #10
+      else
+        Result := Result + #9 + 'varref ' + ArgNode.Text + #10;
+    end
     else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
       IsVarParamAtPosition(ADeclNode, ParamIndex) and
       (FCurrentMethodClass <> '') and
@@ -1023,6 +1033,12 @@ begin
       EncodeExceptionMemberStrTemp(
         ArgNode.ChildAt(0).Text, ArgNode.ChildAt(1).Text, TempName) then
       Result := Result + #9 + 'strvar ' + TempName + #10
+    else if (ArgNode <> nil) and IsVarParamAtPosition(ADeclNode, ParamIndex) and
+      TryByRefFieldAddressBlob(ArgNode, Decoded) then
+      { By-ref formal + field-access arg → field address (gep, no load);
+        the int-fold fallback below emits a value load against a ptr formal,
+        which opt folds to unreachable (tree-exit139 family). }
+      Result := Result + #9 + Decoded
     else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
       FModel.LookupConstValue(ArgNode.Text, ConstOrdinal) then
       { Enum/const identifier folds here at the source: the FoldCore fallback

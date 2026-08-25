@@ -1066,6 +1066,14 @@ begin
       else if IsPtrReturn then
         FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
           IntToStr(ParamCount + 1) + ':p' + ParamTypes + ':p')
+      else if IsRecReturn and (TypeMetaSize(PtrReturnClass) > 0) then
+        { Record-returning methods need the same :r<N> sret classification
+          as free functions — without it the builder omits sret_ptr, the
+          retvar falls back to an uninitialized alloca ptr, and Result.X
+          stores write through garbage (tree-exit139 family root cause). }
+        FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
+          IntToStr(ParamCount + 1) + ':p' + ParamTypes + ':r' +
+          IntToStr(TypeMetaSize(PtrReturnClass) div 8))
       else
         FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
           IntToStr(ParamCount + 1) + ':p' + ParamTypes);

@@ -1009,6 +1009,7 @@ begin
         Handler label is CallTarget (bbN); empty → synthetic try.exc.N. }
       FNeedsExceptionRuntime := True;
       Inc(FTryCounter);
+      Inc(FTryFrameDepth);
       Emit('  ; --- try begin ---');
       Emit('  %jmpbuf.' + IntToStr(FTryCounter) + ' = alloca [9 x ptr]');
       Emit('  call void @' +
@@ -1031,6 +1032,8 @@ begin
     sckExceptionTryPop:
     begin
       Emit('  ; --- try end ---');
+      if FTryFrameDepth > 0 then
+        Dec(FTryFrameDepth);
       Emit('  call void @' +
         SystemContractAt(sckExceptionTryPop).RuntimeMapping + '()');
     end;

@@ -26,6 +26,7 @@ implementation
 
 uses
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
+  nextpas.core.os.env,
   nextpas.core.system.contracts, nextpas.compiler.frontend.symbol_cache, nextpas.compiler.diagnostics.enhanced;
 
 type

@@ -255,7 +255,12 @@ begin
   begin
     FModule.SetFunctionTStringReturnAbi(FCurrentFuncId, True);
     FModule.AddFunctionParam(FCurrentFuncId, 'sret_ptr', GetPtrType, False, False);
-  end;
+  end
+  else if (Length(RetSuffix) > 1) and (RetSuffix[1] = 'r') then
+    { Record-returning method: same ABI as free functions with :r<N> —
+      void(sret_ptr, self, formals...). FSretValueId lets the retvar bind
+      to the buffer instead of an uninitialized alloca ptr. }
+    FModule.AddFunctionParam(FCurrentFuncId, 'sret_ptr', GetPtrType, False, False);
   FModule.AddFunctionParam(FCurrentFuncId, 'self', GetPtrType, False, False);
   for I := 1 to ParamCount - 1 do
   begin
@@ -288,7 +293,8 @@ begin
   ClearGlobalRefs;
   ClearWorkBlocks;
 
-  if RetSuffix = 's' then
+  if (RetSuffix = 's') or
+    ((Length(RetSuffix) > 1) and (RetSuffix[1] = 'r')) then
   begin
     FSretValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
     ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[1].ValueId;
@@ -307,7 +313,8 @@ begin
   EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
 
   FPendingParamCount := ParamCount - 1;
-  if RetSuffix = 's' then
+  if (RetSuffix = 's') or
+    ((Length(RetSuffix) > 1) and (RetSuffix[1] = 'r')) then
     FPendingParamLlvmIdx := 2
   else
     FPendingParamLlvmIdx := 1;

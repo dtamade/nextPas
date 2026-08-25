@@ -453,6 +453,7 @@ begin
           Emit('  %retstr.' + IntToStr(AInstr.ResultId) +
             '.2 = insertvalue {ptr, i64} %retstr.' +
             IntToStr(AInstr.ResultId) + '.1, i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', 1');
+          EmitTryFramePops;
           Emit('  ret {ptr, i64} %retstr.' + IntToStr(AInstr.ResultId) + '.2');
         end;
       end
@@ -475,6 +476,7 @@ begin
             '.4 = insertvalue {ptr, i64, ptr, i64} %retstrowned.' +
             IntToStr(AInstr.ResultId) + '.3, i64 ' +
             ValueRef(AInstr.Operands[3].ValueId) + ', 3');
+          EmitTryFramePops;
           Emit('  ret {ptr, i64, ptr, i64} %retstrowned.' +
             IntToStr(AInstr.ResultId) + '.4');
         end;
@@ -1046,6 +1048,7 @@ begin
       FNeedsExceptionRuntime := True;
       Inc(FTryCounter);
       Emit('  ; --- try begin ---');
+      Inc(FTryFrameDepth);
       Emit('  %jmpbuf.' + IntToStr(FTryCounter) + ' = alloca [9 x ptr]');
       Emit('  call void @np_try_push(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
       Emit('  %setjmp.' + IntToStr(FTryCounter) + ' = call i32 @setjmp(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
@@ -1061,6 +1064,8 @@ begin
     hikTryEnd:
     begin
       Emit('  ; --- try end ---');
+      if FTryFrameDepth > 0 then
+        Dec(FTryFrameDepth);
       Emit('  call void @np_try_pop()');
     end;
     hikFinallyBegin:

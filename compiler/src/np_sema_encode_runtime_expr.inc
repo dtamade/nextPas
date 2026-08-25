@@ -1,3 +1,120 @@
+{ P^.F classification via the pointer-var registry: pointee type + field
+  index, or decline when the base is not a registered pointer var. }
+function TSemanticAnalyzer.TryPointerFieldAccess(const ALocalNode: TGreenNode;
+  out APointerName, APointeeTypeName, AFieldName: string;
+  out AFieldIndex: Int64): Boolean;
+var
+  BaseNode, DerefNode, FieldNode: TGreenNode;
+begin
+  APointerName := '';
+  APointeeTypeName := '';
+  AFieldName := '';
+  AFieldIndex := -1;
+  if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkDotAccess) or
+    (ALocalNode.ChildCount < 2) then
+    Exit(False);
+  DerefNode := ALocalNode.ChildAt(0);
+  FieldNode := ALocalNode.ChildAt(1);
+  if (DerefNode = nil) or (DerefNode.NodeKind <> gnkDereference) or
+    (DerefNode.ChildCount < 1) or (FieldNode = nil) or
+    (FieldNode.NodeKind <> gnkIdentifier) then
+    Exit(False);
+  BaseNode := DerefNode.ChildAt(0);
+  if (BaseNode = nil) or (BaseNode.NodeKind <> gnkIdentifier) then
+    Exit(False);
+  APointerName := BaseNode.Text;
+  APointeeTypeName := LookupPointerVar(APointerName);
+  if APointeeTypeName = '' then
+    Exit(False);
+  AFieldName := FieldNode.Text;
+  AFieldIndex := TypeMetaFieldIndex(APointeeTypeName, AFieldName);
+  Result := AFieldIndex >= 0;
+end;
+
+{ Address blob for a by-ref formal receiving a field-access argument:
+  P^.F via pointer-var registry, or B.F when B resolves as a pointer var,
+  or B.F when B is a record-typed symbol ('varref' address channel).
+  Emits base ptr + 'field_ref' (gep, no load) — the value paths append
+  arr_load instead, which starves the callee's address expectation.
+  Shared by the expression-position residual-call encoder and the
+  statement-position EncodeCallStatementArgs (tree-exit139 family). }
+function TSemanticAnalyzer.TryByRefFieldAddressBlob(
+  const ALocalNode: TGreenNode; out ABlob: string): Boolean;
+var
+  BaseName, FieldName: string;
+  TypeNameK: string;
+  FieldIdx: Int64;
+  SymbolIdTmp, TypeIdTmp: LongInt;
+begin
+  ABlob := '';
+  if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkDotAccess) or
+    (ALocalNode.ChildCount < 2) then
+    Exit(False);
+  if TryPointerFieldAccess(ALocalNode, BaseName, TypeNameK, FieldName,
+    FieldIdx) then
+  begin
+    ABlob := 'var ' + BaseName + #10 + 'field_ref ' +
+      IntToStr(FieldIdx) + #10;
+    Exit(True);
+  end;
+  if (ALocalNode.ChildAt(0) <> nil) and
+    (ALocalNode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ALocalNode.ChildAt(1) <> nil) and
+    (ALocalNode.ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    BaseName := ALocalNode.ChildAt(0).Text;
+    FieldName := ALocalNode.ChildAt(1).Text;
+    { Result aliases the current sret retvar alloca (record-returning
+      functions pass Result.X by address like any record base). }
+    if SameText(BaseName, 'Result') and (FCurrentRetVarName <> '') then
+      BaseName := FCurrentRetVarName;
+    { Pointer-var base: slot holds the pointer, plain load yields it. }
+    TypeNameK := LookupPointerVar(BaseName);
+    if TypeNameK <> '' then
+    begin
+      FieldIdx := TypeMetaFieldIndex(TypeNameK, FieldName);
+      if FieldIdx >= 0 then
+      begin
+        ABlob := 'var ' + BaseName + #10 + 'field_ref ' +
+          IntToStr(FieldIdx) + #10;
+        Exit(True);
+      end;
+    end;
+    { Record-typed base (var-param/local/global record): address channel is
+      'varref' — builder pushes the alloca, or single-derefs var-param
+      allocas to the caller record pointer (never the double-deref value
+      that 'var' would give). Symbol table supplies the declared type;
+      seeded-body locals register via RegisterRecordVar only (no model
+      symbol), so fall back to that registry before declining. }
+    SymbolIdTmp := FModel.FindSymbolByName(BaseName);
+    TypeIdTmp := 0;
+    TypeNameK := '';
+    FieldIdx := -1;
+    if SymbolIdTmp > 0 then
+      TypeIdTmp := FModel.SymbolTypeId(SymbolIdTmp);
+    if TypeIdTmp > 0 then
+      TypeNameK := FModel.TypeAt(TypeIdTmp - 1).Name;
+    if (TypeNameK = '') or (not TypeMetaIsRecord(TypeNameK)) then
+      TypeNameK := LookupRecordVar(BaseName);
+    if (TypeNameK <> '') and TypeMetaIsRecord(TypeNameK) then
+    begin
+      FieldIdx := TypeMetaFieldIndex(TypeNameK, FieldName);
+      if FieldIdx >= 0 then
+      begin
+        ABlob := 'varref ' + BaseName + #10 + 'field_ref ' +
+          IntToStr(FieldIdx) + #10;
+        Exit(True);
+      end;
+    end;
+    if GetEnvDefault('NEXTPAS_DEBUG', '') = '1' then
+      WriteLn(StdErr, '[byref-field] declined base=', BaseName,
+        ' field=', FieldName, ' sym=', SymbolIdTmp,
+        ' typeid=', TypeIdTmp, ' type="', TypeNameK,
+        '" isrec=', TypeMetaIsRecord(TypeNameK), ' fieldidx=', FieldIdx);
+  end;
+  Result := False;
+end;
+
 function TSemanticAnalyzer.EncodeRuntimeIntExprFoldCore(
   const ANode: TGreenNode; out ABlob: string; out AExprId: LongInt): Boolean;
 
@@ -18,108 +135,6 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFoldCore(
       Child := N.ChildAt(I);
       if (Child <> nil) and NeedsFoldFallback(Child) then
         Exit(True);
-    end;
-    Result := False;
-  end;
-
-  function TryPointerFieldAccess(const ALocalNode: TGreenNode;
-    out APointerName, APointeeTypeName, AFieldName: string;
-    out AFieldIndex: Int64): Boolean;
-  var
-    BaseNode, DerefNode, FieldNode: TGreenNode;
-  begin
-    APointerName := '';
-    APointeeTypeName := '';
-    AFieldName := '';
-    AFieldIndex := -1;
-    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkDotAccess) or
-      (ALocalNode.ChildCount < 2) then
-      Exit(False);
-    DerefNode := ALocalNode.ChildAt(0);
-    FieldNode := ALocalNode.ChildAt(1);
-    if (DerefNode = nil) or (DerefNode.NodeKind <> gnkDereference) or
-      (DerefNode.ChildCount < 1) or (FieldNode = nil) or
-      (FieldNode.NodeKind <> gnkIdentifier) then
-      Exit(False);
-    BaseNode := DerefNode.ChildAt(0);
-    if (BaseNode = nil) or (BaseNode.NodeKind <> gnkIdentifier) then
-      Exit(False);
-    APointerName := BaseNode.Text;
-    APointeeTypeName := LookupPointerVar(APointerName);
-    if APointeeTypeName = '' then
-      Exit(False);
-    AFieldName := FieldNode.Text;
-    AFieldIndex := TypeMetaFieldIndex(APointeeTypeName, AFieldName);
-    Result := AFieldIndex >= 0;
-  end;
-
-  { Address blob for a by-ref formal receiving a field-access argument:
-    P^.F via pointer-var registry, or B.F when B resolves as a pointer var.
-    Emits base ptr + 'field_ref' (gep, no load) — the value paths append
-    arr_load instead, which starves the callee's address expectation.
-    Var-param record bases (APool.F) need param-type registration that
-    does not exist yet; they fall through unchanged. }
-  function TryByRefFieldAddressBlob(const ALocalNode: TGreenNode;
-    out ABlob: string): Boolean;
-  var
-    BaseName, FieldName: string;
-    TypeNameK: string;
-    FieldIdx: Int64;
-    SymbolIdTmp, TypeIdTmp: LongInt;
-  begin
-    ABlob := '';
-    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkDotAccess) or
-      (ALocalNode.ChildCount < 2) then
-      Exit(False);
-    if TryPointerFieldAccess(ALocalNode, BaseName, TypeNameK, FieldName,
-      FieldIdx) then
-    begin
-      ABlob := 'var ' + BaseName + #10 + 'field_ref ' +
-        IntToStr(FieldIdx) + #10;
-      Exit(True);
-    end;
-    if (ALocalNode.ChildAt(0) <> nil) and
-      (ALocalNode.ChildAt(0).NodeKind = gnkIdentifier) and
-      (ALocalNode.ChildAt(1) <> nil) and
-      (ALocalNode.ChildAt(1).NodeKind = gnkIdentifier) then
-    begin
-      BaseName := ALocalNode.ChildAt(0).Text;
-      FieldName := ALocalNode.ChildAt(1).Text;
-      { Pointer-var base: slot holds the pointer, plain load yields it. }
-      TypeNameK := LookupPointerVar(BaseName);
-      if TypeNameK <> '' then
-      begin
-        FieldIdx := TypeMetaFieldIndex(TypeNameK, FieldName);
-        if FieldIdx >= 0 then
-        begin
-          ABlob := 'var ' + BaseName + #10 + 'field_ref ' +
-            IntToStr(FieldIdx) + #10;
-          Exit(True);
-        end;
-      end;
-      { Record-typed base (var-param/local/global record): address channel is
-        'varref' — builder pushes the alloca, or single-derefs var-param
-        allocas to the caller record pointer (never the double-deref value
-        that 'var' would give). Symbol table supplies the declared type. }
-      SymbolIdTmp := FModel.FindSymbolByName(BaseName);
-      if SymbolIdTmp > 0 then
-      begin
-        TypeIdTmp := FModel.SymbolTypeId(SymbolIdTmp);
-        if TypeIdTmp > 0 then
-        begin
-          TypeNameK := FModel.TypeAt(TypeIdTmp - 1).Name;
-          if (TypeNameK <> '') and TypeMetaIsRecord(TypeNameK) then
-          begin
-            FieldIdx := TypeMetaFieldIndex(TypeNameK, FieldName);
-            if FieldIdx >= 0 then
-            begin
-              ABlob := 'varref ' + BaseName + #10 + 'field_ref ' +
-                IntToStr(FieldIdx) + #10;
-              Exit(True);
-            end;
-          end;
-        end;
-      end;
     end;
     Result := False;
   end;

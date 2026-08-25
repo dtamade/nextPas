@@ -65,6 +65,7 @@ type
     FStrictCalls: Boolean;
     FUnitFiniCallsEmitted: Boolean;
     FTryCounter: LongInt;
+    FTryFrameDepth: LongInt;
     { ResultId -> actual LLVM type for the current function (1-based ValueId).
       Load/call/const may disagree with HIR TypeId (e.g. Integer i32 vs call i64). }
     FValueLlvmTypes: array of string;
@@ -128,6 +129,7 @@ type
     procedure EmitObjectFreeRelease(const AInstr: THIRInstr);
     procedure EmitInstr(const AInstr: THIRInstr);
     procedure EmitTerminator(const ATerm: THIRTerminator);
+    procedure EmitTryFramePops;
     procedure EmitWriteIntHelper;
     procedure EmitStrConstants;
     procedure EmitAllocHelper;

@@ -7,7 +7,12 @@ begin
   ClosePendingObjectFreeGuard;
   case ATerm.Kind of
     htkReturn:
-      if ATerm.ReturnValue = 0 then
+      begin
+        { Exit-inside-try paths skip the structured hikTryEnd; unwind the
+          frames so @__np_exc_stack never keeps dangling buffers. The
+          except-handler path needs this too — longjmp consumed nothing. }
+        EmitTryFramePops;
+        if ATerm.ReturnValue = 0 then
         Emit('  ret void')
       else begin
         T := FModule.Types.GetType(FCurrentReturnTypeId);
@@ -22,6 +27,7 @@ begin
           EmitCastValueToLlvmType(ATerm.ReturnValue, RetTy,
             'ret.' + IntToStr(ATerm.ReturnValue),
             ValueLlvmType(ATerm.ReturnValue, '')));
+        end;
       end;
     htkBranch:
       Emit('  br label %bb' + IntToStr(ATerm.TargetBlock));
@@ -45,6 +51,16 @@ begin
     htkUnreachable:
       Emit('  unreachable');
   end;
+end;
+
+procedure THIRLlvmEmitter.EmitTryFramePops;
+var
+  I: LongInt;
+begin
+  { Exit-inside-try paths skip the structured hikTryEnd; unwind the frames
+    so @__np_exc_stack never keeps dangling buffers (tree-exit139 family). }
+  for I := 1 to FTryFrameDepth do
+    Emit('  call void @np_try_pop()');
 end;
 
 function THIRLlvmEmitter.IsSretFunction(const AName: string): Boolean;
@@ -166,6 +182,7 @@ begin
   else
     Emit('define ' + RetStr + ' ' + LlvmGlobalRef(AFunc.Name) +
       '(' + ParamStr + ') #0 {');
+  FTryFrameDepth := 0;
 
   { Entry-prologue pre-pass: render every hikAlloca of this function so the
     main block walk can skip them (hikAlloca case in EmitInstr is a no-op).
