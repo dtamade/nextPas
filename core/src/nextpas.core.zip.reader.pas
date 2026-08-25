@@ -342,6 +342,7 @@ var
   LNameLen, LExtraLen: Word;
   LDataOff: Int64;
   LPayload: TBytes;
+  LHint: UInt64;
 begin
   LE := FEntries[CheckIndex(AIndex)];
   if (FFlags[AIndex] and C_ZIP_FLAG_ENCRYPTED) <> 0 then
@@ -373,7 +374,16 @@ begin
   LPayload := Copy(FData, LDataOff, Int64(LE.CompressedSize));
 
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
-    Result := RawDeflateDecompressWithMaxOutputSize(LPayload, FMaxOutputSize)
+  begin
+    { central 声明的未压缩尺寸作容量提示（一次预分配到位）；对敌意声明
+      施加压缩比上界防 DoS：提示超过 压缩尺寸×16+64KB 时按上界预分配，
+      超出部分由倍增扩容兜底，硬上限仍是 FMaxOutputSize }
+    LHint := LE.UncompressedSize;
+    if LHint > UInt64(Length(LPayload)) * 16 + 65536 then
+      LHint := UInt64(Length(LPayload)) * 16 + 65536;
+    Result := RawDeflateDecompressSized(LPayload, SizeUInt(LHint),
+      FMaxOutputSize);
+  end
   else if LE.MethodCode = C_ZIP_METHOD_STORE then
     Result := LPayload
   else

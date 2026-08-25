@@ -39,6 +39,11 @@ function RawDeflateCompress(const AData: TBytes;
 function RawDeflateDecompress(const AData: TBytes): TBytes;
 function RawDeflateDecompressWithMaxOutputSize(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes;
+{** 带期望输出尺寸的 RAW inflate：预分配一次到位（zip 等容器声明了
+    未压缩尺寸时避免倍增扩容）；实际输出仍受 AMaxOutputSize 强制约束，
+    声明值只是容量提示不参与正确性判定。 *}
+function RawDeflateDecompressSized(const AData: TBytes;
+  const AExpectedOutputSize, AMaxOutputSize: SizeUInt): TBytes;
 
 implementation
 
@@ -827,8 +832,23 @@ begin
   Result := RawDeflateDecompressWithMaxOutputSize(AData, MAX_DECOMPRESS_SIZE);
 end;
 
+function RawInflateOneShot(const AData: TBytes;
+  const AMaxOutputSize, ACapacityHint: SizeUInt): TBytes; forward;
+
 function RawDeflateDecompressWithMaxOutputSize(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes;
+begin
+  Result := RawInflateOneShot(AData, AMaxOutputSize, 0);
+end;
+
+function RawDeflateDecompressSized(const AData: TBytes;
+  const AExpectedOutputSize, AMaxOutputSize: SizeUInt): TBytes;
+begin
+  Result := RawInflateOneShot(AData, AMaxOutputSize, AExpectedOutputSize);
+end;
+
+function RawInflateOneShot(const AData: TBytes;
+  const AMaxOutputSize, ACapacityHint: SizeUInt): TBytes;
 var
   LStream: z_stream;
   LCapacity, LOutLen: SizeUInt;
@@ -847,7 +867,10 @@ begin
   if inflateInit2(LStream, -15) <> Z_OK then
     raise EIOError.Create('raw inflateInit2 failed');
   try
+    { 初始容量：调用方提示（如容器声明的未压缩尺寸）优先，避免反复扩容 }
     LCapacity := SizeUInt(Length(AData)) * 4;
+    if ACapacityHint > LCapacity then
+      LCapacity := ACapacityHint;
     if LCapacity < 64 then
       LCapacity := 64;
     if LCapacity > AMaxOutputSize then
