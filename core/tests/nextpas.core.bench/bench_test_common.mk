@@ -38,15 +38,27 @@ OBJ_DIR = $(BUILD_DIR)/obj
 
 TARGET = $(BIN_DIR)/$(PROGRAM)
 
-.PHONY: all clean test
+# Leak gate: mirrors tests/common.mk (staged defaulting complete 2026-08-25).
+# The build already compiles with -gh; the gate adds the fail-closed exit
+# assertion. Opt out per invocation with HEAPTRC_GATE= (empty) or =0;
+# "0 must read as off where it is used" - resolve at the consumer via
+# HEAPTRC_ENABLED, command-line variables outrank makefile assignments.
+HEAPTRC_GATE ?= 1
+HEAPTRC_ENABLED := $(HEAPTRC_GATE)
+ifeq ($(HEAPTRC_GATE),0)
+HEAPTRC_ENABLED :=
+endif
+HEAPTRC_DUMP ?= $(BIN_DIR)/$(PROGRAM).heaptrc
+
+.PHONY: all clean test run
 
 all: $(TARGET)
 
 $(TARGET): $(ALL_SRCS) | $(BIN_DIR) $(OBJ_DIR)
 	$(FPC) $(FPCFLAGS) \
-		-FU$(OBJ_DIR) -FE$(BIN_DIR) \
-		-Fu$(SRC_DIR) -Fi$(SRC_DIR) \
-		$(PROGRAM).lpr
+	-FU$(OBJ_DIR) -FE$(BIN_DIR) \
+	-Fu$(SRC_DIR) -Fi$(SRC_DIR) \
+	$(PROGRAM).lpr
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
@@ -58,4 +70,14 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 test: $(TARGET)
-	$(TARGET)
+	@if [ -n "$(HEAPTRC_ENABLED)" ]; then \
+		rm -f $(HEAPTRC_DUMP); \
+		HEAPTRC='haltonnotreleased,log=$(HEAPTRC_DUMP)' $(TARGET); \
+		grep -q '^Heap dump by heaptrc unit' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: no heap dump written ($(HEAPTRC_DUMP))"; exit 1; }; \
+		grep -q '^0 unfreed memory blocks : 0$$' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: unfreed blocks reported"; cat $(HEAPTRC_DUMP); exit 1; }; \
+		echo "[HEAPTRC] OK"; \
+	else \
+		$(TARGET); \
+	fi
+
+run: test

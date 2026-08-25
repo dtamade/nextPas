@@ -35,6 +35,10 @@ begin
     LP := LTracker.GetMem(128);
     Check(LP <> nil, 'GetMem should return non-nil');
     Check(LTracker.ActiveAllocCount = 1, 'ActiveAllocCount should be 1');
+    { FIX: release before tracker teardown — suite itself must stay
+      leak-clean under the default heaptrc gate }
+    LTracker.FreeMem(LP);
+    Check(LTracker.ActiveAllocCount = 0, 'after free: count=0');
   finally
     LTracker.Free;
   end;
@@ -105,13 +109,19 @@ end;
 procedure TestLeakDetection;
 var
   LTracker: TTrackingAllocator;
+  { FIX: keep handles to the deliberately leaked blocks so they can be
+    released after the assertions — suite stays leak-clean under the
+    default heaptrc gate while the leak-detection semantics are unchanged }
+  LP1, LP2: Pointer;
 begin
   LTracker := TTrackingAllocator.Create(GetRtlAllocator);
   try
-    LTracker.GetMem(128);
-    LTracker.GetMem(256);
+    LP1 := LTracker.GetMem(128);
+    LP2 := LTracker.GetMem(256);
     Check(LTracker.HasLeaks, 'should report leaks');
     Check(LTracker.ActiveAllocCount = 2, 'should have 2 leaks');
+    LTracker.FreeMem(LP1);
+    LTracker.FreeMem(LP2);
   finally
     LTracker.Free;
   end;
@@ -139,15 +149,19 @@ procedure TestReportLeaks;
 var
   LTracker: TTrackingAllocator;
   LReport: string;
+  { FIX: same as TestLeakDetection — release after asserting }
+  LP1, LP2: Pointer;
 begin
   LTracker := TTrackingAllocator.Create(GetRtlAllocator);
   try
-    LTracker.GetMem(100);
-    LTracker.GetMem(200);
+    LP1 := LTracker.GetMem(100);
+    LP2 := LTracker.GetMem(200);
     LReport := LTracker.ReportLeaks;
     Check(Pos('100', LReport) > 0, 'report should contain size 100');
     Check(Pos('200', LReport) > 0, 'report should contain size 200');
     Check(Pos('Leak report', LReport) > 0, 'report should have header');
+    LTracker.FreeMem(LP1);
+    LTracker.FreeMem(LP2);
   finally
     LTracker.Free;
   end;
