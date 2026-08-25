@@ -129,6 +129,14 @@ function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
   const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
   const AOptions: TNetWsFrameSessionOptions): IWebSocketFrameSession;
 
+{ 同上（F-10）：ACheckOrigin 非空时升级握手按回调裁决 Origin（拒绝抛
+  EHttpError），替代缺省「必须存在且非 null」检查——服务端 Origin 白名单
+  等部署面策略由此在 core 握手层执行；nil 等价四参版本。 }
+function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
+  const AOptions: TNetWsFrameSessionOptions;
+  const ACheckOrigin: TWebSocketOriginCheck): IWebSocketFrameSession; overload;
+
 { Connect to a WebSocket server.
   Establishes TCP connection, performs client handshake, returns IWebSocket.
   Supports ws:// and wss:// schemes.
@@ -800,10 +808,13 @@ begin
   AConn := LConn;
 end;
 
-{ 非阻塞升级（B8 第二片）：见 interface 注释。 }
+{ 非阻塞升级（B8 第二片）：见 interface 注释。
+  F-10：五参重载为真身——ACheckOrigin 经局部 TWebSocketOptions 注入握手
+  （此前硬编码 Default 使回调不可达）；四参版本薄委托传 nil。 }
 function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
   const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
-  const AOptions: TNetWsFrameSessionOptions): IWebSocketFrameSession;
+  const AOptions: TNetWsFrameSessionOptions;
+  const ACheckOrigin: TWebSocketOriginCheck): IWebSocketFrameSession;
 var
   LConn: ITcpStream;
   LDeflate: Boolean;
@@ -812,12 +823,15 @@ var
   LPush: IWebSocketFrameWorkerPush;
   LSession: TNetWsFrameSession;
   LNotifier: IWsServerShutdownNotifier;
+  LHandshakeOpts: TWebSocketOptions;
 begin
   LConn := nil;
   LNotifier := nil;
   { 非阻塞路径不登记 shutdown 通知器：事件驱动会话收尾不经 TWebSocketImpl.
     Destroy，无人 Detach，注册表会悬挂引用。 }
-  PerformUpgradeHandshake(AReq, AW, TWebSocketOptions.Default, False, False,
+  LHandshakeOpts := TWebSocketOptions.Default;
+  LHandshakeOpts.OnCheckOrigin := ACheckOrigin;
+  PerformUpgradeHandshake(AReq, AW, LHandshakeOpts, False, False,
     LConn, LDeflate, LNotifier);
   if not Supports(AW, IHttpConnContext, LConnCtx) then
   begin
@@ -842,6 +856,14 @@ begin
     raise EHttpError.Create(hekUpgrade, 'WebSocket upgrade handoff failed');
   end;
   Result := LSession;
+end;
+
+function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
+  const AOptions: TNetWsFrameSessionOptions): IWebSocketFrameSession;
+begin
+  Result := UpgradeWebSocketHandoff(AReq, AW, ASink, AOptions,
+    TWebSocketOriginCheck(nil));
 end;
 
 { TWsServerShutdownNotifier }
