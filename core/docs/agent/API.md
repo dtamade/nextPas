@@ -33,6 +33,11 @@ TTriState = (tsUnset, tsFalse, tsTrue);   { 三态布尔：unset 即不上送 }
   wire 映射：openai §1.1 / anthropic §2.1（required→any、none→省略 tools）}
 TToolChoiceMode = (tcmUnset, tcmAuto, tcmNone, tcmRequired, tcmNamed);
 
+{ 推理力度旋钮（W7）：reUnset 不上送。openai → reasoning_effort；
+  anthropic 无对应参数 → 忽略 + warn（Q-A5 同规则），推理力度走本侧
+  Thinking/Budget }
+TReasoningEffort = (reUnset, reMinimal, reLow, reMedium, reHigh);
+
 TStreamDeltaKind = (
   sdkTextDelta,        { TextDelta 追加正文 }
   sdkThinkingDelta,    { TextDelta 追加思考内容 }
@@ -154,6 +159,7 @@ TCompletionRequest = record
   ParallelToolCalls: TTriState;    { tsUnset 不上送 }
   ToolChoice: TToolChoiceMode;     { tcmUnset 不上送；映射见 WIRE-MAPPINGS §1.1/§2.1 }
   ToolChoiceName: string;          { 仅 tcmNamed 有效；缺名 aecConfig }
+  ReasoningEffort: TReasoningEffort; { reUnset 不上送；openai reasoning_effort（W7）}
   Thinking: TTriState;             { 扩展思考开关；tsUnset 不上送 }
   ThinkingBudgetTokens: Int64;     { CMaxTokensUnset；Thinking=tsTrue 时语义生效 }
   ExtraJson: TJsonText;            { 逃生舱：合并进请求根对象（厂商私有参数）}
@@ -172,6 +178,7 @@ end;
     function WithResponseSchema(const ASchemaJson: string): TCompletionRequest;
     function WithToolChoice(AMode: TToolChoiceMode;
       const AName: string): TCompletionRequest;
+    function WithReasoningEffort(AEffort: TReasoningEffort): TCompletionRequest;
     { WithTools(array of IAgentTool) 第二形态落位在 tools 层自由函数
       （base 不依赖 intf 的分层约束，ARCHITECTURE §1），提取各工具的 Spec——
       builder 链经其不断裂；随 W3 tools 落地 }
@@ -443,6 +450,10 @@ TProviderOptions = record          { 公共段，两厂商选项 record 内嵌 }
   Model: string;                   { 回退默认；生效序 request.Model > 本值，皆空 → aecConfig }
   ConnectTimeoutMs: Int64;         { 默认 10_000 }
   TotalTimeoutMs: Int64;           { 默认 300_000（LLM 长尾合理值）}
+  ReadIdleTimeoutMs: Int64;        { CTimeoutDefault=0 禁用；流式块间空闲超时
+                                     （W7，WIRE-MAPPINGS §0）：超时合成 aecTimeout
+                                     且不污染取消标志。推荐 60_000 起——o1 系
+                                     reasoning 沉默期需按模型族放宽 }
   Transport: IAgentTransport;      { 注入点：测试/装饰器；nil → 生产 http transport }
   Logger: ILogger;                 { log.intf 接缝（SELECTION C15）；nil → NullLogger 零开销 }
   ExtraHeaders: TWireHeaderArray;

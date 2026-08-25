@@ -17,6 +17,7 @@ TSSEFeeder feed 式引擎（ParseSSE 委托单一引擎，WHATWG 对齐），目
 跨模块 slice；两引擎输入域不同（agent.sse 字节域含 UTF-8 跨块/BOM/DoS 上限，
 http.sse 文本行域），合并经审计判定不立项 |
 | **W6 结构化输出与工具选择（v1.1 第一批，2026-08-25 立项）** | 词表 `TToolChoiceMode`/`ToolChoiceName` + `ResponseSchemaJson` 启用；openai 族 json_schema strict 编码 + tool_choice 四形态；anthropic tool_choice 映射（required→any、none→省略 tools 转译）+ schema fail-fast；WIRE-MAPPINGS §1.7 立 strict 节 | test_provider_openai / test_provider_anthropic / test_codecs / test_fake_provider 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准无回归 + Ready 报告 |
+| **W7 推理力度与流式空闲卫生（v1.1 第二批，2026-08-25 立项）** | 词表 `TReasoningEffort`（openai reasoning_effort 编码，anthropic 忽略+warn 待遇对齐）；传输层 `ReadIdleTimeoutMs` 流式块间空闲超时（回环时序验证，aecTimeout 合成不污染取消标志） | test_provider_openai / test_provider_anthropic / test_transport_stream 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准 A/B 无回归 + Ready 报告 |
 
 ## Wave 内顺序约束
 
@@ -97,6 +98,7 @@ http.sse 文本行域），合并经审计判定不立项 |
 
 - **ReadIdleTimeoutMs（流式块间空闲超时）**【v1.1 承诺位】——冷读评审判定这是
   传输卫生而非策略题：上游僵死时消费方挂满 TotalTimeout 300s 不可接受。
+  【已立项 2026-08-25 → W7 落地】
 - **WithFallback 装饰器**（多 provider 容灾链：主路错误码命中白名单→次路重放）——
   纯组合 `IAgentProvider` 即可实现，~百行级。触发：任一客户表达多供应商容灾需求。
 - **WithThrottle 装饰器**（客户端限流防 429，消费 core.ratelimit 令牌桶）——
@@ -121,7 +123,7 @@ v1.1 第一批立项顺序：**Structured Output → tool_choice**（余项按�
   【已立项 2026-08-25 → W6 落地】
 - **ReasoningEffort 旋钮**【v1.1 候选 #3】——OpenAI 系 reasoning_effort 无落点、
   与 anthropic Thinking 待遇失衡（冷读评审指认）；anthropic 侧忽略+warn 有
-  ParallelToolCalls 先例。
+  ParallelToolCalls 先例。【已立项 2026-08-25 → W7 落地】
 - **CountTokens API**（Anthropic /count_tokens 先例；精确计数不入约束路径，
   仅观测）——计费精度诉求出现时立项。
 - **Prompt-cache 断点策略**（loop 自动放置 cache_control 断点；agent 循环每轮全量
