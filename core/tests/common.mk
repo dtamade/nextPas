@@ -56,15 +56,20 @@ HEAPTRC_ENABLED :=
 endif
 HEAPTRC_DUMP ?= $(BUILD_DIR)/$(PROGRAM).heaptrc
 
+# Optional extra environment for the test process (P5l): suites that need
+# fixture wiring (e.g. NEXTPAS_PG_TEST_CONN for local-postgres db suites)
+# set RUN_ENV after the include; empty by default.
+RUN_ENV ?=
+
 run: build
 	@if [ -n "$(HEAPTRC_ENABLED)" ]; then \
 		rm -f $(HEAPTRC_DUMP); \
-		HEAPTRC='haltonnotreleased,log=$(HEAPTRC_DUMP)' $(BUILD_DIR)/$(PROGRAM); \
+		HEAPTRC='haltonnotreleased,log=$(HEAPTRC_DUMP)' $(RUN_ENV) $(BUILD_DIR)/$(PROGRAM); \
 		grep -q '^Heap dump by heaptrc unit' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: no heap dump written ($(HEAPTRC_DUMP))"; exit 1; }; \
 		grep -q '^0 unfreed memory blocks : 0$$' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: unfreed blocks reported"; cat $(HEAPTRC_DUMP); exit 1; }; \
 		echo "[HEAPTRC] OK"; \
 	else \
-		$(BUILD_DIR)/$(PROGRAM); \
+		$(RUN_ENV) $(BUILD_DIR)/$(PROGRAM); \
 	fi
 
 # * _wine / Windows-only-symbol 测试：WINE_ONLY_TEST=1 时 test 目标走
