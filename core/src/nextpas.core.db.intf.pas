@@ -180,6 +180,25 @@ type
       const ARowId: Int64; const AReadWrite: Boolean): IDbBlobStream;
   end;
 
+  {** 异步取消控制（V3-B6，可选能力，QueryInterface 于 IDbConnection
+      探测）。db.async 执行器经本面把消费方取消令牌映射为后端中断
+      原语。语义：
+      - ArmCancel/DisarmCancel 配对：sqlite 装/卸 progress handler
+        （探测内部取消标志）；pg 等其余后端无操作返回 True。
+        只允许在无在途调用时调用（执行器单飞模型保证）。
+      - RequestCancel 线程安全、尽力而为：pg = PQcancel（在途语句以
+        57014 query_canceled 收场）；sqlite = 原子标志 → 已装 handler
+        中断 → SQLITE_INTERRUPT；无在途调用时无害 no-op。
+      - 取消引发失败的归一：两端均 decTimeout（"查询取消"语义位，
+        ClassifyPg 57014 / ClassifySqlite INTERRUPT 同词表）。
+      无布尔能力位（与 IDbRowBlobControl 同例）：探测即能力，无需自述。 *}
+  IDbCancelControl = interface
+    ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE00D}']
+    function ArmCancel: Boolean;
+    procedure DisarmCancel;
+    procedure RequestCancel;
+  end;
+
   {** 后端能力自述（V3-B1）：只描述统一层契约内的能力面，不做元数据
       全家桶。可选能力接口——QueryInterface 探测，未实现 = 连接来自
       早于本契约的适配器；门面 DbCapabilities 统一探测并允许 nil。

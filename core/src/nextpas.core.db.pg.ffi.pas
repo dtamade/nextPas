@@ -66,6 +66,14 @@ type
   TPQloCreat   = function(AConn: PGconn; AMode: Integer): TOid; cdecl;
   TPQloUnlink  = function(AConn: PGconn; AOid: TOid): Integer; cdecl;
 
+  { V3-B6 异步取消三件套。PGcancel 句柄线程安全：PQgetCancel 在建连
+    线程取一次，PQcancel 可从任意线程调用（libpq 文档明示），向服务
+    端另发取消请求使在途语句以 57014（query_canceled）收场。 }
+  TPQgetCancel  = function(AConn: PGconn): PGcancel; cdecl;
+  TPQfreeCancel = procedure(ACancel: PGcancel); cdecl;
+  TPQcancel     = function(ACancel: PGcancel; AErrBuf: PAnsiChar;
+    AErrBufSize: Integer): Integer; cdecl;
+
 var
   { Bound by nextpas.core.db.pg.loader; callers must PgEnsureLoaded first
     (TPgConn.Create does it). Never call while nil. }
@@ -99,6 +107,9 @@ var
   lo_tell64:  TPQloTell64;
   lo_creat:   TPQloCreat;
   lo_unlink:  TPQloUnlink;
+  pq_getCancel:  TPQgetCancel;
+  pq_freeCancel: TPQfreeCancel;
+  pq_cancel:     TPQcancel;
 
 implementation
 
