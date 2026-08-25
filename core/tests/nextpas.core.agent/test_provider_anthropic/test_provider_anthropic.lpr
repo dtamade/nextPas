@@ -213,6 +213,95 @@ begin
     'structured output deferred to v1.1');
 end;
 
+procedure TestEncodeToolChoiceW6;
+var
+  Req: TCompletionRequest;
+  Doc: IJsonDocument;
+begin
+  Req := TCompletionRequest.New('m').WithMaxTokens(16)
+    .WithTools(TToolSpecArray.Create(WSpec('f', 'd', '{}')));
+
+  Doc := JsonParse(EncodeAnthropicRequest(
+    Req.WithToolChoice(tcmAuto), False));
+  CheckEqual('auto',
+    Doc.Root.Get('tool_choice').Get('type').AsStr.ToString, 'auto type');
+
+  Doc := JsonParse(EncodeAnthropicRequest(
+    Req.WithToolChoice(tcmRequired), False));
+  CheckEqual('any',
+    Doc.Root.Get('tool_choice').Get('type').AsStr.ToString,
+    'required maps to any');
+
+  Doc := JsonParse(EncodeAnthropicRequest(
+    Req.WithToolChoice(tcmNamed, 'f'), False));
+  CheckEqual('tool',
+    Doc.Root.Get('tool_choice').Get('type').AsStr.ToString, 'named type');
+  CheckEqual('f',
+    Doc.Root.Get('tool_choice').Get('name').AsStr.ToString, 'named tool');
+
+  { unset 不上送（哨兵纪律）}
+  Doc := JsonParse(EncodeAnthropicRequest(Req, False));
+  Check(not Doc.Root.ObjectHas('tool_choice'), 'unset absent');
+end;
+
+procedure TestEncodeNoneOmitsToolsW6;
+var
+  ReqBase: TCompletionRequest;
+  Doc: IJsonDocument;
+begin
+  ReqBase := TCompletionRequest.New('m').WithMaxTokens(16)
+    .WithTools(TToolSpecArray.Create(WSpec('f', 'd', '{}')));
+
+  { tcmNone：省略 tools 字段转译等价禁用（Q-A9 备注）}
+  Doc := JsonParse(EncodeAnthropicRequest(
+    ReqBase.WithToolChoice(tcmNone), False));
+  Check(not Doc.Root.ObjectHas('tools'), 'none omits tools field');
+  Check(not Doc.Root.ObjectHas('tool_choice'),
+    'none emits no tool_choice key');
+
+  { 对照：同请求 auto 时 tools 在场 }
+  Doc := JsonParse(EncodeAnthropicRequest(
+    ReqBase.WithToolChoice(tcmAuto), False));
+  Check(Doc.Root.ObjectHas('tools'), 'control: tools present with auto');
+end;
+
+procedure TestEncodeRejectsW6;
+var
+  Code: TAgentErrorCode;
+  Req: TCompletionRequest;
+
+  function TryBad(const AReq: TCompletionRequest;
+    out ACode: TAgentErrorCode): Boolean;
+  begin
+    Result := False;
+    try
+      EncodeAnthropicRequest(AReq, False);
+    except
+      on E: EAgentError do
+      begin
+        ACode := E.ErrorCode;
+        Result := True;
+      end;
+    end;
+  end;
+
+begin
+  Req := TCompletionRequest.New('m').WithMaxTokens(8)
+    .WithResponseSchema('not json');
+  Check(TryBad(Req, Code) and (Code = aecConfig),
+    'schema fail-fast on anthropic regardless of payload');
+
+  Req := TCompletionRequest.New('m').WithMaxTokens(8)
+    .WithToolChoice(tcmNamed);
+  Check(TryBad(Req, Code) and (Code = aecConfig),
+    'named without name rejected');
+
+  Req := TCompletionRequest.New('m').WithMaxTokens(8)
+    .WithToolChoice(tcmRequired);
+  Check(TryBad(Req, Code) and (Code = aecConfig),
+    'tool choice with empty tools rejected');
+end;
+
 procedure TestEncodeImageSources;
 var
   Req: TCompletionRequest;
@@ -829,6 +918,9 @@ begin
   T.Test('encode full matrix', @TestEncodeFullMatrix);
   T.Test('encode system merge', @TestEncodeSystemMerge);
   T.Test('encode rejects', @TestEncodeRejects);
+  T.Test('encode tool choice W6', @TestEncodeToolChoiceW6);
+  T.Test('encode none omits tools W6', @TestEncodeNoneOmitsToolsW6);
+  T.Test('encode rejects W6', @TestEncodeRejectsW6);
   T.Test('encode image sources', @TestEncodeImageSources);
   T.Test('decode non-stream full', @TestDecodeNonStreamFull);
   T.Test('decode unmapped stop and block', @TestDecodeUnmappedStopAndBlock);

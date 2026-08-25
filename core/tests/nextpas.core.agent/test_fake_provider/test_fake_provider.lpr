@@ -40,6 +40,21 @@ begin
   Check(MessageText(M) = 'B', 'second script second');
 end;
 
+procedure TestW6FieldsDoNotAffectReplay;
+var
+  P: IAgentProvider;
+  M: TMessage;
+  R: TCompletionRequest;
+begin
+  { W6 词表字段对回放路径零影响：脚本即所得，不校验 schema }
+  P := NewFakeProvider(CScript2);
+  R := TCompletionRequest.New('m').WithUserText('hi')
+    .WithResponseSchema('{"type":"object"}')
+    .WithToolChoice(tcmRequired);
+  M := P.Complete(R);
+  Check(MessageText(M) = 'A', 'replay first with W6 fields');
+end;
+
 procedure TestStreamFoldAndEnvelope;
 var
   P: IAgentProvider;
@@ -173,6 +188,7 @@ var
 begin
   T := TTestSuite.Create('nextpas.core.agent.fake_provider');
   T.Test('replay order', @TestReplayOrder);
+  T.Test('W6 fields do not affect replay', @TestW6FieldsDoNotAffectReplay);
   T.Test('stream fold and envelope', @TestStreamFoldAndEnvelope);
   T.Test('exhaustion raises', @TestExhaustionRaises);
   T.Test('echo provider', @TestEchoProvider);

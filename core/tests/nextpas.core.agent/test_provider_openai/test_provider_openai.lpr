@@ -177,12 +177,105 @@ var
   end;
 
 begin
+  { W6：合法 schema 不再被拒；仅非法 JSON 拒（aecConfig）}
   Req := TCompletionRequest.New('m');
   Req.ResponseSchemaJson := '{"type":"object"}';
+  Check(not TryBad(Req, Code), 'valid schema accepted since W6');
+  Req := TCompletionRequest.New('m');
+  Req.ResponseSchemaJson := 'not json';
   Check(TryBad(Req, Code) and (Code = aecConfig),
-    'ResponseSchemaJson rejected in v1');
+    'schema must be valid JSON object');
   Check(TryBad(TCompletionRequest.New(''), Code) and (Code = aecConfig),
     'empty model rejected');
+end;
+
+procedure TestEncodeStructuredOutputW6;
+var
+  Doc: IJsonDocument;
+begin
+  Doc := JsonParse(EncodeOpenAIRequest(
+    TCompletionRequest.New('gpt-4o').WithUserText('extract')
+      .WithResponseSchema(
+        '{"type":"object","properties":{"name":{"type":"string"}}}'),
+    False));
+  Check(Doc.Root.ObjectHas('response_format'), 'response_format present');
+  CheckEqual('json_schema',
+    Doc.Root.Get('response_format').Get('type').AsStr.ToString, 'rf type');
+  Check(Doc.Root.Get('response_format').Get('json_schema')
+    .Get('strict').IsBool and
+    Doc.Root.Get('response_format').Get('json_schema').Get('strict').AsBool,
+    'strict true');
+  CheckEqual('response',
+    Doc.Root.Get('response_format').Get('json_schema')
+      .Get('name').AsStr.ToString, 'fixed name response');
+  Check(Doc.Root.Get('response_format').Get('json_schema').Get('schema')
+    .Get('properties').ObjectHas('name'), 'schema passthrough verbatim');
+
+  { §1.7：流式/非流式共用同一编码，无第二形态 }
+  Doc := JsonParse(EncodeOpenAIRequest(
+    TCompletionRequest.New('m').WithUserText('x')
+      .WithResponseSchema('{}'), True));
+  Check(Doc.Root.ObjectHas('response_format') and
+    Doc.Root.Get('stream').IsBool, 'streaming carries same encoding');
+end;
+
+procedure TestEncodeToolChoiceW6;
+var
+  R: TCompletionRequest;
+  Doc: IJsonDocument;
+begin
+  R := TCompletionRequest.New('m').WithUserText('x')
+    .WithTools(TToolSpecArray.Create(WSpec('f', 'd', '{}')));
+
+  Doc := JsonParse(EncodeOpenAIRequest(R.WithToolChoice(tcmAuto), False));
+  CheckEqual('auto', Doc.Root.Get('tool_choice').AsStr.ToString, 'auto');
+
+  Doc := JsonParse(EncodeOpenAIRequest(R.WithToolChoice(tcmNone), False));
+  CheckEqual('none', Doc.Root.Get('tool_choice').AsStr.ToString, 'none');
+
+  Doc := JsonParse(EncodeOpenAIRequest(R.WithToolChoice(tcmRequired), False));
+  CheckEqual('required',
+    Doc.Root.Get('tool_choice').AsStr.ToString, 'required');
+
+  Doc := JsonParse(EncodeOpenAIRequest(
+    R.WithToolChoice(tcmNamed, 'f'), False));
+  CheckEqual('function',
+    Doc.Root.Get('tool_choice').Get('type').AsStr.ToString, 'named type');
+  CheckEqual('f',
+    Doc.Root.Get('tool_choice').Get('function').Get('name').AsStr.ToString,
+    'named fn');
+
+  { unset 不上送（哨兵纪律）}
+  Doc := JsonParse(EncodeOpenAIRequest(R, False));
+  Check(not Doc.Root.ObjectHas('tool_choice'), 'unset absent');
+end;
+
+procedure TestEncodeRejectsW6;
+var
+  Code: TAgentErrorCode;
+
+  function TryBad(const AReq: TCompletionRequest;
+    out ACode: TAgentErrorCode): Boolean;
+  begin
+    Result := False;
+    try
+      EncodeOpenAIRequest(AReq, False);
+    except
+      on E: EAgentError do
+      begin
+        ACode := E.ErrorCode;
+        Result := True;
+      end;
+    end;
+  end;
+
+begin
+  Check(TryBad(TCompletionRequest.New('m').WithUserText('x')
+    .WithToolChoice(tcmNamed), Code) and (Code = aecConfig),
+    'named without name rejected');
+  Check(TryBad(TCompletionRequest.New('m').WithUserText('x')
+    .WithToolChoice(tcmRequired), Code) and (Code = aecConfig),
+    'tool choice with empty tools rejected');
 end;
 
 const
@@ -815,6 +908,9 @@ begin
   T.Test('encode full matrix', @TestEncodeFull);
   T.Test('encode stream flags', @TestEncodeStreamFlags);
   T.Test('encode rejects', @TestEncodeRejects);
+  T.Test('encode structured output W6', @TestEncodeStructuredOutputW6);
+  T.Test('encode tool choice W6', @TestEncodeToolChoiceW6);
+  T.Test('encode rejects W6', @TestEncodeRejectsW6);
   T.Test('decode non-stream full', @TestDecodeNonStreamFull);
   T.Test('decode unmapped finish', @TestDecodeUnmappedFinish);
   T.Test('decode violations', @TestDecodeViolations);

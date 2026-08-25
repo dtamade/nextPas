@@ -128,6 +128,12 @@ LReply := LProvider.Complete(
 // 3.5) 可选：会话转录持久化（W5 JSONL store；权限边界见 SECURITY §6）
 LStore := NewJsonlTranscriptStore('/var/lib/myapp/transcripts');
 
+// 3.6) 可选：结构化输出 / 工具强制（W6；openai 族 json_schema strict，
+//      anthropic 侧 schema fail-fast、tool_choice 映射见 WIRE-MAPPINGS §2.1）
+// LReply := LProvider.Complete(TCompletionRequest.New('gpt-4o')
+//   .WithUserText('extract: ...')
+//   .WithResponseSchema('{"type":"object","properties":{...}}'));
+
 // 4) 测试离线：NewFakeProvider 脚本回放，CI 零网络零睡眠
 ```
 

@@ -430,14 +430,23 @@ function EncodeOpenAIRequest(const AReq: TCompletionRequest;
 var
   B: IJsonBuilder;
   I: Integer;
+  LSchema: IJsonDocument;
 begin
+  { §1.7：schema 须为合法 JSON object，违者本地 aecConfig 不发网 }
   if AReq.ResponseSchemaJson <> '' then
-    raise EAgentError.CreateLocal(aecConfig,
-      'openai: ResponseSchemaJson requires structured output support ' +
-      '(v1.1 roadmap); not accepted by this adapter yet');
+  begin
+    LSchema := JsonParse(AReq.ResponseSchemaJson);
+    if (LSchema = nil) or LSchema.HasError or (not LSchema.Root.IsObject) then
+      raise EAgentError.CreateLocal(aecConfig,
+        'openai: ResponseSchemaJson must be a JSON object');
+  end;
   if AReq.Model = '' then
     raise EAgentError.CreateLocal(aecConfig,
       'openai: model is required');
+  { §1.1：装配矛盾显式暴露——要求选择工具却未携带工具词表 }
+  if (AReq.ToolChoice <> tcmUnset) and (Length(AReq.Tools) = 0) then
+    raise EAgentError.CreateLocal(aecConfig,
+      'openai: ToolChoice requires a non-empty Tools array');
 
   B := JsonBuilder;
   B.BeginObject;
@@ -515,6 +524,62 @@ begin
     B.EndArray;
   end;
 
+  { ToolChoice（§1.1）：tcmUnset 不上送；named 缺名本地 aecConfig }
+  case AReq.ToolChoice of
+    tcmAuto:
+      begin
+        B.Key('tool_choice');
+        B.Str('auto');
+      end;
+    tcmNone:
+      begin
+        B.Key('tool_choice');
+        B.Str('none');
+      end;
+    tcmRequired:
+      begin
+        B.Key('tool_choice');
+        B.Str('required');
+      end;
+    tcmNamed:
+      begin
+        if AReq.ToolChoiceName = '' then
+          raise EAgentError.CreateLocal(aecConfig,
+            'openai: ToolChoice=tcmNamed requires ToolChoiceName');
+        B.Key('tool_choice');
+        B.BeginObject;
+        B.Key('type');
+        B.Str('function');
+        B.Key('function');
+        B.BeginObject;
+        B.Key('name');
+        B.Str(AReq.ToolChoiceName);
+        B.EndObject;
+        B.EndObject;
+      end;
+    tcmUnset:
+      ;                        { 不上送（哨兵纪律）}
+  end;
+
+  { ResponseSchemaJson（§1.7）：入口已校验 JSON object，此处原文透传 }
+  if AReq.ResponseSchemaJson <> '' then
+  begin
+    B.Key('response_format');
+    B.BeginObject;
+    B.Key('type');
+    B.Str('json_schema');
+    B.Key('json_schema');
+    B.BeginObject;
+    B.Key('name');
+    B.Str('response');
+    B.Key('strict');
+    B.Bool(True);
+    B.Key('schema');
+    B.RawJson(AReq.ResponseSchemaJson);
+    B.EndObject;
+    B.EndObject;
+  end;
+
   { Thinking/ThinkingBudgetTokens 无 Chat Completions 对应参数
     （扩展思考在 Responses API），v1 忽略——词表无 wire 目标即不上送 }
 
@@ -532,7 +597,7 @@ begin
   WriteExtraFields(B, AReq.ExtraJson,
     ['model', 'messages', 'max_tokens', 'max_completion_tokens',
      'temperature', 'top_p', 'seed', 'stop', 'parallel_tool_calls',
-     'tools', 'stream', 'stream_options']);
+     'tools', 'tool_choice', 'response_format', 'stream', 'stream_options']);
 
   B.EndObject;
   Result := B.ToString;

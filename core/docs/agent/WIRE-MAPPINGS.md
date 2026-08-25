@@ -45,6 +45,8 @@
 | `StopSequences` 非空 | `stop` |
 | `ParallelToolCalls` ≠ tsUnset | `parallel_tool_calls` |
 | `Tools` 非空（AReq.Tools） | `tools:[{type:"function", function:{name, description, parameters}}]`（parameters 为 JSON Schema 对象）；**空数组不上送字段** |
+| `ResponseSchemaJson` 非空 | `response_format:{type:"json_schema", json_schema:{name:"response", strict:true, schema:<原文透传>}}`（§1.7；schema 须可解析为 JSON object，违者本地 aecConfig） |
+| `ToolChoice` | tcmUnset 不上送；tcmAuto→`"auto"`；tcmNone→`"none"`；tcmRequired→`"required"`；tcmNamed→`{type:"function",function:{name:ToolChoiceName}}`（缺名本地 aecConfig） |
 | 流式调用 | 追加 `"stream":true, "stream_options":{"include_usage":true}`（quirk Q-O3） |
 | `ExtraJson` | 浅合并进请求根对象 |
 
@@ -112,9 +114,27 @@ data: [DONE]                                                             → 终
   wire 与 Chat Completions 同族（订阅上游亦为同方言，sub2api 确认）。
 - 编解码器/provider 复用 OpenAI 族实现：差异仅默认端点、归因名 `'grok'`、
   env 前缀 `NEXTPAS_AGENT_GROK_*`。
-- 适用怪癖全集 = §1.5（含 Q-O2 别名与 Q-O9 心跳帧）。
+- 适用怪癖全集 = §1.5（含 Q-O2 别名与 Q-O9 心跳帧）；structured output 与
+  tool_choice 编码同族适用（§1.7、§1.1）。
 - v1 inbox（未入词表）：`reasoning_effort` 参数、`x_search` 服务端工具、
   Responses 族 encrypted_reasoning 重试语义。
+
+### 1.7 Structured Output（json_schema strict 模式，W6/v1.1 第一批）
+
+词表 `ResponseSchemaJson` 携带 **JSON Schema 对象文本**（draft 版本由上游
+解释，建议 2020-12）。编码形态固定 `strict:true`——输出约束由上游执行，
+响应侧仍是普通 content/tool_calls 词表，SDK 不做输出二次校验（消费方自行
+解析；frStop 语义不变）。
+
+- `json_schema.name` 固定 `"response"`：OpenAI 必填标识符但无语义载荷，
+  词表不为它设字段；上游对 name/schema 的合法性裁决以 400 形态自然归因
+  （Q-O1 同哲学：SDK 不做模型/网关能力预判）。
+- schema 文本在编码入口经 json 解析器校验为 JSON object，违者本地
+  aecConfig 不发网（防呆与 MaxTokens 缺失同纪律）；通过后原文透传
+  （不重序列化，与 tools.parameters 同规则）。
+- 兼容网关仅支持 `{"type":"json_object"}` 时 strict 形态被上游拒绝并按
+  公共分类器归因。
+- 流式/非流式共用同一请求编码（Encode 单一实现），无第二形态。
 
 ## 2. Anthropic Messages 适配器
 
@@ -140,7 +160,9 @@ data: [DONE]                                                             → 终
 | `Seed` ≠ CSeedUnset | 无对应参数：忽略 + debug 日志（与 ParallelToolCalls 同规则）|
 | `StopSequences` | `stop_sequences` |
 | `Thinking` 三态 / Budget | `thinking:{"type":"enabled","budget_tokens":N}`；tsFalse 显式 `{"type":"disabled"}`；tsUnset 不上送；**tsTrue 而 Budget unset → aecConfig**（anthropic 强制 budget_tokens）|
-| `Thinking` 三态 / Budget | `thinking:{"type":"enabled","budget_tokens":N}`；tsFalse 显式 `{"type":"disabled"}`；tsUnset 不上送 |
+| `ToolChoice` tcmAuto/tcmRequired/tcmNamed | `tool_choice:{"type":"auto"}` / `{"type":"any"}` / `{"type":"tool","name":ToolChoiceName}`（缺名本地 aecConfig）；仅 Tools 非空时上送 |
+| `ToolChoice` tcmNone | 无 none wire 形态：**省略 `tools` 字段**转译等价禁用（Q-A9 备注）；debug 日志记一条转译说明 |
+| `ResponseSchemaJson` 非空 | **本地 aecConfig**：厂商 API 无结构化输出参数——fail-fast 而非静默降级为 prompt 注入（tool-based 转译为后续候选，见 §3） |
 | 流式调用 | `"stream":true` |
 
 注意：anthropic 无 `parallel_tool_calls` 开关（Q-A5）；该词表字段被忽略并在
@@ -196,15 +218,19 @@ id / model                            → Id / Model
 | Q-A6 | `input_json_delta` 的 partial_json 是纯片段，可能跨块断裂 | 与 openai 同一 index 分桶 + StringBuilder 累积机制（provider.common 单一实现） |
 | Q-A7 | 429/5xx 响应可能带 `retry-after` 秒级头 | 公共规则解析；HTTP-date 形态不解析返回 unknown |
 | Q-A8 | 连接在 `message_stop` 之前死亡（截断流） | **fail-closed**：decoder.Finalize 无 message_start→stop 完整轨迹即抛 aecProtocol，绝不把截断答案合成完整消息（与 Q-A1 同精神；对照 OpenAI Q-O4 的宽容是各自协议现实）|
+| Q-A9 | thinking enabled 时官方仅允许 `tool_choice:{"type":"auto"}`；any/tool 组合遭上游 400 | SDK 不做本地预判（组合约束随上游演化），400 经公共分类器自然归因；tcmNone 的 tools 省略转译不受此约束影响 |
 
 ## 3. 明确不做（v1 边界）
 
-OpenAI 侧：`logprobs`、`response_format`/JSON mode（词表保留位
-ResponseSchemaJson 已立，v1 置非空即 aecConfig）、audio/modality 参数、
-legacy `functions` 字段、`tool_choice` 细粒度控制、`reasoning_effort`
-推理力度旋钮（后两项 + structured output 均 **v1.1 承诺位**，ROADMAP 组 B#1-2）。
+OpenAI 侧：`logprobs`、audio/modality 参数、legacy `functions` 字段、
+`reasoning_effort` 推理力度旋钮（v1.1 候选 #3）。
 Anthropic 侧：`metadata.user_id`、citations、server-side tools（web_search 等）、
 `container`/code-execution、prompt caching 显式 `cache_control` 打点（缓存命中
-用量照常记录，但主动打点策略留给消费方经 ExtraJson 注入）。
+用量照常记录，但主动打点策略留给消费方经 ExtraJson 注入）、structured output
+tool-based 转译（合成工具+强制 tool_choice 的完整方案为后续候选；当前
+ResponseSchemaJson 在 anthropic 保持 fail-fast aecConfig，见 §2.1）。
+
+response_format/JSON mode 与 `tool_choice` 已随 W6（v1.1 第一批）落地：
+openai 族 §1.1/§1.7，anthropic §2.1。
 
 以上任一项进入实施范围时：先在本文件立节，再动代码。

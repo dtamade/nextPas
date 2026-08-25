@@ -29,6 +29,10 @@ TFinishReason = (frNone, frStop, frLength, frToolCalls, frContentFilter);
 
 TTriState = (tsUnset, tsFalse, tsTrue);   { 三态布尔：unset 即不上送 }
 
+{ 工具选择模式（W6）：tcmUnset 不上送；tcmNamed 需配 ToolChoiceName。
+  wire 映射：openai §1.1 / anthropic §2.1（required→any、none→省略 tools）}
+TToolChoiceMode = (tcmUnset, tcmAuto, tcmNone, tcmRequired, tcmNamed);
+
 TStreamDeltaKind = (
   sdkTextDelta,        { TextDelta 追加正文 }
   sdkThinkingDelta,    { TextDelta 追加思考内容 }
@@ -138,14 +142,18 @@ TCompletionRequest = record
   System: string;                  { 顶层 system 便利字段 }
   Messages: TMessageArray;         { 对话历史（不含本轮待发 user 时自行前置）}
   Tools: TToolSpecArray;           { 随请求携带（WithTools builder），接口单参数化 }
-  ResponseSchemaJson: TJsonText;   { v1.1 保留位：置非空时 v1 编码器抛 aecConfig
-                                     （ROADMAP inbox 组 B#1，先占词表防破坏性变更）}
+  ResponseSchemaJson: TJsonText;   { 非空即请求结构化输出：openai 族 json_schema
+                                     strict 编码（WIRE-MAPPINGS §1.7），须为合法
+                                     JSON object 否则 aecConfig；anthropic 无厂商
+                                     参数 → 本地 aecConfig fail-fast（§2.1）}
   MaxTokens: Int64;                { CMaxTokensUnset；anthropic 强制必填→WIRE-MAPPINGS §2.1 }
   Temperature: Double;             { CTemperatureUnset }
   TopP: Double;                    { CTopPUnset }
   Seed: Int64;                     { CSeedUnset }
   StopSequences: TStringArray;
   ParallelToolCalls: TTriState;    { tsUnset 不上送 }
+  ToolChoice: TToolChoiceMode;     { tcmUnset 不上送；映射见 WIRE-MAPPINGS §1.1/§2.1 }
+  ToolChoiceName: string;          { 仅 tcmNamed 有效；缺名 aecConfig }
   Thinking: TTriState;             { 扩展思考开关；tsUnset 不上送 }
   ThinkingBudgetTokens: Int64;     { CMaxTokensUnset；Thinking=tsTrue 时语义生效 }
   ExtraJson: TJsonText;            { 逃生舱：合并进请求根对象（厂商私有参数）}
@@ -161,6 +169,9 @@ end;
     function WithTemperature(AValue: Double): TCompletionRequest;
     function WithStop(const ASeq: TStringArray): TCompletionRequest;
     function WithTools(const ASpecs: TToolSpecArray): TCompletionRequest;
+    function WithResponseSchema(const ASchemaJson: string): TCompletionRequest;
+    function WithToolChoice(AMode: TToolChoiceMode;
+      const AName: string): TCompletionRequest;
     { WithTools(array of IAgentTool) 第二形态落位在 tools 层自由函数
       （base 不依赖 intf 的分层约束，ARCHITECTURE §1），提取各工具的 Spec——
       builder 链经其不断裂；随 W3 tools 落地 }
