@@ -17,6 +17,8 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.compress.intf,
+  nextpas.core.io.intf,
   nextpas.core.zip.base,
   nextpas.core.zip.writer,
   nextpas.core.zip.reader,
@@ -31,6 +33,10 @@ type
   TZipExtractOptions = nextpas.core.zip.fs.TZipExtractOptions;
   IZipWriter = nextpas.core.zip.writer.IZipWriter;
   IZipReader = nextpas.core.zip.reader.IZipReader;
+  { 流式条目读写端：写端经 IZipWriter.AddEntryStream 获取（推式），
+    读端经 IZipReader.OpenEntry* 获取（拉式），Close/EOF 语义见各接口 }
+  ICompressWriter = nextpas.core.compress.intf.ICompressWriter;
+  IDecompressReader = nextpas.core.compress.intf.IDecompressReader;
 
 const
   C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.reader.C_ZIP_DEFAULT_MAX_OUTPUT;

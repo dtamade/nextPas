@@ -16,6 +16,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.bytes.builder,
+  nextpas.core.compress.intf,
   nextpas.core.zip.base;
 
 type
@@ -53,6 +54,12 @@ type
     {** 完整选项添加：方法/时间戳/unix 模式字一次给定 *}
     procedure AddEntryWithOptions(const AName: string; const AData: TBytes;
       const AOptions: TZipAddOptions);
+    {** 流式添加条目：返回未压缩载荷的推式写入端（ICompressWriter），
+        增量计算 CRC32 并按 Method 压缩；Close 后条目落定（析构兜底同义）。
+        载荷不必整体物化，内存上界为单条目压缩尺寸；Finish 时存在未 Close
+        的流则 raise。多个未关闭流按各自 Close 顺序落盘。 *}
+    function AddEntryStream(const AName: string;
+      const AOptions: TZipAddOptions): ICompressWriter;
     {** 已添加条目数 *}
     function EntryCount: Integer;
     {** 终结并返回完整归档字节；此后各添加方法与 Finish 均 raise *}
@@ -74,6 +81,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.io.intf,
   nextpas.core.checksum.crc32,
   nextpas.core.compress.deflate;
 
@@ -104,6 +112,10 @@ type
     FCapacity: Integer;
     FFinished: Boolean;
     FForceZip64: Boolean;
+    { 未 Close 的流式写入端。弱登记（裸指针，不持引用计数）：
+      用户放弃流时对象必然析构并按指针注销；写器只比较/清除指针，
+      绝不解引用悬垂指针（在册 ⇔ FOwner<>nil ⇔ 存活外部引用） }
+    FOpenSinks: array of Pointer;
     procedure CheckOpen;
     procedure EnsureCapacity(AMinimum: Integer);
     procedure AddEntryInternal(const AName: string; const APayload,
@@ -111,8 +123,17 @@ type
       AIsDir: Boolean; AMode: Word);
     procedure AddDirectoryInternal(const AName: string;
       const AModTimeUnixSec: Int64);
+    procedure RegisterSink(ASink: TObject);
+    procedure UnregisterSink(APtr: Pointer);
+    procedure DetachSinks;
+    { local header + 压缩载荷落盘（元数据已含全部字段，偏移在此捕获） }
+    procedure AppendLocalEntry(const AMeta: TZipEntryMeta;
+      const APayload: TBytes);
+    { 流式条目定稿：登记元数据并落盘 local header + 压缩载荷 }
+    procedure CommitStreamEntry(AMeta: TZipEntryMeta; const APayload: TBytes);
   public
     constructor Create(AForceZip64: Boolean);
+    destructor Destroy; override;
     procedure AddEntry(const AName: string; const AData: TBytes);
     procedure AddEntryWithTime(const AName: string; const AData: TBytes;
       const AModTimeUnixSec: Int64);
@@ -124,6 +145,8 @@ type
       const AModTimeUnixSec: Int64);
     procedure AddEntryWithOptions(const AName: string; const AData: TBytes;
       const AOptions: TZipAddOptions);
+    function AddEntryStream(const AName: string;
+      const AOptions: TZipAddOptions): ICompressWriter;
     function EntryCount: Integer;
     function Finish: TBytes;
   end;
@@ -160,6 +183,12 @@ begin
   FForceZip64 := AForceZip64;
 end;
 
+destructor TZipWriter.Destroy;
+begin
+  DetachSinks;
+  inherited;
+end;
+
 procedure TZipWriter.CheckOpen;
 begin
   if FFinished then
@@ -179,51 +208,199 @@ begin
   FCapacity := LNew;
 end;
 
+{ 条目规格归一化（一次性添加与流式添加共用）：模式字声明目录即按目录处理
+  并补尾随 '/'（对齐 Go archive/zip 语义）；低字节 $10 为 MS-DOS 目录属性位，
+  unzip 等工具据此识别目录条目 }
+procedure ResolveEntrySpec(const AName: string; AIsDir: Boolean; AMode: Word;
+  out AEffName: string; out AEffIsDir: Boolean; out AExtAttrs: LongWord);
+begin
+  AEffIsDir := AIsDir or ((AMode and $4000) <> 0);
+  AEffName := AName;
+  if AEffIsDir and ((AEffName = '') or (AEffName[Length(AEffName)] <> '/')) then
+    AEffName := AEffName + '/';
+  ValidateZipEntryName(AEffName);
+  if AMode = 0 then
+  begin
+    if AEffIsDir then
+      AExtAttrs := C_ZIP_EXTERNAL_ATTR_DIRECTORY
+    else
+      AExtAttrs := C_ZIP_EXTERNAL_ATTR_REGULAR;
+  end
+  else if AEffIsDir then
+    AExtAttrs := (LongWord(AMode) shl 16) or $0010
+  else
+    AExtAttrs := LongWord(AMode) shl 16;
+end;
+
+{ IBytesBuilder 的最小 IWriter 适配：供增量压缩器写入压缩载荷缓冲 }
+type
+  TBuilderSink = class(TInterfacedObject, IWriter)
+  private
+    FBuilder: IBytesBuilder;
+  public
+    constructor Create(const ABuilder: IBytesBuilder);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+constructor TBuilderSink.Create(const ABuilder: IBytesBuilder);
+begin
+  inherited Create;
+  FBuilder := ABuilder;
+end;
+
+function TBuilderSink.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  if ACount > 0 then
+    FBuilder.AppendBytes(PByte(@ABuf), ACount);
+  Result := ACount;
+end;
+
+{ 流式条目写入端：外部写未压缩字节进来，内部增量 CRC + raw deflate；
+  Close（或放弃时析构）定稿条目。语义见 IZipWriter.AddEntryStream 注释。 }
+type
+  TZipEntrySink = class(TInterfacedObject, ICompressWriter)
+  private
+    FOwner: TZipWriter;          { 弱归属；DetachOwner 置 nil }
+    FMeta: TZipEntryMeta;        { Close 时补齐 Crc/USize/CSize/Z64 标记 }
+    FTimeUnixSec: Int64;
+    FCrc: LongWord;
+    FUSize: UInt64;
+    FBuffer: IBytesBuilder;      { store 原样 / deflate 压缩输出累积 }
+    FDeflate: ICompressWriter;   { deflate 路径的增量压缩器；store 为 nil }
+    FClosed: Boolean;
+    procedure FinalizeEntry(AOwner: TZipWriter);
+  public
+    constructor Create(AOwner: TZipWriter; const AMeta: TZipEntryMeta;
+      const ATimeUnixSec: Int64);
+    destructor Destroy; override;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+    procedure Close;
+    procedure DetachOwner;
+  end;
+
+constructor TZipEntrySink.Create(AOwner: TZipWriter; const AMeta: TZipEntryMeta;
+  const ATimeUnixSec: Int64);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FMeta := AMeta;
+  FTimeUnixSec := ATimeUnixSec;
+  FCrc := 0;                     { Crc32Update 标准值语义的运行值 }
+  FUSize := 0;
+  FBuffer := CreateBytesBuilder(4096);
+  if AMeta.FMethod = C_ZIP_METHOD_DEFLATE then
+    FDeflate := CreateRawDeflateWriter(TBuilderSink.Create(FBuffer));
+end;
+
+procedure TZipEntrySink.DetachOwner;
+begin
+  FOwner := nil;
+end;
+
+destructor TZipEntrySink.Destroy;
+begin
+  { 显式放弃未关闭的流：仅解除登记，条目不落入归档（见 API 契约）。
+    登记为裸指针（弱引用），析构必然可达：用户丢掉最后一个外部
+    引用时计数归零走到这里 }
+  if FOwner <> nil then
+  begin
+    FOwner.UnregisterSink(Pointer(Self));
+    FOwner := nil;
+  end;
+  inherited;
+end;
+
+function TZipEntrySink.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  if FClosed then
+    raise EIOError.Create('zip entry stream: write after close');
+  if FOwner = nil then
+    raise EInvalidOperationError.Create('zip entry stream: writer released');
+  if ACount > 0 then
+  begin
+    FCrc := Crc32Update(FCrc, @ABuf, ACount);
+    Inc(FUSize, ACount);
+    if FDeflate <> nil then
+      FDeflate.Write(ABuf, ACount)
+    else
+      FBuffer.AppendBytes(PByte(@ABuf), ACount);
+  end;
+  Result := ACount;
+end;
+
+procedure TZipEntrySink.Flush;
+begin
+  if FClosed then
+    raise EIOError.Create('zip entry stream: flush after close');
+  if FOwner = nil then
+    raise EInvalidOperationError.Create('zip entry stream: writer released');
+  if FDeflate <> nil then
+    FDeflate.Flush;
+end;
+
+procedure TZipEntrySink.FinalizeEntry(AOwner: TZipWriter);
+var
+  LPayload: TBytes;
+begin
+  LPayload := FBuffer.ToBytes;
+  FMeta.FCrc := FCrc;
+  FMeta.FUSize := FUSize;
+  FMeta.FCSize := Length(LPayload);
+  FMeta.FNeedsZ64Sizes := AOwner.FForceZip64 or
+    (FUSize > C_ZIP_MAX_SIZE32) or
+    (UInt64(Length(LPayload)) > C_ZIP_MAX_SIZE32);
+  DosDateTimeFromUnix(FTimeUnixSec, FMeta.FDosDate, FMeta.FDosTime);
+  AOwner.CommitStreamEntry(FMeta, LPayload);
+end;
+
+procedure TZipEntrySink.Close;
+var
+  LOwner: TZipWriter;
+begin
+  { 先置 FClosed 再定稿：压缩终结失败时本流已作废，条目不落入归档，
+    登记由 finally 保证解除，不阻塞后续 Finish }
+  if FClosed then
+    Exit;
+  FClosed := True;
+  LOwner := FOwner;
+  if LOwner = nil then
+    raise EInvalidOperationError.Create('zip entry stream: writer released');
+  try
+    if FDeflate <> nil then
+      FDeflate.Close;
+    FinalizeEntry(LOwner);
+  finally
+    if FOwner <> nil then
+    begin
+      FOwner.UnregisterSink(Pointer(Self));
+      FOwner := nil;
+    end;
+  end;
+end;
+
 procedure TZipWriter.AddEntryInternal(const AName: string; const APayload,
   AData: TBytes; AMethod: Word; const AModTimeUnixSec: Int64;
   AIsDir: Boolean; AMode: Word);
 var
-  LCrc: LongWord;
-  LDosDate, LDosTime: Word;
   LMeta: TZipEntryMeta;
-  LVersion: Word;
   LEffName: string;
   LEffIsDir: Boolean;
 begin
   CheckOpen;
-  { 模式字声明目录即按目录处理并补尾随 '/'（对齐 Go archive/zip 语义） }
-  LEffIsDir := AIsDir or ((AMode and $4000) <> 0);
-  LEffName := AName;
-  if LEffIsDir and ((LEffName = '') or (LEffName[Length(LEffName)] <> '/')) then
-    LEffName := LEffName + '/';
-  ValidateZipEntryName(LEffName);
-  if AMode = 0 then
-  begin
-    if LEffIsDir then
-      LMeta.FExtAttrs := C_ZIP_EXTERNAL_ATTR_DIRECTORY
-    else
-      LMeta.FExtAttrs := C_ZIP_EXTERNAL_ATTR_REGULAR;
-  end
-  else if LEffIsDir then
-    { 低字节 $10 为 MS-DOS 目录属性位，unzip 等工具据此识别目录条目 }
-    LMeta.FExtAttrs := (LongWord(AMode) shl 16) or $0010
-  else
-    LMeta.FExtAttrs := LongWord(AMode) shl 16;
+  ResolveEntrySpec(AName, AIsDir, AMode, LEffName, LEffIsDir,
+    LMeta.FExtAttrs);
 
   LMeta.FNeedsZ64Sizes := FForceZip64 or
     (UInt64(Length(AData)) > C_ZIP_MAX_SIZE32) or
     (UInt64(Length(APayload)) > C_ZIP_MAX_SIZE32);
 
-  LCrc := Crc32OfBytes(AData);
-  DosDateTimeFromUnix(AModTimeUnixSec, LDosDate, LDosTime);
-
   LMeta.FName := LEffName;
   LMeta.FMethod := AMethod;
-  LMeta.FCrc := LCrc;
+  LMeta.FCrc := Crc32OfBytes(AData);
   LMeta.FUSize := Length(AData);
   LMeta.FCSize := Length(APayload);
-  LMeta.FDosTime := LDosTime;
-  LMeta.FDosDate := LDosDate;
+  DosDateTimeFromUnix(AModTimeUnixSec, LMeta.FDosDate, LMeta.FDosTime);
   LMeta.FLocalOffset := FOut.Length;
   LMeta.FIsDir := LEffIsDir;
 
@@ -231,7 +408,15 @@ begin
   FEntries[FCount] := LMeta;
   Inc(FCount);
 
-  if LMeta.FNeedsZ64Sizes then
+  AppendLocalEntry(LMeta, APayload);
+end;
+
+procedure TZipWriter.AppendLocalEntry(const AMeta: TZipEntryMeta;
+  const APayload: TBytes);
+var
+  LVersion: Word;
+begin
+  if AMeta.FNeedsZ64Sizes then
     LVersion := C_ZIP_VERSION_ZIP64
   else
     LVersion := C_ZIP_VERSION_DEFAULT;
@@ -239,36 +424,77 @@ begin
   FOut.AppendUInt32LE(C_ZIP_LOCAL_SIG);
   FOut.AppendUInt16LE(LVersion);
   FOut.AppendUInt16LE(C_ZIP_FLAG_UTF8);
-  FOut.AppendUInt16LE(AMethod);
-  FOut.AppendUInt16LE(LDosTime);
-  FOut.AppendUInt16LE(LDosDate);
-  FOut.AppendUInt32LE(LCrc);
-  if LMeta.FNeedsZ64Sizes then
+  FOut.AppendUInt16LE(AMeta.FMethod);
+  FOut.AppendUInt16LE(AMeta.FDosTime);
+  FOut.AppendUInt16LE(AMeta.FDosDate);
+  FOut.AppendUInt32LE(AMeta.FCrc);
+  if AMeta.FNeedsZ64Sizes then
   begin
     FOut.AppendUInt32LE(C_ZIP_MAX_SIZE32);  { 实际值在 Zip64 extra }
     FOut.AppendUInt32LE(C_ZIP_MAX_SIZE32);
   end
   else
   begin
-    FOut.AppendUInt32LE(LongWord(Length(APayload)));
-    FOut.AppendUInt32LE(LongWord(Length(AData)));
+    FOut.AppendUInt32LE(LongWord(AMeta.FCSize));
+    FOut.AppendUInt32LE(LongWord(AMeta.FUSize));
   end;
-  FOut.AppendUInt16LE(Word(Length(LEffName)));
-  if LMeta.FNeedsZ64Sizes then
+  FOut.AppendUInt16LE(Word(Length(AMeta.FName)));
+  if AMeta.FNeedsZ64Sizes then
     FOut.AppendUInt16LE(C_ZIP64_LOCAL_EXTRA_LEN)
   else
     FOut.AppendUInt16LE(0);
-  if Length(LEffName) > 0 then
-    FOut.AppendBytes(PByte(Pointer(LEffName)), Length(LEffName));
-  if LMeta.FNeedsZ64Sizes then
+  if Length(AMeta.FName) > 0 then
+    FOut.AppendBytes(PByte(Pointer(AMeta.FName)), Length(AMeta.FName));
+  if AMeta.FNeedsZ64Sizes then
   begin
     FOut.AppendUInt16LE(C_ZIP64_EXTRA_ID);
     FOut.AppendUInt16LE(16);
-    FOut.AppendUInt64LE(LMeta.FUSize);
-    FOut.AppendUInt64LE(LMeta.FCSize);
+    FOut.AppendUInt64LE(AMeta.FUSize);
+    FOut.AppendUInt64LE(AMeta.FCSize);
   end;
   if Length(APayload) > 0 then
     FOut.AppendBytes(PByte(APayload), Length(APayload));
+end;
+
+procedure TZipWriter.RegisterSink(ASink: TObject);
+begin
+  SetLength(FOpenSinks, Length(FOpenSinks) + 1);
+  FOpenSinks[High(FOpenSinks)] := Pointer(ASink);
+end;
+
+procedure TZipWriter.UnregisterSink(APtr: Pointer);
+var
+  LI, LJ: Integer;
+begin
+  for LI := 0 to High(FOpenSinks) do
+    if FOpenSinks[LI] = APtr then
+    begin
+      for LJ := LI to High(FOpenSinks) - 1 do
+        FOpenSinks[LJ] := FOpenSinks[LJ + 1];
+      SetLength(FOpenSinks, Length(FOpenSinks) - 1);
+      Exit;
+    end;
+end;
+
+procedure TZipWriter.DetachSinks;
+var
+  LI: Integer;
+begin
+  { 先分离归属再清登记：流的 Write/Close/析构看到 FOwner=nil 即不再回调写器。
+    在册元素必有存活外部引用（见 FOpenSinks 注释），裸指针转型安全 }
+  for LI := 0 to High(FOpenSinks) do
+    TZipEntrySink(FOpenSinks[LI]).DetachOwner;
+  FOpenSinks := nil;
+end;
+
+procedure TZipWriter.CommitStreamEntry(AMeta: TZipEntryMeta;
+  const APayload: TBytes);
+begin
+  AMeta.FLocalOffset := FOut.Length;
+  EnsureCapacity(FCount + 1);
+  FEntries[FCount] := AMeta;
+  Inc(FCount);
+  AppendLocalEntry(AMeta, APayload);
 end;
 
 procedure TZipWriter.AddEntry(const AName: string; const AData: TBytes);
@@ -329,6 +555,39 @@ begin
     (Length(AName) > 0) and (AName[Length(AName)] = '/'), AOptions.Mode);
 end;
 
+function TZipWriter.AddEntryStream(const AName: string;
+  const AOptions: TZipAddOptions): ICompressWriter;
+var
+  LMethod: Word;
+  LTime: Int64;
+  LEffName: string;
+  LEffIsDir: Boolean;
+  LExtAttrs: LongWord;
+  LMeta: TZipEntryMeta;
+  LSink: TZipEntrySink;
+begin
+  CheckOpen;
+  if AOptions.Method = zmDeflate then
+    LMethod := C_ZIP_METHOD_DEFLATE
+  else
+    LMethod := C_ZIP_METHOD_STORE;
+  if AOptions.ModTimeUnixSec < 0 then
+    LTime := DosMinUnixSec
+  else
+    LTime := AOptions.ModTimeUnixSec;
+  ResolveEntrySpec(AName,
+    (Length(AName) > 0) and (AName[Length(AName)] = '/'), AOptions.Mode,
+    LEffName, LEffIsDir, LExtAttrs);
+  FillChar(LMeta, SizeOf(LMeta), 0);
+  LMeta.FName := LEffName;
+  LMeta.FMethod := LMethod;
+  LMeta.FExtAttrs := LExtAttrs;
+  LMeta.FIsDir := LEffIsDir;
+  LSink := TZipEntrySink.Create(Self, LMeta, LTime);
+  RegisterSink(LSink);
+  Result := LSink;
+end;
+
 procedure TZipWriter.AddDirectory(const AName: string);
 begin
   AddDirectoryInternal(AName, DosMinUnixSec);
@@ -362,13 +621,15 @@ var
   LI: Integer;
   LE: TZipEntryMeta;
   LCDOffset, LCDSize, LCDEnd, LZ64EocdPos: UInt64;
-  LCount: Int64;
-  LNeedsZ64Offset, LAnyZ64, LNeedZ64Eocd: Boolean;
+  LCount: Int64;  LNeedsZ64Offset, LAnyZ64, LNeedZ64Eocd: Boolean;
   LVersionMadeBy, LVersionNeeded: Word;
   LExtraLen: Integer;
   LCountField: LongWord;
 begin
   CheckOpen;
+  if Length(FOpenSinks) > 0 then
+    raise EInvalidOperationError.Create(
+      'zip writer: streaming entry not closed');
   LCDOffset := FOut.Length;
   for LI := 0 to FCount - 1 do
   begin

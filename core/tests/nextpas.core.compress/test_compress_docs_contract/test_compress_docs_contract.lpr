@@ -460,14 +460,21 @@ begin
 
   CheckContains(LDeflateLower, 'compress2(',
     'one-shot Deflate source uses zlib wrapper API');
-  CheckContains(LDeflateLower, 'inflateinit(lstream',
+  CheckContains(LDeflateLower, 'inflateinit2(lstream',
     'one-shot Deflate source uses zlib wrapper API for decode');
   CheckContains(LDeflateLower, 'lstream.avail_in <> 0',
     'one-shot Deflate decode rejects trailing input');
-  CheckContains(LDeflateLower, 'deflateinit(fstream',
-    'streaming Deflate writer uses zlib-wrapped init');
-  CheckContains(LDeflateLower, 'inflateinit(fstream',
-    'streaming Deflate reader uses zlib-wrapped init');
+  { 包装版与裸流的分野收敛到 windowBits 参数：Create/CreateRaw 共享
+    InitStream（deflateInit2/inflateInit2），15=zlib 包装、-15=raw；
+    裸流 API 必须显式携带 Raw 命名，禁止静默切换格式 }
+  CheckContains(LDeflateLower, 'deflateinit2(fstream',
+    'streaming Deflate writer init goes through deflateInit2');
+  CheckContains(LDeflateLower, 'inflateinit2(fstream',
+    'streaming Deflate reader init goes through inflateInit2');
+  CheckContains(LDeflateLower, 'constructor tdeflatewriter.createraw',
+    'raw streaming Deflate writer keeps explicit Raw naming');
+  CheckContains(LDeflateLower, 'constructor tdeflatereader.createraw',
+    'raw streaming Deflate reader keeps explicit Raw naming');
   CheckAbsent(LDeflateLower, 'deflateinit2(fstream, alevel, z_deflated, -15',
     'streaming Deflate must not silently switch to raw mode');
 

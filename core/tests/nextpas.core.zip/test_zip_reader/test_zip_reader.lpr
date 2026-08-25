@@ -7,6 +7,9 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.process,
+  nextpas.core.compress.intf,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.zip,
   nextpas.core.zip.base;
 
@@ -503,6 +506,253 @@ begin
     'data-descriptor local headers tolerated');
 end;
 
+{ 流式读端全量读出必须与一次性提取逐字节一致（deflate 与 store 双路径） }
+procedure TestStreamOpenMatchesExtract;
+var
+  LDir, LZipPath: string;
+  LRaw: TBytes;
+  LR: IZipReader;
+  LS: IDecompressReader;
+  LGot, LWant: TBytes;
+  LBuf: array[0..511] of Byte;
+  LI: Integer;
+  LN, LTotal: SizeUInt;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/py_deflate.zip';
+    RunPy(C_PY_MAKE, LZipPath, 'deflate');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  LR := NewZipReader(LRaw);
+
+  { deflate 条目：按索引打开，分块拉取拼装 }
+  LWant := LR.ExtractToBytes(LR.Find('dir/b.bin'));
+  SetLength(LGot, Length(LWant));
+  LS := LR.OpenEntry(LR.Find('dir/b.bin'));
+  LTotal := 0;
+  repeat
+    LN := LS.Read(LBuf[0], SizeOf(LBuf));
+    for LI := 0 to Integer(LN) - 1 do
+      LGot[Integer(LTotal) + LI] := LBuf[LI];
+    Inc(LTotal, LN);
+  until LN = 0;
+  Check(SameBytes(LGot, LWant), 'streamed deflate equals one-shot extract');
+  CheckEqual(Int64(Length(LWant)), Int64(LTotal), 'stream total bytes');
+
+  { store 条目：按名打开 }
+  LWant := LR.ExtractToBytesByName('a.txt');
+  SetLength(LGot, 0);
+  LS := LR.OpenEntryByName('a.txt');
+  LN := LS.Read(LBuf[0], 64);
+  SetLength(LGot, Integer(LN));
+  for LI := 0 to Integer(LN) - 1 do
+    LGot[LI] := LBuf[LI];
+  Check(SameBytes(LGot, LWant), 'streamed store equals extract');
+end;
+
+{ 1 字节粒度拉取：解压器与校验层在最小读取步长下正确 }
+procedure TestStreamByteGranular;
+var
+  LDir, LZipPath: string;
+  LRaw: TBytes;
+  LR: IZipReader;
+  LS: IDecompressReader;
+  LGot: string;
+  LB: Byte;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/py_deflate.zip';
+    RunPy(C_PY_MAKE, LZipPath, 'deflate');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  LR := NewZipReader(LRaw);
+  LS := LR.OpenEntryByName('a.txt');
+  LGot := '';
+  while LS.Read(LB, 1) = 1 do
+    LGot := LGot + Chr(LB);
+  Check(LGot = 'hello world', 'byte-granular stream content');
+end;
+
+{ 篡改载荷后流式读到 EOF 必须触发校验失败（EOF 处强制尺寸+CRC32） }
+procedure TestStreamCrcTamperAtEof;
+var
+  LDir, LZipPath: string;
+  LRaw: TBytes;
+  LR: IZipReader;
+  LS: IDecompressReader;
+  LBuf: array[0..63] of Byte;
+  LGotRaise: Boolean;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/py_store.zip';
+    RunPy(C_PY_MAKE, LZipPath, 'store');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  { a.txt store 载荷位于 local header(30)+名字(5)=35 }
+  LRaw[35] := LRaw[35] xor $01;
+  LR := NewZipReader(LRaw);
+  LS := LR.OpenEntryByName('a.txt');
+  LGotRaise := False;
+  try
+    while LS.Read(LBuf[0], SizeOf(LBuf)) > 0 do ;
+    { 读到 EOF 的这一次返回前应完成校验并 raise }
+  except
+    on E: Exception do
+      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'tampered payload raises crc mismatch at stream eof');
+end;
+
+{ 放弃未读完的流：Close 跳过校验，不 raise（契约允许中途放弃） }
+procedure TestStreamAbandonSkipsVerify;
+var
+  LDir, LZipPath: string;
+  LRaw: TBytes;
+  LR: IZipReader;
+  LS: IDecompressReader;
+  LB: Byte;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/py_store.zip';
+    RunPy(C_PY_MAKE, LZipPath, 'store');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  LRaw[35] := LRaw[35] xor $01;
+  LR := NewZipReader(LRaw);
+  LS := LR.OpenEntryByName('a.txt');
+  CheckEqual(Int64(1), Int64(NativeUInt(LS.Read(LB, 1))), 'first byte readable');
+  LS.Close;  { 未到 EOF：按契约放弃剩余数据且不校验 }
+  Check(True, 'abandoned stream close skips verification');
+end;
+
+{ 流式路径同样受 MaxOutputSize 约束：超限在流中途中断 }
+procedure TestStreamBombCap;
+var
+  LDir, LZipPath: string;
+  LRaw: TBytes;
+  LOpts: TZipReadOptions;
+  LR: IZipReader;
+  LS: IDecompressReader;
+  LBuf: array[0..4095] of Byte;
+  LGotRaise: Boolean;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/zeros.zip';
+    RunPy(C_PY_ZEROS, LZipPath, '');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  LOpts.MaxOutputSize := 1024;
+  LR := NewZipReaderWithOptions(LRaw, LOpts);
+  LS := LR.OpenEntry(0);
+  LGotRaise := False;
+  try
+    while LS.Read(LBuf[0], SizeOf(LBuf)) > 0 do ;
+  except
+    on E: Exception do
+      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'stream read stops at max output size');
+end;
+
+{ 同一 reader 并发打开多个流交错读取，互不串扰 }
+procedure TestStreamConcurrentInterleaved;
+var
+  LDir, LZipPath: string;
+  LRaw: TBytes;
+  LR: IZipReader;
+  SA, SB: IDecompressReader;
+  LA, LB: string;
+  BA, BB: Byte;
+  DoneA, DoneB: Boolean;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/py_deflate.zip';
+    RunPy(C_PY_MAKE, LZipPath, 'deflate');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  LR := NewZipReader(LRaw);
+  SA := LR.OpenEntryByName('a.txt');
+  SB := LR.OpenEntryByName('dir/b.bin');
+  LA := '';
+  LB := '';
+  DoneA := False;
+  DoneB := False;
+  { 返回 0 即 EOF：停止再读该流 }
+  repeat
+    if not DoneA then
+      if SA.Read(BA, 1) = 1 then
+        LA := LA + Chr(BA)
+      else
+        DoneA := True;
+    if not DoneB then
+      if SB.Read(BB, 1) = 1 then
+        LB := LB + Chr(BB)
+      else
+        DoneB := True;
+  until DoneA and DoneB;
+  Check(LA = 'hello world', 'interleaved stream A content');
+  Check(Length(LB) = 1024, 'interleaved stream B length');
+  { b.bin 内容为 range(256)*4；string 下标 1 基，LB[10] 即偏移 9 }
+  Check(Byte(LB[10]) = Byte(9), 'interleaved stream B offset content');
+end;
+
+{ CopyEntryTo 泵送整条目到任意 IWriter，返回字节数并完成 EOF 校验 }
+procedure TestCopyEntryToSink;
+var
+  LDir, LZipPath: string;
+  LRaw: TBytes;
+  LR: IZipReader;
+  LDst: IStream;
+  LW: IWriter;
+  LGot: TBytes;
+  LN, LBack: SizeUInt;
+begin
+  LDir := NewCaseDir;
+  try
+    LZipPath := LDir + '/py_deflate.zip';
+    RunPy(C_PY_MAKE, LZipPath, 'deflate');
+    LRaw := ReadFile(LZipPath);
+  finally
+    RemoveAll(LDir);
+  end;
+  LR := NewZipReader(LRaw);
+
+  LDst := CreateBytesStream(64);
+  LW := LDst as IWriter;
+  LN := LR.CopyEntryTo(LR.Find('dir/b.bin'), LW);
+  CheckEqual(Int64(1024), Int64(NativeUInt(LN)), 'copy entry returns byte count');
+  SetLength(LGot, Integer(LDst.Size));
+  if Length(LGot) > 0 then
+  begin
+    LDst.Position := 0;
+    LBack := LDst.Read(LGot[0], Length(LGot));
+    CheckEqual(Int64(1024), Int64(NativeUInt(LBack)), 'sink captured all bytes');
+  end;
+  Check(SameBytes(LGot, ExpectedBin), 'copied content matches');
+
+  { 空条目泵送：0 字节且不 raise }
+  LN := LR.CopyEntryTo(LR.Find('empty.bin'), CreateBytesStream(16) as IWriter);
+  CheckEqual(Int64(0), Int64(NativeUInt(LN)), 'empty entry copies zero bytes');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.reader');
   T.Test('Empty archive reader', @TestEmptyArchiveReader);
@@ -518,5 +768,12 @@ begin
   T.Test('Index guards', @TestIndexGuards);
   T.Test('External attrs and symlink', @TestExternalAttrsAndSymlink);
   T.Test('Data descriptor tolerance', @TestDataDescriptorTolerance);
+  T.Test('Stream open matches extract', @TestStreamOpenMatchesExtract);
+  T.Test('Stream byte granular', @TestStreamByteGranular);
+  T.Test('Stream crc tamper at eof', @TestStreamCrcTamperAtEof);
+  T.Test('Stream abandon skips verify', @TestStreamAbandonSkipsVerify);
+  T.Test('Stream bomb cap', @TestStreamBombCap);
+  T.Test('Stream concurrent interleaved', @TestStreamConcurrentInterleaved);
+  T.Test('Copy entry to sink', @TestCopyEntryToSink);
   if not T.Run then Halt(1);
 end.

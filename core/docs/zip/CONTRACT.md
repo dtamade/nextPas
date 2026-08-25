@@ -38,6 +38,7 @@
 | `AddEntryDeflateWithTime(...)` | 同上 + 显式时间戳 |
 | `AddDirectory(Name)` / `AddDirectoryWithTime(...)` | 目录条目；名字规范化补尾随 `/`；查找需用规范化名 |
 | `AddEntryWithOptions(Name, Data, TZipAddOptions)` | 方法/时间戳/模式字一次给定；模式字声明目录（$4000）时补尾随 `/` 并置 MS-DOS 位 $10 |
+| `AddEntryStream(Name, TZipAddOptions): ICompressWriter` | 流式添加：返回推式写入端（`nextpas.core.compress.intf` 家族），增量 CRC32 + 按 Method 压缩；`Close` 定稿条目；放弃未 Close 的流则条目不落入归档；存在未关闭流时 `Finish` raise |
 | `EntryCount` | 已添加条目数 |
 | `Finish: TBytes` | 终结并返回完整归档；此后任何添加/再次 Finish raise |
 
@@ -49,6 +50,8 @@
 | `Find(Name): Integer` | 按名查找；缺失 -1；重名取首个 |
 | `ExtractToBytes(Index)` | 提取并强制 CRC32/尺寸校验；目录条目返回空字节 |
 | `ExtractToBytesByName(Name)` | 同上按名；缺失 raise ENotFoundError |
+| `OpenEntry(Index) / OpenEntryByName(Name): IDecompressReader` | 流式打开：pull 式增量解压不物化输出；读到 EOF（返回 0）时强制尺寸+CRC32 校验；可同读器多流并发；EOF 前放弃则跳过校验 |
+| `CopyEntryTo(Index, IWriter): SizeUInt` | 泵送整条目到任意写端，EOF 处校验，返回输出字节数 |
 
 ## 2. 不变量
 
@@ -69,6 +72,10 @@
 - **[INV-9]** 权限还原仅对 unix 归档（外部属性高 16 位模式字非零）生效；
   目录的权限与 mtime 在全部内容落盘后逆序定稿。
 - **[INV-10]** 符号链接条目默认跳过；SkipSymlinks=False 为显式 opt-in 保真创建。
+- **[INV-11]** 流式契约：写端 `AddEntryStream` 增量计算 CRC32 与压缩输出，
+  内存上界为单条目压缩尺寸，`Close` 定稿、析构兜底为放弃（条目排除）；
+  读端 `OpenEntry*` 在读到 EOF 时强制尺寸+CRC32 校验，EOF 前放弃跳过校验；
+  `MaxOutputSize` 对流式路径在流中途中断生效。
 
 ## 3. 错误模型
 
