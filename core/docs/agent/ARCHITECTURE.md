@@ -60,10 +60,12 @@
 | `nextpas.core.agent.retry.pas` | 策略 | TRetryPolicy 记录 + `WithRetry(inner, policy, clock)` 装饰器（纯策略无 IO，睡在 clock 上；流式只重试到首 delta——首 delta 门回放） | intf, base, errors, async.cancellation, platform.random |
 | `nextpas.core.agent.fallback.pas` | 策略 | `NewFallbackProvider(chain, policy)` 容灾链装饰器（白名单内逐家切换、流式首 delta 门、全链耗尽透传最后原始错误、取消即止；OnSwitch 观测） | intf, base, errors |
 | `nextpas.core.agent.throttle.pas` | 策略 | IAgentRateGate 细接口 + `NewThrottledProvider(inner, gate, clock, policy)` 客户端限流（拒绝→clock 取消感知等待重取，超窗本地 aecRateLimited）；`NewTokenBucketGate` 适配 core.lockfree.ratelimit 标准库 | intf, base, errors, clock, lockfree.ratelimit |
+| `nextpas.core.agent.hedge.pas` | 策略 | `NewHedgedProvider(inner, clock, policy)` 对冲装饰器（DelayMs 无响应即并发第二路取先达、输路取消令牌合并必 Cancel、流式首 delta 先达者胜投递不重复、双倍 token 成本工厂级 opt-in；OnHedged 观测） | intf, base, errors, async.cancellation, sync.event, clock |
 | `nextpas.core.agent.resilience.pas` | 韧性 | 消费方侧纯函数三件（自 code888 韧弧 K69-K75 提炼反哺）：`StreamHasError` 断流指纹判定、`WaitCancelMs` 取消感知毫秒退避（ms→ns 溢出守卫+nil 吸收）、`ClampHintMs` 重试提示同帽钳制（负哨兵透传） | base, thread, agent.base |
 | `nextpas.core.agent.transport.http.pas` | 传输 | 生产 IAgentTransport：http client 发请求；非流式读全响应体；流式经 IReader 逐块喂 agent.sse | intf, http.client, sse, errors |
 | `nextpas.core.agent.provider.common.pas` | 适配支撑 | 适配器共享 helper：wire JSON 组装/读取、SSE data 帧→delta 的公共骨架、Extra 无损捕获、帧序 FSM 骨架 | base, errors, json, intf |
 | `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-O1..O7 全部落码+gate | base, errors, intf, common, transport, fold, json, json.builder, text.builder, os.env |
+| `nextpas.core.agent.provider.openai.responses.pas` | 适配 | OpenAI Responses 适配器（W9 第三协议支柱）；同款公开编解码器三件（映射权威=WIRE-MAPPINGS §3，Q-R1..R7 落码+gate） | base, errors, intf, common, transport, fold, json, json.builder, text.builder, os.env |
 | `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-A1..A8 全部落码+gate（含 Q-A8 截断 fail-closed 与流中途 error→sdkError） | base, errors, intf, common, transport, fold, json, json.builder, text.builder, text.conv, os.env |
 | `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold, json |
 | `nextpas.core.agent.tools.pas` | 工具 | 名称/schema 注册校验（aecConfig）、§1.5 参数校验失败→error result、结果截断信封（UTF-8 安全切）、RunToolBatch 批执行器（时钟感知超时/取消合成/异常兜底 aecToolFailed/WriteGuard 迟到写仲裁） | base, intf, clock, errors, atomic, json, text, cancellation |

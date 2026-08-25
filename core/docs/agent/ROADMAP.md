@@ -19,6 +19,7 @@ http.sse 文本行域），合并经审计判定不立项 |
 | **W6 结构化输出与工具选择（v1.1 第一批，2026-08-25 立项）** | 词表 `TToolChoiceMode`/`ToolChoiceName` + `ResponseSchemaJson` 启用；openai 族 json_schema strict 编码 + tool_choice 四形态；anthropic tool_choice 映射（required→any、none→省略 tools 转译）+ schema fail-fast；WIRE-MAPPINGS §1.7 立 strict 节 | test_provider_openai / test_provider_anthropic / test_codecs / test_fake_provider 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准无回归 + Ready 报告 |
 | **W7 推理力度与流式空闲卫生（v1.1 第二批，2026-08-25 立项）** | 词表 `TReasoningEffort`（openai reasoning_effort 编码，anthropic 忽略+warn 待遇对齐）；传输层 `ReadIdleTimeoutMs` 流式块间空闲超时（回环时序验证，aecTimeout 合成不污染取消标志）；新增 `test_e2e_live` 真实端点 opt-in 门 | test_provider_openai / test_provider_anthropic / test_transport_stream / test_e2e_live 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准 A/B 无回归 + Ready 报告 |
 | **W8 可靠性装饰器套件（v1.1 第三批，2026-08-25 立项）** | `WithFallback` 多供应商容灾链（白名单切换、首 delta 门、最后原始错误透传、取消即止、OnSwitch 观测）+ `WithThrottle` 客户端限流（`IAgentRateGate` 细接口对接 core.lockfree.ratelimit 标准库，clock 注入零睡眠等待，超窗本地 aecRateLimited 带 RetryAfterMs） | test_fallback / test_throttle 全绿（含 HEAPTRC 泄漏门）+ 三基准 A/B 零回归 + Ready 报告 |
+| **W9 Responses 协议与对冲（v1.1 第四批，2026-08-25 立项）** | OpenAI Responses API 编解码器（独立单元 `provider.openai.responses`：input 数组/instructions/reasoning.effort/tool_choice/text.format 编码，output 项+usage details 解码，SSE `response.*` 事件全集→词表增量；E2E 真网三协议支柱补齐）+ `WithHedge` 对冲装饰器（DelayMs 无响应即并发第二路取先达、输路必 Cancel、双倍 token 成本工厂级 opt-in；可靠性装饰器四象限收官：retry 败后重试/fallback 败后换家/throttle 事前整形/hedge 慢时对冲） | test_provider_responses / test_hedge 全绿（含 HEAPTRC 泄漏门）/ test_e2e_live 扩 responses 三测真网全绿 + 三基准 A/B 零回归 + Ready 报告 |
 
 ## Wave 内顺序约束
 
@@ -110,6 +111,8 @@ http.sse 文本行域），合并经审计判定不立项 |
   评估上移为通用 transport 装饰器。
 - **WithHedge 对冲装饰器**（延迟敏感场景 T 毫秒后并发第二请求取先达）——
   双倍 token 成本必须显式 opt-in。触发：交互式 agent 产品提出 p95 延迟诉求。
+  【已立项 2026-08-25 → W9 落地（用户连续波次以"性能"为首位关键词，视为
+  p95 延迟诉求成立）】
 - **Provider 级 tracing 钩子**（onRequest/onResponse/onRetry 观测事件，
   loop OnEvent 的 provider 层对位）——触发：首个生产接入方要求请求级追踪。
 
@@ -137,6 +140,8 @@ v1.1 第一批立项顺序：**Structured Output → tool_choice**（余项按�
   立项前置条件是先向 json 域提出 feed 式解析反哺 slice。
 - **Gemini / Responses 协议编解码器**——不押注单一客户需求；任一多模态/兼容系
   客户接入即可立项（D13 公开 codec 使追加成本低）。
+  【Responses 半边已立项 2026-08-25 → W9 落地（E2E 测试端点原生支持
+  /v1/responses，真网验证条件成立）；Gemini 半边仍留本项待触发】
 - **工具能力标志回归**：tcIdempotent/tcReadOnly/tcNeedsConfirm 消费语义立项后
   回归 TToolCapability 词表（v1 已裁撤至仅 tcParallel——冷读评审指认死词表）。
 - **loop 全局工具并发上限**（D14 明确 v1 不做）——出现跨批资源争用证据时立项。
