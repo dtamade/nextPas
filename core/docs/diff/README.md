@@ -50,8 +50,11 @@ Hunks := ParseUnified(PatchText);                // tolerant reader:
 
 ## Consumers
 
-- `nextpas.core.tui.widget.diffview` renders unified diffs today from raw
-  text; migrating it to the shared parser is a tui-lane decision (D3).
+- `nextpas.core.tui.widget.diffview` consumes this module since D3:
+  `TDiffView.UnifiedToLines` delegates to `ParseUnified`, which fixed the
+  inline parser's per-hunk line-number reset, `---`-content misdetection
+  and `\ No newline` handling. The header section (`---`/`+++`) still
+  renders as `dlHeader`; git transport lines are skipped.
 
 ## Testing
 

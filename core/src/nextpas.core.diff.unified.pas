@@ -26,6 +26,9 @@ uses
 function BuildHunks(const AEdits: TDiffEditArray;
   const AOld, ANew: TStringArray; AContext: Integer): TDiffHunkArray;
 
+{ Render one hunk's "@@ -a,b +c,d @@" header line (no trailing EOL). }
+function FormatHunkHeader(const AHunk: TDiffHunk): string;
+
 { Render hunks as "@@ -a,b +c,d @@" sections. No file headers. }
 function EmitUnifiedHunks(const AHunks: TDiffHunkArray): string;
 
@@ -204,6 +207,12 @@ begin
   Result := Hunks;
 end;
 
+function FormatHunkHeader(const AHunk: TDiffHunk): string;
+begin
+  Result := '@@ -' + RangeStr(AHunk.OldStart, AHunk.OldCount)
+    + ' +' + RangeStr(AHunk.NewStart, AHunk.NewCount) + ' @@';
+end;
+
 function EmitUnifiedHunks(const AHunks: TDiffHunkArray): string;
 var
   H, L: Integer;
@@ -211,11 +220,7 @@ begin
   Result := '';
   for H := 0 to Length(AHunks) - 1 do
   begin
-    Result := Result + '@@ -'
-      + RangeStr(AHunks[H].OldStart, AHunks[H].OldCount)
-      + ' +'
-      + RangeStr(AHunks[H].NewStart, AHunks[H].NewCount)
-      + ' @@' + #10;
+    Result := Result + FormatHunkHeader(AHunks[H]) + #10;
     for L := 0 to Length(AHunks[H].Lines) - 1 do
     begin
       case AHunks[H].Lines[L].Action of

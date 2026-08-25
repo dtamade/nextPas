@@ -26,6 +26,7 @@ function DiffLines(const AOld, ANew: TStringArray): TDiffEditArray; inline;
 function BuildHunks(const AEdits: TDiffEditArray;
   const AOld, ANew: TStringArray; AContext: Integer): TDiffHunkArray; inline;
 function EmitUnifiedHunks(const AHunks: TDiffHunkArray): string; inline;
+function FormatHunkHeader(const AHunk: TDiffHunk): string; inline;
 function EmitUnified(const AOld, ANew: TStringArray;
   AContext: Integer = 3): string; inline;
 function ParseUnified(const AText: string): TDiffHunkArray; inline;
@@ -48,6 +49,11 @@ end;
 function EmitUnifiedHunks(const AHunks: TDiffHunkArray): string;
 begin
   Result := nextpas.core.diff.unified.EmitUnifiedHunks(AHunks);
+end;
+
+function FormatHunkHeader(const AHunk: TDiffHunk): string;
+begin
+  Result := nextpas.core.diff.unified.FormatHunkHeader(AHunk);
 end;
 
 function EmitUnified(const AOld, ANew: TStringArray;

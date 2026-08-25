@@ -7,7 +7,7 @@ unit nextpas.core.tui.widget.diffview;
 
 interface
 
-uses nextpas.core.tui.base, nextpas.core.tui.color, nextpas.core.tui.modifier, nextpas.core.tui.style, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.widget.block, nextpas.core.tui.widget.intf;
+uses nextpas.core.tui.base, nextpas.core.tui.color, nextpas.core.tui.modifier, nextpas.core.tui.style, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.widget.block, nextpas.core.tui.widget.intf, nextpas.core.diff.base, nextpas.core.diff;
 
 type
   TDiffLineKind = (dlContext, dlAdded, dlRemoved, dlHeader);
@@ -18,6 +18,8 @@ type
     OldNum: Integer;
     NewNum: Integer;
   end;
+
+  TDiffLineArray = array of TDiffLine;
 
   TDiffViewState = record
     ScrollY: Integer;
@@ -49,6 +51,9 @@ type
   public
     class function New(const ALines: array of TDiffLine): IDiffView; static;
     class function FromUnifiedDiff(const Diff: AnsiString): IDiffView; static;
+    { Parse a unified patch into render lines; exposed separately so the
+      line-number semantics are testable without going through the widget }
+    class function UnifiedToLines(const Diff: AnsiString): TDiffLineArray; static;
 
     function WithStyle(const S: TStyle): IDiffView;
     function WithAddedStyle(const S: TStyle): IDiffView;
@@ -103,80 +108,76 @@ begin
 end;
 
 class function TDiffView.FromUnifiedDiff(const Diff: AnsiString): IDiffView;
+begin
+  Result := TDiffView.New(UnifiedToLines(Diff));
+end;
+
+class function TDiffView.UnifiedToLines(const Diff: AnsiString): TDiffLineArray;
 var
-  I, Start, Len, Count: Integer;
-  RawLine: AnsiString;
-  DL: TDiffLine;
-  ParsedLines: array of TDiffLine;
-  OldN, NewN: Integer;
+  Hunks: TDiffHunkArray;
+  ParsedLines: TDiffLineArray;
+  Count, H, L, I, Start: Integer;
+  RawLine: string;
+
+  function MakeLine(AKind: TDiffLineKind; const AText: AnsiString;
+    AOldNum, ANewNum: Integer): TDiffLine;
+  begin
+    Result.Kind := AKind;
+    Result.Text := AText;
+    Result.OldNum := AOldNum;
+    Result.NewNum := ANewNum;
+  end;
+
+  procedure PushLine(ALine: TDiffLine);
+  begin
+    Inc(Count);
+    SetLength(ParsedLines, Count);
+    ParsedLines[Count - 1] := ALine;
+  end;
+
 begin
   Count := 0;
   ParsedLines := nil;
-  Len := Length(Diff);
+
+  // file-header section before the first hunk: keep ---/+++ visible as
+  // headers, skip git transport noise (diff --git / index lines)
   Start := 1;
-  OldN := 0;
-  NewN := 0;
-
-  for I := 1 to Len + 1 do
+  for I := 1 to Length(Diff) + 1 do
   begin
-    if (I > Len) or (Diff[I] = #10) then
-    begin
-      RawLine := Copy(Diff, Start, I - Start);
-      Start := I + 1;
-
-      DL.OldNum := 0;
-      DL.NewNum := 0;
-
-      if (Length(RawLine) >= 3) and (Copy(RawLine, 1, 3) = '---') then
-      begin
-        DL.Kind := dlHeader;
-        DL.Text := RawLine;
-      end
-      else if (Length(RawLine) >= 3) and (Copy(RawLine, 1, 3) = '+++') then
-      begin
-        DL.Kind := dlHeader;
-        DL.Text := RawLine;
-      end
-      else if (Length(RawLine) >= 2) and (Copy(RawLine, 1, 2) = '@@') then
-      begin
-        DL.Kind := dlHeader;
-        DL.Text := RawLine;
-        OldN := 1; NewN := 1;
-      end
-      else if (Length(RawLine) >= 1) and (RawLine[1] = '+') then
-      begin
-        DL.Kind := dlAdded;
-        DL.Text := Copy(RawLine, 2, Length(RawLine) - 1);
-        DL.NewNum := NewN;
-        Inc(NewN);
-      end
-      else if (Length(RawLine) >= 1) and (RawLine[1] = '-') then
-      begin
-        DL.Kind := dlRemoved;
-        DL.Text := Copy(RawLine, 2, Length(RawLine) - 1);
-        DL.OldNum := OldN;
-        Inc(OldN);
-      end
-      else
-      begin
-        DL.Kind := dlContext;
-        if Length(RawLine) > 0 then
-          DL.Text := Copy(RawLine, 2, Length(RawLine) - 1)
-        else
-          DL.Text := '';
-        DL.OldNum := OldN;
-        DL.NewNum := NewN;
-        Inc(OldN);
-        Inc(NewN);
-      end;
-
-      Inc(Count);
-      SetLength(ParsedLines, Count);
-      ParsedLines[Count - 1] := DL;
-    end;
+    if (I <= Length(Diff)) and (Diff[I] <> #10) then
+      Continue;
+    RawLine := Copy(Diff, Start, I - Start);
+    Start := I + 1;
+    if (Length(RawLine) >= 2) and (Copy(RawLine, 1, 2) = '@@') then
+      Break;
+    if RawLine = '' then
+      Continue;
+    if (Length(RawLine) >= 3)
+      and ((Copy(RawLine, 1, 3) = '---') or (Copy(RawLine, 1, 3) = '+++')) then
+      PushLine(MakeLine(dlHeader, RawLine, 0, 0));
   end;
 
-  Result := TDiffView.New(ParsedLines);
+  // hunks come from the shared golden-tested parser: real line numbers
+  // from the @@ headers, no ---/+++ confusion inside content, no-newline
+  // markers handled
+  Hunks := ParseUnified(Diff);
+  for H := 0 to Length(Hunks) - 1 do
+  begin
+    PushLine(MakeLine(dlHeader, AnsiString(FormatHunkHeader(Hunks[H])), 0, 0));
+    for L := 0 to Length(Hunks[H].Lines) - 1 do
+      with Hunks[H].Lines[L] do
+        case Action of
+          daEqual:
+            PushLine(MakeLine(dlContext, AnsiString(Text),
+              OldIndex + 1, NewIndex + 1));
+          daDelete:
+            PushLine(MakeLine(dlRemoved, AnsiString(Text), OldIndex + 1, 0));
+          daInsert:
+            PushLine(MakeLine(dlAdded, AnsiString(Text), 0, NewIndex + 1));
+        end;
+  end;
+
+  Result := ParsedLines;
 end;
 
 function TDiffView.WithStyle(const S: TStyle): IDiffView;
