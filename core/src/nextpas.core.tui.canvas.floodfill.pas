@@ -19,6 +19,11 @@ uses
   nextpas.core.tui.canvas.edit,
   nextpas.core.tui.canvas.raster;
 
+const
+  {** @desc 单次填充的最大格数(达到即截断, 结果不完整)。
+      接口区导出供调用方辨识截断态(如 UI 提示"已达上限") *}
+  FLOOD_FILL_LIMIT = 100000;
+
 {** @desc 从 (AX,AY) 起把同色区域替换为 AFill, 经 builder 记录增量
     @return 填充格数; 种子越界、图层非法或种子与 AFill 同色返回 0(无变化) *}
 function CanvasFloodFill4(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
@@ -50,7 +55,6 @@ type
   end;
 
 const
-  FLOOD_FILL_LIMIT = 100000;
   FLOOD_STACK_INIT = 4096;
 
 function CanvasFloodFill4(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
