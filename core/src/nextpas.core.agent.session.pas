@@ -12,7 +12,8 @@ unit nextpas.core.agent.session;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.format,
   nextpas.core.fs,
   nextpas.core.json,
   nextpas.core.json.builder,
@@ -78,7 +79,7 @@ const
 function Corrupt(ALineNo: Integer; const AWhy: string): ETranscriptCorrupt;
 begin
   Result := ETranscriptCorrupt.CreateLocal(aecProtocol,
-    Format('transcript line %d: %s', [ALineNo, AWhy]));
+    TextFormat('transcript line %d: %s', [ALineNo, AWhy]));
 end;
 
 procedure Misuse(const AWhy: string);

@@ -86,7 +86,8 @@ procedure WriteBindSlot(ABase: Pointer; const AIndex, ANativeSize: Integer;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.exception,
   nextpas.core.db.err,
   nextpas.core.db.trace,

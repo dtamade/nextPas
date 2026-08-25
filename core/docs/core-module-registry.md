@@ -72,6 +72,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `oauth` | L3 | OAuth2 authorization-code client + PKCE (RFC 6749 §4.1 / RFC 7636; `nextpas.core.oauth.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
+| `pg` | L2 backend of `db` | compat shim re-exporting `nextpas.core.db.pg`（libpq FFI, dlopen；G2 删除后因并行项目依赖于 2026-08-25 恢复） | yes | L0-L1; platform.dl | focused-runtime |
 | `platform` | L0 | host ABI and OS semantics | yes | host owner `platform.*.base/ffi`, L0 only | source-contract + focused-runtime |
 | `process` | L2 | process management | yes | L0-L1 | focused-runtime |
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
@@ -79,6 +80,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
+| `sqlite` | L2 backend of `db` | compat shim re-exporting `nextpas.core.db.sqlite`（system libsqlite3 FFI；G2 删除后因并行项目依赖于 2026-08-25 恢复，v1 TSqlitePool/migrate 专用面不回归） | yes | L0-L1 | focused-runtime |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
 | `system` | L0 root facade exception | RTL frontier facade | yes | L0 plus explicit text/io/path/fs debt | source-contract |

@@ -79,7 +79,8 @@ function TranslatePlaceholdersOdbc(const ASql: string;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.exception,
   nextpas.core.db.err,
   nextpas.core.db.trace,

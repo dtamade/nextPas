@@ -37,7 +37,9 @@ unit nextpas.core.db.redis.adapter;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.sync,
   nextpas.core.errors,

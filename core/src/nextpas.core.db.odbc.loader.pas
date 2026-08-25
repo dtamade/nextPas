@@ -38,7 +38,7 @@ procedure OdbcRaise(AHandleType: SmallInt; AHandle: Pointer;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.format,
   nextpas.core.platform.dl,
   nextpas.core.exception,
   nextpas.core.db.odbc.ffi;
@@ -200,11 +200,11 @@ var
 begin
   LDiag := OdbcDiag(AHandleType, AHandle);
   if Length(LDiag) > 0 then
-    LMsg := Format('odbc: %s [%s/%d] %s',
+    LMsg := TextFormat('odbc: %s [%s/%d] %s',
       [AContext, LDiag[0].SqlState, LDiag[0].NativeError,
        LDiag[0].Message])
   else
-    LMsg := Format('odbc: %s [retcode %d, no diagnostics]',
+    LMsg := TextFormat('odbc: %s [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   if Length(LDiag) > 0 then
     raise EDbOdbcError.Create(LMsg, ARetCode, LDiag[0].SqlState)

@@ -38,7 +38,8 @@ function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.db.err,
   { 直接用 lrucache 子单元：collections 门面对泛型接口名不可透传
     （实证），且本处需具名特化类型作字段类型 }

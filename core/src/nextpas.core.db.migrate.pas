@@ -84,7 +84,7 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.checksum.crc32,
   nextpas.core.db.tx,
   nextpas.core.time;

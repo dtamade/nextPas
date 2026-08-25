@@ -31,9 +31,10 @@ unit nextpas.core.db.pool;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.sync,
+  nextpas.core.time,
   nextpas.core.db.base,
   nextpas.core.db.intf;
 
