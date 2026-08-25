@@ -11,8 +11,8 @@ uses
 const
   DEFAULT_BUFFER_SIZE = 4096;
 
-function CreateBufferedReader(const AInner: IReader; const ABufSize: SizeUInt = DEFAULT_BUFFER_SIZE): IReader;
-function CreateBufferedWriter(const AInner: IWriter; const ABufSize: SizeUInt = DEFAULT_BUFFER_SIZE): IWriter;
+function CreateBufferedReader(const AInner: IReader; const ABufSize: SizeUInt = DEFAULT_BUFFER_SIZE): IReader; inline;
+function CreateBufferedWriter(const AInner: IWriter; const ABufSize: SizeUInt = DEFAULT_BUFFER_SIZE): IWriter; inline;
 
 implementation
 
@@ -35,7 +35,7 @@ type
     constructor Create(const AInner: IReader; const ABufSize: SizeUInt);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function ReadByte: Byte;
-    procedure UnreadByte;
+    procedure UnreadByte; inline;
   end;
 
   TBufferedWriter = class(TInterfacedObject, IWriter, IFlusher)
@@ -154,9 +154,19 @@ begin
     FCanUnread := True;
     Exit;
   end;
-  LN := Read(Result, 1);
-  if LN = 0 then
-    raise EIOError.Create('TBufferedReader.ReadByte: EOF');
+  { Fast path: serve directly from the filled buffer, skip virtual dispatch.
+    Slow path delegates to Read, which advances FBufPos itself. }
+  if FBufPos < FBufLen then
+  begin
+    Result := FBuf[FBufPos];
+    Inc(FBufPos);
+  end
+  else
+  begin
+    LN := Read(Result, 1);
+    if LN = 0 then
+      raise EIOError.Create('TBufferedReader.ReadByte: EOF');
+  end;
   FLastByte := Result;
   FCanUnread := True;
 end;

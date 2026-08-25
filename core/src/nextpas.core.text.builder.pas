@@ -18,7 +18,7 @@ type
     procedure AppendInt(const AValue: Int64);
     procedure AppendUInt(const AValue: UInt64);
     procedure AppendHex(const AValue: UInt64; const AMinDigits: Int32 = 1);
-    procedure AppendBool(const AValue: Boolean);
+    procedure AppendBool(const AValue: Boolean); inline;
     procedure AppendFloat(const AValue: Double);
     function AsView: TStringView;
     function ToString: string;
@@ -49,7 +49,7 @@ type
     procedure AppendInt(const AValue: Int64);
     procedure AppendUInt(const AValue: UInt64);
     procedure AppendHex(const AValue: UInt64; const AMinDigits: Int32 = 1);
-    procedure AppendBool(const AValue: Boolean);
+    procedure AppendBool(const AValue: Boolean); inline;
     procedure AppendFloat(const AValue: Double);
 
     function AsView: TStringView; inline;
@@ -89,7 +89,7 @@ type
     procedure AppendInt(const AValue: Int64);
     procedure AppendUInt(const AValue: UInt64);
     procedure AppendHex(const AValue: UInt64; const AMinDigits: Int32 = 1);
-    procedure AppendBool(const AValue: Boolean);
+    procedure AppendBool(const AValue: Boolean); inline;
     procedure AppendFloat(const AValue: Double);
     function AsView: TStringView;
     function ToString: string; override;
