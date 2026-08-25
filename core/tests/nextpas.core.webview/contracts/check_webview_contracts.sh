@@ -2,6 +2,7 @@
 # nextpas.core.webview source-contract 门禁（INV-4 + INV-5 家族内复核）
 #
 # INV-4: base/intf 禁止 uses bridge/fake/factory/gtk/webview2/wk 单元。
+# bridge: 禁止 uses 任何后端/factory 单元（依赖方向 base←intf←bridge←后端）。
 # INV-5 复核: 家族生产单元禁 raw host units（DynLibs/ctypes/BaseUnix/
 #         Windows/Unix）；动态装载真相归 platform.dl（全局架构检查器
 #         已有同规则，此处做家族内快速失败）。
@@ -40,6 +41,19 @@ done
 if [[ ! -f "$SRC/nextpas.core.webview.pas" ]]; then
   echo "FAIL: missing facade nextpas.core.webview.pas"
   fail=1
+fi
+
+# --- bridge 依赖方向（BRIDGE_PROTOCOL/CONTRACT §1）：
+#     bridge 禁止 uses 任何后端/factory 单元——它只认识 intf 的契约。
+if [[ -f "$SRC/nextpas.core.webview.bridge.pas" ]]; then
+  for token in fake factory gtk webview2 wk; do
+    hits="$(grep -Ec "nextpas\.core\.webview\.${token}\b" \
+      "$SRC/nextpas.core.webview.bridge.pas" || true)"
+    if [[ "$hits" -ne 0 ]]; then
+      echo "FAIL: bridge references nextpas.core.webview.$token, $hits hit(s)"
+      fail=1
+    fi
+  done
 fi
 
 # --- INV-5 家族内复核：raw host units 缺席（先剥注释再扫描） ---
