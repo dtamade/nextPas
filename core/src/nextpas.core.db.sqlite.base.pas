@@ -16,6 +16,7 @@ uses
 const
   { Result codes (sqlite3.h) }
   SQLITE_OK          = 0;
+  SQLITE_ERROR       = 1;
   SQLITE_ROW         = 100;
   SQLITE_DONE        = 101;
 
@@ -71,6 +72,56 @@ type
     AsBlob: TBytes;
   end;
 
+  { ---- C5 调优预设（V3-C5）：连接级 PRAGMA 的受控词汇。
+    预设即注释即契约：每个字段 unset 语义明确，绝不静默猜测。 ---- }
+
+  { journal_mode；sjmUnset = 不设置（保持 sqlite 缺省 delete）。
+    :memory: 库恒过滤（WAL 对内存库无意义）。 }
+  TDbSqliteJournalMode = (
+    sjmUnset,
+    sjmDelete,     { 缺省回滚日志 }
+    sjmTruncate,
+    sjmPersist,
+    sjmMemory,
+    sjmWal         { 写前日志：读写并发最佳；文件头持久化，网络 FS 不支持
+                     → 应用后回读校验，不符即抛 decNotSupported }
+  );
+
+  { synchronous；sysUnset = 不设置（缺省 FULL） }
+  TDbSqliteSync = (
+    sysUnset,
+    sysOff,        { 最快；崩溃可能损坏 }
+    sysNormal,     { WAL 模式工业标配：仅断电风险窗口，无损坏 }
+    sysFull        { 最保守 }
+  );
+
+  { foreign_keys 三态：sqlite 缺省 OFF 是著名陷阱，但默认改写会惊吓
+    依赖原语义的消费方——故三态显式表达 }
+  TDbSqliteFkMode = (fkUnset, fkOff, fkOn);
+
+  TDbSqlitePragmas = record
+    JournalMode: TDbSqliteJournalMode;
+    Synchronous: TDbSqliteSync;
+    ForeignKeys: TDbSqliteFkMode;
+    { 页缓存大小：正 = 页数；负 = KiB（sqlite 语义）；0 = 不设置 }
+    CacheSize: Integer;
+    { 内存映射 IO 上限字节数；<0 = 不设置；0 = 禁用 mmap }
+    MmapSize: Int64;
+    class function Default: TDbSqlitePragmas; static;
+  end;
+
 implementation
+
+{ C5 安全缺省（文件库）：WAL + synchronous=NORMAL + 外键强制。
+  逐字段显式赋值；仅在消费方显式传入 pragmas 重载时生效——
+  不经此入口的连接保持 sqlite 原生缺省，行为零变化。 }
+class function TDbSqlitePragmas.Default: TDbSqlitePragmas;
+begin
+  Result.JournalMode := sjmWal;
+  Result.Synchronous := sysNormal;
+  Result.ForeignKeys := fkOn;
+  Result.CacheSize := 0;      { 不设置 }
+  Result.MmapSize := -1;      { 不设置 }
+end;
 
 end.
