@@ -25,6 +25,7 @@ uses
   nextpas.core.http.impl.h1,
   nextpas.core.http.impl.tls.stream,
   nextpas.core.http.client,
+  nextpas.core.http.client.decorator,
   nextpas.core.http.form.base,
   nextpas.core.json,
   nextpas.core.json.value,
@@ -2710,6 +2711,28 @@ begin
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+{ K86（code888 反哺消费判据）：HTTP 重试语义纯函数导出面——
+  decorator 自用 + code888 provider 双消费者。HttpStatusIsRetryable =
+  429 + 整个 5xx（其余终结）；TryParseHttpDateUnix = IMF-fix 串 →
+  unix 秒，无时钟依赖纯函数 }
+procedure TestHttpRetrySemanticsExports;
+var
+  U: Int64;
+begin
+  CheckTrue(HttpStatusIsRetryable(429), '429 retryable');
+  CheckTrue(HttpStatusIsRetryable(500), '500 retryable');
+  CheckTrue(HttpStatusIsRetryable(599), '599 retryable');
+  CheckFalse(HttpStatusIsRetryable(404), '404 terminal');
+  CheckFalse(HttpStatusIsRetryable(400), '400 terminal');
+  CheckFalse(HttpStatusIsRetryable(200), '2xx not retryable');
+  CheckFalse(HttpStatusIsRetryable(0), '0 not retryable');
+  { RFC 7231 经典样例：Sun, 06 Nov 1994 08:49:37 GMT = 784111777 }
+  CheckTrue(TryParseHttpDateUnix('Sun, 06 Nov 1994 08:49:37 GMT', U),
+    'imf-fix parses');
+  CheckEqual(Int64(784111777), U, 'known epoch');
+  CheckFalse(TryParseHttpDateUnix('not a date', U), 'garbage rejected');
 end;
 
 { F8（pascn backfeed）：无体响应的 Body 语义是「空」而非「无」——
@@ -9404,5 +9427,7 @@ begin
     @TestClientZeroBodyStreamCompletesAtHeaders);
   T.Test('Client bodyless responses have empty body reader (F8)',
     @TestBodylessResponsesHaveEmptyBodyReader);
+  T.Test('Http retry semantics exports (K86)',
+    @TestHttpRetrySemanticsExports);
   if not T.Run then Halt(1);
 end.
