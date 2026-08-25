@@ -324,6 +324,49 @@ begin
     'attestation object shape roundtrip');
 end;
 
+{ ===== 前缀解析（混合格式容器：authData 内嵌 COSE 公钥等）===== }
+
+procedure TestPrefixParse;
+var
+  LBuf: TBytes;
+  LR: TCborPrefixResult;
+begin
+  { item + 尾随垃圾：只消费 item 本身 }
+  LBuf := HexToBytes('80ffff');
+  LR := CborParsePrefix(LBuf, 0);
+  Check((not LR.Doc.HasError) and (LR.Consumed = 1) and LR.Doc.Root.IsArray,
+    'prefix array with junk tail');
+
+  { map + 尾随字节：内容可访问且消费长度精确（a1=map1, 键00 值01） }
+  LBuf := HexToBytes('a10001beef');
+  LR := CborParsePrefix(LBuf, 0);
+  Check((not LR.Doc.HasError) and (LR.Consumed = 3)
+    and (LR.Doc.Root.PairCount = 1) and (LR.Doc.Root.GetInt(0).AsInt = 1),
+    'prefix map consumed length exact');
+
+  { 中段偏移起解析 }
+  LBuf := HexToBytes('000102');
+  LR := CborParsePrefix(LBuf, 2);
+  Check((not LR.Doc.HasError) and (LR.Consumed = 1)
+    and (LR.Doc.Root.AsInt = 2),
+    'prefix from mid offset');
+
+  { 截断 item：HasError 且 Consumed=0 }
+  LBuf := HexToBytes('82');
+  LR := CborParsePrefix(LBuf, 0);
+  Check(LR.Doc.HasError and (LR.Consumed = 0), 'prefix truncated rejected');
+
+  { 越界偏移：显式报错不崩 }
+  LBuf := HexToBytes('00');
+  LR := CborParsePrefix(LBuf, 5);
+  Check(LR.Doc.HasError and (LR.Consumed = 0), 'prefix offset beyond input');
+
+  { 恶性输入在偏移处：保留错误语义 }
+  LBuf := HexToBytes('00ff');
+  LR := CborParsePrefix(LBuf, 1);
+  Check(LR.Doc.HasError and (LR.Consumed = 0), 'prefix malformed at offset');
+end;
+
 procedure TestValueAccessorsEdgeCases;
 var
   LD: ICborDocument;
@@ -352,5 +395,6 @@ begin
   T.Test('builder appendix-a', @TestBuilderAppendixA);
   T.Test('builder webauthn shape', @TestBuilderWebauthnShape);
   T.Test('value accessor edges', @TestValueAccessorsEdgeCases);
+  T.Test('prefix parse', @TestPrefixParse);
   if not T.Run then Halt(1);
 end.

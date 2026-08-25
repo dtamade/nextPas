@@ -98,6 +98,7 @@ type
     FBlobs: array of TBytes;
     FHasError: Boolean;
     FErr: TCborError;
+    FRootEnd: SizeUInt;
     function GetNode(const AIdx: UInt32): PCborNode; inline;
   public
     procedure Init;
@@ -107,6 +108,8 @@ type
     function HasError: Boolean; inline;
     function Error: TCborError; inline;
     function RootIndex: UInt32; inline;
+    { 根 item 结束偏移（相对传入缓冲；前缀解析的消费长度语义） }
+    function RootEnd: SizeUInt; inline;
     property Node[AIdx: UInt32]: PCborNode read GetNode;
   end;
 
@@ -161,6 +164,21 @@ type
   function CborParse(const AData: TBytes): ICborDocument; overload;
   function CborParse(const AData: PByte; const ASize: SizeUInt): ICborDocument; overload;
 
+type
+  { 前缀解析结果：Consumed = item 从起点占用的字节数；Doc 为该 item 的
+    DOM 视图。失败：Consumed=0 且 Doc.HasError=True。寿命：Doc 存活期内
+    输入缓冲必须有效（借用视图纪律，同 TCborValue）。 }
+  TCborPrefixResult = record
+    Consumed: SizeUInt;
+    Doc: ICborDocument;
+  end;
+
+{ 前缀解析：AData[AOffset] 起读恰好一个完整 item，容许其后尾随字节
+  （混合格式容器——WebAuthn authenticatorData 内嵌 COSE 公钥等场景）。
+  AOffset 越界 / 恶性输入：Consumed=0、HasError=True。 }
+function CborParsePrefix(const AData: TBytes;
+  const AOffset: SizeUInt): TCborPrefixResult;
+
 
 
 implementation
@@ -176,6 +194,7 @@ begin
   FBlobs := nil;
   FHasError := False;
   FErr := Default(TCborError);
+  FRootEnd := 0;
 end;
 
 function TCborDocument.GetNode(const AIdx: UInt32): PCborNode;
@@ -242,6 +261,11 @@ begin
     Result := cCborNoIndex;
 end;
 
+function TCborDocument.RootEnd: SizeUInt;
+begin
+  Result := FRootEnd;
+end;
+
 { ===== 解析器 ===== }
 
 type
@@ -260,7 +284,7 @@ type
   public
     constructor Create(const AData: PByte; const ASize: SizeUInt;
       const ADoc: PCborDocument);
-    procedure Run;
+    procedure Run(const AAllowTrailing: Boolean);
   end;
 
 constructor TCborParser.Create(const AData: PByte; const ASize: SizeUInt;
@@ -547,7 +571,7 @@ begin
   Result := FDoc^.AddNode(LNode);
 end;
 
-procedure TCborParser.Run;
+procedure TCborParser.Run(const AAllowTrailing: Boolean);
 var
   LRoot: UInt32;
 begin
@@ -559,7 +583,9 @@ begin
   end;
   if FDoc^.HasError then
     Exit;
-  if FPos <> FSize then
+  { 根 item 结束处先落位：前缀解析（AAllowTrailing）据此报告消费长度 }
+  FDoc^.FRootEnd := FPos;
+  if (FPos <> FSize) and (not AAllowTrailing) then
     FDoc^.SetError(FPos, 'trailing bytes after root');
 end;
 
@@ -571,11 +597,19 @@ type
     FDoc: PCborDocument;
   public
     constructor Create(const AData: PByte; const ASize: SizeUInt);
+    { 接管已解析完的文档记录（CborParsePrefix 自管解析流程时用） }
+    constructor CreateAdopt(const ARec: PCborDocument);
     destructor Destroy; override;
     function HasError: Boolean;
     function Error: TCborError;
     function Root: TCborValue;
   end;
+
+constructor TCborDocumentImpl.CreateAdopt(const ARec: PCborDocument);
+begin
+  inherited Create;
+  FDoc := ARec;
+end;
 
 constructor TCborDocumentImpl.Create(const AData: PByte; const ASize: SizeUInt);
 var
@@ -591,7 +625,7 @@ begin
   end;
   LParser := TCborParser.Create(AData, ASize, FDoc);
   try
-    LParser.Run;
+    LParser.Run(False);
   finally
     LParser.Free;
   end;
@@ -633,6 +667,35 @@ end;
 function CborParse(const AData: PByte; const ASize: SizeUInt): ICborDocument;
 begin
   Result := TCborDocumentImpl.Create(AData, ASize);
+end;
+
+function CborParsePrefix(const AData: TBytes;
+  const AOffset: SizeUInt): TCborPrefixResult;
+var
+  LRec: PCborDocument;
+  LParser: TCborParser;
+  LSize: SizeUInt;
+begin
+  LSize := SizeUInt(Length(AData));
+  New(LRec);
+  LRec^.Init;
+  LParser := nil;
+  if AOffset < LSize then
+  begin
+    LParser := TCborParser.Create(@AData[AOffset], LSize - AOffset, LRec);
+    try
+      LParser.Run(True);
+    finally
+      LParser.Free;
+    end;
+  end
+  else
+    LRec^.SetError(AOffset, 'offset beyond input');
+  if LRec^.HasError then
+    Result.Consumed := 0
+  else
+    Result.Consumed := LRec^.RootEnd;
+  Result.Doc := TCborDocumentImpl.CreateAdopt(LRec);
 end;
 
 { ===== TCborValue ===== }
