@@ -69,7 +69,8 @@ function CreateFakeWebview(
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
 
-{ 阻塞直到所有窗口关闭或 WebviewExitLoop（GTK 后端落地前为 fake 泵循环）}
+{ 阻塞直到所有窗口关闭或 WebviewExitLoop；gtk 活跃窗口存在时进入
+  GTK 主循环（最后窗口 destroy 触发 quit 返回），否则 fake 泵循环 }
 procedure WebviewRunLoop;
 
 { 从任意线程请求退出 RunLoop（幂等）}
@@ -78,7 +79,10 @@ procedure WebviewExitLoop;
 implementation
 
 uses
-  TypInfo;
+  TypInfo,
+  nextpas.core.webview.gtk.loader,
+  nextpas.core.webview.gtk,
+  nextpas.core.webview.gtk.win;
 
 var
   GExitRequested: Boolean = False;
@@ -91,12 +95,14 @@ begin
 end;
 
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
+var
+  LInfo: TGtkLoadInfo;
 begin
   case AKind of
     wvFake:    Result := True;
-    wvGtk,
+    wvGtk:     Result := TryLoadGtkWebkit(LInfo);   // 幂等缓存（S3 接入）
     wvWebview2,
-    wvWk:      Result := False;   // S3/S4/W2/W3 各自波次接入
+    wvWk:      Result := False;   // W2/W3 各自波次接入
   else
     Result := False;
   end;
@@ -118,6 +124,7 @@ begin
       GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
   case AKind of
     wvFake: Result := CreateFakeWebview(AOptions);
+    wvGtk:  Result := TGtkWebview.Create(AOptions);
   else
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is registered but has no factory yet', [
@@ -130,8 +137,13 @@ begin
   GExitRequested := False;
   while not GExitRequested do
   begin
-    FakePumpAll;
-    if FakeLiveWindowCount = 0 then
+    if GtkLiveWindowCount > 0 then
+      WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
+    else if FakeLiveWindowCount > 0 then
+      FakePumpAll
+    else
+      Break;
+    if (GtkLiveWindowCount = 0) and (FakeLiveWindowCount = 0) then
       Break;
     platform_thread_yield;
   end;
@@ -140,6 +152,9 @@ end;
 procedure WebviewExitLoop;
 begin
   GExitRequested := True;
+  { gtk_main 阻塞期间标志位不会被轮询——必须同步触发 quit 才能返回 }
+  if GtkLiveWindowCount > 0 then
+    WinShellQuitMainLoop;
 end;
 
 { ---- Builder ---- }
