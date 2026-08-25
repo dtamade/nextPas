@@ -46,7 +46,7 @@
 | `ParallelToolCalls` ≠ tsUnset | `parallel_tool_calls` |
 | `Tools` 非空（AReq.Tools） | `tools:[{type:"function", function:{name, description, parameters}}]`（parameters 为 JSON Schema 对象）；**空数组不上送字段** |
 | `ResponseSchemaJson` 非空 | `response_format:{type:"json_schema", json_schema:{name:"response", strict:true, schema:<原文透传>}}`（§1.7；schema 须可解析为 JSON object，违者本地 aecConfig） |
-| `ToolChoice` | tcmUnset 不上送；tcmAuto→`"auto"`；tcmNone→`"none"`；tcmRequired→`"required"`；tcmNamed→`{type:"function",function:{name:ToolChoiceName}}`（缺名本地 aecConfig） |
+| `ToolChoice` | tcmUnset 不上送；tcmAuto→`"auto"`；tcmNone→`"none"`；tcmRequired→`"required"`；tcmNamed→`{type:"function",function:{name:ToolChoiceName}}`（缺名或 Tools 空，本地 aecConfig） |
 | 流式调用 | 追加 `"stream":true, "stream_options":{"include_usage":true}`（quirk Q-O3） |
 | `ExtraJson` | 浅合并进请求根对象 |
 
@@ -160,8 +160,8 @@ data: [DONE]                                                             → 终
 | `Seed` ≠ CSeedUnset | 无对应参数：忽略 + debug 日志（与 ParallelToolCalls 同规则）|
 | `StopSequences` | `stop_sequences` |
 | `Thinking` 三态 / Budget | `thinking:{"type":"enabled","budget_tokens":N}`；tsFalse 显式 `{"type":"disabled"}`；tsUnset 不上送；**tsTrue 而 Budget unset → aecConfig**（anthropic 强制 budget_tokens）|
-| `ToolChoice` tcmAuto/tcmRequired/tcmNamed | `tool_choice:{"type":"auto"}` / `{"type":"any"}` / `{"type":"tool","name":ToolChoiceName}`（缺名本地 aecConfig）；仅 Tools 非空时上送 |
-| `ToolChoice` tcmNone | 无 none wire 形态：**省略 `tools` 字段**转译等价禁用（Q-A9 备注）；debug 日志记一条转译说明 |
+| `ToolChoice` tcmAuto/tcmRequired/tcmNamed | `tool_choice:{"type":"auto"}` / `{"type":"any"}` / `{"type":"tool","name":ToolChoiceName}`（缺名或 Tools 空本地 aecConfig）；仅 Tools 非空时上送 |
+| `ToolChoice` tcmNone | 无 none wire 形态：**省略 `tools` 字段**转译等价禁用（Q-A9 备注）；provider 层 debug 日志记一条转译说明 |
 | `ResponseSchemaJson` 非空 | **本地 aecConfig**：厂商 API 无结构化输出参数——fail-fast 而非静默降级为 prompt 注入（tool-based 转译为后续候选，见 §3） |
 | 流式调用 | `"stream":true` |
 
