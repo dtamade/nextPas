@@ -39,6 +39,22 @@
 7. **嵌入载体**三轨：`.pack` 文件 / 生成 `.inc` typed const（S4）/ `{$R}`（按需）。
 8. mount/overlay 推迟至有真实双源场景；接口留位不留桩。
 
+## 仓库约束：FPC RTL 隔离与反哺（2026-08-25 增补）
+
+规则：`nextpas.core.*` 不准直接依赖引用 FPC RTL，一切经 nextpas.core 解决；不满足的
+能力通过反哺 nextpas.core 实现。落到本设计：
+
+1. **uses 白名单**：respack/vfs 全部单元只允许 settings.inc + base/errors/exception
+   （+io.intf/fs/path/respack.reader 按依赖白名单表）；禁 `SysUtils`/`Classes`/
+   OS 单元直引。异常一律继承 `nextpas.core.exception.Exception`（全框架唯一
+   SysUtils.Exception 触点在该根模块内桥接）。source-contract 测试逐单元断言。
+2. **反哺清单**：mmap 大包读取 → platform/mem 立项（v1 不做）；目录监视 → 消费既有
+   fs.watch；其余当前无缺口。
+3. **存量抽取盘点**（实查结论）：compiler/tools 无虚拟 FS/打包存量可抽；
+   bench `*.inc` 是代码拆分先例非数据嵌入；compiler 的 ResourceToolProfileId 属目标
+   工具链档案与资产嵌入无关。S4 工具的格式逻辑必须全部落 core 侧（respack.writer），
+   CLI 只留薄壳——正向示范"项目代码抽出来进 core"。
+
 ## 阶段切片
 
 ### S0 — 设计文档（本切片）
@@ -69,7 +85,8 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_roundtrip
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 ```
 出口条件：FORMAT.md 校验清单每条规则至少一个拒绝用例；golden 字节快照（含 digest 区
-与去重共享槽位形态）；digest 与注入函数一致性用例；heaptrc 零泄漏；
+与去重共享槽位形态）；digest 与注入函数一致性用例；source-contract 含 uses 白名单
+断言（禁 SysUtils/Classes/OS 单元直引）；heaptrc 零泄漏；
 registry 增加 `respack` 行（L2，source-contract → focused-runtime）。
 
 ### S2 — vfs 契约与内存树
@@ -104,6 +121,7 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contracts
 ```
 出口条件：conformance P1–P8 全过（三后端 × 整树/Sub 视图）；零拷贝地址断言生效；
+source-contract 含 uses 白名单断言（含禁 SysUtils/Classes/OS 单元直引）；
 registry 增加 `vfs` 行。
 
 ### S4 — 嵌入工具链

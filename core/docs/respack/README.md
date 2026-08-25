@@ -137,6 +137,46 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 | 路径语法全盘采纳 Go ValidPath | 业界事实标准，含 `.` 根特例与反斜杠规则 |
 | 压缩只留 codecId 槽位 | Tauri brotli 读时分配破坏零拷贝；HTTP 编码归 http.static |
 
+## FPC RTL 隔离与反哺
+
+项目规范：`nextpas.core.*` 不直接依赖 FPC RTL；缺口通过反哺 nextpas.core 解决。
+
+### 本模块 uses 白名单（source-contract 锁定）
+
+| 允许 | 禁止 |
+|------|------|
+| `nextpas.core.settings.inc` | `SysUtils`、`Classes` |
+| `nextpas.core.base` | `Windows`、`BaseUnix`、`Unix` 及一切 OS 单元 |
+| `nextpas.core.errors` / `exception`（经根模块桥接） | 任何其他 FPC RTL 单元 |
+
+- 异常类型继承 `nextpas.core.exception.Exception`。该根模块是全框架唯一允许触碰
+  `SysUtils.Exception` 的位置（FPC 下桥接、nextPas 编译器下原生实现）——本模块的
+  `EResPack*` 异常只认这个根
+- source-contract 测试逐单元断言 uses 清单，违例即红
+
+### 反哺触发点（当前已知）
+
+| 缺口 | 反哺去向 | 状态 |
+|------|----------|------|
+| 大 blob 内存映射读取 | platform/mem（文件映射 owner） | v1 不做 mmap；有需求时反哺立项，不在本模块内私调 OS API |
+| BE 平台换序 | `platform.endian` inquiry（已有） | 直接使用 |
+
+## 与既有模块的关系
+
+| 模块 | 边界 |
+|------|------|
+| `nextpas.core.zip`（已存在，store 写端） | **定位互补不重叠**：zip 是"外部工具可读的交换容器"（unzip/python/Go 可直接解）；respack 是"程序附着的运行时容器"（16 字节对齐、const 数组嵌入、header-first 递进校验、零拷贝切片）。两者共享同一套规范路径纪律（zip 单元已拒绝 zip-slip 形态，与本模块 ValidPath 语法同源） |
+| `nextpas.core.compress` | v1 无接触；未来压缩编解码经 codecId 登记表 + compress seam 立项 |
+| `checksum.fnv32` | 算法选型一致但内联实现（六行不值得建 seam），见设计决策记录 |
+
+## 可抽取存量盘点（2026-08-25 实查）
+
+- `core/src/nextpas.core.bench.report.*.inc` 是 `{$I}` **代码拆分**先例，不是数据嵌入；
+  本模块 S4 的 `.inc` 数据载体生成器是新能力，不与之混淆
+- compiler/toolchain 的 `ResourceToolProfileId` 是目标平台资源工具（windres 类）的
+  工具链档案，与资产嵌入无关，不抽取
+- compiler/tools 中不存在虚拟 FS 或打包存量代码可抽取
+
 ## 关联文档
 
 - [FORMAT.md](FORMAT.md) — 线格式 v1 权威定义（字节布局、校验规则、扩展策略）

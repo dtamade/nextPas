@@ -220,6 +220,40 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contracts
   If-Modified-Since 取 `ModTime`；属跨模块改动，按 AGENTS.md 单独说明理由与验证
 - config/TUI 资产加载后续跟进
 
+## FPC RTL 隔离与反哺
+
+项目规范：`nextpas.core.*` 不直接依赖 FPC RTL；缺口通过反哺 nextpas.core 解决。
+
+### 本模块 uses 白名单（source-contract 锁定）
+
+| 允许 | 禁止 |
+|------|------|
+| `nextpas.core.settings.inc` | `SysUtils`、`Classes` |
+| `nextpas.core.base` / `io.intf` | `Windows`、`BaseUnix`、`Unix` 及一切 OS 单元 |
+| `nextpas.core.exception` / `errors`（异常根桥接） | 任何其他 FPC RTL 单元 |
+| `os` 后端另加 `fs`/`path`；`embedded` 另加 `respack.reader` | |
+
+- `EVfsError` 继承 `nextpas.core.exception.Exception`——全框架唯一允许触碰
+  `SysUtils.Exception` 的位置是 exception 根模块（FPC 下桥接、nextPas 下原生实现），
+  本模块只认这个根
+- 流词汇只用 `nextpas.core.io.intf.IStream`，绝不引 FPC `Classes.TStream`
+- source-contract 测试逐单元断言 uses 清单，违例即红
+
+### 反哺触发点（当前已知）
+
+| 缺口 | 反哺去向 | 状态 |
+|------|----------|------|
+| 大 pack 低驻留读取需要文件映射 | platform/mem（文件映射 owner） | v1 不做 mmap；有需求时反哺立项，不在本模块私调 OS API |
+| 目录监视（开发态热刷新资产） | fs.watch（已有 owner） | 直接消费，不重复实现 |
+| 原生 Exception 基类 | nextpas.core.exception 已承接 | 无新增缺口 |
+
+## 可抽取存量盘点（2026-08-25 实查）
+
+- compiler/tools 中不存在虚拟 FS、内存树或打包读取的存量代码可抽取——本模块是绿地
+- "项目代码抽进 core"纪律对本设计的要求：S4 打包工具与 `.inc` 生成器的全部格式逻辑
+  必须落在 `respack.writer`（core 侧），CLI 只是薄壳——工具逻辑进 core、壳留项目侧，
+  正向示范该规则
+
 ## 关联文档
 
 - [`core/docs/respack/README.md`](../respack/README.md) — 格式层模块
