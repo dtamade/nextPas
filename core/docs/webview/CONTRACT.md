@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-25
-**版本**：0.2（Design——本文档为 S0 阶段设计契约，源码家族落地时版本升至 1.0）
+**版本**：1.0（源码家族已落地：base/intf/fake/factory/门面 + 六个测试门；
+bridge 与平台后端仍按波次推进，语义变更须升版本号）
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
@@ -288,6 +289,10 @@ TWebviewScaleHandler      = reference to procedure(ANewScale: Double);
   `AOnError(EWebviewEvalFailed)` 收尾（保持恰好一次；进程整体退出除外）。
   JS 执行成功但表达式值为 `undefined` 时结果文本按引擎诚实序列化（见
   BACKENDS.md eval 结果矩阵）。
+- **错误实例所有权**：传给回调的异常实例（含 `AOnError` 的
+  `EWebviewEvalFailed`）由框架创建、触发并在 `try/finally` 中释放；回调
+  只可在调用栈内读取，不得 Free、不得在返回后继续持有引用。由调用方
+  `raise` 的异常仍按 RTL 语义由框架捕获后释放。
 - `Focus` 在 GTK 上 `gtk_window_present`；WebView2 `moveFocus(CODE)`；
   WK `makeFirstResponder`——细节入 BACKENDS.md。
 - 事件注册返回句柄用于反注册的需求推迟到出现真实用例再扩展（YAGNI）。
