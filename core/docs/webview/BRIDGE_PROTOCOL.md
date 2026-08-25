@@ -43,7 +43,7 @@
   WebView2：`AddScriptToExecuteOnDocumentCreated`；WK：`WKUserScript` document-start）。
 - **每次导航都会重新注入**；native 在注入完成回调（WebView2）或首次帧到达（GTK/WK）
   处触发 `OnReady`。协议不假设注入与首个 invoke 的先后序——JS 侧用
-  `__npwReady` promise 兜底（见 §4）。
+  `window.__npw.ready` promise 兜底（见 §4）。
 - bridge script 文本作为常量存放于 `webview.bridge`（`NPW_BRIDGE_SCRIPT`），
   版本常量 `NPW_BRIDGE_VERSION = 1`。
 
@@ -52,6 +52,7 @@
 ```js
 window.__npw = {
   version: 1,
+  ready,                    // Promise，注入完成即兑现；业务脚本发首帧前 await 它
   invoke(cmd, payload)      // payload 任意 JSON 值，缺省 null；返回 Promise<any>
   listen(event, callback)   // 订阅 native→js 事件，返回退订函数
   emit(event, payload)      // js→js 本地广播（不经 native）；可选便利
@@ -62,14 +63,18 @@ window.__npw.__reject(id, errObj)     // errObj = {code, message}
 window.__npw.__emit(event, payloadJson)
 ```
 
+> 就绪信号的唯一权威名是 **`window.__npw.ready`**（不是全局 `__npwReady`）。
+> README 示例、CONTRACT §2.2 注记与本节引用同一名字。
+
 约定：
 
 - `invoke` 的 payload 与结果都是**任意 JSON 值**（推荐对象）；序列化由 JS 侧
   `JSON.stringify`、native 侧 json owner 完成。
 - `listen` 回调收到的 payload 已反序列化为 JS 对象。
-- id 为正整数（u53 安全范围内），由 **native 侧分配**？——否：id 由 native 分配用于
-  eval 回执；invoke 帧的 id 由 **JS 侧分配**并自增，native 不解释只回显。
-  两个方向各自独立编号，互不相干。
+- **id 分配（唯一权威规则）**：invoke 帧 `id` 由 **JS 侧**在页面生命周期内
+  单调自增分配（u53 安全范围）；native 不解释、不重排、原样回显。native 侧
+  pending 表以该 id 为键。注意区分：native 发起的 `Eval` 调用**不走本协议**——
+  它的完成回调直接绑定在 Eval 调用对象上，与帧 id 无关（见 CONTRACT.md §3.2）。
 
 ## 3. 帧格式
 
@@ -88,9 +93,11 @@ transport 上传递的是**一个 JSON 文本字符串**：
 | `cmd` | 字符串 | 是 | 非空；建议 `<domain>.<action>` 命名 |
 | `payload` | 任意 JSON | 否 | 缺省视为 `null` |
 
-非法帧（无法解析 / `v≠1` / 缺字段 / `cmd` 空）→ native 忽略并按 §5 计入坏帧
-诊断计数；**不对坏帧回 reject**（此时可能连可靠回执通道都没有），
-debug 构建下输出诊断日志。
+非法帧（无法解析 / `v≠1` / 缺字段 / `cmd` 空）→ native 静默忽略；
+**不对坏帧回 reject**（此时可能连可靠回执通道都没有）。debug 构建下
+bridge 经 `log.intf` 输出诊断行（是否保留计数器属实现细节，不入契约）；
+测试侧需要构造非法帧时走 fake 后端 `FakeDeliverFrame`（非法 JSON 入参
+抛 `EWebviewBadFrame`，见 CONTRACT §2.4）。
 
 ### 3.2 native → js（回执）
 
@@ -131,7 +138,7 @@ native                          page
 
 竞态说明：若业务脚本在注入前调用 `invoke`，bridge script 尚不存在会抛 ReferenceError。
 为消除该窗口期，业务模板应在 `await window.__npw.ready` 后再发首帧；
-bridge script 末尾派发 `__npwReady` resolve。此约定写入 starter 示例，
+bridge script 末尾兑现 `window.__npw.ready`。此约定写入 starter 示例，
 协议本身不为它增加帧类型。
 
 ## 5. 错误码稳定词汇表
@@ -161,7 +168,15 @@ bridge script 末尾派发 `__npwReady` resolve。此约定写入 starter 示例
   （encoding owner），Wave 1 不做裸二进制帧。
 - JSON 解析一律经 json owner（`nextpas.core.json`）；bridge 内禁止手写字符串扫描。
 
-## 7. fake 后端的协议职责
+## 7. 帧作用域（iframe 立场）
+
+- 注入 script 与 message handler **只挂主帧**（GTK：`for_main_frame_only`；
+  WebView2：DocumentCreated 注入天然主帧；WK：`forMainFrameOnly:YES`）。
+- iframe 内代码没有 `window.__npw`，协议不为跨帧投递提供任何机制。
+- 主页面若嵌入第三方 iframe，iframe 无法调用 invoke handler——这是安全特性
+  不是缺陷（CONTRACT.md §6.1）。
+
+## 8. fake 后端的协议职责
 
 fake 后端**完整走过 bridge**（不是绕开它直呼 handler）：测试用
 `FakeDeliverFrame(json)` 模拟页面来帧、`FakeCaptureEval()` 捕获 native 发出的

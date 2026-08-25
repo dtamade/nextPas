@@ -1,9 +1,23 @@
 # nextpas.core.webview 模块设计（2026-08-25）
 
-> 状态：S0 文档阶段。本文是活动计划；稳定契约在 `core/docs/webview/`
+> 状态：S0 文档阶段（v0.2 深化 + Go/Rust 对标审查完成）。
+> 本文是活动计划；稳定契约在 `core/docs/webview/`
 > （[README](../webview/README.md) / [CONTRACT](../webview/CONTRACT.md) /
-> [BRIDGE_PROTOCOL](../webview/BRIDGE_PROTOCOL.md) / [BACKENDS](../webview/BACKENDS.md)）。
+> [BRIDGE_PROTOCOL](../webview/BRIDGE_PROTOCOL.md) / [BACKENDS](../webview/BACKENDS.md) /
+> [PARITY-GO-RUST](../webview/PARITY-GO-RUST.md)）。
 > 冲突时以 CONTRACT 为准，本文记录切片顺序与治理约定。
+
+## S0 深化记录（2026-08-25 第二轮）
+
+对标 Rust wry/tao/Tauri v2 与 Go Wails 后的修订：
+
+- **修正**：桥协议 id 分配表述自相矛盾（统一为 JS 侧分配，INV-2 同步改写）；
+  README 示例代码语法；Eval 补 exactly-one 回调语义（INV-7 新增）。
+- **补面**：窗口状态操作（maximize/minimize/restore/focus）、zoom、UA 读写、
+  InitScripts、DataDirectory/EphemeralSession（互斥校验）、DPI 只读最小集
+  （GetScaleFactor/OnScaleChanged）、Maximized 启动项。
+- **立牌**：CONTRACT §6 最小威胁模型（桥主帧 only、远程内容风险）、§9
+  Deferred 登记簿（七项各带触发条件，防半成品占位）、PARITY §5 刻意不抄清单。
 
 ## 背景
 
@@ -47,15 +61,24 @@ Wave 1 = Linux（gtk）+ fake；Wave 2 = Windows（webview2，移植 fafafa COM 
 Wave 3 = macOS（wk，先做 stage0 ObjC 能力 probe）。平台能力差异以语义诚实表
 公开（CONTRACT §2.2），不做跨平台假装。
 
+### D5：窗口壳反哺路线（总控确认，2026-08-25）
+
+长期需要独立跨平台窗口模块（含 Android/iOS 的宿主 surface attach 模型），
+webview 是第一个 consumer；Tauri 的 tao+wry 分层即此结构。节奏：Wave 1 不新建
+模块，窗口壳以内部缝 `webview.gtk.win`（纯函数式、无 webview 概念）实现；
+抽取触发条件与流程见 CONTRACT §1.1——第二个 consumer 出现或 Wave 2 落地前，
+按受控跨模块 slice 上移为独立 lane。移动端语义（attach ≠ top-level）在窗口
+模块立项时作为一等约束，不阻塞 webview 波次。
+
 ## 切片计划
 
 | Slice | 内容 | 验证 | 备注 |
 |-------|------|------|------|
-| **S0**（本批） | 设计文档四件 + 本计划 | 文档评审；不改 src/tests/registry | 文档阶段 |
-| S1 | `base`+`intf`+门面骨架+`fake` 后端+契约测试骨架；**registry 补行同批** | focused gate（fake 全接口矩阵）；source-contract 扩展（INV-4/INV-5） | intf 视为冻结候选起点 |
+| **S0**（本批） | 设计文档五件（含 PARITY-GO-RUST）+ 本计划 + 对标审查轮 | 文档评审；不改 src/tests/registry | 文档阶段 |
+| S1 | `base`+`intf`+门面骨架+`fake` 后端+契约测试骨架；**registry 补行同批** | focused gate（fake 全接口矩阵：窗口状态机/zoom/UA/scale/Ephemeral 互斥/exactly-one 性质）；source-contract 扩展（INV-4/INV-5） | intf 视为冻结候选起点 |
 | S2 | `bridge` 协议 v1 编解码+pending 表+注入脚本常量 | bridge 契约测试 round-trip/坏帧/生命周期；bench_bridge 建立 | json owner 解析 |
 | S3 | `gtk.ffi`+`gtk.loader`（探测 4.1→4.0，符号级能力分支） | compile-only 门禁（全 host）；loader 探测单测（真机）；ABI 对照说明 | 取证方式参照 platform FFI import workflow |
-| S4 | `gtk` 后端运行时：窗口壳+导航+Eval 异步回执+scheme+dispatcher | runtime 冒烟（Xvfb）：建窗→eval round-trip→invoke round-trip→close 幂等；无库环境 SKIP | OnReady/OnNavigation 事件矩阵 |
+| S4 | `gtk.win` 内缝（纯函数式窗口操作）+ `gtk` 后端运行时：窗口壳+导航+Eval 异步回执+scheme+dispatcher | runtime 冒烟（Xvfb）：建窗→eval round-trip→invoke round-trip→zoom/UA 读写→close 幂等；无库环境 SKIP；gtk.win 单元独立契约测试（无 webview 依赖断言） | OnReady/OnNavigation 事件矩阵；eval 结果矩阵逐格断言；内缝为 D5 抽取预备 |
 | S5 | `factory` 选择逻辑+Builder+examples（hello/assets/devserver）+文档收口（API reference、语义诚实表复核） | focused gate 全量+hygiene+git diff --check；示例手工验收清单 | registry truth level 复评 |
 | W2/W3 | webview2 / wk 波次独立立项 | 各自 probe 先行 | 不混入 Wave 1 lane |
 

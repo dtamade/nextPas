@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-25
-**版本**：0（Design——本文档为 S0 阶段设计契约，源码家族落地时版本升至 1.0）
+**版本**：0.2（Design——本文档为 S0 阶段设计契约，源码家族落地时版本升至 1.0）
+**对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
 
@@ -18,6 +19,7 @@
 | `nextpas.core.webview.fake` | 测试后端 | 无头脚本化后端：记录调用、手动驱动回调，契约测试全走它 | W1 |
 | `nextpas.core.webview.gtk.ffi` | ABI | WebKitGTK/GLib/GTK3 类型与函数指针变量声明（无 external） | W1 |
 | `nextpas.core.webview.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`），版本探测 4.1→4.0 | W1 |
+| `nextpas.core.webview.gtk.win` | **内缝** | 窗口壳操作的纯函数式内部实现（无 webview 概念）；**窗口模块抽取预备缝**，见 §1.1 | W1 |
 | `nextpas.core.webview.gtk` | 后端 | Linux 实现：窗口壳、scheme、idle dispatch、WebKitGTK 信号桥接 | W1 |
 | `nextpas.core.webview.factory` | 工厂 | 后端注册/探测/选择 + `TWebviewBuilder` | W1 |
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
@@ -45,6 +47,33 @@ module registry 条目必须与首个源码家族同批落地（S1）：注册�
 `check_architecture_source_contracts.py` 会拒绝没有 source family 的注册行。
 S0 文档 slice 不改注册表。
 
+### 1.1 窗口壳归属策略（反哺路线）
+
+**方向判断**：长期需要独立的跨平台窗口模块（立项时定名，候选
+`nextpas.core.window`），webview 只是它的第一个 consumer。依据：
+
+- Tauri 的分层即先例：tao（窗口）+ wry（webview 内容）各自独立演进；
+  Wails v3 同样把 Application/Window 与 webview 绑定分离。
+- 仓库内的未来消费者已经存在：gpu/font 渲染栈、IDE workbench 规范明确禁止
+  各自私建 shell（docs/architecture/ide-specification.md）。
+- Android/iOS 的"窗口"语义是 **attach 到宿主 surface**（Activity/UIView），
+  不是创建 top-level window——窗口模块必须从第一天就同时建模这两类，
+  这是它独立于 webview 存在的核心理由之一。
+
+**节奏控制**（fafafa 教训 + 受控跨模块纪律）：Wave 1 **不新建窗口模块**。
+窗口壳以可机械抽取的内部缝实现：
+
+- `nextpas.core.webview.gtk.win`：纯函数式 GTK 窗口操作（create/title/
+  geometry/state/focus/loop），签名不含任何 webview 概念，只依赖
+  `gtk.ffi/gtk.loader`；
+- `nextpas.core.webview.gtk` 组合"窗口缝 + webview 内容"并实现 IWebviewWindow。
+
+抽取触发条件（满足其一即立独立 lane 做受控跨模块 slice）：
+(a) 第二个真实 consumer 出现（GPU UI 栈 / IDE workbench / 对话框家族）；
+(b) Wave 2 webview2 后端落地前——届时 Win32 缝与 GTK 缝一起上移，
+避免两套后端各养一份窗口代码。抽取后 `IWebviewWindow` 保持不变
+（组合面），消费方无感。
+
 ---
 
 ## 2. 核心类型（webview.base）
@@ -67,24 +96,46 @@ TWebviewOptions = record
   MaxWidth: Integer;        // 0 = 不设限制
   MaxHeight: Integer;
   Resizable: Boolean;       // 默认 True
+  Maximized: Boolean;       // 默认 False；启动即最大化
   DebugTools: Boolean;      // 默认 False；True 打开 inspector/devtools
   SchemeName: string;       // 默认 'npres'；资源 scheme 名
   InitialHtml: string;      // 非空则启动加载该 HTML（优先级低于 InitialUrl）
   InitialUrl: string;       // 非空则启动导航；DevServerUrl 存在时通常填它
   DevServerUrl: string;     // 非空 = 开发模式：资源服务整体让位给该 http 地址
+  DataDirectory: string;    // ''= 引擎默认持久化位置；非空= 自定义 profile 目录
+  EphemeralSession: Boolean;// 默认 False；True= 内存会话（与 DataDirectory 互斥：
+                            //   同时设置抛 EWebviewInvalidState）
+  InitScripts: TArray<string>;    // 追加注入脚本（document-start，主帧），
+                                  // 桥脚本之外的业务初始化；顺序=数组序
 end;
 
 function DefaultWebviewOptions: TWebviewOptions;
 ```
 
+InitScripts 的注入时机与桥脚本相同层（document-start、main-frame-only、
+每次导航都生效）；与桥的先后序未定义——init script 里不得调用 `__npw`
+（需要桥的应用应监听 `OnReady` 或 await `window.__npw.ready`，见
+BRIDGE_PROTOCOL.md §2.1）。
+
 **语义诚实表**（跨平台差异显式声明，不做假装）：
 
-| 字段 | GTK (WebKitGTK) | webview2 (W2) | wk (W3) |
+| 字段/能力 | GTK (WebKitGTK) | webview2 (W2) | wk (W3) |
 |------|-----------------|----------------|---------|
 | MinWidth/MinHeight | `gtk_window_set_geometry_hints` 生效 | `SetBounds` 夹取生效 | `contentMinSize` 生效 |
+| Maximized | `gtk_window_maximize`（启动前设置） | ShowMaximized 路径 | `performZoom`/`isZoomed`（zoom=最大化语义），否则 `setFrame`+`styleMask`；W3 定案 |
 | DebugTools | 需要 WebKit ≥ 2.24（4.x 均满足） | `AreDevToolsEnabled` | `isInspectable`（macOS 13+ 才可编程开启） |
+| Eval 结果回执 | ≥2.40 用 `evaluate_javascript`（run_javascript 已废弃）；更老版本用 `run_javascript`+`_finish`，同样可取结果 | `ExecuteScript` completion | `evaluateJavaScript:completionHandler:` |
 | SchemeName | 必须在创建第一个 webview 前 register_uri_scheme，否则静默失效 | `WebResourceRequested` 可后挂但首帧前生效最稳 | WKURLSchemeHandler 随 configuration 创建 |
 | DevServerUrl | 直接 Navigate 到 http URL | 同左 | ATS 例外由调用方自行负责（W3 再议） |
+| DataDirectory | 自建 `WebKitWebContext` + local storage path；默认 context 为共享单例 | `EnvironmentOptions.UserDataFolder`；多窗口同目录才共享会话 | `WKWebsiteDataStore(forPersistentStore:)` |
+| EphemeralSession | `webkit_web_context_new_ephemeral` | `ControllerOptions.IsInPrivateModeEnabled`? → Environment `CreateCoreWebView2EnvironmentWithOptions` private 变体；W2 定案 | `WKWebsiteDataStore.nonPersistent()` |
+| SetUserAgent | `user-agent` property | `Settings.UserAgent` | `customUserAgent` |
+| SetZoom/GetZoom | `set_zoom_level/get_zoom_level`（全页缩放） | `ZoomFactor`（全页缩放） | `pageZoom`（全页缩放） |
+| GetScaleFactor | `gtk_widget_get_scale_factor`（整数值） | `RasterizationScale`（浮点） | `backingScaleFactor`（浮点） |
+
+DPI 策略（对齐 tao 口径的最小子集）：Wave 1 只读暴露 `GetScaleFactor`
+（返回浮点，GTK 整数诚实升格）+ `OnScaleChanged` 事件；逻辑坐标一律物理像素
+除以 scale，由消费方决定换算时机。不做 per-monitor 动态重排承诺。
 
 ### 2.3 事件 record
 
@@ -102,14 +153,20 @@ end;
 错误族基类派生自框架根异常：
 
 ```pascal
-EWebviewError              = class(ENextPasError);  // 族基类，category=ecInternal
-EWebviewBackendUnavailable = class(EWebviewError);  // dlopen/探测失败；ecResourceExhausted? 否→ecInternal
-EWebviewNotInitialized     = class(EWebviewError);  // 未创建即使用；ecInvalidState 类目
-EWebviewInvalidState       = class(EWebviewError);  // 重复 Create / Close 后操作等
+EWebviewError              = class(ENextPasError);  // 族基类
+EWebviewBackendUnavailable = class(EWebviewError);  // dlopen/探测失败
+EWebviewNotInitialized     = class(EWebviewError);  // 未创建即使用
+EWebviewInvalidState       = class(EWebviewError);  // 重复 Create / Close 后操作 /
+                                                    // Ephemeral 与 DataDirectory 冲突等
 EWebviewClosed             = class(EWebviewError);  // Close 之后仍发起 Eval/Emit 等
-EWebviewTimeout            = class(EWebviewError);  // invoke pending 超时（若启用）
-EWebviewBadFrame           = class(EWebviewError);  // bridge 收到无法解析的帧；ecParse
-EWebviewInvokeError        = class(EWebviewError);  // handler 内抛出的包装；携带 code/message 回传前端 reject
+EWebviewEvalFailed         = class(EWebviewError);  // Eval 执行失败（导航中/引擎错误/
+                                                    // Close 时在途收尾）
+EWebviewTimeout            = class(EWebviewError);  // invoke pending 超时（预留，W1 不启用）
+EWebviewBadFrame           = class(EWebviewError);  // 无法解析的帧；生产路径静默忽略，
+                                                    // 本类供 fake 后端 FakeDeliverFrame
+                                                    // 校验测试入参使用
+EWebviewInvokeError        = class(EWebviewError);  // handler 内抛出的包装；
+                                                    // 携带 Code/Message 回传前端 reject
 ```
 
 - 具体类目值在 S1 实现时对照 `nextpas.core.exception.TErrorCategory` 定值并写测试。
@@ -121,6 +178,8 @@ EWebviewInvokeError        = class(EWebviewError);  // handler 内抛出的包�
 ## 3. 接口契约（webview.intf）
 
 对外一律 interface（COM 引用计数），消费方不手写释放。
+`TWebviewBuilder.New` 同样返回 interface（factory 单元实现），链式配置后
+`Build`/`Run` 出窗口；生命周期归 COM 引用计数管理。
 
 ### 3.1 主线程投递
 
@@ -151,13 +210,32 @@ IWebviewWindow = interface
   procedure Close;                       // 幂等；Close 后其他方法抛 EWebviewClosed
   function IsClosed: Boolean;
 
-  { 窗口壳 }
+  { 窗口壳 —— 可见性 }
   procedure Show;  procedure Hide;
   function IsVisible: Boolean;
+  procedure Focus;                       // 抬升并聚焦；无焦点概念的引擎为 no-op（诚实表）
+
+  { 窗口壳 —— 标题与几何 }
   procedure SetTitle(const ATitle: string);
   procedure SetBounds(AWidth, AHeight: Integer);
   function GetWidth: Integer;  function GetHeight: Integer;
   procedure SetResizable(AResizable: Boolean);
+
+  { 窗口壳 —— 状态（tao 对齐最小集） }
+  procedure Maximize;    procedure Unmaximize;
+  function IsMaximized: Boolean;
+  procedure Minimize;    procedure Restore;
+  function IsMinimized: Boolean;
+
+  { 内容缩放与 UA }
+  procedure SetZoom(AFactor: Double);    // 1.0 = 100%
+  function GetZoom: Double;
+  procedure SetUserAgent(const AUserAgent: string);
+  function GetUserAgent: string;
+
+  { DPI }
+  function GetScaleFactor: Double;
+  procedure OnScaleChanged(AHandler: TWebviewScaleHandler);
 
   { 导航 }
   procedure Navigate(const AUrl: string);
@@ -167,7 +245,7 @@ IWebviewWindow = interface
   function CanGoForward: Boolean; function GoForward: Boolean;
 
   { 异步 eval —— 唯一入口，禁止同步形态 }
-  { ACallback 在 UI 主线程收到 JSON 结果文本；失败以异常进入 AOnError }
+  { ACallback 与 AOnError 恰好其一被调用，且都在 UI 主线程 }
   procedure Eval(const AJavascript: string;
     ACallback: TWebviewEvalCallback;
     AOnError: TWebviewEvalErrorCallback);
@@ -186,18 +264,32 @@ IWebviewWindow = interface
   procedure OnNavigationFinished(AHandler: TWebviewNavEventHandler); overload;
   procedure OnNavigationFailed(AHandler: TWebviewNavFailedHandler); overload;
   procedure OnWindowClosed(AHandler: TWebviewNotifyHandler); overload;
-  procedure OnReady(AHandler: TWebviewNotifyHandler); overload; // 注入桥就绪（每导航一次）
+  procedure OnReady(AHandler: TWebviewNotifyHandler); overload; // 桥就绪（每导航一次）
+  { Eval/OnScaleChanged 同样提供 method/proc 三重载形态，签名从略 }
+
+  { invoke 注册表（见 §3.3） }
+  function Invokes: IWebviewInvokeRegistry;
+
+  { 资产挂载（见 §3.4）；DevServerUrl 模式下 Mount 被 no-op 并记录诊断 }
+  function Assets: IWebviewAssets;
 end;
 
-TWebviewEvalCallback     = reference to procedure(const AResultJson: string);
-TWebviewEvalErrorCallback= reference to procedure(const AError: Exception);
-TWebviewNavEventHandler  = reference to procedure(const AEvent: TWebviewNavigationEvent);
-TWebviewNavFailedHandler = reference to procedure(const AEvent: TWebviewNavigationEvent);
-TWebviewNotifyHandler    = reference to procedure;
+TWebviewEvalCallback      = reference to procedure(const AResultJson: string);
+TWebviewEvalErrorCallback = reference to procedure(const AError: Exception);
+TWebviewNavEventHandler   = reference to procedure(const AEvent: TWebviewNavigationEvent);
+TWebviewNavFailedHandler  = reference to procedure(const AEvent: TWebviewNavigationEvent);
+TWebviewNotifyHandler     = reference to procedure;
+TWebviewScaleHandler      = reference to procedure(ANewScale: Double);
 ```
 
-- `Eval` 结果文本是 JS 值的 JSON 序列化（引擎行为：`undefined` 序列化为 `"null"`
-  或空串按后端诚实记录于 BACKENDS.md）。
+- **Eval exactly-one 语义**：`ACallback`/`AOnError` 恰好其一被调用一次。
+  页面导航中/引擎失败走 `AOnError`（包装为 `EWebviewEvalFailed`，属
+  `EWebviewError` 族）；窗口 `Close` 或引擎终止时，所有在途 Eval 统一以
+  `AOnError(EWebviewEvalFailed)` 收尾（保持恰好一次；进程整体退出除外）。
+  JS 执行成功但表达式值为 `undefined` 时结果文本按引擎诚实序列化（见
+  BACKENDS.md eval 结果矩阵）。
+- `Focus` 在 GTK 上 `gtk_window_present`；WebView2 `moveFocus(CODE)`；
+  WK `makeFirstResponder`——细节入 BACKENDS.md。
 - 事件注册返回句柄用于反注册的需求推迟到出现真实用例再扩展（YAGNI）。
 
 ### 3.3 invoke 契约
@@ -216,11 +308,25 @@ IWebviewInvokeCompletion = interface
   procedure Ok(const AResultJson: string);
   procedure Fail(const ACode, AMessage: string);
 end;
+
+IWebviewInvokeRegistry = interface
+  procedure Register(const ACmd: string;
+    AHandler: TWebviewInvokeSyncHandler); overload;
+  procedure Register(const ACmd: string;
+    AHandler: TWebviewInvokeAsyncHandler); overload;
+  { method-pointer / proc 三重载形态遵循 design-conventions §8，此处从略 }
+  procedure Unregister(const ACmd: string);
+end;
 ```
 
-注册 API 在 `IWebviewInvokeRegistry`（由 window 暴露 `Invokes` 属性），
-同样提供 method-pointer / proc 三重载。handler 抛出的一切异常：
-`EWebviewInvokeError` 按其 Code/Message reject，其余按 `npw.handler_error` reject。
+- cmd 命名约定 `<domain>.<action>`（如 `fs.readText`）。保留规则单一且明确：
+  cmd 为空、或以 `npw.`（协议错误码词汇前缀）或 `_` 开头时，
+  `Register` 抛 `EWebviewInvalidState`；其余字符串一律接受。
+- 同名重复注册抛 `EWebviewInvalidState`（显式 Unregister 后可重注册）。
+- handler 抛出的一切异常：`EWebviewInvokeError` 按其 Code/Message reject，
+  其余按 `npw.handler_error` reject。
+- **handler 执行线程**：同步 handler 总在 UI 主线程内联执行；异步 handler 的
+  `Ok/Fail` 可在任意线程调用（桥内部 marshal 回主线程再发回执）。
 
 ### 3.4 资源服务
 
@@ -242,6 +348,10 @@ end;
 - 解析顺序 = mount 顺序（先挂先查）；默认建议 embedded 优先。
 - MIME 表内置 ~30 条常见映射，未命中回退 `application/octet-stream`。
 - scheme 名默认 `npres`；URL 形态 `npres://<mount>/<path>`。
+- **响应形态刻意取最简**（对齐决策，详见 PARITY-GO-RUST.md §4）：
+  命中=200 + `Content-Type`，未命中=404 + `text/plain` 空体；无自定义 header/
+  status/redirect 面。wry 式完整 Response 能力推迟到真实需求出现再扩
+  （届时 intf 加第二方法，不破坏现有签名）。
 - DevServerUrl 非空时不注册 scheme 路径处理（开发模式直连 http）。
 - 内嵌 provider 的字节来源推荐复用 `respack` 家族产物（集成点在 examples 论证，
   intf 不依赖 respack）。
@@ -268,7 +378,7 @@ end;
 6. 与 `async.loop` 的关系：本模块不 uses `TAsyncLoop`；应用层自行把两者接起来
    （示例演示）。保持 webview 对 async owner 无编译期依赖，避免 L3 内部交叉。
 
-## 5. 主循环
+## 5. 主循环与多窗口
 
 ```pascal
 { factory 提供；阻塞直到所有窗口关闭或 ExitLoop }
@@ -276,15 +386,44 @@ procedure WebviewRunLoop;
 procedure WebviewExitLoop;
 ```
 
+**窗口创建分解**（多窗口的正式路径）：
+
+- `TWebviewBuilder.New...Build: IWebviewWindow` —— 可多次调用，每次创建
+  一个独立窗口；同一 UI 主线程共享同一主循环。
+- `TWebviewBuilder.New...Run(url)` = `Build` + `Navigate`/显示 +
+  `WebviewRunLoop` 的单窗便捷封装。
+- 循环退出条件：最后一个未 Close 的窗口关闭（或 `WebviewExitLoop` 被调）；
+  `OnWindowClosed` 在计数减一后触发，先于进程级退出判定。
+
 - GTK：`gtk_main` / `gtk_main_quit`。
 - RunLoop 期间宿主不得再占用该线程做长计算；后台工作走第 4 节姿势。
 - fake 后端提供手动泵（`PumpOnce`）供确定性测试。
+- **与宿主事件循环融合**（`IterateOnce`：单步迭代一次主循环、非阻塞或限时）：
+  这是未来把 GLib context 接进 `TAsyncLoop.WaitForWake` 的关键面，涉及各后端
+  循环所有权设计（gtk_main vs g_main_context_iteration 自驱泵），**登记为
+  deferred-LI**（PARITY-GO-RUST.md §5），Wave 1 不实现不预留接口——避免像
+  fafafa 那样留半成品调度器。
 
-## 6. 不变量
+## 6. 安全模型（最小威胁模型）
+
+1. **桥暴露面 = 主帧 only**。注入脚本与 script-message handler 都只挂主帧；
+   iframe 内的页面代码拿不到 `window.__npw`。跨帧通信需求出现前不支持。
+2. **远程内容风险**：任何被加载页面都能调用全部已注册 invoke handler。
+   生产应用必须只加载自家 scheme/资源；若确需远程 URL（如外链帮助页），
+   当前唯一护栏是应用自律。导航 allowlist（`NavigateTo` 校验 +
+   `OnNavigationStarted` veto）登记 deferred-Sec，Wave 1 不提供。
+   文档必须在示例里写明这一点（不学 fafafa capabilities.json 半成品）。
+3. **DebugTools 默认关**；release 构建忘开无副作用，dev 忘开只是没 inspector。
+4. **payload 边界**：单帧建议 ≤ 1 MiB（BRIDGE_PROTOCOL.md §6）；二进制走 base64。
+5. **CSP**：本模块不注入 CSP（引擎/页面职责）；示例展示如何在自家 HTML 里带
+   CSP meta。与 config/template 家族的 CSP 组合策略 deferred。
+
+## 7. 不变量
 
 - INV-1 `Close` 幂等；Close 后除 `IsClosed/NativeHandle` 外一切方法抛 `EWebviewClosed`。
-- INV-2 pending invoke id 进程内单调递增，不复用；窗口销毁时全部 pending 以
-  `npw.closed` reject。
+- INV-2 invoke 帧 id 由 **JS 侧**在页面生命周期内单调递增分配；native pending 表
+  以该 id 为键，窗口销毁时全部 pending 以 `npw.closed` reject；id 不被 native
+  解释、不复用。（eval 回执不经此通道——native 侧回调直接绑定 Eval 调用。）
 - INV-3 `bridge` 对帧的编解码是无处不在的唯一权威；任何后端不得私自解析 payload。
 - INV-4 `base`/`intf` 的 uses 闭包里不出现 `webview.gtk*`、`webview.fake`、
   `webview.factory`、`webview.bridge`（source-contract 门禁冻结）。
@@ -292,21 +431,40 @@ procedure WebviewExitLoop;
   `BaseUnix`/`ctypes`…）；GTK/Win32/ObjC 真相全部收敛在后端 `ffi`+`loader`。
 - INV-6 每个 public 异步入口都有超时或不超时的明确语义并写入注释；
   invoke pending 默认不限时（前端 Promise 天然有调用方语义），可选超时参数留待真实需求。
+- INV-7 用户回调恰好一次触发：Eval 二选一（含 Close 时在途 Eval 统一
+  `EWebviewEvalFailed` 收尾）、invoke completion 至多一次、事件每来源每次一条。
+  fake 后端的契约测试逐条冻结此性质。
 
-## 7. 测试门禁
+## 8. 测试门禁
 
 | 门禁 | 载体 | 要求 |
 |------|------|------|
-| 契约测试（CI 必跑） | `tests/nextpas.core.webview/test_*`，全走 fake | base 校验、bridge 编解码 round-trip/坏帧/pending 生命周期、fake 全接口行为矩阵、factory 选择逻辑 |
+| 契约测试（CI 必跑） | `tests/nextpas.core.webview/test_*`，全走 fake | base 校验（含 Ephemeral/DataDirectory 互斥）、bridge 编解码 round-trip/坏帧/pending 生命周期、fake 全接口行为矩阵（窗口状态机/zoom/UA/scale 事件）、factory 选择逻辑、INV-7 exactly-one 性质 |
 | source-contract | `tests/architecture/source_contracts/` 扩展 | INV-4/INV-5 静态扫描；`*.ffi` 无逻辑检查 |
-| 运行时冒烟（本地/Linux CI） | `test_webview_gtk_runtime` | 探测到 libwebkit2gtk 才跑；Xvfb 下建窗→NavigateToString→eval round-trip→invoke round-trip；未探测到输出 SKIP 并以 `NEXTPAS_WEBVIEW_GTK_REQUIRED=1` 强制 |
+| 运行时冒烟（本地/Linux CI） | `test_webview_gtk_runtime` | 探测到 libwebkit2gtk 才跑；Xvfb 下建窗→NavigateToString→eval round-trip→invoke round-trip→zoom/UA 读写→close 幂等；未探测到输出 SKIP 并以 `NEXTPAS_WEBVIEW_GTK_REQUIRED=1` 强制 |
 | compile-only | 非 Linux host | gtk/webview2 单元参与语法级编译门禁（不链接） |
 | benchmark | `benchmarks/nextpas.core.webview/bench_bridge` | 帧编码/解码 ns/op、dispatcher Post 往返延迟（nextpas.core.bench 框架，禁自定义计时） |
 
 runtime 冒烟允许的最大环境假设：存在 `libwebkit2gtk-4.1.so.0`（或 4.0）运行库
 + GTK3 运行库；不要求 dev 包（我们自声明 ABI）。
 
-## 8. 稳定性
+## 9. Deferred 登记簿（防止半成品混进 Wave 1）
+
+| 能力 | 类别 | 触发条件 |
+|------|------|----------|
+| `IterateOnce` 主循环融合 | deferred-LI | 应用真要把 webview loop 接进 TAsyncLoop 时立项 |
+| 导航 allowlist / OnNavigationStarted veto | deferred-Sec | 出现必须加载远程内容的场景 |
+| close-request veto（拦截关闭弹确认框） | deferred-Sec | 应用需要"关闭前确认"交互时；GTK 侧信号绑定已在 BACKENDS §2.2 预留 |
+| 全屏/decorations/透明/图标/always-on-top/drag region/attention | deferred-Win | tao 对齐第二批 |
+| 多 webview 单窗口 / 窗口间通信 | deferred-Arch | Tauri v2 已支持，但 Wave 1 无需求 |
+| cookies / storage 检查 API | deferred-St | 调试器类工具需求出现 |
+| invoke pending 超时参数 | deferred-Ipc | 前端侧无法兜底的挂死案例出现 |
+| 自定义协议完整 Response（header/status/redirect） | deferred-Res | 静态资源之外的动态 scheme 服务需求 |
+| CSP 注入/组合策略 | deferred-Sec | 与 config/template 家族组合输出安全 HTML 的场景出现 |
+
+规则：Deferred ≠ 计划内；每一项都要有触发条件，触发前接口不留占位。
+
+## 10. 稳定性
 
 - 当前 `draft`；registry 条目随 S1 源码落地，truth level 记 `focused-runtime`
   （fake 面）/ `source-contract`（边界面），runtime 冒烟达标后升

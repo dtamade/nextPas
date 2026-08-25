@@ -1,8 +1,8 @@
 # nextpas.core.webview 后端绑定策略
 
 **状态**: Design（S0）
-本文档记录各后端的 ABI 绑定方式、版本矩阵、主线程唤醒原语，
-以及从 fafafa.webview 移植资产的清单与边界。
+本文档记录各后端的 ABI 绑定方式、版本矩阵、主线程唤醒原语、
+eval 结果语义矩阵，以及从 fafafa.webview 移植资产的清单与边界。
 
 ---
 
@@ -38,22 +38,36 @@
 ### 2.2 最小函数面（S3 装载清单草案）
 
 窗口壳：`gtk_init_check`、`gtk_window_new/set_title/set_default_size/
-set_resizable/set_size_request/resize/show_all/hide/close`、
-`g_signal_connect_data`（close-event）、`gtk_widget_get_window`（句柄）、
+set_resizable/set_size_request/resize/maximize/unmaximize/iconify/
+deiconify/present/close/show_all/hide`、状态查询
+`gtk_window_is_maximized/gtk_widget_get_visible/gtk_widget_get_scale_factor`、
+`g_signal_connect_data`（close-event/scale 变化）、
+`gtk_widget_get_window`（句柄）、
 `gtk_main/main_quit`、`g_idle_add_full/g_source_remove`（dispatcher）。
 
 内容：`webkit_web_view_new`、`load_uri/load_html/reload/stop/go_back/go_forward/
-can_go_back/can_go_forward`、`run_javascript`（≥2.40 用 `run_javascript_finish`
-取结果；更老版本结果不可取——诚实记录为"结果为 null"）、
-`set_zoom_level`、`webkit_web_view_get_inspector`（DebugTools）。
+can_go_back/can_go_forward`、eval 双路径：≥2.40 用 `evaluate_javascript`
+（`run_javascript` 自该版废弃）；更老版本用 `run_javascript` +
+`run_javascript_finish`——两者都能取回结果（自 2.4 起即成对存在），
+不存在"老版本无回执"的悬崖，loader 只按符号存在性选路径、
+`evaluate_javascript` 缺席时静默用旧对、
+`set_zoom_level/get_zoom_level`（zoom-level property 访问函数组）、
+WebKitSettings `user-agent` property 读写、
+`webkit_settings_set_enable_developer_extras`（DebugTools）、
+`webkit_web_view_get_inspector`、`gtk_widget_grab_focus`（Focus）。
+
+会话：默认 context 为共享单例；`DataDirectory` 非空或 `EphemeralSession` 时
+自建 context——`webkit_web_context_new_ephemeral`（ephemeral）或
+`g_object_new(WEBKIT_TYPE_WEB_CONTEXT, "local-storage-directory", ...)` +
+website-data-manager 路径组（持久化自定义目录；具体属性名 S3 对照头文件冻结）。
+context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 
 桥 transport：`webkit_user_content_manager_new`、
-`register_script_message_handler`、`webkit_user_script_new` +
-`add_script`、`script_message_received` 信号、
+`register_script_message_handler`（main-frame-only 形态）、
+`webkit_user_script_new` + `add_script`、`script_message_received` 信号、
 `webkit_javascript_result_*`（eval 结果解包）。
 
-资源：`webkit_web_context_new_with_ephemeral?` 否——默认 context +
-`webkit_web_context_register_uri_scheme`（须在首个 web view 创建前）。
+资源：`webkit_web_context_register_uri_scheme`（须在首个 web view 创建前）。
 
 > 最终清单 S3 以官方头核对后冻结，并附 source-surface 对照说明
 > （参照 platform FFI import workflow 的取证方式）。
@@ -73,6 +87,10 @@ can_go_back/can_go_forward`、`run_javascript`（≥2.40 用 `run_javascript_fin
 - 主线程唤醒：隐藏 message-only window + `PostMessage(WM_APP+N)`，
   WndProc 泵出闭包。STA 一致性由"创建线程=泵线程"保证。
 - `ExecuteScript` 天然异步（completion handler），直接映射 `Eval` 契约。
+- 窗口壳经 Win32 直出（`CreateWindowEx` + 内嵌 controller `put_Bounds`）；
+  Maximize/Minimize/Restore/Focus 走 ShowWindow/SetForegroundWindow 族。
+- 会话：`EnvironmentOptions.UserDataFolder`（持久化自定义目录）/
+  private 环境变体（Ephemeral）；W2 启动前对照当版文档定案。
 - 运行时依赖 WebView2 Runtime（Evergreen）；缺失时降级语义同 §1.2。
 
 ## 4. wk 后端（Wave 3，macOS）
@@ -86,15 +104,28 @@ can_go_back/can_go_forward`、`run_javascript`（≥2.40 用 `run_javascript_fin
   （objc_msgSend 手工调用 + class_addMethod 注册回调），ffi 文件照常自声明。
 - 主线程唤醒：`dispatch_async(dispatch_get_main_queue(), ...)` 经 libdispatch dlopen。
 - `evaluateJavaScript:completionHandler:` 天然异步，直接映射 `Eval`。
+- 会话：`WKWebsiteDataStore default`/`nonPersistent`/自定义 persistent store。
 
 ## 5. fake 后端（Wave 1，全平台）
 
-- 纯 Pascal，无引擎无线程；完整走 bridge 协议栈（见 BRIDGE_PROTOCOL.md §7）。
+- 纯 Pascal，无引擎无线程；完整走 bridge 协议栈（见 BRIDGE_PROTOCOL.md §8）。
 - 提供确定性驱动入口（仅测试可见）：注入帧、捕获 eval 文本、手动触发事件、
-  手动泵 dispatcher 队列。
+  手动泵 dispatcher 队列、手动触发 scale 变化。
 - 契约测试的唯一载体；CI 不需要任何图形环境。
 
-## 6. fafafa.webview 资产移植清单
+## 6. eval 结果语义矩阵
+
+| 页面表达式求值结果 | GTK (run_javascript_finish) | webview2 (ExecuteScript) | wk (completionHandler) | 契约归一 |
+|------|------|------|------|------|
+| 对象/数组/基本类型 | JSC value → JSON 序列化 | JSON 文本原样 | id/nil 判别后序列化 | JSON 文本透传 |
+| `undefined` | undefined value → `"null"`（JSC→JSON 规则） | 字符串 `"null"` | nil → `"null"` | `"null"` |
+| `null` | `"null"` | `"null"` | `"<null>"` | `"null"` |
+| 抛异常 | finish 取 error → AOnError | completion errorInfo → AOnError | error → AOnError | AOnError(EWebviewEvalFailed) |
+
+归一实现放在各后端 transport 尾部；bridge 不参与 eval 通道（INV-2 注记）。
+矩阵在 runtime 冒烟里逐行断言（fake 侧另有等价用例）。
+
+## 7. fafafa.webview 资产移植清单
 
 | fafafa 资产 | 处置 |
 |-------------|------|
@@ -107,11 +138,12 @@ can_go_back/can_go_forward`、`run_javascript`（≥2.40 用 `run_javascript_fin
 | threadpool / promise / api.* 命令层 | **不移植**：worker 线程归 async/thread owner；Tauri 全命令面对齐推迟到真实需求出现 |
 | 同步 ExecuteScript、嵌套消息泵、忙轮询、三态签名 | **抛弃**（设计红线，README.md） |
 
-## 7. 平台缺口登记
+## 8. 平台缺口登记
 
 | 缺口 | 影响 | 补位计划 |
 |------|------|----------|
-| WebKitGTK < 2.40 的 run_javascript 无结果回执 | Eval 结果恒 null | loader 探测符号存在性；文档标注；不做 polyfill |
+| WebKitGTK ≥2.40 弃用 `run_javascript`（被 `evaluate_javascript` 取代） | 双 API 并存期 | loader 按符号存在性选路径：新 API 优先，缺席静默回退旧对；两者均能取结果，无能力悬崖 |
 | Wayland 下 NativeHandle 语义（无 XID） | 句柄嵌入场景受限 | Wave 1 文档标注"X11 下为 XID，Wayland 为 NULL"；嵌入场景非目标 |
 | macOS ATS 对 http dev server 的限制 | DevServerUrl 在 wk 上可能被拦 | W3 设计时决策（NSAppTransportSecurity 或提示 https） |
 | Windows WebView2 Evergreen 版本漂移 | COM v2 接口偶有新增 | 只绑定稳定子集；token 校验失败即 EWebviewBackendUnavailable |
+| GTK GetScaleFactor 仅整数（X11 典型 1/2） | HiDpi 小数缩放读不到 | 诚实表已标注；Wayland/GTK4 时代再评 |
