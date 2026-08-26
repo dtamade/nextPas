@@ -101,6 +101,12 @@ type
     FIdleEndDeadline: TDeadline;
     function BuildLine: string;
     procedure RefreshDeadline;
+    { 升序 uid 表二分定位(0 基); 未命中 -1 }
+    class function UidPosition(const AUids: TImapUidArray;
+      AUid: Int64): Int64; static;
+    { 首个未读的序号(RFC 3501 UNSEEN 响应码语义);
+      无未读返回 0(整行省略)。经 SEARCH 谓词下推 + ListUids 定位。 }
+    function FirstUnseenOrdinal: Int64;
     function EffectiveIdlePollMs: Int64;
     function EffectiveIdleTimeoutMs: Int64;
     procedure NotifySink(const AEvent: TMailImapServerEvent);
@@ -212,6 +218,42 @@ begin
   FSink := nil;
   FStore := nil;
   inherited Destroy;
+end;
+
+class function TMailImapServerSession.UidPosition(
+  const AUids: TImapUidArray; AUid: Int64): Int64;
+var
+  LLo, LHi, LMid: Integer;
+begin
+  Result := -1;
+  LLo := 0;
+  LHi := Length(AUids) - 1;
+  while LLo <= LHi do
+  begin
+    LMid := (LLo + LHi) div 2;
+    if AUids[LMid] = AUid then
+      Exit(LMid)
+    else if AUids[LMid] < AUid then
+      LLo := LMid + 1
+    else
+      LHi := LMid - 1;
+  end;
+end;
+
+function TMailImapServerSession.FirstUnseenOrdinal: Int64;
+var
+  LUnseen: TImapUidArray;
+  LUids: TImapUidArray;
+  LPos: Int64;
+begin
+  Result := 0;
+  LUnseen := FStore.Search(FBox, TImapSearchPred.UnseenOnly);
+  if Length(LUnseen) = 0 then
+    Exit;
+  LUids := FStore.ListUids(FBox);
+  LPos := UidPosition(LUids, LUnseen[0]);
+  if LPos >= 0 then
+    Result := LPos + 1;
 end;
 
 function TMailImapServerSession.EffectiveIdlePollMs: Int64;
@@ -975,6 +1017,7 @@ var
   LName: string;
   LBox: TImapMailboxSnapshot;
   LB: TBufStringBuilder;
+  LFirstUnseen: Int64;
 begin
   LName := ImapUnquoteArg(Trim(AArgs));
   if not FStore.OpenMailbox(FUserId, LName, LBox) then
@@ -992,9 +1035,13 @@ begin
     LB.AppendInt(FBox.Exists);
     LB.AppendStr(' EXISTS' + #13#10);
     LB.AppendStr('* 0 RECENT' + #13#10);
-    LB.AppendStr('* OK [UNSEEN ');
-    LB.AppendInt(FBox.Unseen);
-    LB.AppendStr(']' + #13#10);
+    LFirstUnseen := FirstUnseenOrdinal;
+    if LFirstUnseen > 0 then
+    begin
+      LB.AppendStr('* OK [UNSEEN ');
+      LB.AppendInt(LFirstUnseen);
+      LB.AppendStr(']' + #13#10);
+    end;
     LB.AppendStr('* OK [UIDVALIDITY ');
     LB.AppendInt(Int64(FBox.UidValidity));
     LB.AppendStr(']' + #13#10);
@@ -1213,6 +1260,13 @@ begin
     SetLength(LSeenUids, 0);
 
   LRows := FStore.LoadRows(FBox, LOurUids);
+  { 序号以本命令 ListUids 位置为准(1 基)——SPI 契约「会话按下标回填」
+    的会话侧兑现; 存储提供的 Seq 值不信任(首批真实消费方暴露:
+    存储侧 seq 语义各异, 全局自增列非邮箱内序号)。 }
+  for LI := 0 to Length(LRows) - 1 do
+  begin
+    LRows[LI].Seq := UidPosition(LUids, LRows[LI].Uid) + 1;
+  end;
   LB.Init(512 + Length(LRows) * 96);
   try
     for LI := 0 to Length(LRows) - 1 do
