@@ -303,7 +303,7 @@ begin
   { Step 1: Convert scalar to signed radix-16 digits.
     Each digit is in [-8..7]. We process 4 bits at a time from LSB. }
   Carry := 0;
-  for I := 0 to 63 do
+  for I := 0 to 62 do
   begin
     { Extract 4-bit nibble }
     D := ((AScalar[I shr 1] shr ((I and 1) * 4)) and $F) + Carry;
@@ -317,7 +317,11 @@ begin
       Carry := 0;
     Digits[I] := Int8(D);
   end;
-  { Note: after clamping, scalar < L < 2^253, so carry=0 at end }
+  { 最高位数字吸收进位但不再回卷：所有调用方的标量 < 2^255（clamped 密钥
+    最高 nibble ≤ 7，ScReduce 后 < L），Digits[63] ≤ 8 仍在表范围内。
+    若此处也回卷，末位进位会被丢弃，代表值整体偏移 -2^256，公钥错误
+    （触发条件：byte31 低 nibble ≥ 8 且高 nibble = 7）。 }
+  Digits[63] := Int8(((AScalar[31] shr 4) and $F) + Carry);
 
   { Step 2: Evaluate using Horner-like scheme from MSB }
   Q.X := FE_ZERO; Q.Y := FE_ONE; Q.Z := FE_ONE; Q.T := FE_ZERO;
