@@ -97,6 +97,41 @@ begin
   Check(GCancelCallbackFired = 1, 'callback fired immediately for cancelled token');
 end;
 
+{ Test: RemoveOnCancel（V3-B7 反哺新增的幂等注销面） }
+procedure TestRemoveOnCancel;
+var
+  LToken: IAsyncCancellationToken;
+begin
+  WriteLn('TestRemoveOnCancel:');
+  { 摘除 A 后取消：只有 B 触发 }
+  LToken := CreateCancellationToken;
+  GCancelCallbackFired := 0;
+  LToken.OnCancel(@TestCancelCallback, Pointer(1));
+  LToken.OnCancel(@TestCancelCallback, Pointer(2));
+  LToken.RemoveOnCancel(@TestCancelCallback, Pointer(1));
+  LToken.Cancel;
+  Check(GCancelCallbackFired = 1, 'removed callback not fired, other fired');
+
+  { 无匹配注销 = 无害 no-op；重复注销幂等 }
+  LToken := CreateCancellationToken;
+  GCancelCallbackFired := 0;
+  LToken.RemoveOnCancel(@TestCancelCallback);       { 从未注册 }
+  LToken.OnCancel(@TestCancelCallback);
+  LToken.RemoveOnCancel(@TestCancelCallback);
+  LToken.RemoveOnCancel(@TestCancelCallback);       { 重复摘除 }
+  LToken.Cancel;
+  Check(GCancelCallbackFired = 0, 'cancel after removal fires nothing');
+
+  { 连续同名多注册一次清空 }
+  LToken := CreateCancellationToken;
+  GCancelCallbackFired := 0;
+  LToken.OnCancel(@TestCancelCallback);
+  LToken.OnCancel(@TestCancelCallback);
+  LToken.RemoveOnCancel(@TestCancelCallback);
+  LToken.Cancel;
+  Check(GCancelCallbackFired = 0, 'duplicate registrations all removed');
+end;
+
 { Test 6: Multiple callbacks }
 procedure TestMultipleCallbacks;
 var
@@ -266,6 +301,9 @@ begin
   WriteLn;
 
   TestOnCancelAlreadyCancelled;
+  WriteLn;
+
+  TestRemoveOnCancel;
   WriteLn;
 
   TestMultipleCallbacks;

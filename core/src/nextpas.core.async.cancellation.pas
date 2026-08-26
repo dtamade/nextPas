@@ -37,6 +37,13 @@ type
     { 注册取消回调（取消时立即调用，若已取消则立即调用） }
     procedure OnCancel(ACallback: TCancelCallback; AContext: Pointer = nil);
 
+    { 注销回调（V3-B7 反哺新增）：移除全部 Callback+Context 精确匹配
+      的注册项；无匹配为无害 no-op（含已取消后本就未存储的情形）。
+      生命周期用途——注册方析构前摘除以裸指针作上下文的回调，防
+      "令牌比注册方长寿"时的悬垂 UAF。 }
+    procedure RemoveOnCancel(ACallback: TCancelCallback;
+      AContext: Pointer = nil);
+
     { 创建子令牌（父取消时子自动取消）。父持子引用保活（V3-B6）：
       子任务结束时须调用 DetachFromParent 摘链，否则子滞留至父亡。 }
     function CreateChildToken: IAsyncCancellationToken;
@@ -106,6 +113,8 @@ type
     procedure Cancel;
     function IsCancelled: Boolean;
     procedure OnCancel(ACallback: TCancelCallback; AContext: Pointer = nil);
+    procedure RemoveOnCancel(ACallback: TCancelCallback;
+      AContext: Pointer = nil);
     function CreateChildToken: IAsyncCancellationToken;
     procedure DetachFromParent;
     function WaitForCancel(ATimeoutMs: UInt32 = 0): Boolean;
@@ -324,6 +333,41 @@ begin
     else
       FCallbacks := LEntry;
     FCallbackTail := LEntry;
+  finally
+    platform_mutex_unlock(FLock);
+  end;
+end;
+
+procedure TAsyncCancellationTokenImpl.RemoveOnCancel(
+  ACallback: TCancelCallback; AContext: Pointer);
+var
+  LP, LPrev, LDone: PCancelCallbackEntry;
+begin
+  platform_mutex_lock(FLock);
+  try
+    LP := FCallbacks;
+    LPrev := nil;
+    while LP <> nil do
+    begin
+      if (LP^.Callback = ACallback) and (LP^.Context = AContext) then
+      begin
+        { 摘除匹配节点（LPrev 保持指向最后一个保留节点，可安全处理
+          连续匹配）；头尾指针同步维护 }
+        if LPrev <> nil then
+          LPrev^.Next := LP^.Next
+        else
+          FCallbacks := LP^.Next;
+        if FCallbackTail = LP then
+          FCallbackTail := LPrev;
+        LDone := LP;
+        LP := LP^.Next;
+        Dispose(LDone);
+        { 继续扫描：同名多注册一次清空 }
+        Continue;
+      end;
+      LPrev := LP;
+      LP := LP^.Next;
+    end;
   finally
     platform_mutex_unlock(FLock);
   end;
