@@ -625,6 +625,30 @@ begin
   end;
 end;
 
+{ W10：CacheControl 经 RequestBase 模板逐轮透传——loop 零改动消费，
+  打点位置由各适配器编码器决定（test_provider_anthropic §2.6 覆盖）}
+procedure TestCacheControlTemplateW10;
+var
+  Prov: TFakeProvider;
+  Loop: TAgentLoop;
+  Run: IAgentLoopRun;
+begin
+  Prov := TFakeProvider.Create;
+  Loop := TAgentLoop.Create(Prov);
+  try
+    Prov.Add(TextTurn('done'));
+    Loop.Options.RequestBase.Model := 'fake-model';
+    Loop.Options.RequestBase.CacheControl := ccmAuto;
+    Run := Loop.Run('hello');
+    Check(Run.Outcome = roCompleted, 'run completes');
+    CheckEqual(1, Prov.ServedCount, 'one round served');
+    Check(Prov.RequestAt(0).CacheControl = ccmAuto,
+      'template cache flag rides on round request');
+  finally
+    Loop.Free;
+  end;
+end;
+
 procedure TestParallelBatchExecution;
 var
   Prov: TFakeProvider;
@@ -1121,6 +1145,7 @@ var
 begin
   T := TTestSuite.Create('nextpas.core.agent.loop');
   T.Test('event order snapshot', @TestEventOrderSnapshot);
+  T.Test('cache control template W10', @TestCacheControlTemplateW10);
   T.Test('parallel batch execution', @TestParallelBatchExecution);
   T.Test('budget warning once', @TestBudgetWarningOnce);
   T.Test('doom loop guided finish', @TestDoomLoopGuidedFinish);

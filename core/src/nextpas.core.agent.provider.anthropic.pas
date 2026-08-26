@@ -301,7 +301,18 @@ end;
 
 { ---- 编码（§2.1）---- }
 
-procedure WriteUserBlocks(ABld: IJsonBuilder; const AM: TMessage);
+procedure WriteCacheControl(ABld: IJsonBuilder);
+begin
+  { §2.6：ephemeral 断点标记；附着在 content block/tool 对象内部 }
+  ABld.Key('cache_control');
+  ABld.BeginObject;
+  ABld.Key('type');
+  ABld.Str('ephemeral');
+  ABld.EndObject;
+end;
+
+procedure WriteUserBlocks(ABld: IJsonBuilder; const AM: TMessage;
+  AMarkTail: Boolean = False);
 var
   J: Integer;
   P: TPart;
@@ -319,6 +330,8 @@ begin
           ABld.Str('text');
           ABld.Key('text');
           ABld.Str(P.Text);
+          if AMarkTail and (J = High(AM.Parts)) then
+            WriteCacheControl(ABld);   { §2.6：末块断点标记 }
           ABld.EndObject;
         end;
       pkImage:
@@ -327,6 +340,8 @@ begin
           ABld.Key('type');
           ABld.Str('image');
           WriteImageSource(ABld, P.ImageUrl);
+          if AMarkTail and (J = High(AM.Parts)) then
+            WriteCacheControl(ABld);
           ABld.EndObject;
         end;
       pkToolResult:
@@ -344,6 +359,8 @@ begin
             ABld.Key('is_error');    { 哨兵纪律：仅失败时上送 }
             ABld.RawJson('true');
           end;
+          if AMarkTail and (J = High(AM.Parts)) then
+            WriteCacheControl(ABld);
           ABld.EndObject;
         end;
       pkThinking,
@@ -355,7 +372,8 @@ begin
   ABld.EndArray;
 end;
 
-procedure WriteAssistantBlocks(ABld: IJsonBuilder; const AM: TMessage);
+procedure WriteAssistantBlocks(ABld: IJsonBuilder; const AM: TMessage;
+  AMarkTail: Boolean = False);
 var
   J: Integer;
   P: TPart;
@@ -373,6 +391,8 @@ begin
           ABld.Str('text');
           ABld.Key('text');
           ABld.Str(P.Text);
+          if AMarkTail and (J = High(AM.Parts)) then
+            WriteCacheControl(ABld);   { §2.6：末块断点标记 }
           ABld.EndObject;
         end;
       pkThinking:
@@ -388,6 +408,8 @@ begin
             ABld.Key('signature');
             ABld.Str(P.Signature);
           end;
+          if AMarkTail and (J = High(AM.Parts)) then
+            WriteCacheControl(ABld);
           ABld.EndObject;
         end;
       pkToolCall:
@@ -400,6 +422,8 @@ begin
           ABld.Key('name');
           ABld.Str(P.ToolName);
           WriteToolUseInput(ABld, P.ArgumentsJson);
+          if AMarkTail and (J = High(AM.Parts)) then
+            WriteCacheControl(ABld);
           ABld.EndObject;
         end;
       pkImage,
@@ -411,7 +435,8 @@ begin
   ABld.EndArray;
 end;
 
-procedure WriteTools(ABld: IJsonBuilder; const ASpecs: TToolSpecArray);
+procedure WriteTools(ABld: IJsonBuilder; const ASpecs: TToolSpecArray;
+  AMarkTail: Boolean = False);
 var
   I: Integer;
   Doc: IJsonDocument;
@@ -439,6 +464,8 @@ begin
           'anthropic: tool input_schema must be a JSON object');
       ABld.RawJson(JsonStringify(Doc.Root));
     end;
+    if AMarkTail and (I = High(ASpecs)) then
+      WriteCacheControl(ABld);         { §2.6：末个 tool 断点标记 }
     ABld.EndObject;
   end;
   ABld.EndArray;
@@ -453,6 +480,8 @@ var
   LSysParts: array of string;
   LSysBuf: IStringBuilder;
   LDup: Boolean;
+  LCache: Boolean;
+  LLastMsg: Integer;
 
   procedure NoteSys(const ATxt: string);
   var
@@ -495,6 +524,13 @@ begin
     raise EAgentError.CreateLocal(aecConfig,
       'anthropic: ToolChoice=tcmNamed requires ToolChoiceName');
 
+  { Extra 回注前确定性预计算（§2.6）：ccmAuto 断点标记的载体判定 }
+  LCache := AReq.CacheControl = ccmAuto;
+  LLastMsg := -1;
+  for I := 0 to High(AReq.Messages) do
+    if AReq.Messages[I].Role <> mrSystem then
+      LLastMsg := I;                 { 末条非 system 消息 = 尾标记载体 }
+
   B := JsonBuilder;
   B.BeginObject;
   B.Key('model');
@@ -524,7 +560,21 @@ begin
       LSysBuf.AppendStr(LSysParts[I]);
     end;
     B.Key('system');
-    B.Str(LSysBuf.ToString);
+    if LCache then
+    begin
+      { §2.6：ccmAuto 下 system 切数组形态以承载断点标记（单 text block）}
+      B.BeginArray;
+      B.BeginObject;
+      B.Key('type');
+      B.Str('text');
+      B.Key('text');
+      B.Str(LSysBuf.ToString);
+      WriteCacheControl(B);
+      B.EndObject;
+      B.EndArray;
+    end
+    else
+      B.Str(LSysBuf.ToString);
   end;
 
   B.Key('messages');
@@ -540,7 +590,7 @@ begin
           B.BeginObject;
           B.Key('role');
           B.Str('user');
-          WriteUserBlocks(B, M);
+          WriteUserBlocks(B, M, LCache and (I = LLastMsg));
           WriteExtraFields(B, M.ExtraJson, ['role', 'content']);
           B.EndObject;
         end;
@@ -549,7 +599,7 @@ begin
           B.BeginObject;
           B.Key('role');
           B.Str('assistant');
-          WriteAssistantBlocks(B, M);
+          WriteAssistantBlocks(B, M, LCache and (I = LLastMsg));
           WriteExtraFields(B, M.ExtraJson, ['role', 'content']);
           B.EndObject;
         end;
@@ -560,7 +610,7 @@ begin
           B.BeginObject;
           B.Key('role');
           B.Str('user');
-          WriteUserBlocks(B, M);
+          WriteUserBlocks(B, M, LCache and (I = LLastMsg));
           WriteExtraFields(B, M.ExtraJson, ['role', 'content']);
           B.EndObject;
         end;
@@ -573,7 +623,7 @@ begin
   if AReq.ToolChoice <> tcmNone then
   begin
     if Length(AReq.Tools) > 0 then
-      WriteTools(B, AReq.Tools);     { 空数组不上送字段 }
+      WriteTools(B, AReq.Tools, LCache);  { 空数组不上送字段；§2.6 尾标记 }
     case AReq.ToolChoice of
       tcmAuto:
         begin

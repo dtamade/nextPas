@@ -742,6 +742,88 @@ begin
   Check(Found, 'warn logged mentioning reasoning_effort');
 end;
 
+function CountSub(const AHay, ANeedle: string): Integer;
+var
+  P, LFrom: Integer;
+begin
+  Result := 0;
+  LFrom := 1;
+  while LFrom <= Length(AHay) do
+  begin
+    P := Pos(ANeedle, Copy(AHay, LFrom, Length(AHay)));
+    if P = 0 then
+      Break;
+    Inc(Result);
+    LFrom := LFrom + P + Length(ANeedle) - 1;
+  end;
+end;
+
+{ W10（WIRE-MAPPINGS §2.6）：ccmAuto 三断点放置——tools 尾恒定/system
+  数组形态恒定/末条消息尾块；ccmUnset 字节零变化 }
+procedure TestEncodeCacheControlW10;
+var
+  LFull, LSparse: TJsonText;
+begin
+  LFull := EncodeAnthropicRequest(TCompletionRequest.New('claude-x')
+    .WithMaxTokens(64)
+    .WithSystem('sys-prefix')
+    .WithTools([WSpec('t1', 'd1', '{"type":"object"}'),
+                WSpec('t2', 'd2', '{"type":"object"}')])
+    .WithUserText('round one')
+    .WithCacheControl(ccmAuto), False);
+  { 三载体齐备：恰好 3 个标记 }
+  CheckEqual(3, CountSub(LFull, '"cache_control"'),
+    'three markers for tools+system+tail');
+  Check(Pos('"system":[{"type":"text","text":"sys-prefix"', LFull) > 0,
+    'system switches to block array form when caching');
+  Check(Pos('"name":"t2","description":"d2","input_schema":' +
+    '{"type":"object"},"cache_control":{"type":"ephemeral"}}', LFull) > 0,
+    'last tool carries marker');
+  Check(Pos('"text":"round one","cache_control":{"type":"ephemeral"' +
+    '}}]', LFull) > 0,
+    'tail message final block carries marker');
+
+  { 无 tools 无 system：仅消息尾一处标记 }
+  LSparse := EncodeAnthropicRequest(TCompletionRequest.New('claude-x')
+    .WithMaxTokens(64).WithUserText('solo')
+    .WithCacheControl(ccmAuto), False);
+  CheckEqual(1, CountSub(LSparse, '"cache_control"'),
+    'sparse request marks message tail only');
+end;
+
+procedure TestEncodeCacheUnsetByteStableW10;
+var
+  LReq: TCompletionRequest;
+begin
+  LReq := TCompletionRequest.New('claude-x').WithMaxTokens(64)
+    .WithSystem('sys-prefix')
+    .WithTools([WSpec('t1', 'd1', '{"type":"object"}')])
+    .WithUserText('hello');
+  Check(Pos('cache_control',
+    EncodeAnthropicRequest(LReq, False)) = 0,
+    'ccmUnset emits no cache markers (v1 byte stability)');
+  Check(Pos('"system":"sys-prefix"',
+    EncodeAnthropicRequest(LReq, False)) > 0,
+    'ccmUnset keeps system string form');
+end;
+
+procedure TestEncodeCacheEmptyTailSkippedW10;
+var
+  M: TMessage;
+  LReq: TCompletionRequest;
+begin
+  { 末条消息无 parts：无块可附着，整请求零标记 }
+  M := Default(TMessage);
+  M.Role := mrUser;
+  LReq := TCompletionRequest.New('claude-x').WithMaxTokens(64)
+    .WithCacheControl(ccmAuto);
+  SetLength(LReq.Messages, 1);
+  LReq.Messages[0] := M;
+  CheckEqual(0, CountSub(EncodeAnthropicRequest(LReq, False),
+    '"cache_control"'),
+    'empty tail message yields zero markers');
+end;
+
 procedure TestProviderCompleteEndToEnd;
 var
   T: TScriptedTransport;
@@ -956,6 +1038,11 @@ begin
   T.Test('encode none omits tools W6', @TestEncodeNoneOmitsToolsW6);
   T.Test('encode rejects W6', @TestEncodeRejectsW6);
   T.Test('reasoning effort ignored W7', @TestReasoningEffortIgnoredW7);
+  T.Test('encode cache control W10', @TestEncodeCacheControlW10);
+  T.Test('encode cache unset byte stable W10',
+    @TestEncodeCacheUnsetByteStableW10);
+  T.Test('encode cache empty tail skipped W10',
+    @TestEncodeCacheEmptyTailSkippedW10);
   T.Test('encode image sources', @TestEncodeImageSources);
   T.Test('decode non-stream full', @TestDecodeNonStreamFull);
   T.Test('decode unmapped stop and block', @TestDecodeUnmappedStopAndBlock);

@@ -250,6 +250,19 @@ begin
   Check(not Doc.Root.ObjectHas('tool_choice'), 'unset absent');
 end;
 
+{ W10（WIRE-MAPPINGS §2.6 跨家族语义）：openai 族自动缓存无 wire 字段，
+  ccmAuto 为零差异意图声明——编码输出与 unset 逐字节相同 }
+procedure TestCacheControlNoopW10;
+var
+  R: TCompletionRequest;
+begin
+  R := TCompletionRequest.New('gpt-4o').WithMaxTokens(64)
+    .WithSystem('sys').WithUserText('hi');
+  CheckEqual(EncodeOpenAIRequest(R, False),
+    EncodeOpenAIRequest(R.WithCacheControl(ccmAuto), False),
+    'ccmAuto produces byte-identical openai encoding');
+end;
+
 procedure TestReasoningEffortW7;
 var
   R: TCompletionRequest;
@@ -942,6 +955,7 @@ begin
   T.Test('encode tool choice W6', @TestEncodeToolChoiceW6);
   T.Test('encode rejects W6', @TestEncodeRejectsW6);
   T.Test('reasoning effort W7', @TestReasoningEffortW7);
+  T.Test('cache control noop W10', @TestCacheControlNoopW10);
   T.Test('decode non-stream full', @TestDecodeNonStreamFull);
   T.Test('decode unmapped finish', @TestDecodeUnmappedFinish);
   T.Test('decode violations', @TestDecodeViolations);
