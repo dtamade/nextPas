@@ -134,6 +134,9 @@ var
       BindReq(@G_main_loop_quit, 'g_main_loop_quit') and
       BindReq(@G_main_loop_unref, 'g_main_loop_unref') and
       BindReq(@G_timeout_add, 'g_timeout_add') and
+      BindReq(@G_main_context_default, 'g_main_context_default') and
+      BindReq(@G_main_context_find_source_by_id,
+        'g_main_context_find_source_by_id') and
       { GObject }
       BindReq(@G_object_unref, 'g_object_unref') and
       BindReq(@G_object_set, 'g_object_set') and

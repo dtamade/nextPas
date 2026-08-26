@@ -105,12 +105,19 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 > - IsMinimized 为查询式真值（S4）：`gdk_window_get_state` 与
 >   `GDK_WINDOW_STATE_ICONIFIED` 位与，不做 C 结构布局解析；
 >   Maximized/Visible/几何均为引擎实时真值。
+> - idle 投递清理（S8）：已触发的 idle 在 fire 时即经 destroy-notify
+>   自毁闭包，tag 随源一并失效；关闭路径对 FIdleTags 逐个
+>   `g_main_context_find_source_by_id` 判存后再 remove——直接对陈旧
+>   Source ID 二次 remove 会触发 GLib-CRITICAL（demo_webview 的
+>   Dispatcher.Post → Close 路径首次实锤暴露）。
 
 ### 2.3 主线程唤醒
 
 `g_idle_add_full(G_PRIORITY_DEFAULT, callback, user_data, destroy)`：
-投递闭包堆分配 → idle 回调执行并释放。关闭路径上用 `g_source_remove`
-清理未执行的 pending 投递（owner 计数保护）。
+投递闭包堆分配 → idle 回调执行并释放。关闭路径上按
+`g_main_context_find_source_by_id` 判存后 `g_source_remove`
+清理未执行的 pending 投递（S8，见上）；闭包释放在 destroy-notify
+单点，fire 与 remove 两路径同构。
 
 ## 3. webview2 后端（Wave 2，Windows）
 
