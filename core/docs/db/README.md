@@ -82,6 +82,7 @@ DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
 | 参数级批量绑定（IDbArrayBinding，unnest 单语句单往返；NULL 掩码+fail-fast 对齐校验） | 降级通用批路径 | ✅ pg | §2.16 |
 | 异步挂载与取消（TDbAsyncExecutor 单飞执行线程；令牌级联 → PQcancel / progress handler；归一 decTimeout） | ✅ | ✅ | §2.17 |
 | LISTEN/NOTIFY 订阅会话（专用连接独占 + 泵线程投递；Token 取消；断线自动重连重放订阅；at-most-once 如实上报） | N/A | ✅ | §2.18 |
+| Redis SUBSCRIBE/PSUBSCRIBE 订阅会话（RESP2 推送帧解析 + 确认簿记；传输工厂可注入离线回放；at-most-once 如实上报） | — | ✅ Redis 专属单元 | §2.19 |
 
 上表已运行时自述化（V3-B1）：`DbCapabilities(Conn)` 返回
 `IDbCapabilities`，消费方按能力探测降级而非按后端名分支；契约语义见
@@ -125,6 +126,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_factory      # 统一驱�
 make focused FOCUS=core/tests/nextpas.core.db/test_db_array_bind   # 参数级批量绑定（pg 段需 NEXTPAS_PG_TEST_CONN）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_async        # 异步挂载与取消（pg 段需 NEXTPAS_PG_TEST_CONN）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_pg_listen    # LISTEN/NOTIFY 订阅（需 NEXTPAS_PG_TEST_CONN）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_subscribe  # Redis SUBSCRIBE 订阅（V3-B8，离线回放；live 段需 NEXTPAS_REDIS_TEST_CONN）
 # 全部门禁清单见 CONTRACT §5；每个含 heaptrc 0 unfreed 硬门槛
 ```
 

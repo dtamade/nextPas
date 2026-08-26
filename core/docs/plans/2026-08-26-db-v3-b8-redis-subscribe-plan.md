@@ -67,3 +67,28 @@ redis-rs `PubSub`（`set_connection_time`/`on_message`）。共性契约：
 每门全绿 heaptrc 0 + 家族回归抽查（unified/conformance/redis_base/
 redis_adapter/pg_listen 对照）+ CONTRACT 新节 + README 地图行 +
 benchmarks.md 口径扩充——与 B7 收口纪律完全同款。
+
+## 7. 实现状态（2026-08-26 当日落地回填）
+
+**已落地**：`nextpas.core.db.redis.subscribe` 单元 + test_db_redis_subscribe
+十组离线回放全绿 heaptrc 0 unfreed（连续五轮运行稳定，时序类用例零抖动）；
+CONTRACT §2.19 / README 特性矩阵行与门禁速查行同步。
+
+**实现期偏差登记**：
+
+1. **方法名改协议本词**：提案原案 `Listen/Unlisten/UnlistenAll`（pg 同形）
+   落为 `Subscribe/PSubscribe/PUnsubscribe/UnsubscribeAll`——redis 协议
+   本词降低跨协议误读；打开函数对齐 PgOpenListener 先例命名
+   `RedisOpenSubscriber`。属性面保持同形。
+2. **吞吐基准延后**：本机无 redis，`bench_db_redis_subscribe` 吞吐段待
+   live 环境可用后补采入册 benchmarks.md（§4 基准判据的诚实缺席，
+   live 段经 NEXTPAS_REDIS_TEST_CONN 门控已实现）。
+3. **PING 保活默认关**按计划实现（AKeepAliveMs=0），周期可调。
+4. **Pattern 字段方案 b 落地**：TDbRedisMessage 单记录含
+   Pattern/Channel/Payload 三字段，message 帧 Pattern 空串。
+5. **停泵上界差异成文**：连接在途时停泵上界 = IO deadline
+   （EffectiveIoTimeoutMs = max(2×节拍,1000)ms）而非 pg 的节拍——
+   IRedisTransport 无中断面，契约 §2.19 如实登记。
+
+**家族回归**（2026-08-26，五门全绿 heaptrc 0）：unified 18 / conformance 2 /
+redis_base 11 / redis_adapter 15 / pg_listen 11 passed, 0 failed。
