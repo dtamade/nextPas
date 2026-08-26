@@ -5,6 +5,7 @@ unit nextpas.core.ssh;
  * 消费方一般只需 uses 本单元：
  *   SshClient.Host(..).User(..).Password(..).Connect  → ISshSession
  *   SshExec(host, port, user, pass, cmd)              → TSshExecResult
+ *   LSess.OpenFileSystem                              → ISshFileSystem (SFTP v3)
  *
  * 需要底层构件（wire buffer、cipher codec、kex、known_hosts）做二次开发时，
  * 直接引用对应子单元。 *}
@@ -26,6 +27,7 @@ uses
   nextpas.core.ssh.hostkey,
   nextpas.core.ssh.channel,
   nextpas.core.ssh.transport,
+  nextpas.core.ssh.sftp,
   nextpas.core.ssh.session;
 
 type
@@ -41,6 +43,11 @@ type
   ISshSession = nextpas.core.ssh.session.ISshSession;
   ISshClientBuilder = nextpas.core.ssh.session.ISshClientBuilder;
   TSshExecResult = nextpas.core.ssh.channel.TSshExecResult;
+
+  { SFTP 文件操作面 }
+  ISshFileSystem = nextpas.core.ssh.sftp.ISshFileSystem;
+  TSftpAttrs = nextpas.core.ssh.sftp.TSftpAttrs;
+  TSftpDirEntry = nextpas.core.ssh.sftp.TSftpDirEntry;
 
   { 底层构件 re-export（二次开发/测试用）}
   ISshPacketSender = nextpas.core.ssh.cipher.ISshPacketSender;

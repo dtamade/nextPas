@@ -27,7 +27,8 @@ uses
   nextpas.core.ssh.kex,
   nextpas.core.ssh.hostkey,
   nextpas.core.ssh.channel,
-  nextpas.core.ssh.transport;
+  nextpas.core.ssh.transport,
+  nextpas.core.ssh.sftp;
 
 type
   { 已建立的 SSH 会话（阻塞式）}
@@ -45,6 +46,10 @@ type
 
     { 执行一次性命令并收集输出。需已认证。}
     function Exec(const ACommand: string): TSshExecResult;
+
+    { 打开 sftp 子系统并完成版本握手，返回文件操作面。
+      需已认证；同一会话可多次调用（各自独立通道）。}
+    function OpenFileSystem: ISshFileSystem;
 
     procedure Close;
 
@@ -150,6 +155,7 @@ type
     procedure AuthenticateWithPassword(const AUser, APassword: string);
     procedure AuthenticateWithPrivateKeyData(const AContent: string);
     function Exec(const ACommand: string): TSshExecResult;
+    function OpenFileSystem: ISshFileSystem;
     procedure Close;
   end;
 
@@ -441,6 +447,13 @@ begin
   EnsureAuthenticated;
   Result := SshRunExec(FTransport, ACommand,
     FOptions.InitialWindowSize, FOptions.MaxPacket, FOptions.ExecTimeoutMs);
+end;
+
+function TSshSession.OpenFileSystem: ISshFileSystem;
+begin
+  EnsureAuthenticated;
+  Result := SftpOpenOnTransport(FTransport, FOptions.InitialWindowSize,
+    FOptions.MaxPacket, FOptions.ExecTimeoutMs);
 end;
 
 { TSshClientBuilder }
