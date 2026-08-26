@@ -38,6 +38,11 @@ TToolChoiceMode = (tcmUnset, tcmAuto, tcmNone, tcmRequired, tcmNamed);
   Thinking/Budget }
 TReasoningEffort = (reUnset, reMinimal, reLow, reMedium, reHigh);
 
+{ 提示缓存断点策略（W10）：ccmUnset 不上送。ccmAuto=anthropic 显式
+  cache_control 自动打点（WIRE-MAPPINGS §2.6：tools 尾/system/末条消息
+  尾块三处，≤4 厂商预算）；openai/grok/responses 族自动缓存零 wire 差异 }
+TCacheControlMode = (ccmUnset, ccmAuto);
+
 TStreamDeltaKind = (
   sdkTextDelta,        { TextDelta 追加正文 }
   sdkThinkingDelta,    { TextDelta 追加思考内容 }
@@ -160,6 +165,7 @@ TCompletionRequest = record
   ToolChoice: TToolChoiceMode;     { tcmUnset 不上送；映射见 WIRE-MAPPINGS §1.1/§2.1 }
   ToolChoiceName: string;          { 仅 tcmNamed 有效；缺名 aecConfig }
   ReasoningEffort: TReasoningEffort; { reUnset 不上送；openai reasoning_effort（W7）}
+  CacheControl: TCacheControlMode; { ccmUnset 不上送；anthropic §2.6 自动打点（W10）}
   Thinking: TTriState;             { 扩展思考开关；tsUnset 不上送 }
   ThinkingBudgetTokens: Int64;     { CMaxTokensUnset；Thinking=tsTrue 时语义生效 }
   ExtraJson: TJsonText;            { 逃生舱：合并进请求根对象（厂商私有参数）}
@@ -179,6 +185,7 @@ end;
     function WithToolChoice(AMode: TToolChoiceMode;
       const AName: string): TCompletionRequest;
     function WithReasoningEffort(AEffort: TReasoningEffort): TCompletionRequest;
+    function WithCacheControl(AMode: TCacheControlMode): TCompletionRequest;
     { WithTools(array of IAgentTool) 第二形态落位在 tools 层自由函数
       （base 不依赖 intf 的分层约束，ARCHITECTURE §1），提取各工具的 Spec——
       builder 链经其不断裂；随 W3 tools 落地 }

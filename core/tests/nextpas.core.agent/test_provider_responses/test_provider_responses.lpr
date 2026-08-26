@@ -194,6 +194,18 @@ begin
   Check(Pos('"stream":true', LDoc) > 0, 'stream flag set');
 end;
 
+{ W10（WIRE-MAPPINGS §2.6 跨家族语义）：responses 对象无显式缓存字段，
+  ccmAuto 为零差异意图声明——编码输出与 unset 逐字节相同 }
+procedure TestCacheControlNoopW10;
+var
+  R: TCompletionRequest;
+begin
+  R := Req.WithSystem('be brief');
+  CheckEqual(EncodeResponsesRequest(R, False),
+    EncodeResponsesRequest(R.WithCacheControl(ccmAuto), False),
+    'ccmAuto produces byte-identical responses encoding');
+end;
+
 procedure TestEncodeToolsAndChoice;
 var
   R: TCompletionRequest;
@@ -515,6 +527,7 @@ begin
   T.Test('encode basics', @TestEncodeBasics);
   T.Test('encode tools and choice', @TestEncodeToolsAndChoice);
   T.Test('encode reasoning and schema', @TestEncodeReasoningAndSchema);
+  T.Test('cache control noop W10', @TestCacheControlNoopW10);
   T.Test('build url', @TestBuildUrl);
   T.Test('decode text message', @TestDecodeTextMessage);
   T.Test('decode tool and usage details', @TestDecodeToolAndUsageDetails);

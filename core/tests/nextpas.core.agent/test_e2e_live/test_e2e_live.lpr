@@ -173,6 +173,31 @@ begin
   Check(HasThinkOrText, 'text/thinking blocks decoded');
 end;
 
+procedure TestAnthropicCachedCompleteW10;
+var
+  P: IAgentProvider;
+  M: TMessage;
+begin
+  { W10 §2.6：ccmAuto 断点请求真网接受性（命中节省随端点计费口径，
+    不做数值断言；usage 照常回填含 cache_creation/read 字段）。
+    缓存可用性是账号/端点能力：部分网关型上游对 cache_control 回 403，
+    故设二级 opt-in——NEXTPAS_AGENT_ANTHROPIC_CACHE=1 时才发缓存请求 }
+  if GetEnv('NEXTPAS_AGENT_ANTHROPIC_CACHE') <> '1' then
+  begin
+    Check(True, 'cache e2e skipped: set NEXTPAS_AGENT_ANTHROPIC_CACHE=1 ' +
+      '(endpoint must have caching enabled)');
+    Exit;
+  end;
+  P := NewAnthropicProviderFromEnv;
+  if P = nil then
+    Exit;
+  M := P.Complete(TCompletionRequest.New('').WithMaxTokens(300)
+    .WithCacheControl(ccmAuto)
+    .WithUserText('Reply with exactly: CACHE-OK'));
+  Check(MessageText(M) <> '', 'cached request completes with text');
+  Check(M.FinishReason = frStop, 'cached request end_turn -> frStop');
+end;
+
 procedure TestOpenAIIdleTimeoutNoFalseKill;
 var
   Opts: TOpenAIOptions;
@@ -309,6 +334,7 @@ begin
   T.Test('responses complete W9', @TestResponsesComplete);
   T.Test('responses stream W9', @TestResponsesStream);
   T.Test('responses tool call W9', @TestResponsesToolCall);
+  T.Test('anthropic cached complete W10', @TestAnthropicCachedCompleteW10);
   if not T.Run then
     Halt(1);
 end.

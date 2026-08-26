@@ -20,6 +20,7 @@ http.sse 文本行域），合并经审计判定不立项 |
 | **W7 推理力度与流式空闲卫生（v1.1 第二批，2026-08-25 立项）** | 词表 `TReasoningEffort`（openai reasoning_effort 编码，anthropic 忽略+warn 待遇对齐）；传输层 `ReadIdleTimeoutMs` 流式块间空闲超时（回环时序验证，aecTimeout 合成不污染取消标志）；新增 `test_e2e_live` 真实端点 opt-in 门 | test_provider_openai / test_provider_anthropic / test_transport_stream / test_e2e_live 扩测全绿（含 HEAPTRC 泄漏门）+ 三基准 A/B 无回归 + Ready 报告 |
 | **W8 可靠性装饰器套件（v1.1 第三批，2026-08-25 立项）** | `WithFallback` 多供应商容灾链（白名单切换、首 delta 门、最后原始错误透传、取消即止、OnSwitch 观测）+ `WithThrottle` 客户端限流（`IAgentRateGate` 细接口对接 core.lockfree.ratelimit 标准库，clock 注入零睡眠等待，超窗本地 aecRateLimited 带 RetryAfterMs） | test_fallback / test_throttle 全绿（含 HEAPTRC 泄漏门）+ 三基准 A/B 零回归 + Ready 报告 |
 | **W9 Responses 协议与对冲（v1.1 第四批，2026-08-25 立项）** | OpenAI Responses API 编解码器（独立单元 `provider.openai.responses`：input 数组/instructions/reasoning.effort/tool_choice/text.format 编码，output 项+usage details 解码，SSE `response.*` 事件全集→词表增量；E2E 真网三协议支柱补齐）+ `WithHedge` 对冲装饰器（DelayMs 无响应即并发第二路取先达、输路必 Cancel、双倍 token 成本工厂级 opt-in；可靠性装饰器四象限收官：retry 败后重试/fallback 败后换家/throttle 事前整形/hedge 慢时对冲） | test_provider_responses / test_hedge 全绿（含 HEAPTRC 泄漏门）/ test_e2e_live 扩 responses 三测真网全绿 + 三基准 A/B 零回归 + Ready 报告 |
+| **W10 提示缓存断点（v1.1 第五批，2026-08-26 立项）** | 词表 `TCacheControlMode` + `WithCacheControl`；anthropic 编码器 ccmAuto 三断点放置（tools 尾/system 数组形态/末条消息尾块，≤4 厂商预算，空载体跳过）；openai/grok/responses 族自动缓存零差异声明；PERFORMANCE §6 标记元数据条款；loop 以请求模板透传零改动消费 | test_provider_anthropic / test_provider_openai / test_provider_responses 扩测全绿（含 HEAPTRC 泄漏门）/ test_loop 跨轮标记移动+内容字节稳定断言 / test_e2e_live 扩 anthropic 缓存往返真网测（二级 opt-in `NEXTPAS_AGENT_ANTHROPIC_CACHE=1`，端点需缓存权限）+ 三基准 A/B 无回归 + Ready 报告 |
 
 ## Wave 内顺序约束
 
@@ -135,6 +136,9 @@ v1.1 第一批立项顺序：**Structured Output → tool_choice**（余项按�
 - **Prompt-cache 断点策略**（loop 自动放置 cache_control 断点；agent 循环每轮全量
   重发历史，缓存命中可省 ~90% 输入费用）——与 §W3 前缀稳定不变量配套。
   触发：W3 落地后按真实账单数据评估。
+  【已立项 2026-08-26 → W10（W3 不变量早已落地并经 test_loop 钉死；用户自营
+  网关运营场景下成本/延迟为持续性诉求，账单数据前置放宽为结构性成本论证
+  成立——循环全量重发形态下断点命中收益为数量级）】
 - **增量 JSON 参数校验**（工具参数片段边到边校验，坏参数流中即败而非执行时败）
   ——底座已核实：json.parser/scanner 为整输入 token 化，无 feed 式增量；
   立项前置条件是先向 json 域提出 feed 式解析反哺 slice。

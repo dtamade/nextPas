@@ -46,6 +46,12 @@ type
     anthropic 无对应参数 → 忽略 + warn（Q-A5 同规则），力度走 Thinking/Budget }
   TReasoningEffort = (reUnset, reMinimal, reLow, reMedium, reHigh);
 
+  { 提示缓存断点策略（W10）：ccmUnset 不上送（v1 请求字节零变化）。
+    ccmAuto=anthropic 显式 cache_control 自动打点（WIRE-MAPPINGS §2.6：
+    tools 尾/system/末条消息尾块三处）；openai/grok/responses 族自动
+    缓存，编码零差异 }
+  TCacheControlMode = (ccmUnset, ccmAuto);
+
   TStreamDeltaKind = (
     sdkTextDelta,        { TextDelta 追加正文 }
     sdkThinkingDelta,    { TextDelta 追加思考内容；Signature 携带签名透传 }
@@ -217,6 +223,7 @@ type
     ToolChoice: TToolChoiceMode;     { tcmUnset 不上送；§1.1/§2.1 映射 }
     ToolChoiceName: string;          { 仅 tcmNamed 有效；缺名 aecConfig }
     ReasoningEffort: TReasoningEffort; { reUnset 不上送；openai reasoning_effort }
+    CacheControl: TCacheControlMode; { ccmUnset 不上送；anthropic §2.6 自动打点 }
     Thinking: TTriState;             { 扩展思考开关；tsUnset 不上送 }
     ThinkingBudgetTokens: Int64;     { CMaxTokensUnset；Thinking=tsTrue 时生效 }
     ExtraJson: TJsonText;            { 逃生舱：浅合并进请求根对象 }
@@ -232,6 +239,8 @@ type
     function WithToolChoice(AMode: TToolChoiceMode;
       const AName: string = ''): TCompletionRequest;
     function WithReasoningEffort(AEffort: TReasoningEffort): TCompletionRequest;
+    function WithCacheControl(AMode: TCacheControlMode): TCompletionRequest;
+      { W10：anthropic 显式打点；其余适配器零差异接受（§2.6）}
       { builder 全部返回修改后的副本（record 值语义链式书写）}
   end;
 
@@ -385,6 +394,13 @@ function TCompletionRequest.WithReasoningEffort(
 begin
   Result := Self;
   Result.ReasoningEffort := AEffort;
+end;
+
+function TCompletionRequest.WithCacheControl(
+  AMode: TCacheControlMode): TCompletionRequest;
+begin
+  Result := Self;
+  Result.CacheControl := AMode;
 end;
 
 function MergeExtraJson(const ATexts: array of TJsonText): TJsonText;
