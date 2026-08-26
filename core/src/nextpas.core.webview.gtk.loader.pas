@@ -129,6 +129,11 @@ var
       BindReq(@G_cancellable_new, 'g_cancellable_new') and
       BindReq(@G_cancellable_cancel, 'g_cancellable_cancel') and
       BindReq(@G_error_new_literal, 'g_error_new_literal') and
+      BindReq(@G_main_loop_new, 'g_main_loop_new') and
+      BindReq(@G_main_loop_run, 'g_main_loop_run') and
+      BindReq(@G_main_loop_quit, 'g_main_loop_quit') and
+      BindReq(@G_main_loop_unref, 'g_main_loop_unref') and
+      BindReq(@G_timeout_add, 'g_timeout_add') and
       { GObject }
       BindReq(@G_object_unref, 'g_object_unref') and
       BindReq(@G_object_set, 'g_object_set') and
