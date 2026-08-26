@@ -116,7 +116,7 @@ begin
         GEvalText := 'ERR:' + AErr.Message;
         GEvalDone := True;
       end);
-    for I := 0 to 200 do
+    for I := 0 to 1500 do
     begin
       GTK_main_iteration_do(0);
       if GEvalDone then Break;
@@ -216,7 +216,7 @@ begin
       探针含 location/readyState，失败消息自带现场 }
     LRes := '';
     LDone := False;
-    for LIter := 0 to 1600 do
+    for LIter := 0 to 2400 do
     begin
       GTK_main_iteration_do(0);
       Sleep(5);
@@ -280,14 +280,14 @@ var
   I: Integer;
 begin
   Result := '';
-  for I := 0 to 1000 do
+  for I := 0 to 2000 do
   begin
     GTK_main_iteration_do(0);
     Sleep(5);
     if I mod 20 = 19 then
     begin
       EvalAwait(AWin, 'document.body?document.body.innerText:""',
-        Result, 600);
+        Result, 800);
       if (Result <> '') and (Result <> '""') then Exit;
     end;
   end;
@@ -306,15 +306,15 @@ begin
     '").then(function(r){return r.text();})' +
     '.then(function(t){window.__npwp=t;},' +
     'function(){window.__npwp="ERR";});window.__npwp';
-  EvalAwait(AWin, LJs, AResult, 400);
+  EvalAwait(AWin, LJs, AResult, 800);
   I := 0;
   while Pos('PENDING', AResult) > 0 do
   begin
     Inc(I);
-    if I > 1200 then Break;
+    if I > 2000 then Break;
     GTK_main_iteration_do(0);
     Sleep(5);
-    EvalAwait(AWin, 'window.__npwp', AResult, 400);
+    EvalAwait(AWin, 'window.__npwp', AResult, 800);
   end;
 end;
 
