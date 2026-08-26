@@ -31,7 +31,8 @@ uses
   nextpas.core.agent.fallback,
   nextpas.core.agent.throttle,
   nextpas.core.agent.hedge,
-  nextpas.core.agent.provider.openai.responses;
+  nextpas.core.agent.provider.openai.responses,
+  nextpas.core.agent.transport.trace;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
@@ -114,6 +115,9 @@ type
   TThrottleWaitHook = nextpas.core.agent.throttle.TThrottleWaitHook;
   THedgePolicy = nextpas.core.agent.hedge.THedgePolicy;
   THedgeFireHook = nextpas.core.agent.hedge.THedgeFireHook;
+  IAgentTraceSink = nextpas.core.agent.intf.IAgentTraceSink;
+  TTraceRequestInfo = nextpas.core.agent.base.TTraceRequestInfo;
+  TTraceResponseInfo = nextpas.core.agent.base.TTraceResponseInfo;
 
 function NewFallbackProvider(const AChain: array of IAgentProvider;
   const APolicy: TFallbackPolicy): IAgentProvider; inline;
@@ -129,6 +133,11 @@ function NewHedgedProvider(const AInner: IAgentProvider;
 function NewOpenAIResponsesProvider(
   const AOpts: TOpenAIOptions): IAgentProvider; inline;
 function NewOpenAIResponsesProviderFromEnv: IAgentProvider; inline;
+
+{ W11 请求级追踪：transport 装饰器一处接线三适配器（API.md §3.2）}
+function NewTracedTransport(const AName: string;
+  const ASink: IAgentTraceSink; const AInner: IAgentTransport;
+  const AClock: IAgentClock = nil): IAgentTransport; inline;
 
 implementation
 
@@ -340,6 +349,14 @@ begin
   Result :=
     nextpas.core.agent.provider.openai.responses.
     NewOpenAIResponsesProviderFromEnv;
+end;
+
+function NewTracedTransport(const AName: string;
+  const ASink: IAgentTraceSink; const AInner: IAgentTransport;
+  const AClock: IAgentClock): IAgentTransport;
+begin
+  Result := nextpas.core.agent.transport.trace.NewTracedTransport(
+    AName, ASink, AInner, AClock);
 end;
 
 end.
