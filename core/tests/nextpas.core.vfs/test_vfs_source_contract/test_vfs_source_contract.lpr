@@ -52,14 +52,32 @@ begin
     ALabel + ' — must not reference nextpas.core.fs');
 end;
 
+{ embed 变体：允许 fs.glob（纯字符串匹配，非 IO），其余 fs 单元仍禁。
+  不用 StringReplace（SysUtils 词汇），手写剔除 }
+procedure AssertNoFsSeamExceptGlob(const ALabel, ASource: string);
+var
+  S: string;
+  Hit: SizeInt;
+begin
+  S := ASource;
+  repeat
+    Hit := Pos('nextpas.core.fs.glob', S);
+    if Hit > 0 then
+      Delete(S, Hit, Length('nextpas.core.fs.glob'));
+  until Hit = 0;
+  Check(Pos('nextpas.core.fs', S) = 0,
+    ALabel + ' — only nextpas.core.fs.glob allowed');
+end;
+
 procedure TestRespackSourcesNoFpcRtl;
 const
-  FILES: array[0..4] of string = (
+  FILES: array[0..5] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
     'src/nextpas.core.respack.reader.pas',
-    'src/nextpas.core.respack.dirsource.pas');
+    'src/nextpas.core.respack.dirsource.pas',
+    'src/nextpas.core.respack.embed.pas');
 var
   I: Integer;
 begin
@@ -119,9 +137,14 @@ var
   I: Integer;
   Src: string;
 begin
-  { 白名单外的单元一律禁 fs 引用；os/dirsource 是仅有的两个 seam }
+  { 白名单外的单元一律禁 fs 引用；os/dirsource 是仅有的两个 IO seam，
+    embed 允许 fs.glob（纯匹配无 IO），用变体断言 }
   for I := Low(NO_SEAM) to High(NO_SEAM) do
     AssertNoFsSeam(NO_SEAM[I], LoadSourceText(NO_SEAM[I]));
+  AssertNoFsSeamExceptGlob('embed', LoadSourceText('src/nextpas.core.respack.embed.pas'));
+  Check(Pos('nextpas.core.fs.glob',
+    LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed declares fs.glob dependency');
 
   { 正向断言：两个 seam 单元确实声明了 fs 依赖（防白名单失效漂移） }
   Src := LoadSourceText('src/nextpas.core.vfs.os.pas');
