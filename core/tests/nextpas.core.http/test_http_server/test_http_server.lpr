@@ -73,6 +73,10 @@ begin
   { Builder preserves other fields }
   CheckEqual(5000, LOpts.ReadTimeout, 'builder preserves ReadTimeout');
   CheckEqual(10000, LOpts.WriteTimeout, 'builder preserves WriteTimeout');
+
+  { R11: read-abort sink defaults to nil and survives the builder }
+  Check(THttpServerOptions.Default.ReadAbortSink = nil,
+    'default ReadAbortSink is nil');
 end;
 
 procedure TestServerOptionsDefaultAndProductionTimeouts;
@@ -301,6 +305,43 @@ function NativeSocketHandle: PtrUInt;
     property TryReadCalls: Int32 read FTryReadCalls;
     property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
     property LastReadDeadline: TDeadline read FLastReadDeadline;
+  end;
+
+  { R11 mock: reads stall once input is exhausted (WouldBlock, peer alive),
+    writes are accepted up to a byte budget and captured in Output. }
+  TStall408RuntimeTcpStream = class(TInterfacedObject, IReader, IWriter,
+    IStream, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime)
+  private
+    FInput: string;
+    FInputPos: SizeInt;
+    FOutput: string;
+    FWriteBudget: SizeUInt;
+    FWrittenTotal: SizeUInt;
+  public
+    constructor Create(const AInput: string; const AWriteBudget: SizeUInt);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
+    property Output: string read FOutput;
+    property WrittenTotal: SizeUInt read FWrittenTotal;
   end;
 
   TZeroProgressTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
@@ -976,6 +1017,146 @@ begin
   raise EIOError.Create('idle read test stream must not use nonblocking write path');
 end;
 
+constructor TStall408RuntimeTcpStream.Create(const AInput: string;
+  const AWriteBudget: SizeUInt);
+begin
+  inherited Create;
+  FInput := AInput;
+  FInputPos := 1;
+  FOutput := '';
+  FWriteBudget := AWriteBudget;
+  FWrittenTotal := 0;
+end;
+
+function TStall408RuntimeTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeUInt;
+begin
+  if (ACount = 0) or (FInputPos > Length(FInput)) then
+    Exit(0);
+  LRemaining := SizeUInt(Length(FInput) - FInputPos + 1);
+  Result := ACount;
+  if Result > LRemaining then
+    Result := LRemaining;
+  Move(FInput[FInputPos], ABuf, Result);
+  Inc(FInputPos, SizeInt(Result));
+end;
+
+function TStall408RuntimeTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LOldLen: SizeUInt;
+begin
+  { Sync write path: record like a socket would accept. }
+  LOldLen := SizeUInt(Length(FOutput));
+  SetLength(FOutput, LOldLen + ACount);
+  if ACount > 0 then
+    Move(ABuf, FOutput[LOldLen + 1], ACount);
+  Inc(FWrittenTotal, ACount);
+  Result := ACount;
+end;
+
+function TStall408RuntimeTcpStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := -1;
+end;
+
+procedure TStall408RuntimeTcpStream.Close;
+begin
+end;
+
+function TStall408RuntimeTcpStream.GetSize: Int64;
+begin
+  Result := -1;
+end;
+
+function TStall408RuntimeTcpStream.GetPosition: Int64;
+begin
+  Result := -1;
+end;
+
+procedure TStall408RuntimeTcpStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function TStall408RuntimeTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(8080);
+end;
+
+function TStall408RuntimeTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(65000);
+end;
+
+procedure TStall408RuntimeTcpStream.Shutdown;
+begin
+end;
+
+procedure TStall408RuntimeTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TStall408RuntimeTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TStall408RuntimeTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+procedure TStall408RuntimeTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+procedure TStall408RuntimeTcpStream.SetCancelToken(
+  const AToken: INetCancelToken);
+begin
+end;
+
+function TStall408RuntimeTcpStream.NativeSocketHandle: PtrUInt;
+begin
+  Result := 46;
+end;
+
+procedure TStall408RuntimeTcpStream.SetBlocking(const ABlocking: Boolean);
+begin
+end;
+
+function TStall408RuntimeTcpStream.TryRead(var ABuf; const ACount: SizeUInt;
+  out ARead: SizeUInt): TTcpStreamIOResult;
+begin
+  ARead := Read(ABuf, ACount);
+  if ARead = 0 then
+    Exit(tsiorWouldBlock);
+  Result := tsiorOk;
+end;
+
+function TStall408RuntimeTcpStream.TryWrite(const ABuf; const ACount: SizeUInt;
+  out AWritten: SizeUInt): TTcpStreamIOResult;
+var
+  LRemaining: SizeUInt;
+  LOldLen: SizeUInt;
+begin
+  if FWrittenTotal >= FWriteBudget then
+  begin
+    AWritten := 0;
+    Exit(tsiorWouldBlock);
+  end;
+  LRemaining := FWriteBudget - FWrittenTotal;
+  AWritten := ACount;
+  if AWritten > LRemaining then
+    AWritten := LRemaining;
+  if AWritten > 0 then
+  begin
+    LOldLen := SizeUInt(Length(FOutput));
+    SetLength(FOutput, LOldLen + AWritten);
+    Move(ABuf, FOutput[LOldLen + 1], AWritten);
+    Inc(FWrittenTotal, AWritten);
+  end;
+  Result := tsiorOk;
+end;
+
 constructor TZeroProgressTcpStream.Create(const AInput: string);
 begin
   inherited Create;
@@ -1296,6 +1477,26 @@ function TMockSessionContext.SubmitHijackMigration: Boolean;
 begin
   { mock 无在途迁移可提交。 }
   Result := False;
+end;
+
+type
+  { R11 test double: records read-abort notifications. Scenarios drive one
+    aborting connection at a time and read counters only after StopServer
+    (thread join), so plain fields suffice. }
+  TRecordingReadAbortSink = class(TInterfacedObject, IHttpServerReadAbortSink)
+  private
+    FCount: Int32;
+    FLastAddr: string;
+  public
+    procedure OnReadAbort(const ARemoteAddr: string);
+    property Count: Int32 read FCount;
+    property LastAddr: string read FLastAddr;
+  end;
+
+procedure TRecordingReadAbortSink.OnReadAbort(const ARemoteAddr: string);
+begin
+  Inc(FCount);
+  FLastAddr := ARemoteAddr;
 end;
 
 function DefaultH1ServerTransportOptions(
@@ -2705,6 +2906,97 @@ const
 begin
   RunPollDrivenMidRequestReadTimeout(
     'poll-driven partial fixed-length body timeout', REQ);
+end;
+
+procedure TestH1PollDrivenMidRequestTimeoutWritesBestEffort408;
+{ R11: mid-request read-deadline expiry queues a best-effort 408 before the
+  close (write side accepts bytes), fires the read-abort sink exactly once,
+  and keeps server ownership. The sibling RunPollDrivenMidRequestReadTimeout
+  tests lock the fallback path where the write side faults (bare close). }
+const
+  REQ =
+    'POST /body HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'ab';
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
+  LStreamObj: TStall408RuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LSinkObj: TRecordingReadAbortSink;
+  LSink: IHttpServerReadAbortSink;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.ReadTimeout := 20;
+  LHttpOpts.IdleTimeout := 20;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+  LSinkObj := TRecordingReadAbortSink.Create;
+  LSink := LSinkObj;
+  LH1Opts.ReadAbortSink := LSink;
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    '408 write path: h1 transport exposes context-aware session factory');
+
+  LStreamObj := TStall408RuntimeTcpStream.Create(REQ, 65536);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    '408 write path: h1 session exposes poll-driven seam');
+  Check(Supports(LSession, ITcpServerPollDrivenSessionWithDeadline, LDeadlineSession),
+    '408 write path: session exposes deadline seam');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    '408 write path: partial request bytes keep the session active');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    '408 write path: partial request bytes do not reach the handler');
+
+  platform_thread_sleep_ns(50000000);
+  Check(LDeadlineSession.WakeDeadline.IsExpired,
+    '408 write path: request-side wake deadline eventually expires');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    '408 write path: accepted-write drain finishes inline with close');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), '408 write path: timeout close keeps server ownership');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    '408 write path: handler still not called');
+  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
+    '408 write path: no worker work submitted');
+  Check(Pos('HTTP/1.1 408', LStreamObj.Output) > 0,
+    '408 write path: response bytes carry the 408 status line');
+  Check(Pos('close', LStreamObj.Output) > 0,
+    '408 write path: response carries connection close token');
+  Check(LStreamObj.WrittenTotal > 0,
+    '408 write path: response drained through the nonblocking write path');
+  Check(LDeadlineSession.WakeDeadline.IsInfinite,
+    '408 write path: wake deadline cleared after close');
+  CheckEqual(Int64(1), Int64(LSinkObj.Count),
+    '408 write path: read-abort sink fired exactly once');
 end;
 
 procedure TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp;
@@ -8046,6 +8338,131 @@ begin
   Check(Pos('LFast.HasTransferEncoding', LSrc) > 0, 'S2-2 still rejects TE');
 end;
 
+procedure TestReadAbort408OnThreadedMidRequestTimeout;
+{ R11: threaded backend — request read deadline expiring mid-request answers
+  a best-effort 408 then closes, and fires the read-abort sink once. }
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LOpts: THttpServerOptions;
+  LSinkObj: TRecordingReadAbortSink;
+  LSink: IHttpServerReadAbortSink;
+  LConn: ITcpStream;
+  LPartial: string;
+  LData: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+const
+  CRLF = #13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ok', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'OK';
+    AW.GetHeaders.SetHeader('content-length',
+      IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.ReadTimeout := 300;
+  LOpts.IdleTimeout := 300;
+  LSinkObj := TRecordingReadAbortSink.Create;
+  LSink := LSinkObj;
+  LOpts.ReadAbortSink := LSink;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LPartial :=
+        'POST /x HTTP/1.1' + CRLF +
+        'Host: t' + CRLF +
+        'Content-Length: 100' + CRLF +
+        CRLF +
+        'ab';
+      LConn.Write(LPartial[1], SizeUInt(Length(LPartial)));
+      LData := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+    finally
+      LConn.Close;
+    end;
+    Check(Pos('HTTP/1.1 408', LData) > 0,
+      'threaded mid-request timeout answers 408 instead of a bare reset');
+    Check(LClosed, 'threaded mid-request timeout closes after the 408');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+  CheckEqual(Int64(1), Int64(LSinkObj.Count),
+    'threaded read-abort sink fired exactly once');
+  Check(Pos('127.0.0.1', LSinkObj.LastAddr) > 0,
+    'threaded read-abort sink reports the peer address');
+end;
+
+procedure TestIdleKeepAliveTimeoutStaysSilent;
+{ R11 counterpart: keep-alive idle expiry (no request bytes for the next
+  request) closes silently — no 408, no sink notification. }
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LOpts: THttpServerOptions;
+  LSinkObj: TRecordingReadAbortSink;
+  LSink: IHttpServerReadAbortSink;
+  LConn: ITcpStream;
+  LRequest: string;
+  LData: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+const
+  CRLF = #13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ok', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'OK';
+    AW.GetHeaders.SetHeader('content-length',
+      IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.ReadTimeout := 300;
+  LOpts.IdleTimeout := 300;
+  LSinkObj := TRecordingReadAbortSink.Create;
+  LSink := LSinkObj;
+  LOpts.ReadAbortSink := LSink;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LRequest := 'GET /ok HTTP/1.1' + CRLF + 'Host: t' + CRLF + CRLF;
+      LConn.Write(LRequest[1], SizeUInt(Length(LRequest)));
+      { Response 1 completes, then the client sends nothing: the idle
+        keep-alive deadline fires and must end in a bare close. }
+      LData := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+    finally
+      LConn.Close;
+    end;
+    Check(Pos('HTTP/1.1 200', LData) > 0,
+      'idle scenario first request succeeds');
+    Check(Pos('HTTP/1.1 408', LData) = 0,
+      'idle keep-alive timeout stays silent (no 408)');
+    Check(LClosed, 'idle keep-alive timeout closes the connection');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+  CheckEqual(Int64(0), Int64(LSinkObj.Count),
+    'idle keep-alive timeout does not fire the read-abort sink');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestLivePostFixedBodyOnEpoll;
 { S2-2: fixed-length POST body readable on epoll (fast-path snapshot body). }
@@ -8090,6 +8507,69 @@ begin
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure TestLiveReadAbort408OnEpollMidRequestTimeout;
+{ R11 on the poll backend end to end: mid-request read-deadline expiry
+  answers a best-effort 408 then closes, sink fires once. }
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LOpts: THttpServerOptions;
+  LSinkObj: TRecordingReadAbortSink;
+  LSink: IHttpServerReadAbortSink;
+  LConn: ITcpStream;
+  LPartial: string;
+  LData: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+const
+  CRLF = #13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ok', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'OK';
+    AW.GetHeaders.SetHeader('content-length',
+      IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LOpts.ReadTimeout := 300;
+  LOpts.IdleTimeout := 300;
+  LSinkObj := TRecordingReadAbortSink.Create;
+  LSink := LSinkObj;
+  LOpts.ReadAbortSink := LSink;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LPartial :=
+        'POST /x HTTP/1.1' + CRLF +
+        'Host: t' + CRLF +
+        'Content-Length: 100' + CRLF +
+        CRLF +
+        'ab';
+      LConn.Write(LPartial[1], SizeUInt(Length(LPartial)));
+      LData := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+    finally
+      LConn.Close;
+    end;
+    Check(Pos('HTTP/1.1 408', LData) > 0,
+      'epoll mid-request timeout answers 408 instead of a bare reset');
+    Check(LClosed, 'epoll mid-request timeout closes after the 408');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+  CheckEqual(Int64(1), Int64(LSinkObj.Count),
+    'epoll read-abort sink fired exactly once');
 end;
 {$ENDIF}
 
@@ -8335,5 +8815,15 @@ begin
     @TestH1FastPathFixedBodySourceContract);
   T.Test('Live POST fixed body on epoll (S2-2)',
     @TestLivePostFixedBodyOnEpoll);
+  T.Test('H1 poll-driven mid-request timeout queues best-effort 408 (R11)',
+    @TestH1PollDrivenMidRequestTimeoutWritesBestEffort408);
+  T.Test('Threaded mid-request read timeout answers 408 + sink (R11)',
+    @TestReadAbort408OnThreadedMidRequestTimeout);
+  T.Test('Idle keep-alive timeout stays silent without sink (R11)',
+    @TestIdleKeepAliveTimeoutStaysSilent);
+{$IFDEF NEXTPAS_LINUX}
+  T.Test('Epoll mid-request read timeout answers 408 + sink (R11)',
+    @TestLiveReadAbort408OnEpollMidRequestTimeout);
+{$ENDIF}
   if not T.Run then Halt(1);
 end.

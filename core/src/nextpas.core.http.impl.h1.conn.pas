@@ -34,6 +34,9 @@ type
       handler execution for short-request scale (S1-1). Tests that assert handoff
       must set True. }
     PreferPollWorkerHandoff: Boolean;
+    { R11: read-abort observation sink (may be nil). Fired when a request
+      read deadline expires mid-request; never for idle keep-alive waits. }
+    ReadAbortSink: IHttpServerReadAbortSink;
   end;
 
 
@@ -107,6 +110,8 @@ type
       const ACloseAfterDrain: Boolean);
     procedure ArmPollWriteDeadline;
     procedure ArmDirectWriteDeadline;
+    { R11: fire the read-abort sink (best-effort, never raises). }
+    procedure NotifyReadAbort;
     function UsePollOwnedResponseDrain: Boolean;
     function ExecuteCurrentRequest: TTcpServerConnOwnership;
     function ExecuteCurrentPollRequest(out AOutbound: IH1OutboundBuffer;
@@ -578,6 +583,17 @@ begin
   if FOptions.WriteTimeout > 0 then
     FConn.SetWriteDeadline(TDeadline.After(
       TDuration.FromMilliseconds(FOptions.WriteTimeout)));
+end;
+
+procedure TH1ServerConnectionState.NotifyReadAbort;
+begin
+  { Observation must never break the close path: sink faults are swallowed. }
+  if FOptions.ReadAbortSink = nil then
+    Exit;
+  try
+    FOptions.ReadAbortSink.OnReadAbort(FConn.RemoteAddr.ToString);
+  except
+  end;
 end;
 
 function TH1ServerConnectionState.UsePollOwnedResponseDrain: Boolean;

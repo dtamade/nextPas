@@ -91,6 +91,11 @@ function H1PollAdvanceRequestParse(const AState: TH1ServerConnectionState;
   const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult; forward;
 
+{ R11: read-deadline expiry close path (408 best-effort, sink notify). }
+function FinishPollReadDeadlineExpired(const AState: TH1ServerConnectionState;
+  const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult; forward;
+
 constructor TH1PollRunWork.Create(const AState: TH1ServerConnectionState);
 begin
   inherited Create;
@@ -467,6 +472,36 @@ begin
   end;
 end;
 
+{ R11: request read deadline expired mid-parse — fire the read-abort sink and
+  best-effort queue a 408 before closing, so blind-retrying clients stop on a
+  structured answer instead of a bare reset. Idle keep-alive waits (no request
+  bytes) stay silent. Any drain fault falls back to the bare close. }
+function FinishPollReadDeadlineExpired(const AState: TH1ServerConnectionState;
+  const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+var
+  LMidRequest: Boolean;
+begin
+  LMidRequest := not AState.FPollReadDeadlineIsIdle;
+  AState.ClearPollReadDeadline;
+  AState.FKeepAlive := False;
+  if LMidRequest then
+  begin
+    AState.NotifyReadAbort;
+    try
+      if AState.QueuePollErrorResponse(HTTP_STATUS_REQUEST_TIMEOUT) then
+        Exit(H1PollAdvanceResponseDrain(AState, AEvents, ANextEvents, AOwnership));
+    except
+      { Best-effort only: a drain fault ends the session like the bare close.
+        Drop the queued response and disarm the write deadline so the wake
+        deadline contract (infinite after close) still holds. }
+      AState.ResetPollResponseState;
+    end;
+  end;
+  ANextEvents := [];
+  Result := tsprDone;
+end;
+
 function H1PollAdvanceRequestParse(const AState: TH1ServerConnectionState;
   const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
@@ -514,12 +549,7 @@ begin
       if not (peReadable in AEvents) then
       begin
         if AState.FPollReadDeadline.IsExpired then
-        begin
-          AState.ClearPollReadDeadline;
-          AState.FKeepAlive := False;
-          ANextEvents := [];
-          Exit(tsprDone);
-        end;
+          Exit(FinishPollReadDeadlineExpired(AState, AEvents, ANextEvents, AOwnership));
         if AState.FPollResponsePending then
           Exit(H1PollAdvanceResponseDrain(AState, AEvents, ANextEvents, AOwnership));
         ANextEvents := [peReadable];
@@ -531,12 +561,7 @@ begin
         tsiorWouldBlock:
           begin
             if AState.FPollReadDeadline.IsExpired then
-            begin
-              AState.ClearPollReadDeadline;
-              AState.FKeepAlive := False;
-              ANextEvents := [];
-              Exit(tsprDone);
-            end;
+              Exit(FinishPollReadDeadlineExpired(AState, AEvents, ANextEvents, AOwnership));
             ANextEvents := [peReadable];
             Exit(tsprWait);
           end;

@@ -203,6 +203,19 @@ type
     function EffectiveConnectTimeout: Int64;
   end;
 
+  { Read-abort observation sink: invoked when a server connection's request
+    read deadline expires mid-request and the session replies with a
+    best-effort 408 Request Timeout before closing. Not called for idle
+    keep-alive timeouts (no request bytes received). Implementations must be
+    thread-safe: callbacks arrive from reactor threads (poll backend) or
+    worker/connection threads (threaded backend / poll worker handoff).
+    Interface sink, not closure: handlers capture nothing (assembly-time
+    injection keeps FPC escape-closure pitfalls out of the IO path). }
+  IHttpServerReadAbortSink = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-520000000001}']
+    procedure OnReadAbort(const ARemoteAddr: string);
+  end;
+
   THttpServerOptions = record
     Backend: TTcpServerBackend;
     ReadTimeout: Int64;
@@ -238,6 +251,8 @@ type
       >0 显式覆盖池规模，用于放开「流式并发上界 = worker 池规模」的伸缩上限
       （token888 已知差距 #2，wiki/testing.md）。0 语义不变。 }
     WorkerPoolSize: Integer;
+    { ReadAbortSink: 读截止过期中止观测（可空）。见 IHttpServerReadAbortSink。 }
+    ReadAbortSink: IHttpServerReadAbortSink;
     { Default (PD-1B): Read/Write = 30000 ms. Long-poll/SSE/tests that need
       unbounded IO must set WithReadTimeout(0)/WithWriteTimeout(0) explicitly.
       IdleTimeout alone is not a complete production template. }
@@ -263,6 +278,10 @@ type
       See WorkerPoolSize field note. }
     function WithWorkerPoolSize(
       const AWorkerCount: Integer = 0): THttpServerOptions;
+    {** Observe request read-deadline aborts (408 path). See
+      IHttpServerReadAbortSink. }
+    function WithReadAbortSink(
+      const ASink: IHttpServerReadAbortSink): THttpServerOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
   end;
@@ -1268,6 +1287,13 @@ function THttpServerOptions.WithWorkerPoolSize(
 begin
   Result := Self;
   Result.WorkerPoolSize := AWorkerCount;
+end;
+
+function THttpServerOptions.WithReadAbortSink(
+  const ASink: IHttpServerReadAbortSink): THttpServerOptions;
+begin
+  Result := Self;
+  Result.ReadAbortSink := ASink;
 end;
 
 function THttpServerOptions.EffectiveVersion(
