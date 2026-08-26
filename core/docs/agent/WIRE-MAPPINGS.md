@@ -246,6 +246,31 @@ content block 对象上，命中按断点前缀判定，厂商预算 ≤4 个/�
 非内容——历史块的文本/id/签名等内容字节跨轮不变，仅末条消息标记附着位随轮
 移动；tools/system 段序列化字节跨轮恒定。自定义断点位形仍走 ExtraJson 逃生舱。
 
+### 2.7 Token 预估端点（count_tokens，W12/v1.1 第七批）
+
+厂商提供独立预估端点：`POST {base}/v1/messages/count_tokens`（URL 拼接规则
+同 §0——去尾 `/`；已含 `/v1` 结尾只追加 `/messages/count_tokens`，否则追加
+完整默认路径）。实现在 provider.anthropic，公开纯编解码器直测（D13 同款）。
+
+**请求体**：与 §2.1 messages 同构，两处差异：
+
+| 键 | messages | count_tokens | 备注 |
+|----|----------|--------------|------|
+| `max_tokens` | 强制必填 | **不发射** | 端点 schema 无此键；词表 MaxTokens 不校验 |
+| `stream` | 可选 true | **不发射** | 端点无流式形态 |
+
+model/system/messages/tools/tool_choice/thinking/temperature/top_p/
+stop_sequences 与 ccmAuto 断点标记照常；ResponseSchemaJson 维持 fail-fast
+aecConfig（§2.1 同规）；ExtraJson 回注冲突表同时排除 max_tokens/stream。
+
+**响应**：非流式 JSON object，唯一消费键 `input_tokens`（Int64）。缺键、
+非法 JSON 或非 object → aecProtocol（RawBodySnippet 带证据）。HTTP 非 2xx
+照常走 transport 层错误分类（§2.4）。
+
+**能力面**：`IAgentTokenCounter` 仅 anthropic 实现。openai/grok/responses
+族无对应厂商端点（usage 只能从事后响应取）→ 不实现，消费方 Supports
+探测为否即诚实边界，不做本地近似估算冒充。
+
 ## 3. OpenAI Responses 适配器（W9/v1.1 第四批）
 
 > 第三协议支柱。端点 `POST {base}/responses`；与 Chat Completions 共享
@@ -326,6 +351,7 @@ response_format/JSON mode 与 `tool_choice` 已随 W6（v1.1 第一批）落地�
 openai 族 §1.1/§1.7，anthropic §2.1。`reasoning_effort` 已随 W7（v1.1 第二批）
 入词表：openai 族 §1.1 编码、anthropic 忽略+warn。prompt caching 显式打点已随
 W10（v1.1 第五批）入词表：anthropic 显式 `cache_control` §2.6，openai/grok/
-responses 族自动缓存零差异。
+responses 族自动缓存零差异。token 预估已随 W12（v1.1 第七批）以 anthropic
+厂商端点落地（§2.7）；openai 族维持不做（无厂商端点）。
 
 以上任一项进入实施范围时：先在本文件立节，再动代码。

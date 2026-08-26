@@ -542,6 +542,27 @@ function NewTracedTransport(const AName: string;
 - 字节口径为 UTF-8 精确计数；时钟经 IAgentClock 注入，测试零睡眠；
   流式 `Status=-1`/`ResponseBytes=-1`：SSE 事件级观测归 fold/loop 层
 
+### 3.3 能力接口 IAgentTokenCounter（nextpas.core.agent.provider.anthropic，W12）
+
+```pascal
+IAgentTokenCounter = interface
+  ['{A1B2C3D4-E5F6-7890-ABCD-111111000012}']
+  function CountTokens(const AReq: TCompletionRequest): Int64;
+end;
+```
+
+- **能力探测式接口**：仅实现于 anthropic provider（厂商 count_tokens 端点，
+  映射权威=WIRE-MAPPINGS §2.7）；openai/grok/responses 族无厂商端点，
+  不实现。
+- 消费方用 `Supports(Prov, IAgentTokenCounter, LCounter)` 探测；未支持即走
+  自有估算或降级路径——本模块不做本地近似估算冒充厂商口径（诚实边界）。
+- 语义：同步阻塞调用，复用 Complete 同一套 transport/鉴权/超时配置；
+  错误分类一致——本地装配错 aecConfig、上游错误按 §2.4 分类透传；
+  响应缺 `input_tokens` 即 aecProtocol。
+
+纯编解码器同批公开（D13）：`EncodeAnthropicCountTokensRequest(AReq)` 与
+`BuildAnthropicCountTokensUrl(ABaseUrl)`，见 §8 Anthropic 段。
+
 ## 4. 协议域纯函数（nextpas.core.agent.fold）
 
 ```pascal
@@ -834,6 +855,14 @@ procedure DecodeAnthropicResponse(const ABody: TJsonText;
 
 function NewAnthropicWireDecoder(
   const ALog: ILogger = nil): IAgentWireDecoder;
+
+function EncodeAnthropicCountTokensRequest(
+  const AReq: TCompletionRequest): TJsonText;  { W12：§2.7 同构减
+                                                  max_tokens/stream 两键 }
+
+function BuildAnthropicUrl(const ABaseUrl: string): string;
+function BuildAnthropicCountTokensUrl(
+  const ABaseUrl: string): string;             { W12：…/v1/messages/count_tokens }
 
 { ---- OpenAI Responses 族（nextpas.core.agent.provider.openai.responses，
   W9/v1.1 第四批；映射权威=WIRE-MAPPINGS §3）---- }
