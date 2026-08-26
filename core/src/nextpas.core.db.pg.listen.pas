@@ -106,7 +106,7 @@ type
     procedure ConsumeAndDeliver;
     procedure MarkDisconnected(const ADiag: string);
     procedure EnqueueLocked(const AN: TDbPgNotification);
-    function DrainLocked: TDbPgNotificationArray;
+    function TakeAllNotifications: TDbPgNotificationArray;
     function ValidateChannel(const AChannel: string): string;
     procedure RequireAlive;
     procedure RecordErrorLocked(const ADiag: string);
@@ -175,6 +175,41 @@ begin
   Result := Int64(platform_monotonic_ns div 1000000);
 end;
 
+{ conninfo 是否已显式携带 connect_timeout 键。按"行首/空白 + 关键字
+  + 紧随 ="的键位边界匹配（评审 n1）：口令等值内恰好含该子串不再
+  误判。带引号含空格值的完整词法解析超出本面范围，此处为尽力扫描。 }
+function ConnInfoHasTimeoutKey(const AInfo: string): Boolean;
+const
+  KEY = 'connect_timeout';
+var
+  I, J: Integer;
+begin
+  Result := False;
+  for I := 1 to Length(AInfo) - Length(KEY) + 1 do
+    if (AInfo[I] = 'c') and (Copy(AInfo, I, Length(KEY)) = KEY) then
+      if (I = 1) or (AInfo[I - 1] in [' ', #9]) then
+      begin
+        J := I + Length(KEY);
+        while (J <= Length(AInfo)) and (AInfo[J] = ' ') do
+          Inc(J);
+        if (J <= Length(AInfo)) and (AInfo[J] = '=') then
+        begin
+          Result := True;
+          Exit;
+        end;
+      end;
+end;
+
+{ 无 connect_timeout 时追加护栏：防 PQconnectdb 在坏网络下无限阻塞
+  拖死调用线程（首连）/泵线程与关停路径（重连）。首连与重连同款。 }
+function ConnInfoWithGuard(const AInfo: string): string;
+begin
+  Result := AInfo;
+  if not ConnInfoHasTimeoutKey(Result) then
+    Result := Result + ' connect_timeout=' +
+      IntToStr(RECONNECT_CONNECT_TIMEOUT_S);
+end;
+
 { ---- 构造/析构 ---- }
 
 constructor TPgListener.Create(const AConnInfo: string);
@@ -209,9 +244,10 @@ begin
   FStopping := 0;
   FPumpAlive := 1;
   { 首连同步完成：坏 conninfo 在消费方线程 fail-fast（可读诊断），
-    泵线程只负责后续的重连循环 }
+    泵线程只负责后续的重连循环；无 connect_timeout 时同款追加护栏
+    ——fail-fast 不该被 OS 级 TCP 超时拖成分钟级阻塞（评审 m2） }
   try
-    FConn := TPgConn.Create(AConnInfo);
+    FConn := TPgConn.Create(ConnInfoWithGuard(AConnInfo));
   except
     on E: EPgError do
       raise EDbError.CreateSimple(dbkPostgres,
@@ -233,8 +269,13 @@ end;
 
 destructor TPgListener.Destroy;
 begin
-  { 构造期建连失败会自动触发析构（FPC 契约），此时池/事件可能未
-    装配——逐项判空，保证异常路径同样干净收尾 }
+  { 先摘取消回调链（评审 M1）：Token 是公开属性、消费方可合法持有
+    至任意时刻——不摘链的话，监听器释放后任何一次 Token.Cancel 都会
+    以已释放的 Self 调桥函数（悬垂 UAF）。RemoveOnCancel 幂等。
+    其后为构造期建连失败自动析构的判空收尾（FPC 契约：ctor 异常调
+    dtor），池/事件可能未装配。 }
+  if FToken <> nil then
+    FToken.RemoveOnCancel(@PgListenerStopBridge, Self);
   atomic_exchange(FStopping, 1, mo_acq_rel);
   if FWake <> nil then
     FWake.SetEvent;
@@ -363,7 +404,7 @@ function TPgListener.Receive(
 var
   LDeadlineMs, LRemainMs, LChunkMs, LChunkNs: Int64;
 begin
-  Result := DrainLocked;
+  Result := TakeAllNotifications;
   if Length(Result) > 0 then
     Exit;
   if ATimeoutMs = 0 then
@@ -375,7 +416,7 @@ begin
   while True do
   begin
     { 余量优先：停泵前后已入队通知都可取尽 }
-    Result := DrainLocked;
+    Result := TakeAllNotifications;
     if Length(Result) > 0 then
       Exit;
     if atomic_load(FPumpAlive, mo_acquire) = 0 then
@@ -476,7 +517,7 @@ begin
   Inc(FCount);
 end;
 
-function TPgListener.DrainLocked: TDbPgNotificationArray;
+function TPgListener.TakeAllNotifications: TDbPgNotificationArray;
 var
   K, I: Integer;
 begin
@@ -548,22 +589,38 @@ procedure TPgListener.TryReconnect;
 var
   LInfo: string;
   I: Integer;
+  LConn: TPgConn;
+  LSnap: TDbStringArray;
 begin
-  { 重连建连加超时护栏：无 connect_timeout 时追加，防止坏网络下
-    PQconnectdb 无限阻塞拖死泵线程（连带拖死 Destroy 关停） }
-  LInfo := FConnInfo;
-  if Pos('connect_timeout', LInfo) = 0 then
-    LInfo := LInfo + ' connect_timeout=' +
-      IntToStr(RECONNECT_CONNECT_TIMEOUT_S);
-  FConn := TPgConn.Create(LInfo);
-  { 成功：按订阅快照重放 LISTEN（at-most-once 承诺的另一半——
-    会话换了，订阅必须自己补回来），再恢复状态读数 }
+  { 建连走公共护栏（评审 m2/n1：首连/重连同一关键字边界判定） }
+  LInfo := ConnInfoWithGuard(FConnInfo);
+  LConn := TPgConn.Create(LInfo);
+  { 快照副本先行；重放是网络 IO，不持锁执行 }
   FLk.Acquire;
   try
+    SetLength(LSnap, Length(FChannels));
     for I := 0 to High(FChannels) do
-      FConn.Exec('LISTEN ' + FChannels[I]);
+      LSnap[I] := FChannels[I];
+  finally
+    FLk.Release;
+  end;
+  { 按订阅快照重放 LISTEN（at-most-once 承诺的另一半——会话换了，
+    订阅必须自己补回来）。重放中途失败则本连接不接管：FConn 保持
+    nil，恢复机器统一拥有重试权——避免半配置连接常驻导致 Connected
+    长期失真、GapCount 双计（评审 m1） }
+  try
+    for I := 0 to High(LSnap) do
+      LConn.Exec('LISTEN ' + LSnap[I]);
+  except
+    LConn.Free;
+    raise;                              { 诊断由 PumpLoop 统一记录 }
+  end;
+  { 全部成功才接管并翻转状态读数 }
+  FLk.Acquire;
+  try
+    FConn := LConn;
     FConnected := True;
-    FBackendPid := pq_backendPID(FConn.Handle);
+    FBackendPid := pq_backendPID(LConn.Handle);
     FLastError := '';
   finally
     FLk.Release;

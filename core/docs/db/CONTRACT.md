@@ -627,6 +627,10 @@ A := L.Receive(2000);                  // 阻塞至 ≥1 条；一次带回全�
 L.Token.Cancel;                        // 协同停泵；Destroy 同步收尾不留后台线程
 ```
 
+- **Token 生命周期**：`Token.Cancel` 经回调桥协同停泵；监听器析构
+  首步即 `RemoveOnCancel` 摘链（async.cancellation V3-B7 反哺新增的
+  幂等注销面）——消费方可安全持有 Token 越过监听器生命周期，此后
+  取消树级联不再触达已释放对象。
 - **不经 db 门面**（§2.17 同纪律）：独立单元显式 uses，避免把泵线程
   依赖传染给只用同步面的门面消费者（默认零成本）；消费方程序须将
   `nextpas.core.thread.init` 放 uses 首位。
@@ -641,9 +645,12 @@ L.Token.Cancel;                        // 协同停泵；Destroy 同步收尾不
   令牌级联，Cancel 即协同停泵（桥接唤醒事件即时惊动，不等节拍）。
 - **诚实语义（at-most-once，不假装 at-least-once）**：
   - 断线窗口内的通知丢失不补发，`GapCount` 如实记断线次数；
-  - 自动重连（间隔 = 4×节拍；重连建连在 conninfo 无 connect_timeout
-    时追加 connect_timeout=2，防坏网络拖死泵与 Destroy 关停），成功
-    后按订阅快照逐通道重放 LISTEN；
+  - 自动重连（间隔 = 4×节拍；建连在 conninfo 无 connect_timeout 键时
+    追加 connect_timeout=2——首连同款护栏，防坏网络把"fail-fast"
+    拖成 OS 级分钟级阻塞；键判定按关键字边界匹配而非子串），成功
+    后按订阅快照逐通道重放 LISTEN；重放中途失败则新连接不接管
+    （FConn 保持 nil 由恢复机器统一重试），杜绝半配置连接常驻与
+    Connected 读数失真；
   - 投递队列满**保旧弃新**并计 `DroppedCount`（FIFO 顺序不打断）。
 - **延迟事实**：通知延迟上界 ≈ 泵节拍（默认 50ms）+ 服务端 RTT。
   无 OS poller 依赖的诚实折中；PQsocket 已绑定，event-loop 级集成
