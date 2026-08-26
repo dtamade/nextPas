@@ -15,7 +15,7 @@
 | `nextpas.core.db.base` | L0 依赖根 | TDbKind / TDbColumnType / EDbError / EDbNotSupported |
 | `nextpas.core.db.intf` | 接口 | IDbConnection / IDbQuery / IDbTxControl |
 | `nextpas.core.db.sqlite.*` | L2 后端 | SQLite 实现：base/ffi/conn/pool/tx/migrate + 门面 |
-| `nextpas.core.db.pg.*` | L2 后端 | PostgreSQL 实现：base/ffi/loader/conn + 门面 |
+| `nextpas.core.db.pg.*` | L2 后端 | PostgreSQL 实现：base/ffi/loader/conn/listen + 门面 |
 | `nextpas.core.db.sqlite.adapter` | 适配 | IDbConnection/IDbQuery 的 SQLite 包装（ConnectSqlite） |
 | `nextpas.core.db.pg.adapter` | 适配 | 同上 PG 包装（ConnectPostgres）+ ? → $N 占位符翻译 |
 | `nextpas.core.db.tx` | 泛化助手 | WithTransaction over IDbConnection |
@@ -612,6 +612,54 @@ H.Cancel;                        // 任意线程；尽力中断在途查询
   量级（内存库微查询 ~2µs）时劣化显著（10×+），**不要为此类负载
   异步挂载**；适用域是长查询/阻塞场景的主线程让出与取消能力（真机
   pg 取消 50M 行聚合 ~200ms 内中断，自然完成需秒级）。
+
+### 2.18 LISTEN/NOTIFY 订阅（V3-B7，nextpas.core.db.pg.listen）
+
+pg 原生 pub/sub 一等公民化收口（G9）。形态 = **专用连接独占的订阅
+会话**：`TPgListener` 构造时私有建连并常驻单工泵线程，"LISTEN 会话
+不能跑普通查询"的诚实约束由结构保证——本类不暴露任何查询面。
+
+```pascal
+L := PgOpenListener('host=/var/run/postgresql dbname=app user=app');
+L.Listen('events');                    // 客户端校验先行，异步应用（典型 ≤1 节拍）
+A := L.Receive(2000);                  // 阻塞至 ≥1 条；一次带回全部积压（FIFO）
+{ TDbPgNotification: Channel / Payload / SenderPid }
+L.Token.Cancel;                        // 协同停泵；Destroy 同步收尾不留后台线程
+```
+
+- **不经 db 门面**（§2.17 同纪律）：独立单元显式 uses，避免把泵线程
+  依赖传染给只用同步面的门面消费者（默认零成本）；消费方程序须将
+  `nextpas.core.thread.init` 放 uses 首位。
+- **底座零平行宇宙**：泵线程 = `nextpas.core.thread.pool` 单工池；
+  互斥/事件 = `nextpas.core.sync`；取消 =
+  `nextpas.core.async.cancellation`。本单元不直接引 FPC RTL 单元。
+- **投递面与路线图偏差**：原案 "async.channel 投递"落为监听器内建有界
+  **记录队列**（互斥 + 自动复位事件）——IAsyncChannel 是字节通道，
+  托管串记录需手工扁平化/释放，且 db.async 已确立 thread.pool +
+  core.sync 的家族线程惯例；为队列引入不运行的 TAsyncLoop 得不偿失。
+  取消语义按承诺经 `IAsyncCancellationToken`：Token 属性外露可挂子
+  令牌级联，Cancel 即协同停泵（桥接唤醒事件即时惊动，不等节拍）。
+- **诚实语义（at-most-once，不假装 at-least-once）**：
+  - 断线窗口内的通知丢失不补发，`GapCount` 如实记断线次数；
+  - 自动重连（间隔 = 4×节拍；重连建连在 conninfo 无 connect_timeout
+    时追加 connect_timeout=2，防坏网络拖死泵与 Destroy 关停），成功
+    后按订阅快照逐通道重放 LISTEN；
+  - 投递队列满**保旧弃新**并计 `DroppedCount`（FIFO 顺序不打断）。
+- **延迟事实**：通知延迟上界 ≈ 泵节拍（默认 50ms）+ 服务端 RTT。
+  无 OS poller 依赖的诚实折中；PQsocket 已绑定，event-loop 级集成
+  （平台轮询器）留待有判据的需求立项。
+- **所有权/线程模型**：PGconn 仅泵线程触碰（Listen/Unlisten 经命令
+  队列跨线程投递）；`PQnotifies` 产物逐条 `PQfreemem`（heaptrc 0
+  锁定）；`TPGnotify` 按 libpq C 布局逐字段镜像
+  （relname/be_pid/extra），布局错位 = 把 PID 解引用当指针——真机
+  自发自收往返门禁钉死此漂移。
+- **频道名校验**：客户端先行 `[A-Za-z0-9_]` 且长度 ≤63（pg 标识符
+  NAMEDATALEN-1 上界），非法 fail-fast 不触网；未订阅频道 Unlisten
+  拒绝（编程错误早暴露）。
+- 门禁：test_db_pg_listen 十一组真机全绿 heaptrc 0（自发自收往返/
+  无载 NOTIFY/FIFO 保序/静默超时/频道名拒绝/unlisten↔relisten/
+  UNLISTEN */溢出保旧弃新/令牌取消/坏 conninfo fail-fast 干净析构/
+  pg_terminate_backend 真断线→自动重连重订阅再达）。
 
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
