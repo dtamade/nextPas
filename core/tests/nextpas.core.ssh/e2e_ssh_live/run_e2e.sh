@@ -71,10 +71,12 @@ run_docker() {
   cleanup() { docker rm -f "$CNAME" >/dev/null 2>&1; rm -rf "$TMP"; }
   trap cleanup EXIT INT TERM
 
-  # 一次性密钥三件套：sshd host key / 客户端密钥 / authorized_keys
+  # 一次性密钥：sshd host key / 客户端 ed25519+RSA 密钥 / authorized_keys
   ssh-keygen -q -t ed25519 -N '' -f "$TMP/host_ed25519"      || fail "host keygen"
   ssh-keygen -q -t ed25519 -N '' -f "$TMP/client_key"        || fail "client keygen"
+  ssh-keygen -q -t rsa -b 2048 -N '' -f "$TMP/client_rsa_key" || fail "rsa client keygen"
   cp "$TMP/client_key.pub" "$TMP/authorized_keys"
+  cat "$TMP/client_rsa_key.pub" >> "$TMP/authorized_keys"
   cp "$DIR/sshd_e2e_config" "$TMP/sshd_config"
   mkdir -p "$TMP/stage"
   mv "$TMP/sshd_config" "$TMP/host_ed25519" "$TMP/authorized_keys" "$TMP/stage/"
@@ -111,6 +113,7 @@ run_docker() {
   export NEXTPAS_SSH_E2E_PORT="$PORT"
   export NEXTPAS_SSH_E2E_USER=root
   export NEXTPAS_SSH_E2E_KEYFILE="$TMP/client_key"
+  export NEXTPAS_SSH_E2E_RSA_KEYFILE="$TMP/client_rsa_key"
   export NEXTPAS_SSH_E2E_KNOWN_HOSTS="$TMP/known_hosts"
   echo "[e2e] docker fixture ready: root@127.0.0.1:$PORT (container $CNAME)"
   rc=0

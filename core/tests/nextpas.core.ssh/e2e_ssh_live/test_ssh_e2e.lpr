@@ -10,6 +10,7 @@ program test_ssh_e2e;
   可选：
     NEXTPAS_SSH_E2E_PORT       默认 22
     NEXTPAS_SSH_E2E_KNOWN_HOSTS  known_hosts 文件（缺省则不做严格校验）
+    NEXTPAS_SSH_E2E_RSA_KEYFILE  未加密 OpenSSH RSA 私钥（缺省则跳过 RSA 场景）
 
   场景：exec stdout/exit 码、stderr 分流、同会话多次 exec、
         错误 known_hosts 必须被 sekHostKey 拒绝。
@@ -28,6 +29,7 @@ const
 
 var
   GFail: Integer = 0;
+  GRsaRan: Boolean = False;
 
 procedure Fail(const AMsg: string);
 begin
@@ -96,7 +98,7 @@ begin
     Result := ADef;
 end;
 
-function ConnectE2E(const AKnownHosts: string): ISshSession;
+function ConnectE2EWithKey(const AKnownHosts, AKeyFile: string): ISshSession;
 var
   LBuilder: ISshClientBuilder;
   LKey: TStringList;
@@ -110,12 +112,18 @@ begin
     .ExecTimeoutMs(30000);
   LKey := TStringList.Create;
   try
-    LKey.LoadFromFile(EnvOr('NEXTPAS_SSH_E2E_KEYFILE', ''));
+    LKey.LoadFromFile(AKeyFile);
     LBuilder := LBuilder.PrivateKeyData(LKey.Text);
   finally
     LKey.Free;
   end;
   Result := LBuilder.Connect;
+end;
+
+function ConnectE2E(const AKnownHosts: string): ISshSession;
+begin
+  Result := ConnectE2EWithKey(AKnownHosts,
+    EnvOr('NEXTPAS_SSH_E2E_KEYFILE', ''));
 end;
 
 { 场景 1：exec 收 stdout、exit=0，且同一会话连续两次 exec }
@@ -335,6 +343,42 @@ begin
   end;
 end;
 
+{ 场景 7：RSA 私钥 publickey 认证（rsa-sha2-512）+ exec。
+  密钥由编排器 ssh-keygen -t rsa 现场生成并注入 authorized_keys；
+  未提供环境变量时显式 SKIP，不计入场景数。}
+procedure ScenarioRsaAuth;
+var
+  LSess: ISshSession;
+  LR: TSshExecResult;
+  LKeyFile: string;
+begin
+  LKeyFile := EnvOr('NEXTPAS_SSH_E2E_RSA_KEYFILE', '');
+  if LKeyFile = '' then
+  begin
+    Writeln('[e2e] scenario: rsa publickey auth — SKIP (no NEXTPAS_SSH_E2E_RSA_KEYFILE)');
+    Exit;
+  end;
+  GRsaRan := True;
+  Writeln('[e2e] scenario: rsa publickey auth exec');
+  try
+    LSess := ConnectE2EWithKey(EnvOr('NEXTPAS_SSH_E2E_KNOWN_HOSTS', ''), LKeyFile);
+    try
+      LR := LSess.Exec('echo ' + MARKER);
+      if Pos(MARKER, LR.StdOutText) = 0 then
+        Fail('rsa auth stdout missing marker, got "' + Trim(LR.StdOutText) + '"')
+      else if LR.ExitCode <> 0 then
+        Fail('expected exit 0, got ' + IntToStr(LR.ExitCode))
+      else
+        Writeln('[e2e]   ok: rsa key exec marker, exit=0');
+    finally
+      LSess.Close;
+    end;
+  except
+    on LE: ESSHError do Fail(SshErrorKindName(LE.Kind) + ': ' + LE.Message);
+    on LE: Exception do Fail(LE.ClassName + ': ' + LE.Message);
+  end;
+end;
+
 begin
   try
     if GetEnvironmentVariable('NEXTPAS_SSH_E2E_TRACE') = '1' then
@@ -350,9 +394,10 @@ begin
     ScenarioWrongHostKey;
     ScenarioExecStress;
     ScenarioSftpRoundtrip;
+    ScenarioRsaAuth;
 
     if GFail = 0 then
-      Writeln('[e2e] PASS (6 scenarios)')
+      Writeln('[e2e] PASS (', 6 + Ord(GRsaRan), ' scenarios)')
     else
       Writeln('[e2e] FAILED: ', GFail, ' failure(s)');
     ExitCode := Ord(GFail > 0);
