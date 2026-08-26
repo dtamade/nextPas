@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.db*.pas`
 **层级**：L3 家族（依赖 L0-L2；SQLite/PostgreSQL 后端实现为 L2 子模块）
 **Owner**：core-db lane
-**最后更新**：2026-08-23
-**版本**：1.0
+**最后更新**：2026-08-26（V3-B7 LISTEN/NOTIFY 成文）
+**版本**：1.1（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY）
 
 ---
 
@@ -726,6 +726,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_factory     # 统一驱动
 make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlite_pragmas  # C5 调优预设（离线）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_array_bind  # C2 参数级批量绑定（sqlite 离线诚实契约 + pg 真机段）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_async      # B6 异步挂载与取消（sqlite 离线 + pg 真机 PQcancel 段）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_pg_listen  # B7 LISTEN/NOTIFY 订阅（真机，NEXTPAS_PG_TEST_CONN 门控）
 make focused FOCUS=core/tests/nextpas.core.http.middleware/test_session_sqlite  # 消费方回归
 ```
 
