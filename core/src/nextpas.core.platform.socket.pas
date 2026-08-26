@@ -344,6 +344,11 @@ function platform_socket_error_in_progress(const AError: Int32): Boolean;
     @return True 表示应重试同一系统调用（poll/deadline 语义保持） *}
 function platform_socket_error_interrupted(const AError: Int32): Boolean;
 
+{** @desc 判断错误是否为瞬时连接中止（ECONNABORTED / WSAECONNABORTED）
+    @param AError 错误码
+    @return True 表示应重试（accept 循环语义：握手完成到取走之间对端 reset） *}
+function platform_socket_error_aborted(const AError: Int32): Boolean;
+
 const
   { poll event bits for platform_socket_poll }
 {$IFDEF NEXTPAS_WINDOWS}
@@ -884,6 +889,11 @@ end;
 function platform_socket_error_interrupted(const AError: Int32): Boolean;
 begin
   Result := (AError = ESysEINTR) or (AError = PLATFORM_ERR_INTR);
+end;
+
+function platform_socket_error_aborted(const AError: Int32): Boolean;
+begin
+  Result := AError = ESysECONNABORTED;
 end;
 
 function platform_socket_poll(const ASocket: TPlatformSocket;

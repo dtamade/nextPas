@@ -162,8 +162,6 @@ end;
 
 procedure TTcpThreadedServer.Shutdown;
 var
-  LAddr: TNetAddress;
-  LWake: ITcpStream;
   LWsReg: IWsServerShutdownRegistry;
 begin
   atomic_store(FRunning, 0, mo_release);
@@ -174,16 +172,11 @@ begin
   if FSessionContext <> nil then
     if Supports(FSessionContext, IWsServerShutdownRegistry, LWsReg) then
       LWsReg.ShutdownAll(FOptions.ShutdownTimeoutNs);
+  { R9：listener.Close 先 shutdown 唤醒 accept 循环线程的阻塞 Accept，
+    再按在飞归属收尾 fd——自连唤醒 hack 删除（backlog 打满时自连会
+    失效排队，shutdown 永远可靠）。accept 循环经 except Break 收场。 }
   if FListener <> nil then
-  begin
-    LAddr := FListener.LocalAddr;
-    try
-      LWake := NetTcpConnect(LAddr.IP, LAddr.Port);
-      LWake.Close;
-    except
-    end;
     FListener.Close;
-  end;
   if FWorkerHandoff <> nil then
     FWorkerHandoff.Shutdown;
 end;

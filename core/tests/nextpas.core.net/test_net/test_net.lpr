@@ -1121,8 +1121,144 @@ begin
   LListener.Close;
 end;
 
+{ ---- R9: Close 唤醒阻塞 Accept（shutdown 先行 + fd 所有权移交）---- }
+
+var
+  GCloseWakeListener: ITcpListener = nil;
+  GCloseWakeHandle: TPlatformThreadHandle = nil;
+  GCloseWakeFinished: Int32 = 0;
+  GCloseWakeGotError: Int32 = 0;
+  GCloseWakeMsg: string = '';
+
+function AcceptBlockedWorker(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  try
+    { 关闭竞态下连接恰在 shutdown 前入队：Accept 成功返回也算被唤醒收场。 }
+    GCloseWakeListener.Accept;
+  except
+    on E: ENetworkError do
+    begin
+      GCloseWakeGotError := 1;
+      GCloseWakeMsg := E.Message;
+    end;
+  end;
+  InterlockedExchange(GCloseWakeFinished, 1);
+end;
+
+procedure WaitForCloseWakeWorker(const ALabel: string);
+var
+  LWaits: Integer;
+  LRetVal: Pointer;
+const
+  CJoiTimeoutLoops = 5000;   { 5s @1ms }
+begin
+  LWaits := 0;
+  while (InterlockedCompareExchange(GCloseWakeFinished, 0, 0) = 0) and
+        (LWaits < CJoiTimeoutLoops) do
+  begin
+    platform_thread_sleep_ns(1000000);
+    Inc(LWaits);
+  end;
+  Check(InterlockedCompareExchange(GCloseWakeFinished, 0, 0) = 1,
+    ALabel + ': blocked accept woke within join watchdog (no hang)');
+  if InterlockedCompareExchange(GCloseWakeFinished, 0, 0) = 1 then
+    platform_thread_join(GCloseWakeHandle, LRetVal);
+end;
+
+procedure TestTcpListenerCloseWakesBlockedAccept;
+begin
+  GCloseWakeFinished := 0;
+  GCloseWakeGotError := 0;
+  GCloseWakeMsg := '';
+  GCloseWakeListener := TcpListen('127.0.0.1', 0);
+  { 不 detach：收场需 join（join 已分离线程是 UB，正是要防的悬挂形态） }
+  platform_thread_create(GCloseWakeHandle, @AcceptBlockedWorker, nil);
+  { 让 worker 深入阻塞 accept }
+  platform_thread_sleep_ns(150000000);
+  GCloseWakeListener.Close;
+  WaitForCloseWakeWorker('close wakes blocked accept');
+  CheckEqual(Int64(1), Int64(InterlockedCompareExchange(GCloseWakeGotError, 0, 0)),
+    'close wakes blocked accept with a structured error');
+  Check(Pos('after close', GCloseWakeMsg) > 0,
+    'woken accept reports listener-closed error, got: ' + GCloseWakeMsg);
+  { Close 后 fd 已由在飞路径收尾：再 Accept 立即干净报错，不悬挂不崩溃。 }
+  try
+    GCloseWakeListener.Accept;
+    Check(False, 'accept after woken-close still raises');
+  except
+    on ENetworkError do
+      Check(True, 'accept after woken-close still raises');
+  end;
+  GCloseWakeListener := nil;
+end;
+
+procedure TestTcpListenerCloseAcceptRaceStress;
+var
+  LI: Integer;
+  LClean: Integer;
+begin
+  LClean := 0;
+  for LI := 1 to 30 do
+  begin
+    GCloseWakeFinished := 0;
+    GCloseWakeGotError := 0;
+    GCloseWakeMsg := '';
+    GCloseWakeListener := TcpListen('127.0.0.1', 0);
+    platform_thread_create(GCloseWakeHandle, @AcceptBlockedWorker, nil);
+    { 随机化关闭时点：覆盖 未登记/已登记未入内核/已入内核 三种交错 }
+    platform_thread_sleep_ns(Int64((LI mod 4) * 800000));
+    GCloseWakeListener.Close;
+    WaitForCloseWakeWorker('race stress iter');
+    if (InterlockedCompareExchange(GCloseWakeGotError, 0, 0) = 1) and
+       (Pos('after close', GCloseWakeMsg) > 0) then
+      Inc(LClean);
+    GCloseWakeListener := nil;
+  end;
+  CheckEqual(Int64(30), Int64(LClean),
+    'all raced accepts ended with the structured closed error');
+end;
+
+procedure TestTcpListenerDoubleCloseIdempotent;
+var
+  LListener: ITcpListener;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LListener.Close;
+  LListener.Close;
+  Check(length(LListener.LocalAddr.IP) >= 0,
+    'double close stays safe and LocalAddr remains readable');
+  LListener := nil;
+end;
+
 { Unix socket echo：UnixListen → UnixConnect → 写 → Shutdown → 读回
   （AF_UNIX 域，Linux/macOS/FreeBSD；Windows 上 expect unsupported 跳过） }
+
+procedure TestTcpListenerCloseWakeSourceContract;
+{ R9 形态锁：Accept 保 EINTR/ECONNABORTED 重试与在飞登记；
+  Close 必须 shutdown 先行（唤醒先于 fd 号释放）；threaded 服务器
+  Shutdown 的自连唤醒 hack 必须不存在。 }
+var
+  LSrc, LServerSrc: string;
+  LAccept, LClose: string;
+begin
+  LSrc := ReadTextFile('../../../src/nextpas.core.net.tcp.pas');
+  LAccept := ExtractSourceRange(LSrc, 'function ttcplistener.accept',
+    'function ttcplistener.localaddr', 'TTcpListener.Accept implementation');
+  LClose := ExtractSourceRange(LSrc, 'procedure ttcplistener.close',
+    'function ttcplistener.nativesockethandle', 'TTcpListener.Close implementation');
+  CheckSourceContains(LAccept, 'platform_socket_error_interrupted',
+    'accept keeps the EINTR retry contract');
+  CheckSourceContains(LAccept, 'platform_socket_error_aborted',
+    'accept retries transient handshake aborts (R9)');
+  CheckSourceContains(LAccept, 'facceptdepth',
+    'accept registers in-flight depth for fd ownership handover (R9)');
+  CheckSourceContains(LClose, 'platform_socket_shutdown',
+    'close wakes blocked accept via shutdown before fd release (R9)');
+  LServerSrc := ReadTextFile('../../../src/nextpas.core.net.server.threaded.pas');
+  Check(Pos('nettcpconnect', LServerSrc) = 0,
+    'threaded server shutdown must not self-connect-wake anymore (R9)');
+end;
 function UnixEchoServer(AArg: Pointer): Pointer; cdecl;
 var
   LListener: ITcpListener;
@@ -1239,6 +1375,14 @@ begin
     @TestTcpStreamPostCloseRuntimeGuards);
   T.Test('TCP listener post-close runtime guards',
     @TestTcpListenerPostCloseRuntimeGuards);
+  T.Test('TCP listener close wakes blocked accept (R9)',
+    @TestTcpListenerCloseWakesBlockedAccept);
+  T.Test('TCP listener close/accept race stress 30x (R9)',
+    @TestTcpListenerCloseAcceptRaceStress);
+  T.Test('TCP listener double close idempotent (R9)',
+    @TestTcpListenerDoubleCloseIdempotent);
+  T.Test('TCP listener close-wake source contract (R9)',
+    @TestTcpListenerCloseWakeSourceContract);
   T.Test('Unix socket echo', @TestUnixSocketEcho);
   T.Test('Unix socket path reuse after close', @TestUnixListenReusePath);
   if not T.Run then Halt(1);
