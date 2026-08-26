@@ -359,6 +359,11 @@ const
   GIT_CHECKOUT_REMOVE_UNTRACKED  = 1 shl 5;
   GIT_CHECKOUT_NONE              = 1 shl 30;
 
+  // k97: git_apply location (git_apply_location_t)
+  GIT_APPLY_LOCATION_WORKING_DIR = 0;
+  GIT_APPLY_LOCATION_INDEX       = 1;
+  GIT_APPLY_LOCATION_BOTH        = 2;
+
   // Worktree add flags
   GIT_WORKTREE_ADD_CREATE_REF = 1 shl 0;
   GIT_WORKTREE_ADD_LOCK       = 1 shl 1;

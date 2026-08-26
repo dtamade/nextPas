@@ -112,6 +112,11 @@ function git_diff_num_deltas(diff: git_diff): csize_t; cdecl;
 function git_diff_get_delta(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl;
 procedure git_diff_free(diff: git_diff); cdecl;
 
+// k97: apply a preparsed patch to the working directory (location enum:
+// 0=workdir 1=index 2=both); options may be nil (defaults)
+function git_apply(repo: git_repository; diff: git_diff; location: cint; const opts: Pointer): cint; cdecl;
+function git_diff_from_buffer(out diff: git_diff; const content: PChar; length: csize_t): cint; cdecl;
+
 // Patch access (per-file diff hunks/lines)
 function git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl;
 function git_patch_num_hunks(patch: git_patch): csize_t; cdecl;
@@ -353,6 +358,8 @@ type
   TLibGit2_git_index_has_conflicts = function(index: git_index): cint; cdecl;
   TLibGit2_git_checkout_head = function(repo: git_repository; const opts: Pointer): cint; cdecl;
   TLibGit2_git_checkout_tree = function(repo: git_repository; tree: git_object; const opts: Pointer): cint; cdecl;
+  TLibGit2_git_apply = function(repo: git_repository; diff: git_diff; location: cint; const opts: Pointer): cint; cdecl;
+  TLibGit2_git_diff_from_buffer = function(out diff: git_diff; const content: PChar; length: csize_t): cint; cdecl;
   TLibGit2_git_index_free = procedure(index: git_index); cdecl;
   TLibGit2_git_repository_config = function(out cfg: git_config; repo: git_repository): cint; cdecl;
   TLibGit2_git_config_open_default = function(out cfg: git_config): cint; cdecl;
@@ -502,6 +509,8 @@ function static_git_index_write_tree_to(out id: git_oid; index: git_index; repo:
 function static_git_index_has_conflicts(index: git_index): cint; cdecl; external LIBGIT2_LIB name 'git_index_has_conflicts';
   function static_git_checkout_head(repo: git_repository; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_checkout_head';
   function static_git_checkout_tree(repo: git_repository; tree: git_object; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_checkout_tree';
+function static_git_apply(repo: git_repository; diff: git_diff; location: cint; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_apply';
+function static_git_diff_from_buffer(out diff: git_diff; const content: PChar; length: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_diff_from_buffer';
 procedure static_git_index_free(index: git_index); cdecl; external LIBGIT2_LIB name 'git_index_free';
 function static_git_repository_config(out cfg: git_config; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_config';
 function static_git_config_open_default(out cfg: git_config): cint; cdecl; external LIBGIT2_LIB name 'git_config_open_default';
@@ -1065,6 +1074,16 @@ begin
   Result := static_git_checkout_tree(repo, tree, opts);
 end;
 
+  function git_apply(repo: git_repository; diff: git_diff; location: cint; const opts: Pointer): cint; cdecl;
+begin
+  Result := static_git_apply(repo, diff, location, opts);
+end;
+
+  function git_diff_from_buffer(out diff: git_diff; const content: PChar; length: csize_t): cint; cdecl;
+begin
+  Result := static_git_diff_from_buffer(diff, content, length);
+end;
+
 procedure git_index_free(index: git_index); cdecl;
 begin
   static_git_index_free(index);
@@ -1353,6 +1372,8 @@ var
   dyn_git_index_has_conflicts: TLibGit2_git_index_has_conflicts = nil;
   dyn_git_checkout_head: TLibGit2_git_checkout_head = nil;
   dyn_git_checkout_tree: TLibGit2_git_checkout_tree = nil;
+  dyn_git_apply: TLibGit2_git_apply = nil;
+  dyn_git_diff_from_buffer: TLibGit2_git_diff_from_buffer = nil;
   dyn_git_index_free: TLibGit2_git_index_free = nil;
   dyn_git_repository_config: TLibGit2_git_repository_config = nil;
   dyn_git_config_open_default: TLibGit2_git_config_open_default = nil;
@@ -2371,6 +2392,20 @@ begin
   if not Assigned(dyn_git_checkout_tree) then
     Pointer(dyn_git_checkout_tree) := ResolveLibGit2Symbol('git_checkout_tree');
   Result := dyn_git_checkout_tree(repo, tree, opts);
+end;
+
+  function git_apply(repo: git_repository; diff: git_diff; location: cint; const opts: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_apply) then
+    Pointer(dyn_git_apply) := ResolveLibGit2Symbol('git_apply');
+  Result := dyn_git_apply(repo, diff, location, opts);
+end;
+
+  function git_diff_from_buffer(out diff: git_diff; const content: PChar; length: csize_t): cint; cdecl;
+begin
+  if not Assigned(dyn_git_diff_from_buffer) then
+    Pointer(dyn_git_diff_from_buffer) := ResolveLibGit2Symbol('git_diff_from_buffer');
+  Result := dyn_git_diff_from_buffer(diff, content, length);
 end;
 
 procedure git_index_free(index: git_index); cdecl;
