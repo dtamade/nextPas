@@ -94,7 +94,7 @@
 | `#[folder/prefix/include/exclude]` | S4 工具选项同名能力 | Deferred→S4 | 工具层过滤映射 |
 | debug 构建读磁盘 | os/embedded 双态工厂切换 | 定稿 | consumer 零改动，conformance 强制双态同结果 |
 | `metadata_only` | index-only 枚举天然支持 | 定稿 | reader 不触内容即可 Count/枚举 |
-| web 框架 handlers（axum/actix…） | http.static IVfs 内容源（S5） | Deferred→S5 | 跨模块 slice 单独立项 |
+| web 框架 handlers（axum/actix…） | http.static `ServeVfs(IVfs)`（S5 已落地） | Done (S5) | ETag 取条目 fnv32、条件请求/Range/MIME 与 fs 版同语义；端到端示例与三后端基准见 README「嵌入载体」节 |
 | include_dir `extract()` | 工具 extract-to-dir 选项 | Deferred→S4 | 调试/迁移用途 |
 | Tauri phf 完美哈希 O(1) | 排序数组二分 O(log n) | 定稿偏离 | 10k 条目 ≤14 次缓存友好比较；FORMAT 预留 flag bit2 hash-index 区，超大规模再启用 |
 | Tauri brotli / include-flate | codecId 登记表槽位 | Deferred | 读时分配破坏零拷贝；HTTP 编码归 http.static |
