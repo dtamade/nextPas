@@ -81,6 +81,7 @@ DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
 | TLS 契约成文（责任表 + 各后端样例；pg conninfo/redis UseTls 透传） | N/A | ✅ | §2.1-TLS |
 | 参数级批量绑定（IDbArrayBinding，unnest 单语句单往返；NULL 掩码+fail-fast 对齐校验） | 降级通用批路径 | ✅ pg | §2.16 |
 | 异步挂载与取消（TDbAsyncExecutor 单飞执行线程；令牌级联 → PQcancel / progress handler；归一 decTimeout） | ✅ | ✅ | §2.17 |
+| LISTEN/NOTIFY 订阅会话（专用连接独占 + 泵线程投递；Token 取消；断线自动重连重放订阅；at-most-once 如实上报） | N/A | ✅ | §2.18 |
 
 上表已运行时自述化（V3-B1）：`DbCapabilities(Conn)` 返回
 `IDbCapabilities`，消费方按能力探测降级而非按后端名分支；契约语义见
@@ -123,6 +124,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_v2           # 统一层�
 make focused FOCUS=core/tests/nextpas.core.db/test_db_factory      # 统一驱动工厂
 make focused FOCUS=core/tests/nextpas.core.db/test_db_array_bind   # 参数级批量绑定（pg 段需 NEXTPAS_PG_TEST_CONN）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_async        # 异步挂载与取消（pg 段需 NEXTPAS_PG_TEST_CONN）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_pg_listen    # LISTEN/NOTIFY 订阅（需 NEXTPAS_PG_TEST_CONN）
 # 全部门禁清单见 CONTRACT §5；每个含 heaptrc 0 unfreed 硬门槛
 ```
 
