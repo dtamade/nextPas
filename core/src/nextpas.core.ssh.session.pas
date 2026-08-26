@@ -95,6 +95,7 @@ uses
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.auth,
   nextpas.core.ssh.keys,
+  nextpas.core.ssh.rsa,
   nextpas.core.ssh.kex.curve25519;
 
 const
@@ -409,37 +410,62 @@ var
   LR: TsshReader;
   LMsg: TBytes;
   LKey: TSshPrivateKey;
-  LPubBlob, LSignedData, LSig64, LSigBlob: TBytes;
+  LPubBlob, LSignedData, LSig64, LSigRaw, LSigBlob: TBytes;
+  LAlgName: string;
+
+  { USERAUTH 回复收口：SUCCESS 置位；FAILURE 抛 sekAuth（带可继续方法表）}
+  procedure AwaitSuccessOrRaise(const AWhat: string);
+  begin
+    LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE]);
+    if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
+      FAuthenticated := True
+    else
+    begin
+      LR := TsshReader.Create(LMsg);
+      try
+        LR.ReadByte;
+        LR.ReadStringText;
+      finally
+        LR.Free;
+      end;
+      raise ESSHError.Create(sekAuth, 'ssh session: ' + AWhat + ' rejected');
+    end;
+  end;
+
 begin
   EnsureHandshaken;
 
   if not SshLoadPrivateKey(AContent, LKey, LPubBlob) then
     raise ESSHError.Create(sekKeyFormat, 'ssh session: private key parse failed');
-  if LKey.Kind <> hkEd25519 then
-    raise ESSHError.Create(sekUnsupported,
-      'ssh session: only unencrypted ed25519 private keys supported');
 
-  LSignedData := SshAuthSignedData(FSessionId, FActiveUser, SSH_ALG_ED25519, LPubBlob);
-  if not Ed25519Sign(LKey.Ed25519Seed, LSignedData, LSig64) then
-    raise ESSHError.Create(sekCrypto, 'ssh session: ed25519 sign failed');
-  LSigBlob := SshBuildEd25519SigBlob(LSig64);
-  FTransport.SendPacket(
-    SshBuildAuthPubKeySigned(FActiveUser, SSH_ALG_ED25519, LPubBlob, LSigBlob));
-
-  LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE]);
-  if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
-    FAuthenticated := True
+  case LKey.Kind of
+    hkEd25519:
+      begin
+        LAlgName := SSH_ALG_ED25519;
+        LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LPubBlob);
+        if not Ed25519Sign(LKey.Ed25519Seed, LSignedData, LSig64) then
+          raise ESSHError.Create(sekCrypto, 'ssh session: ed25519 sign failed');
+        LSigBlob := SshBuildEd25519SigBlob(LSig64);
+      end;
+    hkRsa:
+      begin
+        { rsa-sha2-512 与 rsa-sha2-256 同版本引入且被一切接受 RSA 的服务端
+          支持；选最强档，单次尝试不做降级 }
+        LAlgName := SSH_RSA_SIG_SHA512;
+        LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LPubBlob);
+        if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
+          DIGEST_INFO_SHA512, LSigRaw) then
+          raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
+        LSigBlob := SshBuildRsaSigBlob(LSigRaw, LAlgName);
+      end;
   else
-  begin
-    LR := TsshReader.Create(LMsg);
-    try
-      LR.ReadByte;
-      LR.ReadStringText;
-    finally
-      LR.Free;
-    end;
-    raise ESSHError.Create(sekAuth, 'ssh session: publickey rejected');
+    raise ESSHError.Create(sekUnsupported,
+      'ssh session: unsupported private key kind');
   end;
+
+  FTransport.SendPacket(
+    SshBuildAuthPubKeySigned(FActiveUser, LAlgName, LPubBlob, LSigBlob));
+  AwaitSuccessOrRaise('publickey');
 end;
 
 function TSshSession.Exec(const ACommand: string): TSshExecResult;

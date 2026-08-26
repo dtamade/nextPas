@@ -31,6 +31,8 @@ uses
   nextpas.core.crypto.hash,
   nextpas.core.encoding.base64,
   nextpas.core.platform.files.text,
+  nextpas.core.ssh.rsa,
+  ssh_rsa_kat,
   nextpas.core.test;
 
 { ── 线程安全阻塞内存管道 ───────────────────────────────────────── }
@@ -657,6 +659,7 @@ var
   LUser, LMethod, LPass, LAlg, LReqName: string;
   LPassOk, LWantReply: Boolean;
   LPubBlob, LSigBlob, LSigRaw, LSignedData: TBytes;
+  LRsaE, LRsaN: TBytes;
   LRid: UInt32;
   LRAlg: TsshReader;
   LW: TsshWriter;
@@ -727,6 +730,35 @@ begin
                   否则只剩 31 字节，Verify 长度检查直接失败 }
                 LPassOk := Ed25519Verify(Copy(LPubBlob,
                   Length(LPubBlob) - 32, 32), LSignedData, LSigRaw);
+              end
+              else if FSc^.PubKeyOk and (Length(LSigBlob) > 0)
+                and ((LAlg = 'rsa-sha2-512') or (LAlg = 'rsa-sha2-256')) then
+              begin
+                { RFC 4252 §7 真实验签：解析公钥 blob 的 e/n，
+                  对签名数据按算法哈希后走 PKCS#1 v1.5 核 }
+                LSigRaw := nil;
+                LRAlg := TsshReader.Create(LSigBlob);
+                try
+                  LRAlg.ReadStringText;
+                  LSigRaw := LRAlg.ReadStringBytes;
+                finally
+                  LRAlg.Free;
+                end;
+                LRAlg := TsshReader.Create(LPubBlob);
+                try
+                  LRAlg.ReadStringText;           { 'ssh-rsa' }
+                  LRsaE := LRAlg.ReadMPInt;
+                  LRsaN := LRAlg.ReadMPInt;
+                finally
+                  LRAlg.Free;
+                end;
+                LSignedData := SshAuthSignedData(FSessionId, LUser, LAlg, LPubBlob);
+                if LAlg = 'rsa-sha2-512' then
+                  LPassOk := RsaVerifyPkcs1v15(LRsaE, LRsaN,
+                    SHA512(LSignedData), DIGEST_INFO_SHA512, LSigRaw)
+                else
+                  LPassOk := RsaVerifyPkcs1v15(LRsaE, LRsaN,
+                    SHA256(LSignedData), DIGEST_INFO_SHA256, LSigRaw);
               end;
             end;
           finally
@@ -937,6 +969,47 @@ begin
   end;
 end;
 
+{ RSA 公钥 wire blob：string("ssh-rsa") || mpint e || mpint n }
+function RsaPubBlob(const AE, AN: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(64);
+  try
+    LW.PutStringText('ssh-rsa');
+    LW.PutMPInt(AE);
+    LW.PutMPInt(AN);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
+{ RSA 私段：checkint x2 || string(type) || mpint n,e,d,iqmp,p,q || comment }
+function MakeRsaPrivSection(ACheck: UInt32; const AN, AE, AD: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(512);
+  try
+    LW.PutUInt32(ACheck);
+    LW.PutUInt32(ACheck);
+    LW.PutStringText('ssh-rsa');
+    LW.PutMPInt(AN);
+    LW.PutMPInt(AE);
+    LW.PutMPInt(AD);
+    LW.PutMPInt(PatternBytes($AA, 128));
+    LW.PutMPInt(PatternBytes($BB, 128));
+    LW.PutMPInt(PatternBytes($CC, 128));
+    LW.PutStringText('loop client key');
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
 function Base64Chunked(const AData: TBytes): string;
 var
   LB64: string;
@@ -964,6 +1037,7 @@ end;
 const
   LOOP_PASSWORD = 0;
   LOOP_PUBKEY = 1;
+  LOOP_PUBKEY_RSA = 2;
   KH_PATH = '/tmp/nextpas_ssh_session_known_hosts';
 
 type
@@ -1031,6 +1105,13 @@ begin
       LOpts.User := CLIENT_USER;
       if AMode = LOOP_PASSWORD then
         LOpts.Password := CLIENT_PASSWORD
+      else if AMode = LOOP_PUBKEY_RSA then
+      begin
+        LOpts.PrivateKeyData := PemOf(CraftContainer(
+          RsaPubBlob(HexToBytesKat(KAT_E_HEX), KatN),
+          MakeRsaPrivSection($A1B2C3D4, KatN,
+            HexToBytesKat(KAT_E_HEX), KatD)));
+      end
       else
       begin
         LSeed := PatternBytes($3D, 32);
@@ -1138,6 +1219,19 @@ begin
     LR: TLoopResult;
   begin
     LR := RunLoopback(LOOP_PUBKEY, True, True, '', False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  { 场景三b：RSA 私钥（rsa-sha2-512）publickey 认证全栈回环。
+    客户端走 SshLoadPrivateKey→RsaSignPkcs1v15 真实签名路径，
+    服务端解析 blob 后按算法哈希做 PKCS#1 v1.5 验签。}
+  GSuite.Test('publickey rsa auth loopback', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PUBKEY_RSA, True, True, '', False);
     CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
     CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
     CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');

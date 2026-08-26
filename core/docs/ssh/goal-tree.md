@@ -114,12 +114,32 @@ lane 基于旧基建开发，replay 到当前 main（net.async/io.reactor 新栈
       追踪 / NEXTPAS_SSH_E2E_DUMP 明文包转储）；假服务端 s→c 帧 recipient
       合规化（改用客户端声明的通道号），test_ssh_session 回归 5/5
 
+## S9 — RSA 私钥签名认证（已完成）
+
+客户端 publickey 认证扩展到 ssh-rsa（RFC 8332），补齐企业环境最常用密钥类型：
+
+- [x] `rsa`：PKCS#1 v1.5 签名/验签核独立成单元——DigestInfo 前缀、EM 编码、
+      常数时间比较单一来源；hostkey 验签与客户端签名共享同一套逻辑
+- [x] **修复潜伏缺陷**：DIGEST_INFO_SHA512 末字节是摘要长度 $20（应为
+      $40，SHA-512 摘要 64 字节）——DER 自相矛盾，任何真实 rsa-sha2-512
+      验签恒败。既有测试的 e=1 数学构造只覆盖 EM 比对且仅测 SHA-256，
+      坏常量从未被执行；openssl 黄金向量 KAT 双向锁死后此类漂移无法再溜进
+- [x] `keys`：openssh-key-v1 容器解析扩展 ssh-rsa 私有段
+      （字段序 n,e,d,iqmp,p,q）；TSshPrivateKey 增加 RsaN/RsaE/RsaD
+- [x] `auth`/`session`：SshBuildRsaSigBlob（RFC 8332 §3 blob）；
+      AuthenticateWithPrivateKeyData 按 Kind 分发，RSA 选 rsa-sha2-512
+      单次尝试（与 rsa-sha2-256 同版本引入，无需降级）
+- [x] 测试三线闭环：openssl 产出黄金向量进 tests/shared/ssh_rsa_kat
+      （hostkey 门验签 KAT + keys 门签名逐字节 KAT，防两处常量漂移）；
+      test_ssh_session 假服务端 RSA 真实验签回环；e2e 第七场景
+      ssh-keygen 现场生成 RSA 密钥对真实 sshd 认证 exec
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
 | bcrypt_pbkdf + aes256-ctr 私钥解密 | OpenSSH 加密私钥容器（需要 blowfish 核心） |
-| RSA 私钥签名认证 | PKCS#1 容器解析 + bigint 签名路径 |
+| RSA 签名 CRT 优化 | 用容器自带 iqmp/p/q 做中国剩余定理，模幂量减 ~4x |
 | ecdsa-sha2-nistp256 主机密钥 | 枚举已预留，需 mpint(r,s)↔DER 转换 |
 | DH group14-sha256 KEX | bigint modpow 可用，作为 curve25519 不可用时的回退 |
 | ssh-agent | Unix socket 协议客户端 |
@@ -129,7 +149,7 @@ lane 基于旧基建开发，replay 到当前 main（net.async/io.reactor 新栈
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP 互操作** 补齐：
-本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均 6 场景通过
-（含通道复用压力与 internal-sftp 文件操作回路），heaptrc 0 泄漏。e2e 为 opt-in
-门控，不进默认 gate。
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证**
+补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均
+7 场景通过（含通道复用压力、internal-sftp 文件操作回路与 RSA publickey 认证），
+heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。

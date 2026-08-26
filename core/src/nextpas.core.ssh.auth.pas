@@ -14,6 +14,7 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.base,
+  nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer;
 
 { SSH_MSG_SERVICE_REQUEST "ssh-userauth" }
@@ -36,6 +37,9 @@ function SshBuildAuthPubKeySigned(const AUser, AAlgName: string;
 
 { ed25519 签名 blob：string("ssh-ed25519") + string(64B) }
 function SshBuildEd25519SigBlob(const ASig64: TBytes): TBytes;
+
+{ RSA 签名 blob（RFC 8332 §3）：string(rsa-sha2-256/512) + string(sig) }
+function SshBuildRsaSigBlob(const ASigRaw: TBytes; const ASigAlgName: string): TBytes;
 
 implementation
 
@@ -139,15 +143,22 @@ begin
 end;
 
 function SshBuildEd25519SigBlob(const ASig64: TBytes): TBytes;
+begin
+  if Length(ASig64) <> 64 then
+    raise ESSHError.Create(sekProtocol, 'ssh auth: ed25519 signature must be 64 bytes');
+  Result := SshBuildRsaSigBlob(ASig64, 'ssh-ed25519');
+end;
+
+function SshBuildRsaSigBlob(const ASigRaw: TBytes; const ASigAlgName: string): TBytes;
 var
   LW: TsshWriter;
 begin
-  if Length(ASig64) <> 64 then
-    raise Exception.Create('ssh auth: ed25519 signature must be 64 bytes');
+  if (ASigAlgName = '') or (Length(ASigRaw) = 0) then
+    raise ESSHError.Create(sekProtocol, 'ssh auth: empty signature blob field');
   LW := PayloadWriter;
   try
-    LW.PutStringText('ssh-ed25519');
-    LW.PutStringBytes(ASig64);
+    LW.PutStringText(ASigAlgName);
+    LW.PutStringBytes(ASigRaw);
     Result := LW.ToBytes;
   finally
     LW.Free;

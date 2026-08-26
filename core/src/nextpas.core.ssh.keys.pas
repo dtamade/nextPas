@@ -2,9 +2,9 @@ unit nextpas.core.ssh.keys;
 
 {** nextpas.core.ssh - 私钥容器解析。
  *
- * 当前支持：OpenSSH "openssh-key-v1" 未加密容器中的 ssh-ed25519 密钥。
- * 加密容器（bcrypt_pbkdf + aes256-ctr）明确抛 sekUnsupported，
- * 属于后续 slice（见 docs/ssh/goal-tree.md）。 *}
+ * 当前支持：OpenSSH "openssh-key-v1" 未加密容器中的 ssh-ed25519 与
+ * ssh-rsa 密钥（ssh-keygen 默认容器格式）。加密容器（bcrypt_pbkdf +
+ * aes256-ctr）明确抛 sekUnsupported，属后续 slice（见 goal-tree）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -22,7 +22,10 @@ type
   { 已解析的客户端私钥 }
   TSshPrivateKey = record
     Kind: TSshHostKeyAlg;
-    Ed25519Seed: TBytes;   { 32 字节种子（Ed25519 签名输入）}
+    Ed25519Seed: TBytes;   { hkEd25519：32 字节种子（Ed25519 签名输入）}
+    RsaN: TBytes;          { hkRsa：模数（大端 magnitude，mpint 剥前导零）}
+    RsaE: TBytes;          { hkRsa：公钥指数（通常 010001）}
+    RsaD: TBytes;          { hkRsa：私钥指数（签名用；CRT 五元组属后续优化 slice）}
   end;
 
 {** 解析 PEM 形式的 openssh-key-v1 容器内容。
@@ -136,19 +139,37 @@ begin
     if LCheck1 <> LCheck2 then
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: checkint mismatch');
     LKeyType := LR.ReadStringText;
-    if LKeyType <> 'ssh-ed25519' then
+    if LKeyType = 'ssh-ed25519' then
+    begin
+      AKey.Kind := hkEd25519;
+      LPubInPriv := LR.ReadStringBytes;
+      LPrivRaw := LR.ReadStringBytes;
+      if Length(LPrivRaw) < 32 then
+        raise ESSHError.Create(sekKeyFormat, 'ssh keys: ed25519 private section too short');
+      SetLength(AKey.Ed25519Seed, 32);
+      Move(LPrivRaw[0], AKey.Ed25519Seed[0], 32);
+      { 公钥段应与 priv64 后半一致；宽松校验长度即可 }
+      if Length(LPubInPriv) <> 32 then
+        raise ESSHError.Create(sekKeyFormat, 'ssh keys: ed25519 embedded pubkey not 32 bytes');
+    end
+    else if LKeyType = 'ssh-rsa' then
+    begin
+      { PROTOCOL.key：私有段字段序 n,e,d,iqmp,p,q；iqmp/p/q 暂不落字段
+        （签名只需 N/E/D），仍必须按序读出以保持游标一致 }
+      AKey.Kind := hkRsa;
+      AKey.RsaN := LR.ReadMPInt;
+      AKey.RsaE := LR.ReadMPInt;
+      AKey.RsaD := LR.ReadMPInt;
+      LR.ReadMPInt;                    { iqmp }
+      LR.ReadMPInt;                    { p }
+      LR.ReadMPInt;                    { q }
+      if (Length(AKey.RsaE) = 0) or (Length(AKey.RsaD) = 0) or
+         (Length(AKey.RsaN) < 32) then
+        raise ESSHError.Create(sekKeyFormat, 'ssh keys: rsa key fields invalid');
+    end
+    else
       raise ESSHError.Create(sekUnsupported,
-        'ssh keys: only unencrypted ed25519 supported yet, got "' + LKeyType + '"');
-    AKey.Kind := hkEd25519;
-    LPubInPriv := LR.ReadStringBytes;
-    LPrivRaw := LR.ReadStringBytes;
-    if Length(LPrivRaw) < 32 then
-      raise ESSHError.Create(sekKeyFormat, 'ssh keys: ed25519 private section too short');
-    SetLength(AKey.Ed25519Seed, 32);
-    Move(LPrivRaw[0], AKey.Ed25519Seed[0], 32);
-    { 公钥段应与 priv64 后半一致；宽松校验长度即可 }
-    if Length(LPubInPriv) <> 32 then
-      raise ESSHError.Create(sekKeyFormat, 'ssh keys: ed25519 embedded pubkey not 32 bytes');
+        'ssh keys: unsupported key type "' + LKeyType + '" in openssh container');
     LComment := LR.ReadStringText;    { 忽略注释 }
   finally
     LR.Free;
