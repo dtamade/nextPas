@@ -184,7 +184,7 @@ end;
 function RequestMetadata(const AParser: IH1Parser): TH1RequestMetadata; inline;
 begin
   if AParser = nil then
-    Exit(Default(TH1RequestMetadata));
+    Exit(EmptyH1RequestMetadata);
   Result := AParser.GetRequestMetadata;
 end;
 
