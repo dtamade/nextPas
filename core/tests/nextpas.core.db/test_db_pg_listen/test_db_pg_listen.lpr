@@ -58,6 +58,7 @@ begin
     Check(L.Connected, 'listener connected after open');
     Check(L.BackendPid > 0, 'backend pid positive');
     L.Listen('np_b7_rt');
+    Sleep(150);   { LISTEN 异步应用，等其生效再发通知 }
     CheckEqual(Int64(1), Int64(Length(L.SubscribedChannels)),
       'one subscribed channel');
     S := PgOpen(GConn);
@@ -91,6 +92,7 @@ begin
   L := PgOpenListener(GConn);
   try
     L.Listen('np_b7_nopld');
+    Sleep(150);   { 同上：应用窗口设防 }
     S := PgOpen(GConn);
     try
       S.Exec('NOTIFY np_b7_nopld');
@@ -121,6 +123,7 @@ begin
   L := PgOpenListener(GConn);
   try
     L.Listen('np_b7_order');
+    Sleep(150);   { 同上：应用窗口设防 }
     S := PgOpen(GConn);
     try
       { 单次 Exec 原子到达：一批十条级联投递，顺序由服务端保证 }
