@@ -60,5 +60,8 @@
 2. **system/tools 前置且恒定**：两者在请求对象中的位置与序列化形式跨轮不变。
 3. **只追加**：每轮仅在尾部追加 assistant/tool 消息，禁止中间插入或压缩重排
    （自动 compaction 若将来引入，必须显式失效缓存预期并告知消费方）。
+4. **cache_control 标记是元数据不是内容**（W10 起）：ccmAuto 在末条消息尾块
+   附着的断点标记随轮移动，历史块的内容字节（text/id/signature 等）永不变化；
+   tools/system 段标记位与序列化字节跨轮恒定（WIRE-MAPPINGS §2.6）。
 
 该不变量是 W3 test_loop 的断言项之一（连续两轮请求的前缀字节相等）。
