@@ -91,6 +91,8 @@ type
     function ConfigEntries: TGitConfigEntryArray;
     procedure ApplyPatch(const APatch: string);
     procedure CheckoutPaths(const ASpec: string; const APaths: TStringArray);
+    function WorkdirPatchText(const ARef: string; const APaths: TStringArray;
+      AShowBinary: Boolean): string;
 
     // Worktree operations (IGitWorktreeExt)
     function AddWorktree(const AName, APath, ARef: string;
@@ -460,6 +462,12 @@ end;
 procedure TGitRepositoryImpl.ApplyPatch(const APatch: string);
 begin
   FRepo.ApplyPatch(APatch);
+end;
+
+function TGitRepositoryImpl.WorkdirPatchText(const ARef: string;
+  const APaths: TStringArray; AShowBinary: Boolean): string;
+begin
+  Result := FRepo.WorkdirPatchText(ARef, APaths, AShowBinary);
 end;
 
 procedure TGitRepositoryImpl.CheckoutPaths(const ASpec: string;
