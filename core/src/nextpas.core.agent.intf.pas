@@ -85,6 +85,16 @@ type
       const AToken: IAsyncCancellationToken): IAgentCompletion; overload;
   end;
 
+  { W12 能力接口（API.md §3.3）：token 预估，仅部分适配器实现——anthropic
+    有厂商 count_tokens 端点（WIRE-MAPPINGS §2.7）；openai/grok/responses
+    族无对应端点诚实不实现。消费方 Supports 探测，未支持走自有降级路径 }
+  IAgentTokenCounter = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-111111000012}']
+    { 同步阻塞调用；错误分类与 Complete 一致（aecConfig 本地装配错 /
+      上游按 §2.4 分类透传；响应缺 input_tokens 即 aecProtocol）}
+    function CountTokens(const AReq: TCompletionRequest): Int64;
+  end;
+
   { ---- 工具 ---- }
 
   IToolContext = interface

@@ -118,6 +118,7 @@ type
   IAgentTraceSink = nextpas.core.agent.intf.IAgentTraceSink;
   TTraceRequestInfo = nextpas.core.agent.base.TTraceRequestInfo;
   TTraceResponseInfo = nextpas.core.agent.base.TTraceResponseInfo;
+  IAgentTokenCounter = nextpas.core.agent.intf.IAgentTokenCounter;
 
 function NewFallbackProvider(const AChain: array of IAgentProvider;
   const APolicy: TFallbackPolicy): IAgentProvider; inline;

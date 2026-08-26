@@ -258,10 +258,12 @@ content block 对象上，命中按断点前缀判定，厂商预算 ≤4 个/�
 |----|----------|--------------|------|
 | `max_tokens` | 强制必填 | **不发射** | 端点 schema 无此键；词表 MaxTokens 不校验 |
 | `stream` | 可选 true | **不发射** | 端点无流式形态 |
+| `temperature`/`top_p`/`stop_sequences` | 按 sentinel 上送 | **不发射** | 采样参数不影响 tokenization，端点 schema 无此三键；严格上游对未知键回 400 |
 
-model/system/messages/tools/tool_choice/thinking/temperature/top_p/
-stop_sequences 与 ccmAuto 断点标记照常；ResponseSchemaJson 维持 fail-fast
-aecConfig（§2.1 同规）；ExtraJson 回注冲突表同时排除 max_tokens/stream。
+model/messages/system/tools/tool_choice/thinking 与 ccmAuto 断点标记照常；
+ResponseSchemaJson 维持 fail-fast aecConfig（§2.1 同规）。ExtraJson 回注
+冲突表在 count 模式同步收窄——编码器未写的键不再列为已知，用户经逃生舱
+显式携带采样参数则原样上送（严格上游 400 即诚实失败），绝不静默丢弃。
 
 **响应**：非流式 JSON object，唯一消费键 `input_tokens`（Int64）。缺键、
 非法 JSON 或非 object → aecProtocol（RawBodySnippet 带证据）。HTTP 非 2xx
