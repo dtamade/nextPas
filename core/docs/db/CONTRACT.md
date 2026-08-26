@@ -679,6 +679,63 @@ L.Token.Cancel;                        // 协同停泵；Destroy 同步收尾不
   UNLISTEN */溢出保旧弃新/令牌取消/坏 conninfo fail-fast 干净析构/
   pg_terminate_backend 真断线→自动重连重订阅再达）。
 
+### 2.19 Redis SUBSCRIBE 订阅会话（V3-B8，nextpas.core.db.redis.subscribe）
+
+redis 原生 pub/sub 一等公民化（B8），骨架自 pg.listen（§2.18）直接泛化：
+专用连接独占的订阅会话 + 单工泵线程 + 有界记录队列。RESP2 订阅态独占
+约束（进入订阅态后仅 SUBSCRIBE/UNSUBSCRIBE/PSUBSCRIBE/PUNSUBSCRIBE/
+RESET/QUIT 合法）由结构保证——本类不暴露任何普通命令面，PUBLISH 由
+消费方经 db.redis 适配器另路发送。
+
+```pascal
+S := RedisOpenSubscriber(Opts);
+S.Subscribe('events'); S.PSubscribe('news.*');  // 客户端校验先行，异步应用
+M := S.Receive(2000);                           // 阻塞至 ≥1 条；一次带回全部积压（FIFO）
+{ TDbRedisMessage: Channel / Payload / Pattern——message 帧 Pattern 为空串，
+  pmessage 帧携带命中 pattern }
+S.Token.Cancel;                                 // 协同停泵；Destroy 同步收尾不留后台线程
+```
+
+- **与 pg.listen 的词汇差异（有意为之）**：方法名用协议本词
+  Subscribe/PSubscribe/UnsubscribeAll 而非 Listen/Unlisten 别名——提案原
+  案 Listen 同形在实现期改为 redis 本词，降低跨协议误读；属性面同形
+  （Token/Connected/GapCount/DroppedCount/LastError/SubscribedChannels/
+  SubscribedPatterns）。不进统一接口（§2.18 同决策）：频道确认帧/pattern/
+  独占强度语义差异大，等第二实证再议抽象。
+- **确认帧簿记回执**：subscribe/psubscribe 确认帧吸收为簿记回执不投递；
+  SubscribedChannels/Patterns 快照记已发出命令的条目；重复 Subscribe 同
+  频道幂等去重不重发命令。
+- **不经 db 门面**（§2.17/§2.18 同纪律）：独立单元显式 uses，
+  thread.init 放 uses 首位。
+- **底座零平行宇宙**：thread.pool 单工池 + core.sync 互斥/事件 +
+  async.cancellation 取消桥（析构首步 RemoveOnCancel 摘链，消费方可安全
+  持 Token 越过订阅器生命周期）；RESP 解析复用 db.redis.resp 的
+  RespTryParse/TRespValue，零平行解析器。
+- **传输工厂 DI 缝**：`TRedisTransportFactory = reference to function:
+  IRedisTransport`；live 构造内部工厂 = NewNetRedisTransport +
+  AUTH/SELECT 握手（坏地址/口令消费方线程 fail-fast）；注入构造（门禁
+  离线回放、自定义 TLS dial）握手责任随注入方。
+- **诚实语义（at-most-once，与 §2.18 同口径）**：
+  - 断线窗口推送丢失不补发，GapCount 如实记断线次数；自动重连间隔 =
+    4×节拍，成功后按订阅快照逐条重放；重放中途失败则新连接不接管
+    （FConn 保持 nil 由恢复机器统一重试），杜绝半配置连接常驻与
+    Connected 读数失真；LastError 在恢复成功时清空（成功即无错的设计
+    语义，消费方勿假设其跨恢复存活）。
+  - 投递队列满保旧弃新计 DroppedCount（FIFO 不打断）；默认容量 1024。
+  - 服务端错误帧记 LastError 诊断但不断线（订阅态内错误非连接致命）。
+- **停泵时延上界 = IO deadline 而非节拍**（与 §2.18 差异，如实登记）：
+  连接在途时泵阻塞于带 deadline 的 Recv（IRedisTransport 无中断面），
+  取消最迟一个 EffectiveIoTimeoutMs = max(2×节拍, 1000)ms（钳 3600000）
+  内生效；空闲/退避期等事件即时惊动。PING 保活默认关
+  （AKeepAliveMs=0），开启按周期发 PING 维持中间件活性。
+- **协议护栏**：单帧上限 MAX_FRAME_BYTES=16MB，超限判协议错走断线重连；
+  解析以精确有效长度视图喂 RespTryParse（防陈旧字节误扫成幽灵帧）。
+- 门禁：test_db_redis_subscribe 十组全绿 heaptrc 0（确认簿记+幂等/
+  pmessage 分派/静默超时/校验 fail-fast 不触网/溢出保旧弃新/令牌取消/
+  错误帧可见不断线/断线自动重连重放再达/重放失败不接管/live 自发自收
+  NEXTPAS_REDIS_TEST_CONN 门控）。吞吐基准段待 live redis 环境可用后补采
+  入册（诚实缺席登记）。
+
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
 旧入口名 `nextpas.core.sqlite` / `nextpas.core.pg` 曾在 G2 全量删除；
