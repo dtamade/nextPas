@@ -88,6 +88,14 @@ while Q.Step do ...;                          // 接口引用计数自动释放
 |---|---|---|---|
 | postgres | libpq conninfo 原文透传（适配器零 TLS 代码） | `sslmode=verify-full sslrootcert=/etc/ca.pem host=db.example.com` | libpq 按所选模式执行；推荐 verify-full |
 | redis | `ConnectRedis(addr, TDbRedisConnectOptions)` UseTls/TlsServerName（A5.1b，TLSDial 一体阻塞） | `UseTls=True; TlsServerName='db.example.com'` | nextpas.core.tls 栈标准校验；SNI 取显式名否则 Host |
+
+> **pg 段真机实证（2026-08-26）**：本机 PG17.11 + 自签 CA（CN=localhost，
+> SAN 含 127.0.0.1）临时实例。`sslmode=verify-full` 正路径经完整栈
+> （adapter/listen 门禁 13+11 组全绿，heaptrc 0）；负路径错误 CA 被
+> libpq 证书校验拒绝（certificate verify failed）；`sslmode=require`
+> 加密通道经 pg_stat_ssl 确认 ssl=t。注意 localhost 双栈解析下
+> libpq 多地址回退可能掩盖证书错误诊断——负路径验证建议显式 IP。
+> redis 段 live 冒烟维持 NEXTPAS_REDIS_TEST_TLS_CONN env 门控惯例。
 | odbc | connstr 原文透传，加密键随驱动 | `Encrypt=yes;TrustServerCertificate=no`（MS 驱动系） | 各 ODBC 驱动 |
 | mysql | **v1 未支持**：DSN 解析器不识别 ssl 键，透传不生效——升级路径已登记（B4 余项），不假装支持 | — | — |
 | sqlite | N/A（进程内库） | — | — |
