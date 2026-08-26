@@ -3,12 +3,14 @@
 L2 资源打包格式模块。把一棵文件树打包成单个带索引的二进制 blob（pack），支持
 零拷贝随机读取，是前端资源嵌入程序/动态库场景的格式层。
 
-**状态：S1-S4 已实现并有 gate 覆盖**
+**状态：S1-S5 已实现并有 gate 覆盖**
 （`base`/`writer`/`reader`/`dirsource`/`embed`/门面；六个测试 gate 全绿、heaptrc
 零泄漏；writer 含 golden 逐字节快照门禁，roundtrip 含 10k 条目 perf smoke；
 embed 含 .inc 文本确定性 golden 门禁与 extract roundtrip 门禁）。
 嵌入工具链（S4）已落地：`nextpas.core.respack.embed` 单元 + `rp_pack` CLI；
-http.static 对接（S5）未开始。
+http.static 对接（S5）已落地：`ServeVfs(AFs)` 让 embedded 后端直接服务 HTTP
+（ETag 取条目 fnv32、条件请求/Range/MIME 与 fs 版同语义），端到端示例见
+`core/examples/nextpas.core.http/http_static_vfs_demo/`。
 计划见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 
 ## 模块定位
@@ -142,15 +144,19 @@ writer 产出的 blob 如何进入程序，由构建侧选择：
 | fpc 编译耗时（2MB 资产，200 文件） | ≈2.4 s | ≈0.29 s |
 | fpc 编译耗时（4MB） | ≈4.4 s（≈1.1 s/MB 线性） | ≈0.30 s（恒定） |
 | 启动"首资产可用"（1MB 包，200×5KB） | Open+Find ≈51 µs | ReadFile+Open+Find ≈3.3 ms |
+| ServeVfs 每响应开销（handler 直调，4KB 条目，65 文件树） | embedded ≈7.0 µs/op（142 Kops/s）；206 区间同价 ≈7.1 µs；404 miss 无惩罚 ≈7.4 µs | os 真盘后端 ≈16.3 µs/op（61 Kops/s），嵌入路径快 **≈2.3×** |
 | writer 内存峰值（INV-R10 上限实测） | — | 输入 512MB 构建成功；进程峰值 RSS ≈ 2×输入 + ~14MB（128MB→267MB、512MB→1038MB） |
 
 结论：typed const 的编译时间随资产线性增长，经验阈值维持 **< 4MB 走 .inc**；
-更大包走 `.pack`（启动一次性读入的毫秒级成本可忽略）。复现实验：
+更大包走 `.pack`（启动一次性读入的毫秒级成本可忽略）。ServeVfs 下嵌入路径
+免 stat/open 系统调用，区间读经 IStream 窗口定位与全量同价。复现实验：
 `core/scripts/respack_bench_compile.sh [MB]`、基准
-`core/benchmarks/nextpas.core.respack/bench_embed_startup` 与
-`bench_writer_memory`。
+`core/benchmarks/nextpas.core.respack/bench_embed_startup`、
+`bench_writer_memory` 与 `bench_servevfs`。
 
-示例（开发态/发布态切换）：`core/examples/nextpas.core.vfs/demo_asset_embed/`
+示例（开发态/发布态切换）：`core/examples/nextpas.core.vfs/demo_asset_embed/`；
+端到端 HTTP 服务（respack → .inc → embedded → ServeVfs，自检 200/304/206/404，
+另含 `--serve` 长驻与 `--dev` os 后端切换）：`core/examples/nextpas.core.http/http_static_vfs_demo/`
 —— 同一 consumer 代码在 `CreateOsVfs('wwwroot')` 与
 `CreateEmbeddedVfs(@DEMO_ASSETS[0], …)` 两后端上跑通。
 

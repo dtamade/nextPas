@@ -197,6 +197,25 @@ type
     RequestId: string;
   end;
 
+  { W11 请求级追踪观测事件（API.md §3.2；transport.trace 装饰器产出）}
+  TTraceRequestInfo = record
+    Provider: string;                { 构造注入的适配器名（'anthropic' 等）}
+    Url: string;
+    Stream: Boolean;
+    BodyBytes: Int64;                { 上送载荷 UTF-8 字节数 }
+  end;
+
+  TTraceResponseInfo = record
+    Provider: string;
+    Url: string;
+    Stream: Boolean;
+    Status: Integer;                 { -1 = 不可得（流式 wire 层不暴露 / 异常路径）}
+    Failed: Boolean;                 { True=transport 异常路径（配对保证）}
+    DurationMs: Int64;               { RoundTrip 全程 / OpenStream 建流耗时 }
+    ResponseBytes: Int64;            { 非流式响应体；流式 -1（事件级归 fold/loop 层）}
+    RequestId: string;               { 响应头透传；异常路径空串 }
+  end;
+
   { SSE 帧（增量解析产物）}
   TWireSSEEvent = record
     Event: string;                   { event: 字段；无则空串 }

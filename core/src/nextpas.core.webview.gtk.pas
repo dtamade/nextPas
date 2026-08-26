@@ -899,10 +899,20 @@ end;
 procedure TGtkWebview.DropIdlePendings;
 var
   I: Integer;
+  LCtx, LSrc: Pointer;
 begin
-  { g_source_remove 触发 destroy-notify → 闭包释放在 IdleDestroy 单点 }
+  { 已触发的 idle 在 fire 时即经 destroy-notify 自毁闭包；此处按
+    find-by-id 判存再移除，避免对陈旧 Source ID 二次 remove 触发
+    GLib-CRITICAL（Dispatcher.Post 后随即 Close 的路径） }
+  LCtx := G_main_context_default();
   for I := 0 to High(FIdleTags) do
-    G_source_remove(FIdleTags[I]);
+  begin
+    if LCtx = nil then
+      Break;
+    LSrc := G_main_context_find_source_by_id(LCtx, FIdleTags[I]);
+    if LSrc <> nil then
+      G_source_remove(FIdleTags[I]);
+  end;
   FIdleTags := nil;
 end;
 

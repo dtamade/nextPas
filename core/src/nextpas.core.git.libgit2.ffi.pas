@@ -364,6 +364,9 @@ const
   GIT_APPLY_LOCATION_INDEX       = 1;
   GIT_APPLY_LOCATION_BOTH        = 2;
 
+  // k101: include binary content as "GIT binary patch" literal sections
+  GIT_DIFF_SHOW_BINARY           = 1 shl 30;
+
   // Worktree add flags
   GIT_WORKTREE_ADD_CREATE_REF = 1 shl 0;
   GIT_WORKTREE_ADD_LOCK       = 1 shl 1;

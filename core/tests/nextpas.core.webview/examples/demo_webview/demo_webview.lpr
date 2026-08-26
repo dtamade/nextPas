@@ -1,0 +1,625 @@
+program demo_webview;
+
+{** @desc nextpas.core.webview 消费者演示：真实桌面窗口 + 完整 IPC 矩阵。
+
+    只依赖公共门面（nextpas.core.webview / nextpas.core.json），与真实
+    应用写法一致：Builder 流式构造 → Assets.MountEmbedded 提供页面 →
+    Invokes 注册同步/异步 handler → Eval/Emit/listen 双向通道。
+
+    两种运行形态：
+    - demo_webview               交互模式：打开窗口，人工点按；stdout 记录桥流量
+    - demo_webview --selftest    自检模式：同一页面驱动全链路矩阵，
+                                 全事件驱动（回调链推进，无 Sleep/轮询），
+                                 打印 demo-pass 行，自动关窗，exit 0/1
+
+    覆盖矩阵：
+    1) native→web eval 回执（6*7=42）
+    2) web→native 同步 invoke（JSON 解析 + JSON 返回）
+    3) 有状态原生 handler（counter 连续自增，跨调用保持）
+    4) 异步 invoke（Dispatcher.Post 延迟完成，completion.Ok 收口）
+    5) web→native→web 全环（invoke 触发 native Emit，页面 listen 接收）
+
+    无 GTK 后端时 --selftest 打印 demo-skip 优雅通过（CI 可跑）。 }
+
+{$I nextpas.core.settings.inc}
+
+uses
+  SysUtils,
+  DateUtils,
+  nextpas.core.base,
+  nextpas.core.json,
+  { 显式选后端时引 base（门面只 re-export 类型别名，不带枚举值） }
+  nextpas.core.webview.base,
+  nextpas.core.webview;
+
+const
+  { 自检推进阶段（严格线性，防乱序误判） }
+  ST_WAIT_NAV   = 1;
+  ST_WAIT_EVAL  = 2;
+  ST_WAIT_SUM   = 3;
+  ST_WAIT_CNT1  = 4;
+  ST_WAIT_CNT2  = 5;
+  ST_WAIT_TICK  = 6;
+  ST_WAIT_PUSH  = 7;
+  ST_WAIT_EVENT = 8;
+
+  PAGE_HTML: AnsiString =
+    '<!DOCTYPE html>'#10 +
+    '<html><head><meta charset="utf-8">'#10 +
+    '<style>'#10 +
+    ':root{--panel:rgba(255,255,255,.045);--line:rgba(255,255,255,.09);' +
+    '--txt:#e7ecf7;--dim:#8b95ad;' +
+    '--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}'#10 +
+    '*{box-sizing:border-box;margin:0;padding:0}'#10 +
+    'body{font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;' +
+    'background:radial-gradient(1100px 620px at 12% -10%,#1c2749 0%,transparent 55%),' +
+    'radial-gradient(900px 520px at 100% 0%,#12304a 0%,transparent 50%),#0b0f1d;' +
+    'color:var(--txt);min-height:100vh;padding:34px 38px 70px}'#10 +
+    '.wrap{max-width:980px;margin:0 auto}'#10 +
+    'h1{font-size:27px;font-weight:700;letter-spacing:.3px;' +
+    'background:linear-gradient(92deg,#8ea2ff,#5fd4f5 60%,#43e5c8);' +
+    '-webkit-background-clip:text;background-clip:text;color:transparent}'#10 +
+    '.sub{color:var(--dim);font-size:13px;margin-top:5px}'#10 +
+    '.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));' +
+    'gap:16px;margin-top:24px}'#10 +
+    '.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;' +
+    'padding:18px;backdrop-filter:blur(6px)}'#10 +
+    '.card h2{font-size:12px;font-weight:600;color:var(--dim);letter-spacing:.14em;' +
+    'text-transform:uppercase;margin-bottom:13px}'#10 +
+    '.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}'#10 +
+    'button{appearance:none;border:0;border-radius:9px;padding:9px 16px;font-size:13px;' +
+    'font-weight:600;color:#081020;cursor:pointer;' +
+    'background:linear-gradient(94deg,#6d8bff,#39c7ef);' +
+    'transition:transform .12s ease,box-shadow .12s ease;' +
+    'box-shadow:0 2px 10px rgba(57,199,239,.22)}'#10 +
+    'button:hover{transform:translateY(-1px);box-shadow:0 5px 16px rgba(57,199,239,.32)}'#10 +
+    'button:active{transform:none}button:disabled{opacity:.45;cursor:default;transform:none}'#10 +
+    'input{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;' +
+    'color:var(--txt);font-family:var(--mono);padding:8px 10px;width:78px;font-size:14px;' +
+    'outline:none}input:focus{border-color:rgba(109,139,255,.65)}'#10 +
+    '.val{font-family:var(--mono);font-size:15px;color:#9ff3e0;' +
+    'background:rgba(95,212,245,.07);border:1px solid rgba(95,212,245,.25);' +
+    'border-radius:8px;padding:7px 11px;min-width:64px;text-align:right}'#10 +
+    '.muted{color:var(--dim);font-size:12px;margin-top:10px;font-family:var(--mono)}'#10 +
+    '.log{font-family:var(--mono);font-size:12px;line-height:1.75;max-height:150px;' +
+    'overflow:auto;color:#aab6cf}'#10 +
+    'footer{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;' +
+    'gap:28px;padding:10px;background:rgba(8,11,22,.72);backdrop-filter:blur(8px);' +
+    'border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;' +
+    'color:var(--dim)}footer b{color:#9ff3e0;font-weight:600}'#10 +
+    '</style></head><body>'#10 +
+    '<div class="wrap">'#10 +
+    '<h1>nextPas WebView</h1>'#10 +
+    '<div class="sub">Pascal native process &#8646; WebKitGTK content ' +
+    '&#183; full IPC round-trips, zero HTTP server</div>'#10 +
+    '<div class="grid">'#10 +
+    '<div class="card"><h2>Sync invoke &#183; sum</h2>'#10 +
+    '<div class="row"><input id="aIn" value="19"><span style="color:#8b95ad">+</span>' +
+    '<input id="bIn" value="23"><button id="sumBtn">Compute</button>' +
+    '<span class="val" id="sumOut">&#8212;</span></div>'#10 +
+    '<div class="muted" id="sumMs">window.__npw.invoke("demo.sum")</div></div>'#10 +
+    '<div class="card"><h2>Stateful native &#183; counter</h2>'#10 +
+    '<div class="row"><button id="cntBtn">Increment</button>' +
+    '<span class="val" id="cntOut" style="font-size:19px">0</span></div>'#10 +
+    '<div class="muted">Int64 lives in the Pascal object across calls</div></div>'#10 +
+    '<div class="card"><h2>Async invoke &#183; deferred</h2>'#10 +
+    '<div class="row"><button id="tickBtn">Run async tick</button>' +
+    '<span class="val" id="tickOut">&#8212;</span></div>'#10 +
+    '<div class="muted">handler returns later via Dispatcher.Post</div></div>'#10 +
+    '<div class="card"><h2>Native push</h2>'#10 +
+    '<div class="row"><button id="pushBtn">Request native push</button>' +
+    '<span class="val" id="pushOut">&#8212;</span></div>'#10 +
+    '<div class="muted">invoke triggers native Emit; page listens</div></div>'#10 +
+    '<div class="card" style="grid-column:1/-1"><h2>Event log</h2>'#10 +
+    '<div class="log" id="log"></div></div>'#10 +
+    '</div></div>'#10 +
+    '<footer><span>bridge <b id="ver">&#8230;</b></span>' +
+    '<span>state <b id="state">booting</b></span>' +
+    '<span>last op <b id="lastms">&#8212;</b></span></footer>'#10 +
+    '<script>'#10 +
+    { 注意：所有经 textContent 写入的文本用字面 UTF-8 字符，不用实体 }
+    'function $(id){return document.getElementById(id)}'#10 +
+    'function lastOp(t0){var d=Math.round(performance.now()-t0);' +
+    '$("lastms").textContent=d+" ms";return d}'#10 +
+    'function logLine(s){var d=document.createElement("div");d.textContent=s;' +
+    '$("log").prepend(d)}'#10 +
+    'function report(step,body){__npw.invoke("demo.report",' +
+    '{step:step,body:(body===undefined?null:body)})}'#10 +
+    '__npw.ready.then(function(){' +
+    '$("ver").textContent="v"+__npw.version;' +
+    'var st=$("state");st.textContent="ready";st.style.color="#43e5c8";' +
+    'logLine("bridge ready · protocol v"+__npw.version)})'#10 +
+    '__npw.listen("demo.event",function(p){' +
+    'logLine("event ← "+JSON.stringify(p));' +
+    '$("pushOut").textContent=(p&&p.note)?p.note:JSON.stringify(p);' +
+    'report("event",p)})'#10 +
+    '$("sumBtn").addEventListener("click",function(){' +
+    'var t0=performance.now();$("sumBtn").disabled=true;' +
+    '__npw.invoke("demo.sum",{a:Number($("aIn").value),b:Number($("bIn").value)})'#10 +
+    '.then(function(r){$("sumOut").textContent=JSON.stringify(r);lastOp(t0);' +
+    '$("sumMs").textContent="round-trip "+Math.round(performance.now()-t0)+" ms";' +
+    'logLine("invoke demo.sum → "+JSON.stringify(r))},' +
+    'function(e){$("sumOut").textContent="ERR";logLine("demo.sum failed: "+JSON.stringify(e))})'#10 +
+    '.then(function(){$("sumBtn").disabled=false})})'#10 +
+    '$("cntBtn").addEventListener("click",function(){' +
+    'var t0=performance.now();' +
+    '__npw.invoke("demo.counter",{})' +
+    '.then(function(r){$("cntOut").textContent=r.count;lastOp(t0);' +
+    'logLine("invoke demo.counter → "+r.count)},' +
+    'function(e){logLine("demo.counter failed: "+JSON.stringify(e))})})'#10 +
+    '$("tickBtn").addEventListener("click",function(){' +
+    'var t0=performance.now();$("tickBtn").disabled=true;$("tickOut").textContent="…";'#10 +
+    '__npw.invoke("demo.tick",{}).then(function(r){' +
+    '$("tickOut").textContent=r.deferred?"ok":"??";lastOp(t0);' +
+    'logLine("async tick settled → "+JSON.stringify(r)+" (+"+' +
+    'Math.round(performance.now()-t0)+" ms)")},' +
+    'function(e){$("tickOut").textContent="ERR";logLine("demo.tick failed: "+JSON.stringify(e))})'#10 +
+    '.then(function(){$("tickBtn").disabled=false})})'#10 +
+    '$("pushBtn").addEventListener("click",function(){' +
+    'var t0=performance.now();' +
+    '__npw.invoke("demo.push",{}).then(function(r){lastOp(t0);' +
+    'logLine("invoke demo.push → "+JSON.stringify(r)+", awaiting event")},' +
+    'function(e){logLine("demo.push failed: "+JSON.stringify(e))})})'#10 +
+    'function __npwSelf(kind){var p=null;'#10 +
+    'if(kind==="sum")p=__npw.invoke("demo.sum",{a:19,b:23});' +
+    'else if(kind==="counter")p=__npw.invoke("demo.counter",{});' +
+    'else if(kind==="tick")p=__npw.invoke("demo.tick",{});' +
+    'else if(kind==="push")p=__npw.invoke("demo.push",{});'#10 +
+    'if(!p)return;'#10 +
+    'p.then(function(r){' +
+    'if(kind==="sum"){logLine("[selftest] sum → "+JSON.stringify(r));report("sum",r)}' +
+    'else if(kind==="counter"){report("counter",r)}' +
+    'else if(kind==="tick"){logLine("[selftest] tick → "+JSON.stringify(r));report("tick",r)}' +
+    'else if(kind==="push"){report("push",r)}},' +
+    'function(e){report("selffail",{msg:JSON.stringify(e)})})}'#10 +
+    '</script></body></html>';
+
+function StrToBytes(const S: AnsiString): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(S));
+  if Length(S) > 0 then
+    Move(S[1], Result[0], Length(S));
+end;
+
+type
+  { 内嵌页面 provider：前缀 '' 直挂，规范化后只认 index.html }
+  TDemoPageProvider = class(TInterfacedObject, IWebviewAssetProvider)
+  public
+    function TryResolve(const APath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+  end;
+
+function TDemoPageProvider.TryResolve(const APath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+var
+  LPath: string;
+begin
+  ABytes := nil;
+  AMimeType := '';
+  LPath := APath;
+  while (Length(LPath) > 0) and (LPath[1] = '/') do
+    Delete(LPath, 1, 1);
+  if Copy(LPath, 1, 4) = 'app/' then
+    Delete(LPath, 1, 4);
+  if LPath <> 'index.html' then
+    Exit(False);
+  ABytes := StrToBytes(PAGE_HTML);
+  AMimeType := 'text/html; charset=utf-8';
+  Result := True;
+end;
+
+type
+  TDemoApp = class
+  private
+    FSelftest: Boolean;
+    FStage: Integer;
+    FCounter: Int64;
+    FSeq: Int64;
+    FFailed: Boolean;
+    FFinished: Boolean;
+    FPushQueued: Boolean;
+    FEventSeen: Boolean;
+    FStarted: TDateTime;
+    FWindow: IWebviewWindow;
+    procedure Pass(const AWhat: string);
+    procedure Fail(const AWhy: string);
+    procedure Log(const AMsg: string);
+    procedure CloseWindow;
+    { 解析并校验 object payload；ADoc 必须由调用方持有到取值结束——
+      TJsonValue 指向文档内存，文档释放后继续读属悬垂访问 }
+    procedure RequireJsonObject(const APayloadJson: string;
+      out ADoc: IJsonDocument; out ARoot: TJsonValue);
+    function HandleSum(const APayloadJson: string): string;
+    function HandleCounter(const APayloadJson: string): string;
+    procedure HandleTick(const APayloadJson: string;
+      const ACompletion: IWebviewInvokeCompletion);
+    procedure HandlePush(const APayloadJson: string;
+      const ACompletion: IWebviewInvokeCompletion);
+    function HandleReport(const APayloadJson: string): string;
+    procedure OnNavFinished(const AEvent: TWebviewNavigationEvent);
+    procedure KickSelftest(const AKind: string);
+    procedure Advance(const AStep, ABodyJson: string);
+    procedure FinishFullCircle;
+  public
+    constructor Create(ASelftest: Boolean);
+    procedure Run;
+    property Failed: Boolean read FFailed;
+  end;
+
+procedure Stamp(var APrev: TDateTime; out AMs: Int64);
+var
+  LNow: TDateTime;
+begin
+  LNow := Now;
+  AMs := MilliSecondsBetween(LNow, APrev);
+  APrev := LNow;
+end;
+
+{ ---- TDemoApp ---- }
+
+constructor TDemoApp.Create(ASelftest: Boolean);
+begin
+  inherited Create;
+  FSelftest := ASelftest;
+  FStage := ST_WAIT_NAV;
+end;
+
+procedure TDemoApp.Pass(const AWhat: string);
+begin
+  WriteLn('demo-pass ', AWhat);
+end;
+
+procedure TDemoApp.Fail(const AWhy: string);
+begin
+  if FFailed or FFinished then Exit;
+  FFailed := True;
+  WriteLn('demo-fail ', AWhy);
+  CloseWindow;
+end;
+
+procedure TDemoApp.Log(const AMsg: string);
+begin
+  WriteLn(FormatDateTime('[hh:nn:ss.zzz]', Now), ' ', AMsg);
+end;
+
+procedure TDemoApp.CloseWindow;
+begin
+  if (FWindow <> nil) and not FWindow.IsClosed then
+    FWindow.Close;
+end;
+
+{ payload 必须是 JSON object；否则抛 EWebviewInvokeError 走桥错误路径
+  （演示错误语义：页面收到 reject）。文档生命周期归调用方。 }
+procedure TDemoApp.RequireJsonObject(const APayloadJson: string;
+  out ADoc: IJsonDocument; out ARoot: TJsonValue);
+begin
+  ADoc := JsonParse(APayloadJson);
+  ARoot := ADoc.Root;
+  if ADoc.HasError or (not ARoot.IsObject) then
+    raise EWebviewInvokeError.Create('payload must be a JSON object',
+      'npw.demo.bad_payload');
+end;
+
+function TDemoApp.HandleSum(const APayloadJson: string): string;
+var
+  LDoc: IJsonDocument;
+  R: TJsonValue;
+begin
+  RequireJsonObject(APayloadJson, LDoc, R);
+  Result := Format('{"sum":%d}', [R.Get('a').AsInt + R.Get('b').AsInt]);
+end;
+
+function TDemoApp.HandleCounter(const APayloadJson: string): string;
+var
+  LDoc: IJsonDocument;
+  R: TJsonValue;
+begin
+  RequireJsonObject(APayloadJson, LDoc, R);
+  Inc(FCounter);
+  Result := Format('{"count":%d}', [FCounter]);
+end;
+
+procedure TDemoApp.HandleTick(const APayloadJson: string;
+  const ACompletion: IWebviewInvokeCompletion);
+var
+  LDoc: IJsonDocument;
+  R: TJsonValue;
+  LSeq: Int64;
+begin
+  RequireJsonObject(APayloadJson, LDoc, R);
+  Inc(FSeq);
+  LSeq := FSeq;
+  { 不就地完成：投递回主循环下一拍，证明异步 completion 路径 }
+  FWindow.Dispatcher.Post(procedure
+    begin
+      if not FWindow.IsClosed then
+        ACompletion.Ok(Format('{"deferred":true,"seq":%d}', [LSeq]));
+    end);
+end;
+
+procedure TDemoApp.HandlePush(const APayloadJson: string;
+  const ACompletion: IWebviewInvokeCompletion);
+var
+  LDoc: IJsonDocument;
+  R: TJsonValue;
+  LSeq: Int64;
+begin
+  RequireJsonObject(APayloadJson, LDoc, R);
+  Inc(FSeq);
+  LSeq := FSeq;
+  FWindow.Dispatcher.Post(procedure
+    begin
+      if FWindow.IsClosed then Exit;
+      { 先 ack 后 emit：WebKit 同视图按序执行 eval，页面回报次序确定，
+        自检状态机按 push→event 线性推进 }
+      ACompletion.Ok('{"queued":true}');
+      FWindow.Emit('demo.event',
+        Format('{"note":"pushed from Pascal","seq":%d}', [LSeq]));
+    end);
+end;
+
+function TDemoApp.HandleReport(const APayloadJson: string): string;
+var
+  LDoc: IJsonDocument;
+  R: TJsonValue;
+  LStep: string;
+  LMono: Int64;
+begin
+  RequireJsonObject(APayloadJson, LDoc, R);
+  LStep := JsonStrField(R, 'step');
+  if FSelftest then
+  begin
+    if LStep = 'selffail' then
+    begin
+      Fail('page-side failure: ' + JsonStrField(R.Get('body'), 'msg'));
+      Exit('{}');
+    end;
+    Stamp(FStarted, LMono);
+    Log(Format('report %-8s %s (%dms)', [LStep, APayloadJson, LMono]));
+    Advance(LStep, APayloadJson);
+  end
+  else
+    Log('report ' + LStep + ' ' + APayloadJson);
+  Result := '{}';
+end;
+
+procedure TDemoApp.OnNavFinished(const AEvent: TWebviewNavigationEvent);
+var
+  LMs: Int64;
+begin
+  if FSelftest then
+  begin
+    if FStage <> ST_WAIT_NAV then Exit;
+    Stamp(FStarted, LMs);
+    Log(Format('navigation finished (%dms)', [LMs]));
+    Pass('window up, asset served over npres://');
+    FStage := ST_WAIT_EVAL;
+    FWindow.Eval('6*7',
+      procedure(const AResultJson: string)
+      begin
+        if FFailed or FFinished then Exit;
+        if AResultJson <> '42' then
+        begin
+          Fail('eval 6*7 got: ' + AResultJson);
+          Exit;
+        end;
+        Pass('native->web eval roundtrip (6*7=42)');
+        FStage := ST_WAIT_SUM;
+        KickSelftest('sum');
+      end,
+      procedure(const AErr: Exception)
+      begin
+        Fail('eval error: ' + AErr.Message);
+      end);
+  end
+  else
+  begin
+    Log('page loaded, bridge injected');
+    FWindow.Emit('demo.event', '{"note":"hello from native","seq":0}');
+  end;
+end;
+
+procedure TDemoApp.KickSelftest(const AKind: string);
+begin
+  FWindow.Eval('__npwSelf("' + AKind + '")',
+    procedure(const AResultJson: string)
+    begin
+      { 结果恒为 undefined；真正断言在 demo.report 回报里做 }
+    end,
+    procedure(const AErr: Exception)
+    begin
+      Fail('kick ' + AKind + ' eval error: ' + AErr.Message);
+    end);
+end;
+
+procedure TDemoApp.Advance(const AStep, ABodyJson: string);
+var
+  LDoc: IJsonDocument;
+  LBody: TJsonValue;
+  LCount: Int64;
+begin
+  if FFailed or FFinished then Exit;
+  LDoc := JsonParse(ABodyJson);
+  if LDoc.HasError then
+  begin
+    Fail('report payload not json: ' + ABodyJson);
+    Exit;
+  end;
+  LBody := LDoc.Root.Get('body');
+
+  case FStage of
+
+    ST_WAIT_SUM:
+      if AStep = 'sum' then
+      begin
+        if JsonIntField(LBody, 'sum') <> 42 then
+        begin
+          Fail('sum roundtrip expected 42, got: ' + ABodyJson);
+          Exit;
+        end;
+        Pass('sync invoke roundtrip sum(19,23)=42');
+        FStage := ST_WAIT_CNT1;
+        KickSelftest('counter');
+      end;
+
+    ST_WAIT_CNT1:
+      if AStep = 'counter' then
+      begin
+        LCount := JsonIntField(LBody, 'count');
+        if LCount <> 1 then
+        begin
+          Fail('counter first increment expected 1, got: ' + ABodyJson);
+          Exit;
+        end;
+        Pass('stateful counter -> 1');
+        FStage := ST_WAIT_CNT2;
+        KickSelftest('counter');
+      end;
+
+    ST_WAIT_CNT2:
+      if AStep = 'counter' then
+      begin
+        LCount := JsonIntField(LBody, 'count');
+        if LCount <> 2 then
+        begin
+          Fail('counter second increment expected 2, got: ' + ABodyJson);
+          Exit;
+        end;
+        Pass('stateful counter -> 2 (state kept in native object)');
+        FStage := ST_WAIT_TICK;
+        KickSelftest('tick');
+      end;
+
+    ST_WAIT_TICK:
+      if AStep = 'tick' then
+      begin
+        if not JsonBoolField(LBody, 'deferred') then
+        begin
+          Fail('async tick expected deferred:true, got: ' + ABodyJson);
+          Exit;
+        end;
+        Pass('async invoke completed via Dispatcher.Post');
+        FStage := ST_WAIT_PUSH;
+        KickSelftest('push');
+      end;
+
+    { 收尾阶段 push-ack 与 event 回报跨通道无全局次序保证（两条独立
+      异步链），按集合语义双到即成 }
+    ST_WAIT_PUSH, ST_WAIT_EVENT:
+      if AStep = 'push' then
+      begin
+        if not JsonBoolField(LBody, 'queued') then
+        begin
+          Fail('push expected queued:true, got: ' + ABodyJson);
+          Exit;
+        end;
+        FPushQueued := True;
+        Pass('push ack queued:true');
+        FStage := ST_WAIT_EVENT;
+        if FEventSeen then
+          FinishFullCircle;
+      end
+      else if AStep = 'event' then
+      begin
+        if JsonStrField(LBody, 'note') <> 'pushed from Pascal' then
+        begin
+          Fail('event note mismatch, got: ' + ABodyJson);
+          Exit;
+        end;
+        FEventSeen := True;
+        Pass('native->web event received');
+        if FPushQueued then
+          FinishFullCircle;
+      end;
+  end;
+end;
+
+procedure TDemoApp.FinishFullCircle;
+begin
+  if FFinished or FFailed then Exit;
+  FFinished := True;
+  Pass('full circle web->native->web complete');
+  Pass('all steps');
+  CloseWindow;
+end;
+
+procedure TDemoApp.Run;
+begin
+  FStarted := Now;
+  FWindow := TWebviewBuilder.New
+    .Title('nextPas WebView Demo')
+    .Size(1040, 700)
+    .Resizable(True)
+    .Kind(wvGtk)
+    .Build;
+
+  { 页面资产经自身 scheme 提供：npres://app/index.html }
+  FWindow.Assets.MountEmbedded('', TDemoPageProvider.Create);
+
+  { IPC 面：同步 / 有状态同步 / 回报 / 异步 }
+  FWindow.Invokes.Register('demo.sum', @HandleSum);
+  FWindow.Invokes.Register('demo.counter', @HandleCounter);
+  FWindow.Invokes.Register('demo.report', @HandleReport);
+  FWindow.Invokes.RegisterAsync('demo.tick', @HandleTick);
+  FWindow.Invokes.RegisterAsync('demo.push', @HandlePush);
+
+  FWindow.OnNavigationFinished(@OnNavFinished);
+  FWindow.OnNavigationFailed(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      if FSelftest then
+        Fail('navigation failed: ' + AEvent.Url)
+      else
+        Log('navigation failed: ' + AEvent.Url);
+    end);
+  FWindow.OnWindowClosed(
+    procedure
+    begin
+      WebviewExitLoop;
+    end);
+
+  FWindow.Show;
+  if FSelftest then
+    Log('selftest window up, driving matrix...')
+  else
+    Log('window up; close it to exit');
+  FWindow.Navigate('npres://app/index.html');
+
+  WebviewRunLoop;
+  FWindow := nil;
+
+  if FSelftest and (not FFinished) and (not FFailed) then
+  begin
+    FFailed := True;
+    WriteLn('demo-fail interrupted before completion');
+  end;
+end;
+
+var
+  LApp: TDemoApp;
+  LSelftest: Boolean;
+begin
+  LSelftest := (ParamCount >= 1) and (ParamStr(1) = '--selftest');
+
+  if not WebviewBackendAvailable(wvGtk) then
+  begin
+    if LSelftest then
+      WriteLn('demo-skip no-gtk-backend')
+    else
+    begin
+      WriteLn('no GTK/WebKitGTK backend available on this machine');
+      ExitCode := 1;
+    end;
+    Exit;
+  end;
+
+  LApp := TDemoApp.Create(LSelftest);
+  try
+    LApp.Run;
+    if LSelftest and LApp.Failed then
+      ExitCode := 1;
+  finally
+    LApp.Free;
+  end;
+end.

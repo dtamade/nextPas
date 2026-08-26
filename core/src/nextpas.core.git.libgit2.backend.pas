@@ -122,6 +122,8 @@ type
     function DiffWorkingTree(const ARef: string): TGitDiff;
     function DiffWorkingTreeEx(const ARef: string;
       const AOptions: TGitDiffOptions): TGitDiff;
+    function WorkdirPatchText(const ARef: string; const APaths: TStringArray;
+      AShowBinary: Boolean): string;
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;
     // M5+ (2026-08-15): blame a file (libgit2 native, no CLI spawn)
     function Blame(const APath: string): TGitBlame;
@@ -1527,6 +1529,8 @@ var
 begin
   FillChar(LOpts, SizeOf(LOpts), 0);
   LOpts.version := 1;   { GIT_DIFF_OPTIONS_VERSION }
+  if AOptions.ShowBinary then
+    LOpts.flags := LOpts.flags or GIT_DIFF_SHOW_BINARY;
   if AOptions.UnifiedLines > 0 then
     LOpts.context_lines := cuint(AOptions.UnifiedLines);
   if AOptions.InterhunkLines > 0 then
@@ -1606,6 +1610,64 @@ begin
       @LOpts), 'Diff tree to workdir');
     try
       Result := CollectDiff(LDiff);
+    finally
+      git_diff_free(LDiff);
+    end;
+  finally
+    git_object_free(LObj);
+    git_tree_free(LTree);
+  end;
+end;
+
+{ k101: 工作树（含 index）相对 ARef 的完整 patch 文本——SHOW_BINARY 打开时
+  二进制 delta 出 "GIT binary patch" literal 段，git_patch_to_buf 的输出即
+  git diff 同构文本，可被 git_diff_from_buffer 整包解析回写（ApplyPatch）。
+  buf.ptr 不保证 NUL 结尾，按 size 取段 }
+function TGitRepository.WorkdirPatchText(const ARef: string;
+  const APaths: TStringArray; AShowBinary: Boolean): string;
+var
+  LObj: git_object;
+  LTree: git_tree;
+  LDiff: git_diff;
+  LOpts: git_diff_options;
+  LOptRec: TGitDiffOptions;
+  LPathStrs: TStringArray;
+  LPathPtrs: TPAnsiCharArray;
+  LN, I: csize_t;
+  LPatch: git_patch;
+  LBuf: git_buf;
+  S: string;
+begin
+  Result := '';
+  ResolveRevToTree(ARef, LObj, LTree);
+  try
+    LOptRec := Default(TGitDiffOptions);
+    LOptRec.Paths := APaths;
+    LOptRec.ShowBinary := AShowBinary;
+    BuildDiffOptions(LOptRec, LOpts, LPathStrs, LPathPtrs);
+    CheckResult(git_diff_tree_to_workdir_with_index(LDiff, FHandle, LTree,
+      @LOpts), 'Diff tree to workdir');
+    try
+      LN := git_diff_num_deltas(LDiff);
+      { csize_t 下 LN=0 时 LN-1 下溢——空差必须显式守卫 }
+      if LN > 0 then
+        for I := 0 to LN - 1 do
+        begin
+          CheckResult(git_patch_from_diff(LPatch, LDiff, I),
+            'Patch from diff');
+          try
+            FillChar(LBuf, SizeOf(LBuf), 0);
+            CheckResult(git_patch_to_buf(LBuf, LPatch), 'Patch to buf');
+            try
+              SetString(S, PChar(LBuf.ptr), LBuf.size);
+              Result := Result + S;
+            finally
+              git_buf_dispose(@LBuf);
+            end;
+          finally
+            git_patch_free(LPatch);
+          end;
+        end;
     finally
       git_diff_free(LDiff);
     end;

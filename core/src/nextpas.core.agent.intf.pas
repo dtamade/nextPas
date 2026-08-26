@@ -43,6 +43,13 @@ type
     function OpenStream(const AReq: TWireRequest): IAgentWireStream;
   end;
 
+  { W11 请求级追踪汇（API.md §3.2）：transport.trace 装饰器产出事件对。
+    契约：回调内不得抛出——失败路径的 sink 异常会顶替传输错误上抛 }
+  IAgentTraceSink = interface
+    procedure OnRequest(const AInfo: TTraceRequestInfo);
+    procedure OnResponse(const AInfo: TTraceResponseInfo);
+  end;
+
   { 流帧解码器（API.md §8，D13 公开编解码器）：把厂商 SSE 帧归约为词表增量。
     provider 工厂内部与 Stream() 路径共用同一实现；Finalize 抹平 usage/finish
     到达顺序。实例不跨消息复用、非线程安全（单角色独占） }

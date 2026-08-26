@@ -518,10 +518,296 @@ begin
   GHASHMultiplyScalar(AX, LHPtr);
 end;
 
+{$IFDEF CPUX86_64}
+type
+  { 聚合 GHASH 幂表：[0]=H¹, [1]=H², [2]=H³, [3]=H⁴（正规域，asm 内反射） }
+  TGHASHPowerTable = array[0..3] of TAESBlock;
+
+{ 幂表构建：复用既有单块乘法（正规域），每组调用一次、成本按组摊薄 }
+procedure BuildGHASHPowerTable(const AHashKey: TAESBlock; out APow: TGHASHPowerTable);
+var
+  I: Integer;
+begin
+  APow[0] := AHashKey;
+  for I := 1 to 3 do
+  begin
+    APow[I] := APow[I - 1];
+    GHASHMultiplyPCLMUL(APow[I], AHashKey);
+  end;
+end;
+
+{ 聚合 GHASH：4 块一组延迟规约。
+  数学依据：A₄ = (A₀⊕X₁)·H⁴ ⊕ X₂·H³ ⊕ X₃·H² ⊕ X₄·H；规约对 XOR 线性，
+  故四个独立乘积可先求和（C_L/C_H 各自累积）再做一次共享规约。
+  性能依据：原单块路径每块一条「乘法→规约」串行依赖链；此版四路乘法
+  输入互不依赖可并行发射，规约成本由每块一次摊薄为每 4 块一次。
+  寄存器布局：xmm8/9/10=LUT，xmm11..14=反射 H⁴/H³/H²/H¹，
+  xmm15=反射累加器（跨组保持），xmm0/xmm7=临时。}
+procedure GHASHUpdatePCLMULAgg(var AState: TAESBlock; const APow: TGHASHPowerTable;
+  AData: PByte; ABlocks: Integer); assembler; nostackframe;
+asm
+  // rdi=AState, rsi=APow, rdx=AData, ecx=ABlocks（须为 4 的倍数且 ≥4）
+  test ecx, ecx
+  jle @done
+
+  movdqa xmm8, [rip + GHASHReflectHi]
+  movdqa xmm9, [rip + GHASHReflectLo]
+  movdqa xmm10, [rip + GHASHMask0F]
+
+  // 反射幂表：xmm11=H⁴ xmm12=H³ xmm13=H² xmm14=H¹（反射只碰 xmm0/xmm7）
+  movdqu xmm0, [rsi + 48]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm11, xmm8
+  pshufb xmm11, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm11, xmm7
+
+  movdqu xmm0, [rsi + 32]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm12, xmm8
+  pshufb xmm12, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm12, xmm7
+
+  movdqu xmm0, [rsi + 16]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm13, xmm8
+  pshufb xmm13, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm13, xmm7
+
+  movdqu xmm0, [rsi]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm14, xmm8
+  pshufb xmm14, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm14, xmm7
+
+  // 累加器载入并反射（跨组保持反射域）
+  movdqu xmm0, [rdi]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm15, xmm8
+  pshufb xmm15, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm15, xmm7
+
+  mov r8d, ecx
+
+@group:
+  pxor xmm5, xmm5        // C_L 累计
+  pxor xmm6, xmm6        // C_H 累计
+
+  // X1 → P1 = X1 · H⁴（LO/HI 即时并入累计，MID 拆两半并入；
+  //   各乘积输入互不依赖，乱序核并行发射——这是相对串行链的收益来源）
+  movdqu xmm0, [rdx]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm1, xmm8
+  pshufb xmm1, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm1, xmm7
+
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm11, $00   // LO
+  pxor xmm5, xmm0
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm11, $11   // HI
+  pxor xmm6, xmm0
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm11, $01   // MID1
+  pclmulqdq xmm1, xmm11, $10   // MID2（原始 X1 消耗于此）
+  pxor xmm0, xmm1              // MID
+  movdqa xmm7, xmm0
+  pslldq xmm7, 8
+  pxor xmm5, xmm7              // C_L ^= MID<<64
+  psrldq xmm0, 8
+  pxor xmm6, xmm0              // C_H ^= MID>>64
+
+  // X2 → P2 = X2 · H³
+  movdqu xmm0, [rdx + 16]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm1, xmm8
+  pshufb xmm1, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm1, xmm7
+
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm12, $00
+  pxor xmm5, xmm0
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm12, $11
+  pxor xmm6, xmm0
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm12, $01
+  pclmulqdq xmm1, xmm12, $10
+  pxor xmm0, xmm1
+  movdqa xmm7, xmm0
+  pslldq xmm7, 8
+  pxor xmm5, xmm7
+  psrldq xmm0, 8
+  pxor xmm6, xmm0
+
+  // X3 → P3 = X3 · H²
+  movdqu xmm0, [rdx + 32]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm1, xmm8
+  pshufb xmm1, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm1, xmm7
+
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm13, $00
+  pxor xmm5, xmm0
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm13, $11
+  pxor xmm6, xmm0
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm13, $01
+  pclmulqdq xmm1, xmm13, $10
+  pxor xmm0, xmm1
+  movdqa xmm7, xmm0
+  pslldq xmm7, 8
+  pxor xmm5, xmm7
+  psrldq xmm0, 8
+  pxor xmm6, xmm0
+
+  // X4 折入当前累加器 → P4 = (X4⊕acc) · H¹
+  movdqu xmm0, [rdx + 48]
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm1, xmm8
+  pshufb xmm1, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm1, xmm7
+
+  pxor xmm1, xmm15
+
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm14, $00
+  pxor xmm5, xmm0
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm14, $11
+  pxor xmm6, xmm0
+  movdqa xmm0, xmm1
+  pclmulqdq xmm0, xmm14, $01
+  pclmulqdq xmm1, xmm14, $10
+  pxor xmm0, xmm1
+  movdqa xmm7, xmm0
+  pslldq xmm7, 8
+  pxor xmm5, xmm7
+  psrldq xmm0, 8
+  pxor xmm6, xmm0
+
+  add rdx, 64
+  sub r8d, 4
+  jnz @group
+
+  // 共享规约（与单块路径逐指令同构：输入 xmm2=C_L / xmm3=C_H，输出 xmm2）
+  movdqa xmm2, xmm5
+  movdqa xmm3, xmm6
+  movdqa xmm4, xmm3
+  movdqa xmm5, xmm3
+  psllq xmm4, 7
+  psrlq xmm5, 57
+  pslldq xmm5, 8
+  por xmm4, xmm5
+  movdqa xmm5, xmm3
+  movdqa xmm6, xmm3
+  psllq xmm5, 2
+  psrlq xmm6, 62
+  pslldq xmm6, 8
+  por xmm5, xmm6
+  movdqa xmm6, xmm3
+  movdqa xmm7, xmm3
+  psllq xmm6, 1
+  psrlq xmm7, 63
+  pslldq xmm7, 8
+  por xmm6, xmm7
+  pxor xmm4, xmm5
+  pxor xmm4, xmm6
+  pxor xmm4, xmm3
+  movdqa xmm5, xmm3
+  psrlq xmm5, 57
+  psrldq xmm5, 8
+  movdqa xmm6, xmm3
+  psrlq xmm6, 62
+  psrldq xmm6, 8
+  pxor xmm5, xmm6
+  movdqa xmm6, xmm3
+  psrlq xmm6, 63
+  psrldq xmm6, 8
+  pxor xmm5, xmm6
+  movdqa xmm6, xmm5
+  movdqa xmm7, xmm5
+  psllq xmm6, 7
+  pxor xmm5, xmm6
+  movdqa xmm6, xmm7
+  psllq xmm6, 2
+  pxor xmm5, xmm6
+  psllq xmm7, 1
+  pxor xmm5, xmm7
+  pxor xmm2, xmm4
+  pxor xmm2, xmm5
+  movdqa xmm15, xmm2
+
+  // 反射回正规域存储
+  movdqa xmm0, xmm15
+  movdqa xmm7, xmm0
+  pand xmm7, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm1, xmm8
+  pshufb xmm1, xmm7
+  movdqa xmm7, xmm9
+  pshufb xmm7, xmm0
+  por xmm1, xmm7
+  movdqu [rdi], xmm1
+
+@done:
+end;
+{$ENDIF}
+
+
 procedure GHASHUpdate(var AState: TAESBlock; const LHPtr: TAESBlock; const AData: TBytes; AOffset, ALen: Integer);
 var
   I, J, Blocks, Rem: Integer;
   Block: TAESBlock;
+  LPow: TGHASHPowerTable;
+  LAggBlocks: Integer;
 begin
   Blocks := ALen div 16;
   Rem := ALen mod 16;
@@ -529,7 +815,18 @@ begin
   {$IFDEF CPUX86_64}
   if UsePCLMUL and (Blocks > 0) then
   begin
-    GHASHUpdatePCLMUL(AState, LHPtr, @AData[AOffset], Blocks);
+    if Blocks >= 8 then
+    begin
+      { 聚合路径：≥2 组才值得付幂表构建成本；零头走单块路径续算 }
+      BuildGHASHPowerTable(LHPtr, LPow);
+      LAggBlocks := (Blocks div 4) * 4;
+      GHASHUpdatePCLMULAgg(AState, LPow, @AData[AOffset], LAggBlocks);
+      if Blocks > LAggBlocks then
+        GHASHUpdatePCLMUL(AState, LHPtr,
+          @AData[AOffset + LAggBlocks * 16], Blocks - LAggBlocks);
+    end
+    else
+      GHASHUpdatePCLMUL(AState, LHPtr, @AData[AOffset], Blocks);
     if Rem > 0 then
     begin
       FillChar(Block[0], 16, 0);
