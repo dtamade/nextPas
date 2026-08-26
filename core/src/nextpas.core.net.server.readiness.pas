@@ -678,6 +678,10 @@ begin
           LCount);
         if LErr <> 0 then
         begin
+          { EINTR：信号中断属常态（调试器/探针/SIGCHLD），重试本轮；
+            截止会话由 HandleExpiredPollTargets 兜底，不因信号丢拍 }
+          if LErr = 4 then  { ESysEINTR，与 io.reactor.epoll 同款局部常量 }
+            Continue;
           if not FRunning then
             Break;
           raise ENetworkError.Create('tcp readiness poller wait failed (' +
