@@ -95,8 +95,26 @@ make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
 
 核心验证手段是 **回环测试**：测试内实现一个最小 SSH 服务端（走同样的底层原语但独立的
 服务端逻辑路径），与真实客户端实现在内存管道上完成完整握手 → 认证 → exec，
-无需外部 sshd 即可证明协议栈各层协同正确。对外的 live-sshd 冒烟测试为 opt-in
-（环境变量门控），不进入默认 gate。
+无需外部 sshd 即可证明协议栈各层协同正确。
+
+真实服务器互操作由 **e2e_ssh_live** 承担（opt-in，不进默认 gate）：
+
+```bash
+cd core/tests/nextpas.core.ssh/e2e_ssh_live
+
+# 模式一：本地 Docker 夹具（一次性密钥、随机端口、全封闭）
+NEXTPAS_SSH_E2E_LOCAL=1 bash run_e2e.sh
+
+# 模式二：直连真实 sshd
+NEXTPAS_SSH_E2E_REMOTE=1 \
+NEXTPAS_SSH_E2E_HOST=<host> NEXTPAS_SSH_E2E_USER=<user> \
+NEXTPAS_SSH_E2E_KEYFILE=<未加密 ed25519 私钥> bash run_e2e.sh
+```
+
+场景：exec marker + 同会话二次 exec、远端 exit code 透传、stdout/stderr 分离、
+known_hosts 不匹配预认证拒绝。运行带 heaptrc 0 泄漏门禁。夹具注意事项：
+sshd `StrictModes` 要求 authorized_keys 必须 root 属主且组/其他不可写；
+Docker 发布端口每次启动会重排，TOFU 的 known_hosts 需按当次端口重新采集。
 
 ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
 （`core/tests/nextpas.core.crypto/test_ed25519`），并与 OpenSSL/cryptography
@@ -120,5 +138,5 @@ x86_64 宿主、`-O3`、单线程实测（数值随机器浮动，门禁下限�
 - 无 zlib 压缩、无 ssh-agent、无 SFTP（见 goal-tree 后续 slice 表）。
 - AEAD 算法协商的 MAC 字段被忽略（chacha/gcm 内建认证），与 OpenSSH 行为一致；
   CTR 类必须搭配 ETM MAC。
-- 对真实 OpenSSH 服务器的互操作属后续 slice（live-sshd 冒烟），当前结论等级为
-  focused-runtime 回环证据。
+- 对真实 OpenSSH 服务器的互操作已由 e2e_ssh_live 验证（本地 Docker Alpine 9.7 与
+  远程 Debian OpenSSH 10.0p2 均 4 场景通过）；该门为 opt-in，不进默认 gate。

@@ -50,6 +50,22 @@
 - [x] KNOWN_LIMITS 固化到 README（已知限制 + 性能基准表）
 - [x] Ready 报告：focused gates 全绿证据 + hygiene + git diff --check
 
+## S6 — 真实服务器互操作（已完成）
+
+- [x] `e2e_ssh_live`：opt-in 编排器（`run_e2e.sh`，环境变量门控），两种模式：
+      - **local docker 夹具**：alpine + openssh-server 容器，一次性 host/client 密钥、
+        随机端口、TOFU 采集 known_hosts，全封闭可重复
+      - **remote 直连**：真实 sshd（已验证 Debian OpenSSH 10.0p2 与 Alpine 9.7）
+- [x] 场景：exec marker + 同会话二次 exec / 远端 exit code 透传 / stdout-stderr 分离 /
+      known_hosts 不匹配预认证拒绝；heaptrc 0 泄漏门禁与 common.mk 同语义
+- [x] 互操作中发现并修复的真实缺陷（这正是 live 测试的价值）：
+      - AEAD/EtM 帧的 padding 对齐：OpenSSH 对 aadlen 模式要求 packlen（不含 4 字节
+        长度字段本身）按块对齐，`ISshPacketSender.AadLen` 表达该语义
+        （chacha/gcm/ctr-etm = 4，none = 0）
+      - chacha20-poly1305 raw-MAC 帧（poly1305 直接作用于 encLen‖密文，无 RFC 8439 pad16）
+      - ed25519 `EdBasePointMul` 有符号 radix-16 末位进位丢失（约 7% 密钥公钥错误，
+        触发条件 SHA-512(seed) 末字节高 nibble=7 且低 nibble≥8）；回归向量进入 test_ed25519
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
@@ -62,9 +78,10 @@
 | SFTP v3 | 子系统通道之上的文件操作面 |
 | zlib 压缩方法 | compress.deflate 可复用 |
 | async reactor 适配 | net.async.dial + 非阻塞读事件化 |
-| live-sshd 冒烟 | 环境变量门控的真实互操作测试 |
 
 ## 真实性等级声明
 
-当前所有结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为准；
-对真实 OpenSSH 服务器的互操作性属于后续 slice，未验证前不声明。
+核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
+真实服务器互操作已由 **S6 live e2e** 补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与
+远程 Debian OpenSSH 10.0p2 均 4 场景通过，heaptrc 0 泄漏。e2e 为 opt-in 门控，
+不进默认 gate。
