@@ -2,7 +2,8 @@
 
 **状态**: **Landed**（Wave 1 双后端落地——fake 测试支撑 + GTK/WebKitGTK；
 S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
-live 覆盖均已进主线。W2 webview2 / W3 wk 待平台环境启动）
+live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正
+均已进主线。W2 webview2 / W3 wk 待平台环境启动）
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。
@@ -50,9 +51,26 @@ live 覆盖均已进主线。W2 webview2 / W3 wk 待平台环境启动）
 
 活动计划见 `core/docs/plans/2026-08-25-webview-module.md`（slice 划分、验证与 landing 约定）。
 
+## 可运行演示
+
+`core/tests/nextpas.core.webview/examples/demo_webview` 是完整消费侧示例：
+真实 WebKitGTK 窗口 + 深色 UI，覆盖全 IPC 矩阵（eval 往返 / 同步 invoke /
+有状态 handler / 异步 completion / native→web 事件推送全环），
+只依赖公共门面 `nextpas.core.webview`。
+
+```bash
+# 人工演示：打开窗口，点按交互，stdout 记录桥流量
+make -C core/tests/nextpas.core.webview/examples/demo_webview run
+
+# 自检门：同一页面事件驱动跑完矩阵，双跑（plain + heaptrc），0 unfreed 硬门
+make focused FOCUS=core/tests/nextpas.core.webview/examples/demo_webview
+```
+
+无 GTK 环境时自检打印 `demo-skip no-gtk-backend` 优雅通过。
+
 ## 使用示例（目标形态示意）
 
-> 以下为设计目标 API 形状，Wave 1 实现完成后以 CONTRACT.md 为准更新。
+> 以下为设计目标 API 形状；实际以 CONTRACT.md 为准，可运行版本见上节。
 
 ```pascal
 uses
