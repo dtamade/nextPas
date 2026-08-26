@@ -89,6 +89,8 @@ type
     function Blame(const APath: string): TGitBlame;
     // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
     function ConfigEntries: TGitConfigEntryArray;
+    procedure ApplyPatch(const APatch: string);
+    procedure CheckoutPaths(const ASpec: string; const APaths: TStringArray);
 
     // Worktree operations (IGitWorktreeExt)
     function AddWorktree(const AName, APath, ARef: string;
@@ -453,6 +455,17 @@ end;
 function TGitRepositoryImpl.ConfigEntries: TGitConfigEntryArray;
 begin
   Result := FRepo.ConfigEntries;
+end;
+
+procedure TGitRepositoryImpl.ApplyPatch(const APatch: string);
+begin
+  FRepo.ApplyPatch(APatch);
+end;
+
+procedure TGitRepositoryImpl.CheckoutPaths(const ASpec: string;
+  const APaths: TStringArray);
+begin
+  FRepo.CheckoutPaths(ASpec, APaths);
 end;
 
 function TGitRepositoryImpl.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;

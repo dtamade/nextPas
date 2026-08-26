@@ -29,7 +29,9 @@ uses
   nextpas.core.agent.session,
   nextpas.core.agent.resilience,
   nextpas.core.agent.fallback,
-  nextpas.core.agent.throttle;
+  nextpas.core.agent.throttle,
+  nextpas.core.agent.hedge,
+  nextpas.core.agent.provider.openai.responses;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
@@ -110,6 +112,8 @@ type
   IAgentRateGate = nextpas.core.agent.throttle.IAgentRateGate;
   TThrottlePolicy = nextpas.core.agent.throttle.TThrottlePolicy;
   TThrottleWaitHook = nextpas.core.agent.throttle.TThrottleWaitHook;
+  THedgePolicy = nextpas.core.agent.hedge.THedgePolicy;
+  THedgeFireHook = nextpas.core.agent.hedge.THedgeFireHook;
 
 function NewFallbackProvider(const AChain: array of IAgentProvider;
   const APolicy: TFallbackPolicy): IAgentProvider; inline;
@@ -118,6 +122,13 @@ function NewThrottledProvider(const AInner: IAgentProvider;
   const APolicy: TThrottlePolicy): IAgentProvider; inline;
 function NewTokenBucketGate(ARatePerSecond,
   ABurst: Double): IAgentRateGate; inline;
+
+{ W9 对冲装饰器 + OpenAI Responses 协议支柱 }
+function NewHedgedProvider(const AInner: IAgentProvider;
+  const AClock: IAgentClock; const APolicy: THedgePolicy): IAgentProvider; inline;
+function NewOpenAIResponsesProvider(
+  const AOpts: TOpenAIOptions): IAgentProvider; inline;
+function NewOpenAIResponsesProviderFromEnv: IAgentProvider; inline;
 
 implementation
 
@@ -307,6 +318,28 @@ function NewTokenBucketGate(ARatePerSecond, ABurst: Double): IAgentRateGate;
 begin
   Result := nextpas.core.agent.throttle.NewTokenBucketGate(ARatePerSecond,
     ABurst);
+end;
+
+function NewHedgedProvider(const AInner: IAgentProvider;
+  const AClock: IAgentClock; const APolicy: THedgePolicy): IAgentProvider;
+begin
+  Result := nextpas.core.agent.hedge.NewHedgedProvider(AInner, AClock,
+    APolicy);
+end;
+
+function NewOpenAIResponsesProvider(
+  const AOpts: TOpenAIOptions): IAgentProvider;
+begin
+  Result :=
+    nextpas.core.agent.provider.openai.responses.NewOpenAIResponsesProvider(
+      AOpts);
+end;
+
+function NewOpenAIResponsesProviderFromEnv: IAgentProvider;
+begin
+  Result :=
+    nextpas.core.agent.provider.openai.responses.
+    NewOpenAIResponsesProviderFromEnv;
 end;
 
 end.

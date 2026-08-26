@@ -41,6 +41,7 @@ uses
   nextpas.core.errors,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.atomic,
   nextpas.core.platform.socket.base,
   nextpas.core.platform.error,
   nextpas.core.net.resolve,
@@ -101,7 +102,10 @@ type
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
-    FClosed: Boolean;
+    { R9: 关闭态与在飞 accept 计数均为原子量——Close 可从任意线程调用，
+      必须唤醒他线程正阻塞的 Accept 且不产生 fd 号复用竞态。 }
+    FClosedFlag: Int32;
+    FAcceptDepth: Int32;
     procedure EnsureOpen(const AOperation: string);
   public
     constructor Create(const ASocket: TPlatformSocket; const ALocal: TNetAddress);
@@ -632,19 +636,22 @@ begin
   inherited Create;
   FSocket := ASocket;
   FLocal := ALocal;
-  FClosed := False;
+  AtomicStore32(FClosedFlag, 0);
+  AtomicStore32(FAcceptDepth, 0);
 end;
 
 destructor TTcpListener.Destroy;
 begin
-  if not FClosed then
+  { R9: exchange 兜底首次关闭（Close 从未调用时）；已 Close 的路径下
+    fd 归属已由 Close/在飞 Accept 收尾，此处不再触碰。 }
+  if AtomicExchange32(FClosedFlag, 1) = 0 then
     platform_socket_close(FSocket);
   inherited;
 end;
 
 procedure TTcpListener.EnsureOpen(const AOperation: string);
 begin
-  if FClosed then
+  if AtomicLoad32(FClosedFlag) <> 0 then
     raise ENetworkError.Create('tcp listener ' + AOperation + ' after close');
 end;
 
@@ -656,29 +663,52 @@ var
   LResult: Int32;
   LLocal: TNetAddress;
 begin
-  EnsureOpen('accept');
-  while True do
-  begin
-    LAddr.Clear;
-    LAddrLen := SizeOf(LAddr.Storage);
-    LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
-    if LResult = 0 then
-      Break;
-    if platform_socket_error_interrupted(LResult) then
-      Continue;
-    raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
+  { R9: 先登记在飞再触碰 fd——并发 Close 由此确定 fd 归属（见 Close）。
+    登记后复检关闭态，封死「Close 见深度 0 已关 fd、本调用随后才登记」
+    的窗口。 }
+  AtomicFetchAdd32(FAcceptDepth, 1);
+  try
+    if AtomicLoad32(FClosedFlag) <> 0 then
+      raise ENetworkError.Create('tcp listener accept after close');
+    while True do
+    begin
+      LAddr.Clear;
+      LAddrLen := SizeOf(LAddr.Storage);
+      LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
+      if LResult = 0 then
+        Break;
+      if platform_socket_error_interrupted(LResult) then
+        Continue;
+      { R9: 握手完成后、accept 取走前被对端 reset 的连接（ECONNABORTED）
+        是瞬时噪音，与 EINTR 同列重试，不撕毁 accept 循环（对齐 Go）。 }
+      if platform_socket_error_aborted(LResult) then
+        Continue;
+      { Close 的 shutdown 唤醒落在这里：给出结构化关闭错误而非裸 errno。 }
+      if AtomicLoad32(FClosedFlag) <> 0 then
+        raise ENetworkError.Create('tcp listener accept after close');
+      raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
+    end;
+    LAddr.Len := UInt32(LAddrLen);
+    LLocalAddr.Clear;
+    LAddrLen := SizeOf(LLocalAddr.Storage);
+    if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
+    begin
+      LLocalAddr.Len := UInt32(LAddrLen);
+      LLocal := AddrFromSockAddr(LLocalAddr);
+    end
+    else
+      LLocal := FLocal;
+    Result := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
+  finally
+    { R9: 最后一个离场者在已关闭态下收尾延迟的 fd 关闭（所有权移交）。 }
+    if AtomicFetchSub32(FAcceptDepth, 1) = 1 then
+      if (AtomicLoad32(FClosedFlag) <> 0) and
+         (FSocket.Value <> PLATFORM_INVALID_SOCKET.Value) then
+      begin
+        platform_socket_close(FSocket);
+        FSocket := PLATFORM_INVALID_SOCKET;
+      end;
   end;
-  LAddr.Len := UInt32(LAddrLen);
-  LLocalAddr.Clear;
-  LAddrLen := SizeOf(LLocalAddr.Storage);
-  if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
-  begin
-    LLocalAddr.Len := UInt32(LAddrLen);
-    LLocal := AddrFromSockAddr(LLocalAddr);
-  end
-  else
-    LLocal := FLocal;
-  Result := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
 end;
 
 function TTcpListener.LocalAddr: TNetAddress;
@@ -688,9 +718,18 @@ end;
 
 procedure TTcpListener.Close;
 begin
-  if not FClosed then
+  { R9: 首个关闭者负责唤醒与 fd 收尾（幂等）。
+    ① shutdown 先于 fd 号释放：POSIX close 不唤醒他线程阻塞中的 accept，
+    且释放的 fd 号可被复用——阻塞中的 accept 会认错 socket（ABA）；
+    shutdown(RDWR) 使内核立即以 EINVAL 放行所有阻塞 accept，无此竞态。
+    ② 有在飞 accept 时推迟真实 close：返回路径的最后离场者关闭
+    （所有权移交）——否则 close 与在飞 syscall 竞态，Linux 上已进入
+    内核的 accept 不因 close 返回，将永久悬挂。 }
+  if AtomicExchange32(FClosedFlag, 1) <> 0 then
+    Exit;
+  platform_socket_shutdown(FSocket, PLATFORM_SHUT_RDWR);
+  if AtomicLoad32(FAcceptDepth) = 0 then
   begin
-    FClosed := True;
     platform_socket_close(FSocket);
     FSocket := PLATFORM_INVALID_SOCKET;
   end;
@@ -718,34 +757,53 @@ var
   LLocal: TNetAddress;
 begin
   AConn := nil;
-  EnsureOpen('try accept');
-  LAddr.Clear;
-  LAddrLen := SizeOf(LAddr.Storage);
-  LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
-  if LResult = 0 then
-  begin
-    LAddr.Len := UInt32(LAddrLen);
-    LLocalAddr.Clear;
-    LAddrLen := SizeOf(LLocalAddr.Storage);
-    if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
+  { R9: 与 Accept 同一登记/复检/离场收尾协议（非阻塞调用窗口极小，
+    但协议统一才无可推敲的例外）。 }
+  AtomicFetchAdd32(FAcceptDepth, 1);
+  try
+    if AtomicLoad32(FClosedFlag) <> 0 then
+      raise ENetworkError.Create('tcp listener try accept after close');
+    LAddr.Clear;
+    LAddrLen := SizeOf(LAddr.Storage);
+    LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
+    if LResult = 0 then
     begin
-      LLocalAddr.Len := UInt32(LAddrLen);
-      LLocal := AddrFromSockAddr(LLocalAddr);
-    end
-    else
-      LLocal := FLocal;
-    AConn := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
-    Exit(tarAccepted);
+      LAddr.Len := UInt32(LAddrLen);
+      LLocalAddr.Clear;
+      LAddrLen := SizeOf(LLocalAddr.Storage);
+      if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
+      begin
+        LLocalAddr.Len := UInt32(LAddrLen);
+        LLocal := AddrFromSockAddr(LLocalAddr);
+      end
+      else
+        LLocal := FLocal;
+      AConn := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
+      Exit(tarAccepted);
+    end;
+    if platform_socket_error_would_block(LResult) or
+       platform_socket_error_interrupted(LResult) then
+      Exit(tarWouldBlock);
+    { EMFILE/ENFILE: process or system fd table full. Treat as temporary
+      backpressure (same as would-block for readiness loops) so one bad accept
+      does not tear down the epoll server. Threaded Accept still raises. }
+    if platform_socket_error_resource_limit(LResult) then
+      Exit(tarWouldBlock);
+    { R9: 瞬时握手中止与 shutdown 唤醒同 Accept 语义。 }
+    if platform_socket_error_aborted(LResult) then
+      Exit(tarWouldBlock);
+    if AtomicLoad32(FClosedFlag) <> 0 then
+      raise ENetworkError.Create('tcp listener try accept after close');
+    raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
+  finally
+    if AtomicFetchSub32(FAcceptDepth, 1) = 1 then
+      if (AtomicLoad32(FClosedFlag) <> 0) and
+         (FSocket.Value <> PLATFORM_INVALID_SOCKET.Value) then
+      begin
+        platform_socket_close(FSocket);
+        FSocket := PLATFORM_INVALID_SOCKET;
+      end;
   end;
-  if platform_socket_error_would_block(LResult) or
-     platform_socket_error_interrupted(LResult) then
-    Exit(tarWouldBlock);
-  { EMFILE/ENFILE: process or system fd table full. Treat as temporary
-    backpressure (same as would-block for readiness loops) so one bad accept
-    does not tear down the epoll server. Threaded Accept still raises. }
-  if platform_socket_error_resource_limit(LResult) then
-    Exit(tarWouldBlock);
-  raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
 end;
 
 { Factory functions }

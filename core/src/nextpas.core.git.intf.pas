@@ -80,6 +80,15 @@ type
     // 合并视图：local + worktree + global + system（同 git config --list 语义）。
     // 读取失败 → EGitError。
     function ConfigEntries: TGitConfigEntryArray;
+    // k97: apply a unified-diff patch text to the working directory.
+    // The buffer is parsed in full before the first file is written; a
+    // failing hunk raises EGitError (partial writes possible — callers
+    // wanting all-or-nothing semantics must snapshot touched files).
+    procedure ApplyPatch(const APatch: string);
+    // k97: force-restore the listed paths to their content at ASpec
+    // (discard semantics; paths absent from ASpec are left untouched —
+    // untracked removal stays the caller's job via status + fs).
+    procedure CheckoutPaths(const ASpec: string; const APaths: TStringArray);
   end;
 
   IGitCommit = interface

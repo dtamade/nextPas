@@ -734,7 +734,22 @@ begin
   LConn := FPool.Get(LPoolHostKey, LConnectPort);
   LPooled := LConn <> nil;
   if not LPooled then
-    PrepareFreshConnection
+  begin
+    { 拨号阶段（DNS/connect/TLS/CONNECT 隧道）与写读阶段同一传输异常契约：
+      ENetworkError/ETimeoutError 经 HttpWrapTransportException 包装为
+      EHttpError，裸网络异常不穿透 RoundTrip。 }
+    try
+      PrepareFreshConnection;
+    except
+      on E: Exception do
+      begin
+        LWrapped := HttpWrapTransportException(E);
+        if LWrapped <> nil then
+          raise LWrapped;
+        raise;
+      end;
+    end;
+  end
   else
   begin
     ApplyClientDeadline(LConn, LRequestDeadline);

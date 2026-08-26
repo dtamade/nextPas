@@ -178,7 +178,17 @@ begin
       begin
         if not IsRequestReadFailure(E) then
           WriteErrorResponse(AState.FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+            AState.FOptions.WriteTimeout)
+        else if HttpErrorIsTimeout(E) and (not LUsingIdleDeadline) then
+        begin
+          { R11: request read deadline expired mid-request — best-effort 408
+            so blind-retrying clients stop on a structured answer instead of a
+            bare reset. Idle keep-alive waits (client sent nothing) stay
+            silent, matching the poll backend. }
+          AState.NotifyReadAbort;
+          WriteErrorResponse(AState.FConn, HTTP_STATUS_REQUEST_TIMEOUT,
             AState.FOptions.WriteTimeout);
+        end;
         AState.FKeepAlive := False;
       end;
     end;

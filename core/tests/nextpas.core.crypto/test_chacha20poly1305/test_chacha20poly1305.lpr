@@ -200,6 +200,44 @@ begin
 
   end);
 
+  { 回归：OpenSSH chachapoly 的裸 Poly1305（无 pad16/长度块）。
+    部分尾块必须把 0x01 放在数据之后（位随长度变化），不能套用满块的 2^128。}
+  LSuite.Test('Poly1305Raw RFC 8439 2.5.2 (34B partial end)', procedure
+  var LKey, LMsg, LTag: TBytes;
+  begin
+    LKey := HexToBytes('85d6be7857556d337f4452fe42d506a8' +
+      '0103808afb0db2fd4abff6af4149f51b');
+    LMsg := BytesOf('Cryptographic Forum Research Group');
+    LTag := Poly1305Raw(LKey, LMsg);
+    CheckEqual('a8061dc1305136c6c22b8baf0c0127a9', BytesToHex(LTag));
+  end);
+
+  LSuite.Test('Poly1305Raw RFC 8439 A.3 #4 (127B multi-block)', procedure
+  var LKey, LMsg, LTag: TBytes;
+  begin
+    LKey := HexToBytes('1c9240a5eb55d38af333888604f6b5f0' +
+      '473917c1402b80099dca5cbc207075c0');
+    LMsg := HexToBytes(
+      '2754776173206272696c6c69672c20616e642074686520736c6974687920746f' +
+      '7665730a446964206779726520616e642067696d626c6520696e207468652077' +
+      '6162653a0a416c6c206d696d737920776572652074686520626f726f676f7665' +
+      '732c0a416e6420746865206d6f6d65207261746873206f757467726162652e');
+    LTag := Poly1305Raw(LKey, LMsg);
+    CheckEqual('4541669a7eaaee61e708dc7cbcc5eb62', BytesToHex(LTag));
+  end);
+
+  LSuite.Test('Poly1305Raw OpenSSH macdata shape (28B = full + partial)', procedure
+  var LKey, LMacData, LTag: TBytes;
+  begin
+    { 模拟 chachapoly 首帧：encLen(4) || ct(24) = 28B，1 个满块 + 12B 尾块 }
+    LKey := HexToBytes('261f64b4831ab2509467f571a7de3b86' +
+      'ae79b7267c3507e9a3a2ccafab867805');
+    LMacData := HexToBytes('00000018000102030405060708090a' +
+      '0b0c0d0e0f1011121314151617');
+    LTag := Poly1305Raw(LKey, LMacData);
+    CheckEqual('5e638d70a7b68cdac0fd7f53122496ea', BytesToHex(LTag));
+  end);
+
   LRunner := TSuiteRunner.Create('nextpas.core.crypto.chacha20poly1305');
   LRunner.Add(LSuite);
   LRunner.RunAll;

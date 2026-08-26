@@ -1,8 +1,10 @@
 program test_webview_factory;
-{ 工厂与 Builder 门禁：后端可用性事实（fake 恒真/其余 False）、
-  不可用后端 fail-fast（ecNotFound）、选项校验接线、默认 kind 冻结、
-  fluent 链全字段应用、Build 多窗、RunLoop/ExitLoop 语义、
-  Emit 早于 ready 静默丢弃。heaptrc 0 unfreed 硬门。 }
+{ 工厂与 Builder 门禁：后端可用性事实（探测驱动）、不可用后端
+  fail-fast（ecNotFound）、选项校验接线、缺省 kind 能力驱动冒烟、
+  fluent 链全字段应用（Kind(wvFake) 钉确定性语义）、Build 多窗、
+  RunLoop/ExitLoop 语义、Emit 早于 ready 静默丢弃。
+  builder/工厂出窗一律显式 Close 收口——活跃窗泄漏会令
+  WebviewRunLoop 进入 gtk_main 死等（S4 实锤坑）。heaptrc 0 硬门。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -13,21 +15,49 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
+  nextpas.core.webview.gtk.loader,
   nextpas.core.webview.factory;
+
+function GtkProbeUsable: Boolean;
+var
+  LInfo: TGtkLoadInfo;
+begin
+  Result := TryLoadGtkWebkit(LInfo);
+end;
 
 procedure TestBackendAvailabilityFacts;
 begin
   Check(WebviewBackendAvailable(wvFake), 'fake always available');
-  Check(not WebviewBackendAvailable(wvGtk), 'gtk lands in S3/S4');
+  { S3 起 gtk 按探测结果可用（幂等缓存）；与 loader 直探保持一致 }
+  CheckEqual(GtkProbeUsable(), WebviewBackendAvailable(wvGtk),
+    'gtk availability matches loader probe');
   Check(not WebviewBackendAvailable(wvWebview2), 'webview2 lands in W2');
   Check(not WebviewBackendAvailable(wvWk), 'wk lands in W3');
-  CheckEqual(Ord(wvFake), Ord(DefaultWebviewKind));
+  { S4：默认 kind 能力驱动——gtk 可用即 wvGtk，否则回落 wvFake }
+  if GtkProbeUsable() then
+    CheckEqual(Ord(wvGtk), Ord(DefaultWebviewKind), 'default = gtk when probed')
+  else
+    CheckEqual(Ord(wvFake), Ord(DefaultWebviewKind), 'default falls back to fake');
 end;
 
 procedure TestUnavailableBackendFailsFast;
 var
   LRaised: Boolean;
+  LQuick: IWebviewWindow;
 begin
+  if GtkProbeUsable() then
+  begin
+    { 可用环境：构造+立即 Close，验证工厂路径本身（不留活跃窗口——
+      泄漏会让 RunLoop 进入真实 gtk_main 死等，S3 曾实锤此坑） }
+    LQuick := CreateWebviewOf(wvGtk, DefaultWebviewOptions);
+    try
+      LQuick.Close;
+    finally
+      LQuick := nil;
+    end;
+    Check(True, '');
+    Exit;
+  end;
   LRaised := False;
   try
     CreateWebviewOf(wvGtk, DefaultWebviewOptions);
@@ -64,8 +94,11 @@ var
 begin
   { 接口面无 Title getter（只有 Set）；构造期字段经 fake 行为面校验：
     几何直接断言，标题/可缩放等由 options→CreateFakeWebview 路径在
-    fake_window gate 覆盖。此处锁 fluent 链不丢字段。 }
+    fake_window gate 覆盖。Kind(wvFake) 钉确定性后端——缺省 kind 在
+    探测到 WebKitGTK 的机器上是 wvGtk，几何断言只对 fake 语义成立。
+    此处锁 fluent 链不丢字段。 }
   W := TWebviewBuilder.New
+    .Kind(wvFake)
     .Title('Factory')
     .Size(1200, 800)
     .MinSize(400, 300)
@@ -80,7 +113,8 @@ begin
     CheckEqual(800, W.GetHeight);
     Check(not W.IsClosed, 'built window is open');
   finally
-    W := nil;
+    if (W <> nil) and not W.IsClosed then
+      W.Close;
   end;
 end;
 
@@ -104,14 +138,15 @@ procedure TestBuilderBuildTwiceTwoWindows;
 var
   WA, WB: IWebviewWindow;
 begin
-  WA := TWebviewBuilder.New.Build;
-  WB := TWebviewBuilder.New.Build;
+  WA := TWebviewBuilder.New.Kind(wvFake).Build;
+  WB := TWebviewBuilder.New.Kind(wvFake).Build;
   try
     Check(WA <> WB, 'two distinct windows');
     Check(FakeLiveWindowCount >= 2, 'both tracked');
   finally
-    WA := nil;
-    WB := nil;
+    { 显式收口：gtk 等真后端接口引用释放不等于窗口关闭 }
+    if (WA <> nil) and not WA.IsClosed then WA.Close;
+    if (WB <> nil) and not WB.IsClosed then WB.Close;
   end;
 end;
 
@@ -123,6 +158,7 @@ var
 begin
   LReadies := 0;
   W := TWebviewBuilder.New
+    .Kind(wvFake)
     .RegisterInvoke('ping',
       function(const APayloadJson: string): string
       begin
@@ -143,6 +179,8 @@ begin
     W.Navigate('npres://app/second.html');
     CheckEqual(2, LReadies, 'ready per navigation');
   finally
+    if not W.IsClosed then
+      W.Close;
     W := nil;
   end;
 end;
@@ -166,6 +204,34 @@ begin
     CheckEqual('{"n":2}', LFake.LastEmitPayloadJson);
   finally
     W := nil;
+  end;
+end;
+
+procedure TestDefaultKindFollowsProbe;
+var
+  W: IWebviewWindow;
+  LIsFake: Boolean;
+begin
+  { S4：缺省 kind 能力驱动——探测到 WebKitGTK 即真后端，否则回落 fake。
+    FromWindow 只认 fake 实例，其异常与否即判别器。出窗必须显式收口：
+    真后端窗口泄漏会让末尾 RunLoop 用例进入 gtk_main 死等 }
+  W := TWebviewBuilder.New.Build;
+  try
+    LIsFake := False;
+    try
+      TFakeWebview.FromWindow(W);
+      LIsFake := True;
+    except
+      on E: EWebviewInvalidState do ;
+    end;
+    if GtkProbeUsable() then
+      Check(not LIsFake, 'probed env builds real backend by default')
+    else
+      Check(LIsFake, 'unprobed env falls back to fake');
+    Check(not W.IsClosed, 'default-built window is open');
+  finally
+    if (W <> nil) and not W.IsClosed then
+      W.Close;
   end;
 end;
 
@@ -214,6 +280,7 @@ begin
   T := TTestSuite.Create('nextpas.core.webview.factory');
   T.Test('backend availability facts', @TestBackendAvailabilityFacts);
   T.Test('unavailable backend fails fast', @TestUnavailableBackendFailsFast);
+  T.Test('default kind follows probe', @TestDefaultKindFollowsProbe);
   T.Test('create validates options', @TestCreateValidatesOptions);
   T.Test('builder applies all fields', @TestBuilderAppliesAllFields);
   T.Test('builder ephemeral conflict raises at build',

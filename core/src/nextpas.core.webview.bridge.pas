@@ -19,8 +19,13 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.json,
-  nextpas.core.webview.base;
+  nextpas.core.json.types,
+  nextpas.core.json.builder,
+  nextpas.core.webview.base,
+  nextpas.core.webview.intf;
 
 const
   { 错误码稳定词汇表（BRIDGE_PROTOCOL §5） }
@@ -58,6 +63,69 @@ function BuildEmitScript(const AEvent, APayloadJson: string): string;
 { handler 错误码归一化：EWebviewInvokeError 空 Code 补默认 npw.bad_request，
   非空（含 app.* 自定义码）原样透传（§5 规则）。 }
 function NormalizeInvokeCode(const ACode: string): string;
+
+type
+  {** invoke handler 注册表唯一实现：六形态注册统一归一为 reference 形态
+      存储（design-conventions §8 范式），直接实现 IWebviewInvokeRegistry；
+      fake 与 gtk 后端共用同一实例语义。命名空间校验委托 base.CheckInvokeCmd；
+      重复 cmd 抛 EWebviewInvalidState；Unregister 对未注册 cmd 静默。
+      非线程安全——只允许 UI 主线程触碰（与窗口壳同线程）。 *}
+  TWebviewInvokeRegistry = class(TInterfacedObject, IWebviewInvokeRegistry)
+  private type
+    TEntry = record
+      Cmd: string;
+      IsAsync: Boolean;
+      SyncHandler: TWebviewInvokeSyncHandler;
+      AsyncHandler: TWebviewInvokeAsyncHandler;
+    end;
+  private
+    FEntries: array of TEntry;
+    function IndexOf(const ACmd: string): Integer;
+    procedure AddEntry(const ACmd: string; AIsAsync: Boolean;
+      const ASync: TWebviewInvokeSyncHandler;
+      const AAsync: TWebviewInvokeAsyncHandler);
+  public
+    { IWebviewInvokeRegistry }
+    procedure Register(const ACmd: string;
+      AHandler: TWebviewInvokeSyncHandler); overload;
+    procedure Register(const ACmd: string;
+      AHandler: TWebviewInvokeSyncMethod); overload;
+    procedure Register(const ACmd: string;
+      AHandler: TWebviewInvokeSyncProc); overload;
+    procedure RegisterAsync(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncHandler); overload;
+    procedure RegisterAsync(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncMethod); overload;
+    procedure RegisterAsync(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncProc); overload;
+    procedure Unregister(const ACmd: string);
+    { 分发面：False = 未注册；按 IsAsync 选择形态调用 }
+    function Find(const ACmd: string; out AIsAsync: Boolean;
+      out ASync: TWebviewInvokeSyncHandler;
+      out AAsync: TWebviewInvokeAsyncHandler): Boolean;
+    function Count: Integer;
+  end;
+
+  {** 嵌入式资产存储唯一实现：prefix 前缀路由到 provider 链，最长前缀
+      优先；TryResolve 未命中返回 False（404 正常业务路径）。
+      MountDirectory 需要文件系统 owner 支撑，W1 显式不支持（抛
+      ENotSupportedError），落位时由 fs owner 接管实现。 *}
+  TWebviewAssetsImpl = class(TInterfacedObject, IWebviewAssets)
+  private type
+    TMount = record
+      Prefix: string;
+      Provider: IWebviewAssetProvider;
+    end;
+  private
+    FMounts: array of TMount;
+  public
+    procedure MountEmbedded(const APrefix: string;
+      AProvider: IWebviewAssetProvider);
+    procedure MountDirectory(const APrefix, ARootDir: string);
+    function TryResolve(const ASchemeRelativePath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+    function MountCount: Integer;
+  end;
 
 const
   { 注入脚本（§2）：document-start 主帧注入，每次导航重注。
@@ -135,9 +203,7 @@ const
 
 implementation
 
-uses
-  nextpas.core.json.types,
-  nextpas.core.json.builder;
+{ json.types/json.builder 已在 interface uses 引入 }
 
 { 把任意文本转成 JS 字符串字面量：JSON 字符串转义集是 JS 的子集
   （引号/反斜杠/控制字符），直接复用 json owner 的 Str 编码。
@@ -238,6 +304,177 @@ begin
     Result := NPW_CODE_BAD_REQUEST
   else
     Result := ACode;
+end;
+
+{ ---- TWebviewInvokeRegistry：六形态归一 + 命名空间校验 ---- }
+
+function TWebviewInvokeRegistry.IndexOf(const ACmd: string): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FEntries) do
+    if FEntries[I].Cmd = ACmd then
+      Exit(I);
+  Result := -1;
+end;
+
+procedure TWebviewInvokeRegistry.AddEntry(const ACmd: string;
+  AIsAsync: Boolean; const ASync: TWebviewInvokeSyncHandler;
+  const AAsync: TWebviewInvokeAsyncHandler);
+begin
+  CheckInvokeCmd(ACmd);
+  if IndexOf(ACmd) >= 0 then
+    raise EWebviewInvalidState.CreateFmt(
+      'invoke handler already registered: %s', [ACmd]);
+  SetLength(FEntries, Length(FEntries) + 1);
+  FEntries[High(FEntries)].Cmd := ACmd;
+  FEntries[High(FEntries)].IsAsync := AIsAsync;
+  FEntries[High(FEntries)].SyncHandler := ASync;
+  FEntries[High(FEntries)].AsyncHandler := AAsync;
+end;
+
+procedure TWebviewInvokeRegistry.Register(const ACmd: string;
+  AHandler: TWebviewInvokeSyncHandler);
+begin
+  AddEntry(ACmd, False, AHandler, nil);
+end;
+
+procedure TWebviewInvokeRegistry.Register(const ACmd: string;
+  AHandler: TWebviewInvokeSyncMethod);
+begin
+  Register(ACmd,
+    function(const APayloadJson: string): string
+    begin
+      Result := AHandler(APayloadJson);
+    end);
+end;
+
+procedure TWebviewInvokeRegistry.Register(const ACmd: string;
+  AHandler: TWebviewInvokeSyncProc);
+begin
+  Register(ACmd,
+    function(const APayloadJson: string): string
+    begin
+      Result := AHandler(APayloadJson);
+    end);
+end;
+
+procedure TWebviewInvokeRegistry.RegisterAsync(const ACmd: string;
+  AHandler: TWebviewInvokeAsyncHandler);
+begin
+  AddEntry(ACmd, True, nil, AHandler);
+end;
+
+procedure TWebviewInvokeRegistry.RegisterAsync(const ACmd: string;
+  AHandler: TWebviewInvokeAsyncMethod);
+begin
+  RegisterAsync(ACmd,
+    procedure(const APayloadJson: string;
+      const ACompletion: IWebviewInvokeCompletion)
+    begin
+      AHandler(APayloadJson, ACompletion);
+    end);
+end;
+
+procedure TWebviewInvokeRegistry.RegisterAsync(const ACmd: string;
+  AHandler: TWebviewInvokeAsyncProc);
+begin
+  RegisterAsync(ACmd,
+    procedure(const APayloadJson: string;
+      const ACompletion: IWebviewInvokeCompletion)
+    begin
+      AHandler(APayloadJson, ACompletion);
+    end);
+end;
+
+procedure TWebviewInvokeRegistry.Unregister(const ACmd: string);
+var
+  LIdx, I: Integer;
+begin
+  LIdx := IndexOf(ACmd);
+  if LIdx < 0 then
+    Exit;   { 未注册是静默 no-op }
+  for I := LIdx to High(FEntries) - 1 do
+    FEntries[I] := FEntries[I + 1];
+  SetLength(FEntries, Length(FEntries) - 1);
+end;
+
+function TWebviewInvokeRegistry.Count: Integer;
+begin
+  Result := Length(FEntries);
+end;
+
+function TWebviewInvokeRegistry.Find(const ACmd: string; out AIsAsync: Boolean;
+  out ASync: TWebviewInvokeSyncHandler;
+  out AAsync: TWebviewInvokeAsyncHandler): Boolean;
+var
+  LIdx: Integer;
+begin
+  LIdx := IndexOf(ACmd);
+  Result := LIdx >= 0;
+  if not Result then
+    Exit(False);
+  AIsAsync := FEntries[LIdx].IsAsync;
+  ASync := FEntries[LIdx].SyncHandler;
+  AAsync := FEntries[LIdx].AsyncHandler;
+end;
+
+{ ---- TWebviewAssetsImpl：前缀路由 + provider 链 ---- }
+
+procedure TWebviewAssetsImpl.MountEmbedded(const APrefix: string;
+  AProvider: IWebviewAssetProvider);
+var
+  LIdx: Integer;
+begin
+  if AProvider = nil then
+    raise EWebviewInvalidState.Create('asset provider must not be nil');
+  LIdx := Length(FMounts);
+  SetLength(FMounts, LIdx + 1);
+  FMounts[LIdx].Prefix := APrefix;
+  FMounts[LIdx].Provider := AProvider;
+end;
+
+procedure TWebviewAssetsImpl.MountDirectory(const APrefix, ARootDir: string);
+begin
+  { 文件系统支撑归 fs owner；W1 显式不支持（CONTRACT §3.4 同 fake 立场） }
+  raise ENotSupportedError.Create('directory asset mounts are not supported yet');
+end;
+
+function TWebviewAssetsImpl.TryResolve(const ASchemeRelativePath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+var
+  I, LBest, LLen: Integer;
+  LPath: string;
+begin
+  Result := False;
+  ABytes := nil;
+  AMimeType := '';
+  { 归一：去首部 '/'，统一相对形态匹配前缀 }
+  LPath := ASchemeRelativePath;
+  while (LPath <> '') and (LPath[1] = '/') do
+    Delete(LPath, 1, 1);
+  if LPath = '' then
+    Exit;
+  LBest := -1;
+  LLen := -1;
+  for I := 0 to High(FMounts) do
+    { 空前缀 = 根挂载匹配一切（FPC Pos('',s) 返回 0，须显式豁免）；
+      同长并列取先挂者——与 CONTRACT §3 解析顺序一致 }
+    if ((FMounts[I].Prefix = '') or
+        (Pos(FMounts[I].Prefix, LPath) = 1)) and
+       (Length(FMounts[I].Prefix) > LLen) then
+    begin
+      LBest := I;
+      LLen := Length(FMounts[I].Prefix);
+    end;
+  if LBest < 0 then
+    Exit;
+  Result := FMounts[LBest].Provider.TryResolve(LPath, ABytes, AMimeType);
+end;
+
+function TWebviewAssetsImpl.MountCount: Integer;
+begin
+  Result := Length(FMounts);
 end;
 
 end.

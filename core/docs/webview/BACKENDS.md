@@ -69,8 +69,36 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 
 资源：`webkit_web_context_register_uri_scheme`（须在首个 web view 创建前）。
 
-> 最终清单 S3 以官方头核对后冻结，并附 source-surface 对照说明
-> （参照 platform FFI import workflow 的取证方式）。
+> **S3 冻结注记**（落地实现对照 /usr/include/webkitgtk-4.1 官方头）：
+> - eval 双路径按符号存在性选择已实现（loader 能力位 `TGtkEvalPath`），
+>   `run_javascript_finish` 经 `WebKitJavascriptResult.get_js_value`
+>   统一解包为 JSCValue，两路径同构取回结果。
+> - 会话 context 三形态齐备：默认共享（get_default）/ ephemeral /
+>   DataDirectory（website_data_manager "base-data-directory"）；
+>   视图一律 `new_with_context` 创建，scheme 先于视图注册。
+> - eval 结果文本：null/undefined 诚实序列化为 'null'；不可 JSON 化
+>   值降级 JSC toString 文本。
+> - scheme 404 已走真实 GError 路径（S4）：`finish_error(quark
+>   'nextpas-webview', 404)`，GError 所有权随调用移交 WebKit；
+>   页面侧 `fetch` 以 reject 呈现，与 HTTP 语义对齐。
+> - 桥回执 eval（SendReceipt）为 fire-and-forget，不入在途登记：
+>   回执无用户回调、无恰好一次语义；若与 Close 竞态，最坏即页面未
+>   收到回执（与页面已销毁的观察一致），且不存在可悬挂的记录分配。
+> - scheme 请求归属（S5）：context 级单 handler 限制下，经
+>   `webkit_uri_scheme_request_get_web_view` 对回活跃窗口表按发起
+>   视图精确路由——多窗口资产命名空间硬隔离（live 双窗门禁覆盖）；
+>   service worker 等无视图请求回落"最新活跃窗口"。
+> - 浮点异常屏蔽（S5）：gtk_init 前恢复 IEEE 全屏蔽。FPC RTL 默认
+>   解封 FP 异常且内核 clone 的子线程继承创建者控制字——GDK/JSC 等
+>   引擎代码里合法的除零值运算（预期 ±Inf）会陷阱成随机位置
+>   EZeroDivide（gdb 实锤于 libgdk-3 主线程）。C 宿主默认带屏蔽，
+>   我们对齐同一语义；仅本进程内生效。
+> - 自有 context（ephemeral / DataDirectory）生命周期归窗口：析构时
+>   先摘 scheme 注册表再 unref——顺序不可反，注册表按指针地址判重，
+>   后摘会误删复用同址的新 context 条目。
+> - IsMinimized 为查询式真值（S4）：`gdk_window_get_state` 与
+>   `GDK_WINDOW_STATE_ICONIFIED` 位与，不做 C 结构布局解析；
+>   Maximized/Visible/几何均为引擎实时真值。
 
 ### 2.3 主线程唤醒
 

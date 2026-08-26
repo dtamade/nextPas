@@ -38,6 +38,9 @@ unit nextpas.core.net.async.tls;
  *
  * Scope: client sessions only (upgrade an existing stream, or dial +
  * upgrade). Server-side async support lands with the TLS listener work.
+ * Backend: Options.Backend 选择引擎——atbOpenSSL（缺省，本单元
+ * memory-BIO 泵）/ atbFreePascal（分发到 nextpas.core.net.async.tlsfp，
+ * 纯 Pascal TLS1.3 泵）；两泵回调/错误码契约同构，调用方无感。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -58,21 +61,36 @@ const
   ASYNC_TLS_ERR_HANDSHAKE = -3002;
 
 type
+  { TLS 引擎后端。atbOpenSSL = memory-BIO 泵（既有，全功能）；
+    atbFreePascal = 纯 Pascal TLS1.3 泵（nextpas.core.net.async.tlsfp，
+    S1 自写协议基线；能力边界见该单元头——v1 无链验证/PSK/HRR，
+    VerifyPeer=True fail-closed 抛错）。atbAuto 缺省解析为 OpenSSL
+    （成熟度优先），显式指定才走纯 Pas。 }
+  TAsyncTlsBackend = (atbAuto, atbOpenSSL, atbFreePascal);
+
   { 异步 TLS 客户端选项。Ctx=nil 时按 VerifyPeer 惰性建进程级共享默认
     ctx；Ctx<>nil 时以调用方 ctx 的证书校验设置为准（VerifyPeer 字段
     被忽略），单元仍会强制 PARTIAL_WRITE|MOVING_WRITE_BUFFER mode。
     注意：HandshakeDeadline 无缺省值魔法——用 DefaultAsyncTlsClientOptions
-    或显式设 TDeadline.Infinite，零初始化记录表示「已过期」。 }
+    或显式设 TDeadline.Infinite，零初始化记录表示「已过期」。
+    Backend=atbFreePascal 时 Ctx 被忽略（纯 Pas 无外部 CTX 概念）。 }
   TAsyncTlsClientOptions = record
     { SNI 主机名；空串 = 不发送（AsyncTlsConnect 回退填 Host） }
     ServerName: string;
     { 仅影响内部共享 ctx：True = 校验链并加载系统信任库；False = 不校验
-      （代理节点场景显式关闭）。缺省 True（安全默认）。 }
+      （代理节点场景显式关闭）。缺省 True（安全默认）。
+      freepascal 后端同样支持（tls.x509verify 全链验证）。 }
     VerifyPeer: Boolean;
     { 握手阶段（含底层拨号）绝对期限；Infinite = 不设超时 }
     HandshakeDeadline: TDeadline;
     { 高级：外部共享 SSL_CTX。调用方持有生命周期，须存活到回调之后。 }
     Ctx: PSSL_CTX;
+    { 引擎后端选择；缺省 atbOpenSSL。
+      freepascal 后端：Ctx 被忽略（纯 Pas 无外部 CTX 概念），
+      TrustBundlePath 空 = 系统 CA bundle 发现。 }
+    Backend: TAsyncTlsBackend;
+    { 信任锚 PEM bundle 文件路径；仅 freepascal 后端消费 }
+    TrustBundlePath: string;
   end;
 
   { 异步握手完成回调：AError=0 时 AStream 为就绪 TLS 流；失败时
@@ -104,6 +122,7 @@ uses
   nextpas.core.io.base, nextpas.core.io.intf,
   nextpas.core.async.cancellation,
   nextpas.core.net.async.dial,
+  nextpas.core.net.async.tlsfp,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.bio,
@@ -196,6 +215,8 @@ begin
   Result.VerifyPeer := True;
   Result.HandshakeDeadline := TDeadline.Infinite;
   Result.Ctx := nil;
+  Result.Backend := atbOpenSSL;
+  Result.TrustBundlePath := '';
 end;
 
 { ======== 握手上下文与流类型 ======== }
@@ -585,7 +606,19 @@ function AsyncTlsUpgrade(const ALoop: TAsyncLoop;
   ACallback: TAsyncTlsConnectCallback; AContext: Pointer): Boolean;
 var
   LCtx: PTlsHsCtx;
+  LOptsFp: TAsyncTlsFpClientOptions;
 begin
+  { 纯 Pas 引擎分发：字段平移，回调/错误码契约与 OpenSSL 泵同构 }
+  if AOptions.Backend = atbFreePascal then
+  begin
+    LOptsFp.ServerName := AOptions.ServerName;
+    LOptsFp.VerifyPeer := AOptions.VerifyPeer;
+    LOptsFp.HandshakeDeadline := AOptions.HandshakeDeadline;
+    LOptsFp.TrustBundlePath := AOptions.TrustBundlePath;
+    Result := AsyncTlsFpUpgrade(ALoop, AStream, LOptsFp, ACallback,
+      AContext);
+    Exit;
+  end;
   Result := False;
   if (AStream = nil) or not Assigned(ACallback) then
     Exit;
@@ -608,7 +641,19 @@ function AsyncTlsConnect(const ALoop: TAsyncLoop; const AHost: string;
 var
   LCtx: PTlsHsCtx;
   LOpts: TAsyncTcpDialOptions;
+  LOptsFp: TAsyncTlsFpClientOptions;
 begin
+  { 纯 Pas 引擎分发：字段平移，SNI 缺省回填与 OpenSSL 泵一致 }
+  if AOptions.Backend = atbFreePascal then
+  begin
+    LOptsFp.ServerName := AOptions.ServerName;
+    LOptsFp.VerifyPeer := AOptions.VerifyPeer;
+    LOptsFp.HandshakeDeadline := AOptions.HandshakeDeadline;
+    LOptsFp.TrustBundlePath := AOptions.TrustBundlePath;
+    Result := AsyncTlsFpConnect(ALoop, AHost, APort, LOptsFp, ACallback,
+      AContext);
+    Exit;
+  end;
   Result := False;
   if (AHost = '') or not Assigned(ACallback) then
     Exit;

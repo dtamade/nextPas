@@ -16,6 +16,11 @@ type
 
 function GraphemeNext(const AData: PByte; ALen: SizeUInt): TGraphemeResult;
 
+{** @desc 字符串的终端显示宽: 字素簇宽求和, 与 TBuffer 渲染推进同模型
+    (基础码点+VS16/键帽/RI 对计 2 列)。供计宽/裁剪侧对齐渲染,
+    逐码点累计会把 emoji 序列低报导致右对齐压穿边界 }
+function GraphemeStrWidth(const AValue: string): Integer;
+
 implementation
 
 uses
@@ -192,6 +197,25 @@ begin
 
   Result.CodePoints := LCodePoints;
   Result.Width := LWidth;
+end;
+
+function GraphemeStrWidth(const AValue: string): Integer;
+var
+  LPos: SizeUInt;
+  LLn: SizeUInt;
+  LG: TGraphemeResult;
+begin
+  Result := 0;
+  LLn := SizeUInt(Length(AValue));
+  LPos := 1;
+  while LPos <= LLn do
+  begin
+    LG := GraphemeNext(@AValue[LPos], LLn - LPos + 1);
+    if LG.ByteLen <= 0 then
+      Break;                      { 防御: 尾部非法字节不再推进 }
+    Inc(Result, LG.Width);
+    Inc(LPos, SizeUInt(LG.ByteLen));
+  end;
 end;
 
 end.

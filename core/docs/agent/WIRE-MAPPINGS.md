@@ -223,17 +223,109 @@ id / model                            → Id / Model
 | Q-A8 | 连接在 `message_stop` 之前死亡（截断流） | **fail-closed**：decoder.Finalize 无 message_start→stop 完整轨迹即抛 aecProtocol，绝不把截断答案合成完整消息（与 Q-A1 同精神；对照 OpenAI Q-O4 的宽容是各自协议现实）|
 | Q-A9 | thinking enabled 时官方仅允许 `tool_choice:{"type":"auto"}`；any/tool 组合遭上游 400 | SDK 不做本地预判（组合约束随上游演化），400 经公共分类器自然归因；tcmNone 的 tools 省略转译不受此约束影响 |
 
-## 3. 明确不做（v1 边界）
+### 2.6 Prompt caching 断点策略（W10/v1.1 第五批）
+
+词表 `CacheControl: TCacheControlMode = (ccmUnset, ccmAuto)`；ccmUnset 不上送
+（v1 既有请求字节零变化）。anthropic 是显式打点协议：`cache_control` 附着在
+content block 对象上，命中按断点前缀判定，厂商预算 ≤4 个/请求。
+
+**ccmAuto 放置算法**（编码器内固定，确定性保障跨轮稳定）：
+
+| 载体 | 发射形态 | 标记位 |
+|------|---------|--------|
+| tools | 末个 tool 对象尾附 `cache_control` | 有 Tools 时恒定 |
+| system | 从 string 形态切换为单 text block 数组形态并附标记 | 有 system 时恒定 |
+| messages | 最后一条消息的最后一个 content block 尾附标记 | 随轮次尾部移动 |
+
+三处合计 ≤3 ≤4 预算；空载体（无 tools/无 system/末条消息无 parts）跳过不打。
+
+**跨家族语义**：openai/grok/responses 三面对象无显式缓存字段——厂商对足长
+前缀自动缓存，`ccmAuto` 在这些适配器为零差异意图声明（编码器不产任何字节）。
+
+**与前缀稳定不变量的关系**（PERFORMANCE §6）：cache_control 是请求元数据而
+非内容——历史块的文本/id/签名等内容字节跨轮不变，仅末条消息标记附着位随轮
+移动；tools/system 段序列化字节跨轮恒定。自定义断点位形仍走 ExtraJson 逃生舱。
+
+## 3. OpenAI Responses 适配器（W9/v1.1 第四批）
+
+> 第三协议支柱。端点 `POST {base}/responses`；与 Chat Completions 共享
+> 公共规则（§0）但请求/响应/SSE 三面形态均不同——本节为唯一权威。
+> 实现单元 `nextpas.core.agent.provider.openai.responses.pas`（D13 公开
+> 编解码器同款三件：Encode/Decode/WireDecoder）。
+
+### 3.1 请求映射
+
+| TCompletionRequest | Responses 字段 | 备注 |
+|---|---|---|
+| Model | `model` | 必填 |
+| System | `instructions` | 顶层全局前缀；Messages 中不再重复注入 system |
+| Messages(user text) | `input[]{role:"user",content:[{type:"input_text"}]}` | assistant 回填 `{type:"output_text"}` |
+| Messages(tool result) | `input[]{type:"function_call_output", call_id, output}` | 对应上游 function_call 项的 call_id |
+| Messages(assistant tool calls) | `input[]{type:"function_call", call_id, name, arguments}` | 回放历史轮的调用项 |
+| MaxTokens | `max_output_tokens` | CMaxTokensUnset 省略 |
+| Temperature / TopP / Seed | `temperature` / `top_p` / `seed` | sentinel 缺省省略 |
+| StopSequences | —（**不支持**） | Q-R1：忽略+warn |
+| ResponseSchemaJson | `text.format={type:"json_schema",…strict}` | Q-R6：structured output 在此走 text.format 而非 chat 的 response_format |
+| Tools | `tools[]{type:"function", name, description, parameters, strict}` | Q-R3：function 定义平铺（无 chat 版嵌套 function 包装）|
+| ToolChoice | `"auto"/"none"/"required"/{"type":"function","name":…}` | 四形态直映 |
+| ParallelToolCalls | `parallel_tool_calls` | tsUnset 省略 |
+| ReasoningEffort | `reasoning:{effort}` | reMinimal 映射 "minimal"；reUnset 整字段省略 |
+
+### 3.2 非流式响应映射
+
+根对象 `object:"response"`；`status="completed"` 正常解码：
+
+- `output[]` 逐项展开：`type:"message"` → content 内 `output_text` 拼
+  assistant 文本；`type:"function_call"` → 工具调用槽（name/call_id/
+  arguments）；`type:"reasoning"` → thinking part（summary 文本拼接，
+  词表落点 pkThinking）。
+- `usage`: `input_tokens/output_tokens` + `output_tokens_details.
+  reasoning_tokens`（Q-R4 字段名差异集中在此层吸收）。
+- `status="failed"` 或根级 `error` → 公共错误分类器归因（§0/§1.4 同款信封
+   解析；`error.code/message` 直取）。
+
+### 3.3 流式事件映射（SSE，`event:` 名为主键，Q-R2）
+
+| event | 词表增量 |
+|---|---|
+| `response.created` | 首 envelope delta（response.id → MessageId；Q-A1 同精神的强制首信封） |
+| `response.output_text.delta` | sdkTextDelta(`delta`) |
+| `response.reasoning_summary_text.delta` | sdkThinkingDelta(`delta`) |
+| `response.output_item.added`(function_call) | sdkToolCallStart(item_id→call_id, name) |
+| `response.function_call_arguments.delta` | sdkToolCallDelta（按 item_id 分桶累积） |
+| `response.output_item.done`(function_call) | arguments 兜底校验（分桶缺失时以完整串补齐） |
+| `response.completed` | usage delta（response.usage）+ 终态收口 |
+| `response.incomplete` | finish=sdkFinishLength 截断语义 |
+| `response.failed` / `response.error` | sdkError（流中失败上浮，fold 收口） |
+
+`ping`、`response.in_progress`、`response.content_part.added/done`、
+`response.output_text.done`、`response.reasoning_summary_*` 其余变体：
+零增量合法帧，静默吞（Extra 证据照录）。
+
+### 3.4 OpenAI Responses 怪癖清单
+
+| # | 怪癖 | 处置 |
+|---|------|------|
+| Q-R1 | 无 stop sequences 参数（chat completions 有） | 编码侧忽略+warn（ReasoningEffort·anthropic 待遇先例）；调用方显式设置即日志可见 |
+| Q-R2 | SSE 以 `event:` 名为主键（同 anthropic，异于 chat completions data-only） | 解码按 event 分派；data JSON 只做载荷提取 |
+| Q-R3 | function tools 与 function_call 输出全部平铺（无嵌套 function 包装、id 叫 call_id） | 编码/解码两侧集中映射；词表不变 |
+| Q-R4 | usage 字段名与 reasoning 明细位置不同于 chat completions | FillUsage responses 变体一次吸收 |
+| Q-R5 | 连接在 `response.completed/failed` 之前死亡（截断流） | **fail-closed**：无 created→completed/failed 完整轨迹 Finalize 即抛 aecProtocol（Q-A8 同精神） |
+| Q-R6 | structured output 走 `text.format` 而非 `response_format` | W6 schema 词表直映；strict 语义一致 |
+| Q-R7 | opencode 代理等兼容实现的事件子集可能有缺 | 以官方规范为准编码；实测差异记入本表不阻塞（E2E 门兜底核实） |
+
+## 4. 明确不做（v1 边界）
 
 OpenAI 侧：`logprobs`、audio/modality 参数、legacy `functions` 字段。
 Anthropic 侧：`metadata.user_id`、citations、server-side tools（web_search 等）、
-`container`/code-execution、prompt caching 显式 `cache_control` 打点（缓存命中
-用量照常记录，但主动打点策略留给消费方经 ExtraJson 注入）、structured output
+`container`/code-execution、structured output
 tool-based 转译（合成工具+强制 tool_choice 的完整方案为后续候选；当前
 ResponseSchemaJson 在 anthropic 保持 fail-fast aecConfig，见 §2.1）。
 
 response_format/JSON mode 与 `tool_choice` 已随 W6（v1.1 第一批）落地：
 openai 族 §1.1/§1.7，anthropic §2.1。`reasoning_effort` 已随 W7（v1.1 第二批）
-入词表：openai 族 §1.1 编码、anthropic 忽略+warn。
+入词表：openai 族 §1.1 编码、anthropic 忽略+warn。prompt caching 显式打点已随
+W10（v1.1 第五批）入词表：anthropic 显式 `cache_control` §2.6，openai/grok/
+responses 族自动缓存零差异。
 
 以上任一项进入实施范围时：先在本文件立节，再动代码。

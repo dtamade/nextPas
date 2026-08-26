@@ -84,7 +84,10 @@ var
   W: IWebviewWindow;
   LFake: TFakeWebview;
 begin
+  { Kind(wvFake) 钉确定性后端：缺省 kind 在探测到 WebKitGTK 的机器上
+    是 wvGtk，FromWindow 判别与 DeliverInvoke 驱动只对 fake 成立 }
   W := TWebviewBuilder.New
+    .Kind(wvFake)
     .RegisterInvoke('echo', MakeEcho('builder'))
     .Build;
   try
@@ -93,6 +96,8 @@ begin
     LFake.DeliverInvoke('echo', '{}');
     CheckEqual('{"tag":"builder"}', LFake.LastOutcome.ResultJson);
   finally
+    if not W.IsClosed then
+      W.Close;
     W := nil;
   end;
 end;

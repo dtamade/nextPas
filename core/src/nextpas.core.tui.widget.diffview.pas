@@ -32,6 +32,8 @@ type
     function WithStyle(const S: TStyle): IDiffView;
     function WithAddedStyle(const S: TStyle): IDiffView;
     function WithRemovedStyle(const S: TStyle): IDiffView;
+    function WithHeaderStyle(const S: TStyle): IDiffView;
+    function WithLineNumStyle(const S: TStyle): IDiffView;
     function WithBlock(ABlock: IBlock): IDiffView;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TDiffViewState);
@@ -53,6 +55,8 @@ type
     function WithStyle(const S: TStyle): IDiffView;
     function WithAddedStyle(const S: TStyle): IDiffView;
     function WithRemovedStyle(const S: TStyle): IDiffView;
+    function WithHeaderStyle(const S: TStyle): IDiffView;
+    function WithLineNumStyle(const S: TStyle): IDiffView;
     function WithBlock(ABlock: IBlock): IDiffView;
 
     { IWidget }
@@ -187,6 +191,12 @@ begin FAddedStyle := S; Result := Self; end;
 
 function TDiffView.WithRemovedStyle(const S: TStyle): IDiffView;
 begin FRemovedStyle := S; Result := Self; end;
+
+function TDiffView.WithHeaderStyle(const S: TStyle): IDiffView;
+begin FHeaderStyle := S; Result := Self; end;
+
+function TDiffView.WithLineNumStyle(const S: TStyle): IDiffView;
+begin FLineNumStyle := S; Result := Self; end;
 
 function TDiffView.WithBlock(ABlock: IBlock): IDiffView;
 begin FBlock := ABlock; Result := Self; end;

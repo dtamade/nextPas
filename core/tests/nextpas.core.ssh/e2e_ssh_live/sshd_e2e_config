@@ -1,0 +1,14 @@
+# e2e_ssh_live 容器内 sshd 配置（由 run_e2e.sh 挂载到 /config/sshd_config）
+Port 22
+ListenAddress 0.0.0.0
+HostKey /config/host_ed25519
+PermitRootLogin prohibit-password
+PubkeyAuthentication yes
+AuthorizedKeysFile /config/authorized_keys
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+X11Forwarding no
+AllowTcpForwarding no
+PrintMotd no
+LogLevel DEBUG3

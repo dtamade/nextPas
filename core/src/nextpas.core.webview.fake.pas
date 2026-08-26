@@ -344,48 +344,6 @@ begin
     end;
 end;
 
-function SyncMethodToRef(
-  AHandler: TWebviewInvokeSyncMethod): TWebviewInvokeSyncHandler;
-begin
-  Result :=
-    function(const APayloadJson: string): string
-    begin
-      Result := AHandler(APayloadJson);
-    end;
-end;
-
-function SyncProcToRef(
-  AHandler: TWebviewInvokeSyncProc): TWebviewInvokeSyncHandler;
-begin
-  Result :=
-    function(const APayloadJson: string): string
-    begin
-      Result := AHandler(APayloadJson);
-    end;
-end;
-
-function AsyncMethodToRef(
-  AHandler: TWebviewInvokeAsyncMethod): TWebviewInvokeAsyncHandler;
-begin
-  Result :=
-    procedure(const APayloadJson: string;
-      const ACompletion: IWebviewInvokeCompletion)
-    begin
-      AHandler(APayloadJson, ACompletion);
-    end;
-end;
-
-function AsyncProcToRef(
-  AHandler: TWebviewInvokeAsyncProc): TWebviewInvokeAsyncHandler;
-begin
-  Result :=
-    procedure(const APayloadJson: string;
-      const ACompletion: IWebviewInvokeCompletion)
-    begin
-      AHandler(APayloadJson, ACompletion);
-    end;
-end;
-
 { ---- TFakeDispatcher：互斥保护的环形 FIFO ---- }
 
 type
@@ -523,189 +481,16 @@ begin
   PostRef(NotifyProcToRef(AProc));
 end;
 
-{ ---- TFakeInvokeRegistry：归一化存储 + 命名空间校验 ---- }
+{ ---- invoke 注册表：唯一实现收敛到 bridge（TWebviewInvokeRegistry）----
+  fake 仅保留别名；gtk 后端复用同一实现，杜绝双处漂移。 }
 
 type
-  TFakeInvokeEntry = record
-    Cmd: string;
-    SyncHandler: TWebviewInvokeSyncHandler;
-    AsyncHandler: TWebviewInvokeAsyncHandler;
-    IsAsync: Boolean;
-  end;
+  TFakeInvokeRegistry = nextpas.core.webview.bridge.TWebviewInvokeRegistry;
 
-  TFakeInvokeRegistry = class(TInterfacedObject, IWebviewInvokeRegistry)
-  private
-    FEntries: array of TFakeInvokeEntry;
-    function IndexOf(const ACmd: string): Integer;
-  public
-    procedure RegisterSyncRef(const ACmd: string;
-      AHandler: TWebviewInvokeSyncHandler);
-    procedure RegisterAsyncRef(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncHandler);
-    procedure Unregister(const ACmd: string);
-    { IWebviewInvokeRegistry }
-    procedure Register(const ACmd: string;
-      AHandler: TWebviewInvokeSyncHandler); overload;
-    procedure Register(const ACmd: string;
-      AHandler: TWebviewInvokeSyncMethod); overload;
-    procedure Register(const ACmd: string;
-      AHandler: TWebviewInvokeSyncProc); overload;
-    procedure RegisterAsync(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncHandler); overload;
-    procedure RegisterAsync(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncMethod); overload;
-    procedure RegisterAsync(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncProc); overload;
-  end;
-
-function TFakeInvokeRegistry.IndexOf(const ACmd: string): Integer;
-var
-  I: Integer;
-begin
-  Result := -1;
-  for I := 0 to High(FEntries) do
-    if FEntries[I].Cmd = ACmd then
-      Exit(I);
-end;
-
-procedure TFakeInvokeRegistry.RegisterSyncRef(const ACmd: string;
-  AHandler: TWebviewInvokeSyncHandler);
-var
-  LIdx: Integer;
-begin
-  CheckInvokeCmd(ACmd);
-  LIdx := IndexOf(ACmd);
-  if LIdx >= 0 then
-    raise EWebviewInvalidState.CreateFmt(
-      'invoke cmd "%s" is already registered', [ACmd]);
-  SetLength(FEntries, Length(FEntries) + 1);
-  FEntries[High(FEntries)].Cmd := ACmd;
-  FEntries[High(FEntries)].SyncHandler := AHandler;
-  FEntries[High(FEntries)].IsAsync := False;
-end;
-
-procedure TFakeInvokeRegistry.RegisterAsyncRef(const ACmd: string;
-  AHandler: TWebviewInvokeAsyncHandler);
-var
-  LIdx: Integer;
-begin
-  CheckInvokeCmd(ACmd);
-  LIdx := IndexOf(ACmd);
-  if LIdx >= 0 then
-    raise EWebviewInvalidState.CreateFmt(
-      'invoke cmd "%s" is already registered', [ACmd]);
-  SetLength(FEntries, Length(FEntries) + 1);
-  FEntries[High(FEntries)].Cmd := ACmd;
-  FEntries[High(FEntries)].AsyncHandler := AHandler;
-  FEntries[High(FEntries)].IsAsync := True;
-end;
-
-procedure TFakeInvokeRegistry.Unregister(const ACmd: string);
-var
-  LIdx, I: Integer;
-begin
-  LIdx := IndexOf(ACmd);
-  if LIdx < 0 then
-    Exit;
-  for I := LIdx to High(FEntries) - 1 do
-    FEntries[I] := FEntries[I + 1];
-  SetLength(FEntries, Length(FEntries) - 1);
-end;
-
-procedure TFakeInvokeRegistry.Register(const ACmd: string;
-  AHandler: TWebviewInvokeSyncHandler);
-begin
-  RegisterSyncRef(ACmd, AHandler);
-end;
-
-procedure TFakeInvokeRegistry.Register(const ACmd: string;
-  AHandler: TWebviewInvokeSyncMethod);
-begin
-  RegisterSyncRef(ACmd, SyncMethodToRef(AHandler));
-end;
-
-procedure TFakeInvokeRegistry.Register(const ACmd: string;
-  AHandler: TWebviewInvokeSyncProc);
-begin
-  RegisterSyncRef(ACmd, SyncProcToRef(AHandler));
-end;
-
-procedure TFakeInvokeRegistry.RegisterAsync(const ACmd: string;
-  AHandler: TWebviewInvokeAsyncHandler);
-begin
-  RegisterAsyncRef(ACmd, AHandler);
-end;
-
-procedure TFakeInvokeRegistry.RegisterAsync(const ACmd: string;
-  AHandler: TWebviewInvokeAsyncMethod);
-begin
-  RegisterAsyncRef(ACmd, AsyncMethodToRef(AHandler));
-end;
-
-procedure TFakeInvokeRegistry.RegisterAsync(const ACmd: string;
-  AHandler: TWebviewInvokeAsyncProc);
-begin
-  RegisterAsyncRef(ACmd, AsyncProcToRef(AHandler));
-end;
-
-{ ---- TFakeAssets：embedded provider 链 ---- }
+{ ---- 资产存储：唯一实现收敛到 bridge（TWebviewAssetsImpl）---- }
 
 type
-  TFakeAssetMount = record
-    Prefix: string;
-    Provider: IWebviewAssetProvider;
-  end;
-
-  TFakeAssets = class(TInterfacedObject, IWebviewAssets)
-  private
-    FMounts: array of TFakeAssetMount;
-  public
-    function TryResolve(const ASchemeRelativePath: string;
-      out ABytes: TBytes; out AMimeType: string): Boolean;
-    procedure MountEmbedded(const APrefix: string;
-      AProvider: IWebviewAssetProvider);
-    procedure MountDirectory(const APrefix, ARootDir: string);
-  end;
-
-function TFakeAssets.TryResolve(const ASchemeRelativePath: string;
-  out ABytes: TBytes; out AMimeType: string): Boolean;
-var
-  I: Integer;
-  LPath: string;
-begin
-  Result := False;
-  ABytes := nil;
-  AMimeType := '';
-  for I := 0 to High(FMounts) do
-  begin
-    if FMounts[I].Prefix = '' then
-      LPath := ASchemeRelativePath
-    else if Copy(ASchemeRelativePath, 1, Length(FMounts[I].Prefix) + 1)
-      = FMounts[I].Prefix + '/' then
-      LPath := Copy(ASchemeRelativePath, Length(FMounts[I].Prefix) + 2,
-        MaxInt)
-    else
-      Continue;
-    if FMounts[I].Provider.TryResolve(LPath, ABytes, AMimeType) then
-      Exit(True);
-  end;
-end;
-
-procedure TFakeAssets.MountEmbedded(const APrefix: string;
-  AProvider: IWebviewAssetProvider);
-begin
-  if AProvider = nil then
-    raise EWebviewInvalidState.Create('asset provider must not be nil');
-  SetLength(FMounts, Length(FMounts) + 1);
-  FMounts[High(FMounts)].Prefix := APrefix;
-  FMounts[High(FMounts)].Provider := AProvider;
-end;
-
-procedure TFakeAssets.MountDirectory(const APrefix, ARootDir: string);
-begin
-  raise ENotSupportedError.Create(
-    'fake backend mounts embedded providers only (headless env)');
-end;
+  TFakeAssets = nextpas.core.webview.bridge.TWebviewAssetsImpl;
 
 { ---- TFakeCompletion：at-most-once + 主线程 marshal ---- }
 
@@ -1542,13 +1327,14 @@ procedure TFakeWebview.DispatchInvoke(AFrameId: Int64; const ACmd,
   APayloadJson: string);
 var
   LReg: TFakeInvokeRegistry;
-  LIdx: Integer;
+  LIsAsync: Boolean;
+  LSync: TWebviewInvokeSyncHandler;
+  LAsync: TWebviewInvokeAsyncHandler;
   LResultJson: string;
   LCompletion: IWebviewInvokeCompletion;
 begin
   LReg := TFakeInvokeRegistry(FInvokes);
-  LIdx := LReg.IndexOf(ACmd);
-  if LIdx < 0 then
+  if not LReg.Find(ACmd, LIsAsync, LSync, LAsync) then
   begin
     RecordOutcome(ACmd, True, '', NPW_CODE_HANDLER_MISSING,
       'no handler registered for cmd');
@@ -1557,11 +1343,11 @@ begin
         'no handler registered for cmd');
     Exit;
   end;
-  if LReg.FEntries[LIdx].IsAsync then
+  if LIsAsync then
   begin
     LCompletion := TFakeCompletion.Create(Self, ACmd, AFrameId);
     try
-      LReg.FEntries[LIdx].AsyncHandler(APayloadJson, LCompletion);
+      LAsync(APayloadJson, LCompletion);
     except
       on E: Exception do
       begin
@@ -1576,7 +1362,7 @@ begin
   else
   begin
     try
-      LResultJson := LReg.FEntries[LIdx].SyncHandler(APayloadJson);
+      LResultJson := LSync(APayloadJson);
       RecordOutcome(ACmd, False, LResultJson, '', '');
       if AFrameId >= 0 then
         EnqueueReceipt(AFrameId, False, LResultJson, '', '');

@@ -45,6 +45,9 @@ type
     function RegisterAsyncInvoke(const ACmd: string;
       AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
     function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
+    { 显式钉后端（fake 等确定性场景）；缺省 = DefaultWebviewKind 能力驱动，
+      Build 时不可用按工厂语义 fail-fast }
+    function Kind(AKind: TWebviewKind): IWebviewBuilder;
     function Build: IWebviewWindow;
     procedure Run(const AUrl: string);
     procedure RunHtml(const AHtml: string);
@@ -69,7 +72,8 @@ function CreateFakeWebview(
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
 
-{ 阻塞直到所有窗口关闭或 WebviewExitLoop（GTK 后端落地前为 fake 泵循环）}
+{ 阻塞直到所有窗口关闭或 WebviewExitLoop；gtk 活跃窗口存在时进入
+  GTK 主循环（最后窗口 destroy 触发 quit 返回），否则 fake 泵循环 }
 procedure WebviewRunLoop;
 
 { 从任意线程请求退出 RunLoop（幂等）}
@@ -78,27 +82,34 @@ procedure WebviewExitLoop;
 implementation
 
 uses
-  TypInfo;
+  TypInfo,
+  nextpas.core.webview.gtk.loader,
+  nextpas.core.webview.gtk,
+  nextpas.core.webview.gtk.win;
 
 var
   GExitRequested: Boolean = False;
 
 function DefaultWebviewKind: TWebviewKind;
 begin
-  { S4 起：Linux→wvGtk（探测降级）、Windows→wvWebview2、macOS→wvWk，
-    全部不可用时回落 wvFake 并记录诊断。当前只有 fake 内建。 }
-  Result := wvFake;
+  { S4：能力驱动平台优先——探测到 WebKitGTK 即 wvGtk（无 IFDEF；
+    非 Linux 上探测自然失败）。W2/W3 落地后在其前位插入各自探测，
+    全部不可用回落 wvFake。 }
+  if WebviewBackendAvailable(wvGtk) then
+    Result := wvGtk
+  else
+    Result := wvFake;
 end;
 
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
+var
+  LInfo: TGtkLoadInfo;
 begin
   case AKind of
     wvFake:    Result := True;
-    wvGtk,
-    wvWebview2,
-    wvWk:      Result := False;   // S3/S4/W2/W3 各自波次接入
+    wvGtk:     Result := TryLoadGtkWebkit(LInfo);   // 幂等缓存（S3 接入）
   else
-    Result := False;
+    Result := False;   // wvWebview2 / wvWk 各自波次接入
   end;
 end;
 
@@ -118,6 +129,7 @@ begin
       GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
   case AKind of
     wvFake: Result := CreateFakeWebview(AOptions);
+    wvGtk:  Result := TGtkWebview.Create(AOptions);
   else
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is registered but has no factory yet', [
@@ -130,8 +142,13 @@ begin
   GExitRequested := False;
   while not GExitRequested do
   begin
-    FakePumpAll;
-    if FakeLiveWindowCount = 0 then
+    if GtkLiveWindowCount > 0 then
+      WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
+    else if FakeLiveWindowCount > 0 then
+      FakePumpAll
+    else
+      Break;
+    if (GtkLiveWindowCount = 0) and (FakeLiveWindowCount = 0) then
       Break;
     platform_thread_yield;
   end;
@@ -140,6 +157,9 @@ end;
 procedure WebviewExitLoop;
 begin
   GExitRequested := True;
+  { gtk_main 阻塞期间标志位不会被轮询——必须同步触发 quit 才能返回 }
+  if GtkLiveWindowCount > 0 then
+    WinShellQuitMainLoop;
 end;
 
 { ---- Builder ---- }
@@ -155,11 +175,13 @@ type
   TBuilderImpl = class(TInterfacedObject, IWebviewBuilder)
   private
     FOptions: TWebviewOptions;
+    FKind: TWebviewKind;
     FInvokes: array of TFakeInvokeReg;
     FReady: array of TWebviewNotifyHandler;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
   public
     constructor Create;
+    function Kind(AKind: TWebviewKind): IWebviewBuilder;
     function Title(const ATitle: string): IWebviewBuilder;
     function Size(AWidth, AHeight: Integer): IWebviewBuilder;
     function MinSize(AWidth, AHeight: Integer): IWebviewBuilder;
@@ -190,6 +212,7 @@ constructor TBuilderImpl.Create;
 begin
   inherited Create;
   FOptions := DefaultWebviewOptions;
+  FKind := DefaultWebviewKind;
 end;
 
 function TBuilderImpl.Title(const ATitle: string): IWebviewBuilder;
@@ -255,6 +278,12 @@ begin
   Result := Self;
 end;
 
+function TBuilderImpl.Kind(AKind: TWebviewKind): IWebviewBuilder;
+begin
+  FKind := AKind;
+  Result := Self;
+end;
+
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder;
 begin
   SetLength(FOptions.InitScripts, Length(FOptions.InitScripts) + 1);
@@ -307,7 +336,7 @@ end;
 
 function TBuilderImpl.Build: IWebviewWindow;
 begin
-  Result := ApplyTo(CreateWebviewOf(DefaultWebviewKind, FOptions));
+  Result := ApplyTo(CreateWebviewOf(FKind, FOptions));
 end;
 
 procedure TBuilderImpl.Run(const AUrl: string);
