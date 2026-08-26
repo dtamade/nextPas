@@ -39,6 +39,8 @@ const
     'examples/nextpas.core.http/http_hello_server';
   WebSocketExampleRelativeDir =
     'examples/nextpas.core.http/http_websocket_echo_demo';
+  VfsDemoRelativeDir =
+    'examples/nextpas.core.http/http_static_vfs_demo';
   HttpUnitPath = 'src/nextpas.core.http.pas';
   { POSIX signal numbers — same values as platform.signal, avoided as direct use. }
   SIGTERM_NUM = 15;
@@ -838,6 +840,25 @@ begin
   end;
 end;
 
+{ 嵌入资源端到端 demo：make run 自含构建（rp_pack 生成 .inc）+ 起真 server
+  自检 200/304/206/404/目录 404 后自行退出，断言退出码与自检标记即可。 }
+procedure TestVfsStaticDemoEndToEndSelfCheck;
+var
+  LExampleDir: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LExampleDir := PathJoin(ResolveCoreRoot(ExampleRelativeDir), VfsDemoRelativeDir);
+  Check(DirectoryExists(LExampleDir), 'vfs static demo directory exists');
+  RunProcessAndCapture(ResolveMakeExecutable, ['run'], LExampleDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'vfs static demo self-check exit code: ' + LOutput);
+  CheckContains(LOutput, 'backend: embedded', 'embedded backend selected');
+  CheckContains(LOutput, 'self-check: all requests OK',
+    'end-to-end asset serving verified');
+end;
+
 begin
   T := TTestSuite.Create('http examples');
   T.Test('server options demo builds', @TestServerOptionsDemoBuilds);
@@ -849,5 +870,7 @@ begin
     @TestGetClientExampleUsesEnvUrlWithoutFixedPort);
   T.Test('websocket echo demo serves documented endpoint',
     @TestWebSocketEchoDemoServesDocumentedEndpoint);
+  T.Test('vfs static demo end-to-end self-check',
+    @TestVfsStaticDemoEndToEndSelfCheck);
   if not T.Run then Halt(1);
 end.
