@@ -78,7 +78,7 @@ end;
 function Sym(const AName: PAnsiChar; out AAddr: Pointer): Boolean;
 var
   LLibs: array[0..4] of PPlatformLibrary;
-  LCount, I: Integer;
+  I: Integer;
 begin
   LLibs[0] := @GWebkitLib;
   LLibs[1] := @GGtkLib;
@@ -123,7 +123,12 @@ var
       BindReq(@G_signal_connect_data, 'g_signal_connect_data') and
       BindReq(@G_memory_input_stream_new_from_data,
         'g_memory_input_stream_new_from_data') and
+      BindReq(@G_malloc, 'g_malloc') and
       BindReq(@G_free, 'g_free') and
+      BindReq(@G_quark_from_static_string, 'g_quark_from_static_string') and
+      BindReq(@G_cancellable_new, 'g_cancellable_new') and
+      BindReq(@G_cancellable_cancel, 'g_cancellable_cancel') and
+      BindReq(@G_error_new_literal, 'g_error_new_literal') and
       { GObject }
       BindReq(@G_object_unref, 'g_object_unref') and
       BindReq(@G_object_set, 'g_object_set') and
@@ -151,6 +156,7 @@ var
         'gtk_widget_get_allocated_width') and
       BindReq(@GTK_widget_get_allocated_height,
         'gtk_widget_get_allocated_height') and
+      BindReq(@GDK_window_get_state, 'gdk_window_get_state') and
       BindReq(@GTK_container_add, 'gtk_container_add') and
       BindReq(@GTK_main, 'gtk_main') and
       BindReq(@GTK_main_quit, 'gtk_main_quit') and

@@ -78,9 +78,11 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 >   视图一律 `new_with_context` 创建，scheme 先于视图注册。
 > - eval 结果文本：null/undefined 诚实序列化为 'null'；不可 JSON 化
 >   值降级 JSC toString 文本。
-> - scheme 404 当前以正文诚实返回（finish text/html），HTTP 级错误码
->   语义留待 GError 路径 S4 精化。
-> - IsMinimized 为本地跟踪（window-state-event 解析 S4 精化）；
+> - scheme 404 已走真实 GError 路径（S4）：`finish_error(quark
+>   'nextpas-webview', 404)`，GError 所有权随调用移交 WebKit；
+>   页面侧 `fetch` 以 reject 呈现，与 HTTP 语义对齐。
+> - IsMinimized 为查询式真值（S4）：`gdk_window_get_state` 与
+>   `GDK_WINDOW_STATE_ICONIFIED` 位与，不做 C 结构布局解析；
 >   Maximized/Visible/几何均为引擎实时真值。
 
 ### 2.3 主线程唤醒

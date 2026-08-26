@@ -94,6 +94,11 @@ begin
     for I := 0 to 20 do GTK_main_iteration_do(0);
     Check(Abs(W.GetZoom - 1.5) < 1e-9, 'zoom roundtrip');
 
+    { UA 属性通道往返（g_object varargs FFI 路径的 live 覆盖） }
+    W.SetUserAgent('npw-gate/1.0');
+    for I := 0 to 20 do GTK_main_iteration_do(0);
+    CheckEqual('npw-gate/1.0', W.GetUserAgent, 'ua roundtrip');
+
     { 内容加载 + 异步 eval exactly-one }
     W.NavigateToString('<html><body>npw</body></html>');
     GEvalDone := False;
@@ -127,11 +132,118 @@ begin
   PumpGtk(50);
 end;
 
+type
+  { 页面与资源都经 npres:// 自身提供——相对 fetch 天然命中本家族 scheme }
+  TGateProvider = class(TInterfacedObject, IWebviewAssetProvider)
+  public
+    function TryResolve(const APath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+  end;
+
+const
+  PAGE_HTML: AnsiString =
+    '<html><body><script>' +
+    'window.res="LOADED";' +
+    'window.onerror=function(m){window.res+="|JS:"+m;};' +
+    'fetch("hello.txt").then(function(r){return r.text();})' +
+    '.then(function(t){window.res="OK:"+t;' +
+    'return fetch("missing.txt");})' +
+    '.then(function(){window.res+="|NO404";},' +
+    'function(){window.res+="|ERR";});' +
+    '</script></body></html>';
+
+function StrToGateBytes(const S: AnsiString): TBytes;
+begin
+  SetLength(Result, Length(S));
+  if Length(S) > 0 then
+    Move(S[1], Result[0], Length(S));
+end;
+
+function TGateProvider.TryResolve(const APath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  { CONTRACT §3：provider 收到前缀剥离后的相对路径（无前导 '/'） }
+  ABytes := nil;
+  AMimeType := '';
+  Result := True;
+  if APath = 'hello.txt' then
+  begin
+    ABytes := StrToGateBytes('npw-scheme-ok');
+    AMimeType := 'text/plain';
+  end
+  else if APath = 'page.html' then
+  begin
+    ABytes := StrToGateBytes(PAGE_HTML);
+    AMimeType := 'text/html';
+  end
+  else
+    Result := False;
+end;
+
+procedure TestSchemeAssetPipeline;
+var
+  W: IWebviewWindow;
+  LOpts: TWebviewOptions;
+  LProv: IWebviewAssetProvider;
+  LRes: string;
+  LDone: Boolean;
+  LIter: Integer;
+begin
+  LOpts := DefaultWebviewOptions;
+  if not BackendUsable() then
+  begin
+    Check(True, '');
+    Exit;
+  end;
+  try
+    W := CreateWebviewOf(wvGtk, LOpts);
+  except
+    on E: EWebviewBackendUnavailable do
+    begin
+      Check(True, '');   { 无显示环境优雅跳过 }
+      Exit;
+    end;
+  end;
+
+  try
+    LProv := TGateProvider.Create;
+    W.Assets.MountEmbedded('', LProv);
+    W.Navigate('npres://app/page.html');
+
+    { 轮询页面结果：hello 命中 + missing 真实 404 双断言。
+      探针含 location/readyState，失败消息自带现场 }
+    LRes := '';
+    LDone := False;
+    for LIter := 0 to 1600 do
+    begin
+      GTK_main_iteration_do(0);
+      Sleep(5);
+      if (LIter mod 20 = 0) and not LDone then
+        W.Eval('location.href+"#"+document.readyState+"#"+(window.res||"")',
+          procedure(const AResultJson: string)
+          begin
+            LRes := AResultJson;
+            LDone := Pos('|', LRes) > 0;
+          end,
+          nil);
+      if LDone then Break;
+    end;
+    Check(Pos('OK:npw-scheme-ok', LRes) > 0, 'scheme serves mounted asset, got: ' + LRes);
+    Check(Pos('|ERR', LRes) > 0, 'missing resource yields real error');
+    Check(Pos('NO404', LRes) = 0, 'no false-positive 200 on missing');
+
+    W.Close;
+  finally
+    W := nil;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
   T := TTestSuite.Create('nextpas.core.webview.gtk.backend');
   T.Test('factory matches probe', @TestFactoryMatchesProbe);
   T.Test('create unavailable or smoke', @TestCreateUnavailableOrSmoke);
+  T.Test('scheme asset pipeline', @TestSchemeAssetPipeline);
   if not T.Run then Halt(1);
 end.

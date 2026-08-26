@@ -54,6 +54,7 @@ implementation
 var
   GInitDone: Boolean = False;
   GInitOk: Boolean = False;
+  GMainLoopRunning: Boolean = False;
 
 function WinShellInit: Boolean;
 var
@@ -133,12 +134,19 @@ end;
 
 procedure WinShellRunMainLoop;
 begin
-  GTK_main();
+  GMainLoopRunning := True;
+  try
+    GTK_main();
+  finally
+    GMainLoopRunning := False;
+  end;
 end;
 
 procedure WinShellQuitMainLoop;
 begin
-  GTK_main_quit();
+  { 无运行中主循环时调用 gtk_main_quit 会触发 Gtk-CRITICAL }
+  if GMainLoopRunning then
+    GTK_main_quit();
 end;
 
 end.

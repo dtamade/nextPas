@@ -17,8 +17,8 @@ unit nextpas.core.webview.gtk;
          不捕获 completion 对象字段——对象指针不受引用计数保护（S1 教训）。
        - 协议立场：页面坏帧静默忽略（BRIDGE_PROTOCOL §3.1 生产路径），
          与 fake 驱动面抛 EWebviewBadFrame 的校验互补。
-       - IsMinimized 为本地跟踪（window-state-event 解析留待 S4 精化），
-         Maximized/Visible/几何均为引擎实时真值。 *}
+       - IsMinimized 为查询式真值（gdk_window_get_state ICONIFIED 位）；
+         Maximized/Visible/几何同为引擎实时真值。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -36,26 +36,27 @@ uses
   nextpas.core.webview.gtk.loader;
 
 type
-PEvalRec = ^TEvalRec;
-    TEvalRec = record
-Callback: TWebviewEvalCallback;
-OnError: TWebviewEvalErrorCallback;
-Done: Boolean;
-    end;
-    PIdleRec = ^TIdleRec;
-    TIdleRec = record
-Proc: TWebviewProcRef;
-    end;
-    PCompletionMarshal = ^TCompletionMarshal;
-    TCompletionMarshal = record
-Win: TObject;          { 非拥有：keep-alive 保证存活 }
-FrameId: Int64;
-Cmd: string;
-IsError: Boolean;
-ResultJson: string;
-Code: string;
-MsgText: string;
-    end;
+  PEvalRec = ^TEvalRec;
+  TEvalRec = record
+    Callback: TWebviewEvalCallback;
+    OnError: TWebviewEvalErrorCallback;
+    Done: Boolean;
+    Cancel: Pointer;   { GCancellable*: Close 后保证引擎回调必达, 单点释放 }
+  end;
+  PIdleRec = ^TIdleRec;
+  TIdleRec = record
+    Proc: TWebviewProcRef;
+  end;
+  PCompletionMarshal = ^TCompletionMarshal;
+  TCompletionMarshal = record
+    Win: TObject;          { 非拥有：keep-alive 保证存活 }
+    FrameId: Int64;
+    Cmd: string;
+    IsError: Boolean;
+    ResultJson: string;
+    Code: string;
+    MsgText: string;
+  end;
 
 
   {** WebKitGTK 实现。构造即装载（缺库抛 EWebviewBackendUnavailable）、
@@ -67,7 +68,6 @@ MsgText: string;
     FWin, FView, FContext: Pointer;
     FOwnsContext: Boolean;
     FClosed: Boolean;
-    FMinimized: Boolean;
     FScale: Double;
     FReadyFired: Boolean;
     FOwnerThread: UInt64;
@@ -179,6 +179,40 @@ uses
 
 var
   GLiveWindows: array of TGtkWebview;
+  { scheme 按 context 去重：默认 context 是进程级单例，多窗口重复注册
+    会被 GLib CRITICAL 拒绝，且后到处理器无法接管——必须首注册独占 }
+  GRegisteredSchemeCtxs: array of Pointer;
+  GGtkDebugChecked: Boolean = False;
+  GGtkDebugEnabled: Boolean = False;
+
+{ 环境门控诊断轨迹（NPW_GTK_DEBUG=1 时写 stderr），默认零开销：
+  覆盖 nav/scheme/eval 三条异步轴，用于现场问题定位 }
+procedure GtkTrace(const AMsg: string);
+begin
+  if not GGtkDebugChecked then
+  begin
+    GGtkDebugChecked := True;
+    GGtkDebugEnabled := GetEnvironmentVariable('NPW_GTK_DEBUG') = '1';
+  end;
+  if GGtkDebugEnabled then
+    WriteLn(StdErr, '[npw-gtk] ', AMsg);
+end;
+
+function SchemeContextRegistered(ACtx: Pointer): Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to High(GRegisteredSchemeCtxs) do
+    if GRegisteredSchemeCtxs[I] = ACtx then
+      Exit(True);
+  Result := False;
+end;
+
+procedure RememberSchemeContext(ACtx: Pointer);
+begin
+  SetLength(GRegisteredSchemeCtxs, Length(GRegisteredSchemeCtxs) + 1);
+  GRegisteredSchemeCtxs[High(GRegisteredSchemeCtxs)] := ACtx;
+end;
 
 function GtkLiveWindowCount: Integer;
 var
@@ -273,6 +307,7 @@ begin
   case AEvent of
     WEBKIT_LOAD_STARTED:
       begin
+        GtkTrace('nav started: ' + LSelf.CurrentUri);
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
         for I := 0 to High(LSelf.FOnNavStarted) do
@@ -280,6 +315,7 @@ begin
       end;
     WEBKIT_LOAD_FINISHED:
       begin
+        GtkTrace('nav finished: ' + LSelf.CurrentUri);
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
         for I := 0 to High(LSelf.FOnNavFinished) do
@@ -306,22 +342,56 @@ begin
   end;
 end;
 
+var
+  GSchemeErrQuark: GQuark = 0;
+
+{ scheme 请求的 owner 解析：context 级注册只能绑一个 trampoline，
+  故按"最新活跃窗口"全局分发——多窗口共享同一 scheme 命名空间，
+  单窗独占资产隔离属多窗口策略，登记为 S5 多窗口打磨项 }
+function LatestLiveWebview: TGtkWebview;
+var
+  I: Integer;
+begin
+  for I := High(GLiveWindows) downto 0 do
+    if not GLiveWindows[I].FClosed then
+      Exit(GLiveWindows[I]);
+  Result := nil;
+end;
+
+{ finish_error 的 GError 所有权移交 WebKit（源码 adoptGRef 模式），
+  调用方不 free；误判会在 live 门禁以 double-free 可见地暴露 }
+procedure SchemeFinishNotFound(ARequest: Pointer);
+begin
+  if GSchemeErrQuark = 0 then
+    GSchemeErrQuark := G_quark_from_static_string('nextpas-webview');
+  WEBKIT_uri_scheme_request_finish_error(ARequest,
+    G_error_new_literal(GSchemeErrQuark, 404, 'resource not found'));
+end;
+
 procedure SchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
 var
-  LSelf: TGtkWebview absolute AUserData;
+  LSelf: TGtkWebview;
   LPath, LMime: string;
   LBytes: TBytes;
   LBuf, LStream: Pointer;
-const
-  NOT_FOUND: AnsiString =
-    '<html><body><h1>404</h1><p>resource not found</p></body></html>';
 begin
+  LSelf := LatestLiveWebview;
+  if LSelf = nil then
+  begin
+    GtkTrace('scheme request, no live window: ' +
+      StrPas(WEBKIT_uri_scheme_request_get_path(ARequest)));
+    SchemeFinishNotFound(ARequest);
+    Exit;
+  end;
   LPath := StrPas(WEBKIT_uri_scheme_request_get_path(ARequest));
   if LSelf.FAssetsIntf.TryResolve(LPath, LBytes, LMime) then
   begin
+    GtkTrace('scheme hit ' + LPath + ' (' + IntToStr(Length(LBytes)) + 'B)');
     if LMime = '' then
       LMime := 'application/octet-stream';
-    GetMem(LBuf, Length(LBytes) + 1);
+    { GLib 侧分配（g_malloc）配对 G_free 销毁器——字节所有权随流移交
+      WebKit；禁止 GetMem：FPC 堆指针经 C free 释放属跨分配器未定义行为 }
+    LBuf := G_malloc(Length(LBytes) + 1);
     if Length(LBytes) > 0 then
       Move(LBytes[0], LBuf^, Length(LBytes));
     LStream := G_memory_input_stream_new_from_data(
@@ -331,13 +401,8 @@ begin
   end
   else
   begin
-    { 404 正文诚实返回；HTTP 级错误码语义留待 GError 路径精化（S4 注记） }
-    GetMem(LBuf, Length(NOT_FOUND) + 1);
-    Move(NOT_FOUND[1], LBuf^, Length(NOT_FOUND));
-    LStream := G_memory_input_stream_new_from_data(
-      LBuf, Length(NOT_FOUND), TGDestroyNotify(@G_free));
-    WEBKIT_uri_scheme_request_finish(ARequest, LStream,
-      Length(NOT_FOUND), 'text/html');
+    GtkTrace('scheme miss ' + LPath + ' -> 404');
+    SchemeFinishNotFound(ARequest);
   end;
 end;
 
@@ -384,13 +449,22 @@ begin
   end;
 end;
 
+{ 记录所有权单点释放（仅引擎完成回调一侧调用）：随记录 unref 其
+  GCancellable——cancellable 是 GObject，漏 unref 即逐次 eval 泄漏 }
+procedure FreeEvalRec(ARec: PEvalRec);
+begin
+  if ARec^.Cancel <> nil then
+    G_object_unref(ARec^.Cancel);
+  Dispose(ARec);
+end;
+
 procedure SettleEvalGlobal(ARec: PEvalRec; AOk: Boolean; const AText: string);
 var
   LErr: EWebviewEvalFailed;
 begin
   if ARec^.Done then
   begin
-    Dispose(ARec);
+    FreeEvalRec(ARec);
     Exit;
   end;
   ARec^.Done := True;
@@ -411,7 +485,7 @@ begin
       end;
     end;
   finally
-    Dispose(ARec);
+    FreeEvalRec(ARec);
   end;
 end;
 
@@ -426,7 +500,8 @@ begin
   if LRec^.Done then
   begin
     { Close 已收尾：仅释放记录（所有权仍在引擎回执一侧） }
-    Dispose(LRec);
+    GtkTrace('eval late callback after close, disposed');
+    FreeEvalRec(LRec);
     Exit;
   end;
   LVal := nil;
@@ -440,7 +515,10 @@ begin
       LVal := WEBKIT_javascript_result_get_js_value(LJsRes);
   end;
   if LErr <> nil then
-    LText := StrPas(LErr^.Message)
+  begin
+    LText := StrPas(LErr^.Message);
+    GtkTrace('eval failed: ' + LText);
+  end
   else
   begin
     LOk := True;
@@ -448,6 +526,7 @@ begin
       LText := EvalTextOfValueGlobal(LVal)
     else
       LText := '';
+    GtkTrace('eval ok: ' + Copy(LText, 1, 120));
   end;
   SettleEvalGlobal(LRec, LOk, LText);
 end;
@@ -604,9 +683,15 @@ var
   LGeo: TWinShellGeometry;
 begin
   LCtx := ResolveContext;
-  { scheme 注册必须先于首个 web view 创建（BACKENDS §2.2） }
-  WEBKIT_web_context_register_uri_scheme(LCtx,
-    PAnsiChar(FOptions.SchemeName), @SchemeRequestCb, Self, nil);
+  { scheme 注册必须先于该 context 首个 web view 创建（BACKENDS §2.2）；
+    同 context 只注册一次——handler 绑定首窗实例，后续窗口经同一
+    全局分发（见 SchemeRequestCb 的 owner 解析） }
+  if not SchemeContextRegistered(LCtx) then
+  begin
+    WEBKIT_web_context_register_uri_scheme(LCtx,
+      PAnsiChar(FOptions.SchemeName), @SchemeRequestCb, nil, nil);
+    RememberSchemeContext(LCtx);
+  end;
 
   FView := WEBKIT_web_view_new_with_context(LCtx);
   if FView = nil then
@@ -775,7 +860,10 @@ var
   LRec: PEvalRec;
   LErr: EWebviewEvalFailed;
 begin
-  RequireOpen;
+  { 幂等（CONTRACT §3 intf 承诺，与 fake 一致）；二次 Close 直接返回，
+    避免对已销毁 widget 重复 destroy }
+  if FClosed then
+    Exit;
   FClosed := True;
   { 在途 eval 立即以 onerr 收尾（exactly-one）。记录不在此处释放：
     所有权单点在引擎必然到达的完成回调——迟到回执读 Done 后仅释放。
@@ -795,6 +883,10 @@ begin
           LErr.Free;
         end;
       end;
+      { 取消使引擎侧完成回执必达——记录按单点所有权在其内释放，
+        进程生命周期内无悬挂分配（heaptrc 0 兑现） }
+      if LRec^.Cancel <> nil then
+        G_cancellable_cancel(LRec^.Cancel);
     end;
   end;
   FPendingEvals := nil;
@@ -919,20 +1011,23 @@ procedure TGtkWebview.Minimize;
 begin
   RequireOpen;
   GTK_window_iconify(FWin);
-  FMinimized := True;
 end;
 
 procedure TGtkWebview.Restore;
 begin
   RequireOpen;
   GTK_window_deiconify(FWin);
-  FMinimized := False;
 end;
 
 function TGtkWebview.IsMinimized: Boolean;
+var
+  LGdkWin: Pointer;
 begin
   RequireOpen;
-  Result := FMinimized;
+  LGdkWin := GTK_widget_get_window(FWin);
+  { 查询式真值：未 realize 时 gdk window 为 nil 视作非最小化 }
+  Result := (LGdkWin <> nil) and
+    ((GDK_window_get_state(LGdkWin) and GDK_WINDOW_STATE_ICONIFIED) <> 0);
 end;
 
 procedure TGtkWebview.SetZoom(AFactor: Double);
@@ -1055,14 +1150,16 @@ begin
   LRec^.Callback := ACallback;
   LRec^.OnError := AOnError;
   LRec^.Done := False;
+  LRec^.Cancel := G_cancellable_new();
   SetLength(FPendingEvals, Length(FPendingEvals) + 1);
   FPendingEvals[High(FPendingEvals)] := LRec;
+  GtkTrace('eval dispatch: ' + Copy(AJavascript, 1, 80));
   if GtkLoadInfo().EvalPath = gepEvaluateJavascript then
     WEBKIT_web_view_evaluate_javascript(FView, PAnsiChar(AJavascript),
-      Length(AJavascript), nil, nil, nil, @EvalReadyCb, LRec)
+      Length(AJavascript), nil, nil, LRec^.Cancel, @EvalReadyCb, LRec)
   else
     WEBKIT_web_view_run_javascript(FView, PAnsiChar(AJavascript),
-      nil, @EvalReadyCb, LRec);
+      LRec^.Cancel, @EvalReadyCb, LRec);
 end;
 
 procedure TGtkWebview.Emit(const AEvent, APayloadJson: string);

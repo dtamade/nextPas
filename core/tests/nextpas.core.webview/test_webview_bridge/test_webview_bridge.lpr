@@ -325,6 +325,106 @@ begin
   end;
 end;
 
+{ ---- 资产前缀路由：TWebviewAssetsImpl 行为钉死（CONTRACT §3）---- }
+
+type
+  TProbeEntry = record
+    Key: string;
+    Mime: string;
+  end;
+
+  { 记录型 provider：捕获收到的路径形态，按表命中 }
+  TProbeProvider = class(TInterfacedObject, IWebviewAssetProvider)
+  public
+    LastPath: string;
+    Table: array of TProbeEntry;
+    function TryResolve(const APath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+  end;
+
+function TProbeProvider.TryResolve(const APath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+var
+  I: Integer;
+begin
+  LastPath := APath;
+  AMimeType := 'text/plain';
+  Result := False;
+  for I := 0 to High(Table) do
+    if Table[I].Key = APath then
+    begin
+      SetLength(ABytes, 1);
+      ABytes[0] := Ord('x');
+      AMimeType := Table[I].Mime;
+      Exit(True);
+    end;
+end;
+
+procedure TestAssetsPrefixRouting;
+var
+  LAssets: IWebviewAssets;
+  LRoot, LStatic: TProbeProvider;
+  LBytes: TBytes;
+  LMime: string;
+begin
+  LRoot := TProbeProvider.Create;
+  SetLength(LRoot.Table, 1);
+  LRoot.Table[0].Key := 'page.html';
+  LRoot.Table[0].Mime := 'text/html';
+  LStatic := TProbeProvider.Create;
+  SetLength(LStatic.Table, 2);
+  LStatic.Table[0].Key := 'static/a.js';
+  LStatic.Table[0].Mime := 'text/javascript';
+  LStatic.Table[1].Key := 'other.txt';
+  LStatic.Table[1].Mime := 'text/plain';
+
+  LAssets := TWebviewAssetsImpl.Create;
+  LAssets.MountEmbedded('', LRoot);        { 根挂载：空前缀匹配一切 }
+  LAssets.MountEmbedded('static', LStatic);
+
+  { 命中：最长前缀胜过根挂载；provider 收到剥离后的相对路径 }
+  Check(LAssets.TryResolve('/static/a.js', LBytes, LMime), 'longest prefix hit');
+  CheckEqual(LStatic.LastPath, 'static/a.js', 'provider gets stripped path');
+  CheckEqual(LMime, 'text/javascript', 'mime from winning provider');
+
+  { 空前缀回退（FPC Pos('',s)=0 回归钉死） }
+  Check(LAssets.TryResolve('page.html', LBytes, LMime), 'root mount fallback');
+  CheckEqual(LRoot.LastPath, 'page.html', 'root provider path form');
+
+  { 多余前导斜杠统一归一；命名空间内未命中不跨挂载回退 }
+  Check(not LAssets.TryResolve('//static/other.txt', LBytes, LMime),
+    'namespace miss does not fall through');
+  CheckEqual(LStatic.LastPath, 'static/other.txt', 'routed to owning namespace');
+end;
+
+procedure TestAssetsMissAndValidation;
+var
+  LAssets, LFresh: IWebviewAssets;
+  LProv: TProbeProvider;
+  LBytes: TBytes;
+  LMime: string;
+  LRaised: Boolean;
+begin
+  LProv := TProbeProvider.Create;
+  LAssets := TWebviewAssetsImpl.Create;
+  LAssets.MountEmbedded('app', LProv);
+
+  Check(not LAssets.TryResolve('zzz.bin', LBytes, LMime), 'unmatched prefix misses');
+  Check(not LAssets.TryResolve('', LBytes, LMime), 'empty path misses');
+  Check(not LAssets.TryResolve('app/nope.txt', LBytes, LMime),
+    'prefix hit but table miss is provider False');
+
+  { 先持引用再触发拒绝路径——实例随接口变量收尾释放（heaptrc 0） }
+  LFresh := TWebviewAssetsImpl.Create;
+  LRaised := False;
+  try
+    LFresh.MountEmbedded('', nil);
+  except
+    on E: EWebviewInvalidState do LRaised := True;
+  end;
+  Check(LRaised, 'nil provider rejected');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -342,5 +442,7 @@ begin
     @TestFakeFrameInvalidRaisesBadFrame);
   T.Test('fake frame async marshal receipt', @TestFakeFrameAsyncMarshalReceipt);
   T.Test('fake frame closed window', @TestFakeFrameClosedWindow);
+  T.Test('assets prefix routing', @TestAssetsPrefixRouting);
+  T.Test('assets miss and validation', @TestAssetsMissAndValidation);
   if not T.Run then Halt(1);
 end.
