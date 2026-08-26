@@ -27,10 +27,10 @@ HikariCP、ADO.NET `DbProviderFactory`。✅=已落地有门禁证据；
 | 9 | 连接池硬化 | HikariCP 探活/泄漏检测/寿命 | ValidateOnAcquire/LeakDetection/Lifetime/Idle 全有，15 组门禁 | ✅ C3 |
 | 10 | 观测钩子 | otelsql / Hikari metrics | IDbTraceListener 四后端同构 + Hub | ✅ B3 |
 | 11 | 错误归一 | pgx pgconn.PgError；MySQL SQLState | Classify{Sqlite,Pg,My,Odbc(+Ex),Redis} 词元/码位表 | ✅ |
-| 12 | 查询超时 | context deadline | TDbExecOptions advisory（pg SET 窗口/mysql max_execution_time/odbc QUERY_TIMEOUT/sqlite 忽略） | 🟡 语义成文 |
+| 12 | 查询超时 | context deadline | TDbExecOptions advisory（pg SET 窗口/mysql max_execution_time/odbc QUERY_TIMEOUT/sqlite 忽略）——conformance §12 advisory 全后端复跑 + pg 真机超时 decTimeout 与会话恢复钉死（V3-B2 门禁） | ✅ B2 |
 | 13 | 取消 | ctx 取消传播 | ✅ B6：TDbAsyncExecutor 令牌级联 → IDbCancelControl（pg PQcancel / sqlite progress handler），归一 decTimeout；句柄直呼 Cancel 同面；同步模型本身仍无取消（契约明示） | ✅ B6 |
-| 14 | LISTEN/NOTIFY | pgx notification | 未做（依赖 B6 取消语义） | ❌ B7 |
-| 15 | TLS 一等公民 | sslmode/verify-full | pg conninfo 透传事实存在、redis UseTls 已落；**契约未成文** | 🟡 B4 文档片 |
+| 14 | LISTEN/NOTIFY | pgx notification | ✅ B7：nextpas.core.db.pg.listen 订阅会话——专用连接独占 + 泵线程投递 + Token（IAsyncCancellationToken）取消 + 断线自动重连重放订阅；at-most-once 如实上报（GapCount/DroppedCount）；投递面偏差（原案 async.channel → 内建有界记录队列）入 CONTRACT §2.18 | ✅ B7 |
+| 15 | TLS 一等公民 | sslmode/verify-full | CONTRACT §2.1-TLS 责任表成文（pg conninfo 透传/redis UseTls+TLSDial/odbc connstr/sqlite N/A）+ verify-full 推荐样例；带证书 conformance 冒烟本地无环境未跑（env 门控余项，诚实登记不假装验证） | ✅ B4（文档） |
 | 16 | 迁移框架 | sqlx migrate/golang-migrate | db.migrate 版本表+dry-run | ✅ |
 | 17 | 国产库覆盖 | —（对标系外，总控指令） | D1 指南✅；D2/D3/D4 待真机 | 🟡 环境门控 |
 
@@ -60,8 +60,8 @@ HikariCP、ADO.NET `DbProviderFactory`。✅=已落地有门禁证据；
 | 片 | 内容 | 对标锚点 |
 |---|---|---|
 | C5 | sqlite PRAGMA 调优预设（WAL+NORMAL 安全缺省，:memory: 过滤 journal 类） | sqlx `SqliteConnectOptions.JournalMode` |
-| B4 | TLS 契约成文：§2.1 责任表 + 各后端样例（含 redis A5.1b 实证） | pgx sslmode 表 |
-| C4 | 基准口径入册 + 裸驱动开销比 ≤1.15× 护栏（bench 不进默认 verify） | Hikari 泄漏率判据思路 |
+| B4 | TLS 契约成文 ✅：§2.1-TLS 责任表 + 样例落地（带证书冒烟 env 门控余项如实保留） | pgx sslmode 表 |
+| C4 | 基准口径入册 ✅：docs/db/benchmarks.md（J1 开销比 ≤1.15×/J2 池建连不变式/J3 大对象内存界三判据 + 七个 bench 逐一口径；2026-08-25 全量采集；bench 不进根 verify 链）+ V3-B7 追加 bench_db_listen 投递面口径 | Hikari 泄漏率判据思路 |
 | C2 | 参数级批量绑定 ✅：pg unnest 定案（binary COPY 留 P2 评估）；sqlite/mysql/odbc/redis 如实缺席；四路基准 array 29ms/10K 行稳态（batch 的 6.0×） | pgx CopyFrom / FireDAC Array DML |
 
 ### P2（依赖最晚就绪/外部环境）
@@ -69,6 +69,9 @@ HikariCP、ADO.NET `DbProviderFactory`。✅=已落地有门禁证据；
 - B6 异步挂载（core.async 执行器投递 + IAsyncCancellationToken→
   PQcancel/sqlite progress handler）；B7 LISTEN/NOTIFY 随后。
 - mysql/odbc 语句缓存的收益评估（先 bench 后立项，不做无判据优化）。
+  2026-08-26 环境探测：本机无 mysql/mariadb 客户端与服务，odbc 无
+  isql/odbcinst——评估维持环境门控待办；pg 侧已有 G8 缓存判据
+  （2.1–2.4×）与 sqlite 侧 2.39× 在册可作跨后端预期锚点。
 - D2/D3 国产协议系真机 conformance、D4 达梦路线决策（需环境/硬件）。
 
 ### 维持不做（V3 §4 不变）

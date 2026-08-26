@@ -18,6 +18,7 @@
 | pg.ffi | libpq C ABI 声明（**cdecl 过程类型**，非 external——运行时 dlopen） |
 | pg.loader | `dlopen('libpq.so.5')` + dlsym 绑定全部符号（复用 `platform.dl.TPlatformLibrary`） |
 | pg.conn | 友好表面：`TPgConn` / `TPgQuery`（对齐 `TSqliteDb`/`TSqliteQuery` 形态） |
+| pg.listen | V3-B7 LISTEN/NOTIFY 订阅会话：TPgListener 专用连接独占 + 单工泵线程投递（见 CONTRACT §2.18） |
 | pg.pas | 门面：re-export 全部公共 API |
 
 ### 1.2 核心 API
@@ -77,6 +78,10 @@ TPgQuery:
   （token888 db 层单写者策略，与 sqlite FULLMUTEX 语义对齐）。
 - **[INV-5]** 加载失败（缺 `libpq.so.5`）在首次 `PgOpen`/`Query` 时立刻抛可读错误
   （fail-fast），不静默降级。
+- **[INV-6]**（V3-B7）`PQnotifies` 返回的每条 PGnotify 用后即
+  `PQfreemem`（heaptrc 0 锁定）；`TPGnotify` 字段序镜像 libpq C 布局
+  （relname/be_pid/extra），改动即 ABI 漂移——真机自发自收往返门禁
+  （test_db_pg_listen）钉死。
 
 ## 3. 依赖
 

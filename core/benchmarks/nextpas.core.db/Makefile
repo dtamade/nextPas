@@ -21,7 +21,8 @@ BENCHES := \
 	bench_db_stmt_cache \
 	bench_db_blob_stream \
 	bench_db_pool_stress \
-	bench_db_async
+	bench_db_async \
+	bench_db_listen
 
 .PHONY: bench $(BENCHES) clean
 
