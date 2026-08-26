@@ -95,6 +95,9 @@ var
   G_main_loop_unref: procedure(ALoop: Pointer); cdecl;
   G_timeout_add: function(AInterval: guint; AFunc: TGIdleFunc;
     AData: Pointer): guint; cdecl;
+  G_main_context_default: function: Pointer; cdecl;
+  G_main_context_find_source_by_id: function(AContext: Pointer;
+    ASourceId: guint): Pointer; cdecl;
 
   { ---- GObject（libgobject-2.0）---- }
   G_object_unref: procedure(AObj: Pointer); cdecl;

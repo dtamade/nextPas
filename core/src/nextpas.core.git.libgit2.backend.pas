@@ -1649,23 +1649,25 @@ begin
       @LOpts), 'Diff tree to workdir');
     try
       LN := git_diff_num_deltas(LDiff);
-      for I := 0 to LN - 1 do
-      begin
-        CheckResult(git_patch_from_diff(LPatch, LDiff, I),
-          'Patch from diff');
-        try
-          FillChar(LBuf, SizeOf(LBuf), 0);
-          CheckResult(git_patch_to_buf(LBuf, LPatch), 'Patch to buf');
+      { csize_t 下 LN=0 时 LN-1 下溢——空差必须显式守卫 }
+      if LN > 0 then
+        for I := 0 to LN - 1 do
+        begin
+          CheckResult(git_patch_from_diff(LPatch, LDiff, I),
+            'Patch from diff');
           try
-            SetString(S, PChar(LBuf.ptr), LBuf.size);
-            Result := Result + S;
+            FillChar(LBuf, SizeOf(LBuf), 0);
+            CheckResult(git_patch_to_buf(LBuf, LPatch), 'Patch to buf');
+            try
+              SetString(S, PChar(LBuf.ptr), LBuf.size);
+              Result := Result + S;
+            finally
+              git_buf_dispose(@LBuf);
+            end;
           finally
-            git_buf_dispose(@LBuf);
+            git_patch_free(LPatch);
           end;
-        finally
-          git_patch_free(LPatch);
         end;
-      end;
     finally
       git_diff_free(LDiff);
     end;

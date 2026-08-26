@@ -90,6 +90,7 @@ type
     procedure WaitAll;
     function WaitAllTimeout(const ATimeoutNs: Int64): Boolean;
     function GetWorkerCount: Integer;
+    function GetStartedWorkerCount: Integer;
   end;
 
 procedure TWorkStealingPool.AcquireOwner(const AWorkerIndex: Integer);
@@ -447,6 +448,12 @@ begin
     end;
   end;
   FMutex.Release;
+end;
+
+function TWorkStealingPool.GetStartedWorkerCount: Integer;
+begin
+  { 预创建语义：构造即满编，已启动数恒等于容量 }
+  Result := FWorkerCount;
 end;
 
 function TWorkStealingPool.GetWorkerCount: Integer;

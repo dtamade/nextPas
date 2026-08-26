@@ -11,4 +11,5 @@ UsePAM no
 X11Forwarding no
 AllowTcpForwarding no
 PrintMotd no
+Subsystem	sftp	internal-sftp
 LogLevel DEBUG3

@@ -84,6 +84,36 @@ lane 基于旧基建开发，replay 到当前 main（net.async/io.reactor 新栈
 - [x] bench_ssh_cipher 按 common.mk phase-2 默认开的新规显式 `HEAPTRC_GATE=0`
       （基准不链 heaptrc 防吞吐失真；泄漏纪律由其余门 + e2e 覆盖）
 
+## S8 — SFTP v3 文件操作面（已完成）
+
+子系统通道之上的文件操作客户端，draft-ietf-secsh-filexfer-02 子集：
+
+- [x] `sftp`：INIT 握手、open/read/write/close/opendir/readdir/
+      realpath/stat/lstat/remove/mkdir/rmdir、TSftpAttrs 编解码、
+      TSshFileSystem 实现 ISshFileSystem；三个入口
+      SftpOpenOnChannel / SftpOpenOnWire / SftpOpenOnTransport
+- [x] 缝隙设计：ISftpWire 抽象帧收发，TSshChannelWire 适配通道层
+      （SFTP 帧长度前缀流重组）——密闭门测试注入假 wire 即可覆盖全部
+      请求应答路径，无需真实 SSH 栈；`test_ssh_sftp` 12 用例 heaptrc 全零
+- [x] `channel` 从一次性 exec 重构为单通道引擎 TSshChannel（exec 与 sftp
+      共用），重构后 e2e 压测挖出四项真实缺陷并全部修复：
+      - **SendData 缺 RFC 4254 §6.1 string 长度前缀**（根因级）：CHANNEL_DATA
+        的 data 是 string，此前发裸字节导致对端把我们的首 4 字节当串头吞掉——
+        SFTP INIT 首包即毁（internal-sftp exit 11）；exec 不发数据故回环全绿，
+        暴露了回环测试的覆盖盲区，只有 live e2e 能抓到
+      - 接收侧窗口基准错位：回补信用应按我方 CHANNEL_OPEN 声明的初始窗口
+        记账（消费过半回补），此前误用对端声明的窗口做基准，小流量未暴露
+      - 本地通道号进程级单调递增（GNextLocalChannelId 替代恒 0 常量），
+        PumpFiltered 统一过滤旧通道迟滞帧并就地入账发送侧 WINDOW_ADJUST；
+        同会话连续 exec 不再依赖服务端 GC 时序
+      - SshRunExec 未初始化函数结果：FPC 结果缓冲被调用方循环复用时残留上轮
+        TBytes 指针，stdout 成倍累积（twotwo 现象的第二层根因）；
+        `Result := Default(TSshExecResult)` 修复
+- [x] e2e 新增 SFTP 场景（internal-sftp 写→读回→列目→stat→删除回路，
+      "ok: write+read N bytes"）与诊断双钩子（NEXTPAS_SSH_E2E_TRACE 帧级
+      追踪 / NEXTPAS_SSH_E2E_DUMP 明文包转储）；假服务端 s→c 帧 recipient
+      合规化（改用客户端声明的通道号），test_ssh_session 回归 5/5
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
@@ -93,13 +123,13 @@ lane 基于旧基建开发，replay 到当前 main（net.async/io.reactor 新栈
 | ecdsa-sha2-nistp256 主机密钥 | 枚举已预留，需 mpint(r,s)↔DER 转换 |
 | DH group14-sha256 KEX | bigint modpow 可用，作为 curve25519 不可用时的回退 |
 | ssh-agent | Unix socket 协议客户端 |
-| SFTP v3 | 子系统通道之上的文件操作面 |
 | zlib 压缩方法 | compress.deflate 可复用 |
 | async reactor 适配 | net.async.dial + 非阻塞读事件化 |
 
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口** 补齐：本地 Docker 夹具
-（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均 5 场景通过（含通道复用压力），
-heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP 互操作** 补齐：
+本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均 6 场景通过
+（含通道复用压力与 internal-sftp 文件操作回路），heaptrc 0 泄漏。e2e 为 opt-in
+门控，不进默认 gate。
