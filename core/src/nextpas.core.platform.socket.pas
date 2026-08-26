@@ -1667,6 +1667,12 @@ begin
   Result := (AError = PLATFORM_ERR_INTR) or (AError = WSAEINTR);
 end;
 
+function platform_socket_error_aborted(const AError: Int32): Boolean;
+begin
+  { WSAECONNABORTED: peer reset between handshake completion and accept. }
+  Result := AError = WSAECONNABORTED;
+end;
+
 function platform_socket_poll(const ASocket: TPlatformSocket;
   const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
 var
