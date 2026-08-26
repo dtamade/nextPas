@@ -499,6 +499,46 @@ TAnthropicOptions = record
 end;
 ```
 
+### 3.2 请求级追踪（nextpas.core.agent.transport.trace，W11）
+
+```pascal
+TTraceRequestInfo = record
+  Provider: string;                { 构造注入的适配器名（'anthropic' 等）}
+  Url: string;
+  Stream: Boolean;
+  BodyBytes: Int64;                { 上送载荷体积 }
+end;
+
+TTraceResponseInfo = record
+  Provider: string;
+  Url: string;
+  Stream: Boolean;
+  Status: Integer;                 { -1 = transport 异常路径（配对保证）}
+  DurationMs: Int64;               { RoundTrip 全程 / OpenStream 建流耗时 }
+  ResponseBytes: Int64;            { 非流式响应体；流式 -1（事件级归 fold/loop 层）}
+  RequestId: string;               { 响应头透传；异常路径空串 }
+end;
+
+IAgentTraceSink = interface
+  procedure OnRequest(const AInfo: TTraceRequestInfo);
+  procedure OnResponse(const AInfo: TTraceResponseInfo);
+end;
+
+function NewTracedTransport(const AName: string;
+  const ASink: IAgentTraceSink;
+  const AInner: IAgentTransport): IAgentTransport;
+```
+
+语义：
+
+- 包装任意 `IAgentTransport`，一处接线三适配器全覆盖；与 WithRetry 叠装
+  （traced 在内层）时每次尝试各产一对事件——重试可见性无需专用 onRetry 钩子
+- OnRequest 在派发前、OnResponse 在落定后（含异常：先发 `Status=-1` 配对
+  事件再原样上抛——观测者不吞异常、不改写失败语义）
+- sink 回调异常直接冒泡（与 loop 钩子同哲学）；时钟经 IAgentClock 注入，
+  测试零睡眠
+- 流式 `ResponseBytes=-1`：SSE 事件级观测归 fold/loop 层，本层只报建流
+
 ## 4. 协议域纯函数（nextpas.core.agent.fold）
 
 ```pascal
