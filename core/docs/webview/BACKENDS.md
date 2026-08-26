@@ -76,11 +76,17 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 > - 会话 context 三形态齐备：默认共享（get_default）/ ephemeral /
 >   DataDirectory（website_data_manager "base-data-directory"）；
 >   视图一律 `new_with_context` 创建，scheme 先于视图注册。
+>   勘误（S7）：DataDirectory 形态自 S3 起即坏——manager 直传当
+>   context 用，触发 WEBKIT_IS_WEB_CONTEXT CRITICAL；正确路径经
+>   `web_context_new_with_website_data_manager` 包装并交还初始引用。
+>   因零 live 覆盖从未暴露，datadir 门禁补齐后实锤修复。
 > - eval 结果文本：null/undefined 诚实序列化为 'null'；不可 JSON 化
 >   值降级 JSC toString 文本。
 > - scheme 404 已走真实 GError 路径（S4）：`finish_error(quark
 >   'nextpas-webview', 404)`，GError 所有权随调用移交 WebKit；
 >   页面侧 `fetch` 以 reject 呈现，与 HTTP 语义对齐。
+> - GetTitle（S6）：gtk_window_get_title 同步读 WM 级标题；未显式
+>   设置过返回 ''（GTK 语义），fake 返回 options 初始值/SetTitle 痕迹。
 > - 桥回执 eval（SendReceipt）为 fire-and-forget，不入在途登记：
 >   回执无用户回调、无恰好一次语义；若与 Close 竞态，最坏即页面未
 >   收到回执（与页面已销毁的观察一致），且不存在可悬挂的记录分配。

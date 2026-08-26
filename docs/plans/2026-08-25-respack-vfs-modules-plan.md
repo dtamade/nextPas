@@ -139,18 +139,31 @@ registry vfs 行更新为已落地形态。
 - **perf smoke**（roundtrip gate）：10k 条目 build + 全量 Find 总耗时硬上限
   （1000ms 宽松预算防 O(n²) 回归，非基准测试），stopwatch 计时 + 全量有序性抽查
 
-### S4 — 嵌入工具链
+### S4 — 嵌入工具链（已完成，2026-08-26）
 
 任务：
-1. `.inc` 生成器（把 blob 转成 typed const Pascal 单元），放工具侧
-2. 工具过滤/映射选项（对标 rust-embed derive 属性与 asar unpack-dir）：
-   include/exclude glob、路径 prefix 映射、去重开关、digest 开关（算法选择）、
-   extract-to-dir（include_dir extract 对等物，调试/迁移用）
-3. 示例：最小 app 打包前端资源并用 os/embedded 双后端跑通（开发态/发布态切换演示）
-4. 大小基准：const 数组 vs .pack 读入的编译时间/启动时间对比数据；writer 内存上限
-   （512MB 声明）实测
+- [x] `.inc` 生成器（typed const snippet 与完整单元两种形态）——格式逻辑落 core 侧
+  `nextpas.core.respack.embed`（glob 过滤/prefix 映射/inc 发射器），CLI 只留参数
+  解析薄壳：`core/tools/respack/rp_pack.lpr`
+- [x] 工具选项面（对标 rust-embed derive 属性与 asar unpack-dir）：
+  include/exclude glob、StripPrefix/AddPrefix 映射、`--dedup`、`--digest sha256`
+  （算法注入，CLI 组装 hash 域闭包）、extract-to-dir（收口 dirsource seam 单元）
+- [x] 示例：`core/examples/nextpas.core.vfs/demo_asset_embed/`——同一 consumer 在
+  os/embedded 双后端跑通开发态/发布态切换
+- [x] 基准数字记入 `core/docs/respack/README.md`「嵌入载体」节：
+  编译耗时 typed const ≈1.1s/MB 线性 vs `.pack` 恒定 ≈0.3s；启动首资产 1MB 包
+  const ≈51µs vs 文件读入 ≈3.3ms；writer 512MB 上限构建成功、峰值 RSS ≈2×输入
 
-出口条件：示例程序在 host fpc 下构建运行；基准数字记入模块文档。
+出口条件已满足：示例 host fpc 构建运行通过；基准可复现（脚本 + 两基准程序）。
+
+实现期决策与修复记录：
+- **dirsource 内容锚点生命期缺陷修复（根因修复，非本切片引入）**：枚举返回后内容
+  缓冲即释放，调用方 Data 全体悬垂，S3 gate 靠分配器运气通过。改为 bundle record
+  （Entries + Contents 锚点同值返回）；补 mtime/size 携带回归测试
+- **walk 回调不携带 Size/ModTime**：dirsource seam 内显式 Stat 补齐（上游 fs.dir
+  BuildWalkInfo 缺口已记录，待 fs lane 评估是否下沉）
+- **embed 不经 Include 回调过滤**：全枚举 + 单趟过滤映射，规避跨帧闭包捕获的不确定性
+- **源契约门禁扩展**：respack 单元清单纳入 embed；seam 断言新增"仅允许 fs.glob"变体
 
 ### S5 — http.static 接入 IVfs（跨模块 slice）
 
@@ -186,5 +199,8 @@ If-Modified-Since 取 `ModTime`。
   source-contract 四个新门；writer golden 快照与 roundtrip perf smoke 补齐；
   9 个 gate 全绿、heaptrc 零泄漏。实现期发现的 FPC trunk 陷阱沉淀在
   `core/docs/respack/README.md`「实现期发现的 FPC trunk 注意事项」。
-- 下一步：S4 嵌入工具链（.inc 生成器、glob 过滤、示例与基准）；S5 http.static
-  跨模块 slice 另行立项。
+- S4 完成（2026-08-26）：嵌入工具链（embed 单元 + rp_pack CLI + demo 示例 + 基准）；
+  新增 test_respack_embed 门（12 检查），源契约门禁扩展至 embed 单元；
+  修复 dirsource 内容锚点生命期缺陷与 mtime/size 缺失（含回归测试）；
+  10 个 gate 全绿、heaptrc 零泄漏。
+- 下一步：S5 http.static 跨模块 slice 另行立项。

@@ -142,6 +142,7 @@ var
       BindReq(@GTK_init_check, 'gtk_init_check') and
       BindReq(@GTK_window_new, 'gtk_window_new') and
       BindReq(@GTK_window_set_title, 'gtk_window_set_title') and
+      BindReq(@GTK_window_get_title, 'gtk_window_get_title') and
       BindReq(@GTK_window_set_default_size, 'gtk_window_set_default_size') and
       BindReq(@GTK_window_set_resizable, 'gtk_window_set_resizable') and
       BindReq(@GTK_window_resize, 'gtk_window_resize') and

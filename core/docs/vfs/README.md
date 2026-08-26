@@ -4,9 +4,11 @@ L2 只读虚拟文件树模块。把"一棵文件树"抽象成统一接口：真
 respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，不关心内容来自二进制
 内嵌数据还是文件系统。
 
-**状态：S3 已落地。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数全部实现；
+**状态：S3 已落地、S4 消费示例就位。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数全部实现；
 9 个验证门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
-`vfs.mount`（overlay/挂载表）推迟；S4 嵌入工具链、S5 http.static 对接未开始。
+`vfs.mount`（overlay/挂载表）推迟；S5 http.static 对接未开始。
+嵌入工作流示例见 `core/examples/nextpas.core.vfs/demo_asset_embed/`
+（os/embedded 双后端开发态-发布态切换，资源经 respack S4 工具链生成）。
 实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 对标依据见 [`core/docs/respack/PARITY-go-rust.md`](../respack/PARITY-go-rust.md)。
 
@@ -50,7 +52,7 @@ Bytes := VfsReadAllBytes(Fs, 'assets/app.js');
 var Web := CreateSubVfs(Fs, 'wwwroot');
 
 // 全树确定性遍历（Go fs.WalkDir 对等物）
-VfsWalk(Fs, '',
+VfsWalk(Fs, '.',
   procedure(const APath: string; const AInfo: TEntryInfo; var AStop: Boolean)
   begin
     Log(APath);

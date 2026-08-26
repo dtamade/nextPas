@@ -4,7 +4,8 @@ unit nextpas.core.mail;
 
 {**
  * nextpas.core.mail 门面（L3）。
- * 聚合邮件域公共 API：地址/消息载体类型；SMTP 客户端与服务器会话。
+ * 聚合邮件域公共 API：地址/消息载体类型；SMTP 客户端与服务器会话；
+ * IMAP 服务器会话。
  * 消费方默认只 uses 本单元。
  *}
 
@@ -14,6 +15,8 @@ uses
   nextpas.core.mail.base,
   nextpas.core.mail.smtp,
   nextpas.core.mail.smtp.server,
+  nextpas.core.mail.imap.base,
+  nextpas.core.mail.imap.server,
   nextpas.core.mime;
 
 type
@@ -36,12 +39,34 @@ type
   ISmtpServerSink = nextpas.core.mail.smtp.server.ISmtpServerSink;
   ISmtpMailPolicyHook = nextpas.core.mail.smtp.server.ISmtpMailPolicyHook;
 
+  { imap 服务器会话 }
+  TImapSessionPhase = nextpas.core.mail.imap.base.TImapSessionPhase;
+  TImapMailboxSnapshot = nextpas.core.mail.imap.base.TImapMailboxSnapshot;
+  TImapMailRow = nextpas.core.mail.imap.base.TImapMailRow;
+  TImapSearchPred = nextpas.core.mail.imap.base.TImapSearchPred;
+  TImapAuthResult = nextpas.core.mail.imap.base.TImapAuthResult;
+  TImapRevocationStatus = nextpas.core.mail.imap.base.TImapRevocationStatus;
+  IImapLoginCheck = nextpas.core.mail.imap.base.IImapLoginCheck;
+  IImapRevocationCheck = nextpas.core.mail.imap.base.IImapRevocationCheck;
+  IImapMailboxStore = nextpas.core.mail.imap.base.IImapMailboxStore;
+  TImapServerConfig = nextpas.core.mail.imap.base.TImapServerConfig;
+  TMailImapServerEvent = nextpas.core.mail.imap.server.TMailImapServerEvent;
+  IImapServerSink = nextpas.core.mail.imap.server.IImapServerSink;
+  TMailImapServerSession = nextpas.core.mail.imap.server.TMailImapServerSession;
+
 const
   { smtp 服务器会话事件枚举值（FPC 枚举值不随类型别名传播，须显式 re-export） }
   msseMessage = nextpas.core.mail.smtp.server.msseMessage;
   msseTimeout = nextpas.core.mail.smtp.server.msseTimeout;
   msseOverflow = nextpas.core.mail.smtp.server.msseOverflow;
   msseClosed = nextpas.core.mail.smtp.server.msseClosed;
+
+  { imap 服务器会话事件枚举值 }
+  iiseLogin = nextpas.core.mail.imap.server.iiseLogin;
+  iiseLogout = nextpas.core.mail.imap.server.iiseLogout;
+  iiseClosed = nextpas.core.mail.imap.server.iiseClosed;
+  iiseOverflow = nextpas.core.mail.imap.server.iiseOverflow;
+  iiseTimeout = nextpas.core.mail.imap.server.iiseTimeout;
 
 implementation
 

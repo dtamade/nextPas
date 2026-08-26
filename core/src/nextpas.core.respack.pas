@@ -7,10 +7,12 @@ unit nextpas.core.respack;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.respack.base,
   nextpas.core.respack.reader,
   nextpas.core.respack.writer,
-  nextpas.core.respack.dirsource;
+  nextpas.core.respack.dirsource,
+  nextpas.core.respack.embed;
 
 type
   TResPackHeader = nextpas.core.respack.base.TResPackHeader;
@@ -24,6 +26,9 @@ type
   TResPackLayoutInfo = nextpas.core.respack.writer.TResPackLayoutInfo;
   TResPackIncludeFunc = nextpas.core.respack.dirsource.TResPackIncludeFunc;
   TResPack = nextpas.core.respack.reader.TResPack;
+  TResPackEmbedOptions = nextpas.core.respack.embed.TResPackEmbedOptions;
+  TResPackIncOptions = nextpas.core.respack.embed.TResPackIncOptions;
+  TResPackDirEntries = nextpas.core.respack.dirsource.TResPackDirEntries;
 
   EResPackError = nextpas.core.respack.base.EResPackError;
   EResPackCorrupted = nextpas.core.respack.base.EResPackCorrupted;
@@ -36,6 +41,8 @@ type
 const
   RESPACK_VERSION = nextpas.core.respack.base.RESPACK_VERSION;
   RESPACK_CODEC_STORE = nextpas.core.respack.base.RESPACK_CODEC_STORE;
+  RESPACK_INC_DEFAULT_BYTES_PER_LINE =
+    nextpas.core.respack.embed.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
 
 function ResPackOpen(const AData: PByte; const ASize: SizeUInt): TResPack; inline;
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
@@ -46,7 +53,18 @@ function ResPackValidPath(const APath: string;
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inline;
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
 function ResPackEntriesFromDir(const ARoot: string;
-  const AInclude: TResPackIncludeFunc = nil): TResPackInputArray; inline;
+  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; inline;
+function ResPackDefaultEmbedOptions: TResPackEmbedOptions; inline;
+function ResPackDefaultIncOptions: TResPackIncOptions; inline;
+function ResPackValidIdent(const AName: string): Boolean; inline;
+function ResPackEmbedBuild(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions): TResPackBlob; inline;
+function ResPackEmbedIncSource(const ABlob: TResPackBlob;
+  const AOpts: TResPackIncOptions): TBytes; inline;
+function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
+  const AOpts: TResPackIncOptions; const AUnitName: string): TBytes; inline;
+procedure ResPackExtractToDir(const ABlob: TResPackBlob;
+  const ADestDir: string); inline;
 
 implementation
 
@@ -83,9 +101,49 @@ begin
 end;
 
 function ResPackEntriesFromDir(const ARoot: string;
-  const AInclude: TResPackIncludeFunc): TResPackInputArray;
+  const AInclude: TResPackIncludeFunc): TResPackDirEntries;
 begin
   Result := nextpas.core.respack.dirsource.ResPackEntriesFromDir(ARoot, AInclude);
+end;
+
+function ResPackDefaultEmbedOptions: TResPackEmbedOptions;
+begin
+  Result := nextpas.core.respack.embed.ResPackDefaultEmbedOptions;
+end;
+
+function ResPackDefaultIncOptions: TResPackIncOptions;
+begin
+  Result := nextpas.core.respack.embed.ResPackDefaultIncOptions;
+end;
+
+function ResPackValidIdent(const AName: string): Boolean;
+begin
+  Result := nextpas.core.respack.embed.ResPackValidIdent(AName);
+end;
+
+function ResPackEmbedBuild(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions): TResPackBlob;
+begin
+  Result := nextpas.core.respack.embed.ResPackEmbedBuild(ASourceDir, AOpts);
+end;
+
+function ResPackEmbedIncSource(const ABlob: TResPackBlob;
+  const AOpts: TResPackIncOptions): TBytes;
+begin
+  Result := nextpas.core.respack.embed.ResPackEmbedIncSource(ABlob, AOpts);
+end;
+
+function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
+  const AOpts: TResPackIncOptions; const AUnitName: string): TBytes;
+begin
+  Result := nextpas.core.respack.embed.ResPackEmbedIncUnitSource(ABlob, AOpts,
+    AUnitName);
+end;
+
+procedure ResPackExtractToDir(const ABlob: TResPackBlob;
+  const ADestDir: string);
+begin
+  nextpas.core.respack.dirsource.ResPackExtractToDir(ABlob, ADestDir);
 end;
 
 end.

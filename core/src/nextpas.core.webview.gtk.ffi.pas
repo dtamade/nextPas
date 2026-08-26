@@ -105,6 +105,7 @@ var
   GTK_init_check: function(AArgc: PInt32; AArgv: PPAnsiChar): gboolean; cdecl;
   GTK_window_new: function(ATyp: Int32): Pointer; cdecl;
   GTK_window_set_title: procedure(AWin: Pointer; ATitle: PAnsiChar); cdecl;
+  GTK_window_get_title: function(AWin: Pointer): PAnsiChar; cdecl;
   GTK_window_set_default_size: procedure(AWin: Pointer;
     AW, AH: Int32); cdecl;
   GTK_window_set_resizable: procedure(AWin: Pointer; AResizable: gboolean); cdecl;

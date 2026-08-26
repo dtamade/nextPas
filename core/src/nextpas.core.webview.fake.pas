@@ -143,6 +143,7 @@ type
     function IsVisible: Boolean;
     procedure Focus; virtual;
     procedure SetTitle(const ATitle: string); virtual;
+    function GetTitle: string; virtual;
     procedure SetBounds(AWidth, AHeight: Integer); virtual;
     function GetWidth: Integer;
     function GetHeight: Integer;
@@ -770,6 +771,12 @@ procedure TFakeWebview.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   FTitle := ATitle;
+end;
+
+function TFakeWebview.GetTitle: string;
+begin
+  RequireOpen;
+  Result := FTitle;
 end;
 
 procedure TFakeWebview.SetBounds(AWidth, AHeight: Integer);

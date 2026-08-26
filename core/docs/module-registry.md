@@ -59,7 +59,7 @@ completion claim.
 | `props` | L3 | app property helpers | `nextpas.core.props` | L0-L2 | focused-runtime |
 | `reflect` | Support | reflection experiment | `nextpas.core.reflect` | system/typinfo owner only | source-contract |
 | `regex` | L2 | regular expressions | `nextpas.core.regex` | L0-L1, optional simd | focused-runtime |
-| `respack` | L2 | resource pack container (embed assets, asar/Tauri parity) | `nextpas.core.respack` | L0; dirsource is the single fs seam | focused-runtime, source-contract |
+| `respack` | L2 | resource pack container + embed toolchain (asar/Tauri parity) | `nextpas.core.respack` | L0; dirsource is the single fs IO seam; embed adds fs.glob (match-only) via source-contract exception | focused-runtime ×6, source-contract |
 | `simd` | L0 | SIMD ABI/backends | `nextpas.core.simd` | L0, platform CPU/file probes, allowlisted host/os probes | focused-runtime, source-contract |
 | `sse` | Support | legacy SIMD surface | `nextpas.core.sse` | simd owner only | source-contract |
 | `stopwatch` | L1 | timing helper | `nextpas.core.stopwatch` | L0, platform time | focused-runtime |
