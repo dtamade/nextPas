@@ -9150,6 +9150,40 @@ begin
   Check(LRaised, 'dial func failure propagates as exception');
 end;
 
+{ Dial 阶段裸传输异常契约：ENetworkError 必须包装为 EHttpError(hekConnect)，
+  不穿透 RoundTrip（拨号发生在写读阶段 except 边界之外，曾漏包装——
+  proxy888 订阅拉取管线按 EHttpError 分类消费时被裸异常击穿）。 }
+procedure TestClientDialNetworkErrorWrappedAsHttpError;
+var
+  LClient: IHttpClient;
+  LKind: THttpErrorKind;
+  LGot: Boolean;
+begin
+  LClient := NewHttpClient.WithDialFunc(
+    function(const AHost: string; const APort: UInt16;
+      const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream
+    begin
+      Result := nil;
+      raise ENetworkError.Create('DNS resolve failed for: dial-fail.invalid');
+    end);
+  LGot := False;
+  LKind := hekUnknown;
+  try
+    LClient.Get('http://dial-fail.invalid/nope');
+  except
+    on E: ENetworkError do
+      LGot := False;   { 裸网络异常穿透 = 契约破坏 }
+    on E: EHttpError do
+    begin
+      LKind := E.Kind;
+      LGot := E.Kind = hekConnect;
+    end;
+  end;
+  Check(LGot,
+    'dial-phase ENetworkError surfaces as EHttpError(hekConnect), kind=' +
+    IntToStr(Ord(LKind)));
+end;
+
 { Main }
 
 begin
@@ -9158,6 +9192,8 @@ begin
   T.Test('Client dials through custom DialFunc tunnel', @TestClientWithDialFunc);
   T.Test('Client DialFunc failure propagates as exception',
     @TestClientDialFuncFailureRaises);
+  T.Test('Dial-phase ENetworkError wraps as EHttpError(hekConnect)',
+    @TestClientDialNetworkErrorWrappedAsHttpError);
   T.Test('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
   T.Test('H1 client transport rejects nil request inputs',
     @TestH1ClientTransportRejectsNilRequestInputs);
