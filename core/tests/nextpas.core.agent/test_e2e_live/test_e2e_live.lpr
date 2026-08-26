@@ -5,6 +5,7 @@ program test_e2e_live;
 uses
   nextpas.core.thread.init,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.log.intf,
   nextpas.core.json,
   nextpas.core.agent.base,
@@ -198,6 +199,33 @@ begin
   Check(M.FinishReason = frStop, 'cached request end_turn -> frStop');
 end;
 
+procedure TestAnthropicCountTokensW12;
+var
+  P: IAgentProvider;
+  Counter: IAgentTokenCounter;
+  N, N2: Int64;
+begin
+  { W12 §2.7：count_tokens 端点真网接受性。数值不做精确断言（厂商口径随
+    tokenizer 版本可能漂移），只断言为正且随文本增长不减 }
+  P := NewAnthropicProviderFromEnv;
+  Check(P <> nil,
+    'anthropic provider from env (NEXTPAS_AGENT_ANTHROPIC_*)');
+  if P = nil then
+    Exit;
+  Check(Supports(P, IAgentTokenCounter, Counter),
+    'anthropic provider exposes IAgentTokenCounter');
+  if Counter = nil then
+    Exit;
+  N := Counter.CountTokens(
+    TCompletionRequest.New('').WithUserText('hi'));
+  Check(N > 0, 'short text counts positive');
+  N2 := Counter.CountTokens(
+    TCompletionRequest.New('').WithUserText(
+      'The quick brown fox jumps over the lazy dog. ' +
+      'Pack my box with five dozen liquor jugs.'));
+  Check(N2 >= N, 'longer text counts at least as much');
+end;
+
 procedure TestOpenAIIdleTimeoutNoFalseKill;
 var
   Opts: TOpenAIOptions;
@@ -335,6 +363,7 @@ begin
   T.Test('responses stream W9', @TestResponsesStream);
   T.Test('responses tool call W9', @TestResponsesToolCall);
   T.Test('anthropic cached complete W10', @TestAnthropicCachedCompleteW10);
+  T.Test('anthropic count tokens W12', @TestAnthropicCountTokensW12);
   if not T.Run then
     Halt(1);
 end.
