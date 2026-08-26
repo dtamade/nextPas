@@ -36,12 +36,14 @@ function ConnectPostgres(const AConnInfo: string;
   const AOptions: TDbConnectOptions;
   const AStmtCacheCapacity: Integer): IDbConnection;
 
+
 implementation
 
 uses
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.db.err,
+  nextpas.core.db.sqlscan,
   nextpas.core.db.trace,
   nextpas.core.db.pg.ffi,
   nextpas.core.db.tx,
@@ -74,122 +76,9 @@ end;
        - ?  -> 下一个顺序编号 $k（1 起，逐个递增）
        - ?N -> 直接映射 $N（不扰动顺序计数） *}
 function TranslatePlaceholders(const ASql: string): string;
-var
-  LB: IStringBuilder;
-  I: Integer;
-  C: Char;
-  InStr, InDq, InLineC, InBlockC: Boolean;
-  N: Integer;
-  Seq: Integer;
 begin
-  LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
-  Seq := 0;
-  InStr := False;
-  InDq := False;
-  InLineC := False;
-  InBlockC := False;
-  I := 1;
-  while I <= Length(ASql) do
-  begin
-    C := ASql[I];
-    if InLineC then
-    begin
-      LB.AppendChar(C);
-      if C = #10 then
-        InLineC := False;
-    end
-    else if InBlockC then
-    begin
-      LB.AppendChar(C);
-      if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
-      begin
-        LB.AppendChar('/');
-        InBlockC := False;
-        Inc(I);
-      end;
-    end
-    else if InStr then
-    begin
-      LB.AppendChar(C);
-      if C = '''' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = '''') then
-        begin
-          LB.AppendChar('''');
-          Inc(I);
-        end
-        else
-          InStr := False;
-      end;
-    end
-    else if InDq then
-    begin
-      LB.AppendChar(C);
-      if C = '"' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = '"') then
-        begin
-          LB.AppendChar('"');
-          Inc(I);
-        end
-        else
-          InDq := False;
-      end;
-    end
-    else
-    begin
-      case C of
-        '''' :
-          begin
-            InStr := True;
-            LB.AppendChar(C);
-          end;
-        '"' :
-          begin
-            InDq := True;
-            LB.AppendChar(C);
-          end;
-        '-' :
-          begin
-            if (I < Length(ASql)) and (ASql[I + 1] = '-') then
-              InLineC := True;
-            LB.AppendChar(C);
-          end;
-        '/' :
-          begin
-            if (I < Length(ASql)) and (ASql[I + 1] = '*') then
-            begin
-              InBlockC := True;
-              Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
-              Continue;
-            end;
-            LB.AppendChar(C);
-          end;
-        '?' :
-          begin
-            Inc(I);
-            N := 0;
-            while (I <= Length(ASql)) and (ASql[I] in ['0'..'9']) do
-            begin
-              N := N * 10 + (Ord(ASql[I]) - Ord('0'));
-              Inc(I);
-            end;
-            if N = 0 then
-            begin
-              Inc(Seq);
-              N := Seq;
-            end;
-            LB.AppendChar('$');
-            LB.AppendInt(N);
-            Continue;
-          end;
-      else
-        LB.AppendChar(C);
-      end;
-    end;
-    Inc(I);
-  end;
-  Result := LB.ToString;
+  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
+  Result := SqlScanRenderDollar(ASql, DBSQLSCAN_PG);
 end;
 
 { 结果列类型：按 PQftype OID 归入统一列类型；未知类型一律 dbcText
