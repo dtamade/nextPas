@@ -314,6 +314,7 @@ procedure LoadChangedCb(AView: Pointer; AEvent: guint;
 const
   WEBKIT_LOAD_STARTED = 0;
   WEBKIT_LOAD_FINISHED = 3;
+  WEBKIT_LOAD_FAILED = 4;
 var
   LSelf: TGtkWebview absolute AUserData;
   LEv: TWebviewNavigationEvent;
@@ -337,7 +338,39 @@ begin
           LSelf.FOnNavFinished[I](LEv);
         LSelf.FireReadyOnce;
       end;
+    WEBKIT_LOAD_FAILED:
+      begin
+        GtkTrace('nav failed(load-changed): ' + LSelf.CurrentUri);
+        LEv := Default(TWebviewNavigationEvent);
+        LEv.Url := LSelf.CurrentUri;
+        LEv.IsError := True;
+        for I := 0 to High(LSelf.FOnNavFailed) do
+          LSelf.FOnNavFailed[I](LEv);
+      end;
   end;
+end;
+
+procedure LoadFailedCb(AView, ALoadEvent, AFailingUri, AErr,
+  AUserData: Pointer); cdecl;
+var
+  LSelf: TGtkWebview absolute AUserData;
+  LEv: TWebviewNavigationEvent;
+  I: Integer;
+begin
+  if LSelf.FClosed then
+    Exit;
+  GtkTrace('nav failed: ' + StrPas(AFailingUri));
+  LEv := Default(TWebviewNavigationEvent);
+  LEv.Url := StrPas(AFailingUri);
+  LEv.IsError := True;
+  if AErr <> nil then
+  begin
+    LEv.ErrorCode := PGError(AErr)^.Code;
+    if PGError(AErr)^.Message <> nil then
+      LEv.ErrorMessage := StrPas(PGError(AErr)^.Message);
+  end;
+  for I := 0 to High(LSelf.FOnNavFailed) do
+    LSelf.FOnNavFailed[I](LEv);
 end;
 
 procedure ScaleNotifyCb(AObj, APspec, AUserData: Pointer); cdecl;
@@ -647,8 +680,11 @@ begin
   FScale := 1.0;
   FInvokesIntf := TWebviewInvokeRegistry.Create;
   FInvokes := FInvokesIntf as TObject;
-  FAssetsIntf := TWebviewAssetsImpl.Create;
+  FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
   FAssets := FAssetsIntf as TObject;
+  if FOptions.DevServerUrl <> '' then
+    GtkTrace('dev mode: assets inert, scheme deferred (' +
+      FOptions.DevServerUrl + ')');
 
   SetupSessionContext;
   SetupSchemeAndShell;
@@ -656,6 +692,13 @@ begin
 
   RegisterLive(Self);
   FSelfKeepAlive := Self;   { keep-alive：见单元头 }
+
+  { Initial* 启动加载：构造即导航。资产解析发生在主循环泵请求时，
+    Build 返回后的挂载先于任何请求，无时序竞态（§3.4） }
+  if FOptions.InitialHtml <> '' then
+    NavigateToString(FOptions.InitialHtml)
+  else if FOptions.InitialUrl <> '' then
+    Navigate(FOptions.InitialUrl);
 end;
 
 destructor TGtkWebview.Destroy;
@@ -738,8 +781,10 @@ begin
   { scheme 注册必须先于该 context 首个 web view 创建（BACKENDS §2.2）；
     同 context 只注册一次（GLib 拒绝重复注册）。handler 不绑定任何
     窗口实例——请求按发起视图精确归属（见 SchemeRequestCb），context
-    销毁时经 ForgetSchemeContext 摘除，防地址复用误判已注册 }
-  if not SchemeContextRegistered(LCtx) then
+    销毁时经 ForgetSchemeContext 摘除，防地址复用误判已注册。
+    DevServerUrl 开发模式不注册（§3.4 直连 http）；同 context 的后续
+    非 dev 窗口按需补注册——注册发生在其构造期，仍先于它的首次导航 }
+  if (FOptions.DevServerUrl = '') and (not SchemeContextRegistered(LCtx)) then
   begin
     WEBKIT_web_context_register_uri_scheme(LCtx,
       PAnsiChar(FOptions.SchemeName), @SchemeRequestCb, nil, nil);
@@ -788,6 +833,10 @@ begin
   AddUserScript(NPW_BRIDGE_SCRIPT);
 
   g_signal_connect_data(FView, 'load-changed', @LoadChangedCb, Self, nil, 0);
+  { 导航失败走官方 load-failed（携带 failing_uri + GError）——
+    load-changed 的 WEBKIT_LOAD_FAILED 事件不带错误详情，此前该信号
+    未接线导致 OnNavigationFailed 全程未生效（dev-mode 门禁实锤） }
+  g_signal_connect_data(FView, 'load-failed', @LoadFailedCb, Self, nil, 0);
   g_signal_connect_data(FView, 'notify::scale-factor',
     @ScaleNotifyCb, Self, nil, 0);
 end;

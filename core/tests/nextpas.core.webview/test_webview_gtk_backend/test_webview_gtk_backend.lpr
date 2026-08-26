@@ -41,6 +41,7 @@ const
   WC_REP_A = 20;   { 窗 A 桥报告 }
   WC_REP_B = 21;   { 窗 B 桥报告 }
   WC_EVAL  = 30;   { eval 回执（全局同时至多一发）}
+  WC_NAVFAIL = 40; { 导航失败事件 }
   REPORT_CMD = 'gate.report';
 
 type
@@ -283,6 +284,84 @@ begin
     begin
       SignalChannel(AChannel);
     end);
+end;
+
+{ DevServerUrl 开发模式（§3.4）。本机环境事实：WebKit 网络进程无法
+  启动，http/file 导航零事件（含可达服务）——故 dev 直连行为不做
+  引擎级断言，只验同步可观测面；导航失败接线改用进程内 scheme 404
+  （finish_error → load-failed 信号，不依赖网络进程）确定性覆盖。
+  对照段：同进程后续普通窗口资产管线照常——按需补注册无缝 }
+procedure TestDevServerModeLive;
+var
+  LDev, LNorm: IWebviewWindow;
+  LOpts: TWebviewOptions;
+  LProv: IWebviewAssetProvider;
+  LBody: string;
+  LBytes: TBytes;
+  LMime: string;
+begin
+  if not BackendUsable() then
+  begin
+    Check(True, '');
+    Exit;
+  end;
+
+  { dev 模式：资产惰性（挂载 no-op、解析一律 404），同步可观测 }
+  LOpts := DefaultWebviewOptions;
+  LOpts.EphemeralSession := True;
+  LOpts.DevServerUrl := 'http://127.0.0.1:8123';
+  try
+    LDev := CreateWebviewOf(wvGtk, LOpts);
+  except
+    on E: EWebviewBackendUnavailable do
+    begin
+      Check(True, '');   { 无显示环境优雅跳过 }
+      Exit;
+    end;
+  end;
+  try
+    LDev.Assets.MountEmbedded('', TGateProvider.Create);
+    Check(not LDev.Assets.TryResolve('hello.txt', LBytes, LMime),
+      'dev mode resolve must be inert 404');
+  finally
+    LDev.Close;
+    LDev := nil;
+  end;
+
+  LOpts := DefaultWebviewOptions;
+  LProv := TGateProvider.Create;
+  try
+    LNorm := CreateWebviewOf(wvGtk, LOpts);
+  except
+    on E: EWebviewBackendUnavailable do
+    begin
+      Check(True, '');
+      Exit;
+    end;
+  end;
+  try
+    LNorm.Assets.MountEmbedded('', LProv);
+    AttachNavSignal(LNorm, WC_NAV_B);
+    LNorm.Show;
+    LNorm.Navigate('npres://app/hello.txt');
+    AwaitChannel(WC_NAV_B, 'post-dev normal window finished');
+    EvalAwait(LNorm, 'document.body.innerText', LBody);
+    Check(Pos('npw-scheme-ok', LBody) > 0,
+      'scheme lazily registered after dev-first window, got: ' + LBody);
+
+    { 进程内失败源：scheme 404 经 finish_error 触发 load-failed，
+      错误码透传到事件（OnNavigationFailed 接线回归） }
+    LNorm.OnNavigationFailed(
+      procedure(const AEvent: TWebviewNavigationEvent)
+      begin
+        SignalChannel(WC_NAVFAIL);
+      end);
+    LNorm.Navigate('npres://app/missing-on-purpose.html');
+    AwaitChannel(WC_NAVFAIL, 'scheme 404 load failed');
+  finally
+    LNorm.Close;
+    LNorm := nil;
+  end;
 end;
 
 procedure TestSchemeAssetPipeline;
@@ -586,5 +665,6 @@ begin
   T.Test('multi window asset isolation', @TestMultiWindowAssetIsolation);
   T.Test('ephemeral session lifecycle', @TestEphemeralSessionLifecycle);
   T.Test('datadir session lifecycle', @TestDataDirectorySessionLifecycle);
+  T.Test('dev server mode live', @TestDevServerModeLive);
   if not T.Run then Halt(1);
 end.
