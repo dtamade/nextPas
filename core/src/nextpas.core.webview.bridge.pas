@@ -118,7 +118,9 @@ type
     end;
   private
     FMounts: array of TMount;
+    FInert: Boolean;   { DevServerUrl 开发模式：挂载 no-op、解析一律 404 }
   public
+    constructor Create(AInert: Boolean = False);
     procedure MountEmbedded(const APrefix: string;
       AProvider: IWebviewAssetProvider);
     procedure MountDirectory(const APrefix, ARootDir: string);
@@ -421,11 +423,19 @@ end;
 
 { ---- TWebviewAssetsImpl：前缀路由 + provider 链 ---- }
 
+constructor TWebviewAssetsImpl.Create(AInert: Boolean);
+begin
+  inherited Create;
+  FInert := AInert;
+end;
+
 procedure TWebviewAssetsImpl.MountEmbedded(const APrefix: string;
   AProvider: IWebviewAssetProvider);
 var
   LIdx: Integer;
 begin
+  if FInert then
+    Exit;   { DevServerUrl 开发模式：资源服务让位 http dev server（§3.4） }
   if AProvider = nil then
     raise EWebviewInvalidState.Create('asset provider must not be nil');
   LIdx := Length(FMounts);
@@ -436,7 +446,10 @@ end;
 
 procedure TWebviewAssetsImpl.MountDirectory(const APrefix, ARootDir: string);
 begin
-  { 文件系统支撑归 fs owner；W1 显式不支持（CONTRACT §3.4 同 fake 立场） }
+  { 文件系统支撑归 fs owner；W1 显式不支持（CONTRACT §3.4 同 fake 立场）。
+    开发模式同样 no-op 语义优先于不支持错误——保持两模式观感一致 }
+  if FInert then
+    Exit;
   raise ENotSupportedError.Create('directory asset mounts are not supported yet');
 end;
 
@@ -449,6 +462,8 @@ begin
   Result := False;
   ABytes := nil;
   AMimeType := '';
+  if FInert then
+    Exit;
   { 归一：去首部 '/'，统一相对形态匹配前缀 }
   LPath := ASchemeRelativePath;
   while (LPath <> '') and (LPath[1] = '/') do

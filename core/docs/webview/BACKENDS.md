@@ -110,6 +110,14 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 >   `g_main_context_find_source_by_id` 判存后再 remove——直接对陈旧
 >   Source ID 二次 remove 会触发 GLib-CRITICAL（demo_webview 的
 >   Dispatcher.Post → Close 路径首次实锤暴露）。
+> - 导航失败接线（S9）：`OnNavigationFailed` 此前从未生效——
+>   load-changed 只处理 STARTED/FINISHED，WEBKIT_LOAD_FAILED 静默
+>   吞掉。改接官方 `load-failed` 信号（failing_uri + GError 错误码/
+>   消息透传事件），load-changed 的 FAILED(4) 分支作同语义兜底。
+> - DevServerUrl 开发模式（S9）：资产面整体惰性——挂载 no-op、解析
+>   一律 404；DevServerUrl 窗口若为 context 首窗则跳过 npres 注册，
+>   同 context 后续非 dev 窗口在各自构造期按需补注册（注册先于其
+>   首次导航，时序安全）；GtkTrace 记录惰性诊断。
 
 ### 2.3 主线程唤醒
 
@@ -188,3 +196,4 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 | macOS ATS 对 http dev server 的限制 | DevServerUrl 在 wk 上可能被拦 | W3 设计时决策（NSAppTransportSecurity 或提示 https） |
 | Windows WebView2 Evergreen 版本漂移 | COM v2 接口偶有新增 | 只绑定稳定子集；token 校验失败即 EWebviewBackendUnavailable |
 | GTK GetScaleFactor 仅整数（X11 典型 1/2） | HiDpi 小数缩放读不到 | 诚实表已标注；Wayland/GTK4 时代再评 |
+| 本机（2026-08-26 取证）WebKit 网络进程无法启动：http/file 导航零事件（连可达本地服务也不发起），仅进程内自定义 scheme 可用 | DevServerUrl 直连行为无法做引擎级 live 断言 | 门禁改用同步可观测面（资产惰性）+ scheme 404 覆盖失败接线；真机 http 行为待环境修复后补采 |

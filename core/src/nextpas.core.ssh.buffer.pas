@@ -35,6 +35,7 @@ type
     procedure PutByte(AValue: Byte);
     procedure PutBoolean(AValue: Boolean);
     procedure PutUInt32(AValue: UInt32);
+    procedure PutUInt64(AValue: UInt64);
     procedure PutStringBytes(const AValue: TBytes);
     procedure PutStringText(const AText: string);
     { 无符号大端 magnitude → RFC 4251 mpint（补符号位前导零；0 编码为空串）}
@@ -62,6 +63,7 @@ type
     procedure Skip(ACount: SizeUInt);
     function ReadBoolean: Boolean;
     function ReadUInt32: UInt32;
+    function ReadUInt64: UInt64;
     function ReadStringBytes: TBytes;
     function ReadStringText: string;
     { 解析 mpint 为无符号大端 magnitude（剥离前导零；负数高位按无符号处理）}
@@ -286,6 +288,17 @@ begin
     or (UInt32(FData[FPos + 2]) shl 8)
     or UInt32(FData[FPos + 3]);
   Inc(FPos, 4);
+end;
+
+procedure TsshWriter.PutUInt64(AValue: UInt64);
+begin
+  PutUInt32(UInt32(AValue shr 32));
+  PutUInt32(UInt32(AValue and $FFFFFFFF));
+end;
+
+function TsshReader.ReadUInt64: UInt64;
+begin
+  Result := (UInt64(ReadUInt32) shl 32) or UInt64(ReadUInt32);
 end;
 
 function TsshReader.ReadStringBytes: TBytes;

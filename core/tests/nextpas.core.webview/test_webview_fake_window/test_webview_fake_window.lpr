@@ -9,6 +9,7 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
+  nextpas.core.base,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
@@ -250,6 +251,98 @@ begin
   end;
 end;
 
+type
+  TFixedProvider = class(TInterfacedObject, IWebviewAssetProvider)
+  public
+    function TryResolve(const APath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+  end;
+
+function TFixedProvider.TryResolve(const APath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  ABytes := nil;
+  AMimeType := '';
+  Result := APath = 'hit.txt';
+  if Result then
+  begin
+    SetLength(ABytes, 2);
+    ABytes[0] := Ord('o');
+    ABytes[1] := Ord('k');
+    AMimeType := 'text/plain';
+  end;
+end;
+
+procedure TestInitialLoadOptions;
+var
+  LOpts: TWebviewOptions;
+  W: IWebviewWindow;
+  LFake: TFakeWebview;
+begin
+  { InitialUrl：构造即导航一次 }
+  LOpts := DefaultWebviewOptions;
+  LOpts.InitialUrl := 'npres://app/index.html';
+  LFake := TFakeWebview.Create(LOpts);
+  W := LFake;
+  try
+    CheckEqual(1, LFake.NavigateCount, 'initial url navigates once');
+    Check(not W.CanGoBack, 'initial nav is first history entry');
+  finally
+    W := nil;   { 引用计数归零即析构，禁止再 Free }
+  end;
+
+  { InitialHtml 优先于 InitialUrl，且只导航一次不叠加 }
+  LOpts := DefaultWebviewOptions;
+  LOpts.InitialUrl := 'npres://app/index.html';
+  LOpts.InitialHtml := '<html><body>npw</body></html>';
+  LFake := TFakeWebview.Create(LOpts);
+  try
+    CheckEqual(1, LFake.NavigateCount,
+      'initial html wins and never double-navigates');
+  finally
+    LFake.Free;
+  end;
+
+  { 都为空：不自动导航（现状语义回归钉死） }
+  LFake := TFakeWebview.Create(DefaultWebviewOptions);
+  try
+    CheckEqual(0, LFake.NavigateCount, 'no initial load by default');
+  finally
+    LFake.Free;
+  end;
+end;
+
+procedure TestDevServerAssetsInert;
+var
+  LOpts: TWebviewOptions;
+  W: IWebviewWindow;
+  LHit: Boolean;
+  LBytes: TBytes;
+  LMime: string;
+begin
+  { DevServerUrl 非空：挂载 no-op + 解析一律 404（§3.4 直连 http） }
+  LOpts := DefaultWebviewOptions;
+  LOpts.DevServerUrl := 'http://127.0.0.1:5173';
+  W := CreateWebviewOf(wvFake, LOpts);
+  try
+    W.Assets.MountEmbedded('', TFixedProvider.Create);
+    LHit := W.Assets.TryResolve('hit.txt', LBytes, LMime);
+    Check(not LHit, 'dev mode resolve must be inert 404');
+  finally
+    W := nil;
+  end;
+
+  { 对照：非 dev 模式同一 provider 正常命中 }
+  W := CreateWebviewOf(wvFake, DefaultWebviewOptions);
+  try
+    W.Assets.MountEmbedded('', TFixedProvider.Create);
+    LHit := W.Assets.TryResolve('/hit.txt', LBytes, LMime);
+    Check(LHit, 'normal mode resolves through mount');
+  finally
+    W := nil;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -262,5 +355,7 @@ begin
   T.Test('close idempotent and semantics', @TestCloseIdempotentAndSemantics);
   T.Test('live count tracking', @TestLiveCountTracking);
   T.Test('navigation history', @TestNavigationHistory);
+  T.Test('initial load options', @TestInitialLoadOptions);
+  T.Test('dev server assets inert', @TestDevServerAssetsInert);
   if not T.Run then Halt(1);
 end.

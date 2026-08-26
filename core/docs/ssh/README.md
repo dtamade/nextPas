@@ -73,8 +73,9 @@ nextpas.core.ssh.kex.curve25519.pas  ← curve25519-sha256 客户端交换
 nextpas.core.ssh.hostkey.pas         ← 主机密钥解析 / 验签 / 指纹 / known_hosts
 nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析
 nextpas.core.ssh.auth.pas            ← userauth 载荷构造/解析
-nextpas.core.ssh.channel.pas         ← 连接协议：通道复用与 exec
+nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem）
 nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道）
+nextpas.core.ssh.sftp.pas            ← SFTP v3 客户端（ISshFileSystem 门面）
 ```
 
 依赖方向：`base ← errors/buffer ← cipher/kex/hostkey/keys/auth ← transport/channel ← session ← 门面`。
@@ -90,6 +91,7 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_hostkey
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_keys
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_transport
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_session
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp
 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
 ```
 
@@ -112,8 +114,11 @@ NEXTPAS_SSH_E2E_KEYFILE=<未加密 ed25519 私钥> bash run_e2e.sh
 ```
 
 场景：exec marker + 同会话二次 exec、远端 exit code 透传、stdout/stderr 分离、
-known_hosts 不匹配预认证拒绝、同会话连续 16 次 exec 压力（通道复用回归放大器）。
-`NEXTPAS_SSH_E2E_TRACE=1` 开启帧级追踪（库内 `SshChannelTrace` 钩子，默认 nil 零开销）。
+known_hosts 不匹配预认证拒绝、同会话连续 16 次 exec 压力（通道复用回归放大器）、
+SFTP 写→读→列目→stat 尺寸校验→删除回路。
+`NEXTPAS_SSH_E2E_TRACE=1` 开启帧级追踪（库内 `SshChannelTrace` 钩子，默认 nil 零开销，
+含 tx 方向帧头）；`NEXTPAS_SSH_E2E_DUMP=1` 额外转储全部明文包到 `/tmp/np_ssh_dump.txt`
+（配合传输层 `SshTransportDump` 钩子）。
 运行带 heaptrc 0 泄漏门禁；失败时编排器输出完整 sshd DEBUG3 日志。夹具注意事项：
 sshd `StrictModes` 要求 authorized_keys 必须 root 属主且组/其他不可写；
 Docker 发布端口每次启动会重排，TOFU 的 known_hosts 需按当次端口重新采集。

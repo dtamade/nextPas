@@ -77,6 +77,7 @@ const
 
   { exec 时我方声明给对端的通道请求名 }
   SSH_REQ_EXEC = 'exec';
+  SSH_REQ_SUBSYSTEM = 'subsystem';
   SSH_REQ_EXIT_STATUS = 'exit-status';
 
 type

@@ -407,6 +407,70 @@ begin
   Check(LAll.IsDone, 'all done');
 end;
 
+{ 惰性扩容专项（容量与预创建解耦回归） }
+
+procedure TestPoolLazyIdleZeroThreads;
+var
+  LPool: IThreadPool;
+begin
+  { 空闲池零线程：构造后静置 50ms，任何假预创建都会在此暴露 }
+  LPool := ThreadPool(8);
+  platform_thread_sleep_ns(50 * 1000 * 1000);
+  CheckEqual(Int64(0), Int64(LPool.StartedWorkerCount),
+    'idle pool must not start workers');
+  LPool.Shutdown;
+end;
+
+procedure TestPoolLazyScaleToCapacity;
+var
+  LPool: IThreadPool;
+  LI, LSpins: Integer;
+begin
+  GCounter := 0;
+  LPool := ThreadPool(8);
+  { 16 × 30ms 突发 > 容量 8：积压逃生口应把池扩到满编 }
+  for LI := 1 to 16 do
+    LPool.Submit(procedure
+    begin
+      InterlockedIncrement(GCounter);
+      platform_thread_sleep_ns(30 * 1000 * 1000);
+    end);
+
+  { 负载窗口内轮询至满编（上限 2s 防挂） }
+  LSpins := 0;
+  while (LPool.StartedWorkerCount < 8) and (LSpins < 2000) do
+  begin
+    platform_thread_sleep_ns(1000 * 1000);
+    Inc(LSpins);
+  end;
+  CheckEqual(Int64(8), Int64(LPool.StartedWorkerCount),
+    'burst backlog must scale pool to capacity');
+  LPool.WaitAll;
+  CheckEqual(Int64(16), Int64(InterlockedCompareExchange(GCounter, 0, 0)),
+    'all burst tasks ran');
+  LPool.Shutdown;
+end;
+
+procedure TestPoolLazySingleWorkerCap;
+var
+  LPool: IThreadPool;
+  LI: Integer;
+begin
+  GCounter := 0;
+  LPool := ThreadPool(1);
+  for LI := 1 to 5 do
+    LPool.Submit(procedure
+    begin
+      InterlockedIncrement(GCounter);
+    end);
+  LPool.WaitAll;
+  CheckEqual(Int64(5), Int64(InterlockedCompareExchange(GCounter, 0, 0)),
+    'all tasks ran on single worker');
+  CheckEqual(Int64(1), Int64(LPool.StartedWorkerCount),
+    'capacity cap respected under burst');
+  LPool.Shutdown;
+end;
+
 {$IFDEF UNIX}
 procedure SigAbrtHandler(ASig: cint); cdecl;
 begin
@@ -425,6 +489,9 @@ begin
   T.Test('Pool shutdown rejects new', @TestPoolShutdownRejectsNew);
   T.Test('Pool worker count', @TestPoolWorkerCount);
   T.Test('Pool H4 SegQueue source-contract', @TestPoolH4SegQueueSourceContract);
+  T.Test('Pool lazy idle zero threads', @TestPoolLazyIdleZeroThreads);
+  T.Test('Pool lazy scale to capacity', @TestPoolLazyScaleToCapacity);
+  T.Test('Pool lazy single worker cap', @TestPoolLazySingleWorkerCap);
   T.Test('Channel single producer/consumer', @TestChannelSingleProducerConsumer);
   T.Test('Channel with thread', @TestChannelWithThread);
   T.Test('Channel multi-producer sum', @TestChannelMultiProducerSum);
