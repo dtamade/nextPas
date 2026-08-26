@@ -28,7 +28,11 @@ type
       Returns True if all tasks finished, False if timed out. }
     function WaitAllTimeout(const ATimeoutNs: Int64): Boolean;
     function GetWorkerCount: Integer;
+    { 实际已启动的 worker 线程数：容量上界（GetWorkerCount）与在用数
+      的差值即惰性扩容的省量；观测/诊断用途 }
+    function GetStartedWorkerCount: Integer;
     property WorkerCount: Integer read GetWorkerCount;
+    property StartedWorkerCount: Integer read GetStartedWorkerCount;
   end;
 
   generic IChannel<T> = interface
