@@ -79,7 +79,8 @@ uses
   nextpas.core.crypto.constant_time,
   nextpas.core.crypto.hmac,
   nextpas.core.encoding.base64,
-  nextpas.core.platform.files.text;
+  nextpas.core.platform.files.text,
+  nextpas.core.ssh.rsa;
 
 { 从 AFrom 起查找字符（替代 StrUtils.PosEx，冷路径无需优化）}
 function PosCharFrom(const AChar: Char; const AText: string; AFrom: Integer): Integer;
@@ -130,64 +131,9 @@ end;
 
 { ---- RSA PKCS#1 v1.5 验签 ---- }
 
-const
-  { DigestInfo DER 前缀（RFC 8017 §9.2）}
-  DIGEST_INFO_SHA256: array[0..18] of Byte = (
-    $30, $31, $30, $0d, $06, $09, $60, $86, $48, $01,
-    $65, $03, $04, $02, $01, $05, $00, $04, $20);
-  DIGEST_INFO_SHA512: array[0..18] of Byte = (
-    $30, $51, $30, $0d, $06, $09, $60, $86, $48, $01,
-    $65, $03, $04, $02, $03, $05, $00, $04, $20);
-
-{ modexp 结果右对齐到模长（bigint 输出可能剥离了前导零）}
-function LeftPadTo(const AValue: TBytes; ALen: Integer): TBytes;
-var
-  LOff: SizeUInt;
-begin
-  Result := nil;
-  SetLength(Result, ALen);
-  FillChar(Result[0], SizeUInt(ALen), 0);
-  if SizeUInt(Length(AValue)) > SizeUInt(ALen) then
-    Exit;
-  LOff := SizeUInt(ALen) - SizeUInt(Length(AValue));
-  if Length(AValue) > 0 then
-    Move(AValue[0], Result[LOff], SizeUInt(Length(AValue)));
-end;
-
-function RsaVerifyPkcs1v15(const AE, AN, AMsgHash: TBytes;
-  const ADigestInfo: array of Byte; ASig: TBytes): Boolean;
-var
-  LEmRaw, LEm, LExpected: TBytes;
-  LErr: string;
-  LTLen, LPsLen, LPos: Integer;
-begin
-  Result := False;
-  if (Length(ASig) = 0) or (SizeUInt(Length(ASig)) > SizeUInt(Length(AN))) then
-    Exit;
-  if not TryBigIntModExpFromUnsignedBytes(ASig, AE, AN, LEmRaw, LErr) then
-    Exit;
-
-  LTLen := Length(ADigestInfo) + Length(AMsgHash);
-  LPsLen := Length(AN) - 3 - LTLen;
-  if (LPsLen < 8) or (Length(LEmRaw) > Length(AN)) then
-    Exit;
-
-  { 期望 EM = 00 01 FF..FF 00 || DigestInfo || Hash，模长定长 }
-  SetLength(LExpected, Length(AN));
-  FillChar(LExpected[0], SizeUInt(Length(LExpected)), 0);
-  LExpected[1] := $01;
-  for LPos := 2 to LPsLen + 1 do
-    LExpected[LPos] := $FF;
-  LPos := LPsLen + 2;
-  LExpected[LPos] := $00;
-  Inc(LPos);
-  Move(ADigestInfo[0], LExpected[LPos], SizeUInt(Length(ADigestInfo)));
-  Inc(LPos, Length(ADigestInfo));
-  Move(AMsgHash[0], LExpected[LPos], SizeUInt(Length(AMsgHash)));
-
-  LEm := LeftPadTo(LEmRaw, Length(AN));
-  Result := TConstantTime.CompareBytes(LEm, LExpected) = 1;
-end;
+{ DigestInfo 前缀、EM 编码与常数时间比较统一收口在 nextpas.core.ssh.rsa：
+  签名（客户端 publickey）与验签（主机密钥）共享同一套编码逻辑，
+  RsaVerifyPkcs1v15 直接由该单元提供。 }
 
 { ---- 服务方签名验证 ---- }
 
