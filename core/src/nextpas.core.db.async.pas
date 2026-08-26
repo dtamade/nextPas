@@ -20,9 +20,16 @@ unit nextpas.core.db.async;
          归一 decTimeout（"查询取消"语义位）。
        - 默认零成本：不使用本单元时 db 家族行为与同步直调逐字节一致。
 
-       时序不变式（Submit 关键路径）：子令牌回调注册先于工作体入队
-       ——否则极小工作体可能在注册完成前已执行完毕并释放 op 记录，
-       回调上下文悬挂。 *}
+       时序不变式（Submit 关键路径）：
+       a) 子令牌回调注册先于工作体入队——否则极小工作体可能在注册
+         完成前已执行完毕并释放 op 记录，回调上下文悬挂；
+       b) 句柄的第一个接口引用必须在入队前由 Submit 本地持有——
+         FPC 类指针不保活（构造贷返还后 rc=0），若唯一接口引用在
+         op 记录字段里，worker 可在 Submit 取回 Result 前完成
+         执行+finalize+Dispose 整个周期并触发析构，消费方拿到的
+         是已释放内存（微工作体 + 高负载下真实复现过的 UAF，
+         RIP=0）。本地 LHeld: IDbAsyncHandle 即该引用，末行经它
+         移交给消费方。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -313,6 +320,11 @@ function TDbAsyncExecutor.Submit(const AWork: TDbAsyncWork;
 var
   LOp: PDbAsyncOp;
   LHandle: TDbAsyncHandle;
+  { 不变式 b 的物理载体：句柄的第一个接口引用。FPC 中类指针不保活
+    （构造贷返还后 rc=0），若唯一接口引用在 op 记录里，worker 可在
+    本函数取回 Result 前完成 finalize+Dispose 并触发析构——消费方
+    拿到的将是已释放内存。此引用保证对象自创建起不可提前死亡。 }
+  LHeld: IDbAsyncHandle;
   LChild: IAsyncCancellationToken;
   LCtrl: IDbCancelControl;
   LConflict: Boolean;
@@ -326,6 +338,7 @@ begin
   { 全部装配先行（句柄 + 级联），最后才入队可见——见单元头时序不变式 }
   New(LOp);
   LHandle := TDbAsyncHandle.Create(LCtrl);
+  LHeld := LHandle;                     { 首个接口引用先行（rc 0→1） }
   LOp^.HandleRaw := LHandle;            { 对象身份：零开销分发 }
   LOp^.HandleRef := LHandle;            { 托管引用保活（引用计数 +1） }
   LOp^.Work := AWork;
@@ -380,7 +393,9 @@ begin
     Dispose(LOp);                       { 托管字段引用一并释放 }
     raise;                              { 锁外重抛，生命周期照常管理 }
   end;
-  Result := LOp^.HandleRef;             { 消费方引用（引用计数 +1） }
+  { 不变式 b：此刻 op 记录可能已被 worker finalize+Dispose；LHeld
+    保证对象存活，此处只做引用移交 }
+  Result := LHeld;                      { 消费方引用（引用计数 +1） }
 end;
 
 function TDbAsyncExecutor.InFlight: Boolean;
