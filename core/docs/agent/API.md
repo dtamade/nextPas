@@ -513,7 +513,8 @@ TTraceResponseInfo = record
   Provider: string;
   Url: string;
   Stream: Boolean;
-  Status: Integer;                 { -1 = transport 异常路径（配对保证）}
+  Status: Integer;                 { -1 = 不可得（流式 wire 层不暴露/异常路径）}
+  Failed: Boolean;                 { True = transport 异常路径（配对保证）}
   DurationMs: Int64;               { RoundTrip 全程 / OpenStream 建流耗时 }
   ResponseBytes: Int64;            { 非流式响应体；流式 -1（事件级归 fold/loop 层）}
   RequestId: string;               { 响应头透传；异常路径空串 }
@@ -526,18 +527,20 @@ end;
 
 function NewTracedTransport(const AName: string;
   const ASink: IAgentTraceSink;
-  const AInner: IAgentTransport): IAgentTransport;
+  const AInner: IAgentTransport;
+  const AClock: IAgentClock = nil): IAgentTransport;
 ```
 
 语义：
 
 - 包装任意 `IAgentTransport`，一处接线三适配器全覆盖；与 WithRetry 叠装
   （traced 在内层）时每次尝试各产一对事件——重试可见性无需专用 onRetry 钩子
-- OnRequest 在派发前、OnResponse 在落定后（含异常：先发 `Status=-1` 配对
-  事件再原样上抛——观测者不吞异常、不改写失败语义）
-- sink 回调异常直接冒泡（与 loop 钩子同哲学）；时钟经 IAgentClock 注入，
-  测试零睡眠
-- 流式 `ResponseBytes=-1`：SSE 事件级观测归 fold/loop 层，本层只报建流
+- OnRequest 在派发前、OnResponse 在落定后；transport 异常路径先发
+  `Failed=True` 配对事件再原样上抛——不改写失败语义
+- **sink 契约：回调内不得抛出**。失败路径的 sink 异常会顶替传输错误上抛；
+  成功路径 sink 异常直接冒泡可见
+- 字节口径为 UTF-8 精确计数；时钟经 IAgentClock 注入，测试零睡眠；
+  流式 `Status=-1`/`ResponseBytes=-1`：SSE 事件级观测归 fold/loop 层
 
 ## 4. 协议域纯函数（nextpas.core.agent.fold）
 
