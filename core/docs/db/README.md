@@ -127,6 +127,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_array_bind   # 参数级�
 make focused FOCUS=core/tests/nextpas.core.db/test_db_async        # 异步挂载与取消（pg 段需 NEXTPAS_PG_TEST_CONN）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_pg_listen    # LISTEN/NOTIFY 订阅（需 NEXTPAS_PG_TEST_CONN）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_subscribe  # Redis SUBSCRIBE 订阅（V3-B8，离线回放；live 段需 NEXTPAS_REDIS_TEST_CONN）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlscan     # SQL 词法扫描共享引擎（V3-C6，离线纯函数）
 # 全部门禁清单见 CONTRACT §5；每个含 heaptrc 0 unfreed 硬门槛
 ```
 
