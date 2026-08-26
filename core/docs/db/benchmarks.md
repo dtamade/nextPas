@@ -136,6 +136,24 @@ P99：sqlite 3.8→32.9µs；pg 105.9→116.9µs（噪声轮 614.9µs）。
 取消能力：真机 pg 取消 50M 行聚合 ~200ms 内中断（自然完成秒级）。
 >20% 劣化回退条款的评估结论见路线图 B6 回填。
 
+### bench_db_listen —— LISTEN/NOTIFY 投递面（V3-B7）
+
+口径：latency = 单条 NOTIFY → Receive 醒来的端到端耗时（含发送往返
+与泵节拍），双泵节拍对照（默认 50ms / 5ms），N=400 各预热 20；
+throughput = 分批流水 NOTIFY（100 条/Exec × 20 批，载荷逐条唯一——
+同事务同频道同载荷服务端去重只投一条），DroppedCount ≠ 0 即 Halt(1)。
+pg 真机段自门控。
+
+| 段 | 指标 | 本次（2026-08-26，Xeon E5-2696 v4，pg 17 本机 socket） |
+|---|---|---|
+| latency tick=50ms | mean / p99 / max | 50.12 ms / 50.21 ms / 50.26 ms |
+| latency tick=5ms | mean / p99 / max | 5.11 ms / 5.20 ms / 5.22 ms |
+| throughput（tick=50ms） | 稳态消费 | 2,000 条 / 204 ms ≈ **9,800 条/s**，0 丢弃 |
+
+结论："延迟上界 ≈ 泵节拍 + RTT"契约成立且 p99 紧贴节拍（分布由节拍
+主导，无长尾）；节拍降档延迟近线性下移——PQsocket + 平台轮询器
+升级若立项，以本表为升级前基线对照。
+
 ### bench_db_pool_stress —— 池并发正确性（J2）
 
 口径：read 相位 8 线程 × 3000 轮 Acquire/Exec/Release（策略
