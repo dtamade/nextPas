@@ -13,6 +13,7 @@ unit nextpas.core.webview.gtk.win;
 interface
 
 uses
+  Math,
   nextpas.core.webview.gtk.ffi;
 
 type
@@ -62,6 +63,12 @@ var
 begin
   if not GInitDone then
   begin
+    { 恢复 IEEE 浮点异常屏蔽：FPC RTL 默认解除屏蔽，而内核 clone 的
+      子线程继承创建者 FP 控制字——WebKit/GLib/JIT 工作线程里任何合法
+      的除零值运算（预期 ±Inf/NaN）都会陷阱成随机位置的 EZeroDivide。
+      C 宿主默认带屏蔽嵌入引擎，我们对齐同一语义（仅本进程内生效）。 }
+    math.SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
+      exOverflow, exUnderflow, exPrecision]);
     GInitOk := GTK_init_check(@LArgc, nil) <> 0;
     GInitDone := True;
   end;

@@ -210,6 +210,8 @@ var
         'webkit_uri_scheme_request_get_uri') and
       BindReq(@WEBKIT_uri_scheme_request_get_path,
         'webkit_uri_scheme_request_get_path') and
+      BindReq(@WEBKIT_uri_scheme_request_get_web_view,
+        'webkit_uri_scheme_request_get_web_view') and
       BindReq(@WEBKIT_uri_scheme_request_finish,
         'webkit_uri_scheme_request_finish') and
       BindReq(@WEBKIT_uri_scheme_request_finish_error,

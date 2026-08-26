@@ -3,7 +3,9 @@ program test_webview_gtk_backend;
   1) factory 可用性与 loader 探测一致；
   2) 库+显示可用时：构造→几何/标题/缩放真值→NavigateToString→
      异步 eval 回执（6*7=42）→invoke 同步回执经真实协议栈→Close 干净；
-  3) 缺库/无显示环境：构造抛 EWebviewBackendUnavailable，优雅通过。
+  3) scheme 资产管线：挂载→页面相对 fetch 命中 + 缺资源真实 reject；
+  4) 多窗口资产隔离：双窗同 context，各归其主，跨窗请求 reject；
+  5) 缺库/无显示环境：构造抛 EWebviewBackendUnavailable，优雅通过。
   主循环泵用 gtk_main_iteration_do(False) 非阻塞迭代+超时护栏。
   heaptrc 0 unfreed 硬门。 }
 
@@ -238,6 +240,194 @@ begin
   end;
 end;
 
+{ 单发 eval 泵到回执（exactly-one），超时护栏内必达。
+  注：闭包不能捕获 out 形参，经局部变量中转 }
+procedure EvalAwait(AWin: IWebviewWindow; const AJs: string;
+  out AResult: string; ACaps: Integer);
+var
+  LDone: Boolean;
+  LRes: string;
+  I: Integer;
+begin
+  LDone := False;
+  LRes := '';
+  AWin.Eval(AJs,
+    procedure(const AResultJson: string)
+    begin
+      LRes := AResultJson;
+      LDone := True;
+    end,
+    procedure(const AErr: Exception)
+    begin
+      LRes := 'ERR:' + AErr.Message;
+      LDone := True;
+    end);
+  for I := 0 to ACaps do
+  begin
+    GTK_main_iteration_do(0);
+    if LDone then Break;
+    Sleep(5);
+  end;
+  Check(LDone, 'eval settled: ' + Copy(AJs, 1, 60));
+  AResult := LRes;
+end;
+
+{ 轮询到页面 body 出现文本为止（加载完成的事实探针） }
+function WaitForBodyText(AWin: IWebviewWindow): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to 400 do
+  begin
+    GTK_main_iteration_do(0);
+    Sleep(5);
+    if I mod 20 = 19 then
+    begin
+      EvalAwait(AWin, 'document.body?document.body.innerText:""',
+        Result, 200);
+      if (Result <> '') and (Result <> '""') then Exit;
+    end;
+  end;
+end;
+
+{ fetch 探针：结果落窗 + 轮询（与 scheme 管线用例同姿势）。
+  纪律：不直接 eval 裸 Promise 表达式——run_javascript 路径对
+  未取值 Promise 回 GError "Unsupported result type" }
+procedure FetchProbe(AWin: IWebviewWindow; const AFile: string;
+  out AResult: string);
+var
+  LJs: string;
+  I: Integer;
+begin
+  LJs := 'window.__npwp="PENDING";fetch("' + AFile +
+    '").then(function(r){return r.text();})' +
+    '.then(function(t){window.__npwp=t;},' +
+    'function(){window.__npwp="ERR";});window.__npwp';
+  EvalAwait(AWin, LJs, AResult, 200);
+  I := 0;
+  while Pos('PENDING', AResult) > 0 do
+  begin
+    Inc(I);
+    if I > 600 then Break;
+    GTK_main_iteration_do(0);
+    Sleep(5);
+    EvalAwait(AWin, 'window.__npwp', AResult, 200);
+  end;
+end;
+
+type
+  { 按实例标签供页：page.html 自识 + <tag>.txt 独占——双窗隔离断言的料 }
+  TTagProvider = class(TInterfacedObject, IWebviewAssetProvider)
+  public
+    Tag: string;
+    function TryResolve(const APath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+  end;
+
+function TTagProvider.TryResolve(const APath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  { CONTRACT §3：provider 收到前缀剥离后的相对路径（无前导 '/'） }
+  ABytes := nil;
+  AMimeType := '';
+  Result := False;
+  if APath = 'page.html' then
+  begin
+    ABytes := StrToGateBytes(AnsiString('<html><body>npw-' + Tag +
+      '</body></html>'));
+    AMimeType := 'text/html';
+    Result := True;
+  end
+  else if APath = Tag + '.txt' then
+  begin
+    ABytes := StrToGateBytes('content-' + Tag);
+    AMimeType := 'text/plain';
+    Result := True;
+  end;
+end;
+
+procedure TestMultiWindowAssetIsolation;
+var
+  W1, W2: IWebviewWindow;
+  P1Obj, P2Obj: TTagProvider;
+  LBody: string;
+  LOpts: TWebviewOptions;
+
+  function CreateOrSkip: IWebviewWindow;
+  begin
+    Result := nil;
+    try
+      Result := CreateWebviewOf(wvGtk, LOpts);
+    except
+      on E: EWebviewBackendUnavailable do ;   { 无显示环境优雅跳过 }
+    end;
+  end;
+
+begin
+  if not BackendUsable() then
+  begin
+    Check(True, '');
+    Exit;
+  end;
+  LOpts := DefaultWebviewOptions;
+  W1 := CreateOrSkip;
+  if W1 = nil then
+  begin
+    Check(True, '');
+    Exit;
+  end;
+  W2 := CreateOrSkip;
+  if W2 = nil then
+  begin
+    { 第二窗不可造（资源受限）：收口首窗后优雅跳过 }
+    if not W1.IsClosed then
+      W1.Close;
+    W1 := nil;
+    PumpGtk(50);
+    Check(True, '');
+    Exit;
+  end;
+  try
+    try
+      P1Obj := TTagProvider.Create;
+      P1Obj.Tag := 'one';
+      P2Obj := TTagProvider.Create;
+      P2Obj.Tag := 'two';
+      W1.Assets.MountEmbedded('', P1Obj);
+      W2.Assets.MountEmbedded('', P2Obj);
+
+      { 双窗并发导航同一 scheme URL：请求必须各归其主（S5 视图精确路由），
+        而非"最新窗口通吃" }
+      W1.Navigate('npres://app/page.html');
+      W2.Navigate('npres://app/page.html');
+      LBody := WaitForBodyText(W1);
+      Check(Pos('npw-one', LBody) > 0, 'w1 page served by own provider, got: ' + LBody);
+      LBody := WaitForBodyText(W2);
+      Check(Pos('npw-two', LBody) > 0, 'w2 page served by own provider, got: ' + LBody);
+
+      { 各自命名空间内命中 }
+      FetchProbe(W1, 'one.txt', LBody);
+      Check(Pos('content-one', LBody) > 0, 'w1 fetches own asset, got: ' + LBody);
+      FetchProbe(W2, 'two.txt', LBody);
+      Check(Pos('content-two', LBody) > 0, 'w2 fetches own asset, got: ' + LBody);
+
+      { 跨窗口硬隔离：对方资产必须 reject，不得串台 }
+      FetchProbe(W1, 'two.txt', LBody);
+      Check(Pos('ERR', LBody) > 0, 'w1 cannot fetch w2 asset (isolated), got: ' + LBody);
+      FetchProbe(W2, 'one.txt', LBody);
+      Check(Pos('ERR', LBody) > 0, 'w2 cannot fetch w1 asset (isolated), got: ' + LBody);
+    finally
+      if (W1 <> nil) and not W1.IsClosed then W1.Close;
+      if (W2 <> nil) and not W2.IsClosed then W2.Close;
+    end;
+  finally
+    W1 := nil;
+    W2 := nil;
+    PumpGtk(50);   { Close 收尾泵：destroy/idle 全落定（heaptrc 兜底） }
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -245,5 +435,6 @@ begin
   T.Test('factory matches probe', @TestFactoryMatchesProbe);
   T.Test('create unavailable or smoke', @TestCreateUnavailableOrSmoke);
   T.Test('scheme asset pipeline', @TestSchemeAssetPipeline);
+  T.Test('multi window asset isolation', @TestMultiWindowAssetIsolation);
   if not T.Run then Halt(1);
 end.

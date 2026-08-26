@@ -4,10 +4,13 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-26
-**版本**：1.2（S4——后端打磨：scheme 404 真实 GError、IsMinimized 查询式
-真值、DefaultWebviewKind 能力驱动、Builder.Kind() 显式钉后端、gtk Close
-幂等对齐；资产前缀路由语义钉死——空前缀根挂载、最长前缀唯一命中、
-provider 收到剥离前导斜杠的相对路径。九个测试门全绿。）
+**版本**：1.3（S5——多窗口资产按发起视图精确归属：scheme 请求经
+`get_web_view` 对回活跃窗口表，命名空间硬隔离，无视图请求回落最新
+活跃窗；自有 context 析构先摘注册表再 unref，杜绝地址复用误判；
+gtk_init 前恢复 IEEE 浮点屏蔽，根治引擎线程随机 EZeroDivide。
+承 S4：scheme 404 真实 GError、IsMinimized 查询式真值、
+DefaultWebviewKind 能力驱动、Builder.Kind() 显式钉后端、gtk Close
+幂等对齐；资产前缀路由语义钉死。九个测试门全绿。）
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
@@ -44,12 +47,14 @@ gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
   动态加载原语一律来自 `nextpas.core.platform.dl`，
   **禁止使用 FPC `DynLibs` 单元**（gate policy：raw host units 仅限 owner path）。
 
-**落地状态**（S4 后）：`base` / `intf` / `bridge` / `fake` / `factory` /
+**落地状态**（S5 后）：`base` / `intf` / `bridge` / `fake` / `factory` /
 门面与 `gtk.ffi` / `gtk.loader` / `gtk.win` / `gtk` 已全部落地；
 `gtk.win` 即 §1.1 预定的抽取预备缝（签名零 webview 概念）。
 webview2（W2）/ wk（W3）按波次接入同一 bridge 与 factory 位。
 S4 打磨：scheme 未命中走真实 GError 404；IsMinimized 查询式真值；
 DefaultWebviewKind 能力探测驱动（无 IFDEF）；资产路由语义见 §3。
+S5 多窗口：scheme 请求按发起视图精确归属，资产命名空间跨窗硬隔离
+（§5）。
 
 ### 注册表时机
 
@@ -416,6 +421,10 @@ procedure WebviewExitLoop;
   `WebviewRunLoop` 的单窗便捷封装。
 - 循环退出条件：最后一个未 Close 的窗口关闭（或 `WebviewExitLoop` 被调）；
   `OnWindowClosed` 在计数减一后触发，先于进程级退出判定。
+- **多窗口资产隔离**（S5）：同一 context 的 scheme handler 唯一，但请求
+  经发起视图精确归属所属窗口——各窗资产命名空间互不可见（跨窗请求
+  404），无视图请求（service worker）回落最新活跃窗口。gtk_backend
+  门禁以双窗 live 用例钉死该语义。
 
 - GTK：`gtk_main` / `gtk_main_quit`。
 - RunLoop 期间宿主不得再占用该线程做长计算；后台工作走第 4 节姿势。

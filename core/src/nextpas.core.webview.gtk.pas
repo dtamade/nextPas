@@ -214,6 +214,20 @@ begin
   GRegisteredSchemeCtxs[High(GRegisteredSchemeCtxs)] := ACtx;
 end;
 
+procedure ForgetSchemeContext(ACtx: Pointer);
+var
+  I, J: Integer;
+begin
+  for I := 0 to High(GRegisteredSchemeCtxs) do
+    if GRegisteredSchemeCtxs[I] = ACtx then
+    begin
+      for J := I to High(GRegisteredSchemeCtxs) - 1 do
+        GRegisteredSchemeCtxs[J] := GRegisteredSchemeCtxs[J + 1];
+      SetLength(GRegisteredSchemeCtxs, Length(GRegisteredSchemeCtxs) - 1);
+      Exit;
+    end;
+end;
+
 function GtkLiveWindowCount: Integer;
 var
   I, LCnt: Integer;
@@ -345,9 +359,22 @@ end;
 var
   GSchemeErrQuark: GQuark = 0;
 
-{ scheme 请求的 owner 解析：context 级注册只能绑一个 trampoline，
-  故按"最新活跃窗口"全局分发——多窗口共享同一 scheme 命名空间，
-  单窗独占资产隔离属多窗口策略，登记为 S5 多窗口打磨项 }
+{ scheme 请求的 owner 解析（S5）：context 级注册只能绑一个 trampoline，
+  但请求可精确归属发起视图——webkit_uri_scheme_request_get_web_view
+  对回 GLiveWindows 的 FView 指针即得所属窗口，多窗口资产命名空间
+  硬隔离。service worker 等无视图请求回落"最新活跃窗口"。 }
+function LiveWindowForView(AView: Pointer): TGtkWebview;
+var
+  I: Integer;
+begin
+  if AView <> nil then
+    for I := 0 to High(GLiveWindows) do
+      if (not GLiveWindows[I].FClosed) and
+         (GLiveWindows[I].FView = AView) then
+        Exit(GLiveWindows[I]);
+  Result := nil;
+end;
+
 function LatestLiveWebview: TGtkWebview;
 var
   I: Integer;
@@ -375,7 +402,10 @@ var
   LBytes: TBytes;
   LBuf, LStream: Pointer;
 begin
-  LSelf := LatestLiveWebview;
+  LSelf := LiveWindowForView(
+    WEBKIT_uri_scheme_request_get_web_view(ARequest));
+  if LSelf = nil then
+    LSelf := LatestLiveWebview;   { 无视图请求（service worker）回退 }
   if LSelf = nil then
   begin
     GtkTrace('scheme request, no live window: ' +
@@ -629,6 +659,15 @@ end;
 
 destructor TGtkWebview.Destroy;
 begin
+  { context 生命周期收口：自有 context 先摘 scheme 注册表再 unref——
+    顺序不可反，unref 后地址可能被新分配复用，后摘会误删他人条目
+    （注册表按指针地址判重）。共享默认 context 不持有不摘除。 }
+  if FOwnsContext and (FContext <> nil) then
+  begin
+    ForgetSchemeContext(FContext);
+    G_object_unref(FContext);
+    FContext := nil;
+  end;
   UnregisterLive(Self);
   inherited Destroy;
 end;
@@ -684,8 +723,9 @@ var
 begin
   LCtx := ResolveContext;
   { scheme 注册必须先于该 context 首个 web view 创建（BACKENDS §2.2）；
-    同 context 只注册一次——handler 绑定首窗实例，后续窗口经同一
-    全局分发（见 SchemeRequestCb 的 owner 解析） }
+    同 context 只注册一次（GLib 拒绝重复注册）。handler 不绑定任何
+    窗口实例——请求按发起视图精确归属（见 SchemeRequestCb），context
+    销毁时经 ForgetSchemeContext 摘除，防地址复用误判已注册 }
   if not SchemeContextRegistered(LCtx) then
   begin
     WEBKIT_web_context_register_uri_scheme(LCtx,

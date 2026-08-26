@@ -189,6 +189,8 @@ var
     : PAnsiChar; cdecl;
   WEBKIT_uri_scheme_request_get_path: function(ARequest: Pointer)
     : PAnsiChar; cdecl;
+  WEBKIT_uri_scheme_request_get_web_view: function(ARequest: Pointer)
+    : Pointer; cdecl;
   WEBKIT_uri_scheme_request_finish: procedure(ARequest: Pointer;
     AStream: Pointer; AStreamLength: gssize; AMimeType: PAnsiChar); cdecl;
   WEBKIT_uri_scheme_request_finish_error: procedure(ARequest: Pointer;
