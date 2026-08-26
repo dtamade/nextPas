@@ -41,6 +41,14 @@ function SshRunExec(ATransport: TSshClientTransport; const ACommand: string;
   DISCONNECT 抛 sekDisconnect 并带描述。公开供 session 层认证流程复用。}
 function PumpMessage(ATransport: TSshClientTransport): TBytes;
 
+type
+  { 可选诊断钩子：非 nil 时泵循环逐帧回调（e2e/互操作排障用；库内默认 nil，
+    零开销）。回调方自行保证线程安全——当前一次性 exec 为单线程使用。}
+    TSshTraceProc = procedure(const ALine: string);
+
+var
+  SshChannelTrace: TSshTraceProc = nil;
+
 { 常用通道载荷构造（复用点：多路复用通道 slice）}
 function EofPayload(ARemoteId: UInt32): TBytes;
 function ClosePayload(ARemoteId: UInt32): TBytes;
@@ -52,6 +60,27 @@ implementation
 
 uses
   nextpas.core.time.stopwatch;
+
+procedure TraceStr(const ALine: string);
+begin
+  if SshChannelTrace <> nil then
+    SshChannelTrace(ALine);
+end;
+
+procedure TracePkt(const ATag: string; const APkt: TBytes);
+var
+  LFirst: UInt32;
+begin
+  if SshChannelTrace = nil then
+    Exit;
+  LFirst := 0;
+  if Length(APkt) >= 5 then
+    LFirst := (UInt32(APkt[1]) shl 24) or (UInt32(APkt[2]) shl 16) or
+      (UInt32(APkt[3]) shl 8) or UInt32(APkt[4]);
+  SshChannelTrace(ATag + ': type=' + IntToStr(APkt[0]) +
+    ' first=' + IntToStr(LFirst) + ' len=' + IntToStr(Length(APkt)));
+end;
+
 
 function TSshExecResult.StdOutText: string;
 begin
@@ -147,6 +176,26 @@ begin
     Result := ATransport.ReadPacket;
     if Length(Result) = 0 then
       raise ESSHError.Create(sekProtocol, 'ssh channel: empty packet');
+    TracePkt('rx', Result);
+    { 通道族消息（recipient-first 布局）按我方通道号过滤：一次性 exec 恒用
+      LOCAL_CHANNEL_ID，服务端复用"最低空闲号"导致跨 exec 通道号漂移时，
+      上一会话的迟滞帧不得被当前状态机误认（真实缺陷：DATA 静默丢弃 /
+      迟滞 CLOSE 提前收泵）。90/91 由 OpenSession 的 LLc 校验负责。}
+    if (Result[0] >= SSH_MSG_CHANNEL_OPEN_FAILURE) and
+       (Result[0] <= SSH_MSG_CHANNEL_FAILURE) then
+    begin
+      LR := TsshReader.Create(Result);
+      try
+        LR.ReadByte;
+        if LR.ReadUInt32 <> LOCAL_CHANNEL_ID then
+        begin
+          TraceStr('rx: stale chan frame dropped');
+          Continue;
+        end;
+      finally
+        LR.Free;
+      end;
+    end;
     case Result[0] of
       SSH_MSG_IGNORE, SSH_MSG_DEBUG, SSH_MSG_UNIMPLEMENTED,
       SSH_MSG_EXT_INFO, SSH_MSG_USERAUTH_BANNER:
@@ -263,12 +312,17 @@ begin
             LR.ReadByte;
             LLc := LR.ReadUInt32;
             if LLc <> LOCAL_CHANNEL_ID then
+            begin
+              TraceStr('open: confirm for other local id ' + IntToStr(LLc) + ', skip');
               Continue;
+            end;
             FRemoteId := LR.ReadUInt32;
             FRemoteWindow := LR.ReadUInt32;
           finally
             LR.Free;
           end;
+          TraceStr('open: confirmed remote=' + IntToStr(FRemoteId) +
+            ' window=' + IntToStr(FRemoteWindow));
           Exit;
         end;
       SSH_MSG_CHANNEL_OPEN_FAILURE:
@@ -318,7 +372,10 @@ begin
     LMsg := PumpMessage(FTransport);
     case LMsg[0] of
       SSH_MSG_CHANNEL_SUCCESS:
+      begin
+        TraceStr('exec: success');
         Exit;
+      end;
       SSH_MSG_CHANNEL_FAILURE:
         raise ESSHError.Create(sekProtocol, 'ssh channel: exec refused by server');
       SSH_MSG_CHANNEL_DATA:
@@ -329,6 +386,7 @@ begin
         ; { EOF 细节留给收集阶段 }
       SSH_MSG_CHANNEL_CLOSE:
         begin
+          TraceStr('exec: close during reply wait');
           FTransport.SendPacket(ClosePayload(FRemoteId));
           FSentClose := True;
           FDone := True;
@@ -379,8 +437,10 @@ begin
   LR := TsshReader.Create(APayload);
   try
     LR.ReadByte;
+    { recipient 字段是我方（声明方为客户端）的通道号，不是服务端号；
+      与 FRemoteId 比对是语义错位，服务端非 0 号分配时数据被误丢 }
     LRid := LR.ReadUInt32;
-    if LRid <> FRemoteId then
+    if LRid <> LOCAL_CHANNEL_ID then
       Exit;
     if AExtended then
     begin
@@ -418,6 +478,7 @@ begin
     begin
       FExitCode := Integer(LR.ReadUInt32);
       FGotExitStatus := True;
+      TraceStr('pump: exit-status=' + IntToStr(FExitCode));
       if LWantReply then
         FTransport.SendPacket(ChannelReplyPayload(FRemoteId, True));
     end
@@ -438,6 +499,7 @@ procedure TSshExecRun.PumpUntilDone;
 var
   LMsg: TBytes;
 begin
+  TraceStr('pump: enter done=' + IntToStr(Ord(FDone)) + ' remote=' + IntToStr(FRemoteId));
   while not FDone do
   begin
     if TimedOut then
@@ -458,6 +520,8 @@ begin
         HandleGlobalRequest;
       SSH_MSG_CHANNEL_CLOSE:
         begin
+          TraceStr('pump: close -> done (stdout=' +
+            IntToStr(Length(FStdOut)) + ' stderr=' + IntToStr(Length(FStdErr)) + ')');
           if not FSentClose then
           begin
             FTransport.SendPacket(ClosePayload(FRemoteId));

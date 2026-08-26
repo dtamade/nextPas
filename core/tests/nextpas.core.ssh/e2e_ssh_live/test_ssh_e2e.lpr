@@ -18,6 +18,7 @@ program test_ssh_e2e;
 uses
   nextpas.core.system.sysutils, Classes,
   nextpas.core.ssh,
+  nextpas.core.ssh.channel,
   nextpas.core.ssh.errors;
 
 const
@@ -30,6 +31,12 @@ procedure Fail(const AMsg: string);
 begin
   Writeln('[e2e]   FAIL: ', AMsg);
   Inc(GFail);
+end;
+
+{ 帧级追踪（NEXTPAS_SSH_E2E_TRACE=1 时由库回调）}
+procedure TraceLine(const ALine: string);
+begin
+  Writeln('[trace] ', ALine);
 end;
 
 function EnvOr(const AName, ADef: string): string;
@@ -82,7 +89,8 @@ begin
 
       LR2 := LSess.Exec('printf %s two');
       if Trim(LR2.StdOutText) <> 'two' then
-        Fail('exec#2 stdout got "' + Trim(LR2.StdOutText) + '"')
+        Fail('exec#2 stdout got "' + Trim(LR2.StdOutText) + '" (exit=' +
+          IntToStr(LR2.ExitCode) + ')')
       else if LR2.ExitCode <> 0 then
         Fail('exec#2 expected exit 0, got ' + IntToStr(LR2.ExitCode))
       else
@@ -177,8 +185,47 @@ begin
   end;
 end;
 
+{ 场景 5：同会话连续多次 exec 压力（通道复用路径的回归放大器）}
+procedure ScenarioExecStress;
+const
+  N = 16;
+var
+  LSess: ISshSession;
+  LR: TSshExecResult;
+  I, LBad: Integer;
+begin
+  Writeln('[e2e] scenario: ', N, ' sequential execs on one session');
+  try
+    LSess := ConnectE2E(EnvOr('NEXTPAS_SSH_E2E_KNOWN_HOSTS', ''));
+    try
+      LBad := 0;
+      for I := 1 to N do
+      begin
+        LR := LSess.Exec('printf %s two');
+        if (Trim(LR.StdOutText) <> 'two') or (LR.ExitCode <> 0) then
+        begin
+          Fail('exec#' + IntToStr(I) + ' stdout="' + Trim(LR.StdOutText) +
+            '" (exit=' + IntToStr(LR.ExitCode) + ')');
+          Inc(LBad);
+          if LBad >= 3 then
+            Break; { 现场已足够，避免刷屏 }
+        end;
+      end;
+      if LBad = 0 then
+        Writeln('[e2e]   ok: ', N, '/', N, ' execs clean');
+    finally
+      LSess.Close;
+    end;
+  except
+    on E: ESSHError do Fail(SshErrorKindName(E.Kind) + ': ' + E.Message);
+    on E: Exception do Fail(E.ClassName + ': ' + E.Message);
+  end;
+end;
+
 begin
   try
+    if GetEnvironmentVariable('NEXTPAS_SSH_E2E_TRACE') = '1' then
+      SshChannelTrace := @TraceLine;
     Writeln('[e2e] live target: ', EnvOr('NEXTPAS_SSH_E2E_USER', 'root'), '@',
       EnvOr('NEXTPAS_SSH_E2E_HOST', ''), ':',
       EnvOr('NEXTPAS_SSH_E2E_PORT', '22'));
@@ -186,9 +233,10 @@ begin
     ScenarioExitCode;
     ScenarioStderrSplit;
     ScenarioWrongHostKey;
+    ScenarioExecStress;
 
     if GFail = 0 then
-      Writeln('[e2e] PASS (4 scenarios)')
+      Writeln('[e2e] PASS (5 scenarios)')
     else
       Writeln('[e2e] FAILED: ', GFail, ' failure(s)');
     ExitCode := Ord(GFail > 0);

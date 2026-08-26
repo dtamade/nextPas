@@ -66,6 +66,24 @@
       - ed25519 `EdBasePointMul` 有符号 radix-16 末位进位丢失（约 7% 密钥公钥错误，
         触发条件 SHA-512(seed) 末字节高 nibble=7 且低 nibble≥8）；回归向量进入 test_ed25519
 
+## S7 — landing replay 集成收口（已完成）
+
+lane 基于旧基建开发，replay 到当前 main（net.async/io.reactor 新栈）时 e2e 暴露
+一个回环测试覆盖不到的潜伏缺陷——这正是 opt-in live 门与 replay 纪律的价值：
+
+- [x] **通道号语义错位**（真实缺陷，约 10% 概率空 stdout）：服务端→客户端帧的
+      recipient 字段是我方通道号（恒 LOCAL_CHANNEL_ID=0），HandleData 却与
+      FRemoteId（服务端自编号）比对；OpenSSH 复用"最低空闲号"时侥幸成立，
+      服务端未及时 GC 旧通道而分配非 0 号时该 exec 全部 DATA 被静默丢弃。
+      修复：HandleData 改按 LOCAL_CHANNEL_ID 校验；PumpMessage 中央过滤
+      recipient-first 族（92–100）陈旧通道帧，杜绝跨 exec 迟滞 CLOSE/DATA
+      误触发状态机。修复验证：23 次非 0 号分配全部正确处理，10 轮全绿
+- [x] e2e 增强：同会话连续 16 次 exec 压力场景（回归放大器）、失败输出完整
+      sshd 日志、`SshChannelTrace` 可选帧级追踪钩子、编排器 fail-open 修复
+      （docker 分支 `exit $?` 曾取到 tail 的退出码）
+- [x] bench_ssh_cipher 按 common.mk phase-2 默认开的新规显式 `HEAPTRC_GATE=0`
+      （基准不链 heaptrc 防吞吐失真；泄漏纪律由其余门 + e2e 覆盖）
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
@@ -82,6 +100,6 @@
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e** 补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与
-远程 Debian OpenSSH 10.0p2 均 4 场景通过，heaptrc 0 泄漏。e2e 为 opt-in 门控，
-不进默认 gate。
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口** 补齐：本地 Docker 夹具
+（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均 5 场景通过（含通道复用压力），
+heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。

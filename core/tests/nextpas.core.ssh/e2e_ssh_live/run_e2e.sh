@@ -113,8 +113,13 @@ run_docker() {
   export NEXTPAS_SSH_E2E_KEYFILE="$TMP/client_key"
   export NEXTPAS_SSH_E2E_KNOWN_HOSTS="$TMP/known_hosts"
   echo "[e2e] docker fixture ready: root@127.0.0.1:$PORT (container $CNAME)"
-  run_binary || { echo "[e2e] ---- sshd 日志（尾部）----"; \
-    docker exec "$CNAME" tail -60 /config/sshd.log 2>/dev/null; exit $?; }
+  rc=0
+  run_binary || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "[e2e] ---- sshd 日志（完整）----"
+    docker exec "$CNAME" cat /config/sshd.log 2>/dev/null
+  fi
+  exit "$rc"
 }
 
 # ---- 主入口 ----

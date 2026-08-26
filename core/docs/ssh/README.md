@@ -112,7 +112,9 @@ NEXTPAS_SSH_E2E_KEYFILE=<未加密 ed25519 私钥> bash run_e2e.sh
 ```
 
 场景：exec marker + 同会话二次 exec、远端 exit code 透传、stdout/stderr 分离、
-known_hosts 不匹配预认证拒绝。运行带 heaptrc 0 泄漏门禁。夹具注意事项：
+known_hosts 不匹配预认证拒绝、同会话连续 16 次 exec 压力（通道复用回归放大器）。
+`NEXTPAS_SSH_E2E_TRACE=1` 开启帧级追踪（库内 `SshChannelTrace` 钩子，默认 nil 零开销）。
+运行带 heaptrc 0 泄漏门禁；失败时编排器输出完整 sshd DEBUG3 日志。夹具注意事项：
 sshd `StrictModes` 要求 authorized_keys 必须 root 属主且组/其他不可写；
 Docker 发布端口每次启动会重排，TOFU 的 known_hosts 需按当次端口重新采集。
 
