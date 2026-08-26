@@ -33,8 +33,12 @@ WINE_FPC_FLAGS += -FU$(WINE_BUILD_DIR) -FE$(WINE_BUILD_DIR) -Fu$(CORE_ROOT)/src 
 clean-src:
 	@find $(CORE_ROOT)/src -maxdepth 1 -type f \( -name '*.ppu' -o -name '*.o' \) -delete 2>/dev/null || true
 
+# Drop this gate's cached .ppu before compiling: fpc reuse of these caches is
+# unreliable (observed once as a misleading "Forward declaration not solved"
+# from half-stale units), while focused builds recompile the world anyway.
 build: clean-src
 	@mkdir -p $(BUILD_DIR)
+	rm -f $(BUILD_DIR)/*.ppu
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
 # Leak gate: default-ON for every suite built via this file (staged
