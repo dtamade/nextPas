@@ -142,6 +142,7 @@ type
 
     { 窗口壳 —— 标题与几何 }
     procedure SetTitle(const ATitle: string);
+    function GetTitle: string;
     procedure SetBounds(AWidth, AHeight: Integer);
     function GetWidth: Integer;
     function GetHeight: Integer;

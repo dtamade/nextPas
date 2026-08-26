@@ -57,6 +57,7 @@ begin
 
     W.SetTitle('Hello');
     W.SetBounds(800, 600);
+    CheckEqual('Hello', W.GetTitle, 'title roundtrip');
     CheckEqual(800, W.GetWidth);
     CheckEqual(600, W.GetHeight);
 

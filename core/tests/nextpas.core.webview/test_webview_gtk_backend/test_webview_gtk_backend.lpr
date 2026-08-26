@@ -10,7 +10,9 @@ program test_webview_gtk_backend;
      （window.__npw.invoke）推送结果，命中与缺资源 reject 双断言；
   4) 多窗口资产隔离：双窗同 context，请求按发起视图各归其主，
      跨窗请求 reject；
-  5) 缺库/无显示环境：构造抛 EWebviewBackendUnavailable，优雅通过。
+  5) ephemeral 会话：每窗自有 context，顺序建/毁两窗各归其主服务，
+     钉死析构摘表/unref 收口语义；
+  6) 缺库/无显示环境：构造抛 EWebviewBackendUnavailable，优雅通过。
   heaptrc 0 unfreed 硬门。 }
 
 {$I nextpas.core.settings.inc}
@@ -166,6 +168,7 @@ begin
     Check(Abs(W.GetZoom - 1.5) < 1e-9, 'zoom roundtrip');
     W.SetUserAgent('npw-gate/1.0');
     CheckEqual('npw-gate/1.0', W.GetUserAgent, 'ua roundtrip');
+    CheckEqual('npw-gate', W.GetTitle, 'title roundtrip');
 
     { 内容加载完成是引擎事件；完成后 eval 回执亦为事件 }
     W.OnNavigationFinished(
@@ -256,13 +259,17 @@ begin
   APayload := ASlot^.Payload;
 end;
 
-procedure RegisterReport(AWin: IWebviewWindow; ASlot: PReportSlot);
+{ 桥报告槽：handler 回执时写 Payload 并点亮所属通道 }
+procedure RegisterReport(AWin: IWebviewWindow; ASlot: PReportSlot;
+  AChannel: Integer);
 begin
+  ASlot^.Channel := AChannel;
+  ASlot^.Payload := '';
   AWin.Invokes.Register(REPORT_CMD,
     function(const APayloadJson: string): string
     begin
       ASlot^.Payload := APayloadJson;
-      SignalChannel(ASlot^.Channel);
+      SignalChannel(AChannel);
       Result := 'null';
     end);
 end;
@@ -303,8 +310,7 @@ begin
   try
     LProv := TGateProvider.Create;
     W.Assets.MountEmbedded('', LProv);
-    LSlot.Channel := WC_REP_A;
-    RegisterReport(W, @LSlot);
+    RegisterReport(W, @LSlot, WC_REP_A);
     AttachNavSignal(W, WC_NAV_A);
 
     W.Navigate('npres://app/page.html');
@@ -398,16 +404,14 @@ begin
   end;
   try
     try
-      S1.Channel := WC_REP_A;
-      S2.Channel := WC_REP_B;
       P1Obj := TTagProvider.Create;
       P1Obj.Tag := 'one';
       P2Obj := TTagProvider.Create;
       P2Obj.Tag := 'two';
       W1.Assets.MountEmbedded('', P1Obj);
       W2.Assets.MountEmbedded('', P2Obj);
-      RegisterReport(W1, @S1);
-      RegisterReport(W2, @S2);
+      RegisterReport(W1, @S1, WC_REP_A);
+      RegisterReport(W2, @S2, WC_REP_B);
       AttachNavSignal(W1, WC_NAV_A);
       AttachNavSignal(W2, WC_NAV_B);
 
@@ -451,6 +455,63 @@ begin
   end;
 end;
 
+{ ephemeral 会话 live 覆盖（S5 析构收口路径）：每窗自有 WebKitWebContext，
+  构造时各自注册 scheme，析构时先摘注册表再 unref。顺序建/毁两窗并各
+  自服务资产——防"地址复用被误判已注册致 scheme 静默 404"回归 }
+procedure TestEphemeralSessionLifecycle;
+var
+  LOpts: TWebviewOptions;
+  LSlot: TReportSlot;
+  PObj: TTagProvider;
+  W: IWebviewWindow;
+  LBody: string;
+  I: Integer;
+
+  function CreateAndPrepare: IWebviewWindow;
+  begin
+    Result := nil;
+    try
+      Result := CreateWebviewOf(wvGtk, LOpts);
+    except
+      on E: EWebviewBackendUnavailable do Exit;
+    end;
+    PObj := TTagProvider.Create;
+    PObj.Tag := 'eph';
+    Result.Assets.MountEmbedded('', PObj);
+    RegisterReport(Result, @LSlot, WC_REP_A);
+    AttachNavSignal(Result, WC_NAV_A);
+  end;
+
+begin
+  if not BackendUsable() then
+  begin
+    Check(True, '');
+    Exit;
+  end;
+  LOpts := DefaultWebviewOptions;
+  LOpts.EphemeralSession := True;
+  for I := 1 to 2 do
+  begin
+    W := CreateAndPrepare;
+    if W = nil then
+    begin
+      Check(True, '');   { 无显示环境优雅跳过 }
+      Exit;
+    end;
+    try
+      W.Navigate('npres://app/page.html');
+      AwaitChannel(WC_NAV_A, 'ephemeral load ' + IntToStr(I));
+      FetchViaBridge(W, 'eph.txt', @LSlot, LBody);
+      Check(Pos('content-eph', LBody) > 0,
+        'ephemeral window ' + IntToStr(I) + ' serves own asset, got: ' + LBody);
+    finally
+      if not W.IsClosed then
+        W.Close;
+      W := nil;
+    end;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -459,5 +520,6 @@ begin
   T.Test('create unavailable or smoke', @TestCreateUnavailableOrSmoke);
   T.Test('scheme asset pipeline', @TestSchemeAssetPipeline);
   T.Test('multi window asset isolation', @TestMultiWindowAssetIsolation);
+  T.Test('ephemeral session lifecycle', @TestEphemeralSessionLifecycle);
   if not T.Run then Halt(1);
 end.

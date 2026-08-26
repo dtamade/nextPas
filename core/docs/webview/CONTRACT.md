@@ -4,13 +4,12 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-26
-**版本**：1.3（S5——多窗口资产按发起视图精确归属：scheme 请求经
-`get_web_view` 对回活跃窗口表，命名空间硬隔离，无视图请求回落最新
-活跃窗；自有 context 析构先摘注册表再 unref，杜绝地址复用误判；
-gtk_init 前恢复 IEEE 浮点屏蔽，根治引擎线程随机 EZeroDivide。
-承 S4：scheme 404 真实 GError、IsMinimized 查询式真值、
-DefaultWebviewKind 能力驱动、Builder.Kind() 显式钉后端、gtk Close
-幂等对齐；资产前缀路由语义钉死。九个测试门全绿。）
+**版本**：1.4（S6——IWebviewWindow.GetTitle 补全（WM 级同步读，未设置
+过为 ''）；ephemeral 会话 live 覆盖：顺序建/毁两窗各自服务资产，钉死
+S5 析构摘表/unref 收口语义。承 S5：多窗口资产按发起视图精确归属、
+自有 context 析构收口、IEEE 浮点屏蔽；承 S4：scheme 404 真实 GError、
+IsMinimized 查询式真值、DefaultWebviewKind 能力驱动、Builder.Kind()
+显式钉后端、gtk Close 幂等对齐；资产前缀路由语义钉死。九个测试门全绿。）
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
@@ -236,6 +235,7 @@ IWebviewWindow = interface
 
   { 窗口壳 —— 标题与几何 }
   procedure SetTitle(const ATitle: string);
+  function GetTitle: string;             // S6：WM 级标题同步读；未设置过为 ''（诚实表）
   procedure SetBounds(AWidth, AHeight: Integer);
   function GetWidth: Integer;  function GetHeight: Integer;
   procedure SetResizable(AResizable: Boolean);
