@@ -76,6 +76,10 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 > - 会话 context 三形态齐备：默认共享（get_default）/ ephemeral /
 >   DataDirectory（website_data_manager "base-data-directory"）；
 >   视图一律 `new_with_context` 创建，scheme 先于视图注册。
+>   勘误（S7）：DataDirectory 形态自 S3 起即坏——manager 直传当
+>   context 用，触发 WEBKIT_IS_WEB_CONTEXT CRITICAL；正确路径经
+>   `web_context_new_with_website_data_manager` 包装并交还初始引用。
+>   因零 live 覆盖从未暴露，datadir 门禁补齐后实锤修复。
 > - eval 结果文本：null/undefined 诚实序列化为 'null'；不可 JSON 化
 >   值降级 JSC toString 文本。
 > - scheme 404 已走真实 GError 路径（S4）：`finish_error(quark
