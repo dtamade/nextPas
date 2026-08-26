@@ -57,6 +57,15 @@ type
     class function Default: TDbRedisConnectOptions; static;
   end;
 
+  {** 订阅推送消息（V3-B8）。pmessage 带 Pattern；message 为空串。
+      redis pub/sub 无发送方进程号语义（对照 pg 的 SenderPid）。 *}
+  TDbRedisMessage = record
+    Pattern: string;
+    Channel: string;
+    Payload: string;
+  end;
+  TDbRedisMessageArray = array of TDbRedisMessage;
+
 implementation
 
 class function TDbRedisConnectOptions.Default: TDbRedisConnectOptions;
