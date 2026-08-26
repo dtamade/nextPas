@@ -42,11 +42,16 @@ build: clean-src
 # extends the default to all modules once the TRegex design debt was
 # cleared). Opt out per invocation with HEAPTRC_GATE= (empty) or
 # HEAPTRC_GATE=0; opt back in explicitly with HEAPTRC_GATE=1.
-# FPC trunk 3.3.1 never delivers the heaptrc exit dump to the console, so
-# grepping test output for leaks is vacuous. The env channels still work:
-# haltonnotreleased turns unfreed blocks into exit code 203, log= writes the
-# dump to a file. The dump pins below also fail closed when heaptrc did not
-# run at all.
+# The heaptrc exit dump is not a dependable leak signal on FPC trunk
+# 3.3.1: it goes through the StdErr text record, which gets a flush-per-
+# write FlushFunc only when the handle is a device (pipe/tty deliver it,
+# verified with controlled probes incl. an empty program); redirected to
+# a regular file the record is buffered and nothing flushes it at exit —
+# small dumps vanish whole, large ones truncate at buffer boundaries.
+# Grep-based leak checks therefore fail closed here instead. The env
+# channels are reliable: haltonnotreleased turns unfreed blocks into exit
+# code 203, log= writes the dump to a file (heaptrc closes its own file).
+# The dump pins below also fail closed when heaptrc did not run at all.
 HEAPTRC_GATE ?= 1
 # Resolve at the consumer, not by reassignment: a command-line HEAPTRC_GATE=0
 # outranks any makefile assignment, so "0" must read as off where it is used.
