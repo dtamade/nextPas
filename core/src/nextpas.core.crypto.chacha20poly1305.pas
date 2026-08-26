@@ -45,9 +45,17 @@ function TryChaCha20Poly1305DecryptCombined(
  *       （QUIC ChaCha20 头保护掩码等仅取块流的消费方使用） *}
 function ChaCha20Block(const AKey, ANonce: TBytes; ACounter: UInt32): TBytes;
 
+{** @desc ChaCha20 流加密：从指定块计数器起对 AInput 异或密钥流 *}
+function ChaCha20Xor(const AKey, ANonce: TBytes; ACounter: UInt32; const AInput: TBytes): TBytes;
+
+{** @desc 裸 Poly1305：对 AMacData 整体计算 16 字节 tag，无 RFC 8439 的 pad16
+ *       分节与长度块。OpenSSH chachapoly（tag 直接覆盖 encLen||ct）等非标准
+ *       AEAD 组装方使用。AKey 为一次性 32B poly key *}
+function Poly1305Raw(const AKey, AMacData: TBytes): TBytes;
+
 implementation
 
-uses nextpas.core.crypto.constant_time;
+uses nextpas.core.crypto.constant_time, nextpas.core.crypto.errors;
 
 const
   CHACHA20_KEY_SIZE = 32;
@@ -995,6 +1003,40 @@ begin
   PUInt64(ATag)^ := FLo;
   PUInt64(ATag + 8)^ := FHi;
 end;
+
+function Poly1305Raw(const AKey, AMacData: TBytes): TBytes;
+var
+  LCtx: TPoly1305Ctx;
+  LBlock: array[0..15] of Byte;
+  LOffset, LChunk: Integer;
+begin
+  if Length(AKey) <> POLY1305_KEY_SIZE then
+    raise ECryptoError.Create(cecInvalidArgument,
+      'chacha20poly1305: poly key must be 32 bytes');
+  SetLength(Result, POLY1305_TAG_SIZE);
+  Poly1305Init(LCtx, @AKey[0]);
+  LOffset := 0;
+  while LOffset < Length(AMacData) do
+  begin
+    LChunk := Length(AMacData) - LOffset;
+    if LChunk > 16 then
+      LChunk := 16;
+    FillChar(LBlock, SizeOf(LBlock), 0);
+    Move(AMacData[LOffset], LBlock[0], LChunk);
+    if LChunk = 16 then
+      { 满块：追加的 0x01 在第 128 位，经 AHiBit 传入 }
+      Poly1305Update(LCtx, @LBlock[0], UInt64(1) shl 40)
+    else
+    begin
+      { 尾块：0x01 紧跟在数据之后（位位置随实际长度变化）}
+      LBlock[LChunk] := $01;
+      Poly1305Update(LCtx, @LBlock[0], 0);
+    end;
+    Inc(LOffset, LChunk);
+  end;
+  Poly1305Finish(LCtx, @Result[0]);
+end;
+
 function TryChaCha20Poly1305Encrypt(
   const AKey, ANonce, AAAD, APlaintext: TBytes;
   out ACiphertext, ATag: TBytes

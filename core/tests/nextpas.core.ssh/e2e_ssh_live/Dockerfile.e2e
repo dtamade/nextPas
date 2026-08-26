@@ -1,0 +1,5 @@
+FROM alpine:3.20
+# e2e_ssh_live 本地 OpenSSH 夹具镜像：仅含 openssh-server，
+# 密钥/配置/authorized_keys 在运行时由 run_e2e.sh 注入。
+RUN apk add --no-cache openssh-server \
+    && mkdir -p /run/sshd /var/empty /config
