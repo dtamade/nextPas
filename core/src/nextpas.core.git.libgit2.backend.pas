@@ -127,6 +127,11 @@ type
     function Blame(const APath: string): TGitBlame;
     // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
     function ConfigEntries: TGitConfigEntryArray;
+    // k97: apply unified patch text to the working directory (raises on
+    // parse or hunk failure; partial writes possible — see intf comment)
+    procedure ApplyPatch(const APatch: string);
+    // k97: force-restore listed paths to their ASpec content (discard)
+    procedure CheckoutPaths(const ASpec: string; const APaths: TStringArray);
 
     // Backward compatibility with old naming
     function HasUncommit: Boolean;
@@ -1607,6 +1612,60 @@ begin
   finally
     git_object_free(LObj);
     git_tree_free(LTree);
+  end;
+end;
+
+{ k97: apply / pathspec checkout }
+
+procedure TGitRepository.ApplyPatch(const APatch: string);
+var
+  LDiff: git_diff;
+begin
+  if APatch = '' then
+    raise EGitError.Create(GIT_EINVALID, 'ApplyPatch: empty patch');
+  { full-buffer parse first: a malformed patch fails before any write }
+  CheckResult(git_diff_from_buffer(LDiff, PChar(APatch),
+    csize_t(System.Length(APatch))), 'Parse patch buffer');
+  try
+    CheckResult(git_apply(FHandle, LDiff, GIT_APPLY_LOCATION_WORKING_DIR,
+      nil), 'Apply patch');
+  finally
+    git_diff_free(LDiff);
+  end;
+end;
+
+procedure TGitRepository.CheckoutPaths(const ASpec: string;
+  const APaths: TStringArray);
+var
+  LObj: git_object;
+  LTree: git_tree;
+  LOpts: git_checkout_options;
+  LPathStrs: TStringArray;
+  LPathPtrs: TPAnsiCharArray;
+  I: Integer;
+begin
+  if System.Length(APaths) = 0 then
+    raise EGitError.Create(GIT_EINVALID, 'CheckoutPaths: empty pathspec');
+  ResolveRevToTree(ASpec, LObj, LTree);
+  try
+    LOpts := Default(git_checkout_options);
+    CheckResult(git_checkout_options_init(@LOpts,
+      GIT_CHECKOUT_OPTIONS_VERSION), 'Init checkout options');
+    LOpts.checkout_strategy := GIT_CHECKOUT_FORCE or GIT_CHECKOUT_RECREATE_MISSING;
+    SetLength(LPathStrs, System.Length(APaths));
+    SetLength(LPathPtrs, System.Length(APaths));
+    for I := 0 to High(APaths) do
+    begin
+      LPathStrs[I] := APaths[I];
+      LPathPtrs[I] := PAnsiChar(LPathStrs[I]);
+    end;
+    LOpts.paths.strings := PPChar(@LPathPtrs[0]);
+    LOpts.paths.count := csize_t(System.Length(LPathPtrs));
+    CheckResult(git_checkout_tree(FHandle, git_object(LTree), @LOpts),
+      'Checkout paths from ' + ASpec);
+  finally
+    git_tree_free(LTree);
+    git_object_free(LObj);
   end;
 end;
 
