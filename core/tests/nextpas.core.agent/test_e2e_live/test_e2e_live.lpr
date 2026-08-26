@@ -63,7 +63,9 @@ begin
   Check(MessageText(M) <> '', 'openai complete returns text');
   Check(M.FinishReason = frStop, 'finish stop');
   Check(M.Usage.Known, 'usage known');
-  Check(Pos('big-pickle', M.Model) > 0, 'model echoed');
+  { 回显断言只锁 wire→TMessage.Model 映射非空；具体名字不耦合——
+    模型经 env 注入，网关型端点可能回显上游路由名而非请求名 }
+  Check(M.Model <> '', 'model echoed');
   Check(MessageText(M) <> '', 'non-empty content');
   { Q-O2：端点返回 reasoning_content 时折叠为 pkThinking part；
     无该字段也不影响文本 }
