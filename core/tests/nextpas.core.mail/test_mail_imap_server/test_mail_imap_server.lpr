@@ -82,6 +82,7 @@ type
   public
     Boxes: array of TMemBox;
     BumpVer: Int64;   { 外部线程可递增（IDLE 推送用；单写者对齐写，测试口径） }
+    GarbageSeq: Boolean; { 回归注入: LoadRows 返回脏 Seq(999), 验证会话回填 }
     constructor Create;
     procedure AddBox(const AName: string);
     procedure AddMail(const ABox: string; ASeen: Boolean;
@@ -267,7 +268,10 @@ begin
       begin
         SetLength(Result, LN + 1);
         Result[LN].Uid := Boxes[LIdx].Mails[J].Uid;
-        Result[LN].Seq := J + 1;
+        if GarbageSeq then
+          Result[LN].Seq := 999
+        else
+          Result[LN].Seq := J + 1;
         Result[LN].Seen := Boxes[LIdx].Mails[J].Seen;
         Result[LN].Size := Length(Boxes[LIdx].Mails[J].Content);
         Result[LN].Subject := Boxes[LIdx].Mails[J].Subject;
@@ -1129,6 +1133,56 @@ begin
   end;
 end;
 
+{ 回归（批次 3.1）: UNSEEN 响应码语义 = 首未读序号而非未读计数
+  （判别数据：计数 1、序号 2）；FETCH 输出序号由会话按 ListUids 位置
+  回填，存储脏 Seq 不透传。 }
+procedure TestUnseenOrdinalAndSeq;
+var
+  AFx: TFx;
+  C: TRawClient;
+  LCfg: TImapServerConfig;
+begin
+  LCfg := DefaultConfig;
+  LCfg.LoginCheck := TTestLoginCheck.Create;
+  StartFx(AFx, LCfg);
+  try
+    { 清空夹具默认播种, 换判别数据: 未读计数 1、首未读序号 2(计数≠序号) }
+    AFx.StoreObj.Boxes := nil;
+    AFx.StoreObj.AddBox('INBOX');
+    AFx.StoreObj.AddMail('INBOX', True, 'seen1', 'f@x', 't@x',
+      'Mon, 24 Aug 2026 10:00:00 +0000', 'mail one body');
+    AFx.StoreObj.AddMail('INBOX', False, 'unseen2', 'f@x', 't@x',
+      'Mon, 24 Aug 2026 10:00:00 +0000', 'mail two body');
+    AFx.StoreObj.AddMail('INBOX', True, 'seen3', 'f@x', 't@x',
+      'Mon, 24 Aug 2026 10:00:00 +0000', 'mail three body');
+    AFx.StoreObj.GarbageSeq := True;
+    Check(C.Open(AFx.Port), 'open');
+    C.ReadLine(3000, GScratch);
+    C.SendLine('v0 LOGIN user@test.example secret');
+    ExpectLine(C, 'v0 OK LOGIN completed', 'login ok');
+    C.SendLine('v1 SELECT INBOX');
+    ExpectLine(C, '* 3 EXISTS', 'reg select exists');
+    ExpectLine(C, '* 0 RECENT', 'reg select recent');
+    ExpectLine(C, '* OK [UNSEEN 2]', 'reg unseen ordinal not count');
+    ExpectLine(C, '* OK [UIDVALIDITY 1]', 'reg select uidvalidity');
+    ExpectLine(C, '* OK [UIDNEXT 4]', 'reg select uidnext');
+    ExpectLine(C, '* FLAGS (\Seen \Answered \Flagged \Deleted \Draft)',
+      'reg select flags');
+    ExpectLine(C,
+      '* OK [PERMANENTFLAGS (\Seen \Answered \Flagged \Deleted \Draft)]',
+      'reg select permanentflags');
+    ExpectLine(C, 'v1 OK [READ-WRITE] SELECT completed', 'reg select tagged');
+    C.SendLine('v2 FETCH 1:3 (UID)');
+    ExpectLine(C, '* 1 FETCH (UID 1)', 'reg seq backfill row1');
+    ExpectLine(C, '* 2 FETCH (UID 2)', 'reg seq backfill row2');
+    ExpectLine(C, '* 3 FETCH (UID 3)', 'reg seq backfill row3');
+    ExpectLine(C, 'v2 OK FETCH completed', 'reg fetch tagged');
+    C.Close;
+  finally
+    StopFx(AFx);
+  end;
+end;
+
 procedure TestIdleCycle;
 var
   AFx: TFx;
@@ -1310,6 +1364,7 @@ begin
   T.Test('AuthenticatePlain', @TestAuthenticatePlain);
   T.Test('ListSelectExamineStatus', @TestListSelectExamineStatus);
   T.Test('FetchMatrix', @TestFetchMatrix);
+  T.Test('UnseenOrdinalAndSeq', @TestUnseenOrdinalAndSeq);
   T.Test('SearchStoreCopy', @TestSearchStoreCopy);
   T.Test('AppendLiterals', @TestAppendLiterals);
   T.Test('IdleCycle', @TestIdleCycle);

@@ -1,10 +1,10 @@
-# nextpas.core.mail 代码契约 v0.4
+# nextpas.core.mail 代码契约 v0.5
 
 **模块路径**：`core/src/nextpas.core.mail*.pas`（base/mime/smtp/imap + 门面）
 **层级**：L3（依赖 L0-L2 与 `nextpas.core.mime`）
 **Owner**：codex/mime-mail-20260816（mailServer888 反哺）
 **最后更新**：2026-08-26
-**版本**：0.4（正式；v0.1 客户端草图废弃，见 §6 差异表；0.2→0.3 行为 SMTP
+**版本**：0.5（正式；v0.1 客户端草图废弃，见 §6 差异表；0.2→0.3 行为 SMTP
 服务器批次，当时仅推进变更记录未改头部版本号，本版一并修正）
 
 ---
@@ -165,7 +165,7 @@ end;
 ## 9. 测试与证据（IMAP 增量）
 
 - `test_mail_imap_server`：epoll readiness 后端 + 裸行协议客户端 +
-  内存 mock 存储/认证/吊销缝；**16 用例全绿，heaptrc 0 unfreed
+  内存 mock 存储/认证/吊销缝；**17 用例全绿，heaptrc 0 unfreed
   （6259 blocks alloc/free 平衡）**。覆盖问候与能力串（TLS 探测位双分支）、
   登录三态与门控、AUTHENTICATE PLAIN（IR/挑战/取消/坏机制）、LIST/LSUB、
   SELECT/EXAMINE 全块黄金向量、STATUS、FETCH 项矩阵（FLAGS/UID/ENVELOPE/
@@ -189,3 +189,4 @@ end;
 | 2026-08-16 | 0.1→0.2 | 废弃客户端草图；邮件域落地：地址/消息模型/MIME 桥接（依赖 mime）/SMTP 客户端；E* 异常与不变量体系 |
 | 2026-08-16 | 0.2→0.3 | 新增 SMTP 服务器事件驱动会话（mail.smtp.server，net.server poll-driven）；边界决策见 plans/2026-08-16-smtp-server-module-boundary.md；INV-A7/A8 |
 | 2026-08-26 | 0.3→0.4 | 新增 IMAP 服务器事件驱动会话（mail.imap.base/server，存储 SPI 零 SQL）；边界决策见 plans/2026-08-26-imap-server-module-boundary.md；INV-A9/A10/A11；§8 偏离表；修正头部版本号漂移 |
+| 2026-08-26 | 0.4→0.5 | 批次 3.1 修复（首批真实消费方 mailServer888 Phase 6a 端到端暴露）：① SELECT「\* OK [UNSEEN n]」由未读计数改为首未读序号（RFC 3501 语义；无未读整行省略），经 SEARCH 谓词下推 + ListUids 定位；② FETCH 输出序号由会话按本命令 ListUids 位置回填（SPI 注释契约的会话侧兑现，不信任存储 Seq 值）。核心套件 16→17 用例（新增 UnseenOrdinalAndSeq 判别回归：计数≠序号数据 + 存储脏 Seq 注入） |
