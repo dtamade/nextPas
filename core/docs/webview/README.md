@@ -1,6 +1,8 @@
 # nextpas.core.webview
 
-**状态**: **Design**（S0 文档阶段；尚无源码家族）
+**状态**: **Landed**（Wave 1 双后端落地——fake 测试支撑 + GTK/WebKitGTK；
+S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
+live 覆盖均已进主线。W2 webview2 / W3 wk 待平台环境启动）
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。

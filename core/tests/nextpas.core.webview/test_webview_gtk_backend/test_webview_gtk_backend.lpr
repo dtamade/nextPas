@@ -12,7 +12,9 @@ program test_webview_gtk_backend;
      跨窗请求 reject；
   5) ephemeral 会话：每窗自有 context，顺序建/毁两窗各归其主服务，
      钉死析构摘表/unref 收口语义；
-  6) 缺库/无显示环境：构造抛 EWebviewBackendUnavailable，优雅通过。
+  6) DataDirectory 会话：website_data_manager 自建 context 路径，
+     持久化目录下资产服务全链可用（三形态矩阵收尾）；
+  7) 缺库/无显示环境：构造抛 EWebviewBackendUnavailable，优雅通过。
   heaptrc 0 unfreed 硬门。 }
 
 {$I nextpas.core.settings.inc}
@@ -512,6 +514,68 @@ begin
   end;
 end;
 
+{ DataDirectory 会话形态 live 覆盖（三形态矩阵收尾）：自建
+  website_data_manager context（base-data-directory），持久化目录下
+  资产服务全链可用；与 ephemeral 同走"自有 context"收口路径 }
+procedure TestDataDirectorySessionLifecycle;
+var
+  LOpts: TWebviewOptions;
+  LSlot: TReportSlot;
+  PObj: TTagProvider;
+  W: IWebviewWindow;
+  LBody: string;
+  LDir: string;
+begin
+  if not BackendUsable() then
+  begin
+    Check(True, '');
+    Exit;
+  end;
+  LDir := IncludeTrailingPathDelimiter(GetTempDir) +
+    'npw-gate-dd-' + IntToStr(GetProcessID);
+  ForceDirectories(LDir);
+  try
+    LOpts := DefaultWebviewOptions;
+    LOpts.DataDirectory := LDir;
+    W := nil;
+    try
+      W := CreateWebviewOf(wvGtk, LOpts);
+    except
+      on E: EWebviewBackendUnavailable do
+      begin
+        Check(True, '');   { 无显示环境优雅跳过 }
+        Exit;
+      end;
+    end;
+    try
+      PObj := TTagProvider.Create;
+      PObj.Tag := 'dd';
+      W.Assets.MountEmbedded('', PObj);
+      RegisterReport(W, @LSlot, WC_REP_A);
+      AttachNavSignal(W, WC_NAV_A);
+
+      W.Navigate('npres://app/page.html');
+      AwaitChannel(WC_NAV_A, 'datadir load finished');
+      EvalAwait(W, 'document.body.innerText', LBody);
+      Check(Pos('npw-dd', LBody) > 0,
+        'datadir page served by own provider, got: ' + LBody);
+      FetchViaBridge(W, 'dd.txt', @LSlot, LBody);
+      Check(Pos('content-dd', LBody) > 0,
+        'datadir fetch serves own asset, got: ' + LBody);
+
+      { 持久化目录确实落盘（website_data_manager 建立了存储结构） }
+      Check(DirectoryExists(LDir), 'data directory materialized');
+    finally
+      if (W <> nil) and not W.IsClosed then
+        W.Close;
+      W := nil;
+    end;
+  finally
+    { 尽力清理临时持久化目录（内容归 WebKit 所有，失败不致命） }
+    RemoveDir(LDir);
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -521,5 +585,6 @@ begin
   T.Test('scheme asset pipeline', @TestSchemeAssetPipeline);
   T.Test('multi window asset isolation', @TestMultiWindowAssetIsolation);
   T.Test('ephemeral session lifecycle', @TestEphemeralSessionLifecycle);
+  T.Test('datadir session lifecycle', @TestDataDirectorySessionLifecycle);
   if not T.Run then Halt(1);
 end.

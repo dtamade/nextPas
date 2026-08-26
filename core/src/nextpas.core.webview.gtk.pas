@@ -706,14 +706,26 @@ begin
 end;
 
 function TGtkWebview.ResolveContext: Pointer;
+var
+  LManager: Pointer;
 begin
   if not FOwnsContext then
     Exit(WEBKIT_web_context_get_default());
   if FOptions.EphemeralSession then
     Result := WEBKIT_web_context_new_ephemeral()
   else
-    Result := WEBKIT_website_data_manager_new('base-data-directory',
+  begin
+    { website_data_manager 不是 context——须经 new_with_website_data_manager
+      包装（S7 live 门禁实锤：直传 manager 触发 WEBKIT_IS_WEB_CONTEXT
+      CRITICAL 且 new_with_context 返回 nil） }
+    LManager := WEBKIT_website_data_manager_new('base-data-directory',
       PAnsiChar(FOptions.DataDirectory), Pointer(nil));
+    if LManager = nil then
+      raise EWebviewNotInitialized.Create(
+        'webkit_website_data_manager_new failed (data directory rejected)');
+    Result := WEBKIT_web_context_new_with_website_data_manager(LManager);
+    G_object_unref(LManager);   { context 持有自身引用，交还初始引用 }
+  end;
   FContext := Result;
 end;
 
