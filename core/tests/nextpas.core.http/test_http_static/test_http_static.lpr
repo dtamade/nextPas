@@ -11,8 +11,10 @@ uses
   nextpas.core.io.intf,
   nextpas.core.vfs.base,
   nextpas.core.vfs.intf,
+  nextpas.core.vfs,
   nextpas.core.vfs.memtree,
   nextpas.core.vfs.os,
+  nextpas.core.respack,
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
@@ -112,6 +114,22 @@ begin
   finally
     LConn.Close;
   end;
+end;
+
+{ 提取响应里首个 header 值（AName 须为小写）；找不到返回空串 }
+function HeaderValue(const AResp, AName: string): string;
+var
+  LKeyStart, LValStart, LValEnd: SizeInt;
+begin
+  Result := '';
+  LKeyStart := Pos(AName + ': ', AResp);
+  if LKeyStart = 0 then
+    Exit;
+  LValStart := LKeyStart + Length(AName) + 2;
+  LValEnd := LValStart;
+  while (LValEnd <= Length(AResp)) and (AResp[LValEnd] <> #13) do
+    Inc(LValEnd);
+  Result := System.Copy(AResp, LValStart, LValEnd - LValStart);
 end;
 
 procedure SetupTmpDir;
@@ -1257,6 +1275,196 @@ begin
   end;
 end;
 
+{ ===== ServeVfs: embedded backend consistency ===== }
+{ rp_pack 恒写条目 hash 且取真实 mtime，CLI 路径产不出 mtime=0 / 无 hash
+  条目；此组直构 respack blob 覆盖这两条仅 embedded 可达的组合路径，
+  并验证窗口流定位读与 hash 标志位读取。 }
+
+function EmbedEntry(const APath: string; const AData: TBytes;
+  const AModTime: Int64): TResPackInputEntry;
+begin
+  Result.Path := APath;
+  Result.Data := @AData[0];
+  Result.DataSize := SizeUInt(Length(AData));
+  Result.ModTime := AModTime;
+end;
+
+function BuildEmbedVfs(AHashes: Boolean): IVfs;
+var
+  LIndex, LNoMtime, LBin, LCss: TBytes;
+  LEntries: TResPackInputArray;
+  LOpts: TResPackBuildOptions;
+  LBlob: TResPackBlob;
+begin
+  LIndex := StrBytes('<html>embed</html>');
+  LNoMtime := StrBytes('no-mtime');
+  LBin := TBytes.Create($00, $FE, $FF, Ord('Z'));
+  LCss := StrBytes('p{}');
+  if AHashes then
+  begin
+    SetLength(LEntries, 3);
+    LEntries[0] := EmbedEntry('index.html', LIndex, 1700000000);
+    LEntries[1] := EmbedEntry('nomtime.txt', LNoMtime, 0);
+    LEntries[2] := EmbedEntry('bin.bin', LBin, 1700000000);
+  end
+  else
+  begin
+    SetLength(LEntries, 1);
+    LEntries[0] := EmbedEntry('style.css', LCss, 1700000000);
+  end;
+  LOpts := ResPackDefaultOptions;
+  LOpts.Hashes := AHashes;
+  LBlob := ResPackBuild(LEntries, LOpts);
+  { AOwnsBlob=True：接口持所有权，门结束随引用释放（heaptrc 可证） }
+  Result := CreateEmbeddedVfs(LBlob.Data, LBlob.Size, True);
+end;
+
+{ ETag 形态须为 "fnv-<8 个大写十六进制>" }
+procedure CheckFnvETagForm(const AETag, AMsg: string);
+var
+  LI: Integer;
+begin
+  Check(Length(AETag) = 14, AMsg + ': length 14');
+  Check(System.Copy(AETag, 1, 5) = '"fnv-', AMsg + ': fnv prefix');
+  Check(AETag[14] = '"', AMsg + ': closing quote');
+  for LI := 6 to 13 do
+    Check(AETag[LI] in ['0'..'9', 'A'..'F'], AMsg + ': hex digit');
+end;
+
+procedure StartEmbedServer(const AVfs: IVfs; const ARoute: string;
+  out AServer: THttpServer; out APort: UInt16;
+  out AHandle: TPlatformThreadHandle);
+var
+  LRouter: THttpRouter;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get(ARoute, ServeVfs(AVfs));
+  AHandle := StartTestServer(LRouter as IHttpHandler, AServer, APort);
+end;
+
+procedure TestServeVfsEmbeddedHashedETagAndConditional;
+var
+  LVfs: IVfs;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp, LETag: string;
+begin
+  LVfs := BuildEmbedVfs(True);
+  StartEmbedServer(LVfs, '/e1/*filepath', LServer, LPort, LHandle);
+  try
+    LResp := SendRawRequest(LPort, 'GET /e1/index.html HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'embedded status 200');
+    Check(Pos('<html>embed</html>', LResp) > 0, 'embedded content served');
+    LETag := HeaderValue(LResp, 'etag');
+    CheckFnvETagForm(LETag, 'embedded hashed entry etag');
+    Check(Pos('last-modified: ', LowerCase(LResp)) > 0,
+      'embedded known mtime yields Last-Modified');
+
+    LResp := SendRawRequest(LPort,
+      'GET /e1/index.html HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-None-Match: ' + LETag + #13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 304', LResp) > 0, 'embedded INM match yields 304');
+
+    LResp := SendRawRequest(LPort,
+      'GET /e1/index.html HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-None-Match: "other"'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'embedded INM mismatch yields 200');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsEmbeddedUnknownModTime;
+var
+  LVfs: IVfs;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LVfs := BuildEmbedVfs(True);
+  StartEmbedServer(LVfs, '/e1/*filepath', LServer, LPort, LHandle);
+  try
+    LResp := SendRawRequest(LPort, 'GET /e1/nomtime.txt HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'embedded mtime=0 status 200');
+    Check(Pos('last-modified:', LowerCase(LResp)) = 0,
+      'embedded mtime=0 suppresses Last-Modified');
+
+    LResp := SendRawRequest(LPort,
+      'GET /e1/nomtime.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-Modified-Since: Thu, 01 Jan 2099 00:00:00 GMT'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'embedded IMS ignored when mtime unknown');
+    Check(Pos('no-mtime', LResp) > 0, 'embedded body served alongside IMS');
+
+    LResp := SendRawRequest(LPort,
+      'GET /e1/nomtime.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-None-Match: "zz"'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'embedded INM mismatch still 200 without mtime');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsEmbeddedRangeAndUnhashedFallback;
+var
+  LVfs: IVfs;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp, LETag: string;
+  LBodyPos: SizeInt;
+begin
+  LVfs := BuildEmbedVfs(True);
+  StartEmbedServer(LVfs, '/e1/*filepath', LServer, LPort, LHandle);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /e1/bin.bin HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=1-2'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 206', LResp) > 0, 'embedded range status 206');
+    Check(Pos('content-range: bytes 1-2/4', LResp) > 0,
+      'embedded window-stream Content-Range');
+    LBodyPos := Pos(#13#10#13#10, LResp);
+    Inc(LBodyPos, 4);
+    Check((Ord(LResp[LBodyPos]) = $FE) and (Ord(LResp[LBodyPos + 1]) = $FF),
+      'embedded positioned read lands on exact window bytes');
+
+    LResp := SendRawRequest(LPort,
+      'GET /e1/bin.bin HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=0-1,2-3'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 416', LResp) > 0, 'embedded multi-range yields 416');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+
+  LVfs := BuildEmbedVfs(False);
+  StartEmbedServer(LVfs, '/e2/*filepath', LServer, LPort, LHandle);
+  try
+    LResp := SendRawRequest(LPort, 'GET /e2/style.css HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'unhashed blob status 200');
+    LETag := HeaderValue(LResp, 'etag');
+    Check((Length(LETag) > 0) and (Pos('"fnv-', LETag) = 0),
+      'unhashed entry falls back to size+mtime etag');
+    Check(Pos('content-type: text/css', LResp) > 0, 'unhashed mime css');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Main ===== }
 begin
   SetupTmpDir;
@@ -1326,6 +1534,12 @@ begin
       @TestServeVfsBinaryBodyPreserved);
     T.Test('ServeVfs os backend consistency',
       @TestServeVfsOsBackendConsistency);
+    T.Test('ServeVfs embedded hashed etag and conditional',
+      @TestServeVfsEmbeddedHashedETagAndConditional);
+    T.Test('ServeVfs embedded unknown modtime',
+      @TestServeVfsEmbeddedUnknownModTime);
+    T.Test('ServeVfs embedded range and unhashed fallback',
+      @TestServeVfsEmbeddedRangeAndUnhashedFallback);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
