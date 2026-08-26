@@ -73,7 +73,7 @@ as the default client/server version.
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
 | Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
 | WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` + `TWebSocketOptions.ConnectTimeout`/`Timeout` (Default 30s) + optional `WithCancelToken` for mid-frame cancel |
-| Static files | `ServeFile` / `ServeDir` |
+| Static files | fs: `ServeFile` / `ServeDir`; virtual filesystem (IVfs): `ServeVfs` — ETag from backend ContentHash (`fnv-<8hex>`) with size+mtime fallback, unknown ModTime skips Last-Modified/IMS, dirs and invalid paths → 404 |
 | Form parse | `ParseUrlEncodedForm` / `ParseMultipartFormData` |
 
 ## Quick Start

@@ -9,6 +9,10 @@ uses
   nextpas.core.text.conv,
   nextpas.core.fs,
   nextpas.core.io.intf,
+  nextpas.core.vfs.base,
+  nextpas.core.vfs.intf,
+  nextpas.core.vfs.memtree,
+  nextpas.core.vfs.os,
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
@@ -428,8 +432,8 @@ begin
     'static file body path opens a file stream');
   Check(Pos('nextpas.core.io.Copy(', LSource) > 0,
     'static file body path streams through io.Copy');
-  Check(Pos('CopyFileRange(', LSource) > 0,
-    'range body path streams via CopyFileRange');
+  Check(Pos('CopyRange(', LSource) > 0,
+    'range body path streams via CopyRange');
   Check(Pos('accept-ranges', LowerCase(LSource)) > 0,
     'static responses advertise Accept-Ranges');
 end;
@@ -823,6 +827,436 @@ begin
   end;
 end;
 
+{ ===== ServeVfs: shared in-memory tree ===== }
+{ ASCII-only string → bytes (SysUtils facade helpers are off-limits here). }
+function StrBytes(const S: string): TBytes;
+var
+  LI: SizeInt;
+begin
+  SetLength(Result, Length(S));
+  for LI := 1 to Length(S) do
+    Result[LI - 1] := Byte(Ord(S[LI]));
+end;
+
+{ Entries cover both ETag regimes: hash-backed fnv and size+mtime fallback,
+  and both mtime regimes: known Unix seconds and unknown zero. }
+function BuildMemVfs: IVfs;
+var
+  LItems: array of TVfsMemEntry;
+  LStyle, LCss, LHashed, LNoMtime, LBin: TBytes;
+begin
+  LStyle := StrBytes('body{}');
+  LCss := StrBytes('.a{color:red}');
+  LHashed := StrBytes('let x=1;');
+  LNoMtime := StrBytes('plain');
+  LBin := TBytes.Create($00, $01, $FE, $FF, Ord('A'), Ord('Z'));
+  SetLength(LItems, 5);
+  LItems[0].Name := 'style.txt';
+  LItems[0].Data := LStyle;
+  LItems[0].ModTime := 1700000000;
+  LItems[0].Hash := 0;
+  LItems[1].Name := 'css/main.css';
+  LItems[1].Data := LCss;
+  LItems[1].ModTime := 0;
+  LItems[1].Hash := $DEADBEEF;
+  LItems[2].Name := 'hashed.js';
+  LItems[2].Data := LHashed;
+  LItems[2].ModTime := 0;
+  LItems[2].Hash := $DEADBEEF;
+  LItems[3].Name := 'nomtime.txt';
+  LItems[3].Data := LNoMtime;
+  LItems[3].ModTime := 0;
+  LItems[3].Hash := 0;
+  LItems[4].Name := 'binary.bin';
+  LItems[4].Data := LBin;
+  LItems[4].ModTime := 1700000000;
+  LItems[4].Hash := $12345678;
+  Result := CreateMemTreeVfs(LItems);
+end;
+
+procedure TestServeVfsExistingFile;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /m/style.txt HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'status 200');
+    Check(Pos('body{}', LResp) > 0, 'vfs file content served');
+    Check(Pos('content-type: text/plain', LResp) > 0, 'mime type txt');
+    Check(Pos('accept-ranges: bytes', LResp) > 0, 'Accept-Ranges advertised');
+
+    LResp := SendRawRequest(LPort, 'GET /m/css/main.css HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'nested status 200');
+    Check(Pos('.a{color:red}', LResp) > 0, 'nested content served');
+    Check(Pos('content-type: text/css', LResp) > 0, 'nested mime css');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsMissingFile404;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /m/nope.txt HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 404', LResp) > 0, 'missing vfs entry returns 404');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsDirectoryReturns404;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { Directories are never served (no index): plain miss. }
+    LResp := SendRawRequest(LPort, 'GET /m/css HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 404', LResp) > 0, 'directory entry returns 404');
+
+    LResp := SendRawRequest(LPort, 'GET /m HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 404', LResp) > 0, 'empty relative path returns 404');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsInvalidPathsReturn404;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { The VFS namespace is canonical: traversal/rooted forms are misses,
+      indistinguishable from nonexistent entries (no probing oracle). }
+    LResp := SendRawRequest(LPort, 'GET /m/../secret HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 404', LResp) > 0, 'dot-dot segment is a miss');
+
+    LResp := SendRawRequest(LPort, 'GET /m/%2e%2e/secret HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 404', LResp) > 0, 'URL-encoded dot-dot is a miss');
+
+    LResp := SendRawRequest(LPort, 'GET /m/%2fetc%2fpasswd HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 404', LResp) > 0, 'rooted decoded path is a miss');
+
+    LResp := SendRawRequest(LPort, 'GET /m/a//b HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) = 0,
+      'empty segment never resolves to content');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsETagForms;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { Hash-backed entry: ETag is "fnv-<8 uppercase hex>". }
+    LResp := SendRawRequest(LPort, 'GET /m/hashed.js HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('etag: "fnv-DEADBEEF"', LResp) > 0,
+      'hash-backed ETag is fnv-<8 hex> of ContentHash');
+
+    { No-hash entry with known mtime: strong size+mtime ETag, no fnv form. }
+    LResp := SendRawRequest(LPort, 'GET /m/style.txt HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('etag: "', LResp) > 0, 'fallback ETag present');
+    Check(Pos('etag: "fnv-', LResp) = 0, 'fallback ETag is not fnv form');
+    Check(Pos('last-modified: ', LResp) > 0,
+      'known mtime yields Last-Modified');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsNotModifiedViaETag;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LETagStart, LETagEnd: SizeInt;
+  LETag: string;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /m/hashed.js HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    LETagStart := Pos('etag: "', LResp);
+    Check(LETagStart > 0, 'ETag present in first response');
+    Inc(LETagStart, 6);
+    LETagEnd := Pos('"', LResp, LETagStart + 1);
+    LETag := System.Copy(LResp, LETagStart, LETagEnd - LETagStart + 1);
+
+    LResp := SendRawRequest(LPort,
+      'GET /m/hashed.js HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-None-Match: ' + LETag + #13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 304', LResp) > 0, '304 for matching hash ETag');
+
+    LResp := SendRawRequest(LPort,
+      'GET /m/hashed.js HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-None-Match: "nope"'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, '200 for mismatching ETag');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsUnknownModTimeConditional;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { ModTime=0 entry: no Last-Modified header at all. }
+    LResp := SendRawRequest(LPort, 'GET /m/nomtime.txt HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'unknown-mtime entry serves 200');
+    Check(Pos('last-modified:', LowerCase(LResp)) = 0,
+      'unknown mtime suppresses Last-Modified');
+
+    { If-Modified-Since must not produce a bogus 304 for t=0 resources. }
+    LResp := SendRawRequest(LPort,
+      'GET /m/nomtime.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-Modified-Since: Thu, 01 Jan 2099 00:00:00 GMT'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'If-Modified-Since ignored when mtime unknown');
+    Check(Pos('plain', LResp) > 0, 'body still served alongside IMS');
+
+    { If-None-Match keeps working even without mtime. }
+    LResp := SendRawRequest(LPort,
+      'GET /m/nomtime.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-None-Match: "nope"'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'INM mismatch still 200 without mtime');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsKnownModTimeConditional304;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LLmStart, LLmEnd: SizeInt;
+  LLastMod: string;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /m/style.txt HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    LLmStart := Pos('last-modified: ', LowerCase(LResp));
+    Check(LLmStart > 0, 'Last-Modified present for known mtime');
+    Inc(LLmStart, Length('last-modified: '));
+    LLmEnd := LLmStart;
+    while (LLmEnd <= Length(LResp)) and (LResp[LLmEnd] <> #13) do
+      Inc(LLmEnd);
+    LLastMod := System.Copy(LResp, LLmStart, LLmEnd - LLmStart);
+
+    LResp := SendRawRequest(LPort,
+      'GET /m/style.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-Modified-Since: ' + LLastMod + #13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 304', LResp) > 0, '304 for matching If-Modified-Since');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsRangeRequests;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBodyPos: SizeInt;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { Fixed range over the 6-byte style.txt with body braces. }
+    LResp := SendRawRequest(LPort,
+      'GET /m/style.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=0-2'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 206', LResp) > 0, '206 Partial Content');
+    Check(Pos('content-range: bytes 0-2/6', LResp) > 0, 'Content-Range header');
+    LBodyPos := Pos(#13#10#13#10, LResp);
+    Inc(LBodyPos, 4);
+    Check(System.Copy(LResp, LBodyPos, 3) = 'bod', 'range body prefix');
+
+    { Suffix range. }
+    LResp := SendRawRequest(LPort,
+      'GET /m/style.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=-3'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 206', LResp) > 0, '206 for suffix range');
+    Check(Pos('content-range: bytes 3-5/6', LResp) > 0, 'suffix Content-Range');
+
+    { Unsatisfiable range. }
+    LResp := SendRawRequest(LPort,
+      'GET /m/style.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=100-200'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 416', LResp) > 0, '416 for out-of-range request');
+    Check(Pos('content-range: bytes */6', LResp) > 0, '416 carries total size');
+
+    { Multi-range stays unsupported → 416, same as fs backend. }
+    LResp := SendRawRequest(LPort,
+      'GET /m/style.txt HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=0-1,3-4'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 416', LResp) > 0, 'multi-range returns 416');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsBinaryBodyPreserved;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBodyPos: SizeInt;
+begin
+  LVfs := BuildMemVfs;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/m/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /m/binary.bin HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'binary status 200');
+    Check(Pos('content-type: application/octet-stream', LResp) > 0,
+      'bin maps to octet-stream');
+    LBodyPos := Pos(#13#10#13#10, LResp);
+    Inc(LBodyPos, 4);
+    Check(Ord(LResp[LBodyPos]) = $00, 'byte $00 preserved');
+    Check(Ord(LResp[LBodyPos + 1]) = $01, 'byte $01 preserved');
+    Check(Ord(LResp[LBodyPos + 2]) = $FE, 'byte $FE preserved');
+    Check(Ord(LResp[LBodyPos + 3]) = $FF, 'byte $FF preserved');
+    Check(LResp[LBodyPos + 4] = 'A', 'byte A preserved');
+    Check(LResp[LBodyPos + 5] = 'Z', 'byte Z preserved');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeVfsOsBackendConsistency;
+var
+  LVfs: IVfs;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  { Same handler contract over the os backend rooted at the shared tmpdir:
+    real files have mtime+size but no ContentHash → size+mtime ETag regime. }
+  LVfs := CreateOsVfs(CTmpDir);
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/o/*filepath', ServeVfs(LVfs));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /o/style.txt HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'os backend status 200');
+    Check(Pos('body{}', LResp) > 0, 'os backend content matches fs copy');
+    Check(Pos('etag: "', LResp) > 0, 'os backend has ETag');
+    Check(Pos('etag: "fnv-', LResp) = 0, 'os backend uses size+mtime ETag');
+    Check(Pos('last-modified: ', LResp) > 0, 'os backend has Last-Modified');
+
+    LResp := SendRawRequest(LPort, 'GET /o/css/main.css HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'os backend nested status 200');
+    Check(Pos('.a{color:red}', LResp) > 0, 'os backend nested content');
+
+    LResp := SendRawRequest(LPort, 'GET /o/nope.txt HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 404', LResp) > 0, 'os backend missing returns 404');
+
+    LResp := SendRawRequest(LPort, 'GET /o/css HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 404', LResp) > 0, 'os backend directory returns 404');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Main ===== }
 begin
   SetupTmpDir;
@@ -874,6 +1308,24 @@ begin
       @TestServeFileDownloadDisposition);
     T.Test('ServeFileDownload custom filename',
       @TestServeFileDownloadCustomName);
+    T.Test('ServeVfs serves memtree file', @TestServeVfsExistingFile);
+    T.Test('ServeVfs missing entry returns 404', @TestServeVfsMissingFile404);
+    T.Test('ServeVfs directory and root return 404',
+      @TestServeVfsDirectoryReturns404);
+    T.Test('ServeVfs invalid paths are plain misses',
+      @TestServeVfsInvalidPathsReturn404);
+    T.Test('ServeVfs ETag forms fnv vs size+mtime', @TestServeVfsETagForms);
+    T.Test('ServeVfs conditional via hash ETag',
+      @TestServeVfsNotModifiedViaETag);
+    T.Test('ServeVfs unknown mtime skips IMS negotiation',
+      @TestServeVfsUnknownModTimeConditional);
+    T.Test('ServeVfs known mtime yields 304 on IMS',
+      @TestServeVfsKnownModTimeConditional304);
+    T.Test('ServeVfs range 206/416 semantics', @TestServeVfsRangeRequests);
+    T.Test('ServeVfs preserves binary body bytes',
+      @TestServeVfsBinaryBodyPreserved);
+    T.Test('ServeVfs os backend consistency',
+      @TestServeVfsOsBackendConsistency);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
