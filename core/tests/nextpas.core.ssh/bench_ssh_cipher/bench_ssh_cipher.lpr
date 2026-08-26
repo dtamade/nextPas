@@ -14,8 +14,9 @@ program bench_ssh_cipher;
   分配器检测开销会严重扭曲吞吐数据。
 }
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.time,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.cipher;

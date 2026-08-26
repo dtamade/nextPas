@@ -14,7 +14,7 @@ unit nextpas.core.ssh;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,

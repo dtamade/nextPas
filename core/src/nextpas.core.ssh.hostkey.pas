@@ -13,10 +13,9 @@ unit nextpas.core.ssh.hostkey;
 interface
 
 uses
-  SysUtils,
-  Math,
-  StrUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.text.strings,
   nextpas.core.hash.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -81,6 +80,17 @@ uses
   nextpas.core.crypto.hmac,
   nextpas.core.encoding.base64,
   nextpas.core.platform.files.text;
+
+{ 从 AFrom 起查找字符（替代 StrUtils.PosEx，冷路径无需优化）}
+function PosCharFrom(const AChar: Char; const AText: string; AFrom: Integer): Integer;
+var
+  I: Integer;
+begin
+  for I := AFrom to Length(AText) do
+    if AText[I] = AChar then
+      Exit(I);
+  Result := 0;
+end;
 
 { ---- 公钥 blob 解析 ---- }
 
@@ -321,7 +331,7 @@ begin
   if LTrimmed[1] = '@' then
     Exit;
   { 手工剔除空字段：known_hosts 允许连续空格分隔 }
-  LRaw := LTrimmed.Split([' ']);
+  LRaw := StringsSplit(LTrimmed, ' ', True);
   SetLength(LParts, Length(LRaw));
   LKept := 0;
   for I := 0 to High(LRaw) do
@@ -360,7 +370,7 @@ begin
   else
     LQueryPorted := '[' + AHostName + ']:' + IntToStr(APort);
 
-  LCands := APatterns.Split([',']);
+  LCands := StringsSplit(APatterns, ',');
   for I := 0 to High(LCands) do
   begin
     LOne := Trim(LCands[I]);
@@ -370,7 +380,7 @@ begin
     begin
       { |1|salt_b64|hash_b64，HMAC-SHA1(salt, hostname) }
       LPipe1 := Length(HASH_MARK);
-      LPipe2 := PosEx('|', LOne, LPipe1 + 1);
+      LPipe2 := PosCharFrom('|', LOne, LPipe1 + 1);
       if LPipe2 <= 0 then
         Continue;
       LSalt := Base64Decode(Copy(LOne, LPipe1 + 1, LPipe2 - LPipe1 - 1));

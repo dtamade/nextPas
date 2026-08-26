@@ -19,6 +19,7 @@ uses
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.kex,
+  nextpas.core.ssh.kex.curve25519,
   nextpas.core.ssh.hostkey,
   nextpas.core.ssh.keys,
   nextpas.core.ssh.auth,
@@ -590,16 +591,10 @@ begin
     LW.Free;
   end;
 
-  LHInput := ConcatAll([
-    LVc,
-    StringToBytes(SERVER_IDENT),
-    LClientInit,
-    LMyInit,
-    Ed25519PubBlob(LHostPub),
-    LEphemeral,
-    LXPub,
-    LKmpint]);
-  LH := SHA256(LHInput);
+  { 与客户端共用生产实现的交换哈希输入构造（RFC 4253 §8）}
+  LH := SHA256(SshBuildCurve25519HashInput(
+    BytesToText(LVc), SERVER_IDENT, LClientInit, LMyInit,
+    Ed25519PubBlob(LHostPub), LEphemeral, LXPub, LShared));
   FSessionId := LH;
 
   if not Ed25519Sign(FSc^.HostSeed, LH, LSig64) then

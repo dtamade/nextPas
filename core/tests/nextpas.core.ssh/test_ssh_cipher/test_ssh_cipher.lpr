@@ -222,6 +222,7 @@ begin
   LSuite.Test('chacha wire matches OpenSSH construction oracle', procedure
   var
     LKeyMat, LMainKey, LHeaderKey, LNonce, LMask, LEncLen, LOracl, LWire: TBytes;
+    LCt, LPolyKey, LMacData, LTag: TBytes;
     LSend: ISshPacketSender;
     LBody: TBytes;
     LLenField: UInt32;
@@ -245,13 +246,23 @@ begin
     LEncLen[2] := Byte((LLenField shr 8) and $FF) xor LMask[2];
     LEncLen[3] := Byte(LLenField and $FF) xor LMask[3];
 
-    CheckTrue(TryChaCha20Poly1305EncryptCombined(LMainKey, LNonce, LEncLen,
-      LBody, LOracl));
+    { OpenSSH 构造（PROTOCOL.chacha20poly1305）：
+      ct = main 流 counter=1；tag = 裸 Poly1305(encLen||ct)，key = main 块 0 前 32B }
+    LCt := ChaCha20Xor(LMainKey, LNonce, 1, LBody);
+    LPolyKey := Copy(ChaCha20Block(LMainKey, LNonce, 0), 0, 32);
+    SetLength(LMacData, 4 + SizeUInt(Length(LCt)));
+    Move(LEncLen[0], LMacData[0], 4);
+    Move(LCt[0], LMacData[4], SizeUInt(Length(LCt)));
+    LTag := Poly1305Raw(LPolyKey, LMacData);
+    SetLength(LOracl, 4 + SizeUInt(Length(LCt)) + 16);
+    Move(LEncLen[0], LOracl[0], 4);
+    Move(LCt[0], LOracl[4], SizeUInt(Length(LCt)));
+    Move(LTag[0], LOracl[4 + Length(LCt)], 16);
 
     LSend := CreateSshPacketSender('chacha20-poly1305@openssh.com', '', LKeyMat, nil, nil);
     LWire := LSend.Protect(LBody, $7F01E233);
-    CheckEqual(BytesToHex(LOracl), BytesToHex(Copy(LWire, 4, Length(LWire))),
-      'ciphertext+tag must equal independent oracle');
+    CheckEqual(BytesToHex(LOracl), BytesToHex(LWire),
+      'full wire must equal independent oracle');
   end);
 
   LSuite.Test('gcm roundtrip and counter advance', procedure

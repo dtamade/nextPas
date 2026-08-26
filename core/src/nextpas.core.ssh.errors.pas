@@ -10,8 +10,8 @@ unit nextpas.core.ssh.errors;
 interface
 
 uses
-  SysUtils,
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.exception;
 
 type
   { SSH 失败类别 }

@@ -13,8 +13,9 @@ unit nextpas.core.ssh.buffer;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.text.strings,
   nextpas.core.ssh.errors;
 
 type
@@ -331,7 +332,7 @@ begin
   SetLength(Result, 0);
   if LJoined = '' then
     Exit;
-  LParts := LJoined.Split([',']);
+  LParts := StringsSplit(LJoined, ',');
   LOut := 0;
   SetLength(Result, Length(LParts));
   for I := 0 to High(LParts) do

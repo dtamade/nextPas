@@ -11,8 +11,9 @@ unit nextpas.core.ssh.keys;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.text.strings,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer;
@@ -33,6 +34,30 @@ implementation
 
 uses
   nextpas.core.encoding.base64;
+
+{ 按 '#' 换行切分（替代 SysUtils 字符串助手的多分隔符 Split）}
+function SplitBase64Junk(const AValue: string): TStringArray;
+var
+  I: Integer;
+  LChunk: string;
+
+  procedure Flush;
+  begin
+    SetLength(Result, Length(Result) + 1);
+    Result[High(Result)] := LChunk;
+    LChunk := '';
+  end;
+
+begin
+  Result := nil;
+  LChunk := '';
+  for I := 1 to Length(AValue) do
+    if (AValue[I] = '#') or (AValue[I] = #10) or (AValue[I] = #13) then
+      Flush
+    else
+      LChunk := LChunk + AValue[I];
+  Flush;
+end;
 
 const
   OPENSSH_KEY_MAGIC: array[0..14] of Byte = (
@@ -59,7 +84,7 @@ begin
     raise ESSHError.Create(sekKeyFormat, 'ssh keys: missing END marker');
   LLine := Copy(AContent, LBeginMark + Length(MARK_BEGIN),
     LEndMark - LBeginMark - Length(MARK_BEGIN));
-  LLines := LLine.Split(['#', #10, #13]);
+  LLines := SplitBase64Junk(LLine);
   for I := 0 to High(LLines) do
     Result := Result + Trim(LLines[I]);
 end;

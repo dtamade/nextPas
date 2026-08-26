@@ -6,8 +6,9 @@ unit nextpas.core.ssh.cipher;
  * 线上包；接收方按 帧头→包体 两步还原。纯内存变换，帧同步由 transport 驱动。
  *
  * 支持三族：
- *  - chacha20-poly1305@openssh.com：长度字段用 header key 流加密，AAD=密文长度字段，
- *    Poly1305 tag 追加在尾（OpenSSH PROTOCOL.chacha20poly1305 构造）
+ *  - chacha20-poly1305@openssh.com：长度字段用 header key 流加密，Poly1305
+ *    裸覆盖 encLen||ct（无 RFC 8439 的 pad16/长度块），tag 追加在尾
+ *    （OpenSSH PROTOCOL.chacha20poly1305 构造）
  *  - aes*-gcm@openssh.com：长度字段明文并作为 AAD，RFC 5647 调用计数器从 1 起
  *  - aes*-ctr + hmac-sha2-*-etm：长度字段明文，EtM MAC 覆盖 seq||len||密文 body
  *
@@ -18,7 +19,7 @@ unit nextpas.core.ssh.cipher;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors;
@@ -29,6 +30,10 @@ type
     ['{9C1E6E10-4A11-4F72-9D30-5A0000000001}']
     { padding 对齐块大小（>=8）；transport 用它计算 pad 长度 }
     function PaddingBlock: Integer;
+    { 参与 pad 对齐基准的 AAD 字节数。OpenSSH packet.c 发送端先 len-=aadlen 再算
+      padlen，接收端强制 need(=packlen)%blocksize=0；AEAD/EtM 的长度字段不进
+      密文对齐区，返回 4；none 等整帧加密模式返回 0 }
+    function AadLen: Integer;
     { body=[padlen][payload][padding] → 完整线上包（含长度字段与 tag/mac）}
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
   end;
@@ -184,21 +189,19 @@ begin
 end;
 
 { 12 字节 nonce：4 个零 + 大端序序列号低 32 位。
-  （djb 8 字节 nonce 的 RFC 8439 映射：nonce12 = $00000000 || seq_BE64）}
+  OpenSSH 以 POKE_U64（大端）把 seq 写进 8 字节 seqbuf 供 djb chacha 的
+  input[14..15] 消费；映射到 RFC 8439 字节布局即 $00000000 || seq_BE64 }
 function ChachaNonce(ASeq: UInt32): TBytes;
 begin
   Result := nil;
   SetLength(Result, 12);
-  FillChar(Result[0], 4, 0);
-  Result[4] := 0;
-  Result[5] := 0;
-  Result[6] := 0;
-  Result[7] := 0;
+  FillChar(Result[0], 12, 0);
   Result[8] := Byte(ASeq shr 24);
   Result[9] := Byte((ASeq shr 16) and $FF);
   Result[10] := Byte((ASeq shr 8) and $FF);
   Result[11] := Byte(ASeq and $FF);
 end;
+
 
 procedure RequireLen(const ABuf: TBytes; ANeeded: Integer; const AWhat: string);
 begin
@@ -223,6 +226,7 @@ type
   TSshNoneSender = class(TInterfacedObject, ISshPacketSender)
   public
     function PaddingBlock: Integer;
+    function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
   end;
 
@@ -236,6 +240,12 @@ type
 function TSshNoneSender.PaddingBlock: Integer;
 begin
   Result := SSH_MIN_PAD_BLOCK;
+end;
+
+function TSshNoneSender.AadLen: Integer;
+begin
+  { 整帧（含长度字段）参与加密与对齐 }
+  Result := 0;
 end;
 
 function TSshNoneSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
@@ -275,6 +285,7 @@ type
   public
     constructor Create(const AKeyMaterial: TBytes);
     function PaddingBlock: Integer;
+    function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
   end;
 
@@ -302,22 +313,38 @@ begin
   Result := CHACHA_PAD_BLOCK;
 end;
 
+function TSshChachaSender.AadLen: Integer;
+begin
+  { AEAD：长度字段由 header key 单独加密，不进 payload 对齐区 }
+  Result := 4;
+end;
+
 function TSshChachaSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
-  LNonce, LMask, LEncLen, LWire: TBytes;
+  LNonce, LMask, LEncLen, LPolyKey, LCt, LTag, LMacData: TBytes;
 begin
+  { OpenSSH PROTOCOL.chacha20poly1305：
+    - 前 32B（main）：counter=0 派生 poly key；counter=1 起加密载荷
+    - 后 32B（header）：counter=0 掩码长度字段
+    - Poly1305 直接覆盖 encLen||ct（无 RFC 8439 的 pad16 与长度块） }
   LNonce := ChachaNonce(ASeq);
-  { OpenSSH djb 计数起点为 0；RFC 8439 counter=0 块即该掩码流的首块 }
   LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
   SetLength(LEncLen, 4);
   PutU32BE(LEncLen, 0, UInt32(Length(ABodyPlain)) xor U32BEOf(LMask, 0));
-  if not TryChaCha20Poly1305EncryptCombined(FMainKey, LNonce, LEncLen,
-    ABodyPlain, LWire) then
-    raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha encrypt failed');
+  LCt := ChaCha20Xor(FMainKey, LNonce, 1, ABodyPlain);
+  LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
+  SetLength(LPolyKey, 32);
+  SetLength(LMacData, 4 + SizeUInt(Length(LCt)));
+  Move(LEncLen[0], LMacData[0], 4);
+  if Length(LCt) > 0 then
+    Move(LCt[0], LMacData[4], SizeUInt(Length(LCt)));
+  LTag := Poly1305Raw(LPolyKey, LMacData);
   Result := nil;
-  SetLength(Result, 4 + SizeUInt(Length(LWire)));
+  SetLength(Result, 4 + SizeUInt(Length(LCt)) + CHACHA_TAG);
   Move(LEncLen[0], Result[0], 4);
-  Move(LWire[0], Result[4], SizeUInt(Length(LWire)));
+  if Length(LCt) > 0 then
+    Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
+  Move(LTag[0], Result[4 + SizeUInt(Length(LCt))], CHACHA_TAG);
 end;
 
 constructor TSshChachaReceiver.Create(const AKeyMaterial: TBytes);
@@ -344,17 +371,26 @@ end;
 
 function TSshChachaReceiver.Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
 var
-  LEncLen, LCt, LNonce: TBytes;
+  LEncLen, LCt, LTag, LNonce, LPolyKey, LExpect, LMacData: TBytes;
 begin
   if SizeUInt(Length(AWire)) < 4 + CHACHA_TAG then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: chacha packet truncated');
   LEncLen := Copy(AWire, 0, 4);
-  { 密文与 tag 合并传入：API 契约为 ct||tag }
-  LCt := Copy(AWire, 4, SizeInt(Length(AWire)) - 4);
+  LTag := Copy(AWire, SizeUInt(Length(AWire)) - CHACHA_TAG, CHACHA_TAG);
+  LCt := Copy(AWire, 4,
+    SizeInt(SizeUInt(Length(AWire)) - 4 - CHACHA_TAG));
+  { Poly1305 覆盖 encLen||ct；常量时间比较后再解密 }
   LNonce := ChachaNonce(ASeq);
-  if not TryChaCha20Poly1305DecryptCombined(FMainKey, LNonce, LEncLen,
-    LCt, Result) then
+  LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
+  SetLength(LPolyKey, 32);
+  SetLength(LMacData, 4 + SizeUInt(Length(LCt)));
+  Move(LEncLen[0], LMacData[0], 4);
+  if Length(LCt) > 0 then
+    Move(LCt[0], LMacData[4], SizeUInt(Length(LCt)));
+  LExpect := Poly1305Raw(LPolyKey, LMacData);
+  if TConstantTime.CompareBytes(LExpect, LTag) <> 1 then
     raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha AEAD verify failed');
+  Result := ChaCha20Xor(FMainKey, LNonce, 1, LCt);
 end;
 
 { ---- aes*-gcm@openssh.com（RFC 5647 调用计数器，OpenSSH 布局）---- }
@@ -368,6 +404,7 @@ type
   public
     constructor Create(const AKey, AIV: TBytes);
     function PaddingBlock: Integer;
+    function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
   end;
 
@@ -395,6 +432,12 @@ end;
 function TSshGcmSender.PaddingBlock: Integer;
 begin
   Result := AES_PAD_BLOCK;
+end;
+
+function TSshGcmSender.AadLen: Integer;
+begin
+  { AEAD（RFC 5647）：长度字段明文但作为 GCM AAD 认证，不进对齐区 }
+  Result := 4;
 end;
 
 function GcmNonce(const ABaseIV: TBytes; ACounter: UInt32): TBytes;
@@ -610,6 +653,7 @@ type
     constructor Create(const ACipher, AMac: string; const AKey, AIV, AMacKey: TBytes);
     destructor Destroy; override;
     function PaddingBlock: Integer;
+    function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
   end;
 
@@ -648,6 +692,12 @@ end;
 function TSshCtrEtmSender.PaddingBlock: Integer;
 begin
   Result := AES_PAD_BLOCK;
+end;
+
+function TSshCtrEtmSender.AadLen: Integer;
+begin
+  { EtM：长度字段明文且被 MAC 先行覆盖，不进加密对齐区 }
+  Result := 4;
 end;
 
 function TSshCtrEtmSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;

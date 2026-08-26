@@ -200,6 +200,79 @@ begin
   ANeg.CompSc := 'none';
 end;
 
+{ 回归：OpenSSH 接收端强制 need(=packlen) % blocksize = 0。
+  AEAD/EtM 的长度字段不进对齐区（len -= aadlen），packlen 本身必须整除块大小。}
+procedure AssertAeadPacklenAligned(const ACipher, AMac: string;
+  AKeyLen, AIvLen, ABlk: Integer);
+const
+  LENNS: array[0..7] of Integer = (1, 4, 12, 17, 23, 31, 48, 100);
+var
+  LClientEnd, LServerEnd: TMemPipeEnd;
+  LTr: TSshClientTransport;
+  LNeg: TSshNegotiated;
+  LKeyC, LKeyS, LMacC, LIv, LIdent, LWireFrame, LPayload, LBody: TBytes;
+  LSrvRecv: ISshPacketReceiver;
+  LLn, LPackLen, LSeq: Integer;
+begin
+  MakePipe(LClientEnd, LServerEnd);
+  LTr := TSshClientTransport.Create(LClientEnd);
+  try
+    LIdent := StringToBytes('SSH-2.0-Srv' + #13#10);
+    LServerEnd.Write(LIdent[0], SizeUInt(Length(LIdent)));
+    LTr.ExchangeVersions;
+    LServerEnd.Drain(LIdent);
+
+    FillChachaNegotiated(LNeg);
+    LNeg.EncCs := ACipher;
+    LNeg.EncSc := ACipher;
+    LNeg.MacCs := AMac;
+    LNeg.MacSc := AMac;
+    LKeyC := PatternBytes($C1, AKeyLen);
+    LKeyS := PatternBytes($D1, AKeyLen);
+    if AMac <> '' then
+      LMacC := PatternBytes($E1, SshMacKeySize(AMac));
+    if AIvLen > 0 then
+      LIv := PatternBytes($F1, AIvLen)
+    else
+      LIv := nil;
+    LTr.ApplyNewKeys(LNeg,
+      Copy(LIv, 0, AIvLen), Copy(LKeyC, 0, SshCipherKeySize(ACipher)),
+      Copy(LMacC, 0, SshMacKeySize(AMac)),
+      Copy(LIv, 0, AIvLen), Copy(LKeyS, 0, SshCipherKeySize(ACipher)),
+      Copy(LMacC, 0, SshMacKeySize(AMac)));
+
+    LSrvRecv := CreateSshPacketReceiver(ACipher, AMac,
+      Copy(LKeyC, 0, SshCipherKeySize(ACipher)),
+      Copy(LIv, 0, AIvLen), Copy(LMacC, 0, SshMacKeySize(AMac)));
+
+    LSeq := 0;
+    for LLn in LENNS do
+    begin
+      LPayload := PatternBytes(Byte(LLn), LLn);
+      LTr.SendPacket(LPayload);
+      LServerEnd.Drain(LWireFrame);
+      LPackLen := Int64(LSrvRecv.BodyLengthFromHeader(
+        UInt32(LSeq), Copy(LWireFrame, 0, 4)));
+      CheckTrue((LPackLen mod ABlk) = 0,
+        ACipher + ' packlen aligned to ' + IntToStr(ABlk) +
+        ', payload len=' + IntToStr(LLn) +
+        ', packlen=' + IntToStr(LPackLen));
+      CheckTrue((SizeUInt(4) +
+        SizeUInt(LSrvRecv.TrailerSize(LPackLen))) = SizeUInt(Length(LWireFrame)),
+        ACipher + ' frame size consistent, payload len=' + IntToStr(LLn));
+      LBody := LSrvRecv.Unprotect(UInt32(LSeq), LWireFrame);
+      CheckTrue((Length(LBody) > SizeUInt(LLn)) and
+        CompareMem(@LPayload[0], @LBody[1], LLn),
+        ACipher + ' payload intact, len=' + IntToStr(LLn));
+      Inc(LSeq);
+    end;
+  finally
+    LTr.Free;
+    LClientEnd.Free;
+    LServerEnd.Free;
+  end;
+end;
+
 var
   LRunner: TSuiteRunner;
   LSuite: TTestSuite;
@@ -424,6 +497,16 @@ begin
       LClientEnd.Free;
       LServerEnd.Free;
     end;
+  end);
+
+  { 回归：OpenSSH 接收端强制 need(=packlen) % blocksize = 0。
+    AEAD/EtM 的长度字段不进对齐区（len -= aadlen），packlen 本身必须整除块大小。 }
+  LSuite.Test('aead send keeps packlen aligned (OpenSSH framing)', procedure
+  begin
+    AssertAeadPacklenAligned('chacha20-poly1305@openssh.com', '', 64, 0, 8);
+    AssertAeadPacklenAligned('aes256-gcm@openssh.com', '', 32, 12, 16);
+    AssertAeadPacklenAligned('aes256-ctr',
+      'hmac-sha2-256-etm@openssh.com', 32, 16, 16);
   end);
 
   LSuite.Test('disconnect sends message then closes', procedure

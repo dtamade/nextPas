@@ -15,7 +15,7 @@ unit nextpas.core.ssh.transport;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
@@ -204,7 +204,7 @@ end;
 
 procedure TSshClientTransport.SendPacket(const APayload: TBytes);
 var
-  LPayloadLen, LPad, LBodyLen: SizeUInt;
+  LPayloadLen, LPad, LBodyLen, LAad: SizeUInt;
   LBlock: Integer;
   LBody, LWire: TBytes;
 begin
@@ -212,7 +212,11 @@ begin
     raise ESSHError.Create(sekIO, 'ssh transport: closed');
   LPayloadLen := SizeUInt(Length(APayload));
   LBlock := FSender.PaddingBlock;
-  LPad := SizeUInt(LBlock) - ((4 + 1 + LPayloadLen) mod SizeUInt(LBlock));
+  { OpenSSH packet.c：AEAD/EtM 模式长度字段不进对齐区（len -= aadlen），
+    接收端强制 packlen % blocksize = 0 }
+  LAad := SizeUInt(FSender.AadLen);
+  LPad := SizeUInt(LBlock) -
+    ((SizeUInt(4 + 1) + LPayloadLen - LAad) mod SizeUInt(LBlock));
   if LPad < SSH_MIN_PADDING then
     Inc(LPad, SizeUInt(LBlock));
   LBodyLen := 1 + LPayloadLen + LPad;

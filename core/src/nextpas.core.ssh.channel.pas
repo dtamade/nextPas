@@ -14,7 +14,7 @@ unit nextpas.core.ssh.channel;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,

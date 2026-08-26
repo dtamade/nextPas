@@ -16,10 +16,11 @@ unit nextpas.core.ssh.session;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net,
+  nextpas.core.base.utils,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -76,6 +77,8 @@ function SshConnectOn(const AIO: IReadWriteCloser;
   const AOptions: TSshConnectOptions): ISshSession;
 
 { Fluent 构造器入口 }
+
+
 function SshClient: ISshClientBuilder;
 
 implementation
@@ -211,7 +214,11 @@ begin
   begin
     FClosed := True;
     if FTransport <> nil then
-      FTransport.Disconnect(DISCONNECT_BY_APPLICATION, 'client closing');
+      try
+        FTransport.Disconnect(DISCONNECT_BY_APPLICATION, 'client closing');
+      except
+        { 关闭路径的断连失败不影响调用方；底层流仍会被释放 }
+      end;
   end;
 end;
 
@@ -341,6 +348,7 @@ begin
     SshMacKeySize(ANegotiated.MacCs));
   LMacSc := SshKdfSha256(LKmpint, AH, Ord('F'), FSessionId,
     SshMacKeySize(ANegotiated.MacSc));
+
 
   FTransport.SendPacket(SingleBytePayload(SSH_MSG_NEWKEYS));
   ExpectOneOf([SSH_MSG_NEWKEYS]);

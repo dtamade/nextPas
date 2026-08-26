@@ -12,7 +12,7 @@ unit nextpas.core.ssh.kex.curve25519;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.buffer,
@@ -71,6 +71,14 @@ type
       const AMyKexInit, APeerKexInit: TBytes): TSshKexCurve25519Result;
   end;
 
+{ RFC 4253 §8 交换哈希输入：string(V_C)||string(V_S)||string(I_C)||
+  string(I_S)||string(K_S)||mpint(e)||mpint(f)||mpint(K)。
+  独立导出：环回 mock 服务端必须与客户端共用同一构造，防止两端各自
+  手拼导致 H 漂移（回环镜像同错不可见）。}
+function SshBuildCurve25519HashInput(const AVc, AVs: string;
+  const AClientKexInit, AServerKexInit, AHostKeyBlob,
+  AClientEphemeral, AServerEphemeral, ASharedSecret: TBytes): TBytes;
+
 implementation
 
 uses
@@ -103,6 +111,29 @@ constructor TSshKexCurve25519.Create;
 begin
   inherited Create;
   GenerateX25519KeyPair(FPriv, FPub);
+end;
+
+function SshBuildCurve25519HashInput(const AVc, AVs: string;
+  const AClientKexInit, AServerKexInit, AHostKeyBlob,
+  AClientEphemeral, AServerEphemeral, ASharedSecret: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  { 全部字段按线类型编码：V/I/K_S/e/f 为 string（含 uint32 长度前缀），K 为 mpint }
+  LW := TsshWriter.Create(2048);
+  try
+    LW.PutStringText(AVc);
+    LW.PutStringText(AVs);
+    LW.PutStringBytes(AClientKexInit);
+    LW.PutStringBytes(AServerKexInit);
+    LW.PutStringBytes(AHostKeyBlob);
+    LW.PutStringBytes(AClientEphemeral);
+    LW.PutStringBytes(AServerEphemeral);
+    LW.PutMPInt(ASharedSecret);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
 end;
 
 function TSshKexCurve25519.AlgorithmName: string;
@@ -155,7 +186,7 @@ function TSshKexCurve25519.ProcessReplyNamed(const APayload: TBytes;
 var
   LR: TsshReader;
   LW: TsshWriter;
-  LServerEphemeral, LShared, LKmpint, LHashInput: TBytes;
+  LServerEphemeral, LShared, LHashInput: TBytes;
   LX25519Err: AnsiString;
 begin
   LR := TsshReader.Create(APayload);
@@ -178,26 +209,9 @@ begin
   if IsAllZero(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
 
-  { K 以 RFC 4251 mpint 编码进入散列输入 }
-  LW := TsshWriter.Create(64);
-  try
-    LW.PutMPInt(LShared);
-    LKmpint := LW.ToBytes;
-  finally
-    LW.Free;
-  end;
-
-  LHashInput := ConcatAll([
-    SshBytesFromText(AVc),
-    SshBytesFromText(AVs),
-    AMyKexInit,
-    APeerKexInit,
-    Result.ServerHostKeyBlob,
-    FPub,
-    LServerEphemeral,
-    LKmpint
-  ]);
   Result.SharedSecret := LShared;
+  LHashInput := SshBuildCurve25519HashInput(AVc, AVs, AMyKexInit, APeerKexInit,
+    Result.ServerHostKeyBlob, FPub, LServerEphemeral, LShared);
   Result.ExchangeHashH := SHA256(LHashInput);
 end;
 

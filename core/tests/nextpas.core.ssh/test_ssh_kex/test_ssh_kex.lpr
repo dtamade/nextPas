@@ -343,11 +343,9 @@ begin
       { K 一致 }
       CheckEqual(BytesToHex(LShared), BytesToHex(LGot.SharedSecret), 'K');
 
-      { 独立重算 H = HASH(V_C||V_S||I_C||I_S||K_S||e||f||K)，K 为 mpint }
-      LHInput := ConcatAll([
-        SshBytesFromText(LC), SshBytesFromText(LS), LIc, LIs,
-        LHostKeyBlob, Copy(LInit, 5, 32), LSrvPub,
-        MpIntEncode(LShared)]);
+      { H 契约 = 共享的 RFC 4253 §8 构造（与环回 mock 同源，防两端漂移）}
+      LHInput := SshBuildCurve25519HashInput(LC, LS, LIc, LIs,
+        LHostKeyBlob, Copy(LInit, 5, 32), LSrvPub, LShared);
       CheckEqual(BytesToHex(SHA256(LHInput)), BytesToHex(LGot.ExchangeHashH), 'H');
 
       CheckTrue(CompareMem(@LHostKeyBlob[0], @LGot.ServerHostKeyBlob[0],
