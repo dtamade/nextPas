@@ -119,12 +119,19 @@ if LProvider = nil then
   { 演示代码才允许降级 fake；生产路径绝不静默回退（§3）}
 
 // 2) 可靠性（一行装饰；W8 起可叠装——顺序即语义：限流在最外先整形，
-//    重试护单家，容灾链兜底切供应商）
+//    重试护单家，容灾链兜底切供应商；W9 起 hedge 按需插内层对冲慢请求）
 LProvider := WithThrottle(LProvider,
   NewTokenBucketGate(0.5, 5), NewSystemClock, TThrottlePolicy.Default);
 LProvider := WithFallback([LProvider, LBackupProvider],
   TFallbackPolicy.Default);
 LProvider := WithRetry(LProvider, TRetryPolicy.Default, NewSystemClock);
+
+{ 可靠性装饰器四象限选型（W9 收官）：
+  · WithRetry    —— 同一家失败了再试（瞬时错误、退避+Retry-After）
+  · WithFallback —— 这家不行换那家（多供应商容灾）
+  · WithThrottle —— 别把上游打穿（客户端事前整形防 429）
+  · WithHedge    —— 慢就再发一路抢时间（p95 延迟敏感；双倍 token
+                    成本显式 opt-in，交互式产品才值得）}
 
 // 3) 调用：一行全量 或 pull 式流式（工具随请求携带）
 LReply := LProvider.Complete(

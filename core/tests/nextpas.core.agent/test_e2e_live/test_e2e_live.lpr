@@ -11,6 +11,7 @@ uses
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
   nextpas.core.agent.provider.openai,
+  nextpas.core.agent.provider.openai.responses,
   nextpas.core.agent.provider.anthropic,
   { HTTPS：注册 OpenSSL 后端（initialization 副作用，同 test_http_tls_real）}
   nextpas.core.tls.openssl.backed,
@@ -62,7 +63,9 @@ begin
   Check(MessageText(M) <> '', 'openai complete returns text');
   Check(M.FinishReason = frStop, 'finish stop');
   Check(M.Usage.Known, 'usage known');
-  Check(Pos('big-pickle', M.Model) > 0, 'model echoed');
+  { 回显断言只锁 wire→TMessage.Model 映射非空；具体名字不耦合——
+    模型经 env 注入，网关型端点可能回显上游路由名而非请求名 }
+  Check(M.Model <> '', 'model echoed');
   Check(MessageText(M) <> '', 'non-empty content');
   { Q-O2：端点返回 reasoning_content 时折叠为 pkThinking part；
     无该字段也不影响文本 }
@@ -195,6 +198,95 @@ begin
   Check(MessageText(M) <> '', 'idle watchdog no false kill');
 end;
 
+procedure TestResponsesComplete;
+var
+  P: IAgentProvider;
+  M: TMessage;
+begin
+  { W9：Responses 协议真网往返（同族 env，仅 wire 方言不同）}
+  P := NewOpenAIResponsesProviderFromEnv;
+  Check(P <> nil, 'responses provider from env (NEXTPAS_AGENT_OPENAI_*)');
+  if P = nil then
+    Exit;
+  M := P.Complete(TCompletionRequest.New('').WithUserText(
+    'Reply with exactly: OK'));
+  Check(MessageText(M) <> '', 'responses complete returns text');
+  Check(M.FinishReason = frStop, 'completed -> frStop');
+  Check(M.Usage.Known, 'usage known (input/output_tokens)');
+end;
+
+procedure TestResponsesStream;
+var
+  P: IAgentProvider;
+  C: IAgentCompletion;
+  D: TStreamDelta;
+  M: TMessage;
+  LText: string;
+  LHasEnv, LHasFinish: Boolean;
+begin
+  P := NewOpenAIResponsesProviderFromEnv;
+  if P = nil then
+    Exit;
+  C := P.Stream(TCompletionRequest.New('').WithUserText(
+    'Count from 1 to 5, digits only.'));
+  LHasEnv := False;
+  LHasFinish := False;
+  LText := '';
+  while C.NextDelta(D) do
+  begin
+    if D.Kind = sdkEnvelope then
+      LHasEnv := True;
+    if D.Kind = sdkTextDelta then
+      LText := LText + D.TextDelta;
+    if D.Kind = sdkFinish then
+      LHasFinish := True;
+  end;
+  M := C.GetMessage;
+  Check(LHasEnv, 'response.created envelope first');
+  Check(LHasFinish, 'terminal event mapped to finish');
+  Check(Length(LText) > 0, 'output_text deltas accumulated');
+  CheckEqual(LText, MessageText(M),
+    'fold invariant across responses stream');
+end;
+
+procedure TestResponsesToolCall;
+var
+  P: IAgentProvider;
+  M: TMessage;
+  I: Integer;
+  Specs: TToolSpecArray;
+  HasCall: Boolean;
+begin
+  P := NewOpenAIResponsesProviderFromEnv;
+  if P = nil then
+    Exit;
+  SetLength(Specs, 1);
+  Specs[0] := Default(TToolSpec);
+  Specs[0].Name := 'get_weather';
+  Specs[0].Description := 'Get current weather for a city';
+  Specs[0].ParametersJson :=
+    '{"type":"object","properties":{"city":{"type":"string"}},' +
+    '"required":["city"]}';
+  { Q-R3 平铺 function_call 的实端形态验证；模型拒绝调工具时退化为
+    纯文本完成——断言按实际回包自适应 }
+  M := P.Complete(TCompletionRequest.New('').WithTools(Specs)
+    .WithToolChoice(tcmNamed, 'get_weather')
+    .WithUserText('What is the weather in San Francisco? Use the tool.'));
+  HasCall := False;
+  for I := 0 to High(M.Parts) do
+    if M.Parts[I].Kind = pkToolCall then
+    begin
+      HasCall := True;
+      Check(M.Parts[I].ToolCallId <> '', 'call_id carried');
+      Check(M.Parts[I].ToolName = 'get_weather', 'tool name echoed');
+    end;
+  Check(HasCall or (M.FinishReason = frStop),
+    'named tool_choice honored (call item or text fallback)');
+  if HasCall then
+    Check(M.FinishReason = frToolCalls,
+      'open slot implies frToolCalls');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -214,6 +306,9 @@ begin
   T.Test('anthropic complete', @TestAnthropicComplete);
   T.Test('openai idle timeout no false kill',
     @TestOpenAIIdleTimeoutNoFalseKill);
+  T.Test('responses complete W9', @TestResponsesComplete);
+  T.Test('responses stream W9', @TestResponsesStream);
+  T.Test('responses tool call W9', @TestResponsesToolCall);
   if not T.Run then
     Halt(1);
 end.

@@ -398,6 +398,13 @@ function NewFallbackProvider(const AChain: array of IAgentProvider;
 function NewThrottledProvider(const AInner: IAgentProvider;
   const AGate: IAgentRateGate; const AClock: IAgentClock;
   const APolicy: TThrottlePolicy): IAgentProvider;
+
+{ W9 对冲装饰器 + OpenAI Responses 协议支柱 }
+function NewHedgedProvider(const AInner: IAgentProvider;
+  const AClock: IAgentClock; const APolicy: THedgePolicy): IAgentProvider;
+function NewOpenAIResponsesProvider(
+  const AOpts: TOpenAIOptions): IAgentProvider;
+function NewOpenAIResponsesProviderFromEnv: IAgentProvider;
 function NewTokenBucketGate(ARatePerSecond, ABurst: Double): IAgentRateGate;
 function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   const AClock: IAgentClock): IAgentProvider;
@@ -606,6 +613,29 @@ NewThrottledProvider 语义：
   与上游 429 都落 aecRateLimited，但本地路径 Message 带 'throttled: ' 前缀、
   从未触网。取消打断等待立即以 EAgentCancelled 上抛。
 
+{ ---- W9 对冲装饰器（可靠性四象限收官：retry 败后重试/fallback 败后
+  换家/throttle 事前整形/hedge 慢时对冲）---- }
+
+THedgePolicy = record
+  DelayMs: Int64;                  { 主路无响应 T 毫秒后起对冲路；必填 >0，
+                                     工厂校验否则 aecConfig——显式 opt-in }
+  OnHedged: THedgeFireHook;        { nil=静默；对冲路发起时上报（观测用） }
+  class function Default(ADelayMs: Int64): THedgePolicy; static;
+end;
+
+THedgeFireHook = reference to procedure(ADelayMs: Int64);
+  { 对冲路发起时回调：参数即本次生效的 DelayMs（实例仅调用期有效）}
+
+NewHedgedProvider(inner, clock, policy) 语义：
+- Complete：主路先行；DelayMs 内完成则对冲路从未存在（零额外成本）；到点未
+  完成即并发第二路，**任一路先返回者胜出**，输路经取消令牌合并被 Cancel。
+  两路皆败：透传**主路**原始错误（不包装；对齐 retry/fallback 哲学）。
+- Stream：两流各取首 delta，先达者胜出并包装投递；输流 Cancel 且其增量
+  永不外泄（首 delta 门同门——投递不重复）。首 delta 已投递后不再对冲。
+- 成本明示：对冲路是完整第二次请求，双倍 token 成本由调用方 opt-in 承担；
+  输路可能已被上游计费（客户端只能保证不采用其结果，不能撤回服务端计费）。
+- 取消优先：外部令牌触发时两路一并取消，立即 EAgentCancelled。
+
 ## 6. 循环（nextpas.core.agent.loop）
 
 ```pascal
@@ -754,6 +784,21 @@ procedure DecodeAnthropicResponse(const ABody: TJsonText;
 
 function NewAnthropicWireDecoder(
   const ALog: ILogger = nil): IAgentWireDecoder;
+
+{ ---- OpenAI Responses 族（nextpas.core.agent.provider.openai.responses，
+  W9/v1.1 第四批；映射权威=WIRE-MAPPINGS §3）---- }
+
+function EncodeResponsesRequest(const AReq: TCompletionRequest;
+  AStream: Boolean): TJsonText;
+
+procedure DecodeResponsesResponse(const ABody: TJsonText;
+  out AMsg: TMessage;
+  const ALog: ILogger = nil);                { 违反协议抛 aecProtocol }
+
+function NewResponsesWireDecoder(
+  const ALog: ILogger = nil): IAgentWireDecoder;
+
+function BuildResponsesUrl(const ABaseUrl: string): string;
 ```
 
 可选 `ALog`：未映射枚举值（零值+`agent.unmapped.*` 捕获之外）与 Q-O7
