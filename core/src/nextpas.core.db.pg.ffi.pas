@@ -73,6 +73,13 @@ type
   TPQfreeCancel = procedure(ACancel: PGcancel); cdecl;
   TPQcancel     = function(ACancel: PGcancel; AErrBuf: PAnsiChar;
     AErrBufSize: Integer): Integer; cdecl;
+  { V3-B7 LISTEN/NOTIFY 订阅面 }
+  TPQnotifies    = function(AConn: PGconn): PPGnotify; cdecl;
+  TPQfreemem     = procedure(APtr: Pointer); cdecl;
+  TPQsocket      = function(AConn: PGconn): Integer; cdecl;
+  TPQconsumeInput = function(AConn: PGconn): Integer; cdecl;
+  { 发送方后端 PID 读回（自发自收识别与真机门禁 pg_terminate_backend 定位用） }
+  TPQbackendPID  = function(AConn: PGconn): Integer; cdecl;
 
 var
   { Bound by nextpas.core.db.pg.loader; callers must PgEnsureLoaded first
@@ -110,6 +117,12 @@ var
   pq_getCancel:  TPQgetCancel;
   pq_freeCancel: TPQfreeCancel;
   pq_cancel:     TPQcancel;
+  { V3-B7 LISTEN/NOTIFY }
+  pq_notifies:   TPQnotifies;
+  pq_freemem:    TPQfreemem;
+  pq_socket:     TPQsocket;
+  pq_consumeInput: TPQconsumeInput;
+  pq_backendPID: TPQbackendPID;
 
 implementation
 

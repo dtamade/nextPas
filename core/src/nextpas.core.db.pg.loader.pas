@@ -85,6 +85,12 @@ begin
   pq_getCancel  := TPQgetCancel(LoadSym('PQgetCancel'));
   pq_freeCancel := TPQfreeCancel(LoadSym('PQfreeCancel'));
   pq_cancel     := TPQcancel(LoadSym('PQcancel'));
+  { V3-B7 LISTEN/NOTIFY 订阅面（均为 libpq 初代符号，无版本门槛） }
+  pq_notifies     := TPQnotifies(LoadSym('PQnotifies'));
+  pq_freemem      := TPQfreemem(LoadSym('PQfreemem'));
+  pq_socket       := TPQsocket(LoadSym('PQsocket'));
+  pq_consumeInput := TPQconsumeInput(LoadSym('PQconsumeInput'));
+  pq_backendPID   := TPQbackendPID(LoadSym('PQbackendPID'));
 end;
 
 procedure PgEnsureLoaded;

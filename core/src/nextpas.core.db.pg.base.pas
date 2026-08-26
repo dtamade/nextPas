@@ -60,6 +60,28 @@ type
   PGconn   = Pointer;   { PGconn*   }
   PGresult = Pointer;   { PGresult* }
   PGcancel = Pointer;   { PGcancel*（V3-B6 取消令牌，PQgetCancel 产物） }
+
+  { PGnotify（libpq C 布局逐字段镜像，PQnotifies 逐条返回，
+    PQfreemem 释放；V3-B7 LISTEN/NOTIFY 订阅面用）。
+    C 原形：struct pgNotify { char *relname; int be_pid; char *extra; }
+    ——字段序 relname/be_pid/extra 不得改动（布局错位 = 解引用
+    整数当指针，真机门禁以自发自收往返钉死）。 }
+  TPGnotify = record
+    Relname: PAnsiChar;   { 通知频道名 }
+    BePid: Integer;       { 发送方后端 PID }
+    Extra: PAnsiChar;     { NOTIFY 载荷串（可空指针或空串） }
+  end;
+  PPGnotify = ^TPGnotify;
+
+  {** @desc 统一层通知记录（V3-B7）：LISTEN/NOTIFY 单条投递载荷。
+      Payload 可为空串（无载形态 NOTIFY channel）；SenderPid =
+      发送方后端 PID（自发自收时即本会话 PID）。 *}
+  TDbPgNotification = record
+    Channel: string;
+    Payload: string;
+    SenderPid: Integer;
+  end;
+  TDbPgNotificationArray = array of TDbPgNotification;
   TOid     = Cardinal;  { PostgreSQL object identifier }
 
   {** @desc PostgreSQL error, carries libpq diagnostics.
