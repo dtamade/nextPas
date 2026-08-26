@@ -3,10 +3,12 @@
 L2 资源打包格式模块。把一棵文件树打包成单个带索引的二进制 blob（pack），支持
 零拷贝随机读取，是前端资源嵌入程序/动态库场景的格式层。
 
-**状态：S1-S3 已实现并有 gate 覆盖**
-（`base`/`writer`/`reader`/`dirsource`/门面；五个测试 gate 全绿、heaptrc 零泄漏；
-writer 含 golden 逐字节快照门禁，roundtrip 含 10k 条目 perf smoke）。
-`vfs.embedded` 已接入（S3 落地）；嵌入工具链（S4）、http.static 对接（S5）未开始。
+**状态：S1-S4 已实现并有 gate 覆盖**
+（`base`/`writer`/`reader`/`dirsource`/`embed`/门面；六个测试 gate 全绿、heaptrc
+零泄漏；writer 含 golden 逐字节快照门禁，roundtrip 含 10k 条目 perf smoke；
+embed 含 .inc 文本确定性 golden 门禁与 extract roundtrip 门禁）。
+嵌入工具链（S4）已落地：`nextpas.core.respack.embed` 单元 + `rp_pack` CLI；
+http.static 对接（S5）未开始。
 计划见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 
 ## 模块定位
@@ -58,10 +60,11 @@ nextpas.core.respack.pas           ← 门面：re-export + Open/Build inline �
 nextpas.core.respack.base.pas      ← TResPackHeader/TResPackEntry record、常量、错误
 nextpas.core.respack.reader.pas    ← 校验 + 索引二分查找（只读，无分配热路径）
 nextpas.core.respack.writer.pas    ← 条目列表 → blob（排序/去重/对齐/索引生成）
-nextpas.core.respack.dirsource.pas ← 从 nextpas.core.fs 目录枚举条目（唯一引 fs 的单元）
+nextpas.core.respack.dirsource.pas ← 目录枚举（输入）+ 解包落盘（输出），唯一引 fs 的 seam 单元
+nextpas.core.respack.embed.pas     ← 嵌入工具链库：glob 过滤/prefix 映射/.inc 生成（S4）
 ```
 
-依赖方向：`base ← reader/writer ← dirsource ← 门面`。
+依赖方向：`base ← reader/writer ← dirsource/embed ← 门面`。
 
 ### 依赖白名单
 
@@ -70,9 +73,10 @@ nextpas.core.respack.dirsource.pas ← 从 nextpas.core.fs 目录枚举条目（
 | `base` | L0（`base`/`errors`） | 纯类型与常量 |
 | `reader` | `base` | 无堆分配查找路径 |
 | `writer` | `base` | 纯内存构造 |
-| `dirsource` | `writer` + `nextpas.core.fs` | **唯一的 L2→L2 seam**，与 fs→path seam 同性质，registry 记录 |
+| `dirsource` | `writer`/`reader` + `nextpas.core.fs` | **唯一的 L2→L2 IO seam**：目录枚举与 extract 落盘都收口在此，registry 记录 |
+| `embed` | `writer`/`dirsource` + `nextpas.core.fs.glob` | 工具链库；仅允许 fs.glob（纯字符串匹配、无 IO），源契约门禁单列断言 |
 
-`reader`/`writer` 不依赖 fs/bytes/io：输入输出一律 `(PByte, SizeUInt)` 或调用方提供的
+`reader`/`writer`/`embed` 不依赖 fs/io：blob 输入输出一律 `(PByte, SizeUInt)` 或调用方提供的
 目标缓冲，保持格式层可被任何宿主复用。
 
 ### 完整性双档
@@ -98,17 +102,57 @@ writer 经注入的摘要函数生产摘要，校验助手放消费侧 hash 模�
 
 逐项对标证据见 [PARITY-go-rust.md](PARITY-go-rust.md)。
 
-## 嵌入载体
+## 嵌入载体与嵌入工具链（S4 已落地）
 
 writer 产出的 blob 如何进入程序，由构建侧选择：
 
 | 载体 | 机制 | 适用 | 实现阶段 |
 |------|------|------|----------|
 | 独立 `.pack` 文件 | 随程序分发，运行时整体读入或 mmap | 大包、需热更新 | S1 起 |
-| 生成 `.inc` typed const | 工具把 blob 转成 Pascal 常量数组编入 | 中小包（经验值 < 4MB），跨平台零工具链要求 | S4 |
+| 生成 `.inc`/单元 typed const | `rp_pack inc` 把 blob 转成 Pascal 常量编入 | 中小包，跨平台零运行时工具要求 | **S4** |
 | `{$R}` 资源链接 | fcl-res 跨平台链入，`TResourceStream` 取回 | 编译速度敏感 | 文档记录，按需实现 |
 
-`.inc` 生成器放在工具侧（S4），不在本模块运行时单元里。
+### 工具链构成
+
+- **库（格式逻辑全部在此）**：`nextpas.core.respack.embed`
+  - `ResPackEmbedBuild(SourceDir, TResPackEmbedOptions): TResPackBlob`
+    —— 处理管线：相对路径 → StripPrefix 剥离（不匹配即剔除）→ glob
+    include/exclude（对剥离后路径匹配；`*` 不跨 `/`、跨层级用 `**/`）→
+    AddPrefix 拼接 → ValidPath 校验。过滤后 0 条目显式报错（空包几乎总是
+    glob 写错），绝不静默产出。
+  - `ResPackEmbedIncSource / ResPackEmbedIncUnitSource`：blob → Pascal 源文本
+    （snippet 或完整单元形态）。确定性输出，由 test_respack_embed golden 门禁
+    逐字节锁定。
+  - 解包落盘 `ResPackExtractToDir(blob, dir)` 在 dirsource（唯一 IO seam 单元），
+    对标 include_dir extract / asar unpack-dir 的调试迁移用途。
+- **CLI 薄壳**：`core/tools/respack/rp_pack.lpr`（`make -C core/tools/respack build`）
+  ```
+  rp_pack build   --src DIR --out F.pack [--include GLOB]... [--exclude GLOB]...
+                  [--strip-prefix P/] [--add-prefix P/] [--dedup] [--no-hash]
+                  [--digest sha256]
+  rp_pack inc     --src DIR (--const NAME | --unit NAME) --out F.pas [同上过滤项]
+  rp_pack extract --pack F.pack --out DIR
+  rp_pack list    --pack F.pack
+  ```
+
+### 载体实测数据（2026-08-26，本仓库 worktree 主机，fpc trunk -O2）
+
+| 维度 | typed const 编入 | `.pack` 文件随程序分发 |
+|------|------------------|------------------------|
+| fpc 编译耗时（2MB 资产，200 文件） | ≈2.4 s | ≈0.29 s |
+| fpc 编译耗时（4MB） | ≈4.4 s（≈1.1 s/MB 线性） | ≈0.30 s（恒定） |
+| 启动"首资产可用"（1MB 包，200×5KB） | Open+Find ≈51 µs | ReadFile+Open+Find ≈3.3 ms |
+| writer 内存峰值（INV-R10 上限实测） | — | 输入 512MB 构建成功；进程峰值 RSS ≈ 2×输入 + ~14MB（128MB→267MB、512MB→1038MB） |
+
+结论：typed const 的编译时间随资产线性增长，经验阈值维持 **< 4MB 走 .inc**；
+更大包走 `.pack`（启动一次性读入的毫秒级成本可忽略）。复现实验：
+`core/scripts/respack_bench_compile.sh [MB]`、基准
+`core/benchmarks/nextpas.core.respack/bench_embed_startup` 与
+`bench_writer_memory`。
+
+示例（开发态/发布态切换）：`core/examples/nextpas.core.vfs/demo_asset_embed/`
+—— 同一 consumer 代码在 `CreateOsVfs('wwwroot')` 与
+`CreateEmbeddedVfs(@DEMO_ASSETS[0], …)` 两后端上跑通。
 
 ## 测试计划
 
@@ -116,7 +160,8 @@ writer 产出的 blob 如何进入程序，由构建侧选择：
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_roundtrip
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader    # 含损坏输入拒绝
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer    # 排序/去重/对齐/golden
-make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource # 含 extract 落盘与 mtime 回归
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_embed     # S4：glob/prefix/inc golden/roundtrip
 ```
 
 - round-trip：目录样例 → build → open → 逐字节比对全部条目
@@ -146,7 +191,9 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
 |------|------|------|
 | 常量标识符实参 + inline 函数的 u64 参数 | 常量传播把函数体按 32 位折叠（`shr 32` 后 high:=low），写出 `0x0000002800000028` 类错值 | u64 写入一律显式 `UInt64(常量)`；见 writer 内注释 |
 | `Pos('', S)` 返回值 | FPC 返回 0（Delphi 语义为 1），`Pos(Prefix,S)=1` 式前缀判断对空前缀全错 | 前缀判断用显式 `StartsWith` 助手，空前缀恒真 |
-| `for I := 0 to N - 1 do`（N: SizeUInt） | N=0 时上界回绕为 `$FFFFFFFF`，循环体以垃圾下标执行 → AV/总线错误 | 循环前守卫 `N > 0`，或改 `while I < N`；Hoare 分区类算法下标一律 Int64 |
+| `for I := 0 to N - 1 do`（N: SizeUInt） | N=0 时上界回绕为 `$FFFFFFFF`，循环体以垃圾下标执行 → AV/总线错误 | 循环前守卫 `N > 0`，或改 `while I < N`；Hoare 分区类算法下标一律 Int64（S4 embed 的空 ExcludeGlobs 即踩此坑） |
+| 取临时托管数组的指针存入 record | `E.Data := Pointer(BytesOf(s))` 中临时 TBytes 语句结束即释放，Data 成悬垂指针；症状随堆复用抖动（AV 或静默脏字节） | 内容缓冲锚定在存活局部变量上再取址 |
+| 局部托管数组作逃逸指针的生命期锚点 | 函数返回后锚点数组释放，调用方持有的 Data 全体悬垂；gate 靠分配器运气通过，调用链上一旦插入分配即爆（S4 在 dirsource 修复为 bundle 返回锚点） | 逃逸结构必须自带内容所有权（record 携带缓冲字段），不依赖调用顺序默契 |
 
 ## FPC RTL 隔离与反哺
 
