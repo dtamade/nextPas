@@ -203,4 +203,8 @@ If-Modified-Since 取 `ModTime`。
   新增 test_respack_embed 门（12 检查），源契约门禁扩展至 embed 单元；
   修复 dirsource 内容锚点生命期缺陷与 mtime/size 缺失（含回归测试）；
   10 个 gate 全绿、heaptrc 零泄漏。
-- 下一步：S5 http.static 跨模块 slice 另行立项。
+- S5 完成（2026-08-26）：http.static 接入 IVfs，立项与完成记录见
+  `docs/plans/2026-08-26-http-static-vfs-s5-plan.md`；test_http_static 39 门 +
+  vfs 五门 + http contract/smoke 全绿；端到端示例 http_static_vfs_demo 与
+  bench_servevfs 基准（embedded ≈7.0 µs/op vs os ≈16.3 µs/op，≈2.3×）落库。
+  **本计划全部切片收官。**

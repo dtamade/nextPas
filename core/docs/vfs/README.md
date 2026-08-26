@@ -4,10 +4,13 @@ L2 只读虚拟文件树模块。把"一棵文件树"抽象成统一接口：真
 respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，不关心内容来自二进制
 内嵌数据还是文件系统。
 
-**状态：S3 已落地、S4 消费示例就位。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数全部实现；
+**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数全部实现；
 9 个验证门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
-`vfs.mount`（overlay/挂载表）推迟；S5 http.static 对接未开始。
-嵌入工作流示例见 `core/examples/nextpas.core.vfs/demo_asset_embed/`
+`vfs.mount`（overlay/挂载表）推迟；S5 已完成：`nextpas.core.http.static.ServeVfs(AFs)`
+是首个 L3 consumer，embedded/os 双后端经同一 handler 服务 HTTP（ETag 取
+ContentHash fnv32，未知 mtime 跳过 IMS 协商）。
+嵌入工作流示例见 `core/examples/nextpas.core.vfs/demo_asset_embed/`；
+端到端 HTTP 示例见 `core/examples/nextpas.core.http/http_static_vfs_demo/`
 （os/embedded 双后端开发态-发布态切换，资源经 respack S4 工具链生成）。
 实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
 对标依据见 [`core/docs/respack/PARITY-go-rust.md`](../respack/PARITY-go-rust.md)。
