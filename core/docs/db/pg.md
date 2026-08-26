@@ -1,10 +1,10 @@
 # nextpas.core.db.pg 代码契约
 
-**模块路径**：`core/src/nextpas.core.db.pg*.pas`（5 个源文件，nextpas.core.db 家族 PostgreSQL 后端子模块）
+**模块路径**：`core/src/nextpas.core.db.pg*.pas`（6 个源文件，nextpas.core.db 家族 PostgreSQL 后端子模块；V3-B7 起含 listen 订阅会话）
 **层级**：L2 实现（挂在 L3 `nextpas.core.db` 家族下；依赖 L0-L1: platform.dl, exception, text.conv）
 **Owner**：token888 反哺；与 proxy888 联合评审；2026-08-23 起由 core-db lane 收编维护
-**最后更新**：2026-08-25（G2 收口：旧名 nextpas.core.pg.* shim 已删除，仅存 nextpas.core.db.pg.*）
-**版本**：1.1（收编版）
+**最后更新**：2026-08-26（V3-B7 LISTEN/NOTIFY：listen 子模块入编 + [INV-6] + TLS 真机冒烟注记）
+**版本**：1.2（1.1 收编版 → 1.2 增订 B7）
 
 ---
 

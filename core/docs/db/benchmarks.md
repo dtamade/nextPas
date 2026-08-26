@@ -166,6 +166,50 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 | read(8T) | 24,000 | 269 ms | 89,219 ops/s | opens=4 ✅ |
 | writer(4T) | 800 | 7 ms | 114,285 ops/s | busy=0 |
 
+### bench_db_stmt_cache 表注
+
+2026-08-26 复采中 pg cached point 跨过 ±15% 带（−23%），环境取证与
+裁决见文末「复采记录」。
+
+## 复采记录（2026-08-26）
+
+全量同机同口径复采（Xeon E5-2696 v4，pg 17 本机 socket，FPC 3.3.1
+-O2），逐项对照 2026-08-25 基线。
+
+**噪声带内（±15%），基线维持**：adapter_overhead（J1 持平）、
+translate_complexity（线性度成立）、batch_insert pg 四路（autocommit
+22,360 / txloop 571 / batch 166 / array 32 ms，对基线 +2.4% / +8.6% /
+−4.6% / +10.3%）、blob_stream（stream +0.2 MB）、pool_stress
+（opens=4、busy=0）、stmt_cache sqlite 两路（nocache +5.9%、cached
+−7.1%，hit_rate=1.0000）、listen 双节拍（50.13 ms / 5.12 ms，吞吐
+9,847 条/s 零丢弃，与在册同量级）。
+
+**跨过阈值项与裁决**：
+
+- stmt_cache pg point cached：16,165 ops/s 对在册 20,973（−23%）；
+  同轮 nocache 仅 −3.9%。取证：路径源码未变（git）、libpq/PG 版本
+  未变（dpkg.log 无升级记录）、纯计算指标（sqlite 点查 sync 1.4µs）
+  不动；而 IPC 往返地板整体抬高——bench_db_async pg sync SELECT 1
+  均值 56–60µs（在册 47.6–54.4）、sqlite 异步固定挂载成本 ~23–26µs
+  （在册 ~15–17）。多处调度/往返敏感指标同步抬升而计算路径纹丝
+  不动，归因共享机器共租负载（复采窗口 load≈8–11 持续，另有外部
+  进程每 60s 对集群做健康探测）。基线维持为参考；静默窗口复测若
+  pg cached 仍 ≤17K 再立回归案。
+- bench_db_async 比值段：sqlite 16.8–19.2×（在册 10.6–11.6×）即上
+  款同一地板抬升的调度侧写，非实现回归；pg 比值 1.27–1.82× 在册
+  区间内。
+
+**附带事件（已收口）**：bench_db_async 高负载下间歇 AV@RIP=0（约
+2/6 次，本轮复采首次暴露）。根因（gdb 回溯 + valgrind + 生命周期
+插桩链式定位）：`TDbAsyncExecutor.Submit` 的句柄唯一接口引用寄存
+于 op 记录字段，而 FPC 类指针不保活（构造贷返还后 rc=0），worker
+可在 Submit 取回 Result 前完成执行+finalize+Dispose 整个周期并触
+发析构——消费方拿到已释放内存。修复：本地 `LHeld: IDbAsyncHandle`
+首个接口引用先行持有（单元头时序不变式 b 成文）；test_db_async 增
+设 5 万次微工作体高频提交回归段。修复后 solo ×10、focused 门禁
+13/13（heaptrc 分配释放精确平衡）、bench 四轮、gdb 连续二十轮猎捕
+全部干净。本记录 async 数字采自修复后轮次。
+
 ## 登记纪律
 
 - 优化提交引用本文数字时必须注明「同机同口径复跑」并给出前后对照。
