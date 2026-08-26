@@ -20,7 +20,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.db.pg.base,
   nextpas.core.db.pg.ffi,
-  nextpas.core.db.pg.loader;
+  nextpas.core.db.pg.loader,
+  nextpas.core.db.sqlscan;
 
 type
   TPgConn = class;
@@ -138,6 +139,7 @@ type
   on load or connect failure. }
 function PgOpen(const AConnInfo: string): TPgConn;
 
+
 implementation
 
 uses
@@ -179,85 +181,9 @@ end;
        repository SQL; a '$$' in a literal would count, which is
        acceptable for controlled SQL. *}
 function MaxParamIndex(const ASql: string): Integer;
-var
-  I: Integer;
-  C: Char;
-  InStr, InDq, InLineC, InBlockC: Boolean;
-  N: Integer;
 begin
-  Result := 0;
-  InStr := False;
-  InDq := False;
-  InLineC := False;
-  InBlockC := False;
-  I := 1;
-  while I <= Length(ASql) do
-  begin
-    C := ASql[I];
-    if InLineC then
-    begin
-      if C = #10 then
-        InLineC := False;
-    end
-    else if InBlockC then
-    begin
-      if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
-      begin
-        InBlockC := False;
-        Inc(I);
-      end;
-    end
-    else if InStr then
-    begin
-      if C = '''' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = '''') then
-          Inc(I)
-        else
-          InStr := False;
-      end;
-    end
-    else if InDq then
-    begin
-      if C = '"' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = '"') then
-          Inc(I)
-        else
-          InDq := False;
-      end;
-    end
-    else
-    begin
-      case C of
-        '''': InStr := True;
-        '"': InDq := True;
-        '-':
-          if (I < Length(ASql)) and (ASql[I + 1] = '-') then
-            InLineC := True;
-        '/':
-          if (I < Length(ASql)) and (ASql[I + 1] = '*') then
-          begin
-            InBlockC := True;
-            Inc(I);
-          end;
-        '$':
-          begin
-            Inc(I);
-            N := 0;
-            while (I <= Length(ASql)) and (ASql[I] in ['0'..'9']) do
-            begin
-              N := N * 10 + (Ord(ASql[I]) - Ord('0'));
-              Inc(I);
-            end;
-            if N > Result then
-              Result := N;
-            Continue;
-          end;
-      end;
-    end;
-    Inc(I);
-  end;
+  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
+  Result := SqlScanMaxPlaceholderIndex(ASql, DBSQLSCAN_PG, '$');
 end;
 
 {** @desc 对 ASql 中列出的 $N 参数追加 ::bytea cast。扫描状态机与
@@ -265,125 +191,10 @@ end;
        dollar-quote 体不识别——与 MaxParamIndex 同一受控边界。 *}
 function AppendByteaCasts(const ASql: string;
   const AIndexes: array of Integer): string;
-var
-  LB: IStringBuilder;
-  I: Integer;
-  C: Char;
-  InStr, InDq, InLineC, InBlockC: Boolean;
-  N, K: Integer;
-  Matched: Boolean;
 begin
-  LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
-  InStr := False;
-  InDq := False;
-  InLineC := False;
-  InBlockC := False;
-  I := 1;
-  while I <= Length(ASql) do
-  begin
-    C := ASql[I];
-    if InLineC then
-    begin
-      LB.AppendChar(C);
-      if C = #10 then
-        InLineC := False;
-    end
-    else if InBlockC then
-    begin
-      LB.AppendChar(C);
-      if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
-      begin
-        LB.AppendChar('/');
-        InBlockC := False;
-        Inc(I);
-      end;
-    end
-    else if InStr then
-    begin
-      LB.AppendChar(C);
-      if C = '''' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = '''') then
-        begin
-          LB.AppendChar('''');
-          Inc(I);
-        end
-        else
-          InStr := False;
-      end;
-    end
-    else if InDq then
-    begin
-      LB.AppendChar(C);
-      if C = '"' then
-      begin
-        if (I < Length(ASql)) and (ASql[I + 1] = '"') then
-        begin
-          LB.AppendChar('"');
-          Inc(I);
-        end
-        else
-          InDq := False;
-      end;
-    end
-    else
-    begin
-      case C of
-        '''' :
-          begin
-            InStr := True;
-            LB.AppendChar(C);
-          end;
-        '"' :
-          begin
-            InDq := True;
-            LB.AppendChar(C);
-          end;
-        '-' :
-          begin
-            if (I < Length(ASql)) and (ASql[I + 1] = '-') then
-              InLineC := True;
-            LB.AppendChar(C);
-          end;
-        '/' :
-          begin
-            if (I < Length(ASql)) and (ASql[I + 1] = '*') then
-            begin
-              InBlockC := True;
-              Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
-              Continue;
-            end;
-            LB.AppendChar(C);
-          end;
-        '$' :
-          begin
-            LB.AppendChar('$');
-            Inc(I);
-            N := 0;
-            while (I <= Length(ASql)) and (ASql[I] in ['0'..'9']) do
-            begin
-              LB.AppendChar(ASql[I]);
-              N := N * 10 + (Ord(ASql[I]) - Ord('0'));
-              Inc(I);
-            end;
-            Matched := False;
-            for K := 0 to High(AIndexes) do
-              if AIndexes[K] = N then
-              begin
-                Matched := True;
-                Break;
-              end;
-            if Matched and (N > 0) then
-              LB.AppendStr('::bytea');
-            Continue;
-          end;
-      else
-        LB.AppendChar(C);
-      end;
-    end;
-    Inc(I);
-  end;
-  Result := LB.ToString;
+  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
+  Result := SqlScanDecorate(ASql, DBSQLSCAN_PG, '$', AIndexes,
+    '::bytea');
 end;
 
 { ===== TPgConn ===== }
