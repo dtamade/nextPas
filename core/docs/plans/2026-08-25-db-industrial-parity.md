@@ -30,7 +30,7 @@ HikariCP、ADO.NET `DbProviderFactory`。✅=已落地有门禁证据；
 | 12 | 查询超时 | context deadline | TDbExecOptions advisory（pg SET 窗口/mysql max_execution_time/odbc QUERY_TIMEOUT/sqlite 忽略）——conformance §12 advisory 全后端复跑 + pg 真机超时 decTimeout 与会话恢复钉死（V3-B2 门禁） | ✅ B2 |
 | 13 | 取消 | ctx 取消传播 | ✅ B6：TDbAsyncExecutor 令牌级联 → IDbCancelControl（pg PQcancel / sqlite progress handler），归一 decTimeout；句柄直呼 Cancel 同面；同步模型本身仍无取消（契约明示） | ✅ B6 |
 | 14 | LISTEN/NOTIFY | pgx notification | ✅ B7：nextpas.core.db.pg.listen 订阅会话——专用连接独占 + 泵线程投递 + Token（IAsyncCancellationToken）取消 + 断线自动重连重放订阅；at-most-once 如实上报（GapCount/DroppedCount）；投递面偏差（原案 async.channel → 内建有界记录队列）入 CONTRACT §2.18 | ✅ B7 |
-| 15 | TLS 一等公民 | sslmode/verify-full | CONTRACT §2.1-TLS 责任表成文（pg conninfo 透传/redis UseTls+TLSDial/odbc connstr/sqlite N/A）+ verify-full 推荐样例；带证书 conformance 冒烟本地无环境未跑（env 门控余项，诚实登记不假装验证） | ✅ B4（文档） |
+| 15 | TLS 一等公民 | sslmode/verify-full | CONTRACT §2.1-TLS 责任表成文（pg conninfo 透传/redis UseTls+TLSDial/odbc connstr/sqlite N/A）+ verify-full 推荐样例；**2026-08-26 带证书冒烟收口**：本机 PG17.11 自签 CA 临时实例实证——verify-full 下 test_db_pg 13 组 + test_db_pg_listen 11 组真机全绿 heaptrc 干净；错误 CA 被 libpq 证书校验拒绝（exit 2）；sslmode=require 加密通道 pg_stat_ssl 确认 ssl=t | ✅ B4（文档+真机冒烟） |
 | 16 | 迁移框架 | sqlx migrate/golang-migrate | db.migrate 版本表+dry-run | ✅ |
 | 17 | 国产库覆盖 | —（对标系外，总控指令） | D1 指南✅；D2/D3/D4 待真机 | 🟡 环境门控 |
 
