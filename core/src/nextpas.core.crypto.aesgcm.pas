@@ -617,7 +617,7 @@ asm
   pxor xmm5, xmm5        // C_L 累计
   pxor xmm6, xmm6        // C_H 累计
 
-  // X1 → P1 = X1 · H⁴（LO/HI 即时并入累计，MID 拆两半并入；
+  // X1 → P1 = (acc ⊕ X1) · H⁴（A₀ 与 X1 同乘 H⁴，见顶部恒等式；
   //   各乘积输入互不依赖，乱序核并行发射——这是相对串行链的收益来源）
   movdqu xmm0, [rdx]
   movdqa xmm7, xmm0
@@ -629,6 +629,8 @@ asm
   movdqa xmm7, xmm9
   pshufb xmm7, xmm0
   por xmm1, xmm7
+
+  pxor xmm1, xmm15       // (A₀ ⊕ X₁)
 
   movdqa xmm0, xmm1
   pclmulqdq xmm0, xmm11, $00   // LO
@@ -702,7 +704,7 @@ asm
   psrldq xmm0, 8
   pxor xmm6, xmm0
 
-  // X4 折入当前累加器 → P4 = (X4⊕acc) · H¹
+  // X4 → P4 = X4 · H¹（A₀ 已折入第一路，此处不再并入 acc）
   movdqu xmm0, [rdx + 48]
   movdqa xmm7, xmm0
   pand xmm7, xmm10
@@ -713,8 +715,6 @@ asm
   movdqa xmm7, xmm9
   pshufb xmm7, xmm0
   por xmm1, xmm7
-
-  pxor xmm1, xmm15
 
   movdqa xmm0, xmm1
   pclmulqdq xmm0, xmm14, $00
@@ -732,11 +732,9 @@ asm
   psrldq xmm0, 8
   pxor xmm6, xmm0
 
-  add rdx, 64
-  sub r8d, 4
-  jnz @group
-
-  // 共享规约（与单块路径逐指令同构：输入 xmm2=C_L / xmm3=C_H，输出 xmm2）
+  // 每组共享规约：red(C_L,C_H) 覆写反射域累加器。
+  //   GF(2^128) 规约对 XOR 线性 ⇒ 各组积和可独立规约；A₀ 已在第一路
+  //   消费，故本组结果直接作为下一组 A₀（赋值而非 XOR）。
   movdqa xmm2, xmm5
   movdqa xmm3, xmm6
   movdqa xmm4, xmm3
@@ -782,9 +780,12 @@ asm
   pxor xmm5, xmm7
   pxor xmm2, xmm4
   pxor xmm2, xmm5
-  movdqa xmm15, xmm2
+  movdqa xmm15, xmm2     // acc := red(本组积和)，作为下一组 A₀
 
-  // 反射回正规域存储
+  add rdx, 64
+  sub r8d, 4
+  jnz @group
+
   movdqa xmm0, xmm15
   movdqa xmm7, xmm0
   pand xmm7, xmm10

@@ -71,6 +71,40 @@ begin
     CheckEqual('58e2fccefa7e3061367f1d57a4e7455a', BytesToHex(LTag));
   end);
 
+  { 聚合 GHASH 路径（≥8 块走 GHASHUpdatePCLMULAgg）回归：曾因组间
+    累加器折返缺失 + A₀ 折入路次错误导致 tag 全错、TLS 握手 AEAD
+    解密整体失败（NIST 短向量 ≤4 块覆盖不到）。参考值由 Python
+    cryptography AESGCM 生成。 }
+  LSuite.Test('agg path 128B (2 groups) external vector', procedure
+  var LKey, LIV, LPlain, LAAD, LCipher, LTag, LDecrypted: TBytes; LOk: Boolean;
+  begin
+    LKey := HexToBytes('000102030405060708090a0b0c0d0e0f');
+    LIV := HexToBytes('000102030405060708090a0b');
+    LPlain := HexToBytes('00070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b7279');
+    LAAD := HexToBytes('000005fa');
+    LOk := PurePascalAESGCMEncrypt(LKey, LIV, LPlain, LAAD, LCipher, LTag);
+    CheckTrue(LOk);
+    CheckEqual('5af1b7a95577faf8735b26f9b2d5379a', BytesToHex(LTag));
+    LOk := PurePascalAESGCMDecrypt(LKey, LIV, LCipher, LTag, LAAD, LDecrypted);
+    CheckTrue(LOk);
+    CheckEqual(BytesToHex(LPlain), BytesToHex(LDecrypted));
+  end);
+
+  LSuite.Test('agg path 256B (4 groups) external vector', procedure
+  var LKey, LIV, LPlain, LAAD, LCipher, LTag, LDecrypted: TBytes; LOk: Boolean;
+  begin
+    LKey := HexToBytes('000102030405060708090a0b0c0d0e0f');
+    LIV := HexToBytes('000102030405060708090a0b');
+    LPlain := HexToBytes('00070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f9');
+    LAAD := HexToBytes('000005fa');
+    LOk := PurePascalAESGCMEncrypt(LKey, LIV, LPlain, LAAD, LCipher, LTag);
+    CheckTrue(LOk);
+    CheckEqual('e700078b668c91310499a3d1c857bfff', BytesToHex(LTag));
+    LOk := PurePascalAESGCMDecrypt(LKey, LIV, LCipher, LTag, LAAD, LDecrypted);
+    CheckTrue(LOk);
+    CheckEqual(BytesToHex(LPlain), BytesToHex(LDecrypted));
+  end);
+
   LSuite.Test('tampered tag rejected', procedure
   var LKey, LIV, LPlain, LAAD, LCipher, LTag, LBadTag, LDecrypted: TBytes; LOk: Boolean;
   begin
