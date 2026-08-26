@@ -272,20 +272,22 @@ begin
   AResult := LRes;
 end;
 
-{ 轮询到页面 body 出现文本为止（加载完成的事实探针） }
+{ 轮询到页面 body 出现文本为止（加载完成的事实探针）。
+  预算取宽裕值：九门连跑或他 lane 编译并行的负载下，WebKit 子进程
+  拉起与导航可能远慢于空闲态 }
 function WaitForBodyText(AWin: IWebviewWindow): string;
 var
   I: Integer;
 begin
   Result := '';
-  for I := 0 to 400 do
+  for I := 0 to 1000 do
   begin
     GTK_main_iteration_do(0);
     Sleep(5);
     if I mod 20 = 19 then
     begin
       EvalAwait(AWin, 'document.body?document.body.innerText:""',
-        Result, 200);
+        Result, 600);
       if (Result <> '') and (Result <> '""') then Exit;
     end;
   end;
@@ -304,15 +306,15 @@ begin
     '").then(function(r){return r.text();})' +
     '.then(function(t){window.__npwp=t;},' +
     'function(){window.__npwp="ERR";});window.__npwp';
-  EvalAwait(AWin, LJs, AResult, 200);
+  EvalAwait(AWin, LJs, AResult, 400);
   I := 0;
   while Pos('PENDING', AResult) > 0 do
   begin
     Inc(I);
-    if I > 600 then Break;
+    if I > 1200 then Break;
     GTK_main_iteration_do(0);
     Sleep(5);
-    EvalAwait(AWin, 'window.__npwp', AResult, 200);
+    EvalAwait(AWin, 'window.__npwp', AResult, 400);
   end;
 end;
 
@@ -390,6 +392,9 @@ begin
   end;
   try
     try
+      { 创建后先泵一拍：给 WebKit 子进程（WebProcess/NetworkProcess）
+        拉起时间，降低并发导航下的首探针超时概率 }
+      PumpGtk(50);
       P1Obj := TTagProvider.Create;
       P1Obj.Tag := 'one';
       P2Obj := TTagProvider.Create;
