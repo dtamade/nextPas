@@ -13,8 +13,11 @@ uses
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.keys,
+  nextpas.core.ssh.rsa,
   nextpas.core.crypto.ed25519,
+  nextpas.core.crypto.hash,
   nextpas.core.encoding.base64,
+  ssh_rsa_kat,
   nextpas.core.test;
 
 function PatternBytes(APattern: Byte; ACount: Integer): TBytes;
@@ -134,6 +137,48 @@ begin
     + '-----END OPENSSH PRIVATE KEY-----' + #10;
 end;
 
+{ RSA 公钥 wire blob：string("ssh-rsa") || mpint e || mpint n }
+function RsaPubBlob(const AE, AN: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(64);
+  try
+    LW.PutStringText('ssh-rsa');
+    LW.PutMPInt(AE);
+    LW.PutMPInt(AN);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
+{ RSA 私段：checkint x2 || string(type) || mpint n,e,d,iqmp,p,q || comment。
+  iqmp/p/q 用占位字节（解析器按序读出但不校验，签名只需 N/E/D）。}
+function MakeRsaPrivSection(ACheck: UInt32; const AN, AE, AD: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(512);
+  try
+    LW.PutUInt32(ACheck);
+    LW.PutUInt32(ACheck);
+    LW.PutStringText('ssh-rsa');
+    LW.PutMPInt(AN);
+    LW.PutMPInt(AE);
+    LW.PutMPInt(AD);
+    LW.PutMPInt(PatternBytes($AA, 128));
+    LW.PutMPInt(PatternBytes($BB, 128));
+    LW.PutMPInt(PatternBytes($CC, 128));
+    LW.PutStringText('s9-test');
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
 procedure ExpectKindError(const AContent: string; AExpected: TSshErrorKind;
   const AWhat: string);
 var
@@ -219,7 +264,7 @@ begin
     ExpectKindError(PemOf(LContainer), sekUnsupported, 'encrypted container');
   end);
 
-  LSuite.Test('non-ed25519 key type raises sekUnsupported', procedure
+  LSuite.Test('unsupported key type raises sekUnsupported', procedure
   var
     LSeed, LPub, LContainer, LParsedPub: TBytes;
     LKey: TSshPrivateKey;
@@ -227,9 +272,53 @@ begin
     SetLength(LSeed, 32);
     FillChar(LSeed[0], 32, $77);
     LPub := Ed25519PublicKeyFromPrivate(LSeed);
+    { ssh-dss：现代集合外，明确不支持（ssh-rsa 已支持，见下）}
     LContainer := CraftContainer('none', 'none', 1,
-      Ed25519PubBlob(LPub), MakePrivSection('ssh-rsa', 7, LPub, LSeed));
-    ExpectKindError(PemOf(LContainer), sekUnsupported, 'rsa key type');
+      Ed25519PubBlob(LPub), MakePrivSection('ssh-dss', 7, LPub, LSeed));
+    ExpectKindError(PemOf(LContainer), sekUnsupported, 'dss key type');
+  end);
+
+  LSuite.Test('rsa container parses', procedure
+  var
+    LN, LD, LPubBlob: TBytes;
+    LKey: TSshPrivateKey;
+  begin
+    LN := KatN;
+    LD := KatD;
+    CheckTrue(SshLoadPrivateKey(PemOf(CraftContainer('none', 'none', 1,
+      RsaPubBlob(HexToBytesKat(KAT_E_HEX), LN),
+      MakeRsaPrivSection(7, LN, HexToBytesKat(KAT_E_HEX), LD))),
+      LKey, LPubBlob));
+    CheckEqual(Ord(hkRsa), Ord(LKey.Kind));
+    CheckTrue(Length(LKey.RsaN) = 256, 'modulus must be 256 bytes');
+    CheckTrue(BytesToHex(LKey.RsaN) = BytesToHex(LN), 'modulus must roundtrip');
+    CheckTrue(BytesToHex(LKey.RsaE) = KAT_E_HEX, 'exponent must be 010001');
+    CheckTrue(BytesToHex(LKey.RsaD) = BytesToHex(LD), 'private exponent must roundtrip');
+    CheckTrue(Length(LPubBlob) > 4, 'pub blob must be present');
+  end);
+
+  { 签名路径黄金向量：与 openssl dgst -sign 输出逐字节一致
+    （PKCS#1 v1.5 确定性编码，允许精确断言）。}
+  LSuite.Test('rsa sign matches openssl goldens', procedure
+  var
+    LN, LD, LSig: TBytes;
+  begin
+    LN := KatN;
+    LD := KatD;
+
+    CheckTrue(RsaSignPkcs1v15(LN, LD, SHA256(KatMsg),
+      DIGEST_INFO_SHA256, LSig), 'sha256 sign must succeed');
+    CheckTrue(BytesToHex(LSig) = BytesToHex(KatSigSha256),
+      'sha256 signature must equal openssl output');
+
+    CheckTrue(RsaSignPkcs1v15(LN, LD, SHA512(KatMsg),
+      DIGEST_INFO_SHA512, LSig), 'sha512 sign must succeed');
+    CheckTrue(BytesToHex(LSig) = BytesToHex(KatSigSha512),
+      'sha512 signature must equal openssl output');
+
+    { 摘要错配 DigestInfo → 验签必须拒绝 }
+    CheckFalse(RsaVerifyPkcs1v15(HexToBytesKat(KAT_E_HEX), LN,
+      SHA512(KatMsg), DIGEST_INFO_SHA256, KatSigSha512));
   end);
 
   LSuite.Test('structure errors raise sekKeyFormat', procedure
