@@ -3,9 +3,14 @@
 **模块路径**：`core/src/nextpas.core.webview*.pas`
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
-**最后更新**：2026-08-25
-**版本**：1.1（S3——GTK 家族四单元 ffi/loader/win/backend 落地并过
-真实引擎 live 门禁；测试门扩至九个。语义变更须升版本号。）
+**最后更新**：2026-08-26
+**版本**：1.3（S5——多窗口资产按发起视图精确归属：scheme 请求经
+`get_web_view` 对回活跃窗口表，命名空间硬隔离，无视图请求回落最新
+活跃窗；自有 context 析构先摘注册表再 unref，杜绝地址复用误判；
+gtk_init 前恢复 IEEE 浮点屏蔽，根治引擎线程随机 EZeroDivide。
+承 S4：scheme 404 真实 GError、IsMinimized 查询式真值、
+DefaultWebviewKind 能力驱动、Builder.Kind() 显式钉后端、gtk Close
+幂等对齐；资产前缀路由语义钉死。九个测试门全绿。）
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
@@ -42,10 +47,14 @@ gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
   动态加载原语一律来自 `nextpas.core.platform.dl`，
   **禁止使用 FPC `DynLibs` 单元**（gate policy：raw host units 仅限 owner path）。
 
-**落地状态**（S3 后）：`base` / `intf` / `bridge` / `fake` / `factory` /
+**落地状态**（S5 后）：`base` / `intf` / `bridge` / `fake` / `factory` /
 门面与 `gtk.ffi` / `gtk.loader` / `gtk.win` / `gtk` 已全部落地；
 `gtk.win` 即 §1.1 预定的抽取预备缝（签名零 webview 概念）。
 webview2（W2）/ wk（W3）按波次接入同一 bridge 与 factory 位。
+S4 打磨：scheme 未命中走真实 GError 404；IsMinimized 查询式真值；
+DefaultWebviewKind 能力探测驱动（无 IFDEF）；资产路由语义见 §3。
+S5 多窗口：scheme 请求按发起视图精确归属，资产命名空间跨窗硬隔离
+（§5）。
 
 ### 注册表时机
 
@@ -185,7 +194,11 @@ EWebviewInvokeError        = class(EWebviewError);  // handler 内抛出的包�
 
 对外一律 interface（COM 引用计数），消费方不手写释放。
 `TWebviewBuilder.New` 同样返回 interface（factory 单元实现），链式配置后
-`Build`/`Run` 出窗口；生命周期归 COM 引用计数管理。
+`Build`/`Run` 出窗口；生命周期归 COM 引用计数管理。`Kind(AKind)` 显式钉
+后端（fake 等确定性场景的正规入口）；缺省 = `DefaultWebviewKind`
+能力驱动，`Build` 时不可用按工厂语义 fail-fast。builder 出的窗口与工厂
+路径同一生命周期纪律：消费方负责 `Close`（幂等），接口引用释放不替代
+关闭——真后端窗口不 Close 会保持活跃并阻塞 RunLoop 退出判定。
 
 ### 3.1 主线程投递
 
@@ -355,7 +368,11 @@ IWebviewAssetProvider = interface
 end;
 ```
 
-- 解析顺序 = mount 顺序（先挂先查）；默认建议 embedded 优先。
+- 前缀路由语义（S4 钉死，bridge 门禁回归覆盖）：
+  最长前缀唯一命中，同长并列取先挂；空前缀 = 根挂载匹配一切
+  （FPC `Pos('',s)` 返回 0，路由显式豁免）；请求路径归一为剥离前导
+  `/` 的相对形态，provider 收到同一形态；前缀命中但 provider 返回
+  False 即 404，不跨挂载回退（命名空间硬隔离）。
 - MIME 表内置 ~30 条常见映射，未命中回退 `application/octet-stream`。
 - scheme 名默认 `npres`；URL 形态 `npres://<mount>/<path>`。
 - **响应形态刻意取最简**（对齐决策，详见 PARITY-GO-RUST.md §4）：
@@ -404,6 +421,10 @@ procedure WebviewExitLoop;
   `WebviewRunLoop` 的单窗便捷封装。
 - 循环退出条件：最后一个未 Close 的窗口关闭（或 `WebviewExitLoop` 被调）；
   `OnWindowClosed` 在计数减一后触发，先于进程级退出判定。
+- **多窗口资产隔离**（S5）：同一 context 的 scheme handler 唯一，但请求
+  经发起视图精确归属所属窗口——各窗资产命名空间互不可见（跨窗请求
+  404），无视图请求（service worker）回落最新活跃窗口。gtk_backend
+  门禁以双窗 live 用例钉死该语义。
 
 - GTK：`gtk_main` / `gtk_main_quit`。
 - RunLoop 期间宿主不得再占用该线程做长计算；后台工作走第 4 节姿势。

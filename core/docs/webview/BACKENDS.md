@@ -78,9 +78,23 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 >   视图一律 `new_with_context` 创建，scheme 先于视图注册。
 > - eval 结果文本：null/undefined 诚实序列化为 'null'；不可 JSON 化
 >   值降级 JSC toString 文本。
-> - scheme 404 当前以正文诚实返回（finish text/html），HTTP 级错误码
->   语义留待 GError 路径 S4 精化。
-> - IsMinimized 为本地跟踪（window-state-event 解析 S4 精化）；
+> - scheme 404 已走真实 GError 路径（S4）：`finish_error(quark
+>   'nextpas-webview', 404)`，GError 所有权随调用移交 WebKit；
+>   页面侧 `fetch` 以 reject 呈现，与 HTTP 语义对齐。
+> - scheme 请求归属（S5）：context 级单 handler 限制下，经
+>   `webkit_uri_scheme_request_get_web_view` 对回活跃窗口表按发起
+>   视图精确路由——多窗口资产命名空间硬隔离（live 双窗门禁覆盖）；
+>   service worker 等无视图请求回落"最新活跃窗口"。
+> - 浮点异常屏蔽（S5）：gtk_init 前恢复 IEEE 全屏蔽。FPC RTL 默认
+>   解封 FP 异常且内核 clone 的子线程继承创建者控制字——GDK/JSC 等
+>   引擎代码里合法的除零值运算（预期 ±Inf）会陷阱成随机位置
+>   EZeroDivide（gdb 实锤于 libgdk-3 主线程）。C 宿主默认带屏蔽，
+>   我们对齐同一语义；仅本进程内生效。
+> - 自有 context（ephemeral / DataDirectory）生命周期归窗口：析构时
+>   先摘 scheme 注册表再 unref——顺序不可反，注册表按指针地址判重，
+>   后摘会误删复用同址的新 context 条目。
+> - IsMinimized 为查询式真值（S4）：`gdk_window_get_state` 与
+>   `GDK_WINDOW_STATE_ICONIFIED` 位与，不做 C 结构布局解析；
 >   Maximized/Visible/几何均为引擎实时真值。
 
 ### 2.3 主线程唤醒

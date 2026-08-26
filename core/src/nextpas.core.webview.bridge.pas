@@ -458,7 +458,10 @@ begin
   LBest := -1;
   LLen := -1;
   for I := 0 to High(FMounts) do
-    if (Pos(FMounts[I].Prefix, LPath) = 1) and
+    { 空前缀 = 根挂载匹配一切（FPC Pos('',s) 返回 0，须显式豁免）；
+      同长并列取先挂者——与 CONTRACT §3 解析顺序一致 }
+    if ((FMounts[I].Prefix = '') or
+        (Pos(FMounts[I].Prefix, LPath) = 1)) and
        (Length(FMounts[I].Prefix) > LLen) then
     begin
       LBest := I;

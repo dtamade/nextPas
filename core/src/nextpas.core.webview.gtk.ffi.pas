@@ -22,6 +22,11 @@ type
   gchar = AnsiChar;
   Pgchar = ^gchar;
   PPAnsiChar = ^PAnsiChar;
+  GQuark = Cardinal;
+
+const
+  { GdkWindowState 位（gdkevents.h GEnum 序） }
+  GDK_WINDOW_STATE_ICONIFIED = 1 shl 1;
 
 const
   { GLib 主循环源返回值 }
@@ -76,7 +81,13 @@ var
     AConnectFlags: guint): gulong; cdecl;
   G_memory_input_stream_new_from_data: function(AData: Pointer;
     ALen: gssize; ADestroy: TGDestroyNotify): Pointer; cdecl;
+  G_malloc: function(ASize: NativeUInt): Pointer; cdecl;
   G_free: procedure(AMem: Pointer); cdecl;
+  G_quark_from_static_string: function(AString: PAnsiChar): GQuark; cdecl;
+  G_cancellable_new: function: Pointer; cdecl;
+  G_cancellable_cancel: procedure(ACancellable: Pointer); cdecl;
+  G_error_new_literal: function(ADomain: GQuark; ACode: Int32;
+    AMessage: PAnsiChar): PGError; cdecl;
 
   { ---- GObject（libgobject-2.0）---- }
   G_object_unref: procedure(AObj: Pointer); cdecl;
@@ -105,6 +116,7 @@ var
   GTK_widget_destroy: procedure(AWidget: Pointer); cdecl;
   GTK_widget_get_allocated_width: function(AWidget: Pointer): Int32; cdecl;
   GTK_widget_get_allocated_height: function(AWidget: Pointer): Int32; cdecl;
+  GDK_window_get_state: function(AWindow: Pointer): guint; cdecl;
   GTK_container_add: procedure(AContainer: Pointer; AWidget: Pointer); cdecl;
   GTK_main: procedure; cdecl;
   GTK_main_quit: procedure; cdecl;
@@ -177,6 +189,8 @@ var
     : PAnsiChar; cdecl;
   WEBKIT_uri_scheme_request_get_path: function(ARequest: Pointer)
     : PAnsiChar; cdecl;
+  WEBKIT_uri_scheme_request_get_web_view: function(ARequest: Pointer)
+    : Pointer; cdecl;
   WEBKIT_uri_scheme_request_finish: procedure(ARequest: Pointer;
     AStream: Pointer; AStreamLength: gssize; AMimeType: PAnsiChar); cdecl;
   WEBKIT_uri_scheme_request_finish_error: procedure(ARequest: Pointer;
