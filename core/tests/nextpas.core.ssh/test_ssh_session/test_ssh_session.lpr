@@ -339,6 +339,9 @@ type
   private
     FEnd: TMemPipeEnd;
     FSc: PSshLoopServerScenario;
+    { 客户端在 CHANNEL_OPEN 里声明的本地号；s→c 帧的 recipient 必须用它
+      （RFC 4254 §5：recipient 指接收方一侧的通道号），不能填服务端自编号 }
+    FClientChannelId: UInt32;
     FRecvSeq, FSendSeq: UInt32;
     FRecv: ISshPacketReceiver;     { c→s 解码 }
     FSend: ISshPacketSender;       { s→c 编码 }
@@ -754,6 +757,7 @@ begin
             LR.ReadByte;
             LR.ReadStringText;                 { 'session' }
             LRid := LR.ReadUInt32;
+            FClientChannelId := LRid;
           finally
             LR.Free;
           end;
@@ -781,12 +785,12 @@ begin
             if LReqName = SSH_REQ_EXEC then
             begin
               if LWantReply then
-                ReplyPayload(ChannelReplyPayload(SRV_CHANNEL_ID, True));
+                ReplyPayload(ChannelReplyPayload(FClientChannelId, True));
               { 推送输出计划：两段 stdout、一段 stderr、exit-status }
               LW := TsshWriter.Create(64);
               try
                 LW.PutByte(SSH_MSG_CHANNEL_DATA);
-                LW.PutUInt32(SRV_CHANNEL_ID);
+                LW.PutUInt32(FClientChannelId);
                 LW.PutStringBytes(FSc^.StdOut1);
                 ReplyPayload(LW.ToBytes);
               finally
@@ -795,7 +799,7 @@ begin
               LW := TsshWriter.Create(64);
               try
                 LW.PutByte(SSH_MSG_CHANNEL_DATA);
-                LW.PutUInt32(SRV_CHANNEL_ID);
+                LW.PutUInt32(FClientChannelId);
                 LW.PutStringBytes(FSc^.StdOut2);
                 ReplyPayload(LW.ToBytes);
               finally
@@ -804,7 +808,7 @@ begin
               LW := TsshWriter.Create(64);
               try
                 LW.PutByte(SSH_MSG_CHANNEL_EXTENDED_DATA);
-                LW.PutUInt32(SRV_CHANNEL_ID);
+                LW.PutUInt32(FClientChannelId);
                 LW.PutUInt32(SSH_EXTENDED_DATA_STDERR);
                 LW.PutStringBytes(FSc^.StdErr);
                 ReplyPayload(LW.ToBytes);
@@ -814,7 +818,7 @@ begin
               LW := TsshWriter.Create(32);
               try
                 LW.PutByte(SSH_MSG_CHANNEL_REQUEST);
-                LW.PutUInt32(SRV_CHANNEL_ID);
+                LW.PutUInt32(FClientChannelId);
                 LW.PutStringText(SSH_REQ_EXIT_STATUS);
                 LW.PutBoolean(True);
                 LW.PutUInt32(FSc^.ExitCode);
@@ -822,11 +826,11 @@ begin
               finally
                 LW.Free;
               end;
-              { OpenSSH 语义：命令结束即关闭通道 }
-              ReplyPayload(SingleBytePayloadOf(SSH_MSG_CHANNEL_CLOSE));
+              { OpenSSH 语义：命令结束即关闭通道；CLOSE 同样带 recipient }
+              ReplyPayload(ClosePayload(FClientChannelId));
             end
             else if LWantReply then
-              ReplyPayload(ChannelReplyPayload(SRV_CHANNEL_ID, False));
+              ReplyPayload(ChannelReplyPayload(FClientChannelId, False));
           finally
             LR.Free;
           end;
@@ -837,7 +841,7 @@ begin
 
       SSH_MSG_CHANNEL_CLOSE:
         begin
-          ReplyPayload(SingleBytePayloadOf(SSH_MSG_CHANNEL_CLOSE));
+          ReplyPayload(ClosePayload(FClientChannelId));
           Exit;
         end;
     end;
