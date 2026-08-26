@@ -736,6 +736,33 @@ S.Token.Cancel;                                 // 协同停泵；Destroy 同步
   NEXTPAS_REDIS_TEST_CONN 门控）。吞吐基准段待 live redis 环境可用后补采
   入册（诚实缺席登记）。
 
+### 2.20 SQL 词法扫描共享引擎（V3-C6，nextpas.core.db.sqlscan）
+
+家族内五份复制的"字符串/标识符/注释状态机"（pg/mysql/odbc 三份占位符
+翻译 + pg.conn 参数计数 + bytea 装饰）收敛为单一纯函数单元；四消费方
+薄委托、公开签名零变化。**换牙零漂移由黄金语料实证**：原实现 30 案例
+输出落盘 → 新引擎重放逐字节全等（含混合编号槽位 [2,1,3,2]、超 Int32
+编号回绕、未终止字面量等酷刑样本）。
+
+- **方言词法集记录化**：双引号/反引号/方括号标识符与 `#` 行注释四布尔
+  （DBSQLSCAN_PG/MYSQL/ODBC 常量）；词素互斥即方言隔离——pg 方言下
+  反引号是代码字符、mysql 下双引号是代码字符，与各后端历史行为一致。
+- **四公开面共享单遍引擎**：`SqlScanTranslateQuestion`（'?' 保形改写 +
+  物理序→逻辑号槽位计划）/`SqlScanRenderDollar`（?→$N，裸 ? 走顺序
+  计数、显式 ?N 不扰动）/`SqlScanMaxPlaceholderIndex`（原始编号计数，
+  零输出分配）/`SqlScanDecorate`（命中原位追加后缀如 ::bytea cast，
+  源数字回显不改写）。
+- **受控边界（历史行为成文保留，非缺陷）**：dollar-quote 体不识别；
+  行注释仅 #10 终止（#13 归注释体）；占位符数字累加无溢出防护
+  （回绕值如实入槽）；块注释起始 `/` 不落输出；mysql 方言不处理双引号
+  定界（默认 SQL_MODE 语义）。
+- **性能契约**：单遍扫 + StringBuilder 追加，dollar/count 路径不建槽数组
+  （pg 热路径零额外分配）；J1 开销比判据沿用。
+- 门禁：test_db_sqlscan 十二组离线全绿 heaptrc 0；回归七门
+  （pg/mysql_adapter/odbc_adapter/array_bind/stmt_cache/unified/
+  conformance）全绿。设计记录：
+  core/docs/plans/2026-08-26-db-v3-c6-sqlscan-extract-plan.md。
+
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
 旧入口名 `nextpas.core.sqlite` / `nextpas.core.pg` 曾在 G2 全量删除；
