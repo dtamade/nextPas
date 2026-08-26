@@ -336,6 +336,36 @@ begin
   LConn := nil;
 end;
 
+{ ---- 10b 微工作体高频提交（时序不变式 b 回归）----
+  工作体近零耗时：worker 可在 Submit 返回与末行取值之间完成整个
+  执行+finalize+Dispose 周期。若 Submit 入队后回读共享 op 槽（对
+  已释放记录的 HandleRef 做 AddRef）即 UAF——本段以 5 万次高频
+  提交放大该窗口做统计性覆盖；heaptrc 下同时压引用计数纪律。 }
+
+procedure TestTrivialBodyStress;
+const
+  N = 50000;
+var
+  LConn: IDbConnection;
+  LExec: TDbAsyncExecutor;
+  LH: IDbAsyncHandle;
+  I: Integer;
+begin
+  LExec := NewSqliteExec(LConn);
+  try
+    for I := 1 to N do
+    begin
+      LH := LExec.Submit(procedure begin end);
+      Check(LH.WaitFor(30000), 'trivial op done');
+      LH := nil;
+    end;
+    Check(not LExec.InFlight, 'no residue in flight slot');
+  finally
+    LExec.Free;
+    LConn := nil;
+  end;
+end;
+
 { ---- 11 pg 提交/等待往返 ---- }
 
 procedure TestPgRoundtrip;
@@ -475,6 +505,7 @@ begin
   T.Test('sqlite consumer drops handle early', @TestConsumerDropsHandleEarly);
   T.Test('sqlite destroy waits inflight', @TestDestroyWaitsInflight);
   T.Test('sqlite sync path unaffected', @TestSyncPathUnaffected);
+  T.Test('sqlite trivial body stress (invariant b)', @TestTrivialBodyStress);
   T.Test('pg submit wait roundtrip', @TestPgRoundtrip);
   T.Test('pg real cancel 57014', @TestPgRealCancel);
   T.Test('pg single flight reject recover', @TestPgSingleFlight);
