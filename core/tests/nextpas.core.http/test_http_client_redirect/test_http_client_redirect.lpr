@@ -85,6 +85,11 @@ var
 type
   TTrackedRequestBody = class;
 
+  TChunkCallbackProbe = class
+  public
+    procedure Consume(const AData: PByte; ASize: SizeUInt);
+  end;
+
   PServerCtx = ^TServerCtx;
   TServerCtx = record
     Server: THttpServer;
@@ -115,6 +120,10 @@ type
     FSeenWwwAuthenticateHeader: string;
     FSeenCookieHeader: string;
     FSeenCookie2Header: string;
+    FSecondHasOptions: Boolean;
+    FSecondHasChunkCallback: Boolean;
+    FSecondSkipBodyBuffer: Boolean;
+    FSecondHasCancelToken: Boolean;
   public
     constructor Create; overload;
     constructor Create(const ATrackedBody: TTrackedRequestBody); overload;
@@ -141,6 +150,10 @@ type
     property SeenWwwAuthenticateHeader: string read FSeenWwwAuthenticateHeader;
     property SeenCookieHeader: string read FSeenCookieHeader;
     property SeenCookie2Header: string read FSeenCookie2Header;
+    property SecondHasOptions: Boolean read FSecondHasOptions;
+    property SecondHasChunkCallback: Boolean read FSecondHasChunkCallback;
+    property SecondSkipBodyBuffer: Boolean read FSecondSkipBodyBuffer;
+    property SecondHasCancelToken: Boolean read FSecondHasCancelToken;
   end;
 
   TNilResponseTransport = class(TInterfacedObject, IHttpTransport)
@@ -1488,6 +1501,10 @@ begin
   inherited Create;
 end;
 
+procedure TChunkCallbackProbe.Consume(const AData: PByte; ASize: SizeUInt);
+begin
+end;
+
 constructor TRedirectCaptureTransport.Create(const ATrackedBody: TTrackedRequestBody);
 begin
   Create;
@@ -1501,6 +1518,7 @@ var
   LStatus: THttpStatus;
   LUrl: TUrl;
   LBody: string;
+  LReqOpts: IHttpRequestWithOptions;
 begin
   Inc(FCalls);
   LBody := ReadReaderStr(AReq.Body);
@@ -1522,6 +1540,15 @@ begin
   FOriginalBodyClosedBeforeFollowup := (FTrackedBody <> nil) and
     FTrackedBody.Closed;
   FSecondBody := LBody;
+  FSecondHasOptions := Supports(AReq, IHttpRequestWithOptions, LReqOpts);
+  if FSecondHasOptions then
+  begin
+    FSecondHasChunkCallback :=
+      Assigned(LReqOpts.RequestOptions.ResponseBodyChunk);
+    FSecondSkipBodyBuffer := LReqOpts.RequestOptions.SkipBodyBuffer;
+    FSecondHasCancelToken :=
+      LReqOpts.RequestOptions.EffectiveCancelToken <> nil;
+  end;
   LUrl := AReq.Url;
   FSeenMethod := AReq.Method;
   FSeenScheme := LUrl.Scheme;
@@ -4309,6 +4336,43 @@ begin
     'HttpEnsureSuccess non-2xx uses CreateOp with Op=ensure');
 end;
 
+procedure TestClientRedirectPreservesStreamingOptions;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LProbe: TChunkCallbackProbe;
+  LToken: IHttpCancelToken;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+  LProbe := TChunkCallbackProbe.Create;
+  LToken := NewHttpCancelToken;
+  try
+    LReq := THttpRequestBuilder.Create(hmGet, 'http://redirect.test/old')
+      .ResponseBodyChunk(@LProbe.Consume)
+      .SkipBodyBuffer
+      .CancelToken(LToken)
+      .Build;
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'streaming redirect reaches final response');
+    Check(LTransportObj.SecondHasOptions,
+      'redirect follow-up keeps request options interface');
+    Check(LTransportObj.SecondHasChunkCallback,
+      'redirect follow-up preserves response chunk callback');
+    Check(LTransportObj.SecondSkipBodyBuffer,
+      'redirect follow-up preserves SkipBodyBuffer');
+    Check(LTransportObj.SecondHasCancelToken,
+      'redirect follow-up preserves cancel token');
+  finally
+    LProbe.Free;
+  end;
+end;
+
 { HttpPostString/PutString/PatchString/DeleteString tests }
 
 { Main }
@@ -4401,5 +4465,7 @@ begin
     @TestStreamingBodyOwnershipOnRedirect);
   T.Test('Client redirect CreateOp source contract',
     @TestClientRedirectCreateOpSourceContract);
+  T.Test('Client redirect preserves streaming request options',
+    @TestClientRedirectPreservesStreamingOptions);
   if not T.Run then Halt(1);
 end.
