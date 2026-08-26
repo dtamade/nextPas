@@ -116,6 +116,7 @@ type
     function IsVisible: Boolean;
     procedure Focus; virtual;
     procedure SetTitle(const ATitle: string); virtual;
+    function GetTitle: string; virtual;
     procedure SetBounds(AWidth, AHeight: Integer); virtual;
     function GetWidth: Integer;
     function GetHeight: Integer;
@@ -1014,6 +1015,19 @@ procedure TGtkWebview.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   WinShellSetTitle(FWin, ATitle);
+end;
+
+function TGtkWebview.GetTitle: string;
+var
+  LRaw: PAnsiChar;
+begin
+  RequireOpen;
+  { WM 级标题同步读：未显式设置过为空串（诚实表，见 BACKENDS §2） }
+  LRaw := GTK_window_get_title(FWin);
+  if LRaw <> nil then
+    Result := StrPas(LRaw)
+  else
+    Result := '';
 end;
 
 procedure TGtkWebview.SetBounds(AWidth, AHeight: Integer);

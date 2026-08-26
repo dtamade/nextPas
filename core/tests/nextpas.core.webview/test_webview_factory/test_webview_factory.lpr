@@ -92,8 +92,8 @@ procedure TestBuilderAppliesAllFields;
 var
   W: IWebviewWindow;
 begin
-  { 接口面无 Title getter（只有 Set）；构造期字段经 fake 行为面校验：
-    几何直接断言，标题/可缩放等由 options→CreateFakeWebview 路径在
+  { 构造期字段经 fake 行为面校验：几何与标题直接断言，可缩放等由
+    options→CreateFakeWebview 路径在
     fake_window gate 覆盖。Kind(wvFake) 钉确定性后端——缺省 kind 在
     探测到 WebKitGTK 的机器上是 wvGtk，几何断言只对 fake 语义成立。
     此处锁 fluent 链不丢字段。 }
@@ -111,6 +111,7 @@ begin
   try
     CheckEqual(1200, W.GetWidth);
     CheckEqual(800, W.GetHeight);
+    CheckEqual('Factory', W.GetTitle, 'builder applies title');
     Check(not W.IsClosed, 'built window is open');
   finally
     if (W <> nil) and not W.IsClosed then
