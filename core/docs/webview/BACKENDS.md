@@ -81,6 +81,9 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 > - scheme 404 已走真实 GError 路径（S4）：`finish_error(quark
 >   'nextpas-webview', 404)`，GError 所有权随调用移交 WebKit；
 >   页面侧 `fetch` 以 reject 呈现，与 HTTP 语义对齐。
+> - 桥回执 eval（SendReceipt）为 fire-and-forget，不入在途登记：
+>   回执无用户回调、无恰好一次语义；若与 Close 竞态，最坏即页面未
+>   收到回执（与页面已销毁的观察一致），且不存在可悬挂的记录分配。
 > - scheme 请求归属（S5）：context 级单 handler 限制下，经
 >   `webkit_uri_scheme_request_get_web_view` 对回活跃窗口表按发起
 >   视图精确路由——多窗口资产命名空间硬隔离（live 双窗门禁覆盖）；

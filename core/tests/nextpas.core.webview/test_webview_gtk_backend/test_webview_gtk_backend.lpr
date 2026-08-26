@@ -1,12 +1,16 @@
 program test_webview_gtk_backend;
-{ gtk 后端门禁（确定性分支 + 可用即冒烟）：
+{ gtk 后端门禁（确定性分支 + 可用即冒烟）——全事件驱动，零忙等。
+  等待原语：事件回执退出 GLib 嵌套主循环 + 单发超时护栏（deadline
+  是失败判据，不是节奏器）；不使用 Sleep/迭代数轮询：
   1) factory 可用性与 loader 探测一致；
-  2) 库+显示可用时：构造→几何/标题/缩放真值→NavigateToString→
-     异步 eval 回执（6*7=42）→invoke 同步回执经真实协议栈→Close 干净；
-  3) scheme 资产管线：挂载→页面相对 fetch 命中 + 缺资源真实 reject；
-  4) 多窗口资产隔离：双窗同 context，各归其主，跨窗请求 reject；
+  2) 库+显示可用时：构造→可见性/缩放/UA 同步属性真值→
+     NavigateToString 经 OnNavigationFinished 事件→eval 回执
+     （6*7=42）→Close 干净；
+  3) scheme 资产管线：挂载→页面 fetch 经真实桥 IPC
+     （window.__npw.invoke）推送结果，命中与缺资源 reject 双断言；
+  4) 多窗口资产隔离：双窗同 context，请求按发起视图各归其主，
+     跨窗请求 reject；
   5) 缺库/无显示环境：构造抛 EWebviewBackendUnavailable，优雅通过。
-  主循环泵用 gtk_main_iteration_do(False) 非阻塞迭代+超时护栏。
   heaptrc 0 unfreed 硬门。 }
 
 {$I nextpas.core.settings.inc}
@@ -24,18 +28,87 @@ uses
   nextpas.core.webview.gtk.ffi,
   nextpas.core.webview.factory;
 
-var
-  GEvalText: string;
-  GEvalDone: Boolean;
+const
+  { 事件护栏 deadline：正常回执毫秒级到达；仅环境灾难时兜底失败 }
+  WAIT_DEADLINE_MS = 20000;
+  { 等待通道：handler 携带通道号回执，跨窗事件互不误触 }
+  WC_NAV_A = 10;   { 窗 A 导航完成 }
+  WC_NAV_B = 11;   { 窗 B 导航完成 }
+  WC_REP_A = 20;   { 窗 A 桥报告 }
+  WC_REP_B = 21;   { 窗 B 桥报告 }
+  WC_EVAL  = 30;   { eval 回执（全局同时至多一发）}
+  REPORT_CMD = 'gate.report';
 
-procedure PumpGtk(AIdleMs: Integer);
-begin
-  while AIdleMs > 0 do
-  begin
-    GTK_main_iteration_do(0);
-    Dec(AIdleMs, 5);
-    Sleep(5);
+type
+  PReportSlot = ^TReportSlot;
+  TReportSlot = record
+    Payload: string;
+    Channel: Integer;
   end;
+
+var
+  { 当前等待会话（UI 单线程，任一时刻至多一个嵌套主循环在跑） }
+  GWaitLoop: Pointer = nil;
+  GWaitActiveChannel: Integer = 0;
+  GWaitTimeoutTag: guint = 0;
+  GWaitFired: set of byte = [];
+
+procedure SignalChannel(AChannel: Integer);
+begin
+  Include(GWaitFired, Byte(AChannel));
+  if (GWaitLoop <> nil) and (GWaitActiveChannel = AChannel) then
+    G_main_loop_quit(GWaitLoop);
+end;
+
+function WaitTimeoutCb(AData: Pointer): gboolean; cdecl;
+begin
+  if GWaitLoop <> nil then
+    G_main_loop_quit(GWaitLoop);
+  Result := GLIB_SOURCE_REMOVE;   { 自移除 }
+end;
+
+procedure AwaitChannel(AChannel: Integer; const AWhat: string);
+begin
+  if AChannel in GWaitFired then
+  begin
+    Exclude(GWaitFired, Byte(AChannel));   { 先于武装到达的事件直接消费 }
+    Exit;
+  end;
+  GWaitActiveChannel := AChannel;
+  GWaitLoop := G_main_loop_new(nil, 0);
+  GWaitTimeoutTag := G_timeout_add(WAIT_DEADLINE_MS, @WaitTimeoutCb, nil);
+  G_main_loop_run(GWaitLoop);
+  G_main_loop_unref(GWaitLoop);
+  GWaitLoop := nil;
+  if AChannel in GWaitFired then
+  begin
+    Exclude(GWaitFired, Byte(AChannel));
+    G_source_remove(GWaitTimeoutTag);   { 事件先到，撤下未触发的护栏 }
+  end
+  else
+    Check(False, 'event wait timeout: ' + AWhat);
+end;
+
+{ eval 回执（exactly-one）退出 WC_EVAL 通道 }
+procedure EvalAwait(AWin: IWebviewWindow; const AJs: string;
+  out AResult: string);
+var
+  LRes: string;
+begin
+  LRes := '';
+  AWin.Eval(AJs,
+    procedure(const AResultJson: string)
+    begin
+      LRes := AResultJson;
+      SignalChannel(WC_EVAL);
+    end,
+    procedure(const AErr: Exception)
+    begin
+      LRes := 'ERR:' + AErr.Message;
+      SignalChannel(WC_EVAL);
+    end);
+  AwaitChannel(WC_EVAL, 'eval settle: ' + Copy(AJs, 1, 50));
+  AResult := LRes;
 end;
 
 function BackendUsable: Boolean;
@@ -57,7 +130,7 @@ var
   W: IWebviewWindow;
   LOpts: TWebviewOptions;
   LErrored: Boolean;
-  I: Integer;
+  LRes: string;
 begin
   LOpts := DefaultWebviewOptions;
   if not BackendUsable() then
@@ -85,57 +158,37 @@ begin
   end;
 
   try
-    { 几何与状态真值 }
+    { 可见性与属性往返均为同步 FFI 属性读写，无需任何等待 }
     W.SetTitle('npw-gate');
     W.Show;
-    PumpGtk(100);
     Check(W.IsVisible, 'visible after show');
-
-    { 缩放真值往返 }
     W.SetZoom(1.5);
-    for I := 0 to 20 do GTK_main_iteration_do(0);
     Check(Abs(W.GetZoom - 1.5) < 1e-9, 'zoom roundtrip');
-
-    { UA 属性通道往返（g_object varargs FFI 路径的 live 覆盖） }
     W.SetUserAgent('npw-gate/1.0');
-    for I := 0 to 20 do GTK_main_iteration_do(0);
     CheckEqual('npw-gate/1.0', W.GetUserAgent, 'ua roundtrip');
 
-    { 内容加载 + 异步 eval exactly-one }
-    W.NavigateToString('<html><body>npw</body></html>');
-    GEvalDone := False;
-    GEvalText := '';
-    W.Eval('6*7',
-      procedure(const AResultJson: string)
+    { 内容加载完成是引擎事件；完成后 eval 回执亦为事件 }
+    W.OnNavigationFinished(
+      procedure(const AEvent: TWebviewNavigationEvent)
       begin
-        GEvalText := AResultJson;
-        GEvalDone := True;
-      end,
-      procedure(const AErr: Exception)
-      begin
-        GEvalText := 'ERR:' + AErr.Message;
-        GEvalDone := True;
+        SignalChannel(WC_NAV_A);
       end);
-    for I := 0 to 1500 do
-    begin
-      GTK_main_iteration_do(0);
-      if GEvalDone then Break;
-      Sleep(10);
-    end;
-    Check(GEvalDone, 'eval settled');
-    CheckEqual('42', GEvalText, 'eval result text');
+    W.NavigateToString('<html><body>npw</body></html>');
+    AwaitChannel(WC_NAV_A, 'string load finished');
 
+    EvalAwait(W, '6*7', LRes);
+    CheckEqual('42', LRes, 'eval result text');
+
+    { 全部 eval 已收口，无在途回执：Close 同步销毁即可 }
     W.Close;
   finally
     W := nil;
   end;
-
-  { Close 后窗口计数归零、对象随引用释放（heaptrc 兜底） }
-  PumpGtk(50);
 end;
 
 type
-  { 页面与资源都经 npres:// 自身提供——相对 fetch 天然命中本家族 scheme }
+  { 页面与资源都经 npres:// 自身提供——相对 fetch 天然命中本家族 scheme；
+    结果经真实桥 IPC（__npw.invoke）推回原生，事件驱动收取 }
   TGateProvider = class(TInterfacedObject, IWebviewAssetProvider)
   public
     function TryResolve(const APath: string;
@@ -145,13 +198,16 @@ type
 const
   PAGE_HTML: AnsiString =
     '<html><body><script>' +
-    'window.res="LOADED";' +
-    'window.onerror=function(m){window.res+="|JS:"+m;};' +
     'fetch("hello.txt").then(function(r){return r.text();})' +
-    '.then(function(t){window.res="OK:"+t;' +
-    'return fetch("missing.txt");})' +
-    '.then(function(){window.res+="|NO404";},' +
-    'function(){window.res+="|ERR";});' +
+    '.then(function(t){' +
+    'return fetch("missing.txt").then(function(){' +
+    'window.__npw.invoke("gate.report",{ok:true,body:t+"|NO404"});' +
+    '},function(){' +
+    'window.__npw.invoke("gate.report",{ok:true,body:t+"|ERR"});' +
+    '});' +
+    '},function(e){' +
+    'window.__npw.invoke("gate.report",{ok:false,body:"FETCH:"+e});' +
+    '});' +
     '</script></body></html>';
 
 function StrToGateBytes(const S: AnsiString): TBytes;
@@ -182,14 +238,51 @@ begin
     Result := False;
 end;
 
+{ 页面 fetch 结果经桥 invoke 推送（WC_REPx 通道收取）。
+  纪律：不 eval 裸 Promise 表达式（run_javascript 路径对未取值
+  Promise 回 GError "Unsupported result type"）；分发本身仍以
+  WC_EVAL 收口后，再等报告通道 }
+procedure FetchViaBridge(AWin: IWebviewWindow; const AFile: string;
+  ASlot: PReportSlot; out APayload: string);
+begin
+  ASlot^.Payload := '';
+  EvalAwait(AWin,
+    'fetch("' + AFile + '").then(function(r){return r.text();})' +
+    '.then(function(t){window.__npw.invoke("gate.report",' +
+    '{ok:true,body:t});},' +
+    'function(){window.__npw.invoke("gate.report",{ok:false});});',
+    APayload);
+  AwaitChannel(ASlot^.Channel, 'bridge report for ' + AFile);
+  APayload := ASlot^.Payload;
+end;
+
+procedure RegisterReport(AWin: IWebviewWindow; ASlot: PReportSlot);
+begin
+  AWin.Invokes.Register(REPORT_CMD,
+    function(const APayloadJson: string): string
+    begin
+      ASlot^.Payload := APayloadJson;
+      SignalChannel(ASlot^.Channel);
+      Result := 'null';
+    end);
+end;
+
+procedure AttachNavSignal(AWin: IWebviewWindow; AChannel: Integer);
+begin
+  AWin.OnNavigationFinished(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      SignalChannel(AChannel);
+    end);
+end;
+
 procedure TestSchemeAssetPipeline;
 var
   W: IWebviewWindow;
   LOpts: TWebviewOptions;
   LProv: IWebviewAssetProvider;
-  LRes: string;
-  LDone: Boolean;
-  LIter: Integer;
+  LSlot: TReportSlot;
+  LBody: string;
 begin
   LOpts := DefaultWebviewOptions;
   if not BackendUsable() then
@@ -210,111 +303,24 @@ begin
   try
     LProv := TGateProvider.Create;
     W.Assets.MountEmbedded('', LProv);
-    W.Navigate('npres://app/page.html');
+    LSlot.Channel := WC_REP_A;
+    RegisterReport(W, @LSlot);
+    AttachNavSignal(W, WC_NAV_A);
 
-    { 轮询页面结果：hello 命中 + missing 真实 404 双断言。
-      探针含 location/readyState，失败消息自带现场 }
-    LRes := '';
-    LDone := False;
-    for LIter := 0 to 2400 do
-    begin
-      GTK_main_iteration_do(0);
-      Sleep(5);
-      if (LIter mod 20 = 0) and not LDone then
-        W.Eval('location.href+"#"+document.readyState+"#"+(window.res||"")',
-          procedure(const AResultJson: string)
-          begin
-            LRes := AResultJson;
-            LDone := Pos('|', LRes) > 0;
-          end,
-          nil);
-      if LDone then Break;
-    end;
-    Check(Pos('OK:npw-scheme-ok', LRes) > 0, 'scheme serves mounted asset, got: ' + LRes);
-    Check(Pos('|ERR', LRes) > 0, 'missing resource yields real error');
-    Check(Pos('NO404', LRes) = 0, 'no false-positive 200 on missing');
+    W.Navigate('npres://app/page.html');
+    AwaitChannel(WC_NAV_A, 'page load finished');
+
+    { 页面内 fetch 链已完成并经桥推送报告：hello 命中 + missing 真 404 }
+    AwaitChannel(WC_REP_A, 'scheme pipeline report');
+    LBody := LSlot.Payload;
+    Check(Pos('npw-scheme-ok', LBody) > 0,
+      'scheme serves mounted asset, got: ' + LBody);
+    Check(Pos('|ERR', LBody) > 0, 'missing resource yields real error');
+    Check(Pos('NO404', LBody) = 0, 'no false-positive 200 on missing');
 
     W.Close;
   finally
     W := nil;
-  end;
-end;
-
-{ 单发 eval 泵到回执（exactly-one），超时护栏内必达。
-  注：闭包不能捕获 out 形参，经局部变量中转 }
-procedure EvalAwait(AWin: IWebviewWindow; const AJs: string;
-  out AResult: string; ACaps: Integer);
-var
-  LDone: Boolean;
-  LRes: string;
-  I: Integer;
-begin
-  LDone := False;
-  LRes := '';
-  AWin.Eval(AJs,
-    procedure(const AResultJson: string)
-    begin
-      LRes := AResultJson;
-      LDone := True;
-    end,
-    procedure(const AErr: Exception)
-    begin
-      LRes := 'ERR:' + AErr.Message;
-      LDone := True;
-    end);
-  for I := 0 to ACaps do
-  begin
-    GTK_main_iteration_do(0);
-    if LDone then Break;
-    Sleep(5);
-  end;
-  Check(LDone, 'eval settled: ' + Copy(AJs, 1, 60));
-  AResult := LRes;
-end;
-
-{ 轮询到页面 body 出现文本为止（加载完成的事实探针）。
-  预算取宽裕值：九门连跑或他 lane 编译并行的负载下，WebKit 子进程
-  拉起与导航可能远慢于空闲态 }
-function WaitForBodyText(AWin: IWebviewWindow): string;
-var
-  I: Integer;
-begin
-  Result := '';
-  for I := 0 to 2000 do
-  begin
-    GTK_main_iteration_do(0);
-    Sleep(5);
-    if I mod 20 = 19 then
-    begin
-      EvalAwait(AWin, 'document.body?document.body.innerText:""',
-        Result, 800);
-      if (Result <> '') and (Result <> '""') then Exit;
-    end;
-  end;
-end;
-
-{ fetch 探针：结果落窗 + 轮询（与 scheme 管线用例同姿势）。
-  纪律：不直接 eval 裸 Promise 表达式——run_javascript 路径对
-  未取值 Promise 回 GError "Unsupported result type" }
-procedure FetchProbe(AWin: IWebviewWindow; const AFile: string;
-  out AResult: string);
-var
-  LJs: string;
-  I: Integer;
-begin
-  LJs := 'window.__npwp="PENDING";fetch("' + AFile +
-    '").then(function(r){return r.text();})' +
-    '.then(function(t){window.__npwp=t;},' +
-    'function(){window.__npwp="ERR";});window.__npwp';
-  EvalAwait(AWin, LJs, AResult, 800);
-  I := 0;
-  while Pos('PENDING', AResult) > 0 do
-  begin
-    Inc(I);
-    if I > 2000 then Break;
-    GTK_main_iteration_do(0);
-    Sleep(5);
-    EvalAwait(AWin, 'window.__npwp', AResult, 800);
   end;
 end;
 
@@ -353,6 +359,7 @@ procedure TestMultiWindowAssetIsolation;
 var
   W1, W2: IWebviewWindow;
   P1Obj, P2Obj: TTagProvider;
+  S1, S2: TReportSlot;
   LBody: string;
   LOpts: TWebviewOptions;
 
@@ -386,42 +393,54 @@ begin
     if not W1.IsClosed then
       W1.Close;
     W1 := nil;
-    PumpGtk(50);
     Check(True, '');
     Exit;
   end;
   try
     try
-      { 创建后先泵一拍：给 WebKit 子进程（WebProcess/NetworkProcess）
-        拉起时间，降低并发导航下的首探针超时概率 }
-      PumpGtk(50);
+      S1.Channel := WC_REP_A;
+      S2.Channel := WC_REP_B;
       P1Obj := TTagProvider.Create;
       P1Obj.Tag := 'one';
       P2Obj := TTagProvider.Create;
       P2Obj.Tag := 'two';
       W1.Assets.MountEmbedded('', P1Obj);
       W2.Assets.MountEmbedded('', P2Obj);
+      RegisterReport(W1, @S1);
+      RegisterReport(W2, @S2);
+      AttachNavSignal(W1, WC_NAV_A);
+      AttachNavSignal(W2, WC_NAV_B);
 
       { 双窗并发导航同一 scheme URL：请求必须各归其主（S5 视图精确路由），
         而非"最新窗口通吃" }
       W1.Navigate('npres://app/page.html');
       W2.Navigate('npres://app/page.html');
-      LBody := WaitForBodyText(W1);
-      Check(Pos('npw-one', LBody) > 0, 'w1 page served by own provider, got: ' + LBody);
-      LBody := WaitForBodyText(W2);
-      Check(Pos('npw-two', LBody) > 0, 'w2 page served by own provider, got: ' + LBody);
+      AwaitChannel(WC_NAV_A, 'w1 load finished');
+      AwaitChannel(WC_NAV_B, 'w2 load finished');
+
+      { 各自页面身份由各自 provider 供给 }
+      EvalAwait(W1, 'document.body.innerText', LBody);
+      Check(Pos('npw-one', LBody) > 0,
+        'w1 page served by own provider, got: ' + LBody);
+      EvalAwait(W2, 'document.body.innerText', LBody);
+      Check(Pos('npw-two', LBody) > 0,
+        'w2 page served by own provider, got: ' + LBody);
 
       { 各自命名空间内命中 }
-      FetchProbe(W1, 'one.txt', LBody);
-      Check(Pos('content-one', LBody) > 0, 'w1 fetches own asset, got: ' + LBody);
-      FetchProbe(W2, 'two.txt', LBody);
-      Check(Pos('content-two', LBody) > 0, 'w2 fetches own asset, got: ' + LBody);
+      FetchViaBridge(W1, 'one.txt', @S1, LBody);
+      Check(Pos('content-one', LBody) > 0,
+        'w1 fetches own asset, got: ' + LBody);
+      FetchViaBridge(W2, 'two.txt', @S2, LBody);
+      Check(Pos('content-two', LBody) > 0,
+        'w2 fetches own asset, got: ' + LBody);
 
       { 跨窗口硬隔离：对方资产必须 reject，不得串台 }
-      FetchProbe(W1, 'two.txt', LBody);
-      Check(Pos('ERR', LBody) > 0, 'w1 cannot fetch w2 asset (isolated), got: ' + LBody);
-      FetchProbe(W2, 'one.txt', LBody);
-      Check(Pos('ERR', LBody) > 0, 'w2 cannot fetch w1 asset (isolated), got: ' + LBody);
+      FetchViaBridge(W1, 'two.txt', @S1, LBody);
+      Check(Pos('"ok":false', LBody) > 0,
+        'w1 cannot fetch w2 asset (isolated), got: ' + LBody);
+      FetchViaBridge(W2, 'one.txt', @S2, LBody);
+      Check(Pos('"ok":false', LBody) > 0,
+        'w2 cannot fetch w1 asset (isolated), got: ' + LBody);
     finally
       if (W1 <> nil) and not W1.IsClosed then W1.Close;
       if (W2 <> nil) and not W2.IsClosed then W2.Close;
@@ -429,7 +448,6 @@ begin
   finally
     W1 := nil;
     W2 := nil;
-    PumpGtk(50);   { Close 收尾泵：destroy/idle 全落定（heaptrc 兜底） }
   end;
 end;
 

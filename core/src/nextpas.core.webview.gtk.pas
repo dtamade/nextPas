@@ -848,15 +848,26 @@ begin
   end;
 end;
 
+{ 内部回执 eval：fire-and-forget，不入在途登记。无用户回调需
+  恰好一次语义；若 Close 与分发竞态，最坏结果是页面未收到回执——
+  与页面已销毁的观察一致，且无任何记录可悬挂泄漏 }
 procedure TGtkWebview.SendReceipt(AFrameId: Int64; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
+var
+  LJs: string;
 begin
   if FClosed then
     Exit;
   if AIsError then
-    Eval(BuildRejectScript(AFrameId, ACode, AMessage), nil, nil)
+    LJs := BuildRejectScript(AFrameId, ACode, AMessage)
   else
-    Eval(BuildResolveScript(AFrameId, AResultJson), nil, nil);
+    LJs := BuildResolveScript(AFrameId, AResultJson);
+  if GtkLoadInfo().EvalPath = gepEvaluateJavascript then
+    WEBKIT_web_view_evaluate_javascript(FView, PAnsiChar(LJs),
+      Length(LJs), nil, nil, nil, nil, nil)
+  else
+    WEBKIT_web_view_run_javascript(FView, PAnsiChar(LJs),
+      nil, nil, nil);
 end;
 
 procedure TGtkWebview.PostIdle(AProc: TWebviewProcRef);
