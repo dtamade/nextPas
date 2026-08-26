@@ -9,17 +9,21 @@ program test_net_async_tlsfp;
   3. garbage-server       裸 TCP 服务端发非 TLS 字节 → 握手负码失败，
                           不外漏半开流
   4. dial-refused         拨号拒绝原样透传负码
-  5. verify-peer-raises   VerifyPeer=True 同步抛错（fail-closed 声明）
-  6. defaults             缺省选项字段
-  7. multi-write          同一连接两次顺序 AsyncWrite（回归：发送队列
+  5. defaults             缺省选项字段
+  6. multi-write          同一连接两次顺序 AsyncWrite（回归：发送队列
                           残留压实——旧实现第二次写会重放首条记录，
                           对端 AEAD 序列号错乱即断）
-  8. seam-dispatch        经 net.async.tls.AsyncTlsConnect +
+  7. seam-dispatch        经 net.async.tls.AsyncTlsConnect +
                           Backend=atbFreePascal 分发到本引擎打真机，
                           证明单一入口可选后端
+  8. verify-peer-success  CA 签发证书 + 匹配主机名：全链验证 +
+                          CV 签名校验通过，完整 GET
+  9. verify-untrusted     不受信锚（无关自签 CA）→ 负码失败
+ 10. hostname-mismatch    主机名不在 SAN → 即使链可信也失败
 
   外部对端 = openssl s_server（Makefile test 目标拉起/回收；无 openssl
-  时软跳过）。进程内垃圾服务端走同一事件循环，无线程、无阻塞 IO。 *}
+  时软跳过）。VerifyPeer 用例还需 Makefile 生成的测试 PKI（env 缺席
+  即不注册）。进程内垃圾服务端走同一事件循环，无线程、无阻塞 IO。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -446,40 +450,79 @@ begin
   Check(GCliErr < 0, 'negative passthrough code');
 end;
 
-procedure TestVerifyPeerRaises;
+{ VerifyPeer=True 的 e2e 驱动：信任锚 bundle + 期望的主机名 }
+procedure RunVerifiedGet(const ATrustBundle, AServerName: string);
 var
   LOpts: TAsyncTlsFpClientOptions;
-  LRaised: Boolean;
 begin
-  LOpts := DefaultAsyncTlsFpClientOptions;
-  LOpts.VerifyPeer := True;
-
-  { connect 路径需要活循环（提交后可能立即调度） }
-  GFinished := False;
+  ResetClientState;
   GLoop := TAsyncLoop.Create;
   try
-    LRaised := False;
-    try
-      AsyncTlsFpUpgrade(nil, nil, LOpts, @ReadyCb, nil);
-    except
-      on E: EInvalidOperationError do
-        LRaised := True;
-    end;
-    Check(LRaised, 'VerifyPeer=True raises fail-closed');
-
-    LRaised := False;
-    try
-      AsyncTlsFpConnect(GLoop, '127.0.0.1', cServerPort, LOpts, @ReadyCb,
-        nil);
-    except
-      on E: EInvalidOperationError do
-        LRaised := True;
-    end;
-    Check(LRaised, 'VerifyPeer=True raises on connect path too');
+    GLoop.Schedule(TDuration.FromSeconds(30), @StopCb, nil);
+    LOpts := DefaultAsyncTlsFpClientOptions;
+    LOpts.ServerName := AServerName;
+    LOpts.VerifyPeer := True;
+    LOpts.HandshakeDeadline := TDeadline.After(TDuration.FromSeconds(10));
+    LOpts.TrustBundlePath := ATrustBundle;
+    GSubmitOk := AsyncTlsFpConnect(GLoop, '127.0.0.1', cServerPort,
+      LOpts, @ReadyCb, nil);
+    if GSubmitOk and not GCbCalled then
+      GLoop.Run;
   finally
+    ReleaseRxBuf;
+    GCliStream := nil;
     GLoop.Free;
     GLoop := nil;
   end;
+end;
+
+function EnvOrEmpty(const AName: string): string;
+begin
+  Result := GetEnvironmentVariable(AName);
+end;
+
+{ VerifyPeer 成功路径：CA 签发证书 + 匹配主机名 → 完整握手 + GET }
+procedure TestVerifyPeerSuccess;
+var
+  LBundle: string;
+begin
+  LBundle := EnvOrEmpty('TLSFP_TRUST_BUNDLE');
+  Check(LBundle <> '', 'trust bundle env present');
+  RunVerifiedGet(LBundle, 'localhost');
+  Check(GSubmitOk, 'verify submit');
+  Check(GCbCalled, 'verify callback delivered');
+  Check(GCliReady, 'verified handshake done');
+  CheckEqual(Int64(0), Int64(GCliErr), 'verify no error');
+  Check(GFoundResponse, 'verified HTTP response recognized');
+end;
+
+{ 不受信锚（无关自签 CA）→ 握手负码失败，不外漏半开流 }
+procedure TestVerifyUntrustedFails;
+var
+  LBundle: string;
+begin
+  LBundle := EnvOrEmpty('TLSFP_UNTRUSTED_BUNDLE');
+  Check(LBundle <> '', 'untrusted bundle env present');
+  RunVerifiedGet(LBundle, 'localhost');
+  Check(GSubmitOk, 'untrusted submit');
+  Check(GCbCalled, 'untrusted callback delivered');
+  Check(not GCliReady, 'untrusted handshake rejected');
+  Check(GCliErr < 0, 'untrusted negative error');
+  Check(GCliStream = nil, 'untrusted no half-open stream');
+end;
+
+{ 主机名不匹配（SAN 无此名）→ 握手失败，即使链本身可信 }
+procedure TestHostnameMismatchFails;
+var
+  LBundle: string;
+begin
+  LBundle := EnvOrEmpty('TLSFP_TRUST_BUNDLE');
+  Check(LBundle <> '', 'mismatch trust bundle env present');
+  RunVerifiedGet(LBundle, 'mismatch.invalid');
+  Check(GSubmitOk, 'hostname submit');
+  Check(GCbCalled, 'hostname callback delivered');
+  Check(not GCliReady, 'hostname mismatch rejected');
+  Check(GCliErr < 0, 'hostname mismatch negative error');
 end;
 
 procedure TestDefaults;
@@ -500,7 +543,6 @@ var
 begin
   GSuite := TTestSuite.Create('net_async_tlsfp');
   GSuite.Test('Defaults', @TestDefaults);
-  GSuite.Test('VerifyPeerRaises', @TestVerifyPeerRaises);
   GSuite.Test('DialRefused', @TestDialRefused);
   GSuite.Test('GarbageServer', @TestGarbageServer);
   if TlsE2EAvailable then
@@ -508,6 +550,14 @@ begin
     GSuite.Test('FullHandshakeGet', @TestFullHandshakeGet);
     GSuite.Test('SecondConnection', @TestSecondConnection);
     GSuite.Test('SeamDispatch', @TestSeamDispatch);
+    { VerifyPeer 用例需要 Makefile 生成的测试 PKI（env 缺席即跳过注册）}
+    if (EnvOrEmpty('TLSFP_TRUST_BUNDLE') <> '') and
+       (EnvOrEmpty('TLSFP_UNTRUSTED_BUNDLE') <> '') then
+    begin
+      GSuite.Test('VerifyPeerSuccess', @TestVerifyPeerSuccess);
+      GSuite.Test('VerifyUntrustedFails', @TestVerifyUntrustedFails);
+      GSuite.Test('HostnameMismatchFails', @TestHostnameMismatchFails);
+    end;
   end;
   { 裸 Run 会吞失败退出码（门禁假绿）：失败必须 Halt(1) }
   if not GSuite.Run then

@@ -79,14 +79,18 @@ type
     ServerName: string;
     { 仅影响内部共享 ctx：True = 校验链并加载系统信任库；False = 不校验
       （代理节点场景显式关闭）。缺省 True（安全默认）。
-      freepascal 后端只接受 False（True 即抛错）。 }
+      freepascal 后端同样支持（tls.x509verify 全链验证）。 }
     VerifyPeer: Boolean;
     { 握手阶段（含底层拨号）绝对期限；Infinite = 不设超时 }
     HandshakeDeadline: TDeadline;
     { 高级：外部共享 SSL_CTX。调用方持有生命周期，须存活到回调之后。 }
     Ctx: PSSL_CTX;
-    { 引擎后端选择；缺省 atbOpenSSL }
+    { 引擎后端选择；缺省 atbOpenSSL。
+      freepascal 后端：Ctx 被忽略（纯 Pas 无外部 CTX 概念），
+      TrustBundlePath 空 = 系统 CA bundle 发现。 }
     Backend: TAsyncTlsBackend;
+    { 信任锚 PEM bundle 文件路径；仅 freepascal 后端消费 }
+    TrustBundlePath: string;
   end;
 
   { 异步握手完成回调：AError=0 时 AStream 为就绪 TLS 流；失败时
@@ -212,6 +216,7 @@ begin
   Result.HandshakeDeadline := TDeadline.Infinite;
   Result.Ctx := nil;
   Result.Backend := atbOpenSSL;
+  Result.TrustBundlePath := '';
 end;
 
 { ======== 握手上下文与流类型 ======== }
@@ -609,6 +614,7 @@ begin
     LOptsFp.ServerName := AOptions.ServerName;
     LOptsFp.VerifyPeer := AOptions.VerifyPeer;
     LOptsFp.HandshakeDeadline := AOptions.HandshakeDeadline;
+    LOptsFp.TrustBundlePath := AOptions.TrustBundlePath;
     Result := AsyncTlsFpUpgrade(ALoop, AStream, LOptsFp, ACallback,
       AContext);
     Exit;
@@ -643,6 +649,7 @@ begin
     LOptsFp.ServerName := AOptions.ServerName;
     LOptsFp.VerifyPeer := AOptions.VerifyPeer;
     LOptsFp.HandshakeDeadline := AOptions.HandshakeDeadline;
+    LOptsFp.TrustBundlePath := AOptions.TrustBundlePath;
     Result := AsyncTlsFpConnect(ALoop, AHost, APort, LOptsFp, ACallback,
       AContext);
     Exit;

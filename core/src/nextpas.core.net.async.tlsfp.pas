@@ -23,11 +23,16 @@ unit nextpas.core.net.async.tlsfp;
  *   失败不可降级为 EOF。
  * - Close 尽力发送 close_notify 后关底层（不等对端，quiet-shutdown）。
  *
- * v1 明示的能力边界（fail-closed，绝不假装支持）：
+ * v2 能力边界（fail-closed，绝不假装支持）：
  * - 仅 TLS 1.3（服务器拒绝 1.3 即失败，无 1.2 回退）；密钥交换仅
  *   X25519；HelloRetryRequest / PSK 恢复 / 客户端证书（收到
- *   CertificateRequest 即失败）/ VerifyPeer=True（链信任库 + 主机名）
- *   均未支持，触发即显式失败。
+ *   CertificateRequest 即失败）均未支持，触发即显式失败。
+ * - VerifyPeer=True：复用 tls.x509verify 全链验证（日期/签名/CA
+ *   约束/路径长度/信任锚/主机名 SAN+通配符）+ CertificateVerify
+ *   签名校验。信任锚来源 TrustBundlePath 显式指定，或空串时发现
+ *   系统 CA bundle 文件（Debian/RHEL/SUSE/FreeBSD 已知路径；目录型
+ *   系统库如 Android cacerts 不在 v2 发现范围）。吊销检查（OCSP/
+ *   CRL）未做——与 OpenSSL 默认软失败策略的差距已明示。
  * - 后握手消息仅容忍 NewSessionTicket（忽略，v1 不做会话恢复）与
  *   KeyUpdate（update_requested 时按 RFC 8446 §4.6.3 轮换本端写密钥）；
  *   其余类型显式失败。
@@ -45,7 +50,9 @@ uses
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.async.base, nextpas.core.async.loop,
   nextpas.core.net.base, nextpas.core.net.intf,
-  nextpas.core.net.async.tcp;
+  nextpas.core.net.async.tcp,
+  nextpas.core.fs,
+  nextpas.core.tls.x509, nextpas.core.tls.x509verify;
 
 const
   { 底层流读写/提交失败、握手超时、解密失败 }
@@ -54,15 +61,20 @@ const
   ASYNC_TLSFP_ERR_HANDSHAKE = -3202;
 
 type
-  { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 当前显式不支持
-    （fail-closed：提交即抛错，避免「部分校验」假象）。 }
+  { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
+    全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
   TAsyncTlsFpClientOptions = record
-    { SNI 主机名；空串 = 不发送（AsyncTlsFpConnect 回退填 Host） }
+    { SNI 主机名；空串 = 不发送（AsyncTlsFpConnect 回退填 Host），
+      VerifyPeer=True 且空串时跳过主机名匹配（OpenSSL 同款语义：
+      裸 IP 连接无法做身份绑定） }
     ServerName: string;
-    { 预留；当前必须 False }
+    { True = 链验证 + 主机名 + CV 签名校验，任一不过即握手失败 }
     VerifyPeer: Boolean;
     { 握手阶段（含底层拨号）绝对期限；Infinite = 不设超时 }
     HandshakeDeadline: TDeadline;
+    { 信任锚 PEM bundle 文件路径；空串 = 进程级共享系统默认库
+      （已知 bundle 文件惰性发现并缓存，内容确定性故无锁发布安全） }
+    TrustBundlePath: string;
   end;
 
   { 异步握手完成回调：AError=0 时 AStream 为就绪 TLS 流；失败时
@@ -91,6 +103,8 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.system.sysutils,
+  nextpas.core.encoding.base64,
+  nextpas.core.atomic,
   nextpas.core.mem.secure,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.x25519,
@@ -108,6 +122,184 @@ uses
   nextpas.core.tls.tls13.recordsealer,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify;
+
+{ ======== 信任锚解析与进程级共享系统库 ======== }
+
+type
+  { 加载器创建的证书对象数组：TX509TrustStore 只存引用不拥有，
+    调用方验证完毕后必须自行释放 }
+  TFpCertObjArray = array of TX509Certificate;
+
+const
+  { 已知系统 CA bundle 文件（单文件整读，避免目录扫描开销；
+    目录型系统库如 Android cacerts 不在 v2 发现范围——见单元头） }
+  CSystemTrustBundleFiles: array[0..3] of string = (
+    '/etc/ssl/certs/ca-certificates.crt',        { Debian/Ubuntu }
+    '/etc/pki/tls/certs/ca-bundle.crt',          { RHEL/Fedora }
+    '/etc/ssl/ca-bundle.pem',                    { SUSE }
+    '/usr/local/share/certs/ca-root-nss.crt'     { FreeBSD }
+  );
+
+function ExtractPemCertificateBlock(const APem: string;
+  var AFrom: Integer; out ADer: TBytes): Boolean;
+var
+  LBeginTag, LEndTag: string;
+  LStart, LFinish, LIdx, LLineStart: Integer;
+  LBody: string;
+begin
+  Result := False;
+  SetLength(ADer, 0);
+  LBeginTag := '-----BEGIN CERTIFICATE-----';
+  LEndTag := '-----END CERTIFICATE-----';
+  { Copy(APem, AFrom+1, ·) 中相对位 r 对应绝对位 AFrom+r：
+    标签起点 = AFrom+r，标签后首字符 = AFrom+r+len(tag) }
+  LStart := Pos(LBeginTag, Copy(APem, AFrom + 1, MaxInt));
+  if LStart = 0 then
+    Exit;
+  LStart := AFrom + LStart + Length(LBeginTag);
+  LFinish := Pos(LEndTag, Copy(APem, LStart, MaxInt));
+  if LFinish = 0 then
+    Exit;
+  LFinish := LStart + LFinish - 1;
+
+  { 剥掉 base64 体里的换行空白再解码 }
+  LBody := '';
+  for LIdx := LStart to LFinish - 1 do
+    if not (APem[LIdx] in [#13, #10, #32, #9]) then
+      LBody := LBody + APem[LIdx];
+  try
+    ADer := Base64Decode(LBody);
+    Result := Length(ADer) > 0;
+  except
+    Result := False;
+  end;
+  { 越过本块 END 标记继续找下一块 }
+  AFrom := LFinish + Length(LEndTag);
+end;
+
+function LoadTrustStoreFromBundleFile(const APath: string;
+  out ALoadedCerts: TFpCertObjArray; out AError: string): TX509TrustStore;
+var
+  LPem: string;
+  LCert: TX509Certificate;
+  LCursor: Integer;
+  LDer: TBytes;
+  LCount: Integer;
+begin
+  Result := nil;
+  AError := '';
+  SetLength(ALoadedCerts, 0);
+  if not nextpas.core.fs.IsFile(APath) then
+  begin
+    AError := 'trust bundle not found: ' + APath;
+    Exit;
+  end;
+  LPem := nextpas.core.fs.ReadFileText(APath);
+  Result := TX509TrustStore.Create;
+  LCursor := 0;
+  LCount := 0;
+  while ExtractPemCertificateBlock(LPem, LCursor, LDer) do
+  begin
+    LCert := TX509Certificate.Create;
+    try
+      LCert.LoadFromDER(LDer);
+      Result.AddTrustedCertificate(LCert);
+      Inc(LCount);
+      SetLength(ALoadedCerts, Length(ALoadedCerts) + 1);
+      ALoadedCerts[High(ALoadedCerts)] := LCert;
+    except
+      LCert.Free; { 单块坏证书跳过，不拖垮整个库 }
+    end;
+  end;
+  if LCount = 0 then
+  begin
+    Result.Free;
+    Result := nil;
+    AError := 'no certificate parsed from trust bundle: ' + APath;
+  end;
+end;
+
+function BuildSystemTrustStore(out ALoadedCerts: TFpCertObjArray;
+  out AError: string): TX509TrustStore;
+var
+  I: Integer;
+begin
+  Result := nil;
+  AError := '';
+  SetLength(ALoadedCerts, 0);
+  for I := Low(CSystemTrustBundleFiles) to High(CSystemTrustBundleFiles) do
+  begin
+    if nextpas.core.fs.IsFile(CSystemTrustBundleFiles[I]) then
+    begin
+      Result := LoadTrustStoreFromBundleFile(
+        CSystemTrustBundleFiles[I], ALoadedCerts, AError);
+      if Result <> nil then
+        Exit;
+    end;
+  end;
+  AError := 'no system CA bundle discovered (tried ' +
+    IntToStr(Length(CSystemTrustBundleFiles)) + ' known paths)';
+end;
+
+var
+  { 进程级共享系统信任库（存 PtrUInt 于 Int64 槽）：构建内容确定性
+    （同一 bundle 集合），故 CAS 竞败方释放自有副本即可，胜者等价。
+    库内证书对象按设计随进程常驻（一次性 ~150 个小对象），不视为泄漏。 }
+  GSharedSystemTrustStoreRef: Int64 = 0;
+
+function SharedSystemTrustStore: TX509TrustStore;
+var
+  LBuilt: TX509TrustStore;
+  LCerts: TFpCertObjArray;
+  LErr: string;
+  LRef: Int64;
+  I: Integer;
+begin
+  LRef := AtomicLoad64(GSharedSystemTrustStoreRef);
+  if LRef <> 0 then
+    Exit(TX509TrustStore(Pointer(PtrUInt(LRef))));
+  LBuilt := BuildSystemTrustStore(LCerts, LErr);
+  if LBuilt = nil then
+    Exit(nil); { VerifyPeer 下游报错；LCerts 此时空 }
+  if AtomicCompareExchange64(GSharedSystemTrustStoreRef, 0,
+    Int64(PtrUInt(Pointer(LBuilt)))) <> 0 then
+  begin
+    { 别的线程先发布：本副本整体弃置（内容确定性等价） }
+    LBuilt.Free;
+    for I := 0 to High(LCerts) do
+      LCerts[I].Free;
+  end;
+  Result := TX509TrustStore(Pointer(PtrUInt(
+    AtomicLoad64(GSharedSystemTrustStoreRef))));
+end;
+
+{ 显式 bundle 路径每次独立加载（测试/嵌入式场景，量小不缓存）；
+  空路径 = 进程级共享系统库。AOwned=True 时调用方用完必须 Free store
+  并释放 AStoreCerts 内全部证书对象（store 只存引用不拥有）。 }
+function ResolveTrustStore(const AExplicitPath: string;
+  out AStore: TX509TrustStore; out AStoreCerts: TFpCertObjArray;
+  out AOwned: Boolean; out AError: string): Boolean;
+begin
+  AError := '';
+  AOwned := False;
+  SetLength(AStoreCerts, 0);
+  if AExplicitPath <> '' then
+  begin
+    AStore := LoadTrustStoreFromBundleFile(AExplicitPath, AStoreCerts,
+      AError);
+    Result := AStore <> nil;
+    AOwned := Result;
+    if not Result and (AError = '') then
+      AError := 'trust bundle load failed: ' + AExplicitPath;
+  end
+  else
+  begin
+    AStore := SharedSystemTrustStore;
+    Result := AStore <> nil;
+    if not Result then
+      AError := 'no system CA bundle discovered; set TrustBundlePath explicitly';
+  end;
+end;
 
 const
   { 单次网络读块大小（≥ 最大 TLS 密文记录 16KB+256） }
@@ -134,6 +326,11 @@ type
     Stream: IAsyncTcpStream;
     Timer: TAsyncTimerHandle;
     ServerName: string;
+    { VerifyPeer=True 时：CERT 相做全链验证，CV 相验签名 }
+    VerifyPeer: Boolean;
+    TrustBundlePath: string;
+    { 链验证通过后捕获的叶子证书公钥（CV 签名校验输入） }
+    LeafPublicKeyInfo: TX509PublicKeyInfo;
     OnReady: TAsyncTlsFpConnectCallback;
     OnReadyCtx: Pointer;
     Deadline: TDeadline;
@@ -578,6 +775,102 @@ begin
   ACtx^.State := hsRecvFlight;
 end;
 
+{ VerifyPeer 相一：证书链 DER → TX509 对象 → 全链验证（日期/签名/
+  CA 约束/信任锚/主机名）。返回 False = 已 FpFail。 }
+function FpVerifyServerChain(ACtx: PFpHsCtx;
+  const ACerts: TTLS13CertificateArray): Boolean;
+var
+  LChain: array of TX509Certificate;
+  LStore: TX509TrustStore;
+  LStoreCerts: TFpCertObjArray;
+  LOwned: Boolean;
+  LErr: string;
+  LV: TX509VerifyResult;
+  I: Integer;
+begin
+  Result := False;
+  try
+    if Length(ACerts) = 0 then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    SetLength(LChain, Length(ACerts));
+    try
+      for I := 0 to High(ACerts) do
+      begin
+        LChain[I] := TX509Certificate.Create;
+        LChain[I].LoadFromDER(ACerts[I]);
+      end;
+    except
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      { finally 统一释放：未初始化槽位为 nil，Free 安全 }
+      for I := 0 to High(LChain) do
+        LChain[I].Free;
+      Exit;
+    end;
+    try
+      if not ResolveTrustStore(ACtx^.TrustBundlePath, LStore, LStoreCerts,
+        LOwned, LErr) then
+      begin
+        WriteLn(ErrOutput, '[tlsfp] verify failed: ', LErr);
+        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        Exit;
+      end;
+      try
+        LV := VerifyX509Chain(LChain, LStore, ACtx^.ServerName);
+        if not LV.IsValid then
+        begin
+          { 仅失败路径的一行现场：链验证拒绝原因（日期/签名/主机名等） }
+          WriteLn(ErrOutput, '[tlsfp] verify failed: ', LV.ErrorMessage);
+          FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+          Exit;
+        end;
+        ACtx^.LeafPublicKeyInfo := LChain[0].PublicKeyInfo;
+        Result := True;
+      finally
+        { 先 store 后证书：store 析构只清指针数组，不拥有对象 }
+        if LOwned then
+          LStore.Free;
+        for I := 0 to High(LStoreCerts) do
+          LStoreCerts[I].Free;
+      end;
+    finally
+      for I := 0 to High(LChain) do
+        LChain[I].Free;
+    end;
+  except
+    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+  end;
+end;
+
+{ VerifyPeer 相二：CV 签名校验。输入 = Hash(CH..CERT)——调用点必须
+  在把 CV 消息追加进 transcript 之前。 }
+function FpVerifyCertVerifySignature(ACtx: PFpHsCtx; AScheme: Word;
+  const ASig: TBytes): Boolean;
+var
+  LHash, LInput: TBytes;
+  LErr: string;
+begin
+  Result := False;
+  try
+    LHash := FpTranscriptHash(ACtx^.Suite, ACtx^.Transcript);
+    LInput := BuildTLS13ServerCertificateVerifyInputSHA256(LHash);
+    if not TryVerifyTLS13CertificateVerifySignature(AScheme,
+      ACtx^.LeafPublicKeyInfo, LInput, ASig, LErr) then
+    begin
+      { 仅失败路径的一行现场：CV 方案与失败原因 }
+      WriteLn(ErrOutput, '[tlsfp] verify failed: scheme=', AScheme, ' ',
+        LErr);
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    Result := True;
+  except
+    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+  end;
+end;
+
 procedure HandleEncryptedFlightRecord(ACtx: PFpHsCtx;
   const APayload: TBytes);
 var
@@ -650,6 +943,11 @@ begin
             end;
             ACtx^.SeenCert := True;
             AppendBytesTo(ACtx^.Transcript, LMsg);
+            { VerifyPeer：全链验证（日期/签名/CA 约束/信任锚/主机名）。
+              失败即握手终止——绝不降级为不校验继续。 }
+            if ACtx^.VerifyPeer then
+              if not FpVerifyServerChain(ACtx, LCerts) then
+                Exit;
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_CERTIFICATE_REQUEST then
           begin
@@ -660,14 +958,17 @@ begin
           else if LMsgType = TLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY then
           begin
             { 结构合法性必查（transcript 完整性依赖其长度域可信）；
-              签名验证属信任决策，VerifyPeer=False 时跳过 —— 与
-              OpenSSL SSL_VERIFY_NONE 语义一致 }
+              VerifyPeer=True 时签名必须验过才入 transcript——CV 签的
+              是 Hash(CH..CERT)，先验后追加，顺序不可倒置 }
             if not TryParseTLS13CertificateVerifyHandshake(LMsg, LScheme,
               LSig, LError) then
             begin
               FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
               Exit;
             end;
+            if ACtx^.VerifyPeer then
+              if not FpVerifyCertVerifySignature(ACtx, LScheme, LSig) then
+                Exit;
             ACtx^.SeenCertVerify := True;
             AppendBytesTo(ACtx^.Transcript, LMsg);
           end
@@ -990,11 +1291,13 @@ begin
   Result.ServerName := '';
   Result.VerifyPeer := False;
   Result.HandshakeDeadline := TDeadline.Infinite;
+  Result.TrustBundlePath := '';
 end;
 
 { 公共初始化：X25519 keypair + ClientHello（失败静默释放并 re-raise）}
 function AllocHsCtx(const ALoop: TAsyncLoop;
   const AServerName: string; const ADeadline: TDeadline;
+  AVerifyPeer: Boolean; const ATrustBundlePath: string;
   AOnReady: TAsyncTlsFpConnectCallback; AOnReadyCtx: Pointer
   ): PFpHsCtx;
 var
@@ -1004,6 +1307,8 @@ begin
   FillChar(Result^, SizeOf(Result^), 0);
   Result^.Loop := ALoop;
   Result^.ServerName := AServerName;
+  Result^.VerifyPeer := AVerifyPeer;
+  Result^.TrustBundlePath := ATrustBundlePath;
   Result^.OnReady := AOnReady;
   Result^.OnReadyCtx := AOnReadyCtx;
   Result^.Deadline := ADeadline;
@@ -1033,16 +1338,12 @@ var
   LCtx: PFpHsCtx;
 begin
   Result := False;
-  { fail-closed 声明最先校验：即便其它参数也不合法，也不得静默降级 }
-  if AOptions.VerifyPeer then
-    raise EInvalidOperationError.Create(
-      'tlsfp: peer chain verification is not supported yet ' +
-      '(fail-closed); use VerifyPeer=False');
   if (AStream = nil) or not Assigned(ACallback) then
     Exit;
 
   LCtx := AllocHsCtx(ALoop, AOptions.ServerName,
-    AOptions.HandshakeDeadline, ACallback, AContext);
+    AOptions.HandshakeDeadline, AOptions.VerifyPeer,
+    AOptions.TrustBundlePath, ACallback, AContext);
   if LCtx = nil then
     Exit;
   LCtx^.Stream := AStream;
@@ -1063,11 +1364,6 @@ var
   LServerName: string;
 begin
   Result := False;
-  { fail-closed 声明最先校验：即便其它参数也不合法，也不得静默降级 }
-  if AOptions.VerifyPeer then
-    raise EInvalidOperationError.Create(
-      'tlsfp: peer chain verification is not supported yet ' +
-      '(fail-closed); use VerifyPeer=False');
   if (AHost = '') or not Assigned(ACallback) then
     Exit;
   if AOptions.ServerName <> '' then
@@ -1076,7 +1372,7 @@ begin
     LServerName := AHost;
 
   LCtx := AllocHsCtx(ALoop, LServerName, AOptions.HandshakeDeadline,
-    ACallback, AContext);
+    AOptions.VerifyPeer, AOptions.TrustBundlePath, ACallback, AContext);
   if LCtx = nil then
     Exit;
   if not LCtx^.Deadline.IsInfinite then

@@ -27,12 +27,29 @@ test: build
 	if ! command -v openssl >/dev/null 2>&1; then \
 	  echo "SKIP: openssl not available for tlsfp e2e"; \
 	else \
-	  if [ ! -f /tmp/tls13_test_cert.pem ] || [ ! -f /tmp/tls13_test_key.pem ]; then \
+	  if [ ! -f /tmp/tlsfp_v2_ca.crt ] || [ ! -f /tmp/tlsfp_v2_ca.key ]; then \
 	    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
-	      -keyout /tmp/tls13_test_key.pem -out /tmp/tls13_test_cert.pem \
-	      -days 1 -nodes -subj "/CN=localhost" 2>/dev/null || true; \
+	      -keyout /tmp/tlsfp_v2_ca.key -out /tmp/tlsfp_v2_ca.crt \
+	      -days 2 -nodes -subj "/CN=tlsfp-test-ca" \
+	      -addext "basicConstraints=critical,CA:TRUE" 2>/dev/null || true; \
 	  fi; \
-	  if [ ! -f /tmp/tls13_test_cert.pem ]; then \
+	  if [ ! -f /tmp/tlsfp_v2_server.crt ] && [ -f /tmp/tlsfp_v2_ca.crt ]; then \
+	    printf "subjectAltName=DNS:localhost,IP:127.0.0.1\n" > /tmp/tlsfp_v2_san.ext; \
+	    openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+	      -keyout /tmp/tlsfp_v2_server.key -out /tmp/tlsfp_v2_server.csr \
+	      -nodes -subj "/CN=localhost" 2>/dev/null; \
+	    openssl x509 -req -in /tmp/tlsfp_v2_server.csr \
+	      -CA /tmp/tlsfp_v2_ca.crt -CAkey /tmp/tlsfp_v2_ca.key -CAcreateserial \
+	      -out /tmp/tlsfp_v2_server.crt -days 2 -sha256 \
+	      -extfile /tmp/tlsfp_v2_san.ext 2>/dev/null || true; \
+	  fi; \
+	  if [ ! -f /tmp/tlsfp_v2_otherca.crt ]; then \
+	    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+	      -keyout /tmp/tlsfp_v2_otherca.key -out /tmp/tlsfp_v2_otherca.crt \
+	      -days 2 -nodes -subj "/CN=tlsfp-test-other-ca" \
+	      -addext "basicConstraints=critical,CA:TRUE" 2>/dev/null || true; \
+	  fi; \
+	  if [ ! -f /tmp/tlsfp_v2_server.crt ]; then \
 	    echo "SKIP: could not generate e2e test certificate"; \
 	  else \
 	    if command -v lsof >/dev/null 2>&1; then \
@@ -42,8 +59,8 @@ test: build
 	    fi; \
 	    sleep 0.3; \
 	    (sleep 40) | openssl s_server -4 \
-	      -key /tmp/tls13_test_key.pem \
-	      -cert /tmp/tls13_test_cert.pem \
+	      -key /tmp/tlsfp_v2_server.key \
+	      -cert /tmp/tlsfp_v2_server.crt \
 	      -accept $$PORT -www >/dev/null 2>&1 & \
 	    SERVER_PID=$$!; \
 	    sleep 1.2; \
@@ -62,6 +79,8 @@ test: build
 	  fi; \
 	fi; \
 	set +e; \
+	TLSFP_TRUST_BUNDLE=/tmp/tlsfp_v2_ca.crt \
+	TLSFP_UNTRUSTED_BUNDLE=/tmp/tlsfp_v2_otherca.crt \
 	HEAPTRC='haltonnotreleased,log=$(BUILD_DIR)/$(PROGRAM).heaptrc' $(BUILD_DIR)/$(PROGRAM); \
 	RESULT=$$?; \
 	if [ -n "$$SERVER_PID" ]; then \
