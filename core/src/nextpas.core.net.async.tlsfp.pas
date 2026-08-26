@@ -433,16 +433,29 @@ begin
 end;
 
 const
-  { 单次网络读块大小（≥ 最大 TLS 密文记录 16KB+256） }
+  { 单次网络读块下限（≥ 最大 TLS 密文记录 16KB+256） }
   cNetReadChunk = 16640;
+  { 读块自适应上界。臂挂从下限起步，满读翻倍、不足半读回缩——
+    批量流自动长大让单次 read 吞掉多记录突发（摊薄 epoll/read），
+    低速连接保持下限不占内存。S2：此值即每连接未组帧读缓冲的
+    显式最坏值（65536B），与连接总数相乘有界。 }
+  cNetReadChunkMax = 65536;
+  { 实测扫描（2026-08-26，vless+wss→socks5 端到端）：16K=199.3、
+    64K=214.5、128K=206.6 MiB/s——64K 为最优点；再大会放大交付侧
+    FPlainOut 压缩搬移与缓存压力 }
   { 单条记录载荷上限（5B 头之外） }
   cMaxRecordPayload = 16384 + 256;
   { 单条握手消息上限（证书链可达数十 KB，1MB 已远超合理面） }
   cMaxHandshakeMessage = 1 shl 20;
   { 应用相单记录明文片上限：TLSInnerPlaintext ≤ 16384 含 ct 尾字节 }
   cMaxAppFragment = 16383;
-  { 未组帧网络缓冲上限（约 2 条最大记录，超出即协议错） }
-  cMaxNetInBuf = 2 * (5 + cMaxRecordPayload);
+  { 未组帧网络缓冲协议错界：读块满额（合法实字节峰值）+ 一条最大
+    记录余量；超出 = 对端持续给不出可组帧记录，协议错 }
+  cMaxNetInBuf = cNetReadChunkMax + 5 + cMaxRecordPayload;
+  { 应用相单泵解密预算：一次唤醒内就地解密的明文累计上界——
+    读进的全部完整记录一次消化完（而非解 1 条交付 1 次），同时
+    给事件循环单次占用设显式顶。S2：FPlainOut 峰值 ≤ 预算 + 单片。 }
+  cDecryptBatchBytes = 262144;
   { 握手期记录预算（防对端灌包） }
   cMaxFlightRecords = 96;
   { 后握手缓冲上限 }
@@ -532,6 +545,7 @@ type
     FPostHs: TBytes;
     FNetTx: TBytes;
     FNetTxOff: Integer;
+    FRecvChunk: Integer;
     FRecvArmed: Boolean;
     FSendArmed: Boolean;
     FPumping: Boolean;
@@ -1642,6 +1656,7 @@ begin
   FLoop := ALoop;
   FNetIn := ANetInSeed;
   FPostHs := APostHsSeed;
+  FRecvChunk := cNetReadChunk;
   FOpener.Init(FSuite, FApp.ServerApplicationKey,
     FApp.ServerApplicationIV);
   FSealer.Init(FSuite, FApp.ClientApplicationKey,
@@ -1794,8 +1809,11 @@ begin
         Exit(-1);
       end;
       Inc(Result, LRes);
-      if Result > 0 then
-        Exit; { 攒到一批先交付，避免饿死读方 }
+      { 批处理：读进的完整记录就地全部解密（至预算顶），不再
+        「解 1 条交付 1 次」——单次 read 的收获一次榨干，交付次数
+        与 epoll/read 同步摊薄；NetIn 排空由循环条件自然收口 }
+      if Result >= cDecryptBatchBytes then
+        Exit;
     end
     else if LCt = TLS_CONTENT_TYPE_ALERT then
     begin
@@ -1969,7 +1987,18 @@ begin
   else
   begin
     SetLength(LSelf.FNetIn,
-      Length(LSelf.FNetIn) - cNetReadChunk + AResult);
+      Length(LSelf.FNetIn) - LSelf.FRecvChunk + AResult);
+    { 读块自时钟：满读翻倍至多记录粒度（对端突发被单次 read 吞下），
+      不足半读说明内核暂无余量，回缩下限；其间保持不变防抖动 }
+    if (AResult >= LSelf.FRecvChunk) and
+       (LSelf.FRecvChunk < cNetReadChunkMax) then
+    begin
+      LSelf.FRecvChunk := LSelf.FRecvChunk * 2;
+      if LSelf.FRecvChunk > cNetReadChunkMax then
+        LSelf.FRecvChunk := cNetReadChunkMax;
+    end
+    else if AResult * 2 < LSelf.FRecvChunk then
+      LSelf.FRecvChunk := cNetReadChunk;
   end;
   LSelf.Pump;
 end;
@@ -2006,20 +2035,20 @@ begin
   Result := False;
   if FRecvArmed or FDead then
     Exit;
-  SetLength(FNetIn, Length(FNetIn) + cNetReadChunk);
-  LRx := @FNetIn[Length(FNetIn) - cNetReadChunk];
+  SetLength(FNetIn, Length(FNetIn) + FRecvChunk);
+  LRx := @FNetIn[Length(FNetIn) - FRecvChunk];
   FRecvArmed := True;
   { 读挂起带期限时走底层超时形态（到期由底层交付其域内负码） }
   if FHasReadDeadlineReq then
   begin
-    if FInner.AsyncReadTimeout(LRx, cNetReadChunk, FReadDeadlineReq,
+    if FInner.AsyncReadTimeout(LRx, FRecvChunk, FReadDeadlineReq,
       @StreamRecvCb, Self) then
       Exit(True);
   end
-  else if FInner.AsyncRead(LRx, cNetReadChunk, @StreamRecvCb, Self) then
+  else if FInner.AsyncRead(LRx, FRecvChunk, @StreamRecvCb, Self) then
     Exit(True);
   FRecvArmed := False;
-  SetLength(FNetIn, Length(FNetIn) - cNetReadChunk);
+  SetLength(FNetIn, Length(FNetIn) - FRecvChunk);
 end;
 
 function TFpTlsStream.ArmNetSend: Boolean;
