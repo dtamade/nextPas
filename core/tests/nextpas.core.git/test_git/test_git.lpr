@@ -1025,6 +1025,31 @@ begin
     'flag off keeps binary section out');
 end;
 
+{ k101 hotfix: clean tree → empty patch text（零差下溢守卫回归） }
+procedure TestWorkdirPatchTextCleanTreeEmpty;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepositoryExt;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'k101-clean']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'manager init');
+  LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'T'], 'cfg name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 't@t.invalid'], 'cfg mail');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 's.txt']),
+    BytesOfString('seed' + sLineBreak));
+  CheckGitOk(LRepoDir, ['add', 's.txt'], 'add');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'seed'], 'commit');
+  Check(Supports(LMgr.OpenRepository(LRepoDir), IGitRepositoryExt, LRepo),
+    'supports ext');
+  CheckEqual('', LRepo.WorkdirPatchText('HEAD', nil, True),
+    'clean tree yields empty patch');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -1054,6 +1079,7 @@ begin
     T.Test('ApplyPatch partial-failure probe (k97)', @TestApplyPatchPartialFailureProbe);
     T.Test('CheckoutPaths restores (k97)', @TestCheckoutPathsRestores);
     T.Test('WorkdirPatchText binary round trip (k101)', @TestWorkdirPatchTextBinaryRoundTrip);
+    T.Test('WorkdirPatchText clean tree empty (k101 hotfix)', @TestWorkdirPatchTextCleanTreeEmpty);
     T.Test('WorkdirPatchText text regression + flag guard (k101)', @TestWorkdirPatchTextTextAndFlagGuard);
   if not T.Run then Halt(1);
   finally
