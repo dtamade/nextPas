@@ -13,6 +13,7 @@ uses
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.thread.intf,
+  nextpas.core.vfs.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -576,6 +577,10 @@ function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
+{** @desc Static file serving from a read-only virtual filesystem (IVfs).
+   ETag prefers backend ContentHash ("fnv-hex8"); unknown ModTime (0) skips
+   Last-Modified / If-Modified-Since negotiation. Directories → 404. }
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc; inline;
 function ServeFileDownload(const APath: string): THttpHandlerFunc; overload; inline;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload; inline;
 {** @desc Strong ETag from size+mtime. }
@@ -1462,6 +1467,11 @@ end;
 function ServeDir(const ARoot: string): THttpHandlerFunc;
 begin
   Result := nextpas.core.http.static.ServeDir(ARoot);
+end;
+
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
+begin
+  Result := nextpas.core.http.static.ServeVfs(AFs);
 end;
 
 function ServeFileDownload(const APath: string): THttpHandlerFunc;

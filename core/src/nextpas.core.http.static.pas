@@ -5,16 +5,36 @@ unit nextpas.core.http.static;
 interface
 
 uses
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.vfs.intf;
 
 { Serve a single file. Returns handler that reads file and writes it as response.
   Supports range requests (RFC 7233), ETag, Last-Modified, Cache-Control. }
-function ServeFile(const APath: string): THttpHandlerFunc;
+function ServeFile(const APath: string): THttpHandlerFunc; overload;
+
+{ Same as above with an explicit Cache-Control policy value (e.g.
+  'public, max-age=31536000, immutable' for content-addressed assets).
+  The single-argument overload keeps the conservative revalidate default. }
+function ServeFile(const APath, ACacheControl: string): THttpHandlerFunc; overload;
 
 { Serve files from a directory. Path param 'filepath' or URL path used as relative file path.
   Example: router.Get('/static/*filepath', ServeDir('/var/www'))
   Supports range requests (RFC 7233), ETag, Last-Modified, Cache-Control. }
-function ServeDir(const ARoot: string): THttpHandlerFunc;
+function ServeDir(const ARoot: string): THttpHandlerFunc; overload;
+
+{ Same as above with an explicit Cache-Control policy value applied to every
+  served entry (the single-argument overload keeps the revalidate default). }
+function ServeDir(const ARoot, ACacheControl: string): THttpHandlerFunc; overload;
+
+{ Serve files from a read-only virtual filesystem (nextpas.core.vfs IVfs).
+  Path param 'filepath' or URL path used as relative VFS path.
+  Example: router.Get('/assets/*filepath', ServeVfs(AFs))
+  Supports range requests (RFC 7233), ETag, Last-Modified, Cache-Control.
+  ETag prefers backend ContentHash ("fnv-hex8"); without a hash falls back to
+  size+mtime strong ETag. Entries with unknown ModTime (0) skip Last-Modified
+  and If-Modified-Since negotiation. Directories and invalid paths return 404
+  (no index serving). }
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
 
 { Serve a single file with Content-Disposition: attachment for download.
   Supports range requests, ETag, Last-Modified, Cache-Control. }
@@ -59,6 +79,8 @@ uses
   nextpas.core.fs,
   nextpas.core.io,
   nextpas.core.io.intf,
+  nextpas.core.vfs.base,
+  nextpas.core.vfs.errors,
   nextpas.core.http.base,
   nextpas.core.http.url,
   nextpas.core.http.message;
@@ -514,8 +536,9 @@ begin
     'range_not_satisfiable', 'Range not satisfiable');
 end;
 
-{ Copy file range to writer }
-procedure CopyFileRange(const AFile: IFile; const AWriter: IWriter;
+{ Copy ACount bytes from AInput starting at AStart to writer.
+  Accepts any IStream (fs IFile and IVfs.OpenRead streams both qualify). }
+procedure CopyRange(const AInput: IStream; const AWriter: IWriter;
   AStart, ACount: Int64);
 var
   LBuf: array[0..8191] of Byte;
@@ -524,7 +547,7 @@ var
   LN: SizeUInt;
 begin
   { Seek to start position }
-  AFile.Seek(AStart, soBeginning);
+  AInput.Seek(AStart, soBeginning);
   LRemaining := ACount;
   while LRemaining > 0 do
   begin
@@ -532,7 +555,7 @@ begin
       LToRead := SizeOf(LBuf)
     else
       LToRead := SizeUInt(LRemaining);
-    LN := AFile.Read(LBuf[0], LToRead);
+    LN := AInput.Read(LBuf[0], LToRead);
     if LN = 0 then
       Break;
     AWriter.Write(LBuf[0], LN);
@@ -541,10 +564,11 @@ begin
 end;
 
 { Serve file content with optional range support, ETag, Last-Modified, Cache-Control.
-  ADownloadName: if non-empty, set Content-Disposition: attachment with given filename. }
+  ADownloadName: if non-empty, set Content-Disposition: attachment with given filename.
+  ACacheControl: verbatim Cache-Control policy header value. }
 procedure ServeFileContentEx(const AFilePath: string;
   const AReq: IHttpRequest; const AW: IHttpResponseWriter;
-  const ADownloadName: string);
+  const ADownloadName, ACacheControl: string);
 var
   LFile: IFile;
   LInfo: TFileInfo;
@@ -586,7 +610,7 @@ begin
     AW.GetHeaders.SetHeader('content-type', LMime);
     AW.GetHeaders.SetHeader('etag', LETag);
     AW.GetHeaders.SetHeader('last-modified', LLastModified);
-    AW.GetHeaders.SetHeader('cache-control', 'public, max-age=0, must-revalidate');
+    AW.GetHeaders.SetHeader('cache-control', ACacheControl);
     AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
     AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
     if ADownloadName <> '' then
@@ -620,7 +644,7 @@ begin
       AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
       AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
       LWriter := TResponseWriterAdapter.Create(AW);
-      CopyFileRange(LFile, LWriter, LStart, LEnd - LStart + 1);
+      CopyRange(LFile, LWriter, LStart, LEnd - LStart + 1);
     end
     else
     begin
@@ -639,13 +663,23 @@ end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
 begin
+  Result := ServeFile(APath, 'public, max-age=0, must-revalidate');
+end;
+
+function ServeFile(const APath, ACacheControl: string): THttpHandlerFunc;
+begin
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    ServeFileContentEx(APath, AReq, AW, '');
+    ServeFileContentEx(APath, AReq, AW, '', ACacheControl);
   end;
 end;
 
 function ServeDir(const ARoot: string): THttpHandlerFunc;
+begin
+  Result := ServeDir(ARoot, 'public, max-age=0, must-revalidate');
+end;
+
+function ServeDir(const ARoot, ACacheControl: string): THttpHandlerFunc;
 begin
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var
@@ -696,7 +730,144 @@ begin
       AW.Write(PAnsiChar('Forbidden')^, 9);
       Exit;
     end;
-    ServeFileContentEx(LFullPath, AReq, AW, '');
+    ServeFileContentEx(LFullPath, AReq, AW, '', ACacheControl);
+  end;
+end;
+
+{ Serve one VFS entry with the same response semantics as ServeFileContentEx.
+  Exists/IsDir gate up front; an EVfsNotFound escaping the late gates maps to
+  404, any other failure maps to 500. ContentHash-backed ETag keeps identity
+  stable for embedded trees whose entries carry no wall-clock mtime. }
+procedure ServeVfsContentEx(const AFs: IVfs; const AVfsPath: string;
+  const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+var
+  LInfo: TStatInfo;
+  LStream: IStream;
+  LWriter: IWriter;
+  LMime: string;
+  LETag: string;
+  LLastModified: string;
+  LModTimeUnix: Int64;
+  LIfNoneMatch: string;
+  LRangeHeader: string;
+  LStart, LEnd: Int64;
+begin
+  try
+    if not AFs.Exists(AVfsPath) then
+    begin
+      HttpWriteErrorNotFound(AW, 'File not found');
+      Exit;
+    end;
+    LInfo := AFs.Stat(AVfsPath);
+    if LInfo.Info.IsDir then
+    begin
+      HttpWriteErrorNotFound(AW, 'File not found');
+      Exit;
+    end;
+
+    { TEntryInfo.ModTime is Unix seconds; 0 = unknown. Suppress Last-Modified
+      and If-Modified-Since entirely (a t=0 resource must never yield a bogus
+      304); If-None-Match stays usable via the hash-backed ETag. }
+    LModTimeUnix := LInfo.Info.ModTime;
+    if LModTimeUnix < 0 then
+      LModTimeUnix := 0;
+    if LInfo.ContentHash <> 0 then
+      LETag := '"fnv-' + IntToHex(LInfo.ContentHash, 8) + '"'
+    else
+      LETag := GenerateETag(LInfo.Info.Size, LModTimeUnix);
+    if LModTimeUnix > 0 then
+      LLastModified := FormatHttpDate(LModTimeUnix)
+    else
+      LLastModified := '';
+
+    { Conditional negotiation: honor If-None-Match always; honor
+      If-Modified-Since only when the mtime is actually known. }
+    LIfNoneMatch := '';
+    if AReq <> nil then
+      LIfNoneMatch := AReq.GetHeaders.Get('if-none-match');
+    if (LModTimeUnix > 0) or (LIfNoneMatch <> '') then
+      if HttpTryWriteNotModified(AReq, AW, LETag, LLastModified,
+        LModTimeUnix) then
+        Exit;
+
+    LMime := MimeTypeFromExt(ExtractExt(AVfsPath));
+    AW.GetHeaders.SetHeader('content-type', LMime);
+    AW.GetHeaders.SetHeader('etag', LETag);
+    if LLastModified <> '' then
+      AW.GetHeaders.SetHeader('last-modified', LLastModified);
+    AW.GetHeaders.SetHeader('cache-control', 'public, max-age=0, must-revalidate');
+    AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
+    AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
+
+    { Range request support (single byte range only; multi-range → 416).
+      Body path always streams via IVfs.OpenRead IStream — never ReadAll. }
+    LRangeHeader := '';
+    if AReq <> nil then
+      LRangeHeader := AReq.GetHeaders.Get('range');
+
+    if LRangeHeader <> '' then
+    begin
+      if not ParseRangeHeader(LRangeHeader, LInfo.Info.Size, LStart, LEnd) then
+      begin
+        SendRangeNotSatisfiable(LInfo.Info.Size, AW);
+        Exit;
+      end;
+      LStream := AFs.OpenRead(AVfsPath);
+      AW.GetHeaders.SetHeader('content-range',
+        'bytes ' + IntToStr(LStart) + '-' + IntToStr(LEnd) + '/' +
+        IntToStr(LInfo.Info.Size));
+      AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
+      AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
+      LWriter := TResponseWriterAdapter.Create(AW);
+      CopyRange(LStream, LWriter, LStart, LEnd - LStart + 1);
+    end
+    else
+    begin
+      LStream := AFs.OpenRead(AVfsPath);
+      AW.GetHeaders.SetHeader('content-length', IntToStr(LInfo.Info.Size));
+      AW.WriteHeader(HTTP_STATUS_OK);
+      LWriter := TResponseWriterAdapter.Create(AW);
+      nextpas.core.io.Copy(LWriter, LStream);
+    end;
+  except
+    on EVfsNotFound do
+      HttpWriteErrorNotFound(AW, 'File not found');
+    else
+      HttpWriteErrorInternal(AW, 'Internal Server Error');
+  end;
+end;
+
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
+begin
+  Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LRelative: string;
+  begin
+    { Same path extraction contract as ServeDir }
+    LRelative := AReq.PathParam('filepath');
+    if LRelative = '' then
+    begin
+      LRelative := AReq.Path;
+      { Strip leading slash }
+      if (Length(LRelative) > 0) and (LRelative[1] = '/') then
+        LRelative := System.Copy(LRelative, 2, Length(LRelative) - 1);
+    end;
+    try
+      LRelative := nextpas.core.http.url.UrlDecode(LRelative);
+    except
+      AW.GetHeaders.SetHeader('content-length', '11');
+      AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      AW.Write(PAnsiChar('Bad Request')^, 11);
+      Exit;
+    end;
+    { The VFS namespace is canonical: empty/rooted/traversal forms are plain
+      misses (404), indistinguishable from nonexistent entries. }
+    if (LRelative = '') or not VfsValidPath(LRelative, False) then
+    begin
+      HttpWriteErrorNotFound(AW, 'File not found');
+      Exit;
+    end;
+    ServeVfsContentEx(AFs, LRelative, AReq, AW);
   end;
 end;
 
@@ -717,7 +888,8 @@ begin
     LFileName := APath;
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    ServeFileContentEx(APath, AReq, AW, LFileName);
+    ServeFileContentEx(APath, AReq, AW, LFileName,
+      'public, max-age=0, must-revalidate');
   end;
 end;
 
@@ -725,7 +897,8 @@ function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc
 begin
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    ServeFileContentEx(APath, AReq, AW, ADownloadName);
+    ServeFileContentEx(APath, AReq, AW, ADownloadName,
+      'public, max-age=0, must-revalidate');
   end;
 end;
 
