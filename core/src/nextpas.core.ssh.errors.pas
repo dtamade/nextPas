@@ -25,6 +25,7 @@ type
     sekCrypto,       { AEAD/MAC 校验失败、加解密错误 }
     sekTimeout,      { 等待对端消息超时 }
     sekIO,           { 底层读写失败 / 对端关闭连接 }
+    sekSftp,         { SFTP STATUS 失败码映射（no-such-file 等）}
     sekUnsupported   { 明确不支持的功能（如加密私钥容器）}
   );
 
@@ -52,7 +53,7 @@ function SshErrorKindName(AKind: TSshErrorKind): string;
 const
   NAMES: array[TSshErrorKind] of string = (
     'protocol', 'disconnect', 'negotiation', 'hostkey', 'auth',
-    'key-format', 'crypto', 'timeout', 'io', 'unsupported'
+    'key-format', 'crypto', 'timeout', 'io', 'sftp', 'unsupported'
   );
 begin
   Result := NAMES[AKind];

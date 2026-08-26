@@ -18,8 +18,10 @@ program test_ssh_e2e;
 uses
   nextpas.core.system.sysutils, Classes,
   nextpas.core.ssh,
+  nextpas.core.ssh.transport,
   nextpas.core.ssh.channel,
-  nextpas.core.ssh.errors;
+  nextpas.core.ssh.errors,
+  nextpas.core.ssh.sftp;
 
 const
   MARKER = 'np-e2e-7f3d-marker';
@@ -37,6 +39,54 @@ end;
 procedure TraceLine(const ALine: string);
 begin
   Writeln('[trace] ', ALine);
+end;
+
+function HexDump(const AData: TBytes): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(AData) do
+  begin
+    if I > 0 then
+      Result += ' ';
+    Result += IntToHex(AData[I], 2);
+  end;
+end;
+
+{ 动态数组 = 是引用比较，内容相等须逐字节 }
+function SameBytes(const A, B: TBytes): Boolean;
+var
+  I: Integer;
+begin
+  Result := Length(A) = Length(B);
+  if not Result then
+    Exit;
+  for I := 0 to High(A) do
+    if A[I] <> B[I] then
+      Exit(False);
+end;
+
+{ 明文包转储（NEXTPAS_SSH_E2E_DUMP=1 时逐包写 /tmp/np_ssh_dump.txt）}
+var
+  GDumpInit: Boolean = False;
+  GDumpFile: Text;
+
+procedure DumpPacket(const ATag: string; const APkt: TBytes);
+var
+  I: Integer;
+begin
+  if not GDumpInit then
+  begin
+    Assign(GDumpFile, '/tmp/np_ssh_dump.txt');
+    Rewrite(GDumpFile);
+    GDumpInit := True;
+  end;
+  Write(GDumpFile, ATag, ' ', Length(APkt), ':');
+  for I := 0 to High(APkt) do
+    Write(GDumpFile, ' ', IntToHex(APkt[I], 2));
+  Writeln(GDumpFile);
+  Flush(GDumpFile);
 end;
 
 function EnvOr(const AName, ADef: string): string;
@@ -205,7 +255,10 @@ begin
         if (Trim(LR.StdOutText) <> 'two') or (LR.ExitCode <> 0) then
         begin
           Fail('exec#' + IntToStr(I) + ' stdout="' + Trim(LR.StdOutText) +
-            '" (exit=' + IntToStr(LR.ExitCode) + ')');
+            '" len=' + IntToStr(Length(LR.StdOut)) +
+            ' hex=' + HexDump(LR.StdOut) +
+            ' stderr_len=' + IntToStr(Length(LR.StdErr)) +
+            ' (exit=' + IntToStr(LR.ExitCode) + ')');
           Inc(LBad);
           if LBad >= 3 then
             Break; { 现场已足够，避免刷屏 }
@@ -222,10 +275,72 @@ begin
   end;
 end;
 
+{ 场景 6：SFTP 文件操作全回路（internal-sftp）——写→读回→列目→stat→删除 }
+procedure ScenarioSftpRoundtrip;
+var
+  LSess: ISshSession;
+  LFfs: ISshFileSystem;
+  LRoot, LPath: string;
+  LData, LGot: TBytes;
+  LDir: TSftpDirEntryArray;
+  LFound: Boolean;
+  I: Integer;
+begin
+  Writeln('[e2e] scenario: sftp write/read/list/stat/remove roundtrip');
+  try
+    LSess := ConnectE2E(EnvOr('NEXTPAS_SSH_E2E_KNOWN_HOSTS', ''));
+    try
+      LFfs := LSess.OpenFileSystem;
+      LRoot := LFfs.RealPath('.');
+      LPath := LRoot + '/np-e2e-sftp-marker.txt';
+      LData := BytesOf('sftp-roundtrip-' + MARKER);
+      LFfs.WriteFile(LPath, LData);
+      try
+        LGot := LFfs.ReadFile(LPath);
+        if SameBytes(LGot, LData) then
+          Writeln('[e2e]   ok: write+read ', Length(LGot), ' bytes')
+        else
+          Fail('sftp readback mismatch');
+        LFound := False;
+        LDir := LFfs.ListDir(LRoot);
+        for I := 0 to High(LDir) do
+          if LDir[I].Name = 'np-e2e-sftp-marker.txt' then
+          begin
+            LFound := True;
+            if LDir[I].Attrs.Size <> UInt64(Length(LData)) then
+              Fail('readdir size mismatch');
+          end;
+        if LFound then
+          Writeln('[e2e]   ok: readdir lists marker with size')
+        else
+          Fail('marker missing from readdir');
+      finally
+        LFfs.Remove(LPath);
+      end;
+      LFound := False;
+      LDir := LFfs.ListDir(LRoot);
+      for I := 0 to High(LDir) do
+        if LDir[I].Name = 'np-e2e-sftp-marker.txt' then
+          LFound := True;
+      if not LFound then
+        Writeln('[e2e]   ok: remove confirmed via readdir')
+      else
+        Fail('marker still present after remove');
+    finally
+      LSess.Close;
+    end;
+  except
+    on LE: ESSHError do Fail(SshErrorKindName(LE.Kind) + ': ' + LE.Message);
+    on LE: Exception do Fail(LE.ClassName + ': ' + LE.Message);
+  end;
+end;
+
 begin
   try
     if GetEnvironmentVariable('NEXTPAS_SSH_E2E_TRACE') = '1' then
       SshChannelTrace := @TraceLine;
+    if GetEnvironmentVariable('NEXTPAS_SSH_E2E_DUMP') = '1' then
+      SshTransportDump := @DumpPacket;
     Writeln('[e2e] live target: ', EnvOr('NEXTPAS_SSH_E2E_USER', 'root'), '@',
       EnvOr('NEXTPAS_SSH_E2E_HOST', ''), ':',
       EnvOr('NEXTPAS_SSH_E2E_PORT', '22'));
@@ -234,9 +349,10 @@ begin
     ScenarioStderrSplit;
     ScenarioWrongHostKey;
     ScenarioExecStress;
+    ScenarioSftpRoundtrip;
 
     if GFail = 0 then
-      Writeln('[e2e] PASS (5 scenarios)')
+      Writeln('[e2e] PASS (6 scenarios)')
     else
       Writeln('[e2e] FAILED: ', GFail, ' failure(s)');
     ExitCode := Ord(GFail > 0);

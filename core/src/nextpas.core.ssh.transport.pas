@@ -25,6 +25,14 @@ uses
   nextpas.core.ssh.kex;
 
 type
+  { 诊断钩子：非 nil 时逐包回调明文载荷（ATag='tx'/'rx'；互操作排障用，
+    库内默认 nil 零开销）}
+  TSshTransportDumpProc = procedure(const ATag: string; const APkt: TBytes);
+
+var
+  SshTransportDump: TSshTransportDumpProc = nil;
+
+type
   TSshTransportState = (
     tstInit,            { 未开始 }
     tstVersionExchange, { 版本串交换中 }
@@ -82,6 +90,15 @@ implementation
 
 uses
   nextpas.core.crypto.random;
+
+function UInt32Bytes(AValue: UInt32): TBytes;
+begin
+  SetLength(Result, 4);
+  Result[0] := Byte(AValue shr 24);
+  Result[1] := Byte(AValue shr 16);
+  Result[2] := Byte(AValue shr 8);
+  Result[3] := Byte(AValue);
+end;
 
 const
   DISCONNECT_PROTOCOL_VERSION = 2;
@@ -210,6 +227,8 @@ var
 begin
   if FState = tstClosed then
     raise ESSHError.Create(sekIO, 'ssh transport: closed');
+  if SshTransportDump <> nil then
+    SshTransportDump('tx', APayload);
   LPayloadLen := SizeUInt(Length(APayload));
   LBlock := FSender.PaddingBlock;
   { OpenSSH packet.c：AEAD/EtM 模式长度字段不进对齐区（len -= aadlen），
@@ -244,6 +263,12 @@ begin
   SetLength(LHeader, RECV_HEADER_SIZE);
   ReadFull(LHeader, 0, RECV_HEADER_SIZE);
   LBodyLen := FReceiver.BodyLengthFromHeader(FRecvSeq, LHeader);
+  if SshTransportDump <> nil then
+  begin
+    SshTransportDump('rseq', UInt32Bytes(FRecvSeq));
+    SshTransportDump('rhdr', LHeader);
+    SshTransportDump('rlen', UInt32Bytes(LBodyLen));
+  end;
   if (LBodyLen < 1) or (LBodyLen > SSH_MAX_RECEIVE_PACKET) then
     raise ESSHError.Create(sekProtocol,
       'ssh transport: unreasonable packet length ' + IntToStr(LBodyLen));
@@ -262,6 +287,8 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh transport: bad padding length');
   LPayloadLen := LBodyLen - 1 - LPadLen;
   Result := Copy(LBody, 1, SizeInt(LPayloadLen));
+  if SshTransportDump <> nil then
+    SshTransportDump('rx', Result);
 end;
 
 procedure TSshClientTransport.ApplyNewKeys(const ANegotiated: TSshNegotiated;
