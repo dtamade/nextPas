@@ -104,6 +104,7 @@ type
     UnifiedLines: Integer;       // <=0 = libgit2 默认（3 行）
     InterhunkLines: Integer;     // <=0 = 默认（0）
     Paths: TStringArray;         // 空 = 全仓
+    ShowBinary: Boolean;         // k101: 二进制 delta 以 "GIT binary patch" 段输出
   end;
 
   // One blame hunk: 一段连续行归属同一 commit

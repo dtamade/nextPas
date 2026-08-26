@@ -69,6 +69,12 @@ type
     // M5+（参数化）：同上带 options。
     function DiffWorkingTreeEx(const ARef: string;
       const AOptions: TGitDiffOptions): TGitDiff;
+    // k101: 工作树（含 index）相对 ARef 的完整 patch 文本——逐 delta 经
+    // git_patch_from_diff + git_patch_to_buf 连缀，与 git diff <ref> 输出同构；
+    // AShowBinary=True 时二进制 delta 以 "GIT binary patch" literal 段导出
+    // （可被 ApplyPatch 的 git_diff_from_buffer 解析回写）。无差异 → ''。
+    function WorkdirPatchText(const ARef: string; const APaths: TStringArray;
+      AShowBinary: Boolean): string;
     // M5: commit traversal from AStartRef along parents (topological + time order),
     // newest-first; ALimit <= 0 = unlimited. Unresolvable ref → EGitError.
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;

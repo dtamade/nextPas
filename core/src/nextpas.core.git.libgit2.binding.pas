@@ -122,6 +122,7 @@ function git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t)
 function git_patch_num_hunks(patch: git_patch): csize_t; cdecl;
 function git_patch_get_hunk(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl;
 function git_patch_get_line_in_hunk(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl;
+function git_patch_to_buf(out buf: git_buf; patch: git_patch): cint; cdecl;
 procedure git_patch_free(patch: git_patch); cdecl;
 
 // Revwalk (commit traversal along parents)
@@ -321,6 +322,7 @@ type
   TLibGit2_git_diff_get_delta = function(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl;
   TLibGit2_git_diff_free = procedure(diff: git_diff); cdecl;
   TLibGit2_git_patch_from_diff = function(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl;
+  TLibGit2_git_patch_to_buf = function(out buf: git_buf; patch: git_patch): cint; cdecl;
   TLibGit2_git_patch_num_hunks = function(patch: git_patch): csize_t; cdecl;
   TLibGit2_git_patch_get_hunk = function(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl;
   TLibGit2_git_patch_get_line_in_hunk = function(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl;
@@ -472,6 +474,7 @@ function static_git_diff_num_deltas(diff: git_diff): csize_t; cdecl; external LI
 function static_git_diff_get_delta(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl; external LIBGIT2_LIB name 'git_diff_get_delta';
 procedure static_git_diff_free(diff: git_diff); cdecl; external LIBGIT2_LIB name 'git_diff_free';
 function static_git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_from_diff';
+function static_git_patch_to_buf(out buf: git_buf; patch: git_patch): cint; cdecl; external LIBGIT2_LIB name 'git_patch_to_buf';
 function static_git_patch_num_hunks(patch: git_patch): csize_t; cdecl; external LIBGIT2_LIB name 'git_patch_num_hunks';
 function static_git_patch_get_hunk(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_get_hunk';
 function static_git_patch_get_line_in_hunk(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_get_line_in_hunk';
@@ -887,6 +890,11 @@ end;
 function git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl;
 begin
   Result := static_git_patch_from_diff(patch, diff, idx);
+end;
+
+function git_patch_to_buf(out buf: git_buf; patch: git_patch): cint; cdecl;
+begin
+  Result := static_git_patch_to_buf(buf, patch);
 end;
 
 function git_patch_num_hunks(patch: git_patch): csize_t; cdecl;
@@ -1337,6 +1345,7 @@ var
   dyn_git_diff_get_delta: TLibGit2_git_diff_get_delta = nil;
   dyn_git_diff_free: TLibGit2_git_diff_free = nil;
   dyn_git_patch_from_diff: TLibGit2_git_patch_from_diff = nil;
+  dyn_git_patch_to_buf: TLibGit2_git_patch_to_buf = nil;
   dyn_git_patch_num_hunks: TLibGit2_git_patch_num_hunks = nil;
   dyn_git_patch_get_hunk: TLibGit2_git_patch_get_hunk = nil;
   dyn_git_patch_get_line_in_hunk: TLibGit2_git_patch_get_line_in_hunk = nil;
@@ -1500,6 +1509,7 @@ begin
   dyn_git_diff_get_delta := nil;
   dyn_git_diff_free := nil;
   dyn_git_patch_from_diff := nil;
+  dyn_git_patch_to_buf := nil;
   dyn_git_patch_num_hunks := nil;
   dyn_git_patch_get_hunk := nil;
   dyn_git_patch_get_line_in_hunk := nil;
@@ -2133,6 +2143,13 @@ begin
   if not Assigned(dyn_git_patch_from_diff) then
     Pointer(dyn_git_patch_from_diff) := ResolveLibGit2Symbol('git_patch_from_diff');
   Result := dyn_git_patch_from_diff(patch, diff, idx);
+end;
+
+function git_patch_to_buf(out buf: git_buf; patch: git_patch): cint; cdecl;
+begin
+  if not Assigned(dyn_git_patch_to_buf) then
+    Pointer(dyn_git_patch_to_buf) := ResolveLibGit2Symbol('git_patch_to_buf');
+  Result := dyn_git_patch_to_buf(buf, patch);
 end;
 
 function git_patch_num_hunks(patch: git_patch): csize_t; cdecl;
