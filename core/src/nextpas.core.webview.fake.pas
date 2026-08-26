@@ -626,7 +626,7 @@ begin
   FDebugTools := AOptions.DebugTools;
   FDispatcher := TFakeDispatcher.Create;
   LReg := TFakeInvokeRegistry.Create;
-  LAssets := TFakeAssets.Create;
+  LAssets := TFakeAssets.Create(AOptions.DevServerUrl <> '');
   FInvokesIntf := LReg;    { 拥有（引用计数） }
   FAssetsIntf := LAssets;
   FInvokes := LReg;        { 非拥有别名（同类私有访问） }
@@ -636,6 +636,13 @@ begin
   FHistIdx := -1;
   SetLength(GLiveWindows, Length(GLiveWindows) + 1);
   GLiveWindows[High(GLiveWindows)] := Self;
+
+  { Initial* 启动加载：构造即导航。资产/桥请求都在主循环泵里才发生，
+    Build 返回后的挂载先于任何请求，无时序竞态（§3.4） }
+  if AOptions.InitialHtml <> '' then
+    NavigateToString(AOptions.InitialHtml)
+  else if AOptions.InitialUrl <> '' then
+    Navigate(AOptions.InitialUrl);
 end;
 
 destructor TFakeWebview.Destroy;
