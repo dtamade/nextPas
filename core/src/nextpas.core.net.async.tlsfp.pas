@@ -1294,9 +1294,6 @@ begin
     Exit;
   FPumping := True;
   try
-    if not FDead then
-      ArmNetSend; { 有已封密文就先冲 }
-
     LIters := 0;
     while True do
     begin
@@ -1313,6 +1310,13 @@ begin
           DeliverWrite(ASYNC_TLSFP_ERR_IO);
         Exit;
       end;
+      { 每迭代先冲已封密文：同步回调（读交付/写完成）内可能刚封装了新
+        记录，而该回调里的重入 Pump 被本函数入口护栏拒绝——若只在泵
+        入口冲一次，回调期间封装的密文将永远发不出去（实测 sing-box
+        wss：WS 升级响应交付后 vless 命令帧滞留发送队列，双向静默
+        死锁）。 }
+      if not FDead then
+        ArmNetSend;
       if FDead then
       begin
         if FReadPending then
@@ -1332,7 +1336,6 @@ begin
         Move(FPlainOut[LCopy], FPlainOut[0],
           Length(FPlainOut) - LCopy);
         SetLength(FPlainOut, Length(FPlainOut) - LCopy);
-        WriteLn(ErrOutput, '[t] deliver ', LCopy);
         DeliverRead(Int32(LCopy));
         Continue;
       end;
@@ -1345,7 +1348,6 @@ begin
         DeliverRead(0);
         Continue;
       end;
-      WriteLn(ErrOutput, '[t] gate armed=', FRecvArmed);
       if FRecvArmed then
         Exit; { 臂挂接收未完成：FNetIn 尾部是未初始化暂存区，不可解析；
                 新字节只会经回调收缩后进入，届时再泵 }
