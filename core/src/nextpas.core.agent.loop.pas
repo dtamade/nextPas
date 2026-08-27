@@ -483,7 +483,8 @@ var
   Jobs: array of TToolJob;
   SlotJob: array of Integer;           { Slots[i] → Jobs 下标；-1=无 job }
   One: array[0..0] of TToolJob;
-  AllParallel: Boolean;
+  Group: array of TToolJob;            { W13：相邻 tcParallel 段的临时视图 }
+  G, H: Integer;                       { 分组游标 }
   LStopped: Boolean;
   Verdict: THookVerdict;
   ChildTok: IAsyncCancellationToken;
@@ -847,26 +848,36 @@ begin
       if LStopped then
         SetLength(Slots, Length(Slots) - 1); { stop 的调用不执行不回喂 }
 
-      { ---- 执行：全 tcParallel 才整批并行；否则逐个单元素批保序
-        （LIFECYCLE §5：串/并行都经线程池）。取消在切片边界生效，
-        未完成项已被合成 cancelled error result ---- }
+      { ---- 执行：tcParallel 分组调度（W13，LIFECYCLE §5）——贪心相邻段
+        并行：连续 tcParallel 整段一次 RunToolBatch；非并行独占单批。
+        语义保持：非并行期无并发兄弟。全并行=单组，全串行=逐个 ---- }
       if Length(Jobs) > 0 then
       begin
-        AllParallel := True;
-        for I := 0 to High(Jobs) do
-          if not (tcParallel in Slots[SlotJob[I]].Spec.Capabilities) then
-          begin
-            AllParallel := False;
+        G := 0;
+        while G <= High(Jobs) do
+        begin
+          if Assigned(LOpt.Cancel) and LOpt.Cancel.IsCancelled then
             Break;
-          end;
-        if AllParallel then
-          RunToolBatch(Jobs, FPool, LClock, LOpt.Cancel)
-        else
-          for I := 0 to High(Jobs) do
+          if tcParallel in Jobs[G].Tool.Spec.Capabilities then
           begin
-            One[0] := Jobs[I];
+            H := G;
+            while (H < High(Jobs)) and
+              (tcParallel in Jobs[H + 1].Tool.Spec.Capabilities) do
+              Inc(H);
+            SetLength(Group, H - G + 1);
+            for I := G to H do
+              Group[I - G] := Jobs[I];
+            RunToolBatch(Group, FPool, LClock, LOpt.Cancel);
+            G := H + 1;
+          end
+          else
+          begin
+            One[0] := Jobs[G];
             RunToolBatch(One, FPool, LClock, LOpt.Cancel);
+            Inc(G);
           end;
+        end;
+        SetLength(Group, 0);
       end;
 
       { ---- 截断信封化 → post-hook（只见截断后载荷，DoS 时序）→ 定槽 ---- }

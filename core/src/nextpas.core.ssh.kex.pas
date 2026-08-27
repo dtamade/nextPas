@@ -23,8 +23,8 @@ const
   SSH_OFFER_KEX_ALGS: array[0..1] of string =
     ('curve25519-sha256', 'curve25519-sha256@libssh.org');
 
-  SSH_OFFER_HOSTKEY_ALGS: array[0..2] of string =
-    ('ssh-ed25519', 'rsa-sha2-512', 'rsa-sha2-256');
+  SSH_OFFER_HOSTKEY_ALGS: array[0..3] of string =
+    ('ssh-ed25519', 'ecdsa-sha2-nistp256', 'rsa-sha2-512', 'rsa-sha2-256');
 
   SSH_OFFER_CIPHER_ALGS: array[0..5] of string =
     ('chacha20-poly1305@openssh.com',

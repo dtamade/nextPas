@@ -22,12 +22,14 @@ var
   T: TTestSuite;
 
 const
-  C_ZIP_UNITS: array[0..4] of string = (
+  C_ZIP_UNITS: array[0..6] of string = (
     'src/nextpas.core.zip.pas',
     'src/nextpas.core.zip.base.pas',
     'src/nextpas.core.zip.writer.pas',
     'src/nextpas.core.zip.reader.pas',
-    'src/nextpas.core.zip.fs.pas'
+    'src/nextpas.core.zip.sequential.pas',
+    'src/nextpas.core.zip.fs.pas',
+    'src/nextpas.core.zip.aes.pas'
   );
 
   { 经典 RTL / 平台单元黑名单：与"只允许 nextpas.*"白名单互为双保险 }

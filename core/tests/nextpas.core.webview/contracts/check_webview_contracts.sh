@@ -28,7 +28,7 @@ for unit in nextpas.core.webview.base.pas nextpas.core.webview.intf.pas; do
     fail=1
     continue
   fi
-  for token in bridge fake factory gtk webview2 wk vfs; do
+  for token in bridge fake factory gtk webview2 wk vfs mime; do
     hits="$(grep -Ec "nextpas\.core\.webview\.${token}\b" "$path" || true)"
     if [[ "$hits" -ne 0 ]]; then
       echo "FAIL: $unit references nextpas.core.webview.$token (INV-4), $hits hit(s)"

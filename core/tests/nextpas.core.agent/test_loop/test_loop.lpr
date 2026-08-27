@@ -155,6 +155,48 @@ type
       const ACtx: IToolContext): TToolResult;
   end;
 
+  { W13 并发探针：原子在飞计数与峰值。Max=观测到的最大并发；
+    诊断计数 Dbg* 暴露 Enter 路径，用于断言 CAS 正确性与串/并行判定 }
+  TMeter = class
+  private
+    FCur: Int32;
+    FMax: Int32;
+  public
+    DbgCalls: Int32;
+    DbgBrk: Int32;
+    DbgCasFail: Int32;
+    DbgLastLNow: Int32;
+    DbgLastLOld: Int32;
+    function Enter: Int32;
+    procedure Leave;
+    property Max: Int32 read FMax;
+  end;
+
+  TStampBox = class
+  public
+    V: Int32;
+  end;
+
+  TProbeTool = class(TInterfacedObject, IAgentTool)
+  private
+    FSpec: TToolSpec;
+    FGlobal: TMeter;
+    FSleepMs: Integer;
+    FExclusive: Boolean;
+    FFaultBox: TStampBox;            { 非零=违例（独占破坏/序号错位）；
+                                       接口变量持工具，故障经共享盒上报 }
+    FStampBox: TStampBox;
+    FExpectIdx: Integer;
+  public
+    constructor Create(const AName: string; ACaps: TToolCapabilities;
+      const AGlobal: TMeter; ASleepMs: Integer;
+      AExclusive: Boolean = False; const AFaultBox: TStampBox = nil;
+      const AStampBox: TStampBox = nil; AExpectIdx: Integer = -1);
+    function Spec: TToolSpec;
+    function Execute(const AArgumentsJson: TJsonText;
+      const ACtx: IToolContext): TToolResult;
+  end;
+
 { ---- 消息构造助手 ---- }
 
 function NewAsst(AOutTokens: Int64): TMessage;
@@ -558,6 +600,81 @@ begin
   Result.ContentJson := '"b-ok"';
 end;
 
+function TMeter.Enter: Int32;
+var
+  LNow, LOld, LPrev: Int32;
+begin
+  Inc(DbgCalls);
+  LNow := _backend_xadd_i32(FCur, 1) + 1;
+  DbgLastLNow := LNow;
+  { 峰值单调提升：CAS 循环——仅当并发峰值被超越时提升 Max }
+  repeat
+    LOld := _backend_xadd_i32(FMax, 0);
+    DbgLastLOld := LOld;
+    if LNow <= LOld then
+    begin
+      Inc(DbgBrk);
+      Break;
+    end;
+    LPrev := _backend_cmpxchg_i32(FMax, LNow, LOld);
+    if LPrev = LOld then
+      Break;
+    Inc(DbgCasFail);
+  until False;
+  Result := LNow;
+end;
+
+procedure TMeter.Leave;
+begin
+  _backend_xadd_i32(FCur, -1);
+end;
+
+constructor TProbeTool.Create(const AName: string;
+  ACaps: TToolCapabilities; const AGlobal: TMeter; ASleepMs: Integer;
+  AExclusive: Boolean; const AFaultBox: TStampBox;
+  const AStampBox: TStampBox; AExpectIdx: Integer);
+begin
+  inherited Create;
+  FGlobal := AGlobal;
+  FSleepMs := ASleepMs;
+  FExclusive := AExclusive;
+  FFaultBox := AFaultBox;
+  FStampBox := AStampBox;
+  FExpectIdx := AExpectIdx;
+  FSpec := Default(TToolSpec);
+  FSpec.Name := AName;
+  FSpec.Capabilities := ACaps;
+end;
+
+function TProbeTool.Spec: TToolSpec;
+begin
+  Result := FSpec;
+end;
+
+function TProbeTool.Execute(const AArgumentsJson: TJsonText;
+  const ACtx: IToolContext): TToolResult;
+var
+  LGlobAtEntry: Int32;
+begin
+  LGlobAtEntry := FGlobal.Enter;
+  if FExclusive and (LGlobAtEntry > 1) and (FFaultBox <> nil) then
+    FFaultBox.V := 1;
+  if FExclusive and (FStampBox <> nil) then
+  begin
+    if _backend_xadd_i32(FStampBox.V, 0) <> FExpectIdx then
+    begin
+      if FFaultBox <> nil then
+        FFaultBox.V := 1;
+    end
+    else
+      _backend_xadd_i32(FStampBox.V, 1);
+  end;
+  NewSystemClock.SleepMs(FSleepMs, nil);
+  FGlobal.Leave;
+  Result := Default(TToolResult);
+  Result.ContentJson := '"ok-' + FSpec.Name + '"';
+end;
+
 { ---- 测试体 ---- }
 
 procedure TestEventOrderSnapshot;
@@ -689,6 +806,178 @@ begin
     Loop.Free;
     Pool.Shutdown;
     Gates.Free;
+  end;
+end;
+
+{ ---- W13：tcParallel 分组调度（LIFECYCLE §5）---- }
+
+procedure TestMixedBatchParallelGroupW13;
+var
+  Prov: TFakeProvider;
+  Loop: TAgentLoop;
+  Pool: IThreadPool;
+  Asst1: TMessage;
+  Run: IAgentLoopRun;
+  TR: TMessageArray;
+  GlobM: TMeter;
+  NBox: TStampBox;
+  PA, PB, PN: IAgentTool;
+begin
+  { [P,P,N]：相邻并行对同组重叠执行——Global.Max≥2 为确定性证据，
+    旧"全有全无"规则下整批退化串行即 Max=1 必红；尾随非并行独占。
+    工具经接口变量持有（W2 惯例），故障经共享盒上报 }
+  GlobM := TMeter.Create;
+  NBox := TStampBox.Create;
+  Prov := TFakeProvider.Create;
+  Pool := CreateThreadPool(4);
+  Loop := TAgentLoop.Create(Prov, Pool);
+  PA := TProbeTool.Create('pa', [tcParallel], GlobM, 30);
+  PB := TProbeTool.Create('pb', [tcParallel], GlobM, 30);
+  PN := TProbeTool.Create('pn', [], GlobM, 5, True, NBox);
+  try
+    Asst1 := NewAsst(-1);
+    AddCall(Asst1, 'c-a', 'pa', '{}');
+    AddCall(Asst1, 'c-b', 'pb', '{}');
+    AddCall(Asst1, 'c-n', 'pn', '{}');
+    Prov.Add(Asst1);
+    Prov.Add(TextTurn('group ok'));
+    Loop.Options.RequestBase.Model := 'fake-model';
+    Loop.AddTool(PA);
+    Loop.AddTool(PB);
+    Loop.AddTool(PN);
+    Run := Loop.Run('go');
+    Check(Run.Outcome = roCompleted, 'mixed batch completes');
+    Check(GlobM.Max >= 2, 'adjacent parallel pair overlapped');
+    CheckEqual(Integer(0), Integer(NBox.V), 'trailing serial ran exclusive');
+    TR := Run.Transcript;
+    CheckLength(3, Length(TR[2].Parts), 'all results fed back');
+  finally
+    Loop.Free;
+    Pool.Shutdown;
+    PA := nil;
+    PB := nil;
+    PN := nil;
+    NBox.Free;
+    GlobM.Free;
+  end;
+end;
+
+procedure TestMixedBatchSandwichW13;
+var
+  Prov: TFakeProvider;
+  Loop: TAgentLoop;
+  Pool: IThreadPool;
+  Asst1: TMessage;
+  Run: IAgentLoopRun;
+  TR: TMessageArray;
+  I: Integer;
+  AllOk: Boolean;
+  GlobM: TMeter;
+  XBox: TStampBox;
+  P1, P2, PX: IAgentTool;
+begin
+  { [P,N,P]：中间非并行调用切断配对——两 P 各自孤立完成不饿死，
+    全程无任何重叠（Max=1 精确断言钉死分组语义）}
+  GlobM := TMeter.Create;
+  XBox := TStampBox.Create;
+  Prov := TFakeProvider.Create;
+  Pool := CreateThreadPool(4);
+  Loop := TAgentLoop.Create(Prov, Pool);
+  P1 := TProbeTool.Create('p1', [tcParallel], GlobM, 10);
+  PX := TProbeTool.Create('px', [], GlobM, 10, True, XBox);
+  P2 := TProbeTool.Create('p2', [tcParallel], GlobM, 10);
+  try
+    Asst1 := NewAsst(-1);
+    AddCall(Asst1, 'c-1', 'p1', '{}');
+    AddCall(Asst1, 'c-x', 'px', '{}');
+    AddCall(Asst1, 'c-2', 'p2', '{}');
+    Prov.Add(Asst1);
+    Prov.Add(TextTurn('sandwich ok'));
+    Loop.Options.RequestBase.Model := 'fake-model';
+    Loop.AddTool(P1);
+    Loop.AddTool(PX);
+    Loop.AddTool(P2);
+    Run := Loop.Run('go');
+    Check(Run.Outcome = roCompleted, 'sandwich batch completes');
+    CheckEqual(Integer(0), Integer(XBox.V), 'middle serial ran exclusive');
+    CheckEqual(Integer(1), GlobM.Max,
+      'non-parallel call splits the pair (no cross-grouping)');
+    CheckEqual(Integer(3), Integer(GlobM.DbgCalls), 'dbg calls');
+    CheckEqual(Integer(1), Integer(GlobM.DbgLastLNow), 'dbg lnow');
+    CheckEqual(Integer(1), Integer(GlobM.DbgLastLOld), 'dbg lold');
+    CheckEqual(Integer(2), Integer(GlobM.DbgBrk), 'dbg brk');
+    TR := Run.Transcript;
+    CheckLength(3, Length(TR[2].Parts), 'three results fed back');
+    AllOk := True;
+    for I := 0 to 2 do
+      if TR[2].Parts[I].IsError then
+        AllOk := False;
+    Check(AllOk, 'no starvation among sandwiched calls');
+  finally
+    Loop.Free;
+    Pool.Shutdown;
+    P1 := nil;
+    P2 := nil;
+    PX := nil;
+    XBox.Free;
+    GlobM.Free;
+  end;
+end;
+
+procedure TestSerialBatchOrderW13;
+var
+  Prov: TFakeProvider;
+  Loop: TAgentLoop;
+  Pool: IThreadPool;
+  Asst1: TMessage;
+  Run: IAgentLoopRun;
+  StampBox: TStampBox;
+  FaultBoxes: array of TStampBox;
+  GlobM: TMeter;
+  N1, N2, N3: IAgentTool;
+  I: Integer;
+begin
+  { [N,N,N]：全串行批严格按调用序执行（戳号校验），回归保序不变量 }
+  GlobM := TMeter.Create;
+  StampBox := TStampBox.Create;
+  SetLength(FaultBoxes, 3);
+  for I := 0 to 2 do
+    FaultBoxes[I] := TStampBox.Create;
+  Prov := TFakeProvider.Create;
+  Pool := CreateThreadPool(2);
+  Loop := TAgentLoop.Create(Prov, Pool);
+  N1 := TProbeTool.Create('n1', [], GlobM, 2, True, FaultBoxes[0],
+    StampBox, 0);
+  N2 := TProbeTool.Create('n2', [], GlobM, 2, True, FaultBoxes[1],
+    StampBox, 1);
+  N3 := TProbeTool.Create('n3', [], GlobM, 2, True, FaultBoxes[2],
+    StampBox, 2);
+  try
+    Asst1 := NewAsst(-1);
+    AddCall(Asst1, 'c-1', 'n1', '{}');
+    AddCall(Asst1, 'c-2', 'n2', '{}');
+    AddCall(Asst1, 'c-3', 'n3', '{}');
+    Prov.Add(Asst1);
+    Prov.Add(TextTurn('serial ok'));
+    Loop.Options.RequestBase.Model := 'fake-model';
+    Loop.AddTool(N1);
+    Loop.AddTool(N2);
+    Loop.AddTool(N3);
+    Run := Loop.Run('go');
+    Check(Run.Outcome = roCompleted, 'serial batch completes');
+    for I := 0 to 2 do
+      CheckEqual(Integer(0), Integer(FaultBoxes[I].V),
+        'call ' + IntToStr(I + 1) + ' ran in order and exclusive');
+  finally
+    Loop.Free;
+    Pool.Shutdown;
+    N1 := nil;
+    N2 := nil;
+    N3 := nil;
+    for I := 0 to 2 do
+      FaultBoxes[I].Free;
+    StampBox.Free;
+    GlobM.Free;
   end;
 end;
 
@@ -1147,6 +1436,9 @@ begin
   T.Test('event order snapshot', @TestEventOrderSnapshot);
   T.Test('cache control template W10', @TestCacheControlTemplateW10);
   T.Test('parallel batch execution', @TestParallelBatchExecution);
+  T.Test('mixed batch parallel group W13', @TestMixedBatchParallelGroupW13);
+  T.Test('mixed batch sandwich W13', @TestMixedBatchSandwichW13);
+  T.Test('serial batch order W13', @TestSerialBatchOrderW13);
   T.Test('budget warning once', @TestBudgetWarningOnce);
   T.Test('doom loop guided finish', @TestDoomLoopGuidedFinish);
   T.Test('max tool calls trims batch', @TestMaxToolCallsTrimsBatch);

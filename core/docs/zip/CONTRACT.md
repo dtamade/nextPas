@@ -11,10 +11,10 @@
 | 类型 | 说明 |
 |------|------|
 | `TZipMethod = (zmStore, zmDeflate)` | 已知压缩方法；未知方法码保持 `zmStore`，看 `MethodCode` |
-| `TZipEntryInfo` | central directory 条目元数据；尺寸/偏移为 UInt64（Zip64 宽度）；含 `ExternalAttrs` 原值与 `IsSymlink` 判定 |
+| `TZipEntryInfo` | central directory 条目元数据；尺寸/偏移为 UInt64（Zip64 宽度）；含 `ExternalAttrs` 原值与 `IsSymlink` 判定；加密条目另有 `IsEncrypted` / `AesVersion`（1=AE-1，2=AE-2）/ `AesStrengthCode`，`MethodCode` 为解密后的真实压缩方法 |
 | `TZipWriteOptions` | `ForceZip64: Boolean`——无条件产出 Zip64 结构 |
-| `TZipAddOptions` | 单条目完整选项：`Method` / `ModTimeUnixSec`（<0 取 DOS 下限）/ `Mode`（unix 模式字，0 取默认） |
-| `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB |
+| `TZipAddOptions` | 单条目完整选项：`Method` / `ModTimeUnixSec`（<0 取 DOS 下限）/ `Mode`（unix 模式字，0 取默认）/ `Password`（非空走 WinZip AE-2 加密，INV-14）/ `AesStrength`（1/2/3 = AES-128/192/256，0 取 3）/ `DataDescriptor`（仅 `AddEntryStream` 生效，INV-15） |
+| `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`Password`——WinZip AES 解密口令（INV-14） |
 | `TZipExtractOptions` | fs 解包选项：`RestoreMode` / `SkipSymlinks` / `MaxOutputSize` |
 
 ### 1.2 工厂函数
@@ -23,6 +23,8 @@
 |------|------|
 | `NewZipWriter` / `NewZipWriterWithOptions` | 写器；顺序追加、一次性 Finish |
 | `NewZipReader` / `NewZipReaderWithOptions` | 读器；构造时解析 central directory，非法结构立即 raise |
+| `NewZipReaderFrom` / `NewZipReaderFromWithOptions` | 从可定位流打开：经 IReaderAt 定位读按需取数（EOCD/central/条目载荷），不整体载入、不改写调用方流位置；源须同时实现 IStream 与 IReaderAt，否则 ENotSupportedError；多条目流可并发打开 |
+| `NewZipSequentialReader` / `NewZipSequentialReaderWithOptions` | 从纯顺序流打开：仅靠 local header + data descriptor 前进，不整载、不要求 seek，与七期描述符写端对偶；源为任意 IReader（HTTP body/管道）；一次仅一流，MaxOutputSize 与口令语义与读端一致 |
 | `DefaultZipWriteOptions` / `DefaultZipAddOptions` / `DefaultZipReadOptions` / `DefaultZipExtractOptions` | 各选项默认值 |
 | `ZipPackDirInto` / `ZipPackDir` | 目录递归打包（携带 mtime 与 posix 权限位） |
 | `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录 |
@@ -38,7 +40,9 @@
 | `AddEntryDeflateWithTime(...)` | 同上 + 显式时间戳 |
 | `AddDirectory(Name)` / `AddDirectoryWithTime(...)` | 目录条目；名字规范化补尾随 `/`；查找需用规范化名 |
 | `AddEntryWithOptions(Name, Data, TZipAddOptions)` | 方法/时间戳/模式字一次给定；模式字声明目录（$4000）时补尾随 `/` 并置 MS-DOS 位 $10 |
-| `AddEntryStream(Name, TZipAddOptions): ICompressWriter` | 流式添加：返回推式写入端（`nextpas.core.compress.intf` 家族），增量 CRC32 + 按 Method 压缩；`Close` 定稿条目；放弃未 Close 的流则条目不落入归档；存在未关闭流时 `Finish` raise |
+| `AddEntryStream(Name, TZipAddOptions): ICompressWriter` | 流式添加：返回推式写入端（`nextpas.core.compress.intf` 家族），增量 CRC32 + 按 Method 压缩；`Close` 定稿条目；默认内存上界为单条目压缩尺寸，`DataDescriptor` 开启后降到常数级（INV-15）；放弃未 Close 的流则条目不落入归档（描述符直写路径改为 Finish fail-closed）；存在未关闭流时 `Finish` raise |
+| `StreamOutputTo(IWriter)` | 绑定流式输出端：分块排空已暂存字节，此后逐条目透传（内存上界为单条目压缩尺寸）；仅允许绑定一次，重复绑定 raise；绑定后 `Finish` 拒绝，终结经 `FinishTo(同一 sink)` |
+| `FinishTo(IWriter): UInt64` | 终结并把完整归档直写 sink，返回写入总字节数；未绑定时自动绑定。产出与缓冲式 `Finish` 字节级一致；nil sink / 异源 sink / 未关闭条目流 raise |
 | `EntryCount` | 已添加条目数 |
 | `Finish: TBytes` | 终结并返回完整归档；此后任何添加/再次 Finish raise |
 
@@ -53,6 +57,16 @@
 | `OpenEntry(Index) / OpenEntryByName(Name): IDecompressReader` | 流式打开：pull 式增量解压不物化输出；读到 EOF（返回 0）时强制尺寸+CRC32 校验；可同读器多流并发；EOF 前放弃则跳过校验 |
 | `CopyEntryTo(Index, IWriter): SizeUInt` | 泵送整条目到任意写端，EOF 处校验，返回输出字节数 |
 
+### 1.5 顺序读器方法
+
+| 方法 | 说明 |
+|------|------|
+| `Next(out Info: TZipEntryInfo): Boolean` | 推进到下一条目；True 携带当前条目元数据（描述符条目在 Next 时已通过 descriptor 强校验并回填真实尺寸/CRC），False 表示已到 central/EOCD；截断/签名错 raise EParseError |
+| `Current: TZipEntryInfo` / `EntryIndex: Integer` / `AtEnd: Boolean` | 当前条目视图与迭代状态 |
+| `Open: IDecompressReader` | 打开当前条目流（拉式，读到 0 为 EOF）；一次仅一流，重复打开或未 Next 时 raise EInvalidOperationError；MaxOutputSize 与口令语义与读端一致 |
+| `CopyTo(IWriter): SizeUInt` | 泵送当前条目到任意写端，EOF 处校验，返回输出字节数 |
+| `Skip` | 跳过当前条目载荷（不解压，直接丢弃 descriptor/载荷）；未 Next 或已打开流时 raise |
+
 ## 2. 不变量
 
 - **[INV-1]** CRC32 永远针对未压缩载荷计算与校验（store 与 deflate 一致）。
@@ -61,11 +75,13 @@
   受宿主 zlib 版本影响外）。
 - **[INV-4]** 敌意条目名（空名/绝对路径/盘符/反斜杠/`..` 段）在写端拒绝入参、
   在读端提取与落盘前以 EParseError 拒绝。
-- **[INV-5]** 加密条目（flag bit 0）、未知压缩方法、多盘归档 → ENotSupportedError。
+- **[INV-5]** 遗留 ZipCrypto（flag bit 0 且无有效 0x9901 extra）、未知压缩
+  方法、多盘归档 → ENotSupportedError；WinZip AES 条目按 INV-14 放行。
 - **[INV-6]** Zip64：尺寸/偏移超 ZIP32 宽度或条目数超 65535 时自动启用；
   ForceZip64 无条件启用。central 布局固定为 [固定字段][名字][extra][注释]。
-- **[INV-7]** data descriptor 容忍：本地头 flag bit3 置位的流式归档按 central
-  权威值提取（本地 crc/尺寸为占位值不影响结果）；写端永不产出描述符。
+- **[INV-7]** data descriptor 读端容忍：本地头 flag bit3 置位的流式归档按
+  central 权威值提取（本地 crc/尺寸为占位值不影响结果）。写端默认仍不
+  产出描述符；`TZipAddOptions.DataDescriptor` 显式开启时按 INV-15 产出。
 - **[INV-8]** deflate 提取预分配以 central 声明尺寸为容量提示，但对敌意声明
   施加压缩比上界（压缩尺寸×16+64KB），硬上限仍是 MaxOutputSize；声明值不参与
   正确性判定（实际输出仍强制校验）。
@@ -73,22 +89,71 @@
   目录的权限与 mtime 在全部内容落盘后逆序定稿。
 - **[INV-10]** 符号链接条目默认跳过；SkipSymlinks=False 为显式 opt-in 保真创建。
 - **[INV-11]** 流式契约：写端 `AddEntryStream` 增量计算 CRC32 与压缩输出，
-  内存上界为单条目压缩尺寸，`Close` 定稿、析构兜底为放弃（条目排除）；
+  内存上界为单条目压缩尺寸，`Close` 定稿、析构兜底为放弃（暂存路径条目
+  排除；描述符直写路径见 INV-15 fail-closed）；
   读端 `OpenEntry*` 在读到 EOF 时强制尺寸+CRC32 校验，EOF 前放弃跳过校验；
   `MaxOutputSize` 对流式路径在流中途中断生效。
+- **[INV-12]** 归档流式输出契约：`StreamOutputTo` 绑定后逐条目透传（绑定
+  前暂存字节先按 ≤256 KiB 分块排空），内存上界为单条目压缩尺寸；
+  `FinishTo` 与缓冲式 `Finish` 字节级一致（同一 Emit 序列化路径的结构保证，
+  测试以 store/deflate/目录/选项模式字/unicode 名/ForceZip64/条目流全场景
+  断言）；sink 短写交付 `EIOError`，sink 抛出的异常原样传播，失败后归档
+  不完整，写器应整体弃用。
+- **[INV-13]** 可定位流来源契约：`NewZipReaderFrom*` 全程经 IReaderAt 定位
+  读按需取数——调用方流位置不被改写，多条目流可并发打开（各自持独立区
+  间游标）；源须同时实现 IStream 与 IReaderAt，缺失定位读即 fail-closed；
+  MaxOutputSize 对提取与流式两条路径同样生效；EOF 处尺寸+CRC32 强制校验
+  与 INV-11 一致。
+- **[INV-14]** WinZip AES 加密条目契约：写端仅产出 AE-2（wire 方法 99 +
+  0x9901 extra + flag bit0，头部 CRC 置 0，压缩后加密，帧 = salt+口令校验
+  值+AES-CTR 密文+10 字节 HMAC-SHA1 认证码；密钥 PBKDF2-HMAC-SHA1 1000 轮
+  派生 encKey+authKey+pwVerify；盐取安全随机，同输入不再字节级确定）。
+  读端同时接受 AE-1（保留真实 CRC32，走常规 CRC 校验）与 AE-2（头部 CRC
+  必须为 0，完整性由认证码保证）；口令校验值与认证码在解密前强校验且
+  失败报文统一（不泄露失败点 oracle），常量时间比对；缺口令
+  EInvalidOperationError；遗留 ZipCrypto 按 INV-5 拒绝。x86_64 且 CPU 支持
+  时 CTR 块加密走 AES-NI（128/256 位密钥），其余走常数时间实现（含 192）。
+- **[INV-15]** 描述符直写契约：仅 `AddEntryStream` + `DataDescriptor=True`
+  生效。开形态 local header（bit3 + CRC=0 + 尺寸字段/zip64 extra 零占位，
+  版本 ≥45，加密再抬到 51）立即落盘，压缩字节经 Emit 路由直通输出管道
+  （可选 `TWinZipAesSealer` 增量封框），`Close` 紧贴数据补发描述符
+  （签名 `$08074B50` + crc + 尺寸；任一尺寸超 ZIP32 则成对走 64 位）。
+  描述符条目期间强制串行化（`AddEntry*` / `AddEntryStream` /
+  `StreamOutputTo` 一律 `EInvalidOperationError`）。放弃未 Close 的描述符
+  流会在输出中留下孤儿字节，`Finish` / `FinishTo` fail-closed
+  （`descriptor entry abandoned`）。central flags 镜像 bit3；AE-2 描述符
+  携带真实 CRC，登记进 central 的头部 CRC 仍置 0（INV-14）。默认
+  `DataDescriptor=False`，既有缓冲/暂存路径字节级行为不变。
+- **[INV-16]** 顺序读契约：`NewZipSequentialReader*` 从任意 `IReader` 顺序
+  消费，仅靠 local header + data descriptor 前进，不整载、不要求 seek，
+  与 INV-15 对偶。`Next` 在描述符条目上增量扫描定位描述符（签名 +
+  CRC/尺寸强校验 + 下一条目签名预检，防载荷误判），并通过 pushback 保
+  证跨条目字节级精确；非描述符条目按 local 声明尺寸精确有界。`Open` /
+  `CopyTo`/`Skip` 语义与读端一致（Guard/解压/CRC/MaxOutput/口令），
+  一次仅一流，重复打开或未 `Next` 时 `EInvalidOperationError`；截断
+  结构 `EParseError`，不支持的 AES 描述符 `ENotSupportedError`。
 
 ## 3. 错误模型
 
 | 场景 | 异常 |
 |------|------|
-| 结构损坏（签名错、截断、extra 链畸形、central 越界、坏符号链接目标） | `EParseError('zip: ...')` |
+| 结构损坏（签名错、截断、extra 链畸形、central 越界、坏符号链接目标、AE 强度/厂商非法） | `EParseError('zip: ...')` |
 | CRC 不符 / 解压尺寸不符 | `EIOError` |
-| 加密条目 / 未知方法 / 多盘归档 | `ENotSupportedError` |
+| 遗留 ZipCrypto / 未知方法 / 多盘归档 / 不支持的 AE 版本 | `ENotSupportedError` |
+| WinZip AES 口令校验值或认证码不匹配（统一报文，无失败点 oracle） | `EParseError('zip aes: authentication failed')` |
+| 加密条目未配置口令 | `EInvalidOperationError` |
 | 条目缺失（按名查找后提取） | `ENotFoundError` |
 | 索引越界 | `EIndexOutOfRangeError` |
 | Finish 后再写入 / 再 Finish | `EInvalidOperationError` |
+| 描述符直写进行中的其他条目级操作 | `EInvalidOperationError('zip writer: descriptor entry stream is active')` |
+| 描述符直写流被放弃后 Finish/FinishTo | `EInvalidOperationError('zip writer: descriptor entry abandoned')` |
 | 写端条目名不安全 | `EArgumentError` |
+| 流式输出端为 nil / 重复绑定 / 异源 FinishTo | `EArgumentError`（nil）/ `EInvalidOperation`（其余） |
+| 输出 sink 短写 | `EIOError('zip writer: short write to output sink')` |
+| 源流缺失定位读能力 | `ENotSupportedError` |
 | 单条目解压超过 MaxOutputSize | `EIOError`（来自 raw inflate 上限语义） |
+| 顺序读未 Next 或重复打开流 | `EInvalidOperationError` |
+| 顺序读 AES 描述符 | `ENotSupportedError` |
 
 ## 4. 源契约
 
@@ -100,10 +165,11 @@ FPC RTL（SysUtils/Classes 等）与第三方库一律经 owner 模块间接使�
 ## 5. 测试入口
 
 ```bash
-make focused FOCUS=core/tests/nextpas.core.zip/test_zip           # 写端结构/确定性/Zip64/选项
-make focused FOCUS=core/tests/nextpas.core.zip/test_zip_reader    # 读端解析/防护/属性
-make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fs        # 目录打包/解包/权限
-make focused FOCUS=core/tests/nextpas.core.zip/test_zip_contract  # 本契约 + 无 FPC RTL 依赖审计
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip            # 写端结构/确定性/Zip64/选项
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_reader     # 读端解析/防护/属性
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_sequential # 顺序读端（HTTP body/管道）与描述符对偶
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fs         # 目录打包/解包/权限
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_contract   # 本契约 + 无 FPC RTL 依赖审计
 ```
 
 python3 zipfile 作为独立实现交叉验证源（读我们产出的归档、生成参考归档、

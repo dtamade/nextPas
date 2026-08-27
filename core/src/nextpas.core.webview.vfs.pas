@@ -30,8 +30,9 @@ function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.webview.base,
+  nextpas.core.webview.mime,
   nextpas.core.vfs.util;
 
 type
@@ -61,23 +62,8 @@ begin
 end;
 
 function TVfsAssetProvider.GuessMime(const APath: string): string;
-var
-  LExt: string;
 begin
-  LExt := LowerCase(ExtractFileExt(APath));
-  if LExt = '.html' then Exit('text/html; charset=utf-8');
-  if LExt = '.htm' then Exit('text/html; charset=utf-8');
-  if LExt = '.js' then Exit('application/javascript; charset=utf-8');
-  if LExt = '.mjs' then Exit('application/javascript; charset=utf-8');
-  if LExt = '.css' then Exit('text/css; charset=utf-8');
-  if LExt = '.json' then Exit('application/json; charset=utf-8');
-  if LExt = '.png' then Exit('image/png');
-  if LExt = '.jpg' then Exit('image/jpeg');
-  if LExt = '.jpeg' then Exit('image/jpeg');
-  if LExt = '.svg' then Exit('image/svg+xml');
-  if LExt = '.txt' then Exit('text/plain; charset=utf-8');
-  if LExt = '.wasm' then Exit('application/wasm');
-  Result := 'application/octet-stream';
+  Result := GuessWebviewMime(APath);
 end;
 
 function TVfsAssetProvider.TryRead(const APath: string; out ABytes: TBytes;

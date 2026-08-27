@@ -8,6 +8,7 @@ uses
   nextpas.core.fs,
   nextpas.core.process,
   nextpas.core.compress.intf,
+  nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.zip,
@@ -298,18 +299,19 @@ begin
   LW.AddEntry('x.txt', BytesOfStr('v'));
   LRaw := LW.Finish;
 
-  { patch central method -> 99 }
+  { patch central method -> 99（无加密标志）：六期起在解析期即以
+    EParseError 拒绝（AE extra 缺失） }
   LCDPos := FindCentralSig(LRaw);
   Check(LCDPos > 0, 'central sig located');
   LRaw[LCDPos + 10] := 99;
-  LR := NewZipReader(LRaw);
+  LR := nil;
   LGot := False;
   try
-    LR.ExtractToBytes(0);
+    LR := NewZipReader(LRaw);
   except
-    on E: ENotSupportedError do LGot := True;
+    on E: EParseError do LGot := True;
   end;
-  Check(LGot, 'unknown method raises not-supported');
+  Check(LGot, 'method 99 without flag refused at parse');
 
   { 还原 method、patch 加密位 }
   LW := NewZipWriter;
@@ -753,6 +755,313 @@ begin
   CheckEqual(Int64(0), Int64(NativeUInt(LN)), 'empty entry copies zero bytes');
 end;
 
+{ ---- 可定位流来源读器（NewZipReaderFrom）---- }
+
+type
+  { 仅实现 IStream 的最小源（无 IReaderAt）：验证构造期 fail-closed }
+  TNoAtStream = class(TInterfacedObject, IStream)
+  private
+    FData: TBytes;
+  public
+    constructor Create(const AData: TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    property Size: Int64 read GetSize;
+    property Position: Int64 read GetPosition write SetPosition;
+  end;
+
+constructor TNoAtStream.Create(const AData: TBytes);
+begin
+  inherited Create;
+  FData := AData;
+end;
+
+function TNoAtStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := ACount;
+end;
+
+function TNoAtStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := ACount;
+end;
+
+function TNoAtStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := AOffset;
+end;
+
+procedure TNoAtStream.Close;
+begin
+end;
+
+function TNoAtStream.GetSize: Int64;
+begin
+  Result := Length(FData);
+end;
+
+function TNoAtStream.GetPosition: Int64;
+begin
+  Result := 0;
+end;
+
+procedure TNoAtStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function PatternBytes(ALen: Integer; ASeed: Integer): TBytes;
+var
+  LI: Integer;
+begin
+  SetLength(Result, ALen);
+  for LI := 0 to ALen - 1 do
+    Result[LI] := Byte((LI * 3 + ASeed + (LI shr 5)) mod 251);
+end;
+
+{ 固定混合条目面：store/deflate/目录/unicode 名，显式时间戳 }
+function BuildMixedArchive: TBytes;
+var
+  LW: IZipWriter;
+begin
+  LW := NewZipWriter;
+  LW.AddEntryWithTime('hello.txt', BytesOfStr('hello world'), 1787574896);
+  LW.AddEntryDeflateWithTime('data.bin', PatternBytes(20000, 11), 1787574896);
+  LW.AddDirectoryWithTime('assets', 1780000000);
+  LW.AddEntryDeflateWithTime('数据/文件.txt',
+    BytesOfStr('unicode nested payload'), 1787574896);
+  Result := LW.Finish;
+end;
+
+{ 元数据逐项对齐（与内存读器互为参照） }
+procedure CheckParity(const AMem, ASrc: IZipReader);
+var
+  LI: Integer;
+  LE, LS: TZipEntryInfo;
+begin
+  CheckEqual(Int64(AMem.EntryCount), Int64(ASrc.EntryCount),
+    'source reader entry count parity');
+  for LI := 0 to AMem.EntryCount - 1 do
+  begin
+    LE := AMem.Entry(LI);
+    LS := ASrc.Entry(LI);
+    Check(LE.Name = LS.Name, 'parity name: ' + LE.Name);
+    CheckEqual(Int64(Integer(LE.MethodCode)), Int64(Integer(LS.MethodCode)),
+      'parity method: ' + LE.Name);
+    CheckEqual(Int64(LE.CompressedSize), Int64(LS.CompressedSize),
+      'parity csize: ' + LE.Name);
+    CheckEqual(Int64(LE.UncompressedSize), Int64(LS.UncompressedSize),
+      'parity usize: ' + LE.Name);
+    CheckEqual(Int64(LE.Crc32), Int64(LS.Crc32),
+      'parity crc: ' + LE.Name);
+    CheckEqual(Int64(LE.ExternalAttrs), Int64(LS.ExternalAttrs),
+      'parity attrs: ' + LE.Name);
+  end;
+end;
+
+procedure TestSourceReaderParityAndExtract;
+var
+  LArchive: TBytes;
+  LMem, LSrc: IZipReader;
+  LS: IStream;
+  LI: Integer;
+begin
+  LArchive := BuildMixedArchive;
+  LMem := NewZipReader(LArchive);
+
+  { 内存流源：元数据对齐 + 提取逐一相等 }
+  LS := CreateBytesStreamFrom(LArchive);
+  LSrc := NewZipReaderFrom(LS);
+  CheckParity(LMem, LSrc);
+  for LI := 0 to LSrc.EntryCount - 1 do
+    if not LSrc.Entry(LI).IsDirectory then
+      Check(SameBytes(LMem.ExtractToBytes(LI), LSrc.ExtractToBytes(LI)),
+        'source extract equals memory: ' + LSrc.Entry(LI).Name);
+
+  { 空归档（仅 EOCD）也可从源打开 }
+  LS := CreateBytesStreamFrom(NewZipWriter.Finish);
+  CheckEqual(Int64(0), Int64(NewZipReaderFrom(LS).EntryCount),
+    'empty archive from source');
+end;
+
+{ 同一源读器并发打开两条流交错小块读取——各自区间游标独立；
+  CopyEntryTo 经源路径泵送 }
+procedure TestSourceReaderStreamsInterleavedAndCopy;
+var
+  LR: IZipReader;
+  LS1, LS2: IDecompressReader;
+  LGot, LGot2: TBytes;
+  LB: Byte;
+  LN1, LN2: SizeUInt;
+  LDst: IStream;
+  LW: IWriter;
+  LCopied: TBytes;
+  LBack: SizeUInt;
+begin
+  LR := NewZipReaderFrom(CreateBytesStreamFrom(BuildMixedArchive));
+
+  SetLength(LGot, 0);
+  SetLength(LGot2, 0);
+  LS1 := LR.OpenEntryByName('data.bin');
+  LS2 := LR.OpenEntryByName('hello.txt');
+  repeat
+    LN1 := LS1.Read(LB, 7);
+    if LN1 > 0 then
+    begin
+      SetLength(LGot, Length(LGot) + Integer(LN1));
+      Move(LB, LGot[Length(LGot) - Integer(LN1)], LN1);
+    end;
+    LN2 := LS2.Read(LB, 3);
+    if LN2 > 0 then
+    begin
+      SetLength(LGot2, Length(LGot2) + Integer(LN2));
+      Move(LB, LGot2[Length(LGot2) - Integer(LN2)], LN2);
+    end;
+  until (LN1 = 0) and (LN2 = 0);
+  LS1.Close;
+  LS2.Close;
+  Check(SameBytes(LGot, PatternBytes(20000, 11)),
+    'interleaved deflate stream intact');
+  Check(SameBytes(LGot2, BytesOfStr('hello world')),
+    'interleaved store stream intact');
+
+  LDst := CreateBytesStream(64);
+  LW := LDst as IWriter;
+  CheckEqual(Int64(20000),
+    Int64(NativeUInt(LR.CopyEntryTo(LR.Find('data.bin'), LW))),
+    'source copy pumped length');
+  SetLength(LCopied, Integer(LDst.Size));
+  LDst.Position := 0;
+  LBack := LDst.Read(LCopied[0], Length(LCopied));
+  CheckEqual(Int64(Length(LCopied)), Int64(NativeUInt(LBack)),
+    'source copy read back fully');
+  Check(SameBytes(LCopied, PatternBytes(20000, 11)),
+    'source copied content matches');
+end;
+
+{ 定位读语义：调用方 Position 不受影响；nil / 无定位读 / 垃圾 / 截断源
+  在构造期显式失败 }
+procedure TestSourceReaderGuardsAndPosition;
+var
+  LArchive, LBad: TBytes;
+  LS: IStream;
+  LR: IZipReader;
+  LGot: TBytes;
+  LGotRaise: Boolean;
+  LI: Integer;
+begin
+  LArchive := BuildMixedArchive;
+
+  { Position 不受构造与提取影响 }
+  LS := CreateBytesStreamFrom(LArchive);
+  LS.Position := 3;
+  LR := NewZipReaderFrom(LS);
+  LGot := LR.ExtractToBytesByName('hello.txt');
+  Check(SameBytes(LGot, BytesOfStr('hello world')),
+    'extract with mid-position source works');
+  CheckEqual(Int64(3), Int64(LS.Position), 'caller position untouched');
+
+  { nil 源：EArgumentError }
+  LGotRaise := False;
+  try
+    NewZipReaderFrom(nil);
+  except
+    on E: Exception do
+      LGotRaise := Pos('EArgumentError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'nil source raises argument error');
+
+  { 无 IReaderAt 的源：构造期 ENotSupportedError（fail-closed） }
+  LGotRaise := False;
+  try
+    NewZipReaderFrom(TNoAtStream.Create(LArchive));
+  except
+    on E: Exception do
+      LGotRaise := Pos('ENotSupportedError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'source without positioned reads refused');
+
+  { 无 EOCD 的垃圾字节 }
+  SetLength(LBad, 100);
+  for LI := 0 to High(LBad) do
+    LBad[LI] := Byte((LI * 31 + 7) mod 253);
+  LGotRaise := False;
+  try
+    NewZipReaderFrom(CreateBytesStreamFrom(LBad));
+  except
+    on E: Exception do
+      LGotRaise := Pos('EParseError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'garbage source raises parse error');
+
+  { 截断掉 EOCD 尾部 }
+  LBad := Copy(LArchive, 0, Length(LArchive) - 10);
+  LGotRaise := False;
+  try
+    NewZipReaderFrom(CreateBytesStreamFrom(LBad));
+  except
+    on E: Exception do
+      LGotRaise := Pos('EParseError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'truncated tail raises parse error');
+end;
+
+{ ForceZip64 结构经源路径解析；MaxOutputSize 对提取与流式两条路径生效 }
+procedure TestSourceReaderZip64AndMaxOutput;
+var
+  LOptsW: TZipWriteOptions;
+  LOptsR: TZipReadOptions;
+  LW: IZipWriter;
+  LS: IStream;
+  LR: IZipReader;
+  LSt: IDecompressReader;
+  LGot: TBytes;
+  LB: Byte;
+  LGotRaise: Boolean;
+begin
+  LOptsW := DefaultZipWriteOptions;
+  LOptsW.ForceZip64 := True;
+  LW := NewZipWriterWithOptions(LOptsW);
+  LW.AddEntryWithTime('tiny.txt', BytesOfStr('hello zip64'), 1787574896);
+  LS := CreateBytesStreamFrom(LW.Finish);
+  LR := NewZipReaderFrom(LS);
+  CheckEqual(Int64(11), Int64(LR.Entry(0).UncompressedSize),
+    'zip64 source usize from extra field');
+  Check(SameBytes(LR.ExtractToBytesByName('tiny.txt'),
+    BytesOfStr('hello zip64')), 'zip64 source extract');
+
+  { 提取路径：超上限 raise EIOError }
+  LS := CreateBytesStreamFrom(BuildMixedArchive);
+  LOptsR := DefaultZipReadOptions;
+  LOptsR.MaxOutputSize := 16;
+  LR := NewZipReaderFromWithOptions(LS, LOptsR);
+  LGotRaise := False;
+  try
+    LGot := LR.ExtractToBytesByName('data.bin');
+  except
+    on E: Exception do
+      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'max output enforced on source extract');
+
+  { 流式路径：读取途中超上限 raise }
+  LGotRaise := False;
+  LSt := LR.OpenEntryByName('data.bin');
+  try
+    while LSt.Read(LB, 8) > 0 do ;
+  except
+    on E: Exception do
+      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+  end;
+  LSt.Close;
+  Check(LGotRaise, 'max output enforced mid-stream on source path');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.reader');
   T.Test('Empty archive reader', @TestEmptyArchiveReader);
@@ -775,5 +1084,12 @@ begin
   T.Test('Stream bomb cap', @TestStreamBombCap);
   T.Test('Stream concurrent interleaved', @TestStreamConcurrentInterleaved);
   T.Test('Copy entry to sink', @TestCopyEntryToSink);
+  T.Test('Source reader parity and extract', @TestSourceReaderParityAndExtract);
+  T.Test('Source reader streams interleaved and copy',
+    @TestSourceReaderStreamsInterleavedAndCopy);
+  T.Test('Source reader guards and position',
+    @TestSourceReaderGuardsAndPosition);
+  T.Test('Source reader zip64 and max output',
+    @TestSourceReaderZip64AndMaxOutput);
   if not T.Run then Halt(1);
 end.

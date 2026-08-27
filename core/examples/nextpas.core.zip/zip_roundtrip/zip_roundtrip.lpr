@@ -18,16 +18,19 @@ uses
   nextpas.core.zip.base;
 
 var
-  LRoot, LOut: string;
+  LRoot, LOut, LAesZip: string;
   LW: IZipWriter;
   LR: IZipReader;
   LOpts: TZipWriteOptions;
-  LStreamOpts: TZipAddOptions;
+  LStreamOpts, LAesOpts: TZipAddOptions;
+  LROpts: TZipReadOptions;
   LI, LSize: Integer;
   LN: SizeUInt;
+  LTotal: UInt64;
   LData, LGot: TBytes;
   LSink: ICompressWriter;
   LSrc: IDecompressReader;
+  LFile: IFile;
   LChunk: array[0..255] of Byte;
 
 function SameBytes(const A, B: TBytes): Boolean;
@@ -39,9 +42,18 @@ begin
   for LI := 0 to High(A) do
     if A[LI] <> B[LI] then Exit(False);
 end;
+
+function StrBytes(const S: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(S));
+  if Length(S) > 0 then
+    Move(Pointer(S)^, Result[0], Length(S));
+end;
 begin
   LRoot := GetTempDir + '/zip_roundtrip_src';
   LOut := GetTempDir + '/zip_roundtrip_out';
+  LAesZip := LOut + '.aes.zip';
 
   { 准备示例树 }
   RemoveAll(LRoot);
@@ -109,7 +121,41 @@ begin
   until LN = 0;
   WriteLn('streamed   : ', BoolToStr(SameBytes(LGot, LData), True));
 
+  { 流式输出：归档逐字节直写文件，不经整档物化（任意大小内存恒定） }
+  LW := NewZipWriter;
+  LFile := nextpas.core.fs.Create(LOut + '.stream.zip');
+  LW.StreamOutputTo(LFile as IWriter);
+  ZipPackDirInto(LRoot, LW);
+  LTotal := LW.FinishTo(LFile as IWriter);
+  LFile.Close;
+  WriteLn('piped      : ', LOut + '.stream.zip', ' bytes=', LTotal);
+
+  { 流式读回：从文件源定位取数直接解析，不经整档载入 }
+  LFile := nextpas.core.fs.Open(LOut + '.stream.zip', [fmRead]);
+  LR := NewZipReaderFrom(LFile as IStream);
+  LGot := LR.ExtractToBytesByName('hello.txt');
+  WriteLn('piped read : ', BoolToStr(SameBytes(LGot, StrBytes('hello zip')),
+    True));
+  LFile.Close;
+
+  { AES 加密条目：AE-2 写入 + 口令读回 }
+  LW := NewZipWriter;
+  LAesOpts := DefaultZipAddOptions;
+  LAesOpts.Method := zmDeflate;
+  LAesOpts.Password := StrBytes('demo-password');
+  LAesOpts.AesStrength := 3;
+  LW.AddEntryWithOptions('secret.txt', StrBytes('encrypted hello'), LAesOpts);
+  WriteFile(LAesZip, LW.Finish);
+
+  LROpts := DefaultZipReadOptions;
+  LROpts.Password := StrBytes('demo-password');
+  LR := NewZipReaderWithOptions(ReadFile(LAesZip), LROpts);
+  LGot := LR.ExtractToBytesByName('secret.txt');
+  WriteLn('aes256 read: ',
+    BoolToStr(SameBytes(LGot, StrBytes('encrypted hello')), True));
+
   RemoveAll(LRoot);
   RemoveAll(LOut);
   DeleteFile(LOut + '.zip');
+  DeleteFile(LAesZip);
 end.
