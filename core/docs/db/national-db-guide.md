@@ -94,11 +94,25 @@ Conn := ConnectOdbc('Driver=DM8 ODBC DRIVER;Server=127.0.0.1;' +
   依赖驱动的 SqlState 质量。
 - 事务面 = AUTOCOMMIT OFF + SQLEndTran；`AImmediate` 参数接受为 no-op。
 
-### 2.5 其余 ODBC 路径库（GBase 8s / 神通 等）
+### 2.5 PolarDB / GoldenDB / TDSQL（双协议形态，选型见 §1）
+
+```pascal
+{ PolarDB-PG 形态走 pg 路径；PolarDB-X / GoldenDB / TDSQL-MySQL 形态走 mysql 路径 }
+Conn := ConnectPostgres('host=127.0.0.1 port=5432 dbname=polardb user=polardb password=secret');
+Conn := ConnectMysql('host=127.0.0.1 port=3306 user=goldendb password=secret db=app');
+Conn := ConnectMysql('host=127.0.0.1 port=3306 user=tdsql password=secret db=app');
+```
+
+- PolarDB-PG 与社区 PG 线协议一致，按 §2.1 预期；PolarDB-X / GoldenDB /
+  TDSQL 的 MySQL 兼容形态按 §2.3 预期——语句超时同样探测定格大概率忽略。
+- 这些库的分布式事务/全局一致性读等扩展能力不在统一层契约内，不假装支持。
+
+### 2.6 其余 ODBC 路径库（GBase 8s / 8a / 神通 等）
 
 同 §2.4 模板，替换 Driver 名与服务器参数即可；connstr 原文透传
 SQLDriverConnect，本层不解析不改写。个别驱动拒绝 `SQL_ATTR_QUERY_TIMEOUT`
-属环境降级（best effort），不影响其余功能。
+属环境降级（best effort），不影响其余功能。GBase 8a 分析型形态的批量装载
+建议走原生工具而非统一层批执行（能力矩阵 BatchExecutor 仍为逐条+单事务）。
 
 ## 3. 能力预期矩阵（跨库速查）
 
@@ -141,7 +155,21 @@ SQLDriverConnect，本层不解析不改写。个别驱动拒绝 `SQL_ATTR_QUERY
 4. **记录**：把实测能力矩阵快照（DbCapabilities 输出 + 门禁结果）回填到
    本文件对应小节，替换"待真机验证"标注。
 
-## 5. 反馈回路
+## 5. 离线预研结论（2026-08-28，无真机，不假验证）
+
+- **预研覆盖**：openGauss / KingbaseES / OceanBase MySQL 租户 / TiDB /
+  PolarDB（PG+X）/ GoldenDB / TDSQL（PG+MySQL）/ 达梦 DM8 / GBase 8s/8a /
+  神通——全部按 §1 三档分类并给出连接配方与能力预期，落点本文。
+- **未验证**：任意国产库的 conformance / trace 真机门禁均未跑过（无
+  `NEXTPAS_*_TEST_CONN` 环境），本文 §2 能力预期与 §3 矩阵均为**理论预期**，
+  上生产前必须按 §4 步骤自验。
+- **已收口**：ODBC MySQL 系 `HY000+1062` 欠归一由 D5 `ClassifyOdbcEx`
+  单调提精收口（仅 MySQL 词元驱动生效，达梦等仍欠归一诚实保留）。
+- **下一步**：真机环境就绪后，D2（pg 协议系）/ D3（mysql 协议系）按
+  env 门控跑 `test_db_conformance` + `test_db_trace`，结果回填本文对应小节
+  并同步路线图 D2/D3 状态列。
+
+## 6. 反馈回路
 
 国产库暴露出的底层缺陷按 AGENTS.md 跨模块纪律处理：优先修统一层/网关
 实现，不在消费方堆 workaround；发现归一缺口登记 CONTRACT §2.11/D 线
