@@ -18,11 +18,11 @@ SSH-2 客户端协议栈（对标 libssh2 的能力面），纯 Pascal 实现，
 | 主机密钥 | `ssh-ed25519`、`ecdsa-sha2-nistp256`、`rsa-sha2-512`、`rsa-sha2-256` |
 | 加密 | `chacha20-poly1305@openssh.com`、`aes256-gcm@openssh.com`、`aes128-gcm@openssh.com`、`aes256-ctr`、`aes192-ctr`、`aes128-ctr` |
 | MAC | `hmac-sha2-256-etm@openssh.com`、`hmac-sha2-512-etm@openssh.com`（仅 ETM；CTR 类算法必需） |
-| 压缩 | `none` |
+| 压缩 | `none`（默认零开销）、`zlib@openssh.com`（延迟，`USERAUTH_SUCCESS` 后启用）、`zlib`（即时，`NEWKEYS` 后启用）— 有状态流式（每方向 `z_stream`，`Z_SYNC_FLUSH` 逐包刷出，1 MiB 解压上限防 bomb） |
 | 认证 | `password`、`publickey`（openssh-key-v1 容器：ssh-ed25519、ssh-rsa；支持未加密与 `aes256-ctr`+`bcrypt` 加密；RSA 走 `rsa-sha2-512` 签名）、`ssh-agent`（Unix socket 11→12 枚举 + 13→14 代签名，支持 ed25519 / rsa-sha2-512/256，回退 `privatekey→password`） |
 
 明确不支持并会在协商阶段给出清晰错误的历史包袱：
-SHA-1 KEX、DH group1/14、非 ETM MAC、zlib 压缩、ssh-dss。
+SHA-1 KEX、DH group1、非 ETM MAC、ssh-dss（zlib 压缩已支持，见下）。
 
 ## API 形态
 
@@ -77,9 +77,10 @@ nextpas.core.crypto.blowfish.pas     ← Blowfish 分组密码（bcrypt 底座�
 nextpas.core.crypto.bcrypt_pbkdf.pas ← bcrypt_pbkdf 密钥派生（OpenSSH 加密私钥 KDF）
 nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析（ed25519 / ssh-rsa，未加密与 aes256-ctr+bcrypt 加密）
 nextpas.core.ssh.auth.pas            ← userauth 载荷构造/解析（probe `hasSig=false` + `PK_OK` / signed）
+nextpas.core.ssh.compress.pas        ← 压缩：有状态 `zlib`/`zlib@openssh.com`（`ISshCompressor` 双 `z_stream`，`Z_SYNC_FLUSH`，1 MiB 防 bomb）
 nextpas.core.ssh.agent.pas           ← ssh-agent 协议客户端（Unix socket 长度前缀帧，List/Sign）
 nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem）
-nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退）
+nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活）
 nextpas.core.ssh.sftp.pas            ← SFTP v3 客户端（ISshFileSystem 门面）
 ```
 
@@ -95,6 +96,7 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_kex
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_hostkey
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_keys
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_transport
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_compress
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_session
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_agent
@@ -172,13 +174,24 @@ ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
 | `agent rsa` 全栈回环 | ~45ms | 含 RSA 签名 |
 | `agent multiple` | ~5ms | 2 身份枚举首命中 |
 
+**压缩**（有状态 `zlib`/`zlib@openssh.com`，`test_ssh_compress` + `test_ssh_session` 回环）：
+
+| 路径 | 耗时/大小 | 备注 |
+| --- | --- | --- |
+| `none`（默认） | 零开销 | 不创建 `z_stream`，直通 |
+| `zlib@openssh.com` 延迟激活 | `USERAUTH_SUCCESS` 后首包起压缩 | 与 OpenSSH `delayed` 语义一致 |
+| `zlib` 即时 | `NEWKEYS` 后立即压缩 | 兼容 `zlib` 协商 |
+| 回环 `compress delayed` (password/pubkey/dh/agent) | 4–7ms / 6ms / 75ms | 19/19 全绿，含 dh 回退与 agent 组合 |
+| 解压上限 | 1 MiB | `SSH_COMP_MAX_DECOMPRESSED` 防 bomb |
+| 有状态增益 | 第 2 包 1 KiB `A*` 压缩后显著小于首包 | `Z_SYNC_FLUSH` 保留滑动窗口 |
+
 ## 已知限制
 
 - 加密私钥仅支持 `aes256-ctr` + `bcrypt`（KDF rounds≥1，salt 非空）；
   其他 cipher/kdf 组合（`aes128-ctr`、chacha 等加密容器）报 `sekUnsupported`。
 - RSA 签名默认走 CRT 加速（`p/q/iqmp` 存在且校验通过时，`dp/dq` + Garner 合并，约 5× 于 naive）；非法/缺失 CRT 自动回退 naive，无声誉风险。
 - KEX 已支持 `curve25519-sha256` 优先、`diffie-hellman-group14-sha256` 回退（2048-bit MODP，32 字节随机私钥，mpint 哈希输入）；curve25519 约 1ms，group14 约 50–70ms，默认首选前者。
-- 无 zlib 压缩（见 goal-tree 后续 slice 表）；ssh-agent 已落地（`agent` 单元，Unix socket，probe→PK_OK→sign 回退链）。
+- 压缩已支持 `zlib@openssh.com`（延迟，推荐）与 `zlib`（即时），默认 `Compress=False` 零开销；按需 `SshClient.Compress(True)` 或 `TSshConnectOptions.Compress:=True` 开启。
 - AEAD 算法协商的 MAC 字段被忽略（chacha/gcm 内建认证），与 OpenSSH 行为一致；
   CTR 类必须搭配 ETM MAC。
 - 对真实 OpenSSH 服务器的互操作已由 e2e_ssh_live 验证（本地 Docker Alpine 9.7 与

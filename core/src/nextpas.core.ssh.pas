@@ -29,6 +29,7 @@ uses
   nextpas.core.ssh.transport,
   nextpas.core.ssh.sftp,
   nextpas.core.ssh.agent,
+  nextpas.core.ssh.compress,
   nextpas.core.ssh.session;
 
 type
@@ -58,6 +59,7 @@ type
   TSshKnownHosts = nextpas.core.ssh.hostkey.TSshKnownHosts;
   TSshAgentClient = nextpas.core.ssh.agent.TSshAgentClient;
   TSshAgentIdentity = nextpas.core.ssh.agent.TSshAgentIdentity;
+  ISshCompressor = nextpas.core.ssh.compress.ISshCompressor;
   TsshWriter = nextpas.core.ssh.buffer.TsshWriter;
   TsshReader = nextpas.core.ssh.buffer.TsshReader;
 

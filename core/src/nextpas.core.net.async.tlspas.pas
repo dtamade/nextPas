@@ -27,8 +27,9 @@ unit nextpas.core.net.async.tlspas;
  *
  * v2 能力边界（fail-closed，绝不假装支持）：
  * - 仅 TLS 1.3（服务器拒绝 1.3 即失败，无 1.2 回退）；密钥交换
- *   X25519/P-256（首轮 X25519，遇 HelloRetryRequest 自动重试
- *   P-256，transcript 按 RFC 8446 §4.4.1 合成 message_hash）；
+ *   X25519/P-256/P-384（首轮 X25519，遇 HelloRetryRequest 自动重试
+ *   P-256/P-384，transcript 按 RFC 8446 §4.4.1 合成 message_hash；
+ *   P-384 共享 48B、公钥 97B，走 SHA-384 路径）；
  *   PSK 会话恢复（单身份，NewSessionTicket 捕获，带 max_early_data
  *   票据跳过，0-RTT 不做）已支持，HRR+PSK 组合 binder 重算已覆盖；
  *   客户端证书（收到 CertificateRequest 即失败）仍未支持。
@@ -162,6 +163,11 @@ function AsyncTlsFpConnect(const ALoop: TAsyncLoop; const AHost: string;
   const APort: UInt16; const AOptions: TAsyncTlsPasClientOptions;
   ACallback: TAsyncTlsPasConnectCallback; AContext: Pointer = nil): Boolean; deprecated 'use AsyncTlsPasConnect';
 
+{ HRR helpers exposed for synthetic verification (stable for test, not for app logic) }
+function TlsPasIsSupportedHRRGroup(AGroup: Word): Boolean;
+function TlsPasGroupKeyShareLen(AGroup: Word): Integer;
+function TlsPasBuildMessageHash(const ACH1: TBytes; ACipherSuite: Word): TBytes;
+
 implementation
 
 uses
@@ -178,6 +184,7 @@ uses
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.p256ecdh,
+  nextpas.core.crypto.p384,
   nextpas.core.tls.keyschedule.labels,
   nextpas.core.io.intf,
   nextpas.core.async.cancellation,
@@ -519,8 +526,9 @@ type
     State: TTlsPasHsState;
     { 客户端 X25519 私钥（收尾清零） }
     Priv: TBytes;
-    { HRR 扩展：P-256 私钥与 HRR 状态（收尾清零） }
+    { HRR 扩展：P-256/P-384 私钥与 HRR 状态（收尾清零） }
     PrivP256: TBytes;
+    PrivP384: TBytes;
     FirstGroup: Word;
     HRRSeen: Boolean;
     HRRTranscript: TBytes;
@@ -876,7 +884,7 @@ end;
   单元沿用 patch 思路：HRR 时用 PatchClientHelloKeyShare 生成 CH2，
   再以手工 binder 覆盖；不扩展 clienthello 构建器，避免为单一
   状态机引入额外 builder 分支。跨模块 touched files 仅本单元与
-  p256ecdh（新增）。约 30 行内完成 HRR 状态迁移与 binder 重算。 }
+  p256ecdh/p384（P-384 新增）。HRR 重试同时支持 P-256(65B)/P-384(97B)。 }
 
 function TlsPasIsHRR(const ARandom: TBytes): Boolean;
 begin
@@ -994,6 +1002,101 @@ begin
   Result := TLS13ComputeFinishedVerifyDataFromTrafficSecretForCipherSuite(ACipherSuite, LBinderKey, LHash);
 end;
 
+function TlsPasIsSupportedHRRGroup(AGroup: Word): Boolean;
+begin
+  Result := (AGroup = TLS13_GROUP_X25519) or (AGroup = TLS13_GROUP_SECP256R1) or (AGroup = TLS13_GROUP_SECP384R1);
+end;
+
+function TlsPasGroupKeyShareLen(AGroup: Word): Integer;
+begin
+  case AGroup of
+    TLS13_GROUP_X25519: Result := 32;
+    TLS13_GROUP_SECP256R1: Result := 65;
+    TLS13_GROUP_SECP384R1: Result := 97;
+  else
+    Result := -1;
+  end;
+end;
+
+function TlsPasGenerateHRRKeyPair(AGroup: Word; ACtx: PTlsPasHsCtx; out APub: TBytes; out AError: string): Boolean;
+var
+  LPrivP256: TBytes;
+  LPrivP384: TBytes;
+begin
+  Result := False;
+  AError := '';
+  SetLength(APub, 0);
+  case AGroup of
+    TLS13_GROUP_SECP256R1:
+      begin
+        if not TryGenerateP256ECDHKeyPair(LPrivP256, APub, AError) then Exit;
+        SecureZeroBytes(ACtx^.Priv);
+        SecureZeroBytes(ACtx^.PrivP384);
+        ACtx^.PrivP256 := LPrivP256;
+      end;
+    TLS13_GROUP_SECP384R1:
+      begin
+        if not TryP384ECDHEKeyPair(LPrivP384, APub, AError) then Exit;
+        SecureZeroBytes(ACtx^.Priv);
+        SecureZeroBytes(ACtx^.PrivP256);
+        ACtx^.PrivP384 := LPrivP384;
+      end;
+    TLS13_GROUP_X25519:
+      begin
+        GenerateX25519KeyPair(LPrivP256, APub);
+        SecureZeroBytes(ACtx^.PrivP256);
+        SecureZeroBytes(ACtx^.PrivP384);
+        SecureZeroBytes(ACtx^.Priv);
+        ACtx^.Priv := LPrivP256;
+      end;
+  else
+    AError := 'unsupported HRR group';
+    Exit;
+  end;
+  Result := True;
+end;
+
+function TlsPasDeriveSharedSecret(ACtx: PTlsPasHsCtx; AGroup: Word; const APeerShare: TBytes; out AShared: TBytes; out AError: string): Boolean;
+var
+  LPeerPoint: TECPoint;
+  LSharedPoint: TECPoint;
+  LSharedX: TBytes;
+begin
+  Result := False;
+  AError := '';
+  SetLength(AShared, 0);
+  case AGroup of
+    TLS13_GROUP_X25519:
+      begin
+        try
+          AShared := X25519ComputeSharedSecret(ACtx^.Priv, APeerShare);
+          Result := True;
+        except
+          on E: Exception do AError := E.Message;
+        end;
+      end;
+    TLS13_GROUP_SECP256R1:
+      begin
+        if Length(ACtx^.PrivP256) = 0 then begin AError := 'P-256 private missing'; Exit; end;
+        if not TryParseP256PublicPoint(APeerShare, LPeerPoint, AError) then Exit;
+        if not TryP256ScalarMult(ACtx^.PrivP256, LPeerPoint, LSharedPoint, AError) then Exit;
+        if LSharedPoint.IsInfinity then begin AError := 'P-256 ECDHE infinity'; Exit; end;
+        if not TryToFixedLength32(LSharedPoint.X, LSharedX, AError) then Exit;
+        if Length(LSharedX) <> 32 then begin AError := 'P-256 shared len'; Exit; end;
+        AShared := LSharedX;
+        Result := True;
+      end;
+    TLS13_GROUP_SECP384R1:
+      begin
+        if Length(ACtx^.PrivP384) = 0 then begin AError := 'P-384 private missing'; Exit; end;
+        if not TryP384ECDHE(ACtx^.PrivP384, APeerShare, AShared, AError) then Exit;
+        Result := True;
+      end;
+  else
+    AError := 'unsupported group';
+  end;
+end;
+
 { ======== 握手上下文生命周期 ======== }
 
 procedure CancelHsTimer(ACtx: PTlsPasHsCtx);
@@ -1014,6 +1117,7 @@ begin
   ClearTLS13ApplicationSecrets(ACtx^.AppSecrets);
   SecureZeroBytes(ACtx^.Priv);
   SecureZeroBytes(ACtx^.PrivP256);
+  SecureZeroBytes(ACtx^.PrivP384);
   SecureZeroBytes(ACtx^.ServerFinKey);
   SecureZeroBytes(ACtx^.ClientFinKey);
   SecureZeroBytes(ACtx^.HRRTranscript);
@@ -1079,8 +1183,6 @@ var
   LInfo: TTLS13ServerHelloInfo;
   LError: string;
   LNewPub: TBytes;
-  LNewPrivP256: TBytes;
-  LNewPrivX: TBytes;
   LCH2: TBytes;
   LTruncatedCH2: TBytes;
   LMsgHash: TBytes;
@@ -1094,9 +1196,6 @@ var
   LPskePos: Integer;
   LBefore: TBytes;
   LAfter: TBytes;
-  LPeerPoint: TECPoint;
-  LSharedPoint: TECPoint;
-  LSharedX: TBytes;
 begin
   if not TryParseServerHelloFromHandshake(AMsg, LInfo) then
   begin
@@ -1120,8 +1219,7 @@ begin
       TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
-    if (LInfo.KeyShareGroup <> TLS13_GROUP_X25519) and
-       (LInfo.KeyShareGroup <> TLS13_GROUP_SECP256R1) then
+    if not TlsPasIsSupportedHRRGroup(LInfo.KeyShareGroup) then
     begin
       TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
@@ -1138,22 +1236,10 @@ begin
     end;
     if Length(ACtx^.CH1Body) = 0 then
       ACtx^.CH1Body := Copy(ACtx^.CHBody);
-    if LInfo.KeyShareGroup = TLS13_GROUP_SECP256R1 then
+    if not TlsPasGenerateHRRKeyPair(LInfo.KeyShareGroup, ACtx, LNewPub, LError) then
     begin
-      if not TryGenerateP256ECDHKeyPair(LNewPrivP256, LNewPub, LError) then
-      begin
-        TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-        Exit;
-      end;
-      SecureZeroBytes(ACtx^.Priv);
-      ACtx^.PrivP256 := LNewPrivP256;
-    end
-    else
-    begin
-      GenerateX25519KeyPair(LNewPrivX, LNewPub);
-      SecureZeroBytes(ACtx^.PrivP256);
-      SecureZeroBytes(ACtx^.Priv);
-      ACtx^.Priv := LNewPrivX;
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
+      Exit;
     end;
     ACtx^.FirstGroup := LInfo.KeyShareGroup;
     LCH2 := PatchClientHelloKeyShare(ACtx^.CHBody, LNewPub, LInfo.KeyShareGroup);
@@ -1296,23 +1382,12 @@ begin
     TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
-  if LInfo.KeyShareGroup = TLS13_GROUP_X25519 then
+  if TlsPasGroupKeyShareLen(LInfo.KeyShareGroup) < 0 then
   begin
-    if Length(LInfo.PeerKeyShare) <> 32 then
-    begin
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-  end
-  else if LInfo.KeyShareGroup = TLS13_GROUP_SECP256R1 then
-  begin
-    if Length(LInfo.PeerKeyShare) <> 65 then
-    begin
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-  end
-  else
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
+    Exit;
+  end;
+  if Length(LInfo.PeerKeyShare) <> TlsPasGroupKeyShareLen(LInfo.KeyShareGroup) then
   begin
     TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
@@ -1332,48 +1407,10 @@ begin
     TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
-  if LInfo.KeyShareGroup = TLS13_GROUP_X25519 then
+  if not TlsPasDeriveSharedSecret(ACtx, LInfo.KeyShareGroup, LInfo.PeerKeyShare, LShared, LError) then
   begin
-    try
-      LShared := X25519ComputeSharedSecret(ACtx^.Priv, LInfo.PeerKeyShare);
-    except
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-  end
-  else
-  begin
-    if Length(ACtx^.PrivP256) = 0 then
-    begin
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-    if not TryParseP256PublicPoint(LInfo.PeerKeyShare, LPeerPoint, LError) then
-    begin
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-    if not TryP256ScalarMult(ACtx^.PrivP256, LPeerPoint, LSharedPoint, LError) then
-    begin
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-    if LSharedPoint.IsInfinity then
-    begin
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-    if not TryToFixedLength32(LSharedPoint.X, LSharedX, LError) then
-    begin
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-    if Length(LSharedX) <> 32 then
-    begin
-      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-      Exit;
-    end;
-    LShared := LSharedX;
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
+    Exit;
   end;
   ACtx^.Suite := LInfo.SelectedCipherSuite;
   SetLength(ACtx^.Transcript, 0);

@@ -250,7 +250,7 @@ var
   MixPtr, TmpPtr: PSingle;
   Gain: Single;
   HasData: Boolean;
-  OutBuf: TAudioBuffer;
+  OutBuf, SwapBuf: TAudioBuffer;
 begin
   if AFrames <= 0 then Exit(0);
   Needed := AFrames * FFormat.BlockAlign;
@@ -282,11 +282,11 @@ begin
   FillChar(ABuffer.Data[0], Needed, 0);
   MixPtr := PSingle(@ABuffer.Data[0]);
   HasData := False;
+  SetLength(Tmp.Data, Needed);
+  Tmp.Format := FFormat;
+  Tmp.FrameCount := AFrames;
   for I := 0 to High(NodesSnap) do
   begin
-    SetLength(Tmp.Data, Needed);
-    Tmp.Format := FFormat;
-    Tmp.FrameCount := AFrames;
     Gain := NodesSnap[I].Gain * FVolume;
     try
       J := NodesSnap[I].Source.FillRealtime(Tmp, AFrames);
@@ -330,7 +330,9 @@ begin
     begin
       try
         ProcsSnap[I].Processor.Process(OutBuf, Tmp);
+        SwapBuf := OutBuf;
         OutBuf := Tmp;
+        Tmp := SwapBuf;
       except
         InterlockedExchangeAdd64(FViolations, 1);
       end;

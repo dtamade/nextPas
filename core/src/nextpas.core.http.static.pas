@@ -401,6 +401,8 @@ var
   LEscapedName: string;
   LIfNoneMatch: string;
   LIsHead: Boolean;
+  LIfRangeHeader: string;
+  LIfRangeDate: Int64;
 begin
   if AReq <> nil then
     LIfNoneMatch := AReq.GetHeaders.Get('if-none-match')
@@ -429,6 +431,29 @@ begin
     LRangeHeader := AReq.GetHeaders.Get('range')
   else
     LRangeHeader := '';
+  { RFC 7233 §3.2 If-Range: when present, Range is honored only if the
+    validator matches the current representation; otherwise fall back to
+    full 200. ETag form is strong exact match (quoted), date form uses
+    TryParseHttpDate over the three HTTP-date grammars. }
+  if (LRangeHeader <> '') and (AReq <> nil) then
+  begin
+    LIfRangeHeader := Trim(AReq.GetHeaders.Get('if-range'));
+    if LIfRangeHeader <> '' then
+    begin
+      if TryParseHttpDate(LIfRangeHeader, LIfRangeDate) then
+      begin
+        { Date validator: stale when resource mtime is unknown or newer. }
+        if (AModTimeUnix = 0) or (AModTimeUnix > LIfRangeDate) then
+          LRangeHeader := '';
+      end
+      else
+      begin
+        { ETag validator: strong comparison. Weak "W/" never matches. }
+        if LIfRangeHeader <> AETag then
+          LRangeHeader := '';
+      end;
+    end;
+  end;
   if LRangeHeader <> '' then
   begin
     if not ParseRangeHeader(LRangeHeader, ASize, LStart, LEnd) then

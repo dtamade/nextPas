@@ -22,6 +22,7 @@ uses
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.cipher,
+  nextpas.core.ssh.compress,
   nextpas.core.ssh.kex;
 
 type
@@ -52,6 +53,11 @@ type
     FReceiver: ISshPacketReceiver;
     FServerIdent: string;
     FMyKexInitPayload: TBytes;
+    FCompressor: ISshCompressor;
+    FDecompressor: ISshCompressor;
+    FCompressEnabled: Boolean;
+    FNegotiatedCompCs: string;
+    FNegotiatedCompSc: string;
     procedure SendRaw(const ABytes: TBytes);
     procedure ReadFull(var ABuf: TBytes; AOffset, ACount: SizeUInt);
     function ReadLineRaw: string;
@@ -65,6 +71,12 @@ type
 
     { 构造发送 KEXINIT；返回我方完整载荷（供 H 计算保留）。}
     function SendKexInit(const ACookie: TBytes): TBytes;
+    function SendKexInitEx(const ACookie: TBytes; ACompress: Boolean): TBytes;
+
+    { 协商后记录压缩算法，由 ApplyNewKeys/EnableDelayedCompression 按时机激活 }
+    procedure SetNegotiatedCompression(const ANeg: TSshNegotiated);
+    procedure EnableCompression;
+    function IsCompressionEnabled: Boolean;
 
     { 帧化发送一条消息载荷（含消息号字节）}
     procedure SendPacket(const APayload: TBytes);
@@ -214,9 +226,46 @@ end;
 
 function TSshClientTransport.SendKexInit(const ACookie: TBytes): TBytes;
 begin
-  FMyKexInitPayload := SshBuildKexInitPayload(ACookie);
+  Result := SendKexInitEx(ACookie, False);
+end;
+
+function TSshClientTransport.SendKexInitEx(const ACookie: TBytes; ACompress: Boolean): TBytes;
+begin
+  FMyKexInitPayload := SshBuildKexInitPayloadEx(ACookie, ACompress);
   SendPacket(FMyKexInitPayload);
   Result := FMyKexInitPayload;
+end;
+
+procedure TSshClientTransport.SetNegotiatedCompression(const ANeg: TSshNegotiated);
+begin
+  FNegotiatedCompCs := ANeg.CompCs;
+  FNegotiatedCompSc := ANeg.CompSc;
+  FCompressEnabled := False;
+  { immediate zlib activates now; delayed waits for EnableCompression }
+  if (FNegotiatedCompCs = SSH_COMP_ZLIB) or (FNegotiatedCompSc = SSH_COMP_ZLIB) then
+    EnableCompression
+  else if (FNegotiatedCompCs = SSH_COMP_NONE) and (FNegotiatedCompSc = SSH_COMP_NONE) then
+  begin
+    FCompressor := nil;
+    FDecompressor := nil;
+  end;
+end;
+
+procedure TSshClientTransport.EnableCompression;
+begin
+  if FCompressEnabled then Exit;
+  if (FNegotiatedCompCs = SSH_COMP_NONE) and (FNegotiatedCompSc = SSH_COMP_NONE) then Exit;
+  if (FCompressor = nil) or (FDecompressor = nil) then
+  begin
+    FCompressor := CreateSshZlibCompressor;
+    FDecompressor := FCompressor; // single object holds both streams
+  end;
+  FCompressEnabled := True;
+end;
+
+function TSshClientTransport.IsCompressionEnabled: Boolean;
+begin
+  Result := FCompressEnabled;
 end;
 
 procedure TSshClientTransport.SendPacket(const APayload: TBytes);
@@ -224,12 +273,16 @@ var
   LPayloadLen, LPad, LBodyLen, LAad: SizeUInt;
   LBlock: Integer;
   LBody, LWire: TBytes;
+  LOut: TBytes;
 begin
   if FState = tstClosed then
     raise ESSHError.Create(sekIO, 'ssh transport: closed');
   if SshTransportDump <> nil then
     SshTransportDump('tx', APayload);
-  LPayloadLen := SizeUInt(Length(APayload));
+  LOut := APayload;
+  if FCompressEnabled and (FCompressor <> nil) and (FNegotiatedCompCs <> SSH_COMP_NONE) then
+    LOut := FCompressor.Compress(APayload);
+  LPayloadLen := SizeUInt(Length(LOut));
   LBlock := FSender.PaddingBlock;
   { OpenSSH packet.c：AEAD/EtM 模式长度字段不进对齐区（len -= aadlen），
     接收端强制 packlen % blocksize = 0 }
@@ -243,7 +296,7 @@ begin
   SetLength(LBody, LBodyLen);
   LBody[0] := Byte(LPad);
   if LPayloadLen > 0 then
-    Move(APayload[0], LBody[1], LPayloadLen);
+    Move(LOut[0], LBody[1], LPayloadLen);
   if not SecureRandomBytes(@LBody[1 + LPayloadLen], Integer(LPad)) then
     FillChar(LBody[1 + LPayloadLen], LPad, $2A);
 
@@ -287,6 +340,8 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh transport: bad padding length');
   LPayloadLen := LBodyLen - 1 - LPadLen;
   Result := Copy(LBody, 1, SizeInt(LPayloadLen));
+  if FCompressEnabled and (FDecompressor <> nil) and (FNegotiatedCompSc <> SSH_COMP_NONE) then
+    Result := FDecompressor.Decompress(Result);
   if SshTransportDump <> nil then
     SshTransportDump('rx', Result);
 end;

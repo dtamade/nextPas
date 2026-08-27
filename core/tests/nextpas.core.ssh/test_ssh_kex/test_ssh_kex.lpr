@@ -535,6 +535,27 @@ begin
     end;
   end);
 
+  LSuite.Test('compress negotiation', procedure
+  var LW:TsshWriter; LPeer:TSshPeerKexInit; LNeg:TSshNegotiated; LPayload:TBytes;
+  begin
+    // default none negotiates none
+    LPeer:=SshParseKexInit(CraftKexInitPayload(['curve25519-sha256']));
+    // craft peer offering only none -> SshNegotiate should still pick none
+    LW:=TsshWriter.Create(256);
+    try LW.PutByte(SSH_MSG_KEXINIT); LW.PutRaw(HexToBytes('000102030405060708090a0b0c0d0e0f')); LW.PutNameList(['curve25519-sha256']); LW.PutNameList(['ssh-ed25519']); LW.PutNameList(['aes256-gcm@openssh.com']); LW.PutNameList(['aes256-gcm@openssh.com']); LW.PutNameList([]); LW.PutNameList([]); LW.PutNameList(['none']); LW.PutNameList(['none']); LW.PutStringText(''); LW.PutStringText(''); LW.PutBoolean(False); LW.PutUInt32(0); LPeer:=SshParseKexInit(LW.ToBytes); finally LW.Free; end;
+    LNeg:=SshNegotiate(LPeer); CheckEqual('none', LNeg.CompCs);
+    // with compress enabled, peer offering zlib@openssh.com -> picks zlib@openssh.com
+    LW:=TsshWriter.Create(256);
+    try LW.PutByte(SSH_MSG_KEXINIT); LW.PutRaw(HexToBytes('000102030405060708090a0b0c0d0e0f')); LW.PutNameList(['curve25519-sha256']); LW.PutNameList(['ssh-ed25519']); LW.PutNameList(['aes256-gcm@openssh.com']); LW.PutNameList(['aes256-gcm@openssh.com']); LW.PutNameList([]); LW.PutNameList([]); LW.PutNameList(['zlib@openssh.com','zlib','none']); LW.PutNameList(['zlib@openssh.com','zlib','none']); LW.PutStringText(''); LW.PutStringText(''); LW.PutBoolean(False); LW.PutUInt32(0); LPeer:=SshParseKexInit(LW.ToBytes); finally LW.Free; end;
+    LNeg:=SshNegotiateEx(LPeer, True); CheckEqual('zlib@openssh.com', LNeg.CompCs);
+    LNeg:=SshNegotiateEx(LPeer, False); CheckEqual('none', LNeg.CompCs);
+    // SshBuildKexInitPayloadEx includes compress when true
+    LPayload:=SshBuildKexInitPayloadEx(HexToBytes('00112233445566778899aabbccddeeff'), True);
+    LPeer:=SshParseKexInit(LPayload); CheckTrue(Length(LPeer.CompCs)=3); CheckEqual('zlib@openssh.com', LPeer.CompCs[0]);
+    LPayload:=SshBuildKexInitPayloadEx(HexToBytes('00112233445566778899aabbccddeeff'), False);
+    LPeer:=SshParseKexInit(LPayload); CheckEqual('none', LPeer.CompCs[0]);
+  end);
+
   LRunner := TSuiteRunner.Create('nextpas.core.ssh.kex');
   LRunner.Add(LSuite);
   LRunner.RunAll;

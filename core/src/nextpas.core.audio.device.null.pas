@@ -27,6 +27,7 @@ type
     FViolations: Int64;
     FEvents: TDeviceEventArray;
     FConsecutiveUnderruns: Integer;
+    FScratch: TBytes;
     procedure PushEvent(AKind: TDeviceEventKind; const AMsg: string);
   public
     constructor Create(const AInfo: TAudioDeviceInfo; const AFormat: TAudioFormat);
@@ -204,15 +205,11 @@ begin
     FLock.Leave;
   end;
   LNeeded := AFrames * FFormat.BlockAlign;
-  SetLength(LBuf.Data, LNeeded);
+  if Length(FScratch) <> LNeeded then
+    SetLength(FScratch, LNeeded);
+  LBuf.Data := FScratch;
   LBuf.Format := FFormat;
   LBuf.FrameCount := AFrames;
-  if Length(LBuf.Data) < LNeeded then
-  begin
-    InterlockedExchangeAdd64(FViolations, 1);
-    AFrames := Length(LBuf.Data) div FFormat.BlockAlign;
-    if AFrames <= 0 then Exit(0);
-  end;
   try
     LRet := FSource.FillRealtime(LBuf, AFrames);
   except
