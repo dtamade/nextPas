@@ -21,7 +21,9 @@ uses
   nextpas.core.audio.mix,
   nextpas.core.audio.dsp.filters,
   nextpas.core.audio.dsp.dynamics,
-  nextpas.core.audio.dsp.fft;
+  nextpas.core.audio.dsp.fft,
+  nextpas.core.audio.device.intf,
+  nextpas.core.audio.device.null;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -58,6 +60,12 @@ type
   TBiquad = nextpas.core.audio.dsp.filters.TBiquad;
   TCompressor = nextpas.core.audio.dsp.dynamics.TCompressor;
   TSingleArray = nextpas.core.audio.dsp.fft.TSingleArray;
+
+  TDeviceState = nextpas.core.audio.device.intf.TDeviceState;
+  TDeviceEvent = nextpas.core.audio.device.intf.TDeviceEvent;
+  TAudioDeviceInfoArray = nextpas.core.audio.device.intf.TAudioDeviceInfoArray;
+  IAudioDevice = nextpas.core.audio.device.intf.IAudioDevice;
+  IAudioDeviceProvider = nextpas.core.audio.device.intf.IAudioDeviceProvider;
 
 { ---- base forwarding ---- }
 
@@ -119,6 +127,8 @@ function WindowHann(N, I: Integer): Single; inline;
 procedure FFT(var ARe, AIm: array of Single); inline;
 procedure IFFT(var ARe, AIm: array of Single); inline;
 function IsPowerOfTwo(N: Integer): Boolean; inline;
+
+function CreateNullAudioProvider: IAudioDeviceProvider; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -318,6 +328,9 @@ begin nextpas.core.audio.dsp.fft.IFFT(ARe, AIm); end;
 
 function IsPowerOfTwo(N: Integer): Boolean;
 begin Result := nextpas.core.audio.dsp.fft.IsPowerOfTwo(N); end;
+
+function CreateNullAudioProvider: IAudioDeviceProvider;
+begin Result := nextpas.core.audio.device.null.CreateNullAudioProvider; end;
 
 procedure AudioRegisterDecoderPlaceholder;
 begin

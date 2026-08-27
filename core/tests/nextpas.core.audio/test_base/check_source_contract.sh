@@ -52,7 +52,9 @@ for f in \
   "$SRC/nextpas.core.audio.mix.pas" \
   "$SRC/nextpas.core.audio.dsp.filters.pas" \
   "$SRC/nextpas.core.audio.dsp.dynamics.pas" \
-  "$SRC/nextpas.core.audio.dsp.fft.pas"
+  "$SRC/nextpas.core.audio.dsp.fft.pas" \
+  "$SRC/nextpas.core.audio.device.intf.pas" \
+  "$SRC/nextpas.core.audio.device.null.pas"
 do
   if [ ! -f "$f" ]; then
     echo "[FAIL] missing $f"
@@ -107,20 +109,32 @@ else
   fail=1
 fi
 
-# ensure no device/graph/timeline intf exists in PR5 scope (still draft)
-if ls "$SRC"/nextpas.core.audio.device.* 1>/dev/null 2>&1; then
-  echo "[FAIL] device intf should not exist in PR5"
+# PR6: device domain landed; graph/timeline still draft
+if ! ls "$SRC"/nextpas.core.audio.device.intf.pas 1>/dev/null 2>&1; then
+  echo "[FAIL] device.intf missing in PR6"
+  fail=1
+fi
+if ! ls "$SRC"/nextpas.core.audio.device.null.pas 1>/dev/null 2>&1; then
+  echo "[FAIL] device.null missing in PR6"
   fail=1
 fi
 if ls "$SRC"/nextpas.core.audio.graph.* 1>/dev/null 2>&1; then
-  echo "[FAIL] graph intf should not exist in PR5"
+  echo "[FAIL] graph intf should not exist in PR6"
   fail=1
 fi
 if ls "$SRC"/nextpas.core.audio.timeline.* 1>/dev/null 2>&1; then
-  echo "[FAIL] timeline intf should not exist in PR5"
+  echo "[FAIL] timeline intf should not exist in PR6"
   fail=1
 fi
-echo "[OK] no device/graph/timeline units (PR5 scope)"
+if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000040" "$SRC/nextpas.core.audio.device.intf.pas"; then
+  echo "[FAIL] IAudioDevice GUID missing"
+  fail=1
+fi
+if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000041" "$SRC/nextpas.core.audio.device.intf.pas"; then
+  echo "[FAIL] IAudioDeviceProvider GUID missing"
+  fail=1
+fi
+echo "[OK] device domain present, no graph/timeline (PR6 scope)"
 
 if [ "$fail" -ne 0 ]; then
   echo "source-contract gate FAILED"
