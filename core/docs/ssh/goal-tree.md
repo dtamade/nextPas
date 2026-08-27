@@ -213,18 +213,26 @@ OpenSSH 默认主机密钥三件套补齐最后一块（`ssh-ed25519` / `rsa-sha
 - [x] 性能说明：DH 2048-bit 单次交换约 50–70ms（同 host），约为 curve25519 的
       50×；作为回退可用性优先于性能，默认仍首选 curve25519
 
+## S14 — ssh-agent 协议客户端（已完成）
+
+Unix socket 上的 OpenSSH agent 转发——枚举身份 + 代签名，无私钥落地：
+
+- [x] `agent`：`TSshAgentClient`（`UnixConnect`/`IReadWriteCloser` 双注入，4 字节 BE 长度帧，`ReadExact/WriteExact` 循环，`ListIdentities` 11→12 / `Sign` 13→14，`SshAgentKeyBlobToAlgName/Flags` 映射 `ssh-rsa→rsa-sha2-512`），`SshAgentConnect/FromEnv`（`SSH_AUTH_SOCK`）
+- [x] `session`：`ISshSession.AuthenticateWithAgent[-On]` + `TSshClientBuilder.AgentSocketPath`，`RunAuthentication` 走 `agent→privatekey→password` 回退（`sekAuth/sekIO` 失败不阻断下一方式），`AuthenticateWithAgentClient`逐身份 `probe(PK_OK)→Sign(flags)` 循环（`rsa-sha2-512/256` 按 blob 类型选 flag）
+- [x] 测试四线闭环：`test_ssh_agent` 内存管道 5 用例（`list/sign ed25519/rsa-sha2-512/multiple/unknown`，54ms 内）；`test_ssh_session` 假 agent + 假服务端双管道回环 5 用例（`ed25519/rsa/multiple/no-identities/dh-fallback`，15/15，`Probe→PK_OK→SIGN→SUCCESS` 全路径，真实验签）；`test_ssh_kex/hostkey/keys` 等 8 门回归全绿
+- [x] 服务端探针修复：`ServeApp` 的 `publickey` 分支按 `hasSig` 分流——probe 无 sig 字段，命中回 `SSH_MSG_USERAUTH_PK_OK` 否则 `FAILURE`；签名请求才走 `Ed25519Verify/RsaVerifyPkcs1v15`，与真实 OpenSSH 时序一致
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| ssh-agent | Unix socket 协议客户端 |
 | zlib 压缩方法 | compress.deflate 可复用 |
 | async reactor 适配 | net.async.dial + 非阻塞读事件化 |
 
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT + S12 ECDSA + S13 DH 回退**
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT + S12 ECDSA + S13 DH 回退 + S14 agent**
 补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均
-8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA/CRT/ECDSA 与加密私钥认证，以及 DH group14 回退协商与交换），
+8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA/CRT/ECDSA 与加密私钥认证，以及 DH group14 回退协商与交换；agent 为纯客户端协议，live 需 `ssh-agent` 环境，默认 gate 由内存管道回环覆盖），
 heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。

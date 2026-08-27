@@ -36,6 +36,7 @@ uses
   nextpas.core.encoding.base64,
   nextpas.core.platform.files.text,
   nextpas.core.ssh.rsa,
+  nextpas.core.ssh.agent,
   ssh_rsa_kat,
   nextpas.core.test;
 
@@ -724,7 +725,7 @@ var
   LMsg: TBytes;
   LR: TsshReader;
   LUser, LMethod, LPass, LAlg, LReqName: string;
-  LPassOk, LWantReply: Boolean;
+  LPassOk, LWantReply, LHasSig: Boolean;
   LPubBlob, LSigBlob, LSigRaw, LSignedData: TBytes;
   LRsaE, LRsaN: TBytes;
   LRid: UInt32;
@@ -776,56 +777,87 @@ begin
             end
             else if LMethod = 'publickey' then
             begin
-              LR.ReadBoolean;                  { 有签名 }
-              LAlg := LR.ReadStringText;
-              LPubBlob := LR.ReadStringBytes;
-              LSigBlob := LR.ReadStringBytes;
-              if FSc^.PubKeyOk and (LAlg = 'ssh-ed25519')
-                and (Length(LSigBlob) > 0) then
+              LPassOk := False;
               begin
-                LSigRaw := nil;
-                LRAlg := TsshReader.Create(LSigBlob);
-                try
-                  LRAlg.ReadStringText;
-                  LSigRaw := LRAlg.ReadStringBytes;
-                finally
-                  LRAlg.Free;
+                // RFC 4252 §7: first packet has hasSig=false (probe), second hasSig=true+sig
+                // We must branch: probe → PK_OK or FAILURE, signed → verify then SUCCESS/FAILURE
+                LHasSig := LR.ReadBoolean;
+                LAlg := LR.ReadStringText;
+                LPubBlob := LR.ReadStringBytes;
+                if not LHasSig then
+                begin
+                  // Probe: no signature blob to read
+                  if FSc^.PubKeyOk then
+                  begin
+                    LW := TsshWriter.Create(64);
+                    try
+                      LW.PutByte(SSH_MSG_USERAUTH_PK_OK);
+                      LW.PutStringText(LAlg);
+                      LW.PutStringBytes(LPubBlob);
+                      ReplyPayload(LW.ToBytes);
+                    finally
+                      LW.Free;
+                    end;
+                  end
+                  else
+                  begin
+                    LW := TsshWriter.Create(48);
+                    try
+                      LW.PutByte(SSH_MSG_USERAUTH_FAILURE);
+                      LW.PutStringText('password,publickey');
+                      LW.PutBoolean(False);
+                      ReplyPayload(LW.ToBytes);
+                    finally
+                      LW.Free;
+                    end;
+                  end;
+                  Continue;
                 end;
-                LSignedData := SshAuthSignedData(FSessionId, LUser,
-                  'ssh-ed25519', LPubBlob);
-                { 动态数组 Copy 是 0 基索引：起点必须是 Length-32，
-                  否则只剩 31 字节，Verify 长度检查直接失败 }
-                LPassOk := Ed25519Verify(Copy(LPubBlob,
-                  Length(LPubBlob) - 32, 32), LSignedData, LSigRaw);
-              end
-              else if FSc^.PubKeyOk and (Length(LSigBlob) > 0)
-                and ((LAlg = 'rsa-sha2-512') or (LAlg = 'rsa-sha2-256')) then
-              begin
-                { RFC 4252 §7 真实验签：解析公钥 blob 的 e/n，
-                  对签名数据按算法哈希后走 PKCS#1 v1.5 核 }
-                LSigRaw := nil;
-                LRAlg := TsshReader.Create(LSigBlob);
-                try
-                  LRAlg.ReadStringText;
-                  LSigRaw := LRAlg.ReadStringBytes;
-                finally
-                  LRAlg.Free;
+                // Signed request
+                LSigBlob := LR.ReadStringBytes;
+                if FSc^.PubKeyOk and (LAlg = 'ssh-ed25519')
+                  and (Length(LSigBlob) > 0) then
+                begin
+                  LSigRaw := nil;
+                  LRAlg := TsshReader.Create(LSigBlob);
+                  try
+                    LRAlg.ReadStringText;
+                    LSigRaw := LRAlg.ReadStringBytes;
+                  finally
+                    LRAlg.Free;
+                  end;
+                  LSignedData := SshAuthSignedData(FSessionId, LUser,
+                    'ssh-ed25519', LPubBlob);
+                  LPassOk := Ed25519Verify(Copy(LPubBlob,
+                    Length(LPubBlob) - 32, 32), LSignedData, LSigRaw);
+                end
+                else if FSc^.PubKeyOk and (Length(LSigBlob) > 0)
+                  and ((LAlg = 'rsa-sha2-512') or (LAlg = 'rsa-sha2-256')) then
+                begin
+                  LSigRaw := nil;
+                  LRAlg := TsshReader.Create(LSigBlob);
+                  try
+                    LRAlg.ReadStringText;
+                    LSigRaw := LRAlg.ReadStringBytes;
+                  finally
+                    LRAlg.Free;
+                  end;
+                  LRAlg := TsshReader.Create(LPubBlob);
+                  try
+                    LRAlg.ReadStringText;
+                    LRsaE := LRAlg.ReadMPInt;
+                    LRsaN := LRAlg.ReadMPInt;
+                  finally
+                    LRAlg.Free;
+                  end;
+                  LSignedData := SshAuthSignedData(FSessionId, LUser, LAlg, LPubBlob);
+                  if LAlg = 'rsa-sha2-512' then
+                    LPassOk := RsaVerifyPkcs1v15(LRsaE, LRsaN,
+                      SHA512(LSignedData), DIGEST_INFO_SHA512, LSigRaw)
+                  else
+                    LPassOk := RsaVerifyPkcs1v15(LRsaE, LRsaN,
+                      SHA256(LSignedData), DIGEST_INFO_SHA256, LSigRaw);
                 end;
-                LRAlg := TsshReader.Create(LPubBlob);
-                try
-                  LRAlg.ReadStringText;           { 'ssh-rsa' }
-                  LRsaE := LRAlg.ReadMPInt;
-                  LRsaN := LRAlg.ReadMPInt;
-                finally
-                  LRAlg.Free;
-                end;
-                LSignedData := SshAuthSignedData(FSessionId, LUser, LAlg, LPubBlob);
-                if LAlg = 'rsa-sha2-512' then
-                  LPassOk := RsaVerifyPkcs1v15(LRsaE, LRsaN,
-                    SHA512(LSignedData), DIGEST_INFO_SHA512, LSigRaw)
-                else
-                  LPassOk := RsaVerifyPkcs1v15(LRsaE, LRsaN,
-                    SHA256(LSignedData), DIGEST_INFO_SHA256, LSigRaw);
               end;
             end;
           finally
@@ -1347,6 +1379,260 @@ begin
   end;
 end;
 
+{ ── agent 回环驱动（S14） ───────────────────────────────────── }
+
+type
+  TFakeAgentLoop = class
+  private
+    FEnd: TMemPipeEnd;
+    FEdSeed, FEdPub, FEdBlob: TBytes;
+    FRsaN, FRsaE, FRsaD, FRsaP, FRsaQ, FRsaIqmp, FRsaBlob: TBytes;
+    FHasEd, FHasRsa: Boolean;
+    function ReadMsg(out APayload: TBytes): Boolean;
+    procedure WriteMsg(const APayload: TBytes);
+  public
+    constructor Create(AEnd: TMemPipeEnd; AHasEd, AHasRsa: Boolean);
+    procedure Run;
+  end;
+
+  PAgentLoopSync = ^TAgentLoopSync;
+  TAgentLoopSync = record
+    AgentEnd: TMemPipeEnd;
+    HasEd, HasRsa: Boolean;
+    Done: Boolean;
+    DoneEvent: PRTLEvent;
+  end;
+
+constructor TFakeAgentLoop.Create(AEnd: TMemPipeEnd; AHasEd, AHasRsa: Boolean);
+begin
+  inherited Create;
+  FEnd := AEnd;
+  FHasEd := AHasEd;
+  FHasRsa := AHasRsa;
+  if FHasEd then
+  begin
+    FEdSeed := PatternBytes($3D, 32);
+    FEdPub := Ed25519PublicKeyFromPrivate(FEdSeed);
+    FEdBlob := Ed25519PubBlob(FEdPub);
+  end;
+  if FHasRsa then
+  begin
+    FRsaN := CrtKatN();
+    FRsaE := CrtKatE();
+    FRsaD := CrtKatD();
+    FRsaP := CrtKatP();
+    FRsaQ := CrtKatQ();
+    FRsaIqmp := CrtKatIqmp();
+    FRsaBlob := RsaPubBlob(FRsaE, FRsaN);
+  end;
+end;
+
+function TFakeAgentLoop.ReadMsg(out APayload: TBytes): Boolean;
+var
+  LLenBytes: array[0..3] of Byte;
+  LLen: UInt32;
+  LBuf: TBytes;
+  LGot: SizeUInt;
+begin
+  Result := False;
+  APayload := nil;
+  SetLength(LBuf, 4);
+  LGot := 0;
+  while LGot < 4 do
+  begin
+    LGot := LGot + FEnd.Read(LBuf[LGot], 4 - LGot);
+    if LGot = 0 then Exit;
+  end;
+  LLenBytes[0] := LBuf[0]; LLenBytes[1] := LBuf[1]; LLenBytes[2] := LBuf[2]; LLenBytes[3] := LBuf[3];
+  LLen := (UInt32(LLenBytes[0]) shl 24) or (UInt32(LLenBytes[1]) shl 16) or (UInt32(LLenBytes[2]) shl 8) or UInt32(LLenBytes[3]);
+  if LLen > 1024 * 1024 then Exit;
+  SetLength(APayload, LLen);
+  LGot := 0;
+  while LGot < LLen do
+  begin
+    LGot := LGot + FEnd.Read(APayload[LGot], LLen - LGot);
+    if LGot = 0 then Exit;
+  end;
+  Result := True;
+end;
+
+procedure TFakeAgentLoop.WriteMsg(const APayload: TBytes);
+var
+  LW2: TsshWriter;
+  LFrame: TBytes;
+begin
+  LW2 := TsshWriter.Create(4 + Length(APayload));
+  try
+    LW2.PutUInt32(UInt32(Length(APayload)));
+    if Length(APayload) > 0 then LW2.PutRaw(APayload);
+    LFrame := LW2.ToBytes;
+  finally
+    LW2.Free;
+  end;
+  FEnd.Write(LFrame[0], SizeUInt(Length(LFrame)));
+end;
+
+procedure TFakeAgentLoop.Run;
+var
+  LReq, LResp: TBytes;
+  LR2: TsshReader;
+  LW2: TsshWriter;
+  LBlob, LData: TBytes;
+  LFlags: UInt32;
+  LSig64, LSigRaw, LSigBlob: TBytes;
+begin
+  while ReadMsg(LReq) do
+  begin
+    if Length(LReq) = 0 then Break;
+    case LReq[0] of
+      SSH_AGENTC_REQUEST_IDENTITIES:
+        begin
+          LW2 := TsshWriter.Create(128);
+          try
+            LW2.PutByte(SSH_AGENT_IDENTITIES_ANSWER);
+            if FHasEd and FHasRsa then
+            begin LW2.PutUInt32(2); LW2.PutStringBytes(FEdBlob); LW2.PutStringText('ed25519 fake'); LW2.PutStringBytes(FRsaBlob); LW2.PutStringText('rsa fake'); end
+            else if FHasEd then
+            begin LW2.PutUInt32(1); LW2.PutStringBytes(FEdBlob); LW2.PutStringText('ed25519 fake'); end
+            else if FHasRsa then
+            begin LW2.PutUInt32(1); LW2.PutStringBytes(FRsaBlob); LW2.PutStringText('rsa fake'); end
+            else LW2.PutUInt32(0);
+            LResp := LW2.ToBytes;
+          finally LW2.Free; end;
+          WriteMsg(LResp);
+        end;
+      SSH_AGENTC_SIGN_REQUEST:
+        begin
+          LR2 := TsshReader.Create(LReq);
+          try LR2.ReadByte; LBlob := LR2.ReadStringBytes; LData := LR2.ReadStringBytes; LFlags := LR2.ReadUInt32; finally LR2.Free; end;
+          LSigBlob := nil;
+          if FHasEd and (Length(LBlob) = Length(FEdBlob)) and CompareMem(@LBlob[0], @FEdBlob[0], Length(LBlob)) then
+          begin
+            if not Ed25519Sign(FEdSeed, LData, LSig64) then
+            begin LW2 := TsshWriter.Create(1); try LW2.PutByte(SSH_AGENT_FAILURE); LResp := LW2.ToBytes; finally LW2.Free; end; WriteMsg(LResp); Continue; end;
+            LSigBlob := SshBuildEd25519SigBlob(LSig64);
+          end
+          else if FHasRsa and (Length(LBlob) = Length(FRsaBlob)) and CompareMem(@LBlob[0], @FRsaBlob[0], Length(LBlob)) then
+          begin
+            if LFlags = SSH_AGENT_RSA_SHA2_256 then
+            begin if not RsaSignPkcs1v15(FRsaN, FRsaD, SHA256(LData), DIGEST_INFO_SHA256, LSigRaw) then begin LW2 := TsshWriter.Create(1); try LW2.PutByte(SSH_AGENT_FAILURE); LResp := LW2.ToBytes; finally LW2.Free; end; WriteMsg(LResp); Continue; end; LSigBlob := SshBuildRsaSigBlob(LSigRaw, 'rsa-sha2-256'); end
+            else
+            begin if not RsaSignPkcs1v15Crt(FRsaN, FRsaD, FRsaP, FRsaQ, FRsaIqmp, SHA512(LData), DIGEST_INFO_SHA512, LSigRaw) then if not RsaSignPkcs1v15(FRsaN, FRsaD, SHA512(LData), DIGEST_INFO_SHA512, LSigRaw) then begin LW2 := TsshWriter.Create(1); try LW2.PutByte(SSH_AGENT_FAILURE); LResp := LW2.ToBytes; finally LW2.Free; end; WriteMsg(LResp); Continue; end; LSigBlob := SshBuildRsaSigBlob(LSigRaw, 'rsa-sha2-512'); end;
+          end
+          else
+          begin LW2 := TsshWriter.Create(1); try LW2.PutByte(SSH_AGENT_FAILURE); LResp := LW2.ToBytes; finally LW2.Free; end; WriteMsg(LResp); Continue; end;
+          LW2 := TsshWriter.Create(128);
+          try LW2.PutByte(SSH_AGENT_SIGN_RESPONSE); LW2.PutStringBytes(LSigBlob); LResp := LW2.ToBytes; finally LW2.Free; end;
+          WriteMsg(LResp);
+        end;
+      else
+        begin LW2 := TsshWriter.Create(1); try LW2.PutByte(SSH_AGENT_FAILURE); LResp := LW2.ToBytes; finally LW2.Free; end; WriteMsg(LResp); end;
+    end;
+  end;
+end;
+
+function AgentLoopThreadMain(AParam: Pointer): PtrInt;
+var
+  L: TFakeAgentLoop;
+  S: PAgentLoopSync;
+begin
+  Result := 0;
+  S := PAgentLoopSync(AParam);
+  L := TFakeAgentLoop.Create(S^.AgentEnd, S^.HasEd, S^.HasRsa);
+  try L.Run; finally L.Free; S^.Done := True; RTLEventSetEvent(S^.DoneEvent); end;
+end;
+
+function RunLoopbackAgent(AHasEd, AHasRsa: Boolean; AServerAccept: Boolean; AForceDH: Boolean = False): TLoopResult;
+var
+  LSc: PSshLoopServerScenario;
+  LSyncSsh: PSync;
+  LSharedSsh, LSharedAgent: PPipeShared;
+  LClientEnd, LServerEnd: TMemPipeEnd;
+  LAgentClient, LAgentServer: TMemPipeEnd;
+  LThreadSsh: TThreadID;
+  LSyncAgent: PAgentLoopSync;
+  LAgentThread: TThreadID;
+  LOpts: TSshConnectOptions;
+  LSession: ISshSession;
+  LWait: Integer;
+begin
+  Result := Default(TLoopResult);
+  LClientEnd := nil; LServerEnd := nil; LSharedSsh := nil;
+  LAgentClient := nil; LAgentServer := nil; LSharedAgent := nil;
+  New(LSc); New(LSyncSsh); GetMem(LSyncAgent, SizeOf(TAgentLoopSync));
+  try
+    LSc^.AcceptUser := CLIENT_USER;
+    LSc^.AcceptPassword := CLIENT_PASSWORD;
+    LSc^.PasswordOk := False;
+    LSc^.PubKeyOk := AServerAccept;
+    LSc^.StdOut1 := StringToBytes('agent-stdout|');
+    LSc^.StdOut2 := StringToBytes('ok!');
+    LSc^.StdErr := StringToBytes('');
+    LSc^.ExitCode := 7;
+    LSc^.HostSeed := PatternBytes($E7, 32);
+    LSc^.ForceDH := AForceDH;
+    LSc^.Failed := False; LSc^.FailMsg := ''; LSc^.Done := False;
+    LSc^.MsgCount := 0; LSc^.Msg1Type := 0; LSc^.Msg1Len := 0;
+    LSyncSsh^.Scenario := LSc; LSyncSsh^.ServerEnd := nil; LSyncSsh^.ThreadDone := False; LSyncSsh^.DoneEvent := RTLEventCreate;
+    LSyncAgent^.HasEd := AHasEd; LSyncAgent^.HasRsa := AHasRsa; LSyncAgent^.Done := False; LSyncAgent^.DoneEvent := RTLEventCreate;
+    try
+      MakePipe(LClientEnd, LServerEnd, LSharedSsh);
+      MakePipe(LAgentClient, LAgentServer, LSharedAgent);
+      LSyncSsh^.ServerEnd := LServerEnd;
+      LSyncAgent^.AgentEnd := LAgentServer;
+      BeginThread(@AgentLoopThreadMain, Pointer(LSyncAgent), LAgentThread);
+      BeginThread(@ServerThreadMain, Pointer(LSyncSsh), LThreadSsh);
+
+      LOpts := DefaultSshConnectOptions(CLIENT_HOST_NAME);
+      LOpts.User := CLIENT_USER;
+      LOpts.ExecTimeoutMs := 30000;
+      LOpts.InitialWindowSize := 16;
+
+      try
+        LSession := SshCreateSession(LClientEnd, LOpts);
+        try
+          LSession.AuthenticateWithAgentOn(LAgentClient);
+          Result.ServerVersion := LSession.ServerVersion;
+          Result.Fingerprint := LSession.ServerHostKeyFingerprint;
+          Result.Exec := LSession.Exec('echo agent');
+        finally
+          LSession.Close;
+          LSession := nil;
+        end;
+      except
+        on E: ESSHError do
+        begin Result.ClientFailed := True; Result.ClientErrKind := E.Kind; Result.ClientErrMsg := E.Message; end;
+        on E: Exception do
+        begin Result.ClientFailed := True; Result.ClientErrMsg := E.ClassName + ': ' + E.Message; end;
+      end;
+
+      LWait := 0;
+      while (not LSyncSsh^.ThreadDone) and (LWait < 20000) do
+      begin RTLEventWaitFor(LSyncSsh^.DoneEvent, 100); Inc(LWait, 100); end;
+      Result.ServerFailed := LSc^.Failed;
+      Result.ServerErrMsg := LSc^.FailMsg;
+      Result.ServerMsgCount := LSc^.MsgCount;
+      // tear down agent
+      LAgentClient.Close;
+      LAgentServer.Close;
+      LWait := 0;
+      while (not LSyncAgent^.Done) and (LWait < 2000) do
+      begin RTLEventWaitFor(LSyncAgent^.DoneEvent, 100); Inc(LWait, 100); end;
+    finally
+      RTLEventDestroy(LSyncSsh^.DoneEvent);
+      RTLEventDestroy(LSyncAgent^.DoneEvent);
+      LClientEnd.Free; LServerEnd.Free;
+      LAgentClient.Free; LAgentServer.Free;
+      if LSharedSsh <> nil then begin DoneCriticalSection(LSharedSsh^.Lock); Dispose(LSharedSsh); end;
+      if LSharedAgent <> nil then begin DoneCriticalSection(LSharedAgent^.Lock); Dispose(LSharedAgent); end;
+      Dispose(LSyncSsh);
+    end;
+  finally
+    Dispose(LSc);
+    FreeMem(LSyncAgent);
+  end;
+end;
+
 var
   GRunner: TSuiteRunner;
   GSuite: TTestSuite;
@@ -1482,6 +1768,52 @@ begin
     LR: TLoopResult;
   begin
     LR := RunLoopback(LOOP_PUBKEY, True, True, '', False, True);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  { S14：agent 回环（内存管道双链路：ssh + agent Unix-socket 语义）}
+  GSuite.Test('agent ed25519 auth loopback', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopbackAgent(True, False, True, False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+    CheckEqual('agent-stdout|ok!', LR.Exec.StdOutText, 'stdout');
+  end);
+
+  GSuite.Test('agent rsa auth loopback', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopbackAgent(False, True, True, False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  GSuite.Test('agent multiple identities loopback', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopbackAgent(True, True, True, False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  GSuite.Test('agent no identities rejected as sekAuth', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopbackAgent(False, False, True, False);
+    CheckTrue(LR.ClientFailed, 'client must fail');
+    CheckEqual(Ord(sekAuth), Ord(LR.ClientErrKind), 'error kind');
+  end);
+
+  GSuite.Test('agent dh fallback loopback', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopbackAgent(True, False, True, True);
     CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
     CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
     CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
