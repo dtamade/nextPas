@@ -70,6 +70,18 @@ function TryChaCha20Poly1305EncryptToBuf(
   APlain: PByte; APlainLen: Integer;
   ADest: PByte; ADestLen: Integer): Boolean;
 
+function TryChaCha20Poly1305EncryptToBufDirect(
+  const AKey: TBytes; ANonce: PByte; ANonceLen: Integer;
+  AAAD: PByte; AAADLen: Integer;
+  APlain: PByte; APlainLen: Integer;
+  ADest: PByte; ADestLen: Integer): Boolean;
+
+function TryChaCha20Poly1305DecryptCombinedBufDirect(
+  const AKey: TBytes; ANonce: PByte; ANonceLen: Integer;
+  AAAD: PByte; AAADLen: Integer;
+  AEncrypted: PByte; AEncryptedLen: Integer;
+  ADest: PByte; ADestLen: Integer): Boolean;
+
 {** @desc 裸 Poly1305：对 AMacData 整体计算 16 字节 tag，无 RFC 8439 的 pad16
  *       分节与长度块。OpenSSH chachapoly（tag 直接覆盖 encLen||ct）等非标准
  *       AEAD 组装方使用。AKey 为一次性 32B poly key *}
