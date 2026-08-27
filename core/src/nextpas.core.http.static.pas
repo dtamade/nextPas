@@ -92,7 +92,8 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.url,
   nextpas.core.http.message,
-  nextpas.core.http.mime;
+  nextpas.core.http.mime,
+  nextpas.core.time.httpdate;
 
 type
   TResponseWriterAdapter = class(TInterfacedObject, IWriter)
@@ -117,23 +118,6 @@ begin
 end;
 
 { ===== Helpers ===== }
-
-const
-  DAY_NAMES: array[1..7] of string = (
-    'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'
-  );
-  MONTH_NAMES: array[1..12] of string = (
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  );
-
-function Pad2(AVal: Integer): string; inline;
-begin
-  if AVal < 10 then
-    Result := '0' + Chr(Ord('0') + AVal)
-  else
-    Result := Chr(Ord('0') + AVal div 10) + Chr(Ord('0') + AVal mod 10);
-end;
 
 { Returns True if the relative path is safe (no traversal).
   Semantics: VFS canonical ValidPath + HTTP double-encoding guard.
@@ -173,31 +157,8 @@ begin
 end;
 
 function FormatHttpDate(const AUnixTimestamp: Int64): string;
-var
-  LDT: TOffsetDateTime;
-  LYear, LMonth, LDay, LHour, LMinute, LSecond: Integer;
-  LDayOfWeek: Integer;
 begin
-  LDT := TOffsetDateTime.FromUnixSeconds(AUnixTimestamp);
-  LDT := LDT.ToUtc;
-  LYear := LDT.GetYear;
-  LMonth := LDT.GetMonth;
-  LDay := LDT.GetDay;
-  LHour := LDT.GetHour;
-  LMinute := LDT.GetMinute;
-  LSecond := LDT.GetSecond;
-  { Zeller's congruence for day of week }
-  LDayOfWeek := (LDay + (13 * ((LMonth + 12 * ((14 - LMonth) div 12)) mod 12 + 1)) div 5
-    + ((LYear - ((14 - LMonth) div 12)) mod 100)
-    + ((LYear - ((14 - LMonth) div 12)) mod 100) div 4
-    + ((LYear - ((14 - LMonth) div 12)) div 100) * 5
-    + 5) mod 7;
-  { Zeller: 0=Sat, 1=Sun, ..., 6=Fri → map to 1=Sun, ..., 7=Sat }
-  LDayOfWeek := ((LDayOfWeek + 6) mod 7) + 1;
-  Result := DAY_NAMES[LDayOfWeek] + ', '
-    + Pad2(LDay) + ' ' + MONTH_NAMES[LMonth] + ' ' + IntToStr(LYear)
-    + ' ' + Pad2(LHour) + ':' + Pad2(LMinute) + ':' + Pad2(LSecond)
-    + ' GMT';
+  Result := nextpas.core.time.httpdate.FormatHttpDate(AUnixTimestamp);
 end;
 
 procedure HttpEnsureDateHeader(const AHeaders: IHttpHeaders);
@@ -213,187 +174,9 @@ begin
     FormatHttpDate(DateTimeToUnix(DateTimeUtcNow)));
 end;
 
-{ Parse HTTP date string (RFC 7231 §7.1.1.1) to Unix timestamp.
-  Accepts: "Sun, 06 Nov 1994 08:49:37 GMT" (preferred)
-  Returns 0 on parse failure. }
-function ParseHttpDate(const ADate: string): Int64;
-var
-  LLen, LPos, LMonth, LI: Integer;
-  LDay, LYear, LHour, LMinute, LSecond: Integer;
-  LMonthStr: string;
-  LDT: TOffsetDateTime;
-begin
-  Result := 0;
-  LLen := Length(ADate);
-  { Preferred form: "Sun, 06 Nov 1994 08:49:37 GMT" = 29 chars (1-based). }
-  if LLen < 29 then Exit;
-
-  { Day name + ", " occupies indices 1..5; day digits start at 6. }
-  LPos := 6;
-  if LPos + 1 > LLen then Exit;
-  if (ADate[LPos] < '0') or (ADate[LPos] > '9') or
-    (ADate[LPos + 1] < '0') or (ADate[LPos + 1] > '9') then
-    Exit;
-  LDay := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
-  Inc(LPos, 3); { day + space → month }
-
-  if LPos + 2 > LLen then Exit;
-  LMonthStr := System.Copy(ADate, LPos, 3);
-  LMonth := 0;
-  for LI := 1 to 12 do
-    if LMonthStr = MONTH_NAMES[LI] then
-    begin
-      LMonth := LI;
-      Break;
-    end;
-  if LMonth = 0 then Exit;
-  Inc(LPos, 4); { month + space → year }
-
-  if LPos + 3 > LLen then Exit;
-  if (ADate[LPos] < '0') or (ADate[LPos] > '9') then Exit;
-  LYear := (Ord(ADate[LPos]) - Ord('0')) * 1000
-         + (Ord(ADate[LPos + 1]) - Ord('0')) * 100
-         + (Ord(ADate[LPos + 2]) - Ord('0')) * 10
-         + (Ord(ADate[LPos + 3]) - Ord('0'));
-  Inc(LPos, 5); { year + space → time }
-
-  if LPos + 7 > LLen then Exit;
-  LHour := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
-  LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 + (Ord(ADate[LPos + 4]) - Ord('0'));
-  LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 + (Ord(ADate[LPos + 7]) - Ord('0'));
-
-  { 范围校验：非法时/分/秒/日/月拒绝（TOffsetDateTime 会容错回绕，
-    如 25:49:37 → 次日 01:49:37——严格解析须显式拒绝）。 }
-  if (LDay < 1) or (LDay > 31) or (LMonth < 1) or (LMonth > 12) or
-     (LHour > 23) or (LMinute > 59) or (LSecond > 60) then
-    Exit;
-
-  try
-    LDT := TOffsetDateTime.Create(
-      TNaiveDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond),
-      TUtcOffset.UTC);
-    Result := LDT.ToUnixSeconds;
-  except
-    Result := 0;
-  end;
-end;
-
-{ Parse RFC 850 / ANSIC C date as fallback forms of HTTP-date
-  (RFC 7231 §7.1.1.1; Go http.ParseTime accepts both).
-  RFC850:  "Sunday, 06-Nov-94 08:49:37 GMT"
-  ANSIC:   "Sun Nov  6 08:49:37 1994"   (day space-padded to 2 cols)
-  Returns 0 on parse failure; two-digit years expand via 69 → 20xx rule
-  (POSIX strptime %y, same as Go time.Parse with "06"). }
-function ParseHttpDateFallback(const ADate: string): Int64;
-var
-  LDay, LMonth, LYear, LHour, LMinute, LSecond, LI, LPos: Integer;
-  LMonthStr: string;
-  LDT: TOffsetDateTime;
-begin
-  Result := 0;
-  if Length(ADate) < 16 then
-    Exit;
-  { RFC850: weekday + ", " + DD-Mmm-YY at fixed offsets (1-based).
-    "Sunday, 06-Nov-94 ..." → ','@7, day@9-10, '-'@11, month@12-14,
-    '-'@15, year@16-17, time@19. }
-  if (ADate[7] = ',') and (ADate[11] = '-') and (ADate[15] = '-') then
-  begin
-    LDay := (Ord(ADate[9]) - Ord('0')) * 10 + (Ord(ADate[10]) - Ord('0'));
-    LMonthStr := System.Copy(ADate, 12, 3);
-    LMonth := 0;
-    for LI := 1 to 12 do
-      if LMonthStr = MONTH_NAMES[LI] then
-      begin
-        LMonth := LI;
-        Break;
-      end;
-    if LMonth = 0 then
-      Exit;
-    LYear := (Ord(ADate[16]) - Ord('0')) * 10 + (Ord(ADate[17]) - Ord('0'));
-    if LYear < 69 then
-      LYear := 2000 + LYear
-    else
-      LYear := 1900 + LYear;
-    LPos := 19;   { skip "-YY " → "HH:MM:SS" }
-  end
-  else if ADate[4] = ' ' then
-  begin
-    { ANSIC: "Sun Nov  6 08:49:37 1994" — weekday space month, then
-      day either " 6" (space-padded) or "16". }
-    LMonthStr := System.Copy(ADate, 5, 3);
-    LMonth := 0;
-    for LI := 1 to 12 do
-      if LMonthStr = MONTH_NAMES[LI] then
-      begin
-        LMonth := LI;
-        Break;
-      end;
-    if LMonth = 0 then
-      Exit;
-    LPos := 9;
-    if (ADate[LPos] = ' ') then
-    begin
-      LDay := Ord(ADate[LPos + 1]) - Ord('0');
-      Inc(LPos, 3);
-    end
-    else if (ADate[LPos] in ['0'..'9']) and (ADate[LPos + 1] in ['0'..'9']) then
-    begin
-      LDay := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
-      Inc(LPos, 3);
-    end
-    else
-      Exit;
-  end
-  else
-    Exit;
-  { LPos points at "HH:MM:SS " for both fallback forms. }
-  if (LPos + 9 > Length(ADate)) then
-    Exit;
-  if (ADate[LPos + 2] <> ':') or (ADate[LPos + 5] <> ':') then
-    Exit;
-  LHour := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
-  LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 + (Ord(ADate[LPos + 4]) - Ord('0'));
-  LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 + (Ord(ADate[LPos + 7]) - Ord('0'));
-  { ANSIC year is trailing: "HH:MM:SS YYYY"; RFC850 is "HH:MM:SS GMT". }
-  if (ADate[LPos + 8] = ' ') and (LPos + 12 <= Length(ADate)) and
-     (ADate[LPos + 9] in ['0'..'9']) then
-  begin
-    if ADate[4] = ' ' then
-    begin
-      LYear := (Ord(ADate[LPos + 9]) - Ord('0')) * 1000
-             + (Ord(ADate[LPos + 10]) - Ord('0')) * 100
-             + (Ord(ADate[LPos + 11]) - Ord('0')) * 10
-             + (Ord(ADate[LPos + 12]) - Ord('0'));
-    end;
-  end;
-  if (LDay < 1) or (LDay > 31) or (LMonth < 1) or (LMonth > 12) or
-     (LHour > 23) or (LMinute > 59) or (LSecond > 60) then
-    Exit;
-  try
-    LDT := TOffsetDateTime.Create(
-      TNaiveDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond),
-      TUtcOffset.UTC);
-    Result := LDT.ToUnixSeconds;
-  except
-    Result := 0;
-  end;
-end;
-
-{** @desc Parse HTTP-date (RFC 7231 §7.1.1.1) to Unix timestamp seconds.
-   Accepts IMF-fixdate ("Sun, 06 Nov 1994 08:49:37 GMT"), RFC 850
-   ("Sunday, 06-Nov-94 08:49:37 GMT") and ANSIC ("Sun Nov  6 08:49:37 1994")
-   — the same set as Go's http.ParseTime. Returns False on parse failure. }
 function TryParseHttpDate(const ADate: string; out AUnix: Int64): Boolean;
-var
-  LV: Int64;
 begin
-  LV := ParseHttpDate(ADate);
-  if LV = 0 then
-    LV := ParseHttpDateFallback(ADate);
-  if LV = 0 then
-    Exit(False);
-  AUnix := LV;
-  Result := True;
+  Result := nextpas.core.time.httpdate.TryParseHttpDate(ADate, AUnix);
 end;
 function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
 begin
@@ -617,6 +400,7 @@ var
   LWriter: IWriter;
   LEscapedName: string;
   LIfNoneMatch: string;
+  LIsHead: Boolean;
 begin
   if AReq <> nil then
     LIfNoneMatch := AReq.GetHeaders.Get('if-none-match')
@@ -640,6 +424,7 @@ begin
     AW.GetHeaders.SetHeader('content-disposition',
       'attachment; filename="' + LEscapedName + '"');
   end;
+  LIsHead := (AReq <> nil) and (AReq.Method = hmHead);
   if AReq <> nil then
     LRangeHeader := AReq.GetHeaders.Get('range')
   else
@@ -651,19 +436,23 @@ begin
       SendRangeNotSatisfiable(ASize, AW);
       Exit;
     end;
-    LStream := AFactory();
     AW.GetHeaders.SetHeader('content-range',
       'bytes ' + IntToStr(LStart) + '-' + IntToStr(LEnd) + '/' + IntToStr(ASize));
     AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
     AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
+    if LIsHead then
+      Exit;
+    LStream := AFactory();
     LWriter := TResponseWriterAdapter.Create(AW);
     CopyRange(LStream, LWriter, LStart, LEnd - LStart + 1);
   end
   else
   begin
-    LStream := AFactory();
     AW.GetHeaders.SetHeader('content-length', IntToStr(ASize));
     AW.WriteHeader(HTTP_STATUS_OK);
+    if LIsHead then
+      Exit;
+    LStream := AFactory();
     LWriter := TResponseWriterAdapter.Create(AW);
     nextpas.core.io.Copy(LWriter, LStream);
   end;
@@ -819,15 +608,25 @@ begin
         LETag := '"fnv-' + IntToHex(LInfo.ContentHash, 8) + '"'
       else
         LETag := GenerateETag(LInfo.Info.Size, LModTimeUnix);
+      if not LCache.TryGetLastModified(AVfsPath, LLastModified) then
+      begin
+        if LModTimeUnix > 0 then
+          LLastModified := FormatHttpDate(LModTimeUnix)
+        else
+          LLastModified := '';
+      end;
     end
-    else if LInfo.ContentHash <> 0 then
-      LETag := '"fnv-' + IntToHex(LInfo.ContentHash, 8) + '"'
     else
-      LETag := GenerateETag(LInfo.Info.Size, LModTimeUnix);
-    if LModTimeUnix > 0 then
-      LLastModified := FormatHttpDate(LModTimeUnix)
-    else
-      LLastModified := '';
+    begin
+      if LInfo.ContentHash <> 0 then
+        LETag := '"fnv-' + IntToHex(LInfo.ContentHash, 8) + '"'
+      else
+        LETag := GenerateETag(LInfo.Info.Size, LModTimeUnix);
+      if LModTimeUnix > 0 then
+        LLastModified := FormatHttpDate(LModTimeUnix)
+      else
+        LLastModified := '';
+    end;
     LMime := HttpMimeFromPath(AVfsPath);
     HttpServeStaticStream(AReq, AW, LInfo.Info.Size, LETag, LLastModified, LMime, ACacheControl, LModTimeUnix,
       function: IStream

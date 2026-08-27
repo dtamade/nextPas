@@ -21,10 +21,11 @@ type
     function CaseSensitive: Boolean;
   end;
 
-  { 可选能力：预计算 ETag 快速路径（embedded 零分配命中，os/memtree 回退 false） }
+  { 可选能力：预计算 ETag / Last-Modified 快速路径（embedded 零分配命中，os/memtree 回退 false） }
   IVfsETag = interface(IInterface)
     ['{B2D7E6A1-4C9F-4A1E-9E3D-7F1A2C8D5B30}']
     function TryGetETag(const APath: string; out AETag: string): Boolean;
+    function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
   end;
 
 implementation

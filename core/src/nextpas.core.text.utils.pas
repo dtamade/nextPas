@@ -16,6 +16,8 @@ function IsBlank(const S: string): Boolean;
 function LowerCase(const S: string): string;
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
 function UpperCase(const S: string): string;
+{** @desc Trim + ASCII LowerCase 单点归一化, 供 palette/theme/cmdline 等名称键复用 *}
+function NormalizeKey(const S: string): string; inline;
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
 function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
 function RepeatString(const S: string; ACount: Integer): string;
@@ -105,6 +107,11 @@ begin
   SetLength(Result, Length(S));
   for I := 1 to Length(S) do
     Result[I] := Chr(ToUpper(Byte(S[I])));
+end;
+
+function NormalizeKey(const S: string): string; inline;
+begin
+  Result := LowerCase(Trim(S));
 end;
 
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string;
