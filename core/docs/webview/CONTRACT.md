@@ -4,7 +4,7 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.6（S11——`webview.vfs` 公共适配器 `CreateVfsAssetProvider(IVfs)` 抽离
+**版本**：1.7（S12——高级感/性能/稳定性三轴打磨：demo 深/浅双主题+玻璃拟态+性能徽标；资产路由索引化（最长前缀首命中）+ MIME 二分表（12 项）；TryDecodeFrame 2MiB 守卫 + HasError 校验；Builder 重复/空 handler 互斥校验强化；bench 回归 SmallHit 718ns/Fallback 904ns/Miss 218ns 全绿）\n**承接**：1.6（S11——`webview.vfs` 公共适配器 `CreateVfsAssetProvider(IVfs)` 抽离
 （`demo_webview_respack` 私有实现收敛为家族唯一收口，TVfs 前缀容错双试 + MIME 快表）、
 `test_webview_vfs` 6 用例门禁、依赖方向 `vfs` 纳入 INV-4、bench `bench_vfs`
 基线（SmallHit 766ns/1.3M ops、1M 800µs/1.22GB/s）；承 S10 Builder 三形态、
