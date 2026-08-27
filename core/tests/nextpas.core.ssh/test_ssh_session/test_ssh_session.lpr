@@ -30,6 +30,9 @@ uses
   nextpas.core.crypto.ed25519,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.bcrypt_pbkdf,
+  nextpas.core.crypto.bigint,
+  nextpas.core.crypto.random,
+  nextpas.core.ssh.kex.dhgroup14,
   nextpas.core.encoding.base64,
   nextpas.core.platform.files.text,
   nextpas.core.ssh.rsa,
@@ -328,6 +331,7 @@ type
     StdErr: TBytes;
     ExitCode: UInt32;
     HostSeed: TBytes;
+    ForceDH: Boolean;
     Failed: Boolean;
     FailMsg: string;
     Done: Boolean;
@@ -524,7 +528,7 @@ procedure TSshLoopServer.Handshake;
 var
   LLine, LVc, LMyInit, LClientInit, LInit, LMsg, LReply: TBytes;
   LR: TsshReader;
-  LEphemeral, LShared, LKmpint, LHInput, LH, LSig64, LSigBlob: TBytes;
+  LEphemeral, LShared, LKmpint, LH, LSig64, LSigBlob: TBytes;
   LXErr: AnsiString;
   LHostPub: TBytes;
   LXPriv, LXPub: TBytes;
@@ -532,6 +536,10 @@ var
   LW: TsshWriter;
   LText: string;
   LNl: Integer;
+  LIsDH: Boolean;
+  LPrime, LGen, LSrvPriv: TBytes;
+  LErr: string;
+  LClientE: TBytes;
 begin
   { 版本串是裸文本，不走二进制帧 }
   LLine := StringToBytes(SERVER_IDENT + #13#10);
@@ -562,31 +570,82 @@ begin
     Exit;
   end;
 
-  LMyInit := SshBuildKexInitPayload(PatternBytes($EE, 16));
+  if FSc^.ForceDH then
+  begin
+    LW := TsshWriter.Create(512);
+    try
+      LW.PutByte(SSH_MSG_KEXINIT);
+      LW.PutRaw(PatternBytes($EE, 16));
+      LW.PutNameList(['diffie-hellman-group14-sha256']);
+      LW.PutNameList(['ssh-ed25519']);
+      LW.PutNameList(['chacha20-poly1305@openssh.com']);
+      LW.PutNameList(['chacha20-poly1305@openssh.com']);
+      LW.PutNameList([]);
+      LW.PutNameList([]);
+      LW.PutNameList(['none']);
+      LW.PutNameList(['none']);
+      LW.PutStringText('');
+      LW.PutStringText('');
+      LW.PutBoolean(False);
+      LW.PutUInt32(0);
+      LMyInit := LW.ToBytes;
+    finally
+      LW.Free;
+    end;
+  end
+  else
+    LMyInit := SshBuildKexInitPayload(PatternBytes($EE, 16));
   SendPlainPayload(LMyInit);
 
   LInit := ReadPlainFrameBody;
   if (Length(LInit) = 0) or (LInit[0] <> SSH_MSG_KEX_ECDH_INIT) then
   begin
-    Fail('server: expected ECDH INIT');
+    Fail('server: expected KEX INIT');
     Exit;
   end;
 
   LHostPub := Ed25519PublicKeyFromPrivate(FSc^.HostSeed);
+  LIsDH := FSc^.ForceDH;
 
-  LR := TsshReader.Create(LInit);
-  try
-    LR.ReadByte;
-    LEphemeral := LR.ReadStringBytes;
-  finally
-    LR.Free;
-  end;
-
-  GenerateX25519KeyPair(LXPriv, LXPub);
-  if not TryX25519ComputeSharedSecret(LXPriv, LEphemeral, LShared, LXErr) then
+  if LIsDH then
   begin
-    Fail('server: x25519 failed');
-    Exit;
+    LR := TsshReader.Create(LInit);
+    try
+      LR.ReadByte;
+      LClientE := LR.ReadMPInt;
+    finally
+      LR.Free;
+    end;
+    LPrime := SshDHGroup14Prime;
+    LGen := SshDHGroup14Generator;
+    LSrvPriv := GenerateSecureRandomBytes(32);
+    if not TryBigIntModExpFromUnsignedBytes(LGen, LSrvPriv, LPrime, LXPub, LErr) then
+    begin
+      Fail('server: dh pub failed: ' + LErr);
+      Exit;
+    end;
+    if not TryBigIntModExpFromUnsignedBytes(LClientE, LSrvPriv, LPrime, LShared, LErr) then
+    begin
+      Fail('server: dh shared failed: ' + LErr);
+      Exit;
+    end;
+    LEphemeral := LClientE;
+  end
+  else
+  begin
+    LR := TsshReader.Create(LInit);
+    try
+      LR.ReadByte;
+      LEphemeral := LR.ReadStringBytes;
+    finally
+      LR.Free;
+    end;
+    GenerateX25519KeyPair(LXPriv, LXPub);
+    if not TryX25519ComputeSharedSecret(LXPriv, LEphemeral, LShared, LXErr) then
+    begin
+      Fail('server: x25519 failed');
+      Exit;
+    end;
   end;
 
   LW := TsshWriter.Create(80);
@@ -597,10 +656,14 @@ begin
     LW.Free;
   end;
 
-  { 与客户端共用生产实现的交换哈希输入构造（RFC 4253 §8）}
-  LH := SHA256(SshBuildCurve25519HashInput(
-    BytesToText(LVc), SERVER_IDENT, LClientInit, LMyInit,
-    Ed25519PubBlob(LHostPub), LEphemeral, LXPub, LShared));
+  if LIsDH then
+    LH := SHA256(SshBuildDHGroup14HashInput(
+      BytesToText(LVc), SERVER_IDENT, LClientInit, LMyInit,
+      Ed25519PubBlob(LHostPub), LEphemeral, LXPub, LShared))
+  else
+    LH := SHA256(SshBuildCurve25519HashInput(
+      BytesToText(LVc), SERVER_IDENT, LClientInit, LMyInit,
+      Ed25519PubBlob(LHostPub), LEphemeral, LXPub, LShared));
   FSessionId := LH;
 
   if not Ed25519Sign(FSc^.HostSeed, LH, LSig64) then
@@ -610,11 +673,14 @@ begin
   end;
   LSigBlob := SigBlobOf('ssh-ed25519', LSig64);
 
-  LW := TsshWriter.Create(256);
+  LW := TsshWriter.Create(512);
   try
     LW.PutByte(SSH_MSG_KEX_ECDH_REPLY);
     LW.PutStringBytes(Ed25519PubBlob(LHostPub));
-    LW.PutStringBytes(LXPub);
+    if LIsDH then
+      LW.PutMPInt(LXPub)
+    else
+      LW.PutStringBytes(LXPub);
     LW.PutStringBytes(LSigBlob);
     LReply := LW.ToBytes;
     SendPlainPayload(LReply);
@@ -1140,7 +1206,8 @@ type
 
 { 起服务线程，跑一轮真实客户端：握手 → 认证 → exec → 关闭 }
 function RunLoopback(AMode: Integer; APasswordOk, APubKeyOk: Boolean;
-  const AKnownHostsFile: string; AStrictHostKey: Boolean): TLoopResult;
+  const AKnownHostsFile: string; AStrictHostKey: Boolean;
+  AForceDH: Boolean = False): TLoopResult;
 var
   LSc: PSshLoopServerScenario;
   LSync: PSync;
@@ -1168,6 +1235,7 @@ begin
     LSc^.StdErr := StringToBytes('warn: loop stderr');
     LSc^.ExitCode := 7;
     LSc^.HostSeed := PatternBytes($E7, 32);
+    LSc^.ForceDH := AForceDH;
     LSc^.Failed := False;
     LSc^.FailMsg := '';
     LSc^.Done := False;
@@ -1395,6 +1463,28 @@ begin
     finally
       DeleteFile(KH_PATH);
     end;
+  end);
+
+  { S13：服务端仅提供 group14 时客户端回退 DH，完成握手→认证→exec }
+  GSuite.Test('dh group14 fallback loopback (password)', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PASSWORD, True, False, '', False, True);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+    CheckEqual('stdout-part-one|stdout-part-two!', LR.Exec.StdOutText, 'stdout');
+  end);
+
+  GSuite.Test('dh group14 fallback loopback (publickey)', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PUBKEY, True, True, '', False, True);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
   end);
 
   GRunner := TSuiteRunner.Create('nextpas.core.ssh.session');
