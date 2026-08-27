@@ -8,6 +8,7 @@ ZIP archive container: read, write, filesystem pack/extract.
 |------|------|
 | `nextpas.core.zip` | Facade: re-exports the full public surface |
 | `nextpas.core.zip.base` | Method enum, entry metadata record, signature/limit constants, entry-name safety predicate, unix/DOS time conversion |
+| `nextpas.core.zip.common` | Shared kernel：`GuardEntryReadable` / `DecompressEntryVerified` / LE* / `IsKnownZipSig` — reader 与 sequential 单点复用 |
 | `nextpas.core.zip.writer` | `IZipWriter` implementation |
 | `nextpas.core.zip.reader` | `IZipReader` implementation |
 | `nextpas.core.zip.sequential` | `ISequentialZipReader` — pure sequential (pipe/HTTP body) reader |
@@ -264,5 +265,10 @@ allocate beyond the configured output cap.
 in `compare_go/`. Reader parsing uses the boundary-checked
 `nextpas.core.bytes.cursor` primitive with single-allocation entry arrays;
 CRC32 is slice-by-8 in `nextpas.core.checksum.crc32`.
+
+Sequential read reuses the same `DecompressEntryVerified` kernel via
+`nextpas.core.zip.common`（reader/sequential 单点复用，fail-closed 语义一致），
+`2000×512B` 顺序提取 `322k entries/s / 157 MB/s`（内存读 `373k/182 MB/s`），
+`1MB` 单条目顺序 `398 MB/s`（内存读 `568 MB/s`），管道扫描开销约 15% 可预期；`bench_zip` 的 `BenchSequential` 为锚点。
 
 Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip).
