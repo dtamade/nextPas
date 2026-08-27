@@ -33,6 +33,8 @@ type
     function StdErrText: string;
   end;
 
+  TProcSshExecResult = procedure(const AResult: TSshExecResult; AErr: ESSHError; AContext: Pointer);
+
 { 在已认证的传输上执行一次性命令并阻塞收集输出。
   ATimeoutMs <= 0 表示无限等待。}
 function SshRunExec(ATransport: TSshClientTransport; const ACommand: string;
