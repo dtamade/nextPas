@@ -221,7 +221,7 @@ grep -rn "string(AnsiString" core/src/nextpas.core.db*.pas  # 终态 0 行
 - [x] §6.1 全量 gates **全绿 + heaptrc 0 unfreed**（env 门控 skip 如实登记：C8-1 factory 15/migrate_v2 10/tx_v2 9；C8-2 pool_v2 19；C8-3 redis_base 11/redis_adapter 15/odbc_base 7+1skip/odbc_adapter 6+1skip；C8-4 mysql_adapter 6+1skip/redis_subscribe 10/pg 13/sqlscan 12/conformance 2/unified 18）
 - [x] `make hygiene` + `git diff --check` 双 pass（每片独立验证）
 - [x] 四切片独立 landing（`landing/core-db-c8-1-text-20260828` --no-ff e77398f40 + `landing/core-db-c8-234-20260828` cherry-picks 925806581），lane 收敛后 `core-db`@`main` 零 diff
-- [ ] `grep -l "string(AnsiString" = 0` 未达成——残留 8 处在 `db.pg.*` LO 路径（非 C8 12 单元 scope），记入下一 sweep，不阻 C8 Done
+- [x] `grep -l "string(AnsiString" = 0` 达成（2026-08-28 C8.5 扫尾：15 处 `pg/sqlite/loader` → `AnsiPtrToStr`，仅 `odbc.loader` 注释豁免；终态 `grep -rn` 0 行有效代码）
 
 ---
 

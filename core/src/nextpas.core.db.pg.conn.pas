@@ -158,14 +158,14 @@ begin
   if LP = nil then
     Result := ''
   else
-    Result := string(AnsiString(LP));
+    Result := AnsiPtrToStr(LP);
 end;
 
 procedure RaiseResultError(const ARes: PGresult);
 var
   LMsg: string;
 begin
-  LMsg := string(AnsiString(pq_resultErrorMessage(ARes)));
+  LMsg := AnsiPtrToStr(pq_resultErrorMessage(ARes));
   if LMsg = '' then
     LMsg := 'PostgreSQL 执行失败';
   raise EPgError.Create(LMsg, ErrField(ARes, PG_DIAG_SQLSTATE),
@@ -215,7 +215,7 @@ begin
         libpq 细分码 08001/08006 需服务端协商后才有，此处拿不到——
         用 ISO 通用码保证 ClassifyPg 落 decConnection） }
       raise EPgError.Create(
-        string(AnsiString(pq_errorMessage(FConn))),
+        AnsiPtrToStr(pq_errorMessage(FConn)),
         '08000', 'ERROR', '');
     finally
       pq_finish(FConn);
@@ -317,7 +317,7 @@ begin
   LStatus := pq_resultStatus(ARes);
   if not (LStatus in [PGRES_EMPTY_QUERY, PGRES_COMMAND_OK, PGRES_TUPLES_OK]) then
     RaiseResultError(ARes);
-  FLastCmdTuples := StrToInt64Def(string(AnsiString(pq_cmdTuples(ARes))), 0);
+  FLastCmdTuples := StrToInt64Def(AnsiPtrToStr(pq_cmdTuples(ARes)), 0);
 end;
 
 procedure TPgConn.Exec(const ASql: string);
@@ -354,7 +354,7 @@ end;
 
 function TPgConn.ErrorMessage: string;
 begin
-  Result := string(AnsiString(pq_errorMessage(FConn)));
+  Result := AnsiPtrToStr(pq_errorMessage(FConn));
 end;
 
 function TPgConn.ShowVar(const AName: string): string;
@@ -590,7 +590,7 @@ function TPgQuery.ColumnName(const AIndex: Integer): string;
 begin
   if FRes = nil then
     Exit('');
-  Result := string(AnsiString(pq_fname(FRes, AIndex)));
+  Result := AnsiPtrToStr(pq_fname(FRes, AIndex));
 end;
 
 function TPgQuery.ColumnFieldOid(const AIndex: Integer): Cardinal;

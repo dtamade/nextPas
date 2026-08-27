@@ -1199,7 +1199,7 @@ begin
   FFd := lo_open(FConnH, TOid(AOid), LMode);
   if FFd < 0 then
     raise EDbError.CreateSimple(dbkPostgres,
-      'lo_open failed: ' + string(AnsiString(pq_errorMessage(FConnH))));
+      'lo_open failed: ' + AnsiPtrToStr(pq_errorMessage(FConnH)));
 end;
 
 destructor TDbPgBlobStream.Destroy;
@@ -1219,7 +1219,7 @@ begin
   N := lo_read(FConnH, FFd, PAnsiChar(ABuf), SizeInt(ACount));
   if N < 0 then
     raise EDbError.CreateSimple(dbkPostgres,
-      'lo_read failed: ' + string(AnsiString(pq_errorMessage(FConnH))));
+      'lo_read failed: ' + AnsiPtrToStr(pq_errorMessage(FConnH)));
   Result := SizeUInt(N);
 end;
 
@@ -1232,7 +1232,7 @@ begin
   N := lo_write(FConnH, FFd, PAnsiChar(ABuf), SizeInt(ACount));
   if (N < 0) or (SizeUInt(N) <> ACount) then
     raise EDbError.CreateSimple(dbkPostgres,
-      'lo_write short write: ' + string(AnsiString(pq_errorMessage(FConnH))));
+      'lo_write short write: ' + AnsiPtrToStr(pq_errorMessage(FConnH)));
 end;
 
 function TDbPgBlobStream.Seek(AOffset: Int64; AOrigin: TDbSeekOrigin): Int64;
@@ -1250,7 +1250,7 @@ begin
   R := lo_lseek64(FConnH, FFd, AOffset, LWhence);
   if R < 0 then
     raise EDbError.CreateSimple(dbkPostgres,
-      'lo_lseek64 failed: ' + string(AnsiString(pq_errorMessage(FConnH))));
+      'lo_lseek64 failed: ' + AnsiPtrToStr(pq_errorMessage(FConnH)));
   Result := R;
 end;
 
@@ -1287,7 +1287,7 @@ begin
   Oid := lo_creat(FConn.Handle, INV_READ or INV_WRITE);
   if Oid = PG_INVALID_OID then
     raise EDbError.CreateSimple(dbkPostgres,
-      'lo_creat failed: ' + string(AnsiString(pq_errorMessage(FConn.Handle))));
+      'lo_creat failed: ' + AnsiPtrToStr(pq_errorMessage(FConn.Handle)));
   Result := Int64(Oid);
 end;
 
@@ -1311,7 +1311,7 @@ begin
   if lo_unlink(FConn.Handle, TOid(AOid)) < 0 then
     raise EDbError.CreateSimple(dbkPostgres,
       'lo_unlink failed: ' +
-        string(AnsiString(pq_errorMessage(FConn.Handle))));
+        AnsiPtrToStr(pq_errorMessage(FConn.Handle)));
 end;
 
 end.

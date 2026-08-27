@@ -18,6 +18,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.db.sqlite.base,
   nextpas.core.db.sqlite.ffi;
 
@@ -98,7 +99,7 @@ implementation
 procedure RaiseError(const ACode: Integer; const ADb: TSqliteHandle);
 begin
   raise ESqliteError.Create(ACode, sqlite3_extended_errcode(ADb),
-    string(AnsiString(sqlite3_errmsg(ADb))));
+    AnsiPtrToStr(sqlite3_errmsg(ADb)));
 end;
 
 { ===== ESqliteError ===== }
@@ -133,7 +134,7 @@ begin
   LRC := sqlite3_open_v2(PAnsiChar(AnsiString(APath)), FDb, AFlags, nil);
   if LRC <> SQLITE_OK then
     raise ESqliteError.Create(LRC, sqlite3_extended_errcode(FDb),
-      string(AnsiString(sqlite3_errmsg(FDb))));
+      AnsiPtrToStr(sqlite3_errmsg(FDb)));
 end;
 
 destructor TSqliteDb.Destroy;
@@ -162,7 +163,7 @@ begin
     begin
       try
         raise ESqliteError.Create(LRC, sqlite3_extended_errcode(FDb),
-          string(AnsiString(LErr)));
+          AnsiPtrToStr(LErr));
       finally
         sqlite3_free(LErr);
       end;
@@ -199,7 +200,7 @@ end;
 
 function TSqliteDb.Version: string;
 begin
-  Result := string(AnsiString(sqlite3_libversion));
+  Result := AnsiPtrToStr(sqlite3_libversion);
 end;
 
 function SqliteOpen(const APath: string): TSqliteDb;
@@ -300,7 +301,7 @@ end;
 
 function TSqliteQuery.ColumnName(const AIndex: Integer): string;
 begin
-  Result := string(AnsiString(sqlite3_column_name(FStmt, AIndex)));
+  Result := AnsiPtrToStr(sqlite3_column_name(FStmt, AIndex));
 end;
 
 { ASCII 大写（避免为本文件引入 SysUtils 依赖） }
@@ -331,7 +332,7 @@ begin
   LDecl := sqlite3_column_decltype(FStmt, AIndex);
   if LDecl = nil then
     Exit;
-  LU := UpCaseAscii(string(AnsiString(LDecl)));
+  LU := UpCaseAscii(AnsiPtrToStr(LDecl));
   if Pos('INT', LU) > 0 then
     Exit(SQLITE_INTEGER);
   if (Pos('CHAR', LU) > 0) or (Pos('CLOB', LU) > 0)
@@ -351,7 +352,7 @@ begin
   LDecl := sqlite3_column_decltype(FStmt, AIndex);
   if LDecl = nil then
     Exit('');
-  Result := UpCaseAscii(string(AnsiString(LDecl)));
+  Result := UpCaseAscii(AnsiPtrToStr(LDecl));
 end;
 
 function TSqliteQuery.GetInt64(const AIndex: Integer): Int64;

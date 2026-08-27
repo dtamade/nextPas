@@ -143,7 +143,7 @@ begin
   ClassifySqlite(ARC, sqlite3_extended_errcode(AHandle),
     LCategory, LConstraint);
   raise EDbError.CreateFullSqlite(ARC, sqlite3_extended_errcode(AHandle),
-    LCategory, LConstraint, string(AnsiString(sqlite3_errmsg(AHandle))));
+    LCategory, LConstraint, AnsiPtrToStr(sqlite3_errmsg(AHandle)));
 end;
 
 function MapColumnType(const ASqliteType: Integer): TDbColumnType;
@@ -740,7 +740,7 @@ end;
 
 function TDbSqliteConnection.ProductVersion: string;
 begin
-  Result := string(AnsiString(sqlite3_libversion));
+  Result := AnsiPtrToStr(sqlite3_libversion);
 end;
 
 function TDbSqliteConnection.SupportsSavepoints: Boolean;

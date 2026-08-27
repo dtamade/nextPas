@@ -34,6 +34,7 @@ implementation
 
 uses
   nextpas.core.platform.dl,
+  nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.db.mysql.ffi;
 
@@ -51,7 +52,7 @@ var
 begin
   LN := platform_dl_error(@LBuf[0], SizeOf(LBuf));
   if LN > 0 then
-    Result := string(AnsiString(@LBuf[0]))
+    Result := AnsiPtrToStr(@LBuf[0])
   else
     Result := 'unknown dl error';
 end;
