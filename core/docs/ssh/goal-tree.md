@@ -151,11 +151,31 @@ OpenSSH 加密私钥容器（bcrypt_pbkdf + AES-256-CTR）落地，闭环 ssh-ke
       test_ssh_session 假服务端加密密钥认证回环；e2e 第八场景 ssh-keygen -t ed25519 -N 口令 生成真实加密密钥对 Docker/remote sshd 认证
 - [x] 文档收口：README 已知限制移除加密容器行，goal-tree 后续 slice 表移除该项
 
+## S11 — RSA 签名 CRT 加速（已完成）
+
+客户端 RSA 私钥容器自带的 `p/q/iqmp`（`q^{-1} mod p`）不再闲置，签名走
+中国剩余定理，2048-bit 模幂拆为两路 1024-bit：
+
+- [x] `keys`：`TSshPrivateKey` 增 `RsaP/RsaQ/RsaIqmp/RsaHasCrt`，`IsCrtValid`
+      校验 `p*q==n` 与 `q*iqmp ≡ 1 (mod p)`（`TryBigIntMul/ModMul`），非法
+      容器落 `HasCrt=False` 触发 naive 回退，不误伤旧测试哑数据
+- [x] `rsa`：`RsaSignPkcs1v15Crt`——`dp=D mod (p-1)`/`dq` 派生 + `EM^dp mod p`
+      /`EM^dq mod q` + `diff=(m1-m2) mod p` + `h=iqmp*diff mod p` + `sig=m2+h*q`
+     （Garner 合并，复用 `TryBigInt*FromUnsignedBytes`，全链条失败返回 False）
+- [x] `session`：`AuthenticateWithPrivateKeyData` 优先走 CRT，失败回退 naive；
+      哑数据/非法 CRT 容器无静默错签
+- [x] `ssh_rsa_kat`：第二套 2048-bit 向量 `CrtKatN/P/Q/Iqmp/D`（Python cryptography
+      现场生成，`q*iqmp % p == 1` 已校验），`ssh_bcrypt_kat` 复用不变
+- [x] 测试五线闭环：`test_ssh_keys` CRT 等价性（sha256/sha512 逐字节 + 验签）、
+      `HasCrt` 判定、哑参数错签隔离、bench（32 次 `rsa-sha512` naive 6.3s→crt 1.2s ≈5.2x）、
+      加密 RSA+CRT 容器解密后等价性；`test_ssh_session` 新增 `LOOP_PUBKEY_RSA_CRT`
+      真实验签回环（48ms vs naive 226ms ≈4.7x）
+- [x] 文档/性能收口见下
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| RSA 签名 CRT 优化 | 用容器自带 iqmp/p/q 做中国剩余定理，模幂量减 ~4x |
 | ecdsa-sha2-nistp256 主机密钥 | 枚举已预留，需 mpint(r,s)↔DER 转换 |
 | DH group14-sha256 KEX | bigint modpow 可用，作为 curve25519 不可用时的回退 |
 | ssh-agent | Unix socket 协议客户端 |
@@ -165,7 +185,7 @@ OpenSSH 加密私钥容器（bcrypt_pbkdf + AES-256-CTR）落地，闭环 ssh-ke
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥**
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT**
 补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均
-8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA publickey 与加密私钥认证），
+8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA publickey/CRT 与加密私钥认证），
 heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。
