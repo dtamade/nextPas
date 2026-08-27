@@ -4,7 +4,7 @@
 S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
 live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正、
 S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 respack
-资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环、S15 MIME 65 项与骨架屏收口、S16 生产就绪收口均已进主线。W2 webview2 / W3 wk 待平台环境启动）
+资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环、S15 MIME 65 项与骨架屏收口、S16 生产就绪收口、S17 respack 高级感对齐与 bench 刷新、S18 W2 桩+loader via wine 交叉验证均已进主线。W2 真 runtime 待 Edge，W3 wk 待平台）
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。
@@ -36,7 +36,7 @@ S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 res
 |------|------|------|----------|------|
 | `gtk` | Linux | WebKitGTK 4.1（探测降级 4.0） | 运行时 dlopen，自声明 ABI | **Wave 1** |
 | `fake` | 全平台（无头） | 无引擎，脚本化驱动 | 纯 Pascal | **Wave 1**（测试支撑） |
-| `webview2` | Windows | Microsoft WebView2 (Edge) | COM 头移植 + WebView2Loader.dll 动态加载 | Wave 2 |
+| `webview2` | Windows (wine 10.0 可交叉验证) | Microsoft WebView2 (Edge) | COM 桩 + WebView2Loader.dll 动态加载（platform.dl；Linux 不可用，wine 可用） | **Wave 2 桩已落地**（ffi/loader/桩后端 + 3 用例门禁，wine 交叉验证通过） |
 | `wk` | macOS | WKWebView | ObjC runtime / objcclass（待编译器能力确认） | Wave 3 |
 
 平台能力差异以"语义诚实表"记录在 [CONTRACT.md](CONTRACT.md)，不做跨平台假装。
@@ -155,23 +155,23 @@ LProvider := CreateVfsAssetProvider(LVfs); // 前缀容错双试 + MIME 共享�
 LWin.Assets.MountEmbedded('', LProvider);
 ```
 
-性能基线（`core/benchmarks/nextpas.core.webview/bench_vfs`，`nextpas.core.bench` 框架）：
+性能基线（`core/benchmarks/nextpas.core.webview/bench_vfs`，`nextpas.core.bench` 框架，过滤均值 1.23 GB/s 级）：
 
-| 场景 | ns/op | ops/s | 吞吐 |
+| 场景 | ns/op (过滤均值) | ops/s | 吞吐 |
 |------|-------|-------|------|
-| SmallHit/index.html | 718 ns | 1.39M | 191 MB/s |
-| Fallback/app/index.html | 904 ns | 1.1M | 214 MB/s |
-| Miss404 | 218 ns | 4.5M | 127 MB/s |
-| LargeHit/1M | 793 µs | 1.26k | 1.23 GB/s |
+| SmallHit/index.html | 683 ns | 1.46M | 199 MB/s |
+| Fallback/app/index.html | 892 ns | 1.12M | 211 MB/s |
+| Miss404 | 229 ns | 4.37M | 114 MB/s |
+| LargeHit/1M | 787 µs | 1.27k | 1.23 GB/s |
 
-桥协议基线（`core/benchmarks/nextpas.core.webview/bench_bridge`）：
+桥协议基线（`core/benchmarks/nextpas.core.webview/bench_bridge`，过滤均值）：
 
 | 场景 | ns/op | ops/s | 备注 |
 |------|-------|-------|------|
-| TryDecodeFrame | 3859 ns | 259k | JSON 解析 + 校验 + 规范化 |
-| BuildResolveScript | 627 ns | 1.59M | JsStringLit + 拼接 |
-| BuildRejectScript | 1286 ns | 778k | 错误码归一 + 对象构造 |
-| BuildEmitScript | 942 ns | 1.06M | 事件名校验 + 双 Json |
+| TryDecodeFrame | 3.80 µs | 263k | JSON 解析 + 校验 + 规范化 |
+| BuildResolveScript | 604 ns | 1.65M | JsStringLit + 拼接 |
+| BuildRejectScript | 1.25 µs | 800k | 错误码归一 + 对象构造 |
+| BuildEmitScript | 900 ns | 1.11M | 事件名校验 + 双 Json |
 
 前端侧（协议细节见 BRIDGE_PROTOCOL.md）：
 

@@ -92,17 +92,20 @@ uses
   TypInfo,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
-  nextpas.core.webview.gtk.win;
+  nextpas.core.webview.gtk.win,
+  nextpas.core.webview.webview2.loader,
+  nextpas.core.webview.webview2;
 
 var
   GExitRequested: Boolean = False;
 
 function DefaultWebviewKind: TWebviewKind;
 begin
-  { S4：能力驱动平台优先——探测到 WebKitGTK 即 wvGtk（无 IFDEF；
-    非 Linux 上探测自然失败）。W2/W3 落地后在其前位插入各自探测，
-    全部不可用回落 wvFake。 }
-  if WebviewBackendAvailable(wvGtk) then
+  { S18：能力驱动平台优先——wvWebview2（Windows/wine）优先于 wvGtk，
+    非对应平台探测自然失败，无 IFDEF。 }
+  if WebviewBackendAvailable(wvWebview2) then
+    Result := wvWebview2
+  else if WebviewBackendAvailable(wvGtk) then
     Result := wvGtk
   else
     Result := wvFake;
@@ -111,12 +114,14 @@ end;
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
 var
   LInfo: TGtkLoadInfo;
+  LW2: TWebView2LoadInfo;
 begin
   case AKind of
-    wvFake:    Result := True;
-    wvGtk:     Result := TryLoadGtkWebkit(LInfo);   // 幂等缓存（S3 接入）
+    wvFake:      Result := True;
+    wvGtk:       Result := TryLoadGtkWebkit(LInfo);   // 幂等缓存（S3 接入）
+    wvWebview2:  Result := TryLoadWebView2(LW2);      // W2 探测（wine 亦经 platform.dl）
   else
-    Result := False;   // wvWebview2 / wvWk 各自波次接入
+    Result := False;   // wvWk 波次接入
   end;
 end;
 
@@ -135,8 +140,9 @@ begin
       'webview backend "%s" is not available in this build', [
       GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
   case AKind of
-    wvFake: Result := CreateFakeWebview(AOptions);
-    wvGtk:  Result := TGtkWebview.Create(AOptions);
+    wvFake:     Result := CreateFakeWebview(AOptions);
+    wvGtk:      Result := TGtkWebview.Create(AOptions);
+    wvWebview2: Result := TWebView2Webview.Create(AOptions);
   else
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is registered but has no factory yet', [
@@ -151,11 +157,17 @@ begin
   begin
     if GtkLiveWindowCount > 0 then
       WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
+    else if WebView2LiveWindowCount > 0 then
+    begin
+      { W2 桩：无消息泵，yield 避免忙转；真实 WebView2 时为 Win32 消息泵 }
+      platform_thread_yield;
+      Break;
+    end
     else if FakeLiveWindowCount > 0 then
       FakePumpAll
     else
       Break;
-    if (GtkLiveWindowCount = 0) and (FakeLiveWindowCount = 0) then
+    if (GtkLiveWindowCount = 0) and (WebView2LiveWindowCount = 0) and (FakeLiveWindowCount = 0) then
       Break;
     platform_thread_yield;
   end;
