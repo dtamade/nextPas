@@ -1,6 +1,6 @@
 # nextpas.core.webview 后端绑定策略
 
-**状态**: **Landed**（Wave 1 gtk/fake 全量 + S4-S14 打磨；W2/W3 待平台）
+**状态**: **Production Ready**（Wave 1 gtk/fake 全量 + S4-S16 打磨；bench 双基线入库；W2/W3 待平台）
 本文档记录各后端的 ABI 绑定方式、版本矩阵、主线程唤醒原语、
 eval 结果语义矩阵，以及从 fafafa.webview 移植资产的清单与边界。
 
