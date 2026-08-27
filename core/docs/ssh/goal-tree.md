@@ -190,11 +190,33 @@ OpenSSH 默认主机密钥三件套补齐最后一块（`ssh-ed25519` / `rsa-sha
 - [x] e2e：Docker 夹具可选 `host_ecdsa`（`ssh-keygen -t ecdsa -b 256`）与 TOFU 采集；
       真实 Debian 10.0p2 的 ecdsa 主机密钥已在 `ssh-keyscan -t ecdsa` 路径验证
 
+## S13 — diffie-hellman-group14-sha256 回退 KEX（已完成）
+
+`curve25519-sha256` 不可用时的标准回退——RFC 3526 2048-bit MODP Group 14
+与 RFC 4253 §8 交换散列（`mpint(e/f/K)` 版）：
+
+- [x] `kex.dhgroup14`：`SshDHGroup14Prime/Generator`（256 字节 RFC3526 素数
+      + `g=2`）、`SshBuildDHGroup14HashInput`（Vc/Vs/Ic/Is/Ks/e/f/K 均为
+      规范 mpint）、`TSshKexDHGroup14`（32 字节随机私钥、mpint 载荷、
+      `1 < f < p` 与全零共享拒绝、`SHA256(H)`）
+- [x] `kex`：`SSH_OFFER_KEX_ALGS` 增 `diffie-hellman-group14-sha256`，优先级
+      `curve25519-sha256 > curve25519-sha256@libssh.org > group14`（与
+      OpenSSH 一致）；AEAD/ETM 既有逻辑不变
+- [x] `session`：`DoHandshake` 按 `LNeg.KexAlg` 分派——`group14` 走
+      `TSshKexDHGroup14`，其余走 `TSshKexCurve25519`；同一 `DeriveAndApplyNewKeys`
+      链条，无重复 KDF
+- [x] 测试四线闭环：`test_ssh_kex` 新增 `dh fallback negotiation` 与
+      `dh group14 client exchange`（独立 `e^srvPriv` 重算 K 与 `SHA256` 重算 H，
+      53ms vs curve25519 1ms，2048-bit 模幂代价明确）；`test_ssh_session`
+      假服务端扩展 `ForceDH` 分支（独立 DH 密钥对与 `SshBuildDHGroup14HashInput`），
+      新增 `dh fallback loopback (password/publickey)`（61ms/69ms，10/10）
+- [x] 性能说明：DH 2048-bit 单次交换约 50–70ms（同 host），约为 curve25519 的
+      50×；作为回退可用性优先于性能，默认仍首选 curve25519
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| DH group14-sha256 KEX | bigint modpow 可用，作为 curve25519 不可用时的回退 |
 | ssh-agent | Unix socket 协议客户端 |
 | zlib 压缩方法 | compress.deflate 可复用 |
 | async reactor 适配 | net.async.dial + 非阻塞读事件化 |
@@ -202,7 +224,7 @@ OpenSSH 默认主机密钥三件套补齐最后一块（`ssh-ed25519` / `rsa-sha
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT + S12 ECDSA**
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT + S12 ECDSA + S13 DH 回退**
 补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均
-8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA/CRT/ECDSA 与加密私钥认证），
+8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA/CRT/ECDSA 与加密私钥认证，以及 DH group14 回退协商与交换），
 heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。

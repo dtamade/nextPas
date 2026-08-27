@@ -99,7 +99,8 @@ uses
   nextpas.core.ssh.auth,
   nextpas.core.ssh.keys,
   nextpas.core.ssh.rsa,
-  nextpas.core.ssh.kex.curve25519;
+  nextpas.core.ssh.kex.curve25519,
+  nextpas.core.ssh.kex.dhgroup14;
 
 const
   DISCONNECT_BY_APPLICATION = 11;
@@ -300,8 +301,9 @@ var
   LCookie, LMyInit, LPeerInit, LReply: TBytes;
   LPeer: TSshPeerKexInit;
   LNeg: TSshNegotiated;
-  LKex: TSshKexCurve25519;
   LK, LH, LHostBlob, LSigBlob: TBytes;
+  LKexCurve: TSshKexCurve25519;
+  LKexDH: TSshKexDHGroup14;
 begin
   FTransport.ExchangeVersions;
 
@@ -312,14 +314,29 @@ begin
   LPeer := SshParseKexInit(LPeerInit);
   LNeg := SshNegotiate(LPeer);
 
-  LKex := TSshKexCurve25519.Create;
-  try
-    FTransport.SendPacket(LKex.BuildInitPayload);
-    LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-    LKex.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-      LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-  finally
-    LKex.Free;
+  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
+  begin
+    LKexDH := TSshKexDHGroup14.Create;
+    try
+      FTransport.SendPacket(LKexDH.BuildInitPayload);
+      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+    finally
+      LKexDH.Free;
+    end;
+  end
+  else
+  begin
+    LKexCurve := TSshKexCurve25519.Create;
+    try
+      FTransport.SendPacket(LKexCurve.BuildInitPayload);
+      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+    finally
+      LKexCurve.Free;
+    end;
   end;
 
   FHostKeyBlob := LHostBlob;
