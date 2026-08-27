@@ -656,12 +656,7 @@ begin
   case ACipherSuite of
     TLS13_CIPHER_CHACHA20_POLY1305_SHA256:
       begin
-        // ChaCha 仍走 TBytes 包装（小堆），后续补零堆直通
-        SetLength(LNonceBytes, ANonceLen);
-        if ANonceLen > 0 then Move(ANonce^, LNonceBytes[0], ANonceLen);
-        SetLength(LAADBytes, AAADLen);
-        if AAADLen > 0 then Move(AAAD^, LAADBytes[0], AAADLen);
-        if not TryChaCha20Poly1305EncryptToBuf(AKey, LNonceBytes, LAADBytes, APlain, APlainLen, ADest, ADestCap) then
+        if not TryChaCha20Poly1305EncryptToBufDirect(AKey, ANonce, ANonceLen, AAAD, AAADLen, APlain, APlainLen, ADest, ADestCap) then
         begin AError := 'ChaCha20-Poly1305 encryption failed'; Exit(False); end;
         AEncryptedLen := APlainLen + 16;
         Result := True;
@@ -728,11 +723,7 @@ begin
         if AEncryptedLen < 16 then begin AError := 'ChaCha20-Poly1305 encrypted payload must include 16-byte tag'; Exit(False); end;
         LTotalPlain := AEncryptedLen - 16;
         if ADestCap < LTotalPlain then begin AError := TextFormat('AEAD decryptDirect: dest too small (%d < %d)', [ADestCap, LTotalPlain]); Exit(False); end;
-        SetLength(LNonceBytes, ANonceLen);
-        if ANonceLen > 0 then Move(ANonce^, LNonceBytes[0], ANonceLen);
-        SetLength(LAADBytes, AAADLen);
-        if AAADLen > 0 then Move(AAAD^, LAADBytes[0], AAADLen);
-        if not TryChaCha20Poly1305DecryptCombinedBuf(AKey, LNonceBytes, LAADBytes, AEncrypted, AEncryptedLen, ADest, ADestCap) then
+        if not TryChaCha20Poly1305DecryptCombinedBufDirect(AKey, ANonce, ANonceLen, AAAD, AAADLen, AEncrypted, AEncryptedLen, ADest, ADestCap) then
         begin AError := 'ChaCha20-Poly1305 decryption/authentication failed'; Exit(False); end;
         if not TryParseTLS13InnerPlaintextTo(ADest, LTotalPlain, AFragLen, AContentType) then
         begin AError := 'TLS 1.3 inner plaintext invalid (chacha direct)'; Exit(False); end;

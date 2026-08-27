@@ -1492,4 +1492,186 @@ begin
   Result := True;
 end;
 
+function ChaCha20Load32LEPtr(ANonce: PByte; AOffset: Integer): UInt32; inline;
+begin
+  Result := UInt32(ANonce[AOffset]) or (UInt32(ANonce[AOffset+1]) shl 8)
+    or (UInt32(ANonce[AOffset+2]) shl 16) or (UInt32(ANonce[AOffset+3]) shl 24);
+end;
+
+procedure ChaCha20BlockPtr(const AKey: TBytes; ANonce: PByte; ACounter: UInt32; out ABlock: array of Byte);
+var
+  LState, LWork: array[0..15] of UInt32;
+  I: Integer;
+begin
+  LState[0] := $61707865; LState[1] := $3320646E;
+  LState[2] := $79622D32; LState[3] := $6B206574;
+  for I := 0 to 7 do LState[4+I] := Load32LE(AKey, I*4);
+  LState[12] := ACounter;
+  LState[13] := ChaCha20Load32LEPtr(ANonce, 0);
+  LState[14] := ChaCha20Load32LEPtr(ANonce, 4);
+  LState[15] := ChaCha20Load32LEPtr(ANonce, 8);
+  for I := 0 to 15 do LWork[I] := LState[I];
+  for I := 0 to 9 do
+  begin
+    QuarterRound(LWork[0], LWork[4], LWork[8], LWork[12]);
+    QuarterRound(LWork[1], LWork[5], LWork[9], LWork[13]);
+    QuarterRound(LWork[2], LWork[6], LWork[10], LWork[14]);
+    QuarterRound(LWork[3], LWork[7], LWork[11], LWork[15]);
+    QuarterRound(LWork[0], LWork[5], LWork[10], LWork[15]);
+    QuarterRound(LWork[1], LWork[6], LWork[11], LWork[12]);
+    QuarterRound(LWork[2], LWork[7], LWork[8], LWork[13]);
+    QuarterRound(LWork[3], LWork[4], LWork[9], LWork[14]);
+  end;
+  for I := 0 to 15 do
+  begin
+    LWork[I] := LWork[I] + LState[I];
+    ABlock[I*4] := Byte(LWork[I] and $FF);
+    ABlock[I*4+1] := Byte((LWork[I] shr 8) and $FF);
+    ABlock[I*4+2] := Byte((LWork[I] shr 16) and $FF);
+    ABlock[I*4+3] := Byte((LWork[I] shr 24) and $FF);
+  end;
+end;
+
+function ChaCha20XorPtr(const AKey: TBytes; ANonce: PByte; ACounter: UInt32; AInput: PByte; AInputLen: Integer; ADest: PByte): Boolean;
+var
+  LBlock: array[0..63] of Byte;
+  LOff, LBlockLen, I: Integer;
+  LCounter: UInt32;
+begin
+  Result := False;
+  if (AInput = nil) and (AInputLen > 0) then Exit;
+  if (ADest = nil) and (AInputLen > 0) then Exit;
+  if Length(AKey) <> 32 then Exit;
+  LOff := 0;
+  LCounter := ACounter;
+  while LOff < AInputLen do
+  begin
+    ChaCha20BlockPtr(AKey, ANonce, LCounter, LBlock);
+    LBlockLen := 64;
+    if LOff + LBlockLen > AInputLen then LBlockLen := AInputLen - LOff;
+    for I := 0 to LBlockLen - 1 do
+      ADest[LOff + I] := AInput[LOff + I] xor LBlock[I];
+    Inc(LCounter);
+    Inc(LOff, LBlockLen);
+  end;
+  Result := True;
+end;
+
+function TryChaCha20Poly1305EncryptToBufDirect(
+  const AKey: TBytes; ANonce: PByte; ANonceLen: Integer;
+  AAAD: PByte; AAADLen: Integer;
+  APlain: PByte; APlainLen: Integer;
+  ADest: PByte; ADestLen: Integer): Boolean;
+var
+  LBlock0: array[0..63] of Byte;
+  LPolyCtx: TPoly1305Ctx;
+  LPadBlock: array[0..15] of Byte;
+  LOffset: Integer;
+begin
+  Result := False;
+  if (APlain = nil) and (APlainLen > 0) then Exit;
+  if (ADest = nil) and (APlainLen + 16 > 0) then Exit;
+  if ADestLen < APlainLen + 16 then Exit;
+  if Length(AKey) <> CHACHA20_KEY_SIZE then Exit;
+  if ANonceLen <> CHACHA20_NONCE_SIZE then Exit;
+  if (ANonce = nil) and (ANonceLen > 0) then Exit;
+  if (AAAD = nil) and (AAADLen > 0) then Exit;
+  ChaCha20BlockPtr(AKey, ANonce, 0, LBlock0);
+  if APlainLen > 0 then
+    if not ChaCha20XorPtr(AKey, ANonce, 1, APlain, APlainLen, ADest) then Exit(False);
+  Poly1305Init(LPolyCtx, @LBlock0[0]);
+  LOffset := 0;
+  while LOffset + 16 <= AAADLen do
+  begin
+    Poly1305Update(LPolyCtx, AAAD + LOffset, UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < AAADLen then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move((AAAD + LOffset)^, LPadBlock[0], AAADLen - LOffset);
+    Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  end;
+  LOffset := 0;
+  while LOffset + 16 <= APlainLen do
+  begin
+    Poly1305Update(LPolyCtx, ADest + LOffset, UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < APlainLen then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move((ADest + LOffset)^, LPadBlock[0], APlainLen - LOffset);
+    Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  end;
+  FillChar(LPadBlock, 16, 0);
+  PUInt64(@LPadBlock[0])^ := UInt64(AAADLen);
+  PUInt64(@LPadBlock[8])^ := UInt64(APlainLen);
+  Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  Poly1305Finish(LPolyCtx, ADest + APlainLen);
+  Result := True;
+end;
+
+function TryChaCha20Poly1305DecryptCombinedBufDirect(
+  const AKey: TBytes; ANonce: PByte; ANonceLen: Integer;
+  AAAD: PByte; AAADLen: Integer;
+  AEncrypted: PByte; AEncryptedLen: Integer;
+  ADest: PByte; ADestLen: Integer): Boolean;
+var
+  LCipherLen: Integer;
+  LTagPtr: PByte;
+  LPadBlock: array[0..15] of Byte;
+  LBlock0: array[0..63] of Byte;
+  LPolyCtx: TPoly1305Ctx;
+  LExpectedTag: array[0..15] of Byte;
+  LOffset: Integer;
+begin
+  Result := False;
+  if (AEncrypted = nil) and (AEncryptedLen > 0) then Exit;
+  if (ADest = nil) and (AEncryptedLen > 16) then Exit;
+  if AEncryptedLen < POLY1305_TAG_SIZE then Exit;
+  LCipherLen := AEncryptedLen - POLY1305_TAG_SIZE;
+  if ADestLen < LCipherLen then Exit;
+  if Length(AKey) <> CHACHA20_KEY_SIZE then Exit;
+  if ANonceLen <> CHACHA20_NONCE_SIZE then Exit;
+  if (ANonce = nil) and (ANonceLen > 0) then Exit;
+  if (AAAD = nil) and (AAADLen > 0) then Exit;
+  LTagPtr := AEncrypted + LCipherLen;
+  ChaCha20BlockPtr(AKey, ANonce, 0, LBlock0);
+  Poly1305Init(LPolyCtx, @LBlock0[0]);
+  LOffset := 0;
+  while LOffset + 16 <= AAADLen do
+  begin
+    Poly1305Update(LPolyCtx, AAAD + LOffset, UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < AAADLen then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move((AAAD + LOffset)^, LPadBlock[0], AAADLen - LOffset);
+    Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  end;
+  LOffset := 0;
+  while LOffset + 16 <= LCipherLen do
+  begin
+    Poly1305Update(LPolyCtx, AEncrypted + LOffset, UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < LCipherLen then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move((AEncrypted + LOffset)^, LPadBlock[0], LCipherLen - LOffset);
+    Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  end;
+  FillChar(LPadBlock, 16, 0);
+  PUInt64(@LPadBlock[0])^ := UInt64(AAADLen);
+  PUInt64(@LPadBlock[8])^ := UInt64(LCipherLen);
+  Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  Poly1305Finish(LPolyCtx, @LExpectedTag[0]);
+  if TConstantTime.CompareBuffer(@LExpectedTag[0], LTagPtr, 16) <> 1 then Exit(False);
+  if LCipherLen > 0 then
+    if not ChaCha20XorPtr(AKey, ANonce, 1, AEncrypted, LCipherLen, ADest) then Exit(False);
+  Result := True;
+end;
+
 end.
