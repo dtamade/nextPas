@@ -51,6 +51,13 @@ function TryTLS13AEADDecryptToBuf(
   out AFragLen: Integer; out AContentType: Byte; out AError: string
 ): Boolean;
 
+function TryTLS13AEADEncryptToBuf(
+  ACipherSuite: Word;
+  const AKey, ANonce, AAAD: TBytes;
+  APlain: PByte; APlainLen: Integer;
+  ADest: PByte; ADestCap: Integer;
+  out AEncryptedLen: Integer; out AError: string): Boolean;
+
 implementation
 
 uses
@@ -513,6 +520,94 @@ begin
           AError := 'TLS 1.3 inner plaintext invalid (aes buf)';
           Exit(False);
         end;
+        Result := True;
+      end;
+  else
+    begin
+      AError := TextFormat('Unsupported TLS 1.3 cipher suite for pure AEAD: 0x%.4x', [ACipherSuite]);
+      Result := False;
+    end;
+  end;
+end;
+
+function TryTLS13AEADEncryptToBuf(
+  ACipherSuite: Word;
+  const AKey, ANonce, AAAD: TBytes;
+  APlain: PByte; APlainLen: Integer;
+  ADest: PByte; ADestCap: Integer;
+  out AEncryptedLen: Integer; out AError: string): Boolean;
+var
+  LPlain, LCipher, LTag: TBytes;
+begin
+  AEncryptedLen := 0;
+  AError := '';
+  Result := False;
+  if (APlain = nil) and (APlainLen > 0) then
+  begin
+    AError := 'AEAD encryptToBuf: plain nil';
+    Exit(False);
+  end;
+  if (ADest = nil) and (APlainLen + 16 > 0) then
+  begin
+    AError := 'AEAD encryptToBuf: dest nil';
+    Exit(False);
+  end;
+  if ADestCap < APlainLen + 16 then
+  begin
+    AError := TextFormat('AEAD encryptToBuf: dest too small (%d < %d)', [ADestCap, APlainLen + 16]);
+    Exit(False);
+  end;
+  case ACipherSuite of
+    TLS13_CIPHER_CHACHA20_POLY1305_SHA256:
+      begin
+        if not TryChaCha20Poly1305EncryptToBuf(AKey, ANonce, AAAD, APlain, APlainLen, ADest, ADestCap) then
+        begin
+          AError := 'ChaCha20-Poly1305 encryption failed';
+          Exit(False);
+        end;
+        AEncryptedLen := APlainLen + 16;
+        Result := True;
+      end;
+    TLS13_CIPHER_AES_128_GCM_SHA256,
+    TLS13_CIPHER_AES_256_GCM_SHA384:
+      begin
+        if not ValidateAESGCMInputs(ACipherSuite, AKey, ANonce, AError) then
+          Exit(False);
+        if Length(AKey) = 16 then
+        begin
+          if not nextpas.core.crypto.aesgcm.AESNIGCMEncryptTo128Ptr(AKey, @ANonce[0], 12, APlain, APlainLen, AAAD, ADest, ADestCap) then
+          begin
+            AError := 'AES-GCM encryption failed';
+            Exit(False);
+          end;
+        end
+        else if Length(AKey) = 32 then
+        begin
+          if not nextpas.core.crypto.aesgcm.AESNIGCMEncryptTo256Ptr(AKey, @ANonce[0], 12, APlain, APlainLen, AAAD, ADest, ADestCap) then
+          begin
+            AError := 'AES-GCM encryption failed';
+            Exit(False);
+          end;
+        end
+        else
+        begin
+          // fallback scalar not yet PByte — use TBytes path then copy
+          SetLength(LPlain, APlainLen);
+          if APlainLen > 0 then Move(APlain^, LPlain[0], APlainLen);
+          if not PurePascalAESGCMEncrypt(AKey, ANonce, LPlain, AAAD, LCipher, LTag) then
+          begin
+            AError := 'AES-GCM encryption failed';
+            Exit(False);
+          end;
+          if Length(LCipher) <> APlainLen then
+          begin
+            AError := 'AES-GCM encrypt length mismatch';
+            Exit(False);
+          end;
+          Move(LCipher[0], ADest^, APlainLen);
+          Move(LTag[0], (ADest + APlainLen)^, 16);
+        end;
+        AEncryptedLen := APlainLen + 16;
         Result := True;
       end;
   else
