@@ -386,8 +386,9 @@ function TryTLS13AEADDecryptToBuf(
 var
   LTotalPlain: Integer;
   LCipherLen: Integer;
-  LTag: TBytes;
+  LTagBuf: array[0..15] of Byte;
   LCipher: TBytes;
+  LTag: TBytes;
 begin
   AFragLen := 0;
   AContentType := 0;
@@ -445,24 +446,12 @@ begin
           AError := TextFormat('AEAD decryptToBuf: dest too small (%d < %d)', [ADestCap, LCipherLen]);
           Exit(False);
         end;
-        SetLength(LTag, 16);
-        Move((AEncrypted + LCipherLen)^, LTag[0], 16);
+        Move((AEncrypted + LCipherLen)^, LTagBuf[0], 16);
         if LCipherLen = 0 then
         begin
-          if not PurePascalAESGCMDecryptTo(AKey, ANonce, nil, LTag, AAAD, ADest, ADestCap) then
-          begin
-            AError := 'AES-GCM decryption/authentication failed';
-            Exit(False);
-          end;
-        end
-        else
-        begin
-          // Use PByte GHASH fast path directly via AESNIGCM helpers to avoid extra CT copy
-          // For generic path, PurePascalAESGCMDecryptTo would copy CT again; so we dispatch directly
           if (Length(AKey) = 16) and (Length(ANonce) = 12) then
           begin
-            // Try AESNI path without extra CT copy
-            if not nextpas.core.crypto.aesgcm.AESNIGCMDecryptTo128(AKey, ANonce, AEncrypted, LCipherLen, LTag, AAAD, ADest, ADestCap) then
+            if not nextpas.core.crypto.aesgcm.AESNIGCMDecryptTo128Ptr(AKey, @ANonce[0], 12, nil, 0, @LTagBuf[0], AAAD, ADest, ADestCap) then
             begin
               AError := 'AES-GCM decryption/authentication failed';
               Exit(False);
@@ -470,7 +459,36 @@ begin
           end
           else if (Length(AKey) = 32) and (Length(ANonce) = 12) then
           begin
-            if not nextpas.core.crypto.aesgcm.AESNIGCMDecryptTo256(AKey, ANonce, AEncrypted, LCipherLen, LTag, AAAD, ADest, ADestCap) then
+            if not nextpas.core.crypto.aesgcm.AESNIGCMDecryptTo256Ptr(AKey, @ANonce[0], 12, nil, 0, @LTagBuf[0], AAAD, ADest, ADestCap) then
+            begin
+              AError := 'AES-GCM decryption/authentication failed';
+              Exit(False);
+            end;
+          end
+          else
+          begin
+            SetLength(LTag, 16);
+            Move(LTagBuf[0], LTag[0], 16);
+            if not PurePascalAESGCMDecryptTo(AKey, ANonce, nil, LTag, AAAD, ADest, ADestCap) then
+            begin
+              AError := 'AES-GCM decryption/authentication failed';
+              Exit(False);
+            end;
+          end;
+        end
+        else
+        begin
+          if (Length(AKey) = 16) and (Length(ANonce) = 12) then
+          begin
+            if not nextpas.core.crypto.aesgcm.AESNIGCMDecryptTo128Ptr(AKey, @ANonce[0], 12, AEncrypted, LCipherLen, @LTagBuf[0], AAAD, ADest, ADestCap) then
+            begin
+              AError := 'AES-GCM decryption/authentication failed';
+              Exit(False);
+            end;
+          end
+          else if (Length(AKey) = 32) and (Length(ANonce) = 12) then
+          begin
+            if not nextpas.core.crypto.aesgcm.AESNIGCMDecryptTo256Ptr(AKey, @ANonce[0], 12, AEncrypted, LCipherLen, @LTagBuf[0], AAAD, ADest, ADestCap) then
             begin
               AError := 'AES-GCM decryption/authentication failed';
               Exit(False);
@@ -479,6 +497,8 @@ begin
           else
           begin
             // Fallback scalar: need CT as TBytes copy
+            SetLength(LTag, 16);
+            Move(LTagBuf[0], LTag[0], 16);
             SetLength(LCipher, LCipherLen);
             Move(AEncrypted^, LCipher[0], LCipherLen);
             if not PurePascalAESGCMDecryptTo(AKey, ANonce, LCipher, LTag, AAAD, ADest, ADestCap) then
