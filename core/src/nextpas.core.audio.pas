@@ -16,6 +16,9 @@ uses
   nextpas.core.audio.codec.aiff,
   nextpas.core.audio.codec.meta,
   nextpas.core.audio.codec.registry,
+  nextpas.core.audio.codec.flac.decoder,
+  nextpas.core.audio.codec.mp3.decoder,
+  nextpas.core.audio.codec.vorbis.decoder,
   nextpas.core.audio.resample,
   nextpas.core.audio.resample.sinc,
   nextpas.core.audio.mix,
@@ -114,6 +117,13 @@ function CreateWavEncoder: IAudioEncoder; inline;
 
 function AiffProbe(const APrefix: TBytes): TAudioProbeResult; inline;
 function CreateAiffDecoder: IAudioDecoder; inline;
+
+function FlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function CreateFlacDecoder: IAudioDecoder; inline;
+function Mp3Probe(const APrefix: TBytes): TAudioProbeResult; inline;
+function CreateMp3Decoder: IAudioDecoder; inline;
+function VorbisProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function CreateVorbisDecoder: IAudioDecoder; inline;
 
 function TryParseID3v2(const APrefix: TBytes; out ATags: TAudioTags; out ASkipped: Integer): Boolean; inline;
 function TryParseVorbisComment(const AData: TBytes; out ATags: TAudioTags): Boolean; inline;
@@ -238,6 +248,36 @@ end;
 function CreateAiffDecoder: IAudioDecoder;
 begin
   Result := nextpas.core.audio.codec.aiff.CreateAiffDecoder;
+end;
+
+function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
+begin
+  Result := nextpas.core.audio.codec.flac.decoder.FlacProbe(APrefix);
+end;
+
+function CreateFlacDecoder: IAudioDecoder;
+begin
+  Result := nextpas.core.audio.codec.flac.decoder.CreateFlacDecoder;
+end;
+
+function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
+begin
+  Result := nextpas.core.audio.codec.mp3.decoder.Mp3Probe(APrefix);
+end;
+
+function CreateMp3Decoder: IAudioDecoder;
+begin
+  Result := nextpas.core.audio.codec.mp3.decoder.CreateMp3Decoder;
+end;
+
+function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
+begin
+  Result := nextpas.core.audio.codec.vorbis.decoder.VorbisProbe(APrefix);
+end;
+
+function CreateVorbisDecoder: IAudioDecoder;
+begin
+  Result := nextpas.core.audio.codec.vorbis.decoder.CreateVorbisDecoder;
 end;
 
 function TryParseID3v2(const APrefix: TBytes; out ATags: TAudioTags; out ASkipped: Integer): Boolean;
