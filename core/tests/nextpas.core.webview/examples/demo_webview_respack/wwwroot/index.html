@@ -17,19 +17,19 @@ button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(57,199,239,.3
 .log div{border-left:2px solid transparent;padding-left:8px;margin:2px 0}
 .log div:first-child{border-color:var(--accent2);color:var(--txt)}
 .muted{color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:8px}
-footer{margin-top:20px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}footer{margin-top:20px;font-family:var(--mono);font-size:11px;color:var(--dim)}
 </style></head><body>
 <div class="top"><div><h1>nextPas WebView — respack assets</h1><div class="sub">npres://app/index.html via IVfs adapter · <span id="mode">…</span> · bridge v<span id="ver">…</span></div></div><span class="pill">● <b id="modeLabel">embedded</b></span></div>
 <div class="card">
   <div style="display:flex;gap:10px;align-items:center">
-    <button id="pingBtn">invoke ping</button>
+    <button id="pingBtn" aria-label="invoke ping">invoke ping</button>
     <span id="pingOut" style="font-family:var(--mono);color:#9ff3e0">—</span>
     <span id="perf" style="font-family:var(--mono);font-size:11px;color:var(--dim)"></span>
   </div>
   <div class="muted">window.__npw.invoke("demo.ping") · <span id="hint">ready</span></div>
-  <div class="log" id="log"></div>
+  <div class="log" id="log" role="log" aria-live="polite" aria-atomic="false"></div>
 </div>
-<footer>close window to exit · dev: --dev (os vfs) / --dev-server http://localhost:5173 (http) · glassmorphism · indexed routing O(log n)</footer>
+<footer role="status" aria-live="polite">close window to exit · dev: --dev (os vfs) / --dev-server http://localhost:5173 (http) · glassmorphism · indexed routing O(log n)</footer>
 <script>
 function $(id){return document.getElementById(id)}
 function log(s){var d=document.createElement("div");d.textContent=s;$("log").prepend(d)}

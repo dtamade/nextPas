@@ -4,7 +4,7 @@
 S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
 live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正、
 S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 respack
-资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口均已进主线。W2 webview2 / W3 wk 待平台环境启动）
+资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环均已进主线。W2 webview2 / W3 wk 待平台环境启动）
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。
@@ -163,6 +163,15 @@ LWin.Assets.MountEmbedded('', LProvider);
 | Fallback/app/index.html | 904 ns | 1.1M | 214 MB/s |
 | Miss404 | 218 ns | 4.5M | 127 MB/s |
 | LargeHit/1M | 793 µs | 1.26k | 1.23 GB/s |
+
+桥协议基线（`core/benchmarks/nextpas.core.webview/bench_bridge`）：
+
+| 场景 | ns/op | ops/s | 备注 |
+|------|-------|-------|------|
+| TryDecodeFrame | 3859 ns | 259k | JSON 解析 + 校验 + 规范化 |
+| BuildResolveScript | 627 ns | 1.59M | JsStringLit + 拼接 |
+| BuildRejectScript | 1286 ns | 778k | 错误码归一 + 对象构造 |
+| BuildEmitScript | 942 ns | 1.06M | 事件名校验 + 双 Json |
 
 前端侧（协议细节见 BRIDGE_PROTOCOL.md）：
 
