@@ -73,7 +73,7 @@ as the default client/server version.
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
 | Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
 | WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` + `TWebSocketOptions.ConnectTimeout`/`Timeout` (Default 30s) + optional `WithCancelToken` for mid-frame cancel |
-| Static files | fs: `ServeFile` / `ServeDir`; virtual filesystem (IVfs): `ServeVfs` — ETag from backend ContentHash (`fnv-<8hex>`) with size+mtime fallback, unknown ModTime skips Last-Modified/IMS, dirs and invalid paths → 404 |
+| Static files | fs: `ServeFile` / `ServeDir`; virtual filesystem (IVfs): `ServeVfs` — ETag from backend ContentHash (`fnv-<8hex>`) with size+mtime fallback, unknown ModTime skips Last-Modified/IMS, dirs and invalid paths → 404; `HttpServeStaticStream` unified pipeline: conditional 304 (If-None-Match/If-Modified-Since), single Range 206/416 with `Accept-Ranges: bytes`, `If-Range` (ETag strong / HTTP-date) fallback to 200, `HEAD` header-only without opening stream, error paths HEAD-aware |
 | Form parse | `ParseUrlEncodedForm` / `ParseMultipartFormData` |
 
 ## Quick Start

@@ -165,6 +165,7 @@ end;
   - 来源为堆缓冲/TBytes → 引用计数自然保活
   - 来源为 const 数据/静态段 → 无引用计数，**文档化规则：调用方保证 blob 生命期覆盖
     IVfs 及其派生的全部 IStream**；构造函数提供 `AOwnsBlob: Boolean` 覆盖堆场景
+- `Create` 期物化 `FPaths/FEntries/FETags/FLastMods` 四平行缓存：`Stat/OpenRead/Exists` 走 `FPaths` 二分 + `FEntries[Idx]` 零 `DecodeWire`，`ServeVfs` 走预计算 `ETag/Last-Modified` O(1)；10k 规模 < 400KB 可控
 - conformance 门含地址断言：读取缓冲指针必须落在 `[blob, blob+blobTotal)` 区间内，
   锁死零拷贝不被回归破坏
 

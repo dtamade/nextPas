@@ -26,8 +26,6 @@ uses
   nextpas.core.ssh.channel;
 
 type
-  TProcSshExecResult = procedure(const AResult: TSshExecResult; AErr: ESSHError; AContext: Pointer);
-
   ISshAsyncSession = interface
     ['{9C1E6E10-4A11-4F72-9D30-5A0000000010}']
     function GetConnected: Boolean;
@@ -87,7 +85,8 @@ uses
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.kex.curve25519,
   nextpas.core.ssh.kex.dhgroup14,
-  nextpas.core.ssh.transport.async;
+  nextpas.core.ssh.transport.async,
+  nextpas.core.ssh.channel.async;
 
 type
   TAsyncExpectHandler = procedure(const APayload: TBytes; AErr: ESSHError) of object;
@@ -278,10 +277,13 @@ begin
       ACallback(Default(TSshExecResult), ESSHError.Create(sekAuth, 'ssh session: not authenticated'), nil);
     Exit(False);
   end;
-  // Channel async is S16-3 full scope; MVP returns unsupported but keeps handshake usable.
-  if Assigned(ACallback) then
-    ACallback(Default(TSshExecResult), ESSHError.Create(sekUnsupported, 'ssh async exec: channel async not yet implemented, use sync Exec on loop thread via Post'), nil);
-  Result := True;
+  if FClosed then
+  begin
+    if Assigned(ACallback) then
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: closed'), nil);
+    Exit(False);
+  end;
+  Result := SshAsyncRunExec(FTransport, ACommand, FOptions.InitialWindowSize, FOptions.MaxPacket, FOptions.ExecTimeoutMs, ACallback, nil);
 end;
 
 { TAsyncConnector }
