@@ -80,8 +80,10 @@ function TranslatePlaceholdersOdbc(const ASql: string;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.tx,
@@ -160,14 +162,14 @@ begin
     LNative := LDiag[0].NativeError;
     LMsg := LDiag[0].Message;
     if LMsg = '' then
-      LMsg := Format('odbc: %s failed [%s/%d]',
+      LMsg := TextFormat('odbc: %s failed [%s/%d]',
         [AContext, LSs, LNative]);
   end
   else
   begin
     LSs := '';
     LNative := 0;
-    LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
+    LMsg := TextFormat('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
   ClassifyOdbcEx(LSs, LNative, AMyFlavor, LCategory, LConstraint);
@@ -191,14 +193,14 @@ begin
     LNative := LDiag[0].NativeError;
     LMsg := LDiag[0].Message;
     if LMsg = '' then
-      LMsg := Format('odbc: %s failed [%s/%d]',
+      LMsg := TextFormat('odbc: %s failed [%s/%d]',
         [AContext, LSs, LNative]);
   end
   else
   begin
     LSs := '';
     LNative := 0;
-    LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
+    LMsg := TextFormat('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
   sql_freeHandle(SQL_HANDLE_STMT, AStmt);
