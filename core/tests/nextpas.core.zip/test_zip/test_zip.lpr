@@ -7,8 +7,10 @@ uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
   nextpas.core.fs,
+  nextpas.core.io,
   nextpas.core.process,
   nextpas.core.compress.intf,
+  nextpas.core.io.intf,
   nextpas.core.zip,
   nextpas.core.zip.base;
 
@@ -739,6 +741,742 @@ begin
   Check(LGot, 'write after close raises');
 end;
 
+{ ---- 流式输出（sink 收集器 / 小块分片 / 故障注入） ---- }
+
+type
+  TCollectWriter = class(TInterfacedObject, IWriter)
+  private
+    FBuf: TBytes;
+    FLen: Integer;
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Bytes: TBytes;
+  end;
+
+  { 故意按 ≤7 字节切片转发的 sink：验证任意分块下输出不变 }
+  TChunkWriter = class(TInterfacedObject, IWriter)
+  private
+    FInner: TCollectWriter;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Bytes: TBytes;
+  end;
+
+  { 首次写入少返回 1 字节（短写故障） }
+  TShortWriter = class(TInterfacedObject, IWriter)
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+  { 直接抛 IO 错误的 sink }
+  TRaisingWriter = class(TInterfacedObject, IWriter)
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+function TCollectWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  if ACount > 0 then
+  begin
+    if Length(FBuf) < FLen + Integer(ACount) then
+      SetLength(FBuf, (FLen + Integer(ACount)) * 2);
+    Move(ABuf, PByte(FBuf)[FLen], ACount);
+    Inc(FLen, ACount);
+  end;
+  Result := ACount;
+end;
+
+function TCollectWriter.Bytes: TBytes;
+begin
+  SetLength(Result, FLen);
+  if FLen > 0 then
+    Move(PByte(FBuf)^, Result[0], SizeUInt(FLen));
+end;
+
+constructor TChunkWriter.Create;
+begin
+  inherited Create;
+  FInner := TCollectWriter.Create;
+end;
+
+destructor TChunkWriter.Destroy;
+begin
+  FInner.Free;
+  inherited;
+end;
+
+function TChunkWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LP: PByte;
+  LLeft, LN: SizeUInt;
+begin
+  LP := @ABuf;
+  LLeft := ACount;
+  while LLeft > 0 do
+  begin
+    LN := LLeft;
+    if LN > 7 then
+      LN := 7;
+    FInner.Write(LP^, LN);
+    Inc(LP, LN);
+    Dec(LLeft, LN);
+  end;
+  Result := ACount;
+end;
+
+function TChunkWriter.Bytes: TBytes;
+begin
+  Result := FInner.Bytes;
+end;
+
+function TShortWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  if ACount = 0 then
+    Exit(0);
+  Result := ACount - 1;
+end;
+
+function TRaisingWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  raise EIOError.Create('sink exploded');
+end;
+
+{ 确定性模式字节（deflate 输入） }
+function PatternBytes(ALen: Integer; ASeed: Integer): TBytes;
+var
+  LI: Integer;
+begin
+  SetLength(Result, ALen);
+  for LI := 0 to ALen - 1 do
+    Result[LI] := Byte((LI * 3 + ASeed + (LI shr 5)) mod 251);
+end;
+
+{ 固定混合条目面：store/deflate/目录/选项模式字/unicode 名，显式时间戳 }
+procedure PopulateMixed(const AW: IZipWriter);
+var
+  LOpts: TZipAddOptions;
+begin
+  AW.AddEntry('hello.txt', BytesOfStr('hello world'));
+  AW.AddEntryDeflateWithTime('data.bin', PatternBytes(20000, 11), 1787574896);
+  AW.AddDirectoryWithTime('assets', 1780000000);
+  LOpts := DefaultZipAddOptions;
+  LOpts.Method := zmStore;
+  LOpts.ModTimeUnixSec := 1787574896;
+  LOpts.Mode := ZipRegularMode($1A4);
+  AW.AddEntryWithOptions('assets/readme.txt', BytesOfStr('mode word entry'),
+    LOpts);
+  AW.AddEntryDeflate('数据/文件.txt', PatternBytes(4096, 22));
+end;
+
+procedure TestStreamingMatchesBuffered;
+var
+  LWa, LWb: IZipWriter;
+  LCw: TCollectWriter;
+  LChk: TChunkWriter;
+  LOptsW: TZipWriteOptions;
+  LA, LZ64: TBytes;
+  LTotal: UInt64;
+begin
+  { 场景 A：暂存排空 + 绑定后透传的混合路径 }
+  LWa := NewZipWriter;
+  PopulateMixed(LWa);
+  LWa.AddDirectoryWithTime('late', 1787574896);
+  LA := LWa.Finish;
+
+  LCw := TCollectWriter.Create;
+  LWb := NewZipWriter;
+  PopulateMixed(LWb);
+  LWb.StreamOutputTo(LCw);              { 排空已暂存字节 }
+  LWb.AddDirectoryWithTime('late', 1787574896);
+  LTotal := LWb.FinishTo(LCw);
+  Check(SameBytes(LA, LCw.Bytes), 'piped output byte-identical to buffered');
+  CheckEqual(Int64(LTotal), Int64(Length(LCw.Bytes)),
+    'finish-to total equals collected length');
+
+  { 场景 B：强制 Zip64 结构逐字节等价 }
+  LOptsW := DefaultZipWriteOptions;
+  LOptsW.ForceZip64 := True;
+  LWa := NewZipWriterWithOptions(LOptsW);
+  PopulateMixed(LWa);
+  LZ64 := LWa.Finish;
+
+  LCw := TCollectWriter.Create;
+  LWb := NewZipWriterWithOptions(LOptsW);
+  PopulateMixed(LWb);
+  LWb.StreamOutputTo(LCw);
+  LWb.FinishTo(LCw);
+  Check(SameBytes(LZ64, LCw.Bytes), 'forced-zip64 piped output identical');
+
+  { 场景 C：≤7 字节任意小片的 sink 下输出不变（条目序列同场景 A） }
+  LChk := TChunkWriter.Create;
+  LWb := NewZipWriter;
+  PopulateMixed(LWb);
+  LWb.StreamOutputTo(LChk);
+  LWb.AddDirectoryWithTime('late', 1787574896);
+  LWb.FinishTo(LChk);
+  Check(SameBytes(LA, LChk.Bytes), 'chunked sink output identical');
+end;
+
+procedure TestStreamedEntriesThroughPipedOutput;
+var
+  LWa, LWb: IZipWriter;
+  LSink: ICompressWriter;
+  LCw: TCollectWriter;
+  LOpts: TZipAddOptions;
+  LData: TBytes;
+  LA, LB: TBytes;
+begin
+  LData := PatternBytes(50000, 33);
+  LOpts := DefaultZipAddOptions;
+  LOpts.Method := zmDeflate;
+  LOpts.ModTimeUnixSec := 1787574896;
+
+  LWa := NewZipWriter;
+  LSink := LWa.AddEntryStream('s.bin', LOpts);
+  LSink.Write(LData[0], 12345);
+  LSink.Write(LData[12345], Length(LData) - 12345);
+  LSink.Close;
+  LA := LWa.Finish;
+
+  LCw := TCollectWriter.Create;
+  LWb := NewZipWriter;
+  LWb.StreamOutputTo(LCw);
+  LSink := LWb.AddEntryStream('s.bin', LOpts);
+  LSink.Write(LData[0], 777);
+  LSink.Write(LData[777], Length(LData) - 777);
+  LSink.Close;
+  LWb.FinishTo(LCw);
+  LB := LCw.Bytes;
+
+  Check(SameBytes(LA, LB), 'streamed entry under piped output identical');
+end;
+
+procedure TestPipedRoundtripAndPython;
+var
+  LW: IZipWriter;
+  LR: IZipReader;
+  LCw: TCollectWriter;
+  LDir, LManifest: string;
+  LPayload1, LPayload2, LPayload3: TBytes;
+  LArchive: TBytes;
+  LTotal: UInt64;
+begin
+  LPayload1 := PatternBytes(3000, 44);
+  LPayload2 := PatternBytes(70000, 55);
+  LPayload3 := BytesOfStr('unicode nested payload');
+
+  LCw := TCollectWriter.Create;
+  LW := NewZipWriter;
+  LW.StreamOutputTo(LCw);
+  LW.AddEntryWithTime('plain.txt', LPayload1, 1787574896);
+  LW.AddEntryDeflateWithTime('big/lz.bin', LPayload2, 1787574896);
+  LW.AddDirectoryWithTime('empty-dir', 1780000000);
+  LW.AddEntryDeflateWithTime('数据/文件.txt', LPayload3, 1787574896);
+  LTotal := LW.FinishTo(LCw);
+  CheckEqual(Int64(LTotal), Int64(Length(LCw.Bytes)),
+    'roundtrip total matches collected length');
+  LArchive := LCw.Bytes;
+
+  { 读端往返：结构、内容逐一校验 }
+  LR := NewZipReader(LArchive);
+  CheckEqual(Int64(4), Int64(LR.EntryCount), 'piped archive entry count');
+  Check(SameBytes(LR.ExtractToBytesByName('plain.txt'), LPayload1),
+    'store entry roundtrip');
+  Check(SameBytes(LR.ExtractToBytesByName('big/lz.bin'), LPayload2),
+    'deflate entry roundtrip');
+  Check(SameBytes(LR.ExtractToBytesByName('数据/文件.txt'), LPayload3),
+    'unicode entry roundtrip');
+
+  { python3 zipfile 独立交叉验证 }
+  LDir := NewTempCaseDir;
+  try
+    WriteFile(LDir + '/piped.zip', LArchive);
+    LManifest :=
+      'plain.txt'#9'0'#9 + IntToStr(Length(LPayload1)) + #9 +
+        Hex32(Crc32OfBytes(LPayload1)) + #10 +
+      'big/lz.bin'#9'8'#9 + IntToStr(Length(LPayload2)) + #9 +
+        Hex32(Crc32OfBytes(LPayload2)) + #10 +
+      'empty-dir/'#9'0'#9'0'#9 +
+        Hex32(Crc32OfBytes(nil)) + #10 +
+      '数据/文件.txt'#9'8'#9 + IntToStr(Length(LPayload3)) + #9 +
+        Hex32(Crc32OfBytes(LPayload3)) + #10;
+    WriteManifest(LDir, LManifest);
+    CrossCheck(LDir + '/piped.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
+{ FPC 3.3.1 已知行为：带接口实参的调用若异常穿越该栈帧，实参会粘住一个
+  引用不释放（heaptrc 门拦截；nil 实参与无实参调用不受影响，成功路径亦然）。
+  期望抛错的流式输出调用一律经下列辅助完成——异常在【同一帧内】被捕获，
+  不携带接口实参出帧。 }
+function TryBindExpectInvalid(const AW: IZipWriter; ASink: TObject): Boolean;
+var
+  S: IWriter;
+begin
+  Result := False;
+  if not ASink.GetInterface(IWriter, S) then Exit;
+  try
+    AW.StreamOutputTo(S);
+  except
+    on E: Exception do
+      Result := Pos('InvalidOperation', E.ClassName) > 0;
+  end;
+end;
+
+function TryFinishToExpectInvalid(const AW: IZipWriter; ASink: TObject): Boolean;
+var
+  S: IWriter;
+begin
+  Result := False;
+  if not ASink.GetInterface(IWriter, S) then Exit;
+  try
+    AW.FinishTo(S);
+  except
+    on E: Exception do
+      Result := Pos('InvalidOperation', E.ClassName) > 0;
+  end;
+end;
+
+function TryFinishToExpectShortWrite(const AW: IZipWriter;
+  ASink: TObject): Boolean;
+var
+  S: IWriter;
+begin
+  Result := False;
+  if not ASink.GetInterface(IWriter, S) then Exit;
+  try
+    AW.FinishTo(S);
+  except
+    on E: Exception do
+      Result := Pos('EIOError', E.ClassName) > 0;
+  end;
+end;
+
+function TryPipedAddExpectIOError(const AW: IZipWriter;
+  ASink: TObject): Boolean;
+var
+  S: IWriter;
+begin
+  Result := False;
+  if not ASink.GetInterface(IWriter, S) then Exit;
+  try
+    AW.StreamOutputTo(S);
+    AW.AddEntryDeflate('boom.bin', PatternBytes(2048, 66));
+  except
+    on E: Exception do
+      Result := Pos('EIOError', E.ClassName) > 0;
+  end;
+end;
+
+procedure TestStreamingGuards;
+var
+  LW: IZipWriter;
+  LCw, LOther: TCollectWriter;
+  LShort: TShortWriter;
+  LRaise: TRaisingWriter;
+  LA: TBytes;
+  LR: IZipReader;
+  LGot: Boolean;
+begin
+  { 空归档流式输出 = EOCD only，与缓冲式字节一致且可读 }
+  LCw := TCollectWriter.Create;
+  LW := NewZipWriter;
+  LW.StreamOutputTo(LCw);
+  CheckEqual(Int64(LW.FinishTo(LCw)), Int64(22),
+    'empty piped archive is EOCD-only 22 bytes');
+  LA := NewZipWriter.Finish;
+  Check(SameBytes(LA, LCw.Bytes), 'empty piped equals buffered empty');
+  LR := NewZipReader(LCw.Bytes);
+  CheckEqual(Int64(0), Int64(LR.EntryCount), 'empty piped archive readable');
+
+  { nil sink：两种入口都拒绝 }
+  LW := NewZipWriter;
+  LGot := False;
+  try
+    LW.StreamOutputTo(nil);
+  except
+    on E: Exception do
+      LGot := Pos('EArgumentError', E.ClassName) > 0;
+  end;
+  Check(LGot, 'nil sink on stream-output raises argument error');
+
+  LW := NewZipWriter;
+  LGot := False;
+  try
+    LW.FinishTo(nil);
+  except
+    on E: Exception do
+      LGot := Pos('EArgumentError', E.ClassName) > 0;
+  end;
+  Check(LGot, 'nil sink on finish-to raises argument error');
+
+  { 双重绑定 / 绑定后 Finish / 异源 FinishTo 全部拒绝 }
+  LCw := TCollectWriter.Create;
+  LW := NewZipWriter;
+  LW.StreamOutputTo(LCw);
+  Check(TryBindExpectInvalid(LW, LCw), 'double bind raises invalid operation');
+
+  LGot := False;
+  try
+    LW.Finish;
+  except
+    on E: Exception do
+      LGot := Pos('InvalidOperation', E.ClassName) > 0;
+  end;
+  Check(LGot, 'finish after bind raises invalid operation');
+
+  LOther := TCollectWriter.Create;
+  Check(TryFinishToExpectInvalid(LW, LOther),
+    'finish-to foreign sink raises invalid operation');
+
+  { 终结后再操作一律拒绝 }
+  LW.FinishTo(LCw);
+  LGot := False;
+  try
+    LW.AddEntry('x.txt', BytesOfStr('x'));
+  except
+    on E: Exception do
+      LGot := Pos('InvalidOperation', E.ClassName) > 0;
+  end;
+  Check(LGot, 'add after finish-to raises');
+
+  Check(TryFinishToExpectInvalid(LW, LCw), 'finish-to twice raises');
+
+  { 短写 sink：终结时交付 EIOError }
+  LW := NewZipWriter;
+  LW.AddEntry('a.txt', BytesOfStr('short write target'));
+  LShort := TShortWriter.Create;
+  Check(TryFinishToExpectShortWrite(LW, LShort),
+    'short write surfaces as IO error');
+
+  { 绑定模式下条目添加时 sink 故障原样传播 }
+  LW := NewZipWriter;
+  LRaise := TRaisingWriter.Create;
+  Check(TryPipedAddExpectIOError(LW, LRaise),
+    'sink failure propagates from add-time emit');
+end;
+
+{ ---- 七期：数据描述符直写（INV-15）---- }
+
+{ 描述符条目的 local header 逐字节断言：bit3、零值占位、zip64 零占位
+  extra，描述符紧贴数据且携带真实 crc/尺寸；staged 条目前后共存正常 }
+procedure TestDescriptorStructure;
+var
+  LW: IZipWriter;
+  LS: ICompressWriter;
+  LO: TZipAddOptions;
+  LP, LZip: TBytes;
+  LOff, LDataOff, LDDOff: Integer;
+begin
+  LP := BytesOfStr('descriptor-payload');
+  LW := NewZipWriter;
+  LW.AddEntry('plain.txt', BytesOfStr('PLAIN'));
+  LO := DefaultZipAddOptions;
+  LO.DataDescriptor := True;
+  LS := LW.AddEntryStream('a.bin', LO);
+  LS.Write(LP[0], Length(LP));
+  LS.Close;
+  LO.Method := zmDeflate;
+  LS := LW.AddEntryStream('b.bin', LO);
+  LS.Write(LP[0], Length(LP));
+  LS.Close;
+  LW.AddEntry('tail.txt', BytesOfStr('TAIL'));
+  LZip := LW.Finish;
+
+  { dd store 条目 local header：plain 条目占 30+9+5=44 起 }
+  LOff := 30 + Length('plain.txt') + Length('PLAIN');
+  Check(LE32At(LZip, LOff) = C_ZIP_LOCAL_SIG, 'dd local sig');
+  Check((LE16At(LZip, LOff + 6) and C_ZIP_FLAG_DESCRIPTOR) <> 0,
+    'dd local bit3 set');
+  Check(LE32At(LZip, LOff + 14) = 0, 'dd local crc placeholder zero');
+  Check(LE32At(LZip, LOff + 18) = C_ZIP_MAX_SIZE32,
+    'dd local csize placeholder');
+  Check(LE32At(LZip, LOff + 22) = C_ZIP_MAX_SIZE32,
+    'dd local usize placeholder');
+  LDataOff := LOff + 30 + Length('a.bin') + 20;  { zip64 占位 extra=20B }
+  { 描述符紧贴数据：sig + 真实 crc + 真实尺寸 }
+  LDDOff := LDataOff + Length(LP);
+  Check(LE32At(LZip, LDDOff) = C_ZIP_DESCRIPTOR_SIG, 'descriptor signature');
+  Check(LE32At(LZip, LDDOff + 4) = Crc32OfBytes(LP),
+    'descriptor carries real crc');
+  Check(LE32At(LZip, LDDOff + 8) = LongWord(Length(LP)),
+    'descriptor compressed size');
+  Check(LE32At(LZip, LDDOff + 12) = LongWord(Length(LP)),
+    'descriptor uncompressed size');
+  { deflate 条目的 local 同形态：描述符（16B）之后即下一 local header }
+  LOff := LDDOff + 16;
+  Check(LE32At(LZip, LOff) = C_ZIP_LOCAL_SIG, 'dd deflate local sig');
+  Check((LE16At(LZip, LOff + 6) and C_ZIP_FLAG_DESCRIPTOR) <> 0,
+    'dd deflate bit3 set');
+  LDataOff := LOff + 30 + Length('b.bin') + 20;
+  Check(LE32At(LZip, LOff + 14) = 0, 'dd deflate crc placeholder zero');
+
+  { plain 条目无 bit3 }
+  Check((LE16At(LZip, 6) and C_ZIP_FLAG_DESCRIPTOR) = 0,
+    'plain entry has no bit3');
+end;
+
+{ 描述符归档自家读端双路径往返 + python 独立交叉验证 + ForceZip64 组合 }
+procedure TestDescriptorRoundtripAndPython;
+var
+  LW: IZipWriter;
+  LS: ICompressWriter;
+  LO: TZipAddOptions;
+  LA, LB, LZip: TBytes;
+  LR, LRSeek: IZipReader;
+  LI: Integer;
+  LDir: string;
+begin
+  SetLength(LA, 150000);
+  for LI := 0 to High(LA) do
+    LA[LI] := Byte((LI * 11 + LI shr 4) mod 251);
+  LB := BytesOfStr('stored descriptor bytes');
+
+  LW := NewZipWriter;
+  LO := DefaultZipAddOptions;
+  LO.DataDescriptor := True;
+  LO.Method := zmDeflate;
+  LS := LW.AddEntryStream('big.bin', LO);
+  LS.Write(LA[0], 70000);
+  LS.Write(LA[70000], Length(LA) - 70000);   { 跨块 CRC/压缩连续性 }
+  LS.Close;
+  LO.Method := zmStore;
+  LS := LW.AddEntryStream('s.bin', LO);
+  LS.Write(LB[0], Length(LB));
+  LS.Close;
+  LO.Method := zmDeflate;
+  LS := LW.AddEntryStream('empty.bin', LO);
+  LS.Close;
+  LS := LW.AddEntryStream('d/', LO);         { 目录也可走描述符形态 }
+  LS.Close;
+  LZip := LW.Finish;
+
+  LR := NewZipReader(LZip);
+  CheckEqual(Int64(4), Int64(LR.EntryCount), 'four descriptor entries');
+  Check(SameBytes(LR.ExtractToBytesByName('big.bin'), LA),
+    'dd deflate roundtrip content');
+  Check(SameBytes(LR.ExtractToBytesByName('s.bin'), LB),
+    'dd store roundtrip content');
+  CheckEqual(Int64(0), Int64(Length(LR.ExtractToBytesByName('empty.bin'))),
+    'dd empty extracts empty');
+  Check(LR.Entry(LR.Find('d/')).IsDirectory, 'dd directory recognized');
+
+  LRSeek := NewZipReaderFrom(BytesStreamFrom(LZip));
+  Check(SameBytes(LRSeek.ExtractToBytesByName('big.bin'), LA),
+    'seekable reader parity for descriptor entries');
+
+  LDir := NewTempCaseDir;
+  try
+    WriteFile(LDir + '/case.zip', LZip);
+    WriteManifest(LDir,
+      'big.bin'#9'8'#9'150000'#9 + Hex32(Crc32OfBytes(LA)) + #10 +
+      's.bin'#9'0'#9 + IntToStr(Length(LB)) + #9 +
+      Hex32(Crc32OfBytes(LB)) + #10 +
+      'empty.bin'#9'8'#9'0'#9'00000000'#10 +
+      'd/'#9'8'#9'0'#9'00000000'#10);
+    CrossCheck(LDir + '/case.zip', LDir + '/manifest.tsv');
+  finally
+    RemoveAll(LDir);
+  end;
+
+  { ForceZip64 与描述符组合仍可读 }
+  LW := NewZipWriterWithOptions(DefaultZipWriteOptions);
+  LO := DefaultZipAddOptions;
+  LO.DataDescriptor := True;
+  LS := LW.AddEntryStream('z.bin', LO);
+  LS.Write(LB[0], Length(LB));
+  LS.Close;
+  LZip := LW.Finish;
+  Check(SameBytes(NewZipReader(LZip).ExtractToBytesByName('z.bin'), LB),
+    'force zip64 + descriptor roundtrip');
+end;
+
+{ AES + 描述符组合：往返、central CRC=0 契约与描述符真实 CRC 分离、
+  流式输出端可读 }
+procedure TestDescriptorAesCombo;
+const
+  C_NAME = 'enc.txt';
+var
+  LW: IZipWriter;
+  LS: ICompressWriter;
+  LO: TZipAddOptions;
+  LCw: TCollectWriter;
+  LP, LZip: TBytes;
+  LR: IZipReader;
+  LROpts, LBadOpts: TZipReadOptions;
+  LOff, LDDOff: Integer;
+begin
+  LP := BytesOfStr('aes descriptor secret');
+
+  { 缓冲模式构建并断言布局 }
+  LW := NewZipWriter;
+  LO := DefaultZipAddOptions;
+  LO.DataDescriptor := True;
+  LO.Password := BytesOfStr('pw123');
+  LO.AesStrength := 3;
+  LS := LW.AddEntryStream(C_NAME, LO);
+  LS.Write(LP[0], Length(LP));
+  LS.Close;
+  LZip := LW.Finish;
+
+  LR := NewZipReader(LZip);
+  LROpts := DefaultZipReadOptions;
+  LROpts.Password := BytesOfStr('pw123');
+  Check(SameBytes(
+    NewZipReaderWithOptions(LZip, LROpts).ExtractToBytesByName(C_NAME), LP),
+    'aes descriptor roundtrip');
+  Check(LR.Entry(LR.Find(C_NAME)).Crc32 = 0,
+    'central crc zero for AE-2 descriptor entry');
+  { 错口令统一报文（独立选项记录，避免污染后续正例） }
+  LBadOpts := DefaultZipReadOptions;
+  LBadOpts.Password := BytesOfStr('bad');
+  try
+    NewZipReaderWithOptions(LZip, LBadOpts).ExtractToBytesByName(C_NAME);
+    Check(False, 'wrong password must fail');
+  except
+    on E: Exception do
+      Check(Pos('EParseError', E.ClassName) > 0,
+        'wrong password fails as parse error');
+  end;
+
+  { 描述符携带真实 crc：位于 salt+pwv+密文+认证码之后 }
+  LOff := 30 + Length(C_NAME) + 31;   { extra = zip64(20)+AE(11) }
+  LDDOff := LOff + 18 + Length(LP) + 10;
+  Check(LE32At(LZip, LDDOff) = C_ZIP_DESCRIPTOR_SIG, 'aes frame followed by descriptor');
+  Check(LE32At(LZip, LDDOff + 4) = Crc32OfBytes(LP),
+    'aes descriptor carries real crc');
+
+  { 流式输出端同构可读 }
+  LCw := TCollectWriter.Create;
+  LW := NewZipWriter;
+  LO := DefaultZipAddOptions;
+  LO.DataDescriptor := True;
+  LO.Password := BytesOfStr('pw123');
+  LO.AesStrength := 3;
+  LS := LW.AddEntryStream(C_NAME, LO);
+  LS.Write(LP[0], Length(LP));
+  LS.Close;
+  LW.FinishTo(LCw);
+  Check(SameBytes(
+    NewZipReaderWithOptions(LCw.Bytes, LROpts).ExtractToBytesByName(C_NAME),
+    LP), 'aes descriptor via piped output roundtrip');
+end;
+
+{ 描述符直写期间的串行化守卫与弃流 fail-closed。
+  IWriter 实参一律经 Try*ExpectInvalid 转成命名接口局部量——FPC 异常
+  穿越持有接口实参的栈帧会粘引用，直接 StreamOutputTo(TCollectWriter)
+  会泄漏（六期同类陷阱） }
+procedure TestDescriptorGuards;
+var
+  LW: IZipWriter;
+  LS, LAbandon: ICompressWriter;
+  LCw: TCollectWriter;
+  LHold: IWriter;
+  LO: TZipAddOptions;
+  LX: Byte;
+  LGot: Boolean;
+begin
+  LX := Ord('x');
+  LW := NewZipWriter;
+  LO := DefaultZipAddOptions;
+  LO.DataDescriptor := True;
+  LS := LW.AddEntryStream('active.bin', LO);
+  LS.Write(LX, 1);
+
+  { 直写进行中：一切条目级入口拒绝 }
+  LGot := False;
+  try
+    LW.AddEntry('nope', BytesOfStr('y'));
+  except
+    on E: Exception do
+      LGot := Pos('InvalidOperation', E.ClassName) > 0;
+  end;
+  Check(LGot, 'add rejected during direct entry');
+
+  LGot := False;
+  try
+    LW.AddEntryStream('nope2', DefaultZipAddOptions);
+  except
+    on E: Exception do
+      LGot := Pos('InvalidOperation', E.ClassName) > 0;
+  end;
+  Check(LGot, 'staged stream rejected during direct entry');
+
+  { LHold 把收集器钉在接口上：拒绝路径的隐式 IWriter 临时量即使被
+    异常粘住，对象也有命名持有者，用例结束时成对释放 }
+  LCw := TCollectWriter.Create;
+  LHold := LCw;
+  Check(TryBindExpectInvalid(LW, LCw), 'bind rejected during direct entry');
+
+  LS.Close;
+  { Close 后串行化解除，绑定可用 }
+  LW.StreamOutputTo(LHold);
+  LW.AddEntry('after.bin', BytesOfStr('ok'));
+  LW.FinishTo(LHold);
+  Check(NewZipReader(LCw.Bytes).EntryCount = 2, 'piped direct archive valid');
+
+  { 弃流：Finish/FinishTo fail-closed，且写器保持不可终结 }
+  LW := NewZipWriter;
+  LO := DefaultZipAddOptions;
+  LO.DataDescriptor := True;
+  LAbandon := LW.AddEntryStream('abandon.bin', LO);
+  LAbandon.Write(LX, 1);
+  LAbandon := nil;
+  LGot := False;
+  try
+    LW.Finish;
+  except
+    on E: Exception do
+      LGot := Pos('InvalidOperation', E.ClassName) > 0;
+  end;
+  Check(LGot, 'finish fails closed on abandoned direct stream');
+  LCw := TCollectWriter.Create;
+  LHold := LCw;
+  Check(TryFinishToExpectInvalid(LW, LCw),
+    'finish-to fails closed on abandoned direct stream');
+end;
+
+{ 大载荷跨块直写与暂存路径内容一致（常数内存路径的正确性锚）}
+procedure TestDescriptorLargeParity;
+var
+  LW: IZipWriter;
+  LS: ICompressWriter;
+  LO: TZipAddOptions;
+  LData: TBytes;
+  LDirect, LStaged, LZip: TBytes;
+  LI: Integer;
+begin
+  SetLength(LData, 8 * 1024 * 1024);
+  for LI := 0 to High(LData) do
+    LData[LI] := Byte((LI * 7 + LI shr 6) mod 249);
+
+  { 直写路径：三块不均匀写入 }
+  LW := NewZipWriter;
+  LO := DefaultZipAddOptions;
+  LO.DataDescriptor := True;
+  LO.Method := zmDeflate;
+  LS := LW.AddEntryStream('big.bin', LO);
+  LS.Write(LData[0], 3 * 1024 * 1024);
+  LS.Write(LData[3 * 1024 * 1024], 3 * 1024 * 1024);
+  LS.Write(LData[6 * 1024 * 1024], 2 * 1024 * 1024);
+  LS.Close;
+  LZip := LW.Finish;
+  LDirect := NewZipReader(LZip).ExtractToBytesByName('big.bin');
+  Check(SameBytes(LDirect, LData), 'direct large payload roundtrip');
+
+  { 暂存路径同输入：提取内容一致 }
+  LW := NewZipWriter;
+  LW.AddEntryDeflate('big.bin', LData);
+  LZip := LW.Finish;
+  LStaged := NewZipReader(LZip).ExtractToBytesByName('big.bin');
+  Check(SameBytes(LDirect, LStaged),
+    'direct equals staged extraction content');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip');
   T.Test('CRC vector', @TestCrcVector);
@@ -759,5 +1497,16 @@ begin
   T.Test('Streamed entries', @TestStreamedEntries);
   T.Test('Streamed matches one-shot', @TestStreamedMatchesOneShot);
   T.Test('Streamed guards', @TestStreamedGuards);
+  T.Test('Streaming output matches buffered', @TestStreamingMatchesBuffered);
+  T.Test('Streamed entries through piped output',
+    @TestStreamedEntriesThroughPipedOutput);
+  T.Test('Piped roundtrip and python cross-check', @TestPipedRoundtripAndPython);
+  T.Test('Streaming guards', @TestStreamingGuards);
+  T.Test('Descriptor structure', @TestDescriptorStructure);
+  T.Test('Descriptor roundtrip and python',
+    @TestDescriptorRoundtripAndPython);
+  T.Test('Descriptor AES combo', @TestDescriptorAesCombo);
+  T.Test('Descriptor guards', @TestDescriptorGuards);
+  T.Test('Descriptor large parity', @TestDescriptorLargeParity);
   if not T.Run then Halt(1);
 end.

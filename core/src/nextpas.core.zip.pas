@@ -22,6 +22,7 @@ uses
   nextpas.core.zip.base,
   nextpas.core.zip.writer,
   nextpas.core.zip.reader,
+  nextpas.core.zip.sequential,
   nextpas.core.zip.fs;
 
 type
@@ -33,6 +34,7 @@ type
   TZipExtractOptions = nextpas.core.zip.fs.TZipExtractOptions;
   IZipWriter = nextpas.core.zip.writer.IZipWriter;
   IZipReader = nextpas.core.zip.reader.IZipReader;
+  ISequentialZipReader = nextpas.core.zip.sequential.ISequentialZipReader;
   { 流式条目读写端：写端经 IZipWriter.AddEntryStream 获取（推式），
     读端经 IZipReader.OpenEntry* 获取（拉式），Close/EOF 语义见各接口 }
   ICompressWriter = nextpas.core.compress.intf.ICompressWriter;
@@ -49,6 +51,12 @@ function DefaultZipReadOptions: TZipReadOptions; inline;
 function NewZipReader(const AData: TBytes): IZipReader; inline;
 function NewZipReaderWithOptions(const AData: TBytes;
   const AOptions: TZipReadOptions): IZipReader; inline;
+function NewZipReaderFrom(const ASource: IStream): IZipReader; inline;
+function NewZipReaderFromWithOptions(const ASource: IStream;
+  const AOptions: TZipReadOptions): IZipReader; inline;
+function NewZipSequentialReader(const ASource: IReader): ISequentialZipReader; inline;
+function NewZipSequentialReaderWithOptions(const ASource: IReader;
+  const AOptions: TZipReadOptions): ISequentialZipReader; inline;
 
 procedure ZipPackDirInto(const ADir: string; const AWriter: IZipWriter); inline;
 function ZipPackDir(const ADir: string): TBytes; inline;
@@ -94,6 +102,30 @@ function NewZipReaderWithOptions(const AData: TBytes;
   const AOptions: TZipReadOptions): IZipReader;
 begin
   Result := nextpas.core.zip.reader.NewZipReaderWithOptions(AData, AOptions);
+end;
+
+function NewZipReaderFrom(const ASource: IStream): IZipReader;
+begin
+  Result := nextpas.core.zip.reader.NewZipReaderFrom(ASource);
+end;
+
+function NewZipReaderFromWithOptions(const ASource: IStream;
+  const AOptions: TZipReadOptions): IZipReader;
+begin
+  Result :=
+    nextpas.core.zip.reader.NewZipReaderFromWithOptions(ASource, AOptions);
+end;
+
+function NewZipSequentialReader(const ASource: IReader): ISequentialZipReader;
+begin
+  Result := nextpas.core.zip.sequential.NewZipSequentialReader(ASource);
+end;
+
+function NewZipSequentialReaderWithOptions(const ASource: IReader;
+  const AOptions: TZipReadOptions): ISequentialZipReader;
+begin
+  Result := nextpas.core.zip.sequential.NewZipSequentialReaderWithOptions(
+    ASource, AOptions);
 end;
 
 procedure ZipPackDirInto(const ADir: string; const AWriter: IZipWriter);

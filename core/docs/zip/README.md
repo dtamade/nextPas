@@ -10,6 +10,8 @@ ZIP archive container: read, write, filesystem pack/extract.
 | `nextpas.core.zip.base` | Method enum, entry metadata record, signature/limit constants, entry-name safety predicate, unix/DOS time conversion |
 | `nextpas.core.zip.writer` | `IZipWriter` implementation |
 | `nextpas.core.zip.reader` | `IZipReader` implementation |
+| `nextpas.core.zip.sequential` | `ISequentialZipReader` — pure sequential (pipe/HTTP body) reader |
+| `nextpas.core.zip.aes` | WinZip AE-2 seal/unseal, streaming sealer/reader, AES-CTR |
 | `nextpas.core.zip.fs` | Directory pack/extract convenience layer |
 
 ## Supported Features
@@ -22,11 +24,12 @@ ZIP archive container: read, write, filesystem pack/extract.
 | Zip64 | Yes (automatic / forced) | Yes | Engages when sizes/offsets/count exceed ZIP32 widths; `TZipWriteOptions.ForceZip64` forces it |
 | UTF-8 names | Yes (flag bit 11) | Yes | Names are raw byte strings; surfaced as stored |
 | Unix mode words | Yes (`TZipAddOptions.Mode`) | Yes | `TZipEntryInfo.ExternalAttrs` / `.IsSymlink`; helpers `ZipUnixModeOf` / `ZipRegularMode` / `ZipDirectoryMode` |
-| Data descriptors | Not written | Tolerated on read | Streaming-writer archives (local flag bit 3) extract using central-directory sizes |
+| Data descriptors | Yes (`TZipAddOptions.DataDescriptor` on `AddEntryStream`) | Tolerated on read | Local bit3 + zero-size placeholder; descriptor after payload; central remains authoritative |
 | Streaming entries (`IStream` family) | Yes (`AddEntryStream` → `ICompressWriter`) | Yes (`OpenEntry*` → `IDecompressReader`, `CopyEntryTo`) | Incremental CRC32+deflate on write; pull-style decode with EOF size+CRC32 verification on read |
+| WinZip AES encryption (AE-2) | Yes (`TZipAddOptions.Password`) | Yes (AE-1 and AE-2, `TZipReadOptions.Password`) | Method 99 + `0x9901` extra; PBKDF2-HMAC-SHA1 keys, AES-CTR, HMAC-SHA1-80 auth code; legacy ZipCrypto refused |
 
-Not supported by design: encryption (flag bit 0 raises), multi-disk archives,
-data descriptors on write (sizes are known up front).
+Not supported by design: legacy ZipCrypto encryption (flag bit 0 without a
+valid `0x9901` extra raises `ENotSupportedError`), multi-disk archives.
 
 ## API
 
@@ -70,12 +73,120 @@ S.Close;                              // finalizes the entry
 ```
 
 The payload never has to be materialized; memory is bounded by one entry's
-compressed output. Streams integrate with the house `IStream` family
+compressed output. Set `Opts.DataDescriptor := True` to drop that bound to a
+constant: the local header (flag bit 3, zero size placeholders, zip64 extra)
+is emitted immediately, compressed bytes go straight to the output pipe, and
+`Close` appends the data descriptor. Only one descriptor entry may be open at
+a time; abandoning it without `Close` leaves orphan bytes, so `Finish` fails
+closed. Streams integrate with the house `IStream` family
 (`nextpas.core.io.intf`): an `AddEntryStream` sink is an `ICompressWriter`,
-so any compressor/reader adapter can be chained on top. Multiple streams may
-be open at once; each lands in its own `Close` order. Abandoning a stream
-(dropping the last reference without `Close`) excludes its entry from the
-archive. `Finish` raises while any stream is still open.
+so any compressor/reader adapter can be chained on top. Multiple staged
+(non-descriptor) streams may be open at once; each lands in its own `Close`
+order. Abandoning a staged stream excludes its entry from the archive.
+`Finish` raises while any stream is still open.
+
+### Streaming output
+
+```pascal
+var Sink: IWriter;   // e.g. an HTTP response body, file stream, pipe...
+W := NewZipWriter;
+W.StreamOutputTo(Sink);              // entries stream through as they land
+W.AddEntryDeflate('big.bin', Data);
+W.AddDirectory('assets');
+N := W.FinishTo(Sink);               // finalize: central dir + EOCD, N = bytes
+```
+
+Binding routes every emitted byte straight to the sink, so memory stays
+bounded by one entry's compressed payload regardless of archive size. Bytes
+staged before binding are drained in 256 KiB chunks first. `FinishTo` on a
+never-bound writer is equivalent to bind-then-finalize. Piped and buffered
+modes produce byte-identical archives (same serialization path); a short
+write raises `EIOError`, sink failures propagate as-is, and a failed terminal
+leaves the archive incomplete — discard the writer.
+
+### Reading from a seekable source
+
+```pascal
+var Src: IStream;   // e.g. fs.Open('big.zip', [fmRead]) — needs IReaderAt
+R := NewZipReaderFrom(Src);
+for I := 0 to R.EntryCount - 1 do Info := R.Entry(I);
+Data := R.ExtractToBytesByName('dir/file.txt');
+```
+
+The archive is never materialized: EOCD, central directory and entry payloads
+are fetched with positioned reads (`IReaderAt`), so the caller's stream
+position is untouched and several entry streams can be open concurrently —
+each keeps its own span cursor. Sources that lack positioned reads are
+rejected at construction (`ENotSupportedError`, fail-closed). Extraction,
+`OpenEntry*` streaming and `MaxOutputSize` semantics are identical to the
+in-memory reader.
+
+### Reading from a sequential source
+
+```pascal
+var Src: IReader;   // e.g. HTTP response body, pipe, non-seekable stream
+var Seq: ISequentialZipReader;
+var Info: TZipEntryInfo;
+var S: IDecompressReader;
+Seq := NewZipSequentialReader(Src);
+while Seq.Next(Info) do
+begin
+  WriteLn(Info.Name, ' ', Info.UncompressedSize);
+  S := Seq.Open;                      // pull-style incremental decode, EOF verified
+  repeat
+    N := S.Read(Buf[0], SizeOf(Buf));
+    if N = 0 then Break;
+    Consume(Buf, N);
+  until False;
+  S.Close;
+end;
+```
+
+The archive is never materialized: `Next` advances solely from `local header + data descriptor`
+without seeking or whole-archive buffering, forming the read-side dual of
+`TZipAddOptions.DataDescriptor` streaming writes. Non-descriptor entries are
+bounded by declared sizes; descriptor entries are located by incremental
+scanning (signature `$08074B50` + CRC/size strong validation + next-signature
+pre-check) with pushback for byte-exact boundaries. `Open`/`CopyTo`/`Skip`
+share the same `Guard`/`MaxOutputSize`/password semantics as the random-access
+reader; only one entry stream may be open at a time.
+
+### AES encryption (WinZip AE-2)
+
+```pascal
+var W: IZipWriter; O: TZipAddOptions; RO: TZipReadOptions;
+W := NewZipWriter;
+O := DefaultZipAddOptions;
+O.Method := zmDeflate;
+O.Password := StrBytes('hunter2');
+O.AesStrength := 3;              // 1/2/3 = AES-128/192/256, 0 -> 256
+W.AddEntryWithOptions('secret.txt', Data, O);
+Archive := W.Finish;
+
+RO := DefaultZipReadOptions;
+RO.Password := StrBytes('hunter2');
+R := NewZipReaderWithOptions(Archive, RO);
+Data2 := R.ExtractToBytesByName('secret.txt');
+```
+
+Writing always produces AE-2: wire method `99` with the real compression method
+in a `0x9901` extra field, general-purpose flag bit 0 set, header CRC32 forced
+to zero (integrity rests entirely on the authentication code). Payloads are
+compressed first, then framed as salt + password-verification value +
+AES-CTR ciphertext + 10-byte truncated HMAC-SHA1; keys come from
+PBKDF2-HMAC-SHA1 (1000 iterations). Salt is drawn from secure randomness, so
+encrypted output is intentionally not byte-reproducible.
+
+Reading accepts both AE-1 and AE-2. AE-1 entries keep their real CRC32 and go
+through normal CRC verification; AE-2 entries must carry CRC32 = 0 and rely on
+the authentication code. Password-verification and authentication-code checks
+run before decryption with one uniform failure message
+(`EParseError('zip aes: authentication failed')`) — wrong password and tampered
+bytes are indistinguishable by design. Opening an encrypted entry without a
+configured password raises `EInvalidOperationError`. Legacy ZipCrypto archives
+remain rejected. On x86_64 with AES-NI available the CTR block function uses
+hardware acceleration for 128/256-bit keys; everything else falls back to the
+constant-time implementation (including AES-192).
 
 ### Read
 

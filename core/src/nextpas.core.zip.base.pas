@@ -22,7 +22,7 @@ type
   TZipEntryInfo = record
     Name: string;                { 归档内存储的原始名字节（UTF-8 约定） }
     Method: TZipMethod;          { 已知方法；未知方法保持 zmStore，看 MethodCode }
-    MethodCode: Word;            { 原始 method 字段值 }
+    MethodCode: Word;            { 原始 method 字段值；加密条目为解密后的真实方法 }
     Crc32: LongWord;
     CompressedSize: UInt64;
     UncompressedSize: UInt64;
@@ -31,6 +31,9 @@ type
     IsDirectory: Boolean;
     ExternalAttrs: LongWord;     { central 的外部属性原值；unix 模式在高 16 位 }
     IsSymlink: Boolean;          { unix 模式位判定 S_IFLNK }
+    IsEncrypted: Boolean;        { general purpose flag bit 0 }
+    AesVersion: Word;            { WinZip AES 版本：0=非 AES 条目，1=AE-1，2=AE-2 }
+    AesStrengthCode: Byte;       { WinZip AES 强度码：1/2/3 = AES-128/192/256 }
   end;
 
 const
@@ -40,6 +43,7 @@ const
   C_ZIP_EOCD_SIG       = $06054B50;
   C_ZIP64_EOCD_SIG     = $06064B50;
   C_ZIP64_EOCD_LOC_SIG = $07064B50;
+  C_ZIP_DESCRIPTOR_SIG = $08074B50;
 
   { Zip64 extended information extra field id }
   C_ZIP64_EXTRA_ID = $0001;
@@ -48,11 +52,17 @@ const
   C_ZIP_VERSION_DEFAULT = 20;     { PKZIP 2.0 基线 }
   C_ZIP_VERSION_ZIP64   = 45;
   C_ZIP_FLAG_ENCRYPTED  = $0001;
+  C_ZIP_FLAG_DESCRIPTOR = $0008;  { bit3：数据描述符（流式写） }
   C_ZIP_FLAG_UTF8       = $0800;  { general purpose flag bit 11 }
 
   { 方法码 }
   C_ZIP_METHOD_STORE   = 0;
   C_ZIP_METHOD_DEFLATE = 8;
+  { WinZip AES 加密条目的 wire 方法码；真实方法在 0x9901 extra 内 }
+  C_ZIP_METHOD_WINZIP_AES = 99;
+
+  { 版本 needed：WinZip AES 条目最低 51（APPNOTE 约定） }
+  C_ZIP_VERSION_AES = 51;
 
   C_ZIP_MADE_BY_HOST_UNIX = 3 shl 8; { version made by：host = Unix }
 
