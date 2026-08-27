@@ -50,8 +50,10 @@ interface
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.db.base,
   nextpas.core.db.redis.base,
   nextpas.core.db.redis.transport,
