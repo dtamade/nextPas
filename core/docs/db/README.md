@@ -55,34 +55,35 @@ end.
 第三方驱动实现 `IDbDriver` 后 `DbRegisterDriver` 注入即接入
 DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
 
-## 特性矩阵
+## 特性矩阵（五后端对齐）
 
-| 能力 | sqlite | PostgreSQL | 契约 |
-|---|---|---|---|
-| 参数化查询（? → $N 翻译） | ✅ | ✅ | §2.1 |
-| 事务（IDbTxControl 手动计数面） | ✅ | ✅ | §2.3 |
-| savepoint 混合嵌套（WithTransaction 自动） | ✅ | ✅ | §2.3 |
-| 瞬时错误重试（WithTransactionRetry + 自定义段位谓词） | ✅ | ✅ | §2.3 |
-| 手动 SAVEPOINT/RollbackTo/ReleaseTo | ✅ | ✅ | §2.3 |
-| 批执行 IDbBatchExecutor | ✅ | ✅ 单次往返 | §2.5* |
-| 透明语句缓存 | ✅ LRU | —（G8 排期） | INC-3 |
-| 连接池（读池+单写者） | ✅ | ✅ | §2.7 |
-| 池泄漏检测 + 获取栈采样（默认关） | ✅ | ✅ | §2.7 |
-| 迁移 checksum 防篡改 + dry-run | ✅ | ✅ | §2.4 |
-| 大对象流 | 行内 blob 区间读写 | lo_* 句柄模型 | §2.9 |
-| 列类型 dbcBool / NULL 行级信号 | ✅ | ✅ | §2.1 |
-| 查询/锁超时（TDbConnectOptions） | busy_timeout | connect/statement_timeout | INC-7 |
-| 查询级超时（Exec/Query + TDbExecOptions，advisory） | 忽略（诚实登记） | ✅ exec/query 双路径 | §2.6b |
-| 观测钩子（IDbTraceListener/IDbTraceControl，四后端同构接线） | ✅ | ✅ | §2.12 |
-| Redis 原生后端（RESP2 无 C 库依赖，键值面映射统一层） | ✅ | ✅ | §2.13 |
-| 错误归一（Category+Constraint 双码位） | ✅ | ✅ 含定位字段 | §2.2 |
-| 统一驱动工厂（注册制 DbOpen + Open 即池 DbOpenPool） | ✅ | ✅ 五后端+可插拔 | §2.14 |
-| sqlite 调优预设（WAL+NORMAL+FK 安全缺省，journal 回读校验 fail-closed） | ✅ | — | §2.15 |
-| TLS 契约成文（责任表 + 各后端样例；pg conninfo/redis UseTls 透传） | N/A | ✅ | §2.1-TLS |
-| 参数级批量绑定（IDbArrayBinding，unnest 单语句单往返；NULL 掩码+fail-fast 对齐校验） | 降级通用批路径 | ✅ pg | §2.16 |
-| 异步挂载与取消（TDbAsyncExecutor 单飞执行线程；令牌级联 → PQcancel / progress handler；归一 decTimeout） | ✅ | ✅ | §2.17 |
-| LISTEN/NOTIFY 订阅会话（专用连接独占 + 泵线程投递；Token 取消；断线自动重连重放订阅；at-most-once 如实上报） | N/A | ✅ | §2.18 |
-| Redis SUBSCRIBE/PSUBSCRIBE 订阅会话（RESP2 推送帧解析 + 确认簿记；传输工厂可注入离线回放；at-most-once 如实上报） | — | ✅ Redis 专属单元 | §2.19 |
+> 列：`sqlite` / `pg` / `mysql`（含 MariaDB，112B 绑定）/ `odbc`（网关，含国产库）/ `redis`（RESP2）。`—` = 诚实缺席（不冒充），`N/A` = 模型无关。
+
+| 能力 | sqlite | pg | mysql | odbc | redis | 契约 |
+|---|---|---|---|---|---|---|
+| 参数化查询（? 参数化即注入安全） | ✅ `?` | ✅ `?→$N` | ✅ `?N→?+槽位` | ✅ `SQLBindParameter` | ✅ `?→bulk` | §2.1 |
+| 事务（IDbTxControl 手动计数面） | ✅ | ✅ | ✅ | ✅ `AUTOCOMMIT+EndTran` | ✅ `MULTI/EXEC` | §2.3 |
+| savepoint 混合嵌套（WithTransaction 自动） | ✅ | ✅ | ✅ | —（ISO 无发现） | — | §2.3 |
+| 瞬时错误重试（WithTransactionRetry + 段位谓词） | ✅ | ✅ | ✅ `1205/1213` | ✅ `40001` | ✅ `EXECABORT` | §2.3 |
+| 手动 SAVEPOINT/RollbackTo/ReleaseTo | ✅ | ✅ | ✅ `SAVEPOINT` | — | — | §2.3 |
+| 批执行 IDbBatchExecutor | ✅ | ✅ 单次往返 | ✅ `MULTI_STATEMENTS` | ✅ 逐条+事务 | ✅ 真流水线 | §2.5* |
+| 透明语句缓存 | ✅ LRU | ✅ LRU | —（排期） | — | — | INC-3 |
+| 连接池（读池+单写者） | ✅ | ✅ | ✅ | ✅ | ✅ | §2.7 |
+| 池泄漏检测 + 获取栈采样（默认关） | ✅ | ✅ | ✅ | ✅ | ✅ | §2.7 |
+| 迁移 checksum 防篡改 + dry-run | ✅ | ✅ | ✅ | ✅ | —（键值无 DDL） | §2.4 |
+| 大对象流 | 行内区间 | `lo_*` 句柄 | — | — | — | §2.9 |
+| 列类型 `dbcBool` / `NULL` 行级信号 | ✅ 亲和 | ✅ OID16 | ✅ `TINYINT(1)→dbcInteger` | — | ✅ `reply→dbcText` | §2.1 |
+| 查询/锁超时（TDbConnectOptions） | `busy_timeout` | `connect/statement` | `connect_timeout` + `max_exec≥8.0` | `LOGIN_TIMEOUT` | — | INC-7 |
+| 查询级超时（`TDbExecOptions` advisory） | — | ✅ 双路径 | ✅ `Exec` 定格 | ✅ 秒粒度 | — | §2.6b |
+| 观测钩子（`IDbTrace` 四后端同构） | ✅ | ✅ | ✅ | ✅ | ✅ | §2.12 |
+| 错误归一（`Category+Constraint`） | ✅ | ✅ +定位 | ✅ `CR_*/ER_*` | ✅ `SQLSTATE`+`OdbcEx` | ✅ 词元表 | §2.2 |
+| 统一驱动工厂（`DbOpen/DbOpenPool`） | ✅ | ✅ | ✅ | ✅ | ✅ 可插拔 | §2.14 |
+| sqlite 调优预设（WAL+NORMAL+FK + 回读校验） | ✅ | — | — | — | — | §2.15 |
+| TLS 契约成文（责任表；pg/redis 透传；mysql 排期） | N/A | ✅ `verify-full` | —（排期） | 驱动透传 | ✅ `UseTls` | §2.1-TLS |
+| 参数级批量绑定（`IDbArrayBinding`） | — | ✅ `unnest` 6× | — | — | — | §2.16 |
+| 异步挂载与取消（`TDbAsync` 单飞 + 令牌→`PQcancel`） | ✅ | ✅ | ✅ | — | — | §2.17 |
+| LISTEN/NOTIFY 订阅（专用连接+泵线程；重连重放） | N/A | ✅ | N/A | N/A | — | §2.18 |
+| SUBSCRIBE/PSUBSCRIBE（RESP2 推送+确认簿记） | — | — | — | — | ✅ | §2.19 |
 
 上表已运行时自述化（V3-B1）：`DbCapabilities(Conn)` 返回
 `IDbCapabilities`，消费方按能力探测降级而非按后端名分支；契约语义见
@@ -90,20 +91,11 @@ CONTRACT §2.10。
 
 > 词汇表收口（V3-C8，2026-08-28）：家族 39 单元 `uses SysUtils` 12→0（仅注释豁免），`IntToStr/Trim/LowerCase/IntToHex/Format/FreeAndNil/GetTickCount64/Exception/AnsiPtrToStr` 全量收敛至 `nextpas.core.text.conv / text.format / base.utils / time / errors`，零反哺新增，见 `2026-08-28-db-v3-c8-rtl-convergence-proposal.md`。
 
-MySQL/MariaDB：基础三件套（base 常量词汇 / ffi 双方言 ABI 镜像 /
-loader 多 soname 探测 + flavor 自动识别）与适配器（prepared stmt
-二进制协议、错误归一、savepoint、多语句批执行）已落地（V3-A1/A2）；
-统一工厂 `ConnectMysql(dsn[, opts])` 已透出。真机 roundtrip 冒烟设
-`NEXTPAS_MYSQL_TEST_CONN` 启用。
+MySQL/MariaDB（V3-A1/A2，含国产 MySQL 协议系代理）：`base` 常量词汇（含 `ER_TRUNCATED 1366 / DATA_TOO_LONG 1406` 等全量收口）/ `ffi` 双方言 ABI 镜像（Oracle 72B @68/70 vs MariaDB 112B @64/96/101，门禁 `sizeof` 钉死）/ `loader` 多 soname 探测 + `mariadb_connection` flavor 自动识别 + `libmariadb 112B` 真机双引擎（`mariadb:11.8 53306` + `mysql:8.0.46 53307` 7/7 `heaptrc 0`；`mysql_native_password` 兼容说明见 `national-db-guide §5`）/ `adapter` prepared stmt 二进制协议（`?N→?` 槽位计划、`MY_PT_*` 按声明类型绑定、截断 `fetch_column` 重取）/ 错误归一 `CR_*/ER_*` 全表（`1062/1022→unique`、`1366/1406→constraint` 等）/ `savepoint` + `MULTI_STATEMENTS` 批执行。统一工厂 `ConnectMysql(dsn[, opts])` 已透出；`NEXTPAS_MYSQL_TEST_CONN='host=... port=53307 user=root password=... db=testdb'` 启用 live 7 组（含 roundtrip/四分类/savepoint/能力自述）。
 
-ODBC（第四后端网关，服务任意 DSN 与国产库 ODBC 路径）：base 常量
-词汇 / ffi 22 符号最小面 / loader 多候选探测（V3-A3）与适配器
-IDbConnection over DSN、prepared 参数化、GetData 惰性物化 + 截断
-重取、AUTOCOMMIT+SQLEndTran 事务面、ClassifyOdbc SQLSTATE 归一、
-GetInfo 能力降级矩阵（V3-A4）均已落地；统一工厂 `ConnectOdbc(connstr[,
-opts])` 已透出。契约见 CONTRACT §2.11。门禁仅驱动管理器
-（unixODBC libodbc.so.2）即可全绿——负连接走管理器 IM002 真实诊断
-链路；真库往返设 `NEXTPAS_ODBC_TEST_CONN` 启用。
+ODBC（第四后端网关，`unixODBC libodbc.so.2` / `Windows odbc32`，国产库含 DM8 等，V3-A3/A4）：`base` 常量词汇 / `ffi` 22 符号最小面（仅 ANSI，规避 `SQLWCHAR` 宽度分歧）/ `loader` 多候选探测 / `adapter` `SQLDriverConnect` 原文透传 + `SQLPrepare/BindParameter/Execute` 参数化 + `SQLFetch/GetData` 惰性物化（`01004` 截断整值重取）+ `AUTOCOMMIT OFF + SQLEndTran` 计数式事务 + `ClassifyOdbc` `SQLSTATE` 归一 + `ClassifyOdbcEx` MySQL 系 `HY000+1062` 单调提精 / `GetInfo` 能力降级矩阵（`Savepoints=false` 等见 CONTRACT §2.11 + `national-db-guide §2.4/§4.5` DM8 ODBC 配方）。统一工厂 `ConnectOdbc(connstr[, opts])` 已透出；仅驱动管理器即可全绿（`IM002` 真实诊断链路），真库 `NEXTPAS_ODBC_TEST_CONN` 启用。
+
+Redis（第五后端，`RESP2` 无 C 库依赖，经 `nextpas.core.net` 阻塞 TCP，V3-A5/A5.1b）：`RESP` 帧解析 + `?→bulk` 参数化 + `array→行` 映射 + `MULTI/EXEC` 事务直映 + `BatchExecutor` 真流水线 + `INFO` 版本探测（`redis_version→valkey_version` 回退）+ `UseTls/TlsServerName` 一体阻塞 `TLSDial` + `SUBSCRIBE/PSUBSCRIBE` 推送会话（确认簿记 + 传输工厂可注入离线回放）。`ClassifyRedis` 词元表 + `transport` 接口化。`ConnectRedis(addr[, opts])` / `RedisOpenSubscriber` 已透出；`NEXTPAS_REDIS_TEST_CONN` / `NEXTPAS_REDIS_TEST_TLS_CONN` 门控 live 15 组。
 
 ## 文档地图
 
@@ -130,11 +122,15 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_async        # 异步挂�
 make focused FOCUS=core/tests/nextpas.core.db/test_db_pg_listen    # LISTEN/NOTIFY 订阅（需 NEXTPAS_PG_TEST_CONN）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_subscribe  # Redis SUBSCRIBE 订阅（V3-B8，离线回放；live 段需 NEXTPAS_REDIS_TEST_CONN）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlscan     # SQL 词法扫描共享引擎（V3-C6，离线纯函数）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql        # MySQL/MariaDB 基础探测（V3-A1，离线 7 组）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql_adapter # MySQL 适配器（V3-A2，6+1 live；NEXTPAS_MYSQL_TEST_CONN='host=127.0.0.1 port=53307 user=root password=Test123@abc db=testdb'）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_base    # ODBC 网关探测（V3-A3，unixODBC 即可全绿）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_adapter  # ODBC 适配器（V3-A4，5+1 live；NEXTPAS_ODBC_TEST_CONN）
 # 全部门禁清单见 CONTRACT §5；每个含 heaptrc 0 unfreed 硬门槛
 ```
 
-pg/mysql 相关门禁需要本地实例（Makefile `ensure-db` 自动建测试库，
-`NEXTPAS_PG_TEST_CONN` 覆盖连接串）。
+pg/mysql/odbc 相关门禁需要本地实例（`ensure-db` 自动建测试库）：
+`NEXTPAS_PG_TEST_CONN` / `NEXTPAS_MYSQL_TEST_CONN` / `NEXTPAS_ODBC_TEST_CONN` 覆盖连接串；缺席对应 live 段自动 Skip。
 
 ## 兼容 shim（恢复为最小面，2026-08-25）
 
