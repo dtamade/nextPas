@@ -273,6 +273,8 @@ type
     procedure HookWritable(AHandler: TOnQuicWritable);
     function UnderlyingConn: TQuicClientConnection;
     function UnderlyingUdp: IAsyncUdpSocket;
+    function FindStream(AStreamId: UInt64): IQuicStream;
+    procedure Pump;
   end;
 
 { TQuicSessionParams }
