@@ -65,6 +65,7 @@ type
     FPaths: TVfsNameArray; { cached sorted file paths — O(1) reuse, avoids per-call EntryPaths alloc }
     FETags: array of string; { parallel ETag cache — precomputed at Create, O(1) ServeVfs }
     FLastMods: array of string; { parallel Last-Modified cache — FormatHttpDate at Create }
+    FEntries: array of TResPackEntry; { parallel entry cache — zero DecodeWire on Stat/OpenRead }
     function EntryPaths: TVfsNameArray; inline;
     function HasSubtreePath(const APath: string): Boolean;
     function StartsWithPath(const AStr, APrefix: string): Boolean;
@@ -194,15 +195,18 @@ begin
   FData := AData;
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
-  { Materialize sorted path index + parallel ETag/Last-Modified cache once — O(n) upfront, O(1) per ServeVfs }
+  { Materialize sorted path index + parallel caches once — O(n) upfront, O(1) per ServeVfs/Stat/OpenRead.
+    FEntries avoids per-request DecodeWire + respack binary search. }
   SetLength(FPaths, FRp.Count);
   SetLength(FETags, FRp.Count);
   SetLength(FLastMods, FRp.Count);
+  SetLength(FEntries, FRp.Count);
   if FRp.Count > 0 then
     for I := 0 to FRp.Count - 1 do
     begin
       E := FRp.EntryAt(I);
       FPaths[I] := FRp.PathOf(E);
+      FEntries[I] := E;
       if (E.Flags and RESPACK_EFLAG_HASHED) <> 0 then
         FETags[I] := '"fnv-' + nextpas.core.text.conv.IntToHex(UInt64(E.Hash), 8) + '"'
       else
@@ -216,6 +220,7 @@ end;
 
 destructor TEmbeddedVfs.Destroy;
 begin
+  SetLength(FEntries, 0);
   SetLength(FLastMods, 0);
   SetLength(FETags, 0);
   SetLength(FPaths, 0);
@@ -231,14 +236,12 @@ begin
 end;
 
 function TEmbeddedVfs.Exists(const APath: string): Boolean;
-var
-  E: TResPackEntry;
 begin
   if not VfsValidPath(APath, True) then
     Exit(False);
   if VfsIsRoot(APath) then
     Exit(True);
-  if FRp.Find(APath, E) then
+  if IndexOfPath(APath) >= 0 then
     Exit(True);
   Result := HasSubtreePath(APath);
 end;
@@ -321,12 +324,15 @@ end;
 
 function TEmbeddedVfs.Stat(const APath: string): TStatInfo;
 var
+  Idx: SizeInt;
   E: TResPackEntry;
 begin
   if not VfsValidPath(APath, True) then
     raise EVfsInvalidPath.CreateCtx('stat', APath, 'invalid virtual path');
-  if FRp.Find(APath, E) then
+  Idx := IndexOfPath(APath);
+  if Idx >= 0 then
   begin
+    E := FEntries[Idx];
     Result.Info.Name := APath;
     Result.Info.Size := Int64(E.Size);
     Result.Info.ModTime := E.ModTime;
@@ -384,16 +390,19 @@ end;
 
 function TEmbeddedVfs.OpenRead(const APath: string): IStream;
 var
+  Idx: SizeInt;
   E: TResPackEntry;
 begin
   if not VfsValidPath(APath, True) then
     raise EVfsInvalidPath.CreateCtx('open', APath, 'invalid virtual path');
-  if not FRp.Find(APath, E) then
+  Idx := IndexOfPath(APath);
+  if Idx < 0 then
   begin
     if HasSubtreePath(APath) then
       raise EVfsIsADirectory.CreateCtx('open', APath, 'target is a directory');
     raise EVfsNotFound.CreateCtx('open', APath, 'not found');
   end;
+  E := FEntries[Idx];
   Result := TWindowStream.Create(FData, Int64(E.DataOffset), Int64(E.Size));
 end;
 

@@ -16,6 +16,7 @@ uses
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
   nextpas.core.webview.gtk.loader,
+  nextpas.core.webview.webview2.loader,
   nextpas.core.webview.factory;
 
 type
@@ -43,16 +44,26 @@ begin
   Result := TryLoadGtkWebkit(LInfo);
 end;
 
+function Wv2ProbeUsable: Boolean;
+var
+  LInfo: TWebView2LoadInfo;
+begin
+  Result := TryLoadWebView2(LInfo);
+end;
+
 procedure TestBackendAvailabilityFacts;
 begin
   Check(WebviewBackendAvailable(wvFake), 'fake always available');
   { S3 起 gtk 按探测结果可用（幂等缓存）；与 loader 直探保持一致 }
   CheckEqual(GtkProbeUsable(), WebviewBackendAvailable(wvGtk),
     'gtk availability matches loader probe');
-  Check(not WebviewBackendAvailable(wvWebview2), 'webview2 lands in W2');
+  CheckEqual(Wv2ProbeUsable(), WebviewBackendAvailable(wvWebview2),
+    'webview2 availability matches loader probe');
   Check(not WebviewBackendAvailable(wvWk), 'wk lands in W3');
-  { S4：默认 kind 能力驱动——gtk 可用即 wvGtk，否则回落 wvFake }
-  if GtkProbeUsable() then
+  { S18：默认 kind 能力驱动——wvWebview2 优先于 wvGtk，否则回落 wvFake }
+  if Wv2ProbeUsable() then
+    CheckEqual(Ord(wvWebview2), Ord(DefaultWebviewKind), 'default = webview2 when probed')
+  else if GtkProbeUsable() then
     CheckEqual(Ord(wvGtk), Ord(DefaultWebviewKind), 'default = gtk when probed')
   else
     CheckEqual(Ord(wvFake), Ord(DefaultWebviewKind), 'default falls back to fake');

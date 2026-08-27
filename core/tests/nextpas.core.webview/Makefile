@@ -1,6 +1,6 @@
-.PHONY: test test-contracts test-base test-bridge test-factory test-fake-eval test-fake-invoke test-fake-window test-gtk-loader test-gtk-backend test-vfs clean
+.PHONY: test test-contracts test-base test-bridge test-factory test-fake-eval test-fake-invoke test-fake-window test-gtk-loader test-gtk-backend test-vfs test-webview2-loader clean
 
-test: test-contracts test-base test-bridge test-factory test-fake-eval test-fake-invoke test-fake-window test-gtk-loader test-gtk-backend test-vfs
+test: test-contracts test-base test-bridge test-factory test-fake-eval test-fake-invoke test-fake-window test-gtk-loader test-gtk-backend test-vfs test-webview2-loader
 
 test-contracts:
 	$(MAKE) -C contracts test
@@ -32,6 +32,9 @@ test-gtk-backend:
 test-vfs:
 	$(MAKE) -C test_webview_vfs clean test
 
+test-webview2-loader:
+	$(MAKE) -C test_webview_webview2_loader clean test
+
 clean:
 	$(MAKE) -C contracts clean
 	$(MAKE) -C test_webview_base clean
@@ -43,3 +46,4 @@ clean:
 	$(MAKE) -C test_webview_gtk_loader clean
 	$(MAKE) -C test_webview_gtk_backend clean
 	$(MAKE) -C test_webview_vfs clean
+	$(MAKE) -C test_webview_webview2_loader clean
