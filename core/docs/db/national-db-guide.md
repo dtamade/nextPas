@@ -197,10 +197,12 @@ NEXTPAS_PG_TEST_CONN='host=127.0.0.1 port=55432 dbname=postgres user=testuser pa
 - **预研覆盖**：openGauss / KingbaseES / OceanBase MySQL 租户 / TiDB /
   PolarDB（PG+X）/ GoldenDB / TDSQL（PG+MySQL）/ 达梦 DM8 / GBase 8s/8a /
   神通——全部按 §1 三档分类并给出连接配方与能力预期，落点本文。
-- **已真机（2026-08-28，Docker）**：**openGauss 5.0.0 x86**（`opengauss/opengauss:5.0.0`，§4.5 三步兼容后 `NEXTPAS_PG_TEST_CONN` 指向 55432）：`test_db_pg 13 passed / conformance 2 passed / trace 5 passed`，方言鸿沟 3 例已诚实记录（`unnest` 多列 / `WITH ORDINALITY` 缺失，array 场景降级为 batch）。
-- **仍理论**：KingbaseES / TiDB / OceanBase 仍为理论预期（无真机），上生产前按 §4 自验；**达梦 DM8 已完成 P1 ODBC 网关路径决策（ADR 0002，零新增代码，honest downgrade）**，P2 `libdmdpi` 按需触发。
+- **已真机（2026-08-28，Docker）**：
+  - **openGauss 5.0.0 x86**（`opengauss/opengauss:5.0.0`，§4.5 三步兼容后 `NEXTPAS_PG_TEST_CONN` 指向 55432）：`test_db_pg 13 passed / conformance 2 passed / trace 5 passed`，方言鸿沟 3 例已诚实记录（`unnest` 多列 / `WITH ORDINALITY` 缺失，array 场景降级为 batch）。
+  - **MySQL 协议系**：`mariadb:11.8`（`53306`）与 `mysql:8.0.46`（`53307`）双引擎经 **MariaDB Connector/C 3.3（libmariadb.so.3, 112B 绑定）** 直连验证——`test_db_mysql_adapter 7/7 passed`（roundtrip/四分类/savepoint/caps）`heaptrc 0`，`mysql:8` 需 `mysql_native_password`（`caching_sha2` 需 libmysqlclient 8，MariaDB 客户端以 `mysql_native_password` 兼容，生产建议显式创建该类用户）。此双引擎已覆盖 TiDB/OceanBase/PolarDB-X/GoldenDB/TDSQL-MySQL 的线协议兼容面（同属 MySQL 协议系，差异仅方言与事务语义，见 §2.3）。
+- **仍理论**：KingbaseES 仍为理论预期（无真机），上生产前按 §4 自验；**达梦 DM8 已完成 P1 ODBC 网关路径决策（ADR 0002，零新增代码，honest downgrade）**，P2 `libdmdpi` 按需触发。
 - **已收口**：ODBC MySQL 系 `HY000+1062` 欠归一由 D5 `ClassifyOdbcEx` 单调提精收口（仅 MySQL 词元驱动生效，达梦等仍欠归一诚实保留，见 ADR 0002）。
-- **下一步**：D3（mysql 协议系）待 TiDB/OceanBase Docker 编排真机；D4 达梦 P1 已就绪，P2 待消费方触发。
+- **下一步**：KingbaseES 待 Docker 真机；TiDB/OceanBase 以 MySQL 8/MariaDB 双引擎为代理已具备发布条件，独立 TiDB 集群编排（PD+TiKV+TiDB）可作为独立进阶验证。
 
 ## 6. 反馈回路
 

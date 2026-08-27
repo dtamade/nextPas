@@ -56,6 +56,12 @@ const
   DB_MYSQL_ER_ROW_IS_REFERENCED     = 1217;
   DB_MYSQL_ER_NO_REFERENCED_ROW_2   = 1452;
   DB_MYSQL_ER_ROW_IS_REFERENCED_2   = 1451;
+  DB_MYSQL_ER_CANT_CREATE_TABLE     = 1005;
+  DB_MYSQL_ER_DB_CREATE_EXISTS      = 1007;
+  DB_MYSQL_ER_BAD_DB_ERROR          = 1049;
+  DB_MYSQL_ER_UNKNOWN_ERROR         = 1105;
+  DB_MYSQL_ER_TRUNCATED_WRONG_VALUE = 1366;
+  DB_MYSQL_ER_DATA_TOO_LONG         = 1406;
   DB_MYSQL_ER_DBACCESS_DENIED_ERROR = 1044;
   DB_MYSQL_ER_ACCESS_DENIED_ERROR   = 1045;
   DB_MYSQL_ER_BAD_NULL_ERROR        = 1048;  { Column cannot be null }
@@ -263,6 +269,12 @@ begin
     ACategory := decConstraint;
     AConstraint := dckCheck;
     Exit;
+  end
+  else if (ACode = DB_MYSQL_ER_TRUNCATED_WRONG_VALUE) or
+          (ACode = DB_MYSQL_ER_DATA_TOO_LONG) then
+  begin
+    ACategory := decConstraint;
+    Exit;
   end;
 
   case ACode of
@@ -279,6 +291,10 @@ begin
       ACategory := decSyntax;             { 对齐 pg class-42 归一 }
     DB_MYSQL_ER_NOT_SUPPORTED_YET, DB_MYSQL_ER_OPTION_PREVENTS_STATEMENT:
       ACategory := decNotSupported;
+    DB_MYSQL_ER_CANT_CREATE_TABLE, DB_MYSQL_ER_UNKNOWN_ERROR:
+      ACategory := decCapacity;
+    DB_MYSQL_ER_BAD_DB_ERROR, DB_MYSQL_ER_DB_CREATE_EXISTS:
+      ACategory := decConnection;
     DB_MYSQL_CR_OUT_OF_MEMORY:
       ACategory := decCapacity;
   else
