@@ -1,11 +1,10 @@
-# nextpas.core.mail 代码契约 v0.5
+# nextpas.core.mail 代码契约 v0.6
 
 **模块路径**：`core/src/nextpas.core.mail*.pas`（base/mime/smtp/imap + 门面）
 **层级**：L3（依赖 L0-L2 与 `nextpas.core.mime`）
 **Owner**：codex/mime-mail-20260816（mailServer888 反哺）
-**最后更新**：2026-08-26
-**版本**：0.5（正式；v0.1 客户端草图废弃，见 §6 差异表；0.2→0.3 行为 SMTP
-服务器批次，当时仅推进变更记录未改头部版本号，本版一并修正）
+**最后更新**：2026-08-27
+**版本**：0.6（SMTP Submission 587：STARTTLS 真握手 + AUTH PLAIN/LOGIN + 吊销联动）
 
 ---
 
@@ -22,12 +21,13 @@
   的 RFC 2047 编解码接入（语法委托 mime，INV-A3）。
 - SMTP 客户端（RFC 5321）：EHLO/HELO 回退、MAIL/RCPT/DATA、AUTH PLAIN/LOGIN、
   超时/取消、TryXxx 对偶（`nextpas.core.mail.smtp`）。
-- SMTP 服务器事件驱动会话（RFC 5321 务实子集，`nextpas.core.mail.smtp.server`）：
-  HELO/EHLO 能力（PIPELINING/8BITMIME/SIZE/AUTH/ENHANCEDSTATUSCODES）、
+- SMTP 服务器事件驱动会话（RFC 5321/3207/4954 务实子集，`nextpas.core.mail.smtp.server`）：
+  HELO/EHLO 能力（PIPELINING/8BITMIME/SIZE/STARTTLS/AUTH/ENHANCEDSTATUSCODES）、
   MAIL/RCPT/DATA（点转义、大小上限、收件人上限）、RSET/NOOP/QUIT/HELP/VRFY，
-  STARTTLS 探测位、AUTH 注册回调校验（缺省拒）；会话接入 `net.server`
+  STARTTLS 真握手（ISmtpTlsUpgrade 缝：220 冲刷后握手升级，成功替换 FConn/缓冲重置/RFC 3207 重置 EHLO，失败 454；二次 503，已激活 STARTTLS 454）、
+  AUTH PLAIN/LOGIN（ISmtpAuthHook 缝：PLAIN 初始响应与挑战两形态、LOGIN 两轮挑战 334 序列、统一 535 防枚举、EHLO 能力按 TLS 门控）；会话接入 `net.server`
   poll-driven 契约（epoll/kqueue/iocp readiness 路径），出站回复队列有界背压，
-  读空闲超时经 WakeDeadline 由 reactor 唤醒。
+  读空闲超时经 WakeDeadline 由 reactor 唤醒；认证后 msseAuthed 事件 + AuthedMailGate 门控（吊销/归属联动）。
 - IMAP 服务器事件驱动会话（RFC 3501 务实子集 = 原版 imap.rs 行为基线，
   `mail.imap.base` + `mail.imap.server`）：CAPABILITY/NOOP/LOGOUT/
   STARTTLS 探测位/LOGIN/AUTHENTICATE PLAIN/LIST/LSUB/SELECT/EXAMINE/
@@ -124,6 +124,9 @@ end;
   AUTHENTICATE 一律 NO Authentication temporarily unavailable；已认证
   会话每命令分发前过 RevocationCheck（irsRevoked → 重置态 + NO
   Authentication required），LOGOUT/CAPABILITY 免检。
+- **[INV-A12]** SMTP STARTTLS 管线：stCommand 收到 STARTTLS → 已激活 503/无钩子 454/否则 220 冲刷后握手升级（FlushOutbound 完成恢复点调用 ISmtpTlsUpgrade.Upgrade 成功替换 FConn/FConnRuntime 并重置行缓冲/读缓冲/HELO 状态，保留或重置认证态按 RFC 3207 EHLO 必须重发约束；失败 454 回命令态）。升级后立即 DrainReadable（同批 TLS ClientHello 不丢）；缓冲清空纪律（INV-A10 同族）保障升级瞬间零残留。
+- **[INV-A13]** SMTP AUTH 管线：EHLO 能力广播按 TLS 门控（已 TLS 或无 TLS 钩子时才广播 AUTH；STARTTLS 可用而未激活时隐藏，防明文窃听）。AUTH PLAIN 支持初始响应与 334 空挑战两形态，AUTH LOGIN 两轮 334（Username:/Password:）挑战态经 FAuthPending 分流；统一 535 5.7.8 防枚举；成功置 FAuthed/FAuthedUserId 并发 msseAuthed。
+- **[INV-A14]** SMTP 认证后门控：RequireAuth 下仍需 AUTH 才接受 MAIL；已认证 MAIL 前经 AuthedMailGate.Check（非空=整行拒绝，如吊销联动 553/530），与 MailPolicy 双阶段钩子正交兼容。
 
 ## 6. 与 v0.1 差异表（v0.1 = 客户端草图）
 
@@ -143,11 +146,11 @@ end;
 
 - `test_mail_address`（8 用例）、`test_mail_mime`（24 用例）、
   `test_smtp_client`（13 用例，本地 mock 服务器）、`test_mail_smtp_server`
-  （9 用例，epoll readiness 后端 + mail.smtp 客户端对跑）；全部经 common.mk
+  （21 用例，epoll readiness 后端 + mail.smtp 客户端/裸行协议对跑）；全部经 common.mk
   （heaptrc gate）0 unfreed。
 - `test_mail_smtp_server` 覆盖：banner/EHLO 能力/HELO、MAIL/RCPT/DATA 全流程
-  与点转义、SIZE/收件人上限、命令顺序与语法错误、VRFY/EXPN/STARTTLS 探测、
-  AUTH 未启用与 RequireAuth、QUIT 关闭、读空闲超时、出站背压溢出中止。
+  与点转义、SIZE/收件人上限、命令顺序与语法错误、VRFY/EXPN、STARTTLS（探测 454/二次 503/220 握手/失败 454/缓冲不丢）、
+  AUTH（PLAIN 初始与挑战、LOGIN 两轮、未启用 503、统一 535、防枚举）、RequireAuth/已认证 MAIL 放行、吊销门控 553、TLS 门控广播、QUIT 关闭、读空闲超时、出站背压溢出中止、管线多行同批不丢。
 
 ## 8. IMAP 对原版基线的偏离表
 
@@ -161,6 +164,8 @@ end;
 | UID SEARCH 输出 | uid_mode 参数未用，两模式均输出 UID | 保持 | parity 保持 |
 | STARTTLS「OK」分支 | 交还流做 TLS 握手 | 无握手缝：OK 应答后关闭连接（默认配置 TlsAvailable=False 走 unavailable，不可达）；tls 批次接线 | 已披露限制 |
 | LOGIN 错误文案 | Invalid credentials / temporarily unavailable 两分 | 三态缝映射 iarInvalid→NO Authentication failed / iarUnavailable→temporarily unavailable | 文案微调（语义等价三分） |
+
+> **注（v0.6）**：SMTP STARTTLS 已实现真握手（ISmtpTlsUpgrade 缝，220 冲刷后升级，成功替换连接；失败 454；EHLO 需重发），不再走「OK 后关闭」旧披露路径；IMAP STARTTLS 仍保持上表披露（默认 TlsAvailable=False 不可达，握手缝待后续批次）。
 
 ## 9. 测试与证据（IMAP 增量）
 
@@ -190,3 +195,4 @@ end;
 | 2026-08-16 | 0.2→0.3 | 新增 SMTP 服务器事件驱动会话（mail.smtp.server，net.server poll-driven）；边界决策见 plans/2026-08-16-smtp-server-module-boundary.md；INV-A7/A8 |
 | 2026-08-26 | 0.3→0.4 | 新增 IMAP 服务器事件驱动会话（mail.imap.base/server，存储 SPI 零 SQL）；边界决策见 plans/2026-08-26-imap-server-module-boundary.md；INV-A9/A10/A11；§8 偏离表；修正头部版本号漂移 |
 | 2026-08-26 | 0.4→0.5 | 批次 3.1 修复（首批真实消费方 mailServer888 Phase 6a 端到端暴露）：① SELECT「\* OK [UNSEEN n]」由未读计数改为首未读序号（RFC 3501 语义；无未读整行省略），经 SEARCH 谓词下推 + ListUids 定位；② FETCH 输出序号由会话按本命令 ListUids 位置回填（SPI 注释契约的会话侧兑现，不信任存储 Seq 值）。核心套件 16→17 用例（新增 UnseenOrdinalAndSeq 判别回归：计数≠序号数据 + 存储脏 Seq 注入） |
+| 2026-08-27 | 0.5→0.6 | 批次 6b（SMTP Submission 587）：STARTTLS 真握手（ISmtpTlsUpgrade 220 冲刷断点+FConn 替换+缓冲重置，失败 454/二次 503）、AUTH PLAIN/LOGIN 全形态（ISmtpAuthHook，统一 535，EHLO TLS 门控，挑战态 FAuthPending 分流，msseAuthed 事件）、AuthedMailGate 吊销/归属联动（553），INV-A12/A13/A14；test_mail_smtp_server 10→21 用例（新增 AUTH/STARTTLS/门控矩阵 11 用例，dummy TLS 升级不依赖真实握手解密，真实 TLS 链路走集成台架）；AuthCallback: TMethod 移除，配置置 nil 零行为变化 |
