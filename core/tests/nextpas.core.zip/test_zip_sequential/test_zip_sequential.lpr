@@ -756,6 +756,39 @@ begin
   Check(SameBytes(Got, BytesOfStr('after')), 'skip->after');
 end;
 
+function TryTotalLimitSequential(const AData: TBytes; ALimit: UInt64): Boolean;
+var
+  R: ISequentialZipReader;
+  Opts: TZipReadOptions;
+  Info: TZipEntryInfo;
+begin
+  Opts := DefaultZipReadOptions;
+  Opts.MaxTotalOutputSize := ALimit;
+  R := NewZipSequentialReaderWithOptions(CreateBytesStreamFrom(AData) as IReader, Opts);
+  try
+    while R.Next(Info) do
+      R.Skip;
+    Result := False;
+  except
+    on E: EIOError do Result := True;
+  end;
+end;
+
+procedure TestTotalLimitSequential;
+var
+  W: IZipWriter;
+  Archive: TBytes;
+  LI: Integer;
+begin
+  W := NewZipWriter;
+  for LI := 0 to 4 do
+    W.AddEntry('f' + IntToStr(LI) + '.bin', PatternBytes(100, LI));
+  Archive := W.Finish;
+  Check(TryTotalLimitSequential(Archive, 250), 'total limit enforced sequential');
+  Check(not TryTotalLimitSequential(Archive, 500), 'total exact boundary sequential');
+  Check(not TryTotalLimitSequential(Archive, 0), 'total unlimited sequential');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.sequential');
   T.Test('Empty archive', @TestEmptyArchive);
@@ -777,5 +810,6 @@ begin
   T.Test('Empty descriptor store', @TestEmptyDescriptorStore);
   T.Test('Force Zip64 sequential', @TestSequentialWithForceZip64);
   T.Test('Skip buffered descriptor', @TestSkipBufferedDescriptor);
+  T.Test('Total limit sequential', @TestTotalLimitSequential);
   if not T.Run then Halt(1);
 end.

@@ -25,11 +25,13 @@ uses
 
 type
   {** @desc 解包选项：RestoreMode 还原归档内 posix 权限位（仅 unix 归档）；
-       SkipSymlinks 跳过符号链接条目；MaxOutputSize=0 取读端默认上限 *}
+       SkipSymlinks 跳过符号链接条目；MaxOutputSize=0 取读端默认上限；
+       MaxTotalOutputSize 为跨条目总输出上限，0=不限 *}
   TZipExtractOptions = record
   RestoreMode: Boolean;
   SkipSymlinks: Boolean;
   MaxOutputSize: SizeUInt;
+  MaxTotalOutputSize: UInt64;
 end;
 
 {** 递归打包 ADir 内容（不含 ADir 自身条目）追加到 AWriter。 *}
@@ -186,6 +188,7 @@ begin
   Result.RestoreMode := True;
   Result.SkipSymlinks := True;
   Result.MaxOutputSize := 0;
+  Result.MaxTotalOutputSize := 0;
 end;
 
 procedure ZipExtractToDirWithOptions(const AData: TBytes;
@@ -202,6 +205,7 @@ var
   LDirs: TDeferredDirArray;
 begin
   LOpts.MaxOutputSize := AOptions.MaxOutputSize;
+  LOpts.MaxTotalOutputSize := AOptions.MaxTotalOutputSize;
   LR := NewZipReaderWithOptions(AData, LOpts);
   MkdirAll(ADestDir, PermDirDefault);
   SetLength(LDirs, 0);

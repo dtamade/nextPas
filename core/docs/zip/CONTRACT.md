@@ -14,8 +14,8 @@
 | `TZipEntryInfo` | central directory 条目元数据；尺寸/偏移为 UInt64（Zip64 宽度）；含 `ExternalAttrs` 原值与 `IsSymlink` 判定；加密条目另有 `IsEncrypted` / `AesVersion`（1=AE-1，2=AE-2）/ `AesStrengthCode`，`MethodCode` 为解密后的真实压缩方法 |
 | `TZipWriteOptions` | `ForceZip64: Boolean`——无条件产出 Zip64 结构 |
 | `TZipAddOptions` | 单条目完整选项：`Method` / `ModTimeUnixSec`（<0 取 DOS 下限）/ `Mode`（unix 模式字，0 取默认）/ `Password`（非空走 WinZip AE-2 加密，INV-14）/ `AesStrength`（1/2/3 = AES-128/192/256，0 取 3）/ `DataDescriptor`（仅 `AddEntryStream` 生效，INV-15） |
-| `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`Password`——WinZip AES 解密口令（INV-14） |
-| `TZipExtractOptions` | fs 解包选项：`RestoreMode` / `SkipSymlinks` / `MaxOutputSize` |
+| `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`MaxTotalOutputSize: UInt64`——跨条目总输出上限，0=不限（INV-17）；`Password`——WinZip AES 解密口令（INV-14） |
+| `TZipExtractOptions` | fs 解包选项：`RestoreMode` / `SkipSymlinks` / `MaxOutputSize` / `MaxTotalOutputSize` |
 
 ### 1.2 工厂函数
 
@@ -132,6 +132,12 @@
   `CopyTo`/`Skip` 语义与读端一致（Guard/解压/CRC/MaxOutput/口令），
   一次仅一流，重复打开或未 `Next` 时 `EInvalidOperationError`；截断
   结构 `EParseError`，不支持的 AES 描述符 `ENotSupportedError`。
+- **[INV-17]** 总输出守卫：`TZipReadOptions.MaxTotalOutputSize` 为跨条目
+  总未压缩尺寸上限（防“100k × 1MiB 小条目绕过单条目上限”型 ZipBomb），
+  0=不限。随机读路径（内存/定位流）在解析 central 结束时对
+  `Σ UncompressedSize` 做溢出安全求和并 fail-closed（`EIOError`）；
+  顺序读路径在 `Next` 归一真实尺寸后增量累计，超限即 `EIOError`；
+  单值已超限或累加溢出均拒绝；`TZipExtractOptions` 同步透传该上限。
 
 ## 3. 错误模型
 
@@ -152,6 +158,7 @@
 | 输出 sink 短写 | `EIOError('zip writer: short write to output sink')` |
 | 源流缺失定位读能力 | `ENotSupportedError` |
 | 单条目解压超过 MaxOutputSize | `EIOError`（来自 raw inflate 上限语义） |
+| 跨条目总输出超过 MaxTotalOutputSize | `EIOError('zip: total uncompressed size exceeds limit')` |
 | 顺序读未 Next 或重复打开流 | `EInvalidOperationError` |
 | 顺序读 AES 描述符 | `ENotSupportedError` |
 
@@ -160,7 +167,7 @@
 生产单元（src/nextpas.core.zip*.pas）不得 uses 任何非 `nextpas.*` 单元——
 FPC RTL（SysUtils/Classes 等）与第三方库一律经 owner 模块间接使用；该规则由
 `test_zip_contract` 门在 CI 中机械执行。门面单元只做 re-export 与 inline
-委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享内核（`GuardEntryReadable/DecompressEntryVerified/IsKnownZipSig/LE*`），消除重复，保证校验单点一致。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
+委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/DecompressEntryVerified/IsKnownZipSig/LE*`），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享解析链（`DecodeCentralExtra/DecodeLocalExtra`），消除重复，保证校验单点一致。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
 
 ## 5. 测试入口
 

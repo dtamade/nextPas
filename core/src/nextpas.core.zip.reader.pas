@@ -28,10 +28,13 @@ uses
 
 type
   {** @desc 读选项：MaxOutputSize 为单条目解压输出上限（防 zip bomb），
-       0 = 采用默认上限；Password 供 WinZip AES 加密条目解密（AE-1/AE-2，
-       遗留 ZipCrypto 不支持），空口令遇加密条目 raise *}
+       0 = 采用默认上限；MaxTotalOutputSize 为跨条目总输出上限（防
+       “多小条目绕过单条目上限”型 zip bomb），0 = 不限；Password 供
+       WinZip AES 加密条目解密（AE-1/AE-2，遗留 ZipCrypto 不支持），
+       空口令遇加密条目 raise *}
   TZipReadOptions = record
     MaxOutputSize: SizeUInt;
+    MaxTotalOutputSize: UInt64;
     Password: TBytes;
   end;
 
@@ -89,7 +92,8 @@ uses
   nextpas.core.checksum.crc32,
   nextpas.core.compress.deflate,
   nextpas.core.zip.aes,
-  nextpas.core.zip.common;
+  nextpas.core.zip.common,
+  nextpas.core.zip.extra;
 
 const
   C_EOCD_MIN_LEN       = 22;
@@ -107,6 +111,7 @@ type
     FEntries: array of TZipEntryInfo;
     FFlags: array of Word;
     FMaxOutputSize: SizeUInt;
+    FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
@@ -116,7 +121,7 @@ type
     function ExtractIndex(AIndex: Integer): TBytes;
   public
     constructor Create(const AData: TBytes; AMaxOutput: SizeUInt;
-      const APassword: TBytes);
+      AMaxTotalOutput: UInt64; const APassword: TBytes);
     function EntryCount: Integer;
     function Entry(AIndex: Integer): TZipEntryInfo;
     function Find(const AName: string): Integer;
@@ -188,6 +193,7 @@ type
     FEntries: array of TZipEntryInfo;
     FFlags: array of Word;
     FMaxOutputSize: SizeUInt;
+    FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
     { 定位取数：[APos, APos+ACount) 越界或短读即结构截断 }
     procedure Fetch(APos: Int64; ACount: SizeUInt; out ADst: TBytes;
@@ -200,7 +206,7 @@ type
     function ExtractIndex(AIndex: Integer): TBytes;
   public
     constructor Create(const ASource: IStream; AMaxOutput: SizeUInt;
-      const APassword: TBytes);
+      AMaxTotalOutput: UInt64; const APassword: TBytes);
     function EntryCount: Integer;
     function Entry(AIndex: Integer): TZipEntryInfo;
     function Find(const AName: string): Integer;
@@ -318,8 +324,7 @@ var
   LCrc, LExtAttrs: LongWord;
   LCSize, LUSize, LLho: UInt64;
   LNameBytes: TBytes;
-  LExtraLeft, LExtraUsed: Integer;
-  LExtraId, LExtraSize: Word;
+  LExtraBytes: TBytes;
   LAesVersion, LAesVendor, LAesRealMethod: Word;
   LAesStrength: Byte;
   LHasAes: Boolean;
@@ -348,54 +353,11 @@ begin
   if LNameLen > 0 then
     LNameBytes := AC.ReadBytes(LNameLen);
 
-  { 扫描 extra 字段链，取 Zip64 宽度值替换经典字段的 $FFFFFFFF 占位；
-    WinZip AES extra（0x9901）在此一并捕获 }
-  LAesVersion := 0;
-  LAesVendor := 0;
-  LAesRealMethod := 0;
-  LAesStrength := 0;
-  LHasAes := False;
-  LExtraLeft := LExtraLen;
-  while LExtraLeft >= 4 do
-  begin
-    LExtraId := AC.ReadU16LE;
-    LExtraSize := AC.ReadU16LE;
-    if Integer(LExtraSize) > LExtraLeft - 4 then
-      raise EParseError.Create('zip: malformed extra field');
-    if LExtraId = C_ZIP64_EXTRA_ID then
-    begin
-      LExtraUsed := 0;
-      if (LUSize = UInt64($FFFFFFFF)) and (LExtraSize - LExtraUsed >= 8) then
-      begin
-        LUSize := AC.ReadU64LE;
-        Inc(LExtraUsed, 8);
-      end;
-      if (LCSize = UInt64($FFFFFFFF)) and (LExtraSize - LExtraUsed >= 8) then
-      begin
-        LCSize := AC.ReadU64LE;
-        Inc(LExtraUsed, 8);
-      end;
-      if (LLho = UInt64($FFFFFFFF)) and (LExtraSize - LExtraUsed >= 8) then
-        LLho := AC.ReadU64LE
-      else
-        AC.Seek(AC.Position + SizeUInt(LExtraSize - LExtraUsed));
-    end
-    else if LExtraId = C_WINZIP_AES_EXTRA_ID then
-    begin
-      if LHasAes or (LExtraSize <> C_WINZIP_AES_EXTRA_BODY) then
-        raise EParseError.Create('zip: malformed WinZip AES extra field');
-      LAesVersion := AC.ReadU16LE;
-      LAesVendor := AC.ReadU16LE;
-      LAesStrength := AC.ReadBytes(1)[0];
-      LAesRealMethod := AC.ReadU16LE;
-      if LAesVendor <> C_WINZIP_AES_VENDOR_LE then
-        raise EParseError.Create('zip: unknown WinZip AES vendor id');
-      LHasAes := True;
-    end
-    else
-      AC.Seek(AC.Position + SizeUInt(LExtraSize));
-    Dec(LExtraLeft, 4 + Integer(LExtraSize));
-  end;
+  LExtraBytes := nil;
+  if LExtraLen > 0 then
+    LExtraBytes := AC.ReadBytes(LExtraLen);
+  DecodeCentralExtra(LExtraBytes, LUSize, LCSize, LLho, LHasAes,
+    LAesVersion, LAesVendor, LAesRealMethod, LAesStrength);
   AC.Seek(AC.Position + SizeUInt(LCommentFieldLen));
 
   AE.Name := '';
@@ -451,6 +413,7 @@ end;
 function DefaultZipReadOptions: TZipReadOptions;
 begin
   Result.MaxOutputSize := C_ZIP_DEFAULT_MAX_OUTPUT;
+  Result.MaxTotalOutputSize := 0;
   Result.Password := nil;
 end;
 
@@ -467,16 +430,18 @@ begin
   LMax := AOptions.MaxOutputSize;
   if LMax = 0 then
     LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result := TZipReaderImpl.Create(AData, LMax, AOptions.Password);
+  Result := TZipReaderImpl.Create(AData, LMax, AOptions.MaxTotalOutputSize,
+    AOptions.Password);
 end;
 
 constructor TZipReaderImpl.Create(const AData: TBytes; AMaxOutput: SizeUInt;
-  const APassword: TBytes);
+  AMaxTotalOutput: UInt64; const APassword: TBytes);
 begin
   inherited Create;
   FData := AData;
   FC := NewByteCursor(AData);
   FMaxOutputSize := AMaxOutput;
+  FMaxTotalOutputSize := AMaxTotalOutput;
   FPassword := APassword;
   ParseCentralDirectory;
 end;
@@ -578,6 +543,18 @@ begin
       raise EParseError.Create('zip: bad central header signature at ' +
         IntToStr(Int64(FC.Position) - 4));
     ParseCentralEntry(FC, FEntries[LI], FFlags[LI]);
+  end;
+  if FMaxTotalOutputSize <> 0 then
+  begin
+    LCdSize := 0;
+    for LI := 0 to LCount - 1 do
+    begin
+      if FEntries[LI].UncompressedSize > FMaxTotalOutputSize then
+        raise EIOError.Create('zip: total uncompressed size exceeds limit');
+      if LCdSize > FMaxTotalOutputSize - FEntries[LI].UncompressedSize then
+        raise EIOError.Create('zip: total uncompressed size exceeds limit');
+      Inc(LCdSize, FEntries[LI].UncompressedSize);
+    end;
   end;
 end;
 
@@ -767,7 +744,7 @@ begin
 end;
 
 constructor TZipSourceReader.Create(const ASource: IStream;
-  AMaxOutput: SizeUInt; const APassword: TBytes);
+  AMaxOutput: SizeUInt; AMaxTotalOutput: UInt64; const APassword: TBytes);
 begin
   inherited Create;
   if ASource = nil then
@@ -778,6 +755,7 @@ begin
       'zip: source stream does not support positioned reads (IReaderAt)');
   FSize := ASource.GetSize;
   FMaxOutputSize := AMaxOutput;
+  FMaxTotalOutputSize := AMaxTotalOutput;
   FPassword := APassword;
   ParseCentralDirectory;
 end;
@@ -906,6 +884,18 @@ begin
       raise EParseError.Create('zip: bad central header signature at ' +
         IntToStr(Int64(LCdOffset) + Int64(LC.Position) - 4));
     ParseCentralEntry(LC, FEntries[LI], FFlags[LI]);
+  end;
+  if FMaxTotalOutputSize <> 0 then
+  begin
+    LCdSize := 0;
+    for LI := 0 to LCount - 1 do
+    begin
+      if FEntries[LI].UncompressedSize > FMaxTotalOutputSize then
+        raise EIOError.Create('zip: total uncompressed size exceeds limit');
+      if LCdSize > FMaxTotalOutputSize - FEntries[LI].UncompressedSize then
+        raise EIOError.Create('zip: total uncompressed size exceeds limit');
+      Inc(LCdSize, FEntries[LI].UncompressedSize);
+    end;
   end;
 end;
 
@@ -1085,7 +1075,8 @@ begin
   LMax := AOptions.MaxOutputSize;
   if LMax = 0 then
     LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result := TZipSourceReader.Create(ASource, LMax, AOptions.Password);
+  Result := TZipSourceReader.Create(ASource, LMax,
+    AOptions.MaxTotalOutputSize, AOptions.Password);
 end;
 
 end.
