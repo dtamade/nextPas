@@ -22,9 +22,19 @@ unit nextpas.core.mail.smtp.server;
  *
  * 业务集成：应用实现 ISmtpServerSink，服务器在 reactor 线程回调
  * OnServerEvent(msseMessage, Envelope) 交付一封收信（MAIL/RCPT/DATA 收集
- * 完毕后的信封；Envelope.ClientIP 为对端 IP，同 reactor 线程读取）。
+ * 完毕后的信封；Envelope.ClientIP 为对端 IP，同 reactor 线程读取）；
+ * msseClosed 事件信封亦携带 ClientIP（对端 IP 与 msseMessage 同源），
+ * 供消费方按 IP 归账连接生命周期（如 per-IP 并发连接计数递减）。
  * 业务侧回调内不执行阻塞 I/O；向会话内送数据须经
  * context.WorkerHandoff 在 reactor 线程交付。
+ *
+ * MAIL/RCPT 阶段同步策略：配置 MailPolicy（ISmtpMailPolicyHook）后，会话在
+ * MAIL FROM 解析成功、信封 From 定值前回调 EvaluateMailFrom，在 RCPT TO
+ * 解析成功、收件人入列前回调 EvaluateRcptTo（reactor 线程，须短非阻塞：
+ * 令牌桶/计数/内存状态表判定，不得做 DNS/DB 等阻塞操作）；返回 '' 放行，
+ * 非空为完整拒绝回复行。MAIL 拒绝后信封未定值，客户端可重发 MAIL 或 RSET；
+ * RCPT 拒绝后该收件人未入列，可重发该 RCPT 或整体重试。典型消费：限流
+ * （MAIL 阶段）、greylisting（RCPT 阶段三元组判定）、来源域策略。
  *
  * 线程约束：SendXxx/Cancel 由推进方（reactor 线程，即 Advance）调用。
  *}
@@ -76,6 +86,26 @@ type
       const AEnvelope: TMailSmtpEnvelope);
   end;
 
+  { MAIL/RCPT 阶段同步策略钩子：应用在信封 From 定值前（MAIL）或收件人
+    入列前（RCPT）裁决是否接受本封发件人/收件人。reactor 线程调用，
+    须短非阻塞（μs 级，如令牌桶/计数/内存状态表判定），不得做
+    DNS/DB/网络等可能阻塞的操作（D9：阻塞操作须卸载到 worker）。
+    典型消费：连接/消息限流、greylisting（三元组判定在 RCPT 阶段）、
+    来源域策略。
+    返回 '' = 放行；非空 = 完整拒绝回复行（状态码 + 增强码 + 文案 +
+    CRLF，如 '452 4.7.1 Too many messages' + #13#10）。MAIL 拒绝后
+    信封未定值；RCPT 拒绝后该收件人未入列，客户端可重发该 RCPT 或
+    RSET 后整体重试。 }
+  ISmtpMailPolicyHook = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000021}']
+    function EvaluateMailFrom(const AFrom: TMailAddress;
+      const AClientIP: string): string;
+    { RCPT 阶段：AFrom 为当前信封 MAIL FROM（可为空），ARcpt 为待定收件人。
+      实现不关心的阶段返回 ''（放行），实现须同时覆盖两阶段。 }
+    function EvaluateRcptTo(const AFrom: TMailAddress; const ARcpt: TMailAddress;
+      const AClientIP: string): string;
+  end;
+
   TMailSmtpServerConfig = record
     Domain: string;                  { EHLO/HELO banner 域名；'' → 'localhost' }
     MaxMessageSize: Int64;           { DATA 上限；0 → 64MiB }
@@ -85,6 +115,7 @@ type
     RequireAuth: Boolean;            { 已 AUTH 才接受 MAIL（Submission 语义） }
     AuthEnabled: Boolean;            { 是否广播 AUTH 并接受 AUTH 命令 }
     AuthCallback: TMethod;           { 预留：凭证校验回调；本批缺省拒（见 plans §6） }
+    MailPolicy: ISmtpMailPolicyHook; { MAIL 阶段同步策略钩子；nil = 关闭 }
     class function Default: TMailSmtpServerConfig; static;
   end;
 
@@ -127,6 +158,7 @@ type
       FEnvelope: TEnvelopeBuild;
       FHeloState: (hsNone, hsHelo, hsEhlo);
       FAuthed: Boolean;
+      FMailPolicy: ISmtpMailPolicyHook;
       FClosedNotified: Boolean;
       FDataBytes: SizeUInt;
       FDataBuf: TBytes;              { DATA 明文累积（去点转义、含行界） }
@@ -174,6 +206,7 @@ begin
   Result.AuthEnabled := False;
   Result.AuthCallback.Code := nil;
   Result.AuthCallback.Data := nil;
+  Result.MailPolicy := nil;
 end;
 
 { 从累积行缓冲构造 string（去 CRLF）}
@@ -196,12 +229,21 @@ begin
 end;
 
 procedure TMailSmtpServerSession.NotifyClosed;
+var
+  LEnv: TMailSmtpEnvelope;
 begin
   if FClosedNotified then
     Exit;
   FClosedNotified := True;
   if FSink <> nil then
-    FSink.OnServerEvent(msseClosed, Default(TMailSmtpEnvelope));
+  begin
+    { 关闭事件信封携带对端 IP（与 msseMessage 同源 RemoteAddr，连接
+      已终止但地址为 accept 时缓存的 sockaddr，仍可读）：消费方按 IP
+      归账连接生命周期（如 per-IP 并发连接计数递减）。 }
+    LEnv := Default(TMailSmtpEnvelope);
+    LEnv.ClientIP := FConn.RemoteAddr.IP;
+    FSink.OnServerEvent(msseClosed, LEnv);
+  end;
 end;
 
 procedure TMailSmtpServerSession.AbortSession;
@@ -230,6 +272,7 @@ begin
     raise EArgumentError.Create('smtp server session requires stream runtime seam');
   FSink := ASink;
   FConfig := AConfig;
+  FMailPolicy := FConfig.MailPolicy;
   if FConfig.Domain = '' then
     FConfig.Domain := 'localhost';
   if FConfig.MaxMessageSize <= 0 then
@@ -373,6 +416,7 @@ var
   LAddr: TMailAddress;
   LSize: Int64;
   LOk: Boolean;
+  LPolicyReply: string;
 begin
   if not SplitVerb(ALine, LVerb, LArgs) then
   begin
@@ -437,6 +481,17 @@ begin
           BeginFlush(stCommand);
           Exit;
         end;
+        if FMailPolicy <> nil then
+        begin
+          LPolicyReply := FMailPolicy.EvaluateMailFrom(LAddr,
+            FConn.RemoteAddr.IP);
+          if LPolicyReply <> '' then
+          begin
+            EnqueueStr(LPolicyReply);
+            BeginFlush(stCommand);
+            Exit;
+          end;
+        end;
         FEnvelope.From := LAddr;
         FEnvelope.FromSet := True;
         EnqueueStr('250 2.1.0 Ok' + #13#10);
@@ -467,6 +522,19 @@ begin
           EnqueueStr('501 5.1.3 Bad recipient address syntax' + #13#10);
           BeginFlush(stCommand);
           Exit;
+        end;
+        if FMailPolicy <> nil then
+        begin
+          { RCPT 阶段同步策略(9.5): 收件人入列前判定(如 greylisting 三元组
+            451)。拒绝则该 RCPT 不入列, 客户端可重发该 RCPT 或整体重试。 }
+          LPolicyReply := FMailPolicy.EvaluateRcptTo(FEnvelope.From, LAddr,
+            FConn.RemoteAddr.IP);
+          if LPolicyReply <> '' then
+          begin
+            EnqueueStr(LPolicyReply);
+            BeginFlush(stCommand);
+            Exit;
+          end;
         end;
         SetLength(FEnvelope.Recipients, Length(FEnvelope.Recipients) + 1);
         FEnvelope.Recipients[High(FEnvelope.Recipients)] := LAddr;
