@@ -76,21 +76,31 @@ Conn := ConnectMysql('host=127.0.0.1 port=4000 user=root ' +
 - 多语句 Exec 需 `CLIENT_MULTI_STATEMENTS`，工厂默认携带。
 - OceanBase 的 `SELECT ... FOR UPDATE` 等方言细节不在统一层契约内。
 
-### 2.4 达梦 DM8（ODBC）
+### 2.4 达梦 DM8（ODBC）— P1 ODBC 网关（ADR 0002）
 
 ```pascal
 { DSN-less（推荐）：驱动名以达梦安装的 odbcinst 为准 }
 Conn := ConnectOdbc('Driver=DM8 ODBC DRIVER;Server=127.0.0.1;' +
   'Port=5236;Database=SYSDBA;UID=SYSDBA;PWD=secret');
+{ 池化（Go sql.DB 语义） }
+Pool := DbOpenPool('odbc',
+  'Driver=DM8 ODBC DRIVER;Server=127.0.0.1;Port=5236;Database=SYSDBA;UID=SYSDBA;PWD=secret');
 ```
 
 - 默认端口 5236；驱动管理器 unixODBC（本仓 ODBC 门禁的同款环境）。
 - 统一层走 SQLPrepare/SQLBindParameter 参数化（注入安全），?N 槽位计划
-  与 pg/mysql 同构。
+  与 pg/mysql 同构；亦支持 `DbOpen('odbc', connstr)` 统一工厂形态。
 - 能力预期按 §2.11 诚实降级：**savepoints 不可用**（ISO CLI 无发现机制，
-  BeginTxn 前先确认业务可接受）、语句超时秒粒度向上取整、约束违约归一
-  依赖驱动的 SqlState 质量。
-- 事务面 = AUTOCOMMIT OFF + SQLEndTran；`AImmediate` 参数接受为 no-op。
+  嵌套 `WithTransaction` 将 fail-fast `decNotSupported`，业务需避免嵌套）、
+  `SupportsBatchExecutor=True`（逐条+单事务，精确到步）、
+  `SupportsMultiStatementExec=False`（分号批因驱动而异）、语句超时秒粒度
+  向上取整、约束违约归一依赖驱动的 SqlState 质量（多数 `HY000` 欠归一，
+  `NativeError` 仅透传）。
+- 事务面 = AUTOCOMMIT OFF + SQLEndTran；`AImmediate` 参数接受为 no-op
+ （Oracle 系 `BEGIN IMMEDIATE` 无对应，契约差异登记）。
+- **分阶段**：P1 ODBC 网关零新增代码即 Tier-1 支持（本节）；P2 专用
+  `libdmdpi` 适配器（`dpi_*` 25 符号、`ClassifyDm`、`dbkDm`）仅当触发条件
+  满足时再议（见 ADR 0002：≥2 消费方欠归一阻塞或需 LOB/interval/数组绑定）。
 
 ### 2.5 PolarDB / GoldenDB / TDSQL（双协议形态，选型见 §1）
 
@@ -117,7 +127,7 @@ SQLDriverConnect，本层不解析不改写。个别驱动拒绝 `SQL_ATTR_QUERY
 统一能力自述一律运行时探测：`DbCapabilities(Conn)` 返回
 `IDbCapabilities`，**不要按库名分支**。快速预期：
 
-| 能力 | pg 协议系 | mysql 协议系 | ODBC 网关 |
+| 能力 | pg 协议系 | mysql 协议系 | ODBC 网关* |
 |---|---|---|---|
 | savepoints | ✅ 预期 | ✅ 预期 | ❌（§2.11 降级） |
 | 批执行 IDbBatchExecutor | ✅ 单次往返 | ✅ | ✅ 逐条+单事务 |
@@ -125,6 +135,8 @@ SQLDriverConnect，本层不解析不改写。个别驱动拒绝 `SQL_ATTR_QUERY
 | 语句超时 | ✅ 会话级 | 探测定格（多半忽略） | ✅ 秒粒度逐语句 |
 | 大对象流 | ✅ lo_*（待逐库验证） | ❌ | ❌ |
 | 占位符上限 | 65535 | 65535 | 999 保守下界 |
+
+\* ODBC 网关含达梦 DM8：P1 阶段 `savepoints=false`、`NativeBool=false` 为契约性降级，非缺陷；P2 `libdmdpi` 可使 savepoints/arrayBinding 升格（ADR 0002）。
 
 错误归一现状（原 D 线账本缺口已收口）：MySQL 协议系驱动经 ODBC
 把约束违约报 `HY000+1062` 时，由 ClassifyOdbcEx 按 NativeError
@@ -162,7 +174,7 @@ SQLDriverConnect，本层不解析不改写。个别驱动拒绝 `SQL_ATTR_QUERY
 | `opengauss/opengauss:5.0.0`（2.05GB）| `linux/amd64` | **否**（本次实证直接 `docker pull/run`） | 原生 | `docker run --name og-test -e GS_PASSWORD='Test123@abc' -p 55432:5432 opengauss/opengauss:5.0.0` → 3s `server started` |
 | `kingbase / oceanbase x86` | `amd64` | 否 | 原生 | 同模板 |
 | `pingcap/tidb`（PD+TiKV+TiDB 三件套）| `amd64` | 否，但需 `docker-compose` 编排 | 中等启动成本 | `tiup` 亦可，门禁同前 |
-| `dameng DM8 ARM-only` 等政企交付 | `arm64` only | **是**，`docker run --platform linux/arm64 dameng/dm8` | 慢，仅功能验证 | 务必在结果标注 `emulated` |
+| `dameng/dm8:8.0`（常见 ARM 交付） | `linux/arm64`（部分 x86 镜像需向厂商获取） | **是**（ARM 镜像时）`docker run --platform linux/arm64 --name dm-test -p 5236:5236 --privileged dameng/dm8:8.0` | 慢，仅功能验证 | 需先 `docker pull --platform linux/arm64 ...` 并配置 `odbcinst.ini: Driver=DM8 ODBC DRIVER, Driver=/opt/dmdbms/bin/libdodbc.so`，结果标注 `emulated`；x86 镜像可原生（见厂商下载中心） |
 
 **openGauss 兼容三步**（已脚本化，见 `scripts/verify-national-db.sh` 建议）：
 
@@ -186,9 +198,9 @@ NEXTPAS_PG_TEST_CONN='host=127.0.0.1 port=55432 dbname=postgres user=testuser pa
   PolarDB（PG+X）/ GoldenDB / TDSQL（PG+MySQL）/ 达梦 DM8 / GBase 8s/8a /
   神通——全部按 §1 三档分类并给出连接配方与能力预期，落点本文。
 - **已真机（2026-08-28，Docker）**：**openGauss 5.0.0 x86**（`opengauss/opengauss:5.0.0`，§4.5 三步兼容后 `NEXTPAS_PG_TEST_CONN` 指向 55432）：`test_db_pg 13 passed / conformance 2 passed / trace 5 passed`，方言鸿沟 3 例已诚实记录（`unnest` 多列 / `WITH ORDINALITY` 缺失，array 场景降级为 batch）。
-- **仍理论**：KingbaseES / TiDB / OceanBase / 达梦 等仍为理论预期（无真机），上生产前按 §4 自验。
-- **已收口**：ODBC MySQL 系 `HY000+1062` 欠归一由 D5 `ClassifyOdbcEx` 单调提精收口（仅 MySQL 词元驱动生效，达梦等仍欠归一诚实保留）。
-- **下一步**：D3（mysql 协议系）待 TiDB/OceanBase Docker 编排真机；D4 达梦待 ODBC 网关 + 必要时 ` --platform linux/arm64` QEMU 仿真，结果同模板回填并同步路线图。
+- **仍理论**：KingbaseES / TiDB / OceanBase 仍为理论预期（无真机），上生产前按 §4 自验；**达梦 DM8 已完成 P1 ODBC 网关路径决策（ADR 0002，零新增代码，honest downgrade）**，P2 `libdmdpi` 按需触发。
+- **已收口**：ODBC MySQL 系 `HY000+1062` 欠归一由 D5 `ClassifyOdbcEx` 单调提精收口（仅 MySQL 词元驱动生效，达梦等仍欠归一诚实保留，见 ADR 0002）。
+- **下一步**：D3（mysql 协议系）待 TiDB/OceanBase Docker 编排真机；D4 达梦 P1 已就绪，P2 待消费方触发。
 
 ## 6. 反馈回路
 

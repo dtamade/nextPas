@@ -13,7 +13,7 @@ unit nextpas.core.db.mysql.adapter;
        客户端库转连接字符集文本；截断时按实际长度扩缓冲经
        mysql_stmt_fetch_column 重取。
 
-       双方言 MYSQL_BIND 编组（Oracle 72B / MariaDB 120B，buffer_type
+       双方言 MYSQL_BIND 编组（Oracle 72B / MariaDB 112B，buffer_type
        偏移与宽度不同）在本单元单点实现——A1 ffi 镜像钉死布局，此处
        按 loader 探测的 flavor 选择写法，别处不得触碰原生布局。
 
