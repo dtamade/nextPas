@@ -65,6 +65,12 @@ begin
     dckNone, 'truncated-wrong-value 1366');
   ExpectMy(DB_MYSQL_ER_DATA_TOO_LONG, '22001', decConstraint, dckNone,
     'data-too-long 1406');
+  ExpectMy(DB_MYSQL_ER_CANT_CREATE_TABLE, 'HY000', decCapacity, dckNone,
+    'cant-create-table 1005');
+  ExpectMy(DB_MYSQL_ER_BAD_DB_ERROR, 'HY000', decConnection, dckNone,
+    'bad-db 1049');
+  ExpectMy(DB_MYSQL_ER_UNKNOWN_ERROR, 'HY000', decCapacity, dckNone,
+    'unknown-error 1105');
   { 事务/超时 }
   ExpectMy(DB_MYSQL_ER_LOCK_DEADLOCK, '40001', decTransaction, dckNone,
     'deadlock');
