@@ -11,9 +11,11 @@ program test_ssh_e2e;
     NEXTPAS_SSH_E2E_PORT       默认 22
     NEXTPAS_SSH_E2E_KNOWN_HOSTS  known_hosts 文件（缺省则不做严格校验）
     NEXTPAS_SSH_E2E_RSA_KEYFILE  未加密 OpenSSH RSA 私钥（缺省则跳过 RSA 场景）
+    NEXTPAS_SSH_E2E_ENC_KEYFILE  加密 OpenSSH ed25519 私钥（缺省则跳过加密场景）
+    NEXTPAS_SSH_E2E_ENC_PASSPHRASE 加密私钥口令
 
   场景：exec stdout/exit 码、stderr 分流、同会话多次 exec、
-        错误 known_hosts 必须被 sekHostKey 拒绝。
+        错误 known_hosts 必须被 sekHostKey 拒绝、RSA/加密私钥认证。
   由 run_e2e.sh 编排（remote 直连 / local sshd fixture）；本程序不做门控。
 }
 uses
@@ -30,6 +32,7 @@ const
 var
   GFail: Integer = 0;
   GRsaRan: Boolean = False;
+  GEncRan: Boolean = False;
 
 procedure Fail(const AMsg: string);
 begin
@@ -124,6 +127,32 @@ function ConnectE2E(const AKnownHosts: string): ISshSession;
 begin
   Result := ConnectE2EWithKey(AKnownHosts,
     EnvOr('NEXTPAS_SSH_E2E_KEYFILE', ''));
+end;
+
+function ConnectE2EWithEncKey(const AKnownHosts: string): ISshSession;
+var
+  LBuilder: ISshClientBuilder;
+  LKey: TStringList;
+  LPass: string;
+begin
+  LBuilder := SshClient
+    .Host(EnvOr('NEXTPAS_SSH_E2E_HOST', '127.0.0.1'))
+    .Port(Word(StrToIntDef(EnvOr('NEXTPAS_SSH_E2E_PORT', '22'), 22)))
+    .User(EnvOr('NEXTPAS_SSH_E2E_USER', 'root'))
+    .KnownHostsFile(AKnownHosts)
+    .StrictHostKey(AKnownHosts <> '')
+    .ExecTimeoutMs(30000);
+  LKey := TStringList.Create;
+  try
+    LKey.LoadFromFile(EnvOr('NEXTPAS_SSH_E2E_ENC_KEYFILE', ''));
+    LBuilder := LBuilder.PrivateKeyData(LKey.Text);
+  finally
+    LKey.Free;
+  end;
+  LPass := EnvOr('NEXTPAS_SSH_E2E_ENC_PASSPHRASE', '');
+  if LPass <> '' then
+    LBuilder := LBuilder.PrivateKeyPassphrase(LPass);
+  Result := LBuilder.Connect;
 end;
 
 { 场景 1：exec 收 stdout、exit=0，且同一会话连续两次 exec }
@@ -379,6 +408,42 @@ begin
   end;
 end;
 
+{ 场景 8：加密私钥（aes256-ctr+bcrypt）publickey 认证 + exec。
+  Docker 夹具现场生成 ssh-keygen -t ed25519 -N 'enc-pass-88'，口令经环境变量传递；
+  未提供时 SKIP。}
+procedure ScenarioEncAuth;
+var
+  LSess: ISshSession;
+  LR: TSshExecResult;
+  LKeyFile: string;
+begin
+  LKeyFile := EnvOr('NEXTPAS_SSH_E2E_ENC_KEYFILE', '');
+  if LKeyFile = '' then
+  begin
+    Writeln('[e2e] scenario: encrypted key auth — SKIP (no NEXTPAS_SSH_E2E_ENC_KEYFILE)');
+    Exit;
+  end;
+  GEncRan := True;
+  Writeln('[e2e] scenario: encrypted ed25519 key auth exec');
+  try
+    LSess := ConnectE2EWithEncKey(EnvOr('NEXTPAS_SSH_E2E_KNOWN_HOSTS', ''));
+    try
+      LR := LSess.Exec('echo ' + MARKER);
+      if Pos(MARKER, LR.StdOutText) = 0 then
+        Fail('enc auth stdout missing marker, got "' + Trim(LR.StdOutText) + '"')
+      else if LR.ExitCode <> 0 then
+        Fail('expected exit 0, got ' + IntToStr(LR.ExitCode))
+      else
+        Writeln('[e2e]   ok: encrypted key exec marker, exit=0');
+    finally
+      LSess.Close;
+    end;
+  except
+    on LE: ESSHError do Fail(SshErrorKindName(LE.Kind) + ': ' + LE.Message);
+    on LE: Exception do Fail(LE.ClassName + ': ' + LE.Message);
+  end;
+end;
+
 begin
   try
     if GetEnvironmentVariable('NEXTPAS_SSH_E2E_TRACE') = '1' then
@@ -395,9 +460,10 @@ begin
     ScenarioExecStress;
     ScenarioSftpRoundtrip;
     ScenarioRsaAuth;
+    ScenarioEncAuth;
 
     if GFail = 0 then
-      Writeln('[e2e] PASS (', 6 + Ord(GRsaRan), ' scenarios)')
+      Writeln('[e2e] PASS (', 6 + Ord(GRsaRan) + Ord(GEncRan), ' scenarios)')
     else
       Writeln('[e2e] FAILED: ', GFail, ' failure(s)');
     ExitCode := Ord(GFail > 0);

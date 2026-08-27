@@ -41,8 +41,10 @@ type
     { 密码认证。失败抛 ESSHError(sekAuth)。}
     procedure AuthenticateWithPassword(const AUser, APassword: string);
 
-    { 公钥认证：openssh-key-v1 未加密容器内容（当前支持 ed25519）。}
-    procedure AuthenticateWithPrivateKeyData(const AContent: string);
+    { 公钥认证：openssh-key-v1 容器内容（未加密或 aes256-ctr+bcrypt 加密）。
+      未加密时 APassphrase 被忽略。}
+    procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
+    procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
 
     { 执行一次性命令并收集输出。需已认证。}
     function Exec(const ACommand: string): TSshExecResult;
@@ -66,6 +68,7 @@ type
     function User(const AValue: string): ISshClientBuilder;
     function Password(const AValue: string): ISshClientBuilder;
     function PrivateKeyData(const AValue: string): ISshClientBuilder;
+    function PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
     function KnownHostsFile(const AValue: string): ISshClientBuilder;
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
@@ -154,7 +157,8 @@ type
     function GetServerVersion: string;
     function GetServerHostKeyFingerprint: string;
     procedure AuthenticateWithPassword(const AUser, APassword: string);
-    procedure AuthenticateWithPrivateKeyData(const AContent: string);
+    procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
+    procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
     function Exec(const ACommand: string): TSshExecResult;
     function OpenFileSystem: ISshFileSystem;
     procedure Close;
@@ -170,6 +174,7 @@ type
     function User(const AValue: string): ISshClientBuilder;
     function Password(const AValue: string): ISshClientBuilder;
     function PrivateKeyData(const AValue: string): ISshClientBuilder;
+    function PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
     function KnownHostsFile(const AValue: string): ISshClientBuilder;
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
@@ -405,7 +410,12 @@ begin
   end;
 end;
 
-procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent: string);
+procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent: string); overload;
+begin
+  AuthenticateWithPrivateKeyData(AContent, FOptions.PrivateKeyPassphrase);
+end;
+
+procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
 var
   LR: TsshReader;
   LMsg: TBytes;
@@ -435,7 +445,7 @@ var
 begin
   EnsureHandshaken;
 
-  if not SshLoadPrivateKey(AContent, LKey, LPubBlob) then
+  if not SshLoadPrivateKey(AContent, LKey, LPubBlob, APassphrase) then
     raise ESSHError.Create(sekKeyFormat, 'ssh session: private key parse failed');
 
   case LKey.Kind of
@@ -520,6 +530,12 @@ begin
   Result := Self;
 end;
 
+function TSshClientBuilder.PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
+begin
+  FOptions.PrivateKeyPassphrase := AValue;
+  Result := Self;
+end;
+
 function TSshClientBuilder.KnownHostsFile(const AValue: string): ISshClientBuilder;
 begin
   FOptions.KnownHostsFile := AValue;
@@ -556,7 +572,8 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh connect: user is required');
   ASession.FActiveUser := AOptions.User;
   if AOptions.PrivateKeyData <> '' then
-    ASession.AuthenticateWithPrivateKeyData(AOptions.PrivateKeyData)
+    ASession.AuthenticateWithPrivateKeyData(AOptions.PrivateKeyData,
+      AOptions.PrivateKeyPassphrase)
   else
     ASession.AuthenticateWithPassword(AOptions.User, AOptions.Password);
 end;

@@ -134,11 +134,27 @@ lane 基于旧基建开发，replay 到当前 main（net.async/io.reactor 新栈
       test_ssh_session 假服务端 RSA 真实验签回环；e2e 第七场景
       ssh-keygen 现场生成 RSA 密钥对真实 sshd 认证 exec
 
+## S10 — 加密私钥解密（已完成）
+
+OpenSSH 加密私钥容器（bcrypt_pbkdf + AES-256-CTR）落地，闭环 ssh-keygen 生成→解密→签名→真实 sshd 认证：
+
+- [x] `blowfish`/`bcrypt_pbkdf`：OpenBSD blowfish.c / bcrypt_pbkdf.c 权威语义——
+      InitState pi 常量程序化提取、Stream2Word 循环大端、ExpandState 流归属（初始 P XOR 用 key 流、链式回填 XOR 用 data 流）、
+      EncryptBlock 教科书 16 轮+swap+XR^P[16]/XL^P[17]；零密钥向量 4EF99745 6198DD78 已验证；bcrypt 64 轮扩张与 64 轮魔串加密、半块字节序 out[4i+3]=字>>24
+- [x] `bcrypt_pbkdf`：python-bcrypt 5.0.0 五向量交叉验证（48/16、48/64、32/100、72/5、16/1），
+      常量进 tests/shared/ssh_bcrypt_kat
+- [x] `cipher`：TAesCtrStream 复用暴露 SshAesCtrCrypt（AES-256-CTR，IV 作初始计数器）
+- [x] `keys`：openssh-key-v1 加密容器解析（cipher aes256-ctr / kdf bcrypt / kdfoptions salt+rounds）→
+      bcrypt_pbkdf(pass, salt, 48, rounds) → key(32)+iv(16) → AES-256-CTR 解密 priv section → 复用 checkint/ed25519/rsa 解析路径；
+      口令 API：SshLoadPrivateKey 增加 Passphrase 参数、TSshConnectOptions.PrivateKeyPassphrase、ISshSession.AuthenticateWithPrivateKeyData 过载、SshClient.PrivateKeyPassphrase builder
+- [x] 测试四线闭环：test_ssh_keys 五向量 KAT + 加密 ed25519/rsa 容器自构造往返（含错误口令 checkint 拒绝与 CTR 往返）；
+      test_ssh_session 假服务端加密密钥认证回环；e2e 第八场景 ssh-keygen -t ed25519 -N 口令 生成真实加密密钥对 Docker/remote sshd 认证
+- [x] 文档收口：README 已知限制移除加密容器行，goal-tree 后续 slice 表移除该项
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| bcrypt_pbkdf + aes256-ctr 私钥解密 | OpenSSH 加密私钥容器（需要 blowfish 核心） |
 | RSA 签名 CRT 优化 | 用容器自带 iqmp/p/q 做中国剩余定理，模幂量减 ~4x |
 | ecdsa-sha2-nistp256 主机密钥 | 枚举已预留，需 mpint(r,s)↔DER 转换 |
 | DH group14-sha256 KEX | bigint modpow 可用，作为 curve25519 不可用时的回退 |
@@ -149,7 +165,7 @@ lane 基于旧基建开发，replay 到当前 main（net.async/io.reactor 新栈
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证**
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥**
 补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均
-7 场景通过（含通道复用压力、internal-sftp 文件操作回路与 RSA publickey 认证），
+8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA publickey 与加密私钥认证），
 heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。

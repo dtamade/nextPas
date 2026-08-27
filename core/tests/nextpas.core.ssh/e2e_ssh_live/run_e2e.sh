@@ -75,8 +75,10 @@ run_docker() {
   ssh-keygen -q -t ed25519 -N '' -f "$TMP/host_ed25519"      || fail "host keygen"
   ssh-keygen -q -t ed25519 -N '' -f "$TMP/client_key"        || fail "client keygen"
   ssh-keygen -q -t rsa -b 2048 -N '' -f "$TMP/client_rsa_key" || fail "rsa client keygen"
+  ssh-keygen -q -t ed25519 -N 'enc-pass-88' -f "$TMP/client_enc_key" || fail "enc client keygen"
   cp "$TMP/client_key.pub" "$TMP/authorized_keys"
   cat "$TMP/client_rsa_key.pub" >> "$TMP/authorized_keys"
+  cat "$TMP/client_enc_key.pub" >> "$TMP/authorized_keys"
   cp "$DIR/sshd_e2e_config" "$TMP/sshd_config"
   mkdir -p "$TMP/stage"
   mv "$TMP/sshd_config" "$TMP/host_ed25519" "$TMP/authorized_keys" "$TMP/stage/"
@@ -114,6 +116,8 @@ run_docker() {
   export NEXTPAS_SSH_E2E_USER=root
   export NEXTPAS_SSH_E2E_KEYFILE="$TMP/client_key"
   export NEXTPAS_SSH_E2E_RSA_KEYFILE="$TMP/client_rsa_key"
+  export NEXTPAS_SSH_E2E_ENC_KEYFILE="$TMP/client_enc_key"
+  export NEXTPAS_SSH_E2E_ENC_PASSPHRASE='enc-pass-88'
   export NEXTPAS_SSH_E2E_KNOWN_HOSTS="$TMP/known_hosts"
   echo "[e2e] docker fixture ready: root@127.0.0.1:$PORT (container $CNAME)"
   rc=0
