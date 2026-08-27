@@ -121,6 +121,9 @@ procedure ResPackFreeBlob(var ABlob: TResPackBlob);
 
 implementation
 
+uses
+  nextpas.core.base.pathvalid;
+
 function RdU16LE(AData: PByte): Word;
 begin
   Result := Word(AData[0]) or (Word(AData[1]) shl 8);
@@ -174,96 +177,10 @@ begin
   Result := H;
 end;
 
-function ResPackUtf8Valid(const S: string): Boolean;
-var
-  I, N: Integer;
-  B, Cont: Byte;
-  Need: Integer;
-begin
-  { 轻量 UTF-8 结构校验（Go utf8.ValidString 对等语义） }
-  Result := False;
-  N := Length(S);
-  if N = 0 then
-    Exit(True);
-  I := 1;
-  while I <= N do
-  begin
-    B := Byte(S[I]);
-    if B < $80 then
-    begin
-      Inc(I);
-      Continue;
-    end
-    else if (B and $E0) = $C0 then
-    begin
-      Need := 1;
-      if (B and $1E) = 0 then Exit(False);  { 过长编码 C0/C1 }
-    end
-    else if (B and $F0) = $E0 then
-      Need := 2
-    else if (B and $F8) = $F0 then
-    begin
-      Need := 3;
-      if B > $F4 then Exit(False);          { > U+10FFFF 首字节 }
-    end
-    else
-      Exit(False);
-    if I + Need > N then
-      Exit(False);
-    for Cont := 1 to Need do
-    begin
-      if (Byte(S[I + Cont]) and $C0) <> $80 then
-        Exit(False);
-    end;
-    { 排除代理区与过长编码边界值 }
-    if (Need = 2) and (B = $E0) and (Byte(S[I + 1]) < $A0) then
-      Exit(False);
-    if (Need = 3) and ((B = $F0) and (Byte(S[I + 1]) < $90)) then
-      Exit(False);
-    if (Need = 3) and (B = $F4) and (Byte(S[I + 1]) >= $90) then
-      Exit(False);
-    Inc(I, Need + 1);
-  end;
-  Result := True;
-end;
-
 function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean;
-var
-  Start, I, N, SegLen: Integer;
 begin
-  Result := False;
-  if not ResPackUtf8Valid(APath) then
-    Exit;
-  if APath = '.' then
-    Exit(not AFileEntry);   { '.' 仅表根；文件条目非法 }
-  if Length(APath) = 0 then
-    Exit;
-  if (APath[1] = '/') or (APath[Length(APath)] = '/') then
-    Exit;
-  N := Length(APath);
-  Start := 1;
-  for I := 1 to N + 1 do
-  begin
-    if (I > N) or (APath[I] = '/') then
-    begin
-      SegLen := I - Start;
-      if SegLen = 0 then
-        Exit; { empty segment: 'a//b' }
-      if SegLen = 1 then
-      begin
-        if APath[Start] = '.' then
-          Exit; { single dot segment }
-      end
-      else if SegLen = 2 then
-      begin
-        if (APath[Start] = '.') and (APath[Start + 1] = '.') then
-          Exit; { parent segment }
-      end;
-      Start := I + 1;
-    end;
-  end;
-  Result := True;
+  Result := BaseValidPath(APath, not AFileEntry);
 end;
 
 function ResPackDefaultOptions: TResPackBuildOptions;

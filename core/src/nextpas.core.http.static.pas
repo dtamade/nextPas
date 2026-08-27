@@ -91,7 +91,8 @@ uses
   nextpas.core.vfs.errors,
   nextpas.core.http.base,
   nextpas.core.http.url,
-  nextpas.core.http.message;
+  nextpas.core.http.message,
+  nextpas.core.http.mime;
 
 type
   TResponseWriterAdapter = class(TInterfacedObject, IWriter)
@@ -132,120 +133,6 @@ begin
     Result := '0' + Chr(Ord('0') + AVal)
   else
     Result := Chr(Ord('0') + AVal div 10) + Chr(Ord('0') + AVal mod 10);
-end;
-
-function ExtractExt(const APath: string): string;
-var
-  LI: SizeInt;
-begin
-  for LI := Length(APath) downto 1 do
-  begin
-    if APath[LI] = '.' then
-      Exit(System.Copy(APath, LI, Length(APath) - LI + 1));
-    if APath[LI] = '/' then
-      Exit('');
-  end;
-  Result := '';
-end;
-
-function SameExt(const AExt, ACanon: string): Boolean; inline;
-var
-  I: Integer;
-  CA: Char;
-begin
-  if Length(AExt) <> Length(ACanon) then
-    Exit(False);
-  for I := 1 to Length(AExt) do
-  begin
-    CA := AExt[I];
-    if (CA >= 'A') and (CA <= 'Z') then
-      CA := Chr(Ord(CA) or $20);
-    if CA <> ACanon[I] then
-      Exit(False);
-  end;
-  Result := True;
-end;
-
-function MimeTypeFromExt(const AExt: string): string;
-begin
-  { Zero-alloc case-insensitive compare — avoids LowerCase heap alloc per request }
-  { Text / markup }
-  if SameExt(AExt, '.html') then Result := 'text/html; charset=utf-8'
-  else if SameExt(AExt, '.htm') then Result := 'text/html; charset=utf-8'
-  else if SameExt(AExt, '.css') then Result := 'text/css; charset=utf-8'
-  else if SameExt(AExt, '.txt') then Result := 'text/plain; charset=utf-8'
-  else if SameExt(AExt, '.csv') then Result := 'text/csv; charset=utf-8'
-  else if SameExt(AExt, '.md') then Result := 'text/markdown; charset=utf-8'
-  else if SameExt(AExt, '.xml') then Result := 'application/xml'
-  else if SameExt(AExt, '.svg') then Result := 'image/svg+xml'
-  { JavaScript / JSON / WebAssembly }
-  else if SameExt(AExt, '.js') then Result := 'application/javascript; charset=utf-8'
-  else if SameExt(AExt, '.mjs') then Result := 'application/javascript; charset=utf-8'
-  else if SameExt(AExt, '.json') then Result := 'application/json; charset=utf-8'
-  else if SameExt(AExt, '.jsonld') then Result := 'application/ld+json'
-  else if SameExt(AExt, '.wasm') then Result := 'application/wasm'
-  { Images }
-  else if SameExt(AExt, '.png') then Result := 'image/png'
-  else if SameExt(AExt, '.jpg') then Result := 'image/jpeg'
-  else if SameExt(AExt, '.jpeg') then Result := 'image/jpeg'
-  else if SameExt(AExt, '.gif') then Result := 'image/gif'
-  else if SameExt(AExt, '.webp') then Result := 'image/webp'
-  else if SameExt(AExt, '.avif') then Result := 'image/avif'
-  else if SameExt(AExt, '.ico') then Result := 'image/x-icon'
-  else if SameExt(AExt, '.bmp') then Result := 'image/bmp'
-  else if SameExt(AExt, '.tiff') then Result := 'image/tiff'
-  else if SameExt(AExt, '.tif') then Result := 'image/tiff'
-  else if SameExt(AExt, '.heic') then Result := 'image/heic'
-  else if SameExt(AExt, '.heif') then Result := 'image/heif'
-  else if SameExt(AExt, '.apng') then Result := 'image/apng'
-  { Fonts }
-  else if SameExt(AExt, '.woff') then Result := 'font/woff'
-  else if SameExt(AExt, '.woff2') then Result := 'font/woff2'
-  else if SameExt(AExt, '.ttf') then Result := 'font/ttf'
-  else if SameExt(AExt, '.otf') then Result := 'font/otf'
-  else if SameExt(AExt, '.eot') then Result := 'application/vnd.ms-fontobject'
-  { Audio / Video }
-  else if SameExt(AExt, '.mp3') then Result := 'audio/mpeg'
-  else if SameExt(AExt, '.ogg') then Result := 'audio/ogg'
-  else if SameExt(AExt, '.opus') then Result := 'audio/opus'
-  else if SameExt(AExt, '.wav') then Result := 'audio/wav'
-  else if SameExt(AExt, '.flac') then Result := 'audio/flac'
-  else if SameExt(AExt, '.aac') then Result := 'audio/aac'
-  else if SameExt(AExt, '.mp4') then Result := 'video/mp4'
-  else if SameExt(AExt, '.webm') then Result := 'video/webm'
-  else if SameExt(AExt, '.ogv') then Result := 'video/ogg'
-  else if SameExt(AExt, '.avi') then Result := 'video/x-msvideo'
-  else if SameExt(AExt, '.mov') then Result := 'video/quicktime'
-  else if SameExt(AExt, '.mkv') then Result := 'video/x-matroska'
-  { Documents }
-  else if SameExt(AExt, '.pdf') then Result := 'application/pdf'
-  else if SameExt(AExt, '.doc') then Result := 'application/msword'
-  else if SameExt(AExt, '.docx') then Result := 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  else if SameExt(AExt, '.xls') then Result := 'application/vnd.ms-excel'
-  else if SameExt(AExt, '.xlsx') then Result := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  else if SameExt(AExt, '.ppt') then Result := 'application/vnd.ms-powerpoint'
-  else if SameExt(AExt, '.pptx') then Result := 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  { Archives }
-  else if SameExt(AExt, '.zip') then Result := 'application/zip'
-  else if SameExt(AExt, '.gz') then Result := 'application/gzip'
-  else if SameExt(AExt, '.tar') then Result := 'application/x-tar'
-  else if SameExt(AExt, '.bz2') then Result := 'application/x-bzip2'
-  else if SameExt(AExt, '.7z') then Result := 'application/x-7z-compressed'
-  else if SameExt(AExt, '.rar') then Result := 'application/vnd.rar'
-  { Streaming / manifest }
-  else if SameExt(AExt, '.m3u8') then Result := 'application/vnd.apple.mpegurl'
-  else if SameExt(AExt, '.mpd') then Result := 'application/dash+xml'
-  else if SameExt(AExt, '.ts') then Result := 'video/mp2t'
-  { Data interchange }
-  else if SameExt(AExt, '.yaml') then Result := 'application/yaml'
-  else if SameExt(AExt, '.yml') then Result := 'application/yaml'
-  else if SameExt(AExt, '.toml') then Result := 'application/toml'
-  else if SameExt(AExt, '.geojson') then Result := 'application/geo+json'
-  { Web manifests }
-  else if SameExt(AExt, '.webmanifest') then Result := 'application/manifest+json'
-  else if SameExt(AExt, '.webapp') then Result := 'application/x-web-app-manifest+json'
-  { Fallback }
-  else Result := 'application/octet-stream';
 end;
 
 { Returns True if the relative path is safe (no traversal).
@@ -790,7 +677,7 @@ procedure ServeFileContentEx(const AFilePath: string;
   const ADownloadName, ACacheControl: string);
 var
   LInfo: TFileInfo;
-  LExt, LMime, LETag, LLastModified: string;
+  LMime, LETag, LLastModified: string;
   LFileSize: Int64;
 begin
   try
@@ -806,8 +693,7 @@ begin
       Exit;
     end;
     LFileSize := LInfo.Size;
-    LExt := ExtractExt(AFilePath);
-    LMime := MimeTypeFromExt(LExt);
+    LMime := HttpMimeFromPath(AFilePath);
     LETag := GenerateETag(LFileSize, LInfo.ModTime);
     LLastModified := FormatHttpDate(FileModTimeToUnixSeconds(LInfo.ModTime));
     HttpServeStaticStream(AReq, AW, LFileSize, LETag, LLastModified, LMime, ACacheControl,
@@ -929,7 +815,7 @@ begin
       LLastModified := FormatHttpDate(LModTimeUnix)
     else
       LLastModified := '';
-    LMime := MimeTypeFromExt(ExtractExt(AVfsPath));
+    LMime := HttpMimeFromPath(AVfsPath);
     HttpServeStaticStream(AReq, AW, LInfo.Info.Size, LETag, LLastModified, LMime, ACacheControl, LModTimeUnix,
       function: IStream
       begin
