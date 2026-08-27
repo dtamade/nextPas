@@ -65,6 +65,10 @@ strip_comments() {
 for token in DynLibs ctypes BaseUnix Windows Unix; do
   for f in "$SRC"/nextpas.core.webview*.pas; do
     [[ -e "$f" ]] || continue
+    # win 壳（gtk.win / webview2.win）是窗口真相的 FFI 宿主，允许直接 Windows/Win32 API
+    if [[ "$token" == "Windows" && "$(basename "$f")" == *".win.pas" ]]; then
+      continue
+    fi
     hits="$(strip_comments "$f" | grep -Ec "\b${token}\b" || true)"
     if [[ "$hits" -ne 0 ]]; then
       echo "FAIL: raw host unit token '$token' in $(basename "$f") (INV-5), $hits hit(s)"

@@ -31,6 +31,8 @@ type
   private
     FOptions: TWebviewOptions;
     FClosed: Boolean;
+    FWin: Pointer;
+    FVisible: Boolean;
   public
     constructor Create(const AOptions: TWebviewOptions);
     destructor Destroy; override;
@@ -87,7 +89,8 @@ function WebView2LiveWindowCount: Integer;
 implementation
 
 uses
-  nextpas.core.webview.webview2.loader;
+  nextpas.core.webview.webview2.loader,
+  nextpas.core.webview.webview2.win;
 
 var
   GLive: Integer = 0;
@@ -100,6 +103,7 @@ end;
 constructor TWebView2Webview.Create(const AOptions: TWebviewOptions);
 var
   LInfo: TWebView2LoadInfo;
+  LGeo: TWin32ShellGeometry;
 begin
   CheckWebviewOptions(AOptions);
   if not TryLoadWebView2(LInfo) then
@@ -108,15 +112,26 @@ begin
   FOptions := AOptions;
   FClosed := False;
   Inc(GLive);
+  LGeo.Title := FOptions.Title;
+  LGeo.Width := FOptions.Width;
+  LGeo.Height := FOptions.Height;
+  LGeo.Resizable := FOptions.Resizable;
+  LGeo.StartMaximized := FOptions.Maximized;
+  FWin := Win32ShellCreate(LGeo);
   { 真实 controller 创建位：Environment → Controller → WebView，
-    绑定 bridge 脚本、scheme、ExecuteScript 回调。当前桩不创建
-    原生窗口，RunLoop 侧不阻塞；factory 已保证仅 Windows/wine 分支
-    进入，Linux 原生此构造永不触达（WebviewBackendAvailable 为 False）。 }
+    绑定 bridge 脚本、scheme、ExecuteScript 回调。当前桩已创建
+    原生 Win32 窗口（wine 可见），WebView2 controller 待 Edge
+    runtime 接线；RunLoop 侧由 Win32 消息泵驱动。 }
 end;
 
 destructor TWebView2Webview.Destroy;
 begin
-  if not FClosed then Dec(GLive);
+  if not FClosed then
+  begin
+    Dec(GLive);
+    if FWin <> nil then
+      Win32ShellDestroy(FWin);
+  end;
   inherited Destroy;
 end;
 
@@ -142,6 +157,11 @@ begin
   if FClosed then Exit;
   FClosed := True;
   Dec(GLive);
+  if FWin <> nil then
+  begin
+    Win32ShellDestroy(FWin);
+    FWin := nil;
+  end;
 end;
 function TWebView2Webview.IsClosed: Boolean;
 begin
@@ -150,23 +170,31 @@ end;
 procedure TWebView2Webview.Show;
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
+  FVisible := True;
+  if FWin <> nil then Win32ShellShow(FWin);
 end;
 procedure TWebView2Webview.Hide;
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
+  FVisible := False;
+  if FWin <> nil then Win32ShellHide(FWin);
 end;
 function TWebView2Webview.IsVisible: Boolean;
 begin
-  Result := not FClosed;
+  if FClosed then Exit(False);
+  if FWin <> nil then Result := Win32ShellIsVisible(FWin)
+  else Result := FVisible;
 end;
 procedure TWebView2Webview.Focus;
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
+  if FWin <> nil then Win32ShellFocus(FWin);
 end;
 procedure TWebView2Webview.SetTitle(const ATitle: string);
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
   FOptions.Title := ATitle;
+  if FWin <> nil then Win32ShellSetTitle(FWin, ATitle);
 end;
 function TWebView2Webview.GetTitle: string;
 begin
@@ -176,6 +204,7 @@ procedure TWebView2Webview.SetBounds(AWidth, AHeight: Integer);
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
   FOptions.Width := AWidth; FOptions.Height := AHeight;
+  if FWin <> nil then Win32ShellResize(FWin, AWidth, AHeight);
 end;
 function TWebView2Webview.GetWidth: Integer;
 begin
@@ -194,15 +223,18 @@ procedure TWebView2Webview.Maximize;
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
   FOptions.Maximized := True;
+  if FWin <> nil then Win32ShellMaximize(FWin);
 end;
 procedure TWebView2Webview.Unmaximize;
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
   FOptions.Maximized := False;
+  if FWin <> nil then Win32ShellUnmaximize(FWin);
 end;
 function TWebView2Webview.IsMaximized: Boolean;
 begin
-  Result := FOptions.Maximized;
+  if FWin <> nil then Result := Win32ShellIsMaximized(FWin)
+  else Result := FOptions.Maximized;
 end;
 procedure TWebView2Webview.Minimize;
 begin
@@ -234,7 +266,8 @@ begin
 end;
 function TWebView2Webview.GetScaleFactor: Double;
 begin
-  Result := 1.0;
+  if FWin <> nil then Result := Win32ShellScaleFactor(FWin)
+  else Result := 1.0;
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
@@ -306,7 +339,8 @@ begin
 end;
 function TWebView2Webview.NativeHandle: TWebviewNativeHandle;
 begin
-  Result := nil;
+  if FWin <> nil then Result := Win32ShellNativeHandle(FWin)
+  else Result := nil;
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
