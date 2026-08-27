@@ -16,6 +16,7 @@ uses
   nextpas.core.vfs,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
+  nextpas.core.webview.mime,
   nextpas.core.webview.fake,
   nextpas.core.webview.factory,
   nextpas.core.webview.vfs;
@@ -105,6 +106,7 @@ function CreateFakeWebview(const AOptions: TWebviewOptions): IWebviewWindow; inl
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow; inline;
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider; inline;
+function GuessWebviewMime(const APath: string): string; inline;
 
 procedure WebviewRunLoop; inline;
 procedure WebviewExitLoop; inline;
@@ -150,6 +152,11 @@ end;
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider;
 begin
   Result := nextpas.core.webview.vfs.CreateVfsAssetProvider(AVfs);
+end;
+
+function GuessWebviewMime(const APath: string): string;
+begin
+  Result := nextpas.core.webview.mime.GuessWebviewMime(APath);
 end;
 
 procedure WebviewRunLoop;

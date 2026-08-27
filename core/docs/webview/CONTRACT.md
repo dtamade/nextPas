@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.7（S12——高级感/性能/稳定性三轴打磨：demo 深/浅双主题+玻璃拟态+性能徽标；资产路由索引化（最长前缀首命中）+ MIME 二分表（12 项）；TryDecodeFrame 2MiB 守卫 + HasError 校验；Builder 重复/空 handler 互斥校验强化；bench 回归 SmallHit 718ns/Fallback 904ns/Miss 218ns 全绿）\n**承接**：1.6（S11——`webview.vfs` 公共适配器 `CreateVfsAssetProvider(IVfs)` 抽离
+**版本**：1.8（S13——复用/稳定性/高级感收口：MIME 共享单元抽取（`webview.mime` 二分表唯一事实源，`vfs` 归一复用）、bridge fuzz 3 用例（oversized 2MiB/HasError/语料 10）+ Builder 校验回退覆盖、demo a11y（focus-visible/reduced-motion/aria-live/键盘回车/系统主题 change 监听）与 bench 17 用例全绿）
+**承接**：1.7（S12——高级感/性能/稳定性三轴打磨：demo 深/浅双主题+玻璃拟态+性能徽标；资产路由索引化（最长前缀首命中）+ MIME 二分表（12 项）；TryDecodeFrame 2MiB 守卫 + HasError 校验；Builder 重复/空 handler 互斥校验强化；bench 回归 SmallHit 718ns/Fallback 904ns/Miss 218ns 全绿）\n**承接**：1.6（S11——`webview.vfs` 公共适配器 `CreateVfsAssetProvider(IVfs)` 抽离
 （`demo_webview_respack` 私有实现收敛为家族唯一收口，TVfs 前缀容错双试 + MIME 快表）、
 `test_webview_vfs` 6 用例门禁、依赖方向 `vfs` 纳入 INV-4、bench `bench_vfs`
 基线（SmallHit 766ns/1.3M ops、1M 800µs/1.22GB/s）；承 S10 Builder 三形态、
@@ -28,6 +29,7 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 | `nextpas.core.webview.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`），版本探测 4.1→4.0 | W1 |
 | `nextpas.core.webview.gtk.win` | **内缝** | 窗口壳操作的纯函数式内部实现（无 webview 概念）；**窗口模块抽取预备缝**，见 §1.1 | W1 |
 | `nextpas.core.webview.gtk` | 后端 | Linux 实现：窗口壳、scheme、idle dispatch、WebKitGTK 信号桥接 | W1 |
+| `nextpas.core.webview.mime` | 共享 | MIME 二分快表（12 项，vfs/未来 provider 唯一事实源） | S13 |
 | `nextpas.core.webview.vfs` | 适配 | `IVfs → IWebviewAssetProvider`（respack/vfs 集成，CONTRACT §3.4 唯一收口） | S11 |
 | `nextpas.core.webview.factory` | 工厂 | 后端注册/探测/选择 + `TWebviewBuilder` | W1 |
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
@@ -37,7 +39,7 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 ### 依赖方向
 
 ```
-base ← intf ← bridge ← {gtk, fake, vfs} ← factory ← 门面
+base ← intf ← {bridge, mime} ← {gtk, fake, vfs} ← factory ← 门面
                     └── (webview2/wk 同 gtk 位)
 gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
 ```
