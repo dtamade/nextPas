@@ -76,6 +76,7 @@ type
     QuicParams: TQuicClientParams;
     BindAddr: string;
     TickIntervalMs: UInt32;
+    ObfsPassword: string;
     class function Create(const ALoop: TAsyncLoop; const AHost: string;
       APort: UInt16): TQuicSessionParams; static;
     function Normalized: TQuicSessionParams;
@@ -86,6 +87,7 @@ type
     function StreamId: UInt64;
     function IsUnidirectional: Boolean;
     procedure Reset(AErrorCode: UInt64);
+    procedure InjectData(const AData: TBytes; AFin: Boolean);
   end;
 
   IQuicSession = interface
@@ -113,6 +115,8 @@ type
     procedure HookWritable(AHandler: TOnQuicWritable);
     function UnderlyingConn: TQuicClientConnection;
     function UnderlyingUdp: IAsyncUdpSocket;
+    function FindStream(AStreamId: UInt64): IQuicStream;
+    procedure Pump;
   end;
 
 function CreateQuicSession(const ALoop: TAsyncLoop): IQuicSession;
@@ -120,7 +124,9 @@ function CreateQuicSession(const ALoop: TAsyncLoop): IQuicSession;
 implementation
 
 uses
-  nextpas.core.net.quic.varint;
+  nextpas.core.net.quic.varint,
+  nextpas.core.hash.blake2b,
+  nextpas.core.crypto.random;
 
 type
   TQuicSession = class;
@@ -197,6 +203,7 @@ type
     function StreamId: UInt64;
     function IsUnidirectional: Boolean;
     procedure Reset(AErrorCode: UInt64);
+    procedure InjectData(const AData: TBytes; AFin: Boolean);
     procedure NotifyEof;
     procedure NotifyReset;
   end;
@@ -492,6 +499,11 @@ begin
   end;
 end;
 
+procedure TQuicStreamAdapter.InjectData(const AData: TBytes; AFin: Boolean);
+begin
+  DeliverData(AData, AFin);
+end;
+
 procedure TQuicStreamAdapter.DeliverData(const AData: TBytes; AFin: Boolean);
 var
   LOld, LI: Integer;
@@ -612,6 +624,53 @@ end;
 class function TQuicSession.NowUs: UInt64;
 begin
   Result := GetTickCount64 * 1000;
+end;
+
+const
+  cQuicSalamanderSaltLen = 8;
+
+procedure QuicSalamanderPasswordBytes(const APassword: string; out AOut: TBytes);
+begin
+  AOut := nil;
+  if Length(APassword) = 0 then Exit;
+  SetLength(AOut, Length(APassword));
+  Move(APassword[1], AOut[0], Length(APassword));
+end;
+
+function QuicSalamanderKey(const APassword: string; const ASalt: TBytes): TBLAKE2b256Digest;
+var LCat, LPw: TBytes;
+begin
+  QuicSalamanderPasswordBytes(APassword, LPw);
+  SetLength(LCat, Length(LPw) + Length(ASalt));
+  if Length(LPw) > 0 then Move(LPw[0], LCat[0], Length(LPw));
+  if Length(ASalt) > 0 then Move(ASalt[0], LCat[Length(LPw)], Length(ASalt));
+  if Length(LCat) = 0 then Result := BLAKE2b256Of(LCat, 0)
+  else Result := BLAKE2b256Of(LCat[0], Length(LCat));
+end;
+
+function QuicSalamanderSeal(const APassword: string; const APlain: TBytes): TBytes;
+var LSalt: TBytes; LKey: TBLAKE2b256Digest; LI: Integer;
+begin
+  Result := nil;
+  SetLength(LSalt, cQuicSalamanderSaltLen);
+  if not SecureRandomBytes(@LSalt[0], cQuicSalamanderSaltLen) then Exit;
+  LKey := QuicSalamanderKey(APassword, LSalt);
+  SetLength(Result, cQuicSalamanderSaltLen + Length(APlain));
+  Move(LSalt[0], Result[0], cQuicSalamanderSaltLen);
+  for LI := 0 to Length(APlain)-1 do Result[cQuicSalamanderSaltLen+LI] := APlain[LI] xor LKey[LI mod BLAKE2B256_DIGEST_SIZE];
+end;
+
+function QuicSalamanderOpen(const APassword: string; const AWire: TBytes): TBytes;
+var LSalt: TBytes; LKey: TBLAKE2b256Digest; LI, LPay: Integer;
+begin
+  Result := nil;
+  if Length(AWire) <= cQuicSalamanderSaltLen then Exit;
+  SetLength(LSalt, cQuicSalamanderSaltLen);
+  Move(AWire[0], LSalt[0], cQuicSalamanderSaltLen);
+  LKey := QuicSalamanderKey(APassword, LSalt);
+  LPay := Length(AWire) - cQuicSalamanderSaltLen;
+  SetLength(Result, LPay);
+  for LI := 0 to LPay-1 do Result[LI] := AWire[cQuicSalamanderSaltLen+LI] xor LKey[LI mod BLAKE2B256_DIGEST_SIZE];
 end;
 
 procedure TQuicSession.MarkClosed(const AReason: string);
@@ -752,11 +811,19 @@ end;
 procedure TQuicSession.SendDgram(const ADgram: TBytes);
 var
   LCtx: PSendCtx;
+  LWire: TBytes;
 begin
   if (FUdp = nil) or (Length(ADgram) = 0) then
     Exit;
   New(LCtx);
-  LCtx^.Buf := Copy(ADgram, 0, Length(ADgram));
+  if FParams.ObfsPassword <> '' then
+  begin
+    LWire := QuicSalamanderSeal(FParams.ObfsPassword, ADgram);
+    if Length(LWire) = 0 then begin Dispose(LCtx); Exit; end;
+    LCtx^.Buf := LWire;
+  end
+  else
+    LCtx^.Buf := Copy(ADgram, 0, Length(ADgram));
   if not FUdp.AsyncSendTo(@LCtx^.Buf[0], UInt32(Length(LCtx^.Buf)),
     FPeerAddr, @TQuicSession.SentCb, LCtx) then
     Dispose(LCtx);
@@ -800,6 +867,16 @@ begin
   end;
   SetLength(LDgram, ABytes);
   Move(LSess.FRxBuf[0], LDgram[0], ABytes);
+  if LSess.FParams.ObfsPassword <> '' then
+  begin
+    LDgram := QuicSalamanderOpen(LSess.FParams.ObfsPassword, LDgram);
+    if Length(LDgram) = 0 then
+    begin
+      LSess.ArmRecv;
+      LSess.ScheduleTick;
+      Exit;
+    end;
+  end;
   if (LSess.FConn <> nil) and not LSess.FConn.OnDatagram(LDgram) then
   begin
     LSess.MarkClosed(LSess.FConn.LastError);
@@ -1146,6 +1223,26 @@ end;
 function TQuicSession.UnderlyingUdp: IAsyncUdpSocket;
 begin
   Result := FUdp;
+end;
+
+procedure TQuicSession.Pump;
+begin
+  if FConn <> nil then
+  begin
+    FConn.OnTimer(NowUs);
+    DrainOutbound;
+    CheckConnPhase;
+  end;
+end;
+
+function TQuicSession.FindStream(AStreamId: UInt64): IQuicStream;
+var
+  LI: Integer;
+begin
+  Result := nil;
+  for LI := 0 to High(FStreams) do
+    if FStreams[LI].StreamId = AStreamId then
+      Exit(FStreams[LI] as IQuicStream);
 end;
 
 function CreateQuicSession(const ALoop: TAsyncLoop): IQuicSession;
