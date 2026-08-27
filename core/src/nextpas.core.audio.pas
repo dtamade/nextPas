@@ -24,8 +24,10 @@ uses
   nextpas.core.audio.dsp.fft,
   nextpas.core.audio.device.intf,
   nextpas.core.audio.device.null,
+  nextpas.core.audio.timeline.intf,
   nextpas.core.audio.game.intf,
   nextpas.core.audio.graph.intf,
+  nextpas.core.audio.timeline,
   nextpas.core.audio.game,
   nextpas.core.audio.graph,
   nextpas.core.audio.player;
@@ -75,6 +77,7 @@ type
   TGameSfxId = nextpas.core.audio.game.intf.TGameSfxId;
   TGameVoiceId = nextpas.core.audio.game.intf.TGameVoiceId;
   TGamePlayParams = nextpas.core.audio.game.intf.TGamePlayParams;
+  IAudioTimeline = nextpas.core.audio.timeline.intf.IAudioTimeline;
   IGameAudio = nextpas.core.audio.game.intf.IGameAudio;
   TGraphState = nextpas.core.audio.graph.intf.TGraphState;
   IAudioGraph = nextpas.core.audio.graph.intf.IAudioGraph;
@@ -147,6 +150,7 @@ function CreateAudioPlayer(const ADevice: IAudioDevice; const AGraph: IAudioGrap
 function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat): IAudioPlayer; inline;
 function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline;
+function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -364,6 +368,9 @@ begin Result := nextpas.core.audio.game.CreateGameAudio(ADevice, AGraph, AMaxVoi
 
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer): IGameAudio;
 begin Result := nextpas.core.audio.game.CreateGameAudioForFormat(AProvider, AFormat, AMaxVoices); end;
+
+function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
+begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
 
 procedure AudioRegisterDecoderPlaceholder;
 begin
