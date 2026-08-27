@@ -18,6 +18,24 @@ uses
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.factory;
 
+type
+  { 总命中 provider：用于验开发模式惰性覆盖——正常模式会命中，
+    dev 模式必须仍 404 }
+  TAlwaysHitProvider = class(TInterfacedObject, IWebviewAssetProvider)
+  public
+    function TryResolve(const APath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+  end;
+
+function TAlwaysHitProvider.TryResolve(const APath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  ABytes := TBytes.Create(1);
+  ABytes[0] := 42;
+  AMimeType := 'text/plain';
+  Result := True;
+end;
+
 function GtkProbeUsable: Boolean;
 var
   LInfo: TGtkLoadInfo;
@@ -208,6 +226,80 @@ begin
   end;
 end;
 
+procedure TestBuilderInitialNavigation;
+var
+  W: IWebviewWindow;
+  LFake: TFakeWebview;
+begin
+  { InitialUrl 构造期导航：Build 时即完成一次 Navigate（fake 计次 1） }
+  W := TWebviewBuilder.New
+    .Kind(wvFake)
+    .InitialUrl('npres://app/initial.html')
+    .Build;
+  LFake := TFakeWebview.FromWindow(W);
+  try
+    CheckEqual(1, LFake.NavigateCount, 'initial url triggers one navigate on create');
+    Check(W.CanGoBack = False, 'initial nav history at start');
+    { 再次显式导航应累积 }
+    W.Navigate('npres://app/second.html');
+    CheckEqual(2, LFake.NavigateCount, 'second navigate increments');
+    Check(W.CanGoBack, 'history after second nav');
+  finally
+    if not W.IsClosed then W.Close;
+    W := nil;
+  end;
+
+  { CONTRACT §2.2：InitialUrl 优先级高于 InitialHtml——两者同设时
+    以 Url 为准（与 gtk/fake 实现一致）。 }
+  W := TWebviewBuilder.New
+    .Kind(wvFake)
+    .InitialUrl('npres://app/should-win.html')
+    .InitialHtml('<html>hello</html>')
+    .Build;
+  LFake := TFakeWebview.FromWindow(W);
+  try
+    CheckEqual(1, LFake.NavigateCount, 'initial url wins over html');
+  finally
+    if not W.IsClosed then W.Close;
+    W := nil;
+  end;
+
+  W := TWebviewBuilder.New
+    .Kind(wvFake)
+    .InitialHtml('<html>only-html</html>')
+    .Build;
+  LFake := TFakeWebview.FromWindow(W);
+  try
+    CheckEqual(1, LFake.NavigateCount, 'initial html alone triggers navigate');
+  finally
+    if not W.IsClosed then W.Close;
+    W := nil;
+  end;
+end;
+
+procedure TestBuilderDevServerInert;
+var
+  W: IWebviewWindow;
+  LBytes: TBytes;
+  LMime: string;
+begin
+  { DevServerUrl 开发模式：资产面惰性——挂载 no-op、解析一律 404 }
+  W := TWebviewBuilder.New
+    .Kind(wvFake)
+    .DevServerUrl('http://127.0.0.1:5173')
+    .Build;
+  try
+    W.Assets.MountEmbedded('', TAlwaysHitProvider.Create);
+    Check(not W.Assets.TryResolve('hello.txt', LBytes, LMime),
+      'dev mode resolve must be inert 404');
+    Check(not W.Assets.TryResolve('app/hello.txt', LBytes, LMime),
+      'dev mode any path is inert');
+  finally
+    if not W.IsClosed then W.Close;
+    W := nil;
+  end;
+end;
+
 procedure TestDefaultKindFollowsProbe;
 var
   W: IWebviewWindow;
@@ -289,6 +381,8 @@ begin
   T.Test('builder build twice two windows', @TestBuilderBuildTwiceTwoWindows);
   T.Test('builder invoke and ready', @TestBuilderInvokeAndReady);
   T.Test('emit dropped before ready', @TestEmitDroppedBeforeReady);
+  T.Test('builder initial navigation', @TestBuilderInitialNavigation);
+  T.Test('builder dev server inert', @TestBuilderDevServerInert);
   T.Test('run loop exit paths', @TestRunLoopExitPaths);
   if not T.Run then Halt(1);
 end.

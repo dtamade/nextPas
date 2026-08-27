@@ -637,12 +637,13 @@ begin
   SetLength(GLiveWindows, Length(GLiveWindows) + 1);
   GLiveWindows[High(GLiveWindows)] := Self;
 
-  { Initial* 启动加载：构造即导航。资产/桥请求都在主循环泵里才发生，
-    Build 返回后的挂载先于任何请求，无时序竞态（§3.4） }
-  if AOptions.InitialHtml <> '' then
-    NavigateToString(AOptions.InitialHtml)
-  else if AOptions.InitialUrl <> '' then
-    Navigate(AOptions.InitialUrl);
+  { Initial* 启动加载：构造即导航。优先级 InitialUrl > InitialHtml
+    （CONTRACT §2.2），资产/桥请求都在主循环泵里才发生，Build 返回后的
+    挂载先于任何请求，无时序竞态（§3.4） }
+  if AOptions.InitialUrl <> '' then
+    Navigate(AOptions.InitialUrl)
+  else if AOptions.InitialHtml <> '' then
+    NavigateToString(AOptions.InitialHtml);
 end;
 
 destructor TFakeWebview.Destroy;

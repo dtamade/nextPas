@@ -75,6 +75,7 @@ completion claim.
 | `tui` | L3 | terminal UI | `nextpas.core.tui` | L0-L2 | focused-runtime partial |
 | `validation` | L2 | validation helpers | `nextpas.core.validation` | L0-L1 | focused-runtime |
 | `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub + facade) | `nextpas.core.vfs` | L0-L1; os backend is the single fs/path seam; embedded adds respack.reader | focused-runtime, source-contract |
+| `webview` | L3 | desktop app shell over system web engines (WebKitGTK/WebView2/WKWebView backends; unified IPC bridge) | `nextpas.core.webview` | L0-L2 plus json owner; platform.dl | focused-runtime, source-contract |
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML format | `nextpas.core.yaml` | L0-L1 | focused-runtime |
