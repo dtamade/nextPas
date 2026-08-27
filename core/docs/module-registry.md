@@ -39,7 +39,7 @@ completion claim.
 | `fs` | L2 | filesystem facade | `nextpas.core.fs` | L0-L1, platform/files/path | focused-runtime |
 | `git` | L2 | git/libgit2 | `nextpas.core.git` | L0-L1, libgit2 FFI allowlist | source-contract |
 | `hash` | L2 | hash/digest | `nextpas.core.hash` | L0-L1 | focused-runtime |
-| `http` | L3 | HTTP framework | `nextpas.core.http` | L0-L2 | focused-runtime partial |
+| `http` | L3 | HTTP framework | `nextpas.core.http` | L0-L2 | focused-runtime partial — static pipeline: conditional 304, single Range 206/416 + `If-Range` (ETag/date) fallback, `HEAD` header-only without stream open, error paths HEAD-aware |
 | `id` | L1 | identifiers | `nextpas.core.id` | L0, platform random | focused-runtime |
 | `ini` | L2 | INI format | `nextpas.core.ini` | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller/completion | `nextpas.core.io` | L0, platform | focused-runtime, forced-compile |
@@ -59,7 +59,7 @@ completion claim.
 | `props` | L3 | app property helpers | `nextpas.core.props` | L0-L2 | focused-runtime |
 | `reflect` | Support | reflection experiment | `nextpas.core.reflect` | system/typinfo owner only | source-contract |
 | `regex` | L2 | regular expressions | `nextpas.core.regex` | L0-L1, optional simd | focused-runtime |
-| `respack` | L2 | resource pack container + embed toolchain (asar/Tauri parity) | `nextpas.core.respack` | L0; dirsource is the single fs IO seam; embed adds fs.glob (match-only) via source-contract exception | focused-runtime ×6, source-contract |
+| `respack` | L2 | resource pack container + embed toolchain (asar/Tauri parity) | `nextpas.core.respack` | L0; dirsource is the single fs IO seam; embed adds fs.glob (match-only) via source-contract exception | focused-runtime ×6, source-contract — writer O(n) hash buckets (256→65536), reader single-pass cached `DecodeWire` (50% saving), `BaseValidPath` via `base.pathvalid` L0 shared |
 | `simd` | L0 | SIMD ABI/backends | `nextpas.core.simd` | L0, platform CPU/file probes, allowlisted host/os probes | focused-runtime, source-contract |
 | `sse` | Support | legacy SIMD surface | `nextpas.core.sse` | simd owner only | source-contract |
 | `stopwatch` | L1 | timing helper | `nextpas.core.stopwatch` | L0, platform time | focused-runtime |
@@ -74,7 +74,7 @@ completion claim.
 | `toml` | L2 | TOML format | `nextpas.core.toml` | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI | `nextpas.core.tui` | L0-L2 | focused-runtime partial |
 | `validation` | L2 | validation helpers | `nextpas.core.validation` | L0-L1 | focused-runtime |
-| `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub + facade) | `nextpas.core.vfs` | L0-L1; os backend is the single fs/path seam; embedded adds respack.reader | focused-runtime, source-contract |
+| `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub + facade) | `nextpas.core.vfs` | L0-L1; os backend is the single fs/path seam; embedded adds respack.reader | focused-runtime, source-contract — embedded `FPaths/FEntries/FETags/FLastMods` parallel cache (O(log n) index, O(1) ETag/Last-Modified, zero `DecodeWire` on `Stat/OpenRead`), `TWindowStream` zero-copy window, `HasSubtreePath` O(log n) |
 | `webview` | L3 | desktop app shell over system web engines (WebKitGTK/WebView2/WKWebView backends; unified IPC bridge) | `nextpas.core.webview` | L0-L2 plus json owner; platform.dl | focused-runtime, source-contract |
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |

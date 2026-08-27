@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.13（S18—— W2 WebView2 via wine：ffi/loader/桩后端 + factory probe + wine 交叉验证（Linux 不可用/wine 可用双态）、门禁 17/13/6/3 全绿）
+**版本**：1.14（S19—— W2 Win32 窗口壳：webview2.win 真窗口（与 gtk.win 对称）、factory Win32 消息泵、门禁 17/13/6/3 全绿、wine 真窗口可交互）
+**承接**：1.13（S18—— W2 WebView2 via wine：ffi/loader/桩后端 + factory probe + wine 交叉验证（Linux 不可用/wine 可用双态）、门禁 17/13/6/3 全绿）
 **承接**：1.12（S17—— 完美收口：respack demo 高级感对齐主 demo（双主题/玻璃拟态/骨架/错误边界/a11y 全量）、bench 基线刷新至过滤均值、文档 1.12 对齐）
 **承接**：1.11（S16—— Production Ready：全量文档时效对齐、window 缝预备缝契约冻结、双 bench 基线入库、demo 恢复路径闭环、门禁 17/13/6 全绿 hygiene 0）
 **承接**：1.10（S15—— polish：MIME 12→65 项（复用 http.mime 65 项零分配二分表、avif/bmp/woff2 等全量）、demo 骨架屏 + 错误边界（alert + showErr + skeleton）、VFS 65 项回退覆盖、bench 双基线保持）
@@ -40,7 +41,8 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
 | `nextpas.core.webview.webview2.ffi` | ABI | WebView2 COM 最小声明（无 external） | **W2 桩已落地（S18）** |
 | `nextpas.core.webview.webview2.loader` | 装载 | WebView2Loader.dll 探测与符号装载（platform.dl，wine 兼容） | **W2 桩已落地（S18）** |
-| `nextpas.core.webview.webview2` | 后端 | Windows 桩后端（loader 成功即桩窗口，COM 窗口壳待 Edge runtime） | **W2 桩已落地（S18）** |
+| `nextpas.core.webview.webview2.win` | **内缝** | Win32 窗口壳纯函数式实现（与 gtk.win 对称） | **W2 真窗口已落地（S19）** |
+| `nextpas.core.webview.webview2` | 后端 | Windows 实现：Win32 窗口壳 + WebView2 controller 桩 + bridge 预埋（controller 待 Edge） | **W2 真窗口已落地（S19）** |
 | `nextpas.core.webview.wk.*` | 后端 | macOS WKWebView（base/ffi/backend） | W3 |
 
 ### 依赖方向

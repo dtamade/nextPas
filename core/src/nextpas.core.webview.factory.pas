@@ -94,7 +94,8 @@ uses
   nextpas.core.webview.gtk,
   nextpas.core.webview.gtk.win,
   nextpas.core.webview.webview2.loader,
-  nextpas.core.webview.webview2;
+  nextpas.core.webview.webview2,
+  nextpas.core.webview.webview2.win;
 
 var
   GExitRequested: Boolean = False;
@@ -158,11 +159,7 @@ begin
     if GtkLiveWindowCount > 0 then
       WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
     else if WebView2LiveWindowCount > 0 then
-    begin
-      { W2 桩：无消息泵，yield 避免忙转；真实 WebView2 时为 Win32 消息泵 }
-      platform_thread_yield;
-      Break;
-    end
+      Win32ShellRunMainLoop { Win32 消息泵（wine 真窗口可交互）}
     else if FakeLiveWindowCount > 0 then
       FakePumpAll
     else
@@ -176,9 +173,11 @@ end;
 procedure WebviewExitLoop;
 begin
   GExitRequested := True;
-  { gtk_main 阻塞期间标志位不会被轮询——必须同步触发 quit 才能返回 }
+  { 阻塞式主循环期间标志位不可轮询——同步触发 quit }
   if GtkLiveWindowCount > 0 then
     WinShellQuitMainLoop;
+  if WebView2LiveWindowCount > 0 then
+    Win32ShellQuitMainLoop;
 end;
 
 { ---- Builder ---- }
