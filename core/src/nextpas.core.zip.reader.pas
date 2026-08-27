@@ -88,7 +88,8 @@ uses
   nextpas.core.bytes.cursor,
   nextpas.core.checksum.crc32,
   nextpas.core.compress.deflate,
-  nextpas.core.zip.aes;
+  nextpas.core.zip.aes,
+  nextpas.core.zip.common;
 
 const
   C_EOCD_MIN_LEN       = 22;
@@ -306,19 +307,6 @@ begin
     raise EParseError.Create('zip: truncated ' + AWhat);
 end;
 
-{ 条目可读性守卫：加密位拒绝 + zip-slip 危险名拒绝 }
-procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
-begin
-  { 加密位 + 无 WinZip AES extra = 遗留 ZipCrypto：明确不支持。
-    WinZip AES 条目在此放行，口令校验在解封层执行 }
-  if ((AFlags and C_ZIP_FLAG_ENCRYPTED) <> 0) and (AE.AesVersion = 0) then
-    raise ENotSupportedError.Create(
-      'zip: legacy ZipCrypto encryption not supported: ' + AE.Name);
-  { 条目名来自不可信输入：提取前强制 zip-slip 防护 }
-  if not IsSafeZipEntryName(AE.Name) then
-    raise EParseError.Create('zip: refusing unsafe entry name: ' + AE.Name);
-end;
-
 { 解析单个 central 条目（游标须已对齐签名处，签名由调用方校验并消费）：
   固定字段、文件名、extra 链（0x0001 内顺序固定：原始尺寸、压缩尺寸、
   本地头偏移）、注释跳过 }
@@ -458,51 +446,6 @@ begin
   AE.ExternalAttrs := LExtAttrs;
   AE.IsSymlink :=
     ((LExtAttrs shr 16) and $F000) = C_ZIP_UNIX_MODE_SYMLINK;
-end;
-
-{ 一次性提取路径共用：按 Method 解压并强制尺寸+CRC 校验。对敌意的未压缩
-  尺寸声明施加压缩比上界防 DoS：提示超过 压缩尺寸×16+64KB 时按上界预分配，
-  超出部分由倍增扩容兜底，硬上限仍是 AMaxOutput }
-function DecompressEntryVerified(const AE: TZipEntryInfo;
-  const APayload: TBytes; const APassword: TBytes;
-  AMaxOutput: SizeUInt): TBytes;
-var
-  LHint: UInt64;
-  LCompressed: TBytes;
-begin
-  { 加密条目：一次性解封（口令校验值+认证码强校验）得到压缩流 }
-  if AE.IsEncrypted and (AE.AesVersion > 0) then
-    LCompressed := UnsealWinZipAesPayload(APassword, APayload,
-      AE.AesStrengthCode, AE.Name)
-  else
-    LCompressed := APayload;
-
-  if AE.MethodCode = C_ZIP_METHOD_DEFLATE then
-  begin
-    LHint := AE.UncompressedSize;
-    if LHint > UInt64(Length(LCompressed)) * 16 + 65536 then
-      LHint := UInt64(Length(LCompressed)) * 16 + 65536;
-    Result := RawDeflateDecompressSized(LCompressed, SizeUInt(LHint),
-      AMaxOutput);
-  end
-  else if AE.MethodCode = C_ZIP_METHOD_STORE then
-    Result := LCompressed
-  else
-    raise ENotSupportedError.Create('zip: unsupported compression method ' +
-      IntToStr(AE.MethodCode) + ': ' + AE.Name);
-
-  if UInt64(Length(Result)) <> AE.UncompressedSize then
-    raise EIOError.Create('zip: decompressed size mismatch for ' + AE.Name);
-  { AE-2 头部 CRC 恒为 0（写端契约），完整性由认证码保证；其余走常规比对。
-    AE-2 条目头部出现非零 CRC 视为结构违规，fail-closed }
-  if (AE.AesVersion = C_WINZIP_AES_VERSION_2) then
-  begin
-    if AE.Crc32 <> 0 then
-      raise EParseError.Create(
-        'zip: AE-2 entry with nonzero crc field: ' + AE.Name);
-  end
-  else if Crc32OfBytes(Result) <> AE.Crc32 then
-    raise EIOError.Create('zip: crc mismatch for ' + AE.Name);
 end;
 
 function DefaultZipReadOptions: TZipReadOptions;

@@ -328,6 +328,39 @@ begin
   end;
 end;
 
+procedure TestBuilderDuplicateAndNilGuards;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    TWebviewBuilder.New
+      .Kind(wvFake)
+      .RegisterInvoke('dup.cmd', function(const APayloadJson: string): string begin Result:='{}'; end)
+      .RegisterInvoke('dup.cmd', function(const APayloadJson: string): string begin Result:='{}'; end)
+      .Build;
+  except
+    on E: EWebviewInvalidState do LRaised := True;
+  end;
+  Check(LRaised, 'duplicate cmd in builder must raise');
+
+  LRaised := False;
+  try
+    TWebviewBuilder.New.Kind(wvFake).RegisterInvoke('ok.cmd', nil).Build;
+  except
+    on E: EWebviewInvalidState do LRaised := True;
+  end;
+  Check(LRaised, 'nil sync handler must raise');
+
+  LRaised := False;
+  try
+    TWebviewBuilder.New.Kind(wvFake).OnReady(nil).Build;
+  except
+    on E: EWebviewInvalidState do LRaised := True;
+  end;
+  Check(LRaised, 'nil OnReady must raise');
+end;
+
 procedure TestRunLoopExitPaths;
 var
   W: IWebviewWindow;
@@ -383,6 +416,7 @@ begin
   T.Test('emit dropped before ready', @TestEmitDroppedBeforeReady);
   T.Test('builder initial navigation', @TestBuilderInitialNavigation);
   T.Test('builder dev server inert', @TestBuilderDevServerInert);
+  T.Test('builder duplicate and nil guards', @TestBuilderDuplicateAndNilGuards);
   T.Test('run loop exit paths', @TestRunLoopExitPaths);
   if not T.Run then Halt(1);
 end.
