@@ -142,6 +142,43 @@ begin
   LRTOpener.Clear;
 end;
 
+procedure BenchRecordOpenTo(ADecRefMib: Double; out AMibOpenTo: Double);
+var
+  LKey2, LIV2, LFrag2: TBytes;
+  LSeal2: TTLS13RecordSealer;
+  LOpener2: TTLS13RecordOpener;
+  LWires2: array of TBytes;
+  LRec2: TBytes;
+  LErr2: string;
+  LCt2: Byte;
+  LFragLen2: Integer;
+  LDest: TBytes;
+  LT02, LT12: QWord;
+  J: Integer;
+begin
+  LKey2 := PatternBuf(16);
+  LIV2 := PatternBuf(12);
+  LFrag2 := PatternBuf(FRAGMENT_LEN);
+  LSeal2.Init(TLS13_CIPHER_AES_128_GCM_SHA256, LKey2, LIV2);
+  SetLength(LWires2, RECORDS);
+  for J := 0 to RECORDS - 1 do
+  begin
+    if not LSeal2.Seal(LFrag2, 23, LRec2, LErr2) then Fail('seal setup OpenTo');
+    LWires2[J] := Copy(LRec2, 5, Length(LRec2) - 5);
+  end;
+  SetLength(LDest, FRAGMENT_LEN + 256);
+  LOpener2.Init(TLS13_CIPHER_AES_128_GCM_SHA256, LKey2, LIV2);
+  if not LOpener2.OpenTo(LWires2[0], @LDest[0], Length(LDest), LFragLen2, LCt2, LErr2) then Fail('OpenTo roundtrip: '+LErr2);
+  if (LCt2 <> 23) or (LFragLen2 <> FRAGMENT_LEN) then Fail('OpenTo roundtrip mismatch len');
+  LOpener2.Init(TLS13_CIPHER_AES_128_GCM_SHA256, LKey2, LIV2);
+  LT02 := GetTickCount64;
+  for J := 0 to RECORDS - 1 do
+    if not LOpener2.OpenTo(LWires2[J], @LDest[0], Length(LDest), LFragLen2, LCt2, LErr2) then Fail('bench OpenTo '+IntToStr(J)+': '+LErr2);
+  LT12 := GetTickCount64;
+  AMibOpenTo := (Int64(RECORDS) * FRAGMENT_LEN / (1024 * 1024)) / ((LT12 - LT02) / 1000.0);
+  LSeal2.Clear; LOpener2.Clear;
+end;
+
 { ---------- 裸大缓冲单发（密码学天花板） ---------- }
 
 procedure BenchRaw(out AMibEnc, AMibDec: Double);
@@ -180,7 +217,7 @@ begin
 end;
 
 var
-  LRecEnc, LRecDec, LRawEnc, LRawDec: Double;
+  LRecEnc, LRecDec, LRawEnc, LRawDec, LMibOpenTo: Double;
 begin
   GSeed := QWord($9E3779B97F4A7C15);
 
@@ -192,6 +229,9 @@ begin
   BenchRecordLayer(LRecEnc, LRecDec);
   WriteLn(Format('record seal (aes128-gcm) : %8.1f MiB/s', [LRecEnc]));
   WriteLn(Format('record open (aes128-gcm) : %8.1f MiB/s', [LRecDec]));
+  BenchRecordOpenTo(LRecDec, LMibOpenTo);
+  WriteLn(Format('record openTo (aes128-gcm): %8.1f MiB/s', [LMibOpenTo]));
+  WriteLn(Format('openTo vs open gain: %.1f%%', [(LMibOpenTo / LRecDec - 1) * 100]));
 
   BenchRaw(LRawEnc, LRawDec);
   WriteLn(Format('raw encrypt (aes128-gcm) : %8.1f MiB/s', [LRawEnc]));
