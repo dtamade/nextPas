@@ -147,6 +147,8 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.encoding.base64,
   nextpas.core.atomic,
+  nextpas.core.bytes,
+  nextpas.core.mem,
   nextpas.core.time.stopwatch,
   nextpas.core.mem.secure,
   nextpas.core.crypto.hash,
@@ -544,6 +546,8 @@ type
     FPlainOut: TBytes;
     FPostHs: TBytes;
     FNetTx: TBytes;
+    FNetInBuf: TByteStreamBuf;
+    FPlainOutBuf: TByteStreamBuf;
     FNetTxOff: Integer;
     FRecvChunk: Integer;
     FRecvArmed: Boolean;
@@ -703,6 +707,33 @@ begin
     Move(ABuf[5], APayload[0], LHeader.Length);
   Move(ABuf[LTotal], ABuf[0], Length(ABuf) - LTotal);
   SetLength(ABuf, Length(ABuf) - LTotal);
+  Result := 1;
+end;
+
+{ 零拷贝视图版：从连续缓冲 (AData, AAvailable) 试组一条记录
+  返回 1=可组帧（填充 ACt/APayloadOff/APayloadLen/ATotalLen）
+        0=需要更多字节  <0=协议错；不移动/不拷贝缓冲 }
+function FpTryFrameRecordView(AData: PByte; AAvailable: SizeUInt;
+  out ACt: Byte; out APayloadOff, APayloadLen, ATotalLen: SizeUInt): Integer;
+begin
+  Result := 0;
+  ACt := 0; APayloadOff := 0; APayloadLen := 0; ATotalLen := 0;
+  if (AData = nil) and (AAvailable > 0) then Exit(-1);
+  if AAvailable < 5 then Exit(0);
+  ACt := AData[0];
+  case ACt of
+    TLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC,
+    TLS_CONTENT_TYPE_ALERT,
+    TLS_CONTENT_TYPE_HANDSHAKE,
+    TLS_CONTENT_TYPE_APPLICATION_DATA: ;
+  else
+    Exit(-1);
+  end;
+  APayloadLen := (SizeUInt(AData[3]) shl 8) or SizeUInt(AData[4]);
+  if APayloadLen > SizeUInt(cMaxRecordPayload) then Exit(-1);
+  ATotalLen := 5 + APayloadLen;
+  if AAvailable < ATotalLen then Exit(0);
+  APayloadOff := 5;
   Result := 1;
 end;
 
@@ -1656,6 +1687,10 @@ begin
   FLoop := ALoop;
   FNetIn := ANetInSeed;
   FPostHs := APostHsSeed;
+  FNetInBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
+  FPlainOutBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
+  if Length(ANetInSeed) > 0 then
+    FNetInBuf.Append(@ANetInSeed[0], Length(ANetInSeed));
   FRecvChunk := cNetReadChunk;
   FOpener.Init(FSuite, FApp.ServerApplicationKey,
     FApp.ServerApplicationIV);
@@ -1674,6 +1709,10 @@ begin
   FSealer.Clear;
   FOpener.Clear;
   ClearTLS13ApplicationSecrets(FApp);
+  if Assigned(FNetInBuf) then FNetInBuf.Free;
+  FNetInBuf := nil;
+  if Assigned(FPlainOutBuf) then FPlainOutBuf.Free;
+  FPlainOutBuf := nil;
   FInner := nil;
   FLoop := nil;
   inherited Destroy;
@@ -1781,18 +1820,26 @@ end;
 function TFpTlsStream.OpenAvailableRecords: Integer;
 var
   LCt: Byte;
-  LPayload: TBytes;
-  LFrameRes, LRes: Integer;
+  LPayloadOff, LPayloadLen, LTotalLen: SizeUInt;
+  LFrameRes: Integer;
+  LFragLen: Integer;
+  LInnerCt: Byte;
+  LErr: string;
+  LDest: PByte;
+  LPayloadPtr: PByte;
+  LFatal: Boolean;
+  LFragBytes: TBytes;
 begin
   Result := 0;
   while not FEofIn and not FDead do
   begin
-    if Length(FNetIn) > cMaxNetInBuf then
+    if FNetInBuf.Available > SizeUInt(cMaxNetInBuf) then
     begin
       FDead := True;
       Exit(-1);
     end;
-    LFrameRes := FpTryFrameRecord(FNetIn, LCt, LPayload);
+    LFrameRes := FpTryFrameRecordView(FNetInBuf.Data, FNetInBuf.Available,
+      LCt, LPayloadOff, LPayloadLen, LTotalLen);
     if LFrameRes < 0 then
     begin
       FDead := True;
@@ -1802,26 +1849,83 @@ begin
       Exit;
     if LCt = TLS_CONTENT_TYPE_APPLICATION_DATA then
     begin
-      LRes := HandleOpenedRecord(LPayload);
-      if LRes < 0 then
+      // Payload位于 Data+Off 区间，零拷贝视图不分配
+      LPayloadPtr := FNetInBuf.Data + LPayloadOff;
+      // 预留明文目标区（最坏 payloadLen，实际 fragLen ≤ payloadLen）
+      if LPayloadLen > 0 then
+        LDest := FPlainOutBuf.ReserveAppend(LPayloadLen)
+      else
+        LDest := nil;
+      if not FOpener.OpenToBuf(LPayloadPtr, Integer(LPayloadLen),
+        LDest, Integer(LPayloadLen), LFragLen, LInnerCt, LErr) then
       begin
+        FNetInBuf.Consume(LTotalLen);
         FDead := True;
         Exit(-1);
       end;
-      Inc(Result, LRes);
-      { 批处理：读进的完整记录就地全部解密（至预算顶），不再
-        「解 1 条交付 1 次」——单次 read 的收获一次榨干，交付次数
-        与 epoll/read 同步摊薄；NetIn 排空由循环条件自然收口 }
-      if Result >= cDecryptBatchBytes then
-        Exit;
+      FNetInBuf.Consume(LTotalLen);
+      case LInnerCt of
+        TLS_CONTENT_TYPE_APPLICATION_DATA:
+          begin
+            // 提交真实片段长度（丢弃零填充尾）
+            if LFragLen > 0 then
+              FPlainOutBuf.CommitAppend(SizeUInt(LFragLen))
+            else
+            begin
+              // 零长度片段：仅预留未提交即回退（Reserve 未 commit 自动空洞回收）
+              // 无需额外操作，下一 Reserve 会复用同一尾区
+            end;
+            Inc(Result, LFragLen);
+            if Result >= cDecryptBatchBytes then
+              Exit;
+          end;
+        TLS_CONTENT_TYPE_HANDSHAKE:
+          begin
+            // 握手内嵌（NewSessionTicket/KeyUpdate）：不入明文流，转后握手处理
+            // Reserve 區已写入但不提交；拷贝片段走既有 TBytes 路径（罕见、低频）
+            SetLength(LFragBytes, LFragLen);
+            if LFragLen > 0 then
+              Move(LDest^, LFragBytes[0], LFragLen);
+            // 回退 Reserve（不 Commit，尾区自动复用）
+            FeedPostHandshake(LFragBytes, LFatal);
+            if LFatal then
+            begin
+              FDead := True;
+              Exit(-1);
+            end;
+          end;
+        TLS_CONTENT_TYPE_ALERT:
+          begin
+            SetLength(LFragBytes, LFragLen);
+            if LFragLen > 0 then
+              Move(LDest^, LFragBytes[0], LFragLen);
+            if (Length(LFragBytes) >= 2) and (LFragBytes[0] = 2) then
+            begin
+              FDead := True;
+              Exit(-1);
+            end;
+            FEofIn := True;
+          end;
+        TLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC:
+          ; // 忽略
+      else
+        begin
+          FDead := True;
+          Exit(-1);
+        end;
+      end;
     end
     else if LCt = TLS_CONTENT_TYPE_ALERT then
     begin
-      { 应用相的明文 alert 记录 = 对端异常（正常 alert 走加密内嵌） }
+      FNetInBuf.Consume(LTotalLen);
       FDead := True;
       Exit(-1);
+    end
+    else
+    begin
+      // CCS 等明文记录：直接丢弃
+      FNetInBuf.Consume(LTotalLen);
     end;
-    { CCS 记录：忽略 }
   end;
 end;
 
@@ -1885,7 +1989,7 @@ begin
       if LIters > cMaxPumpIterations then
       begin
         WriteLn(ErrOutput, '[tlsfp] pump iteration cap exceeded: plain=',
-          Length(FPlainOut), ' netin=', Length(FNetIn), ' eof=', FEofIn,
+          FPlainOutBuf.Available, ' netin=', FNetInBuf.Available, ' eof=', FEofIn,
           ' readpending=', FReadPending);
         FDead := True;
         if FReadPending then
@@ -1907,19 +2011,17 @@ begin
           DeliverRead(ASYNC_TLSFP_ERR_IO);
         Exit;
       end;
-      if Length(FPlainOut) > 0 then
+      if FPlainOutBuf.Available > 0 then
       begin
         if not FReadPending then
         begin
           Exit;
         end;
         LCopy := FReadLen;
-        if LCopy > SizeUInt(Length(FPlainOut)) then
-          LCopy := SizeUInt(Length(FPlainOut));
-        Move(FPlainOut[0], FReadBuf^, LCopy);
-        Move(FPlainOut[LCopy], FPlainOut[0],
-          Length(FPlainOut) - LCopy);
-        SetLength(FPlainOut, Length(FPlainOut) - LCopy);
+        if LCopy > FPlainOutBuf.Available then
+          LCopy := FPlainOutBuf.Available;
+        Move(FPlainOutBuf.Data^, FReadBuf^, LCopy);
+        FPlainOutBuf.Consume(LCopy);
         DeliverRead(Int32(LCopy));
         Continue;
       end;
@@ -1982,12 +2084,12 @@ begin
   if AResult = 0 then
   begin
     { 对端 TCP EOF：半关闭，读侧置 EOF；存量整记录仍可在 Pump 中消化 }
+    // 零拷贝：FNetInBuf 上次 Reserve 的尾区未提交，保持原状（AResult=0 不 commit）
     LSelf.FEofIn := True;
   end
   else
   begin
-    SetLength(LSelf.FNetIn,
-      Length(LSelf.FNetIn) - LSelf.FRecvChunk + AResult);
+    LSelf.FNetInBuf.CommitAppend(SizeUInt(AResult));
     { 读块自时钟：满读翻倍至多记录粒度（对端突发被单次 read 吞下），
       不足半读说明内核暂无余量，回缩下限；其间保持不变防抖动 }
     if (AResult >= LSelf.FRecvChunk) and
@@ -2035,8 +2137,7 @@ begin
   Result := False;
   if FRecvArmed or FDead then
     Exit;
-  SetLength(FNetIn, Length(FNetIn) + FRecvChunk);
-  LRx := @FNetIn[Length(FNetIn) - FRecvChunk];
+  LRx := FNetInBuf.ReserveAppend(SizeUInt(FRecvChunk));
   FRecvArmed := True;
   { 读挂起带期限时走底层超时形态（到期由底层交付其域内负码） }
   if FHasReadDeadlineReq then
@@ -2048,7 +2149,7 @@ begin
   else if FInner.AsyncRead(LRx, FRecvChunk, @StreamRecvCb, Self) then
     Exit(True);
   FRecvArmed := False;
-  SetLength(FNetIn, Length(FNetIn) - FRecvChunk);
+  // Reserve 未提交，不移动 FLen，尾区自动复用，无需回缩 SetLength
 end;
 
 function TFpTlsStream.ArmNetSend: Boolean;
@@ -2232,19 +2333,18 @@ begin
   ARead := 0;
   if FDead then
     Exit(tsiorClosed);
-  if Length(FPlainOut) = 0 then
+  if FPlainOutBuf.Available = 0 then
   begin
     if OpenAvailableRecords < 0 then
       Exit(tsiorClosed);
   end;
-  if Length(FPlainOut) > 0 then
+  if FPlainOutBuf.Available > 0 then
   begin
     LN := ACount;
-    if LN > SizeUInt(Length(FPlainOut)) then
-      LN := SizeUInt(Length(FPlainOut));
-    Move(FPlainOut[0], ABuf, LN);
-    Move(FPlainOut[LN], FPlainOut[0], Length(FPlainOut) - LN);
-    SetLength(FPlainOut, Length(FPlainOut) - LN);
+    if LN > FPlainOutBuf.Available then
+      LN := FPlainOutBuf.Available;
+    Move(FPlainOutBuf.Data^, ABuf, LN);
+    FPlainOutBuf.Consume(LN);
     ARead := LN;
     Exit(tsiorOk);
   end;
