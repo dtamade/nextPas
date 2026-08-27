@@ -45,6 +45,13 @@ type
     function RegisterAsyncInvoke(const ACmd: string;
       AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
     function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
+    { 构造期导航（S9）：两者均进 FOptions，由后端构造期按优先级启动
+      （InitialUrl 优先于 InitialHtml；Run/RunHtml 参数优先于两者）。 }
+    function InitialUrl(const AUrl: string): IWebviewBuilder;
+    function InitialHtml(const AHtml: string): IWebviewBuilder;
+    { 开发模式（S9）：非空即让位 http dev server，资产面惰性，
+      同 context 首窗跳过 scheme 注册。 }
+    function DevServerUrl(const AUrl: string): IWebviewBuilder;
     { 显式钉后端（fake 等确定性场景）；缺省 = DefaultWebviewKind 能力驱动，
       Build 时不可用按工厂语义 fail-fast }
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
@@ -198,6 +205,9 @@ type
     function RegisterAsyncInvoke(const ACmd: string;
       AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
     function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
+    function InitialUrl(const AUrl: string): IWebviewBuilder;
+    function InitialHtml(const AHtml: string): IWebviewBuilder;
+    function DevServerUrl(const AUrl: string): IWebviewBuilder;
     function Build: IWebviewWindow;
     procedure Run(const AUrl: string);
     procedure RunHtml(const AHtml: string);
@@ -315,6 +325,24 @@ function TBuilderImpl.OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
 begin
   SetLength(FReady, Length(FReady) + 1);
   FReady[High(FReady)] := AHandler;
+  Result := Self;
+end;
+
+function TBuilderImpl.InitialUrl(const AUrl: string): IWebviewBuilder;
+begin
+  FOptions.InitialUrl := AUrl;
+  Result := Self;
+end;
+
+function TBuilderImpl.InitialHtml(const AHtml: string): IWebviewBuilder;
+begin
+  FOptions.InitialHtml := AHtml;
+  Result := Self;
+end;
+
+function TBuilderImpl.DevServerUrl(const AUrl: string): IWebviewBuilder;
+begin
+  FOptions.DevServerUrl := AUrl;
   Result := Self;
 end;
 

@@ -3,13 +3,14 @@
 **模块路径**：`core/src/nextpas.core.webview*.pas`
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
-**最后更新**：2026-08-26
-**版本**：1.4（S6——IWebviewWindow.GetTitle 补全（WM 级同步读，未设置
-过为 ''）；ephemeral 会话 live 覆盖：顺序建/毁两窗各自服务资产，钉死
-S5 析构摘表/unref 收口语义。承 S5：多窗口资产按发起视图精确归属、
-自有 context 析构收口、IEEE 浮点屏蔽；承 S4：scheme 404 真实 GError、
-IsMinimized 查询式真值、DefaultWebviewKind 能力驱动、Builder.Kind()
-显式钉后端、gtk Close 幂等对齐；资产前缀路由语义钉死。九个测试门全绿。）
+**最后更新**：2026-08-27
+**版本**：1.5（S10——Builder 补齐 InitialUrl/InitialHtml/DevServerUrl 三形态
+（构造期导航 Url 优先语义钉死，gtk/fake 同构修复此前 Html 优先错误）、
+factory 门禁补 12 用例覆盖惰性与导航语义、respack→IWebviewAssetProvider
+集成示例 `demo_webview_respack` 三形态（embedded/os/dev-server）落地、
+注册表 `webview` 行 focused-runtime 入册；承 S9：DevServerUrl 资产惰性
++ scheme 按需补注册、Initial* 构造期导航、OnNavigationFailed 修复与
+bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + bench 全绿。）
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
