@@ -10,9 +10,11 @@
 # 离线段（sqlite 全量）
 make -C core/benchmarks/nextpas.core.db bench
 
-# 含真机 pg 段（本地实例，test 门 ensure-db 同库）
+# 含真机 pg/mysql 段（本地实例，test 门 ensure-db 同库）
 NEXTPAS_PG_TEST_CONN='host=/var/run/postgresql dbname=nextpas_pg_test user='"$USER" \
+  NEXTPAS_MYSQL_TEST_CONN='host=127.0.0.1 port=53307 user=root password=Test123@abc db=testdb' \
   make -C core/benchmarks/nextpas.core.db bench
+# mysql 段仅 adapter_overhead 默认启用（batch/bulk 10k 行回环 TCP ~3.6s，不进默认批）
 ```
 
 设计约束：bench 目标**不接入根 Makefile verify/test 链**（环境噪声
@@ -46,13 +48,15 @@ NEXTPAS_PG_TEST_CONN='host=/var/run/postgresql dbname=nextpas_pg_test user='"$US
 直调 `TSqliteDb`（conn 层），unified = `ConnectSqlite` 适配层；
 `Sizes=(1000,10000)` 固定。
 
-| N | native | unified | 比 |
-|---|---|---|---|
-| 1000 | 2 ms | 2 ms | 1.00× |
-| 10000 | 19 ms | 17 ms | 0.89×（噪声内持平） |
+| N | native | unified | 比 | mysql (via libmariadb 112B, TCP 回环) |
+|---|---|---|---|---|
+| 1000 | 2 ms | 2 ms | 1.00× | 337 ms |
+| 10000 | 19 ms | 17 ms | 0.89×（噪声内持平） | 3599 ms |
 
-结论：适配层开销在测量噪声之下，J1 通过。语句缓存命中后统一层
-反而省去重复 prepare。
+结论：sqlite 适配层开销在测量噪声之下，J1 通过。mysql 回环 TCP 往返
+约 0.34 ms/行（10k 行 3.6s），属网络/协议栈成本而非适配层开销——
+同口径 `adapter_overhead` 已区分 `native/unified`（内存）与 `mysql`
+（网络）三列，避免误比。语句缓存命中后统一层反而省去重复 prepare。
 
 ### bench_db_translate_complexity —— 占位符翻译线性度
 

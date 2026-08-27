@@ -50,6 +50,38 @@ begin
   WriteLn(Format('adapter insert%8d + select: %6d ms (sum=%d)', [N, T1-T0, S]));
 end;
 
+procedure BenchMysqlInsertSelect(const N: Integer);
+var
+  Conn: IDbConnection; Q: IDbQuery; I: Int64; S: Int64;
+  LEnv: string;
+begin
+  LEnv := GetEnvironmentVariable('NEXTPAS_MYSQL_TEST_CONN');
+  if LEnv = '' then
+  begin
+    WriteLn('mysql   insert', N:8, ' + select: skipped (no NEXTPAS_MYSQL_TEST_CONN)');
+    Exit;
+  end;
+  Conn := ConnectMysql(LEnv);
+  Conn.Exec('DROP TABLE IF EXISTS t_bench');
+  Conn.Exec('CREATE TABLE t_bench (id INTEGER PRIMARY KEY AUTO_INCREMENT, v INTEGER)');
+  Conn.Exec('DELETE FROM t_bench');
+  WithTransaction(Conn, procedure
+  begin
+    T0 := GetTickCount64;
+    for GK := 1 to N do
+    begin
+      Q := Conn.Query('INSERT INTO t_bench (v) VALUES (?)');
+      Q.BindInt64(1, GK);
+      Q.Step;
+    end;
+    T1 := GetTickCount64;
+  end);
+  Q := Conn.Query('SELECT SUM(id) FROM t_bench');
+  Q.Step; S := Q.GetInt64(0);
+  WriteLn(Format('mysql   insert%8d + select: %6d ms (sum=%d) [mariadb/mysql via libmariadb 112B]', [N, T1-T0, S]));
+  Conn.Exec('DROP TABLE IF EXISTS t_bench');
+end;
+
 var
   N: Integer;
   Sizes: array[0..1] of Integer = (1000, 10000);
@@ -60,5 +92,6 @@ begin
   begin
     BenchNativeInsertSelect(Sizes[K]);
     BenchUnifiedInsertSelect(Sizes[K]);
+    BenchMysqlInsertSelect(Sizes[K]);
   end;
 end.
