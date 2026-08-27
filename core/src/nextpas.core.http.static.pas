@@ -712,6 +712,76 @@ begin
   end;
 end;
 
+{ Unified static content serving: handles conditional GET (304), common headers,
+  and single-range (206/416) vs full (200) streaming. AFactory is invoked
+  lazily after Range parsing so we never open the underlying stream for 304/416. }
+type
+  TStaticStreamFactory = reference to function: IStream;
+
+procedure HttpServeStaticStream(
+  const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const ASize: Int64; const AETag, ALastModified, AMime, ACacheControl: string;
+  const AModTimeUnix: Int64; const AFactory: TStaticStreamFactory;
+  const ADownloadName: string = '');
+var
+  LRangeHeader: string;
+  LStart, LEnd: Int64;
+  LStream: IStream;
+  LWriter: IWriter;
+  LEscapedName: string;
+  LIfNoneMatch: string;
+begin
+  if AReq <> nil then
+    LIfNoneMatch := AReq.GetHeaders.Get('if-none-match')
+  else
+    LIfNoneMatch := '';
+  if (AModTimeUnix > 0) or (LIfNoneMatch <> '') then
+    if HttpTryWriteNotModified(AReq, AW, AETag, ALastModified, AModTimeUnix) then
+      Exit;
+  AW.GetHeaders.SetHeader('content-type', AMime);
+  AW.GetHeaders.SetHeader('etag', AETag);
+  if ALastModified <> '' then
+    AW.GetHeaders.SetHeader('last-modified', ALastModified);
+  AW.GetHeaders.SetHeader('cache-control', ACacheControl);
+  AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
+  AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
+  if ADownloadName <> '' then
+  begin
+    LEscapedName := ADownloadName;
+    LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '\', '\\', True);
+    LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '"', '\"', True);
+    AW.GetHeaders.SetHeader('content-disposition',
+      'attachment; filename="' + LEscapedName + '"');
+  end;
+  if AReq <> nil then
+    LRangeHeader := AReq.GetHeaders.Get('range')
+  else
+    LRangeHeader := '';
+  if LRangeHeader <> '' then
+  begin
+    if not ParseRangeHeader(LRangeHeader, ASize, LStart, LEnd) then
+    begin
+      SendRangeNotSatisfiable(ASize, AW);
+      Exit;
+    end;
+    LStream := AFactory();
+    AW.GetHeaders.SetHeader('content-range',
+      'bytes ' + IntToStr(LStart) + '-' + IntToStr(LEnd) + '/' + IntToStr(ASize));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
+    AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
+    LWriter := TResponseWriterAdapter.Create(AW);
+    CopyRange(LStream, LWriter, LStart, LEnd - LStart + 1);
+  end
+  else
+  begin
+    LStream := AFactory();
+    AW.GetHeaders.SetHeader('content-length', IntToStr(ASize));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    LWriter := TResponseWriterAdapter.Create(AW);
+    nextpas.core.io.Copy(LWriter, LStream);
+  end;
+end;
+
 { Serve file content with optional range support, ETag, Last-Modified, Cache-Control.
   ADownloadName: if non-empty, set Content-Disposition: attachment with given filename.
   ACacheControl: verbatim Cache-Control policy header value. }
@@ -719,17 +789,9 @@ procedure ServeFileContentEx(const AFilePath: string;
   const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const ADownloadName, ACacheControl: string);
 var
-  LFile: IFile;
   LInfo: TFileInfo;
-  LWriter: IWriter;
-  LExt: string;
-  LMime: string;
-  LETag: string;
-  LLastModified: string;
-  LRangeHeader: string;
-  LStart, LEnd: Int64;
+  LExt, LMime, LETag, LLastModified: string;
   LFileSize: Int64;
-  LEscapedName: string;
 begin
   try
     if not nextpas.core.fs.Exists(AFilePath) then
@@ -743,66 +805,17 @@ begin
       HttpWriteErrorNotFound(AW, 'File not found');
       Exit;
     end;
-
     LFileSize := LInfo.Size;
     LExt := ExtractExt(AFilePath);
     LMime := MimeTypeFromExt(LExt);
     LETag := GenerateETag(LFileSize, LInfo.ModTime);
-    { HTTP-date / If-Modified-Since use second resolution; ETag keeps full ns. }
     LLastModified := FormatHttpDate(FileModTimeToUnixSeconds(LInfo.ModTime));
-
-    if HttpTryWriteNotModified(AReq, AW, LETag, LLastModified,
-      FileModTimeToUnixSeconds(LInfo.ModTime)) then
-      Exit;
-
-    { Set common headers }
-    AW.GetHeaders.SetHeader('content-type', LMime);
-    AW.GetHeaders.SetHeader('etag', LETag);
-    AW.GetHeaders.SetHeader('last-modified', LLastModified);
-    AW.GetHeaders.SetHeader('cache-control', ACacheControl);
-    AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
-    AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
-    if ADownloadName <> '' then
-    begin
-      { RFC 6266: Content-Disposition filename needs quoted-string escaping.
-        Escape backslashes and double quotes to prevent header injection. }
-      LEscapedName := ADownloadName;
-      LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '\', '\\', True);
-      LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '"', '\"', True);
-      AW.GetHeaders.SetHeader('content-disposition',
-        'attachment; filename="' + LEscapedName + '"');
-    end;
-
-    { Range request support (single byte range only; multi-range → 416).
-      Body path always streams via IFile + io.Copy / CopyFileRange — never ReadAll. }
-    if AReq <> nil then
-      LRangeHeader := AReq.GetHeaders.Get('range')
-    else
-      LRangeHeader := '';
-
-    if LRangeHeader <> '' then
-    begin
-      if not ParseRangeHeader(LRangeHeader, LFileSize, LStart, LEnd) then
+    HttpServeStaticStream(AReq, AW, LFileSize, LETag, LLastModified, LMime, ACacheControl,
+      FileModTimeToUnixSeconds(LInfo.ModTime),
+      function: IStream
       begin
-        SendRangeNotSatisfiable(LFileSize, AW);
-        Exit;
-      end;
-      LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
-      AW.GetHeaders.SetHeader('content-range',
-        'bytes ' + IntToStr(LStart) + '-' + IntToStr(LEnd) + '/' + IntToStr(LFileSize));
-      AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
-      AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
-      LWriter := TResponseWriterAdapter.Create(AW);
-      CopyRange(LFile, LWriter, LStart, LEnd - LStart + 1);
-    end
-    else
-    begin
-      LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
-      AW.GetHeaders.SetHeader('content-length', IntToStr(LFileSize));
-      AW.WriteHeader(HTTP_STATUS_OK);
-      LWriter := TResponseWriterAdapter.Create(AW);
-      nextpas.core.io.Copy(LWriter, LFile);
-    end;
+        Result := nextpas.core.fs.Open(AFilePath, [fmRead]);
+      end, ADownloadName);
   except
     HttpWriteErrorInternal(AW, 'Internal Server Error');
   end;
@@ -882,15 +895,8 @@ procedure ServeVfsContentEx(const AFs: IVfs; const AVfsPath: string;
   const ACacheControl: string);
 var
   LInfo: TStatInfo;
-  LStream: IStream;
-  LWriter: IWriter;
-  LMime: string;
-  LETag: string;
-  LLastModified: string;
+  LMime, LETag, LLastModified: string;
   LModTimeUnix: Int64;
-  LIfNoneMatch: string;
-  LRangeHeader: string;
-  LStart, LEnd: Int64;
 begin
   try
     try
@@ -912,10 +918,6 @@ begin
       HttpWriteErrorNotFound(AW, 'File not found');
       Exit;
     end;
-
-    { TEntryInfo.ModTime is Unix seconds; 0 = unknown. Suppress Last-Modified
-      and If-Modified-Since entirely (a t=0 resource must never yield a bogus
-      304); If-None-Match stays usable via the hash-backed ETag. }
     LModTimeUnix := LInfo.Info.ModTime;
     if LModTimeUnix < 0 then
       LModTimeUnix := 0;
@@ -927,56 +929,12 @@ begin
       LLastModified := FormatHttpDate(LModTimeUnix)
     else
       LLastModified := '';
-
-    { Conditional negotiation: honor If-None-Match always; honor
-      If-Modified-Since only when the mtime is actually known. }
-    LIfNoneMatch := '';
-    if AReq <> nil then
-      LIfNoneMatch := AReq.GetHeaders.Get('if-none-match');
-    if (LModTimeUnix > 0) or (LIfNoneMatch <> '') then
-      if HttpTryWriteNotModified(AReq, AW, LETag, LLastModified,
-        LModTimeUnix) then
-        Exit;
-
     LMime := MimeTypeFromExt(ExtractExt(AVfsPath));
-    AW.GetHeaders.SetHeader('content-type', LMime);
-    AW.GetHeaders.SetHeader('etag', LETag);
-    if LLastModified <> '' then
-      AW.GetHeaders.SetHeader('last-modified', LLastModified);
-    AW.GetHeaders.SetHeader('cache-control', ACacheControl);
-    AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
-    AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
-
-    { Range request support (single byte range only; multi-range → 416).
-      Body path always streams via IVfs.OpenRead IStream — never ReadAll. }
-    LRangeHeader := '';
-    if AReq <> nil then
-      LRangeHeader := AReq.GetHeaders.Get('range');
-
-    if LRangeHeader <> '' then
-    begin
-      if not ParseRangeHeader(LRangeHeader, LInfo.Info.Size, LStart, LEnd) then
+    HttpServeStaticStream(AReq, AW, LInfo.Info.Size, LETag, LLastModified, LMime, ACacheControl, LModTimeUnix,
+      function: IStream
       begin
-        SendRangeNotSatisfiable(LInfo.Info.Size, AW);
-        Exit;
-      end;
-      LStream := AFs.OpenRead(AVfsPath);
-      AW.GetHeaders.SetHeader('content-range',
-        'bytes ' + IntToStr(LStart) + '-' + IntToStr(LEnd) + '/' +
-        IntToStr(LInfo.Info.Size));
-      AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
-      AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
-      LWriter := TResponseWriterAdapter.Create(AW);
-      CopyRange(LStream, LWriter, LStart, LEnd - LStart + 1);
-    end
-    else
-    begin
-      LStream := AFs.OpenRead(AVfsPath);
-      AW.GetHeaders.SetHeader('content-length', IntToStr(LInfo.Info.Size));
-      AW.WriteHeader(HTTP_STATUS_OK);
-      LWriter := TResponseWriterAdapter.Create(AW);
-      nextpas.core.io.Copy(LWriter, LStream);
-    end;
+        Result := AFs.OpenRead(AVfsPath);
+      end);
   except
     on EVfsNotFound do
       HttpWriteErrorNotFound(AW, 'File not found');
