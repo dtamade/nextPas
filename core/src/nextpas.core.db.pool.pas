@@ -31,9 +31,11 @@ unit nextpas.core.db.pool;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.sync,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.time,
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.db.tx;
@@ -523,7 +525,7 @@ begin
       LRole := 'read';
     N := Length(FPending);
     SetLength(FPending, N + 1);
-    FPending[N] := Format(
+    FPending[N] := TextFormat(
       'pool: lease leak suspected — held %dms (threshold %dms), %s lease',
       [LHeldMs, FPolicy.LeakDetectionThresholdMs, LRole]);
     if FOutstanding[I].FrameCount > 0 then
