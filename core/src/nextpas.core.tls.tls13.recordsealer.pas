@@ -132,7 +132,6 @@ end;
 function TTLS13RecordSealer.SealToBuf(AFragment: PByte; AFragLen: Integer; AContentType: Byte;
   ADest: PByte; ADestCap: Integer; out ARecordLen: Integer; out AError: string): Boolean;
 var
-  LInner: TBytes;
   LNonceBytes: array[0..11] of Byte;
   LNonce: TBytes;
   LAAD: TBytes;
@@ -173,7 +172,6 @@ begin
     AError := 'TLS 1.3 record sealer SealToBuf: dest too small';
     Exit;
   end;
-  SetLength(LInner, LInnerLen);
   if AFragLen > 0 then
   begin
     if AFragment = nil then
@@ -181,15 +179,15 @@ begin
       AError := 'TLS 1.3 record sealer SealToBuf: fragment nil';
       Exit;
     end;
-    Move(AFragment^, LInner[0], AFragLen);
+    Move(AFragment^, (ADest + 5)^, AFragLen);
   end;
-  LInner[AFragLen] := AContentType;
+  (ADest + 5 + AFragLen)^ := AContentType;
   BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
   SetLength(LNonce, 12);
   Move(LNonceBytes[0], LNonce[0], 12);
   LEncLen := 0;
   LAAD := BuildTLS13RecordAAD(Word(LInnerLen + 16));
-  if not TryTLS13AEADEncryptToBuf(FCipherSuite, FKey, LNonce, LAAD, @LInner[0], LInnerLen, ADest + 5, ADestCap - 5, LEncLen, AError) then
+  if not TryTLS13AEADEncryptToBuf(FCipherSuite, FKey, LNonce, LAAD, ADest + 5, LInnerLen, ADest + 5, ADestCap - 5, LEncLen, AError) then
     Exit;
   ADest[0] := TLS_CONTENT_TYPE_APPLICATION_DATA;
   ADest[1] := Byte(TLS_LEGACY_VERSION shr 8);
