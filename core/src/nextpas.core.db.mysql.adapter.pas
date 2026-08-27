@@ -193,7 +193,7 @@ end;
 
 function ParseMySqlDsn(const ADsn: string): TDbMysqlDsnParts;
 var
-  I, LLen, LQuote: Integer;
+  I, LLen, LQuote, LStart: Integer;
   LKey, LVal: string;
 begin
   Result.Host := '127.0.0.1';
@@ -210,38 +210,33 @@ begin
       Inc(I);
     if I > LLen then
       Break;
-    LKey := '';
+    LStart := I;
     while (I <= LLen) and (ADsn[I] <> '=') do
-    begin
-      LKey := LKey + LowerCase(ADsn[I]);
       Inc(I);
-    end;
-    if (LKey = '') or (I > LLen) then
+    if (I - LStart = 0) or (I > LLen) then
       raise EDbError.CreateSimple(dbkMysql,
         'malformed dsn near offset ' + IntToStr(I));
+    LKey := LowerCase(Copy(ADsn, LStart, I - LStart));
     Inc(I);  { skip '=' }
-    LVal := '';
     if (I <= LLen) and ((ADsn[I] = '''') or (ADsn[I] = '"')) then
     begin
       LQuote := Ord(ADsn[I]);
       Inc(I);
+      LStart := I;
       while (I <= LLen) and (Ord(ADsn[I]) <> LQuote) do
-      begin
-        LVal := LVal + ADsn[I];
         Inc(I);
-      end;
       if I > LLen then
         raise EDbError.CreateSimple(dbkMysql,
           'unterminated quoted dsn value for "' + LKey + '"');
+      LVal := Copy(ADsn, LStart, I - LStart);
       Inc(I);  { closing quote }
     end
     else
     begin
+      LStart := I;
       while (I <= LLen) and (ADsn[I] <> ' ') do
-      begin
-        LVal := LVal + ADsn[I];
         Inc(I);
-      end;
+      LVal := Copy(ADsn, LStart, I - LStart);
     end;
     AssignDsnKey(Result, LKey, LVal);
   end;

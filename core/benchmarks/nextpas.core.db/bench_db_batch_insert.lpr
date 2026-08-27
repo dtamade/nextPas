@@ -171,4 +171,7 @@ begin
   end
   else
     WriteLn('backend=postgres skipped');
+  { mysql 段：N=10000 在回环 TCP 上 ~3.6s/10k（adapter_overhead 实测），
+    batch 四路全开总计 >10s，不进默认 bench 以免掩盖 pg 核心口径。
+    需单独评估时设 NEXTPAS_MYSQL_TEST_CONN 并单跑 adapter_overhead。 }
 end.
