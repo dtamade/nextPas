@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.9（S14——性能/完整性闭环：bench_bridge 4 热路径基线（TryDecode 3.8µs/Resolve 0.6µs/Reject 1.2µs/Emit 0.9µs）+ respack a11y 对齐 + factory 重复/空守卫回退 + BACKENDS Landed 收口）
+**版本**：1.10（S15—— polish：MIME 12→65 项（复用 http.mime 65 项零分配二分表、avif/bmp/woff2 等全量）、demo 骨架屏 + 错误边界（alert + showErr + skeleton）、VFS 65 项回退覆盖、bench 双基线保持）
+**承接**：1.9（S14——性能/完整性闭环：bench_bridge 4 热路径基线（TryDecode 3.8µs/Resolve 0.6µs/Reject 1.2µs/Emit 0.9µs）+ respack a11y 对齐 + factory 重复/空守卫回退 + BACKENDS Landed 收口）
 **承接**：1.8（S13——复用/稳定性/高级感收口：MIME 共享单元抽取（`webview.mime` 二分表唯一事实源，`vfs` 归一复用）、bridge fuzz 3 用例（oversized 2MiB/HasError/语料 10）+ Builder 校验回退覆盖、demo a11y（focus-visible/reduced-motion/aria-live/键盘回车/系统主题 change 监听）与 bench 17 用例全绿）
 **承接**：1.7（S12——高级感/性能/稳定性三轴打磨：demo 深/浅双主题+玻璃拟态+性能徽标；资产路由索引化（最长前缀首命中）+ MIME 二分表（12 项）；TryDecodeFrame 2MiB 守卫 + HasError 校验；Builder 重复/空 handler 互斥校验强化；bench 回归 SmallHit 718ns/Fallback 904ns/Miss 218ns 全绿）\n**承接**：1.6（S11——`webview.vfs` 公共适配器 `CreateVfsAssetProvider(IVfs)` 抽离
 （`demo_webview_respack` 私有实现收敛为家族唯一收口，TVfs 前缀容错双试 + MIME 快表）、

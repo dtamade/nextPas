@@ -105,6 +105,11 @@ begin
   Bld.AddFile('a.json', StrBytes('{}'), 0);
   Bld.AddFile('a.bin', StrBytes(#0#1#2), 0);
   Bld.AddFile('a.svg', StrBytes('<svg/>'), 0);
+  Bld.AddFile('a.avif', StrBytes('x'), 0);
+  Bld.AddFile('a.woff2', StrBytes('x'), 0);
+  Bld.AddFile('a.mp4', StrBytes('x'), 0);
+  Bld.AddFile('a.pdf', StrBytes('x'), 0);
+  Bld.AddFile('a.ts', StrBytes('x'), 0);
   V := Bld.Freeze;
   Bld.Free;
   P := CreateVfsAssetProvider(V);
@@ -112,6 +117,11 @@ begin
   Check(P.TryResolve('a.json', B, M) and (M = 'application/json; charset=utf-8'), 'json mime');
   Check(P.TryResolve('a.bin', B, M) and (M = 'application/octet-stream'), 'octet fallback');
   Check(P.TryResolve('a.svg', B, M) and (M = 'image/svg+xml'), 'svg mime');
+  Check(P.TryResolve('a.avif', B, M) and (M = 'image/avif'), 'avif mime');
+  Check(P.TryResolve('a.woff2', B, M) and (M = 'font/woff2'), 'woff2 mime');
+  Check(P.TryResolve('a.mp4', B, M) and (M = 'video/mp4'), 'mp4 mime');
+  Check(P.TryResolve('a.pdf', B, M) and (M = 'application/pdf'), 'pdf mime');
+  Check(P.TryResolve('a.ts', B, M) and (M = 'video/mp2t'), 'ts mime');
 end;
 
 procedure TestEmptyAndLeadingSlash;
