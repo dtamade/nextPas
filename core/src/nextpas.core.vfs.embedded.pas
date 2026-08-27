@@ -28,7 +28,8 @@ function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.time.httpdate;
 
 type
   { 只读窗口流：读窗口 = blob 内 [FOffset, FOffset+FSize)，零拷贝直达 }
@@ -63,6 +64,7 @@ type
     FOwnsBlob: Boolean;
     FPaths: TVfsNameArray; { cached sorted file paths — O(1) reuse, avoids per-call EntryPaths alloc }
     FETags: array of string; { parallel ETag cache — precomputed at Create, O(1) ServeVfs }
+    FLastMods: array of string; { parallel Last-Modified cache — FormatHttpDate at Create }
     function EntryPaths: TVfsNameArray; inline;
     function HasSubtreePath(const APath: string): Boolean;
     function StartsWithPath(const AStr, APrefix: string): Boolean;
@@ -76,6 +78,7 @@ type
     function OpenRead(const APath: string): IStream;
     function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
+    function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
   end;
 
 function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
@@ -191,9 +194,10 @@ begin
   FData := AData;
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
-  { Materialize sorted path index + parallel ETag cache once — O(n) upfront, O(1) per ServeVfs }
+  { Materialize sorted path index + parallel ETag/Last-Modified cache once — O(n) upfront, O(1) per ServeVfs }
   SetLength(FPaths, FRp.Count);
   SetLength(FETags, FRp.Count);
+  SetLength(FLastMods, FRp.Count);
   if FRp.Count > 0 then
     for I := 0 to FRp.Count - 1 do
     begin
@@ -203,11 +207,16 @@ begin
         FETags[I] := '"fnv-' + nextpas.core.text.conv.IntToHex(UInt64(E.Hash), 8) + '"'
       else
         FETags[I] := '"' + nextpas.core.text.conv.IntToHex(E.Size, 16) + '-' + nextpas.core.text.conv.IntToHex(UInt64(E.ModTime), 16) + '"';
+      if E.ModTime > 0 then
+        FLastMods[I] := nextpas.core.time.httpdate.FormatHttpDate(E.ModTime)
+      else
+        FLastMods[I] := '';
     end;
 end;
 
 destructor TEmbeddedVfs.Destroy;
 begin
+  SetLength(FLastMods, 0);
   SetLength(FETags, 0);
   SetLength(FPaths, 0);
   if FOwnsBlob and (FData <> nil) then
@@ -284,6 +293,20 @@ begin
     Exit(True);
   end;
   AETag := '';
+  Result := False;
+end;
+
+function TEmbeddedVfs.TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
+var
+  Idx: SizeInt;
+begin
+  Idx := IndexOfPath(APath);
+  if Idx >= 0 then
+  begin
+    ALastModified := FLastMods[Idx];
+    Exit(True);
+  end;
+  ALastModified := '';
   Result := False;
 end;
 
