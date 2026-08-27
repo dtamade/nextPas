@@ -1062,6 +1062,59 @@ begin
   Check(LGotRaise, 'max output enforced mid-stream on source path');
 end;
 
+{ 跨条目总上限 MaxTotalOutputSize：单条目均在 MaxOutput 内，但总和超限即
+  在构造期拒绝（fail-closed，防“多小条目绕过单条目上限”型 zip bomb） }
+procedure TestTotalOutputLimit;
+var
+  LW: IZipWriter;
+  LArch: TBytes;
+  LOpts: TZipReadOptions;
+  LR: IZipReader;
+  LS: IStream;
+  LGotRaise: Boolean;
+  LI: Integer;
+begin
+  LW := NewZipWriter;
+  for LI := 0 to 4 do
+    LW.AddEntry('f' + IntToStr(LI) + '.bin', PatternBytes(100, LI));
+  LArch := LW.Finish;
+  { 5*100=500 总量，设限 250 应在解析期即拒绝 }
+  LOpts := DefaultZipReadOptions;
+  LOpts.MaxTotalOutputSize := 250;
+  LGotRaise := False;
+  try
+    LR := NewZipReaderWithOptions(LArch, LOpts);
+    LR.EntryCount;
+  except
+    on E: Exception do
+      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'total limit enforced on memory reader');
+
+  LGotRaise := False;
+  try
+    LS := CreateBytesStreamFrom(LArch);
+    LR := NewZipReaderFromWithOptions(LS, LOpts);
+    LR.EntryCount;
+  except
+    on E: Exception do
+      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'total limit enforced on source reader');
+
+  { 合法边界：总和恰等于上限不拒绝 }
+  LOpts.MaxTotalOutputSize := 500;
+  LR := NewZipReaderWithOptions(LArch, LOpts);
+  CheckEqual(Int64(5), Int64(LR.EntryCount), 'total limit exact boundary');
+  Check(SameBytes(LR.ExtractToBytesByName('f0.bin'), PatternBytes(100, 0)),
+    'boundary still extracts');
+
+  { 0=不限：500 远大于单条目默认上限的 1 GiB? 不，500 <1GiB 所以依然通过 }
+  LOpts.MaxTotalOutputSize := 0;
+  LR := NewZipReaderWithOptions(LArch, LOpts);
+  CheckEqual(Int64(5), Int64(LR.EntryCount), 'total unlimited passes');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.reader');
   T.Test('Empty archive reader', @TestEmptyArchiveReader);
@@ -1091,5 +1144,6 @@ begin
     @TestSourceReaderGuardsAndPosition);
   T.Test('Source reader zip64 and max output',
     @TestSourceReaderZip64AndMaxOutput);
+  T.Test('Total output limit', @TestTotalOutputLimit);
   if not T.Run then Halt(1);
 end.

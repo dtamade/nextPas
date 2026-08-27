@@ -49,8 +49,10 @@ uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
   nextpas.core.compress.deflate,
+  nextpas.core.bytes.builder,
   nextpas.core.zip.aes,
-  nextpas.core.zip.common;
+  nextpas.core.zip.common,
+  nextpas.core.zip.extra;
 
 const
   C_LOCAL_HEADER_LEN = 30;
@@ -73,6 +75,8 @@ type
   private
     FSrc: IReader;
     FMaxOutput: SizeUInt;
+    FMaxTotalOutput: UInt64;
+    FCumulative: UInt64;
     FPassword: TBytes;
     FIndex: Integer;
     FAtEnd: Boolean;
@@ -87,6 +91,7 @@ type
     FBufferedRaw: TBytes;
     FBufferedReady: Boolean;
     procedure CheckNoStream;
+    procedure CheckTotalLimit;
     procedure ReadExactBytes(out ADst: TBytes; ACount: SizeUInt; const AWhat: string);
     procedure ReadExactBuf(var ABuf; ACount: SizeUInt; const AWhat: string);
     procedure PushBack(const AData: TBytes);
@@ -96,7 +101,7 @@ type
     function MakeDecompressedReader: IDecompressReader;
   public
     constructor Create(const ASource: IReader; AMaxOutput: SizeUInt;
-      const APassword: TBytes);
+      AMaxTotalOutput: UInt64; const APassword: TBytes);
     function Next(out AInfo: TZipEntryInfo): Boolean;
     function Current: TZipEntryInfo;
     function EntryIndex: Integer;
@@ -159,13 +164,15 @@ begin
 end;
 
 constructor TSequentialZipReader.Create(const ASource: IReader;
-  AMaxOutput: SizeUInt; const APassword: TBytes);
+  AMaxOutput: SizeUInt; AMaxTotalOutput: UInt64; const APassword: TBytes);
 begin
   inherited Create;
   if ASource = nil then
     raise EArgumentError.Create('zip: nil source reader');
   FSrc := ASource;
   FMaxOutput := AMaxOutput;
+  FMaxTotalOutput := AMaxTotalOutput;
+  FCumulative := 0;
   FPassword := Copy(APassword);
   FIndex := -1;
   FAtEnd := False;
@@ -185,6 +192,17 @@ begin
   if FStreamOpen then
     raise EInvalidOperationError.Create(
       'zip sequential: previous entry stream not closed');
+end;
+
+procedure TSequentialZipReader.CheckTotalLimit;
+begin
+  if FMaxTotalOutput = 0 then
+    Exit;
+  if FCurrent.UncompressedSize > FMaxTotalOutput then
+    raise EIOError.Create('zip: total uncompressed size exceeds limit');
+  if FCumulative > FMaxTotalOutput - FCurrent.UncompressedSize then
+    raise EIOError.Create('zip: total uncompressed size exceeds limit');
+  Inc(FCumulative, FCurrent.UncompressedSize);
 end;
 
 function TSequentialZipReader.HasPushBack: Boolean;
@@ -272,9 +290,6 @@ var
   LHasAes, LIsDir: Boolean;
   LAesVersion, LAesVendor, LAesRealMethod: Word;
   LAesStrength: Byte;
-  LPos: SizeUInt;
-  LExtraId, LExtraSize: Word;
-  LExtraPos: SizeUInt;
 begin
   ReadExactBytes(LFixed, 4, 'local header signature');
   if LE32At(LFixed, 0) <> C_ZIP_LOCAL_SIG then
@@ -315,47 +330,8 @@ begin
   end;
   LCSize := LCSize32;
   LUSize := LUSize32;
-  LHasAes := False;
-  LAesVersion := 0;
-  LAesVendor := 0;
-  LAesRealMethod := 0;
-  LAesStrength := 0;
-  LExtraPos := 0;
-  while LExtraPos + 4 <= SizeUInt(Length(LExtraBytes)) do
-  begin
-    LExtraId := LE16At(LExtraBytes, LExtraPos);
-    LExtraSize := LE16At(LExtraBytes, LExtraPos + 2);
-    if LExtraPos + 4 + LExtraSize > SizeUInt(Length(LExtraBytes)) then
-      raise EParseError.Create('zip: malformed extra field');
-    if LExtraId = C_ZIP64_EXTRA_ID then
-    begin
-      if LExtraSize >= 16 then
-      begin
-        if LUSize = UInt64($FFFFFFFF) then
-          LUSize := LE64At(LExtraBytes, LExtraPos + 4);
-        if LCSize = UInt64($FFFFFFFF) then
-          LCSize := LE64At(LExtraBytes, LExtraPos + 12);
-      end
-      else if LExtraSize >= 8 then
-      begin
-        if LUSize = UInt64($FFFFFFFF) then
-          LUSize := LE64At(LExtraBytes, LExtraPos + 4);
-      end;
-    end
-    else if LExtraId = C_WINZIP_AES_EXTRA_ID then
-    begin
-      if LHasAes or (LExtraSize <> C_WINZIP_AES_EXTRA_BODY) then
-        raise EParseError.Create('zip: malformed WinZip AES extra field');
-      LAesVersion := LE16At(LExtraBytes, LExtraPos + 4);
-      LAesVendor := LE16At(LExtraBytes, LExtraPos + 6);
-      LAesStrength := LExtraBytes[LExtraPos + 8];
-      LAesRealMethod := LE16At(LExtraBytes, LExtraPos + 9);
-      if LAesVendor <> C_WINZIP_AES_VENDOR_LE then
-        raise EParseError.Create('zip: unknown WinZip AES vendor id');
-      LHasAes := True;
-    end;
-    Inc(LExtraPos, 4 + LExtraSize);
-  end;
+  DecodeLocalExtra(LExtraBytes, LUSize, LCSize, LHasAes, LAesVersion,
+    LAesVendor, LAesRealMethod, LAesStrength);
   FCurrentFlags := LFlags;
   FCurrentIsDescriptor := (LFlags and C_ZIP_FLAG_DESCRIPTOR) <> 0;
   FCurrentRawMethod := LMethod;
@@ -412,12 +388,12 @@ end;
 
 function TSequentialZipReader.CollectDescriptorPayload: TBytes;
 var
-  LAccum: TBytes;
-  LLen, LCap, LPrevLen: SizeUInt;
-  LChunk: TBytes;
+  LBuilder: IBytesBuilder;
+  LChunk: array[0..8191] of Byte;
   LRead: SizeUInt;
+  LLen, LPrevLen: SizeUInt;
   LPos: Integer;
-  LCandCrc, LCalcCrc: LongWord;
+  LCandCrc: LongWord;
   LCandCSize, LCandUSize: UInt64;
   LCandCSize64, LCandUSize64: UInt64;
   LFound: Boolean;
@@ -425,11 +401,20 @@ var
   LFoundCrc: LongWord;
   LFoundCSize, LFoundUSize: UInt64;
   LFoundDescSize: SizeUInt;
-  LDecompressed: TBytes;
   LExtraAfter: TBytes;
   LScanStart, LScanEnd: Integer;
   LPayload: TBytes;
   LNextSigNeed: SizeUInt;
+  LData: PByte;
+  function LE32Ptr(AOff: SizeUInt): LongWord; inline;
+  begin
+    Result := LongWord(LData[AOff]) or (LongWord(LData[AOff + 1]) shl 8) or
+      (LongWord(LData[AOff + 2]) shl 16) or (LongWord(LData[AOff + 3]) shl 24);
+  end;
+  function LE64Ptr(AOff: SizeUInt): UInt64; inline;
+  begin
+    Result := UInt64(LE32Ptr(AOff)) or (UInt64(LE32Ptr(AOff + 4)) shl 32);
+  end;
   function TryDescriptorAt(APos: SizeUInt; ADescSize: SizeUInt; out ACrc: LongWord;
     out ACSize, AUSize: UInt64): Boolean;
   var
@@ -442,15 +427,15 @@ var
     Result := False;
     if ADescSize = 16 then
     begin
-      LCrcTmp := LE32At(LAccum, APos + 4);
-      LCSizeTmp := LE32At(LAccum, APos + 8);
-      LUSizeTmp := LE32At(LAccum, APos + 12);
+      LCrcTmp := LE32Ptr(APos + 4);
+      LCSizeTmp := LE32Ptr(APos + 8);
+      LUSizeTmp := LE32Ptr(APos + 12);
     end
     else
     begin
-      LCrcTmp := LE32At(LAccum, APos + 4);
-      LCSizeTmp := LE64At(LAccum, APos + 8);
-      LUSizeTmp := LE64At(LAccum, APos + 16);
+      LCrcTmp := LE32Ptr(APos + 4);
+      LCSizeTmp := LE64Ptr(APos + 8);
+      LUSizeTmp := LE64Ptr(APos + 16);
     end;
     if LCSizeTmp <> APos then
       Exit;
@@ -459,7 +444,7 @@ var
     if APos > 0 then
     begin
       SetLength(LPay, APos);
-      Move(LAccum[0], LPay[0], APos);
+      Move(LData^, LPay[0], APos);
       LCalc := Crc32OfBytes(LPay);
     end
     else
@@ -493,9 +478,7 @@ begin
   if FCurrent.IsEncrypted then
     raise ENotSupportedError.Create(
       'zip: sequential AES descriptor not supported: ' + FCurrent.Name);
-  LAccum := nil;
-  LLen := 0;
-  LCap := 0;
+  LBuilder := CreateBytesBuilder(8192);
   LFound := False;
   LFoundPos := 0;
   LFoundCrc := 0;
@@ -503,7 +486,6 @@ begin
   LFoundUSize := 0;
   LFoundDescSize := 16;
   repeat
-    SetLength(LChunk, 8192);
     LRead := 0;
     if HasPushBack then
     begin
@@ -523,16 +505,10 @@ begin
     if LRead = 0 then
       raise EParseError.Create('zip: truncated descriptor payload for ' +
         FCurrent.Name);
-    if LLen + LRead > LCap then
-    begin
-      LCap := (LLen + LRead) * 2;
-      if LCap < 8192 then
-        LCap := 8192;
-      SetLength(LAccum, LCap);
-    end;
-    Move(LChunk[0], LAccum[LLen], LRead);
-    LPrevLen := LLen;
-    Inc(LLen, LRead);
+    LPrevLen := LBuilder.Length;
+    LBuilder.AppendBytes(@LChunk[0], LRead);
+    LLen := LBuilder.Length;
+    LData := LBuilder.Data;
     if LLen < 16 then
       Continue;
     if LPrevLen > 40 then
@@ -542,9 +518,8 @@ begin
     LScanEnd := Integer(LLen) - 16;
     for LPos := LScanStart to LScanEnd do
     begin
-      if LE32At(LAccum, SizeUInt(LPos)) <> C_ZIP_DESCRIPTOR_SIG then
+      if LE32Ptr(SizeUInt(LPos)) <> C_ZIP_DESCRIPTOR_SIG then
         Continue;
-      { Try 16-byte descriptor first }
       if LLen - SizeUInt(LPos) >= 16 then
       begin
         if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
@@ -552,8 +527,7 @@ begin
           LNextSigNeed := 16;
           if LLen - SizeUInt(LPos + LNextSigNeed) >= 4 then
           begin
-            if not IsKnownZipSig(LE32At(LAccum, SizeUInt(LPos + LNextSigNeed))) then
-              { 16-byte trial failed next-sig, try 24-byte as fallback }
+            if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + LNextSigNeed))) then
             else
             begin
               LFound := True;
@@ -566,13 +540,9 @@ begin
             end;
           end
           else
-          begin
-            { Not enough bytes to verify next sig, defer decision }
             Continue;
-          end;
         end;
       end;
-      { Try 24-byte Zip64 descriptor }
       if LLen - SizeUInt(LPos) >= 24 then
       begin
         if TryDescriptorAt(SizeUInt(LPos), 24, LCandCrc, LCandCSize64, LCandUSize64) then
@@ -580,13 +550,11 @@ begin
           LNextSigNeed := 24;
           if LLen - SizeUInt(LPos + LNextSigNeed) >= 4 then
           begin
-            if not IsKnownZipSig(LE32At(LAccum, SizeUInt(LPos + LNextSigNeed))) then
+            if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + LNextSigNeed))) then
               Continue;
           end
           else
-          begin
             Continue;
-          end;
           LFound := True;
           LFoundPos := SizeUInt(LPos);
           LFoundCrc := LCandCrc;
@@ -597,10 +565,7 @@ begin
         end;
       end
       else if LLen - SizeUInt(LPos) > 0 then
-      begin
-        { Descriptor split across chunks, wait for more data }
         Continue;
-      end;
     end;
     if LFound then
       Break;
@@ -613,14 +578,14 @@ begin
   until False;
   SetLength(LPayload, LFoundPos);
   if LFoundPos > 0 then
-    Move(LAccum[0], LPayload[0], LFoundPos);
+    Move(LData^, LPayload[0], LFoundPos);
   FCurrent.Crc32 := LFoundCrc;
   FCurrent.CompressedSize := LFoundCSize;
   FCurrent.UncompressedSize := LFoundUSize;
   if LLen > LFoundPos + LFoundDescSize then
   begin
     SetLength(LExtraAfter, LLen - LFoundPos - LFoundDescSize);
-    Move(LAccum[LFoundPos + LFoundDescSize], LExtraAfter[0], Length(LExtraAfter));
+    Move((LData + LFoundPos + LFoundDescSize)^, LExtraAfter[0], Length(LExtraAfter));
     PushBack(LExtraAfter);
   end;
   Result := LPayload;
@@ -693,6 +658,7 @@ begin
     FBufferedRaw := LRaw;
     FBufferedReady := True;
   end;
+  CheckTotalLimit;
   Inc(FIndex);
   AInfo := FCurrent;
   Result := True;
@@ -801,7 +767,8 @@ begin
   LMax := AOptions.MaxOutputSize;
   if LMax = 0 then
     LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result := TSequentialZipReader.Create(ASource, LMax, AOptions.Password);
+  Result := TSequentialZipReader.Create(ASource, LMax,
+    AOptions.MaxTotalOutputSize, AOptions.Password);
 end;
 
 end.
