@@ -145,14 +145,24 @@ end.
 | `Build` | 创建窗口（多窗共享同一主循环） |
 | `Run(url)/RunHtml(html)` | 单窗便捷封装（Build+Navigate+RunLoop） |
 
-respack 集成形态见 `demo_webview_respack`（`IVfs → IWebviewAssetProvider`
-适配器，CONTRACT §3.4）：
+respack 集成形态见 `demo_webview_respack` 与 `nextpas.core.webview.vfs`
+（`IVfs → IWebviewAssetProvider` 唯一收口，CONTRACT §3.4）：
 
 ```pascal
+uses nextpas.core.vfs, nextpas.core.webview.vfs;
 LVfs := CreateEmbeddedVfs(@DEMO_ASSETS[0], DEMO_ASSETS_SIZE, False);
-LProvider := TVfsAssetProvider.Create(LVfs); // TryResolve 委托 VFS
+LProvider := CreateVfsAssetProvider(LVfs); // 前缀容错双试 + MIME 快表
 LWin.Assets.MountEmbedded('', LProvider);
 ```
+
+性能基线（`core/benchmarks/nextpas.core.webview/bench_vfs`，`nextpas.core.bench` 框架）：
+
+| 场景 | ns/op | ops/s | 吞吐 |
+|------|-------|-------|------|
+| SmallHit/index.html | 766 ns | 1.3M | 246 MB/s |
+| Fallback/app/index.html | 1082 ns | 924k | 267 MB/s |
+| Miss404 | 271 ns | 3.6M | 200 MB/s |
+| LargeHit/1M | 799 µs | 1.2k | 1.22 GB/s |
 
 前端侧（协议细节见 BRIDGE_PROTOCOL.md）：
 
