@@ -64,6 +64,9 @@ function SshCipherIvSize(const ACipher: string): Integer;
 function SshMacKeySize(const AMac: string): Integer;
 function SshCipherRequiresMac(const ACipher: string): Boolean;
 
+{** AES-CTR 加解密（对称 XOR）。供加密私钥容器解密复用。*}
+function SshAesCtrCrypt(const AKey, AIV, AInput: TBytes): TBytes;
+
 implementation
 
 uses
@@ -804,6 +807,25 @@ begin
   else
     Result := TSshCtrEtmReceiver.Create(ACipher, AMac,
       Copy(AKey, 0, SshCipherKeySize(ACipher)), AIV, AMacKey);
+end;
+
+function SshAesCtrCrypt(const AKey, AIV, AInput: TBytes): TBytes;
+var
+  LStream: TAesCtrStream;
+begin
+  if Length(AInput) = 0 then
+    Exit(nil);
+  if (Length(AKey) <> 16) and (Length(AKey) <> 24) and (Length(AKey) <> 32) then
+    raise ESSHError.Create(sekCrypto, 'ssh cipher: invalid aes key length');
+  if Length(AIV) <> 16 then
+    raise ESSHError.Create(sekCrypto, 'ssh cipher: invalid aes iv length');
+  Result := Copy(AInput, 0, Length(AInput));
+  LStream := TAesCtrStream.Create(AKey, AIV);
+  try
+    LStream.XorInto(Result, 0, SizeUInt(Length(Result)));
+  finally
+    LStream.Free;
+  end;
 end;
 
 end.

@@ -693,12 +693,13 @@ begin
   RegisterLive(Self);
   FSelfKeepAlive := Self;   { keep-alive：见单元头 }
 
-  { Initial* 启动加载：构造即导航。资产解析发生在主循环泵请求时，
-    Build 返回后的挂载先于任何请求，无时序竞态（§3.4） }
-  if FOptions.InitialHtml <> '' then
-    NavigateToString(FOptions.InitialHtml)
-  else if FOptions.InitialUrl <> '' then
-    Navigate(FOptions.InitialUrl);
+  { Initial* 启动加载：构造即导航。优先级 InitialUrl > InitialHtml
+    （CONTRACT §2.2），资产解析发生在主循环泵请求时，Build 返回后的挂载
+    先于任何请求，无时序竞态（§3.4） }
+  if FOptions.InitialUrl <> '' then
+    Navigate(FOptions.InitialUrl)
+  else if FOptions.InitialHtml <> '' then
+    NavigateToString(FOptions.InitialHtml);
 end;
 
 destructor TGtkWebview.Destroy;

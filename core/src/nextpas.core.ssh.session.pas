@@ -41,8 +41,10 @@ type
     { 密码认证。失败抛 ESSHError(sekAuth)。}
     procedure AuthenticateWithPassword(const AUser, APassword: string);
 
-    { 公钥认证：openssh-key-v1 未加密容器内容（当前支持 ed25519）。}
-    procedure AuthenticateWithPrivateKeyData(const AContent: string);
+    { 公钥认证：openssh-key-v1 容器内容（未加密或 aes256-ctr+bcrypt 加密）。
+      未加密时 APassphrase 被忽略。}
+    procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
+    procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
 
     { 执行一次性命令并收集输出。需已认证。}
     function Exec(const ACommand: string): TSshExecResult;
@@ -66,6 +68,7 @@ type
     function User(const AValue: string): ISshClientBuilder;
     function Password(const AValue: string): ISshClientBuilder;
     function PrivateKeyData(const AValue: string): ISshClientBuilder;
+    function PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
     function KnownHostsFile(const AValue: string): ISshClientBuilder;
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
@@ -154,7 +157,8 @@ type
     function GetServerVersion: string;
     function GetServerHostKeyFingerprint: string;
     procedure AuthenticateWithPassword(const AUser, APassword: string);
-    procedure AuthenticateWithPrivateKeyData(const AContent: string);
+    procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
+    procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
     function Exec(const ACommand: string): TSshExecResult;
     function OpenFileSystem: ISshFileSystem;
     procedure Close;
@@ -170,6 +174,7 @@ type
     function User(const AValue: string): ISshClientBuilder;
     function Password(const AValue: string): ISshClientBuilder;
     function PrivateKeyData(const AValue: string): ISshClientBuilder;
+    function PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
     function KnownHostsFile(const AValue: string): ISshClientBuilder;
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
@@ -405,7 +410,12 @@ begin
   end;
 end;
 
-procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent: string);
+procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent: string); overload;
+begin
+  AuthenticateWithPrivateKeyData(AContent, FOptions.PrivateKeyPassphrase);
+end;
+
+procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
 var
   LR: TsshReader;
   LMsg: TBytes;
@@ -435,7 +445,7 @@ var
 begin
   EnsureHandshaken;
 
-  if not SshLoadPrivateKey(AContent, LKey, LPubBlob) then
+  if not SshLoadPrivateKey(AContent, LKey, LPubBlob, APassphrase) then
     raise ESSHError.Create(sekKeyFormat, 'ssh session: private key parse failed');
 
   case LKey.Kind of
@@ -450,12 +460,22 @@ begin
     hkRsa:
       begin
         { rsa-sha2-512 与 rsa-sha2-256 同版本引入且被一切接受 RSA 的服务端
-          支持；选最强档，单次尝试不做降级 }
+          支持；选最强档，单次尝试不做降级。优先走 CRT（p/q/iqmp 存在时约 4x
+          加速），失败则回退到朴素模幂以兼顾非法 CRT 容器/测试哑数据。}
         LAlgName := SSH_RSA_SIG_SHA512;
         LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LPubBlob);
-        if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
-          DIGEST_INFO_SHA512, LSigRaw) then
-          raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
+        if LKey.RsaHasCrt then
+        begin
+          if not RsaSignPkcs1v15Crt(LKey.RsaN, LKey.RsaD, LKey.RsaP, LKey.RsaQ,
+            LKey.RsaIqmp, SHA512(LSignedData), DIGEST_INFO_SHA512, LSigRaw) then
+            if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
+              DIGEST_INFO_SHA512, LSigRaw) then
+              raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
+        end
+        else
+          if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
+            DIGEST_INFO_SHA512, LSigRaw) then
+            raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
         LSigBlob := SshBuildRsaSigBlob(LSigRaw, LAlgName);
       end;
   else
@@ -520,6 +540,12 @@ begin
   Result := Self;
 end;
 
+function TSshClientBuilder.PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
+begin
+  FOptions.PrivateKeyPassphrase := AValue;
+  Result := Self;
+end;
+
 function TSshClientBuilder.KnownHostsFile(const AValue: string): ISshClientBuilder;
 begin
   FOptions.KnownHostsFile := AValue;
@@ -556,7 +582,8 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh connect: user is required');
   ASession.FActiveUser := AOptions.User;
   if AOptions.PrivateKeyData <> '' then
-    ASession.AuthenticateWithPrivateKeyData(AOptions.PrivateKeyData)
+    ASession.AuthenticateWithPrivateKeyData(AOptions.PrivateKeyData,
+      AOptions.PrivateKeyPassphrase)
   else
     ASession.AuthenticateWithPassword(AOptions.User, AOptions.Password);
 end;

@@ -2,8 +2,9 @@
 
 **状态**: **Landed**（Wave 1 双后端落地——fake 测试支撑 + GTK/WebKitGTK；
 S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
-live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正
-均已进主线。W2 webview2 / W3 wk 待平台环境启动）
+live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正、
+S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 respack
+资产集成示例均已进主线。W2 webview2 / W3 wk 待平台环境启动）
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。
@@ -66,11 +67,22 @@ make -C core/tests/nextpas.core.webview/examples/demo_webview run
 make focused FOCUS=core/tests/nextpas.core.webview/examples/demo_webview
 ```
 
-无 GTK 环境时自检打印 `demo-skip no-gtk-backend` 优雅通过。
+`core/tests/nextpas.core.webview/examples/demo_webview_respack` 是
+CONTRACT §3.4 推荐的 respack 集成路径示例：同一份前端资源在
+`embedded (prod) → os (dev) → http dev-server` 三形态间切换，演示
+`IVfs → IWebviewAssetProvider` 适配与 `DevServerUrl` 开发模式：
 
-## 使用示例（目标形态示意）
+```bash
+make -C core/tests/nextpas.core.webview/examples/demo_webview_respack run           # prod：pack blob 零拷贝
+make -C core/tests/nextpas.core.webview/examples/demo_webview_respack run-dev       # dev：wwwroot 热重载
+make -C core/tests/nextpas.core.webview/examples/demo_webview_respack run-dev-server # dev-server：http 直连（惰性资产）
+```
 
-> 以下为设计目标 API 形状；实际以 CONTRACT.md 为准，可运行版本见上节。
+两演示在无 GTK 环境时均打印 `demo-skip no-gtk-backend` 优雅通过。
+
+## 使用示例
+
+可运行版本见演示；以下为门面最简形态（与 CONTRACT §2-§3 一致）：
 
 ```pascal
 uses
@@ -95,21 +107,62 @@ end;
 
 var
   LDemo: TDemo;
+  LWin: IWebviewWindow;
 begin
   LDemo := TDemo.Create;
   try
-    TWebviewBuilder.New
+    // Builder 链式构造 + 构造期导航（InitialUrl 优先于 InitialHtml）
+    // Dev 模式：再加 .DevServerUrl('http://127.0.0.1:5173')
+    LWin := TWebviewBuilder.New
       .Title('Demo')
       .Size(1200, 800)
       .DebugTools(True)
+      .InitialUrl('npres://app/index.html')
+      // .InitialHtml('<h1>hi</h1>') // 二选一
       .RegisterInvoke('ping', @LDemo.OnPing)
       .OnReady(@LDemo.OnReady)
-      .Run('npres://app/index.html');   // 或 .NavigateToString('<h1>hi</h1>')
+      .Build;
+    LWin.Assets.MountEmbedded('', TMyRespackProvider.Create);
+    LWin.Show;
+    WebviewRunLoop;
+    LWin := nil;
   finally
     LDemo.Free;
   end;
 end.
 ```
+
+`TWebviewBuilder` 全链路（见 CONTRACT §2.2 与 factory 单元）：
+
+| 方法 | 作用 |
+|------|------|
+| `Title/Size/MinSize/MaxSize/Resizable/StartMaximized` | 窗口几何与状态 |
+| `DebugTools/Scheme/DataDirectory/Ephemeral` | 引擎会话与 scheme |
+| `AddInitScript` | document-start 注入（不得触 __npw） |
+| `InitialUrl/InitialHtml` | 构造期导航（Url 优先） |
+| `DevServerUrl` | 开发模式：资产惰性、scheme 惰注册 |
+| `RegisterInvoke/RegisterAsyncInvoke/OnReady/Kind` | IPC 与后端选型 |
+| `Build` | 创建窗口（多窗共享同一主循环） |
+| `Run(url)/RunHtml(html)` | 单窗便捷封装（Build+Navigate+RunLoop） |
+
+respack 集成形态见 `demo_webview_respack` 与 `nextpas.core.webview.vfs`
+（`IVfs → IWebviewAssetProvider` 唯一收口，CONTRACT §3.4）：
+
+```pascal
+uses nextpas.core.vfs, nextpas.core.webview.vfs;
+LVfs := CreateEmbeddedVfs(@DEMO_ASSETS[0], DEMO_ASSETS_SIZE, False);
+LProvider := CreateVfsAssetProvider(LVfs); // 前缀容错双试 + MIME 快表
+LWin.Assets.MountEmbedded('', LProvider);
+```
+
+性能基线（`core/benchmarks/nextpas.core.webview/bench_vfs`，`nextpas.core.bench` 框架）：
+
+| 场景 | ns/op | ops/s | 吞吐 |
+|------|-------|-------|------|
+| SmallHit/index.html | 766 ns | 1.3M | 246 MB/s |
+| Fallback/app/index.html | 1082 ns | 924k | 267 MB/s |
+| Miss404 | 271 ns | 3.6M | 200 MB/s |
+| LargeHit/1M | 799 µs | 1.2k | 1.22 GB/s |
 
 前端侧（协议细节见 BRIDGE_PROTOCOL.md）：
 

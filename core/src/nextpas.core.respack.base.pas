@@ -230,8 +230,7 @@ end;
 function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean;
 var
-  Start, I, N: Integer;
-  Seg: string;
+  Start, I, N, SegLen: Integer;
 begin
   Result := False;
   if not ResPackUtf8Valid(APath) then
@@ -248,9 +247,19 @@ begin
   begin
     if (I > N) or (APath[I] = '/') then
     begin
-      Seg := Copy(APath, Start, I - Start);
-      if (Seg = '') or (Seg = '.') or (Seg = '..') then
-        Exit;
+      SegLen := I - Start;
+      if SegLen = 0 then
+        Exit; { empty segment: 'a//b' }
+      if SegLen = 1 then
+      begin
+        if APath[Start] = '.' then
+          Exit; { single dot segment }
+      end
+      else if SegLen = 2 then
+      begin
+        if (APath[Start] = '.') and (APath[Start + 1] = '.') then
+          Exit; { parent segment }
+      end;
       Start := I + 1;
     end;
   end;

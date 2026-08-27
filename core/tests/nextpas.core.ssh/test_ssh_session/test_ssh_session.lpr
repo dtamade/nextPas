@@ -29,6 +29,7 @@ uses
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ed25519,
   nextpas.core.crypto.hash,
+  nextpas.core.crypto.bcrypt_pbkdf,
   nextpas.core.encoding.base64,
   nextpas.core.platform.files.text,
   nextpas.core.ssh.rsa,
@@ -1010,6 +1011,29 @@ begin
   end;
 end;
 
+function MakeRsaPrivSectionCrt(ACheck: UInt32; const AN, AE, AD, AP, AQ, AIqmp: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(768);
+  try
+    LW.PutUInt32(ACheck);
+    LW.PutUInt32(ACheck);
+    LW.PutStringText('ssh-rsa');
+    LW.PutMPInt(AN);
+    LW.PutMPInt(AE);
+    LW.PutMPInt(AD);
+    LW.PutMPInt(AIqmp);
+    LW.PutMPInt(AP);
+    LW.PutMPInt(AQ);
+    LW.PutStringText('loop client key crt');
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
 function Base64Chunked(const AData: TBytes): string;
 var
   LB64: string;
@@ -1032,13 +1056,72 @@ begin
     + '-----END OPENSSH PRIVATE KEY-----' + #10;
 end;
 
+function PadTo16(const AData: TBytes): TBytes;
+var
+  LPad, I: Integer;
+begin
+  Result := Copy(AData, 0, Length(AData));
+  LPad := (16 - (Length(Result) mod 16)) mod 16;
+  for I := 1 to LPad do
+  begin
+    SetLength(Result, Length(Result) + 1);
+    Result[High(Result)] := Byte(I);
+  end;
+end;
+
+function CraftEncryptedContainer(const APass, ASalt: string; ARounds: Cardinal;
+  const APubBlob, APrivRaw: TBytes): TBytes;
+var
+  LPw, LSaltBytes, LDerived, LAesKey, LAiv, LPadded, LEnc, LKdfOpt: TBytes;
+  LW: TsshWriter;
+  LErr: string;
+begin
+  LPw := StringToBytes(APass);
+  LSaltBytes := StringToBytes(ASalt);
+  if not TryBcryptPbkdf(LPw, LSaltBytes, 48, ARounds, LDerived, LErr) then
+    raise Exception.Create('craft encrypted: pbkdf failed: ' + LErr);
+  SetLength(LAesKey, 32);
+  SetLength(LAiv, 16);
+  Move(LDerived[0], LAesKey[0], 32);
+  Move(LDerived[32], LAiv[0], 16);
+  LPadded := PadTo16(APrivRaw);
+  LEnc := SshAesCtrCrypt(LAesKey, LAiv, LPadded);
+  LW := TsshWriter.Create(64);
+  try
+    LW.PutStringBytes(LSaltBytes);
+    LW.PutUInt32(ARounds);
+    LKdfOpt := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+  LW := TsshWriter.Create(512);
+  try
+    LW.PutRaw(StringToBytes('openssh-key-v1'));
+    LW.PutByte(0);
+    LW.PutStringText('aes256-ctr');
+    LW.PutStringText('bcrypt');
+    LW.PutStringBytes(LKdfOpt);
+    LW.PutUInt32(1);
+    LW.PutStringBytes(APubBlob);
+    LW.PutStringBytes(LEnc);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
 { ── 回环驱动 ─────────────────────────────────────────────────── }
 
 const
   LOOP_PASSWORD = 0;
   LOOP_PUBKEY = 1;
   LOOP_PUBKEY_RSA = 2;
+  LOOP_PUBKEY_ENCRYPTED = 3;
+  LOOP_PUBKEY_RSA_CRT = 4;
   KH_PATH = '/tmp/nextpas_ssh_session_known_hosts';
+  ENC_PASSPHRASE = 's3cret-pass-42';
+  ENC_SALT = 'salty12345678901';
+  ENC_ROUNDS = 16;
 
 type
   TLoopResult = record
@@ -1111,6 +1194,24 @@ begin
           RsaPubBlob(HexToBytesKat(KAT_E_HEX), KatN),
           MakeRsaPrivSection($A1B2C3D4, KatN,
             HexToBytesKat(KAT_E_HEX), KatD)));
+      end
+      else if AMode = LOOP_PUBKEY_RSA_CRT then
+      begin
+        { 真实 CRT 路径：服务端同样走 PKCS#1 验签，客户端优先走 CRT }
+        LOpts.PrivateKeyData := PemOf(CraftContainer(
+          RsaPubBlob(HexToBytesKat(KAT_E_HEX), CrtKatN),
+          MakeRsaPrivSectionCrt($A1B2C3D4, CrtKatN, HexToBytesKat(KAT_E_HEX),
+            CrtKatD, CrtKatP, CrtKatQ, CrtKatIqmp)));
+      end
+      else if AMode = LOOP_PUBKEY_ENCRYPTED then
+      begin
+        LSeed := PatternBytes($3D, 32);
+        LPub := Ed25519PublicKeyFromPrivate(LSeed);
+        LContainer := CraftEncryptedContainer(ENC_PASSPHRASE, ENC_SALT, ENC_ROUNDS,
+          Ed25519PubBlob(LPub),
+          MakePrivSection('ssh-ed25519', $A1B2C3D4, LPub, LSeed));
+        LOpts.PrivateKeyData := PemOf(LContainer);
+        LOpts.PrivateKeyPassphrase := ENC_PASSPHRASE;
       end
       else
       begin
@@ -1232,6 +1333,26 @@ begin
     LR: TLoopResult;
   begin
     LR := RunLoopback(LOOP_PUBKEY_RSA, True, True, '', False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  GSuite.Test('publickey rsa CRT auth loopback', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PUBKEY_RSA_CRT, True, True, '', False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  GSuite.Test('publickey encrypted ed25519 auth loopback', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PUBKEY_ENCRYPTED, True, True, '', False);
     CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
     CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
     CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');

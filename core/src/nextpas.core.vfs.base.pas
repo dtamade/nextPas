@@ -93,8 +93,7 @@ end;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 var
-  Start, I, N: Integer;
-  Seg: string;
+  Start, I, N, SegLen: Integer;
 begin
   Result := False;
   if not VfsUtf8Valid(APath) then
@@ -111,9 +110,19 @@ begin
   begin
     if (I > N) or (APath[I] = '/') then
     begin
-      Seg := Copy(APath, Start, I - Start);
-      if (Seg = '') or (Seg = '.') or (Seg = '..') then
-        Exit;
+      SegLen := I - Start;
+      if SegLen = 0 then
+        Exit; { empty segment }
+      if SegLen = 1 then
+      begin
+        if APath[Start] = '.' then
+          Exit;
+      end
+      else if SegLen = 2 then
+      begin
+        if (APath[Start] = '.') and (APath[Start + 1] = '.') then
+          Exit;
+      end;
       Start := I + 1;
     end;
   end;
