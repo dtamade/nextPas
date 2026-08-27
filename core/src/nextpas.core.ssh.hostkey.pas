@@ -2,7 +2,8 @@ unit nextpas.core.ssh.hostkey;
 
 {** nextpas.core.ssh - 主机公钥解析、验签、指纹与 known_hosts。
  *
- * 支持 ssh-ed25519 与 ssh-rsa（rsa-sha2-256/512 签名，PKCS#1 v1.5）。
+ * 支持 ssh-ed25519、ssh-rsa（rsa-sha2-256/512，PKCS#1 v1.5）与
+ * ecdsa-sha2-nistp256（P-256，SHA-256，mpint(r,s)→DER 转换后调 crypto.ecdsa）。
  * known_hosts 支持：明文模式（含 * ? 通配、逗号列表）、[host]:port 形式、
  * |1|salt|hash 散列条目（HMAC-SHA1）；@cert-authority/@revoked 行跳过。
  *
@@ -29,7 +30,12 @@ type
     Ed25519Pub: TBytes;   { hkEd25519：32 字节公钥 }
     RsaE: TBytes;         { hkRsa：大端 magnitude }
     RsaN: TBytes;
+    EcdsaP256X: TBytes;   { hkEcdsaP256：32 字节 X }
+    EcdsaP256Y: TBytes;   { hkEcdsaP256：32 字节 Y }
   end;
+
+{** 构造 ecdsa-sha2-nistp256 公钥 wire blob。供测试与上层构造器复用。*}
+function SshEcdsaP256PubToBlob(const AX, AY: TBytes): TBytes;
 
 {** 解析 RFC 4253 §6.6 公钥 wire blob。不认识的算法返回 False。*}
 function SshParseHostKey(const ABlob: TBytes; out AInfo: TSshHostKeyInfo): Boolean;
@@ -78,6 +84,8 @@ uses
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.constant_time,
   nextpas.core.crypto.hmac,
+  nextpas.core.crypto.ecdsa,
+  nextpas.core.crypto.asn1,
   nextpas.core.encoding.base64,
   nextpas.core.platform.files.text,
   nextpas.core.ssh.rsa;
@@ -98,7 +106,10 @@ end;
 function SshParseHostKey(const ABlob: TBytes; out AInfo: TSshHostKeyInfo): Boolean;
 var
   LR: TsshReader;
-  LAlg: string;
+  LAlg, LCurve: string;
+  LQ: TBytes;
+  LPoint: TECPoint;
+  LErr: string;
 begin
   Result := False;
   LR := TsshReader.Create(ABlob);
@@ -123,9 +134,56 @@ begin
         raise ESSHError.Create(sekKeyFormat, 'ssh hostkey: rsa key fields invalid');
       Exit(True);
     end;
+    if LAlg = 'ecdsa-sha2-nistp256' then
+    begin
+      LCurve := LR.ReadStringText;
+      if LCurve <> 'nistp256' then
+        raise ESSHError.Create(sekKeyFormat, 'ssh hostkey: ecdsa curve must be nistp256');
+      LQ := LR.ReadStringBytes;
+      if (Length(LQ) <> 65) or (LQ[0] <> $04) then
+        raise ESSHError.Create(sekKeyFormat, 'ssh hostkey: ecdsa point must be 65-byte uncompressed');
+      AInfo.AlgName := LAlg;
+      AInfo.Kind := hkEcdsaP256;
+      SetLength(AInfo.EcdsaP256X, 32);
+      SetLength(AInfo.EcdsaP256Y, 32);
+      Move(LQ[1], AInfo.EcdsaP256X[0], 32);
+      Move(LQ[33], AInfo.EcdsaP256Y[0], 32);
+      LPoint.X := AInfo.EcdsaP256X;
+      LPoint.Y := AInfo.EcdsaP256Y;
+      LPoint.IsInfinity := False;
+      if not TryValidateP256Point(LPoint, LErr) then
+        raise ESSHError.Create(sekKeyFormat, 'ssh hostkey: ecdsa point invalid: ' + LErr);
+      Exit(True);
+    end;
     AInfo := Default(TSshHostKeyInfo);
   finally
     LR.Free;
+  end;
+end;
+
+function SshEcdsaP256PubToBlob(const AX, AY: TBytes): TBytes;
+var
+  LW: TsshWriter;
+  LQ: TBytes;
+  LPadX, LPadY: TBytes;
+  LErr: string;
+begin
+  if not TryToFixedLength32(AX, LPadX, LErr) then
+    raise ESSHError.Create(sekKeyFormat, 'ssh hostkey: ecdsa X pad failed: ' + LErr);
+  if not TryToFixedLength32(AY, LPadY, LErr) then
+    raise ESSHError.Create(sekKeyFormat, 'ssh hostkey: ecdsa Y pad failed: ' + LErr);
+  SetLength(LQ, 65);
+  LQ[0] := $04;
+  Move(LPadX[0], LQ[1], 32);
+  Move(LPadY[0], LQ[33], 32);
+  LW := TsshWriter.Create(128);
+  try
+    LW.PutStringText('ecdsa-sha2-nistp256');
+    LW.PutStringText('nistp256');
+    LW.PutStringBytes(LQ);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
   end;
 end;
 
@@ -143,6 +201,11 @@ var
   LR: TsshReader;
   LSigRaw: TBytes;
   LSigAlgName: string;
+  LErr: string;
+  LWriter: TASN1Writer;
+  LDER, LPub: TBytes;
+  LR2: TsshReader;
+  LRBytes, LSBytes: TBytes;
 begin
   Result := False;
   LR := TsshReader.Create(ASigBlob);
@@ -171,6 +234,41 @@ begin
           Result := RsaVerifyPkcs1v15(AInfo.RsaE, AInfo.RsaN, AH,
             DIGEST_INFO_SHA256, LSigRaw);
         { 裸 ssh-rsa（SHA-1）不在现代集合内：拒绝 }
+      end;
+    hkEcdsaP256:
+      begin
+        if LSigAlgName <> 'ecdsa-sha2-nistp256' then
+          Exit;
+        try
+          LR2 := TsshReader.Create(LSigRaw);
+          try
+            LRBytes := LR2.ReadMPInt;
+            LSBytes := LR2.ReadMPInt;
+            if LR2.Remaining <> 0 then
+              Exit;
+          finally
+            LR2.Free;
+          end;
+        except
+          Exit;
+        end;
+        LWriter := TASN1Writer.Create;
+        try
+          LWriter.BeginSequence;
+          LWriter.WriteBigInteger(LRBytes);
+          LWriter.WriteBigInteger(LSBytes);
+          LWriter.EndSequence;
+          LDER := LWriter.GetData;
+        finally
+          LWriter.Free;
+        end;
+        SetLength(LPub, 65);
+        LPub[0] := $04;
+        if (Length(AInfo.EcdsaP256X) <> 32) or (Length(AInfo.EcdsaP256Y) <> 32) then
+          Exit;
+        Move(AInfo.EcdsaP256X[0], LPub[1], 32);
+        Move(AInfo.EcdsaP256Y[0], LPub[33], 32);
+        Result := TryECDSAVerifyP256SHA256(AH, LPub, LDER, LErr);
       end;
     else
       Result := False;

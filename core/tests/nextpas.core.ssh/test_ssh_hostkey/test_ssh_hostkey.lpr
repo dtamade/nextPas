@@ -15,6 +15,8 @@ uses
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.hostkey,
   nextpas.core.crypto.ed25519,
+  nextpas.core.crypto.ecdsa,
+  nextpas.core.crypto.asn1,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.hash,
   nextpas.core.hash.base,
@@ -101,6 +103,36 @@ begin
     LW.PutStringText('ssh-rsa');
     LW.PutMPInt(AE);
     LW.PutMPInt(AN);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
+function EcdsaSshSigRaw(const ADER: TBytes): TBytes;
+var
+  LR: TASN1Reader;
+  LRoot: TASN1Node;
+  LRBytes, LSBytes: TBytes;
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LR := TASN1Reader.Create(ADER);
+  try
+    LRoot := LR.Parse;
+    try
+      LRBytes := LRoot.GetChild(0).AsBigInteger;
+      LSBytes := LRoot.GetChild(1).AsBigInteger;
+    finally
+      LRoot.Free;
+    end;
+  finally
+    LR.Free;
+  end;
+  LW := TsshWriter.Create(80);
+  try
+    LW.PutMPInt(LRBytes);
+    LW.PutMPInt(LSBytes);
     Result := LW.ToBytes;
   finally
     LW.Free;
@@ -385,6 +417,105 @@ begin
       CheckEqual(Int64(1), Int64(LKH.Count));
       CheckTrue(LKH.ContainsKey('tmp.example.com', 22, LBlob));
       DeleteFile(LPath);
+    finally
+      LKH.Free;
+    end;
+  end);
+
+  LSuite.Test('ecdsa blob parse and roundtrip', procedure
+  var
+    LPriv, LBlob: TBytes;
+    LPoint: TECPoint;
+    LErr: string;
+    LInfo: TSshHostKeyInfo;
+    LX, LY: TBytes;
+  begin
+    LPriv := HexToBytes('c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721');
+    CheckTrue(TryP256ScalarMultBase(LPriv, LPoint, LErr));
+    CheckTrue(TryToFixedLength32(LPoint.X, LX, LErr));
+    CheckTrue(TryToFixedLength32(LPoint.Y, LY, LErr));
+    LBlob := SshEcdsaP256PubToBlob(LX, LY);
+    CheckTrue(SshParseHostKey(LBlob, LInfo));
+    CheckEqual('ecdsa-sha2-nistp256', LInfo.AlgName);
+    CheckEqual(Ord(hkEcdsaP256), Ord(LInfo.Kind));
+    CheckEqual(BytesToHex(LX), BytesToHex(LInfo.EcdsaP256X));
+    CheckEqual(BytesToHex(LY), BytesToHex(LInfo.EcdsaP256Y));
+    { 指纹稳定 }
+    CheckTrue(Copy(SshFingerprintSHA256(LBlob), 1, 7) = 'SHA256:');
+    { 错误点：截断 blob 必须失败（抛异常或返回 False）}
+    begin
+      LInfo := Default(TSshHostKeyInfo);
+      try
+        CheckFalse(SshParseHostKey(Copy(LBlob, 0, 20), LInfo), 'truncated ecdsa blob must not parse');
+      except
+        on E: ESSHError do
+          CheckTrue(True, 'truncated raises');
+      end;
+    end;
+    { 坏曲线名：nistp384 应被拒绝（抛 sekKeyFormat）}
+    begin
+      LInfo := Default(TSshHostKeyInfo);
+      try
+        CheckFalse(SshParseHostKey(HexToBytes('0000001365636473612d736861322d6e69737470323536000000086e6973747033383400000041041111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222222'), LInfo), 'bad curve must not parse');
+      except
+        on E: ESSHError do
+          CheckEqual(Ord(sekKeyFormat), Ord(E.Kind), 'bad curve must be sekKeyFormat');
+      end;
+    end;
+  end);
+
+  LSuite.Test('ecdsa signature verify positive and negative', procedure
+  var
+    LPriv, LBlob, LH, LDER, LSigRaw, LSigBlob: TBytes;
+    LPoint: TECPoint;
+    LErr: string;
+    LInfo: TSshHostKeyInfo;
+    LX, LY: TBytes;
+  begin
+    LPriv := HexToBytes('c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721');
+    CheckTrue(TryP256ScalarMultBase(LPriv, LPoint, LErr));
+    CheckTrue(TryToFixedLength32(LPoint.X, LX, LErr));
+    CheckTrue(TryToFixedLength32(LPoint.Y, LY, LErr));
+    LBlob := SshEcdsaP256PubToBlob(LX, LY);
+    CheckTrue(SshParseHostKey(LBlob, LInfo));
+    LH := SHA256(HexToBytes('6e6578747061732065636473612074657374')); // 'nextpas ecdsa test'
+    CheckTrue(TryECDSASignP256SHA256(LH, LPriv, LDER, LErr));
+    LSigRaw := EcdsaSshSigRaw(LDER);
+    LSigBlob := SigBlobOf('ecdsa-sha2-nistp256', LSigRaw);
+    CheckTrue(SshVerifyHostSignature(LInfo, 'ecdsa-sha2-nistp256', LH, LSigBlob), 'valid ecdsa sig must verify');
+    { 算法名不一致 → False }
+    CheckFalse(SshVerifyHostSignature(LInfo, 'ssh-ed25519', LH, LSigBlob));
+    { 篡改 H → False }
+    CheckFalse(SshVerifyHostSignature(LInfo, '', ConcatBytes(Copy(LH, 0, 31), HexToBytes('ff')), LSigBlob));
+    { 篡改签名 → False }
+    LSigRaw[10] := LSigRaw[10] xor $01;
+    CheckFalse(SshVerifyHostSignature(LInfo, '', LH, SigBlobOf('ecdsa-sha2-nistp256', LSigRaw)));
+  end);
+
+  LSuite.Test('ecdsa known_hosts roundtrip with hash and plain', procedure
+  var
+    LKH: TSshKnownHosts;
+    LPriv, LBlob: TBytes;
+    LPoint: TECPoint;
+    LX, LY: TBytes;
+    LErr: string;
+    LSalt, LHash: TBytes;
+    LLine: string;
+  begin
+    LPriv := HexToBytes('c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721');
+    CheckTrue(TryP256ScalarMultBase(LPriv, LPoint, LErr));
+    CheckTrue(TryToFixedLength32(LPoint.X, LX, LErr));
+    CheckTrue(TryToFixedLength32(LPoint.Y, LY, LErr));
+    LBlob := SshEcdsaP256PubToBlob(LX, LY);
+    LKH := TSshKnownHosts.Create;
+    try
+      LKH.AddLine('ecdsa.example.com ecdsa-sha2-nistp256 ' + Base64Encode(LBlob));
+      CheckTrue(LKH.ContainsKey('ecdsa.example.com', 22, LBlob));
+      LSalt := PatternBytes($5A, 16);
+      LHash := HMAC_SHA1(LSalt, SshBytesFromText('hashed-ecdsa.example.com'));
+      LLine := '|1|' + Base64Encode(LSalt) + '|' + Base64Encode(LHash) + ' ecdsa-sha2-nistp256 ' + Base64Encode(LBlob);
+      LKH.AddLine(LLine);
+      CheckTrue(LKH.ContainsKey('hashed-ecdsa.example.com', 22, LBlob));
     finally
       LKH.Free;
     end;

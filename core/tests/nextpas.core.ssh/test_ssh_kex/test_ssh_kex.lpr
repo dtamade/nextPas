@@ -137,7 +137,8 @@ begin
     CheckEqual('curve25519-sha256', LPeer.KexAlgs[0]);
     CheckEqual('curve25519-sha256@libssh.org', LPeer.KexAlgs[1]);
     CheckEqual('ssh-ed25519', LPeer.HostKeyAlgs[0]);
-    CheckEqual('rsa-sha2-512', LPeer.HostKeyAlgs[1]);
+    CheckEqual('ecdsa-sha2-nistp256', LPeer.HostKeyAlgs[1]);
+    CheckEqual('rsa-sha2-512', LPeer.HostKeyAlgs[2]);
     CheckEqual('chacha20-poly1305@openssh.com', LPeer.EncCs[0]);
     CheckEqual('hmac-sha2-512-etm@openssh.com', LPeer.MacSc[0]);
     CheckEqual('none', LPeer.CompCs[0]);
@@ -202,6 +203,59 @@ begin
     CheckEqual('', LNeg.MacCs);
     CheckEqual('', LNeg.MacSc);
     CheckEqual('none', LNeg.CompCs);
+  end);
+
+  LSuite.Test('ecdsa hostkey negotiation prefers ed25519 over ecdsa and rsa', procedure
+  var
+    LW: TsshWriter;
+    LPeer: TSshPeerKexInit;
+    LNeg: TSshNegotiated;
+  begin
+    LW := TsshWriter.Create(256);
+    try
+      LW.PutByte(SSH_MSG_KEXINIT);
+      LW.PutRaw(HexToBytes('000102030405060708090a0b0c0d0e0f'));
+      LW.PutNameList(['curve25519-sha256']);
+      LW.PutNameList(['ecdsa-sha2-nistp256', 'rsa-sha2-512']);
+      LW.PutNameList(['aes256-gcm@openssh.com']);
+      LW.PutNameList(['aes256-gcm@openssh.com']);
+      LW.PutNameList([]);
+      LW.PutNameList([]);
+      LW.PutNameList(['none']);
+      LW.PutNameList(['none']);
+      LW.PutStringText('');
+      LW.PutStringText('');
+      LW.PutBoolean(False);
+      LW.PutUInt32(0);
+      LPeer := SshParseKexInit(LW.ToBytes);
+      LNeg := SshNegotiate(LPeer);
+      CheckEqual('ecdsa-sha2-nistp256', LNeg.HostKeyAlg);
+    finally
+      LW.Free;
+    end;
+    { 当服务端同时提供 ed25519 与 ecdsa，客户端优先 ed25519 }
+    LW := TsshWriter.Create(256);
+    try
+      LW.PutByte(SSH_MSG_KEXINIT);
+      LW.PutRaw(HexToBytes('000102030405060708090a0b0c0d0e0f'));
+      LW.PutNameList(['curve25519-sha256']);
+      LW.PutNameList(['ecdsa-sha2-nistp256', 'ssh-ed25519', 'rsa-sha2-512']);
+      LW.PutNameList(['aes256-gcm@openssh.com']);
+      LW.PutNameList(['aes256-gcm@openssh.com']);
+      LW.PutNameList([]);
+      LW.PutNameList([]);
+      LW.PutNameList(['none']);
+      LW.PutNameList(['none']);
+      LW.PutStringText('');
+      LW.PutStringText('');
+      LW.PutBoolean(False);
+      LW.PutUInt32(0);
+      LPeer := SshParseKexInit(LW.ToBytes);
+      LNeg := SshNegotiate(LPeer);
+      CheckEqual('ssh-ed25519', LNeg.HostKeyAlg);
+    finally
+      LW.Free;
+    end;
   end);
 
   LSuite.Test('ctr cipher demands etm mac', procedure
