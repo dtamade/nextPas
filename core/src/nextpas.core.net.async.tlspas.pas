@@ -584,6 +584,7 @@ type
     FNetTx: TBytes;
     FNetInBuf: TByteStreamBuf;
     FPlainOutBuf: TByteStreamBuf;
+    FNetTxBuf: TByteStreamBuf;
     FNetTxOff: Integer;
     FRecvChunk: Integer;
     FRecvArmed: Boolean;
@@ -2115,6 +2116,7 @@ begin
   FPostHs := APostHsSeed;
   FNetInBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
   FPlainOutBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
+  FNetTxBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
   if Length(ANetInSeed) > 0 then
     FNetInBuf.Append(@ANetInSeed[0], Length(ANetInSeed));
   FRecvChunk := cNetReadChunk;
@@ -2139,6 +2141,8 @@ begin
   FNetInBuf := nil;
   if Assigned(FPlainOutBuf) then FPlainOutBuf.Free;
   FPlainOutBuf := nil;
+  if Assigned(FNetTxBuf) then FNetTxBuf.Free;
+  FNetTxBuf := nil;
   FInner := nil;
   FLoop := nil;
   inherited Destroy;
@@ -2547,9 +2551,9 @@ begin
       LSelf.DeliverWrite(ASYNC_TLSFP_ERR_IO);
     Exit;
   end;
-  Inc(LSelf.FNetTxOff, AResult);
+  LSelf.FNetTxBuf.Consume(SizeUInt(AResult));
   LSelf.CompactTxIfDrained;
-  if (LSelf.FNetTxOff >= Length(LSelf.FNetTx)) and
+  if (LSelf.FNetTxBuf.Available = 0) and
      LSelf.FWritePending then
     LSelf.DeliverWrite(Int32(LSelf.FWriteTotal))
   else
@@ -2579,17 +2583,14 @@ begin
 end;
 
 function TFpTlsStream.ArmNetSend: Boolean;
-var
-  LLeft: Integer;
 begin
   Result := False;
   if FSendArmed or FDead then
     Exit;
-  LLeft := Length(FNetTx) - FNetTxOff;
-  if LLeft <= 0 then
+  if FNetTxBuf.Available = 0 then
     Exit(True);
   FSendArmed := True;
-  if FInner.AsyncWrite(@FNetTx[FNetTxOff], UInt32(LLeft), @StreamSendCb,
+  if FInner.AsyncWrite(FNetTxBuf.Data, UInt32(FNetTxBuf.Available), @StreamSendCb,
     Self) then
     Exit(True);
   FSendArmed := False;
@@ -2614,19 +2615,16 @@ begin
       LRecord, LErr) then
       raise EInvalidOperationError.Create('tlsfp: seal app data: ' +
         LErr);
-    AppendBytesTo(FNetTx, LRecord);
+    if Length(LRecord) > 0 then
+      FNetTxBuf.Append(@LRecord[0], Length(LRecord));
     Inc(LOffset, LTake);
   end;
 end;
 
 procedure TFpTlsStream.CompactTxIfDrained;
 begin
-  if (FNetTxOff >= Length(FNetTx)) and (Length(FNetTx) > 0) and
-     not FWritePending then
-  begin
-    FNetTx := nil;
-    FNetTxOff := 0;
-  end;
+  if (FNetTxBuf.Available = 0) and not FWritePending then
+    FNetTxBuf.Clear;
 end;
 
 { ---- IReader/IWriter（同步便捷面） ---- }
@@ -2657,7 +2655,8 @@ begin
     LAlert := TBytes.Create(1, 0); { warning + close_notify }
     if FSealer.Seal(LAlert, TLS_CONTENT_TYPE_ALERT, LRecord, LErr) then
     begin
-      AppendBytesTo(FNetTx, LRecord);
+      if Length(LRecord) > 0 then
+        FNetTxBuf.Append(@LRecord[0], Length(LRecord));
       ArmNetSend; { 尽力冲刷；不等对端 }
     end;
   end;
@@ -2790,7 +2789,7 @@ begin
   if ACount = 0 then
     Exit(tsiorOk);
   { 有未冲尽残留时不再追加（避免跨调用字节序歧义）：先冲完再来 }
-  if FNetTxOff < Length(FNetTx) then
+  if FNetTxBuf.Available > 0 then
     Exit(tsiorWouldBlock);
   SetLength(LView, ACount);
   Move(ABuf, LView[0], ACount);
@@ -2800,9 +2799,8 @@ begin
     FDead := True;
     Exit(tsiorClosed);
   end;
-  FNetTxOff := 0;
   ArmNetSend;
-  if FNetTxOff < Length(FNetTx) then
+  if FNetTxBuf.Available > 0 then
     Exit(tsiorWouldBlock);
   CompactTxIfDrained;
   AWritten := ACount;
@@ -2862,16 +2860,12 @@ begin
   end;
   { 整段先封队（dataplane 缓冲有界，瞬态 ~1.06× 可接受）；
     冲刷完成后一次回调总长。缓冲所有权：调用方持有至回调，
-    本层立即拷贝成记录队列，不引用调用方内存跨重试。
-    先压实已冲尽的残留队列：否则下面的 off 重置会指向旧记录，
-    重发即对端序列号错乱（实测 sing-box bad record MAC）。 }
-  if FNetTxOff < Length(FNetTx) then
+    本层立即拷贝成记录队列，不引用调用方内存跨重试。 }
+  if FNetTxBuf.Available > 0 then
   begin
     { 前序写未冲尽（close_notify 残留等）：拒绝重复提交 }
     Exit;
   end;
-  FNetTx := nil;
-  FNetTxOff := 0;
   SetLength(LView, ALen);
   Move(ABuf^, LView[0], ALen);
   try
