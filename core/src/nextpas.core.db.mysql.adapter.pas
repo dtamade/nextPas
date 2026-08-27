@@ -87,8 +87,9 @@ procedure WriteBindSlot(ABase: Pointer; const AIndex, ANativeSize: Integer;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.tx,
@@ -132,8 +133,8 @@ var
   LMsg, LSs: string;
 begin
   LCode := Integer(my_errno(AConnH));
-  LMsg := string(AnsiString(my_error(AConnH)));
-  LSs := string(AnsiString(my_sqlstate(AConnH)));
+  LMsg := AnsiPtrToStr(my_error(AConnH));
+  LSs := AnsiPtrToStr(my_sqlstate(AConnH));
   ClassifyMy(LCode, LSs, LCategory, LConstraint);
   raise EDbError.CreateFullMy(LCode, LSs, LMsg, LCategory, LConstraint);
 end;
@@ -147,8 +148,8 @@ var
   LMsg, LSs: string;
 begin
   LCode := Integer(my_stmtErrno(AStmt));
-  LMsg := string(AnsiString(my_stmtError(AStmt)));
-  LSs := string(AnsiString(my_stmtSqlstate(AStmt)));
+  LMsg := AnsiPtrToStr(my_stmtError(AStmt));
+  LSs := AnsiPtrToStr(my_stmtSqlstate(AStmt));
   ClassifyMy(LCode, LSs, LCategory, LConstraint);
   raise EDbError.CreateFullMy(LCode, LSs, LMsg, LCategory, LConstraint);
 end;
@@ -162,8 +163,8 @@ var
   LMsg, LSs: string;
 begin
   LCode := Integer(my_stmtErrno(AStmt));
-  LMsg := string(AnsiString(my_stmtError(AStmt)));
-  LSs := string(AnsiString(my_stmtSqlstate(AStmt)));
+  LMsg := AnsiPtrToStr(my_stmtError(AStmt));
+  LSs := AnsiPtrToStr(my_stmtSqlstate(AStmt));
   my_stmtClose(AStmt);
   ClassifyMy(LCode, LSs, LCategory, LConstraint);
   raise EDbError.CreateFullMy(LCode, LSs, LMsg, LCategory, LConstraint);
@@ -707,7 +708,7 @@ begin
     begin
       FResBufs[I] := nil;
       LF := my_fetchFieldDirect(LMetaRes, Cardinal(I));
-      FColMeta[I].Name := string(AnsiString(LF^.Name));
+      FColMeta[I].Name := AnsiPtrToStr(LF^.Name);
       FColMeta[I].Typ := LF^.Typ;
       FColMeta[I].CharsetNr := LF^.CharsetNr;
       case LF^.Typ of
@@ -1090,7 +1091,7 @@ begin
     begin
       LRow := my_fetchRow(LRes);
       if (LRow <> nil) and ((LRow + 0)^ <> nil) then
-        Result := StrToInt64Def(string(AnsiString((LRow + 0)^)), 0);
+        Result := StrToInt64Def(AnsiPtrToStr((LRow + 0)^), 0);
     end;
   finally
     my_freeResult(LRes);
