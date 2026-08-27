@@ -400,6 +400,7 @@ var
   LWriter: IWriter;
   LEscapedName: string;
   LIfNoneMatch: string;
+  LIsHead: Boolean;
 begin
   if AReq <> nil then
     LIfNoneMatch := AReq.GetHeaders.Get('if-none-match')
@@ -423,6 +424,7 @@ begin
     AW.GetHeaders.SetHeader('content-disposition',
       'attachment; filename="' + LEscapedName + '"');
   end;
+  LIsHead := (AReq <> nil) and (AReq.Method = hmHead);
   if AReq <> nil then
     LRangeHeader := AReq.GetHeaders.Get('range')
   else
@@ -434,19 +436,23 @@ begin
       SendRangeNotSatisfiable(ASize, AW);
       Exit;
     end;
-    LStream := AFactory();
     AW.GetHeaders.SetHeader('content-range',
       'bytes ' + IntToStr(LStart) + '-' + IntToStr(LEnd) + '/' + IntToStr(ASize));
     AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
     AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
+    if LIsHead then
+      Exit;
+    LStream := AFactory();
     LWriter := TResponseWriterAdapter.Create(AW);
     CopyRange(LStream, LWriter, LStart, LEnd - LStart + 1);
   end
   else
   begin
-    LStream := AFactory();
     AW.GetHeaders.SetHeader('content-length', IntToStr(ASize));
     AW.WriteHeader(HTTP_STATUS_OK);
+    if LIsHead then
+      Exit;
+    LStream := AFactory();
     LWriter := TResponseWriterAdapter.Create(AW);
     nextpas.core.io.Copy(LWriter, LStream);
   end;
