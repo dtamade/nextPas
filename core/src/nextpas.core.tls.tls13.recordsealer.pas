@@ -37,6 +37,14 @@ type
     function Open(const AEncryptedPayload: TBytes;
       out AFragment: TBytes; out AContentType: Byte;
       out AError: string): Boolean;
+    function OpenTo(const AEncryptedPayload: TBytes;
+      ADest: PByte; ADestCap: Integer;
+      out AFragLen: Integer; out AContentType: Byte;
+      out AError: string): Boolean;
+    function OpenToBuf(AEncrypted: PByte; AEncryptedLen: Integer;
+      ADest: PByte; ADestCap: Integer;
+      out AFragLen: Integer; out AContentType: Byte;
+      out AError: string): Boolean;
     procedure UpdateKey(const ANewKey, ANewIV: TBytes);
     procedure Clear;
     function IsExhausted: Boolean;
@@ -199,6 +207,90 @@ begin
   if not IncrementTLS13Sequence(FSequence) then
     FState := tssExhausted;
 
+  Result := True;
+end;
+
+function TTLS13RecordOpener.OpenTo(const AEncryptedPayload: TBytes;
+  ADest: PByte; ADestCap: Integer;
+  out AFragLen: Integer; out AContentType: Byte;
+  out AError: string): Boolean;
+var
+  LNonceBytes: array[0..11] of Byte;
+  LNonce: TBytes;
+  LAAD: TBytes;
+begin
+  AFragLen := 0;
+  AContentType := 0;
+  AError := '';
+  Result := False;
+  if (ADest = nil) and (ADestCap > 0) and (Length(AEncryptedPayload) > 0) then
+  begin
+    AError := 'TLS 1.3 record opener OpenTo: dest nil';
+    Exit;
+  end;
+  if FState = tssExhausted then
+  begin
+    AError := 'TLS 1.3 record opener: sequence number exhausted';
+    Exit;
+  end;
+  if Length(FIV) <> 12 then
+  begin
+    AError := 'TLS 1.3 record opener: IV must be 12 bytes';
+    Exit;
+  end;
+  BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
+  SetLength(LNonce, 12);
+  Move(LNonceBytes[0], LNonce[0], 12);
+  LAAD := BuildTLS13RecordAAD(Word(Length(AEncryptedPayload)));
+  if not TryTLS13AEADDecryptTo(FCipherSuite, FKey, LNonce, LAAD,
+    AEncryptedPayload, ADest, ADestCap, AFragLen, AContentType, AError) then
+    Exit;
+  if not IncrementTLS13Sequence(FSequence) then
+    FState := tssExhausted;
+  Result := True;
+end;
+
+function TTLS13RecordOpener.OpenToBuf(AEncrypted: PByte;
+  AEncryptedLen: Integer; ADest: PByte; ADestCap: Integer;
+  out AFragLen: Integer; out AContentType: Byte; out AError: string): Boolean;
+var
+  LNonceBytes: array[0..11] of Byte;
+  LNonce: TBytes;
+  LAAD: TBytes;
+begin
+  AFragLen := 0;
+  AContentType := 0;
+  AError := '';
+  Result := False;
+  if (ADest = nil) and (ADestCap > 0) and (AEncryptedLen > 0) then
+  begin
+    AError := 'TLS 1.3 record opener OpenToBuf: dest nil';
+    Exit;
+  end;
+  if (AEncrypted = nil) and (AEncryptedLen > 0) then
+  begin
+    AError := 'TLS 1.3 record opener OpenToBuf: encrypted nil';
+    Exit;
+  end;
+  if FState = tssExhausted then
+  begin
+    AError := 'TLS 1.3 record opener: sequence number exhausted';
+    Exit;
+  end;
+  if Length(FIV) <> 12 then
+  begin
+    AError := 'TLS 1.3 record opener: IV must be 12 bytes';
+    Exit;
+  end;
+  BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
+  SetLength(LNonce, 12);
+  Move(LNonceBytes[0], LNonce[0], 12);
+  LAAD := BuildTLS13RecordAAD(Word(AEncryptedLen));
+  if not TryTLS13AEADDecryptToBuf(FCipherSuite, FKey, LNonce, LAAD,
+    AEncrypted, AEncryptedLen, ADest, ADestCap, AFragLen, AContentType, AError) then
+    Exit;
+  if not IncrementTLS13Sequence(FSequence) then
+    FState := tssExhausted;
   Result := True;
 end;
 

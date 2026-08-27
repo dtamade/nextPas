@@ -57,6 +57,11 @@ function HttpTryWriteNotModified(const AReq: IHttpRequest;
 {** @desc Format Unix timestamp as HTTP date (RFC 7231 §7.1.1.1).
    Example: "Sun, 06 Nov 1994 08:49:37 GMT". }
 function FormatHttpDate(const AUnixTimestamp: Int64): string;
+{** @desc Parse HTTP-date (RFC 7231 §7.1.1.1) to Unix timestamp seconds.
+   Accepts IMF-fixdate ("Sun, 06 Nov 1994 08:49:37 GMT"), RFC 850
+   ("Sunday, 06-Nov-94 08:49:37 GMT") and ANSIC ("Sun Nov  6 08:49:37 1994")
+   — the same set as Go's http.ParseTime. Returns False on parse failure. }
+function TryParseHttpDate(const ADate: string; out AUnix: Int64): Boolean;
 {** @desc Ensure headers carry a Date header (RFC 7231 §7.1.1.2 SHOULD).
    Injects current UTC time only when the headers do not already have one. }
 procedure HttpEnsureDateHeader(const AHeaders: IHttpHeaders);
@@ -348,6 +353,12 @@ begin
   LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 + (Ord(ADate[LPos + 4]) - Ord('0'));
   LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 + (Ord(ADate[LPos + 7]) - Ord('0'));
 
+  { 范围校验：非法时/分/秒/日/月拒绝（TOffsetDateTime 会容错回绕，
+    如 25:49:37 → 次日 01:49:37——严格解析须显式拒绝）。 }
+  if (LDay < 1) or (LDay > 31) or (LMonth < 1) or (LMonth > 12) or
+     (LHour > 23) or (LMinute > 59) or (LSecond > 60) then
+    Exit;
+
   try
     LDT := TOffsetDateTime.Create(
       TNaiveDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond),
@@ -358,6 +369,123 @@ begin
   end;
 end;
 
+{ Parse RFC 850 / ANSIC C date as fallback forms of HTTP-date
+  (RFC 7231 §7.1.1.1; Go http.ParseTime accepts both).
+  RFC850:  "Sunday, 06-Nov-94 08:49:37 GMT"
+  ANSIC:   "Sun Nov  6 08:49:37 1994"   (day space-padded to 2 cols)
+  Returns 0 on parse failure; two-digit years expand via 69 → 20xx rule
+  (POSIX strptime %y, same as Go time.Parse with "06"). }
+function ParseHttpDateFallback(const ADate: string): Int64;
+var
+  LDay, LMonth, LYear, LHour, LMinute, LSecond, LI, LPos: Integer;
+  LMonthStr: string;
+  LDT: TOffsetDateTime;
+begin
+  Result := 0;
+  if Length(ADate) < 16 then
+    Exit;
+  { RFC850: weekday + ", " + DD-Mmm-YY at fixed offsets (1-based).
+    "Sunday, 06-Nov-94 ..." → ','@7, day@9-10, '-'@11, month@12-14,
+    '-'@15, year@16-17, time@19. }
+  if (ADate[7] = ',') and (ADate[11] = '-') and (ADate[15] = '-') then
+  begin
+    LDay := (Ord(ADate[9]) - Ord('0')) * 10 + (Ord(ADate[10]) - Ord('0'));
+    LMonthStr := System.Copy(ADate, 12, 3);
+    LMonth := 0;
+    for LI := 1 to 12 do
+      if LMonthStr = MONTH_NAMES[LI] then
+      begin
+        LMonth := LI;
+        Break;
+      end;
+    if LMonth = 0 then
+      Exit;
+    LYear := (Ord(ADate[16]) - Ord('0')) * 10 + (Ord(ADate[17]) - Ord('0'));
+    if LYear < 69 then
+      LYear := 2000 + LYear
+    else
+      LYear := 1900 + LYear;
+    LPos := 19;   { skip "-YY " → "HH:MM:SS" }
+  end
+  else if ADate[4] = ' ' then
+  begin
+    { ANSIC: "Sun Nov  6 08:49:37 1994" — weekday space month, then
+      day either " 6" (space-padded) or "16". }
+    LMonthStr := System.Copy(ADate, 5, 3);
+    LMonth := 0;
+    for LI := 1 to 12 do
+      if LMonthStr = MONTH_NAMES[LI] then
+      begin
+        LMonth := LI;
+        Break;
+      end;
+    if LMonth = 0 then
+      Exit;
+    LPos := 9;
+    if (ADate[LPos] = ' ') then
+    begin
+      LDay := Ord(ADate[LPos + 1]) - Ord('0');
+      Inc(LPos, 3);
+    end
+    else if (ADate[LPos] in ['0'..'9']) and (ADate[LPos + 1] in ['0'..'9']) then
+    begin
+      LDay := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
+      Inc(LPos, 3);
+    end
+    else
+      Exit;
+  end
+  else
+    Exit;
+  { LPos points at "HH:MM:SS " for both fallback forms. }
+  if (LPos + 9 > Length(ADate)) then
+    Exit;
+  if (ADate[LPos + 2] <> ':') or (ADate[LPos + 5] <> ':') then
+    Exit;
+  LHour := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
+  LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 + (Ord(ADate[LPos + 4]) - Ord('0'));
+  LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 + (Ord(ADate[LPos + 7]) - Ord('0'));
+  { ANSIC year is trailing: "HH:MM:SS YYYY"; RFC850 is "HH:MM:SS GMT". }
+  if (ADate[LPos + 8] = ' ') and (LPos + 12 <= Length(ADate)) and
+     (ADate[LPos + 9] in ['0'..'9']) then
+  begin
+    if ADate[4] = ' ' then
+    begin
+      LYear := (Ord(ADate[LPos + 9]) - Ord('0')) * 1000
+             + (Ord(ADate[LPos + 10]) - Ord('0')) * 100
+             + (Ord(ADate[LPos + 11]) - Ord('0')) * 10
+             + (Ord(ADate[LPos + 12]) - Ord('0'));
+    end;
+  end;
+  if (LDay < 1) or (LDay > 31) or (LMonth < 1) or (LMonth > 12) or
+     (LHour > 23) or (LMinute > 59) or (LSecond > 60) then
+    Exit;
+  try
+    LDT := TOffsetDateTime.Create(
+      TNaiveDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond),
+      TUtcOffset.UTC);
+    Result := LDT.ToUnixSeconds;
+  except
+    Result := 0;
+  end;
+end;
+
+{** @desc Parse HTTP-date (RFC 7231 §7.1.1.1) to Unix timestamp seconds.
+   Accepts IMF-fixdate ("Sun, 06 Nov 1994 08:49:37 GMT"), RFC 850
+   ("Sunday, 06-Nov-94 08:49:37 GMT") and ANSIC ("Sun Nov  6 08:49:37 1994")
+   — the same set as Go's http.ParseTime. Returns False on parse failure. }
+function TryParseHttpDate(const ADate: string; out AUnix: Int64): Boolean;
+var
+  LV: Int64;
+begin
+  LV := ParseHttpDate(ADate);
+  if LV = 0 then
+    LV := ParseHttpDateFallback(ADate);
+  if LV = 0 then
+    Exit(False);
+  AUnix := LV;
+  Result := True;
+end;
 function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
 begin
   Result := '"' + IntToHex(ASize, 16) + '-' + IntToHex(AModTime, 16) + '"';

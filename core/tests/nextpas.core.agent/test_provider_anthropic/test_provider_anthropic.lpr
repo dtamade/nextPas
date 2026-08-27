@@ -4,6 +4,7 @@ program test_provider_anthropic;
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.log.intf,
   nextpas.core.json,
   nextpas.core.os.env,
@@ -1026,6 +1027,133 @@ begin
     CheckEqual('anthropic', P.GetName, 'env provider name');
 end;
 
+{ ---- W12：token 预估（WIRE-MAPPINGS §2.7）---- }
+
+procedure TestEncodeCountTokensW12;
+var
+  J: string;
+  R: TCompletionRequest;
+  Hit: Boolean;
+begin
+  { 同构减 max_tokens/stream：MaxTokens unset 合法（messages 路径则拒绝）}
+  J := EncodeAnthropicCountTokensRequest(
+    TCompletionRequest.New('claude-m').WithSystem('be terse')
+      .WithUserText('hi'));
+  Check(Pos('"max_tokens"', J) = 0, 'no max_tokens key');
+  Check(Pos('"stream"', J) = 0, 'no stream key');
+  Check(Pos('"model":"claude-m"', J) > 0, 'model present');
+  Check(Pos('"system":"be terse"', J) > 0, 'system present');
+  Check(Pos('"role":"user"', J) > 0, 'messages present');
+
+  { 采样参数不影响 tokenization，count schema 无此三键——不发射 }
+  R := TCompletionRequest.New('claude-m').WithUserText('hi')
+    .WithTemperature(0.7).WithStop(TStringArray.Create('END'));
+  R.TopP := 0.9;
+  J := EncodeAnthropicCountTokensRequest(R);
+  Check(Pos('"temperature"', J) = 0, 'no temperature key');
+  Check(Pos('"top_p"', J) = 0, 'no top_p key');
+  Check(Pos('"stop_sequences"', J) = 0, 'no stop_sequences key');
+
+  { ccmAuto 断点照常打点：tools 尾 + system 数组形态 + 末条消息尾 = 3 }
+  J := EncodeAnthropicCountTokensRequest(
+    TCompletionRequest.New('claude-m').WithSystem('s')
+      .WithUserText('u')
+      .WithTools(TToolSpecArray.Create(WSpec('t1', 'd1', '{}')))
+      .WithCacheControl(ccmAuto));
+  CheckEqual(Integer(3), CountSub(J, '"cache_control"'),
+    'ccmAuto markers survive count mode');
+
+  { ResponseSchema fail-fast 与 messages 同规 }
+  Hit := False;
+  try
+    EncodeAnthropicCountTokensRequest(
+      TCompletionRequest.New('claude-m')
+        .WithResponseSchema('{"type":"object"}'));
+  except
+    on E: EAgentError do
+      Hit := E.ErrorCode = aecConfig;
+  end;
+  Check(Hit, 'schema still fail-fast in count mode');
+
+  { 对照：同请求走 messages 编码，缺 MaxTokens 即拒绝——差异只在 count 模式 }
+  Hit := False;
+  try
+    EncodeAnthropicRequest(TCompletionRequest.New('claude-m'), False);
+  except
+    on E: EAgentError do
+      Hit := E.ErrorCode = aecConfig;
+  end;
+  Check(Hit, 'messages path still requires max_tokens');
+end;
+
+procedure TestBuildCountTokensUrlW12;
+begin
+  CheckEqual('https://api.anthropic.com/v1/messages/count_tokens',
+    BuildAnthropicCountTokensUrl(''), 'default base');
+  CheckEqual('https://proxy.corp/v1/messages/count_tokens',
+    BuildAnthropicCountTokensUrl('https://proxy.corp/v1/'), 'prejoined /v1');
+  CheckEqual('https://gw.io/ant/v1/messages/count_tokens',
+    BuildAnthropicCountTokensUrl('https://gw.io/ant/'),
+    'reverse-proxy prefix');
+end;
+
+procedure TestCountTokensProviderW12;
+var
+  T: TScriptedTransport;
+  Opts: TAnthropicOptions;
+  P: IAgentProvider;
+  Counter: IAgentTokenCounter;
+  N: Int64;
+  Hit: Boolean;
+  Req: TCompletionRequest;
+begin
+  T := TScriptedTransport.Create;
+  T.ProviderName := 'anthropic';
+  T.Add(ScriptResp(200, '{"input_tokens":321}'));
+  Opts := TAnthropicOptions.New('');
+  Opts.Common.ApiKey := 'ak-ct';
+  Opts.Common.Model := 'claude-m';
+  Opts.Common.Transport := T;
+  P := NewAnthropicProvider(Opts);
+
+  Check(Supports(P, IAgentTokenCounter, Counter),
+    'anthropic provider exposes token counter capability');
+  if Counter = nil then
+    Exit;
+
+  Req := TCompletionRequest.New('').WithUserText('count me');
+  N := Counter.CountTokens(Req);
+  CheckEqual(Int64(321), N, 'vendor input_tokens parsed');
+  Check(Pos('/v1/messages/count_tokens', T.LastRequest.Url) > 0,
+    'count endpoint url');
+  Check(Pos('"max_tokens"', T.LastRequest.BodyJson) = 0,
+    'wire body has no max_tokens key');
+  Check(Pos('"model":"claude-m"', T.LastRequest.BodyJson) > 0,
+    'options model resolved into wire body');
+
+  { 响应缺 input_tokens → aecProtocol（fail-closed）}
+  T.Add(ScriptResp(200, '{"id":"ct_1"}'));
+  Hit := False;
+  try
+    Counter.CountTokens(Req);
+  except
+    on E: EAgentError do
+      Hit := E.ErrorCode = aecProtocol;
+  end;
+  Check(Hit, 'missing input_tokens is a protocol violation');
+
+  { 非 object 响应同样 aecProtocol }
+  T.Add(ScriptResp(200, '[1]'));
+  Hit := False;
+  try
+    Counter.CountTokens(Req);
+  except
+    on E: EAgentError do
+      Hit := E.ErrorCode = aecProtocol;
+  end;
+  Check(Hit, 'non-object response is a protocol violation');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1059,5 +1187,8 @@ begin
     @TestProviderHonorsCancellationAtBoundary);
   T.Test('url and options defaults', @TestUrlAndOptionsDefaults);
   T.Test('from env', @TestFromEnv);
+  T.Test('encode count tokens W12', @TestEncodeCountTokensW12);
+  T.Test('build count tokens url W12', @TestBuildCountTokensUrlW12);
+  T.Test('provider count tokens W12', @TestCountTokensProviderW12);
   if not T.Run then Halt(1);
 end.

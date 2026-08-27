@@ -13,12 +13,14 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.bytes.binary,
   nextpas.core.bytes.builder,
-  nextpas.core.bytes.cursor;
+  nextpas.core.bytes.cursor,
+  nextpas.core.bytes.stream;
 
 type
   TEndianness = nextpas.core.bytes.base.TEndianness;
   IBytesBuilder = nextpas.core.bytes.builder.IBytesBuilder;
   IByteCursor = nextpas.core.bytes.cursor.IByteCursor;
+  TByteStreamBuf = nextpas.core.bytes.stream.TByteStreamBuf;
 
 const
   endLittle = nextpas.core.bytes.base.endLittle;

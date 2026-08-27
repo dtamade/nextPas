@@ -20,6 +20,10 @@ program test_net_async_tlsfp;
                           CV 签名校验通过，完整 GET
   9. verify-untrusted     不受信锚（无关自签 CA）→ 负码失败
  10. hostname-mismatch    主机名不在 SAN → 即使链可信也失败
+ 11. psk-capture          连接带 SessionCache：捕获 s_server 的
+                          NewSessionTicket 并派生 resumption PSK 入缓存
+ 12. psk-resume           第二条连接带同一缓存：服务器接受 PSK
+                          （WasResumed=True），GET 正常
 
   外部对端 = openssl s_server（Makefile test 目标拉起/回收；无 openssl
   时软跳过）。VerifyPeer 用例还需 Makefile 生成的测试 PKI（env 缺席
@@ -69,6 +73,13 @@ var
   GRxBufPtr: PByte;
   { 分段写阶段计数（multi-write 回归） }
   GWriteStage: Integer;
+  { PSK 会话恢复（用例 11/12）：跨用例共享的会话缓存与票据等待状态。
+    GWasResumed 必须在连接存活期内于驱动内部捕获——RunCachedGet 收尾
+    即释放流，用例体里只剩 nil }
+  GCache: TAsyncTlsFpSessionCache;
+  GWaitTicket: Boolean;
+  GTicketPolls: Integer;
+  GWasResumed: Boolean;
 
   { 进程内垃圾服务端状态 }
   GListener: IAsyncTcpListener;
@@ -125,6 +136,9 @@ begin
   GSubmitOk := False;
   GCbCalled := False;
   GWriteStage := 0;
+  GWaitTicket := False;
+  GTicketPolls := 0;
+  GWasResumed := False;
   { 用例间必须复位：FinishCase 靠它防止重复调度停机 }
   GFinished := False;
 end;
@@ -143,6 +157,9 @@ end;
 procedure ReadCb(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 const
   cCap = 262144;
+  cMaxTicketPolls = 64;
+var
+  LDummySess: TFpTlsResumptionSession;
 begin
   if AResult < 0 then
   begin
@@ -162,8 +179,22 @@ begin
   if ContainsBytes(GAcc, 'HTTP/1.') then
   begin
     GFoundResponse := True;
-    FinishCase;
-    Exit;
+    { 用例 11 连接 1：NST 可能晚于响应字节到达，继续泵直到票据入
+      缓存或轮询上限；挂死兜底靠外部提前调度的 @StopCb }
+    if GWaitTicket then
+    begin
+      if (GCache <> nil) and
+         GCache.TryPeek('localhost', cServerPort, LDummySess) then
+      begin
+        FinishCase;
+        Exit;
+      end;
+      Inc(GTicketPolls);
+      if GTicketPolls > cMaxTicketPolls then
+        FinishCase;
+    end
+    else
+      FinishCase;
   end;
   if Length(GAcc) > cCap then
   begin
@@ -297,9 +328,11 @@ begin
       GLoop.Run;
   finally
     ReleaseRxBuf;
-    GCliStream := nil;
+    { 先停 loop（取消挂起 op 并交付回调，此刻流仍存活），再放流引用；
+      反序会在流销毁后向其投递取消回调（use-after-free） }
     GLoop.Free;
     GLoop := nil;
+    GCliStream := nil;
   end;
 end;
 
@@ -323,9 +356,11 @@ begin
       GLoop.Run;
   finally
     ReleaseRxBuf;
-    GCliStream := nil;
+    { 先停 loop（取消挂起 op 并交付回调，此刻流仍存活），再放流引用；
+      反序会在流销毁后向其投递取消回调（use-after-free） }
     GLoop.Free;
     GLoop := nil;
+    GCliStream := nil;
   end;
 end;
 
@@ -352,12 +387,13 @@ begin
       GLoop.Run;
   finally
     ReleaseRxBuf;
+    { 先停 loop 再放流引用（理由同上） }
+    GLoop.Free;
+    GLoop := nil;
     GCliStream := nil;
     GSrvStream := nil;
     GListener := nil;
     LRaw := nil;
-    GLoop.Free;
-    GLoop := nil;
   end;
 end;
 
@@ -378,9 +414,11 @@ begin
       GLoop.Run;
   finally
     ReleaseRxBuf;
-    GCliStream := nil;
+    { 先停 loop（取消挂起 op 并交付回调，此刻流仍存活），再放流引用；
+      反序会在流销毁后向其投递取消回调（use-after-free） }
     GLoop.Free;
     GLoop := nil;
+    GCliStream := nil;
   end;
 end;
 
@@ -470,15 +508,54 @@ begin
       GLoop.Run;
   finally
     ReleaseRxBuf;
-    GCliStream := nil;
+    { 先停 loop（取消挂起 op 并交付回调，此刻流仍存活），再放流引用；
+      反序会在流销毁后向其投递取消回调（use-after-free） }
     GLoop.Free;
     GLoop := nil;
+    GCliStream := nil;
   end;
 end;
 
 function EnvOrEmpty(const AName: string): string;
 begin
   Result := GetEnvironmentVariable(AName);
+end;
+
+{ PSK 用例驱动：同一共享缓存跑一条到 s_server 的连接。GWaitTicket=True
+  时读回调会等 NST 入缓存再收尾（见 ReadCb）。 }
+procedure RunCachedGet;
+var
+  LOpts: TAsyncTlsFpClientOptions;
+  LResume: ITlsFpResumeInfo;
+begin
+  ResetClientState;
+  GLoop := TAsyncLoop.Create;
+  try
+    GLoop.Schedule(TDuration.FromSeconds(30), @StopCb, nil);
+    LOpts := DefaultAsyncTlsFpClientOptions;
+    LOpts.ServerName := 'localhost';
+    LOpts.HandshakeDeadline := TDeadline.After(TDuration.FromSeconds(10));
+    LOpts.Cache := GCache;
+    if GWaitTicket then
+      { 票据等待挂死兜底：FinishCase 幂等，先到先停 }
+      GLoop.Schedule(TDuration.FromSeconds(6), @StopCb, nil);
+    GSubmitOk := AsyncTlsFpConnect(GLoop, '127.0.0.1', cServerPort,
+      LOpts, @ReadyCb, nil);
+    if GSubmitOk and not GCbCalled then
+      GLoop.Run;
+    { 恢复状态必须在连接存活期内捕获：finally 会释放流 }
+    LResume := nil;
+    if (GCliStream <> nil) and
+       Supports(GCliStream, ITlsFpResumeInfo, LResume) then
+      GWasResumed := LResume.GetWasResumed;
+  finally
+    ReleaseRxBuf;
+    { 先停 loop（取消挂起 op 并交付回调，此刻流仍存活），再放流引用；
+      反序会在流销毁后向其投递取消回调（use-after-free） }
+    GLoop.Free;
+    GLoop := nil;
+    GCliStream := nil;
+  end;
 end;
 
 { VerifyPeer 成功路径：CA 签发证书 + 匹配主机名 → 完整握手 + GET }
@@ -525,6 +602,40 @@ begin
   Check(GCliErr < 0, 'hostname mismatch negative error');
 end;
 
+{ 连接 1：全握手 + GET，等 s_server 的 NewSessionTicket 捕获入缓存，
+  并断言 resumption PSK 已派生 }
+procedure TestPskCaptureAndStore;
+var
+  LSess: TFpTlsResumptionSession;
+begin
+  GWaitTicket := True;
+  RunCachedGet;
+  Check(GSubmitOk, 'capture connect submit');
+  Check(GCbCalled, 'capture callback delivered');
+  Check(GCliReady, 'capture handshake done');
+  CheckEqual(Int64(0), Int64(GCliErr), 'capture no error');
+  Check(GFoundResponse, 'capture HTTP response recognized');
+  Check(GCache.TryPeek('localhost', cServerPort, LSess),
+    'session ticket stored in cache');
+  Check(Length(LSess.ResumptionPSK) > 0, 'resumption psk derived');
+  Check(LSess.CipherSuite <> 0, 'suite recorded');
+end;
+
+{ 连接 2：同一缓存 → CH 带 pre_shared_key+binder，服务器接受 PSK
+  （省去证书飞行），WasResumed=True 且应用数据往返正常。
+  若服务器拒绝恢复会自然回退全握手，GetWasResumed=False 即用例红。 }
+procedure TestPskResumeConnection;
+begin
+  GWaitTicket := False;
+  RunCachedGet;
+  Check(GSubmitOk, 'resume connect submit');
+  Check(GCbCalled, 'resume callback delivered');
+  Check(GCliReady, 'resume handshake done');
+  CheckEqual(Int64(0), Int64(GCliErr), 'resume no error');
+  Check(GFoundResponse, 'resume HTTP response recognized');
+  Check(GWasResumed, 'connection was resumed via PSK');
+end;
+
 procedure TestDefaults;
 var
   LOpts: TAsyncTlsFpClientOptions;
@@ -539,27 +650,39 @@ end;
 
 var
   GSuite: TTestSuite;
+  LPass: Boolean;
 
 begin
-  GSuite := TTestSuite.Create('net_async_tlsfp');
-  GSuite.Test('Defaults', @TestDefaults);
-  GSuite.Test('DialRefused', @TestDialRefused);
-  GSuite.Test('GarbageServer', @TestGarbageServer);
-  if TlsE2EAvailable then
-  begin
-    GSuite.Test('FullHandshakeGet', @TestFullHandshakeGet);
-    GSuite.Test('SecondConnection', @TestSecondConnection);
-    GSuite.Test('SeamDispatch', @TestSeamDispatch);
-    { VerifyPeer 用例需要 Makefile 生成的测试 PKI（env 缺席即跳过注册）}
-    if (EnvOrEmpty('TLSFP_TRUST_BUNDLE') <> '') and
-       (EnvOrEmpty('TLSFP_UNTRUSTED_BUNDLE') <> '') then
+  GCache := TAsyncTlsFpSessionCache.Create;
+  try
+    GSuite := TTestSuite.Create('net_async_tlsfp');
+    GSuite.Test('Defaults', @TestDefaults);
+    GSuite.Test('DialRefused', @TestDialRefused);
+    GSuite.Test('GarbageServer', @TestGarbageServer);
+    if TlsE2EAvailable then
     begin
-      GSuite.Test('VerifyPeerSuccess', @TestVerifyPeerSuccess);
-      GSuite.Test('VerifyUntrustedFails', @TestVerifyUntrustedFails);
-      GSuite.Test('HostnameMismatchFails', @TestHostnameMismatchFails);
+      GSuite.Test('FullHandshakeGet', @TestFullHandshakeGet);
+      GSuite.Test('SecondConnection', @TestSecondConnection);
+      GSuite.Test('SeamDispatch', @TestSeamDispatch);
+      { VerifyPeer 用例需要 Makefile 生成的测试 PKI（env 缺席即跳过注册）}
+      if (EnvOrEmpty('TLSFP_TRUST_BUNDLE') <> '') and
+         (EnvOrEmpty('TLSFP_UNTRUSTED_BUNDLE') <> '') then
+      begin
+        GSuite.Test('VerifyPeerSuccess', @TestVerifyPeerSuccess);
+        GSuite.Test('VerifyUntrustedFails', @TestVerifyUntrustedFails);
+        GSuite.Test('HostnameMismatchFails', @TestHostnameMismatchFails);
+      end;
+      { PSK 会话恢复依赖真实对端发票据，顺序敏感：先捕获后恢复 }
+      GSuite.Test('PskCaptureAndStore', @TestPskCaptureAndStore);
+      GSuite.Test('PskResumeConnection', @TestPskResumeConnection);
     end;
+    { 裸 Run 会吞失败退出码（门禁假绿）：失败必须 Halt(1)；
+      缓存先于 Halt 释放，失败路径 heaptrc 才能保持 0 泄漏 }
+    LPass := GSuite.Run;
+  finally
+    GCache.Free;
+    GCache := nil;
   end;
-  { 裸 Run 会吞失败退出码（门禁假绿）：失败必须 Halt(1) }
-  if not GSuite.Run then
+  if not LPass then
     Halt(1);
 end.

@@ -45,6 +45,11 @@ type
 function EncodeAnthropicRequest(const AReq: TCompletionRequest;
   AStream: Boolean): TJsonText;
 
+{ W12 count_tokens 编码（§2.7）：与 messages 同构但无 max_tokens/stream 键，
+  MaxTokens sentinel 不校验；其余校验同 §2.1 }
+function EncodeAnthropicCountTokensRequest(
+  const AReq: TCompletionRequest): TJsonText;
+
 { 非流式响应解码（§2.2）：违反协议抛 aecProtocol（带 RawBodySnippet）}
 procedure DecodeAnthropicResponse(const ABody: TJsonText;
   out AMsg: TMessage;
@@ -56,6 +61,9 @@ function NewAnthropicWireDecoder(
   const ALog: ILogger = nil): IAgentWireDecoder;
 
 function BuildAnthropicUrl(const ABaseUrl: string): string;
+
+{ W12：count_tokens 端点拼接，规则同 §0 }
+function BuildAnthropicCountTokensUrl(const ABaseUrl: string): string;
 
 function NewAnthropicProvider(
   const AOpts: TAnthropicOptions): IAgentProvider;
@@ -151,7 +159,7 @@ begin
   raise E;
 end;
 
-function JoinMessagesUrl(const ABaseUrl, ADefault: string): string;
+function JoinMessagesUrl(const ABaseUrl, ADefault, ASuffix: string): string;
 var
   LBase: string;
 begin
@@ -162,14 +170,21 @@ begin
     Delete(LBase, Length(LBase), 1);
   if (Length(LBase) >= 3) and
     (Copy(LBase, Length(LBase) - 2, 3) = '/v1') then
-    Result := LBase + '/messages'
+    Result := LBase + ASuffix
   else
-    Result := LBase + '/v1/messages';
+    Result := LBase + '/v1' + ASuffix;
 end;
 
 function BuildAnthropicUrl(const ABaseUrl: string): string;
 begin
-  Result := JoinMessagesUrl(ABaseUrl, CANTHROPIC_DEFAULT_BASE_URL);
+  Result := JoinMessagesUrl(ABaseUrl, CANTHROPIC_DEFAULT_BASE_URL,
+    '/messages');
+end;
+
+function BuildAnthropicCountTokensUrl(const ABaseUrl: string): string;
+begin
+  Result := JoinMessagesUrl(ABaseUrl, CANTHROPIC_DEFAULT_BASE_URL,
+    '/messages/count_tokens');
 end;
 
 { stop_reason 四值映射；未知取 frNone + unmapped 文本回传（§0 未映射规则）}
@@ -471,8 +486,10 @@ begin
   ABld.EndArray;
 end;
 
-function EncodeAnthropicRequest(const AReq: TCompletionRequest;
-  AStream: Boolean): TJsonText;
+{ 共享编码主体：ACountMode=True 时按 §2.7 装配 count_tokens 体——
+  不校验也不发射 max_tokens；其余与 messages 完全同构 }
+function EncodeAnthropicBody(const AReq: TCompletionRequest;
+  AStream, ACountMode: Boolean): TJsonText;
 var
   B: IJsonBuilder;
   I: Integer;
@@ -509,7 +526,7 @@ begin
     raise EAgentError.CreateLocal(aecConfig,
       'anthropic: ResponseSchemaJson has no vendor wire parameter; ' +
       'use an OpenAI-family adapter for structured output');
-  if AReq.MaxTokens <= CMaxTokensUnset then
+  if not ACountMode and (AReq.MaxTokens <= CMaxTokensUnset) then
     raise EAgentError.CreateLocal(aecConfig,
       'anthropic: max_tokens is required by the vendor (set MaxTokens)');
   if (AReq.Thinking = tsTrue) and
@@ -540,8 +557,12 @@ begin
     raise EAgentError.CreateLocal(aecConfig,
       'anthropic: model is required');
 
-  B.Key('max_tokens');
-  B.Int(AReq.MaxTokens);             { 厂商强制必填，绝不静默填默认 }
+  if not ACountMode then
+  begin
+    B.Key('max_tokens');
+    B.Int(AReq.MaxTokens);           { 厂商强制必填，绝不静默填默认；
+                                       §2.7 count_tokens 端点除外（schema 无此键）}
+  end;
 
   { 顶层 system（§2.1）：System 字段先行 + 历史 mrSystem 文本，
     重复去重、\n\n 连接——算法固定保障前缀字节稳定（§0）}
@@ -656,18 +677,20 @@ begin
     end;
   end;
 
-  if AReq.Temperature >= 0 then
+  { §2.7：count_tokens schema 无采样参数（不影响 tokenization），不发射——
+    严格上游对未知键回 400，精确匹配文档化 schema }
+  if not ACountMode and (AReq.Temperature >= 0) then
   begin
     B.Key('temperature');
     B.Float(AReq.Temperature);
   end;
-  if AReq.TopP >= 0 then
+  if not ACountMode and (AReq.TopP >= 0) then
   begin
     B.Key('top_p');
     B.Float(AReq.TopP);
   end;
 
-  if Length(AReq.StopSequences) > 0 then
+  if not ACountMode and (Length(AReq.StopSequences) > 0) then
   begin
     B.Key('stop_sequences');
     B.BeginArray;
@@ -705,13 +728,31 @@ begin
     B.RawJson('true');
   end;
 
-  { Extra 回注根对象（冲突键让位已知字段）}
-  WriteExtraFields(B, AReq.ExtraJson,
-    ['model', 'max_tokens', 'system', 'messages', 'tools', 'tool_choice',
-     'temperature', 'top_p', 'stop_sequences', 'thinking', 'stream']);
+  { Extra 回注根对象（冲突键让位已知字段）。count 模式冲突表同步收窄：
+    编码器未写的键不再列为已知——用户经逃生舱显式携带则原样上送，
+    严格上游 400 即诚实失败，绝不静默丢弃 }
+  if ACountMode then
+    WriteExtraFields(B, AReq.ExtraJson,
+      ['model', 'system', 'messages', 'tools', 'tool_choice', 'thinking'])
+  else
+    WriteExtraFields(B, AReq.ExtraJson,
+      ['model', 'max_tokens', 'system', 'messages', 'tools', 'tool_choice',
+       'temperature', 'top_p', 'stop_sequences', 'thinking', 'stream']);
 
   B.EndObject;
   Result := B.ToString;
+end;
+
+function EncodeAnthropicRequest(const AReq: TCompletionRequest;
+  AStream: Boolean): TJsonText;
+begin
+  Result := EncodeAnthropicBody(AReq, AStream, False);
+end;
+
+function EncodeAnthropicCountTokensRequest(
+  const AReq: TCompletionRequest): TJsonText;
+begin
+  Result := EncodeAnthropicBody(AReq, False, True);
 end;
 
 { ---- 非流式解码（§2.2）---- }
@@ -1313,12 +1354,18 @@ end;
 { ---- provider ---- }
 
 type
-  TAnthropicProvider = class(TInterfacedObject, IAgentProvider)
+  TAnthropicProvider = class(TInterfacedObject, IAgentProvider,
+    IAgentTokenCounter)
   private
     FOpts: TAnthropicOptions;
     FTransport: IAgentTransport;
     FLog: ILogger;
     function ResolveModel(const AReq: TCompletionRequest): string;
+    { W12 拆分：装配前置（鉴权/模型解析/Q-A5 待遇）与传输选项填装，
+      messages 与 count_tokens 两路径共用 }
+    function PrepRequest(
+      const AReq: TCompletionRequest): TCompletionRequest;
+    procedure ApplyTransportOptions(var AWire: TWireRequest);
     function BuildWireRequest(const AReq: TCompletionRequest;
       AStream: Boolean): TWireRequest;
   public
@@ -1331,6 +1378,7 @@ type
       const AReq: TCompletionRequest): IAgentCompletion; overload;
     function Stream(const AReq: TCompletionRequest;
       const AToken: IAsyncCancellationToken): IAgentCompletion; overload;
+    function CountTokens(const AReq: TCompletionRequest): Int64;
   end;
 
 constructor TAnthropicProvider.Create(const AOpts: TAnthropicOptions);
@@ -1360,55 +1408,85 @@ begin
     'anthropic: model is required (request.Model or options.Common.Model)');
 end;
 
-function TAnthropicProvider.BuildWireRequest(
-  const AReq: TCompletionRequest; AStream: Boolean): TWireRequest;
-var
-  LReq: TCompletionRequest;
-  I, N: Integer;
+function TAnthropicProvider.PrepRequest(
+  const AReq: TCompletionRequest): TCompletionRequest;
 begin
   if FOpts.Common.ApiKey = '' then
     raise EAgentError.CreateLocal(aecConfig,
       'anthropic: api key is required (' + CANTHROPIC_ENV_API_KEY + ')');
-  LReq := AReq;
-  LReq.Model := ResolveModel(AReq);
+  Result := AReq;
+  Result.Model := ResolveModel(AReq);
   { Q-A5 / Seed：无对应参数，忽略并记日志，不算错误 }
-  if LReq.ParallelToolCalls <> tsUnset then
+  if Result.ParallelToolCalls <> tsUnset then
     WarnLog(FLog,
       'anthropic: parallel_tool_calls has no wire parameter (Q-A5), ignored');
-  if LReq.Seed <> CSeedUnset then
+  if Result.Seed <> CSeedUnset then
     DebugLog(FLog, 'anthropic: seed has no wire parameter, ignored');
-  if LReq.ReasoningEffort <> reUnset then
+  if Result.ReasoningEffort <> reUnset then
     WarnLog(FLog,
       'anthropic: reasoning_effort has no wire parameter (W7), ignored; ' +
       'use Thinking/ThinkingBudgetTokens');
-  if LReq.ToolChoice = tcmNone then
+  if Result.ToolChoice = tcmNone then
     DebugLog(FLog,
       'anthropic: tool_choice none translated to omitting tools (Q-A9)');
+end;
 
-  Result := Default(TWireRequest);
-  Result.Url := BuildAnthropicUrl(FOpts.Common.BaseUrl);
-  Result.BodyJson := EncodeAnthropicRequest(LReq, AStream);
-  Result.ReadIdleTimeoutMs := FOpts.Common.ReadIdleTimeoutMs;   { W7 }
-  SetLength(Result.Headers, 0);
-  N := Length(Result.Headers);
-  SetLength(Result.Headers, N + 1);
-  Result.Headers[N].Name := 'x-api-key';
-  Result.Headers[N].Value := FOpts.Common.ApiKey;
-  N := Length(Result.Headers);
-  SetLength(Result.Headers, N + 1);
-  Result.Headers[N].Name := 'anthropic-version';
+procedure TAnthropicProvider.ApplyTransportOptions(var AWire: TWireRequest);
+var
+  I, N: Integer;
+begin
+  AWire.ReadIdleTimeoutMs := FOpts.Common.ReadIdleTimeoutMs;   { W7 }
+  SetLength(AWire.Headers, 0);
+  N := Length(AWire.Headers);
+  SetLength(AWire.Headers, N + 1);
+  AWire.Headers[N].Name := 'x-api-key';
+  AWire.Headers[N].Value := FOpts.Common.ApiKey;
+  N := Length(AWire.Headers);
+  SetLength(AWire.Headers, N + 1);
+  AWire.Headers[N].Name := 'anthropic-version';
   if FOpts.AnthropicVersion <> '' then
-    Result.Headers[N].Value := FOpts.AnthropicVersion
+    AWire.Headers[N].Value := FOpts.AnthropicVersion
   else
-    Result.Headers[N].Value := CANTHROPIC_VERSION_DEFAULT;
+    AWire.Headers[N].Value := CANTHROPIC_VERSION_DEFAULT;
   for I := 0 to High(FOpts.Common.ExtraHeaders) do
   begin
-    N := Length(Result.Headers);
-    SetLength(Result.Headers, N + 1);
-    Result.Headers[N] := FOpts.Common.ExtraHeaders[I];
+    N := Length(AWire.Headers);
+    SetLength(AWire.Headers, N + 1);
+    AWire.Headers[N] := FOpts.Common.ExtraHeaders[I];
   end;
-  Result.ConnectTimeoutMs := FOpts.Common.ConnectTimeoutMs;
-  Result.TotalTimeoutMs := FOpts.Common.TotalTimeoutMs;
+  AWire.ConnectTimeoutMs := FOpts.Common.ConnectTimeoutMs;
+  AWire.TotalTimeoutMs := FOpts.Common.TotalTimeoutMs;
+end;
+
+function TAnthropicProvider.BuildWireRequest(
+  const AReq: TCompletionRequest; AStream: Boolean): TWireRequest;
+begin
+  Result := Default(TWireRequest);
+  Result.Url := BuildAnthropicUrl(FOpts.Common.BaseUrl);
+  Result.BodyJson := EncodeAnthropicRequest(PrepRequest(AReq), AStream);
+  ApplyTransportOptions(Result);
+end;
+
+function TAnthropicProvider.CountTokens(
+  const AReq: TCompletionRequest): Int64;
+var
+  LWire: TWireRequest;
+  LResp: TWireResponse;
+  LDoc: IJsonDocument;
+begin
+  { §2.7：count_tokens 端点往返；错误分类与 Complete 同一管线
+    （本地 aecConfig / 上游 transport 归约 / 缺键 aecProtocol）}
+  LWire := Default(TWireRequest);
+  LWire.Url := BuildAnthropicCountTokensUrl(FOpts.Common.BaseUrl);
+  LWire.BodyJson := EncodeAnthropicCountTokensRequest(PrepRequest(AReq));
+  ApplyTransportOptions(LWire);
+  FTransport.RoundTrip(LWire, LResp);
+  LDoc := JsonParse(LResp.BodyText);
+  if LDoc.HasError or (not LDoc.Root.IsObject) then
+    ProtocolError(LResp.BodyText, 'count_tokens response must be a JSON object');
+  if not LDoc.Root.Get('input_tokens').IsInt then
+    ProtocolError(LResp.BodyText, 'count_tokens response missing input_tokens');
+  Result := LDoc.Root.Get('input_tokens').AsInt;
 end;
 
 function TAnthropicProvider.Complete(

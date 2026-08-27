@@ -71,6 +71,11 @@ function NewH1ResponseParser(const ASkipBody: Boolean): IH1Parser; overload;
    nil and PARSER_BODY_MAX_CAPACITY does not apply. }
 function NewH1ResponseParser(const ASkipBody, ASkipBodyBuffer: Boolean): IH1Parser; overload;
 
+{ 空请求元数据：nil 解析器回退值。托管记录的 Default 零值必须在属主
+  单元内构造——消费方单元生成跨单元归属的 $_zero_ 初始化数据会触发
+  FPC ppu 符号归属冲突（app 消费图下必现，core 内部图侥幸不触发） }
+function EmptyH1RequestMetadata: TH1RequestMetadata;
+
 implementation
 
 uses
@@ -187,6 +192,11 @@ const
     The BodyLimit middleware is the primary size control; this prevents
     unbounded allocation if the middleware is not configured. }
   PARSER_BODY_MAX_CAPACITY: SizeUInt = 32 * 1024 * 1024;
+
+function EmptyH1RequestMetadata: TH1RequestMetadata;
+begin
+  Result := Default(TH1RequestMetadata);
+end;
 
 function LowerTrim(const AValue: string): string; inline;
 begin

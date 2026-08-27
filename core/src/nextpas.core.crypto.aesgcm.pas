@@ -24,6 +24,18 @@ function PurePascalAESGCMDecrypt(
   out APlaintext: TBytes
 ): Boolean;
 
+function PurePascalAESGCMDecryptTo(
+  const AKey, AIV, ACiphertext, ATag, AAAD: TBytes;
+  APlaintext: PByte; APlainLen: Integer
+): Boolean;
+
+function AESNIGCMDecryptTo128(
+  const AKey, AIV: TBytes; ACipher: PByte; ACipherLen: Integer;
+  const ATag, AAAD: TBytes; ADest: PByte; ADestLen: Integer): Boolean;
+function AESNIGCMDecryptTo256(
+  const AKey, AIV: TBytes; ACipher: PByte; ACipherLen: Integer;
+  const ATag, AAAD: TBytes; ADest: PByte; ADestLen: Integer): Boolean;
+
 implementation
 
 uses
@@ -617,7 +629,7 @@ asm
   pxor xmm5, xmm5        // C_L 累计
   pxor xmm6, xmm6        // C_H 累计
 
-  // X1 → P1 = X1 · H⁴（LO/HI 即时并入累计，MID 拆两半并入；
+  // X1 → P1 = (acc ⊕ X1) · H⁴（A₀ 与 X1 同乘 H⁴，见顶部恒等式；
   //   各乘积输入互不依赖，乱序核并行发射——这是相对串行链的收益来源）
   movdqu xmm0, [rdx]
   movdqa xmm7, xmm0
@@ -629,6 +641,8 @@ asm
   movdqa xmm7, xmm9
   pshufb xmm7, xmm0
   por xmm1, xmm7
+
+  pxor xmm1, xmm15       // (A₀ ⊕ X₁)
 
   movdqa xmm0, xmm1
   pclmulqdq xmm0, xmm11, $00   // LO
@@ -702,7 +716,7 @@ asm
   psrldq xmm0, 8
   pxor xmm6, xmm0
 
-  // X4 折入当前累加器 → P4 = (X4⊕acc) · H¹
+  // X4 → P4 = X4 · H¹（A₀ 已折入第一路，此处不再并入 acc）
   movdqu xmm0, [rdx + 48]
   movdqa xmm7, xmm0
   pand xmm7, xmm10
@@ -713,8 +727,6 @@ asm
   movdqa xmm7, xmm9
   pshufb xmm7, xmm0
   por xmm1, xmm7
-
-  pxor xmm1, xmm15
 
   movdqa xmm0, xmm1
   pclmulqdq xmm0, xmm14, $00
@@ -732,11 +744,9 @@ asm
   psrldq xmm0, 8
   pxor xmm6, xmm0
 
-  add rdx, 64
-  sub r8d, 4
-  jnz @group
-
-  // 共享规约（与单块路径逐指令同构：输入 xmm2=C_L / xmm3=C_H，输出 xmm2）
+  // 每组共享规约：red(C_L,C_H) 覆写反射域累加器。
+  //   GF(2^128) 规约对 XOR 线性 ⇒ 各组积和可独立规约；A₀ 已在第一路
+  //   消费，故本组结果直接作为下一组 A₀（赋值而非 XOR）。
   movdqa xmm2, xmm5
   movdqa xmm3, xmm6
   movdqa xmm4, xmm3
@@ -782,9 +792,12 @@ asm
   pxor xmm5, xmm7
   pxor xmm2, xmm4
   pxor xmm2, xmm5
-  movdqa xmm15, xmm2
+  movdqa xmm15, xmm2     // acc := red(本组积和)，作为下一组 A₀
 
-  // 反射回正规域存储
+  add rdx, 64
+  sub r8d, 4
+  jnz @group
+
   movdqa xmm0, xmm15
   movdqa xmm7, xmm0
   pand xmm7, xmm10
@@ -1403,6 +1416,330 @@ begin
     GCTR(ExpandedKey, Nr, ICB, ACiphertext, 0, CTLen, APlaintext, 0);
   end;
 
+  Result := True;
+end;
+
+procedure GHASHUpdatePByte(var AState: TAESBlock; const H: TAESBlock; AData: PByte; ALen: Integer);
+var
+  LBlock: TAESBlock;
+  J: Integer;
+  LOff: Integer;
+  LBlocks: Integer;
+  LRem: Integer;
+{$IFDEF CPUX86_64}
+  LPow: TGHASHPowerTable;
+  LAggBlocks: Integer;
+{$ENDIF}
+begin
+  LBlocks := ALen div 16;
+  LRem := ALen mod 16;
+{$IFDEF CPUX86_64}
+  if UsePCLMUL and (LBlocks > 0) then
+  begin
+    if LBlocks >= 8 then
+    begin
+      BuildGHASHPowerTable(H, LPow);
+      LAggBlocks := (LBlocks div 4) * 4;
+      GHASHUpdatePCLMULAgg(AState, LPow, AData, LAggBlocks);
+      if LBlocks > LAggBlocks then
+        GHASHUpdatePCLMUL(AState, H, AData + LAggBlocks * 16, LBlocks - LAggBlocks);
+    end
+    else
+      GHASHUpdatePCLMUL(AState, H, AData, LBlocks);
+    if LRem > 0 then
+    begin
+      FillChar(LBlock[0], 16, 0);
+      Move((AData + LBlocks * 16)^, LBlock[0], LRem);
+      GHASHUpdatePCLMUL(AState, H, @LBlock[0], 1);
+    end;
+    Exit;
+  end;
+{$ENDIF}
+  LOff := 0;
+  for J := 0 to LBlocks - 1 do
+  begin
+    AState[0] := AState[0] xor AData[LOff];
+    AState[1] := AState[1] xor AData[LOff + 1];
+    AState[2] := AState[2] xor AData[LOff + 2];
+    AState[3] := AState[3] xor AData[LOff + 3];
+    AState[4] := AState[4] xor AData[LOff + 4];
+    AState[5] := AState[5] xor AData[LOff + 5];
+    AState[6] := AState[6] xor AData[LOff + 6];
+    AState[7] := AState[7] xor AData[LOff + 7];
+    AState[8] := AState[8] xor AData[LOff + 8];
+    AState[9] := AState[9] xor AData[LOff + 9];
+    AState[10] := AState[10] xor AData[LOff + 10];
+    AState[11] := AState[11] xor AData[LOff + 11];
+    AState[12] := AState[12] xor AData[LOff + 12];
+    AState[13] := AState[13] xor AData[LOff + 13];
+    AState[14] := AState[14] xor AData[LOff + 14];
+    AState[15] := AState[15] xor AData[LOff + 15];
+    GHASHMultiplySingle(AState, H);
+    Inc(LOff, 16);
+  end;
+  if LRem > 0 then
+  begin
+    FillChar(LBlock[0], 16, 0);
+    Move(AData[LOff], LBlock[0], LRem);
+    for J := 0 to 15 do
+      AState[J] := AState[J] xor LBlock[J];
+    GHASHMultiplySingle(AState, H);
+  end;
+end;
+
+procedure GCTRTo(const AExpandedKey: TAESExpandedKey; ANr: Integer;
+  const AICB: TAESBlock; ACipher: PByte; ACipherLen: Integer; APlainOut: PByte);
+var
+  CB, EncCB: TAESBlock;
+  J, Blocks, Rem: Integer;
+  LCtKey: TAESCt64Key;
+  LOff: Integer;
+begin
+  if ACipherLen = 0 then Exit;
+  Move(AICB[0], CB[0], 16);
+  Blocks := ACipherLen div 16;
+  Rem := ACipherLen mod 16;
+  LCtKey.Nr := ANr;
+  Move(AExpandedKey[0], LCtKey.RK[0], (ANr + 1) * 4 * SizeOf(UInt32));
+  LOff := 0;
+  for J := 0 to Blocks - 1 do
+  begin
+    AESCt64EncryptBlock(@CB[0], @EncCB[0], LCtKey);
+    PUInt64(APlainOut + LOff)^ := PUInt64(ACipher + LOff)^ xor PUInt64(@EncCB[0])^;
+    PUInt64(APlainOut + LOff + 8)^ := PUInt64(ACipher + LOff + 8)^ xor PUInt64(@EncCB[8])^;
+    IncrementCounter(CB);
+    Inc(LOff, 16);
+  end;
+  if Rem > 0 then
+  begin
+    AESCt64EncryptBlock(@CB[0], @EncCB[0], LCtKey);
+    for J := 0 to Rem - 1 do
+      APlainOut[LOff + J] := ACipher[LOff + J] xor EncCB[J];
+  end;
+end;
+
+function AESNIGCMDecryptTo128(
+  const AKey, AIV: TBytes; ACipher: PByte; ACipherLen: Integer;
+  const ATag, AAAD: TBytes; ADest: PByte; ADestLen: Integer): Boolean;
+var
+  NiKey: TAESNIExpandedKey128;
+  KeyBlock: TAESNIBlock;
+  H, J0, S: TAESBlock;
+  ZeroBlock, EncJ0: TAESNIBlock;
+  ICB: TAESNIBlock;
+  LenBlock: TAESBlock;
+  AADLen, I: Integer;
+  AADBits, CTBits: UInt64;
+  TagBytes: TAESBlock;
+begin
+  Result := False;
+  if Length(AIV) <> 12 then Exit;
+  if Length(ATag) <> GCM_TAG_SIZE then Exit;
+  if (ADest = nil) and (ACipherLen > 0) then Exit;
+  if ADestLen < ACipherLen then Exit;
+  if Length(AKey) <> 16 then Exit;
+  Move(AKey[0], KeyBlock[0], 16);
+  AESNIExpandKey128(KeyBlock, NiKey);
+  FillChar(ZeroBlock[0], 16, 0);
+  AESNIEncryptBlock128(ZeroBlock, TAESNIBlock(H), NiKey);
+  FillChar(J0[0], 16, 0);
+  Move(AIV[0], J0[0], 12);
+  J0[15] := 1;
+  AADLen := Length(AAAD);
+  FillChar(S[0], 16, 0);
+  if AADLen > 0 then
+    GHASHUpdate(S, H, AAAD, 0, AADLen);
+  if ACipherLen > 0 then
+    GHASHUpdatePByte(S, H, ACipher, ACipherLen);
+  FillChar(LenBlock[0], 16, 0);
+  AADBits := UInt64(AADLen) * 8;
+  CTBits := UInt64(ACipherLen) * 8;
+  LenBlock[0] := Byte(AADBits shr 56);
+  LenBlock[1] := Byte(AADBits shr 48);
+  LenBlock[2] := Byte(AADBits shr 40);
+  LenBlock[3] := Byte(AADBits shr 32);
+  LenBlock[4] := Byte(AADBits shr 24);
+  LenBlock[5] := Byte(AADBits shr 16);
+  LenBlock[6] := Byte(AADBits shr 8);
+  LenBlock[7] := Byte(AADBits);
+  LenBlock[8] := Byte(CTBits shr 56);
+  LenBlock[9] := Byte(CTBits shr 48);
+  LenBlock[10] := Byte(CTBits shr 40);
+  LenBlock[11] := Byte(CTBits shr 32);
+  LenBlock[12] := Byte(CTBits shr 24);
+  LenBlock[13] := Byte(CTBits shr 16);
+  LenBlock[14] := Byte(CTBits shr 8);
+  LenBlock[15] := Byte(CTBits);
+  for I := 0 to 15 do
+    S[I] := S[I] xor LenBlock[I];
+  GHASHMultiplySingle(S, H);
+  AESNIEncryptBlock128(TAESNIBlock(J0), EncJ0, NiKey);
+  for I := 0 to 15 do
+    TagBytes[I] := S[I] xor EncJ0[I];
+  if TConstantTime.CompareBuffer(@TagBytes[0], @ATag[0], GCM_TAG_SIZE) <> 1 then
+    Exit(False);
+  if ACipherLen > 0 then
+  begin
+    Move(J0[0], ICB[0], 16);
+    IncrementCounter(TAESBlock(ICB));
+    AESNIEncryptCTR128(NiKey, ICB, ACipher, ACipherLen, ADest);
+  end;
+  Result := True;
+end;
+
+function AESNIGCMDecryptTo256(
+  const AKey, AIV: TBytes; ACipher: PByte; ACipherLen: Integer;
+  const ATag, AAAD: TBytes; ADest: PByte; ADestLen: Integer): Boolean;
+var
+  NiKey: TAESNIExpandedKey256;
+  H, J0, S: TAESBlock;
+  ZeroBlock, EncJ0: TAESNIBlock;
+  ICB: TAESNIBlock;
+  LenBlock: TAESBlock;
+  AADLen, I: Integer;
+  AADBits, CTBits: UInt64;
+  TagBytes: TAESBlock;
+begin
+  Result := False;
+  if Length(AIV) <> 12 then Exit;
+  if Length(ATag) <> GCM_TAG_SIZE then Exit;
+  if (ADest = nil) and (ACipherLen > 0) then Exit;
+  if ADestLen < ACipherLen then Exit;
+  if Length(AKey) <> 32 then Exit;
+  AESNIExpandKey256(AKey, NiKey);
+  FillChar(ZeroBlock[0], 16, 0);
+  AESNIEncryptBlock256(ZeroBlock, TAESNIBlock(H), NiKey);
+  FillChar(J0[0], 16, 0);
+  Move(AIV[0], J0[0], 12);
+  J0[15] := 1;
+  AADLen := Length(AAAD);
+  FillChar(S[0], 16, 0);
+  if AADLen > 0 then
+    GHASHUpdate(S, H, AAAD, 0, AADLen);
+  if ACipherLen > 0 then
+    GHASHUpdatePByte(S, H, ACipher, ACipherLen);
+  FillChar(LenBlock[0], 16, 0);
+  AADBits := UInt64(AADLen) * 8;
+  CTBits := UInt64(ACipherLen) * 8;
+  LenBlock[0] := Byte(AADBits shr 56);
+  LenBlock[1] := Byte(AADBits shr 48);
+  LenBlock[2] := Byte(AADBits shr 40);
+  LenBlock[3] := Byte(AADBits shr 32);
+  LenBlock[4] := Byte(AADBits shr 24);
+  LenBlock[5] := Byte(AADBits shr 16);
+  LenBlock[6] := Byte(AADBits shr 8);
+  LenBlock[7] := Byte(AADBits);
+  LenBlock[8] := Byte(CTBits shr 56);
+  LenBlock[9] := Byte(CTBits shr 48);
+  LenBlock[10] := Byte(CTBits shr 40);
+  LenBlock[11] := Byte(CTBits shr 32);
+  LenBlock[12] := Byte(CTBits shr 24);
+  LenBlock[13] := Byte(CTBits shr 16);
+  LenBlock[14] := Byte(CTBits shr 8);
+  LenBlock[15] := Byte(CTBits);
+  for I := 0 to 15 do
+    S[I] := S[I] xor LenBlock[I];
+  GHASHMultiplySingle(S, H);
+  AESNIEncryptBlock256(TAESNIBlock(J0), EncJ0, NiKey);
+  for I := 0 to 15 do
+    TagBytes[I] := S[I] xor EncJ0[I];
+  if TConstantTime.CompareBuffer(@TagBytes[0], @ATag[0], GCM_TAG_SIZE) <> 1 then
+    Exit(False);
+  if ACipherLen > 0 then
+  begin
+    Move(J0[0], ICB[0], 16);
+    IncrementCounter(TAESBlock(ICB));
+    AESNIEncryptCTR256(NiKey, ICB, ACipher, ACipherLen, ADest);
+  end;
+  Result := True;
+end;
+
+function PurePascalAESGCMDecryptTo(
+  const AKey, AIV, ACiphertext, ATag, AAAD: TBytes;
+  APlaintext: PByte; APlainLen: Integer
+): Boolean;
+var
+  LCTLen: Integer;
+  ExpandedKey: TAESExpandedKey;
+  Nr: Integer;
+  H, J0, S: TAESBlock;
+  ZeroBlock, EncJ0: TAESBlock;
+  ICB: TAESBlock;
+  LenBlock: TAESBlock;
+  AADLen, I: Integer;
+  TagBytes: TAESBlock;
+  AADBits, CTBits: UInt64;
+begin
+  Result := False;
+  if Length(ATag) <> GCM_TAG_SIZE then Exit;
+  if Length(AIV) <> 12 then Exit;
+  LCTLen := Length(ACiphertext);
+  if (APlaintext = nil) and (LCTLen > 0) then Exit;
+  if APlainLen < LCTLen then Exit;
+  if UseAESNI then
+  begin
+    if Length(AKey) = 16 then
+    begin
+      if LCTLen = 0 then
+        Exit(AESNIGCMDecryptTo128(AKey, AIV, nil, 0, ATag, AAAD, APlaintext, APlainLen))
+      else
+        Exit(AESNIGCMDecryptTo128(AKey, AIV, @ACiphertext[0], LCTLen, ATag, AAAD, APlaintext, APlainLen));
+    end;
+    if Length(AKey) = 32 then
+    begin
+      if LCTLen = 0 then
+        Exit(AESNIGCMDecryptTo256(AKey, AIV, nil, 0, ATag, AAAD, APlaintext, APlainLen))
+      else
+        Exit(AESNIGCMDecryptTo256(AKey, AIV, @ACiphertext[0], LCTLen, ATag, AAAD, APlaintext, APlainLen));
+    end;
+  end;
+  if not (Length(AKey) in [16, 24, 32]) then Exit;
+  AESKeyExpand(AKey, ExpandedKey, Nr);
+  if Nr = 0 then Exit;
+  FillChar(ZeroBlock[0], 16, 0);
+  AESEncryptBlock(ZeroBlock, H, ExpandedKey, Nr);
+  FillChar(J0[0], 16, 0);
+  Move(AIV[0], J0[0], 12);
+  J0[15] := 1;
+  AADLen := Length(AAAD);
+  FillChar(S[0], 16, 0);
+  if AADLen > 0 then
+    GHASHUpdate(S, H, AAAD, 0, AADLen);
+  if LCTLen > 0 then
+    GHASHUpdate(S, H, ACiphertext, 0, LCTLen);
+  FillChar(LenBlock[0], 16, 0);
+  AADBits := UInt64(AADLen) * 8;
+  CTBits := UInt64(LCTLen) * 8;
+  LenBlock[0] := Byte(AADBits shr 56);
+  LenBlock[1] := Byte(AADBits shr 48);
+  LenBlock[2] := Byte(AADBits shr 40);
+  LenBlock[3] := Byte(AADBits shr 32);
+  LenBlock[4] := Byte(AADBits shr 24);
+  LenBlock[5] := Byte(AADBits shr 16);
+  LenBlock[6] := Byte(AADBits shr 8);
+  LenBlock[7] := Byte(AADBits);
+  LenBlock[8] := Byte(CTBits shr 56);
+  LenBlock[9] := Byte(CTBits shr 48);
+  LenBlock[10] := Byte(CTBits shr 40);
+  LenBlock[11] := Byte(CTBits shr 32);
+  LenBlock[12] := Byte(CTBits shr 24);
+  LenBlock[13] := Byte(CTBits shr 16);
+  LenBlock[14] := Byte(CTBits shr 8);
+  LenBlock[15] := Byte(CTBits);
+  for I := 0 to 15 do
+    S[I] := S[I] xor LenBlock[I];
+  GHASHMultiplySingle(S, H);
+  AESEncryptBlock(J0, EncJ0, ExpandedKey, Nr);
+  for I := 0 to 15 do
+    TagBytes[I] := S[I] xor EncJ0[I];
+  if TConstantTime.CompareBuffer(@TagBytes[0], @ATag[0], GCM_TAG_SIZE) <> 1 then
+    Exit(False);
+  if LCTLen > 0 then
+  begin
+    Move(J0[0], ICB[0], 16);
+    IncrementCounter(ICB);
+    GCTRTo(ExpandedKey, Nr, ICB, @ACiphertext[0], LCTLen, APlaintext);
+  end;
   Result := True;
 end;
 

@@ -25,6 +25,7 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.router,
   nextpas.core.http.server,
+  nextpas.core.http.static,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.thread;
@@ -651,6 +652,44 @@ begin
   Check(HttpIfNoneMatchMatches('"x", "abc"', '"abc"'), 'list match');
   Check(not HttpIfNoneMatchMatches('"x"', '"abc"'), 'mismatch');
   Check(not HttpIfNoneMatchMatches('', '"abc"'), 'empty header');
+end;
+
+{ HTTP-date 三格式解析（Go http.ParseTime 同集）：
+  IMF-fixdate / RFC850 / ANSIC，合法矩阵 + 非法拒绝。 }
+procedure TestTryParseHttpDate;
+var
+  LUnix: Int64;
+begin
+  { IMF-fixdate（首选形态）。 }
+  Check(TryParseHttpDate('Sun, 06 Nov 1994 08:49:37 GMT', LUnix),
+    'IMF 解析');
+  CheckEqual(784111777, LUnix, 'IMF 值（1994-11-06T08:49:37Z）');
+  { RFC850（旧形态，两位年 + 全称星期）。 }
+  Check(TryParseHttpDate('Sunday, 06-Nov-94 08:49:37 GMT', LUnix),
+    'RFC850 解析');
+  CheckEqual(784111777, LUnix, 'RFC850 值（94 → 1994）');
+  Check(TryParseHttpDate('Sunday, 06-Nov-69 08:49:37 GMT', LUnix),
+    'RFC850 69 阈值下沿');
+  CheckEqual(-4806623, LUnix, '69 → 1969（POSIX 规则）');
+  { ANSIC（Go 原生形态，日左补空格）。 }
+  Check(TryParseHttpDate('Sun Nov  6 08:49:37 1994', LUnix),
+    'ANSIC 解析');
+  CheckEqual(784111777, LUnix, 'ANSIC 值');
+  Check(TryParseHttpDate('Sun Nov 16 08:49:37 1994', LUnix),
+    'ANSIC 两位数日');
+  CheckEqual(784975777, LUnix, 'ANSIC 两位日值');
+  { 非法拒绝。 }
+  Check(not TryParseHttpDate('', LUnix), '空串拒绝');
+  Check(not TryParseHttpDate('not a date', LUnix), '乱串拒绝');
+  Check(not TryParseHttpDate('Sun, 06 Nov 1994', LUnix), '缺时间拒绝');
+  Check(not TryParseHttpDate('Mon, 99 Nov 1994 08:49:37 GMT', LUnix),
+    '非法日拒绝');
+  Check(not TryParseHttpDate('Sun, 06 Foo 1994 08:49:37 GMT', LUnix),
+    '非法月拒绝');
+  Check(not TryParseHttpDate('Sun, 06 Nov 1994 25:49:37 GMT', LUnix),
+    '非法时拒绝');
+  Check(not TryParseHttpDate('Sunday, 06-Nov-94 25:49:37 GMT', LUnix),
+    'RFC850 非法时拒绝');
 end;
 
 { ===== Test: ServeFile range request ===== }
@@ -1540,6 +1579,7 @@ begin
       @TestServeVfsEmbeddedUnknownModTime);
     T.Test('ServeVfs embedded range and unhashed fallback',
       @TestServeVfsEmbeddedRangeAndUnhashedFallback);
+    T.Test('TryParseHttpDate three formats', @TestTryParseHttpDate);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;

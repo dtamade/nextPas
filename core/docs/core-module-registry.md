@@ -23,7 +23,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `async` | L1 | event loop/runtime | yes | L0 plus approved L1 | source-contract + focused-runtime |
 | `auth` | L3 | JWT/session/authentication token primitives (`nextpas.core.auth.*`, `nextpas.core.jwt`) | yes | L0-L2 plus crypto/hash/encoding owners | focused-runtime |
 | `atomic` | L0 | atomic primitives | yes | L0 only | focused-runtime |
-| `audio` | L2 | PCM WAV container codec | yes | L0-L2 (io/fs owner) | focused-runtime |
+| `audio` | L2 | 完整音频子系统（decode-first，接口化） | yes | L0-L2 (io/fs owner) | source-contract（待 PR1 gate 落地） |
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |

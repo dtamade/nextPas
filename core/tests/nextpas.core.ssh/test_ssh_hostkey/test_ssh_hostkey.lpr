@@ -20,6 +20,7 @@ uses
   nextpas.core.hash.base,
   nextpas.core.encoding.base64,
   nextpas.core.platform.files.text,
+  ssh_rsa_kat,
   nextpas.core.test;
 
 function HexToBytes(const AHex: string): TBytes;
@@ -267,6 +268,36 @@ begin
     { 篡改签名一个字节 → False }
     LSig[20] := LSig[20] xor $08;
     CheckFalse(SshVerifyHostSignature(LInfo, '', LAH, SigBlobOf('rsa-sha2-256', LSig)));
+  end);
+
+  { 外部黄金向量：openssl dgst -sha256/-sha512 -sign 对固定消息产出。
+    e=1 构造只覆盖 EM 比对逻辑，这里用真实 RSA 签名双向锁定两条
+    DigestInfo 路径——SHA-512 前缀曾带错摘要长度字节（$20 应为 $40）
+    且无外部向量覆盖，真实签名恒验败。 }
+  LSuite.Test('rsa pkcs1 v1.5 verify against openssl signatures', procedure
+  var
+    LInfo: TSshHostKeyInfo;
+    LN, LMsgBytes, LSig256, LSig512: TBytes;
+  begin
+    LN := KatN;
+    CheckTrue(SshParseHostKey(RsaHostKeyBlob(HexToBytes(KAT_E_HEX), LN), LInfo));
+    LMsgBytes := KatMsg;
+    LSig256 := KatSigSha256;
+    LSig512 := KatSigSha512;
+    CheckEqual(Int64(256), Int64(Length(LSig256)));
+    CheckEqual(Int64(256), Int64(Length(LSig512)));
+
+    CheckTrue(SshVerifyHostSignature(LInfo, 'rsa-sha2-256', SHA256(LMsgBytes),
+      SigBlobOf('rsa-sha2-256', LSig256)), 'openssl sha256 sig must verify');
+    CheckTrue(SshVerifyHostSignature(LInfo, 'rsa-sha2-512', SHA512(LMsgBytes),
+      SigBlobOf('rsa-sha2-512', LSig512)), 'openssl sha512 sig must verify');
+
+    { 摘要与签名算法错配 / 篡改 → False }
+    CheckFalse(SshVerifyHostSignature(LInfo, 'rsa-sha2-512', SHA512(LMsgBytes),
+      SigBlobOf('rsa-sha2-512', LSig256)));
+    LSig512[100] := LSig512[100] xor $10;
+    CheckFalse(SshVerifyHostSignature(LInfo, '', SHA512(LMsgBytes),
+      SigBlobOf('rsa-sha2-512', LSig512)));
   end);
 
   LSuite.Test('wildmatch semantics', procedure

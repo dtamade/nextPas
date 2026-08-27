@@ -296,6 +296,7 @@ var
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
   LReqOpts: IHttpRequestWithOptions;
+  LNewReqOpts: IHttpRequestWithOptions;
   LFollowRedirects: Boolean;
 begin
   LUrl := AReq.Url;
@@ -408,6 +409,12 @@ begin
       LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11,
         LNewHeaders, AReq.Body, AReq.ContentLength);
     end;
+    { Redirects create a fresh request object. Preserve per-request options so
+      streaming sinks, cancellation, timeout, and redirect policy remain
+      attached to every hop. }
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) and
+       Supports(LNewReq, IHttpRequestWithOptions, LNewReqOpts) then
+      LNewReqOpts.SetRequestOptions(LReqOpts.RequestOptions);
 
     Result := DoRequest(LNewReq, ARedirectsLeft - 1, ARequestBodyCloseAttempted);
   end

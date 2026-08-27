@@ -19,7 +19,7 @@ SSH-2 客户端协议栈（对标 libssh2 的能力面），纯 Pascal 实现，
 | 加密 | `chacha20-poly1305@openssh.com`、`aes256-gcm@openssh.com`、`aes128-gcm@openssh.com`、`aes256-ctr`、`aes192-ctr`、`aes128-ctr` |
 | MAC | `hmac-sha2-256-etm@openssh.com`、`hmac-sha2-512-etm@openssh.com`（仅 ETM；CTR 类算法必需） |
 | 压缩 | `none` |
-| 认证 | `password`、`publickey`（OpenSSH 私钥容器，未加密） |
+| 认证 | `password`、`publickey`（openssh-key-v1 未加密容器：ssh-ed25519、ssh-rsa；RSA 走 `rsa-sha2-512` 签名） |
 
 明确不支持并会在协商阶段给出清晰错误的历史包袱：
 SHA-1 KEX、DH group1/14、非 ETM MAC、zlib 压缩、ECDSA 主机密钥（枚举已预留）。
@@ -71,7 +71,8 @@ nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态
 nextpas.core.ssh.kex.pas             ← KEXINIT 协商 + 密钥推导
 nextpas.core.ssh.kex.curve25519.pas  ← curve25519-sha256 客户端交换
 nextpas.core.ssh.hostkey.pas         ← 主机密钥解析 / 验签 / 指纹 / known_hosts
-nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析
+nextpas.core.ssh.rsa.pas             ← RSA PKCS#1 v1.5 签名/验签核（DigestInfo 单一来源）
+nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析（ed25519 / ssh-rsa）
 nextpas.core.ssh.auth.pas            ← userauth 载荷构造/解析
 nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem）
 nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道）
@@ -139,11 +140,13 @@ x86_64 宿主、`-O3`、单线程实测（数值随机器浮动，门禁下限�
 
 ## 已知限制
 
-- 私钥仅支持 **未加密** OpenSSH 容器（ed25519）；加密容器
-  （bcrypt_pbkdf + aes256-ctr）与 RSA 私钥签名在后续 slice。
+- 私钥仅支持 **未加密** openssh-key-v1 容器（ssh-ed25519、ssh-rsa）；
+  加密容器（bcrypt_pbkdf + aes256-ctr）在后续 slice。
+- RSA 签名用私钥指数直接模幂（Montgomery），CRT 五元组优化在后续 slice。
 - KEX 仅 `curve25519-sha256`；DH group14-sha256 回退推迟。
-- 无 zlib 压缩、无 ssh-agent、无 SFTP（见 goal-tree 后续 slice 表）。
+- 无 zlib 压缩、无 ssh-agent（见 goal-tree 后续 slice 表）。
 - AEAD 算法协商的 MAC 字段被忽略（chacha/gcm 内建认证），与 OpenSSH 行为一致；
   CTR 类必须搭配 ETM MAC。
 - 对真实 OpenSSH 服务器的互操作已由 e2e_ssh_live 验证（本地 Docker Alpine 9.7 与
-  远程 Debian OpenSSH 10.0p2 均 4 场景通过）；该门为 opt-in，不进默认 gate。
+  远程 Debian OpenSSH 10.0p2 均 7 场景通过，含 SFTP 回路与 RSA 认证）；
+  该门为 opt-in，不进默认 gate。

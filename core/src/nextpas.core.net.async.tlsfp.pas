@@ -47,11 +47,13 @@ unit nextpas.core.net.async.tlsfp;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.async.base, nextpas.core.async.loop,
   nextpas.core.net.base, nextpas.core.net.intf,
   nextpas.core.net.async.tcp,
   nextpas.core.fs,
+  nextpas.core.platform.sync,
   nextpas.core.tls.x509, nextpas.core.tls.x509verify;
 
 const
@@ -61,6 +63,44 @@ const
   ASYNC_TLSFP_ERR_HANDSHAKE = -3202;
 
 type
+  { 会话恢复条目：一条 NewSessionTicket 的完整恢复材料 }
+  TFpTlsResumptionSession = record
+    { 恢复必须沿用原会话的密码套件（PSK 与其绑定） }
+    CipherSuite: Word;
+    TicketIdentity: TBytes;
+    ResumptionPSK: TBytes;
+    TicketAgeAdd: Cardinal;
+    LifetimeSec: Cardinal;
+    { 单调时钟毫秒：算 obfuscated_ticket_age + 本地过期 }
+    IssuedMs: Int64;
+  end;
+
+  { 恢复状态查询：判断本次握手是否走了 PSK 恢复（测试与调用方观测
+    用）。流对象隐藏实现，经 Supports(IAsyncTcpStream) 获取。 }
+  ITlsFpResumeInfo = interface
+    ['{8F3A2C61-9B4D-4E75-A1D0-3C6E5B8F2914}']
+    function GetWasResumed: Boolean;
+  end;
+
+  { 会话缓存：Host:Port → 最新恢复条目（线性小表，mutex 保护）。
+    语义 = Peek 不取走：服务器拒绝恢复时客户端自然回退全握手并
+    以新票据刷新条目。调用方持有实例生命周期，须存活到相关连接
+    全部结束后再释放。线程安全。 }
+  TAsyncTlsFpSessionCache = class
+  private
+    FMutex: TPlatformMutex;
+    FHosts: array of string;
+    FPorts: array of UInt16;
+    FSessions: array of TFpTlsResumptionSession;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Store(const AHost: string; APort: UInt16;
+      const ASession: TFpTlsResumptionSession);
+    function TryPeek(const AHost: string; APort: UInt16;
+      out ASession: TFpTlsResumptionSession): Boolean;
+  end;
+
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
   TAsyncTlsFpClientOptions = record
@@ -75,6 +115,9 @@ type
     { 信任锚 PEM bundle 文件路径；空串 = 进程级共享系统默认库
       （已知 bundle 文件惰性发现并缓存，内容确定性故无锁发布安全） }
     TrustBundlePath: string;
+    { 会话缓存：非 nil 且缓存命中时尝试 PSK 恢复（1-RTT）；服务器
+      拒绝则自动回退全握手。新票据在数据相捕获后回写缓存。nil = 关闭 }
+    Cache: TAsyncTlsFpSessionCache;
   end;
 
   { 异步握手完成回调：AError=0 时 AStream 为就绪 TLS 流；失败时
@@ -100,11 +143,13 @@ function AsyncTlsFpConnect(const ALoop: TAsyncLoop; const AHost: string;
 implementation
 
 uses
-  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.system.sysutils,
   nextpas.core.encoding.base64,
   nextpas.core.atomic,
+  nextpas.core.bytes,
+  nextpas.core.mem,
+  nextpas.core.time.stopwatch,
   nextpas.core.mem.secure,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.x25519,
@@ -121,7 +166,95 @@ uses
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.tls.tls13.recordsealer,
   nextpas.core.tls.tls13.servercertificate,
-  nextpas.core.tls.tls13.servercertverify;
+  nextpas.core.tls.tls13.servercertverify,
+  nextpas.core.tls.tls13.posthandshake;
+
+{ ======== 会话恢复缓存 ======== }
+
+var
+  { 单调时钟基准：票据年龄与本地过期的唯一时钟源 }
+  GMonoClock: TStopwatch;
+
+function FpMonoMs: Int64;
+begin
+  Result := GMonoClock.ElapsedMilliseconds;
+end;
+
+constructor TAsyncTlsFpSessionCache.Create;
+begin
+  inherited Create;
+  if platform_mutex_init(FMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlsfp: session cache mutex init');
+end;
+
+destructor TAsyncTlsFpSessionCache.Destroy;
+var
+  I: Integer;
+begin
+  platform_mutex_destroy(FMutex);
+  for I := 0 to High(FSessions) do
+  begin
+    SecureZeroBytes(FSessions[I].TicketIdentity);
+    SecureZeroBytes(FSessions[I].ResumptionPSK);
+  end;
+  inherited Destroy;
+end;
+
+procedure TAsyncTlsFpSessionCache.Store(const AHost: string; APort: UInt16;
+  const ASession: TFpTlsResumptionSession);
+var
+  I: Integer;
+begin
+  if AHost = '' then
+    Exit;
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FHosts) do
+      if (FPorts[I] = APort) and (FHosts[I] = AHost) then
+      begin
+        { 旧票据密钥材料即刻清零后覆盖 }
+        SecureZeroBytes(FSessions[I].TicketIdentity);
+        SecureZeroBytes(FSessions[I].ResumptionPSK);
+        FSessions[I] := ASession;
+        Exit;
+      end;
+    SetLength(FHosts, Length(FHosts) + 1);
+    SetLength(FPorts, Length(FPorts) + 1);
+    SetLength(FSessions, Length(FSessions) + 1);
+    FHosts[High(FHosts)] := AHost;
+    FPorts[High(FPorts)] := APort;
+    FSessions[High(FSessions)] := ASession;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsFpSessionCache.TryPeek(const AHost: string; APort: UInt16;
+  out ASession: TFpTlsResumptionSession): Boolean;
+var
+  I: Integer;
+begin
+  { out 参数先行清零：False 路径也必须交付已定义值——record 内含
+    TBytes 托管字段，调用方拿栈垃圾做 record 赋值会对野指针增引用 }
+  ASession := Default(TFpTlsResumptionSession);
+  Result := False;
+  if AHost = '' then
+    Exit;
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FHosts) do
+      if (FPorts[I] = APort) and (FHosts[I] = AHost) then
+      begin
+        ASession := FSessions[I];
+        { 本地过期：寿命已尽则不提供（服务器侧同样会拒） }
+        Result :=
+          ASession.IssuedMs + Int64(ASession.LifetimeSec) * 1000 > FpMonoMs;
+        Exit;
+      end;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
 
 { ======== 信任锚解析与进程级共享系统库 ======== }
 
@@ -302,16 +435,29 @@ begin
 end;
 
 const
-  { 单次网络读块大小（≥ 最大 TLS 密文记录 16KB+256） }
+  { 单次网络读块下限（≥ 最大 TLS 密文记录 16KB+256） }
   cNetReadChunk = 16640;
+  { 读块自适应上界。臂挂从下限起步，满读翻倍、不足半读回缩——
+    批量流自动长大让单次 read 吞掉多记录突发（摊薄 epoll/read），
+    低速连接保持下限不占内存。S2：此值即每连接未组帧读缓冲的
+    显式最坏值（65536B），与连接总数相乘有界。 }
+  cNetReadChunkMax = 65536;
+  { 实测扫描（2026-08-26，vless+wss→socks5 端到端）：16K=199.3、
+    64K=214.5、128K=206.6 MiB/s——64K 为最优点；再大会放大交付侧
+    FPlainOut 压缩搬移与缓存压力 }
   { 单条记录载荷上限（5B 头之外） }
   cMaxRecordPayload = 16384 + 256;
   { 单条握手消息上限（证书链可达数十 KB，1MB 已远超合理面） }
   cMaxHandshakeMessage = 1 shl 20;
   { 应用相单记录明文片上限：TLSInnerPlaintext ≤ 16384 含 ct 尾字节 }
   cMaxAppFragment = 16383;
-  { 未组帧网络缓冲上限（约 2 条最大记录，超出即协议错） }
-  cMaxNetInBuf = 2 * (5 + cMaxRecordPayload);
+  { 未组帧网络缓冲协议错界：读块满额（合法实字节峰值）+ 一条最大
+    记录余量；超出 = 对端持续给不出可组帧记录，协议错 }
+  cMaxNetInBuf = cNetReadChunkMax + 5 + cMaxRecordPayload;
+  { 应用相单泵解密预算：一次唤醒内就地解密的明文累计上界——
+    读进的全部完整记录一次消化完（而非解 1 条交付 1 次），同时
+    给事件循环单次占用设显式顶。S2：FPlainOut 峰值 ≤ 预算 + 单片。 }
+  cDecryptBatchBytes = 262144;
   { 握手期记录预算（防对端灌包） }
   cMaxFlightRecords = 96;
   { 后握手缓冲上限 }
@@ -329,6 +475,16 @@ type
     { VerifyPeer=True 时：CERT 相做全链验证，CV 相验签名 }
     VerifyPeer: Boolean;
     TrustBundlePath: string;
+    { 会话恢复：缓存里有票据则带 PSK 出手；PsksAccepted 后按恢复
+      语义处理飞行（无 CERT/CV） }
+    ResumeSession: TFpTlsResumptionSession;
+    HasResumeSession: Boolean;
+    { 已带 PSK 出手（CH 含 pre_shared_key）；PsksAccepted=服务器接受 }
+    Resuming: Boolean;
+    PsksAccepted: Boolean;
+    { 票据捕获回写目标（经数据相传入流） }
+    Cache: TAsyncTlsFpSessionCache;
+    CachePort: UInt16;
     { 链验证通过后捕获的叶子证书公钥（CV 签名校验输入） }
     LeafPublicKeyInfo: TX509PublicKeyInfo;
     OnReady: TAsyncTlsFpConnectCallback;
@@ -373,19 +529,27 @@ type
     TLS 分帧。读挂起与写挂起各一槽，互相独立。 }
   TFpTlsStream = class(TInterfacedObject, IReader, IWriter,
     IReadWriteCloser, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime,
-    IAsyncTcpStream)
+    IAsyncTcpStream, ITlsFpResumeInfo)
   private
     FInner: IAsyncTcpStream;
     FLoop: TAsyncLoop;
     FSuite: Word;
     FApp: TTLS13ApplicationSecrets;
+    { 票据捕获：非 nil 时 NewSessionTicket → 派生 PSK 入缓存 }
+    FCache: TAsyncTlsFpSessionCache;
+    FCacheHost: string;
+    FCachePort: UInt16;
+    FWasResumed: Boolean;
     FSealer: TTLS13RecordSealer;
     FOpener: TTLS13RecordOpener;
     FNetIn: TBytes;
     FPlainOut: TBytes;
     FPostHs: TBytes;
     FNetTx: TBytes;
+    FNetInBuf: TByteStreamBuf;
+    FPlainOutBuf: TByteStreamBuf;
     FNetTxOff: Integer;
+    FRecvChunk: Integer;
     FRecvArmed: Boolean;
     FSendArmed: Boolean;
     FPumping: Boolean;
@@ -424,8 +588,12 @@ type
   public
     constructor Create(ASuite: Word; const AApp: TTLS13ApplicationSecrets;
       const AInner: IAsyncTcpStream; ALoop: TAsyncLoop;
-      const ANetInSeed, APostHsSeed: TBytes);
+      const ANetInSeed, APostHsSeed: TBytes;
+      ACache: TAsyncTlsFpSessionCache; const ACacheHost: string;
+      ACachePort: UInt16; AWasResumed: Boolean);
     destructor Destroy; override;
+    { ITlsFpResumeInfo }
+    function GetWasResumed: Boolean;
     { IReader }
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     { IWriter }
@@ -539,6 +707,33 @@ begin
     Move(ABuf[5], APayload[0], LHeader.Length);
   Move(ABuf[LTotal], ABuf[0], Length(ABuf) - LTotal);
   SetLength(ABuf, Length(ABuf) - LTotal);
+  Result := 1;
+end;
+
+{ 零拷贝视图版：从连续缓冲 (AData, AAvailable) 试组一条记录
+  返回 1=可组帧（填充 ACt/APayloadOff/APayloadLen/ATotalLen）
+        0=需要更多字节  <0=协议错；不移动/不拷贝缓冲 }
+function FpTryFrameRecordView(AData: PByte; AAvailable: SizeUInt;
+  out ACt: Byte; out APayloadOff, APayloadLen, ATotalLen: SizeUInt): Integer;
+begin
+  Result := 0;
+  ACt := 0; APayloadOff := 0; APayloadLen := 0; ATotalLen := 0;
+  if (AData = nil) and (AAvailable > 0) then Exit(-1);
+  if AAvailable < 5 then Exit(0);
+  ACt := AData[0];
+  case ACt of
+    TLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC,
+    TLS_CONTENT_TYPE_ALERT,
+    TLS_CONTENT_TYPE_HANDSHAKE,
+    TLS_CONTENT_TYPE_APPLICATION_DATA: ;
+  else
+    Exit(-1);
+  end;
+  APayloadLen := (SizeUInt(AData[3]) shl 8) or SizeUInt(AData[4]);
+  if APayloadLen > SizeUInt(cMaxRecordPayload) then Exit(-1);
+  ATotalLen := 5 + APayloadLen;
+  if AAvailable < ATotalLen then Exit(0);
+  APayloadOff := 5;
   Result := 1;
 end;
 
@@ -696,7 +891,8 @@ begin
   LNetInSeed := ACtx^.NetIn;
   LPostHsSeed := ACtx^.EncBuf;
   LStream := TFpTlsStream.Create(ACtx^.Suite, ACtx^.AppSecrets,
-    ACtx^.Stream, ACtx^.Loop, LNetInSeed, LPostHsSeed);
+    ACtx^.Stream, ACtx^.Loop, LNetInSeed, LPostHsSeed,
+    ACtx^.Cache, ACtx^.ServerName, ACtx^.CachePort, ACtx^.PsksAccepted);
   ACtx^.Stream := nil;
   LCb := ACtx^.OnReady;
   LCbCtx := ACtx^.OnReadyCtx;
@@ -731,11 +927,16 @@ begin
     FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
     Exit;
   end;
-  { v1 无 PSK：服务器选择 pre_shared_key 即失败 }
+  { pre_shared_key 选择合法性：未出手却被选中、多身份里选了非零项、
+    或选中的套件与票据不符，均为协议错 }
   if LInfo.HasPreSharedKey then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
-    Exit;
+    if (not ACtx^.Resuming) or (LInfo.SelectedPSKIdentity <> 0) or
+       (LInfo.SelectedCipherSuite <> ACtx^.ResumeSession.CipherSuite) then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
   end;
   { v1 仅 X25519 key share }
   if (not LInfo.HasKeyShare) or
@@ -760,7 +961,20 @@ begin
   SetLength(ACtx^.Transcript, 0);
   AppendBytesTo(ACtx^.Transcript, ACtx^.CHBody);
   AppendBytesTo(ACtx^.Transcript, AMsg);
-  if not TryDeriveTLS13HandshakeSecrets(ACtx^.Suite, LShared,
+  if LInfo.HasPreSharedKey then
+  begin
+    { psk_dhe_ke 恢复路径：early secret 由 resumption PSK 参与，
+      DHE 共密仍来自 X25519 }
+    if not TryDeriveTLS13HandshakeSecretsWithPSK(ACtx^.Suite, LShared,
+      ACtx^.Transcript, ACtx^.ResumeSession.ResumptionPSK,
+      ACtx^.Secrets, LError) then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    ACtx^.PsksAccepted := True;
+  end
+  else if not TryDeriveTLS13HandshakeSecrets(ACtx^.Suite, LShared,
     ACtx^.Transcript, ACtx^.Secrets, LError) then
   begin
     FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
@@ -935,6 +1149,12 @@ begin
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_CERTIFICATE then
           begin
+            { 恢复握手无服务器证书（RFC 8446 §2.2）；出现即协议错 }
+            if ACtx^.PsksAccepted then
+            begin
+              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              Exit;
+            end;
             if not TryParseTLS13ServerCertificateHandshake(LMsg, LCerts,
               LError) then
             begin
@@ -957,6 +1177,12 @@ begin
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY then
           begin
+            { 恢复握手无 CV；出现即协议错 }
+            if ACtx^.PsksAccepted then
+            begin
+              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              Exit;
+            end;
             { 结构合法性必查（transcript 完整性依赖其长度域可信）；
               VerifyPeer=True 时签名必须验过才入 transcript——CV 签的
               是 Hash(CH..CERT)，先验后追加，顺序不可倒置 }
@@ -974,12 +1200,19 @@ begin
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_FINISHED then
           begin
-            { RFC 8446 §4.4.1-4.4.3：v1 无 PSK，server flight 必含
-              EE+CERT+CV；缺失即结构不完整 fail-closed（无 CV 绑定
-              等于 transcript 未被服务器签名）。乱序/重复消息由
-              FINISHED 的 transcript HMAC 自动判负，无需顺序机。 }
-            if not (ACtx^.SeenEncryptedExtensions and
-                    ACtx^.SeenCert and ACtx^.SeenCertVerify) then
+            { RFC 8446 §4.4.1-4.4.3：全握手的 server flight 必含
+              EE+CERT+CV；恢复握手只需 EE。乱序/重复消息由 FINISHED 的
+              transcript HMAC 自动判负，无需顺序机。 }
+            if ACtx^.PsksAccepted then
+            begin
+              if not ACtx^.SeenEncryptedExtensions then
+              begin
+                FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+                Exit;
+              end;
+            end
+            else if not (ACtx^.SeenEncryptedExtensions and
+                         ACtx^.SeenCert and ACtx^.SeenCertVerify) then
             begin
               FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
               Exit;
@@ -1292,34 +1525,55 @@ begin
   Result.VerifyPeer := False;
   Result.HandshakeDeadline := TDeadline.Infinite;
   Result.TrustBundlePath := '';
+  Result.Cache := nil;
 end;
 
 { 公共初始化：X25519 keypair + ClientHello（失败静默释放并 re-raise）}
 function AllocHsCtx(const ALoop: TAsyncLoop;
-  const AServerName: string; const ADeadline: TDeadline;
-  AVerifyPeer: Boolean; const ATrustBundlePath: string;
+  const AServerName: string; ACachePort: UInt16;
+  const AOptions: TAsyncTlsFpClientOptions;
+  const AResumeSession: TFpTlsResumptionSession; AHasResume: Boolean;
   AOnReady: TAsyncTlsFpConnectCallback; AOnReadyCtx: Pointer
   ): PFpHsCtx;
 var
   LPub: TBytes;
+  LPartialCH: TBytes;
 begin
   New(Result);
   FillChar(Result^, SizeOf(Result^), 0);
   Result^.Loop := ALoop;
   Result^.ServerName := AServerName;
-  Result^.VerifyPeer := AVerifyPeer;
-  Result^.TrustBundlePath := ATrustBundlePath;
+  Result^.VerifyPeer := AOptions.VerifyPeer;
+  Result^.TrustBundlePath := AOptions.TrustBundlePath;
+  Result^.Cache := AOptions.Cache;
+  Result^.CachePort := ACachePort;
+  Result^.ResumeSession := AResumeSession;
+  Result^.HasResumeSession := AHasResume;
+  Result^.Deadline := AOptions.HandshakeDeadline;
   Result^.OnReady := AOnReady;
   Result^.OnReadyCtx := AOnReadyCtx;
-  Result^.Deadline := ADeadline;
   Result^.Timer := TAsyncTimerHandle.None;
   Result^.State := hsSendCH;
   InitTLS13HandshakeSecrets(Result^.Secrets);
   InitTLS13ApplicationSecrets(Result^.AppSecrets);
   try
     GenerateX25519KeyPair(Result^.Priv, LPub);
-    Result^.CHBody := BuildTLS13ClientHelloHandshake(AServerName, '',
-      LPub);
+    if AHasResume then
+    begin
+      { PSK 恢复（psk_dhe_ke）：仍带 X25519 key_share；binder 覆盖
+        去 binders 的部分 CH，由构建器内部完成 }
+      Result^.Resuming := True;
+      Result^.CHBody :=
+        BuildTLS13ClientHelloHandshakeWithComputedPSKBinder(
+          AServerName, '', LPub, AResumeSession.CipherSuite,
+          AResumeSession.TicketIdentity,
+          Cardinal(Int64(AResumeSession.TicketAgeAdd) +
+            (FpMonoMs - AResumeSession.IssuedMs)),
+          AResumeSession.ResumptionPSK, LPartialCH);
+    end
+    else
+      Result^.CHBody := BuildTLS13ClientHelloHandshake(AServerName, '',
+        LPub);
   except
     FreeHsCtxSilent(Result);
     raise;
@@ -1336,14 +1590,16 @@ function AsyncTlsFpUpgrade(const ALoop: TAsyncLoop;
   ACallback: TAsyncTlsFpConnectCallback; AContext: Pointer): Boolean;
 var
   LCtx: PFpHsCtx;
+  LDummySess: TFpTlsResumptionSession;
 begin
   Result := False;
   if (AStream = nil) or not Assigned(ACallback) then
     Exit;
 
-  LCtx := AllocHsCtx(ALoop, AOptions.ServerName,
-    AOptions.HandshakeDeadline, AOptions.VerifyPeer,
-    AOptions.TrustBundlePath, ACallback, AContext);
+  FillChar(LDummySess, SizeOf(LDummySess), 0);
+  { 升级路径无拨号端口语境：票据缓存仅经 Connect 路径启用 }
+  LCtx := AllocHsCtx(ALoop, AOptions.ServerName, 0, AOptions,
+    LDummySess, False, ACallback, AContext);
   if LCtx = nil then
     Exit;
   LCtx^.Stream := AStream;
@@ -1362,6 +1618,8 @@ var
   LCtx: PFpHsCtx;
   LOpts: TAsyncTcpDialOptions;
   LServerName: string;
+  LSess: TFpTlsResumptionSession;
+  LHasResume: Boolean;
 begin
   Result := False;
   if (AHost = '') or not Assigned(ACallback) then
@@ -1371,8 +1629,15 @@ begin
   else
     LServerName := AHost;
 
-  LCtx := AllocHsCtx(ALoop, LServerName, AOptions.HandshakeDeadline,
-    AOptions.VerifyPeer, AOptions.TrustBundlePath, ACallback, AContext);
+  { 会话恢复尝试：缓存命中即带 PSK 出手；服务器拒绝时 SH 不含
+    pre_shared_key，自然回退全握手 }
+  LHasResume := False;
+  FillChar(LSess, SizeOf(LSess), 0);
+  if AOptions.Cache <> nil then
+    LHasResume := AOptions.Cache.TryPeek(LServerName, APort, LSess);
+
+  LCtx := AllocHsCtx(ALoop, LServerName, APort, AOptions, LSess,
+    LHasResume, ACallback, AContext);
   if LCtx = nil then
     Exit;
   if not LCtx^.Deadline.IsInfinite then
@@ -1392,19 +1657,50 @@ end;
 
 constructor TFpTlsStream.Create(ASuite: Word;
   const AApp: TTLS13ApplicationSecrets; const AInner: IAsyncTcpStream;
-  ALoop: TAsyncLoop; const ANetInSeed, APostHsSeed: TBytes);
+  ALoop: TAsyncLoop; const ANetInSeed, APostHsSeed: TBytes;
+  ACache: TAsyncTlsFpSessionCache; const ACacheHost: string;
+  ACachePort: UInt16; AWasResumed: Boolean);
 begin
   inherited Create;
   FSuite := ASuite;
   FApp := AApp;
+  { 密钥材料必须深拷贝：FpDone 创建本对象后立即经 FreeHsCtx 安全
+    擦除握手上下文，record 赋值的 TBytes 引用与上下文共享底层缓冲，
+    会被连带清零——NST 派生 PSK 将拿到全零 master secret }
+  FApp.TranscriptHash := Copy(AApp.TranscriptHash);
+  FApp.ResumptionTranscriptHash := Copy(AApp.ResumptionTranscriptHash);
+  FApp.DerivedSecret := Copy(AApp.DerivedSecret);
+  FApp.MasterSecret := Copy(AApp.MasterSecret);
+  FApp.ClientApplicationTrafficSecret :=
+    Copy(AApp.ClientApplicationTrafficSecret);
+  FApp.ServerApplicationTrafficSecret :=
+    Copy(AApp.ServerApplicationTrafficSecret);
+  FApp.ClientApplicationKey := Copy(AApp.ClientApplicationKey);
+  FApp.ServerApplicationKey := Copy(AApp.ServerApplicationKey);
+  FApp.ClientApplicationIV := Copy(AApp.ClientApplicationIV);
+  FApp.ServerApplicationIV := Copy(AApp.ServerApplicationIV);
+  FCache := ACache;
+  FCacheHost := ACacheHost;
+  FCachePort := ACachePort;
+  FWasResumed := AWasResumed;
   FInner := AInner;
   FLoop := ALoop;
   FNetIn := ANetInSeed;
   FPostHs := APostHsSeed;
+  FNetInBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
+  FPlainOutBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
+  if Length(ANetInSeed) > 0 then
+    FNetInBuf.Append(@ANetInSeed[0], Length(ANetInSeed));
+  FRecvChunk := cNetReadChunk;
   FOpener.Init(FSuite, FApp.ServerApplicationKey,
     FApp.ServerApplicationIV);
   FSealer.Init(FSuite, FApp.ClientApplicationKey,
     FApp.ClientApplicationIV);
+end;
+
+function TFpTlsStream.GetWasResumed: Boolean;
+begin
+  Result := FWasResumed;
 end;
 
 destructor TFpTlsStream.Destroy;
@@ -1413,6 +1709,10 @@ begin
   FSealer.Clear;
   FOpener.Clear;
   ClearTLS13ApplicationSecrets(FApp);
+  if Assigned(FNetInBuf) then FNetInBuf.Free;
+  FNetInBuf := nil;
+  if Assigned(FPlainOutBuf) then FPlainOutBuf.Free;
+  FPlainOutBuf := nil;
   FInner := nil;
   FLoop := nil;
   inherited Destroy;
@@ -1426,6 +1726,8 @@ var
   LMsg: TBytes;
   LMsgType: Byte;
   LErr: string;
+  LTicket: TTLS13NewSessionTicket;
+  LSess: TFpTlsResumptionSession;
 begin
   AFatal := False;
   AppendBytesTo(FPostHs, AFragment);
@@ -1433,7 +1735,29 @@ begin
   begin
     LMsgType := LMsg[0];
     if LMsgType = TLS_HANDSHAKE_TYPE_NEW_SESSION_TICKET then
-      Continue; { v1 不缓存会话票据：忽略 }
+    begin
+      { v2：捕获票据派生 PSK 入缓存。恢复材料绑定本会话 master
+        secret（全握手才有意义）；带 max_early_data 的票据跳过——
+        v2 不做 0-RTT，收下也用不上 }
+      if TryParseTLS13NewSessionTicket(LMsg, LTicket, LErr) and
+         (FCache <> nil) and (LTicket.TicketLifetime > 0) and
+         (Length(LTicket.Ticket) > 0) and
+         (not LTicket.HasMaxEarlyDataSize) then
+      begin
+        FillChar(LSess, SizeOf(LSess), 0);
+        LSess.CipherSuite := FSuite;
+        LSess.TicketIdentity :=
+          Copy(LTicket.Ticket, 0, Length(LTicket.Ticket));
+        LSess.ResumptionPSK := TLS13DeriveResumptionPSKFromTranscriptHash(
+          FSuite, FApp.MasterSecret, FApp.ResumptionTranscriptHash,
+          LTicket.TicketNonce);
+        LSess.TicketAgeAdd := LTicket.TicketAgeAdd;
+        LSess.LifetimeSec := LTicket.TicketLifetime;
+        LSess.IssuedMs := FpMonoMs;
+        FCache.Store(FCacheHost, FCachePort, LSess);
+      end;
+      Continue;
+    end;
     if LMsgType = TLS_HANDSHAKE_TYPE_KEY_UPDATE then
     begin
       if (Length(LMsg) >= 5) and (LMsg[4] = 1) then
@@ -1496,18 +1820,26 @@ end;
 function TFpTlsStream.OpenAvailableRecords: Integer;
 var
   LCt: Byte;
-  LPayload: TBytes;
-  LFrameRes, LRes: Integer;
+  LPayloadOff, LPayloadLen, LTotalLen: SizeUInt;
+  LFrameRes: Integer;
+  LFragLen: Integer;
+  LInnerCt: Byte;
+  LErr: string;
+  LDest: PByte;
+  LPayloadPtr: PByte;
+  LFatal: Boolean;
+  LFragBytes: TBytes;
 begin
   Result := 0;
   while not FEofIn and not FDead do
   begin
-    if Length(FNetIn) > cMaxNetInBuf then
+    if FNetInBuf.Available > SizeUInt(cMaxNetInBuf) then
     begin
       FDead := True;
       Exit(-1);
     end;
-    LFrameRes := FpTryFrameRecord(FNetIn, LCt, LPayload);
+    LFrameRes := FpTryFrameRecordView(FNetInBuf.Data, FNetInBuf.Available,
+      LCt, LPayloadOff, LPayloadLen, LTotalLen);
     if LFrameRes < 0 then
     begin
       FDead := True;
@@ -1517,23 +1849,83 @@ begin
       Exit;
     if LCt = TLS_CONTENT_TYPE_APPLICATION_DATA then
     begin
-      LRes := HandleOpenedRecord(LPayload);
-      if LRes < 0 then
+      // Payload位于 Data+Off 区间，零拷贝视图不分配
+      LPayloadPtr := FNetInBuf.Data + LPayloadOff;
+      // 预留明文目标区（最坏 payloadLen，实际 fragLen ≤ payloadLen）
+      if LPayloadLen > 0 then
+        LDest := FPlainOutBuf.ReserveAppend(LPayloadLen)
+      else
+        LDest := nil;
+      if not FOpener.OpenToBuf(LPayloadPtr, Integer(LPayloadLen),
+        LDest, Integer(LPayloadLen), LFragLen, LInnerCt, LErr) then
       begin
+        FNetInBuf.Consume(LTotalLen);
         FDead := True;
         Exit(-1);
       end;
-      Inc(Result, LRes);
-      if Result > 0 then
-        Exit; { 攒到一批先交付，避免饿死读方 }
+      FNetInBuf.Consume(LTotalLen);
+      case LInnerCt of
+        TLS_CONTENT_TYPE_APPLICATION_DATA:
+          begin
+            // 提交真实片段长度（丢弃零填充尾）
+            if LFragLen > 0 then
+              FPlainOutBuf.CommitAppend(SizeUInt(LFragLen))
+            else
+            begin
+              // 零长度片段：仅预留未提交即回退（Reserve 未 commit 自动空洞回收）
+              // 无需额外操作，下一 Reserve 会复用同一尾区
+            end;
+            Inc(Result, LFragLen);
+            if Result >= cDecryptBatchBytes then
+              Exit;
+          end;
+        TLS_CONTENT_TYPE_HANDSHAKE:
+          begin
+            // 握手内嵌（NewSessionTicket/KeyUpdate）：不入明文流，转后握手处理
+            // Reserve 區已写入但不提交；拷贝片段走既有 TBytes 路径（罕见、低频）
+            SetLength(LFragBytes, LFragLen);
+            if LFragLen > 0 then
+              Move(LDest^, LFragBytes[0], LFragLen);
+            // 回退 Reserve（不 Commit，尾区自动复用）
+            FeedPostHandshake(LFragBytes, LFatal);
+            if LFatal then
+            begin
+              FDead := True;
+              Exit(-1);
+            end;
+          end;
+        TLS_CONTENT_TYPE_ALERT:
+          begin
+            SetLength(LFragBytes, LFragLen);
+            if LFragLen > 0 then
+              Move(LDest^, LFragBytes[0], LFragLen);
+            if (Length(LFragBytes) >= 2) and (LFragBytes[0] = 2) then
+            begin
+              FDead := True;
+              Exit(-1);
+            end;
+            FEofIn := True;
+          end;
+        TLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC:
+          ; // 忽略
+      else
+        begin
+          FDead := True;
+          Exit(-1);
+        end;
+      end;
     end
     else if LCt = TLS_CONTENT_TYPE_ALERT then
     begin
-      { 应用相的明文 alert 记录 = 对端异常（正常 alert 走加密内嵌） }
+      FNetInBuf.Consume(LTotalLen);
       FDead := True;
       Exit(-1);
+    end
+    else
+    begin
+      // CCS 等明文记录：直接丢弃
+      FNetInBuf.Consume(LTotalLen);
     end;
-    { CCS 记录：忽略 }
   end;
 end;
 
@@ -1597,7 +1989,7 @@ begin
       if LIters > cMaxPumpIterations then
       begin
         WriteLn(ErrOutput, '[tlsfp] pump iteration cap exceeded: plain=',
-          Length(FPlainOut), ' netin=', Length(FNetIn), ' eof=', FEofIn,
+          FPlainOutBuf.Available, ' netin=', FNetInBuf.Available, ' eof=', FEofIn,
           ' readpending=', FReadPending);
         FDead := True;
         if FReadPending then
@@ -1619,19 +2011,17 @@ begin
           DeliverRead(ASYNC_TLSFP_ERR_IO);
         Exit;
       end;
-      if Length(FPlainOut) > 0 then
+      if FPlainOutBuf.Available > 0 then
       begin
         if not FReadPending then
         begin
           Exit;
         end;
         LCopy := FReadLen;
-        if LCopy > SizeUInt(Length(FPlainOut)) then
-          LCopy := SizeUInt(Length(FPlainOut));
-        Move(FPlainOut[0], FReadBuf^, LCopy);
-        Move(FPlainOut[LCopy], FPlainOut[0],
-          Length(FPlainOut) - LCopy);
-        SetLength(FPlainOut, Length(FPlainOut) - LCopy);
+        if LCopy > FPlainOutBuf.Available then
+          LCopy := FPlainOutBuf.Available;
+        Move(FPlainOutBuf.Data^, FReadBuf^, LCopy);
+        FPlainOutBuf.Consume(LCopy);
         DeliverRead(Int32(LCopy));
         Continue;
       end;
@@ -1694,12 +2084,23 @@ begin
   if AResult = 0 then
   begin
     { 对端 TCP EOF：半关闭，读侧置 EOF；存量整记录仍可在 Pump 中消化 }
+    // 零拷贝：FNetInBuf 上次 Reserve 的尾区未提交，保持原状（AResult=0 不 commit）
     LSelf.FEofIn := True;
   end
   else
   begin
-    SetLength(LSelf.FNetIn,
-      Length(LSelf.FNetIn) - cNetReadChunk + AResult);
+    LSelf.FNetInBuf.CommitAppend(SizeUInt(AResult));
+    { 读块自时钟：满读翻倍至多记录粒度（对端突发被单次 read 吞下），
+      不足半读说明内核暂无余量，回缩下限；其间保持不变防抖动 }
+    if (AResult >= LSelf.FRecvChunk) and
+       (LSelf.FRecvChunk < cNetReadChunkMax) then
+    begin
+      LSelf.FRecvChunk := LSelf.FRecvChunk * 2;
+      if LSelf.FRecvChunk > cNetReadChunkMax then
+        LSelf.FRecvChunk := cNetReadChunkMax;
+    end
+    else if AResult * 2 < LSelf.FRecvChunk then
+      LSelf.FRecvChunk := cNetReadChunk;
   end;
   LSelf.Pump;
 end;
@@ -1736,20 +2137,19 @@ begin
   Result := False;
   if FRecvArmed or FDead then
     Exit;
-  SetLength(FNetIn, Length(FNetIn) + cNetReadChunk);
-  LRx := @FNetIn[Length(FNetIn) - cNetReadChunk];
+  LRx := FNetInBuf.ReserveAppend(SizeUInt(FRecvChunk));
   FRecvArmed := True;
   { 读挂起带期限时走底层超时形态（到期由底层交付其域内负码） }
   if FHasReadDeadlineReq then
   begin
-    if FInner.AsyncReadTimeout(LRx, cNetReadChunk, FReadDeadlineReq,
+    if FInner.AsyncReadTimeout(LRx, FRecvChunk, FReadDeadlineReq,
       @StreamRecvCb, Self) then
       Exit(True);
   end
-  else if FInner.AsyncRead(LRx, cNetReadChunk, @StreamRecvCb, Self) then
+  else if FInner.AsyncRead(LRx, FRecvChunk, @StreamRecvCb, Self) then
     Exit(True);
   FRecvArmed := False;
-  SetLength(FNetIn, Length(FNetIn) - cNetReadChunk);
+  // Reserve 未提交，不移动 FLen，尾区自动复用，无需回缩 SetLength
 end;
 
 function TFpTlsStream.ArmNetSend: Boolean;
@@ -1933,19 +2333,18 @@ begin
   ARead := 0;
   if FDead then
     Exit(tsiorClosed);
-  if Length(FPlainOut) = 0 then
+  if FPlainOutBuf.Available = 0 then
   begin
     if OpenAvailableRecords < 0 then
       Exit(tsiorClosed);
   end;
-  if Length(FPlainOut) > 0 then
+  if FPlainOutBuf.Available > 0 then
   begin
     LN := ACount;
-    if LN > SizeUInt(Length(FPlainOut)) then
-      LN := SizeUInt(Length(FPlainOut));
-    Move(FPlainOut[0], ABuf, LN);
-    Move(FPlainOut[LN], FPlainOut[0], Length(FPlainOut) - LN);
-    SetLength(FPlainOut, Length(FPlainOut) - LN);
+    if LN > FPlainOutBuf.Available then
+      LN := FPlainOutBuf.Available;
+    Move(FPlainOutBuf.Data^, ABuf, LN);
+    FPlainOutBuf.Consume(LN);
     ARead := LN;
     Exit(tsiorOk);
   end;
@@ -2111,5 +2510,8 @@ begin
   { 与 net.async.tls 一致：接受但不在冲刷中途强断（握手期才全强制） }
   Result := AsyncWrite(ABuf, ALen, ACallback, AContext);
 end;
+
+initialization
+  GMonoClock.Start;
 
 end.

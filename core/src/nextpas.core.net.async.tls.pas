@@ -608,9 +608,12 @@ var
   LCtx: PTlsHsCtx;
   LOptsFp: TAsyncTlsFpClientOptions;
 begin
-  { 纯 Pas 引擎分发：字段平移，回调/错误码契约与 OpenSSL 泵同构 }
+  { 纯 Pas 引擎分发：从 Default 出发做字段平移——record 直接逐字段
+    抄写会漏掉未平移字段（Cache 等新增项带栈垃圾进引擎，NST 到达时
+    野指针解引用即崩），必须以全零缺省为底 }
   if AOptions.Backend = atbFreePascal then
   begin
+    LOptsFp := DefaultAsyncTlsFpClientOptions;
     LOptsFp.ServerName := AOptions.ServerName;
     LOptsFp.VerifyPeer := AOptions.VerifyPeer;
     LOptsFp.HandshakeDeadline := AOptions.HandshakeDeadline;
@@ -643,9 +646,10 @@ var
   LOpts: TAsyncTcpDialOptions;
   LOptsFp: TAsyncTlsFpClientOptions;
 begin
-  { 纯 Pas 引擎分发：字段平移，SNI 缺省回填与 OpenSSL 泵一致 }
+  { 纯 Pas 引擎分发：从 Default 出发做字段平移（理由同 AsyncTlsUpgrade） }
   if AOptions.Backend = atbFreePascal then
   begin
+    LOptsFp := DefaultAsyncTlsFpClientOptions;
     LOptsFp.ServerName := AOptions.ServerName;
     LOptsFp.VerifyPeer := AOptions.VerifyPeer;
     LOptsFp.HandshakeDeadline := AOptions.HandshakeDeadline;
