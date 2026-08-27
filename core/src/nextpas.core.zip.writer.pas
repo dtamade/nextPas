@@ -114,10 +114,10 @@ uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
   nextpas.core.compress.deflate,
-  nextpas.core.zip.aes;
+  nextpas.core.zip.aes,
+  nextpas.core.zip.extra;
 
 const
-  C_ZIP64_LOCAL_EXTRA_LEN = 20;  { id(2)+size(2)+原始/压缩尺寸各 8 }
   C_ZIP64_EOCD_BODY_LEN   = 44;  { zip64 EOCD 记录体（不含签名+尺寸前缀 12 字节） }
   C_STREAM_CHUNK = 256 * 1024;   { 暂存排空分块尺寸 }
 
@@ -736,6 +736,7 @@ procedure TZipWriter.AppendLocalEntry(const AMeta: TZipEntryMeta;
   const APayload: TBytes; ADescriptorOpen: Boolean);
 var
   LVersion, LWireMethod, LExtraLen, LFlags, LZ64Sizes: Integer;
+  LExtra: TBytes;
 begin
   { 描述符开形态尺寸未知：版本抬到 45 且强制 zip64 占位 extra——流式无法
     回头改写已落盘的头部，只有预先声明 64 位宽度才能容纳事后才知道的
@@ -760,11 +761,10 @@ begin
   if ADescriptorOpen then
     LFlags := LFlags or C_ZIP_FLAG_DESCRIPTOR;
 
-  { local extra：Zip64 尺寸对（20B）与 WinZip AES extra（11B）可并存 }
+  LExtra := BuildLocalExtra(AMeta.FUSize, AMeta.FCSize, ADescriptorOpen,
+    AMeta.FNeedsZ64Sizes, AMeta.FAesStrength, AMeta.FMethod);
+  LExtraLen := Length(LExtra);
   LZ64Sizes := Ord(ADescriptorOpen or AMeta.FNeedsZ64Sizes);
-  LExtraLen := LZ64Sizes * C_ZIP64_LOCAL_EXTRA_LEN;
-  if AMeta.FAesStrength > 0 then
-    Inc(LExtraLen, 4 + C_WINZIP_AES_EXTRA_BODY);
 
   EmitU32(C_ZIP_LOCAL_SIG);
   EmitU16(Word(LVersion));
@@ -790,28 +790,8 @@ begin
   EmitU16(Word(LExtraLen));
   if Length(AMeta.FName) > 0 then
     EmitRaw(PByte(Pointer(AMeta.FName))^, SizeUInt(Length(AMeta.FName)));
-  if LZ64Sizes = 1 then
-  begin
-    EmitU16(C_ZIP64_EXTRA_ID);
-    EmitU16(16);
-    if ADescriptorOpen then
-    begin
-      EmitU64(0);                 { 尺寸未知，占位零值 }
-      EmitU64(0);
-    end
-    else
-    begin
-      EmitU64(AMeta.FUSize);
-      EmitU64(AMeta.FCSize);
-    end;
-  end;
-  if AMeta.FAesStrength > 0 then
-  begin
-    EmitU16(C_WINZIP_AES_EXTRA_ID);
-    EmitU16(C_WINZIP_AES_EXTRA_BODY);
-    EmitRaw(PByte(BuildWinZipAesExtraBody(AMeta.FAesStrength,
-      AMeta.FMethod))^, C_WINZIP_AES_EXTRA_BODY);
-  end;
+  if LExtraLen > 0 then
+    EmitRaw(LExtra[0], SizeUInt(LExtraLen));
   if (Length(APayload) > 0) and (not ADescriptorOpen) then
     EmitRaw(PByte(APayload)^, SizeUInt(Length(APayload)));
 end;
@@ -1043,8 +1023,9 @@ var
   LCDOffset, LCDSize, LCDEnd, LZ64EocdPos: UInt64;
   LCount: Int64;  LNeedsZ64Offset, LAnyZ64, LNeedZ64Eocd: Boolean;
   LVersionMadeBy, LVersionNeeded: Word;
-  LExtraLen, LZ64BodyLen, LCFlags: Integer;
+  LExtraLen, LCFlags: Integer;
   LCountField: LongWord;
+  LExtra: TBytes;
 begin
   LCDOffset := FTell;
   for LI := 0 to FCount - 1 do
@@ -1091,18 +1072,10 @@ begin
       EmitU32(LongWord(LE.FCSize));
       EmitU32(LongWord(LE.FUSize));
     end;
+    LExtra := BuildCentralExtra(LE.FUSize, LE.FCSize, LE.FLocalOffset,
+      LE.FNeedsZ64Sizes, LNeedsZ64Offset, LE.FAesStrength, LE.FMethod);
+    LExtraLen := Length(LExtra);
     EmitU16(Word(Length(LE.FName)));
-    { central extra：Zip64（内容宽随字段）与 WinZip AES extra（11B）可并存 }
-    LZ64BodyLen := 0;
-    if LE.FNeedsZ64Sizes then
-      Inc(LZ64BodyLen, 16);
-    if LNeedsZ64Offset then
-      Inc(LZ64BodyLen, 8);
-    LExtraLen := LZ64BodyLen;
-    if LZ64BodyLen > 0 then
-      Inc(LExtraLen, 4);
-    if LE.FAesStrength > 0 then
-      Inc(LExtraLen, 4 + C_WINZIP_AES_EXTRA_BODY);
     EmitU16(Word(LExtraLen));
     EmitU16(0);  { comment len }
     EmitU16(0);  { disk number start }
@@ -1115,26 +1088,8 @@ begin
     { central 布局固定顺序：固定字段、文件名、extra、注释 }
     if Length(LE.FName) > 0 then
       EmitRaw(PByte(Pointer(LE.FName))^, SizeUInt(Length(LE.FName)));
-    if LZ64BodyLen > 0 then
-    begin
-      EmitU16(C_ZIP64_EXTRA_ID);
-      EmitU16(Word(LZ64BodyLen));
-      { APPNOTE 固定顺序：原始尺寸、压缩尺寸、本地头偏移 }
-      if LE.FNeedsZ64Sizes then
-      begin
-        EmitU64(LE.FUSize);
-        EmitU64(LE.FCSize);
-      end;
-      if LNeedsZ64Offset then
-        EmitU64(LE.FLocalOffset);
-    end;
-    if LE.FAesStrength > 0 then
-    begin
-      EmitU16(C_WINZIP_AES_EXTRA_ID);
-      EmitU16(C_WINZIP_AES_EXTRA_BODY);
-      EmitRaw(PByte(BuildWinZipAesExtraBody(LE.FAesStrength,
-        LE.FMethod))^, C_WINZIP_AES_EXTRA_BODY);
-    end;
+    if LExtraLen > 0 then
+      EmitRaw(LExtra[0], SizeUInt(LExtraLen));
   end;
 
   { central 尺寸必须在写 EOCD 前固化，否则会把 EOCD 自身前缀计入 }

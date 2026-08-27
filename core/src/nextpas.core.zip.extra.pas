@@ -1,9 +1,10 @@
 unit nextpas.core.zip.extra;
 {**
- * @desc ZIP extra field 共享解析内核：Zip64 ($0001) 与 WinZip AES ($9901)
- *       的链式解析与校验集中于此，消除 reader / sequential / writer 的
- *       重复循环与 magic-number 分散，保证 extra 链畸形、AES 厂商非法等
- *       错误语义单点一致。仅依赖 nextpas.*，无 FPC RTL 直引。
+ * @desc ZIP extra field 共享编解码内核：Zip64 ($0001) 与 WinZip AES ($9901)
+ *       的链式解析/编码与校验集中于此，消除 reader / sequential / writer
+ *       的重复循环与 magic-number 分散，保证 extra 链畸形、AES 厂商非法、
+ *       编码顺序（Zip64→AES）与字段宽度等错误语义与字节形态单点一致。
+ *       仅依赖 nextpas.*，无 FPC RTL 直引。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -20,6 +21,12 @@ procedure DecodeCentralExtra(const AExtra: TBytes; var AUSize, ACSize,
 procedure DecodeLocalExtra(const AExtra: TBytes; var AUSize, ACSize: UInt64;
   var AHasAes: Boolean; var AAesVersion, AAesVendor, AAesRealMethod: Word;
   var AAesStrength: Byte);
+
+function BuildLocalExtra(const AUSize, ACSize: UInt64; ADescriptorOpen,
+  ANeedsZip64: Boolean; AAesStrength: Byte; AAesMethod: Word): TBytes;
+function BuildCentralExtra(const AUSize, ACSize, ALocalOffset: UInt64;
+  ANeedsZ64Sizes, ANeedsZ64Offset: Boolean; AAesStrength: Byte;
+  AAesMethod: Word): TBytes;
 
 implementation
 
@@ -42,6 +49,26 @@ begin
   LHi := LongWord(AData[AOff + 4]) or (LongWord(AData[AOff + 5]) shl 8) or
     (LongWord(AData[AOff + 6]) shl 16) or (LongWord(AData[AOff + 7]) shl 24);
   Result := UInt64(LLo) or (UInt64(LHi) shl 32);
+end;
+
+procedure WriteLE16(var ADst: TBytes; AOff: SizeUInt; AValue: Word); inline;
+begin
+  ADst[AOff] := Byte(AValue and $FF);
+  ADst[AOff + 1] := Byte((AValue shr 8) and $FF);
+end;
+
+procedure WriteLE32(var ADst: TBytes; AOff: SizeUInt; AValue: LongWord); inline;
+begin
+  ADst[AOff] := Byte(AValue and $FF);
+  ADst[AOff + 1] := Byte((AValue shr 8) and $FF);
+  ADst[AOff + 2] := Byte((AValue shr 16) and $FF);
+  ADst[AOff + 3] := Byte((AValue shr 24) and $FF);
+end;
+
+procedure WriteLE64(var ADst: TBytes; AOff: SizeUInt; AValue: UInt64); inline;
+begin
+  WriteLE32(ADst, AOff, LongWord(AValue and $FFFFFFFF));
+  WriteLE32(ADst, AOff + 4, LongWord((AValue shr 32) and $FFFFFFFF));
 end;
 
 procedure DecodeCentralExtra(const AExtra: TBytes; var AUSize, ACSize,
@@ -146,6 +173,101 @@ begin
       AHasAes := True;
     end;
     Inc(LPos, 4 + LSize);
+  end;
+end;
+
+function BuildLocalExtra(const AUSize, ACSize: UInt64; ADescriptorOpen,
+  ANeedsZip64: Boolean; AAesStrength: Byte; AAesMethod: Word): TBytes;
+var
+  LNeedsZ64: Boolean;
+  LTotal: SizeUInt;
+  LPos: SizeUInt;
+  LAesBody: TBytes;
+begin
+  Result := nil;
+  LNeedsZ64 := ADescriptorOpen or ANeedsZip64;
+  LTotal := 0;
+  if LNeedsZ64 then
+    Inc(LTotal, 20);
+  if AAesStrength <> 0 then
+    Inc(LTotal, 4 + C_WINZIP_AES_EXTRA_BODY);
+  if LTotal = 0 then
+    Exit;
+  SetLength(Result, LTotal);
+  LPos := 0;
+  if LNeedsZ64 then
+  begin
+    WriteLE16(Result, LPos, C_ZIP64_EXTRA_ID);
+    WriteLE16(Result, LPos + 2, 16);
+    if ADescriptorOpen then
+    begin
+      WriteLE64(Result, LPos + 4, 0);
+      WriteLE64(Result, LPos + 12, 0);
+    end
+    else
+    begin
+      WriteLE64(Result, LPos + 4, AUSize);
+      WriteLE64(Result, LPos + 12, ACSize);
+    end;
+    Inc(LPos, 20);
+  end;
+  if AAesStrength <> 0 then
+  begin
+    WriteLE16(Result, LPos, C_WINZIP_AES_EXTRA_ID);
+    WriteLE16(Result, LPos + 2, C_WINZIP_AES_EXTRA_BODY);
+    LAesBody := BuildWinZipAesExtraBody(AAesStrength, AAesMethod);
+    Move(LAesBody[0], Result[LPos + 4], C_WINZIP_AES_EXTRA_BODY);
+    Inc(LPos, 4 + C_WINZIP_AES_EXTRA_BODY);
+  end;
+end;
+
+function BuildCentralExtra(const AUSize, ACSize, ALocalOffset: UInt64;
+  ANeedsZ64Sizes, ANeedsZ64Offset: Boolean; AAesStrength: Byte;
+  AAesMethod: Word): TBytes;
+var
+  LBodyLen: SizeUInt;
+  LTotal: SizeUInt;
+  LPos: SizeUInt;
+  LAesBody: TBytes;
+begin
+  Result := nil;
+  LBodyLen := 0;
+  if ANeedsZ64Sizes then
+    Inc(LBodyLen, 16);
+  if ANeedsZ64Offset then
+    Inc(LBodyLen, 8);
+  LTotal := 0;
+  if LBodyLen > 0 then
+    Inc(LTotal, 4 + LBodyLen);
+  if AAesStrength <> 0 then
+    Inc(LTotal, 4 + C_WINZIP_AES_EXTRA_BODY);
+  if LTotal = 0 then
+    Exit;
+  SetLength(Result, LTotal);
+  LPos := 0;
+  if LBodyLen > 0 then
+  begin
+    WriteLE16(Result, LPos, C_ZIP64_EXTRA_ID);
+    WriteLE16(Result, LPos + 2, Word(LBodyLen));
+    Inc(LPos, 4);
+    if ANeedsZ64Sizes then
+    begin
+      WriteLE64(Result, LPos, AUSize);
+      WriteLE64(Result, LPos + 8, ACSize);
+      Inc(LPos, 16);
+    end;
+    if ANeedsZ64Offset then
+    begin
+      WriteLE64(Result, LPos, ALocalOffset);
+      Inc(LPos, 8);
+    end;
+  end;
+  if AAesStrength <> 0 then
+  begin
+    WriteLE16(Result, LPos, C_WINZIP_AES_EXTRA_ID);
+    WriteLE16(Result, LPos + 2, C_WINZIP_AES_EXTRA_BODY);
+    LAesBody := BuildWinZipAesExtraBody(AAesStrength, AAesMethod);
+    Move(LAesBody[0], Result[LPos + 4], C_WINZIP_AES_EXTRA_BODY);
   end;
 end;
 
