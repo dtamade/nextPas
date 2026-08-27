@@ -9,7 +9,7 @@ ZIP archive container: read, write, filesystem pack/extract.
 | `nextpas.core.zip` | Facade: re-exports the full public surface |
 | `nextpas.core.zip.base` | Method enum, entry metadata record, signature/limit constants, entry-name safety predicate, unix/DOS time conversion |
 | `nextpas.core.zip.common` | Shared kernel：`GuardEntryReadable` / `DecompressEntryVerified` / LE* / `IsKnownZipSig` — reader 与 sequential 单点复用 |
-| `nextpas.core.zip.extra` | Shared extra parser：`DecodeCentralExtra` / `DecodeLocalExtra` — Zip64/AES extra 链单点校验 |
+| `nextpas.core.zip.extra` | Shared extra codec：`Decode*` / `BuildLocalExtra` / `BuildCentralExtra` — Zip64/AES extra 链编解码单点，消除 writer/reader 重复 |
 | `nextpas.core.zip.writer` | `IZipWriter` implementation |
 | `nextpas.core.zip.reader` | `IZipReader` implementation |
 | `nextpas.core.zip.sequential` | `ISequentialZipReader` — pure sequential (pipe/HTTP body) reader |
