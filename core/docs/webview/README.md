@@ -4,7 +4,7 @@
 S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
 live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正、
 S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 respack
-资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环、S15 MIME 65 项与骨架屏收口、S16 生产就绪收口、S17 respack 高级感对齐与 bench 刷新均已进主线。W2 webview2 / W3 wk 待平台环境启动）
+资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环、S15 MIME 65 项与骨架屏收口、S16 生产就绪收口、S17 respack 高级感对齐与 bench 刷新、S18 W2 桩+loader via wine 交叉验证均已进主线。W2 真 runtime 待 Edge，W3 wk 待平台）
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。
@@ -36,7 +36,7 @@ S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 res
 |------|------|------|----------|------|
 | `gtk` | Linux | WebKitGTK 4.1（探测降级 4.0） | 运行时 dlopen，自声明 ABI | **Wave 1** |
 | `fake` | 全平台（无头） | 无引擎，脚本化驱动 | 纯 Pascal | **Wave 1**（测试支撑） |
-| `webview2` | Windows | Microsoft WebView2 (Edge) | COM 头移植 + WebView2Loader.dll 动态加载 | Wave 2 |
+| `webview2` | Windows (wine 10.0 可交叉验证) | Microsoft WebView2 (Edge) | COM 桩 + WebView2Loader.dll 动态加载（platform.dl；Linux 不可用，wine 可用） | **Wave 2 桩已落地**（ffi/loader/桩后端 + 3 用例门禁，wine 交叉验证通过） |
 | `wk` | macOS | WKWebView | ObjC runtime / objcclass（待编译器能力确认） | Wave 3 |
 
 平台能力差异以"语义诚实表"记录在 [CONTRACT.md](CONTRACT.md)，不做跨平台假装。
