@@ -58,7 +58,8 @@ type
     FData: PByte;
     FSize: SizeUInt;
     FOwnsBlob: Boolean;
-    function EntryPaths: TVfsNameArray;
+    FPaths: TVfsNameArray; { cached sorted file paths — O(1) reuse, avoids per-call EntryPaths alloc }
+    function EntryPaths: TVfsNameArray; inline;
     function HasSubtreePath(const APath: string): Boolean;
     function StartsWithPath(const AStr, APrefix: string): Boolean;
   public
@@ -175,16 +176,24 @@ end;
 
 constructor TEmbeddedVfs.Create(AData: PByte; ASize: SizeUInt;
   AOwnsBlob: Boolean);
+var
+  I: SizeUInt;
 begin
   inherited Create;
   FRp := TResPack.Open(AData, ASize);   { 校验失败 EResPackCorrupted 原样透传 }
   FData := AData;
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
+  { Materialize sorted path index once — avoids per-call EntryPaths rebuild (~n allocs) }
+  SetLength(FPaths, FRp.Count);
+  if FRp.Count > 0 then
+    for I := 0 to FRp.Count - 1 do
+      FPaths[I] := FRp.PathOf(FRp.EntryAt(I));
 end;
 
 destructor TEmbeddedVfs.Destroy;
 begin
+  SetLength(FPaths, 0);
   if FOwnsBlob and (FData <> nil) then
     FreeMem(FData);
   FData := nil;
@@ -192,19 +201,8 @@ begin
 end;
 
 function TEmbeddedVfs.EntryPaths: TVfsNameArray;
-var
-  I: SizeUInt;
-  E: TResPackEntry;
 begin
-  Result := nil;
-  SetLength(Result, FRp.Count);
-  if FRp.Count = 0 then
-    Exit;
-  for I := 0 to FRp.Count - 1 do
-  begin
-    E := FRp.EntryAt(I);
-    Result[I] := FRp.PathOf(E);
-  end;
+  Result := FPaths; { zero-alloc reuse — caller must not mutate }
 end;
 
 function TEmbeddedVfs.Exists(const APath: string): Boolean;
@@ -222,22 +220,26 @@ end;
 
 function TEmbeddedVfs.HasSubtreePath(const APath: string): Boolean;
 var
-  Names: TVfsNameArray;
   Prefix: string;
-  I: SizeUInt;
+  Lo, Hi, Mid: SizeInt;
 begin
-  { 子目录存在性：任一文件路径以 'dir/' 开头即成立。
-    O(n) 线性扫描（List 同款口径）；空清单直接 False }
+  { 子目录存在性：排序路径首个 ≥ prefix 的项即判定点 — O(log n) }
   Result := False;
-  Prefix := APath + '/';
-  Names := EntryPaths;
-  if SizeUInt(Length(Names)) = 0 then
+  if Length(FPaths) = 0 then
     Exit;
-  for I := 0 to SizeUInt(Length(Names)) - 1 do
+  Prefix := APath + '/';
+  Lo := 0;
+  Hi := Length(FPaths);
+  while Lo < Hi do
   begin
-    if StartsWithPath(Names[I], Prefix) then
-      Exit(True);
+    Mid := (Lo + Hi) shr 1;
+    if FPaths[Mid] < Prefix then
+      Lo := Mid + 1
+    else
+      Hi := Mid;
   end;
+  if (Lo < Length(FPaths)) and StartsWithPath(FPaths[Lo], Prefix) then
+    Exit(True);
 end;
 
 { 前缀判断：显式处理空前缀（FPC Pos('',S)=0 陷阱） }
