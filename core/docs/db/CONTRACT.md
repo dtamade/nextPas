@@ -856,4 +856,4 @@ test_db_odbc_adapter（V3-A3/A4）在仅有驱动管理器（unixODBC）而无�
 | `Exception` | `nextpas.core.errors` | FPC 下同类型别名，ABI 零变化 |
 | `string(AnsiString(PAnsiChar))` | `nextpas.core.text.conv.AnsiPtrToStr` | PAnsiChar 读回统一入口，规避托管记录数组内强转破坏 |
 
-残留 `string(AnsiString` 8 处在 `db.pg.*` LO 路径（非本次 12 单元 scope），记入下一收敛 sweep，不影响 C8 终态判定。
+C8.5 扫尾（2026-08-28）：`string(AnsiString` 家族全量清零（`pg.conn/pg.adapter/pg.listen/sqlite.conn/sqlite.adapter/pg.loader/mysql.loader` 共 15 处 → `AnsiPtrToStr`，唯一剩余为 `odbc.loader` 注释内示例），`grep -rn "string(AnsiString" core/src/nextpas.core.db*.pas` 仅注释豁免。
