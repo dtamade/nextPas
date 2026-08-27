@@ -106,6 +106,7 @@ type
     Password: string;
     PrivateKeyData: string;          { openssh-key-v1 容器内容（未加密或 aes256-ctr+bcrypt 加密）}
     PrivateKeyPassphrase: string;    { 加密私钥口令；未加密时忽略 }
+    AgentSocketPath: string;         { ssh-agent Unix socket 路径；为空则不走 agent }
     KnownHostsFile: string;          { 为空则跳过 known_hosts 校验 }
     StrictHostKeyChecking: Boolean;  { True：未知主机密钥直接拒绝 }
     ConnectTimeoutMs: Integer;       { 预留：当前阻塞 IO 未接入超时 }

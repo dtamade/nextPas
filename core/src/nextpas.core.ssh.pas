@@ -28,6 +28,7 @@ uses
   nextpas.core.ssh.channel,
   nextpas.core.ssh.transport,
   nextpas.core.ssh.sftp,
+  nextpas.core.ssh.agent,
   nextpas.core.ssh.session;
 
 type
@@ -55,6 +56,8 @@ type
   ISshKeyExchange = nextpas.core.ssh.kex.curve25519.ISshKeyExchange;
   TSshClientTransport = nextpas.core.ssh.transport.TSshClientTransport;
   TSshKnownHosts = nextpas.core.ssh.hostkey.TSshKnownHosts;
+  TSshAgentClient = nextpas.core.ssh.agent.TSshAgentClient;
+  TSshAgentIdentity = nextpas.core.ssh.agent.TSshAgentIdentity;
   TsshWriter = nextpas.core.ssh.buffer.TsshWriter;
   TsshReader = nextpas.core.ssh.buffer.TsshReader;
 
