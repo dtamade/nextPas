@@ -192,7 +192,7 @@ begin
     FreeMem(LBlock);
   end;
 
-  { MariaDB 布局 }
+  { MariaDB 布局 — 112 字节，实测偏移 64/96/101（见 ffi.pas） }
   GetMem(LBlock, 2 * SIZE_MYSQL_BIND_MARIADB);
   try
     FillChar(LBlock^, SizeUInt(2 * SIZE_MYSQL_BIND_MARIADB), 0);
@@ -203,16 +203,16 @@ begin
     Check(PPointer(LBlock)^ = @LLen, 'mariadb: length@0 shared prefix');
     Check(PPointer(PByte(LBlock) + 8)^ = @LNullFlag,
       'mariadb: is_null@8 shared prefix');
-    Check(PQWord(PByte(LBlock) + 72)^ = QWord(SizeOf(LBuf)),
-      'mariadb: buffer_length@72');
-    Check(PCardinal(PByte(LBlock) + 100)^ = MYSQL_TYPE_LONGLONG,
-      'mariadb: buffer_type@100 as 4-byte enum');
-    Check((PByte(LBlock) + 105)^ = 0, 'mariadb: is_unsigned@105 off');
+    Check(PQWord(PByte(LBlock) + 64)^ = QWord(SizeOf(LBuf)),
+      'mariadb: buffer_length@64');
+    Check(PCardinal(PByte(LBlock) + 96)^ = MYSQL_TYPE_LONGLONG,
+      'mariadb: buffer_type@96 as 4-byte enum');
+    Check((PByte(LBlock) + 101)^ = 0, 'mariadb: is_unsigned@101 off');
 
     FillChar(LBlock^, SizeUInt(2 * SIZE_MYSQL_BIND_MARIADB), 0);
     WriteBindSlot(LBlock, 0, SIZE_MYSQL_BIND_MARIADB, MYSQL_TYPE_NULL,
       nil, 0, @LNullFlag, nil, @LLen, False);
-    Check(PCardinal(PByte(LBlock) + 100)^ = MYSQL_TYPE_NULL,
+    Check(PCardinal(PByte(LBlock) + 96)^ = MYSQL_TYPE_NULL,
       'mariadb: null param type');
     Check(PPointer(PByte(LBlock) + 8)^ = @LNullFlag,
       'mariadb: null flag pointer set');

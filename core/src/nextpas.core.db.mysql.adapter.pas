@@ -285,10 +285,10 @@ begin
       end;
     SIZE_MYSQL_BIND_MARIADB:
       begin
-        PQWord(P + 72)^ := ABufferLength;
-        PCardinal(P + 100)^ := ABufferType;  { 4 字节 enum }
+        PQWord(P + 64)^ := ABufferLength;
+        PCardinal(P + 96)^ := ABufferType;   { 4 字节 enum，实测 96（非 100） }
         if AIsUnsigned then
-          (P + 105)^ := 1;
+          (P + 101)^ := 1;
       end;
   else
     raise EDbError.CreateSimple(dbkMysql,
@@ -671,7 +671,7 @@ begin
           end;
       end;
     end;
-    if not my_stmtBindParam(FStmt, FParamNative) then
+    if my_stmtBindParam(FStmt, FParamNative) then
       RaiseMyStmt(FStmt);
   end;
   if my_stmtExecute(FStmt) <> 0 then
@@ -712,24 +712,23 @@ begin
       FColMeta[I].Typ := LF^.Typ;
       FColMeta[I].CharsetNr := LF^.CharsetNr;
       case LF^.Typ of
-        MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_LONG,
-        MYSQL_TYPE_LONGLONG, MYSQL_TYPE_INT24:
-          FColMeta[I].BindType := MY_PT_LONGLONG;
-        MYSQL_TYPE_FLOAT, MYSQL_TYPE_DOUBLE:
-          FColMeta[I].BindType := MY_PT_DOUBLE;
+        MYSQL_TYPE_TINY:
+          begin FColMeta[I].BindType := MYSQL_TYPE_TINY; FResCap[I] := 1; end;
+        MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
+          begin FColMeta[I].BindType := MYSQL_TYPE_SHORT; FResCap[I] := 2; end;
+        MYSQL_TYPE_LONG, MYSQL_TYPE_INT24:
+          begin FColMeta[I].BindType := MYSQL_TYPE_LONG; FResCap[I] := 4; end;
+        MYSQL_TYPE_LONGLONG:
+          begin FColMeta[I].BindType := MY_PT_LONGLONG; FResCap[I] := 8; end;
+        MYSQL_TYPE_FLOAT:
+          begin FColMeta[I].BindType := MYSQL_TYPE_FLOAT; FResCap[I] := 4; end;
+        MYSQL_TYPE_DOUBLE:
+          begin FColMeta[I].BindType := MY_PT_DOUBLE; FResCap[I] := 8; end;
         MYSQL_TYPE_DECIMAL, MYSQL_TYPE_NEWDECIMAL:
-          FColMeta[I].BindType := MY_PT_STRING;  { 协议即 length-prefixed 文本 }
-        MYSQL_TYPE_YEAR:
-          FColMeta[I].BindType := MY_PT_LONGLONG;
+          begin FColMeta[I].BindType := MY_PT_STRING; FResCap[I] := MY_BUF_INITIAL; end;
       else
-        FColMeta[I].BindType := MY_PT_STRING;    { 文本/blob/日期/JSON/BIT }
+        begin FColMeta[I].BindType := MY_PT_STRING; FResCap[I] := MY_BUF_INITIAL; end;
       end;
-      if FColMeta[I].BindType = MY_PT_LONGLONG then
-        FResCap[I] := SizeOf(Int64)
-      else if FColMeta[I].BindType = MY_PT_DOUBLE then
-        FResCap[I] := SizeOf(Double)
-      else
-        FResCap[I] := MY_BUF_INITIAL;
       GetMem(FResBufs[I], SizeUInt(FResCap[I]));
       WriteBindSlot(FResultNative, I, FNativeSize, FColMeta[I].BindType,
         FResBufs[I], QWord(FResCap[I]), @FResNulls[I], @FResErrs[I],
@@ -738,7 +737,7 @@ begin
   finally
     my_freeResult(LMetaRes);   { 元数据复制完即释放 }
   end;
-  if not my_stmtBindResult(FStmt, FResultNative) then
+  if my_stmtBindResult(FStmt, FResultNative) then
     RaiseMyStmt(FStmt);
   if my_stmtStoreResult(FStmt) <> 0 then
     RaiseMyStmt(FStmt);
@@ -763,7 +762,7 @@ begin
     WriteBindSlot(FResultNative, I, FNativeSize, FColMeta[I].BindType,
       FResBufs[I], QWord(FResCap[I]), @FResNulls[I], @FResErrs[I],
       @FResLens[I], False);
-    if not my_stmtFetchColumn(FStmt,
+    if my_stmtFetchColumn(FStmt,
       Pointer(PByte(FResultNative) + PtrUInt(I * FNativeSize)),
       Cardinal(I), 0) then
       RaiseMyStmt(FStmt);
@@ -865,14 +864,13 @@ end;
 function TDbMyQuery.ColumnType(AIndex: Integer): TDbColumnType;
 begin
   RequireOpenRow(AIndex);
-  { NULL 是行级信号（与 sqlite/pg 同契约）：值空一律 dbcNull，
-    非空才回落列声明类型 }
   if FResNulls[AIndex] then
     Exit(dbcNull);
   case FColMeta[AIndex].BindType of
-    MY_PT_LONGLONG:
+    MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_LONG,
+    MY_PT_LONGLONG, MYSQL_TYPE_INT24, MYSQL_TYPE_YEAR:
       Result := dbcInteger;
-    MY_PT_DOUBLE:
+    MYSQL_TYPE_FLOAT, MY_PT_DOUBLE:
       Result := dbcFloat;
   else
     if FColMeta[AIndex].CharsetNr = MY_BINARY_CHARSET then
@@ -907,13 +905,28 @@ var
   LS: string;
   LCode: Integer;
   LD: Double;
+  LSg: Single;
 begin
   RequireOpenRow(AIndex);
   if FResNulls[AIndex] then
     Exit(0);
   case FColMeta[AIndex].BindType of
+    MYSQL_TYPE_TINY:
+      Result := ShortInt(PByte(FResBufs[AIndex])^);
+    MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
+      Result := PSmallInt(FResBufs[AIndex])^;
+    MYSQL_TYPE_LONG, MYSQL_TYPE_INT24:
+      Result := PInteger(FResBufs[AIndex])^;
     MY_PT_LONGLONG:
       Result := PInt64(FResBufs[AIndex])^;
+    MYSQL_TYPE_FLOAT:
+      begin
+        LSg := PSingle(FResBufs[AIndex])^;
+        if (LSg >= 9.3e18) or (LSg <= -9.3e18) then
+          raise EDbError.CreateSimple(dbkMysql,
+            'float value out of int64 range');
+        Result := Trunc(LSg);
+      end;
     MY_PT_DOUBLE:
       begin
         LD := PDouble(FResBufs[AIndex])^;
@@ -940,10 +953,18 @@ begin
   if FResNulls[AIndex] then
     Exit(0.0);
   case FColMeta[AIndex].BindType of
-    MY_PT_DOUBLE:
-      Result := PDouble(FResBufs[AIndex])^;
+    MYSQL_TYPE_TINY:
+      Result := ShortInt(PByte(FResBufs[AIndex])^);
+    MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
+      Result := PSmallInt(FResBufs[AIndex])^;
+    MYSQL_TYPE_LONG, MYSQL_TYPE_INT24:
+      Result := PInteger(FResBufs[AIndex])^;
     MY_PT_LONGLONG:
       Result := PInt64(FResBufs[AIndex])^;
+    MYSQL_TYPE_FLOAT:
+      Result := PSingle(FResBufs[AIndex])^;
+    MY_PT_DOUBLE:
+      Result := PDouble(FResBufs[AIndex])^;
   else
     begin
       LS := ColAsString(AIndex);
