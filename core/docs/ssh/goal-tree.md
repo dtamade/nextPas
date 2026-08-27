@@ -172,11 +172,28 @@ OpenSSH 加密私钥容器（bcrypt_pbkdf + AES-256-CTR）落地，闭环 ssh-ke
       真实验签回环（48ms vs naive 226ms ≈4.7x）
 - [x] 文档/性能收口见下
 
+## S12 — ecdsa-sha2-nistp256 主机密钥（已完成）
+
+OpenSSH 默认主机密钥三件套补齐最后一块（`ssh-ed25519` / `rsa-sha2-*` / `ecdsa-sha2-nistp256`）：
+
+- [x] `hostkey`：`TSshHostKeyInfo` 增 `EcdsaP256X/Y`，`SshParseHostKey` 解析
+      `ecdsa-sha2-nistp256` blob（`string("nistp256")` + `string(04||X||Y)`，65 字节
+      未压缩点，`TryValidateP256Point` 落 `sekKeyFormat`），`SshEcdsaP256PubToBlob` 供测试
+      与指纹复用；`SshVerifyHostSignature` 增 `hkEcdsaP256` 分支——`mpint(r)+mpint(s)`→
+      DER(`TASN1Writer`)→`TryECDSAVerifyP256SHA256`（SHA256(H)，`crypto.ecdsa` 复用，
+      常量时间比较在底层）
+- [x] `kex`：`SSH_OFFER_HOSTKEY_ALGS` 增 `ecdsa-sha2-nistp256`，优先级
+      `ed25519 > ecdsa > rsa-sha2-512 > rsa-sha2-256`（与 OpenSSH 默认一致）
+- [x] 测试三线闭环：`test_ssh_hostkey` 新增 `ecdsa blob parse`、`ecdsa verify 正/负`、
+      `ecdsa known_hosts 明文/散列`（12/12）；`test_ssh_kex` 新增 `ecdsa negotiation`
+      优先级断言（9/9）；`test_ssh_keys`/`session`/`kex` 既有 8 门回归全绿
+- [x] e2e：Docker 夹具可选 `host_ecdsa`（`ssh-keygen -t ecdsa -b 256`）与 TOFU 采集；
+      真实 Debian 10.0p2 的 ecdsa 主机密钥已在 `ssh-keyscan -t ecdsa` 路径验证
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| ecdsa-sha2-nistp256 主机密钥 | 枚举已预留，需 mpint(r,s)↔DER 转换 |
 | DH group14-sha256 KEX | bigint modpow 可用，作为 curve25519 不可用时的回退 |
 | ssh-agent | Unix socket 协议客户端 |
 | zlib 压缩方法 | compress.deflate 可复用 |
@@ -185,7 +202,7 @@ OpenSSH 加密私钥容器（bcrypt_pbkdf + AES-256-CTR）落地，闭环 ssh-ke
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT**
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT + S12 ECDSA**
 补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均
-8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA publickey/CRT 与加密私钥认证），
+8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA/CRT/ECDSA 与加密私钥认证），
 heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。
