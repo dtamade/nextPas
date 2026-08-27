@@ -119,6 +119,26 @@ end;
 
 { ===== Helpers ===== }
 
+function IsHeadReq(const AReq: IHttpRequest): Boolean; inline;
+begin
+  Result := (AReq <> nil) and (AReq.Method = hmHead);
+end;
+
+procedure WriteErrorHeadAware(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AStatus: THttpStatus;
+  const ACode, AMsg: string);
+begin
+  if IsHeadReq(AReq) then
+  begin
+    { HEAD MUST NOT include body — same status/headers, content-length 0. }
+    AW.GetHeaders.SetHeader('content-type', 'application/problem+json');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(AStatus);
+  end
+  else
+    HttpWriteErrorResponse(AW, AStatus, ACode, AMsg);
+end;
+
 { Returns True if the relative path is safe (no traversal).
   Semantics: VFS canonical ValidPath + HTTP double-encoding guard.
   Reuses VfsValidPath as single source of truth, then rejects '%' and '\'
@@ -458,6 +478,14 @@ begin
   begin
     if not ParseRangeHeader(LRangeHeader, ASize, LStart, LEnd) then
     begin
+      if IsHeadReq(AReq) then
+      begin
+        AW.GetHeaders.SetHeader('content-range', 'bytes */' + IntToStr(ASize));
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.GetHeaders.SetHeader('content-type', 'application/problem+json');
+        AW.WriteHeader(HTTP_STATUS_RANGE_NOT_SATISFIABLE);
+        Exit;
+      end;
       SendRangeNotSatisfiable(ASize, AW);
       Exit;
     end;
@@ -497,13 +525,13 @@ begin
   try
     if not nextpas.core.fs.Exists(AFilePath) then
     begin
-      HttpWriteErrorNotFound(AW, 'File not found');
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
       Exit;
     end;
     LInfo := nextpas.core.fs.Stat(AFilePath);
     if LInfo.FileType <> ftRegular then
     begin
-      HttpWriteErrorNotFound(AW, 'File not found');
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
       Exit;
     end;
     LFileSize := LInfo.Size;
@@ -517,7 +545,7 @@ begin
         Result := nextpas.core.fs.Open(AFilePath, [fmRead]);
       end, ADownloadName);
   except
-    HttpWriteErrorInternal(AW, 'Internal Server Error');
+    WriteErrorHeadAware(AReq, AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', 'Internal Server Error');
   end;
 end;
 
@@ -554,7 +582,8 @@ begin
     begin
       AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
-      AW.Write(PAnsiChar('Bad Request')^, 11);
+      if not IsHeadReq(AReq) then
+        AW.Write(PAnsiChar('Bad Request')^, 11);
       Exit;
     end;
     { Security: reject traversal attempts }
@@ -562,7 +591,8 @@ begin
     begin
       AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
-      AW.Write(PAnsiChar('Bad Request')^, 11);
+      if not IsHeadReq(AReq) then
+        AW.Write(PAnsiChar('Bad Request')^, 11);
       Exit;
     end;
     { Build full path }
@@ -579,7 +609,8 @@ begin
     begin
       AW.GetHeaders.SetHeader('content-length', '9');
       AW.WriteHeader(HTTP_STATUS_FORBIDDEN);
-      AW.Write(PAnsiChar('Forbidden')^, 9);
+      if not IsHeadReq(AReq) then
+        AW.Write(PAnsiChar('Forbidden')^, 9);
       Exit;
     end;
     ServeFileContentEx(LFullPath, AReq, AW, '', ACacheControl);
@@ -605,18 +636,18 @@ begin
     except
       on EVfsNotFound do
       begin
-        HttpWriteErrorNotFound(AW, 'File not found');
+        WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
         Exit;
       end;
       on EVfsInvalidPath do
       begin
-        HttpWriteErrorNotFound(AW, 'File not found');
+        WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
         Exit;
       end;
     end;
     if LInfo.Info.IsDir then
     begin
-      HttpWriteErrorNotFound(AW, 'File not found');
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
       Exit;
     end;
     LModTimeUnix := LInfo.Info.ModTime;
@@ -660,9 +691,9 @@ begin
       end);
   except
     on EVfsNotFound do
-      HttpWriteErrorNotFound(AW, 'File not found');
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
     else
-      HttpWriteErrorInternal(AW, 'Internal Server Error');
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', 'Internal Server Error');
   end;
 end;
 
@@ -681,14 +712,15 @@ begin
     begin
       AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
-      AW.Write(PAnsiChar('Bad Request')^, 11);
+      if not IsHeadReq(AReq) then
+        AW.Write(PAnsiChar('Bad Request')^, 11);
       Exit;
     end;
     { The VFS namespace is canonical: empty/rooted/traversal forms are plain
       misses (404), indistinguishable from nonexistent entries. }
     if (LRelative = '') or not VfsValidPath(LRelative, False) then
     begin
-      HttpWriteErrorNotFound(AW, 'File not found');
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
       Exit;
     end;
     ServeVfsContentEx(AFs, LRelative, AReq, AW, ACacheControl);
