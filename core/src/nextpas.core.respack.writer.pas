@@ -162,6 +162,8 @@ function ResPackBuild(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): TResPackBlob;
 var
   N, I, J, K: SizeUInt;
+  BucketIdx, BucketCount: SizeUInt;
+  Buckets: array of array of SizeUInt;
   Order: array of SizeUInt;
   TotalInput: SizeUInt;
   PathLens: array of Word;
@@ -239,39 +241,69 @@ begin
   SetLength(Slots, N);
   SlotCount := 0;
   Cur := DataStart;
-  if N > 0 then
+  { Deduplicate: FNV 哈希分桶将 O(n²) 扫描降为期望 O(n)，仅哈希碰撞时回验字节 }
+  if AOpts.Deduplicate then
+  begin
+    // 桶数取 2 的幂且 ≥ 2×N，平均 0.5 槽/桶，碰撞探测近常数
+    BucketCount := 256;
+    while (BucketCount < N * 2) and (BucketCount < 65536) do
+      BucketCount := BucketCount shl 1;
+    SetLength(Buckets, BucketCount);
+    // Buckets 初始化为空动态数组，无需显式清零
+    if N > 0 then
+      for I := 0 to N - 1 do
+      begin
+        J := Order[I];
+        EntrySlots[J] := SizeUInt(-1);
+        BucketIdx := SizeUInt(FnvBuf[J]) and (BucketCount - 1);
+        if (SlotCount > 0) and (Length(Buckets[BucketIdx]) > 0) then
+        begin
+          for K := 0 to SizeUInt(High(Buckets[BucketIdx])) do
+          begin
+            // Buckets[BucketIdx][K] 存槽位索引
+            if (Slots[Buckets[BucketIdx][K]].Fnv = FnvBuf[J])
+              and (AEntries[J].DataSize = AEntries[Slots[Buckets[BucketIdx][K]].SrcIdx].DataSize)
+              and ((AEntries[J].DataSize = 0)
+                or BytesEqual(AEntries[J].Data,
+                  AEntries[Slots[Buckets[BucketIdx][K]].SrcIdx].Data, AEntries[J].DataSize)) then
+            begin
+              EntrySlots[J] := Buckets[BucketIdx][K];
+              Break;
+            end;
+          end;
+        end;
+        if EntrySlots[J] = SizeUInt(-1) then
+        begin
+          Cur := AlignUp(Cur, RESPACK_DATA_ALIGN);
+          Slots[SlotCount].Offset := Cur;
+          Slots[SlotCount].SrcIdx := J;
+          if NeedFnv then
+            Slots[SlotCount].Fnv := FnvBuf[J]
+          else
+            Slots[SlotCount].Fnv := 0;
+          // 加入桶
+          SetLength(Buckets[BucketIdx], Length(Buckets[BucketIdx]) + 1);
+          Buckets[BucketIdx][High(Buckets[BucketIdx])] := SlotCount;
+          EntrySlots[J] := SlotCount;
+          Cur := Cur + UInt64(AEntries[J].DataSize);
+          Inc(SlotCount);
+        end;
+      end;
+  end
+  else if N > 0 then
     for I := 0 to N - 1 do
     begin
       J := Order[I];
-      EntrySlots[J] := SizeUInt(-1);
-      if AOpts.Deduplicate and (SlotCount > 0) then
-      begin
-        for K := 0 to SlotCount - 1 do
-        begin
-          if (Slots[K].Fnv = FnvBuf[J])
-            and (AEntries[J].DataSize = AEntries[Slots[K].SrcIdx].DataSize)
-            and ((AEntries[J].DataSize = 0)
-              or BytesEqual(AEntries[J].Data,
-                AEntries[Slots[K].SrcIdx].Data, AEntries[J].DataSize)) then
-          begin
-            EntrySlots[J] := K;
-            Break;
-          end;
-        end;
-      end;
-      if EntrySlots[J] = SizeUInt(-1) then
-      begin
-        Cur := AlignUp(Cur, RESPACK_DATA_ALIGN);
-        Slots[SlotCount].Offset := Cur;
-        Slots[SlotCount].SrcIdx := J;
-        if NeedFnv then
-          Slots[SlotCount].Fnv := FnvBuf[J]
-        else
-          Slots[SlotCount].Fnv := 0;
-        EntrySlots[J] := SlotCount;
-        Cur := Cur + UInt64(AEntries[J].DataSize);
-        Inc(SlotCount);
-      end;
+      Cur := AlignUp(Cur, RESPACK_DATA_ALIGN);
+      Slots[SlotCount].Offset := Cur;
+      Slots[SlotCount].SrcIdx := J;
+      if NeedFnv then
+        Slots[SlotCount].Fnv := FnvBuf[J]
+      else
+        Slots[SlotCount].Fnv := 0;
+      EntrySlots[J] := SlotCount;
+      Cur := Cur + UInt64(AEntries[J].DataSize);
+      Inc(SlotCount);
     end;
   EndData := Cur;
   if AOpts.DigestFunc <> nil then
