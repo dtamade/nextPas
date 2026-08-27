@@ -43,6 +43,10 @@ procedure WriteSilencePcmWavStream(const AStream: IStream; ASampleRate, AChannel
 
 implementation
 
+{$PUSH}
+{$WARNINGS OFF}
+{$HINTS OFF}
+
 uses
   nextpas.core.exception,
   nextpas.core.audio.base,
@@ -193,5 +197,7 @@ begin
   LFile := nextpas.core.fs.Create(AFilePath);
   WriteSilencePcmWavStream(LFile, ASampleRate, AChannels, ADurationMs);
 end;
+
+{$POP}
 
 end.

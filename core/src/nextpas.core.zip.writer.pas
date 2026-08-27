@@ -703,9 +703,7 @@ var
 begin
   CheckOpen;
   CheckNoDirectActive;
-  { 全字段零初始化：新增的 FDescriptor 等布尔标记不得依赖栈残留值
-    （未初始化位会随机泄进 central flags） }
-  FillChar(LMeta, SizeOf(LMeta), 0);
+  LMeta := Default(TZipEntryMeta);
   ResolveEntrySpec(AName, AIsDir, AMode, LEffName, LEffIsDir,
     LMeta.FExtAttrs);
 
@@ -987,7 +985,7 @@ begin
   ResolveEntrySpec(AName,
     (Length(AName) > 0) and (AName[Length(AName)] = '/'), AOptions.Mode,
     LEffName, LEffIsDir, LExtAttrs);
-  FillChar(LMeta, SizeOf(LMeta), 0);
+  LMeta := Default(TZipEntryMeta);
   LMeta.FName := LEffName;
   LMeta.FMethod := LMethod;
   LMeta.FExtAttrs := LExtAttrs;

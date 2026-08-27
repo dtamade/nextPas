@@ -14,7 +14,7 @@ SSH-2 客户端协议栈（对标 libssh2 的能力面），纯 Pascal 实现，
 
 | 用途 | 支持 |
 | --- | --- |
-| KEX | `curve25519-sha256`、`curve25519-sha256@libssh.org` |
+| KEX | `curve25519-sha256`、`curve25519-sha256@libssh.org`、`diffie-hellman-group14-sha256`（回退） |
 | 主机密钥 | `ssh-ed25519`、`ecdsa-sha2-nistp256`、`rsa-sha2-512`、`rsa-sha2-256` |
 | 加密 | `chacha20-poly1305@openssh.com`、`aes256-gcm@openssh.com`、`aes128-gcm@openssh.com`、`aes256-ctr`、`aes192-ctr`、`aes128-ctr` |
 | MAC | `hmac-sha2-256-etm@openssh.com`、`hmac-sha2-512-etm@openssh.com`（仅 ETM；CTR 类算法必需） |
@@ -70,6 +70,7 @@ nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM�
 nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机
 nextpas.core.ssh.kex.pas             ← KEXINIT 协商 + 密钥推导
 nextpas.core.ssh.kex.curve25519.pas  ← curve25519-sha256 客户端交换
+nextpas.core.ssh.kex.dhgroup14.pas   ← diffie-hellman-group14-sha256 客户端交换（回退）
 nextpas.core.ssh.hostkey.pas         ← 主机密钥解析 / 验签 / 指纹 / known_hosts（ed25519/rsa/ecdsa-p256）
 nextpas.core.ssh.rsa.pas             ← RSA PKCS#1 v1.5 签名/验签核（DigestInfo 单一来源）
 nextpas.core.crypto.blowfish.pas     ← Blowfish 分组密码（bcrypt 底座，OpenBSD 语义）
@@ -149,12 +150,21 @@ ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
 
 回环 `LOOP_PUBKEY_RSA` 226ms → `LOOP_PUBKEY_RSA_CRT` 48ms 同样体现约 4.7× 增益。
 
+**KEX**（同一 host，`test_ssh_kex` 独立交换重算）：
+
+| 算法 | 交换耗时 | 备注 |
+| --- | --- | --- |
+| curve25519-sha256 | ~1ms | 默认首选，X25519 |
+| diffie-hellman-group14-sha256 | ~50–70ms | 2048-bit MODP 回退，约 50× 于 curve25519 |
+
+回环 `dh group14 fallback` 61–69ms 与独立 KEX 门 53ms 一致；可用性优先于性能。
+
 ## 已知限制
 
 - 加密私钥仅支持 `aes256-ctr` + `bcrypt`（KDF rounds≥1，salt 非空）；
   其他 cipher/kdf 组合（`aes128-ctr`、chacha 等加密容器）报 `sekUnsupported`。
 - RSA 签名默认走 CRT 加速（`p/q/iqmp` 存在且校验通过时，`dp/dq` + Garner 合并，约 5× 于 naive）；非法/缺失 CRT 自动回退 naive，无声誉风险。
-- KEX 仅 `curve25519-sha256`；DH group14-sha256 回退推迟。
+- KEX 已支持 `curve25519-sha256` 优先、`diffie-hellman-group14-sha256` 回退（2048-bit MODP，32 字节随机私钥，mpint 哈希输入）；curve25519 约 1ms，group14 约 50–70ms，默认首选前者。
 - 无 zlib 压缩、无 ssh-agent（见 goal-tree 后续 slice 表）。
 - AEAD 算法协商的 MAC 字段被忽略（chacha/gcm 内建认证），与 OpenSSH 行为一致；
   CTR 类必须搭配 ETM MAC。

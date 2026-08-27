@@ -14,8 +14,8 @@ unit nextpas.core.net.async.tlspas;
  * - 流面铁律：底层收发一律经 IAsyncTcpStream.AsyncRead/AsyncWrite，
  *   不触碰裸 fd（可用假流做密闭测试；可叠加在变换流之上）。
  * - 握手期绝对期限 Options.HandshakeDeadline（Infinite = 不设超时；
- *   零初始化表示「已过期」——用 DefaultAsyncTlsFpClientOptions 或显式
- *   TDeadline.Infinite）。超时交付 ASYNC_TLSFP_ERR_IO。
+ *   零初始化表示「已过期」——用 DefaultAsyncTlsPasClientOptions 或显式
+ *   TDeadline.Infinite）。超时交付 ASYNC_TLSPAS_ERR_IO。
  * - 失败一次性交付：AStream=nil 且 AError<0；半开连接不外漏。
  *   提交返回 False 仅表示同步提交失败且【未】回调；True = 结果经回调。
  * - 数据相：读挂起与写挂起互相独立；同方向重复提交是调用方 bug；
@@ -43,8 +43,8 @@ unit nextpas.core.net.async.tlspas;
  *   其余类型显式失败。
  *
  * Error codes: 0 = ok，否则负值：
- *   ASYNC_TLSFP_ERR_IO        底层流/提交失败、握手超时、解密失败
- *   ASYNC_TLSFP_ERR_HANDSHAKE TLS 协议层失败（alert、非法消息、边界）
+ *   ASYNC_TLSPAS_ERR_IO        底层流/提交失败、握手超时、解密失败
+ *   ASYNC_TLSPAS_ERR_HANDSHAKE TLS 协议层失败（alert、非法消息、边界）
  *}
 
 {$I nextpas.core.settings.inc}
@@ -63,13 +63,15 @@ uses
 
 const
   { 底层流读写/提交失败、握手超时、解密失败 }
-  ASYNC_TLSFP_ERR_IO = -3201;
+  ASYNC_TLSPAS_ERR_IO = -3201;
   { TLS 协议层失败：alert、非法消息、不支持的对端选择 }
-  ASYNC_TLSFP_ERR_HANDSHAKE = -3202;
+  ASYNC_TLSPAS_ERR_HANDSHAKE = -3202;
+  ASYNC_TLSFP_ERR_IO = ASYNC_TLSPAS_ERR_IO deprecated 'use ASYNC_TLSPAS_ERR_IO';
+  ASYNC_TLSFP_ERR_HANDSHAKE = ASYNC_TLSPAS_ERR_HANDSHAKE deprecated 'use ASYNC_TLSPAS_ERR_HANDSHAKE';
 
 type
   { 会话恢复条目：一条 NewSessionTicket 的完整恢复材料 }
-  TFpTlsResumptionSession = record
+  TTlsPasResumptionSession = record
     { 恢复必须沿用原会话的密码套件（PSK 与其绑定） }
     CipherSuite: Word;
     TicketIdentity: TBytes;
@@ -82,7 +84,7 @@ type
 
   { 恢复状态查询：判断本次握手是否走了 PSK 恢复（测试与调用方观测
     用）。流对象隐藏实现，经 Supports(IAsyncTcpStream) 获取。 }
-  ITlsFpResumeInfo = interface
+  ITlsPasResumeInfo = interface
     ['{8F3A2C61-9B4D-4E75-A1D0-3C6E5B8F2914}']
     function GetWasResumed: Boolean;
   end;
@@ -91,25 +93,25 @@ type
     语义 = Peek 不取走：服务器拒绝恢复时客户端自然回退全握手并
     以新票据刷新条目。调用方持有实例生命周期，须存活到相关连接
     全部结束后再释放。线程安全。 }
-  TAsyncTlsFpSessionCache = class
+  TAsyncTlsPasSessionCache = class
   private
     FMutex: TPlatformMutex;
     FHosts: array of string;
     FPorts: array of UInt16;
-    FSessions: array of TFpTlsResumptionSession;
+    FSessions: array of TTlsPasResumptionSession;
   public
     constructor Create;
     destructor Destroy; override;
     procedure Store(const AHost: string; APort: UInt16;
-      const ASession: TFpTlsResumptionSession);
+      const ASession: TTlsPasResumptionSession);
     function TryPeek(const AHost: string; APort: UInt16;
-      out ASession: TFpTlsResumptionSession): Boolean;
+      out ASession: TTlsPasResumptionSession): Boolean;
   end;
 
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
-  TAsyncTlsFpClientOptions = record
-    { SNI 主机名；空串 = 不发送（AsyncTlsFpConnect 回退填 Host），
+  TAsyncTlsPasClientOptions = record
+    { SNI 主机名；空串 = 不发送（AsyncTlsPasConnect 回退填 Host），
       VerifyPeer=True 且空串时跳过主机名匹配（OpenSSL 同款语义：
       裸 IP 连接无法做身份绑定） }
     ServerName: string;
@@ -122,49 +124,43 @@ type
     TrustBundlePath: string;
     { 会话缓存：非 nil 且缓存命中时尝试 PSK 恢复（1-RTT）；服务器
       拒绝则自动回退全握手。新票据在数据相捕获后回写缓存。nil = 关闭 }
-    Cache: TAsyncTlsFpSessionCache;
+    Cache: TAsyncTlsPasSessionCache;
   end;
 
   { 异步握手完成回调：AError=0 时 AStream 为就绪 TLS 流；失败时
     AStream=nil 且 AError<0。事件循环线程回调，一次。 }
-  TAsyncTlsFpConnectCallback = procedure(AStream: IAsyncTcpStream;
+  TAsyncTlsPasConnectCallback = procedure(AStream: IAsyncTcpStream;
     AError: Int32; AContext: Pointer);
 
-function DefaultAsyncTlsFpClientOptions: TAsyncTlsFpClientOptions;
+function DefaultAsyncTlsPasClientOptions: TAsyncTlsPasClientOptions;
 
 { 在既有已连接流上做非阻塞纯 Pas TLS1.3 客户端握手（升级）。
   False = 同步提交失败且不回调；True = 结果经回调交付。
   提交成功后 AStream 所有权移交状态机，调用方不得再使用。 }
-function AsyncTlsFpUpgrade(const ALoop: TAsyncLoop;
-  const AStream: IAsyncTcpStream; const AOptions: TAsyncTlsFpClientOptions;
-  ACallback: TAsyncTlsFpConnectCallback; AContext: Pointer = nil): Boolean;
+function AsyncTlsPasUpgrade(const ALoop: TAsyncLoop;
+  const AStream: IAsyncTcpStream; const AOptions: TAsyncTlsPasClientOptions;
+  ACallback: TAsyncTlsPasConnectCallback; AContext: Pointer = nil): Boolean;
 
 { 拨号 + 升级一步到位（AsyncTcpDial Happy-Eyeballs + TLS 握手共用
-  HandshakeDeadline）。SNI 缺省取 AHost。返回语义同 AsyncTlsFpUpgrade。 }
-function AsyncTlsFpConnect(const ALoop: TAsyncLoop; const AHost: string;
-  const APort: UInt16; const AOptions: TAsyncTlsFpClientOptions;
-  ACallback: TAsyncTlsFpConnectCallback; AContext: Pointer = nil): Boolean;
-
-// === tlspas 别名（fp→pas 软改名，编译器双兼容） ===
-
-const
-  ASYNC_TLSPAS_ERR_IO = ASYNC_TLSFP_ERR_IO;
-  ASYNC_TLSPAS_ERR_HANDSHAKE = ASYNC_TLSFP_ERR_HANDSHAKE;
+  HandshakeDeadline）。SNI 缺省取 AHost。返回语义同 AsyncTlsPasUpgrade。 }
+function AsyncTlsPasConnect(const ALoop: TAsyncLoop; const AHost: string;
+  const APort: UInt16; const AOptions: TAsyncTlsPasClientOptions;
+  ACallback: TAsyncTlsPasConnectCallback; AContext: Pointer = nil): Boolean;
 
 type
-  TTlsPasResumptionSession = TFpTlsResumptionSession;
-  ITlsPasResumeInfo = ITlsFpResumeInfo;
-  TAsyncTlsPasSessionCache = TAsyncTlsFpSessionCache;
-  TAsyncTlsPasClientOptions = TAsyncTlsFpClientOptions;
-  TAsyncTlsPasConnectCallback = TAsyncTlsFpConnectCallback;
+  TFpTlsResumptionSession = TTlsPasResumptionSession deprecated 'use TTlsPasResumptionSession';
+  ITlsFpResumeInfo = ITlsPasResumeInfo deprecated 'use ITlsPasResumeInfo';
+  TAsyncTlsFpSessionCache = TAsyncTlsPasSessionCache deprecated 'use TAsyncTlsPasSessionCache';
+  TAsyncTlsFpClientOptions = TAsyncTlsPasClientOptions deprecated 'use TAsyncTlsPasClientOptions';
+  TAsyncTlsFpConnectCallback = TAsyncTlsPasConnectCallback deprecated 'use TAsyncTlsPasConnectCallback';
 
-function DefaultAsyncTlsPasClientOptions: TAsyncTlsFpClientOptions;
-function AsyncTlsPasUpgrade(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream;
-  const AOptions: TAsyncTlsFpClientOptions; ACallback: TAsyncTlsFpConnectCallback;
-  AContext: Pointer = nil): Boolean;
-function AsyncTlsPasConnect(const ALoop: TAsyncLoop; const AHost: string;
-  const APort: UInt16; const AOptions: TAsyncTlsFpClientOptions;
-  ACallback: TAsyncTlsFpConnectCallback; AContext: Pointer = nil): Boolean;
+function DefaultAsyncTlsFpClientOptions: TAsyncTlsPasClientOptions; deprecated 'use DefaultAsyncTlsPasClientOptions';
+function AsyncTlsFpUpgrade(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream;
+  const AOptions: TAsyncTlsPasClientOptions; ACallback: TAsyncTlsPasConnectCallback;
+  AContext: Pointer = nil): Boolean; deprecated 'use AsyncTlsPasUpgrade';
+function AsyncTlsFpConnect(const ALoop: TAsyncLoop; const AHost: string;
+  const APort: UInt16; const AOptions: TAsyncTlsPasClientOptions;
+  ACallback: TAsyncTlsPasConnectCallback; AContext: Pointer = nil): Boolean; deprecated 'use AsyncTlsPasConnect';
 
 implementation
 
@@ -205,19 +201,19 @@ var
   { 单调时钟基准：票据年龄与本地过期的唯一时钟源 }
   GMonoClock: TStopwatch;
 
-function FpMonoMs: Int64;
+function TlsPasMonoMs: Int64;
 begin
   Result := GMonoClock.ElapsedMilliseconds;
 end;
 
-constructor TAsyncTlsFpSessionCache.Create;
+constructor TAsyncTlsPasSessionCache.Create;
 begin
   inherited Create;
   if platform_mutex_init(FMutex) <> 0 then
-    raise EInvalidOperationError.Create('tlsfp: session cache mutex init');
+    raise EInvalidOperationError.Create('tlspas: session cache mutex init');
 end;
 
-destructor TAsyncTlsFpSessionCache.Destroy;
+destructor TAsyncTlsPasSessionCache.Destroy;
 var
   I: Integer;
 begin
@@ -230,8 +226,8 @@ begin
   inherited Destroy;
 end;
 
-procedure TAsyncTlsFpSessionCache.Store(const AHost: string; APort: UInt16;
-  const ASession: TFpTlsResumptionSession);
+procedure TAsyncTlsPasSessionCache.Store(const AHost: string; APort: UInt16;
+  const ASession: TTlsPasResumptionSession);
 var
   I: Integer;
 begin
@@ -259,14 +255,14 @@ begin
   end;
 end;
 
-function TAsyncTlsFpSessionCache.TryPeek(const AHost: string; APort: UInt16;
-  out ASession: TFpTlsResumptionSession): Boolean;
+function TAsyncTlsPasSessionCache.TryPeek(const AHost: string; APort: UInt16;
+  out ASession: TTlsPasResumptionSession): Boolean;
 var
   I: Integer;
 begin
   { out 参数先行清零：False 路径也必须交付已定义值——record 内含
     TBytes 托管字段，调用方拿栈垃圾做 record 赋值会对野指针增引用 }
-  ASession := Default(TFpTlsResumptionSession);
+  ASession := Default(TTlsPasResumptionSession);
   Result := False;
   if AHost = '' then
     Exit;
@@ -278,7 +274,7 @@ begin
         ASession := FSessions[I];
         { 本地过期：寿命已尽则不提供（服务器侧同样会拒） }
         Result :=
-          ASession.IssuedMs + Int64(ASession.LifetimeSec) * 1000 > FpMonoMs;
+          ASession.IssuedMs + Int64(ASession.LifetimeSec) * 1000 > TlsPasMonoMs;
         Exit;
       end;
   finally
@@ -291,7 +287,7 @@ end;
 type
   { 加载器创建的证书对象数组：TX509TrustStore 只存引用不拥有，
     调用方验证完毕后必须自行释放 }
-  TFpCertObjArray = array of TX509Certificate;
+  TTlsPasCertObjArray = array of TX509Certificate;
 
 const
   { 已知系统 CA bundle 文件（单文件整读，避免目录扫描开销；
@@ -341,7 +337,7 @@ begin
 end;
 
 function LoadTrustStoreFromBundleFile(const APath: string;
-  out ALoadedCerts: TFpCertObjArray; out AError: string): TX509TrustStore;
+  out ALoadedCerts: TTlsPasCertObjArray; out AError: string): TX509TrustStore;
 var
   LPem: string;
   LCert: TX509Certificate;
@@ -382,7 +378,7 @@ begin
   end;
 end;
 
-function BuildSystemTrustStore(out ALoadedCerts: TFpCertObjArray;
+function BuildSystemTrustStore(out ALoadedCerts: TTlsPasCertObjArray;
   out AError: string): TX509TrustStore;
 var
   I: Integer;
@@ -413,7 +409,7 @@ var
 function SharedSystemTrustStore: TX509TrustStore;
 var
   LBuilt: TX509TrustStore;
-  LCerts: TFpCertObjArray;
+  LCerts: TTlsPasCertObjArray;
   LErr: string;
   LRef: Int64;
   I: Integer;
@@ -440,7 +436,7 @@ end;
   空路径 = 进程级共享系统库。AOwned=True 时调用方用完必须 Free store
   并释放 AStoreCerts 内全部证书对象（store 只存引用不拥有）。 }
 function ResolveTrustStore(const AExplicitPath: string;
-  out AStore: TX509TrustStore; out AStoreCerts: TFpCertObjArray;
+  out AStore: TX509TrustStore; out AStoreCerts: TTlsPasCertObjArray;
   out AOwned: Boolean; out AError: string): Boolean;
 begin
   AError := '';
@@ -494,10 +490,10 @@ const
   cMaxPostHsBuf = 4 * cMaxHandshakeMessage;
 
 type
-  TFpHsState = (hsSendCH, hsRecvSH, hsRecvFlight, hsFlushFin);
+  TTlsPasHsState = (hsSendCH, hsRecvSH, hsRecvFlight, hsFlushFin);
 
-  PFpHsCtx = ^TFpHsCtx;
-  TFpHsCtx = record
+  PTlsPasHsCtx = ^TTlsPasHsCtx;
+  TTlsPasHsCtx = record
     Loop: TAsyncLoop;
     Stream: IAsyncTcpStream;
     Timer: TAsyncTimerHandle;
@@ -507,20 +503,20 @@ type
     TrustBundlePath: string;
     { 会话恢复：缓存里有票据则带 PSK 出手；PsksAccepted 后按恢复
       语义处理飞行（无 CERT/CV） }
-    ResumeSession: TFpTlsResumptionSession;
+    ResumeSession: TTlsPasResumptionSession;
     HasResumeSession: Boolean;
     { 已带 PSK 出手（CH 含 pre_shared_key）；PsksAccepted=服务器接受 }
     Resuming: Boolean;
     PsksAccepted: Boolean;
     { 票据捕获回写目标（经数据相传入流） }
-    Cache: TAsyncTlsFpSessionCache;
+    Cache: TAsyncTlsPasSessionCache;
     CachePort: UInt16;
     { 链验证通过后捕获的叶子证书公钥（CV 签名校验输入） }
     LeafPublicKeyInfo: TX509PublicKeyInfo;
-    OnReady: TAsyncTlsFpConnectCallback;
+    OnReady: TAsyncTlsPasConnectCallback;
     OnReadyCtx: Pointer;
     Deadline: TDeadline;
-    State: TFpHsState;
+    State: TTlsPasHsState;
     { 客户端 X25519 私钥（收尾清零） }
     Priv: TBytes;
     { HRR 扩展：P-256 私钥与 HRR 状态（收尾清零） }
@@ -563,16 +559,16 @@ type
     TTLS13RecordSealer/Opener 承载应用相加解密。fd 仅经
     NativeSocketHandle 透传作观测用途——绕过本层直读写 fd 会破坏
     TLS 分帧。读挂起与写挂起各一槽，互相独立。 }
-  TFpTlsStream = class(TInterfacedObject, IReader, IWriter,
+  TTlsPasStream = class(TInterfacedObject, IReader, IWriter,
     IReadWriteCloser, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime,
-    IAsyncTcpStream, ITlsFpResumeInfo)
+    IAsyncTcpStream, ITlsPasResumeInfo)
   private
     FInner: IAsyncTcpStream;
     FLoop: TAsyncLoop;
     FSuite: Word;
     FApp: TTLS13ApplicationSecrets;
     { 票据捕获：非 nil 时 NewSessionTicket → 派生 PSK 入缓存 }
-    FCache: TAsyncTlsFpSessionCache;
+    FCache: TAsyncTlsPasSessionCache;
     FCacheHost: string;
     FCachePort: UInt16;
     FWasResumed: Boolean;
@@ -584,6 +580,7 @@ type
     FNetTx: TBytes;
     FNetInBuf: TByteStreamBuf;
     FPlainOutBuf: TByteStreamBuf;
+    FNetTxBuf: TByteStreamBuf;
     FNetTxOff: Integer;
     FRecvChunk: Integer;
     FRecvArmed: Boolean;
@@ -625,10 +622,10 @@ type
     constructor Create(ASuite: Word; const AApp: TTLS13ApplicationSecrets;
       const AInner: IAsyncTcpStream; ALoop: TAsyncLoop;
       const ANetInSeed, APostHsSeed: TBytes;
-      ACache: TAsyncTlsFpSessionCache; const ACacheHost: string;
+      ACache: TAsyncTlsPasSessionCache; const ACacheHost: string;
       ACachePort: UInt16; AWasResumed: Boolean);
     destructor Destroy; override;
-    { ITlsFpResumeInfo }
+    { ITlsPasResumeInfo }
     function GetWasResumed: Boolean;
     { IReader }
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -671,26 +668,29 @@ type
       AContext: Pointer = nil): Boolean;
   end;
 
+type
+  TFpTlsStream = TTlsPasStream deprecated 'use TTlsPasStream';
+
 { ======== 静态回调前向声明 ======== }
 
-procedure FpHsStep(ACtx: Pointer); forward;
-procedure FpRecvCb(AUserData: UInt64; AResult: Int32;
+procedure TlsPasHsStep(ACtx: Pointer); forward;
+procedure TlsPasRecvCb(AUserData: UInt64; AResult: Int32;
   AContext: Pointer); forward;
-procedure FpSendCb(AUserData: UInt64; AResult: Int32;
+procedure TlsPasSendCb(AUserData: UInt64; AResult: Int32;
   AContext: Pointer); forward;
-procedure FpTimerCb(AContext: Pointer); forward;
-procedure FpDialDone(AStream: IAsyncTcpStream; AError: Int32;
+procedure TlsPasTimerCb(AContext: Pointer); forward;
+procedure TlsPasDialDone(AStream: IAsyncTcpStream; AError: Int32;
   AContext: Pointer); forward;
 procedure StreamRecvCb(AUserData: UInt64; AResult: Int32;
   AContext: Pointer); forward;
 procedure StreamSendCb(AUserData: UInt64; AResult: Int32;
   AContext: Pointer); forward;
-procedure FpArmRecv(ACtx: PFpHsCtx); forward;
-procedure FpArmSend(ACtx: PFpHsCtx); forward;
+procedure TlsPasArmRecv(ACtx: PTlsPasHsCtx); forward;
+procedure TlsPasArmSend(ACtx: PTlsPasHsCtx); forward;
 
 { ======== 通用小件 ======== }
 
-function FpTranscriptHash(ASuite: Word; const AT: TBytes): TBytes;
+function TlsPasTranscriptHash(ASuite: Word; const AT: TBytes): TBytes;
 begin
   if TLS13CipherSuiteIsSHA384(ASuite) then
     Exit(SHA384(AT));
@@ -710,7 +710,7 @@ end;
 
 { 从 ABuf 组一条完整记录：1=取出（从缓冲移除），0=需要更多字节，
   <0=协议错（类型非法或超限） }
-function FpTryFrameRecord(var ABuf: TBytes; out ACt: Byte;
+function TlsPasTryFrameRecord(var ABuf: TBytes; out ACt: Byte;
   out APayload: TBytes): Integer;
 var
   LHeader: TTLSRecordHeader;
@@ -751,7 +751,7 @@ end;
 { 零拷贝视图版：从连续缓冲 (AData, AAvailable) 试组一条记录
   返回 1=可组帧（填充 ACt/APayloadOff/APayloadLen/ATotalLen）
         0=需要更多字节  <0=协议错；不移动/不拷贝缓冲 }
-function FpTryFrameRecordView(AData: PByte; AAvailable: SizeUInt;
+function TlsPasTryFrameRecordView(AData: PByte; AAvailable: SizeUInt;
   out ACt: Byte; out APayloadOff, APayloadLen, ATotalLen: SizeUInt): Integer;
 begin
   Result := 0;
@@ -776,7 +776,7 @@ begin
 end;
 
 { 从握手消息流弹出一条完整消息：1=弹出，0=需要更多，<0=超限 }
-function FpTryPopHandshake(var ABuf: TBytes; out AMessage: TBytes): Integer;
+function TlsPasTryPopHandshake(var ABuf: TBytes; out AMessage: TBytes): Integer;
 var
   LLen: Cardinal;
 begin
@@ -799,7 +799,7 @@ end;
 
 { 用客户端握手密钥封一条记录（Certificate/Finished 飞行）。
   失败抛错（仅内存/AEAD 内部错，调用点统一转握手失败）。 }
-function FpSealClientHandshakeRecord(ACtx: PFpHsCtx; const ABody: TBytes;
+function TlsPasSealClientHandshakeRecord(ACtx: PTlsPasHsCtx; const ABody: TBytes;
   ACT: Byte): TBytes;
 var
   LInner, LNonce, LAAD, LEncrypted: TBytes;
@@ -813,15 +813,15 @@ begin
   if not TryTLS13AEADEncrypt(ACtx^.Suite,
     ACtx^.Secrets.ClientHandshakeKey, LNonce, LAAD, LInner, LEncrypted,
     LError) then
-    raise EInvalidOperationError.Create('tlsfp: seal client flight: ' +
+    raise EInvalidOperationError.Create('tlspas: seal client flight: ' +
       LError);
   if not IncrementTLS13Sequence(ACtx^.CliSeq) then
-    raise EInvalidOperationError.Create('tlsfp: client sequence overflow');
+    raise EInvalidOperationError.Create('tlspas: client sequence overflow');
   Result := BuildTLSPlaintext(TLS_CONTENT_TYPE_APPLICATION_DATA,
     LEncrypted);
 end;
 
-procedure BuildClientFlight(ACtx: PFpHsCtx);
+procedure BuildClientFlight(ACtx: PTlsPasHsCtx);
 var
   LTranscript: TBytes;
   LHash: TBytes;
@@ -831,7 +831,7 @@ var
 begin
   { Finished 输入哈希覆盖 CH..SF }
   LTranscript := Copy(ACtx^.Transcript, 0, Length(ACtx^.Transcript));
-  LHash := FpTranscriptHash(ACtx^.Suite, LTranscript);
+  LHash := TlsPasTranscriptHash(ACtx^.Suite, LTranscript);
   LVerify := TLS13ComputeFinishedVerifyDataForCipherSuite(ACtx^.Suite,
     ACtx^.ClientFinKey, LHash);
 
@@ -847,12 +847,12 @@ begin
   if ACtx^.CertRequested then
   begin
     { 空 Certificate：type||len(4)||ctx_len(0)||list_len(0)，8 字节 }
-    LRecord := FpSealClientHandshakeRecord(ACtx,
+    LRecord := TlsPasSealClientHandshakeRecord(ACtx,
       TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
         0, 0, 0, 0), TLS_CONTENT_TYPE_HANDSHAKE);
     AppendBytesTo(ACtx^.TxBytes, LRecord);
   end;
-  LRecord := FpSealClientHandshakeRecord(ACtx, LFinished,
+  LRecord := TlsPasSealClientHandshakeRecord(ACtx, LFinished,
     TLS_CONTENT_TYPE_HANDSHAKE);
   AppendBytesTo(ACtx^.TxBytes, LRecord);
   ACtx^.TxOff := 0;
@@ -861,7 +861,7 @@ begin
     保留正确派生供后续批次扩展 }
   AppendBytesTo(LTranscript, LFinished);
   ACtx^.AppSecrets.ResumptionTranscriptHash :=
-    FpTranscriptHash(ACtx^.Suite, LTranscript);
+    TlsPasTranscriptHash(ACtx^.Suite, LTranscript);
 end;
 
 { ======== HRR 辅助：资料勘察结论 ========
@@ -877,12 +877,12 @@ end;
   状态机引入额外 builder 分支。跨模块 touched files 仅本单元与
   p256ecdh（新增）。约 30 行内完成 HRR 状态迁移与 binder 重算。 }
 
-function FpIsHRR(const ARandom: TBytes): Boolean;
+function TlsPasIsHRR(const ARandom: TBytes): Boolean;
 begin
   Result := (Length(ARandom) = 32) and CompareMem(@ARandom[0], @TLS13_HRR_RANDOM[0], 32);
 end;
 
-function FpBuildMessageHash(const ACH1: TBytes; ACipherSuite: Word): TBytes;
+function TlsPasBuildMessageHash(const ACH1: TBytes; ACipherSuite: Word): TBytes;
 var
   LHash: TBytes;
 begin
@@ -899,7 +899,7 @@ begin
     Move(LHash[0], Result[4], Length(LHash));
 end;
 
-function FpPatchBinder(const AOriginalCH: TBytes; const ANewBinder: TBytes): TBytes;
+function TlsPasPatchBinder(const AOriginalCH: TBytes; const ANewBinder: TBytes): TBytes;
 var
   LPos, LExtStart, LExtLen, LExtType, LExtListLen: Integer;
   LSessionIdLen, LCipherLen, LCompLen: Integer;
@@ -964,7 +964,7 @@ begin
   Move(LAfterBinder[0], Result[Length(LBeforeBinder)+Length(ANewBinder)], Length(LAfterBinder));
 end;
 
-function FpComputeHRRBinder(ACipherSuite: Word; const APSK, ACH1, AHRR, ATruncatedCH2: TBytes): TBytes;
+function TlsPasComputeHRRBinder(ACipherSuite: Word; const APSK, ACH1, AHRR, ATruncatedCH2: TBytes): TBytes;
 var
   LTranscript: TBytes;
   LHash: TBytes;
@@ -972,7 +972,7 @@ var
   LEarlySecret, LBinderKey: TBytes;
   LMsgHash: TBytes;
 begin
-  LMsgHash := FpBuildMessageHash(ACH1, ACipherSuite);
+  LMsgHash := TlsPasBuildMessageHash(ACH1, ACipherSuite);
   SetLength(LTranscript, 0);
   AppendBytesTo(LTranscript, LMsgHash);
   AppendBytesTo(LTranscript, AHRR);
@@ -995,7 +995,7 @@ end;
 
 { ======== 握手上下文生命周期 ======== }
 
-procedure CancelHsTimer(ACtx: PFpHsCtx);
+procedure CancelHsTimer(ACtx: PTlsPasHsCtx);
 begin
   if (ACtx <> nil) and (ACtx^.Loop <> nil) and ACtx^.Timer.IsValid then
   begin
@@ -1004,7 +1004,7 @@ begin
   end;
 end;
 
-procedure FreeHsCtx(ACtx: PFpHsCtx);
+procedure FreeHsCtx(ACtx: PTlsPasHsCtx);
 begin
   if ACtx = nil then
     Exit;
@@ -1022,16 +1022,16 @@ begin
 end;
 
 { 同步提交失败路径：静默释放，不回调（契约：False = 未回调） }
-procedure FreeHsCtxSilent(ACtx: PFpHsCtx);
+procedure FreeHsCtxSilent(ACtx: PTlsPasHsCtx);
 begin
   if ACtx <> nil then
     ACtx^.Finished := True;
   FreeHsCtx(ACtx);
 end;
 
-procedure FpFail(ACtx: PFpHsCtx; AErr: Int32);
+procedure TlsPasFail(ACtx: PTlsPasHsCtx; AErr: Int32);
 var
-  LCb: TAsyncTlsFpConnectCallback;
+  LCb: TAsyncTlsPasConnectCallback;
   LCbCtx: Pointer;
 begin
   if (ACtx = nil) or ACtx^.Finished then
@@ -1044,10 +1044,10 @@ begin
     LCb(nil, AErr, LCbCtx);
 end;
 
-procedure FpDone(ACtx: PFpHsCtx);
+procedure TlsPasDone(ACtx: PTlsPasHsCtx);
 var
-  LStream: TFpTlsStream;
-  LCb: TAsyncTlsFpConnectCallback;
+  LStream: TTlsPasStream;
+  LCb: TAsyncTlsPasConnectCallback;
   LCbCtx: Pointer;
   LNetInSeed: TBytes;
   LPostHsSeed: TBytes;
@@ -1059,7 +1059,7 @@ begin
   { 未组帧残余与已解密未消费握手片段移交数据相 }
   LNetInSeed := ACtx^.NetIn;
   LPostHsSeed := ACtx^.EncBuf;
-  LStream := TFpTlsStream.Create(ACtx^.Suite, ACtx^.AppSecrets,
+  LStream := TTlsPasStream.Create(ACtx^.Suite, ACtx^.AppSecrets,
     ACtx^.Stream, ACtx^.Loop, LNetInSeed, LPostHsSeed,
     ACtx^.Cache, ACtx^.ServerName, ACtx^.CachePort, ACtx^.PsksAccepted);
   ACtx^.Stream := nil;
@@ -1072,7 +1072,7 @@ end;
 
 { ======== 接收处理 ======== }
 
-procedure HandleServerHelloMessage(ACtx: PFpHsCtx; const AMsg: TBytes);
+procedure HandleServerHelloMessage(ACtx: PTlsPasHsCtx; const AMsg: TBytes);
 var
   LShared: TBytes;
   LInfo: TTLS13ServerHelloInfo;
@@ -1099,40 +1099,40 @@ var
 begin
   if not TryParseServerHelloFromHandshake(AMsg, LInfo) then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   if LInfo.SelectedVersion <> $0304 then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
-  if FpIsHRR(LInfo.ServerRandom) then
+  if TlsPasIsHRR(LInfo.ServerRandom) then
   begin
     if ACtx^.HRRSeen then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if (not LInfo.HasKeyShare) or (Length(LInfo.PeerKeyShare) <> 0) then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if (LInfo.KeyShareGroup <> TLS13_GROUP_X25519) and
        (LInfo.KeyShareGroup <> TLS13_GROUP_SECP256R1) then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if LInfo.KeyShareGroup = ACtx^.FirstGroup then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if not TLS13AEADIsSupported(LInfo.SelectedCipherSuite) then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if Length(ACtx^.CH1Body) = 0 then
@@ -1141,7 +1141,7 @@ begin
     begin
       if not TryGenerateP256ECDHKeyPair(LNewPrivP256, LNewPub, LError) then
       begin
-        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
         Exit;
       end;
       SecureZeroBytes(ACtx^.Priv);
@@ -1158,7 +1158,7 @@ begin
     LCH2 := PatchClientHelloKeyShare(ACtx^.CHBody, LNewPub, LInfo.KeyShareGroup);
     if Length(LCH2) = 0 then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if LInfo.HasCookie and (Length(LInfo.Cookie) > 0) then
@@ -1250,24 +1250,24 @@ begin
     begin
       if Length(ACtx^.ResumeSession.ResumptionPSK) = 0 then
       begin
-        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
         Exit;
       end;
       LTruncatedCH2 := Copy(LCH2, 0, Length(LCH2) - (2 + 1 + Length(ACtx^.ResumeSession.ResumptionPSK)));
-      LNewBinder := FpComputeHRRBinder(LInfo.SelectedCipherSuite, ACtx^.ResumeSession.ResumptionPSK, ACtx^.CH1Body, AMsg, LTruncatedCH2);
+      LNewBinder := TlsPasComputeHRRBinder(LInfo.SelectedCipherSuite, ACtx^.ResumeSession.ResumptionPSK, ACtx^.CH1Body, AMsg, LTruncatedCH2);
       if Length(LNewBinder) = 0 then
       begin
-        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
         Exit;
       end;
-      LCH2 := FpPatchBinder(LCH2, LNewBinder);
+      LCH2 := TlsPasPatchBinder(LCH2, LNewBinder);
       if Length(LCH2) = 0 then
       begin
-        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
         Exit;
       end;
     end;
-    LMsgHash := FpBuildMessageHash(ACtx^.CH1Body, LInfo.SelectedCipherSuite);
+    LMsgHash := TlsPasBuildMessageHash(ACtx^.CH1Body, LInfo.SelectedCipherSuite);
     SetLength(ACtx^.HRRTranscript, 0);
     AppendBytesTo(ACtx^.HRRTranscript, LMsgHash);
     AppendBytesTo(ACtx^.HRRTranscript, AMsg);
@@ -1278,7 +1278,7 @@ begin
     ACtx^.TxBytes := BuildTLSPlaintext(TLS_CONTENT_TYPE_HANDSHAKE, LCH2);
     ACtx^.TxOff := 0;
     if not ACtx^.SendArmed then
-      FpArmSend(ACtx);
+      TlsPasArmSend(ACtx);
     Exit;
   end;
   if LInfo.HasPreSharedKey then
@@ -1286,20 +1286,20 @@ begin
     if (not ACtx^.Resuming) or (LInfo.SelectedPSKIdentity <> 0) or
        (LInfo.SelectedCipherSuite <> ACtx^.ResumeSession.CipherSuite) then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
   end;
   if not LInfo.HasKeyShare then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   if LInfo.KeyShareGroup = TLS13_GROUP_X25519 then
   begin
     if Length(LInfo.PeerKeyShare) <> 32 then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
   end
@@ -1307,28 +1307,28 @@ begin
   begin
     if Length(LInfo.PeerKeyShare) <> 65 then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
   end
   else
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   if ACtx^.HRRSeen and (LInfo.KeyShareGroup <> ACtx^.FirstGroup) then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   if not ACtx^.HRRSeen and (LInfo.KeyShareGroup <> TLS13_GROUP_X25519) then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   if not TLS13AEADIsSupported(LInfo.SelectedCipherSuite) then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   if LInfo.KeyShareGroup = TLS13_GROUP_X25519 then
@@ -1336,7 +1336,7 @@ begin
     try
       LShared := X25519ComputeSharedSecret(ACtx^.Priv, LInfo.PeerKeyShare);
     except
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
   end
@@ -1344,32 +1344,32 @@ begin
   begin
     if Length(ACtx^.PrivP256) = 0 then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if not TryParseP256PublicPoint(LInfo.PeerKeyShare, LPeerPoint, LError) then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if not TryP256ScalarMult(ACtx^.PrivP256, LPeerPoint, LSharedPoint, LError) then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if LSharedPoint.IsInfinity then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if not TryToFixedLength32(LSharedPoint.X, LSharedX, LError) then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     if Length(LSharedX) <> 32 then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     LShared := LSharedX;
@@ -1392,7 +1392,7 @@ begin
       ACtx^.Transcript, ACtx^.ResumeSession.ResumptionPSK,
       ACtx^.Secrets, LError) then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     ACtx^.PsksAccepted := True;
@@ -1400,7 +1400,7 @@ begin
   else if not TryDeriveTLS13HandshakeSecrets(ACtx^.Suite, LShared,
     ACtx^.Transcript, ACtx^.Secrets, LError) then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   ACtx^.ServerFinKey := TLS13FinishedKeyForCipherSuite(ACtx^.Suite,
@@ -1413,13 +1413,13 @@ begin
 end;
 
 { VerifyPeer 相一：证书链 DER → TX509 对象 → 全链验证（日期/签名/
-  CA 约束/信任锚/主机名）。返回 False = 已 FpFail。 }
-function FpVerifyServerChain(ACtx: PFpHsCtx;
+  CA 约束/信任锚/主机名）。返回 False = 已 TlsPasFail。 }
+function TlsPasVerifyServerChain(ACtx: PTlsPasHsCtx;
   const ACerts: TTLS13CertificateArray): Boolean;
 var
   LChain: array of TX509Certificate;
   LStore: TX509TrustStore;
-  LStoreCerts: TFpCertObjArray;
+  LStoreCerts: TTlsPasCertObjArray;
   LOwned: Boolean;
   LErr: string;
   LV: TX509VerifyResult;
@@ -1429,7 +1429,7 @@ begin
   try
     if Length(ACerts) = 0 then
     begin
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     SetLength(LChain, Length(ACerts));
@@ -1440,7 +1440,7 @@ begin
         LChain[I].LoadFromDER(ACerts[I]);
       end;
     except
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       { finally 统一释放：未初始化槽位为 nil，Free 安全 }
       for I := 0 to High(LChain) do
         LChain[I].Free;
@@ -1450,8 +1450,8 @@ begin
       if not ResolveTrustStore(ACtx^.TrustBundlePath, LStore, LStoreCerts,
         LOwned, LErr) then
       begin
-        WriteLn(ErrOutput, '[tlsfp] verify failed: ', LErr);
-        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        WriteLn(ErrOutput, '[tlspas] verify failed: ', LErr);
+        TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
         Exit;
       end;
       try
@@ -1459,8 +1459,8 @@ begin
         if not LV.IsValid then
         begin
           { 仅失败路径的一行现场：链验证拒绝原因（日期/签名/主机名等） }
-          WriteLn(ErrOutput, '[tlsfp] verify failed: ', LV.ErrorMessage);
-          FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+          WriteLn(ErrOutput, '[tlspas] verify failed: ', LV.ErrorMessage);
+          TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
           Exit;
         end;
         ACtx^.LeafPublicKeyInfo := LChain[0].PublicKeyInfo;
@@ -1477,13 +1477,13 @@ begin
         LChain[I].Free;
     end;
   except
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
   end;
 end;
 
 { VerifyPeer 相二：CV 签名校验。输入 = Hash(CH..CERT)——调用点必须
   在把 CV 消息追加进 transcript 之前。 }
-function FpVerifyCertVerifySignature(ACtx: PFpHsCtx; AScheme: Word;
+function TlsPasVerifyCertVerifySignature(ACtx: PTlsPasHsCtx; AScheme: Word;
   const ASig: TBytes): Boolean;
 var
   LHash, LInput: TBytes;
@@ -1491,24 +1491,24 @@ var
 begin
   Result := False;
   try
-    LHash := FpTranscriptHash(ACtx^.Suite, ACtx^.Transcript);
+    LHash := TlsPasTranscriptHash(ACtx^.Suite, ACtx^.Transcript);
     LInput := BuildTLS13ServerCertificateVerifyInputSHA256(LHash);
     if not TryVerifyTLS13CertificateVerifySignature(AScheme,
       ACtx^.LeafPublicKeyInfo, LInput, ASig, LErr) then
     begin
       { 仅失败路径的一行现场：CV 方案与失败原因 }
-      WriteLn(ErrOutput, '[tlsfp] verify failed: scheme=', AScheme, ' ',
+      WriteLn(ErrOutput, '[tlspas] verify failed: scheme=', AScheme, ' ',
         LErr);
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
     end;
     Result := True;
   except
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
   end;
 end;
 
-procedure HandleEncryptedFlightRecord(ACtx: PFpHsCtx;
+procedure HandleEncryptedFlightRecord(ACtx: PTlsPasHsCtx;
   const APayload: TBytes);
 var
   LAAD, LNonce, LPlaintext: TBytes;
@@ -1530,7 +1530,7 @@ begin
     ACtx^.SrvSeq);
   if not IncrementTLS13Sequence(ACtx^.SrvSeq) then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   if not TryTLS13AEADDecrypt(ACtx^.Suite,
@@ -1538,19 +1538,19 @@ begin
     LError) then
   begin
     { 解密失败 = 密钥不符或遭篡改：协议层失败，不可降级 }
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   if not TryParseTLS13InnerPlaintext(LPlaintext, LFrag, LInnerCt) then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     Exit;
   end;
   case LInnerCt of
     TLS_CONTENT_TYPE_HANDSHAKE:
       begin
         AppendBytesTo(ACtx^.EncBuf, LFrag);
-        while FpTryPopHandshake(ACtx^.EncBuf, LMsg) = 1 do
+        while TlsPasTryPopHandshake(ACtx^.EncBuf, LMsg) = 1 do
         begin
           LMsgType := LMsg[0];
           if LMsgType = TLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS then
@@ -1558,13 +1558,13 @@ begin
             if not TryParseTLS13EncryptedExtensions(LMsg, LEEInfo,
               LError) then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             { v1 不发 early_data：服务器宣称接受即协议错 }
             if LEEInfo.HasEarlyData then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             ACtx^.SeenEncryptedExtensions := True;
@@ -1575,13 +1575,13 @@ begin
             { 恢复握手无服务器证书（RFC 8446 §2.2）；出现即协议错 }
             if ACtx^.PsksAccepted then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             if not TryParseTLS13ServerCertificateHandshake(LMsg, LCerts,
               LError) then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             ACtx^.SeenCert := True;
@@ -1589,13 +1589,13 @@ begin
             { VerifyPeer：全链验证（日期/签名/CA 约束/信任锚/主机名）。
               失败即握手终止——绝不降级为不校验继续。 }
             if ACtx^.VerifyPeer then
-              if not FpVerifyServerChain(ACtx, LCerts) then
+              if not TlsPasVerifyServerChain(ACtx, LCerts) then
                 Exit;
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_CERTIFICATE_REQUEST then
           begin
             { v1 无客户端证书材料：fail-closed（见单元头能力边界） }
-            FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+            TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
             Exit;
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY then
@@ -1603,7 +1603,7 @@ begin
             { 恢复握手无 CV；出现即协议错 }
             if ACtx^.PsksAccepted then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             { 结构合法性必查（transcript 完整性依赖其长度域可信）；
@@ -1612,11 +1612,11 @@ begin
             if not TryParseTLS13CertificateVerifyHandshake(LMsg, LScheme,
               LSig, LError) then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             if ACtx^.VerifyPeer then
-              if not FpVerifyCertVerifySignature(ACtx, LScheme, LSig) then
+              if not TlsPasVerifyCertVerifySignature(ACtx, LScheme, LSig) then
                 Exit;
             ACtx^.SeenCertVerify := True;
             AppendBytesTo(ACtx^.Transcript, LMsg);
@@ -1630,31 +1630,31 @@ begin
             begin
               if not ACtx^.SeenEncryptedExtensions then
               begin
-                FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+                TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
                 Exit;
               end;
             end
             else if not (ACtx^.SeenEncryptedExtensions and
                          ACtx^.SeenCert and ACtx^.SeenCertVerify) then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             LMsgLen := ReadUInt24(LMsg, 1);
             if LMsgLen <> Cardinal(ACtx^.Secrets.HashSize) then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             SetLength(LVerify, Integer(LMsgLen));
             if Integer(LMsgLen) > 0 then
               Move(LMsg[4], LVerify[0], Integer(LMsgLen));
-            LHash := FpTranscriptHash(ACtx^.Suite, ACtx^.Transcript);
+            LHash := TlsPasTranscriptHash(ACtx^.Suite, ACtx^.Transcript);
             if not TLS13VerifyFinishedForCipherSuite(ACtx^.Suite,
               ACtx^.Secrets.ServerHandshakeTrafficSecret, LHash,
               LVerify) then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             AppendBytesTo(ACtx^.Transcript, LMsg);
@@ -1664,43 +1664,43 @@ begin
               ACtx^.Secrets.HandshakeSecret, ACtx^.Transcript,
               ACtx^.AppSecrets, LError) then
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             try
               BuildClientFlight(ACtx);
             except
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
             ACtx^.State := hsFlushFin;
-            { 返回让泵转去冲刷客户端飞行；NetIn 余量随 FpDone 移交 }
+            { 返回让泵转去冲刷客户端飞行；NetIn 余量随 TlsPasDone 移交 }
             Exit;
           end
           else
           begin
             { 未知握手消息：fail-closed }
-            FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+            TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
             Exit;
           end;
         end;
         if Length(ACtx^.EncBuf) > cMaxPostHsBuf then
         begin
-          FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+          TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
           Exit;
         end;
       end;
     TLS_CONTENT_TYPE_ALERT:
-      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
     TLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC:
       ; { middlebox 兼容记录：忽略 }
   else
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
   end;
 end;
 
 { 泵尽 NetIn 可组帧记录；False = 已失败/已完成（终止泵） }
-function FpPumpRecords(ACtx: PFpHsCtx): Boolean;
+function TlsPasPumpRecords(ACtx: PTlsPasHsCtx): Boolean;
 var
   LCt: Byte;
   LPayload: TBytes;
@@ -1715,10 +1715,10 @@ begin
     LPumped := 0;
     while (ACtx^.State <> hsFlushFin) and not ACtx^.Finished do
     begin
-      LFrameRes := FpTryFrameRecord(ACtx^.NetIn, LCt, LPayload);
+      LFrameRes := TlsPasTryFrameRecord(ACtx^.NetIn, LCt, LPayload);
       if LFrameRes < 0 then
       begin
-        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
         Exit(False);
       end;
       if LFrameRes = 0 then
@@ -1727,7 +1727,7 @@ begin
       if (LPumped > cMaxFlightRecords) or
          (Length(ACtx^.NetIn) > cMaxNetInBuf) then
       begin
-        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
         Exit(False);
       end;
       if ACtx^.State = hsRecvSH then
@@ -1736,17 +1736,17 @@ begin
           TLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC: ; { 忽略 }
           TLS_CONTENT_TYPE_ALERT:
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit(False);
             end;
           TLS_CONTENT_TYPE_HANDSHAKE:
             begin
               AppendBytesTo(ACtx^.HsBuf, LPayload);
-              while FpTryPopHandshake(ACtx^.HsBuf, LMsg) = 1 do
+              while TlsPasTryPopHandshake(ACtx^.HsBuf, LMsg) = 1 do
               begin
                 if LMsg[0] <> TLS_HANDSHAKE_TYPE_SERVER_HELLO then
                 begin
-                  FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+                  TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
                   Exit(False);
                 end;
                 HandleServerHelloMessage(ACtx, LMsg);
@@ -1755,13 +1755,13 @@ begin
               end;
               if Length(ACtx^.HsBuf) > cMaxHandshakeMessage then
               begin
-                FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+                TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
                 Exit(False);
               end;
             end;
           TLS_CONTENT_TYPE_APPLICATION_DATA:
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit(False);
             end;
         end;
@@ -1772,7 +1772,7 @@ begin
           TLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC: ; { 忽略 }
           TLS_CONTENT_TYPE_ALERT:
             begin
-              FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit(False);
             end;
           TLS_CONTENT_TYPE_APPLICATION_DATA:
@@ -1780,7 +1780,7 @@ begin
         else
           begin
             { 握手密钥相不允许明文 handshake 记录 }
-            FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+            TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
             Exit(False);
           end;
         end;
@@ -1793,7 +1793,7 @@ end;
 
 { ======== 握手 IO 臂挂 ======== }
 
-procedure FpArmRecv(ACtx: PFpHsCtx);
+procedure TlsPasArmRecv(ACtx: PTlsPasHsCtx);
 var
   LRx: PByte;
 begin
@@ -1802,14 +1802,14 @@ begin
   SetLength(ACtx^.NetIn, Length(ACtx^.NetIn) + cNetReadChunk);
   LRx := @ACtx^.NetIn[Length(ACtx^.NetIn) - cNetReadChunk];
   ACtx^.RecvArmed := True;
-  if ACtx^.Stream.AsyncRead(LRx, cNetReadChunk, @FpRecvCb, ACtx) then
+  if ACtx^.Stream.AsyncRead(LRx, cNetReadChunk, @TlsPasRecvCb, ACtx) then
     Exit;
   ACtx^.RecvArmed := False;
   SetLength(ACtx^.NetIn, Length(ACtx^.NetIn) - cNetReadChunk);
-  FpFail(ACtx, ASYNC_TLSFP_ERR_IO);
+  TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_IO);
 end;
 
-procedure FpArmSend(ACtx: PFpHsCtx);
+procedure TlsPasArmSend(ACtx: PTlsPasHsCtx);
 var
   LLeft: Integer;
 begin
@@ -1819,24 +1819,24 @@ begin
   if LLeft <= 0 then
   begin
     if ACtx^.State = hsFlushFin then
-      FpDone(ACtx);
+      TlsPasDone(ACtx);
     Exit;
   end;
   ACtx^.SendArmed := True;
   if ACtx^.Stream.AsyncWrite(@ACtx^.TxBytes[ACtx^.TxOff], UInt32(LLeft),
-    @FpSendCb, ACtx) then
+    @TlsPasSendCb, ACtx) then
     Exit;
   ACtx^.SendArmed := False;
-  FpFail(ACtx, ASYNC_TLSFP_ERR_IO);
+  TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_IO);
 end;
 
 { ======== 握手回调 ======== }
 
-procedure FpRecvCb(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+procedure TlsPasRecvCb(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 var
-  LCtx: PFpHsCtx;
+  LCtx: PTlsPasHsCtx;
 begin
-  LCtx := PFpHsCtx(AContext);
+  LCtx := PTlsPasHsCtx(AContext);
   if (LCtx = nil) or LCtx^.Finished then
     Exit;
   LCtx^.RecvArmed := False;
@@ -1844,72 +1844,72 @@ begin
   begin
     { 握手期对端 EOF/传输错误都是失败 }
     if AResult = 0 then
-      FpFail(LCtx, ASYNC_TLSFP_ERR_IO)
+      TlsPasFail(LCtx, ASYNC_TLSPAS_ERR_IO)
     else
-      FpFail(LCtx, AResult); { 底层域负码透传（取消/超时语义保留） }
+      TlsPasFail(LCtx, AResult); { 底层域负码透传（取消/超时语义保留） }
     Exit;
   end;
   { 有效字节已在 NetIn 尾部（臂挂时预扩容），收缩到实际长度 }
   SetLength(LCtx^.NetIn,
     Length(LCtx^.NetIn) - cNetReadChunk + AResult);
-  if not FpPumpRecords(LCtx) then
+  if not TlsPasPumpRecords(LCtx) then
     Exit;
   if LCtx^.Finished then
     Exit;
   if LCtx^.State = hsFlushFin then
   begin
-    FpArmSend(LCtx);
+    TlsPasArmSend(LCtx);
     Exit;
   end;
-  FpArmRecv(LCtx);
+  TlsPasArmRecv(LCtx);
 end;
 
-procedure FpSendCb(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+procedure TlsPasSendCb(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 var
-  LCtx: PFpHsCtx;
+  LCtx: PTlsPasHsCtx;
 begin
-  LCtx := PFpHsCtx(AContext);
+  LCtx := PTlsPasHsCtx(AContext);
   if (LCtx = nil) or LCtx^.Finished then
     Exit;
   LCtx^.SendArmed := False;
   if AResult <= 0 then
   begin
     if AResult = 0 then
-      FpFail(LCtx, ASYNC_TLSFP_ERR_IO)
+      TlsPasFail(LCtx, ASYNC_TLSPAS_ERR_IO)
     else
-      FpFail(LCtx, AResult);
+      TlsPasFail(LCtx, AResult);
     Exit;
   end;
   Inc(LCtx^.TxOff, AResult);
   if LCtx^.State = hsFlushFin then
   begin
     if LCtx^.TxOff >= Length(LCtx^.TxBytes) then
-      FpDone(LCtx)
+      TlsPasDone(LCtx)
     else
-      FpArmSend(LCtx);
+      TlsPasArmSend(LCtx);
     Exit;
   end;
   { ClientHello 冲完 → 收 ServerHello }
-  FpArmRecv(LCtx);
+  TlsPasArmRecv(LCtx);
 end;
 
-procedure FpTimerCb(AContext: Pointer);
+procedure TlsPasTimerCb(AContext: Pointer);
 var
-  LCtx: PFpHsCtx;
+  LCtx: PTlsPasHsCtx;
 begin
-  LCtx := PFpHsCtx(AContext);
+  LCtx := PTlsPasHsCtx(AContext);
   if (LCtx = nil) or LCtx^.Finished then
     Exit;
   LCtx^.Timer := TAsyncTimerHandle.None;
-  FpFail(LCtx, ASYNC_TLSFP_ERR_IO);
+  TlsPasFail(LCtx, ASYNC_TLSPAS_ERR_IO);
 end;
 
-procedure FpHsStep(ACtx: Pointer);
+procedure TlsPasHsStep(ACtx: Pointer);
 var
-  LCtx: PFpHsCtx;
+  LCtx: PTlsPasHsCtx;
   LCHRecord: TBytes;
 begin
-  LCtx := PFpHsCtx(ACtx);
+  LCtx := PTlsPasHsCtx(ACtx);
   if (LCtx = nil) or LCtx^.Finished then
     Exit;
   if LCtx^.State <> hsSendCH then
@@ -1919,30 +1919,30 @@ begin
   LCtx^.TxBytes := LCHRecord;
   LCtx^.TxOff := 0;
   LCtx^.State := hsRecvSH;
-  FpArmSend(LCtx);
+  TlsPasArmSend(LCtx);
 end;
 
-procedure FpDialDone(AStream: IAsyncTcpStream; AError: Int32;
+procedure TlsPasDialDone(AStream: IAsyncTcpStream; AError: Int32;
   AContext: Pointer);
 var
-  LCtx: PFpHsCtx;
+  LCtx: PTlsPasHsCtx;
 begin
-  LCtx := PFpHsCtx(AContext);
+  LCtx := PTlsPasHsCtx(AContext);
   if LCtx = nil then
     Exit;
   if AError <> 0 then
   begin
     { 拨号失败原样透传 dial 域负错误码（超时/拒绝等语义保留） }
-    FpFail(LCtx, AError);
+    TlsPasFail(LCtx, AError);
     Exit;
   end;
   LCtx^.Stream := AStream;
-  FpHsStep(LCtx);
+  TlsPasHsStep(LCtx);
 end;
 
 { ======== 工厂入口 ======== }
 
-function DefaultAsyncTlsFpClientOptions: TAsyncTlsFpClientOptions;
+function DefaultAsyncTlsPasClientOptions: TAsyncTlsPasClientOptions;
 begin
   Result.ServerName := '';
   Result.VerifyPeer := False;
@@ -1954,10 +1954,10 @@ end;
 { 公共初始化：X25519 keypair + ClientHello（失败静默释放并 re-raise）}
 function AllocHsCtx(const ALoop: TAsyncLoop;
   const AServerName: string; ACachePort: UInt16;
-  const AOptions: TAsyncTlsFpClientOptions;
-  const AResumeSession: TFpTlsResumptionSession; AHasResume: Boolean;
-  AOnReady: TAsyncTlsFpConnectCallback; AOnReadyCtx: Pointer
-  ): PFpHsCtx;
+  const AOptions: TAsyncTlsPasClientOptions;
+  const AResumeSession: TTlsPasResumptionSession; AHasResume: Boolean;
+  AOnReady: TAsyncTlsPasConnectCallback; AOnReadyCtx: Pointer
+  ): PTlsPasHsCtx;
 var
   LPub: TBytes;
   LPartialCH: TBytes;
@@ -1993,7 +1993,7 @@ begin
           AServerName, '', LPub, AResumeSession.CipherSuite,
           AResumeSession.TicketIdentity,
           Cardinal(Int64(AResumeSession.TicketAgeAdd) +
-            (FpMonoMs - AResumeSession.IssuedMs)),
+            (TlsPasMonoMs - AResumeSession.IssuedMs)),
           AResumeSession.ResumptionPSK, LPartialCH);
     end
     else
@@ -2011,12 +2011,12 @@ begin
   end;
 end;
 
-function AsyncTlsFpUpgrade(const ALoop: TAsyncLoop;
-  const AStream: IAsyncTcpStream; const AOptions: TAsyncTlsFpClientOptions;
-  ACallback: TAsyncTlsFpConnectCallback; AContext: Pointer): Boolean;
+function AsyncTlsPasUpgrade(const ALoop: TAsyncLoop;
+  const AStream: IAsyncTcpStream; const AOptions: TAsyncTlsPasClientOptions;
+  ACallback: TAsyncTlsPasConnectCallback; AContext: Pointer): Boolean;
 var
-  LCtx: PFpHsCtx;
-  LDummySess: TFpTlsResumptionSession;
+  LCtx: PTlsPasHsCtx;
+  LDummySess: TTlsPasResumptionSession;
 begin
   Result := False;
   if (AStream = nil) or not Assigned(ACallback) then
@@ -2030,21 +2030,21 @@ begin
     Exit;
   LCtx^.Stream := AStream;
   if not LCtx^.Deadline.IsInfinite then
-    LCtx^.Timer := ALoop.Schedule(LCtx^.Deadline.Remaining, @FpTimerCb,
+    LCtx^.Timer := ALoop.Schedule(LCtx^.Deadline.Remaining, @TlsPasTimerCb,
       LCtx);
-  FpHsStep(LCtx);
-  { 同步失败已在 FpFail 回调；此后结果一律经回调交付 }
+  TlsPasHsStep(LCtx);
+  { 同步失败已在 TlsPasFail 回调；此后结果一律经回调交付 }
   Result := True;
 end;
 
-function AsyncTlsFpConnect(const ALoop: TAsyncLoop; const AHost: string;
-  const APort: UInt16; const AOptions: TAsyncTlsFpClientOptions;
-  ACallback: TAsyncTlsFpConnectCallback; AContext: Pointer): Boolean;
+function AsyncTlsPasConnect(const ALoop: TAsyncLoop; const AHost: string;
+  const APort: UInt16; const AOptions: TAsyncTlsPasClientOptions;
+  ACallback: TAsyncTlsPasConnectCallback; AContext: Pointer): Boolean;
 var
-  LCtx: PFpHsCtx;
+  LCtx: PTlsPasHsCtx;
   LOpts: TAsyncTcpDialOptions;
   LServerName: string;
-  LSess: TFpTlsResumptionSession;
+  LSess: TTlsPasResumptionSession;
   LHasResume: Boolean;
 begin
   Result := False;
@@ -2067,30 +2067,30 @@ begin
   if LCtx = nil then
     Exit;
   if not LCtx^.Deadline.IsInfinite then
-    LCtx^.Timer := ALoop.Schedule(LCtx^.Deadline.Remaining, @FpTimerCb,
+    LCtx^.Timer := ALoop.Schedule(LCtx^.Deadline.Remaining, @TlsPasTimerCb,
       LCtx);
 
   LOpts := DefaultAsyncTcpDialOptions;
   LOpts.NoDelay := True;
   LOpts.OverallDeadline := AOptions.HandshakeDeadline;
-  if not AsyncTcpDial(ALoop, AHost, APort, LOpts, @FpDialDone, LCtx) then
+  if not AsyncTcpDial(ALoop, AHost, APort, LOpts, @TlsPasDialDone, LCtx) then
     FreeHsCtxSilent(LCtx)
   else
     Result := True;
 end;
 
-{ ======== TFpTlsStream：数据相 ======== }
+{ ======== TTlsPasStream：数据相 ======== }
 
-constructor TFpTlsStream.Create(ASuite: Word;
+constructor TTlsPasStream.Create(ASuite: Word;
   const AApp: TTLS13ApplicationSecrets; const AInner: IAsyncTcpStream;
   ALoop: TAsyncLoop; const ANetInSeed, APostHsSeed: TBytes;
-  ACache: TAsyncTlsFpSessionCache; const ACacheHost: string;
+  ACache: TAsyncTlsPasSessionCache; const ACacheHost: string;
   ACachePort: UInt16; AWasResumed: Boolean);
 begin
   inherited Create;
   FSuite := ASuite;
   FApp := AApp;
-  { 密钥材料必须深拷贝：FpDone 创建本对象后立即经 FreeHsCtx 安全
+  { 密钥材料必须深拷贝：TlsPasDone 创建本对象后立即经 FreeHsCtx 安全
     擦除握手上下文，record 赋值的 TBytes 引用与上下文共享底层缓冲，
     会被连带清零——NST 派生 PSK 将拿到全零 master secret }
   FApp.TranscriptHash := Copy(AApp.TranscriptHash);
@@ -2115,6 +2115,7 @@ begin
   FPostHs := APostHsSeed;
   FNetInBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
   FPlainOutBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
+  FNetTxBuf := TByteStreamBuf.Create(DefaultAllocator, 4096);
   if Length(ANetInSeed) > 0 then
     FNetInBuf.Append(@ANetInSeed[0], Length(ANetInSeed));
   FRecvChunk := cNetReadChunk;
@@ -2124,12 +2125,12 @@ begin
     FApp.ClientApplicationIV);
 end;
 
-function TFpTlsStream.GetWasResumed: Boolean;
+function TTlsPasStream.GetWasResumed: Boolean;
 begin
   Result := FWasResumed;
 end;
 
-destructor TFpTlsStream.Destroy;
+destructor TTlsPasStream.Destroy;
 begin
   { quiet-shutdown：不阻塞等对端；密钥即刻清零 }
   FSealer.Clear;
@@ -2139,6 +2140,8 @@ begin
   FNetInBuf := nil;
   if Assigned(FPlainOutBuf) then FPlainOutBuf.Free;
   FPlainOutBuf := nil;
+  if Assigned(FNetTxBuf) then FNetTxBuf.Free;
+  FNetTxBuf := nil;
   FInner := nil;
   FLoop := nil;
   inherited Destroy;
@@ -2146,18 +2149,18 @@ end;
 
 { ---- 后握手消息 ---- }
 
-procedure TFpTlsStream.FeedPostHandshake(const AFragment: TBytes;
+procedure TTlsPasStream.FeedPostHandshake(const AFragment: TBytes;
   out AFatal: Boolean);
 var
   LMsg: TBytes;
   LMsgType: Byte;
   LErr: string;
   LTicket: TTLS13NewSessionTicket;
-  LSess: TFpTlsResumptionSession;
+  LSess: TTlsPasResumptionSession;
 begin
   AFatal := False;
   AppendBytesTo(FPostHs, AFragment);
-  while FpTryPopHandshake(FPostHs, LMsg) = 1 do
+  while TlsPasTryPopHandshake(FPostHs, LMsg) = 1 do
   begin
     LMsgType := LMsg[0];
     if LMsgType = TLS_HANDSHAKE_TYPE_NEW_SESSION_TICKET then
@@ -2179,7 +2182,7 @@ begin
           LTicket.TicketNonce);
         LSess.TicketAgeAdd := LTicket.TicketAgeAdd;
         LSess.LifetimeSec := LTicket.TicketLifetime;
-        LSess.IssuedMs := FpMonoMs;
+        LSess.IssuedMs := TlsPasMonoMs;
         FCache.Store(FCacheHost, FCachePort, LSess);
       end;
       Continue;
@@ -2207,7 +2210,7 @@ begin
     AFatal := True;
 end;
 
-function TFpTlsStream.HandleOpenedRecord(const APayload: TBytes): Integer;
+function TTlsPasStream.HandleOpenedRecord(const APayload: TBytes): Integer;
 var
   LFrag: TBytes;
   LInnerCt: Byte;
@@ -2243,7 +2246,7 @@ begin
   end;
 end;
 
-function TFpTlsStream.OpenAvailableRecords: Integer;
+function TTlsPasStream.OpenAvailableRecords: Integer;
 var
   LCt: Byte;
   LPayloadOff, LPayloadLen, LTotalLen: SizeUInt;
@@ -2264,7 +2267,7 @@ begin
       FDead := True;
       Exit(-1);
     end;
-    LFrameRes := FpTryFrameRecordView(FNetInBuf.Data, FNetInBuf.Available,
+    LFrameRes := TlsPasTryFrameRecordView(FNetInBuf.Data, FNetInBuf.Available,
       LCt, LPayloadOff, LPayloadLen, LTotalLen);
     if LFrameRes < 0 then
     begin
@@ -2357,7 +2360,7 @@ end;
 
 { ---- 挂起交付与泵 ---- }
 
-procedure TFpTlsStream.DeliverRead(AResult: Int32);
+procedure TTlsPasStream.DeliverRead(AResult: Int32);
 var
   LCB: TIoCompletion;
   LCtx: Pointer;
@@ -2376,7 +2379,7 @@ begin
     LCB(UInt64(PtrUInt(LBuf)), AResult, LCtx);
 end;
 
-procedure TFpTlsStream.DeliverWrite(AResult: Int32);
+procedure TTlsPasStream.DeliverWrite(AResult: Int32);
 var
   LCB: TIoCompletion;
   LCtx: Pointer;
@@ -2391,7 +2394,7 @@ begin
     LCB(0, AResult, LCtx);
 end;
 
-procedure TFpTlsStream.Pump;
+procedure TTlsPasStream.Pump;
 const
   { 单次泵内迭代上限：合法路径每迭代必有进展（明文递减/记录消耗/
     臂挂后返回等待回调）。若未来出现未知病态零进展交错，在此
@@ -2414,14 +2417,14 @@ begin
       Inc(LIters);
       if LIters > cMaxPumpIterations then
       begin
-        WriteLn(ErrOutput, '[tlsfp] pump iteration cap exceeded: plain=',
+        WriteLn(ErrOutput, '[tlspas] pump iteration cap exceeded: plain=',
           FPlainOutBuf.Available, ' netin=', FNetInBuf.Available, ' eof=', FEofIn,
           ' readpending=', FReadPending);
         FDead := True;
         if FReadPending then
-          DeliverRead(ASYNC_TLSFP_ERR_IO);
+          DeliverRead(ASYNC_TLSPAS_ERR_IO);
         if FWritePending then
-          DeliverWrite(ASYNC_TLSFP_ERR_IO);
+          DeliverWrite(ASYNC_TLSPAS_ERR_IO);
         Exit;
       end;
       { 每迭代先冲已封密文：同步回调（读交付/写完成）内可能刚封装了新
@@ -2434,7 +2437,7 @@ begin
       if FDead then
       begin
         if FReadPending then
-          DeliverRead(ASYNC_TLSFP_ERR_IO);
+          DeliverRead(ASYNC_TLSPAS_ERR_IO);
         Exit;
       end;
       if FPlainOutBuf.Available > 0 then
@@ -2467,7 +2470,7 @@ begin
       if LRes < 0 then
       begin
         if FReadPending then
-          DeliverRead(ASYNC_TLSFP_ERR_IO);
+          DeliverRead(ASYNC_TLSPAS_ERR_IO);
         Exit;
       end;
       if LRes > 0 then
@@ -2477,7 +2480,7 @@ begin
         if not ArmNetRecv then
         begin
           if FReadPending then
-            DeliverRead(ASYNC_TLSFP_ERR_IO);
+            DeliverRead(ASYNC_TLSPAS_ERR_IO);
           Exit;
         end;
       end;
@@ -2491,9 +2494,9 @@ end;
 procedure StreamRecvCb(AUserData: UInt64; AResult: Int32;
   AContext: Pointer);
 var
-  LSelf: TFpTlsStream;
+  LSelf: TTlsPasStream;
 begin
-  LSelf := TFpTlsStream(AContext);
+  LSelf := TTlsPasStream(AContext);
   if LSelf = nil then
     Exit;
   LSelf.FRecvArmed := False;
@@ -2504,7 +2507,7 @@ begin
     if LSelf.FReadPending then
       LSelf.DeliverRead(AResult);
     if LSelf.FWritePending then
-      LSelf.DeliverWrite(ASYNC_TLSFP_ERR_IO);
+      LSelf.DeliverWrite(ASYNC_TLSPAS_ERR_IO);
     Exit;
   end;
   if AResult = 0 then
@@ -2534,9 +2537,9 @@ end;
 procedure StreamSendCb(AUserData: UInt64; AResult: Int32;
   AContext: Pointer);
 var
-  LSelf: TFpTlsStream;
+  LSelf: TTlsPasStream;
 begin
-  LSelf := TFpTlsStream(AContext);
+  LSelf := TTlsPasStream(AContext);
   if LSelf = nil then
     Exit;
   LSelf.FSendArmed := False;
@@ -2544,19 +2547,19 @@ begin
   begin
     LSelf.FDead := True;
     if LSelf.FWritePending then
-      LSelf.DeliverWrite(ASYNC_TLSFP_ERR_IO);
+      LSelf.DeliverWrite(ASYNC_TLSPAS_ERR_IO);
     Exit;
   end;
-  Inc(LSelf.FNetTxOff, AResult);
+  LSelf.FNetTxBuf.Consume(SizeUInt(AResult));
   LSelf.CompactTxIfDrained;
-  if (LSelf.FNetTxOff >= Length(LSelf.FNetTx)) and
+  if (LSelf.FNetTxBuf.Available = 0) and
      LSelf.FWritePending then
     LSelf.DeliverWrite(Int32(LSelf.FWriteTotal))
   else
     LSelf.Pump;
 end;
 
-function TFpTlsStream.ArmNetRecv: Boolean;
+function TTlsPasStream.ArmNetRecv: Boolean;
 var
   LRx: PByte;
 begin
@@ -2578,18 +2581,15 @@ begin
   // Reserve 未提交，不移动 FLen，尾区自动复用，无需回缩 SetLength
 end;
 
-function TFpTlsStream.ArmNetSend: Boolean;
-var
-  LLeft: Integer;
+function TTlsPasStream.ArmNetSend: Boolean;
 begin
   Result := False;
   if FSendArmed or FDead then
     Exit;
-  LLeft := Length(FNetTx) - FNetTxOff;
-  if LLeft <= 0 then
+  if FNetTxBuf.Available = 0 then
     Exit(True);
   FSendArmed := True;
-  if FInner.AsyncWrite(@FNetTx[FNetTxOff], UInt32(LLeft), @StreamSendCb,
+  if FInner.AsyncWrite(FNetTxBuf.Data, UInt32(FNetTxBuf.Available), @StreamSendCb,
     Self) then
     Exit(True);
   FSendArmed := False;
@@ -2597,11 +2597,11 @@ end;
 
 { ---- 明文封队（写方向） ---- }
 
-procedure TFpTlsStream.SealPlainToQueue(const APlain: TBytes);
+procedure TTlsPasStream.SealPlainToQueue(const APlain: TBytes);
 var
-  LSeg, LRecord: TBytes;
-  LOffset, LTake: Integer;
+  LOffset, LTake, LRecLen, LNeed: Integer;
   LErr: string;
+  LDest: PByte;
 begin
   LOffset := 0;
   while LOffset < Length(APlain) do
@@ -2609,35 +2609,32 @@ begin
     LTake := Length(APlain) - LOffset;
     if LTake > cMaxAppFragment then
       LTake := cMaxAppFragment;
-    LSeg := Copy(APlain, LOffset, LTake);
-    if not FSealer.Seal(LSeg, TLS_CONTENT_TYPE_APPLICATION_DATA,
-      LRecord, LErr) then
-      raise EInvalidOperationError.Create('tlsfp: seal app data: ' +
-        LErr);
-    AppendBytesTo(FNetTx, LRecord);
+    // 5B header + (LTake+1) inner +16 tag
+    LNeed := 5 + (LTake + 1) + 16;
+    LDest := FNetTxBuf.ReserveAppend(SizeUInt(LNeed));
+    if not FSealer.SealToBuf(@APlain[LOffset], LTake, TLS_CONTENT_TYPE_APPLICATION_DATA,
+      LDest, LNeed, LRecLen, LErr) then
+      raise EInvalidOperationError.Create('tlspas: seal app data: ' + LErr);
+    FNetTxBuf.CommitAppend(SizeUInt(LRecLen));
     Inc(LOffset, LTake);
   end;
 end;
 
-procedure TFpTlsStream.CompactTxIfDrained;
+procedure TTlsPasStream.CompactTxIfDrained;
 begin
-  if (FNetTxOff >= Length(FNetTx)) and (Length(FNetTx) > 0) and
-     not FWritePending then
-  begin
-    FNetTx := nil;
-    FNetTxOff := 0;
-  end;
+  if (FNetTxBuf.Available = 0) and not FWritePending then
+    FNetTxBuf.Clear;
 end;
 
 { ---- IReader/IWriter（同步便捷面） ---- }
 
-function TFpTlsStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+function TTlsPasStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   if TryRead(ABuf, ACount, Result) <> tsiorOk then
     Result := 0;
 end;
 
-function TFpTlsStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+function TTlsPasStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   { 同步面不支持记录化写入（异步栈契约）：请走 AsyncWrite }
   Result := 0;
@@ -2645,19 +2642,23 @@ end;
 
 { ---- IReadWriteCloser ---- }
 
-procedure TFpTlsStream.Close;
+procedure TTlsPasStream.Close;
 var
   LAlert: TBytes;
   LRecord: TBytes;
   LErr: string;
+  LDest: PByte;
+  LRecLen: Integer;
+  LAlertBytes: array[0..1] of Byte;
 begin
   if not FCloseNotifySent and not FDead then
   begin
     FCloseNotifySent := True;
-    LAlert := TBytes.Create(1, 0); { warning + close_notify }
-    if FSealer.Seal(LAlert, TLS_CONTENT_TYPE_ALERT, LRecord, LErr) then
+    LAlertBytes[0] := 1; LAlertBytes[1] := 0; { warning + close_notify }
+    LDest := FNetTxBuf.ReserveAppend(5 + 3 + 16);
+    if FSealer.SealToBuf(@LAlertBytes[0], 2, TLS_CONTENT_TYPE_ALERT, LDest, 5 + 3 + 16, LRecLen, LErr) then
     begin
-      AppendBytesTo(FNetTx, LRecord);
+      FNetTxBuf.CommitAppend(SizeUInt(LRecLen));
       ArmNetSend; { 尽力冲刷；不等对端 }
     end;
   end;
@@ -2668,14 +2669,14 @@ begin
     FInner := nil;
   end;
   if FReadPending then
-    DeliverRead(ASYNC_TLSFP_ERR_IO);
+    DeliverRead(ASYNC_TLSPAS_ERR_IO);
   if FWritePending then
-    DeliverWrite(ASYNC_TLSFP_ERR_IO);
+    DeliverWrite(ASYNC_TLSPAS_ERR_IO);
 end;
 
 { ---- ITcpStream 委托底层流 ---- }
 
-function TFpTlsStream.LocalAddr: TNetAddress;
+function TTlsPasStream.LocalAddr: TNetAddress;
 begin
   if FInner <> nil then
     Result := FInner.LocalAddr
@@ -2683,7 +2684,7 @@ begin
     FillChar(Result, SizeOf(Result), 0);
 end;
 
-function TFpTlsStream.RemoteAddr: TNetAddress;
+function TTlsPasStream.RemoteAddr: TNetAddress;
 begin
   if FInner <> nil then
     Result := FInner.RemoteAddr
@@ -2691,43 +2692,43 @@ begin
     FillChar(Result, SizeOf(Result), 0);
 end;
 
-procedure TFpTlsStream.Shutdown;
+procedure TTlsPasStream.Shutdown;
 begin
   if FInner <> nil then
     FInner.Shutdown;
 end;
 
-procedure TFpTlsStream.SetNoDelay(const AValue: Boolean);
+procedure TTlsPasStream.SetNoDelay(const AValue: Boolean);
 begin
   if FInner <> nil then
     FInner.SetNoDelay(AValue);
 end;
 
-procedure TFpTlsStream.SetKeepAlive(const AValue: Boolean);
+procedure TTlsPasStream.SetKeepAlive(const AValue: Boolean);
 begin
   if FInner <> nil then
     FInner.SetKeepAlive(AValue);
 end;
 
-procedure TFpTlsStream.SetReadDeadline(const ADeadline: TDeadline);
+procedure TTlsPasStream.SetReadDeadline(const ADeadline: TDeadline);
 begin
   if FInner <> nil then
     FInner.SetReadDeadline(ADeadline);
 end;
 
-procedure TFpTlsStream.SetWriteDeadline(const ADeadline: TDeadline);
+procedure TTlsPasStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   if FInner <> nil then
     FInner.SetWriteDeadline(ADeadline);
 end;
 
-procedure TFpTlsStream.SetCancelToken(const AToken: INetCancelToken);
+procedure TTlsPasStream.SetCancelToken(const AToken: INetCancelToken);
 begin
   if FInner <> nil then
     FInner.SetCancelToken(AToken);
 end;
 
-procedure TFpTlsStream.BindCancelToken(
+procedure TTlsPasStream.BindCancelToken(
   const AToken: IAsyncCancellationToken);
 begin
   if FInner <> nil then
@@ -2736,14 +2737,14 @@ end;
 
 { ---- ITcpSocketRuntime ---- }
 
-function TFpTlsStream.NativeSocketHandle: PtrUInt;
+function TTlsPasStream.NativeSocketHandle: PtrUInt;
 begin
   Result := 0;
   if FInner <> nil then
     Result := (FInner as ITcpSocketRuntime).NativeSocketHandle;
 end;
 
-procedure TFpTlsStream.SetBlocking(const ABlocking: Boolean);
+procedure TTlsPasStream.SetBlocking(const ABlocking: Boolean);
 begin
   if FInner <> nil then
     (FInner as ITcpSocketRuntime).SetBlocking(ABlocking);
@@ -2751,7 +2752,7 @@ end;
 
 { ---- ITcpStreamRuntime ---- }
 
-function TFpTlsStream.TryRead(var ABuf; const ACount: SizeUInt;
+function TTlsPasStream.TryRead(var ABuf; const ACount: SizeUInt;
   out ARead: SizeUInt): TTcpStreamIOResult;
 var
   LN: SizeUInt;
@@ -2779,7 +2780,7 @@ begin
   Exit(tsiorWouldBlock);
 end;
 
-function TFpTlsStream.TryWrite(const ABuf; const ACount: SizeUInt;
+function TTlsPasStream.TryWrite(const ABuf; const ACount: SizeUInt;
   out AWritten: SizeUInt): TTcpStreamIOResult;
 var
   LView: TBytes;
@@ -2790,7 +2791,7 @@ begin
   if ACount = 0 then
     Exit(tsiorOk);
   { 有未冲尽残留时不再追加（避免跨调用字节序歧义）：先冲完再来 }
-  if FNetTxOff < Length(FNetTx) then
+  if FNetTxBuf.Available > 0 then
     Exit(tsiorWouldBlock);
   SetLength(LView, ACount);
   Move(ABuf, LView[0], ACount);
@@ -2800,9 +2801,8 @@ begin
     FDead := True;
     Exit(tsiorClosed);
   end;
-  FNetTxOff := 0;
   ArmNetSend;
-  if FNetTxOff < Length(FNetTx) then
+  if FNetTxBuf.Available > 0 then
     Exit(tsiorWouldBlock);
   CompactTxIfDrained;
   AWritten := ACount;
@@ -2811,7 +2811,7 @@ end;
 
 { ---- IAsyncTcpStream ---- }
 
-function TFpTlsStream.AsyncRead(ABuf: Pointer; ALen: UInt32;
+function TTlsPasStream.AsyncRead(ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   Result := False;
@@ -2821,7 +2821,7 @@ begin
     Exit; { 单挂起契约：重复提交是调用方 bug }
   if FDead then
   begin
-    ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSFP_ERR_IO, AContext);
+    ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSPAS_ERR_IO, AContext);
     Exit(True);
   end;
   FReadBuf := ABuf;
@@ -2834,7 +2834,7 @@ begin
   Result := True;
 end;
 
-function TFpTlsStream.AsyncReadRef(ABuf: Pointer; ALen: UInt32;
+function TTlsPasStream.AsyncReadRef(ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletionRef; AContext: Pointer): Boolean;
 var
   LWrap: Pointer;
@@ -2845,7 +2845,7 @@ begin
     Dispose(PIoCompletionRefCtx(LWrap));
 end;
 
-function TFpTlsStream.AsyncWrite(ABuf: Pointer; ALen: UInt32;
+function TTlsPasStream.AsyncWrite(ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LView: TBytes;
@@ -2857,28 +2857,24 @@ begin
     Exit; { 单挂起契约 }
   if FDead then
   begin
-    ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSFP_ERR_IO, AContext);
+    ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSPAS_ERR_IO, AContext);
     Exit(True);
   end;
   { 整段先封队（dataplane 缓冲有界，瞬态 ~1.06× 可接受）；
     冲刷完成后一次回调总长。缓冲所有权：调用方持有至回调，
-    本层立即拷贝成记录队列，不引用调用方内存跨重试。
-    先压实已冲尽的残留队列：否则下面的 off 重置会指向旧记录，
-    重发即对端序列号错乱（实测 sing-box bad record MAC）。 }
-  if FNetTxOff < Length(FNetTx) then
+    本层立即拷贝成记录队列，不引用调用方内存跨重试。 }
+  if FNetTxBuf.Available > 0 then
   begin
     { 前序写未冲尽（close_notify 残留等）：拒绝重复提交 }
     Exit;
   end;
-  FNetTx := nil;
-  FNetTxOff := 0;
   SetLength(LView, ALen);
   Move(ABuf^, LView[0], ALen);
   try
     SealPlainToQueue(LView);
   except
     FDead := True;
-    ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSFP_ERR_IO, AContext);
+    ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSPAS_ERR_IO, AContext);
     Exit(True);
   end;
   FWriteTotal := Integer(ALen);
@@ -2889,7 +2885,7 @@ begin
   Result := True;
 end;
 
-function TFpTlsStream.AsyncWriteRef(ABuf: Pointer; ALen: UInt32;
+function TTlsPasStream.AsyncWriteRef(ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletionRef; AContext: Pointer): Boolean;
 var
   LWrap: Pointer;
@@ -2900,7 +2896,7 @@ begin
     Dispose(PIoCompletionRefCtx(LWrap));
 end;
 
-function TFpTlsStream.AsyncReadTimeout(ABuf: Pointer; ALen: UInt32;
+function TTlsPasStream.AsyncReadTimeout(ABuf: Pointer; ALen: UInt32;
   const ADeadline: TDeadline; ACallback: TIoCompletion;
   AContext: Pointer): Boolean;
 begin
@@ -2911,7 +2907,7 @@ begin
     Exit;
   if FDead then
   begin
-    ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSFP_ERR_IO, AContext);
+    ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSPAS_ERR_IO, AContext);
     Exit(True);
   end;
   FReadBuf := ABuf;
@@ -2925,11 +2921,11 @@ begin
   Pump;
   if FReadPending and (FPlainOutBuf.Available = 0) and not FEofIn and
      not FDead and not FRecvArmed then
-    DeliverRead(ASYNC_TLSFP_ERR_IO); { 臂挂失败 }
+    DeliverRead(ASYNC_TLSPAS_ERR_IO); { 臂挂失败 }
   Result := True;
 end;
 
-function TFpTlsStream.AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32;
+function TTlsPasStream.AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32;
   const ADeadline: TDeadline; ACallback: TIoCompletion;
   AContext: Pointer): Boolean;
 begin
@@ -2937,23 +2933,23 @@ begin
   Result := AsyncWrite(ABuf, ALen, ACallback, AContext);
 end;
 
-function DefaultAsyncTlsPasClientOptions: TAsyncTlsFpClientOptions;
+function DefaultAsyncTlsFpClientOptions: TAsyncTlsPasClientOptions;
 begin
-  Result := DefaultAsyncTlsFpClientOptions;
+  Result := DefaultAsyncTlsPasClientOptions;
 end;
 
-function AsyncTlsPasUpgrade(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream;
-  const AOptions: TAsyncTlsFpClientOptions; ACallback: TAsyncTlsFpConnectCallback;
+function AsyncTlsFpUpgrade(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream;
+  const AOptions: TAsyncTlsPasClientOptions; ACallback: TAsyncTlsPasConnectCallback;
   AContext: Pointer): Boolean;
 begin
-  Result := AsyncTlsFpUpgrade(ALoop, AStream, AOptions, ACallback, AContext);
+  Result := AsyncTlsPasUpgrade(ALoop, AStream, AOptions, ACallback, AContext);
 end;
 
-function AsyncTlsPasConnect(const ALoop: TAsyncLoop; const AHost: string;
-  const APort: UInt16; const AOptions: TAsyncTlsFpClientOptions;
-  ACallback: TAsyncTlsFpConnectCallback; AContext: Pointer): Boolean;
+function AsyncTlsFpConnect(const ALoop: TAsyncLoop; const AHost: string;
+  const APort: UInt16; const AOptions: TAsyncTlsPasClientOptions;
+  ACallback: TAsyncTlsPasConnectCallback; AContext: Pointer): Boolean;
 begin
-  Result := AsyncTlsFpConnect(ALoop, AHost, APort, AOptions, ACallback, AContext);
+  Result := AsyncTlsPasConnect(ALoop, AHost, APort, AOptions, ACallback, AContext);
 end;
 
 initialization

@@ -14,8 +14,10 @@ uses
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.kex,
   nextpas.core.ssh.kex.curve25519,
+  nextpas.core.ssh.kex.dhgroup14,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.hash,
+  nextpas.core.crypto.bigint,
   nextpas.core.test;
 
 function HexToBytes(const AHex: string): TBytes;
@@ -427,6 +429,110 @@ begin
       end;
     end;
     CheckTrue(LRaised, 'wrong reply msg must raise');
+  end);
+
+  LSuite.Test('dh group14 negotiation picks fallback when curve25519 unavailable', procedure
+  var
+    LPeer: TSshPeerKexInit;
+    LNeg: TSshNegotiated;
+  begin
+    LPeer := SshParseKexInit(CraftKexInitPayload(['diffie-hellman-group14-sha256']));
+    LNeg := SshNegotiate(LPeer);
+    CheckEqual('diffie-hellman-group14-sha256', LNeg.KexAlg);
+    { 当服务端同时提供 curve25519 与 group14，客户端优先 curve25519 }
+    LPeer := SshParseKexInit(CraftKexInitPayload(
+      ['diffie-hellman-group14-sha256', 'curve25519-sha256']));
+    LNeg := SshNegotiate(LPeer);
+    CheckEqual('curve25519-sha256', LNeg.KexAlg);
+  end);
+
+  LSuite.Test('dh group14 client exchange against simulated server', procedure
+  var
+    LClient: TSshKexDHGroup14;
+    LPrime, LGen, LSrvPriv, LSrvPub, LShared, LInit, LClientE: TBytes;
+    LHostKeyBlob, LSigBlob, LReply: TBytes;
+    LW: TsshWriter;
+    LR: TsshReader;
+    LGotK, LGotH, LGotHost, LGotSig: TBytes;
+    LHInput: TBytes;
+    LErr: string;
+    LC, LS: string;
+    LIc, LIs: TBytes;
+    LRaised: Boolean;
+  begin
+    LPrime := SshDHGroup14Prime;
+    CheckEqual(256, Length(LPrime));
+    LGen := SshDHGroup14Generator;
+    CheckEqual(1, Length(LGen));
+    CheckEqual(2, LGen[0]);
+
+    LClient := TSshKexDHGroup14.Create;
+    try
+      CheckEqual('diffie-hellman-group14-sha256', LClient.AlgorithmName);
+      LInit := LClient.BuildInitPayload;
+      CheckTrue(Length(LInit) > 5, 'dh init must carry mpint');
+      { 提取 e }
+      LR := TsshReader.Create(LInit);
+      try
+        LR.ReadByte;
+        LClientE := LR.ReadMPInt;
+      finally
+        LR.Free;
+      end;
+      CheckTrue(Length(LClientE) > 0, 'e not empty');
+
+      { 模拟服务端：随机私钥 32 字节，f = g^srvPriv mod p }
+      LSrvPriv := PatternBytes($33, 32);
+      CheckTrue(TryBigIntModExpFromUnsignedBytes(LGen, LSrvPriv, LPrime, LSrvPub, LErr), 'srv pub');
+      LHostKeyBlob := PatternBytes($BE, 48);
+      LSigBlob := PatternBytes($5A, 20);
+      LW := TsshWriter.Create(512);
+      try
+        LW.PutByte(SSH_MSG_KEX_ECDH_REPLY);
+        LW.PutStringBytes(LHostKeyBlob);
+        LW.PutMPInt(LSrvPub);
+        LW.PutStringBytes(LSigBlob);
+        LReply := LW.ToBytes;
+      finally
+        LW.Free;
+      end;
+
+      LC := 'SSH-2.0-NextPas_Test';
+      LS := 'SSH-2.0-OpenSSH_9.0';
+      LIc := HexToBytes('1112131415');
+      LIs := HexToBytes('2122232425');
+
+      CheckTrue(LClient.ProcessReply(LReply, LC, LS, LIc, LIs,
+        LGotK, LGotH, LGotHost, LGotSig));
+      { K 独立重算：e^srvPriv (交换律) 应等于 LGotK = f^cliPriv }
+      CheckTrue(TryBigIntModExpFromUnsignedBytes(LClientE, LSrvPriv, LPrime, LShared, LErr));
+      CheckEqual(BytesToHex(LShared), BytesToHex(LGotK), 'K via server priv matches');
+
+      LHInput := SshBuildDHGroup14HashInput(LC, LS, LIc, LIs,
+        LHostKeyBlob, LClientE, LSrvPub, LGotK);
+      CheckEqual(BytesToHex(SHA256(LHInput)), BytesToHex(LGotH), 'H dh');
+
+      { 错误：f 越界 }
+      LW := TsshWriter.Create(512);
+      try
+        LW.PutByte(SSH_MSG_KEX_ECDH_REPLY);
+        LW.PutStringBytes(LHostKeyBlob);
+        LW.PutMPInt(PatternBytes($00, 0)); // empty f
+        LW.PutStringBytes(LSigBlob);
+        LReply := LW.ToBytes;
+      finally
+        LW.Free;
+      end;
+      LRaised := False;
+      try
+        LClient.ProcessReply(LReply, LC, LS, LIc, LIs, LGotK, LGotH, LGotHost, LGotSig);
+      except
+        on E: ESSHError do LRaised := True;
+      end;
+      CheckTrue(LRaised, 'empty f must raise');
+    finally
+      LClient.Free;
+    end;
   end);
 
   LRunner := TSuiteRunner.Create('nextpas.core.ssh.kex');

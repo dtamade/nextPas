@@ -65,6 +65,11 @@ function TryChaCha20Poly1305DecryptCombinedBuf(
   ADest: PByte; ADestLen: Integer
 ): Boolean;
 
+function TryChaCha20Poly1305EncryptToBuf(
+  const AKey, ANonce: TBytes; const AAAD: TBytes;
+  APlain: PByte; APlainLen: Integer;
+  ADest: PByte; ADestLen: Integer): Boolean;
+
 {** @desc 裸 Poly1305：对 AMacData 整体计算 16 字节 tag，无 RFC 8439 的 pad16
  *       分节与长度块。OpenSSH chachapoly（tag 直接覆盖 encLen||ct）等非标准
  *       AEAD 组装方使用。AKey 为一次性 32B poly key *}
@@ -1431,6 +1436,59 @@ begin
   if LCipherLen > 0 then
     if not ChaCha20XorTo(AKey, ANonce, 1, AEncrypted, LCipherLen, ADest) then
       Exit(False);
+  Result := True;
+end;
+
+function TryChaCha20Poly1305EncryptToBuf(
+  const AKey, ANonce: TBytes; const AAAD: TBytes;
+  APlain: PByte; APlainLen: Integer;
+  ADest: PByte; ADestLen: Integer): Boolean;
+var
+  LBlock0: TBytes;
+  LPolyCtx: TPoly1305Ctx;
+  LPadBlock: array[0..15] of Byte;
+  LOffset: Integer;
+begin
+  Result := False;
+  if (APlain = nil) and (APlainLen > 0) then Exit;
+  if (ADest = nil) and (APlainLen + 16 > 0) then Exit;
+  if ADestLen < APlainLen + 16 then Exit;
+  if Length(AKey) <> CHACHA20_KEY_SIZE then Exit;
+  if Length(ANonce) <> CHACHA20_NONCE_SIZE then Exit;
+  LBlock0 := ChaCha20Block(AKey, ANonce, 0);
+  if APlainLen > 0 then
+    if not ChaCha20XorTo(AKey, ANonce, 1, APlain, APlainLen, ADest) then
+      Exit(False);
+  Poly1305Init(LPolyCtx, @LBlock0[0]);
+  LOffset := 0;
+  while LOffset + 16 <= Length(AAAD) do
+  begin
+    Poly1305Update(LPolyCtx, @AAAD[LOffset], UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < Length(AAAD) then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move(AAAD[LOffset], LPadBlock[0], Length(AAAD) - LOffset);
+    Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  end;
+  LOffset := 0;
+  while LOffset + 16 <= APlainLen do
+  begin
+    Poly1305Update(LPolyCtx, ADest + LOffset, UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < APlainLen then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move((ADest + LOffset)^, LPadBlock[0], APlainLen - LOffset);
+    Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  end;
+  FillChar(LPadBlock, 16, 0);
+  PUInt64(@LPadBlock[0])^ := UInt64(Length(AAAD));
+  PUInt64(@LPadBlock[8])^ := UInt64(APlainLen);
+  Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  Poly1305Finish(LPolyCtx, ADest + APlainLen);
   Result := True;
 end;
 

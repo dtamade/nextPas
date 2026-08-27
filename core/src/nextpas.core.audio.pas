@@ -15,7 +15,13 @@ uses
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.aiff,
   nextpas.core.audio.codec.meta,
-  nextpas.core.audio.codec.registry;
+  nextpas.core.audio.codec.registry,
+  nextpas.core.audio.resample,
+  nextpas.core.audio.resample.sinc,
+  nextpas.core.audio.mix,
+  nextpas.core.audio.dsp.filters,
+  nextpas.core.audio.dsp.dynamics,
+  nextpas.core.audio.dsp.fft;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -46,6 +52,12 @@ type
   IAudioEncoder = nextpas.core.audio.codec.intf.IAudioEncoder;
   TAudioEncodeOptions = nextpas.core.audio.codec.intf.TAudioEncodeOptions;
   TDecoderFactory = nextpas.core.audio.codec.registry.TDecoderFactory;
+
+  TResampleQuality = nextpas.core.audio.resample.sinc.TResampleQuality;
+  TBiquadType = nextpas.core.audio.dsp.filters.TBiquadType;
+  TBiquad = nextpas.core.audio.dsp.filters.TBiquad;
+  TCompressor = nextpas.core.audio.dsp.dynamics.TCompressor;
+  TSingleArray = nextpas.core.audio.dsp.fft.TSingleArray;
 
 { ---- base forwarding ---- }
 
@@ -90,6 +102,23 @@ procedure AudioRegisterDecoder(AFactory: TDecoderFactory); inline;
 function TryDecodeWhole(ADecoder: IAudioDecoder; const AStream: IStream; out ABuffer: TAudioBuffer): Boolean; inline;
 function TryDecodeWholeFile(const APath: string; out ABuffer: TAudioBuffer; out ATags: TAudioTags): Boolean; inline;
 function AudioOpenFileStreaming(const APath: string): IAudioSource; inline;
+
+{ ---- resample/mix/dsp forwarding (PR5) ---- }
+
+function AudioResampleLinear(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer; inline;
+function CreateLinearResampler: IAudioResampler; inline;
+function CreateSincResampler(AQuality: TResampleQuality = rsGood): IAudioResampler; inline;
+
+procedure MixInto(var ADst: TAudioBuffer; const ASrc: TAudioBuffer; AGain: Single; AOffset: Integer); inline;
+procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single); inline;
+procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single); inline;
+function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single; inline;
+function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single; inline;
+
+function WindowHann(N, I: Integer): Single; inline;
+procedure FFT(var ARe, AIm: array of Single); inline;
+procedure IFFT(var ARe, AIm: array of Single); inline;
+function IsPowerOfTwo(N: Integer): Boolean; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -253,6 +282,42 @@ function CreateWavEncoder: IAudioEncoder;
 begin
   Result := nextpas.core.audio.codec.wav.CreateWavEncoder;
 end;
+
+function AudioResampleLinear(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer;
+begin Result := nextpas.core.audio.resample.AudioResampleLinear(AInput, ANewRate); end;
+
+function CreateLinearResampler: IAudioResampler;
+begin Result := nextpas.core.audio.resample.CreateLinearResampler; end;
+
+function CreateSincResampler(AQuality: TResampleQuality): IAudioResampler;
+begin Result := nextpas.core.audio.resample.sinc.CreateSincResampler(AQuality); end;
+
+procedure MixInto(var ADst: TAudioBuffer; const ASrc: TAudioBuffer; AGain: Single; AOffset: Integer);
+begin nextpas.core.audio.mix.MixInto(ADst, ASrc, AGain, AOffset); end;
+
+procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
+begin nextpas.core.audio.mix.ApplyGain(ABuf, AGain); end;
+
+procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
+begin nextpas.core.audio.mix.ApplyGainRamp(ABuf, AStartGain, AEndGain); end;
+
+function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
+begin Result := nextpas.core.audio.mix.NormalizePeak(ABuf, ATarget); end;
+
+function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
+begin Result := nextpas.core.audio.mix.NormalizeRMS(ABuf, ATarget); end;
+
+function WindowHann(N, I: Integer): Single;
+begin Result := nextpas.core.audio.dsp.fft.WindowHann(N, I); end;
+
+procedure FFT(var ARe, AIm: array of Single);
+begin nextpas.core.audio.dsp.fft.FFT(ARe, AIm); end;
+
+procedure IFFT(var ARe, AIm: array of Single);
+begin nextpas.core.audio.dsp.fft.IFFT(ARe, AIm); end;
+
+function IsPowerOfTwo(N: Integer): Boolean;
+begin Result := nextpas.core.audio.dsp.fft.IsPowerOfTwo(N); end;
 
 procedure AudioRegisterDecoderPlaceholder;
 begin
