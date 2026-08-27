@@ -12946,4 +12946,7 @@ initialization
   SetExceptionMask(GetExceptionMask + [exInvalidOp, exZeroDivide,
     exOverflow, exUnderflow, exPrecision]);
   __c2p_static_fill_music888_vorbisdec;
+finalization
+  if vdec_imdct_buf2 <> nil then FreeMem(vdec_imdct_buf2);
+  if vdec_res_pc <> nil then FreeMem(vdec_res_pc);
 end.
