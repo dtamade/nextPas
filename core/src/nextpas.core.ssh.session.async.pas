@@ -138,6 +138,12 @@ type
     FSessionId: TBytes;
     FKexCurve: TSshKexCurve25519;
     FKexDH: TSshKexDHGroup14;
+    // agent
+    FAgentClient: TSshAgentClient;
+    FAgentIds: TSshAgentIdentityArray;
+    FAgentIdx: Integer;
+    FCurrentAgentBlob: TBytes;
+    FCurrentAgentAlg: string;
     // expect helper
     FExpectAccept: array of Byte;
     FExpectCb: TAsyncExpectHandler;
@@ -160,9 +166,13 @@ type
     procedure OnAuthPasswordResult(const APayload: TBytes; AErr: ESSHError);
     procedure OnAuthPubkeyProbeResult(const APayload: TBytes; AErr: ESSHError);
     procedure OnAuthPubkeyResult(const APayload: TBytes; AErr: ESSHError);
+    procedure OnAgentProbeResult(const APayload: TBytes; AErr: ESSHError);
+    procedure OnAgentSignResult(const APayload: TBytes; AErr: ESSHError);
     // auth helpers
     procedure AuthWithPassword;
     procedure AuthWithPrivateKey;
+    procedure AuthWithAgent;
+    procedure TryNextAgentIdentity;
     procedure TryEnableDelayedAndSucceed;
     // expect helper
     function ExpectOneOfAsync(const AAccept: array of Byte; const AHandler: TAsyncExpectHandler): Boolean;
@@ -215,9 +225,25 @@ end;
 destructor TAsyncSshSession.Destroy;
 begin
   Close;
+  FreeAndNil(FTransport);
   FreeAndNil(FKnownHosts);
   inherited;
 end;
+
+type
+  PExecPost = ^TExecPost;
+  TExecPost = record
+    Transport: TAsyncSshTransport;
+    Command: string;
+    InitialWindow: UInt32;
+    MaxPacket: UInt32;
+    TimeoutMs: Integer;
+    Callback: TProcSshExecResult;
+    Context: Pointer;
+  end;
+
+procedure ExecPostCb(AContext: Pointer); forward;
+procedure ExecPostDiscard(AContext: Pointer); forward;
 
 function TAsyncSshSession.GetConnected: Boolean;
 begin
@@ -269,7 +295,28 @@ begin
   end;
 end;
 
+procedure ExecPostCb(AContext: Pointer);
+var P: PExecPost;
+begin
+  P := PExecPost(AContext);
+  try
+    SshAsyncRunExec(P^.Transport, P^.Command, P^.InitialWindow, P^.MaxPacket, P^.TimeoutMs, P^.Callback, P^.Context);
+  finally
+    Dispose(P);
+  end;
+end;
+
+procedure ExecPostDiscard(AContext: Pointer);
+var P: PExecPost;
+begin
+  P := PExecPost(AContext);
+  if Assigned(P^.Callback) then
+    P^.Callback(Default(TSshExecResult), ESSHError.Create(sekIO, 'ssh session: loop closed before exec'), P^.Context);
+  Dispose(P);
+end;
+
 function TAsyncSshSession.ExecAsync(const ACommand: string; ACallback: TProcSshExecResult): Boolean;
+var P: PExecPost;
 begin
   if not FAuthenticated then
   begin
@@ -283,7 +330,29 @@ begin
       ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: closed'), nil);
     Exit(False);
   end;
-  Result := SshAsyncRunExec(FTransport, ACommand, FOptions.InitialWindowSize, FOptions.MaxPacket, FOptions.ExecTimeoutMs, ACallback, nil);
+  if (FLoop = nil) or (FTransport = nil) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: invalid state'), nil);
+    Exit(False);
+  end;
+  New(P);
+  P^.Transport := FTransport;
+  P^.Command := ACommand;
+  P^.InitialWindow := FOptions.InitialWindowSize;
+  P^.MaxPacket := FOptions.MaxPacket;
+  P^.TimeoutMs := FOptions.ExecTimeoutMs;
+  P^.Callback := ACallback;
+  P^.Context := nil;
+  try
+    FLoop.PostEx(@ExecPostCb, P, @ExecPostDiscard);
+    Result := True;
+  except
+    Dispose(P);
+    if Assigned(ACallback) then
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: post exec failed'), nil);
+    Result := False;
+  end;
 end;
 
 { TAsyncConnector }
@@ -303,10 +372,16 @@ var Cb: TSshAsyncConnectCb; Ctx: Pointer;
 begin
   Cb := FUserCb; Ctx := FUserCtx;
   FUserCb := nil;
+  FreeAndNil(FAgentClient);
   FreeAndNil(FKexCurve);
   FreeAndNil(FKexDH);
+  if FSession <> nil then
+  begin
+    // session owns transport after OnDial; avoid double free
+    FSession.FTransport := nil;
+    FreeAndNil(FSession);
+  end;
   if FTransport <> nil then FreeAndNil(FTransport);
-  if FSession <> nil then FreeAndNil(FSession);
   if Assigned(Cb) then Cb(nil, AErr, Ctx) else if AErr <> nil then AErr.Free;
   Free;
 end;
@@ -316,6 +391,7 @@ var Cb: TSshAsyncConnectCb; Ctx: Pointer; Sess: ISshAsyncSession;
 begin
   Cb := FUserCb; Ctx := FUserCtx;
   FUserCb := nil;
+  FreeAndNil(FAgentClient);
   FreeAndNil(FKexCurve);
   FreeAndNil(FKexDH);
   Sess := FSession as ISshAsyncSession;
@@ -501,22 +577,20 @@ end;
 
 procedure TAsyncConnector.DoAuth;
 begin
-  // priority: privatekey > password ; agent attempted via sync fallback if needed
-  if FOptions.PrivateKeyData <> '' then
+  if FOptions.AgentSocketPath <> '' then
+    AuthWithAgent
+  else if FOptions.PrivateKeyData <> '' then
     AuthWithPrivateKey
   else if FOptions.Password <> '' then
     AuthWithPassword
-  else if FOptions.AgentSocketPath <> '' then
-  begin
-    // agent MVP: fallback to password error if no other method
-    Fail(ESSHError.Create(sekAuth, 'ssh async: agent auth not yet implemented in async MVP, use PrivateKeyData/Password'));
-  end
   else
     Fail(ESSHError.Create(sekAuth, 'ssh async: no auth method configured'));
 end;
 
 procedure DoAuthPasswordSendDone(AErr: ESSHError; AContext: Pointer); forward;
 procedure DoAuthPubkeySendDone(AErr: ESSHError; AContext: Pointer); forward;
+procedure DoAgentProbeSendDone(AErr: ESSHError; AContext: Pointer); forward;
+procedure DoAgentSignedSendDone(AErr: ESSHError; AContext: Pointer); forward;
 
 procedure TAsyncConnector.AuthWithPassword;
 begin
@@ -564,6 +638,53 @@ begin
     Fail(ESSHError.Create(sekIO, 'ssh async pubkey send failed'));
 end;
 
+procedure TAsyncConnector.AuthWithAgent;
+var LOk: Boolean;
+begin
+  try
+    FAgentClient := SshAgentConnect(FOptions.AgentSocketPath);
+  except
+    on E: ESSHError do begin Fail(E); Exit; end;
+    on E: Exception do begin Fail(ESSHError.Create(sekIO, E.Message)); Exit; end;
+  end;
+  LOk := False;
+  try
+    LOk := FAgentClient.ListIdentities(FAgentIds);
+  except
+    on E: ESSHError do begin Fail(E); Exit; end;
+    on E: Exception do begin Fail(ESSHError.Create(sekIO, E.Message)); Exit; end;
+  end;
+  if not LOk then begin Fail(ESSHError.Create(sekAuth, 'ssh async: agent list failed')); Exit; end;
+  if Length(FAgentIds)=0 then
+  begin
+    if FOptions.PrivateKeyData<>'' then begin FreeAndNil(FAgentClient); AuthWithPrivateKey; Exit; end;
+    if FOptions.Password<>'' then begin FreeAndNil(FAgentClient); AuthWithPassword; Exit; end;
+    Fail(ESSHError.Create(sekAuth, 'ssh async: agent has no identities')); Exit;
+  end;
+  FAgentIdx := 0;
+  TryNextAgentIdentity;
+end;
+
+procedure TAsyncConnector.TryNextAgentIdentity;
+var LBlob: TBytes; LAlg: string;
+begin
+  while FAgentIdx < Length(FAgentIds) do
+  begin
+    LBlob := FAgentIds[FAgentIdx].Blob;
+    LAlg := FAgentIds[FAgentIdx].AlgName;
+    if LAlg='' then begin Inc(FAgentIdx); Continue; end;
+    FCurrentAgentBlob := LBlob;
+    FCurrentAgentAlg := LAlg;
+    if not FTransport.AsyncSendPacket(SshBuildAuthPubKeyProbe(FOptions.User, LAlg, LBlob), @DoAgentProbeSendDone, Self) then
+      Fail(ESSHError.Create(sekIO, 'ssh async agent probe send failed'));
+    Exit;
+  end;
+  // exhausted
+  if FOptions.PrivateKeyData<>'' then begin FreeAndNil(FAgentClient); AuthWithPrivateKey; Exit; end;
+  if FOptions.Password<>'' then begin FreeAndNil(FAgentClient); AuthWithPassword; Exit; end;
+  Fail(ESSHError.Create(sekAuth, 'ssh async: agent publickey rejected'));
+end;
+
 // To keep handshake simple, we implement explicit Expect callbacks for auth results
 procedure TAsyncConnector.OnAuthPasswordResult(const APayload: TBytes; AErr: ESSHError);
 begin
@@ -579,7 +700,7 @@ end;
 
 procedure TAsyncConnector.OnAuthPubkeyProbeResult(const APayload: TBytes; AErr: ESSHError);
 begin
-  // not used in this MVP (pubkey signed directly)
+  // not used (direct signed path)
 end;
 
 procedure TAsyncConnector.OnAuthPubkeyResult(const APayload: TBytes; AErr: ESSHError);
@@ -592,6 +713,45 @@ begin
     Fail(ESSHError.Create(sekAuth, 'ssh session: publickey rejected'));
 end;
 
+procedure TAsyncConnector.OnAgentProbeResult(const APayload: TBytes; AErr: ESSHError);
+var LFlags: UInt32; LSignedData, LSigBlob: TBytes;
+begin
+  if AErr<>nil then begin Fail(AErr); Exit; end;
+  if Length(APayload)=0 then begin Fail(ESSHError.Create(sekProtocol,'ssh async: empty agent probe reply')); Exit; end;
+  case APayload[0] of
+    SSH_MSG_USERAUTH_SUCCESS:
+      begin FreeAndNil(FAgentClient); TryEnableDelayedAndSucceed; Exit; end;
+    SSH_MSG_USERAUTH_FAILURE:
+      begin Inc(FAgentIdx); TryNextAgentIdentity; Exit; end;
+    SSH_MSG_USERAUTH_PK_OK:
+      begin
+        LFlags := SshAgentKeyBlobToSignFlags(FCurrentAgentBlob);
+        LSignedData := SshAuthSignedData(FSessionId, FOptions.User, FCurrentAgentAlg, FCurrentAgentBlob);
+        try
+          if not FAgentClient.Sign(FCurrentAgentBlob, LSignedData, LFlags, LSigBlob) then
+          begin Inc(FAgentIdx); TryNextAgentIdentity; Exit; end;
+        except
+          on E: ESSHError do begin Inc(FAgentIdx); TryNextAgentIdentity; Exit; end;
+        end;
+        if not FTransport.AsyncSendPacket(SshBuildAuthPubKeySigned(FOptions.User, FCurrentAgentAlg, FCurrentAgentBlob, LSigBlob), @DoAgentSignedSendDone, Self) then
+          Fail(ESSHError.Create(sekIO,'ssh async agent signed send failed'));
+        Exit;
+      end;
+  else
+    Inc(FAgentIdx); TryNextAgentIdentity;
+  end;
+end;
+
+procedure TAsyncConnector.OnAgentSignResult(const APayload: TBytes; AErr: ESSHError);
+begin
+  if AErr<>nil then begin Fail(AErr); Exit; end;
+  if Length(APayload)=0 then begin Fail(ESSHError.Create(sekProtocol,'ssh async: empty agent sign reply')); Exit; end;
+  if APayload[0]=SSH_MSG_USERAUTH_SUCCESS then
+  begin FreeAndNil(FAgentClient); TryEnableDelayedAndSucceed; end
+  else
+  begin Inc(FAgentIdx); TryNextAgentIdentity; end;
+end;
+
 procedure TAsyncConnector.TryEnableDelayedAndSucceed;
 begin
   if SshCompressionIsDelayed(FNeg.CompCs) or SshCompressionIsDelayed(FNeg.CompSc) then
@@ -599,7 +759,7 @@ begin
   FSession.FAuthenticated := True;
   FSession.FNegotiated := FNeg;
   FSession.FSessionId := FSessionId;
-  // fingerprint already set
+  FreeAndNil(FAgentClient);
   Succeed;
 end;
 
@@ -665,6 +825,24 @@ begin
   if AErr <> nil then begin Self.Fail(AErr); Exit; end;
   if not Self.ExpectOneOfAsync([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE], @Self.OnAuthPubkeyResult) then
     Self.Fail(ESSHError.Create(sekIO, 'ssh async expect auth result failed'));
+end;
+
+procedure DoAgentProbeSendDone(AErr: ESSHError; AContext: Pointer);
+var Self: TAsyncConnector;
+begin
+  Self := TAsyncConnector(AContext);
+  if AErr <> nil then begin Self.Fail(AErr); Exit; end;
+  if not Self.ExpectOneOfAsync([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE, SSH_MSG_USERAUTH_PK_OK], @Self.OnAgentProbeResult) then
+    Self.Fail(ESSHError.Create(sekIO, 'ssh async expect agent probe result failed'));
+end;
+
+procedure DoAgentSignedSendDone(AErr: ESSHError; AContext: Pointer);
+var Self: TAsyncConnector;
+begin
+  Self := TAsyncConnector(AContext);
+  if AErr <> nil then begin Self.Fail(AErr); Exit; end;
+  if not Self.ExpectOneOfAsync([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE], @Self.OnAgentSignResult) then
+    Self.Fail(ESSHError.Create(sekIO, 'ssh async expect agent signed result failed'));
 end;
 
 function SshAsyncConnect(const ALoop: TAsyncLoop; const AOptions: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer): Boolean;
