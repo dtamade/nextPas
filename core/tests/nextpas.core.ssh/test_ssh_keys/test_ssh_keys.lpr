@@ -16,8 +16,11 @@ uses
   nextpas.core.ssh.rsa,
   nextpas.core.crypto.ed25519,
   nextpas.core.crypto.hash,
+  nextpas.core.crypto.bcrypt_pbkdf,
+  nextpas.core.ssh.cipher,
   nextpas.core.encoding.base64,
   ssh_rsa_kat,
+  ssh_bcrypt_kat,
   nextpas.core.test;
 
 function PatternBytes(APattern: Byte; ACount: Integer): TBytes;
@@ -259,7 +262,8 @@ begin
     SetLength(LSeed, 32);
     FillChar(LSeed[0], 32, $6E);
     LPub := Ed25519PublicKeyFromPrivate(LSeed);
-    LContainer := CraftContainer('aes256-ctr', 'bcrypt',
+    { aes128-ctr 不是 openssh-key-v1 加密容器支持的 cipher，仅 aes256-ctr 受支持 }
+    LContainer := CraftContainer('aes128-ctr', 'bcrypt',
       1, Ed25519PubBlob(LPub), MakePrivSection('ssh-ed25519', 1, LPub, LSeed));
     ExpectKindError(PemOf(LContainer), sekUnsupported, 'encrypted container');
   end);
@@ -347,6 +351,194 @@ begin
         LRaised := True;
     end;
     CheckTrue(LRaised, 'missing markers must raise');
+  end);
+
+  LSuite.Test('bcrypt_pbkdf five vectors match python-bcrypt', procedure
+  var
+    I: Integer;
+    LPw, LSalt, LKey, LWant: TBytes;
+    LErr: string;
+  begin
+    for I := 0 to High(BCRYPT_VECTORS) do
+    begin
+      LPw := StringToBytes(BCRYPT_VECTORS[I].Pass);
+      LSalt := StringToBytes(BCRYPT_VECTORS[I].Salt);
+      CheckTrue(TryBcryptPbkdf(LPw, LSalt, BCRYPT_VECTORS[I].KeyLen,
+        BCRYPT_VECTORS[I].Rounds, LKey, LErr),
+        'pbkdf should succeed vector ' + IntToStr(I));
+      LWant := HexToBytes(BCRYPT_VECTORS[I].WantHex);
+      CheckEqual(BytesToHex(LWant), BytesToHex(LKey),
+        'vector ' + IntToStr(I) + ' mismatch');
+    end;
+  end);
+
+  LSuite.Test('encrypted ed25519 container decrypts with correct passphrase', procedure
+  var
+    LSeed, LPub, LPrivRaw, LContainer, LPubOut: TBytes;
+    LKey: TSshPrivateKey;
+    LOk: Boolean;
+    LSaltHex: string;
+    LPw: string;
+    LRounds: Cardinal;
+    LPad, I: Integer;
+    LPadded, LDerived, LAesKey, LAiv, LEnc, LKdfOpt: TBytes;
+    LW2, LW: TsshWriter;
+    LErr: string;
+  begin
+    SetLength(LSeed, 32);
+    FillChar(LSeed[0], 32, $42);
+    LPub := Ed25519PublicKeyFromPrivate(LSeed);
+    LPrivRaw := MakePrivSection('ssh-ed25519', $A5A5A5A5, LPub, LSeed);
+    { pad to 16 }
+    LPadded := Copy(LPrivRaw, 0, Length(LPrivRaw));
+    LPad := (16 - (Length(LPadded) mod 16)) mod 16;
+    for I := 1 to LPad do
+    begin
+      SetLength(LPadded, Length(LPadded) + 1);
+      LPadded[High(LPadded)] := Byte(I);
+    end;
+    LPw := 's3cret!';
+    LSaltHex := 'salty__12345678';
+    LRounds := 16;
+    CheckTrue(TryBcryptPbkdf(StringToBytes(LPw), StringToBytes(LSaltHex), 48, LRounds, LDerived, LErr));
+    SetLength(LAesKey, 32);
+    SetLength(LAiv, 16);
+    Move(LDerived[0], LAesKey[0], 32);
+    Move(LDerived[32], LAiv[0], 16);
+    LEnc := SshAesCtrCrypt(LAesKey, LAiv, LPadded);
+    LW2 := TsshWriter.Create(64);
+    try
+      LW2.PutStringBytes(StringToBytes(LSaltHex));
+      LW2.PutUInt32(LRounds);
+      LKdfOpt := LW2.ToBytes;
+    finally
+      LW2.Free;
+    end;
+    LContainer := CraftContainer('aes256-ctr', 'bcrypt', 1, Ed25519PubBlob(LPub), LEnc);
+    { patch kdfoptions: CraftContainer writes empty string, replace with real }
+    { We built CraftContainer with empty, need to rebuild with correct kdfoptions }
+    LW := TsshWriter.Create(512);
+    try
+      LW.PutRaw(StringToBytes('openssh-key-v1'));
+      LW.PutByte(0);
+      LW.PutStringText('aes256-ctr');
+      LW.PutStringText('bcrypt');
+      LW.PutStringBytes(LKdfOpt);
+      LW.PutUInt32(1);
+      LW.PutStringBytes(Ed25519PubBlob(LPub));
+      LW.PutStringBytes(LEnc);
+      LContainer := LW.ToBytes;
+    finally
+      LW.Free;
+    end;
+    LOk := SshLoadPrivateKey(PemOf(LContainer), LKey, LPubOut, LPw);
+    CheckTrue(LOk);
+    CheckEqual(Ord(hkEd25519), Ord(LKey.Kind));
+    CheckTrue(CompareMem(@LSeed[0], @LKey.Ed25519Seed[0], 32), 'seed decrypt roundtrip');
+    { wrong passphrase must fail checkint }
+    ExpectKindError(PemOf(LContainer), sekKeyFormat, 'wrong passphrase should fail');
+  end);
+
+  LSuite.Test('encrypted ed25519 container wrong passphrase raises checkint', procedure
+  var
+    LSeed, LPub, LPrivRaw, LContainer, LPubOut: TBytes;
+    LKey: TSshPrivateKey;
+    LPw: string;
+    LSalt: string;
+    LRounds: Cardinal;
+    LPadded, LDerived, LAesKey, LAiv, LEnc, LKdfOpt: TBytes;
+    LW2, LW: TsshWriter;
+    LErr: string;
+    LPad, I: Integer;
+    LRaised: Boolean;
+  begin
+    SetLength(LSeed, 32);
+    FillChar(LSeed[0], 32, $99);
+    LPub := Ed25519PublicKeyFromPrivate(LSeed);
+    LPrivRaw := MakePrivSection('ssh-ed25519', $12345678, LPub, LSeed);
+    LPadded := Copy(LPrivRaw, 0, Length(LPrivRaw));
+    LPad := (16 - (Length(LPadded) mod 16)) mod 16;
+    for I := 1 to LPad do
+    begin
+      SetLength(LPadded, Length(LPadded) + 1);
+      LPadded[High(LPadded)] := Byte(I);
+    end;
+    LPw := 'correct horse';
+    LSalt := 'testsalt12345678';
+    LRounds := 16;
+    CheckTrue(TryBcryptPbkdf(StringToBytes(LPw), StringToBytes(LSalt), 48, LRounds, LDerived, LErr));
+    SetLength(LAesKey, 32); Move(LDerived[0], LAesKey[0], 32);
+    SetLength(LAiv, 16); Move(LDerived[32], LAiv[0], 16);
+    LEnc := SshAesCtrCrypt(LAesKey, LAiv, LPadded);
+    LW2 := TsshWriter.Create(64);
+    try LW2.PutStringBytes(StringToBytes(LSalt)); LW2.PutUInt32(LRounds); LKdfOpt := LW2.ToBytes; finally LW2.Free; end;
+    LW := TsshWriter.Create(512);
+    try
+      LW.PutRaw(StringToBytes('openssh-key-v1')); LW.PutByte(0);
+      LW.PutStringText('aes256-ctr'); LW.PutStringText('bcrypt'); LW.PutStringBytes(LKdfOpt);
+      LW.PutUInt32(1); LW.PutStringBytes(Ed25519PubBlob(LPub)); LW.PutStringBytes(LEnc);
+      LContainer := LW.ToBytes;
+    finally LW.Free; end;
+    LRaised := False;
+    try
+      SshLoadPrivateKey(PemOf(LContainer), LKey, LPubOut, 'wrong passphrase');
+    except
+      on E: ESSHError do LRaised := True;
+    end;
+    CheckTrue(LRaised, 'wrong passphrase must raise');
+  end);
+
+  LSuite.Test('encrypted rsa container decrypts', procedure
+  var
+    LN, LD, LPubBlob, LPrivRaw, LContainer, LPubOut: TBytes;
+    LKey: TSshPrivateKey;
+    LPw, LSalt: string;
+    LRounds: Cardinal;
+    LPadded, LDerived, LAesKey, LAiv, LEnc, LKdfOpt: TBytes;
+    LW2, LW: TsshWriter;
+    LErr: string;
+    LPad, I: Integer;
+  begin
+    LN := KatN; LD := KatD;
+    LPubBlob := RsaPubBlob(HexToBytesKat(KAT_E_HEX), LN);
+    LPrivRaw := MakeRsaPrivSection(7, LN, HexToBytesKat(KAT_E_HEX), LD);
+    LPadded := Copy(LPrivRaw, 0, Length(LPrivRaw));
+    LPad := (16 - (Length(LPadded) mod 16)) mod 16;
+    for I := 1 to LPad do
+    begin SetLength(LPadded, Length(LPadded)+1); LPadded[High(LPadded)] := Byte(I); end;
+    LPw := 'rsa-pass-123';
+    LSalt := 'rsasalttest1234';
+    LRounds := 16;
+    CheckTrue(TryBcryptPbkdf(StringToBytes(LPw), StringToBytes(LSalt), 48, LRounds, LDerived, LErr));
+    SetLength(LAesKey, 32); Move(LDerived[0], LAesKey[0], 32);
+    SetLength(LAiv, 16); Move(LDerived[32], LAiv[0], 16);
+    LEnc := SshAesCtrCrypt(LAesKey, LAiv, LPadded);
+    LW2 := TsshWriter.Create(64);
+    try LW2.PutStringBytes(StringToBytes(LSalt)); LW2.PutUInt32(LRounds); LKdfOpt := LW2.ToBytes; finally LW2.Free; end;
+    LW := TsshWriter.Create(512);
+    try
+      LW.PutRaw(StringToBytes('openssh-key-v1')); LW.PutByte(0);
+      LW.PutStringText('aes256-ctr'); LW.PutStringText('bcrypt'); LW.PutStringBytes(LKdfOpt);
+      LW.PutUInt32(1); LW.PutStringBytes(LPubBlob); LW.PutStringBytes(LEnc);
+      LContainer := LW.ToBytes;
+    finally LW.Free; end;
+    CheckTrue(SshLoadPrivateKey(PemOf(LContainer), LKey, LPubOut, LPw));
+    CheckEqual(Ord(hkRsa), Ord(LKey.Kind));
+    CheckTrue(BytesToHex(LKey.RsaN) = BytesToHex(LN), 'rsa N roundtrip encrypted');
+    CheckTrue(BytesToHex(LKey.RsaD) = BytesToHex(LD), 'rsa D roundtrip encrypted');
+  end);
+
+  LSuite.Test('aes-ctr crypt roundtrip', procedure
+  var
+    LKey, LIV, LPlain, LCipher, LDec: TBytes;
+    I: Integer;
+  begin
+    SetLength(LKey, 32); for I:=0 to 31 do LKey[I]:=Byte(I);
+    SetLength(LIV, 16); for I:=0 to 15 do LIV[I]:=Byte(I*2);
+    SetLength(LPlain, 48); for I:=0 to 47 do LPlain[I]:=Byte(I*3+7);
+    LCipher := SshAesCtrCrypt(LKey, LIV, LPlain);
+    LDec := SshAesCtrCrypt(LKey, LIV, LCipher);
+    CheckEqual(BytesToHex(LPlain), BytesToHex(LDec), 'ctr roundtrip');
   end);
 
   LRunner := TSuiteRunner.Create('nextpas.core.ssh.keys');

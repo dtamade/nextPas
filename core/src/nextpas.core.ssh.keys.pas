@@ -2,9 +2,9 @@ unit nextpas.core.ssh.keys;
 
 {** nextpas.core.ssh - 私钥容器解析。
  *
- * 当前支持：OpenSSH "openssh-key-v1" 未加密容器中的 ssh-ed25519 与
- * ssh-rsa 密钥（ssh-keygen 默认容器格式）。加密容器（bcrypt_pbkdf +
- * aes256-ctr）明确抛 sekUnsupported，属后续 slice（见 goal-tree）。 *}
+ * 支持：OpenSSH "openssh-key-v1" 容器中的 ssh-ed25519 与 ssh-rsa 密钥，
+ * 未加密（cipher none / kdf none）与加密（cipher aes256-ctr / kdf bcrypt +
+ * bcrypt_pbkdf 派生 48 字节 → AES-256-CTR 解密）两种形态。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -29,14 +29,18 @@ type
   end;
 
 {** 解析 PEM 形式的 openssh-key-v1 容器内容。
- * 成功时返回 True 并给出私钥与其公钥 wire blob（用于 publickey 认证）。*}
+ * 成功时返回 True 并给出私钥与其公钥 wire blob（用于 publickey 认证）。
+ * 加密容器需提供口令（APassphrase）；未加密时口令被忽略。*}
 function SshLoadPrivateKey(const AContent: string;
-  out AKey: TSshPrivateKey; out APubBlob: TBytes): Boolean;
+  out AKey: TSshPrivateKey; out APubBlob: TBytes;
+  const APassphrase: string = ''): Boolean;
 
 implementation
 
 uses
-  nextpas.core.encoding.base64;
+  nextpas.core.encoding.base64,
+  nextpas.core.crypto.bcrypt_pbkdf,
+  nextpas.core.ssh.cipher;
 
 { 按 '#' 换行切分（替代 SysUtils 字符串助手的多分隔符 Split）}
 function SplitBase64Junk(const AValue: string): TStringArray;
@@ -92,12 +96,24 @@ begin
     Result := Result + Trim(LLines[I]);
 end;
 
+function StringToBytesPass(const AText: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AText));
+  if Length(AText) > 0 then
+    Move(PByte(PChar(AText))^, Result[0], SizeUInt(Length(AText)));
+end;
+
 function SshLoadPrivateKey(const AContent: string;
-  out AKey: TSshPrivateKey; out APubBlob: TBytes): Boolean;
+  out AKey: TSshPrivateKey; out APubBlob: TBytes;
+  const APassphrase: string = ''): Boolean;
 var
   LBlob: TBytes;
-  LR: TsshReader;
+  LR, LKdfR: TsshReader;
   LCipher, LKdf, LKeyType, LComment: string;
+  LKdfOptions, LSalt, LPassBytes, LDerived, LKey, LIV, LPrivEnc: TBytes;
+  LRounds: UInt32;
+  LErr: string;
   LNKeys: UInt32;
   LPrivSection: TBytes;
   LCheck1, LCheck2: UInt32;
@@ -119,18 +135,59 @@ begin
 
     LCipher := LR.ReadStringText;
     LKdf := LR.ReadStringText;
-    LR.ReadStringBytes;              { kdfoptions }
-    if (LCipher <> 'none') or (LKdf <> 'none') then
+    LKdfOptions := LR.ReadStringBytes;
+    if (LCipher = 'none') and (LKdf = 'none') then
+    begin
+      if Length(LKdfOptions) <> 0 then
+        raise ESSHError.Create(sekKeyFormat, 'ssh keys: kdfoptions must be empty for none');
+    end
+    else if (LCipher = 'aes256-ctr') and (LKdf = 'bcrypt') then
+    begin
+      { 保持外层解析，解密在读出 priv 段后进行 }
+    end
+    else
       raise ESSHError.Create(sekUnsupported,
-        'ssh keys: encrypted openssh containers not supported yet');
+        'ssh keys: unsupported cipher/kdf "' + LCipher + '/' + LKdf + '"');
     LNKeys := LR.ReadUInt32;
     if LNKeys <> 1 then
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: expected exactly one key');
     APubBlob := LR.ReadStringBytes;
-    LPrivSection := LR.ReadStringBytes;
+    LPrivEnc := LR.ReadStringBytes;
   finally
     LR.Free;
   end;
+
+  if (LCipher = 'aes256-ctr') and (LKdf = 'bcrypt') then
+  begin
+    if Length(LKdfOptions) = 0 then
+      raise ESSHError.Create(sekKeyFormat, 'ssh keys: missing bcrypt kdfoptions');
+    LKdfR := TsshReader.Create(LKdfOptions);
+    try
+      LSalt := LKdfR.ReadStringBytes;
+      LRounds := LKdfR.ReadUInt32;
+    finally
+      LKdfR.Free;
+    end;
+    if Length(LSalt) = 0 then
+      raise ESSHError.Create(sekKeyFormat, 'ssh keys: bcrypt salt empty');
+    if LRounds < 1 then
+      raise ESSHError.Create(sekKeyFormat, 'ssh keys: bcrypt rounds must be >= 1');
+    LPassBytes := StringToBytesPass(APassphrase);
+    if Length(LPassBytes) = 0 then
+      raise ESSHError.Create(sekKeyFormat, 'ssh keys: passphrase required for encrypted key');
+    if not TryBcryptPbkdf(LPassBytes, LSalt, 48, LRounds, LDerived, LErr) then
+      raise ESSHError.Create(sekKeyFormat, 'ssh keys: bcrypt_pbkdf failed: ' + LErr);
+    SetLength(LKey, 32);
+    SetLength(LIV, 16);
+    Move(LDerived[0], LKey[0], 32);
+    Move(LDerived[32], LIV[0], 16);
+    { AES-256-CTR：CTR 初值为 IV，全零计数器跨块递增（SshAesCtrCrypt 封装）}
+    LPrivSection := SshAesCtrCrypt(LKey, LIV, LPrivEnc);
+    if (Length(LPrivSection) mod 16) <> 0 then
+      raise ESSHError.Create(sekKeyFormat, 'ssh keys: decrypted priv section not block aligned');
+  end
+  else
+    LPrivSection := LPrivEnc;
 
   LR := TsshReader.Create(LPrivSection);
   try
@@ -148,21 +205,18 @@ begin
         raise ESSHError.Create(sekKeyFormat, 'ssh keys: ed25519 private section too short');
       SetLength(AKey.Ed25519Seed, 32);
       Move(LPrivRaw[0], AKey.Ed25519Seed[0], 32);
-      { 公钥段应与 priv64 后半一致；宽松校验长度即可 }
       if Length(LPubInPriv) <> 32 then
         raise ESSHError.Create(sekKeyFormat, 'ssh keys: ed25519 embedded pubkey not 32 bytes');
     end
     else if LKeyType = 'ssh-rsa' then
     begin
-      { PROTOCOL.key：私有段字段序 n,e,d,iqmp,p,q；iqmp/p/q 暂不落字段
-        （签名只需 N/E/D），仍必须按序读出以保持游标一致 }
       AKey.Kind := hkRsa;
       AKey.RsaN := LR.ReadMPInt;
       AKey.RsaE := LR.ReadMPInt;
       AKey.RsaD := LR.ReadMPInt;
-      LR.ReadMPInt;                    { iqmp }
-      LR.ReadMPInt;                    { p }
-      LR.ReadMPInt;                    { q }
+      LR.ReadMPInt;
+      LR.ReadMPInt;
+      LR.ReadMPInt;
       if (Length(AKey.RsaE) = 0) or (Length(AKey.RsaD) = 0) or
          (Length(AKey.RsaN) < 32) then
         raise ESSHError.Create(sekKeyFormat, 'ssh keys: rsa key fields invalid');
@@ -170,7 +224,7 @@ begin
     else
       raise ESSHError.Create(sekUnsupported,
         'ssh keys: unsupported key type "' + LKeyType + '" in openssh container');
-    LComment := LR.ReadStringText;    { 忽略注释 }
+    LComment := LR.ReadStringText;
   finally
     LR.Free;
   end;
