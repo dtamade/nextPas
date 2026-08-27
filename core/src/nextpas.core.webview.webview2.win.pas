@@ -6,7 +6,14 @@ unit nextpas.core.webview.webview2.win;
        独立模块的抽取预备缝第二极：Win32 缝 + GTK 缝同构，消费方无感。
 
        立场：不做策略决策（布局/默认值归调用方），只做机械转发与
-       句柄纪律（ShowWindow 统一出口、WM_DESTROY 幂等 Quit 等）。 *}
+       句柄纪律（ShowWindow 统一出口、WM_DESTROY 幂等 Quit 等）。
+
+       S20 补齐：
+       - Minimize/Restore/IsMinimized（IsIconic/ShowWindow SW_*）
+       - DPI 真值：GetDpiForWindow 动态绑定（user32），回退 GetDeviceCaps
+         取 LOGPIXELSX/96；GetScaleFactor 返 Double（1.25 等分数值可达）
+       - WM_DPICHANGED → ScaleChanged 回调（进程级单回调，够单窗语义；
+         多窗时按 HWND 过滤分发——当前单回调对应最近注册窗口，保持简单） *}
 
 {$I nextpas.core.settings.inc}
 
@@ -21,6 +28,8 @@ type
     StartMaximized: Boolean;
   end;
 
+  TWin32ScaleChangedProc = procedure(AWin: Pointer; AScale: Double);
+
 function Win32ShellInit: Boolean;
 function Win32ShellCreate(const AGeometry: TWin32ShellGeometry): Pointer;
 procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string);
@@ -32,7 +41,11 @@ function Win32ShellIsVisible(AWin: Pointer): Boolean;
 function Win32ShellIsMaximized(AWin: Pointer): Boolean;
 procedure Win32ShellMaximize(AWin: Pointer);
 procedure Win32ShellUnmaximize(AWin: Pointer);
-function Win32ShellScaleFactor(AWin: Pointer): Integer;
+procedure Win32ShellMinimize(AWin: Pointer);
+procedure Win32ShellRestore(AWin: Pointer);
+function Win32ShellIsMinimized(AWin: Pointer): Boolean;
+function Win32ShellScaleFactor(AWin: Pointer): Double;
+procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc);
 procedure Win32ShellFocus(AWin: Pointer);
 function Win32ShellNativeHandle(AWin: Pointer): Pointer;
 procedure Win32ShellRunMainLoop;
@@ -49,13 +62,55 @@ const
   CLASS_NAME = 'NextPasWebView2Win';
   WIN_STYLE_RESIZABLE = WS_OVERLAPPEDWINDOW;
   WIN_STYLE_FIXED     = WS_OVERLAPPED or WS_CAPTION or WS_SYSMENU or WS_MINIMIZEBOX;
+  WM_DPICHANGED = $02E0;
+
+type
+  TGetDpiForWindow = function(AWnd: HWND): UINT; stdcall;
 
 var
   GRegistered: Boolean = False;
   GMainLoopRunning: Boolean = False;
   GWinCount: Integer = 0;
+  GGetDpiForWindow: TGetDpiForWindow = nil;
+  GGetDpiTried: Boolean = False;
+  GScaleHandler: TWin32ScaleChangedProc = nil;
+
+function TryResolveGetDpiForWindow: TGetDpiForWindow;
+var
+  H: HMODULE;
+begin
+  if GGetDpiTried then Exit(GGetDpiForWindow);
+  GGetDpiTried := True;
+  H := GetModuleHandleW('user32.dll');
+  if H <> 0 then
+    GGetDpiForWindow := TGetDpiForWindow(GetProcAddress(H, 'GetDpiForWindow'));
+  Result := GGetDpiForWindow;
+end;
+
+function CurrentScaleForWindow(AWnd: HWND): Double;
+var
+  LGetDpi: TGetDpiForWindow;
+  Dpi: UINT;
+  DC: HDC;
+begin
+  LGetDpi := TryResolveGetDpiForWindow;
+  if Assigned(LGetDpi) then
+  begin
+    Dpi := LGetDpi(AWnd);
+    if Dpi <> 0 then Exit(Dpi / 96.0);
+  end;
+  DC := GetDC(AWnd);
+  try
+    Result := GetDeviceCaps(DC, LOGPIXELSX) / 96.0;
+    if Result < 0.5 then Result := 1.0;
+  finally
+    ReleaseDC(AWnd, DC);
+  end;
+end;
 
 function WndProc(AWnd: HWND; AMsg: UINT; AWParam: WPARAM; ALParam: LPARAM): LRESULT; stdcall;
+var
+  LScale: Double;
 begin
   case AMsg of
     WM_DESTROY:
@@ -70,6 +125,16 @@ begin
       begin
         DestroyWindow(AWnd);
         Result := 0;
+        Exit;
+      end;
+    WM_DPICHANGED:
+      begin
+        if Assigned(GScaleHandler) then
+        begin
+          LScale := CurrentScaleForWindow(AWnd);
+          GScaleHandler(Pointer(AWnd), LScale);
+        end;
+        Result := DefWindowProcW(AWnd, AMsg, AWParam, ALParam);
         Exit;
       end;
   end;
@@ -170,21 +235,36 @@ begin
   ShowWindow(HWND(AWin), SW_RESTORE);
 end;
 
-function Win32ShellScaleFactor(AWin: Pointer): Integer;
-var
-  DC: HDC;
+procedure Win32ShellMinimize(AWin: Pointer);
 begin
-  if AWin = nil then Exit(1);
-  {$IFDEF HAS_GETDPIFORWINDOW}
-  // Windows 10 1607+ : GetDpiForWindow
-  {$ENDIF}
-  DC := GetDC(HWND(AWin));
-  try
-    Result := GetDeviceCaps(DC, LOGPIXELSX) div 96;
-    if Result < 1 then Result := 1;
-  finally
-    ReleaseDC(HWND(AWin), DC);
-  end;
+  if AWin = nil then Exit;
+  ShowWindow(HWND(AWin), SW_MINIMIZE);
+end;
+
+procedure Win32ShellRestore(AWin: Pointer);
+begin
+  if AWin = nil then Exit;
+  if IsIconic(HWND(AWin)) or IsZoomed(HWND(AWin)) then
+    ShowWindow(HWND(AWin), SW_RESTORE)
+  else
+    ShowWindow(HWND(AWin), SW_SHOW);
+end;
+
+function Win32ShellIsMinimized(AWin: Pointer): Boolean;
+begin
+  Result := (AWin <> nil) and IsIconic(HWND(AWin));
+end;
+
+function Win32ShellScaleFactor(AWin: Pointer): Double;
+begin
+  if AWin = nil then Exit(1.0);
+  Result := CurrentScaleForWindow(HWND(AWin));
+  if Result < 0.5 then Result := 1.0;
+end;
+
+procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc);
+begin
+  GScaleHandler := AHandler;
 end;
 
 procedure Win32ShellFocus(AWin: Pointer);
@@ -231,6 +311,7 @@ end;
 { Linux / 非 Windows 桩：零代价、编译期可达，行为与不可用后端一致 }
 var
   GRunning: Boolean = False;
+  GScaleStub: TWin32ScaleChangedProc = nil;
 function Win32ShellInit: Boolean; begin Result := False; end;
 function Win32ShellCreate(const AGeometry: TWin32ShellGeometry): Pointer; begin Result := nil; end;
 procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string); begin end;
@@ -242,7 +323,11 @@ function Win32ShellIsVisible(AWin: Pointer): Boolean; begin Result := False; end
 function Win32ShellIsMaximized(AWin: Pointer): Boolean; begin Result := False; end;
 procedure Win32ShellMaximize(AWin: Pointer); begin end;
 procedure Win32ShellUnmaximize(AWin: Pointer); begin end;
-function Win32ShellScaleFactor(AWin: Pointer): Integer; begin Result := 1; end;
+procedure Win32ShellMinimize(AWin: Pointer); begin end;
+procedure Win32ShellRestore(AWin: Pointer); begin end;
+function Win32ShellIsMinimized(AWin: Pointer): Boolean; begin Result := False; end;
+function Win32ShellScaleFactor(AWin: Pointer): Double; begin Result := 1.0; end;
+procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc); begin GScaleStub := AHandler; end;
 procedure Win32ShellFocus(AWin: Pointer); begin end;
 function Win32ShellNativeHandle(AWin: Pointer): Pointer; begin Result := AWin; end;
 procedure Win32ShellRunMainLoop; begin GRunning := True; GRunning := False; end;
