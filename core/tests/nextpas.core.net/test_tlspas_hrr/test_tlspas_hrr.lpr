@@ -3,6 +3,7 @@ program test_tlspas_hrr;
 {$I nextpas.core.settings.inc}
 
 uses
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.base,
   nextpas.core.test,
@@ -12,7 +13,15 @@ uses
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,
-  nextpas.core.net.async.tlspas;
+  nextpas.core.net.async.tlspas,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
+  nextpas.core.async.base,
+  nextpas.core.async.loop,
+  nextpas.core.net.base,
+  nextpas.core.net.intf,
+  nextpas.core.net.tcp,
+  nextpas.core.net.async.tcp;
 
 procedure TestGroupKeyShareLen;
 begin
@@ -137,7 +146,6 @@ begin
   FillChar(LCH2[0], 12, $77);
   LSuite := TLS13_CIPHER_AES_128_GCM_SHA256;
   LMsgHash := TlsPasBuildMessageHash(LCH1, LSuite);
-  // Simulate tlspas HRRTranscript = message_hash || HRR || CH2
   SetLength(LTranscript, 0);
   SetLength(LTranscript, Length(LMsgHash) + Length(LHRR) + Length(LCH2));
   Move(LMsgHash[0], LTranscript[0], Length(LMsgHash));
@@ -145,6 +153,158 @@ begin
   Move(LCH2[0], LTranscript[Length(LMsgHash)+Length(LHRR)], Length(LCH2));
   Check(LTranscript[0] = 254, 'transcript starts with message_hash');
   Check(Length(LTranscript) = (4+32)+8+12, 'transcript total len');
+end;
+
+{ ===== live HRR e2e (requires openssl s_server, else skipped) ===== }
+const
+  cGetRequest = 'GET / HTTP/1.0'#13#10#13#10;
+
+var
+  GLiveLoop: TAsyncLoop;
+  GLiveStream: IAsyncTcpStream;
+  GLiveErr: Int32;
+  GLiveReady: Boolean;
+  GLiveCbCalled: Boolean;
+  GLiveFinished: Boolean;
+  GLiveBuf: PByte;
+  GLiveAcc: TBytes;
+  GLiveFound: Boolean;
+
+procedure LiveStopCb(AContext: Pointer);
+begin
+  if GLiveLoop <> nil then GLiveLoop.Stop;
+end;
+
+procedure LiveFinish;
+begin
+  if GLiveFinished then Exit;
+  GLiveFinished := True;
+  GLiveLoop.Schedule(TDuration.FromMilliseconds(1), @LiveStopCb, nil);
+end;
+
+function LiveContains(const AHay: TBytes; const ANeedle: string): Boolean;
+var I,J: Integer; LHit: Integer;
+begin
+  Result:=False; LHit:=Length(ANeedle);
+  if Length(AHay) < LHit then Exit;
+  for I:=0 to Length(AHay)-LHit do begin
+    Result:=True;
+    for J:=0 to LHit-1 do if AHay[I+J]<>Ord(ANeedle[J+1]) then begin Result:=False; Break; end;
+    if Result then Exit;
+  end;
+end;
+
+procedure LiveReadCb(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  if AResult < 0 then begin GLiveErr:=AResult; LiveFinish; Exit; end;
+  if AResult = 0 then begin LiveFinish; Exit; end;
+  SetLength(GLiveAcc, Length(GLiveAcc)+AResult);
+  Move(GLiveBuf^, GLiveAcc[Length(GLiveAcc)-AResult], AResult);
+  if LiveContains(GLiveAcc, 'HTTP/1.') then begin GLiveFound:=True; LiveFinish; Exit; end;
+  if Length(GLiveAcc) > 262144 then begin LiveFinish; Exit; end;
+  if not GLiveStream.AsyncRead(GLiveBuf, 4096, @LiveReadCb, nil) then begin GLiveErr:=-3201; LiveFinish; end;
+end;
+
+procedure LiveReadyCb(AStream: IAsyncTcpStream; AError: Int32; AContext: Pointer);
+begin
+  GLiveCbCalled:=True;
+  if AError<>0 then begin GLiveErr:=AError; LiveFinish; Exit; end;
+  GLiveStream:=AStream; GLiveReady:=True;
+  if not GLiveStream.AsyncWrite(PChar(cGetRequest), Length(cGetRequest), @LiveReadCb, nil) then
+  begin
+    // WriteCb reused ReadCb trampoline: after write we need read. Use direct write-cb that arms read
+    GLiveErr:=-3201; LiveFinish; Exit;
+  end;
+  // Actually we used ReadCb as write cb; arm read after write completes via separate cb
+end;
+
+procedure LiveWriteCb(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  if AResult<=0 then begin GLiveErr:=-3201; LiveFinish; Exit; end;
+  GetMem(GLiveBuf, 4096);
+  if not GLiveStream.AsyncRead(GLiveBuf, 4096, @LiveReadCb, nil) then begin FreeMem(GLiveBuf); GLiveBuf:=nil; GLiveErr:=-3201; LiveFinish; end;
+end;
+
+procedure LiveReadyCbWithRead(AStream: IAsyncTcpStream; AError: Int32; AContext: Pointer);
+begin
+  GLiveCbCalled:=True;
+  if AError<>0 then begin GLiveErr:=AError; LiveFinish; Exit; end;
+  GLiveStream:=AStream; GLiveReady:=True;
+  if not GLiveStream.AsyncWrite(PChar(cGetRequest), Length(cGetRequest), @LiveWriteCb, nil) then begin GLiveErr:=-3201; LiveFinish; end;
+end;
+
+function LivePortAvailable(APort: UInt16): Boolean;
+var LProbe: ITcpStream;
+begin
+  Result:=False;
+  try LProbe:=NetTcpConnect('127.0.0.1', APort); Result:=LProbe<>nil; except Result:=False; end;
+end;
+
+function EnvPort(const AName: string; ADef: UInt16): UInt16;
+var S: string; V: Integer;
+begin
+  S:=GetEnvironmentVariable(AName);
+  if S='' then Exit(ADef);
+  V:=StrToIntDef(S, ADef);
+  Result:=UInt16(V);
+end;
+
+procedure RunLiveHRR(APort: UInt16);
+var LOpts: TAsyncTlsPasClientOptions;
+begin
+  GLiveStream:=nil; GLiveErr:=0; GLiveReady:=False; GLiveCbCalled:=False; GLiveFinished:=False; GLiveFound:=False; SetLength(GLiveAcc,0); GLiveBuf:=nil;
+  GLiveLoop:=TAsyncLoop.Create;
+  try
+    GLiveLoop.Schedule(TDuration.FromSeconds(35), @LiveStopCb, nil);
+    LOpts:=DefaultAsyncTlsPasClientOptions;
+    LOpts.ServerName:='localhost';
+    // P-384 HRR needs longer deadline (keygen ~11s)
+    LOpts.HandshakeDeadline:=TDeadline.After(TDuration.FromSeconds(30));
+    if not AsyncTlsPasConnect(GLiveLoop, '127.0.0.1', APort, LOpts, @LiveReadyCbWithRead, nil) then
+      GLiveErr:=-3201
+    else if not GLiveCbCalled then
+      GLiveLoop.Run;
+  finally
+    if GLiveBuf<>nil then begin FreeMem(GLiveBuf); GLiveBuf:=nil; end;
+    GLiveLoop.Free; GLiveLoop:=nil;
+    GLiveStream:=nil;
+  end;
+end;
+
+procedure TestHRRP256Live;
+var P: UInt16;
+begin
+  P:=EnvPort('TLSPAS_HRR_P256_PORT', 15557);
+  if not LivePortAvailable(P) then begin Check(True, 'skip P-256 HRR no server'); Exit; end;
+  RunLiveHRR(P);
+  Check(GLiveCbCalled, 'P-256 HRR callback');
+  Check(GLiveReady, 'P-256 HRR handshake');
+  CheckEqual(Int64(0), Int64(GLiveErr), 'P-256 HRR no error');
+  Check(GLiveFound, 'P-256 HRR HTTP response');
+end;
+
+procedure TestHRRP384Live;
+var P: UInt16;
+begin
+  P:=EnvPort('TLSPAS_HRR_P384_PORT', 15558);
+  if not LivePortAvailable(P) then begin Check(True, 'skip P-384 HRR no server'); Exit; end;
+  RunLiveHRR(P);
+  Check(GLiveCbCalled, 'P-384 HRR callback');
+  Check(GLiveReady, 'P-384 HRR handshake');
+  CheckEqual(Int64(0), Int64(GLiveErr), 'P-384 HRR no error');
+  Check(GLiveFound, 'P-384 HRR HTTP response');
+end;
+
+procedure TestHRRBaseNoHRR;
+var P: UInt16;
+begin
+  P:=EnvPort('TLSPAS_HRR_BASE_PORT', 15556);
+  if not LivePortAvailable(P) then begin Check(True, 'skip base no HRR'); Exit; end;
+  RunLiveHRR(P);
+  Check(GLiveCbCalled, 'base callback');
+  Check(GLiveReady, 'base handshake');
+  CheckEqual(Int64(0), Int64(GLiveErr), 'base no error');
+  Check(GLiveFound, 'base HTTP response');
 end;
 
 var
@@ -159,6 +319,9 @@ begin
   GSuite.Test('P256Roundtrip', @TestP256Roundtrip);
   GSuite.Test('PatchP384', @TestPatchP384);
   GSuite.Test('TranscriptSynthesis', @TestTranscriptSynthesis);
+  GSuite.Test('HRRBaseNoHRR', @TestHRRBaseNoHRR);
+  GSuite.Test('HRRP256Live', @TestHRRP256Live);
+  GSuite.Test('HRRP384Live', @TestHRRP384Live);
   if not GSuite.Run then
     Halt(1);
 end.
