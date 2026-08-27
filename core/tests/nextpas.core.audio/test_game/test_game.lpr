@@ -10,6 +10,16 @@ begin
   P:=PSingle(@Result.Data[0]);
   for I:=0 to AFrames*2-1 do P[I]:=AVal;
 end;
+
+function MakeBufForFmt(const AFmt: TAudioFormat; AFrames: Integer; AVal: Single): TAudioBuffer;
+var P: PSingle; I: Integer;
+begin
+  Result.Format:=AFmt;
+  Result.FrameCount:=AFrames;
+  SetLength(Result.Data, AFrames*Result.Format.BlockAlign);
+  P:=PSingle(@Result.Data[0]);
+  for I:=0 to AFrames*AFmt.Channels-1 do P[I]:=AVal;
+end;
 type T=class
   procedure TestLoadPlay;
   procedure TestPan;
@@ -59,7 +69,7 @@ var G: IGameAudio; S: TGameSfxId; Buf: TAudioBuffer; P: PSingle; Fmt: TAudioForm
 begin
   Fmt:=AudioFormatCreate(48000,1,sfF32);
   G:=CreateGameAudioForFormat(CreateNullAudioProvider, Fmt, 8);
-  S:=G.Load(MakeBuf(20,0.5));
+  S:=G.Load(MakeBufForFmt(Fmt,20,0.5));
   G.Play(S, 1.0, 0, 2.0, False);
   SetLength(Buf.Data, 10*Fmt.BlockAlign); Buf.Format:=Fmt; Buf.FrameCount:=10;
   G.Graph.FillRealtime(Buf,10);
@@ -69,7 +79,7 @@ procedure T.TestLoop;
 var G: IGameAudio; S: TGameSfxId; Buf: TAudioBuffer;
 begin
   G:=CreateGameAudioForFormat(CreateNullAudioProvider, AudioFormatCreate(48000,1,sfF32), 8);
-  S:=G.Load(MakeBuf(5,0.7));
+  S:=G.Load(MakeBufForFmt(AudioFormatCreate(48000,1,sfF32),5,0.7));
   G.Play(S, 1.0, 0, 1.0, True);
   SetLength(Buf.Data, 10*AudioFormatCreate(48000,1,sfF32).BlockAlign); Buf.Format:=AudioFormatCreate(48000,1,sfF32); Buf.FrameCount:=10;
   G.Graph.FillRealtime(Buf,10);
@@ -79,7 +89,7 @@ procedure T.TestMasterGain;
 var G: IGameAudio; S: TGameSfxId; Buf: TAudioBuffer; P: PSingle;
 begin
   G:=CreateGameAudioForFormat(CreateNullAudioProvider, AudioFormatCreate(48000,1,sfF32), 8);
-  S:=G.Load(MakeBuf(10,1.0));
+  S:=G.Load(MakeBufForFmt(AudioFormatCreate(48000,1,sfF32),10,1.0));
   G.SetMasterGain(0.5);
   G.Play(S);
   SetLength(Buf.Data, 4*4); Buf.Format:=AudioFormatCreate(48000,1,sfF32); Buf.FrameCount:=4;
@@ -90,7 +100,7 @@ procedure T.TestVoiceSteal;
 var G: IGameAudio; S: TGameSfxId;
 begin
   G:=CreateGameAudioForFormat(CreateNullAudioProvider, AudioFormatCreate(48000,1,sfF32), 2);
-  S:=G.Load(MakeBuf(100,0.1));
+  S:=G.Load(MakeBufForFmt(AudioFormatCreate(48000,1,sfF32),100,0.1));
   G.Play(S); G.Play(S); G.Play(S);
   CheckEqual(2, G.VoiceCount,'max 2 steal');
 end;
@@ -98,7 +108,7 @@ procedure T.TestStopVoice;
 var G: IGameAudio; S: TGameSfxId; V: TGameVoiceId;
 begin
   G:=CreateGameAudioForFormat(CreateNullAudioProvider, AudioFormatCreate(48000,1,sfF32), 8);
-  S:=G.Load(MakeBuf(100,0.1));
+  S:=G.Load(MakeBufForFmt(AudioFormatCreate(48000,1,sfF32),100,0.1));
   V:=G.Play(S);
   CheckTrue(G.StopVoice(V),'stop true');
   CheckEqual(0, G.VoiceCount,'0 after stop');
@@ -108,7 +118,7 @@ procedure T.TestStopAll;
 var G: IGameAudio; S: TGameSfxId;
 begin
   G:=CreateGameAudioForFormat(CreateNullAudioProvider, AudioFormatCreate(48000,1,sfF32), 8);
-  S:=G.Load(MakeBuf(10,0.1));
+  S:=G.Load(MakeBufForFmt(AudioFormatCreate(48000,1,sfF32),10,0.1));
   G.Play(S); G.Play(S);
   G.StopAll;
   CheckEqual(0, G.VoiceCount,'stop all 0');
@@ -141,7 +151,7 @@ procedure T.TestConcurrentVoicesMix;
 var G: IGameAudio; S: TGameSfxId; Buf: TAudioBuffer; P: PSingle;
 begin
   G:=CreateGameAudioForFormat(CreateNullAudioProvider, AudioFormatCreate(48000,1,sfF32), 8);
-  S:=G.Load(MakeBuf(10,0.4));
+  S:=G.Load(MakeBufForFmt(AudioFormatCreate(48000,1,sfF32),10,0.4));
   G.Play(S); G.Play(S);
   SetLength(Buf.Data, 4*4); Buf.Format:=AudioFormatCreate(48000,1,sfF32); Buf.FrameCount:=4;
   G.Graph.FillRealtime(Buf,4);
@@ -151,7 +161,7 @@ procedure T.TestEofReap;
 var G: IGameAudio; S: TGameSfxId; Buf: TAudioBuffer;
 begin
   G:=CreateGameAudioForFormat(CreateNullAudioProvider, AudioFormatCreate(48000,1,sfF32), 8);
-  S:=G.Load(MakeBuf(5,0.5));
+  S:=G.Load(MakeBufForFmt(AudioFormatCreate(48000,1,sfF32),5,0.5));
   G.Play(S);
   SetLength(Buf.Data, 10*4); Buf.Format:=AudioFormatCreate(48000,1,sfF32); Buf.FrameCount:=10;
   G.Graph.FillRealtime(Buf,10);
