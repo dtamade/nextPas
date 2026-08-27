@@ -30,8 +30,9 @@ unit nextpas.core.net.async.tlspas;
  *   X25519/P-256/P-384（首轮 X25519，遇 HelloRetryRequest 自动重试
  *   P-256/P-384，transcript 按 RFC 8446 §4.4.1 合成 message_hash；
  *   P-384 共享 48B、公钥 97B，走 SHA-384 路径）；
- *   PSK 会话恢复（单身份，NewSessionTicket 捕获，带 max_early_data
- *   票据跳过，0-RTT 不做）已支持，HRR+PSK 组合 binder 重算已覆盖；
+ *   PSK 会话恢复（单身份，NewSessionTicket 捕获，含 max_early_data
+ *   票据纳入缓存仍走 1-RTT，0-RTT 数据面不做）已支持，HRR+PSK 组合
+ *   binder 重算已覆盖；
  *   客户端证书（收到 CertificateRequest 即失败）仍未支持。
  * - VerifyPeer=True：复用 tls.x509verify 全链验证（日期/签名/CA
  *   约束/路径长度/信任锚/主机名 SAN+通配符）+ CertificateVerify
@@ -585,11 +586,9 @@ type
     FNetIn: TBytes;
     FPlainOut: TBytes;
     FPostHs: TBytes;
-    FNetTx: TBytes;
     FNetInBuf: TByteStreamBuf;
     FPlainOutBuf: TByteStreamBuf;
     FNetTxBuf: TByteStreamBuf;
-    FNetTxOff: Integer;
     FRecvChunk: Integer;
     FRecvArmed: Boolean;
     FSendArmed: Boolean;
@@ -895,6 +894,7 @@ function TlsPasBuildMessageHash(const ACH1: TBytes; ACipherSuite: Word): TBytes;
 var
   LHash: TBytes;
 begin
+  Result := nil;
   if TLS13CipherSuiteIsSHA384(ACipherSuite) then
     LHash := SHA384(ACH1)
   else
@@ -2204,12 +2204,12 @@ begin
     if LMsgType = TLS_HANDSHAKE_TYPE_NEW_SESSION_TICKET then
     begin
       { v2：捕获票据派生 PSK 入缓存。恢复材料绑定本会话 master
-        secret（全握手才有意义）；带 max_early_data 的票据跳过——
-        v2 不做 0-RTT，收下也用不上 }
+        secret（全握手才有意义）；含 max_early_data 的票据亦纳入
+        缓存但仍走 1-RTT（0-RTT 数据面未启用，按 RFC 8446 §2.3
+        回退语义安全）}
       if TryParseTLS13NewSessionTicket(LMsg, LTicket, LErr) and
          (FCache <> nil) and (LTicket.TicketLifetime > 0) and
-         (Length(LTicket.Ticket) > 0) and
-         (not LTicket.HasMaxEarlyDataSize) then
+         (Length(LTicket.Ticket) > 0) then
       begin
         FillChar(LSess, SizeOf(LSess), 0);
         LSess.CipherSuite := FSuite;
