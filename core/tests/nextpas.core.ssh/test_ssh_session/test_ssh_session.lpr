@@ -1011,6 +1011,29 @@ begin
   end;
 end;
 
+function MakeRsaPrivSectionCrt(ACheck: UInt32; const AN, AE, AD, AP, AQ, AIqmp: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(768);
+  try
+    LW.PutUInt32(ACheck);
+    LW.PutUInt32(ACheck);
+    LW.PutStringText('ssh-rsa');
+    LW.PutMPInt(AN);
+    LW.PutMPInt(AE);
+    LW.PutMPInt(AD);
+    LW.PutMPInt(AIqmp);
+    LW.PutMPInt(AP);
+    LW.PutMPInt(AQ);
+    LW.PutStringText('loop client key crt');
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
 function Base64Chunked(const AData: TBytes): string;
 var
   LB64: string;
@@ -1094,6 +1117,7 @@ const
   LOOP_PUBKEY = 1;
   LOOP_PUBKEY_RSA = 2;
   LOOP_PUBKEY_ENCRYPTED = 3;
+  LOOP_PUBKEY_RSA_CRT = 4;
   KH_PATH = '/tmp/nextpas_ssh_session_known_hosts';
   ENC_PASSPHRASE = 's3cret-pass-42';
   ENC_SALT = 'salty12345678901';
@@ -1170,6 +1194,14 @@ begin
           RsaPubBlob(HexToBytesKat(KAT_E_HEX), KatN),
           MakeRsaPrivSection($A1B2C3D4, KatN,
             HexToBytesKat(KAT_E_HEX), KatD)));
+      end
+      else if AMode = LOOP_PUBKEY_RSA_CRT then
+      begin
+        { 真实 CRT 路径：服务端同样走 PKCS#1 验签，客户端优先走 CRT }
+        LOpts.PrivateKeyData := PemOf(CraftContainer(
+          RsaPubBlob(HexToBytesKat(KAT_E_HEX), CrtKatN),
+          MakeRsaPrivSectionCrt($A1B2C3D4, CrtKatN, HexToBytesKat(KAT_E_HEX),
+            CrtKatD, CrtKatP, CrtKatQ, CrtKatIqmp)));
       end
       else if AMode = LOOP_PUBKEY_ENCRYPTED then
       begin
@@ -1301,6 +1333,16 @@ begin
     LR: TLoopResult;
   begin
     LR := RunLoopback(LOOP_PUBKEY_RSA, True, True, '', False);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  GSuite.Test('publickey rsa CRT auth loopback', procedure
+  var
+    LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PUBKEY_RSA_CRT, True, True, '', False);
     CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
     CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
     CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
