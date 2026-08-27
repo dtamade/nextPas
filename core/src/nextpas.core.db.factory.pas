@@ -26,8 +26,8 @@ unit nextpas.core.db.factory;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.db.pool;

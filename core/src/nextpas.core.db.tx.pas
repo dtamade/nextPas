@@ -90,7 +90,7 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.db.err,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
