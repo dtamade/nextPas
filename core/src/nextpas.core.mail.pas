@@ -37,6 +37,10 @@ type
   TMailSmtpServerConfig = nextpas.core.mail.smtp.server.TMailSmtpServerConfig;
   TMailSmtpServerSession = nextpas.core.mail.smtp.server.TMailSmtpServerSession;
   ISmtpServerSink = nextpas.core.mail.smtp.server.ISmtpServerSink;
+  ISmtpMailPolicyHook = nextpas.core.mail.smtp.server.ISmtpMailPolicyHook;
+  ISmtpAuthHook = nextpas.core.mail.smtp.server.ISmtpAuthHook;
+  ISmtpTlsUpgrade = nextpas.core.mail.smtp.server.ISmtpTlsUpgrade;
+  ISmtpAuthedMailGate = nextpas.core.mail.smtp.server.ISmtpAuthedMailGate;
 
   { imap 服务器会话 }
   TImapSessionPhase = nextpas.core.mail.imap.base.TImapSessionPhase;
@@ -59,6 +63,7 @@ const
   msseTimeout = nextpas.core.mail.smtp.server.msseTimeout;
   msseOverflow = nextpas.core.mail.smtp.server.msseOverflow;
   msseClosed = nextpas.core.mail.smtp.server.msseClosed;
+  msseAuthed = nextpas.core.mail.smtp.server.msseAuthed;
 
   { imap 服务器会话事件枚举值 }
   iiseLogin = nextpas.core.mail.imap.server.iiseLogin;
