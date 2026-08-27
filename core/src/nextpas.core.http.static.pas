@@ -893,12 +893,20 @@ var
   LStart, LEnd: Int64;
 begin
   try
-    if not AFs.Exists(AVfsPath) then
-    begin
-      HttpWriteErrorNotFound(AW, 'File not found');
-      Exit;
+    try
+      LInfo := AFs.Stat(AVfsPath);
+    except
+      on EVfsNotFound do
+      begin
+        HttpWriteErrorNotFound(AW, 'File not found');
+        Exit;
+      end;
+      on EVfsInvalidPath do
+      begin
+        HttpWriteErrorNotFound(AW, 'File not found');
+        Exit;
+      end;
     end;
-    LInfo := AFs.Stat(AVfsPath);
     if LInfo.Info.IsDir then
     begin
       HttpWriteErrorNotFound(AW, 'File not found');
