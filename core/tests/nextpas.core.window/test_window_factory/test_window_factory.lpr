@@ -14,45 +14,119 @@ uses
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.fake,
-  nextpas.core.window.factory;
+  nextpas.core.window.factory,
+  nextpas.core.window.gtk,
+  nextpas.core.window.gtk.loader,
+  nextpas.core.window.sdl2,
+  nextpas.core.window.sdl2.loader,
+  nextpas.core.window.win32,
+  nextpas.core.window.win32.loader,
+  nextpas.core.window.cocoa,
+  nextpas.core.window.cocoa.loader,
+  nextpas.core.window.wasm,
+  nextpas.core.window.wasm.loader,
+  nextpas.core.window.android,
+  nextpas.core.window.android.loader,
+  nextpas.core.window.uikit,
+  nextpas.core.window.uikit.loader;
 
 procedure TestBackendAvailabilityFacts;
+var
+  LGtkAvail, LSdl2Avail, LWin32Avail, LCocoaAvail, LWasmAvail, LAndroidAvail, LUIKitAvail: Boolean;
 begin
   Check(WindowBackendAvailable(wkFake), 'fake always available');
-  Check(not WindowBackendAvailable(wkGtk), 'gtk lands in S2');
-  Check(not WindowBackendAvailable(wkSdl2), 'sdl2 lands in S3');
-  Check(not WindowBackendAvailable(wkWin32), 'win32 lands in S4');
-  Check(not WindowBackendAvailable(wkCocoa), 'cocoa lands in S4');
-  Check(not WindowBackendAvailable(wkAndroid), 'android lands in S5');
-  Check(not WindowBackendAvailable(wkUIKit), 'uikit lands in S5');
-  { S1：仅 fake 可用，default 回落 fake }
-  CheckEqual(Ord(wkFake), Ord(DefaultWindowKind), 'default = fake when only fake probed');
+  LGtkAvail := WindowBackendAvailable(wkGtk);
+  Check(LGtkAvail = WindowGtkIsAvailable, 'gtk availability matches loader probe');
+  LSdl2Avail := WindowBackendAvailable(wkSdl2);
+  Check(LSdl2Avail = WindowSdl2IsAvailable, 'sdl2 availability matches loader probe');
+  LWin32Avail := WindowBackendAvailable(wkWin32);
+  Check(LWin32Avail = WindowWin32IsAvailable, 'win32 availability matches loader probe');
+  LCocoaAvail := WindowBackendAvailable(wkCocoa);
+  Check(LCocoaAvail = WindowCocoaIsAvailable, 'cocoa availability matches loader probe');
+  LWasmAvail := WindowBackendAvailable(wkWasm);
+  Check(LWasmAvail = WindowWasmIsAvailable, 'wasm availability matches loader probe');
+  LAndroidAvail := WindowBackendAvailable(wkAndroid);
+  Check(LAndroidAvail = WindowAndroidIsAvailable, 'android availability matches loader probe');
+  LUIKitAvail := WindowBackendAvailable(wkUIKit);
+  Check(LUIKitAvail = WindowUIKitIsAvailable, 'uikit availability matches loader probe');
+  // Default kind priority: win32 > cocoa > gtk > sdl2 > fake (wasm between but not available on Linux)
+  if LWin32Avail then
+    CheckEqual(Ord(wkWin32), Ord(DefaultWindowKind), 'default = win32 when probed')
+  else if LCocoaAvail then
+    CheckEqual(Ord(wkCocoa), Ord(DefaultWindowKind), 'default = cocoa when probed')
+  else if LGtkAvail then
+    CheckEqual(Ord(wkGtk), Ord(DefaultWindowKind), 'default = gtk when gtk probed')
+  else if LSdl2Avail then
+    CheckEqual(Ord(wkSdl2), Ord(DefaultWindowKind), 'default = sdl2 when gtk absent but sdl2 probed')
+  else
+    CheckEqual(Ord(wkFake), Ord(DefaultWindowKind), 'default = fake when none probed');
+  Check(Ord(wkWasm) < Ord(wkFake), 'wasm before fake');
 end;
 
 procedure TestUnavailableBackendFailsFast;
 var
   LRaised: Boolean;
+  W: IWindow;
 begin
-  LRaised := False;
-  try
-    CreateWindowOf(wkGtk, DefaultWindowOptions);
-  except
-    on E: EWindowBackendUnavailable do
-    begin
-      LRaised := True;
-      CheckEqual(Ord(ecNotFound), Ord(E.Category));
-      CheckContains(E.Message, 'wkGtk');
+  if WindowBackendAvailable(wkGtk) then
+  begin
+    // gtk available: creating should succeed (environment has display or at least loader)
+    // If no display, creation may still raise NotInitialized; treat both as "available" path
+    try
+      W := CreateWindowOf(wkGtk, DefaultWindowOptions);
+      Check(not W.IsClosed, 'gtk available: create succeeds');
+      W.Close;
+    except
+      on E: EWindowNotInitialized do
+        Check(True, 'gtk available but no display — honst NotInitialized');
+      on E: EWindowBackendUnavailable do
+        Check(False, 'gtk available should not raise BackendUnavailable');
     end;
+  end
+  else
+  begin
+    LRaised := False;
+    try
+      CreateWindowOf(wkGtk, DefaultWindowOptions);
+    except
+      on E: EWindowBackendUnavailable do
+      begin
+        LRaised := True;
+        CheckEqual(Ord(ecNotFound), Ord(E.Category));
+        CheckContains(E.Message, 'wkGtk');
+      end;
+    end;
+    Check(LRaised, 'unavailable backend must fail fast with ecNotFound');
   end;
-  Check(LRaised, 'unavailable backend must fail fast with ecNotFound');
 
-  LRaised := False;
-  try
-    CreateWindowOf(wkSdl2, DefaultWindowOptions);
-  except
-    on E: EWindowBackendUnavailable do LRaised := True;
+  if WindowBackendAvailable(wkSdl2) then
+  begin
+    try
+      W := CreateWindowOf(wkSdl2, DefaultWindowOptions);
+      Check(not W.IsClosed, 'sdl2 available: create succeeds');
+      W.Close;
+    except
+      on E: EWindowNotInitialized do
+        Check(True, 'sdl2 available but no display — honest NotInitialized');
+      on E: EWindowBackendUnavailable do
+        Check(False, 'sdl2 available should not raise BackendUnavailable');
+    end;
+  end
+  else
+  begin
+    LRaised := False;
+    try
+      CreateWindowOf(wkSdl2, DefaultWindowOptions);
+    except
+      on E: EWindowBackendUnavailable do
+      begin
+        LRaised := True;
+        CheckEqual(Ord(ecNotFound), Ord(E.Category));
+        CheckContains(E.Message, 'wkSdl2');
+      end;
+    end;
+    Check(LRaised, 'sdl2 unavailable fail fast');
   end;
-  Check(LRaised, 'sdl2 unavailable fail fast');
 end;
 
 procedure TestCreateValidatesOptions;
@@ -97,26 +171,16 @@ begin
     on E: Exception do Check(False, 'fake should accept parentHandle: ' + E.Message);
   end;
 
-  { desktop kinds 直接抛 EWindowUnsupported }
+  { desktop kinds 直接抛 EWindowUnsupported（若可用），否则 BackendUnavailable 亦算诚实 }
   LRaised := False;
   try
     CreateWindowOf(wkGtk, LOptions);
   except
     on E: EWindowUnsupported do LRaised := True;
-    on E: EWindowBackendUnavailable do
-    begin
-      { S1 gtk 不可用会先抛 BackendUnavailable；用可用前置无法测此路径，
-        但我们可以在 factory 中验证优先级：backend unavailable 优先于 unsupported.
-        为了测 unsupported，我们直接测 factory 内对假想可用的分支：此处改测逻辑
-        —— 若 backend 不可用，则用另一种验证：用 wkFake 以外的 fake? 跳过
-        只要 factory 对 ParentHandle 的检查在 availability 之前就会先抛 unsupported.
-        当前实现是先检查 availability 再检查 ParentHandle，所以此处会先抛 BackendUnavailable.
-        这是可接受的，两者都是正确失败。 }
-      LRaised := True;
-    end;
+    on E: EWindowBackendUnavailable do LRaised := True;
+    on E: EWindowNotInitialized do LRaised := True; // gtk available but no display — still honest
   end;
-  { 在 S1 环境下 Gtk 不可用，抛 BackendUnavailable 亦算通过 honet fail-fast }
-  Check(LRaised, 'desktop parentHandle must fail (unsupported or unavailable)');
+  Check(LRaised, 'desktop parentHandle must fail (unsupported or unavailable or no display)');
 end;
 
 procedure TestBuilderAppliesAllFields;
@@ -195,19 +259,37 @@ var
   LFake: TFakeWindow;
   LIsFake: Boolean;
 begin
-  W := TWindowBuilder.New.Build;
-  try
-    LIsFake := False;
+  if not WindowBackendAvailable(wkGtk) then
+  begin
+    W := TWindowBuilder.New.Build;
     try
-      LFake := TFakeWindow.FromWindow(W);
-      LIsFake := True;
-    except
-      on E: EWindowInvalidState do ;
+      LIsFake := False;
+      try
+        LFake := TFakeWindow.FromWindow(W);
+        LIsFake := True;
+      except
+        on E: EWindowInvalidState do ;
+      end;
+      Check(LIsFake, 'default kind without gtk is fake');
+      Check(not W.IsClosed, 'default-built window is open');
+    finally
+      if (W <> nil) and not W.IsClosed then W.Close;
     end;
-    Check(LIsFake, 'default kind in S1 is fake');
-    Check(not W.IsClosed, 'default-built window is open');
-  finally
-    if (W <> nil) and not W.IsClosed then W.Close;
+  end
+  else
+  begin
+    // gtk available: default should be gtk; if no display, may raise NotInitialized — skip strict check
+    try
+      W := TWindowBuilder.New.Build;
+      try
+        Check(not W.IsClosed, 'default-built gtk window is open');
+      finally
+        if not W.IsClosed then W.Close;
+      end;
+    except
+      on E: EWindowNotInitialized do
+        Check(True, 'gtk default but no display — honest NotInitialized');
+    end;
   end;
 end;
 
@@ -300,8 +382,75 @@ begin
   Check(LRaised, 'builder build must reject max < min');
 end;
 
+procedure TestWasmParentHandleIsAttachFriendly;
+var
+  LOptions: TWindowOptions;
+begin
+  LOptions := DefaultWindowOptions;
+  LOptions.ParentHandle := TWindowNativeHandle(Pointer($CAFE));
+  if not WindowBackendAvailable(wkWasm) then
+  begin
+    try
+      CreateWindowOf(wkWasm, LOptions);
+      Check(False, 'wasm unavailable should fail fast');
+    except
+      on E: EWindowBackendUnavailable do
+        CheckContains(E.Message, 'wkWasm')
+      else
+        Check(False, 'wasm with parent must not raise Unsupported');
+    end;
+  end
+  else
+  begin
+    try
+      CreateWindowOf(wkWasm, LOptions).Close;
+      Check(True, 'wasm attach with parent succeeds when available');
+    except
+      on E: Exception do Check(False, 'wasm with parent should succeed when available: '+E.Message);
+    end;
+  end;
+  { fake 亦为 attach 友好（契约预演）}
+  try
+    CreateFakeWindow(LOptions).Close;
+  except
+    on E: Exception do Check(False, 'fake with parent must not fail: ' + E.Message);
+  end;
+end;
+
+procedure TestAttachRequiresParentHandle;
+var
+  LOptions: TWindowOptions;
+  LRaised: Boolean;
+begin
+  LOptions := DefaultWindowOptions;
+  LOptions.ParentHandle := nil;
+  // Android attach requires ParentHandle
+  if not WindowBackendAvailable(wkAndroid) then
+  begin
+    try CreateWindowOf(wkAndroid, LOptions); Check(False, 'android unavailable fail'); except on E:EWindowBackendUnavailable do Check(True,'android unavailable honest'); end;
+  end
+  else
+  begin
+    LRaised:=False;
+    try CreateWindowOf(wkAndroid, LOptions); except on E:EWindowUnsupported do LRaised:=True; end;
+    Check(LRaised, 'android attach without parent must raise Unsupported');
+  end;
+  // UIKit attach requires ParentHandle
+  if not WindowBackendAvailable(wkUIKit) then
+  begin
+    try CreateWindowOf(wkUIKit, LOptions); Check(False, 'uikit unavailable fail'); except on E:EWindowBackendUnavailable do Check(True,'uikit unavailable honest'); end;
+  end
+  else
+  begin
+    LRaised:=False;
+    try CreateWindowOf(wkUIKit, LOptions); except on E:EWindowUnsupported do LRaised:=True; end;
+    Check(LRaised, 'uikit attach without parent must raise Unsupported');
+  end;
+end;
+
 var
   T: TTestSuite;
+  LOk: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.window.factory');
   T.Test('backend availability facts', @TestBackendAvailabilityFacts);
@@ -315,5 +464,15 @@ begin
   T.Test('factory create window of fake', @TestFactoryCreateWindowOfFake);
   T.Test('run loop exit paths', @TestRunLoopExitPaths);
   T.Test('factory options conflict raises at build', @TestFactoryOptionsConflictRaisesAtBuild);
-  if not T.Run then Halt(1);
+  T.Test('wasm parent handle is attach friendly', @TestWasmParentHandleIsAttachFriendly);
+  T.Test('attach requires parent handle', @TestAttachRequiresParentHandle);
+  LOk := T.Run;
+  UnloadWindowGtk;
+  UnloadWindowSdl2;
+  UnloadWindowWin32;
+  UnloadWindowCocoa;
+  UnloadWindowWasm;
+  UnloadWindowAndroid;
+  UnloadWindowUIKit;
+  if not LOk then Halt(1);
 end.

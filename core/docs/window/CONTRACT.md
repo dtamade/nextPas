@@ -4,7 +4,7 @@
 **层级**：L2 家族（依赖 L0-L1：base/errors/platform.dl 缝；被 L3 的
 `gpu` / `directui` / `webview` 与外部 `game888` 复用）
 **Owner**：core-window lane
-**最后更新**：2026-08-26
+**最后更新**：2026-08-28（S5 8 后端全量，mobile/wasm attach 实装，12 门禁）
 **版本**：0.1（Design S0 冻结草案——源码未落地；本文件冻结单元布局、类型/
 接口签名、线程模型、不变量、错误族、Deferred 与门禁。S1 首个 family 落地时
 若需偏离，必须在本文件留勘误行并过对应契约测试，不允许静默分叉。）
@@ -28,6 +28,7 @@ Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 | `nextpas.core.window.sdl2.ffi/.loader/.sdl2` | 后端 | SDL2 `SDL_Window`，game888 未来底座 | S3 |
 | `nextpas.core.window.win32.*` | 后端 | `CreateWindowEx` + `WM_*` | S4 |
 | `nextpas.core.window.cocoa.*` | 后端 | `NSWindow` / `NSView` | S4 |
+| `nextpas.core.window.wasm.ffi/.loader/.wasm` | 后端 | WASM `<canvas>` attach（`devicePixelRatio` + CSS/物理双口径） | S2a |
 | `nextpas.core.window.android.*` / `.uikit.*` | 后端 | 宿主 surface attach（`ParentHandle` 非 nil 路径） | S5 |
 
 ### 依赖方向
@@ -69,7 +70,7 @@ L2 / owner core-window / public facade yes / allowed deps L0-L1 +
 跨平台差异显式声明，不做假装。每个后端接入前逐格复核本表并在其
 focused/runtime 门禁中断言可测格。
 
-### 2.1 NativeHandle 诚实表（冻结）
+### 2.1 NativeHandle 诚实表（冻结，S2a 补 wasm 行）
 
 | 后端 | `NativeHandle` 返回 | 说明 |
 |------|---------------------|------|
@@ -78,6 +79,7 @@ focused/runtime 门禁中断言可测格。
 | `sdl2` | 按 windowing subsystem：X11 XID / HWND / NSWindow* / Wayland nil | `SDL_GetWindowWMInfo` 判别 subsystem |
 | `win32` | HWND | 客户区顶层窗口句柄 |
 | `cocoa` | NSWindow* | 外部消费须自行桥接 ObjC 世界 |
+| `wasm` | `EMSCRIPTEN` canvas 元素指针（attach 形态；`ParentHandle` 携带 canvas id 指针） | `emscripten_get_canvas_element_size` 的 `target` 指向的 `<canvas>`；`Close` 后 nil，生命周期归 DOM |
 | `android` | ANativeWindow* | attach 形态；surface 生命周期归宿主 Activity |
 | `uikit` | UIWindow* | attach 形态 |
 | `fake` | 确定性生成的非零假句柄 | 仅用于断言句柄传递链，永不解释内容 |
@@ -93,17 +95,17 @@ focused/runtime 门禁中断言可测格。
 
 ### 2.2 行为差异矩阵
 
-| 能力 | gtk | sdl2 | win32 | cocoa | fake |
-|------|-----|------|-------|-------|------|
-| Min/Max 尺寸约束 | `gtk_geometry_hints` 生效 | `SDL_SetWindowMinimumSize` 生效 | `WM_GETMINMAXINFO` 生效 | `contentMinSize`/`contentMaxSize` 生效 | 生效（校验逻辑同 base） |
-| GetScaleFactor | 整数诚实升格（典型 1/2） | ≥2.24 `SDL_GetWindowDisplayScale`；缺席回退 1.0（诚实标注） | `GetDpiForWindow/96` | `backingScaleFactor` | 固定 1.0，可脚本化改 |
-| weMoved 事件 | 发（配置协议决定精度） | 发 | 发 | 发 | 仅脚本注入 |
-| Wayland weMoved | **不发**（无全局坐标） | 不发 | — | — | — |
-| GetTitle | WM 级同步读；未设置过 '' | `SDL_GetWindowTitle` | `GetWindowText` | `title` property | 缓存读 |
-| Focus | `present` | `RaiseWindow` | `SetForegroundWindow` | `makeKeyAndOrderFront` | 状态位翻转 |
-| IsMinimized/Maximized | 查询式真值（gdk window state 位） | `SDL_WINDOW_*` 状态位 | `IsIconic/IsZoomed` | `isMiniaturized`/`isZoomed` | 状态位 |
-| ParentHandle（attach） | **不支持**：Build 抛 `EWindowUnsupported` | 同左（S3） | 同左 | 同左 | 记录并接受（供 S5 契约预演） |
-| 几何单位换算 | 内部逻辑像素，读写按 scale 换算物理口径，往返误差 ±1px | 同左（点坐标） | 物理像素直通 | 点坐标换算，±1px | 物理像素直通 |
+| 能力 | gtk | sdl2 | win32 | cocoa | wasm | android | uikit | fake |
+|------|-----|------|-------|-------|------|---------|-------|------|
+| Min/Max 尺寸约束 | `gtk_geometry_hints` 生效 | `SDL_SetWindowMinimumSize` 生效 | `WM_GETMINMAXINFO` 生效 | `contentMinSize`/`contentMaxSize` 生效 | **忽略**：canvas 尺寸归 CSS/浏览器布局，`Build` 选项 `Min/Max` 诚实 no-op | **忽略**：surface 尺寸归宿主布局，诚实 no-op | **忽略**：同 android | 生效（校验逻辑同 base） |
+| GetScaleFactor | 整数诚实升格（典型 1/2） | ≥2.24 `SDL_GetWindowDisplayScale`；缺席回退 1.0（诚实标注） | `GetDpiForWindow/96` | `backingScaleFactor` | `emscripten_get_device_pixel_ratio`（`1.0..3.0`），浏览器缩放时 `weScaleChanged` | 宿主 display metrics（当前 1.0 诚实） | `UIScreen.scale`（当前 2.0/3.0 诚实） | 固定 1.0，可脚本化改 |
+| weMoved 事件 | 发（配置协议决定精度） | 发 | 发 | 发 | **不发**：canvas 无全局屏幕坐标 | **不发**：surface 无全局屏幕坐标 | **不发** | 仅脚本注入 |
+| Wayland weMoved | **不发**（无全局坐标） | 不发 | — | — | — | — | — | — |
+| GetTitle | WM 级同步读；未设置过 '' | `SDL_GetWindowTitle` | `GetWindowText` | `title` property | `document.title` 同步（宿主归 `webview.wasm`） | 缓存（宿主标题归 Activity） | 缓存（宿主标题归 UIWindow） | 缓存读 |
+| Focus | `present` | `RaiseWindow` | `SetForegroundWindow` | `makeKeyAndOrderFront` | `canvas.focus()`（宿主可为 no-op） | 宿主焦点（no-op） | 宿主焦点（no-op） | 状态位翻转 |
+| IsMinimized/Maximized | 查询式真值（gdk window state 位） | `SDL_WINDOW_*` 状态位 | `IsIconic/IsZoomed` | `isMiniaturized`/`isZoomed` | **诚实 no-op**：`IsMinimized=False`/`IsMaximized=False` 恒假 | **诚实 no-op** | **诚实 no-op** | 状态位 |
+| ParentHandle（attach） | **不支持**：Build 抛 `EWindowUnsupported` | 同左（S3） | 同左 | 同左 | **接受**：`ParentHandle` 携带 canvas 元素指针/id 指针（attach 唯一形态） | **必需**：携带 `ANativeWindow*`，缺失抛 `Unsupported` | **必需**：携带 `UIWindow*`，缺失抛 `Unsupported` | 记录并接受（供 attach 契约预演） |
+| 几何单位换算 | 内部逻辑像素，读写按 scale 换算物理口径，往返误差 ±1px | 同左（点坐标） | 物理像素直通 | 点坐标换算，±1px | CSS 像素×`devicePixelRatio`=物理像素；`SetBounds` 写 CSS 尺度，内部×ratio 得物理往返 | 物理像素直通（只读） | 点坐标（只读，×scale） | 物理像素直通 |
 
 几何契约统一口径：`SetBounds/GetWidth/GetHeight/weResized/weMoved` 一律
 **物理像素**；逻辑像素 = 物理像素 / `GetScaleFactor`，换算时机归消费方。
@@ -116,10 +118,10 @@ focused/runtime 门禁中断言可测格。
 ### 3.1 后端种类
 
 ```pascal
-TWindowKind = (wkGtk, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkFake);
+TWindowKind = (wkGtk, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkWasm, wkFake);
 ```
 
-生产种类在前、`wkFake` 收尾（对齐 `TWebviewKind` 排列惯例）。能力驱动的
+生产种类在前、`wkFake` 收尾（对齐 `TWebviewKind` 排列惯例，`wkWasm` 紧邻 `wkFake` 之前属 attach 族）。能力驱动的
 缺省选择 `DefaultWindowKind: TWindowKind` 定义在 **factory**（探测需要
 loader 参与），base 只拥有枚举本身。
 
@@ -303,13 +305,26 @@ end;
 procedure WindowRunLoop;
 procedure WindowExitLoop;
 
+{ 非阻塞泵：为 game/directui tick 循环提供单步迭代（M-band 落地，不阻塞） }
+function WindowPumpOnce: Boolean;
+procedure WindowPumpAll;
+
 { 能力探测（factory 持 loader 真相；base 不知道这些函数的存在） }
 function WindowBackendAvailable(AKind: TWindowKind): Boolean;
 function DefaultWindowKind: TWindowKind;
+
+{ 宿主驱动扩展：attach 后端由宿主经 Supports 探测调用，拒绝 LM_ 消息伪装 }
+type
+  IWindowHost = interface
+    ['{7E9A2B3C-3D4E-4F60-9A8B-C1D2E3F4A005}']
+    procedure HostResized(AWidth, AHeight: Integer);
+    procedure HostScaleChanged(ANewScale: Double);
+    procedure HostCloseRequested;
+  end;
 ```
 
 - `Kind()` 缺省 = `DefaultWindowKind` 能力驱动（探测顺序：平台原生 >
-  gtk > sdl2；细节 S1 定案并写测试）；`Build` 时后端不可用按工厂语义
+  wasm > gtk > sdl2；wasm 在浏览器宿主为原生；细节 S2a 补 wasm 并写测试）；`Build` 时后端不可用按工厂语义
   fail-fast 抛 `EWindowBackendUnavailable`。
 - `Build` 可多次调用创建多个独立窗口；同一进程所有窗口共享同一 UI 主线程
   与同一后端主循环。builder 出的窗口与工厂路径同一生命周期纪律：消费方
@@ -319,7 +334,7 @@ function DefaultWindowKind: TWindowKind;
 - `WindowRunLoop` 期间宿主不得再占用该线程做长计算；后台工作 post 给应用
   自己的执行设施，完成后 `Dispatcher.Post` 回主线程收尾。
 - 本模块不 uses `TAsyncLoop`；应用层自行把两者接起来。`IterateOnce`
-  （单步迭代融合宿主循环）登记 deferred-LI，S1 不实现不预留接口。
+  （单步迭代融合宿主循环）登记 deferred-LI，S1 不实现不预留接口；M-band 以 `WindowPumpOnce/PumpAll` 提供最小非阻塞泵，供 game/directui 的 `tick` 循环复用，不经消息号。
 
 ### 4.4 fake 驱动面（fake）
 
@@ -384,6 +399,7 @@ Build（隐藏创建，选项已校验）
 - 移动端（S5）scale 来自宿主 surface 的 display metrics；attach 形态下
   窗口几何只读（尺寸归宿主布局），SetBounds 为诚实 no-op——S5 定案前
   此行先冻在诚实表。
+- wasm 端 scale = `devicePixelRatio`（浏览器缩放/显示器迁移时 `weScaleChanged`），几何写 CSS 尺度内部×ratio 得物理；attach 形态下 `ParentHandle` 携带 canvas 指针/id 指针，`Min/Max` 诚实 no-op。
 
 ### 6.3 多窗口
 
@@ -436,7 +452,7 @@ runtime 冒烟允许的最大环境假设：存在 GTK3 运行库；不要求 de
 
 | 能力 | 类别 | 触发条件 |
 |------|------|----------|
-| `IterateOnce` 主循环融合（接 `TAsyncLoop.WaitForWake`） | deferred-LI | 应用真要把 window loop 接进 TAsyncLoop 时立项（涉及各后端循环所有权设计，禁止半成品调度器） |
+| `IterateOnce` 主循环融合（接 `TAsyncLoop.WaitForWake`） | deferred-LI | 应用真要把 window loop 接进 TAsyncLoop 时立项（M-band 已以 `WindowPumpOnce` 提供最小非阻塞泵，完整融合仍 deferred） |
 | close-request 交互确认（弹窗 veto UI） | deferred-Win | 应用需要"关闭前确认"完整交互时（`weCloseRequested` 忽略即 veto 已覆盖判定面） |
 | fullscreen / decorations / transparent / icon / alwaysOnTop / drag region | deferred-Win | tao 对齐第二批；每批过诚实表复核 |
 | 运行期 SetMinSize/SetMaxSize | deferred-Win | 出现运行中改变约束的真实场景 |

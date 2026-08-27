@@ -479,6 +479,8 @@ procedure TQuicStreamMux.MaybeAdvertiseWindows(AIdx: Integer);
 var
   LF: TBytes;
 begin
+  if (AIdx < 0) or (AIdx >= Length(FStreams)) then
+    Exit;
   { 流级升窗 }
   if QuicRecvShouldAdvertise(FStreams[AIdx].RxCtl) and
      QuicRecvAdvertise(FStreams[AIdx].RxCtl,
