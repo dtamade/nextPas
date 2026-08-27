@@ -55,6 +55,10 @@ function PcmTpdfNoise(var AState: UInt32): Single; inline;
 
 implementation
 
+{$PUSH}
+{$WARNINGS OFF}
+{$HINTS OFF}
+
 function PcmClampF32(AValue: Single): Single;
 begin
   if AValue < -1.0 then Exit(-1.0);
@@ -342,5 +346,7 @@ begin
       Move(AInterleaved[LSrcOffset], APlanes[LCh][LDstOffset], ABytesPerSample);
     end;
 end;
+
+{$POP}
 
 end.

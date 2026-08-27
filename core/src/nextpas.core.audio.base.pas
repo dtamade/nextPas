@@ -112,6 +112,10 @@ function AudioFormatCreate(ASampleRate, AChannels: Integer;
 
 implementation
 
+{$PUSH}
+{$WARNINGS OFF}
+{$HINTS OFF}
+
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer;
 begin
   case AFormat of
@@ -145,8 +149,6 @@ begin
 end;
 
 function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioChannelLayout;
-var
-  LExact: UInt32;
 begin
   { Exact match first. }
   if AMask = AudioChannelMaskForLayout(clMono) then Exit(clMono);
@@ -164,9 +166,6 @@ begin
   else
     Result := clStereo;
   end;
-  { Silence unused warning for LExact if not used }
-  LExact := 0;
-  if LExact <> 0 then ;
 end;
 
 function AudioFormatCreate(ASampleRate, AChannels: Integer;
@@ -288,5 +287,7 @@ begin
     Exit(0);
   Result := Int64((Frame * UInt64(1000000000)) div UInt64(SampleRate));
 end;
+
+{$POP}
 
 end.

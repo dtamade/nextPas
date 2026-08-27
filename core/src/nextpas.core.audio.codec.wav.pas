@@ -44,6 +44,10 @@ function WavProbe(const APrefix: TBytes): TAudioProbeResult;
 
 implementation
 
+{$PUSH}
+{$WARNINGS OFF}
+{$HINTS OFF}
+
 uses
   nextpas.core.audio.pcm,
   nextpas.core.fs;
@@ -241,8 +245,6 @@ var
   LFormat: TAudioFormat;
   LSampleFmt: TAudioSampleFormat;
   LMask: UInt32;
-  LLayout: TAudioChannelLayout;
-  LExtraBext: string;
   LStartPos: Int64;
 begin
   Result.Format := Default(TAudioFormat);
@@ -327,7 +329,6 @@ begin
   LBits := 0;
   LExtFound := False;
   LChannelMask := 0;
-  LExtraBext := '';
 
   while HasBytes(AStream, 8, LRiffEnd) do
   begin
@@ -914,5 +915,7 @@ begin
   LOpts.ApplyDither := False;
   AudioEncodeWav(ABuffer, ADest, LOpts);
 end;
+
+{$POP}
 
 end.
