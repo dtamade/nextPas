@@ -27,6 +27,9 @@ function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
 
 implementation
 
+uses
+  nextpas.core.text.conv;
+
 type
   { 只读窗口流：读窗口 = blob 内 [FOffset, FOffset+FSize)，零拷贝直达 }
   TWindowStream = class(TInterfacedObject, IStream, IReaderAt)
@@ -52,16 +55,18 @@ type
     property Position: Int64 read GetPosition write SetPosition;
   end;
 
-  TEmbeddedVfs = class(TInterfacedObject, IVfs)
+  TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag)
   private
     FRp: TResPack;
     FData: PByte;
     FSize: SizeUInt;
     FOwnsBlob: Boolean;
     FPaths: TVfsNameArray; { cached sorted file paths — O(1) reuse, avoids per-call EntryPaths alloc }
+    FETags: array of string; { parallel ETag cache — precomputed at Create, O(1) ServeVfs }
     function EntryPaths: TVfsNameArray; inline;
     function HasSubtreePath(const APath: string): Boolean;
     function StartsWithPath(const AStr, APrefix: string): Boolean;
+    function IndexOfPath(const APath: string): SizeInt;
   public
     constructor Create(AData: PByte; ASize: SizeUInt; AOwnsBlob: Boolean);
     destructor Destroy; override;
@@ -70,6 +75,7 @@ type
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
     function CaseSensitive: Boolean;
+    function TryGetETag(const APath: string; out AETag: string): Boolean;
   end;
 
 function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
@@ -178,21 +184,31 @@ constructor TEmbeddedVfs.Create(AData: PByte; ASize: SizeUInt;
   AOwnsBlob: Boolean);
 var
   I: SizeUInt;
+  E: TResPackEntry;
 begin
   inherited Create;
   FRp := TResPack.Open(AData, ASize);   { 校验失败 EResPackCorrupted 原样透传 }
   FData := AData;
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
-  { Materialize sorted path index once — avoids per-call EntryPaths rebuild (~n allocs) }
+  { Materialize sorted path index + parallel ETag cache once — O(n) upfront, O(1) per ServeVfs }
   SetLength(FPaths, FRp.Count);
+  SetLength(FETags, FRp.Count);
   if FRp.Count > 0 then
     for I := 0 to FRp.Count - 1 do
-      FPaths[I] := FRp.PathOf(FRp.EntryAt(I));
+    begin
+      E := FRp.EntryAt(I);
+      FPaths[I] := FRp.PathOf(E);
+      if (E.Flags and RESPACK_EFLAG_HASHED) <> 0 then
+        FETags[I] := '"fnv-' + nextpas.core.text.conv.IntToHex(UInt64(E.Hash), 8) + '"'
+      else
+        FETags[I] := '"' + nextpas.core.text.conv.IntToHex(E.Size, 16) + '-' + nextpas.core.text.conv.IntToHex(UInt64(E.ModTime), 16) + '"';
+    end;
 end;
 
 destructor TEmbeddedVfs.Destroy;
 begin
+  SetLength(FETags, 0);
   SetLength(FPaths, 0);
   if FOwnsBlob and (FData <> nil) then
     FreeMem(FData);
@@ -240,6 +256,35 @@ begin
   end;
   if (Lo < Length(FPaths)) and StartsWithPath(FPaths[Lo], Prefix) then
     Exit(True);
+end;
+
+function TEmbeddedVfs.IndexOfPath(const APath: string): SizeInt;
+var
+  Lo, Hi, Mid: SizeInt;
+begin
+  Lo := 0;
+  Hi := Length(FPaths);
+  while Lo < Hi do
+  begin
+    Mid := (Lo + Hi) shr 1;
+    if FPaths[Mid] = APath then Exit(Mid);
+    if FPaths[Mid] < APath then Lo := Mid + 1 else Hi := Mid;
+  end;
+  Result := -1;
+end;
+
+function TEmbeddedVfs.TryGetETag(const APath: string; out AETag: string): Boolean;
+var
+  Idx: SizeInt;
+begin
+  Idx := IndexOfPath(APath);
+  if Idx >= 0 then
+  begin
+    AETag := FETags[Idx];
+    Exit(True);
+  end;
+  AETag := '';
+  Result := False;
 end;
 
 { 前缀判断：显式处理空前缀（FPC Pos('',S)=0 陷阱） }

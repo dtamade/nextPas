@@ -783,6 +783,7 @@ var
   LInfo: TStatInfo;
   LMime, LETag, LLastModified: string;
   LModTimeUnix: Int64;
+  LCache: IVfsETag;
 begin
   try
     try
@@ -807,7 +808,19 @@ begin
     LModTimeUnix := LInfo.Info.ModTime;
     if LModTimeUnix < 0 then
       LModTimeUnix := 0;
-    if LInfo.ContentHash <> 0 then
+    if (AFs is IVfsETag) then
+    begin
+      LCache := AFs as IVfsETag;
+      if LCache.TryGetETag(AVfsPath, LETag) then
+      begin
+        { hot path: embedded precomputed ETag — zero per-request hex alloc }
+      end
+      else if LInfo.ContentHash <> 0 then
+        LETag := '"fnv-' + IntToHex(LInfo.ContentHash, 8) + '"'
+      else
+        LETag := GenerateETag(LInfo.Info.Size, LModTimeUnix);
+    end
+    else if LInfo.ContentHash <> 0 then
       LETag := '"fnv-' + IntToHex(LInfo.ContentHash, 8) + '"'
     else
       LETag := GenerateETag(LInfo.Info.Size, LModTimeUnix);
