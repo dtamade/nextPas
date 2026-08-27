@@ -19,6 +19,7 @@ uses
   nextpas.core.tls.tls13.wire;
 
 function BuildTLS13RecordAAD(AEncryptedLength: Word): TBytes;
+procedure BuildTLS13RecordAADTo(AEncryptedLength: Word; ADest: PByte);
 function BuildTLS13RecordNonce(const AStaticIV: TBytes; ASequenceNumber: QWord): TBytes;
 procedure BuildTLS13RecordNonceTo(const AStaticIV: TBytes; ASequenceNumber: QWord; ADest: PByte);
 
@@ -44,6 +45,17 @@ begin
   Result[2] := Byte(TLS_LEGACY_VERSION and $FF);
   Result[3] := Byte((AEncryptedLength shr 8) and $FF);
   Result[4] := Byte(AEncryptedLength and $FF);
+end;
+
+procedure BuildTLS13RecordAADTo(AEncryptedLength: Word; ADest: PByte);
+begin
+  if ADest = nil then
+    RaiseInvalidParameter('TLS13AADDestNil');
+  ADest^ := TLS_CONTENT_TYPE_APPLICATION_DATA;
+  (ADest + 1)^ := Byte(TLS_LEGACY_VERSION shr 8);
+  (ADest + 2)^ := Byte(TLS_LEGACY_VERSION and $FF);
+  (ADest + 3)^ := Byte((AEncryptedLength shr 8) and $FF);
+  (ADest + 4)^ := Byte(AEncryptedLength and $FF);
 end;
 
 function BuildTLS13RecordNonce(const AStaticIV: TBytes; ASequenceNumber: QWord): TBytes;

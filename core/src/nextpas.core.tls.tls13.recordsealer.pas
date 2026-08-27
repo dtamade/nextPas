@@ -133,8 +133,7 @@ function TTLS13RecordSealer.SealToBuf(AFragment: PByte; AFragLen: Integer; ACont
   ADest: PByte; ADestCap: Integer; out ARecordLen: Integer; out AError: string): Boolean;
 var
   LNonceBytes: array[0..11] of Byte;
-  LNonce: TBytes;
-  LAAD: TBytes;
+  LAADBytes: array[0..4] of Byte;
   LEncLen: Integer;
   LInnerLen: Integer;
 begin
@@ -183,11 +182,9 @@ begin
   end;
   (ADest + 5 + AFragLen)^ := AContentType;
   BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
-  SetLength(LNonce, 12);
-  Move(LNonceBytes[0], LNonce[0], 12);
   LEncLen := 0;
-  LAAD := BuildTLS13RecordAAD(Word(LInnerLen + 16));
-  if not TryTLS13AEADEncryptToBuf(FCipherSuite, FKey, LNonce, LAAD, ADest + 5, LInnerLen, ADest + 5, ADestCap - 5, LEncLen, AError) then
+  BuildTLS13RecordAADTo(Word(LInnerLen + 16), @LAADBytes[0]);
+  if not TryTLS13AEADEncryptDirect(FCipherSuite, FKey, @LNonceBytes[0], 12, @LAADBytes[0], 5, ADest + 5, LInnerLen, ADest + 5, ADestCap - 5, LEncLen, AError) then
     Exit;
   ADest[0] := TLS_CONTENT_TYPE_APPLICATION_DATA;
   ADest[1] := Byte(TLS_LEGACY_VERSION shr 8);
@@ -289,8 +286,7 @@ function TTLS13RecordOpener.OpenTo(const AEncryptedPayload: TBytes;
   out AError: string): Boolean;
 var
   LNonceBytes: array[0..11] of Byte;
-  LNonce: TBytes;
-  LAAD: TBytes;
+  LAADBytes: array[0..4] of Byte;
 begin
   AFragLen := 0;
   AContentType := 0;
@@ -312,12 +308,19 @@ begin
     Exit;
   end;
   BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
-  SetLength(LNonce, 12);
-  Move(LNonceBytes[0], LNonce[0], 12);
-  LAAD := BuildTLS13RecordAAD(Word(Length(AEncryptedPayload)));
-  if not TryTLS13AEADDecryptTo(FCipherSuite, FKey, LNonce, LAAD,
-    AEncryptedPayload, ADest, ADestCap, AFragLen, AContentType, AError) then
-    Exit;
+  BuildTLS13RecordAADTo(Word(Length(AEncryptedPayload)), @LAADBytes[0]);
+  if Length(AEncryptedPayload) > 0 then
+  begin
+    if not TryTLS13AEADDecryptDirect(FCipherSuite, FKey, @LNonceBytes[0], 12, @LAADBytes[0], 5,
+      @AEncryptedPayload[0], Length(AEncryptedPayload), ADest, ADestCap, AFragLen, AContentType, AError) then
+      Exit;
+  end
+  else
+  begin
+    if not TryTLS13AEADDecryptDirect(FCipherSuite, FKey, @LNonceBytes[0], 12, @LAADBytes[0], 5,
+      nil, 0, ADest, ADestCap, AFragLen, AContentType, AError) then
+      Exit;
+  end;
   if not IncrementTLS13Sequence(FSequence) then
     FState := tssExhausted;
   Result := True;
@@ -328,8 +331,7 @@ function TTLS13RecordOpener.OpenToBuf(AEncrypted: PByte;
   out AFragLen: Integer; out AContentType: Byte; out AError: string): Boolean;
 var
   LNonceBytes: array[0..11] of Byte;
-  LNonce: TBytes;
-  LAAD: TBytes;
+  LAADBytes: array[0..4] of Byte;
 begin
   AFragLen := 0;
   AContentType := 0;
@@ -356,10 +358,8 @@ begin
     Exit;
   end;
   BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
-  SetLength(LNonce, 12);
-  Move(LNonceBytes[0], LNonce[0], 12);
-  LAAD := BuildTLS13RecordAAD(Word(AEncryptedLen));
-  if not TryTLS13AEADDecryptToBuf(FCipherSuite, FKey, LNonce, LAAD,
+  BuildTLS13RecordAADTo(Word(AEncryptedLen), @LAADBytes[0]);
+  if not TryTLS13AEADDecryptDirect(FCipherSuite, FKey, @LNonceBytes[0], 12, @LAADBytes[0], 5,
     AEncrypted, AEncryptedLen, ADest, ADestCap, AFragLen, AContentType, AError) then
     Exit;
   if not IncrementTLS13Sequence(FSequence) then
