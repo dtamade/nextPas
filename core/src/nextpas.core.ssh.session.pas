@@ -78,6 +78,7 @@ type
     function KnownHostsFile(const AValue: string): ISshClientBuilder;
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
+    function Compress(AValue: Boolean): ISshClientBuilder;
     { 建立 TCP、完成握手并按已填选项认证 }
     function Connect: ISshSession;
   end;
@@ -111,6 +112,7 @@ uses
   nextpas.core.ssh.keys,
   nextpas.core.ssh.rsa,
   nextpas.core.ssh.agent,
+  nextpas.core.ssh.compress,
   nextpas.core.ssh.kex.curve25519,
   nextpas.core.ssh.kex.dhgroup14;
 
@@ -151,6 +153,7 @@ type
     FHostKeyFingerprint: string;
     FKnownHosts: TSshKnownHosts;
     FKnownHostsLoaded: Boolean;
+    FNegotiated: TSshNegotiated;
 
     procedure EnsureHandshaken;
     procedure EnsureAuthenticated;
@@ -162,6 +165,7 @@ type
     procedure DeriveAndApplyNewKeys(const ANegotiated: TSshNegotiated;
       const AK, AH: TBytes);
     procedure AuthenticateWithAgentClient(const AAgent: TSshAgentClient);
+    procedure TryEnableDelayedCompression;
   public
     constructor CreateInternal(const AIO: IReadWriteCloser;
       const AOptions: TSshConnectOptions);
@@ -195,6 +199,7 @@ type
     function KnownHostsFile(const AValue: string): ISshClientBuilder;
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
+    function Compress(AValue: Boolean): ISshClientBuilder;
     function Connect: ISshSession;
   end;
 
@@ -312,6 +317,13 @@ begin
   end;
 end;
 
+procedure TSshSession.TryEnableDelayedCompression;
+begin
+  if FAuthenticated and (SshCompressionIsDelayed(FNegotiated.CompCs)
+    or SshCompressionIsDelayed(FNegotiated.CompSc)) then
+    FTransport.EnableCompression;
+end;
+
 procedure TSshSession.DoHandshake;
 var
   LCookie, LMyInit, LPeerInit, LReply: TBytes;
@@ -324,11 +336,12 @@ begin
   FTransport.ExchangeVersions;
 
   LCookie := GenerateSecureRandomBytes(16);
-  LMyInit := FTransport.SendKexInit(LCookie);
+  LMyInit := FTransport.SendKexInitEx(LCookie, FOptions.Compress);
 
   LPeerInit := ExpectOneOf([SSH_MSG_KEXINIT]);
   LPeer := SshParseKexInit(LPeerInit);
-  LNeg := SshNegotiate(LPeer);
+  LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
+  FNegotiated := LNeg;
 
   if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
   begin
@@ -397,6 +410,7 @@ begin
 
   FTransport.SendPacket(SingleBytePayload(SSH_MSG_NEWKEYS));
   ExpectOneOf([SSH_MSG_NEWKEYS]);
+  FTransport.SetNegotiatedCompression(ANegotiated);
   FTransport.ApplyNewKeys(ANegotiated,
     LIvCs, LKeyCs, LMacCs, LIvSc, LKeySc, LMacSc);
 end;
@@ -428,13 +442,16 @@ begin
 
   LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE]);
   if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
-    FAuthenticated := True
+  begin
+    FAuthenticated := True;
+    TryEnableDelayedCompression;
+  end
   else
   begin
     LR := TsshReader.Create(LMsg);
     try
       LR.ReadByte;
-      LR.ReadStringText;  { 可继续尝试的方法列表 }
+      LR.ReadStringText;
     finally
       LR.Free;
     end;
@@ -519,6 +536,7 @@ begin
   FTransport.SendPacket(
     SshBuildAuthPubKeySigned(FActiveUser, LAlgName, LPubBlob, LSigBlob));
   AwaitSuccessOrRaise('publickey');
+  TryEnableDelayedCompression;
 end;
 
 procedure TSshSession.AuthenticateWithAgent(const APath: string);
@@ -566,16 +584,15 @@ begin
   begin
     LAlgName := LIds[I].AlgName;
     if LAlgName = '' then Continue;
-    // probe
     FTransport.SendPacket(SshBuildAuthPubKeyProbe(FActiveUser, LAlgName, LIds[I].Blob));
     LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE, SSH_MSG_USERAUTH_PK_OK]);
     if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
     begin
       FAuthenticated := True;
+      TryEnableDelayedCompression;
       Exit;
     end;
     if LMsg[0] = SSH_MSG_USERAUTH_FAILURE then Continue;
-    // PK_OK -> sign
     LFlags := SshAgentKeyBlobToSignFlags(LIds[I].Blob);
     LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LIds[I].Blob);
     if not AAgent.Sign(LIds[I].Blob, LSignedData, LFlags, LSigBlob) then Continue;
@@ -584,6 +601,7 @@ begin
     if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
     begin
       FAuthenticated := True;
+      TryEnableDelayedCompression;
       Exit;
     end;
     // else try next identity
@@ -670,6 +688,12 @@ end;
 function TSshClientBuilder.ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
 begin
   FOptions.ExecTimeoutMs := AValue;
+  Result := Self;
+end;
+
+function TSshClientBuilder.Compress(AValue: Boolean): ISshClientBuilder;
+begin
+  FOptions.Compress := AValue;
   Result := Self;
 end;
 

@@ -111,6 +111,7 @@ type
     StrictHostKeyChecking: Boolean;  { True：未知主机密钥直接拒绝 }
     ConnectTimeoutMs: Integer;       { 预留：当前阻塞 IO 未接入超时 }
     ExecTimeoutMs: Integer;          { Exec 输出收集超时，<=0 表示无限等待 }
+    Compress: Boolean;               { True：协商 zlib@openssh.com / zlib，延迟/即时激活 }
     InitialWindowSize: UInt32;
     MaxPacket: UInt32;
   end;

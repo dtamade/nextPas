@@ -222,17 +222,38 @@ Unix socket 上的 OpenSSH agent 转发——枚举身份 + 代签名，无私�
 - [x] 测试四线闭环：`test_ssh_agent` 内存管道 5 用例（`list/sign ed25519/rsa-sha2-512/multiple/unknown`，54ms 内）；`test_ssh_session` 假 agent + 假服务端双管道回环 5 用例（`ed25519/rsa/multiple/no-identities/dh-fallback`，15/15，`Probe→PK_OK→SIGN→SUCCESS` 全路径，真实验签）；`test_ssh_kex/hostkey/keys` 等 8 门回归全绿
 - [x] 服务端探针修复：`ServeApp` 的 `publickey` 分支按 `hasSig` 分流——probe 无 sig 字段，命中回 `SSH_MSG_USERAUTH_PK_OK` 否则 `FAILURE`；签名请求才走 `Ed25519Verify/RsaVerifyPkcs1v15`，与真实 OpenSSH 时序一致
 
+## S15 — zlib 压缩（zlib@openssh.com 延迟 / zlib 即时）（已完成）
+
+RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩——
+`none` 零开销，协商命中后再按时机激活：
+
+- [x] `compress`：`ISshCompressor` 有状态封装（每方向 `z_stream`，`deflateInit/inflateInit`，
+      每包 `deflate(Z_SYNC_FLUSH)` 动态扩容保留滑动窗口，`inflate(Z_SYNC_FLUSH)` 1 MiB 上限
+      防 bomb，`CreateSshZlibCompressor` 单对象双流，复用 `nextpas.core.compress.base` 的 `LevelToZlib`）
+- [x] `kex`：`SSH_OFFER_COMP_ALGS=('none')` + `SSH_OFFER_COMP_ALGS_COMPRESS=('zlib@openssh.com','zlib','none')`，
+      `SshBuildKexInitPayloadEx(ACookie,ACompress)` / `SshNegotiateEx(APeer,ACompress)`，
+      `ACompress=False` 时保持纯 `none` 零开销；`SshNegotiate` 重定向到 `Ex(...,False)` 兼容既有调用
+- [x] `transport`：`FCompressor/FDecompressor/FCompressEnabled/FNegCompCs/Sc`，
+      `SetNegotiatedCompression`（immediate `zlib` 立即 `EnableCompression`，delayed 等 `USERAUTH_SUCCESS` 后），
+      `EnableCompression` 懒创建 `z_stream`；`SendPacket` 先 `Compress` 再 `padding/Protect`，`ReadPacket` 先 `Unprotect/strip` 再 `Decompress`（RFC 4253 §6.2 顺序）
+- [x] `session`：`ISshClientBuilder.Compress(Boolean)` + `TSshConnectOptions.Compress`（默认 False），
+      `DoHandshake` 改 `SendKexInitEx(...,Compress)` + `SshNegotiateEx`，`DeriveAndApplyNewKeys` 中
+      `SetNegotiatedCompression` 再 `ApplyNewKeys`，`TryEnableDelayedCompression` 在 `password/publickey/agent` 成功后按 `delayed` 激活
+- [x] 测试五线闭环：`test_ssh_compress` 4/4（`roundtrip single/stateful empty/bomb`，有状态第 2 包更小验证窗口保留，1 MiB 防 bomb）；
+      `test_ssh_kex` 12/12（`compress negotiation`：`Ex(True)` 选 `zlib@openssh.com`，`Ex(False)` 选 `none`，`BuildEx` 3 名 vs 1 名）；
+      `test_ssh_transport` 9/9 零开销回归；`test_ssh_session` 19/19（新增 4 压缩回环：`password/pubkey/dh+compress/agent+compress`，假服务端 `ForceCompress` 延迟激活与 `Compress` 双端协商，假 agent 双管道同测）
+- [x] `base`/`ssh.pas` 门面 re-export `ISshCompressor` 与 `compress` 单元
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| zlib 压缩方法 | compress.deflate 可复用 |
 | async reactor 适配 | net.async.dial + 非阻塞读事件化 |
 
 ## 真实性等级声明
 
 核心结论以 **focused-runtime**（回环测试在 Linux x86_64 host 上真实执行）为基础；
-真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT + S12 ECDSA + S13 DH 回退 + S14 agent**
+真实服务器互操作已由 **S6 live e2e + S7 replay 集成收口 + S8 SFTP + S9 RSA 认证 + S10 加密私钥 + S11 CRT + S12 ECDSA + S13 DH 回退 + S14 agent + S15 压缩**
 补齐：本地 Docker 夹具（Alpine OpenSSH 9.7）与远程 Debian OpenSSH 10.0p2 均
-8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA/CRT/ECDSA 与加密私钥认证，以及 DH group14 回退协商与交换；agent 为纯客户端协议，live 需 `ssh-agent` 环境，默认 gate 由内存管道回环覆盖），
+8 场景通过（含通道复用压力、internal-sftp 文件操作回路、RSA/CRT/ECDSA 与加密私钥认证，以及 DH group14 回退协商与交换；agent 为纯客户端协议，live 需 `ssh-agent` 环境，默认 gate 由内存管道回环覆盖；压缩由 `zlib@openssh.com` 延迟回环与有状态窗口验证覆盖），
 heaptrc 0 泄漏。e2e 为 opt-in 门控，不进默认 gate。
