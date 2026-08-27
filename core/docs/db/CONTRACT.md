@@ -399,7 +399,15 @@ KingbaseES 等）的 D4 备选接入路径。契约要点：
   （decNotSupported）。AImmediate 无 ISO 对应语义，接受为 no-op。
 - **能力降级矩阵**：见 §2.10 表 ODBC 列与 adapter 单元头注（同文）。
   Savepoints 因 ISO CLI 无发现机制整体降级且不实现
-  IDbSavepointControl（互证契约一致）。
+  IDbSavepointControl（互证契约一致）。**达梦 DM8 备注（ADR 0002）**：
+  经 `ConnectOdbc(Driver=DM8 ODBC DRIVER;…)` 的 P1 ODBC 网关为 Tier-1
+  路径，`SupportsSavepoints=False` 为契约性诚实降级（嵌套
+  `WithTransaction` 将 fail-fast `decNotSupported`），`SupportsBatchExecutor
+  =True`（逐条+单事务、精确到步），`SupportsNativeBool=False`；约束违约等
+  归一依赖驱动的 SqlState 质量（多数报 `HY000` 欠归一、`NativeError`
+  仅透传，不经 `ClassifyOdbcEx` MySQL 提精——达梦自成体系码位不参与
+  提精，宁可欠归一不错归一），语句超时秒粒度向上取整。P2 `libdmdpi`
+  专用适配器（`dpi_*`/`ClassifyDm`/`dbkDm`）仅当触发条件满足时再议。
 - **占位符**：? 与统一契约同形直通；?N 槽位计划与 pg/mysql 同构
   （Seq 只对裸 ? 递增）。重复逻辑号（如 `?, ?1`）的执行层复用三后端
   一致不支持：服务端参数计数 = 占位符数，未绑定物理槽一律 fail-fast。
