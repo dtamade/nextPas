@@ -233,7 +233,8 @@ begin
         MinData := E.DataOffset;
     end;
 
-  { 步骤 6：路径范围落在 strtab 推导边界内 }
+  { 步骤 6+7：路径范围 + 有序性 + 规范语法 — 合并以省一次 DecodeWire/Compare
+    （MinData 已在步骤 5 推导完成；步骤 6 优先于 7，错误码保持与分步一致） }
   if Result.Count > 0 then
     for I := 0 to Result.Count - 1 do
     begin
@@ -241,19 +242,10 @@ begin
       if UInt64(E.PathOffset) + UInt64(E.PathLen)
         > MinData - Result.FStrTabBase then
         raise EResPackCorrupted.CreateStep(6, 'path beyond string table bound');
-    end;
-
-  { 步骤 7：严格有序（免费得到无重复）+ 存储路径符合规范语法 }
-  if Result.Count > 0 then
-    for I := 0 to Result.Count - 1 do
-    begin
       if I > 0 then
-      begin
         if Result.CompareStoredToStored(I - 1, I) >= 0 then
           raise EResPackCorrupted.CreateStep(7,
             'index not strictly sorted or duplicate path');
-      end;
-      Result.DecodeWire(I, E);
       if not ResPackValidPath(Result.PathOf(E), True) then
         raise EResPackCorrupted.CreateStep(7, 'non-canonical path stored');
     end;
