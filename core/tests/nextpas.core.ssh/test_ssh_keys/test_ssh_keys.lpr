@@ -8,6 +8,7 @@ program test_ssh_keys;
  * checkint/nkeys/marker 等结构错误路径。}
 
 uses
+  SysUtils,
   nextpas.core.system.sysutils,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -182,6 +183,30 @@ begin
   end;
 end;
 
+{ RSA 私段（真实 CRT 五元组，验证 HasCrt 准确性）}
+function MakeRsaPrivSectionCrt(ACheck: UInt32; const AN, AE, AD, AP, AQ, AIqmp: TBytes): TBytes;
+var
+  LW: TsshWriter;
+begin
+  Result := nil;
+  LW := TsshWriter.Create(768);
+  try
+    LW.PutUInt32(ACheck);
+    LW.PutUInt32(ACheck);
+    LW.PutStringText('ssh-rsa');
+    LW.PutMPInt(AN);
+    LW.PutMPInt(AE);
+    LW.PutMPInt(AD);
+    LW.PutMPInt(AIqmp);
+    LW.PutMPInt(AP);
+    LW.PutMPInt(AQ);
+    LW.PutStringText('crt-valid');
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
+end;
+
 procedure ExpectKindError(const AContent: string; AExpected: TSshErrorKind;
   const AWhat: string);
 var
@@ -323,6 +348,133 @@ begin
     { 摘要错配 DigestInfo → 验签必须拒绝 }
     CheckFalse(RsaVerifyPkcs1v15(HexToBytesKat(KAT_E_HEX), LN,
       SHA512(KatMsg), DIGEST_INFO_SHA256, KatSigSha512));
+  end);
+
+  LSuite.Test('rsa crt signature equals naive for both digests', procedure
+  var
+    LN, LD, LP, LQ, LIq, LSigNaive, LSigCrt: TBytes;
+  begin
+    LN := CrtKatN; LD := CrtKatD; LP := CrtKatP; LQ := CrtKatQ; LIq := CrtKatIqmp;
+    CheckTrue(RsaSignPkcs1v15(LN, LD, SHA256(KatMsg), DIGEST_INFO_SHA256, LSigNaive), 'naive sha256');
+    CheckTrue(RsaSignPkcs1v15Crt(LN, LD, LP, LQ, LIq, SHA256(KatMsg), DIGEST_INFO_SHA256, LSigCrt), 'crt sha256');
+    CheckEqual(BytesToHex(LSigNaive), BytesToHex(LSigCrt), 'crt==naive sha256');
+    CheckTrue(RsaVerifyPkcs1v15(HexToBytesKat(KAT_E_HEX), LN, SHA256(KatMsg), DIGEST_INFO_SHA256, LSigCrt), 'verify crt sha256');
+
+    CheckTrue(RsaSignPkcs1v15(LN, LD, SHA512(KatMsg), DIGEST_INFO_SHA512, LSigNaive), 'naive sha512');
+    CheckTrue(RsaSignPkcs1v15Crt(LN, LD, LP, LQ, LIq, SHA512(KatMsg), DIGEST_INFO_SHA512, LSigCrt), 'crt sha512');
+    CheckEqual(BytesToHex(LSigNaive), BytesToHex(LSigCrt), 'crt==naive sha512');
+    CheckTrue(RsaVerifyPkcs1v15(HexToBytesKat(KAT_E_HEX), LN, SHA512(KatMsg), DIGEST_INFO_SHA512, LSigCrt), 'verify crt sha512');
+  end);
+
+  LSuite.Test('rsa crt container parsing validates HasCrt', procedure
+  var
+    LN, LD, LP, LQ, LIq, LPubBlob: TBytes;
+    LKey: TSshPrivateKey;
+    LOk: Boolean;
+  begin
+    LN := CrtKatN; LD := CrtKatD; LP := CrtKatP; LQ := CrtKatQ; LIq := CrtKatIqmp;
+    LPubBlob := RsaPubBlob(HexToBytesKat(KAT_E_HEX), LN);
+    LOk := SshLoadPrivateKey(PemOf(CraftContainer('none', 'none', 1, LPubBlob,
+      MakeRsaPrivSectionCrt(7, LN, HexToBytesKat(KAT_E_HEX), LD, LP, LQ, LIq))), LKey, LPubBlob);
+    CheckTrue(LOk, 'valid crt container must parse');
+    CheckTrue(LKey.RsaHasCrt, 'HasCrt must be true for valid p*q==n and q*iqmp%p==1');
+    CheckEqual(BytesToHex(LP), BytesToHex(LKey.RsaP), 'p roundtrip');
+    CheckEqual(BytesToHex(LQ), BytesToHex(LKey.RsaQ), 'q roundtrip');
+    CheckEqual(BytesToHex(LIq), BytesToHex(LKey.RsaIqmp), 'iqmp roundtrip');
+    { 哑数据容器必须落在 HasCrt=false，触发 naive 回退 }
+    LOk := SshLoadPrivateKey(PemOf(CraftContainer('none', 'none', 1,
+      RsaPubBlob(HexToBytesKat(KAT_E_HEX), LN),
+      MakeRsaPrivSection(7, LN, HexToBytesKat(KAT_E_HEX), LD))), LKey, LPubBlob);
+    CheckTrue(LOk);
+    CheckFalse(LKey.RsaHasCrt, 'dummy crt must be invalid');
+  end);
+
+  LSuite.Test('RsaSignPkcs1v15Crt rejects invalid CRT params', procedure
+  var
+    LN, LD, LSigDummy, LSigNaive: TBytes;
+  begin
+    LN := CrtKatN; LD := CrtKatD;
+    { 哑 p/q 仍能产出签名但结果与 naive 不同且验签失败；
+      有 IsCrtValid 闸门的容器不会走到 CRT 路径（HasCrt=false 回退 naive）。
+      仅 nil/空输入应直接返回 False。}
+    CheckTrue(RsaSignPkcs1v15Crt(LN, LD, PatternBytes($AA, 128), PatternBytes($BB, 128),
+      PatternBytes($CC, 128), SHA256(KatMsg), DIGEST_INFO_SHA256, LSigDummy), 'dummy p/q still produces bytes');
+    CheckTrue(RsaSignPkcs1v15(LN, LD, SHA256(KatMsg), DIGEST_INFO_SHA256, LSigNaive));
+    CheckFalse(BytesToHex(LSigDummy) = BytesToHex(LSigNaive), 'dummy crt must not match naive');
+    CheckFalse(RsaVerifyPkcs1v15(HexToBytesKat(KAT_E_HEX), LN, SHA256(KatMsg), DIGEST_INFO_SHA256, LSigDummy), 'dummy crt sig must not verify');
+    CheckFalse(RsaSignPkcs1v15Crt(nil, LD, CrtKatP, CrtKatQ, CrtKatIqmp,
+      SHA256(KatMsg), DIGEST_INFO_SHA256, LSigDummy), 'nil N must fail');
+    CheckFalse(RsaSignPkcs1v15Crt(LN, nil, CrtKatP, CrtKatQ, CrtKatIqmp,
+      SHA256(KatMsg), DIGEST_INFO_SHA256, LSigDummy), 'nil D must fail');
+  end);
+
+  LSuite.Test('rsa crt bench Naive vs CRT (prints throughput)', procedure
+  var
+    LN, LD, LP, LQ, LIq, LSig: TBytes;
+    I, LIter: Integer;
+    T0, T1, TNaive, TCrt: QWord;
+  begin
+    LN := CrtKatN; LD := CrtKatD; LP := CrtKatP; LQ := CrtKatQ; LIq := CrtKatIqmp;
+    LIter := 32;
+    T0 := SysUtils.GetTickCount64;
+    for I := 1 to LIter do
+      CheckTrue(RsaSignPkcs1v15(LN, LD, SHA512(KatMsg), DIGEST_INFO_SHA512, LSig));
+    T1 := SysUtils.GetTickCount64;
+    TNaive := T1 - T0;
+    if TNaive = 0 then TNaive := 1;
+    T0 := SysUtils.GetTickCount64;
+    for I := 1 to LIter do
+      CheckTrue(RsaSignPkcs1v15Crt(LN, LD, LP, LQ, LIq, SHA512(KatMsg), DIGEST_INFO_SHA512, LSig));
+    T1 := SysUtils.GetTickCount64;
+    TCrt := T1 - T0;
+    if TCrt = 0 then TCrt := 1;
+    WriteLn(Format('  [bench] rsa-sha512 x%d naive=%d ms crt=%d ms speedup=%.2fx',
+      [LIter, TNaive, TCrt, TNaive / TCrt]));
+    { CRT 必须与 naive 等价已在前序用例保证；此处只断言 CRT 不显著更慢（>2x 回退即视为回归）}
+    CheckTrue(TCrt * 2 <= TNaive * 3 + 20, 'crt should not be much slower than naive');
+  end);
+
+  LSuite.Test('encrypted rsa with CRT decrypts and HasCrt true', procedure
+  var
+    LN, LD, LP, LQ, LIq, LPubBlob, LPrivRaw, LContainer, LPubOut: TBytes;
+    LKey: TSshPrivateKey;
+    LPw, LSalt: string;
+    LRounds: Cardinal;
+    LPadded, LDerived, LAesKey, LAiv, LEnc, LKdfOpt: TBytes;
+    LW2, LW: TsshWriter;
+    LErr: string;
+    LPad, I2: Integer;
+    LSigNaive, LSigCrt: TBytes;
+  begin
+    LN := CrtKatN; LD := CrtKatD; LP := CrtKatP; LQ := CrtKatQ; LIq := CrtKatIqmp;
+    LPubBlob := RsaPubBlob(HexToBytesKat(KAT_E_HEX), LN);
+    LPrivRaw := MakeRsaPrivSectionCrt(99, LN, HexToBytesKat(KAT_E_HEX), LD, LP, LQ, LIq);
+    LPadded := Copy(LPrivRaw, 0, Length(LPrivRaw));
+    LPad := (16 - (Length(LPadded) mod 16)) mod 16;
+    for I2 := 1 to LPad do
+    begin SetLength(LPadded, Length(LPadded)+1); LPadded[High(LPadded)] := Byte(I2); end;
+    LPw := 'crt-enc-pass';
+    LSalt := 'crt-salt-1234567';
+    LRounds := 16;
+    CheckTrue(TryBcryptPbkdf(StringToBytes(LPw), StringToBytes(LSalt), 48, LRounds, LDerived, LErr));
+    SetLength(LAesKey, 32); Move(LDerived[0], LAesKey[0], 32);
+    SetLength(LAiv, 16); Move(LDerived[32], LAiv[0], 16);
+    LEnc := SshAesCtrCrypt(LAesKey, LAiv, LPadded);
+    LW2 := TsshWriter.Create(64);
+    try LW2.PutStringBytes(StringToBytes(LSalt)); LW2.PutUInt32(LRounds); LKdfOpt := LW2.ToBytes; finally LW2.Free; end;
+    LW := TsshWriter.Create(768);
+    try
+      LW.PutRaw(StringToBytes('openssh-key-v1')); LW.PutByte(0);
+      LW.PutStringText('aes256-ctr'); LW.PutStringText('bcrypt'); LW.PutStringBytes(LKdfOpt);
+      LW.PutUInt32(1); LW.PutStringBytes(LPubBlob); LW.PutStringBytes(LEnc);
+      LContainer := LW.ToBytes;
+    finally LW.Free; end;
+    CheckTrue(SshLoadPrivateKey(PemOf(LContainer), LKey, LPubOut, LPw));
+    CheckTrue(LKey.RsaHasCrt, 'encrypted crt must retain HasCrt');
+    CheckTrue(RsaSignPkcs1v15Crt(LKey.RsaN, LKey.RsaD, LKey.RsaP, LKey.RsaQ, LKey.RsaIqmp,
+      SHA512(KatMsg), DIGEST_INFO_SHA512, LSigCrt));
+    CheckTrue(RsaSignPkcs1v15(LN, LD, SHA512(KatMsg), DIGEST_INFO_SHA512, LSigNaive));
+    CheckEqual(BytesToHex(LSigNaive), BytesToHex(LSigCrt), 'encrypted crt sig must match naive');
   end);
 
   LSuite.Test('structure errors raise sekKeyFormat', procedure

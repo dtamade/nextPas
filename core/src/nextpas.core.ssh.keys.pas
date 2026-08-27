@@ -25,7 +25,11 @@ type
     Ed25519Seed: TBytes;   { hkEd25519：32 字节种子（Ed25519 签名输入）}
     RsaN: TBytes;          { hkRsa：模数（大端 magnitude，mpint 剥前导零）}
     RsaE: TBytes;          { hkRsa：公钥指数（通常 010001）}
-    RsaD: TBytes;          { hkRsa：私钥指数（签名用；CRT 五元组属后续优化 slice）}
+    RsaD: TBytes;          { hkRsa：私钥指数（签名用）}
+    RsaP: TBytes;          { hkRsa：素因子 p（CRT）}
+    RsaQ: TBytes;          { hkRsa：素因子 q（CRT）}
+    RsaIqmp: TBytes;       { hkRsa：q^{-1} mod p（CRT 系数）}
+    RsaHasCrt: Boolean;    { hkRsa：是否具备完整 CRT 五元组（p/q/iqmp 均存在且有效）}
   end;
 
 {** 解析 PEM 形式的 openssh-key-v1 容器内容。
@@ -40,6 +44,7 @@ implementation
 uses
   nextpas.core.encoding.base64,
   nextpas.core.crypto.bcrypt_pbkdf,
+  nextpas.core.crypto.bigint,
   nextpas.core.ssh.cipher;
 
 { 按 '#' 换行切分（替代 SysUtils 字符串助手的多分隔符 Split）}
@@ -102,6 +107,44 @@ begin
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
     Move(PByte(PChar(AText))^, Result[0], SizeUInt(Length(AText)));
+end;
+
+function BytesEqualTrim(const A, B: TBytes): Boolean;
+var
+  I, LA, LB, SA, SB: Integer;
+begin
+  LA := Length(A); SA := 0;
+  while (SA < LA) and (A[SA] = 0) do Inc(SA);
+  LB := Length(B); SB := 0;
+  while (SB < LB) and (B[SB] = 0) do Inc(SB);
+  LA := LA - SA;
+  LB := LB - SB;
+  if LA <> LB then Exit(False);
+  if LA = 0 then Exit(True);
+  for I := 0 to LA - 1 do
+    if A[SA + I] <> B[SB + I] then Exit(False);
+  Result := True;
+end;
+
+function IsCrtValid(const AN, AP, AQ, AIqmp: TBytes): Boolean;
+var
+  LProd, LCheck: TBytes;
+  LErr: string;
+begin
+  Result := False;
+  if (Length(AN) = 0) or (Length(AP) = 0) or (Length(AQ) = 0) or (Length(AIqmp) = 0) then
+    Exit;
+  if (Length(AP) < 32) or (Length(AQ) < 32) or (Length(AIqmp) < 32) then
+    Exit;
+  if not TryBigIntMulFromUnsignedBytes(AP, AQ, LProd, LErr) then
+    Exit;
+  if not BytesEqualTrim(LProd, AN) then
+    Exit;
+  if not TryBigIntModMulFromUnsignedBytes(AQ, AIqmp, AP, LCheck, LErr) then
+    Exit;
+  if (Length(LCheck) <> 1) or (LCheck[0] <> 1) then
+    Exit;
+  Result := True;
 end;
 
 function SshLoadPrivateKey(const AContent: string;
@@ -214,9 +257,10 @@ begin
       AKey.RsaN := LR.ReadMPInt;
       AKey.RsaE := LR.ReadMPInt;
       AKey.RsaD := LR.ReadMPInt;
-      LR.ReadMPInt;
-      LR.ReadMPInt;
-      LR.ReadMPInt;
+      AKey.RsaIqmp := LR.ReadMPInt;
+      AKey.RsaP := LR.ReadMPInt;
+      AKey.RsaQ := LR.ReadMPInt;
+      AKey.RsaHasCrt := IsCrtValid(AKey.RsaN, AKey.RsaP, AKey.RsaQ, AKey.RsaIqmp);
       if (Length(AKey.RsaE) = 0) or (Length(AKey.RsaD) = 0) or
          (Length(AKey.RsaN) < 32) then
         raise ESSHError.Create(sekKeyFormat, 'ssh keys: rsa key fields invalid');

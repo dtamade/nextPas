@@ -460,12 +460,22 @@ begin
     hkRsa:
       begin
         { rsa-sha2-512 与 rsa-sha2-256 同版本引入且被一切接受 RSA 的服务端
-          支持；选最强档，单次尝试不做降级 }
+          支持；选最强档，单次尝试不做降级。优先走 CRT（p/q/iqmp 存在时约 4x
+          加速），失败则回退到朴素模幂以兼顾非法 CRT 容器/测试哑数据。}
         LAlgName := SSH_RSA_SIG_SHA512;
         LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LPubBlob);
-        if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
-          DIGEST_INFO_SHA512, LSigRaw) then
-          raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
+        if LKey.RsaHasCrt then
+        begin
+          if not RsaSignPkcs1v15Crt(LKey.RsaN, LKey.RsaD, LKey.RsaP, LKey.RsaQ,
+            LKey.RsaIqmp, SHA512(LSignedData), DIGEST_INFO_SHA512, LSigRaw) then
+            if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
+              DIGEST_INFO_SHA512, LSigRaw) then
+              raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
+        end
+        else
+          if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
+            DIGEST_INFO_SHA512, LSigRaw) then
+            raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
         LSigBlob := SshBuildRsaSigBlob(LSigRaw, LAlgName);
       end;
   else

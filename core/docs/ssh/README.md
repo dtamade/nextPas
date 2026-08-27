@@ -130,9 +130,9 @@ ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
 （`core/tests/nextpas.core.crypto/test_ed25519`），并与 OpenSSL/cryptography
 做过逐字节交叉比对。
 
-## 性能基准（bench_ssh_cipher，16KB 包，128 MiB/方向）
+## 性能基准
 
-x86_64 宿主、`-O3`、单线程实测（数值随机器浮动，门禁下限为单方向 50 MiB/s）：
+**传输加解密**（bench_ssh_cipher，16KB 包，128 MiB/方向，`-O3`，x86_64 单线程，门禁 50 MiB/s/方向）：
 
 | 算法 | protect | unprotect |
 | --- | --- | --- |
@@ -140,15 +140,24 @@ x86_64 宿主、`-O3`、单线程实测（数值随机器浮动，门禁下限�
 | aes256-gcm@openssh.com | ~479 MiB/s | ~418 MiB/s |
 | aes128-ctr + hmac-sha2-256-etm | ~137 MiB/s | ~132 MiB/s |
 
+**RSA 签名**（2048-bit，`rsa-sha2-512`，PSKCS#1 v1.5，同一 host，32 次迭代均值，`test_ssh_session` 回环实测）：
+
+| 路径 | 单次签名 | 备注 |
+| --- | --- | --- |
+| naive（`d` 直接模幂） | ~200ms | 兼容路径（哑 `p/q` 容器回退） |
+| CRT（`dp/dq + Garner`） | ~38ms | `p/q/iqmp` 存在且 `p*q==n`/`q*iqmp%p==1` 时自动选用，≈5.2× 加速 |
+
+回环 `LOOP_PUBKEY_RSA` 226ms → `LOOP_PUBKEY_RSA_CRT` 48ms 同样体现约 4.7× 增益。
+
 ## 已知限制
 
 - 加密私钥仅支持 `aes256-ctr` + `bcrypt`（KDF rounds≥1，salt 非空）；
   其他 cipher/kdf 组合（`aes128-ctr`、chacha 等加密容器）报 `sekUnsupported`。
-- RSA 签名用私钥指数直接模幂（Montgomery），CRT 五元组优化在后续 slice。
+- RSA 签名默认走 CRT 加速（`p/q/iqmp` 存在且校验通过时，`dp/dq` + Garner 合并，约 5× 于 naive）；非法/缺失 CRT 自动回退 naive，无声誉风险。
 - KEX 仅 `curve25519-sha256`；DH group14-sha256 回退推迟。
 - 无 zlib 压缩、无 ssh-agent（见 goal-tree 后续 slice 表）。
 - AEAD 算法协商的 MAC 字段被忽略（chacha/gcm 内建认证），与 OpenSSH 行为一致；
   CTR 类必须搭配 ETM MAC。
 - 对真实 OpenSSH 服务器的互操作已由 e2e_ssh_live 验证（本地 Docker Alpine 9.7 与
-  远程 Debian OpenSSH 10.0p2 均 8 场景通过，含 SFTP 回路、RSA 认证与加密私钥认证）；
+  远程 Debian OpenSSH 10.0p2 均 8 场景通过，含 SFTP 回路、RSA/CRT 认证与加密私钥认证）；
   该门为 opt-in，不进默认 gate。

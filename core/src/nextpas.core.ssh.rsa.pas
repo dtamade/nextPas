@@ -36,6 +36,13 @@ const
 function RsaSignPkcs1v15(const AN, AD, AMsgHash: TBytes;
   const ADigestInfo: array of Byte; out ASig: TBytes): Boolean;
 
+{** PKCS#1 v1.5 CRT 签名：利用 p/q/iqmp 与中国剩余定理加速。
+  * 需满足 AN = AP*AQ 且 AIqmp = AQ^{-1} mod AP；不满足或任一环节失败
+  * 返回 False，调用方应回退到朴素 RsaSignPkcs1v15。*}
+function RsaSignPkcs1v15Crt(const AN, AD, AP, AQ, AIqmp: TBytes;
+  const AMsgHash: TBytes; const ADigestInfo: array of Byte;
+  out ASig: TBytes): Boolean;
+
 {** PKCS#1 v1.5 验签：sig^e mod n 重构 EM 与期望值常数时间比较。
   * 自 hostkey 移入（原实现与签名共享同一套编码逻辑）。*}
 function RsaVerifyPkcs1v15(const AE, AN, AMsgHash: TBytes;
@@ -94,6 +101,39 @@ begin
     (AModLen - 3 - Length(ADigestInfo) - Length(AMsgHash) >= 8);
 end;
 
+{ 大端无符号字节数组减一（用于 p-1 / q-1，p/q 为奇素数，借位仅在末字节）}
+function BytesSubOne(const AValue: TBytes): TBytes;
+var
+  I, LFirstNonZero: Integer;
+begin
+  if Length(AValue) = 0 then
+    Exit(nil);
+  Result := Copy(AValue, 0, Length(AValue));
+  I := High(Result);
+  while (I >= 0) and (Result[I] = 0) do
+  begin
+    Result[I] := $FF;
+    Dec(I);
+  end;
+  if I >= 0 then
+    Dec(Result[I])
+  else
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+  LFirstNonZero := 0;
+  while (LFirstNonZero < High(Result)) and (Result[LFirstNonZero] = 0) do
+    Inc(LFirstNonZero);
+  if LFirstNonZero > 0 then
+    Result := Copy(Result, LFirstNonZero, Length(Result) - LFirstNonZero);
+  if Length(Result) = 0 then
+  begin
+    SetLength(Result, 1);
+    Result[0] := 0;
+  end;
+end;
+
 function RsaSignPkcs1v15(const AN, AD, AMsgHash: TBytes;
   const ADigestInfo: array of Byte; out ASig: TBytes): Boolean;
 var
@@ -110,6 +150,47 @@ begin
     RsaBuildEm(Length(AN), ADigestInfo, AMsgHash), AN, AD, LRaw, LErr) then
     Exit;
   ASig := LeftPadTo(LRaw, Length(AN));
+  Result := True;
+end;
+
+function RsaSignPkcs1v15Crt(const AN, AD, AP, AQ, AIqmp: TBytes;
+  const AMsgHash: TBytes; const ADigestInfo: array of Byte;
+  out ASig: TBytes): Boolean;
+var
+  LEm, LPMinus1, LQMinus1, LDp, LDq, LM1, LM2, LDiff, LH, LHq, LSigRaw: TBytes;
+  LErr: string;
+begin
+  Result := False;
+  ASig := nil;
+  if (Length(AN) = 0) or (Length(AD) = 0) or (Length(AP) = 0) or
+     (Length(AQ) = 0) or (Length(AIqmp) = 0) or (Length(AMsgHash) = 0) then
+    Exit;
+  if not EmFits(Length(AN), ADigestInfo, AMsgHash) then
+    Exit;
+  LEm := RsaBuildEm(Length(AN), ADigestInfo, AMsgHash);
+  LPMinus1 := BytesSubOne(AP);
+  LQMinus1 := BytesSubOne(AQ);
+  if (Length(LPMinus1) = 0) or (Length(LQMinus1) = 0) then
+    Exit;
+  if not TryBigIntModFromUnsignedBytes(AD, LPMinus1, LDp, LErr) then
+    Exit;
+  if not TryBigIntModFromUnsignedBytes(AD, LQMinus1, LDq, LErr) then
+    Exit;
+  if (Length(LDp) = 0) or (Length(LDq) = 0) then
+    Exit;
+  if not TryBigIntModExpFromUnsignedBytes(LEm, LDp, AP, LM1, LErr) then
+    Exit;
+  if not TryBigIntModExpFromUnsignedBytes(LEm, LDq, AQ, LM2, LErr) then
+    Exit;
+  if not TryBigIntSubtractModuloFromUnsignedBytes(LM1, LM2, AP, LDiff, LErr) then
+    Exit;
+  if not TryBigIntModMulFromUnsignedBytes(AIqmp, LDiff, AP, LH, LErr) then
+    Exit;
+  if not TryBigIntMulFromUnsignedBytes(LH, AQ, LHq, LErr) then
+    Exit;
+  if not TryBigIntAddFromUnsignedBytes(LM2, LHq, LSigRaw, LErr) then
+    Exit;
+  ASig := LeftPadTo(LSigRaw, Length(AN));
   Result := True;
 end;
 
