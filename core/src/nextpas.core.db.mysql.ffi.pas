@@ -178,10 +178,10 @@ var
 
 const
   { 双方言 MYSQL_BIND 原生镜像尺寸（LP64）。声明见下；门禁用 sizeof
-    钉死防漂移。MariaDB 侧尺寸可在本机对真实头文件复核；Oracle 侧
-    按 8.x 公开头文件记录。 }
+    钉死防漂移。MariaDB 3.3 实测 sizeof=112（见本机 usr/include/mariadb/mariadb_stmt.h
+    的 st_mysql_bind），Oracle 侧按 8.x 公开头文件记录 72。 }
   SIZE_MYSQL_BIND_MYSQL   = 72;
-  SIZE_MYSQL_BIND_MARIADB = 120;
+  SIZE_MYSQL_BIND_MARIADB = 112;
 
 type
   { Oracle libmysqlclient 8.x st_mysql_bind 镜像。
@@ -205,13 +205,14 @@ type
     LongDataUsed: Byte;       { 71 }
   end;                        { sizeof = 72 }
 
-  { MariaDB Connector/C 3.x st_mysql_bind 镜像。
-    偏移: length 0 / is_null 8 / buffer 16 / error 24 / row_ptr 32 /
-    store_param_f 40 / fetch_result 48 / fetch_value 56 / extension 64 /
-    buffer_length 72 / offset 80 / length_value 88 / flags 96 /
-    buffer_type 100(4 字节 enum) / error_value 104 / is_unsigned 105 /
-    long_data_used 106 / is_null_value 107 / extension2 112。
-    函数指针成员由驱动在 bind 时自填，调用方保持零值即可。 }
+  { MariaDB Connector/C 3.3 st_mysql_bind（112 字节，LP64）。
+    实测偏移（usr/include/mariadb/mariadb_stmt.h）:
+    length 0 / is_null 8 / buffer 16 / error 24 /
+    row_ptr 32 / store_param_func 40 / fetch_result 48 / skip_result 56 /
+    buffer_length 64 / offset 72 / length_value 80 / flags 88 /
+    pack_length 92 / buffer_type 96(4 字节) / error_value 100 /
+    is_unsigned 101 / long_data_used 102 / is_null_value 103 /
+    extension 104。 }
   TMysqlBindMariadb = record
     Length_: PQWord;          { 0  }
     IsNull: PBoolean;         { 8  }
@@ -220,19 +221,19 @@ type
     RowPtr: Pointer;          { 32 }
     StoreParamF: Pointer;     { 40 }
     FetchResultF: Pointer;    { 48 }
-    FetchValueF: Pointer;     { 56 }
-    Extension: Pointer;       { 64 }
-    BufferLength: QWord;      { 72 }
-    Offset: QWord;            { 80 }
-    LengthValue: QWord;       { 88 }
-    Flags: Cardinal;          { 96 }
-    BufferType: Cardinal;     { 100 — 注意宽度 4 字节、位置与 Oracle 不同 }
-    ErrorValue: Byte;         { 104 }
-    IsUnsignedByte: Byte;     { 105 }
-    LongDataUsed: Byte;       { 106 }
-    IsNullValue: Byte;        { 107 }
-    Extension2: Pointer;      { 112 }
-  end;                        { sizeof = 120 }
+    SkipResultF: Pointer;     { 56 }
+    BufferLength: QWord;      { 64 }
+    Offset: QWord;            { 72 }
+    LengthValue: QWord;       { 80 }
+    Flags: Cardinal;          { 88 }
+    PackLength: Cardinal;     { 92 }
+    BufferType: Cardinal;     { 96 — 4 字节 enum }
+    ErrorValue: Byte;         { 100 }
+    IsUnsignedByte: Byte;     { 101 }
+    LongDataUsed: Byte;       { 102 }
+    IsNullValue: Byte;        { 103 }
+    Extension: Pointer;       { 104 }
+  end;                        { sizeof = 112 }
 
 implementation
 
