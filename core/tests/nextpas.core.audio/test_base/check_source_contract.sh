@@ -37,7 +37,9 @@ for f in \
   "$SRC/nextpas.core.audio.dsp.fft.pas" \
   "$SRC/nextpas.core.audio.device.intf.pas" \
   "$SRC/nextpas.core.audio.device.null.pas" \
+  "$SRC/nextpas.core.audio.game.intf.pas" \
   "$SRC/nextpas.core.audio.graph.intf.pas" \
+  "$SRC/nextpas.core.audio.game.pas" \
   "$SRC/nextpas.core.audio.graph.pas" \
   "$SRC/nextpas.core.audio.player.pas"
 do
@@ -55,6 +57,7 @@ enc_line=$(grep -n "TAudioEncodeOptions" "$SRC/nextpas.core.audio.codec.intf.pas
 dec_line=$(grep -n "IAudioDecoder" "$SRC/nextpas.core.audio.codec.intf.pas" | head -n1 | cut -d: -f1)
 if [ -n "$enc_line" ] && [ -n "$dec_line" ]; then if [ "$enc_line" -gt "$dec_line" ]; then echo "[FAIL] TAudioEncodeOptions must be declared before IAudioDecoder (lines $enc_line > $dec_line)"; fail=1; else echo "[OK] TAudioEncodeOptions before IAudioDecoder"; fi; else echo "[FAIL] missing TAudioEncodeOptions or IAudioDecoder"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.device.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] device.intf missing in PR7"; fail=1; fi
+if ! ls "$SRC"/nextpas.core.audio.game.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] game.intf missing in PR8"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.graph.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] graph.intf missing in PR7"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.graph.pas 1>/dev/null 2>&1; then echo "[FAIL] graph.pas missing in PR7"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.player.pas 1>/dev/null 2>&1; then echo "[FAIL] player.pas missing in PR7"; fail=1; fi
@@ -63,6 +66,7 @@ if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000040" "$SRC/nextpas.core.audio.dev
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000041" "$SRC/nextpas.core.audio.device.intf.pas"; then echo "[FAIL] IAudioDeviceProvider GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000042" "$SRC/nextpas.core.audio.graph.intf.pas"; then echo "[FAIL] IAudioGraph GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000043" "$SRC/nextpas.core.audio.graph.intf.pas"; then echo "[FAIL] IAudioPlayer GUID missing"; fail=1; fi
-echo "[OK] device+graph domains present, no timeline (PR7 scope)"
+if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000050" "$SRC/nextpas.core.audio.game.intf.pas"; then echo "[FAIL] IGameAudio GUID missing"; fail=1; fi
+echo "[OK] device+graph+game domains present, no timeline (PR8 scope)"
 if [ "$fail" -ne 0 ]; then echo "source-contract gate FAILED"; exit 1; fi
 echo "source-contract gate PASSED"

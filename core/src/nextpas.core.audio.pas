@@ -24,7 +24,9 @@ uses
   nextpas.core.audio.dsp.fft,
   nextpas.core.audio.device.intf,
   nextpas.core.audio.device.null,
+  nextpas.core.audio.game.intf,
   nextpas.core.audio.graph.intf,
+  nextpas.core.audio.game,
   nextpas.core.audio.graph,
   nextpas.core.audio.player;
 
@@ -70,6 +72,10 @@ type
   IAudioDevice = nextpas.core.audio.device.intf.IAudioDevice;
   IAudioDeviceProvider = nextpas.core.audio.device.intf.IAudioDeviceProvider;
 
+  TGameSfxId = nextpas.core.audio.game.intf.TGameSfxId;
+  TGameVoiceId = nextpas.core.audio.game.intf.TGameVoiceId;
+  TGamePlayParams = nextpas.core.audio.game.intf.TGamePlayParams;
+  IGameAudio = nextpas.core.audio.game.intf.IGameAudio;
   TGraphState = nextpas.core.audio.graph.intf.TGraphState;
   IAudioGraph = nextpas.core.audio.graph.intf.IAudioGraph;
   IAudioPlayer = nextpas.core.audio.graph.intf.IAudioPlayer;
@@ -139,6 +145,8 @@ function CreateNullAudioProvider: IAudioDeviceProvider; inline;
 function CreateAudioGraph(const AFormat: TAudioFormat): IAudioGraph; inline;
 function CreateAudioPlayer(const ADevice: IAudioDevice; const AGraph: IAudioGraph): IAudioPlayer; inline;
 function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat): IAudioPlayer; inline;
+function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline;
+function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -350,6 +358,12 @@ begin Result := nextpas.core.audio.player.CreateAudioPlayer(ADevice, AGraph); en
 
 function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat): IAudioPlayer;
 begin Result := nextpas.core.audio.player.CreateAudioPlayerForFormat(AProvider, AFormat); end;
+
+function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer): IGameAudio;
+begin Result := nextpas.core.audio.game.CreateGameAudio(ADevice, AGraph, AMaxVoices); end;
+
+function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer): IGameAudio;
+begin Result := nextpas.core.audio.game.CreateGameAudioForFormat(AProvider, AFormat, AMaxVoices); end;
 
 procedure AudioRegisterDecoderPlaceholder;
 begin
