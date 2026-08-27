@@ -425,12 +425,63 @@ begin
   Check(LRaised, 'nil provider rejected');
 end;
 
+procedure TestDecodeFuzzOversized;
+var
+  LFrame: TWebviewFrame;
+  LBig: string;
+begin
+  SetLength(LBig, 2 * 1024 * 1024 + 1);
+  FillChar(LBig[1], Length(LBig), Ord('x'));
+  Check(not TryDecodeFrame(LBig, LFrame), 'oversized frame rejected');
+  Check(not TryDecodeFrame('', LFrame), 'empty rejected');
+  Check(not TryDecodeFrame(StringOfChar(' ', 2*1024*1024+10), LFrame), 'oversized whitespace rejected');
+end;
+
+procedure TestDecodeFuzzHasError;
+var
+  LFrame: TWebviewFrame;
+begin
+  { truncated / malformed json must not raise, must return False }
+  Check(not TryDecodeFrame('{"v":1,"id":1,"cmd":"a","payload":', LFrame), 'truncated json');
+  Check(not TryDecodeFrame('{"v":1,"id":1,"cmd":"a",', LFrame), 'trailing comma');
+  Check(not TryDecodeFrame('{"v":1,"id":99999999999999999999,"cmd":"a"}', LFrame), 'id overflow as string');
+  Check(not TryDecodeFrame('{"v":1,"id":1,"cmd":"a","payload":undefined}', LFrame), 'undefined payload');
+end;
+
+procedure TestDecodeFuzzRandomCorpus;
+var
+  I: Integer;
+  LFrame: TWebviewFrame;
+  LInputs: array[0..9] of string = (
+    '{"v":1,"id":1,"cmd":"a","payload":null}',
+    '{"v":1,"id":1,"cmd":"a","payload":123}',
+    '{"v":1,"id":1,"cmd":"a","payload":true}',
+    '{"v":1,"id":1,"cmd":"a","payload":[1,2,3]}',
+    '{"v":1,"id":1,"cmd":"x","extra":"ignored"}',
+    '{"v":1,"id":1,"cmd":"a","payload":{"nested":{"deep":1}}}',
+    '{"v":1,"id":9007199254740991,"cmd":"edge"}',
+    '{"v":1,"id":1,"cmd":"a","payload":""}',
+    '{"v":1,"id":1,"cmd":"a","payload":"hel\"lo"}',
+    '{"v":1,"id":1,"cmd":"demo.sum","payload":{"a":1,"b":2}}'
+  );
+begin
+  for I := Low(LInputs) to High(LInputs) do
+  begin
+    Check(TryDecodeFrame(LInputs[I], LFrame), 'corpus valid #' + IntToStr(I));
+    Check(LFrame.Cmd <> '', 'cmd non-empty');
+    Check(LFrame.Id > 0, 'id positive');
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
   T := TTestSuite.Create('nextpas.core.webview.bridge');
   T.Test('decode valid matrix', @TestDecodeValidMatrix);
   T.Test('decode invalid matrix', @TestDecodeInvalidMatrix);
+  T.Test('decode fuzz oversized guard', @TestDecodeFuzzOversized);
+  T.Test('decode fuzz hasError guard', @TestDecodeFuzzHasError);
+  T.Test('decode fuzz corpus', @TestDecodeFuzzRandomCorpus);
   T.Test('resolve builder', @TestResolveBuilder);
   T.Test('reject builder', @TestRejectBuilder);
   T.Test('emit builder', @TestEmitBuilder);

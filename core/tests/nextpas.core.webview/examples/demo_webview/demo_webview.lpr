@@ -82,32 +82,34 @@ const
     '[data-theme="light"] footer{background:rgba(246,247,251,.78);border-top-color:rgba(16,22,40,.08)}'#10 +
     'footer b{color:var(--ok);font-weight:700}[data-theme="light"] footer b{color:#0a7a6b}'#10 +
     '@media(max-width:640px){body{padding:18px 16px 80px}.wrap{max-width:100%}h1{font-size:22px}}'#10 +
+    '@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}'#10 +
+    '.primary:focus-visible,.icon-btn:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}'#10 +
     '</style></head><body>'#10 +
     '<div class="wrap">'#10 +
     '<div class="top"><div><h1>nextPas WebView</h1><div class="sub">Pascal native &#8646; WebKitGTK &middot; full IPC round-trips, zero HTTP server</div></div>'#10 +
-    '<div style="display:flex;gap:10px;align-items:center"><span class="pill"><i></i><b id="ver">…</b>&nbsp;bridge</span><button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">◐</button></div></div>'#10 +
+    '<div style="display:flex;gap:10px;align-items:center"><span class="pill"><i></i><b id="ver">…</b>&nbsp;bridge</span><button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme" aria-pressed="false">◐</button></div></div>'#10 +
     '<div class="grid">'#10 +
     '<div class="card"><h2>Sync invoke &middot; sum</h2>'#10 +
-    '<div class="row"><input id="aIn" value="19"><span style="color:var(--dim)">+</span>' +
-    '<input id="bIn" value="23"><button class="primary" id="sumBtn">Compute</button>' +
+    '<div class="row"><input id="aIn" value="19" aria-label="a" inputmode="numeric"><span style="color:var(--dim)">+</span>' +
+    '<input id="bIn" value="23" aria-label="b" inputmode="numeric"><button class="primary" id="sumBtn" aria-label="Compute sum">Compute</button>' +
     '<span class="val" id="sumOut">&#8212;</span></div>'#10 +
     '<div class="muted" id="sumMs">window.__npw.invoke("demo.sum")</div></div>'#10 +
     '<div class="card"><h2>Stateful native &middot; counter</h2>'#10 +
-    '<div class="row"><button class="primary" id="cntBtn">Increment</button>' +
+    '<div class="row"><button class="primary" id="cntBtn" aria-label="Increment counter">Increment</button>' +
     '<span class="val" id="cntOut" style="font-size:19px">0</span></div>'#10 +
     '<div class="muted">Int64 lives in the Pascal object across calls</div></div>'#10 +
     '<div class="card"><h2>Async invoke &middot; deferred</h2>'#10 +
-    '<div class="row"><button class="primary" id="tickBtn">Run async tick</button>' +
+    '<div class="row"><button class="primary" id="tickBtn" aria-label="Run async tick">Run async tick</button>' +
     '<span class="val" id="tickOut">&#8212;</span></div>'#10 +
     '<div class="muted">handler returns later via Dispatcher.Post</div></div>'#10 +
     '<div class="card"><h2>Native push</h2>'#10 +
-    '<div class="row"><button class="primary" id="pushBtn">Request native push</button>' +
+    '<div class="row"><button class="primary" id="pushBtn" aria-label="Request native push">Request native push</button>' +
     '<span class="val" id="pushOut">&#8212;</span></div>'#10 +
     '<div class="muted">invoke triggers native Emit; page listens</div></div>'#10 +
     '<div class="card" style="grid-column:1/-1"><h2>Event log</h2>'#10 +
-    '<div class="log" id="log"></div></div>'#10 +
+    '<div class="log" id="log" role="log" aria-live="polite" aria-atomic="false"></div></div>'#10 +
     '</div></div>'#10 +
-    '<footer><span>state <b id="state">booting</b></span>' +
+    '<footer role="status" aria-live="polite"><span>state <b id="state">booting</b></span>' +
     '<span>last op <b id="lastms">&#8212;</b></span><span>theme <b id="themeLabel">auto</b></span></footer>'#10 +
     '<script>'#10 +
     'function $(id){return document.getElementById(id)}'#10 +
@@ -117,7 +119,7 @@ const
     '$("log").prepend(d)}'#10 +
     'function report(step,body){__npw.invoke("demo.report",' +
     '{step:step,body:(body===undefined?null:body)})}'#10 +
-    '(function(){var k="npw-theme";function apply(t){document.documentElement.setAttribute("data-theme",t);var l=$("themeLabel");if(l)l.textContent=t;try{localStorage.setItem(k,t);}catch(e){}}var s=null;try{s=localStorage.getItem(k);}catch(e){}if(s==="light"||s==="dark")apply(s);else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)apply("light");else apply("dark");var b=$("themeBtn");if(b)b.addEventListener("click",function(){var cur=document.documentElement.getAttribute("data-theme");apply(cur==="dark"?"light":"dark")});})();'#10 +
+    '(function(){var k="npw-theme";function apply(t){document.documentElement.setAttribute("data-theme",t);var l=$("themeLabel");if(l)l.textContent=t;var bb=$("themeBtn");if(bb)bb.setAttribute("aria-pressed",t==="light"?"true":"false");try{localStorage.setItem(k,t);}catch(e){}}var s=null;try{s=localStorage.getItem(k);}catch(e){}if(s==="light"||s==="dark")apply(s);else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)apply("light");else apply("dark");var b=$("themeBtn");if(b)b.addEventListener("click",function(){var cur=document.documentElement.getAttribute("data-theme");apply(cur==="dark"?"light":"dark")});try{var mq=window.matchMedia("(prefers-color-scheme: light)");if(mq&&mq.addEventListener)mq.addEventListener("change",function(e){var cur=null;try{cur=localStorage.getItem(k);}catch(ex){}if(cur!=="light"&&cur!=="dark")apply(e.matches?"light":"dark")});}catch(e){}var a=$("aIn"),bb2=$("bIn");function onEnter(e){if(e.key==="Enter")$("sumBtn").click();}if(a)a.addEventListener("keydown",onEnter);if(bb2)bb2.addEventListener("keydown",onEnter);})();'#10 +
     '__npw.ready.then(function(){' +
     '$("ver").textContent="v"+__npw.version;' +
     'var st=$("state");st.textContent="ready";st.style.color="#43e5c8";' +
