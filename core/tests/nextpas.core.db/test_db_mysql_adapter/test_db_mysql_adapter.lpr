@@ -10,8 +10,10 @@ program test_db_mysql_adapter;
     5 负连接归一：不存在 socket → EDbError(dbkMysql, decConnection)
     6 TDbKind 枚举序号稳定契约（dbkMysql = 尾部追加 3）
     7 真机冒烟（NEXTPAS_MYSQL_TEST_CONN 门控，缺席即 Skip）：
-      roundtrip/列类型四分类/savepoint 回滚
-  1-6 全部离线可跑。 }
+      roundtrip/列类型四分类/savepoint 回滚/能力自述
+    8 大文本与截断（同门控）：超长插入 1406→decConstraint + 1024 字节
+      Text 经 fetch_column 重取完整回取（>256 翻倍策略）
+  1-6 全部离线可跑，7-8 live 门控。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -390,6 +392,76 @@ begin
   end;
 end;
 
+procedure TestLiveTruncationAndLargeText;
+var
+  LEnv: string;
+  Conn: IDbConnection;
+  Q: IDbQuery;
+  LLong: string;
+  LGot: string;
+  LRaised: Boolean;
+begin
+  LEnv := GetEnvironmentVariable('NEXTPAS_MYSQL_TEST_CONN');
+  if LEnv = '' then
+    Skip('no NEXTPAS_MYSQL_TEST_CONN (live truncation skipped)');
+  Conn := ConnectMysql(LEnv);
+  try
+    { 超长截断 → 1406/1366 归一 decConstraint（STRICT_TRANS_TABLES 默认开启） }
+    Conn.Exec('DROP TABLE IF EXISTS t_my_trunc');
+    Conn.Exec('CREATE TABLE t_my_trunc (id INT PRIMARY KEY, s VARCHAR(5))');
+    Conn.Exec('DELETE FROM t_my_trunc');
+    LRaised := False;
+    try
+      Q := Conn.Query('INSERT INTO t_my_trunc VALUES (?, ?)');
+      try
+        Q.BindInt64(1, 1);
+        Q.BindText(2, '1234567890'); { 10 chars > 5, expect 1406 }
+        Q.Step;
+      finally
+        Q := nil;
+      end;
+    except
+      on E: EDbError do
+      begin
+        LRaised := True;
+        Check(E.Category = decConstraint,
+          'truncation maps to decConstraint, got ' + IntToStr(Ord(E.Category)));
+        Check((E.BackendCode = 1406) or (E.BackendCode = 1366),
+          'truncation code 1406/1366, got ' + IntToStr(E.BackendCode));
+      end;
+    end;
+    Check(LRaised, 'overlong insert raises decConstraint');
+
+    { 大文本 fetch 截断重取：> MY_BUF_INITIAL(256) 经 fetch_column 完整回取 }
+    Conn.Exec('DROP TABLE IF EXISTS t_my_big');
+    Conn.Exec('CREATE TABLE t_my_big (id INT PRIMARY KEY, t TEXT)');
+    LLong := StringOfChar('x', 1024);
+    Q := Conn.Query('INSERT INTO t_my_big VALUES (?, ?)');
+    try
+      Q.BindInt64(1, 1);
+      Q.BindText(2, LLong);
+      Q.Step;
+    finally
+      Q := nil;
+    end;
+    Q := Conn.Query('SELECT t FROM t_my_big WHERE id = ?');
+    try
+      Q.BindInt64(1, 1);
+      Check(Q.Step, 'big text row present');
+      CheckEqual(Int64(Ord(dbcText)), Int64(Ord(Q.ColumnType(0))), 'big text type');
+      LGot := Q.GetText(0);
+      CheckEqual(Int64(Length(LLong)), Int64(Length(LGot)), 'big text length via refetch');
+      Check(LGot = LLong, 'big text content via refetch');
+    finally
+      Q := nil;
+    end;
+    Conn.Exec('DROP TABLE IF EXISTS t_my_trunc');
+    Conn.Exec('DROP TABLE IF EXISTS t_my_big');
+  finally
+    Conn := nil;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.db.mysql.adapter');
   T.Test('ClassifyMy normalization table', @TestClassifyMyTable);
@@ -399,5 +471,6 @@ begin
   T.Test('negative connect normalized', @TestNegativeConnectNormalized);
   T.Test('TDbKind ordinal stable', @TestDbkMysqlOrdinalStable);
   T.Test('live roundtrip smoke', @TestLiveRoundtripSmoke);
+  T.Test('live truncation and large-text refetch', @TestLiveTruncationAndLargeText);
   if not T.Run then Halt(1);
 end.
