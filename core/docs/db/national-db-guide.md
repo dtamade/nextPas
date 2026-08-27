@@ -7,12 +7,12 @@
 ## 0. 诚实声明
 
 本文的**连接配方以各库官方驱动文档为据**；统一层侧的行为保证只覆盖
-契约已成文部分。截至 2026-08-25：
+契约已成文部分。截至 2026-08-28：
 
 - **真机钉死**：SQLite / PostgreSQL / MySQL(Oracle ≥8.0) 的全量门禁；
   ODBC 网关对 unixODBC 驱动管理器的负连接诊断链路（IM002 归一
-  decConnection）。live 往返经环境变量门控（见 §4 验证）。
-- **理论路径**：下表各国产库的具体连接参数未经本仓真机验证——按
+  decConnection）；**openGauss 5.0.0 x86 via Docker 真机**（`test_db_pg 13 passed / conformance 2 passed / trace 5 passed`，见 §2.1 与 §4.5）。live 往返经环境变量门控（见 §4 验证）。
+- **理论路径**：除 openGauss 外，其余国产库的具体连接参数仍为理论路径——按
   §4 步骤自验后再上生产。宁欠承诺不错承诺。
 
 ## 1. 路径决策表
@@ -35,20 +35,18 @@ ODBC 网关**。同一库两条路径都通时，能力矩阵（§2.10）更丰�
 
 ## 2. 逐库连接配方
 
-### 2.1 openGauss / GaussDB（pg 协议）
+### 2.1 openGauss / GaussDB（pg 协议）— ✅ 真机实证 2026-08-28
 
 ```pascal
-Conn := ConnectPostgres('host=127.0.0.1 port=5432 dbname=app ' +
-  'user=app password=secret');
+Conn := ConnectPostgres('host=127.0.0.1 port=55432 dbname=postgres ' +
+  'user=testuser password=Test123@abc');
 ```
 
-- 服务端需允许密码认证（openGauss 默认 sha256：`pg_hba.conf` 配
-  `sha256`，libpq ≥10 支持该机制协商；旧 libpq 报认证方式不支持属
-  环境问题非统一层问题）。
-- 预期差异：错误消息措辞与社区 PG 不同，但 **SqlState 保留**——统一层
-  归一只消费 SqlState（§2.2），类目归一不受影响。
-- 能力预期：savepoint/batch/native bool/statement_timeout 按 §2.10 PG 列
-  预期成立；large object（lo_* fastpath）未真机验证，上生产前先跑 §4 探针。
+- **真机**：`opengauss/opengauss:5.0.0` x86（2.05GB）`docker run -e GS_PASSWORD -p 55432:5432`，为兼容香草 libpq 需 `password_encryption_type=0`（md5）+ `pg_hba md5` + `gs_ctl reload`（默认 `sha256` 会报 `none of the server's SASL mechanisms are supported`，方案已固化到 §4.5 脚本）。初建用户 `opengauss` 禁止远程，须另建 `testuser` 远程可达。
+- **门禁**（`NEXTPAS_PG_TEST_CONN='host=127.0.0.1 port=55432 dbname=postgres user=testuser …'`）：
+  - `test_db_pg 13 passed heaptrc 0` / `test_db_conformance 2 passed` / `test_db_trace 5 passed`（含 pg 段 `postgres trace live 117ms`）
+  - `test_db_array_bind`  **16 passed, 3 failed** — `unnest(int[],text[])` 多列重载与 `WITH ORDINALITY` 在 openGauss 缺失（`function unnest(integer[], text[]) does not exist` / `syntax error at "WITH ORDINALITY"`），**方言鸿沟诚实记录**：array_bind 在此库应降级为 `IDbBatchExecutor` 批路径（能力矩阵 SupportsArrayBinding 仍 True，但消费方应探能力后按库容退化）。
+- 预期差异：错误消息措辞与社区 PG 不同，但 **SqlState 保留**——统一层归一只消费 SqlState（§2.2），类目归一已验证不受影响；约束/事务/savepoint 全量通过。
 
 ### 2.2 KingbaseES（pg 协议）
 
@@ -155,19 +153,42 @@ SQLDriverConnect，本层不解析不改写。个别驱动拒绝 `SQL_ATTR_QUERY
 4. **记录**：把实测能力矩阵快照（DbCapabilities 输出 + 门禁结果）回填到
    本文件对应小节，替换"待真机验证"标注。
 
-## 5. 离线预研结论（2026-08-28，无真机，不假验证）
+### 4.5 Docker 一键真机（推荐）— x86 原生，QEMU 仅 ARM 逃生
+
+**结论**：**首选 Docker 原生 x86 镜像，不到万不得已不用 QEMU**。宿主机为 x86_64 且已装 `qemu-aarch64-static + binfmt_misc`（本机实证 `qemu-aarch64 / qemu-arm` 均就绪），`docker run --platform linux/arm64` 会自动经 QEMU 仿真，但**性能 5–10× 慢**，仅适合 `conformance/trace` 小数据门禁，**不适合** `bench_db_*` 性能判据。
+
+| 镜像 | 架构 | 是否需 QEMU | 性能 | 备注 |
+|---|---|---|---|---|
+| `opengauss/opengauss:5.0.0`（2.05GB）| `linux/amd64` | **否**（本次实证直接 `docker pull/run`） | 原生 | `docker run --name og-test -e GS_PASSWORD='Test123@abc' -p 55432:5432 opengauss/opengauss:5.0.0` → 3s `server started` |
+| `kingbase / oceanbase x86` | `amd64` | 否 | 原生 | 同模板 |
+| `pingcap/tidb`（PD+TiKV+TiDB 三件套）| `amd64` | 否，但需 `docker-compose` 编排 | 中等启动成本 | `tiup` 亦可，门禁同前 |
+| `dameng DM8 ARM-only` 等政企交付 | `arm64` only | **是**，`docker run --platform linux/arm64 dameng/dm8` | 慢，仅功能验证 | 务必在结果标注 `emulated` |
+
+**openGauss 兼容三步**（已脚本化，见 `scripts/verify-national-db.sh` 建议）：
+
+```bash
+docker run --name og-test -e GS_PASSWORD='Test123@abc' -d -p 55432:5432 opengauss/opengauss:5.0.0
+# 等 10s 后
+docker exec -u opengauss og-test bash -c "GAUSSHOME=/usr/local/opengauss LD_LIBRARY_PATH=/usr/local/opengauss/lib /usr/local/opengauss/bin/gs_guc set -D /var/lib/opengauss/data -c \"password_encryption_type=0\""
+docker exec og-test bash -c "sed -i 's/sha256/md5/g' /var/lib/opengauss/data/pg_hba.conf"
+docker exec -u opengauss og-test bash -c "GAUSSHOME=/usr/local/opengauss LD_LIBRARY_PATH=/usr/local/opengauss/lib /usr/local/opengauss/bin/gs_ctl reload -D /var/lib/opengauss/data"
+docker exec -u opengauss og-test bash -c "LD_LIBRARY_PATH=/usr/local/opengauss/lib /usr/local/opengauss/bin/gsql -d postgres -c \"create user testuser password 'Test123@abc';\""
+# 探针
+docker run --rm --network host postgres:16-alpine psql "host=127.0.0.1 port=55432 dbname=postgres user=testuser password=Test123@abc" -c "select version();"
+NEXTPAS_PG_TEST_CONN='host=127.0.0.1 port=55432 dbname=postgres user=testuser password=Test123@abc' make focused FOCUS=core/tests/nextpas.core.db/test_db_pg
+```
+
+陷阱：初建用户 `opengauss` 禁止远程（`FATAL: Forbid remote connection with initial user`）；`gs_ctl restart` 会杀容器主进程（`--rm` 容器自删），故用 `reload`；`--rm` 容器重启即丢数据，演示用 `--name` 持久化。
+
+## 5. 离线预研结论（2026-08-28，openGauss 已真机，余下理论）
 
 - **预研覆盖**：openGauss / KingbaseES / OceanBase MySQL 租户 / TiDB /
   PolarDB（PG+X）/ GoldenDB / TDSQL（PG+MySQL）/ 达梦 DM8 / GBase 8s/8a /
   神通——全部按 §1 三档分类并给出连接配方与能力预期，落点本文。
-- **未验证**：任意国产库的 conformance / trace 真机门禁均未跑过（无
-  `NEXTPAS_*_TEST_CONN` 环境），本文 §2 能力预期与 §3 矩阵均为**理论预期**，
-  上生产前必须按 §4 步骤自验。
-- **已收口**：ODBC MySQL 系 `HY000+1062` 欠归一由 D5 `ClassifyOdbcEx`
-  单调提精收口（仅 MySQL 词元驱动生效，达梦等仍欠归一诚实保留）。
-- **下一步**：真机环境就绪后，D2（pg 协议系）/ D3（mysql 协议系）按
-  env 门控跑 `test_db_conformance` + `test_db_trace`，结果回填本文对应小节
-  并同步路线图 D2/D3 状态列。
+- **已真机（2026-08-28，Docker）**：**openGauss 5.0.0 x86**（`opengauss/opengauss:5.0.0`，§4.5 三步兼容后 `NEXTPAS_PG_TEST_CONN` 指向 55432）：`test_db_pg 13 passed / conformance 2 passed / trace 5 passed`，方言鸿沟 3 例已诚实记录（`unnest` 多列 / `WITH ORDINALITY` 缺失，array 场景降级为 batch）。
+- **仍理论**：KingbaseES / TiDB / OceanBase / 达梦 等仍为理论预期（无真机），上生产前按 §4 自验。
+- **已收口**：ODBC MySQL 系 `HY000+1062` 欠归一由 D5 `ClassifyOdbcEx` 单调提精收口（仅 MySQL 词元驱动生效，达梦等仍欠归一诚实保留）。
+- **下一步**：D3（mysql 协议系）待 TiDB/OceanBase Docker 编排真机；D4 达梦待 ODBC 网关 + 必要时 ` --platform linux/arm64` QEMU 仿真，结果同模板回填并同步路线图。
 
 ## 6. 反馈回路
 
