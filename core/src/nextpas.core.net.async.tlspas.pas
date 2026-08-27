@@ -91,10 +91,16 @@ type
     function GetWasResumed: Boolean;
   end;
 
-  { 会话缓存：Host:Port → 最新恢复条目（线性小表，mutex 保护）。
-    语义 = Peek 不取走：服务器拒绝恢复时客户端自然回退全握手并
-    以新票据刷新条目。调用方持有实例生命周期，须存活到相关连接
-    全部结束后再释放。线程安全。 }
+  { HRR 可观测：查询本次握手是否经历 HelloRetryRequest（真实重传）。
+    与 WasResumed 正交，可同时为真（HRR+PSK）。 }
+  ITlsPasHRRInfo = interface
+    ['{A7F1D3E2-4C8B-4F2A-9E0D-1B2C3D4E5F6A}']
+    function GetWasHRR: Boolean;
+  end;
+
+  { 会话缓存：Host:Port → 恢复条目 LRU（每 host 最多 4 票据，mutex
+    保护）。Store 追加并在满时淘汰最旧同 host 条目；TryPeek 返回
+    最新未过期条目（线性小表，O(N) 可接受）。线程安全。 }
   TAsyncTlsPasSessionCache = class
   private
     FMutex: TPlatformMutex;
@@ -234,24 +240,39 @@ begin
   inherited Destroy;
 end;
 
+const
+  cTlsPasCacheMaxPerHost = 4;
+
 procedure TAsyncTlsPasSessionCache.Store(const AHost: string; APort: UInt16;
   const ASession: TTlsPasResumptionSession);
 var
-  I: Integer;
+  I, Cnt, Oldest: Integer;
 begin
   if AHost = '' then
     Exit;
   platform_mutex_lock(FMutex);
   try
+    Cnt := 0; Oldest := -1;
     for I := 0 to High(FHosts) do
       if (FPorts[I] = APort) and (FHosts[I] = AHost) then
       begin
-        { 旧票据密钥材料即刻清零后覆盖 }
-        SecureZeroBytes(FSessions[I].TicketIdentity);
-        SecureZeroBytes(FSessions[I].ResumptionPSK);
-        FSessions[I] := ASession;
-        Exit;
+        Inc(Cnt);
+        if Oldest < 0 then Oldest := I;
       end;
+    if Cnt >= cTlsPasCacheMaxPerHost then
+    begin
+      SecureZeroBytes(FSessions[Oldest].TicketIdentity);
+      SecureZeroBytes(FSessions[Oldest].ResumptionPSK);
+      for I := Oldest to High(FHosts) - 1 do
+      begin
+        FHosts[I] := FHosts[I + 1];
+        FPorts[I] := FPorts[I + 1];
+        FSessions[I] := FSessions[I + 1];
+      end;
+      SetLength(FHosts, Length(FHosts) - 1);
+      SetLength(FPorts, Length(FPorts) - 1);
+      SetLength(FSessions, Length(FSessions) - 1);
+    end;
     SetLength(FHosts, Length(FHosts) + 1);
     SetLength(FPorts, Length(FPorts) + 1);
     SetLength(FSessions, Length(FSessions) + 1);
@@ -268,22 +289,19 @@ function TAsyncTlsPasSessionCache.TryPeek(const AHost: string; APort: UInt16;
 var
   I: Integer;
 begin
-  { out 参数先行清零：False 路径也必须交付已定义值——record 内含
-    TBytes 托管字段，调用方拿栈垃圾做 record 赋值会对野指针增引用 }
   ASession := Default(TTlsPasResumptionSession);
   Result := False;
   if AHost = '' then
     Exit;
   platform_mutex_lock(FMutex);
   try
-    for I := 0 to High(FHosts) do
+    for I := High(FHosts) downto 0 do
       if (FPorts[I] = APort) and (FHosts[I] = AHost) then
       begin
         ASession := FSessions[I];
-        { 本地过期：寿命已尽则不提供（服务器侧同样会拒） }
-        Result :=
-          ASession.IssuedMs + Int64(ASession.LifetimeSec) * 1000 > TlsPasMonoMs;
-        Exit;
+        Result := ASession.IssuedMs + Int64(ASession.LifetimeSec) * 1000 > TlsPasMonoMs;
+        if Result then Exit;
+        { 过期则继续向旧条目回退 }
       end;
   finally
     platform_mutex_unlock(FMutex);
@@ -570,7 +588,7 @@ type
     TLS 分帧。读挂起与写挂起各一槽，互相独立。 }
   TTlsPasStream = class(TInterfacedObject, IReader, IWriter,
     IReadWriteCloser, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime,
-    IAsyncTcpStream, ITlsPasResumeInfo)
+    IAsyncTcpStream, ITlsPasResumeInfo, ITlsPasHRRInfo)
   private
     FInner: IAsyncTcpStream;
     FLoop: TAsyncLoop;
@@ -581,6 +599,7 @@ type
     FCacheHost: string;
     FCachePort: UInt16;
     FWasResumed: Boolean;
+    FWasHRR: Boolean;
     FSealer: TTLS13RecordSealer;
     FOpener: TTLS13RecordOpener;
     FNetIn: TBytes;
@@ -631,10 +650,12 @@ type
       const AInner: IAsyncTcpStream; ALoop: TAsyncLoop;
       const ANetInSeed, APostHsSeed: TBytes;
       ACache: TAsyncTlsPasSessionCache; const ACacheHost: string;
-      ACachePort: UInt16; AWasResumed: Boolean);
+      ACachePort: UInt16; AWasResumed: Boolean; AWasHRR: Boolean = False);
     destructor Destroy; override;
     { ITlsPasResumeInfo }
     function GetWasResumed: Boolean;
+    { ITlsPasHRRInfo }
+    function GetWasHRR: Boolean;
     { IReader }
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     { IWriter }
@@ -1166,7 +1187,7 @@ begin
   LPostHsSeed := ACtx^.EncBuf;
   LStream := TTlsPasStream.Create(ACtx^.Suite, ACtx^.AppSecrets,
     ACtx^.Stream, ACtx^.Loop, LNetInSeed, LPostHsSeed,
-    ACtx^.Cache, ACtx^.ServerName, ACtx^.CachePort, ACtx^.PsksAccepted);
+    ACtx^.Cache, ACtx^.ServerName, ACtx^.CachePort, ACtx^.PsksAccepted, ACtx^.HRRSeen);
   ACtx^.Stream := nil;
   LCb := ACtx^.OnReady;
   LCbCtx := ACtx^.OnReadyCtx;
@@ -2123,7 +2144,7 @@ constructor TTlsPasStream.Create(ASuite: Word;
   const AApp: TTLS13ApplicationSecrets; const AInner: IAsyncTcpStream;
   ALoop: TAsyncLoop; const ANetInSeed, APostHsSeed: TBytes;
   ACache: TAsyncTlsPasSessionCache; const ACacheHost: string;
-  ACachePort: UInt16; AWasResumed: Boolean);
+  ACachePort: UInt16; AWasResumed: Boolean; AWasHRR: Boolean = False);
 begin
   inherited Create;
   FSuite := ASuite;
@@ -2147,6 +2168,7 @@ begin
   FCacheHost := ACacheHost;
   FCachePort := ACachePort;
   FWasResumed := AWasResumed;
+  FWasHRR := AWasHRR;
   FInner := AInner;
   FLoop := ALoop;
   FNetIn := ANetInSeed;
@@ -2166,6 +2188,11 @@ end;
 function TTlsPasStream.GetWasResumed: Boolean;
 begin
   Result := FWasResumed;
+end;
+
+function TTlsPasStream.GetWasHRR: Boolean;
+begin
+  Result := FWasHRR;
 end;
 
 destructor TTlsPasStream.Destroy;
