@@ -643,7 +643,7 @@ begin
   end;
   if pq_consumeInput(H) = 0 then
   begin
-    LDiag := string(AnsiString(pq_errorMessage(H)));
+    LDiag := AnsiPtrToStr(pq_errorMessage(H));
     MarkDisconnected(LDiag);
     Exit;
   end;
