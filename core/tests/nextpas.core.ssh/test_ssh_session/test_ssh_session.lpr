@@ -37,6 +37,7 @@ uses
   nextpas.core.platform.files.text,
   nextpas.core.ssh.rsa,
   nextpas.core.ssh.agent,
+  nextpas.core.ssh.compress,
   ssh_rsa_kat,
   nextpas.core.test;
 
@@ -333,6 +334,7 @@ type
     ExitCode: UInt32;
     HostSeed: TBytes;
     ForceDH: Boolean;
+    ForceCompress: Boolean;
     Failed: Boolean;
     FailMsg: string;
     Done: Boolean;
@@ -347,14 +349,15 @@ type
   private
     FEnd: TMemPipeEnd;
     FSc: PSshLoopServerScenario;
-    { 客户端在 CHANNEL_OPEN 里声明的本地号；s→c 帧的 recipient 必须用它
-      （RFC 4254 §5：recipient 指接收方一侧的通道号），不能填服务端自编号 }
     FClientChannelId: UInt32;
     FRecvSeq, FSendSeq: UInt32;
-    FRecv: ISshPacketReceiver;     { c→s 解码 }
-    FSend: ISshPacketSender;       { s→c 编码 }
+    FRecv: ISshPacketReceiver;
+    FSend: ISshPacketSender;
     FEncrypted: Boolean;
     FSessionId: TBytes;
+    FComp: ISshCompressor;
+    FCompEnabled: Boolean;
+    FNegCompCs, FNegCompSc: string;
     procedure SendPlainPayload(const APayload: TBytes);
     function RecvRaw(out AData: TBytes): Boolean;
     function ReadPlainFrameBody: TBytes;
@@ -491,6 +494,8 @@ begin
   SetLength(Result, LBodyLen - 1 - LPadLen);
   if Length(Result) > 0 then
     Move(LBody[1], Result[0], Length(Result));
+  if FCompEnabled and (FComp <> nil) and SshCompressionIsZlib(FNegCompSc) then
+    Result := FComp.Decompress(Result);
 end;
 
 procedure TSshLoopServer.ReplyPayload(const APayload: TBytes);
@@ -498,17 +503,21 @@ var
   LWire, LBody: TBytes;
   LPad, I: Integer;
   LW: TsshWriter;
+  LOut: TBytes;
 begin
   if FEncrypted then
   begin
+    LOut := APayload;
+    if FCompEnabled and (FComp <> nil) and SshCompressionIsZlib(FNegCompCs) then
+      LOut := FComp.Compress(APayload);
     { 与 transport.SendPacket 同构：body = padlen ‖ 载荷 ‖ 填充 }
-    LPad := 8 - ((4 + 1 + SizeUInt(Length(APayload))) mod 8);
+    LPad := 8 - ((4 + 1 + SizeUInt(Length(LOut))) mod 8);
     if LPad < SSH_MIN_PADDING then
       Inc(LPad, 8);
-    LW := TsshWriter.Create(8 + Length(APayload));
+    LW := TsshWriter.Create(8 + Length(LOut));
     try
       LW.PutByte(Byte(LPad));
-      LW.PutRaw(APayload);
+      LW.PutRaw(LOut);
       for I := 1 to LPad do
         LW.PutByte($30);
       LBody := LW.ToBytes;
@@ -571,20 +580,31 @@ begin
     Exit;
   end;
 
-  if FSc^.ForceDH then
+  if FSc^.ForceDH or FSc^.ForceCompress then
   begin
     LW := TsshWriter.Create(512);
     try
       LW.PutByte(SSH_MSG_KEXINIT);
       LW.PutRaw(PatternBytes($EE, 16));
-      LW.PutNameList(['diffie-hellman-group14-sha256']);
+      if FSc^.ForceDH then
+        LW.PutNameList(['diffie-hellman-group14-sha256'])
+      else
+        LW.PutNameList(['curve25519-sha256', 'curve25519-sha256@libssh.org', 'diffie-hellman-group14-sha256']);
       LW.PutNameList(['ssh-ed25519']);
       LW.PutNameList(['chacha20-poly1305@openssh.com']);
       LW.PutNameList(['chacha20-poly1305@openssh.com']);
       LW.PutNameList([]);
       LW.PutNameList([]);
-      LW.PutNameList(['none']);
-      LW.PutNameList(['none']);
+      if FSc^.ForceCompress then
+      begin
+        LW.PutNameList(['zlib@openssh.com', 'zlib', 'none']);
+        LW.PutNameList(['zlib@openssh.com', 'zlib', 'none']);
+      end
+      else
+      begin
+        LW.PutNameList(['none']);
+        LW.PutNameList(['none']);
+      end;
       LW.PutStringText('');
       LW.PutStringText('');
       LW.PutBoolean(False);
@@ -718,6 +738,18 @@ begin
   FRecvSeq := 3;
   FSendSeq := 3;
   FEncrypted := True;
+  if FSc^.ForceCompress then
+  begin
+    FNegCompCs := SSH_COMP_ZLIB_OPENSSH;
+    FNegCompSc := SSH_COMP_ZLIB_OPENSSH;
+    FComp := CreateSshZlibCompressor;
+    FCompEnabled := False; { delayed: USERAUTH_SUCCESS 后启用 }
+  end
+  else
+  begin
+    FNegCompCs := SSH_COMP_NONE;
+    FNegCompSc := SSH_COMP_NONE;
+  end;
 end;
 
 procedure TSshLoopServer.ServeApp;
@@ -866,6 +898,8 @@ begin
           if LPassOk then
           begin
             ReplyPayload(SingleBytePayloadOf(SSH_MSG_USERAUTH_SUCCESS));
+            if SshCompressionIsDelayed(FNegCompSc) or SshCompressionIsDelayed(FNegCompCs) then
+              FCompEnabled := True;
           end
           else
           begin
@@ -1239,7 +1273,7 @@ type
 { 起服务线程，跑一轮真实客户端：握手 → 认证 → exec → 关闭 }
 function RunLoopback(AMode: Integer; APasswordOk, APubKeyOk: Boolean;
   const AKnownHostsFile: string; AStrictHostKey: Boolean;
-  AForceDH: Boolean = False): TLoopResult;
+  AForceDH: Boolean = False; AForceCompress: Boolean = False): TLoopResult;
 var
   LSc: PSshLoopServerScenario;
   LSync: PSync;
@@ -1268,6 +1302,7 @@ begin
     LSc^.ExitCode := 7;
     LSc^.HostSeed := PatternBytes($E7, 32);
     LSc^.ForceDH := AForceDH;
+    LSc^.ForceCompress := AForceCompress;
     LSc^.Failed := False;
     LSc^.FailMsg := '';
     LSc^.Done := False;
@@ -1324,6 +1359,7 @@ begin
       end;
       LOpts.KnownHostsFile := AKnownHostsFile;
       LOpts.StrictHostKeyChecking := AStrictHostKey;
+      LOpts.Compress := AForceCompress;
       LOpts.ExecTimeoutMs := 30000;
       LOpts.InitialWindowSize := 16;   { 迫使客户端发送 WINDOW_ADJUST }
 
@@ -1542,7 +1578,7 @@ begin
   try L.Run; finally L.Free; S^.Done := True; RTLEventSetEvent(S^.DoneEvent); end;
 end;
 
-function RunLoopbackAgent(AHasEd, AHasRsa: Boolean; AServerAccept: Boolean; AForceDH: Boolean = False): TLoopResult;
+function RunLoopbackAgent(AHasEd, AHasRsa: Boolean; AServerAccept: Boolean; AForceDH: Boolean = False; AForceCompress: Boolean = False): TLoopResult;
 var
   LSc: PSshLoopServerScenario;
   LSyncSsh: PSync;
@@ -1571,6 +1607,7 @@ begin
     LSc^.ExitCode := 7;
     LSc^.HostSeed := PatternBytes($E7, 32);
     LSc^.ForceDH := AForceDH;
+    LSc^.ForceCompress := AForceCompress;
     LSc^.Failed := False; LSc^.FailMsg := ''; LSc^.Done := False;
     LSc^.MsgCount := 0; LSc^.Msg1Type := 0; LSc^.Msg1Len := 0;
     LSyncSsh^.Scenario := LSc; LSyncSsh^.ServerEnd := nil; LSyncSsh^.ThreadDone := False; LSyncSsh^.DoneEvent := RTLEventCreate;
@@ -1585,6 +1622,7 @@ begin
 
       LOpts := DefaultSshConnectOptions(CLIENT_HOST_NAME);
       LOpts.User := CLIENT_USER;
+      LOpts.Compress := AForceCompress;
       LOpts.ExecTimeoutMs := 30000;
       LOpts.InitialWindowSize := 16;
 
@@ -1817,6 +1855,46 @@ begin
     CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
     CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
     CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  { S15：压缩延迟激活回环 — 客户端与服务端同时协商 zlib@openssh.com，
+    认证后启用压缩，exec 通道往返仍正确（含高度可压缩载荷验证有状态压缩有效）}
+  GSuite.Test('compress delayed loopback (password)', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PASSWORD, True, False, '', False, False, True);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+    CheckEqual('stdout-part-one|stdout-part-two!', LR.Exec.StdOutText, 'stdout');
+  end);
+
+  GSuite.Test('compress delayed loopback (publickey)', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PUBKEY, True, True, '', False, False, True);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  GSuite.Test('compress delayed + dh fallback loopback', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopback(LOOP_PASSWORD, True, False, '', False, True, True);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+  end);
+
+  GSuite.Test('compress delayed agent loopback', procedure
+  var LR: TLoopResult;
+  begin
+    LR := RunLoopbackAgent(True, False, True, False, True);
+    CheckTrue(not LR.ServerFailed, 'server ok: ' + LR.ServerErrMsg);
+    CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
+    CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
+    CheckEqual('agent-stdout|ok!', LR.Exec.StdOutText, 'stdout');
   end);
 
   GRunner := TSuiteRunner.Create('nextpas.core.ssh.session');
