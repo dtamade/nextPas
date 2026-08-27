@@ -59,6 +59,10 @@ begin
     dckForeignKey, 'fk-parent');
   ExpectMy(DB_MYSQL_ER_CHECK_CONSTRAINT_VIOLATED, '45000', decConstraint,
     dckCheck, 'check');
+  ExpectMy(DB_MYSQL_ER_TRUNCATED_WRONG_VALUE, 'HY000', decConstraint,
+    dckNone, 'truncated-wrong-value 1366');
+  ExpectMy(DB_MYSQL_ER_DATA_TOO_LONG, '22001', decConstraint, dckNone,
+    'data-too-long 1406');
   { 事务/超时 }
   ExpectMy(DB_MYSQL_ER_LOCK_DEADLOCK, '40001', decTransaction, dckNone,
     'deadlock');
