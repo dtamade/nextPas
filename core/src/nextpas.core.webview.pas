@@ -13,10 +13,12 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.vfs,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
-  nextpas.core.webview.factory;
+  nextpas.core.webview.factory,
+  nextpas.core.webview.vfs;
 
 { ---- 常量 ---- }
 
@@ -102,6 +104,7 @@ function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
 function CreateFakeWebview(const AOptions: TWebviewOptions): IWebviewWindow; inline;
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow; inline;
+function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider; inline;
 
 procedure WebviewRunLoop; inline;
 procedure WebviewExitLoop; inline;
@@ -142,6 +145,11 @@ function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
 begin
   Result := nextpas.core.webview.factory.CreateWebviewOf(AKind, AOptions);
+end;
+
+function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider;
+begin
+  Result := nextpas.core.webview.vfs.CreateVfsAssetProvider(AVfs);
 end;
 
 procedure WebviewRunLoop;

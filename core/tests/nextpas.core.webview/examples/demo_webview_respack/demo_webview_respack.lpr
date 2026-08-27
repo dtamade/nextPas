@@ -28,72 +28,10 @@ uses
   nextpas.core.errors,
   nextpas.core.vfs,
   nextpas.core.webview.base,
-  nextpas.core.webview;
+  nextpas.core.webview,
+  nextpas.core.webview.vfs;
 
 {$I assets_respack.inc}  { DEMO_ASSETS / DEMO_ASSETS_SIZE —— 构建期生成 }
-
-type
-  { IVfs → IWebviewAssetProvider 适配器：TryResolve 委托 VFS 读取；
-    归一由 VFS 层处理（大小写/分隔符），本层只补 MIME 快表。 }
-  TVfsAssetProvider = class(TInterfacedObject, IWebviewAssetProvider)
-  private
-    FVfs: IVfs;
-    function GuessMime(const APath: string): string;
-  public
-    constructor Create(AVfs: IVfs);
-    function TryResolve(const APath: string;
-      out ABytes: TBytes; out AMimeType: string): Boolean;
-  end;
-
-constructor TVfsAssetProvider.Create(AVfs: IVfs);
-begin
-  inherited Create;
-  FVfs := AVfs;
-end;
-
-function TVfsAssetProvider.GuessMime(const APath: string): string;
-var
-  LExt: string;
-begin
-  LExt := LowerCase(ExtractFileExt(APath));
-  if LExt = '.html' then Exit('text/html; charset=utf-8');
-  if LExt = '.js' then Exit('application/javascript; charset=utf-8');
-  if LExt = '.css' then Exit('text/css; charset=utf-8');
-  if LExt = '.json' then Exit('application/json; charset=utf-8');
-  if LExt = '.png' then Exit('image/png');
-  if LExt = '.svg' then Exit('image/svg+xml');
-  if (LExt = '.txt') or (LExt = '.log') then Exit('text/plain; charset=utf-8');
-  Result := 'application/octet-stream';
-end;
-
-function TVfsAssetProvider.TryResolve(const APath: string;
-  out ABytes: TBytes; out AMimeType: string): Boolean;
-var
-  LNorm: string;
-  LText: string;
-begin
-  ABytes := nil;
-  AMimeType := '';
-  { VFS 已归一：前导 / 已在 bridge 层剥离，此处按相对路径直接寻址 }
-  LNorm := APath;
-  if (LNorm <> '') and (LNorm[1] = '/') then
-    Delete(LNorm, 1, 1);
-  if (Length(LNorm) >= 4) and (Copy(LNorm, 1, 4) = 'app/') then
-    Delete(LNorm, 1, 4);
-  if not FVfs.Exists(LNorm) then
-    Exit(False);
-  { 小文件用文本读；二进制亦可改 VfsReadAllBytes（此处演示足够）。 }
-  try
-    LText := VfsReadAllText(FVfs, LNorm);
-    SetLength(ABytes, Length(LText));
-    if Length(LText) > 0 then
-      Move(LText[1], ABytes[0], Length(LText));
-  except
-    Exit(False);
-  end;
-  AMimeType := GuessMime(LNorm);
-  Result := True;
-end;
 
 function DevServerFromArgs(out AUrl: string): Boolean;
 var
@@ -163,13 +101,13 @@ begin
   begin
     WriteLn('mode: dev (os vfs, wwwroot/) — edit wwwroot/ and reload');
     LVfs := CreateOsVfs('wwwroot');
-    LProvider := TVfsAssetProvider.Create(LVfs);
+    LProvider := CreateVfsAssetProvider(LVfs);
   end
   else
   begin
     WriteLn('mode: prod (embedded vfs, pack blob)');
     LVfs := CreateEmbeddedVfs(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE), False);
-    LProvider := TVfsAssetProvider.Create(LVfs);
+    LProvider := CreateVfsAssetProvider(LVfs);
   end;
 
   LBuilder := TWebviewBuilder.New

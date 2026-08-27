@@ -3,11 +3,12 @@
 **模块路径**：`core/src/nextpas.core.webview*.pas`
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
-**最后更新**：2026-08-27
-**版本**：1.5（S10——Builder 补齐 InitialUrl/InitialHtml/DevServerUrl 三形态
-（构造期导航 Url 优先语义钉死，gtk/fake 同构修复此前 Html 优先错误）、
-factory 门禁补 12 用例覆盖惰性与导航语义、respack→IWebviewAssetProvider
-集成示例 `demo_webview_respack` 三形态（embedded/os/dev-server）落地、
+**最后更新**：2026-08-28
+**版本**：1.6（S11——`webview.vfs` 公共适配器 `CreateVfsAssetProvider(IVfs)` 抽离
+（`demo_webview_respack` 私有实现收敛为家族唯一收口，TVfs 前缀容错双试 + MIME 快表）、
+`test_webview_vfs` 6 用例门禁、依赖方向 `vfs` 纳入 INV-4、bench `bench_vfs`
+基线（SmallHit 766ns/1.3M ops、1M 800µs/1.22GB/s）；承 S10 Builder 三形态、
+factory 12 用例、respack 三形态等。十门 + 双 bench 全绿。）
 注册表 `webview` 行 focused-runtime 入册；承 S9：DevServerUrl 资产惰性
 + scheme 按需补注册、Initial* 构造期导航、OnNavigationFailed 修复与
 bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + bench 全绿。）
@@ -27,6 +28,7 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 | `nextpas.core.webview.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`），版本探测 4.1→4.0 | W1 |
 | `nextpas.core.webview.gtk.win` | **内缝** | 窗口壳操作的纯函数式内部实现（无 webview 概念）；**窗口模块抽取预备缝**，见 §1.1 | W1 |
 | `nextpas.core.webview.gtk` | 后端 | Linux 实现：窗口壳、scheme、idle dispatch、WebKitGTK 信号桥接 | W1 |
+| `nextpas.core.webview.vfs` | 适配 | `IVfs → IWebviewAssetProvider`（respack/vfs 集成，CONTRACT §3.4 唯一收口） | S11 |
 | `nextpas.core.webview.factory` | 工厂 | 后端注册/探测/选择 + `TWebviewBuilder` | W1 |
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
 | `nextpas.core.webview.webview2.*` | 后端 | Windows WebView2（base/ffi/loader/backend），COM 头移植 | W2 |
@@ -35,13 +37,13 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 ### 依赖方向
 
 ```
-base ← intf ← bridge ← {gtk, fake} ← factory ← 门面
+base ← intf ← bridge ← {gtk, fake, vfs} ← factory ← 门面
                     └── (webview2/wk 同 gtk 位)
 gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
 ```
 
-- **`base` 与 `intf` 禁止 uses 任何后端、bridge、factory 单元。**
-- `bridge` 禁止 uses 任何后端单元；它只认识 `intf` 的契约。
+- **`base` 与 `intf` 禁止 uses 任何后端、bridge、factory、vfs 单元。**
+- `bridge` 禁止 uses 任何后端/vfs/factory 单元；它只认识 `intf` 的契约。
 - `*.ffi` 只含 ABI 类型与函数指针声明，不含逻辑、不含 `external`。
 - `*.loader` 只做装载与探测，是唯一允许触碰动态加载设施的后端侧单元；
   动态加载原语一律来自 `nextpas.core.platform.dl`，

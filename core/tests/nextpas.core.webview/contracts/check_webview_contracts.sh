@@ -28,7 +28,7 @@ for unit in nextpas.core.webview.base.pas nextpas.core.webview.intf.pas; do
     fail=1
     continue
   fi
-  for token in bridge fake factory gtk webview2 wk; do
+  for token in bridge fake factory gtk webview2 wk vfs; do
     hits="$(grep -Ec "nextpas\.core\.webview\.${token}\b" "$path" || true)"
     if [[ "$hits" -ne 0 ]]; then
       echo "FAIL: $unit references nextpas.core.webview.$token (INV-4), $hits hit(s)"
@@ -44,9 +44,9 @@ if [[ ! -f "$SRC/nextpas.core.webview.pas" ]]; then
 fi
 
 # --- bridge 依赖方向（BRIDGE_PROTOCOL/CONTRACT §1）：
-#     bridge 禁止 uses 任何后端/factory 单元——它只认识 intf 的契约。
+#     bridge 禁止 uses 任何后端/factory/vfs 单元——它只认识 intf 的契约。
 if [[ -f "$SRC/nextpas.core.webview.bridge.pas" ]]; then
-  for token in fake factory gtk webview2 wk; do
+  for token in fake factory gtk webview2 wk vfs; do
     hits="$(grep -Ec "nextpas\.core\.webview\.${token}\b" \
       "$SRC/nextpas.core.webview.bridge.pas" || true)"
     if [[ "$hits" -ne 0 ]]; then
