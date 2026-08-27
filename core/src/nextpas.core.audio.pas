@@ -12,7 +12,10 @@ uses
   nextpas.core.audio.codec.intf,
   nextpas.core.audio.pcm,
   nextpas.core.io.intf,
-  nextpas.core.audio.codec.wav;
+  nextpas.core.audio.codec.wav,
+  nextpas.core.audio.codec.aiff,
+  nextpas.core.audio.codec.meta,
+  nextpas.core.audio.codec.registry;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -42,6 +45,7 @@ type
   IAudioDecoder = nextpas.core.audio.codec.intf.IAudioDecoder;
   IAudioEncoder = nextpas.core.audio.codec.intf.IAudioEncoder;
   TAudioEncodeOptions = nextpas.core.audio.codec.intf.TAudioEncodeOptions;
+  TDecoderFactory = nextpas.core.audio.codec.registry.TDecoderFactory;
 
 { ---- base forwarding ---- }
 
@@ -71,6 +75,21 @@ procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const ADest: IStream; cons
 procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const ADest: IStream); overload; inline;
 function CreateWavDecoder: IAudioDecoder; inline;
 function CreateWavEncoder: IAudioEncoder; inline;
+
+function AiffProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function CreateAiffDecoder: IAudioDecoder; inline;
+
+function TryParseID3v2(const APrefix: TBytes; out ATags: TAudioTags; out ASkipped: Integer): Boolean; inline;
+function TryParseVorbisComment(const AData: TBytes; out ATags: TAudioTags): Boolean; inline;
+function TryParseRiffInfo(const AStream: IStream; ALimit: Int64; out ATags: TAudioTags): Boolean; inline;
+function MergeTags(const APrimary, AFallback: TAudioTags): TAudioTags; inline;
+
+function AudioDetectProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function AudioDetectProbeFromStream(const AStream: IStream): TAudioProbeResult; inline;
+procedure AudioRegisterDecoder(AFactory: TDecoderFactory); inline;
+function TryDecodeWhole(ADecoder: IAudioDecoder; const AStream: IStream; out ABuffer: TAudioBuffer): Boolean; inline;
+function TryDecodeWholeFile(const APath: string; out ABuffer: TAudioBuffer; out ATags: TAudioTags): Boolean; inline;
+function AudioOpenFileStreaming(const APath: string): IAudioSource; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -148,6 +167,66 @@ end;
 function WavProbe(const APrefix: TBytes): TAudioProbeResult;
 begin
   Result := nextpas.core.audio.codec.wav.WavProbe(APrefix);
+end;
+
+function AiffProbe(const APrefix: TBytes): TAudioProbeResult;
+begin
+  Result := nextpas.core.audio.codec.aiff.AiffProbe(APrefix);
+end;
+
+function CreateAiffDecoder: IAudioDecoder;
+begin
+  Result := nextpas.core.audio.codec.aiff.CreateAiffDecoder;
+end;
+
+function TryParseID3v2(const APrefix: TBytes; out ATags: TAudioTags; out ASkipped: Integer): Boolean;
+begin
+  Result := nextpas.core.audio.codec.meta.TryParseID3v2(APrefix, ATags, ASkipped);
+end;
+
+function TryParseVorbisComment(const AData: TBytes; out ATags: TAudioTags): Boolean;
+begin
+  Result := nextpas.core.audio.codec.meta.TryParseVorbisComment(AData, ATags);
+end;
+
+function TryParseRiffInfo(const AStream: IStream; ALimit: Int64; out ATags: TAudioTags): Boolean;
+begin
+  Result := nextpas.core.audio.codec.meta.TryParseRiffInfo(AStream, ALimit, ATags);
+end;
+
+function MergeTags(const APrimary, AFallback: TAudioTags): TAudioTags;
+begin
+  Result := nextpas.core.audio.codec.meta.MergeTags(APrimary, AFallback);
+end;
+
+function AudioDetectProbe(const APrefix: TBytes): TAudioProbeResult;
+begin
+  Result := nextpas.core.audio.codec.registry.AudioDetectProbe(APrefix);
+end;
+
+function AudioDetectProbeFromStream(const AStream: IStream): TAudioProbeResult;
+begin
+  Result := nextpas.core.audio.codec.registry.AudioDetectProbeFromStream(AStream);
+end;
+
+procedure AudioRegisterDecoder(AFactory: TDecoderFactory);
+begin
+  nextpas.core.audio.codec.registry.AudioRegisterDecoder(AFactory);
+end;
+
+function TryDecodeWhole(ADecoder: IAudioDecoder; const AStream: IStream; out ABuffer: TAudioBuffer): Boolean;
+begin
+  Result := nextpas.core.audio.codec.registry.TryDecodeWhole(ADecoder, AStream, ABuffer);
+end;
+
+function TryDecodeWholeFile(const APath: string; out ABuffer: TAudioBuffer; out ATags: TAudioTags): Boolean;
+begin
+  Result := nextpas.core.audio.codec.registry.TryDecodeWholeFile(APath, ABuffer, ATags);
+end;
+
+function AudioOpenFileStreaming(const APath: string): IAudioSource;
+begin
+  Result := nextpas.core.audio.codec.registry.AudioOpenFileStreaming(APath);
 end;
 
 procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const AFilePath: string);
