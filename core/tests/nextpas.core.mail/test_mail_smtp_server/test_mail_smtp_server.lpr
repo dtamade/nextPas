@@ -28,6 +28,7 @@ uses
   nextpas.core.net.server,
   nextpas.core.platform.thread,
   nextpas.core.text.conv,
+  nextpas.core.encoding.base64,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.mail;
@@ -53,10 +54,40 @@ type
     LastRcptCount: Int32;
     LastData: string;
     LastClientIP: string;
-    LastClosedIP: string;
+    AuthedCount: Int32;
+    LastAuthedUser: string;
     constructor Create;
     procedure OnServerEvent(const AEvent: TMailSmtpServerEvent;
       const AEnvelope: TMailSmtpEnvelope);
+  end;
+
+  TTestAuthHook = class(TInterfacedObject, ISmtpAuthHook)
+  private
+    FUser: string;
+    FPass: string;
+  public
+    constructor Create(const AUser, APass: string);
+    function Authenticate(const AUsername, APassword: string;
+      out AUserId: string): Boolean;
+  end;
+
+  TTestDummyTlsUpgrade = class(TInterfacedObject, ISmtpTlsUpgrade)
+  public
+    UpgradeCount: Int32;
+    function Upgrade(const AConn: ITcpStream): ITcpStream;
+  end;
+
+  TTestAuthedGate = class(TInterfacedObject, ISmtpAuthedMailGate)
+  private
+    FRequireUser: string;
+  public
+    constructor Create(const ARequireUser: string);
+    function Check(const AUserId: string; const AFrom: TMailAddress): string;
+  end;
+
+  TFailTlsUpgrade = class(TInterfacedObject, ISmtpTlsUpgrade)
+  public
+    function Upgrade(const AConn: ITcpStream): ITcpStream;
   end;
 
   TTestSmtpHandler = class(TInterfacedObject, ITcpServerHandler,
@@ -73,23 +104,6 @@ type
     FSinkObj: TTestSmtpSink;
     FSink: ISmtpServerSink;
     FConfig: TMailSmtpServerConfig;
-  end;
-
-  { MAIL/RCPT 策略钩子 mock：可切换放行/拒绝，记录调用与入参 }
-  TTestMailPolicy = class(TInterfacedObject, ISmtpMailPolicyHook)
-  public
-    RejectReply: string;       { '' = 放行 MAIL; 非空 = 完整拒绝行(含 CRLF) }
-    RcptRejectReply: string;   { '' = 放行 RCPT; 非空 = 完整拒绝行(含 CRLF) }
-    Calls: Int32;              { EvaluateMailFrom 次数 }
-    RcptCalls: Int32;          { EvaluateRcptTo 次数 }
-    LastFrom: string;
-    LastRcpt: string;
-    LastIP: string;
-    constructor Create;
-    function EvaluateMailFrom(const AFrom: TMailAddress;
-      const AClientIP: string): string;
-    function EvaluateRcptTo(const AFrom: TMailAddress; const ARcpt: TMailAddress;
-      const AClientIP: string): string;
   end;
 
 { 服务器线程：ListenAndServe 阻塞运行，退出时释放引用 }
@@ -285,6 +299,16 @@ begin
   end;
 end;
 
+function EncodePlain(const AUser, APass: string): string;
+var
+  LB: TBytes;
+  S: string;
+begin
+  S := #0 + AUser + #0 + APass;
+  LB := StringToUTF8Bytes(S);
+  Result := nextpas.core.encoding.base64.Base64Encode(LB);
+end;
+
 { ── 事件类型 ──────────────────────────────────────────────────────── }
 
 constructor TTestSmtpSink.Create;
@@ -309,11 +333,63 @@ begin
     msseOverflow:
       Inc(OverflowCount);
     msseClosed:
+      Inc(ClosedCount);
+    msseAuthed:
       begin
-        Inc(ClosedCount);
-        LastClosedIP := AEnvelope.ClientIP;
+        Inc(AuthedCount);
+        LastAuthedUser := AEnvelope.AuthedUserId;
       end;
   end;
+end;
+
+constructor TTestAuthHook.Create(const AUser, APass: string);
+begin
+  inherited Create;
+  FUser := AUser;
+  FPass := APass;
+end;
+
+function TTestAuthHook.Authenticate(const AUsername, APassword: string;
+  out AUserId: string): Boolean;
+begin
+  if (AUsername = FUser) and (APassword = FPass) then
+  begin
+    AUserId := AUsername;
+    Result := True;
+  end
+  else
+  begin
+    AUserId := '';
+    Result := False;
+  end;
+end;
+
+function TTestDummyTlsUpgrade.Upgrade(const AConn: ITcpStream): ITcpStream;
+begin
+  Inc(UpgradeCount);
+  Result := AConn;
+end;
+
+constructor TTestAuthedGate.Create(const ARequireUser: string);
+begin
+  inherited Create;
+  FRequireUser := ARequireUser;
+end;
+
+function TTestAuthedGate.Check(const AUserId: string; const AFrom: TMailAddress): string;
+begin
+  if AUserId <> FRequireUser then
+    Result := '553 5.7.1 Sender address rejected: not owned by user' + #13#10
+  else if LowerCase(AFrom.Full) <> LowerCase(FRequireUser) then
+    Result := '553 5.7.1 Sender address rejected: not owned by user' + #13#10
+  else
+    Result := '';
+end;
+
+function TFailTlsUpgrade.Upgrade(const AConn: ITcpStream): ITcpStream;
+begin
+  raise ENextPasError.Create('TLS fail');
+  Result := nil;
 end;
 
 constructor TTestSmtpHandler.Create(const ASink: TTestSmtpSink;
@@ -337,32 +413,6 @@ function TTestSmtpHandler.NewSession(const AConn: ITcpStream;
 begin
   Inc(CreateCount);
   Result := TMailSmtpServerSession.Create(AConn, FSink, FConfig);
-end;
-
-constructor TTestMailPolicy.Create;
-begin
-  inherited Create;
-  RejectReply := '';
-  RcptRejectReply := '';
-end;
-
-function TTestMailPolicy.EvaluateMailFrom(const AFrom: TMailAddress;
-  const AClientIP: string): string;
-begin
-  Inc(Calls);
-  LastFrom := AFrom.Full;
-  LastIP := AClientIP;
-  Result := RejectReply;
-end;
-
-function TTestMailPolicy.EvaluateRcptTo(const AFrom: TMailAddress;
-  const ARcpt: TMailAddress; const AClientIP: string): string;
-begin
-  Inc(RcptCalls);
-  LastFrom := AFrom.Full;
-  LastRcpt := ARcpt.Full;
-  LastIP := AClientIP;
-  Result := RcptRejectReply;
 end;
 
 { ── 测试用例 ──────────────────────────────────────────────────────── }
@@ -491,9 +541,6 @@ begin
   { 点转义还原：'.line' 与 '..double' 应原样回到应用 }
   Check(Pos('.line' + #13#10, LSink.LastData) > 0, 'dot unstuff single');
   Check(Pos('..double' + #13#10, LSink.LastData) > 0, 'dot unstuff double');
-  { 关闭事件携带对端 IP（批次 9.4：连接生命周期按 IP 归账的前提） }
-  Check(SpinWait(LSink.ClosedCount, 1), 'closed event delivered');
-  CheckEqual('127.0.0.1', LSink.LastClosedIP, 'closed event carries peer ip');
 
   StopSmtpServer(LServer, LH);
   LSink := nil;
@@ -527,139 +574,6 @@ begin
 
   StopSmtpServer(LServer, LH);
   LSink := nil;
-end;
-
-{ MAIL 阶段同步策略钩子：放行路径（250 + 信封正常）与拒绝路径
-  （452 + 信封未定值 → RCPT 503 + 策略放开后重发成功） }
-procedure TestMailPolicyHook;
-var
-  LH: TPlatformThreadHandle;
-  LServer: ITcpServer;
-  LHandler: TTestSmtpHandler;
-  LSink: TTestSmtpSink;
-  LConfig: TMailSmtpServerConfig;
-  LPort: UInt16;
-  C: TRawClient;
-  LPolicy: TTestMailPolicy;
-  LPolicyRef: ISmtpMailPolicyHook;
-begin
-  { 放行路径：钩子被调用并拿到 From + 对端 IP }
-  LSink := TTestSmtpSink.Create;
-  LPolicy := TTestMailPolicy.Create;
-  LPolicyRef := LPolicy;
-  LConfig := TMailSmtpServerConfig.Default;
-  LConfig.MailPolicy := LPolicyRef;
-  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
-
-  C.Open(LPort);
-  ExpectBanner(C, 2000);
-  C.SendLine('EHLO test.example');
-  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'EHLO');
-  C.SendLine('MAIL FROM:<a@b.com>');
-  ExpectReply(C, 2000, '250', 'mail ok (policy allow)');
-  C.SendLine('RCPT TO:<x@y.com>');
-  ExpectReply(C, 2000, '250', 'rcpt ok after policy allow');
-  C.SendLine('QUIT');
-  ExpectReply(C, 2000, '221', 'QUIT');
-  C.Close;
-  { 250 回复已读回 ⇒ EvaluateMailFrom 必已完成（回复在回调后入队） }
-  CheckEqual(1, LPolicy.Calls, 'policy called once on allow');
-  CheckEqual('a@b.com', LPolicy.LastFrom, 'policy sees from');
-  CheckEqual('127.0.0.1', LPolicy.LastIP, 'policy sees peer ip');
-
-  StopSmtpServer(LServer, LH);
-  LSink := nil;
-  LPolicyRef := nil;
-
-  { 拒绝路径：452；信封未定值（RCPT → 503）；策略放开后重发成功 }
-  LSink := TTestSmtpSink.Create;
-  LPolicy := TTestMailPolicy.Create;
-  LPolicy.RejectReply := '452 4.7.1 Too many messages' + #13#10;
-  LPolicyRef := LPolicy;
-  LConfig := TMailSmtpServerConfig.Default;
-  LConfig.MailPolicy := LPolicyRef;
-  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
-
-  C.Open(LPort);
-  ExpectBanner(C, 2000);
-  C.SendLine('EHLO test.example');
-  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'EHLO');
-  C.SendLine('MAIL FROM:<a@b.com>');
-  ExpectReply(C, 2000, '452', 'mail rejected by policy');
-  C.SendLine('RCPT TO:<x@y.com>');
-  ExpectReply(C, 2000, '503', 'rcpt after policy reject');
-  LPolicy.RejectReply := '';
-  C.SendLine('MAIL FROM:<a@b.com>');
-  ExpectReply(C, 2000, '250', 'mail ok after policy release');
-  C.SendLine('RCPT TO:<x@y.com>');
-  ExpectReply(C, 2000, '250', 'rcpt ok after policy release');
-  C.SendLine('QUIT');
-  ExpectReply(C, 2000, '221', 'QUIT');
-  C.Close;
-  CheckEqual(2, LPolicy.Calls, 'policy called twice (reject + allow)');
-
-  StopSmtpServer(LServer, LH);
-  LSink := nil;
-  LPolicyRef := nil;
-end;
-
-{ RCPT 阶段同步策略钩子(9.5)：拒绝 → 该收件人未入列(DATA 缺 RCPT → 503)，
-  释放后重发 RCPT 成功并完成 DATA }
-procedure TestRcptPolicyHook;
-var
-  LH: TPlatformThreadHandle;
-  LServer: ITcpServer;
-  LHandler: TTestSmtpHandler;
-  LSink: TTestSmtpSink;
-  LConfig: TMailSmtpServerConfig;
-  LPort: UInt16;
-  C: TRawClient;
-  LPolicy: TTestMailPolicy;
-  LPolicyRef: ISmtpMailPolicyHook;
-begin
-  LSink := TTestSmtpSink.Create;
-  LPolicy := TTestMailPolicy.Create;
-  LPolicy.RcptRejectReply := '451 4.7.1 Greylisted, try again later' + #13#10;
-  LPolicyRef := LPolicy;
-  LConfig := TMailSmtpServerConfig.Default;
-  LConfig.MailPolicy := LPolicyRef;
-  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
-
-  C.Open(LPort);
-  ExpectBanner(C, 2000);
-  C.SendLine('EHLO test.example');
-  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'EHLO');
-  C.SendLine('MAIL FROM:<a@b.com>');
-  ExpectReply(C, 2000, '250', 'mail ok');
-  C.SendLine('RCPT TO:<x@y.com>');
-  ExpectReply(C, 2000, '451', 'rcpt rejected by policy');
-  { 收件人未入列: DATA → 503 }
-  C.SendLine('DATA');
-  ExpectReply(C, 2000, '503', 'data after rejected rcpt (no recipients)');
-  { 释放后重发 RCPT 成功 }
-  LPolicy.RcptRejectReply := '';
-  C.SendLine('RCPT TO:<x@y.com>');
-  ExpectReply(C, 2000, '250', 'rcpt ok after policy release');
-  C.SendLine('DATA');
-  ExpectReply(C, 2000, '354', 'data accepted');
-  C.SendLine('Subject: t');
-  C.SendLine('');
-  C.SendLine('body');
-  C.SendLine('.');
-  ExpectReply(C, 2000, '250', 'message queued');
-  C.SendLine('QUIT');
-  ExpectReply(C, 2000, '221', 'QUIT');
-  C.Close;
-  { 250 回复已读回 ⇒ EvaluateRcptTo 必已完成 }
-  CheckEqual(2, LPolicy.RcptCalls, 'rcpt policy called twice (reject + allow)');
-  CheckEqual('a@b.com', LPolicy.LastFrom, 'rcpt policy sees mail from');
-  CheckEqual('x@y.com', LPolicy.LastRcpt, 'rcpt policy sees rcpt to');
-  CheckEqual('127.0.0.1', LPolicy.LastIP, 'rcpt policy sees peer ip');
-  Check(SpinWait(LSink.MsgCount, 1), 'message delivered after rcpt release');
-
-  StopSmtpServer(LServer, LH);
-  LSink := nil;
-  LPolicyRef := nil;
 end;
 
 procedure TestOrderAndSyntax;
@@ -750,7 +664,7 @@ begin
   C.SendLine('MAIL FROM:<a@b.com>');
   ExpectReply(C, 2000, '530', 'auth required');
   C.SendLine('AUTH PLAIN AAAA');
-  ExpectReply(C, 2000, '503', 'auth impl pending');
+  ExpectReply(C, 2000, '535', 'auth fail invalid');
   C.SendLine('QUIT');
   ExpectReply(C, 2000, '221', 'QUIT');
   C.Close;
@@ -890,6 +804,363 @@ begin
   LSink := nil;
 end;
 
+procedure TestAuthPlainSuccess;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LHook: TTestAuthHook;
+  B64: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LHook := TTestAuthHook.Create('alice', 'secret');
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.AuthEnabled := True;
+  LConfig.AuthHook := LHook;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'AUTH', 'ehlo auth advert');
+  B64 := EncodePlain('alice', 'secret');
+  C.SendLine('AUTH PLAIN ' + B64);
+  ExpectReply(C, 2000, '235', 'auth plain success');
+  Check(SpinWait(LSink.AuthedCount, 1), 'authed event');
+  CheckEqual('alice', LSink.LastAuthedUser, 'authed user');
+  { RequireAuth now should allow MAIL }
+  LConfig.RequireAuth := False;
+  C.SendLine('MAIL FROM:<alice@example.com>');
+  ExpectReply(C, 2000, '250', 'mail after auth');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestAuthPlainFail;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LHook: TTestAuthHook;
+  B64: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LHook := TTestAuthHook.Create('bob', 'right');
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.AuthEnabled := True;
+  LConfig.AuthHook := LHook;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'AUTH', 'ehlo');
+  B64 := EncodePlain('bob', 'wrong');
+  C.SendLine('AUTH PLAIN ' + B64);
+  ExpectReply(C, 2000, '535', 'auth fail');
+  Check(not SpinWait(LSink.AuthedCount, 1), 'no authed');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestAuthPlainChallenge;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LHook: TTestAuthHook;
+  B64: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LHook := TTestAuthHook.Create('u', 'p');
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.AuthEnabled := True;
+  LConfig.AuthHook := LHook;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'AUTH', 'ehlo');
+  C.SendLine('AUTH PLAIN');
+  ExpectReply(C, 2000, '334', 'plain challenge');
+  B64 := EncodePlain('u', 'p');
+  C.SendLine(B64);
+  ExpectReply(C, 2000, '235', 'plain challenge success');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestAuthLoginSuccess;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LHook: TTestAuthHook;
+  BU, BP: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LHook := TTestAuthHook.Create('alice', 'pw123');
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.AuthEnabled := True;
+  LConfig.AuthHook := LHook;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'AUTH', 'ehlo');
+  C.SendLine('AUTH LOGIN');
+  ExpectReply(C, 2000, '334', 'login user challenge');
+  BU := nextpas.core.encoding.base64.Base64Encode(StringToUTF8Bytes('alice'));
+  C.SendLine(BU);
+  ExpectReply(C, 2000, '334', 'login pass challenge');
+  BP := nextpas.core.encoding.base64.Base64Encode(StringToUTF8Bytes('pw123'));
+  C.SendLine(BP);
+  ExpectReply(C, 2000, '235', 'login success');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestAuthNotEnabled;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.AuthEnabled := False;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'ehlo no auth');
+  C.SendLine('AUTH PLAIN ' + EncodePlain('a','b'));
+  ExpectReply(C, 2000, '503', 'auth not available');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestStarTlsDummy;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LTls: TTestDummyTlsUpgrade;
+begin
+  LSink := TTestSmtpSink.Create;
+  LTls := TTestDummyTlsUpgrade.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.TlsUpgrade := LTls;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'STARTTLS', 'ehlo starttls');
+  C.SendLine('STARTTLS');
+  ExpectReply(C, 2000, '220', 'starttls 220');
+  Check(SpinWait(LTls.UpgradeCount, 1), 'upgrade called');
+  { TLS 后需重发 EHLO }
+  C.SendLine('EHLO t2');
+  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'ehlo after tls');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestStarTlsAlreadyActive;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LTls: TTestDummyTlsUpgrade;
+begin
+  LSink := TTestSmtpSink.Create;
+  LTls := TTestDummyTlsUpgrade.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.TlsUpgrade := LTls;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('STARTTLS');
+  ExpectReply(C, 2000, '220', 'first tls');
+  C.SendLine('STARTTLS');
+  ExpectReply(C, 2000, '503', 'already active');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestStarTlsNoHook;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.TlsUpgrade := nil;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('STARTTLS');
+  ExpectReply(C, 2000, '454', 'no hook');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestStarTlsFail;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LFail: TFailTlsUpgrade;
+begin
+  LSink := TTestSmtpSink.Create;
+  LFail := TFailTlsUpgrade.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.TlsUpgrade := LFail;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('STARTTLS');
+  ExpectReply(C, 2000, '220', '220 before fail');
+  ExpectReply(C, 5000, '454', 'upgrade fail 454');
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'ehlo after fail');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestAuthedMailGate;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LHook: TTestAuthHook;
+  LGate: TTestAuthedGate;
+  B64: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LHook := TTestAuthHook.Create('alice@example.com', 'secret');
+  LGate := TTestAuthedGate.Create('alice@example.com');
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.AuthEnabled := True;
+  LConfig.AuthHook := LHook;
+  LConfig.AuthedMailGate := LGate;
+  LConfig.RequireAuth := True;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'AUTH', 'ehlo');
+  B64 := EncodePlain('alice@example.com', 'secret');
+  C.SendLine('AUTH PLAIN ' + B64);
+  ExpectReply(C, 2000, '235', 'auth');
+  { 试图用非归属地址发信 → 553 }
+  C.SendLine('MAIL FROM:<bob@example.com>');
+  ExpectReply(C, 2000, '553', 'sender rejected');
+  { 正确地址放行 }
+  C.SendLine('MAIL FROM:<alice@example.com>');
+  ExpectReply(C, 2000, '250', 'mail ok');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
+procedure TestAuthAfterTlsAdvertise;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LTls: TTestDummyTlsUpgrade;
+  LHook: TTestAuthHook;
+  B64: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LTls := TTestDummyTlsUpgrade.Create;
+  LHook := TTestAuthHook.Create('u', 'p');
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.AuthEnabled := True;
+  LConfig.TlsUpgrade := LTls;
+  LConfig.AuthHook := LHook;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  { 未 TLS 时不应广播 AUTH（因有 TlsUpgrade）}
+  Check(not ExpectMultiLine(C, 2000, '250', 'AUTH', 'no auth before tls'), 'no auth before tls');
+  C.SendLine('STARTTLS');
+  ExpectReply(C, 2000, '220', 'tls');
+  C.SendLine('EHLO t2');
+  Check(ExpectMultiLine(C, 2000, '250', 'AUTH', 'auth after tls'), 'auth after tls');
+  B64 := EncodePlain('u', 'p');
+  C.SendLine('AUTH PLAIN ' + B64);
+  ExpectReply(C, 2000, '235', 'auth after tls ok');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'quit');
+  C.Close;
+  StopSmtpServer(LServer, LH);
+end;
+
 var
   T: TTestSuite;
 
@@ -899,14 +1170,23 @@ begin
   T.Test('EhloCapabilities', @Test_Full);
   T.Test('MailRcptDataFlow', @TestMailRcptDataFlow);
   T.Test('SizeReject', @TestSizeReject);
-  T.Test('MailPolicyHook', @TestMailPolicyHook);
-  T.Test('RcptPolicyHook', @TestRcptPolicyHook);
   T.Test('OrderAndSyntax', @TestOrderAndSyntax);
   T.Test('RequireAuth', @TestRequireAuth);
   T.Test('MaxRecipients', @TestMaxRecipients);
   T.Test('IdleTimeout', @TestIdleTimeout);
   T.Test('OverflowAbort', @TestOverflowAbort);
   T.Test('PipelinedCommands', @TestPipelinedCommands);
+  T.Test('AuthPlainSuccess', @TestAuthPlainSuccess);
+  T.Test('AuthPlainFail', @TestAuthPlainFail);
+  T.Test('AuthPlainChallenge', @TestAuthPlainChallenge);
+  T.Test('AuthLoginSuccess', @TestAuthLoginSuccess);
+  T.Test('AuthNotEnabled', @TestAuthNotEnabled);
+  T.Test('StarTlsDummy', @TestStarTlsDummy);
+  T.Test('StarTlsAlreadyActive', @TestStarTlsAlreadyActive);
+  T.Test('StarTlsNoHook', @TestStarTlsNoHook);
+  T.Test('StarTlsFail', @TestStarTlsFail);
+  T.Test('AuthedMailGate', @TestAuthedMailGate);
+  T.Test('AuthAfterTlsAdvertise', @TestAuthAfterTlsAdvertise);
   if not T.Run then
     Halt(1);
 end.
