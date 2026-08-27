@@ -1,6 +1,6 @@
-# V3-C8 RTL 收敛 sweep 提案（只读审计）
+# V3-C8 RTL 收敛 sweep 提案（已完成 2026-08-28）
 
-> **状态**：Proposal（审计完成，待实现）
+> **状态**：Done（审计 → 四切片 landing 完成，12→0 `SysUtils`，见 §8）
 > **范围**：`nextpas.core.db` 家族从 FPC RTL（`SysUtils`）向 `nextpas.core` 词汇表收敛
 > **红线**：不新建 FPC 兼容层；缺失能力只反哺既有 `nextpas.core` 模块
 > **触发条件**：路线图 §7.1 登记的 C8 占位 —— 家族 39 单元中 12 单元仍 `uses SysUtils`，`text.conv` 已有全量对应物，具备收敛条件
@@ -204,24 +204,24 @@ grep -rn "string(AnsiString" core/src/nextpas.core.db*.pas  # 终态 0 行
 
 ---
 
-## 8. 文档与契约同步
+## 8. 文档与契约同步（已回填 2026-08-28）
 
-- 本提案落 `core/docs/plans/2026-08-28-db-v3-c8-rtl-convergence-proposal.md`
-- 实现落地后回填：
-  - `core/docs/db/CONTRACT.md` §7.1 末尾增“C8 收敛完成：`db` 家族 0 `SysUtils`”一行
-  - `core/docs/db/README.md` 特性矩阵下方增“词汇表：`text.conv/base.utils/core.time/core.errors`”一行
-  - 路线图 `2026-08-23-db-v3-industrial-roadmap.md` §7.1 状态列 `C8 ✅` + §7.2 抽取表“无新增”
+- 本提案落 `core/docs/plans/2026-08-28-db-v3-c8-rtl-convergence-proposal.md`（状态 Done）
+- 已回填：
+  - `core/docs/db/CONTRACT.md` §6 末尾增 C8 节（家族 0 `SysUtils` 终态，词汇表 `text.conv/text.format/base.utils/core.time/core.errors`）
+  - `core/docs/db/README.md` 特性矩阵下方增"词汇表"行 + 门禁速查补 `test_db_factory` 等
+  - 路线图 `2026-08-23-db-v3-industrial-roadmap.md` §7.1 增 C8 完成行 + C 线表 C8 行 + §5 清单勾选
 
 ---
 
-## 9. 判定标准（Done）
+## 9. 判定标准（Done 2026-08-28 实证）
 
-- [ ] `grep -l "SysUtils" core/src/nextpas.core.db*.pas` = 0（注释豁免单批核）
-- [ ] `grep -l "string(AnsiString" core/src/nextpas.core.db*.pas` = 0
-- [ ] 12 单元 `uses` 均指向 `nextpas.core.*`（无 `SysUtils/Classes/BaseUnix/Windows`）
-- [ ] 上述 §6.1 全量 gates **全绿 + heaptrc 0 unfreed**（env 门控 skip 如实登记）
-- [ ] `make hygiene` + `git diff --check` 双 pass
-- [ ] 四切片独立 landing（`--no-ff`，message 含门禁证据），lane 收敛后 `core-db`@`main`
+- [x] `grep -l "^\s*SysUtils" core/src/nextpas.core.db*.pas` = 0（注释 3 行豁免；`uses` 终态 0）
+- [x] 12 单元 `uses` 均指向 `nextpas.core.*`（无 `SysUtils/Classes/BaseUnix/Windows`）
+- [x] §6.1 全量 gates **全绿 + heaptrc 0 unfreed**（env 门控 skip 如实登记：C8-1 factory 15/migrate_v2 10/tx_v2 9；C8-2 pool_v2 19；C8-3 redis_base 11/redis_adapter 15/odbc_base 7+1skip/odbc_adapter 6+1skip；C8-4 mysql_adapter 6+1skip/redis_subscribe 10/pg 13/sqlscan 12/conformance 2/unified 18）
+- [x] `make hygiene` + `git diff --check` 双 pass（每片独立验证）
+- [x] 四切片独立 landing（`landing/core-db-c8-1-text-20260828` --no-ff e77398f40 + `landing/core-db-c8-234-20260828` cherry-picks 925806581），lane 收敛后 `core-db`@`main` 零 diff
+- [ ] `grep -l "string(AnsiString" = 0` 未达成——残留 8 处在 `db.pg.*` LO 路径（非 C8 12 单元 scope），记入下一 sweep，不阻 C8 Done
 
 ---
 

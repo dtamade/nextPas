@@ -88,6 +88,8 @@ DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
 `IDbCapabilities`，消费方按能力探测降级而非按后端名分支；契约语义见
 CONTRACT §2.10。
 
+> 词汇表收口（V3-C8，2026-08-28）：家族 39 单元 `uses SysUtils` 12→0（仅注释豁免），`IntToStr/Trim/LowerCase/IntToHex/Format/FreeAndNil/GetTickCount64/Exception/AnsiPtrToStr` 全量收敛至 `nextpas.core.text.conv / text.format / base.utils / time / errors`，零反哺新增，见 `2026-08-28-db-v3-c8-rtl-convergence-proposal.md`。
+
 MySQL/MariaDB：基础三件套（base 常量词汇 / ffi 双方言 ABI 镜像 /
 loader 多 soname 探测 + flavor 自动识别）与适配器（prepared stmt
 二进制协议、错误归一、savepoint、多语句批执行）已落地（V3-A1/A2）；

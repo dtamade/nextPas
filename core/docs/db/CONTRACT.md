@@ -841,3 +841,19 @@ test_db_odbc_adapter（V3-A3/A4）在仅有驱动管理器（unixODBC）而无�
 - **V3 工业级路线图**（后端扩张/架构收口/性能工业化三主线，S9+ 排期）：
   `core/docs/plans/2026-08-23-db-v3-industrial-roadmap.md`
 - 两阶段收编决策：`core/docs/plans/2026-08-23-db-module-boundary.md`
+- V3-C6 词法扫描共享引擎：`core/docs/plans/2026-08-26-db-v3-c6-sqlscan-extract-plan.md`（五份状态机→单一 `db.sqlscan`，黄金语料零漂移）
+- V3-C8 RTL 收敛 sweep：`core/docs/plans/2026-08-28-db-v3-c8-rtl-convergence-proposal.md`（家族 39 单元 12→0 `uses SysUtils`，`text.conv/text.format/base.utils/time/errors` 全量替换，零反哺新增，四切片独立 landing 全绿 heaptrc 0）
+
+## 7. 词汇表收口（V3-C8，2026-08-28）
+
+家族 39 单元 `uses SysUtils` 12→0（`grep -l "^\s*SysUtils"` 0，注释 3 行豁免），实现词汇表收口：
+
+| FPC `SysUtils` | `nextpas.core` 对应 | 备注 |
+|---|---|---|
+| `IntToStr/IntToHex/Trim/LowerCase/StrToIntDef` | `nextpas.core.text.conv` | `Format` 仅 `%s/%d/%%` 走 `text.format.TextFormat` |
+| `FreeAndNil/Supports` | `nextpas.core.base.utils` | 同实现逐字节一致 |
+| `GetTickCount64` | `nextpas.core.time` | 单调源 `platform_monotonic_ns` |
+| `Exception` | `nextpas.core.errors` | FPC 下同类型别名，ABI 零变化 |
+| `string(AnsiString(PAnsiChar))` | `nextpas.core.text.conv.AnsiPtrToStr` | PAnsiChar 读回统一入口，规避托管记录数组内强转破坏 |
+
+残留 `string(AnsiString` 8 处在 `db.pg.*` LO 路径（非本次 12 单元 scope），记入下一收敛 sweep，不影响 C8 终态判定。

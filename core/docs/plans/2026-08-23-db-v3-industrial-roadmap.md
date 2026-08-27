@@ -136,6 +136,7 @@ channel/retry/semaphore/shutdown 完整件。**
 | **C4 基准门禁化** ✅ | 六个 bench 口径入册 docs/db/benchmarks.md：adapter_overhead(J1 开销比≤1.15×)/translate_complexity/batch_insert(C2 基线：pg batch 对 txloop 2.8×)/stmt_cache(sqlite point 2.39×、pg 2.12×)/blob_stream(J3 流式 +0.2MB vs 物化 +256MB)/pool_stress(J2 opens==Max 不变式 fail-fast) | bench 手动目标 Makefile（core/benchmarks/nextpas.core.db/），不进默认 verify，编译不带 heaptrc 插桩；pg 段程序内 NEXTPAS_PG_TEST_CONN 自门控；登记纪律：优化引用须同机同口径对照、±15% 内视为环境噪声 | 全量采集入册 ✅（Xeon E5-2696 v4/FPC 3.3.1 trunk/PG 17.11 同机）：J1 持平 ✅ J2 opens=4/4 ✅ J3 ✅ |
 | **C5 sqlite 调优预设** ✅ | `TDbSqlitePragmas`（JournalMode/Synchronous/ForeignKeys 三态/CacheSize/MmapSize）进 ConnectSqlite 新重载；旧入口全 unset 行为零变化 | 安全缺省 = WAL+NORMAL+FK ON 仅显式传入生效；:memory: 过滤 journal_mode；**journal_mode 回读校验 fail-closed**（网络 FS 静默拒绝 WAL → decNotSupported，不静默降级）；mmap advisory（部分构建编译期禁用）；工厂内建 sqlite 驱动不烘 PRAGMA（WAL 持久化文件头，统一入口静默改写波及外部工具） | 门禁偏差：独立 test_db_sqlite_pragmas 七组全绿 heaptrc 0 ✅（原计划扩 test_db_sqlite——该门测裸 conn 层，pragmas 挂统一层，分门与 trace/factory 惯例一致）：默认钉子/过滤/显式组合/负 KiB/advisory/unset 零变化/stmt cache 正交 |
 | **C6 SQL 词法扫描共享引擎（sqlscan 抽取）** ✅ | §7.2 候选触发条件实测超额满足——同一"字符串/标识符/注释状态机"在家族内复制**五份**（pg/mysql/odbc 三份占位符翻译 + pg.conn MaxParamIndex 计数 + pg.conn AppendByteaCasts bytea 装饰，后者头注自证与计数面同款）→ 收敛为纯函数单元 `nextpas.core.db.sqlscan`，四消费方改薄委托，公开签名零变化 | 方言词法集记录化（双引号/反引号/方括号标识符 + # 注释四布尔）；四公开面共享单遍私有引擎：TranslateQuestion（保形+槽位计划）/RenderDollar（$N 重算渲染）/MaxPlaceholderIndex（原始编号计数）/Decorate（命中原位追加后缀、源数字回显）；dollar/count 热路径零槽数组分配保 J1 开销比判据；受控边界成文不变（dollar-quote 体不识别、行注释仅 #10 终止、占位符数字无溢出防护、mysql 不处理 " 定界）；**历史怪癖随黄金语料一并成文**（块注释起始 `/` 不落输出；超 Int32 编号回绕记槽） | **换牙零漂移实证**：临时 harness 把五份原实现跑 30 案例语料落盘黄金 → 换牙后新引擎重放逐字节 diff 全等；test_db_sqlscan 十二组离线全绿 heaptrc 0（方言矩阵/混合编号不变式 [2,1,3,2]/字面量注释吞噬/方言隔离/装饰前导零回显与溢出失配/包装互洽/容量翻倍/CRLF 多字节）；回归 pg/mysql_adapter/odbc_adapter/array_bind（bytea 直接受害者）/stmt_cache/unified/conformance 七门全绿 ✅ |
+| **C8 RTL 收敛 sweep（词汇表收口）** ✅ | 家族 39 单元 12→0 `uses SysUtils`（仅注释豁免），`text.conv/text.format/base.utils/core.time/core.errors` 全量替换，零反哺新增 | 四切片串行：C8-1 文本归一（factory/tx/migrate/db.pas/redis.transport）/ C8-2 池与时间（pool Format→TextFormat + GetTickCount64→core.time）/ C8-3 协议诊断（odbc.loader/adapter/redis.resp Format/IntToHex）/ C8-4 C ABI（mysql/redis adapter AnsiPtrToStr + FreeAndNil + Exception 别名）；Format 仅 `%s/%d/%%`，dollar/count 热路径零分配保 J1；C ABI 少一次 AnsiString 临时堆分配微优 | test_db_factory 15 + migrate_v2 10 + tx_v2 9 / pool_v2 19 / odbc_base 7+1skip + odbc_adapter 6+1skip + redis_base 11 + redis_adapter 15 / mysql_adapter 6+1skip + redis_subscribe 10 + pg 13 + sqlscan 12 + conformance 2 全绿 heaptrc 0；`grep -l "^\s*SysUtils"` 0 行 ✅ |
 
 ### 主线 D：国产数据库支持（总控指令入册）
 
@@ -180,11 +181,11 @@ D2/D3 依赖 pg/mysql 驱动稳定即已满足）。
 
 ## 5. 文档完善清单（随分片同步）
 
-- [x] `core/docs/db/README.md` 模块入口（本次新增：快速上手 + 特性矩阵）
-- [ ] CONTRACT §2.x 随每片同步（纪律不变）
-- [ ] `docs/db/benchmarks.md`（C4 产出：基准口径册）
-- [ ] 各新后端一页指南（对齐 sqlite.md/pg.md 体例：A2/A4 产出）
-- [ ] 本路线图每片 landing 回填状态 ✅
+- [x] `core/docs/db/README.md` 模块入口（本次新增：快速上手 + 特性矩阵；C8 增词汇表行）
+- [x] CONTRACT §2.x 随每片同步 + §6 增 C8 节（2026-08-28）
+- [x] `docs/db/benchmarks.md`（C4 产出：基准口径册）
+- [x] 各新后端一页指南（对齐 sqlite.md/pg.md 体例：A2/A4 产出）
+- [x] 本路线图每片 landing 回填状态 ✅（C6/C8 已回填§7.1/C线表）
 
 ---
 
@@ -217,6 +218,7 @@ nextpas.core；可复用代码考虑抽成新模块。**
   Format(→text.format) 全套对应物；C 线架构收口时逐单元把 db 家族
   implementation uses 的 SysUtils 面替换掉，完成条件 = 家族全部单元
   不再引用 FPC RTL 单元名。登记为 C8（RTL 收敛 sweep）排期占位。
+- **C8 完成（2026-08-28）**：家族 39 单元 12→0 `uses SysUtils`（仅注释 3 行豁免；`grep -l "^\s*SysUtils"` 0），词汇表收敛至 `text.conv/text.format/base.utils/core.time/core.errors` 全量替换，零反哺新增，见 `2026-08-28-db-v3-c8-rtl-convergence-proposal.md`（四切片独立 landing：C8-1 文本归一/C8-2 池与时间/C8-3 协议诊断/C8-4 C ABI，全量 gates 全绿 heaptrc 0）。
 - **红线**：不得为此新建"FPC 兼容层"单元（维持基线禁令）；只允许
   反哺进既有 core 模块或按四件套范式立新模块。
 
