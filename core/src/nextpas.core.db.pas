@@ -173,7 +173,7 @@ function MigrationVersion(const AConn: IDbConnection): Int64; inline;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.db.sqlite.adapter,
   nextpas.core.db.sqlite.pool,
   nextpas.core.db.pg.adapter,

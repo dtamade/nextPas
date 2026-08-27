@@ -16,7 +16,6 @@ unit nextpas.core.db.redis.transport;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.db.base,
   nextpas.core.db.redis.base,
