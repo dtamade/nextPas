@@ -244,11 +244,22 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
       `test_ssh_transport` 9/9 零开销回归；`test_ssh_session` 19/19（新增 4 压缩回环：`password/pubkey/dh+compress/agent+compress`，假服务端 `ForceCompress` 延迟激活与 `Compress` 双端协商，假 agent 双管道同测）
 - [x] `base`/`ssh.pas` 门面 re-export `ISshCompressor` 与 `compress` 单元
 
+## S16 — async reactor 适配（进行中，S16-1/2 手续完成，S16-3 收口中）
+
+`TAsyncLoop` 单线程事件化——阻塞 `TcpConnect + Read` 改为 `AsyncTcpDial(RFC8305 HE) + AsyncReadPacket` 回调链，`none` 零开销，压缩/序列号与同步一致：
+
+- [x] `transport.async`：`TAsyncSshTransport`（`TAsyncLoop+IAsyncTcpStream`，`AsyncExchangeVersions` 逐字节容忍前置行、`AsyncSendPacket` 复用 `Protect` + `Compress` + `SecureRandom` + `FWriteBuf` 保活、`AsyncReadPacket` 4B头→BodyLen→Trailer 重组、`ApplyNewKeys/SetNegotiatedCompression/EnableCompression` 复用 `cipher/compress`，`SshTransportState` 连续）
+- [x] `session.async`：`TAsyncConnector` 状态机（`AsyncTcpDial→Version→SendKexInitEx→Expect KEXINIT→NegotiateEx→curve25519/DH group14 BuildInit→Expect REPLY→VerifyHostSignature→KDF A-F→Send/Expect NEWKEYS→ApplyNewKeys→SERVICE_REQUEST/ACCEPT→Auth`），`curve25519+group14` 双分支、`SshVerifyHostSignature+known_hosts` 复用、`SshBuildAuth*` 复用、`SshAsyncClient/SshAsyncConnect` + `DialOptions` 透传；`Compress` 延迟激活与 `none` 零开销同语义；`IAsyncTcpStream` 来自 `AsyncTcpDial` 或 `AsyncTcpStreamAdopt`（测试注入）
+- [ ] `channel` async：`ExecAsync` 通道状态机（`S16-3`，当前占位 `sekUnsupported`，保留 `sync Exec` 不变）
+- [x] 编译闭环：`transport.async` 614L + `session.async` 830L，`FPC 3.3.1 HEAPTRC 0`，`kex 12/12 + session 19/19` 同步零回归；`AsyncTcpDial` `OverallDeadline` 映射 `ConnectTimeoutMs`，`FreeAndNil`/`plain→method` 调度器去竞态
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| async reactor 适配 | net.async.dial + 非阻塞读事件化 |
+| channel async exec | `ISshAsyncSession.ExecAsync` 真正通道状态机（S16-3） |
+| sftp async | `ISshFileSystem` async 化（S17） |
+| ProxyJump | 代理跳（后续） |
 
 ## 真实性等级声明
 
