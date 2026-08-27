@@ -4,7 +4,7 @@
 S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
 live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正、
 S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 respack
-资产集成示例均已进主线。W2 webview2 / W3 wk 待平台环境启动）
+资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨均已进主线。W2 webview2 / W3 wk 待平台环境启动）
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。
@@ -159,10 +159,10 @@ LWin.Assets.MountEmbedded('', LProvider);
 
 | 场景 | ns/op | ops/s | 吞吐 |
 |------|-------|-------|------|
-| SmallHit/index.html | 766 ns | 1.3M | 246 MB/s |
-| Fallback/app/index.html | 1082 ns | 924k | 267 MB/s |
-| Miss404 | 271 ns | 3.6M | 200 MB/s |
-| LargeHit/1M | 799 µs | 1.2k | 1.22 GB/s |
+| SmallHit/index.html | 718 ns | 1.39M | 191 MB/s |
+| Fallback/app/index.html | 904 ns | 1.1M | 214 MB/s |
+| Miss404 | 218 ns | 4.5M | 127 MB/s |
+| LargeHit/1M | 793 µs | 1.26k | 1.23 GB/s |
 
 前端侧（协议细节见 BRIDGE_PROTOCOL.md）：
 

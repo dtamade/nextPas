@@ -1,29 +1,35 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>nextPas WebView — respack</title>
 <style>
-:root{--panel:rgba(255,255,255,.06);--line:rgba(255,255,255,.10);--txt:#e7ecf7;--dim:#8b95ad;--mono:ui-monospace,Menlo,Consolas,monospace}
+:root{--bg:#0b0f1d;--panel:rgba(255,255,255,.06);--line:rgba(255,255,255,.10);--txt:#e7ecf7;--dim:#8b95ad;--accent:#6d8bff;--accent2:#39c7ef;--ok:#43e5c8;--mono:ui-monospace,Menlo,Consolas,monospace;--radius:14px}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:#0b0f1d;color:var(--txt);padding:28px 32px}
-h1{font-size:22px}
-.sub{color:var(--dim);font-size:12px;margin-top:4px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
-button{appearance:none;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;background:linear-gradient(92deg,#6d8bff,#39c7ef);color:#081020}
-.log{font-family:var(--mono);font-size:12px;line-height:1.7;max-height:160px;overflow:auto;color:#aab6cf;margin-top:8px}
-.muted{color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:6px}
-footer{margin-top:18px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(900px 500px at 12% -10%,#1c2749 0%,transparent 55%),radial-gradient(800px 400px at 100% 0%,#12304a 0%,transparent 50%),#0b0f1d;color:var(--txt);padding:28px 32px;min-height:100vh}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:22px;font-weight:800;background:linear-gradient(92deg,var(--accent),var(--accent2) 60%,var(--ok));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);font-size:12px;margin-top:6px;font-family:var(--mono)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--dim);background:rgba(255,255,255,.06);border:1px solid var(--line);padding:5px 10px;border-radius:999px;backdrop-filter:blur(10px)}
+.pill b{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-top:18px;backdrop-filter:blur(16px) saturate(1.2);box-shadow:0 8px 24px rgba(0,0,0,.28)}
+button{appearance:none;border:0;border-radius:10px;padding:9px 16px;font-weight:700;cursor:pointer;background:linear-gradient(92deg,var(--accent),var(--accent2));color:#081020;transition:transform .12s ease,box-shadow .12s ease}
+button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(57,199,239,.3)}
+.log{font-family:var(--mono);font-size:12px;line-height:1.7;max-height:160px;overflow:auto;color:#aab6cf;margin-top:10px}
+.log div{border-left:2px solid transparent;padding-left:8px;margin:2px 0}
+.log div:first-child{border-color:var(--accent2);color:var(--txt)}
+.muted{color:var(--dim);font-size:11px;font-family:var(--mono);margin-top:8px}
+footer{margin-top:20px;font-family:var(--mono);font-size:11px;color:var(--dim)}
 </style></head><body>
-<h1>nextPas WebView — respack assets</h1>
-<div class="sub">npres://app/index.html via IVfs adapter · <span id="mode">…</span> · bridge v<span id="ver">…</span></div>
+<div class="top"><div><h1>nextPas WebView — respack assets</h1><div class="sub">npres://app/index.html via IVfs adapter · <span id="mode">…</span> · bridge v<span id="ver">…</span></div></div><span class="pill">● <b id="modeLabel">embedded</b></span></div>
 <div class="card">
   <div style="display:flex;gap:10px;align-items:center">
     <button id="pingBtn">invoke ping</button>
     <span id="pingOut" style="font-family:var(--mono);color:#9ff3e0">—</span>
+    <span id="perf" style="font-family:var(--mono);font-size:11px;color:var(--dim)"></span>
   </div>
-  <div class="muted">window.__npw.invoke("demo.ping")</div>
+  <div class="muted">window.__npw.invoke("demo.ping") · <span id="hint">ready</span></div>
   <div class="log" id="log"></div>
 </div>
-<footer>close window to exit · dev: --dev (os vfs) / --dev-server http://localhost:5173 (http)</footer>
+<footer>close window to exit · dev: --dev (os vfs) / --dev-server http://localhost:5173 (http) · glassmorphism · indexed routing O(log n)</footer>
 <script>
 function $(id){return document.getElementById(id)}
 function log(s){var d=document.createElement("div");d.textContent=s;$("log").prepend(d)}
@@ -33,11 +39,16 @@ __npw.ready.then(function(){
   log("bridge ready v"+__npw.version);
   var m=new URLSearchParams(location.search).get("mode")||"embedded";
   $("mode").textContent=m;
+  $("modeLabel").textContent=m;
 });
 $("pingBtn").addEventListener("click",function(){
+  var t0=performance.now();
   __npw.invoke("demo.ping",{hello:"world"}).then(function(r){
+    var ms=Math.round(performance.now()-t0);
     $("pingOut").textContent=JSON.stringify(r);
-    log("ping → "+JSON.stringify(r));
+    $("perf").textContent=ms+" ms";
+    $("hint").textContent="round-trip "+ms+" ms";
+    log("ping → "+JSON.stringify(r)+" ("+ms+" ms)");
   },function(e){ log("ping failed "+JSON.stringify(e)); });
 });
 __npw.listen("demo.event",function(p){ log("event ← "+JSON.stringify(p)); });

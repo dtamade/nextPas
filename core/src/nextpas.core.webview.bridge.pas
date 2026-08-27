@@ -227,7 +227,11 @@ var
 begin
   Result := False;
   AFrame := Default(TWebviewFrame);
+  if (AFrameJson = '') or (Length(AFrameJson) > 2 * 1024 * 1024) then
+    Exit;
   if not TryJsonParse(AFrameJson, LDoc) then
+    Exit;
+  if LDoc.HasError then
     Exit;
   LRoot := LDoc.Root;
   if not LRoot.IsObject then
@@ -432,16 +436,27 @@ end;
 procedure TWebviewAssetsImpl.MountEmbedded(const APrefix: string;
   AProvider: IWebviewAssetProvider);
 var
-  LIdx: Integer;
+  LPos, I: Integer;
 begin
   if FInert then
     Exit;   { DevServerUrl 开发模式：资源服务让位 http dev server（§3.4） }
   if AProvider = nil then
     raise EWebviewInvalidState.Create('asset provider must not be nil');
-  LIdx := Length(FMounts);
-  SetLength(FMounts, LIdx + 1);
-  FMounts[LIdx].Prefix := APrefix;
-  FMounts[LIdx].Provider := AProvider;
+  { 保持按前缀长度降序稳定有序：最长前缀优先，同长保持先挂先得——
+    TryResolve 首命中即最优，平均 O(1)、最坏 O(n) 但 n≤~16 时常数极小；
+    语义与 CONTRACT §3 最长前缀唯一命中/同长先挂一致 }
+  LPos := Length(FMounts);
+  for I := 0 to High(FMounts) do
+    if Length(APrefix) > Length(FMounts[I].Prefix) then
+    begin
+      LPos := I;
+      Break;
+    end;
+  SetLength(FMounts, Length(FMounts) + 1);
+  for I := High(FMounts) downto LPos + 1 do
+    FMounts[I] := FMounts[I - 1];
+  FMounts[LPos].Prefix := APrefix;
+  FMounts[LPos].Provider := AProvider;
 end;
 
 procedure TWebviewAssetsImpl.MountDirectory(const APrefix, ARootDir: string);
@@ -456,7 +471,7 @@ end;
 function TWebviewAssetsImpl.TryResolve(const ASchemeRelativePath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 var
-  I, LBest, LLen: Integer;
+  I: Integer;
   LPath: string;
 begin
   Result := False;
@@ -464,27 +479,16 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  { 归一：去首部 '/'，统一相对形态匹配前缀 }
   LPath := ASchemeRelativePath;
   while (LPath <> '') and (LPath[1] = '/') do
     Delete(LPath, 1, 1);
   if LPath = '' then
     Exit;
-  LBest := -1;
-  LLen := -1;
+  { 已按长度降序稳定排序：首个前缀命中即最长命中，同长先挂语义天然保持 }
   for I := 0 to High(FMounts) do
-    { 空前缀 = 根挂载匹配一切（FPC Pos('',s) 返回 0，须显式豁免）；
-      同长并列取先挂者——与 CONTRACT §3 解析顺序一致 }
-    if ((FMounts[I].Prefix = '') or
-        (Pos(FMounts[I].Prefix, LPath) = 1)) and
-       (Length(FMounts[I].Prefix) > LLen) then
-    begin
-      LBest := I;
-      LLen := Length(FMounts[I].Prefix);
-    end;
-  if LBest < 0 then
-    Exit;
-  Result := FMounts[LBest].Provider.TryResolve(LPath, ABytes, AMimeType);
+    if (FMounts[I].Prefix = '') or (Pos(FMounts[I].Prefix, LPath) = 1) then
+      Exit(FMounts[I].Provider.TryResolve(LPath, ABytes, AMimeType));
+  Result := False;
 end;
 
 function TWebviewAssetsImpl.MountCount: Integer;
