@@ -26,7 +26,7 @@ for unit in nextpas.core.window.base.pas nextpas.core.window.intf.pas; do
     fail=1
     continue
   fi
-  for token in fake factory gtk sdl2 win32 cocoa android uikit; do
+  for token in fake factory gtk sdl2 win32 cocoa android uikit wasm; do
     hits="$(grep -Ec "nextpas\.core\.window\.${token}\b" "$path" || true)"
     if [[ "$hits" -ne 0 ]]; then
       echo "FAIL: $unit references nextpas.core.window.$token (INV-3), $hits hit(s)"
@@ -34,7 +34,7 @@ for unit in nextpas.core.window.base.pas nextpas.core.window.intf.pas; do
     fi
   done
   # also forbid direct backend qualifiers like window.gtk.ffi
-  for token in "window\.gtk" "window\.sdl2" "window\.win32" "window\.cocoa" "window\.android" "window\.uikit"; do
+  for token in "window\.gtk" "window\.sdl2" "window\.win32" "window\.cocoa" "window\.android" "window\.uikit" "window\.wasm"; do
     hits="$(grep -Ec "nextpas\.core\.${token}\b" "$path" || true)"
     if [[ "$hits" -ne 0 ]]; then
       echo "FAIL: $unit references nextpas.core.$token (INV-3), $hits hit(s)"

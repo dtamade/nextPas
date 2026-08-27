@@ -147,10 +147,13 @@ end;
 
 procedure TestWindowKindOrder;
 begin
-  { wkFake 必须收尾（家族惯例） }
+  { wkFake 必须收尾（家族惯例），wkWasm 紧邻 fake 之前（attach 族） }
   CheckEqual(Ord(wkFake), Ord(High(TWindowKind)));
+  CheckEqual(Ord(wkWasm), Ord(High(TWindowKind)) - 1, 'wasm penultimate');
   Check(Ord(wkGtk) < Ord(wkFake), 'gtk before fake');
   Check(Ord(wkSdl2) < Ord(wkFake), 'sdl2 before fake');
+  Check(Ord(wkGtk) < Ord(wkWasm), 'gtk before wasm');
+  Check(Ord(wkWasm) < Ord(wkFake), 'wasm before fake');
 end;
 
 procedure TestEventRecordZeroFields;

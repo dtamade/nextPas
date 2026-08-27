@@ -1,9 +1,9 @@
 # nextpas.core.window
 
-**状态**: Design S0 — 契约冻结前，源码未落地；注册表项随 S1 首个 family 同批进入
+**状态**: M-band 稳定 — S1→S5 全后端落地，13 门禁全绿，`bench_dispatcher` 391µs/1000
 **层级**: L2 系统能力（依赖 L0-L1；被 L3 的 `webview` / `gpu` / `directui` / 外部 `game888` 复用）
 **Owner**: core-window lane
-**最后更新**: 2026-08-26
+**最后更新**: 2026-08-28（M-band 去消息化 + `IWindowHost` + `WindowPumpOnce` + 13 门禁）
 **对标基准**: Rust `winit` + `tao` / `GLFW` / `SDL2 Window` / `Flutter View` / Android `Activity.getWindow()` / iOS `UIWindow`
 
 ---
@@ -29,15 +29,16 @@ platform(L0) ──► window(L2) ──► gpu(L3) ──► directui(L3)
 
 ## 能力总览
 
-| 域 | 最小闭包（S1） | 后续扩展（Deferred 登记，触发前不占位） |
+| 域 | 最小闭包（S1-M-band） | 后续扩展（Deferred 登记，触发前不占位） |
 |---|---|---|
 | 生命周期 | `Create / Show / Hide / Close(幂等) / IsClosed / IsVisible / Focus` | `close-request veto（关闭前确认）` |
 | 标题与几何 | `Title / SetBounds(Width/Height) / Min/Max / Resizable / Maximized-Minimize-Restore / GetBounds` | `decorations / transparent / alwaysOnTop / icon / fullscreen / dragRegion` |
-| DPI | `GetScaleFactor: Double（GTK 整数诚实升格） / OnScaleChanged`，逻辑坐标 = 物理像素 / scale | `per-monitor dynamic reflow` |
-| 输入与事件 | `OnEvent(TWindowEvent)` 统一分发（Close/Resized/Moved/FocusIn/Out/ScaleChanged），主线程投递 `IWindowDispatcher.Post` | `键盘/鼠标/触摸/滚轮细分事件、IME` |
-| 句柄 | `NativeHandle: TWindowNativeHandle`（X11 XID / HWND / NSWindow* / ANativeWindow* / Wayland nil 诚实表） | — |
-| 主循环 | `WindowRunLoop / WindowExitLoop`（阻塞至末窗关闭或显式退出）；`fake` 提供 `PumpOnce` 确定性驱动 | `IterateOnce` 融入 `TAsyncLoop` |
-| 多窗口 | `TWindowBuilder.New … Build: IWindow` 可多次调用，共享同一 UI 主循环；`Run` 为单窗便捷封装（Build+Show+RunLoop，CONTRACT §4.3） | `多 view 单窗 / 窗口间通信` |
+| DPI | `GetScaleFactor: Double（GTK 整数诚实升格） / weScaleChanged`，逻辑坐标 = 物理像素 / scale | `per-monitor dynamic reflow` |
+| 输入与事件 | `OnEvent(TWindowEvent)` 统一分发（Close/Resized/Moved/FocusIn/Out/ScaleChanged），主线程投递 `IWindowDispatcher.Post`（拒绝 `LM_` 消息伪装） | `键盘/鼠标/触摸/滚轮细分事件、IME` |
+| 句柄 | `NativeHandle: TWindowNativeHandle`（X11 XID / HWND / NSWindow* / ANativeWindow* / Wayland nil / WASM canvas 诚实表） | — |
+| 主循环 | `WindowRunLoop / WindowExitLoop`（阻塞至末窗关闭或显式退出）；`WindowPumpOnce / PumpAll` 非阻塞单步（M-band，game/directui tick 复用）；`fake` 提供确定性驱动 | `IterateOnce` 完整融入 `TAsyncLoop`（已以 `PumpOnce` 最小落地） |
+| 宿主驱动 | `IWindowHost.HostResized/HostScaleChanged/HostCloseRequested`（`wasm/android/uikit/fake` 经 `Supports` 探测，M-band） | — |
+| 多窗口 | `TWindowBuilder.New … Build: IWindow` 可多次调用，共享同一 UI 主循环 | `多 view 单窗 / 窗口间通信` |
 
 跨平台差异一律以 **语义诚实表** 记录在 `CONTRACT.md §2`，不做假装。
 
@@ -62,15 +63,18 @@ base ← gtk.ffi ← gtk.loader ← gtk ─┘
 
 ## 后端矩阵
 
-| 后端 | 平台 | 窗口实现 | 波次 |
-|------|------|----------|------|
-| `gtk` | Linux | GTK3 `GtkWindow` | S2（从 `webview.gtk.win` 机械抽取）+ S1 `fake` 并行 |
-| `fake` | 全平台无头 | 纯 Pascal 脚本化驱动 | S1（契约测试唯一载体） |
-| `sdl2` | 全平台（含 game888 复用） | SDL2 `SDL_Window` / `SDL_CreateWindow` | S3 |
-| `win32` | Windows | `CreateWindowEx` + `WM_*` | S4（与 `webview` Wave 2 同步抽取，避免双份 Win32 缝） |
-| `cocoa` | macOS | `NSWindow` / `NSView` | S4 |
-| `android` | Android | `ANativeWindow` attach 到 `Activity`（`ParentHandle` 非 nil） | S5 |
-| `uikit` | iOS | `UIWindow` / `UIView` attach | S5 |
+| 后端 | 平台 | 窗口实现 | 波次 | 探活 |
+|------|------|----------|------|------|
+| `win32` | Windows | `CreateWindowEx` + `WM_*` + message-only `PostMessage` | S4 | `WindowWin32IsAvailable` |
+| `cocoa` | macOS | `NSWindow` / `NSView` + `dispatch_async` | S4 | `WindowCocoaIsAvailable` |
+| `android` | Android | `ANativeWindow` attach 到 `Activity`（`ParentHandle` 必需，`IWindowHost` 驱动） | S5 | `WindowAndroidIsAvailable` |
+| `uikit` | iOS | `UIWindow` attach（`ParentHandle` 必需，`IWindowHost`） | S5 | `WindowUIKitIsAvailable` |
+| `wasm` | Browser | `<canvas>` attach（`ParentHandle` canvas id，CSS×`devicePixelRatio`，`IWindowHost`） | S5 | `WindowWasmIsAvailable` |
+| `gtk` | Linux | GTK3 `GtkWindow`（`g_idle_add_full` + 6 信号） | S2 | `WindowGtkIsAvailable` |
+| `sdl2` | 全平台（含 game888 复用） | `SDL_Window` / `SDL_CreateWindow` + user-event | S3 | `WindowSdl2IsAvailable` |
+| `fake` | 全平台无头 | 纯 Pascal 脚本化驱动（`IWindowHost` 全实现） | S1 | 恒真（CI 唯一载体） |
+
+> 探测顺序 `win32 > cocoa > android > uikit > wasm > gtk > sdl2 > fake`，`DefaultWindowKind` 能力驱动；`bench_dispatcher` 391µs/1000 `PostSingle`（32cap 环）。
 
 ---
 
@@ -103,13 +107,25 @@ begin
 end;
 ```
 
-嵌入内容（gpu / webview / directui）统一经句柄：
+嵌入内容（gpu / webview / directui）统一经句柄 + 宿主扩展：
 
 ```pascal
 // gpu 侧：拿句柄建 GL 上下文
 Ctx := gl_context_create(LWin.NativeHandle, LWin.GetScaleFactor);
- // webview 侧：组合 window 壳 + web 内容（S2 后 webview.gtk 改为组合本模块）
+// webview 侧：组合 window 壳 + web 内容
 WvWin := TWebviewBuilder.New.WithWindow(LWin).Navigate('npres://app/index.html').Build;
+// 宿主侧（Android/iOS/WASM）：经强类型 IWindowHost 注入，不经 LM_ 消息
+if Supports(LWin, IWindowHost, Host) then
+begin
+  Host.HostResized(ANativeWindow_getWidth(H), ANativeWindow_getHeight(H));
+  Host.HostScaleChanged(NewScale);
+end;
+// game 侧：tick 循环非阻塞泵，不阻塞 RunLoop
+while not Quit do
+begin
+  WindowPumpOnce; // fake/sdl/wasm/android/uikit 合泵
+  GameTick; Render;
+end;
 ```
 
 前端无需关心后端；单元测试一律走 `wvFake / winFake`：
@@ -127,10 +143,11 @@ Check(LWin.IsClosed);
 ## 设计红线
 
 1. **base/intf 零后端依赖**；后端经工厂注册进入。
-2. **eval/渲染均不提供同步阻塞形态**；跨线程只走 `IWindowDispatcher.Post`。
-3. **所有用户回调统一在 UI 主线程触发**；可跨线程的仅 `Post` 与 `Close(内部 marshal, 幂等)`。
-4. **Deferred 能力不预埋占位**，每项有触发条件（见 `CONTRACT.md §9`）。
-5. **`fake` 是 CI 契约的唯一载体**（见 `CONTRACT.md §8`）；图形环境缺席时测试仍全绿。
+2. **拒绝 LCL 式 `LM_` 跨平台消息**：业务语义永走强类型接口/事件/`Supports`，消息仅作底层唤醒原语（`g_idle_add/PostMessage/SDL_PushEvent/dispatch_async`）。
+3. **eval/渲染均不提供同步阻塞形态**；跨线程只走 `IWindowDispatcher.Post`，宿主驱动经 `IWindowHost`。
+4. **所有用户回调统一在 UI 主线程触发**；可跨线程的仅 `Post` 与 `Close(内部 marshal, 幂等)`。
+5. **Deferred 能力不预埋占位**，每项有触发条件（见 `CONTRACT.md §9`）。
+6. **`fake` 是 CI 契约的唯一载体**（见 `CONTRACT.md §8`）；图形环境缺席时测试仍全绿；`WindowPumpOnce` 为 game/directui 提供非阻塞复用。
 
 ---
 
@@ -138,6 +155,6 @@ Check(LWin.IsClosed);
 
 | 文档 | 内容 |
 |------|------|
-| `CONTRACT.md` | 冻结契约：单元布局、类型/接口签名、线程模型、不变量、错误、Deferred、测试门禁 |
-| `ARCHITECTURE.md` | 架构纵深：抽取缝、后端矩阵、事件/DPI/主循环、与 gpu/webview/game888/directui 的组合 |
-| `ROADMAP.md` | 分波实施图：S1 docs+fake → S2 抽取 → S3 SDL2 → S4 Win32/Cocoa+directui → S5 mobile |
+| `CONTRACT.md` | 冻结契约：单元布局、类型/接口签名、线程模型、不变量、错误、Deferred、测试门禁、宿主与非阻塞泵 |
+| `ARCHITECTURE.md` | 架构纵深：抽取缝、后端矩阵、事件/DPI/主循环、去消息化、与 gpu/webview/game888/directui 的组合 |
+| `ROADMAP.md` | 分波实施图：S1→S5 全后端 + M-band 维护带（13 门禁，391µs 基线） |

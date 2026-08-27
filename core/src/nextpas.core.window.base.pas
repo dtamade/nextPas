@@ -19,8 +19,9 @@ uses
 
 type
   { 后端种类。平台原生在前，wkFake 收尾（对齐 TWebviewKind 惯例）。
-    S1 仅 wkFake 可用；其余随波次接入。 }
-  TWindowKind = (wkGtk, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkFake);
+    S1 仅 wkFake 可用；S2a 新增 wkWasm（wasm canvas attach，枚举在
+    wkFake 前一位保证 High 仍为 fake）；其余随波次接入。 }
+  TWindowKind = (wkGtk, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkWasm, wkFake);
 
   { 平台原生窗口句柄（X11 XID / HWND / NSWindow* / ANativeWindow*；
     Wayland 为 nil——诚实差异见 CONTRACT §2.1）。仅供嵌入场景，本家族
