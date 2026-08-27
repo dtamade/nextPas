@@ -8,7 +8,7 @@ SSH-2 客户端协议栈（对标 libssh2 的能力面），纯 Pascal 实现，
 
 - L2 协议模块（与 `tls` 同层：面向字节流的协议实现）。
 - 第一期只做客户端（libssh2 本身也是客户端为主）；服务端不在本模块范围。
-- 阻塞同步 API 优先（贴合 `net.TcpConnect` 的使用模型）；async reactor 适配是后续 slice。
+- 同步阻塞 API 为主（贴合 `net.TcpConnect`）；`S16` 起提供 `TAsyncLoop + IAsyncTcpStream` 事件化路径（`AsyncTcpDial(RFC8305)` + 回调状态机），与同步路径零开销复用同一密码学与压缩。
 
 ## 算法支持（现代集合）
 
@@ -67,7 +67,8 @@ nextpas.core.ssh.base.pas            ← 协议常量、消息号、选项记录
 nextpas.core.ssh.errors.pas          ← ESSHError + 错误分类
 nextpas.core.ssh.buffer.pas          ← RFC 4251 wire 类型读写器
 nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM）
-nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机
+nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机（阻塞）
+nextpas.core.ssh.transport.async.pas ← 异步传输层（`TAsyncLoop+IAsyncTcpStream`，版本交换与二进制包事件化，复用 cipher/compress）
 nextpas.core.ssh.kex.pas             ← KEXINIT 协商 + 密钥推导
 nextpas.core.ssh.kex.curve25519.pas  ← curve25519-sha256 客户端交换
 nextpas.core.ssh.kex.dhgroup14.pas   ← diffie-hellman-group14-sha256 客户端交换（回退）
@@ -81,6 +82,7 @@ nextpas.core.ssh.compress.pas        ← 压缩：有状态 `zlib`/`zlib@openssh
 nextpas.core.ssh.agent.pas           ← ssh-agent 协议客户端（Unix socket 长度前缀帧，List/Sign）
 nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem）
 nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活）
+nextpas.core.ssh.session.async.pas   ← 异步会话（`AsyncTcpDial(RFC8305)` + 状态机握手/认证，复用 cipher/kex/hostkey/compress，`Compress` 同语义）
 nextpas.core.ssh.sftp.pas            ← SFTP v3 客户端（ISshFileSystem 门面）
 ```
 
@@ -191,9 +193,10 @@ ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
   其他 cipher/kdf 组合（`aes128-ctr`、chacha 等加密容器）报 `sekUnsupported`。
 - RSA 签名默认走 CRT 加速（`p/q/iqmp` 存在且校验通过时，`dp/dq` + Garner 合并，约 5× 于 naive）；非法/缺失 CRT 自动回退 naive，无声誉风险。
 - KEX 已支持 `curve25519-sha256` 优先、`diffie-hellman-group14-sha256` 回退（2048-bit MODP，32 字节随机私钥，mpint 哈希输入）；curve25519 约 1ms，group14 约 50–70ms，默认首选前者。
-- 压缩已支持 `zlib@openssh.com`（延迟，推荐）与 `zlib`（即时），默认 `Compress=False` 零开销；按需 `SshClient.Compress(True)` 或 `TSshConnectOptions.Compress:=True` 开启。
+- 压缩已支持 `zlib@openssh.com`（延迟，推荐）与 `zlib`（即时），默认 `Compress=False` 零开销；按需 `SshClient.Compress(True)` 或 `TSshConnectOptions.Compress:=True` 开启。`async` 路径同语义（`none` 零开销，延迟/即时激活一致）。
 - AEAD 算法协商的 MAC 字段被忽略（chacha/gcm 内建认证），与 OpenSSH 行为一致；
   CTR 类必须搭配 ETM MAC。
+- `async` 会话 `ISshAsyncSession.ExecAsync` 通道状态机在 `S16-3` 补齐前返回 `sekUnsupported`（占位），握手/认证已可用；同步 `Exec` 不受影响。
 - 对真实 OpenSSH 服务器的互操作已由 e2e_ssh_live 验证（本地 Docker Alpine 9.7 与
   远程 Debian OpenSSH 10.0p2 均 8 场景通过，含 SFTP 回路、RSA/CRT/ECDSA 认证与加密私钥认证）；
   该门为 opt-in，不进默认 gate。
