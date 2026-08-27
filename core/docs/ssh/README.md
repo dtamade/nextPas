@@ -196,7 +196,7 @@ ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
 - 压缩已支持 `zlib@openssh.com`（延迟，推荐）与 `zlib`（即时），默认 `Compress=False` 零开销；按需 `SshClient.Compress(True)` 或 `TSshConnectOptions.Compress:=True` 开启。`async` 路径同语义（`none` 零开销，延迟/即时激活一致）。
 - AEAD 算法协商的 MAC 字段被忽略（chacha/gcm 内建认证），与 OpenSSH 行为一致；
   CTR 类必须搭配 ETM MAC。
-- `async` 会话 `ISshAsyncSession.ExecAsync` 通道状态机在 `S16-3` 补齐前返回 `sekUnsupported`（占位），握手/认证已可用；同步 `Exec` 不受影响。
+- `async` 会话 `ISshAsyncSession.ExecAsync` 已完整（`channel.async:TAsyncExecRunner`，`Open→Exec→Pump` 与窗口/超时一致，`TAsyncLoop` 单线程）；握手/认证/Exec 全链路事件化，`none` 零开销。
 - 对真实 OpenSSH 服务器的互操作已由 e2e_ssh_live 验证（本地 Docker Alpine 9.7 与
   远程 Debian OpenSSH 10.0p2 均 8 场景通过，含 SFTP 回路、RSA/CRT/ECDSA 认证与加密私钥认证）；
   该门为 opt-in，不进默认 gate。
