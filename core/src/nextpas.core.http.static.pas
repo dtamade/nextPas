@@ -34,7 +34,10 @@ function ServeDir(const ARoot, ACacheControl: string): THttpHandlerFunc; overloa
   size+mtime strong ETag. Entries with unknown ModTime (0) skip Last-Modified
   and If-Modified-Since negotiation. Directories and invalid paths return 404
   (no index serving). }
-function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc; overload;
+{ Same as above with an explicit Cache-Control policy value applied to every
+  served entry (the single-argument overload keeps the revalidate default). }
+function ServeVfs(const AFs: IVfs; const ACacheControl: string): THttpHandlerFunc; overload;
 
 { Serve a single file with Content-Disposition: attachment for download.
   Supports range requests, ETag, Last-Modified, Cache-Control. }
@@ -145,122 +148,141 @@ begin
   Result := '';
 end;
 
-function MimeTypeFromExt(const AExt: string): string;
+function SameExt(const AExt, ACanon: string): Boolean; inline;
 var
-  LExt: string;
+  I: Integer;
+  CA: Char;
 begin
-  LExt := LowerCase(AExt);
+  if Length(AExt) <> Length(ACanon) then
+    Exit(False);
+  for I := 1 to Length(AExt) do
+  begin
+    CA := AExt[I];
+    if (CA >= 'A') and (CA <= 'Z') then
+      CA := Chr(Ord(CA) or $20);
+    if CA <> ACanon[I] then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+function MimeTypeFromExt(const AExt: string): string;
+begin
+  { Zero-alloc case-insensitive compare — avoids LowerCase heap alloc per request }
   { Text / markup }
-  if LExt = '.html' then Result := 'text/html; charset=utf-8'
-  else if LExt = '.htm' then Result := 'text/html; charset=utf-8'
-  else if LExt = '.css' then Result := 'text/css; charset=utf-8'
-  else if LExt = '.txt' then Result := 'text/plain; charset=utf-8'
-  else if LExt = '.csv' then Result := 'text/csv; charset=utf-8'
-  else if LExt = '.md' then Result := 'text/markdown; charset=utf-8'
-  else if LExt = '.xml' then Result := 'application/xml'
-  else if LExt = '.svg' then Result := 'image/svg+xml'
+  if SameExt(AExt, '.html') then Result := 'text/html; charset=utf-8'
+  else if SameExt(AExt, '.htm') then Result := 'text/html; charset=utf-8'
+  else if SameExt(AExt, '.css') then Result := 'text/css; charset=utf-8'
+  else if SameExt(AExt, '.txt') then Result := 'text/plain; charset=utf-8'
+  else if SameExt(AExt, '.csv') then Result := 'text/csv; charset=utf-8'
+  else if SameExt(AExt, '.md') then Result := 'text/markdown; charset=utf-8'
+  else if SameExt(AExt, '.xml') then Result := 'application/xml'
+  else if SameExt(AExt, '.svg') then Result := 'image/svg+xml'
   { JavaScript / JSON / WebAssembly }
-  else if LExt = '.js' then Result := 'application/javascript; charset=utf-8'
-  else if LExt = '.mjs' then Result := 'application/javascript; charset=utf-8'
-  else if LExt = '.json' then Result := 'application/json; charset=utf-8'
-  else if LExt = '.jsonld' then Result := 'application/ld+json'
-  else if LExt = '.wasm' then Result := 'application/wasm'
+  else if SameExt(AExt, '.js') then Result := 'application/javascript; charset=utf-8'
+  else if SameExt(AExt, '.mjs') then Result := 'application/javascript; charset=utf-8'
+  else if SameExt(AExt, '.json') then Result := 'application/json; charset=utf-8'
+  else if SameExt(AExt, '.jsonld') then Result := 'application/ld+json'
+  else if SameExt(AExt, '.wasm') then Result := 'application/wasm'
   { Images }
-  else if LExt = '.png' then Result := 'image/png'
-  else if LExt = '.jpg' then Result := 'image/jpeg'
-  else if LExt = '.jpeg' then Result := 'image/jpeg'
-  else if LExt = '.gif' then Result := 'image/gif'
-  else if LExt = '.webp' then Result := 'image/webp'
-  else if LExt = '.avif' then Result := 'image/avif'
-  else if LExt = '.ico' then Result := 'image/x-icon'
-  else if LExt = '.bmp' then Result := 'image/bmp'
-  else if LExt = '.tiff' then Result := 'image/tiff'
-  else if LExt = '.tif' then Result := 'image/tiff'
-  else if LExt = '.heic' then Result := 'image/heic'
-  else if LExt = '.heif' then Result := 'image/heif'
-  else if LExt = '.apng' then Result := 'image/apng'
+  else if SameExt(AExt, '.png') then Result := 'image/png'
+  else if SameExt(AExt, '.jpg') then Result := 'image/jpeg'
+  else if SameExt(AExt, '.jpeg') then Result := 'image/jpeg'
+  else if SameExt(AExt, '.gif') then Result := 'image/gif'
+  else if SameExt(AExt, '.webp') then Result := 'image/webp'
+  else if SameExt(AExt, '.avif') then Result := 'image/avif'
+  else if SameExt(AExt, '.ico') then Result := 'image/x-icon'
+  else if SameExt(AExt, '.bmp') then Result := 'image/bmp'
+  else if SameExt(AExt, '.tiff') then Result := 'image/tiff'
+  else if SameExt(AExt, '.tif') then Result := 'image/tiff'
+  else if SameExt(AExt, '.heic') then Result := 'image/heic'
+  else if SameExt(AExt, '.heif') then Result := 'image/heif'
+  else if SameExt(AExt, '.apng') then Result := 'image/apng'
   { Fonts }
-  else if LExt = '.woff' then Result := 'font/woff'
-  else if LExt = '.woff2' then Result := 'font/woff2'
-  else if LExt = '.ttf' then Result := 'font/ttf'
-  else if LExt = '.otf' then Result := 'font/otf'
-  else if LExt = '.eot' then Result := 'application/vnd.ms-fontobject'
+  else if SameExt(AExt, '.woff') then Result := 'font/woff'
+  else if SameExt(AExt, '.woff2') then Result := 'font/woff2'
+  else if SameExt(AExt, '.ttf') then Result := 'font/ttf'
+  else if SameExt(AExt, '.otf') then Result := 'font/otf'
+  else if SameExt(AExt, '.eot') then Result := 'application/vnd.ms-fontobject'
   { Audio / Video }
-  else if LExt = '.mp3' then Result := 'audio/mpeg'
-  else if LExt = '.ogg' then Result := 'audio/ogg'
-  else if LExt = '.opus' then Result := 'audio/opus'
-  else if LExt = '.wav' then Result := 'audio/wav'
-  else if LExt = '.flac' then Result := 'audio/flac'
-  else if LExt = '.aac' then Result := 'audio/aac'
-  else if LExt = '.mp4' then Result := 'video/mp4'
-  else if LExt = '.webm' then Result := 'video/webm'
-  else if LExt = '.ogv' then Result := 'video/ogg'
-  else if LExt = '.avi' then Result := 'video/x-msvideo'
-  else if LExt = '.mov' then Result := 'video/quicktime'
-  else if LExt = '.mkv' then Result := 'video/x-matroska'
+  else if SameExt(AExt, '.mp3') then Result := 'audio/mpeg'
+  else if SameExt(AExt, '.ogg') then Result := 'audio/ogg'
+  else if SameExt(AExt, '.opus') then Result := 'audio/opus'
+  else if SameExt(AExt, '.wav') then Result := 'audio/wav'
+  else if SameExt(AExt, '.flac') then Result := 'audio/flac'
+  else if SameExt(AExt, '.aac') then Result := 'audio/aac'
+  else if SameExt(AExt, '.mp4') then Result := 'video/mp4'
+  else if SameExt(AExt, '.webm') then Result := 'video/webm'
+  else if SameExt(AExt, '.ogv') then Result := 'video/ogg'
+  else if SameExt(AExt, '.avi') then Result := 'video/x-msvideo'
+  else if SameExt(AExt, '.mov') then Result := 'video/quicktime'
+  else if SameExt(AExt, '.mkv') then Result := 'video/x-matroska'
   { Documents }
-  else if LExt = '.pdf' then Result := 'application/pdf'
-  else if LExt = '.doc' then Result := 'application/msword'
-  else if LExt = '.docx' then Result := 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  else if LExt = '.xls' then Result := 'application/vnd.ms-excel'
-  else if LExt = '.xlsx' then Result := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  else if LExt = '.ppt' then Result := 'application/vnd.ms-powerpoint'
-  else if LExt = '.pptx' then Result := 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  else if SameExt(AExt, '.pdf') then Result := 'application/pdf'
+  else if SameExt(AExt, '.doc') then Result := 'application/msword'
+  else if SameExt(AExt, '.docx') then Result := 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  else if SameExt(AExt, '.xls') then Result := 'application/vnd.ms-excel'
+  else if SameExt(AExt, '.xlsx') then Result := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  else if SameExt(AExt, '.ppt') then Result := 'application/vnd.ms-powerpoint'
+  else if SameExt(AExt, '.pptx') then Result := 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
   { Archives }
-  else if LExt = '.zip' then Result := 'application/zip'
-  else if LExt = '.gz' then Result := 'application/gzip'
-  else if LExt = '.tar' then Result := 'application/x-tar'
-  else if LExt = '.bz2' then Result := 'application/x-bzip2'
-  else if LExt = '.7z' then Result := 'application/x-7z-compressed'
-  else if LExt = '.rar' then Result := 'application/vnd.rar'
+  else if SameExt(AExt, '.zip') then Result := 'application/zip'
+  else if SameExt(AExt, '.gz') then Result := 'application/gzip'
+  else if SameExt(AExt, '.tar') then Result := 'application/x-tar'
+  else if SameExt(AExt, '.bz2') then Result := 'application/x-bzip2'
+  else if SameExt(AExt, '.7z') then Result := 'application/x-7z-compressed'
+  else if SameExt(AExt, '.rar') then Result := 'application/vnd.rar'
   { Streaming / manifest }
-  else if LExt = '.m3u8' then Result := 'application/vnd.apple.mpegurl'
-  else if LExt = '.mpd' then Result := 'application/dash+xml'
-  else if LExt = '.ts' then Result := 'video/mp2t'
+  else if SameExt(AExt, '.m3u8') then Result := 'application/vnd.apple.mpegurl'
+  else if SameExt(AExt, '.mpd') then Result := 'application/dash+xml'
+  else if SameExt(AExt, '.ts') then Result := 'video/mp2t'
   { Data interchange }
-  else if LExt = '.yaml' then Result := 'application/yaml'
-  else if LExt = '.yml' then Result := 'application/yaml'
-  else if LExt = '.toml' then Result := 'application/toml'
-  else if LExt = '.geojson' then Result := 'application/geo+json'
+  else if SameExt(AExt, '.yaml') then Result := 'application/yaml'
+  else if SameExt(AExt, '.yml') then Result := 'application/yaml'
+  else if SameExt(AExt, '.toml') then Result := 'application/toml'
+  else if SameExt(AExt, '.geojson') then Result := 'application/geo+json'
   { Web manifests }
-  else if LExt = '.webmanifest' then Result := 'application/manifest+json'
-  else if LExt = '.webapp' then Result := 'application/x-web-app-manifest+json'
+  else if SameExt(AExt, '.webmanifest') then Result := 'application/manifest+json'
+  else if SameExt(AExt, '.webapp') then Result := 'application/x-web-app-manifest+json'
   { Fallback }
   else Result := 'application/octet-stream';
 end;
 
-{ Returns True if the relative path is safe (no traversal). }
+{ Returns True if the relative path is safe (no traversal).
+  Semantics: VFS canonical ValidPath + HTTP double-encoding guard.
+  Reuses VfsValidPath as single source of truth, then rejects '%' and '\'
+  which Go ValidPath would accept as normal chars but must be blocked after
+  UrlDecode to prevent encoded traversal. }
 function IsSafePath(const ARelative: string): Boolean;
-var
-  LI, LLen: SizeInt;
 begin
-  LLen := Length(ARelative);
-  if LLen = 0 then Exit(False);
-  { Reject absolute paths }
-  if ARelative[1] = '/' then Exit(False);
-  { Reject Windows path separators before file lookup. }
-  for LI := 1 to LLen do
+  if ARelative = '' then
+    Exit(False);
+  { After UrlDecode, any remaining '%' indicates double-encoding attempt }
+  if Pos('%', ARelative) > 0 then
+    Exit(False);
+  if Pos('\', ARelative) > 0 then
+    Exit(False);
+  Result := VfsValidPath(ARelative, False);
+end;
+
+{ Extract relative path from request: tries wildcard param 'filepath', falls
+  back to URL path with leading slash stripped. Returns False only when
+  UrlDecode raises (malformed percent-encoding) — caller should reply 400. }
+function TryExtractRequestPath(const AReq: IHttpRequest; out ARelative: string): Boolean;
+begin
+  ARelative := AReq.PathParam('filepath');
+  if ARelative = '' then
   begin
-    if ARelative[LI] = '\' then
-      Exit(False);
-    { Reject percent-encoded characters after URL decode — prevents double encoding attacks }
-    if ARelative[LI] = '%' then
-      Exit(False);
+    ARelative := AReq.Path;
+    if (Length(ARelative) > 0) and (ARelative[1] = '/') then
+      ARelative := System.Copy(ARelative, 2, Length(ARelative) - 1);
   end;
-  { Reject any '..' component }
-  LI := 1;
-  while LI <= LLen do
-  begin
-    if (ARelative[LI] = '.') and (LI + 1 <= LLen) and (ARelative[LI + 1] = '.') then
-    begin
-      { Check it's a full component: at start or after '/', and at end or before '/' }
-      if ((LI = 1) or (ARelative[LI - 1] = '/')) and
-         ((LI + 2 > LLen) or (ARelative[LI + 2] = '/')) then
-        Exit(False);
-    end;
-    Inc(LI);
+  try
+    ARelative := nextpas.core.http.url.UrlDecode(ARelative);
+    Result := True;
+  except
+    Result := False;
   end;
-  Result := True;
 end;
 
 function FormatHttpDate(const AUnixTimestamp: Int64): string;
@@ -543,8 +565,7 @@ begin
   Result := False;
   if AIfModifiedSince = '' then
     Exit;
-  LSince := ParseHttpDate(AIfModifiedSince);
-  if LSince = 0 then
+  if not TryParseHttpDate(AIfModifiedSince, LSince) then
     Exit;
   Result := AModTimeUnix <= LSince;
 end;
@@ -816,18 +837,8 @@ begin
     LNormalizedRoot: string;
     LNormalizedFull: string;
   begin
-    { Try wildcard param first, fall back to URL path }
-    LRelative := AReq.PathParam('filepath');
-    if LRelative = '' then
+    if not TryExtractRequestPath(AReq, LRelative) then
     begin
-      LRelative := AReq.Path;
-      { Strip leading slash }
-      if (Length(LRelative) > 0) and (LRelative[1] = '/') then
-        LRelative := System.Copy(LRelative, 2, Length(LRelative) - 1);
-    end;
-    try
-      LRelative := nextpas.core.http.url.UrlDecode(LRelative);
-    except
       AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       AW.Write(PAnsiChar('Bad Request')^, 11);
@@ -867,7 +878,8 @@ end;
   404, any other failure maps to 500. ContentHash-backed ETag keeps identity
   stable for embedded trees whose entries carry no wall-clock mtime. }
 procedure ServeVfsContentEx(const AFs: IVfs; const AVfsPath: string;
-  const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+  const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const ACacheControl: string);
 var
   LInfo: TStatInfo;
   LStream: IStream;
@@ -923,7 +935,7 @@ begin
     AW.GetHeaders.SetHeader('etag', LETag);
     if LLastModified <> '' then
       AW.GetHeaders.SetHeader('last-modified', LLastModified);
-    AW.GetHeaders.SetHeader('cache-control', 'public, max-age=0, must-revalidate');
+    AW.GetHeaders.SetHeader('cache-control', ACacheControl);
     AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
     AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
 
@@ -967,22 +979,17 @@ end;
 
 function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
 begin
+  Result := ServeVfs(AFs, 'public, max-age=0, must-revalidate');
+end;
+
+function ServeVfs(const AFs: IVfs; const ACacheControl: string): THttpHandlerFunc;
+begin
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var
     LRelative: string;
   begin
-    { Same path extraction contract as ServeDir }
-    LRelative := AReq.PathParam('filepath');
-    if LRelative = '' then
+    if not TryExtractRequestPath(AReq, LRelative) then
     begin
-      LRelative := AReq.Path;
-      { Strip leading slash }
-      if (Length(LRelative) > 0) and (LRelative[1] = '/') then
-        LRelative := System.Copy(LRelative, 2, Length(LRelative) - 1);
-    end;
-    try
-      LRelative := nextpas.core.http.url.UrlDecode(LRelative);
-    except
       AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       AW.Write(PAnsiChar('Bad Request')^, 11);
@@ -995,7 +1002,7 @@ begin
       HttpWriteErrorNotFound(AW, 'File not found');
       Exit;
     end;
-    ServeVfsContentEx(AFs, LRelative, AReq, AW);
+    ServeVfsContentEx(AFs, LRelative, AReq, AW, ACacheControl);
   end;
 end;
 
