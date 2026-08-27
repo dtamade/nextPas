@@ -36,6 +36,8 @@ const
     ('hmac-sha2-512-etm@openssh.com', 'hmac-sha2-256-etm@openssh.com');
 
   SSH_OFFER_COMP_ALGS: array[0..0] of string = ('none');
+  SSH_OFFER_COMP_ALGS_COMPRESS: array[0..2] of string =
+    ('zlib@openssh.com', 'zlib', 'none');
 
 type
   { 对端 KEXINIT 各字段的名称列表 }
@@ -65,6 +67,7 @@ type
 {** 构造我方 SSH_MSG_KEXINIT 载荷（消息号字节由 transport 加）。
  * ACookie 为 16 字节随机数；返回的载荷同时用于 H 计算，调用方需保留。*}
 function SshBuildKexInitPayload(const ACookie: TBytes): TBytes;
+function SshBuildKexInitPayloadEx(const ACookie: TBytes; ACompress: Boolean): TBytes;
 
 {** 解析对端 KEXINIT 载荷（不含消息号字节）。*}
 function SshParseKexInit(const APayload: TBytes): TSshPeerKexInit;
@@ -72,6 +75,7 @@ function SshParseKexInit(const APayload: TBytes): TSshPeerKexInit;
 {** 双方全字段协商；任一关键字段无交集抛 sekNegotiation。
  * AEAD cipher 下 MAC 字段允许无交集（结果置空串）。*}
 function SshNegotiate(const APeer: TSshPeerKexInit): TSshNegotiated;
+function SshNegotiateEx(const APeer: TSshPeerKexInit; ACompress: Boolean): TSshNegotiated;
 
 {** RFC 4253 §7.2 KDF：HASH(K || H || X || session_id)，不足再接 HASH(K || H || prev)。*}
 function SshKdfSha256(const AKMpint, AH: TBytes; AX: Byte;
@@ -96,6 +100,11 @@ begin
 end;
 
 function SshBuildKexInitPayload(const ACookie: TBytes): TBytes;
+begin
+  Result := SshBuildKexInitPayloadEx(ACookie, False);
+end;
+
+function SshBuildKexInitPayloadEx(const ACookie: TBytes; ACompress: Boolean): TBytes;
 var
   LW: TsshWriter;
 begin
@@ -111,12 +120,20 @@ begin
     LW.PutNameList(SSH_OFFER_CIPHER_ALGS);
     LW.PutNameList(SSH_OFFER_MAC_ALGS);
     LW.PutNameList(SSH_OFFER_MAC_ALGS);
-    LW.PutNameList(SSH_OFFER_COMP_ALGS);
-    LW.PutNameList(SSH_OFFER_COMP_ALGS);
+    if ACompress then
+    begin
+      LW.PutNameList(SSH_OFFER_COMP_ALGS_COMPRESS);
+      LW.PutNameList(SSH_OFFER_COMP_ALGS_COMPRESS);
+    end
+    else
+    begin
+      LW.PutNameList(SSH_OFFER_COMP_ALGS);
+      LW.PutNameList(SSH_OFFER_COMP_ALGS);
+    end;
     LW.PutStringText('');
     LW.PutStringText('');
-    LW.PutBoolean(False);   { first_kex_packet_follows }
-    LW.PutUInt32(0);        { reserved }
+    LW.PutBoolean(False);
+    LW.PutUInt32(0);
     Result := LW.ToBytes;
   finally
     LW.Free;
@@ -157,6 +174,11 @@ end;
 
 function SshNegotiate(const APeer: TSshPeerKexInit): TSshNegotiated;
 begin
+  Result := SshNegotiateEx(APeer, False);
+end;
+
+function SshNegotiateEx(const APeer: TSshPeerKexInit; ACompress: Boolean): TSshNegotiated;
+begin
   Result.KexAlg := SshPickFirstMatch(SSH_OFFER_KEX_ALGS, APeer.KexAlgs);
   RequireAlg(Result.KexAlg, 'key exchange algorithm');
   Result.HostKeyAlg := SshPickFirstMatch(SSH_OFFER_HOSTKEY_ALGS, APeer.HostKeyAlgs);
@@ -167,14 +189,21 @@ begin
   RequireAlg(Result.EncSc, 'server-to-client cipher');
   Result.MacCs := SshPickFirstMatch(SSH_OFFER_MAC_ALGS, APeer.MacCs);
   Result.MacSc := SshPickFirstMatch(SSH_OFFER_MAC_ALGS, APeer.MacSc);
-  { AEAD 自带完整性；ctr 族必须有 MAC }
   if (Result.MacCs = '') and SshCipherRequiresMac(Result.EncCs) then
     RequireAlg(Result.MacCs, 'client-to-server mac');
   if (Result.MacSc = '') and SshCipherRequiresMac(Result.EncSc) then
     RequireAlg(Result.MacSc, 'server-to-client mac');
-  Result.CompCs := SshPickFirstMatch(SSH_OFFER_COMP_ALGS, APeer.CompCs);
+  if ACompress then
+  begin
+    Result.CompCs := SshPickFirstMatch(SSH_OFFER_COMP_ALGS_COMPRESS, APeer.CompCs);
+    Result.CompSc := SshPickFirstMatch(SSH_OFFER_COMP_ALGS_COMPRESS, APeer.CompSc);
+  end
+  else
+  begin
+    Result.CompCs := SshPickFirstMatch(SSH_OFFER_COMP_ALGS, APeer.CompCs);
+    Result.CompSc := SshPickFirstMatch(SSH_OFFER_COMP_ALGS, APeer.CompSc);
+  end;
   RequireAlg(Result.CompCs, 'client-to-server compression');
-  Result.CompSc := SshPickFirstMatch(SSH_OFFER_COMP_ALGS, APeer.CompSc);
   RequireAlg(Result.CompSc, 'server-to-client compression');
 end;
 
