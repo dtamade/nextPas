@@ -10,7 +10,9 @@ uses
   nextpas.core.audio.errors,
   nextpas.core.audio.intf,
   nextpas.core.audio.codec.intf,
-  nextpas.core.audio.pcm;
+  nextpas.core.audio.pcm,
+  nextpas.core.io.intf,
+  nextpas.core.audio.codec.wav;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -60,6 +62,15 @@ function PcmS24ToF32(AValue: Integer): Single; inline;
 function PcmF32ToS24(AValue: Single): Integer; inline;
 function PcmS32ToF32(AValue: LongInt): Single; inline;
 function PcmF32ToS32(AValue: Single): LongInt; inline;
+
+{ ---- wav codec forwarding (decode-first 便利) ---- }
+
+function WavProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const AFilePath: string); overload; inline;
+procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const ADest: IStream; const AOptions: TAudioEncodeOptions); overload; inline;
+procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const ADest: IStream); overload; inline;
+function CreateWavDecoder: IAudioDecoder; inline;
+function CreateWavEncoder: IAudioEncoder; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -132,6 +143,36 @@ end;
 function PcmF32ToS32(AValue: Single): LongInt;
 begin
   Result := nextpas.core.audio.pcm.PcmF32ToS32(AValue);
+end;
+
+function WavProbe(const APrefix: TBytes): TAudioProbeResult;
+begin
+  Result := nextpas.core.audio.codec.wav.WavProbe(APrefix);
+end;
+
+procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const AFilePath: string);
+begin
+  nextpas.core.audio.codec.wav.AudioEncodeWav(ABuffer, AFilePath);
+end;
+
+procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const ADest: IStream; const AOptions: TAudioEncodeOptions);
+begin
+  nextpas.core.audio.codec.wav.AudioEncodeWav(ABuffer, ADest, AOptions);
+end;
+
+procedure AudioEncodeWav(const ABuffer: TAudioBuffer; const ADest: IStream);
+begin
+  nextpas.core.audio.codec.wav.AudioEncodeWav(ABuffer, ADest);
+end;
+
+function CreateWavDecoder: IAudioDecoder;
+begin
+  Result := nextpas.core.audio.codec.wav.CreateWavDecoder;
+end;
+
+function CreateWavEncoder: IAudioEncoder;
+begin
+  Result := nextpas.core.audio.codec.wav.CreateWavEncoder;
 end;
 
 procedure AudioRegisterDecoderPlaceholder;
