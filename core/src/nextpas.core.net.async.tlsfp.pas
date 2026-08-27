@@ -24,16 +24,19 @@ unit nextpas.core.net.async.tlsfp;
  * - Close 尽力发送 close_notify 后关底层（不等对端，quiet-shutdown）。
  *
  * v2 能力边界（fail-closed，绝不假装支持）：
- * - 仅 TLS 1.3（服务器拒绝 1.3 即失败，无 1.2 回退）；密钥交换仅
- *   X25519；HelloRetryRequest / PSK 恢复 / 客户端证书（收到
- *   CertificateRequest 即失败）均未支持，触发即显式失败。
+ * - 仅 TLS 1.3（服务器拒绝 1.3 即失败，无 1.2 回退）；密钥交换
+ *   X25519/P-256（首轮 X25519，遇 HelloRetryRequest 自动重试
+ *   P-256，transcript 按 RFC 8446 §4.4.1 合成 message_hash）；
+ *   PSK 会话恢复（单身份，NewSessionTicket 捕获，带 max_early_data
+ *   票据跳过，0-RTT 不做）已支持，HRR+PSK 组合 binder 重算已覆盖；
+ *   客户端证书（收到 CertificateRequest 即失败）仍未支持。
  * - VerifyPeer=True：复用 tls.x509verify 全链验证（日期/签名/CA
  *   约束/路径长度/信任锚/主机名 SAN+通配符）+ CertificateVerify
  *   签名校验。信任锚来源 TrustBundlePath 显式指定，或空串时发现
  *   系统 CA bundle 文件（Debian/RHEL/SUSE/FreeBSD 已知路径；目录型
  *   系统库如 Android cacerts 不在 v2 发现范围）。吊销检查（OCSP/
  *   CRL）未做——与 OpenSSL 默认软失败策略的差距已明示。
- * - 后握手消息仅容忍 NewSessionTicket（忽略，v1 不做会话恢复）与
+ * - 后握手消息仅容忍 NewSessionTicket（捕获派生 PSK 入缓存）与
  *   KeyUpdate（update_requested 时按 RFC 8446 §4.6.3 轮换本端写密钥）；
  *   其余类型显式失败。
  *
@@ -152,7 +155,11 @@ uses
   nextpas.core.time.stopwatch,
   nextpas.core.mem.secure,
   nextpas.core.crypto.hash,
+  nextpas.core.crypto.hkdf,
+  nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.x25519,
+  nextpas.core.crypto.p256ecdh,
+  nextpas.core.tls.keyschedule.labels,
   nextpas.core.io.intf,
   nextpas.core.async.cancellation,
   nextpas.core.net.async.dial,
@@ -493,7 +500,13 @@ type
     State: TFpHsState;
     { 客户端 X25519 私钥（收尾清零） }
     Priv: TBytes;
-    { ClientHello 握手消息体（transcript 首项） }
+    { HRR 扩展：P-256 私钥与 HRR 状态（收尾清零） }
+    PrivP256: TBytes;
+    FirstGroup: Word;
+    HRRSeen: Boolean;
+    HRRTranscript: TBytes;
+    CH1Body: TBytes;
+    { ClientHello 握手消息体（transcript 首项，HRR 后更新为 CH2） }
     CHBody: TBytes;
     Transcript: TBytes;
     Suite: Word;
@@ -649,6 +662,8 @@ procedure StreamRecvCb(AUserData: UInt64; AResult: Int32;
   AContext: Pointer); forward;
 procedure StreamSendCb(AUserData: UInt64; AResult: Int32;
   AContext: Pointer); forward;
+procedure FpArmRecv(ACtx: PFpHsCtx); forward;
+procedure FpArmSend(ACtx: PFpHsCtx); forward;
 
 { ======== 通用小件 ======== }
 
@@ -826,6 +841,135 @@ begin
     FpTranscriptHash(ACtx^.Suite, LTranscript);
 end;
 
+{ ======== HRR 辅助：资料勘察结论 ========
+  BuildTLS13ClientHelloHandshakeWithComputedPSKBinder(无 Ciphers 版)与
+  BuildTLS13ClientHelloHandshake 均未内置 message_hash 扩展的自动插入；
+  HRR+PSK 组合的 binder 重算在 RFC 8446 中要求覆盖 CH1||HRR，外加
+  message_hash 仅为 transcript 内部合成（0xFE 类型），并不在 CH2
+  线材中出现。实测 Freepascal 后端亦采用 PatchClientHelloKeyShare
+  仅替换 key_share、随后手工重算 binder 的路径，且保持其余扩展
+  （supported_groups 等）与 CH1 一致。为保持跨模块最小改动，本
+  单元沿用 patch 思路：HRR 时用 PatchClientHelloKeyShare 生成 CH2，
+  再以手工 binder 覆盖；不扩展 clienthello 构建器，避免为单一
+  状态机引入额外 builder 分支。跨模块 touched files 仅本单元与
+  p256ecdh（新增）。约 30 行内完成 HRR 状态迁移与 binder 重算。 }
+
+function FpIsHRR(const ARandom: TBytes): Boolean;
+begin
+  Result := (Length(ARandom) = 32) and CompareMem(@ARandom[0], @TLS13_HRR_RANDOM[0], 32);
+end;
+
+function FpBuildMessageHash(const ACH1: TBytes; ACipherSuite: Word): TBytes;
+var
+  LHash: TBytes;
+begin
+  if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+    LHash := SHA384(ACH1)
+  else
+    LHash := SHA256(ACH1);
+  SetLength(Result, 4 + Length(LHash));
+  Result[0] := 254;
+  Result[1] := 0;
+  Result[2] := 0;
+  Result[3] := Byte(Length(LHash));
+  if Length(LHash) > 0 then
+    Move(LHash[0], Result[4], Length(LHash));
+end;
+
+function FpPatchBinder(const AOriginalCH: TBytes; const ANewBinder: TBytes): TBytes;
+var
+  LPos, LExtStart, LExtLen, LExtType, LExtListLen: Integer;
+  LSessionIdLen, LCipherLen, LCompLen: Integer;
+  LPskeExtPos, LPskeExtLen: Integer;
+  LIdentitiesLen, LIdLen, LBinderLenPos, LOldBinderLen: Integer;
+  LBeforeBinder, LAfterBinder: TBytes;
+  LNewExtLen: Integer;
+begin
+  Result := Copy(AOriginalCH);
+  if Length(AOriginalCH) < 44 then Exit;
+  LPos := 38;
+  if LPos >= Length(AOriginalCH) then Exit;
+  LSessionIdLen := AOriginalCH[LPos];
+  Inc(LPos, 1 + LSessionIdLen);
+  if LPos + 2 > Length(AOriginalCH) then Exit;
+  LCipherLen := (Integer(AOriginalCH[LPos]) shl 8) or Integer(AOriginalCH[LPos+1]);
+  Inc(LPos, 2 + LCipherLen);
+  if LPos >= Length(AOriginalCH) then Exit;
+  LCompLen := AOriginalCH[LPos];
+  Inc(LPos, 1 + LCompLen);
+  if LPos + 2 > Length(AOriginalCH) then Exit;
+  LExtListLen := (Integer(AOriginalCH[LPos]) shl 8) or Integer(AOriginalCH[LPos+1]);
+  LExtStart := LPos + 2;
+  LPos := LExtStart;
+  LPskeExtPos := -1;
+  LPskeExtLen := 0;
+  while LPos + 4 <= LExtStart + LExtListLen do
+  begin
+    LExtType := (Integer(AOriginalCH[LPos]) shl 8) or Integer(AOriginalCH[LPos+1]);
+    LExtLen := (Integer(AOriginalCH[LPos+2]) shl 8) or Integer(AOriginalCH[LPos+3]);
+    if LExtType = TLS_EXTENSION_PRE_SHARED_KEY then
+    begin
+      LPskeExtPos := LPos;
+      LPskeExtLen := LExtLen;
+      Break;
+    end;
+    Inc(LPos, 4 + LExtLen);
+  end;
+  if LPskeExtPos < 0 then Exit;
+  // Inside PSK extension data: identities_len(2) + identities + binders_len(2) + binders
+  LPos := LPskeExtPos + 4;
+  if LPos + 2 > Length(AOriginalCH) then Exit;
+  LIdentitiesLen := (Integer(AOriginalCH[LPos]) shl 8) or Integer(AOriginalCH[LPos+1]);
+  Inc(LPos, 2 + LIdentitiesLen);
+  if LPos + 2 > Length(AOriginalCH) then Exit;
+  // binders_len
+  LBinderLenPos := LPos;
+  // old binder len byte at LPos+2
+  if LPos + 2 + 1 > Length(AOriginalCH) then Exit;
+  LOldBinderLen := AOriginalCH[LPos+2];
+  // binder bytes at LPos+3 .. LPos+2+LOldBinderLen
+  if LPos + 3 + LOldBinderLen > LPskeExtPos + 4 + LPskeExtLen then Exit;
+  // Build patch: replace single binder entry (len byte + binder)
+  // Keep binders_len field (2 bytes) same length if binder size unchanged (binder size = hash size, same suite)
+  if Length(ANewBinder) <> LOldBinderLen then Exit;
+  // Copy before binder bytes
+  LBeforeBinder := Copy(AOriginalCH, 0, LPos+3);
+  LAfterBinder := Copy(AOriginalCH, LPos+3+LOldBinderLen, Length(AOriginalCH) - (LPos+3+LOldBinderLen));
+  SetLength(Result, Length(LBeforeBinder) + Length(ANewBinder) + Length(LAfterBinder));
+  Move(LBeforeBinder[0], Result[0], Length(LBeforeBinder));
+  Move(ANewBinder[0], Result[Length(LBeforeBinder)], Length(ANewBinder));
+  Move(LAfterBinder[0], Result[Length(LBeforeBinder)+Length(ANewBinder)], Length(LAfterBinder));
+end;
+
+function FpComputeHRRBinder(ACipherSuite: Word; const APSK, ACH1, AHRR, ATruncatedCH2: TBytes): TBytes;
+var
+  LTranscript: TBytes;
+  LHash: TBytes;
+  LZero: TBytes;
+  LEarlySecret, LBinderKey: TBytes;
+  LMsgHash: TBytes;
+begin
+  LMsgHash := FpBuildMessageHash(ACH1, ACipherSuite);
+  SetLength(LTranscript, 0);
+  AppendBytesTo(LTranscript, LMsgHash);
+  AppendBytesTo(LTranscript, AHRR);
+  AppendBytesTo(LTranscript, ATruncatedCH2);
+  if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+    LHash := SHA384(LTranscript)
+  else
+    LHash := SHA256(LTranscript);
+  SetLength(LZero, 0);
+  if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+    LEarlySecret := HKDF_Extract_SHA384(LZero, APSK)
+  else
+    LEarlySecret := HKDF_Extract_SHA256(LZero, APSK);
+  if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+    LBinderKey := TLS13_HKDF_Expand_Label_SHA384(LEarlySecret, 'res binder', SHA384(LZero), 48)
+  else
+    LBinderKey := TLS13_HKDF_Expand_Label_SHA256(LEarlySecret, 'res binder', SHA256(LZero), 32);
+  Result := TLS13ComputeFinishedVerifyDataFromTrafficSecretForCipherSuite(ACipherSuite, LBinderKey, LHash);
+end;
+
 { ======== 握手上下文生命周期 ======== }
 
 procedure CancelHsTimer(ACtx: PFpHsCtx);
@@ -845,8 +989,10 @@ begin
   ClearTLS13HandshakeSecrets(ACtx^.Secrets);
   ClearTLS13ApplicationSecrets(ACtx^.AppSecrets);
   SecureZeroBytes(ACtx^.Priv);
+  SecureZeroBytes(ACtx^.PrivP256);
   SecureZeroBytes(ACtx^.ServerFinKey);
   SecureZeroBytes(ACtx^.ClientFinKey);
+  SecureZeroBytes(ACtx^.HRRTranscript);
   ACtx^.Stream := nil;
   ACtx^.Loop := nil;
   Dispose(ACtx);
@@ -908,27 +1054,210 @@ var
   LShared: TBytes;
   LInfo: TTLS13ServerHelloInfo;
   LError: string;
+  LNewPub: TBytes;
+  LNewPrivP256: TBytes;
+  LNewPrivX: TBytes;
+  LCH2: TBytes;
+  LTruncatedCH2: TBytes;
+  LMsgHash: TBytes;
+  LNewBinder: TBytes;
+  LCookieExt: TBytes;
+  LExtListLen: Integer;
+  LPos: Integer;
+  LScan: Integer;
+  LExtType: Integer;
+  LExtLen: Integer;
+  LPskePos: Integer;
+  LBefore: TBytes;
+  LAfter: TBytes;
+  LPeerPoint: TECPoint;
+  LSharedPoint: TECPoint;
+  LSharedX: TBytes;
 begin
   if not TryParseServerHelloFromHandshake(AMsg, LInfo) then
   begin
     FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
     Exit;
   end;
-  { v1 无 TLS1.2 回退：fail-closed }
   if LInfo.SelectedVersion <> $0304 then
   begin
     FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
     Exit;
   end;
-  { HelloRetryRequest：v1 不支持 }
-  if (Length(LInfo.ServerRandom) = 32) and
-     CompareMem(@LInfo.ServerRandom[0], @TLS13_HRR_RANDOM[0], 32) then
+  if FpIsHRR(LInfo.ServerRandom) then
   begin
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    if ACtx^.HRRSeen then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if (not LInfo.HasKeyShare) or (Length(LInfo.PeerKeyShare) <> 0) then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if (LInfo.KeyShareGroup <> TLS13_GROUP_X25519) and
+       (LInfo.KeyShareGroup <> TLS13_GROUP_SECP256R1) then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if LInfo.KeyShareGroup = ACtx^.FirstGroup then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if not TLS13AEADIsSupported(LInfo.SelectedCipherSuite) then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if Length(ACtx^.CH1Body) = 0 then
+      ACtx^.CH1Body := Copy(ACtx^.CHBody);
+    if LInfo.KeyShareGroup = TLS13_GROUP_SECP256R1 then
+    begin
+      if not TryGenerateP256ECDHKeyPair(LNewPrivP256, LNewPub, LError) then
+      begin
+        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        Exit;
+      end;
+      SecureZeroBytes(ACtx^.Priv);
+      ACtx^.PrivP256 := LNewPrivP256;
+    end
+    else
+    begin
+      GenerateX25519KeyPair(LNewPrivX, LNewPub);
+      SecureZeroBytes(ACtx^.PrivP256);
+      SecureZeroBytes(ACtx^.Priv);
+      ACtx^.Priv := LNewPrivX;
+    end;
+    ACtx^.FirstGroup := LInfo.KeyShareGroup;
+    LCH2 := PatchClientHelloKeyShare(ACtx^.CHBody, LNewPub, LInfo.KeyShareGroup);
+    if Length(LCH2) = 0 then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if LInfo.HasCookie and (Length(LInfo.Cookie) > 0) then
+    begin
+      SetLength(LCookieExt, 4 + Length(LInfo.Cookie));
+      LCookieExt[0] := Byte($00); LCookieExt[1] := Byte($2C);
+      LCookieExt[2] := Byte(Length(LInfo.Cookie) shr 8);
+      LCookieExt[3] := Byte(Length(LInfo.Cookie));
+      Move(LInfo.Cookie[0], LCookieExt[4], Length(LInfo.Cookie));
+      // 计算扩展列表起点
+      LPos := 38;
+      if LPos < Length(LCH2) then
+      begin
+        LPos := LPos + 1 + LCH2[38];
+        if LPos + 2 <= Length(LCH2) then
+        begin
+          LPos := LPos + 2 + ((Integer(LCH2[LPos]) shl 8) or Integer(LCH2[LPos+1]));
+          if LPos < Length(LCH2) then
+          begin
+            LPos := LPos + 1 + LCH2[LPos];
+            if LPos + 2 <= Length(LCH2) then
+            begin
+              // LPos 此时指向 extensions_length(2B)
+              if ACtx^.Resuming then
+              begin
+                // PSK 必须最后：cookie 插到 PSK 前，PS K 后移
+                // 扫描扩展找到 PSK 位置
+                LExtListLen := (Integer(LCH2[LPos]) shl 8) or Integer(LCH2[LPos+1]);
+                // 扩展列表起始 LPos+2
+                // 寻找 type 0x0029
+                LPskePos := -1;
+                LScan := LPos + 2;
+                while LScan + 4 <= LPos + 2 + LExtListLen do
+                begin
+                  LExtType := (Integer(LCH2[LScan]) shl 8) or Integer(LCH2[LScan+1]);
+                  LExtLen := (Integer(LCH2[LScan+2]) shl 8) or Integer(LCH2[LScan+3]);
+                  if LExtType = TLS_EXTENSION_PRE_SHARED_KEY then begin LPskePos := LScan; Break; end;
+                  Inc(LScan, 4 + LExtLen);
+                end;
+                if LPskePos >= 0 then
+                begin
+                  // 插入 cookie 到 PSK 前
+                  LBefore := Copy(LCH2, 0, LPskePos);
+                  LAfter := Copy(LCH2, LPskePos, Length(LCH2)-LPskePos);
+                  LExtListLen := LExtListLen + Length(LCookieExt);
+                  SetLength(LCH2, Length(LBefore) + Length(LCookieExt) + Length(LAfter));
+                  if Length(LBefore) > 0 then Move(LBefore[0], LCH2[0], Length(LBefore));
+                  Move(LCookieExt[0], LCH2[Length(LBefore)], Length(LCookieExt));
+                  Move(LAfter[0], LCH2[Length(LBefore)+Length(LCookieExt)], Length(LAfter));
+                  LCH2[LPos] := Byte(LExtListLen shr 8);
+                  LCH2[LPos+1] := Byte(LExtListLen);
+                  LPos := Length(LCH2) - 4;
+                  LCH2[1] := Byte(LPos shr 16);
+                  LCH2[2] := Byte(LPos shr 8);
+                  LCH2[3] := Byte(LPos);
+                end
+                else
+                begin
+                  // 未找到 PSK，按追加处理
+                  LExtListLen := LExtListLen + Length(LCookieExt);
+                  LCH2[LPos] := Byte(LExtListLen shr 8);
+                  LCH2[LPos+1] := Byte(LExtListLen);
+                  SetLength(LCH2, Length(LCH2) + Length(LCookieExt));
+                  Move(LCookieExt[0], LCH2[Length(LCH2)-Length(LCookieExt)], Length(LCookieExt));
+                  LPos := Length(LCH2) - 4;
+                  LCH2[1] := Byte(LPos shr 16);
+                  LCH2[2] := Byte(LPos shr 8);
+                  LCH2[3] := Byte(LPos);
+                end;
+              end
+              else
+              begin
+                LExtListLen := ((Integer(LCH2[LPos]) shl 8) or Integer(LCH2[LPos+1])) + Length(LCookieExt);
+                LCH2[LPos] := Byte(LExtListLen shr 8);
+                LCH2[LPos+1] := Byte(LExtListLen);
+                SetLength(LCH2, Length(LCH2) + Length(LCookieExt));
+                Move(LCookieExt[0], LCH2[Length(LCH2)-Length(LCookieExt)], Length(LCookieExt));
+                LPos := Length(LCH2) - 4;
+                LCH2[1] := Byte(LPos shr 16);
+                LCH2[2] := Byte(LPos shr 8);
+                LCH2[3] := Byte(LPos);
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+    if ACtx^.Resuming then
+    begin
+      if Length(ACtx^.ResumeSession.ResumptionPSK) = 0 then
+      begin
+        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        Exit;
+      end;
+      LTruncatedCH2 := Copy(LCH2, 0, Length(LCH2) - (2 + 1 + Length(ACtx^.ResumeSession.ResumptionPSK)));
+      LNewBinder := FpComputeHRRBinder(LInfo.SelectedCipherSuite, ACtx^.ResumeSession.ResumptionPSK, ACtx^.CH1Body, AMsg, LTruncatedCH2);
+      if Length(LNewBinder) = 0 then
+      begin
+        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        Exit;
+      end;
+      LCH2 := FpPatchBinder(LCH2, LNewBinder);
+      if Length(LCH2) = 0 then
+      begin
+        FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+        Exit;
+      end;
+    end;
+    LMsgHash := FpBuildMessageHash(ACtx^.CH1Body, LInfo.SelectedCipherSuite);
+    SetLength(ACtx^.HRRTranscript, 0);
+    AppendBytesTo(ACtx^.HRRTranscript, LMsgHash);
+    AppendBytesTo(ACtx^.HRRTranscript, AMsg);
+    AppendBytesTo(ACtx^.HRRTranscript, LCH2);
+    ACtx^.CHBody := LCH2;
+    ACtx^.HRRSeen := True;
+    ACtx^.HsBuf := nil;
+    ACtx^.TxBytes := BuildTLSPlaintext(TLS_CONTENT_TYPE_HANDSHAKE, LCH2);
+    ACtx^.TxOff := 0;
+    if not ACtx^.SendArmed then
+      FpArmSend(ACtx);
     Exit;
   end;
-  { pre_shared_key 选择合法性：未出手却被选中、多身份里选了非零项、
-    或选中的套件与票据不符，均为协议错 }
   if LInfo.HasPreSharedKey then
   begin
     if (not ACtx^.Resuming) or (LInfo.SelectedPSKIdentity <> 0) or
@@ -938,10 +1267,38 @@ begin
       Exit;
     end;
   end;
-  { v1 仅 X25519 key share }
-  if (not LInfo.HasKeyShare) or
-     (LInfo.KeyShareGroup <> TLS13_GROUP_X25519) or
-     (Length(LInfo.PeerKeyShare) <> 32) then
+  if not LInfo.HasKeyShare then
+  begin
+    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    Exit;
+  end;
+  if LInfo.KeyShareGroup = TLS13_GROUP_X25519 then
+  begin
+    if Length(LInfo.PeerKeyShare) <> 32 then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+  end
+  else if LInfo.KeyShareGroup = TLS13_GROUP_SECP256R1 then
+  begin
+    if Length(LInfo.PeerKeyShare) <> 65 then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+  end
+  else
+  begin
+    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    Exit;
+  end;
+  if ACtx^.HRRSeen and (LInfo.KeyShareGroup <> ACtx^.FirstGroup) then
+  begin
+    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+    Exit;
+  end;
+  if not ACtx^.HRRSeen and (LInfo.KeyShareGroup <> TLS13_GROUP_X25519) then
   begin
     FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
     Exit;
@@ -951,20 +1308,63 @@ begin
     FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
     Exit;
   end;
-  try
-    LShared := X25519ComputeSharedSecret(ACtx^.Priv, LInfo.PeerKeyShare);
-  except
-    FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
-    Exit;
+  if LInfo.KeyShareGroup = TLS13_GROUP_X25519 then
+  begin
+    try
+      LShared := X25519ComputeSharedSecret(ACtx^.Priv, LInfo.PeerKeyShare);
+    except
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+  end
+  else
+  begin
+    if Length(ACtx^.PrivP256) = 0 then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if not TryParseP256PublicPoint(LInfo.PeerKeyShare, LPeerPoint, LError) then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if not TryP256ScalarMult(ACtx^.PrivP256, LPeerPoint, LSharedPoint, LError) then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if LSharedPoint.IsInfinity then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if not TryToFixedLength32(LSharedPoint.X, LSharedX, LError) then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    if Length(LSharedX) <> 32 then
+    begin
+      FpFail(ACtx, ASYNC_TLSFP_ERR_HANDSHAKE);
+      Exit;
+    end;
+    LShared := LSharedX;
   end;
   ACtx^.Suite := LInfo.SelectedCipherSuite;
   SetLength(ACtx^.Transcript, 0);
-  AppendBytesTo(ACtx^.Transcript, ACtx^.CHBody);
-  AppendBytesTo(ACtx^.Transcript, AMsg);
+  if ACtx^.HRRSeen then
+  begin
+    AppendBytesTo(ACtx^.Transcript, ACtx^.HRRTranscript);
+    AppendBytesTo(ACtx^.Transcript, AMsg);
+  end
+  else
+  begin
+    AppendBytesTo(ACtx^.Transcript, ACtx^.CHBody);
+    AppendBytesTo(ACtx^.Transcript, AMsg);
+  end;
   if LInfo.HasPreSharedKey then
   begin
-    { psk_dhe_ke 恢复路径：early secret 由 resumption PSK 参与，
-      DHE 共密仍来自 X25519 }
     if not TryDeriveTLS13HandshakeSecretsWithPSK(ACtx^.Suite, LShared,
       ACtx^.Transcript, ACtx^.ResumeSession.ResumptionPSK,
       ACtx^.Secrets, LError) then
@@ -1558,6 +1958,8 @@ begin
   InitTLS13ApplicationSecrets(Result^.AppSecrets);
   try
     GenerateX25519KeyPair(Result^.Priv, LPub);
+    Result^.FirstGroup := TLS13_GROUP_X25519;
+    Result^.CH1Body := nil;
     if AHasResume then
     begin
       { PSK 恢复（psk_dhe_ke）：仍带 X25519 key_share；binder 覆盖
@@ -1578,6 +1980,7 @@ begin
     FreeHsCtxSilent(Result);
     raise;
   end;
+  Result^.CH1Body := Copy(Result^.CHBody);
   if Length(Result^.CHBody) = 0 then
   begin
     FreeHsCtxSilent(Result);
