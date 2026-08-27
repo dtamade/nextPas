@@ -35,11 +35,6 @@ const
   MAX_PALETTE = 256;
   HEXDIGITS: array[0..15] of Char = '0123456789abcdef';
 
-  { 16 色 RGB 映射(与终端基础色一致) }
-  COLOR_RGB: array[0..15] of LongWord = (
-    $000000, $800000, $008000, $808000, $000080, $800080, $008080, $C0C0C0,
-    $808080, $FF0000, $00FF00, $FFFF00, $0000FF, $FF00FF, $00FFFF, $FFFFFF);
-
 function HexVal(C: Char): Integer;
 begin
   case C of
@@ -76,68 +71,6 @@ begin
   for I := AFrom to Length(S) - Length(Sub) + 1 do
     if Copy(S, I, Length(Sub)) = Sub then
       Exit(I);
-end;
-
-{ 颜色 → '#rrggbb'(仅 ckRgb); ckIndexed 按 16 色表归一; ckReset/ckUnset → '' }
-function ColorToHex(const AColor: TColor): AnsiString;
-var
-  V: LongWord;
-begin
-  case AColor.Kind of
-    ckRgb:
-      Result := '#' + HEXDIGITS[(AColor.R shr 4) and $F] + HEXDIGITS[AColor.R and $F]
-        + HEXDIGITS[(AColor.G shr 4) and $F] + HEXDIGITS[AColor.G and $F]
-        + HEXDIGITS[(AColor.B shr 4) and $F] + HEXDIGITS[AColor.B and $F];
-    ckIndexed:
-      begin
-        V := COLOR_RGB[AColor.Index and 15];
-        Result := '#' + HEXDIGITS[(V shr 20) and $F] + HEXDIGITS[(V shr 16) and $F]
-          + HEXDIGITS[(V shr 12) and $F] + HEXDIGITS[(V shr 8) and $F]
-          + HEXDIGITS[(V shr 4) and $F] + HEXDIGITS[V and $F];
-      end;
-  else
-    Result := '';
-  end;
-end;
-
-{ 从十六进制串解析(支持 #rgb / #rrggbb / 无前缀 6 位)。失败返回 False }
-function ParseHexColor(const AHex: AnsiString; out AColor: TColor): Boolean;
-var
-  S: AnsiString;
-  I, R, G, B: Integer;
-begin
-  Result := False;
-  S := AHex;
-  if (Length(S) = 4) and (S[1] = '#') then
-  begin
-    R := HexVal(S[2]); G := HexVal(S[3]); B := HexVal(S[4]);
-    if (R < 0) or (G < 0) or (B < 0) then
-      Exit;
-    AColor := RgbColor(R * 17, G * 17, B * 17);
-    Exit(True);
-  end;
-  if Length(S) = 7 then
-  begin
-    for I := 2 to 7 do
-      if HexVal(S[I]) < 0 then
-        Exit;
-    R := HexVal(S[2]) * 16 + HexVal(S[3]);
-    G := HexVal(S[4]) * 16 + HexVal(S[5]);
-    B := HexVal(S[6]) * 16 + HexVal(S[7]);
-    AColor := RgbColor(R, G, B);
-    Exit(True);
-  end;
-  if Length(S) = 6 then
-  begin
-    for I := 1 to 6 do
-      if HexVal(S[I]) < 0 then
-        Exit;
-    R := HexVal(S[1]) * 16 + HexVal(S[2]);
-    G := HexVal(S[3]) * 16 + HexVal(S[4]);
-    B := HexVal(S[5]) * 16 + HexVal(S[6]);
-    AColor := RgbColor(R, G, B);
-    Exit(True);
-  end;
 end;
 
 procedure AppendHex2(var S: AnsiString; V: Integer);
@@ -443,7 +376,7 @@ begin
   begin
     if PCount >= MAX_PALETTE then
       Break;
-    if not ParseHexColor(PaletteVal.ArrayGet(I).AsStr.ToString, C) then
+    if not TryParseHexColor(PaletteVal.ArrayGet(I).AsStr.ToString, C) then
       Exit;
     Palette[PCount] := C;
     Inc(PCount);

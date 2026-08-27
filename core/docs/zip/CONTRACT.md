@@ -168,6 +168,7 @@ FPC RTL（SysUtils/Classes 等）与第三方库一律经 owner 模块间接使�
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip            # 写端结构/确定性/Zip64/选项
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_reader     # 读端解析/防护/属性
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_sequential # 顺序读端（HTTP body/管道）与描述符对偶
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fuzz       # 模糊/属性护栏：随机载荷/名/模式 seq vs mem 一致性
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fs         # 目录打包/解包/权限
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_contract   # 本契约 + 无 FPC RTL 依赖审计
 ```

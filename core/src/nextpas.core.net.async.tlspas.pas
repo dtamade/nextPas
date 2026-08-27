@@ -615,6 +615,7 @@ type
     procedure DeliverWrite(AResult: Int32);
     { 明文按 ≤16KB 片封队到 FNetTx }
     procedure SealPlainToQueue(const APlain: TBytes);
+    procedure SealPlainToQueueBuf(AData: PByte; ALen: SizeUInt);
     { 已冲尽时压实发送队列（防长连接无限增长） }
     procedure CompactTxIfDrained;
     procedure Pump;
@@ -2620,6 +2621,28 @@ begin
   end;
 end;
 
+procedure TTlsPasStream.SealPlainToQueueBuf(AData: PByte; ALen: SizeUInt);
+var
+  LOffset, LTake, LRecLen, LNeed: Integer;
+  LErr: string;
+  LDest: PByte;
+begin
+  LOffset := 0;
+  while SizeUInt(LOffset) < ALen do
+  begin
+    LTake := Integer(ALen) - LOffset;
+    if LTake > cMaxAppFragment then
+      LTake := cMaxAppFragment;
+    LNeed := 5 + (LTake + 1) + 16;
+    LDest := FNetTxBuf.ReserveAppend(SizeUInt(LNeed));
+    if not FSealer.SealToBuf(AData + LOffset, LTake, TLS_CONTENT_TYPE_APPLICATION_DATA,
+      LDest, LNeed, LRecLen, LErr) then
+      raise EInvalidOperationError.Create('tlspas: seal app data: ' + LErr);
+    FNetTxBuf.CommitAppend(SizeUInt(LRecLen));
+    Inc(LOffset, LTake);
+  end;
+end;
+
 procedure TTlsPasStream.CompactTxIfDrained;
 begin
   if (FNetTxBuf.Available = 0) and not FWritePending then
@@ -2782,8 +2805,6 @@ end;
 
 function TTlsPasStream.TryWrite(const ABuf; const ACount: SizeUInt;
   out AWritten: SizeUInt): TTcpStreamIOResult;
-var
-  LView: TBytes;
 begin
   AWritten := 0;
   if FDead then
@@ -2793,10 +2814,8 @@ begin
   { 有未冲尽残留时不再追加（避免跨调用字节序歧义）：先冲完再来 }
   if FNetTxBuf.Available > 0 then
     Exit(tsiorWouldBlock);
-  SetLength(LView, ACount);
-  Move(ABuf, LView[0], ACount);
   try
-    SealPlainToQueue(LView);
+    SealPlainToQueueBuf(PByte(@ABuf), ACount);
   except
     FDead := True;
     Exit(tsiorClosed);
@@ -2847,8 +2866,6 @@ end;
 
 function TTlsPasStream.AsyncWrite(ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
-var
-  LView: TBytes;
 begin
   Result := False;
   if (ABuf = nil) or (ALen = 0) or not Assigned(ACallback) then
@@ -2868,10 +2885,8 @@ begin
     { 前序写未冲尽（close_notify 残留等）：拒绝重复提交 }
     Exit;
   end;
-  SetLength(LView, ALen);
-  Move(ABuf^, LView[0], ALen);
   try
-    SealPlainToQueue(LView);
+    SealPlainToQueueBuf(PByte(ABuf), ALen);
   except
     FDead := True;
     ACallback(UInt64(PtrUInt(ABuf)), ASYNC_TLSPAS_ERR_IO, AContext);

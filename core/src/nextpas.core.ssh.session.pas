@@ -46,6 +46,11 @@ type
     procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
     procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
 
+    { ssh-agent 认证：通过 Unix socket 与 agent 通信，枚举身份并逐一探测。}
+    procedure AuthenticateWithAgent(const APath: string);
+    { 测试缝隙：直接注入已连通的 agent IO（内存管道），避免文件系统依赖。}
+    procedure AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
+
     { 执行一次性命令并收集输出。需已认证。}
     function Exec(const ACommand: string): TSshExecResult;
 
@@ -69,6 +74,7 @@ type
     function Password(const AValue: string): ISshClientBuilder;
     function PrivateKeyData(const AValue: string): ISshClientBuilder;
     function PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
+    function AgentSocketPath(const AValue: string): ISshClientBuilder;
     function KnownHostsFile(const AValue: string): ISshClientBuilder;
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
@@ -82,6 +88,11 @@ function SshConnect(const AOptions: TSshConnectOptions): ISshSession;
 { 细粒度入口：在自建 IO（如测试内存管道）上完成握手与认证。
   认证方式由 AOptions 决定，语义同 SshConnect；不拨号。}
 function SshConnectOn(const AIO: IReadWriteCloser;
+  const AOptions: TSshConnectOptions): ISshSession;
+
+{ 创建未认证会话，供 AuthenticateWithXxx/AuthenticateWithAgentOn 手动驱动
+  （测试缝隙；不拨号，不触发 RunAuthentication）。}
+function SshCreateSession(const AIO: IReadWriteCloser;
   const AOptions: TSshConnectOptions): ISshSession;
 
 { Fluent 构造器入口 }
@@ -99,6 +110,7 @@ uses
   nextpas.core.ssh.auth,
   nextpas.core.ssh.keys,
   nextpas.core.ssh.rsa,
+  nextpas.core.ssh.agent,
   nextpas.core.ssh.kex.curve25519,
   nextpas.core.ssh.kex.dhgroup14;
 
@@ -149,6 +161,7 @@ type
     function ExpectOneOf(const AAcceptable: array of Byte): TBytes;
     procedure DeriveAndApplyNewKeys(const ANegotiated: TSshNegotiated;
       const AK, AH: TBytes);
+    procedure AuthenticateWithAgentClient(const AAgent: TSshAgentClient);
   public
     constructor CreateInternal(const AIO: IReadWriteCloser;
       const AOptions: TSshConnectOptions);
@@ -160,6 +173,8 @@ type
     procedure AuthenticateWithPassword(const AUser, APassword: string);
     procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
     procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
+    procedure AuthenticateWithAgent(const APath: string);
+    procedure AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
     function Exec(const ACommand: string): TSshExecResult;
     function OpenFileSystem: ISshFileSystem;
     procedure Close;
@@ -176,6 +191,7 @@ type
     function Password(const AValue: string): ISshClientBuilder;
     function PrivateKeyData(const AValue: string): ISshClientBuilder;
     function PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
+    function AgentSocketPath(const AValue: string): ISshClientBuilder;
     function KnownHostsFile(const AValue: string): ISshClientBuilder;
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
@@ -505,6 +521,76 @@ begin
   AwaitSuccessOrRaise('publickey');
 end;
 
+procedure TSshSession.AuthenticateWithAgent(const APath: string);
+var
+  LAgent: TSshAgentClient;
+begin
+  EnsureHandshaken;
+  if APath = '' then
+    raise ESSHError.Create(sekIO, 'ssh session: agent socket path empty');
+  LAgent := SshAgentConnect(APath);
+  try
+    AuthenticateWithAgentClient(LAgent);
+  finally
+    LAgent.Free;
+  end;
+end;
+
+procedure TSshSession.AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
+var
+  LAgent: TSshAgentClient;
+begin
+  EnsureHandshaken;
+  LAgent := TSshAgentClient.Create(AAgentIO);
+  try
+    AuthenticateWithAgentClient(LAgent);
+  finally
+    LAgent.Free;
+  end;
+end;
+
+procedure TSshSession.AuthenticateWithAgentClient(const AAgent: TSshAgentClient);
+var
+  LIds: TSshAgentIdentityArray;
+  I: Integer;
+  LAlgName: string;
+  LSignedData, LSigBlob: TBytes;
+  LFlags: UInt32;
+  LMsg: TBytes;
+begin
+  if not AAgent.ListIdentities(LIds) then
+    raise ESSHError.Create(sekAuth, 'ssh session: agent list failed');
+  if Length(LIds) = 0 then
+    raise ESSHError.Create(sekAuth, 'ssh session: agent has no identities');
+  for I := 0 to High(LIds) do
+  begin
+    LAlgName := LIds[I].AlgName;
+    if LAlgName = '' then Continue;
+    // probe
+    FTransport.SendPacket(SshBuildAuthPubKeyProbe(FActiveUser, LAlgName, LIds[I].Blob));
+    LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE, SSH_MSG_USERAUTH_PK_OK]);
+    if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
+    begin
+      FAuthenticated := True;
+      Exit;
+    end;
+    if LMsg[0] = SSH_MSG_USERAUTH_FAILURE then Continue;
+    // PK_OK -> sign
+    LFlags := SshAgentKeyBlobToSignFlags(LIds[I].Blob);
+    LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LIds[I].Blob);
+    if not AAgent.Sign(LIds[I].Blob, LSignedData, LFlags, LSigBlob) then Continue;
+    FTransport.SendPacket(SshBuildAuthPubKeySigned(FActiveUser, LAlgName, LIds[I].Blob, LSigBlob));
+    LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE]);
+    if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
+    begin
+      FAuthenticated := True;
+      Exit;
+    end;
+    // else try next identity
+  end;
+  raise ESSHError.Create(sekAuth, 'ssh session: agent publickey rejected');
+end;
+
 function TSshSession.Exec(const ACommand: string): TSshExecResult;
 begin
   EnsureAuthenticated;
@@ -563,6 +649,12 @@ begin
   Result := Self;
 end;
 
+function TSshClientBuilder.AgentSocketPath(const AValue: string): ISshClientBuilder;
+begin
+  FOptions.AgentSocketPath := AValue;
+  Result := Self;
+end;
+
 function TSshClientBuilder.KnownHostsFile(const AValue: string): ISshClientBuilder;
 begin
   FOptions.KnownHostsFile := AValue;
@@ -594,10 +686,32 @@ end;
 
 procedure RunAuthentication(const ASession: TSshSession;
   const AOptions: TSshConnectOptions);
+var
+  LAgentOk: Boolean;
 begin
   if AOptions.User = '' then
     raise ESSHError.Create(sekProtocol, 'ssh connect: user is required');
   ASession.FActiveUser := AOptions.User;
+  if AOptions.AgentSocketPath <> '' then
+  begin
+    LAgentOk := False;
+    try
+      ASession.AuthenticateWithAgent(AOptions.AgentSocketPath);
+      LAgentOk := True;
+    except
+      on E: ESSHError do
+      begin
+        if E.Kind in [sekAuth, sekIO] then
+        begin
+          if (AOptions.PrivateKeyData = '') and (AOptions.Password = '') then
+            raise;
+        end
+        else
+          raise;
+      end;
+    end;
+    if LAgentOk then Exit;
+  end;
   if AOptions.PrivateKeyData <> '' then
     ASession.AuthenticateWithPrivateKeyData(AOptions.PrivateKeyData,
       AOptions.PrivateKeyPassphrase)
@@ -646,6 +760,12 @@ begin
     LSession.Free;
     raise;
   end;
+end;
+
+function SshCreateSession(const AIO: IReadWriteCloser;
+  const AOptions: TSshConnectOptions): ISshSession;
+begin
+  Result := TSshSession.CreateInternal(AIO, AOptions);
 end;
 
 end.

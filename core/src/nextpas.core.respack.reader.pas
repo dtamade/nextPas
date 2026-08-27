@@ -30,6 +30,7 @@ type
     function CompareStoredToBuf(const AIdx: SizeUInt;
       const ABuf: PByte; const ALen: SizeUInt): Integer;
     function CompareStoredToStored(const AA, AB: SizeUInt): Integer;
+    function CompareCachedEntries(const AA, AB: TResPackEntry): Integer;
     function Search(const APath: string; out AIdx: SizeUInt): Boolean;
 
   public
@@ -156,6 +157,29 @@ begin
   Result := 0;
 end;
 
+function TResPack.CompareCachedEntries(const AA, AB: TResPackEntry): Integer;
+var
+  PA, PB: PByte;
+  LA, LB, N, I: SizeUInt;
+begin
+  PA := FData + SizeUInt(FStrTabBase) + AA.PathOffset;
+  PB := FData + SizeUInt(FStrTabBase) + AB.PathOffset;
+  LA := AA.PathLen;
+  LB := AB.PathLen;
+  N := LA;
+  if LB < N then N := LB;
+  I := 0;
+  while I < N do
+  begin
+    if PA[I] < PB[I] then Exit(-1);
+    if PA[I] > PB[I] then Exit(1);
+    Inc(I);
+  end;
+  if LA < LB then Exit(-1);
+  if LA > LB then Exit(1);
+  Result := 0;
+end;
+
 class function TResPack.Open(const AData: PByte; const ASize: SizeUInt): TResPack;
 var
   I: SizeUInt;
@@ -163,6 +187,7 @@ var
   MinData, DigEnd: UInt64;
   HdrFlags: UInt32;
   IdxBase: PByte;
+  Cached: array of TResPackEntry;
 begin
   Result.Close;
 
@@ -209,9 +234,14 @@ begin
   IdxBase := AData + SizeUInt(Result.FHdr.IndexOffset);
 
   { 步骤 5：entry 结构、codec、data 对齐与范围；同时推导 strtab 上界
-    （Count 为 SizeUInt，0-1 回绕 ⇒ 每个循环都必须以 Count>0 为前提） }
+    （Count 为 SizeUInt，0-1 回绕 ⇒ 每个循环都必须以 Count>0 为前提）
+    单次 DecodeWire + 缓存：第二遍校验复用缓存零 Decode，10k 规模省 50% 解析 }
   MinData := Result.FHdr.BlobTotal;
   if Result.Count > 0 then
+  begin
+    // 缓存条目避免第二遍二次 DecodeWire
+    // Count 受 BlobTotal/40 限制，10k 级分配 < 400KB，可控
+    SetLength(Cached, Result.Count);
     for I := 0 to Result.Count - 1 do
     begin
       Result.DecodeWire(I, E);
@@ -231,24 +261,27 @@ begin
         raise EResPackCorrupted.CreateStep(5, 'data range beyond blobTotal');
       if E.DataOffset < MinData then
         MinData := E.DataOffset;
+      Cached[I] := E;
     end;
+  end;
 
-  { 步骤 6+7：路径范围 + 有序性 + 规范语法 — 合并以省一次 DecodeWire/Compare
+  { 步骤 6+7：路径范围 + 有序性 + 规范语法 — 复用缓存零 Decode
     （MinData 已在步骤 5 推导完成；步骤 6 优先于 7，错误码保持与分步一致） }
   if Result.Count > 0 then
     for I := 0 to Result.Count - 1 do
     begin
-      Result.DecodeWire(I, E);
+      E := Cached[I];
       if UInt64(E.PathOffset) + UInt64(E.PathLen)
         > MinData - Result.FStrTabBase then
         raise EResPackCorrupted.CreateStep(6, 'path beyond string table bound');
       if I > 0 then
-        if Result.CompareStoredToStored(I - 1, I) >= 0 then
+        if Result.CompareCachedEntries(Cached[I - 1], Cached[I]) >= 0 then
           raise EResPackCorrupted.CreateStep(7,
             'index not strictly sorted or duplicate path');
       if not ResPackValidPath(Result.PathOf(E), True) then
         raise EResPackCorrupted.CreateStep(7, 'non-canonical path stored');
     end;
+  SetLength(Cached, 0);
 
   { 步骤 8：digest 区范围 }
   if (Result.FHdr.Flags and RESPACK_FLAG_DIGESTED) <> 0 then

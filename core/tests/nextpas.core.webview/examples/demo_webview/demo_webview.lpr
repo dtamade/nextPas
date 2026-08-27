@@ -84,11 +84,16 @@ const
     '@media(max-width:640px){body{padding:18px 16px 80px}.wrap{max-width:100%}h1{font-size:22px}}'#10 +
     '@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}'#10 +
     '.primary:focus-visible,.icon-btn:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}'#10 +
+    '.card.skeleton{position:relative;overflow:hidden;background:linear-gradient(90deg,var(--panel) 25%,var(--panel2) 37%,var(--panel) 63%);background-size:400% 100%;animation:skeleton 1.2s ease-in-out infinite}'#10 +
+    '@keyframes skeleton{0%{background-position:100% 0}100%{background-position:-100% 0}}'#10 +
+    '.card.error{border-color:rgba(255,80,80,.35);background:rgba(255,80,80,.06)}[data-theme="light"] .card.error{background:rgba(255,80,80,.07)}'#10 +
+    '.card.error h2{color:#ff6b6b}'#10 +
     '</style></head><body>'#10 +
     '<div class="wrap">'#10 +
     '<div class="top"><div><h1>nextPas WebView</h1><div class="sub">Pascal native &#8646; WebKitGTK &middot; full IPC round-trips, zero HTTP server</div></div>'#10 +
     '<div style="display:flex;gap:10px;align-items:center"><span class="pill"><i></i><b id="ver">…</b>&nbsp;bridge</span><button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme" aria-pressed="false">◐</button></div></div>'#10 +
-    '<div class="grid">'#10 +
+    '<div class="grid" id="grid">'#10 +
+    '<div class="card error" id="errCard" style="display:none" role="alert" aria-live="assertive"><h2>Load / Invoke error</h2><div class="muted" id="errMsg" style="margin-top:8px">—</div><div style="margin-top:12px"><button class="primary" id="errRetry">Dismiss</button></div></div>'#10 +
     '<div class="card"><h2>Sync invoke &middot; sum</h2>'#10 +
     '<div class="row"><input id="aIn" value="19" aria-label="a" inputmode="numeric"><span style="color:var(--dim)">+</span>' +
     '<input id="bIn" value="23" aria-label="b" inputmode="numeric"><button class="primary" id="sumBtn" aria-label="Compute sum">Compute</button>' +
@@ -120,10 +125,14 @@ const
     'function report(step,body){__npw.invoke("demo.report",' +
     '{step:step,body:(body===undefined?null:body)})}'#10 +
     '(function(){var k="npw-theme";function apply(t){document.documentElement.setAttribute("data-theme",t);var l=$("themeLabel");if(l)l.textContent=t;var bb=$("themeBtn");if(bb)bb.setAttribute("aria-pressed",t==="light"?"true":"false");try{localStorage.setItem(k,t);}catch(e){}}var s=null;try{s=localStorage.getItem(k);}catch(e){}if(s==="light"||s==="dark")apply(s);else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)apply("light");else apply("dark");var b=$("themeBtn");if(b)b.addEventListener("click",function(){var cur=document.documentElement.getAttribute("data-theme");apply(cur==="dark"?"light":"dark")});try{var mq=window.matchMedia("(prefers-color-scheme: light)");if(mq&&mq.addEventListener)mq.addEventListener("change",function(e){var cur=null;try{cur=localStorage.getItem(k);}catch(ex){}if(cur!=="light"&&cur!=="dark")apply(e.matches?"light":"dark")});}catch(e){}var a=$("aIn"),bb2=$("bIn");function onEnter(e){if(e.key==="Enter")$("sumBtn").click();}if(a)a.addEventListener("keydown",onEnter);if(bb2)bb2.addEventListener("keydown",onEnter);})();'#10 +
+    'var grid=$("grid");if(grid)grid.classList.add("skeleton");'#10 +
+    'function showErr(m){var c=$("errCard"),e=$("errMsg");if(c&&e){e.textContent=m;c.style.display="";}}'#10 +
+    'var er=$("errRetry");if(er)er.addEventListener("click",function(){var c=$("errCard");if(c)c.style.display="none";});'#10 +
     '__npw.ready.then(function(){' +
     '$("ver").textContent="v"+__npw.version;' +
     'var st=$("state");st.textContent="ready";st.style.color="#43e5c8";' +
-    'logLine("bridge ready · protocol v"+__npw.version)})'#10 +
+    'if(grid)grid.classList.remove("skeleton");' +
+    'logLine("bridge ready · protocol v"+__npw.version)}).catch(function(e){showErr("bridge init: "+e);if(grid)grid.classList.remove("skeleton");})'#10 +
     '__npw.listen("demo.event",function(p){' +
     'logLine("event ← "+JSON.stringify(p));' +
     '$("pushOut").textContent=(p&&p.note)?p.note:JSON.stringify(p);' +
@@ -134,27 +143,27 @@ const
     '.then(function(r){$("sumOut").textContent=JSON.stringify(r);lastOp(t0);' +
     '$("sumMs").textContent="round-trip "+Math.round(performance.now()-t0)+" ms";' +
     'logLine("invoke demo.sum → "+JSON.stringify(r))},' +
-    'function(e){$("sumOut").textContent="ERR";logLine("demo.sum failed: "+JSON.stringify(e))})'#10 +
+    'function(e){$("sumOut").textContent="ERR";logLine("demo.sum failed: "+JSON.stringify(e));showErr("demo.sum: "+JSON.stringify(e))})'#10 +
     '.then(function(){$("sumBtn").disabled=false})})'#10 +
     '$("cntBtn").addEventListener("click",function(){' +
     'var t0=performance.now();' +
     '__npw.invoke("demo.counter",{})' +
     '.then(function(r){$("cntOut").textContent=r.count;lastOp(t0);' +
     'logLine("invoke demo.counter → "+r.count)},' +
-    'function(e){logLine("demo.counter failed: "+JSON.stringify(e))})})'#10 +
+    'function(e){logLine("demo.counter failed: "+JSON.stringify(e));showErr("counter: "+JSON.stringify(e))})})'#10 +
     '$("tickBtn").addEventListener("click",function(){' +
     'var t0=performance.now();$("tickBtn").disabled=true;$("tickOut").textContent="…";'#10 +
     '__npw.invoke("demo.tick",{}).then(function(r){' +
     '$("tickOut").textContent=r.deferred?"ok":"??";lastOp(t0);' +
     'logLine("async tick settled → "+JSON.stringify(r)+" (+"+' +
     'Math.round(performance.now()-t0)+" ms)")},' +
-    'function(e){$("tickOut").textContent="ERR";logLine("demo.tick failed: "+JSON.stringify(e))})'#10 +
+    'function(e){$("tickOut").textContent="ERR";logLine("demo.tick failed: "+JSON.stringify(e));showErr("tick: "+JSON.stringify(e))})'#10 +
     '.then(function(){$("tickBtn").disabled=false})})'#10 +
     '$("pushBtn").addEventListener("click",function(){' +
     'var t0=performance.now();' +
     '__npw.invoke("demo.push",{}).then(function(r){lastOp(t0);' +
     'logLine("invoke demo.push → "+JSON.stringify(r)+", awaiting event")},' +
-    'function(e){logLine("demo.push failed: "+JSON.stringify(e))})})'#10 +
+    'function(e){logLine("demo.push failed: "+JSON.stringify(e));showErr("push: "+JSON.stringify(e))})})'#10 +
     'function __npwSelf(kind){var p=null;'#10 +
     'if(kind==="sum")p=__npw.invoke("demo.sum",{a:19,b:23});' +
     'else if(kind==="counter")p=__npw.invoke("demo.counter",{});' +

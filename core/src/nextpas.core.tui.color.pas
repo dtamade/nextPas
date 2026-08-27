@@ -52,6 +52,11 @@ function Rgb(const AR, AG, AB: Byte): TColor; inline;
 function Idx(const AIndex: Byte): TColor; inline;
 function HexColor(const AHex: AnsiString): TColor;
 
+{ 统一 Hex 编解码：单一真源，palette/docstore 均委托此处 }
+function ColorToHex(const AColor: TColor): AnsiString;
+function TryParseHexColor(const AHex: AnsiString; out AColor: TColor): Boolean;
+procedure ColorToRgb(const AColor: TColor; out AR, AG, AB: Byte);
+
 const
   { 命名色映射到 indexed 0..15 —— 与 ratatui 完全一致 }
   TUI_BLACK:         TColor = (Kind: ckIndexed; Index: 0);
@@ -70,6 +75,9 @@ const
   TUI_LIGHT_MAGENTA: TColor = (Kind: ckIndexed; Index: 13);
   TUI_LIGHT_CYAN:    TColor = (Kind: ckIndexed; Index: 14);
   TUI_WHITE:         TColor = (Kind: ckIndexed; Index: 15);
+
+  HEXDIGITS: array[0..15] of Char = '0123456789abcdef';
+  COLOR_RGB: array[0..15] of LongWord = ($000000,$800000,$008000,$808000,$000080,$800080,$008080,$C0C0C0,$808080,$FF0000,$00FF00,$FFFF00,$0000FF,$FF00FF,$00FFFF,$FFFFFF);
 
 implementation
 
@@ -141,26 +149,115 @@ begin
   Result := IndexedColor(AIndex);
 end;
 
+function HexValStrict(C: AnsiChar): Integer; inline;
+begin
+  case C of
+    '0'..'9': Result := Ord(C) - Ord('0');
+    'a'..'f': Result := Ord(C) - Ord('a') + 10;
+    'A'..'F': Result := Ord(C) - Ord('A') + 10;
+  else
+    Result := -1;
+  end;
+end;
+
+function ColorToHex(const AColor: TColor): AnsiString;
+var
+  V: LongWord;
+begin
+  case AColor.Kind of
+    ckRgb:
+      Result := '#' + HEXDIGITS[(AColor.R shr 4) and $F] + HEXDIGITS[AColor.R and $F]
+                    + HEXDIGITS[(AColor.G shr 4) and $F] + HEXDIGITS[AColor.G and $F]
+                    + HEXDIGITS[(AColor.B shr 4) and $F] + HEXDIGITS[AColor.B and $F];
+    ckIndexed:
+      begin
+        V := COLOR_RGB[AColor.Index and 15];
+        Result := '#' + HEXDIGITS[(V shr 20) and $F] + HEXDIGITS[(V shr 16) and $F]
+                      + HEXDIGITS[(V shr 12) and $F] + HEXDIGITS[(V shr 8) and $F]
+                      + HEXDIGITS[(V shr 4) and $F] + HEXDIGITS[V and $F];
+      end;
+  else
+    Result := '';
+  end;
+end;
+
+function TryParseHexColor(const AHex: AnsiString; out AColor: TColor): Boolean;
+var
+  S: AnsiString;
+  L, R, I: Integer;
+  RV, GV, BV: Integer;
+begin
+  Result := False;
+  { 手动 Trim：避免依赖 SysUtils，符合 nextpas RTL 约束 }
+  L := 1; R := Length(AHex);
+  while (L <= R) and (AHex[L] in [#9,#10,#13,' ']) do Inc(L);
+  while (R >= L) and (AHex[R] in [#9,#10,#13,' ']) do Dec(R);
+  if L > R then Exit;
+  S := Copy(AHex, L, R - L + 1);
+  { #rgb short form }
+  if (Length(S) = 4) and (S[1] = '#') then
+  begin
+    RV := HexValStrict(S[2]); GV := HexValStrict(S[3]); BV := HexValStrict(S[4]);
+    if (RV < 0) or (GV < 0) or (BV < 0) then Exit;
+    AColor := RgbColor(RV * 17, GV * 17, BV * 17);
+    Exit(True);
+  end;
+  { #rrggbb }
+  if (Length(S) = 7) and (S[1] = '#') then
+  begin
+    for I := 2 to 7 do if HexValStrict(S[I]) < 0 then Exit;
+    RV := HexValStrict(S[2]) * 16 + HexValStrict(S[3]);
+    GV := HexValStrict(S[4]) * 16 + HexValStrict(S[5]);
+    BV := HexValStrict(S[6]) * 16 + HexValStrict(S[7]);
+    AColor := RgbColor(RV, GV, BV);
+    Exit(True);
+  end;
+  { rrggbb without # }
+  if Length(S) = 6 then
+  begin
+    for I := 1 to 6 do if HexValStrict(S[I]) < 0 then Exit;
+    RV := HexValStrict(S[1]) * 16 + HexValStrict(S[2]);
+    GV := HexValStrict(S[3]) * 16 + HexValStrict(S[4]);
+    BV := HexValStrict(S[5]) * 16 + HexValStrict(S[6]);
+    AColor := RgbColor(RV, GV, BV);
+    Exit(True);
+  end;
+end;
+
+procedure ColorToRgb(const AColor: TColor; out AR, AG, AB: Byte);
+var
+  V: LongWord;
+begin
+  case AColor.Kind of
+    ckRgb: begin AR := AColor.R; AG := AColor.G; AB := AColor.B; end;
+    ckIndexed:
+      begin
+        V := COLOR_RGB[AColor.Index and 15];
+        AR := Byte((V shr 16) and $FF);
+        AG := Byte((V shr 8) and $FF);
+        AB := Byte(V and $FF);
+      end;
+  else begin AR := 0; AG := 0; AB := 0; end;
+  end;
+end;
+
 function HexColor(const AHex: AnsiString): TColor;
 var
-  LStart: Integer;
-  LR, LG, LB: Byte;
-  function HexVal(AC: AnsiChar): Byte;
-  begin
-    case AC of
-      '0'..'9': Result := Byte(Ord(AC) - Ord('0'));
-      'a'..'f': Result := Byte(Ord(AC) - Ord('a') + 10);
-      'A'..'F': Result := Byte(Ord(AC) - Ord('A') + 10);
-    else Result := 0;
-    end;
-  end;
+  C: TColor;
 begin
+  if TryParseHexColor(AHex, C) then Exit(C);
   if Length(AHex) = 0 then Exit(ResetColor);
-  if AHex[1] = '#' then LStart := 2 else LStart := 1;
-  if Length(AHex) - LStart + 1 < 6 then Exit(ResetColor);
-  LR := HexVal(AHex[LStart]) * 16 + HexVal(AHex[LStart + 1]);
-  LG := HexVal(AHex[LStart + 2]) * 16 + HexVal(AHex[LStart + 3]);
-  LB := HexVal(AHex[LStart + 4]) * 16 + HexVal(AHex[LStart + 5]);
-  Result := RgbColor(LR, LG, LB);
+  if AHex[1] = '#' then
+  begin
+    if Length(AHex) < 7 then Exit(ResetColor);
+    if TryParseHexColor(Copy(AHex, 1, 7), C) then Exit(C);
+  end
+  else
+  begin
+    if Length(AHex) < 6 then Exit(ResetColor);
+    if TryParseHexColor(Copy(AHex, 1, 6), C) then Exit(C);
+  end;
+  Result := ResetColor;
 end;
+
 end.
