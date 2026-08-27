@@ -1,51 +1,51 @@
 # nextpas.core.audio
 
-PCM WAV container codec: RIFF/WAVE parse and write for 8/16-bit mono/stereo.
+L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖容器编解码 / DSP / 设备 / 图 / 时间线五域。
 
-## API
+> 设计权威：[`DESIGN.md`](./DESIGN.md)（Draft v3）—— 分层、双平面线程模型、域级 intf 冻结、纯 Pascal 可替换性、PR Plan 见该文档。
+
+## 模块定位
+
+- **base**：统一货币 `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags` 等值类型，`ChannelMask` 为真值源
+- **intf**：跨域共享面 `IAudioSource/IRealtimeAudioSource/IAudioResampler/IAudioConverter/IAudioProcessor`
+- **codec**：编解码域 `IAudioDecoder/IAudioEncoder`（Probe ≤4KB、DecodeWhole/Streaming、Tags）
+- **pcm**：纯函数 sample 格式互转（U8/S16/S24/S32↔F32，TPDF dither）、交织/平面、Clamp
+- **errors**：`EAudioError(EIOError)` 异常树
+- **门面**：`nextpas.core.audio` 仅 type 别名 + inline 转发 + 空注册表占位，零逻辑
+
+PR1 仅交付上述 base 层；`device/graph/timeline` 域 intf 分别在 PR6/PR7/PR9 落位。
+
+## 现有兼容层
+
+`nextpas.core.audio.pcm_wav.pas` 为旧 WAV 函数的兼容壳（PR2 才重构为 `codec.wav`，当前保持八拒四正十二用例不变）。
+
+## 入口速览（PR1 后）
 
 ```pascal
-uses nextpas.core.audio.pcm_wav;
+uses
+  nextpas.core.audio,        // 门面：别名 + inline 转发
+  nextpas.core.audio.base,   // 值类型
+  nextpas.core.audio.intf,   // 共享接口
+  nextpas.core.audio.codec.intf; // Codec 域
 
 var
-  Data: TPcmWavData;
+  LFmt: TAudioFormat;
+  LBuf: TAudioBuffer;
 begin
-  if TryLoadPcmWav('/path/to/sound.wav', Data) then
-    PlayPcm(Data.SampleRate, Data.Channels, Data.Bytes);
-
-  { stream-based parse (memory, network, any IStream) }
-  if TryParsePcmWav(LStream, Data) then ...
-
-  { write from 16-bit samples }
-  WritePcmWav('/tmp/out.wav', 44100, 1, Samples);
-  WritePcmWavStream(LStream, 44100, 1, Samples);
-
-  { write N ms of silence }
-  WriteSilencePcmWav('/tmp/silence.wav', 44100, 1, 500);
+  LFmt := AudioFormatCreate(44100, 2, sfS16);
+  Check(LFmt.IsValid);
+  // BlockAlign = 4, ByteRate = 176400, FramesForMs(1000) = 44100
 end;
 ```
 
-## Entry points
+## 测试
 
-| Function | Purpose |
-| --- | --- |
-| `TryLoadPcmWav(AFilePath, AData)` | Open + parse a WAV file; `False` on any failure, `AData` cleared. |
-| `TryParsePcmWav(AStream, AData)` | Parse a RIFF/WAVE stream from the current position. |
-| `WritePcmWav(AFilePath, ARate, AChannels, ASamples)` | Create/replace a 16-bit PCM WAV file. |
-| `WritePcmWavStream(AStream, ARate, AChannels, ASamples)` | Append header + samples to any `IStream`. |
-| `WriteSilencePcmWav(AFilePath, ARate, AChannels, ADurationMs)` | Create/replace a zero-sample WAV file. |
-| `WriteSilencePcmWavStream(AStream, ARate, AChannels, ADurationMs)` | Append a zero-sample WAV to a stream. |
+```bash
+make -C core/tests/nextpas.core.audio/test_base clean test   # PR1 基座：格式算术/掩码/时钟
+make -C core/tests/nextpas.core.audio/test_pcm_wav clean test # 十二用例（八拒四正）回归
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # source-contract gate
+```
 
-## Format contract
+## PR Plan
 
-- Supported: PCM (`format = 1`), 8 or 16 bits, mono or stereo.
-- Parsing is defensive: every chunk read is bounded by the declared RIFF size;
-  chunk padding bytes are skipped; `data` size must be a multiple of block
-  align; payload is capped at 256 MiB; any mismatch rejects the container and
-  clears the output record.
-- Writer emits the standard 44-byte header layout (RIFF/WAVE, `fmt `, `data`).
-
-## Constants
-
-`DefaultPcmWavSampleRate` (44100), `DefaultPcmWavChannels` (1),
-`DefaultPcmWavSilenceMs` (50), `PcmWavBitsPerSample` (16).
+见 `DESIGN.md §10`：PR1 base-foundation → PR2 wav-rework → PR3 aiff/meta/registry → PR4 flac-pure → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 game → PR9 timeline → PR10 editor → PR11 FFI codecs。
