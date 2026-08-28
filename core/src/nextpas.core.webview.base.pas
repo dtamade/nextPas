@@ -264,6 +264,14 @@ begin
     raise EWebviewInvalidState.Create('webview event name must not be empty');
 end;
 
+function WebviewGrowCapacity(ACurrent: Integer): Integer; inline;
+begin
+  if ACurrent = 0 then
+    Result := 4
+  else
+    Result := ACurrent * 2;
+end;
+
 procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
 var
   LIdx: Integer;
