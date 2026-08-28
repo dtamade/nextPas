@@ -1367,10 +1367,20 @@ begin
       on E: Exception do
       begin
         if E is EWebviewInvokeError then
+        begin
           RecordOutcome(ACmd, True, '',
-            MapInvokeCode(EWebviewInvokeError(E).Code), E.Message)
+            MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+          if AFrameId >= 0 then
+            EnqueueReceipt(AFrameId, True, '',
+              MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+        end
         else
+        begin
           RecordOutcome(ACmd, True, '', NPW_CODE_HANDLER_ERROR, E.Message);
+          if AFrameId >= 0 then
+            EnqueueReceipt(AFrameId, True, '', NPW_CODE_HANDLER_ERROR,
+              E.Message);
+        end;
       end;
     end;
   end

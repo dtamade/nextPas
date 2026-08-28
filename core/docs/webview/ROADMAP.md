@@ -4,7 +4,7 @@
 **层级**：L3 家族（依赖 L0-L2；`platform.dl` + `json` owner）  
 **Owner**：core-webview lane  
 **最后更新**：2026-08-28  
-**当前版本**：**1.44**（S50 终局冻结）
+**当前版本**：**1.45**（S51 终局冻结）
 **当前状态**：**Production Ready · focused-runtime · 冻结**（`core-module-registry` 已 `focused-runtime`，13+10+6+3 门全绿，hygiene/source-contracts 双 pass，bench 基线 S27）  
 **对标基准**：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）  
 **稳定契约**：[CONTRACT.md](CONTRACT.md)（权威）· [README.md](README.md)（消费面）· [BRIDGE_PROTOCOL.md](BRIDGE_PROTOCOL.md)（v1 帧）· [BACKENDS.md](BACKENDS.md)（能力诚实表）
@@ -89,7 +89,7 @@
 **验证**：对应平台诚实表 + 单测。  
 **退出**：`IWebviewWindow` 13→N 渐进，保持 `CONTRACT` 版本递增。
 
-### 4.6 S50 — 性能与文档终局
+### 4.6 S51 — 性能与文档终局
 
 **触发**：S45-S49 任一落地后。  
 **范围**：`bench_vfs`/`bench_bridge` 过滤均值重测（`nextpas.core.bench`）、`README` 徽标刷新、`PARITY` 再对标。  
@@ -132,7 +132,7 @@
 - **M1（S45）**：`window` 独立 `focused-runtime`，`webview` 双窗 live 回归绿。
 - **M2（S46）**：Darwin 真 `WKWebView` 可交互，`DefaultWebviewKind` 在 Darwin 优先 `wk`。
 - **M3（S47-S48）**：`IterateOnce` + `allowlist` 转正，`async` 集成冒烟绿。
-- **M4（S50）**：`CONTRACT 1.50` 冻结，bench 无回归，`README` 对齐。
+- **M4（S51）**：`CONTRACT 1.50` 冻结，bench 无回归，`README` 对齐。
 
 每个里程碑一个可回滚 commit，`worktree clean` + `focused gate` + `hygiene` + `git diff --check` 后经 `landing/*` 候选分支 `cherry-pick` 入 `main`（不 raw merge lane）。
 
