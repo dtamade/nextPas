@@ -163,6 +163,27 @@ begin
   W:=NewZipWriter; W.AddEntry('a', nil); W.Finish; LOk:=False; try W.Reserve(10); except on E: EInvalidOperationError do LOk:=True; end; Check(LOk,'reserve after finish raises');
 end;
 
+procedure TestZeroAllocConsistency;
+var LBuf: array[0..63] of Byte; LLen: SizeUInt; LHeap: TBytes; LI, LJ: Integer;
+begin
+  for LI:=0 to 1 do
+  begin
+    LHeap:=BuildLocalExtra(123,456, LI=1, True, 2, C_ZIP_METHOD_DEFLATE);
+    LLen:=EncodeLocalExtra(123,456, LI=1, True, 2, C_ZIP_METHOD_DEFLATE, @LBuf[0]);
+    Check(LLen=SizeUInt(Length(LHeap)),'encode local len vs build');
+    for LJ:=0 to Integer(LLen)-1 do Check(LHeap[LJ]=LBuf[LJ],'encode local byte '+IntToStr(LJ));
+    LHeap:=BuildCentralExtra(10,20,30, True, True, 1, C_ZIP_METHOD_STORE);
+    LLen:=EncodeCentralExtra(10,20,30, True, True, 1, C_ZIP_METHOD_STORE, @LBuf[0]);
+    Check(LLen=SizeUInt(Length(LHeap)),'encode central len vs build');
+    for LJ:=0 to Integer(LLen)-1 do Check(LHeap[LJ]=LBuf[LJ],'encode central byte '+IntToStr(LJ));
+  end;
+  // empty case
+  LHeap:=BuildLocalExtra(0,0, False, False, 0, 0);
+  Check(Length(LHeap)=0,'build local empty');
+  LLen:=EncodeLocalExtra(0,0, False, False, 0, 0, @LBuf[0]);
+  Check(LLen=0,'encode local empty');
+end;
+
 begin
   T:=TTestSuite.Create('nextpas.core.zip.extra');
   T.Test('Local roundtrip', @TestLocalRoundtrip);
@@ -170,5 +191,6 @@ begin
   T.Test('Order and widths', @TestExtraOrderAndWidths);
   T.Test('Malformed fail-closed', @TestMalformed);
   T.Test('Reserve preallocation', @TestReserve);
+  T.Test('Zero-alloc encode vs Build', @TestZeroAllocConsistency);
   if not T.Run then Halt(1);
 end.

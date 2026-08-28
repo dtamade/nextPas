@@ -9,7 +9,7 @@ ZIP archive container: read, write, filesystem pack/extract.
 | `nextpas.core.zip` | Facade: re-exports the full public surface |
 | `nextpas.core.zip.base` | Method enum, entry metadata record, signature/limit constants, entry-name safety predicate, unix/DOS time conversion |
 | `nextpas.core.zip.common` | Shared kernel：`GuardEntryReadable` / `DecompressEntryVerified` / LE* / `IsKnownZipSig` — reader 与 sequential 单点复用 |
-| `nextpas.core.zip.extra` | Shared extra codec：`Decode*` / `BuildLocalExtra` / `BuildCentralExtra` — Zip64/AES extra 链编解码单点，消除 writer/reader 重复 |
+| `nextpas.core.zip.extra` | Shared extra codec：`Decode*` / `Build*` / `Encode*`（栈上零分配 `PByte` 直写，无堆分配）— Zip64/AES extra 链编解码单点，消除 writer/reader 重复 |
 | `nextpas.core.zip.writer` | `IZipWriter` implementation |
 | `nextpas.core.zip.reader` | `IZipReader` implementation |
 | `nextpas.core.zip.sequential` | `ISequentialZipReader` — pure sequential (pipe/HTTP body) reader |
@@ -265,12 +265,7 @@ allocate beyond the configured output cap.
 
 ## Performance
 
-`core/benchmarks/nextpas.core.zip/bench_zip` measures pack/parse/extract over
-2000 small deflate entries plus a 1 MiB single-entry roundtrip, with a Go
-`archive/zip` comparison under the same workload (including CRC verification)
-in `compare_go/`. Reader parsing uses the boundary-checked
-`nextpas.core.bytes.cursor` primitive with single-allocation entry arrays;
-CRC32 is slice-by-8 in `nextpas.core.checksum.crc32`.
+`core/benchmarks/nextpas.core.zip/bench_zip` 以 `nextpas.core.bench` `TBenchSuite` 规矩承载（`SetMinDuration 200ms`/`MinSamples 5`/`MaxIterations 20`，`ACtx.SetBytes` 换算吞吐，`PrintToConsole`+`ToBenchstat`+`SaveToJSON` 归档），覆盖 `200×512B` 小容器与 `1MiB` 吞吐两面（含 `pack-reserve`/`stream-out`/`descriptor`/`staged`/`seq-*`/`aes-*` 13 项），`2000×512B` 全量 parity 预检 + Go `archive/zip` 对比在 `compare_go/`。Reader 解析用 `nextpas.core.bytes.cursor` 边界检查 + 单次分配条目数组；CRC32 为 `nextpas.core.checksum.crc32` slice-by-8；`nextpas.core.zip.extra` 逐条目经 64 字节栈缓冲 `Encode*` 零分配（`pack 200×512B` `810→805 allocs`），`Reserve` 预分配消除 2k+ 几何重分配。
 
 Sequential read reuses the same `DecompressEntryVerified` kernel via
 `nextpas.core.zip.common`（reader/sequential 单点复用，fail-closed 语义一致），

@@ -738,8 +738,9 @@ end;
 procedure TZipWriter.AppendLocalEntry(const AMeta: TZipEntryMeta;
   const APayload: TBytes; ADescriptorOpen: Boolean);
 var
-  LVersion, LWireMethod, LExtraLen, LFlags, LZ64Sizes: Integer;
-  LExtra: TBytes;
+  LVersion, LWireMethod, LFlags, LZ64Sizes: Integer;
+  LExtraBuf: array[0..63] of Byte;
+  LExtraLen: SizeUInt;
 begin
   { 描述符开形态尺寸未知：版本抬到 45 且强制 zip64 占位 extra——流式无法
     回头改写已落盘的头部，只有预先声明 64 位宽度才能容纳事后才知道的
@@ -764,9 +765,8 @@ begin
   if ADescriptorOpen then
     LFlags := LFlags or C_ZIP_FLAG_DESCRIPTOR;
 
-  LExtra := BuildLocalExtra(AMeta.FUSize, AMeta.FCSize, ADescriptorOpen,
-    AMeta.FNeedsZ64Sizes, AMeta.FAesStrength, AMeta.FMethod);
-  LExtraLen := Length(LExtra);
+  LExtraLen := EncodeLocalExtra(AMeta.FUSize, AMeta.FCSize, ADescriptorOpen,
+    AMeta.FNeedsZ64Sizes, AMeta.FAesStrength, AMeta.FMethod, @LExtraBuf[0]);
   LZ64Sizes := Ord(ADescriptorOpen or AMeta.FNeedsZ64Sizes);
 
   EmitU32(C_ZIP_LOCAL_SIG);
@@ -794,7 +794,7 @@ begin
   if Length(AMeta.FName) > 0 then
     EmitRaw(PByte(Pointer(AMeta.FName))^, SizeUInt(Length(AMeta.FName)));
   if LExtraLen > 0 then
-    EmitRaw(LExtra[0], SizeUInt(LExtraLen));
+    EmitRaw(LExtraBuf[0], LExtraLen);
   if (Length(APayload) > 0) and (not ADescriptorOpen) then
     EmitRaw(PByte(APayload)^, SizeUInt(Length(APayload)));
 end;
@@ -1038,9 +1038,10 @@ var
   LCDOffset, LCDSize, LCDEnd, LZ64EocdPos: UInt64;
   LCount: Int64;  LNeedsZ64Offset, LAnyZ64, LNeedZ64Eocd: Boolean;
   LVersionMadeBy, LVersionNeeded: Word;
-  LExtraLen, LCFlags: Integer;
+  LCFlags: Integer;
   LCountField: LongWord;
-  LExtra: TBytes;
+  LExtraBuf: array[0..63] of Byte;
+  LExtraLen: SizeUInt;
 begin
   LCDOffset := FTell;
   for LI := 0 to FCount - 1 do
@@ -1087,9 +1088,8 @@ begin
       EmitU32(LongWord(LE.FCSize));
       EmitU32(LongWord(LE.FUSize));
     end;
-    LExtra := BuildCentralExtra(LE.FUSize, LE.FCSize, LE.FLocalOffset,
-      LE.FNeedsZ64Sizes, LNeedsZ64Offset, LE.FAesStrength, LE.FMethod);
-    LExtraLen := Length(LExtra);
+    LExtraLen := EncodeCentralExtra(LE.FUSize, LE.FCSize, LE.FLocalOffset,
+      LE.FNeedsZ64Sizes, LNeedsZ64Offset, LE.FAesStrength, LE.FMethod, @LExtraBuf[0]);
     EmitU16(Word(Length(LE.FName)));
     EmitU16(Word(LExtraLen));
     EmitU16(0);  { comment len }
@@ -1104,7 +1104,7 @@ begin
     if Length(LE.FName) > 0 then
       EmitRaw(PByte(Pointer(LE.FName))^, SizeUInt(Length(LE.FName)));
     if LExtraLen > 0 then
-      EmitRaw(LExtra[0], SizeUInt(LExtraLen));
+      EmitRaw(LExtraBuf[0], LExtraLen);
   end;
 
   { central 尺寸必须在写 EOCD 前固化，否则会把 EOCD 自身前缀计入 }
