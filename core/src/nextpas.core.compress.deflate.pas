@@ -996,5 +996,10 @@ begin
   end;
 end;
 
+function DeflateRawCompress(const AData: TBytes; const ALevel: TCompressionLevel): TBytes;
+begin
+  Result := RawDeflateCompress(AData, ALevel);
+end;
+
 end.
 
