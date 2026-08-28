@@ -5,8 +5,10 @@ unit nextpas.core.zip.builder;
  *       覆盖常见打包路径。委托 `IZipWriter` 实现，字节形态与
  *       直接写器全等，`Reserve` 用于 200+ 条目预分配以避免几何扩容。
  *
- * 约束：方法一律返回 `Self` 支持链式；`Finish` 后再次添加或再次
- *       `Finish` 遵循底层写器语义（`EInvalidOperationError`）。
+ * 约束：链式方法一律返回 `Self`；流式条目经 `AddEntryStream`
+ *       直通写器（语义与 `IZipWriter.AddEntryStream` 一致，含
+ *       DataDescriptor 直写与 fail-closed）；`Finish` 后再次添加
+ *       或再次 `Finish` 遵循底层写器语义（`EInvalidOperationError`）。
  *       `StreamTo` 绑定后 `Finish` 需经 `FinishTo` 完成。
  *}
 
@@ -16,6 +18,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.compress.intf,
   nextpas.core.io.intf,
   nextpas.core.zip.base,
   nextpas.core.zip.writer;
@@ -29,6 +32,8 @@ type
     function AddWithOptions(const AName: string; const AData: TBytes;
       const AOptions: TZipAddOptions): IZipBuilder;
     function AddDirectory(const AName: string): IZipBuilder;
+    function AddEntryStream(const AName: string;
+      const AOptions: TZipAddOptions): ICompressWriter;
     function Reserve(ACapacity: Integer): IZipBuilder;
     function StreamTo(const ASink: IWriter): IZipBuilder;
     function Finish: TBytes;
@@ -54,6 +59,8 @@ type
     function AddWithOptions(const AName: string; const AData: TBytes;
       const AOptions: TZipAddOptions): IZipBuilder;
     function AddDirectory(const AName: string): IZipBuilder;
+    function AddEntryStream(const AName: string;
+      const AOptions: TZipAddOptions): ICompressWriter;
     function Reserve(ACapacity: Integer): IZipBuilder;
     function StreamTo(const ASink: IWriter): IZipBuilder;
     function Finish: TBytes;
@@ -90,6 +97,12 @@ function TZipBuilder.AddDirectory(const AName: string): IZipBuilder;
 begin
   FWriter.AddDirectory(AName);
   Result := Self;
+end;
+
+function TZipBuilder.AddEntryStream(const AName: string;
+  const AOptions: TZipAddOptions): ICompressWriter;
+begin
+  Result := FWriter.AddEntryStream(AName, AOptions);
 end;
 
 function TZipBuilder.Reserve(ACapacity: Integer): IZipBuilder;

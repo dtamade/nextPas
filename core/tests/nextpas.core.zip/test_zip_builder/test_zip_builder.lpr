@@ -205,6 +205,60 @@ begin
   Check(ZipUnixModeOf(R.Entry(R.Find('m.txt'))) = Word($8000 or $640), 'mixed mode kept');
 end;
 
+procedure TestBuilderStreamParity;
+var
+  B: IZipBuilder;
+  W: IZipWriter;
+  Opts: TZipAddOptions;
+  SBuilder, SWriter: ICompressWriter;
+  LA, LB: TBytes;
+  LBlob: TBytes;
+begin
+  LBlob := PatternBytes(50000, 77);
+  Opts := DefaultZipAddOptions;
+  Opts.Method := zmDeflate;
+
+  B := ZipBuilder;
+  SBuilder := B.AddEntryStream('big.bin', Opts);
+  SBuilder.Write(LBlob[0], 12345);
+  SBuilder.Write(LBlob[12345], Length(LBlob)-12345);
+  SBuilder.Close;
+  B.Add('after.txt', BytesOfStr('tail'));
+  LA := B.Finish;
+
+  W := NewZipWriter;
+  SWriter := W.AddEntryStream('big.bin', Opts);
+  SWriter.Write(LBlob[0], 12345);
+  SWriter.Write(LBlob[12345], Length(LBlob)-12345);
+  SWriter.Close;
+  W.AddEntry('after.txt', BytesOfStr('tail'));
+  LB := W.Finish;
+
+  Check(SameBytes(LA, LB), 'Builder stream parity vs writer');
+  Check(SameBytes(NewZipReader(LA).ExtractToBytesByName('big.bin'), LBlob), 'Builder stream roundtrip');
+end;
+
+procedure TestBuilderVsWriterZeroCost;
+var
+  B: IZipBuilder;
+  W: IZipWriter;
+  LA, LB: TBytes;
+  LI: Integer;
+begin
+  B := ZipBuilder;
+  B.Reserve(20);
+  for LI:=0 to 19 do B.AddDeflate('f/'+IntToStr(LI)+'.bin', PatternBytes(512, LI));
+  LA := B.Finish;
+
+  W := NewZipWriter;
+  W.Reserve(20);
+  for LI:=0 to 19 do W.AddEntryDeflate('f/'+IntToStr(LI)+'.bin', PatternBytes(512, LI));
+  LB := W.Finish;
+
+  Check(SameBytes(LA, LB), 'Builder vs writer Reserve chain byte-identical');
+  Check(NewZipReader(LA).EntryCount=20, 'Builder 20 entries');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.builder');
   T.Test('Chain matches writer', @TestChainMatchesWriter);
@@ -212,5 +266,7 @@ begin
   T.Test('Finish guards', @TestFinishGuards);
   T.Test('StreamTo identical', @TestStreamToIdentical);
   T.Test('Mixed unicode/mode roundtrip', @TestMixedUnicodeAndMode);
+  T.Test('Builder stream parity', @TestBuilderStreamParity);
+  T.Test('Builder vs writer zero-cost', @TestBuilderVsWriterZeroCost);
   if not T.Run then Halt(1);
 end.
