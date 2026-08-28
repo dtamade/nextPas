@@ -53,6 +53,10 @@ begin
   R := Length(S);
   while (L <= R) and (S[L] <= ' ') do Inc(L);
   while (R >= L) and (S[R] <= ' ') do Dec(R);
+  if L > R then
+    Exit('');
+  if (L = 1) and (R = Length(S)) then
+    Exit(S);
   Result := Copy(S, L, R - L + 1);
 end;
 
@@ -62,6 +66,8 @@ var
 begin
   L := 1;
   while (L <= Length(S)) and (S[L] <= ' ') do Inc(L);
+  if L = 1 then
+    Exit(S);
   Result := Copy(S, L, Length(S) - L + 1);
 end;
 
@@ -71,6 +77,8 @@ var
 begin
   R := Length(S);
   while (R >= 1) and (S[R] <= ' ') do Dec(R);
+  if R = Length(S) then
+    Exit(S);
   Result := Copy(S, 1, R);
 end;
 
