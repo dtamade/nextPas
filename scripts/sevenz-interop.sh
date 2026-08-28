@@ -89,6 +89,17 @@ begin
         if Length(Got)=0 then Fail('empty file should be empty');
     end;
     WriteLn('verify ok ', R.EntryCount);
+  end else if Mode='glob' then begin
+    // glob <archive> — verify IgnoreCase O(log N) dispatch on mixed case names
+    ArcPath:=ParamStr(2);
+    Data:=ReadAllBytes(ArcPath);
+    R:=TSevenZReaderImpl.Create(Data);
+    if Length(R.EntriesByGlobIgnoreCase('F*.TXT')) <> R.EntryCount then Fail('glob prefix* IgnoreCase');
+    if Length(R.EntriesByGlobIgnoreCase('*.txt')) <> R.EntryCount then Fail('glob *suffix IgnoreCase');
+    if R.FindByGlobIgnoreCase('f*.txt') < 0 then Fail('find glob IgnoreCase');
+    if R.FindByGlobIgnoreCase('F1.TXT') < 0 then Fail('find exact IgnoreCase');
+    if Length(R.ExtractByGlobIgnoreCase('F*.TXT')) <> R.EntryCount then Fail('extract glob IgnoreCase');
+    WriteLn('glob ok ', R.EntryCount);
   end else Fail('unknown mode '+Mode);
 end.
 PAS
@@ -142,6 +153,9 @@ run 7z a -t7z -m0=LZMA2 -mx=3 -psecret -mhe=on "$TMP/p7-enc.7z" "$TMP/p7-src/a.t
 run "$HELPER" verify "$TMP/p7-enc.7z" secret
 # 错密码应失败
 if "$HELPER" verify "$TMP/p7-enc.7z" wrong 2>/dev/null; then echo "FAIL: wrong password should fail"; exit 1; fi
+
+say "our->glob IgnoreCase (O(log N) fast paths)"
+run "$HELPER" glob "$TMP/our-multi.7z"
 
 # 3) xz raw 交叉
 say "xz raw cross"
