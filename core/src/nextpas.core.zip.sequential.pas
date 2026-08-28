@@ -77,6 +77,7 @@ type
     FSrc: IReader;
     FMaxOutput: SizeUInt;
     FMaxTotalOutput: UInt64;
+    FMaxDescriptorBuffer: SizeUInt;
     FCumulative: UInt64;
     FPassword: TBytes;
     FIndex: Integer;
@@ -102,7 +103,7 @@ type
     function MakeDecompressedReader: IDecompressReader;
   public
     constructor Create(const ASource: IReader; AMaxOutput: SizeUInt;
-      AMaxTotalOutput: UInt64; const APassword: TBytes);
+      AMaxTotalOutput: UInt64; AMaxDescriptorBuffer: SizeUInt; const APassword: TBytes);
     function Next(out AInfo: TZipEntryInfo): Boolean;
     function Current: TZipEntryInfo;
     function EntryIndex: Integer;
@@ -165,7 +166,7 @@ begin
 end;
 
 constructor TSequentialZipReader.Create(const ASource: IReader;
-  AMaxOutput: SizeUInt; AMaxTotalOutput: UInt64; const APassword: TBytes);
+  AMaxOutput: SizeUInt; AMaxTotalOutput: UInt64; AMaxDescriptorBuffer: SizeUInt; const APassword: TBytes);
 begin
   inherited Create;
   if ASource = nil then
@@ -173,6 +174,10 @@ begin
   FSrc := ASource;
   FMaxOutput := AMaxOutput;
   FMaxTotalOutput := AMaxTotalOutput;
+  if AMaxDescriptorBuffer = 0 then
+    FMaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR
+  else
+    FMaxDescriptorBuffer := AMaxDescriptorBuffer;
   FCumulative := 0;
   FPassword := Copy(APassword);
   FIndex := -1;
@@ -725,7 +730,7 @@ begin
     if (LLen > 64 * 1024 * 1024) and (LLen > FMaxOutput) then
       raise EParseError.Create('zip: descriptor not found for ' +
         FCurrent.Name);
-    if LLen > 512 * 1024 * 1024 then
+    if LLen > FMaxDescriptorBuffer then
       raise EParseError.Create('zip: descriptor not found for ' +
         FCurrent.Name);
   until False;
@@ -918,13 +923,16 @@ end;
 function NewZipSequentialReaderWithOptions(const ASource: IReader;
   const AOptions: TZipReadOptions): ISequentialZipReader;
 var
-  LMax: SizeUInt;
+  LMax, LDesc: SizeUInt;
 begin
   LMax := AOptions.MaxOutputSize;
   if LMax = 0 then
     LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
+  LDesc := AOptions.MaxDescriptorBuffer;
+  if LDesc = 0 then
+    LDesc := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
   Result := TSequentialZipReader.Create(ASource, LMax,
-    AOptions.MaxTotalOutputSize, AOptions.Password);
+    AOptions.MaxTotalOutputSize, LDesc, AOptions.Password);
 end;
 
 end.

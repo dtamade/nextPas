@@ -14,7 +14,7 @@
 | `TZipEntryInfo` | central directory 条目元数据；尺寸/偏移为 UInt64（Zip64 宽度）；含 `ExternalAttrs` 原值与 `IsSymlink` 判定；加密条目另有 `IsEncrypted` / `AesVersion`（1=AE-1，2=AE-2）/ `AesStrengthCode`，`MethodCode` 为解密后的真实压缩方法 |
 | `TZipWriteOptions` | `ForceZip64: Boolean`——无条件产出 Zip64 结构 |
 | `TZipAddOptions` | 单条目完整选项：`Method` / `ModTimeUnixSec`（<0 取 DOS 下限）/ `Mode`（unix 模式字，0 取默认）/ `Password`（非空走 WinZip AE-2 加密，INV-14）/ `AesStrength`（1/2/3 = AES-128/192/256，0 取 3）/ `DataDescriptor`（仅 `AddEntryStream` 生效，INV-15） |
-| `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`MaxTotalOutputSize: UInt64`——跨条目总输出上限，0=不限（INV-17）；`Password`——WinZip AES 解密口令（INV-14） |
+| `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`MaxTotalOutputSize: UInt64`——跨条目总输出上限，0=不限（INV-17）；`MaxDescriptorBuffer: SizeUInt`——顺序读描述符扫描缓冲上限，0 取 512MiB（INV-16）；`Password`——WinZip AES 解密口令（INV-14） |
 | `TZipExtractOptions` | fs 解包选项：`RestoreMode` / `SkipSymlinks` / `MaxOutputSize` / `MaxTotalOutputSize` |
 | `IZipBuilder` | 链式构造器：`Add`/`AddDeflate`/`AddWithTime`/`AddDeflateWithTime`/`AddWithOptions`/`AddDirectory`/`AddDirectoryWithTime`/`AddEntryStream`/`Reserve`/`StreamTo`/`Finish`/`FinishTo` 薄委托 `IZipWriter`（三十一—三十二期对称完备） |
 
@@ -25,7 +25,7 @@
 | `NewZipWriter` / `NewZipWriterWithOptions` | 写器；顺序追加、一次性 Finish |
 | `NewZipReader` / `NewZipReaderWithOptions` | 读器；构造时解析 central directory，非法结构立即 raise |
 | `NewZipReaderFrom` / `NewZipReaderFromWithOptions` | 从可定位流打开：经 IReaderAt 定位读按需取数（EOCD/central/条目载荷），不整体载入、不改写调用方流位置；源须同时实现 IStream 与 IReaderAt，否则 ENotSupportedError；多条目流可并发打开 |
-| `NewZipSequentialReader` / `NewZipSequentialReaderWithOptions` | 从纯顺序流打开：仅靠 local header + data descriptor 前进，不整载、不要求 seek，与七期描述符写端对偶；源为任意 IReader（HTTP body/管道）；一次仅一流，MaxOutputSize 与口令语义与读端一致 |
+| `NewZipSequentialReader` / `NewZipSequentialReaderWithOptions` | 从纯顺序流打开：仅靠 local header + data descriptor 前进，不整载、不要求 seek，与七期描述符写端对偶；源为任意 IReader（HTTP body/管道）；一次仅一流，MaxOutputSize/MaxTotal/MaxDescriptorBuffer 与口令语义与读端一致 |
 | `DefaultZipWriteOptions` / `DefaultZipAddOptions` / `DefaultZipReadOptions` / `DefaultZipExtractOptions` | 各选项默认值 |
 | `ZipPackDirInto` / `ZipPackDir` | 目录递归打包（携带 mtime 与 posix 权限位） |
 | `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录 |
@@ -138,7 +138,7 @@
   字节级精确；非描述符条目按 local 声明尺寸精确有界。`Open` /
   `CopyTo`/`Skip` 语义与读端一致（Guard/解压/CRC/MaxOutput/口令），
   一次仅一流，重复打开或未 `Next` 时 `EInvalidOperationError`；截断
-  结构 `EParseError`，`AES+descriptor` 已打通（44期），`缺口令` 仍 `EInvalidOperationError`。目录判定
+  结构 `EParseError`（`descriptor not found` 含缓冲上限 `MaxDescriptorBuffer` 默认 512MiB 可配，45期与 `MaxOutput/MaxTotal` 正交），`AES+descriptor` 已打通（44期），`缺口令` 仍 `EInvalidOperationError`。目录判定
   仅认尾随 `/`（无 external attrs），与随机读的 `S_IFDIR` 判定互为已知差
   异，见 §6 Known Limitations。
 - **[INV-17]** 总输出守卫：`TZipReadOptions.MaxTotalOutputSize` 为跨条目
