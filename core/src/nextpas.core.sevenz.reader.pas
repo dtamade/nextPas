@@ -46,11 +46,13 @@ type
     FLowerNames: array of string;                           { lowercased names for ignore-case indexes }
     FSortedIdxIgnoreCase: array of Integer;
     FSortedIdxRevIgnoreCase: array of Integer;
+    FIgnoreCaseBuilt: Boolean;
     procedure BuildNameMaps;
     procedure BuildSortedIdx;
     procedure BuildSortedIdxRev;
     procedure BuildSortedIdxIgnoreCase;
     procedure BuildSortedIdxRevIgnoreCase;
+    procedure EnsureIgnoreCaseBuilt;
     function LowerBoundPrefix(const APrefix: string): Integer;
     function LowerBoundSuffix(const ASuffix: string): Integer;
     function LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
@@ -623,7 +625,6 @@ end;
 procedure TSevenZReaderImpl.BuildNameMaps;
 var
   LI: Integer;
-  LLower: string;
 begin
   FreeAndNil(FNameMap);
   FreeAndNil(FNameMapIgnoreCase);
@@ -634,22 +635,19 @@ begin
   FLowerNames := nil;
   if Length(FEntries)=0 then Exit;
   FNameMap := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
-  FNameMapIgnoreCase := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
-  SetLength(FLowerNames, Length(FEntries));
+  // Lazy ignore-case: defer FLowerNames / FNameMapIgnoreCase / sorted ignore indexes
+  FNameMapIgnoreCase := nil;
+  FLowerNames := nil;
+  FSortedIdxIgnoreCase := nil;
+  FSortedIdxRevIgnoreCase := nil;
+  FIgnoreCaseBuilt := False;
   for LI:=0 to High(FEntries) do
   begin
     if not FNameMap.ContainsKey(FEntries[LI].Name) then
       FNameMap.Put(FEntries[LI].Name, LI);
-    if IsAsciiStr(FEntries[LI].Name) then LLower := AsciiLowerStr(FEntries[LI].Name)
-    else LLower := LowerCase(FEntries[LI].Name);
-    FLowerNames[LI] := LLower;
-    if not FNameMapIgnoreCase.ContainsKey(LLower) then
-      FNameMapIgnoreCase.Put(LLower, LI);
   end;
   BuildSortedIdx;
   BuildSortedIdxRev;
-  BuildSortedIdxIgnoreCase;
-  BuildSortedIdxRevIgnoreCase;
 end;
 
 procedure TSevenZReaderImpl.BuildSortedIdx;
@@ -779,9 +777,29 @@ begin
   if Length(FSortedIdxRevIgnoreCase) > 1 then QuickSort(0, High(FSortedIdxRevIgnoreCase));
 end;
 
+procedure TSevenZReaderImpl.EnsureIgnoreCaseBuilt;
+var LI: Integer; LLower: string;
+begin
+  if FIgnoreCaseBuilt then Exit;
+  if Length(FEntries) = 0 then begin FIgnoreCaseBuilt := True; Exit; end;
+  FNameMapIgnoreCase := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
+  SetLength(FLowerNames, Length(FEntries));
+  for LI := 0 to High(FEntries) do
+  begin
+    if IsAsciiStr(FEntries[LI].Name) then LLower := AsciiLowerStr(FEntries[LI].Name) else LLower := LowerCase(FEntries[LI].Name);
+    FLowerNames[LI] := LLower;
+    if not FNameMapIgnoreCase.ContainsKey(LLower) then
+      FNameMapIgnoreCase.Put(LLower, LI);
+  end;
+  BuildSortedIdxIgnoreCase;
+  BuildSortedIdxRevIgnoreCase;
+  FIgnoreCaseBuilt := True;
+end;
+
 function TSevenZReaderImpl.LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
 var LLo, LHi, LMid: Integer; LCmp: Integer; LLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   if IsAsciiStr(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
   LLo := 0; LHi := Length(FSortedIdxIgnoreCase);
   while LLo < LHi do
@@ -796,6 +814,7 @@ end;
 function TSevenZReaderImpl.LowerBoundSuffixIgnoreCase(const ASuffix: string): Integer;
 var LLo, LHi, LMid: Integer; LCmp: Integer; LLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   if IsAsciiStr(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
   LLo := 0; LHi := Length(FSortedIdxRevIgnoreCase);
   while LLo < LHi do
@@ -945,6 +964,7 @@ var
   LIdx: Integer;
   LLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   if FNameMapIgnoreCase<>nil then
   begin
     if IsAsciiStr(AName) then LLower := AsciiLowerStr(AName) else LLower := LowerCase(AName);
@@ -964,6 +984,7 @@ end;
 
 function TSevenZReaderImpl.ContainsIgnoreCase(const AName: string): Boolean;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := FindIgnoreCase(AName) >= 0;
 end;
 
@@ -986,6 +1007,7 @@ end;
 function TSevenZReaderImpl.TryGetEntryIgnoreCase(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
 var LIdx: Integer;
 begin
+  EnsureIgnoreCaseBuilt;
   LIdx := FindIgnoreCase(AName);
   Result := LIdx >= 0;
   if Result then
@@ -1403,6 +1425,7 @@ end;
 function TSevenZReaderImpl.EntriesByPrefixIgnoreCase(const APrefix: string): TSevenZEntryInfoArray;
 var LStart, LPos, LIdx, LCnt: Integer; LLower, LEntryLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := nil;
   if APrefix='' then begin Result := GetEntries; Exit; end;
   if Length(FSortedIdxIgnoreCase)=0 then Exit;
@@ -1431,6 +1454,7 @@ end;
 function TSevenZReaderImpl.EntriesBySuffixIgnoreCase(const ASuffix: string): TSevenZEntryInfoArray;
 var LStart, LPos, LIdx, LCnt: Integer; LLower, LEntryLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := nil;
   if ASuffix='' then begin Result := GetEntries; Exit; end;
   if Length(FSortedIdxRevIgnoreCase)=0 then Exit;
@@ -1459,6 +1483,7 @@ end;
 function TSevenZReaderImpl.FindByPrefixIgnoreCase(const APrefix: string): Integer;
 var LStart, LIdx: Integer; LLower, LEntryLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := -1;
   if APrefix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
   if Length(FSortedIdxIgnoreCase)=0 then Exit(-1);
@@ -1474,6 +1499,7 @@ end;
 function TSevenZReaderImpl.FindBySuffixIgnoreCase(const ASuffix: string): Integer;
 var LStart, LIdx: Integer; LLower, LEntryLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := -1;
   if ASuffix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
   if Length(FSortedIdxRevIgnoreCase)=0 then Exit(-1);
@@ -1497,6 +1523,7 @@ end;
 function TSevenZReaderImpl.EntriesByGlobIgnoreCase(const APattern: string): TSevenZEntryInfoArray;
 var LI, LCnt, LStarCount: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIdx: Integer;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := nil;
   if APattern='' then Exit;
   if APattern='*' then begin Result := GetEntries; Exit; end;
@@ -1542,6 +1569,7 @@ end;
 function TSevenZReaderImpl.FindByGlobIgnoreCase(const APattern: string): Integer;
 var LI, LStarCount, LPos, LIdx: Integer; LPrefix, LSuffix, LLowerPref, LLowerSuff, LEntryLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := -1;
   if APattern='' then Exit(-1);
   if APattern='*' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
@@ -1589,6 +1617,7 @@ end;
 function TSevenZReaderImpl.ExtractByPrefixIgnoreCase(const APrefix: string): TSevenZExtractedArray;
 var LIndices: TSevenZIndexArray;
 begin
+  EnsureIgnoreCaseBuilt;
   LIndices := IndicesByPrefixIgnoreCase(APrefix);
   Result := ExtractIndicesGrouped(LIndices);
 end;
@@ -1596,6 +1625,7 @@ end;
 function TSevenZReaderImpl.ExtractBySuffixIgnoreCase(const ASuffix: string): TSevenZExtractedArray;
 var LIndices: TSevenZIndexArray;
 begin
+  EnsureIgnoreCaseBuilt;
   LIndices := IndicesBySuffixIgnoreCase(ASuffix);
   Result := ExtractIndicesGrouped(LIndices);
 end;
@@ -1692,6 +1722,7 @@ end;
 function TSevenZReaderImpl.IndicesByPrefixIgnoreCase(const APrefix: string): TSevenZIndexArray;
 var LStart, LPos, LIdx, LCnt: Integer; LLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := nil;
   if APrefix = '' then
   begin
@@ -1739,6 +1770,7 @@ end;
 function TSevenZReaderImpl.FilterIndicesBySuffixIgnoreCase(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray;
 var LI, LCnt, LIdx, LNeed: Integer; LLowerSuff: string; LIsAsciiSuff: Boolean;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := nil;
   LNeed := Length(APrefix) + Length(ASuffix);
   LIsAsciiSuff := IsAsciiStr(ASuffix);
@@ -1806,6 +1838,7 @@ end;
 function TSevenZReaderImpl.IndicesBySuffixIgnoreCase(const ASuffix: string): TSevenZIndexArray;
 var LStart, LPos, LIdx, LCnt: Integer; LLower: string;
 begin
+  EnsureIgnoreCaseBuilt;
   Result := nil;
   if ASuffix = '' then
   begin
@@ -1979,6 +2012,7 @@ end;
 
 function TSevenZReaderImpl.TryExtractByPrefixIgnoreCaseWithError(const APrefix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
 begin
+  EnsureIgnoreCaseBuilt;
   AExtracted := nil; AError := ''; Result := False;
   try AExtracted := ExtractByPrefixIgnoreCase(APrefix); Result := True;
   except on E: Exception do begin AError := E.ClassName+': '+E.Message; AExtracted := nil; Result := False; end; end;
@@ -1992,6 +2026,7 @@ end;
 
 function TSevenZReaderImpl.TryExtractBySuffixIgnoreCaseWithError(const ASuffix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
 begin
+  EnsureIgnoreCaseBuilt;
   AExtracted := nil; AError := ''; Result := False;
   try AExtracted := ExtractBySuffixIgnoreCase(ASuffix); Result := True;
   except on E: Exception do begin AError := E.ClassName+': '+E.Message; AExtracted := nil; Result := False; end; end;
@@ -2006,6 +2041,7 @@ end;
 function TSevenZReaderImpl.TryExtractByGlobIgnoreCaseWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
 var LI, LCnt, LIdx: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
 begin
+  EnsureIgnoreCaseBuilt;
   AExtracted := nil; AError := ''; Result := False;
   try
     if APattern='' then begin Result := True; Exit; end;
