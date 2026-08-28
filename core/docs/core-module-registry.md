@@ -100,7 +100,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `window` | L2 | window shell + surface (nextpas.core.window family; first consumer webview/gpu/directui/game888) | yes | L0-L1 plus platform.dl seam | focused-runtime |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
-| `zip` | L2 | ZIP archive container (store/deflate, Zip64, streaming, WinZip AES, sequential, builder, dir pack/extract) | yes | L0-L2 (compress/fs/checksum owners) | focused-runtime |
+| `zip` | L2 | ZIP archive container (store/deflate, Zip64, streaming, WinZip AES, sequential, builder, dir pack/extract) | yes | L0-L2 (compress/fs/checksum owners) | source-contract + focused-runtime |
 
 Database family: backends are L2 implementations inside the `db` family —
 currently `sqlite`, `pg`, `mysql`, `odbc` and `redis`, physically under

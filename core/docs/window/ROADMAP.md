@@ -143,9 +143,9 @@ Era 全堵时的合法工作池：doc-truth 对齐、flake 修复、诚实表复
 
 | 日期 | 变更 |
 |------|------|
-| 2026-08-28 | M-band bench 分拆：`bench_dispatcher` 5→7 项，新增 `WindowPumpOnceZero/10000` 183µs（≈18ns/次，零活窗早退零锁）与 `WindowPumpOnceLive/1000` 754µs 对比，验证空转成本；热路径 inline + O(1) + Diagnostics 完整闭环 |
-| 2026-08-28 | M-band perf 收口：热路径 `GetWidth/GetHeight/GetScaleFactor/NativeHandle/GetDispatcher/IsClosed` inline + `CheckWindowOptions` 富错误信息 + `O(1)` 活窗计数 + `WindowBackendDiagnostics` + `WindowPumpOnce` 零活窗早退，bench 391→377µs/1000；13 门禁全绿；NEXT=M-band 维持 |
-| 2026-08-28 | M-band 去消息化+宿主泵：`IWindowHost` + `WindowPumpOnce/PumpAll` + dispatcher 32cap + `test_window_host` 7用例 + bench 391µs/1000；13门禁全绿；NEXT=M-band 维持 |
+| 2026-08-28 | M6 共享设施去重 — queue/live：`TWindowQueue` 6后端 ~200行 + `TWindowLiveRegistry` 7后端 ~150行，无锁 inline Count 16ns 早退，`PostSingle` 370µs `Zero` 167µs `Live` 430µs，13门 heaptrc 0，README/ARCH 真相收口 |
+| 2026-08-28 | M5 共享队列去重 + 终局泄漏收口：`TWindowQueue` 6后端去重 + finalization 0泄漏，`PostSingle` 377→370µs `Zero` 183→167µs `Live` 754→430µs，13门全绿 |
+| 2026-08-28 | M-band bench 分拆：`bench_dispatcher` 5→7项，新增 `WindowPumpOnceZero/10000` 183µs（≈18ns/次）与 `WindowPumpOnceLive/1000` 754µs，验证空转成本；热路径 inline + O(1) + Diagnostics 完整闭环 |
 | 2026-08-28 | S5 mobile attach 落地：`wasm/android/uikit .ffi/loader/pas` 全接入 factory 8 后端 + `test_window_{wasm,android,uikit}_runtime` 各 3 用例；12 门禁全绿；NEXT=M-band |
 | 2026-08-28 | S4 win32/cocoa 落地：`win32/cocoa .ffi/loader/pas` + factory 注册表 8 后端收敛 + `test_window_{win32,cocoa}_runtime`；9 门禁全绿；NEXT=S5 |
 | 2026-08-28 | S3 sdl2 落地：`sdl2.ffi/loader/sdl2` + 用户事件 dispatcher + WMInfo/DisplayScale + `test_window_sdl2_runtime` + `test_window_stress` + `bench_dispatcher`；7 门禁全绿；NEXT=S4 |

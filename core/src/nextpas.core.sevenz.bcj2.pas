@@ -114,9 +114,6 @@ type
     LCj: Integer;
     LCur: PByte;
     LIp: UInt32;
-    LDone: Boolean;
-  label
-    LOuterContinue;
   begin
     Result := 0;
     v := P.Temp;

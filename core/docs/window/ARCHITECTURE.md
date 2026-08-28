@@ -2,7 +2,7 @@
 
 **状态**：Design S0（与 [CONTRACT.md](CONTRACT.md) 0.1 冻结草案同批）
 **Owner**：core-window lane
-**最后更新**：2026-08-28（S5 8 后端全接入：wasm/android/uikit attach 实装，13 门禁，去消息化 + Host/PumpOnce + O(1) 计数 + 热路径 inline 377µs）
+**最后更新**：2026-08-28（S5 8 后端全接入 + M5 去重：共享队列 6 合1 + finalization 0泄漏，13 门禁，去消息化 + Host/PumpOnce + O(1) + inline 370µs/167µs）
 **对标基准**: Rust `winit` / `tao` · GLFW / SDL2 Window · Flutter View /
 Android `Activity.getWindow()` / iOS `UIWindow`
 
@@ -241,7 +241,9 @@ Android/iOS 没有"创建 top-level window"的自由：应用窗口归宿主
 
 - `FakeLiveWindowCount` 为 `GFakeLiveCount` 的 `inline` 读，`Destroy`/`RealClose`/`Create` 三处维护，零遍历；`WindowPumpOnce` 零活窗路径与全量路径على同一口径，避免空转锁竞争。
 - `GetWidth/GetHeight/GetScaleFactor/NativeHandle/GetDispatcher/IsClosed` 与 `TFakeDispatcher.IsOnMainThread/PostRef/PumpOnce` 等高频访问一律 `inline`，`CheckWindowOptions` 以 `CreateFmt` 携带越界值，错误信息富化不增分支。
-- `WindowBackendDiagnostics: string` 遍历 `BACKENDS[8]` 以 `Probe()+sonames` 逐行输出，供 `EWindowBackendUnavailable` 失败现场直连探测真相；bench 基线 `PostSingle/1000 = 377µs`（32cap 环，`O(1)` + inline 后），7 项分拆中 `WindowPumpOnceZero/10000 = 183µs`（≈18ns/次，零活窗早退零锁）与 `WindowPumpOnceLive/1000 = 754µs` 对比验证空转成本。
+- `WindowBackendDiagnostics: string` 遍历 `BACKENDS[8]` 以 `Probe()+sonames` 逐行输出，供 `EWindowBackendUnavailable` 失败现场直连探测真相；bench 基线 `PostSingle/1000 = 370µs`（32cap 环，`O(1)` + inline + 共享队列后），7 项分拆中 `WindowPumpOnceZero/10000 = 167µs`（≈16ns/次，零活窗早退零锁）与 `WindowPumpOnceLive/1000 = 430µs` 对比验证空转成本；finalization Free GQueue 消 heaptrc 0 泄漏。
+- 共享队列 `nextpas.core.window.queue.TWindowQueue` 为 `sdl2/win32/cocoa/wasm/android/uikit` 6 家提供同一套“互斥环形 FIFO + 32 cap 起步 + 2× 增长 + 锁外 Drain”实现，单点修复、零样板拷贝（M5 去重约 200 行），`fake` 的 per-window 队列复用同一增长语义但 per-window 实例隔离以保持契约测试确定性。
+- 共享活窗 `nextpas.core.window.live.TWindowLiveRegistry/TWindowSdlLiveRegistry` 为 7 生产后端提供同一套“末尾换位删除 + 无锁 inline Count（16ns 早退）+ finalization 释放”实现，单点修复、零样板拷贝（M6 去重约 150 行），`sdl` 扩展 `FindByID` 平行数组路由。
 
 ### 7.3 事件驱动 RunLoop（M-band 稳定性，按行业同行做法）
 

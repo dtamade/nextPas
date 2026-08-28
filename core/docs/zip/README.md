@@ -284,17 +284,18 @@ could block later files). Symlink entries are skipped by default;
 
 Entry names from archives are untrusted input. The shared predicate
 `IsSafeZipEntryName` rejects empty names, absolute paths, drive prefixes,
-backslashes and `..` segments; extraction paths re-check it and raise
+backslashes, `//` empty segments, `./` single-dot segments and `..` segments; extraction paths re-check it and raise
 `EParseError` before touching the filesystem. Declared entry sizes never
 allocate beyond the configured output cap.
 
 ## Performance
 
-`core/benchmarks/nextpas.core.zip/bench_zip` 以 `nextpas.core.bench` `TBenchSuite` 规矩承载（`SetMinDuration 200ms`/`MinSamples 5`/`MaxIterations 20`，`ACtx.SetBytes` 换算吞吐，`PrintToConsole`+`ToBenchstat`+`SaveToJSON` 归档），覆盖 `200×512B` 小容器与 `1MiB` 吞吐两面（含 `pack-reserve`/`builder-pack`/`stream-out`/`descriptor`/`staged`/`seq-*`/`aes-*` 14 项），`2000×512B` 全量 parity 预检 + Go `archive/zip` 对比在 `compare_go/` 与 `test_zip_go_parity` 双向对等门（十九期领头羊双锚点：Python zipfile + Go archive/zip，各自独立验证 store/deflate、unicode、1MiB、20×混合、30 fuzz 的字节级一致）。Reader 解析用 `nextpas.core.bytes.cursor` 边界检查 + 单次分配条目数组；CRC32 为 `nextpas.core.checksum.crc32` slice-by-8；`nextpas.core.zip.extra` 逐条目经 64 字节栈缓冲 `Encode*` 零分配（`pack 200×512B` `810→805 allocs`），`Reserve` 预分配消除 2k+ 几何重分配；`test_zip_perf` 以 `CountingMemoryManager`（heaptrc 兼容）锁定 `200×512B ≤815 / Reserve ≤810 / 1MiB ≤12 allocs` 预算，回归即红（二十期阈值门）；`test_zip_stress` 以 `70k Zip64`（1.07s）/`1k 混合双路径`/`Bomb 单值与总量`/`并发提取` 验证极限压力下的规模与 fail-closed（二十一期）；`BASELINE.json` + `check_regression.py` 以 `allocs +2` 硬预算、`bytes` 强一致、`ns +50%` 告警构成 `make regression` CI 硬门（`make baseline` 需人工审查，二十二期）。
+`core/benchmarks/nextpas.core.zip/bench_zip` 以 `nextpas.core.bench` `TBenchSuite` 规矩承载（`SetMinDuration 200ms`/`MinSamples 5`/`MaxIterations 20`，`ACtx.SetBytes` 换算吞吐，`PrintToConsole`+`ToBenchstat`+`SaveToJSON` 归档），覆盖 `200×512B` 小容器（bench 轻量化；`2000×512B` 全量 parity 另作预检）与 `1MiB` 吞吐两面（含 `pack-reserve`/`builder-pack`/`stream-out`/`descriptor`/`staged`/`seq-*`/`aes-*` 14 项），Go `archive/zip` 对比在 `compare_go/` 与 `test_zip_go_parity` 双向对等门（十九期领头羊双锚点：Python zipfile + Go archive/zip，各自独立验证 store/deflate、unicode、1MiB、20×混合、30 fuzz 的字节级一致）。Reader 解析用 `nextpas.core.bytes.cursor` 边界检查 + 单次分配条目数组；CRC32 为 `nextpas.core.checksum.crc32` slice-by-8；`nextpas.core.zip.extra` 逐条目经 64 字节栈缓冲 `Encode*` 零分配（`pack 200×512B` `810→805 allocs`），`Reserve` 预分配消除 2k+ 几何重分配，`StreamOutputTo` 后 `DrainStaged` 以内板指针分块直写（零拷贝排空）；`test_zip_perf` 以 `CountingMemoryManager`（heaptrc 兼容）锁定 `200×512B ≤815 / Reserve ≤810 / 1MiB ≤12 allocs` 预算，回归即红（二十期阈值门）；`test_zip_stress` 以 `70k Zip64`（1.07s）/`1k 混合双路径`/`Bomb 单值与总量`/`并发提取` 验证极限压力下的规模与 fail-closed（二十一期）；`BASELINE.json` + `check_regression.py` 以 `allocs +2` 硬预算、`bytes` 强一致、`ns +50%` 告警构成 `make regression` CI 硬门（`make baseline` 需人工审查，二十二期）。
 
 Sequential read reuses the same `DecompressEntryVerified` kernel via
 `nextpas.core.zip.common`（reader/sequential 单点复用，fail-closed 语义一致），
-`2000×512B` 顺序提取 `322k entries/s / 157 MB/s`（内存读 `373k/182 MB/s`），
-`1MB` 单条目顺序 `398 MB/s`（内存读 `568 MB/s`），管道扫描开销约 15% 可预期；`bench_zip` 的 `BenchSequential` 为锚点。
+`200×512B` 顺序提取约 `300k entries/s` 量级（内存读略高约 15%），`1MB` 单条目
+顺序约 `300-400 MB/s`（视机器与 `benchstat` 方差），管道扫描开销可预期；`bench_zip`
+的 `BenchSequential` 为锚点（方差高时回归以 `allocs` 硬门为准，`ns` 仅告警）。
 
 Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip).

@@ -9,6 +9,7 @@ unit nextpas.core.sevenz.coders;
  *}
 
 {$I nextpas.core.settings.inc}
+{$PUSH}{$WARN 5024 OFF}
 
 interface
 
@@ -169,6 +170,7 @@ end;
   依次尝试 zlib 与 raw per-message 路径，AOutSize 用作输出上限以防炸弹。
   raw 路径的 inflate 实现对精确上限需 +1 探测字节（否则恰好填满时误判越界），
   这里以 LMax+1 探测后回校验真实上界。超限统一抛 ESevenZLimitError 供上层区分炸弹与损坏 }
+{$PUSH}{$WARNINGS OFF}
 function DeflateDecodeSevenZ(const AInput: TBytes; AOutSize: UInt64): TBytes;
 var
   LMax, LRawMax: SizeUInt;
@@ -246,6 +248,7 @@ function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TByte
 begin
   Result := BZip2DecodeSevenZ(AInput, AOutSize);
 end;
+{$POP}
 
 { 单个 coder 执行：AInputs 为其全部输入流 }
 
@@ -428,5 +431,5 @@ begin
     raise ESevenZError.Create('folder decode chain unsatisfiable');
   Result := LResolved[Afolder.MainOutIndex];
 end;
-
+{$POP}
 end.

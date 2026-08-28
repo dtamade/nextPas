@@ -33,7 +33,7 @@ type
     function AtEnd: Boolean;
     {** 打开当前条目流（拉式，读到 0 为 EOF，EOF 处校验）；未 Next 或已打开流时 raise *}
     function Open: IDecompressReader;
-    {** 同 Open，按名打开当前条目的别名（仅为接口完整性，实际等同 Open） *}
+    {** 泵送当前条目载荷到 ADst（EOF 处校验，返回字节数）；未 Next 或已打开流时 raise *}
     function CopyTo(const ADst: IWriter): SizeUInt;
     {** 跳过当前条目载荷（不解压，直接丢弃）；未 Next 或已打开流时 raise *}
     procedure Skip;

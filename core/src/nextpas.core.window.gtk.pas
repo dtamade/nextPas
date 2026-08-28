@@ -31,13 +31,14 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.window.gtk.ffi,
-  nextpas.core.window.gtk.loader;
+  nextpas.core.window.gtk.loader,
+  nextpas.core.window.live;
 
 var
   GInitDone: Boolean = False;
   GInitOk: Boolean = False;
   GMainLoopRunning: Boolean = False;
-  GLiveWindows: array of Pointer;
+  GLiveRegistry: TWindowLiveRegistry;
 
 function EnsureGtkInit: Boolean;
 var
@@ -58,40 +59,6 @@ var
   LInfo: TWindowGtkLoadInfo;
 begin
   Result := TryLoadWindowGtk(LInfo) and LInfo.Loaded;
-end;
-
-{ ---- Helpers for callback normalization ---- }
-
-function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler;
-begin
-  Result := procedure(const AEvent: TWindowEvent)
-    begin
-      AHandler(AEvent);
-    end;
-end;
-
-function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler;
-begin
-  Result := procedure(const AEvent: TWindowEvent)
-    begin
-      AHandler(AEvent);
-    end;
-end;
-
-function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef;
-begin
-  Result := procedure
-    begin
-      AHandler();
-    end;
-end;
-
-function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef;
-begin
-  Result := procedure
-    begin
-      AHandler();
-    end;
 end;
 
 { ---- Dispatcher via g_idle_add_full ---- }
@@ -239,26 +206,21 @@ end;
 
 function GtkLiveWindowCount: Integer;
 begin
-  Result := Length(GLiveWindows);
+  if GLiveRegistry = nil then Exit(0);
+  Result := GLiveRegistry.Count;
 end;
 
 procedure RegisterLive(AWin: Pointer);
 begin
-  SetLength(GLiveWindows, Length(GLiveWindows)+1);
-  GLiveWindows[High(GLiveWindows)] := AWin;
+  if GLiveRegistry = nil then
+    GLiveRegistry := TWindowLiveRegistry.Create;
+  GLiveRegistry.Register(AWin);
 end;
 
 procedure UnregisterLive(AWin: Pointer);
-var
-  I: Integer;
 begin
-  for I := High(GLiveWindows) downto 0 do
-    if GLiveWindows[I] = AWin then
-    begin
-      GLiveWindows[I] := GLiveWindows[High(GLiveWindows)];
-      SetLength(GLiveWindows, Length(GLiveWindows)-1);
-      Break;
-    end;
+  if GLiveRegistry = nil then Exit;
+  GLiveRegistry.Unregister(AWin);
 end;
 
 { ---- TWindowGtk ---- }
@@ -782,5 +744,8 @@ begin
   if GMainLoopRunning then
     gtk_main_quit();
 end;
+
+finalization
+  GLiveRegistry.Free;
 
 end.

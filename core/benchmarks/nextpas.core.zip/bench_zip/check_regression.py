@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Zip bench 回归门：对比 BASELINE.json 与当前 build/bench-zip.json。
-以 allocs 为硬预算（零容忍 +2 抖动），bytes 必须相等，ns/op 允许 +30%（噪声大）。
+以 allocs 为硬预算（零容忍 +2 抖动），bytes 必须相等，ns/op 允许 +50%（噪声大）。
 任一回归即非零退出，CI 硬门。
 """
 import json

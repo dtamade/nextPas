@@ -39,6 +39,8 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.time.base,
+  nextpas.core.window.live,
+  nextpas.core.window.queue,
   nextpas.core.window.sdl2.ffi,
   nextpas.core.window.sdl2.loader;
 
@@ -46,13 +48,9 @@ var
   GInitDone: Boolean = False;
   GInitOk: Boolean = False;
   GLoopQuit: Boolean = False;
-  GLiveWindows: array of Pointer;
-  GLiveWindowIDs: array of UInt32;
+  GLiveRegistry: TWindowSdlLiveRegistry;
   GUserEventType: UInt32 = 0;
-  GDispLock: ILock;
-  GDispRing: array of TWindowProcRef;
-  GDispHead: Integer = 0;
-  GDispCount: Integer = 0;
+  GQueue: TWindowQueue;
   GDestroying: Boolean = False;
   GWaitEvent: IEvent;
 
@@ -69,8 +67,8 @@ begin
   GUserEventType := SDL_RegisterEvents(1);
   if GUserEventType = UInt32(-1) then
     GUserEventType := SDL_USEREVENT;
-  if GDispLock = nil then
-    GDispLock := TMutex.Create as ILock;
+  if GQueue = nil then
+    GQueue := TWindowQueue.Create;
   GInitOk := True;
   Result := True;
 end;
@@ -84,129 +82,55 @@ end;
 
 function SdlLiveWindowCount: Integer;
 begin
-  Result := Length(GLiveWindows);
+  if GLiveRegistry = nil then Exit(0);
+  Result := GLiveRegistry.Count;
 end;
 
 procedure RegisterLive(AWin: Pointer; AID: UInt32);
 begin
-  SetLength(GLiveWindows, Length(GLiveWindows)+1);
-  GLiveWindows[High(GLiveWindows)] := AWin;
-  SetLength(GLiveWindowIDs, Length(GLiveWindowIDs)+1);
-  GLiveWindowIDs[High(GLiveWindowIDs)] := AID;
+  if GLiveRegistry = nil then
+    GLiveRegistry := TWindowSdlLiveRegistry.Create;
+  GLiveRegistry.Register(AWin, AID);
 end;
 
 procedure UnregisterLive(AWin: Pointer);
-var
-  I: Integer;
 begin
-  for I := High(GLiveWindows) downto 0 do
-    if GLiveWindows[I] = AWin then
-    begin
-      GLiveWindows[I] := GLiveWindows[High(GLiveWindows)];
-      GLiveWindowIDs[I] := GLiveWindowIDs[High(GLiveWindowIDs)];
-      SetLength(GLiveWindows, Length(GLiveWindows)-1);
-      SetLength(GLiveWindowIDs, Length(GLiveWindowIDs)-1);
-      Break;
-    end;
+  if GLiveRegistry = nil then Exit;
+  GLiveRegistry.Unregister(AWin);
 end;
 
 function FindWindowByID(AID: UInt32): Pointer;
-var
-  I: Integer;
 begin
-  Result := nil;
-  if AID = 0 then Exit;
-  for I := 0 to High(GLiveWindowIDs) do
-    if GLiveWindowIDs[I] = AID then
-      Exit(GLiveWindows[I]);
+  if GLiveRegistry = nil then Exit(nil);
+  Result := GLiveRegistry.FindByID(AID);
 end;
 
 { ---- Dispatcher helpers ---- }
 
-function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler;
-begin
-  Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
-end;
-
-function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler;
-begin
-  Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
-end;
-
-function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef;
-begin
-  Result := procedure begin AHandler(); end;
-end;
-
-function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef;
-begin
-  Result := procedure begin AHandler(); end;
-end;
-
-procedure DispatcherGrow;
-var
-  LNewCap, I: Integer;
-  LNew: array of TWindowProcRef;
-begin
-  LNewCap := Length(GDispRing) * 2;
-  if LNewCap = 0 then LNewCap := 32;
-  SetLength(LNew, LNewCap);
-  for I := 0 to GDispCount -1 do
-    LNew[I] := GDispRing[(GDispHead + I) mod Length(GDispRing)];
-  GDispRing := LNew;
-  GDispHead := 0;
-end;
-
 procedure DispatcherPush(AProc: TWindowProcRef);
 begin
-  if GDispLock = nil then
-    GDispLock := TMutex.Create as ILock;
+  if GQueue = nil then
+    GQueue := TWindowQueue.Create;
   if GWaitEvent = nil then
     GWaitEvent := CreateEvent(False);
-  GDispLock.Acquire;
-  try
-    if GDispCount = Length(GDispRing) then
-      DispatcherGrow;
-    GDispRing[(GDispHead + GDispCount) mod Length(GDispRing)] := AProc;
-    Inc(GDispCount);
-  finally
-    GDispLock.Release;
-  end;
+  GQueue.Push(AProc);
   GWaitEvent.SetEvent;
 end;
 
 function DispatcherPop(out AProc: TWindowProcRef): Boolean;
 begin
-  Result := False;
-  AProc := nil;
-  if GDispLock = nil then Exit;
-  GDispLock.Acquire;
-  try
-    if GDispCount = 0 then Exit;
-    AProc := GDispRing[GDispHead];
-    GDispRing[GDispHead] := nil;
-    GDispHead := (GDispHead + 1) mod Length(GDispRing);
-    Dec(GDispCount);
-    Result := True;
-  finally
-    GDispLock.Release;
+  if GQueue = nil then
+  begin
+    AProc := nil;
+    Exit(False);
   end;
+  Result := GQueue.TryPop(AProc);
 end;
 
 procedure DispatcherDropAll;
-var
-  I: Integer;
 begin
-  if GDispLock = nil then Exit;
-  GDispLock.Acquire;
-  try
-    for I := 0 to GDispCount -1 do
-      GDispRing[(GDispHead + I) mod Length(GDispRing)] := nil;
-    GDispCount := 0;
-    GDispHead := 0;
-  finally
-    GDispLock.Release;
-  end;
+  if GQueue = nil then Exit;
+  GQueue.Clear;
 end;
 
 procedure DispatcherWake;
@@ -221,18 +145,9 @@ begin
 end;
 
 procedure DispatcherDrain;
-var
-  LProc: TWindowProcRef;
 begin
-  while DispatcherPop(LProc) do
-  begin
-    try
-      if Assigned(LProc) then LProc();
-    except
-      raise;
-    end;
-    LProc := nil;
-  end;
+  if GQueue = nil then Exit;
+  GQueue.Drain;
 end;
 
 { ---- Global dispatcher facade per window ---- }
@@ -763,5 +678,10 @@ begin
     GWaitEvent.SetEvent;
   DispatcherWake;
 end;
+
+finalization
+  GLiveRegistry.Free;
+  GQueue.Free;
+  GWaitEvent := nil;
 
 end.

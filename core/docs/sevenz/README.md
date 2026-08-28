@@ -43,7 +43,7 @@ plus the encoded header via `SetPassword`.
 | `nextpas.core.sevenz.reader` | signature header validation, 2-entry LRU folder decode cache, CRC checks, `ESevenZLimitError` bomb gates (header 64MiB, pack 64MiB, `SEVENZ_MAX_*` via `limits`) |
 | `nextpas.core.sevenz.writer` | archive serialization (single or multi-folder, parallel folder encode when `IsMultiThread`), zip-style entry-name safety, single-pass `Move+CRC` |
 | `nextpas.core.sevenz.levels` | pure `SevenZLevelOrdToDeflateLevel`/`SevenZLevelOrdToBZip2BlockSize` mapping (`1`/`9`) reused by writer/bench/facade |
-| `nextpas.core.sevenz.limits` | pure `SEVENZ_MAX_*` bomb/header constants (`64 MiB header/pack, 8 GiB total, 1M files, 64 KiB name, 1M pack/folders, 1M coder props, 256 KiB extract window`) shared by reader/writer/bench/test |
+| `nextpas.core.sevenz.limits` | pure `SEVENZ_MAX_*` bomb/header constants (`64 MiB header/pack, 8 GiB total/unpack, 1M files/folders/pack streams/CRC, 1M coder props, 64 KiB name, 256 KiB extract window`) shared by reader/writer/bench/test |
 | `nextpas.core.sevenz.fs` | filesystem federation: `SevenZAddTree`/`SevenZAddFileFromFs` and `SevenZExtractAllToFs` (also via `Builder.AddTree`/`AddFileFromFs`) |
 | `nextpas.core.sevenz` | facade (explicit forwarding, plus `SevenZFilterMethodId`/`SevenZFilterFromMethodId`/`SevenZIsSupportedMethod`/`SevenZMethodName` helpers, `SevenZCreateWriterBuilder`, `SevenZLevelToDeflateLevel`/`SevenZLevelToBZip2BlockSize`) |
 
@@ -92,10 +92,15 @@ var R: ISevenZReader;
 R := TSevenZReaderImpl.Create(ArchiveBytes);   { parses and validates eagerly }
 for I := 0 to R.Count - 1 do
   WriteLn(R[I].Name);                          { Count/Items default property }
+for E in R do WriteLn(E.Name);                 { enumerator, zero-alloc }
 if R.Contains('docs/a.bin') then
   Data := R.Extract(R.Find('docs/a.bin'));     { CRC-verified, cached per folder }
 if R.TryGetEntry('docs/a.bin', Info) then
   WriteLn(Info.Size);
+if R.TryEntryByName('docs/a.bin', Info) then  { alias, same as TryGetEntry }
+  WriteLn(Info.Size);
+WriteLn(Length(R.Entries));                    { snapshot array }
+WriteLn(R.FindIgnoreCase('DOCS/A.BIN'));       { case-insensitive }
 
 // Non-raising probe (no exception traffic for index probing)
 if not R.TryExtract(Idx, Data) then
@@ -221,7 +226,7 @@ Archive := SevenZCreateWriterBuilder
 | Surface | Entry |
 |---------|-------|
 | Reader create | `TSevenZReaderImpl.Create(Bytes)` / `CreateWithPassword` / `CreateFromReader`(+`WithPassword`) |
-| Reader inspect | `EntryCount` / `Count` / `IsEmpty` / `Entry(I)` / `Items[I]` (`Reader[I]`) / `Find(Name)` / `Contains(Name)` / `TryGetEntry(Name,out Info)` / `EntryByName(Name)` / `for E in Reader do` |
+| Reader inspect | `EntryCount` / `Count` / `IsEmpty` / `Entry(I)` / `Items[I]` (`Reader[I]`) / `Entries` / `Find(Name)` / `FindIgnoreCase(Name)` / `Contains(Name)` / `ContainsIgnoreCase(Name)` / `TryGetEntry(Name,out Info)` / `TryEntryByName` / `TryGetEntryIgnoreCase(Name,out Info)` / `EntryByName(Name)` / `EntryByNameIgnoreCase(Name)` / `for E in Reader do` |
 | Reader extract | `Extract(I)` / `ExtractTo(W,I)` / `OpenStream(I)` / `TryExtract*` / `TryOpenStream*` |
 | Writer direct | `TSevenZWriterImpl.Create` → `AddFile*` / `AddFileFromReader*` / `AddDirectory*` → `SetFilters/SetLevel/SetMethod/SetPassword/SetFolderLimits/SetEncodeHeader/SetProgress` → `Finish`/`FinishTo` |
 | Writer builder | `SevenZCreateWriterBuilder` → chain `AddFile*`/ `WithFilters/WithLevel/WithMethod/WithPassword/WithFolderLimits/WithEncodeHeader/WithProgress` + `AddTree/AddTreeWithFilter/AddFileFromFs` → `Build`/`Finish`/`FinishTo` |
@@ -275,11 +280,11 @@ The encoder side is always pure Pascal today.
 ## Verification
 
 - Focused gate: `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test`
-  (134 tests: UTF conversion edge cases, FILETIME, LZMA2 round trips incl. stored-fallback
+  (140 tests: UTF conversion edge cases, FILETIME, LZMA2 round trips incl. stored-fallback
   and chunk-cap boundaries, backend switching, writer→reader container round
   trips, reader/writer error paths, Delta/Deflate/BZip2 vectors (zlib/raw dual path
   and p7zip BZip2 golden, zero-copy view stream, Deflate/BZip2 bomb via `ESevenZLimitError`), BCJ full-family round trips (x86/ARM/ARM64/PPC/IA64/SPARC/ARMT/RISCV),
-  `for..in` enumerator + `Count`/`Items`/`IsEmpty`/`Contains`/`TryGetEntry`/`EntryByName` + 2-entry LRU folder cache + `WithProgress` per-folder callback (zero overhead when nil, batched parallel aware) + header/pack/file-count/name NUL bomb (`ESevenZLimitError`/`EArgumentError` at 64MiB header/pack, 8GiB total, 1M files/folders/pack streams, 1M coder props, 64KiB name) + single-pass `Move+CRC` writer & `ExtractTo` reader (256KiB window, windowed CRC),
+  `for..in` enumerator + `Count`/`Items`/`Entries`/`IsEmpty`/`Contains`/`ContainsIgnoreCase`/`TryGetEntry`/`TryEntryByName`/`TryGetEntryIgnoreCase`/`EntryByName`/`EntryByNameIgnoreCase`/`FindIgnoreCase` (zero-alloc ASCII fast path, non-ASCII fallback via `LowerCase`) + 2-entry LRU folder cache + `WithProgress` per-folder callback (zero overhead when nil, batched parallel aware) + header/pack/file-count/name NUL/binding bomb (`ESevenZLimitError`/`EArgumentError` at 64MiB header/pack, 8GiB total/unpack, 1M files/folders/pack streams/CRC, 1M coder props, 64KiB name, duplicate bind) + single-pass `Move+CRC` writer & `ExtractTo` reader (256KiB window, windowed CRC) + warnings 0,
   ExtractTo windowed writes, entry-stream semantics, synthesized kEncodedHeader archive round trip,
   writer filter chains: BCJ/Delta/two-stage and mixed-family round trips, zero-alloc Delta in-place, unified filter dispatch, Deflate/BZip2 writers via `SetMethod` (BZip2 via libbz2 mapped levels `1`/`9` + `30`, pure `nextpas.core.sevenz.levels` helpers), parallel folder encode (≥2 folders, `IsMultiThread` guarded, per-thread fresh LZMA encoder, AES serial), builder fluent API (`SevenZCreateWriterBuilder` chained, `AddTree`/`AddFileFromFs` federation) and `TryExtract` family (`TryExtractWithError`/`TryOpenStream` probes), byte-identical
   determinism, reset-to-default equality, depth validation (16), empty archive,
