@@ -1,16 +1,9 @@
 unit nextpas.core.audio.codec.flac.sse;
 
-{ 手工 NEON 内核：FLAC 去相关与 wasted_bits 的向量化。
+{ 手工 NEON / SSE2 内核：FLAC 去相关与 wasted_bits 的向量化。
+  aarch64: 4-wide NEON ld1/sub/add/ushl；x86_64: 4-wide SSE2 movdqu/psubd/paddd/pslld
   定点 32 位为主；64 位中间与 LPC dot 需 64 位累加与 floor Sar64。
-  兼容性：ppcrossa64 3.3.1 的 aarch64 汇编器对 widen/narrow
-  (sxtl/sxtl2/xtn/xtn2/sshll/sshll2/shrn/shrn2/saddl/smull 等)
-  的 .2s/.2d/.4s 组合报 Invalid arrangement / Unrecognized opcode，
-  因此 mid_side 与 LPC 的 64 位路径弃用 sxtl/xtn，改用向量加载 +
-  sxtw/asr 的 4-wide 标量展开（每 4 样点一个向量 ld1/st1，lane 经
-  umov/ins 提取/回填，或纯 GPR ldr/str；dot 经 sxtw+mul+add 64 位
-  累加，asr x12,x12,w3 完成 Sar64 floor）。该迂回仍比纯标量少分支，
-  且仅用已验证通过的指令：ld1/st1 .4s、dup .4s、ushl .4s、
-  umov/ins/ldr/str、sxtw、lsl/orr/and/add/sub/mul/asr 等。 }
+  兼容性见原注释；x86_64 路径仅用 SSE2 已验证指令。 }
 
 {$mode objfpc}{$H+}
 
@@ -24,11 +17,16 @@ interface
 
 {$ifdef FLAC_SIMD}
 {$ifdef cpuaarch64}
-procedure flac_left_side_neon(dst1_: PInt32; src0_: PInt32; n_: LongWord); // dst1[i] = src0 - dst1
-procedure flac_right_side_neon(dst0_: PInt32; src1_: PInt32; n_: LongWord); // dst0[i] += src1[i]
-procedure flac_wasted_bits_neon(dst_: PInt32; n_: LongWord; shift_: LongWord); // dst[i] <<= shift
-procedure flac_mid_side_neon(mid_: PInt32; side_: PInt32; n_: LongWord); // m=(mid<<1)|(side&1); mid=(m+side)>>1 floor; side=(m-side)>>1
-procedure flac_lpc_restore_neon(out_: PInt32; coeff_: PInt32; order_: LongWord; shift_: LongWord; n_: LongWord); // LPC 预测还原：dot=Σ out*coeff，Sar64
+procedure flac_left_side_neon(dst1_: PInt32; src0_: PInt32; n_: LongWord);
+procedure flac_right_side_neon(dst0_: PInt32; src1_: PInt32; n_: LongWord);
+procedure flac_wasted_bits_neon(dst_: PInt32; n_: LongWord; shift_: LongWord);
+procedure flac_mid_side_neon(mid_: PInt32; side_: PInt32; n_: LongWord);
+procedure flac_lpc_restore_neon(out_: PInt32; coeff_: PInt32; order_: LongWord; shift_: LongWord; n_: LongWord);
+{$endif}
+{$ifdef cpux86_64}
+procedure flac_left_side_sse(dst1_: PInt32; src0_: PInt32; n_: LongWord);
+procedure flac_right_side_sse(dst0_: PInt32; src1_: PInt32; n_: LongWord);
+procedure flac_wasted_bits_sse(dst_: PInt32; n_: LongWord; shift_: LongWord);
 {$endif}
 {$endif}
 
@@ -38,7 +36,6 @@ implementation
 {$ifdef cpuaarch64}
 
 procedure flac_left_side_neon(dst1_: PInt32; src0_: PInt32; n_: LongWord); assembler; nostackframe;
-{ x0=dst1  x1=src0  w2=n }
 asm
   cbz     w2, .Lfls_left_done
   lsr     w3, w2, #2
@@ -89,7 +86,6 @@ asm
 end;
 
 procedure flac_wasted_bits_neon(dst_: PInt32; n_: LongWord; shift_: LongWord); assembler; nostackframe;
-{ dst[i] <<= shift，shift 0..31，4-wide shl }
 asm
   cbz     w1, .Lwb_done
   cbz     w2, .Lwb_done
@@ -115,8 +111,6 @@ asm
 end;
 
 procedure flac_mid_side_neon(mid_: PInt32; side_: PInt32; n_: LongWord); assembler; nostackframe;
-{ 4-wide 向量 ld1 + sxtw/lsl/orr/add/sub/asr 标量展开，避免 sxtl/xtn。
-  x0=mid  x1=side  w2=n。v0/v1 为输入块，v2/v3 为输出块经 umov/ins 组装。 }
 asm
   cbz     w2, .Lmid_done
   lsr     w3, w2, #2
@@ -203,9 +197,6 @@ asm
 end;
 
 procedure flac_lpc_restore_neon(out_: PInt32; coeff_: PInt32; order_: LongWord; shift_: LongWord; n_: LongWord); assembler; nostackframe;
-{ x0=out  x1=coeff  w2=order  w3=shift  w4=n。外层 i=order..n-1，内层 dot 4-wide
-  展开用 sxtw+mul+add 累加，末尾 asr x12,x12,x3 实现 Sar64 floor。AAPCS64
-  仅用 v0-v7/x0-x17，nostackframe。 }
 asm
   cmp     w4, w2
   b.ls    .Llpc_done
@@ -288,6 +279,99 @@ asm
 end;
 
 {$endif cpuaarch64}
+{$ifdef cpux86_64}
+// rdi=dst1 rsi=src0 edx=n
+procedure flac_left_side_sse(dst1_: PInt32; src0_: PInt32; n_: LongWord); assembler; nostackframe;
+asm
+  testl   %edx, %edx
+  jz      .Lls_done
+  movl    %edx, %ecx
+  shrl    $2, %ecx
+  jz      .Lls_tail
+.Lls_loop:
+  movdqu  (%rsi), %xmm0
+  movdqu  (%rdi), %xmm1
+  psubd   %xmm1, %xmm0
+  movdqu  %xmm0, (%rdi)
+  addq    $16, %rsi
+  addq    $16, %rdi
+  decl    %ecx
+  jnz     .Lls_loop
+.Lls_tail:
+  andl    $3, %edx
+  jz      .Lls_done
+.Lls_tail_loop:
+  movl    (%rsi), %eax
+  subl    (%rdi), %eax
+  movl    %eax, (%rdi)
+  addq    $4, %rsi
+  addq    $4, %rdi
+  decl    %edx
+  jnz     .Lls_tail_loop
+.Lls_done:
+end;
+
+procedure flac_right_side_sse(dst0_: PInt32; src1_: PInt32; n_: LongWord); assembler; nostackframe;
+asm
+  testl   %edx, %edx
+  jz      .Lrs_done
+  movl    %edx, %ecx
+  shrl    $2, %ecx
+  jz      .Lrs_tail
+.Lrs_loop:
+  movdqu  (%rsi), %xmm0
+  movdqu  (%rdi), %xmm1
+  paddd   %xmm0, %xmm1
+  movdqu  %xmm1, (%rdi)
+  addq    $16, %rsi
+  addq    $16, %rdi
+  decl    %ecx
+  jnz     .Lrs_loop
+.Lrs_tail:
+  andl    $3, %edx
+  jz      .Lrs_done
+.Lrs_tail_loop:
+  movl    (%rsi), %eax
+  addl    %eax, (%rdi)
+  addq    $4, %rsi
+  addq    $4, %rdi
+  decl    %edx
+  jnz     .Lrs_tail_loop
+.Lrs_done:
+end;
+
+procedure flac_wasted_bits_sse(dst_: PInt32; n_: LongWord; shift_: LongWord); assembler; nostackframe;
+asm
+  testl   %esi, %esi
+  jz      .Lwb_done
+  testl   %edx, %edx
+  jz      .Lwb_done
+  movl    %esi, %ecx
+  shrl    $2, %ecx
+  jz      .Lwb_tail_setup
+  movd    %edx, %xmm1
+.Lwb_loop:
+  movdqu  (%rdi), %xmm0
+  pslld   %xmm1, %xmm0
+  movdqu  %xmm0, (%rdi)
+  addq    $16, %rdi
+  decl    %ecx
+  jnz     .Lwb_loop
+.Lwb_tail_setup:
+  andl    $3, %esi
+  jz      .Lwb_done
+  movl    %edx, %ecx
+.Lwb_tail_loop:
+  movl    (%rdi), %eax
+  shll    %cl, %eax
+  movl    %eax, (%rdi)
+  addq    $4, %rdi
+  decl    %esi
+  jnz     .Lwb_tail_loop
+.Lwb_done:
+end;
+
+{$endif cpux86_64}
 {$endif FLAC_SIMD}
 
 end.

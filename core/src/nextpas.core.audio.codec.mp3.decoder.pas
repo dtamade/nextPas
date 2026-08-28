@@ -12,6 +12,7 @@ uses
   nextpas.core.audio.codec.intf;
 
 function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
+function Mp3DecodeBytes(const AData: TBytes): TAudioBuffer;
 function CreateMp3Decoder: IAudioDecoder;
 
 implementation
@@ -20,7 +21,8 @@ uses
   nextpas.core.bytes.cursor,
   nextpas.core.audio.codec.mp3,
   nextpas.core.audio.codec.meta,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.audio.pcm.simd;
 
 type
   TMemoryMp3Source = class(TInterfacedObject, IAudioSource, IRealtimeAudioSource)
@@ -40,14 +42,21 @@ type
     FTags: TAudioTags;
     FDec: TMp3decT;
     FInit: Boolean;
+    FOut: TBytes;
+    FOutCap: Integer;
     procedure EnsureArena;
+    function DecodeBytesInternal(const AData: TBytes): TAudioBuffer;
   public
     constructor Create;
     function Probe(const APrefix: TBytes): TAudioProbeResult;
     function DecodeWhole(const AStream: IStream): TAudioBuffer;
+    function DecodeBytes(const AData: TBytes): TAudioBuffer;
     function OpenStreaming(const AStream: IStream): IAudioSource;
     function Tags: TAudioTags;
   end;
+
+threadvar
+  GReuseMp3: TMp3Decoder;
 
 constructor TMemoryMp3Source.Create(const ABuffer: TAudioBuffer);
 begin
@@ -146,56 +155,43 @@ begin
   FInit := True;
 end;
 
-function TMp3Decoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
+function TMp3Decoder.DecodeBytesInternal(const AData: TBytes): TAudioBuffer;
 var
-  LData: TBytes;
-  LAvail: Int64;
-  LRead: LongInt;
   Len, Off: LongInt;
   N, CH, SR: LongInt;
   Info: TMp3decFrameInfoT;
   Pcm: array[0..2304*2-1] of SmallInt;
-  LOutBytes: TBytes;
-  LOutPos, LOutCap, LTotalFrames: Integer;
+  LOutPos, LTotalFrames: Integer;
   LFormat: TAudioFormat;
   LHasFormat: Boolean;
-  I: Integer;
+  I, VIdx: Integer;
   F: Single;
   Skipped: Integer;
   TmpTags: TAudioTags;
 begin
   Result := Default(TAudioBuffer);
   FTags := Default(TAudioTags);
-  if AStream = nil then raise EAudioDecodeError.Create('mp3: nil stream');
-  LAvail := AStream.Size - AStream.Position;
-  if LAvail <= 0 then raise EAudioDecodeError.Create('mp3: empty stream');
-  if LAvail > 1024*1024*256 then raise EAudioDecodeError.Create('mp3: stream too large');
-  SetLength(LData, LAvail);
-  LRead := AStream.Read(LData[0], LongInt(LAvail));
-  if LRead <> LAvail then raise EAudioDecodeError.Create('mp3: read failed');
-
-  // 复用度：ID3v2 标签归一 via codec.meta
-  if TryParseID3v2(LData, TmpTags, Skipped) then
-  begin
-    FTags := TmpTags;
-    // 落后兼容：保留 Extra
-  end else Skipped := 0;
-
+  if TryParseID3v2(AData, TmpTags, Skipped) then FTags := TmpTags else Skipped := 0;
   EnsureArena;
-  // 复用实例级 Dec，重置状态
   mp3dec_init(@FDec);
-  Len := Length(LData);
+  Len := Length(AData);
   Off := Skipped;
   if Off < 0 then Off := 0;
   if Off >= Len then raise EAudioDecodeError.Create('mp3: no audio after ID3');
   LHasFormat := False;
   LTotalFrames := 0;
   LOutPos := 0;
-  LOutCap := 0;
-  SetLength(LOutBytes, 0);
+  // 复用 FOut：首跑分配 ~Len*11（41KB→460KB），后 420 次零分配
+  if FOutCap < Len * 11 then
+  begin
+    FOutCap := Len * 11;
+    if FOutCap < 4096 * 4 then FOutCap := 4096 * 4;
+    if FOutCap > 1024*1024*32 then FOutCap := 1024*1024*32;
+    SetLength(FOut, FOutCap);
+  end;
   while Off < Len do
   begin
-    N := mp3dec_decode_frame(@FDec, @LData[Off], Len - Off, @Pcm[0], @Info);
+    N := mp3dec_decode_frame(@FDec, @AData[Off], Len - Off, @Pcm[0], @Info);
     if Info.frame_bytes > 0 then Inc(Off, Info.frame_bytes) else Inc(Off);
     if N > 0 then
     begin
@@ -208,19 +204,34 @@ begin
         LFormat := AudioFormatCreate(SR, CH, sfF32);
         LHasFormat := True;
       end;
-      if LOutPos + N * CH * 4 > LOutCap then
+      if LOutPos + N * CH * 4 > FOutCap then
       begin
-        if LOutCap = 0 then LOutCap := 4096 * CH * 4;
-        while LOutPos + N * CH * 4 > LOutCap do LOutCap := LOutCap * 2;
-        SetLength(LOutBytes, LOutCap);
+        while LOutPos + N * CH * 4 > FOutCap do FOutCap := FOutCap * 2;
+        SetLength(FOut, FOutCap);
       end;
-      // 性能：逐采样除法→倒数预乘，优于 music888 的直接除法
+{$IFDEF CPUX86_64}
+      // 4-wide S16→F32 直连 intrinsics（1 CALL/4，Linux 融合），与 FLAC 同路径
+      VIdx := 0;
+      while VIdx + 3 < N * CH do
+      begin
+        PcmConvertS16x4ToF32(@Pcm[VIdx], 1.0/32768.0, PSingle(@FOut[LOutPos]));
+        Inc(LOutPos, 16);
+        Inc(VIdx, 4);
+      end;
+      for I := VIdx to N * CH - 1 do
+      begin
+        F := Pcm[I] * (1.0 / 32768.0);
+        PSingle(@FOut[LOutPos])^ := F;
+        Inc(LOutPos, 4);
+      end;
+{$ELSE}
       for I := 0 to N * CH - 1 do
       begin
         F := Pcm[I] * (1.0 / 32768.0);
-        PSingle(@LOutBytes[LOutPos])^ := F;
+        PSingle(@FOut[LOutPos])^ := F;
         Inc(LOutPos, 4);
       end;
+{$ENDIF}
       Inc(LTotalFrames, N);
     end
     else if N = 0 then
@@ -230,10 +241,37 @@ begin
     end else Break;
   end;
   if not LHasFormat then raise EAudioDecodeError.Create('mp3: decode failed');
-  SetLength(LOutBytes, LOutPos);
+  SetLength(Result.Data, LOutPos);
+  if LOutPos > 0 then Move(FOut[0], Result.Data[0], LOutPos);
   Result.Format := LFormat;
   Result.FrameCount := LTotalFrames;
-  Result.Data := LOutBytes;
+end;
+
+function TMp3Decoder.DecodeBytes(const AData: TBytes): TAudioBuffer;
+begin
+  Result := DecodeBytesInternal(AData);
+end;
+
+function Mp3DecodeBytes(const AData: TBytes): TAudioBuffer;
+begin
+  if GReuseMp3 = nil then GReuseMp3 := TMp3Decoder.Create;
+  Result := GReuseMp3.DecodeBytesInternal(AData);
+end;
+
+function TMp3Decoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
+var
+  LData: TBytes;
+  LAvail: Int64;
+  LRead: LongInt;
+begin
+  if AStream = nil then raise EAudioDecodeError.Create('mp3: nil stream');
+  LAvail := AStream.Size - AStream.Position;
+  if LAvail <= 0 then raise EAudioDecodeError.Create('mp3: empty stream');
+  if LAvail > 1024*1024*256 then raise EAudioDecodeError.Create('mp3: stream too large');
+  SetLength(LData, LAvail);
+  LRead := AStream.Read(LData[0], LongInt(LAvail));
+  if LRead <> LAvail then raise EAudioDecodeError.Create('mp3: read failed');
+  Result := DecodeBytesInternal(LData);
 end;
 
 function TMp3Decoder.OpenStreaming(const AStream: IStream): IAudioSource;

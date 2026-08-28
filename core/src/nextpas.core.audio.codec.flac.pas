@@ -936,7 +936,7 @@ function FlacSar64(Value: Int64; Count: LongWord): Int64; inline;
 {$endif}
 {$ifdef FLAC_NO_SIMD}
 {$else}
-{$if defined(cpuaarch64)}
+{$if defined(cpuaarch64) or defined(cpux86_64)}
 {$define FLAC_SIMD_ON}
 {$ifend}
 {$endif}
@@ -9482,6 +9482,19 @@ begin
             i_2 := (i_2 + 1);
           end;
         end;
+{$else}{$ifdef cpux86_64}
+        if AudioUseSSE2 then
+          flac_left_side_sse(PInt32T(output[1]), PInt32T(output[0]), LongWord(frame^.header.block_size))
+        else
+        begin
+          i_2 := TUint32T(0);
+          while (i_2 < LongWord(frame^.header.block_size)) do
+          begin
+            output[1][i_2] := TInt32T((output[0][i_2] - output[1][i_2]));
+            _L__for0_step:
+            i_2 := (i_2 + 1);
+          end;
+        end;
 {$else}
         i_2 := TUint32T(0);
         while (i_2 < LongWord(frame^.header.block_size)) do
@@ -9490,7 +9503,7 @@ begin
           _L__for0_step:
           i_2 := (i_2 + 1);
         end;
-{$endif}
+{$endif}{$endif}
 {$else}
         i_2 := TUint32T(0);
         while (i_2 < LongWord(frame^.header.block_size)) do
@@ -9517,6 +9530,19 @@ begin
             i_2 := (i_2 + 1);
           end;
         end;
+{$else}{$ifdef cpux86_64}
+        if AudioUseSSE2 then
+          flac_right_side_sse(PInt32T(output[0]), PInt32T(output[1]), LongWord(frame^.header.block_size))
+        else
+        begin
+          i_2 := TUint32T(0);
+          while (i_2 < LongWord(frame^.header.block_size)) do
+          begin
+            output[0][i_2] := TInt32T((output[0][i_2] + output[1][i_2]));
+            _L__for1_step:
+            i_2 := (i_2 + 1);
+          end;
+        end;
 {$else}
         i_2 := TUint32T(0);
         while (i_2 < LongWord(frame^.header.block_size)) do
@@ -9525,7 +9551,7 @@ begin
           _L__for1_step:
           i_2 := (i_2 + 1);
         end;
-{$endif}
+{$endif}{$endif}
 {$else}
         i_2 := TUint32T(0);
         while (i_2 < LongWord(frame^.header.block_size)) do
@@ -14484,6 +14510,19 @@ begin
         i_2 := (i_2 + 1);
       end;
     end;
+{$else}{$ifdef cpux86_64}
+    if AudioUseSSE2 then
+      flac_wasted_bits_sse(output, block_size, LongWord(subframe^.header.wasted_bits))
+    else
+    begin
+      i_2 := TUint32T(0);
+      while (i_2 < block_size) do
+      begin
+        output[i_2] := (output[i_2] shl subframe^.header.wasted_bits);
+        _L__for0_step:
+        i_2 := (i_2 + 1);
+      end;
+    end;
 {$else}
     i_2 := TUint32T(0);
     while (i_2 < block_size) do
@@ -14492,7 +14531,7 @@ begin
       _L__for0_step:
       i_2 := (i_2 + 1);
     end;
-{$endif}
+{$endif}{$endif}
 {$else}
     i_2 := TUint32T(0);
     while (i_2 < block_size) do

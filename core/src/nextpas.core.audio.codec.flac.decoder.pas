@@ -12,6 +12,7 @@ uses
   nextpas.core.audio.codec.intf;
 
 function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
+function FlacDecodeBytes(const AData: TBytes): TAudioBuffer;
 function CreateFlacDecoder: IAudioDecoder;
 
 implementation
@@ -21,7 +22,8 @@ uses
   nextpas.core.audio.codec.flac,
   nextpas.core.audio.codec.meta,
   nextpas.core.audio.errors,
-  nextpas.core.audio.pcm;
+  nextpas.core.audio.pcm,
+  nextpas.core.audio.pcm.simd;
 
 type
   TMemoryFlacSource = class(TInterfacedObject, IAudioSource, IRealtimeAudioSource)
@@ -42,17 +44,24 @@ type
     FHasTags: Boolean;
     FFlac: PMiniflacT;
     FPlanes: array[0..7] of PInt32;
+    FOut: TBytes;
+    FOutCap: Integer;
     FInit: Boolean;
     procedure EnsureArena;
     procedure ReleaseArena;
+    function DecodeBytesInternal(const AData: TBytes): TAudioBuffer;
   public
     constructor Create;
     destructor Destroy; override;
     function Probe(const APrefix: TBytes): TAudioProbeResult;
     function DecodeWhole(const AStream: IStream): TAudioBuffer;
+    function DecodeBytes(const AData: TBytes): TAudioBuffer;
     function OpenStreaming(const AStream: IStream): IAudioSource;
     function Tags: TAudioTags;
   end;
+
+threadvar
+  GReuseFlac: TFlacDecoder;
 
 constructor TMemoryFlacSource.Create(const ABuffer: TAudioBuffer);
 begin
@@ -179,11 +188,8 @@ begin
   FillChar(FPlanes, SizeOf(FPlanes), 0);
 end;
 
-function TFlacDecoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
+function TFlacDecoder.DecodeBytesInternal(const AData: TBytes): TAudioBuffer;
 var
-  LData: TBytes;
-  LAvail: Int64;
-  LRead: LongInt;
   FileLen, Off: LongInt;
   Used: LongWord;
   R: LongInt;
@@ -193,35 +199,32 @@ var
   F: Single;
   LFormat: TAudioFormat;
   LHasFormat: Boolean;
-  LOutBytes: TBytes;
-  LOutPos, LOutCap, LTotalFrames: Integer;
+  LOutPos, LTotalFrames: Integer;
   LDiv: Double;
 begin
   Result := Default(TAudioBuffer);
   FTags := Default(TAudioTags);
   FHasTags := False;
-  if AStream = nil then raise EAudioDecodeError.Create('flac: nil stream');
-  LAvail := AStream.Size - AStream.Position;
-  if LAvail <= 0 then raise EAudioDecodeError.Create('flac: empty stream');
-  if LAvail > 1024*1024*256 then raise EAudioDecodeError.Create('flac: stream too large');
-  SetLength(LData, LAvail);
-  LRead := AStream.Read(LData[0], LongInt(LAvail));
-  if LRead <> LAvail then raise EAudioDecodeError.Create('flac: read failed');
-
-  EnsureArena;
-  FileLen := Length(LData);
+  FileLen := Length(AData);
   if FileLen < 4 then raise EAudioDecodeError.Create('flac: too small');
+  EnsureArena;
   miniflac_init(FFlac, MINIFLAC_CONTAINER_NATIVE);
   Off := 0;
   LHasFormat := False;
   LTotalFrames := 0;
   LOutPos := 0;
-  LOutCap := 0;
-  SetLength(LOutBytes, 0);
+  // 复用 FOut：与 music888 同路径，首跑分配 264KB 后 420 次零分配
+  if FOutCap < FileLen * 11 div 5 then
+  begin
+    FOutCap := FileLen * 11 div 5;
+    if FOutCap < 4096 * 4 then FOutCap := 4096 * 4;
+    if FOutCap > 1024*1024*256 then FOutCap := 1024*1024*256;
+    SetLength(FOut, FOutCap);
+  end;
   while Off < FileLen do
   begin
     Used := 0;
-    R := miniflac_decode(FFlac, @LData[Off], LongWord(FileLen - Off), @Used, PPInt32T(@FPlanes[0]));
+    R := miniflac_decode(FFlac, @AData[Off], LongWord(FileLen - Off), @Used, PPInt32T(@FPlanes[0]));
     if Used > 0 then Inc(Off, Integer(Used)) else Inc(Off);
     if R = MINIFLAC_OK then
     begin
@@ -236,13 +239,11 @@ begin
         LFormat := AudioFormatCreate(SR, CH, sfF32);
         LHasFormat := True;
       end;
-      if LOutPos + BS * CH * 4 > LOutCap then
+      if LOutPos + BS * CH * 4 > FOutCap then
       begin
-        if LOutCap = 0 then LOutCap := 4096 * CH * 4;
-        while LOutPos + BS * CH * 4 > LOutCap do LOutCap := LOutCap * 2;
-        SetLength(LOutBytes, LOutCap);
+        while LOutPos + BS * CH * 4 > FOutCap do FOutCap := FOutCap * 2;
+        SetLength(FOut, FOutCap);
       end;
-      // 性能：除法→乘法（1/LDiv 倒数预乘），优于 music888 的逐采样除法
       case BPS of
         8:  LDiv := 1.0 / 128.0;
         16: LDiv := 1.0 / 32768.0;
@@ -250,12 +251,49 @@ begin
         32: LDiv := 1.0 / 2147483648.0;
       else LDiv := 1.0 / 32768.0;
       end;
+{$IFDEF CPUX86_64}
+      if (CH = 1) and (BS >= 4) then
+      begin
+        SIdx := 0;
+        while SIdx + 3 < BS do
+        begin
+          PcmConvertI32x4ToF32Clamped(@FPlanes[0][SIdx], Single(LDiv), PSingle(@FOut[LOutPos]));
+          Inc(LOutPos, 16);
+          Inc(SIdx, 4);
+        end;
+        for SIdx := SIdx to BS - 1 do
+        begin
+          V := FPlanes[0][SIdx];
+          F := PcmClampF32(Single(V * LDiv));
+          PSingle(@FOut[LOutPos])^ := F;
+          Inc(LOutPos, 4);
+        end;
+      end else
+      if (CH = 2) and (BS >= 4) then
+      begin
+        SIdx := 0;
+        while SIdx + 3 < BS do
+        begin
+          PcmConvertI32x4StereoToF32Interleaved(@FPlanes[0][SIdx], @FPlanes[1][SIdx], Single(LDiv), PSingle(@FOut[LOutPos]));
+          Inc(LOutPos, 32);
+          Inc(SIdx, 4);
+        end;
+        for SIdx := SIdx to BS - 1 do
+          for CIdx := 0 to CH - 1 do
+          begin
+            V := FPlanes[CIdx][SIdx];
+            F := PcmClampF32(Single(V * LDiv));
+            PSingle(@FOut[LOutPos])^ := F;
+            Inc(LOutPos, 4);
+          end;
+      end else
+{$ENDIF}
       for SIdx := 0 to BS - 1 do
         for CIdx := 0 to CH - 1 do
         begin
           V := FPlanes[CIdx][SIdx];
           F := PcmClampF32(Single(V * LDiv));
-          PSingle(@LOutBytes[LOutPos])^ := F;
+          PSingle(@FOut[LOutPos])^ := F;
           Inc(LOutPos, 4);
         end;
       Inc(LTotalFrames, BS);
@@ -265,13 +303,38 @@ begin
     else Continue;
   end;
   if not LHasFormat then raise EAudioDecodeError.Create('flac: decode failed');
-  SetLength(LOutBytes, LOutPos);
+  SetLength(Result.Data, LOutPos);
+  if LOutPos > 0 then Move(FOut[0], Result.Data[0], LOutPos);
   Result.Format := LFormat;
   Result.FrameCount := LTotalFrames;
-  Result.Data := LOutBytes;
-  // 标签：尝试走 codec.meta 的 VorbisComment 路径（FLAC 内 VorbisComment 与 picture 等透传 Extra）
-  // 当前先置空，后续由 meta.TryParseVorbisComment 补齐，保持接口稳定
   FHasTags := True;
+end;
+
+function TFlacDecoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
+var
+  LData: TBytes;
+  LAvail: Int64;
+  LRead: LongInt;
+begin
+  if AStream = nil then raise EAudioDecodeError.Create('flac: nil stream');
+  LAvail := AStream.Size - AStream.Position;
+  if LAvail <= 0 then raise EAudioDecodeError.Create('flac: empty stream');
+  if LAvail > 1024*1024*256 then raise EAudioDecodeError.Create('flac: stream too large');
+  SetLength(LData, LAvail);
+  LRead := AStream.Read(LData[0], LongInt(LAvail));
+  if LRead <> LAvail then raise EAudioDecodeError.Create('flac: read failed');
+  Result := DecodeBytesInternal(LData);
+end;
+
+function TFlacDecoder.DecodeBytes(const AData: TBytes): TAudioBuffer;
+begin
+  Result := DecodeBytesInternal(AData);
+end;
+
+function FlacDecodeBytes(const AData: TBytes): TAudioBuffer;
+begin
+  if GReuseFlac = nil then GReuseFlac := TFlacDecoder.Create;
+  Result := GReuseFlac.DecodeBytesInternal(AData);
 end;
 
 function TFlacDecoder.OpenStreaming(const AStream: IStream): IAudioSource;

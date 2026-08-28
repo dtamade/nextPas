@@ -204,11 +204,8 @@ begin
         while LOutPos + N * CH * 4 > LOutCap do LOutCap := LOutCap * 2;
         SetLength(LOutBytes, LOutCap);
       end;
-      for I := 0 to N * CH - 1 do
-      begin
-        PSingle(@LOutBytes[LOutPos])^ := Tmp[I];
-        Inc(LOutPos, 4);
-      end;
+      Move(Tmp[0], LOutBytes[LOutPos], N * CH * SizeOf(Single));
+      Inc(LOutPos, N * CH * SizeOf(Single));
       Inc(LTotalFrames, N);
     end;
     if LTotalFrames = 0 then raise EAudioDecodeError.Create('vorbis: no frames');
