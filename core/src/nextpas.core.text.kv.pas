@@ -1,17 +1,17 @@
 unit nextpas.core.text.kv;
 
-{** @desc 通用 key=value 空格分词扫描器（L0，零后端依赖）。
-       形态：空格分隔的 key=value 序列，value 可用 ' 或 " 包裹以含
-       空格/@/= 等特殊字符。与 MySQL DSN、PG conninfo、ODBC connstr
-       等多处 DSN 形态同源，抽取为共享内核提升复用度与可测试性。
-
-       词法与 nextpas.core.db.mysql.adapter.ParseMySqlDsn 同构：
-       - 跳过空白，寻 '=' 分隔；缺 '=' 或空 key → 错 "malformed ... near offset X"
-       - '=' 后若为引号则寻同引号闭合，缺闭合 → 错 "unterminated quoted value for \"key\""
-       - 否则读至空白截断
-       - 保留原大小写，交由调用方 SameText 比对（零分配大小写无关）
-       - 不做键合法性校验，调用方按需 fail-fast（未知键/非法值）
-       单遍 O(n)，零 TextBuilder 分配，仅 Copy 结果分量。 *}
+// @desc 通用 key=value 扫描器（L0，零后端依赖）。
+// 统一形态：key=value 序列，分隔符为空格或 ';'（兼容 MySQL DSN
+// 空格分隔与 ODBC connstr 分号分隔），value 可用单引号/双引号/花括号
+// 包裹以含空格/@/= 等特殊字符。与 MySQL DSN、PG conninfo、ODBC
+// connstr 等多处 DSN 形态同源，抽取为共享内核提升复用度。
+// 词法与 nextpas.core.db.mysql.adapter.ParseMySqlDsn 同构并扩展：
+// - 跳过空白与 ';'，寻 '=' 分隔；缺 '=' 或空 key -> 错 "malformed ... near offset X"
+// - '=' 后若为引号或花括号则寻同形闭合，缺闭合 -> 错 "unterminated quoted value for key"
+// - 否则读至空白或 ';' 截断；尾随 ';' 按分隔符跳过
+// - 保留原大小写，交由调用方 SameText 比对（零分配大小写无关）
+// - 不做键合法性校验，调用方按需 fail-fast（未知键/非法值）
+// 单遍 O(n)，零 TextBuilder 分配，仅 Copy 结果分量。
 
 {$I nextpas.core.settings.inc}
 
@@ -70,7 +70,7 @@ begin
   I := 1;
   while I <= LLen do
   begin
-    while (I <= LLen) and (S[I] = ' ') do
+    while (I <= LLen) and ((S[I] = ' ') or (S[I] = ';')) do
       Inc(I);
     if I > LLen then Break;
     LStart := I;
@@ -80,9 +80,12 @@ begin
       raise ENextPasError.CreateFmt('malformed dsn near offset %d', [I]);
     LKey := Copy(S, LStart, I - LStart);
     Inc(I);
-    if (I <= LLen) and ((S[I] = '''') or (S[I] = '"')) then
+    if (I <= LLen) and ((S[I] = '''') or (S[I] = '"') or (S[I] = '{')) then
     begin
-      LQuote := Ord(S[I]);
+      if S[I] = '{' then
+        LQuote := Ord('}')
+      else
+        LQuote := Ord(S[I]);
       Inc(I);
       LStart := I;
       while (I <= LLen) and (Ord(S[I]) <> LQuote) do
@@ -95,7 +98,7 @@ begin
     else
     begin
       LStart := I;
-      while (I <= LLen) and (S[I] <> ' ') do
+      while (I <= LLen) and (S[I] <> ' ') and (S[I] <> ';') do
         Inc(I);
       LVal := Copy(S, LStart, I - LStart);
     end;
@@ -114,7 +117,7 @@ begin
   I := 1;
   while I <= LLen do
   begin
-    while (I <= LLen) and (S[I] = ' ') do
+    while (I <= LLen) and ((S[I] = ' ') or (S[I] = ';')) do
       Inc(I);
     if I > LLen then Break;
     LStart := I;
@@ -124,9 +127,12 @@ begin
       raise ENextPasError.CreateFmt('malformed dsn near offset %d', [I]);
     LKey := Copy(S, LStart, I - LStart);
     Inc(I);
-    if (I <= LLen) and ((S[I] = '''') or (S[I] = '"')) then
+    if (I <= LLen) and ((S[I] = '''') or (S[I] = '"') or (S[I] = '{')) then
     begin
-      LQuote := Ord(S[I]);
+      if S[I] = '{' then
+        LQuote := Ord('}')
+      else
+        LQuote := Ord(S[I]);
       Inc(I);
       LStart := I;
       while (I <= LLen) and (Ord(S[I]) <> LQuote) do
@@ -139,7 +145,7 @@ begin
     else
     begin
       LStart := I;
-      while (I <= LLen) and (S[I] <> ' ') do
+      while (I <= LLen) and (S[I] <> ' ') and (S[I] <> ';') do
         Inc(I);
       LVal := Copy(S, LStart, I - LStart);
     end;
