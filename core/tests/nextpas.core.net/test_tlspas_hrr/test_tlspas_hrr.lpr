@@ -14,6 +14,8 @@ uses
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.recordsealer,
+  nextpas.core.tls.tls13.posthandshake,
+  nextpas.core.tls.tls13.finished,
   nextpas.core.net.async.tlspas,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -524,6 +526,39 @@ begin
   finally C.Free; end;
 end;
 
+procedure TestEndOfEarlyDataHandshakeBuildParse;
+var LEoed: TBytes; LInfo: TTLS13EndOfEarlyDataInfo; LErr: string; LOk: Boolean;
+begin
+  LEoed := BuildTLS13EndOfEarlyDataHandshake;
+  Check(Length(LEoed) = 4, 'EOED len 4');
+  Check(LEoed[0] = 5, 'EOED type 0x05');
+  Check((LEoed[1]=0) and (LEoed[2]=0) and (LEoed[3]=0), 'EOED length zero');
+  LOk := TryParseTLS13EndOfEarlyData(LEoed, LInfo, LErr);
+  Check(LOk and LInfo.Valid, 'EOED parse valid: ' + LErr);
+  LEoed[0] := 4;
+  Check(not TryParseTLS13EndOfEarlyData(LEoed, LInfo, LErr), 'EOED wrong type fails');
+end;
+
+procedure TestFinishedWithEOEDDiffers;
+var LTranscript, LEoed, LHashWithout, LHashWith, LVerifyWithout, LVerifyWith: TBytes;
+    LKey: TBytes;
+begin
+  SetLength(LTranscript, 40);
+  FillChar(LTranscript[0], 40, $33);
+  LEoed := BuildTLS13EndOfEarlyDataHandshake;
+  LHashWithout := SHA256(LTranscript);
+  SetLength(LTranscript, 44);
+  Move(LEoed[0], LTranscript[40], 4);
+  LHashWith := SHA256(LTranscript);
+  Check(not CompareMem(@LHashWithout[0], @LHashWith[0], 32), 'EOED changes transcript hash (stability)');
+  SetLength(LKey, 32);
+  FillChar(LKey[0], 32, $42);
+  LVerifyWithout := TLS13ComputeFinishedVerifyDataForCipherSuite(TLS13_CIPHER_AES_128_GCM_SHA256, LKey, LHashWithout);
+  LVerifyWith := TLS13ComputeFinishedVerifyDataForCipherSuite(TLS13_CIPHER_AES_128_GCM_SHA256, LKey, LHashWith);
+  Check(Length(LVerifyWithout)=32, 'verify len 32');
+  Check(not CompareMem(@LVerifyWithout[0], @LVerifyWith[0], 32), 'Finished verify differs with EOED (completeness)');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -548,6 +583,8 @@ begin
   GSuite.Test('EarlyDataSeal', @TestEarlyDataSealRoundTrip);
   GSuite.Test('EarlyDataTicketCache', @TestTicketMaxEarlyDataCapture);
   GSuite.Test('EarlyDataLiveRejectFallback', @TestEarlyDataLiveRejectFallback);
+  GSuite.Test('EndOfEarlyDataBuildParse', @TestEndOfEarlyDataHandshakeBuildParse);
+  GSuite.Test('FinishedWithEOEDDiffers', @TestFinishedWithEOEDDiffers);
   if not GSuite.Run then
     Halt(1);
 end.

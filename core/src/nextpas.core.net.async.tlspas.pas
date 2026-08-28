@@ -32,8 +32,10 @@ unit nextpas.core.net.async.tlspas;
  *   P-384 共享 48B、公钥 97B，走 SHA-384 路径）；
  *   PSK 会话恢复（单身份，NewSessionTicket 捕获，max_early_data 入
  *   缓存，AllowEarlyData+EarlyData 时 0-RTT 数据面已接通，EE 接受
- *   判定与 HRR 互斥均已覆盖，未接受则回退 1-RTT）；HRR+PSK binder
- *   重算已覆盖；客户端证书（收到 CertificateRequest 即失败）仍未支持。
+ *   判定与 HRR 互斥均已覆盖，接受时自动发送 EndOfEarlyData（RFC 8446
+ *   §4.5，EOED+Finished 同记录），未接受则回退 1-RTT）；HRR+PSK
+ *   binder 重算已覆盖；客户端证书（收到 CertificateRequest 即失败）
+ *   仍未支持。
  * - VerifyPeer=True：复用 tls.x509verify 全链验证（日期/签名/CA
  *   约束/路径长度/信任锚/主机名 SAN+通配符）+ CertificateVerify
  *   签名校验。信任锚来源 TrustBundlePath 显式指定，或空串时发现
@@ -147,13 +149,13 @@ type
       拒绝则自动回退全握手。新票据在数据相捕获后回写缓存。nil = 关闭 }
     Cache: TAsyncTlsPasSessionCache;
     { 0-RTT 开关：True 时若缓存命中且票据 max_early_data>0，则在
-      ClientHello 中附加 early_data 扩展（RFC8446 §4.2.10）；
-      默认 False 零开销，行为与当前 1-RTT 完全一致。S6-keys 仅暴露
-      开关与派生原语，数据面仍回退 1-RTT。 }
+      ClientHello 中附加 early_data 扩展（RFC8446 §4.2.10），并在
+      服务端 EE 接受后自动发送 EndOfEarlyData（RFC 8446 §4.5）；
+      默认 False 零开销，行为与 1-RTT 完全一致。 }
     AllowEarlyData: Boolean;
     { 0-RTT 待发送早期数据（幂等请求体，如 GET）。仅当 AllowEarlyData=True
-      且票据有效且长度≤MaxEarlyDataSize 时随 CH 之后发送，仍走 1-RTT
-      回退语义；默认空不发。 }
+      且票据有效且长度≤MaxEarlyDataSize 时随 CH 之后以 early 密钥发送，
+      服务端接受则 EOED+Finished，拒绝则 1-RTT 回退；默认空不发。 }
     EarlyData: TBytes;
   end;
 
@@ -897,14 +899,26 @@ end;
 procedure BuildClientFlight(ACtx: PTlsPasHsCtx);
 var
   LTranscript: TBytes;
+  LTranscriptForFin: TBytes;
   LHash: TBytes;
   LVerify: TBytes;
   LFinished: TBytes;
+  LEoed: TBytes;
+  LFlight: TBytes;
   LRecord: TBytes;
 begin
-  { Finished 输入哈希覆盖 CH..SF }
+  { RFC 8446 §4.5：接受 early_data 时客户端在 Finished 之前发送
+    EndOfEarlyData，且 Finished 的 transcript Hash 需覆盖 EOED。 }
   LTranscript := Copy(ACtx^.Transcript, 0, Length(ACtx^.Transcript));
-  LHash := TlsPasTranscriptHash(ACtx^.Suite, LTranscript);
+  LTranscriptForFin := Copy(LTranscript, 0, Length(LTranscript));
+  if ACtx^.EarlyDataAccepted then
+  begin
+    LEoed := BuildTLS13EndOfEarlyDataHandshake;
+    AppendBytesTo(LTranscriptForFin, LEoed);
+  end
+  else
+    SetLength(LEoed, 0);
+  LHash := TlsPasTranscriptHash(ACtx^.Suite, LTranscriptForFin);
   LVerify := TLS13ComputeFinishedVerifyDataForCipherSuite(ACtx^.Suite,
     ACtx^.ClientFinKey, LHash);
 
@@ -916,22 +930,29 @@ begin
   if Length(LVerify) > 0 then
     Move(LVerify[0], LFinished[4], Length(LVerify));
 
-  SetLength(ACtx^.TxBytes, 0);
+  { 飞行按 RFC 顺序拼装：EOED (+ 空 Certificate 若被请求) + Finished，
+    同一 handshake IV 下一同加密为单记录，降低往返与分片。 }
+  SetLength(LFlight, 0);
+  if Length(LEoed) > 0 then
+    AppendBytesTo(LFlight, LEoed);
   if ACtx^.CertRequested then
-  begin
-    { 空 Certificate：type||len(4)||ctx_len(0)||list_len(0)，8 字节 }
-    LRecord := TlsPasSealClientHandshakeRecord(ACtx,
-      TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
-        0, 0, 0, 0), TLS_CONTENT_TYPE_HANDSHAKE);
-    AppendBytesTo(ACtx^.TxBytes, LRecord);
-  end;
-  LRecord := TlsPasSealClientHandshakeRecord(ACtx, LFinished,
+    AppendBytesTo(LFlight, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
+      0, 0, 0, 0));
+  AppendBytesTo(LFlight, LFinished);
+
+  SetLength(ACtx^.TxBytes, 0);
+  LRecord := TlsPasSealClientHandshakeRecord(ACtx, LFlight,
     TLS_CONTENT_TYPE_HANDSHAKE);
   AppendBytesTo(ACtx^.TxBytes, LRecord);
   ACtx^.TxOff := 0;
 
-  { resumption_master_secret 输入 = Hash(CH..CF)；v1 不恢复会话，
+  { resumption_master_secret 输入 = Hash(CH..EOED..CF)；v1 不恢复会话，
     保留正确派生供后续批次扩展 }
+  if Length(LEoed) > 0 then
+    AppendBytesTo(LTranscript, LEoed);
+  if ACtx^.CertRequested then
+    AppendBytesTo(LTranscript, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
+      0, 0, 0, 0));
   AppendBytesTo(LTranscript, LFinished);
   ACtx^.AppSecrets.ResumptionTranscriptHash :=
     TlsPasTranscriptHash(ACtx^.Suite, LTranscript);

@@ -63,6 +63,8 @@ type
     FController: ICoreWebView2Controller;
     FWebView: ICoreWebView2;
     FWebMessageToken: Int64;
+    FNavStartingToken: Int64;
+    FNavCompletedToken: Int64;
     FBridgeScriptId: WideString;
     {$ENDIF}
     procedure RequireOpen;
@@ -226,6 +228,22 @@ type
     constructor Create(AOwner: TWebView2Webview);
     function Invoke(sender: ICoreWebView2; args: ICoreWebView2WebMessageReceivedEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
   end;
+
+  TNavStartingHandler = class(TInterfacedObject, ICoreWebView2NavigationStartingEventHandler)
+  private
+    FOwner: TWebView2Webview;
+  public
+    constructor Create(AOwner: TWebView2Webview);
+    function Invoke(sender: ICoreWebView2; args: ICoreWebView2NavigationStartingEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+  end;
+
+  TNavCompletedHandler = class(TInterfacedObject, ICoreWebView2NavigationCompletedEventHandler)
+  private
+    FOwner: TWebView2Webview;
+  public
+    constructor Create(AOwner: TWebView2Webview);
+    function Invoke(sender: ICoreWebView2; args: ICoreWebView2NavigationCompletedEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+  end;
 {$ENDIF}
 
 type
@@ -362,6 +380,102 @@ begin
     else
       S := '';
     FOwner.OnWebMessageReceived(S);
+  end;
+end;
+
+constructor TNavStartingHandler.Create(AOwner: TWebView2Webview);
+begin
+  inherited Create;
+  FOwner := AOwner;
+end;
+
+function TNavStartingHandler.Invoke(sender: ICoreWebView2; args: ICoreWebView2NavigationStartingEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+var
+  PW: PWideChar;
+  Uri: string;
+  Ev: TWebviewNavigationEvent;
+  I: Integer;
+begin
+  Result := S_OK;
+  if (FOwner = nil) or FOwner.FClosed then Exit;
+  Uri := '';
+  if (args <> nil) and (args.get_Uri(PW) = S_OK) then
+  begin
+    if PW <> nil then
+    begin
+      Uri := string(WideString(PW));
+      CoTaskMemFree(PW);
+    end;
+  end
+  else if FOwner.FWebView <> nil then
+  begin
+    // fallback: try get_Source
+    if FOwner.FWebView.get_Source(PW) = S_OK then
+    begin
+      if PW <> nil then
+      begin
+        Uri := string(WideString(PW));
+        CoTaskMemFree(PW);
+      end;
+    end;
+  end;
+  Ev := Default(TWebviewNavigationEvent);
+  Ev.Url := Uri;
+  for I := 0 to High(FOwner.FOnNavStarted) do
+    FOwner.FOnNavStarted[I](Ev);
+end;
+
+constructor TNavCompletedHandler.Create(AOwner: TWebView2Webview);
+begin
+  inherited Create;
+  FOwner := AOwner;
+end;
+
+function TNavCompletedHandler.Invoke(sender: ICoreWebView2; args: ICoreWebView2NavigationCompletedEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+var
+  IsOk: BOOL;
+  Status: Integer;
+  Ev: TWebviewNavigationEvent;
+  I: Integer;
+  PW: PWSTR;
+  Uri: string;
+begin
+  Result := S_OK;
+  if (FOwner = nil) or FOwner.FClosed then Exit;
+  IsOk := True;
+  Status := 0;
+  if args <> nil then
+  begin
+    args.get_IsSuccess(IsOk);
+    args.get_WebErrorStatus(Status);
+  end;
+  Uri := '';
+  if FOwner.FWebView <> nil then
+  begin
+    if FOwner.FWebView.get_Source(PW) = S_OK then
+    begin
+      if PW <> nil then
+      begin
+        Uri := string(WideString(PW));
+        CoTaskMemFree(PW);
+      end;
+    end;
+  end;
+  Ev := Default(TWebviewNavigationEvent);
+  Ev.Url := Uri;
+  Ev.IsError := not IsOk;
+  Ev.ErrorCode := Status;
+  if Ev.IsError then
+  begin
+    Ev.ErrorMessage := 'WebErrorStatus=' + IntToStr(Status);
+    for I := 0 to High(FOwner.FOnNavFailed) do
+      FOwner.FOnNavFailed[I](Ev);
+  end
+  else
+  begin
+    for I := 0 to High(FOwner.FOnNavFinished) do
+      FOwner.FOnNavFinished[I](Ev);
+    FOwner.FireReadyOnce;
   end;
 end;
 {$ENDIF}
@@ -541,6 +655,8 @@ procedure TWebView2Webview.OnControllerCreated(errorCode: LongInt; const ACtrl: 
 var
   LWebView: ICoreWebView2;
   LHandler: ICoreWebView2WebMessageReceivedEventHandler;
+  LNavStart: ICoreWebView2NavigationStartingEventHandler;
+  LNavComp: ICoreWebView2NavigationCompletedEventHandler;
   PW: PWSTR;
 begin
   if FClosed then Exit;
@@ -562,6 +678,11 @@ begin
   // WebMessageReceived
   LHandler := TWebMessageHandler.Create(Self);
   FWebView.add_WebMessageReceived(LHandler, FWebMessageToken);
+  // Navigation events
+  LNavStart := TNavStartingHandler.Create(Self);
+  FWebView.add_NavigationStarting(LNavStart, FNavStartingToken);
+  LNavComp := TNavCompletedHandler.Create(Self);
+  FWebView.add_NavigationCompleted(LNavComp, FNavCompletedToken);
   // Default navigation if requested
   if FOptions.DevServerUrl <> '' then
   begin
@@ -699,6 +820,10 @@ begin
   begin
     if FWebMessageToken <> 0 then
       FWebView.remove_WebMessageReceived(FWebMessageToken);
+    if FNavStartingToken <> 0 then
+      FWebView.remove_NavigationStarting(FNavStartingToken);
+    if FNavCompletedToken <> 0 then
+      FWebView.remove_NavigationCompleted(FNavCompletedToken);
     if FBridgeScriptId <> '' then
       FWebView.RemoveScriptToExecuteOnDocumentCreated(PWideChar(FBridgeScriptId));
   end;

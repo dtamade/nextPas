@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.16（S21—— W2 真 controller 接线：CreateEnvironment→CreateController 异步链、WebMessageReceived 桥分发、AddScript注入、ExecuteScript/Eval 闭环、WM_SIZE bounds 同步、门禁 17/13/6/3 全绿 + wine 真 Eval 可交互）
+**版本**：1.17（S22—— W2 导航事件真接线：NavigationStarting→OnNavStarted / NavigationCompleted→OnNavFinished+Failed（IsSuccess/WebErrorStatus）、wine 双态真触发 + 失败分支 + TriggerFakeWebMessage 桥回环验证、门禁 17/13/6/3 全绿 + wine 导航+桥全交互）
+**承接**：1.16（S21—— W2 真 controller 接线：CreateEnvironment→CreateController 异步链、WebMessageReceived 桥分发、AddScript注入、ExecuteScript/Eval 闭环、WM_SIZE bounds 同步、门禁 17/13/6/3 全绿 + wine 真 Eval 可交互）
 **承接**：1.15（S20—— W2 壳完整度：Minimize/Restore/IsMinimized、DPI 真值 GetDpiForWindow 动态绑定+分数缩放、WM_DPICHANGED ScaleChanged、FFI 完整 vtable、门禁 17/13/6/3 全绿 + wine 满态可交互）
 **承接**：1.14（S19—— W2 Win32 窗口壳：webview2.win 真窗口（与 gtk.win 对称）、factory Win32 消息泵、门禁 17/13/6/3 全绿、wine 真窗口可交互）
 **承接**：1.13（S18—— W2 WebView2 via wine：ffi/loader/桩后端 + factory probe + wine 交叉验证（Linux 不可用/wine 可用双态）、门禁 17/13/6/3 全绿）
@@ -41,10 +42,10 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 | `nextpas.core.webview.vfs` | 适配 | `IVfs → IWebviewAssetProvider`（respack/vfs 集成，CONTRACT §3.4 唯一收口） | S11 |
 | `nextpas.core.webview.factory` | 工厂 | 后端注册/探测/选择 + `TWebviewBuilder` | W1 |
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
-| `nextpas.core.webview.webview2.ffi` | ABI | WebView2 COM 完整 vtable（ICoreWebView2/Controller/Environment/Settings + WebMessageArgs + handlers，无 external） | **W2 S21 完整（含 WebMessageArgs）** |
+| `nextpas.core.webview.webview2.ffi` | ABI | WebView2 COM 完整 vtable（ICoreWebView2/Controller/Environment/Settings + WebMessageArgs/NavigationStarting+Completed handlers，无 external） | **W2 S22 完整（含导航事件）** |
 | `nextpas.core.webview.webview2.loader` | 装载 | WebView2Loader.dll 探测与符号装载（platform.dl，wine 兼容） | **W2 桩已落地（S18）** |
 | `nextpas.core.webview.webview2.win` | **内缝** | Win32 窗口壳纯函数式实现（Minimize/Restore/DPI 真值/WM_DPICHANGED/WM_SIZE，与 gtk.win 对称） | **W2 S21 携 WM_SIZE 同步** |
-| `nextpas.core.webview.webview2` | 后端 | Windows 实现：Win32 满态壳 + WebView2 controller 真接线（Env→Controller 异步链、ExecuteScript、WebMessage 桥、AddScript 注入、bounds 同步） | **W2 S21 真 controller 已落地（wine 仿真可交互）** |
+| `nextpas.core.webview.webview2` | 后端 | Windows 实现：Win32 满态壳 + WebView2 controller 真接线（Env→Controller 异步链、ExecuteScript、WebMessage 桥、AddScript 注入、bounds 同步、NavigationStarting/Completed 真事件） | **W2 S22 导航真事件已落地（wine 双态仿真全交互）** |
 | `nextpas.core.webview.wk.*` | 后端 | macOS WKWebView（base/ffi/backend） | W3 |
 
 ### 依赖方向
