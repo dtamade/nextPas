@@ -106,11 +106,11 @@ type
     procedure Post(AProc: TWebviewProcRef); overload;
     procedure Post(AProc: TWebviewProcMethod); overload;
     procedure Post(AProc: TWebviewProc); overload;
-    function IsOnMainThread: Boolean;
+    function IsOnMainThread: Boolean; inline;
 
     { IWebviewWindow }
     procedure Close; virtual;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     procedure Show; virtual;
     procedure Hide; virtual;
     function IsVisible: Boolean;
@@ -147,7 +147,7 @@ type
       ACallback: TWebviewEvalCallback;
       AOnError: TWebviewEvalErrorCallback); virtual;
     procedure Emit(const AEvent, APayloadJson: string); virtual;
-    function GetDispatcher: IWebviewDispatcher;
+    function GetDispatcher: IWebviewDispatcher; inline;
     function NativeHandle: TWebviewNativeHandle;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload; virtual;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventMethod); overload; virtual;
@@ -717,7 +717,7 @@ begin
   inherited Destroy;
 end;
 
-function TGtkWebview.IsClosed: Boolean;
+function TGtkWebview.IsClosed: Boolean; inline;
 begin
   Result := FClosed;
 end;
@@ -1047,12 +1047,12 @@ begin
     end);
 end;
 
-function TGtkWebview.IsOnMainThread: Boolean;
+function TGtkWebview.IsOnMainThread: Boolean; inline;
 begin
   Result := platform_thread_id = FOwnerThread;
 end;
 
-function TGtkWebview.GetDispatcher: IWebviewDispatcher;
+function TGtkWebview.GetDispatcher: IWebviewDispatcher; inline;
 begin
   Result := Self;
 end;
