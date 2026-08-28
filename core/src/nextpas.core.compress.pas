@@ -51,6 +51,10 @@ function DeflateCompress(const AData: TBytes;
 function DeflateDecompress(const AData: TBytes): TBytes; inline;
 function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes; inline;
+function DeflateDecompressWithEndPos(const AData: TBytes; AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes; inline;
+function DeflateDecompressPtrWithEndPos(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes; inline;
 function RawDeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes; inline;
 function RawDeflateDecompress(const AData: TBytes): TBytes; inline;
@@ -149,6 +153,20 @@ function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
 begin
   Result := nextpas.core.compress.deflate.DeflateDecompressWithMaxOutputSize(
     AData, AMaxOutputSize);
+end;
+
+function DeflateDecompressWithEndPos(const AData: TBytes; AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes;
+begin
+  Result := nextpas.core.compress.deflate.DeflateDecompressWithEndPos(AData,
+    AStart, AEndPos);
+end;
+
+function DeflateDecompressPtrWithEndPos(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes;
+begin
+  Result := nextpas.core.compress.deflate.DeflateDecompressPtrWithEndPos(AData,
+    ACount, AStart, AEndPos);
 end;
 
 function RawDeflateCompress(const AData: TBytes;
