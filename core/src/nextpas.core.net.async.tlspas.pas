@@ -322,6 +322,7 @@ function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): 
 function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string; overload;
 function TlsPasFormatPrometheusMetricsWithLabels(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): string;
 type TTlsPasAdaptiveHealth = record Healthy: Boolean; Reason: string; RejectRate: Double; Current: Integer; AdaptiveMax: Cardinal; end;
+type TTlsPasAdaptiveSnapshot = record Metrics: TTlsPasAdaptiveMetrics; Health: TTlsPasAdaptiveHealth; end;
 function TlsPasMetricsEqual(const A, B: TTlsPasAdaptiveMetrics): Boolean;
 function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics): Integer; overload;
 function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): Integer; overload;
@@ -353,6 +354,7 @@ type
     function GetReplayStats: TAsyncTlsPasReplayStats;
     function GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
     function GetAdaptiveHealth: TTlsPasAdaptiveHealth;
+    function GetSnapshot: TTlsPasAdaptiveSnapshot;
     procedure Clear;
     procedure UpdateConfig(const AConfig: TTlsPasAdaptiveLimitConfig);
     property Config: TTlsPasAdaptiveLimitConfig read FConfig;
@@ -1755,6 +1757,16 @@ begin
   Result := TlsPasComputeAdaptiveHealth(M, C);
 end;
 
+function TAsyncTlsPasAdaptiveObserver.GetSnapshot: TTlsPasAdaptiveSnapshot;
+var C: TTlsPasAdaptiveLimitConfig; S: TTlsPasServerStats; R: TAsyncTlsPasReplayStats;
+begin
+  platform_mutex_lock(FConfigMutex); try C := FConfig; finally platform_mutex_unlock(FConfigMutex); end;
+  S := FInner.GetServerStats; R := FInner.GetReplayStats;
+  Result.Metrics.AdaptiveMax := TlsPasComputeAdaptiveMaxEarlyData(S, R, C);
+  Result.Metrics.Server := S; Result.Metrics.Replay := R;
+  Result.Health := TlsPasComputeAdaptiveHealth(Result.Metrics, C);
+end;
+
 procedure TAsyncTlsPasAdaptiveObserver.Clear;
 begin
   FInner.Clear;
@@ -2446,11 +2458,11 @@ procedure TAsyncTlsPasAdaptiveTracer.Trace(const AEvent: TTlsPasTraceEvent); beg
 function TAsyncTlsPasAdaptiveTracer.SampleCount: Int64; begin Result := FInner.SampleCount; end;
 function TAsyncTlsPasAdaptiveTracer.TotalCount: Int64; begin Result := FInner.TotalCount; end;
 function TAsyncTlsPasAdaptiveTracer.GetAdaptiveRate: Double;
-var M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth;
+var Snap: TTlsPasAdaptiveSnapshot;
 begin
   if FObserver = nil then Exit(FConfig.BaseRate);
-  M := FObserver.GetAdaptiveMetrics; H := FObserver.GetAdaptiveHealth;
-  platform_mutex_lock(FMutex); try Result := TlsPasComputeAdaptiveSamplingRate(M, H, FConfig); finally platform_mutex_unlock(FMutex); end;
+  Snap := FObserver.GetSnapshot;
+  platform_mutex_lock(FMutex); try Result := TlsPasComputeAdaptiveSamplingRate(Snap.Metrics, Snap.Health, FConfig); finally platform_mutex_unlock(FMutex); end;
 end;
 function TAsyncTlsPasAdaptiveTracer.ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
 var R: Double;

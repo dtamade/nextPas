@@ -2082,6 +2082,21 @@ begin
   J := TlsPasPrometheusGauge('x', 'help', 1.0, ''); Check(Pos('nextpas_tlspas_x', J) > 0, 'prefix const');
 end;
 
+procedure TestS35Snapshot;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Snap: TTlsPasAdaptiveSnapshot; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    Snap := Obs.GetSnapshot;
+    M := Obs.GetAdaptiveMetrics; H := Obs.GetAdaptiveHealth;
+    Check(Snap.Metrics.AdaptiveMax = M.AdaptiveMax, 'snapshot metrics equal');
+    Check(Snap.Health.Healthy = H.Healthy, 'snapshot health equal');
+    Check(Snap.Metrics.Replay.Current = 0, 'snapshot current 0');
+    Check(Pos('nextpas', TlsPasSpansToOTLPJSON(nil)) = 0, 'nil otlp no alloc but valid');
+  finally Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -2162,6 +2177,7 @@ begin
   GSuite.Test('OTLPExport', @TestOTLPExport);
   GSuite.Test('S33Polish', @TestS33Polish);
   GSuite.Test('S34Consistency', @TestS34Consistency);
+  GSuite.Test('S35Snapshot', @TestS35Snapshot);
   if not GSuite.Run then
     Halt(1);
 end.

@@ -557,6 +557,10 @@ procedure BenchTracerSetRate(aIters: Int64);
 var I: Int64;
 begin for I := 1 to aIters do GTracerConcrete.SetRate(0.02); end;
 
+procedure BenchSnapshot(aIters: Int64);
+var I: Int64; S: TTlsPasAdaptiveSnapshot;
+begin for I := 1 to aIters do S := GAdaptiveObserver.GetSnapshot; end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -752,6 +756,7 @@ begin
     .AddLoop('OTLP JSON', @BenchOTLPJSON)
     .AddLoop('Prometheus Gauge', @BenchPrometheusGauge)
     .AddLoop('Tracer SetRate', @BenchTracerSetRate)
+    .AddLoop('Snapshot', @BenchSnapshot)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
