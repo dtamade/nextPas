@@ -104,6 +104,7 @@ type
   TAutomationCurve = nextpas.core.audio.studio.automation.TAutomationCurve;
   TMidiNote = nextpas.core.audio.studio.sequencer.TMidiNote;
   TAudioVector3 = nextpas.core.audio.spatial.TAudioVector3;
+  TSimdCaps = nextpas.core.audio.simd.TSimdCaps;
 
 { ---- base forwarding ---- }
 
@@ -112,6 +113,20 @@ function AudioFormatCreate(ASampleRate, AChannels: Integer;
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioChannelMaskForLayout(ALayout: TAudioChannelLayout): UInt32; inline;
 function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioChannelLayout; inline;
+function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64; inline;
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer; inline;
+
+{ ---- simd forwarding (realtime-grade, 4-wide) ---- }
+
+function AudioSimdCaps: TSimdCaps; inline;
+procedure SimdAddF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single); inline;
+procedure SimdMulF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single); inline;
+function SimdPeakF32(const AData: PSingle; ACount: Integer): Single; inline;
+function SimdSumSquaresF32(const AData: PSingle; ACount: Integer): Double; inline;
+procedure SimdClampF32(AData: PSingle; ACount: Integer; ALo, AHi: Single); inline;
 
 { ---- pcm forwarding ---- }
 
@@ -216,6 +231,35 @@ function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioCha
 begin
   Result := nextpas.core.audio.base.AudioChannelLayoutForMask(AMask, AChannels);
 end;
+
+function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;
+begin Result := nextpas.core.audio.base.AudioBytesForFrames(AFormat, AFrames); end;
+
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
+begin Result := nextpas.core.audio.base.AudioFillMemoryRealtime(ASrc, APos, ABuffer, AFrames); end;
+
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer;
+begin Result := nextpas.core.audio.base.AudioSilentFill(ABuffer, AFormat, AFrames); end;
+
+function AudioSimdCaps: TSimdCaps;
+begin Result := nextpas.core.audio.simd.AudioSimdCaps; end;
+
+procedure SimdAddF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single);
+begin nextpas.core.audio.simd.SimdAddF32(ASrc, ADst, ACount, AGain); end;
+
+procedure SimdMulF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single);
+begin nextpas.core.audio.simd.SimdMulF32(ASrc, ADst, ACount, AGain); end;
+
+function SimdPeakF32(const AData: PSingle; ACount: Integer): Single;
+begin Result := nextpas.core.audio.simd.SimdPeakF32(AData, ACount); end;
+
+function SimdSumSquaresF32(const AData: PSingle; ACount: Integer): Double;
+begin Result := nextpas.core.audio.simd.SimdSumSquaresF32(AData, ACount); end;
+
+procedure SimdClampF32(AData: PSingle; ACount: Integer; ALo, AHi: Single);
+begin nextpas.core.audio.simd.SimdClampF32(AData, ACount, ALo, AHi); end;
 
 function PcmClampF32(AValue: Single): Single;
 begin
