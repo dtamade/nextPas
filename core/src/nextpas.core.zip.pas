@@ -21,6 +21,7 @@ uses
   nextpas.core.io.intf,
   nextpas.core.zip.base,
   nextpas.core.zip.writer,
+  nextpas.core.zip.builder,
   nextpas.core.zip.reader,
   nextpas.core.zip.sequential,
   nextpas.core.zip.fs;
@@ -33,6 +34,7 @@ type
   TZipReadOptions = nextpas.core.zip.reader.TZipReadOptions;
   TZipExtractOptions = nextpas.core.zip.fs.TZipExtractOptions;
   IZipWriter = nextpas.core.zip.writer.IZipWriter;
+  IZipBuilder = nextpas.core.zip.builder.IZipBuilder;
   IZipReader = nextpas.core.zip.reader.IZipReader;
   ISequentialZipReader = nextpas.core.zip.sequential.ISequentialZipReader;
   { 流式条目读写端：写端经 IZipWriter.AddEntryStream 获取（推式），
@@ -65,6 +67,11 @@ procedure ZipExtractToDirWithOptions(const AData: TBytes;
   const ADestDir: string; const AOptions: TZipExtractOptions); inline;
 procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
   const AMaxOutputSize: SizeUInt = 0); inline;
+
+function ZipBuilder: IZipBuilder; inline;
+function ZipBuilderForceZip64: IZipBuilder; inline;
+function NewZipBuilder: IZipBuilder; inline;
+function NewZipBuilderWithOptions(const AOptions: TZipWriteOptions): IZipBuilder; inline;
 
 implementation
 
@@ -153,6 +160,26 @@ procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
   const AMaxOutputSize: SizeUInt);
 begin
   nextpas.core.zip.fs.ZipExtractToDir(AData, ADestDir, AMaxOutputSize);
+end;
+
+function ZipBuilder: IZipBuilder;
+begin
+  Result := nextpas.core.zip.builder.ZipBuilder;
+end;
+
+function ZipBuilderForceZip64: IZipBuilder;
+begin
+  Result := nextpas.core.zip.builder.ZipBuilderForceZip64;
+end;
+
+function NewZipBuilder: IZipBuilder;
+begin
+  Result := nextpas.core.zip.builder.NewZipBuilder;
+end;
+
+function NewZipBuilderWithOptions(const AOptions: TZipWriteOptions): IZipBuilder;
+begin
+  Result := nextpas.core.zip.builder.NewZipBuilderWithOptions(AOptions);
 end;
 
 end.

@@ -283,6 +283,13 @@ type
     { 对端是否通告支持数据报（EE 后生效）与单帧总字节上界 }
     property DatagramSupported: Boolean read FDgramEnabled;
     property PeerMaxDatagramSize: Integer read FPeerMaxDgramSize;
+    function ExportKeyingMaterial(const ALabel: TBytes; const AContext: TBytes;
+      ALength: Integer): TBytes;
+    function ExportKeyingMaterialStr(const ALabel: string; const AContext: string;
+      ALength: Integer): TBytes;
+    property TlsSuite: Word read FTlsSuite;
+    property HasAppKeys: Boolean read FHasAppKeys;
+    property AppSecrets: TTLS13ApplicationSecrets read FAppSecrets;
     { 观测面：首个 Initial 的 DCID（Retry 完整性验证的 ODCID 即它） }
     property LocalFirstDcid: TBytes read FLocalDcid;
   end;
@@ -1948,6 +1955,36 @@ end;
 procedure TQuicClientConnection.HookDatagram(AHandler: TOnQuicDatagram);
 begin
   FOnDgram := AHandler;
+end;
+
+function TQuicClientConnection.ExportKeyingMaterial(const ALabel: TBytes;
+  const AContext: TBytes; ALength: Integer): TBytes;
+begin
+  Result := nil;
+  if not FHasAppKeys then Exit;
+  if (FTlsSuite <> $1301) and (FTlsSuite <> $1302) and (FTlsSuite <> $1303) then Exit;
+  if (FAppSecrets.MasterSecret = nil) or (FAppSecrets.TranscriptHash = nil) then Exit;
+  Result := TLS13ExportKeyingMaterial(FTlsSuite, FAppSecrets.MasterSecret,
+    FAppSecrets.TranscriptHash, ALabel, AContext, ALength);
+end;
+
+function TQuicClientConnection.ExportKeyingMaterialStr(const ALabel: string;
+  const AContext: string; ALength: Integer): TBytes;
+var
+  LLabelB, LCtxB: TBytes;
+begin
+  Result := nil;
+  if ALabel <> '' then
+  begin
+    SetLength(LLabelB, Length(ALabel));
+    if Length(LLabelB) > 0 then Move(ALabel[1], LLabelB[0], Length(LLabelB));
+  end;
+  if AContext <> '' then
+  begin
+    SetLength(LCtxB, Length(AContext));
+    if Length(LCtxB) > 0 then Move(AContext[1], LCtxB[0], Length(LCtxB));
+  end;
+  Result := ExportKeyingMaterial(LLabelB, LCtxB, ALength);
 end;
 
 end.

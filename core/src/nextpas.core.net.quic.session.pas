@@ -104,6 +104,10 @@ type
     function StreamCount: Integer;
     function SendDatagram(const AData: TBytes): TQuicSessionError;
     procedure HookDatagram(AHandler: TOnQuicDatagram);
+    function ExportKeyingMaterial(const ALabel: TBytes; const AContext: TBytes;
+      ALength: Integer): TBytes;
+    function ExportKeyingMaterialStr(const ALabel: string; const AContext: string;
+      ALength: Integer): TBytes;
     function DatagramSupported: Boolean;
     function PeerMaxDatagramSize: Integer;
     function PeerParamsValid: Boolean;
@@ -262,6 +266,10 @@ type
     function StreamCount: Integer;
     function SendDatagram(const AData: TBytes): TQuicSessionError;
     procedure HookDatagram(AHandler: TOnQuicDatagram);
+    function ExportKeyingMaterial(const ALabel: TBytes; const AContext: TBytes;
+      ALength: Integer): TBytes;
+    function ExportKeyingMaterialStr(const ALabel: string; const AContext: string;
+      ALength: Integer): TBytes;
     function DatagramSupported: Boolean;
     function PeerMaxDatagramSize: Integer;
     function PeerParamsValid: Boolean;
@@ -1235,6 +1243,27 @@ begin
     DrainOutbound;
     CheckConnPhase;
   end;
+end;
+
+function TQuicSession.ExportKeyingMaterial(const ALabel: TBytes; const AContext: TBytes;
+  ALength: Integer): TBytes;
+begin
+  Result := nil;
+  if FConn <> nil then
+    Result := FConn.ExportKeyingMaterial(ALabel, AContext, ALength);
+end;
+
+function TQuicSession.ExportKeyingMaterialStr(const ALabel: string; const AContext: string;
+  ALength: Integer): TBytes;
+var
+  LLabelB, LCtxB: TBytes;
+begin
+  Result := nil;
+  SetLength(LLabelB, Length(ALabel));
+  if Length(ALabel) > 0 then Move(ALabel[1], LLabelB[0], Length(ALabel));
+  SetLength(LCtxB, Length(AContext));
+  if Length(AContext) > 0 then Move(AContext[1], LCtxB[0], Length(AContext));
+  Result := ExportKeyingMaterial(LLabelB, LCtxB, ALength);
 end;
 
 function TQuicSession.FindStream(AStreamId: UInt64): IQuicStream;

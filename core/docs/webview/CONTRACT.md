@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.19（S24—— 门禁与性能收口：新增 test_webview_webview2_post（Win32ShellPost/UserAgent/DataDirectory 4 用例）、12 门全绿；bridge bench 基线复测（TryDecode 9µs/Resolve 5.7µs 等）无回归；文档 1.19 对齐，hygiene 0）
+**版本**：1.20（S25—— W3 WKWebView 波次桩：新增 wk.ffi/loader/wk 三件套（Darwin 预留、Linux 桩 false、幂等缓存）、factory wvWk 接线（DefaultWebviewKind 探测序 W2→Gtk→Wk→Fake）、IsOnMainThread 真线程比对+UserAgent/Zoom 本地缓存、test_webview_wk_loader 3 用例、13 门全绿；文档 1.20 对齐，hygiene 0）
+**承接**：1.19（S24—— 门禁与性能收口：新增 test_webview_webview2_post（Win32ShellPost/UserAgent/DataDirectory 4 用例）、12 门全绿；bridge bench 基线复测（TryDecode 9µs/Resolve 5.7µs 等）无回归；文档 1.19 对齐，hygiene 0）
 **承接**：1.18（S23—— W2 调度与稳定收口：Win32 隐藏窗口 PostMessage 调度器（与 gtk idle 对称）、Eval pending exactly-once 泄漏修复（RemovePending+Close 协同）、UserAgent 本地缓存+DataDirectory 透传、wine Post/导航/桥/Eval 全链验证、门禁全绿 hygiene 0）
 **承接**：1.17（S22—— W2 导航事件真接线：NavigationStarting→OnNavStarted / NavigationCompleted→OnNavFinished+Failed（IsSuccess/WebErrorStatus）、wine 双态真触发 + 失败分支 + TriggerFakeWebMessage 桥回环验证、门禁 17/13/6/3 全绿 + wine 导航+桥全交互）
 **承接**：1.16（S21—— W2 真 controller 接线：CreateEnvironment→CreateController 异步链、WebMessageReceived 桥分发、AddScript注入、ExecuteScript/Eval 闭环、WM_SIZE bounds 同步、门禁 17/13/6/3 全绿 + wine 真 Eval 可交互）
@@ -48,7 +49,9 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 | `nextpas.core.webview.webview2.loader` | 装载 | WebView2Loader.dll 探测与符号装载（platform.dl，wine 兼容） | **W2 桩已落地（S18）** |
 | `nextpas.core.webview.webview2.win` | **内缝** | Win32 窗口壳纯函数式实现（Minimize/Restore/DPI 真值/WM_DPICHANGED/WM_SIZE/Post 隐藏窗口调度，与 gtk.win 对称） | **W2 S23 携 Post 调度（与 gtk idle 对称）** |
 | `nextpas.core.webview.webview2` | 后端 | Windows 实现：Win32 满态壳 + WebView2 controller 真接线（Env→Controller 异步链、ExecuteScript/WebMessage/ навигация、Post 调度、pending exactly-once、UA/DataDirectory） | **W2 S23 调度与稳定收口（wine 全交互）** |
-| `nextpas.core.webview.wk.*` | 后端 | macOS WKWebView（base/ffi/backend） | W3 |
+| `nextpas.core.webview.wk.ffi` | ABI | WKWebView 类型与探针结果（无 external，无逻辑） | **W3 S25 桩** |
+| `nextpas.core.webview.wk.loader` | 装载 | WK 运行时探测（经 `platform.dl` 预留，Darwin 桩；幂等缓存，与 gtk/webview2 同纪律） | **W3 S25 桩（恒 False）** |
+| `nextpas.core.webview.wk` | 后端 | macOS 桩：fail-fast + UserAgent/Zoom 本地缓存 + 真线程 IsOnMainThread；Darwin 真实现待 ObjC 探通 | **W3 S25 桩** |
 
 ### 依赖方向
 

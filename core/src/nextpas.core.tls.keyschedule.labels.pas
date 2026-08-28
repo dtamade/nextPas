@@ -31,6 +31,23 @@ function TLS13_HKDF_Expand_Label_SHA384(
 
 function BuildTLS13HKDFLabel(const ALabel: string; const AContext: TBytes; ALength: Integer): TBytes;
 
+// Binary-label variant: ALabel may contain NUL bytes (e.g., TUIC uuid raw 16 bytes).
+function TLS13_HKDF_Expand_Label_SHA256_Bytes(
+  const ASecret: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+
+function TLS13_HKDF_Expand_Label_SHA384_Bytes(
+  const ASecret: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+
+function BuildTLS13HKDFLabelBytes(const ALabel: TBytes; const AContext: TBytes; ALength: Integer): TBytes;
+
 implementation
 
 uses nextpas.core.crypto.hkdf, nextpas.core.hash.base, nextpas.core.tls.tls13.wire;
@@ -51,6 +68,32 @@ begin
   SetLength(Result, Length(Result) + LLabelLen);
   for I := 1 to LLabelLen do
     Result[Length(Result) - LLabelLen + I - 1] := Byte(LFullLabel[I]);
+  AppendByte(Result, Byte(LContextLen));
+  if LContextLen > 0 then
+    AppendBytes(Result, AContext);
+end;
+
+function BuildTLS13HKDFLabelBytes(const ALabel: TBytes; const AContext: TBytes; ALength: Integer): TBytes;
+var
+  LFullLabel: TBytes;
+  LContextLen: Integer;
+  I: Integer;
+begin
+  SetLength(LFullLabel, 6 + Length(ALabel));
+  LFullLabel[0] := Byte(Ord('t'));
+  LFullLabel[1] := Byte(Ord('l'));
+  LFullLabel[2] := Byte(Ord('s'));
+  LFullLabel[3] := Byte(Ord('1'));
+  LFullLabel[4] := Byte(Ord('3'));
+  LFullLabel[5] := Byte(Ord(' '));
+  for I := 0 to Length(ALabel) - 1 do
+    LFullLabel[6 + I] := ALabel[I];
+  LContextLen := Length(AContext);
+  Result := nil;
+  AppendUInt16(Result, Word(ALength));
+  AppendByte(Result, Byte(Length(LFullLabel)));
+  if Length(LFullLabel) > 0 then
+    AppendBytes(Result, LFullLabel);
   AppendByte(Result, Byte(LContextLen));
   if LContextLen > 0 then
     AppendBytes(Result, AContext);
@@ -79,6 +122,32 @@ var
   LHkdfLabel: TBytes;
 begin
   LHkdfLabel := BuildTLS13HKDFLabel(ALabel, AContext, ALength);
+  Result := HKDF_Expand_SHA384(ASecret, LHkdfLabel, ALength);
+end;
+
+function TLS13_HKDF_Expand_Label_SHA256_Bytes(
+  const ASecret: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+var
+  LHkdfLabel: TBytes;
+begin
+  LHkdfLabel := BuildTLS13HKDFLabelBytes(ALabel, AContext, ALength);
+  Result := HKDF_Expand_SHA256(ASecret, LHkdfLabel, ALength);
+end;
+
+function TLS13_HKDF_Expand_Label_SHA384_Bytes(
+  const ASecret: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+var
+  LHkdfLabel: TBytes;
+begin
+  LHkdfLabel := BuildTLS13HKDFLabelBytes(ALabel, AContext, ALength);
   Result := HKDF_Expand_SHA384(ASecret, LHkdfLabel, ALength);
 end;
 
