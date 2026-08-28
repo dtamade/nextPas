@@ -21,7 +21,7 @@ function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
 
 implementation
 
-uses Math;
+uses Math, nextpas.core.audio.simd;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);
 var LNew: TBytes; LExpected: Integer;
@@ -76,18 +76,17 @@ begin
   if Length(LSrcData) < LSamples * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: src F32 data too small');
   if Length(ADst.Data) < (LDstOffset + LSamples) * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: dst F32 data too small');
   LDstPtr := PSingle(@ADst.Data[0]); LSrcPtr := PSingle(@LSrcData[0]);
-  for LI := 0 to LSamples - 1 do
-    LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI] * AGain;
+  SimdAddF32(LSrcPtr, @LDstPtr[LDstOffset], LSamples, AGain);
 end;
 
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
-var NSamples, LI: Integer; P: PSingle;
+var NSamples: Integer; P: PSingle;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit;
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGain: data too small');
   P := PSingle(@ABuf.Data[0]);
-  for LI := 0 to NSamples - 1 do P[LI] := P[LI] * AGain;
+  SimdMulF32(P, P, NSamples, AGain);
 end;
 
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
@@ -103,26 +102,24 @@ begin
 end;
 
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
-var NSamples, LI: Integer; P: PSingle; LPeak, LAbs, LGain: Single;
+var NSamples: Integer; P: PSingle; LPeak, LGain: Single;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit(0);
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('NormalizePeak: data too small');
-  P := PSingle(@ABuf.Data[0]); LPeak := 0;
-  for LI := 0 to NSamples - 1 do begin LAbs := P[LI]; if LAbs < 0 then LAbs := -LAbs; if LAbs > LPeak then LPeak := LAbs; end;
+  P := PSingle(@ABuf.Data[0]); LPeak := SimdPeakF32(P, NSamples);
   Result := LPeak;
   if LPeak = 0 then LGain := 1 else LGain := ATarget / LPeak;
   ApplyGain(ABuf, LGain);
 end;
 
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
-var NSamples, LI: Integer; P: PSingle; LSum: Double; LRms, LGain: Single;
+var NSamples: Integer; P: PSingle; LSum: Double; LRms, LGain: Single;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit(0);
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('NormalizeRMS: data too small');
-  P := PSingle(@ABuf.Data[0]); LSum := 0;
-  for LI := 0 to NSamples - 1 do LSum := LSum + P[LI] * P[LI];
+  P := PSingle(@ABuf.Data[0]); LSum := SimdSumSquaresF32(P, NSamples);
   LRms := Single(Sqrt(LSum / NSamples)); Result := LRms;
   if LRms = 0 then LGain := 1 else LGain := ATarget / LRms;
   ApplyGain(ABuf, LGain);

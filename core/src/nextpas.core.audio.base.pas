@@ -110,6 +110,13 @@ function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioFormatCreate(ASampleRate, AChannels: Integer;
   ASampleFormat: TAudioSampleFormat): TAudioFormat; inline;
 
+{ ---- Realtime helpers (zero-alloc, lock-free, no IO) ---- }
+// 单一真值：供 wav/aiff/timeline/bus/graph/playlist/game/sequencer 复用
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer; inline;
+
 implementation
 
 {$PUSH}
@@ -286,6 +293,34 @@ begin
   if SampleRate <= 0 then
     Exit(0);
   Result := Int64((Frame * UInt64(1000000000)) div UInt64(SampleRate));
+end;
+
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
+var LAvail, LToCopy: Integer; LBytesNeeded, LBytesToCopy: Int64; LBlockAlign: Integer;
+begin
+  Result:=0; if AFrames<=0 then Exit(0);
+  LBlockAlign:=ASrc.Format.BlockAlign; if LBlockAlign<=0 then Exit(0);
+  LBytesNeeded:=Int64(AFrames)*Int64(LBlockAlign);
+  if (LBytesNeeded>High(Integer)) or (Length(ABuffer.Data)<LBytesNeeded) then Exit(0);
+  if (APos<0) or (APos>ASrc.FrameCount) then APos:=ASrc.FrameCount;
+  LAvail:=ASrc.FrameCount-APos;
+  if LAvail<=0 then begin FillChar(ABuffer.Data[0],Integer(LBytesNeeded),0); ABuffer.Format:=ASrc.Format; ABuffer.FrameCount:=AFrames; Exit(AFrames); end;
+  LToCopy:=AFrames; if LToCopy>LAvail then LToCopy:=LAvail;
+  LBytesToCopy:=Int64(LToCopy)*Int64(LBlockAlign);
+  if LBytesToCopy>0 then Move(ASrc.Data[Int64(APos)*Int64(LBlockAlign)],ABuffer.Data[0],Integer(LBytesToCopy));
+  if LToCopy<AFrames then FillChar(ABuffer.Data[Integer(LBytesToCopy)],Integer(LBytesNeeded-LBytesToCopy),0);
+  ABuffer.Format:=ASrc.Format; ABuffer.FrameCount:=AFrames; APos:=APos+LToCopy; Result:=AFrames;
+end;
+
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer;
+var LBytes: Int64;
+begin
+  Result:=0; if AFrames<=0 then Exit(0); if not AFormat.IsValid then Exit(0);
+  LBytes:=Int64(AFrames)*Int64(AFormat.BlockAlign);
+  if (LBytes>High(Integer)) or (Length(ABuffer.Data)<LBytes) then Exit(0);
+  FillChar(ABuffer.Data[0],Integer(LBytes),0); ABuffer.Format:=AFormat; ABuffer.FrameCount:=AFrames; Result:=AFrames;
 end;
 
 {$POP}

@@ -50,7 +50,7 @@ procedure PcmInterleave(const APlanes: array of TBytes; AFrames, AChannels: Inte
 procedure PcmDeinterleave(const AInterleaved: TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out APlanes: TAudioPlaneArray);
 
-{ ---- Memory-source realtime helper (shared wav/aiff, zero-alloc) ---- }
+{ ---- Memory-source realtime helper (re-export from base: single truth) ---- }
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
 function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
@@ -355,54 +355,11 @@ end;
 
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var
-  LAvail, LToCopy: Integer;
-  LBytesNeeded, LBytesToCopy: Int64;
-  LBlockAlign: Integer;
-begin
-  Result := 0;
-  if AFrames <= 0 then Exit(0);
-  LBlockAlign := ASrc.Format.BlockAlign;
-  if LBlockAlign <= 0 then Exit(0);
-  LBytesNeeded := Int64(AFrames) * Int64(LBlockAlign);
-  if (LBytesNeeded > High(Integer)) or (Length(ABuffer.Data) < LBytesNeeded) then Exit(0);
-  if (APos < 0) or (APos > ASrc.FrameCount) then APos := ASrc.FrameCount;
-  LAvail := ASrc.FrameCount - APos;
-  if LAvail <= 0 then
-  begin
-    FillChar(ABuffer.Data[0], Integer(LBytesNeeded), 0);
-    ABuffer.Format := ASrc.Format;
-    ABuffer.FrameCount := AFrames;
-    Exit(AFrames);
-  end;
-  LToCopy := AFrames;
-  if LToCopy > LAvail then LToCopy := LAvail;
-  LBytesToCopy := Int64(LToCopy) * Int64(LBlockAlign);
-  if LBytesToCopy > 0 then
-    Move(ASrc.Data[Int64(APos) * Int64(LBlockAlign)], ABuffer.Data[0], Integer(LBytesToCopy));
-  if LToCopy < AFrames then
-    FillChar(ABuffer.Data[Integer(LBytesToCopy)], Integer(LBytesNeeded - LBytesToCopy), 0);
-  ABuffer.Format := ASrc.Format;
-  ABuffer.FrameCount := AFrames;
-  APos := APos + LToCopy;
-  Result := AFrames;
-end;
+begin Result:=nextpas.core.audio.base.AudioFillMemoryRealtime(ASrc,APos,ABuffer,AFrames); end;
 
 function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
   AFrames: Integer): Integer;
-var
-  LBytes: Int64;
-begin
-  Result := 0;
-  if AFrames <= 0 then Exit(0);
-  if not AFormat.IsValid then Exit(0);
-  LBytes := Int64(AFrames) * Int64(AFormat.BlockAlign);
-  if (LBytes > High(Integer)) or (Length(ABuffer.Data) < LBytes) then Exit(0);
-  FillChar(ABuffer.Data[0], Integer(LBytes), 0);
-  ABuffer.Format := AFormat;
-  ABuffer.FrameCount := AFrames;
-  Result := AFrames;
-end;
+begin Result:=nextpas.core.audio.base.AudioSilentFill(ABuffer,AFormat,AFrames); end;
 
 {$POP}
 

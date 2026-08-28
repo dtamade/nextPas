@@ -130,9 +130,7 @@ begin
   if AFrames <= 0 then Exit(0);
   LNeeded := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < LNeeded then Exit(0);
-  FillChar(ABuffer.Data[0], LNeeded, 0);
-  ABuffer.Format := FFormat;
-  ABuffer.FrameCount := AFrames;
+  AudioSilentFill(ABuffer, FFormat, AFrames);
   // realtime: snapshot without lock (control plane uses lock)
   LSrc := FSource;
   LGain := FGain;
@@ -210,15 +208,11 @@ begin
   if Length(FBuses) = 0 then Exit(0);
   LNeeded := AFrames * FBuses[0].GetFormat.BlockAlign;
   if Length(ABuffer.Data) < LNeeded then Exit(0);
-  FillChar(ABuffer.Data[0], LNeeded, 0);
-  ABuffer.Format := FBuses[0].GetFormat;
-  ABuffer.FrameCount := AFrames;
+  AudioSilentFill(ABuffer, FBuses[0].GetFormat, AFrames);
   if Length(FScratch.Data) < LNeeded then Exit(AFrames);
   for I := 0 to High(FBuses) do
   begin
-    FScratch.Format := FBuses[I].GetFormat;
-    FScratch.FrameCount := AFrames;
-    FillChar(FScratch.Data[0], LNeeded, 0);
+    AudioSilentFill(FScratch, FBuses[I].GetFormat, AFrames);
     try
       (FBuses[I] as IRealtimeAudioSource).FillRealtime(FScratch, AFrames);
     except

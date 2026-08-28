@@ -13,6 +13,7 @@ uses
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.graph.intf,
+  nextpas.core.audio.simd,
   nextpas.core.audio.errors;
 
 type
@@ -271,13 +272,12 @@ begin
   // realtime: iterate nodes directly without lock (snapshot-free)
   if Length(FNodes) = 0 then
   begin
-    FillChar(ABuffer.Data[0], Needed, 0);
-    ABuffer.FrameCount := AFrames;
+    AudioSilentFill(ABuffer, FFormat, AFrames);
     FPosition := FPosition + UInt64(AFrames);
     Exit(AFrames);
   end;
 
-  FillChar(ABuffer.Data[0], Needed, 0);
+  AudioSilentFill(ABuffer, FFormat, AFrames);
   MixPtr := PSingle(@ABuffer.Data[0]);
   HasData := False;
   FScratch.Format := FFormat;
@@ -298,17 +298,12 @@ begin
       InterlockedExchangeAdd64(FUnderruns, 1);
     HasData := True;
     TmpPtr := PSingle(@FScratch.Data[0]);
-    if Gain = 1.0 then
-      for J := 0 to AFrames * FFormat.Channels - 1 do
-        MixPtr[J] := MixPtr[J] + TmpPtr[J]
-    else
-      for J := 0 to AFrames * FFormat.Channels - 1 do
-        MixPtr[J] := MixPtr[J] + TmpPtr[J] * Gain;
+    SimdAddF32(TmpPtr, MixPtr, AFrames * FFormat.Channels, Gain);
   end;
 
   if not HasData then
   begin
-    FillChar(ABuffer.Data[0], Needed, 0);
+    AudioSilentFill(ABuffer, FFormat, AFrames);
     Result := 0;
     Exit;
   end;

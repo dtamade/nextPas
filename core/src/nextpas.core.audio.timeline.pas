@@ -10,8 +10,7 @@ uses
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.timeline.intf,
-  nextpas.core.audio.errors,
-  nextpas.core.audio.pcm;
+  nextpas.core.audio.errors;
 
 type
   TTimelineImpl = class(TInterfacedObject, IAudioTimeline, IAudioSource, IRealtimeAudioSource)

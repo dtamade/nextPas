@@ -123,8 +123,7 @@ begin
   end;
   if FEof and not FLoop then
   begin
-    FillChar(ABuffer.Data[0], Needed, 0);
-    ABuffer.FrameCount := AFrames;
+    AudioSilentFill(ABuffer, FFormat, AFrames);
     Exit(0);
   end;
   OutPtr := PSingle(@ABuffer.Data[0]);

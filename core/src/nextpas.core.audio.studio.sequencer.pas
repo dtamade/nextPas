@@ -139,9 +139,7 @@ begin
   if AFrames <= 0 then Exit(0);
   LNeeded := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < LNeeded then Exit(0);
-  FillChar(ABuffer.Data[0], LNeeded, 0);
-  ABuffer.Format := FFormat;
-  ABuffer.FrameCount := AFrames;
+  AudioSilentFill(ABuffer, FFormat, AFrames);
   // realtime: lock-free snapshot (control plane uses lock)
   LState := FState;
   LPos := FPos;
