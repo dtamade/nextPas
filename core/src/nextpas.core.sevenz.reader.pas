@@ -48,6 +48,7 @@ type
     FSortedIdxRevIgnoreCase: array of Integer;
     FIgnoreCaseBuilt: Boolean;
     procedure BuildNameMaps;
+    procedure BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
     procedure BuildSortedIdx;
     procedure BuildSortedIdxRev;
     procedure BuildSortedIdxIgnoreCase;
@@ -158,6 +159,8 @@ function CompareNames(const A, B: string): Integer; inline;
 begin
   if A < B then Result := -1 else if A > B then Result := 1 else Result := 0;
 end;
+
+function CompareReversed(const A, B: string): Integer; forward;
 
 type
   {** @desc 条目只读流：持有 Extract 产出的缓冲引用（不二次拷贝），
@@ -637,29 +640,57 @@ begin
   BuildSortedIdxRev;
 end;
 
-procedure TSevenZReaderImpl.BuildSortedIdx;
-var
-  LI: Integer;
+procedure TSevenZReaderImpl.BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
+var LI: Integer;
   procedure QuickSort(AL, AR: Integer);
-  var LI, LJ, LPivot: Integer; LTmp: Integer;
-  begin
-    LI := AL; LJ := AR; LPivot := FSortedIdx[(AL+AR) div 2];
-    repeat
-      while CompareNames(FEntries[FSortedIdx[LI]].Name, FEntries[LPivot].Name) < 0 do Inc(LI);
-      while CompareNames(FEntries[FSortedIdx[LJ]].Name, FEntries[LPivot].Name) > 0 do Dec(LJ);
-      if LI <= LJ then
+  var LI2, LJ, LPivot: Integer; LTmp: Integer;
+    function Cmp(const A, B: Integer): Integer; inline;
+    begin
+      if AUseLower then
       begin
-        LTmp := FSortedIdx[LI]; FSortedIdx[LI] := FSortedIdx[LJ]; FSortedIdx[LJ] := LTmp;
-        Inc(LI); Dec(LJ);
+        if ARev then Result := CompareReversed(FLowerNames[A], FLowerNames[B])
+        else Result := CompareNames(FLowerNames[A], FLowerNames[B]);
+      end else
+      begin
+        if ARev then Result := CompareReversed(FEntries[A].Name, FEntries[B].Name)
+        else Result := CompareNames(FEntries[A].Name, FEntries[B].Name);
       end;
-    until LI > LJ;
+    end;
+  begin
+    LI2 := AL; LJ := AR; LPivot := ADest[(AL+AR) div 2];
+    repeat
+      while Cmp(ADest[LI2], LPivot) < 0 do Inc(LI2);
+      while Cmp(ADest[LJ], LPivot) > 0 do Dec(LJ);
+      if LI2 <= LJ then
+      begin LTmp := ADest[LI2]; ADest[LI2] := ADest[LJ]; ADest[LJ] := LTmp; Inc(LI2); Dec(LJ); end;
+    until LI2 > LJ;
     if AL < LJ then QuickSort(AL, LJ);
-    if LI < AR then QuickSort(LI, AR);
+    if LI2 < AR then QuickSort(LI2, AR);
   end;
 begin
-  SetLength(FSortedIdx, Length(FEntries));
-  for LI:=0 to High(FSortedIdx) do FSortedIdx[LI] := LI;
-  if Length(FSortedIdx) > 1 then QuickSort(0, High(FSortedIdx));
+  SetLength(ADest, Length(FEntries));
+  for LI:=0 to High(ADest) do ADest[LI] := LI;
+  if Length(ADest) > 1 then QuickSort(0, High(ADest));
+end;
+
+procedure TSevenZReaderImpl.BuildSortedIdx;
+begin
+  BuildSorted(FSortedIdx, False, False);
+end;
+
+procedure TSevenZReaderImpl.BuildSortedIdxRev;
+begin
+  BuildSorted(FSortedIdxRev, False, True);
+end;
+
+procedure TSevenZReaderImpl.BuildSortedIdxIgnoreCase;
+begin
+  BuildSorted(FSortedIdxIgnoreCase, True, False);
+end;
+
+procedure TSevenZReaderImpl.BuildSortedIdxRevIgnoreCase;
+begin
+  BuildSorted(FSortedIdxRevIgnoreCase, True, True);
 end;
 
 function TSevenZReaderImpl.LowerBoundPrefix(const APrefix: string): Integer;
@@ -695,73 +726,6 @@ begin
   if LI = 0 then
     if LJ = 0 then Exit(0) else Exit(-1)
   else Exit(1);
-end;
-
-procedure TSevenZReaderImpl.BuildSortedIdxRev;
-var
-  LI: Integer;
-  procedure QuickSort(AL, AR: Integer);
-  var LI, LJ, LPivot: Integer; LTmp: Integer;
-  begin
-    LI := AL; LJ := AR; LPivot := FSortedIdxRev[(AL+AR) div 2];
-    repeat
-      while CompareReversed(FEntries[FSortedIdxRev[LI]].Name, FEntries[LPivot].Name) < 0 do Inc(LI);
-      while CompareReversed(FEntries[FSortedIdxRev[LJ]].Name, FEntries[LPivot].Name) > 0 do Dec(LJ);
-      if LI <= LJ then
-      begin
-        LTmp := FSortedIdxRev[LI]; FSortedIdxRev[LI] := FSortedIdxRev[LJ]; FSortedIdxRev[LJ] := LTmp;
-        Inc(LI); Dec(LJ);
-      end;
-    until LI > LJ;
-    if AL < LJ then QuickSort(AL, LJ);
-    if LI < AR then QuickSort(LI, AR);
-  end;
-begin
-  SetLength(FSortedIdxRev, Length(FEntries));
-  for LI:=0 to High(FSortedIdxRev) do FSortedIdxRev[LI] := LI;
-  if Length(FSortedIdxRev) > 1 then QuickSort(0, High(FSortedIdxRev));
-end;
-
-procedure TSevenZReaderImpl.BuildSortedIdxIgnoreCase;
-var LI: Integer;
-  procedure QuickSort(AL, AR: Integer);
-  var LI, LJ, LPivot: Integer; LTmp: Integer;
-  begin
-    LI := AL; LJ := AR; LPivot := FSortedIdxIgnoreCase[(AL+AR) div 2];
-    repeat
-      while CompareNames(FLowerNames[FSortedIdxIgnoreCase[LI]], FLowerNames[LPivot]) < 0 do Inc(LI);
-      while CompareNames(FLowerNames[FSortedIdxIgnoreCase[LJ]], FLowerNames[LPivot]) > 0 do Dec(LJ);
-      if LI <= LJ then
-      begin LTmp := FSortedIdxIgnoreCase[LI]; FSortedIdxIgnoreCase[LI] := FSortedIdxIgnoreCase[LJ]; FSortedIdxIgnoreCase[LJ] := LTmp; Inc(LI); Dec(LJ); end;
-    until LI > LJ;
-    if AL < LJ then QuickSort(AL, LJ);
-    if LI < AR then QuickSort(LI, AR);
-  end;
-begin
-  SetLength(FSortedIdxIgnoreCase, Length(FEntries));
-  for LI:=0 to High(FSortedIdxIgnoreCase) do FSortedIdxIgnoreCase[LI] := LI;
-  if Length(FSortedIdxIgnoreCase) > 1 then QuickSort(0, High(FSortedIdxIgnoreCase));
-end;
-
-procedure TSevenZReaderImpl.BuildSortedIdxRevIgnoreCase;
-var LI: Integer;
-  procedure QuickSort(AL, AR: Integer);
-  var LI, LJ, LPivot: Integer; LTmp: Integer;
-  begin
-    LI := AL; LJ := AR; LPivot := FSortedIdxRevIgnoreCase[(AL+AR) div 2];
-    repeat
-      while CompareReversed(FLowerNames[FSortedIdxRevIgnoreCase[LI]], FLowerNames[LPivot]) < 0 do Inc(LI);
-      while CompareReversed(FLowerNames[FSortedIdxRevIgnoreCase[LJ]], FLowerNames[LPivot]) > 0 do Dec(LJ);
-      if LI <= LJ then
-      begin LTmp := FSortedIdxRevIgnoreCase[LI]; FSortedIdxRevIgnoreCase[LI] := FSortedIdxRevIgnoreCase[LJ]; FSortedIdxRevIgnoreCase[LJ] := LTmp; Inc(LI); Dec(LJ); end;
-    until LI > LJ;
-    if AL < LJ then QuickSort(AL, LJ);
-    if LI < AR then QuickSort(LI, AR);
-  end;
-begin
-  SetLength(FSortedIdxRevIgnoreCase, Length(FEntries));
-  for LI:=0 to High(FSortedIdxRevIgnoreCase) do FSortedIdxRevIgnoreCase[LI] := LI;
-  if Length(FSortedIdxRevIgnoreCase) > 1 then QuickSort(0, High(FSortedIdxRevIgnoreCase));
 end;
 
 procedure TSevenZReaderImpl.EnsureIgnoreCaseBuilt;
@@ -930,12 +894,13 @@ function SameIgnoreCase(const A, B: string): Boolean; inline;
 var LI: Integer;
 begin
   if Length(A) <> Length(B) then Exit(False);
-  for LI := 1 to Length(A) do
+  if IsAsciiString(A) and IsAsciiString(B) then
   begin
-    if (Ord(A[LI]) > 127) or (Ord(B[LI]) > 127) then Exit(LowerCase(A)=LowerCase(B));
-    if AsciiLowerChar(A[LI]) <> AsciiLowerChar(B[LI]) then Exit(False);
+    for LI := 1 to Length(A) do
+      if AsciiLowerChar(A[LI]) <> AsciiLowerChar(B[LI]) then Exit(False);
+    Exit(True);
   end;
-  Result := True;
+  Result := LowerCase(A) = LowerCase(B);
 end;
 
 function TSevenZReaderImpl.FindIgnoreCase(const AName: string): Integer;
