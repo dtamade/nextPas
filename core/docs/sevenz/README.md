@@ -324,4 +324,5 @@ The encoder side is always pure Pascal today.
   (`encode pure ~6 MB/s / decode pure ~17 MB/s / ffi ~42 MB/s` on 1 MiB mixed),
   BCJ x86 `~200 MB/s` / Delta `~80 MB/s` (zero-alloc in-place), and warm-cache container extraction `~300 MB/s`
   (`container create multi(st)` ~10 MB/s raw, `extract multi` ~100-130 MB/s; with `cthreads` linked `multi(mt)` shows batched parallel folder speedup capped at 8 threads; `scripts/sevenz-interop.sh` covers BZip2/Deflate/BCJ+Password/Multi)
+  plus `glob IgnoreCase` index bench on 2k entries (`prefix*` ~35k ops/s, `*suffix` ~1.8k, `p*s` ~0.8k, `exact` ~3M via hash, all O(log N) fast paths)
   (decode also cross-checked with liblzma when loadable).
