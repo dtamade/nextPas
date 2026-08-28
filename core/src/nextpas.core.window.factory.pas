@@ -68,6 +68,8 @@ uses
   nextpas.core.platform.thread,
   nextpas.core.window.fake,
   nextpas.core.window.gtk3,
+  nextpas.core.window.gtk4,
+  nextpas.core.window.gtk2,
   nextpas.core.gtk3.loader,
   nextpas.core.gtk4.loader,
   nextpas.core.gtk2.loader,
@@ -121,16 +123,70 @@ begin
 end;
 procedure QuitFake; begin end;
 
-function ProbeGtk: Boolean;
-var L: TGtk3LoadInfo; begin Result := TryLoadGtk3(L) and L.Loaded; end;
-
-// 独立家族探测（供 diagnostics 与未来多版本回退）
+// 独立家族探测（供 diagnostics 与回退）
 function ProbeGtk3: Boolean;
 var L: TGtk3LoadInfo; begin Result := TryLoadGtk3(L) and L.Loaded; end;
 function ProbeGtk4: Boolean;
 var L: TGtk4LoadInfo; begin Result := TryLoadGtk4(L) and L.Loaded; end;
 function ProbeGtk2: Boolean;
 var L: TGtk2LoadInfo; begin Result := TryLoadGtk2(L) and L.Loaded; end;
+
+function ProbeGtk: Boolean;
+begin
+  // gtk 聚合探测：gtk4 > gtk3 > gtk2 任一可用即视为 wkGtk 可用（智能回退）
+  Result := ProbeGtk4 or ProbeGtk3 or ProbeGtk2;
+end;
+
+function CreateGtkSmart(const AOptions: TWindowOptions): IWindow;
+begin
+  // 优先 gtk4，其次 gtk3，最后 gtk2；与 ProbeGtk 顺序一致
+  if ProbeGtk4 then
+    Exit(CreateWindowGtk4(AOptions));
+  if ProbeGtk3 then
+    Exit(CreateWindowGtk(AOptions));
+  if ProbeGtk2 then
+    Exit(CreateWindowGtk2(AOptions));
+  raise EWindowBackendUnavailable.Create('GTK backend not available (all families failed)');
+end;
+
+function LiveGtkSmart: Integer;
+begin
+  Result := 0;
+  // 聚合三族活窗计数（单进程只会有其一非零，但聚合最诚实）
+  try Result := Result + GtkLiveWindowCount; except end;
+  try Result := Result + Gtk4LiveWindowCount; except end;
+  try Result := Result + Gtk2LiveWindowCount; except end;
+end;
+
+procedure RunGtkSmart;
+begin
+  if ProbeGtk4 and (Gtk4LiveWindowCount > 0) then
+  begin
+    WindowGtk4RunMainLoop;
+    Exit;
+  end;
+  if ProbeGtk3 and (GtkLiveWindowCount > 0) then
+  begin
+    WindowGtkRunMainLoop;
+    Exit;
+  end;
+  if ProbeGtk2 and (Gtk2LiveWindowCount > 0) then
+  begin
+    WindowGtk2RunMainLoop;
+    Exit;
+  end;
+  // 无活窗但被 factory 以 Probe 选中时，选首个可用族的 RunLoop
+  if ProbeGtk4 then WindowGtk4RunMainLoop
+  else if ProbeGtk3 then WindowGtkRunMainLoop
+  else WindowGtk2RunMainLoop;
+end;
+
+procedure QuitGtkSmart;
+begin
+  if ProbeGtk4 then try WindowGtk4QuitMainLoop; except end;
+  if ProbeGtk3 then try WindowGtkQuitMainLoop; except end;
+  if ProbeGtk2 then try WindowGtk2QuitMainLoop; except end;
+end;
 function ProbeQt5Pas: Boolean;
 var L: TQt5PasLoadInfo; begin Result := TryLoadQt5Pas(L) and L.Loaded; end;
 function ProbeQt: Boolean;
@@ -166,7 +222,7 @@ begin
   BACKENDS[2].Kind := wkAndroid; BACKENDS[2].Probe := @ProbeAndroid; BACKENDS[2].Create := @CreateWindowAndroid; BACKENDS[2].Live := @AndroidLiveWindowCount; BACKENDS[2].Run := @WindowAndroidRunLoop; BACKENDS[2].Quit := @WindowAndroidQuitLoop;
   BACKENDS[3].Kind := wkUIKit; BACKENDS[3].Probe := @ProbeUIKit; BACKENDS[3].Create := @CreateWindowUIKit; BACKENDS[3].Live := @UIKitLiveWindowCount; BACKENDS[3].Run := @WindowUIKitRunLoop; BACKENDS[3].Quit := @WindowUIKitQuitLoop;
   BACKENDS[4].Kind := wkWasm; BACKENDS[4].Probe := @ProbeWasm; BACKENDS[4].Create := @CreateWindowWasm; BACKENDS[4].Live := @WasmLiveWindowCount; BACKENDS[4].Run := @WindowWasmRunLoop; BACKENDS[4].Quit := @WindowWasmQuitLoop;
-  BACKENDS[5].Kind := wkGtk; BACKENDS[5].Probe := @ProbeGtk; BACKENDS[5].Create := @CreateWindowGtk; BACKENDS[5].Live := @GtkLiveWindowCount; BACKENDS[5].Run := @WindowGtkRunMainLoop; BACKENDS[5].Quit := @WindowGtkQuitMainLoop;
+  BACKENDS[5].Kind := wkGtk; BACKENDS[5].Probe := @ProbeGtk; BACKENDS[5].Create := @CreateGtkSmart; BACKENDS[5].Live := @LiveGtkSmart; BACKENDS[5].Run := @RunGtkSmart; BACKENDS[5].Quit := @QuitGtkSmart;
   BACKENDS[6].Kind := wkSdl2; BACKENDS[6].Probe := @ProbeSdl2; BACKENDS[6].Create := @CreateWindowSdl2; BACKENDS[6].Live := @SdlLiveWindowCount; BACKENDS[6].Run := @WindowSdl2RunLoop; BACKENDS[6].Quit := @WindowSdl2QuitLoop;
   BACKENDS[7].Kind := wkFake; BACKENDS[7].Probe := @ProbeFake; BACKENDS[7].Create := @CreateFakeWindow; BACKENDS[7].Live := @LiveFake; BACKENDS[7].Run := @RunFake; BACKENDS[7].Quit := @QuitFake;
   BACKENDS_INITED := True;
@@ -226,7 +282,7 @@ begin
       GetEnumName(TypeInfo(TWindowKind), Ord(BACKENDS[I].Kind)),
       BoolToStr(LAvail, True)]);
     case BACKENDS[I].Kind of
-      wkGtk: LLine := LLine + ' (sonames: libgtk-3.so.0, libgobject-2.0.so.0, libglib-2.0.so.0)';
+      wkGtk: LLine := LLine + ' (sonames: libgtk-4.so.1|libgtk-3.so.0|libgtk-x11-2.0.so.0, libgobject-2.0.so.0, libglib-2.0.so.0; smart fallback gtk4>gtk3>gtk2)';
       wkSdl2: LLine := LLine + ' (soname: libSDL2.so)';
       wkWin32: LLine := LLine + ' (sonames: user32.dll / libuser32)';
       wkCocoa: LLine := LLine + ' (sonames: libobjc, libdispatch, AppKit)';
