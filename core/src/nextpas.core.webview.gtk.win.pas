@@ -32,19 +32,19 @@ function WinShellInit: Boolean;
 { 创建 top-level 壳窗口并应用启动几何；返回 GtkWindow* 句柄 }
 function WinShellCreate(const AGeometry: TWinShellGeometry): Pointer;
 
-procedure WinShellSetTitle(AWin: Pointer; const ATitle: string);
-procedure WinShellResize(AWin: Pointer; AW, AH: Integer);
-procedure WinShellShow(AWin: Pointer);
-procedure WinShellHide(AWin: Pointer);
+procedure WinShellSetTitle(AWin: Pointer; const ATitle: string); inline;
+procedure WinShellResize(AWin: Pointer; AW, AH: Integer); inline;
+procedure WinShellShow(AWin: Pointer); inline;
+procedure WinShellHide(AWin: Pointer); inline;
 
-function WinShellIsMaximized(AWin: Pointer): Boolean;
-procedure WinShellMaximize(AWin: Pointer);
-procedure WinShellUnmaximize(AWin: Pointer);
-function WinShellScaleFactor(AWidget: Pointer): Integer;
+function WinShellIsMaximized(AWin: Pointer): Boolean; inline;
+procedure WinShellMaximize(AWin: Pointer); inline;
+procedure WinShellUnmaximize(AWin: Pointer); inline;
+function WinShellScaleFactor(AWidget: Pointer): Integer; inline;
 
 { 键盘焦点与原生句柄 }
-procedure WinShellFocus(AWidget: Pointer);
-function WinShellNativeHandle(AWidget: Pointer): Pointer;
+procedure WinShellFocus(AWidget: Pointer); inline;
+function WinShellNativeHandle(AWidget: Pointer): Pointer; inline;
 
 { 主循环所有权：RunLoop 语义（阻塞直到 Quit）；Quit 幂等安全 }
 procedure WinShellRunMainLoop;
@@ -88,53 +88,53 @@ begin
     GTK_window_maximize(Result);
 end;
 
-procedure WinShellSetTitle(AWin: Pointer; const ATitle: string);
+procedure WinShellSetTitle(AWin: Pointer; const ATitle: string); inline;
 begin
   GTK_window_set_title(AWin, PAnsiChar(ATitle));
 end;
 
-procedure WinShellResize(AWin: Pointer; AW, AH: Integer);
+procedure WinShellResize(AWin: Pointer; AW, AH: Integer); inline;
 begin
   GTK_window_resize(AWin, AW, AH);
 end;
 
-procedure WinShellShow(AWin: Pointer);
+procedure WinShellShow(AWin: Pointer); inline;
 begin
   { show_all 统一出口：子部件可见性由壳一次性铺开 }
   GTK_widget_show_all(AWin);
 end;
 
-procedure WinShellHide(AWin: Pointer);
+procedure WinShellHide(AWin: Pointer); inline;
 begin
   GTK_widget_hide(AWin);
 end;
 
-function WinShellIsMaximized(AWin: Pointer): Boolean;
+function WinShellIsMaximized(AWin: Pointer): Boolean; inline;
 begin
   Result := GTK_window_is_maximized(AWin) <> 0;
 end;
 
-procedure WinShellMaximize(AWin: Pointer);
+procedure WinShellMaximize(AWin: Pointer); inline;
 begin
   GTK_window_maximize(AWin);
 end;
 
-procedure WinShellUnmaximize(AWin: Pointer);
+procedure WinShellUnmaximize(AWin: Pointer); inline;
 begin
   GTK_window_unmaximize(AWin);
 end;
 
-function WinShellScaleFactor(AWidget: Pointer): Integer;
+function WinShellScaleFactor(AWidget: Pointer): Integer; inline;
 begin
   Result := GTK_widget_get_scale_factor(AWidget);
 end;
 
-procedure WinShellFocus(AWidget: Pointer);
+procedure WinShellFocus(AWidget: Pointer); inline;
 begin
   GTK_widget_grab_focus(AWidget);
 end;
 
-function WinShellNativeHandle(AWidget: Pointer): Pointer;
+function WinShellNativeHandle(AWidget: Pointer): Pointer; inline;
 begin
   Result := GTK_widget_get_window(AWidget);
 end;
