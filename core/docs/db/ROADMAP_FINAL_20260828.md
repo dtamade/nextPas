@@ -14,13 +14,13 @@
 ### R0-2 文本零分配彻底化
 
 - **冻结**：`RepeatString` 倍增拷贝、`PosEx`/`SplitString` 预分配 + `inline`（`nextpas.core.text.utils`），`Trim/Lower/Upper/IsBlank/Pad` 全 inline 零拷贝直返
-- **晋级门**：`ScanKV 355ns vs ParseKV 902ns` 小载荷差保持、`allocs ≈ pairs×2`、`Trim(` 在 `db.*` 全族 0 行、`make focused test_text 33 passed heaptrc0`
+- **晋级门**：`ScanKV 387ns vs ParseKV 825ns` 小载荷差保持、`allocs ≈ pairs×2`、`Trim(` 在 `db.*` 全族 0 行、`make focused test_text 33 passed heaptrc0`
 
 ### R0-3 超大载荷线性度锚点
 
-- **冻结**：`bench_kv` 固件 `GSmall(~610B)/GMedium(~2263B)/GLarge(~9728B)/GSuperLarge(~21440B,400对×`kN=v_x8`)`，用例 `kv/parse_super~5KB` + `kv/scan_super~5KB`
+- **冻结**：`bench_kv` 固件 `GSmall(~610B)/GMedium(~2263B)/GLarge(~9728B)/GSuperLarge(~43048B,400对×`kN=v_x8`)`，用例 `kv/parse_super~42KB` + `kv/scan_super~20KB`
 - **口径**：`TBenchSuite 7样本中位, MinDuration=100ms, -O2, FPC 3.3.1`，报告 `median/mean/p95/thr/allocs`
-- **晋级门**：线性 `1.5KB/350B 4.3× 字节对 3.97× 耗时`、`super/1.5KB 2.2× 字节对 2.22× 耗时`，吞吐 530–1015MB/s，`CV 50-80% WARN` 仅环境噪声以 `filtered median` 为准
+- **晋级门**：线性 `1.5KB/350B 4.3× 字节对 3.96× 耗时`、`super/1.5KB 4.4× 字节对 4.27× 耗时`，吞吐 739–1131MB/s，`CV 50-80% WARN` 仅环境噪声以 `filtered median` 为准
 
 ### R1-1 Redis 集群归一
 

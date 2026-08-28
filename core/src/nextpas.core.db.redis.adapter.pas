@@ -130,7 +130,18 @@ begin
       raise EDbError.CreateSimple(dbkRedis,
         'invalid port ":' + LTail + '"');
   end;
-  AOpts.Host := Trim(LHostPart);
+  begin
+    LSlash := 1;
+    LCode := Length(LHostPart);
+    while (LSlash <= LCode) and (LHostPart[LSlash] <= ' ') do Inc(LSlash);
+    while (LCode >= LSlash) and (LHostPart[LCode] <= ' ') do Dec(LCode);
+    if LSlash > LCode then
+      AOpts.Host := ''
+    else if (LSlash = 1) and (LCode = Length(LHostPart)) then
+      AOpts.Host := LHostPart
+    else
+      AOpts.Host := Copy(LHostPart, LSlash, LCode - LSlash + 1);
+  end;
   if AOpts.Host = '' then
     raise EDbError.CreateSimple(dbkRedis, 'empty host');
   { 统一层连接选项映射（advisory）：StatementTimeoutMs 作为 IO
