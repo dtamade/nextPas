@@ -4,7 +4,7 @@
 **层级**：L3 家族（依赖 L0-L2；`platform.dl` + `json` owner）  
 **Owner**：core-webview lane  
 **最后更新**：2026-08-28  
-**当前版本**：**1.41**（S47 调度与状态薄转发全 inline）（S46 桥协议薄转发全 inline）（S45 窗口壳薄转发全 inline）（S44 Builder 全 inline，14+7 全路径 inline，零重复）  
+**当前版本**：**1.42**（S48 Win32 窗口壳薄转发全 inline）（S47 调度与状态薄转发全 inline）（S46 桥协议薄转发全 inline）（S45 窗口壳薄转发全 inline）（S44 Builder 全 inline，14+7 全路径 inline，零重复）  
 **当前状态**：**Production Ready · focused-runtime · 冻结**（`core-module-registry` 已 `focused-runtime`，13+10+6+3 门全绿，hygiene/source-contracts 双 pass，bench 基线 S27）  
 **对标基准**：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）  
 **稳定契约**：[CONTRACT.md](CONTRACT.md)（权威）· [README.md](README.md)（消费面）· [BRIDGE_PROTOCOL.md](BRIDGE_PROTOCOL.md)（v1 帧）· [BACKENDS.md](BACKENDS.md)（能力诚实表）

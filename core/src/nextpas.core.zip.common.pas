@@ -30,6 +30,10 @@ function DecompressEntryVerified(const AE: TZipEntryInfo;
   const APayload: TBytes; const APassword: TBytes;
   AMaxOutput: SizeUInt): TBytes;
 
+function DecompressEntryToBuffer(const AE: TZipEntryInfo;
+  const APayload: TBytes; const APassword: TBytes;
+  const ADst: PByte; const ADstLen: SizeUInt; AMaxOutput: SizeUInt): SizeUInt;
+
 implementation
 
 uses
@@ -128,6 +132,71 @@ begin
   end
   else if Crc32OfBytes(Result) <> AE.Crc32 then
     raise EIOError.Create('zip: crc mismatch for ' + AE.Name);
+end;
+
+function DecompressEntryToBuffer(const AE: TZipEntryInfo;
+  const APayload: TBytes; const APassword: TBytes;
+  const ADst: PByte; const ADstLen: SizeUInt; AMaxOutput: SizeUInt): SizeUInt;
+var
+  LHint: UInt64;
+  LCompressed: TBytes;
+  LOutLen: SizeUInt;
+  LCrc: LongWord;
+begin
+  if ADst = nil then
+  begin
+    if AE.UncompressedSize <> 0 then
+      raise EArgumentError.Create('zip: nil dest buffer for ' + AE.Name);
+    Exit(0);
+  end;
+  if AE.IsEncrypted and (AE.AesVersion > 0) then
+    LCompressed := UnsealWinZipAesPayload(APassword, APayload,
+      AE.AesStrengthCode, AE.Name)
+  else
+    LCompressed := APayload;
+  if AE.MethodCode = C_ZIP_METHOD_DEFLATE then
+  begin
+    LHint := AE.UncompressedSize;
+    if LHint > UInt64(Length(LCompressed)) * 16 + 65536 then
+      LHint := UInt64(Length(LCompressed)) * 16 + 65536;
+    if ADstLen < AE.UncompressedSize then
+      raise EIOError.Create('zip: dest buffer too small for ' + AE.Name);
+    if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
+      raise EIOError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
+    LOutLen := RawDeflateDecompressToBuffer(LCompressed, ADst, ADstLen, AMaxOutput);
+  end
+  else if AE.MethodCode = C_ZIP_METHOD_STORE then
+  begin
+    if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
+      raise EIOError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
+    if ADstLen < AE.UncompressedSize then
+      raise EIOError.Create('zip: dest buffer too small for ' + AE.Name);
+    if UInt64(Length(LCompressed)) <> AE.UncompressedSize then
+      raise EIOError.Create('zip: decompressed size mismatch for ' + AE.Name);
+    if AE.UncompressedSize > 0 then
+      Move(LCompressed[0], ADst^, SizeUInt(AE.UncompressedSize));
+    LOutLen := SizeUInt(AE.UncompressedSize);
+  end
+  else
+    raise ENotSupportedError.Create('zip: unsupported compression method ' +
+      IntToStr(AE.MethodCode) + ': ' + AE.Name);
+  if UInt64(LOutLen) <> AE.UncompressedSize then
+    raise EIOError.Create('zip: decompressed size mismatch for ' + AE.Name);
+  if AE.AesVersion = C_WINZIP_AES_VERSION_2 then
+  begin
+    if AE.Crc32 <> 0 then
+      raise EParseError.Create('zip: AE-2 entry with nonzero crc field: ' + AE.Name);
+  end
+  else
+  begin
+    if LOutLen = 0 then
+      LCrc := 0
+    else
+      LCrc := Crc32Of(ADst^, LOutLen);
+    if LCrc <> AE.Crc32 then
+      raise EIOError.Create('zip: crc mismatch for ' + AE.Name);
+  end;
+  Result := LOutLen;
 end;
 
 end.
