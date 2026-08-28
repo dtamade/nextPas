@@ -463,10 +463,10 @@ begin
   CheckBytesEqual(LR.ExtractToBytes(0), LGot, 'sequential 1MB verify');
 
   LResults := TBenchSuite.Create('zip')
-    .SetMinDuration(TDuration.FromMilliseconds(200))
-    .SetMinSamples(5)
+    .SetMinDuration(TDuration.FromMilliseconds(300))
+    .SetMinSamples(7)
     .SetWarmupIters(1)
-    .SetMaxIterations(20)
+    .SetMaxIterations(25)
     .Add('zip/pack/200x512B', @BenchPackManyDeflate)
     .Add('zip/pack-reserve/200x512B', @BenchPackWithReserve)
     .Add('zip/builder-pack/200x512B', @BenchBuilderPack)
