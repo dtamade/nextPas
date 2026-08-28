@@ -1019,7 +1019,10 @@ begin
       { 取消使引擎侧完成回执必达——记录按单点所有权在其内释放，
         进程生命周期内无悬挂分配（heaptrc 0 兑现） }
       if LRec^.Cancel <> nil then
+      begin
         G_cancellable_cancel(LRec^.Cancel);
+        LRec^.Cancel := nil;
+      end;
     end;
   end;
   FPendingEvals := nil;
