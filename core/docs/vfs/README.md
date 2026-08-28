@@ -257,6 +257,14 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # us
   出现对 `fs`/`respack` 的 uses；全模块禁止 OS 单元），照 system 模块 source-contract 先例
 - 全部 gate 要求 heaptrc 零泄漏
 
+## 基准（`bench_transform` 固化）
+
+`core/benchmarks/nextpas.core.vfs/bench_transform` 固化 `daAuto` 关键路径（`make -C bench_transform build && ./bench_transform`）：
+- `Stat/large-non-gzip/header-peek` 1MiB 非 gzip 经 4K 头部小读 ~972 ns/op（1.0 Mops/s）
+- `Stat/gz/decompress` 64KiB 解压 ~51 µs/op，对比头部预判慢 ~50×
+- `Open/large-non-gzip/passthrough` 单次读取复用 ~2.26 ms/op，`Open/gz/decompress` ~107 µs/op
+头部预判与单次读取优化由 `test_vfs_compressed` 7/7（含 1MiB 头部预判固化用例）锁定为功能契约，基准用于回归防劣化。
+
 ## Consumer 展望（跨模块 slice，另行立项）
 
 - `http.static` 增加 IVfs 内容源后端（S5）：ETag 直接取 `ContentHash`，
