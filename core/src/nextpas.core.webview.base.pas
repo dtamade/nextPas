@@ -101,6 +101,9 @@ procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string)
 { 注入脚本命名空间守卫（S40）：单条脚本不得触 __npw，builder 与 CheckWebviewOptions 同源，零重复。 }
 procedure CheckWebviewInitScript(const AScript: string); inline;
 
+{ 资产路径归一：剥离前导 '/'，空串保持空（S52 复用抽取，bridge TryResolve 与 gtk scheme 回调同源，零重复 Delete 扫描）。 }
+function NormalizeWebviewAssetPath(const APath: string): string; inline;
+
 { EWebviewError 族 —— 派生自框架根异常，类目定值见单元头注释表 }
 type
   EWebviewError = class(ENextPasError)
@@ -231,6 +234,19 @@ begin
   if AEphemeral and (ADataDirectory <> '') then
     raise EWebviewInvalidState.Create(
       'EphemeralSession and DataDirectory are mutually exclusive');
+end;
+
+function NormalizeWebviewAssetPath(const APath: string): string; inline;
+var
+  I: Integer;
+begin
+  I := 1;
+  while (I <= Length(APath)) and (APath[I] = '/') do
+    Inc(I);
+  if I > 1 then
+    Result := Copy(APath, I, MaxInt)
+  else
+    Result := APath;
 end;
 
 procedure CheckWebviewInitScript(const AScript: string); inline;
