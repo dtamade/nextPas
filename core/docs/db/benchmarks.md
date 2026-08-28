@@ -1,4 +1,4 @@
-# nextpas.core.db 基准口径册（V3-C4）
+# nextpas.core.db 基准口径册（V3-C8）
 
 > 基准是防回归参考与优化判据，不是营销数字。本文固化每个 bench 的
 > 口径（数据集/迭代数/判据），登记最近一次全量采集；任何优化提交
@@ -24,7 +24,7 @@ NEXTPAS_PG_TEST_CONN='host=/var/run/postgresql dbname=nextpas_pg_test user='"$US
 
 | 项 | 值 |
 |---|---|
-| 日期 | 2026-08-25 |
+| 日期 | 2026-08-28 在册；db 段 2026-08-25，text.kv 段 2026-08-28 |
 | CPU | Intel Xeon E5-2696 v4 @ 2.20GHz ×44 |
 | 内存 | 62 GiB |
 | 内核 | Linux 6.12.101+deb13-amd64 |
@@ -169,6 +169,38 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 |---|---|---|---|---|
 | read(8T) | 24,000 | 269 ms | 89,219 ops/s | opens=4 ✅ |
 | writer(4T) | 800 | 7 ms | 114,285 ops/s | busy=0 |
+
+### bench_text_kv —— L0 共享 KV 词法内核（text.kv）
+
+口径：`nextpas.core.text.kv.ParseKV/ScanKV` 单遍空格分隔 `key=value`
+引号包裹扫描，零 `TextBuilder`，`O(n)` 线性；三档负载 small~80B
+（MySQL 真实 DSN）、medium~350B（20 对 + 含 `@/=` 引号）、large~1.5KB
+（100 对）；`TBenchSuite` 7 样本取中位，`MinDuration=100ms, MinSamples=7`，
+报告 `bytes_per_op/allocs_per_op`。编译 `-O2`，对照 `FPC 3.3.1`。
+
+> 在册数字：2026-08-28 09:07 首采（shared box 静稳窗口）；09:15 复跑
+> 因共享机器负载突增（medium/large 均值约 3× 膨胀）仅作噪声对照，不
+> 替代在册。后续新增 DSN 复用方（DM/ODBC）以此为线性度基线。
+
+| workload | bytes | median | mean | p95 | thr(median) | allocs |
+|---|---|---|---|---|---|---|
+| kv/parse_small~80B | 610 | 902 ns | 1147 ns | 2247 ns | 676 MB/s | 15 |
+| kv/parse_medium~350B | 2263 | 2416 ns | 3201 ns | 6353 ns | 937 MB/s | 49 |
+| kv/parse_large~1.5KB | 9728 | 9584 ns | 12505 ns | 23807 ns | 1015 MB/s | 207 |
+| kv/scan_small~80B | 322 | 355 ns | 559 ns | 1322 ns | 906 MB/s | 13 |
+| kv/scan_large~1.5KB | 4032 | 6049 ns | 8256 ns | 20668 ns | 667 MB/s | 201 |
+
+结论：吞吐 530–1015 MB/s 量级，`large/medium/small` 均摊 ≈ 9–16 ns/byte，
+线性 `O(n)` 成立（`1.5KB/350B ≈ 4.3×` 字节、`9584/2416 ≈ 3.97×` 耗时）。
+`ScanKV` 零分配回调查表比 `ParseKV` 数组装箱快约 30–40%（small 355ns
+vs 902ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，印证零
+中间 `Builder`。复用面：`db.mysql.dsn` 已委托 `ParseKV`，后续 `DM/ODBC`
+同形态 DSN 无需再写词法，`bench_text_kv` 为底座性能锚点。
+
+> 复跑噪声对照（2026-08-28 09:15 同机）：small median 797ns/mean 984ns
+> 持平，medium mean 9831ns（×3.1）、large mean 60971ns（×4.9）同步膨胀，
+> 与既往 `bench_db_async` 共享机器负载取证一致（调度/往返敏感、纯计算
+> 稳定），不判回归；静稳窗口重采以本表为准。
 
 ### bench_db_stmt_cache 表注
 
