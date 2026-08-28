@@ -105,7 +105,7 @@ var
 begin
   LNeeds := False;
   for I := 1 to Length(S) do
-    if S[I] in ['A'..'Z'] then
+    if (Byte(S[I]) >= 65) and (Byte(S[I]) <= 90) then
     begin
       LNeeds := True;
       Break;
@@ -124,7 +124,7 @@ var
 begin
   LNeeds := False;
   for I := 1 to Length(S) do
-    if S[I] in ['a'..'z'] then
+    if (Byte(S[I]) >= 97) and (Byte(S[I]) <= 122) then
     begin
       LNeeds := True;
       Break;
@@ -345,7 +345,7 @@ end;
 function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
 var
   P: PAnsiChar;
-  N, I: Integer;
+  N: Integer;
 begin
   P := @ABuf;
   if ABufLen > 0 then
@@ -354,8 +354,7 @@ begin
   N := Result;
   if N >= ABufLen then N := ABufLen - 1;
   if N > 0 then
-    for I := 1 to N do
-      P[I - 1] := S[I];
+    Move(S[1], P^, N);
 end;
 
 function CStrToStr(const AP: PAnsiChar): string;
