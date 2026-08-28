@@ -309,11 +309,20 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 测试：`test_ssh_proxyjump_async` 3/3（`double-hop success / target auth fail / jump auth fail`，`TAsyncLoop+RTLEvent 8s + MemPipe` 双跳转发，`~550ms` 事件化，`HEAPTRC_GATE=0` 9 块已知 `TAsyncLoop` 侧线，功能零回归，`test_ssh_proxyjump 5/5 / session_async 5/5 / sftp_async 7/7`）
 - [x] 性能：同步轮询 `~430ms` 额外开销 → 事件化后二次握手与通道仍需 `KEX/USERAUTH` 但消除 `50ms+5ms` 轮询，`bench_ssh_proxyjump` 基线保持，`S21` 事件化后双跳 `~550ms`（含二次握手），`async` 零轮询，复用度与 `transport.async/channel.async` 同构
 
+## S22 — SFTP via Async Jump（已完成）
+
+`S21` 的 `AsyncJump` 通道已事件化，`S22` 在其上复用 `SFTP async` 文件面，零轮询，保留 `Keeper` 生命周期：
+
+- [x] `proxyjump.async`：`TAsyncChannelStream` 增加 `FQueuedPayload/P/Active + TryFlushQueued`（外层 `TAsyncSshTransport` busy 时缓存 `LOuter` 并 `ScheduleAt(5ms)` 单飞重试，`FPeerWindow` 限流），`CreateWithKeeper` 增加 `FKeeper:IInterface` 持有 `jump ISshAsyncSession`（`ProxySecondHop` 经 `FStream` 链 `SftpChannel→inner Transport→ChannelStream→Keeper` 保活，杜绝 `0xF0` 悬垂与 5s 超时）
+- [x] `sftp.async`：`SshAsyncSftpViaJump / SshAsyncSftpViaJumpOn`（复用 `SshAsyncConnectViaJump` 的 `direct-tcpip` 单通道隧道，第二跳 `KEX→认证` 在 `IAsyncTcpStream` 上重跑，`SftpOpenPostCb 5ms busy defer` + `SendOpen busy retry` + `PSftpOpenPost.Session / FSession` 保留），`SFTP v3` 串行 `RoundTrip` 与 `WINDOW_LOW_WATER_DIVISOR=2` 回补、`4B` 重组与同步同包
+- [x] `transport.async`：`IsWriteBusy` 外化与 `AsyncSendPacket` 单飞语义保留，无新增依赖
+- [x] 测试：`test_ssh_sftp_async_via_jump` 4/4（`realpath→/resolved/foo / stat→1234 / target auth fail→sekAuth / jump auth fail→sekAuth/sekIO`，`TMemPipe+TJumpServer+TSftpTargetServer` 事件化双跳，`~2.5s`，`HEAPTRC_GATE=0` 20 块已知 `TIoReactor` 侧线，`proxyjump_async 3/3 / sftp_async 7/7` 回归）
+- [x] 性能：`bench` 前 `~431ms` 同步轮询额外开销 → `S21/S22` 事件化后 `~550ms`（`proxyjump async`）→ `~2.5s/4`（`sftp via jump async` 双跳含 `INIT/VERSION`），轮询消除，复用度与 `transport.async/channel.async/sftp.async` 同构
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| SFTP via Async Jump | `SftpAsyncViaJump`（`SFTP` 子系统在 `AsyncJump` 通道上） |
 | e2e Async Jump | Docker 双容器 `Async ProxyJump` 互操作（opt-in） |
 
 ## 真实性等级声明
