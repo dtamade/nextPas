@@ -131,7 +131,7 @@ make hygiene && git diff --check
 
 | Gate | 用例 | 要点 |
 |---|---|---|
-| test_base 20 | 格式算术/掩码/时钟/Buffer/PCM/Errors/门面 |
+| test_base 21 | 格式算术/掩码/时钟/Buffer(含 Silence/Clone 工厂)/PCM/Errors/门面 |
 | test_pcm_wav 12 | 兼容壳回归（八拒四正） |
 | test_wav 16 | wav 8..32 位 + float + extensible 5.1/7.1 + fact/bext/rf64 |
 | test_aiff 11 | aiff/aifc + 80-bit Extended80 + ssnd offset |
