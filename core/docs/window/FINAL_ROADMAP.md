@@ -1,14 +1,14 @@
-# nextpas.core.window — 终局路线图 (1.0 → 3.9)
+# nextpas.core.window — 终局路线图 (1.0 → 4.0)
 
-> **定位**：`window` 是 `webview / gpu / directui / game888` 共享的 L2 窗口家族，`1.0` 已完成 S1→S5 + 去消息化 + O(1)/inline + 共享 queue/live + `gtk2/3/4+qt` 家族化 + RTL 解耦；`2.0` 完美化已完成 11×4 严格 + 7 事件 + `LiveGtkSmart/QtIsLoaded` 双 inline + 5× 365µs/24.3ns 4.1% 方差 + 零 `PAnsiChar(AnsiString)`；`3.0-3.9` 扩展至 12 事件 + 输入端到端 + fake 20 全矩阵 + bench 可复现 + shim removal 4.0。本文件是**从 1.0 到 3.9**的收口记录，追求**模块化·性能·高级感·复用度·稳定性·完整性**六维收敛。
+> **定位**：`window` 是 `webview / gpu / directui / game888` 共享的 L2 窗口家族，`1.0` 已完成 S1→S5 + 去消息化 + O(1)/inline + 共享 queue/live + `gtk2/3/4+qt` 家族化 + RTL 解耦；`2.0` 完美化已完成 11×4 严格 + 7 事件 + `LiveGtkSmart/QtIsLoaded` 双 inline + 5× 365µs/24.3ns 4.1% 方差 + 零 `PAnsiChar(AnsiString)`；`3.0-4.0` 扩展至 12 事件 + 输入端到端 + fake 20 全矩阵 + bench 可复现 + shim removal 4.0。本文件是**从 1.0 到 4.0**的收口记录，追求**模块化·性能·高级感·复用度·稳定性·完整性**六维收敛。
 >
-> **Authority**：`CONTRACT.md` 3.9 定义契约；`ARCHITECTURE.md` 3.9 定义分层与线程模型；`BENCH.md` 3.9 冻结 5× 中位；`ROADMAP.md` 记录 S 波次；本文件只记录**已落地**的终局路径。
+> **Authority**：`CONTRACT.md` 4.0 定义契约；`ARCHITECTURE.md` 4.0 定义分层与线程模型；`BENCH.md` 4.0 冻结 5× 中位；`ROADMAP.md` 记录 S 波次；本文件只记录**已落地**的终局路径。
 
 ---
 
-## 0. 判定标准 — 何谓 3.9
+## 0. 判定标准 — 何谓 4.0
 
-| 维度 | 3.9 定义 | 当前 (3.9) | 差距 |
+| 维度 | 4.0 定义 | 当前 (4.0) | 差距 |
 |------|----------|-----------|------|
 | **模块化** | 11 后端 ×4件套 `base←ffi←loader←impl` 严格，`gtk.impl.inc` 718 行共享，零 `PAnsiChar(AnsiString)` Via `text.ansi`，`platform.dl` 唯一触点，legacy `window.gtk` 8 inline removal 4.0 | 11×4 已严格，shim 冻结 8 inline，grep 0 | **已达成** |
 | **性能** | `bench_dispatcher` 7 项 5× 中位 `PostSingle 365µs` 方差 4.1% / `Zero 243µs/10k=24.3ns` 方差 3.0% <5%，`LiveGtkSmart/QtIsLoaded` 双 inline | Linux 单机 365/243 冻结，3.2 后 396/20.6 单次诚实 | **已达成** |

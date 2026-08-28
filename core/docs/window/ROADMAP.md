@@ -3,7 +3,7 @@
 **Authority**: 本文件是 window 模块**向前开发**的唯一执行入口。
 **Companion**: 定位见 [README.md](README.md)；契约见 [CONTRACT.md](CONTRACT.md)；
 架构纵深见 [ARCHITECTURE.md](ARCHITECTURE.md)；抽象原则见 [ABSTRACT_DESIGN.md](ABSTRACT_DESIGN.md)。
-**Updated**: 2026-08-29（3.9 完美化：11×4 严格 + 12 事件 + sdl2/win32/gtk输入+修饰键 + 185 inline + BENCH 355µs/206µs 5× + 13 门禁全绿）
+**Updated**: 2026-08-29（4.0 完美化：11×4 严格 + 12 事件 + sdl2/win32/gtk输入+修饰键 + 185 inline + BENCH 355µs/206µs 5× + 13 门禁全绿）
 
 ---
 
