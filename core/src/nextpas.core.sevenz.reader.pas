@@ -1316,6 +1316,7 @@ var LI, LCnt, LStarCount: Integer;
     LHasQ: Boolean;
     LPrefix, LSuffix: string;
     LIdx: Integer;
+    LIdx2: TSevenZIndexArray;
 begin
   Result := nil;
   if APattern='' then Exit;
@@ -1355,7 +1356,10 @@ begin
       end;
       if TryParseGlobMid(APattern, LPrefix, LSuffix) then
       begin
-        Result := FilterEntriesBySuffix(EntriesByPrefix(LPrefix), LPrefix, LSuffix);
+        LIdx2 := IndicesByPrefix(LPrefix);
+        LIdx2 := FilterIndicesBySuffix(LIdx2, LPrefix, LSuffix);
+        SetLength(Result, Length(LIdx2));
+        for LI:=0 to High(LIdx2) do Result[LI] := FEntries[LIdx2[LI]];
         Exit;
       end;
     end;
@@ -1512,7 +1516,7 @@ begin
 end;
 
 function TSevenZReaderImpl.EntriesByGlobIgnoreCase(const APattern: string): TSevenZEntryInfoArray;
-var LI, LCnt, LStarCount: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIdx: Integer;
+var LI, LCnt, LStarCount: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIdx: Integer; LIdx2: TSevenZIndexArray;
 begin
   EnsureIgnoreCaseBuilt;
   Result := nil;
@@ -1545,7 +1549,10 @@ begin
       end;
       if TryParseGlobMid(APattern, LPrefix, LSuffix) then
       begin
-        Result := FilterEntriesBySuffixIgnoreCase(EntriesByPrefixIgnoreCase(LPrefix), LPrefix, LSuffix);
+        LIdx2 := IndicesByPrefixIgnoreCase(LPrefix);
+        LIdx2 := FilterIndicesBySuffixIgnoreCase(LIdx2, LPrefix, LSuffix);
+        SetLength(Result, Length(LIdx2));
+        for LI:=0 to High(LIdx2) do Result[LI] := FEntries[LIdx2[LI]];
         Exit;
       end;
     end;
