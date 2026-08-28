@@ -1457,6 +1457,34 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure TestAdaptivePrometheus;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; M: TTlsPasAdaptiveMetrics; F, P: string; LReq: IHttpRequest;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    M := Obs.GetAdaptiveMetrics;
+    F := TlsPasFormatPrometheusMetrics(M);
+    Check(Pos('nextpas_tlspas_adaptive_max', F)>0, 'prom default prefix');
+    Check(Pos('# HELP', F)>0, 'prom HELP');
+    Check(Pos('# TYPE', F)>0, 'prom TYPE');
+    Check(Pos('nextpas_tlspas_server_accepts', F)>0, 'prom accepts');
+    Check(Pos('nextpas_tlspas_replay_current', F)>0, 'prom current');
+    P := TlsPasFormatPrometheusMetrics(M, 'myapp');
+    Check(Pos('myapp_adaptive_max', P)>0, 'prom custom prefix');
+    Check(Pos('nextpas_tlspas_adaptive_max', P)=0, 'prom custom no default');
+    F := HttpAdaptiveEarlyDataPrometheusText(Obs);
+    Check(Pos('nextpas_tlspas_adaptive_max', F)>0, 'http prom wrapper');
+    F := HttpAdaptiveEarlyDataPrometheusText(Obs, 'custom');
+    Check(Pos('custom_adaptive_max', F)>0, 'http prom custom');
+    F := HttpAdaptiveEarlyDataPrometheusText(nil);
+    Check(Pos('nextpas_tlspas_adaptive_max 0', F)>0, 'http prom nil 0');
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+    F := HttpAdaptiveEarlyDataPrometheusText(Obs);
+    Check(Length(F)>100, 'prom length');
+  finally Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1515,6 +1543,7 @@ begin
   GSuite.Test('AdaptiveMetricsFormat', @TestAdaptiveMetricsFormat);
   GSuite.Test('AdaptiveLogLine', @TestAdaptiveLogLine);
   GSuite.Test('AdaptivePressure', @TestAdaptivePressure);
+  GSuite.Test('AdaptivePrometheus', @TestAdaptivePrometheus);
   if not GSuite.Run then
     Halt(1);
 end.

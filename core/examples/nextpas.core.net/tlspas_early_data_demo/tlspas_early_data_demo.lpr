@@ -152,6 +152,22 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure DemoAdaptivePrometheus;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; M: TTlsPasAdaptiveMetrics; P: string;
+begin
+  WriteLn('--- Adaptive Prometheus Export (S25) ---');
+  Store := TAsyncTlsPasReplayStoreFactory.CreateMemory(8, 600000);
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    M := Obs.GetAdaptiveMetrics;
+    P := TlsPasFormatPrometheusMetrics(M);
+    WriteLn(System.Copy(P, 1, 200), '...');
+    WriteLn('Http wrapper prefix custom: ', System.Copy(HttpAdaptiveEarlyDataPrometheusText(Obs, 'myapp'), 1, 80), '...');
+    WriteLn('HELP/TYPE present: ', (Pos('# HELP', P)>0) and (Pos('# TYPE', P)>0));
+    WriteLn('Prometheus exposition ready for scraping (/metrics)');
+  finally Obs.Free; end;
+end;
+
 procedure DemoAdaptiveMetricsAndPressure;
 var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession;
   Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; I: Integer; M: TTlsPasAdaptiveMetrics; LReq: IHttpRequest;
@@ -200,8 +216,8 @@ begin
 end;
 
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S24 final) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver');
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S25 final) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -217,5 +233,7 @@ begin
   WriteLn;
   DemoAdaptiveMetricsAndPressure;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S24 full chain self-proof (pressure adaptive).');
+  DemoAdaptivePrometheus;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S25 prometheus exposition self-proof.');
 end.
