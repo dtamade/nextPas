@@ -30,7 +30,7 @@ procedure WindowWin32QuitLoop;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,

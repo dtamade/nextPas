@@ -28,8 +28,7 @@ procedure WindowGtk3QuitMainLoop; inline;
 implementation
 
 uses
-  Math,
-  SysUtils,
+  nextpas.core.math,
   nextpas.core.errors,
   nextpas.core.platform.thread,
   nextpas.core.sync.intf,

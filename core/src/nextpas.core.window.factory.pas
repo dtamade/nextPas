@@ -63,8 +63,8 @@ procedure WindowPumpAll;
 implementation
 
 uses
-  SysUtils,
-  TypInfo,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.typinfo,
   nextpas.core.platform.thread,
   nextpas.core.window.fake,
   nextpas.core.window.gtk3,

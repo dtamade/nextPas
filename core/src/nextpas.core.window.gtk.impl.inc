@@ -23,7 +23,7 @@ var
 begin
   if not GInitDone then
   begin
-    Math.SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
+    nextpas.core.math.SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
       exOverflow, exUnderflow, exPrecision]);
     GInitOk := gtk_init_check(@LArgc, nil) <> 0;
     GInitDone := True;
