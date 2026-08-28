@@ -7,7 +7,8 @@ program bench_dispatcher;
 
 {** @desc 窗口 dispatcher 与事件分发性能基线。
        覆盖：fake Post 吞吐、Pump 往返、weResized 事件分发、
-       多窗并发。供 directui/game 评估主线程投递成本。 *}
+       多窗并发、WindowPumpOnce 零活窗早退 vs 有活窗。供 directui/game
+       评估主线程投递成本与游戏 tick 循环空转开销。 *}
 
 uses
   {$ifdef unix}
@@ -89,6 +90,40 @@ begin
   W2.Close;
 end;
 
+procedure BenchWindowPumpOnceZero(const ACtx: IBenchContext);
+var
+  I: Integer;
+  LWin: IWindow;
+  LClosed: Boolean;
+begin
+  // 零活窗早退路径：无活窗时 WindowPumpOnce 应 O(1) 8 计数聚合即返，零锁
+  LClosed := False;
+  if not GWin.IsClosed then
+  begin
+    GWin.Close;
+    LClosed := True;
+  end;
+  for I := 1 to 10000 do
+    WindowPumpOnce;
+  if LClosed then
+  begin
+    LWin := CreateFakeWindow(DefaultWindowOptions);
+    GWin := LWin;
+    GFake := TFakeWindow.FromWindow(GWin);
+  end;
+  ACtx.SetBytes(10000 * 8);
+end;
+
+procedure BenchWindowPumpOnceLive(const ACtx: IBenchContext);
+var
+  I: Integer;
+begin
+  for I := 1 to 1000 do
+    GWin.GetDispatcher.Post(procedure begin end);
+  for I := 1 to 1000 do
+    WindowPumpOnce;
+end;
+
 procedure RunBenchmarks;
 var
   LSuite: IBenchSuite;
@@ -114,6 +149,8 @@ begin
   LSuite.Add('PumpOnce/1000', @BenchPumpOnce);
   LSuite.Add('EventResized/5000', @BenchEventResized);
   LSuite.Add('MultiWindow/2000', @BenchMultiWindow);
+  LSuite.Add('WindowPumpOnceZero/10000', @BenchWindowPumpOnceZero);
+  LSuite.Add('WindowPumpOnceLive/1000', @BenchWindowPumpOnceLive);
 
   LResults := LSuite.Run;
   WriteLn;

@@ -35,8 +35,10 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.platform.thread,
+  nextpas.core.sync.event,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
+  nextpas.core.time.base,
   nextpas.core.window.sdl2.ffi,
   nextpas.core.window.sdl2.loader;
 
@@ -52,6 +54,7 @@ var
   GDispHead: Integer = 0;
   GDispCount: Integer = 0;
   GDestroying: Boolean = False;
+  GWaitEvent: IEvent;
 
 function EnsureSdlInit: Boolean;
 var
@@ -158,6 +161,8 @@ procedure DispatcherPush(AProc: TWindowProcRef);
 begin
   if GDispLock = nil then
     GDispLock := TMutex.Create as ILock;
+  if GWaitEvent = nil then
+    GWaitEvent := CreateEvent(False);
   GDispLock.Acquire;
   try
     if GDispCount = Length(GDispRing) then
@@ -167,6 +172,7 @@ begin
   finally
     GDispLock.Release;
   end;
+  GWaitEvent.SetEvent;
 end;
 
 function DispatcherPop(out AProc: TWindowProcRef): Boolean;
@@ -677,15 +683,15 @@ end;
 procedure WindowSdl2RunLoop;
 begin
   GLoopQuit := False;
+  if GWaitEvent = nil then
+    GWaitEvent := CreateEvent(False);
   while not GLoopQuit do
   begin
     while SdlPollAndDispatchOnce do ;
-    // If no live windows, exit
     if SdlLiveWindowCount = 0 then Break;
-    // Also drain any pending dispatcher closures even without SDL event
     DispatcherDrain;
-    // Avoid busy spin: sleep 1ms
-    platform_thread_sleep_ms(1);
+    // 事件驱动等待：由 DispatcherPush/SetEvent 唤醒，而非硬编码 sleep 轮询
+    GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
     if SdlLiveWindowCount = 0 then Break;
   end;
 end;
@@ -693,6 +699,8 @@ end;
 procedure WindowSdl2QuitLoop;
 begin
   GLoopQuit := True;
+  if GWaitEvent <> nil then
+    GWaitEvent.SetEvent;
   DispatcherWake;
 end;
 

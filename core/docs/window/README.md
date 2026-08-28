@@ -74,7 +74,7 @@ base ← gtk.ffi ← gtk.loader ← gtk ─┘
 | `sdl2` | 全平台（含 game888 复用） | `SDL_Window` / `SDL_CreateWindow` + user-event | S3 | `WindowSdl2IsAvailable` |
 | `fake` | 全平台无头 | 纯 Pascal 脚本化驱动（`IWindowHost` 全实现） | S1 | 恒真（CI 唯一载体） |
 
-> 探测顺序 `win32 > cocoa > android > uikit > wasm > gtk > sdl2 > fake`，`DefaultWindowKind` 能力驱动；`bench_dispatcher` 377µs/1000 `PostSingle`（32cap 环，O(1) 活窗计数 + `GetWidth/GetHeight`/`IsClosed`/`GetDispatcher`/`IsOnMainThread` inline + `CheckWindowOptions` 富错误信息）。
+> 探测顺序 `win32 > cocoa > android > uikit > wasm > gtk > sdl2 > fake`，`DefaultWindowKind` 能力驱动；`bench_dispatcher` 377µs/1000 `PostSingle`（32cap 环，O(1) 活窗计数 + `GetWidth/GetHeight`/`IsClosed`/`GetDispatcher`/`IsOnMainThread` inline + `CheckWindowOptions` 富错误信息；`WindowPumpOnceZero` 18ns/次早退、7 项分拆）。
 
 ---
 
@@ -148,8 +148,9 @@ Check(LWin.IsClosed);
 2. **拒绝 LCL 式 `LM_` 跨平台消息**：业务语义永走强类型接口/事件/`Supports`，消息仅作底层唤醒原语（`g_idle_add/PostMessage/SDL_PushEvent/dispatch_async`）。
 3. **eval/渲染均不提供同步阻塞形态**；跨线程只走 `IWindowDispatcher.Post`，宿主驱动经 `IWindowHost`。
 4. **所有用户回调统一在 UI 主线程触发**；可跨线程的仅 `Post` 与 `Close(内部 marshal, 幂等)`。
-5. **Deferred 能力不预埋占位**，每项有触发条件（见 `CONTRACT.md §9`）。
-6. **`fake` 是 CI 契约的唯一载体**（见 `CONTRACT.md §8`）；图形环境缺席时测试仍全绿；`WindowPumpOnce` 为 game/directui 提供非阻塞复用。
+5. **整体事件驱动，不得硬编码等待**：`RunLoop` 以 `gtk_main/SDL_WaitEvent/WaitMessage/dispatch` 或 `IEvent` 阻塞于 OS/宿主事件，`DispatcherPush` 以 `SetEvent` 立即唤醒，`WaitTimeout(5ms)` 仅作活窗复核，无 `sleep(1)` 轮询。
+6. **Deferred 能力不预埋占位**，每项有触发条件（见 `CONTRACT.md §9`）。
+7. **`fake` 是 CI 契约的唯一载体**（见 `CONTRACT.md §8`）；图形环境缺席时测试仍全绿；`WindowPumpOnce` 为 game/directui 提供非阻塞复用。
 
 ---
 
