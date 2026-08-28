@@ -307,15 +307,15 @@ type
     FKindSet: Boolean;
   public
     constructor Create;
-    function Kind(AKind: TWindowKind): IWindowBuilder;
-    function Title(const ATitle: string): IWindowBuilder;
-    function Size(AWidth, AHeight: Integer): IWindowBuilder;
-    function MinSize(AWidth, AHeight: Integer): IWindowBuilder;
-    function MaxSize(AWidth, AHeight: Integer): IWindowBuilder;
-    function Resizable(AResizable: Boolean): IWindowBuilder;
-    function StartMaximized(AMaximized: Boolean): IWindowBuilder;
-    function Parent(AHandle: TWindowNativeHandle): IWindowBuilder;
-    function Options(const AOptions: TWindowOptions): IWindowBuilder;
+    function Kind(AKind: TWindowKind): IWindowBuilder; inline;
+    function Title(const ATitle: string): IWindowBuilder; inline;
+    function Size(AWidth, AHeight: Integer): IWindowBuilder; inline;
+    function MinSize(AWidth, AHeight: Integer): IWindowBuilder; inline;
+    function MaxSize(AWidth, AHeight: Integer): IWindowBuilder; inline;
+    function Resizable(AResizable: Boolean): IWindowBuilder; inline;
+    function StartMaximized(AMaximized: Boolean): IWindowBuilder; inline;
+    function Parent(AHandle: TWindowNativeHandle): IWindowBuilder; inline;
+    function Options(const AOptions: TWindowOptions): IWindowBuilder; inline;
     function Build: IWindow;
   end;
 
@@ -327,47 +327,47 @@ begin
   FKindSet := False;
 end;
 
-function TBuilderImpl.Kind(AKind: TWindowKind): IWindowBuilder;
+function TBuilderImpl.Kind(AKind: TWindowKind): IWindowBuilder; inline;
 begin
   FKind := AKind; FKindSet := True; Result := Self;
 end;
 
-function TBuilderImpl.Title(const ATitle: string): IWindowBuilder;
+function TBuilderImpl.Title(const ATitle: string): IWindowBuilder; inline;
 begin
   FOptions.Title := ATitle; Result := Self;
 end;
 
-function TBuilderImpl.Size(AWidth, AHeight: Integer): IWindowBuilder;
+function TBuilderImpl.Size(AWidth, AHeight: Integer): IWindowBuilder; inline;
 begin
   FOptions.Width := AWidth; FOptions.Height := AHeight; Result := Self;
 end;
 
-function TBuilderImpl.MinSize(AWidth, AHeight: Integer): IWindowBuilder;
+function TBuilderImpl.MinSize(AWidth, AHeight: Integer): IWindowBuilder; inline;
 begin
   FOptions.MinWidth := AWidth; FOptions.MinHeight := AHeight; Result := Self;
 end;
 
-function TBuilderImpl.MaxSize(AWidth, AHeight: Integer): IWindowBuilder;
+function TBuilderImpl.MaxSize(AWidth, AHeight: Integer): IWindowBuilder; inline;
 begin
   FOptions.MaxWidth := AWidth; FOptions.MaxHeight := AHeight; Result := Self;
 end;
 
-function TBuilderImpl.Resizable(AResizable: Boolean): IWindowBuilder;
+function TBuilderImpl.Resizable(AResizable: Boolean): IWindowBuilder; inline;
 begin
   FOptions.Resizable := AResizable; Result := Self;
 end;
 
-function TBuilderImpl.StartMaximized(AMaximized: Boolean): IWindowBuilder;
+function TBuilderImpl.StartMaximized(AMaximized: Boolean): IWindowBuilder; inline;
 begin
   FOptions.Maximized := AMaximized; Result := Self;
 end;
 
-function TBuilderImpl.Parent(AHandle: TWindowNativeHandle): IWindowBuilder;
+function TBuilderImpl.Parent(AHandle: TWindowNativeHandle): IWindowBuilder; inline;
 begin
   FOptions.ParentHandle := AHandle; Result := Self;
 end;
 
-function TBuilderImpl.Options(const AOptions: TWindowOptions): IWindowBuilder;
+function TBuilderImpl.Options(const AOptions: TWindowOptions): IWindowBuilder; inline;
 begin
   FOptions := AOptions; Result := Self;
 end;

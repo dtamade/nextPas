@@ -1,9 +1,9 @@
 unit nextpas.core.window.gtk;
 
-{** @desc GTK 后端 shim（deprecated）：转发至独立 L2 gtk3 薄适配层。
+{** @desc GTK 后端 shim（deprecated since 2.0, removal 3.0）：转发至独立 L2 gtk3 薄适配层。
        保留本单元以兼容历史 uses，实际实现已扭转至 nextpas.core.window.gtk3
       （消费 nextpas.core.gtk3 家族）。新代码请直接 uses nextpas.core.window.gtk3
-       或经 factory。 *}
+       或经 factory `TWindowBuilder`。 *}
 
 {$I nextpas.core.settings.inc}
 
