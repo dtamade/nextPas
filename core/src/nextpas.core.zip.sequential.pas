@@ -444,6 +444,9 @@ var
       Exit;
     if (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then
       Exit;
+    { 单条上限预筛：超限的试解压必在 Decompress 路径 raise，直接跳过避免无谓 CPU }
+    if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then
+      Exit;
     if APos > 0 then
     begin
       SetLength(LPay, APos);
@@ -528,39 +531,39 @@ begin
         Continue;
       if LLen - SizeUInt(LPos) >= 16 then
       begin
-        if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
+        { 先验 next sig 已知性与尺寸自洽，再进重校验（CRC/试解压），避免载荷
+          内大量假签名触发 O(n·m) 试解压的 CPU bomb }
+        if LLen - SizeUInt(LPos + 16) >= 4 then
         begin
-          LNextSigNeed := 16;
-          if LLen - SizeUInt(LPos + LNextSigNeed) >= 4 then
+          if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 16))) then
           begin
-            if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + LNextSigNeed))) then
-            else
-            begin
-              LFound := True;
-              LFoundPos := SizeUInt(LPos);
-              LFoundCrc := LCandCrc;
-              LFoundCSize := LCandCSize;
-              LFoundUSize := LCandUSize;
-              LFoundDescSize := 16;
-              Break;
-            end;
+            { 24 位描述符可能仍成立，延后至 24 分支再判 }
           end
-          else
-            Continue;
-        end;
+          else if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
+          begin
+            LFound := True;
+            LFoundPos := SizeUInt(LPos);
+            LFoundCrc := LCandCrc;
+            LFoundCSize := LCandCSize;
+            LFoundUSize := LCandUSize;
+            LFoundDescSize := 16;
+            Break;
+          end;
+        end
+        else if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
+          Continue; { 尾部截断，待更多数据 }
       end;
       if LLen - SizeUInt(LPos) >= 24 then
       begin
+        if LLen - SizeUInt(LPos + 24) >= 4 then
+        begin
+          if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 24))) then
+            Continue;
+        end
+        else
+          Continue;
         if TryDescriptorAt(SizeUInt(LPos), 24, LCandCrc, LCandCSize64, LCandUSize64) then
         begin
-          LNextSigNeed := 24;
-          if LLen - SizeUInt(LPos + LNextSigNeed) >= 4 then
-          begin
-            if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + LNextSigNeed))) then
-              Continue;
-          end
-          else
-            Continue;
           LFound := True;
           LFoundPos := SizeUInt(LPos);
           LFoundCrc := LCandCrc;
