@@ -384,16 +384,62 @@ begin
 end;
 
 procedure TestEarlyDataOptionsAndObservability;
-var LOpts: TAsyncTlsPasClientOptions; LInfo: ITlsPasEarlyDataInfo;
+var LOpts: TAsyncTlsPasClientOptions;
 begin
   LOpts := DefaultAsyncTlsPasClientOptions;
   Check(not LOpts.AllowEarlyData, 'default AllowEarlyData false (zero overhead)');
   LOpts.AllowEarlyData := True;
   Check(LOpts.AllowEarlyData, 'set true');
-
-  // Streams currently always report false until S6-record enables; verify interface present
-  // Synthetic check: create via fake path not needed; just compile-time Supports presence via RTTI
   Check(True, 'ITlsPasEarlyDataInfo compiled');
+end;
+
+procedure TestEarlyDataExtensionSynthetic;
+var LPub: TBytes; LPSK, LIdent: TBytes; LPartial, LCH: TBytes; LInfo: TTLS13ClientHelloInfo; LErr: string;
+begin
+  SetLength(LPub, 32);
+  FillChar(LPub[0], 32, $11);
+  SetLength(LPSK, 32);
+  FillChar(LPSK[0], 32, $22);
+  SetLength(LIdent, 16);
+  FillChar(LIdent[0], 16, $33);
+  // Without early_data: HasEarlyData false, binder still valid
+  LCH := BuildTLS13ClientHelloHandshakeWithComputedPSKBinder('example.com', '', LPub, TLS13_CIPHER_AES_128_GCM_SHA256, LIdent, 0, LPSK, LPartial);
+  Check(not TlsPasHasEarlyData(LCH), 'no early_data by default');
+  Check(TryParseTLS13ClientHelloFromHandshake(LCH, LInfo, LErr) and not LInfo.HasEarlyData, 'parser no early_data');
+  // With early_data: flag true, extension present, parser detects
+  LCH := BuildTLS13ClientHelloHandshakeWithComputedPSKBinder('example.com', '', LPub, TLS13_CIPHER_AES_128_GCM_SHA256, LIdent, 0, LPSK, LPartial, True);
+  Check(TlsPasHasEarlyData(LCH), 'has early_data when allowed');
+  Check(TryParseTLS13ClientHelloFromHandshake(LCH, LInfo, LErr) and LInfo.HasEarlyData, 'parser has early_data');
+  Check(LInfo.HasPreSharedKey, 'psk still present with early_data');
+  // Binder must remain after PSK: early_data before PSK ensures PSK last
+  Check(Length(LInfo.FirstPSKBinder) = 32, 'binder len still 32 with early_data');
+end;
+
+procedure TestTicketMaxEarlyDataCapture;
+var C: TAsyncTlsPasSessionCache; S: TTlsPasResumptionSession; LOk: Boolean;
+begin
+  C := TAsyncTlsPasSessionCache.Create;
+  try
+    S := Default(TTlsPasResumptionSession);
+    S.CipherSuite := TLS13_CIPHER_AES_128_GCM_SHA256;
+    SetLength(S.TicketIdentity, 4);
+    SetLength(S.ResumptionPSK, 32);
+    S.LifetimeSec := 3600;
+    S.IssuedMs := 1000;
+    S.HasMaxEarlyData := True;
+    S.MaxEarlyDataSize := 16384;
+    C.Store('host', 443, S);
+    LOk := C.TryPeek('host', 443, S);
+    Check(LOk, 'peek with early_data');
+    Check(S.HasMaxEarlyData and (S.MaxEarlyDataSize = 16384), 'early_data preserved via cache');
+    // Zero size should be stored but not trigger early_data (policy)
+    S.HasMaxEarlyData := True;
+    S.MaxEarlyDataSize := 0;
+    C.Store('host', 443, S);
+    LOk := C.TryPeek('host', 443, S);
+    Check(LOk and S.HasMaxEarlyData and (S.MaxEarlyDataSize = 0), 'zero early_data preserved');
+    Check(S.MaxEarlyDataSize <= 16384, 'limit check');
+  finally C.Free; end;
 end;
 
 var
@@ -416,6 +462,8 @@ begin
   GSuite.Test('EarlyDataSHA384', @TestEarlyDataDeriveSHA384);
   GSuite.Test('EarlyDataNegative', @TestEarlyDataNegative);
   GSuite.Test('EarlyDataOptions', @TestEarlyDataOptionsAndObservability);
+  GSuite.Test('EarlyDataExtension', @TestEarlyDataExtensionSynthetic);
+  GSuite.Test('EarlyDataTicketCache', @TestTicketMaxEarlyDataCapture);
   if not GSuite.Run then
     Halt(1);
 end.

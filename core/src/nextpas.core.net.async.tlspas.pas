@@ -83,6 +83,11 @@ type
     LifetimeSec: Cardinal;
     { 单调时钟毫秒：算 obfuscated_ticket_age + 本地过期 }
     IssuedMs: Int64;
+    { max_early_data 扩展（RFC8446 §4.2.10）：Has=False 表示票据未
+      宣告 early_data；True 且 Size>0 时配合 AllowEarlyData 触发
+      ClientHello early_data 尾扩展，仍需服务端 EE 确认才算接受。 }
+    HasMaxEarlyData: Boolean;
+    MaxEarlyDataSize: Cardinal;
   end;
 
   { 恢复状态查询：判断本次握手是否走了 PSK 恢复（测试与调用方观测
@@ -187,6 +192,7 @@ function AsyncTlsFpConnect(const ALoop: TAsyncLoop; const AHost: string;
 function TlsPasIsSupportedHRRGroup(AGroup: Word): Boolean;
 function TlsPasGroupKeyShareLen(AGroup: Word): Integer;
 function TlsPasBuildMessageHash(const ACH1: TBytes; ACipherSuite: Word): TBytes;
+function TlsPasHasEarlyData(const AClientHelloHandshake: TBytes): Boolean;
 
 { 0-RTT helpers — 薄封装 keyschedule.TryDeriveTLS13ClientEarlyDataSecrets，
   供合成验证与后续 early_data 数据面复用；零堆/零分支透传。 }
@@ -221,6 +227,7 @@ uses
   nextpas.core.net.async.dial,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
+  nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
@@ -953,6 +960,14 @@ begin
   Result[3] := Byte(Length(LHash));
   if Length(LHash) > 0 then
     Move(LHash[0], Result[4], Length(LHash));
+end;
+
+function TlsPasHasEarlyData(const AClientHelloHandshake: TBytes): Boolean;
+var LInfo: TTLS13ClientHelloInfo; LErr: string;
+begin
+  Result := False;
+  if TryParseTLS13ClientHelloFromHandshake(AClientHelloHandshake, LInfo, LErr) then
+    Result := LInfo.HasEarlyData;
 end;
 
 function TlsPasPatchBinder(const AOriginalCH: TBytes; const ANewBinder: TBytes): TBytes;
@@ -2060,6 +2075,7 @@ function AllocHsCtx(const ALoop: TAsyncLoop;
 var
   LPub: TBytes;
   LPartialCH: TBytes;
+  LAllowEarly: Boolean;
 begin
   New(Result);
   FillChar(Result^, SizeOf(Result^), 0);
@@ -2085,15 +2101,20 @@ begin
     if AHasResume then
     begin
       { PSK 恢复（psk_dhe_ke）：仍带 X25519 key_share；binder 覆盖
-        去 binders 的部分 CH，由构建器内部完成 }
+        去 binders 的部分 CH，由构建器内部完成。S6-ext：AllowEarlyData
+        且票据携带 max_early_data 时附加 early_data 扩展（仍走 1-RTT，
+        需服务端 EE 确认）。 }
       Result^.Resuming := True;
+      LAllowEarly := AOptions.AllowEarlyData and AResumeSession.HasMaxEarlyData
+        and (AResumeSession.MaxEarlyDataSize > 0)
+        and (AResumeSession.MaxEarlyDataSize <= 16384);
       Result^.CHBody :=
         BuildTLS13ClientHelloHandshakeWithComputedPSKBinder(
           AServerName, '', LPub, AResumeSession.CipherSuite,
           AResumeSession.TicketIdentity,
           Cardinal(Int64(AResumeSession.TicketAgeAdd) +
             (TlsPasMonoMs - AResumeSession.IssuedMs)),
-          AResumeSession.ResumptionPSK, LPartialCH);
+          AResumeSession.ResumptionPSK, LPartialCH, LAllowEarly);
     end
     else
       Result^.CHBody := BuildTLS13ClientHelloHandshake(AServerName, '',
@@ -2295,6 +2316,8 @@ begin
         LSess.TicketAgeAdd := LTicket.TicketAgeAdd;
         LSess.LifetimeSec := LTicket.TicketLifetime;
         LSess.IssuedMs := TlsPasMonoMs;
+        LSess.HasMaxEarlyData := LTicket.HasMaxEarlyDataSize;
+        LSess.MaxEarlyDataSize := LTicket.MaxEarlyDataSize;
         FCache.Store(FCacheHost, FCachePort, LSess);
       end;
       Continue;
