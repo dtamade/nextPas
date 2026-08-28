@@ -104,6 +104,7 @@ type
     property Entries: TSevenZEntryInfoArray read GetEntries;
     procedure ClearCache;
     function EntriesByPrefix(const APrefix: string): TSevenZEntryInfoArray;
+    function EntriesBySuffix(const ASuffix: string): TSevenZEntryInfoArray;
     {** 提取文件条目内容并校验 CRC；目录/空文件返回 nil；
         AIndex 越界抛参数错误。重复提取同一 solid 文件夹走缓存 *}
     function Extract(AIndex: Integer): TBytes;
