@@ -216,8 +216,8 @@ begin
   Result.Password := '';
   Result.Database := '';
   Result.Socket := '';
-  if Trim(ADsn) <> '' then
-    if not ValidateKV(ADsn, LErr) then
+  if not ValidateKV(ADsn, LErr) then
+    if LErr <> 'empty dsn' then
       raise EDbError.CreateSimple(dbkMysql, LErr);
   try
     LPairs := ParseKV(ADsn);
