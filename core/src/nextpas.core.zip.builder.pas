@@ -5,11 +5,14 @@ unit nextpas.core.zip.builder;
  *       覆盖常见打包路径。委托 `IZipWriter` 实现，字节形态与
  *       直接写器全等，`Reserve` 用于 200+ 条目预分配以避免几何扩容。
  *
- * 约束：链式方法一律返回 `Self`；流式条目经 `AddEntryStream`
- *       直通写器（语义与 `IZipWriter.AddEntryStream` 一致，含
- *       DataDescriptor 直写与 fail-closed）；`Finish` 后再次添加
- *       或再次 `Finish` 遵循底层写器语义（`EInvalidOperationError`）。
- *       `StreamTo` 绑定后 `Finish` 需经 `FinishTo` 完成。
+ * 约束：链式方法 `Add`/`AddDeflate`/`AddWithTime`/
+ *       `AddDeflateWithTime`/`AddWithOptions`/`AddDirectory`/
+ *       `AddDirectoryWithTime`/`Reserve`/`StreamTo` 一律返回 `Self`；
+ *       流式条目经 `AddEntryStream` 直通写器（语义与 `IZipWriter.
+ *       AddEntryStream` 一致，含 DataDescriptor 直写与 fail-closed）；
+ *       `Finish` 后再次添加或再次 `Finish` 遵循底层写器语义
+ *      （`EInvalidOperationError`）；`StreamTo` 绑定后 `Finish` 需经
+ *       `FinishTo` 完成。
  *}
 
 {$I nextpas.core.settings.inc}
