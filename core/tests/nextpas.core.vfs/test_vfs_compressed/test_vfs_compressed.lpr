@@ -1,7 +1,6 @@
 program test_vfs_compressed;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -142,7 +141,7 @@ var
 begin
   Inner := MakeGzipped;
   Dec := CreateDecompressingVfs(Inner, daAuto);
-  Check(Supports(Dec, IVfsETag, ET), 'decorator exposes IVfsETag');
+  Check(Dec.QueryInterface(IVfsETag, ET) = 0, 'decorator exposes IVfsETag');
   Check(not ET.TryGetETag('gz.txt', Tag), 'ETag disabled after decompress');
   Check(Tag = '', 'ETag empty');
   // LastModified should passthrough if inner supports

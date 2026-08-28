@@ -1372,11 +1372,67 @@ begin
 end;
 
 function TSevenZReaderImpl.EntriesByGlobIgnoreCase(const APattern: string): TSevenZEntryInfoArray;
-var LI, LCnt: Integer;
+var LI, LCnt, LStarCount: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIdx: Integer;
+    LLowerPref, LLowerSuff: string;
 begin
   Result := nil;
   if APattern='' then Exit;
   if APattern='*' then begin Result := GetEntries; Exit; end;
+  LHasQ := Pos('?', APattern) > 0;
+  if not LHasQ then
+  begin
+    LStarCount := 0;
+    for LI:=1 to Length(APattern) do if APattern[LI]='*' then Inc(LStarCount);
+    if LStarCount=0 then
+    begin
+      LIdx := FindIgnoreCase(APattern);
+      if LIdx>=0 then begin SetLength(Result,1); Result[0] := FEntries[LIdx]; end;
+      Exit;
+    end;
+    if LStarCount=1 then
+    begin
+      if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') then
+      begin
+        LPrefix := Copy(APattern,1,Length(APattern)-1);
+        Result := EntriesByPrefixIgnoreCase(LPrefix);
+        Exit;
+      end;
+      if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') then
+      begin
+        LSuffix := Copy(APattern,2,Length(APattern)-1);
+        Result := EntriesBySuffixIgnoreCase(LSuffix);
+        Exit;
+      end;
+      if (Pos('*', APattern) > 1) and (Pos('*', APattern) < Length(APattern)) then
+      begin
+        LStarCount := Pos('*', APattern);
+        LPrefix := Copy(APattern,1,LStarCount-1);
+        LSuffix := Copy(APattern,LStarCount+1, Length(APattern)-LStarCount);
+        if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
+        Result := EntriesByPrefixIgnoreCase(LPrefix);
+        LCnt := 0;
+        for LI:=0 to High(Result) do
+        begin
+          if IsAsciiStr(Result[LI].Name) then LLowerPref := AsciiLowerStr(Result[LI].Name) else LLowerPref := LowerCase(Result[LI].Name);
+          if (Length(LLowerPref) >= Length(LLowerSuff)) and
+             ((Length(LLowerSuff)=0) or (Copy(LLowerPref, Length(LLowerPref)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
+            Inc(LCnt);
+        end;
+        LI := 0; LIdx := 0;
+        while LI <= High(Result) do
+        begin
+          if IsAsciiStr(Result[LI].Name) then LLowerPref := AsciiLowerStr(Result[LI].Name) else LLowerPref := LowerCase(Result[LI].Name);
+          if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
+          if (Length(LLowerPref) >= Length(LLowerSuff)) and
+             ((Length(LLowerSuff)=0) or (Copy(LLowerPref, Length(LLowerPref)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
+          begin Result[LIdx] := Result[LI]; Inc(LIdx); end;
+          Inc(LI);
+        end;
+        SetLength(Result, LIdx);
+        Exit;
+      end;
+    end;
+  end;
   LCnt := 0;
   for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Inc(LCnt);
   SetLength(Result, LCnt);
@@ -1385,11 +1441,40 @@ begin
 end;
 
 function TSevenZReaderImpl.FindByGlobIgnoreCase(const APattern: string): Integer;
-var LI: Integer;
+var LI, LStarCount, LPos, LIdx: Integer; LPrefix, LSuffix, LLowerPref, LLowerSuff, LEntryLower: string;
 begin
   Result := -1;
   if APattern='' then Exit(-1);
   if APattern='*' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
+  if Pos('?', APattern)=0 then
+  begin
+    if Pos('*', APattern)=0 then Exit(FindIgnoreCase(APattern));
+    if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') and (Pos('*', Copy(APattern,1,Length(APattern)-1))=0) then
+      Exit(FindByPrefixIgnoreCase(Copy(APattern,1,Length(APattern)-1)));
+    if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') and (Pos('*', Copy(APattern,2,Length(APattern)-1))=0) then
+      Exit(FindBySuffixIgnoreCase(Copy(APattern,2,Length(APattern)-1)));
+    if (Pos('*', APattern) > 1) and (Pos('*', APattern) < Length(APattern)) and (Pos('*', Copy(APattern, Pos('*', APattern)+1, Length(APattern))) = 0) then
+    begin
+      LI := Pos('*', APattern);
+      LStarCount := LI;
+      LPrefix := Copy(APattern,1,LStarCount-1);
+      LSuffix := Copy(APattern,LStarCount+1, Length(APattern)-LStarCount);
+      if IsAsciiStr(LPrefix) then LLowerPref := AsciiLowerStr(LPrefix) else LLowerPref := LowerCase(LPrefix);
+      if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
+      LPos := LowerBoundPrefixIgnoreCase(LPrefix);
+      while LPos < Length(FSortedIdxIgnoreCase) do
+      begin
+        LIdx := FSortedIdxIgnoreCase[LPos];
+        LEntryLower := FLowerNames[LIdx];
+        if (Length(LEntryLower) < Length(LLowerPref)) or (Copy(LEntryLower,1,Length(LLowerPref)) <> LLowerPref) then Break;
+        if (Length(LEntryLower) >= Length(LLowerPref)+Length(LLowerSuff)) and
+           ((Length(LLowerSuff)=0) or (Copy(LEntryLower, Length(LEntryLower)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
+          Exit(LIdx);
+        Inc(LPos);
+      end;
+      Exit(-1);
+    end;
+  end;
   for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Exit(LI);
   Result := -1;
 end;
@@ -1455,18 +1540,10 @@ begin
 end;
 
 function TSevenZReaderImpl.ExtractByGlobIgnoreCase(const APattern: string): TSevenZExtractedArray;
-var LI, LCnt, LFill: Integer; LIndices: array of Integer;
+var LErr: string;
 begin
-  Result := nil;
-  if APattern='' then Exit;
-  if APattern='*' then begin Result := ExtractAll; Exit; end;
-  LCnt := 0;
-  for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Inc(LCnt);
-  if LCnt=0 then Exit;
-  SetLength(LIndices, LCnt);
-  LFill := 0;
-  for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then begin LIndices[LFill] := LI; Inc(LFill); end;
-  Result := ExtractIndicesGrouped(LIndices);
+  if not TryExtractByGlobIgnoreCaseWithError(APattern, Result, LErr) then
+    raise ESevenZError.Create(LErr);
 end;
 
 function TSevenZReaderImpl.TryExtractAll(out AExtracted: TSevenZExtractedArray): Boolean;
@@ -1767,9 +1844,62 @@ begin
 end;
 
 function TSevenZReaderImpl.TryExtractByGlobIgnoreCaseWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+var LI, LCnt, LIdx, LPos, LStarPos: Integer; LHasQ: Boolean; LPrefix, LSuffix, LLowerPref, LLowerSuff: string; LIndices: array of Integer; LFill: Integer;
 begin
   AExtracted := nil; AError := ''; Result := False;
-  try AExtracted := ExtractByGlobIgnoreCase(APattern); Result := True;
+  try
+    if APattern='' then begin Result := True; Exit; end;
+    if APattern='*' then begin AExtracted := ExtractAll; Result := True; Exit; end;
+    LHasQ := Pos('?', APattern) > 0;
+    if not LHasQ then
+    begin
+      LCnt := 0; for LI:=1 to Length(APattern) do if APattern[LI]='*' then Inc(LCnt);
+      if LCnt=0 then
+      begin
+        LIdx := FindIgnoreCase(APattern);
+        if LIdx >= 0 then
+        begin SetLength(AExtracted,1); AExtracted[0].Info := FEntries[LIdx]; AExtracted[0].Data := Extract(LIdx); end;
+        Result := True; Exit;
+      end;
+      if LCnt=1 then
+      begin
+        if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') then
+        begin AExtracted := ExtractByPrefixIgnoreCase(Copy(APattern,1,Length(APattern)-1)); Result := True; Exit; end;
+        if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') then
+        begin AExtracted := ExtractBySuffixIgnoreCase(Copy(APattern,2,Length(APattern)-1)); Result := True; Exit; end;
+        LStarPos := Pos('*', APattern);
+        if (LStarPos > 1) and (LStarPos < Length(APattern)) then
+        begin
+          LPrefix := Copy(APattern,1,LStarPos-1);
+          LSuffix := Copy(APattern,LStarPos+1, Length(APattern)-LStarPos);
+          if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
+          AExtracted := ExtractByPrefixIgnoreCase(LPrefix);
+          LCnt := 0;
+          for LI:=0 to High(AExtracted) do
+          begin
+            if IsAsciiStr(AExtracted[LI].Info.Name) then LLowerPref := AsciiLowerStr(AExtracted[LI].Info.Name) else LLowerPref := LowerCase(AExtracted[LI].Info.Name);
+            if (Length(LLowerPref) >= Length(LLowerSuff)) and ((Length(LLowerSuff)=0) or (Copy(LLowerPref, Length(LLowerPref)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then Inc(LCnt);
+          end;
+          LIdx := 0; LPos := 0;
+          while LPos <= High(AExtracted) do
+          begin
+            if IsAsciiStr(AExtracted[LPos].Info.Name) then LLowerPref := AsciiLowerStr(AExtracted[LPos].Info.Name) else LLowerPref := LowerCase(AExtracted[LPos].Info.Name);
+            if (Length(LLowerPref) >= Length(LLowerSuff)) and ((Length(LLowerSuff)=0) or (Copy(LLowerPref, Length(LLowerPref)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
+            begin AExtracted[LIdx] := AExtracted[LPos]; Inc(LIdx); end;
+            Inc(LPos);
+          end;
+          SetLength(AExtracted, LCnt);
+          Result := True; Exit;
+        end;
+      end;
+    end;
+    LCnt := 0;
+    for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Inc(LCnt);
+    SetLength(LIndices, LCnt);
+    LFill := 0;
+    for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then begin LIndices[LFill] := LI; Inc(LFill); end;
+    if LCnt > 0 then AExtracted := ExtractIndicesGrouped(LIndices) else SetLength(AExtracted,0);
+    Result := True;
   except on E: Exception do begin AError := E.ClassName+': '+E.Message; AExtracted := nil; Result := False; end; end;
 end;
 
