@@ -181,6 +181,7 @@ make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fs         # 目录打�
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_contract   # 本契约 + 无 FPC RTL 依赖审计
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_extra      # extra 编解码对称性证明（Build/Decode 往返 + 恶意 extra）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_go_parity  # Go archive/zip 双向字节级对等（十九期领头羊双锚点）
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_perf       # 性能回归阈值（二十期 allocs 预算，CountingMemoryManager）
 ```
 
 python3 zipfile 作为独立实现交叉验证源（读我们产出的归档、生成参考归档、
@@ -188,4 +189,6 @@ force_zip64 归档、unix 属性条目、符号链接条目）；python3 缺失�
 失败，不静默跳过。Go `archive/zip` 作为第二锚点：`test_zip_go_parity`
 通过 `go_helper.go` 双向（Pascal→Go verify / Go→Pascal gen）验证
 store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuzz
-的字节级对等；`go` 缺失时显式失败。
+的字节级对等；`go` 缺失时显式失败。`test_zip_perf` 以 `CountingMemoryManager`
+（heaptrc 兼容，统计 GetMem+AllocMem+ReAllocMem）锁定 `200×512B 810→805`
+零分配基线与 `1MiB ≤12 allocs` 预算，`Reserve` 必须降低 allocs，回归即红。
