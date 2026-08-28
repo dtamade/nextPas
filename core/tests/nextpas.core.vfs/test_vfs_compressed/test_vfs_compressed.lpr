@@ -98,15 +98,12 @@ begin
   Check(SI.ContentHash = 0, 'gz stat hash cleared');
   Data := VfsReadAllBytes(Dec, 'gz.txt');
   Check(SameBytes(Data, Raw), 'gz open decompressed content');
-  // plain file must still work
   Data := VfsReadAllBytes(Dec, 'plain.txt');
   Check(SameBytes(Data, BytesOf('plain stays')), 'plain stays after gz');
-  // empty gz
   SI := Dec.Stat('empty.gz');
   Check(SI.Info.Size = 0, 'empty gz stat 0');
   Data := VfsReadAllBytes(Dec, 'empty.gz');
   Check(Length(Data) = 0, 'empty gz open 0');
-  // list unchanged
   L := Dec.List('.');
   Check(Length(L) = 3, 'list count unchanged');
 end;
@@ -144,8 +141,6 @@ begin
   Check(Dec.QueryInterface(IVfsETag, ET) = 0, 'decorator exposes IVfsETag');
   Check(not ET.TryGetETag('gz.txt', Tag), 'ETag disabled after decompress');
   Check(Tag = '', 'ETag empty');
-  // LastModified should passthrough if inner supports
-  // memtree has no LastModified, so should be false; not error
   Check(not ET.TryGetLastModified('gz.txt', LM) or (LM = ''), 'LastModified passthrough');
 end;
 
@@ -180,6 +175,33 @@ begin
   Check(Got, 'list missing raises via inner');
 end;
 
+procedure TestLargeNonGzipStatHeaderPeek;
+var
+  B: TVfsTreeBuilder;
+  Inner, Dec: IVfs;
+  Large: TBytes;
+  SI: TStatInfo;
+  Data: TBytes;
+  I: Integer;
+begin
+  SetLength(Large, 1024 * 1024);
+  for I := 0 to High(Large) do Large[I] := Byte(Ord('A') + (I mod 26));
+  Large[0] := Ord('X'); Large[1] := Ord('Y');
+  B := TVfsTreeBuilder.Create;
+  try
+    B.AddFile('large.bin', Large, 100);
+    Inner := B.Freeze;
+  finally
+    B.Free;
+  end;
+  Dec := CreateDecompressingVfs(Inner, daAuto);
+  SI := Dec.Stat('large.bin');
+  Check(SI.Info.Size = Int64(Length(Large)), 'large non-gzip stat size unchanged (header peek)');
+  Check(SI.ContentHash <> 0, 'large non-gzip stat hash preserved');
+  Data := VfsReadAllBytes(Dec, 'large.bin');
+  Check(SameBytes(Data, Large), 'large non-gzip open passthrough');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.vfs.compressed');
   T.Test('non-gzip passthrough', @TestNonGzipPassthrough);
@@ -188,5 +210,6 @@ begin
   T.Test('ETag disabled LastModified passthrough', @TestETagAndLastModified);
   T.Test('nil inner raises', @TestNilInnerRaises);
   T.Test('list missing raises', @TestListMissingRaises);
+  T.Test('large non-gzip Stat header peek', @TestLargeNonGzipStatHeaderPeek);
   if not T.Run then Halt(1);
 end.
