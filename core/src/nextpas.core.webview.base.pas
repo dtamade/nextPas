@@ -257,6 +257,12 @@ begin
       'InitScripts must not touch __npw (bridge owns that namespace)');
 end;
 
+procedure CheckWebviewEventName(const AEvent: string); inline;
+begin
+  if AEvent = '' then
+    raise EWebviewInvalidState.Create('webview event name must not be empty');
+end;
+
 procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
 var
   LIdx: Integer;
