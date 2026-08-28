@@ -57,7 +57,24 @@ begin
     Result := DeflateDecompressPtrWithEndPos(AData, ACount, AStart, AEndPos);
   except
     on E: EIOError do
-      raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+    begin
+      if Pos('truncated stream', E.Message) > 0 then
+        raise EGitError.Create('truncated zlib stream')
+      else if Pos('invalid zlib header', E.Message) > 0 then
+        raise EGitError.Create('zlib stream is not deflate')
+      else if Pos('invalid window bits', E.Message) > 0 then
+        raise EGitError.Create('corrupt zlib header')
+      else if Pos('corrupt zlib header', E.Message) > 0 then
+        raise EGitError.Create('corrupt zlib header')
+      else if Pos('preset dictionary', E.Message) > 0 then
+        raise EGitError.Create('zlib preset dictionary unsupported')
+      else if Pos('zlib stream too large', E.Message) > 0 then
+        raise EGitError.Create('zlib stream too large')
+      else if Pos('corrupt stream', E.Message) > 0 then
+        raise EGitError.Create('corrupt zlib payload: data error')
+      else
+        raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+    end;
     on E: Exception do
       raise EGitError.Create('corrupt zlib payload: ' + E.Message);
   end;
@@ -73,7 +90,24 @@ begin
   except
     on E: EGitError do raise;
     on E: EIOError do
-      raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+    begin
+      if Pos('truncated stream', E.Message) > 0 then
+        raise EGitError.Create('truncated zlib stream')
+      else if Pos('invalid zlib header', E.Message) > 0 then
+        raise EGitError.Create('zlib stream is not deflate')
+      else if Pos('invalid window bits', E.Message) > 0 then
+        raise EGitError.Create('corrupt zlib header')
+      else if Pos('corrupt zlib header', E.Message) > 0 then
+        raise EGitError.Create('corrupt zlib header')
+      else if Pos('preset dictionary', E.Message) > 0 then
+        raise EGitError.Create('zlib preset dictionary unsupported')
+      else if Pos('zlib stream too large', E.Message) > 0 then
+        raise EGitError.Create('zlib stream too large')
+      else if Pos('corrupt stream', E.Message) > 0 then
+        raise EGitError.Create('corrupt zlib payload: data error')
+      else
+        raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+    end;
     on E: Exception do
       raise EGitError.Create(E.Message);
   end;

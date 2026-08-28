@@ -761,6 +761,8 @@ begin
   Flg := AData[AStart + 1];
   if (Cmf and $0F) <> Z_DEFLATED then
     raise EIOError.Create('deflate: invalid zlib header');
+  if (Cmf shr 4) > 7 then
+    raise EIOError.Create('deflate: invalid window bits');
   if ((Cardinal(Cmf) shl 8) or Flg) mod 31 <> 0 then
     raise EIOError.Create('deflate: corrupt zlib header');
   if (Flg and $20) <> 0 then
@@ -781,6 +783,8 @@ begin
   if AData = nil then
     raise EIOError.Create('deflate: nil input');
   ValidateZlibHeaderAtPtr(AData, ACount, AStart);
+  if (ACount - AStart) > High(LongWord) then
+    raise EIOError.Create('deflate: zlib stream too large');
   Result := nil;
   FillChar(Strm, SizeOf(Strm), 0);
   Strm.next_in := pBytef(AData + AStart);

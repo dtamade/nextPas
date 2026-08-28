@@ -65,6 +65,7 @@ type
   ISshCompressor = nextpas.core.ssh.compress.ISshCompressor;
   TsshWriter = nextpas.core.ssh.buffer.TsshWriter;
   TsshReader = nextpas.core.ssh.buffer.TsshReader;
+  TChannelWindow = nextpas.core.ssh.window.TChannelWindow;
 
 { 默认选项（inline 转发）}
 function DefaultSshOptions(const AHost: string): TSshConnectOptions; inline;
