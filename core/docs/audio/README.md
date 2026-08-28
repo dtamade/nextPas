@@ -33,7 +33,7 @@ function FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 ```
 
 - `IAudioSource.Fill` 为便利转发，内部直调 `FillRealtime`
-- `Timeline.FillRealtime`：快照化（锁内仅拷 `Position/Loop/Duration` 与存活轨，混音无锁），立体声/单声道热点展开，`Pan=(TrackPan+ClipPan)/2` → `L/R=cos/sin*1.414`，`clamp`
+- `Timeline.FillRealtime`：快照化（锁内仅拷 `Position/Loop/Duration` 与存活轨，混音无锁），立体声 4-wide SIMD `[L,R,L,R]×[GL,GR,GL,GR]` + 单声道 4-wide `simd_loadu/mul/add`，`Pan=(TrackPan+ClipPan)/2` → `L/R=cos/sin*1.414`，`clamp` 4-wide `min/max`，与 `mix`/`pcm.simd` 同构 intrin 直连
 - `Graph.FillRealtime`：快照节点/处理器，单 `scratch` 复用（每节点零分配），处理器链双缓冲 `SwapBuf` 交换
 - `Device.Null.Drive`：`FScratch` 复用，稳态零堆增长；`FillRealtime` 异常则 `devDeviceError` 并静音，连续 5 次欠载报 `devUnderrun`
 - 契约注释 `实时路径仅调 FillRealtime` 在 `audio.intf` 冻结，gate 强校验

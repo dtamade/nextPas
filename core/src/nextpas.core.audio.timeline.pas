@@ -190,6 +190,11 @@ var
   SnapPos: UInt64;
   SnapLoop: Boolean;
   SnapDur: UInt64;
+{$IFDEF CPUX86_64}
+  VGainLR: TM128;
+  CGainLR: array[0..3] of Single;
+  NSamples: Integer;
+{$ENDIF}
 begin
   if AFrames<=0 then Exit(0);
   Needed:=AFrames*FFormat.BlockAlign;
@@ -236,40 +241,33 @@ begin
       begin
         if (Gain<>1.0) or (Lgain<>1.0) or (Rgain<>1.0) then
         begin
-          // 4-wide: [L0,R0,L1,R1] * [GL,GR,GL,GR] → add
-          // 高级感：与 mix.pas 同语言，复用 intrin 直连，尾标量收口
+          // 4-wide SIMD：交错立体声 [L0,R0,L1,R1] * [GL,GR,GL,GR]，复用 mix.pas 同款 intrin
+          NSamples := copyFrames * 2;
+          CGainLR[0] := Gain * Lgain; CGainLR[1] := Gain * Rgain; CGainLR[2] := CGainLR[0]; CGainLR[3] := CGainLR[1];
+          VGainLR := simd_loadu_ps(@CGainLR[0]);
           ch := 0;
-          while ch + 1 < copyFrames do
+          while ch + 3 < NSamples do
           begin
-            // 手动展开两帧4样本向量化，避免构造 shuffle 开销
-            // 仍保持 2帧批量以对齐 4-wide 通道
-            MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*Gain*Lgain;
-            MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*Gain*Rgain;
-            MixPtr[(dstOff+ch+1)*2] := MixPtr[(dstOff+ch+1)*2] + SrcPtr[(srcOff+ch+1)*2]*Gain*Lgain;
-            MixPtr[(dstOff+ch+1)*2+1] := MixPtr[(dstOff+ch+1)*2+1] + SrcPtr[(srcOff+ch+1)*2+1]*Gain*Rgain;
-            Inc(ch, 2);
+            simd_storeu_ps(Pointer(PtrUInt(MixPtr) + (dstOff*2 + ch)*SizeOf(Single))^,
+              simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(MixPtr) + (dstOff*2 + ch)*SizeOf(Single))),
+                simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(SrcPtr) + (srcOff*2 + ch)*SizeOf(Single))), VGainLR)));
+            Inc(ch, 4);
           end;
-          for ch:=ch to copyFrames-1 do
-          begin
-            MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*Gain*Lgain;
-            MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*Gain*Rgain;
-          end;
+          for ch := ch to NSamples - 1 do
+            MixPtr[dstOff*2 + ch] := MixPtr[dstOff*2 + ch] + SrcPtr[srcOff*2 + ch] * CGainLR[ch and 3];
         end else
         begin
+          NSamples := copyFrames * 2;
           ch := 0;
-          while ch + 1 < copyFrames do
+          while ch + 3 < NSamples do
           begin
-            MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2];
-            MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1];
-            MixPtr[(dstOff+ch+1)*2] := MixPtr[(dstOff+ch+1)*2] + SrcPtr[(srcOff+ch+1)*2];
-            MixPtr[(dstOff+ch+1)*2+1] := MixPtr[(dstOff+ch+1)*2+1] + SrcPtr[(srcOff+ch+1)*2+1];
-            Inc(ch, 2);
+            simd_storeu_ps(Pointer(PtrUInt(MixPtr) + (dstOff*2 + ch)*SizeOf(Single))^,
+              simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(MixPtr) + (dstOff*2 + ch)*SizeOf(Single))),
+                          simd_loadu_ps(Pointer(PtrUInt(SrcPtr) + (srcOff*2 + ch)*SizeOf(Single)))));
+            Inc(ch, 4);
           end;
-          for ch:=ch to copyFrames-1 do
-          begin
-            MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2];
-            MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1];
-          end;
+          for ch := ch to NSamples - 1 do
+            MixPtr[dstOff*2 + ch] := MixPtr[dstOff*2 + ch] + SrcPtr[srcOff*2 + ch];
         end;
       end else if FFormat.Channels=1 then
       begin
