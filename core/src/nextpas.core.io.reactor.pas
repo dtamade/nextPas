@@ -165,7 +165,27 @@ var
 begin
   if FPendingCount = 0 then
     Exit;
-  SetLength(LReleases, FEntryCount);
+  // First pass: count callbacks needing release to avoid over-allocating
+  // and to avoid leaking LReleases when LReleaseCount=0 (e.g. cancel ops with nil cb).
+  LReleaseCount := 0;
+  for LI := 0 to FEntryCount - 1 do
+    if FEntries[LI].Active and Assigned(FEntries[LI].Callback) then
+      Inc(LReleaseCount);
+  if LReleaseCount = 0 then
+  begin
+    for LI := 0 to FEntryCount - 1 do
+    begin
+      FEntries[LI].Callback := nil;
+      FEntries[LI].Context := nil;
+      FEntries[LI].Active := False;
+      FEntries[LI].NextFree := -1;
+    end;
+    FEntryCount := 0;
+    FPendingCount := 0;
+    FFreeHead := -1;
+    Exit;
+  end;
+  SetLength(LReleases, LReleaseCount);
   LReleaseCount := 0;
   for LI := 0 to FEntryCount - 1 do
   begin
@@ -186,8 +206,6 @@ begin
   FEntryCount := 0;
   FPendingCount := 0;
   FFreeHead := -1;
-  if LReleaseCount = 0 then
-    Exit;
   LHasException := False;
   LExceptionMessage := '';
   FRing.Close;
@@ -207,6 +225,7 @@ begin
       end;
     end;
   end;
+  SetLength(LReleases, 0);
   if LHasException then
     raise Exception.Create(LExceptionMessage);
 end;
