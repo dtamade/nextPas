@@ -867,3 +867,5 @@ test_db_odbc_adapter（V3-A3/A4）在仅有驱动管理器（unixODBC）而无�
 | `string(AnsiString(PAnsiChar))` | `nextpas.core.text.conv.AnsiPtrToStr` | PAnsiChar 读回统一入口，规避托管记录数组内强转破坏 |
 
 C8.5 扫尾（2026-08-28）：`string(AnsiString` 家族全量清零（`pg.conn/pg.adapter/pg.listen/sqlite.conn/sqlite.adapter/pg.loader/mysql.loader` 共 15 处 → `AnsiPtrToStr`，唯一剩余为 `odbc.loader` 注释内示例），`grep -rn "string(AnsiString" core/src/nextpas.core.db*.pas` 仅注释豁免。
+
+* text.kv 共享词法内核（2026-08-28）：`nextpas.core.text.kv` L0 纯函数 `ParseKV/ScanKV` 空格分隔 key=value 引号包裹扫描器（单遍 O(n)，零 TextBuilder），MySQL DSN 委托复用，后续 DM/ODBC 等同形态 DSN 复用底座；离线 `test_text_kv` 13 组自证（空串/引号/@/=/大小写/空值/重复/异常/Scan一致性/100 对容积）。
