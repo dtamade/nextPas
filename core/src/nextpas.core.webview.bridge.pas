@@ -437,17 +437,20 @@ procedure TWebviewAssetsImpl.MountEmbedded(const APrefix: string;
   AProvider: IWebviewAssetProvider);
 var
   LPos, I: Integer;
+  LNormPrefix: string;
 begin
   if FInert then
     Exit;   { DevServerUrl 开发模式：资源服务让位 http dev server（§3.4） }
   if AProvider = nil then
     raise EWebviewInvalidState.Create('asset provider must not be nil');
+  LNormPrefix := NormalizeWebviewAssetPath(APrefix);
   { 保持按前缀长度降序稳定有序：最长前缀优先，同长保持先挂先得——
     TryResolve 首命中即最优，平均 O(1)、最坏 O(n) 但 n≤~16 时常数极小；
-    语义与 CONTRACT §3 最长前缀唯一命中/同长先挂一致 }
+    语义与 CONTRACT §3 最长前缀唯一命中/同长先挂一致；前缀归一化复用
+    base.NormalizeWebviewAssetPath（与 TryResolve 同源，前导 '/' 容错） }
   LPos := Length(FMounts);
   for I := 0 to High(FMounts) do
-    if Length(APrefix) > Length(FMounts[I].Prefix) then
+    if Length(LNormPrefix) > Length(FMounts[I].Prefix) then
     begin
       LPos := I;
       Break;
@@ -455,7 +458,7 @@ begin
   SetLength(FMounts, Length(FMounts) + 1);
   for I := High(FMounts) downto LPos + 1 do
     FMounts[I] := FMounts[I - 1];
-  FMounts[LPos].Prefix := APrefix;
+  FMounts[LPos].Prefix := LNormPrefix;
   FMounts[LPos].Provider := AProvider;
 end;
 
