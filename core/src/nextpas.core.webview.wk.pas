@@ -33,6 +33,21 @@ type
     FScaleHandlersMethodCount: Integer;
     FScaleHandlersProc: array of TWebviewScaleProc;
     FScaleHandlersProcCount: Integer;
+    FOnNavStarted: array of TWebviewNavEventHandler;
+    FOnNavStartedCount: Integer;
+    FOnNavFinished: array of TWebviewNavEventHandler;
+    FOnNavFinishedCount: Integer;
+    FOnNavFailed: array of TWebviewNavFailedHandler;
+    FOnNavFailedCount: Integer;
+    FOnWindowClosed: array of TWebviewNotifyHandler;
+    FOnWindowClosedCount: Integer;
+    FOnReady: array of TWebviewNotifyHandler;
+    FOnReadyCount: Integer;
+    procedure GrowOnNavStarted; inline;
+    procedure GrowOnNavFinished; inline;
+    procedure GrowOnNavFailed; inline;
+    procedure GrowOnWindowClosed; inline;
+    procedure GrowOnReady; inline;
     procedure GrowScaleRef; inline;
     procedure GrowScaleMethod; inline;
     procedure GrowScaleProc; inline;
@@ -156,11 +171,19 @@ begin
 end;
 
 procedure TWkWebview.Close;
+var
+  I: Integer;
 begin
   if FClosed then Exit;
   FClosed := True;
   Dec(GLive);
   UnregisterLive(Self);
+  for I := 0 to FOnWindowClosedCount - 1 do
+    if Assigned(FOnWindowClosed[I]) then
+      try
+        FOnWindowClosed[I]();
+      except
+      end;
 end;
 
 function TWkWebview.IsClosed: Boolean;
@@ -206,6 +229,36 @@ procedure TWkWebview.GrowScaleProc; inline;
 begin
   if FScaleHandlersProcCount = Length(FScaleHandlersProc) then
     SetLength(FScaleHandlersProc, WebviewGrowCapacity(Length(FScaleHandlersProc)));
+end;
+
+procedure TWkWebview.GrowOnNavStarted; inline;
+begin
+  if FOnNavStartedCount = Length(FOnNavStarted) then
+    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
+end;
+
+procedure TWkWebview.GrowOnNavFinished; inline;
+begin
+  if FOnNavFinishedCount = Length(FOnNavFinished) then
+    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
+end;
+
+procedure TWkWebview.GrowOnNavFailed; inline;
+begin
+  if FOnNavFailedCount = Length(FOnNavFailed) then
+    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
+end;
+
+procedure TWkWebview.GrowOnWindowClosed; inline;
+begin
+  if FOnWindowClosedCount = Length(FOnWindowClosed) then
+    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
+end;
+
+procedure TWkWebview.GrowOnReady; inline;
+begin
+  if FOnReadyCount = Length(FOnReady) then
+    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
 end;
 
 procedure TWkWebview.DoScaleChanged(ANewScale: Double);
@@ -265,21 +318,131 @@ end;
 procedure TWkWebview.Emit(const AEvent, APayloadJson: string); begin end;
 function TWkWebview.GetDispatcher: IWebviewDispatcher; begin Result := Self as IWebviewDispatcher; end;
 function TWkWebview.NativeHandle: TWebviewNativeHandle; begin Result := nil; end;
-procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload; begin end;
-procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventMethod); overload; begin end;
-procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventProc); overload; begin end;
-procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventHandler); overload; begin end;
-procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventMethod); overload; begin end;
-procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventProc); overload; begin end;
-procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler); overload; begin end;
-procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod); overload; begin end;
-procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedProc); overload; begin end;
-procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyHandler); overload; begin end;
-procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyMethod); overload; begin end;
-procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyProc); overload; begin end;
-procedure TWkWebview.OnReady(AHandler: TWebviewNotifyHandler); overload; begin end;
-procedure TWkWebview.OnReady(AHandler: TWebviewNotifyMethod); overload; begin end;
-procedure TWkWebview.OnReady(AHandler: TWebviewNotifyProc); overload; begin end;
+procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  GrowOnNavStarted;
+  FOnNavStarted[FOnNavStartedCount] := AHandler;
+  Inc(FOnNavStartedCount);
+end;
+procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventMethod); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnNavigationStarted(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
+end;
+procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventProc); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnNavigationStarted(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
+end;
+procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventHandler); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  GrowOnNavFinished;
+  FOnNavFinished[FOnNavFinishedCount] := AHandler;
+  Inc(FOnNavFinishedCount);
+end;
+procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventMethod); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnNavigationFinished(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
+end;
+procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventProc); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnNavigationFinished(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
+end;
+procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  GrowOnNavFailed;
+  FOnNavFailed[FOnNavFailedCount] := AHandler;
+  Inc(FOnNavFailedCount);
+end;
+procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnNavigationFailed(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
+end;
+procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedProc); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnNavigationFailed(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
+end;
+procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyHandler); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  GrowOnWindowClosed;
+  FOnWindowClosed[FOnWindowClosedCount] := AHandler;
+  Inc(FOnWindowClosedCount);
+end;
+procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyMethod); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnWindowClosed(
+    procedure
+    begin
+      AHandler;
+    end);
+end;
+procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyProc); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnWindowClosed(
+    procedure
+    begin
+      AHandler;
+    end);
+end;
+procedure TWkWebview.OnReady(AHandler: TWebviewNotifyHandler); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  GrowOnReady;
+  FOnReady[FOnReadyCount] := AHandler;
+  Inc(FOnReadyCount);
+end;
+procedure TWkWebview.OnReady(AHandler: TWebviewNotifyMethod); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnReady(
+    procedure
+    begin
+      AHandler;
+    end);
+end;
+procedure TWkWebview.OnReady(AHandler: TWebviewNotifyProc); overload;
+begin
+  if not Assigned(AHandler) then Exit;
+  OnReady(
+    procedure
+    begin
+      AHandler;
+    end);
+end;
 function TWkWebview.GetInvokes: IWebviewInvokeRegistry; begin Result := nil; end;
 function TWkWebview.GetAssets: IWebviewAssets; begin Result := nil; end;
 {$POP}
