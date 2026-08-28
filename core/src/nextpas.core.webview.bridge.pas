@@ -479,9 +479,7 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  LPath := ASchemeRelativePath;
-  while (LPath <> '') and (LPath[1] = '/') do
-    Delete(LPath, 1, 1);
+  LPath := NormalizeWebviewAssetPath(ASchemeRelativePath);
   if LPath = '' then
     Exit;
   { 已按长度降序稳定排序：首个前缀命中即最长命中，同长先挂语义天然保持 }
