@@ -1174,6 +1174,82 @@ begin
   Check(LMock.Calls=2, 'X-Early-Data:0 retry count 2');
 end;
 
+procedure TestHttpClientEarlyDataAutoMark;
+var LReq: IHttpRequest;
+begin
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataIsEarlyRequest(LReq), 'GET initially not early');
+  Check(HttpEarlyDataAutoMarkIfIdempotent(LReq), 'GET auto-mark true');
+  Check(HttpEarlyDataIsEarlyRequest(LReq), 'GET after auto-mark early');
+  Check(not HttpEarlyDataAutoMarkIfIdempotent(LReq), 'second auto-mark false (already early)');
+  LReq := THttpRequest.Create(hmPost, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataAutoMarkIfIdempotent(LReq), 'POST auto-mark false (non-idempotent)');
+  Check(not HttpEarlyDataIsEarlyRequest(LReq), 'POST still not early');
+  LReq := THttpRequest.Create(hmPut, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataAutoMarkIfIdempotent(LReq), 'PUT without key not auto');
+  LReq.Headers.SetHeader('Idempotency-Key', 'auto1');
+  Check(HttpEarlyDataAutoMarkIfIdempotent(LReq), 'PUT with key auto-mark');
+  Check(HttpEarlyDataIsEarlyRequest(LReq), 'PUT with key early');
+end;
+
+procedure TestHttpClientEarlyDataAutoRetryLive;
+var LInner: IHttpClient; LClient: IHttpClient; LReq: IHttpRequest; LResp: IHttpResponse; LMock: TMockTransport; LHOk: IHttpHeaders;
+begin
+  // Auto client: GET without manual Mark should still retry on 425
+  LHOk := NewHttpHeaders;
+  LHOk.SetHeader('content-type', 'text/plain');
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LHOk, 'ok')
+  ]);
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataAutoRetryClient(LInner);
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  // deliberately NOT calling HttpEarlyDataMarkRequest
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_OK, 'auto GET retry returns 200 without manual mark');
+  Check(LMock.Calls=2, 'auto GET mock called twice');
+  // POST auto should NOT mark and thus not retry
+  LHOk := NewHttpHeaders;
+  LHOk.SetHeader('content-type', 'text/plain');
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LHOk, 'ok')
+  ]);
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataAutoRetryClient(LInner);
+  LReq := THttpRequest.Create(hmPost, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_TOO_EARLY, 'auto POST not retried');
+  Check(LMock.Calls=1, 'auto POST mock once');
+  // X-Early-Data:0 with auto mark
+  LHOk := NewHttpHeaders;
+  LHOk.SetHeader('content-type', 'text/plain');
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LHOk, 'ok')
+  ]);
+  LMock.FResponses[0].Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataAutoRetryClient(LInner);
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_OK, 'auto X-Early-Data:0 retry');
+  Check(LMock.Calls=2, 'auto X-Early-Data:0 retry count 2');
+  // With* propagation: WithHeader should keep autoMark
+  LHOk := NewHttpHeaders;
+  LHOk.SetHeader('content-type', 'text/plain');
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LHOk, 'ok')
+  ]);
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataAutoRetryClient(LInner).WithHeader('X-Custom', 'v');
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LResp := LClient.Send(LReq);
+  Check(LMock.Calls=2, 'WithHeader preserves autoMark');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1224,6 +1300,8 @@ begin
   GSuite.Test('HttpClientEarlyDataShouldRetry', @TestHttpClientEarlyDataShouldRetry);
   GSuite.Test('HttpClientEarlyDataMarkAndClone', @TestHttpClientEarlyDataMarkAndClone);
   GSuite.Test('HttpClientEarlyDataRetryClientLive', @TestHttpClientEarlyDataRetryClientLive);
+  GSuite.Test('HttpClientEarlyDataAutoMark', @TestHttpClientEarlyDataAutoMark);
+  GSuite.Test('HttpClientEarlyDataAutoRetryLive', @TestHttpClientEarlyDataAutoRetryLive);
   if not GSuite.Run then
     Halt(1);
 end.
