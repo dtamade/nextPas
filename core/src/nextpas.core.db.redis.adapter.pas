@@ -102,7 +102,6 @@ var
   LHostPart, LTail: string;
   LSlash, LColon: Integer;
   LCode: Integer;
-  LStart, LEnd: Integer;
 begin
   AOpts := TDbRedisConnectOptions.Default;
   AOpts.Host := '';
@@ -131,17 +130,9 @@ begin
       raise EDbError.CreateSimple(dbkRedis,
         'invalid port ":' + LTail + '"');
   end;
-  { 真零分配：先扫描后拷贝——空主机零分配早筛，已.trim 宿主零拷贝直赋 }
-  LStart := 1;
-  LEnd := Length(LHostPart);
-  while (LStart <= LEnd) and (LHostPart[LStart] <= ' ') do Inc(LStart);
-  while (LEnd >= LStart) and (LHostPart[LEnd] <= ' ') do Dec(LEnd);
-  if LStart > LEnd then
+  AOpts.Host := Trim(LHostPart);
+  if AOpts.Host = '' then
     raise EDbError.CreateSimple(dbkRedis, 'empty host');
-  if (LStart = 1) and (LEnd = Length(LHostPart)) then
-    AOpts.Host := LHostPart
-  else
-    AOpts.Host := Copy(LHostPart, LStart, LEnd - LStart + 1);
   { 统一层连接选项映射（advisory）：StatementTimeoutMs 作为 IO
     deadline 上限；BusyTimeoutMs 无对应语义忽略（不冒充）。 }
   if AOptions.StatementTimeoutMs > 0 then
