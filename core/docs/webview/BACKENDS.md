@@ -1,6 +1,6 @@
 # nextpas.core.webview 后端绑定策略
 
-**状态**: **Production Ready**（Wave 1 gtk/fake 全量 + S4-S20 打磨；bench 双基线刷新；W2 Win32 真窗口壳 via wine 已验证且壳满态（DPI 分数/WM_DPICHANGED/最小化）、WebView2 controller 待 Edge S21；W3 待平台）
+**状态**: **Production Ready**（Wave 1 gtk/fake 全量 + S4-S21 打磨；bench 双基线刷新；W2 Win32 真窗口→真 controller via wine 已验证（Env→Controller/ExecuteScript/WebMessage/注入/bounds 全链）、W3 待平台）
 本文档记录各后端的 ABI 绑定方式、版本矩阵、主线程唤醒原语、
 eval 结果语义矩阵，以及从 fafafa.webview 移植资产的清单与边界。
 
@@ -133,13 +133,14 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
   `WebView2Loader.dll`（dlopen）；COM 接口头移植自 fafafa
   `src/fafafa.webview.webview2.interfaces.pas`（GUID/stdcall/token/v2 接口，
   该文件是全项目最难重做的资产，近乎原样搬运后按本仓命名规范改写）。
-- 主线程唤醒：隐藏 message-only window + `PostMessage(WM_APP+N)`，
-  WndProc 泵出闭包。STA 一致性由"创建线程=泵线程"保证。
-- `ExecuteScript` 天然异步（completion handler），直接映射 `Eval` 契约。
+- 主线程唤醒：`Post` 现阶段与 gtk 同步直调（STA 单线程语义；隐藏 message-only window + `PostMessage` 为后续跨线程投递预留，未启用）。
+- `ExecuteScript` 天然异步（`ICoreWebView2ExecuteScriptCompletedHandler`），直接映射 `Eval` 契约（S21：`TExecuteScriptHandler` 持有 `PEvalRec` exactly-once，`errorCode<>S_OK` 走 `EWebviewEvalFailed`，`Close` 时在途以 onerr 收尾）；`Emit`/`SendReceipt` 复用同一链路 fire-and-forget。
+- 桥注入：`AddScriptToExecuteOnDocumentCreated(NPW_BRIDGE_SCRIPT)`（S21），`remove` 于 `Close` 时摘除；`WebMessageReceived`  via `TWebMessageHandler` → `TryDecodeFrame` → `DispatchFrame`（与 gtk 同分发器语义，含 `TLocalInvokeCompletion` exactly-once 多播）。
 - 窗口壳经 Win32 直出（`CreateWindowEx` + 内嵌 controller `put_Bounds`）；
   Maximize/Minimize/Restore/Focus 走 ShowWindow/SetForegroundWindow 族；S20 壳已满态：
   Minimize/Restore/IsMinimized（IsIconic）、GetScaleFactor 分数值（GetDpiForWindow 动态绑定→回退
-  GetDeviceCaps，返 Double）、WM_DPICHANGED → ScaleChanged 多播（GLiveList 多实例分发）。
+  GetDeviceCaps，返 Double）、WM_DPICHANGED → ScaleChanged 多播（GLiveList 多实例分发）；
+  S21 新增 WM_SIZE → `put_Bounds` 同步（Win32ShellOnResize 多播）。
 - 会话：`EnvironmentOptions.UserDataFolder`（持久化自定义目录）/
   private 环境变体（Ephemeral）；W2 启动前对照当版文档定案。
 - 运行时依赖 WebView2 Runtime（Evergreen）；缺失时降级语义同 §1.2。

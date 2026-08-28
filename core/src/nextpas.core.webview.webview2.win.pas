@@ -29,6 +29,7 @@ type
   end;
 
   TWin32ScaleChangedProc = procedure(AWin: Pointer; AScale: Double);
+  TWin32ResizeProc = procedure(AWin: Pointer; AWidth, AHeight: Integer);
 
 function Win32ShellInit: Boolean;
 function Win32ShellCreate(const AGeometry: TWin32ShellGeometry): Pointer;
@@ -46,6 +47,8 @@ procedure Win32ShellRestore(AWin: Pointer);
 function Win32ShellIsMinimized(AWin: Pointer): Boolean;
 function Win32ShellScaleFactor(AWin: Pointer): Double;
 procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc);
+procedure Win32ShellOnResize(AHandler: TWin32ResizeProc);
+function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean;
 procedure Win32ShellFocus(AWin: Pointer);
 function Win32ShellNativeHandle(AWin: Pointer): Pointer;
 procedure Win32ShellRunMainLoop;
@@ -74,6 +77,7 @@ var
   GGetDpiForWindow: TGetDpiForWindow = nil;
   GGetDpiTried: Boolean = False;
   GScaleHandler: TWin32ScaleChangedProc = nil;
+  GResizeHandler: TWin32ResizeProc = nil;
 
 function TryResolveGetDpiForWindow: TGetDpiForWindow;
 var
@@ -125,6 +129,13 @@ begin
       begin
         DestroyWindow(AWnd);
         Result := 0;
+        Exit;
+      end;
+    WM_SIZE:
+      begin
+        if Assigned(GResizeHandler) and (AWParam <> SIZE_MINIMIZED) then
+          GResizeHandler(Pointer(AWnd), LoWord(ALParam), HiWord(ALParam));
+        Result := DefWindowProcW(AWnd, AMsg, AWParam, ALParam);
         Exit;
       end;
     WM_DPICHANGED:
@@ -267,6 +278,24 @@ begin
   GScaleHandler := AHandler;
 end;
 
+procedure Win32ShellOnResize(AHandler: TWin32ResizeProc);
+begin
+  GResizeHandler := AHandler;
+end;
+
+function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean;
+var
+  CR: TRect;
+begin
+  if AWin = nil then Exit(False);
+  Result := GetClientRect(HWND(AWin), CR);
+  if Result then
+  begin
+    AWidth := CR.Right - CR.Left;
+    AHeight := CR.Bottom - CR.Top;
+  end;
+end;
+
 procedure Win32ShellFocus(AWin: Pointer);
 begin
   if AWin = nil then Exit;
@@ -312,6 +341,7 @@ end;
 var
   GRunning: Boolean = False;
   GScaleStub: TWin32ScaleChangedProc = nil;
+  GResizeStub: TWin32ResizeProc = nil;
 function Win32ShellInit: Boolean; begin Result := False; end;
 function Win32ShellCreate(const AGeometry: TWin32ShellGeometry): Pointer; begin Result := nil; end;
 procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string); begin end;
@@ -328,6 +358,8 @@ procedure Win32ShellRestore(AWin: Pointer); begin end;
 function Win32ShellIsMinimized(AWin: Pointer): Boolean; begin Result := False; end;
 function Win32ShellScaleFactor(AWin: Pointer): Double; begin Result := 1.0; end;
 procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc); begin GScaleStub := AHandler; end;
+procedure Win32ShellOnResize(AHandler: TWin32ResizeProc); begin GResizeStub := AHandler; end;
+function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean; begin AWidth:=0; AHeight:=0; Result:=False; end;
 procedure Win32ShellFocus(AWin: Pointer); begin end;
 function Win32ShellNativeHandle(AWin: Pointer): Pointer; begin Result := AWin; end;
 procedure Win32ShellRunMainLoop; begin GRunning := True; GRunning := False; end;
