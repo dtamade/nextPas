@@ -182,6 +182,7 @@ make focused FOCUS=core/tests/nextpas.core.zip/test_zip_contract   # 本契约 +
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_extra      # extra 编解码对称性证明（Build/Decode 往返 + 恶意 extra）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_go_parity  # Go archive/zip 双向字节级对等（十九期领头羊双锚点）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_perf       # 性能回归阈值（二十期 allocs 预算，CountingMemoryManager）
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_stress     # 极限压力（二十一期 70k Zip64/1k混合/Bomb/并发）
 ```
 
 python3 zipfile 作为独立实现交叉验证源（读我们产出的归档、生成参考归档、
@@ -192,3 +193,5 @@ store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuz
 的字节级对等；`go` 缺失时显式失败。`test_zip_perf` 以 `CountingMemoryManager`
 （heaptrc 兼容，统计 GetMem+AllocMem+ReAllocMem）锁定 `200×512B 810→805`
 零分配基线与 `1MiB ≤12 allocs` 预算，`Reserve` 必须降低 allocs，回归即红。
+`test_zip_stress` 以 70k Zip64/1k 混合双路径/ Bomb 单值与总量/并发提取
+验证规模与敌意压力下的 fail-closed。
