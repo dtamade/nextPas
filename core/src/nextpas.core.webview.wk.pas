@@ -20,6 +20,13 @@ uses
   nextpas.core.webview.intf;
 
 type
+  PEvalRec = ^TEvalRec;
+  TEvalRec = record
+    Callback: TWebviewEvalCallback;
+    OnError: TWebviewEvalErrorCallback;
+    Done: Boolean;
+  end;
+
   TWkWebview = class(TInterfacedObject, IWebviewWindow, IWebviewDispatcher)
   private
     FOptions: TWebviewOptions;
@@ -43,6 +50,8 @@ type
     FOnWindowClosedCount: Integer;
     FOnReady: array of TWebviewNotifyHandler;
     FOnReadyCount: Integer;
+    FPendingEvals: array of PEvalRec;
+    FPendingCount: Integer;
     procedure GrowOnNavStarted; inline;
     procedure GrowOnNavFinished; inline;
     procedure GrowOnNavFailed; inline;
@@ -173,11 +182,32 @@ end;
 procedure TWkWebview.Close;
 var
   I: Integer;
+  LRec: PEvalRec;
+  LErr: EWebviewEvalFailed;
 begin
   if FClosed then Exit;
   FClosed := True;
   Dec(GLive);
   UnregisterLive(Self);
+  for I := 0 to FPendingCount - 1 do
+  begin
+    LRec := FPendingEvals[I];
+    if (LRec <> nil) and not LRec^.Done then
+    begin
+      LRec^.Done := True;
+      if Assigned(LRec^.OnError) then
+      begin
+        LErr := EWebviewEvalFailed.Create('webview window is closed');
+        try
+          LRec^.OnError(LErr);
+        finally
+          LErr.Free;
+        end;
+      end;
+      Dispose(LRec);
+    end;
+  end;
+  FPendingCount := 0;
   for I := 0 to FOnWindowClosedCount - 1 do
     if Assigned(FOnWindowClosed[I]) then
       try
@@ -229,6 +259,28 @@ procedure TWkWebview.GrowScaleProc; inline;
 begin
   if FScaleHandlersProcCount = Length(FScaleHandlersProc) then
     SetLength(FScaleHandlersProc, WebviewGrowCapacity(Length(FScaleHandlersProc)));
+end;
+
+procedure TWkWebview.GrowPendingEvals; inline;
+begin
+  if FPendingCount = Length(FPendingEvals) then
+    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
+end;
+
+procedure TWkWebview.RemovePending(ARec: PEvalRec);
+var
+  I, J: Integer;
+begin
+  for I := 0 to FPendingCount - 1 do
+    if FPendingEvals[I] = ARec then
+    begin
+      for J := I to FPendingCount - 2 do
+        FPendingEvals[J] := FPendingEvals[J + 1];
+      Dec(FPendingCount);
+      if FPendingCount < Length(FPendingEvals) then
+        FPendingEvals[FPendingCount] := nil;
+      Exit;
+    end;
 end;
 
 procedure TWkWebview.GrowOnNavStarted; inline;
@@ -307,13 +359,34 @@ function TWkWebview.GoForward: Boolean; begin Result := False; end;
 {$POP}
 {$PUSH}{$HINTS OFF}
 procedure TWkWebview.Eval(const AJavascript: string; ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
-var LErr: EWebviewEvalFailed;
+var
+  LRec: PEvalRec;
+  LErr: EWebviewEvalFailed;
 begin
+  if FClosed then
+  begin
+    if Assigned(AOnError) then
+    begin
+      LErr := EWebviewEvalFailed.Create('webview window is closed');
+      try AOnError(LErr); finally LErr.Free; end;
+    end;
+    Exit;
+  end;
+  New(LRec);
+  LRec^.Callback := ACallback;
+  LRec^.OnError := AOnError;
+  LRec^.Done := False;
+  GrowPendingEvals;
+  FPendingEvals[FPendingCount] := LRec;
+  Inc(FPendingCount);
+  LRec^.Done := True;
+  RemovePending(LRec);
   if Assigned(AOnError) then
   begin
     LErr := EWebviewEvalFailed.Create('WKWebView not available');
     try AOnError(LErr); finally LErr.Free; end;
   end;
+  Dispose(LRec);
 end;
 procedure TWkWebview.Emit(const AEvent, APayloadJson: string); begin end;
 function TWkWebview.GetDispatcher: IWebviewDispatcher; begin Result := Self as IWebviewDispatcher; end;
