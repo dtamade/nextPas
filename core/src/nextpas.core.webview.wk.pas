@@ -85,10 +85,47 @@ uses
 
 var
   GLive: Integer = 0;
+  GLiveList: array of TWkWebview;
+  GLiveListCount: Integer = 0;
+
+procedure GrowLiveList; inline;
+begin
+  if GLiveListCount = Length(GLiveList) then
+    SetLength(GLiveList, WebviewGrowCapacity(Length(GLiveList)));
+end;
+
+procedure RegisterLive(AWin: TWkWebview); inline;
+begin
+  GrowLiveList;
+  GLiveList[GLiveListCount] := AWin;
+  Inc(GLiveListCount);
+end;
+
+procedure UnregisterLive(AWin: TWkWebview);
+var
+  I, J: Integer;
+begin
+  for I := 0 to GLiveListCount - 1 do
+    if GLiveList[I] = AWin then
+    begin
+      for J := I to GLiveListCount - 2 do
+        GLiveList[J] := GLiveList[J + 1];
+      Dec(GLiveListCount);
+      if GLiveListCount < Length(GLiveList) then
+        GLiveList[GLiveListCount] := nil;
+      Break;
+    end;
+end;
 
 function WkLiveWindowCount: Integer;
+var
+  I, LCnt: Integer;
 begin
-  Result := GLive;
+  LCnt := 0;
+  for I := 0 to GLiveListCount - 1 do
+    if (GLiveList[I] <> nil) and not GLiveList[I].FClosed then
+      Inc(LCnt);
+  Result := LCnt;
 end;
 
 constructor TWkWebview.Create(const AOptions: TWebviewOptions);
@@ -105,6 +142,7 @@ begin
   FZoom := 1.0;
   FClosed := False;
   Inc(GLive);
+  RegisterLive(Self);
 end;
 
 procedure TWkWebview.Close;
@@ -112,6 +150,7 @@ begin
   if FClosed then Exit;
   FClosed := True;
   Dec(GLive);
+  UnregisterLive(Self);
 end;
 
 function TWkWebview.IsClosed: Boolean;
