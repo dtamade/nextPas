@@ -569,6 +569,52 @@ begin
         E.NewScale := HIWORD(wParam) / 96.0;
         DoDispatch(E);
       end;
+    WM_KEYDOWN:
+      begin
+        E := Default(TWindowEvent); E.Kind := weKeyDown; E.KeyCode := Integer(wParam); E.Modifiers := 0;
+        E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF);
+        DoDispatch(E);
+      end;
+    WM_KEYUP:
+      begin
+        E := Default(TWindowEvent); E.Kind := weKeyUp; E.KeyCode := Integer(wParam); E.Modifiers := 0;
+        DoDispatch(E);
+      end;
+    WM_LBUTTONDOWN:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1;
+        DoDispatch(E);
+      end;
+    WM_LBUTTONUP:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1;
+        DoDispatch(E);
+      end;
+    WM_RBUTTONDOWN:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2;
+        DoDispatch(E);
+      end;
+    WM_RBUTTONUP:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2;
+        DoDispatch(E);
+      end;
+    WM_MBUTTONDOWN:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3;
+        DoDispatch(E);
+      end;
+    WM_MBUTTONUP:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3;
+        DoDispatch(E);
+      end;
+    WM_MOUSEMOVE:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseMove; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 0;
+        DoDispatch(E);
+      end;
     WM_DISPATCH:
       begin
         DispatcherDrain;

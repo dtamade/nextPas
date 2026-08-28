@@ -64,6 +64,15 @@ const
   WM_SETFOCUS         = $0007;
   WM_KILLFOCUS        = $0008;
   WM_DPICHANGED       = $02E0;
+  WM_KEYDOWN          = $0100;
+  WM_KEYUP            = $0101;
+  WM_LBUTTONDOWN      = $0201;
+  WM_LBUTTONUP        = $0202;
+  WM_RBUTTONDOWN      = $0204;
+  WM_RBUTTONUP        = $0205;
+  WM_MBUTTONDOWN      = $0207;
+  WM_MBUTTONUP        = $0208;
+  WM_MOUSEMOVE        = $0200;
   WM_QUIT             = $0012;
   WM_APP              = $8000;
 
