@@ -160,7 +160,7 @@ end;
 function ValidateKV(const S: string; out AError: string): Boolean;
 var
   I, LLen, LQuote, LStart, LCount: Integer;
-  LKey: string;
+  LKeyStart, LKeyLen: Integer;
 begin
   AError := '';
   LCount := 0;
@@ -179,7 +179,8 @@ begin
       AError := 'malformed dsn near offset ' + IntToStr(I);
       Exit(False);
     end;
-    LKey := Copy(S, LStart, I - LStart);
+    LKeyStart := LStart;
+    LKeyLen := I - LStart;
     Inc(I);
     if (I <= LLen) and ((S[I] = '''') or (S[I] = '"') or (S[I] = '{')) then
     begin
@@ -193,7 +194,8 @@ begin
         Inc(I);
       if I > LLen then
       begin
-        AError := 'unterminated quoted dsn value for "' + LKey + '"';
+        AError := 'unterminated quoted dsn value for "' +
+          Copy(S, LKeyStart, LKeyLen) + '"';
         Exit(False);
       end;
       Inc(I);
