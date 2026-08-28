@@ -115,8 +115,8 @@
 
 ---
 
-## 6. 下一步 (Immediate NEXT = F5 1.0 定版)
+## 6. 下一步 (Immediate NEXT = 1.1 精雕 → 1.0 维护态)
 
-1. **F5 定版收口**：`CONTRACT.md §8` 覆盖率 100%（`deferred` 仍空，新增 `Raw shell` 行），`ARCHITECTURE.md §2.1` 家族布局增 `Raw` 注记，`README` 能力表三段与 `BENCH.md` 5×中位一致；`core-module-registry.md` `focused-runtime → ci-matrix`（Linux 实跑 + Win/mac compile-only 残差诚实标注）。
-2. **标签与 ADR**：`git tag window-1.0` + `docs/adr/adr-window-1.0.md`（决策：抽象不束缚·事件驱动·家族化·RTL 解耦·Raw 单源）。
+1. **F5 定版收口（已完成 2026-08-28，tag window-1.0）**：`CONTRACT.md §8` 覆盖率 100%（`deferred` 仍空，新增 `Raw shell` 行），`ARCHITECTURE.md §2.1` 家族布局增 `Raw` 注记，`README` 能力表三段与 `BENCH.md` 5×中位一致；`core-module-registry.md` `focused-runtime → ci-matrix`（Linux 实跑 + Win/mac compile-only 残差诚实标注）。
+2. **1.1 精雕（已完成 2026-08-29，perf(window): 1.1 micro）**：`PAnsiChar(AnsiString)` 最后 2 处清零→`StrToAnsi`，`LiveGtkSmart` 3×求和→门控单读（Gtk4IsLoaded/3/2），Zero 271µs/10k 持平 27.1ns 仍 <30ns，`BENCH.md` 1.1 单缓存时效；`F4 Raw` 单源零逻辑保持。
 3. ** hygiene 终验**：`make focused 13门 + make hygiene + git diff --check` 全绿 → `Ready` 提 `F4 完整`（跨模块 `Needs Review`：`window.gtk3 Raw` + `webview.gtk.win shim` 四要素已齐）。

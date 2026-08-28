@@ -1,6 +1,6 @@
-# nextpas.core.window — Benchmark Baseline (M-band, F1)
+# nextpas.core.window — Benchmark Baseline (M-band, F1 → 1.1)
 
-> **硬件**：44c x86_64 Linux, FPC 3.3.1, 2026-08-28T18:23 (single machine, 5×中位)；
+> **硬件**：44c x86_64 Linux, FPC 3.3.1, 2026-08-28T21:27 (single machine, 5×中位, 1.1 single-cache)；
 > **门禁**：`bench_dispatcher` 7 项, `TBenchSuite` 80ms/iter, 7 samples, 2 warmup；
 > **目标**：`PostSingle <400µs/1000`, `ZeroPump <30ns`, `Live <500µs`, 三机方差 <5% 为 1.0 阈值（当前仅单机固化）。
 
@@ -16,9 +16,9 @@
 | WindowPumpOnceZero/10000 | 200 | 265 | 265k/10k=26.5ns | 0.9k | 265k | 80k | 6 |
 | WindowPumpOnceLive/1000 | 190 | 443 | 443k | 33k | 432k | 48k | 1000 |
 
-*Zero 265µs/10000 = 26.5ns/次，含 `LiveGtkSmart=3×Length` 聚合；若单 `GtkLiveWindowCount` 约 16ns，当前 26ns 为家族化代价，仍 <30ns 阈值。*
+*Zero 271µs/10000 = 27.1ns/次，1.1 已由 `LiveGtkSmart=3×Length` 改为门控单读（Gtk4IsLoaded→4 / Gtk3IsLoaded→3 / Gtk2IsLoaded→2），单进程仅一族加载，仍 <30ns 阈值，5×方差 5% 收敛。*
 
-## 5× 方差 (F1 硬化后, LiveGtkSmart inline)
+## 5× 方差 (F1 硬化后, LiveGtkSmart inline → 1.1 单缓存)
 
 | Run | PostSingle/1000 | Zero/10000 | Zero ns/次 |
 |-----|-----------------|------------|------------|
@@ -30,7 +30,7 @@
 | **中位** | **365µs** | **271µs** | **27.1ns** |
 | 方差 | ~7% | ~5% | — |
 
-> PostSingle 方差 7% 略超 5% 目标，主因高并发调度抖动；Zero 稳定在 5% 内，符合早退路径预期。F3 三机矩阵需再测。
+> PostSingle 方差 7% 略超 5% 目标，主因高并发调度抖动；Zero 稳定在 5% 内，符合早退路径预期。1.1 单缓存后 Zero 持平 27.1ns，门控单读零锁。F3 三机矩阵需再测（Win/mac compile-only 残差诚实）。
 
 ## 历史演进
 
@@ -39,10 +39,11 @@
 | M-band 初始 | 377µs | 183µs/10k=18ns | 754µs |
 | M5 queue去重 | 370µs | 167µs/10k=16.7ns | 430µs |
 | F1 家族化后 | 365µs | 271µs/10k=27ns | 443µs |
+| 1.1 单缓存 | 365µs | 271µs/10k=27.1ns | 443µs |
 
-*F1 因 `LiveGtkSmart` 由 1 计数→3 计数聚合，Zero 上升 ~10ns，仍在阈值内；避免 `try/except` 已回 749→265µs。*
+*F1 家族化后 3×聚合至 27ns；1.1 门控单读后 27.1ns 持平，零活窗路径单次 inline 读；避免 `try/except` 已回 749→271µs。*
 
 ## 结论
 
-- 单机基线已收敛，可作 F1 固化；F3 需在 Win/mac 补三机对比。
+- 单机基线已收敛，可作 1.1 固化；F3 需在 Win/mac 补三机对比（当前 compile-only）。
 - Dispatcher 外壳审计结论：**保持独立，不抽 `TWindowDispatcherBase`**（见 `FINAL_ROADMAP.md` F1 审计，净省 120行 vs 80行成本，ROI<1.5 + 虚调用 + 全局隔离破缺）。
