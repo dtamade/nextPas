@@ -3485,6 +3485,29 @@ begin
   Check(LR.FindByGlobIgnoreCase('PRE_*_POST.TXT') >=0, 'ignore find p*s');
 end;
 
+procedure TestBuildSortedUnifiedAndSameIgnoreCaseZeroAlloc;
+var LW: ISevenZWriter; LR: ISevenZReader; Idx: Integer; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  for Idx := 0 to 199 do
+    LW.AddFile(Format('File_%3.3d.TXT', [Idx]), BytesOf([Byte(Idx)]));
+  LW.AddFile('Café_Ünicode.txt', BytesOf([$01]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByPrefixIgnoreCase('file_');
+  CheckEqual(Int64(200), Int64(Length(Arr)), 'buildsorted prefix 200 ascii');
+  Arr := LR.EntriesBySuffixIgnoreCase('.txt');
+  Check(Length(Arr) >= 200, 'buildsorted suffix txt >=200');
+  Idx := LR.FindIgnoreCase('FILE_010.TXT');
+  Check(Idx >= 0, 'sameignore ascii upper');
+  CheckEqual('File_010.TXT', LR.Entry(Idx).Name, 'sameignore ascii name');
+  Idx := LR.FindIgnoreCase('café_Ünicode.txt');
+  Check(Idx >= 0, 'sameignore ascii folding preserves non-ascii bytes');
+  CheckEqual(Int64(200), Int64(Idx), 'sameignore non-ascii exact after ascii fold');
+  Arr := LR.EntriesByPrefixIgnoreCase('café_');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'buildsorted non-ascii prefix 1');
+  CheckEqual('Café_Ünicode.txt', Arr[0].Name, 'buildsorted non-ascii prefix name');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3675,6 +3698,7 @@ begin
   T.Test('ignore case full', @TestIgnoreCaseFull);
   T.Test('fs ignore case to fs', @TestFsIgnoreCaseToFs);
   T.Test('glob classify unified', @TestGlobClassifyUnified);
+  T.Test('buildsorted unified + sameignore zeroalloc', @TestBuildSortedUnifiedAndSameIgnoreCaseZeroAlloc);
 
   if not T.Run then Halt(1);
 end.
