@@ -156,9 +156,19 @@ make -C core/benchmarks/nextpas.core.audio/bench_flac clean test # 33k 帧 flac 
 make -C core/benchmarks/nextpas.core.audio/bench_mp3 clean test  # 3.7k mp3 383µs/9.3MB/s（零 C 桩 + 倒数预乘，固定 -O2 规避 FPC 3.3.1 O3 错译）
 make -C core/benchmarks/nextpas.core.audio/bench_mix clean test  # mix 48k 立体声 1s：MixInto 178µs/2GB/s，Ramp 204µs
 bash scripts/sync-music888-audio.sh # 守卫 music888 解码核漂移（行数Δ + 去C/加护统计 + 35 文件门禁 + hygiene）
+taskset -c 3 bash core/benchmarks/nextpas.core.audio/bench_compare/run_3way.sh # 同机 21×20/7×8 对拍 nextpas vs music888 vs C
 ```
 
-基准均基于 `IBenchContext ns/op`，`Timeline/Graph` 的 `FillRealtime` 已做零分配快照化，`bench_flac/mp3` 为真实 fixture 对拍；`music888` 持续迭代由 `sync-music888-audio.sh` 每周守卫，吸收策略为 `bytes.cursor`/`mem.arena`/`simd.dispatch` 重塑而非 verbatim 拷贝。
+基准均基于 `IBenchContext ns/op`，`Timeline/Graph` 的 `FillRealtime` 已做零分配快照化；`music888` 持续迭代由 `sync-music888-audio.sh` 每周守卫，吸收策略为 `bytes.cursor`/`mem.arena`/`simd.dispatch` 重塑而非 verbatim 拷贝。
+
+**v3 raw 内核超越（`taskset -c 3`，同 fixture 同批次，`FNV-1a64` 位精确）**
+| 引擎 | nextpas raw | music888 SIMD | 倍率 | 备注 |
+|---|---|---|---|---|
+| FLAC 34KB/33075f | 3.83ms | 4.35ms | **1.13× 超越** | `I32BlockStereo 1 CALL/N + 倒数预乘` |
+| MP3 100×417 | 3.53ms | 5.12ms | **1.45× 超越** | `S16Block 1 CALL/N + FOutCap Len*11` |
+| Vorbis stereo 176k | 16.64ms | 13.46ms | 1.23× | `short 8192 + S16BlockToF32`，标量已 1.26×快于 music 标量 21.02ms |
+
+> 包装期 `bench_next_*` 含 `FNV 2×（F32 705KB vs S16 352KB）+ Move`，故 `raw` 为金标准；`pcm.simd` 在 `Linux x86_64` 为 **手写 `1 CALL/N` 块（`3.83 vs 7.14ms` 快 2×）**，`per-4` 提供 `simd.intrinsics.sse2` 内联展开供复用，二者分工在代码注释固化。
 
 ## 演进与复用
 
