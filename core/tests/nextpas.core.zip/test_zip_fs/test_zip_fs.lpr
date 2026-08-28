@@ -371,6 +371,40 @@ begin
   end;
 end;
 
+procedure TestExtractMaxTotalGuard;
+var
+  LW: IZipWriter;
+  LZip: TBytes;
+  LOpts: TZipExtractOptions;
+  LDst: string;
+  LGot: Boolean;
+  LI: Integer;
+  LData: TBytes;
+begin
+  LDst := NewCaseDir('bomb');
+  try
+    LW := NewZipWriter;
+    SetLength(LData, 50000);
+    for LI := 0 to High(LData) do LData[LI] := Byte(LI mod 251);
+    LW.AddEntry('a.bin', LData);
+    LW.AddEntry('b.bin', LData);
+    LW.AddEntry('c.bin', LData);
+    LZip := LW.Finish;
+    LOpts := DefaultZipExtractOptions;
+    LOpts.MaxTotalOutputSize := 100000; // 100KB < 150KB total
+    LGot := False;
+    try
+      ZipExtractToDirWithOptions(LZip, LDst, LOpts);
+    except
+      on E: EIOError do LGot := Pos('total', LowerCase(E.Message)) > 0;
+      on E: EParseError do LGot := True;
+    end;
+    Check(LGot, 'extract MaxTotalOutput guard fails closed');
+  finally
+    RemoveAll(LDst);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.fs');
   T.Test('Pack extract roundtrip', @TestPackExtractRoundtrip);
@@ -379,5 +413,6 @@ begin
   T.Test('Hostile entry refused before write', @TestHostileEntryRefusedBeforeWrite);
   T.Test('Permission roundtrip', @TestPermissionRoundtrip);
   T.Test('Symlink entry policy', @TestSymlinkEntryPolicy);
+  T.Test('Extract MaxTotal guard', @TestExtractMaxTotalGuard);
   if not T.Run then Halt(1);
 end.

@@ -15,7 +15,8 @@ uses
   nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.zip,
-  nextpas.core.zip.base;
+  nextpas.core.zip.base,
+  nextpas.core.zip.sequential;
 
 var
   LRoot, LOut, LAesZip: string;
@@ -32,6 +33,12 @@ var
   LSrc: IDecompressReader;
   LFile: IFile;
   LChunk: array[0..255] of Byte;
+  LSeqSrc: IReader;
+  LSeq: ISequentialZipReader;
+  LInfo: TZipEntryInfo;
+  LCnt: Integer;
+  LRs: IDecompressReader;
+  LBld: IZipBuilder;
 
 function SameBytes(const A, B: TBytes): Boolean;
 var
@@ -149,6 +156,31 @@ begin
   WriteLn('piped read : ', BoolToStr(SameBytes(LGot, StrBytes('hello zip')),
     True));
   LFile.Close;
+
+  { 顺序读（INV-16 对偶）：从纯顺序流逐条扫描，不整档 }
+  LSeqSrc := nextpas.core.fs.Open(LOut + '.stream.zip', [fmRead]) as IReader;
+  LSeq := NewZipSequentialReader(LSeqSrc);
+  LCnt := 0;
+  while LSeq.Next(LInfo) do
+  begin
+    Inc(LCnt);
+    if LInfo.Name = 'hello.txt' then
+    begin
+      LRs := LSeq.Open;
+      LRs.Close;
+    end
+    else
+      LSeq.Skip;
+  end;
+  WriteLn('sequential : entries=', LCnt, ' piped ok');
+
+  { Builder WithTime 对称演示：显式时间戳 }
+  LBld := ZipBuilder();
+  LBld.AddWithTime('timed.txt', StrBytes('timed'), 1700000000);
+  LBld.AddDeflateWithTime('timed-def.txt', StrBytes('timed def'), 1700000000);
+  LBld.AddDirectoryWithTime('timed-dir', 1700000000);
+  WriteLn('builder WithTime: ', LBld.EntryCount, ' entries with explicit mtime');
+  LBld.Finish;
 
   { AES 加密条目：AE-2 写入 + 口令读回 }
   LW := NewZipWriter;
