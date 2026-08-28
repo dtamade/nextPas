@@ -36,8 +36,9 @@ function WasmPumpOnce: Boolean;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
+  nextpas.core.text.ansi,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
   nextpas.core.sync.intf,
@@ -137,6 +138,7 @@ type
   TWindowWasm = class(TInterfacedObject, IWindow, IWindowHost)
   private
     FCanvasTarget: string;
+    FCanvasTargetAnsi: AnsiString;
     FCanvasHandle: TWindowNativeHandle;
     FClosed: Boolean;
     FVisible: Boolean;
@@ -189,9 +191,15 @@ type
 function TWindowWasm.ResolveTarget: PAnsiChar;
 begin
   if FCanvasTarget = '' then
-    Result := '#canvas'
+  begin
+    FCanvasTargetAnsi := '#canvas';
+    Result := PAnsiChar(FCanvasTargetAnsi);
+  end
   else
-    Result := PAnsiChar(AnsiString(FCanvasTarget));
+  begin
+    FCanvasTargetAnsi := StrToAnsi(FCanvasTarget);
+    Result := PAnsiChar(FCanvasTargetAnsi);
+  end;
 end;
 
 function TWindowWasm.QueryScale: Double;
@@ -220,7 +228,7 @@ begin
   begin
     P := PAnsiChar(AOptions.ParentHandle);
     if P <> nil then
-      FCanvasTarget := string(AnsiString(P))
+      FCanvasTarget := AnsiPtrToStr(P)
     else
       FCanvasTarget := '#canvas';
   end

@@ -21,13 +21,16 @@ Android `Activity.getWindow()` / iOS `UIWindow`
 ┌───────────────┴────────────────────────────────────────────┐
 │ window(L2)                                                  │
 │   门面 ← factory(builder/runloop/探测) ← intf ← base        │
-│      │                                                      │
+│      │   ▲ one-way 消费独立 L2 gtk/qt（伦理扭转，redis→net） │
 │      ├── fake          （无头脚本化；CI 契约唯一载体）       │
-│      ├── gtk           （gtk.ffi ← gtk.loader，S2 抽取）     │
+│      ├── gtk3/4/2      （薄适配→独立 L2 gtk3/4/2，共享 impl.inc，S2 扭转）│
 │      ├── sdl2          （sdl2.ffi ← sdl2.loader，S3）        │
 │      ├── win32 / cocoa （S4）                               │
 │      ├── wasm          （wasm.ffi ← wasm.loader，S2a；canvas attach） │
 │      └── android / uikit（宿主 surface attach，S5）         │
+│                                                              │
+│ gtk2/gtk3/gtk4/qt5pas/qt (L2 独立 families, dlopen 多 soname)│
+│   base ← ffi ← loader  (window 上方的单向依赖源，不知 window) │
 └───────────────▲────────────────────────────────────────────┘
                 │ 动态装载唯一入口
         nextpas.core.platform.dl (L0)
@@ -50,33 +53,37 @@ Android `Activity.getWindow()` / iOS `UIWindow`
 "窗口壳内部缝"：纯函数式、签名零 webview 概念、只依赖 gtk.ffi/gtk.loader。
 它是本模块 S2 的机械抽取源。
 
-### 2.1 函数映射表
+### 2.1 函数映射表（已扭转：独立 gtk 家族为源）
 
 | 现状（webview.gtk.win） | 目标（window 家族归属） |
 |------|------|
 | `TWinShellGeometry` | 被 `TWindowOptions` 取代（字段超集：min/max/parent） |
-| `WinShellInit` | `window.gtk` 后端初始化段（含 IEEE 浮点屏蔽语义，原样搬运） |
-| `WinShellCreate` | Build 路径的 create 段（选项展开由后端负责） |
+| `WinShellInit` | `window.gtk3/4/2` 后端初始化段（含 IEEE 浮点屏蔽语义，原样搬运，经 `gtk.impl.inc` 共享） |
+| `WinShellCreate` | Build 路径的 create 段（选项展开由后端负责，经共享 impl.inc） |
 | `WinShellSetTitle/Resize/Show/Hide` | `IWindow.SetTitle/SetBounds/Show/Hide` 直译 |
 | `WinShellIsMaximized/Maximize/Unmaximize` | 同名 IWindow 方法直译 |
 | `WinShellScaleFactor` | `GetScaleFactor`（整数诚实升格为 Double 在此完成） |
 | `WinShellFocus/NativeHandle` | `Focus` / `NativeHandle`（X11 XID 化在 loader 侧补齐） |
 | `WinShellRunMainLoop/QuitMainLoop` | factory 主循环的 gtk 驱动段（运行标志语义原样保留） |
 
-### 2.2 抽取纪律
+### 2.2 抽取纪律与伦理扭转
 
 - **机械抽取优先**：函数体逐段搬移，不改行为；行为差异（如新增 min/max
   约束、XID 句柄化、事件信号挂接）作为独立小提交叠加在机械搬移之上，
   保持 diff 可审。
-- **ffi/loader 归属**：抽取后 GTK ABI 声明与装载从
+- **ffi/loader 归属（扭转前）**：抽取后 GTK ABI 声明与装载从
   `webview.gtk.ffi/gtk.loader` 复制出窗口所需子集到
   `window.gtk.ffi/window.gtk.loader`。webview 侧是否回改为 uses
-  window.loader 属 Wave 收口决策——**默认先双份共存**（各自独立演进），
-  待 S4 Win32 缝上移时统一评估去重，避免中途打断 webview lane。
+  window.loader 属 Wave 收口决策——**默认先双份共存**。
+- **伦理扭转（2026-08-28）**：`window.gtk.ffi/loader` 提升为独立 L2 家族
+  `nextpas.core.gtk3/4/2.base|ffi|loader`，`window` 降级为消费者（单向依赖，
+  redis→net 模式）。`window.gtk` 保留为 deprecated shim 转发至 `window.gtk3`，
+  `window.gtk3/4/2` 共享 `window.gtk.impl.inc`（消除 3×786 行重复），factory
+  对 `wkGtk` 以 `gtk4>gtk3>gtk2` 智能回退（Probe/Create/Live/Run/Quit 全聚合）。
 - **事件缝是净新增**：现缝只有轮询式操作，无事件回调。S2 新增
   `g_signal_connect_data` 挂 delete-event/configure/focus/scale 变化，
-  全部 cdecl 回调携带 owner 指针（禁全局变量上下文，BACKENDS §1 纪律）。
-- **抽取尾闭环（2026-08-28）**：`webview.gtk.win` → `window.gtk` 机械抽取已闭环（S2 5 门禁 + S3 7 门禁 + S5 12 门禁 → 13 门禁）；双份 GTK 缝进入 Wave 2/3 收敛评估期，不再新增抽取。
+  全部 cdecl 回调携带 owner 指针（禁全局变量上下文）。
+- **抽取尾闭环**：`webview.gtk.win` → `window.gtk` 机械抽取已闭环（S2 5 门禁 + S3 7 门禁 + S5 12 门禁 → 13 门禁）；扭转后进入共享 impl.inc 阶段，不再新增抽取。
 
 ---
 

@@ -22,21 +22,26 @@ Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 | `nextpas.core.window.fake` | 测试后端 | 无头脚本化后端：注入事件、手动泵 dispatcher，契约测试唯一载体 | S1 |
 | `nextpas.core.window.factory` | 工厂 | 后端注册/探测/选择 + `TWindowBuilder` + `WindowRunLoop/ExitLoop` | S1 |
 | `nextpas.core.window` | 门面 | 聚合 re-export 全部公共 API | S1 |
-| `nextpas.core.window.gtk.ffi` | ABI | GTK3/GObject/GLib 类型与函数指针变量声明（无逻辑、无 external） | S2 |
-| `nextpas.core.window.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`） | S2 |
-| `nextpas.core.window.gtk` | 后端 | Linux 实现：窗口壳、idle dispatch、信号桥接（自 `webview.gtk.win` 机械抽取） | S2 |
+| `nextpas.core.gtk3/4/2.base` / `.ffi` / `.loader` | L2 独立家族 | GTK 2/3/4 ABI+动态装载（dlopen 多 soname，BindOpt，可选符号）；window 仅为消费者（伦理扭转，单向依赖） | S2-扭转 |
+| `nextpas.core.qt5pas/qt` | L2 独立家族 | Qt 绑定（qt5pas 复用 libQt5Pas.so；qt 为自包装 libnextpas-qt.so 多版本 shim，deferred） | qt |
+| `nextpas.core.window.gtk3/4/2` | 后端适配 | Linux GTK 2/3/4 薄适配（共享 `window.gtk.impl.inc`，族显式 `WindowGtk4IsAvailable` 等；`window.gtk` 为 deprecated shim→gtk3） | S2+扭转 |
+| `nextpas.core.window.gtk.impl.inc` | 共享实现 | 消除 gtk3/4/2 三拷贝重复（dispatcher+信号+窗口类同一份，族以 `TGtkLoadInfo/TryLoadGtk` 注入） | polish |
 | `nextpas.core.window.sdl2.ffi/.loader/.sdl2` | 后端 | SDL2 `SDL_Window`，game888 未来底座 | S3 |
 | `nextpas.core.window.win32.*` | 后端 | `CreateWindowEx` + `WM_*` | S4 |
 | `nextpas.core.window.cocoa.*` | 后端 | `NSWindow` / `NSView` | S4 |
 | `nextpas.core.window.wasm.ffi/.loader/.wasm` | 后端 | WASM `<canvas>` attach（`devicePixelRatio` + CSS/物理双口径） | S2a |
 | `nextpas.core.window.android.*` / `.uikit.*` | 后端 | 宿主 surface attach（`ParentHandle` 非 nil 路径） | S5 |
 
-### 依赖方向
+### 依赖方向（伦理扭转后：gtk/qt 独立 L2，window 消费）
 
 ```
-base ← intf ← fake ─┐
-                 factory ← 门面
-base ← gtk.ffi ← gtk.loader ← gtk ─┘
+gtk3/4/2.base ← gtk3/4/2.ffi ← gtk3/4/2.loader  (独立 L2 家族，不知 window)
+qt5pas/qt.base ← qt5pas/qt.ffi ← qt5pas/qt.loader (独立 L2，deferred)
+                      │
+base ← intf ← fake ─┐ │ one-way depends (redis→net 模式)
+                 factory ← 门面 ←───┘  (ProbeGtk 聚合 gtk4>gtk3>gtk2 智能回退)
+base ← window.gtk3/4/2 ←┘  (薄适配，共享 gtk.impl.inc)
+```
            sdl2.ffi ← sdl2.loader ← sdl2 ─┘  （同位）
            win32.* / cocoa.* / android.* / uikit.*  同 gtk 位，波次接入
 ```

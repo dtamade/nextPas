@@ -32,8 +32,9 @@ procedure WindowSdl2QuitLoop;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
+  nextpas.core.text.ansi,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
   nextpas.core.sync.intf,
@@ -377,7 +378,7 @@ procedure TWindowSdl2.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   FTitle := ATitle;
-  SDL_SetWindowTitle(FHandle, PAnsiChar(AnsiString(ATitle)));
+  SDL_SetWindowTitle(FHandle, PAnsiChar(StrToAnsi(ATitle)));
 end;
 
 function TWindowSdl2.GetTitle: string;
@@ -386,7 +387,7 @@ var
 begin
   RequireOpen;
   P := SDL_GetWindowTitle(FHandle);
-  if P <> nil then Result := string(AnsiString(P)) else Result := FTitle;
+  if P <> nil then Result := AnsiPtrToStr(P) else Result := FTitle;
 end;
 
 procedure TWindowSdl2.SetBounds(AWidth, AHeight: Integer);
