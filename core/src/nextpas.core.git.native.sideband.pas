@@ -46,9 +46,20 @@ function GitSidebandJoin(const AEntries: TGitSidebandArray): TBytes;
 
 implementation
 
-function StrToBytes(const S: string): TBytes; inline;
+function BytesToStr(const B: TBytes): string;
 begin
-  Result := GitStringToBytes(S);
+  SetLength(Result, Length(B));
+  if Length(B) > 0 then
+    Move(B[0], Result[1], Length(B));
+end;
+
+function StrToBytes(const S: string): TBytes;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(S));
+  for I := 1 to Length(S) do
+    Result[I-1] := Byte(S[I]);
 end;
 
 function GitSidebandEncode(AKind: TGitSidebandKind; const AData: TBytes): TBytes;
@@ -135,13 +146,13 @@ begin
         end;
       gsbProgress:
         begin
-          Txt := GitBytesToString(Arr[I].Data);
+          Txt := BytesToStr(Arr[I].Data);
           SetLength(ADemuxed.Progress, Length(ADemuxed.Progress) + 1);
           ADemuxed.Progress[High(ADemuxed.Progress)] := Txt;
         end;
       gsbError:
         begin
-          Txt := GitBytesToString(Arr[I].Data);
+          Txt := BytesToStr(Arr[I].Data);
           SetLength(ADemuxed.Errors, Length(ADemuxed.Errors) + 1);
           ADemuxed.Errors[High(ADemuxed.Errors)] := Txt;
         end;

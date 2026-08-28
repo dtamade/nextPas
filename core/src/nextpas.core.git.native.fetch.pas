@@ -38,23 +38,16 @@ uses
   nextpas.core.process,
   nextpas.core.hash.sha1,
   nextpas.core.text.conv,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.pktline,
   nextpas.core.git.native.negotiate,
   nextpas.core.git.native.sideband;
-
-function ConcatBytes(const A, B: TBytes): TBytes;
-begin
-  SetLength(Result, Length(A) + Length(B));
-  if Length(A) > 0 then Move(A[0], Result[0], Length(A));
-  if Length(B) > 0 then Move(B[0], Result[Length(A)], Length(B));
-end;
 
 function GitFetchPack(const ARemoteGitDir: string; const AWants: array of TGitOid; const AHaves: array of TGitOid): TBytes;
 var
   Request: TBytes;
   Caps: TStringArray;
   I: Integer;
-  Tmp: TBytes;
   Out_: TProcessOutput;
   RespBytes: TBytes;
   Pkts: TGitPktArray;
@@ -64,6 +57,8 @@ var
   ErrMsg: string;
   Kind: TGitSidebandKind;
   Payload: TBytes;
+  Parts: array of TBytes;
+  PartCount: Integer;
 begin
   if Length(AWants) = 0 then
     raise EGitError.Create('fetch: want list empty');
@@ -74,26 +69,26 @@ begin
   Caps[0] := 'side-band-64k';
   Caps[1] := 'ofs-delta';
   Caps[2] := 'multi_ack';
-  Request := nil;
+  { 单次直连：先收集 Parts 再 BytesConcatMany 一次分配，替代循环 ConcatBytes O(n²) }
+  SetLength(Parts, Length(AWants) + Length(AHaves) + 4);
+  PartCount := 0;
   for I := 0 to High(AWants) do
   begin
     if I = 0 then
-      Tmp := GitEncodeWant(AWants[I], Caps)
+      Parts[PartCount] := GitEncodeWant(AWants[I], Caps)
     else
-      Tmp := GitEncodeWantSimple(AWants[I]);
-    Request := ConcatBytes(Request, Tmp);
+      Parts[PartCount] := GitEncodeWantSimple(AWants[I]);
+    Inc(PartCount);
   end;
-  Tmp := GitPktEncodeFlush;
-  Request := ConcatBytes(Request, Tmp);
+  Parts[PartCount] := GitPktEncodeFlush; Inc(PartCount);
   for I := 0 to High(AHaves) do
   begin
-    Tmp := GitEncodeHave(AHaves[I]);
-    Request := ConcatBytes(Request, Tmp);
+    Parts[PartCount] := GitEncodeHave(AHaves[I]); Inc(PartCount);
   end;
-  Tmp := GitEncodeDone;
-  Request := ConcatBytes(Request, Tmp);
-  Tmp := GitPktEncodeFlush;
-  Request := ConcatBytes(Request, Tmp);
+  Parts[PartCount] := GitEncodeDone; Inc(PartCount);
+  Parts[PartCount] := GitPktEncodeFlush; Inc(PartCount);
+  SetLength(Parts, PartCount);
+  Request := BytesConcatMany(Parts);
 
   Out_ := RunWithInput('git', ['upload-pack', '--stateless-rpc', ARemoteGitDir], Request);
   if not ProcessSucceeded(Out_) then
