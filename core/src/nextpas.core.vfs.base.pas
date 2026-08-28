@@ -148,35 +148,45 @@ function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
 var
   I, N, OutN: SizeUInt;
-  Tail: string;
-  SegEnd: SizeInt;
+  PathLen, PrefixLen, J: SizeInt;
+  SegPos: SizeInt;
   Child: string;
 begin
   Result := nil;
   SetLength(Result, SizeUInt(Length(ASortedPaths)));
   OutN := 0;
   N := SizeUInt(Length(ASortedPaths));
+  PrefixLen := Length(ADirPrefix);
   I := 0;
   while I < N do
   begin
+    PathLen := Length(ASortedPaths[I]);
     { 前缀匹配显式处理空前缀（FPC Pos('',S)=0 陷阱）。
+      零分配：前缀比较走 CompareMem 直比首段，避免 Pos 的临时分配。
       全量扫描不提前 Break：调用方可能传未按前缀定位的完整清单 }
-    if Length(ASortedPaths[I]) <= Length(ADirPrefix) then
+    if PathLen <= PrefixLen then
     begin
       Inc(I);
       Continue;
     end;
-    if (Length(ADirPrefix) > 0)
-      and (Pos(ADirPrefix, ASortedPaths[I]) <> 1) then
+    if PrefixLen > 0 then
     begin
-      Inc(I);
-      Continue;
+      if not CompareMem(@ASortedPaths[I][1], @ADirPrefix[1], SizeUInt(PrefixLen)) then
+      begin
+        Inc(I);
+        Continue;
+      end;
     end;
-    Tail := Copy(ASortedPaths[I], Length(ADirPrefix) + 1,
-      Length(ASortedPaths[I]) - Length(ADirPrefix));
-    SegEnd := Pos('/', Tail);
-    if SegEnd > 0 then
-      Child := Copy(ASortedPaths[I], 1, Length(ADirPrefix) + SegEnd - 1)
+    { 尾段 '/' 扫描零分配：直接在原串后缀区间线性扫描，省去 Tail:=Copy 的每项堆分配 }
+    SegPos := 0;
+    for J := PrefixLen + 1 to PathLen do
+      if ASortedPaths[I][J] = '/' then
+      begin
+        SegPos := J;
+        Break;
+      end;
+    if SegPos > 0 then
+      Child := Copy(ASortedPaths[I], 1, SegPos - 1)
     else
       Child := ASortedPaths[I];
     if (OutN = 0) or (Result[OutN - 1] <> Child) then
