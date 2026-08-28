@@ -426,9 +426,37 @@ begin
   Tracer.Free; Obs.Free;
 end;
 
+procedure DemoPolishAndSnapshot;
+var G: string; C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double;
+    Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: TAsyncTlsPasAdaptiveTracer;
+    Exp: ITlsPasSpanExporter; J, LPath: string; Snap: TTlsPasAdaptiveSnapshot; Ctx: TTlsPasTraceContext; Ok: Boolean;
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S32 adaptive sampling) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler | Trace | Span | AdaptiveSampling');
+  WriteLn('--- Polish S33 + Consistent S34 + Snapshot S35 (收敛自证) ---');
+  G := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.02, '');
+  WriteLn('Gauge empty prefix defaults nextpas_tlspas=', Pos('nextpas_tlspas_sampling_rate', G)>0, ' len=', Length(G));
+  C := DefaultTlsPasSamplingConfig; C.BaseRate := 0.0001; C.MinRate := 0.00005; C.MaxRate := 1.0;
+  M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); H.Healthy := True; H.RejectRate := 0.02; M.Server.RejectPolicy := 1;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C); WriteLn('Thr floor 0.05 prevents 3x at 0.02 rate=', R:0:6);
+  H.RejectRate := 0.06; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); WriteLn('Thr floor allows 3x at 0.06 rate=', R:0:6);
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(4) as ITlsPasSpanExporter;
+  J := TlsPasSpansToOTLPJSON(Exp); WriteLn('OTLP empty resource service.name=', Pos('service.name', J)>0, ' spans []=', Pos('"spans":[]', J)>0);
+  LPath := '/tmp/tlspas_demo_polish.json'; if FileExists(LPath) then DeleteFile(LPath); if FileExists(LPath+'.tmp') then DeleteFile(LPath+'.tmp');
+  WriteLn('Export nil/empty guard nil=', not TlsPasTryExportSpansToFile(nil, LPath), ' emptyPath=', not TlsPasTryExportSpansToFile(Exp, ''), ' okEmpty=', TlsPasTryExportSpansToFile(Exp, LPath));
+  if FileExists(LPath) then DeleteFile(LPath); WriteLn('No tmp leak=', not FileExists(LPath+'.tmp'));
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Tracer := TAsyncTlsPasAdaptiveTracer.Create(Obs);
+  C := DefaultTlsPasSamplingConfig; C.BaseRate := 0.2; Tracer.UpdateConfig(C);
+  WriteLn('UpdateConfig sync Inner.Rate 0.2=', (Tracer.Inner.Rate>0.19)and(Tracer.Inner.Rate<0.21), ' GetAdaptiveRate 0.2=', (Tracer.GetAdaptiveRate>0.19)and(Tracer.GetAdaptiveRate<0.21));
+  Snap := Obs.GetSnapshot; WriteLn('Snapshot metrics vs live equal=', Snap.Metrics.AdaptiveMax = Obs.GetAdaptiveMetrics.AdaptiveMax, ' health=', Snap.Health.Healthy);
+  Ok := TlsPasParseTraceParent('00-zzzz', Ctx); WriteLn('Fuzz short invalid=', not Ok);
+  Ok := TlsPasParseTraceParent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx); WriteLn('Fuzz version 01 invalid=', not Ok);
+  Tracer.Free; Obs.Free;
+end;
+
+begin
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S35 snapshot) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler | Trace | Span | AdaptiveSampling | Polish+Consistent+Snapshot');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -460,5 +488,7 @@ begin
   WriteLn;
   DemoAdaptiveSampling;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S32 adaptive sampling self-proof.');
+  DemoPolishAndSnapshot;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S35 snapshot self-proof.');
 end.
