@@ -31,6 +31,7 @@ function HttpEarlyDataIsIdempotentRequest(const AReq: IHttpRequest): Boolean;
 
 function HttpEarlyDataIsEarlyRequest(const AReq: IHttpRequest): Boolean;
 procedure HttpEarlyDataMarkRequest(const AReq: IHttpRequest);
+function HttpEarlyDataAutoMarkIfIdempotent(const AReq: IHttpRequest): Boolean; inline;
 
 function HttpEarlyDataStatusIsRetryable(const AStatus: THttpStatus): Boolean; inline;
 function HttpEarlyDataResponseIsEarlyRejected(const AResp: IHttpResponse): Boolean;
@@ -45,8 +46,9 @@ type
   TEarlyDataRetryClient = class(TInterfacedObject, IHttpClient)
   private
     FInner: IHttpClient;
+    FAutoMark: Boolean;
   public
-    constructor Create(const AInner: IHttpClient);
+    constructor Create(const AInner: IHttpClient; AAutoMark: Boolean = False);
     function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
@@ -90,6 +92,8 @@ type
   end;
 
 function NewEarlyDataRetryClient(const AInner: IHttpClient): IHttpClient;
+function NewEarlyDataRetryClientEx(const AInner: IHttpClient; AAutoMark: Boolean): IHttpClient;
+function NewEarlyDataAutoRetryClient(const AInner: IHttpClient): IHttpClient;
 function HttpEarlyDataCloneWithoutEarlyData(const AReq: IHttpRequest): IHttpRequest;
 
 implementation
@@ -150,6 +154,16 @@ begin
     LEarly.SetWasEarlyData(True);
   if AReq.Headers <> nil then
     AReq.Headers.SetHeader(HTTP_HEADER_EARLY_DATA, '1');
+end;
+
+function HttpEarlyDataAutoMarkIfIdempotent(const AReq: IHttpRequest): Boolean;
+begin
+  Result := False;
+  if AReq = nil then Exit;
+  if HttpEarlyDataIsEarlyRequest(AReq) then Exit;
+  if not HttpEarlyDataIsIdempotentRequest(AReq) then Exit;
+  HttpEarlyDataMarkRequest(AReq);
+  Result := True;
 end;
 
 function HttpEarlyDataStatusIsRetryable(const AStatus: THttpStatus): Boolean;
@@ -215,12 +229,13 @@ begin
   Result := LCloned;
 end;
 
-constructor TEarlyDataRetryClient.Create(const AInner: IHttpClient);
+constructor TEarlyDataRetryClient.Create(const AInner: IHttpClient; AAutoMark: Boolean);
 begin
   inherited Create;
   if AInner = nil then
     raise EHttpError.Create(hekArgument, 'EarlyDataRetry inner is nil');
   FInner := AInner;
+  FAutoMark := AAutoMark;
 end;
 
 function TEarlyDataRetryClient.Send(const AReq: IHttpRequest): IHttpResponse;
@@ -228,6 +243,8 @@ var
   LResp: IHttpResponse;
   LRetryReq: IHttpRequest;
 begin
+  if FAutoMark then
+    HttpEarlyDataAutoMarkIfIdempotent(AReq);
   LResp := FInner.Send(AReq);
   if HttpEarlyDataShouldRetry(AReq, LResp) then
   begin
@@ -416,67 +433,77 @@ end;
 
 function TEarlyDataRetryClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithBasicAuth(AUsername, APassword));
+  Result := TEarlyDataRetryClient.Create(FInner.WithBasicAuth(AUsername, APassword), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithBearerAuth(const AToken: string): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithBearerAuth(AToken));
+  Result := TEarlyDataRetryClient.Create(FInner.WithBearerAuth(AToken), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithHeader(const AName, AValue: string): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithHeader(AName, AValue));
+  Result := TEarlyDataRetryClient.Create(FInner.WithHeader(AName, AValue), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithTimeout(ATimeoutMs));
+  Result := TEarlyDataRetryClient.Create(FInner.WithTimeout(ATimeoutMs), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithConnectTimeout(ATimeoutMs));
+  Result := TEarlyDataRetryClient.Create(FInner.WithConnectTimeout(ATimeoutMs), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithMaxRedirects(AMaxRedirects));
+  Result := TEarlyDataRetryClient.Create(FInner.WithMaxRedirects(AMaxRedirects), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithFollowRedirects(AFollow));
+  Result := TEarlyDataRetryClient.Create(FInner.WithFollowRedirects(AFollow), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithRetry(AMaxRetries));
+  Result := TEarlyDataRetryClient.Create(FInner.WithRetry(AMaxRetries), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithCookieJar(AJar));
+  Result := TEarlyDataRetryClient.Create(FInner.WithCookieJar(AJar), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithProxyUrl(AProxyUrl));
+  Result := TEarlyDataRetryClient.Create(FInner.WithProxyUrl(AProxyUrl), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithDialFunc(ADial));
+  Result := TEarlyDataRetryClient.Create(FInner.WithDialFunc(ADial), FAutoMark);
 end;
 
 function TEarlyDataRetryClient.WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(FInner.WithTLSContext(ATLSContext));
+  Result := TEarlyDataRetryClient.Create(FInner.WithTLSContext(ATLSContext), FAutoMark);
 end;
 
 function NewEarlyDataRetryClient(const AInner: IHttpClient): IHttpClient;
 begin
-  Result := TEarlyDataRetryClient.Create(AInner);
+  Result := TEarlyDataRetryClient.Create(AInner, False);
+end;
+
+function NewEarlyDataRetryClientEx(const AInner: IHttpClient; AAutoMark: Boolean): IHttpClient;
+begin
+  Result := TEarlyDataRetryClient.Create(AInner, AAutoMark);
+end;
+
+function NewEarlyDataAutoRetryClient(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TEarlyDataRetryClient.Create(AInner, True);
 end;
 
 end.

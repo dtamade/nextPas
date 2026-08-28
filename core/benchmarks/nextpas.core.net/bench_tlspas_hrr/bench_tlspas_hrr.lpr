@@ -365,6 +365,30 @@ begin
   for I := 1 to aIters do L := HttpEarlyDataCloneWithoutEarlyData(GClientEarlyReq);
 end;
 
+var
+  GClientEarlyReqNotMarked: IHttpRequest;
+
+procedure BenchClientEarlyAutoMark(aIters: Int64);
+var I: Int64; LReq: IHttpRequest; L: Boolean;
+begin
+  for I := 1 to aIters do
+  begin
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+    L := HttpEarlyDataAutoMarkIfIdempotent(LReq);
+  end;
+end;
+
+procedure BenchClientEarlyAutoRetryPath(aIters: Int64);
+var I: Int64; LReq: IHttpRequest; LResp: IHttpResponse; L: Boolean;
+begin
+  for I := 1 to aIters do
+  begin
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+    HttpEarlyDataAutoMarkIfIdempotent(LReq);
+    L := HttpEarlyDataShouldRetry(LReq, GClientEarlyResp425);
+  end;
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -412,6 +436,7 @@ begin
   // Client early-data fixtures
   GClientEarlyReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   HttpEarlyDataMarkRequest(GClientEarlyReq);
+  GClientEarlyReqNotMarked := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   GClientEarlyResp425 := NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0 := NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0.Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
@@ -461,6 +486,8 @@ begin
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
     .AddLoop('ClientEarly CloneWithoutEarly', @BenchClientEarlyClone)
+    .AddLoop('ClientEarly AutoMark', @BenchClientEarlyAutoMark)
+    .AddLoop('ClientEarly AutoRetryPath', @BenchClientEarlyAutoRetryPath)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;
