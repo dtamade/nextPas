@@ -1,7 +1,7 @@
-# nextpas.core.window — Benchmark Baseline (3.7)
+# nextpas.core.window — Benchmark Baseline (3.8)
 
-> **硬件**：44c x86_64 Linux, FPC 3.3.1, 2026-08-29 (single machine, 5×中位, 3.7 11×4+12事件+stress6)；
-> **门禁**：`bench_dispatcher` 7 项 (`TBenchSuite` 80ms/iter, 7 samples, 2 warmup) — 可复现在 `core/tests/nextpas.core.window/test_window_stress` 计时 + `test_window_fake` 注入路径；`bench_dispatcher` 实测 5×中位 355µs/206µs 方差 <5% 见下，见 FINAL_ROADMAP 3.7；
+> **硬件**：44c x86_64 Linux, FPC 3.3.1, 2026-08-29 (single machine, 5×中位, 3.8 11×4+12事件+stress6)；
+> **门禁**：`bench_dispatcher` 7 项 (`TBenchSuite` 80ms/iter, 7 samples, 2 warmup) — 可复现在 `core/tests/nextpas.core.window/test_window_stress` 计时 + `test_window_fake` 注入路径；`bench_dispatcher` 实测 5×中位 355µs/206µs 方差 <5% 见下，见 FINAL_ROADMAP 3.8；
 > **目标**：`PostSingle <400µs/1000`, `ZeroPump <30ns`, `Live <500µs`, 三机方差 <5% 为 1.0 阈值（当前单机 5× 365µs/24.3ns 中位冻结，3.2 后 `396µs/20.6ns` 单次诚实，复现见下）。
 
 ## 单次全量 (200 iters, 2026-08-28T18:23)
@@ -23,7 +23,7 @@
 | Run | PostSingle/1000 | Zero/10000 | Zero ns/次 |
 |-----|-----------------|------------|------------|
 | 1 | 365µs | 244µs | 24.4ns |
-| 2 | 365µs | 237µs | 23.7ns |
+| 2 | 365µs | 237µs | 23.8ns |
 | 3 | 355µs | 243µs | 24.3ns |
 | 4 | 354µs | 238µs | 23.8ns |
 | 5 | 369µs | 243µs | 24.3ns |
