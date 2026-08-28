@@ -60,6 +60,8 @@ type
     procedure GrowScaleRef; inline;
     procedure GrowScaleMethod; inline;
     procedure GrowScaleProc; inline;
+    procedure GrowPendingEvals; inline;
+    procedure RemovePending(ARec: PEvalRec);
     procedure DoScaleChanged(ANewScale: Double);
   public
     constructor Create(const AOptions: TWebviewOptions);
