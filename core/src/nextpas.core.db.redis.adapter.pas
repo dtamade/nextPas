@@ -14,6 +14,7 @@ uses
   nextpas.core.errors,
   nextpas.core.text.utils,
   nextpas.core.text.conv,
+  nextpas.core.bytes.ops,
   nextpas.core.time,
   nextpas.core.net,
   nextpas.core.db.base,
@@ -551,7 +552,6 @@ var
   LR: TRespValue;
   LT0: QWord;
   LTimed: Boolean;
-  LTotal, LOff: Integer;
 begin
   if Length(ASteps) = 0 then
     raise EDbError.CreateSimple(dbkRedis, 'empty batch');
@@ -562,20 +562,8 @@ begin
     RespEncodeCommand(LArgs, LFrames);
     LStepFrames[I] := LFrames;
   end;
-  { 单次写 burst = 流水线关键路径：预求和单分配直写（避免 N 次 SetLength 重分配/拷贝） }
-  begin
-    LTotal := 0;
-    for I := 0 to High(LStepFrames) do
-      Inc(LTotal, Length(LStepFrames[I]));
-    SetLength(LFrames, LTotal);
-    LOff := 0;
-    for I := 0 to High(LStepFrames) do
-      if Length(LStepFrames[I]) > 0 then
-      begin
-        Move(LStepFrames[I][0], LFrames[LOff], Length(LStepFrames[I]));
-        Inc(LOff, Length(LStepFrames[I]));
-      end;
-  end;
+  { 单次写 burst = 流水线关键路径：预求和单分配直写（已收敛至 bytes.ops 单源） }
+  LFrames := BytesConcatMany(LStepFrames);
   LT0 := 0;
   LTimed := FTrace.BeginOp(LT0);
   try
