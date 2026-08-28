@@ -439,6 +439,39 @@ begin
   W := nil;
 end;
 
+procedure TestInputEvents;
+var
+  W: IWindow;
+  LFake: TFakeWindow;
+begin
+  ResetEventCounters;
+  LFake := TFakeWindow.Create(DefaultWindowOptions);
+  W := LFake;
+  try
+    W.OnEvent(procedure(const E: TWindowEvent) begin GEvents:=GEvents+1; GLastEvent:=E; end);
+    LFake.InjectKey(weKeyDown, 65, 1);
+    CheckEqual(Int64(1), Int64(GEvents));
+    CheckEqual(Ord(weKeyDown), Ord(GLastEvent.Kind));
+    CheckEqual(Int64(65), Int64(GLastEvent.KeyCode));
+    CheckEqual(Int64(1), Int64(GLastEvent.Modifiers));
+    GEvents:=0;
+    LFake.InjectMouse(weMouseDown, 100, 200, 1, 0);
+    CheckEqual(Int64(1), Int64(GEvents));
+    CheckEqual(Ord(weMouseDown), Ord(GLastEvent.Kind));
+    CheckEqual(Int64(100), Int64(GLastEvent.X));
+    CheckEqual(Int64(200), Int64(GLastEvent.Y));
+    CheckEqual(Int64(1), Int64(GLastEvent.Button));
+    GEvents:=0;
+    LFake.InjectMouse(weMouseMove, 150, 250, 0, 2);
+    CheckEqual(Int64(1), Int64(GEvents));
+    CheckEqual(Ord(weMouseMove), Ord(GLastEvent.Kind));
+    CheckEqual(Int64(150), Int64(GLastEvent.X));
+    CheckEqual(Int64(2), Int64(GLastEvent.Modifiers));
+  finally
+    W.Close; W:=nil;
+  end;
+end;
+
 procedure TestNoEventsAfterClose;
 var
   W: IWindow;
@@ -475,6 +508,7 @@ begin
   T.Test('close marshal via dispatcher', @TestCloseMarshalViaDispatcher);
   T.Test('parent handle stored', @TestParentHandleStored);
   T.Test('live count tracking', @TestLiveCountTracking);
+  T.Test('input key/mouse via InjectKey/Mouse', @TestInputEvents);
   T.Test('no events after close', @TestNoEventsAfterClose);
   if not T.Run then Halt(1);
 end.
