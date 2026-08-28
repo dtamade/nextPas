@@ -230,6 +230,24 @@ begin
     LOk := TlsPasServerShouldAcceptEarlyData(GReplayStore, GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
 end;
 
+var
+  GServerObserver: TAsyncTlsPasServerObserver;
+
+procedure BenchObserverDecide(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision;
+begin
+  for I := 1 to aIters do
+    D := GServerObserver.Decide(GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
+procedure BenchFormatReplayStats(aIters: Int64);
+var I: Int64; S: TAsyncTlsPasReplayStats; F: string;
+begin
+  S := GReplayCache.GetStats;
+  for I := 1 to aIters do
+    F := TlsPasFormatReplayStats(S);
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -264,6 +282,7 @@ begin
   if FileExists('/tmp/bench_replay_file.dat.tmp') then DeleteFile('/tmp/bench_replay_file.dat.tmp');
   GFileStore := TAsyncTlsPasReplayFileStore.Create('/tmp/bench_replay_file.dat', 64, 600000) as ITlsPasReplayStore;
   GKvStore := TAsyncTlsPasReplayStoreFactory.CreateKv(TAsyncTlsPasMemoryKvStore.Create as ITlsPasKvStore, 64, 600000);
+  GServerObserver := TAsyncTlsPasServerObserver.Create(GReplayStore);
 end;
 
 var
@@ -298,6 +317,8 @@ begin
     .AddLoop('ReplayKvStore (local+kv)', @BenchReplayKvStore)
     .AddLoop('ServerDecide (policy+replay)', @BenchServerDecide)
     .AddLoop('ServerShouldAccept', @BenchServerShouldAccept)
+    .AddLoop('ObserverDecide (wrap+count)', @BenchObserverDecide)
+    .AddLoop('FormatReplayStats', @BenchFormatReplayStats)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;
