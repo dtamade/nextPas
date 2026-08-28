@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0 (2026-08-29) — nextpas.core.zip 1.0.0 领头羊 Final
+
+基于 `1.0.0-rc.1` 零代码变更封版，`12门+bench 16项+hygiene` 全绿，`ci-matrix`（`linux-x86_64`/`win64` 交叉编译通过，`darwin` 源码级可移植）与 `SECURITY` 四模型就绪，`VERSION` 冻结为 `1.0.0`。
+
 ## 1.0.0-rc.1 (2026-08-29) — nextpas.core.zip 领头羊封版 RC
 
 Pascal AI 时代 ZIP 容器领头羊实现，以 `nextpas.core.bench` 为唯一口径，12门+bench+hygiene 全绿，`ci-matrix` 四靶标通过。
