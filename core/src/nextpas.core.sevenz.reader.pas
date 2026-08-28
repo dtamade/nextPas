@@ -1193,31 +1193,38 @@ begin
 end;
 
 function TryParseGlobMid(const APattern: string; out APrefix, ASuffix: string): Boolean; inline;
-var P, Cnt: Integer;
+var LStarCount, LStarPos, LI: Integer; LHasQ: Boolean;
 begin
   Result := False; APrefix := ''; ASuffix := '';
-  if Pos('?', APattern) > 0 then Exit;
-  Cnt := 0;
-  for P := 1 to Length(APattern) do if APattern[P] = '*' then Inc(Cnt);
-  if Cnt <> 1 then Exit;
-  P := Pos('*', APattern);
-  if (P <= 1) or (P >= Length(APattern)) then Exit;
-  APrefix := Copy(APattern, 1, P - 1);
-  ASuffix := Copy(APattern, P + 1, Length(APattern) - P);
+  LStarCount := 0; LStarPos := 0; LHasQ := False;
+  for LI := 1 to Length(APattern) do
+  begin
+    if APattern[LI] = '*' then begin Inc(LStarCount); LStarPos := LI; end
+    else if APattern[LI] = '?' then LHasQ := True;
+  end;
+  if LHasQ then Exit;
+  if LStarCount <> 1 then Exit;
+  if (LStarPos <= 1) or (LStarPos >= Length(APattern)) then Exit;
+  APrefix := Copy(APattern, 1, LStarPos - 1);
+  ASuffix := Copy(APattern, LStarPos + 1, Length(APattern) - LStarPos);
   Result := True;
 end;
 
 type TGlobKind = (gkEmpty, gkStar, gkExact, gkPrefix, gkSuffix, gkPrefixSuffix, gkComplex);
 
 function ClassifyGlob(const APattern: string; out APrefix, ASuffix: string): TGlobKind; inline;
-var LStarCount, LI: Integer;
+var LStarCount, LStarPos, LI: Integer; LHasQ: Boolean;
 begin
   APrefix := ''; ASuffix := '';
   if APattern = '' then Exit(gkEmpty);
   if APattern = '*' then Exit(gkStar);
-  if Pos('?', APattern) > 0 then Exit(gkComplex);
-  LStarCount := 0;
-  for LI := 1 to Length(APattern) do if APattern[LI] = '*' then Inc(LStarCount);
+  LStarCount := 0; LStarPos := 0; LHasQ := False;
+  for LI := 1 to Length(APattern) do
+  begin
+    if APattern[LI] = '*' then begin Inc(LStarCount); LStarPos := LI; end
+    else if APattern[LI] = '?' then LHasQ := True;
+  end;
+  if LHasQ then Exit(gkComplex);
   if LStarCount = 0 then Exit(gkExact);
   if LStarCount = 1 then
   begin
@@ -1225,7 +1232,8 @@ begin
     begin APrefix := Copy(APattern, 1, Length(APattern)-1); Exit(gkPrefix); end;
     if (APattern[1] = '*') and (APattern[Length(APattern)] <> '*') then
     begin ASuffix := Copy(APattern, 2, Length(APattern)-1); Exit(gkSuffix); end;
-    if TryParseGlobMid(APattern, APrefix, ASuffix) then Exit(gkPrefixSuffix);
+    if (LStarPos > 1) and (LStarPos < Length(APattern)) then
+    begin APrefix := Copy(APattern, 1, LStarPos - 1); ASuffix := Copy(APattern, LStarPos + 1, Length(APattern)-LStarPos); Exit(gkPrefixSuffix); end;
   end;
   Result := gkComplex;
 end;
