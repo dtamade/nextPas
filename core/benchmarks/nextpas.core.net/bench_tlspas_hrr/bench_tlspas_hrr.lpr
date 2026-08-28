@@ -23,6 +23,7 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.http.earlydata,
   nextpas.core.http.middleware.earlydata,
+  nextpas.core.http.client_earlydata,
   nextpas.core.platform.time,
   nextpas.core.time.base;
 
@@ -336,6 +337,34 @@ begin
     GHttpMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
 end;
 
+var
+  GClientEarlyReq: IHttpRequest;
+  GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
+
+procedure BenchClientEarlyIsIdempotent(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do L := HttpEarlyDataIsIdempotentRequest(GClientEarlyReq);
+end;
+
+procedure BenchClientEarlyIsEarly(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do L := HttpEarlyDataIsEarlyRequest(GClientEarlyReq);
+end;
+
+procedure BenchClientEarlyShouldRetry(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do L := HttpEarlyDataShouldRetry(GClientEarlyReq, GClientEarlyResp425);
+end;
+
+procedure BenchClientEarlyClone(aIters: Int64);
+var I: Int64; L: IHttpRequest;
+begin
+  for I := 1 to aIters do L := HttpEarlyDataCloneWithoutEarlyData(GClientEarlyReq);
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -380,6 +409,12 @@ begin
   GHttpReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   GHttpMw := EarlyDataMiddleware;
   GHttpMwHandler := GHttpMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
+  // Client early-data fixtures
+  GClientEarlyReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(GClientEarlyReq);
+  GClientEarlyResp425 := NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil);
+  GClientEarlyRespOkEarly0 := NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil);
+  GClientEarlyRespOkEarly0.Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
 end;
 
 var
@@ -422,6 +457,10 @@ begin
     .AddLoop('HttpEarlyData from stream nil', @BenchHttpEarlyDataStream)
     .AddLoop('HttpRequest early flag (Supports)', @BenchHttpRequestFlag)
     .AddLoop('HttpMiddleware early-data', @BenchHttpMiddlewareEarlyData)
+    .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
+    .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
+    .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
+    .AddLoop('ClientEarly CloneWithoutEarly', @BenchClientEarlyClone)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;

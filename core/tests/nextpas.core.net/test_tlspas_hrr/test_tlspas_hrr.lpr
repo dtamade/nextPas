@@ -32,7 +32,9 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.context,
   nextpas.core.http.earlydata,
-  nextpas.core.http.middleware.earlydata;
+  nextpas.core.http.middleware.earlydata,
+  nextpas.core.http.client_earlydata,
+  nextpas.core.http.client;
 
 type
   TCaptureWriter = class(TInterfacedObject, IHttpResponseWriter)
@@ -1004,6 +1006,174 @@ begin
   Check(HttpContextGetString(LCtxNormal, CONTEXT_EARLY_DATA)='0', 'middleware normal context 0');
 end;
 
+{ ===== S18 client early-data retry bridge ===== }
+
+type
+  TMockTransport = class(TInterfacedObject, IHttpTransport)
+  public
+    FCalls: Integer;
+    FResponses: array of IHttpResponse;
+    FLastReq: IHttpRequest;
+    constructor Create(const AResponses: array of IHttpResponse);
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property Calls: Integer read FCalls;
+    property LastReq: IHttpRequest read FLastReq;
+  end;
+
+constructor TMockTransport.Create(const AResponses: array of IHttpResponse);
+var I: Integer;
+begin
+  inherited Create;
+  SetLength(FResponses, Length(AResponses));
+  for I := 0 to High(AResponses) do FResponses[I] := AResponses[I];
+  FCalls := 0;
+  FLastReq := nil;
+end;
+
+function TMockTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+begin
+  FLastReq := AReq;
+  if FCalls < Length(FResponses) then
+    Result := FResponses[FCalls]
+  else
+    Result := FResponses[High(FResponses)];
+  Inc(FCalls);
+end;
+
+procedure TestHttpClientEarlyDataIdempotent;
+var LReq: IHttpRequest;
+begin
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(HttpEarlyDataIsIdempotentRequest(LReq), 'GET idempotent');
+  LReq := THttpRequest.Create(hmHead, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(HttpEarlyDataIsIdempotentRequest(LReq), 'HEAD idempotent');
+  LReq := THttpRequest.Create(hmPost, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataIsIdempotentRequest(LReq), 'POST not idempotent');
+  LReq := THttpRequest.Create(hmPut, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataIsIdempotentRequest(LReq), 'PUT without key not idempotent');
+  LReq.Headers.SetHeader('Idempotency-Key', 'k1');
+  Check(HttpEarlyDataIsIdempotentRequest(LReq), 'PUT with key idempotent');
+end;
+
+procedure TestHttpClientEarlyDataStatus;
+begin
+  Check(HttpEarlyDataStatusIsRetryable(HTTP_STATUS_TOO_EARLY), '425 retryable');
+  Check(not HttpEarlyDataStatusIsRetryable(HTTP_STATUS_OK), '200 not retryable');
+  Check(not HttpEarlyDataStatusIsRetryable(HTTP_STATUS_TOO_MANY_REQUESTS), '429 not in early retry');
+end;
+
+procedure TestHttpClientEarlyDataShouldRetry;
+var LReq: IHttpRequest; LResp: IHttpResponse; LH: IHttpHeaders;
+begin
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(LReq);
+  LH := NewHttpHeaders;
+  LResp := NewResponse(HTTP_STATUS_TOO_EARLY, LH, nil);
+  Check(HttpEarlyDataShouldRetry(LReq, LResp), 'GET early + 425 -> retry');
+  LH := NewHttpHeaders;
+  LH.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
+  LResp := NewResponse(HTTP_STATUS_OK, LH, nil);
+  Check(HttpEarlyDataShouldRetry(LReq, LResp), 'GET early + X-Early-Data:0 -> retry');
+  LH := NewHttpHeaders;
+  LH.SetHeader(HTTP_HEADER_X_EARLY_DATA, '1');
+  LResp := NewResponse(HTTP_STATUS_OK, LH, nil);
+  Check(not HttpEarlyDataShouldRetry(LReq, LResp), 'GET early + X-Early-Data:1 no retry');
+  LReq := THttpRequest.Create(hmPost, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(LReq);
+  LH := NewHttpHeaders;
+  LResp := NewResponse(HTTP_STATUS_TOO_EARLY, LH, nil);
+  Check(not HttpEarlyDataShouldRetry(LReq, LResp), 'POST early + 425 not retry (non-idempotent)');
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  // not marked early
+  LH := NewHttpHeaders;
+  LResp := NewResponse(HTTP_STATUS_TOO_EARLY, LH, nil);
+  Check(not HttpEarlyDataShouldRetry(LReq, LResp), 'GET not early + 425 no retry');
+end;
+
+procedure TestHttpClientEarlyDataMarkAndClone;
+var LReq, LCloned: IHttpRequest;
+begin
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(LReq);
+  Check(HttpEarlyDataIsEarlyRequest(LReq), 'marked early');
+  Check(LReq.Headers.Get(HTTP_HEADER_EARLY_DATA)='1', 'header 1');
+  LCloned := HttpEarlyDataCloneWithoutEarlyData(LReq);
+  Check(not HttpEarlyDataIsEarlyRequest(LCloned), 'cloned not early');
+  Check(LCloned.Headers.Get(HTTP_HEADER_EARLY_DATA)='', 'cloned header removed');
+  Check(LCloned.Method=hmGet, 'clone method preserved');
+end;
+
+procedure TestHttpClientEarlyDataRetryClient;
+var LMock: TMockTransport; LClient: IHttpClient; LReq: IHttpRequest; LResp: IHttpResponse; LH1, LH2: IHttpHeaders; LR1, LR2: IHttpResponse;
+begin
+  LH1 := NewHttpHeaders;
+  LR1 := NewResponse(HTTP_STATUS_TOO_EARLY, LH1, nil);
+  LH2 := NewHttpHeaders;
+  LH2.SetHeader(HTTP_HEADER_X_EARLY_DATA, '1');
+  LR2 := NewResponse(HTTP_STATUS_OK, LH2, 'ok');
+  LMock := TMockTransport.Create([LR1, LR2]);
+  LClient := NewEarlyDataRetryClient(LMock as IHttpTransport as IHttpClient);
+  // Need proper client wrapping: mock implements IHttpTransport, but NewEarlyDataRetryClient expects IHttpClient.
+  // So create a minimal IHttpClient adapter around transport via THttpClient with custom transport.
+  // Simpler: test via TEarlyDataRetryClient directly with a fake client that delegates to mock transport.
+  // We'll bypass by constructing TEarlyDataRetryClient over a THttpClient that uses mock dial? Instead test helpers directly.
+  Check(HttpEarlyDataShouldRetry(nil, nil)=False, 'nil guard');
+  // Synthetic retry verification via pure helpers + clone
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(LReq);
+  Check(HttpEarlyDataShouldRetry(LReq, LR1), 'helpers predict retry');
+  // Verify retry client behavior with a simple fake IHttpClient that counts
+  // Use an anonymous inner transport via TEarlyDataRetryClient's Send path: we test via ShouldRetry + Clone logic only (already covered)
+  Check(LMock.Calls=0, 'mock not yet called');
+end;
+
+procedure TestHttpClientEarlyDataRetryClientLive;
+var LInner: IHttpClient; LClient: IHttpClient; LReq: IHttpRequest; LResp: IHttpResponse; LMock: TMockTransport; LH1, LH2: IHttpHeaders;
+begin
+  LH1 := NewHttpHeaders;
+  LH2 := NewHttpHeaders;
+  LH2.SetHeader('content-type', 'text/plain');
+  // Mock transport that first returns 425, second returns 200
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LH2, 'ok')
+  ]);
+  // Wrap mock transport in a minimal client
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataRetryClient(LInner);
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(LReq);
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_OK, 'retry client returns 200 after 425');
+  Check(LMock.Calls=2, 'mock called twice (retry)');
+  // POST should not retry
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LH2, 'ok')
+  ]);
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataRetryClient(LInner);
+  LReq := THttpRequest.Create(hmPost, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(LReq);
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_TOO_EARLY, 'POST not retried');
+  Check(LMock.Calls=1, 'POST mock called once');
+  // X-Early-Data:0 retry
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LH2, 'ok')
+  ]);
+  // First response has X-Early-Data:0
+  LMock.FResponses[0].Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataRetryClient(LInner);
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(LReq);
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_OK, 'X-Early-Data:0 retry returns second');
+  Check(LMock.Calls=2, 'X-Early-Data:0 retry count 2');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1049,6 +1219,11 @@ begin
   GSuite.Test('HttpEarlyDataBridge', @TestHttpEarlyDataBridge);
   GSuite.Test('HttpRequestEarlyDataFlag', @TestHttpRequestEarlyDataFlag);
   GSuite.Test('HttpMiddlewareEarlyData', @TestHttpMiddlewareEarlyData);
+  GSuite.Test('HttpClientEarlyDataIdempotent', @TestHttpClientEarlyDataIdempotent);
+  GSuite.Test('HttpClientEarlyDataStatus', @TestHttpClientEarlyDataStatus);
+  GSuite.Test('HttpClientEarlyDataShouldRetry', @TestHttpClientEarlyDataShouldRetry);
+  GSuite.Test('HttpClientEarlyDataMarkAndClone', @TestHttpClientEarlyDataMarkAndClone);
+  GSuite.Test('HttpClientEarlyDataRetryClientLive', @TestHttpClientEarlyDataRetryClientLive);
   if not GSuite.Run then
     Halt(1);
 end.
