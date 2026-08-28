@@ -369,6 +369,23 @@ begin
     GAdaptiveMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
 end;
 
+procedure BenchAdaptiveMetricsFormat(aIters: Int64);
+var I: Int64; M: TTlsPasAdaptiveMetrics; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    M := GAdaptiveObserver.GetAdaptiveMetrics;
+    F := TlsPasFormatAdaptiveMetrics(M);
+  end;
+end;
+
+procedure BenchAdaptiveLogLine(aIters: Int64);
+var I: Int64; F: string;
+begin
+  for I := 1 to aIters do
+    F := HttpAdaptiveEarlyDataLogLine(GHttpReqEarly, GAdaptiveObserver);
+end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -522,6 +539,8 @@ begin
     .AddLoop('HttpMiddleware early-data', @BenchHttpMiddlewareEarlyData)
     .AddLoop('Adaptive IsThrottled', @BenchAdaptiveIsThrottled)
     .AddLoop('AdaptiveMiddleware', @BenchAdaptiveMiddleware)
+    .AddLoop('AdaptiveMetricsFormat', @BenchAdaptiveMetricsFormat)
+    .AddLoop('AdaptiveLogLine', @BenchAdaptiveLogLine)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

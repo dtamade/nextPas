@@ -1366,6 +1366,53 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure TestAdaptiveMetricsFormat;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; M: TTlsPasAdaptiveMetrics; F: string;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    M := Obs.GetAdaptiveMetrics;
+    Check(M.AdaptiveMax=16384, 'metrics max 16384');
+    Check(M.Server.Accepts=0, 'metrics server 0');
+    F := TlsPasFormatAdaptiveMetrics(M);
+    Check(Pos('adaptive max=16384', F)>0, 'format max');
+    Check(Pos('accepts=', F)>0, 'format accepts');
+    Check(Pos('hits=', F)>0, 'format hits');
+    // after one accept, metrics reflects
+    M.Server.Accepts := 5; M.Replay.Current := 51;
+    F := TlsPasFormatAdaptiveMetrics(M);
+    Check(Pos('adaptive max=', F)>0, 'format after server');
+  finally Obs.Free; end;
+end;
+
+procedure TestAdaptiveLogLine;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Cfg: TTlsPasAdaptiveLimitConfig;
+  LReqEarly, LReqLarge: IHttpRequest; LEarly: IHttpRequestWithEarlyData; F: string; LBody: TBytes;
+begin
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  Cfg.BaseLimit := 100; Cfg.MinLimit := 50; Cfg.MaxLimit := 100;
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store, Cfg);
+  try
+    LReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+    if Supports(LReqEarly, IHttpRequestWithEarlyData, LEarly) then LEarly.SetWasEarlyData(True);
+    F := HttpAdaptiveEarlyDataLogLine(LReqEarly, Obs);
+    Check(Pos('early=1', F)>0, 'log early 1');
+    Check(Pos('throttled=0', F)>0, 'log not throttled small');
+    Check(Pos('header=1', F)>0, 'log header 1 small');
+    SetLength(LBody, 110); FillChar(LBody[0], 110, $11);
+    LReqLarge := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, BytesStreamFrom(LBody), 110);
+    if Supports(LReqLarge, IHttpRequestWithEarlyData, LEarly) then LEarly.SetWasEarlyData(True);
+    F := HttpAdaptiveEarlyDataLogLine(LReqLarge, Obs);
+    Check(Pos('throttled=1', F)>0, 'log throttled large');
+    Check(Pos('header=0', F)>0, 'log header 0 large');
+    Check(Pos('max=100', F)>0, 'log max 100');
+    F := HttpAdaptiveEarlyDataLogLine(LReqEarly, nil);
+    Check(Pos('max=nil', F)>0, 'log nil max');
+  finally Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1421,6 +1468,8 @@ begin
   GSuite.Test('AdaptiveObserver', @TestAdaptiveObserver);
   GSuite.Test('AdaptiveDecidePure', @TestAdaptiveDecidePure);
   GSuite.Test('AdaptiveMiddleware', @TestAdaptiveMiddleware);
+  GSuite.Test('AdaptiveMetricsFormat', @TestAdaptiveMetricsFormat);
+  GSuite.Test('AdaptiveLogLine', @TestAdaptiveLogLine);
   if not GSuite.Run then
     Halt(1);
 end.
