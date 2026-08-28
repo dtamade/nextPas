@@ -1783,13 +1783,7 @@ begin
   try
     case ClassifyGlob(APattern, LPrefix, LSuffix) of
       gkEmpty: begin Result := True; Exit; end;
-      gkStar:
-      begin
-        SetLength(AExtracted, Length(FEntries));
-        for LI:=0 to High(FEntries) do
-        begin AExtracted[LI].Info := FEntries[LI]; AExtracted[LI].Data := Extract(LI); end;
-        Result := True; Exit;
-      end;
+      gkStar: begin AExtracted := ExtractAll; Result := True; Exit; end;
       gkExact:
       begin
         LIdx := Find(APattern);
