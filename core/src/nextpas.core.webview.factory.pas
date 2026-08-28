@@ -95,7 +95,9 @@ uses
   nextpas.core.webview.gtk.win,
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.webview2,
-  nextpas.core.webview.webview2.win;
+  nextpas.core.webview.webview2.win,
+  nextpas.core.webview.wk.loader,
+  nextpas.core.webview.wk;
 
 var
   GExitRequested: Boolean = False;
@@ -103,11 +105,13 @@ var
 function DefaultWebviewKind: TWebviewKind;
 begin
   { S18：能力驱动平台优先——wvWebview2（Windows/wine）优先于 wvGtk，
-    非对应平台探测自然失败，无 IFDEF。 }
+    非对应平台探测自然失败，无 IFDEF；S25 加入 wvWk（Darwin 桩）。 }
   if WebviewBackendAvailable(wvWebview2) then
     Result := wvWebview2
   else if WebviewBackendAvailable(wvGtk) then
     Result := wvGtk
+  else if WebviewBackendAvailable(wvWk) then
+    Result := wvWk
   else
     Result := wvFake;
 end;
@@ -116,13 +120,15 @@ function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
 var
   LInfo: TGtkLoadInfo;
   LW2: TWebView2LoadInfo;
+  LWk: TWkLoadInfo;
 begin
   case AKind of
     wvFake:      Result := True;
     wvGtk:       Result := TryLoadGtkWebkit(LInfo);   // 幂等缓存（S3 接入）
     wvWebview2:  Result := TryLoadWebView2(LW2);      // W2 探测（wine 亦经 platform.dl）
+    wvWk:        Result := TryLoadWk(LWk);            // W3 桩（Darwin 预留）
   else
-    Result := False;   // wvWk 波次接入
+    Result := False;
   end;
 end;
 
@@ -144,6 +150,7 @@ begin
     wvFake:     Result := CreateFakeWebview(AOptions);
     wvGtk:      Result := TGtkWebview.Create(AOptions);
     wvWebview2: Result := TWebView2Webview.Create(AOptions);
+    wvWk:       Result := TWkWebview.Create(AOptions);
   else
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is registered but has no factory yet', [
