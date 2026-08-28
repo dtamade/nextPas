@@ -777,6 +777,64 @@ begin
   Check(S.Count=1, 'factory kv 1');
 end;
 
+procedure TestServerDecide;
+var Store: ITlsPasReplayStore; Sess: TTlsPasResumptionSession; Id, Early: TBytes; D: TTlsPasEarlyDataDecision;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Sess := Default(TTlsPasResumptionSession);
+  Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+  SetLength(Id, 4); FillChar(Id[0], 4, $11);
+  SetLength(Early, 5); FillChar(Early[0], 5, $22);
+  // policy reject: Allow false -> not touch store
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, False);
+  Check(D = edRejectPolicy, 'policy reject Allow false');
+  Check(Store.Count=0, 'policy reject not inserted');
+  Check(not TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, False), 'should not accept policy');
+  Check(TlsPasEarlyDataDecisionToStr(edRejectPolicy)='reject_policy', 'toStr policy');
+  // policy reject: zero len
+  SetLength(Early, 0);
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, True);
+  Check(D = edRejectPolicy, 'policy reject zero len');
+  SetLength(Early, 5); FillChar(Early[0], 5, $22);
+  // first accept
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, True);
+  Check(D = edAccept, 'first accept');
+  Check(Store.Count=1, 'accept inserted');
+  Check(TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True) = False, 'second should not accept (replay)');
+  Check(TlsPasEarlyDataDecisionToStr(edAccept)='accept', 'toStr accept');
+  // second replay
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, True);
+  Check(D = edRejectReplay, 'second replay');
+  Check(TlsPasEarlyDataDecisionToStr(edRejectReplay)='reject_replay', 'toStr replay');
+  // different payload -> accept
+  Early[0] := $23;
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, True);
+  Check(D = edAccept, 'different payload accept');
+  Check(Store.Count=2, 'count 2');
+  // nil store -> always accept if policy ok
+  D := TlsPasServerDecideEarlyData(nil, Id, Early, Sess, True);
+  Check(D = edAccept, 'nil store accept');
+  Check(TlsPasServerShouldAcceptEarlyData(nil, Id, Early, Sess, True), 'nil should accept');
+  // policy fail with nil store still reject
+  Sess.HasMaxEarlyData := False;
+  D := TlsPasServerDecideEarlyData(nil, Id, Early, Sess, True);
+  Check(D = edRejectPolicy, 'nil store policy still reject');
+end;
+
+procedure TestServerShouldAcceptIntegration;
+var Store: ITlsPasReplayStore; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(4, 600000) as ITlsPasReplayStore;
+  Sess := Default(TTlsPasResumptionSession);
+  Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 500;
+  SetLength(Id, 4); FillChar(Id[0], 4, $55);
+  SetLength(Early, 10); FillChar(Early[0], 10, $66);
+  Check(TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True), '500/10 accept');
+  Check(not TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True), 'replay reject');
+  SetLength(Early, 501); FillChar(Early[0], 501, $66);
+  Check(not TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True), 'over max reject');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -813,6 +871,8 @@ begin
   GSuite.Test('ReplayFileStoreCorruption', @TestReplayFileStoreCorruption);
   GSuite.Test('ReplayKvStore', @TestReplayKvStore);
   GSuite.Test('ReplayFactory', @TestReplayFactory);
+  GSuite.Test('ServerDecide', @TestServerDecide);
+  GSuite.Test('ServerShouldAccept', @TestServerShouldAcceptIntegration);
   if not GSuite.Run then
     Halt(1);
 end.
