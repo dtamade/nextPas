@@ -33,7 +33,7 @@ function GitKindFromString(const AName: string): TGitObjectKind;
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
 function GitBytesToString(const ABytes: TBytes): string; inline;
-function GitStringToBytes(const AText: string): TBytes; inline;
+function GitStringToBytes(const S: string): TBytes; inline;
 
 implementation
 
@@ -120,7 +120,7 @@ begin
   raise EGitError.CreateFmt('unknown git object kind "%s"', [AName]);
 end;
 
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
+function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 begin
   // Directory entries (040000) point at trees, gitlinks (160000) at commits,
   // everything else (100644/100755/120000 regular/symlink) is blob content.
@@ -129,6 +129,24 @@ begin
   if AMode = $E000 then
     Exit(gokCommit);
   Result := gokBlob;
+end;
+
+function GitBytesToString(const ABytes: TBytes): string; inline;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(ABytes));
+  for I := 0 to High(ABytes) do
+    Result[I+1] := Chr(ABytes[I]);
+end;
+
+function GitStringToBytes(const S: string): TBytes; inline;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(S));
+  for I := 1 to Length(S) do
+    Result[I-1] := Byte(S[I]);
 end;
 
 end.
