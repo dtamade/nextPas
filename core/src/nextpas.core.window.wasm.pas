@@ -170,7 +170,7 @@ function TWindowWasmDispatcher.IsOnMainThread: Boolean; inline;
 begin Result := platform_thread_id = FOwnerThread; end;
 
 procedure TWindowWasmDispatcher.Post(AProc: TWindowProcRef);
-begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); DispatcherDrain; end;
+begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); end;
 
 procedure TWindowWasmDispatcher.Post(AProc: TWindowProcMethod);
 begin Post(WindowMethodToRef(AProc)); end;
@@ -322,6 +322,7 @@ begin
   FCanvasHandle := nil;
   UnregisterLive(Pointer(Self));
   if WasmLiveWindowCount = 0 then GLoopQuit := True;
+  if GWaitEvent<>nil then GWaitEvent.SetEvent;
 end;
 
 function TWindowWasm.IsOnMainThread: Boolean; inline;
@@ -467,8 +468,7 @@ begin
   begin
     DispatcherDrain;
     if WasmLiveWindowCount = 0 then Break;
-    // 事件驱动等待：由 DispatcherPush/SetEvent 唤醒，宿主侧 requestAnimationFrame 衔接
-    GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
+    GWaitEvent.Wait;
     if WasmLiveWindowCount = 0 then Break;
   end;
 end;

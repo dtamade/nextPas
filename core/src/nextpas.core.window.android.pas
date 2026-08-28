@@ -161,7 +161,7 @@ function TWindowAndroidDispatcher.IsOnMainThread: Boolean; inline;
 begin Result := platform_thread_id = FOwnerThread; end;
 
 procedure TWindowAndroidDispatcher.Post(AProc: TWindowProcRef);
-begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); DispatcherDrain; end;
+begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); end;
 
 procedure TWindowAndroidDispatcher.Post(AProc: TWindowProcMethod);
 begin Post(WindowMethodToRef(AProc)); end;
@@ -269,10 +269,10 @@ begin
   if FClosed then Exit;
   FClosed := True;
   FVisible := False;
-  // Do not destroy ANativeWindow* (host owns)
   FHandle := nil;
   UnregisterLive(Pointer(Self));
   if AndroidLiveWindowCount = 0 then GLoopQuit := True;
+  if GWaitEvent<>nil then GWaitEvent.SetEvent;
 end;
 
 function TWindowAndroid.IsOnMainThread: Boolean; inline;
@@ -393,8 +393,8 @@ begin
   begin
     DispatcherDrain;
     if AndroidLiveWindowCount = 0 then Break;
-    // 事件驱动等待：由 DispatcherPush/SetEvent 或宿主 Host* 唤醒，而非硬编码 sleep
-    GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
+    // 行业同行做法：Android Looper 阻塞于消息队列，Dispatcher/Host* 以 SetEvent 唤醒，无超时轮询
+    GWaitEvent.Wait;
     if AndroidLiveWindowCount = 0 then Break;
   end;
 end;

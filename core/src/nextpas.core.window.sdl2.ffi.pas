@@ -129,6 +129,8 @@ var
   SDL_GetWindowDisplayScale: function(win: PSDL_Window): Single; cdecl;
   SDL_GetWindowWMInfo: function(win: PSDL_Window; info: PSDL_SysWMinfo): SDL_bool; cdecl;
   SDL_PollEvent: function(evt: PSDL_Event): Int32; cdecl;
+  SDL_WaitEvent: function(evt: PSDL_Event): Int32; cdecl;
+  SDL_WaitEventTimeout: function(evt: PSDL_Event; timeout: Int32): Int32; cdecl;
   SDL_PushEvent: function(evt: PSDL_Event): Int32; cdecl;
   SDL_RegisterEvents: function(num: Int32): UInt32; cdecl;
 

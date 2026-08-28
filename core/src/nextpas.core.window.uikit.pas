@@ -156,7 +156,7 @@ function TWindowUIKitDispatcher.IsOnMainThread: Boolean; inline;
 begin Result := platform_thread_id = FOwnerThread; end;
 
 procedure TWindowUIKitDispatcher.Post(AProc: TWindowProcRef);
-begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); DispatcherDrain; end;
+begin if not Assigned(AProc) then Exit; DispatcherPush(AProc); end;
 
 procedure TWindowUIKitDispatcher.Post(AProc: TWindowProcMethod);
 begin Post(WindowMethodToRef(AProc)); end;
@@ -259,6 +259,7 @@ begin
   FHandle := nil;
   UnregisterLive(Pointer(Self));
   if UIKitLiveWindowCount = 0 then GLoopQuit := True;
+  if GWaitEvent<>nil then GWaitEvent.SetEvent;
 end;
 
 function TWindowUIKit.IsOnMainThread: Boolean; inline;
@@ -369,7 +370,7 @@ begin
   begin
     DispatcherDrain;
     if UIKitLiveWindowCount = 0 then Break;
-    GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
+    GWaitEvent.Wait;
     if UIKitLiveWindowCount = 0 then Break;
   end;
 end;
