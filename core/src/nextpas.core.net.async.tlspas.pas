@@ -30,10 +30,10 @@ unit nextpas.core.net.async.tlspas;
  *   X25519/P-256/P-384（首轮 X25519，遇 HelloRetryRequest 自动重试
  *   P-256/P-384，transcript 按 RFC 8446 §4.4.1 合成 message_hash；
  *   P-384 共享 48B、公钥 97B，走 SHA-384 路径）；
- *   PSK 会话恢复（单身份，NewSessionTicket 捕获，含 max_early_data
- *   票据纳入缓存仍走 1-RTT，0-RTT 数据面不做）已支持，HRR+PSK 组合
- *   binder 重算已覆盖；
- *   客户端证书（收到 CertificateRequest 即失败）仍未支持。
+ *   PSK 会话恢复（单身份，NewSessionTicket 捕获，max_early_data 入
+ *   缓存，AllowEarlyData+EarlyData 时 0-RTT 数据面已接通，EE 接受
+ *   判定与 HRR 互斥均已覆盖，未接受则回退 1-RTT）；HRR+PSK binder
+ *   重算已覆盖；客户端证书（收到 CertificateRequest 即失败）仍未支持。
  * - VerifyPeer=True：复用 tls.x509verify 全链验证（日期/签名/CA
  *   约束/路径长度/信任锚/主机名 SAN+通配符）+ CertificateVerify
  *   签名校验。信任锚来源 TrustBundlePath 显式指定，或空串时发现
@@ -151,6 +151,10 @@ type
       默认 False 零开销，行为与当前 1-RTT 完全一致。S6-keys 仅暴露
       开关与派生原语，数据面仍回退 1-RTT。 }
     AllowEarlyData: Boolean;
+    { 0-RTT 待发送早期数据（幂等请求体，如 GET）。仅当 AllowEarlyData=True
+      且票据有效且长度≤MaxEarlyDataSize 时随 CH 之后发送，仍走 1-RTT
+      回退语义；默认空不发。 }
+    EarlyData: TBytes;
   end;
 
   { 异步握手完成回调：AError=0 时 AStream 为就绪 TLS 流；失败时
@@ -584,6 +588,13 @@ type
     { ClientHello 握手消息体（transcript 首项，HRR 后更新为 CH2） }
     CHBody: TBytes;
     Transcript: TBytes;
+    { 0-RTT 早期数据：CH 含 early_data 时置 SentEarlyData，EE HasEarlyData 决定 Accepted }
+    SentEarlyData: Boolean;
+    EarlyDataAccepted: Boolean;
+    EarlySecrets: TTlsPasEarlyDataSecrets;
+    EarlySealer: TTLS13RecordSealer;
+    EarlySeq: QWord;
+    EarlyData: TBytes;
     Suite: Word;
     Secrets: TTLS13HandshakeSecrets;
     ServerFinKey: TBytes;
@@ -1177,6 +1188,9 @@ begin
   CancelHsTimer(ACtx);
   ClearTLS13HandshakeSecrets(ACtx^.Secrets);
   ClearTLS13ApplicationSecrets(ACtx^.AppSecrets);
+  TlsPasClearEarlyDataSecrets(ACtx^.EarlySecrets);
+  ACtx^.EarlySealer.Clear;
+  SecureZeroBytes(ACtx^.EarlyData);
   SecureZeroBytes(ACtx^.Priv);
   SecureZeroBytes(ACtx^.PrivP256);
   SecureZeroBytes(ACtx^.PrivP384);
@@ -1228,7 +1242,7 @@ begin
   LPostHsSeed := ACtx^.EncBuf;
   LStream := TTlsPasStream.Create(ACtx^.Suite, ACtx^.AppSecrets,
     ACtx^.Stream, ACtx^.Loop, LNetInSeed, LPostHsSeed,
-    ACtx^.Cache, ACtx^.ServerName, ACtx^.CachePort, ACtx^.PsksAccepted, ACtx^.HRRSeen);
+    ACtx^.Cache, ACtx^.ServerName, ACtx^.CachePort, ACtx^.PsksAccepted, ACtx^.HRRSeen, ACtx^.EarlyDataAccepted);
   ACtx^.Stream := nil;
   LCb := ACtx^.OnReady;
   LCbCtx := ACtx^.OnReadyCtx;
@@ -1272,6 +1286,12 @@ begin
   if TlsPasIsHRR(LInfo.ServerRandom) then
   begin
     if ACtx^.HRRSeen then
+    begin
+      TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
+      Exit;
+    end;
+    // S6-record：HRR 与 early_data 互斥，已发 early_data 遇到 HRR 直接 fail-closed
+    if ACtx^.SentEarlyData then
     begin
       TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
       Exit;
@@ -1661,12 +1681,24 @@ begin
               TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
-            { v1 不发 early_data：服务器宣称接受即协议错 }
+            { S6-record：early_data 接受判定。未发 early_data 却收到 EE early_data 视为协议错；
+              已发 early_data 时记录接受/拒绝，HRR 与 early_data 互斥（RFC 8446 §4.1.3）。 }
             if LEEInfo.HasEarlyData then
             begin
-              TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
-              Exit;
-            end;
+              if not ACtx^.SentEarlyData then
+              begin
+                TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
+                Exit;
+              end;
+              if ACtx^.HRRSeen then
+              begin
+                TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
+                Exit;
+              end;
+              ACtx^.EarlyDataAccepted := True;
+            end
+            else if ACtx^.SentEarlyData then
+              ACtx^.EarlyDataAccepted := False;
             ACtx^.SeenEncryptedExtensions := True;
             AppendBytesTo(ACtx^.Transcript, LMsg);
           end
@@ -2007,7 +2039,8 @@ end;
 procedure TlsPasHsStep(ACtx: Pointer);
 var
   LCtx: PTlsPasHsCtx;
-  LCHRecord: TBytes;
+  LCHRecord, LEarlyRecord: TBytes;
+  LErr: string;
 begin
   LCtx := PTlsPasHsCtx(ACtx);
   if (LCtx = nil) or LCtx^.Finished then
@@ -2017,6 +2050,21 @@ begin
   LCHRecord := BuildTLSPlaintext(TLS_CONTENT_TYPE_HANDSHAKE,
     LCtx^.CHBody);
   LCtx^.TxBytes := LCHRecord;
+  // S6-record：若已派生 early 密钥且携带 EarlyData，则紧跟 CH 之后以 early 密钥封装发送（仍走同一 Tx 冲刷）。
+  if LCtx^.SentEarlyData and (Length(LCtx^.EarlyData) > 0) and LCtx^.EarlySecrets.Valid then
+  begin
+    if LCtx^.EarlySealer.Seal(LCtx^.EarlyData, TLS_CONTENT_TYPE_APPLICATION_DATA, LEarlyRecord, LErr) then
+      AppendBytes(LCtx^.TxBytes, LEarlyRecord)
+    else
+    begin
+      // 封装失败：丢弃 EarlyData，保持 CH 仍可 1-RTT 握手，fail-open 仅丢早期数据
+      SecureZeroBytes(LCtx^.EarlyData);
+      SetLength(LCtx^.EarlyData, 0);
+    end;
+    // EarlyData 已封队即清原文（防残留）
+    SecureZeroBytes(LCtx^.EarlyData);
+    SetLength(LCtx^.EarlyData, 0);
+  end;
   LCtx^.TxOff := 0;
   LCtx^.State := hsRecvSH;
   TlsPasArmSend(LCtx);
@@ -2050,6 +2098,7 @@ begin
   Result.TrustBundlePath := '';
   Result.Cache := nil;
   Result.AllowEarlyData := False;
+  SetLength(Result.EarlyData, 0);
 end;
 
 { 0-RTT 薄封装：零分支透传至 keyschedule，不引入新密钥派生实现 }
@@ -2076,6 +2125,7 @@ var
   LPub: TBytes;
   LPartialCH: TBytes;
   LAllowEarly: Boolean;
+  LErr: string;
 begin
   New(Result);
   FillChar(Result^, SizeOf(Result^), 0);
@@ -2122,6 +2172,35 @@ begin
   except
     FreeHsCtxSilent(Result);
     raise;
+  end;
+  { 0-RTT 早期数据本地准备：仅当 CH 已带 early_data 且调用方提供了 EarlyData 时派生 early 密钥。
+    轻量一次性 HKDF，失败则静默回退 1-RTT（不中断握手，EarlyData 丢弃）。 }
+  Result^.SentEarlyData := LAllowEarly and AHasResume;
+  if Result^.SentEarlyData and (Length(AOptions.EarlyData) > 0) then
+  begin
+    if (Length(AOptions.EarlyData) <= Integer(AResumeSession.MaxEarlyDataSize))
+      and (Length(AOptions.EarlyData) <= 16384) then
+    begin
+      Result^.EarlyData := Copy(AOptions.EarlyData);
+      if TlsPasTryDeriveEarlyDataSecrets(AResumeSession.CipherSuite,
+        AResumeSession.ResumptionPSK, Result^.CHBody, Result^.EarlySecrets, LErr) then
+      begin
+        Result^.EarlySealer.Init(AResumeSession.CipherSuite,
+          Result^.EarlySecrets.ClientEarlyKey, Result^.EarlySecrets.ClientEarlyIV);
+        Result^.EarlySeq := 0;
+      end
+      else
+      begin
+        // 派生失败：丢弃 EarlyData，保持 SentEarlyData 但无加密能力（回退）
+        SecureZeroBytes(Result^.EarlyData);
+        SetLength(Result^.EarlyData, 0);
+      end;
+    end
+    else
+    begin
+      // 超限：不发 EarlyData，保留 CH early_data 扩展但无负载（服务端将拒绝）
+      SetLength(Result^.EarlyData, 0);
+    end;
   end;
   Result^.CH1Body := Copy(Result^.CHBody);
   if Length(Result^.CHBody) = 0 then

@@ -43,6 +43,7 @@ type
 { 能力探测（factory 持 loader 真相；base 不知道这些函数的存在） }
 function WindowBackendAvailable(AKind: TWindowKind): Boolean;
 function DefaultWindowKind: TWindowKind;
+function WindowBackendDiagnostics: string;
 
 { 按 kind 创建；不可用抛 EWindowBackendUnavailable }
 function CreateWindowOf(AKind: TWindowKind;
@@ -62,6 +63,7 @@ procedure WindowPumpAll;
 implementation
 
 uses
+  SysUtils,
   TypInfo,
   nextpas.core.platform.thread,
   nextpas.core.window.fake,
@@ -187,6 +189,42 @@ begin
   Result := wkFake;
 end;
 
+function WindowBackendDiagnostics: string;
+var
+  I: Integer;
+  LAvail: Boolean;
+  LLine: string;
+begin
+  InitBackends;
+  Result := '';
+  for I := Low(BACKENDS) to High(BACKENDS) do
+  begin
+    LAvail := False;
+    if Assigned(BACKENDS[I].Probe) then
+      try
+        LAvail := BACKENDS[I].Probe();
+      except
+        LAvail := False;
+      end;
+    LLine := Format('%s: %s', [
+      GetEnumName(TypeInfo(TWindowKind), Ord(BACKENDS[I].Kind)),
+      BoolToStr(LAvail, True)]);
+    case BACKENDS[I].Kind of
+      wkGtk: LLine := LLine + ' (sonames: libgtk-3.so.0, libgobject-2.0.so.0, libglib-2.0.so.0)';
+      wkSdl2: LLine := LLine + ' (soname: libSDL2.so)';
+      wkWin32: LLine := LLine + ' (sonames: user32.dll / libuser32)';
+      wkCocoa: LLine := LLine + ' (sonames: libobjc, libdispatch, AppKit)';
+      wkWasm: LLine := LLine + ' (sonames: env:emscripten_*)';
+      wkAndroid: LLine := LLine + ' (soname: libandroid.so / ANativeWindow)';
+      wkUIKit: LLine := LLine + ' (soname: UIKit / libobjc)';
+      wkFake: LLine := LLine + ' (builtin)';
+    end;
+    if Result <> '' then
+      Result := Result + LineEnding;
+    Result := Result + LLine;
+  end;
+end;
+
 function CreateFakeWindow(const AOptions: TWindowOptions): IWindow;
 begin
   CheckWindowOptions(AOptions);
@@ -201,7 +239,7 @@ begin
   CheckWindowOptions(AOptions);
   if not WindowBackendAvailable(AKind) then
     raise EWindowBackendUnavailable.CreateFmt(
-      'window backend "%s" is not available in this build', [
+      'window backend "%s" is not available in this build — call WindowBackendDiagnostics for sonames/probe details', [
       GetEnumName(TypeInfo(TWindowKind), Ord(AKind))]);
 
   if (AOptions.ParentHandle <> nil) and (AKind in [wkGtk, wkSdl2, wkWin32, wkCocoa]) then

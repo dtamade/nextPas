@@ -134,9 +134,15 @@ type
     ['{49511172-CC67-4BCA-9923-137112F4C4CC}']
     function Invoke(errorCode: HRESULT; resultObjectAsJson: PWideChar): HRESULT; stdcall;
   end;
+  ICoreWebView2WebMessageReceivedEventArgs = interface(IUnknown)
+    ['{E950C629-0D2B-4CC6-9580-7605C714A22D}']
+    function get_Source(out uri: PWSTR): HRESULT; stdcall;
+    function get_WebMessageAsJson(out webMessageAsJson: PWSTR): HRESULT; stdcall;
+    function TryGetWebMessageAsString(out webMessageAsString: PWSTR): HRESULT; stdcall;
+  end;
   ICoreWebView2WebMessageReceivedEventHandler = interface(IUnknown)
     ['{57213F19-00E6-49FA-8E07-898EA01ECBD2}']
-    function Invoke(sender: ICoreWebView2; args: IUnknown): HRESULT; stdcall;
+    function Invoke(sender: ICoreWebView2; args: ICoreWebView2WebMessageReceivedEventArgs): HRESULT; stdcall;
   end;
 
 type

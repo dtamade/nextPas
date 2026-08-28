@@ -1,19 +1,18 @@
 unit nextpas.core.webview.webview2;
 
-{** @desc Windows 后端桩（Wave 2 预备）。
+{** @desc Windows 后端（Wave 2）。
 
-       当前为“编译期占位 + 运行时不可用”语义：TryLoadWebView2 失败即
-       抛 EWebviewBackendUnavailable；成功路径预留 COM 窗口壳接入位，
-       与 gtk 后端同生命周期纪律（FSelfKeepAlive、Close 幂等、
-       Eval exactly-one、Dispatcher.Post 主线程等）但暂不实现真实
-       WebView2 controller——为 wine 交叉验证与源码契约冻结提供
-       可编译、可探测的锚点。
+       S18 桩 → S19 真窗口壳 → S20 壳满态（DPI/最小化/ScaleChanged）→
+       S21 真 controller 接线：CreateCoreWebView2EnvironmentWithOptions
+       异步链 → Controller → CoreWebView2 → ExecuteScript/Emit 映射 +
+       WebMessageReceived 桥分发 + AddScriptToExecuteOnDocumentCreated
+       注入（NPW_BRIDGE_SCRIPT），与 gtk 同协议语义（INV-2）。
 
-       后续真实实现接线位：
-       - WebView2Loader CreateCoreWebView2EnvironmentWithOptions
-       - ICoreWebView2Environment.CreateCoreWebView2Controller
-       - ExecuteScript / WebMessageReceived 桥接
-       本单元禁止直接 uses Windows 以保持 Linux 交叉编译。 *}
+       容错：TryLoad 失败抛 EWebviewBackendUnavailable；异步链错误码
+       非 S_OK 时静默保持 controller=nil，Eval / Navigate 诚实
+       EWebviewEvalFailed / no-op 回退，不崩；Close 时在途 Eval 以
+       onerr 收尾 exactly-once。Linux 交叉编译时 COM 链路为桩，
+       行为与 S20 一致。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -24,9 +23,17 @@ uses
   nextpas.core.base,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
-  nextpas.core.webview.bridge;
+  nextpas.core.webview.bridge,
+  nextpas.core.webview.webview2.ffi;
 
 type
+  PEvalRec = ^TEvalRec;
+  TEvalRec = record
+    Callback: TWebviewEvalCallback;
+    OnError: TWebviewEvalErrorCallback;
+    Done: Boolean;
+  end;
+
   TWebView2Webview = class(TInterfacedObject, IWebviewWindow, IWebviewDispatcher)
   private
     FOptions: TWebviewOptions;
@@ -34,11 +41,47 @@ type
     FWin: Pointer;
     FVisible: Boolean;
     FZoom: Double;
+    FScale: Double;
+    FReadyFired: Boolean;
+    FOwnerThread: UInt64;
+    FSelfKeepAlive: IInterface;
+    FInvokesIntf: IWebviewInvokeRegistry;
+    FInvokes: TObject;
+    FAssetsIntf: IWebviewAssets;
+    FAssets: TObject;
+    FPendingEvals: array of PEvalRec;
+    FOnNavStarted: array of TWebviewNavEventHandler;
+    FOnNavFinished: array of TWebviewNavEventHandler;
+    FOnNavFailed: array of TWebviewNavFailedHandler;
+    FOnWindowClosed: array of TWebviewNotifyHandler;
+    FOnReady: array of TWebviewNotifyHandler;
     FScaleHandlersRef: array of TWebviewScaleHandler;
     FScaleHandlersMethod: array of TWebviewScaleMethod;
     FScaleHandlersProc: array of TWebviewScaleProc;
+    {$IFDEF MSWINDOWS}
+    FEnv: ICoreWebView2Environment;
+    FController: ICoreWebView2Controller;
+    FWebView: ICoreWebView2;
+    FWebMessageToken: Int64;
+    FBridgeScriptId: WideString;
+    {$ENDIF}
+    procedure RequireOpen;
     procedure DoScaleChanged(ANewScale: Double);
     procedure EnsureScaleHook;
+    procedure EnsureResizeHook;
+    procedure UpdateControllerBounds;
+    procedure DispatchFrame(const AFrame: TWebviewFrame);
+    procedure SendReceipt(AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
+    procedure FireReadyOnce;
+    procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
+    procedure HandleNativeDestroy;
+    procedure TryCreateEnvironment;
+    {$IFDEF MSWINDOWS}
+    procedure OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
+    procedure OnControllerCreated(errorCode: LongInt; const ACtrl: ICoreWebView2Controller);
+    procedure OnWebMessageReceived(const AJson: string);
+    {$ENDIF}
+    class function MapInvokeCodeSafe(E: Exception): string; static;
   public
     constructor Create(const AOptions: TWebviewOptions);
     destructor Destroy; override;
@@ -47,7 +90,7 @@ type
     procedure Post(AProc: TWebviewProcMethod); overload;
     procedure Post(AProc: TWebviewProc); overload;
     function IsOnMainThread: Boolean;
-    { IWebviewWindow — 桩：除标题/几何本地回显外，其余抛 Closed 或不可用 }
+    { IWebviewWindow }
     procedure Close;
     function IsClosed: Boolean;
     procedure Show; procedure Hide; function IsVisible: Boolean;
@@ -95,21 +138,34 @@ function WebView2LiveWindowCount: Integer;
 implementation
 
 uses
+  nextpas.core.platform.thread,
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.webview2.win;
+
+{$IFDEF MSWINDOWS}
+procedure CoTaskMemFree(pv: Pointer); stdcall; external 'ole32.dll' name 'CoTaskMemFree';
+{$ENDIF}
 
 var
   GLive: Integer = 0;
   GLiveList: array of TWebView2Webview;
   GScaleHookInstalled: Boolean = False;
+  GResizeHookInstalled: Boolean = False;
 
 procedure GlobalWinScaleChanged(AWin: Pointer; AScale: Double);
-var
-  I: Integer;
+var I: Integer;
 begin
   for I := 0 to High(GLiveList) do
     if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
       GLiveList[I].DoScaleChanged(AScale);
+end;
+
+procedure GlobalWinResizeChanged(AWin: Pointer; AWidth, AHeight: Integer);
+var I: Integer;
+begin
+  for I := 0 to High(GLiveList) do
+    if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
+      GLiveList[I].UpdateControllerBounds;
 end;
 
 procedure RegisterLive(AInst: TWebView2Webview);
@@ -119,8 +175,7 @@ begin
 end;
 
 procedure UnregisterLive(AInst: TWebView2Webview);
-var
-  I, J: Integer;
+var I, J: Integer;
 begin
   for I := 0 to High(GLiveList) do
     if GLiveList[I] = AInst then
@@ -137,6 +192,404 @@ begin
   Result := GLive;
 end;
 
+{$IFDEF MSWINDOWS}
+type
+  TEnvCompletedHandler = class(TInterfacedObject, ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler)
+  private
+    FOwner: TWebView2Webview;
+  public
+    constructor Create(AOwner: TWebView2Webview);
+    function Invoke(errorCode: nextpas.core.webview.webview2.ffi.HRESULT; createdEnvironment: ICoreWebView2Environment): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+  end;
+
+  TControllerCompletedHandler = class(TInterfacedObject, ICoreWebView2CreateCoreWebView2ControllerCompletedHandler)
+  private
+    FOwner: TWebView2Webview;
+  public
+    constructor Create(AOwner: TWebView2Webview);
+    function Invoke(errorCode: nextpas.core.webview.webview2.ffi.HRESULT; createdController: ICoreWebView2Controller): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+  end;
+
+  TExecuteScriptHandler = class(TInterfacedObject, ICoreWebView2ExecuteScriptCompletedHandler)
+  private
+    FEval: PEvalRec;
+    FOwner: TWebView2Webview;
+  public
+    constructor Create(AOwner: TWebView2Webview; AEval: PEvalRec);
+    function Invoke(errorCode: nextpas.core.webview.webview2.ffi.HRESULT; resultObjectAsJson: PWideChar): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+  end;
+
+  TWebMessageHandler = class(TInterfacedObject, ICoreWebView2WebMessageReceivedEventHandler)
+  private
+    FOwner: TWebView2Webview;
+  public
+    constructor Create(AOwner: TWebView2Webview);
+    function Invoke(sender: ICoreWebView2; args: ICoreWebView2WebMessageReceivedEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+  end;
+{$ENDIF}
+
+type
+  TLocalInvokeCompletion = class(TInterfacedObject, IWebviewInvokeCompletion)
+  private
+    FOwner: TWebView2Webview;
+    FId: Int64;
+    FDone: Boolean;
+  public
+    constructor Create(AOwner: TWebView2Webview; AId: Int64);
+    procedure Ok(const AResultJson: string);
+    procedure Fail(const ACode, AMessage: string);
+  end;
+
+{$IFDEF MSWINDOWS}
+
+constructor TEnvCompletedHandler.Create(AOwner: TWebView2Webview);
+begin
+  inherited Create;
+  FOwner := AOwner;
+end;
+
+function TEnvCompletedHandler.Invoke(errorCode: nextpas.core.webview.webview2.ffi.HRESULT; createdEnvironment: ICoreWebView2Environment): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+begin
+  if (FOwner <> nil) and not FOwner.FClosed then
+    FOwner.OnEnvironmentCreated(errorCode, createdEnvironment);
+  Result := S_OK;
+end;
+
+constructor TControllerCompletedHandler.Create(AOwner: TWebView2Webview);
+begin
+  inherited Create;
+  FOwner := AOwner;
+end;
+
+function TControllerCompletedHandler.Invoke(errorCode: nextpas.core.webview.webview2.ffi.HRESULT; createdController: ICoreWebView2Controller): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+begin
+  if (FOwner <> nil) and not FOwner.FClosed then
+    FOwner.OnControllerCreated(errorCode, createdController);
+  Result := S_OK;
+end;
+
+constructor TExecuteScriptHandler.Create(AOwner: TWebView2Webview; AEval: PEvalRec);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FEval := AEval;
+end;
+
+function TExecuteScriptHandler.Invoke(errorCode: nextpas.core.webview.webview2.ffi.HRESULT; resultObjectAsJson: PWideChar): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+var
+  LText: string;
+  LOk: Boolean;
+  LErr: EWebviewEvalFailed;
+begin
+  Result := S_OK;
+  if FEval = nil then Exit;
+  if FEval^.Done then
+  begin
+    Dispose(FEval);
+    Exit;
+  end;
+  FEval^.Done := True;
+  try
+    if errorCode <> S_OK then
+    begin
+      LOk := False;
+      if resultObjectAsJson <> nil then
+        LText := string(WideString(resultObjectAsJson))
+      else
+        LText := 'WebView2 ExecuteScript failed';
+    end
+    else
+    begin
+      LOk := True;
+      if resultObjectAsJson <> nil then
+        LText := string(WideString(resultObjectAsJson))
+      else
+        LText := 'null';
+    end;
+    if LOk then
+    begin
+      if Assigned(FEval^.Callback) then
+        FEval^.Callback(LText);
+    end
+    else if Assigned(FEval^.OnError) then
+    begin
+      LErr := EWebviewEvalFailed.Create(LText);
+      try
+        FEval^.OnError(LErr);
+      finally
+        LErr.Free;
+      end;
+    end;
+  finally
+    Dispose(FEval);
+  end;
+end;
+
+constructor TWebMessageHandler.Create(AOwner: TWebView2Webview);
+begin
+  inherited Create;
+  FOwner := AOwner;
+end;
+
+function TWebMessageHandler.Invoke(sender: ICoreWebView2; args: ICoreWebView2WebMessageReceivedEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
+var
+  PW: PWideChar;
+  S: string;
+begin
+  Result := S_OK;
+  if (FOwner = nil) or FOwner.FClosed then Exit;
+  if args = nil then Exit;
+  PW := nil;
+  if args.get_WebMessageAsJson(PW) = S_OK then
+  begin
+    if PW <> nil then
+    begin
+      S := string(WideString(PW));
+      CoTaskMemFree(PW);
+    end
+    else
+      S := '';
+    // Post to handler via main thread dispatch is not needed: WebView2 already invokes on UI thread
+    FOwner.OnWebMessageReceived(S);
+  end
+  else if args.TryGetWebMessageAsString(PW) = S_OK then
+  begin
+    if PW <> nil then
+    begin
+      S := string(WideString(PW));
+      CoTaskMemFree(PW);
+    end
+    else
+      S := '';
+    FOwner.OnWebMessageReceived(S);
+  end;
+end;
+{$ENDIF}
+
+constructor TLocalInvokeCompletion.Create(AOwner: TWebView2Webview; AId: Int64);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FId := AId;
+end;
+
+procedure TLocalInvokeCompletion.Ok(const AResultJson: string);
+begin
+  if FDone then raise EWebviewInvalidState.Create('invoke completion already settled');
+  FDone := True;
+  FOwner.SendReceipt(FId, False, AResultJson, '', '');
+end;
+
+procedure TLocalInvokeCompletion.Fail(const ACode, AMessage: string);
+begin
+  if FDone then raise EWebviewInvalidState.Create('invoke completion already settled');
+  FDone := True;
+  FOwner.SendReceipt(FId, True, '', ACode, AMessage);
+end;
+
+class function TWebView2Webview.MapInvokeCodeSafe(E: Exception): string;
+begin
+  if E is EWebviewInvokeError then
+    Result := NormalizeInvokeCode(EWebviewInvokeError(E).Code)
+  else
+    Result := NPW_CODE_HANDLER_ERROR;
+end;
+
+procedure TWebView2Webview.RequireOpen;
+begin
+  if FClosed then
+    raise EWebviewClosed.Create('webview window is closed');
+end;
+
+procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
+var I: Integer;
+begin
+  for I := 0 to High(AList) do
+    AList[I]();
+end;
+
+procedure TWebView2Webview.FireReadyOnce;
+var I: Integer;
+begin
+  if FReadyFired or FClosed then Exit;
+  FReadyFired := True;
+  for I := 0 to High(FOnReady) do
+    FOnReady[I]();
+end;
+
+procedure TWebView2Webview.DoScaleChanged(ANewScale: Double);
+var I: Integer;
+begin
+  FScale := ANewScale;
+  for I := 0 to High(FScaleHandlersRef) do
+    if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](ANewScale);
+  for I := 0 to High(FScaleHandlersMethod) do
+    if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](ANewScale);
+  for I := 0 to High(FScaleHandlersProc) do
+    if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](ANewScale);
+end;
+
+procedure TWebView2Webview.EnsureScaleHook;
+begin
+  if GScaleHookInstalled then Exit;
+  GScaleHookInstalled := True;
+  Win32ShellOnScaleChanged(@GlobalWinScaleChanged);
+end;
+
+procedure TWebView2Webview.EnsureResizeHook;
+begin
+  if GResizeHookInstalled then Exit;
+  GResizeHookInstalled := True;
+  Win32ShellOnResize(@GlobalWinResizeChanged);
+end;
+
+procedure TWebView2Webview.UpdateControllerBounds;
+{$IFDEF MSWINDOWS}
+var
+  R: tagRECT;
+  W, H: Integer;
+begin
+  if FController = nil then Exit;
+  if FWin = nil then Exit;
+  if Win32ShellClientSize(FWin, W, H) then
+  begin
+    R.Left := 0;
+    R.Top := 0;
+    R.Right := W;
+    R.Bottom := H;
+    FController.put_Bounds(R);
+  end;
+end;
+{$ELSE}
+begin
+end;
+{$ENDIF}
+
+procedure TWebView2Webview.DispatchFrame(const AFrame: TWebviewFrame);
+var
+  LReg: TWebviewInvokeRegistry;
+  LIsAsync: Boolean;
+  LSync: TWebviewInvokeSyncHandler;
+  LAsync: TWebviewInvokeAsyncHandler;
+  LResultJson: string;
+  LCompletion: IWebviewInvokeCompletion;
+begin
+  RequireOpen;
+  LReg := TWebviewInvokeRegistry(FInvokes);
+  if not LReg.Find(AFrame.Cmd, LIsAsync, LSync, LAsync) then
+  begin
+    SendReceipt(AFrame.Id, True, '', NPW_CODE_HANDLER_MISSING, 'no handler registered for cmd');
+    Exit;
+  end;
+  if LIsAsync then
+  begin
+    LCompletion := TLocalInvokeCompletion.Create(Self, AFrame.Id);
+    try
+      LAsync(AFrame.PayloadJson, LCompletion);
+    except
+      on E: Exception do
+        SendReceipt(AFrame.Id, True, '', MapInvokeCodeSafe(E), E.Message);
+    end;
+  end
+  else
+  begin
+    try
+      LResultJson := LSync(AFrame.PayloadJson);
+      SendReceipt(AFrame.Id, False, LResultJson, '', '');
+    except
+      on E: Exception do
+        SendReceipt(AFrame.Id, True, '', MapInvokeCodeSafe(E), E.Message);
+    end;
+  end;
+end;
+
+procedure TWebView2Webview.SendReceipt(AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
+var
+  LJs: string;
+begin
+  if FClosed then Exit;
+  if AIsError then
+    LJs := BuildRejectScript(AFrameId, ACode, AMessage)
+  else
+    LJs := BuildResolveScript(AFrameId, AResultJson);
+  // fire-and-forget eval (no callback)
+  Eval(LJs, nil, nil);
+end;
+
+{$IFDEF MSWINDOWS}
+procedure TWebView2Webview.OnWebMessageReceived(const AJson: string);
+var
+  LFrame: TWebviewFrame;
+begin
+  if FClosed then Exit;
+  if TryDecodeFrame(AJson, LFrame) then
+    DispatchFrame(LFrame);
+end;
+
+procedure TWebView2Webview.OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
+var
+  LHandler: ICoreWebView2CreateCoreWebView2ControllerCompletedHandler;
+begin
+  if FClosed then Exit;
+  if (errorCode <> S_OK) or (AEnv = nil) then Exit;
+  FEnv := AEnv;
+  LHandler := TControllerCompletedHandler.Create(Self);
+  FEnv.CreateCoreWebView2Controller(FWin, LHandler);
+end;
+
+procedure TWebView2Webview.OnControllerCreated(errorCode: LongInt; const ACtrl: ICoreWebView2Controller);
+var
+  LWebView: ICoreWebView2;
+  LHandler: ICoreWebView2WebMessageReceivedEventHandler;
+  PW: PWSTR;
+begin
+  if FClosed then Exit;
+  if (errorCode <> S_OK) or (ACtrl = nil) then Exit;
+  FController := ACtrl;
+  if FController.get_CoreWebView2(LWebView) <> S_OK then Exit;
+  FWebView := LWebView;
+  // Make visible and bounds
+  FController.put_IsVisible(True);
+  UpdateControllerBounds;
+  // EnsureResizeHook already, update on resize via win hook
+  // Inject bridge script
+  FWebView.AddScriptToExecuteOnDocumentCreated(PWideChar(WideString(NPW_BRIDGE_SCRIPT)), PW);
+  if PW <> nil then
+  begin
+    FBridgeScriptId := WideString(PW);
+    CoTaskMemFree(PW);
+  end;
+  // WebMessageReceived
+  LHandler := TWebMessageHandler.Create(Self);
+  FWebView.add_WebMessageReceived(LHandler, FWebMessageToken);
+  // Default navigation if requested
+  if FOptions.DevServerUrl <> '' then
+  begin
+    Navigate(FOptions.DevServerUrl);
+  end
+  else if FOptions.InitialUrl <> '' then
+    Navigate(FOptions.InitialUrl)
+  else if FOptions.InitialHtml <> '' then
+    NavigateToString(FOptions.InitialHtml);
+  FireReadyOnce;
+end;
+{$ENDIF}
+
+procedure TWebView2Webview.TryCreateEnvironment;
+{$IFDEF MSWINDOWS}
+var
+  LHandler: ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler;
+begin
+  if FClosed then Exit;
+  if not Assigned(CreateCoreWebView2EnvironmentWithOptions) then Exit;
+  LHandler := TEnvCompletedHandler.Create(Self);
+  CreateCoreWebView2EnvironmentWithOptions(nil, nil, nil, LHandler);
+end;
+{$ELSE}
+begin
+end;
+{$ENDIF}
+
 constructor TWebView2Webview.Create(const AOptions: TWebviewOptions);
 var
   LInfo: TWebView2LoadInfo;
@@ -144,12 +597,17 @@ var
 begin
   CheckWebviewOptions(AOptions);
   if not TryLoadWebView2(LInfo) then
-    raise EWebviewBackendUnavailable.Create(
-      'WebView2 runtime not found (probed WebView2Loader.dll)');
+    raise EWebviewBackendUnavailable.Create('WebView2 runtime not found (probed WebView2Loader.dll)');
   FOptions := AOptions;
   FClosed := False;
   FZoom := 1.0;
+  FScale := 1.0;
   Inc(GLive);
+  FOwnerThread := platform_thread_id;
+  FInvokesIntf := TWebviewInvokeRegistry.Create;
+  FInvokes := FInvokesIntf as TObject;
+  FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
+  FAssets := FAssetsIntf as TObject;
   LGeo.Title := FOptions.Title;
   LGeo.Width := FOptions.Width;
   LGeo.Height := FOptions.Height;
@@ -157,10 +615,14 @@ begin
   LGeo.StartMaximized := FOptions.Maximized;
   FWin := Win32ShellCreate(LGeo);
   RegisterLive(Self);
-  { 真实 controller 创建位：Environment → Controller → WebView，
-    绑定 bridge 脚本、scheme、ExecuteScript 回调。当前桩已创建
-    原生 Win32 窗口（wine 可见），WebView2 controller 待 Edge
-    runtime 接线；RunLoop 侧由 Win32 消息泵驱动。 }
+  EnsureScaleHook;
+  EnsureResizeHook;
+  FSelfKeepAlive := Self;
+  TryCreateEnvironment;
+  if FOptions.InitialUrl = '' then
+  begin
+    // InitialHtml path handled after controller ready; if no controller, also try direct navigate fallback (will no-op until ready)
+  end;
 end;
 
 destructor TWebView2Webview.Destroy;
@@ -177,23 +639,12 @@ begin
   inherited Destroy;
 end;
 
-procedure TWebView2Webview.DoScaleChanged(ANewScale: Double);
-var
-  I: Integer;
+procedure TWebView2Webview.HandleNativeDestroy;
 begin
-  for I := 0 to High(FScaleHandlersRef) do
-    if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](ANewScale);
-  for I := 0 to High(FScaleHandlersMethod) do
-    if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](ANewScale);
-  for I := 0 to High(FScaleHandlersProc) do
-    if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](ANewScale);
-end;
-
-procedure TWebView2Webview.EnsureScaleHook;
-begin
-  if GScaleHookInstalled then Exit;
-  GScaleHookInstalled := True;
-  Win32ShellOnScaleChanged(@GlobalWinScaleChanged);
+  if FClosed then Exit;
+  FClosed := True;
+  FireNotifyHandlers(FOnWindowClosed);
+  FSelfKeepAlive := nil;
 end;
 
 procedure TWebView2Webview.Post(AProc: TWebviewProcRef);
@@ -210,34 +661,78 @@ begin
 end;
 function TWebView2Webview.IsOnMainThread: Boolean;
 begin
-  Result := True;
+  Result := platform_thread_id = FOwnerThread;
 end;
 
 procedure TWebView2Webview.Close;
+var
+  I: Integer;
+  LRec: PEvalRec;
+  LErr: EWebviewEvalFailed;
 begin
   if FClosed then Exit;
   FClosed := True;
+  for I := 0 to High(FPendingEvals) do
+  begin
+    LRec := FPendingEvals[I];
+    if not LRec^.Done then
+    begin
+      LRec^.Done := True;
+      if Assigned(LRec^.OnError) then
+      begin
+        LErr := EWebviewEvalFailed.Create('webview window is closed');
+        try
+          LRec^.OnError(LErr);
+        finally
+          LErr.Free;
+        end;
+      end;
+      Dispose(LRec);
+    end;
+  end;
+  FPendingEvals := nil;
+  FireNotifyHandlers(FOnWindowClosed);
   Dec(GLive);
   UnregisterLive(Self);
+  {$IFDEF MSWINDOWS}
+  if FWebView <> nil then
+  begin
+    if FWebMessageToken <> 0 then
+      FWebView.remove_WebMessageReceived(FWebMessageToken);
+    if FBridgeScriptId <> '' then
+      FWebView.RemoveScriptToExecuteOnDocumentCreated(PWideChar(FBridgeScriptId));
+  end;
+  if FController <> nil then
+    FController.Close;
+  FWebView := nil;
+  FController := nil;
+  FEnv := nil;
+  {$ENDIF}
   if FWin <> nil then
   begin
     Win32ShellDestroy(FWin);
     FWin := nil;
   end;
+  if GLive = 0 then
+    Win32ShellQuitMainLoop;
+  FSelfKeepAlive := nil;
 end;
+
 function TWebView2Webview.IsClosed: Boolean;
 begin
   Result := FClosed;
 end;
+
 procedure TWebView2Webview.Show;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   FVisible := True;
   if FWin <> nil then Win32ShellShow(FWin);
+  UpdateControllerBounds;
 end;
 procedure TWebView2Webview.Hide;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   FVisible := False;
   if FWin <> nil then Win32ShellHide(FWin);
 end;
@@ -249,49 +744,55 @@ begin
 end;
 procedure TWebView2Webview.Focus;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   if FWin <> nil then Win32ShellFocus(FWin);
 end;
 procedure TWebView2Webview.SetTitle(const ATitle: string);
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   FOptions.Title := ATitle;
   if FWin <> nil then Win32ShellSetTitle(FWin, ATitle);
 end;
 function TWebView2Webview.GetTitle: string;
 begin
+  RequireOpen;
   Result := FOptions.Title;
 end;
 procedure TWebView2Webview.SetBounds(AWidth, AHeight: Integer);
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   FOptions.Width := AWidth; FOptions.Height := AHeight;
   if FWin <> nil then Win32ShellResize(FWin, AWidth, AHeight);
+  UpdateControllerBounds;
 end;
 function TWebView2Webview.GetWidth: Integer;
 begin
+  RequireOpen;
   Result := FOptions.Width;
 end;
 function TWebView2Webview.GetHeight: Integer;
 begin
+  RequireOpen;
   Result := FOptions.Height;
 end;
 procedure TWebView2Webview.SetResizable(AResizable: Boolean);
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   FOptions.Resizable := AResizable;
 end;
 procedure TWebView2Webview.Maximize;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   FOptions.Maximized := True;
   if FWin <> nil then Win32ShellMaximize(FWin);
+  UpdateControllerBounds;
 end;
 procedure TWebView2Webview.Unmaximize;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   FOptions.Maximized := False;
   if FWin <> nil then Win32ShellUnmaximize(FWin);
+  UpdateControllerBounds;
 end;
 function TWebView2Webview.IsMaximized: Boolean;
 begin
@@ -300,13 +801,14 @@ begin
 end;
 procedure TWebView2Webview.Minimize;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   if FWin <> nil then Win32ShellMinimize(FWin);
 end;
 procedure TWebView2Webview.Restore;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   if FWin <> nil then Win32ShellRestore(FWin);
+  UpdateControllerBounds;
 end;
 function TWebView2Webview.IsMinimized: Boolean;
 begin
@@ -315,27 +817,40 @@ begin
 end;
 procedure TWebView2Webview.SetZoom(AFactor: Double);
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
   FZoom := AFactor;
+  {$IFDEF MSWINDOWS}
+  if FController <> nil then
+    FController.put_ZoomFactor(AFactor);
+  {$ENDIF}
 end;
 function TWebView2Webview.GetZoom: Double;
 begin
+  {$IFDEF MSWINDOWS}
+  if FController <> nil then
+  begin
+    if FController.get_ZoomFactor(FZoom) = S_OK then
+      Result := FZoom
+    else
+      Result := FZoom;
+    Exit;
+  end;
+  {$ENDIF}
   Result := FZoom;
 end;
 procedure TWebView2Webview.SetUserAgent(const AUserAgent: string);
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
-  FOptions.Title := FOptions.Title; // keep parity: UA is WebView2 Settings, noop until controller
-  // stored intent: future ICoreWebView2Settings.put_AreDefault... / custom UA via EnvironmentOptions
+  RequireOpen;
 end;
 function TWebView2Webview.GetUserAgent: string;
 begin
+  RequireOpen;
   Result := '';
 end;
 function TWebView2Webview.GetScaleFactor: Double;
 begin
   if FWin <> nil then Result := Win32ShellScaleFactor(FWin)
-  else Result := 1.0;
+  else Result := FScale;
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
@@ -360,58 +875,118 @@ begin
 end;
 procedure TWebView2Webview.Navigate(const AUrl: string);
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
+  {$IFDEF MSWINDOWS}
+  if FWebView <> nil then
+    FWebView.Navigate(PWideChar(WideString(AUrl)));
+  {$ENDIF}
 end;
 procedure TWebView2Webview.NavigateToString(const AHtml: string);
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
+  {$IFDEF MSWINDOWS}
+  if FWebView <> nil then
+    FWebView.NavigateToString(PWideChar(WideString(AHtml)));
+  {$ENDIF}
 end;
 procedure TWebView2Webview.Reload;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
+  {$IFDEF MSWINDOWS}
+  if FWebView <> nil then
+    FWebView.Reload;
+  {$ENDIF}
 end;
 procedure TWebView2Webview.Stop;
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
+  {$IFDEF MSWINDOWS}
+  if FWebView <> nil then
+    FWebView.Stop;
+  {$ENDIF}
 end;
 function TWebView2Webview.CanGoBack: Boolean;
+{$IFDEF MSWINDOWS}
+var B: BOOL;
+begin
+  if (FWebView <> nil) and (FWebView.get_CanGoBack(B) = S_OK) then
+    Result := B else Result := False;
+end;
+{$ELSE}
 begin
   Result := False;
 end;
+{$ENDIF}
 function TWebView2Webview.GoBack: Boolean;
 begin
-  Result := False;
+  Result := CanGoBack;
+  {$IFDEF MSWINDOWS}
+  if Result and (FWebView <> nil) then
+    FWebView.GoBack;
+  {$ENDIF}
 end;
 function TWebView2Webview.CanGoForward: Boolean;
+{$IFDEF MSWINDOWS}
+var B: BOOL;
+begin
+  if (FWebView <> nil) and (FWebView.get_CanGoForward(B) = S_OK) then
+    Result := B else Result := False;
+end;
+{$ELSE}
 begin
   Result := False;
 end;
+{$ENDIF}
 function TWebView2Webview.GoForward: Boolean;
 begin
-  Result := False;
+  Result := CanGoForward;
+  {$IFDEF MSWINDOWS}
+  if Result and (FWebView <> nil) then
+    FWebView.GoForward;
+  {$ENDIF}
 end;
 procedure TWebView2Webview.Eval(const AJavascript: string; ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
+{$IFDEF MSWINDOWS}
 var
+  LRec: PEvalRec;
+  LHandler: ICoreWebView2ExecuteScriptCompletedHandler;
   LErr: EWebviewEvalFailed;
 begin
-  if FClosed then
+  RequireOpen;
+  if FWebView = nil then
   begin
     if Assigned(AOnError) then
     begin
-      LErr := EWebviewEvalFailed.Create('closed');
+      LErr := EWebviewEvalFailed.Create('WebView2 not ready (controller pending)');
       try AOnError(LErr); finally LErr.Free; end;
     end;
     Exit;
   end;
+  New(LRec);
+  LRec^.Callback := ACallback;
+  LRec^.OnError := AOnError;
+  LRec^.Done := False;
+  SetLength(FPendingEvals, Length(FPendingEvals) + 1);
+  FPendingEvals[High(FPendingEvals)] := LRec;
+  LHandler := TExecuteScriptHandler.Create(Self, LRec);
+  FWebView.ExecuteScript(PWideChar(WideString(AJavascript)), LHandler);
+end;
+{$ELSE}
+var
+  LErr: EWebviewEvalFailed;
+begin
+  RequireOpen;
   if Assigned(AOnError) then
   begin
-    LErr := EWebviewEvalFailed.Create('WebView2 Eval not implemented (controller pending S21)');
+    LErr := EWebviewEvalFailed.Create('WebView2 Eval not available on this platform');
     try AOnError(LErr); finally LErr.Free; end;
   end;
 end;
+{$ENDIF}
 procedure TWebView2Webview.Emit(const AEvent, APayloadJson: string);
 begin
-  if FClosed then raise EWebviewClosed.Create('closed');
+  RequireOpen;
+  Eval(BuildEmitScript(AEvent, APayloadJson), nil, nil);
 end;
 function TWebView2Webview.GetDispatcher: IWebviewDispatcher;
 begin
@@ -424,56 +999,117 @@ begin
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
+  SetLength(FOnNavStarted, Length(FOnNavStarted) + 1);
+  FOnNavStarted[High(FOnNavStarted)] := AHandler;
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventMethod);
 begin
+  OnNavigationStarted(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventProc);
 begin
+  OnNavigationStarted(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
+  SetLength(FOnNavFinished, Length(FOnNavFinished) + 1);
+  FOnNavFinished[High(FOnNavFinished)] := AHandler;
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventMethod);
 begin
+  OnNavigationFinished(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventProc);
 begin
+  OnNavigationFinished(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
+  SetLength(FOnNavFailed, Length(FOnNavFailed) + 1);
+  FOnNavFailed[High(FOnNavFailed)] := AHandler;
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod);
 begin
+  OnNavigationFailed(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedProc);
 begin
+  OnNavigationFailed(
+    procedure(const AEvent: TWebviewNavigationEvent)
+    begin
+      AHandler(AEvent);
+    end);
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyHandler);
 begin
+  SetLength(FOnWindowClosed, Length(FOnWindowClosed) + 1);
+  FOnWindowClosed[High(FOnWindowClosed)] := AHandler;
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyMethod);
 begin
+  OnWindowClosed(
+    procedure
+    begin
+      AHandler();
+    end);
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyProc);
 begin
+  OnWindowClosed(
+    procedure
+    begin
+      AHandler();
+    end);
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
+  SetLength(FOnReady, Length(FOnReady) + 1);
+  FOnReady[High(FOnReady)] := AHandler;
+  if FReadyFired then AHandler();
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyMethod);
 begin
+  OnReady(
+    procedure
+    begin
+      AHandler();
+    end);
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyProc);
 begin
+  OnReady(
+    procedure
+    begin
+      AHandler();
+    end);
 end;
 function TWebView2Webview.GetInvokes: IWebviewInvokeRegistry;
 begin
-  Result := nil;
+  Result := FInvokesIntf;
 end;
 function TWebView2Webview.GetAssets: IWebviewAssets;
 begin
-  Result := nil;
+  Result := FAssetsIntf;
 end;
 
 end.
