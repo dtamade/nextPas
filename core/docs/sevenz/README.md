@@ -226,7 +226,7 @@ Archive := SevenZCreateWriterBuilder
 | Surface | Entry |
 |---------|-------|
 | Reader create | `TSevenZReaderImpl.Create(Bytes)` / `CreateWithPassword` / `CreateFromReader`(+`WithPassword`) |
-| Reader inspect | `EntryCount` / `Count` / `IsEmpty` / `Entry(I)` / `Items[I]` (`Reader[I]`) / `Entries` / `Find(Name)` / `FindIgnoreCase(Name)` / `Contains(Name)` / `TryGetEntry(Name,out Info)` / `TryEntryByName` / `EntryByName(Name)` / `for E in Reader do` |
+| Reader inspect | `EntryCount` / `Count` / `IsEmpty` / `Entry(I)` / `Items[I]` (`Reader[I]`) / `Entries` / `Find(Name)` / `FindIgnoreCase(Name)` / `Contains(Name)` / `ContainsIgnoreCase(Name)` / `TryGetEntry(Name,out Info)` / `TryEntryByName` / `TryGetEntryIgnoreCase(Name,out Info)` / `EntryByName(Name)` / `EntryByNameIgnoreCase(Name)` / `for E in Reader do` |
 | Reader extract | `Extract(I)` / `ExtractTo(W,I)` / `OpenStream(I)` / `TryExtract*` / `TryOpenStream*` |
 | Writer direct | `TSevenZWriterImpl.Create` → `AddFile*` / `AddFileFromReader*` / `AddDirectory*` → `SetFilters/SetLevel/SetMethod/SetPassword/SetFolderLimits/SetEncodeHeader/SetProgress` → `Finish`/`FinishTo` |
 | Writer builder | `SevenZCreateWriterBuilder` → chain `AddFile*`/ `WithFilters/WithLevel/WithMethod/WithPassword/WithFolderLimits/WithEncodeHeader/WithProgress` + `AddTree/AddTreeWithFilter/AddFileFromFs` → `Build`/`Finish`/`FinishTo` |
@@ -280,11 +280,11 @@ The encoder side is always pure Pascal today.
 ## Verification
 
 - Focused gate: `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test`
-  (137 tests: UTF conversion edge cases, FILETIME, LZMA2 round trips incl. stored-fallback
+  (140 tests: UTF conversion edge cases, FILETIME, LZMA2 round trips incl. stored-fallback
   and chunk-cap boundaries, backend switching, writer→reader container round
   trips, reader/writer error paths, Delta/Deflate/BZip2 vectors (zlib/raw dual path
   and p7zip BZip2 golden, zero-copy view stream, Deflate/BZip2 bomb via `ESevenZLimitError`), BCJ full-family round trips (x86/ARM/ARM64/PPC/IA64/SPARC/ARMT/RISCV),
-  `for..in` enumerator + `Count`/`Items`/`Entries`/`IsEmpty`/`Contains`/`TryGetEntry`/`TryEntryByName`/`EntryByName`/`FindIgnoreCase` + 2-entry LRU folder cache + `WithProgress` per-folder callback (zero overhead when nil, batched parallel aware) + header/pack/file-count/name NUL/binding bomb (`ESevenZLimitError`/`EArgumentError` at 64MiB header/pack, 8GiB total/unpack, 1M files/folders/pack streams/CRC, 1M coder props, 64KiB name, duplicate bind) + single-pass `Move+CRC` writer & `ExtractTo` reader (256KiB window, windowed CRC) + warnings 0,
+  `for..in` enumerator + `Count`/`Items`/`Entries`/`IsEmpty`/`Contains`/`ContainsIgnoreCase`/`TryGetEntry`/`TryEntryByName`/`TryGetEntryIgnoreCase`/`EntryByName`/`EntryByNameIgnoreCase`/`FindIgnoreCase` (zero-alloc ASCII fast path, non-ASCII fallback via `LowerCase`) + 2-entry LRU folder cache + `WithProgress` per-folder callback (zero overhead when nil, batched parallel aware) + header/pack/file-count/name NUL/binding bomb (`ESevenZLimitError`/`EArgumentError` at 64MiB header/pack, 8GiB total/unpack, 1M files/folders/pack streams/CRC, 1M coder props, 64KiB name, duplicate bind) + single-pass `Move+CRC` writer & `ExtractTo` reader (256KiB window, windowed CRC) + warnings 0,
   ExtractTo windowed writes, entry-stream semantics, synthesized kEncodedHeader archive round trip,
   writer filter chains: BCJ/Delta/two-stage and mixed-family round trips, zero-alloc Delta in-place, unified filter dispatch, Deflate/BZip2 writers via `SetMethod` (BZip2 via libbz2 mapped levels `1`/`9` + `30`, pure `nextpas.core.sevenz.levels` helpers), parallel folder encode (≥2 folders, `IsMultiThread` guarded, per-thread fresh LZMA encoder, AES serial), builder fluent API (`SevenZCreateWriterBuilder` chained, `AddTree`/`AddFileFromFs` federation) and `TryExtract` family (`TryExtractWithError`/`TryOpenStream` probes), byte-identical
   determinism, reset-to-default equality, depth validation (16), empty archive,

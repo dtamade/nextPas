@@ -86,12 +86,18 @@ type
     function FindIgnoreCase(const AName: string): Integer;
     {** 是否包含指定名称的条目 *}
     function Contains(const AName: string): Boolean;
+    {** 大小写不敏感是否包含 *}
+    function ContainsIgnoreCase(const AName: string): Boolean;
     {** 按名称查条目信息；存在返回 True 并填充 AInfo *}
     function TryGetEntry(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
     {** TryGetEntry 别名，语义一致 *}
     function TryEntryByName(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
+    {** 大小写不敏感按名称查条目信息 *}
+    function TryGetEntryIgnoreCase(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
     {** 按名称直接取条目信息；不存在抛 EArgumentError *}
     function EntryByName(const AName: string): TSevenZEntryInfo;
+    {** 大小写不敏感按名称直接取条目信息 *}
+    function EntryByNameIgnoreCase(const AName: string): TSevenZEntryInfo;
     function GetIsEmpty: Boolean;
     property IsEmpty: Boolean read GetIsEmpty;
     function GetEntries: TSevenZEntryInfoArray;

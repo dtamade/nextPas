@@ -2940,6 +2940,40 @@ begin
   Check(not LR.TryEntryByName('missing.txt', Info), 'tryentry miss');
 end;
 
+procedure TestReaderContainsIgnoreCase;
+var LW: ISevenZWriter; LR: ISevenZReader;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('Docs/ReadMe.TXT', BytesOf([$01]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Check(LR.ContainsIgnoreCase('docs/readme.txt'), 'contains ignore true');
+  Check(LR.ContainsIgnoreCase('DOCS/README.TXT'), 'contains ignore upper');
+  Check(not LR.ContainsIgnoreCase('missing.txt'), 'contains ignore miss');
+end;
+
+procedure TestReaderTryGetEntryIgnoreCase;
+var LW: ISevenZWriter; LR: ISevenZReader; Info: TSevenZEntryInfo;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a/B.txt', BytesOf([$02,$03]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Check(LR.TryGetEntryIgnoreCase('A/b.TXT', Info), 'tryget ignore found');
+  CheckEqual('a/B.txt', Info.Name, 'tryget ignore name');
+  Check(not LR.TryGetEntryIgnoreCase('missing', Info), 'tryget ignore miss');
+end;
+
+procedure TestReaderEntryByNameIgnoreCase;
+var LW: ISevenZWriter; LR: ISevenZReader; Info: TSevenZEntryInfo;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('Hello.TXT', BytesOf([$AA,$BB]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Info := LR.EntryByNameIgnoreCase('hello.txt');
+  CheckEqual('Hello.TXT', Info.Name, 'entrybyname ignore');
+  CheckEqual(Int64(2), Info.Size, 'entrybyname ignore size');
+  try LR.EntryByNameIgnoreCase('missing.txt'); Fail('missing ignore should raise'); except on E: EArgumentError do ; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3103,6 +3137,9 @@ begin
   T.Test('reader entries snapshot', @TestReaderEntries);
   T.Test('reader find ignore case', @TestReaderFindIgnoreCase);
   T.Test('reader try entry by name', @TestReaderTryEntryByName);
+  T.Test('reader contains ignore case', @TestReaderContainsIgnoreCase);
+  T.Test('reader try get entry ignore case', @TestReaderTryGetEntryIgnoreCase);
+  T.Test('reader entry by name ignore case', @TestReaderEntryByNameIgnoreCase);
 
   if not T.Run then Halt(1);
 end.

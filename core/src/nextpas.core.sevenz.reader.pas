@@ -55,9 +55,12 @@ type
     function Find(const AName: string): Integer;
     function FindIgnoreCase(const AName: string): Integer;
     function Contains(const AName: string): Boolean;
+    function ContainsIgnoreCase(const AName: string): Boolean;
     function TryGetEntry(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
     function TryEntryByName(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
+    function TryGetEntryIgnoreCase(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
     function EntryByName(const AName: string): TSevenZEntryInfo;
+    function EntryByNameIgnoreCase(const AName: string): TSevenZEntryInfo;
     function GetIsEmpty: Boolean;
     function GetEntries: TSevenZEntryInfoArray;
     function Extract(AIndex: Integer): TBytes;
@@ -631,24 +634,42 @@ begin
       Exit(LI);
 end;
 
+function AsciiLower(C: Char): Char; inline;
+begin
+  if (C >= 'A') and (C <= 'Z') then Result := Chr(Ord(C) + 32) else Result := C;
+end;
+
+function SameIgnoreCase(const A, B: string): Boolean; inline;
+var
+  LI: Integer;
+begin
+  if Length(A) <> Length(B) then Exit(False);
+  for LI := 1 to Length(A) do
+    if (Ord(A[LI]) > 127) or (Ord(B[LI]) > 127) then
+      Exit(LowerCase(A) = LowerCase(B));
+  for LI := 1 to Length(A) do
+    if AsciiLower(A[LI]) <> AsciiLower(B[LI]) then Exit(False);
+  Result := True;
+end;
+
 function TSevenZReaderImpl.FindIgnoreCase(const AName: string): Integer;
 var
   LI: Integer;
-  LA, LB: string;
 begin
   Result := -1;
-  LA := LowerCase(AName);
   for LI := 0 to Length(FEntries) - 1 do
-  begin
-    LB := LowerCase(FEntries[LI].Name);
-    if LB = LA then
+    if SameIgnoreCase(FEntries[LI].Name, AName) then
       Exit(LI);
-  end;
 end;
 
 function TSevenZReaderImpl.Contains(const AName: string): Boolean;
 begin
   Result := Find(AName) >= 0;
+end;
+
+function TSevenZReaderImpl.ContainsIgnoreCase(const AName: string): Boolean;
+begin
+  Result := FindIgnoreCase(AName) >= 0;
 end;
 
 function TSevenZReaderImpl.TryGetEntry(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
@@ -667,10 +688,30 @@ begin
   Result := TryGetEntry(AName, AInfo);
 end;
 
+function TSevenZReaderImpl.TryGetEntryIgnoreCase(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
+var LIdx: Integer;
+begin
+  LIdx := FindIgnoreCase(AName);
+  Result := LIdx >= 0;
+  if Result then
+    AInfo := FEntries[LIdx]
+  else
+    AInfo := Default(TSevenZEntryInfo);
+end;
+
 function TSevenZReaderImpl.EntryByName(const AName: string): TSevenZEntryInfo;
 var LIdx: Integer;
 begin
   LIdx := Find(AName);
+  if LIdx < 0 then
+    raise EArgumentError.CreateFmt('entry "%s" not found', [AName]);
+  Result := FEntries[LIdx];
+end;
+
+function TSevenZReaderImpl.EntryByNameIgnoreCase(const AName: string): TSevenZEntryInfo;
+var LIdx: Integer;
+begin
+  LIdx := FindIgnoreCase(AName);
   if LIdx < 0 then
     raise EArgumentError.CreateFmt('entry "%s" not found', [AName]);
   Result := FEntries[LIdx];
