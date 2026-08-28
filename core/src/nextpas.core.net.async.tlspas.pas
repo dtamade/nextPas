@@ -320,6 +320,7 @@ type
 function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
 function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string; overload;
 function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string; overload;
+function TlsPasFormatPrometheusMetricsWithLabels(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): string;
 
 type
   { S20 自适应服务端观察器：基于 Observer 统计动态计算自适应限额并在超限时熔断(RejectPolicy)，
@@ -351,6 +352,29 @@ function TlsPasAdaptiveDecideEarlyData(const AObserver: TAsyncTlsPasServerObserv
   const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
 function TlsPasAdaptiveShouldAcceptEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
   const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+
+{ S26: Prometheus Registry 多实例聚集 + 配置驱动 }
+type
+  TAsyncTlsPasPrometheusRegistry = class
+  private
+    FMutex: TPlatformMutex;
+    FNames: array of string;
+    FObservers: array of TAsyncTlsPasAdaptiveObserver;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Register(const AName: string; AObserver: TAsyncTlsPasAdaptiveObserver);
+    procedure Unregister(const AName: string);
+    function FormatAllMetrics: string; overload;
+    function FormatAllMetrics(const APrefix: string): string; overload;
+    function FormatAllMetricsWithLabels(const APrefix: string): string;
+    function Count: Integer;
+    procedure Clear;
+  end;
+
+function TlsPasTryLoadAdaptiveConfigFromEnv(out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
+function TlsPasTryLoadAdaptiveConfigFromFile(const APath: string; out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
+function TlsPasAdaptiveConfigFromEnvOrDefault: TTlsPasAdaptiveLimitConfig;
 
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
@@ -443,6 +467,7 @@ uses
   nextpas.core.errors,
   nextpas.core.system.sysutils,
   nextpas.core.encoding.base64,
+  nextpas.core.os.env,
   nextpas.core.atomic,
   nextpas.core.bytes,
   nextpas.core.mem,
@@ -1367,6 +1392,52 @@ begin
      P,P,P,AMetrics.Replay.Current]);
 end;
 
+function TlsPasFormatPrometheusMetricsWithLabels(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): string;
+var P, L: string;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  if ALabels = '' then
+    Exit(TlsPasFormatPrometheusMetrics(AMetrics, P));
+  L := ALabels;
+  Result :=
+    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+           '# TYPE %s_adaptive_max gauge'#10 +
+           '%s_adaptive_max{%s} %d'#10 +
+           '# HELP %s_server_accepts Total accepted early_data'#10 +
+           '# TYPE %s_server_accepts counter'#10 +
+           '%s_server_accepts{%s} %d'#10 +
+           '# HELP %s_server_reject_policy Total rejected by policy'#10 +
+           '# TYPE %s_server_reject_policy counter'#10 +
+           '%s_server_reject_policy{%s} %d'#10 +
+           '# HELP %s_server_reject_replay Total rejected by replay'#10 +
+           '# TYPE %s_server_reject_replay counter'#10 +
+           '%s_server_reject_replay{%s} %d'#10 +
+           '# HELP %s_replay_hits Replay cache hits'#10 +
+           '# TYPE %s_replay_hits counter'#10 +
+           '%s_replay_hits{%s} %d'#10 +
+           '# HELP %s_replay_misses Replay cache misses'#10 +
+           '# TYPE %s_replay_misses counter'#10 +
+           '%s_replay_misses{%s} %d'#10 +
+           '# HELP %s_replay_evictions Replay cache evictions'#10 +
+           '# TYPE %s_replay_evictions counter'#10 +
+           '%s_replay_evictions{%s} %d'#10 +
+           '# HELP %s_replay_expiries Replay cache expiries'#10 +
+           '# TYPE %s_replay_expiries counter'#10 +
+           '%s_replay_expiries{%s} %d'#10 +
+           '# HELP %s_replay_current Current replay window size'#10 +
+           '# TYPE %s_replay_current gauge'#10 +
+           '%s_replay_current{%s} %d'#10,
+    [P,P,P,L,Integer(AMetrics.AdaptiveMax),
+     P,P,P,L,AMetrics.Server.Accepts,
+     P,P,P,L,AMetrics.Server.RejectPolicy,
+     P,P,P,L,AMetrics.Server.RejectReplay,
+     P,P,P,L,AMetrics.Replay.Hits,
+     P,P,P,L,AMetrics.Replay.Misses,
+     P,P,P,L,AMetrics.Replay.Evictions,
+     P,P,P,L,AMetrics.Replay.Expiries,
+     P,P,P,L,AMetrics.Replay.Current]);
+end;
+
 procedure TAsyncTlsPasAdaptiveObserver.Clear;
 begin
   FInner.Clear;
@@ -1377,6 +1448,201 @@ begin
   platform_mutex_lock(FConfigMutex);
   FConfig := AConfig;
   platform_mutex_unlock(FConfigMutex);
+end;
+
+{ ===== S26 Prometheus Registry + Config ===== }
+
+constructor TAsyncTlsPasPrometheusRegistry.Create;
+begin
+  inherited Create;
+  if platform_mutex_init(FMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: prometheus registry mutex');
+end;
+
+destructor TAsyncTlsPasPrometheusRegistry.Destroy;
+begin
+  platform_mutex_destroy(FMutex);
+  inherited Destroy;
+end;
+
+procedure TAsyncTlsPasPrometheusRegistry.Register(const AName: string; AObserver: TAsyncTlsPasAdaptiveObserver);
+var I: Integer;
+begin
+  if (AName = '') or (AObserver = nil) then Exit;
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FNames) do
+      if FNames[I] = AName then
+      begin
+        FObservers[I] := AObserver;
+        Exit;
+      end;
+    SetLength(FNames, Length(FNames)+1);
+    SetLength(FObservers, Length(FObservers)+1);
+    FNames[High(FNames)] := AName;
+    FObservers[High(FObservers)] := AObserver;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasPrometheusRegistry.Unregister(const AName: string);
+var I, J: Integer;
+begin
+  if AName = '' then Exit;
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FNames) do
+      if FNames[I] = AName then
+      begin
+        for J := I to High(FNames)-1 do
+        begin
+          FNames[J] := FNames[J+1];
+          FObservers[J] := FObservers[J+1];
+        end;
+        SetLength(FNames, Length(FNames)-1);
+        SetLength(FObservers, Length(FObservers)-1);
+        Exit;
+      end;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasPrometheusRegistry.Count: Integer;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    Result := Length(FNames);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasPrometheusRegistry.Clear;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    SetLength(FNames, 0);
+    SetLength(FObservers, 0);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetrics: string;
+begin
+  Result := FormatAllMetrics('nextpas_tlspas');
+end;
+
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetrics(const APrefix: string): string;
+begin
+  Result := FormatAllMetricsWithLabels(APrefix);
+end;
+
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetricsWithLabels(const APrefix: string): string;
+var I: Integer; LNames: array of string; LObs: array of TAsyncTlsPasAdaptiveObserver; L: string; P: string;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  platform_mutex_lock(FMutex);
+  try
+    LNames := System.Copy(FNames, 0, Length(FNames));
+    LObs := System.Copy(FObservers, 0, Length(FObservers));
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+  Result := '';
+  for I := 0 to High(LNames) do
+  begin
+    if LObs[I] = nil then Continue;
+    L := Format('observer="%s"', [LNames[I]]);
+    Result := Result + TlsPasFormatPrometheusMetricsWithLabels(LObs[I].GetAdaptiveMetrics, P, L) + #10;
+  end;
+end;
+
+function TlsPasAdaptiveConfigFromEnvOrDefault: TTlsPasAdaptiveLimitConfig;
+begin
+  if not TlsPasTryLoadAdaptiveConfigFromEnv(Result) then
+    Result := DefaultTlsPasAdaptiveLimitConfig;
+end;
+
+function TlsPasTryLoadAdaptiveConfigFromEnv(out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
+var S: string; V: Integer; D: Double; Has: Boolean;
+begin
+  AConfig := DefaultTlsPasAdaptiveLimitConfig;
+  Has := False;
+  if TryGetEnv('NEXTPAS_TLSPAS_BASE_LIMIT', S) and (S <> '') then
+  begin
+    V := StrToIntDef(S, -1);
+    if V > 0 then begin AConfig.BaseLimit := Cardinal(V); Has := True; end;
+  end;
+  if TryGetEnv('NEXTPAS_TLSPAS_MIN_LIMIT', S) and (S <> '') then
+  begin
+    V := StrToIntDef(S, -1);
+    if V > 0 then begin AConfig.MinLimit := Cardinal(V); Has := True; end;
+  end;
+  if TryGetEnv('NEXTPAS_TLSPAS_MAX_LIMIT', S) and (S <> '') then
+  begin
+    V := StrToIntDef(S, -1);
+    if V > 0 then begin AConfig.MaxLimit := Cardinal(V); Has := True; end;
+  end;
+  if TryGetEnv('NEXTPAS_TLSPAS_REJECT_RATE', S) and (S <> '') then
+  begin
+    // invariant '.' parser to avoid locale comma issue
+    S := StringReplace(S, ',', '.', [rfReplaceAll]);
+    D := StrToFloatDef(S, -1);
+    if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end;
+  end;
+  if Has then
+  begin
+    if AConfig.MinLimit > AConfig.MaxLimit then AConfig.MinLimit := AConfig.MaxLimit;
+    if AConfig.BaseLimit < AConfig.MinLimit then AConfig.BaseLimit := AConfig.MinLimit;
+    if AConfig.BaseLimit > AConfig.MaxLimit then AConfig.BaseLimit := AConfig.MaxLimit;
+  end;
+  Result := Has;
+end;
+
+function TlsPasTryLoadAdaptiveConfigFromFile(const APath: string; out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
+var F: TextFile; Line, Key, Val: string; P: Integer; Has: Boolean; V: Integer; D: Double;
+begin
+  AConfig := DefaultTlsPasAdaptiveLimitConfig;
+  Result := False;
+  Has := False;
+  if (APath = '') or not FileExists(APath) then Exit;
+  AssignFile(F, APath);
+  try
+    Reset(F);
+    while not Eof(F) do
+    begin
+      ReadLn(F, Line);
+      Line := Trim(Line);
+      if (Line = '') or (Line[1] = '#') then Continue;
+      P := Pos('=', Line);
+      if P = 0 then Continue;
+      Key := Trim(System.Copy(Line, 1, P-1));
+      Val := Trim(System.Copy(Line, P+1, MaxInt));
+      if Key = '' then Continue;
+      if (Key = 'base') or (Key = 'BaseLimit') or (Key = 'NEXTPAS_TLSPAS_BASE_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.BaseLimit := Cardinal(V); Has := True; end; end
+      else if (Key = 'min') or (Key = 'MinLimit') or (Key = 'NEXTPAS_TLSPAS_MIN_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MinLimit := Cardinal(V); Has := True; end; end
+      else if (Key = 'max') or (Key = 'MaxLimit') or (Key = 'NEXTPAS_TLSPAS_MAX_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MaxLimit := Cardinal(V); Has := True; end; end
+      else if (Key = 'threshold') or (Key = 'RejectRateThreshold') or (Key = 'NEXTPAS_TLSPAS_REJECT_RATE') then
+      begin Val := StringReplace(Val, ',', '.', [rfReplaceAll]); D := StrToFloatDef(Val, -1); if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end; end;
+    end;
+    CloseFile(F);
+  except
+    try CloseFile(F); except end;
+    Exit(False);
+  end;
+  if Has then
+  begin
+    if AConfig.MinLimit > AConfig.MaxLimit then AConfig.MinLimit := AConfig.MaxLimit;
+    if AConfig.BaseLimit < AConfig.MinLimit then AConfig.BaseLimit := AConfig.MinLimit;
+    if AConfig.BaseLimit > AConfig.MaxLimit then AConfig.BaseLimit := AConfig.MaxLimit;
+  end;
+  Result := Has;
 end;
 
 constructor TAsyncTlsPasReplayCache.Create;
