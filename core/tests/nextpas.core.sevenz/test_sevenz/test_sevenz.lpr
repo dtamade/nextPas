@@ -3139,6 +3139,63 @@ begin
   CheckEqual(Int64(0), Int64(Length(Arr)), 'empty suffix on empty archive');
 end;
 
+procedure TestFindByPrefixSuffix;
+var LW: ISevenZWriter; LR: ISevenZReader;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('docs/a.txt', BytesOf([$01]));
+  LW.AddFile('docs/b.txt', BytesOf([$02]));
+  LW.AddFile('src/x.pas', BytesOf([$03]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  CheckEqual(Int64(0), Int64(LR.FindByPrefix('docs/')), 'findbyprefix docs');
+  CheckEqual(Int64(2), Int64(LR.FindByPrefix('src/')), 'findbyprefix src');
+  CheckEqual(Int64(-1), Int64(LR.FindByPrefix('missing/')), 'findbyprefix miss');
+  Check(LR.FindBySuffix('.txt') >= 0, 'findbysuffix txt');
+  CheckEqual(Int64(2), Int64(LR.FindBySuffix('.pas')), 'findbysuffix pas');
+  CheckEqual(Int64(-1), Int64(LR.FindBySuffix('.missing')), 'findbysuffix miss');
+  CheckEqual(Int64(0), Int64(LR.FindByPrefix('')), 'findbyprefix empty');
+  CheckEqual(Int64(0), Int64(LR.FindBySuffix('')), 'findbysuffix empty');
+end;
+
+procedure TestEntriesByGlob;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('b.txt', BytesOf([$02]));
+  LW.AddFile('c.pas', BytesOf([$03]));
+  LW.AddFile('docs/d.txt', BytesOf([$04]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByGlob('*.txt');
+  CheckEqual(Int64(3), Int64(Length(Arr)), 'glob *.txt count');
+  Arr := LR.EntriesByGlob('*.pas');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'glob *.pas');
+  Arr := LR.EntriesByGlob('docs/*');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'glob docs/*');
+  Arr := LR.EntriesByGlob('*');
+  CheckEqual(Int64(4), Int64(Length(Arr)), 'glob * all');
+  Arr := LR.EntriesByGlob('?.txt');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'glob ?.txt');
+  Arr := LR.EntriesByGlob('*.missing');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'glob miss');
+end;
+
+procedure TestGlobEdge;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByGlob('');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'glob empty');
+  Arr := LR.EntriesByGlob('a.txt');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'glob exact');
+  LW := TSevenZWriterImpl.Create;
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByGlob('*');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'glob * empty archive');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3314,6 +3371,9 @@ begin
   T.Test('entries by prefix sorted', @TestEntriesByPrefixSorted);
   T.Test('entries by suffix', @TestEntriesBySuffix);
   T.Test('suffix prefix edge', @TestSuffixPrefixEdge);
+  T.Test('find by prefix suffix', @TestFindByPrefixSuffix);
+  T.Test('entries by glob', @TestEntriesByGlob);
+  T.Test('glob edge', @TestGlobEdge);
 
   if not T.Run then Halt(1);
 end.

@@ -212,9 +212,13 @@ type
     FOptions: TWebviewOptions;
     FKind: TWebviewKind;
     FInvokes: array of TFakeInvokeReg;
+    FInvokesLen: Integer;
     FReady: array of TWebviewNotifyHandler;
+    FReadyLen: Integer;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
     procedure EnsureUniqueCmd(const ACmd: string);
+    procedure GrowInvokes;
+    procedure GrowReady;
   public
     constructor Create;
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
@@ -262,6 +266,8 @@ end;
 
 function TBuilderImpl.Size(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
+  if (AWidth < 0) or (AHeight < 0) then
+    raise EWebviewInvalidState.Create('Width/Height must be >= 0');
   FOptions.Width := AWidth;
   FOptions.Height := AHeight;
   Result := Self;
@@ -269,6 +275,12 @@ end;
 
 function TBuilderImpl.MinSize(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
+  if (AWidth < 0) or (AHeight < 0) then
+    raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
+  if (AWidth > 0) and (FOptions.MaxWidth > 0) and (AWidth > FOptions.MaxWidth) then
+    raise EWebviewInvalidState.Create('MinWidth must be <= MaxWidth');
+  if (AHeight > 0) and (FOptions.MaxHeight > 0) and (AHeight > FOptions.MaxHeight) then
+    raise EWebviewInvalidState.Create('MinHeight must be <= MaxHeight');
   FOptions.MinWidth := AWidth;
   FOptions.MinHeight := AHeight;
   Result := Self;
@@ -276,6 +288,12 @@ end;
 
 function TBuilderImpl.MaxSize(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
+  if (AWidth < 0) or (AHeight < 0) then
+    raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
+  if (FOptions.MinWidth > 0) and (AWidth > 0) and (AWidth < FOptions.MinWidth) then
+    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
+  if (FOptions.MinHeight > 0) and (AHeight > 0) and (AHeight < FOptions.MinHeight) then
+    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
   FOptions.MaxWidth := AWidth;
   FOptions.MaxHeight := AHeight;
   Result := Self;
@@ -301,6 +319,9 @@ end;
 
 function TBuilderImpl.Scheme(const ASchemeName: string): IWebviewBuilder; inline;
 begin
+  if (ASchemeName <> '') and not IsValidWebviewSchemeToken(ASchemeName) then
+    raise EWebviewInvalidState.CreateFmt(
+      'SchemeName "%s" is not a valid lowercase scheme token', [ASchemeName]);
   FOptions.SchemeName := ASchemeName;
   Result := Self;
 end;
@@ -339,10 +360,26 @@ begin
   Result := Self;
 end;
 
+procedure TBuilderImpl.GrowInvokes;
+var NC: Integer;
+begin
+  NC := Length(FInvokes);
+  if NC = 0 then NC := 4 else NC := NC * 2;
+  SetLength(FInvokes, NC);
+end;
+
+procedure TBuilderImpl.GrowReady;
+var NC: Integer;
+begin
+  NC := Length(FReady);
+  if NC = 0 then NC := 4 else NC := NC * 2;
+  SetLength(FReady, NC);
+end;
+
 procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string);
 var I: Integer;
 begin
-  for I := 0 to High(FInvokes) do
+  for I := 0 to FInvokesLen - 1 do
     if FInvokes[I].Cmd = ACmd then
       raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
 end;
@@ -354,10 +391,11 @@ begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('invoke handler must not be nil: %s', [ACmd]);
   EnsureUniqueCmd(ACmd);
-  SetLength(FInvokes, Length(FInvokes) + 1);
-  FInvokes[High(FInvokes)].Cmd := ACmd;
-  FInvokes[High(FInvokes)].Sync := AHandler;
-  FInvokes[High(FInvokes)].IsAsync := False;
+  if FInvokesLen = Length(FInvokes) then GrowInvokes;
+  FInvokes[FInvokesLen].Cmd := ACmd;
+  FInvokes[FInvokesLen].Sync := AHandler;
+  FInvokes[FInvokesLen].IsAsync := False;
+  Inc(FInvokesLen);
   Result := Self;
 end;
 
@@ -368,10 +406,11 @@ begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('async invoke handler must not be nil: %s', [ACmd]);
   EnsureUniqueCmd(ACmd);
-  SetLength(FInvokes, Length(FInvokes) + 1);
-  FInvokes[High(FInvokes)].Cmd := ACmd;
-  FInvokes[High(FInvokes)].Async := AHandler;
-  FInvokes[High(FInvokes)].IsAsync := True;
+  if FInvokesLen = Length(FInvokes) then GrowInvokes;
+  FInvokes[FInvokesLen].Cmd := ACmd;
+  FInvokes[FInvokesLen].Async := AHandler;
+  FInvokes[FInvokesLen].IsAsync := True;
+  Inc(FInvokesLen);
   Result := Self;
 end;
 
@@ -379,8 +418,9 @@ function TBuilderImpl.OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
 begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.Create('OnReady handler must not be nil');
-  SetLength(FReady, Length(FReady) + 1);
-  FReady[High(FReady)] := AHandler;
+  if FReadyLen = Length(FReady) then GrowReady;
+  FReady[FReadyLen] := AHandler;
+  Inc(FReadyLen);
   Result := Self;
 end;
 
@@ -406,14 +446,14 @@ function TBuilderImpl.ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
 var
   I: Integer;
 begin
-  for I := 0 to High(FInvokes) do
+  for I := 0 to FInvokesLen - 1 do
   begin
     if FInvokes[I].IsAsync then
       AWin.Invokes.RegisterAsync(FInvokes[I].Cmd, FInvokes[I].Async)
     else
       AWin.Invokes.Register(FInvokes[I].Cmd, FInvokes[I].Sync);
   end;
-  for I := 0 to High(FReady) do
+  for I := 0 to FReadyLen - 1 do
     AWin.OnReady(FReady[I]);
   Result := AWin;
 end;

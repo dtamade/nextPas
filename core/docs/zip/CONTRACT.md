@@ -213,4 +213,4 @@ store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuz
 
 - 顺序读目录判定仅认尾随 `/`，随机读另认 `S_IFDIR`/`S_IFLNK`（external attrs 高位）；见 INV-16。
 - Data descriptor 当前要求带签名 `$08074B50`，无签名描述符视为截断（`EParseError('descriptor not found')`）；兼容性见 INV-16。
-- `extra` 的 `LE*` 已收口至 `nextpas.core.zip.common`，`WriteLE*` 栈直写与 `PByte`/`TBytes` 双形态保留；`Build*` 为堆便捷包装，写端一律走 `Encode*` 零分配路径。
+- `extra` 的 `LE*` 已收口至 `nextpas.core.zip.common`，`WriteLE*` 栈直写与 `PByte`/`TBytes` 双形态保留；`Build*` 为堆便捷包装，写端一律走 `Encode*` 零分配路径（`aes.EncodeWinZipAesExtraBody` 同为栈上 7 字节零堆，`BuildWinZipAesExtraBody` 为其堆包装）。
