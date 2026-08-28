@@ -126,7 +126,6 @@ begin
   begin
     LTail := Copy(LHostPart, LColon + 1, MaxInt);
     LHostPart := Copy(LHostPart, 1, LColon - 1);
-    Val(LTail, LCode, LCode);
     Val(LTail, AOpts.Port, LCode);
     if (LCode <> 0) or (AOpts.Port = 0) then
       raise EDbError.CreateSimple(dbkRedis,

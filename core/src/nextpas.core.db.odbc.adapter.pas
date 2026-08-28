@@ -1382,8 +1382,6 @@ var
   LOut: array[0..C_OUT_CONN_STR - 1] of AnsiChar;
   LOutLen: SmallInt;
 begin
-  if Trim(ADsn) = '' then
-    raise EDbError.CreateSimple(dbkOdbc, 'empty dsn');
   ValidateOdbcConnStr(ADsn);
   OdbcEnsureLoaded;
   LEnv := nil;
