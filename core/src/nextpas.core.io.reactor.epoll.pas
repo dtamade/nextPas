@@ -707,7 +707,9 @@ begin
   LIdx := AllocOp(opWrite, AFd, ABuf, ALen, AOffset, 0, nil, nil, 0,
     ACallback, AContext);
   Result := BindAndArm(LIdx);
-  if not Result then
+  if Result then
+    TryOpImmediately(LIdx)
+  else
     FreeOp(LIdx);
 end;
 
@@ -783,7 +785,9 @@ begin
   LIdx := AllocOp(opSend, AFd, ABuf, ALen, -1, AFlags, nil, nil, 0,
     ACallback, AContext);
   Result := BindAndArm(LIdx);
-  if not Result then
+  if Result then
+    TryOpImmediately(LIdx)
+  else
     FreeOp(LIdx);
 end;
 
