@@ -4,7 +4,9 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.26（S31—— 类型设计冻结复核（低负载）：TWebviewKind 4 值穷尽 + TWebviewOptions 4 不变量（Ephemeral/DataDirectory 互斥、尺寸非负、max≥min、scheme token 小写）全量校验 + EWebviewError 族 8 类目冻结（ecNotFound/ecIO/ecParse/ecInternal）+ IWebviewWindow 13 方法面 composition 冻结、hygiene/source-contracts 双 pass；Production Ready 类型冻结）
+**版本**：1.28（S33—— 零负载一致性抛光：BACKENDS S26 段与 wk.loader 最终无 platform.dl 实现对齐（以注释占位替代 _UseDlDiscipline 旧述）、registry/S10 段落 docs 时效对齐、hygiene/source-contracts 双 pass 复验、单门抽检 wk-loader/factory 全绿（设备繁忙期零 bench 回归策略、复用 S27 基线）；Production Ready 冻结保持）
+**承接**：1.27（S32—— 注册表与架构一致性冻结：`core-module-registry` webview `draft→focused-runtime`（13 门全绿 + demo 双跑 + bench 双基线 + hygiene/source-contracts 双 pass 对齐）、CONTRACT 1.26→1.27；Production Ready 注册表冻结）
+**承接**：1.26（S31—— 类型设计冻结复核（低负载）：TWebviewKind 4 值穷尽 + TWebviewOptions 4 不变量（Ephemeral/DataDirectory 互斥、尺寸非负、max≥min、scheme token 小写）全量校验 + EWebviewError 族 8 类目冻结（ecNotFound/ecIO/ecParse/ecInternal）+ IWebviewWindow 13 方法面 composition 冻结、hygiene/source-contracts 双 pass；Production Ready 类型冻结）
 **承接**：1.25（S30—— 静态审计与文档冻结（低负载）：零 TODO/FIXME（src 0、docs 仅 fafafa 历史 FIXME 引用）、fpc -vh 0 hint（wk 桩全量 {$PUSH}{$HINTS OFF}）、factory 0 warnings（2 处 exhaustive 以 {$WARNINGS OFF} 抑制）、hygiene pass、source-contracts pass、13 门与 bench 基线复用 S27 实测；Production Ready 冻结复核）
 **承接**：1.24（S29—— 主循环完整性：WebviewRunLoop/ExitLoop 补齐 WkLiveWindowCount 分支（Darwin 桩短睡让出，4 后端全量守卫）、工厂循环退出条件四后端全量、13 门全绿；hygiene 0、demo 0 warnings 保持）
 **承接**：1.23（S28—— 警告洁净与 Demo 高级感终极抛光：factory 2 处 case exhaustive unreachable 警告以 {$PUSH}{$WARNINGS OFF} 抑制（demo 构建 0 warnings）、demo_webview 自检双跑（plain+heaptrc）全绿、respack 构建 pass、13 门全绿；hygiene 0）
@@ -529,7 +531,6 @@ runtime 冒烟允许的最大环境假设：存在 `libwebkit2gtk-4.1.so.0`（�
 
 ## 10. 稳定性
 
-- 当前 `draft`；registry 条目随 S1 源码落地，truth level 记 `focused-runtime`
-  （fake 面）/ `source-contract`（边界面），runtime 冒烟达标后升
-  `focused-runtime` 全量。
+- 当前 `focused-runtime`（S32 起）；registry 条目随 S1 源码落地，truth level 记 `focused-runtime`
+  （fake 面）/ `source-contract`（边界面），S32 已晋升全量（13 门 + hygiene/source-contracts 双 pass）。
 - 公共 API 变更纪律：`intf` 单元视为冻结候选，改动必须过契约测试并更新本文档。
