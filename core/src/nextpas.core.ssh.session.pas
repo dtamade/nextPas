@@ -96,6 +96,10 @@ function SshConnectOn(const AIO: IReadWriteCloser;
 function SshCreateSession(const AIO: IReadWriteCloser;
   const AOptions: TSshConnectOptions): ISshSession;
 
+function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
+function SshConnectViaJumpOn(const AJumpSession: ISshSession;
+  const ATargetOpts: TSshConnectOptions): ISshSession;
+
 { Fluent 构造器入口 }
 
 
@@ -201,6 +205,26 @@ type
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
     function Compress(AValue: Boolean): ISshClientBuilder;
     function Connect: ISshSession;
+  end;
+
+  TProxyJumpSession = class(TInterfacedObject, ISshSession)
+  private
+    FJump: ISshSession;
+    FTarget: ISshSession;
+  public
+    constructor Create(const AJump, ATarget: ISshSession);
+    destructor Destroy; override;
+    function GetConnected: Boolean;
+    function GetServerVersion: string;
+    function GetServerHostKeyFingerprint: string;
+    procedure AuthenticateWithPassword(const AUser, APassword: string);
+    procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
+    procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
+    procedure AuthenticateWithAgent(const APath: string);
+    procedure AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
+    function Exec(const ACommand: string): TSshExecResult;
+    function OpenFileSystem: ISshFileSystem;
+    procedure Close;
   end;
 
 { TSshSession }
@@ -790,6 +814,131 @@ function SshCreateSession(const AIO: IReadWriteCloser;
   const AOptions: TSshConnectOptions): ISshSession;
 begin
   Result := TSshSession.CreateInternal(AIO, AOptions);
+end;
+
+{ TProxyJumpSession }
+
+constructor TProxyJumpSession.Create(const AJump, ATarget: ISshSession);
+begin
+  inherited Create;
+  FJump := AJump;
+  FTarget := ATarget;
+end;
+
+destructor TProxyJumpSession.Destroy;
+begin
+  try
+    if FTarget <> nil then FTarget.Close;
+  except end;
+  try
+    if FJump <> nil then FJump.Close;
+  except end;
+  inherited;
+end;
+
+function TProxyJumpSession.GetConnected: Boolean;
+begin
+  Result := (FTarget <> nil) and FTarget.GetConnected;
+end;
+
+function TProxyJumpSession.GetServerVersion: string;
+begin
+  if FTarget <> nil then Result := FTarget.GetServerVersion else Result := '';
+end;
+
+function TProxyJumpSession.GetServerHostKeyFingerprint: string;
+begin
+  if FTarget <> nil then Result := FTarget.GetServerHostKeyFingerprint else Result := '';
+end;
+
+procedure TProxyJumpSession.AuthenticateWithPassword(const AUser, APassword: string);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithPassword(AUser, APassword);
+end;
+
+procedure TProxyJumpSession.AuthenticateWithPrivateKeyData(const AContent: string);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithPrivateKeyData(AContent);
+end;
+
+procedure TProxyJumpSession.AuthenticateWithPrivateKeyData(const AContent, APassphrase: string);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithPrivateKeyData(AContent, APassphrase);
+end;
+
+procedure TProxyJumpSession.AuthenticateWithAgent(const APath: string);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithAgent(APath);
+end;
+
+procedure TProxyJumpSession.AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithAgentOn(AAgentIO);
+end;
+
+function TProxyJumpSession.Exec(const ACommand: string): TSshExecResult;
+begin
+  if FTarget = nil then
+    raise ESSHError.Create(sekIO, 'proxy jump: no target session');
+  Result := FTarget.Exec(ACommand);
+end;
+
+function TProxyJumpSession.OpenFileSystem: ISshFileSystem;
+begin
+  if FTarget = nil then
+    raise ESSHError.Create(sekIO, 'proxy jump: no target session');
+  Result := FTarget.OpenFileSystem;
+end;
+
+procedure TProxyJumpSession.Close;
+begin
+  if FTarget <> nil then try FTarget.Close; except end;
+  if FJump <> nil then try FJump.Close; except end;
+end;
+
+function SshConnectViaJumpOn(const AJumpSession: ISshSession;
+  const ATargetOpts: TSshConnectOptions): ISshSession;
+var
+  LJumpImpl: TSshSession;
+  LChan: TSshChannel;
+  LStream: IReadWriteCloser;
+  LTarget: ISshSession;
+begin
+  if AJumpSession = nil then
+    raise ESSHError.Create(sekProtocol, 'proxy jump: nil jump session');
+  if not (AJumpSession is TSshSession) and not (AJumpSession is TProxyJumpSession) then
+    raise ESSHError.Create(sekUnsupported, 'proxy jump: unsupported jump session type');
+  if AJumpSession is TProxyJumpSession then
+    LJumpImpl := TProxyJumpSession(AJumpSession).FTarget as TSshSession
+  else
+    LJumpImpl := AJumpSession as TSshSession;
+  if LJumpImpl.FTransport = nil then
+    raise ESSHError.Create(sekIO, 'proxy jump: jump transport nil');
+  LChan := TSshChannel.Create(LJumpImpl.FTransport,
+    ATargetOpts.InitialWindowSize, ATargetOpts.MaxPacket, ATargetOpts.ExecTimeoutMs);
+  try
+    LChan.OpenDirectTcpip(ATargetOpts.Host, ATargetOpts.Port);
+    LStream := TChannelStream.Create(LChan);
+    LChan := nil;
+    LTarget := SshConnectOn(LStream, ATargetOpts);
+    Result := TProxyJumpSession.Create(AJumpSession, LTarget);
+  except
+    LChan.Free;
+    raise;
+  end;
+end;
+
+function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
+var
+  LJump: ISshSession;
+begin
+  LJump := SshConnect(AJumpOpts);
+  try
+    Result := SshConnectViaJumpOn(LJump, ATargetOpts);
+  except
+    LJump.Close;
+    raise;
+  end;
 end;
 
 end.

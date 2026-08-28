@@ -446,9 +446,6 @@ var
   LByte: Byte;
   LAdv: TGraphemeAdvance;
   LAscii: Boolean;
-  LUniform: Boolean;
-  LFirst: Byte;
-  LCount: Integer;
 begin
   Result := 0;
   LLeft := Integer(FArea.X);

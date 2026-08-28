@@ -118,19 +118,8 @@ var
   GLock: ILock = nil;
 
 function NormalizeName(const AName: string): string;
-var
-  LStart, LEnd: Integer;
 begin
-  LStart := 1;
-  LEnd := Length(AName);
-  while (LStart <= LEnd) and (AName[LStart] <= ' ') do Inc(LStart);
-  while (LEnd >= LStart) and (AName[LEnd] <= ' ') do Dec(LEnd);
-  if LStart > LEnd then
-    Exit('');
-  if (LStart = 1) and (LEnd = Length(AName)) then
-    Result := LowerCase(AName)
-  else
-    Result := LowerCase(Copy(AName, LStart, LEnd - LStart + 1));
+  Result := LowerCase(Trim(AName));
 end;
 
 function FindEntryLocked(const AName: string): Integer;
