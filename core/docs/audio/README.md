@@ -11,7 +11,7 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 |---|---|---|---|
 | **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 为真值源，`BlockAlign/ByteRate/FramesForMs` | L0 only |
 | **intf** | `audio.intf` | 共享面 `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | base |
-| **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔（已预留 FLAC/MP3 由 `music888` 吸收） | base+intf |
+| **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry/codec.flac(.sse/.decoder)/codec.mp3(.sse/.decoder)/codec.vorbis(.sse/.decoder)` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔，FLAC/MP3/Vorbis 已从 `music888` 吸收（纯 Pascal，手写 SSE/NEON 位精确，`simd.dispatch` 运行时分派，`bytes.cursor`/`mem.arena` 重塑） | base+intf |
 | **pcm** | `audio.pcm` | 纯函数 `U8/S16/S24/S32↔F32`、`Clamp`、`Interleave/Deinterleave`，`TBytes` 货币，`TPDF` 抖动 | base |
 | **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
 | **device** | `device.intf/device.null` | `IAudioDevice(0040)/IAudioDeviceProvider(0041)`，`dsClosed/Opened/Started`，MPSC `TDeviceEvent`，`InterlockedExchangeAdd64` 计数 `Underrun/Violation`，`Drive` 调 `FillRealtime` | base+intf |
@@ -149,14 +149,18 @@ make hygiene && git diff --check
 
 ```bash
 make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s
+make -C core/benchmarks/nextpas.core.audio/bench_flac clean test # 33k 帧 flac 5.6ms/5.9MB/s
+make -C core/benchmarks/nextpas.core.audio/bench_mp3 clean test  # 3.7k mp3 360µs/10MB/s (固定 -O2，规避 FPC 3.3.1 O3 错译)
+bash scripts/sync-music888-audio.sh # 守卫 music888 解码核漂移（行数Δ + 去C/加护统计 + 35 文件门禁 + hygiene）
 ```
 
-现有 `bench_pcm_wav` 覆盖 WAV 编解码热路径；`Timeline/Graph` 的 `FillRealtime` 基准可按 `bench` 框架 `IBenchContext` 单次调用模式扩展，输出 `ns/op` 与 `MB/s`（`-O2`，HEAPTRC 关）。
+基准均基于 `IBenchContext ns/op`，`Timeline/Graph` 的 `FillRealtime` 已做零分配快照化，`bench_flac/mp3` 为真实 fixture 对拍；`music888` 持续迭代由 `sync-music888-audio.sh` 每周守卫，吸收策略为 `bytes.cursor`/`mem.arena`/`simd.dispatch` 重塑而非 verbatim 拷贝。
 
 ## 演进与复用
 
 - **已完成**：PR1 base → PR2 wav → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 game → PR9 timeline
-- **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，后续吸收进 `codec.registry`，保持 `Probe≤4KB` 与可插拔）
+- **已落地**：PR4 flac/mp3/vorbis 纯 Pascal（`music888` 吸收完成，drv 层经 `bytes.cursor`/`mem.arena`/`simd.dispatch` 青出于蓝，`Probe≤4KB` 可插拔，bench 真实 fixture 对拍）
+- **持续守卫**：`music888` 仍在迭代（近期 FLAC 帧头 fuzz / NEON 核收官等），由 `scripts/sync-music888-audio.sh` 周级巡检，`Δ行数` 与 `NEON 核新增` 触发人工复核
 - **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`Game` 复用 `Graph` 快照路径
 - **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配与异常静音
 

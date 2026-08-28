@@ -239,6 +239,10 @@ implementation
   不受影响；x86-64/其余架构维持原优化级别 }
 {$optimization off}
 {$endif}
+{$ifdef cpux86_64}
+{ x86_64 在 -O3 下同样触及 FPC 3.3.1 常量/临时复用错译（bench_mp3 O3 冒烟失败，O2 382µs 正常），
+  已在 bench_mp3/Makefile 固定 -O2；本单元不在源码层强行降级，保留 O2 下 9.4MB/s 性能 }
+{$endif}
 
 uses
   nextpas.core.math
