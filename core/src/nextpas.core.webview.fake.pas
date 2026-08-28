@@ -116,17 +116,29 @@ type
     FHistory: array of string;
     FHistIdx: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
+    FOnNavStartedCount: Integer;
     FOnNavFinished: array of TWebviewNavEventHandler;
+    FOnNavFinishedCount: Integer;
     FOnNavFailed: array of TWebviewNavFailedHandler;
+    FOnNavFailedCount: Integer;
     FOnWindowClosed: array of TWebviewNotifyHandler;
+    FOnWindowClosedCount: Integer;
     FOnReady: array of TWebviewNotifyHandler;
+    FOnReadyCount: Integer;
     FOnScaleChanged: array of TWebviewScaleHandler;
+    FOnScaleChangedCount: Integer;
     procedure RequireOpen;
     procedure GrowPendingEvals; inline;
     procedure GrowOutcomes; inline;
     procedure GrowEvalScripts; inline;
     procedure GrowEmits; inline;
     procedure GrowCaptured; inline;
+    procedure GrowOnNavStarted; inline;
+    procedure GrowOnNavFinished; inline;
+    procedure GrowOnNavFailed; inline;
+    procedure GrowOnWindowClosed; inline;
+    procedure GrowOnReady; inline;
+    procedure GrowOnScaleChanged; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -705,6 +717,42 @@ begin
     SetLength(FCapturedEvals, WebviewGrowCapacity(Length(FCapturedEvals)));
 end;
 
+procedure TFakeWebview.GrowOnNavStarted; inline;
+begin
+  if FOnNavStartedCount = Length(FOnNavStarted) then
+    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
+end;
+
+procedure TFakeWebview.GrowOnNavFinished; inline;
+begin
+  if FOnNavFinishedCount = Length(FOnNavFinished) then
+    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
+end;
+
+procedure TFakeWebview.GrowOnNavFailed; inline;
+begin
+  if FOnNavFailedCount = Length(FOnNavFailed) then
+    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
+end;
+
+procedure TFakeWebview.GrowOnWindowClosed; inline;
+begin
+  if FOnWindowClosedCount = Length(FOnWindowClosed) then
+    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
+end;
+
+procedure TFakeWebview.GrowOnReady; inline;
+begin
+  if FOnReadyCount = Length(FOnReady) then
+    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
+end;
+
+procedure TFakeWebview.GrowOnScaleChanged; inline;
+begin
+  if FOnScaleChangedCount = Length(FOnScaleChanged) then
+    SetLength(FOnScaleChanged, WebviewGrowCapacity(Length(FOnScaleChanged)));
+end;
+
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
@@ -733,7 +781,7 @@ procedure TFakeWebview.FireReadyHandlers;
 var
   I: Integer;
 begin
-  for I := 0 to High(FOnReady) do
+  for I := 0 to FOnReadyCount - 1 do
     FOnReady[I]();
 end;
 
@@ -780,8 +828,8 @@ begin
       LErrObj.Free;
     end;
   end;
-  SetLength(LClosed, Length(FOnWindowClosed));
-  for I := 0 to High(FOnWindowClosed) do
+  SetLength(LClosed, FOnWindowClosedCount);
+  for I := 0 to FOnWindowClosedCount - 1 do
     LClosed[I] := FOnWindowClosed[I];
   { 关闭后投递静默丢弃（契约 §3.1） }
   (FDispatcher as TFakeDispatcher).DropAll;
@@ -931,8 +979,9 @@ end;
 procedure TFakeWebview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
   RequireOpen;
-  SetLength(FOnScaleChanged, Length(FOnScaleChanged) + 1);
-  FOnScaleChanged[High(FOnScaleChanged)] := AHandler;
+  GrowOnScaleChanged;
+  FOnScaleChanged[FOnScaleChangedCount] := AHandler;
+  Inc(FOnScaleChangedCount);
 end;
 
 procedure TFakeWebview.OnScaleChanged(AHandler: TWebviewScaleMethod);
@@ -958,7 +1007,7 @@ begin
   LEvent.IsError := False;
   LEvent.ErrorCode := 0;
   LEvent.ErrorMessage := '';
-  for I := 0 to High(FOnNavStarted) do
+  for I := 0 to FOnNavStartedCount - 1 do
     FOnNavStarted[I](LEvent);
   FireReadyHandlers;
 end;
@@ -1124,8 +1173,9 @@ end;
 procedure TFakeWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
   RequireOpen;
-  SetLength(FOnNavStarted, Length(FOnNavStarted) + 1);
-  FOnNavStarted[High(FOnNavStarted)] := AHandler;
+  GrowOnNavStarted;
+  FOnNavStarted[FOnNavStartedCount] := AHandler;
+  Inc(FOnNavStartedCount);
 end;
 
 procedure TFakeWebview.OnNavigationStarted(AHandler: TWebviewNavEventMethod);
@@ -1141,8 +1191,9 @@ end;
 procedure TFakeWebview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
   RequireOpen;
-  SetLength(FOnNavFinished, Length(FOnNavFinished) + 1);
-  FOnNavFinished[High(FOnNavFinished)] := AHandler;
+  GrowOnNavFinished;
+  FOnNavFinished[FOnNavFinishedCount] := AHandler;
+  Inc(FOnNavFinishedCount);
 end;
 
 procedure TFakeWebview.OnNavigationFinished(AHandler: TWebviewNavEventMethod);
@@ -1158,8 +1209,9 @@ end;
 procedure TFakeWebview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
   RequireOpen;
-  SetLength(FOnNavFailed, Length(FOnNavFailed) + 1);
-  FOnNavFailed[High(FOnNavFailed)] := AHandler;
+  GrowOnNavFailed;
+  FOnNavFailed[FOnNavFailedCount] := AHandler;
+  Inc(FOnNavFailedCount);
 end;
 
 procedure TFakeWebview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod);
@@ -1174,8 +1226,9 @@ end;
 
 procedure TFakeWebview.OnWindowClosed(AHandler: TWebviewNotifyHandler);
 begin
-  SetLength(FOnWindowClosed, Length(FOnWindowClosed) + 1);
-  FOnWindowClosed[High(FOnWindowClosed)] := AHandler;
+  GrowOnWindowClosed;
+  FOnWindowClosed[FOnWindowClosedCount] := AHandler;
+  Inc(FOnWindowClosedCount);
 end;
 
 procedure TFakeWebview.OnWindowClosed(AHandler: TWebviewNotifyMethod);
@@ -1191,8 +1244,9 @@ end;
 procedure TFakeWebview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
   RequireOpen;
-  SetLength(FOnReady, Length(FOnReady) + 1);
-  FOnReady[High(FOnReady)] := AHandler;
+  GrowOnReady;
+  FOnReady[FOnReadyCount] := AHandler;
+  Inc(FOnReadyCount);
 end;
 
 procedure TFakeWebview.OnReady(AHandler: TWebviewNotifyMethod);
@@ -1308,7 +1362,7 @@ var
 begin
   RequireOpen;
   LEvent.Url := AUrl;
-  for I := 0 to High(FOnNavStarted) do
+  for I := 0 to FOnNavStartedCount - 1 do
     FOnNavStarted[I](LEvent);
 end;
 
@@ -1319,7 +1373,7 @@ var
 begin
   RequireOpen;
   LEvent.Url := AUrl;
-  for I := 0 to High(FOnNavFinished) do
+  for I := 0 to FOnNavFinishedCount - 1 do
     FOnNavFinished[I](LEvent);
 end;
 
@@ -1334,7 +1388,7 @@ begin
   LEvent.IsError := True;
   LEvent.ErrorCode := ACode;
   LEvent.ErrorMessage := AMessage;
-  for I := 0 to High(FOnNavFailed) do
+  for I := 0 to FOnNavFailedCount - 1 do
     FOnNavFailed[I](LEvent);
 end;
 
@@ -1359,7 +1413,7 @@ begin
   if ANewScale <= 0 then
     raise EWebviewInvalidState.Create('scale factor must be > 0');
   FScale := ANewScale;
-  for I := 0 to High(FOnScaleChanged) do
+  for I := 0 to FOnScaleChangedCount - 1 do
     FOnScaleChanged[I](ANewScale);
 end;
 
