@@ -162,9 +162,16 @@ var
   DispatchMessageA: function(lpMsg: PMSG): LRESULT; stdcall;
   SetWindowLongPtrA: function(hwnd: HWND; nIndex: Integer; dwNewLong: PtrInt): PtrInt; stdcall;
   GetWindowLongPtrA: function(hwnd: HWND; nIndex: Integer): PtrInt; stdcall;
+  GetKeyState: function(nVirtKey: Integer): SmallInt; stdcall;
 
 const
   GWLP_USERDATA = -21;
+
+  VK_SHIFT   = $10;
+  VK_CONTROL = $11;
+  VK_MENU    = $12;
+  VK_LWIN    = $5B;
+  VK_RWIN    = $5C;
 
 implementation
 

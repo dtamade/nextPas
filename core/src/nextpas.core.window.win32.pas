@@ -512,6 +512,19 @@ begin OnEvent(EventMethodToRef(AHandler)); end;
 procedure TWindowWin32.OnEvent(AHandler: TWindowEventProc);
 begin OnEvent(EventProcToRef(AHandler)); end;
 
+function Win32Modifiers: Integer; inline;
+begin
+  Result := 0;
+  if Assigned(GetKeyState) then
+  begin
+    if (GetKeyState(VK_SHIFT) and $8000) <> 0 then Result := Result or 1;
+    if (GetKeyState(VK_CONTROL) and $8000) <> 0 then Result := Result or 2;
+    if (GetKeyState(VK_MENU) and $8000) <> 0 then Result := Result or 4;
+    if (GetKeyState(VK_LWIN) and $8000) <> 0 then Result := Result or 8;
+    if (GetKeyState(VK_RWIN) and $8000) <> 0 then Result := Result or 8;
+  end;
+end;
+
 function TWindowWin32.WndProc(hwnd: HWND; msg: UINT; wParam: WPARAM; lParam: LPARAM): LRESULT;
 var
   E: TWindowEvent;
@@ -571,48 +584,48 @@ begin
       end;
     WM_KEYDOWN:
       begin
-        E := Default(TWindowEvent); E.Kind := weKeyDown; E.KeyCode := Integer(wParam); E.Modifiers := 0;
+        E := Default(TWindowEvent); E.Kind := weKeyDown; E.KeyCode := Integer(wParam); E.Modifiers := Win32Modifiers;
         E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF);
         DoDispatch(E);
       end;
     WM_KEYUP:
       begin
-        E := Default(TWindowEvent); E.Kind := weKeyUp; E.KeyCode := Integer(wParam); E.Modifiers := 0;
+        E := Default(TWindowEvent); E.Kind := weKeyUp; E.KeyCode := Integer(wParam); E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_LBUTTONDOWN:
       begin
-        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1;
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1; E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_LBUTTONUP:
       begin
-        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1;
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1; E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_RBUTTONDOWN:
       begin
-        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2;
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2; E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_RBUTTONUP:
       begin
-        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2;
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2; E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_MBUTTONDOWN:
       begin
-        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3;
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3; E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_MBUTTONUP:
       begin
-        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3;
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3; E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_MOUSEMOVE:
       begin
-        E := Default(TWindowEvent); E.Kind := weMouseMove; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 0;
+        E := Default(TWindowEvent); E.Kind := weMouseMove; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 0; E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_DISPATCH:
