@@ -372,6 +372,54 @@ begin
   CheckEqual(0, System.Length(LResult), 'empty clone');
 end;
 
+procedure TestSpanConcatMany;
+var
+  LA, LB, LC, LD: TBytes;
+  SA, SB, SC, SD: TByteSpan;
+  LResult: TBytes;
+begin
+  LA := TBytes.Create(1, 2);
+  LB := TBytes.Create(3, 4, 5);
+  LC := TBytes.Create(6);
+  LD := nil;
+  SA := TByteSpan.FromBytes(LA);
+  SB := TByteSpan.FromBytes(LB);
+  SC := TByteSpan.FromBytes(LC);
+  SD := TByteSpan.Empty;
+  LResult := SpanConcatMany([SA, SB, SC]);
+  CheckEqual(6, System.Length(LResult), '3 spans len');
+  CheckEqual(Byte(1), LResult[0]);
+  CheckEqual(Byte(6), LResult[5]);
+  LResult := SpanConcatMany([SA, SD, SB]);
+  CheckEqual(5, System.Length(LResult), 'with empty middle');
+  CheckEqual(Byte(3), LResult[2]);
+  LResult := SpanConcatMany([]);
+  CheckEqual(0, System.Length(LResult), 'empty array');
+  LResult := SpanConcatMany([SD]);
+  CheckEqual(0, System.Length(LResult), 'single empty');
+end;
+
+procedure TestBytesConcatMany;
+var
+  LA, LB, LC: TBytes;
+  LResult: TBytes;
+begin
+  LA := TBytes.Create(1, 2);
+  LB := TBytes.Create(3, 4, 5);
+  LC := TBytes.Create(6, 7);
+  LResult := BytesConcatMany([LA, LB, LC]);
+  CheckEqual(7, System.Length(LResult), '3 bytes len');
+  CheckEqual(Byte(1), LResult[0]);
+  CheckEqual(Byte(7), LResult[6]);
+  LResult := BytesConcatMany([LA, nil, LB]);
+  CheckEqual(5, System.Length(LResult), 'with nil middle');
+  LResult := BytesConcatMany([]);
+  CheckEqual(0, System.Length(LResult), 'empty');
+  LResult := BytesConcatMany([LA]);
+  CheckEqual(2, System.Length(LResult), 'single');
+  Check(BytesEqual(LA, LResult), 'single equal');
+end;
+
 { Additional coverage: binary }
 
 procedure TestToFromEndian;
@@ -522,6 +570,8 @@ begin
   T.Test('ops: SpanContains', @TestSpanContains);
   T.Test('ops: SpanCopySlice', @TestSpanCopySlice);
   T.Test('ops: SpanClone', @TestSpanClone);
+  T.Test('ops: SpanConcatMany', @TestSpanConcatMany);
+  T.Test('ops: BytesConcatMany', @TestBytesConcatMany);
 
   T.Test('binary: ToEndian/FromEndian', @TestToFromEndian);
   T.Test('binary: TryReadUInt8', @TestTryReadUInt8);
