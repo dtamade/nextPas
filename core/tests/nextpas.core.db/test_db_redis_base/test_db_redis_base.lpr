@@ -422,6 +422,7 @@ begin
   Expect('TRYAGAIN', decCapacity, 'classify TRYAGAIN capacity');
   Expect('WRONGTYPE', decConstraint, 'classify WRONGTYPE constraint');
   Expect('BUSYGROUP', decUnknown, 'classify BUSYGROUP under');
+  Expect('NOGROUP', decUnknown, 'classify NOGROUP under (Redis 7 stream)');
   Expect('TOTALLY-MADE-UP', decUnknown, 'classify unknown word');
   Expect('', decUnknown, 'classify empty word');
 end;

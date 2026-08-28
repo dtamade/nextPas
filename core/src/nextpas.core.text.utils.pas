@@ -147,30 +147,36 @@ begin
   if L > R then Exit('');
   SetLength(Result, R - L + 1);
   for I := L to R do
-    if S[I] in ['A'..'Z'] then
-      Result[I - L + 1] := Chr(Ord(S[I]) + 32)
+    if (Byte(S[I]) >= 65) and (Byte(S[I]) <= 90) then
+      Result[I - L + 1] := Chr(Byte(S[I]) + 32)
     else
       Result[I - L + 1] := S[I];
 end;
 
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string; inline;
 var
-  LPadLen: Integer;
+  LPadLen, I: Integer;
 begin
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
     Exit(S);
-  Result := StringOfChar(APadChar, LPadLen) + S;
+  SetLength(Result, AWidth);
+  FillChar(Result[1], LPadLen, Byte(APadChar));
+  for I := 1 to Length(S) do
+    Result[LPadLen + I] := S[I];
 end;
 
 function PadRight(const S: string; AWidth: Integer; APadChar: Char): string; inline;
 var
-  LPadLen: Integer;
+  LPadLen, I: Integer;
 begin
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
     Exit(S);
-  Result := S + StringOfChar(APadChar, LPadLen);
+  SetLength(Result, AWidth);
+  for I := 1 to Length(S) do
+    Result[I] := S[I];
+  FillChar(Result[Length(S) + 1], LPadLen, Byte(APadChar));
 end;
 
 function RepeatString(const S: string; ACount: Integer): string;
