@@ -77,6 +77,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
+| `sevenz` | L2 | 7z archive read/write (single solid folder; LZMA2 write with optional BCJ x86/Delta prefilter chains and AES-256 password encryption incl. encrypted headers, reader executes Delta/BCJ x86/BCJ2 chains and decrypts AES-256 folders/headers; pure Pascal LZMA1/LZMA2 codec with optional liblzma FFI backend) | yes | L0-L1 plus same-layer one-way `crypto`/`hash` | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
 | `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (old `nextpas.core.sqlite.*` unit names are deprecated shims) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
