@@ -89,9 +89,8 @@
 - **[INV-7]** data descriptor 读端容忍：本地头 flag bit3 置位的流式归档按
   central 权威值提取（本地 crc/尺寸为占位值不影响结果）。写端默认仍不
   产出描述符；`TZipAddOptions.DataDescriptor` 显式开启时按 INV-15 产出。
-- **[INV-8]** deflate 提取预分配以 central 声明尺寸为容量提示，但对敌意声明
-  施加压缩比上界（压缩尺寸×16+64KB），硬上限仍是 MaxOutputSize；声明值不参与
-  正确性判定（实际输出仍强制校验）。
+- **[INV-8]** 提取预分配以 central 声明尺寸为容量提示：`deflate` 对敌意声明
+  施加压缩比上界（压缩尺寸×16+64KB），`store` 在 `common.DecompressEntryVerified` 层直比 `UncompressedSize` 与 `MaxOutputSize`（34期 store bomb 已闭环）；两者硬上限均为 `MaxOutputSize`，声明值不参与正确性判定（实际输出仍强制校验）。
 - **[INV-9]** 权限还原仅对 unix 归档（外部属性高 16 位模式字非零）生效；
   目录的权限与 mtime 在全部内容落盘后逆序定稿。
 - **[INV-10]** 符号链接条目默认跳过；SkipSymlinks=False 为显式 opt-in 保真创建。
@@ -99,7 +98,7 @@
   内存上界为单条目压缩尺寸，`Close` 定稿、析构兜底为放弃（暂存路径条目
   排除；描述符直写路径见 INV-15 fail-closed）；
   读端 `OpenEntry*` 在读到 EOF 时强制尺寸+CRC32 校验，EOF 前放弃跳过校验；
-  `MaxOutputSize` 对流式路径在流中途中断生效。
+  `MaxOutputSize` 对 `store`/`deflate` 两路径在入口（`common` 层）与流中途均生效（34期 store bomb 入口守卫）。
 - **[INV-12]** 归档流式输出契约：`StreamOutputTo` 绑定后逐条目透传（绑定
   前暂存字节先按 ≤256 KiB 分块排空），内存上界为单条目压缩尺寸；
   `FinishTo` 与缓冲式 `Finish` 字节级一致（同一 Emit 序列化路径的结构保证，
@@ -134,7 +133,7 @@
 - **[INV-16]** 顺序读契约：`NewZipSequentialReader*` 从任意 `IReader` 顺序
   消费，仅靠 local header + data descriptor 前进，不整载、不要求 seek，
   与 INV-15 对偶。`Next` 在描述符条目上增量扫描定位描述符（签名
-  `$08074B50` + CRC/尺寸强校验 + 下一条目签名预检，防载荷误判；当前实现
+  `$08074B50` + `LCSize==APos`/`LUSize≤MaxOutput` 预筛 + CRC/尺寸强校验 + 下一条目签名预检，防载荷内假签名导致的 `O(n·m)` 试解压 CPU bomb——35期先验 `IsKnownZipSig` 再试解；当前实现
   要求描述符带签名，无签名描述符视为截断），并通过 pushback 保证跨条目
   字节级精确；非描述符条目按 local 声明尺寸精确有界。`Open` /
   `CopyTo`/`Skip` 语义与读端一致（Guard/解压/CRC/MaxOutput/口令），
