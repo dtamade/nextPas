@@ -51,14 +51,6 @@ begin
   if J < I then Result := '' else Result := Copy(S, I, J - I + 1);
 end;
 
-function BytesToString(const B: TBytes): string;
-var L: Integer;
-begin
-  L := Length(B);
-  SetLength(Result, L);
-  if L > 0 then Move(B[0], Result[1], L);
-end;
-
 function ResolveOid(const AGitDir, ARev: string): TGitOid;
 var R: string;
 begin
@@ -96,7 +88,7 @@ begin
     Result.Kind := Kind;
     Result.Size := Length(Data);
     Result.Data := Copy(Data, 0, Length(Data));
-    Result.Text := BytesToString(Data);
+    Result.Text := GitBytesToString(Data);
   finally
     Repo.Free;
   end;
@@ -205,17 +197,17 @@ end;
 function PrettyCommit(const AData: TBytes): string;
 begin
   // commit raw is already pretty; just return text
-  Result := BytesToString(AData);
+  Result := GitBytesToString(AData);
 end;
 
 function PrettyTag(const AData: TBytes): string;
 begin
-  Result := BytesToString(AData);
+  Result := GitBytesToString(AData);
 end;
 
 function PrettyBlob(const AData: TBytes): string;
 begin
-  Result := BytesToString(AData);
+  Result := GitBytesToString(AData);
 end;
 
 function GitCatFilePrettyInternal(const AGitDir: string; const AOid: TGitOid): string;

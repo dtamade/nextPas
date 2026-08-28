@@ -76,18 +76,6 @@ begin
   Result := GitNotesRefExists(AGitDir, GitNotesDefaultRef);
 end;
 
-function BytesToStringLocal(const B: TBytes): string;
-begin
-  SetLength(Result, Length(B));
-  if Length(B)>0 then Move(B[0], Result[1], Length(B));
-end;
-
-function StringToBytesLocal(const S: string): TBytes;
-begin
-  SetLength(Result, Length(S));
-  if Length(S)>0 then Move(S[1], Result[0], Length(S));
-end;
-
 procedure CollectNotesRecursive(ARepo: TNativeRepository; const ATreeOid: TGitOid;
   const APrefix: string; var AOut: TGitNoteArray);
 var
@@ -203,7 +191,7 @@ var
   B: TBytes;
 begin
   B := GitNotesGet(AGitDir, ARefName, ATarget);
-  Result := BytesToStringLocal(B);
+  Result := GitBytesToString(B);
 end;
 
 function GitNotesGetStr(const AGitDir: string; const ATarget: TGitOid): string;
@@ -342,7 +330,7 @@ end;
 
 function GitNotesAdd(const AGitDir, ARefName: string; const ATarget: TGitOid; const ANote: string): TGitOid;
 begin
-  Result := GitNotesAddBytes(AGitDir, ARefName, ATarget, StringToBytesLocal(ANote));
+  Result := GitNotesAddBytes(AGitDir, ARefName, ATarget, GitStringToBytes(ANote));
 end;
 
 function GitNotesAdd(const AGitDir: string; const ATarget: TGitOid; const ANote: string): TGitOid;

@@ -105,13 +105,6 @@ begin
   Result.Message := Msg;
 end;
 
-function BytesToStringLocal(const AData: TBytes): string;
-begin
-  SetLength(Result, Length(AData));
-  if Length(AData) > 0 then
-    Move(AData[0], Result[1], Length(AData));
-end;
-
 function GitParseReflog(const AData: TBytes): TGitReflog;
 var
   Text: string;
@@ -121,7 +114,7 @@ begin
   Result := nil;
   if Length(AData) = 0 then
     Exit;
-  Text := BytesToStringLocal(AData);
+  Text := GitBytesToString(AData);
   Count := 0;
   Start := 1;
   for I := 1 to Length(Text) do

@@ -41,12 +41,6 @@ const
   CModeSymlink = $A000;
   CModeGitlink = $E000;
 
-function BytesToString(const B: TBytes): string;
-begin
-  SetLength(Result, Length(B));
-  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
-end;
-
 function TrimSpacesLocal(const S: string): string;
 var L,R: Integer;
 begin
@@ -175,7 +169,7 @@ begin
       BlobData := ARepo.ReadObject(TreeEnts[I].Oid, BlobKind);
       if TreeEnts[I].Mode = CModeSymlink then
       begin
-        Target := BytesToString(BlobData);
+        Target := GitBytesToString(BlobData);
         if FileExists(FilePath) or IsSymlink(FilePath) or DirectoryExists(FilePath) then
           RemoveAll(FilePath);
         Symlink(Target, FilePath);

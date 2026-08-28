@@ -60,14 +60,6 @@ begin
   Result := True;
 end;
 
-function BytesToString(const B: TBytes): string;
-var L: Integer;
-begin
-  L := Length(B);
-  SetLength(Result, L);
-  if L > 0 then Move(B[0], Result[1], L);
-end;
-
 function SplitLines(const S: string): TStringArray;
 var I, Start, L: Integer; Line: string;
 begin
@@ -168,7 +160,7 @@ begin
   Data := ARepo.ReadObject(BlobOid, Kind);
   if Kind = gokTree then Exit(False);
   // for symlink/gitlink, treat content as is (blame still lines)
-  S := BytesToString(Data);
+  S := GitBytesToString(Data);
   ALines := SplitLines(S);
   Result := True;
 end;

@@ -51,20 +51,6 @@ uses
   nextpas.core.git.native.revparse,
   nextpas.core.git.native.indexer;
 
-function BytesOfString(const S: string): TBytes;
-var L: Integer;
-begin
-  L := Length(S);
-  SetLength(Result, L);
-  if L > 0 then Move(S[1], Result[0], L);
-end;
-
-function StringOfBytes(const B: TBytes): string;
-begin
-  SetLength(Result, Length(B));
-  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
-end;
-
 function ConcatBytes(const A, B: TBytes): TBytes;
 begin
   SetLength(Result, Length(A) + Length(B));
@@ -168,10 +154,10 @@ begin
   if TrimLocal(RevInput) = '' then
     raise EGitError.Create('bundle: empty rev list');
   Out_ := RunWithInput('git', ['--git-dir=' + AGitDir, 'pack-objects', '--stdout', '--revs', '--delta-base-offset'],
-    BytesOfString(RevInput));
+    GitStringToBytes(RevInput));
   if not ProcessSucceeded(Out_) then
     raise EGitError.CreateFmt('bundle pack-objects failed (%d): %s', [Out_.ExitCode, TrimLocal(Out_.StdErr + Out_.StdOut)]);
-  Result := BytesOfString(Out_.StdOut);
+  Result := GitStringToBytes(Out_.StdOut);
   if Length(Result) = 0 then
     raise EGitError.Create('bundle: pack-objects produced empty pack');
   if (Length(Result) < 12) or (Result[0] <> Ord('P')) then
@@ -433,7 +419,7 @@ begin
   for I := 0 to High(Wants) do
     HeaderText := HeaderText + GitOidToHex(Wants[I]) + ' ' + WantNames[I] + #10;
   HeaderText := HeaderText + #10;
-  OutBytes := BytesOfString(HeaderText);
+  OutBytes := GitStringToBytes(HeaderText);
   PackBytes := Pack;
   OutBytes := ConcatBytes(OutBytes, PackBytes);
   // ensure parent dir

@@ -103,12 +103,6 @@ begin
   end;
 end;
 
-function BytesToString(const B: TBytes): string;
-begin
-  SetLength(Result, Length(B));
-  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
-end;
-
 function ContainsFixed(const ALine, APat: string; AIgnoreCase: Boolean): Boolean;
 var L, P: string;
 begin
@@ -214,7 +208,7 @@ begin
       HasNul := False;
       for K := 0 to High(Data) do if Data[K] = 0 then begin HasNul := True; Break; end;
       if HasNul then Continue;
-      Text := BytesToString(Data);
+      Text := GitBytesToString(Data);
       Lines := SplitLines(Text);
       for J := 0 to High(Lines) do
         if ContainsFixed(Lines[J], APattern, AIgnoreCase) then

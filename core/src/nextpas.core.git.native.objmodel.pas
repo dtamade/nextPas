@@ -55,13 +55,6 @@ function GitParseTag(const AData: TBytes): TGitTagInfo;
 
 implementation
 
-function BytesToString(const AData: TBytes): string;
-begin
-  SetLength(Result, Length(AData));
-  if Length(AData) > 0 then
-    Move(AData[0], Result[1], Length(AData));
-end;
-
 function ParseOctalText(const AText: string): Cardinal;
 var
   I: Integer;
@@ -131,9 +124,9 @@ begin
     Inc(EntryCount);
     SetLength(Result, EntryCount);
     Result[EntryCount - 1].Mode := ParseOctalText(
-      BytesToString(Copy(AData, ModeStart, NameStart - ModeStart - 1)));
+      GitBytesToString(Copy(AData, ModeStart, NameStart - ModeStart - 1)));
     Result[EntryCount - 1].Name :=
-      BytesToString(Copy(AData, NameStart, P - NameStart - 1));
+      GitBytesToString(Copy(AData, NameStart, P - NameStart - 1));
     Move(AData[P], Result[EntryCount - 1].Oid.Bytes[0], GitOidRawLen);
     Inc(P, GitOidRawLen);
   end;
@@ -182,7 +175,7 @@ var
   Lines: TStringArray;
   I, Brk, Sp, ParentCount: Integer;
 begin
-  Text := BytesToString(AData);
+  Text := GitBytesToString(AData);
   // headers and message are separated by the first blank line
   Brk := Pos(#10#10, Text);
   if Brk > 0 then
@@ -229,7 +222,7 @@ var
   I, Brk, Sp: Integer;
   HaveObject, HaveType, HaveName: Boolean;
 begin
-  Text := BytesToString(AData);
+  Text := GitBytesToString(AData);
   // headers and message are separated by the first blank line
   Brk := Pos(#10#10, Text);
   if Brk > 0 then

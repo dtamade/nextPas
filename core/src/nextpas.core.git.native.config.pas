@@ -222,13 +222,6 @@ begin
   Result := ToLowerAscii(AKey);
 end;
 
-function BytesToStringLocal(const AData: TBytes): string;
-begin
-  SetLength(Result, Length(AData));
-  if Length(AData) > 0 then
-    Move(AData[0], Result[1], Length(AData));
-end;
-
 function GitParseConfig(const AData: TBytes): TGitConfig;
 var
   Text: string;
@@ -244,7 +237,7 @@ begin
   Result.Entries := nil;
   if Length(AData) = 0 then
     Exit;
-  Text := BytesToStringLocal(AData);
+  Text := GitBytesToString(AData);
   Count := 0;
   for I := 1 to Length(Text) do
     if Text[I] = #10 then Inc(Count);
