@@ -372,6 +372,13 @@ type
     FMutex: TPlatformMutex;
     FNames: array of string;
     FObservers: array of TAsyncTlsPasAdaptiveObserver;
+    FCachedAll: string;
+    FCachedSnapshot: array of TTlsPasAdaptiveMetrics;
+    FCachedPrefix: string;
+    FCacheValid: Boolean;
+    FHitCount: Cardinal;
+    FMissCount: Cardinal;
+    procedure InvalidateCacheLocked;
   public
     constructor Create;
     destructor Destroy; override;
@@ -380,6 +387,11 @@ type
     function FormatAllMetrics: string; overload;
     function FormatAllMetrics(const APrefix: string): string; overload;
     function FormatAllMetricsWithLabels(const APrefix: string): string;
+    function FormatAllMetricsCached: string; overload;
+    function FormatAllMetricsCached(const APrefix: string): string; overload;
+    procedure InvalidateCache;
+    function CacheHitCount: Cardinal;
+    function CacheMissCount: Cardinal;
     function Count: Integer;
     procedure Clear;
   end;
@@ -1620,6 +1632,14 @@ begin
   inherited Destroy;
 end;
 
+procedure TAsyncTlsPasPrometheusRegistry.InvalidateCacheLocked;
+begin
+  FCacheValid := False;
+  FCachedAll := '';
+  SetLength(FCachedSnapshot, 0);
+  FCachedPrefix := '';
+end;
+
 procedure TAsyncTlsPasPrometheusRegistry.Register(const AName: string; AObserver: TAsyncTlsPasAdaptiveObserver);
 var I: Integer;
 begin
@@ -1630,12 +1650,14 @@ begin
       if FNames[I] = AName then
       begin
         FObservers[I] := AObserver;
+        InvalidateCacheLocked;
         Exit;
       end;
     SetLength(FNames, Length(FNames)+1);
     SetLength(FObservers, Length(FObservers)+1);
     FNames[High(FNames)] := AName;
     FObservers[High(FObservers)] := AObserver;
+    InvalidateCacheLocked;
   finally
     platform_mutex_unlock(FMutex);
   end;
@@ -1657,6 +1679,7 @@ begin
         end;
         SetLength(FNames, Length(FNames)-1);
         SetLength(FObservers, Length(FObservers)-1);
+        InvalidateCacheLocked;
         Exit;
       end;
   finally
@@ -1680,9 +1703,28 @@ begin
   try
     SetLength(FNames, 0);
     SetLength(FObservers, 0);
+    InvalidateCacheLocked;
   finally
     platform_mutex_unlock(FMutex);
   end;
+end;
+
+procedure TAsyncTlsPasPrometheusRegistry.InvalidateCache;
+begin
+  platform_mutex_lock(FMutex);
+  try InvalidateCacheLocked; finally platform_mutex_unlock(FMutex); end;
+end;
+
+function TAsyncTlsPasPrometheusRegistry.CacheHitCount: Cardinal;
+begin
+  platform_mutex_lock(FMutex);
+  try Result := FHitCount; finally platform_mutex_unlock(FMutex); end;
+end;
+
+function TAsyncTlsPasPrometheusRegistry.CacheMissCount: Cardinal;
+begin
+  platform_mutex_lock(FMutex);
+  try Result := FMissCount; finally platform_mutex_unlock(FMutex); end;
 end;
 
 function TAsyncTlsPasPrometheusRegistry.FormatAllMetrics: string;
@@ -1712,6 +1754,55 @@ begin
     if LObs[I] = nil then Continue;
     L := Format('observer="%s"', [LNames[I]]);
     Result := Result + TlsPasFormatPrometheusMetricsWithLabels(LObs[I].GetAdaptiveMetrics, P, L) + #10;
+  end;
+end;
+
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetricsCached: string;
+begin
+  Result := FormatAllMetricsCached('nextpas_tlspas');
+end;
+
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetricsCached(const APrefix: string): string;
+var I: Integer; LNames: array of string; LObs: array of TAsyncTlsPasAdaptiveObserver;
+  LMetrics: array of TTlsPasAdaptiveMetrics; P: string; S: string; Hit: Boolean;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  platform_mutex_lock(FMutex);
+  try
+    LNames := System.Copy(FNames, 0, Length(FNames));
+    LObs := System.Copy(FObservers, 0, Length(FObservers));
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+  SetLength(LMetrics, Length(LObs));
+  for I := 0 to High(LObs) do
+    if LObs[I] <> nil then LMetrics[I] := LObs[I].GetAdaptiveMetrics else LMetrics[I] := Default(TTlsPasAdaptiveMetrics);
+  platform_mutex_lock(FMutex);
+  try
+    Hit := FCacheValid and (FCachedPrefix = P) and (Length(FCachedSnapshot) = Length(LMetrics));
+    if Hit then
+      for I := 0 to High(LMetrics) do
+        if not TlsPasMetricsEqual(LMetrics[I], FCachedSnapshot[I]) then begin Hit := False; Break; end;
+    if Hit then
+    begin
+      Inc(FHitCount);
+      Result := FCachedAll;
+      Exit;
+    end;
+    Inc(FMissCount);
+    S := '';
+    for I := 0 to High(LNames) do
+    begin
+      if LObs[I] = nil then Continue;
+      S := S + TlsPasFormatPrometheusMetricsWithLabels(LMetrics[I], P, Format('observer="%s"', [LNames[I]])) + #10;
+    end;
+    FCachedAll := S;
+    FCachedSnapshot := System.Copy(LMetrics, 0, Length(LMetrics));
+    FCachedPrefix := P;
+    FCacheValid := True;
+    Result := S;
+  finally
+    platform_mutex_unlock(FMutex);
   end;
 end;
 

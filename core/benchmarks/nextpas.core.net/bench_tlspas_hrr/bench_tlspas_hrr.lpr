@@ -475,6 +475,34 @@ begin
   end;
 end;
 
+procedure BenchRegistryCachedHit(aIters: Int64);
+var I: Int64; F: string;
+begin
+  for I := 1 to aIters do F := GPromRegistry.FormatAllMetricsCached;
+end;
+
+procedure BenchRegistryCachedMiss(aIters: Int64);
+var I: Int64; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    GPromRegistry.InvalidateCache;
+    F := GPromRegistry.FormatAllMetricsCached;
+  end;
+end;
+
+procedure BenchMetricsHandler(aIters: Int64);
+var I: Int64; Hdl: IHttpHandler; Req: IHttpRequest; W: IHttpResponseWriter;
+begin
+  Hdl := HttpMetricsHandler(GPromRegistry);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/metrics'), hvHttp11, NewHttpHeaders, nil, 0);
+  for I := 1 to aIters do
+  begin
+    W := TCaptureWriterBenchHack.Get;
+    Hdl.ServeHTTP(Req, W);
+  end;
+end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -643,6 +671,9 @@ begin
     .AddLoop('Prometheus Append (zero-alloc)', @BenchPrometheusAppend)
     .AddLoop('CachedExporter hit', @BenchCachedExporterHit)
     .AddLoop('CachedExporter miss', @BenchCachedExporterMiss)
+    .AddLoop('RegistryCached hit', @BenchRegistryCachedHit)
+    .AddLoop('RegistryCached miss', @BenchRegistryCachedMiss)
+    .AddLoop('MetricsHandler', @BenchMetricsHandler)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

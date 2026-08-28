@@ -1740,6 +1740,90 @@ begin
   Check(not H.Healthy, 'over threshold degraded');
 end;
 
+procedure TestRegistryCached;
+var Reg: TAsyncTlsPasPrometheusRegistry; Store1, Store2: ITlsPasReplayStore; Obs1, Obs2: TAsyncTlsPasAdaptiveObserver;
+  Id, Early: TBytes; Sess: TTlsPasResumptionSession; F1, F2, F3: string;
+begin
+  Reg := TAsyncTlsPasPrometheusRegistry.Create;
+  try
+    Store1 := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+    Store2 := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+    Obs1 := TAsyncTlsPasAdaptiveObserver.Create(Store1);
+    Obs2 := TAsyncTlsPasAdaptiveObserver.Create(Store2);
+    Reg.Register('a', Obs1); Reg.Register('b', Obs2);
+    F1 := Reg.FormatAllMetricsCached;
+    Check(Length(F1)>100, 'cached first miss');
+    Check(Reg.CacheMissCount=1, 'miss 1');
+    F2 := Reg.FormatAllMetricsCached;
+    Check(F1=F2, 'cached hit');
+    Check(Reg.CacheHitCount=1, 'hit 1');
+    // mutate one observer
+    Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData:=True; Sess.MaxEarlyDataSize:=16384;
+    SetLength(Id,4); FillChar(Id[0],4,$11); SetLength(Early,10); FillChar(Early[0],10,$22);
+    Obs1.Decide(Id, Early, Sess, True);
+    F3 := Reg.FormatAllMetricsCached;
+    Check(F3<>F1, 'after mutate miss');
+    Check(Reg.CacheMissCount=2, 'miss 2');
+    Reg.InvalidateCache;
+    F3 := Reg.FormatAllMetricsCached;
+    Check(Reg.CacheMissCount=3, 'invalidate miss');
+    Check(HttpRegistryMetricsTextCached(Reg)=F3, 'http wrapper equals');
+    Check(HttpRegistryMetricsTextCached(nil)='', 'nil wrapper empty');
+    Obs1.Free; Obs2.Free;
+  finally Reg.Free; end;
+end;
+
+procedure TestMetricsHandler;
+var Reg: TAsyncTlsPasPrometheusRegistry; Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver;
+  Hdl: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Reg := TAsyncTlsPasPrometheusRegistry.Create;
+  try
+    Reg.Register('api', Obs);
+    Hdl := HttpMetricsHandler(Reg);
+    Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/metrics'), hvHttp11, NewHttpHeaders, nil, 0);
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+    Check(W.GetStatus=HTTP_STATUS_OK, 'handler 200');
+    Check(Pos('text/plain', W.GetHeaders.Get('Content-Type'))>0, 'content-type');
+    Check(Pos('nextpas_tlspas_adaptive_max', HttpRegistryMetricsTextCached(Reg))>0, 'cached text');
+    // cached handler should return same
+    Hdl := HttpMetricsHandler(Reg, 'custom');
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+    Check(Pos('custom_adaptive_max', HttpRegistryMetricsTextCached(Reg, 'custom'))>0, 'custom prefix cached');
+    // filter by observer via registry text: ensure observer label present metric
+    Check(Pos('observer="api"', Reg.FormatAllMetricsCached)>0, 'label api');
+    Obs.Free; Reg.Free;
+  except
+    Obs.Free; Reg.Free; raise;
+  end;
+end;
+
+procedure TestMetricsHandlerCachedExporter;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Exp: TAsyncTlsPasCachedPrometheusExporter;
+  Hdl: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs);
+  try
+    Hdl := HttpMetricsHandler(Exp);
+    Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/metrics'), hvHttp11, NewHttpHeaders, nil, 0);
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+    Check(W.GetStatus=HTTP_STATUS_OK, 'exp handler 200');
+    Check(Pos('nextpas_tlspas_adaptive_max', Exp.Format)>0, 'exp format');
+    Check(Pos('text/plain', W.GetHeaders.Get('Content-Type'))>0, 'exp ct');
+    // second call hit
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+    Check(Exp.HitCount>=1, 'exp hit');
+  finally Exp.Free; Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1806,6 +1890,9 @@ begin
   GSuite.Test('PrometheusAppend', @TestPrometheusAppend);
   GSuite.Test('CachedExporter', @TestCachedExporter);
   GSuite.Test('HealthProperty', @TestHealthProperty);
+  GSuite.Test('RegistryCached', @TestRegistryCached);
+  GSuite.Test('MetricsHandler', @TestMetricsHandler);
+  GSuite.Test('MetricsHandlerCachedExporter', @TestMetricsHandlerCachedExporter);
   if not GSuite.Run then
     Halt(1);
 end.

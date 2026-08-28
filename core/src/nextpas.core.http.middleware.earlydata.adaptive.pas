@@ -33,6 +33,11 @@ function HttpAdaptiveHealthHandler(const AObserver: TAsyncTlsPasAdaptiveObserver
 function HttpRegistryHealthJSON(const ARegistry: TAsyncTlsPasPrometheusRegistry): string;
 function HttpCachedPrometheusText(const AExporter: TAsyncTlsPasCachedPrometheusExporter): string;
 function HttpCachedHealthText(const AExporter: TAsyncTlsPasCachedPrometheusExporter): string;
+function HttpMetricsHandler(const ARegistry: TAsyncTlsPasPrometheusRegistry): IHttpHandler; overload;
+function HttpMetricsHandler(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): IHttpHandler; overload;
+function HttpMetricsHandler(const AExporter: TAsyncTlsPasCachedPrometheusExporter): IHttpHandler; overload;
+function HttpRegistryMetricsTextCached(const ARegistry: TAsyncTlsPasPrometheusRegistry): string; overload;
+function HttpRegistryMetricsTextCached(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): string; overload;
 
 implementation
 
@@ -195,6 +200,51 @@ begin
   if (AExporter = nil) or (AExporter.Observer = nil) then Exit('');
   H := AExporter.Observer.GetAdaptiveHealth;
   Result := TlsPasAdaptiveHealthToPrometheus(H, AExporter.Prefix);
+end;
+
+function HttpRegistryMetricsTextCached(const ARegistry: TAsyncTlsPasPrometheusRegistry): string;
+begin
+  Result := HttpRegistryMetricsTextCached(ARegistry, 'nextpas_tlspas');
+end;
+
+function HttpRegistryMetricsTextCached(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): string;
+begin
+  if ARegistry = nil then Exit('');
+  if APrefix = '' then Result := ARegistry.FormatAllMetricsCached
+  else Result := ARegistry.FormatAllMetricsCached(APrefix);
+end;
+
+function HttpMetricsHandler(const ARegistry: TAsyncTlsPasPrometheusRegistry): IHttpHandler;
+begin
+  Result := HttpMetricsHandler(ARegistry, 'nextpas_tlspas');
+end;
+
+function HttpMetricsHandler(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): IHttpHandler;
+const cCT = 'text/plain; version=0.0.4';
+begin
+  Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var S: string;
+  begin
+    if ARegistry = nil then S := ''
+    else if APrefix = '' then S := ARegistry.FormatAllMetricsCached
+    else S := ARegistry.FormatAllMetricsCached(APrefix);
+    AW.GetHeaders.SetHeader('Content-Type', cCT);
+    AW.WriteHeader(HTTP_STATUS_OK);
+    if Length(S) > 0 then AW.Write(S[1], Length(S));
+  end);
+end;
+
+function HttpMetricsHandler(const AExporter: TAsyncTlsPasCachedPrometheusExporter): IHttpHandler;
+const cCT = 'text/plain; version=0.0.4';
+begin
+  Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var S: string;
+  begin
+    if AExporter = nil then S := '' else S := AExporter.Format;
+    AW.GetHeaders.SetHeader('Content-Type', cCT);
+    AW.WriteHeader(HTTP_STATUS_OK);
+    if Length(S) > 0 then AW.Write(S[1], Length(S));
+  end);
 end;
 
 function AdaptiveEarlyDataMiddleware(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpMiddleware;

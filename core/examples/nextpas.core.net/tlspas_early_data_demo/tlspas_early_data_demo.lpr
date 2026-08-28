@@ -196,34 +196,6 @@ begin
   finally Obs.Free; end;
 end;
 
-procedure DemoCachedExporter;
-var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Exp: TAsyncTlsPasCachedPrometheusExporter;
-  Buf: string; M: TTlsPasAdaptiveMetrics; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
-begin
-  WriteLn('--- Cached Exporter S28 (zero-alloc Append + hit/miss) ---');
-  Store := TAsyncTlsPasReplayStoreFactory.CreateMemory(8, 600000);
-  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
-  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs, 'nextpas_tlspas', 'observer="api"');
-  try
-    WriteLn('First Format miss=', Exp.MissCount, ' hit=', Exp.HitCount, ' len=', Length(Exp.Format));
-    WriteLn('Second Format (hit) hit=', Exp.HitCount+1, ' -> hit cache');
-    Exp.Format; WriteLn('After 2nd hit=', Exp.HitCount, ' miss=', Exp.MissCount);
-    Buf := 'prefix|';
-    TlsPasAppendPrometheusMetrics(Buf, Obs.GetAdaptiveMetrics, 'nextpas_tlspas', 'observer="api"');
-    WriteLn('Append zero-alloc buf len=', Length(Buf), ' contains observer=', Pos('observer="api"', Buf)>0);
-    Buf := '';
-    TlsPasAppendAdaptiveHealth(Buf, Obs.GetAdaptiveHealth, 'nextpas_tlspas');
-    WriteLn('Append health len=', Length(Buf), ' contains health_status=', Pos('health_status', Buf)>0);
-    // mutate
-    Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
-    SetLength(Id, 4); FillChar(Id[0], 4, $11); SetLength(Early, 10); FillChar(Early[0], 10, $99);
-    Obs.Decide(Id, Early, Sess, True);
-    WriteLn('After decide miss len=', Length(Exp.Format), ' hit=', Exp.HitCount, ' miss=', Exp.MissCount);
-    WriteLn('HttpCached wrapper len=', Length(HttpCachedPrometheusText(Exp)), ' health=', Length(HttpCachedHealthText(Exp)));
-    Exp.Invalidate; WriteLn('After Invalidate miss=', Exp.MissCount, ' len=', Length(Exp.Format));
-  finally Exp.Free; Obs.Free; end;
-end;
-
 procedure DemoPrometheusRegistryAndConfig;
 var Reg: TAsyncTlsPasPrometheusRegistry; Store1, Store2: ITlsPasReplayStore; Obs1, Obs2: TAsyncTlsPasAdaptiveObserver;
   Id, Early: TBytes; Sess: TTlsPasResumptionSession; C: TTlsPasAdaptiveLimitConfig; P: string; LPath: string; F: TextFile;
@@ -307,9 +279,72 @@ begin
   finally Obs.Free; end;
 end;
 
+type TDemoCapture = class(TInterfacedObject, IHttpResponseWriter)
+  private FHeaders: IHttpHeaders; FStatus: THttpStatus;
+  public constructor Create; procedure WriteHeader(const AStatus: THttpStatus); function GetStatus: THttpStatus; function GetHeaders: IHttpHeaders; function Write(const ABuf; const ACount: SizeUInt): SizeUInt; procedure Flush;
+end;
+constructor TDemoCapture.Create; begin inherited Create; FHeaders := NewHttpHeaders; FStatus := HTTP_STATUS_OK; end;
+procedure TDemoCapture.WriteHeader(const AStatus: THttpStatus); begin FStatus := AStatus; end;
+function TDemoCapture.GetStatus: THttpStatus; begin Result := FStatus; end;
+function TDemoCapture.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
+function TDemoCapture.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
+procedure TDemoCapture.Flush; begin end;
+
+procedure DemoCachedExporter;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Exp: TAsyncTlsPasCachedPrometheusExporter; Buf: string; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S28 final) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append');
+  WriteLn('--- Cached Exporter S28 (zero-alloc Append + hit/miss) ---');
+  Store := TAsyncTlsPasReplayStoreFactory.CreateMemory(8, 600000);
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs, 'nextpas_tlspas', 'observer="api"');
+  try
+    WriteLn('First Format miss=', Exp.MissCount, ' hit=', Exp.HitCount, ' len=', Length(Exp.Format));
+    WriteLn('Second Format (hit) hit=', Exp.HitCount+1, ' -> hit cache');
+    Exp.Format; WriteLn('After 2nd hit=', Exp.HitCount, ' miss=', Exp.MissCount);
+    Buf := 'prefix|'; TlsPasAppendPrometheusMetrics(Buf, Obs.GetAdaptiveMetrics, 'nextpas_tlspas', 'observer="api"');
+    WriteLn('Append zero-alloc buf len=', Length(Buf), ' contains observer=', Pos('observer="api"', Buf)>0);
+    Buf := ''; TlsPasAppendAdaptiveHealth(Buf, Obs.GetAdaptiveHealth, 'nextpas_tlspas');
+    WriteLn('Append health len=', Length(Buf), ' contains health_status=', Pos('health_status', Buf)>0);
+    Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $11); SetLength(Early, 10); FillChar(Early[0], 10, $99);
+    Obs.Decide(Id, Early, Sess, True);
+    WriteLn('After decide miss len=', Length(Exp.Format), ' hit=', Exp.HitCount, ' miss=', Exp.MissCount);
+    WriteLn('HttpCached wrapper len=', Length(HttpCachedPrometheusText(Exp)), ' health=', Length(HttpCachedHealthText(Exp)));
+    Exp.Invalidate; WriteLn('After Invalidate miss=', Exp.MissCount, ' len=', Length(Exp.Format));
+  finally Exp.Free; Obs.Free; end;
+end;
+
+procedure DemoMetricsHandler;
+var Reg: TAsyncTlsPasPrometheusRegistry; Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Hdl: IHttpHandler; Req: IHttpRequest; Cap: TDemoCapture; W: IHttpResponseWriter; Sess: TTlsPasResumptionSession; Id, Early: TBytes; Exp: TAsyncTlsPasCachedPrometheusExporter;
+begin
+  WriteLn('--- Metrics Handler S29 (Registry Cached + /metrics) ---');
+  Store := TAsyncTlsPasReplayStoreFactory.CreateMemory(8, 600000);
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Reg := TAsyncTlsPasPrometheusRegistry.Create;
+  Reg.Register('api', Obs); Reg.Register('internal', Obs);
+  Hdl := HttpMetricsHandler(Reg);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/metrics'), hvHttp11, NewHttpHeaders, nil, 0);
+  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter;
+  Hdl.ServeHTTP(Req, W);
+  WriteLn('Registry handler CT=', W.GetHeaders.Get('Content-Type'), ' status=', Ord(W.GetStatus), ' cached hit=', Reg.CacheHitCount, ' miss=', Reg.CacheMissCount);
+  WriteLn('Registry cached text len=', Length(HttpRegistryMetricsTextCached(Reg)), ' contains api=', Pos('observer="api"', HttpRegistryMetricsTextCached(Reg))>0);
+  Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData:=True; Sess.MaxEarlyDataSize:=16384;
+  SetLength(Id,4); FillChar(Id[0],4,$11); SetLength(Early,10); FillChar(Early[0],10,$22);
+  Obs.Decide(Id, Early, Sess, True);
+  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter;
+  Hdl.ServeHTTP(Req, W);
+  WriteLn('After mutate miss=', Reg.CacheMissCount, ' hit=', Reg.CacheHitCount, ' len=', Length(HttpRegistryMetricsTextCached(Reg)));
+  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs, 'myapp');
+  Hdl := HttpMetricsHandler(Exp);
+  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter;
+  Hdl.ServeHTTP(Req, W);
+  WriteLn('Single exporter handler CT=', W.GetHeaders.Get('Content-Type'), ' contains myapp=', Pos('myapp_adaptive_max', HttpCachedPrometheusText(Exp))>0);
+  Exp.Free; Reg.Free; Obs.Free;
+end;
+
+begin
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S29 final) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -333,5 +368,7 @@ begin
   WriteLn;
   DemoCachedExporter;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S28 cached+append self-proof.');
+  DemoMetricsHandler;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S29 metrics-handler self-proof.');
 end.

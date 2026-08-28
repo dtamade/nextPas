@@ -1,9 +1,9 @@
-# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S28 Final)
+# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S29 Final)
 
-**模块**: `nextpas.core.net.async.tlspas` (L2 async, pure Pascal TLS 1.3 + Registry + Health + Cached) + `nextpas.core.http.earlydata` (L3 薄桥) + `nextpas.core.http.middleware.earlydata` (L3 中间件) + `nextpas.core.http.middleware.earlydata.adaptive` (L3 自适应限流埋点+结构化指标+压测+Prometheus+Registry+Config+Health+Cached) + `IHttpRequestWithEarlyData` (L3 请求标记) + `nextpas.core.http.client_earlydata` (L3 客户端零配置自动重试) + `TAsyncTlsPasAdaptiveObserver` (L2 自适应熔断+指标聚合+压测+Prometheus+Health) + `TAsyncTlsPasPrometheusRegistry` (L2 多实例聚合) + `TAsyncTlsPasCachedPrometheusExporter` (L2 缓存导出器)
-**状态**: Implemented — S28 Cached 终局：`TlsPasMetricsEqual` + `TlsPasAppendPrometheusMetrics(var Buf)`/`TlsPasAppendAdaptiveHealth` 零分配缓冲直拼 + `TAsyncTlsPasCachedPrometheusExporter` (Mutex 缓存、Metrics 相等命中、Invalidate、Hit/Miss 计数) + L3 `HttpCachedPrometheusText/HealthText` 薄包装 + `DemoCachedExporter` 11段自证 + 混沌 `HealthProperty` 100 随机不变式 + 62 tests + 48 bench 全绿，heap 0，S28 Final
+**模块**: `nextpas.core.net.async.tlspas` (L2 async, pure Pascal TLS 1.3 + Registry Cached + Health + MetricsHandler) + `nextpas.core.http.earlydata` (L3 薄桥) + `nextpas.core.http.middleware.earlydata` (L3 中间件) + `nextpas.core.http.middleware.earlydata.adaptive` (L3 自适应限流埋点+结构化指标+压测+Prometheus+RegistryCached+Config+Health+Handler) + `IHttpRequestWithEarlyData` (L3 请求标记) + `nextpas.core.http.client_earlydata` (L3 客户端零配置自动重试) + `TAsyncTlsPasAdaptiveObserver` (L2 自适应熔断+指标聚合+压测+Prometheus+Health) + `TAsyncTlsPasPrometheusRegistry` (L2 多实例聚合, 缓存) + `TAsyncTlsPasCachedPrometheusExporter` (L2 缓存导出器)
+**状态**: Implemented — S29 Handler 终局：`TAsyncTlsPasPrometheusRegistry.FormatAllMetricsCached` (Mutex 保护全量缓存、Prefix 区分、`TlsPasMetricsEqual` 等值命中、`InvalidateCache` + `CacheHit/Miss` 计数) + L3 `HttpMetricsHandler(Registry[,Prefix])/HttpMetricsHandler(Exporter)` (`text/plain; version=0.0.4`, `200`, 纯函数零分支) + `HttpRegistryMetricsTextCached` 薄包装 + `DemoMetricsHandler` 12段自证 + `RegistryCached/Handler` 3测试 + 51 bench 全绿，65 tests 全绿，heap 0，S29 Final
 **RFC**: 8446 §2.3 / §4.2.10 / §4.6.1 / Appendix E.5, 8446 §8, 8470 (425 Too Early)
-**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv → S12-server → S13-observe → S14-adaptive → S15-polish → S16-http-bridge → S17-http-middleware → S18-http-client-retry → S19-http-auto-retry → S20-adaptive-observer → S21-demo-fullchain → S22-adaptive-middleware → S23-adaptive-metrics → S24-pressure-demo → S25-prometheus → S26-registry+config → S27-health → S28-cached (本提交)
+**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv → S12-server → S13-observe → S14-adaptive → S15-polish → S16-http-bridge → S17-http-middleware → S18-http-client-retry → S19-http-auto-retry → S20-adaptive-observer → S21-demo-fullchain → S22-adaptive-middleware → S23-adaptive-metrics → S24-pressure-demo → S25-prometheus → S26-registry+config → S27-health → S28-cached → S29-handler (本提交)
 
 ---
 
@@ -18,7 +18,7 @@
 - 不支持 0-RTT 客户端证书 (`post_handshake_auth` 之前的 early_data 禁止证书)。
 - 不在 v1 支持跨 SNI / 跨 cipher suite 的 PSK 复用。
 
-## 2. 落地状态（截至 S28 Final）
+## 2. 落地状态（截至 S29 Final）
 
 - `TAsyncTlsPasSessionCache` LRU4：按 host:port 聚合，最老逐出，`SecureZero` 清理，`TryPeek` 高→低跳过期；`TTlsPasResumptionSession` 新增 `HasMaxEarlyData/MaxEarlyDataSize`，`FeedPostHandshake` 从 `NewSessionTicket` 完整捕获（含 `max_early_data` 解析，`0` 视为不可 early，`>16384` 视为不可 early）。
 - HRR 可观测：`ITlsPasHRRInfo.WasHRR` 与 `ITlsPasResumeInfo.WasResumed` 通过 `TTlsPasStream` 暴露；`PSK` 与 `HRR` binder 重算已覆盖（`cookie` 插入于 `0x0029` 之前，`message_hash 0xFE` 合成）。
@@ -47,7 +47,8 @@
 - S26 Registry+Config 终局：新增 `TAsyncTlsPasPrometheusRegistry` (Mutex 聚合多 `TAsyncTlsPasAdaptiveObserver`，`Register/Unregister/Clear/Count`，`FormatAllMetrics` 按 `observer="name"` 标签聚合，L2 复用 `TlsPasFormatPrometheusMetricsWithLabels`) + `TlsPasFormatPrometheusMetricsWithLabels` 标签版 + `TlsPasTryLoadAdaptiveConfigFromEnv` (`NEXTPAS_TLSPAS_BASE/MIN/MAX/REJECT_RATE` Env，`StrToIntDef`/`StrToFloatDef`，非法忽略，夹逼 `Min<=Base<=Max`) + `TlsPasTryLoadAdaptiveConfigFromFile` (`key=value`/`#`注释，`base/min/max/threshold` 别名) + L3 `HttpPrometheusRegistryText`/`HttpAdaptiveConfigFromEnv/File` 薄包装 + `DemoPrometheusRegistryAndConfig` 9段自证 (Registry 2实例+Config 文件/Env) + 测试 `PrometheusRegistry`/`AdaptiveConfigEnvAndFile` + bench `PrometheusRegistry 2 observers ~15µs`/`AdaptiveConfig FromEnv ~200ns`；`build 353k lines 0 警告`，`run` 9段自证（57 tests 43 bench 对齐），多租户 `/metrics` 与运维配置闭环。
 - S27 Health 终局：新增 `TTlsPasAdaptiveHealth` (Healthy/Reason/RejectRate/Current/Max + `Compute` 纯函数零堆：`reject>阈值且Total>=10 → degraded reject_rate` / `current>80 → degraded` / `max@min → degraded` / 否则 `healthy ok`) + `TlsPasFormatAdaptiveHealth` (`healthy/degraded reason=..`) + `TlsPasAdaptiveHealthToPrometheus` (`health_status 1/0` gauge，支持标签) + `TAsyncTlsPasAdaptiveObserver.GetAdaptiveHealth` 一站式 + L3 `HttpAdaptiveHealthJSON` (`{"healthy":true/false,..}` 含 reject_rate/current/max) + `HttpAdaptiveHealthHandler` (`/healthz` 200/503 + `Content-Type: application/json`) + `DemoAdaptiveHealth` 10段自证 (initial healthy→2 rejects degraded→Clear healthy + Prometheus 1/0) + 测试 `AdaptiveHealth`/`HealthPrometheusLabels` + bench `AdaptiveHealth ~200ns`/`HealthPrometheus ~1µs`；`build 354k lines 0 警告`，`run` 10段自证（59 tests 45 bench 对齐），健康探针与告警闭环。
 - S28 Cached 终局：新增 `TlsPasMetricsEqual` 结构相等 + `TlsPasAppendPrometheusMetrics(var Buf, Metrics, Prefix[, Labels])`/`TlsPasAppendAdaptiveHealth` 零分配缓冲直拼（复用 Format 纯函数，`Buf+Format` 单次拷贝，返回追加长，支持多指标串联）+ `TAsyncTlsPasCachedPrometheusExporter` (Mutex 保护 `Observer` + `Prefix/Labels` + `FCached/FCachedMetrics/HasCache` + `Hit/Miss` 计数，`Format` 先 `TlsPasMetricsEqual` 命中即返回缓存，否则 `FormatMetrics` 重算并更新；`AppendTo`/`Invalidate`/`HitCount`/`MissCount`) + L3 `HttpCachedPrometheusText/HealthText` 薄包装 + `DemoCachedExporter` 11段自证 (First miss→Second hit→Append 直拼→Append health→After decide miss→Invalidate→Http wrapper) + 测试 `PrometheusAppend`/`CachedExporter`/`HealthProperty` (100 随机 chaos 不变式：healthy↔min/current/阈值互斥，阈值边界) + bench `PrometheusAppend ~7µs`/`Cached hit ~120ns`/`Cached miss ~7µs`；`build 355k lines 0 警告`，`run` 11段自证（62 tests 48 bench 对齐），高频 `/metrics` 零重复计算闭环。
-- `bench_tlspas_hrr` 48 项 + demo S28：`MessageHash 2.7/4.1µs Patch 2.7/1.7µs P256 2.39ms Transcript 6.2µs EarlyData 28/29µs EOED 342ns Policy 3.4ns Fingerprint 10µs Replay 1.2µs Store 1.4µs Stats 86ns IsReplayed 7µs FileStore 200µs KvStore 69µs ServerDecide 3.2µs Observer 3.2µs Adaptive 1.9ns AdaptiveObserverDecide 3.5µs AdaptiveObserverMax 95ns Header 4ns HttpHeader 4ns HttpStream nil 21ns HttpRequest 81ns Middleware 433ns IsThrottled 188ns AdaptiveMiddleware 648ns MetricsFormat 3.0µs LogLine 5.8µs Pressure 2.2µs Prometheus 7.8µs Registry 2×17µs ConfigEnv 887ns Health 200ns HealthProm 1µs Append 7µs CachedHit 120ns CachedMiss 7µs ClientIsIdempotent 24ns ClientIsEarly 88ns ClientShouldRetry 139ns ClientClone 2.0µs ClientAutoMark 1.8µs ClientAutoRetry 2.0µs`，`P384 741ms` 单采。
+- S29 Handler 终局：L2 `TAsyncTlsPasPrometheusRegistry` 扩展全量缓存（`FCachedAll/FCachedSnapshot/FCachedPrefix/FCacheValid/FHitCount/FMissCount` + `InvalidateCacheLocked` 在 `Register/Unregister/Clear` 自动失效，`FormatAllMetricsCached[Prefix]` 快照 `GetAdaptiveMetrics` 全量 + `TlsPasMetricsEqual`逐项比对命中即 `FHitCount`，否则重算 `FormatMetricsWithLabels` 聚合并更新 `FCachedAll/Snapshot/Prefix/Valid` + `CacheHit/Miss` 计数）+ L3 `HttpMetricsHandler(Registry[,Prefix])`/`HttpMetricsHandler(Exporter)` (`text/plain; version=0.0.4`, `200`, 纯函数零分支；`nil` 兜底空串) + `HttpRegistryMetricsTextCached` 薄包装 + `DemoMetricsHandler` 12段自证 (Registry handler CT/status + cached hit/miss + After mutate miss + Single exporter handler myapp 前缀) + 测试 `RegistryCached`/`MetricsHandler`/`MetricsHandlerCachedExporter` + bench `RegistryCached hit ~150ns/miss ~17µs/Handler ~500ns`；`build 356k lines 0 警告`，`run` 12段自证（65 tests 51 bench 对齐），`/metrics` 一键挂载闭环。
+- `bench_tlspas_hrr` 51 项 + demo S29：`MessageHash 2.7/4.1µs Patch 2.7/1.7µs P256 2.39ms Transcript 6.2µs EarlyData 28/29µs EOED 342ns Policy 3.4ns Fingerprint 10µs Replay 1.2µs Store 1.4µs Stats 86ns IsReplayed 7µs FileStore 200µs KvStore 69µs ServerDecide 3.2µs Observer 3.2µs Adaptive 1.9ns AdaptiveObserverDecide 3.5µs AdaptiveObserverMax 95ns Header 4ns HttpHeader 4ns HttpStream nil 21ns HttpRequest 81ns Middleware 433ns IsThrottled 188ns AdaptiveMiddleware 648ns MetricsFormat 3.0µs LogLine 5.8µs Pressure 2.2µs Prometheus 7.8µs Registry 2×17µs Cached 120ns/7µs RegistryCached 150ns/17µs Handler 500ns ConfigEnv 887ns Health 200ns HealthProm 1µs Append 7µs ClientIsIdempotent 24ns ClientIsEarly 88ns ClientShouldRetry 139ns ClientClone 2.0µs ClientAutoMark 1.8µs ClientAutoRetry 2.0µs`，`P384 741ms` 单采。
 
 ## 3. 威胁模型与重放约束
 
@@ -225,6 +226,15 @@ type TAsyncTlsPasCachedPrometheusExporter = class // Observer+Prefix/Labels, Mut
 end;
 function HttpCachedPrometheusText(const AExporter: TAsyncTlsPasCachedPrometheusExporter): string; // 薄包装
 function HttpCachedHealthText(const AExporter: TAsyncTlsPasCachedPrometheusExporter): string;
+// S29 Handler 缓存与 /metrics 一键挂载 (L2 共享缓存, L3 handler)
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetricsCached: string; overload; // 等值命中 150ns
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetricsCached(const APrefix: string): string; overload;
+procedure TAsyncTlsPasPrometheusRegistry.InvalidateCache; function CacheHitCount: Cardinal; function CacheMissCount: Cardinal;
+function HttpRegistryMetricsTextCached(const ARegistry: TAsyncTlsPasPrometheusRegistry): string; overload;
+function HttpRegistryMetricsTextCached(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): string; overload;
+function HttpMetricsHandler(const ARegistry: TAsyncTlsPasPrometheusRegistry): IHttpHandler; overload; // 200 + text/plain; version=0.0.4
+function HttpMetricsHandler(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): IHttpHandler; overload;
+function HttpMetricsHandler(const AExporter: TAsyncTlsPasCachedPrometheusExporter): IHttpHandler; overload;
 const HTTP_HEADER_X_EARLY_DATA = 'X-Early-Data';
 function HttpEarlyDataHeaderValueFromDecision(ADecision: TTlsPasEarlyDataDecision): string; inline; // 透传 tlspas HeaderValue
 function HttpEarlyDataHeaderValueFromStream(const AStream: IAsyncTcpStream): string; // Supports(ITlsPasEarlyDataInfo) -> '1'/'0'/'' (nil/非 TLS 空串)
@@ -234,7 +244,7 @@ function HttpEarlyDataDecisionToLog(ADecision: TTlsPasEarlyDataDecision): string
 
 `TTlsPasStream` 同时实现 `ITlsPasResumeInfo / ITlsPasHRRInfo / ITlsPasEarlyDataInfo`，`AllowEarlyData=False` 时不分配 early secret、不插入扩展、不创建 early sealer，热路径与 1-RTT 同构；`AllowEarlyData=True` 但缓存未命中或无 `max_early_data` 时同样回退。
 
-## 7. 测试矩阵（已落地 62 项）
+## 7. 测试矩阵（已落地 65 项）
 
 | 场景 | 期望 | 覆盖 |
 |------|------|------|
@@ -269,6 +279,8 @@ function HttpEarlyDataDecisionToLog(ADecision: TTlsPasEarlyDataDecision): string
 | 零分配缓冲 | Buf+Format 直拼，多串联零额外 Format，7µs | PrometheusAppend |
 | 缓存导出器 | 命中120ns/未命中7µs，Invalidate 后重算 | CachedExporter |
 | 健康混沌不变式 | 100 随机 healthy↔min/current/阈值互斥，阈值边界 | HealthProperty |
+| Registry 缓存 | 命中150ns/未命中17µs，Register/Clear 自动失效 | RegistryCached |
+| /metrics Handler | 200 + text/plain; version=0.0.4，Registry/Exporter 双形态 | MetricsHandler/ MetricsHandlerCachedExporter |
 | heaptrc | 0 unfreed blocks | 双跑 heap OK |
 
 活体 `EarlyDataLiveRejectFallback`：`base 15556` 双握手（Step1 正常获票据 → 提升为 early 能力 → Step2 `EarlyData` 13 字节），验证 `WasEarlyDataAccepted=false` 且 `HTTP/1.` 命中，`WasHRR=false`。
