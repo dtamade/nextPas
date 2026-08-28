@@ -84,11 +84,22 @@ procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
 { invoke 命名空间校验（registry 注册与桥分发共用同一权威规则）：
   ACmd 为空、或以 'npw.'（协议错误码词汇前缀）或 '_' 开头时抛
   EWebviewInvalidState，其余一律接受（CONTRACT §3.3）。 }
-procedure CheckInvokeCmd(const ACmd: string);
+procedure CheckInvokeCmd(const ACmd: string); inline;
 
 { scheme token 校验：复用度 — builder 早期 Fail-Fast 与 CheckWebviewOptions 共用同一权威。
   规则：非空且全小写 [a-z][a-z0-9+.-]*，空串返回 False（由 CheckWebviewOptions 视为用默认）。 }
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
+function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
+
+{ 几何校验公共抽取（S39）：builder 链式早期 Fail-Fast 与 CheckWebviewOptions 同源复用，零重复。 }
+procedure CheckWebviewSize(AWidth, AHeight: Integer); inline;
+procedure CheckWebviewMinSize(AMinWidth, AMinHeight: Integer; AMaxWidth, AMaxHeight: Integer); inline;
+procedure CheckWebviewMaxSize(AMaxWidth, AMaxHeight: Integer; AMinWidth, AMinHeight: Integer); inline;
+
+{ 会话互斥校验（S40）：EphemeralSession 与 DataDirectory 互斥，builder 早期 Fail-Fast 与 CheckWebviewOptions 同源，零重复。 }
+procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string); inline;
+
+{ 注入脚本命名空间守卫（S40）：单条脚本不得触 __npw，builder 与 CheckWebviewOptions 同源，零重复。 }
+procedure CheckWebviewInitScript(const AScript: string); inline;
 
 { EWebviewError 族 —— 派生自框架根异常，类目定值见单元头注释表 }
 type
@@ -169,7 +180,7 @@ begin
   Result.InitScripts := nil;
 end;
 
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
+function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
 var
   I: Integer;
 begin
@@ -189,29 +200,56 @@ begin
   Result := True;
 end;
 
+procedure CheckWebviewSize(AWidth, AHeight: Integer); inline;
+begin
+  if (AWidth < 0) or (AHeight < 0) then
+    raise EWebviewInvalidState.Create('Width/Height must be >= 0');
+end;
+
+procedure CheckWebviewMinSize(AMinWidth, AMinHeight: Integer; AMaxWidth, AMaxHeight: Integer); inline;
+begin
+  if (AMinWidth < 0) or (AMinHeight < 0) then
+    raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
+  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMinWidth > AMaxWidth) then
+    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
+  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMinHeight > AMaxHeight) then
+    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+end;
+
+procedure CheckWebviewMaxSize(AMaxWidth, AMaxHeight: Integer; AMinWidth, AMinHeight: Integer); inline;
+begin
+  if (AMaxWidth < 0) or (AMaxHeight < 0) then
+    raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
+  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMaxWidth < AMinWidth) then
+    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
+  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMaxHeight < AMinHeight) then
+    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+end;
+
+procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string); inline;
+begin
+  if AEphemeral and (ADataDirectory <> '') then
+    raise EWebviewInvalidState.Create(
+      'EphemeralSession and DataDirectory are mutually exclusive');
+end;
+
+procedure CheckWebviewInitScript(const AScript: string); inline;
+begin
+  if Pos('__npw', AScript) > 0 then
+    raise EWebviewInvalidState.Create(
+      'InitScripts must not touch __npw (bridge owns that namespace)');
+end;
+
 procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
 var
   LIdx: Integer;
   LToken: string;
-
 begin
-  if AOptions.EphemeralSession and (AOptions.DataDirectory <> '') then
-    raise EWebviewInvalidState.Create(
-      'EphemeralSession and DataDirectory are mutually exclusive');
+  CheckWebviewSession(AOptions.EphemeralSession, AOptions.DataDirectory);
 
-  if (AOptions.Width < 0) or (AOptions.Height < 0) then
-    raise EWebviewInvalidState.Create('Width/Height must be >= 0');
-  if (AOptions.MinWidth < 0) or (AOptions.MinHeight < 0) then
-    raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
-  if (AOptions.MaxWidth < 0) or (AOptions.MaxHeight < 0) then
-    raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
-
-  if (AOptions.MinWidth > 0) and (AOptions.MaxWidth > 0)
-    and (AOptions.MaxWidth < AOptions.MinWidth) then
-    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
-  if (AOptions.MinHeight > 0) and (AOptions.MaxHeight > 0)
-    and (AOptions.MaxHeight < AOptions.MinHeight) then
-    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+  CheckWebviewSize(AOptions.Width, AOptions.Height);
+  CheckWebviewMinSize(AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight);
+  CheckWebviewMaxSize(AOptions.MaxWidth, AOptions.MaxHeight, AOptions.MinWidth, AOptions.MinHeight);
 
   if AOptions.SchemeName <> '' then
   begin
@@ -222,14 +260,10 @@ begin
   end;
 
   for LIdx := 0 to High(AOptions.InitScripts) do
-  begin
-    if Pos('__npw', AOptions.InitScripts[LIdx]) > 0 then
-      raise EWebviewInvalidState.Create(
-        'InitScripts must not touch __npw (bridge owns that namespace)');
-  end;
+    CheckWebviewInitScript(AOptions.InitScripts[LIdx]);
 end;
 
-procedure CheckInvokeCmd(const ACmd: string);
+procedure CheckInvokeCmd(const ACmd: string); inline;
 begin
   if ACmd = '' then
     raise EWebviewInvalidState.Create('invoke cmd must not be empty');

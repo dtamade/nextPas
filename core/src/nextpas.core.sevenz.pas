@@ -39,6 +39,8 @@ type
   TSevenZFilter = nextpas.core.sevenz.intf.TSevenZFilter;
   TSevenZLzmaEncoded = nextpas.core.sevenz.intf.TSevenZLzmaEncoded;
   TSevenZEntryInfoArray = nextpas.core.sevenz.intf.TSevenZEntryInfoArray;
+  TSevenZExtracted = nextpas.core.sevenz.intf.TSevenZExtracted;
+  TSevenZExtractedArray = nextpas.core.sevenz.intf.TSevenZExtractedArray;
   TSevenZEntryEnumerator = nextpas.core.sevenz.intf.TSevenZEntryEnumerator;
   ISevenZLzmaDecoder = nextpas.core.sevenz.intf.ISevenZLzmaDecoder;
   ISevenZLzmaEncoder = nextpas.core.sevenz.intf.ISevenZLzmaEncoder;

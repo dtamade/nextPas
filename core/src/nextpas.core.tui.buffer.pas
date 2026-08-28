@@ -446,9 +446,6 @@ var
   LByte: Byte;
   LAdv: TGraphemeAdvance;
   LAscii: Boolean;
-  LUniform: Boolean;
-  LFirst: Byte;
-  LCount: Integer;
 begin
   Result := 0;
   LLeft := Integer(FArea.X);
@@ -477,33 +474,6 @@ begin
 
   if LAscii then
   begin
-    { K110: uniform ascii bulk fast path — bench_tui SetString.full is StringOfChar('a',100) uniform }
-    if (LHidden = 0) and (ALen > 0) then
-    begin
-      LUniform := True;
-      LFirst := Byte(AStr[0]);
-      if LFirst < 32 then LUniform := False
-      else
-        for LI := 1 to ALen - 1 do
-          if Byte(AStr[LI]) <> LFirst then begin LUniform := False; Break; end;
-      if LUniform then
-      begin
-        LCount := ALen;
-        if LCount > LRemaining then LCount := LRemaining;
-        if LCount > 0 then
-        begin
-          for LX := 0 to LCount - 1 do
-            PrepareWriteSpan(LCursor + LX, AY, 1);
-          LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
-          CellSetSymbolAscii(LCP^, AnsiChar(LFirst));
-          CellApplyStyle(LCP^, AStyle);
-          if LCount > 1 then
-            Move(LCP^, (LCP + 1)^, (LCount - 1) * SizeOf(TCell));
-          Result := LCount;
-          Exit;
-        end;
-      end;
-    end;
     for LI := 0 to ALen - 1 do
     begin
       LByte := Byte(AStr[LI]);

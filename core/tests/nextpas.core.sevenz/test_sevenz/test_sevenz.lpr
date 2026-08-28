@@ -3242,6 +3242,56 @@ begin
   CheckEqual(Int64(-1), Int64(LR.FindBySuffix('.pas')), 'nosuffix miss');
 end;
 
+procedure TestGlobPrefixStarSuffix;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray; Idx: Integer;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('pre_aaa_post.txt', BytesOf([$01]));
+  LW.AddFile('pre_bbb_post.txt', BytesOf([$02]));
+  LW.AddFile('pre_aaa_other.txt', BytesOf([$03]));
+  LW.AddFile('other_post.txt', BytesOf([$04]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByGlob('pre_*_post.txt');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'pre*suffix count');
+  Idx := LR.FindByGlob('pre_*_post.txt');
+  Check(Idx >= 0, 'pre*suffix find');
+  Check(Pos('pre_', LR.Entry(Idx).Name)=1, 'pre*suffix find prefix');
+end;
+
+procedure TestExtractByPrefixSuffixGlob;
+var LW: ISevenZWriter; LR: ISevenZReader; Ext: TSevenZExtractedArray; LOk: Boolean; LErr: string;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('a.log', BytesOf([$02]));
+  LW.AddFile('b.txt', BytesOf([$03]));
+  LW.AddFile('docs/c.txt', BytesOf([$04]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Ext := LR.ExtractByPrefix('a');
+  CheckEqual(Int64(2), Int64(Length(Ext)), 'extract prefix a count');
+  Ext := LR.ExtractBySuffix('.txt');
+  CheckEqual(Int64(3), Int64(Length(Ext)), 'extract suffix txt count');
+  Ext := LR.ExtractByGlob('*.txt');
+  CheckEqual(Int64(3), Int64(Length(Ext)), 'extract glob txt');
+  Check(Ext[0].Data <> nil, 'extract glob data non-nil');
+  LOk := LR.TryExtractByGlob('*.txt', Ext);
+  Check(LOk and (Length(Ext)=3), 'try extract glob ok');
+  LOk := LR.TryExtractByGlobWithError('*.txt', Ext, LErr);
+  Check(LOk and (LErr='') and (Length(Ext)=3), 'try with error ok');
+  Ext := LR.ExtractByGlob('pre_*_post.txt');
+  CheckEqual(Int64(0), Int64(Length(Ext)), 'extract glob miss zero');
+end;
+
+procedure TestLowerBoundSuffixZeroAlloc;
+var LW: ISevenZWriter; LR: ISevenZReader; LI: Integer;
+begin
+  LW := TSevenZWriterImpl.Create;
+  for LI:=0 to 199 do LW.AddFile(Format('file_%3.3d.log', [LI]), BytesOf([Byte(LI)]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  CheckEqual(Int64(200), Int64(Length(LR.EntriesBySuffix('.log'))), 'suffix log 200 via zero alloc');
+  CheckEqual(Int64(200), Int64(Length(LR.EntriesBySuffix('.txt')) + Length(LR.EntriesBySuffix('.log'))), 'suffix mix');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3423,6 +3473,9 @@ begin
   T.Test('find by glob', @TestFindByGlob);
   T.Test('glob dispatch', @TestGlobDispatch);
   T.Test('find by prefix noalloc', @TestFindByPrefixNoAlloc);
+  T.Test('glob prefix*suffix', @TestGlobPrefixStarSuffix);
+  T.Test('extract by prefix suffix glob', @TestExtractByPrefixSuffixGlob);
+  T.Test('lowerbound suffix zero alloc', @TestLowerBoundSuffixZeroAlloc);
 
   if not T.Run then Halt(1);
 end.

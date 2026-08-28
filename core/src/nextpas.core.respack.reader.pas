@@ -31,7 +31,7 @@ type
       const ABuf: PByte; const ALen: SizeUInt): Integer;
     function CompareStoredToStored(const AA, AB: SizeUInt): Integer;
     function CompareCachedEntries(const AA, AB: TResPackEntry): Integer;
-    function Search(const APath: string; out AIdx: SizeUInt): Boolean;
+    function Search(const APath: string; out AIdx: SizeUInt): Boolean; inline;
 
   public
     { 八步校验后可用；任一失败 raise EResPackCorrupted }
@@ -273,18 +273,20 @@ begin
   FStrTabBase := 0;
 end;
 
-function TResPack.Search(const APath: string; out AIdx: SizeUInt): Boolean;
+function TResPack.Search(const APath: string; out AIdx: SizeUInt): Boolean; inline;
 var
   Lo, Hi, Mid: SizeUInt;
   C: Integer;
+  LPtr: Pointer;
 begin
   Result := False;
   Lo := 0;
   Hi := Count;
+  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    C := CompareStoredToBuf(Mid, Pointer(PChar(APath)), SizeUInt(Length(APath)));
+    C := CompareStoredToBuf(Mid, PByte(LPtr), SizeUInt(Length(APath)));
     if C = 0 then
     begin
       AIdx := Mid;

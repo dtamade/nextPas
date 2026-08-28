@@ -269,8 +269,7 @@ end;
 
 function TBuilderImpl.Size(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
-  if (AWidth < 0) or (AHeight < 0) then
-    raise EWebviewInvalidState.Create('Width/Height must be >= 0');
+  CheckWebviewSize(AWidth, AHeight);
   FOptions.Width := AWidth;
   FOptions.Height := AHeight;
   Result := Self;
@@ -278,12 +277,7 @@ end;
 
 function TBuilderImpl.MinSize(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
-  if (AWidth < 0) or (AHeight < 0) then
-    raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
-  if (AWidth > 0) and (FOptions.MaxWidth > 0) and (AWidth > FOptions.MaxWidth) then
-    raise EWebviewInvalidState.Create('MinWidth must be <= MaxWidth');
-  if (AHeight > 0) and (FOptions.MaxHeight > 0) and (AHeight > FOptions.MaxHeight) then
-    raise EWebviewInvalidState.Create('MinHeight must be <= MaxHeight');
+  CheckWebviewMinSize(AWidth, AHeight, FOptions.MaxWidth, FOptions.MaxHeight);
   FOptions.MinWidth := AWidth;
   FOptions.MinHeight := AHeight;
   Result := Self;
@@ -291,12 +285,7 @@ end;
 
 function TBuilderImpl.MaxSize(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
-  if (AWidth < 0) or (AHeight < 0) then
-    raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
-  if (FOptions.MinWidth > 0) and (AWidth > 0) and (AWidth < FOptions.MinWidth) then
-    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
-  if (FOptions.MinHeight > 0) and (AHeight > 0) and (AHeight < FOptions.MinHeight) then
-    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+  CheckWebviewMaxSize(AWidth, AHeight, FOptions.MinWidth, FOptions.MinHeight);
   FOptions.MaxWidth := AWidth;
   FOptions.MaxHeight := AHeight;
   Result := Self;
@@ -331,18 +320,14 @@ end;
 
 function TBuilderImpl.DataDirectory(const APath: string): IWebviewBuilder; inline;
 begin
-  if (APath <> '') and FOptions.EphemeralSession then
-    raise EWebviewInvalidState.Create(
-      'EphemeralSession and DataDirectory are mutually exclusive');
+  CheckWebviewSession(FOptions.EphemeralSession, APath);
   FOptions.DataDirectory := APath;
   Result := Self;
 end;
 
 function TBuilderImpl.Ephemeral: IWebviewBuilder; inline;
 begin
-  if FOptions.DataDirectory <> '' then
-    raise EWebviewInvalidState.Create(
-      'EphemeralSession and DataDirectory are mutually exclusive');
+  CheckWebviewSession(True, FOptions.DataDirectory);
   FOptions.EphemeralSession := True;
   Result := Self;
 end;
@@ -353,19 +338,22 @@ begin
   Result := Self;
 end;
 
-procedure TBuilderImpl.GrowInitScripts;
-var NC: Integer;
+function GrowCapacity(ACurrent: Integer): Integer; inline;
 begin
-  NC := Length(FInitScripts);
-  if NC = 0 then NC := 4 else NC := NC * 2;
-  SetLength(FInitScripts, NC);
+  if ACurrent = 0 then
+    Result := 4
+  else
+    Result := ACurrent * 2;
+end;
+
+procedure TBuilderImpl.GrowInitScripts;
+begin
+  SetLength(FInitScripts, GrowCapacity(Length(FInitScripts)));
 end;
 
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder;
 begin
-  if Pos('__npw', AJavascript) > 0 then
-    raise EWebviewInvalidState.Create(
-      'InitScripts must not touch __npw (bridge owns that namespace)');
+  CheckWebviewInitScript(AJavascript);
   if FInitScriptsLen = Length(FInitScripts) then GrowInitScripts;
   FInitScripts[FInitScriptsLen] := AJavascript;
   Inc(FInitScriptsLen);
@@ -373,19 +361,13 @@ begin
 end;
 
 procedure TBuilderImpl.GrowInvokes;
-var NC: Integer;
 begin
-  NC := Length(FInvokes);
-  if NC = 0 then NC := 4 else NC := NC * 2;
-  SetLength(FInvokes, NC);
+  SetLength(FInvokes, GrowCapacity(Length(FInvokes)));
 end;
 
 procedure TBuilderImpl.GrowReady;
-var NC: Integer;
 begin
-  NC := Length(FReady);
-  if NC = 0 then NC := 4 else NC := NC * 2;
-  SetLength(FReady, NC);
+  SetLength(FReady, GrowCapacity(Length(FReady)));
 end;
 
 procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string);

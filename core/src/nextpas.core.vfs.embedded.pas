@@ -415,14 +415,18 @@ function TEmbeddedVfs.LowerBoundPath(const APath: string): SizeInt; inline;
 var
   Lo, Hi, Mid: SizeInt;
   C: Integer;
+  LPtr: Pointer;
+  LLen: SizeUInt;
 begin
+  LLen := SizeUInt(Length(APath));
+  if LLen > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
   Lo := 0;
   Hi := Length(FPaths);
   while Lo < Hi do
   begin
     Mid := (Lo + Hi) shr 1;
-    C := CompareBytesOrdered(Pointer(PChar(FPaths[Mid])), Pointer(PChar(APath)),
-      SizeUInt(Length(FPaths[Mid])), SizeUInt(Length(APath)));
+    C := CompareBytesOrdered(Pointer(@FPaths[Mid][1]), LPtr,
+      SizeUInt(Length(FPaths[Mid])), LLen);
     if C < 0 then
       Lo := Mid + 1
     else
@@ -454,12 +458,18 @@ end;
 function TEmbeddedVfs.IndexOfPath(const APath: string): SizeInt;
 var
   Lo: SizeInt;
+  LPtr: Pointer;
+  LLen: SizeUInt;
 begin
   Lo := LowerBoundPath(APath);
-  if (Lo < Length(FPaths))
-    and (CompareBytesOrdered(Pointer(PChar(FPaths[Lo])), Pointer(PChar(APath)),
-      SizeUInt(Length(FPaths[Lo])), SizeUInt(Length(APath))) = 0) then
-    Exit(Lo);
+  if Lo < Length(FPaths) then
+  begin
+    LLen := SizeUInt(Length(APath));
+    if LLen > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
+    if CompareBytesOrdered(Pointer(@FPaths[Lo][1]), LPtr,
+      SizeUInt(Length(FPaths[Lo])), LLen) = 0 then
+      Exit(Lo);
+  end;
   Result := -1;
 end;
 

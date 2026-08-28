@@ -4,7 +4,12 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.32（S38—— InitScripts 容量与完整性抛光：Builder InitScripts 倍增预分配（4→2×，与 FInvokes/FReady 同构，零 O(n²)，Build 时切片同步至 FOptions）+ CONTRACT 1.32 时效，承接 S37 容量与 Fail-Fast（IsValidWebviewSchemeToken 复用 + FInvokes/FReady 倍增 + Scheme/几何早筛）；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；Production Ready 保持）
+**版本**：1.37（S43—— 全校验 inline 收口：IsValidWebviewSchemeToken/CheckInvokeCmd 补 inline（全 7 校验 helper 均 inline，builder 13 链路零额外调用）+ CONTRACT 1.37 时效，承接 S42 审计冻结；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；Production Ready 保持）
+**承接**：1.36（S42—— 静态审计冻结：零 TODO/FIXME（src 0、docs 仅 fafafa 历史引用）、fpc -vh 0 hint（factory 0 warnings，2 处 exhaustive 以 {$WARNINGS OFF} 抑制，wk 桩 {$HINTS OFF}）、hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；Production Ready 冻结复核，承接 S41 容量同构）
+**承接**：1.35（S41—— 容量同构收口：builder 抽取 GrowCapacity 公共倍增（4→2×）—— GrowInitScripts/GrowInvokes/GrowReady 三同构收敛零重复 + CONTRACT 1.35 时效，承接 S40 会话/脚本守卫复用；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；Production Ready 保持）
+**承接**：1.34（S40—— 会话与脚本守卫复用收口：base 抽取 CheckWebviewSession/CheckWebviewInitScript 二公共校验（builder DataDirectory/Ephemeral/AddInitScript 早期复用，零重复；CheckWebviewOptions 同源）+ 几何校验 inline 化 + CONTRACT 1.34 时效，承接 S39 几何复用；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；Production Ready 保持）
+**承接**：1.33（S39—— 几何校验复用收口：base 抽取 CheckWebviewSize/MinSize/MaxSize 三公共校验（builder Size/MinSize/MaxSize 早期复用，零重复校验；CheckWebviewOptions 同源复用）+ CONTRACT 1.33 时效，承接 S38 InitScripts 倍增预分配（4→2×）；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；Production Ready 保持）
+**承接**：1.32（S38—— InitScripts 容量与完整性抛光：Builder InitScripts 倍增预分配（4→2×，与 FInvokes/FReady 同构，零 O(n²)，Build 时切片同步至 FOptions）+ CONTRACT 1.32 时效，承接 S37 容量与 Fail-Fast；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；Production Ready 保持）
 **承接**：1.31（S37—— 容量与 Fail-Fast 完整性抛光：base IsValidWebviewSchemeToken 公共抽取（builder Scheme 早期复用，零重复校验）、Builder FInvokes/FReady 容量倍增预分配（4→2×，零 O(n²) 重分配）+ Scheme/几何 early Fail-Fast（Scheme token 非法、Width/Height/Min/Max 负值及 max<min 在链式期即抛），hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；Production Ready 保持）
 **承接**：1.28（S33—— 零负载一致性抛光：BACKENDS S26 段与 wk.loader 最终无 platform.dl 实现对齐（以注释占位替代 _UseDlDiscipline 旧述）、registry/S10 段落 docs 时效对齐、hygiene/source-contracts 双 pass 复验、单门抽检 wk-loader/factory 全绿（设备繁忙期零 bench 回归策略、复用 S27 基线）；Production Ready 冻结保持）
 **承接**：1.27（S32—— 注册表与架构一致性冻结：`core-module-registry` webview `draft→focused-runtime`（13 门全绿 + demo 双跑 + bench 双基线 + hygiene/source-contracts 双 pass 对齐）、CONTRACT 1.26→1.27；Production Ready 注册表冻结）

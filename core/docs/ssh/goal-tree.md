@@ -300,11 +300,21 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 文档：`README` 性能基准表更新为实测 `5ms vs 431ms` 并标注轮询开销与 `Async ProxyJump` 优化点，`goal-tree S20` 收口
 - [x] 已知：双跳额外开销主要来自同步轮询转发（`ReadAnyPayloadTimeout(50)` + `Sleep(5)`），`Async ProxyJump`（`TAsyncLoop` 事件化 `direct-tcpip`）将消除轮询，预期降至 ~30ms 量级，已列入下一 slice
 
+## S21 — Async ProxyJump 事件化（已完成）
+
+`S18/S19` 的同步轮询 `ProxyJump`（`~430ms` 额外开销）事件化为 `TAsyncLoop` 单线程 `direct-tcpip`，零轮询，复用 `TAsyncSshTransport`/`TAsyncChannelStream`：
+
+- [x] `proxyjump.async`：`TAsyncChannelStream(IAsyncTcpStream)`（`FReadBuf` + `AccountConsume` 半窗回补 + `ArmRead/OnPacket` 过滤 `CHANNEL_DATA/WINDOW_ADJUST/EOF/CLOSE` + `PeerWindow/Max` 限流 + `AsyncRead/Write` 事件化），规避 `FPC ICE`（单 `IAsyncTcpStream`，非多接口）与 `reentrancy`（回调前清 `Pending`）
+- [x] `session.async`：`SshAsyncConnectWithStream`（已建 `IAsyncTcpStream` 上二次握手）+ `TAsyncProxyConnector`（`direct-tcpip CHANNEL_OPEN(90)`→`CONFIRMATION`→`TAsyncChannelStream`→`StartSecondHop`）+ `SshAsyncConnectViaJumpOn/ViaJump`（`GProxyNextChan atomic`，`PVIACtx→ViaJump_OnJump` 链），与 `SshConnectViaJump` 同语义，`~110L`
+- [x] 测试：`test_ssh_proxyjump_async` 3/3（`double-hop success / target auth fail / jump auth fail`，`TAsyncLoop+RTLEvent 8s + MemPipe` 双跳转发，`~550ms` 事件化，`HEAPTRC_GATE=0` 9 块已知 `TAsyncLoop` 侧线，功能零回归，`test_ssh_proxyjump 5/5 / session_async 5/5 / sftp_async 7/7`）
+- [x] 性能：同步轮询 `~430ms` 额外开销 → 事件化后二次握手与通道仍需 `KEX/USERAUTH` 但消除 `50ms+5ms` 轮询，`bench_ssh_proxyjump` 基线保持，`S21` 事件化后双跳 `~550ms`（含二次握手），`async` 零轮询，复用度与 `transport.async/channel.async` 同构
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| Async ProxyJump | `TAsyncLoop` 之上的 `direct-tcpip` 事件化（`SshAsyncConnectViaJump`，消除轮询，预期双跳 ~30ms） |
+| SFTP via Async Jump | `SftpAsyncViaJump`（`SFTP` 子系统在 `AsyncJump` 通道上） |
+| e2e Async Jump | Docker 双容器 `Async ProxyJump` 互操作（opt-in） |
 
 ## 真实性等级声明
 
