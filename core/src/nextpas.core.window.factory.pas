@@ -149,12 +149,11 @@ begin
   raise EWindowBackendUnavailable.Create('GTK backend not available (all families failed)');
 end;
 
-function LiveGtkSmart: Integer;
+function LiveGtkSmart: Integer; inline;
 begin
-  Result := 0;
-  try Result := Result + nextpas.core.window.gtk3.GtkLiveWindowCount; except end;
-  try Result := Result + nextpas.core.window.gtk4.Gtk4LiveWindowCount; except end;
-  try Result := Result + nextpas.core.window.gtk2.Gtk2LiveWindowCount; except end;
+  Result := nextpas.core.window.gtk3.GtkLiveWindowCount
+          + nextpas.core.window.gtk4.Gtk4LiveWindowCount
+          + nextpas.core.window.gtk2.Gtk2LiveWindowCount;
 end;
 
 procedure RunGtkSmart;
@@ -286,7 +285,6 @@ begin
       wkAndroid: LDetail := 'soname: libandroid.so / ANativeWindow';
       wkUIKit: LDetail := 'soname: UIKit / libobjc';
       wkFake: LDetail := 'builtin';
-      else LDetail := '';
     end;
     B.Add(GetEnumName(TypeInfo(TWindowKind), Ord(BACKENDS[I].Kind)), LAvail, LDetail);
   end;
