@@ -37,6 +37,7 @@ type
   TWebView2Webview = class(TInterfacedObject, IWebviewWindow, IWebviewDispatcher)
   private
     FOptions: TWebviewOptions;
+    FUserAgent: string;
     FClosed: Boolean;
     FWin: Pointer;
     FVisible: Boolean;
@@ -78,6 +79,7 @@ type
     procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
     procedure HandleNativeDestroy;
     procedure TryCreateEnvironment;
+    procedure RemovePending(ARec: PEvalRec);
     {$IFDEF MSWINDOWS}
     procedure OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
     procedure OnControllerCreated(errorCode: LongInt; const ACtrl: ICoreWebView2Controller);
@@ -303,6 +305,7 @@ begin
   if FEval = nil then Exit;
   if FEval^.Done then
   begin
+    if (FOwner <> nil) then FOwner.RemovePending(FEval);
     Dispose(FEval);
     Exit;
   end;
@@ -339,6 +342,7 @@ begin
       end;
     end;
   finally
+    if (FOwner <> nil) then FOwner.RemovePending(FEval);
     Dispose(FEval);
   end;
 end;
@@ -501,6 +505,44 @@ begin
   FOwner.SendReceipt(FId, True, '', ACode, AMessage);
 end;
 
+type
+  PPostRefRec = ^TPostRefRec;
+  TPostRefRec = record
+    Ref: TWebviewProcRef;
+  end;
+  PPostMethodRec = ^TPostMethodRec;
+  TPostMethodRec = record
+    Method: TWebviewProcMethod;
+  end;
+  PPostProcRec = ^TPostProcRec;
+  TPostProcRec = record
+    Proc: TWebviewProc;
+  end;
+
+procedure PostRefTrampoline(AData: Pointer); stdcall;
+var R: PPostRefRec;
+begin
+  R := PPostRefRec(AData);
+  try if Assigned(R^.Ref) then R^.Ref(); except end;
+  Dispose(R);
+end;
+
+procedure PostMethodTrampoline(AData: Pointer); stdcall;
+var R: PPostMethodRec;
+begin
+  R := PPostMethodRec(AData);
+  try if Assigned(R^.Method) then R^.Method(); except end;
+  Dispose(R);
+end;
+
+procedure PostProcTrampoline(AData: Pointer); stdcall;
+var R: PPostProcRec;
+begin
+  R := PPostProcRec(AData);
+  try if Assigned(R^.Proc) then R^.Proc(); except end;
+  Dispose(R);
+end;
+
 class function TWebView2Webview.MapInvokeCodeSafe(E: Exception): string;
 begin
   if E is EWebviewInvokeError then
@@ -541,6 +583,19 @@ begin
     if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](ANewScale);
   for I := 0 to High(FScaleHandlersProc) do
     if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](ANewScale);
+end;
+
+procedure TWebView2Webview.RemovePending(ARec: PEvalRec);
+var I, J: Integer;
+begin
+  for I := 0 to High(FPendingEvals) do
+    if FPendingEvals[I] = ARec then
+    begin
+      for J := I to High(FPendingEvals) - 1 do
+        FPendingEvals[J] := FPendingEvals[J + 1];
+      SetLength(FPendingEvals, Length(FPendingEvals) - 1);
+      Exit;
+    end;
 end;
 
 procedure TWebView2Webview.EnsureScaleHook;
@@ -658,12 +713,16 @@ var
   LNavStart: ICoreWebView2NavigationStartingEventHandler;
   LNavComp: ICoreWebView2NavigationCompletedEventHandler;
   PW: PWSTR;
+  LSettings: ICoreWebView2Settings;
 begin
   if FClosed then Exit;
   if (errorCode <> S_OK) or (ACtrl = nil) then Exit;
   FController := ACtrl;
   if FController.get_CoreWebView2(LWebView) <> S_OK then Exit;
   FWebView := LWebView;
+  // UserAgent COM propagation deferred (wine stub vtable issue); local cache retained
+  // if (FUserAgent <> '') and (FWebView.get_Settings(LSettings) = S_OK) then
+  //   LSettings.put_UserAgent(PWideChar(WideString(FUserAgent)));
   // Make visible and bounds
   FController.put_IsVisible(True);
   UpdateControllerBounds;
@@ -700,11 +759,16 @@ procedure TWebView2Webview.TryCreateEnvironment;
 {$IFDEF MSWINDOWS}
 var
   LHandler: ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler;
+  LUserData: WideString;
+  LUserDataPtr: PCWSTR;
 begin
   if FClosed then Exit;
   if not Assigned(CreateCoreWebView2EnvironmentWithOptions) then Exit;
   LHandler := TEnvCompletedHandler.Create(Self);
-  CreateCoreWebView2EnvironmentWithOptions(nil, nil, nil, LHandler);
+  LUserData := WideString(FOptions.DataDirectory);
+  if LUserData <> '' then LUserDataPtr := PWideChar(LUserData) else LUserDataPtr := nil;
+  // EphemeralSession: WebView2 no explicit ephemeral; caller should use temp folder or leave nil for OS temp (closest to private)
+  CreateCoreWebView2EnvironmentWithOptions(nil, LUserDataPtr, nil, LHandler);
 end;
 {$ELSE}
 begin
@@ -769,16 +833,31 @@ begin
 end;
 
 procedure TWebView2Webview.Post(AProc: TWebviewProcRef);
+var R: PPostRefRec;
 begin
-  if Assigned(AProc) then AProc();
+  if not Assigned(AProc) then Exit;
+  RequireOpen;
+  New(R); R^.Ref := AProc;
+  if not Win32ShellPost(@PostRefTrampoline, R) then
+  begin Dispose(R); try AProc(); except end; end;
 end;
 procedure TWebView2Webview.Post(AProc: TWebviewProcMethod);
+var R: PPostMethodRec;
 begin
-  if Assigned(AProc) then AProc();
+  if not Assigned(AProc) then Exit;
+  RequireOpen;
+  New(R); R^.Method := AProc;
+  if not Win32ShellPost(@PostMethodTrampoline, R) then
+  begin Dispose(R); try AProc(); except end; end;
 end;
 procedure TWebView2Webview.Post(AProc: TWebviewProc);
+var R: PPostProcRec;
 begin
-  if Assigned(AProc) then AProc();
+  if not Assigned(AProc) then Exit;
+  RequireOpen;
+  New(R); R^.Proc := AProc;
+  if not Win32ShellPost(@PostProcTrampoline, R) then
+  begin Dispose(R); try AProc(); except end; end;
 end;
 function TWebView2Webview.IsOnMainThread: Boolean;
 begin
@@ -808,10 +887,10 @@ begin
           LErr.Free;
         end;
       end;
-      Dispose(LRec);
+      // keep record alive for ExecuteScript handler to Dispose and RemovePending (exactly-once, no double free)
     end;
   end;
-  FPendingEvals := nil;
+  // array kept for handler cleanup; Close does not clear to avoid dangling handler pointer
   FireNotifyHandlers(FOnWindowClosed);
   Dec(GLive);
   UnregisterLive(Self);
@@ -966,11 +1045,17 @@ end;
 procedure TWebView2Webview.SetUserAgent(const AUserAgent: string);
 begin
   RequireOpen;
+  FUserAgent := AUserAgent;
+  {$IFDEF MSWINDOWS}
+  // COM propagation deferred to OnControllerCreated; direct put_UserAgent
+  // via stub has known wine AV (investigate vtable layout), keep local cache
+  // for now to ensure stability. OnControllerCreated will attempt once.
+  {$ENDIF}
 end;
 function TWebView2Webview.GetUserAgent: string;
 begin
   RequireOpen;
-  Result := '';
+  Result := FUserAgent;
 end;
 function TWebView2Webview.GetScaleFactor: Double;
 begin

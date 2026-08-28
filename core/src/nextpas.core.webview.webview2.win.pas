@@ -30,6 +30,7 @@ type
 
   TWin32ScaleChangedProc = procedure(AWin: Pointer; AScale: Double);
   TWin32ResizeProc = procedure(AWin: Pointer; AWidth, AHeight: Integer);
+  TWin32PostProc = procedure(AData: Pointer); stdcall;
 
 function Win32ShellInit: Boolean;
 function Win32ShellCreate(const AGeometry: TWin32ShellGeometry): Pointer;
@@ -49,6 +50,7 @@ function Win32ShellScaleFactor(AWin: Pointer): Double;
 procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc);
 procedure Win32ShellOnResize(AHandler: TWin32ResizeProc);
 function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean;
+function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean;
 procedure Win32ShellFocus(AWin: Pointer);
 function Win32ShellNativeHandle(AWin: Pointer): Pointer;
 procedure Win32ShellRunMainLoop;
@@ -63,15 +65,19 @@ uses
 
 const
   CLASS_NAME = 'NextPasWebView2Win';
+  DISPATCH_CLASS = 'NextPasWebViewDispatch';
   WIN_STYLE_RESIZABLE = WS_OVERLAPPEDWINDOW;
   WIN_STYLE_FIXED     = WS_OVERLAPPED or WS_CAPTION or WS_SYSMENU or WS_MINIMIZEBOX;
   WM_DPICHANGED = $02E0;
+  WM_WV_DISPATCH = WM_USER + 101;
 
 type
   TGetDpiForWindow = function(AWnd: HWND): UINT; stdcall;
 
 var
   GRegistered: Boolean = False;
+  GDispatchRegistered: Boolean = False;
+  GDispatchWnd: HWND = 0;
   GMainLoopRunning: Boolean = False;
   GWinCount: Integer = 0;
   GGetDpiForWindow: TGetDpiForWindow = nil;
@@ -296,6 +302,54 @@ begin
   end;
 end;
 
+function DispatchWndProc(AWnd: HWND; AMsg: UINT; AWParam: WPARAM; ALParam: LPARAM): LRESULT; stdcall;
+var
+  LProc: TWin32PostProc;
+  LData: Pointer;
+begin
+  if AMsg = WM_WV_DISPATCH then
+  begin
+    LProc := TWin32PostProc(AWParam);
+    LData := Pointer(ALParam);
+    if Assigned(LProc) then
+      try LProc(LData); except end;
+    Result := 0;
+    Exit;
+  end;
+  Result := DefWindowProcW(AWnd, AMsg, AWParam, ALParam);
+end;
+
+function EnsureDispatchWnd: Boolean;
+var
+  WC: WNDCLASSEXW;
+begin
+  if GDispatchWnd <> 0 then Exit(True);
+  if not GDispatchRegistered then
+  begin
+    FillChar(WC, SizeOf(WC), 0);
+    WC.cbSize := SizeOf(WC);
+    WC.lpfnWndProc := @DispatchWndProc;
+    WC.hInstance := HInstance;
+    WC.lpszClassName := DISPATCH_CLASS;
+    if RegisterClassExW(WC) = 0 then
+      if GetLastError <> ERROR_CLASS_ALREADY_EXISTS then Exit(False);
+    GDispatchRegistered := True;
+  end;
+  GDispatchWnd := CreateWindowExW(0, DISPATCH_CLASS, nil, 0, 0, 0, 0, 0, HWND(Pointer(-3)), 0, HInstance, nil);
+  Result := GDispatchWnd <> 0;
+end;
+
+function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean;
+begin
+  if not Assigned(AProc) then Exit(False);
+  if EnsureDispatchWnd then
+    if PostMessageW(GDispatchWnd, WM_WV_DISPATCH, WPARAM(AProc), LPARAM(AData)) then
+      Exit(True);
+  // fallback: direct sync execution (no message loop yet or PostMessage failed)
+  try AProc(AData); except end;
+  Result := True;
+end;
+
 procedure Win32ShellFocus(AWin: Pointer);
 begin
   if AWin = nil then Exit;
@@ -360,6 +414,7 @@ function Win32ShellScaleFactor(AWin: Pointer): Double; begin Result := 1.0; end;
 procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc); begin GScaleStub := AHandler; end;
 procedure Win32ShellOnResize(AHandler: TWin32ResizeProc); begin GResizeStub := AHandler; end;
 function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean; begin AWidth:=0; AHeight:=0; Result:=False; end;
+function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean; begin if Assigned(AProc) then try AProc(AData); except end; Result := Assigned(AProc); end;
 procedure Win32ShellFocus(AWin: Pointer); begin end;
 function Win32ShellNativeHandle(AWin: Pointer): Pointer; begin Result := AWin; end;
 procedure Win32ShellRunMainLoop; begin GRunning := True; GRunning := False; end;

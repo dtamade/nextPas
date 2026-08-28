@@ -133,17 +133,16 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
   `WebView2Loader.dll`（dlopen）；COM 接口头移植自 fafafa
   `src/fafafa.webview.webview2.interfaces.pas`（GUID/stdcall/token/v2 接口，
   该文件是全项目最难重做的资产，近乎原样搬运后按本仓命名规范改写）。
-- 主线程唤醒：`Post` 现阶段与 gtk 同步直调（STA 单线程语义；隐藏 message-only window + `PostMessage` 为后续跨线程投递预留，未启用）。
-- `ExecuteScript` 天然异步（`ICoreWebView2ExecuteScriptCompletedHandler`），直接映射 `Eval` 契约（S21：`TExecuteScriptHandler` 持有 `PEvalRec` exactly-once，`errorCode<>S_OK` 走 `EWebviewEvalFailed`，`Close` 时在途以 onerr 收尾）；`Emit`/`SendReceipt` 复用同一链路 fire-and-forget。
+- 主线程唤醒：`Post` 经隐藏 message-only 窗口 `PostMessage(WM_WV_DISPATCH)` 异步投递（S23 与 gtk `g_idle_add_full` 对称，线程安全；无消息循环时回退同步直调，wine 已验证）。
+- `ExecuteScript` 天然异步（`ICoreWebView2ExecuteScriptCompletedHandler`），直接映射 `Eval` 契约（S21：`TExecuteScriptHandler` 持有 `PEvalRec` exactly-once，`errorCode<>S_OK` 走 `EWebviewEvalFailed`；S23 修复 pending 泄漏：`RemovePending` + `Close` 协同 exactly-once，无双 free；`Close` 时在途以 onerr 收尾）；`Emit`/`SendReceipt` 复用同一链路 fire-and-forget。
 - 桥注入：`AddScriptToExecuteOnDocumentCreated(NPW_BRIDGE_SCRIPT)`（S21），`remove` 于 `Close` 时摘除；`WebMessageReceived`  via `TWebMessageHandler` → `TryDecodeFrame` → `DispatchFrame`（与 gtk 同分发器语义，含 `TLocalInvokeCompletion` exactly-once 多播）。
 - 窗口壳经 Win32 直出（`CreateWindowEx` + 内嵌 controller `put_Bounds`）；
   Maximize/Minimize/Restore/Focus 走 ShowWindow/SetForegroundWindow 族；S20 壳已满态：
   Minimize/Restore/IsMinimized（IsIconic）、GetScaleFactor 分数值（GetDpiForWindow 动态绑定→回退
   GetDeviceCaps，返 Double）、WM_DPICHANGED → ScaleChanged 多播（GLiveList 多实例分发）；
   S21 新增 WM_SIZE → `put_Bounds` 同步（Win32ShellOnResize 多播）；S22 导航真事件已接线（NavigationStarting
-  → OnNavStarted，NavigationCompleted → OnNavFinished/OnNavFailed 按 IsSuccess/WebErrorStatus 分流，wine 仿真含失败分支与 Trigger 回环已验证）。
-- 会话：`EnvironmentOptions.UserDataFolder`（持久化自定义目录）/
-  private 环境变体（Ephemeral）；W2 启动前对照当版文档定案。
+  → OnNavStarted，NavigationCompleted → OnNavFinished/OnNavFailed 按 IsSuccess/WebErrorStatus 分流，wine 仿真含失败分支与 Trigger 回环已验证）；S23 新增 `UserAgent` 本地缓存 + `DataDirectory` 透传至 `CreateCoreWebView2EnvironmentWithOptions` userDataFolder。
+- 会话：`DataDirectory` 透传为 `userDataFolder`（S23 落地），`EphemeralSession` 复用默认临时目录（WebView2 无显式 ephemeral，语义对齐）。
 - 运行时依赖 WebView2 Runtime（Evergreen）；缺失时降级语义同 §1.2。
 
 ## 4. wk 后端（Wave 3，macOS）
