@@ -130,6 +130,86 @@ begin
 end;
 
 var
+  GEventCounter: Integer = 0;
+  GStressWindow2: IWindow = nil;
+
+function Worker12Proc(AArg: Pointer): Pointer; cdecl;
+var
+  I: Integer;
+  E: TWindowEvent;
+  F: TFakeWindow;
+begin
+  F := TFakeWindow.FromWindow(GStressWindow2);
+  for I := 1 to 500 do
+  begin
+    E := Default(TWindowEvent);
+    E.Kind := TWindowEventKind(I mod 12);
+    if E.Kind = weResized then begin E.Width:=I; E.Height:=I; end;
+    if E.Kind in [weKeyDown, weKeyUp] then E.KeyCode:=I;
+    if E.Kind in [weMouseDown, weMouseUp, weMouseMove] then begin E.X:=I; E.Y:=I; E.Button:=1; end;
+    if E.Kind in [weScaleChanged, weDpiChanged] then E.NewScale:=1.0;
+    F.InjectEvent(E);
+  end;
+  Result := nil;
+end;
+
+procedure TestConcurrent12EventsMixed;
+var
+  W: IWindow;
+  F: TFakeWindow;
+  Handles: array[0..3] of TPlatformThreadHandle;
+  I: Integer;
+  LPtr: Pointer;
+begin
+  GEventCounter := 0;
+  W := CreateFakeWindow(DefaultWindowOptions);
+  F := TFakeWindow.FromWindow(W);
+  GStressWindow2 := W;
+  W.OnEvent(procedure(const AEvent: TWindowEvent) begin InterlockedIncrement(GEventCounter); end);
+  for I := 0 to 3 do
+    platform_thread_create(Handles[I], @Worker12Proc, nil);
+  for I := 0 to 3 do
+    platform_thread_join(Handles[I], LPtr);
+  while F.PendingPosts > 0 do F.PumpAll;
+  CheckEqual(Int64(2000), Int64(GEventCounter), 'concurrent 12-event 4*500 mixed delivered');
+  GStressWindow2 := nil;
+  W.Close;
+end;
+
+procedure Test12EventMatrix;
+var
+  W: IWindow;
+  F: TFakeWindow;
+  K: TWindowEventKind;
+  E: TWindowEvent;
+  Got: array[TWindowEventKind] of Integer;
+  KK: TWindowEventKind;
+begin
+  for KK := Low(TWindowEventKind) to High(TWindowEventKind) do Got[KK] := 0;
+  W := CreateFakeWindow(DefaultWindowOptions);
+  F := TFakeWindow.FromWindow(W);
+  W.OnEvent(procedure(const AEvent: TWindowEvent) begin Inc(Got[AEvent.Kind]); Inc(GEventCounter); end);
+  GEventCounter := 0;
+  for K := Low(TWindowEventKind) to High(TWindowEventKind) do
+  begin
+    E := Default(TWindowEvent);
+    E.Kind := K;
+    case K of
+      weResized: begin E.Width:=10; E.Height:=10; end;
+      weMoved: begin E.X:=5; E.Y:=5; end;
+      weScaleChanged, weDpiChanged: E.NewScale:=1.5;
+      weKeyDown, weKeyUp: E.KeyCode:=42;
+      weMouseDown, weMouseUp, weMouseMove: begin E.X:=1; E.Y:=1; E.Button:=1; end;
+    end;
+    F.InjectEvent(E);
+  end;
+  CheckEqual(Int64(12), Int64(GEventCounter), '12-event matrix all delivered');
+  for K := Low(TWindowEventKind) to High(TWindowEventKind) do
+    CheckEqual(Int64(1), Int64(Got[K]), 'kind '+IntToStr(Ord(K))+' once');
+  W.Close;
+end;
+
+var
   T: TTestSuite;
 begin
   T := TTestSuite.Create('nextpas.core.window.stress');
@@ -137,5 +217,7 @@ begin
   T.Test('close drops pending', @TestCloseDropsPending);
   T.Test('event order fifo', @TestEventOrderFIFO);
   T.Test('multi window isolation', @TestMultiWindowIsolation);
+  T.Test('concurrent 12-event mixed', @TestConcurrent12EventsMixed);
+  T.Test('12-event matrix', @Test12EventMatrix);
   if not T.Run then Halt(1);
 end.

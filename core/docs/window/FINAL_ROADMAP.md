@@ -1,4 +1,4 @@
-# nextpas.core.window — 终局路线图 (1.0 → 2.0 完美化)
+# nextpas.core.window — 终局路线图 (1.0 → 3.7)
 
 > **定位**：`window` 是 `webview / gpu / directui / game888` 共享的 L2 窗口家族，`1.0` 已完成 S1→S5 + 去消息化 + O(1)/inline + 共享 queue/live + `gtk2/3/4+qt` 家族化 + RTL 解耦；`2.0` 完美化已完成 11×4 严格 + 7 事件 + `LiveGtkSmart/QtIsLoaded` 双 inline + 5× 365µs/24.3ns 4.1% 方差 + 零 `PAnsiChar(AnsiString)`；`3.0-3.6` 扩展至 12 事件 + 输入端到端 + fake 20 全矩阵 + bench 可复现 + shim removal 4.0。本文件是**从 1.0 到 3.6**的收口记录，追求**模块化·性能·高级感·复用度·稳定性·完整性**六维收敛。
 >
