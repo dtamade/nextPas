@@ -1576,7 +1576,7 @@ begin
       Result[LI].Data := nil;
       Continue;
     end;
-    LFound := False;
+    LFound := False; LPos := 0; LDistinct := 0;
     for LPos:=0 to High(LDistinctFolders) do
       if LDistinctFolders[LPos]=LFolderIdx then begin LFound:=True; LDistinct:=LPos; Break; end;
     if not LFound then
