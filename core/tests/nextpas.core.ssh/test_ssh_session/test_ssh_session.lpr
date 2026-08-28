@@ -1910,6 +1910,36 @@ begin
     CheckEqual(Int64(0), Int64(O.KeepAliveIntervalMs), 'default keepalive 0');
   end);
 
+  GSuite.Test('session ShouldRekey byte boundary via loopback', procedure
+  var LScRec: TSshLoopServerScenario; LSyncRec: TSync; LSc: PSshLoopServerScenario; LSync: PSync; LShared: PPipeShared; LClientEnd, LServerEnd: TMemPipeEnd; LThreadId: TThreadID; LOpts: TSshConnectOptions; LSess: ISshSession; LWait, I: Integer;
+  begin
+    LScRec:=Default(TSshLoopServerScenario); LScRec.AcceptUser:=CLIENT_USER; LScRec.AcceptPassword:=CLIENT_PASSWORD; LScRec.PasswordOk:=True; LScRec.PubKeyOk:=False; LScRec.StdOut1:=StringToBytes('ok'); LScRec.ExitCode:=0; LScRec.HostSeed:=PatternBytes($E7,32); LSc:=@LScRec;
+    LSyncRec.Scenario:=LSc; LSyncRec.DoneEvent:=RTLEventCreate; LSyncRec.ThreadDone:=False; LSync:=@LSyncRec;
+    MakePipe(LClientEnd, LServerEnd, LShared); LSync^.ServerEnd:=LServerEnd; BeginThread(@ServerThreadMain, Pointer(LSync), LThreadId);
+    LOpts:=DefaultSshConnectOptions(CLIENT_HOST_NAME); LOpts.User:=CLIENT_USER; LOpts.Password:=CLIENT_PASSWORD; LOpts.RekeyBytes:=100; LOpts.RekeyIntervalMs:=0;
+    try LSess:=SshConnectOn(LClientEnd, LOpts); CheckFalse(LSess.ShouldRekey, 'below threshold after kex'); for I:=1 to 10 do LSess.SendKeepAlive; CheckTrue(LSess.ShouldRekey, 'at boundary after keepalives'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin Sleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); end;
+  end);
+
+  GSuite.Test('session ShouldRekey time boundary via loopback', procedure
+  var LScRec: TSshLoopServerScenario; LSyncRec: TSync; LSc: PSshLoopServerScenario; LSync: PSync; LShared: PPipeShared; LClientEnd, LServerEnd: TMemPipeEnd; LThreadId: TThreadID; LOpts: TSshConnectOptions; LSess: ISshSession; LWait: Integer;
+  begin
+    LScRec:=Default(TSshLoopServerScenario); LScRec.AcceptUser:=CLIENT_USER; LScRec.AcceptPassword:=CLIENT_PASSWORD; LScRec.PasswordOk:=True; LScRec.PubKeyOk:=False; LScRec.StdOut1:=StringToBytes('ok'); LScRec.ExitCode:=0; LScRec.HostSeed:=PatternBytes($E7,32); LSc:=@LScRec;
+    LSyncRec.Scenario:=LSc; LSyncRec.DoneEvent:=RTLEventCreate; LSyncRec.ThreadDone:=False; LSync:=@LSyncRec;
+    MakePipe(LClientEnd, LServerEnd, LShared); LSync^.ServerEnd:=LServerEnd; BeginThread(@ServerThreadMain, Pointer(LSync), LThreadId);
+    LOpts:=DefaultSshConnectOptions(CLIENT_HOST_NAME); LOpts.User:=CLIENT_USER; LOpts.Password:=CLIENT_PASSWORD; LOpts.RekeyBytes:=0; LOpts.RekeyIntervalMs:=100;
+    try LSess:=SshConnectOn(LClientEnd, LOpts); CheckFalse(LSess.ShouldRekey, 'immediately after reset'); Sleep(150); CheckTrue(LSess.ShouldRekey, 'after interval'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin Sleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); end;
+  end);
+
+  GSuite.Test('session SendKeepAlive roundtrip', procedure
+  var LScRec: TSshLoopServerScenario; LSyncRec: TSync; LSc: PSshLoopServerScenario; LSync: PSync; LShared: PPipeShared; LClientEnd, LServerEnd: TMemPipeEnd; LThreadId: TThreadID; LOpts: TSshConnectOptions; LSess: ISshSession; LRes: TSshExecResult; LWait: Integer;
+  begin
+    LScRec:=Default(TSshLoopServerScenario); LScRec.AcceptUser:=CLIENT_USER; LScRec.AcceptPassword:=CLIENT_PASSWORD; LScRec.PasswordOk:=True; LScRec.PubKeyOk:=False; LScRec.StdOut1:=StringToBytes('ka-ok'); LScRec.ExitCode:=0; LScRec.HostSeed:=PatternBytes($E7,32); LSc:=@LScRec;
+    LSyncRec.Scenario:=LSc; LSyncRec.DoneEvent:=RTLEventCreate; LSyncRec.ThreadDone:=False; LSync:=@LSyncRec;
+    MakePipe(LClientEnd, LServerEnd, LShared); LSync^.ServerEnd:=LServerEnd; BeginThread(@ServerThreadMain, Pointer(LSync), LThreadId);
+    LOpts:=DefaultSshConnectOptions(CLIENT_HOST_NAME); LOpts.User:=CLIENT_USER; LOpts.Password:=CLIENT_PASSWORD;
+    try LSess:=SshConnectOn(LClientEnd, LOpts); LSess.SendKeepAlive; LRes:=LSess.Exec('echo hi'); CheckEqual('ka-ok', BytesToText(LRes.StdOut), 'keepalive roundtrip preserves exec'); LSess.Close; LSess:=nil; LWait:=0; while (not LSync^.ThreadDone) and (LWait<1000) do begin Sleep(20); Inc(LWait); end; finally LClientEnd.Free; LServerEnd.Free; DoneCriticalSection(LShared^.Lock); Dispose(LShared); RTLEventDestroy(LSync^.DoneEvent); Finalize(LScRec); Finalize(LSyncRec); Finalize(LOpts); Finalize(LRes); end;
+  end);
+
   GRunner := TSuiteRunner.Create('nextpas.core.ssh.session');
   GRunner.Add(GSuite);
   GRunner.RunAll;

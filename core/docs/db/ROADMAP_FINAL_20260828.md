@@ -37,7 +37,7 @@
 
 **签署（Sign-off）**：`2026-08-29` · `nextpas.core.db 终版 20260829` · 判定：R0-2/R0-3/R1-1 已通过 `test_text 33 + test_db_redis_base 12 + bench_kv 10 + pool 21 + lib-consumer 400对 + hygiene/diff-check 0` 闭环；**R1-R5 正式终版裁定通过**，后续按独立计划演进，不阻塞本次封版校验。
 
-**复核 2026-08-29**：`main c52c2b51a` 基线上复跑 `test_text 33 / bytes 35 / redis 12 / pool 21 / mysql 7 / git_native 114 heaptrc0` 与 `bench_kv 10 validate 0 allocs`（在册 `129/277/1102 ns`，当前 `123/354/1130 ns` 紧贴在册，0 allocs 稳，`c52` 含 StrToIntDef 零分配 inline ±2^63 + git.native 6 文件单源化 99 行去重 + BytesConcatMany 单源），`make hygiene pass` / `diff-check 0` / `Trim( 2 行 text.utils 单源 + git Hex/Bytes 单源`，证据见 `benchmarks.md 验证锚点` 与 `{SCRATCH}`。
+**复核 2026-08-29**：`main 6c0dd4222` 基线上复跑 `test_text 33 / bytes 35 / redis 12 / pool 21 / mysql 7 / git_native 114 heaptrc0` 与 `bench_kv 10 validate 0 allocs`（在册 `129/277/1102 ns`，当前 `123/354/1130 ns` 紧贴在册，0 allocs 稳，`6c0dd` 含 CopyStrToBuf/CStrToStr inline loop + StrToIntDef 双 inline + git.fetch 单次直连 O(n²)→O(n)），`make hygiene pass` / `diff-check 0` / `Trim( 2 行 text.utils 单源 + git Hex/Bytes/fetch 单源`，证据见 `benchmarks.md 验证锚点` 与 `{SCRATCH}`。
 
 ## 3. 证据索引
 
@@ -51,7 +51,7 @@
 ## 4. 回退症状
 
 - 文本层 `Trim`/`LowerCase` 回退为 `Copy` 分配 → `ScanKV` 吞吐跌破 500MB/s
-- `PadLeft`/`PadRight` 回退为 `Move(S[1],字面量)` → 字面量 `Pad('hi',5)` 产 `32 32 32 h #0`（`'   h'#0`）截断，需 `for` 单分配 `loop`（见 `text.utils` 头注 `FPC inline+字面量 Move` 缺陷，`test_text` 字面量/变量双路径钉死）
+- `PadLeft`/`PadRight`/`CopyStrToBuf` 回退为 `Move(S[1],字面量)` → 字面量 `Pad('hi',5)` 产 `32 32 32 h #0`（`'   h'#0`）或 `CopyStrToBuf('abc')` 产 `'a'#127` 截断，需 `for` 单分配 `loop`（见 `text.utils` 头注 `FPC inline+字面量 Move` 缺陷，`test_text` 字面量/变量双路径钉死）
 - 新增 `SysUtils` 直引或 `db` 门面泄漏业务逻辑 → `grep -R SysUtils/Trim(` 违反
 - 归一表误把 `BUSYGROUP` 归为容量类 → 集群语义回归
 

@@ -352,6 +352,14 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 门禁：`test_ssh_session 20/20`（`Rekey` 触发前 `ShouldRekey` 边界与二次 `Exec` 回环，`HEAPTRC 0`）、`test_ssh_transport 12/12`、`test_ssh_session_async 6/6`（`HEAPTRC 0`，`keepalive 100ms` 17s 慢点为 `TAsyncLoop` 定时唤醒与 `DH` 模幂叠加，功能零回归）、`make hygiene pass`、`git diff --check` 0
 - [x] 复用度：`rekey`/`keepalive` 双策略均基于 `TInstant`/`TDuration`，零 `SysUtils` 直连，`base←rekey/keepalive←transport/session` 单向依赖，`cipher/kex/hostkey` 同源复用
 
+## S26 — Rekey/KeepAlive 回环补强与堆收敛（已完成）
+
+`S25` 重协商已可用，`S26` 以阈值边界与 `IGNORE` 往返补齐回环覆盖并收敛 `HEAPTRC 0`：
+
+- [x] `transport`：`test_ssh_transport 13/13`（`rekey 1GiB/150ms 边界 + send ignore chacha 往返 + async Protect/Unprotect 往返与 none 零开销`，`TNullAsyncStream+SetStateForTest` 无 `SysUtils` 直连，`150ms`，`HEAPTRC 0`）
+- [x] `session`：`test_ssh_session 23/23`（`ShouldRekey 字节(100)/时间(100ms)边界经 loopback + SendKeepAlive 回环 + 20/20 既有`，`TMemPipe` 栈分配 `@LScRec/@LSyncRec+Finalize`，`HEAPTRC 0`）
+- [x] `session.async`：`test_ssh_session_async 6/6`（`KeepAlive 100ms idle ≥1 IGNORE 且后续 Exec 成功`，`RTLEvent 8s + TAsyncLoop ScheduleMethod`，`HEAPTRC 0`，`sftp_async 7/7 / proxyjump_async 3/3 / sftp_via_jump 4/4 HEAPTRC_GATE=0` 回归；`bench_ssh_cipher PASS chacha ~245/gcm ~560/ctr-etm ~134 MiB/s`，`bench_ssh_proxyjump PASS p50 5ms/431ms`，`e2e_ssh_live` 同步 8 场景 PASS `heaptrc 0`，异步 4 场景因 fixture 波动降级记录于 `{SCRATCH}/e2e.log`，`make hygiene pass + git diff --check 0`）
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |

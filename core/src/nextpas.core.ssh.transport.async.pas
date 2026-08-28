@@ -107,6 +107,7 @@ type
     property MyKexInitPayload: TBytes read FMyKexInitPayload;
     property Loop: TAsyncLoop read FLoop;
     property Stream: IAsyncTcpStream read FStream;
+    procedure SetStateForTest(AState: TSshTransportState);
   end;
 
 implementation
@@ -242,6 +243,11 @@ end;
 function TAsyncSshTransport.DebugState: string;
 begin
   Result := 'cb=' + BoolToStr(FWriteCb <> nil, 'True', 'False') + ' buf=' + IntToStr(Length(FWriteBuf)) + ' off=' + IntToStr(FWriteOff) + ' state=' + IntToStr(Ord(FState)) + ' ptr=' + IntToStr(PtrUInt(Self));
+end;
+
+procedure TAsyncSshTransport.SetStateForTest(AState: TSshTransportState);
+begin
+  FState := AState;
 end;
 
 procedure TAsyncSshTransport.ApplyNewKeys(const ANegotiated: TSshNegotiated;
