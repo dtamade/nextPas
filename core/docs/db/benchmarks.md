@@ -172,9 +172,9 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 
 ### bench_text_kv —— L0 共享 KV 词法内核（text.kv）
 
-口径：`nextpas.core.text.kv.ParseKV/ScanKV` 单遍空格分隔 `key=value`
-引号包裹扫描，零 `TextBuilder`，`O(n)` 线性；三档负载 small~80B
-（MySQL 真实 DSN）、medium~350B（20 对 + 含 `@/=` 引号）、large~1.5KB
+口径：`nextpas.core.text.kv.ParseKV/ScanKV` 单遍 `key=value` 扫描
+（分隔符空格或 `;`，`'/"/{}` 包裹），零 `TextBuilder`，`O(n)` 线性；
+三档负载 small~80B（MySQL 真实 DSN）、medium~350B（20 对 + 含 `@/=` 引号）、large~1.5KB
 （100 对）；`TBenchSuite` 7 样本取中位，`MinDuration=100ms, MinSamples=7`，
 报告 `bytes_per_op/allocs_per_op`。编译 `-O2`，对照 `FPC 3.3.1`。
 
@@ -194,8 +194,9 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 线性 `O(n)` 成立（`1.5KB/350B ≈ 4.3×` 字节、`9584/2416 ≈ 3.97×` 耗时）。
 `ScanKV` 零分配回调查表比 `ParseKV` 数组装箱快约 30–40%（small 355ns
 vs 902ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，印证零
-中间 `Builder`。复用面：`db.mysql.dsn` 已委托 `ParseKV`，后续 `DM/ODBC`
-同形态 DSN 无需再写词法，`bench_text_kv` 为底座性能锚点。
+中间 `Builder`。复用面：`db.mysql.dsn` 已委托 `ParseKV`，`ODBC connstr`
+分号+花括号（`Driver={DM8 ODBC DRIVER};`）同源复用，`DM` 等同形态 DSN 零新增词法——
+`text.kv` 现为 **MySQL/PG/ODBC/DM 四形态统一底座**，`bench_text_kv` 为性能锚点。
 
 > 复跑噪声对照（2026-08-28 09:15 同机）：small median 797ns/mean 984ns
 > 持平，medium mean 9831ns（×3.1）、large mean 60971ns（×4.9）同步膨胀，
