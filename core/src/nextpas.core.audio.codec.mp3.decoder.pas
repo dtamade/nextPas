@@ -164,8 +164,6 @@ var
   LOutPos, LTotalFrames: Integer;
   LFormat: TAudioFormat;
   LHasFormat: Boolean;
-  I, VIdx: Integer;
-  F: Single;
   Skipped: Integer;
   TmpTags: TAudioTags;
 begin
@@ -209,17 +207,8 @@ begin
         while LOutPos + N * CH * 4 > FOutCap do FOutCap := FOutCap * 2;
         SetLength(FOut, FOutCap);
       end;
-{$IFDEF CPUX86_64}
       PcmConvertS16BlockToF32(@Pcm[0], 1.0/32768.0, PSingle(@FOut[LOutPos]), LongWord(N * CH));
       Inc(LOutPos, N * CH * 4);
-{$ELSE}
-      for I := 0 to N * CH - 1 do
-      begin
-        F := Pcm[I] * (1.0 / 32768.0);
-        PSingle(@FOut[LOutPos])^ := F;
-        Inc(LOutPos, 4);
-      end;
-{$ENDIF}
       Inc(LTotalFrames, N);
     end
     else if N = 0 then

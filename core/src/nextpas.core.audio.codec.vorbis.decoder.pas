@@ -154,7 +154,7 @@ var
   CH, SR: LongInt;
   LOutPos, LTotalFrames: Integer;
   LFormat: TAudioFormat;
-  N, J: Integer;
+  N: Integer;
   TmpS16: array[0..8191] of SmallInt;
 begin
   Result := Default(TAudioBuffer);
@@ -211,16 +211,8 @@ begin
         if FOutCap > 1024*1024*32 then FOutCap := 1024*1024*32;
         SetLength(FOut, FOutCap);
       end;
-{$IFDEF CPUX86_64}
       PcmConvertS16BlockToF32(@TmpS16[0], 1.0/32768.0, PSingle(@FOut[LOutPos]), LongWord(N * CH));
       Inc(LOutPos, N * CH * SizeOf(Single));
-{$ELSE}
-      for J := 0 to N * CH - 1 do
-      begin
-        PSingle(@FOut[LOutPos + J*4])^ := TmpS16[J] * (1.0/32768.0);
-      end;
-      Inc(LOutPos, N * CH * SizeOf(Single));
-{$ENDIF}
       Inc(LTotalFrames, N);
     end;
     if LTotalFrames = 0 then raise EAudioDecodeError.Create('vorbis: no frames');
