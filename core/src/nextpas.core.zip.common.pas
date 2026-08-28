@@ -23,6 +23,9 @@ function IsKnownZipSig(AValue: LongWord): Boolean; inline;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 
+procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
+  AMaxTotal: UInt64);
+
 function DecompressEntryVerified(const AE: TZipEntryInfo;
   const APayload: TBytes; const APassword: TBytes;
   AMaxOutput: SizeUInt): TBytes;
@@ -65,6 +68,24 @@ begin
       'zip: legacy ZipCrypto encryption not supported: ' + AE.Name);
   if not IsSafeZipEntryName(AE.Name) then
     raise EParseError.Create('zip: refusing unsafe entry name: ' + AE.Name);
+end;
+
+procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
+  AMaxTotal: UInt64);
+var
+  LI: Integer;
+  LCum: UInt64;
+begin
+  if AMaxTotal = 0 then Exit;
+  LCum := 0;
+  for LI := 0 to High(AEntries) do
+  begin
+    if AEntries[LI].UncompressedSize > AMaxTotal then
+      raise EIOError.Create('zip: total uncompressed size exceeds limit');
+    if LCum > AMaxTotal - AEntries[LI].UncompressedSize then
+      raise EIOError.Create('zip: total uncompressed size exceeds limit');
+    Inc(LCum, AEntries[LI].UncompressedSize);
+  end;
 end;
 
 function DecompressEntryVerified(const AE: TZipEntryInfo;

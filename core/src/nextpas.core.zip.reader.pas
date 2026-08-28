@@ -463,7 +463,6 @@ var
   LDiskNum, LCdStartDisk, LCount16, LCommentLen: Word;
   LCount: Int64;
   LCdSize, LCdOffset, LZ64EocdOffset: UInt64;
-  LCumTotal: UInt64;
 begin
   if FC.Length < C_EOCD_MIN_LEN then
     raise EParseError.Create('zip: truncated archive');
@@ -548,18 +547,7 @@ begin
         IntToStr(Int64(FC.Position) - 4));
     ParseCentralEntry(FC, FEntries[LI], FFlags[LI]);
   end;
-  if FMaxTotalOutputSize <> 0 then
-  begin
-    LCumTotal := 0;
-    for LI := 0 to LCount - 1 do
-    begin
-      if FEntries[LI].UncompressedSize > FMaxTotalOutputSize then
-        raise EIOError.Create('zip: total uncompressed size exceeds limit');
-      if LCumTotal > FMaxTotalOutputSize - FEntries[LI].UncompressedSize then
-        raise EIOError.Create('zip: total uncompressed size exceeds limit');
-      Inc(LCumTotal, FEntries[LI].UncompressedSize);
-    end;
-  end;
+  GuardTotalOutputSize(FEntries, FMaxTotalOutputSize);
 end;
 
 function TZipReaderImpl.CheckIndex(AIndex: Integer): Integer;
@@ -794,7 +782,6 @@ var
   LDiskNum, LCdStartDisk, LCount16, LCommentLen: Word;
   LCount: Int64;
   LCdSize, LCdOffset, LZ64EocdOffset: UInt64;
-  LCumTotal: UInt64;
   LTail, LBuf, LCDBuf: TBytes;
   LC: IByteCursor;
 begin
@@ -890,18 +877,7 @@ begin
         IntToStr(Int64(LCdOffset) + Int64(LC.Position) - 4));
     ParseCentralEntry(LC, FEntries[LI], FFlags[LI]);
   end;
-  if FMaxTotalOutputSize <> 0 then
-  begin
-    LCumTotal := 0;
-    for LI := 0 to LCount - 1 do
-    begin
-      if FEntries[LI].UncompressedSize > FMaxTotalOutputSize then
-        raise EIOError.Create('zip: total uncompressed size exceeds limit');
-      if LCumTotal > FMaxTotalOutputSize - FEntries[LI].UncompressedSize then
-        raise EIOError.Create('zip: total uncompressed size exceeds limit');
-      Inc(LCumTotal, FEntries[LI].UncompressedSize);
-    end;
-  end;
+  GuardTotalOutputSize(FEntries, FMaxTotalOutputSize);
 end;
 
 function TZipSourceReader.CheckIndex(AIndex: Integer): Integer;
