@@ -788,11 +788,12 @@ begin
   LRanges[LPos].Lo := APn;
   LRanges[LPos].Hi := APn;
 
-  { 单遍合并：降序下相邻可合并即并入前段 }
+  { 单遍合并：降序下相邻/重叠即并入前段（以 Hi+1 与 Lo 判邻接，避免把带洞的离散区间误并） }
   LM := 0;
   for LI := 0 to LN do
   begin
-    if (LM > 0) and (LRanges[LI].Lo <= LRanges[LM - 1].Hi + 1) then
+    if (LM > 0) and (LRanges[LI].Hi + 1 >= LRanges[LM - 1].Lo) and
+       (LRanges[LI].Lo <= LRanges[LM - 1].Hi + 1) then
     begin
       if LRanges[LI].Lo < LRanges[LM - 1].Lo then
         LRanges[LM - 1].Lo := LRanges[LI].Lo;
@@ -817,15 +818,20 @@ end;
 
 function TQuicClientConnection.BuildAckFrameFor(ASpace: TQuicSpace;
   out AHas: Boolean): TBytes;
+var
+  LSingle: TQuicAckRangeArray;
 begin
   Result := nil;
   AHas := FRecvRangeCount[ASpace] > 0;
   if not AHas then
     Exit;
-  { 契约：首 range 上沿必须等于 LargestAcked（frame 层校验）；
-    FRecvRanges 降序故 [0].Hi 即最大已收 }
-  if not QuicAckAppend(Result, FRecvRanges[ASpace][0].Hi, 0,
-    FRecvRanges[ASpace]) then
+  // 规避对端 packet number skip 导致的 ACK 误并（TQuic 1-RTT 场景下 skip 属于
+  // 合法行为，合并式 ACK 若把未收的 skip 区间并入会触发对端 transport 关闭）。
+  // 保守策略：仅确认最大已收包号单点区间，避免把未确认的洞区间一并确认。
+  SetLength(LSingle, 1);
+  LSingle[0].Hi := FRecvRanges[ASpace][0].Hi;
+  LSingle[0].Lo := FRecvRanges[ASpace][0].Hi;
+  if not QuicAckAppend(Result, LSingle[0].Hi, 0, LSingle) then
   begin
     AHas := False;
     Result := nil;
