@@ -43,7 +43,7 @@ function TryLoadGtkWebkit(out AInfo: TGtkLoadInfo): Boolean;
 procedure UnloadGtkWebkit;
 
 { 当前装载快照（不触发装载）。 }
-function GtkLoadInfo: TGtkLoadInfo;
+function GtkLoadInfo: TGtkLoadInfo; inline;
 
 implementation
 
@@ -313,7 +313,7 @@ begin
   GInfo := Default(TGtkLoadInfo);
 end;
 
-function GtkLoadInfo: TGtkLoadInfo;
+function GtkLoadInfo: TGtkLoadInfo; inline;
 begin
   Result := GInfo;
 end;

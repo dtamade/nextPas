@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.42（S48—— Win32 窗口壳薄转发全 inline（Win32Shell* 15 薄转发 inline，零额外调用，与 gtk.win 对称）+ CONTRACT 1.42 时效，承接 S47 调度与状态全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；Production Ready 保持）
+**版本**：1.43（S49—— 装载探针快照薄转发全 inline（GtkLoadInfo/WebView2LoadInfo/WkLoadInfo 3 路径 inline，零额外调用）+ CONTRACT 1.43 时效，承接 S48 Win32 全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；Production Ready 保持）
+**承接**：1.42（S48—— Win32 窗口壳薄转发全 inline（Win32Shell* 15 薄转发 inline，零额外调用，与 gtk.win 对称）+ CONTRACT 1.42 时效，承接 S47 调度与状态全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；Production Ready 保持）
 **承接**：1.41（S47—— 调度与状态薄转发全 inline（IsOnMainThread/IsClosed/GetDispatcher 5 路径 inline，零额外调用）+ CONTRACT 1.41 时效，承接 S46 桥协议全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；Production Ready 保持）
 **承接**：1.40（S46—— 桥协议薄转发全 inline（NormalizeInvokeCode/Count/MountCount 3 路径 inline，零额外调用）+ CONTRACT 1.40 时效，承接 S45 窗口壳全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；Production Ready 保持）
 **承接**：1.39（S45—— 窗口壳薄转发全 inline（WinShell* 10 + GuessWebviewMime/GuessMime 2 薄转发 inline，零额外调用，Linux 热路径零开销）+ CONTRACT 1.39 时效，承接 S44 Builder 全 inline；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；Production Ready 保持）

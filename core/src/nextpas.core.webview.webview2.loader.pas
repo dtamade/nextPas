@@ -26,7 +26,7 @@ type
 
 function TryLoadWebView2(out AInfo: TWebView2LoadInfo): Boolean;
 procedure UnloadWebView2;
-function WebView2LoadInfo: TWebView2LoadInfo;
+function WebView2LoadInfo: TWebView2LoadInfo; inline;
 
 implementation
 
@@ -103,7 +103,7 @@ begin
   GInfo := Default(TWebView2LoadInfo);
 end;
 
-function WebView2LoadInfo: TWebView2LoadInfo;
+function WebView2LoadInfo: TWebView2LoadInfo; inline;
 begin
   Result := GInfo;
 end;
