@@ -117,6 +117,24 @@ begin
   D := ParseMySqlDsn('SOCKET=/run/mysqld.sock USER=u');
   CheckEqual('/run/mysqld.sock', D.Socket, 'keys are case-insensitive');
 
+  // 分号分隔与花括号包裹（text.kv 四形态统一，MySQL 亦受益）
+  D := ParseMySqlDsn('host=db.local;port=3307;user=root');
+  CheckEqual('db.local', D.Host, 'host semicolon');
+  CheckEqual(3307, Int64(D.Port), 'port semicolon');
+  CheckEqual('root', D.User, 'user semicolon');
+
+  D := ParseMySqlDsn('password={p@ss;wd} host=h');
+  CheckEqual('p@ss;wd', D.Password, 'brace value with semicolon');
+  CheckEqual('h', D.Host, 'token after brace');
+
+  try
+    ParseMySqlDsn('host={unterminated');
+    Check(False, 'unterminated brace must fail-fast');
+  except
+    on E: EDbError do
+      Check(Pos('unterminated', E.Message) > 0, 'unterminated brace msg');
+  end;
+
   try
     ParseMySqlDsn('boguskey=v');
     Check(False, 'unknown key must fail-fast');
