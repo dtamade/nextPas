@@ -115,7 +115,7 @@ constructor TSeqSliceReader.Create(AParent: Pointer; const AData: TBytes);
 begin
   inherited Create;
   FParent := AParent;
-  FData := Copy(AData);
+  FData := AData;
   FPos := 0;
   FClosed := False;
 end;
@@ -219,7 +219,7 @@ begin
     Exit;
   if not HasPushBack then
   begin
-    FPushBack := Copy(AData);
+    FPushBack := AData;
     FPushPos := 0;
     Exit;
   end;
@@ -228,7 +228,7 @@ begin
   if LRemLen > 0 then
     Move(FPushBack[FPushPos], LRem[0], LRemLen);
   LOldLen := SizeUInt(Length(AData));
-  FPushBack := Copy(AData);
+  FPushBack := AData;
   SetLength(FPushBack, LOldLen + LRemLen);
   if LRemLen > 0 then
     Move(LRem[0], FPushBack[LOldLen], LRemLen);

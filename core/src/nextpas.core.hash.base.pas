@@ -18,6 +18,7 @@ type
     haSHA384,
     haSHA512,
     haBLAKE2b256,
+    haBLAKE2s256,
     haSHA224
   );
 
@@ -42,6 +43,11 @@ const
   SHA256_BLOCK_SIZE = 64;
   SHA384_BLOCK_SIZE = 128;
   SHA512_BLOCK_SIZE = 128;
+  BLAKE2B256_BLOCK_SIZE = 128;
+  BLAKE2S256_BLOCK_SIZE = 64;
+
+  BLAKE2B256_DIGEST_SIZE = 32;
+  BLAKE2S256_DIGEST_SIZE = 32;
 
 function GetDigestSize(AAlgo: THashAlgorithm): SizeUInt;
 function GetBlockSize(AAlgo: THashAlgorithm): SizeUInt;
@@ -59,7 +65,8 @@ begin
     Ord(haSHA256): Result := SHA256_DIGEST_SIZE;
     Ord(haSHA384): Result := SHA384_DIGEST_SIZE;
     Ord(haSHA512): Result := SHA512_DIGEST_SIZE;
-    Ord(haBLAKE2b256): Result := 32;
+    Ord(haBLAKE2b256): Result := BLAKE2B256_DIGEST_SIZE;
+    Ord(haBLAKE2s256): Result := BLAKE2S256_DIGEST_SIZE;
     Ord(haSHA224): Result := SHA224_DIGEST_SIZE;
   else
     raise EArgumentError.Create('GetDigestSize: invalid hash algorithm');
@@ -74,7 +81,8 @@ begin
     Ord(haSHA256): Result := SHA256_BLOCK_SIZE;
     Ord(haSHA384): Result := SHA384_BLOCK_SIZE;
     Ord(haSHA512): Result := SHA512_BLOCK_SIZE;
-    Ord(haBLAKE2b256): Result := 128;
+    Ord(haBLAKE2b256): Result := BLAKE2B256_BLOCK_SIZE;
+    Ord(haBLAKE2s256): Result := BLAKE2S256_BLOCK_SIZE;
     Ord(haSHA224): Result := SHA224_BLOCK_SIZE;
   else
     raise EArgumentError.Create('GetBlockSize: invalid hash algorithm');
