@@ -207,26 +207,30 @@ end;
 function ParseMySqlDsn(const ADsn: string): TDbMysqlDsnParts;
 var
   LErr: string;
+  LTmp: TDbMysqlDsnParts;
+  PLTmp: ^TDbMysqlDsnParts;
 begin
-  Result.Host := MYSQL_DEFAULT_HOST;
-  Result.Port := MYSQL_DEFAULT_PORT;
-  Result.User := '';
-  Result.Password := '';
-  Result.Database := '';
-  Result.Socket := '';
+  LTmp.Host := MYSQL_DEFAULT_HOST;
+  LTmp.Port := MYSQL_DEFAULT_PORT;
+  LTmp.User := '';
+  LTmp.Password := '';
+  LTmp.Database := '';
+  LTmp.Socket := '';
   if not ValidateKV(ADsn, LErr) then
     if LErr <> 'empty dsn' then
       raise EDbError.CreateSimple(dbkMysql, LErr);
+  PLTmp := @LTmp;
   try
     ScanKV(ADsn, procedure(const AKey, AValue: string)
       begin
-        AssignDsnKey(Result, AKey, AValue);
+        AssignDsnKey(PLTmp^, AKey, AValue);
       end);
   except
     on E: EDbError do raise;
     on E: Exception do
       raise EDbError.CreateSimple(dbkMysql, E.Message);
   end;
+  Result := LTmp;
 end;
 
 { ---- 占位符槽位计划 ---- }
