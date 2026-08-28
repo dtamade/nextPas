@@ -180,8 +180,12 @@ make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fuzz       # 模糊/属�
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fs         # 目录打包/解包/权限
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_contract   # 本契约 + 无 FPC RTL 依赖审计
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_extra      # extra 编解码对称性证明（Build/Decode 往返 + 恶意 extra）
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_go_parity  # Go archive/zip 双向字节级对等（十九期领头羊双锚点）
 ```
 
 python3 zipfile 作为独立实现交叉验证源（读我们产出的归档、生成参考归档、
 force_zip64 归档、unix 属性条目、符号链接条目）；python3 缺失时相关用例显式
-失败，不静默跳过。
+失败，不静默跳过。Go `archive/zip` 作为第二锚点：`test_zip_go_parity`
+通过 `go_helper.go` 双向（Pascal→Go verify / Go→Pascal gen）验证
+store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuzz
+的字节级对等；`go` 缺失时显式失败。
