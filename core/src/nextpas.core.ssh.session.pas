@@ -79,6 +79,9 @@ type
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
     function Compress(AValue: Boolean): ISshClientBuilder;
+    function RekeyBytes(AValue: UInt64): ISshClientBuilder;
+    function RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
+    function KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
     { 建立 TCP、完成握手并按已填选项认证 }
     function Connect: ISshSession;
   end;
@@ -204,6 +207,9 @@ type
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
     function Compress(AValue: Boolean): ISshClientBuilder;
+    function RekeyBytes(AValue: UInt64): ISshClientBuilder;
+    function RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
+    function KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
     function Connect: ISshSession;
   end;
 
@@ -236,6 +242,7 @@ begin
   FIO := AIO;
   FOptions := AOptions;
   FTransport := TSshClientTransport.Create(AIO);
+  FTransport.ConfigureRekey(AOptions.RekeyBytes, AOptions.RekeyIntervalMs);
   FKnownHosts := nil;
   FKnownHostsLoaded := False;
 end;
@@ -720,6 +727,15 @@ begin
   FOptions.Compress := AValue;
   Result := Self;
 end;
+
+function TSshClientBuilder.RekeyBytes(AValue: UInt64): ISshClientBuilder;
+begin FOptions.RekeyBytes := AValue; Result := Self; end;
+
+function TSshClientBuilder.RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
+begin FOptions.RekeyIntervalMs := AValue; Result := Self; end;
+
+function TSshClientBuilder.KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
+begin FOptions.KeepAliveIntervalMs := AValue; Result := Self; end;
 
 function TSshClientBuilder.Connect: ISshSession;
 begin

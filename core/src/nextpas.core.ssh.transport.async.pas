@@ -8,6 +8,7 @@ unit nextpas.core.ssh.transport.async;
 interface
 
 uses
+  SysUtils,
   nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.io.intf,
@@ -43,6 +44,10 @@ type
     FCompressEnabled: Boolean;
     FNegCompCs: string;
     FNegCompSc: string;
+    FRekeyBytes: UInt64;
+    FRekeyIntervalMs: Integer;
+    FBytesSinceRekey: UInt64;
+    FLastRekeyMs: QWord;
 
     FReadHeader: TBytes;
     FReadHeaderOff: SizeUInt;
@@ -85,6 +90,11 @@ type
     procedure SetNegotiatedCompression(const ANeg: TSshNegotiated);
     procedure EnableCompression;
     function IsCompressionEnabled: Boolean;
+    procedure ConfigureRekey(ABytes: UInt64; AIntervalMs: Integer);
+    function ShouldRekey: Boolean;
+    function AsyncSendIgnore(const AData: TBytes; const ACb: TSshAsyncCb; AContext: Pointer = nil): Boolean;
+    function AsyncSendIgnoreEmpty(const ACb: TSshAsyncCb; AContext: Pointer = nil): Boolean;
+    procedure ResetRekeyCounters;
     function AsyncSendPacket(const APayload: TBytes; const ACb: TSshAsyncCb; AContext: Pointer = nil): Boolean;
     function AsyncReadPacket(const ACb: TSshAsyncPacketCb; AContext: Pointer = nil): Boolean;
     function IsWriteBusy: Boolean;
@@ -122,6 +132,10 @@ begin
   FState := tstInit;
   FSender := CreateSshPacketSender('', '', nil, nil, nil);
   FReceiver := CreateSshPacketReceiver('', '', nil, nil, nil);
+  FRekeyBytes := SSH_REKEY_BYTES;
+  FRekeyIntervalMs := SSH_REKEY_INTERVAL_MS;
+  FBytesSinceRekey := 0;
+  FLastRekeyMs := GetTickCount64;
 end;
 
 destructor TAsyncSshTransport.Destroy;
@@ -194,6 +208,42 @@ begin
   Result := FCompressEnabled;
 end;
 
+procedure TAsyncSshTransport.ConfigureRekey(ABytes: UInt64; AIntervalMs: Integer);
+begin
+  FRekeyBytes := ABytes;
+  FRekeyIntervalMs := AIntervalMs;
+end;
+
+function TAsyncSshTransport.ShouldRekey: Boolean;
+begin
+  Result := False;
+  if FState <> tstEncrypted then Exit;
+  if (FRekeyBytes > 0) and (FBytesSinceRekey >= FRekeyBytes) then Exit(True);
+  if (FRekeyIntervalMs > 0) and (GetTickCount64 - FLastRekeyMs >= UInt64(FRekeyIntervalMs)) then Exit(True);
+end;
+
+procedure TAsyncSshTransport.ResetRekeyCounters;
+begin
+  FBytesSinceRekey := 0;
+  FLastRekeyMs := GetTickCount64;
+end;
+
+function TAsyncSshTransport.AsyncSendIgnore(const AData: TBytes; const ACb: TSshAsyncCb; AContext: Pointer): Boolean;
+var LW: TsshWriter;
+begin
+  LW := TsshWriter.Create(1 + 4 + Length(AData));
+  try
+    LW.PutByte(SSH_MSG_IGNORE);
+    LW.PutStringBytes(AData);
+    Result := AsyncSendPacket(LW.ToBytes, ACb, AContext);
+  finally LW.Free; end;
+end;
+
+function TAsyncSshTransport.AsyncSendIgnoreEmpty(const ACb: TSshAsyncCb; AContext: Pointer): Boolean;
+begin
+  Result := AsyncSendIgnore(nil, ACb, AContext);
+end;
+
 function TAsyncSshTransport.IsWriteBusy: Boolean;
 begin
   Result := FWriteCb <> nil;
@@ -214,6 +264,7 @@ begin
   FReceiver := CreateSshPacketReceiver(ANegotiated.EncSc, ANegotiated.MacSc,
     AKeySc, AIvSc, AMacSc);
   FState := tstEncrypted;
+  ResetRekeyCounters;
 end;
 
 procedure TAsyncSshTransport.DoSendPacket(const APayload: TBytes; const ACb: TSshAsyncCb; AContext: Pointer);
@@ -244,6 +295,7 @@ begin
     FillChar(LBody[1 + LPayloadLen], LPad, $2A);
   LWire := FSender.Protect(LBody, FSendSeq);
   Inc(FSendSeq);
+  Inc(FBytesSinceRekey, UInt64(Length(APayload)));
   FWriteBuf := LWire;
   FWriteOff := 0;
   FWriteCb := ACb;
@@ -398,6 +450,7 @@ begin
     on E: ESSHError do begin FailPacketCb(E); Exit; end;
     on E: Exception do begin FailPacketCb(ESSHError.Create(sekProtocol, E.Message)); Exit; end;
   end;
+  Inc(FBytesSinceRekey, UInt64(Length(LResult)));
   Lcb := FReadPacketCb; Ctx := FReadPacketCtx; FReadPacketCb := nil; FReadPacketCtx := nil;
   FReadHeader := nil; FReadTrailer := nil;
   if Assigned(Lcb) then Lcb(LResult, nil, Ctx);

@@ -58,6 +58,9 @@ type
     function StrictHostKey(AValue: Boolean): ISshAsyncClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshAsyncClientBuilder;
     function Compress(AValue: Boolean): ISshAsyncClientBuilder;
+    function RekeyBytes(AValue: UInt64): ISshAsyncClientBuilder;
+    function RekeyIntervalMs(AValue: Integer): ISshAsyncClientBuilder;
+    function KeepAliveIntervalMs(AValue: Integer): ISshAsyncClientBuilder;
     function DialOptions(const AValue: TAsyncTcpDialOptions): ISshAsyncClientBuilder;
     function AsyncConnect(const ALoop: TAsyncLoop; ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean;
   end;
@@ -396,7 +399,7 @@ begin
   if FLoop=nil then begin Fail(ESSHError.Create(sekProtocol,'async connect: nil loop')); Exit; end;
   if FProvidedStream=nil then begin Fail(ESSHError.Create(sekProtocol,'async connect: nil stream')); Exit; end;
   if FOptions.User='' then begin Fail(ESSHError.Create(sekProtocol,'ssh connect: user is required')); Exit; end;
-  FTransport:=TAsyncSshTransport.Create(FLoop, FProvidedStream); FSession:=TAsyncSshSession.Create(FLoop, FTransport, FOptions); FSession.FActiveUser:=FOptions.User;
+  FTransport:=TAsyncSshTransport.Create(FLoop, FProvidedStream); FTransport.ConfigureRekey(FOptions.RekeyBytes, FOptions.RekeyIntervalMs); FSession:=TAsyncSshSession.Create(FLoop, FTransport, FOptions); FSession.FActiveUser:=FOptions.User;
   if not FTransport.AsyncExchangeVersions(@SshAsync_OnVersionDone, Self) then Fail(ESSHError.Create(sekIO,'ssh async version exchange submit failed'));
 end;
 
@@ -447,6 +450,7 @@ begin
   if AError <> 0 then begin Fail(ESSHError.Create(sekIO, 'ssh async dial failed (' + IntToStr(AError) + ')')); Exit; end;
   if AStream = nil then begin Fail(ESSHError.Create(sekIO, 'ssh async dial: nil stream')); Exit; end;
   FTransport := TAsyncSshTransport.Create(FLoop, AStream);
+  FTransport.ConfigureRekey(FOptions.RekeyBytes, FOptions.RekeyIntervalMs);
   FSession := TAsyncSshSession.Create(FLoop, FTransport, FOptions);
   FSession.FActiveUser := FOptions.User;
   if not FTransport.AsyncExchangeVersions(@SshAsync_OnVersionDone, Self) then
@@ -946,6 +950,9 @@ type
     function StrictHostKey(AValue: Boolean): ISshAsyncClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshAsyncClientBuilder;
     function Compress(AValue: Boolean): ISshAsyncClientBuilder;
+    function RekeyBytes(AValue: UInt64): ISshAsyncClientBuilder;
+    function RekeyIntervalMs(AValue: Integer): ISshAsyncClientBuilder;
+    function KeepAliveIntervalMs(AValue: Integer): ISshAsyncClientBuilder;
     function DialOptions(const AValue: TAsyncTcpDialOptions): ISshAsyncClientBuilder;
     function AsyncConnect(const ALoop: TAsyncLoop; ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean;
   end;
@@ -969,6 +976,9 @@ function TAsyncClientBuilder.KnownHostsFile(const AValue: string): ISshAsyncClie
 function TAsyncClientBuilder.StrictHostKey(AValue: Boolean): ISshAsyncClientBuilder; begin FOptions.StrictHostKeyChecking := AValue; Result := Self; end;
 function TAsyncClientBuilder.ExecTimeoutMs(AValue: Integer): ISshAsyncClientBuilder; begin FOptions.ExecTimeoutMs := AValue; Result := Self; end;
 function TAsyncClientBuilder.Compress(AValue: Boolean): ISshAsyncClientBuilder; begin FOptions.Compress := AValue; Result := Self; end;
+function TAsyncClientBuilder.RekeyBytes(AValue: UInt64): ISshAsyncClientBuilder; begin FOptions.RekeyBytes := AValue; Result := Self; end;
+function TAsyncClientBuilder.RekeyIntervalMs(AValue: Integer): ISshAsyncClientBuilder; begin FOptions.RekeyIntervalMs := AValue; Result := Self; end;
+function TAsyncClientBuilder.KeepAliveIntervalMs(AValue: Integer): ISshAsyncClientBuilder; begin FOptions.KeepAliveIntervalMs := AValue; Result := Self; end;
 function TAsyncClientBuilder.DialOptions(const AValue: TAsyncTcpDialOptions): ISshAsyncClientBuilder; begin FDialOptions := AValue; FHasDialOptions := True; Result := Self; end;
 function TAsyncClientBuilder.AsyncConnect(const ALoop: TAsyncLoop; ACallback: TSshAsyncConnectCb; AContext: Pointer): Boolean;
 begin
