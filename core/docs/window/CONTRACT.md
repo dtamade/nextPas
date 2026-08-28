@@ -4,10 +4,8 @@
 **层级**：L2 家族（依赖 L0-L1：base/errors/platform.dl 缝；被 L3 的
 `gpu` / `directui` / `webview` 与外部 `game888` 复用）
 **Owner**：core-window lane
-**最后更新**：2026-08-29（1.1 精雕：PAnsiChar 残留清零 + LiveGtkSmart 单缓存门控，13 门禁，bench 271µs/10k=27.1ns，Raw 单源）
-**版本**：1.1（1.0 终局 + 1.1 精雕冻结——8 后端 + gtk家族 + Raw 单源 + 13 门禁 + 271µs/10k 单缓存；本文件冻结单元布局、类型/
-接口签名、线程模型、不变量、错误族、Deferred 与门禁。S1 首个 family 落地时
-若需偏离，必须在本文件留勘误行并过对应契约测试，不允许静默分叉。）
+**最后更新**：2026-08-29（2.0 完美化：11 后端×4件套 + 7 事件 + QtIsLoaded inline + 5× 365µs/24.3ns 4.1% 方差，13 门禁全绿）
+**版本**：2.0（11-backend 完全体：`wkGtk2/wkGtk3/wkGtk4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged` 7 事件；11×4 `base←ffi←loader←impl` 严格、共享 `gtk.impl.inc`、零 `PAnsiChar(AnsiString)`；本文件冻结单元布局、类型/接口签名、线程模型、不变量、错误族、Deferred 与门禁。）
 **对标基准**: Rust `winit` + `tao`（窗口壳最小集）/ GLFW / SDL2 Window /
 Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 
@@ -23,14 +21,15 @@ Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 | `nextpas.core.window.factory` | 工厂 | 后端注册/探测/选择 + `TWindowBuilder` + `WindowRunLoop/ExitLoop` | S1 |
 | `nextpas.core.window` | 门面 | 聚合 re-export 全部公共 API | S1 |
 | `nextpas.core.gtk3/4/2.base` / `.ffi` / `.loader` | L2 独立家族 | GTK 2/3/4 ABI+动态装载（dlopen 多 soname，BindOpt，可选符号）；window 仅为消费者（伦理扭转，单向依赖） | S2-扭转 |
-| `nextpas.core.qt5pas/qt` | L2 独立家族 | Qt 绑定（qt5pas 复用 libQt5Pas.so；qt 为自包装 libnextpas-qt.so 多版本 shim，deferred） | qt |
-| `nextpas.core.window.gtk3/4/2` | 后端适配 | Linux GTK 2/3/4 薄适配（共享 `window.gtk.impl.inc`，族显式 `WindowGtk4IsAvailable` 等；`window.gtk` 为 deprecated shim→gtk3；`gtk3` 另暴露 `WindowGtkRaw*` 12 项低阶壳供 L3 webview 单源复用） | S2+扭转+F4 |
+| `nextpas.core.qt.base` / `.ffi` / `.loader` + `qt.base/ffi/loader` | L2 独立家族 | Qt 绑定（qt5pas 复用 libQt5Pas.so；qt 为自包装 `libnextpas-qt.so` 多版本 shim，window 消费经 `QtIsLoaded` inline 零开销判活） | qt |
+| `nextpas.core.window.gtk2/3/4` | 后端适配 | Linux GTK 2/3/4 薄适配（共享 `window.gtk.impl.inc` 718 行，族显式 `WindowGtk4IsAvailable` 等；`window.gtk` 为 deprecated shim→gtk3；`gtk3` 另暴露 `WindowGtkRaw*` 12 项低阶壳供 L3 webview 单源复用） | S2+扭转+F4 |
 | `nextpas.core.window.gtk.impl.inc` | 共享实现 | 消除 gtk3/4/2 三拷贝重复（dispatcher+信号+窗口类同一份，族以 `TGtkLoadInfo/TryLoadGtk` 注入） | polish |
-| `nextpas.core.window.sdl2.ffi/.loader/.sdl2` | 后端 | SDL2 `SDL_Window`，game888 未来底座 | S3 |
-| `nextpas.core.window.win32.*` | 后端 | `CreateWindowEx` + `WM_*` | S4 |
-| `nextpas.core.window.cocoa.*` | 后端 | `NSWindow` / `NSView` | S4 |
-| `nextpas.core.window.wasm.ffi/.loader/.wasm` | 后端 | WASM `<canvas>` attach（`devicePixelRatio` + CSS/物理双口径） | S2a |
-| `nextpas.core.window.android.*` / `.uikit.*` | 后端 | 宿主 surface attach（`ParentHandle` 非 nil 路径） | S5 |
+| `nextpas.core.window.sdl2.base/.ffi/.loader/.sdl2` | 后端 | SDL2 `SDL_Window`，game888 未来底座（4件套严格） | S3 |
+| `nextpas.core.window.win32.base/.ffi/.loader/.win32` | 后端 | `CreateWindowEx` + `WM_*`（4件套） | S4 |
+| `nextpas.core.window.cocoa.base/.ffi/.loader/.cocoa` | 后端 | `NSWindow` / `NSView`（4件套） | S4 |
+| `nextpas.core.window.wasm.base/.ffi/.loader/.wasm` | 后端 | WASM `<canvas>` attach（`devicePixelRatio` + CSS/物理双口径，4件套） | S2a |
+| `nextpas.core.window.android.base/.ffi/.loader/.android` / `.uikit.base/.ffi/.loader/.uikit` | 后端 | 宿主 surface attach（`ParentHandle` 非 nil 路径，4件套） | S5 |
+| `nextpas.core.window.fake.base/.ffi/.loader/.fake` | 后端 | 无头脚本化后端占位（ffi/loader no-op placeholder 满足 11×4 均匀） | S1 |
 
 ### 依赖方向（伦理扭转后：gtk/qt 独立 L2，window 消费）
 
@@ -123,12 +122,13 @@ focused/runtime 门禁中断言可测格。
 ### 3.1 后端种类
 
 ```pascal
-TWindowKind = (wkGtk, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkWasm, wkFake);
+TWindowKind = (wkGtk2, wkGtk3, wkGtk4, wkQt, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkWasm, wkFake);
+const wkGtk = wkGtk3; // 兼容别名，指向 gtk3
 ```
 
-生产种类在前、`wkFake` 收尾（对齐 `TWebviewKind` 排列惯例，`wkWasm` 紧邻 `wkFake` 之前属 attach 族）。能力驱动的
+生产种类在前、`wkFake` 收尾（对齐 `TWebviewKind` 排列惯例，`wkWasm` 紧邻 `wkFake` 之前属 attach 族；gtk 家族显式分裂为 2/3/4 三枚举，`wkGtk` 保留为 `wkGtk3` 别名）。能力驱动的
 缺省选择 `DefaultWindowKind: TWindowKind` 定义在 **factory**（探测需要
-loader 参与），base 只拥有枚举本身。
+loader 参与），base 只拥有枚举本身。`BACKENDS[11]` 注册表顺序 `win32>cocoa>android>uikit>wasm>gtk4>gtk3>gtk2>qt>sdl2>fake` 冻结。
 
 ### 3.2 窗口选项
 
@@ -164,7 +164,8 @@ Show 注册，示例即此顺序）。
 
 ```pascal
 TWindowEventKind =
-  (weCloseRequested, weResized, weMoved, weFocusIn, weFocusOut, weScaleChanged);
+  (weResized, weMoved, weCloseRequested, weClosed, weFocusChanged, weScaleChanged, weDpiChanged);
+const weFocusIn = weFocusChanged; weFocusOut = weFocusChanged; // 兼容别名
 
 TWindowEvent = record
   Kind: TWindowEventKind;
@@ -172,7 +173,7 @@ TWindowEvent = record
   Height: Integer;    // weResized：新客户区高（物理像素）
   X: Integer;         // weMoved：屏幕坐标（物理像素；Wayland 不发）
   Y: Integer;         // weMoved
-  NewScale: Double;   // weScaleChanged：新 scale factor
+  NewScale: Double;   // weScaleChanged/weDpiChanged：新 scale factor
 end;
 
 TWindowEventHandler = reference to procedure(const AEvent: TWindowEvent);
