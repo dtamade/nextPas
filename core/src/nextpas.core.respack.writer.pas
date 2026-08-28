@@ -47,19 +47,19 @@ procedure InsertionSortPaths(var AOrder: array of SizeUInt;
 var
   I, J: Int64;
   Key: SizeUInt;
-  KeyPtr: PChar;
+  KeyPtr: Pointer;
   KeyLen: SizeUInt;
 begin
   I := ALow + 1;
   while I <= AHigh do
   begin
     Key := AOrder[I];
-    KeyPtr := PChar(AEntries[Key].Path);
+    KeyPtr := Pointer(@AEntries[Key].Path[1]);
     KeyLen := SizeUInt(APathLens[Key]);
     J := I - 1;
     while (J >= ALow)
       and (nextpas.core.base.utils.CompareBytesOrdered(
-        Pointer(PChar(AEntries[AOrder[J]].Path)), Pointer(KeyPtr),
+        Pointer(@AEntries[AOrder[J]].Path[1]), KeyPtr,
         SizeUInt(APathLens[AOrder[J]]), KeyLen) > 0) do
     begin
       AOrder[J + 1] := AOrder[J];
@@ -86,7 +86,7 @@ procedure QuickSortPaths(var AOrder: array of SizeUInt;
 var
   L, R: Int64;
   Pivot: Int64;
-  PivotPtr: PChar;
+  PivotPtr: Pointer;
   PivotLen: SizeUInt;
 begin
   while ALow < AHigh do
@@ -98,18 +98,18 @@ begin
     end;
     Pivot := (ALow + AHigh) shr 1;
     Swap(Pivot, AHigh);
-    PivotPtr := PChar(AEntries[AOrder[AHigh]].Path);
+    PivotPtr := Pointer(@AEntries[AOrder[AHigh]].Path[1]);
     PivotLen := SizeUInt(APathLens[AOrder[AHigh]]);
     L := ALow;
     R := AHigh - 1;
     while L <= R do
     begin
       while (L <= R) and (nextpas.core.base.utils.CompareBytesOrdered(
-        Pointer(PChar(AEntries[AOrder[L]].Path)), Pointer(PivotPtr),
+        Pointer(@AEntries[AOrder[L]].Path[1]), PivotPtr,
         SizeUInt(APathLens[AOrder[L]]), PivotLen) < 0) do
         Inc(L);
       while (L <= R) and (nextpas.core.base.utils.CompareBytesOrdered(
-        Pointer(PChar(AEntries[AOrder[R]].Path)), Pointer(PivotPtr),
+        Pointer(@AEntries[AOrder[R]].Path[1]), PivotPtr,
         SizeUInt(APathLens[AOrder[R]]), PivotLen) >= 0) do
         Dec(R);
       if L < R then
@@ -207,8 +207,8 @@ begin
     for I := 1 to N - 1 do
     begin
       if nextpas.core.base.utils.CompareBytesOrdered(
-        Pointer(PChar(AEntries[Order[I]].Path)),
-        Pointer(PChar(AEntries[Order[I - 1]].Path)),
+        Pointer(@AEntries[Order[I]].Path[1]),
+        Pointer(@AEntries[Order[I - 1]].Path[1]),
         SizeUInt(PathLens[Order[I]]), SizeUInt(PathLens[Order[I - 1]])) = 0 then
         raise EResPackDuplicatePath.Create('respack: duplicate path "'
           + AEntries[Order[I]].Path + '"');
