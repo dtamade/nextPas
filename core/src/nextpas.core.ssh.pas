@@ -32,6 +32,7 @@ uses
   nextpas.core.ssh.compress,
   nextpas.core.ssh.rekey,
   nextpas.core.ssh.keepalive,
+  nextpas.core.ssh.window,
   nextpas.core.ssh.session;
 
 type
