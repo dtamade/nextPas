@@ -194,8 +194,8 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 线性 `O(n)` 成立（`1.5KB/350B ≈ 4.3×` 字节、`9584/2416 ≈ 3.97×` 耗时）。
 `ScanKV` 零分配回调查表比 `ParseKV` 数组装箱快约 30–40%（small 355ns
 vs 902ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，印证零
-中间 `Builder`。复用面：`db.mysql.dsn` 已委托 `ParseKV` 并以 `ValidateKV`
-真零分配前置（`empty dsn` 免 `Trim` 拷贝，非法输入单遍 `fail-fast`），
+中间 `Builder`。复用面：`db.mysql/pg dsn` 均已委托 `ParseKV` 并以 `ValidateKV`
+真零分配前置（`empty dsn` 免 `Trim` 拷贝，非法输入单遍 `fail-fast`，三后端离线 `malformed/unterminated` 不触达 `libpq/libmysql/odbc`），
 `ODBC connstr` 分号+花括号（`Driver={DM8 ODBC DRIVER};`）同源复用，
 `DM` 等同形态 DSN 零新增词法——`text.kv` 现为 **MySQL/PG/ODBC/DM 四形态
 统一底座**，`bench_text_kv` 为性能锚点（29 门离线基线：26 db + 3 text）。

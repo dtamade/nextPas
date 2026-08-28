@@ -42,6 +42,7 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.text.conv,
+  nextpas.core.text.kv,
   nextpas.core.db.err,
   nextpas.core.db.sqlscan,
   nextpas.core.db.trace,
@@ -1167,7 +1168,11 @@ function ConnectPostgres(const AConnInfo: string;
 var
   Conn: TPgConn;
   LConnInfo: string;
+  LErr: string;
 begin
+  if not ValidateKV(AConnInfo, LErr) then
+    if LErr <> 'empty dsn' then
+      raise EDbError.CreateSimple(dbkPostgres, LErr);
   LConnInfo := AConnInfo;
   if AOptions.BusyTimeoutMs > 0 then
     LConnInfo := LConnInfo + ' connect_timeout=' +
