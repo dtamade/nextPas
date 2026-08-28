@@ -619,12 +619,22 @@ function TLS13Exporter(
 ): TBytes;
 var
   LHashSize: Integer;
-  LCtxHash: TBytes;
+  LEmptyHash, LCtxHash, LSecret: TBytes;
 begin
   Result := nil;
   LHashSize := TLS13CipherSuiteHashSize(ACipherSuite);
   if (LHashSize <= 0) or (Length(AExporterMasterSecret) <> LHashSize) then
     Exit;
+  // Step 1: Derive-Secret(expMaster, label, "") -> Hash("") as context
+  if TLS13CipherSuiteIsSHA256(ACipherSuite) then
+    LEmptyHash := SHA256(TBytes(nil))
+  else if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+    LEmptyHash := SHA384(TBytes(nil))
+  else
+    Exit;
+  LSecret := HKDFExpandLabelBytesForSuite(ACipherSuite, AExporterMasterSecret, ALabel, LEmptyHash, LHashSize);
+  if Length(LSecret) <> LHashSize then Exit;
+  // Step 2: Expand-Label(secret, "exporter", Hash(context), length)
   if Length(AContext) > 0 then
   begin
     if TLS13CipherSuiteIsSHA256(ACipherSuite) then
@@ -635,11 +645,15 @@ begin
       Exit;
   end
   else
-    SetLength(LCtxHash, 0);
-  if Length(LCtxHash) = 0 then
-    Result := HKDFExpandLabelBytesForSuite(ACipherSuite, AExporterMasterSecret, ALabel, nil, ALength)
-  else
-    Result := HKDFExpandLabelBytesForSuite(ACipherSuite, AExporterMasterSecret, ALabel, LCtxHash, ALength);
+  begin
+    if TLS13CipherSuiteIsSHA256(ACipherSuite) then
+      LCtxHash := SHA256(TBytes(nil))
+    else if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+      LCtxHash := SHA384(TBytes(nil))
+    else
+      Exit;
+  end;
+  Result := HKDFExpandLabelForSuite(ACipherSuite, LSecret, 'exporter', LCtxHash, ALength);
 end;
 
 function TLS13ExportKeyingMaterial(
