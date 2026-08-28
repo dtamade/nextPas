@@ -1154,6 +1154,84 @@ begin
   Result := LPi > LPatLen;
 end;
 
+function FilterEntriesBySuffix(const AEntries: TSevenZEntryInfoArray; const APrefix, ASuffix: string): TSevenZEntryInfoArray; inline;
+var LI, LCnt, LIdx: Integer; LNeed: Integer;
+begin
+  Result := nil;
+  LNeed := Length(APrefix) + Length(ASuffix);
+  LCnt := 0;
+  for LI:=0 to High(AEntries) do
+    if (Length(AEntries[LI].Name) >= LNeed) and
+       ((Length(ASuffix)=0) or (Copy(AEntries[LI].Name, Length(AEntries[LI].Name)-Length(ASuffix)+1, Length(ASuffix))=ASuffix)) then Inc(LCnt);
+  SetLength(Result, LCnt);
+  LIdx := 0;
+  for LI:=0 to High(AEntries) do
+    if (Length(AEntries[LI].Name) >= LNeed) and
+       ((Length(ASuffix)=0) or (Copy(AEntries[LI].Name, Length(AEntries[LI].Name)-Length(ASuffix)+1, Length(ASuffix))=ASuffix)) then
+    begin Result[LIdx] := AEntries[LI]; Inc(LIdx); end;
+end;
+
+function FilterEntriesBySuffixIgnoreCase(const AEntries: TSevenZEntryInfoArray; const APrefix, ASuffix: string): TSevenZEntryInfoArray; inline;
+var LI, LCnt, LIdx: Integer; LNeed: Integer; LLowerSuff, LLowerName: string;
+begin
+  Result := nil;
+  LNeed := Length(APrefix) + Length(ASuffix);
+  if IsAsciiStr(ASuffix) then LLowerSuff := AsciiLowerStr(ASuffix) else LLowerSuff := LowerCase(ASuffix);
+  LCnt := 0;
+  for LI:=0 to High(AEntries) do
+  begin
+    if IsAsciiStr(AEntries[LI].Name) then LLowerName := AsciiLowerStr(AEntries[LI].Name) else LLowerName := LowerCase(AEntries[LI].Name);
+    if (Length(LLowerName) >= LNeed) and ((Length(LLowerSuff)=0) or (Copy(LLowerName, Length(LLowerName)-Length(LLowerSuff)+1, Length(LLowerSuff))=LLowerSuff)) then Inc(LCnt);
+  end;
+  SetLength(Result, LCnt);
+  LIdx := 0;
+  for LI:=0 to High(AEntries) do
+  begin
+    if IsAsciiStr(AEntries[LI].Name) then LLowerName := AsciiLowerStr(AEntries[LI].Name) else LLowerName := LowerCase(AEntries[LI].Name);
+    if (Length(LLowerName) >= LNeed) and ((Length(LLowerSuff)=0) or (Copy(LLowerName, Length(LLowerName)-Length(LLowerSuff)+1, Length(LLowerSuff))=LLowerSuff)) then
+    begin Result[LIdx] := AEntries[LI]; Inc(LIdx); end;
+  end;
+end;
+
+function FilterExtractedBySuffix(const AExtracted: TSevenZExtractedArray; const APrefix, ASuffix: string): TSevenZExtractedArray; inline;
+var LI, LCnt, LIdx: Integer; LNeed: Integer;
+begin
+  Result := nil;
+  LNeed := Length(APrefix) + Length(ASuffix);
+  LCnt := 0;
+  for LI:=0 to High(AExtracted) do
+    if (Length(AExtracted[LI].Info.Name) >= LNeed) and
+       ((Length(ASuffix)=0) or (Copy(AExtracted[LI].Info.Name, Length(AExtracted[LI].Info.Name)-Length(ASuffix)+1, Length(ASuffix))=ASuffix)) then Inc(LCnt);
+  SetLength(Result, LCnt);
+  LIdx := 0;
+  for LI:=0 to High(AExtracted) do
+    if (Length(AExtracted[LI].Info.Name) >= LNeed) and
+       ((Length(ASuffix)=0) or (Copy(AExtracted[LI].Info.Name, Length(AExtracted[LI].Info.Name)-Length(ASuffix)+1, Length(ASuffix))=ASuffix)) then
+    begin Result[LIdx] := AExtracted[LI]; Inc(LIdx); end;
+end;
+
+function FilterExtractedBySuffixIgnoreCase(const AExtracted: TSevenZExtractedArray; const APrefix, ASuffix: string): TSevenZExtractedArray; inline;
+var LI, LCnt, LIdx: Integer; LNeed: Integer; LLowerSuff, LLowerName: string;
+begin
+  Result := nil;
+  LNeed := Length(APrefix) + Length(ASuffix);
+  if IsAsciiStr(ASuffix) then LLowerSuff := AsciiLowerStr(ASuffix) else LLowerSuff := LowerCase(ASuffix);
+  LCnt := 0;
+  for LI:=0 to High(AExtracted) do
+  begin
+    if IsAsciiStr(AExtracted[LI].Info.Name) then LLowerName := AsciiLowerStr(AExtracted[LI].Info.Name) else LLowerName := LowerCase(AExtracted[LI].Info.Name);
+    if (Length(LLowerName) >= LNeed) and ((Length(LLowerSuff)=0) or (Copy(LLowerName, Length(LLowerName)-Length(LLowerSuff)+1, Length(LLowerSuff))=LLowerSuff)) then Inc(LCnt);
+  end;
+  SetLength(Result, LCnt);
+  LIdx := 0;
+  for LI:=0 to High(AExtracted) do
+  begin
+    if IsAsciiStr(AExtracted[LI].Info.Name) then LLowerName := AsciiLowerStr(AExtracted[LI].Info.Name) else LLowerName := LowerCase(AExtracted[LI].Info.Name);
+    if (Length(LLowerName) >= LNeed) and ((Length(LLowerSuff)=0) or (Copy(LLowerName, Length(LLowerName)-Length(LLowerSuff)+1, Length(LLowerSuff))=LLowerSuff)) then
+    begin Result[LIdx] := AExtracted[LI]; Inc(LIdx); end;
+  end;
+end;
+
 function TSevenZReaderImpl.EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
 var LI, LCnt, LStarCount: Integer;
     LHasQ: Boolean;
@@ -1201,25 +1279,7 @@ begin
         LStarCount := Pos('*', APattern);
         LPrefix := Copy(APattern,1,LStarCount-1);
         LSuffix := Copy(APattern,LStarCount+1, Length(APattern)-LStarCount);
-        Result := EntriesByPrefix(LPrefix);
-        LCnt := 0;
-        for LI:=0 to High(Result) do
-          if (Length(Result[LI].Name) >= Length(LPrefix)+Length(LSuffix)) and
-             (Copy(Result[LI].Name, Length(Result[LI].Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
-            Inc(LCnt);
-        LI := 0;
-        LIdx := 0;
-        while LI <= High(Result) do
-        begin
-          if (Length(Result[LI].Name) >= Length(LPrefix)+Length(LSuffix)) and
-             (Copy(Result[LI].Name, Length(Result[LI].Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
-          begin
-            Result[LIdx] := Result[LI];
-            Inc(LIdx);
-          end;
-          Inc(LI);
-        end;
-        SetLength(Result, LCnt);
+        Result := FilterEntriesBySuffix(EntriesByPrefix(LPrefix), LPrefix, LSuffix);
         Exit;
       end;
     end;
@@ -1373,7 +1433,6 @@ end;
 
 function TSevenZReaderImpl.EntriesByGlobIgnoreCase(const APattern: string): TSevenZEntryInfoArray;
 var LI, LCnt, LStarCount: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIdx: Integer;
-    LLowerPref, LLowerSuff: string;
 begin
   Result := nil;
   if APattern='' then Exit;
@@ -1408,27 +1467,7 @@ begin
         LStarCount := Pos('*', APattern);
         LPrefix := Copy(APattern,1,LStarCount-1);
         LSuffix := Copy(APattern,LStarCount+1, Length(APattern)-LStarCount);
-        if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
-        Result := EntriesByPrefixIgnoreCase(LPrefix);
-        LCnt := 0;
-        for LI:=0 to High(Result) do
-        begin
-          if IsAsciiStr(Result[LI].Name) then LLowerPref := AsciiLowerStr(Result[LI].Name) else LLowerPref := LowerCase(Result[LI].Name);
-          if (Length(LLowerPref) >= Length(LLowerSuff)) and
-             ((Length(LLowerSuff)=0) or (Copy(LLowerPref, Length(LLowerPref)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
-            Inc(LCnt);
-        end;
-        LI := 0; LIdx := 0;
-        while LI <= High(Result) do
-        begin
-          if IsAsciiStr(Result[LI].Name) then LLowerPref := AsciiLowerStr(Result[LI].Name) else LLowerPref := LowerCase(Result[LI].Name);
-          if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
-          if (Length(LLowerPref) >= Length(LLowerSuff)) and
-             ((Length(LLowerSuff)=0) or (Copy(LLowerPref, Length(LLowerPref)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
-          begin Result[LIdx] := Result[LI]; Inc(LIdx); end;
-          Inc(LI);
-        end;
-        SetLength(Result, LIdx);
+        Result := FilterEntriesBySuffixIgnoreCase(EntriesByPrefixIgnoreCase(LPrefix), LPrefix, LSuffix);
         Exit;
       end;
     end;
@@ -1683,7 +1722,7 @@ begin
 end;
 
 function TSevenZReaderImpl.TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
-var LI, LCnt, LIdx, LPos, LStarPos: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
+var LI, LCnt, LIdx, LStarPos: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
 begin
   AExtracted := nil; AError := ''; Result := False;
   try
@@ -1738,24 +1777,7 @@ begin
         begin
           LPrefix := Copy(APattern,1,LStarPos-1);
           LSuffix := Copy(APattern,LStarPos+1, Length(APattern)-LStarPos);
-          AExtracted := ExtractByPrefix(LPrefix);
-          LCnt := 0;
-          for LI:=0 to High(AExtracted) do
-            if (Length(AExtracted[LI].Info.Name) >= Length(LPrefix)+Length(LSuffix)) and
-               (Copy(AExtracted[LI].Info.Name, Length(AExtracted[LI].Info.Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
-              Inc(LCnt);
-          LIdx := 0; LPos := 0;
-          while LPos <= High(AExtracted) do
-          begin
-            if (Length(AExtracted[LPos].Info.Name) >= Length(LPrefix)+Length(LSuffix)) and
-               (Copy(AExtracted[LPos].Info.Name, Length(AExtracted[LPos].Info.Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
-            begin
-              AExtracted[LIdx] := AExtracted[LPos];
-              Inc(LIdx);
-            end;
-            Inc(LPos);
-          end;
-          SetLength(AExtracted, LCnt);
+          AExtracted := FilterExtractedBySuffix(ExtractByPrefix(LPrefix), LPrefix, LSuffix);
           Result := True;
           Exit;
         end;
@@ -1844,7 +1866,7 @@ begin
 end;
 
 function TSevenZReaderImpl.TryExtractByGlobIgnoreCaseWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
-var LI, LCnt, LIdx, LPos, LStarPos: Integer; LHasQ: Boolean; LPrefix, LSuffix, LLowerPref, LLowerSuff: string; LIndices: array of Integer; LFill: Integer;
+var LI, LCnt, LIdx, LStarPos: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
 begin
   AExtracted := nil; AError := ''; Result := False;
   try
@@ -1872,23 +1894,7 @@ begin
         begin
           LPrefix := Copy(APattern,1,LStarPos-1);
           LSuffix := Copy(APattern,LStarPos+1, Length(APattern)-LStarPos);
-          if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
-          AExtracted := ExtractByPrefixIgnoreCase(LPrefix);
-          LCnt := 0;
-          for LI:=0 to High(AExtracted) do
-          begin
-            if IsAsciiStr(AExtracted[LI].Info.Name) then LLowerPref := AsciiLowerStr(AExtracted[LI].Info.Name) else LLowerPref := LowerCase(AExtracted[LI].Info.Name);
-            if (Length(LLowerPref) >= Length(LLowerSuff)) and ((Length(LLowerSuff)=0) or (Copy(LLowerPref, Length(LLowerPref)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then Inc(LCnt);
-          end;
-          LIdx := 0; LPos := 0;
-          while LPos <= High(AExtracted) do
-          begin
-            if IsAsciiStr(AExtracted[LPos].Info.Name) then LLowerPref := AsciiLowerStr(AExtracted[LPos].Info.Name) else LLowerPref := LowerCase(AExtracted[LPos].Info.Name);
-            if (Length(LLowerPref) >= Length(LLowerSuff)) and ((Length(LLowerSuff)=0) or (Copy(LLowerPref, Length(LLowerPref)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
-            begin AExtracted[LIdx] := AExtracted[LPos]; Inc(LIdx); end;
-            Inc(LPos);
-          end;
-          SetLength(AExtracted, LCnt);
+          AExtracted := FilterExtractedBySuffixIgnoreCase(ExtractByPrefixIgnoreCase(LPrefix), LPrefix, LSuffix);
           Result := True; Exit;
         end;
       end;
