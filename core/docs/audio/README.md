@@ -118,7 +118,7 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-13 门合计 **180 tests**，全量 `HEAPTRC OK`：
+13 门（不含 flac/mp3/vorbis）合计 **184 tests**，全量 16 门 **204 tests**，`HEAPTRC OK`：
 
 ```bash
 for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
@@ -144,6 +144,9 @@ make hygiene && git diff --check
 | test_graph 16 | 快照混音与处理器链双缓冲 |
 | test_game 15 | SFX 池与窃取 |
 | test_timeline 16 | 排序/增益声像/solo/mute/loop/Device 联动 |
+| test_flac 8 | FLAC fLaC/Ogg 探测与解码 whole/streaming/fuzz |
+| test_mp3 6 | MP3 ID3/同步探测与截断 fuzz |
+| test_vorbis 6 | Ogg Vorbis 探测与解码 whole/registry/streaming |
 
 ## 基准
 
