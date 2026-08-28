@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.37（S43—— 全校验 inline 收口：IsValidWebviewSchemeToken/CheckInvokeCmd 补 inline（全 7 校验 helper 均 inline，builder 13 链路零额外调用）+ CONTRACT 1.37 时效，承接 S42 审计冻结；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；Production Ready 保持）
+**版本**：1.38（S44—— Builder 全 inline 收口：AddInitScript + GrowInitScripts/GrowInvokes/GrowReady 补 inline（除 Build/Run 外 14 链路全 inline，零额外调用）+ CONTRACT 1.38 时效，承接 S43 全校验 inline；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；Production Ready 保持）
+**承接**：1.37（S43—— 全校验 inline 收口：IsValidWebviewSchemeToken/CheckInvokeCmd 补 inline（全 7 校验 helper 均 inline，builder 13 链路零额外调用）+ CONTRACT 1.37 时效，承接 S42 审计冻结；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；Production Ready 保持）
 **承接**：1.36（S42—— 静态审计冻结：零 TODO/FIXME（src 0、docs 仅 fafafa 历史引用）、fpc -vh 0 hint（factory 0 warnings，2 处 exhaustive 以 {$WARNINGS OFF} 抑制，wk 桩 {$HINTS OFF}）、hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；Production Ready 冻结复核，承接 S41 容量同构）
 **承接**：1.35（S41—— 容量同构收口：builder 抽取 GrowCapacity 公共倍增（4→2×）—— GrowInitScripts/GrowInvokes/GrowReady 三同构收敛零重复 + CONTRACT 1.35 时效，承接 S40 会话/脚本守卫复用；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；Production Ready 保持）
 **承接**：1.34（S40—— 会话与脚本守卫复用收口：base 抽取 CheckWebviewSession/CheckWebviewInitScript 二公共校验（builder DataDirectory/Ephemeral/AddInitScript 早期复用，零重复；CheckWebviewOptions 同源）+ 几何校验 inline 化 + CONTRACT 1.34 时效，承接 S39 几何复用；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；Production Ready 保持）

@@ -39,7 +39,7 @@ type
     function Scheme(const ASchemeName: string): IWebviewBuilder;
     function DataDirectory(const APath: string): IWebviewBuilder;
     function Ephemeral: IWebviewBuilder;
-    function AddInitScript(const AJavascript: string): IWebviewBuilder;
+    function AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
     function RegisterInvoke(const ACmd: string;
       AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
     function RegisterAsyncInvoke(const ACmd: string;
@@ -219,9 +219,9 @@ type
     FInitScriptsLen: Integer;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
     procedure EnsureUniqueCmd(const ACmd: string);
-    procedure GrowInvokes;
-    procedure GrowReady;
-    procedure GrowInitScripts;
+    procedure GrowInvokes; inline;
+    procedure GrowReady; inline;
+    procedure GrowInitScripts; inline;
   public
     constructor Create;
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
@@ -235,7 +235,7 @@ type
     function Scheme(const ASchemeName: string): IWebviewBuilder;
     function DataDirectory(const APath: string): IWebviewBuilder;
     function Ephemeral: IWebviewBuilder;
-    function AddInitScript(const AJavascript: string): IWebviewBuilder;
+    function AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
     function RegisterInvoke(const ACmd: string;
       AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
     function RegisterAsyncInvoke(const ACmd: string;
@@ -346,12 +346,12 @@ begin
     Result := ACurrent * 2;
 end;
 
-procedure TBuilderImpl.GrowInitScripts;
+procedure TBuilderImpl.GrowInitScripts; inline;
 begin
   SetLength(FInitScripts, GrowCapacity(Length(FInitScripts)));
 end;
 
-function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder;
+function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
 begin
   CheckWebviewInitScript(AJavascript);
   if FInitScriptsLen = Length(FInitScripts) then GrowInitScripts;
@@ -360,12 +360,12 @@ begin
   Result := Self;
 end;
 
-procedure TBuilderImpl.GrowInvokes;
+procedure TBuilderImpl.GrowInvokes; inline;
 begin
   SetLength(FInvokes, GrowCapacity(Length(FInvokes)));
 end;
 
-procedure TBuilderImpl.GrowReady;
+procedure TBuilderImpl.GrowReady; inline;
 begin
   SetLength(FReady, GrowCapacity(Length(FReady)));
 end;
