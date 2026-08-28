@@ -24,6 +24,7 @@ function BuildTLS12ClientHello(const AOptions: TTLS12ClientHelloOptions; const A
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.tls.exceptions,
   nextpas.core.errors,
   nextpas.core.tls.tls12.wire;
@@ -51,14 +52,6 @@ procedure AppendUInt16(var ADest: TBytes; AValue: Word);
 begin
   AppendByte(ADest, Byte(AValue shr 8));
   AppendByte(ADest, Byte(AValue));
-end;
-
-function StringToBytes(const AValue: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(AValue));
-  if Length(AValue) > 0 then
-    Move(AValue[1], Result[0], Length(AValue));
 end;
 
 function BuildSNIExtension(const AHostname: string): TBytes;

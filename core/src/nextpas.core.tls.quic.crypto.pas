@@ -40,17 +40,10 @@ procedure QUICApplyHeaderProtection(var APacket: TBytes; APacketNumberOffset: In
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.hkdf,
   nextpas.core.errors;
-
-function StringToBytes(const AValue: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(AValue));
-  if Length(AValue) > 0 then
-    Move(AValue[1], Result[0], Length(AValue));
-end;
 
 function QUICDeriveInitialSecret(const AConnectionID: TBytes): TBytes;
 var
