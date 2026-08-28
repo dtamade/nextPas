@@ -67,8 +67,8 @@ type
     function ExtractIndicesGrouped(const AIdx: array of Integer): TSevenZExtractedArray;
     function IndicesByPrefix(const APrefix: string): TSevenZIndexArray;
     function IndicesByPrefixIgnoreCase(const APrefix: string): TSevenZIndexArray;
-    function FilterIndicesBySuffix(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray;
-    function FilterIndicesBySuffixIgnoreCase(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray;
+    function FilterIndicesBySuffix(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray; inline;
+    function FilterIndicesBySuffixIgnoreCase(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray; inline;
     function IndicesBySuffix(const ASuffix: string): TSevenZIndexArray;
     function IndicesBySuffixIgnoreCase(const ASuffix: string): TSevenZIndexArray;
   public
@@ -1698,7 +1698,7 @@ begin
   end;
 end;
 
-function TSevenZReaderImpl.FilterIndicesBySuffix(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray;
+function TSevenZReaderImpl.FilterIndicesBySuffix(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray; inline;
 var LI, LCnt, LIdx, LNeed: Integer;
 begin
   Result := nil;
@@ -1715,7 +1715,7 @@ begin
     begin Result[LIdx] := AIndices[LI]; Inc(LIdx); end;
 end;
 
-function TSevenZReaderImpl.FilterIndicesBySuffixIgnoreCase(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray;
+function TSevenZReaderImpl.FilterIndicesBySuffixIgnoreCase(const AIndices: array of Integer; const APrefix, ASuffix: string): TSevenZIndexArray; inline;
 var LI, LCnt, LIdx, LNeed: Integer; LLowerSuff: string; LIsAsciiSuff: Boolean;
 begin
   EnsureIgnoreCaseBuilt;
