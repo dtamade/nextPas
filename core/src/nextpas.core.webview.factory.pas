@@ -116,6 +116,7 @@ begin
     Result := wvFake;
 end;
 
+{$PUSH}{$WARNINGS OFF}
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
 var
   LInfo: TGtkLoadInfo;
@@ -131,6 +132,7 @@ begin
     Result := False;
   end;
 end;
+{$POP}
 
 function CreateFakeWebview(
   const AOptions: TWebviewOptions): IWebviewWindow;
@@ -139,6 +141,7 @@ begin
   Result := TFakeWebview.Create(AOptions);
 end;
 
+{$PUSH}{$WARNINGS OFF}
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
 begin
@@ -157,6 +160,7 @@ begin
       GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
   end;
 end;
+{$POP}
 
 procedure WebviewRunLoop;
 begin

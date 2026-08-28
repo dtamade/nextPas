@@ -10,7 +10,8 @@ program test_zip_builder;
  * 4. StreamTo 直写与缓冲式字节级一致；
  * 5. 混合 unicode + 权限位往返正确性（Builder 产出经 Reader 校验）；
  * 6. Builder 流式（含 descriptor 直写）与 Writer 全等，sequential 侧扫描定位；
- * 7. Builder vs Writer 零成本（Reserve 链式字节级一致）。
+ * 7. Builder descriptor 遗弃与 Writer 同等 fail-closed（孤儿字节）；
+ * 8. Builder vs Writer 零成本（Reserve 链式字节级一致）。
  *}
 {$I nextpas.core.settings.inc}
 uses
@@ -285,6 +286,31 @@ begin
   Check(SameBytes(LCollected, LBlob), 'Builder descriptor seq roundtrip');
 end;
 
+procedure TestBuilderDescriptorAbandon;
+var
+  B: IZipBuilder;
+  S: ICompressWriter;
+  Opts: TZipAddOptions;
+  LOk: Boolean;
+  LData: TBytes;
+begin
+  Opts := DefaultZipAddOptions;
+  Opts.DataDescriptor := True;
+  B := ZipBuilder;
+  S := B.AddEntryStream('abandon.bin', Opts);
+  LData := BytesOfStr('abandon payload');
+  S.Write(LData[0], Length(LData));
+  S := nil; // abandon without Close → orphan bytes уже落盘
+  LOk := False;
+  try
+    B.Finish;
+  except
+    on E: EInvalidOperationError do
+      LOk := Pos('abandon', LowerCase(E.Message)) > 0;
+  end;
+  Check(LOk, 'Builder descriptor abandon fail-closed');
+end;
+
 procedure TestBuilderVsWriterZeroCost;
 var
   B: IZipBuilder;
@@ -315,6 +341,7 @@ begin
   T.Test('Mixed unicode/mode roundtrip', @TestMixedUnicodeAndMode);
   T.Test('Builder stream parity', @TestBuilderStreamParity);
   T.Test('Builder descriptor parity', @TestBuilderDescriptorParity);
+  T.Test('Builder descriptor abandon', @TestBuilderDescriptorAbandon);
   T.Test('Builder vs writer zero-cost', @TestBuilderVsWriterZeroCost);
   if not T.Run then Halt(1);
 end.

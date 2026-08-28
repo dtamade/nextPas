@@ -155,23 +155,23 @@ LProvider := CreateVfsAssetProvider(LVfs); // 前缀容错双试 + MIME 共享�
 LWin.Assets.MountEmbedded('', LProvider);
 ```
 
-性能基线（`core/benchmarks/nextpas.core.webview/bench_vfs`，`nextpas.core.bench` 框架，过滤均值 1.23 GB/s 级）：
+性能基线（`core/benchmarks/nextpas.core.webview/bench_vfs`，`nextpas.core.bench` 框架，过滤均值 1.22 GB/s 级，S27 实测）：
 
 | 场景 | ns/op (过滤均值) | ops/s | 吞吐 |
 |------|-------|-------|------|
-| SmallHit/index.html | 683 ns | 1.46M | 199 MB/s |
-| Fallback/app/index.html | 892 ns | 1.12M | 211 MB/s |
-| Miss404 | 229 ns | 4.37M | 114 MB/s |
-| LargeHit/1M | 787 µs | 1.27k | 1.23 GB/s |
+| SmallHit/index.html | 681 ns | 1.47M | 199 MB/s |
+| Fallback/app/index.html | 894 ns | 1.12M | 213 MB/s |
+| Miss404 | 217 ns | 4.60M | 123 MB/s |
+| LargeHit/1M | 800 µs | 1.25k | 1.22 GB/s |
 
-桥协议基线（`core/benchmarks/nextpas.core.webview/bench_bridge`，过滤均值）：
+桥协议基线（`core/benchmarks/nextpas.core.webview/bench_bridge`，过滤均值，S27 实测）：
 
 | 场景 | ns/op | ops/s | 备注 |
 |------|-------|-------|------|
-| TryDecodeFrame | 3.80 µs | 263k | JSON 解析 + 校验 + 规范化 |
-| BuildResolveScript | 604 ns | 1.65M | JsStringLit + 拼接 |
-| BuildRejectScript | 1.25 µs | 800k | 错误码归一 + 对象构造 |
-| BuildEmitScript | 900 ns | 1.11M | 事件名校验 + 双 Json |
+| TryDecodeFrame | 4.18 µs | 239k | JSON 解析 + 校验 + 规范化 |
+| BuildResolveScript | 622 ns | 1.61M | JsStringLit + 拼接 |
+| BuildRejectScript | 2.37 µs | 422k | 错误码归一 + 对象构造 |
+| BuildEmitScript | 1.06 µs | 943k | 事件名校验 + 双 Json |
 
 前端侧（协议细节见 BRIDGE_PROTOCOL.md）：
 
