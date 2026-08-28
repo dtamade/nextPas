@@ -354,27 +354,32 @@ end;
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  LAvail, LToCopy, LBytesNeeded, LBytesToCopy: Integer;
+  LAvail, LToCopy: Integer;
+  LBytesNeeded, LBytesToCopy: Int64;
+  LBlockAlign: Integer;
 begin
   Result := 0;
   if AFrames <= 0 then Exit(0);
-  LBytesNeeded := AFrames * ASrc.Format.BlockAlign;
-  if Length(ABuffer.Data) < LBytesNeeded then Exit(0);
+  LBlockAlign := ASrc.Format.BlockAlign;
+  if LBlockAlign <= 0 then Exit(0);
+  LBytesNeeded := Int64(AFrames) * Int64(LBlockAlign);
+  if (LBytesNeeded > High(Integer)) or (Length(ABuffer.Data) < LBytesNeeded) then Exit(0);
+  if (APos < 0) or (APos > ASrc.FrameCount) then APos := ASrc.FrameCount;
   LAvail := ASrc.FrameCount - APos;
   if LAvail <= 0 then
   begin
-    FillChar(ABuffer.Data[0], LBytesNeeded, 0);
+    FillChar(ABuffer.Data[0], Integer(LBytesNeeded), 0);
     ABuffer.Format := ASrc.Format;
     ABuffer.FrameCount := AFrames;
     Exit(AFrames);
   end;
   LToCopy := AFrames;
   if LToCopy > LAvail then LToCopy := LAvail;
-  LBytesToCopy := LToCopy * ASrc.Format.BlockAlign;
+  LBytesToCopy := Int64(LToCopy) * Int64(LBlockAlign);
   if LBytesToCopy > 0 then
-    Move(ASrc.Data[APos * ASrc.Format.BlockAlign], ABuffer.Data[0], LBytesToCopy);
+    Move(ASrc.Data[Int64(APos) * Int64(LBlockAlign)], ABuffer.Data[0], Integer(LBytesToCopy));
   if LToCopy < AFrames then
-    FillChar(ABuffer.Data[LBytesToCopy], LBytesNeeded - LBytesToCopy, 0);
+    FillChar(ABuffer.Data[Integer(LBytesToCopy)], Integer(LBytesNeeded - LBytesToCopy), 0);
   ABuffer.Format := ASrc.Format;
   ABuffer.FrameCount := AFrames;
   APos := APos + LToCopy;
