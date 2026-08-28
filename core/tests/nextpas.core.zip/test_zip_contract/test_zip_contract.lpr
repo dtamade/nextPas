@@ -22,12 +22,13 @@ var
   T: TTestSuite;
 
 const
-  C_ZIP_UNITS: array[0..8] of string = (
+  C_ZIP_UNITS: array[0..9] of string = (
     'src/nextpas.core.zip.pas',
     'src/nextpas.core.zip.base.pas',
     'src/nextpas.core.zip.common.pas',
     'src/nextpas.core.zip.extra.pas',
     'src/nextpas.core.zip.writer.pas',
+    'src/nextpas.core.zip.builder.pas',
     'src/nextpas.core.zip.reader.pas',
     'src/nextpas.core.zip.sequential.pas',
     'src/nextpas.core.zip.fs.pas',

@@ -11,6 +11,7 @@ ZIP archive container: read, write, filesystem pack/extract.
 | `nextpas.core.zip.common` | Shared kernel：`GuardEntryReadable` / `DecompressEntryVerified` / LE* / `IsKnownZipSig` — reader 与 sequential 单点复用 |
 | `nextpas.core.zip.extra` | Shared extra codec：`Decode*` / `Build*` / `Encode*`（栈上零分配 `PByte` 直写，无堆分配）— Zip64/AES extra 链编解码单点，消除 writer/reader 重复 |
 | `nextpas.core.zip.writer` | `IZipWriter` implementation |
+| `nextpas.core.zip.builder` | `IZipBuilder` — fluent chaining facade over `IZipWriter` (`ZipBuilder`/`Reserve`/`StreamTo`) |
 | `nextpas.core.zip.reader` | `IZipReader` implementation |
 | `nextpas.core.zip.sequential` | `ISequentialZipReader` — pure sequential (pipe/HTTP body) reader |
 | `nextpas.core.zip.aes` | WinZip AE-2 seal/unseal, streaming sealer/reader, AES-CTR |
@@ -55,6 +56,22 @@ Opts.Mode := ZipRegularMode(&640);               // S_IFREG|0640 unix mode word
 W.AddEntryWithOptions('d.cfg', Data, Opts);      // dir modes normalize trailing '/'
 W.Reserve(2000);                                 // preallocate 2k entries, avoids geometric realloc
 Bytes := W.Finish;
+```
+
+Fluent builder — same bytes, higher-level shape:
+
+```pascal
+Bytes := ZipBuilder
+  .Reserve(2000)
+  .Add('a.txt', Data)
+  .AddDeflate('b.bin', Data)
+  .AddWithOptions('c.cfg', Data, Opts)
+  .AddDirectory('assets')
+  .Finish;
+
+Bytes := ZipBuilderForceZip64.Add('large.bin', Data).Finish;  // forced Zip64
+Cw := TCollectWriter.Create;
+N := ZipBuilder.StreamTo(Cw).Add('a.txt', Data).FinishTo(Cw); // piped, byte-identical
 ```
 
 `Finish` returns the whole archive; further calls raise. `Reserve` is a pure
