@@ -100,7 +100,17 @@ end;
 function LowerCase(const S: string): string;
 var
   I: SizeInt;
+  LNeeds: Boolean;
 begin
+  LNeeds := False;
+  for I := 1 to Length(S) do
+    if S[I] in ['A'..'Z'] then
+    begin
+      LNeeds := True;
+      Break;
+    end;
+  if not LNeeds then
+    Exit(S);
   SetLength(Result, Length(S));
   for I := 1 to Length(S) do
     Result[I] := Chr(ToLower(Byte(S[I])));
@@ -109,7 +119,17 @@ end;
 function UpperCase(const S: string): string;
 var
   I: SizeInt;
+  LNeeds: Boolean;
 begin
+  LNeeds := False;
+  for I := 1 to Length(S) do
+    if S[I] in ['a'..'z'] then
+    begin
+      LNeeds := True;
+      Break;
+    end;
+  if not LNeeds then
+    Exit(S);
   SetLength(Result, Length(S));
   for I := 1 to Length(S) do
     Result[I] := Chr(ToUpper(Byte(S[I])));
