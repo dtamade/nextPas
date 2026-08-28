@@ -22,6 +22,7 @@ const
   GZIP_MAGIC_1 = $1F;
   GZIP_MAGIC_2 = $8B;
   GZIP_METHOD_DEFLATE = 8;
+  GZIP_MAX_DECOMPRESS_BYTES = 32 * 1024 * 1024;
 
 function LevelToZlib(const ALevel: TCompressionLevel): Int32; inline;
 
