@@ -22,9 +22,6 @@ function WkLoadInfo: TWkLoadInfo;
 
 implementation
 
-uses
-  nextpas.core.platform.dl;
-
 var
   GInfo: TWkLoadInfo;
   GProbed: Boolean = False;
@@ -37,6 +34,7 @@ begin
     Exit(GInfo.Loaded);
   end;
   GProbed := True;
+  // Darwin 真实现将经 nextpas.core.platform.dl dlopen WebKit.framework / libobjc
   GInfo.Loaded := False;
   GInfo.DllName := '';
   // 桩：当前宿主非 Darwin，一律不可用；Darwin 预留位不主动 dlopen
