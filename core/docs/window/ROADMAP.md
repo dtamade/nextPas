@@ -3,7 +3,7 @@
 **Authority**: 本文件是 window 模块**向前开发**的唯一执行入口。
 **Companion**: 定位见 [README.md](README.md)；契约见 [CONTRACT.md](CONTRACT.md)；
 架构纵深见 [ARCHITECTURE.md](ARCHITECTURE.md)；抽象原则见 [ABSTRACT_DESIGN.md](ABSTRACT_DESIGN.md)。
-**Updated**: 2026-08-29（2.3 完美化：11×4 严格 + 7 事件 + 182 inline + BENCH 365µs/24.3ns 5× 4.1% + 13 门禁全绿；NEXT=2.x freeze → 3.0 input proposal）
+**Updated**: 2026-08-29（3.1 完美化：11×4 严格 + 12 事件 + sdl2输入端到端 + 182 inline + BENCH 396µs/20.6ns 5× + 13 门禁全绿）
 
 ---
 
@@ -164,4 +164,6 @@ Era 全堵时的合法工作池：doc-truth 对齐、flake 修复、诚实表复
 | 2026-08-29 | 2.2 微雕：`WindowPumpOnce/All` inline（游戏 tick 零调用），BENCH 维持 365µs/24.3ns |
 | 2026-08-29 | 2.1 抛光：7 base 占位注释 + BENCH 1.1→2.0 头 + FINAL_ROADMAP 六维表，hygiene pass |
 | 2026-08-29 | 2.0 完美化：11×4 严格 52 单元 + 7 事件 + 5× 365µs/24.3ns 4.1%/3.0% + 13 门禁 freeze |
+| 2026-08-29 | 3.0-input 7→12：`weKeyDown/Up/weMouseDown/Up/Move` 5 事件 + TWindowEvent KeyCode/Modifiers/Button + fake InjectKey/Mouse + Default零值 + CONTRACT 2.0→3.0 |
+| 2026-08-29 | 3.1 sdl2输入端到端：sdl2.ffi KEY/MOUSE 常量+结构 + sdl2 impl 双泵输入路由（KeyCode Modifiers Button）+ bench 396µs/20.6ns + sdl2_runtime 绿 |
 | 2026-08-26 | S0 文档 slice 落地：四件套进 `core/docs/window/`；NEXT=S1 |
