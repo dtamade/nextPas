@@ -139,53 +139,50 @@ end;
 
 function CreateGtkSmart(const AOptions: TWindowOptions): IWindow;
 begin
-  // 优先 gtk4，其次 gtk3，最后 gtk2；与 ProbeGtk 顺序一致
   if ProbeGtk4 then
-    Exit(CreateWindowGtk4(AOptions));
+    Exit(nextpas.core.window.gtk4.CreateWindowGtk4(AOptions));
   if ProbeGtk3 then
-    Exit(CreateWindowGtk(AOptions));
+    Exit(nextpas.core.window.gtk3.CreateWindowGtk(AOptions));
   if ProbeGtk2 then
-    Exit(CreateWindowGtk2(AOptions));
+    Exit(nextpas.core.window.gtk2.CreateWindowGtk2(AOptions));
   raise EWindowBackendUnavailable.Create('GTK backend not available (all families failed)');
 end;
 
 function LiveGtkSmart: Integer;
 begin
   Result := 0;
-  // 聚合三族活窗计数（单进程只会有其一非零，但聚合最诚实）
-  try Result := Result + GtkLiveWindowCount; except end;
-  try Result := Result + Gtk4LiveWindowCount; except end;
-  try Result := Result + Gtk2LiveWindowCount; except end;
+  try Result := Result + nextpas.core.window.gtk3.GtkLiveWindowCount; except end;
+  try Result := Result + nextpas.core.window.gtk4.Gtk4LiveWindowCount; except end;
+  try Result := Result + nextpas.core.window.gtk2.Gtk2LiveWindowCount; except end;
 end;
 
 procedure RunGtkSmart;
 begin
-  if ProbeGtk4 and (Gtk4LiveWindowCount > 0) then
+  if ProbeGtk4 and (nextpas.core.window.gtk4.Gtk4LiveWindowCount > 0) then
   begin
-    WindowGtk4RunMainLoop;
+    nextpas.core.window.gtk4.WindowGtk4RunMainLoop;
     Exit;
   end;
-  if ProbeGtk3 and (GtkLiveWindowCount > 0) then
+  if ProbeGtk3 and (nextpas.core.window.gtk3.GtkLiveWindowCount > 0) then
   begin
-    WindowGtkRunMainLoop;
+    nextpas.core.window.gtk3.WindowGtkRunMainLoop;
     Exit;
   end;
-  if ProbeGtk2 and (Gtk2LiveWindowCount > 0) then
+  if ProbeGtk2 and (nextpas.core.window.gtk2.Gtk2LiveWindowCount > 0) then
   begin
-    WindowGtk2RunMainLoop;
+    nextpas.core.window.gtk2.WindowGtk2RunMainLoop;
     Exit;
   end;
-  // 无活窗但被 factory 以 Probe 选中时，选首个可用族的 RunLoop
-  if ProbeGtk4 then WindowGtk4RunMainLoop
-  else if ProbeGtk3 then WindowGtkRunMainLoop
-  else WindowGtk2RunMainLoop;
+  if ProbeGtk4 then nextpas.core.window.gtk4.WindowGtk4RunMainLoop
+  else if ProbeGtk3 then nextpas.core.window.gtk3.WindowGtkRunMainLoop
+  else nextpas.core.window.gtk2.WindowGtk2RunMainLoop;
 end;
 
 procedure QuitGtkSmart;
 begin
-  if ProbeGtk4 then try WindowGtk4QuitMainLoop; except end;
-  if ProbeGtk3 then try WindowGtkQuitMainLoop; except end;
-  if ProbeGtk2 then try WindowGtk2QuitMainLoop; except end;
+  if ProbeGtk4 then try nextpas.core.window.gtk4.WindowGtk4QuitMainLoop; except end;
+  if ProbeGtk3 then try nextpas.core.window.gtk3.WindowGtkQuitMainLoop; except end;
+  if ProbeGtk2 then try nextpas.core.window.gtk2.WindowGtk2QuitMainLoop; except end;
 end;
 function ProbeQt5Pas: Boolean;
 var L: TQt5PasLoadInfo; begin Result := TryLoadQt5Pas(L) and L.Loaded; end;

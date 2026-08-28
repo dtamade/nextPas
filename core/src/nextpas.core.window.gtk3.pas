@@ -19,17 +19,18 @@ procedure WindowGtkRunMainLoop;
 procedure WindowGtkQuitMainLoop;
 
 { 族显式别名（与旧 shim 兼容） }
-function WindowGtk3IsAvailable: Boolean; inline;
-function CreateWindowGtk3(const AOptions: TWindowOptions): IWindow; inline;
-function Gtk3LiveWindowCount: Integer; inline;
-procedure WindowGtk3RunMainLoop; inline;
-procedure WindowGtk3QuitMainLoop; inline;
+function WindowGtk3IsAvailable: Boolean;
+function CreateWindowGtk3(const AOptions: TWindowOptions): IWindow;
+function Gtk3LiveWindowCount: Integer;
+procedure WindowGtk3RunMainLoop;
+procedure WindowGtk3QuitMainLoop;
 
 implementation
 
 uses
   nextpas.core.math,
   nextpas.core.errors,
+  nextpas.core.text.ansi,
   nextpas.core.platform.thread,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
@@ -41,36 +42,39 @@ uses
 type
   TGtkLoadInfo = TGtk3LoadInfo;
 
-function TryLoadGtk(out AInfo: TGtkLoadInfo): Boolean; inline;
+function TryLoadGtk(out AInfo: TGtkLoadInfo): Boolean;
 begin
   Result := TryLoadGtk3(AInfo);
 end;
 
 {$I nextpas.core.window.gtk.impl.inc}
 
-function WindowGtk3IsAvailable: Boolean; inline;
+function WindowGtk3IsAvailable: Boolean;
 begin
   Result := WindowGtkIsAvailable;
 end;
 
-function CreateWindowGtk3(const AOptions: TWindowOptions): IWindow; inline;
+function CreateWindowGtk3(const AOptions: TWindowOptions): IWindow;
 begin
   Result := CreateWindowGtk(AOptions);
 end;
 
-function Gtk3LiveWindowCount: Integer; inline;
+function Gtk3LiveWindowCount: Integer;
 begin
   Result := GtkLiveWindowCount;
 end;
 
-procedure WindowGtk3RunMainLoop; inline;
+procedure WindowGtk3RunMainLoop;
 begin
   WindowGtkRunMainLoop;
 end;
 
-procedure WindowGtk3QuitMainLoop; inline;
+procedure WindowGtk3QuitMainLoop;
 begin
   WindowGtkQuitMainLoop;
 end;
+
+finalization
+  GLiveRegistry.Free;
 
 end.

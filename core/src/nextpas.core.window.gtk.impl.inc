@@ -1,6 +1,6 @@
 {**
   Shared GTK window backend implementation for window.gtk3/gtk4/gtk2.
-  This file is included via {$I nextpas.core.window.gtk.impl.inc} from each
+  This file is included via include nextpas.core.window.gtk.impl.inc from each
   thin wrapper (window.gtk3.pas / window.gtk4.pas / window.gtk2.pas).
   Wrapper must define before inclusion:
     - TGtkLoadInfo = <family-specific>LoadInfo (TGtk3LoadInfo / TGtk4LoadInfo / TGtk2LoadInfo)
@@ -382,7 +382,7 @@ begin
   gtk_window_set_default_size(FHandle, FWidth, FHeight);
   gtk_window_set_resizable(FHandle, Ord(FResizable));
   if FTitle <> '' then
-    gtk_window_set_title(FHandle, PAnsiChar(AnsiString(FTitle)));
+    gtk_window_set_title(FHandle, PAnsiChar(StrToAnsi(FTitle)));
   if FMaximized then
     gtk_window_maximize(FHandle);
 
@@ -516,7 +516,7 @@ begin
   RequireOpen;
   FTitle := ATitle;
   if FHandle <> nil then
-    gtk_window_set_title(FHandle, PAnsiChar(AnsiString(ATitle)));
+    gtk_window_set_title(FHandle, PAnsiChar(StrToAnsi(ATitle)));
 end;
 
 function TWindowGtk.GetTitle: string;
@@ -528,7 +528,7 @@ begin
   begin
     P := gtk_window_get_title(FHandle);
     if P <> nil then
-      Result := string(AnsiString(P))
+      Result := AnsiPtrToStr(P)
     else
       Result := FTitle;
   end
@@ -715,5 +715,4 @@ begin
     gtk_main_quit();
 end;
 
-finalization
-  GLiveRegistry.Free;
+{ finalization handled by wrapper (per-family GLiveRegistry) }

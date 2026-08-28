@@ -19,23 +19,18 @@ procedure WindowGtkRunMainLoop;
 procedure WindowGtkQuitMainLoop;
 
 { 族显式别名（gtk4） }
-function WindowGtk4IsAvailable: Boolean; inline;
-function CreateWindowGtk4(const AOptions: TWindowOptions): IWindow; inline;
-function Gtk4LiveWindowCount: Integer; inline;
-procedure WindowGtk4RunMainLoop; inline;
-procedure WindowGtk4QuitMainLoop; inline;
-{ 兼容旧命名（历史 shim 曾透出 gtk3 名，保留转发） }
-function WindowGtk3IsAvailable: Boolean; inline;
-function CreateWindowGtk3(const AOptions: TWindowOptions): IWindow; inline;
-function Gtk3LiveWindowCount: Integer; inline;
-procedure WindowGtk3RunMainLoop; inline;
-procedure WindowGtk3QuitMainLoop; inline;
+function WindowGtk4IsAvailable: Boolean;
+function CreateWindowGtk4(const AOptions: TWindowOptions): IWindow;
+function Gtk4LiveWindowCount: Integer;
+procedure WindowGtk4RunMainLoop;
+procedure WindowGtk4QuitMainLoop;
 
 implementation
 
 uses
   nextpas.core.math,
   nextpas.core.errors,
+  nextpas.core.text.ansi,
   nextpas.core.platform.thread,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
@@ -47,61 +42,39 @@ uses
 type
   TGtkLoadInfo = TGtk4LoadInfo;
 
-function TryLoadGtk(out AInfo: TGtkLoadInfo): Boolean; inline;
+function TryLoadGtk(out AInfo: TGtkLoadInfo): Boolean;
 begin
   Result := TryLoadGtk4(AInfo);
 end;
 
 {$I nextpas.core.window.gtk.impl.inc}
 
-function WindowGtk4IsAvailable: Boolean; inline;
+function WindowGtk4IsAvailable: Boolean;
 begin
   Result := WindowGtkIsAvailable;
 end;
 
-function CreateWindowGtk4(const AOptions: TWindowOptions): IWindow; inline;
+function CreateWindowGtk4(const AOptions: TWindowOptions): IWindow;
 begin
   Result := CreateWindowGtk(AOptions);
 end;
 
-function Gtk4LiveWindowCount: Integer; inline;
+function Gtk4LiveWindowCount: Integer;
 begin
   Result := GtkLiveWindowCount;
 end;
 
-procedure WindowGtk4RunMainLoop; inline;
+procedure WindowGtk4RunMainLoop;
 begin
   WindowGtkRunMainLoop;
 end;
 
-procedure WindowGtk4QuitMainLoop; inline;
+procedure WindowGtk4QuitMainLoop;
 begin
   WindowGtkQuitMainLoop;
 end;
 
-function WindowGtk3IsAvailable: Boolean; inline;
-begin
-  Result := WindowGtkIsAvailable;
-end;
-
-function CreateWindowGtk3(const AOptions: TWindowOptions): IWindow; inline;
-begin
-  Result := CreateWindowGtk(AOptions);
-end;
-
-function Gtk3LiveWindowCount: Integer; inline;
-begin
-  Result := GtkLiveWindowCount;
-end;
-
-procedure WindowGtk3RunMainLoop; inline;
-begin
-  WindowGtkRunMainLoop;
-end;
-
-procedure WindowGtk3QuitMainLoop; inline;
-begin
-  WindowGtkQuitMainLoop;
-end;
+finalization
+  GLiveRegistry.Free;
 
 end.

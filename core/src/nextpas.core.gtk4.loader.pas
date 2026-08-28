@@ -111,7 +111,7 @@ function TryLoadGtk4(out AInfo: TGtk4LoadInfo): Boolean;
       BindReq(@gtk_widget_destroy, 'gtk_widget_destroy') and
       BindReq(@gtk_widget_get_allocated_width, 'gtk_widget_get_allocated_width') and
       BindReq(@gtk_widget_get_allocated_height, 'gtk_widget_get_allocated_height') and
-      BindReq(@gdk_window_get_state, 'gdk_window_get_state') and
+      BindOpt(@gdk_window_get_state, 'gdk_window_get_state') and
       BindReq(@gtk_main, 'gtk_main') and
       BindReq(@gtk_main_quit, 'gtk_main_quit') and
       BindReq(@gtk_main_iteration_do, 'gtk_main_iteration_do') and
