@@ -13,6 +13,7 @@ uses
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,
+  nextpas.core.tls.tls13.recordsealer,
   nextpas.core.net.async.tlspas,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -415,6 +416,27 @@ begin
   Check(Length(LInfo.FirstPSKBinder) = 32, 'binder len still 32 with early_data');
 end;
 
+procedure TestEarlyDataSealRoundTrip;
+var LPSK, LCH: TBytes; LSec: TTlsPasEarlyDataSecrets; LErr: string; LSealer: TTLS13RecordSealer; LOpener: TTLS13RecordOpener; LPlain, LRec, LPayload, LDec: TBytes; LType: Byte;
+begin
+  SetLength(LPSK, 32);
+  FillChar(LPSK[0], 32, $42);
+  SetLength(LCH, 20);
+  FillChar(LCH[0], 20, $11);
+  Check(TlsPasTryDeriveEarlyDataSecrets(TLS13_CIPHER_AES_128_GCM_SHA256, LPSK, LCH, LSec, LErr), 'derive early for seal: ' + LErr);
+  LSealer.Init(TLS13_CIPHER_AES_128_GCM_SHA256, LSec.ClientEarlyKey, LSec.ClientEarlyIV);
+  LOpener.Init(TLS13_CIPHER_AES_128_GCM_SHA256, LSec.ClientEarlyKey, LSec.ClientEarlyIV);
+  SetLength(LPlain, 13);
+  Move(PChar('hello early!')^, LPlain[0], 13);
+  Check(LSealer.Seal(LPlain, TLS_CONTENT_TYPE_APPLICATION_DATA, LRec, LErr), 'seal early: ' + LErr);
+  SetLength(LPayload, Length(LRec) - 5);
+  Move(LRec[5], LPayload[0], Length(LPayload));
+  Check(LOpener.Open(LPayload, LDec, LType, LErr) and (LType = TLS_CONTENT_TYPE_APPLICATION_DATA), 'open early: ' + LErr);
+  Check(Length(LDec) = 13, 'dec len 13');
+  Check(CompareMem(@LPlain[0], @LDec[0], 13), 'early roundtrip');
+  LSealer.Clear; LOpener.Clear; TlsPasClearEarlyDataSecrets(LSec);
+end;
+
 procedure TestTicketMaxEarlyDataCapture;
 var C: TAsyncTlsPasSessionCache; S: TTlsPasResumptionSession; LOk: Boolean;
 begin
@@ -463,6 +485,7 @@ begin
   GSuite.Test('EarlyDataNegative', @TestEarlyDataNegative);
   GSuite.Test('EarlyDataOptions', @TestEarlyDataOptionsAndObservability);
   GSuite.Test('EarlyDataExtension', @TestEarlyDataExtensionSynthetic);
+  GSuite.Test('EarlyDataSeal', @TestEarlyDataSealRoundTrip);
   GSuite.Test('EarlyDataTicketCache', @TestTicketMaxEarlyDataCapture);
   if not GSuite.Run then
     Halt(1);
