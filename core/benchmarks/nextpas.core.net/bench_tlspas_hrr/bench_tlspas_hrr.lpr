@@ -16,6 +16,7 @@ uses
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.posthandshake,
   nextpas.core.net.async.tlspas,
+  nextpas.core.http.earlydata,
   nextpas.core.platform.time,
   nextpas.core.time.base;
 
@@ -267,6 +268,20 @@ begin
     H := TlsPasEarlyDataDecisionToHeaderValue(edAccept);
 end;
 
+procedure BenchHttpEarlyDataHeader(aIters: Int64);
+var I: Int64; H: string;
+begin
+  for I := 1 to aIters do
+    H := HttpEarlyDataHeaderValueFromDecision(edAccept);
+end;
+
+procedure BenchHttpEarlyDataStream(aIters: Int64);
+var I: Int64; H: string;
+begin
+  for I := 1 to aIters do
+    H := HttpEarlyDataHeaderValueFromStream(nil);
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -343,6 +358,8 @@ begin
     .AddLoop('FormatReplayStats', @BenchFormatReplayStats)
     .AddLoop('AdaptiveMaxEarlyData', @BenchAdaptiveLimit)
     .AddLoop('HeaderValue (X-Early-Data)', @BenchHeaderValue)
+    .AddLoop('HttpEarlyData header (decision)', @BenchHttpEarlyDataHeader)
+    .AddLoop('HttpEarlyData from stream nil', @BenchHttpEarlyDataStream)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;

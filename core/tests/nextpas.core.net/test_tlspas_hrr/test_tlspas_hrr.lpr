@@ -24,7 +24,8 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.net.tcp,
-  nextpas.core.net.async.tcp;
+  nextpas.core.net.async.tcp,
+  nextpas.core.http.earlydata;
 
 procedure TestGroupKeyShareLen;
 begin
@@ -911,6 +912,17 @@ begin
   Check(TlsPasEarlyDataDecisionToHeaderValue(edRejectReplay)='0', 'header replay 0');
 end;
 
+procedure TestHttpEarlyDataBridge;
+begin
+  Check(HttpEarlyDataHeaderValueFromDecision(edAccept)='1', 'http header accept');
+  Check(HttpEarlyDataHeaderValueFromDecision(edRejectPolicy)='0', 'http header policy');
+  Check(HttpEarlyDataHeaderValueFromStream(nil)='', 'http nil stream empty');
+  Check(not HttpIsEarlyDataStream(nil), 'http nil not early');
+  Check(HttpEarlyDataDecisionToLog(edAccept)='accept header=1', 'http log accept');
+  Check(HttpEarlyDataDecisionToLog(edRejectReplay)='reject_replay header=0', 'http log replay');
+  Check(HTTP_HEADER_X_EARLY_DATA='X-Early-Data', 'header const');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -953,6 +965,7 @@ begin
   GSuite.Test('FormatHelpers', @TestFormatHelpers);
   GSuite.Test('AdaptiveLimit', @TestAdaptiveLimit);
   GSuite.Test('HeaderValue', @TestHeaderValue);
+  GSuite.Test('HttpEarlyDataBridge', @TestHttpEarlyDataBridge);
   if not GSuite.Run then
     Halt(1);
 end.
