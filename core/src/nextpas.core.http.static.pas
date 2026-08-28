@@ -182,7 +182,7 @@ end;
   Reuses VfsValidPath as single source of truth, then rejects '%' and '\'
   which Go ValidPath would accept as normal chars but must be blocked after
   UrlDecode to prevent encoded traversal. Single-pass scan replaces double Pos. }
-function IsSafePath(const ARelative: string): Boolean;
+function IsSafePath(const ARelative: string): Boolean; inline;
 var
   I: Integer;
 begin
@@ -198,14 +198,14 @@ end;
 { Extract relative path from request: tries wildcard param 'filepath', falls
   back to URL path with leading slash stripped. Returns False only when
   UrlDecode raises (malformed percent-encoding) — caller should reply 400. }
-function TryExtractRequestPath(const AReq: IHttpRequest; out ARelative: string): Boolean;
+function TryExtractRequestPath(const AReq: IHttpRequest; out ARelative: string): Boolean; inline;
 begin
   ARelative := AReq.PathParam('filepath');
   if ARelative = '' then
   begin
     ARelative := AReq.Path;
     if (Length(ARelative) > 0) and (ARelative[1] = '/') then
-      ARelative := System.Copy(ARelative, 2, Length(ARelative) - 1);
+      System.Delete(ARelative, 1, 1);
   end;
   try
     ARelative := nextpas.core.http.url.UrlDecode(ARelative);
