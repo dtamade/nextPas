@@ -131,6 +131,34 @@ type
       out ASession: TTlsPasResumptionSession): Boolean;
   end;
 
+  { 0-RTT 准入策略：纯函数，无堆，零分支透传，供 AllocHsCtx 与上层门面复用 }
+function TlsPasIsEarlyDataAllowed(const ASession: TTlsPasResumptionSession;
+  AAllowEarlyData: Boolean; AEarlyDataLen: Integer): Boolean;
+
+  { 指纹：SHA256(ticket_identity || early_data)，32B，稳定可比，零密钥 }
+function TlsPasComputeEarlyDataFingerprint(const ATicketIdentity,
+  AEarlyData: TBytes): TBytes;
+
+type
+  { 重放窗口 LRU：64 槽，Mutex 保护，窗口期 10min（可配置），命中即重放。
+    职责：服务端去重 / 客户端单票单用检测；不持有密钥材料。 }
+  TAsyncTlsPasReplayCache = class
+  private
+    FMutex: TPlatformMutex;
+    FHashes: array of TBytes;
+    FTimes: array of Int64;
+    FCapacity: Integer;
+    FWindowMs: Int64;
+  public
+    constructor Create; overload;
+    constructor Create(ACapacity: Integer; AWindowMs: Int64); overload;
+    destructor Destroy; override;
+    { 指纹已在窗口内存在则 IsReplay=True 否则插入并 IsReplay=False }
+    function CheckAndAdd(const AFingerprint: TBytes; out IsReplay: Boolean): Boolean;
+    procedure Clear;
+    function Count: Integer;
+  end;
+
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
   TAsyncTlsPasClientOptions = record
@@ -781,6 +809,148 @@ begin
   LBase := Length(ADest);
   SetLength(ADest, LBase + Length(ASrc));
   Move(ASrc[0], ADest[LBase], Length(ASrc));
+end;
+
+{ ======== 0-RTT 策略与重放窗口 ======== }
+
+function TlsPasIsEarlyDataAllowed(const ASession: TTlsPasResumptionSession;
+  AAllowEarlyData: Boolean; AEarlyDataLen: Integer): Boolean;
+begin
+  Result := AAllowEarlyData
+    and ASession.HasMaxEarlyData
+    and (ASession.MaxEarlyDataSize > 0)
+    and (ASession.MaxEarlyDataSize <= 16384)
+    and (AEarlyDataLen > 0)
+    and (AEarlyDataLen <= Integer(ASession.MaxEarlyDataSize))
+    and (AEarlyDataLen <= 16384);
+end;
+
+function TlsPasComputeEarlyDataFingerprint(const ATicketIdentity,
+  AEarlyData: TBytes): TBytes;
+var
+  LBuf: TBytes;
+begin
+  SetLength(LBuf, 0);
+  AppendBytesTo(LBuf, ATicketIdentity);
+  AppendBytesTo(LBuf, AEarlyData);
+  Result := SHA256(LBuf);
+  SecureZeroBytes(LBuf);
+end;
+
+constructor TAsyncTlsPasReplayCache.Create;
+begin
+  Create(64, 600000);
+end;
+
+constructor TAsyncTlsPasReplayCache.Create(ACapacity: Integer; AWindowMs: Int64);
+begin
+  inherited Create;
+  if ACapacity <= 0 then ACapacity := 64;
+  if AWindowMs <= 0 then AWindowMs := 600000;
+  FCapacity := ACapacity;
+  FWindowMs := AWindowMs;
+  if platform_mutex_init(FMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: replay cache mutex init');
+end;
+
+destructor TAsyncTlsPasReplayCache.Destroy;
+var I: Integer;
+begin
+  platform_mutex_destroy(FMutex);
+  for I := 0 to High(FHashes) do
+    SecureZeroBytes(FHashes[I]);
+  inherited Destroy;
+end;
+
+function TAsyncTlsPasReplayCache.CheckAndAdd(const AFingerprint: TBytes;
+  out IsReplay: Boolean): Boolean;
+var
+  I, Oldest: Integer;
+  LNow: Int64;
+  LOldestTime: Int64;
+begin
+  Result := False;
+  IsReplay := False;
+  if Length(AFingerPrint) <> 32 then Exit;
+  LNow := TlsPasMonoMs;
+  platform_mutex_lock(FMutex);
+  try
+    // 先清过期
+    I := 0;
+    while I < Length(FHashes) do
+    begin
+      if FTimes[I] + FWindowMs <= LNow then
+      begin
+        SecureZeroBytes(FHashes[I]);
+        for Oldest := I to High(FHashes) - 1 do
+        begin
+          FHashes[Oldest] := FHashes[Oldest + 1];
+          FTimes[Oldest] := FTimes[Oldest + 1];
+        end;
+        SetLength(FHashes, Length(FHashes) - 1);
+        SetLength(FTimes, Length(FTimes) - 1);
+      end
+      else
+        Inc(I);
+    end;
+    for I := 0 to High(FHashes) do
+      if (Length(FHashes[I]) = 32) and CompareMem(@FHashes[I][0], @AFingerprint[0], 32) then
+      begin
+        IsReplay := True;
+        Result := True;
+        Exit;
+      end;
+    // 未命中则插入
+    if Length(FHashes) >= FCapacity then
+    begin
+      Oldest := 0;
+      LOldestTime := FTimes[0];
+      for I := 1 to High(FTimes) do
+        if FTimes[I] < LOldestTime then
+        begin
+          LOldestTime := FTimes[I];
+          Oldest := I;
+        end;
+      SecureZeroBytes(FHashes[Oldest]);
+      FHashes[Oldest] := Copy(AFingerPrint);
+      FTimes[Oldest] := LNow;
+    end
+    else
+    begin
+      SetLength(FHashes, Length(FHashes) + 1);
+      SetLength(FTimes, Length(FTimes) + 1);
+      FHashes[High(FHashes)] := Copy(AFingerPrint);
+      FTimes[High(FTimes)] := LNow;
+    end;
+    IsReplay := False;
+    Result := True;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasReplayCache.Clear;
+var I: Integer;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FHashes) do
+      SecureZeroBytes(FHashes[I]);
+    SetLength(FHashes, 0);
+    SetLength(FTimes, 0);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasReplayCache.Count: Integer;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    Result := Length(FHashes);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
 end;
 
 { 从 ABuf 组一条完整记录：1=取出（从缓冲移除），0=需要更多字节，
@@ -2199,8 +2369,7 @@ begin
   Result^.SentEarlyData := LAllowEarly and AHasResume;
   if Result^.SentEarlyData and (Length(AOptions.EarlyData) > 0) then
   begin
-    if (Length(AOptions.EarlyData) <= Integer(AResumeSession.MaxEarlyDataSize))
-      and (Length(AOptions.EarlyData) <= 16384) then
+    if TlsPasIsEarlyDataAllowed(AResumeSession, True, Length(AOptions.EarlyData)) then
     begin
       Result^.EarlyData := Copy(AOptions.EarlyData);
       if TlsPasTryDeriveEarlyDataSecrets(AResumeSession.CipherSuite,

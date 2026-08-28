@@ -14,6 +14,7 @@ uses
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,
+  nextpas.core.tls.tls13.posthandshake,
   nextpas.core.net.async.tlspas,
   nextpas.core.platform.time,
   nextpas.core.time.base;
@@ -122,6 +123,44 @@ begin
   end;
 end;
 
+procedure BenchEOEDBuild(aIters: Int64);
+var I: Int64; LMsg: TBytes;
+begin
+  for I := 1 to aIters do
+    LMsg := BuildTLS13EndOfEarlyDataHandshake;
+end;
+
+var
+  GPolicySess: TTlsPasResumptionSession;
+  GReplayCache: TAsyncTlsPasReplayCache;
+  GReplayFp: TBytes;
+
+procedure BenchPolicyAllowed(aIters: Int64);
+var I: Int64; LOk: Boolean;
+begin
+  for I := 1 to aIters do
+    LOk := TlsPasIsEarlyDataAllowed(GPolicySess, True, 100);
+end;
+
+procedure BenchFingerprint(aIters: Int64);
+var I: Int64; LFp: TBytes;
+begin
+  for I := 1 to aIters do
+    LFp := TlsPasComputeEarlyDataFingerprint(GPolicySess.TicketIdentity, GCH1);
+end;
+
+procedure BenchReplayCache(aIters: Int64);
+var I: Int64; IsReplay: Boolean; LFp: TBytes;
+begin
+  SetLength(LFp, 32);
+  FillChar(LFp[0], 32, $11);
+  for I := 1 to aIters do
+  begin
+    LFp[0] := Byte(I and $FF);
+    GReplayCache.CheckAndAdd(LFp, IsReplay);
+  end;
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -141,6 +180,16 @@ begin
   FillChar(GEarlyPSK256[0], 32, $42);
   SetLength(GEarlyPSK384, 48);
   FillChar(GEarlyPSK384[0], 48, $55);
+
+  GPolicySess := Default(TTlsPasResumptionSession);
+  GPolicySess.HasMaxEarlyData := True;
+  GPolicySess.MaxEarlyDataSize := 16384;
+  SetLength(GPolicySess.TicketIdentity, 16);
+  FillChar(GPolicySess.TicketIdentity[0], 16, $33);
+
+  GReplayCache := TAsyncTlsPasReplayCache.Create(64, 600000);
+  SetLength(GReplayFp, 32);
+  FillChar(GReplayFp[0], 32, $99);
 end;
 
 var
@@ -164,6 +213,10 @@ begin
     .AddLoop('Transcript synthesis (msg_hash+HRR+CH2)', @BenchTranscriptSynthesis)
     .AddLoop('EarlyData SHA256 (c e traffic)', @BenchEarlyDataSHA256)
     .AddLoop('EarlyData SHA384 (c e traffic)', @BenchEarlyDataSHA384)
+    .AddLoop('EOED build (4B 0x05)', @BenchEOEDBuild)
+    .AddLoop('Policy allowed (branch)', @BenchPolicyAllowed)
+    .AddLoop('Fingerprint SHA256(id+early)', @BenchFingerprint)
+    .AddLoop('ReplayCache check+add', @BenchReplayCache)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;

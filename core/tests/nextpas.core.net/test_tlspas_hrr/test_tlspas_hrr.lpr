@@ -559,6 +559,60 @@ begin
   Check(not CompareMem(@LVerifyWithout[0], @LVerifyWith[0], 32), 'Finished verify differs with EOED (completeness)');
 end;
 
+procedure TestEarlyDataPolicy;
+var S: TTlsPasResumptionSession;
+begin
+  S := Default(TTlsPasResumptionSession);
+  S.HasMaxEarlyData := True; S.MaxEarlyDataSize := 16384;
+  Check(TlsPasIsEarlyDataAllowed(S, True, 100), 'allow 100');
+  Check(not TlsPasIsEarlyDataAllowed(S, False, 100), 'deny not allowed');
+  Check(not TlsPasIsEarlyDataAllowed(S, True, 0), 'deny zero len');
+  Check(not TlsPasIsEarlyDataAllowed(S, True, 16385), 'deny >16384');
+  Check(not TlsPasIsEarlyDataAllowed(S, True, 16384+1), 'deny over limit');
+  S.MaxEarlyDataSize := 0;
+  Check(not TlsPasIsEarlyDataAllowed(S, True, 10), 'deny max 0');
+  S.HasMaxEarlyData := False; S.MaxEarlyDataSize := 16384;
+  Check(not TlsPasIsEarlyDataAllowed(S, True, 10), 'deny no max flag');
+  S.HasMaxEarlyData := True; S.MaxEarlyDataSize := 500;
+  Check(not TlsPasIsEarlyDataAllowed(S, True, 501), 'deny > max');
+  Check(TlsPasIsEarlyDataAllowed(S, True, 500), 'allow exact max');
+end;
+
+procedure TestEarlyDataFingerprint;
+var F1, F2, F3: TBytes; LId, LEarly: TBytes;
+begin
+  SetLength(LId, 4); FillChar(LId[0], 4, $11);
+  SetLength(LEarly, 5); FillChar(LEarly[0], 5, $22);
+  F1 := TlsPasComputeEarlyDataFingerprint(LId, LEarly);
+  Check(Length(F1)=32, 'fingerprint 32');
+  F2 := TlsPasComputeEarlyDataFingerprint(LId, LEarly);
+  Check(CompareMem(@F1[0], @F2[0], 32), 'deterministic');
+  LEarly[0] := $23;
+  F3 := TlsPasComputeEarlyDataFingerprint(LId, LEarly);
+  Check(not CompareMem(@F1[0], @F3[0], 32), 'different early diff fingerprint');
+end;
+
+procedure TestReplayCache;
+var C: TAsyncTlsPasReplayCache; F1, F2: TBytes; IsReplay: Boolean; LOk: Boolean;
+begin
+  C := TAsyncTlsPasReplayCache.Create(4, 600000);
+  try
+    SetLength(F1, 32); FillChar(F1[0], 32, $AA);
+    SetLength(F2, 32); FillChar(F2[0], 32, $BB);
+    LOk := C.CheckAndAdd(F1, IsReplay);
+    Check(LOk and not IsReplay, 'first not replay');
+    Check(C.Count=1, 'count 1');
+    LOk := C.CheckAndAdd(F1, IsReplay);
+    Check(LOk and IsReplay, 'second replay');
+    Check(C.Count=1, 'still 1');
+    LOk := C.CheckAndAdd(F2, IsReplay);
+    Check(LOk and not IsReplay, 'F2 not replay');
+    Check(C.Count=2, 'count 2');
+    C.Clear;
+    Check(C.Count=0, 'clear 0');
+  finally C.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -585,6 +639,9 @@ begin
   GSuite.Test('EarlyDataLiveRejectFallback', @TestEarlyDataLiveRejectFallback);
   GSuite.Test('EndOfEarlyDataBuildParse', @TestEndOfEarlyDataHandshakeBuildParse);
   GSuite.Test('FinishedWithEOEDDiffers', @TestFinishedWithEOEDDiffers);
+  GSuite.Test('EarlyDataPolicy', @TestEarlyDataPolicy);
+  GSuite.Test('EarlyDataFingerprint', @TestEarlyDataFingerprint);
+  GSuite.Test('ReplayCache', @TestReplayCache);
   if not GSuite.Run then
     Halt(1);
 end.
