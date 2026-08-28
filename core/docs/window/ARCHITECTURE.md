@@ -153,6 +153,8 @@ Android `Activity.getWindow()` / iOS `UIWindow`
 
 退出判定统一在 factory：活跃窗计数归零或 `WindowExitLoop` 被调。
 
+**事件驱动纪律**：所有 `RunLoop` 均为事件驱动阻塞，无硬编码 `sleep(1)` 轮询。`gtk` 以 `gtk_main` 阻塞于 GLib 主上下文；`sdl2/win32/cocoa` 以 `SDL_WaitEvent/PostMessage+WaitMessage/dispatch` 阻塞于 OS 事件队列；`android/uikit/wasm` 等 attach 后端以 `nextpas.core.sync.event`（`IEvent`，`platform_wait_address`）阻塞于 `DispatcherPush/SetEvent`，超时仅作活窗存活复核（5ms），可被 `Post/Host*/Close/Quit` 立即唤醒。
+
 ### 4.2 dispatcher 唤醒原语（跨线程 → 主线程）
 
 | 后端 | 原语 | 说明 |
@@ -239,7 +241,12 @@ Android/iOS 没有"创建 top-level window"的自由：应用窗口归宿主
 
 - `FakeLiveWindowCount` 为 `GFakeLiveCount` 的 `inline` 读，`Destroy`/`RealClose`/`Create` 三处维护，零遍历；`WindowPumpOnce` 零活窗路径与全量路径على同一口径，避免空转锁竞争。
 - `GetWidth/GetHeight/GetScaleFactor/NativeHandle/GetDispatcher/IsClosed` 与 `TFakeDispatcher.IsOnMainThread/PostRef/PumpOnce` 等高频访问一律 `inline`，`CheckWindowOptions` 以 `CreateFmt` 携带越界值，错误信息富化不增分支。
-- `WindowBackendDiagnostics: string` 遍历 `BACKENDS[8]` 以 `Probe()+sonames` 逐行输出，供 `EWindowBackendUnavailable` 失败现场直连探测真相；bench 基线 `PostSingle/1000 = 377µs`（32cap 环，`O(1)` + inline 后）。
+- `WindowBackendDiagnostics: string` 遍历 `BACKENDS[8]` 以 `Probe()+sonames` 逐行输出，供 `EWindowBackendUnavailable` 失败现场直连探测真相；bench 基线 `PostSingle/1000 = 377µs`（32cap 环，`O(1)` + inline 后），7 项分拆中 `WindowPumpOnceZero/10000 = 183µs`（≈18ns/次，零活窗早退零锁）与 `WindowPumpOnceLive/1000 = 754µs` 对比验证空转成本。
+
+### 7.3 事件驱动 RunLoop（M-band 稳定性）
+
+- `sdl2/win32/cocoa/android/uikit/wasm` 六后端 `RunLoop` 已去除 `platform_thread_sleep_ms(1)` 硬编码等待，改为 `IEvent`（`nextpas.core.sync.event`，`platform_wait_address`）事件驱动：`DispatcherPush` 以 `GWaitEvent.SetEvent` 立即唤醒，`WaitTimeout(5ms)` 仅作活窗与 OS 事件复核超时。
+- `gtk` 保持 `gtk_main` 阻塞；`sdl2` 兼以 `SDL_PushEvent` 唤醒 `SDL_PollEvent`；`win32` 兼以 `PostMessage` 唤醒 `PeekMessage`。所有路径无 `sleep` 忙等，符合“整体事件驱动，不得硬编码等待”的架构红线。
 
 ---
 

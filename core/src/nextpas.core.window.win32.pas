@@ -33,8 +33,10 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.platform.thread,
+  nextpas.core.sync.event,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
+  nextpas.core.time.base,
   nextpas.core.window.win32.ffi,
   nextpas.core.window.win32.loader;
 
@@ -52,6 +54,7 @@ var
   GDispHead: Integer = 0;
   GDispCount: Integer = 0;
   GDispWnd: HWND = nil;
+  GWaitEvent: IEvent;
 
 function EnsureWin32Init: Boolean;
 var
@@ -152,6 +155,7 @@ end;
 procedure DispatcherPush(AProc: TWindowProcRef);
 begin
   if GDispLock = nil then GDispLock := TMutex.Create as ILock;
+  if GWaitEvent = nil then GWaitEvent := CreateEvent(False);
   GDispLock.Acquire;
   try
     if GDispCount = Length(GDispRing) then DispatcherGrow;
@@ -160,6 +164,7 @@ begin
   finally
     GDispLock.Release;
   end;
+  GWaitEvent.SetEvent;
 end;
 
 function DispatcherPop(out AProc: TWindowProcRef): Boolean;
@@ -644,9 +649,9 @@ var
   Has: BOOL;
 begin
   GLoopQuit := False;
+  if GWaitEvent = nil then GWaitEvent := CreateEvent(False);
   while not GLoopQuit do
   begin
-    // Drain dispatcher even if no Win32 message
     DispatcherDrain;
     if Win32LiveWindowCount = 0 then Break;
     Has := PeekMessageA(@LMsg, nil, 0, 0, PM_REMOVE);
@@ -662,8 +667,8 @@ begin
     end
     else
     begin
-      // Avoid busy spin
-      platform_thread_sleep_ms(1);
+      // 事件驱动等待：由 DispatcherPush/PostMessage 唤醒，而非硬编码 sleep 轮询
+      GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
     end;
     if Win32LiveWindowCount = 0 then Break;
   end;
@@ -672,6 +677,7 @@ end;
 procedure WindowWin32QuitLoop;
 begin
   GLoopQuit := True;
+  if GWaitEvent <> nil then GWaitEvent.SetEvent;
   PostQuitMessage(0);
   DispatcherWake;
 end;
