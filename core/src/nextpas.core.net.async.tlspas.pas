@@ -296,6 +296,20 @@ type
     property Store: ITlsPasReplayStore read FStore;
   end;
 
+  { S14 自适应限额与 HTTP 埋点：纯函数，零堆，基于观测统计动态限额，供服务端限流与 X-Early-Data 头 }
+type
+  TTlsPasAdaptiveLimitConfig = record
+    BaseLimit: Cardinal;
+    MinLimit: Cardinal;
+    MaxLimit: Cardinal;
+    RejectRateThreshold: Double;
+  end;
+
+function DefaultTlsPasAdaptiveLimitConfig: TTlsPasAdaptiveLimitConfig;
+function TlsPasComputeAdaptiveMaxEarlyData(const AServerStats: TTlsPasServerStats;
+  const AReplayStats: TAsyncTlsPasReplayStats; const AConfig: TTlsPasAdaptiveLimitConfig): Cardinal;
+function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecision): string;
+
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
@@ -1115,6 +1129,53 @@ begin
     FillChar(FStats, SizeOf(FStats), 0);
   finally
     platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function DefaultTlsPasAdaptiveLimitConfig: TTlsPasAdaptiveLimitConfig;
+begin
+  Result.BaseLimit := 16384;
+  Result.MinLimit := 512;
+  Result.MaxLimit := 16384;
+  Result.RejectRateThreshold := 0.1;
+end;
+
+function TlsPasComputeAdaptiveMaxEarlyData(const AServerStats: TTlsPasServerStats;
+  const AReplayStats: TAsyncTlsPasReplayStats; const AConfig: TTlsPasAdaptiveLimitConfig): Cardinal;
+var Total, Rejects: Int64; Rate: Double; LBase, LTmp: Cardinal;
+begin
+  Total := AServerStats.Accepts + AServerStats.RejectPolicy + AServerStats.RejectReplay;
+  if Total = 0 then
+    Exit(AConfig.BaseLimit);
+  Rejects := AServerStats.RejectPolicy + AServerStats.RejectReplay;
+  Rate := Rejects / Total;
+  if Rate > AConfig.RejectRateThreshold then
+  begin
+    LTmp := AConfig.BaseLimit div 2;
+    if LTmp < AConfig.MinLimit then LTmp := AConfig.MinLimit;
+    LBase := LTmp;
+  end
+  else
+  begin
+    LBase := AConfig.BaseLimit;
+    if LBase > AConfig.MaxLimit then LBase := AConfig.MaxLimit;
+  end;
+  if AReplayStats.Current > 50 then
+  begin
+    LTmp := LBase div 2;
+    if LTmp < AConfig.MinLimit then LTmp := AConfig.MinLimit;
+    LBase := LTmp;
+  end;
+  Result := LBase;
+end;
+
+function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecision): string;
+begin
+  case ADecision of
+    edAccept: Result := '1';
+    edRejectPolicy, edRejectReplay: Result := '0';
+  else
+    Result := '0';
   end;
 end;
 
