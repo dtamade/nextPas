@@ -3080,6 +3080,65 @@ begin
   CheckEqual(Int64(2), Int64(Length(LR.EntriesByPrefix('dup.txt'))), 'dup prefix both');
 end;
 
+procedure TestEntriesByPrefixSorted;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('z.txt', BytesOf([$01]));
+  LW.AddFile('a.txt', BytesOf([$02]));
+  LW.AddFile('m.txt', BytesOf([$03]));
+  LW.AddFile('a/b.txt', BytesOf([$04]));
+  LW.AddFile('a/a.txt', BytesOf([$05]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByPrefix('a');
+  CheckEqual(Int64(3), Int64(Length(Arr)), 'sorted a count');
+  CheckEqual('a.txt', Arr[0].Name, 'sorted 0');
+  CheckEqual('a/a.txt', Arr[1].Name, 'sorted 1');
+  CheckEqual('a/b.txt', Arr[2].Name, 'sorted 2');
+  Arr := LR.EntriesByPrefix('z');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'sorted z');
+  Arr := LR.EntriesByPrefix('m');
+  CheckEqual('m.txt', Arr[0].Name, 'sorted m');
+end;
+
+procedure TestEntriesBySuffix;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('b.txt', BytesOf([$02]));
+  LW.AddFile('c.pas', BytesOf([$03]));
+  LW.AddFile('dir/d.txt', BytesOf([$04]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesBySuffix('.txt');
+  CheckEqual(Int64(3), Int64(Length(Arr)), 'suffix txt count');
+  Arr := LR.EntriesBySuffix('.pas');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'suffix pas count');
+  CheckEqual('c.pas', Arr[0].Name, 'suffix pas name');
+  Arr := LR.EntriesBySuffix('');
+  CheckEqual(Int64(4), Int64(Length(Arr)), 'suffix empty all');
+  Arr := LR.EntriesBySuffix('.missing');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'suffix miss');
+end;
+
+procedure TestSuffixPrefixEdge;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByPrefix('a.txt/extra');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'prefix overrun zero');
+  Arr := LR.EntriesBySuffix('a.txt.');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'suffix overrun zero');
+  LW := TSevenZWriterImpl.Create;
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByPrefix('');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'empty prefix on empty archive');
+  Arr := LR.EntriesBySuffix('');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'empty suffix on empty archive');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3252,6 +3311,9 @@ begin
   T.Test('hash index correctness 200', @TestHashIndexCorrectness);
   T.Test('entries by prefix', @TestEntriesByPrefix);
   T.Test('duplicate name stability', @TestDuplicateNameStability);
+  T.Test('entries by prefix sorted', @TestEntriesByPrefixSorted);
+  T.Test('entries by suffix', @TestEntriesBySuffix);
+  T.Test('suffix prefix edge', @TestSuffixPrefixEdge);
 
   if not T.Run then Halt(1);
 end.

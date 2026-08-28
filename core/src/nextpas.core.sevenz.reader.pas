@@ -39,7 +39,10 @@ type
     FPassword: string;
     FNameMap: specialize TSwissTableStr<Integer>;        { exact → first index }
     FNameMapIgnoreCase: specialize TSwissTableStr<Integer>; { lower → first index }
+    FSortedIdx: array of Integer;                           { lexicographic order for prefix }
     procedure BuildNameMaps;
+    procedure BuildSortedIdx;
+    function LowerBoundPrefix(const APrefix: string): Integer;
     procedure ParseArchive;
     procedure ParseHeaderBlock(const AHeaderData: TBytes);
     procedure AssembleEntries;
@@ -69,6 +72,7 @@ type
     function GetEntries: TSevenZEntryInfoArray;
     procedure ClearCache;
     function EntriesByPrefix(const APrefix: string): TSevenZEntryInfoArray;
+    function EntriesBySuffix(const ASuffix: string): TSevenZEntryInfoArray;
     function Extract(AIndex: Integer): TBytes;
     function ExtractTo(const AWriter: IWriter; AIndex: Integer): Int64;
     function OpenStream(AIndex: Integer): IStream;
@@ -95,6 +99,25 @@ uses
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
   nextpas.core.sevenz.limits;
+
+function IsAsciiStr(const S: string): Boolean; inline;
+var LI: Integer;
+begin
+  for LI:=1 to Length(S) do if Ord(S[LI]) > 127 then Exit(False);
+  Result := True;
+end;
+
+function AsciiLowerStr(const S: string): string; inline;
+var LI: Integer;
+begin
+  Result := S;
+  for LI:=1 to Length(Result) do if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then Result[LI] := Chr(Ord(Result[LI])+32);
+end;
+
+function CompareNames(const A, B: string): Integer; inline;
+begin
+  if A < B then Result := -1 else if A > B then Result := 1 else Result := 0;
+end;
 
 type
   {** @desc 条目只读流：持有 Extract 产出的缓冲引用（不二次拷贝），
@@ -553,6 +576,7 @@ var
 begin
   FreeAndNil(FNameMap);
   FreeAndNil(FNameMapIgnoreCase);
+  FSortedIdx := nil;
   if Length(FEntries)=0 then Exit;
   FNameMap := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
   FNameMapIgnoreCase := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
@@ -560,10 +584,50 @@ begin
   begin
     if not FNameMap.ContainsKey(FEntries[LI].Name) then
       FNameMap.Put(FEntries[LI].Name, LI);
-    LLower := LowerCase(FEntries[LI].Name);
+    if IsAsciiStr(FEntries[LI].Name) then LLower := AsciiLowerStr(FEntries[LI].Name)
+    else LLower := LowerCase(FEntries[LI].Name);
     if not FNameMapIgnoreCase.ContainsKey(LLower) then
       FNameMapIgnoreCase.Put(LLower, LI);
   end;
+  BuildSortedIdx;
+end;
+
+procedure TSevenZReaderImpl.BuildSortedIdx;
+var
+  LI: Integer;
+  procedure QuickSort(AL, AR: Integer);
+  var LI, LJ, LPivot: Integer; LTmp: Integer;
+  begin
+    LI := AL; LJ := AR; LPivot := FSortedIdx[(AL+AR) div 2];
+    repeat
+      while CompareNames(FEntries[FSortedIdx[LI]].Name, FEntries[LPivot].Name) < 0 do Inc(LI);
+      while CompareNames(FEntries[FSortedIdx[LJ]].Name, FEntries[LPivot].Name) > 0 do Dec(LJ);
+      if LI <= LJ then
+      begin
+        LTmp := FSortedIdx[LI]; FSortedIdx[LI] := FSortedIdx[LJ]; FSortedIdx[LJ] := LTmp;
+        Inc(LI); Dec(LJ);
+      end;
+    until LI > LJ;
+    if AL < LJ then QuickSort(AL, LJ);
+    if LI < AR then QuickSort(LI, AR);
+  end;
+begin
+  SetLength(FSortedIdx, Length(FEntries));
+  for LI:=0 to High(FSortedIdx) do FSortedIdx[LI] := LI;
+  if Length(FSortedIdx) > 1 then QuickSort(0, High(FSortedIdx));
+end;
+
+function TSevenZReaderImpl.LowerBoundPrefix(const APrefix: string): Integer;
+var LLo, LHi, LMid: Integer; LCmp: Integer;
+begin
+  LLo := 0; LHi := Length(FSortedIdx);
+  while LLo < LHi do
+  begin
+    LMid := (LLo + LHi) div 2;
+    LCmp := CompareNames(FEntries[FSortedIdx[LMid]].Name, APrefix);
+    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
+  end;
+  Result := LLo;
 end;
 
 function TSevenZReaderImpl.DecodeFolder(AFolderIdx: Integer): TBytes;
@@ -693,7 +757,7 @@ var
 begin
   if FNameMapIgnoreCase<>nil then
   begin
-    LLower := LowerCase(AName);
+    if IsAsciiStr(AName) then LLower := AsciiLowerStr(AName) else LLower := LowerCase(AName);
     if FNameMapIgnoreCase.TryGetValue(LLower, LIdx) then
       Exit(LIdx);
   end;
@@ -780,7 +844,7 @@ end;
 
 function TSevenZReaderImpl.EntriesByPrefix(const APrefix: string): TSevenZEntryInfoArray;
 var
-  LI, LCnt: Integer;
+  LStart, LIdx, LCnt, LPos: Integer;
   LPrefixLen: SizeInt;
 begin
   Result := nil;
@@ -790,16 +854,50 @@ begin
     Result := GetEntries;
     Exit;
   end;
+  if Length(FSortedIdx)=0 then Exit;
+  LStart := LowerBoundPrefix(APrefix);
+  LCnt := 0;
+  for LPos:=LStart to High(FSortedIdx) do
+  begin
+    LIdx := FSortedIdx[LPos];
+    if (Length(FEntries[LIdx].Name) < LPrefixLen) or
+       (Copy(FEntries[LIdx].Name,1,LPrefixLen) <> APrefix) then Break;
+    Inc(LCnt);
+  end;
+  SetLength(Result, LCnt);
+  LCnt := 0;
+  for LPos:=LStart to High(FSortedIdx) do
+  begin
+    LIdx := FSortedIdx[LPos];
+    if (Length(FEntries[LIdx].Name) < LPrefixLen) or
+       (Copy(FEntries[LIdx].Name,1,LPrefixLen) <> APrefix) then Break;
+    Result[LCnt] := FEntries[LIdx];
+    Inc(LCnt);
+  end;
+end;
+
+function TSevenZReaderImpl.EntriesBySuffix(const ASuffix: string): TSevenZEntryInfoArray;
+var
+  LI, LCnt: Integer;
+  LSufLen: SizeInt;
+begin
+  Result := nil;
+  LSufLen := Length(ASuffix);
+  if LSufLen=0 then
+  begin
+    Result := GetEntries;
+    Exit;
+  end;
   LCnt := 0;
   for LI:=0 to High(FEntries) do
-    if (Length(FEntries[LI].Name)>=LPrefixLen) and
-       (Copy(FEntries[LI].Name,1,LPrefixLen)=APrefix) then
+    if (Length(FEntries[LI].Name) >= LSufLen) and
+       (Copy(FEntries[LI].Name, Length(FEntries[LI].Name)-LSufLen+1, LSufLen)=ASuffix) then
       Inc(LCnt);
   SetLength(Result, LCnt);
   LCnt := 0;
   for LI:=0 to High(FEntries) do
-    if (Length(FEntries[LI].Name)>=LPrefixLen) and
-       (Copy(FEntries[LI].Name,1,LPrefixLen)=APrefix) then
+    if (Length(FEntries[LI].Name) >= LSufLen) and
+       (Copy(FEntries[LI].Name, Length(FEntries[LI].Name)-LSufLen+1, LSufLen)=ASuffix) then
     begin
       Result[LCnt] := FEntries[LI];
       Inc(LCnt);
