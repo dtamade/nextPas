@@ -34,8 +34,8 @@ function CreateWindowOf(AKind: TWindowKind; const AOptions: TWindowOptions): IWi
 function CreateFakeWindow(const AOptions: TWindowOptions): IWindow;
 procedure WindowRunLoop;
 procedure WindowExitLoop;
-function WindowPumpOnce: Boolean;
-procedure WindowPumpAll;
+function WindowPumpOnce: Boolean; inline;
+procedure WindowPumpAll; inline;
 
 implementation
 
@@ -282,7 +282,7 @@ begin
   for I := Low(BACKENDS) to High(BACKENDS) do if Assigned(BACKENDS[I].Quit) and BACKENDS[I].Probe() then BACKENDS[I].Quit();
 end;
 
-function WindowPumpOnce: Boolean;
+function WindowPumpOnce: Boolean; inline;
 var LDid: Boolean;
 begin
   if (FakeLiveWindowCount = 0) and (SdlLiveWindowCount = 0) and (WasmLiveWindowCount = 0) and (AndroidLiveWindowCount = 0) and (UIKitLiveWindowCount = 0) and (LiveGtkSmart = 0) and (Win32LiveWindowCount = 0) and (CocoaLiveWindowCount = 0) and (QtLiveWindowCount = 0) then Exit(False);
@@ -294,7 +294,7 @@ begin
   if UIKitLiveWindowCount > 0 then if UIKitPumpOnce then Result := True;
 end;
 
-procedure WindowPumpAll;
+procedure WindowPumpAll; inline;
 begin
   while WindowPumpOnce do ;
 end;
