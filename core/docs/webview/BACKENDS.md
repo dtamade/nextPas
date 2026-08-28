@@ -140,7 +140,8 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
   Maximize/Minimize/Restore/Focus 走 ShowWindow/SetForegroundWindow 族；S20 壳已满态：
   Minimize/Restore/IsMinimized（IsIconic）、GetScaleFactor 分数值（GetDpiForWindow 动态绑定→回退
   GetDeviceCaps，返 Double）、WM_DPICHANGED → ScaleChanged 多播（GLiveList 多实例分发）；
-  S21 新增 WM_SIZE → `put_Bounds` 同步（Win32ShellOnResize 多播）。
+  S21 新增 WM_SIZE → `put_Bounds` 同步（Win32ShellOnResize 多播）；S22 导航真事件已接线（NavigationStarting
+  → OnNavStarted，NavigationCompleted → OnNavFinished/OnNavFailed 按 IsSuccess/WebErrorStatus 分流，wine 仿真含失败分支与 Trigger 回环已验证）。
 - 会话：`EnvironmentOptions.UserDataFolder`（持久化自定义目录）/
   private 环境变体（Ephemeral）；W2 启动前对照当版文档定案。
 - 运行时依赖 WebView2 Runtime（Evergreen）；缺失时降级语义同 §1.2。
