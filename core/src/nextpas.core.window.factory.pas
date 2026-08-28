@@ -65,6 +65,7 @@ implementation
 uses
   nextpas.core.system.sysutils,
   nextpas.core.system.typinfo,
+  nextpas.core.diagnostics,
   nextpas.core.platform.thread,
   nextpas.core.window.fake,
   nextpas.core.window.gtk3,
@@ -262,10 +263,11 @@ function WindowBackendDiagnostics: string;
 var
   I: Integer;
   LAvail: Boolean;
-  LLine: string;
+  LDetail: string;
+  B: TDiagnosticsBuilder;
 begin
   InitBackends;
-  Result := '';
+  B.Clear;
   for I := Low(BACKENDS) to High(BACKENDS) do
   begin
     LAvail := False;
@@ -275,41 +277,24 @@ begin
       except
         LAvail := False;
       end;
-    LLine := Format('%s: %s', [
-      GetEnumName(TypeInfo(TWindowKind), Ord(BACKENDS[I].Kind)),
-      BoolToStr(LAvail, True)]);
     case BACKENDS[I].Kind of
-      wkGtk: LLine := LLine + ' (sonames: libgtk-4.so.1|libgtk-3.so.0|libgtk-x11-2.0.so.0, libgobject-2.0.so.0, libglib-2.0.so.0; smart fallback gtk4>gtk3>gtk2)';
-      wkSdl2: LLine := LLine + ' (soname: libSDL2.so)';
-      wkWin32: LLine := LLine + ' (sonames: user32.dll / libuser32)';
-      wkCocoa: LLine := LLine + ' (sonames: libobjc, libdispatch, AppKit)';
-      wkWasm: LLine := LLine + ' (sonames: env:emscripten_*)';
-      wkAndroid: LLine := LLine + ' (soname: libandroid.so / ANativeWindow)';
-      wkUIKit: LLine := LLine + ' (soname: UIKit / libobjc)';
-      wkFake: LLine := LLine + ' (builtin)';
+      wkGtk: LDetail := 'sonames: libgtk-4.so.1|libgtk-3.so.0|libgtk-x11-2.0.so.0, libgobject-2.0.so.0, libglib-2.0.so.0; smart fallback gtk4>gtk3>gtk2';
+      wkSdl2: LDetail := 'soname: libSDL2.so';
+      wkWin32: LDetail := 'sonames: user32.dll / libuser32';
+      wkCocoa: LDetail := 'sonames: libobjc, libdispatch, AppKit';
+      wkWasm: LDetail := 'sonames: env:emscripten_*';
+      wkAndroid: LDetail := 'soname: libandroid.so / ANativeWindow';
+      wkUIKit: LDetail := 'soname: UIKit / libobjc';
+      wkFake: LDetail := 'builtin';
+      else LDetail := '';
     end;
-    if Result <> '' then
-      Result := Result + LineEnding;
-    Result := Result + LLine;
+    B.Add(GetEnumName(TypeInfo(TWindowKind), Ord(BACKENDS[I].Kind)), LAvail, LDetail);
   end;
-  // 独立 L2 家族附加诊断（不在 BACKENDS 循环内，伦理扭转后新增）
-  try
-    Result := Result + LineEnding + Format('gtk4: %s (sonames: libgtk-4.so.1, libgobject-2.0.so.0, libglib-2.0.so.0)', [BoolToStr(ProbeGtk4, True)]);
-  except
-  end;
-  try
-    Result := Result + LineEnding + Format('gtk2: %s (sonames: libgtk-x11-2.0.so.0, libgobject-2.0.so.0, libglib-2.0.so.0)', [BoolToStr(ProbeGtk2, True)]);
-  except
-  end;
-  try
-    Result := Result + LineEnding + Format('qt5pas: %s (sonames: libQt5Pas.so.1)', [BoolToStr(ProbeQt5Pas, True)]);
-  except
-  end;
-  try
-    Result := Result + LineEnding + Format('qt: %s (sonames: libnextpas-qt.so)', [BoolToStr(ProbeQt, True)]);
-  except
-  end;
-  // 探测失败不影响主诊断链
+  try B.Add('gtk4', ProbeGtk4, 'sonames: libgtk-4.so.1, libgobject-2.0.so.0, libglib-2.0.so.0'); except end;
+  try B.Add('gtk2', ProbeGtk2, 'sonames: libgtk-x11-2.0.so.0, libgobject-2.0.so.0, libglib-2.0.so.0'); except end;
+  try B.Add('qt5pas', ProbeQt5Pas, 'sonames: libQt5Pas.so.1'); except end;
+  try B.Add('qt', ProbeQt, 'sonames: libnextpas-qt.so'); except end;
+  Result := B.Build;
 end;
 
 function CreateFakeWindow(const AOptions: TWindowOptions): IWindow;
@@ -375,7 +360,7 @@ begin
       FakePumpAll
     else
       Break;
-    if (FakeLiveWindowCount = 0) and (GtkLiveWindowCount = 0) and (SdlLiveWindowCount = 0)
+    if (FakeLiveWindowCount = 0) and (LiveGtkSmart = 0) and (SdlLiveWindowCount = 0)
        and (Win32LiveWindowCount = 0) and (CocoaLiveWindowCount = 0)
        and (WasmLiveWindowCount = 0) and (AndroidLiveWindowCount = 0) and (UIKitLiveWindowCount = 0) then
       Break;
@@ -399,10 +384,10 @@ function WindowPumpOnce: Boolean;
 var
   LDid: Boolean;
 begin
-  { 零活窗快速路径：避免 5 次 Live 计数与潜在锁竞争 }
+  { 零活窗快速路径：避免多后端 Live 计数与潜在锁竞争（gtk 聚合 LiveGtkSmart） }
   if (FakeLiveWindowCount = 0) and (SdlLiveWindowCount = 0)
      and (WasmLiveWindowCount = 0) and (AndroidLiveWindowCount = 0)
-     and (UIKitLiveWindowCount = 0) and (GtkLiveWindowCount = 0)
+     and (UIKitLiveWindowCount = 0) and (LiveGtkSmart = 0)
      and (Win32LiveWindowCount = 0) and (CocoaLiveWindowCount = 0) then
     Exit(False);
   Result := False;
