@@ -590,17 +590,7 @@ const
   MFLAC_METADATA_END = 2;
   MFLAC_BUFFER_SIZE = 16384;
 
-function memcpy(dest: Pointer; src: Pointer; n: TSizeT): Pointer; cdecl; external 'c' name 'memcpy';
-
-function memmove(dest: Pointer; src: Pointer; n: TSizeT): Pointer; cdecl; external 'c' name 'memmove';
-
-function memset(s_2: Pointer; c_2: LongInt; n: TSizeT): Pointer; cdecl; external 'c' name 'memset';
-
-function memcmp(s1: Pointer; s2: Pointer; n: TSizeT): LongInt; cdecl; external 'c' name 'memcmp';
-
-function strlen(s_2: PAnsiChar): TSizeT; cdecl; external 'c' name 'strlen';
-
-function strcmp(s1: PAnsiChar; s2: PAnsiChar): LongInt; cdecl; external 'c' name 'strcmp';
+{ external 'c' mem/string removed — 使用 System.Move/FillChar/StrLen 替代，已通过 __c2p_* 包装实现零 vendor }
 
 function mflac_size(): TSizeT; cdecl;
 

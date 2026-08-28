@@ -349,11 +349,8 @@ const
   CLIB = 'c';
   {$endif}
 
-function memmove(dest: Pointer; src: Pointer; n_2: TSizeT): Pointer; cdecl; external CLIB name 'memmove';
 
-function strlen(s_2: PAnsiChar): TSizeT; cdecl; external CLIB name 'strlen';
 
-function strcmp(s1: PAnsiChar; s2: PAnsiChar): LongInt; cdecl; external CLIB name 'strcmp';
 
 function printf(format: PAnsiChar): LongInt; cdecl; varargs; external CLIB name 'printf';
 
@@ -495,13 +492,9 @@ function abs(j: LongInt): LongInt; cdecl; external CLIB name 'abs';
 
 function realpath(path: PAnsiChar; resolved_path: PAnsiChar): PAnsiChar; cdecl; external CLIB name 'realpath';
 
-function memcpy(dest: Pointer; src: Pointer; n_2: TSizeT): Pointer; cdecl; external CLIB name 'memcpy';
 
-function memmem(haystack: Pointer; haystacklen: TSizeT; needle: Pointer; needlelen: TSizeT): Pointer; cdecl; external CLIB name 'memmem';
 
-function memset(s_2: Pointer; c: LongInt; n_2: TSizeT): Pointer; cdecl; external CLIB name 'memset';
 
-function memcmp(s1: Pointer; s2: Pointer; n_2: TSizeT): LongInt; cdecl; external CLIB name 'memcmp';
 
 function strcpy(dest: PAnsiChar; src: PAnsiChar): PAnsiChar; cdecl; external CLIB name 'strcpy';
 
@@ -529,7 +522,6 @@ function strpbrk(s_2: PAnsiChar; accept: PAnsiChar): PAnsiChar; cdecl; external 
 
 function strtok(str: PAnsiChar; delim: PAnsiChar): PAnsiChar; cdecl; external CLIB name 'strtok';
 
-function memchr(s_2: Pointer; c: LongInt; n_2: TSizeT): Pointer; cdecl; external CLIB name 'memchr';
 
 function strnlen(s_2: PAnsiChar; maxlen: TSizeT): TSizeT; cdecl; external CLIB name 'strnlen';
 

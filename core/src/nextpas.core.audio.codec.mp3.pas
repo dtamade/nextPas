@@ -137,19 +137,12 @@ const
   HAVE_SIMD = 0;
   HAVE_ARMV6 = 0;
 
-function memcmp(s1: Pointer; s2: Pointer; n: TSizeT): LongInt; cdecl; external 'c' name 'memcmp';
 
-function strlen(s_2: PAnsiChar): TSizeT; cdecl; external 'c' name 'strlen';
 
-function strcmp(s1: PAnsiChar; s2: PAnsiChar): LongInt; cdecl; external 'c' name 'strcmp';
 
-function malloc(size: TSizeT): Pointer; cdecl; external 'c' name 'malloc';
 
-function calloc(nmemb: TSizeT; size: TSizeT): Pointer; cdecl; external 'c' name 'calloc';
 
-function realloc(ptr: Pointer; size: TSizeT): Pointer; cdecl; external 'c' name 'realloc';
 
-procedure free(ptr: Pointer); cdecl; external 'c' name 'free';
 
 procedure abort(); cdecl;
 
@@ -203,45 +196,25 @@ function atexit(&function: TRawProcE21ED0E9): LongInt; cdecl; external 'c' name 
 
 function realpath(path: PAnsiChar; resolved_path: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'realpath';
 
-function memcpy(dest: Pointer; src: Pointer; n: TSizeT): Pointer; cdecl; external 'c' name 'memcpy';
 
-function memmove(dest: Pointer; src: Pointer; n: TSizeT): Pointer; cdecl; external 'c' name 'memmove';
 
-function memmem(haystack: Pointer; haystacklen: TSizeT; needle: Pointer; needlelen: TSizeT): Pointer; cdecl; external 'c' name 'memmem';
 
-function memset(s_2: Pointer; c: LongInt; n: TSizeT): Pointer; cdecl; external 'c' name 'memset';
 
-function strcpy(dest: PAnsiChar; src: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'strcpy';
 
-function strncpy(dest: PAnsiChar; src: PAnsiChar; n: TSizeT): PAnsiChar; cdecl; external 'c' name 'strncpy';
 
-function strncmp(s1: PAnsiChar; s2: PAnsiChar; n: TSizeT): LongInt; cdecl; external 'c' name 'strncmp';
 
-function strcat(dest: PAnsiChar; src: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'strcat';
 
-function strncat(dest: PAnsiChar; src: PAnsiChar; n: TSizeT): PAnsiChar; cdecl; external 'c' name 'strncat';
 
-function strchr(s_2: PAnsiChar; c: LongInt): PAnsiChar; cdecl; external 'c' name 'strchr';
 
-function strrchr(s_2: PAnsiChar; c: LongInt): PAnsiChar; cdecl; external 'c' name 'strrchr';
 
-function strstr(haystack: PAnsiChar; needle: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'strstr';
 
-function strerror(errnum: LongInt): PAnsiChar; cdecl; external 'c' name 'strerror';
 
-function strspn(s_2: PAnsiChar; accept: PAnsiChar): TSizeT; cdecl; external 'c' name 'strspn';
 
-function strcspn(s_2: PAnsiChar; reject: PAnsiChar): TSizeT; cdecl; external 'c' name 'strcspn';
 
-function strpbrk(s_2: PAnsiChar; accept: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'strpbrk';
 
-function strtok(str: PAnsiChar; delim: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'strtok';
 
-function memchr(s_2: Pointer; c: LongInt; n: TSizeT): Pointer; cdecl; external 'c' name 'memchr';
 
-function strnlen(s_2: PAnsiChar; maxlen: TSizeT): TSizeT; cdecl; external 'c' name 'strnlen';
 
-function strcoll(s1: PAnsiChar; s2: PAnsiChar): LongInt; cdecl; external 'c' name 'strcoll';
 
 procedure mp3dec_init(dec: PMp3decT); cdecl;
 
