@@ -694,18 +694,8 @@ begin
 end;
 
 function TWavStreamingSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var
-  LNeeded: Integer;
 begin
-  Result := 0;
-  if AFrames <= 0 then Exit(0);
-  LNeeded := AFrames * FFormat.BlockAlign;
-  if Length(ABuffer.Data) < LNeeded then Exit(0);
-  // streaming source: realtime must not do IO/lock/alloc - output silence
-  FillChar(ABuffer.Data[0], LNeeded, 0);
-  ABuffer.Format := FFormat;
-  ABuffer.FrameCount := AFrames;
-  Result := AFrames;
+  Result := AudioSilentFill(ABuffer, FFormat, AFrames);
 end;
 
 function TWavStreamingSource.SeekTo(AFrame: UInt64): Boolean;

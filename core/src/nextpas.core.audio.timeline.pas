@@ -10,7 +10,8 @@ uses
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.timeline.intf,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.audio.pcm;
 
 type
   TTimelineImpl = class(TInterfacedObject, IAudioTimeline, IAudioSource, IRealtimeAudioSource)
@@ -178,7 +179,7 @@ var
   HasSolo: Boolean;
   TrackGain, ClipGain, Gain: Single;
   TrackPan, ClipPan, Pan: Single;
-  Lgain, Rgain: Single;
+  Lgain, Rgain, LG, RG: Single;
   Clip: TTimelineClip;
   SrcPtr: PSingle;
   SnapPos: UInt64;
@@ -189,7 +190,7 @@ begin
   Needed:=AFrames*FFormat.BlockAlign;
   if Length(ABuffer.Data)<Needed then
   begin InterlockedExchangeAdd64(FViolations,1); AFrames:=Length(ABuffer.Data) div FFormat.BlockAlign; if AFrames<=0 then Exit(0); Needed:=AFrames*FFormat.BlockAlign; end;
-  FillChar(ABuffer.Data[0], Needed, 0);
+  AudioSilentFill(ABuffer, FFormat, AFrames);
   MixPtr:=PSingle(@ABuffer.Data[0]);
   // realtime: lock-free snapshot (control plane uses lock)
   SnapPos:=FPosition;
@@ -216,13 +217,14 @@ begin
       ClipGain:=Clip.Gain; Pan:=(TrackPan+ClipPan)/2;
       Gain:=TrackGain*ClipGain;
       if FFormat.Channels=2 then begin Lgain:=Cos((Pan+1)*Pi/4)*1.414213562; Rgain:=Sin((Pan+1)*Pi/4)*1.414213562; end else begin Lgain:=1; Rgain:=1; end;
+      LG:=Gain*Lgain; RG:=Gain*Rgain;
       SrcPtr:=PSingle(@Clip.Buffer.Data[0]);
       if FFormat.Channels=2 then
       begin
         for ch:=0 to copyFrames-1 do
         begin
-          MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*Gain*Lgain;
-          MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*Gain*Rgain;
+          MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*LG;
+          MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*RG;
         end;
       end else if FFormat.Channels=1 then
       begin

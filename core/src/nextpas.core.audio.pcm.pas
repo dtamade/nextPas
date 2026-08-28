@@ -53,6 +53,8 @@ procedure PcmDeinterleave(const AInterleaved: TBytes; AFrames, AChannels: Intege
 { ---- Memory-source realtime helper (shared wav/aiff, zero-alloc) ---- }
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer; inline;
 
 { ---- TPDF dither noise [-1,1) LSB scaled ---- }
 function PcmTpdfNoise(var AState: UInt32): Single; inline;
@@ -383,6 +385,22 @@ begin
   ABuffer.Format := ASrc.Format;
   ABuffer.FrameCount := AFrames;
   APos := APos + LToCopy;
+  Result := AFrames;
+end;
+
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer;
+var
+  LBytes: Int64;
+begin
+  Result := 0;
+  if AFrames <= 0 then Exit(0);
+  if not AFormat.IsValid then Exit(0);
+  LBytes := Int64(AFrames) * Int64(AFormat.BlockAlign);
+  if (LBytes > High(Integer)) or (Length(ABuffer.Data) < LBytes) then Exit(0);
+  FillChar(ABuffer.Data[0], Integer(LBytes), 0);
+  ABuffer.Format := AFormat;
+  ABuffer.FrameCount := AFrames;
   Result := AFrames;
 end;
 
