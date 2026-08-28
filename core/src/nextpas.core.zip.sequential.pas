@@ -3,9 +3,10 @@ unit nextpas.core.zip.sequential;
  * @desc ZIP 顺序读端：从纯顺序 IReader（HTTP body/管道）按 local header +
  *       data descriptor 前进，不整载、不要求 seek。支持 store/deflate、
  *       Zip64 宽度、UTF-8 名称、空/目录条目；描述符条目通过增量扫描定位
- *       描述符（签名 $08074B50），以 CRC/尺寸强校验避免载荷内误判，并
- *       通过 pushback 保证跨条目字节级精确。与内存/定位流读端共享校验
- *       语义（GuardEntryReadable、DecompressEntryVerified 等价路径）。
+ *       描述符（有签名 16/24 与无签名 12/20 四形态），以 CRC/尺寸强校验
+ *       + 次头部签名预检避免载荷内误判，并通过 pushback 保证跨条目字节级
+ *       精确。与内存/定位流读端共享校验语义（GuardEntryReadable、
+ *       DecompressEntryVerified 等价路径）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -483,6 +484,70 @@ var
     AUSize := LUSizeTmp;
     Result := True;
   end;
+  function TryNoSigAt(APos: SizeUInt; ADescSize: SizeUInt; out ACrc: LongWord;
+    out ACSize, AUSize: UInt64): Boolean;
+  var
+    LCrcTmp: LongWord;
+    LCSizeTmp, LUSizeTmp: UInt64;
+    LPay: TBytes;
+    LCalc: LongWord;
+    LDec: TBytes;
+  begin
+    Result := False;
+    if ADescSize = 12 then
+    begin
+      LCrcTmp := LE32Ptr(APos + 0);
+      LCSizeTmp := LE32Ptr(APos + 4);
+      LUSizeTmp := LE32Ptr(APos + 8);
+    end
+    else
+    begin
+      LCrcTmp := LE32Ptr(APos + 0);
+      LCSizeTmp := LE64Ptr(APos + 4);
+      LUSizeTmp := LE64Ptr(APos + 12);
+    end;
+    if LCSizeTmp <> APos then
+      Exit;
+    if (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then
+      Exit;
+    if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then
+      Exit;
+    if APos > 0 then
+    begin
+      SetLength(LPay, APos);
+      Move(LData^, LPay[0], APos);
+      LCalc := Crc32OfBytes(LPay);
+    end
+    else
+    begin
+      LPay := nil;
+      LCalc := 0;
+    end;
+    if FCurrent.Method = zmStore then
+    begin
+      if LCalc <> LCrcTmp then
+        Exit;
+    end
+    else
+    begin
+      try
+        LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+      except
+        on E: EIOError do
+          raise;
+        on E: Exception do
+          Exit;
+      end;
+      if SizeUInt(Length(LDec)) <> LUSizeTmp then
+        Exit;
+      if Crc32OfBytes(LDec) <> LCrcTmp then
+        Exit;
+    end;
+    ACrc := LCrcTmp;
+    ACSize := LCSizeTmp;
+    AUSize := LUSizeTmp;
+    Result := True;
+  end;
 begin
   if FCurrent.IsEncrypted then
     raise ENotSupportedError.Create(
@@ -518,63 +583,104 @@ begin
     LBuilder.AppendBytes(@LChunk[0], LRead);
     LLen := LBuilder.Length;
     LData := LBuilder.Data;
-    if LLen < 16 then
+    if LLen < 12 then
       Continue;
     if LPrevLen > 40 then
       LScanStart := Integer(LPrevLen) - 40
     else
       LScanStart := 0;
-    LScanEnd := Integer(LLen) - 16;
+    LScanEnd := Integer(LLen) - 12;
     for LPos := LScanStart to LScanEnd do
     begin
-      if LE32Ptr(SizeUInt(LPos)) <> C_ZIP_DESCRIPTOR_SIG then
-        Continue;
-      if LLen - SizeUInt(LPos) >= 16 then
+      if LE32Ptr(SizeUInt(LPos)) = C_ZIP_DESCRIPTOR_SIG then
       begin
-        { 先验 next sig 已知性与尺寸自洽，再进重校验（CRC/试解压），避免载荷
-          内大量假签名触发 O(n·m) 试解压的 CPU bomb }
-        if LLen - SizeUInt(LPos + 16) >= 4 then
+        if LLen - SizeUInt(LPos) >= 16 then
         begin
-          if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 16))) then
+          { 先验 next sig 已知性与尺寸自洽，再进重校验（CRC/试解压），避免载荷
+            内大量假签名触发 O(n·m) 试解压的 CPU bomb }
+          if LLen - SizeUInt(LPos + 16) >= 4 then
           begin
-            { 24 位描述符可能仍成立，延后至 24 分支再判 }
+            if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 16))) then
+            begin
+              { 24 位描述符可能仍成立，延后至 24 分支再判 }
+            end
+            else if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
+            begin
+              LFound := True;
+              LFoundPos := SizeUInt(LPos);
+              LFoundCrc := LCandCrc;
+              LFoundCSize := LCandCSize;
+              LFoundUSize := LCandUSize;
+              LFoundDescSize := 16;
+              Break;
+            end;
           end
           else if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
-          begin
-            LFound := True;
-            LFoundPos := SizeUInt(LPos);
-            LFoundCrc := LCandCrc;
-            LFoundCSize := LCandCSize;
-            LFoundUSize := LCandUSize;
-            LFoundDescSize := 16;
-            Break;
-          end;
-        end
-        else if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
-          Continue; { 尾部截断，待更多数据 }
-      end;
-      if LLen - SizeUInt(LPos) >= 24 then
-      begin
-        if LLen - SizeUInt(LPos + 24) >= 4 then
+            Continue; { 尾部截断，待更多数据 }
+        end;
+        if LLen - SizeUInt(LPos) >= 24 then
         begin
-          if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 24))) then
+          if LLen - SizeUInt(LPos + 24) >= 4 then
+          begin
+            if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 24))) then
+            begin
+              { no-sig 分支延后 }
+            end
+            else if TryDescriptorAt(SizeUInt(LPos), 24, LCandCrc, LCandCSize64, LCandUSize64) then
+            begin
+              LFound := True;
+              LFoundPos := SizeUInt(LPos);
+              LFoundCrc := LCandCrc;
+              LFoundCSize := LCandCSize64;
+              LFoundUSize := LCandUSize64;
+              LFoundDescSize := 24;
+              Break;
+            end;
+          end
+          else
             Continue;
+        end;
+        if LFound then Break;
+      end;
+      { 无签名描述符：12 字节 (crc+u32+u32) 与 20 字节 (crc+u64+u64)，以次头部签名预检为门 }
+      if LLen - SizeUInt(LPos) >= 12 then
+      begin
+        if LLen - SizeUInt(LPos + 12) >= 4 then
+        begin
+          if IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 12))) then
+            if TryNoSigAt(SizeUInt(LPos), 12, LCandCrc, LCandCSize, LCandUSize) then
+            begin
+              LFound := True;
+              LFoundPos := SizeUInt(LPos);
+              LFoundCrc := LCandCrc;
+              LFoundCSize := LCandCSize;
+              LFoundUSize := LCandUSize;
+              LFoundDescSize := 12;
+              Break;
+            end;
         end
         else
           Continue;
-        if TryDescriptorAt(SizeUInt(LPos), 24, LCandCrc, LCandCSize64, LCandUSize64) then
+      end;
+      if LLen - SizeUInt(LPos) >= 20 then
+      begin
+        if LLen - SizeUInt(LPos + 20) >= 4 then
         begin
-          LFound := True;
-          LFoundPos := SizeUInt(LPos);
-          LFoundCrc := LCandCrc;
-          LFoundCSize := LCandCSize64;
-          LFoundUSize := LCandUSize64;
-          LFoundDescSize := 24;
-          Break;
-        end;
-      end
-      else if LLen - SizeUInt(LPos) > 0 then
-        Continue;
+          if IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 20))) then
+            if TryNoSigAt(SizeUInt(LPos), 20, LCandCrc, LCandCSize64, LCandUSize64) then
+            begin
+              LFound := True;
+              LFoundPos := SizeUInt(LPos);
+              LFoundCrc := LCandCrc;
+              LFoundCSize := LCandCSize64;
+              LFoundUSize := LCandUSize64;
+              LFoundDescSize := 20;
+              Break;
+            end;
+        end
+        else
+          Continue;
+      end;
     end;
     if LFound then
       Break;
