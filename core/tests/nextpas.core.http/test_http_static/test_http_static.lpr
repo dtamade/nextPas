@@ -654,6 +654,18 @@ begin
   Check(not HttpIfNoneMatchMatches('', '"abc"'), 'empty header');
 end;
 
+procedure TestHttpWeakETagEqualsPure;
+begin
+  Check(HttpWeakETagEquals('"abc"', '"abc"'), 'exact true');
+  Check(HttpWeakETagEquals('W/"abc"', '"abc"'), 'weak prefix true');
+  Check(HttpWeakETagEquals('"abc"', 'W/"abc"'), 'reverse weak true');
+  Check(HttpWeakETagEquals('W/"abc"', 'W/"abc"'), 'both weak true');
+  Check(not HttpWeakETagEquals('"abc"', '"xyz"'), 'mismatch false');
+  Check(not HttpWeakETagEquals('W/"abc"', '"xyz"'), 'weak mismatch false');
+  Check(HttpWeakETagEquals('', ''), 'empty true');
+  Check(not HttpWeakETagEquals('"a"', ''), 'empty vs value false');
+end;
+
 procedure TestHttpRangeHasBytesPrefixPure;
 begin
   Check(HttpRangeHasBytesPrefix('bytes=0-99'), 'bytes prefix true');
@@ -1591,6 +1603,7 @@ begin
       @TestServeVfsEmbeddedUnknownModTime);
     T.Test('ServeVfs embedded range and unhashed fallback',
       @TestServeVfsEmbeddedRangeAndUnhashedFallback);
+    T.Test('HttpWeakETagEquals pure zero-alloc', @TestHttpWeakETagEqualsPure);
     T.Test('HttpRangeHasBytesPrefix pure zero-alloc', @TestHttpRangeHasBytesPrefixPure);
     T.Test('TryParseHttpDate three formats', @TestTryParseHttpDate);
   if not T.Run then Halt(1);

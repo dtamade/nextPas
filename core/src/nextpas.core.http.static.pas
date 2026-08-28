@@ -72,6 +72,9 @@ procedure HttpEnsureDateHeader(const AHeaders: IHttpHeaders);
 {** @desc 零分配判定 Range 头是否以 "bytes=" 开头（避免 System.Copy 临时串）。 }
 function HttpRangeHasBytesPrefix(const ARange: string): Boolean; inline;
 
+{** @desc 弱 ETag 比较（RFC7232 §3.3）：剥离可选 W/ 前缀后字节级精确匹配，零分配。 }
+function HttpWeakETagEquals(const A, B: string): Boolean; inline;
+
 implementation
 
 uses
@@ -271,7 +274,7 @@ function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolea
 var
   LRest, LToken: string;
   LComma: SizeInt;
-  LServerWeak: string;
+  LServerTrim: string;
 begin
   Result := False;
   if (AIfNoneMatch = '') or (AServerETag = '') then
@@ -279,8 +282,8 @@ begin
   LRest := Trim(AIfNoneMatch);
   if LRest = '*' then
     Exit(True);
-  { RFC 7232 §3.3: If-None-Match uses weak comparison — W/"x" matches "x". }
-  LServerWeak := StripWeakETag(Trim(AServerETag));
+  { RFC 7232 §3.3: weak comparison — W/"x" matches "x", zero-alloc via CompareMem. }
+  LServerTrim := Trim(AServerETag);
   while LRest <> '' do
   begin
     LComma := Pos(',', LRest);
@@ -294,7 +297,7 @@ begin
       LToken := Trim(LRest);
       LRest := '';
     end;
-    if StripWeakETag(LToken) = LServerWeak then
+    if HttpWeakETagEquals(LToken, LServerTrim) then
       Exit(True);
   end;
 end;
@@ -359,6 +362,20 @@ const
 begin
   if Length(ARange) < BYTES_PREFIX_LEN then Exit(False);
   Result := CompareMem(@ARange[1], @BYTES_PREFIX[1], BYTES_PREFIX_LEN);
+end;
+
+function HttpWeakETagEquals(const A, B: string): Boolean;
+var
+  AO, BO: SizeInt;
+  AL, BL: SizeInt;
+begin
+  AO := 1; AL := Length(A);
+  if (AL >= 2) and (A[1] = 'W') and (A[2] = '/') then begin Inc(AO,2); Dec(AL,2); end;
+  BO := 1; BL := Length(B);
+  if (BL >= 2) and (B[1] = 'W') and (B[2] = '/') then begin Inc(BO,2); Dec(BL,2); end;
+  if AL <> BL then Exit(False);
+  if AL = 0 then Exit(True);
+  Result := CompareMem(@A[AO], @B[BO], SizeUInt(AL));
 end;
 
 { Parse Range header value. Returns True if valid single range.
