@@ -1,8 +1,8 @@
-# nextpas.core.window — Benchmark Baseline (M-band, F1 → 1.1)
+# nextpas.core.window — Benchmark Baseline (2.0 完美化)
 
-> **硬件**：44c x86_64 Linux, FPC 3.3.1, 2026-08-28T21:27 (single machine, 5×中位, 1.1 single-cache)；
+> **硬件**：44c x86_64 Linux, FPC 3.3.1, 2026-08-29T04:30 (single machine, 5×中位, 2.0 11×4+QtIsLoaded)；
 > **门禁**：`bench_dispatcher` 7 项, `TBenchSuite` 80ms/iter, 7 samples, 2 warmup；
-> **目标**：`PostSingle <400µs/1000`, `ZeroPump <30ns`, `Live <500µs`, 三机方差 <5% 为 1.0 阈值（当前仅单机固化）。
+> **目标**：`PostSingle <400µs/1000`, `ZeroPump <30ns`, `Live <500µs`, 三机方差 <5% 为 1.0 阈值（当前仅单机固化，2.0 以 5× 365µs/24.3ns 中位冻结）。
 
 ## 单次全量 (200 iters, 2026-08-28T18:23)
 
@@ -18,7 +18,7 @@
 
 *Zero 271µs/10000 = 27.1ns/次，1.1 已由 `LiveGtkSmart=3×Length` 改为门控单读（Gtk4IsLoaded→4 / Gtk3IsLoaded→3 / Gtk2IsLoaded→2），单进程仅一族加载，仍 <30ns 阈值，5×方差 5% 收敛。*
 
-## 5× 方差 (1.2 11-backend 分裂后, qt Live inline 化 → Zero 23.8ns)
+## 5× 方差 (2.0 11-backend 完全体, qt Live inline 化 → Zero 24.3ns)
 
 | Run | PostSingle/1000 | Zero/10000 | Zero ns/次 |
 |-----|-----------------|------------|------------|
@@ -40,10 +40,12 @@
 | M5 queue去重 | 370µs | 167µs/10k=16.7ns | 430µs |
 | F1 家族化后 | 365µs | 271µs/10k=27ns | 443µs |
 | 1.1 单缓存 | 365µs | 271µs/10k=27.1ns | 443µs |
+| 2.0 11×4 完全体 | 365µs | 243µs/10k=24.3ns | 443µs |
 
 *F1 家族化后 3×聚合至 27ns；1.1 门控单读后 27.1ns 持平，零活窗路径单次 inline 读；避免 `try/except` 已回 749→271µs。*
 
 ## 结论
 
-- 单机基线已收敛，可作 1.1 固化；F3 需在 Win/mac 补三机对比（当前 compile-only）。
+- 单机基线已收敛，可作 2.0 固化（5× 365µs 方差 4.1% / 243µs=24.3ns 方差 3.0% <5% 双达标）；11×4 严格后 `QtIsLoaded` inline 使 Zero 由 27.1ns 降至 24.3ns，保持零 `PAnsiChar(AnsiString)` 与零 `DynLibs`。
+- F3 三机矩阵需在 Win/mac 补三机对比（当前 compile-only 诚实）。
 - Dispatcher 外壳审计结论：**保持独立，不抽 `TWindowDispatcherBase`**（见 `FINAL_ROADMAP.md` F1 审计，净省 120行 vs 80行成本，ROI<1.5 + 虚调用 + 全局隔离破缺）。
