@@ -27,6 +27,8 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
+function BytesConcatMany(const AParts: array of TBytes): TBytes;
+function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
@@ -151,6 +153,42 @@ begin
   SetLength(Result, ASpan.Len);
   if ASpan.Len > 0 then
     Move(ASpan.Data^, Result[0], ASpan.Len);
+end;
+
+function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
+var
+  I: Integer;
+  LTotal, LOff: SizeUInt;
+begin
+  LTotal := 0;
+  for I := 0 to High(AParts) do
+    Inc(LTotal, AParts[I].Len);
+  SetLength(Result, LTotal);
+  LOff := 0;
+  for I := 0 to High(AParts) do
+    if AParts[I].Len > 0 then
+    begin
+      Move(AParts[I].Data^, Result[LOff], AParts[I].Len);
+      Inc(LOff, AParts[I].Len);
+    end;
+end;
+
+function BytesConcatMany(const AParts: array of TBytes): TBytes;
+var
+  I: Integer;
+  LTotal, LOff: SizeUInt;
+begin
+  LTotal := 0;
+  for I := 0 to High(AParts) do
+    Inc(LTotal, Length(AParts[I]));
+  SetLength(Result, LTotal);
+  LOff := 0;
+  for I := 0 to High(AParts) do
+    if Length(AParts[I]) > 0 then
+    begin
+      Move(AParts[I][0], Result[LOff], Length(AParts[I]));
+      Inc(LOff, Length(AParts[I]));
+    end;
 end;
 
 { TBytes convenience }
