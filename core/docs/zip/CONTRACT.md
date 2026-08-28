@@ -16,6 +16,7 @@
 | `TZipAddOptions` | 单条目完整选项：`Method` / `ModTimeUnixSec`（<0 取 DOS 下限）/ `Mode`（unix 模式字，0 取默认）/ `Password`（非空走 WinZip AE-2 加密，INV-14）/ `AesStrength`（1/2/3 = AES-128/192/256，0 取 3）/ `DataDescriptor`（仅 `AddEntryStream` 生效，INV-15） |
 | `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`MaxTotalOutputSize: UInt64`——跨条目总输出上限，0=不限（INV-17）；`Password`——WinZip AES 解密口令（INV-14） |
 | `TZipExtractOptions` | fs 解包选项：`RestoreMode` / `SkipSymlinks` / `MaxOutputSize` / `MaxTotalOutputSize` |
+| `IZipBuilder` | 链式构造器：`Add`/`AddDeflate`/`AddWithOptions`/`AddDirectory`/`Reserve`/`StreamTo`/`Finish`/`FinishTo` 薄委托 `IZipWriter`（二十三期） |
 
 ### 1.2 工厂函数
 
@@ -28,6 +29,7 @@
 | `DefaultZipWriteOptions` / `DefaultZipAddOptions` / `DefaultZipReadOptions` / `DefaultZipExtractOptions` | 各选项默认值 |
 | `ZipPackDirInto` / `ZipPackDir` | 目录递归打包（携带 mtime 与 posix 权限位） |
 | `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录 |
+| `ZipBuilder` / `ZipBuilderForceZip64` / `NewZipBuilder*` | 链式构造器工厂（委托 `NewZipWriter*`，字节级一致，高级感 API） |
 | `ZipUnixModeOf` / `ZipRegularMode` / `ZipDirectoryMode` | unix 模式字助手（zip.base） |
 
 ### 1.3 写器方法
@@ -46,6 +48,10 @@
 | `EntryCount` | 已添加条目数 |
 | `Reserve(ACapacity)` | 预分配条目容量（几何扩容一次性到位，无重分配；0 空操作，<0 `EArgumentError`，Finish 后 `EInvalidOperationError`） |
 | `Finish: TBytes` | 终结并返回完整归档；此后任何添加/再次 Finish raise |
+
+### 1.3.1 链式构造器（Fluent Builder）
+
+`IZipBuilder` 为 `IZipWriter` 的薄链式门面（`nextpas.core.zip.builder`），方法 `Add`/`AddDeflate`/`AddWithOptions`/`AddDirectory`/`Reserve`/`StreamTo` 均返回 `Self` 支持链式；`Finish`/`FinishTo`/`EntryCount` 委托写器语义，`ZipBuilder`/`ZipBuilderForceZip64` 为便捷工厂，字节形态与直接写器全等（`Reserve` 亦链式）。
 
 ### 1.4 读器方法
 
@@ -168,7 +174,7 @@
 生产单元（src/nextpas.core.zip*.pas）不得 uses 任何非 `nextpas.*` 单元——
 FPC RTL（SysUtils/Classes 等）与第三方库一律经 owner 模块间接使用；该规则由
 `test_zip_contract` 门在 CI 中机械执行。门面单元只做 re-export 与 inline
-委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/DecompressEntryVerified/IsKnownZipSig/LE*`），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享编解码链（`Decode*/Build*`/`Encode*` 对称——`Build*` 为堆便捷包装，`Encode*` 为栈上零分配（`PByte+SizeUInt` 直写，无 `BuildWinZipAesExtraBody` 堆分配），`writer` 逐条目经 64 字节栈缓冲复用），消除重复，保证校验与字节形态单点一致。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
+委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/DecompressEntryVerified/IsKnownZipSig/LE*`），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享编解码链（`Decode*/Build*`/`Encode*` 对称——`Build*` 为堆便捷包装，`Encode*` 为栈上零分配（`PByte+SizeUInt` 直写，无 `BuildWinZipAesExtraBody` 堆分配），`writer` 逐条目经 64 字节栈缓冲复用），`nextpas.core.zip.builder` 为链式薄委托层（零成本、字节级一致）。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
 
 ## 5. 测试入口
 
@@ -183,6 +189,7 @@ make focused FOCUS=core/tests/nextpas.core.zip/test_zip_extra      # extra 编�
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_go_parity  # Go archive/zip 双向字节级对等（十九期领头羊双锚点）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_perf       # 性能回归阈值（二十期 allocs 预算，CountingMemoryManager）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_stress     # 极限压力（二十一期 70k Zip64/1k混合/Bomb/并发）
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_builder    # 链式构造器（二十三期 Fluent 字节级一致 + fail-closed）
 make -C core/benchmarks/nextpas.core.zip/bench_zip regression      # 基准回归（22期 BASELINE + allocs/bytes 硬门，ns +50% 告警）
 ```
 
