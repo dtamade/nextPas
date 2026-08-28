@@ -61,7 +61,6 @@ type
     FState: TExecState;
     FDeadline: TDeadline;
     FTimer: TAsyncTimerHandle;
-    FInbox: array of TSshDataChunk;
     FFailed: Boolean;
     procedure Fail(AErr: ESSHError);
     procedure Succeed;
@@ -335,7 +334,7 @@ begin
 end;
 
 procedure TAsyncExecRunner.HandlePumpPacket(const APayload: TBytes);
-var LChunk: TBytes; LExt: Boolean;
+var LChunk: TBytes;
 begin
   case APayload[0] of
     SSH_MSG_CHANNEL_DATA:
@@ -346,10 +345,8 @@ begin
       end;
     SSH_MSG_CHANNEL_EXTENDED_DATA:
       begin
-        LExt := False;
         if ExtractData(APayload, True, LChunk) then
-        begin AppendChunkAsync(FResult.StdErr, LChunk); LExt:=True; end;
-        // ExtractData already consumed window; if not stderr, it still consumed but not appended
+          AppendChunkAsync(FResult.StdErr, LChunk);
         PumpNext;
       end;
     SSH_MSG_CHANNEL_REQUEST:
