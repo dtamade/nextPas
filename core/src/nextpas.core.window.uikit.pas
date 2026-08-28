@@ -184,8 +184,8 @@ type
     procedure SetTitle(const ATitle: string);
     function GetTitle: string;
     procedure SetBounds(AWidth, AHeight: Integer);
-    function GetWidth: Integer;
-    function GetHeight: Integer;
+    function GetWidth: Integer; inline;
+    function GetHeight: Integer; inline;
     procedure SetResizable(AResizable: Boolean);
     procedure Maximize;
     procedure Unmaximize;
@@ -293,10 +293,10 @@ begin RequireOpen; Result := FTitle; end;
 procedure TWindowUIKit.SetBounds(AWidth, AHeight: Integer);
 begin RequireOpen; end;
 
-function TWindowUIKit.GetWidth: Integer;
+function TWindowUIKit.GetWidth: Integer; inline;
 begin RequireOpen; Result := FWidth; end;
 
-function TWindowUIKit.GetHeight: Integer;
+function TWindowUIKit.GetHeight: Integer; inline;
 begin RequireOpen; Result := FHeight; end;
 
 procedure TWindowUIKit.SetResizable(AResizable: Boolean);

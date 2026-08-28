@@ -101,6 +101,9 @@ type
 
 implementation
 
+uses
+  SysUtils;
+
 function DefaultWindowOptions: TWindowOptions;
 begin
   Result.Title := '';
@@ -118,18 +121,18 @@ end;
 procedure CheckWindowOptions(const AOptions: TWindowOptions);
 begin
   if (AOptions.Width < 0) or (AOptions.Height < 0) then
-    raise EWindowInvalidState.Create('Width/Height must be >= 0');
+    raise EWindowInvalidState.CreateFmt('Width/Height must be >= 0 (got %d, %d)', [AOptions.Width, AOptions.Height]);
   if (AOptions.MinWidth < 0) or (AOptions.MinHeight < 0) then
-    raise EWindowInvalidState.Create('MinWidth/MinHeight must be >= 0');
+    raise EWindowInvalidState.CreateFmt('MinWidth/MinHeight must be >= 0 (got %d, %d)', [AOptions.MinWidth, AOptions.MinHeight]);
   if (AOptions.MaxWidth < 0) or (AOptions.MaxHeight < 0) then
-    raise EWindowInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
+    raise EWindowInvalidState.CreateFmt('MaxWidth/MaxHeight must be >= 0 (got %d, %d)', [AOptions.MaxWidth, AOptions.MaxHeight]);
 
   if (AOptions.MinWidth > 0) and (AOptions.MaxWidth > 0)
     and (AOptions.MaxWidth < AOptions.MinWidth) then
-    raise EWindowInvalidState.Create('MaxWidth must be >= MinWidth');
+    raise EWindowInvalidState.CreateFmt('MaxWidth (%d) must be >= MinWidth (%d)', [AOptions.MaxWidth, AOptions.MinWidth]);
   if (AOptions.MinHeight > 0) and (AOptions.MaxHeight > 0)
     and (AOptions.MaxHeight < AOptions.MinHeight) then
-    raise EWindowInvalidState.Create('MaxHeight must be >= MinHeight');
+    raise EWindowInvalidState.CreateFmt('MaxHeight (%d) must be >= MinHeight (%d)', [AOptions.MaxHeight, AOptions.MinHeight]);
 end;
 
 { EWindowError 族 }

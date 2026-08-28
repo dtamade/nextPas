@@ -65,8 +65,8 @@ type
     procedure SetTitle(const ATitle: string); virtual;
     function GetTitle: string; virtual;
     procedure SetBounds(AWidth, AHeight: Integer); virtual;
-    function GetWidth: Integer;
-    function GetHeight: Integer;
+    function GetWidth: Integer; inline;
+    function GetHeight: Integer; inline;
     procedure SetResizable(AResizable: Boolean); virtual;
     procedure Maximize; virtual;
     procedure Unmaximize; virtual;
@@ -524,13 +524,13 @@ begin
   DoDispatch(LEvent);
 end;
 
-function TFakeWindow.GetWidth: Integer;
+function TFakeWindow.GetWidth: Integer; inline;
 begin
   RequireOpen;
   Result := FWidth;
 end;
 
-function TFakeWindow.GetHeight: Integer;
+function TFakeWindow.GetHeight: Integer; inline;
 begin
   RequireOpen;
   Result := FHeight;
