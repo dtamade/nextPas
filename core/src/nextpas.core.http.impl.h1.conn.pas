@@ -143,6 +143,7 @@ function IsRequestReadFailure(const E: Exception): Boolean;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.base, nextpas.core.base.utils,
   nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
   nextpas.core.time.base, nextpas.core.time,
@@ -156,7 +157,8 @@ uses
   nextpas.core.http.mem,
   nextpas.core.http.middleware.requestarena,
   nextpas.core.http.impl.h1.serve,
-  nextpas.core.http.impl.h1.poll;
+  nextpas.core.http.impl.h1.poll,
+  nextpas.core.net.async.tlspas;
 
 function ShouldKeepAlive(const AParser: IH1Parser): Boolean; inline;
 var
@@ -612,6 +614,8 @@ var
   LResponseWriter: IWriter;
   LDrainStarted: Boolean;
   LKeepAlive: Boolean;
+  LEarly: ITlsPasEarlyDataInfo;
+  LEarlyReq: IHttpRequestWithEarlyData;
 begin
   Result := tscoServer;
   LW := nil;
@@ -655,6 +659,10 @@ begin
     end;
 
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
+    // 0-RTT: propagate TLS early-data flag to request for EarlyDataMiddleware
+    if Supports(FConn, ITlsPasEarlyDataInfo, LEarly) then
+      if Supports(LReq, IHttpRequestWithEarlyData, LEarlyReq) then
+        LEarlyReq.SetWasEarlyData(LEarly.GetWasEarlyDataAccepted);
 
     if FPending <> '' then
       LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
@@ -729,6 +737,8 @@ var
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
   LKeepAlive: Boolean;
+  LEarly: ITlsPasEarlyDataInfo;
+  LEarlyReq: IHttpRequestWithEarlyData;
 begin
   Result := tscoServer;
   AOutbound := nil;
@@ -775,6 +785,10 @@ begin
     end;
 
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
+    // 0-RTT: propagate TLS early-data flag to request for EarlyDataMiddleware
+    if Supports(FConn, ITlsPasEarlyDataInfo, LEarly) then
+      if Supports(LReq, IHttpRequestWithEarlyData, LEarlyReq) then
+        LEarlyReq.SetWasEarlyData(LEarly.GetWasEarlyDataAccepted);
 
     if FPending <> '' then
       LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)

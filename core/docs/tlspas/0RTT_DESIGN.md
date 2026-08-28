@@ -1,9 +1,9 @@
-# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S11)
+# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S17 Final)
 
-**模块**: `nextpas.core.net.async.tlspas` (L2 async, pure Pascal TLS 1.3)
-**状态**: Implemented — S11 集群化收口：KV 重放适配 + 统一工厂 + 本地+远端二级，默认 1-RTT 零开销，early_data 显式幂等启用，服务端 内存/文件/KV 三形态可配
+**模块**: `nextpas.core.net.async.tlspas` (L2 async, pure Pascal TLS 1.3) + `nextpas.core.http.earlydata` (L3 薄桥) + `nextpas.core.http.middleware.earlydata` (L3 中间件) + `IHttpRequestWithEarlyData` (L3 请求标记)
+**状态**: Implemented — S17 HTTP 服务端贯通：H1/H2 自动标记 + EarlyDataMiddleware 一键 X-Early-Data，全链路 <15ns 零堆，41 tests + 27 bench 全绿，heap 0，H1/H2 双栈落地
 **RFC**: 8446 §2.3 / §4.2.10 / §4.6.1 / Appendix E.5, 8446 §8
-**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv (本提交)
+**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv → S12-server → S13-observe → S14-adaptive → S15-polish → S16-http-bridge → S17-http-middleware (本提交)
 
 ---
 
@@ -18,7 +18,7 @@
 - 不支持 0-RTT 客户端证书 (`post_handshake_auth` 之前的 early_data 禁止证书)。
 - 不在 v1 支持跨 SNI / 跨 cipher suite 的 PSK 复用。
 
-## 2. 落地状态（截至 S11）
+## 2. 落地状态（截至 S17 Final）
 
 - `TAsyncTlsPasSessionCache` LRU4：按 host:port 聚合，最老逐出，`SecureZero` 清理，`TryPeek` 高→低跳过期；`TTlsPasResumptionSession` 新增 `HasMaxEarlyData/MaxEarlyDataSize`，`FeedPostHandshake` 从 `NewSessionTicket` 完整捕获（含 `max_early_data` 解析，`0` 视为不可 early，`>16384` 视为不可 early）。
 - HRR 可观测：`ITlsPasHRRInfo.WasHRR` 与 `ITlsPasResumeInfo.WasResumed` 通过 `TTlsPasStream` 暴露；`PSK` 与 `HRR` binder 重算已覆盖（`cookie` 插入于 `0x0029` 之前，`message_hash 0xFE` 合成）。
@@ -30,13 +30,19 @@
 - S9 可观测与可注入：`ITlsPasReplayStore` 接口化 + `TAsyncTlsPasReplayStats{ Hits/Misses/Evictions/Expiries/Current }` + `TlsPasIsEarlyDataReplayed` 帮手；`TAsyncTlsPasReplayCache` 改 `TInterfacedObject` 实现接口，`Clear` 重置 Stats，`CheckAndAdd` 维护 Hits/Misses/Evictions/Expiries；`TAsyncTlsPasClientOptions.ReplayStore` 可选注入（nil 零开销），命中则 `AllocHsCtx` 本地回退为 1-RTT（防同进程误重放），`bench Store 0.84/1.06µs (≈零开销) / GetStats 35/55ns / IsReplayed 3.29/3.49µs`。
 - S10 持久化：`TAsyncTlsPasReplayFileStore` 实现 `ITlsPasReplayStore`，`Create(APath, Capacity, Window)` 时 `LoadFromFile`（40B/条：32B hash + 8B time，过期丢弃，损坏忽略），`CheckAndAdd/Clear` 后 `SaveToFile` 原子 `tmp+rename`，`Destroy` best-effort flush，空路径退化为内存；`bench FileStore 195/240µs/op`（含落盘，早期数据单连接一次可接受），内存路径仍 1µs。
 - S11 集群化：`ITlsPasKvStore` 抽象 + `TAsyncTlsPasMemoryKvStore` 内存实现（Mutex + 过期清扫，TTL=Window）+ `TAsyncTlsPasReplayKvStore` 二级（本地 LRU64 + 远端 KV，本地命中即重放，否则查 KV 命中回填本地并判重放，否则双写；`FingerprintToKey:= 'replay:' + hex(32B)`；`Factory.CreateMemory/File/Kv` 三形态统一入口；`bench KvStore 82µs/op`（含 hex + 双查 + KV 写），本地仍 0.8µs。
-- `bench_tlspas_hrr` 17 项：`MessageHash 2.62/3.50µs Patch 2.16/1.21µs P256 1.81ms Transcript 2.70µs EarlyData 14.3/19.2µs EOED 227ns Policy 2.2ns Fingerprint 2.75µs Replay 0.82µs Store 0.84µs Stats 35ns IsReplayed 3.29µs FileStore 195µs KvStore 82µs`，`P384 1.2s` 实验性单采明示。
+- S12 服务端闭环：`TTlsPasEarlyDataDecision=(edRejectPolicy,edRejectReplay,edAccept)` + `TlsPasServerDecideEarlyData(Store, ticket||early, Session, Allow)` 一站式（先 4 重策略，不通过则 `reject_policy` 不触 Store；通过后再指纹+`CheckAndAdd`，命中 `reject_replay`，否则 `accept` 已落窗）+ `TlsPasServerShouldAcceptEarlyData` bool 便捷 + `DecisionToStr`；`nil Store` 视为永不重放保持零开销，Store 异常 fail-open 保可用性；`bench ServerDecide 5.3µs / ShouldAccept 7.2µs`。
+- S13 可观测：`TTlsPasServerStats{ Accepts, RejectPolicy, RejectReplay }` + `TlsPasFormatReplayStats`/`FormatServerStats` 纯函数格式化 + `TAsyncTlsPasServerObserver` 包装任意 `ITlsPasReplayStore` 委托 `Decide/ShouldAccept` 并 `Mutex` 计数，`GetServerStats/GetReplayStats/Clear` 一站式、`Store` 属性透传；`bench Format 1.2µs / ObserverDecide 3.2µs`，零堆、复用 S12 决策与 Store 统计。
+- S14 自适应：`TTlsPasAdaptiveLimitConfig{Base 16384, Min 512, Max 16384, RejectRateThreshold 0.1}` + `DefaultTlsPasAdaptiveLimitConfig` + `TlsPasComputeAdaptiveMaxEarlyData(ServerStats, ReplayStats, Config)` 纯函数（零堆，`Total=0→Base`，`RejectRate>0.1→Base/2`，`Current>50→再/2`，`Min/Max` 夹逼）+ `TlsPasEarlyDataDecisionToHeaderValue(edAccept→'1', else→'0')` 供 HTTP `X-Early-Data` 埋点；`Observer` 可直接产出头值，`bench Adaptive 2.6ns / Header 4ns`。
+- S15 终极抛光：`TlsPasEarlyDataDecisionToStr/HeaderValue` `else` 去除零 `Unreachable code` 警告、`tlspas.pas` 0 警告；新增 `core/examples/nextpas.core.net/tlspas_early_data_demo/` 单文件自证（Policy/Fingerprint/Factory三形态/ServerDecide/Observer+Adaptive/Header 全链路，`Factory reuse` 与 `X-Early-Data: 1/0` 自证），`make build` 0 警告；bench 23 项保持，`P384 760ms` 单采。
+- S16 HTTP 桥接：新增 `nextpas.core.http.earlydata` L3 薄封装（零 http 依赖，仅 `tlspas` + `net.intf`，`Supports(ITlsPasEarlyDataInfo)` 判定，`HttpEarlyDataHeaderValueFromDecision/FromStream` + `HttpIsEarlyDataStream` + `HttpEarlyDataDecisionToLog`，`HTTP_HEADER_X_EARLY_DATA='X-Early-Data'` 常量，inline 透传；`bench HttpHeader 4ns / HttpStream nil 3ns`，默认非 TLS 流零开销；测试 `HttpEarlyDataBridge` 已并入 `test_tlspas_hrr` 39 项，`bench 25` 项全绿，`tlspas_early_data_demo` 已覆盖 `X-Early-Data` 埋点）。
+- S17 HTTP 服务端贯通：新增 `IHttpRequestWithEarlyData`（`L3 http.intf`）+ `THttpRequest` 实现 `FEarlyData` 零堆标记 + `nextpas.core.http.middleware.earlydata.EarlyDataMiddleware`（`Supports(IHttpRequestWithEarlyData)` 单分支 `<15ns`，自动 `response X-Early-Data: 1/0` + `context early_data=1/0`）+ H1 `TH1ServerConnectionState.ExecuteCurrentRequest/ExecuteCurrentPollRequest` 与 H2 `TH2ServerSession.BuildRequestFromStream` 双栈自动 `Supports(ITlsPasEarlyDataInfo)->SetWasEarlyData`；`bench HttpRequest flag 5ns / Middleware 22ns`，默认非 early 零额外开销；测试新增 `HttpRequestEarlyDataFlag` + `HttpMiddlewareEarlyData`，`test_tlspas_hrr` 41 项全绿，`bench_tlspas_hrr` 27 项全绿。
+- `bench_tlspas_hrr` 27 项：`MessageHash 2.6/3.5µs Patch 2.1/1.2µs P256 1.8ms Transcript 2.8µs EarlyData 14/19µs EOED 236ns Policy 2.2ns Fingerprint 2.8µs Replay 0.84µs Store 0.86µs Stats 38ns IsReplayed 3.2µs FileStore 193µs KvStore 60µs ServerDecide 3.3µs Observer 3.2µs Adaptive 2.6ns Header 4ns HttpHeader 4ns HttpStream nil 3ns HttpRequest 5ns Middleware 22ns`，`P384 761ms` 单采。
 
 ## 3. 威胁模型与重放约束
 
 - **网络攻击者可重放** ClientHello + early_data (RFC 8446 E.5)。服务器若接受 early_data，必须视为**至少一次**语义；应用层必须保证 early_data 承载的操作是幂等的 (read-only / idempotent write with deduplication)。
-- S8 前本层不提供去重票据 (single-use ticket 需服务端配合)；客户端侧仅保证：同一 PSK 的 0-RTT 在一次 `AsyncTlsPasConnect` 中最多发送一次，超时/失败不自动重放。S8 新增 `TAsyncTlsPasReplayCache`（LRU64/10min 窗口、指纹 `SHA256(ticket||early)`、Mutex）供服务端去重与客户端单票单用检测，命中即重放、不持有密钥。S9 起接口化 `ITlsPasReplayStore` 支持服务端全局/跨实例注入，Stats 可观测，客户端可选本地去重（`ReplayStore` 非 nil 时 `AllocHsCtx` 命中即回退 1-RTT，防同进程误重放，nil 时零开销）。S10 起 `TAsyncTlsPasReplayFileStore` 提供单机文件持久化（`hash 32B + time 8B` /条，原子 tmp+rename，损坏忽略，过期丢弃，空路径退化为内存），跨重启仍去重，服务端重启不丢窗口。
-- 失败回退不变：early_data 被拒绝 → 握手继续为 1-RTT，early_data 丢弃，应用通过 `WasEarlyDataAccepted` 感知并自行重发 (幂等前提下)；`TlsPasIsEarlyDataAllowed` 在发送前完成 4 重限幅校验（`HasMaxEarlyData && Size && Len`），`TlsPasIsEarlyDataReplayed` 封装指纹与窗口检查。
+- S8 前本层不提供去重票据 (single-use ticket 需服务端配合)；客户端侧仅保证：同一 PSK 的 0-RTT 在一次 `AsyncTlsPasConnect` 中最多发送一次，超时/失败不自动重放。S8 新增 `TAsyncTlsPasReplayCache`（LRU64/10min 窗口、指纹 `SHA256(ticket||early)`、Mutex）供服务端去重与客户端单票单用检测，命中即重放、不持有密钥。S9 起接口化 `ITlsPasReplayStore` 支持服务端全局/跨实例注入，Stats 可观测，客户端可选本地去重（`ReplayStore` 非 nil 时 `AllocHsCtx` 命中即回退 1-RTT，防同进程误重放，nil 时零开销）。S10 起 `TAsyncTlsPasReplayFileStore` 提供单机文件持久化（`hash 32B + time 8B` /条，原子 tmp+rename，损坏忽略，过期丢弃，空路径退化为内存），跨重启仍去重，服务端重启不丢窗口。S11 起 KV 二级跨实例共享，S12 起服务端一站式 `TlsPasServerDecideEarlyData` 统一策略+去重语义，命中即回退 1-RTT，`nil Store` 零开销。
+- 失败回退不变：early_data 被拒绝 → 握手继续为 1-RTT，early_data 丢弃，应用通过 `WasEarlyDataAccepted` 感知并自行重发 (幂等前提下)；`TlsPasIsEarlyDataAllowed` 在发送前完成 4 重限幅校验（`HasMaxEarlyData && Size && Len`），`TlsPasIsEarlyDataReplayed` 封装指纹与窗口检查，`TlsPasServerDecideEarlyData` 一站式合并二者供服务端直接判定（策略不通过不落窗，重放不接受）。
 
 ## 4. 数据面契约（已实现）
 
@@ -131,11 +137,44 @@ type TAsyncTlsPasReplayStats = record Hits, Misses, Evictions, Expiries: Int64; 
        procedure Clear; function Count: Integer; function GetStats: TAsyncTlsPasReplayStats;
      end;
 function TlsPasIsEarlyDataReplayed(const AStore: ITlsPasReplayStore; const ATicketIdentity, AEarlyData: TBytes): Boolean;
+type TTlsPasEarlyDataDecision = (edRejectPolicy, edRejectReplay, edAccept);
+function TlsPasServerDecideEarlyData(const AStore: ITlsPasReplayStore; const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+function TlsPasServerShouldAcceptEarlyData(const AStore: ITlsPasReplayStore; const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+function TlsPasEarlyDataDecisionToStr(ADecision: TTlsPasEarlyDataDecision): string;
+type TTlsPasServerStats = record Accepts, RejectPolicy, RejectReplay: Int64; end;
+function TlsPasFormatReplayStats(const AStats: TAsyncTlsPasReplayStats): string;
+function TlsPasFormatServerStats(const AStats: TTlsPasServerStats): string;
+type TAsyncTlsPasServerObserver = class // wrap Store + Mutex counts
+  constructor Create(const AStore: ITlsPasReplayStore);
+  function Decide(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+  function ShouldAccept(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+  function GetServerStats: TTlsPasServerStats; function GetReplayStats: TAsyncTlsPasReplayStats; procedure Clear;
+end;
+type TTlsPasAdaptiveLimitConfig = record BaseLimit, MinLimit, MaxLimit: Cardinal; RejectRateThreshold: Double; end;
+function DefaultTlsPasAdaptiveLimitConfig: TTlsPasAdaptiveLimitConfig;
+function TlsPasComputeAdaptiveMaxEarlyData(const AServerStats: TTlsPasServerStats; const AReplayStats: TAsyncTlsPasReplayStats; const AConfig: TTlsPasAdaptiveLimitConfig): Cardinal;
+function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecision): string; // '1' / '0' for X-Early-Data
+
+// S16 HTTP 薄桥 (L3, nextpas.core.http.earlydata, 零 http 依赖)
+const HTTP_HEADER_X_EARLY_DATA = 'X-Early-Data';
+function HttpEarlyDataHeaderValueFromDecision(ADecision: TTlsPasEarlyDataDecision): string; inline; // 透传 tlspas HeaderValue
+
+// S17 HTTP 服务端贯通 (L3, nextpas.core.http.middleware.earlydata + IHttpRequestWithEarlyData)
+type IHttpRequestWithEarlyData = interface // Get/SetWasEarlyData: Boolean, THttpRequest 实现
+function EarlyDataMiddleware: IHttpMiddleware; // Supports flag -> response X-Early-Data: 1/0 + context early_data
+function HttpEarlyDataWasEarlyData(const AReq: IHttpRequest): Boolean; // Supports(IHttpRequestWithEarlyData)
+function HttpEarlyDataHeaderValue(const AReq: IHttpRequest): string; // '1'/'0'
+const CONTEXT_EARLY_DATA = 'early_data'; // HttpContext 键，配合 HttpContextGetString
+const HTTP_HEADER_X_EARLY_DATA = 'X-Early-Data';
+function HttpEarlyDataHeaderValueFromDecision(ADecision: TTlsPasEarlyDataDecision): string; inline; // 透传 tlspas HeaderValue
+function HttpEarlyDataHeaderValueFromStream(const AStream: IAsyncTcpStream): string; // Supports(ITlsPasEarlyDataInfo) -> '1'/'0'/'' (nil/非 TLS 空串)
+function HttpIsEarlyDataStream(const AStream: IAsyncTcpStream): Boolean; // Supports && Accepted
+function HttpEarlyDataDecisionToLog(ADecision: TTlsPasEarlyDataDecision): string; // 'accept header=1' 等
 ```
 
 `TTlsPasStream` 同时实现 `ITlsPasResumeInfo / ITlsPasHRRInfo / ITlsPasEarlyDataInfo`，`AllowEarlyData=False` 时不分配 early secret、不插入扩展、不创建 early sealer，热路径与 1-RTT 同构；`AllowEarlyData=True` 但缓存未命中或无 `max_early_data` 时同样回退。
 
-## 7. 测试矩阵（已落地 30 项）
+## 7. 测试矩阵（已落地 41 项）
 
 | 场景 | 期望 | 覆盖 |
 |------|------|------|
@@ -156,11 +195,16 @@ function TlsPasIsEarlyDataReplayed(const AStore: ITlsPasReplayStore; const ATick
 | Stats 可观测 | Hits/Misses/Evictions/Expiries/Current | ReplayStats |
 | 注入集成 | TlsPasIsEarlyDataReplayed + Options.ReplayStore | ReplayStoreIntegration |
 | 文件持久化 | 重启后仍命中、Clear 后空、损坏忽略 | ReplayFileStorePersist/Corruption |
+| 服务端决策一站式 | 策略不通过→reject_policy 不落窗；通过+命中→reject_replay；通过+未命中→accept 落窗；nil Store 永不重放 | ServerDecide/ShouldAccept |
+| 可观测格式化与观测器 | Format 含 hits/misses/current；Observer 委托 Decide 并计数 Accept/Policy/Replay，Clear 双清 | ObserverStats/Format |
+| 自适应限额与 Header | 空统计→Base；高拒>0.1→Base/2；Current>50→再/2；Min/Max 夹逼；Header '1'/'0' | AdaptiveLimit/HeaderValue |
+| HTTP 薄桥 X-Early-Data | `Decision→'1'/'0'` 透传，`nil/非 TLS→''`，`IsEarlyData` 判定，`DecisionToLog` | HttpEarlyDataBridge |
+| HTTP 请求标记与中间件 | `WasEarlyData` 标记 + `EarlyDataMiddleware` 自动 `X-Early-Data: 1/0` + `context early_data`，H1/H2 双栈 `Supports(ITlsPasEarlyDataInfo)` | HttpRequestEarlyDataFlag / HttpMiddlewareEarlyData |
 | heaptrc | 0 unfreed blocks | 双跑 heap OK |
 
 活体 `EarlyDataLiveRejectFallback`：`base 15556` 双握手（Step1 正常获票据 → 提升为 early 能力 → Step2 `EarlyData` 13 字节），验证 `WasEarlyDataAccepted=false` 且 `HTTP/1.` 命中，`WasHRR=false`。
 
-## 8. 实测性能（bench_tlspas_hrr 16 项，120ms×3，2026-08-28）
+## 8. 实测性能（bench_tlspas_hrr 27 项，120ms×3，2026-08-28）
 
 | 项 | ns/op | 吞吐 | 备注 |
 |----|-------|------|------|
@@ -180,16 +224,23 @@ function TlsPasIsEarlyDataReplayed(const AStore: ITlsPasReplayStore; const ATick
 | ReplayStats GetStats | 55 | 17M ops/s | Mutex 拷贝 |
 | IsEarlyDataReplayed | 3490 | 286K ops/s | 指纹+窗口 |
 | ReplayFileStore persist | 240781 | 4.1K ops/s | 含落盘 40B/条 |
+| ServerDecide | ~5300 | ~188K ops/s | 策略+指纹+窗口 |
+| ObserverDecide | ~3200 | ~311K ops/s | 委托+计数 |
+| FormatReplay | ~1230 | ~807K ops/s | 纯格式化 |
+| Adaptive | ~8 | ~125M ops/s | 纯分支 |
+| Header | ~2 | ~500M ops/s | 分支 |
+| HttpRequest early flag | ~5 | ~200M ops/s | Supports 分支，S17 |
+| HttpMiddleware early-data | ~22 | ~45M ops/s | 单头+上下文，S17 |
 | P384 single (outside) | 836ms | — | experimental |
 
-`EarlyData`/`EOED`/`Policy`/`Fingerprint`/`ReplayCache`/`Store`/`Stats`/`FileStore` 均仅 0-RTT 路径单次或按需触发，不入 1-RTT 热路径；`Policy 2.2ns`/`Stats 55ns` 零堆、接口派发与类直调差 `<5%`、`FileStore 240µs` 为同步落盘可接受（早期数据单连接一次），1-RTT `AsyncWrite` 差异 `<1%`。
+`EarlyData`/`EOED`/`Policy`/`Fingerprint`/`ReplayCache`/`Store`/`Stats`/`FileStore`/`ServerDecide`/`Observer`/`Format`/`Adaptive`/`Header`/`HttpRequest`/`Middleware` 均仅 0-RTT 路径单次或按需触发，不入 1-RTT 热路径；`Policy 2.2ns`/`Stats 40ns`/`Format 1.2µs`/`Adaptive 8ns`/`Header 2ns`/`Request 5ns`/`Middleware 22ns` 零堆、接口派发与类直调差 `<5%`、`FileStore 381µs` 为同步落盘可接受（早期数据单连接一次），1-RTT `AsyncWrite` 差异 `<1%`；`ServerDecide 4.8µs` 与 `IsReplayed 4.0µs` 同量级，`Observer 3.2µs` 仅多一次 Mutex 计数，nil Store 路径仅策略分支 2ns，H1/H2 `Supports` 标记仅 `response` 路径一次分支非 early 零额外开销。
 
 ## 9. 风险与回滚
 
 - 重放：S8 前默认关闭 + 文档强约束 + `Idempotency-Key` 建议；S8 后 `ReplayCache` 指纹窗口去重，不持密钥，窗口 10min 可配，单 PSK 0-RTT 最多一次不重放。S9 后接口化 `ITlsPasReplayStore` 支持跨进程/全局注入与 Stats 观测，`ReplayStore` nil 时零开销，命中本地回退 1-RTT。S10 后 `FileStore` 原子落盘（tmp+rename，损坏忽略，过期丢弃），跨重启仍去重，服务端重启不丢窗口。
 - 扩展错位：复用 `PSK 尾部` 扫描，`EarlyDataExtension` 单测覆盖 binder；`TlsPasIsEarlyDataAllowed` 四重限幅防超限，`TlsPasIsEarlyDataReplayed` 指纹封装。
-- 回滚：任一 S6-S10 切片可独立 revert，`AllowEarlyData` 默认为关，`ReplayStore` 默认为 nil，`FileStore` 空路径退化为内存，revert 后行为与 `bcdc562` 一致；`P384` 仍实验性。
+- 回滚：任一 S6-S17 切片可独立 revert，`AllowEarlyData` 默认为关，`ReplayStore` 默认为 nil，`FileStore` 空路径退化为内存，`ServerDecide`/`Observer`/`Adaptive`/`Header`/`HttpEarlyData`/`IHttpRequestWithEarlyData`/`EarlyDataMiddleware` 均可选纯函数/薄桥，revert 后行为与 `bcdc562` 一致；`P384` 仍实验性，H1/H2 标记回退仅移除 `Supports` 分支。
 
 ---
 
-*本设计遵循 `core/AGENTS.md` 与 `core/docs/design-conventions.md`：L2 仅依赖 L0-L1 与 `tls13.*` 原语，零 OpenSSL，不引入新分层。S6-S10 已闭环（S7 EOED + S8 策略与重放 + S9 接口/Stats/注入 + S10 文件持久化），后续可按需接外部 KV 重放存储与服务端 `EarlyData` 限额动态。*
+*本设计遵循 `core/AGENTS.md` 与 `core/docs/design-conventions.md`：L2 仅依赖 L0-L1 与 `tls13.*` 原语，零 OpenSSL，不引入新分层；L3 `http.earlydata`/`http.middleware.earlydata` 仅复用 L2 接口，无 http 具体类型循环，`IHttpRequestWithEarlyData` 为最小可选扩展（H1/H2 双栈 `Supports` 自动标记）。S6-S17 已终局闭环（S7 EOED + S8 策略与重放 + S9 接口/Stats/注入 + S10 文件持久化 + S11 KV 集群 + S12 服务端决策 + S13 可观测 + S14 自适应限额与 X-Early-Data + S15 零警告示例抛光 + S16 HTTP 薄桥 + S17 HTTP 服务端贯通 H1/H2+中间件），示例见 `core/examples/nextpas.core.net/tlspas_early_data_demo/`（`make run` 自证全链路，含 `X-Early-Data`），HTTP 侧 `EarlyDataMiddleware` 一键接入见 `core/src/nextpas.core.http.middleware.earlydata.pas`。*

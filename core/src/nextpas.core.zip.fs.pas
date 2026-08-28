@@ -75,32 +75,100 @@ type
   end;
   TDeferredDirArray = array of TDeferredDir;
 
-function SortWalkCompare(const AA, AB: string): Boolean; inline;
+procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
+var
+  LCap, LNew: Integer;
 begin
-  Result := AA > AB;
+  LCap := Length(A);
+  if LCap >= AMin then Exit;
+  if LCap = 0 then LCap := 16;
+  LNew := LCap;
+  while LNew < AMin do
+    LNew := LNew * 2;
+  SetLength(A, LNew);
+end;
+
+procedure WalkAppend(var A: TWalkArray; var ACount: Integer;
+  const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word); inline;
+begin
+  EnsureWalkCapacity(A, ACount + 1);
+  A[ACount].FRel := ARel;
+  A[ACount].FFull := AFull;
+  A[ACount].FIsDir := AIsDir;
+  A[ACount].FMtime := AMtime;
+  A[ACount].FMode := AMode;
+  Inc(ACount);
 end;
 
 procedure SortDirEntries(var A: TDirEntryArray);
 var
-  LI, LJ: Integer;
+  LStackLo, LStackHi: array[0..63] of Integer;
+  LSp, LLo, LHi, LI, LJ: Integer;
+  LPivot: string;
   LTmp: TDirEntry;
 begin
-  for LI := 1 to High(A) do
+  if Length(A) < 2 then Exit;
+  LSp := 0;
+  LStackLo[LSp] := 0;
+  LStackHi[LSp] := High(A);
+  Inc(LSp);
+  while LSp > 0 do
   begin
-    LTmp := A[LI];
-    LJ := LI - 1;
-    while (LJ >= 0) and SortWalkCompare(A[LJ].Name, LTmp.Name) do
+    Dec(LSp);
+    LLo := LStackLo[LSp];
+    LHi := LStackHi[LSp];
+    if LLo >= LHi then Continue;
+    LI := LLo;
+    LJ := LHi;
+    LPivot := A[(LLo + LHi) shr 1].Name;
+    repeat
+      while A[LI].Name < LPivot do Inc(LI);
+      while A[LJ].Name > LPivot do Dec(LJ);
+      if LI <= LJ then
+      begin
+        LTmp := A[LI];
+        A[LI] := A[LJ];
+        A[LJ] := LTmp;
+        Inc(LI);
+        Dec(LJ);
+      end;
+    until LI > LJ;
+    if (LJ - LLo) > (LHi - LI) then
     begin
-      A[LJ + 1] := A[LJ];
-      Dec(LJ);
+      if LLo < LJ then
+      begin
+        LStackLo[LSp] := LLo;
+        LStackHi[LSp] := LJ;
+        Inc(LSp);
+      end;
+      if LI < LHi then
+      begin
+        LStackLo[LSp] := LI;
+        LStackHi[LSp] := LHi;
+        Inc(LSp);
+      end;
+    end
+    else
+    begin
+      if LI < LHi then
+      begin
+        LStackLo[LSp] := LI;
+        LStackHi[LSp] := LHi;
+        Inc(LSp);
+      end;
+      if LLo < LJ then
+      begin
+        LStackLo[LSp] := LLo;
+        LStackHi[LSp] := LJ;
+        Inc(LSp);
+      end;
     end;
-    A[LJ + 1] := LTmp;
   end;
 end;
 
 { 深度优先收集子树：目录先于其内容，同层级按名字节序 }
 procedure CollectLevel(const AAbsDir, ARelPrefix: string;
-  var AOut: TWalkArray);
+  var AOut: TWalkArray; var ACount: Integer);
 var
   LEntries: TDirEntryArray;
   LI: Integer;
@@ -122,24 +190,16 @@ begin
     LInfo := Stat(LChildAbs);
     if LEntries[LI].IsDir then
     begin
-      SetLength(AOut, Length(AOut) + 1);
-      AOut[High(AOut)].FRel := LChildRel;
-      AOut[High(AOut)].FFull := LChildAbs;
-      AOut[High(AOut)].FIsDir := True;
-      AOut[High(AOut)].FMtime := LInfo.ModTime div 1000000000;
-      AOut[High(AOut)].FMode :=
-        ZipDirectoryMode(Word(LInfo.Permission) and $0FFF);
-      CollectLevel(LChildAbs, LChildRel, AOut);
+      WalkAppend(AOut, ACount, LChildRel, LChildAbs, True,
+        LInfo.ModTime div 1000000000,
+        ZipDirectoryMode(Word(LInfo.Permission) and $0FFF));
+      CollectLevel(LChildAbs, LChildRel, AOut, ACount);
     end
     else if LEntries[LI].FileType = ftRegular then
     begin
-      SetLength(AOut, Length(AOut) + 1);
-      AOut[High(AOut)].FRel := LChildRel;
-      AOut[High(AOut)].FFull := LChildAbs;
-      AOut[High(AOut)].FIsDir := False;
-      AOut[High(AOut)].FMtime := LInfo.ModTime div 1000000000;
-      AOut[High(AOut)].FMode :=
-        ZipRegularMode(Word(LInfo.Permission) and $0FFF);
+      WalkAppend(AOut, ACount, LChildRel, LChildAbs, False,
+        LInfo.ModTime div 1000000000,
+        ZipRegularMode(Word(LInfo.Permission) and $0FFF));
     end;
     { 符号链接/设备/FIFO/socket 跳过，见单元头注释 }
   end;
@@ -149,7 +209,7 @@ procedure ZipPackDirInto(const ADir: string; const AWriter: IZipWriter);
 var
   LRoot: TFileInfo;
   LWalks: TWalkArray;
-  LI: Integer;
+  LI, LWalksCount: Integer;
   LOpts: TZipAddOptions;
   LData: TBytes;
 begin
@@ -157,7 +217,9 @@ begin
   if not LRoot.IsDir then
     raise EArgumentError.Create('zip pack: not a directory: ' + ADir);
   SetLength(LWalks, 0);
-  CollectLevel(ADir, '', LWalks);
+  LWalksCount := 0;
+  CollectLevel(ADir, '', LWalks, LWalksCount);
+  SetLength(LWalks, LWalksCount);
   for LI := 0 to High(LWalks) do
   begin
     LOpts := DefaultZipAddOptions;

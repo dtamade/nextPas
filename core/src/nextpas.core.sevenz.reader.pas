@@ -17,7 +17,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.sevenz.base,
   nextpas.core.sevenz.intf,
-  nextpas.core.sevenz.header;
+  nextpas.core.sevenz.header,
+  nextpas.core.collections.hashmap.swiss.str;
 
 type
   {** @desc ISevenZReader 默认实现 *}
@@ -36,6 +37,9 @@ type
     FCacheIdx: array[0..1] of Integer;     { 2-entry MRU 缓存：0 为 MRU }
     FCacheData: array[0..1] of TBytes;
     FPassword: string;
+    FNameMap: specialize TSwissTableStr<Integer>;        { exact → first index }
+    FNameMapIgnoreCase: specialize TSwissTableStr<Integer>; { lower → first index }
+    procedure BuildNameMaps;
     procedure ParseArchive;
     procedure ParseHeaderBlock(const AHeaderData: TBytes);
     procedure AssembleEntries;
@@ -63,6 +67,8 @@ type
     function EntryByNameIgnoreCase(const AName: string): TSevenZEntryInfo;
     function GetIsEmpty: Boolean;
     function GetEntries: TSevenZEntryInfoArray;
+    procedure ClearCache;
+    function EntriesByPrefix(const APrefix: string): TSevenZEntryInfoArray;
     function Extract(AIndex: Integer): TBytes;
     function ExtractTo(const AWriter: IWriter; AIndex: Integer): Int64;
     function OpenStream(AIndex: Integer): IStream;
@@ -244,6 +250,8 @@ end;
 
 destructor TSevenZReaderImpl.Destroy;
 begin
+  FreeAndNil(FNameMap);
+  FreeAndNil(FNameMapIgnoreCase);
   inherited Destroy;
 end;
 
@@ -535,6 +543,27 @@ begin
       LE.MTimeUnixSec := 0;
     FEntries[LI] := LE;
   end;
+  BuildNameMaps;
+end;
+
+procedure TSevenZReaderImpl.BuildNameMaps;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  FreeAndNil(FNameMap);
+  FreeAndNil(FNameMapIgnoreCase);
+  if Length(FEntries)=0 then Exit;
+  FNameMap := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
+  FNameMapIgnoreCase := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
+  for LI:=0 to High(FEntries) do
+  begin
+    if not FNameMap.ContainsKey(FEntries[LI].Name) then
+      FNameMap.Put(FEntries[LI].Name, LI);
+    LLower := LowerCase(FEntries[LI].Name);
+    if not FNameMapIgnoreCase.ContainsKey(LLower) then
+      FNameMapIgnoreCase.Put(LLower, LI);
+  end;
 end;
 
 function TSevenZReaderImpl.DecodeFolder(AFolderIdx: Integer): TBytes;
@@ -627,7 +656,10 @@ end;
 function TSevenZReaderImpl.Find(const AName: string): Integer;
 var
   LI: Integer;
+  LIdx: Integer;
 begin
+  if (FNameMap<>nil) and FNameMap.TryGetValue(AName, LIdx) then
+    Exit(LIdx);
   Result := -1;
   for LI := 0 to Length(FEntries) - 1 do
     if FEntries[LI].Name = AName then
@@ -645,17 +677,26 @@ var
 begin
   if Length(A) <> Length(B) then Exit(False);
   for LI := 1 to Length(A) do
+  begin
     if (Ord(A[LI]) > 127) or (Ord(B[LI]) > 127) then
       Exit(LowerCase(A) = LowerCase(B));
-  for LI := 1 to Length(A) do
     if AsciiLower(A[LI]) <> AsciiLower(B[LI]) then Exit(False);
+  end;
   Result := True;
 end;
 
 function TSevenZReaderImpl.FindIgnoreCase(const AName: string): Integer;
 var
   LI: Integer;
+  LIdx: Integer;
+  LLower: string;
 begin
+  if FNameMapIgnoreCase<>nil then
+  begin
+    LLower := LowerCase(AName);
+    if FNameMapIgnoreCase.TryGetValue(LLower, LIdx) then
+      Exit(LIdx);
+  end;
   Result := -1;
   for LI := 0 to Length(FEntries) - 1 do
     if SameIgnoreCase(FEntries[LI].Name, AName) then
@@ -729,6 +770,40 @@ begin
   SetLength(Result, Length(FEntries));
   for LI := 0 to High(FEntries) do
     Result[LI] := FEntries[LI];
+end;
+
+procedure TSevenZReaderImpl.ClearCache;
+begin
+  FCacheIdx[0] := -1; FCacheIdx[1] := -1;
+  FCacheData[0] := nil; FCacheData[1] := nil;
+end;
+
+function TSevenZReaderImpl.EntriesByPrefix(const APrefix: string): TSevenZEntryInfoArray;
+var
+  LI, LCnt: Integer;
+  LPrefixLen: SizeInt;
+begin
+  Result := nil;
+  LPrefixLen := Length(APrefix);
+  if LPrefixLen=0 then
+  begin
+    Result := GetEntries;
+    Exit;
+  end;
+  LCnt := 0;
+  for LI:=0 to High(FEntries) do
+    if (Length(FEntries[LI].Name)>=LPrefixLen) and
+       (Copy(FEntries[LI].Name,1,LPrefixLen)=APrefix) then
+      Inc(LCnt);
+  SetLength(Result, LCnt);
+  LCnt := 0;
+  for LI:=0 to High(FEntries) do
+    if (Length(FEntries[LI].Name)>=LPrefixLen) and
+       (Copy(FEntries[LI].Name,1,LPrefixLen)=APrefix) then
+    begin
+      Result[LCnt] := FEntries[LI];
+      Inc(LCnt);
+    end;
 end;
 
 function TSevenZReaderImpl.Extract(AIndex: Integer): TBytes;

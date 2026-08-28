@@ -24,7 +24,39 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.net.tcp,
-  nextpas.core.net.async.tcp;
+  nextpas.core.net.async.tcp,
+  nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.http.headers,
+  nextpas.core.http.message,
+  nextpas.core.http.middleware,
+  nextpas.core.http.middleware.context,
+  nextpas.core.http.earlydata,
+  nextpas.core.http.middleware.earlydata;
+
+type
+  TCaptureWriter = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    FHeaders: IHttpHeaders;
+  public
+    constructor Create;
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+  end;
+
+constructor TCaptureWriter.Create;
+begin
+  inherited Create;
+  FHeaders := NewHttpHeaders;
+end;
+procedure TCaptureWriter.WriteHeader(const AStatus: THttpStatus); begin end;
+function TCaptureWriter.GetStatus: THttpStatus; begin Result := HTTP_STATUS_OK; end;
+function TCaptureWriter.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
+function TCaptureWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
+procedure TCaptureWriter.Flush; begin end;
 
 procedure TestGroupKeyShareLen;
 begin
@@ -777,6 +809,201 @@ begin
   Check(S.Count=1, 'factory kv 1');
 end;
 
+procedure TestServerDecide;
+var Store: ITlsPasReplayStore; Sess: TTlsPasResumptionSession; Id, Early: TBytes; D: TTlsPasEarlyDataDecision;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Sess := Default(TTlsPasResumptionSession);
+  Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+  SetLength(Id, 4); FillChar(Id[0], 4, $11);
+  SetLength(Early, 5); FillChar(Early[0], 5, $22);
+  // policy reject: Allow false -> not touch store
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, False);
+  Check(D = edRejectPolicy, 'policy reject Allow false');
+  Check(Store.Count=0, 'policy reject not inserted');
+  Check(not TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, False), 'should not accept policy');
+  Check(TlsPasEarlyDataDecisionToStr(edRejectPolicy)='reject_policy', 'toStr policy');
+  // policy reject: zero len
+  SetLength(Early, 0);
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, True);
+  Check(D = edRejectPolicy, 'policy reject zero len');
+  SetLength(Early, 5); FillChar(Early[0], 5, $22);
+  // first accept
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, True);
+  Check(D = edAccept, 'first accept');
+  Check(Store.Count=1, 'accept inserted');
+  Check(TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True) = False, 'second should not accept (replay)');
+  Check(TlsPasEarlyDataDecisionToStr(edAccept)='accept', 'toStr accept');
+  // second replay
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, True);
+  Check(D = edRejectReplay, 'second replay');
+  Check(TlsPasEarlyDataDecisionToStr(edRejectReplay)='reject_replay', 'toStr replay');
+  // different payload -> accept
+  Early[0] := $23;
+  D := TlsPasServerDecideEarlyData(Store, Id, Early, Sess, True);
+  Check(D = edAccept, 'different payload accept');
+  Check(Store.Count=2, 'count 2');
+  // nil store -> always accept if policy ok
+  D := TlsPasServerDecideEarlyData(nil, Id, Early, Sess, True);
+  Check(D = edAccept, 'nil store accept');
+  Check(TlsPasServerShouldAcceptEarlyData(nil, Id, Early, Sess, True), 'nil should accept');
+  // policy fail with nil store still reject
+  Sess.HasMaxEarlyData := False;
+  D := TlsPasServerDecideEarlyData(nil, Id, Early, Sess, True);
+  Check(D = edRejectPolicy, 'nil store policy still reject');
+end;
+
+procedure TestServerShouldAcceptIntegration;
+var Store: ITlsPasReplayStore; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(4, 600000) as ITlsPasReplayStore;
+  Sess := Default(TTlsPasResumptionSession);
+  Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 500;
+  SetLength(Id, 4); FillChar(Id[0], 4, $55);
+  SetLength(Early, 10); FillChar(Early[0], 10, $66);
+  Check(TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True), '500/10 accept');
+  Check(not TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True), 'replay reject');
+  SetLength(Early, 501); FillChar(Early[0], 501, $66);
+  Check(not TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True), 'over max reject');
+end;
+
+procedure TestObserverStats;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasServerObserver; Sess: TTlsPasResumptionSession; Id, Early: TBytes; S: TTlsPasServerStats; RS: TAsyncTlsPasReplayStats;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasServerObserver.Create(Store);
+  try
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $11);
+    SetLength(Early, 5); FillChar(Early[0], 5, $22);
+    Check(Obs.Decide(Id, Early, Sess, False) = edRejectPolicy, 'obs policy');
+    Check(Obs.ShouldAccept(Id, Early, Sess, True), 'obs first accept');
+    Check(not Obs.ShouldAccept(Id, Early, Sess, True), 'obs replay');
+    Early[0] := $23;
+    Check(Obs.Decide(Id, Early, Sess, True) = edAccept, 'obs second accept');
+    S := Obs.GetServerStats;
+    Check((S.Accepts=2) and (S.RejectPolicy=1) and (S.RejectReplay=1), 'server stats 2/1/1');
+    RS := Obs.GetReplayStats;
+    Check(RS.Current=2, 'replay current 2');
+    Check(Pos('accepts=2', TlsPasFormatServerStats(S))>0, 'format server');
+    Check(Pos('hits=', TlsPasFormatReplayStats(RS))>0, 'format replay');
+    Obs.Clear;
+    S := Obs.GetServerStats;
+    Check((S.Accepts=0) and (S.RejectPolicy=0), 'clear resets server');
+    RS := Obs.GetReplayStats;
+    Check(RS.Current=0, 'clear replay');
+  finally Obs.Free; end;
+end;
+
+procedure TestFormatHelpers;
+var RS: TAsyncTlsPasReplayStats; SS: TTlsPasServerStats; F: string;
+begin
+  RS := Default(TAsyncTlsPasReplayStats);
+  RS.Hits:=1; RS.Misses:=2; RS.Current:=1;
+  F := TlsPasFormatReplayStats(RS);
+  Check(Pos('hits=1', F)>0, 'format hits');
+  Check(Pos('current=1', F)>0, 'format current');
+  SS := Default(TTlsPasServerStats);
+  SS.Accepts:=5; SS.RejectPolicy:=1; SS.RejectReplay:=2;
+  F := TlsPasFormatServerStats(SS);
+  Check(Pos('accepts=5', F)>0, 'format accepts');
+  Check(Pos('reject_replay=2', F)>0, 'format replay');
+end;
+
+procedure TestAdaptiveLimit;
+var C: TTlsPasAdaptiveLimitConfig; SS: TTlsPasServerStats; RS: TAsyncTlsPasReplayStats; L: Cardinal;
+begin
+  C := DefaultTlsPasAdaptiveLimitConfig;
+  Check(C.BaseLimit=16384, 'default base 16384');
+  Check(C.MinLimit=512, 'min 512');
+  SS := Default(TTlsPasServerStats);
+  RS := Default(TAsyncTlsPasReplayStats);
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L=16384, 'empty stats base');
+  SS.Accepts:=9; SS.RejectPolicy:=1; // 10% not >0.1
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L=16384, '10% not over');
+  SS.Accepts:=8; SS.RejectPolicy:=2; // 20% >0.1 -> half
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L=8192, '20% half');
+  RS.Current:=51;
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L=4096, 'current>50 half again');
+  // min clamp
+  C.MinLimit:=5000;
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L>=5000, 'min clamp');
+end;
+
+procedure TestHeaderValue;
+begin
+  Check(TlsPasEarlyDataDecisionToHeaderValue(edAccept)='1', 'header accept 1');
+  Check(TlsPasEarlyDataDecisionToHeaderValue(edRejectPolicy)='0', 'header policy 0');
+  Check(TlsPasEarlyDataDecisionToHeaderValue(edRejectReplay)='0', 'header replay 0');
+end;
+
+procedure TestHttpEarlyDataBridge;
+begin
+  Check(HttpEarlyDataHeaderValueFromDecision(edAccept)='1', 'http header accept');
+  Check(HttpEarlyDataHeaderValueFromDecision(edRejectPolicy)='0', 'http header policy');
+  Check(HttpEarlyDataHeaderValueFromStream(nil)='', 'http nil stream empty');
+  Check(not HttpIsEarlyDataStream(nil), 'http nil not early');
+  Check(HttpEarlyDataDecisionToLog(edAccept)='accept header=1', 'http log accept');
+  Check(HttpEarlyDataDecisionToLog(edRejectReplay)='reject_replay header=0', 'http log replay');
+  Check(HTTP_HEADER_X_EARLY_DATA='X-Early-Data', 'header const');
+end;
+
+procedure TestHttpRequestEarlyDataFlag;
+var
+  LReq: IHttpRequest;
+  LEarly: IHttpRequestWithEarlyData;
+begin
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataWasEarlyData(LReq), 'initial not early');
+  Check(HttpEarlyDataHeaderValue(LReq)='0', 'initial header 0');
+  Check(Supports(LReq, IHttpRequestWithEarlyData, LEarly), 'supports early data');
+  LEarly.SetWasEarlyData(True);
+  Check(HttpEarlyDataWasEarlyData(LReq), 'after set early');
+  Check(HttpEarlyDataHeaderValue(LReq)='1', 'header 1 after set');
+  Check(LReq.GetHeaders.Get(HTTP_HEADER_X_EARLY_DATA)='', 'request header not auto-set');
+  LEarly.SetWasEarlyData(False);
+  Check(not HttpEarlyDataWasEarlyData(LReq), 'reset not early');
+end;
+
+procedure TestHttpMiddlewareEarlyData;
+var
+  LReqEarly, LReqNormal: IHttpRequest;
+  LEarly: IHttpRequestWithEarlyData;
+  LMw: IHttpMiddleware;
+  LHandler: IHttpHandler;
+  LMwHandler: IHttpHandler;
+  LCapEarly, LCapNormal: IHttpResponseWriter;
+  LCtxEarly, LCtxNormal: IHttpContext;
+begin
+  LReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  if Supports(LReqEarly, IHttpRequestWithEarlyData, LEarly) then
+    LEarly.SetWasEarlyData(True);
+  LReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LCtxEarly := NewHttpContext;
+  LCtxNormal := NewHttpContext;
+  (LReqEarly as IHttpRequestWithContext).SetContext(LCtxEarly);
+  (LReqNormal as IHttpRequestWithContext).SetContext(LCtxNormal);
+  LMw := EarlyDataMiddleware;
+  LHandler := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+  end);
+  LMwHandler := LMw.Wrap(LHandler);
+  LCapEarly := TCaptureWriter.Create;
+  LCapNormal := TCaptureWriter.Create;
+  LMwHandler.ServeHTTP(LReqEarly, LCapEarly);
+  Check(LCapEarly.GetHeaders.Get(HTTP_HEADER_X_EARLY_DATA)='1', 'middleware early header 1');
+  Check(HttpContextGetString(LCtxEarly, CONTEXT_EARLY_DATA)='1', 'middleware early context 1');
+  LMwHandler.ServeHTTP(LReqNormal, LCapNormal);
+  Check(LCapNormal.GetHeaders.Get(HTTP_HEADER_X_EARLY_DATA)='0', 'middleware normal header 0');
+  Check(HttpContextGetString(LCtxNormal, CONTEXT_EARLY_DATA)='0', 'middleware normal context 0');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -813,6 +1040,15 @@ begin
   GSuite.Test('ReplayFileStoreCorruption', @TestReplayFileStoreCorruption);
   GSuite.Test('ReplayKvStore', @TestReplayKvStore);
   GSuite.Test('ReplayFactory', @TestReplayFactory);
+  GSuite.Test('ServerDecide', @TestServerDecide);
+  GSuite.Test('ServerShouldAccept', @TestServerShouldAcceptIntegration);
+  GSuite.Test('ObserverStats', @TestObserverStats);
+  GSuite.Test('FormatHelpers', @TestFormatHelpers);
+  GSuite.Test('AdaptiveLimit', @TestAdaptiveLimit);
+  GSuite.Test('HeaderValue', @TestHeaderValue);
+  GSuite.Test('HttpEarlyDataBridge', @TestHttpEarlyDataBridge);
+  GSuite.Test('HttpRequestEarlyDataFlag', @TestHttpRequestEarlyDataFlag);
+  GSuite.Test('HttpMiddlewareEarlyData', @TestHttpMiddlewareEarlyData);
   if not GSuite.Run then
     Halt(1);
 end.

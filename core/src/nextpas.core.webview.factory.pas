@@ -214,6 +214,7 @@ type
     FInvokes: array of TFakeInvokeReg;
     FReady: array of TWebviewNotifyHandler;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
+    procedure EnsureUniqueCmd(const ACmd: string);
   public
     constructor Create;
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
@@ -253,70 +254,76 @@ begin
   FKind := DefaultWebviewKind;
 end;
 
-function TBuilderImpl.Title(const ATitle: string): IWebviewBuilder;
+function TBuilderImpl.Title(const ATitle: string): IWebviewBuilder; inline;
 begin
   FOptions.Title := ATitle;
   Result := Self;
 end;
 
-function TBuilderImpl.Size(AWidth, AHeight: Integer): IWebviewBuilder;
+function TBuilderImpl.Size(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
   FOptions.Width := AWidth;
   FOptions.Height := AHeight;
   Result := Self;
 end;
 
-function TBuilderImpl.MinSize(AWidth, AHeight: Integer): IWebviewBuilder;
+function TBuilderImpl.MinSize(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
   FOptions.MinWidth := AWidth;
   FOptions.MinHeight := AHeight;
   Result := Self;
 end;
 
-function TBuilderImpl.MaxSize(AWidth, AHeight: Integer): IWebviewBuilder;
+function TBuilderImpl.MaxSize(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
   FOptions.MaxWidth := AWidth;
   FOptions.MaxHeight := AHeight;
   Result := Self;
 end;
 
-function TBuilderImpl.Resizable(AResizable: Boolean): IWebviewBuilder;
+function TBuilderImpl.Resizable(AResizable: Boolean): IWebviewBuilder; inline;
 begin
   FOptions.Resizable := AResizable;
   Result := Self;
 end;
 
-function TBuilderImpl.StartMaximized: IWebviewBuilder;
+function TBuilderImpl.StartMaximized: IWebviewBuilder; inline;
 begin
   FOptions.Maximized := True;
   Result := Self;
 end;
 
-function TBuilderImpl.DebugTools(AEnabled: Boolean): IWebviewBuilder;
+function TBuilderImpl.DebugTools(AEnabled: Boolean): IWebviewBuilder; inline;
 begin
   FOptions.DebugTools := AEnabled;
   Result := Self;
 end;
 
-function TBuilderImpl.Scheme(const ASchemeName: string): IWebviewBuilder;
+function TBuilderImpl.Scheme(const ASchemeName: string): IWebviewBuilder; inline;
 begin
   FOptions.SchemeName := ASchemeName;
   Result := Self;
 end;
 
-function TBuilderImpl.DataDirectory(const APath: string): IWebviewBuilder;
+function TBuilderImpl.DataDirectory(const APath: string): IWebviewBuilder; inline;
 begin
+  if (APath <> '') and FOptions.EphemeralSession then
+    raise EWebviewInvalidState.Create(
+      'EphemeralSession and DataDirectory are mutually exclusive');
   FOptions.DataDirectory := APath;
   Result := Self;
 end;
 
-function TBuilderImpl.Ephemeral: IWebviewBuilder;
+function TBuilderImpl.Ephemeral: IWebviewBuilder; inline;
 begin
+  if FOptions.DataDirectory <> '' then
+    raise EWebviewInvalidState.Create(
+      'EphemeralSession and DataDirectory are mutually exclusive');
   FOptions.EphemeralSession := True;
   Result := Self;
 end;
 
-function TBuilderImpl.Kind(AKind: TWebviewKind): IWebviewBuilder;
+function TBuilderImpl.Kind(AKind: TWebviewKind): IWebviewBuilder; inline;
 begin
   FKind := AKind;
   Result := Self;
@@ -324,21 +331,29 @@ end;
 
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder;
 begin
+  if Pos('__npw', AJavascript) > 0 then
+    raise EWebviewInvalidState.Create(
+      'InitScripts must not touch __npw (bridge owns that namespace)');
   SetLength(FOptions.InitScripts, Length(FOptions.InitScripts) + 1);
   FOptions.InitScripts[High(FOptions.InitScripts)] := AJavascript;
   Result := Self;
 end;
 
+procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string);
+var I: Integer;
+begin
+  for I := 0 to High(FInvokes) do
+    if FInvokes[I].Cmd = ACmd then
+      raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
+end;
+
 function TBuilderImpl.RegisterInvoke(const ACmd: string;
   AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
-var I: Integer;
 begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('invoke handler must not be nil: %s', [ACmd]);
-  for I := 0 to High(FInvokes) do
-    if FInvokes[I].Cmd = ACmd then
-      raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
+  EnsureUniqueCmd(ACmd);
   SetLength(FInvokes, Length(FInvokes) + 1);
   FInvokes[High(FInvokes)].Cmd := ACmd;
   FInvokes[High(FInvokes)].Sync := AHandler;
@@ -348,14 +363,11 @@ end;
 
 function TBuilderImpl.RegisterAsyncInvoke(const ACmd: string;
   AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
-var I: Integer;
 begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('async invoke handler must not be nil: %s', [ACmd]);
-  for I := 0 to High(FInvokes) do
-    if FInvokes[I].Cmd = ACmd then
-      raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
+  EnsureUniqueCmd(ACmd);
   SetLength(FInvokes, Length(FInvokes) + 1);
   FInvokes[High(FInvokes)].Cmd := ACmd;
   FInvokes[High(FInvokes)].Async := AHandler;
@@ -363,7 +375,7 @@ begin
   Result := Self;
 end;
 
-function TBuilderImpl.OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
+function TBuilderImpl.OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder; inline;
 begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.Create('OnReady handler must not be nil');
@@ -372,19 +384,19 @@ begin
   Result := Self;
 end;
 
-function TBuilderImpl.InitialUrl(const AUrl: string): IWebviewBuilder;
+function TBuilderImpl.InitialUrl(const AUrl: string): IWebviewBuilder; inline;
 begin
   FOptions.InitialUrl := AUrl;
   Result := Self;
 end;
 
-function TBuilderImpl.InitialHtml(const AHtml: string): IWebviewBuilder;
+function TBuilderImpl.InitialHtml(const AHtml: string): IWebviewBuilder; inline;
 begin
   FOptions.InitialHtml := AHtml;
   Result := Self;
 end;
 
-function TBuilderImpl.DevServerUrl(const AUrl: string): IWebviewBuilder;
+function TBuilderImpl.DevServerUrl(const AUrl: string): IWebviewBuilder; inline;
 begin
   FOptions.DevServerUrl := AUrl;
   Result := Self;

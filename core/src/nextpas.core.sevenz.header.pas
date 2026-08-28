@@ -401,6 +401,8 @@ begin
   LNum := AReader.ReadNumber;
   if LNum > SEVENZ_MAX_PACK_STREAMS then
     raise ESevenZLimitError.Create('pack stream count out of range');
+  if LNum > SEVENZ_MAX_CRC_COUNT then
+    raise ESevenZLimitError.Create('pack crc count out of range');
   SetLength(APack.Sizes, LNum);
   SetLength(APack.DigestDefined, LNum);
   SetLength(APack.Digests, LNum);
@@ -577,6 +579,8 @@ begin
   LNumFolders := AReader.ReadNumber;
   if LNumFolders > SEVENZ_MAX_FOLDERS then
     raise ESevenZLimitError.Create('folder count out of range');
+  if LNumFolders > SEVENZ_MAX_CRC_COUNT then
+    raise ESevenZLimitError.Create('folder crc count out of range');
   LExternal := AReader.ReadByte;
   if LExternal <> 0 then
     raise ESevenZError.Create('external folders not supported');
@@ -718,6 +722,8 @@ begin
               SetLength(LUnknownIndices, Length(LUnknownIndices) + 1);
               LUnknownIndices[High(LUnknownIndices)] := LI;
             end;
+          if Length(LUnknownIndices) > SEVENZ_MAX_CRC_COUNT then
+            raise ESevenZLimitError.Create('crc count out of range');
           SetLength(LCrcDefinedVec, Length(LUnknownIndices));
           AReader.ReadBoolVector2(Length(LUnknownIndices), LCrcDefinedVec);
           for LI := 0 to High(LUnknownIndices) do

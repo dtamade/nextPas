@@ -88,7 +88,12 @@ begin
       AMaxOutput);
   end
   else if AE.MethodCode = C_ZIP_METHOD_STORE then
-    Result := LCompressed
+  begin
+    if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
+      raise EIOError.Create('zip: decompressed size exceeds limit for ' +
+        AE.Name);
+    Result := LCompressed;
+  end
   else
     raise ENotSupportedError.Create('zip: unsupported compression method ' +
       IntToStr(AE.MethodCode) + ': ' + AE.Name);

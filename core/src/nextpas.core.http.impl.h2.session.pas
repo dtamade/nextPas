@@ -193,6 +193,7 @@ function H2ValidateServerPreface(const ABuf: PAnsiChar; const ALen: SizeUInt;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.errors,
@@ -202,7 +203,8 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.mem,
-  nextpas.core.http.middleware.requestarena;
+  nextpas.core.http.middleware.requestarena,
+  nextpas.core.net.async.tlspas;
 
 function H2ValidateServerPreface(const ABuf: PAnsiChar; const ALen: SizeUInt;
   out AConsumed: SizeUInt; out AErrorCode: UInt32): TH2PrefaceStatus;
@@ -1044,8 +1046,15 @@ begin
 end;
 
 function TH2ServerSession.BuildRequestFromStream(const AStream: TH2Stream): IHttpRequest;
+var
+  LEarly: ITlsPasEarlyDataInfo;
+  LEarlyReq: IHttpRequestWithEarlyData;
 begin
   Result := H2BuildRequestFromStream(AStream, FConn.RemoteAddr);
+  // 0-RTT: propagate TLS early-data flag to request for EarlyDataMiddleware
+  if Supports(FConn, ITlsPasEarlyDataInfo, LEarly) then
+    if Supports(Result, IHttpRequestWithEarlyData, LEarlyReq) then
+      LEarlyReq.SetWasEarlyData(LEarly.GetWasEarlyDataAccepted);
 end;
 
 procedure TH2ServerSession.HandleRequestHeaderListTooLarge(

@@ -65,8 +65,11 @@ Bytes := ZipBuilder()
   .Reserve(2000)
   .Add('a.txt', Data)
   .AddDeflate('b.bin', Data)
-  .AddWithOptions('c.cfg', Data, Opts)
+  .AddWithTime('c.txt', Data, UnixSec)
+  .AddDeflateWithTime('d.bin', Data, UnixSec)
+  .AddWithOptions('e.cfg', Data, Opts)
   .AddDirectory('assets')
+  .AddDirectoryWithTime('logs', UnixSec)
   .Finish;
 
 Bytes := ZipBuilderForceZip64().Add('large.bin', Data).Finish;  // forced Zip64

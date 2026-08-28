@@ -16,6 +16,13 @@ uses
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.posthandshake,
   nextpas.core.net.async.tlspas,
+  nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.http.headers,
+  nextpas.core.http.message,
+  nextpas.core.http.middleware,
+  nextpas.core.http.earlydata,
+  nextpas.core.http.middleware.earlydata,
   nextpas.core.platform.time,
   nextpas.core.time.base;
 
@@ -216,6 +223,119 @@ begin
   end;
 end;
 
+procedure BenchServerDecide(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision;
+begin
+  for I := 1 to aIters do
+    D := TlsPasServerDecideEarlyData(GReplayStore, GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
+procedure BenchServerShouldAccept(aIters: Int64);
+var I: Int64; LOk: Boolean;
+begin
+  for I := 1 to aIters do
+    LOk := TlsPasServerShouldAcceptEarlyData(GReplayStore, GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
+var
+  GServerObserver: TAsyncTlsPasServerObserver;
+
+procedure BenchObserverDecide(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision;
+begin
+  for I := 1 to aIters do
+    D := GServerObserver.Decide(GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
+procedure BenchFormatReplayStats(aIters: Int64);
+var I: Int64; S: TAsyncTlsPasReplayStats; F: string;
+begin
+  S := GReplayCache.GetStats;
+  for I := 1 to aIters do
+    F := TlsPasFormatReplayStats(S);
+end;
+
+var
+  GAdaptiveConfig: TTlsPasAdaptiveLimitConfig;
+  GAdaptiveServerStats: TTlsPasServerStats;
+  GAdaptiveReplayStats: TAsyncTlsPasReplayStats;
+
+procedure BenchAdaptiveLimit(aIters: Int64);
+var I: Int64; L: Cardinal;
+begin
+  for I := 1 to aIters do
+    L := TlsPasComputeAdaptiveMaxEarlyData(GAdaptiveServerStats, GAdaptiveReplayStats, GAdaptiveConfig);
+end;
+
+procedure BenchHeaderValue(aIters: Int64);
+var I: Int64; H: string;
+begin
+  for I := 1 to aIters do
+    H := TlsPasEarlyDataDecisionToHeaderValue(edAccept);
+end;
+
+procedure BenchHttpEarlyDataHeader(aIters: Int64);
+var I: Int64; H: string;
+begin
+  for I := 1 to aIters do
+    H := HttpEarlyDataHeaderValueFromDecision(edAccept);
+end;
+
+procedure BenchHttpEarlyDataStream(aIters: Int64);
+var I: Int64; H: string;
+begin
+  for I := 1 to aIters do
+    H := HttpEarlyDataHeaderValueFromStream(nil);
+end;
+
+type
+  TCaptureWriterBenchHack = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    class var FInst: IHttpResponseWriter;
+    FHeaders: IHttpHeaders;
+  public
+    constructor Create;
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+    class function Get: IHttpResponseWriter; static;
+  end;
+
+var
+  GHttpReqEarly, GHttpReqNormal: IHttpRequest;
+  GHttpMw: IHttpMiddleware;
+  GHttpMwHandler: IHttpHandler;
+
+constructor TCaptureWriterBenchHack.Create;
+begin inherited Create; FHeaders := NewHttpHeaders; end;
+procedure TCaptureWriterBenchHack.WriteHeader(const AStatus: THttpStatus); begin end;
+function TCaptureWriterBenchHack.GetStatus: THttpStatus; begin Result := HTTP_STATUS_OK; end;
+function TCaptureWriterBenchHack.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
+function TCaptureWriterBenchHack.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
+procedure TCaptureWriterBenchHack.Flush; begin end;
+class function TCaptureWriterBenchHack.Get: IHttpResponseWriter;
+begin
+  if FInst = nil then FInst := TCaptureWriterBenchHack.Create;
+  Result := FInst;
+  (Result as TCaptureWriterBenchHack).FHeaders.Clear;
+end;
+
+procedure BenchHttpRequestFlag(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do
+    L := HttpEarlyDataWasEarlyData(GHttpReqEarly);
+end;
+
+procedure BenchHttpMiddlewareEarlyData(aIters: Int64);
+var I: Int64;
+begin
+  for I := 1 to aIters do
+    GHttpMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -250,6 +370,16 @@ begin
   if FileExists('/tmp/bench_replay_file.dat.tmp') then DeleteFile('/tmp/bench_replay_file.dat.tmp');
   GFileStore := TAsyncTlsPasReplayFileStore.Create('/tmp/bench_replay_file.dat', 64, 600000) as ITlsPasReplayStore;
   GKvStore := TAsyncTlsPasReplayStoreFactory.CreateKv(TAsyncTlsPasMemoryKvStore.Create as ITlsPasKvStore, 64, 600000);
+  GServerObserver := TAsyncTlsPasServerObserver.Create(GReplayStore);
+  GAdaptiveConfig := DefaultTlsPasAdaptiveLimitConfig;
+  GAdaptiveServerStats := Default(TTlsPasServerStats);
+  GAdaptiveReplayStats := Default(TAsyncTlsPasReplayStats);
+  // HTTP middleware fixtures
+  GHttpReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  (GHttpReqEarly as IHttpRequestWithEarlyData).SetWasEarlyData(True);
+  GHttpReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  GHttpMw := EarlyDataMiddleware;
+  GHttpMwHandler := GHttpMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
 end;
 
 var
@@ -282,6 +412,16 @@ begin
     .AddLoop('IsEarlyDataReplayed', @BenchReplayIsReplayed)
     .AddLoop('ReplayFileStore persist', @BenchReplayFileStore)
     .AddLoop('ReplayKvStore (local+kv)', @BenchReplayKvStore)
+    .AddLoop('ServerDecide (policy+replay)', @BenchServerDecide)
+    .AddLoop('ServerShouldAccept', @BenchServerShouldAccept)
+    .AddLoop('ObserverDecide (wrap+count)', @BenchObserverDecide)
+    .AddLoop('FormatReplayStats', @BenchFormatReplayStats)
+    .AddLoop('AdaptiveMaxEarlyData', @BenchAdaptiveLimit)
+    .AddLoop('HeaderValue (X-Early-Data)', @BenchHeaderValue)
+    .AddLoop('HttpEarlyData header (decision)', @BenchHttpEarlyDataHeader)
+    .AddLoop('HttpEarlyData from stream nil', @BenchHttpEarlyDataStream)
+    .AddLoop('HttpRequest early flag (Supports)', @BenchHttpRequestFlag)
+    .AddLoop('HttpMiddleware early-data', @BenchHttpMiddlewareEarlyData)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;
