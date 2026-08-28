@@ -1250,6 +1250,75 @@ begin
   Check(LMock.Calls=2, 'WithHeader preserves autoMark');
 end;
 
+procedure TestAdaptiveObserver;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession; Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; LMax: Cardinal;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(64, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $11);
+    SetLength(Early, 100); FillChar(Early[0], 100, $22);
+    // initial: no stats -> limit base 16384, 100 accepted
+    LMax := Obs.GetAdaptiveMaxEarlyData;
+    Check(LMax=16384, 'initial adaptive 16384');
+    Check(Obs.Decide(Id, Early, Sess, True)=edAccept, 'adaptive initial accept 100');
+    Check(Obs.ShouldAccept(Id, Early, Sess, True)=False, 'adaptive second replay (same fp)');
+    // fresh fp with large payload > limit: force throttling via config Base 1000
+    Cfg := DefaultTlsPasAdaptiveLimitConfig;
+    Cfg.BaseLimit := 50; Cfg.MinLimit := 50; Cfg.MaxLimit := 16384;
+    Obs.UpdateConfig(Cfg);
+    LMax := Obs.GetAdaptiveMaxEarlyData;
+    Check(LMax=50, 'config base 50');
+    SetLength(Early, 60); FillChar(Early[0], 60, $33);
+    Check(Obs.Decide(Id, Early, Sess, True)=edRejectPolicy, 'adaptive reject >50');
+    // small payload within 50 passes
+    SetLength(Early, 40); FillChar(Early[0], 40, $44);
+    Check(Obs.Decide(Id, Early, Sess, True)=edAccept, 'adaptive accept 40 within 50');
+    // simulate high reject rate: create many policy rejects (large) to push rate >0.1
+    SetLength(Early, 60);
+    Obs.Decide(Id, Early, Sess, True); // reject
+    Obs.Decide(Id, Early, Sess, True); // reject again (different fp? need new Id)
+    SetLength(Id, 4); Id[0]:=$99;
+    SetLength(Early, 60); Obs.Decide(Id, Early, Sess, True);
+    // after rejects, adaptive limit should halve base 50 -> but Min is 50 so stays 50
+    LMax := Obs.GetAdaptiveMaxEarlyData;
+    Check(LMax>=50, 'adaptive after rejects >= min');
+    // Clear resets stats -> limit returns to base
+    Obs.Clear;
+    LMax := Obs.GetAdaptiveMaxEarlyData;
+    Check(LMax=50, 'after clear base 50');
+  finally Obs.Free; end;
+end;
+
+procedure TestAdaptiveDecidePure;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasServerObserver; Cfg: TTlsPasAdaptiveLimitConfig; Sess: TTlsPasResumptionSession; Id, Early: TBytes; D: TTlsPasEarlyDataDecision;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasServerObserver.Create(Store);
+  try
+    Cfg := DefaultTlsPasAdaptiveLimitConfig;
+    Cfg.BaseLimit := 100; Cfg.MinLimit := 50; Cfg.MaxLimit := 100;
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $55);
+    SetLength(Early, 90); FillChar(Early[0], 90, $66);
+    D := TlsPasAdaptiveDecideEarlyData(Obs, Cfg, Id, Early, Sess, True);
+    Check(D=edAccept, 'pure adaptive accept 90 <100');
+    SetLength(Early, 110); FillChar(Early[0], 110, $66);
+    D := TlsPasAdaptiveDecideEarlyData(Obs, Cfg, Id, Early, Sess, True);
+    Check(D=edRejectPolicy, 'pure adaptive reject 110 >100');
+    // nil observer still checks limit before policy: if >100 reject, else delegate nil -> accept (if policy ok)
+    SetLength(Early, 90);
+    D := TlsPasAdaptiveDecideEarlyData(nil, Cfg, Id, Early, Sess, True);
+    Check(D=edAccept, 'nil observer accept within limit');
+    SetLength(Early, 110);
+    D := TlsPasAdaptiveDecideEarlyData(nil, Cfg, Id, Early, Sess, True);
+    Check(D=edRejectPolicy, 'nil observer reject over limit');
+  finally Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1302,6 +1371,8 @@ begin
   GSuite.Test('HttpClientEarlyDataRetryClientLive', @TestHttpClientEarlyDataRetryClientLive);
   GSuite.Test('HttpClientEarlyDataAutoMark', @TestHttpClientEarlyDataAutoMark);
   GSuite.Test('HttpClientEarlyDataAutoRetryLive', @TestHttpClientEarlyDataAutoRetryLive);
+  GSuite.Test('AdaptiveObserver', @TestAdaptiveObserver);
+  GSuite.Test('AdaptiveDecidePure', @TestAdaptiveDecidePure);
   if not GSuite.Run then
     Halt(1);
 end.
