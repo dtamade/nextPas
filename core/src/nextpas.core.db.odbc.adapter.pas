@@ -1368,11 +1368,16 @@ end;
 
 procedure ValidateOdbcConnStr(const AConnStr: string);
 var
-  LPairs: TKVPairs;
+  LCount: Integer;
 begin
+  LCount := 0;
   try
-    LPairs := ParseKV(AConnStr);
-    if Length(LPairs) = 0 then
+    ScanKV(AConnStr,
+      procedure(const AKey, AValue: string)
+      begin
+        Inc(LCount);
+      end);
+    if LCount = 0 then
       raise ENextPasError.Create('empty dsn');
   except
     on E: EDbError do raise;
