@@ -17,6 +17,7 @@ uses
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
+  nextpas.core.zip,
   nextpas.core.zip.base,
   nextpas.core.zip.aes,
   nextpas.core.zip.extra;
@@ -30,6 +31,9 @@ begin
   Check(Length(AExpected)=Length(AActual), AMsg+': length '+IntToStr(Length(AExpected))+' vs '+IntToStr(Length(AActual)));
   for LI:=0 to High(AExpected) do Check(AExpected[LI]=AActual[LI], AMsg+': byte '+IntToStr(LI));
 end;
+
+function BytesOfStr(const S: string): TBytes;
+begin SetLength(Result, Length(S)); if Length(S)>0 then Move(Pointer(S)^, Result[0], Length(S)); end;
 
 procedure TestLocalRoundtrip;
 var LUSize, LCSize: UInt64; LStrength: Byte; LMethod: Word; LDesc, LNeeds: Boolean; LExtra: TBytes;
@@ -136,11 +140,35 @@ begin
   LOk:=False; try DecodeLocalExtra(LExtra, LUSize, LCSize, LHasAes, LVer, LVendor, LReal, LStr); except on E: EParseError do LOk:=True; end; Check(LOk,'bad aes size not error');
 end;
 
+procedure TestReserve;
+var W: IZipWriter; R: IZipReader; LI: Integer; LAr1, LAr2, LData: TBytes; LOk: Boolean;
+begin
+  // 0 / 负值边界
+  W:=NewZipWriter; W.Reserve(0); Check(W.EntryCount=0,'reserve 0 keeps empty');
+  LOk:=False; try W.Reserve(-1); except on E: EArgumentError do LOk:=True; end; Check(LOk,'reserve negative raises');
+  W.Reserve(10); W.AddEntry('a.txt', BytesOfStr('hi')); Check(W.EntryCount=1,'reserve 10 then add 1');
+  // 预分配后字节级一致
+  W:=NewZipWriter; W.Reserve(200);
+  for LI:=0 to 199 do begin LData:=BytesOfStr('x'+IntToStr(LI)); W.AddEntry('f/'+IntToStr(LI)+'.bin', LData); end;
+  LAr1:=W.Finish;
+  W:=NewZipWriter;
+  for LI:=0 to 199 do begin LData:=BytesOfStr('x'+IntToStr(LI)); W.AddEntry('f/'+IntToStr(LI)+'.bin', LData); end;
+  LAr2:=W.Finish;
+  Check(Length(LAr1)=Length(LAr2),'reserve byte-identical length');
+  for LI:=0 to High(LAr1) do Check(LAr1[LI]=LAr2[LI],'reserve byte-identical body at '+IntToStr(LI));
+  R:=NewZipReader(LAr1); Check(R.EntryCount=200,'reserve roundtrip count');
+  // Reserve 小于已用容量应为 no-op
+  W:=NewZipWriter; W.Reserve(5); for LI:=0 to 4 do W.AddEntry('a'+IntToStr(LI), nil); W.Reserve(3); Check(W.EntryCount=5,'reserve smaller than used is no-op'); W.AddEntry('b', nil); Check(W.EntryCount=6,'reserve smaller still allows growth');
+  // Finish 后 Reserve 应 fail-closed
+  W:=NewZipWriter; W.AddEntry('a', nil); W.Finish; LOk:=False; try W.Reserve(10); except on E: EInvalidOperationError do LOk:=True; end; Check(LOk,'reserve after finish raises');
+end;
+
 begin
   T:=TTestSuite.Create('nextpas.core.zip.extra');
   T.Test('Local roundtrip', @TestLocalRoundtrip);
   T.Test('Central roundtrip', @TestCentralRoundtrip);
   T.Test('Order and widths', @TestExtraOrderAndWidths);
   T.Test('Malformed fail-closed', @TestMalformed);
+  T.Test('Reserve preallocation', @TestReserve);
   if not T.Run then Halt(1);
 end.

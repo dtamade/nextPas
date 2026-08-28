@@ -173,6 +173,21 @@ begin
   ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
 end;
 
+procedure BenchPackWithReserve(const ACtx: IBenchContext);
+var
+  LW: IZipWriter;
+  LI: Integer;
+  LArc: TBytes;
+begin
+  LW := NewZipWriter;
+  LW.Reserve(BENCH_PACK_COUNT);
+  for LI := 0 to BENCH_PACK_COUNT - 1 do
+    LW.AddEntryDeflate(EntryName(LI), GFiles[LI]);
+  LArc := LW.Finish;
+  BenchBlackBoxBytes(LArc[0], Length(LArc));
+  ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
+end;
+
 procedure BenchStreamOut(const ACtx: IBenchContext);
 var
   LW: IZipWriter;
@@ -411,6 +426,7 @@ begin
     .SetWarmupIters(1)
     .SetMaxIterations(20)
     .Add('zip/pack/200x512B', @BenchPackManyDeflate)
+    .Add('zip/pack-reserve/200x512B', @BenchPackWithReserve)
     .Add('zip/stream-out/200x512B', @BenchStreamOut)
     .Add('zip/open/parse-CD', @BenchOpenParse)
     .Add('zip/extract-all/200x512B', @BenchExtractAll)
