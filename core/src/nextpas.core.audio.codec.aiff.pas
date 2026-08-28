@@ -557,22 +557,37 @@ begin
   Move(FBuffer.Data[FPos * FBuffer.Format.BlockAlign], ABuffer.Data[0], LBytes);
   ABuffer.Format := FBuffer.Format;
   ABuffer.FrameCount := LToCopy;
-  SetLength(ABuffer.Data, LBytes);
   FPos := FPos + LToCopy;
   Result := LToCopy;
 end;
 
 function TMemoryAiffSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
+var
+  LAvail, LToCopy, LBytesNeeded, LBytesToCopy: Integer;
 begin
-  Result := Fill(ABuffer, AFrames);
-  if Result < AFrames then
+  Result := 0;
+  if AFrames <= 0 then Exit(0);
+  LBytesNeeded := AFrames * FBuffer.Format.BlockAlign;
+  if Length(ABuffer.Data) < LBytesNeeded then Exit(0);
+  LAvail := FBuffer.FrameCount - FPos;
+  if LAvail <= 0 then
   begin
-    if Length(ABuffer.Data) < AFrames * FBuffer.Format.BlockAlign then
-      SetLength(ABuffer.Data, AFrames * FBuffer.Format.BlockAlign);
-    FillChar(ABuffer.Data[Result * FBuffer.Format.BlockAlign], (AFrames - Result) * FBuffer.Format.BlockAlign, 0);
+    FillChar(ABuffer.Data[0], LBytesNeeded, 0);
+    ABuffer.Format := FBuffer.Format;
     ABuffer.FrameCount := AFrames;
-    Result := AFrames;
+    Exit(AFrames);
   end;
+  LToCopy := AFrames;
+  if LToCopy > LAvail then LToCopy := LAvail;
+  LBytesToCopy := LToCopy * FBuffer.Format.BlockAlign;
+  if LBytesToCopy > 0 then
+    Move(FBuffer.Data[FPos * FBuffer.Format.BlockAlign], ABuffer.Data[0], LBytesToCopy);
+  if LToCopy < AFrames then
+    FillChar(ABuffer.Data[LBytesToCopy], LBytesNeeded - LBytesToCopy, 0);
+  ABuffer.Format := FBuffer.Format;
+  ABuffer.FrameCount := AFrames;
+  FPos := FPos + LToCopy;
+  Result := AFrames;
 end;
 
 function TMemoryAiffSource.SeekTo(AFrame: UInt64): Boolean;
