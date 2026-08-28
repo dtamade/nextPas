@@ -3,8 +3,8 @@ unit nextpas.core.text.utils;
 {$I nextpas.core.settings.inc}
 
 {** 2026-08-29 验证锚点：PadLeft/PadRight 单分配 loop（规避 FPC inline+字面量 Move 缺陷）、
-    NormalizeLowerTrim 单源（db.factory 唯一复用）、Lower/Upper Byte 区间、CopyStrToBuf Move、
-    StrToIntDef 零分配 inline（去 Trim 拷贝，单遍空白+符号+数字扫描，含 ±2^63 边界）；
+    NormalizeLowerTrim 单源（db.factory 唯一复用）、Lower/Upper Byte 区间、CopyStrToBuf/CStrToStr inline Move、
+    StrToIntDef 零分配 inline（接口+实现双 inline 去 Trim 拷贝，单遍空白+符号+数字扫描，含 ±2^63 边界）；
     配套 bench_kv 10（validate 0 allocs）与 test_text 33 heaptrc0 见 benchmarks.md 验证锚点。 *}
 
 interface
@@ -25,7 +25,7 @@ function NormalizeLowerTrim(const S: string): string; inline;
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string; inline;
 function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string; inline;
 function RepeatString(const S: string; ACount: Integer): string;
-function StrToIntDef(const S: string; ADefault: Int64): Int64;
+function StrToIntDef(const S: string; ADefault: Int64): Int64; inline;
 function BoolToStr(AValue: Boolean; const ATrueStr: string = 'True'; const AFalseStr: string = 'False'): string;
 function StringReplace(const S, OldPattern, NewPattern: string; AReplaceAll: Boolean = True): string;
 function QuotedStr(const S: string): string;
@@ -39,11 +39,11 @@ function SplitString(const S, Delimiters: string): TStringArray; inline;
 
 {** @desc 拷贝字符串到定长字节缓冲(截断至 ABufLen-1,留下 NUL;不抛)。
         返回源串字符数(截断前)。线程安全(无共享状态)。 *}
-function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
+function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer; inline;
 
 {** @desc 读 NUL 结尾缓冲为 string(无 ShortString 255 上限;StrPas 会截断大缓冲)。
         适合 worker 定长缓冲转 string 的场景。 *}
-function CStrToStr(const AP: PAnsiChar): string;
+function CStrToStr(const AP: PAnsiChar): string; inline;
 
 implementation
 
@@ -372,10 +372,10 @@ begin
     Result[Fill] := System.Copy(S, Start, Length(S) - Start + 1);
 end;
 
-function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
+function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer; inline;
 var
   P: PAnsiChar;
-  N: Integer;
+  N, I: Integer;
 begin
   P := @ABuf;
   if ABufLen > 0 then
@@ -384,10 +384,11 @@ begin
   N := Result;
   if N >= ABufLen then N := ABufLen - 1;
   if N > 0 then
-    Move(S[1], P^, N);
+    for I := 1 to N do
+      P[I-1] := S[I];
 end;
 
-function CStrToStr(const AP: PAnsiChar): string;
+function CStrToStr(const AP: PAnsiChar): string; inline;
 var
   N: SizeInt;
 begin
