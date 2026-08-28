@@ -16,6 +16,7 @@ function IsBlank(const S: string): Boolean; inline;
 function LowerCase(const S: string): string; inline;
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
 function UpperCase(const S: string): string; inline;
+function NormalizeLowerTrim(const S: string): string; inline;
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string; inline;
 function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string; inline;
 function RepeatString(const S: string; ACount: Integer): string;
@@ -133,6 +134,23 @@ begin
   SetLength(Result, Length(S));
   for I := 1 to Length(S) do
     Result[I] := Chr(ToUpper(Byte(S[I])));
+end;
+
+function NormalizeLowerTrim(const S: string): string; inline;
+var
+  L, R, I: SizeInt;
+begin
+  L := 1;
+  R := Length(S);
+  while (L <= R) and (S[L] <= ' ') do Inc(L);
+  while (R >= L) and (S[R] <= ' ') do Dec(R);
+  if L > R then Exit('');
+  SetLength(Result, R - L + 1);
+  for I := L to R do
+    if S[I] in ['A'..'Z'] then
+      Result[I - L + 1] := Chr(Ord(S[I]) + 32)
+    else
+      Result[I - L + 1] := S[I];
 end;
 
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string; inline;
@@ -279,13 +297,25 @@ end;
 function SplitString(const S, Delimiters: string): TStringArray; inline;
 var
   I, Start, Count, Fill: Integer;
+  DelimSet: array[0..255] of Boolean;
 begin
   Result := nil;
-  { 连续分隔符不产生空段:SysUtils.SplitString 语义,行拆分等场景依赖 }
+  if (S = '') or (Delimiters = '') then
+  begin
+    if S <> '' then
+    begin
+      SetLength(Result, 1);
+      Result[0] := S;
+    end;
+    Exit;
+  end;
+  FillChar(DelimSet, SizeOf(DelimSet), 0);
+  for I := 1 to Length(Delimiters) do
+    DelimSet[Byte(Delimiters[I])] := True;
   Count := 0;
   Start := 1;
   for I := 1 to Length(S) do
-    if System.Pos(S[I], Delimiters) > 0 then
+    if DelimSet[Byte(S[I])] then
     begin
       if I > Start then
         Inc(Count);
@@ -299,7 +329,7 @@ begin
   Fill := 0;
   Start := 1;
   for I := 1 to Length(S) do
-    if System.Pos(S[I], Delimiters) > 0 then
+    if DelimSet[Byte(S[I])] then
     begin
       if I > Start then
       begin

@@ -21,7 +21,8 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.err,
   nextpas.core.db.redis.base,
-  nextpas.core.db.redis.resp;
+  nextpas.core.db.redis.resp,
+  nextpas.core.db.redis.adapter;
 
 var
   T: TTestSuite;
@@ -425,6 +426,30 @@ begin
   Expect('', decUnknown, 'classify empty word');
 end;
 
+procedure TestRedisAddrParseFail;
+begin
+  ExpectEDbError(
+    procedure
+    begin
+      ConnectRedis(':6379');
+    end, 'empty host');
+  ExpectEDbError(
+    procedure
+    begin
+      ConnectRedis('127.0.0.1:0');
+    end, 'invalid port 0');
+  ExpectEDbError(
+    procedure
+    begin
+      ConnectRedis('127.0.0.1/16');
+    end, 'db index out of range');
+  ExpectEDbError(
+    procedure
+    begin
+      ConnectRedis('127.0.0.1/-1');
+    end, 'negative db index');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.db.redis.base');
   T.Test('kind ordinal pin', @TestKindOrdinal);
@@ -438,5 +463,6 @@ begin
   T.Test('error type', @TestErrorType);
   T.Test('info field value', @TestInfoFieldValue);
   T.Test('classify redis table', @TestClassifyRedisTable);
+  T.Test('redis addr parse fail', @TestRedisAddrParseFail);
   if not T.Run then Halt(1);
 end.
