@@ -1,9 +1,9 @@
-# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S10)
+# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S11)
 
 **模块**: `nextpas.core.net.async.tlspas` (L2 async, pure Pascal TLS 1.3)
-**状态**: Implemented — S10 持久化收口：文件重放存储 + 原子落盘 + 崩溃安全，默认 1-RTT 零开销，early_data 显式幂等启用，服务端 LRU64/10min 内存 + 文件双层
+**状态**: Implemented — S11 集群化收口：KV 重放适配 + 统一工厂 + 本地+远端二级，默认 1-RTT 零开销，early_data 显式幂等启用，服务端 内存/文件/KV 三形态可配
 **RFC**: 8446 §2.3 / §4.2.10 / §4.6.1 / Appendix E.5, 8446 §8
-**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → S10-file (本提交)
+**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv (本提交)
 
 ---
 
@@ -18,18 +18,19 @@
 - 不支持 0-RTT 客户端证书 (`post_handshake_auth` 之前的 early_data 禁止证书)。
 - 不在 v1 支持跨 SNI / 跨 cipher suite 的 PSK 复用。
 
-## 2. 落地状态（截至 S10）
+## 2. 落地状态（截至 S11）
 
 - `TAsyncTlsPasSessionCache` LRU4：按 host:port 聚合，最老逐出，`SecureZero` 清理，`TryPeek` 高→低跳过期；`TTlsPasResumptionSession` 新增 `HasMaxEarlyData/MaxEarlyDataSize`，`FeedPostHandshake` 从 `NewSessionTicket` 完整捕获（含 `max_early_data` 解析，`0` 视为不可 early，`>16384` 视为不可 early）。
 - HRR 可观测：`ITlsPasHRRInfo.WasHRR` 与 `ITlsPasResumeInfo.WasResumed` 通过 `TTlsPasStream` 暴露；`PSK` 与 `HRR` binder 重算已覆盖（`cookie` 插入于 `0x0029` 之前，`message_hash 0xFE` 合成）。
-- 0-RTT 派生：`TlsPasTryDeriveEarlyDataSecrets` 薄封装 `keyschedule.TryDeriveTLS13ClientEarlyDataSecrets`，`TlsPasClearEarlyDataSecrets`，双套件单测覆盖 `AES_128/SHA256` / `AES_256/SHA384`，`bench 14.8µs/19.4µs`。
+- 0-RTT 派生：`TlsPasTryDeriveEarlyDataSecrets` 薄封装 `keyschedule.TryDeriveTLS13ClientEarlyDataSecrets`，`TlsPasClearEarlyDataSecrets`，双套件单测覆盖 `AES_128/SHA256` / `AES_256/SHA384`，`bench 14.3/19.2µs`。
 - 扩展装配：`AllowEarlyData` + `HasMaxEarlyData` 时 `BuildTLS13ClientHelloHandshakeWithComputedPSKBinder(..., AllowEarlyData:=True)` 附加 `early_data(0x002A, 0 字节)` 于 `pre_shared_key` 之前（`PSK last`，binder 覆盖不变），`TlsPasHasEarlyData` 复用 `parser.HasEarlyData`。
 - 数据面：`TAsyncTlsPasClientOptions.EarlyData: TBytes` 幂等负载，`AllocHsCtx` 内 `HKDF` 派生 `early 密钥` → `EarlySealer`，`TlsPasHsStep` 紧跟 `CH` 之后以 `early 密钥` 封装 `application_data` 单记录同刷；`EE HasEarlyData` 接受/拒绝分支与 `HRR` 互斥均 `fail-closed`，`TTlsPasStream` 同时实现 `ITlsPasEarlyDataInfo.GetWasEarlyDataAccepted`，活体 `EarlyDataLiveRejectFallback` 已验证拒绝回退仍保 1-RTT。
-- S7 完整度：`EndOfEarlyData` (`0x05` 4B) 在 `EarlyDataAccepted` 时纳入 Finished 转录哈希并与 Finished 同记录单刷，`BuildTLS13EndOfEarlyDataHandshake`/`TryParse` 单测与 `FinishedWithEOEDDiffers` 合成自证已覆盖，`bench EOED 228ns`。
-- S8 策略与重放：`TlsPasIsEarlyDataAllowed` 纯函数零分支准入（`HasMaxEarlyData && 0<Size<=16384 && 0<Len<=Size && Len<=16384`）供 `AllocHsCtx` 与上层复用；`TlsPasComputeEarlyDataFingerprint:=SHA256(ticket||early)` 32B 稳定指纹；`TAsyncTlsPasReplayCache` LRU64 窗口 10min、Mutex 保护、`CheckAndAdd` 命中即重放、过期清扫与 `SecureZero`，`bench Fingerprint 2.88µs / ReplayCache 1.01µs`。
-- S9 可观测与可注入：`ITlsPasReplayStore` 接口化 + `TAsyncTlsPasReplayStats{ Hits/Misses/Evictions/Expiries/Current }` + `TlsPasIsEarlyDataReplayed` 帮手；`TAsyncTlsPasReplayCache` 改 `TInterfacedObject` 实现接口，`Clear` 重置 Stats，`CheckAndAdd` 维护 Hits/Misses/Evictions/Expiries；`TAsyncTlsPasClientOptions.ReplayStore` 可选注入（nil 零开销），命中则 `AllocHsCtx` 本地回退为 1-RTT（防同进程误重放），`bench Store 1.06µs (≈零开销) / GetStats 55ns / IsReplayed 3.49µs`。
-- S10 持久化：`TAsyncTlsPasReplayFileStore` 实现 `ITlsPasReplayStore`，`Create(APath, Capacity, Window)` 时 `LoadFromFile`（40B/条：32B hash + 8B time，过期丢弃，损坏忽略），`CheckAndAdd/Clear` 后 `SaveToFile` 原子 `tmp+rename`，`Destroy` best-effort flush，空路径退化为内存；`bench FileStore 240µs/op`（含落盘，早期数据单连接一次可接受），内存路径仍 1µs。
-- `bench_tlspas_hrr` 16 项：`MessageHash 5.98/4.55µs Patch 4.10/1.72µs P256 1.79ms Transcript 2.79µs EarlyData 14.8/19.4µs EOED 228ns Policy 2.2ns Fingerprint 2.88µs Replay 1.01µs Store 1.06µs Stats 55ns IsReplayed 3.49µs FileStore 240µs`，`P384 836ms` 实验性单采明示。
+- S7 完整度：`EndOfEarlyData` (`0x05` 4B) 在 `EarlyDataAccepted` 时纳入 Finished 转录哈希并与 Finished 同记录单刷，`BuildTLS13EndOfEarlyDataHandshake`/`TryParse` 单测与 `FinishedWithEOEDDiffers` 合成自证已覆盖，`bench EOED 227ns`。
+- S8 策略与重放：`TlsPasIsEarlyDataAllowed` 纯函数零分支准入（`HasMaxEarlyData && 0<Size<=16384 && 0<Len<=Size && Len<=16384`）供 `AllocHsCtx` 与上层复用；`TlsPasComputeEarlyDataFingerprint:=SHA256(ticket||early)` 32B 稳定指纹；`TAsyncTlsPasReplayCache` LRU64 窗口 10min、Mutex 保护、`CheckAndAdd` 命中即重放、过期清扫与 `SecureZero`，`bench Fingerprint 2.75/2.88µs / ReplayCache 0.82/1.01µs`。
+- S9 可观测与可注入：`ITlsPasReplayStore` 接口化 + `TAsyncTlsPasReplayStats{ Hits/Misses/Evictions/Expiries/Current }` + `TlsPasIsEarlyDataReplayed` 帮手；`TAsyncTlsPasReplayCache` 改 `TInterfacedObject` 实现接口，`Clear` 重置 Stats，`CheckAndAdd` 维护 Hits/Misses/Evictions/Expiries；`TAsyncTlsPasClientOptions.ReplayStore` 可选注入（nil 零开销），命中则 `AllocHsCtx` 本地回退为 1-RTT（防同进程误重放），`bench Store 0.84/1.06µs (≈零开销) / GetStats 35/55ns / IsReplayed 3.29/3.49µs`。
+- S10 持久化：`TAsyncTlsPasReplayFileStore` 实现 `ITlsPasReplayStore`，`Create(APath, Capacity, Window)` 时 `LoadFromFile`（40B/条：32B hash + 8B time，过期丢弃，损坏忽略），`CheckAndAdd/Clear` 后 `SaveToFile` 原子 `tmp+rename`，`Destroy` best-effort flush，空路径退化为内存；`bench FileStore 195/240µs/op`（含落盘，早期数据单连接一次可接受），内存路径仍 1µs。
+- S11 集群化：`ITlsPasKvStore` 抽象 + `TAsyncTlsPasMemoryKvStore` 内存实现（Mutex + 过期清扫，TTL=Window）+ `TAsyncTlsPasReplayKvStore` 二级（本地 LRU64 + 远端 KV，本地命中即重放，否则查 KV 命中回填本地并判重放，否则双写；`FingerprintToKey:= 'replay:' + hex(32B)`；`Factory.CreateMemory/File/Kv` 三形态统一入口；`bench KvStore 82µs/op`（含 hex + 双查 + KV 写），本地仍 0.8µs。
+- `bench_tlspas_hrr` 17 项：`MessageHash 2.62/3.50µs Patch 2.16/1.21µs P256 1.81ms Transcript 2.70µs EarlyData 14.3/19.2µs EOED 227ns Policy 2.2ns Fingerprint 2.75µs Replay 0.82µs Store 0.84µs Stats 35ns IsReplayed 3.29µs FileStore 195µs KvStore 82µs`，`P384 1.2s` 实验性单采明示。
 
 ## 3. 威胁模型与重放约束
 

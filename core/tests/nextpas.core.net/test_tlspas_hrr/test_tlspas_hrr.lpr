@@ -731,6 +731,52 @@ begin
   if FileExists(LPath) then DeleteFile(LPath);
 end;
 
+procedure TestReplayKvStore;
+var Kv: ITlsPasKvStore; Store1, Store2: ITlsPasReplayStore; F1, F2: TBytes; IsReplay: Boolean;
+begin
+  Kv := TAsyncTlsPasMemoryKvStore.Create as ITlsPasKvStore;
+  Store1 := TAsyncTlsPasReplayKvStore.Create(Kv, 8, 600000) as ITlsPasReplayStore;
+  SetLength(F1, 32); FillChar(F1[0], 32, $11);
+  SetLength(F2, 32); FillChar(F2[0], 32, $22);
+  Check(not Store1.CheckAndAdd(F1, IsReplay) or not IsReplay, 'kv first not replay');
+  Check(Store1.Count=1, 'kv count 1');
+  Check(Store1.CheckAndAdd(F1, IsReplay) and IsReplay, 'kv local hit');
+  // second store shares same Kv backend -> cross-instance hit
+  Store2 := TAsyncTlsPasReplayKvStore.Create(Kv, 8, 600000) as ITlsPasReplayStore;
+  Check(Store2.CheckAndAdd(F1, IsReplay) and IsReplay, 'kv cross hit');
+  Check(not Store2.CheckAndAdd(F2, IsReplay) or not IsReplay, 'kv F2 not replay');
+  Check(Store2.Count=2, 'kv2 count 2 (F1 cross + F2)');
+  Store1.Clear;
+  Check(Store1.Count=0, 'kv clear local');
+  // Kv cleared too -> Store2 local still has F1, so hit; fresh store should miss
+  Check(Store2.CheckAndAdd(F1, IsReplay) and IsReplay, 'after clear still local hit');
+  // fresh instance after clear should miss
+  Store2 := TAsyncTlsPasReplayKvStore.Create(Kv, 8, 600000) as ITlsPasReplayStore;
+  Check(not Store2.CheckAndAdd(F1, IsReplay) or not IsReplay, 'fresh after clear miss');
+end;
+
+procedure TestReplayFactory;
+var S: ITlsPasReplayStore; Kv: ITlsPasKvStore; F1: TBytes; IsReplay: Boolean; LPath: string;
+begin
+  S := TAsyncTlsPasReplayStoreFactory.CreateMemory(4, 600000);
+  SetLength(F1, 32); FillChar(F1[0], 32, $33);
+  Check(not S.CheckAndAdd(F1, IsReplay) or not IsReplay, 'factory memory miss');
+  Check(S.Count=1, 'factory memory 1');
+  LPath := '/tmp/tlspas_factory_file.dat';
+  if FileExists(LPath) then DeleteFile(LPath);
+  S := TAsyncTlsPasReplayStoreFactory.CreateFile(LPath, 4, 600000);
+  Check(S.Count=0, 'factory file empty');
+  Check(not S.CheckAndAdd(F1, IsReplay) or not IsReplay, 'factory file miss');
+  S := nil;
+  if FileExists(LPath) then DeleteFile(LPath);
+  if FileExists(LPath + '.tmp') then DeleteFile(LPath + '.tmp');
+  Kv := TAsyncTlsPasMemoryKvStore.Create as ITlsPasKvStore;
+  S := TAsyncTlsPasReplayStoreFactory.CreateKv(Kv, 4, 600000);
+  Check(S.Count=0, 'factory kv empty');
+  Check(not S.CheckAndAdd(F1, IsReplay) or not IsReplay, 'factory kv miss');
+  Check(S.Count=1, 'factory kv 1');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -765,6 +811,8 @@ begin
   GSuite.Test('ReplayStoreIntegration', @TestReplayStoreIntegration);
   GSuite.Test('ReplayFileStorePersist', @TestReplayFileStorePersist);
   GSuite.Test('ReplayFileStoreCorruption', @TestReplayFileStoreCorruption);
+  GSuite.Test('ReplayKvStore', @TestReplayKvStore);
+  GSuite.Test('ReplayFactory', @TestReplayFactory);
   if not GSuite.Run then
     Halt(1);
 end.

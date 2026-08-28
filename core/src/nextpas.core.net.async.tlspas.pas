@@ -199,6 +199,55 @@ type
     function GetStats: TAsyncTlsPasReplayStats;
   end;
 
+  { KV 抽象：供 ReplayKvStore 集群共享，内存实现自带，Redis/外部可注入同接口。 }
+  ITlsPasKvStore = interface
+    ['{A3B4C5D6-E7F8-4A9B-8C0D-1E2F3A4B5C6D}']
+    function Get(const AKey: string; out AValue: TBytes): Boolean;
+    procedure SetKV(const AKey: string; const AValue: TBytes; ATTLMs: Int64);
+    procedure Delete(const AKey: string);
+    procedure Clear;
+  end;
+
+  TAsyncTlsPasMemoryKvStore = class(TInterfacedObject, ITlsPasKvStore)
+  private
+    FMutex: TPlatformMutex;
+    FKeys: array of string;
+    FValues: array of TBytes;
+    FExpiries: array of Int64;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Get(const AKey: string; out AValue: TBytes): Boolean;
+    procedure SetKV(const AKey: string; const AValue: TBytes; ATTLMs: Int64);
+    procedure Delete(const AKey: string);
+    procedure Clear;
+  end;
+
+  { KV 重放存储：本地 LRU64 + 远端 KV 二级，集群共享。本地命中即重放；本地未命中查 KV，KV 命中则回填本地并判重放；均未命中则两级写入。 }
+  TAsyncTlsPasReplayKvStore = class(TInterfacedObject, ITlsPasReplayStore)
+  private
+    FLocal: TAsyncTlsPasReplayCache;
+    FKv: ITlsPasKvStore;
+    FWindowMs: Int64;
+    FMutex: TPlatformMutex;
+    function FingerprintToKey(const AFingerprint: TBytes): string;
+  public
+    constructor Create(const AKv: ITlsPasKvStore; ACapacity: Integer = 64; AWindowMs: Int64 = 600000);
+    destructor Destroy; override;
+    function CheckAndAdd(const AFingerprint: TBytes; out IsReplay: Boolean): Boolean;
+    procedure Clear;
+    function Count: Integer;
+    function GetStats: TAsyncTlsPasReplayStats;
+  end;
+
+  { 工厂：统一创建内存/文件/KV 三形态，零分支注入。 }
+  TAsyncTlsPasReplayStoreFactory = class
+  public
+    class function CreateMemory(ACapacity: Integer = 64; AWindowMs: Int64 = 600000): ITlsPasReplayStore; static;
+    class function CreateFile(const APath: string; ACapacity: Integer = 64; AWindowMs: Int64 = 600000): ITlsPasReplayStore; static;
+    class function CreateKv(const AKv: ITlsPasKvStore; ACapacity: Integer = 64; AWindowMs: Int64 = 600000): ITlsPasReplayStore; static;
+  end;
+
   { 去重判定：指纹入窗口，命中则重放。封装指纹计算与 Store.CheckAndAdd，nil Store 视为不重放。 }
 function TlsPasIsEarlyDataReplayed(const AStore: ITlsPasReplayStore;
   const ATicketIdentity, AEarlyData: TBytes): Boolean;
@@ -1179,6 +1228,239 @@ end;
 function TAsyncTlsPasReplayFileStore.GetStats: TAsyncTlsPasReplayStats;
 begin
   Result := FInner.GetStats;
+end;
+
+{ ======== 内存 KV 存储 ======== }
+
+constructor TAsyncTlsPasMemoryKvStore.Create;
+begin
+  inherited Create;
+  if platform_mutex_init(FMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: memory kv mutex init');
+end;
+
+destructor TAsyncTlsPasMemoryKvStore.Destroy;
+var I: Integer;
+begin
+  platform_mutex_destroy(FMutex);
+  for I := 0 to High(FValues) do
+    SecureZeroBytes(FValues[I]);
+  inherited Destroy;
+end;
+
+function TAsyncTlsPasMemoryKvStore.Get(const AKey: string; out AValue: TBytes): Boolean;
+var I: Integer; LNow: Int64;
+begin
+  Result := False;
+  SetLength(AValue, 0);
+  LNow := TlsPasMonoMs;
+  platform_mutex_lock(FMutex);
+  try
+    I := 0;
+    while I < Length(FKeys) do
+    begin
+      if FExpiries[I] <= LNow then
+      begin
+        SecureZeroBytes(FValues[I]);
+        FKeys[I] := FKeys[High(FKeys)];
+        FValues[I] := FValues[High(FValues)];
+        FExpiries[I] := FExpiries[High(FExpiries)];
+        SetLength(FKeys, Length(FKeys) - 1);
+        SetLength(FValues, Length(FValues) - 1);
+        SetLength(FExpiries, Length(FExpiries) - 1);
+      end else Inc(I);
+    end;
+    for I := 0 to High(FKeys) do
+      if FKeys[I] = AKey then
+      begin
+        AValue := Copy(FValues[I]);
+        Result := True;
+        Exit;
+      end;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasMemoryKvStore.SetKV(const AKey: string; const AValue: TBytes; ATTLMs: Int64);
+var I: Integer; LExp: Int64;
+begin
+  if ATTLMs <= 0 then ATTLMs := 600000;
+  LExp := TlsPasMonoMs + ATTLMs;
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FKeys) do
+      if FKeys[I] = AKey then
+      begin
+        SecureZeroBytes(FValues[I]);
+        FValues[I] := Copy(AValue);
+        FExpiries[I] := LExp;
+        Exit;
+      end;
+    SetLength(FKeys, Length(FKeys) + 1);
+    SetLength(FValues, Length(FValues) + 1);
+    SetLength(FExpiries, Length(FExpiries) + 1);
+    FKeys[High(FKeys)] := AKey;
+    FValues[High(FValues)] := Copy(AValue);
+    FExpiries[High(FExpiries)] := LExp;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasMemoryKvStore.Delete(const AKey: string);
+var I, J: Integer;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FKeys) do
+      if FKeys[I] = AKey then
+      begin
+        SecureZeroBytes(FValues[I]);
+        for J := I to High(FKeys) - 1 do
+        begin
+          FKeys[J] := FKeys[J+1];
+          FValues[J] := FValues[J+1];
+          FExpiries[J] := FExpiries[J+1];
+        end;
+        SetLength(FKeys, Length(FKeys)-1);
+        SetLength(FValues, Length(FValues)-1);
+        SetLength(FExpiries, Length(FExpiries)-1);
+        Exit;
+      end;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasMemoryKvStore.Clear;
+var I: Integer;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FValues) do
+      SecureZeroBytes(FValues[I]);
+    SetLength(FKeys, 0);
+    SetLength(FValues, 0);
+    SetLength(FExpiries, 0);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+{ ======== KV 重放存储（本地 LRU + 远端 KV） ======== }
+
+constructor TAsyncTlsPasReplayKvStore.Create(const AKv: ITlsPasKvStore; ACapacity: Integer; AWindowMs: Int64);
+begin
+  inherited Create;
+  if not Assigned(AKv) then
+    raise EInvalidOperationError.Create('tlspas: kv store nil');
+  FKv := AKv;
+  FWindowMs := AWindowMs;
+  if FWindowMs <= 0 then FWindowMs := 600000;
+  FLocal := TAsyncTlsPasReplayCache.Create(ACapacity, FWindowMs);
+  if platform_mutex_init(FMutex) <> 0 then
+  begin
+    FLocal.Free;
+    raise EInvalidOperationError.Create('tlspas: kv replay mutex init');
+  end;
+end;
+
+destructor TAsyncTlsPasReplayKvStore.Destroy;
+begin
+  platform_mutex_destroy(FMutex);
+  FLocal.Free;
+  inherited Destroy;
+end;
+
+function TAsyncTlsPasReplayKvStore.FingerprintToKey(const AFingerprint: TBytes): string;
+const HexChars: array[0..15] of Char = '0123456789abcdef';
+var I: Integer;
+begin
+  Result := 'replay:';
+  SetLength(Result, 7 + Length(AFingerprint)*2);
+  for I := 0 to High(AFingerprint) do
+  begin
+    Result[8 + I*2] := HexChars[(AFingerprint[I] shr 4) and $F];
+    Result[8 + I*2 + 1] := HexChars[AFingerprint[I] and $F];
+  end;
+end;
+
+function TAsyncTlsPasReplayKvStore.CheckAndAdd(const AFingerprint: TBytes; out IsReplay: Boolean): Boolean;
+var LKey: string; LVal: TBytes; LLocalReplay: Boolean;
+begin
+  Result := False;
+  IsReplay := False;
+  if Length(AFingerprint) <> 32 then Exit;
+  LKey := FingerprintToKey(AFingerprint);
+  platform_mutex_lock(FMutex);
+  try
+    // 先查本地
+    if FLocal.CheckAndAdd(AFingerprint, LLocalReplay) then
+    begin
+      if LLocalReplay then
+      begin
+        IsReplay := True;
+        Result := True;
+        Exit;
+      end;
+      // 本地未命中已插入，查远端是否已有（跨进程/重启重放）
+      if FKv.Get(LKey, LVal) then
+      begin
+        // 远端已有 -> 视为重放（本地已插入但应判重放）
+        IsReplay := True;
+        Result := True;
+        Exit;
+      end;
+      // 均未命中 -> 写入远端
+      SetLength(LVal, 1);
+      LVal[0] := 1;
+      FKv.SetKV(LKey, LVal, FWindowMs);
+      IsReplay := False;
+      Result := True;
+    end else
+      Result := False;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasReplayKvStore.Clear;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    FLocal.Clear;
+    FKv.Clear;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasReplayKvStore.Count: Integer;
+begin
+  Result := FLocal.Count;
+end;
+
+function TAsyncTlsPasReplayKvStore.GetStats: TAsyncTlsPasReplayStats;
+begin
+  Result := FLocal.GetStats;
+end;
+
+{ ======== 工厂 ======== }
+
+class function TAsyncTlsPasReplayStoreFactory.CreateMemory(ACapacity: Integer; AWindowMs: Int64): ITlsPasReplayStore;
+begin
+  Result := TAsyncTlsPasReplayCache.Create(ACapacity, AWindowMs) as ITlsPasReplayStore;
+end;
+
+class function TAsyncTlsPasReplayStoreFactory.CreateFile(const APath: string; ACapacity: Integer; AWindowMs: Int64): ITlsPasReplayStore;
+begin
+  Result := TAsyncTlsPasReplayFileStore.Create(APath, ACapacity, AWindowMs) as ITlsPasReplayStore;
+end;
+
+class function TAsyncTlsPasReplayStoreFactory.CreateKv(const AKv: ITlsPasKvStore; ACapacity: Integer; AWindowMs: Int64): ITlsPasReplayStore;
+begin
+  Result := TAsyncTlsPasReplayKvStore.Create(AKv, ACapacity, AWindowMs) as ITlsPasReplayStore;
 end;
 
 { 从 ABuf 组一条完整记录：1=取出（从缓冲移除），0=需要更多字节，
