@@ -48,6 +48,7 @@ type
     FSortedIdxRevIgnoreCase: array of Integer;
     FIgnoreCaseBuilt: Boolean;
     procedure BuildNameMaps;
+    { 单核排序：AUseLower 选 FLowerNames/Name，ARev 选 CompareReversed，去重 4 份 QuickSort }
     procedure BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
     procedure BuildSortedIdx;
     procedure BuildSortedIdxRev;
@@ -642,6 +643,7 @@ end;
 
 procedure TSevenZReaderImpl.BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
 var LI: Integer;
+  { 单核去重：inline Cmp 按 AUseLower/ARev 分发，避免 4 份 QuickSort 拷贝 }
   procedure QuickSort(AL, AR: Integer);
   var LI2, LJ, LPivot: Integer; LTmp: Integer;
     function Cmp(const A, B: Integer): Integer; inline;
@@ -894,6 +896,7 @@ function SameIgnoreCase(const A, B: string): Boolean; inline;
 var LI: Integer;
 begin
   if Length(A) <> Length(B) then Exit(False);
+  { ascii 路径零分配：IsAsciiString 8 字节并行预检 + AsciiLowerChar 逐字符；非 ascii 单次 LowerCase }
   if IsAsciiString(A) and IsAsciiString(B) then
   begin
     for LI := 1 to Length(A) do
