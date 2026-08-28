@@ -2,7 +2,7 @@
 
 **状态**：Design S0（与 [CONTRACT.md](CONTRACT.md) 0.1 冻结草案同批）
 **Owner**：core-window lane
-**最后更新**：2026-08-28（S5 8 后端全接入：wasm/android/uikit attach 实装，12 门禁）
+**最后更新**：2026-08-28（S5 8 后端全接入：wasm/android/uikit attach 实装，13 门禁，去消息化 + Host/PumpOnce + O(1) 计数 + 热路径 inline 377µs）
 **对标基准**: Rust `winit` / `tao` · GLFW / SDL2 Window · Flutter View /
 Android `Activity.getWindow()` / iOS `UIWindow`
 
@@ -232,8 +232,14 @@ Android/iOS 没有"创建 top-level window"的自由：应用窗口归宿主
 ## 7.1 非阻塞泵与宿主线程亲和（M-band）
 
 - `IWindowHost.HostResized/HostScaleChanged/HostCloseRequested`：attach 后端（wasm/android/uikit/fake）由宿主（JS/Activity/UIViewController）驱动的强类型入口，不经消息号；**线程亲和**：非主线程调用时经 `Dispatcher.Post` marshal 回主线程再 `we*` 分发，稳定性与 `Close` 同纪律。
-- `WindowPumpOnce / WindowPumpAll`：factory 暴露的非阻塞单步迭代（fake 全泵 + sdl 轮询 + wasm/android/uikit 各自环形队列 Drain），供游戏 `tick` / directui 失效循环在自有 `while not Quit do begin PumpOnce; Render; end` 中复用，不阻塞 `RunLoop`。
+- `WindowPumpOnce / WindowPumpAll`：factory 暴露的非阻塞单步迭代（fake 全泵 + sdl 轮询 + wasm/android/uikit 各自环形队列 Drain），供游戏 `tick` / directui 失效循环在自有 `while not Quit do begin PumpOnce; Render; end` 中复用，不阻塞 `RunLoop`。**零活窗快速路径**：`WindowPumpOnce` 首行 `O(1)` 活窗计数聚合早退，零窗时零锁零探测。
 - 桌面阻塞后端（gtk/win32/cocoa）的 `RunLoop` 仍为拥有者；`PumpOnce` 在其上有宿主时为 best-effort，不承诺完整等价——符合 `deferred-LI` 的渐进立项原则。
+
+### 7.2 热路径与诊断（M-band perf）
+
+- `FakeLiveWindowCount` 为 `GFakeLiveCount` 的 `inline` 读，`Destroy`/`RealClose`/`Create` 三处维护，零遍历；`WindowPumpOnce` 零活窗路径与全量路径على同一口径，避免空转锁竞争。
+- `GetWidth/GetHeight/GetScaleFactor/NativeHandle/GetDispatcher/IsClosed` 与 `TFakeDispatcher.IsOnMainThread/PostRef/PumpOnce` 等高频访问一律 `inline`，`CheckWindowOptions` 以 `CreateFmt` 携带越界值，错误信息富化不增分支。
+- `WindowBackendDiagnostics: string` 遍历 `BACKENDS[8]` 以 `Probe()+sonames` 逐行输出，供 `EWindowBackendUnavailable` 失败现场直连探测真相；bench 基线 `PostSingle/1000 = 377µs`（32cap 环，`O(1)` + inline 后）。
 
 ---
 

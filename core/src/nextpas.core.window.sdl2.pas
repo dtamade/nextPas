@@ -293,7 +293,7 @@ type
     function IsOnMainThread: Boolean; inline;
   protected
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     procedure Show;
     procedure Hide;
     function IsVisible: Boolean;
@@ -301,8 +301,8 @@ type
     procedure SetTitle(const ATitle: string);
     function GetTitle: string;
     procedure SetBounds(AWidth, AHeight: Integer);
-    function GetWidth: Integer;
-    function GetHeight: Integer;
+    function GetWidth: Integer; inline;
+    function GetHeight: Integer; inline;
     procedure SetResizable(AResizable: Boolean);
     procedure Maximize;
     procedure Unmaximize;
@@ -482,7 +482,7 @@ begin
   DoDispatch(E);
 end;
 
-function TWindowSdl2.GetWidth: Integer;
+function TWindowSdl2.GetWidth: Integer; inline;
 var
   W, H: Int32;
 begin
@@ -491,7 +491,7 @@ begin
   Result := W;
 end;
 
-function TWindowSdl2.GetHeight: Integer;
+function TWindowSdl2.GetHeight: Integer; inline;
 var
   W, H: Int32;
 begin

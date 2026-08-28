@@ -53,6 +53,8 @@ type
     function put_IsZoomControlEnabled(enabled: BOOL): HRESULT; stdcall;
     function get_IsBuiltInErrorPageEnabled(out enabled: BOOL): HRESULT; stdcall;
     function put_IsBuiltInErrorPageEnabled(enabled: BOOL): HRESULT; stdcall;
+    function get_UserAgent(out userAgent: PWSTR): HRESULT; stdcall;
+    function put_UserAgent(userAgent: PCWSTR): HRESULT; stdcall;
   end;
   ICoreWebView2 = interface(IUnknown)
     ['{76ECEACB-0462-4D94-AC83-45A67937797C}']

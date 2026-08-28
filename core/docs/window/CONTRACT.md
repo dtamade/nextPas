@@ -4,7 +4,7 @@
 **层级**：L2 家族（依赖 L0-L1：base/errors/platform.dl 缝；被 L3 的
 `gpu` / `directui` / `webview` 与外部 `game888` 复用）
 **Owner**：core-window lane
-**最后更新**：2026-08-28（S5 8 后端全量，mobile/wasm attach 实装，12 门禁）
+**最后更新**：2026-08-28（S5 8 后端全量，mobile/wasm attach 实装，13 门禁，去消息化 + Host/PumpOnce + O(1) 计数 + 热路径 inline）
 **版本**：0.1（Design S0 冻结草案——源码未落地；本文件冻结单元布局、类型/
 接口签名、线程模型、不变量、错误族、Deferred 与门禁。S1 首个 family 落地时
 若需偏离，必须在本文件留勘误行并过对应契约测试，不允许静默分叉。）
