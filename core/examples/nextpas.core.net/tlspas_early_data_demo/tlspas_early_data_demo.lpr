@@ -168,6 +168,42 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure DemoPrometheusRegistryAndConfig;
+var Reg: TAsyncTlsPasPrometheusRegistry; Store1, Store2: ITlsPasReplayStore; Obs1, Obs2: TAsyncTlsPasAdaptiveObserver;
+  Id, Early: TBytes; Sess: TTlsPasResumptionSession; C: TTlsPasAdaptiveLimitConfig; P: string; LPath: string; F: TextFile;
+begin
+  WriteLn('--- Prometheus Registry + Config (S26) ---');
+  Reg := TAsyncTlsPasPrometheusRegistry.Create;
+  Store1 := TAsyncTlsPasReplayStoreFactory.CreateMemory(8, 600000);
+  Store2 := TAsyncTlsPasReplayStoreFactory.CreateMemory(8, 600000);
+  Obs1 := TAsyncTlsPasAdaptiveObserver.Create(Store1);
+  Obs2 := TAsyncTlsPasAdaptiveObserver.Create(Store2);
+  Sess := Default(TTlsPasResumptionSession);
+  Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+  SetLength(Id, 4); FillChar(Id[0], 4, $11);
+  SetLength(Early, 10); FillChar(Early[0], 10, $22);
+  Obs1.Decide(Id, Early, Sess, True);
+  Early[0] := $33; Obs2.Decide(Id, Early, Sess, True);
+  Reg.Register('api', Obs1);
+  Reg.Register('internal', Obs2);
+  P := Reg.FormatAllMetrics;
+  WriteLn('Registry 2 observers lines=', Length(P), ' contains api=', Pos('observer="api"', P)>0, ' internal=', Pos('observer="internal"', P)>0);
+  WriteLn('Http registry prefix custom: ', System.Copy(HttpPrometheusRegistryText(Reg, 'custom'), 1, 60), '...');
+  WriteLn('With labels single: ', System.Copy(TlsPasFormatPrometheusMetricsWithLabels(Obs1.GetAdaptiveMetrics, 'nextpas_tlspas', 'observer="api"'), 1, 80), '...');
+  // Config file demo
+  LPath := '/tmp/tlspas_demo_cfg_s26.conf';
+  AssignFile(F, LPath); Rewrite(F);
+  WriteLn(F, 'base=4096'); WriteLn(F, 'threshold=0.2'); CloseFile(F);
+  if TlsPasTryLoadAdaptiveConfigFromFile(LPath, C) then
+    WriteLn('File config base=', C.BaseLimit, ' threshold=', C.RejectRateThreshold:0:2);
+  DeleteFile(LPath);
+  // Env demo: fallback to Default when not set
+  C := TlsPasAdaptiveConfigFromEnvOrDefault;
+  WriteLn('EnvOrDefault base=', C.BaseLimit, ' (default 16384 when env empty)');
+  WriteLn('Http config wrappers: HttpAdaptiveConfigFromEnv base=', HttpAdaptiveConfigFromEnv.BaseLimit);
+  Reg.Free; Obs1.Free; Obs2.Free;
+end;
+
 procedure DemoAdaptiveMetricsAndPressure;
 var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession;
   Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; I: Integer; M: TTlsPasAdaptiveMetrics; LReq: IHttpRequest;
@@ -216,8 +252,8 @@ begin
 end;
 
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S25 final) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus');
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S26 final) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -235,5 +271,7 @@ begin
   WriteLn;
   DemoAdaptivePrometheus;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S25 prometheus exposition self-proof.');
+  DemoPrometheusRegistryAndConfig;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S26 registry+config self-proof.');
 end.

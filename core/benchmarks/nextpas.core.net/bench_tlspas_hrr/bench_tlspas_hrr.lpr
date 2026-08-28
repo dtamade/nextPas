@@ -409,6 +409,26 @@ begin
 end;
 
 var
+  GPromRegistry: TAsyncTlsPasPrometheusRegistry;
+
+procedure BenchPrometheusRegistry(aIters: Int64);
+var I: Int64; F: string;
+begin
+  for I := 1 to aIters do
+    F := GPromRegistry.FormatAllMetrics;
+end;
+
+procedure BenchAdaptiveConfigLoad(aIters: Int64);
+var I: Int64; C: TTlsPasAdaptiveLimitConfig; LOk: Boolean;
+begin
+  for I := 1 to aIters do
+  begin
+    LOk := TlsPasTryLoadAdaptiveConfigFromEnv(C);
+    if not LOk then C := DefaultTlsPasAdaptiveLimitConfig;
+  end;
+end;
+
+var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
 
@@ -499,6 +519,9 @@ begin
   GAdaptiveServerStats := Default(TTlsPasServerStats);
   GAdaptiveReplayStats := Default(TAsyncTlsPasReplayStats);
   GAdaptiveObserver := TAsyncTlsPasAdaptiveObserver.Create(GReplayStore, GAdaptiveConfig);
+  GPromRegistry := TAsyncTlsPasPrometheusRegistry.Create;
+  GPromRegistry.Register('api', GAdaptiveObserver);
+  GPromRegistry.Register('internal', GAdaptiveObserver);
   // HTTP middleware fixtures
   GHttpReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   (GHttpReqEarly as IHttpRequestWithEarlyData).SetWasEarlyData(True);
@@ -565,6 +588,8 @@ begin
     .AddLoop('AdaptiveLogLine', @BenchAdaptiveLogLine)
     .AddLoop('AdaptivePressure', @BenchAdaptivePressure)
     .AddLoop('AdaptivePrometheus', @BenchAdaptivePrometheus)
+    .AddLoop('PrometheusRegistry 2 observers', @BenchPrometheusRegistry)
+    .AddLoop('AdaptiveConfig FromEnv', @BenchAdaptiveConfigLoad)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
