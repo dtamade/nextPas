@@ -708,6 +708,21 @@ begin
   Check(LTotal = Length(LData), 'raw stream roundtrip size');
 end;
 
+procedure TestCompressCapacityHelpers;
+begin
+  CheckEqual(Int64(200), Int64(CompressNextCapacity(100, 1000)), 'next 100->200');
+  CheckEqual(Int64(1000), Int64(CompressNextCapacity(600, 1000)), 'next 600->1000 capped');
+  CheckEqual(Int64(0), Int64(CompressNextCapacity(1000, 1000)), 'next at max->0');
+  CheckEqual(Int64(0), Int64(CompressNextCapacity(1001, 1000)), 'next over max->0');
+  CheckEqual(Int64(400), Int64(CompressInitialDecompressCapacity(100, 1000)), 'init decomp 100->400');
+  CheckEqual(Int64(1000), Int64(CompressInitialDecompressCapacity(300, 1000)), 'init decomp 300*4=1200 capped to 1000');
+  CheckEqual(Int64(0), Int64(CompressInitialDecompressCapacity(0, 500)), 'init decomp 0->0');
+  CheckEqual(Int64(4000), Int64(CompressInitialInflateCapacity(1000, 10000)), 'init inflate 1000*4=4000');
+  CheckEqual(Int64(8000), Int64(CompressInitialInflateCapacity(1000, 10000, 8000)), 'init inflate hint 8000 overrides');
+  CheckEqual(Int64(64), Int64(CompressInitialInflateCapacity(10, 10000)), 'init inflate floor 64');
+  CheckEqual(Int64(10000), Int64(CompressInitialInflateCapacity(5000, 10000)), 'init inflate 5000*4=20000 capped to 10000');
+end;
+
 { RAW DEFLATE 有界读端：超上限在读过程中即 raise，不等 EOF }
 procedure TestRawDeflateStreamBounded;
 var
@@ -777,5 +792,6 @@ begin
   T.Test('Double close', @TestDoubleClose);
   T.Test('Raw deflate stream roundtrip', @TestRawDeflateStreamRoundtrip);
   T.Test('Raw deflate stream bounded', @TestRawDeflateStreamBounded);
+  T.Test('Compress capacity helpers', @TestCompressCapacityHelpers);
   if not T.Run then Halt(1);
 end.

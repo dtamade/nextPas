@@ -694,9 +694,7 @@ begin
     end;
     Exit(nil);
   end;
-  LCapacity := SizeUInt(Length(AData)) * 4;
-  if (LCapacity < SizeUInt(Length(AData))) or (LCapacity > AMaxOutputSize) then
-    LCapacity := AMaxOutputSize;
+  LCapacity := CompressInitialDecompressCapacity(SizeUInt(Length(AData)), AMaxOutputSize);
   SetLength(Result, LCapacity);
 
   FillChar(LStream, SizeOf(LStream), 0);
@@ -727,12 +725,9 @@ begin
         Break;
       if LOutLen >= LCapacity then
       begin
-        if LCapacity >= AMaxOutputSize then
+        LCapacity := CompressNextCapacity(LCapacity, AMaxOutputSize);
+        if LCapacity = 0 then
           raise EIOError.Create('deflate: decompressed size exceeds limit');
-        if LCapacity > AMaxOutputSize div 2 then
-          LCapacity := AMaxOutputSize
-        else
-          LCapacity := LCapacity * 2;
         SetLength(Result, LCapacity);
       end
       else if LRet = Z_BUF_ERROR then
@@ -845,22 +840,15 @@ begin
   if inflateInit2(LStream, -15) <> Z_OK then
     raise EIOError.Create('raw inflateInit2 failed');
   try
-    LCapacity := SizeUInt(Length(AData)) * 4;
-    if LCapacity < 64 then
-      LCapacity := 64;
-    if LCapacity > AMaxOutputSize then
-      LCapacity := AMaxOutputSize;
+    LCapacity := CompressInitialInflateCapacity(SizeUInt(Length(AData)), AMaxOutputSize);
     SetLength(Result, LCapacity);
     LOutLen := 0;
     repeat
       if LOutLen >= LCapacity then
       begin
-        if LCapacity >= AMaxOutputSize then
+        LCapacity := CompressNextCapacity(LCapacity, AMaxOutputSize);
+        if LCapacity = 0 then
           raise EIOError.Create('raw inflate: decompressed size exceeds limit');
-        if LCapacity > AMaxOutputSize div 2 then
-          LCapacity := AMaxOutputSize
-        else
-          LCapacity := LCapacity * 2;
         SetLength(Result, LCapacity);
       end;
       LStream.next_out := @Result[LOutLen];
@@ -992,25 +980,15 @@ begin
   if inflateInit2(LStream, -15) <> Z_OK then
     raise EIOError.Create('raw inflateInit2 failed');
   try
-    { 初始容量：调用方提示（如容器声明的未压缩尺寸）优先，避免反复扩容 }
-    LCapacity := SizeUInt(Length(AData)) * 4;
-    if ACapacityHint > LCapacity then
-      LCapacity := ACapacityHint;
-    if LCapacity < 64 then
-      LCapacity := 64;
-    if LCapacity > AMaxOutputSize then
-      LCapacity := AMaxOutputSize;
+    LCapacity := CompressInitialInflateCapacity(SizeUInt(Length(AData)), AMaxOutputSize, ACapacityHint);
     SetLength(Result, LCapacity);
     LOutLen := 0;
     repeat
       if LOutLen >= LCapacity then
       begin
-        if LCapacity >= AMaxOutputSize then
+        LCapacity := CompressNextCapacity(LCapacity, AMaxOutputSize);
+        if LCapacity = 0 then
           raise EIOError.Create('raw inflate: decompressed size exceeds limit');
-        if LCapacity > AMaxOutputSize div 2 then
-          LCapacity := AMaxOutputSize
-        else
-          LCapacity := LCapacity * 2;
         SetLength(Result, LCapacity);
       end;
       LStream.next_out := @Result[LOutLen];

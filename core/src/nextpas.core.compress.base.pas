@@ -25,6 +25,9 @@ const
   GZIP_MAX_DECOMPRESS_BYTES = 32 * 1024 * 1024;
 
 function LevelToZlib(const ALevel: TCompressionLevel): Int32; inline;
+function CompressNextCapacity(const ACurrent, AMaxOutputSize: SizeUInt): SizeUInt; inline;
+function CompressInitialDecompressCapacity(const AInputLen, AMaxOutputSize: SizeUInt): SizeUInt; inline;
+function CompressInitialInflateCapacity(const AInputLen, AMaxOutputSize: SizeUInt; const AHint: SizeUInt = 0): SizeUInt; inline;
 
 implementation
 
@@ -37,6 +40,34 @@ begin
   otherwise
     Result := Z_DEFAULT_COMPRESSION;
   end;
+end;
+
+function CompressNextCapacity(const ACurrent, AMaxOutputSize: SizeUInt): SizeUInt;
+begin
+  if ACurrent >= AMaxOutputSize then
+    Exit(0);
+  if ACurrent > AMaxOutputSize div 2 then
+    Result := AMaxOutputSize
+  else
+    Result := ACurrent shl 1;
+end;
+
+function CompressInitialDecompressCapacity(const AInputLen, AMaxOutputSize: SizeUInt): SizeUInt;
+begin
+  Result := AInputLen shl 2;
+  if (Result < AInputLen) or (Result > AMaxOutputSize) then
+    Result := AMaxOutputSize;
+end;
+
+function CompressInitialInflateCapacity(const AInputLen, AMaxOutputSize: SizeUInt; const AHint: SizeUInt): SizeUInt;
+begin
+  Result := AInputLen shl 2;
+  if AHint > Result then
+    Result := AHint;
+  if Result < 64 then
+    Result := 64;
+  if Result > AMaxOutputSize then
+    Result := AMaxOutputSize;
 end;
 
 end.
