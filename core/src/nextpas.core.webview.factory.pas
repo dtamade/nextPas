@@ -171,11 +171,16 @@ begin
       WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
     else if WebView2LiveWindowCount > 0 then
       Win32ShellRunMainLoop { Win32 消息泵（wine 真窗口可交互）}
+    else if WkLiveWindowCount > 0 then
+      begin
+        // Wk 桩：无 NSRunLoop 阻塞，短睡让出 CPU 等待 Close（Darwin 真实现接 NSApplication run）
+        platform_thread_sleep_ms(10);
+      end
     else if FakeLiveWindowCount > 0 then
       FakePumpAll
     else
       Break;
-    if (GtkLiveWindowCount = 0) and (WebView2LiveWindowCount = 0) and (FakeLiveWindowCount = 0) then
+    if (GtkLiveWindowCount = 0) and (WebView2LiveWindowCount = 0) and (WkLiveWindowCount = 0) and (FakeLiveWindowCount = 0) then
       Break;
     platform_thread_yield;
   end;
@@ -189,6 +194,7 @@ begin
     WinShellQuitMainLoop;
   if WebView2LiveWindowCount > 0 then
     Win32ShellQuitMainLoop;
+  // Wk 桩无需显式 quit（Darwin 真实现为 NSApplication stop），仅置标志位即可
 end;
 
 { ---- Builder ---- }
