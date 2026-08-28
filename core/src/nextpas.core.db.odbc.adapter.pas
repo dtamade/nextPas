@@ -84,6 +84,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.text.format,
+  nextpas.core.text.kv,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.tx,
@@ -1365,6 +1366,23 @@ begin
   Result := ConnectOdbc(ADsn, TDbConnectOptions.Default);
 end;
 
+procedure ValidateOdbcConnStr(const AConnStr: string);
+var
+  LPairs: TKVPairs;
+begin
+  try
+    LPairs := ParseKV(AConnStr);
+    if Length(LPairs) = 0 then
+      raise ENextPasError.Create('empty dsn');
+  except
+    on E: EDbError do raise;
+    on E: ENextPasError do
+      raise EDbError.CreateSimple(dbkOdbc, E.Message);
+    on E: Exception do
+      raise EDbError.CreateSimple(dbkOdbc, E.Message);
+  end;
+end;
+
 function ConnectOdbc(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection;
 var
@@ -1373,9 +1391,10 @@ var
   LOut: array[0..C_OUT_CONN_STR - 1] of AnsiChar;
   LOutLen: SmallInt;
 begin
-  OdbcEnsureLoaded;
   if Trim(ADsn) = '' then
     raise EDbError.CreateSimple(dbkOdbc, 'empty dsn');
+  ValidateOdbcConnStr(ADsn);
+  OdbcEnsureLoaded;
   LEnv := nil;
   LDbc := nil;
   LRc := sql_allocHandle(SQL_HANDLE_ENV, nil, LEnv);

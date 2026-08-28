@@ -8,10 +8,11 @@ program test_db_odbc_adapter;
     3 占位符槽位计划：顺序 ? 直通、?N 显式编号、字面量/双引号/
       方括号标识符/行注释/块注释内 ? 不计（纯离线）
     4 空 DSN fail-fast（不触库）
-    5 负连接归一（真库管理器路径）：bogus DSN → 统一 EDbError，
+    5 词法 fail-fast：malformed/unterminated 经 text.kv 离线拦截（4b/4c，不触库）
+    6 负连接归一（真库管理器路径）：bogus DSN → 统一 EDbError，
       Backend=dbkOdbc、SqlState=IM*、Category=decConnection；
       循环多轮验证工厂异常路径句柄零泄漏（heaptrc 兜底）
-    6 能力降级矩阵自洽（真库）：SupportsSavepoints=False ⇔ 无
+    7 能力降级矩阵自洽（真库）：SupportsSavepoints=False ⇔ 无
       IDbSavepointControl、BatchExecutor=True ⇔ 接口在（B1 互证）
    live 段需真实 ODBC 数据源（NEXTPAS_ODBC_TEST_CONN），缺省静默跳过；
    含 CRUD/事务回滚/批执行/>4KB 文本截断重取往返。
@@ -288,6 +289,73 @@ begin
   Check(LRaised, 'empty dsn raises');
 end;
 
+procedure TestMalformedConnStrFailFast;
+var
+  LRaised: Boolean;
+begin
+  // missing '=' or empty key -> ParseKV malformed, should fail before touching driver manager
+  LRaised := False;
+  try
+    ConnectOdbc('Driver');
+    Check(False, 'missing = must raise');
+  except
+    on E: EDbError do
+    begin
+      LRaised := True;
+      Check(E.Backend = dbkOdbc, 'malformed: backend dbkOdbc');
+      Check(Pos('malformed', E.Message) > 0, 'malformed: msg contains malformed');
+    end;
+  end;
+  Check(LRaised, 'malformed raises');
+
+  LRaised := False;
+  try
+    ConnectOdbc('=value');
+    Check(False, 'empty key must raise');
+  except
+    on E: EDbError do
+    begin
+      LRaised := True;
+      Check(Pos('malformed', E.Message) > 0, 'empty key msg');
+    end;
+  end;
+  Check(LRaised, 'empty key raises');
+end;
+
+procedure TestUnterminatedBraceFailFast;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ConnectOdbc('Driver={unterminated');
+    Check(False, 'unterminated brace must raise');
+  except
+    on E: EDbError do
+    begin
+      LRaised := True;
+      Check(E.Backend = dbkOdbc, 'unterminated: backend dbkOdbc');
+      Check(Pos('unterminated', E.Message) > 0, 'unterminated: msg');
+      Check(Pos('Driver', E.Message) > 0, 'unterminated: preserves key');
+    end;
+  end;
+  Check(LRaised, 'unterminated brace raises');
+
+  // also single-quote unterminated
+  LRaised := False;
+  try
+    ConnectOdbc('PWD=''unterminated');
+    Check(False, 'unterminated single must raise');
+  except
+    on E: EDbError do
+    begin
+      LRaised := True;
+      Check(Pos('unterminated', E.Message) > 0, 'single unterminated');
+    end;
+  end;
+  Check(LRaised, 'single unterminated raises');
+end;
+
 { ===== 5 ===== }
 
 procedure TestNegativeConnectNormalized;
@@ -467,6 +535,8 @@ begin
   T.Test('classify ex flavor', @TestClassifyOdbcExFlavor);
   T.Test('placeholder plan', @TestPlaceholderPlan);
   T.Test('empty dsn fail-fast', @TestEmptyDsnFailFast);
+  T.Test('malformed connstr fail-fast', @TestMalformedConnStrFailFast);
+  T.Test('unterminated brace fail-fast', @TestUnterminatedBraceFailFast);
   T.Test('negative connect normalized', @TestNegativeConnectNormalized);
   T.Test('live roundtrip and capabilities', @TestLiveRoundtripAndCapabilities);
   if not T.Run then Halt(1);
