@@ -397,19 +397,28 @@ var
   但请求可精确归属发起视图——webkit_uri_scheme_request_get_web_view
   对回 GLiveWindows 的 FView 指针即得所属窗口，多窗口资产命名空间
   硬隔离。service worker 等无视图请求回落"最新活跃窗口"。 }
-function LiveWindowForView(AView: Pointer): TGtkWebview;
+function LiveWindowForView(AView: Pointer): TGtkWebview; inline;
 var
   I: Integer;
 begin
   if AView <> nil then
+  begin
+    { 单窗快路径：95% 场景 single-window 零扫描，牺牲 2 次比较换线性遍历 }
+    if Length(GLiveWindows) = 1 then
+    begin
+      if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = AView) then
+        Exit(GLiveWindows[0]);
+      Exit(nil);
+    end;
     for I := 0 to High(GLiveWindows) do
       if (not GLiveWindows[I].FClosed) and
          (GLiveWindows[I].FView = AView) then
         Exit(GLiveWindows[I]);
+  end;
   Result := nil;
 end;
 
-function LatestLiveWebview: TGtkWebview;
+function LatestLiveWebview: TGtkWebview; inline;
 var
   I: Integer;
 begin
@@ -421,7 +430,7 @@ end;
 
 { finish_error 的 GError 所有权移交 WebKit（源码 adoptGRef 模式），
   调用方不 free；误判会在 live 门禁以 double-free 可见地暴露 }
-procedure SchemeFinishNotFound(ARequest: Pointer);
+procedure SchemeFinishNotFound(ARequest: Pointer); inline;
 begin
   if GSchemeErrQuark = 0 then
     GSchemeErrQuark := G_quark_from_static_string('nextpas-webview');
@@ -447,7 +456,7 @@ begin
     SchemeFinishNotFound(ARequest);
     Exit;
   end;
-  LPath := StrPas(WEBKIT_uri_scheme_request_get_path(ARequest));
+  LPath := NormalizeWebviewAssetPath(StrPas(WEBKIT_uri_scheme_request_get_path(ARequest)));
   if LSelf.FAssetsIntf.TryResolve(LPath, LBytes, LMime) then
   begin
     GtkTrace('scheme hit ' + LPath + ' (' + IntToStr(Length(LBytes)) + 'B)');
