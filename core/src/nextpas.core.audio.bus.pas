@@ -207,6 +207,7 @@ begin
   Result := 0;
   if AFrames <= 0 then Exit(0);
   if Length(FBuses) = 0 then Exit(0);
+  if AudioBytesForFrames(FBuses[0].GetFormat, AFrames)>High(Integer) then Exit(0);
   LNeeded := AFrames * FBuses[0].GetFormat.BlockAlign;
   if Length(ABuffer.Data) < LNeeded then Exit(0);
   AudioSilentFill(ABuffer, FBuses[0].GetFormat, AFrames);

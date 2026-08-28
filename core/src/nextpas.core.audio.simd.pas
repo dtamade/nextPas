@@ -67,9 +67,19 @@ begin
     GCaps.HasAVX2 := LHasAVX2 and LHasSSE2;
     if not GCaps.HasSSE2 then GCaps.HasSSE2 := True; // x86_64 baseline, honesty fallback
 {$ELSE}
+{$IFDEF CPUAARCH64}
+    GCaps.HasSSE2 := False;
+    GCaps.HasAVX2 := False;
+    GCaps.HasNEON := True; // aarch64 baseline NEON
+{$ELSEIF defined(CPUARM)}
+    GCaps.HasSSE2 := False;
+    GCaps.HasAVX2 := False;
+    GCaps.HasNEON := False; // arm32 NEON optional, conservative
+{$ELSE}
     GCaps.HasSSE2 := True;
     GCaps.HasAVX2 := False;
     GCaps.HasNEON := False;
+{$ENDIF}
 {$ENDIF}
     GInit := True;
   end;
