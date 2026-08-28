@@ -23,6 +23,10 @@ procedure SimdClampF32(AData: PSingle; ACount: Integer; ALo, AHi: Single);
 
 implementation
 
+{$IFDEF CPUX86_64}
+  {$ASMMODE INTEL}
+{$ENDIF}
+
 var
   GCaps: TSimdCaps;
   GInit: Boolean;
@@ -41,10 +45,38 @@ end;
 
 procedure SimdAddF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single);
 var I, N4: Integer;
+{$IFDEF CPUX86_64}
+var LIter: Integer;
+{$ENDIF}
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  // 4-wide unroll — compiler vectorizes to SSE2/AVX on -O2, zero call overhead
   N4 := ACount and not 3;
+{$IFDEF CPUX86_64}
+  if N4 > 0 then
+  begin
+    LIter := N4 shr 2;
+    asm
+      mov eax, dword ptr [LIter]
+      mov rcx, qword ptr [ASrc]
+      mov rdx, qword ptr [ADst]
+      movss xmm2, dword ptr [AGain]
+      shufps xmm2, xmm2, 0
+    @Add4Loop:
+      movups xmm0, dqword ptr [rdx]
+      movups xmm1, dqword ptr [rcx]
+      mulps xmm1, xmm2
+      addps xmm0, xmm1
+      movups dqword ptr [rdx], xmm0
+      add rcx, 16
+      add rdx, 16
+      dec eax
+      jnz @Add4Loop
+    end;
+  end;
+  I := N4;
+  while I < ACount do begin ADst[I] := ADst[I] + ASrc[I] * AGain; Inc(I); end;
+  Exit;
+{$ENDIF}
   I := 0;
   while I < N4 do
   begin
@@ -63,9 +95,36 @@ end;
 
 procedure SimdMulF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single);
 var I, N4: Integer;
+{$IFDEF CPUX86_64}
+var LIter: Integer;
+{$ENDIF}
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
   N4 := ACount and not 3;
+{$IFDEF CPUX86_64}
+  if N4 > 0 then
+  begin
+    LIter := N4 shr 2;
+    asm
+      mov eax, dword ptr [LIter]
+      mov rcx, qword ptr [ASrc]
+      mov rdx, qword ptr [ADst]
+      movss xmm2, dword ptr [AGain]
+      shufps xmm2, xmm2, 0
+    @Mul4Loop:
+      movups xmm1, dqword ptr [rcx]
+      mulps xmm1, xmm2
+      movups dqword ptr [rdx], xmm1
+      add rcx, 16
+      add rdx, 16
+      dec eax
+      jnz @Mul4Loop
+    end;
+  end;
+  I := N4;
+  while I < ACount do begin ADst[I] := ASrc[I] * AGain; Inc(I); end;
+  Exit;
+{$ENDIF}
   I := 0;
   while I < N4 do
   begin
@@ -131,9 +190,37 @@ end;
 
 procedure SimdClampF32(AData: PSingle; ACount: Integer; ALo, AHi: Single);
 var I, N4: Integer; V0, V1, V2, V3: Single;
+{$IFDEF CPUX86_64}
+var LIter: Integer;
+{$ENDIF}
 begin
   if (AData = nil) or (ACount <= 0) then Exit;
   N4 := ACount and not 3;
+{$IFDEF CPUX86_64}
+  if N4 > 0 then
+  begin
+    LIter := N4 shr 2;
+    asm
+      mov eax, dword ptr [LIter]
+      mov rdx, qword ptr [AData]
+      movss xmm2, dword ptr [ALo]
+      shufps xmm2, xmm2, 0
+      movss xmm3, dword ptr [AHi]
+      shufps xmm3, xmm3, 0
+    @Clamp4Loop:
+      movups xmm0, dqword ptr [rdx]
+      maxps xmm0, xmm2
+      minps xmm0, xmm3
+      movups dqword ptr [rdx], xmm0
+      add rdx, 16
+      dec eax
+      jnz @Clamp4Loop
+    end;
+  end;
+  I := N4;
+  while I < ACount do begin V0:=AData[I]; if V0<ALo then V0:=ALo else if V0>AHi then V0:=AHi; AData[I]:=V0; Inc(I); end;
+  Exit;
+{$ENDIF}
   I := 0;
   while I < N4 do
   begin
