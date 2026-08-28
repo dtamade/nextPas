@@ -237,7 +237,7 @@ function TryParseHttpDate(const ADate: string; out AUnix: Int64): Boolean;
 begin
   Result := nextpas.core.time.httpdate.TryParseHttpDate(ADate, AUnix);
 end;
-function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string; inline;
 begin
   Result := VfsETagStrong(ASize, AModTime);
 end;
