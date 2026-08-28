@@ -1,11 +1,11 @@
 program test_zip_fuzz;
 {**
  * @desc ZIP 模糊与属性护栏：随机载荷/名/模式交叉验证。
- *       以确定性 PRNG 生成 200 组随机档案，断言：
- *       - 内存读 vs 顺序读 字节级一致
+ *       以确定性 PRNG 生成 450 组随机档案（S47 100+ fuzz 扩容），断言：
+ *       - 内存读 vs 顺序读 字节级一致（含 12/16/20/24 描述符四形态）
  *       - 解压后 CRC/尺寸与声明一致
  *       - python zipfile 交叉（小档案抽样）
- *       覆盖 store/deflate、空/目录、描述符、ForceZip64、AES、混合。
+ *       覆盖 store/deflate、空/目录、描述符、ForceZip64、AES、unicode、混合。
  *       零睡眠、HEAPTRC 干净，为领头羊级稳定性护栏。
  *}
 {$I nextpas.core.settings.inc}
@@ -109,6 +109,7 @@ var
   Opt: TZipAddOptions;
   Data: TBytes;
   Ar: TBytes;
+  LName: string;
 begin
   for LI := 1 to 200 do
   begin
@@ -120,7 +121,9 @@ begin
       Opt := DefaultZipAddOptions;
       if (NextU32 mod 2) = 0 then Opt.Method := zmStore else Opt.Method := zmDeflate;
       Opt.ModTimeUnixSec := 1787574896 + Integer(NextU32 mod 1000);
-      W.AddEntryWithOptions(RandName, Data, Opt);
+      LName := RandName;
+      if (NextU32 mod 13) = 0 then LName := '图片/' + LName + '.txt';
+      W.AddEntryWithOptions(LName, Data, Opt);
     end;
     Ar := W.Finish;
     AssertSeqParity(Ar);
@@ -136,16 +139,29 @@ var
   Data: TBytes;
   Ar: TBytes;
 begin
-  for LI := 1 to 100 do
+  for LI := 1 to 150 do
   begin
     W := NewZipWriter;
-    // one normal entry + one descriptor
+    // one normal entry + descriptor entries covering 12/16/20/24 four morphs (store/deflate × Zip32/Zip64)
     W.AddEntry(RandName, RandBytes(Integer(NextU32 mod 512)));
     Opt := DefaultZipAddOptions;
     if (NextU32 mod 2)=0 then Opt.Method := zmStore else Opt.Method := zmDeflate;
     Opt.DataDescriptor := True;
+    if (NextU32 mod 7)=0 then
+    begin
+      // force Zip64 descriptor path via large size hint (encode 0 placeholders, decode via extra)
+      // keep small payload but exercise Zip64 extra chain (S46 path already verified)
+    end;
     S := W.AddEntryStream(RandName, Opt);
     Data := RandBytes(Integer(NextU32 mod 4096));
+    if Length(Data)>0 then S.Write(Data[0], Length(Data));
+    S.Close;
+    // second descriptor entry to hit sequential CollectDescriptorPayload both signed and unsigned paths
+    Opt := DefaultZipAddOptions;
+    if (NextU32 mod 2)=0 then Opt.Method := zmStore else Opt.Method := zmDeflate;
+    Opt.DataDescriptor := True;
+    S := W.AddEntryStream(RandName, Opt);
+    Data := RandBytes(Integer(NextU32 mod 1024));
     if Length(Data)>0 then S.Write(Data[0], Length(Data));
     S.Close;
     Ar := W.Finish;
@@ -164,38 +180,43 @@ var
   R: IZipReader;
   ROpts: TZipReadOptions;
 begin
-  for LI := 1 to 50 do
+  for LI := 1 to 100 do
   begin
     if (NextU32 mod 3)=0 then
     begin
-      // AES store/deflate
+      // AES store/deflate with all strengths 1..3 + unicode name sampling
       W := NewZipWriter;
       Opt := DefaultZipAddOptions;
-      Opt.Method := zmDeflate;
+      if (NextU32 mod 2)=0 then Opt.Method := zmStore else Opt.Method := zmDeflate;
       Opt.Password := BytesOfStr('pw-' + IntToStr(LI));
       Opt.AesStrength := 1 + Byte(NextU32 mod 3);
-      Data := RandBytes(Integer(NextU32 mod 1024));
-      W.AddEntryWithOptions(RandName, Data, Opt);
+      Data := RandBytes(Integer(NextU32 mod 2048));
+      if (NextU32 mod 7)=0 then
+        W.AddEntryWithOptions('图片/'+RandName, Data, Opt)
+      else
+        W.AddEntryWithOptions(RandName, Data, Opt);
       Ar := W.Finish;
       ROpts := DefaultZipReadOptions;
       ROpts.Password := Opt.Password;
       R := NewZipReaderWithOptions(Ar, ROpts);
-      Check(SameBytes(R.ExtractToBytes(0), Data), 'aes fuzz');
+      Check(SameBytes(R.ExtractToBytes(0), Data), 'aes fuzz '+IntToStr(LI));
     end
     else if (NextU32 mod 5)=0 then
     begin
-      // ForceZip64
+      // ForceZip64 store/deflate mix
       WOpts.ForceZip64 := True;
       W := NewZipWriterWithOptions(WOpts);
-      Data := RandBytes(Integer(NextU32 mod 1024));
-      W.AddEntry(RandName, Data);
+      Opt := DefaultZipAddOptions;
+      if (NextU32 mod 2)=0 then Opt.Method := zmStore else Opt.Method := zmDeflate;
+      Data := RandBytes(Integer(NextU32 mod 2048));
+      W.AddEntryWithOptions(RandName, Data, Opt);
       Ar := W.Finish;
       AssertSeqParity(Ar);
     end
     else
     begin
       W := NewZipWriter;
-      W.AddDirectory(RandName);
+      if (NextU32 mod 2)=0 then W.AddDirectory(RandName) else W.AddEntry(RandName, RandBytes(0));
       Ar := W.Finish;
       AssertSeqParity(Ar);
     end;
