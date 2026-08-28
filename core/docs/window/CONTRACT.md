@@ -24,7 +24,7 @@ Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 | `nextpas.core.window` | 门面 | 聚合 re-export 全部公共 API | S1 |
 | `nextpas.core.gtk3/4/2.base` / `.ffi` / `.loader` | L2 独立家族 | GTK 2/3/4 ABI+动态装载（dlopen 多 soname，BindOpt，可选符号）；window 仅为消费者（伦理扭转，单向依赖） | S2-扭转 |
 | `nextpas.core.qt5pas/qt` | L2 独立家族 | Qt 绑定（qt5pas 复用 libQt5Pas.so；qt 为自包装 libnextpas-qt.so 多版本 shim，deferred） | qt |
-| `nextpas.core.window.gtk3/4/2` | 后端适配 | Linux GTK 2/3/4 薄适配（共享 `window.gtk.impl.inc`，族显式 `WindowGtk4IsAvailable` 等；`window.gtk` 为 deprecated shim→gtk3） | S2+扭转 |
+| `nextpas.core.window.gtk3/4/2` | 后端适配 | Linux GTK 2/3/4 薄适配（共享 `window.gtk.impl.inc`，族显式 `WindowGtk4IsAvailable` 等；`window.gtk` 为 deprecated shim→gtk3；`gtk3` 另暴露 `WindowGtkRaw*` 12 项低阶壳供 L3 webview 单源复用） | S2+扭转+F4 |
 | `nextpas.core.window.gtk.impl.inc` | 共享实现 | 消除 gtk3/4/2 三拷贝重复（dispatcher+信号+窗口类同一份，族以 `TGtkLoadInfo/TryLoadGtk` 注入） | polish |
 | `nextpas.core.window.sdl2.ffi/.loader/.sdl2` | 后端 | SDL2 `SDL_Window`，game888 未来底座 | S3 |
 | `nextpas.core.window.win32.*` | 后端 | `CreateWindowEx` + `WM_*` | S4 |

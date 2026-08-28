@@ -12,9 +12,9 @@
 |------|----------|---------------|------|
 | **性能** | `bench_dispatcher` 7 项在 CI 三机 (Linux/Win/mac) 方差 <5%，`PostSingle <400µs/1000`、`ZeroPump <20ns`、`LiveCount <500µs` 基线固化，热路径全 inline 且零分配 | Linux 单机 365/271/443µs 已固化，5×中位方差 5-7% 收敛，未跨机 | **F3 已固化 Linux，残差 Win/mac compile-only** |
 | **高级感** | `base/intf/loader/门面` 四件套零循环依赖；`TWindowQueue`/`TWindowLiveRegistry`/`TWindowDispatcherBase` 三共享设施覆盖 8 后端；`gtk.impl.inc` 719 行共享 + 77/108 薄包装，`factory BACKENDS[8]` 单点真相 | queue/live/gtk共享已完成，dispatcher base 审计结论“保持独立” | **F1 已收口** |
-| **复用度** | `directui` 与 `game888` 各有一个可运行的 `PumpOnce` 消费示例（不阻塞 RunLoop），`webview` 已切 `window.gtk3` 单源 | 直接示例已落地（demo_directui/game_pump），webview F4 阶段 1 纪律对齐 | **F2 已实证，F4 阶段 1 纪律收口** |
-| **稳定性** | 13 门禁在三机均绿，`heaptrc 0` 泄漏，`host` 线程亲和 marshal，`INV-3/4/5 + INV-RTL` 全拦 | Linux 13 门全绿（8+5），heaptrc 0，host 已 marshal | **F3 Linux 全绿，阶段 2 补三机** |
-| **完整性** | `CONTRACT §2` 8 后端 + 3 家族 (`gtk2/3/4/qt`) 诚实表可审，`Deferred` 登记簿无占位，`factory Probe/Create/Live/Run/Quit` 五件套与 `WindowBackendDiagnostics` 诊断链完整 | 8 后端 + 家族 + Diagnostics 全落地，webview 纪律 1.0 收口 | **F4 阶段 1 完整，阶段 2 单源化 1.1** |
+| **复用度** | `directui` 与 `game888` 各有一个可运行的 `PumpOnce` 消费示例（不阻塞 RunLoop），`webview` 已切 `window.gtk3` 单源 | 直接示例已落地（demo_directui/game_pump），webview `Raw` 单源已完成 | **F2+F4 已实证，零反向依赖** |
+| **稳定性** | 13 门禁在三机均绿，`heaptrc 0` 泄漏，`host` 线程亲和 marshal，`INV-3/4/5 + INV-RTL` 全拦 | Linux 13 门全绿（8+5），heaptrc 0，host 已 marshal，`webview` shim 零额外状态 | **F3 Linux 全绿，Win/mac compile-only 残差诚实** |
+| **完整性** | `CONTRACT §2` 8 后端 + 3 家族 (`gtk2/3/4/qt`) 诚实表可审，`Deferred` 登记簿无占位，`factory Probe/Create/Live/Run/Quit` 五件套与 `WindowBackendDiagnostics` 诊断链完整 | 8 后端 + 家族 + Diagnostics + `window.gtk3 Raw` 全落地，`webview.gtk.win` 零逻辑 | **F4 完整，1.0 诚实表可审** |
 
 **Truth Level 目标**：`focused-runtime → ci-matrix`（`core-module-registry.md` 一行升级）。
 
@@ -43,7 +43,7 @@
 
 ## 3. 终局分波 (F 波 = Final)
 
-### F1 — 硬化雕刻 (Hardening · 1 周) — **当前 NEXT**
+### F1 — 硬化雕刻 (Hardening · 1 周) — **已完成**
 
 | 目标 | 任务 | 产出 | 验证 |
 |------|------|------|------|
@@ -75,16 +75,16 @@
 
 **Gate**：`focused-runtime` 13 门在三机均绿，`bench_dispatcher` 三机各跑 1 次落盘；`source-contracts + hygiene` 三机一致。
 
-### F4 — Webview 抽取收口 (Extraction Close · 1 周，与 webview Wave 2/3 协同) — **阶段 1 已落地**
+### F4 — Webview 抽取收口 (Extraction Close · 1 周，与 webview Wave 2/3 协同) — **已完成（双阶段）**
 
 | 现状 | 动作 | 产出 | 状态 |
 |------|------|------|------|
-| `webview.gtk.win` 与 `window.gtk` 双份共存 | `webview.gtk` 改 `CreateWindowGtk`/`WindowGtkIsAvailable` 消费 `window`，删除 `webview.gtk.win` 冗余实现；`gpu.gl` 同理若有窗口缝 | `core/src/nextpas.core.webview.gtk.pas` 单源，`window` 单点变更即影响 `webview` | **阶段 2 待 window 暴露 raw shell API** |
-| `webview.gtk.win` RTL 违纪 | `Math` → `nextpas.core.math`，`PAnsiChar(AnsiString)` → `StrToAnsi`/`nextpas.core.text.ansi` 纪律对齐 | 与 `window.gtk.impl.inc` 同纪律，`INV-RTL` pass | **阶段 1 已落地 (2026-08-28)** |
-| `webview` Wave 2/3 的 `win32/cocoa` 同理 | 同步切换，双端 `focused` 互验 | Land paths 显式 `core/src/nextpas.core.webview.*` + `core/src/nextpas.core.window.*`，`Needs Review` | **阶段 2 与 Wave 2 间隙协同** |
+| `webview.gtk.win` 与 `window.gtk` 双份共存 | `window.gtk3` 新增 `WindowGtkRaw*` 低阶壳（Init/Create/Title/Resize/Show/Hide/Maximized/Scale/Focus/Native/Run/Quit 12 项），`webview.gtk.win` 退化为 `inline` shim 全量转发 | `core/src/nextpas.core.window.gtk3.pas` 单源，`webview.gtk.win` 零逻辑，`window` 单点变更即影响 `webview` | **已落地 (2026-08-28)** |
+| `webview.gtk.win` RTL 违纪 | `Math` → `nextpas.core.math`，`PAnsiChar(AnsiString)` → `StrToAnsi`/`nextpas.core.text.ansi` 纪律对齐（阶段 1） | 与 `window.gtk.impl.inc` 同纪律，`INV-RTL` pass | **已落地** |
+| `webview` Wave 2/3 的 `win32/cocoa` 同理 | 同步切换，双端 `focused` 互验（`win32`/`cocoa` webview 暂无窗口缝，`gtk` 先行） | Land paths `core/src/nextpas.core.window.gtk3.pas` + `core/src/nextpas.core.webview.gtk.win.pas` | **已完成，跨模块 `Needs Review` 适格** |
 
 **风险**：`webview` 漂移 → 以本分支 `HEAD` 为基，`path-limited replay` 到 `main`，不 raw merge。
-**F4 阶段 1 决策**：`webview.gtk.win` 保持独立薄壳（FPU 屏蔽+Ansi 纪律已对齐），全量单源化需 `window.gtk3` 先暴露 `RawCreate/Title/Geometry` 的低阶壳 API（返回 `Pointer GtkWindow*` 供 `gtk_container_add`），避免 `webview` 被迫经 `IWindow` 高阶抽象嵌入 WebKit；该 API 属 `window` 1.1 `RawShell` 登记，1.0 不强行耦合。
+**F4 阶段 2 完成小结**：`WindowGtkRaw*` 保持 `inline` 零开销转发已绑定 `gtk_*` 符号（复用 `EnsureGtkInit` + `StrToAnsi` + `G*` 循环），`webview.gtk.win` 仅 `uses window.gtk3` + 12 行 `inline` 转发，无残留 `Math`/`PAnsiChar(AnsiString)`；`GTK_container_add` 仍由 `webview.gtk.ffi` 承载（WebKit 内容绑定），窗口壳创建已单源，符合 `CONTRACT §1` 内缝预备缝兑现。
 
 ### F5 — 1.0 定版 (Release · 3 天)
 
@@ -115,8 +115,8 @@
 
 ---
 
-## 6. 下一步 (Immediate NEXT = F4 阶段 2 → F5)
+## 6. 下一步 (Immediate NEXT = F5 1.0 定版)
 
-1. **F4 阶段 2（window 1.1 预研）**：为 `window.gtk3` 增 `WindowGtkRawShell` 低阶 API（`Create/Title/Geometry/Show/Hide/Scale/Native` 返回 `Pointer`），使 `webview.gtk.win` 可退化为 `deprecated shim` 单源转发，`webview.gtk` 消费 `window.gtk3.RawCreate` + `gtk_container_add`。
-2. **F5 定版**：`CONTRACT §8` 覆盖率 100%，`ARCHITECTURE` 家族布局与 `F4` 后一致，`README` 能力表三段一致；`core-module-registry` `focused-runtime → ci-matrix`（Linux-only 标注残差），`git tag window-1.0`。
-3. ** hygiene 终验**：`make focused 13门 + make hygiene + git diff --check` 全绿 → `Ready` 提 `F4 阶段 1`（跨模块需 `Needs Review` 四要素）。
+1. **F5 定版收口**：`CONTRACT.md §8` 覆盖率 100%（`deferred` 仍空，新增 `Raw shell` 行），`ARCHITECTURE.md §2.1` 家族布局增 `Raw` 注记，`README` 能力表三段与 `BENCH.md` 5×中位一致；`core-module-registry.md` `focused-runtime → ci-matrix`（Linux 实跑 + Win/mac compile-only 残差诚实标注）。
+2. **标签与 ADR**：`git tag window-1.0` + `docs/adr/adr-window-1.0.md`（决策：抽象不束缚·事件驱动·家族化·RTL 解耦·Raw 单源）。
+3. ** hygiene 终验**：`make focused 13门 + make hygiene + git diff --check` 全绿 → `Ready` 提 `F4 完整`（跨模块 `Needs Review`：`window.gtk3 Raw` + `webview.gtk.win shim` 四要素已齐）。
