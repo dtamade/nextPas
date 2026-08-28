@@ -632,32 +632,8 @@ begin
 end;
 
 function TMemoryWavSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var
-  LAvail, LToCopy, LBytesNeeded, LBytesToCopy: Integer;
 begin
-  Result := 0;
-  if AFrames <= 0 then Exit(0);
-  LBytesNeeded := AFrames * FBuffer.Format.BlockAlign;
-  if Length(ABuffer.Data) < LBytesNeeded then Exit(0);
-  LAvail := FBuffer.FrameCount - FPos;
-  if LAvail <= 0 then
-  begin
-    FillChar(ABuffer.Data[0], LBytesNeeded, 0);
-    ABuffer.Format := FBuffer.Format;
-    ABuffer.FrameCount := AFrames;
-    Exit(AFrames);
-  end;
-  LToCopy := AFrames;
-  if LToCopy > LAvail then LToCopy := LAvail;
-  LBytesToCopy := LToCopy * FBuffer.Format.BlockAlign;
-  if LBytesToCopy > 0 then
-    Move(FBuffer.Data[FPos * FBuffer.Format.BlockAlign], ABuffer.Data[0], LBytesToCopy);
-  if LToCopy < AFrames then
-    FillChar(ABuffer.Data[LBytesToCopy], LBytesNeeded - LBytesToCopy, 0);
-  ABuffer.Format := FBuffer.Format;
-  ABuffer.FrameCount := AFrames;
-  FPos := FPos + LToCopy;
-  Result := AFrames;
+  Result := AudioFillMemoryRealtime(FBuffer, FPos, ABuffer, AFrames);
 end;
 
 function TMemoryWavSource.SeekTo(AFrame: UInt64): Boolean;

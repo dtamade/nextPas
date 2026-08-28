@@ -50,6 +50,10 @@ procedure PcmInterleave(const APlanes: array of TBytes; AFrames, AChannels: Inte
 procedure PcmDeinterleave(const AInterleaved: TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out APlanes: TAudioPlaneArray);
 
+{ ---- Memory-source realtime helper (shared wav/aiff, zero-alloc) ---- }
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
+
 { ---- TPDF dither noise [-1,1) LSB scaled ---- }
 function PcmTpdfNoise(var AState: UInt32): Single; inline;
 
@@ -345,6 +349,36 @@ begin
       if (LSrcOffset + ABytesPerSample > Length(AInterleaved)) then Continue;
       Move(AInterleaved[LSrcOffset], APlanes[LCh][LDstOffset], ABytesPerSample);
     end;
+end;
+
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
+var
+  LAvail, LToCopy, LBytesNeeded, LBytesToCopy: Integer;
+begin
+  Result := 0;
+  if AFrames <= 0 then Exit(0);
+  LBytesNeeded := AFrames * ASrc.Format.BlockAlign;
+  if Length(ABuffer.Data) < LBytesNeeded then Exit(0);
+  LAvail := ASrc.FrameCount - APos;
+  if LAvail <= 0 then
+  begin
+    FillChar(ABuffer.Data[0], LBytesNeeded, 0);
+    ABuffer.Format := ASrc.Format;
+    ABuffer.FrameCount := AFrames;
+    Exit(AFrames);
+  end;
+  LToCopy := AFrames;
+  if LToCopy > LAvail then LToCopy := LAvail;
+  LBytesToCopy := LToCopy * ASrc.Format.BlockAlign;
+  if LBytesToCopy > 0 then
+    Move(ASrc.Data[APos * ASrc.Format.BlockAlign], ABuffer.Data[0], LBytesToCopy);
+  if LToCopy < AFrames then
+    FillChar(ABuffer.Data[LBytesToCopy], LBytesNeeded - LBytesToCopy, 0);
+  ABuffer.Format := ASrc.Format;
+  ABuffer.FrameCount := AFrames;
+  APos := APos + LToCopy;
+  Result := AFrames;
 end;
 
 {$POP}

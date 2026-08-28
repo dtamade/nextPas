@@ -179,6 +179,10 @@ function CreateVorbisDecoder: IAudioDecoder; inline;
 function FlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
 function Mp3Probe(const APrefix: TBytes): TAudioProbeResult; inline;
 function VorbisProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function AlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function WavPackProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function OpusProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function AacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
 function CreateAudioPlaylist(const AFormat: TAudioFormat): IAudioPlaylist; inline;
 function CreateAudioBusMixer: IAudioBusMixer; inline;
 function CreateAudioBank: TAudioBank; inline;
@@ -422,6 +426,18 @@ begin Result := nextpas.core.audio.codec.mp3.Mp3Probe(APrefix); end;
 
 function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
 begin Result := nextpas.core.audio.codec.vorbis.VorbisProbe(APrefix); end;
+
+function AlacProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := prUnknown; end;
+
+function WavPackProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := prUnknown; end;
+
+function OpusProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := prUnknown; end;
+
+function AacProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := prUnknown; end;
 
 function CreateAudioPlaylist(const AFormat: TAudioFormat): IAudioPlaylist;
 begin Result := nextpas.core.audio.playlist.CreateAudioPlaylist(AFormat); end;
