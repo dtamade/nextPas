@@ -365,22 +365,23 @@ end;
 
 procedure TZipWriter.DrainStaged(const ASink: IWriter);
 var
-  LStaged: TBytes;
+  LP: PByte;
   LOff, LChunk, LLen: SizeUInt;
 begin
-  { 排空绑定前暂存的字节。ToBytes 一次性物化——该内容本就驻留内存
-    （缓冲模式语义），无额外回退；此后暂存 builder 整体释放 }
+  { 排空绑定前暂存的字节。直接以 builder 连续缓冲分块直写，避免 ToBytes
+    的一次完整 SetLength+Move；语义与 ToBytes 物化后分块等价，但峰值分配
+    减半（仅分块写入，无额外归档级拷贝）。 }
   LLen := FOut.Length;
   if LLen = 0 then
     Exit;
-  LStaged := FOut.ToBytes;
+  LP := FOut.Data;
   LOff := 0;
   while LOff < LLen do
   begin
     LChunk := LLen - LOff;
     if LChunk > C_STREAM_CHUNK then
       LChunk := C_STREAM_CHUNK;
-    WriteAllTo(ASink, LStaged[LOff], LChunk);
+    WriteAllTo(ASink, (LP + LOff)^, LChunk);
     Inc(LOff, LChunk);
   end;
 end;
