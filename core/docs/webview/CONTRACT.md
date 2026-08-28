@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.51（S57—— 在途容量同构与取消幂等收口：`base.WebviewGrowCapacity` inline 抽取（`0→4→2×` 与 `factory.GrowCapacity` 同构复用，假/gtk 在途表 `GrowPendingEvals` 同源）+ `gtk.Close` 取消幂等 `Cancel:=nil`（`G_cancellable_cancel` 后防重取消）+ CONTRACT 1.51 时效，承接 S56 事件名归一；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
+**版本**：1.52（S58—— 文档与 Demo 高级感串联冻结：`CONTRACT §3.4` 与 `BRIDGE_PROTOCOL §6` 交叉引用显式化（Mount 前缀归一 ↔ TryResolve 单根快路径 ↔ 1 MiB 建议联动）+ `demo_webview` 骨架屏 `await __npw.ready` 时序锚点显式化（与 `InitScripts` `ready` 一致）+ CONTRACT 1.52 时效，承接 S57 容量同构；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 冻结复核）
+**承接**：1.51（S57—— 在途容量同构与取消幂等收口：`base.WebviewGrowCapacity` inline 抽取（`0→4→2×` 与 `factory.GrowCapacity` 同构复用，假/gtk 在途表 `GrowPendingEvals` 同源）+ `gtk.Close` 取消幂等 `Cancel:=nil`（`G_cancellable_cancel` 后防重取消）+ CONTRACT 1.51 时效，承接 S56 事件名归一；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
 **承接**：1.50（S56—— 事件名归一复用收口：`base.CheckWebviewEventName` inline 抽取（空事件名 `EWebviewInvalidState` 单源，与 `CheckInvokeCmd/CheckWebviewInitScript` 风格同源；`bridge.BuildEmitScript` + `fake/gtk.Emit` 同源复用，`CheckWebviewOptions` 家族闭环，163→165 inline）+ CONTRACT 1.50 时效，承接 S55 单根快路径；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
 **承接**：1.49（S55—— 资产路由单根快路径性能收口：`TWebviewAssetsImpl.TryResolve` 单挂载 `Prefix=''` 快路径 `MountCount=1` 零扫描直达 `Provider.TryResolve`（与 `MountCount` inline 同源，95% 单 provider demo 热路径 -Pos 调用）+ CONTRACT 1.49 时效，承接 S54 前缀归一；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
 **承接**：1.48（S54—— 资产挂载前缀归一完整性收口：`TWebviewAssetsImpl.MountEmbedded` 前缀归一化复用 `NormalizeWebviewAssetPath`（前导 '/' 容错，`/assets` 与 `assets` 同义，与 `TryResolve/SchemeRequestCb` 同源，挂载-解析闭环零歧义，复用度与完整性封口）+ CONTRACT 1.48 时效，承接 S53 GTK 存活/ scheme；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
@@ -434,9 +435,9 @@ end;
   命中=200 + `Content-Type`，未命中=404 + `text/plain` 空体；无自定义 header/
   status/redirect 面。wry 式完整 Response 能力推迟到真实需求出现再扩
   （届时 intf 加第二方法，不破坏现有签名）。
-- DevServerUrl 非空时不注册 scheme 路径处理（开发模式直连 http）。
+- DevServerUrl 非空时不注册 scheme 路径处理（开发模式直连 http；与 `BRIDGE_PROTOCOL.md §6` 的 `1 MiB` 建议联动：静态资源走资产 `200` 命中路径，超阈值业务 payload 走 base64 分片，`MountEmbedded` 前缀归一 + `TryResolve` 单根快路径保证路径零歧义）。
 - 内嵌 provider 的字节来源推荐复用 `respack` 家族产物（集成点在 examples 论证，
-  intf 不依赖 respack）。
+  intf 不依赖 respack）；`demo_webview` 骨架屏以 `await window.__npw.ready` 为显式就绪锚点（与 `§2 InitScripts` 的 `ready` 时序一致，高级感串联）。
 
 ---
 
