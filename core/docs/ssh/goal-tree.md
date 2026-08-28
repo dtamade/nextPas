@@ -319,11 +319,21 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 测试：`test_ssh_sftp_async_via_jump` 4/4（`realpath→/resolved/foo / stat→1234 / target auth fail→sekAuth / jump auth fail→sekAuth/sekIO`，`TMemPipe+TJumpServer+TSftpTargetServer` 事件化双跳，`~2.5s`，`HEAPTRC_GATE=0` 20 块已知 `TIoReactor` 侧线，`proxyjump_async 3/3 / sftp_async 7/7` 回归）
 - [x] 性能：`bench` 前 `~431ms` 同步轮询额外开销 → `S21/S22` 事件化后 `~550ms`（`proxyjump async`）→ `~2.5s/4`（`sftp via jump async` 双跳含 `INIT/VERSION`），轮询消除，复用度与 `transport.async/channel.async/sftp.async` 同构
 
+## S23 — e2e Async Jump 双容器互操作（已完成）
+
+`S22` 的 `AsyncJump + SFTP via Jump` 已在内存管道事件化全绿，`S23` 将其外推到真实双 `sshd` 的 `opt-in` 互操作，并硬化 `ExecAsync` 门面：
+
+- [x] `session.async`：`ISshAsyncSession.ExecAsync` 增加 `AContext: Pointer = nil`（`TAsyncSshSession` 透传 `PExecPost.Context`，闭环回调 `AContext`，`PostEx` 单线程投递与 `ExecPostDiscard` 一致；兼容既有 `GAsyncState` 全局无参调用，`test_ssh_session_async 5/5` 零回归）
+- [x] `e2e_ssh_live`：`test_ssh_e2e_async.lpr` 独立二进制（`TLoopThread+TAsyncLoop+RTLEvent+WaitFlag`，`AsyncConnectWithLoop/AsyncExec` 辅助，`4+1` 场景：`exec twice / exit code 7 / wrong hostkey → sekHostKey / sftp realpath / via jump(TOFU 双 known_hosts)`，`GJumpRan` 计数，`ShutdownLoop` 保活）
+- [x] `e2e_ssh_live`：`Makefile` 双产物（`test_ssh_e2e + test_ssh_e2e_async`，`FPC -FU/-FE` 同 `BUILD_DIR`，`HEAPTRC_ACTIVE` 同门禁）
+- [x] `e2e_ssh_live`：`run_e2e.sh` 三模（`sync` 单容器 → `async` 同夹具复跑 → `dual` 双容器 `AsyncJump`；`BIN/BIN_ASYNC` 分流 `heaptrc-${label}.log`，`run_docker_dual` 创建 `np-ssh-e2e-net-$$`、`target` 不映射/`jump` 映射、两处 `host_ed25519` 与 `authorized_keys` 注入、`jump known_hosts` 来自 `ssh-keyscan -p JPORT`、`target known_hosts` 由 `host_target.pub` 构造 `target <pub>`、`NEXTPAS_SSH_E2E_HOST=target / JUMP_HOST=127.0.0.1`，`NEXTPAS_SSH_E2E_ASYNC_JUMP=1` 门控，网络/容器 `trap` 自清理）
+- [x] 编译：`test_ssh_e2e_async` 3.0 MiB，`session.async + sftp.async + proxyjump.async` 复用 `cipher/kex/hostkey` 同源，门禁 `make hygiene pass`、`test_ssh_sftp_async_via_jump 4/4 (≈2.5s)`、`proxyjump_async 3/3 / sftp_async 7/7 HEAPTRC_GATE=0` 回归
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| e2e Async Jump | Docker 双容器 `Async ProxyJump` 互操作（opt-in） |
+| Rekey / SCP / Forward / KnownHosts / Metrics / Fuzz | 见 `ROADMAP_FINAL.md` S24–S30 |
 
 ## 真实性等级声明
 

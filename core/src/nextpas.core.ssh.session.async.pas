@@ -34,7 +34,7 @@ type
     function GetServerHostKeyFingerprint: string;
     function GetLoop: TAsyncLoop;
     function GetTransport: TAsyncSshTransport;
-    function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult): Boolean;
+    function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult; AContext: Pointer = nil): Boolean;
     procedure Close;
     property Connected: Boolean read GetConnected;
     property ServerVersion: string read GetServerVersion;
@@ -130,7 +130,7 @@ type
   public
     constructor Create(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; const AOptions: TSshConnectOptions);
     destructor Destroy; override;
-    function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult): Boolean;
+    function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult; AContext: Pointer = nil): Boolean;
     procedure Close;
   end;
 
@@ -338,25 +338,25 @@ begin
   Dispose(P);
 end;
 
-function TAsyncSshSession.ExecAsync(const ACommand: string; ACallback: TProcSshExecResult): Boolean;
+function TAsyncSshSession.ExecAsync(const ACommand: string; ACallback: TProcSshExecResult; AContext: Pointer): Boolean;
 var P: PExecPost;
 begin
   if not FAuthenticated then
   begin
     if Assigned(ACallback) then
-      ACallback(Default(TSshExecResult), ESSHError.Create(sekAuth, 'ssh session: not authenticated'), nil);
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekAuth, 'ssh session: not authenticated'), AContext);
     Exit(False);
   end;
   if FClosed then
   begin
     if Assigned(ACallback) then
-      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: closed'), nil);
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: closed'), AContext);
     Exit(False);
   end;
   if (FLoop = nil) or (FTransport = nil) then
   begin
     if Assigned(ACallback) then
-      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: invalid state'), nil);
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: invalid state'), AContext);
     Exit(False);
   end;
   New(P);
@@ -366,14 +366,14 @@ begin
   P^.MaxPacket := FOptions.MaxPacket;
   P^.TimeoutMs := FOptions.ExecTimeoutMs;
   P^.Callback := ACallback;
-  P^.Context := nil;
+  P^.Context := AContext;
   try
     FLoop.PostEx(@ExecPostCb, P, @ExecPostDiscard);
     Result := True;
   except
     Dispose(P);
     if Assigned(ACallback) then
-      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: post exec failed'), nil);
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: post exec failed'), AContext);
     Result := False;
   end;
 end;
