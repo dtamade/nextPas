@@ -302,3 +302,5 @@ Sequential read reuses the same `DecompressEntryVerified` kernel via
 的 `BenchSequential` 为锚点（方差高时回归以 `allocs` 硬门为准，`ns` 仅告警）。
 
 Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip).
+
+Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S42 已落地，S43—S50 终局 8 期（PByte 零拷贝/AES 描述符/流式阈值/大中央/模糊扩容/cookbook/方差治理/安全审计封版）。
