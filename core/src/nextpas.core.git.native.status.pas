@@ -87,13 +87,7 @@ const
   CModeSymlink = $A000;
   CModeGitlink = $E000;
 
-function BytesOfStringLocal(const AText: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(AText[1], Result[0], Length(AText));
-end;
+
 
 procedure SortPathOids(var AList: TPathOidArray);
 
@@ -283,7 +277,7 @@ begin
     Exit(gscTypeChanged);
   if Info.IsSymlink then
   begin
-    WorkOid := GitHashObject(gokBlob, BytesOfStringLocal(
+    WorkOid := GitHashObject(gokBlob, GitStringToBytes(
       Readlink(Full)));
     if not GitOidSame(WorkOid, AEntry.Oid) then
       Exit(gscModified);

@@ -41,14 +41,6 @@ uses
   nextpas.core.git.native.refs,
   nextpas.core.git.native.checkout;
 
-function BytesOfString(const S: string): TBytes;
-var L: Integer;
-begin
-  L := Length(S);
-  SetLength(Result, L);
-  if L > 0 then Move(S[1], Result[0], L);
-end;
-
 function BytesToHexLower(const B: TBytes): string;
 const Hex: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f');
 var I: Integer;
@@ -117,7 +109,7 @@ begin
   Out_ := Run('git', ['upload-pack', '--advertise-refs', ARemoteGitDir]);
   if not ProcessSucceeded(Out_) then
     raise EGitError.CreateFmt('advertise failed (%d): %s', [Out_.ExitCode, Trim(Out_.StdErr + Out_.StdOut)]);
-  Raw := BytesOfString(Out_.StdOut);
+  Raw := GitStringToBytes(Out_.StdOut);
   Result := GitParseAdvertise(Raw);
   if Length(Result.Refs) = 0 then
     raise EGitError.CreateFmt('ls-remote: no refs advertised from %s', [ARemoteGitDir]);

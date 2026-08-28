@@ -32,8 +32,8 @@ function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
-function GitBytesToString(const ABytes: TBytes): string;
-function GitStringToBytes(const AText: string): TBytes;
+function GitBytesToString(const ABytes: TBytes): string; inline;
+function GitStringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
@@ -131,14 +131,14 @@ begin
   Result := gokBlob;
 end;
 
-function GitBytesToString(const ABytes: TBytes): string;
+function GitBytesToString(const ABytes: TBytes): string; inline;
 begin
   SetLength(Result, Length(ABytes));
   if Length(ABytes) > 0 then
     Move(ABytes[0], Result[1], Length(ABytes));
 end;
 
-function GitStringToBytes(const AText: string): TBytes;
+function GitStringToBytes(const AText: string): TBytes; inline;
 begin
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then

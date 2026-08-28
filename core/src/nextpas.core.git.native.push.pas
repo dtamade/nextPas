@@ -50,20 +50,6 @@ begin
   Result := True;
 end;
 
-function BytesOfString(const S: string): TBytes;
-var L: Integer;
-begin
-  L := Length(S);
-  SetLength(Result, L);
-  if L > 0 then Move(S[1], Result[0], L);
-end;
-
-function StringOfBytes(const B: TBytes): string;
-begin
-  SetLength(Result, Length(B));
-  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
-end;
-
 function ConcatBytes(const A, B: TBytes): TBytes;
 begin
   SetLength(Result, Length(A) + Length(B));
@@ -89,10 +75,10 @@ begin
     Exit;
   end;
   Out_ := RunWithInput('git', ['--git-dir=' + ALocalGitDir, 'pack-objects', '--stdout', '--revs', '--delta-base-offset'],
-    BytesOfString(RevInput));
+    GitStringToBytes(RevInput));
   if not ProcessSucceeded(Out_) then
     raise EGitError.CreateFmt('pack-objects failed (%d): %s', [Out_.ExitCode, Trim(Out_.StdErr + Out_.StdOut)]);
-  Result := BytesOfString(Out_.StdOut);
+  Result := GitStringToBytes(Out_.StdOut);
   if (Length(Result) > 0) and ((Length(Result) < 12) or (Result[0] <> Ord('P'))) then
     raise EGitError.Create('push: pack-objects produced invalid pack');
 end;
@@ -141,12 +127,12 @@ begin
     if (Length(Pkts[I].Data) > 0) and (Pkts[I].Data[0] in [1, 2, 3]) then
     begin
       if Length(Pkts[I].Data) <= 1 then Continue;
-      S := StringOfBytes(Copy(Pkts[I].Data, 1, Length(Pkts[I].Data) - 1));
+      S := GitBytesToString(Copy(Pkts[I].Data, 1, Length(Pkts[I].Data) - 1));
       if Pkts[I].Data[0] = 3 then
         Msg := Msg + Trim(S) + LineEnding;
       Continue;
     end;
-    S := StringOfBytes(Pkts[I].Data);
+    S := GitBytesToString(Pkts[I].Data);
     S := Trim(S);
     if S = '' then Continue;
     if Copy(S, 1, 7) = 'unpack ' then
@@ -206,13 +192,13 @@ begin
   Out_ := RunWithInput('git', ['receive-pack', '--stateless-rpc', ARemoteGitDir], Req);
   if not ProcessSucceeded(Out_) then
   begin
-    Resp := BytesOfString(Out_.StdOut + Out_.StdErr);
+    Resp := GitStringToBytes(Out_.StdOut + Out_.StdErr);
     if Length(Resp) = 0 then
       raise EGitError.CreateFmt('receive-pack failed (%d): %s', [Out_.ExitCode, Trim(Out_.StdErr)]);
-    ParsePushResponse(BytesOfString(Out_.StdOut));
+    ParsePushResponse(GitStringToBytes(Out_.StdOut));
     raise EGitError.CreateFmt('receive-pack failed (%d): %s', [Out_.ExitCode, Trim(Out_.StdErr + Out_.StdOut)]);
   end;
-  Resp := BytesOfString(Out_.StdOut);
+  Resp := GitStringToBytes(Out_.StdOut);
   Result := ParsePushResponse(Resp);
 end;
 
