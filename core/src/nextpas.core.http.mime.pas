@@ -8,8 +8,8 @@ unit nextpas.core.http.mime;
 
 interface
 
-function HttpMimeFromExt(const AExt: string): string;
-function HttpMimeFromPath(const APath: string): string;
+function HttpMimeFromExt(const AExt: string): string; inline;
+function HttpMimeFromPath(const APath: string): string; inline;
 
 implementation
 
@@ -158,14 +158,14 @@ begin
   end;
 end;
 
-function HttpMimeFromExt(const AExt: string): string;
+function HttpMimeFromExt(const AExt: string): string; inline;
 begin
   if Length(AExt) = 0 then
     Exit('application/octet-stream');
   Result := LookupBySlice(PChar(@AExt[1]), Length(AExt));
 end;
 
-function HttpMimeFromPath(const APath: string): string;
+function HttpMimeFromPath(const APath: string): string; inline;
 var
   LI: SizeInt;
   DotPos: SizeInt;
