@@ -111,6 +111,11 @@ const
   ERR_BIGINT_RSA_MESSAGE_NOT_COPRIME = 'E_TLS13_BIGINT_RSA_MESSAGE_NOT_COPRIME';
   ERR_BIGINT_MONTGOMERY_NPRIME_FAILED = 'E_TLS13_BIGINT_MONTGOMERY_NPRIME_FAILED';
 
+threadvar
+  GLatestMontModulus: TBigNat;
+  GLatestMontCtx: TMontgomeryContext;
+  GLatestMontValid: Boolean;
+
 function MakeBigIntError(const ACode, AMessage: string): string;
 begin
   if ACode <> '' then
@@ -645,6 +650,21 @@ begin
   Result := True;
 end;
 
+function TryGetCachedMontCtx(const AModulus: TBigNat; out ACtx: TMontgomeryContext; out AError: string): Boolean;
+begin
+  if GLatestMontValid and (BigNatCompare(GLatestMontModulus, AModulus) = 0) then
+  begin
+    ACtx := GLatestMontCtx;
+    AError := '';
+    Exit(True);
+  end;
+  if not TryInitMontgomeryContext(AModulus, ACtx, AError) then Exit(False);
+  GLatestMontModulus := Copy(AModulus, 0, Length(AModulus));
+  GLatestMontCtx := ACtx;
+  GLatestMontValid := True;
+  Result := True;
+end;
+
 procedure MontgomeryMultiplyInto(
   const ACtx: TMontgomeryContext;
   const ALeft, ARight: TBigNat;
@@ -901,7 +921,7 @@ begin
     Exit;
   end;
 
-  if not TryInitMontgomeryContext(LModulus, LMontCtx, AError) then
+  if not TryGetCachedMontCtx(LModulus, LMontCtx, AError) then
     Exit;
 
   LSignatureNat := BigNatModExpMontgomery(LMessage, LExponent, LMontCtx);
@@ -922,12 +942,12 @@ var
   LModulus: TBigNat;
   LReduced: TBigNat;
 begin
+  // Alias-safe: read inputs before touching out param
+  LValue := BigNatFromUnsignedBytes(AValue);
+  LModulus := BigNatFromUnsignedBytes(AModulus);
   SetLength(AResult, 0);
   AError := '';
   Result := False;
-
-  LValue := BigNatFromUnsignedBytes(AValue);
-  LModulus := BigNatFromUnsignedBytes(AModulus);
 
   if BigNatIsZero(LModulus) then
   begin
@@ -955,13 +975,13 @@ var
   LCtx: TMontgomeryContext;
   LOut: TBigNat;
 begin
+  LBase := BigNatFromUnsignedBytes(ABase);
+  LExponent := BigNatFromUnsignedBytes(AExponent);
+  LModulus := BigNatFromUnsignedBytes(AModulus);
   SetLength(AResult, 0);
   AError := '';
   Result := False;
 
-  LBase := BigNatFromUnsignedBytes(ABase);
-  LExponent := BigNatFromUnsignedBytes(AExponent);
-  LModulus := BigNatFromUnsignedBytes(AModulus);
 
   if BigNatIsZero(LModulus) then
   begin
@@ -978,7 +998,7 @@ begin
 
   LReducedBase := BigNatMod(LBase, LModulus);
 
-  if BigNatIsOdd(LModulus) and TryInitMontgomeryContext(LModulus, LCtx, AError) then
+  if BigNatIsOdd(LModulus) and TryGetCachedMontCtx(LModulus, LCtx, AError) then
     LOut := BigNatModExpMontgomery(LReducedBase, LExponent, LCtx)
   else
   begin
@@ -1003,13 +1023,13 @@ var
   LModulus: TBigNat;
   LRes: TBigNat;
 begin
+  LLeft := BigNatFromUnsignedBytes(ALeft);
+  LRight := BigNatFromUnsignedBytes(ARight);
+  LModulus := BigNatFromUnsignedBytes(AModulus);
   SetLength(AResult, 0);
   AError := '';
   Result := False;
 
-  LLeft := BigNatFromUnsignedBytes(ALeft);
-  LRight := BigNatFromUnsignedBytes(ARight);
-  LModulus := BigNatFromUnsignedBytes(AModulus);
 
   if BigNatIsZero(LModulus) then
   begin
@@ -1046,13 +1066,13 @@ var
   LProdMont: TBigNat;
   LRes: TBigNat;
 begin
+  LLeft := BigNatFromUnsignedBytes(ALeft);
+  LRight := BigNatFromUnsignedBytes(ARight);
+  LModulus := BigNatFromUnsignedBytes(AModulus);
   SetLength(AResult, 0);
   AError := '';
   Result := False;
 
-  LLeft := BigNatFromUnsignedBytes(ALeft);
-  LRight := BigNatFromUnsignedBytes(ARight);
-  LModulus := BigNatFromUnsignedBytes(AModulus);
 
   if BigNatIsZero(LModulus) then
   begin
@@ -1063,7 +1083,7 @@ begin
   LLeft := BigNatMod(LLeft, LModulus);
   LRight := BigNatMod(LRight, LModulus);
 
-  if BigNatIsOdd(LModulus) and TryInitMontgomeryContext(LModulus, LCtx, AError) then
+  if BigNatIsOdd(LModulus) and TryGetCachedMontCtx(LModulus, LCtx, AError) then
   begin
     LLeftMont := MontgomeryMultiply(LCtx, LLeft, LCtx.R2ModN);
     LRightMont := MontgomeryMultiply(LCtx, LRight, LCtx.R2ModN);
@@ -1090,12 +1110,12 @@ var
   LLeft: TBigNat;
   LRight: TBigNat;
 begin
+  LLeft := BigNatFromUnsignedBytes(ALeft);
+  LRight := BigNatFromUnsignedBytes(ARight);
   SetLength(AResult, 0);
   AError := '';
   Result := False;
 
-  LLeft := BigNatFromUnsignedBytes(ALeft);
-  LRight := BigNatFromUnsignedBytes(ARight);
   AResult := BigNatToUnsignedBytes(BigNatMultiply(LLeft, LRight));
   Result := True;
 end;
@@ -1110,12 +1130,12 @@ var
   LLeft: TBigNat;
   LRight: TBigNat;
 begin
+  LLeft := BigNatFromUnsignedBytes(ALeft);
+  LRight := BigNatFromUnsignedBytes(ARight);
   SetLength(AResult, 0);
   AError := '';
   Result := False;
 
-  LLeft := BigNatFromUnsignedBytes(ALeft);
-  LRight := BigNatFromUnsignedBytes(ARight);
   AResult := BigNatToUnsignedBytes(BigNatAdd(LLeft, LRight));
   Result := True;
 end;
