@@ -252,6 +252,21 @@ type
 function TlsPasIsEarlyDataReplayed(const AStore: ITlsPasReplayStore;
   const ATicketIdentity, AEarlyData: TBytes): Boolean;
 
+  { 服务端 0-RTT 决策：策略 + 去重一站式。先做零分支策略校验，不通过则
+    edRejectPolicy 且不触 Store；通过后再做指纹去重，命中则 edRejectReplay，
+    否则 edAccept（已落窗）。nil Store 视为永不重放。供服务端在解析
+    ClientHello early_data 后调用，命中即回退 1-RTT。 }
+type
+  TTlsPasEarlyDataDecision = (edRejectPolicy, edRejectReplay, edAccept);
+
+function TlsPasServerDecideEarlyData(const AStore: ITlsPasReplayStore;
+  const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+function TlsPasServerShouldAcceptEarlyData(const AStore: ITlsPasReplayStore;
+  const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+function TlsPasEarlyDataDecisionToStr(ADecision: TTlsPasEarlyDataDecision): string;
+
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
@@ -952,6 +967,45 @@ begin
       Result := False;
   finally
     SecureZeroBytes(LFP);
+  end;
+end;
+
+function TlsPasServerDecideEarlyData(const AStore: ITlsPasReplayStore;
+  const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+var LFP: TBytes; LIsReplay: Boolean;
+begin
+  if not TlsPasIsEarlyDataAllowed(ASession, AAllowEarlyData, Length(AEarlyData)) then
+    Exit(edRejectPolicy);
+  if not Assigned(AStore) then
+    Exit(edAccept);
+  LFP := TlsPasComputeEarlyDataFingerprint(ATicketIdentity, AEarlyData);
+  try
+    if not AStore.CheckAndAdd(LFP, LIsReplay) then
+      Exit(edAccept); // Store 异常视为不重放，保持可用性 fail-open，观测靠 Stats
+    if LIsReplay then
+      Exit(edRejectReplay);
+    Result := edAccept;
+  finally
+    SecureZeroBytes(LFP);
+  end;
+end;
+
+function TlsPasServerShouldAcceptEarlyData(const AStore: ITlsPasReplayStore;
+  const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+begin
+  Result := TlsPasServerDecideEarlyData(AStore, ATicketIdentity, AEarlyData, ASession, AAllowEarlyData) = edAccept;
+end;
+
+function TlsPasEarlyDataDecisionToStr(ADecision: TTlsPasEarlyDataDecision): string;
+begin
+  case ADecision of
+    edRejectPolicy: Result := 'reject_policy';
+    edRejectReplay: Result := 'reject_replay';
+    edAccept: Result := 'accept';
+  else
+    Result := 'unknown';
   end;
 end;
 
