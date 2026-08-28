@@ -75,9 +75,19 @@ begin
   if LSamples = 0 then Exit;
   if Length(LSrcData) < LSamples * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: src F32 data too small');
   if Length(ADst.Data) < (LDstOffset + LSamples) * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: dst F32 data too small');
+  // 性能：增益门控 + 快路径（gain≈0 跳过，gain≈1 省乘法），稳态热路径内联
+  if Abs(AGain) < 1e-6 then Exit;
   LDstPtr := PSingle(@ADst.Data[0]); LSrcPtr := PSingle(@LSrcData[0]);
-  for LI := 0 to LSamples - 1 do
-    LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI] * AGain;
+  if Abs(AGain - 1.0) < 1e-6 then
+  begin
+    for LI := 0 to LSamples - 1 do
+      LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI];
+  end
+  else
+  begin
+    for LI := 0 to LSamples - 1 do
+      LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI] * AGain;
+  end;
 end;
 
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
@@ -85,6 +95,13 @@ var NSamples, LI: Integer; P: PSingle;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit;
+  if Abs(AGain - 1.0) < 1e-6 then Exit;
+  if Abs(AGain) < 1e-6 then
+  begin
+    if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGain: data too small');
+    FillChar(ABuf.Data[0], NSamples * SizeOf(Single), 0);
+    Exit;
+  end;
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGain: data too small');
   P := PSingle(@ABuf.Data[0]);
   for LI := 0 to NSamples - 1 do P[LI] := P[LI] * AGain;
