@@ -154,6 +154,8 @@ var
   N, I, J, K: SizeUInt;
   BucketIdx, BucketCount: SizeUInt;
   Buckets: array of array of SizeUInt;
+  BucketCounts: array of SizeUInt;
+  NewCap: SizeUInt;
   Order: array of SizeUInt;
   TotalInput: SizeUInt;
   PathLens: array of Word;
@@ -247,6 +249,8 @@ begin
     while (BucketCount < Target) and (BucketCount < BUCKET_MAX) do
       BucketCount := BucketCount shl 1;
     SetLength(Buckets, BucketCount);
+    SetLength(BucketCounts, BucketCount);
+    for I := 0 to BucketCount - 1 do BucketCounts[I] := 0;
     // Buckets 初始化为空动态数组，无需显式清零
     if N > 0 then
       for I := 0 to N - 1 do
@@ -254,9 +258,9 @@ begin
         J := Order[I];
         EntrySlots[J] := SizeUInt(-1);
         BucketIdx := SizeUInt(FnvBuf[J]) and (BucketCount - 1);
-        if (SlotCount > 0) and (Length(Buckets[BucketIdx]) > 0) then
+        if (SlotCount > 0) and (BucketCounts[BucketIdx] > 0) then
         begin
-          for K := 0 to SizeUInt(High(Buckets[BucketIdx])) do
+          for K := 0 to BucketCounts[BucketIdx] - 1 do
           begin
             // Buckets[BucketIdx][K] 存槽位索引
             if (Slots[Buckets[BucketIdx][K]].Fnv = FnvBuf[J])
@@ -279,9 +283,15 @@ begin
             Slots[SlotCount].Fnv := FnvBuf[J]
           else
             Slots[SlotCount].Fnv := 0;
-          // 加入桶
-          SetLength(Buckets[BucketIdx], Length(Buckets[BucketIdx]) + 1);
-          Buckets[BucketIdx][High(Buckets[BucketIdx])] := SlotCount;
+          // 加入桶：2× 预分配，消逐一重分配（4 起步，碰撞桶近常数）
+          if BucketCounts[BucketIdx] >= SizeUInt(Length(Buckets[BucketIdx])) then
+          begin
+            NewCap := SizeUInt(Length(Buckets[BucketIdx])) * 2;
+            if NewCap < 4 then NewCap := 4;
+            SetLength(Buckets[BucketIdx], NewCap);
+          end;
+          Buckets[BucketIdx][BucketCounts[BucketIdx]] := SlotCount;
+          Inc(BucketCounts[BucketIdx]);
           EntrySlots[J] := SlotCount;
           Cur := Cur + UInt64(AEntries[J].DataSize);
           Inc(SlotCount);
