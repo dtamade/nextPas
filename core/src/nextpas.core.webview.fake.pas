@@ -94,17 +94,21 @@ type
     FInvokes: TObject;             // 非拥有别名：同类私有访问用
     FAssets: TObject;              // 同上
     FEvalScripts: TFakeEvalRecords;
+    FEvalScriptsCount: Integer;
     FEvalQueue: array of Boolean;  // 预载结果 FIFO：True=错误（值在 FEvalResults）
     FEvalResults: array of string; // 与 FEvalQueue 平行：成功 JSON 或错误消息
     FPendingEvals: array of TFakePendingEval;
     FPendingCount: Integer;
     FOutcomes: TFakeInvokeOutcomes;
+    FOutcomesCount: Integer;
     { DeliverFrame 协议路径产生的回执脚本（resolve/reject）捕获队列 }
     FCapturedEvals: array of string;
+    FCapturedCount: Integer;
     FEmits: array of record
       Event: string;
       PayloadJson: string;
     end;
+    FEmitsCount: Integer;
     FDroppedEmits: Integer;
     FNavigateCount: Integer;
     FReloadCount: Integer;
@@ -119,6 +123,10 @@ type
     FOnScaleChanged: array of TWebviewScaleHandler;
     procedure RequireOpen;
     procedure GrowPendingEvals; inline;
+    procedure GrowOutcomes; inline;
+    procedure GrowEvalScripts; inline;
+    procedure GrowEmits; inline;
+    procedure GrowCaptured; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -673,17 +681,42 @@ begin
     SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
 end;
 
+procedure TFakeWebview.GrowOutcomes; inline;
+begin
+  if FOutcomesCount = Length(FOutcomes) then
+    SetLength(FOutcomes, WebviewGrowCapacity(Length(FOutcomes)));
+end;
+
+procedure TFakeWebview.GrowEvalScripts; inline;
+begin
+  if FEvalScriptsCount = Length(FEvalScripts) then
+    SetLength(FEvalScripts, WebviewGrowCapacity(Length(FEvalScripts)));
+end;
+
+procedure TFakeWebview.GrowEmits; inline;
+begin
+  if FEmitsCount = Length(FEmits) then
+    SetLength(FEmits, WebviewGrowCapacity(Length(FEmits)));
+end;
+
+procedure TFakeWebview.GrowCaptured; inline;
+begin
+  if FCapturedCount = Length(FCapturedEvals) then
+    SetLength(FCapturedEvals, WebviewGrowCapacity(Length(FCapturedEvals)));
+end;
+
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
   FLck.Acquire;
   try
-    SetLength(FOutcomes, Length(FOutcomes) + 1);
-    FOutcomes[High(FOutcomes)].Cmd := ACmd;
-    FOutcomes[High(FOutcomes)].IsError := AIsError;
-    FOutcomes[High(FOutcomes)].ResultJson := AResultJson;
-    FOutcomes[High(FOutcomes)].Code := ACode;
-    FOutcomes[High(FOutcomes)].Message := AMessage;
+    GrowOutcomes;
+    FOutcomes[FOutcomesCount].Cmd := ACmd;
+    FOutcomes[FOutcomesCount].IsError := AIsError;
+    FOutcomes[FOutcomesCount].ResultJson := AResultJson;
+    FOutcomes[FOutcomesCount].Code := ACode;
+    FOutcomes[FOutcomesCount].Message := AMessage;
+    Inc(FOutcomesCount);
   finally
     FLck.Release;
   end;
@@ -706,9 +739,10 @@ end;
 
 procedure TFakeWebview.AppendEvalScript(const AScript: string);
 begin
-  SetLength(FEvalScripts, Length(FEvalScripts) + 1);
-  FEvalScripts[High(FEvalScripts)].Script := AScript;
-  FEvalScripts[High(FEvalScripts)].Answered := False;
+  GrowEvalScripts;
+  FEvalScripts[FEvalScriptsCount].Script := AScript;
+  FEvalScripts[FEvalScriptsCount].Answered := False;
+  Inc(FEvalScriptsCount);
 end;
 
 procedure TFakeWebview.Close;
@@ -991,7 +1025,7 @@ var
 begin
   RequireOpen;
   AppendEvalScript(AJavascript);
-  LIdx := High(FEvalScripts);
+  LIdx := FEvalScriptsCount - 1;
   LHasQueued := False;
   LIsError := False;
   LValue := '';
@@ -1071,9 +1105,10 @@ begin
     FDroppedEmits := FDroppedEmits + 1;
     Exit;
   end;
-  SetLength(FEmits, Length(FEmits) + 1);
-  FEmits[High(FEmits)].Event := AEvent;
-  FEmits[High(FEmits)].PayloadJson := APayloadJson;
+  GrowEmits;
+  FEmits[FEmitsCount].Event := AEvent;
+  FEmits[FEmitsCount].PayloadJson := APayloadJson;
+  Inc(FEmitsCount);
 end;
 
 function TFakeWebview.GetDispatcher: IWebviewDispatcher; inline;
@@ -1331,18 +1366,19 @@ end;
 procedure TFakeWebview.EnqueueReceipt(AFrameId: Int64; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
-  SetLength(FCapturedEvals, Length(FCapturedEvals) + 1);
+  GrowCaptured;
   if AIsError then
-    FCapturedEvals[High(FCapturedEvals)] :=
+    FCapturedEvals[FCapturedCount] :=
       BuildRejectScript(AFrameId, ACode, AMessage)
   else
-    FCapturedEvals[High(FCapturedEvals)] :=
+    FCapturedEvals[FCapturedCount] :=
       BuildResolveScript(AFrameId, AResultJson);
+  Inc(FCapturedCount);
 end;
 
 function TFakeWebview.CaptureEvalCount: Integer;
 begin
-  Result := Length(FCapturedEvals);
+  Result := FCapturedCount;
 end;
 
 function TFakeWebview.CaptureEvalAt(AIndex: Integer): string;
@@ -1445,7 +1481,7 @@ end;
 
 function TFakeWebview.OutcomeCount: Integer;
 begin
-  Result := Length(FOutcomes);
+  Result := FOutcomesCount;
 end;
 
 function TFakeWebview.OutcomeAt(AIndex: Integer): TFakeInvokeOutcome;
@@ -1455,14 +1491,14 @@ end;
 
 function TFakeWebview.LastOutcome: TFakeInvokeOutcome;
 begin
-  if Length(FOutcomes) = 0 then
+  if FOutcomesCount = 0 then
     raise EWebviewInvalidState.Create('no invoke outcomes recorded');
-  Result := FOutcomes[High(FOutcomes)];
+  Result := FOutcomes[FOutcomesCount - 1];
 end;
 
 function TFakeWebview.EmitCount: Integer;
 begin
-  Result := Length(FEmits);
+  Result := FEmitsCount;
 end;
 
 function TFakeWebview.DroppedEmitCount: Integer;
@@ -1472,16 +1508,16 @@ end;
 
 function TFakeWebview.LastEmitEvent: string;
 begin
-  if Length(FEmits) = 0 then
+  if FEmitsCount = 0 then
     raise EWebviewInvalidState.Create('no emits recorded');
-  Result := FEmits[High(FEmits)].Event;
+  Result := FEmits[FEmitsCount - 1].Event;
 end;
 
 function TFakeWebview.LastEmitPayloadJson: string;
 begin
-  if Length(FEmits) = 0 then
+  if FEmitsCount = 0 then
     raise EWebviewInvalidState.Create('no emits recorded');
-  Result := FEmits[High(FEmits)].PayloadJson;
+  Result := FEmits[FEmitsCount - 1].PayloadJson;
 end;
 
 function TFakeWebview.NavigateCount: Integer;
@@ -1491,7 +1527,7 @@ end;
 
 function TFakeWebview.EvalRecordCount: Integer;
 begin
-  Result := Length(FEvalScripts);
+  Result := FEvalScriptsCount;
 end;
 
 function TFakeWebview.EvalRecordAt(AIndex: Integer): TFakeEvalRecord;
