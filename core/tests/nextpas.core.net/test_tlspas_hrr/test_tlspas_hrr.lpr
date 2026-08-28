@@ -835,6 +835,50 @@ begin
   Check(not TlsPasServerShouldAcceptEarlyData(Store, Id, Early, Sess, True), 'over max reject');
 end;
 
+procedure TestObserverStats;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasServerObserver; Sess: TTlsPasResumptionSession; Id, Early: TBytes; S: TTlsPasServerStats; RS: TAsyncTlsPasReplayStats;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasServerObserver.Create(Store);
+  try
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $11);
+    SetLength(Early, 5); FillChar(Early[0], 5, $22);
+    Check(Obs.Decide(Id, Early, Sess, False) = edRejectPolicy, 'obs policy');
+    Check(Obs.ShouldAccept(Id, Early, Sess, True), 'obs first accept');
+    Check(not Obs.ShouldAccept(Id, Early, Sess, True), 'obs replay');
+    Early[0] := $23;
+    Check(Obs.Decide(Id, Early, Sess, True) = edAccept, 'obs second accept');
+    S := Obs.GetServerStats;
+    Check((S.Accepts=2) and (S.RejectPolicy=1) and (S.RejectReplay=1), 'server stats 2/1/1');
+    RS := Obs.GetReplayStats;
+    Check(RS.Current=2, 'replay current 2');
+    Check(Pos('accepts=2', TlsPasFormatServerStats(S))>0, 'format server');
+    Check(Pos('hits=', TlsPasFormatReplayStats(RS))>0, 'format replay');
+    Obs.Clear;
+    S := Obs.GetServerStats;
+    Check((S.Accepts=0) and (S.RejectPolicy=0), 'clear resets server');
+    RS := Obs.GetReplayStats;
+    Check(RS.Current=0, 'clear replay');
+  finally Obs.Free; end;
+end;
+
+procedure TestFormatHelpers;
+var RS: TAsyncTlsPasReplayStats; SS: TTlsPasServerStats; F: string;
+begin
+  RS := Default(TAsyncTlsPasReplayStats);
+  RS.Hits:=1; RS.Misses:=2; RS.Current:=1;
+  F := TlsPasFormatReplayStats(RS);
+  Check(Pos('hits=1', F)>0, 'format hits');
+  Check(Pos('current=1', F)>0, 'format current');
+  SS := Default(TTlsPasServerStats);
+  SS.Accepts:=5; SS.RejectPolicy:=1; SS.RejectReplay:=2;
+  F := TlsPasFormatServerStats(SS);
+  Check(Pos('accepts=5', F)>0, 'format accepts');
+  Check(Pos('reject_replay=2', F)>0, 'format replay');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -873,6 +917,8 @@ begin
   GSuite.Test('ReplayFactory', @TestReplayFactory);
   GSuite.Test('ServerDecide', @TestServerDecide);
   GSuite.Test('ServerShouldAccept', @TestServerShouldAcceptIntegration);
+  GSuite.Test('ObserverStats', @TestObserverStats);
+  GSuite.Test('FormatHelpers', @TestFormatHelpers);
   if not GSuite.Run then
     Halt(1);
 end.
