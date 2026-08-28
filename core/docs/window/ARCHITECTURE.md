@@ -1,8 +1,8 @@
 # nextpas.core.window 架构设计
 
-**状态**：Design S0（与 [CONTRACT.md](CONTRACT.md) 0.1 冻结草案同批）
+**状态**：1.1 稳定（与 [CONTRACT.md](CONTRACT.md) 1.1 同批，1.0 终局落地 + 1.1 单缓存精雕）
 **Owner**：core-window lane
-**最后更新**：2026-08-28（S5 8 后端全接入 + M5 去重：共享队列 6 合1 + finalization 0泄漏，13 门禁，去消息化 + Host/PumpOnce + O(1) + inline 370µs/167µs）
+**最后更新**：2026-08-29（1.1 精雕：单缓存门控 271µs/10k=27.1ns，共享队列 6 合1 + live 单点 + finalization 0泄漏，13 门禁）
 **对标基准**: Rust `winit` / `tao` · GLFW / SDL2 Window · Flutter View /
 Android `Activity.getWindow()` / iOS `UIWindow`
 
