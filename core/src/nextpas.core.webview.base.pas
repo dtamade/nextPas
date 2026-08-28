@@ -84,11 +84,11 @@ procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
 { invoke 命名空间校验（registry 注册与桥分发共用同一权威规则）：
   ACmd 为空、或以 'npw.'（协议错误码词汇前缀）或 '_' 开头时抛
   EWebviewInvalidState，其余一律接受（CONTRACT §3.3）。 }
-procedure CheckInvokeCmd(const ACmd: string);
+procedure CheckInvokeCmd(const ACmd: string); inline;
 
 { scheme token 校验：复用度 — builder 早期 Fail-Fast 与 CheckWebviewOptions 共用同一权威。
   规则：非空且全小写 [a-z][a-z0-9+.-]*，空串返回 False（由 CheckWebviewOptions 视为用默认）。 }
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
+function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
 
 { 几何校验公共抽取（S39）：builder 链式早期 Fail-Fast 与 CheckWebviewOptions 同源复用，零重复。 }
 procedure CheckWebviewSize(AWidth, AHeight: Integer); inline;
@@ -180,7 +180,7 @@ begin
   Result.InitScripts := nil;
 end;
 
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
+function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
 var
   I: Integer;
 begin
@@ -263,7 +263,7 @@ begin
     CheckWebviewInitScript(AOptions.InitScripts[LIdx]);
 end;
 
-procedure CheckInvokeCmd(const ACmd: string);
+procedure CheckInvokeCmd(const ACmd: string); inline;
 begin
   if ACmd = '' then
     raise EWebviewInvalidState.Create('invoke cmd must not be empty');
