@@ -1368,24 +1368,10 @@ end;
 
 procedure ValidateOdbcConnStr(const AConnStr: string);
 var
-  LCount: Integer;
+  LErr: string;
 begin
-  LCount := 0;
-  try
-    ScanKV(AConnStr,
-      procedure(const AKey, AValue: string)
-      begin
-        Inc(LCount);
-      end);
-    if LCount = 0 then
-      raise ENextPasError.Create('empty dsn');
-  except
-    on E: EDbError do raise;
-    on E: ENextPasError do
-      raise EDbError.CreateSimple(dbkOdbc, E.Message);
-    on E: Exception do
-      raise EDbError.CreateSimple(dbkOdbc, E.Message);
-  end;
+  if not ValidateKV(AConnStr, LErr) then
+    raise EDbError.CreateSimple(dbkOdbc, LErr);
 end;
 
 function ConnectOdbc(const ADsn: string;

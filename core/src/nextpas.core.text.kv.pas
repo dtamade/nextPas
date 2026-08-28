@@ -32,6 +32,10 @@ type
   TKVCallback = reference to procedure(const AKey, AValue: string);
 procedure ScanKV(const S: string; const ACallback: TKVCallback);
 
+{ 零分配校验：仅检查词法（malformed/unterminated），不分配 Key/Value 拷贝；
+  返回 True 表示语法合法且至少一对，False 时 AError 为诊断文案（不抛）。 }
+function ValidateKV(const S: string; out AError: string): Boolean;
+
 implementation
 
 uses
@@ -151,6 +155,62 @@ begin
     end;
     ACallback(LKey, LVal);
   end;
+end;
+
+function ValidateKV(const S: string; out AError: string): Boolean;
+var
+  I, LLen, LQuote, LStart, LCount: Integer;
+  LKey: string;
+begin
+  AError := '';
+  LCount := 0;
+  LLen := Length(S);
+  I := 1;
+  while I <= LLen do
+  begin
+    while (I <= LLen) and ((S[I] = ' ') or (S[I] = ';')) do
+      Inc(I);
+    if I > LLen then Break;
+    LStart := I;
+    while (I <= LLen) and (S[I] <> '=') do
+      Inc(I);
+    if (I - LStart = 0) or (I > LLen) then
+    begin
+      AError := 'malformed dsn near offset ' + IntToStr(I);
+      Exit(False);
+    end;
+    LKey := Copy(S, LStart, I - LStart);
+    Inc(I);
+    if (I <= LLen) and ((S[I] = '''') or (S[I] = '"') or (S[I] = '{')) then
+    begin
+      if S[I] = '{' then
+        LQuote := Ord('}')
+      else
+        LQuote := Ord(S[I]);
+      Inc(I);
+      LStart := I;
+      while (I <= LLen) and (Ord(S[I]) <> LQuote) do
+        Inc(I);
+      if I > LLen then
+      begin
+        AError := 'unterminated quoted dsn value for "' + LKey + '"';
+        Exit(False);
+      end;
+      Inc(I);
+    end
+    else
+    begin
+      while (I <= LLen) and (S[I] <> ' ') and (S[I] <> ';') do
+        Inc(I);
+    end;
+    Inc(LCount);
+  end;
+  if LCount = 0 then
+  begin
+    AError := 'empty dsn';
+    Exit(False);
+  end;
+  Result := True;
 end;
 
 end.
