@@ -16,6 +16,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.time.base,
   nextpas.core.async.loop,
   nextpas.core.async.cancellation,
   nextpas.core.net.async.tcp,
@@ -87,7 +88,6 @@ uses
   SysUtils,
   nextpas.core.system.sysutils,
   nextpas.core.async.base,
-  nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.crypto.random,
   nextpas.core.crypto.ed25519,
@@ -126,8 +126,11 @@ type
     FNegotiated: TSshNegotiated;
     FAuthenticated: Boolean;
     FClosed: Boolean;
+    FKeepAliveHandle: TAsyncTimerHandle;
     procedure LoadKnownHostsIfNeeded;
     procedure VerifyHostKey(const ASigAlg: string; const AH, ASigBlob: TBytes);
+    procedure ScheduleKeepAlive;
+    procedure KeepAliveTick(AContext: Pointer);
     function GetConnected: Boolean;
     function GetServerVersion: string;
     function GetServerHostKeyFingerprint: string;
@@ -322,9 +325,28 @@ begin
   if not FClosed then
   begin
     FClosed := True;
+    if (FLoop <> nil) and FKeepAliveHandle.IsValid then
+      FLoop.CancelTimer(FKeepAliveHandle);
+    FKeepAliveHandle := Default(TAsyncTimerHandle);
     if FTransport <> nil then
       FTransport.Close;
   end;
+end;
+
+procedure TAsyncSshSession.ScheduleKeepAlive;
+begin
+  if FClosed or not FAuthenticated then Exit;
+  if FOptions.KeepAliveIntervalMs <= 0 then Exit;
+  if (FLoop = nil) or (FTransport = nil) then Exit;
+  FKeepAliveHandle := FLoop.ScheduleMethod(TDuration.FromMilliseconds(UInt64(FOptions.KeepAliveIntervalMs)), @KeepAliveTick, Self);
+end;
+
+procedure TAsyncSshSession.KeepAliveTick(AContext: Pointer);
+begin
+  if FClosed or not FAuthenticated then Exit;
+  if FTransport <> nil then
+    FTransport.AsyncSendIgnore(nil, nil, nil);
+  ScheduleKeepAlive;
 end;
 
 procedure ExecPostCb(AContext: Pointer);
@@ -815,6 +837,7 @@ begin
   FSession.FNegotiated := FNeg;
   FSession.FSessionId := FSessionId;
   FreeAndNil(FAgentClient);
+  FSession.ScheduleKeepAlive;
   Succeed;
 end;
 
