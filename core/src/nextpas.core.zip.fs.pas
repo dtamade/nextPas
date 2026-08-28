@@ -75,26 +75,69 @@ type
   end;
   TDeferredDirArray = array of TDeferredDir;
 
-function SortWalkCompare(const AA, AB: string): Boolean; inline;
-begin
-  Result := AA > AB;
-end;
-
 procedure SortDirEntries(var A: TDirEntryArray);
 var
-  LI, LJ: Integer;
+  LStackLo, LStackHi: array[0..63] of Integer;
+  LSp, LLo, LHi, LI, LJ: Integer;
+  LPivot: string;
   LTmp: TDirEntry;
 begin
-  for LI := 1 to High(A) do
+  if Length(A) < 2 then Exit;
+  LSp := 0;
+  LStackLo[LSp] := 0;
+  LStackHi[LSp] := High(A);
+  Inc(LSp);
+  while LSp > 0 do
   begin
-    LTmp := A[LI];
-    LJ := LI - 1;
-    while (LJ >= 0) and SortWalkCompare(A[LJ].Name, LTmp.Name) do
+    Dec(LSp);
+    LLo := LStackLo[LSp];
+    LHi := LStackHi[LSp];
+    if LLo >= LHi then Continue;
+    LI := LLo;
+    LJ := LHi;
+    LPivot := A[(LLo + LHi) shr 1].Name;
+    repeat
+      while A[LI].Name < LPivot do Inc(LI);
+      while A[LJ].Name > LPivot do Dec(LJ);
+      if LI <= LJ then
+      begin
+        LTmp := A[LI];
+        A[LI] := A[LJ];
+        A[LJ] := LTmp;
+        Inc(LI);
+        Dec(LJ);
+      end;
+    until LI > LJ;
+    if (LJ - LLo) > (LHi - LI) then
     begin
-      A[LJ + 1] := A[LJ];
-      Dec(LJ);
+      if LLo < LJ then
+      begin
+        LStackLo[LSp] := LLo;
+        LStackHi[LSp] := LJ;
+        Inc(LSp);
+      end;
+      if LI < LHi then
+      begin
+        LStackLo[LSp] := LI;
+        LStackHi[LSp] := LHi;
+        Inc(LSp);
+      end;
+    end
+    else
+    begin
+      if LI < LHi then
+      begin
+        LStackLo[LSp] := LI;
+        LStackHi[LSp] := LHi;
+        Inc(LSp);
+      end;
+      if LLo < LJ then
+      begin
+        LStackLo[LSp] := LLo;
+        LStackHi[LSp] := LJ;
+        Inc(LSp);
+      end;
     end;
-    A[LJ + 1] := LTmp;
   end;
 end;
 
