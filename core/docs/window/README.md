@@ -1,9 +1,9 @@
 # nextpas.core.window
 
-**状态**: M-band 稳定 — S1→S5 全后端落地，13 门禁全绿，`bench_dispatcher` 377µs/1000（PostSingle/1000，O(1) 活窗计数 + 热路径 inline）
+**状态**: M-band 稳定 — S1→S5 全后端落地，13 门禁全绿，`bench_dispatcher` 370µs/1000（PostSingle，O(1)+inline+共享队列 370/Zero 167µs/16ns）
 **层级**: L2 系统能力（依赖 L0-L1；被 L3 的 `webview` / `gpu` / `directui` / 外部 `game888` 复用）
 **Owner**: core-window lane
-**最后更新**: 2026-08-28（M-band 去消息化 + `IWindowHost` + `WindowPumpOnce` + 13 门禁 + PumpOnce 早期退出 + `demo_pump_loop` 复用实证 + 热路径 inline）
+**最后更新**: 2026-08-28（M5 共享队列 6 合1 + finalization 0泄漏 + 13 门禁 + Host/PumpOnce + O(1)+inline）
 **对标基准**: Rust `winit` + `tao` / `GLFW` / `SDL2 Window` / `Flutter View` / Android `Activity.getWindow()` / iOS `UIWindow`
 
 ---
@@ -74,7 +74,7 @@ base ← gtk.ffi ← gtk.loader ← gtk ─┘
 | `sdl2` | 全平台（含 game888 复用） | `SDL_Window` / `SDL_CreateWindow` + user-event | S3 | `WindowSdl2IsAvailable` |
 | `fake` | 全平台无头 | 纯 Pascal 脚本化驱动（`IWindowHost` 全实现） | S1 | 恒真（CI 唯一载体） |
 
-> 探测顺序 `win32 > cocoa > android > uikit > wasm > gtk > sdl2 > fake`，`DefaultWindowKind` 能力驱动；`bench_dispatcher` 377µs/1000 `PostSingle`（32cap 环，O(1) 活窗计数 + `GetWidth/GetHeight`/`IsClosed`/`GetDispatcher`/`IsOnMainThread` inline + `CheckWindowOptions` 富错误信息；`WindowPumpOnceZero` 18ns/次早退、7 项分拆）。
+> 探测顺序 `win32 > cocoa > android > uikit > wasm > gtk > sdl2 > fake`，`DefaultWindowKind` 能力驱动；`bench_dispatcher` 370µs/1000 `PostSingle`（32cap 共享队列，O(1)+`GetWidth/GetHeight`/`IsClosed`/`GetDispatcher`/`IsOnMainThread` inline + `CheckWindowOptions` 富错误信息；`WindowPumpOnceZero` 167µs/10000 ≈16ns/次早退、7 项分拆 430µs Live 对比，0 泄漏）。
 
 ---
 
@@ -160,4 +160,4 @@ Check(LWin.IsClosed);
 |------|------|
 | `CONTRACT.md` | 冻结契约：单元布局、类型/接口签名、线程模型、不变量、错误、Deferred、测试门禁、宿主与非阻塞泵 |
 | `ARCHITECTURE.md` | 架构纵深：抽取缝、后端矩阵、事件/DPI/主循环、去消息化、与 gpu/webview/game888/directui 的组合 |
-| `ROADMAP.md` | 分波实施图：S1→S5 全后端 + M-band 维护带（13 门禁，377µs 基线） |
+| `ROADMAP.md` | 分波实施图：S1→S5 全后端 + M-band（13 门禁，370/167/430µs，0泄漏） |
