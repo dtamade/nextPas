@@ -33,7 +33,7 @@ function GitKindFromString(const AName: string): TGitObjectKind;
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
 function GitBytesToString(const ABytes: TBytes): string; inline;
-function GitStringToBytes(const S: string): TBytes; inline;
+function GitStringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
@@ -132,21 +132,17 @@ begin
 end;
 
 function GitBytesToString(const ABytes: TBytes): string; inline;
-var
-  I: Integer;
 begin
   SetLength(Result, Length(ABytes));
-  for I := 0 to High(ABytes) do
-    Result[I+1] := Chr(ABytes[I]);
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
 end;
 
-function GitStringToBytes(const S: string): TBytes; inline;
-var
-  I: Integer;
+function GitStringToBytes(const AText: string): TBytes; inline;
 begin
-  SetLength(Result, Length(S));
-  for I := 1 to Length(S) do
-    Result[I-1] := Byte(S[I]);
+  SetLength(Result, Length(AText));
+  if Length(AText) > 0 then
+    Move(AText[1], Result[0], Length(AText));
 end;
 
 end.
