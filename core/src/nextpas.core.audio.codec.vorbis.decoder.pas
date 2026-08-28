@@ -12,6 +12,7 @@ uses
   nextpas.core.audio.codec.intf;
 
 function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
+function VorbisDecodeBytes(const AData: TBytes): TAudioBuffer;
 function CreateVorbisDecoder: IAudioDecoder;
 
 implementation
@@ -38,12 +39,19 @@ type
   TVorbisDecoder = class(TInterfacedObject, IAudioDecoder)
   private
     FTags: TAudioTags;
+    FOut: TBytes;
+    FOutCap: Integer;
+    function DecodeBytesInternal(const AData: TBytes): TAudioBuffer;
   public
     function Probe(const APrefix: TBytes): TAudioProbeResult;
     function DecodeWhole(const AStream: IStream): TAudioBuffer;
+    function DecodeBytes(const AData: TBytes): TAudioBuffer;
     function OpenStreaming(const AStream: IStream): IAudioSource;
     function Tags: TAudioTags;
   end;
+
+threadvar
+  GReuseVorbis: TVorbisDecoder;
 
 constructor TMemoryVorbisSource.Create(const ABuffer: TAudioBuffer);
 begin
@@ -133,36 +141,23 @@ begin
   Result := FTags;
 end;
 
-function TVorbisDecoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
+function TVorbisDecoder.DecodeBytesInternal(const AData: TBytes): TAudioBuffer;
 var
-  LData: TBytes;
-  LAvail: Int64;
-  LRead: LongInt;
   V: PStbVorbis;
   Err: LongInt;
   Info: TStbVorbisInfo;
   Comment: TStbVorbisComment;
   CH, SR: LongInt;
-  LOutBytes: TBytes;
-  LOutPos, LOutCap, LTotalFrames: Integer;
+  LOutPos, LTotalFrames: Integer;
   LFormat: TAudioFormat;
   Tmp: array[0..4095] of Single;
-  N, I: Integer;
-  TmpTags: TAudioTags;
-  RawComment: TBytes;
+  N: Integer;
 begin
   Result := Default(TAudioBuffer);
   FTags := Default(TAudioTags);
-  if AStream = nil then raise EAudioDecodeError.Create('vorbis: nil stream');
-  LAvail := AStream.Size - AStream.Position;
-  if LAvail <= 0 then raise EAudioDecodeError.Create('vorbis: empty stream');
-  if LAvail > 1024*1024*256 then raise EAudioDecodeError.Create('vorbis: stream too large');
-  SetLength(LData, LAvail);
-  LRead := AStream.Read(LData[0], LongInt(LAvail));
-  if LRead <> LAvail then raise EAudioDecodeError.Create('vorbis: read failed');
-
+  if Length(AData) = 0 then raise EAudioDecodeError.Create('vorbis: empty stream');
   Err := 0;
-  V := stb_vorbis_open_memory(@LData[0], Length(LData), @Err, nil);
+  V := stb_vorbis_open_memory(@AData[0], Length(AData), @Err, nil);
   if V = nil then raise EAudioDecodeError.CreateFmt('vorbis: open failed err=%d', [Err]);
   try
     Info := stb_vorbis_get_info(V);
@@ -190,34 +185,66 @@ begin
       // 为保持稳定性，此处不强行解析，仅保留透传，完整 MergeTags 由调用方按需触发
     end;
 
+    // 复用 FOut：首跑 ~176k*4 预分配，后续零分配（对标 FLAC/MP3 11/5 预分配）
+    if FOutCap < Length(AData) * 4 then
+    begin
+      FOutCap := Length(AData) * 4;
+      if FOutCap < 4096 * CH * 4 then FOutCap := 4096 * CH * 4;
+      if FOutCap > 1024*1024*32 then FOutCap := 1024*1024*32;
+      SetLength(FOut, FOutCap);
+    end;
     LOutPos := 0;
-    LOutCap := 0;
     LTotalFrames := 0;
-    SetLength(LOutBytes, 0);
     while True do
     begin
       N := stb_vorbis_get_samples_float_interleaved(V, CH, @Tmp[0], Length(Tmp));
       if N <= 0 then Break;
-      if LOutPos + N * CH * 4 > LOutCap then
+      if LOutPos + N * CH * 4 > FOutCap then
       begin
-        if LOutCap = 0 then LOutCap := 4096 * CH * 4;
-        while LOutPos + N * CH * 4 > LOutCap do LOutCap := LOutCap * 2;
-        SetLength(LOutBytes, LOutCap);
+        while LOutPos + N * CH * 4 > FOutCap do FOutCap := FOutCap * 2;
+        SetLength(FOut, FOutCap);
       end;
-      Move(Tmp[0], LOutBytes[LOutPos], N * CH * SizeOf(Single));
+      Move(Tmp[0], FOut[LOutPos], N * CH * SizeOf(Single));
       Inc(LOutPos, N * CH * SizeOf(Single));
       Inc(LTotalFrames, N);
     end;
     if LTotalFrames = 0 then raise EAudioDecodeError.Create('vorbis: no frames');
-    SetLength(LOutBytes, LOutPos);
+    SetLength(Result.Data, LOutPos);
+    if LOutPos > 0 then Move(FOut[0], Result.Data[0], LOutPos);
     Result.Format := LFormat;
     Result.FrameCount := LTotalFrames;
-    Result.Data := LOutBytes;
     // 若需完整 VorbisComment 解析，可在此构造 RawComment 块并调用 TryParseVorbisComment 合并
     // 保持 FTags 已含 vendor，满足基础完整性
   finally
     stb_vorbis_close(V);
   end;
+end;
+
+function TVorbisDecoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
+var
+  LData: TBytes;
+  LAvail: Int64;
+  LRead: LongInt;
+begin
+  if AStream = nil then raise EAudioDecodeError.Create('vorbis: nil stream');
+  LAvail := AStream.Size - AStream.Position;
+  if LAvail <= 0 then raise EAudioDecodeError.Create('vorbis: empty stream');
+  if LAvail > 1024*1024*256 then raise EAudioDecodeError.Create('vorbis: stream too large');
+  SetLength(LData, LAvail);
+  LRead := AStream.Read(LData[0], LongInt(LAvail));
+  if LRead <> LAvail then raise EAudioDecodeError.Create('vorbis: read failed');
+  Result := DecodeBytesInternal(LData);
+end;
+
+function TVorbisDecoder.DecodeBytes(const AData: TBytes): TAudioBuffer;
+begin
+  Result := DecodeBytesInternal(AData);
+end;
+
+function VorbisDecodeBytes(const AData: TBytes): TAudioBuffer;
+begin
+  if GReuseVorbis = nil then GReuseVorbis := TVorbisDecoder.Create;
+  Result := GReuseVorbis.DecodeBytesInternal(AData);
 end;
 
 function TVorbisDecoder.OpenStreaming(const AStream: IStream): IAudioSource;

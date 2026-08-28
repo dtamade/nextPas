@@ -56,10 +56,6 @@ implementation
     cvtdq2ps xmm1, xmm1
     shufps xmm0, xmm0, 0
     mulps xmm1, xmm0
-    movaps xmm2, [rip + VEC_ONE]
-    minps xmm1, xmm2
-    movaps xmm2, [rip + VEC_NEGONE]
-    maxps xmm1, xmm2
     movups [rsi], xmm1
   end;
 
@@ -102,12 +98,6 @@ implementation
     shufps xmm0, xmm0, 0
     mulps xmm1, xmm0
     mulps xmm2, xmm0
-    movaps xmm3, [rip + VEC_ONE]
-    minps xmm1, xmm3
-    minps xmm2, xmm3
-    movaps xmm3, [rip + VEC_NEGONE]
-    maxps xmm1, xmm3
-    maxps xmm2, xmm3
     movaps xmm3, xmm1
     unpcklps xmm1, xmm2
     unpckhps xmm3, xmm2
@@ -136,7 +126,7 @@ implementation
   end;
 
   procedure PcmConvertS16x4ToF32(AIn: PSmallInt; AScale: Single; AOut: PSingle); inline;
-  var Vi, Sign, Lo: TM128; Vf, Scale, One, NegOne: TM128;
+  var Vi, Sign, Lo: TM128; Vf, Scale: TM128;
   begin
     Vi := simd_loadl_epi64(AIn);
     Sign := simd_srai_epi16(Vi, 15);
@@ -144,10 +134,6 @@ implementation
     Vf := simd_cvtepi32_ps(Lo);
     Scale := simd_set1_ps(AScale);
     Vf := simd_mul_ps(Vf, Scale);
-    One := simd_set1_ps(1.0);
-    NegOne := simd_set1_ps(-1.0);
-    Vf := simd_min_ps(Vf, One);
-    Vf := simd_max_ps(Vf, NegOne);
     simd_storeu_ps(AOut^, Vf);
   end;
 
@@ -172,7 +158,7 @@ implementation
   end;
 
   procedure PcmConvertS16x4StereoToF32Interleaved(AInL, AInR: PSmallInt; AScale: Single; AOut: PSingle); inline;
-  var ViL, ViR, SignL, SignR, LoL, LoR, VfL, VfR, Scale, One, NegOne, OutLo, OutHi: TM128;
+  var ViL, ViR, SignL, SignR, LoL, LoR, VfL, VfR, Scale, OutLo, OutHi: TM128;
   begin
     ViL := simd_loadl_epi64(AInL); ViR := simd_loadl_epi64(AInR);
     SignL := simd_srai_epi16(ViL, 15); SignR := simd_srai_epi16(ViR, 15);
@@ -180,9 +166,6 @@ implementation
     VfL := simd_cvtepi32_ps(LoL); VfR := simd_cvtepi32_ps(LoR);
     Scale := simd_set1_ps(AScale);
     VfL := simd_mul_ps(VfL, Scale); VfR := simd_mul_ps(VfR, Scale);
-    One := simd_set1_ps(1.0); NegOne := simd_set1_ps(-1.0);
-    VfL := simd_min_ps(VfL, One); VfL := simd_max_ps(VfL, NegOne);
-    VfR := simd_min_ps(VfR, One); VfR := simd_max_ps(VfR, NegOne);
     OutLo := simd_unpacklo_ps(VfL, VfR); OutHi := simd_unpackhi_ps(VfL, VfR);
     simd_storeu_ps(AOut^, OutLo);
     simd_storeu_ps(Pointer(PtrUInt(AOut) + 16)^, OutHi);
