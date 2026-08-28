@@ -216,6 +216,20 @@ begin
   end;
 end;
 
+procedure BenchServerDecide(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision;
+begin
+  for I := 1 to aIters do
+    D := TlsPasServerDecideEarlyData(GReplayStore, GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
+procedure BenchServerShouldAccept(aIters: Int64);
+var I: Int64; LOk: Boolean;
+begin
+  for I := 1 to aIters do
+    LOk := TlsPasServerShouldAcceptEarlyData(GReplayStore, GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -282,6 +296,8 @@ begin
     .AddLoop('IsEarlyDataReplayed', @BenchReplayIsReplayed)
     .AddLoop('ReplayFileStore persist', @BenchReplayFileStore)
     .AddLoop('ReplayKvStore (local+kv)', @BenchReplayKvStore)
+    .AddLoop('ServerDecide (policy+replay)', @BenchServerDecide)
+    .AddLoop('ServerShouldAccept', @BenchServerShouldAccept)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;
