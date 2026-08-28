@@ -145,17 +145,30 @@ begin
 end;
 
 procedure TestPadLeft;
+var
+  LVar: string;
 begin
   CheckEqual('   hi', TextPadLeft('hi', 5), 'pad spaces');
   CheckEqual('000hi', TextPadLeft('hi', 5, '0'), 'pad zeros');
   CheckEqual('hello', TextPadLeft('hello', 3), 'no pad needed');
+  // FPC inline+literal Move 缺陷回退锁：字面量与变量路径必须一致
+  CheckEqual('   hi', nextpas.core.text.utils.PadLeft('hi', 5), 'utils pad literal');
+  LVar := 'hi';
+  CheckEqual('   hi', nextpas.core.text.utils.PadLeft(LVar, 5), 'utils pad var');
+  CheckEqual('   hi', TextPadLeft(LVar, 5), 'facade pad var');
 end;
 
 procedure TestPadRight;
+var
+  LVar: string;
 begin
   CheckEqual('hi   ', TextPadRight('hi', 5), 'pad spaces');
   CheckEqual('hi000', TextPadRight('hi', 5, '0'), 'pad zeros');
   CheckEqual('hello', TextPadRight('hello', 3), 'no pad needed');
+  // 同上：PadRight 字面量路径回退锁
+  CheckEqual('hi   ', nextpas.core.text.utils.PadRight('hi', 5), 'utils pad literal');
+  LVar := 'hi';
+  CheckEqual('hi   ', nextpas.core.text.utils.PadRight(LVar, 5), 'utils pad var');
 end;
 
 procedure TestRepeat;

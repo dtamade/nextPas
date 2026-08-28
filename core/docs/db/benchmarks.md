@@ -268,8 +268,8 @@ translate_complexity（线性度成立）、batch_insert pg 四路（autocommit
 - 数字漂移 ±15% 内视为环境噪声（共享机器）；跨过阈值先查环境再谈回归。
 - 新增 bench 必须同步扩充本文口径表，缺口径的 bench 视为不存在。
 
-## 验证锚点 2026-08-29
+## 验证锚点 2026-08-29 — 同步至 origin/main e53a4fec5（db 锚点 eae7df2a8）
 
-- 聚焦门：`test_text 33` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`）
-- 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，`median 125/272/1099 ns`，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
+- 聚焦门：`test_text 33` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`e53a` 复跑 33/12/21/7 绿）
+- 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，`median 126/274/1081 ns` 当前中位，历史 `125/272/1099 ns` 噪声带内，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
 - 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim 0 行单源 NormalizeLowerTrim`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）

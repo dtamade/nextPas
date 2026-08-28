@@ -37,7 +37,7 @@
 
 **签署（Sign-off）**：`2026-08-29` · `nextpas.core.db 终版 20260829` · 判定：R0-2/R0-3/R1-1 已通过 `test_text 33 + test_db_redis_base 12 + bench_kv 10 + pool 21 + lib-consumer 400对 + hygiene/diff-check 0` 闭环；**R1-R5 正式终版裁定通过**，后续按独立计划演进，不阻塞本次封版校验。
 
-**复核 2026-08-29**：`origin/main cdeb3ba04` 基线上复跑 `test_text 33 / redis 12 / pool 21 / mysql 7 heaptrc0` 与 `bench_kv 10 validate 0 allocs`（`125/272/1099 ns`），`make hygiene pass` / `diff-check 0` / `grep Trim db.* 0`，证据见 `benchmarks.md 验证锚点` 与 `{SCRATCH}`。
+**复核 2026-08-29**：`origin/main e53a4fec5` 基线上复跑 `test_text 33 / redis 12 / pool 21 / mysql 7 heaptrc0` 与 `bench_kv 10 validate 0 allocs`（`126/274/1081 ns`，`e53a` 含 db 锚点 `eae7df2a8`），`make hygiene pass` / `diff-check 0` / `grep Trim db.* 0`，证据见 `benchmarks.md 验证锚点` 与 `{SCRATCH}`。
 
 ## 3. 证据索引
 
