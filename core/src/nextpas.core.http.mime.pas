@@ -89,8 +89,11 @@ const
   );
 
 const
-  HASH_SIZE = 128;
+  HASH_SIZE = 128; { 必须为 2 的幂；HASH_MASK = HASH_SIZE-1 派生，128 槽 1-2 探测命中 65 项 }
   HASH_MASK = HASH_SIZE - 1;
+  {$IF (HASH_SIZE and HASH_MASK) <> 0}
+    {$FATAL 'HASH_SIZE must be power of two'}
+  {$ENDIF}
 
 var
   FMimeHash: array[0..HASH_SIZE - 1] of Integer;

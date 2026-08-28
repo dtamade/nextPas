@@ -187,6 +187,9 @@ begin
       if not ResPackValidPath(AEntries[I].Path, True) then
         raise EResPackInvalidPath.Create('respack: invalid pack path "'
           + AEntries[I].Path + '"');
+      if Length(AEntries[I].Path) > High(Word) then
+        raise EResPackInvalidPath.Create('respack: path too long "'
+          + AEntries[I].Path + '"');
       PathLens[I] := Word(Length(AEntries[I].Path));
       TotalInput := TotalInput + SizeUInt(AEntries[I].DataSize);
     end;

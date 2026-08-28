@@ -82,6 +82,10 @@ type
     property Position: Int64 read GetPosition write SetPosition;
   end;
 
+const
+  EMBEDDED_POOL_SIZE = 16; { SpinLock 池 16 槽零分配复用，163ms/10k 实测 }
+
+type
   TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag)
   private
     FRp: TResPack;
@@ -92,7 +96,7 @@ type
     FETags: array of string; { parallel ETag cache — precomputed at Create, O(1) ServeVfs }
     FLastMods: array of string; { parallel Last-Modified cache — FormatHttpDate at Create }
     FEntries: array of TResPackEntry; { parallel entry cache — zero DecodeWire on Stat/OpenRead }
-    FPool: array[0..15] of TEmbeddedSlice; { 16-slot SpinLock 池，零分配复用 }
+    FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
     FPoolCount: Integer;
     FPoolLock: ISpinLock;
     function EntryPaths: TVfsNameArray; inline;
@@ -380,7 +384,7 @@ begin
   if (FPoolLock = nil) or (ASlice = nil) then Exit;
   FPoolLock.Acquire;
   try
-    if FPoolCount < Length(FPool) then
+    if FPoolCount < EMBEDDED_POOL_SIZE then
     begin
       FPool[FPoolCount] := ASlice;
       Inc(FPoolCount);
