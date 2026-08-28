@@ -356,6 +356,48 @@ begin
   Check(LRaised, 'single unterminated raises');
 end;
 
+procedure TestValidBraceAndSemicolonPassesValidation;
+var
+  LRaised: Boolean;
+  LMsg: string;
+begin
+  // Valid ODBC syntax with braces and semicolons should pass text.kv validation
+  // and reach driver manager, not fail as malformed/unterminated
+  LRaised := False;
+  try
+    ConnectOdbc('Driver={DM8 ODBC DRIVER};Server=127.0.0.1;Port=5236;UID=SYSDBA;PWD=SYSPWD;');
+    Check(False, 'valid brace connstr should reach manager');
+  except
+    on E: EDbError do
+    begin
+      LRaised := True;
+      LMsg := E.Message;
+      Check(Pos('malformed', LMsg) = 0, 'valid brace not malformed');
+      Check(Pos('unterminated', LMsg) = 0, 'valid brace not unterminated');
+      Check(E.Backend = dbkOdbc, 'valid brace: backend dbkOdbc');
+      // Must have reached driver manager (SqlState non-empty), not validation layer
+      Check(E.SqlState <> '', 'valid brace reaches manager, SqlState: ' + E.SqlState);
+    end;
+  end;
+  Check(LRaised, 'valid brace reaches manager');
+
+  // Valid semicolon mix should also pass validation
+  LRaised := False;
+  try
+    ConnectOdbc('DSN=myDsn;UID=user;PWD=''p@ss;word'';');
+    Check(False, 'semicolon mix should reach manager');
+  except
+    on E: EDbError do
+    begin
+      LRaised := True;
+      Check(Pos('malformed', E.Message) = 0, 'semicolon mix not malformed');
+      Check(Pos('unterminated', E.Message) = 0, 'semicolon mix not unterminated');
+      Check(E.SqlState <> '', 'semicolon mix reaches manager');
+    end;
+  end;
+  Check(LRaised, 'semicolon mix reaches manager');
+end;
+
 { ===== 5 ===== }
 
 procedure TestNegativeConnectNormalized;
@@ -537,6 +579,7 @@ begin
   T.Test('empty dsn fail-fast', @TestEmptyDsnFailFast);
   T.Test('malformed connstr fail-fast', @TestMalformedConnStrFailFast);
   T.Test('unterminated brace fail-fast', @TestUnterminatedBraceFailFast);
+  T.Test('valid brace and semicolon passes validation', @TestValidBraceAndSemicolonPassesValidation);
   T.Test('negative connect normalized', @TestNegativeConnectNormalized);
   T.Test('live roundtrip and capabilities', @TestLiveRoundtripAndCapabilities);
   if not T.Run then Halt(1);
