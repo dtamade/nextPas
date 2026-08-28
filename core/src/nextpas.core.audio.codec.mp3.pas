@@ -245,6 +245,7 @@ uses
   {$ifdef MP3DEC_SIMD_ON}
   {$ifdef cpuaarch64}
   , nextpas.core.audio.codec.mp3.sse
+  , nextpas.core.audio.simd
   {$endif}
   {$endif}
   ;
@@ -6639,8 +6640,31 @@ end;
 {$endif cpux86_64}
 {$ifdef cpuaarch64}
 procedure L3_antialias(grbuf: PSingle; nbands: LongInt);
+label _L__for0_step, _L__for1_step;
+var
+  i: LongInt; u, d: Single;
 begin
-  mp3d_antialias_neon(grbuf, @_static_L3_antialias_g_aa[0][0], @_static_L3_antialias_g_aa[1][0], nbands);
+  if AudioUseNeon then
+  begin
+    mp3d_antialias_neon(grbuf, @_static_L3_antialias_g_aa[0][0], @_static_L3_antialias_g_aa[1][0], nbands);
+    Exit;
+  end;
+  while (nbands > 0) do
+  begin
+    i := 0;
+    while (i < 8) do
+    begin
+      u := grbuf[(18 + i)];
+      d := grbuf[(17 - i)];
+      grbuf[(18 + i)] := ((u * _static_L3_antialias_g_aa[0][i]) - (d * _static_L3_antialias_g_aa[1][i]));
+      grbuf[(17 - i)] := ((u * _static_L3_antialias_g_aa[1][i]) + (d * _static_L3_antialias_g_aa[0][i]));
+      _L__for1_step:
+      i := (i + 1);
+    end;
+    _L__for0_step:
+    nbands := (nbands - 1);
+    grbuf := (grbuf + 18);
+  end;
 end;
 {$endif cpuaarch64}
 {$else}

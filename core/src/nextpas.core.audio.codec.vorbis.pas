@@ -652,7 +652,8 @@ implementation
 
 uses
   Math,
-  nextpas.core.audio.codec.vorbis.sse
+  nextpas.core.audio.codec.vorbis.sse,
+  nextpas.core.audio.simd
   ;
 
 const
@@ -7288,7 +7289,7 @@ begin
         effective := (effective - 1);
       end;
       {$ifdef C2P_SIMD}
-      if use_cb_sse then
+      if use_cb_sse and AudioUseNeon then
       begin
         { 内核按 4 对块 + 单个 2 对半块消费，恰好用尽向下取偶的对数 }
         v_pairs := ((effective shr 1) and not 1);
@@ -8192,7 +8193,7 @@ begin
   v := nil;
   A := f^.A[blocktype];
   {$ifdef C2P_SIMD}
-  if use_mdct_sse then
+  if use_mdct_sse and AudioUseNeon then
   begin
     vdec_mdct_fold1(buf2, buffer, A, __c2p_sar_longint(n2, 2));
     vdec_mdct_fold2(buf2, buffer, @A[__c2p_sar_longint(n2, 1)], __c2p_sar_longint(n2, 2));
@@ -8225,7 +8226,7 @@ begin
   u := buffer;
   v := buf2;
   {$ifdef C2P_SIMD}
-  if use_mdct_sse then
+  if use_mdct_sse and AudioUseNeon then
   begin
     vdec_mdct_step2(buffer, buf2, @A[(n2 - 8)], Int64(__c2p_sar_longint(n_2, 2)) or (Int64(__c2p_sar_longint(n2, 3)) shl 32));
   end
@@ -8260,7 +8261,7 @@ begin
   end;
   ld := (ilog(TInt32(n_2)) - 1);
   {$ifdef C2P_SIMD}
-  if use_mdct_sse then
+  if use_mdct_sse and AudioUseNeon then
   begin
     { iter0：即 k1=8 的 r 型蝶形（twiddle 每蝶形步进 8，指针每迭代降 8） }
     e0 := (u + ((n2 - 1) - (n4 * 0)));
@@ -8386,7 +8387,7 @@ begin
     bitrev := (bitrev + 2);
   end;
   {$ifdef C2P_SIMD}
-  if use_mdct_sse then
+  if use_mdct_sse and AudioUseNeon then
     vdec_mdct_step7(v, f^.C[blocktype], n2)
   else
   {$endif}
@@ -8422,7 +8423,7 @@ begin
   end;
   end;
   {$ifdef C2P_SIMD}
-  if use_mdct_sse then
+  if use_mdct_sse and AudioUseNeon then
     vdec_mdct_step8(buffer, buf2, ((f^.B[blocktype] + n2) - 8), n2)
   else
   {$endif}

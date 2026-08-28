@@ -944,7 +944,7 @@ function FlacSar64(Value: Int64; Count: LongWord): Int64; inline;
 implementation
 
 {$ifdef FLAC_SIMD_ON}
-uses nextpas.core.audio.codec.flac.sse;
+uses nextpas.core.audio.codec.flac.sse, nextpas.core.audio.simd;
 {$endif}
 
 function cflac_Sar32(Value: LongInt; Count: LongWord): LongInt; cdecl;
@@ -9352,9 +9352,12 @@ var
 begin
 {$ifdef FLAC_SIMD_ON}
 {$ifdef cpuaarch64}
-  flac_mid_side_neon(PInt32T(output[0]), PInt32T(output[1]), LongWord(frame^.header.block_size));
-  i_2 := TUint32T(frame^.header.block_size);
-  System.Exit;
+  if AudioUseNeon then
+  begin
+    flac_mid_side_neon(PInt32T(output[0]), PInt32T(output[1]), LongWord(frame^.header.block_size));
+    i_2 := TUint32T(frame^.header.block_size);
+    System.Exit;
+  end;
 {$endif}
 {$endif}
   i_2 := TUint32T(0);
@@ -9467,7 +9470,18 @@ begin
       begin
 {$ifdef FLAC_SIMD_ON}
 {$ifdef cpuaarch64}
-        flac_left_side_neon(PInt32T(output[1]), PInt32T(output[0]), LongWord(frame^.header.block_size));
+        if AudioUseNeon then
+          flac_left_side_neon(PInt32T(output[1]), PInt32T(output[0]), LongWord(frame^.header.block_size))
+        else
+        begin
+          i_2 := TUint32T(0);
+          while (i_2 < LongWord(frame^.header.block_size)) do
+          begin
+            output[1][i_2] := TInt32T((output[0][i_2] - output[1][i_2]));
+            _L__for0_step:
+            i_2 := (i_2 + 1);
+          end;
+        end;
 {$else}
         i_2 := TUint32T(0);
         while (i_2 < LongWord(frame^.header.block_size)) do
@@ -9491,7 +9505,18 @@ begin
       begin
 {$ifdef FLAC_SIMD_ON}
 {$ifdef cpuaarch64}
-        flac_right_side_neon(PInt32T(output[0]), PInt32T(output[1]), LongWord(frame^.header.block_size));
+        if AudioUseNeon then
+          flac_right_side_neon(PInt32T(output[0]), PInt32T(output[1]), LongWord(frame^.header.block_size))
+        else
+        begin
+          i_2 := TUint32T(0);
+          while (i_2 < LongWord(frame^.header.block_size)) do
+          begin
+            output[0][i_2] := TInt32T((output[0][i_2] + output[1][i_2]));
+            _L__for1_step:
+            i_2 := (i_2 + 1);
+          end;
+        end;
 {$else}
         i_2 := TUint32T(0);
         while (i_2 < LongWord(frame^.header.block_size)) do
@@ -14447,7 +14472,18 @@ begin
   begin
 {$ifdef FLAC_SIMD_ON}
 {$ifdef cpuaarch64}
-    flac_wasted_bits_neon(output, block_size, LongWord(subframe^.header.wasted_bits));
+    if AudioUseNeon then
+      flac_wasted_bits_neon(output, block_size, LongWord(subframe^.header.wasted_bits))
+    else
+    begin
+      i_2 := TUint32T(0);
+      while (i_2 < block_size) do
+      begin
+        output[i_2] := (output[i_2] shl subframe^.header.wasted_bits);
+        _L__for0_step:
+        i_2 := (i_2 + 1);
+      end;
+    end;
 {$else}
     i_2 := TUint32T(0);
     while (i_2 < block_size) do
@@ -14868,7 +14904,30 @@ begin
   begin
 {$ifdef FLAC_SIMD_ON}
 {$ifdef cpuaarch64}
-    flac_lpc_restore_neon(PInt32T(output), PInt32T(@l^.coefficients[0]), LongWord(predictor_order), LongWord(l^.shift), LongWord(block_size));
+    if AudioUseNeon then
+      flac_lpc_restore_neon(PInt32T(output), PInt32T(@l^.coefficients[0]), LongWord(predictor_order), LongWord(l^.shift), LongWord(block_size))
+    else
+    begin
+      i_2 := TUint32T(predictor_order);
+      while (i_2 < block_size) do
+      begin
+        prediction_2 := TInt64T(0);
+        j_2 := TUint32T(0);
+        while (j_2 < LongWord(predictor_order)) do
+        begin
+          temp_2 := TInt64T(output[LongWord((LongWord((i_2 - j_2)) - 1))]);
+          temp_2 := (temp_2 * Int64(l^.coefficients[j_2]));
+          prediction_2 := (prediction_2 + temp_2);
+          _L__for1_step:
+          j_2 := (j_2 + 1);
+        end;
+        prediction_2 := cflac_Sar64(prediction_2, l^.shift);
+        prediction_2 := (prediction_2 + Int64(output[i_2]));
+        output[i_2] := TInt32T(prediction_2);
+        _L__for0_step:
+        i_2 := (i_2 + 1);
+      end;
+    end;
 {$else}
     i_2 := TUint32T(predictor_order);
     while (i_2 < block_size) do
