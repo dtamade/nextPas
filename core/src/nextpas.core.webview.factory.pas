@@ -212,11 +212,11 @@ type
     FOptions: TWebviewOptions;
     FKind: TWebviewKind;
     FInvokes: array of TFakeInvokeReg;
-    FInvokesLen: Integer;
+    FInvokesCount: Integer;
     FReady: array of TWebviewNotifyHandler;
-    FReadyLen: Integer;
+    FReadyCount: Integer;
     FInitScripts: array of string;
-    FInitScriptsLen: Integer;
+    FInitScriptsCount: Integer;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
     procedure EnsureUniqueCmd(const ACmd: string);
     procedure GrowInvokes; inline;
@@ -346,9 +346,9 @@ end;
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
 begin
   CheckWebviewInitScript(AJavascript);
-  if FInitScriptsLen = Length(FInitScripts) then GrowInitScripts;
-  FInitScripts[FInitScriptsLen] := AJavascript;
-  Inc(FInitScriptsLen);
+  if FInitScriptsCount = Length(FInitScripts) then GrowInitScripts;
+  FInitScripts[FInitScriptsCount] := AJavascript;
+  Inc(FInitScriptsCount);
   Result := Self;
 end;
 
@@ -365,7 +365,7 @@ end;
 procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string);
 var I: Integer;
 begin
-  for I := 0 to FInvokesLen - 1 do
+  for I := 0 to FInvokesCount - 1 do
     if FInvokes[I].Cmd = ACmd then
       raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
 end;
@@ -377,11 +377,11 @@ begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('invoke handler must not be nil: %s', [ACmd]);
   EnsureUniqueCmd(ACmd);
-  if FInvokesLen = Length(FInvokes) then GrowInvokes;
-  FInvokes[FInvokesLen].Cmd := ACmd;
-  FInvokes[FInvokesLen].Sync := AHandler;
-  FInvokes[FInvokesLen].IsAsync := False;
-  Inc(FInvokesLen);
+  if FInvokesCount = Length(FInvokes) then GrowInvokes;
+  FInvokes[FInvokesCount].Cmd := ACmd;
+  FInvokes[FInvokesCount].Sync := AHandler;
+  FInvokes[FInvokesCount].IsAsync := False;
+  Inc(FInvokesCount);
   Result := Self;
 end;
 
@@ -392,11 +392,11 @@ begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('async invoke handler must not be nil: %s', [ACmd]);
   EnsureUniqueCmd(ACmd);
-  if FInvokesLen = Length(FInvokes) then GrowInvokes;
-  FInvokes[FInvokesLen].Cmd := ACmd;
-  FInvokes[FInvokesLen].Async := AHandler;
-  FInvokes[FInvokesLen].IsAsync := True;
-  Inc(FInvokesLen);
+  if FInvokesCount = Length(FInvokes) then GrowInvokes;
+  FInvokes[FInvokesCount].Cmd := ACmd;
+  FInvokes[FInvokesCount].Async := AHandler;
+  FInvokes[FInvokesCount].IsAsync := True;
+  Inc(FInvokesCount);
   Result := Self;
 end;
 
@@ -404,9 +404,9 @@ function TBuilderImpl.OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
 begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.Create('OnReady handler must not be nil');
-  if FReadyLen = Length(FReady) then GrowReady;
-  FReady[FReadyLen] := AHandler;
-  Inc(FReadyLen);
+  if FReadyCount = Length(FReady) then GrowReady;
+  FReady[FReadyCount] := AHandler;
+  Inc(FReadyCount);
   Result := Self;
 end;
 
@@ -432,14 +432,14 @@ function TBuilderImpl.ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
 var
   I: Integer;
 begin
-  for I := 0 to FInvokesLen - 1 do
+  for I := 0 to FInvokesCount - 1 do
   begin
     if FInvokes[I].IsAsync then
       AWin.Invokes.RegisterAsync(FInvokes[I].Cmd, FInvokes[I].Async)
     else
       AWin.Invokes.Register(FInvokes[I].Cmd, FInvokes[I].Sync);
   end;
-  for I := 0 to FReadyLen - 1 do
+  for I := 0 to FReadyCount - 1 do
     AWin.OnReady(FReady[I]);
   Result := AWin;
 end;
@@ -447,10 +447,10 @@ end;
 function TBuilderImpl.Build: IWebviewWindow;
 var I: Integer;
 begin
-  if FInitScriptsLen > 0 then
+  if FInitScriptsCount > 0 then
   begin
-    SetLength(FOptions.InitScripts, FInitScriptsLen);
-    for I := 0 to FInitScriptsLen - 1 do
+    SetLength(FOptions.InitScripts, FInitScriptsCount);
+    for I := 0 to FInitScriptsCount - 1 do
       FOptions.InitScripts[I] := FInitScripts[I];
   end
   else
