@@ -529,6 +529,25 @@ end;
 
 { ---- Global SDL event pump ---- }
 
+function SdlModToWindowMod(AMod: UInt16): Integer; inline;
+begin
+  Result := 0;
+  if (AMod and KMOD_SHIFT) <> 0 then Result := Result or 1;
+  if (AMod and KMOD_CTRL) <> 0 then Result := Result or 2;
+  if (AMod and KMOD_ALT) <> 0 then Result := Result or 4;
+  if (AMod and KMOD_GUI) <> 0 then Result := Result or 8;
+end;
+
+function SdlButtonToWindowButton(AButton: UInt8): Integer; inline;
+begin
+  case AButton of
+    1: Result := 1;
+    3: Result := 2;
+    2: Result := 3;
+    else Result := AButton;
+  end;
+end;
+
 function SdlPollAndDispatchOnce: Boolean;
 var
   E: TSDL_Event;
@@ -592,6 +611,71 @@ begin
           LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
+    end;
+  end;
+
+  if E.type_ = SDL_KEYDOWN then
+  begin
+    LWin := FindWindowByID(E.key.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weKeyDown;
+      LEvent.KeyCode := E.key.keysym.sym;
+      LEvent.Modifiers := SdlModToWindowMod(E.key.keysym.mod_);
+      LSelf.DoDispatch(LEvent);
+    end;
+  end
+  else if E.type_ = SDL_KEYUP then
+  begin
+    LWin := FindWindowByID(E.key.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weKeyUp;
+      LEvent.KeyCode := E.key.keysym.sym;
+      LEvent.Modifiers := SdlModToWindowMod(E.key.keysym.mod_);
+      LSelf.DoDispatch(LEvent);
+    end;
+  end
+  else if E.type_ = SDL_MOUSEBUTTONDOWN then
+  begin
+    LWin := FindWindowByID(E.button.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseDown;
+      LEvent.X := E.button.x; LEvent.Y := E.button.y;
+      LEvent.Button := SdlButtonToWindowButton(E.button.button);
+      LEvent.Modifiers := 0;
+      LSelf.DoDispatch(LEvent);
+    end;
+  end
+  else if E.type_ = SDL_MOUSEBUTTONUP then
+  begin
+    LWin := FindWindowByID(E.button.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseUp;
+      LEvent.X := E.button.x; LEvent.Y := E.button.y;
+      LEvent.Button := SdlButtonToWindowButton(E.button.button);
+      LEvent.Modifiers := 0;
+      LSelf.DoDispatch(LEvent);
+    end;
+  end
+  else if E.type_ = SDL_MOUSEMOTION then
+  begin
+    LWin := FindWindowByID(E.motion.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseMove;
+      LEvent.X := E.motion.x; LEvent.Y := E.motion.y;
+      LEvent.Button := 0;
+      LEvent.Modifiers := 0;
+      if (E.motion.state and 1) <> 0 then LEvent.Button := 1;
+      LSelf.DoDispatch(LEvent);
     end;
   end;
 end;
@@ -663,6 +747,26 @@ begin
                 end;
             end;
           end;
+        end else if LEv.type_ = SDL_KEYDOWN then
+        begin
+          LWin := FindWindowByID(LEv.key.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weKeyDown; LEvent.KeyCode := LEv.key.keysym.sym; LEvent.Modifiers := SdlModToWindowMod(LEv.key.keysym.mod_); LSelf.DoDispatch(LEvent); end;
+        end else if LEv.type_ = SDL_KEYUP then
+        begin
+          LWin := FindWindowByID(LEv.key.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weKeyUp; LEvent.KeyCode := LEv.key.keysym.sym; LEvent.Modifiers := SdlModToWindowMod(LEv.key.keysym.mod_); LSelf.DoDispatch(LEvent); end;
+        end else if LEv.type_ = SDL_MOUSEBUTTONDOWN then
+        begin
+          LWin := FindWindowByID(LEv.button.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseDown; LEvent.X := LEv.button.x; LEvent.Y := LEv.button.y; LEvent.Button := SdlButtonToWindowButton(LEv.button.button); LSelf.DoDispatch(LEvent); end;
+        end else if LEv.type_ = SDL_MOUSEBUTTONUP then
+        begin
+          LWin := FindWindowByID(LEv.button.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseUp; LEvent.X := LEv.button.x; LEvent.Y := LEv.button.y; LEvent.Button := SdlButtonToWindowButton(LEv.button.button); LSelf.DoDispatch(LEvent); end;
+        end else if LEv.type_ = SDL_MOUSEMOTION then
+        begin
+          LWin := FindWindowByID(LEv.motion.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseMove; LEvent.X := LEv.motion.x; LEvent.Y := LEv.motion.y; LSelf.DoDispatch(LEvent); end;
         end;
       end;
     end
