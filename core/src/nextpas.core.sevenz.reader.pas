@@ -152,17 +152,7 @@ uses
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
   nextpas.core.sevenz.limits,
-  nextpas.core.text.unicode.utils; // IsAsciiString 8-byte fast path reused
-
-function AsciiLowerStr(const S: string): string; inline;
-var LI: Integer;
-begin
-  Result := S;
-  for LI:=1 to Length(Result) do if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then Result[LI] := Chr(Ord(Result[LI])+32);
-end;
-
-function AsciiLowerChar(const C: Char): Char; inline;
-begin if (C>='A')and(C<='Z') then Result:=Chr(Ord(C)+32) else Result:=C; end;
+  nextpas.core.text.unicode.utils;
 
 function CompareNames(const A, B: string): Integer; inline;
 begin
