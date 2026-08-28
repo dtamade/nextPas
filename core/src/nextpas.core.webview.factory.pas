@@ -325,6 +325,9 @@ end;
 
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder;
 begin
+  if Pos('__npw', AJavascript) > 0 then
+    raise EWebviewInvalidState.Create(
+      'InitScripts must not touch __npw (bridge owns that namespace)');
   SetLength(FOptions.InitScripts, Length(FOptions.InitScripts) + 1);
   FOptions.InitScripts[High(FOptions.InitScripts)] := AJavascript;
   Result := Self;
