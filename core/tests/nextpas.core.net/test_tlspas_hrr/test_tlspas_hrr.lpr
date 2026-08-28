@@ -2019,6 +2019,34 @@ begin
   Check(W.GetStatus=HTTP_STATUS_OK, 'otlp handler 200'); Check(Pos('application/json', W.GetHeaders.Get('Content-Type'))>0, 'otlp ct');
 end;
 
+procedure TestS33Polish;
+var G: string; C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double; Exp: ITlsPasSpanExporter; J: string; LPath: string;
+begin
+  G := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.02, 'nextpas_tlspas'); Check(Pos('sampling_rate 0.0200', G)>0, 'gauge default');
+  G := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.5, ''); Check(Pos('nextpas_tlspas_sampling_rate', G)>0, 'gauge empty prefix defaults');
+  G := TlsPasPrometheusGauge('my_metric', 'help', 1.0, 'custom'); Check(Pos('custom_my_metric', G)>0, 'gauge custom prefix');
+  // sampling clamp extremes
+  C := DefaultTlsPasSamplingConfig; C.MaxRate := 0.05; C.MinRate := 0.001;
+  M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); H.Healthy := False; H.RejectRate := 10; M.Replay.Current := 100; M.Server.RejectPolicy := 10;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check((R > 0.04) and (R < 0.06), 'clamp max extreme');
+  C.BaseRate := 0.0001; C.MinRate := 0.001; H.Healthy := True; H.RejectRate := 0; M.Replay.Current := 0; M.Server.RejectPolicy := 0;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R >= 0.001 - 1e-9, 'clamp min');
+  C.BaseRate := -0.5; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R >= 0, 'clamp negative 0');
+  C.BaseRate := 2.0; C.MaxRate := 1.0; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R <= 1.0 + 1e-9, 'clamp 1');
+  // OTLP empty exporter still valid
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  J := TlsPasSpansToOTLPJSON(Exp); Check(Pos('resourceSpans', J)>0, 'empty otlp resourceSpans'); Check(Pos('"spans":[]', J)>0, 'empty spans []');
+  // file export nil/empty guard
+  Check(not TlsPasTryExportSpansToFile(nil, '/tmp/x'), 'nil exporter false');
+  Check(not TlsPasTryExportSpansToFile(Exp, ''), 'empty path false');
+  LPath := '/tmp/tlspas_polish_otlp.json';
+  if FileExists(LPath) then DeleteFile(LPath);
+  if FileExists(LPath + '.tmp') then DeleteFile(LPath + '.tmp');
+  Check(TlsPasTryExportSpansToFile(Exp, LPath), 'empty exporter export ok');
+  Check(FileExists(LPath), 'empty file exists'); DeleteFile(LPath);
+  Check(not FileExists(LPath + '.tmp'), 'no tmp leak');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -2097,6 +2125,7 @@ begin
   GSuite.Test('AdaptiveSampling', @TestAdaptiveSampling);
   GSuite.Test('AdaptiveTracer', @TestAdaptiveTracer);
   GSuite.Test('OTLPExport', @TestOTLPExport);
+  GSuite.Test('S33Polish', @TestS33Polish);
   if not GSuite.Run then
     Halt(1);
 end.

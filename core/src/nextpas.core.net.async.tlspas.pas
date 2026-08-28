@@ -566,6 +566,7 @@ type
     property Inner: TAsyncTlsPasSamplingTracer read FInner;
   end;
 
+function TlsPasPrometheusGauge(const AMetric, AHelp: string; AValue: Double; const APrefix: string): string;
 function DefaultTlsPasSamplingConfig: TTlsPasSamplingConfig;
 function TlsPasComputeAdaptiveSamplingRate(const AMetrics: TTlsPasAdaptiveMetrics; const AHealth: TTlsPasAdaptiveHealth; const AConfig: TTlsPasSamplingConfig): Double;
 function TlsPasSamplingRateToPrometheus(ARate: Double; const APrefix: string): string; overload;
@@ -2385,12 +2386,15 @@ begin
   Result := R;
 end;
 
-function TlsPasSamplingRateToPrometheus(ARate: Double; const APrefix: string): string;
+function TlsPasPrometheusGauge(const AMetric, AHelp: string; AValue: Double; const APrefix: string): string;
 var P: string;
 begin
   P := APrefix; if P = '' then P := 'nextpas_tlspas';
-  Result := Format('# HELP %s_sampling_rate Adaptive trace sampling rate'#10'# TYPE %s_sampling_rate gauge'#10'%s_sampling_rate %.4f'#10, [P,P,P,ARate]);
+  Result := Format('# HELP %s_%s %s'#10'# TYPE %s_%s gauge'#10'%s_%s %.4f'#10, [P,AMetric,AHelp,P,AMetric,P,AMetric,AValue]);
 end;
+
+function TlsPasSamplingRateToPrometheus(ARate: Double; const APrefix: string): string;
+begin Result := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', ARate, APrefix); end;
 function TlsPasSamplingRateToPrometheus(ARate: Double): string; begin Result := TlsPasSamplingRateToPrometheus(ARate, 'nextpas_tlspas'); end;
 
 function TlsPasSpansToOTLPJSON(const AExporter: ITlsPasSpanExporter): string;
@@ -2419,8 +2423,8 @@ begin
     try if Length(J) > 0 then FS.WriteBuffer(J[1], Length(J)); finally FS.Free; end;
     if FileExists(APath) then DeleteFile(APath);
     Result := RenameFile(Tmp, APath);
-    if not Result then DeleteFile(Tmp);
   except Result := False; end;
+  if not Result then if FileExists(Tmp) then DeleteFile(Tmp);
 end;
 
 constructor TAsyncTlsPasAdaptiveTracer.Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const AConfig: TTlsPasSamplingConfig);

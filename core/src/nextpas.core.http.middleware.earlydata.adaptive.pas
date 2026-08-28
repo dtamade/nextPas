@@ -318,13 +318,15 @@ begin Result := TlsPasSpansToPrometheus(AExporter); end;
 function HttpSpansPrometheusText(const AExporter: ITlsPasSpanExporter; const APrefix: string): string;
 begin Result := TlsPasSpansToPrometheus(AExporter, APrefix); end;
 
+function HttpIsPromRequest(const AReq: IHttpRequest): Boolean; inline;
+begin Result := (AReq <> nil) and (Pos('prom', LowerCase(AReq.Url.ToString)) > 0); end;
+
 function HttpTracezHandler(const AExporter: ITlsPasSpanExporter): IHttpHandler;
 begin
   Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var S: string; IsProm: Boolean;
+  var S: string;
   begin
-    IsProm := (AReq <> nil) and (Pos('prom', LowerCase(AReq.Url.ToString)) > 0);
-    if IsProm then begin S := TlsPasSpansToPrometheus(AExporter); AW.GetHeaders.SetHeader('Content-Type', 'text/plain; version=0.0.4'); end
+    if HttpIsPromRequest(AReq) then begin S := TlsPasSpansToPrometheus(AExporter); AW.GetHeaders.SetHeader('Content-Type', 'text/plain; version=0.0.4'); end
     else begin S := TlsPasSpansToJSON(AExporter); AW.GetHeaders.SetHeader('Content-Type', 'application/json'); end;
     AW.WriteHeader(HTTP_STATUS_OK);
     if Length(S) > 0 then AW.Write(S[1], Length(S));

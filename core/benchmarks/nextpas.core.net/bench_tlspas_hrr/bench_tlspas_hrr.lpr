@@ -549,6 +549,10 @@ procedure BenchOTLPJSON(aIters: Int64);
 var I: Int64; S: string;
 begin for I := 1 to aIters do S := TlsPasSpansToOTLPJSON(GSpanExporter); end;
 
+procedure BenchPrometheusGauge(aIters: Int64);
+var I: Int64; S: string;
+begin for I := 1 to aIters do S := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.02, 'nextpas_tlspas'); end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -741,6 +745,7 @@ begin
     .AddLoop('Adaptive Sampling', @BenchAdaptiveSampling)
     .AddLoop('Adaptive Tracer', @BenchAdaptiveTracer)
     .AddLoop('OTLP JSON', @BenchOTLPJSON)
+    .AddLoop('Prometheus Gauge', @BenchPrometheusGauge)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
