@@ -151,6 +151,7 @@ make hygiene && git diff --check
 make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s
 make -C core/benchmarks/nextpas.core.audio/bench_flac clean test # 33k 帧 flac 5.6ms/5.9MB/s
 make -C core/benchmarks/nextpas.core.audio/bench_mp3 clean test  # 3.7k mp3 360µs/10MB/s (固定 -O2，规避 FPC 3.3.1 O3 错译)
+make -C core/benchmarks/nextpas.core.audio/bench_mix clean test  # mix 48k 立体声 1s：MixInto 178µs/2GB/s，Ramp 204µs
 bash scripts/sync-music888-audio.sh # 守卫 music888 解码核漂移（行数Δ + 去C/加护统计 + 35 文件门禁 + hygiene）
 ```
 
