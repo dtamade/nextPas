@@ -27,6 +27,9 @@ type
   ICompressWriter = nextpas.core.compress.intf.ICompressWriter;
   IDecompressReader = nextpas.core.compress.intf.IDecompressReader;
 
+const
+  GZIP_MAX_DECOMPRESS_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
+
 function DeflateWriter(const ADst: IWriter;
   const ALevel: TCompressionLevel = clDefault): ICompressWriter; inline;
 function DeflateReader(const ASrc: IReader): IDecompressReader; inline;
