@@ -1621,13 +1621,14 @@ begin
 end;
 
 function TSevenZReaderImpl.ExtractIndicesGrouped(const AIdx: array of Integer): TSevenZExtractedArray;
-var LI, LPos, LFolderIdx, LDistinct: Integer; LFound: Boolean; LDecoded: array of TBytes; LDistinctFolders: array of Integer; LOff, LLen: SizeInt; LSub: SizeInt; LData: TBytes;
+var LI, LFolderIdx, LFolderCount: Integer; LDecodedByFolder: array of TBytes; LDecodedValid: array of Boolean; LOff, LLen: SizeInt; LSub: SizeInt; LData: TBytes;
 begin
   Result := nil;
   if Length(AIdx)=0 then Exit;
   SetLength(Result, Length(AIdx));
-  SetLength(LDistinctFolders, 0);
-  SetLength(LDecoded, 0);
+  LFolderCount := Length(FStreams.Folders);
+  SetLength(LDecodedByFolder, LFolderCount);
+  SetLength(LDecodedValid, LFolderCount);
   for LI:=0 to High(AIdx) do
   begin
     Result[LI].Info := FEntries[AIdx[LI]];
@@ -1637,20 +1638,14 @@ begin
       Result[LI].Data := nil;
       Continue;
     end;
-    LFound := False; LPos := 0; LDistinct := 0;
-    for LPos:=0 to High(LDistinctFolders) do
-      if LDistinctFolders[LPos]=LFolderIdx then begin LFound:=True; LDistinct:=LPos; Break; end;
-    if not LFound then
+    if (LFolderIdx < 0) or (LFolderIdx >= LFolderCount) then
+      raise ESevenZError.CreateFmt('folder idx %d out of range', [LFolderIdx]);
+    if not LDecodedValid[LFolderIdx] then
     begin
-      LDistinct := Length(LDistinctFolders);
-      SetLength(LDistinctFolders, LDistinct+1);
-      SetLength(LDecoded, LDistinct+1);
-      LDistinctFolders[LDistinct] := LFolderIdx;
-      LDecoded[LDistinct] := DecodeFolder(LFolderIdx);
-    end
-    else
-      LDistinct := LPos;
-    LData := LDecoded[LDistinct];
+      LDecodedByFolder[LFolderIdx] := DecodeFolder(LFolderIdx);
+      LDecodedValid[LFolderIdx] := True;
+    end;
+    LData := LDecodedByFolder[LFolderIdx];
     LOff := FEntryOffInFolder[AIdx[LI]];
     LSub := FGlobalSubOfEntry[AIdx[LI]];
     LLen := SizeInt(FStreams.Substreams[LSub].Size);
