@@ -267,6 +267,35 @@ function TlsPasServerShouldAcceptEarlyData(const AStore: ITlsPasReplayStore;
   const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
 function TlsPasEarlyDataDecisionToStr(ADecision: TTlsPasEarlyDataDecision): string;
 
+  { S13 可观测：服务端决策统计 + 格式化，零堆纯函数，供日志/HTTP X-Early-Data 埋点 }
+type
+  TTlsPasServerStats = record
+    Accepts: Int64;
+    RejectPolicy: Int64;
+    RejectReplay: Int64;
+  end;
+
+function TlsPasFormatReplayStats(const AStats: TAsyncTlsPasReplayStats): string;
+function TlsPasFormatServerStats(const AStats: TTlsPasServerStats): string;
+
+type
+  { 服务端观测器：包装任意 ITlsPasReplayStore，委托 TlsPasServerDecideEarlyData 并计数，Mutex 保护 }
+  TAsyncTlsPasServerObserver = class
+  private
+    FStore: ITlsPasReplayStore;
+    FMutex: TPlatformMutex;
+    FStats: TTlsPasServerStats;
+  public
+    constructor Create(const AStore: ITlsPasReplayStore);
+    destructor Destroy; override;
+    function Decide(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+    function ShouldAccept(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+    function GetServerStats: TTlsPasServerStats;
+    function GetReplayStats: TAsyncTlsPasReplayStats;
+    procedure Clear;
+    property Store: ITlsPasReplayStore read FStore;
+  end;
+
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
@@ -1006,6 +1035,86 @@ begin
     edAccept: Result := 'accept';
   else
     Result := 'unknown';
+  end;
+end;
+
+function TlsPasFormatReplayStats(const AStats: TAsyncTlsPasReplayStats): string;
+begin
+  Result := Format('hits=%d misses=%d evictions=%d expiries=%d current=%d',
+    [AStats.Hits, AStats.Misses, AStats.Evictions, AStats.Expiries, AStats.Current]);
+end;
+
+function TlsPasFormatServerStats(const AStats: TTlsPasServerStats): string;
+begin
+  Result := Format('accepts=%d reject_policy=%d reject_replay=%d',
+    [AStats.Accepts, AStats.RejectPolicy, AStats.RejectReplay]);
+end;
+
+constructor TAsyncTlsPasServerObserver.Create(const AStore: ITlsPasReplayStore);
+begin
+  inherited Create;
+  FStore := AStore;
+  if platform_mutex_init(FMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: server observer mutex init');
+end;
+
+destructor TAsyncTlsPasServerObserver.Destroy;
+begin
+  platform_mutex_destroy(FMutex);
+  inherited Destroy;
+end;
+
+function TAsyncTlsPasServerObserver.Decide(const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+begin
+  Result := TlsPasServerDecideEarlyData(FStore, ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+  platform_mutex_lock(FMutex);
+  try
+    case Result of
+      edAccept: Inc(FStats.Accepts);
+      edRejectPolicy: Inc(FStats.RejectPolicy);
+      edRejectReplay: Inc(FStats.RejectReplay);
+    end;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasServerObserver.ShouldAccept(const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+begin
+  Result := Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData) = edAccept;
+end;
+
+function TAsyncTlsPasServerObserver.GetServerStats: TTlsPasServerStats;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    Result := FStats;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasServerObserver.GetReplayStats: TAsyncTlsPasReplayStats;
+begin
+  if Assigned(FStore) then
+    Result := FStore.GetStats
+  else
+  begin
+    FillChar(Result, SizeOf(Result), 0);
+  end;
+end;
+
+procedure TAsyncTlsPasServerObserver.Clear;
+begin
+  if Assigned(FStore) then
+    FStore.Clear;
+  platform_mutex_lock(FMutex);
+  try
+    FillChar(FStats, SizeOf(FStats), 0);
+  finally
+    platform_mutex_unlock(FMutex);
   end;
 end;
 
