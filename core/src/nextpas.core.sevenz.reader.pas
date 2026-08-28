@@ -167,6 +167,9 @@ begin
   for LI:=1 to Length(Result) do if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then Result[LI] := Chr(Ord(Result[LI])+32);
 end;
 
+function AsciiLowerChar(const C: Char): Char; inline;
+begin if (C>='A')and(C<='Z') then Result:=Chr(Ord(C)+32) else Result:=C; end;
+
 function CompareNames(const A, B: string): Integer; inline;
 begin
   if A < B then Result := -1 else if A > B then Result := 1 else Result := 0;
@@ -939,21 +942,14 @@ begin
       Exit(LI);
 end;
 
-function AsciiLower(C: Char): Char; inline;
-begin
-  if (C >= 'A') and (C <= 'Z') then Result := Chr(Ord(C) + 32) else Result := C;
-end;
-
 function SameIgnoreCase(const A, B: string): Boolean; inline;
-var
-  LI: Integer;
+var LI: Integer;
 begin
   if Length(A) <> Length(B) then Exit(False);
   for LI := 1 to Length(A) do
   begin
-    if (Ord(A[LI]) > 127) or (Ord(B[LI]) > 127) then
-      Exit(LowerCase(A) = LowerCase(B));
-    if AsciiLower(A[LI]) <> AsciiLower(B[LI]) then Exit(False);
+    if (Ord(A[LI]) > 127) or (Ord(B[LI]) > 127) then Exit(LowerCase(A)=LowerCase(B));
+    if AsciiLowerChar(A[LI]) <> AsciiLowerChar(B[LI]) then Exit(False);
   end;
   Result := True;
 end;
@@ -1182,11 +1178,6 @@ begin
   end;
   while (LPi <= LPatLen) and (APattern[LPi]='*') do Inc(LPi);
   Result := LPi > LPatLen;
-end;
-
-function AsciiLowerChar(const C: Char): Char; inline;
-begin
-  if (C >= 'A') and (C <= 'Z') then Result := Chr(Ord(C) + 32) else Result := C;
 end;
 
 function SuffixMatchesIgnoreCaseAscii(const AName, ASuffixLower: string; const ANeed: Integer): Boolean; inline;
@@ -1650,42 +1641,96 @@ begin
   except on E: Exception do begin AError := E.ClassName+': '+E.Message; AExtracted := nil; Result := False; end; end;
 end;
 
+type
+  TExtractPair = record OrigPos, Folder, EntryIdx: Integer; end;
+
 function TSevenZReaderImpl.ExtractIndicesGrouped(const AIdx: array of Integer): TSevenZExtractedArray;
-var LI, LFolderIdx, LFolderCount: Integer; LDecodedByFolder: array of TBytes; LDecodedValid: array of Boolean; LOff, LLen: SizeInt; LSub: SizeInt; LData: TBytes;
+var LI, LFolderCount, LUseSparse: Integer;
+    LDecodedByFolder: array of TBytes; LDecodedValid: array of Boolean;
+    LOff, LLen: SizeInt; LSub: SizeInt; LData: TBytes;
+    LPairs: array of TExtractPair;
+
+  procedure QuickSortPairs(AL, AR: Integer);
+  var I, J, P: Integer; T: TExtractPair;
+  begin
+    I:=AL; J:=AR; P:=LPairs[(AL+AR) div 2].Folder;
+    repeat
+      while LPairs[I].Folder < P do Inc(I);
+      while LPairs[J].Folder > P do Dec(J);
+      if I<=J then begin T:=LPairs[I]; LPairs[I]:=LPairs[J]; LPairs[J]:=T; Inc(I); Dec(J); end;
+    until I>J;
+    if AL<J then QuickSortPairs(AL,J);
+    if I<AR then QuickSortPairs(I,AR);
+  end;
+
+var LFolderIdx, LPos, LStart, LEnd: Integer;
 begin
   Result := nil;
   if Length(AIdx)=0 then Exit;
   SetLength(Result, Length(AIdx));
   LFolderCount := Length(FStreams.Folders);
-  SetLength(LDecodedByFolder, LFolderCount);
-  SetLength(LDecodedValid, LFolderCount);
-  for LI:=0 to High(AIdx) do
+  // 稀疏判定：FolderCount 巨大且提取稀疏时避免分配 FolderCount 长数组（1M → 16MB）
+  LUseSparse := 0;
+  if (LFolderCount > 4096) and (Length(AIdx)*8 < LFolderCount) then LUseSparse := 1;
+  if LUseSparse=0 then
   begin
-    Result[LI].Info := FEntries[AIdx[LI]];
-    LFolderIdx := FFolderIdxOfEntry[AIdx[LI]];
+    SetLength(LDecodedByFolder, LFolderCount);
+    SetLength(LDecodedValid, LFolderCount);
+    for LI:=0 to High(AIdx) do
+    begin
+      Result[LI].Info := FEntries[AIdx[LI]];
+      LFolderIdx := FFolderIdxOfEntry[AIdx[LI]];
+      if LFolderIdx < 0 then begin Result[LI].Data:=nil; Continue; end;
+      if (LFolderIdx < 0) or (LFolderIdx >= LFolderCount) then
+        raise ESevenZError.CreateFmt('folder idx %d out of range', [LFolderIdx]);
+      if not LDecodedValid[LFolderIdx] then
+      begin LDecodedByFolder[LFolderIdx]:=DecodeFolder(LFolderIdx); LDecodedValid[LFolderIdx]:=True; end;
+      LData := LDecodedByFolder[LFolderIdx];
+      LOff := FEntryOffInFolder[AIdx[LI]];
+      LSub := FGlobalSubOfEntry[AIdx[LI]];
+      LLen := SizeInt(FStreams.Substreams[LSub].Size);
+      if LOff + LLen > Length(LData) then raise ESevenZError.Create('substream window exceeds folder output');
+      SetLength(Result[LI].Data, LLen);
+      if LLen>0 then Move(LData[LOff], Result[LI].Data[0], LLen);
+      if FStreams.Substreams[LSub].HasCrc and (Crc32OfBytes(Result[LI].Data) <> LongWord(FStreams.Substreams[LSub].Crc)) then
+        raise ESevenZError.CreateFmt('entry %d CRC mismatch', [AIdx[LI]]);
+    end;
+    Exit;
+  end;
+  // 稀疏路径：按 Folder 排序后分组单解码，零 FolderCount 分配
+  SetLength(LPairs, Length(AIdx));
+  for LI:=0 to High(AIdx) do
+  begin LPairs[LI].OrigPos:=LI; LPairs[LI].EntryIdx:=AIdx[LI]; LPairs[LI].Folder:=FFolderIdxOfEntry[AIdx[LI]]; end;
+  if Length(LPairs)>1 then QuickSortPairs(0, High(LPairs));
+  LPos:=0;
+  while LPos < Length(LPairs) do
+  begin
+    LFolderIdx := LPairs[LPos].Folder;
+    LStart := LPos;
+    while (LPos < Length(LPairs)) and (LPairs[LPos].Folder = LFolderIdx) do Inc(LPos);
+    LEnd := LPos-1;
     if LFolderIdx < 0 then
     begin
-      Result[LI].Data := nil;
+      for LI:=LStart to LEnd do
+      begin LSub:=LPairs[LI].OrigPos; Result[LSub].Info:=FEntries[LPairs[LI].EntryIdx]; Result[LSub].Data:=nil; end;
       Continue;
     end;
     if (LFolderIdx < 0) or (LFolderIdx >= LFolderCount) then
       raise ESevenZError.CreateFmt('folder idx %d out of range', [LFolderIdx]);
-    if not LDecodedValid[LFolderIdx] then
+    LData := DecodeFolder(LFolderIdx);
+    for LI:=LStart to LEnd do
     begin
-      LDecodedByFolder[LFolderIdx] := DecodeFolder(LFolderIdx);
-      LDecodedValid[LFolderIdx] := True;
+      LSub:=LPairs[LI].EntryIdx;
+      Result[LPairs[LI].OrigPos].Info:=FEntries[LSub];
+      LOff := FEntryOffInFolder[LSub];
+      LLen := SizeInt(FStreams.Substreams[FGlobalSubOfEntry[LSub]].Size);
+      if LOff + LLen > Length(LData) then raise ESevenZError.Create('substream window exceeds folder output');
+      SetLength(Result[LPairs[LI].OrigPos].Data, LLen);
+      if LLen>0 then Move(LData[LOff], Result[LPairs[LI].OrigPos].Data[0], LLen);
+      if FStreams.Substreams[FGlobalSubOfEntry[LSub]].HasCrc and
+         (Crc32OfBytes(Result[LPairs[LI].OrigPos].Data) <> LongWord(FStreams.Substreams[FGlobalSubOfEntry[LSub]].Crc)) then
+        raise ESevenZError.CreateFmt('entry %d CRC mismatch', [LSub]);
     end;
-    LData := LDecodedByFolder[LFolderIdx];
-    LOff := FEntryOffInFolder[AIdx[LI]];
-    LSub := FGlobalSubOfEntry[AIdx[LI]];
-    LLen := SizeInt(FStreams.Substreams[LSub].Size);
-    if LOff + LLen > Length(LData) then
-      raise ESevenZError.Create('substream window exceeds folder output');
-    SetLength(Result[LI].Data, LLen);
-    if LLen > 0 then
-      Move(LData[LOff], Result[LI].Data[0], LLen);
-    if FStreams.Substreams[LSub].HasCrc and (Crc32OfBytes(Result[LI].Data) <> LongWord(FStreams.Substreams[LSub].Crc)) then
-      raise ESevenZError.CreateFmt('entry %d CRC mismatch', [AIdx[LI]]);
   end;
 end;
 
