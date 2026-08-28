@@ -20,7 +20,7 @@ completion claim.
 | `args` | L3 | CLI surface | `nextpas.core.args` | L0-L2 | focused-runtime |
 | `async` | L1 | async loop/runtime | `nextpas.core.async` | L0 plus `io/time` seams | focused-runtime, forced-compile |
 | `atomic` | L0 | atomic primitives | `nextpas.core.atomic` | RTL, base/errors/platform sync only | focused-runtime, source-contract |
-| `base` | L0 | root values/contracts | `nextpas.core.base` | RTL, exception root | focused-runtime |
+| `base` | L0 | root values/contracts | `nextpas.core.base` | RTL, exception root | focused-runtime — `base.utils` adds `CompareBytesOrdered` + `CompareBytesIgnoreCase/HashFNV1aLower` (`LowerTable` 去分支, nil 守卫) unified for respack/vfs/http |
 | `bench` | Support | benchmark helpers | `nextpas.core.bench` | explicit test/bench only | source-contract |
 | `bytes` | L1 | byte containers | `nextpas.core.bytes` | L0, documented text/encoding seam | focused-runtime |
 | `cbor` | L2 | CBOR format (RFC 8949 deterministic subset) | `nextpas.core.cbor` | L0-L1 | focused-runtime |
@@ -39,7 +39,7 @@ completion claim.
 | `fs` | L2 | filesystem facade | `nextpas.core.fs` | L0-L1, platform/files/path | focused-runtime |
 | `git` | L2 | git/libgit2 | `nextpas.core.git` | L0-L1, libgit2 FFI allowlist | source-contract |
 | `hash` | L2 | hash/digest | `nextpas.core.hash` | L0-L1 | focused-runtime |
-| `http` | L3 | HTTP framework | `nextpas.core.http` | L0-L2 | focused-runtime partial — static pipeline: conditional 304, single Range 206/416 + `If-Range` (ETag/date) fallback, `HEAD` header-only without stream open, error paths HEAD-aware |
+| `http` | L3 | HTTP framework | `nextpas.core.http` | L0-L2 | focused-runtime partial — static pipeline: conditional 304 (weak ETag), single Range 206/416 + `If-Range` (ETag/date) fallback, `HEAD` header-only without stream open, error paths HEAD-aware; `http.mime` O(1) open-address hash (128 槽, FNV-1a, 1-2 探测) + 零分配切片 (`LookupBySlice` 直哈 `PChar` 段, `HttpMimeFromPath` 去 `Copy`) + L0 `HashFNV1aLower/CompareIgnoreCase` 复用 + `HashMimeNorm` 归一，ETag 委托 `vfs.base VfsETagStrong/FNV` 单源（`http` 包装保持 API 兼容，`Cache-Control` 单源 `CACHE_REVALIDATE`，`Content-Disposition` 单遍 `EscapeDispositionFilename`） |
 | `id` | L1 | identifiers | `nextpas.core.id` | L0, platform random | focused-runtime |
 | `ini` | L2 | INI format | `nextpas.core.ini` | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller/completion | `nextpas.core.io` | L0, platform | focused-runtime, forced-compile |
@@ -59,7 +59,7 @@ completion claim.
 | `props` | L3 | app property helpers | `nextpas.core.props` | L0-L2 | focused-runtime |
 | `reflect` | Support | reflection experiment | `nextpas.core.reflect` | system/typinfo owner only | source-contract |
 | `regex` | L2 | regular expressions | `nextpas.core.regex` | L0-L1, optional simd | focused-runtime |
-| `respack` | L2 | resource pack container + embed toolchain (asar/Tauri parity) | `nextpas.core.respack` | L0; dirsource is the single fs IO seam; embed adds fs.glob (match-only) via source-contract exception | focused-runtime ×6, source-contract — writer O(n) hash buckets (256→65536), reader single-pass cached `DecodeWire` (50% saving), `BaseValidPath` via `base.pathvalid` L0 shared |
+| `respack` | L2 | resource pack container + embed toolchain (asar/Tauri parity) | `nextpas.core.respack` | L0; dirsource is the single fs IO seam; embed adds fs.glob (match-only) via source-contract exception | focused-runtime ×6, source-contract — writer O(n) hash buckets (`BUCKET_MIN` 256→`BUCKET_MAX` 65536, `TryMulSizeUInt` 溢出安全) + `CompareMem` dedup + `CompareBytesOrdered` 路径排序 (L0 unified, `PathLens` 预计算直通消 `Length` 重复, 插入/快排缓存 `Key/Pivot` 指针) , reader single-pass cached `DecodeWire` (50% saving) + `CompareBytesOrdered` 有序块级比对 + `Search` `Pointer(PChar)` 语义统一, `BaseValidPath` via `base.pathvalid` L0 shared |
 | `simd` | L0 | SIMD ABI/backends | `nextpas.core.simd` | L0, platform CPU/file probes, allowlisted host/os probes | focused-runtime, source-contract |
 | `sse` | Support | legacy SIMD surface | `nextpas.core.sse` | simd owner only | source-contract |
 | `stopwatch` | L1 | timing helper | `nextpas.core.stopwatch` | L0, platform time | focused-runtime |
@@ -74,7 +74,7 @@ completion claim.
 | `toml` | L2 | TOML format | `nextpas.core.toml` | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI | `nextpas.core.tui` | L0-L2 | focused-runtime partial |
 | `validation` | L2 | validation helpers | `nextpas.core.validation` | L0-L1 | focused-runtime |
-| `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub + facade) | `nextpas.core.vfs` | L0-L1; os backend is the single fs/path seam; embedded adds respack.reader | focused-runtime, source-contract — embedded `FPaths/FEntries/FETags/FLastMods` parallel cache (O(log n) index, O(1) ETag/Last-Modified, zero `DecodeWire` on `Stat/OpenRead`), `TWindowStream` zero-copy window, `HasSubtreePath` O(log n) |
+| `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub + facade) | `nextpas.core.vfs` | L0-L1; os backend is the single fs/path seam; embedded adds respack.reader | focused-runtime, source-contract — embedded `FPaths/FEntries/FETags/FLastMods` parallel cache (O(log n) index, O(1) ETag/Last-Modified, zero `DecodeWire`), `TEmbeddedSlice/TEmbeddedSliceStream` 零拷贝+`SpinLock` 16 槽池化 (10k 163ms, `heaptrc 0`)，`List` 零 `Stat` 直填 `FEntries`，`VfsNameCompare` 直通 `base.utils CompareBytesOrdered` + `VfsETagStrong/FNV` 单源消 `embedded/http` 字面量重复，`HasSubtreePath/IndexOfPath` 共用 `LowerBoundPath` + `CompareBytesOrdered` 显式字节序 + `CompareMem` 前缀，移除 `StartsWithPath` 死代码 |
 | `webview` | L3 | desktop app shell over system web engines (WebKitGTK/WebView2/WKWebView backends; unified IPC bridge) | `nextpas.core.webview` | L0-L2 plus json owner; platform.dl | focused-runtime, source-contract |
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |

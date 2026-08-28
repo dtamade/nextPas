@@ -58,6 +58,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.base.utils;
+
 function TResPack.GetCount: SizeUInt;
 begin
   Result := SizeUInt(FHdr.EntryCount);
@@ -106,78 +109,35 @@ begin
 end;
 
 function TResPack.CompareStoredToBuf(const AIdx: SizeUInt;
-  const ABuf: PByte; const ALen: SizeUInt): Integer;
+  const ABuf: PByte; const ALen: SizeUInt): Integer; inline;
 var
   P: PByte;
-  L, N, I: SizeUInt;
+  L: SizeUInt;
 begin
   L := StoredPathRange(AIdx, P);
-  N := L;
-  if ALen < N then
-    N := ALen;
-  I := 0;
-  while I < N do
-  begin
-    if P[I] < ABuf[I] then
-      Exit(-1);
-    if P[I] > ABuf[I] then
-      Exit(1);
-    Inc(I);
-  end;
-  if L < ALen then
-    Exit(-1);
-  if L > ALen then
-    Exit(1);
-  Result := 0;
+  Result := nextpas.core.base.utils.CompareBytesOrdered(
+    Pointer(P), Pointer(ABuf), L, ALen);
 end;
 
-function TResPack.CompareStoredToStored(const AA, AB: SizeUInt): Integer;
+function TResPack.CompareStoredToStored(const AA, AB: SizeUInt): Integer; inline;
 var
   PA, PB: PByte;
-  LA, LB, N, I: SizeUInt;
+  LA, LB: SizeUInt;
 begin
   LA := StoredPathRange(AA, PA);
   LB := StoredPathRange(AB, PB);
-  N := LA;
-  if LB < N then
-    N := LB;
-  I := 0;
-  while I < N do
-  begin
-    if PA[I] < PB[I] then
-      Exit(-1);
-    if PA[I] > PB[I] then
-      Exit(1);
-    Inc(I);
-  end;
-  if LA < LB then
-    Exit(-1);
-  if LA > LB then
-    Exit(1);
-  Result := 0;
+  Result := nextpas.core.base.utils.CompareBytesOrdered(
+    Pointer(PA), Pointer(PB), LA, LB);
 end;
 
-function TResPack.CompareCachedEntries(const AA, AB: TResPackEntry): Integer;
+function TResPack.CompareCachedEntries(const AA, AB: TResPackEntry): Integer; inline;
 var
   PA, PB: PByte;
-  LA, LB, N, I: SizeUInt;
 begin
   PA := FData + SizeUInt(FStrTabBase) + AA.PathOffset;
   PB := FData + SizeUInt(FStrTabBase) + AB.PathOffset;
-  LA := AA.PathLen;
-  LB := AB.PathLen;
-  N := LA;
-  if LB < N then N := LB;
-  I := 0;
-  while I < N do
-  begin
-    if PA[I] < PB[I] then Exit(-1);
-    if PA[I] > PB[I] then Exit(1);
-    Inc(I);
-  end;
-  if LA < LB then Exit(-1);
-  if LA > LB then Exit(1);
-  Result := 0;
+  Result := nextpas.core.base.utils.CompareBytesOrdered(
+    Pointer(PA), Pointer(PB), SizeUInt(AA.PathLen), SizeUInt(AB.PathLen));
 end;
 
 class function TResPack.Open(const AData: PByte; const ASize: SizeUInt): TResPack;
@@ -324,7 +284,7 @@ begin
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    C := CompareStoredToBuf(Mid, Pointer(APath), SizeUInt(Length(APath)));
+    C := CompareStoredToBuf(Mid, Pointer(PChar(APath)), SizeUInt(Length(APath)));
     if C = 0 then
     begin
       AIdx := Mid;
