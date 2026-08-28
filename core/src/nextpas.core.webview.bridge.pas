@@ -295,8 +295,7 @@ function BuildEmitScript(const AEvent, APayloadJson: string): string;
 var
   LJson: string;
 begin
-  if AEvent = '' then
-    raise EWebviewInvalidState.Create('bridge emit event name must not be empty');
+  CheckWebviewEventName(AEvent);
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';

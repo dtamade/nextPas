@@ -1310,6 +1310,7 @@ end;
 
 procedure TGtkWebview.Emit(const AEvent, APayloadJson: string);
 begin
+  CheckWebviewEventName(AEvent);
   RequireOpen;
   Eval(BuildEmitScript(AEvent, APayloadJson), nil, nil);
 end;
