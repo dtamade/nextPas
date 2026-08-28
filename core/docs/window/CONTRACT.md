@@ -4,8 +4,8 @@
 **层级**：L2 家族（依赖 L0-L1：base/errors/platform.dl 缝；被 L3 的
 `gpu` / `directui` / `webview` 与外部 `game888` 复用）
 **Owner**：core-window lane
-**最后更新**：2026-08-29（2.0 完美化：11 后端×4件套 + 7 事件 + QtIsLoaded inline + 5× 365µs/24.3ns 4.1% 方差，13 门禁全绿）
-**版本**：2.0（11-backend 完全体：`wkGtk2/wkGtk3/wkGtk4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged` 7 事件；11×4 `base←ffi←loader←impl` 严格、共享 `gtk.impl.inc`、零 `PAnsiChar(AnsiString)`；本文件冻结单元布局、类型/接口签名、线程模型、不变量、错误族、Deferred 与门禁。）
+**最后更新**：2026-08-29（3.0-input：11 后端×4件套 + 12 事件 + QtIsLoaded inline + 5× 365µs/24.3ns 4.1% 方差，13 门禁全绿）
+**版本**：3.0-input（11-backend 完全体：`wkGtk2/wkGtk3/wkGtk4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件；11×4 `base←ffi←loader←impl` 严格、共享 `gtk.impl.inc`、零 `PAnsiChar(AnsiString)`；`TWindowEvent` 新增 `KeyCode/Modifiers/Button`；本文件冻结单元布局、类型/接口签名、线程模型、不变量、错误族、Deferred 与门禁。）
 **对标基准**: Rust `winit` + `tao`（窗口壳最小集）/ GLFW / SDL2 Window /
 Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 
@@ -160,28 +160,32 @@ Max 与 Min 同时为正时必须满足 max >= min。窗口创建后一律隐藏
 可见性由 `Show` 显式给出（无 `Visible` 选项——事件 handler 应先于
 Show 注册，示例即此顺序）。
 
-### 3.3 事件 record
+### 3.3 事件 record（3.0 input 扩展：7→12，单 dispatch 不变式保持）
 
 ```pascal
 TWindowEventKind =
-  (weResized, weMoved, weCloseRequested, weClosed, weFocusChanged, weScaleChanged, weDpiChanged);
+  (weResized, weMoved, weCloseRequested, weClosed, weFocusChanged, weScaleChanged, weDpiChanged,
+   weKeyDown, weKeyUp, weMouseDown, weMouseUp, weMouseMove);
 const weFocusIn = weFocusChanged; weFocusOut = weFocusChanged; // 兼容别名
 
 TWindowEvent = record
   Kind: TWindowEventKind;
   Width: Integer;     // weResized：新客户区宽（物理像素）
   Height: Integer;    // weResized：新客户区高（物理像素）
-  X: Integer;         // weMoved：屏幕坐标（物理像素；Wayland 不发）
-  Y: Integer;         // weMoved
+  X: Integer;         // weMoved/weMouse*：X（物理像素；Wayland weMoved 不发）
+  Y: Integer;         // weMoved/weMouse*：Y
   NewScale: Double;   // weScaleChanged/weDpiChanged：新 scale factor
+  KeyCode: Integer;   // weKeyDown/Up：平台 keycode（与 sdl2/win32/cocoa 对齐，未触发为 0）
+  Modifiers: Integer; // weKey*/weMouse*：bitmask 1=Shift 2=Ctrl 4=Alt 8=Super
+  Button: Integer;    // weMouseDown/Up/Move：1=left 2=right 3=middle
 end;
 
 TWindowEventHandler = reference to procedure(const AEvent: TWindowEvent);
 ```
 
-无关字段保持零值。**单一事件入口**：一切通知（含 scale 变化）都经
+无关字段保持零值（`Default(TWindowEvent)`）。**单一事件入口**：一切通知（含 scale 变化与 3.0 input）都经
 `OnEvent` 以 `TWindowEvent` 分发，不设第二套 per-event 注册面——这是对
-webview `OnScaleChanged` 独立注册面的有意收紧，理由见 §4.2。
+webview `OnScaleChanged` 独立注册面的有意收紧，理由见 §4.2。`weKey*/weMouse*` 5 种仅为 `TWindowEventKind` 的新增枚举与字段复用，不引入第二分发路径，不破坏 INV-2 FIFO。
 
 ### 3.4 错误族
 
@@ -348,7 +352,7 @@ type
 经 `Supports` 探测获得，命名在 S1 定案，语义现在冻结：
 
 - **注入事件**：把构造好的 `TWindowEvent` 送入与本生产后端同一条
-  `OnEvent` 分发路径（不是旁路直呼 handler）——保证被测的就是分发机制。
+  `OnEvent` 分发路径（不是旁路直呼 handler）——保证被测的就是分发机制。3.0 input 便捷：`InjectKey(weKeyDown/Up, KeyCode, Modifiers)` 与 `InjectMouse(weMouseDown/Up/Move, X,Y, Button, Modifiers)` 均为 `InjectEvent` 的薄包装。
 - **手动泵**：`PumpOnce` 至多执行一条待处理投递、`PumpAll` 清空队列；
   顺序 FIFO 确定。`Post` 在 fake 上不入队真线程，只积累待泵闭包。
 - **状态脚本**：scale 值、最大化/最小化/焦点/可见状态位均可直接改写，
@@ -462,7 +466,7 @@ runtime 冒烟允许的最大环境假设：存在 GTK3 运行库；不要求 de
 | close-request 交互确认（弹窗 veto UI） | deferred-Win | 应用需要"关闭前确认"完整交互时（`weCloseRequested` 忽略即 veto 已覆盖判定面） |
 | fullscreen / decorations / transparent / icon / alwaysOnTop / drag region | deferred-Win | tao 对齐第二批；每批过诚实表复核 |
 | 运行期 SetMinSize/SetMaxSize | deferred-Win | 出现运行中改变约束的真实场景 |
-| 键盘/鼠标/触摸/滚轮/IME 输入事件 | deferred-In | directui/game888 接入需要 native input 时（当前消费者自带输入或经内容引擎） |
+| 键盘/鼠标/触摸/滚轮/IME 输入事件 | **3.0-input 已落地最小集**（`weKeyDown/Up/weMouseDown/Up/Move` 5 种，`KeyCode/Modifiers/Button/X/Y`）；触摸/滚轮/IME 仍 deferred-In | directui/game888 接入需要触摸/滚轮/IME 时再评估（当前 5 种已覆盖基础交互，剩余 per-后端信号映射：gtk key-press/button/motion、sdl2 SDL_KEYDOWN/MOUSE*、win32 WM_KEY*/WM_MOUSE*、cocoa NSEvent） |
 | per-monitor 动态重排 | deferred-DPI | 多显示器动态迁移成为一等需求 |
 | 多 view 单窗 / 窗口间通信 | deferred-Arch | 出现真实消费者 |
 | 父子窗口 / modal 对话框原语 | deferred-Arch | 对话框家族立项 |

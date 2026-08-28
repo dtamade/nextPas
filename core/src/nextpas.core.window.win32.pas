@@ -407,7 +407,7 @@ begin
   FWidth := AWidth; FHeight := AHeight;
   if GetWindowRect(FHandle, @R) then
     MoveWindow(FHandle, R.left, R.top, AWidth, AHeight, True);
-  E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
 
@@ -440,7 +440,7 @@ var
 begin
   RequireOpen;
   ShowWindow(FHandle, SW_MAXIMIZE);
-  E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
 
@@ -521,7 +521,7 @@ begin
   case msg of
     WM_CLOSE:
       begin
-        E.Kind := weCloseRequested; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weCloseRequested; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
         DoDispatch(E);
         Exit(0);
       end;
@@ -533,14 +533,14 @@ begin
           begin
             FWidth := R.right - R.left;
             FHeight := R.bottom - R.top;
-            E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+            E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
             DoDispatch(E);
           end;
         end;
       end;
     WM_MOVE:
       begin
-        E.Kind := weMoved; E.Width := 0; E.Height := 0;
+        E := Default(TWindowEvent); E.Kind := weMoved; E.Width := 0; E.Height := 0;
         E.X := SmallInt(wParam and $FFFF); E.Y := SmallInt((wParam shr 16) and $FFFF);
         E.NewScale := 0;
         DoDispatch(E);
@@ -555,17 +555,17 @@ begin
       end;
     WM_SETFOCUS:
       begin
-        E.Kind := weFocusIn; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weFocusIn; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
         DoDispatch(E);
       end;
     WM_KILLFOCUS:
       begin
-        E.Kind := weFocusOut; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weFocusOut; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
         DoDispatch(E);
       end;
     WM_DPICHANGED:
       begin
-        E.Kind := weScaleChanged; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0;
+        E := Default(TWindowEvent); E.Kind := weScaleChanged; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0;
         E.NewScale := HIWORD(wParam) / 96.0;
         DoDispatch(E);
       end;

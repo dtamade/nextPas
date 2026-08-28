@@ -1,9 +1,9 @@
 # nextpas.core.window
 
-**状态**: 2.0 完美化 — 11 后端×4件套 + 7 事件 + 5× 365µs/24.3ns 4.1% 方差，13 门禁全绿，`BENCH.md` 冻结
+**状态**: 3.0-input — 11 后端×4件套 + 12 事件 + 5× 365µs/24.3ns 4.1% 方差，13 门禁全绿，`BENCH.md` 冻结（2.0 基线不变）
 **层级**: L2 系统能力（依赖 L0-L1；被 L3 的 `webview` / `gpu` / `directui` / 外部 `game888` 复用）
 **Owner**: core-window lane
-**最后更新**: 2026-08-29（2.0 完美化：`wkGtk2/3/4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` 11 种 + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged` 7 事件 + LiveGtkSmart/QtIsLoaded inline，thin-wrapper 美学 + 零 `PAnsiChar(AnsiString)`）
+**最后更新**: 2026-08-29（3.0-input：`wkGtk2/3/4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` 11 种 + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件 + LiveGtkSmart/QtIsLoaded inline，thin-wrapper 美学 + 零 `PAnsiChar(AnsiString)`）
 **对标基准**: Rust `winit` + `tao` / `GLFW` / `SDL2 Window` / `Flutter View` / Android `Activity.getWindow()` / iOS `UIWindow`
 
 ---
@@ -34,7 +34,7 @@ platform(L0) ──► window(L2) ──► gpu(L3) ──► directui(L3)
 | 生命周期 | `Create / Show / Hide / Close(幂等) / IsClosed / IsVisible / Focus` | `close-request veto（关闭前确认）` |
 | 标题与几何 | `Title / SetBounds(Width/Height) / Min/Max / Resizable / Maximized-Minimize-Restore / GetBounds` | `decorations / transparent / alwaysOnTop / icon / fullscreen / dragRegion` |
 | DPI | `GetScaleFactor: Double（GTK 整数诚实升格） / weScaleChanged+weDpiChanged`，逻辑坐标 = 物理像素 / scale | `per-monitor dynamic reflow` |
-| 输入与事件 | `OnEvent(TWindowEvent)` 统一分发（`weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged` 7 事件），主线程投递 `IWindowDispatcher.Post`（拒绝 `LM_` 消息伪装） | `键盘/鼠标/触摸/滚轮细分事件、IME` |
+| 输入与事件 | `OnEvent(TWindowEvent)` 统一分发（`weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件，`KeyCode/Modifiers/Button/X/Y`），主线程投递 `IWindowDispatcher.Post`（拒绝 `LM_` 消息伪装） | `触摸/滚轮/IME（剩余 deferred-In）` |
 | 句柄 | `NativeHandle: TWindowNativeHandle`（X11 XID / HWND / NSWindow* / ANativeWindow* / Wayland nil / WASM canvas 诚实表） | — |
 | 主循环 | `WindowRunLoop / WindowExitLoop`（阻塞至末窗关闭或显式退出）；`WindowPumpOnce / PumpAll` 非阻塞单步（M-band，game/directui tick 复用）；`fake` 提供确定性驱动 | `IterateOnce` 完整融入 `TAsyncLoop`（已以 `PumpOnce` 最小落地） |
 | 宿主驱动 | `IWindowHost.HostResized/HostScaleChanged/HostCloseRequested`（`wasm/android/uikit/fake` 经 `Supports` 探测，M-band） | — |

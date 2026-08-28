@@ -399,7 +399,7 @@ begin
   if AHeight < 0 then AHeight := 0;
   FWidth := AWidth; FHeight := AHeight;
   SDL_SetWindowSize(FHandle, AWidth, AHeight);
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
@@ -435,7 +435,7 @@ var
 begin
   RequireOpen;
   SDL_MaximizeWindow(FHandle);
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
@@ -559,7 +559,7 @@ begin
     case E.window.event of
       SDL_WINDOWEVENT_CLOSE:
         begin
-          LEvent.Kind := weCloseRequested;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weCloseRequested;
           LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
@@ -567,14 +567,14 @@ begin
         begin
           LSelf.FWidth := E.window.data1;
           LSelf.FHeight := E.window.data2;
-          LEvent.Kind := weResized;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weResized;
           LEvent.Width := LSelf.FWidth; LEvent.Height := LSelf.FHeight;
           LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
       SDL_WINDOWEVENT_MOVED:
         begin
-          LEvent.Kind := weMoved;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weMoved;
           LEvent.Width := 0; LEvent.Height := 0;
           LEvent.X := E.window.data1; LEvent.Y := E.window.data2;
           LEvent.NewScale := 0;
@@ -582,13 +582,13 @@ begin
         end;
       SDL_WINDOWEVENT_FOCUS_GAINED:
         begin
-          LEvent.Kind := weFocusIn;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weFocusIn;
           LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
       SDL_WINDOWEVENT_FOCUS_LOST:
         begin
-          LEvent.Kind := weFocusOut;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weFocusOut;
           LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
@@ -628,7 +628,7 @@ begin
             case LEv.window.event of
               SDL_WINDOWEVENT_CLOSE:
                 begin
-                  LEvent.Kind := weCloseRequested;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weCloseRequested;
                   LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
                   LSelf.DoDispatch(LEvent);
                 end;
@@ -636,14 +636,14 @@ begin
                 begin
                   LSelf.FWidth := LEv.window.data1;
                   LSelf.FHeight := LEv.window.data2;
-                  LEvent.Kind := weResized;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weResized;
                   LEvent.Width := LSelf.FWidth; LEvent.Height := LSelf.FHeight;
                   LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
                   LSelf.DoDispatch(LEvent);
                 end;
               SDL_WINDOWEVENT_MOVED:
                 begin
-                  LEvent.Kind := weMoved;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weMoved;
                   LEvent.Width := 0; LEvent.Height := 0;
                   LEvent.X := LEv.window.data1; LEvent.Y := LEv.window.data2;
                   LEvent.NewScale := 0;
@@ -651,13 +651,13 @@ begin
                 end;
               SDL_WINDOWEVENT_FOCUS_GAINED:
                 begin
-                  LEvent.Kind := weFocusIn;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weFocusIn;
                   LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
                   LSelf.DoDispatch(LEvent);
                 end;
               SDL_WINDOWEVENT_FOCUS_LOST:
                 begin
-                  LEvent.Kind := weFocusOut;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weFocusOut;
                   LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
                   LSelf.DoDispatch(LEvent);
                 end;

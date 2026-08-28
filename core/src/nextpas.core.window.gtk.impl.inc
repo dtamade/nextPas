@@ -265,7 +265,7 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E.Kind := weCloseRequested;
+  E := Default(TWindowEvent); E.Kind := weCloseRequested;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 1;
@@ -282,7 +282,7 @@ begin
   H := gtk_widget_get_allocated_height(Self.FHandle);
   Self.FWidth := W;
   Self.FHeight := H;
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := W; E.Height := H; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 0;
@@ -294,7 +294,7 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E.Kind := weFocusIn;
+  E := Default(TWindowEvent); E.Kind := weFocusIn;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 0;
@@ -306,7 +306,7 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E.Kind := weFocusOut;
+  E := Default(TWindowEvent); E.Kind := weFocusOut;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 0;
@@ -321,7 +321,7 @@ begin
   Self := TWindowGtk(AData);
   S := gtk_widget_get_scale_factor(Self.FHandle);
   if S <= 0 then S := 1;
-  E.Kind := weScaleChanged;
+  E := Default(TWindowEvent); E.Kind := weScaleChanged;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0;
   E.NewScale := S;
   Self.DoDispatch(E);
@@ -547,7 +547,7 @@ begin
   FHeight := AHeight;
   if FHandle <> nil then
     gtk_window_resize(FHandle, AWidth, AHeight);
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
@@ -587,7 +587,7 @@ begin
   FMinimized := False;
   if FHandle <> nil then
     gtk_window_maximize(FHandle);
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;

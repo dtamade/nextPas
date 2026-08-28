@@ -337,7 +337,7 @@ begin
     emscripten_set_element_css_size(ResolveTarget, FCssW, FCssH);
   if Assigned(emscripten_set_canvas_element_size) then
     emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E.Kind := weResized; E.Width := FPhysW; E.Height := FPhysH; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FPhysW; E.Height := FPhysH; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
 
@@ -399,7 +399,7 @@ begin
   FPhysW:=Round(FCssW*FScale); FPhysH:=Round(FCssH*FScale);
   if Assigned(emscripten_set_element_css_size) then emscripten_set_element_css_size(ResolveTarget, FCssW, FCssH);
   if Assigned(emscripten_set_canvas_element_size) then emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E.Kind:=weResized; E.Width:=FPhysW; E.Height:=FPhysH; E.X:=0; E.Y:=0; E.NewScale:=0;
+  E := Default(TWindowEvent); E.Kind :=weResized; E.Width:=FPhysW; E.Height:=FPhysH; E.X:=0; E.Y:=0; E.NewScale:=0;
   DoDispatch(E);
 end;
 
@@ -412,13 +412,13 @@ begin
   FScale:=ANewScale;
   FPhysW:=Round(FCssW*FScale); FPhysH:=Round(FCssH*FScale);
   if Assigned(emscripten_set_canvas_element_size) then emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E.Kind:=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=FScale;
+  E := Default(TWindowEvent); E.Kind :=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=FScale;
   DoDispatch(E);
 end;
 
 procedure TWindowWasm.HostCloseRequested;
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
 
 function CreateWindowWasm(const AOptions: TWindowOptions): IWindow;
 begin Result := TWindowWasm.Create(AOptions); end;

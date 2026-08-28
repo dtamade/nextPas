@@ -17,7 +17,8 @@ const
 
 type
   TWindowEventKind =
-    (weResized, weMoved, weCloseRequested, weClosed, weFocusChanged, weScaleChanged, weDpiChanged);
+    (weResized, weMoved, weCloseRequested, weClosed, weFocusChanged, weScaleChanged, weDpiChanged,
+     weKeyDown, weKeyUp, weMouseDown, weMouseUp, weMouseMove);
 
 const
   weFocusIn = weFocusChanged;
@@ -44,6 +45,9 @@ type
     X: Integer;
     Y: Integer;
     NewScale: Double;
+    KeyCode: Integer;   // weKeyDown/Up: platform keycode (GDK/X11 keyval, SDL scancode, Win32 VK, Cocoa keyCode)
+    Modifiers: Integer; // weKey/Mouse: bitmask Shift=1 Ctrl=2 Alt=4 Super=8
+    Button: Integer;    // weMouseDown/Up/Move: 1=left 2=middle 3=right
   end;
 
   TWindowEventHandler = reference to procedure(const AEvent: TWindowEvent);
