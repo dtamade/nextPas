@@ -99,9 +99,10 @@ function TTransformingVfs.OpenRead(const APath: string): IStream;
 var LData: TBytes; LOut: TBytes;
 begin
   try LData := VfsReadAllBytes(FInner, APath); except on E: Exception do raise EVfsError.CreateCtx('open', APath, E.Message); end;
-  if not Should(LData) then begin Result := FInner.OpenRead(APath); Exit; end;
+  // Should 假或 Pointer 未变时复用已读 LData，省二次 FInner.OpenRead 磁盘 IO；单次 VfsReadAllBytes 已付 1 次拷贝，二次 IO 仅增系统调用无零拷贝收益
+  if not Should(LData) then begin Result := CreateBytesStreamFrom(LData); Exit; end;
   try LOut := Transform(LData); except on E: Exception do raise EVfsError.CreateCtx('open', APath, 'transform failed: ' + E.Message); end;
-  if Pointer(LOut) = Pointer(LData) then begin Result := FInner.OpenRead(APath); Exit; end;
+  if Pointer(LOut) = Pointer(LData) then begin Result := CreateBytesStreamFrom(LData); Exit; end;
   Result := CreateBytesStreamFrom(LOut);
 end;
 
