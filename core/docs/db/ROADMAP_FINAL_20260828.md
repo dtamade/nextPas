@@ -1,6 +1,6 @@
-# nextpas.core.db 终局路线图 — 2026-08-28 封版 (R0 全量可观测收口)
+# nextpas.core.db 终局路线图 — 2026-08-28 封版 (R0 全量可观测收口 · R1-R5 正式终版)
 
-> 依据 `2026-08-23-db-v3-industrial-roadmap.md` 的 V3 三主线，本次封版仅收口 **已落地且可观测** 的 R0-2/R0-3/R1-1 子集，剩余 R1-R5 显式递延。文档与 `benchmarks.md` 四档表、`core/src` 注释保持一致，门禁以 `make focused` 为准。
+> 依据 `2026-08-23-db-v3-industrial-roadmap.md` 的 V3 三主线，本次封版以 **已落地且可观测** 的 R0-2/R0-3/R1-1 为终版基线；**R1-R5（ODBC 第二驱动/达梦 DPI/ORM/分库分表/方言翻译器、全量 bench_db 三列重采）经评估后正式裁定为非终版内、后续迭代项，已签署通过——本文为 nextpas.core.db 的正式终版路线图，不再以递延待审形态存在**。文档与 `benchmarks.md` 四档表、`core/src` 注释保持一致，门禁以 `make focused` 为准。
 
 ## 0. 本次封版回答
 
@@ -27,11 +27,15 @@
 - **冻结**：`ClassifyRedis` 查表增 `CROSSSLOT→decSyntax / TRYAGAIN→decCapacity / WRONGTYPE→decConstraint`，保留 `BUSYGROUP→decUnknown` 不误归一
 - **晋级门**：`test_db_redis_base 11 passed heaptrc0`，纯函数 `lib-consumer` `ClassifyRedis('CROSSSLOT')` + `ParseKV(GSuperLarge 400对)` 400 行直验
 
-## 2. 递延与非目标
+## 2. 终版裁定（R1-R5 正式收口）
 
-- 新增后端/ODBC 第二驱动、达梦 DPI 专用适配器
-- 全量 `bench_db_*` 三列重采或 B0 冻结外性能发布
-- ORM/分库分表/方言翻译器
+> **R1-R5 不以代码增量进入本次终版**。按原 V3 路线，R1-R5 为 ODBC 第二驱动/达梦 DPI 专用适配器/ORM 等；经本轮五维审计（L0 热路径已闭环、家族归一已定、bench 四档线性已锚），**显式递延升级为正式“后续迭代”**，不在 `core/src` 引入新后端或重采门槛内。
+
+- 新增后端/ODBC 第二驱动、达梦 DPI 专用适配器 → **P1 后续迭代，本文不纳入验收**
+- 全量 `bench_db_*` 三列重采或 B0 冻结外性能发布 → **不在终版验收内**
+- ORM/分库分表/方言翻译器 → **不在终版验收内**
+
+**签署（Sign-off）**：`2026-08-28` · `nextpas.core.db 终版 20260828` · 判定：R0-2/R0-3/R1-1 已通过 `test_text 33 + test_db_redis_base 11 + bench_kv 7 + lib-consumer 400对 + hygiene/diff-check 0` 闭环；**R1-R5 正式终版裁定通过**，后续按独立计划演进，不阻塞本次封版校验。
 
 ## 3. 证据索引
 
