@@ -36,6 +36,11 @@ function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 
 function VfsIsRoot(const APath: string): Boolean; inline;
 
+{ 零分配前缀判定：APath 是否以 APrefix 开头（空前缀恒真，规避 FPC Pos('',S)=0 陷阱）。
+  HasParent：AChild 是否严格位于 AParent 子树下（AParent+'/' 前缀且更长）。 }
+function VfsPathHasPrefix(const APath, APrefix: string): Boolean; inline;
+function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
+
 { 路径字节序比较（'/' 分隔语义下与逐字节一致）；三后端共用同一序定义 }
 function VfsNameCompare(const AA, AB: string): Integer; inline;
 
@@ -63,6 +68,21 @@ end;
 function VfsIsRoot(const APath: string): Boolean;
 begin
   Result := APath = '.';
+end;
+
+function VfsPathHasPrefix(const APath, APrefix: string): Boolean;
+begin
+  if Length(APrefix) = 0 then Exit(True);
+  if Length(APath) < Length(APrefix) then Exit(False);
+  Result := CompareMem(@APath[1], @APrefix[1], SizeUInt(Length(APrefix)));
+end;
+
+function VfsIsParentPath(const AParent, AChild: string): Boolean;
+begin
+  if Length(AChild) <= Length(AParent) then Exit(False);
+  if AChild[Length(AParent) + 1] <> '/' then Exit(False);
+  if Length(AParent) = 0 then Exit(True);
+  Result := CompareMem(@AChild[1], @AParent[1], SizeUInt(Length(AParent)));
 end;
 
 function VfsNameCompare(const AA, AB: string): Integer; inline;
