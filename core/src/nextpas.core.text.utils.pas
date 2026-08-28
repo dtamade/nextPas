@@ -7,15 +7,15 @@ interface
 uses
   nextpas.core.base;
 
-function Trim(const S: string): string;
-function TrimLeft(const S: string): string;
-function TrimRight(const S: string): string;
+function Trim(const S: string): string; inline;
+function TrimLeft(const S: string): string; inline;
+function TrimRight(const S: string): string; inline;
 function IsEmpty(const S: string): Boolean; inline;
-function IsBlank(const S: string): Boolean;
+function IsBlank(const S: string): Boolean; inline;
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
-function LowerCase(const S: string): string;
+function LowerCase(const S: string): string; inline;
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
-function UpperCase(const S: string): string;
+function UpperCase(const S: string): string; inline;
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
 function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
 function RepeatString(const S: string; ACount: Integer): string;
@@ -45,7 +45,7 @@ uses
   nextpas.core.text.builder,
   nextpas.core.text.char;
 
-function Trim(const S: string): string;
+function Trim(const S: string): string; inline;
 var
   L, R: SizeInt;
 begin
@@ -60,7 +60,7 @@ begin
   Result := Copy(S, L, R - L + 1);
 end;
 
-function TrimLeft(const S: string): string;
+function TrimLeft(const S: string): string; inline;
 var
   L: SizeInt;
 begin
@@ -71,7 +71,7 @@ begin
   Result := Copy(S, L, Length(S) - L + 1);
 end;
 
-function TrimRight(const S: string): string;
+function TrimRight(const S: string): string; inline;
 var
   R: SizeInt;
 begin
@@ -82,12 +82,12 @@ begin
   Result := Copy(S, 1, R);
 end;
 
-function IsEmpty(const S: string): Boolean;
+function IsEmpty(const S: string): Boolean; inline;
 begin
   Result := Length(S) = 0;
 end;
 
-function IsBlank(const S: string): Boolean;
+function IsBlank(const S: string): Boolean; inline;
 var
   I: SizeInt;
 begin
@@ -97,7 +97,7 @@ begin
   Result := True;
 end;
 
-function LowerCase(const S: string): string;
+function LowerCase(const S: string): string; inline;
 var
   I: SizeInt;
   LNeeds: Boolean;
@@ -116,7 +116,7 @@ begin
     Result[I] := Chr(ToLower(Byte(S[I])));
 end;
 
-function UpperCase(const S: string): string;
+function UpperCase(const S: string): string; inline;
 var
   I: SizeInt;
   LNeeds: Boolean;
