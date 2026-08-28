@@ -80,8 +80,8 @@
 - **[INV-2]** 提取时校验 local header 签名、解压尺寸与 CRC32，任一不符即 raise。
 - **[INV-3]** 未显式指定时间戳的输出字节级确定（同输入同归档，除 deflate 载荷
   受宿主 zlib 版本影响外）。
-- **[INV-4]** 敌意条目名（空名/绝对路径/盘符/反斜杠/`..` 段）在写端拒绝入参、
-  在读端提取与落盘前以 EParseError 拒绝。
+- **[INV-4]** 敌意条目名（空名/绝对路径/盘符/反斜杠/`//` 空段/`./` 单点段/`..` 段）在写端拒绝入参、
+  在读端提取与落盘前以 EParseError 拒绝（尾随 `/` 的目录终段空除外）。
 - **[INV-5]** 遗留 ZipCrypto（flag bit 0 且无有效 0x9901 extra）、未知压缩
   方法、多盘归档 → ENotSupportedError；WinZip AES 条目按 INV-14 放行。
 - **[INV-6]** Zip64：尺寸/偏移超 ZIP32 宽度或条目数超 65535 时自动启用；
@@ -133,12 +133,15 @@
   `DataDescriptor=False`，既有缓冲/暂存路径字节级行为不变。
 - **[INV-16]** 顺序读契约：`NewZipSequentialReader*` 从任意 `IReader` 顺序
   消费，仅靠 local header + data descriptor 前进，不整载、不要求 seek，
-  与 INV-15 对偶。`Next` 在描述符条目上增量扫描定位描述符（签名 +
-  CRC/尺寸强校验 + 下一条目签名预检，防载荷误判），并通过 pushback 保
-  证跨条目字节级精确；非描述符条目按 local 声明尺寸精确有界。`Open` /
+  与 INV-15 对偶。`Next` 在描述符条目上增量扫描定位描述符（签名
+  `$08074B50` + CRC/尺寸强校验 + 下一条目签名预检，防载荷误判；当前实现
+  要求描述符带签名，无签名描述符视为截断），并通过 pushback 保证跨条目
+  字节级精确；非描述符条目按 local 声明尺寸精确有界。`Open` /
   `CopyTo`/`Skip` 语义与读端一致（Guard/解压/CRC/MaxOutput/口令），
   一次仅一流，重复打开或未 `Next` 时 `EInvalidOperationError`；截断
-  结构 `EParseError`，不支持的 AES 描述符 `ENotSupportedError`。
+  结构 `EParseError`，不支持的 AES 描述符 `ENotSupportedError`。目录判定
+  仅认尾随 `/`（无 external attrs），与随机读的 `S_IFDIR` 判定互为已知差
+  异，见 §6 Known Limitations。
 - **[INV-17]** 总输出守卫：`TZipReadOptions.MaxTotalOutputSize` 为跨条目
   总未压缩尺寸上限（防“100k × 1MiB 小条目绕过单条目上限”型 ZipBomb），
   0=不限。随机读路径（内存/定位流）在解析 central 结束时对
@@ -205,3 +208,9 @@ store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuz
 验证规模与敌意压力下的 fail-closed。`bench_zip regression` 以
 `BASELINE.json` 为基线，`allocs +2` 零容忍、`bytes` 强一致、`ns +50%` 告警
 的 CI 硬门（`make baseline` 需人工审查后提交）。
+
+## 6. Known Limitations
+
+- 顺序读目录判定仅认尾随 `/`，随机读另认 `S_IFDIR`/`S_IFLNK`（external attrs 高位）；见 INV-16。
+- Data descriptor 当前要求带签名 `$08074B50`，无签名描述符视为截断（`EParseError('descriptor not found')`）；兼容性见 INV-16。
+- `extra` 的 `LE*` 已收口至 `nextpas.core.zip.common`，`WriteLE*` 栈直写与 `PByte`/`TBytes` 双形态保留；`Build*` 为堆便捷包装，写端一律走 `Encode*` 零分配路径。

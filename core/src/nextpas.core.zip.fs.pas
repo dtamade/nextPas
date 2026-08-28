@@ -246,8 +246,7 @@ begin
       LPayload := LR.ExtractToBytes(LI);
       if (Length(LPayload) = 0) or (Length(LPayload) > 4096) then
         raise EParseError.Create('zip extract: bad symlink target: ' + LE.Name);
-      SetLength(LTarget, Length(LPayload));
-      Move(LPayload[0], LTarget[1], Length(LPayload));
+      SetString(LTarget, PAnsiChar(@LPayload[0]), Length(LPayload));
       Symlink(LTarget, LFull);
     end
     else
