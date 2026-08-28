@@ -613,6 +613,74 @@ begin
   finally C.Free; end;
 end;
 
+procedure TestReplayStoreInterface;
+var Store: ITlsPasReplayStore; F1: TBytes; IsReplay: Boolean; LOk: Boolean;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(4, 600000) as ITlsPasReplayStore;
+  SetLength(F1, 32); FillChar(F1[0], 32, $CC);
+  LOk := Store.CheckAndAdd(F1, IsReplay);
+  Check(LOk and not IsReplay, 'interface first not replay');
+  Check(Store.Count=1, 'interface count 1');
+  LOk := Store.CheckAndAdd(F1, IsReplay);
+  Check(LOk and IsReplay, 'interface replay');
+  Check(Store.Count=1, 'still 1 via interface');
+  Store.Clear;
+  Check(Store.Count=0, 'clear via interface');
+end;
+
+procedure TestReplayStats;
+var C: TAsyncTlsPasReplayCache; F1, F2: TBytes; IsReplay: Boolean; S: TAsyncTlsPasReplayStats;
+begin
+  C := TAsyncTlsPasReplayCache.Create(2, 600000);
+  try
+    SetLength(F1, 32); FillChar(F1[0], 32, $01);
+    SetLength(F2, 32); FillChar(F2[0], 32, $02);
+    S := C.GetStats;
+    Check((S.Hits=0) and (S.Misses=0) and (S.Current=0), 'initial stats zero');
+    C.CheckAndAdd(F1, IsReplay);
+    S := C.GetStats;
+    Check((S.Misses=1) and (S.Hits=0) and (S.Current=1), 'after miss 1');
+    C.CheckAndAdd(F1, IsReplay);
+    S := C.GetStats;
+    Check((S.Hits=1) and (S.Misses=1), 'after hit 1');
+    C.CheckAndAdd(F2, IsReplay);
+    S := C.GetStats;
+    Check(S.Misses=2, 'misses 2');
+    // capacity 2, next insert evicts
+    SetLength(F1, 32); FillChar(F1[0], 32, $03);
+    C.CheckAndAdd(F1, IsReplay);
+    S := C.GetStats;
+    Check(S.Evictions=1, 'eviction 1');
+    Check(S.Current=2, 'still capacity 2');
+    C.Clear;
+    S := C.GetStats;
+    Check((S.Hits=0) and (S.Current=0), 'clear resets');
+  finally C.Free; end;
+end;
+
+procedure TestReplayStoreIntegration;
+var Store: ITlsPasReplayStore; LId, LEarly: TBytes; LIsReplay: Boolean;
+    LOpts: TAsyncTlsPasClientOptions;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  SetLength(LId, 4); FillChar(LId[0], 4, $11);
+  SetLength(LEarly, 5); FillChar(LEarly[0], 5, $22);
+  Check(not TlsPasIsEarlyDataReplayed(nil, LId, LEarly), 'nil store not replay');
+  Check(not TlsPasIsEarlyDataReplayed(Store, LId, LEarly), 'first not replay');
+  Check(TlsPasIsEarlyDataReplayed(Store, LId, LEarly), 'second replay');
+  // different early -> not replay
+  LEarly[0] := $23;
+  Check(not TlsPasIsEarlyDataReplayed(Store, LId, LEarly), 'different payload not replay');
+  // options injection zero-overhead check
+  LOpts := DefaultAsyncTlsPasClientOptions;
+  Check(not Assigned(LOpts.ReplayStore), 'default ReplayStore nil');
+  LOpts.ReplayStore := Store;
+  Check(Assigned(LOpts.ReplayStore), 'assigned');
+  Check(LOpts.ReplayStore.Count=2, 'store count 2 after integration');
+  LIsReplay := TlsPasIsEarlyDataReplayed(LOpts.ReplayStore, LId, LEarly);
+  Check(LIsReplay, 'via options replay');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -642,6 +710,9 @@ begin
   GSuite.Test('EarlyDataPolicy', @TestEarlyDataPolicy);
   GSuite.Test('EarlyDataFingerprint', @TestEarlyDataFingerprint);
   GSuite.Test('ReplayCache', @TestReplayCache);
+  GSuite.Test('ReplayStoreInterface', @TestReplayStoreInterface);
+  GSuite.Test('ReplayStats', @TestReplayStats);
+  GSuite.Test('ReplayStoreIntegration', @TestReplayStoreIntegration);
   if not GSuite.Run then
     Halt(1);
 end.

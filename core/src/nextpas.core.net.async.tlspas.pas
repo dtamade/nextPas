@@ -140,15 +140,36 @@ function TlsPasComputeEarlyDataFingerprint(const ATicketIdentity,
   AEarlyData: TBytes): TBytes;
 
 type
+  TAsyncTlsPasReplayStats = record
+    Hits: Int64;
+    Misses: Int64;
+    Evictions: Int64;
+    Expiries: Int64;
+    Current: Integer;
+  end;
+
+  ITlsPasReplayStore = interface
+    ['{E1F2A3B4-C5D6-4E7F-8A9B-0C1D2E3F4A5B}']
+    function CheckAndAdd(const AFingerprint: TBytes; out IsReplay: Boolean): Boolean;
+    procedure Clear;
+    function Count: Integer;
+    function GetStats: TAsyncTlsPasReplayStats;
+  end;
+
   { 重放窗口 LRU：64 槽，Mutex 保护，窗口期 10min（可配置），命中即重放。
-    职责：服务端去重 / 客户端单票单用检测；不持有密钥材料。 }
-  TAsyncTlsPasReplayCache = class
+    职责：服务端去重 / 客户端单票单用检测；不持有密钥材料。
+    S9 起实现 ITlsPasReplayStore，支持注入与可观测 Stats。 }
+  TAsyncTlsPasReplayCache = class(TInterfacedObject, ITlsPasReplayStore)
   private
     FMutex: TPlatformMutex;
     FHashes: array of TBytes;
     FTimes: array of Int64;
     FCapacity: Integer;
     FWindowMs: Int64;
+    FHits: Int64;
+    FMisses: Int64;
+    FEvictions: Int64;
+    FExpiries: Int64;
   public
     constructor Create; overload;
     constructor Create(ACapacity: Integer; AWindowMs: Int64); overload;
@@ -157,8 +178,14 @@ type
     function CheckAndAdd(const AFingerprint: TBytes; out IsReplay: Boolean): Boolean;
     procedure Clear;
     function Count: Integer;
+    function GetStats: TAsyncTlsPasReplayStats;
   end;
 
+  { 去重判定：指纹入窗口，命中则重放。封装指纹计算与 Store.CheckAndAdd，nil Store 视为不重放。 }
+function TlsPasIsEarlyDataReplayed(const AStore: ITlsPasReplayStore;
+  const ATicketIdentity, AEarlyData: TBytes): Boolean;
+
+type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
   TAsyncTlsPasClientOptions = record
@@ -185,6 +212,10 @@ type
       且票据有效且长度≤MaxEarlyDataSize 时随 CH 之后以 early 密钥发送，
       服务端接受则 EOED+Finished，拒绝则 1-RTT 回退；默认空不发。 }
     EarlyData: TBytes;
+    { 可选重放去重存储：非 nil 时在 0-RTT 派生前做指纹去重（SHA256 ticket||early），
+      命中则视为重放、本地静默回退为 1-RTT（不发 early_data 记录），避免同进程
+      误重放；nil = 不检查（默认零开销，服务端仍需自备去重）。 }
+    ReplayStore: ITlsPasReplayStore;
   end;
 
   { 异步握手完成回调：AError=0 时 AStream 为就绪 TLS 流；失败时
@@ -837,6 +868,25 @@ begin
   SecureZeroBytes(LBuf);
 end;
 
+function TlsPasIsEarlyDataReplayed(const AStore: ITlsPasReplayStore;
+  const ATicketIdentity, AEarlyData: TBytes): Boolean;
+var
+  LFP: TBytes;
+  LIsReplay: Boolean;
+begin
+  Result := False;
+  if not Assigned(AStore) then Exit;
+  LFP := TlsPasComputeEarlyDataFingerprint(ATicketIdentity, AEarlyData);
+  try
+    if AStore.CheckAndAdd(LFP, LIsReplay) then
+      Result := LIsReplay
+    else
+      Result := False;
+  finally
+    SecureZeroBytes(LFP);
+  end;
+end;
+
 constructor TAsyncTlsPasReplayCache.Create;
 begin
   Create(64, 600000);
@@ -889,6 +939,7 @@ begin
         end;
         SetLength(FHashes, Length(FHashes) - 1);
         SetLength(FTimes, Length(FTimes) - 1);
+        Inc(FExpiries);
       end
       else
         Inc(I);
@@ -897,10 +948,12 @@ begin
       if (Length(FHashes[I]) = 32) and CompareMem(@FHashes[I][0], @AFingerprint[0], 32) then
       begin
         IsReplay := True;
+        Inc(FHits);
         Result := True;
         Exit;
       end;
     // 未命中则插入
+    Inc(FMisses);
     if Length(FHashes) >= FCapacity then
     begin
       Oldest := 0;
@@ -914,6 +967,7 @@ begin
       SecureZeroBytes(FHashes[Oldest]);
       FHashes[Oldest] := Copy(AFingerPrint);
       FTimes[Oldest] := LNow;
+      Inc(FEvictions);
     end
     else
     begin
@@ -938,6 +992,10 @@ begin
       SecureZeroBytes(FHashes[I]);
     SetLength(FHashes, 0);
     SetLength(FTimes, 0);
+    FHits := 0;
+    FMisses := 0;
+    FEvictions := 0;
+    FExpiries := 0;
   finally
     platform_mutex_unlock(FMutex);
   end;
@@ -948,6 +1006,20 @@ begin
   platform_mutex_lock(FMutex);
   try
     Result := Length(FHashes);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasReplayCache.GetStats: TAsyncTlsPasReplayStats;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    Result.Hits := FHits;
+    Result.Misses := FMisses;
+    Result.Evictions := FEvictions;
+    Result.Expiries := FExpiries;
+    Result.Current := Length(FHashes);
   finally
     platform_mutex_unlock(FMutex);
   end;
@@ -2290,6 +2362,7 @@ begin
   Result.Cache := nil;
   Result.AllowEarlyData := False;
   SetLength(Result.EarlyData, 0);
+  Result.ReplayStore := nil;
 end;
 
 { 0-RTT 薄封装：零分支透传至 keyschedule，不引入新密钥派生实现 }
@@ -2365,25 +2438,54 @@ begin
     raise;
   end;
   { 0-RTT 早期数据本地准备：仅当 CH 已带 early_data 且调用方提供了 EarlyData 时派生 early 密钥。
-    轻量一次性 HKDF，失败则静默回退 1-RTT（不中断握手，EarlyData 丢弃）。 }
+    轻量一次性 HKDF，失败则静默回退 1-RTT（不中断握手，EarlyData 丢弃）。
+    S9：若注入 ReplayStore 则先做指纹去重，命中则本地回退为 1-RTT（零重放）。 }
   Result^.SentEarlyData := LAllowEarly and AHasResume;
   if Result^.SentEarlyData and (Length(AOptions.EarlyData) > 0) then
   begin
     if TlsPasIsEarlyDataAllowed(AResumeSession, True, Length(AOptions.EarlyData)) then
     begin
-      Result^.EarlyData := Copy(AOptions.EarlyData);
-      if TlsPasTryDeriveEarlyDataSecrets(AResumeSession.CipherSuite,
-        AResumeSession.ResumptionPSK, Result^.CHBody, Result^.EarlySecrets, LErr) then
+      // S9 可选本地去重：避免同进程误重放相同 early_data
+      if Assigned(AOptions.ReplayStore) then
       begin
-        Result^.EarlySealer.Init(AResumeSession.CipherSuite,
-          Result^.EarlySecrets.ClientEarlyKey, Result^.EarlySecrets.ClientEarlyIV);
-        Result^.EarlySeq := 0;
+        // 指纹计算与检查为 O(N) 小表，默认 nil 时零开销
+        if TlsPasIsEarlyDataReplayed(AOptions.ReplayStore, AResumeSession.TicketIdentity, AOptions.EarlyData) then
+        begin
+          Result^.SentEarlyData := False;
+          SetLength(Result^.EarlyData, 0);
+        end
+        else
+        begin
+          Result^.EarlyData := Copy(AOptions.EarlyData);
+          if TlsPasTryDeriveEarlyDataSecrets(AResumeSession.CipherSuite,
+            AResumeSession.ResumptionPSK, Result^.CHBody, Result^.EarlySecrets, LErr) then
+          begin
+            Result^.EarlySealer.Init(AResumeSession.CipherSuite,
+              Result^.EarlySecrets.ClientEarlyKey, Result^.EarlySecrets.ClientEarlyIV);
+            Result^.EarlySeq := 0;
+          end
+          else
+          begin
+            SecureZeroBytes(Result^.EarlyData);
+            SetLength(Result^.EarlyData, 0);
+          end;
+        end;
       end
       else
       begin
-        // 派生失败：丢弃 EarlyData，保持 SentEarlyData 但无加密能力（回退）
-        SecureZeroBytes(Result^.EarlyData);
-        SetLength(Result^.EarlyData, 0);
+        Result^.EarlyData := Copy(AOptions.EarlyData);
+        if TlsPasTryDeriveEarlyDataSecrets(AResumeSession.CipherSuite,
+          AResumeSession.ResumptionPSK, Result^.CHBody, Result^.EarlySecrets, LErr) then
+        begin
+          Result^.EarlySealer.Init(AResumeSession.CipherSuite,
+            Result^.EarlySecrets.ClientEarlyKey, Result^.EarlySecrets.ClientEarlyIV);
+          Result^.EarlySeq := 0;
+        end
+        else
+        begin
+          SecureZeroBytes(Result^.EarlyData);
+          SetLength(Result^.EarlyData, 0);
+        end;
       end;
     end
     else
