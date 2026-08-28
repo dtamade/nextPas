@@ -18,14 +18,14 @@
 
 ### R0-3 超大载荷线性度锚点
 
-- **冻结**：`bench_kv` 固件 `GSmall(~610B)/GMedium(~2263B)/GLarge(~9728B)/GSuperLarge(~43048B,400对×`kN=v_x8`)`，用例 `kv/parse_super~42KB` + `kv/scan_super~20KB`
-- **口径**：`TBenchSuite 7样本中位, MinDuration=100ms, -O2, FPC 3.3.1`，报告 `median/mean/p95/thr/allocs`
-- **晋级门**：线性 `1.5KB/350B 4.3× 字节对 3.96× 耗时`、`super/1.5KB 4.4× 字节对 4.27× 耗时`，吞吐 739–1131MB/s，`CV 50-80% WARN` 仅环境噪声以 `filtered median` 为准
+- **冻结**：`bench_kv` 固件 `GSmall(~610B)/GMedium(~2263B)/GLarge(~9728B)/GSuperLarge(~43048B,400对×`kN=v_x8`)`，用例 `kv/parse_super~42KB` + `kv/scan_super~20KB` + `kv/validate_* 3档 0 allocs`
+- **口径**：`TBenchSuite 7样本中位, MinDuration=100ms, -O2, FPC 3.3.1`，报告 `median/mean/p95/thr/allocs`（`validate 129/277/1102ns`）
+- **晋级门**：线性 `1.5KB/350B 4.3× 字节对 3.96× 耗时`、`super/1.5KB 4.4× 字节对 4.27× 耗时`，吞吐 739–1131MB/s（`Pad` 单分配 `loop` 化后字面量正确），`CV 50-80% WARN` 仅环境噪声以 `filtered median` 为准
 
 ### R1-1 Redis 集群归一
 
-- **冻结**：`ClassifyRedis` 查表增 `CROSSSLOT→decSyntax / TRYAGAIN→decCapacity / WRONGTYPE→decConstraint`，保留 `BUSYGROUP→decUnknown` 不误归一
-- **晋级门**：`test_db_redis_base 11 passed heaptrc0`，纯函数 `lib-consumer` `ClassifyRedis('CROSSSLOT')` + `ParseKV(GSuperLarge 400对)` 400 行直验
+- **冻结**：`ClassifyRedis` 查表增 `CROSSSLOT→decSyntax / TRYAGAIN→decCapacity / WRONGTYPE→decConstraint`，保留 `BUSYGROUP/NOGROUP→decUnknown` 不误归一（`NOGROUP` Redis 7 stream）
+- **晋级门**：`test_db_redis_base 12 passed heaptrc0`，`pool 21 passed`（`double-close 幂等 + acquire-after-close`），纯函数 `lib-consumer` `ClassifyRedis('CROSSSLOT')` + `ParseKV(GSuperLarge 400对)` 400 行直验
 
 ## 2. 终版裁定（R1-R5 正式收口）
 
@@ -35,14 +35,14 @@
 - 全量 `bench_db_*` 三列重采或 B0 冻结外性能发布 → **不在终版验收内**
 - ORM/分库分表/方言翻译器 → **不在终版验收内**
 
-**签署（Sign-off）**：`2026-08-28` · `nextpas.core.db 终版 20260828` · 判定：R0-2/R0-3/R1-1 已通过 `test_text 33 + test_db_redis_base 11 + bench_kv 7 + lib-consumer 400对 + hygiene/diff-check 0` 闭环；**R1-R5 正式终版裁定通过**，后续按独立计划演进，不阻塞本次封版校验。
+**签署（Sign-off）**：`2026-08-29` · `nextpas.core.db 终版 20260829` · 判定：R0-2/R0-3/R1-1 已通过 `test_text 33 + test_db_redis_base 12 + bench_kv 10 + pool 21 + lib-consumer 400对 + hygiene/diff-check 0` 闭环；**R1-R5 正式终版裁定通过**，后续按独立计划演进，不阻塞本次封版校验。
 
 ## 3. 证据索引
 
 | 证据 | 路径 |
 |---|---|
 | bench 四档 | `core/build/projects/nextpas.core.text/bench_kv/bench_kv` → `{SCRATCH}/bench-kv.log` |
-| 门禁 33/11 | `make focused test_text / test_db_redis_base` → `{SCRATCH}/test-text.log, redis-base.log` |
+| 门禁 33/12/21/10 | `make focused test_text 33 / redis 12 / pool 21 / bench_kv 10` → `{SCRATCH}/test-text.log, redis-base.log, pool.log, bench-kv.json` |
 | 库启动检查 | `ClassifyRedis+ParseKV/ScanKV` consumer → `{SCRATCH}/lib-consumer.log` |
 | 卫生 | `make hygiene + git diff --check` → `{SCRATCH}/hygiene.log` |
 
