@@ -24,6 +24,7 @@ function TLS12PRF_SHA384(
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hmac;
 
 function ConcatBytes(const ALeft, ARight: TBytes): TBytes;
@@ -31,13 +32,6 @@ begin
   SetLength(Result, Length(ALeft) + Length(ARight));
   if Length(ALeft) > 0 then Move(ALeft[0], Result[0], Length(ALeft));
   if Length(ARight) > 0 then Move(ARight[0], Result[Length(ALeft)], Length(ARight));
-end;
-
-function StringToBytes(const AValue: string): TBytes;
-begin
-  SetLength(Result, Length(AValue));
-  if Length(AValue) > 0 then
-    Move(AValue[1], Result[0], Length(AValue));
 end;
 
 function ConcatLabelAndSeed(const ALabel: string; const ASeed: TBytes): TBytes;
