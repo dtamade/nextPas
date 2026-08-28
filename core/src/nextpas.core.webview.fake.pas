@@ -97,6 +97,7 @@ type
     FEvalScriptsCount: Integer;
     FEvalQueue: array of Boolean;  // 预载结果 FIFO：True=错误（值在 FEvalResults）
     FEvalResults: array of string; // 与 FEvalQueue 平行：成功 JSON 或错误消息
+    FEvalQueueCount: Integer;
     FPendingEvals: array of TFakePendingEval;
     FPendingCount: Integer;
     FOutcomes: TFakeInvokeOutcomes;
@@ -139,6 +140,7 @@ type
     procedure GrowOnWindowClosed; inline;
     procedure GrowOnReady; inline;
     procedure GrowOnScaleChanged; inline;
+    procedure GrowQueue; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -753,6 +755,15 @@ begin
     SetLength(FOnScaleChanged, WebviewGrowCapacity(Length(FOnScaleChanged)));
 end;
 
+procedure TFakeWebview.GrowQueue; inline;
+begin
+  if FEvalQueueCount = Length(FEvalQueue) then
+  begin
+    SetLength(FEvalQueue, WebviewGrowCapacity(Length(FEvalQueue)));
+    SetLength(FEvalResults, WebviewGrowCapacity(Length(FEvalResults)));
+  end;
+end;
+
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
@@ -1080,7 +1091,7 @@ begin
   LValue := '';
   FLck.Acquire;
   try
-    if Length(FEvalQueue) > 0 then
+    if FEvalQueueCount > 0 then
     begin
       LIsError := FEvalQueue[0];
       LValue := FEvalResults[0];
@@ -1106,13 +1117,17 @@ procedure TFakeWebview.ShiftEvalQueue;
 var
   I: Integer;
 begin
-  for I := 0 to High(FEvalQueue) - 1 do
+  for I := 0 to FEvalQueueCount - 2 do
   begin
     FEvalQueue[I] := FEvalQueue[I + 1];
     FEvalResults[I] := FEvalResults[I + 1];
   end;
-  SetLength(FEvalQueue, Length(FEvalQueue) - 1);
-  SetLength(FEvalResults, Length(FEvalResults) - 1);
+  Dec(FEvalQueueCount);
+  if FEvalQueueCount < Length(FEvalQueue) then
+  begin
+    FEvalQueue[FEvalQueueCount] := False;
+    FEvalResults[FEvalQueueCount] := '';
+  end;
 end;
 
 { 恰好一次兑现：先落记录再触发回调（回调内再入本对象是安全的） }
@@ -1302,10 +1317,10 @@ begin
     end
     else
     begin
-      SetLength(FEvalQueue, Length(FEvalQueue) + 1);
-      FEvalQueue[High(FEvalQueue)] := False;
-      SetLength(FEvalResults, Length(FEvalResults) + 1);
-      FEvalResults[High(FEvalResults)] := AResultJson;
+      GrowQueue;
+      FEvalQueue[FEvalQueueCount] := False;
+      FEvalResults[FEvalQueueCount] := AResultJson;
+      Inc(FEvalQueueCount);
     end;
   finally
     FLck.Release;
@@ -1331,10 +1346,10 @@ begin
     end
     else
     begin
-      SetLength(FEvalQueue, Length(FEvalQueue) + 1);
-      FEvalQueue[High(FEvalQueue)] := True;
-      SetLength(FEvalResults, Length(FEvalResults) + 1);
-      FEvalResults[High(FEvalResults)] := AMessage;
+      GrowQueue;
+      FEvalQueue[FEvalQueueCount] := True;
+      FEvalResults[FEvalQueueCount] := AMessage;
+      Inc(FEvalQueueCount);
     end;
   finally
     FLck.Release;
