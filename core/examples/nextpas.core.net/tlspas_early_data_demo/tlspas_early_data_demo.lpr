@@ -168,6 +168,34 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure DemoAdaptiveHealth;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession;
+  Id, Early: TBytes; H: TTlsPasAdaptiveHealth; J: string;
+begin
+  WriteLn('--- Adaptive Health (S27) ---');
+  Store := TAsyncTlsPasReplayStoreFactory.CreateMemory(64, 600000);
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    H := Obs.GetAdaptiveHealth;
+    WriteLn('Initial: ', TlsPasFormatAdaptiveHealth(H), ' json=', HttpAdaptiveHealthJSON(Obs));
+    WriteLn('Prometheus health: ', System.Copy(TlsPasAdaptiveHealthToPrometheus(H, 'nextpas_tlspas'), 1, 80), '...');
+    // degrade
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $AB);
+    SetLength(Early, 10); FillChar(Early[0], 10, $11);
+    Obs.Decide(Id, Early, Sess, True);
+    Sess.HasMaxEarlyData := False;
+    SetLength(Early, 10); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); Obs.Decide(Id, Early, Sess, True);
+    H := Obs.GetAdaptiveHealth;
+    WriteLn('After 2 rejects: ', TlsPasFormatAdaptiveHealth(H), ' json=', HttpAdaptiveHealthJSON(Obs));
+    WriteLn('Handler healthy=', H.Healthy, ' (200 vs 503)');
+    Obs.Clear;
+    WriteLn('After Clear: ', TlsPasFormatAdaptiveHealth(Obs.GetAdaptiveHealth));
+  finally Obs.Free; end;
+end;
+
 procedure DemoPrometheusRegistryAndConfig;
 var Reg: TAsyncTlsPasPrometheusRegistry; Store1, Store2: ITlsPasReplayStore; Obs1, Obs2: TAsyncTlsPasAdaptiveObserver;
   Id, Early: TBytes; Sess: TTlsPasResumptionSession; C: TTlsPasAdaptiveLimitConfig; P: string; LPath: string; F: TextFile;
@@ -252,8 +280,8 @@ begin
 end;
 
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S26 final) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config');
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S27 final) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -273,5 +301,7 @@ begin
   WriteLn;
   DemoPrometheusRegistryAndConfig;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S26 registry+config self-proof.');
+  DemoAdaptiveHealth;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S27 health self-proof.');
 end.
