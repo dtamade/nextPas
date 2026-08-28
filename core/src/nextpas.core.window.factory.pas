@@ -67,8 +67,12 @@ uses
   TypInfo,
   nextpas.core.platform.thread,
   nextpas.core.window.fake,
-  nextpas.core.window.gtk,
-  nextpas.core.window.gtk.loader,
+  nextpas.core.window.gtk3,
+  nextpas.core.gtk3.loader,
+  nextpas.core.gtk4.loader,
+  nextpas.core.gtk2.loader,
+  nextpas.core.qt5pas.loader,
+  nextpas.core.qt.loader,
   nextpas.core.window.sdl2,
   nextpas.core.window.sdl2.loader,
   nextpas.core.window.win32,
@@ -118,7 +122,19 @@ end;
 procedure QuitFake; begin end;
 
 function ProbeGtk: Boolean;
-var L: TWindowGtkLoadInfo; begin Result := TryLoadWindowGtk(L) and L.Loaded; end;
+var L: TGtk3LoadInfo; begin Result := TryLoadGtk3(L) and L.Loaded; end;
+
+// 独立家族探测（供 diagnostics 与未来多版本回退）
+function ProbeGtk3: Boolean;
+var L: TGtk3LoadInfo; begin Result := TryLoadGtk3(L) and L.Loaded; end;
+function ProbeGtk4: Boolean;
+var L: TGtk4LoadInfo; begin Result := TryLoadGtk4(L) and L.Loaded; end;
+function ProbeGtk2: Boolean;
+var L: TGtk2LoadInfo; begin Result := TryLoadGtk2(L) and L.Loaded; end;
+function ProbeQt5Pas: Boolean;
+var L: TQt5PasLoadInfo; begin Result := TryLoadQt5Pas(L) and L.Loaded; end;
+function ProbeQt: Boolean;
+var L: TQtLoadInfo; begin Result := TryLoadQt(L) and L.Loaded; end;
 
 function ProbeSdl2: Boolean;
 var L: TWindowSdl2LoadInfo; begin Result := TryLoadWindowSdl2(L) and L.Loaded; end;
@@ -223,6 +239,24 @@ begin
       Result := Result + LineEnding;
     Result := Result + LLine;
   end;
+  // 独立 L2 家族附加诊断（不在 BACKENDS 循环内，伦理扭转后新增）
+  try
+    Result := Result + LineEnding + Format('gtk4: %s (sonames: libgtk-4.so.1, libgobject-2.0.so.0, libglib-2.0.so.0)', [BoolToStr(ProbeGtk4, True)]);
+  except
+  end;
+  try
+    Result := Result + LineEnding + Format('gtk2: %s (sonames: libgtk-x11-2.0.so.0, libgobject-2.0.so.0, libglib-2.0.so.0)', [BoolToStr(ProbeGtk2, True)]);
+  except
+  end;
+  try
+    Result := Result + LineEnding + Format('qt5pas: %s (sonames: libQt5Pas.so.1)', [BoolToStr(ProbeQt5Pas, True)]);
+  except
+  end;
+  try
+    Result := Result + LineEnding + Format('qt: %s (sonames: libnextpas-qt.so)', [BoolToStr(ProbeQt, True)]);
+  except
+  end;
+  // 探测失败不影响主诊断链
 end;
 
 function CreateFakeWindow(const AOptions: TWindowOptions): IWindow;

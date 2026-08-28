@@ -1,35 +1,54 @@
-unit nextpas.core.window.gtk.loader;
+unit nextpas.core.gtk3.loader;
 
-{** @desc GTK 窗口子集动态装载（家族内唯一触 platform.dl 的单元）。
+{** @desc GTK3 动态装载（家族内唯一触 platform.dl 的单元）。
        原语一律来自 nextpas.core.platform.dl，禁用 FPC DynLibs。
 
        探测仅装载 GTK3 栈（libgtk-3 / libgobject-2.0 / libglib-2.0），
-       不触 WebKit/JSC。能力以符号存在性判定，装载结果进程级幂等。 *}
+       不触 WebKit/JSC。能力以符号存在性判定，装载结果进程级幂等。
+
+       依赖方向：ffi → loader；sonames 见实现。 *}
 
 {$I nextpas.core.settings.inc}
+{$IF 0}
+{$mode objfpc}{$H+}
+{$ENDIF}
 
 interface
 
 uses
   nextpas.core.platform.dl,
-  nextpas.core.window.gtk.ffi;
+  nextpas.core.gtk3.ffi;
 
 type
-  TWindowGtkLoadInfo = record
+  {** 装载结果（与 window.gtk 兼容布局） *}
+  TGtk3LoadInfo = record
     Loaded: Boolean;
   end;
+  {** 兼容别名：window 侧历史名称 *}
+  TWindowGtkLoadInfo = TGtk3LoadInfo;
 
-function TryLoadWindowGtk(out AInfo: TWindowGtkLoadInfo): Boolean;
-procedure UnloadWindowGtk;
-function WindowGtkLoadInfo: TWindowGtkLoadInfo;
-function WindowGtkIsLoaded: Boolean;
+{** @desc 尝试装载 GTK3 栈，幂等
+    @return True 已装载（或本次成功装载） *}
+function TryLoadGtk3(out AInfo: TGtk3LoadInfo): Boolean;
+{** @desc 卸载已装载的 GTK3 栈 *}
+procedure UnloadGtk3;
+{** @desc 返回当前装载信息（未装载时 Loaded=False） *}
+function Gtk3LoadInfo: TGtk3LoadInfo;
+{** @desc 是否已装载 *}
+function Gtk3IsLoaded: Boolean;
+
+{** 兼容包装：window.gtk 历史 API（inline 转发） *}
+function TryLoadWindowGtk(out AInfo: TWindowGtkLoadInfo): Boolean; inline;
+procedure UnloadWindowGtk; inline;
+function WindowGtkLoadInfo: TWindowGtkLoadInfo; inline;
+function WindowGtkIsLoaded: Boolean; inline;
 
 implementation
 
 var
   GLoaded: Boolean = False;
   GLoading: Boolean = False;
-  GInfo: TWindowGtkLoadInfo;
+  GInfo: TGtk3LoadInfo;
   GGtkLib, GGobjectLib, GGlibLib: TPlatformLibrary;
 
 function TryDlOpen(var ALib: TPlatformLibrary; const ASonames: array of string): Boolean;
@@ -69,7 +88,7 @@ begin
   platform_dl_release(GGlibLib);
 end;
 
-function TryLoadWindowGtk(out AInfo: TWindowGtkLoadInfo): Boolean;
+function TryLoadGtk3(out AInfo: TGtk3LoadInfo): Boolean;
 
   function BindAll: Boolean;
   begin
@@ -119,7 +138,7 @@ begin
   FillChar(AInfo, SizeOf(AInfo), 0);
   GLoading := True;
   try
-    if not (TryDlOpen(GGtkLib, ['libgtk-3.so.0']) and
+    if not (TryDlOpen(GGtkLib, ['libgtk-3.so.0', 'libgtk-3.so']) and
             TryDlOpen(GGobjectLib, ['libgobject-2.0.so.0']) and
             TryDlOpen(GGlibLib, ['libglib-2.0.so.0'])) then
     begin
@@ -140,22 +159,42 @@ begin
   end;
 end;
 
-procedure UnloadWindowGtk;
+procedure UnloadGtk3;
 begin
   if not GLoaded then Exit;
   ReleaseAll;
   GLoaded := False;
-  GInfo := Default(TWindowGtkLoadInfo);
+  GInfo := Default(TGtk3LoadInfo);
 end;
 
-function WindowGtkLoadInfo: TWindowGtkLoadInfo;
+function Gtk3LoadInfo: TGtk3LoadInfo;
 begin
   Result := GInfo;
 end;
 
-function WindowGtkIsLoaded: Boolean;
+function Gtk3IsLoaded: Boolean;
 begin
   Result := GLoaded;
+end;
+
+function TryLoadWindowGtk(out AInfo: TWindowGtkLoadInfo): Boolean;
+begin
+  Result := TryLoadGtk3(AInfo);
+end;
+
+procedure UnloadWindowGtk;
+begin
+  UnloadGtk3;
+end;
+
+function WindowGtkLoadInfo: TWindowGtkLoadInfo;
+begin
+  Result := Gtk3LoadInfo;
+end;
+
+function WindowGtkIsLoaded: Boolean;
+begin
+  Result := Gtk3IsLoaded;
 end;
 
 end.
