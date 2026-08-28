@@ -268,8 +268,8 @@ translate_complexity（线性度成立）、batch_insert pg 四路（autocommit
 - 数字漂移 ±15% 内视为环境噪声（共享机器）；跨过阈值先查环境再谈回归。
 - 新增 bench 必须同步扩充本文口径表，缺口径的 bench 视为不存在。
 
-## 验证锚点 2026-08-29 — 同步至 main b60771353（db 锚点 769c69cbd，含 redis Trim 单源化）
+## 验证锚点 2026-08-29 — 同步至 main c52c2b51a（db StrToIntDef 零分配 inline + git.native 6 文件单源化 99 行去重）
 
-- 聚焦门：`test_text 33` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`b607` 复跑 33/12/21/7 绿）
-- 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，在册 `129/277/1102 ns` 静稳中位，当前 `123/273/1074 ns` 紧贴在册，`0 allocs` 不变量稳，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
-- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行收敛至 text.utils 单源——factory NormalizeLowerTrim + redis Trim`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）
+- 聚焦门：`test_text 33` / `test_bytes 35` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` / `test_git_native 114` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`c52` 复跑 33/35/12/21/7/114 绿，含 StrToIntDef ±2^63 边界与 git Bytes/Hex 单源）
+- 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，在册 `129/277/1102 ns` 静稳中位，当前 `123/354/1130 ns` 紧贴在册（medium 受调度噪声 +27% 仍 0 allocs），`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
+- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行收敛至 text.utils 单源——factory NormalizeLowerTrim + redis Trim` + `git.native Hex/Bytes 单源化 base`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）
