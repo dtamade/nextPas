@@ -338,17 +338,9 @@ begin
   Result := Self;
 end;
 
-function GrowCapacity(ACurrent: Integer): Integer; inline;
-begin
-  if ACurrent = 0 then
-    Result := 4
-  else
-    Result := ACurrent * 2;
-end;
-
 procedure TBuilderImpl.GrowInitScripts; inline;
 begin
-  SetLength(FInitScripts, GrowCapacity(Length(FInitScripts)));
+  SetLength(FInitScripts, WebviewGrowCapacity(Length(FInitScripts)));
 end;
 
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
@@ -362,12 +354,12 @@ end;
 
 procedure TBuilderImpl.GrowInvokes; inline;
 begin
-  SetLength(FInvokes, GrowCapacity(Length(FInvokes)));
+  SetLength(FInvokes, WebviewGrowCapacity(Length(FInvokes)));
 end;
 
 procedure TBuilderImpl.GrowReady; inline;
 begin
-  SetLength(FReady, GrowCapacity(Length(FReady)));
+  SetLength(FReady, WebviewGrowCapacity(Length(FReady)));
 end;
 
 procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string);
