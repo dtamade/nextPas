@@ -206,8 +206,6 @@ end;
 
 function ParseMySqlDsn(const ADsn: string): TDbMysqlDsnParts;
 var
-  LPairs: TKVPairs;
-  LPair: TKVPair;
   LErr: string;
 begin
   Result.Host := MYSQL_DEFAULT_HOST;
@@ -220,9 +218,10 @@ begin
     if LErr <> 'empty dsn' then
       raise EDbError.CreateSimple(dbkMysql, LErr);
   try
-    LPairs := ParseKV(ADsn);
-    for LPair in LPairs do
-      AssignDsnKey(Result, LPair.Key, LPair.Value);
+    ScanKV(ADsn, procedure(const AKey, AValue: string)
+      begin
+        AssignDsnKey(Result, AKey, AValue);
+      end);
   except
     on E: EDbError do raise;
     on E: Exception do

@@ -189,6 +189,9 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 | kv/scan_small~80B | 322 | 387 ns | 567 ns | 1275 ns | 832 MB/s | 13 |
 | kv/scan_large~1.5KB | 4032 | 3760 ns | 6715 ns | 18255 ns | 1072 MB/s | 201 |
 | kv/scan_super~5KB | 20232 | 17877 ns | 29402 ns | 74793 ns | 1131 MB/s | 801 |
+| kv/validate_small~80B | 0 | 129 ns | 134 ns | 155 ns | — | 0 |
+| kv/validate_medium~350B | 0 | 277 ns | 280 ns | 285 ns | — | 0 |
+| kv/validate_large~1.5KB | 0 | 1102 ns | 1134 ns | 1151 ns | — | 0 |
 
 结论：吞吐 739–1131 MB/s 量级，`large/medium/small` 均摊 ≈ 1–3 ns/byte，
 线性 `O(n)` 成立（`1.5KB/350B ≈ 4.3×` 字节、`9930/2502 ≈ 3.96×` 耗时；
@@ -204,8 +207,11 @@ vs 825ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，�
 `Val(LTail,LCode,LCode)` 冗余清理），`ODBC` 分号+花括号
 （`Driver={DM8 ODBC DRIVER};`）同源复用，`DM` 等同形态 DSN 零新增词法
 ——`text.kv` 现为 **MySQL/PG/ODBC/DM 四形态 + factory/redis 零分配**
-统一底座，`bench_text_kv` 为性能锚点（`Trim(` 在
-`core/src/nextpas.core.db.*` 全族 `0` 行，29 门离线基线：26 db + 3 text）。
+统一底座，`bench_text_kv` 为性能锚点（零分配不变量以本表为准，`core/src/nextpas.core.db.*` 家族 `Trim(` 0 行单源，29 门离线基线：26 db + 3 text）。
+
+> **口径显式化**：本表 `bytes` = `TBenchSuite` 的 `bytes_per_op`（见 `build/bench-kv.json`），非 `Length(GSuperLarge)` 实串长度；`GSuperLarge` 实串 `Length≈7383B`（400×`kN=v_x8;` 去尾空格），而 `bytes_per_op 43048B` 为 `bench` 侧统计口径（含框架 `bytes` 计数），二者差异为口径所致，非回归。归一路径：`factory`/`redis` 统一走 `nextpas.core.text.utils.NormalizeLowerTrim` 单源（`core/src/nextpas.core.db.*` 保持 `Trim(` 0 行）。
+
+> **ValidateKV 微 bench**（S5b）：`bench_kv` 新增 `kv/validate_small/medium/large` 三用例，覆盖 `ValidateKV` 零分配校验路径（`allocs 0`，`bytes` 同档），与 `parse/scan` 同表对照，供 `ScanKV` 复用前后不变量锚点。
 
 > 复跑噪声对照（2026-08-28 09:15 同机）：small median 797ns/mean 984ns
 > 持平，medium mean 9831ns（×3.1）、large mean 60971ns（×4.9）同步膨胀，

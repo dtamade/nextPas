@@ -14,7 +14,7 @@
 ### R0-2 文本零分配彻底化
 
 - **冻结**：`RepeatString` 倍增拷贝、`PosEx`/`SplitString` 预分配 + `inline`（`nextpas.core.text.utils`），`Trim/Lower/Upper/IsBlank/Pad` 全 inline 零拷贝直返
-- **晋级门**：`ScanKV 387ns vs ParseKV 825ns` 小载荷差保持、`allocs ≈ pairs×2`、`Trim(` 在 `db.*` 全族 0 行、`make focused test_text 33 passed heaptrc0`
+- **晋级门**：`ScanKV 387ns vs ParseKV 825ns` 小载荷差保持、`allocs ≈ pairs×2`、零分配门以 `benchmarks.md` 为单源、`make focused test_text 33 passed heaptrc0`
 
 ### R0-3 超大载荷线性度锚点
 
@@ -51,3 +51,9 @@
 - 文本层 `Trim`/`LowerCase` 回退为 `Copy` 分配 → `ScanKV` 吞吐跌破 500MB/s
 - 新增 `SysUtils` 直引或 `db` 门面泄漏业务逻辑 → `grep -R SysUtils/Trim(` 违反
 - 归一表误把 `BUSYGROUP` 归为容量类 → 集群语义回归
+
+## 附录 A5 · 工厂 FPC trunk 临时量缺陷登记
+
+- 现象：`DbRegisterDriver` 若取 `const ADriver: IDbDriver` 并在 `GLock.Acquire/Release` 锁内 `try-finally` 提前退出（重复注册抛异常），FPC trunk 3.3.1 对 `const` 接口临时实参的生命周期管理存在缺陷，泄漏调用方临时对象。
+- 规避：参数取托管传参（非 `const`），锁内单出口、异常全部在锁外构造（本地变量 `LName/LDup/LEntry` 承载），`GLock` 临界区仅做 `FindEntryLocked/SetLength` 最小操作；重复时 `if LDup then raise` 置于锁外。
+- 证据：`codex/core-db` lane 实测该组合泄漏，改为本地变量路径后 `heaptrc0`；详见 `nextpas.core.db.factory.pas` 头注 `CONTRACT §2.10`。

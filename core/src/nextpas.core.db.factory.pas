@@ -1,25 +1,6 @@
 unit nextpas.core.db.factory;
 
-{** @desc 统一驱动注册工厂（V3-A5 收口，对标 Go database/sql 的
-       sql.Register/sql.Open 与 ADO.NET DbProviderFactory）。
-
-    - 注册制：内建五驱动（sqlite/postgres/mysql/odbc/redis）在单元
-      初始化自注册；第三方适配器实现 IDbDriver 后经
-      DbRegisterDriver 注入即可接入 DbOpen/DbOpenPool 全套入口，
-      无需改动本单元。重复注册同名驱动 fail-closed 抛 EDbError
-      （对齐 sql.Register 同名 panic 语义，防静默覆盖）。
-    - Open 即池：DbOpenPool 返回既有 V3-C3 工业池 TDbPool——
-      对齐 Go "*sql.DB 天生是池"的核心体验；池体复用不重造。
-    - DSN 形态沿用各后端现行约定（pg conninfo / mysql dsn /
-      odbc connstr 原文透传、sqlite 文件路径、redis addr）；
-      redis:// 富 URL 解析不进本版（细粒度控制走 ConnectRedis
-      options 重载）。TDbConnectOptions 为 advisory 语义，
-      逐后端映射见 CONTRACT §2.14。
-    - 第三方驱动的 Kind 诚实约定：内建后端返回对应 dbk* 枚举；
-      未占用枚举位的适配器返回 dbkUnknown（错误归一欠归一，
-      不冒充内建后端——仓库 fail-closed 惯例）。
-    - 线程模型：注册表读写由互斥锁保护（注册通常发生在进程启动期，
-      锁为诚实语义而非性能热点）；Open 调用在锁外执行。 *}
+{** @desc 统一驱动注册工厂，对标 Go sql.Register/Open。内建五驱动自注册，第三方 via IDbDriver 注入；Open 即池复用 V3-C3；详见 CONTRACT §2.10/§2.14。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -133,12 +114,7 @@ begin
   Result := -1;
 end;
 
-{ 注册驱动。nil/空名/重复名一律抛 EDbError(dbkUnknown) fail-closed。
-  名字大小写不敏感（注册时归一小写）。
-  实现注记：参数取托管传参（非 const），锁内单出口、异常全部在锁外
-  构造——规避 FPC trunk 上「const 接口临时实参 + 锁内 try-finally
-  提前退出」组合的临时值生命周期缺陷（实测该组合泄漏调用方临时对象，
-  见路线图 A5 工厂行坑登记；本地变量或继续追加路径均无此现象）。 }
+{ 注册驱动。nil/空名/重复名 fail-closed；大小写不敏感。实现注记见 ROADMAP §A5（FPC trunk 临时量缺陷规避）。 }
 procedure DbRegisterDriver(ADriver: IDbDriver);
 var
   LName: string;

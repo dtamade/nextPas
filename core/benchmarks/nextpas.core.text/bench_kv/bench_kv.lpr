@@ -94,6 +94,27 @@ begin
   GSink := GSink xor UInt64(LCount);
 end;
 
+procedure BenchValidateSmall(const ACtx: IBenchContext);
+var LErr: string; LOk: Boolean;
+begin
+  LOk := ValidateKV(GSmall, LErr);
+  GSink := GSink xor UInt64(Ord(LOk)) xor UInt64(Length(LErr));
+end;
+
+procedure BenchValidateMedium(const ACtx: IBenchContext);
+var LErr: string; LOk: Boolean;
+begin
+  LOk := ValidateKV(GMedium, LErr);
+  GSink := GSink xor UInt64(Ord(LOk)) xor UInt64(Length(LErr));
+end;
+
+procedure BenchValidateLarge(const ACtx: IBenchContext);
+var LErr: string; LOk: Boolean;
+begin
+  LOk := ValidateKV(GLarge, LErr);
+  GSink := GSink xor UInt64(Ord(LOk)) xor UInt64(Length(LErr));
+end;
+
 var
   LResults: IBenchResults;
 begin
@@ -110,6 +131,9 @@ begin
     .Add('kv/scan_small~80B', @BenchScanSmall)
     .Add('kv/scan_large~1.5KB', @BenchScanLarge)
     .Add('kv/scan_super~5KB', @BenchScanSuperLarge)
+    .Add('kv/validate_small~80B', @BenchValidateSmall)
+    .Add('kv/validate_medium~350B', @BenchValidateMedium)
+    .Add('kv/validate_large~1.5KB', @BenchValidateLarge)
     .Run;
   WriteLn(LResults.PrintToConsole);
   WriteLn('sink=', GSink);
