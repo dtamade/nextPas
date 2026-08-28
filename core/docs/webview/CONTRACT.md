@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.47（S53—— GTK scheme/存活窗口性能与复用收口：`LiveWindowForView/LatestLiveWebview/SchemeFinishNotFound` 3 路径 inline + 单窗快路径（`Length=1` 零扫描）+ `SchemeRequestCb` 复用 `NormalizeWebviewAssetPath` 归一路径（与 bridge 同源，零重复 Delete，160→163 inline）+ CONTRACT 1.47 时效，承接 S52 资产归一；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
+**版本**：1.48（S54—— 资产挂载前缀归一完整性收口：`TWebviewAssetsImpl.MountEmbedded` 前缀归一化复用 `NormalizeWebviewAssetPath`（前导 '/' 容错，`/assets` 与 `assets` 同义，与 `TryResolve/SchemeRequestCb` 同源，挂载-解析闭环零歧义，复用度与完整性封口）+ CONTRACT 1.48 时效，承接 S53 GTK 存活/ scheme；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
+**承接**：1.47（S53—— GTK scheme/存活窗口性能与复用收口：`LiveWindowForView/LatestLiveWebview/SchemeFinishNotFound` 3 路径 inline + 单窗快路径（`Length=1` 零扫描）+ `SchemeRequestCb` 复用 `NormalizeWebviewAssetPath` 归一路径（与 bridge 同源，零重复 Delete，160→163 inline）+ CONTRACT 1.47 时效，承接 S52 资产归一；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
 **承接**：1.46（S52—— 资产路径归一复用收口：`base.NormalizeWebviewAssetPath` inline 抽取（桥 `TryResolve` 与 gtk scheme 同源复用，零重复 Delete 扫描，158→160 inline，归一剥离前导 '/' 复用度封口）+ CONTRACT 1.46 时效，承接 S51 fake 异步 exactly-once；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
 **承接**：1.45（S51—— fake 异步 exactly-once 完整性收口：`TFakeWebview.DispatchInvoke` 异步分支异常路径补 `EnqueueReceipt`（与同步分支一致，9 回执点全量 exactly-once，修复 INV-7 在异常异步 handler 下的回执缺失）+ CONTRACT 1.45 时效，承接 S50 全链 inline 冻结；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；Production Ready 保持）
 **承接**：1.44（S50—— 终局冻结：全链薄转发 inline 159 处闭环（base/factory/gtk.win/mime/vfs/bridge/dispatcher 窗口壳全量薄转发零额外调用）+ CONTRACT 1.44 时效，承接 S49 装载探针全 inline；S36-S50 匠心收口完成）
