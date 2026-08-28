@@ -275,6 +275,7 @@ begin
   FHandle := nil;
   UnregisterLive(Pointer(Self));
   if CocoaLiveWindowCount = 0 then GLoopQuit := True;
+  if GWaitEvent<>nil then GWaitEvent.SetEvent;
 end;
 
 function TWindowCocoa.IsOnMainThread: Boolean; inline;
@@ -400,8 +401,7 @@ begin
   begin
     DispatcherDrain;
     if CocoaLiveWindowCount = 0 then Break;
-    // 事件驱动等待：Linux 模拟下由 DispatcherPush/SetEvent 唤醒，macOS 侧由 NSApp run 阻塞
-    GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
+    GWaitEvent.Wait;
     if CocoaLiveWindowCount = 0 then Break;
   end;
 end;

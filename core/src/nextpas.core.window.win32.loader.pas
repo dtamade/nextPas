@@ -84,6 +84,7 @@ begin
   platform_dl_release(GUser32);
   platform_dl_release(GKernel32);
   GetDpiForWindow := nil;
+  WaitMessage := nil;
 end;
 
 function TryLoadWindowWin32(out AInfo: TWindowWin32LoadInfo): Boolean;
@@ -116,6 +117,7 @@ function TryLoadWindowWin32(out AInfo: TWindowWin32LoadInfo): Boolean;
       BindReq(@SetWindowLongPtrA, 'SetWindowLongPtrA') and
       BindReq(@GetWindowLongPtrA, 'GetWindowLongPtrA');
     BindOpt(@GetDpiForWindow, 'GetDpiForWindow');
+    BindOpt(@WaitMessage, 'WaitMessage');
   end;
 
 begin

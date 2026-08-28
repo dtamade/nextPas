@@ -243,10 +243,11 @@ Android/iOS 没有"创建 top-level window"的自由：应用窗口归宿主
 - `GetWidth/GetHeight/GetScaleFactor/NativeHandle/GetDispatcher/IsClosed` 与 `TFakeDispatcher.IsOnMainThread/PostRef/PumpOnce` 等高频访问一律 `inline`，`CheckWindowOptions` 以 `CreateFmt` 携带越界值，错误信息富化不增分支。
 - `WindowBackendDiagnostics: string` 遍历 `BACKENDS[8]` 以 `Probe()+sonames` 逐行输出，供 `EWindowBackendUnavailable` 失败现场直连探测真相；bench 基线 `PostSingle/1000 = 377µs`（32cap 环，`O(1)` + inline 后），7 项分拆中 `WindowPumpOnceZero/10000 = 183µs`（≈18ns/次，零活窗早退零锁）与 `WindowPumpOnceLive/1000 = 754µs` 对比验证空转成本。
 
-### 7.3 事件驱动 RunLoop（M-band 稳定性）
+### 7.3 事件驱动 RunLoop（M-band 稳定性，按行业同行做法）
 
-- `sdl2/win32/cocoa/android/uikit/wasm` 六后端 `RunLoop` 已去除 `platform_thread_sleep_ms(1)` 硬编码等待，改为 `IEvent`（`nextpas.core.sync.event`，`platform_wait_address`）事件驱动：`DispatcherPush` 以 `GWaitEvent.SetEvent` 立即唤醒，`WaitTimeout(5ms)` 仅作活窗与 OS 事件复核超时。
-- `gtk` 保持 `gtk_main` 阻塞；`sdl2` 兼以 `SDL_PushEvent` 唤醒 `SDL_PollEvent`；`win32` 兼以 `PostMessage` 唤醒 `PeekMessage`。所有路径无 `sleep` 忙等，符合“整体事件驱动，不得硬编码等待”的架构红线。
+- **行业对齐**：`winit` 以 `epoll/kqueue` 阻塞于 OS 事件队列、`SDL` 以 `SDL_WaitEvent/Timeout` 阻塞于 `SDL_PumpEvents`、`GLFW` 以 `glfwWaitEvents` 阻塞、`Win32` 以 `GetMessage/WaitMessage` 阻塞于消息队列、`Cocoa` 以 `NSRunLoop/CFRunLoop` 阻塞、`Android` 以 `ALooper_pollOnce` 阻塞、`iOS` 以 `CFRunLoopRun` 阻塞、`WASM` 以 `requestAnimationFrame` 事件驱动。`window` 同律：无 `sleep` 忙等。
+- `sdl2` 以 `SDL_WaitEventTimeout(@E,16)` 阻塞16ms（事件到即分发——`GUserEventType` 直接 `Drain`、`SDL_WINDOWEVENT` 路由到窗口，`SDL_PushEvent` 来自 `DispatcherWake/RealClose` 立即唤醒；`IEvent` 仅当 `SDL_WaitEventTimeout=nil` 时回退）；`win32` 以 `WaitMessage` 阻塞于 `PostMessage(WM_DISPATCH)`（`RealClose/DispatcherWake` 均 `PostMessage+SetEvent` 双唤醒）；`gtk` 保持 `gtk_main` 阻塞；`cocoa/android/uikit/wasm` 等 attach 后端以 `IEvent.Wait` 无限阻塞（`DispatcherPush/Host*/RealClose/Quit` 以 `SetEvent` 唤醒，无超时轮询；`Post` 仅入队不立即 `Drain`，由 `RunLoop/PumpOnce` 在主线程兑现，保持线程亲和）。
+- 所有路径符合“整体事件驱动，不得硬编码等待”红线（`README` 第5条），`bench 7 项` 中 `WindowPumpOnceZero` 18ns 早退即为零等待的量化证据。
 
 ---
 

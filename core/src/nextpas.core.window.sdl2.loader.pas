@@ -70,6 +70,8 @@ procedure ReleaseAll;
 begin
   platform_dl_release(GSdlLib);
   SDL_GetWindowDisplayScale := nil;
+  SDL_WaitEvent := nil;
+  SDL_WaitEventTimeout := nil;
 end;
 
 function TryLoadWindowSdl2(out AInfo: TWindowSdl2LoadInfo): Boolean;
@@ -102,7 +104,9 @@ function TryLoadWindowSdl2(out AInfo: TWindowSdl2LoadInfo): Boolean;
       BindReq(@SDL_PollEvent, 'SDL_PollEvent') and
       BindReq(@SDL_PushEvent, 'SDL_PushEvent') and
       BindReq(@SDL_RegisterEvents, 'SDL_RegisterEvents');
-    // Optional
+    // Optional (industry blocking wait)
+    BindOpt(@SDL_WaitEvent, 'SDL_WaitEvent');
+    BindOpt(@SDL_WaitEventTimeout, 'SDL_WaitEventTimeout');
     BindOpt(@SDL_GetWindowDisplayScale, 'SDL_GetWindowDisplayScale');
   end;
 
