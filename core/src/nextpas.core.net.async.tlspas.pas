@@ -538,6 +538,44 @@ function TlsPasTraceSpanDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; co
   const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession;
   AAllowEarlyData: Boolean; const AName: string = 'tlspas.early_data'): TTlsPasEarlyDataDecision;
 
+{ S32: 自适应采样 + OTLP JSON + 采样 Prometheus — 零堆自适应率，环形直出 OTLP，rate gauge }
+type
+  TTlsPasSamplingConfig = record
+    BaseRate: Double;
+    MinRate: Double;
+    MaxRate: Double;
+  end;
+
+  TAsyncTlsPasAdaptiveTracer = class(TInterfacedObject, ITlsPasTracer)
+  private
+    FInner: TAsyncTlsPasSamplingTracer;
+    FObserver: TAsyncTlsPasAdaptiveObserver;
+    FConfig: TTlsPasSamplingConfig;
+    FMutex: TPlatformMutex;
+  public
+    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const AConfig: TTlsPasSamplingConfig); overload;
+    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver); overload;
+    destructor Destroy; override;
+    procedure Trace(const AEvent: TTlsPasTraceEvent);
+    function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
+    function SampleCount: Int64;
+    function TotalCount: Int64;
+    function GetAdaptiveRate: Double;
+    procedure UpdateConfig(const AConfig: TTlsPasSamplingConfig);
+    property Config: TTlsPasSamplingConfig read FConfig;
+    property Inner: TAsyncTlsPasSamplingTracer read FInner;
+  end;
+
+function DefaultTlsPasSamplingConfig: TTlsPasSamplingConfig;
+function TlsPasComputeAdaptiveSamplingRate(const AMetrics: TTlsPasAdaptiveMetrics; const AHealth: TTlsPasAdaptiveHealth; const AConfig: TTlsPasSamplingConfig): Double;
+function TlsPasSamplingRateToPrometheus(ARate: Double; const APrefix: string): string; overload;
+function TlsPasSamplingRateToPrometheus(ARate: Double): string; overload;
+function TlsPasSpansToOTLPJSON(const AExporter: ITlsPasSpanExporter): string;
+function TlsPasTryExportSpansToFile(const AExporter: ITlsPasSpanExporter; const APath: string): Boolean;
+function TlsPasAdaptiveTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const AAdaptiveTracer: TAsyncTlsPasAdaptiveTracer;
+  const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean; const AName: string = 'tlspas.early_data'): TTlsPasEarlyDataDecision;
+
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
@@ -2323,6 +2361,113 @@ begin
     AExporter.ExportSpan(Sp);
   end;
   if ATracer <> nil then begin Ev := Default(TTlsPasTraceEvent); Ev.Kind := tekEarlyDataDecide; Ev.TimestampMs := T1; Ev.Decision := Result; if AObserver <> nil then Ev.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Ev.Trace := ATrace; if AObserver <> nil then Ev.Healthy := AObserver.GetAdaptiveHealth.Healthy; ATracer.Trace(Ev); end;
+end;
+
+{ ======== S32 Adaptive Sampling + OTLP ======== }
+
+function DefaultTlsPasSamplingConfig: TTlsPasSamplingConfig;
+begin Result.BaseRate := 0.01; Result.MinRate := 0.001; Result.MaxRate := 0.5; end;
+
+function TlsPasComputeAdaptiveSamplingRate(const AMetrics: TTlsPasAdaptiveMetrics; const AHealth: TTlsPasAdaptiveHealth; const AConfig: TTlsPasSamplingConfig): Double;
+var R: Double;
+begin
+  R := AConfig.BaseRate;
+  if not AHealth.Healthy then R := R * 5.0;
+  if AMetrics.Replay.Current > 50 then R := R * 2.0;
+  if AMetrics.Server.RejectPolicy + AMetrics.Server.RejectReplay > 0 then
+  begin
+    if AHealth.RejectRate > AConfig.BaseRate * 10 then R := R * 3.0;
+  end;
+  if R < AConfig.MinRate then R := AConfig.MinRate;
+  if R > AConfig.MaxRate then R := AConfig.MaxRate;
+  if R < 0 then R := 0;
+  if R > 1 then R := 1;
+  Result := R;
+end;
+
+function TlsPasSamplingRateToPrometheus(ARate: Double; const APrefix: string): string;
+var P: string;
+begin
+  P := APrefix; if P = '' then P := 'nextpas_tlspas';
+  Result := Format('# HELP %s_sampling_rate Adaptive trace sampling rate'#10'# TYPE %s_sampling_rate gauge'#10'%s_sampling_rate %.4f'#10, [P,P,P,ARate]);
+end;
+function TlsPasSamplingRateToPrometheus(ARate: Double): string; begin Result := TlsPasSamplingRateToPrometheus(ARate, 'nextpas_tlspas'); end;
+
+function TlsPasSpansToOTLPJSON(const AExporter: ITlsPasSpanExporter): string;
+var Spans: TTlsPasSpanArray; i: Integer; Tp: string;
+begin
+  if AExporter = nil then Exit('{"resourceSpans":[]}');
+  Spans := AExporter.GetSpans;
+  Result := '{"resourceSpans":[{"resource":{},"scopeSpans":[{"spans":[';
+  for i := 0 to High(Spans) do
+  begin
+    if i > 0 then Result := Result + ',';
+    Tp := TlsPasFormatTraceParent(Spans[i].Trace);
+    Result := Result + Format('{"traceId":"%s","name":"%s","startTimeUnixNano":%d,"endTimeUnixNano":%d,"attributes":{"decision":"%s","adaptive_max":%d,"healthy":%s}}', [Tp, Spans[i].Name, Spans[i].StartMs*1000000, Spans[i].EndMs*1000000, TlsPasEarlyDataDecisionToStr(Spans[i].Decision), Integer(Spans[i].AdaptiveMax), LowerCase(BoolToStr(Spans[i].Healthy, True))]);
+  end;
+  Result := Result + ']}}]}';
+end;
+
+function TlsPasTryExportSpansToFile(const AExporter: ITlsPasSpanExporter; const APath: string): Boolean;
+var J, Tmp: string; FS: TFileStream;
+begin
+  Result := False; if (AExporter = nil) or (APath = '') then Exit;
+  J := TlsPasSpansToOTLPJSON(AExporter);
+  Tmp := APath + '.tmp';
+  try
+    FS := TFileStream.Create(Tmp, fmCreate);
+    try if Length(J) > 0 then FS.WriteBuffer(J[1], Length(J)); finally FS.Free; end;
+    if FileExists(APath) then DeleteFile(APath);
+    Result := RenameFile(Tmp, APath);
+    if not Result then DeleteFile(Tmp);
+  except Result := False; end;
+end;
+
+constructor TAsyncTlsPasAdaptiveTracer.Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const AConfig: TTlsPasSamplingConfig);
+begin
+  inherited Create; FObserver := AObserver; FConfig := AConfig;
+  FInner := TAsyncTlsPasSamplingTracer.Create(AConfig.BaseRate);
+  if platform_mutex_init(FMutex) <> 0 then raise EInvalidOperationError.Create('tlspas: adaptive tracer mutex');
+end;
+constructor TAsyncTlsPasAdaptiveTracer.Create(const AObserver: TAsyncTlsPasAdaptiveObserver);
+begin Create(AObserver, DefaultTlsPasSamplingConfig); end;
+destructor TAsyncTlsPasAdaptiveTracer.Destroy; begin platform_mutex_destroy(FMutex); FInner.Free; inherited Destroy; end;
+procedure TAsyncTlsPasAdaptiveTracer.Trace(const AEvent: TTlsPasTraceEvent); begin FInner.Trace(AEvent); end;
+function TAsyncTlsPasAdaptiveTracer.SampleCount: Int64; begin Result := FInner.SampleCount; end;
+function TAsyncTlsPasAdaptiveTracer.TotalCount: Int64; begin Result := FInner.TotalCount; end;
+function TAsyncTlsPasAdaptiveTracer.GetAdaptiveRate: Double;
+var M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth;
+begin
+  if FObserver = nil then Exit(FConfig.BaseRate);
+  M := FObserver.GetAdaptiveMetrics; H := FObserver.GetAdaptiveHealth;
+  platform_mutex_lock(FMutex); try Result := TlsPasComputeAdaptiveSamplingRate(M, H, FConfig); finally platform_mutex_unlock(FMutex); end;
+end;
+function TAsyncTlsPasAdaptiveTracer.ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
+var R: Double;
+begin
+  if not ATrace.Valid then Exit(False);
+  if ATrace.Sampled then Exit(True);
+  R := GetAdaptiveRate; Result := TlsPasShouldSample(ATrace, R);
+end;
+procedure TAsyncTlsPasAdaptiveTracer.UpdateConfig(const AConfig: TTlsPasSamplingConfig);
+begin platform_mutex_lock(FMutex); try FConfig := AConfig; finally platform_mutex_unlock(FMutex); end; end;
+
+function TlsPasAdaptiveTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const AAdaptiveTracer: TAsyncTlsPasAdaptiveTracer;
+  const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean; const AName: string): TTlsPasEarlyDataDecision;
+var T0, T1: Int64; Sp: TTlsPasSpan; Ev: TTlsPasTraceEvent; R: Double;
+begin
+  T0 := TlsPasMonoMs;
+  if AObserver = nil then Result := edRejectPolicy else Result := AObserver.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+  T1 := TlsPasMonoMs;
+  R := 0.01; if AAdaptiveTracer <> nil then R := AAdaptiveTracer.GetAdaptiveRate;
+  if (AExporter <> nil) and ((AAdaptiveTracer = nil) or AAdaptiveTracer.ShouldSample(ATrace) or ATrace.Sampled) then
+  begin
+    Sp := Default(TTlsPasSpan); Sp.Trace := ATrace; Sp.Name := AName; Sp.StartMs := T0; Sp.EndMs := T1; Sp.DurationMs := T1 - T0; Sp.Decision := Result;
+    if AObserver <> nil then begin Sp.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Sp.Healthy := AObserver.GetAdaptiveHealth.Healthy; end;
+    AExporter.ExportSpan(Sp);
+  end;
+  if AAdaptiveTracer <> nil then begin Ev := Default(TTlsPasTraceEvent); Ev.Kind := tekEarlyDataDecide; Ev.TimestampMs := T1; Ev.Decision := Result; if AObserver <> nil then Ev.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Ev.Trace := ATrace; if AObserver <> nil then Ev.Healthy := AObserver.GetAdaptiveHealth.Healthy; AAdaptiveTracer.Trace(Ev); end;
 end;
 
 constructor TAsyncTlsPasReplayCache.Create;

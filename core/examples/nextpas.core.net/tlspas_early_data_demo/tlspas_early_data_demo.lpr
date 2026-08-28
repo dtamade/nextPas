@@ -398,9 +398,37 @@ begin
   Obs.Free;
 end;
 
+procedure DemoAdaptiveSampling;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: TAsyncTlsPasAdaptiveTracer; C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double; Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; Ctx: TTlsPasTraceContext; LPath: string; Hdl: IHttpHandler; Req: IHttpRequest; Cap: TDemoCapture; W: IHttpResponseWriter;
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S31 span) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler | Trace | Span');
+  WriteLn('--- Adaptive Sampling S32 (自适应采样 + OTLP + rate Prometheus) ---');
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  C := DefaultTlsPasSamplingConfig;
+  M := Obs.GetAdaptiveMetrics; H := Obs.GetAdaptiveHealth;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C);
+  WriteLn('Initial rate healthy=', R:0:4, ' prom=', System.Copy(TlsPasSamplingRateToPrometheus(R),1,60), '...');
+  H.Healthy := False; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); WriteLn('Degraded rate boost=', R:0:4, ' > base');
+  M.Replay.Current := 60; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); WriteLn('Pressure rate boost=', R:0:4, ' max clamp=', C.MaxRate:0:2);
+  Tracer := TAsyncTlsPasAdaptiveTracer.Create(Obs);
+  WriteLn('AdaptiveTracer initial rate=', Tracer.GetAdaptiveRate:0:4, ' sample=', Tracer.ShouldSample(TlsPasGenerateTraceContext(False)));
+  C.BaseRate := 0.05; Tracer.UpdateConfig(C); WriteLn('After UpdateConfig base 0.05 rate=', Tracer.GetAdaptiveRate:0:4);
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  Ctx := TlsPasGenerateTraceContext(True); Sp := Default(TTlsPasSpan); Sp.Trace := Ctx; Sp.Name := 'tlspas.early_data'; Sp.Decision := edAccept; Exp.ExportSpan(Sp);
+  WriteLn('OTLP JSON contains resourceSpans=', Pos('resourceSpans', TlsPasSpansToOTLPJSON(Exp))>0, ' HttpOTLP len=', Length(HttpOTLPJSON(Exp)));
+  LPath := '/tmp/tlspas_otlp_demo.json'; if FileExists(LPath) then DeleteFile(LPath);
+  WriteLn('Export to file ', LPath, ' ok=', TlsPasTryExportSpansToFile(Exp, LPath), ' exists=', FileExists(LPath)); if FileExists(LPath) then DeleteFile(LPath);
+  Hdl := HttpOTLPHandler(Exp); Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/otlp'), hvHttp11, NewHttpHeaders, nil, 0);
+  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter; Hdl.ServeHTTP(Req, W);
+  WriteLn('OTLP Handler CT=', W.GetHeaders.Get('Content-Type'), ' status=', Ord(W.GetStatus));
+  WriteLn('Sampling Prom Text=', System.Copy(HttpSamplingRatePrometheusText(Tracer.GetAdaptiveRate),1,60), '...');
+  WriteLn('AdaptiveSampling Prom=', System.Copy(HttpAdaptiveSamplingRateText(Tracer),1,60), '...');
+  Tracer.Free; Obs.Free;
+end;
+
+begin
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S32 adaptive sampling) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler | Trace | Span | AdaptiveSampling');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -430,5 +458,7 @@ begin
   WriteLn;
   DemoSpan;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S31 span self-proof.');
+  DemoAdaptiveSampling;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S32 adaptive sampling self-proof.');
 end.

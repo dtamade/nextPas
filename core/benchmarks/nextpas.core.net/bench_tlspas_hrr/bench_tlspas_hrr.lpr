@@ -535,6 +535,20 @@ procedure BenchTracezHandler(aIters: Int64);
 var I: Int64;
 begin for I := 1 to aIters do GTracezHdl.ServeHTTP(GTracezReq, TCaptureWriterBenchHack.Get); end;
 
+var GAdaptiveTracer: TAsyncTlsPasAdaptiveTracer;
+
+procedure BenchAdaptiveSampling(aIters: Int64);
+var I: Int64; R: Double; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; C: TTlsPasSamplingConfig;
+begin C := DefaultTlsPasSamplingConfig; M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); for I := 1 to aIters do R := TlsPasComputeAdaptiveSamplingRate(M, H, C); end;
+
+procedure BenchAdaptiveTracer(aIters: Int64);
+var I: Int64; L: Boolean;
+begin for I := 1 to aIters do L := GAdaptiveTracer.ShouldSample(GSpanTraceCtx); end;
+
+procedure BenchOTLPJSON(aIters: Int64);
+var I: Int64; S: string;
+begin for I := 1 to aIters do S := TlsPasSpansToOTLPJSON(GSpanExporter); end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -656,6 +670,7 @@ begin
   GSpanExporter.ExportSpan(Default(TTlsPasSpan));
   GTracezReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/tracez'), hvHttp11, NewHttpHeaders, nil, 0);
   GTracezHdl := HttpTracezHandler(GSpanExporter);
+  GAdaptiveTracer := TAsyncTlsPasAdaptiveTracer.Create(GAdaptiveObserver);
 end;
 
 var
@@ -723,6 +738,9 @@ begin
     .AddLoop('Span Export', @BenchSpanExport)
     .AddLoop('Span JSON', @BenchSpanJSON)
     .AddLoop('Tracez Handler', @BenchTracezHandler)
+    .AddLoop('Adaptive Sampling', @BenchAdaptiveSampling)
+    .AddLoop('Adaptive Tracer', @BenchAdaptiveTracer)
+    .AddLoop('OTLP JSON', @BenchOTLPJSON)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

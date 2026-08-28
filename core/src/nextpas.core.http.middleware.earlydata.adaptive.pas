@@ -48,6 +48,11 @@ function HttpTracezHandler(const AExporter: ITlsPasSpanExporter): IHttpHandler;
 function HttpTracezJSON(const AExporter: ITlsPasSpanExporter): string;
 function HttpSpansPrometheusText(const AExporter: ITlsPasSpanExporter): string; overload;
 function HttpSpansPrometheusText(const AExporter: ITlsPasSpanExporter; const APrefix: string): string; overload;
+function HttpOTLPJSON(const AExporter: ITlsPasSpanExporter): string;
+function HttpOTLPHandler(const AExporter: ITlsPasSpanExporter): IHttpHandler;
+function HttpSamplingRatePrometheusText(ARate: Double): string; overload;
+function HttpSamplingRatePrometheusText(ARate: Double; const APrefix: string): string; overload;
+function HttpAdaptiveSamplingRateText(const AAdaptiveTracer: TAsyncTlsPasAdaptiveTracer): string;
 
 implementation
 
@@ -325,6 +330,31 @@ begin
     if Length(S) > 0 then AW.Write(S[1], Length(S));
   end);
 end;
+
+function HttpOTLPJSON(const AExporter: ITlsPasSpanExporter): string;
+begin Result := TlsPasSpansToOTLPJSON(AExporter); end;
+
+function HttpOTLPHandler(const AExporter: ITlsPasSpanExporter): IHttpHandler;
+begin
+  Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var S: string;
+  begin
+    S := TlsPasSpansToOTLPJSON(AExporter);
+    AW.GetHeaders.SetHeader('Content-Type', 'application/json');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    if Length(S) > 0 then AW.Write(S[1], Length(S));
+  end);
+end;
+
+function HttpSamplingRatePrometheusText(ARate: Double): string;
+begin Result := TlsPasSamplingRateToPrometheus(ARate); end;
+
+function HttpSamplingRatePrometheusText(ARate: Double; const APrefix: string): string;
+begin Result := TlsPasSamplingRateToPrometheus(ARate, APrefix); end;
+
+function HttpAdaptiveSamplingRateText(const AAdaptiveTracer: TAsyncTlsPasAdaptiveTracer): string;
+var R: Double;
+begin if AAdaptiveTracer = nil then R := 0 else R := AAdaptiveTracer.GetAdaptiveRate; Result := TlsPasSamplingRateToPrometheus(R); end;
 
 function AdaptiveEarlyDataMiddleware(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpMiddleware;
 begin

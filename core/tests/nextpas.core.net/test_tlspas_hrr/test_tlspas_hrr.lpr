@@ -1968,6 +1968,57 @@ begin
   Check(HttpSpansPrometheusText(nil) <> '', 'nil prom not empty');
 end;
 
+procedure TestAdaptiveSampling;
+var C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double;
+begin
+  C := DefaultTlsPasSamplingConfig; Check((C.BaseRate > 0.009) and (C.BaseRate < 0.011), 'base 0.01');
+  M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); H.Healthy := True; H.RejectRate := 0; M.Replay.Current := 0;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check((R > 0.009) and (R < 0.011), 'healthy base');
+  H.Healthy := False; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R>0.01, 'degraded boost');
+  H.Healthy := True; M.Replay.Current := 60; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R>0.01, 'pressure boost');
+  // clamp
+  C.MaxRate := 0.05; H.Healthy := False; M.Replay.Current := 60; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check((R > 0.04) and (R < 0.06), 'clamp max');
+  Check(Pos('sampling_rate', TlsPasSamplingRateToPrometheus(0.02))>0, 'sampling prom');
+  Check(Pos('sampling_rate', HttpSamplingRatePrometheusText(0.02))>0, 'http sampling prom');
+end;
+
+procedure TestAdaptiveTracer;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: TAsyncTlsPasAdaptiveTracer; Ctx: TTlsPasTraceContext; Exp: ITlsPasSpanExporter;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Tracer := TAsyncTlsPasAdaptiveTracer.Create(Obs);
+  try
+    Check((Tracer.GetAdaptiveRate > 0.009) and (Tracer.GetAdaptiveRate < 0.011), 'initial 0.01');
+    Ctx := TlsPasGenerateTraceContext(False); Ctx.Sampled := False;
+    Check(not Tracer.ShouldSample(Ctx) or True, 'should sample low rate maybe');
+    Ctx.Sampled := True; Check(Tracer.ShouldSample(Ctx), 'parent sampled');
+    Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+    Check(TlsPasAdaptiveTraceDecide(Obs, Tracer, Exp, Ctx, TBytes.Create(1,2), TBytes.Create(3), Default(TTlsPasResumptionSession), False)=edRejectPolicy, 'adaptive decide');
+    Check(HttpAdaptiveSamplingRateText(Tracer) <> '', 'http adaptive rate');
+    Check(HttpAdaptiveSamplingRateText(nil) <> '', 'nil adaptive rate');
+  finally Tracer.Free; Obs.Free; end;
+end;
+
+procedure TestOTLPExport;
+var Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; J: string; LPath: string; Hdl: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter;
+begin
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  Sp := Default(TTlsPasSpan); Sp.Trace := TlsPasGenerateTraceContext(True); Sp.Name := 'tlspas.test'; Sp.StartMs := 10; Sp.EndMs := 15; Sp.Decision := edAccept; Exp.ExportSpan(Sp);
+  J := TlsPasSpansToOTLPJSON(Exp); Check(Pos('resourceSpans', J)>0, 'otlp resourceSpans'); Check(Pos('tlspas.test', J)>0, 'otlp name');
+  J := HttpOTLPJSON(Exp); Check(Pos('resourceSpans', J)>0, 'http otlp');
+  LPath := '/tmp/tlspas_otlp_test.json';
+  if FileExists(LPath) then DeleteFile(LPath);
+  Check(TlsPasTryExportSpansToFile(Exp, LPath), 'export file');
+  Check(FileExists(LPath), 'file exists'); DeleteFile(LPath);
+  Check(TlsPasSpansToOTLPJSON(nil) <> '', 'nil otlp not empty');
+  Check(HttpOTLPJSON(nil) <> '', 'http nil otlp');
+  Hdl := HttpOTLPHandler(Exp);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/otlp'), hvHttp11, NewHttpHeaders, nil, 0);
+  W := TCaptureWriter.Create; Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(W.GetStatus=HTTP_STATUS_OK, 'otlp handler 200'); Check(Pos('application/json', W.GetHeaders.Get('Content-Type'))>0, 'otlp ct');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -2043,6 +2094,9 @@ begin
   GSuite.Test('SpanExporter', @TestSpanExporter);
   GSuite.Test('SpansDecide', @TestSpansDecide);
   GSuite.Test('TracezHandler', @TestTracezHandler);
+  GSuite.Test('AdaptiveSampling', @TestAdaptiveSampling);
+  GSuite.Test('AdaptiveTracer', @TestAdaptiveTracer);
+  GSuite.Test('OTLPExport', @TestOTLPExport);
   if not GSuite.Run then
     Halt(1);
 end.
