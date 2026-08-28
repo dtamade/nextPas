@@ -342,6 +342,7 @@ type
     MsgCount: Integer;
     Msg1Type: Byte;
     Msg1Len: Integer;
+    IgnoreCount: Integer;
   end;
 
   { 独立服务端逻辑路径 }
@@ -776,6 +777,8 @@ begin
       FSc^.Msg1Len := Length(LMsg);
     end;
     case LMsg[0] of
+      SSH_MSG_IGNORE:
+        Inc(FSc^.IgnoreCount);
       SSH_MSG_DISCONNECT:
         Exit;
 
@@ -1895,6 +1898,16 @@ begin
     CheckTrue(not LR.ClientFailed, 'client ok: ' + LR.ClientErrMsg);
     CheckEqual(Int64(7), Int64(LR.Exec.ExitCode), 'exit code');
     CheckEqual('agent-stdout|ok!', LR.Exec.StdOutText, 'stdout');
+  end);
+
+  GSuite.Test('rekey builder fluent + defaults', procedure
+  var O: TSshConnectOptions;
+  begin
+    SshClient.Host('h').User('u').Password('p').RekeyBytes(1024).RekeyIntervalMs(100).KeepAliveIntervalMs(50);
+    O:=DefaultSshConnectOptions('h');
+    CheckEqual(Int64(SSH_REKEY_BYTES), Int64(O.RekeyBytes), 'default rekey bytes 1GiB');
+    CheckEqual(Int64(SSH_REKEY_INTERVAL_MS), Int64(O.RekeyIntervalMs), 'default rekey interval 1h');
+    CheckEqual(Int64(0), Int64(O.KeepAliveIntervalMs), 'default keepalive 0');
   end);
 
   GRunner := TSuiteRunner.Create('nextpas.core.ssh.session');

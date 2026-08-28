@@ -9,6 +9,7 @@ program test_ssh_transport;
  * DISCONNECT 行为与关闭后 IO 错误。}
 
 uses
+  SysUtils,
   nextpas.core.system.sysutils,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
@@ -507,6 +508,55 @@ begin
     AssertAeadPacklenAligned('aes256-gcm@openssh.com', '', 32, 12, 16);
     AssertAeadPacklenAligned('aes256-ctr',
       'hmac-sha2-256-etm@openssh.com', 32, 16, 16);
+  end);
+
+  LSuite.Test('rekey bytes threshold 1GiB boundary (small threshold)', procedure
+  var LClientEnd, LServerEnd: TMemPipeEnd; LTr: TSshClientTransport; LNeg: TSshNegotiated; LKey, LB, LIdent: TBytes;
+  begin
+    MakePipe(LClientEnd, LServerEnd); LTr:=TSshClientTransport.Create(LClientEnd); try
+      LIdent:=StringToBytes('SSH-2.0-Srv'#13#10); LServerEnd.Write(LIdent[0], SizeUInt(Length(LIdent)));
+      LTr.ExchangeVersions; LServerEnd.Drain(LB);
+      FillChachaNegotiated(LNeg); LKey:=PatternBytes($C1,64);
+      LTr.ApplyNewKeys(LNeg, nil,LKey,nil, nil,LKey,nil);
+      LTr.ConfigureRekey(1024, 0);
+      CheckFalse(LTr.ShouldRekey, 'below threshold');
+      LTr.SendPacket(PatternBytes($AA, 1024));
+      CheckTrue(LTr.ShouldRekey, 'at 1GiB boundary (1024)');
+      LTr.ConfigureRekey(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
+    finally LTr.Free; LClientEnd.Free; LServerEnd.Free; end;
+  end);
+
+  LSuite.Test('rekey interval time boundary', procedure
+  var LClientEnd, LServerEnd: TMemPipeEnd; LTr: TSshClientTransport; LNeg: TSshNegotiated; LKey, LB, LIdent: TBytes;
+  begin
+    MakePipe(LClientEnd, LServerEnd); LTr:=TSshClientTransport.Create(LClientEnd); try
+      LIdent:=StringToBytes('SSH-2.0-Srv'#13#10); LServerEnd.Write(LIdent[0], SizeUInt(Length(LIdent)));
+      LTr.ExchangeVersions; LServerEnd.Drain(LB);
+      FillChachaNegotiated(LNeg); LKey:=PatternBytes($C1,64);
+      LTr.ApplyNewKeys(LNeg, nil,LKey,nil, nil,LKey,nil);
+      LTr.ConfigureRekey(0, 100);
+      CheckFalse(LTr.ShouldRekey, 'immediately after reset');
+      Sleep(150);
+      CheckTrue(LTr.ShouldRekey, 'after interval exceeded');
+      LTr.ConfigureRekey(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
+    finally LTr.Free; LClientEnd.Free; LServerEnd.Free; end;
+  end);
+
+  LSuite.Test('send ignore roundtrip via chacha', procedure
+  var LClientEnd, LServerEnd: TMemPipeEnd; LTr: TSshClientTransport; LNeg: TSshNegotiated; LKey: TBytes; LSrvRecv: ISshPacketReceiver; LWire, LBody, LB, LIdent: TBytes;
+  begin
+    MakePipe(LClientEnd, LServerEnd); LTr:=TSshClientTransport.Create(LClientEnd); try
+      LIdent:=StringToBytes('SSH-2.0-Srv'#13#10); LServerEnd.Write(LIdent[0], SizeUInt(Length(LIdent)));
+      LTr.ExchangeVersions; LServerEnd.Drain(LB);
+      FillChachaNegotiated(LNeg); LKey:=PatternBytes($C1,64);
+      LTr.ApplyNewKeys(LNeg, nil,LKey,nil, nil,LKey,nil);
+      LSrvRecv:=CreateSshPacketReceiver('chacha20-poly1305@openssh.com','',LKey,nil,nil);
+      LTr.SendIgnore(StringToBytes('keepalive'));
+      LServerEnd.Drain(LWire);
+      LBody:=LSrvRecv.Unprotect(0, LWire);
+      CheckEqual(Int64(SSH_MSG_IGNORE), Int64(LBody[1]), 'ignore msg');
+      CheckTrue(LTr.ShouldRekey=False, 'ignore counted but below 1GiB');
+    finally LTr.Free; LClientEnd.Free; LServerEnd.Free; end;
   end);
 
   LSuite.Test('disconnect sends message then closes', procedure

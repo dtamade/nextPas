@@ -30,6 +30,8 @@ uses
   nextpas.core.ssh.sftp,
   nextpas.core.ssh.agent,
   nextpas.core.ssh.compress,
+  nextpas.core.ssh.rekey,
+  nextpas.core.ssh.keepalive,
   nextpas.core.ssh.session;
 
 type

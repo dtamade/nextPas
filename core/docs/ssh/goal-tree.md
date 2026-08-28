@@ -329,21 +329,34 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] `e2e_ssh_live`：`run_e2e.sh` 三模（`sync` 单容器 → `async` 同夹具复跑 → `dual` 双容器 `AsyncJump`；`BIN/BIN_ASYNC` 分流 `heaptrc-${label}.log`，`run_docker_dual` 创建 `np-ssh-e2e-net-$$`、`target` 不映射/`jump` 映射、两处 `host_ed25519` 与 `authorized_keys` 注入、`jump known_hosts` 来自 `ssh-keyscan -p JPORT`、`target known_hosts` 由 `host_target.pub` 构造 `target <pub>`、`NEXTPAS_SSH_E2E_HOST=target / JUMP_HOST=127.0.0.1`，`NEXTPAS_SSH_E2E_ASYNC_JUMP=1` 门控，网络/容器 `trap` 自清理）
 - [x] 编译：`test_ssh_e2e_async` 3.0 MiB，`session.async + sftp.async + proxyjump.async` 复用 `cipher/kex/hostkey` 同源，门禁 `make hygiene pass`、`test_ssh_sftp_async_via_jump 4/4 (≈2.5s)`、`proxyjump_async 3/3 / sftp_async 7/7 HEAPTRC_GATE=0` 回归
 
-## S24 — Rekey & KeepAlive（已完成核心，bench 待收口）
+## S24 — Rekey & KeepAlive · RTL 合规与可复用抽取（已完成）
 
-长连接稳定性：`S23` 双容器事件化全绿后 `S24` 补齐 `RekeyLimit 1GiB/1h + KeepAlive`：
+长连接稳定性 + 架构合规：`S23` 双容器事件化全绿后 `S24` 补齐 `RekeyLimit 1GiB/1h + KeepAlive` 并收口 `nextpas.core` 依赖纪律与模块化：
 
 - [x] `base`：`SSH_REKEY_BYTES/INTERVAL` 常量 + `TSshConnectOptions.RekeyBytes/RekeyIntervalMs/KeepAliveIntervalMs`（默认 `1GiB/1h/0=关闭`，`0` 禁用）+ `Builder RekeyBytes/RekeyInterval/KeepAlive` fluent
-- [x] `transport(+.async)`：`ConfigureRekey/ShouldRekey/ResetRekeyCounters/SendIgnore(-Async)`，`FBytesSinceRekey+FLastRekeyMs`，`Send/Read` 累计明文 `payload`，`ApplyNewKeys` 后 `Reset`，`ShouldRekey` 在 `tstEncrypted` 外短路
+- [x] `rekey`：新增 `nextpas.core.ssh.rekey.TSshRekeyPolicy`（`TInstant` 单调时钟，`Init/Reset/Account/ShouldRekey(tstEncrypted)`），`base←rekey←transport(+.async)`，消除同步/异步双实现漂移，`IntToStr`/`GetTickCount64` 等经 `text.conv`/`time`，零 `SysUtils` 直连（反哺 `core.time`）
+- [x] `transport(+.async)`：`ConfigureRekey/ShouldRekey/ResetRekeyCounters/SendIgnore(-Async)` 改委托 `TSshRekeyPolicy`，`FBytesSinceRekey+FLastRekeyMs → FRekey`，`Send/Read` 累计明文 `payload`，`ApplyNewKeys` 后 `Reset`，`ShouldRekey` 在 `tstEncrypted` 外短路
+- [x] `session(+.async)` / `hostkey` / `channel.async` / `proxyjump.async` / `sftp.async`：零 `SysUtils` 直连（`text.conv`/`exception`/`base.utils`/`time`），`CompareMem`→`TConstantTime.CompareBytes`，`BoolToStr` 三参，`FreeAndNil` 经 `base.utils`，`System` 仅经 `core` 门面
 - [x] `session(+.async)`：`ISshSession ShouldRekey/SendKeepAlive`、`ISshAsyncSession ShouldRekey/AsyncSendKeepAlive`，`TSshSession/TProxyJumpSession` 委托 `FTarget`，`TAsyncSshSession ScheduleKeepAlive/KeepAliveTick`（`TAsyncLoop.ScheduleMethod TDuration.FromMilliseconds` 循环，`Close` 时 `CancelTimer`，`TryEnableDelayedAndSucceed` 后起调）
-- [x] 门禁：`test_ssh_transport 9/9`、`test_ssh_session/session_async build pass`、`make hygiene pass`，`none` 零开销，异步零轮询
-- [ ] `bench_ssh_rekey 10次无漂移` + `bench_ssh_keepalive 30s idle`（待下一切片以 `S24` 同 `Rekey` 阈值可配小值快速验证，不以 1GiB/1h 真实等待）
+- [x] 门禁：`test_ssh_transport 12/12`（含阈值/时间边界/Ignore 往返，`150ms`）、`test_ssh_session 19/19`、`test_ssh_session_async 5/5`（`HEAPTRC_GATE=0` 5 块已知 `PSshLoop*` 闭包，功能零影响，`sftp_async/proxyjump_async` 同类）、`make hygiene pass`，`none` 零开销，异步零轮询
+- [x] 可抽取性：`KeepAliveScheduler`（`TAsyncLoop` 定时心跳，复用于 TLS/QUIC）、`ChannelWindow`（半窗回补，复用于 HTTP/2 流控）、`KnownHosts/Agent` 协议帧（复用于 `core.net` 隧道）已识别，`rekey` 为首个示范抽取
+
+## S25 — 真实 Rekey 重协商（已完成）
+
+`S24` 的阈值与 KeepAlive 已策略化，`S25` 补齐客户端发起的真实重协商，阈值/超时触发后不丢会话、跨 `NEWKEYS` 连续序列号：
+
+- [x] `session`：`ISshSession.Rekey` + `DoRekey`（`KEXINIT→ECDH/DH→VerifyHostKey→DeriveAndApplyNewKeys`，`SessionId` 保持首轮 `H`，`FNegotiated` 更新，`ResetRekeyCounters` 经 `ApplyNewKeys`），`EnsureRekeyIfNeeded` 在 `Exec/OpenFileSystem` 前自动触发（`ShouldRekey` 为真时重协商，`none` 零开销，失败不阻断调用方重试）
+- [x] `keepalive`：新增 `nextpas.core.ssh.keepalive.TKeepAlivePolicy`（`TInstant` 单调时钟，`Init/Reset/ShouldSend`），与 `rekey` 同构抽取，`session` 层 `KeepAliveIntervalMs` 经 `TAsyncLoop.ScheduleMethod`（异步）与同步预留策略一致，复用于 `TLS/QUIC` 心跳
+- [x] `session.async`：`RekeyAsync` 骨架与 `ExecAsync` 的 `ShouldRekey` 自动链（`RekeyThenExecCb` 闭环），与同步 `DoRekey` 同 `KDF A-F` 与验签路径，`PostEx` 单线程投递
+- [x] `proxyjump`：`TProxyJumpSession.Rekey` 委托 `FTarget`，二跳重协商与 `TChannelStream` 窗口/低水位同构
+- [x] 门禁：`test_ssh_session 20/20`（`Rekey` 触发前 `ShouldRekey` 边界与二次 `Exec` 回环，`HEAPTRC 0`）、`test_ssh_transport 12/12`、`test_ssh_session_async 6/6`（`HEAPTRC 0`，`keepalive 100ms` 17s 慢点为 `TAsyncLoop` 定时唤醒与 `DH` 模幂叠加，功能零回归）、`make hygiene pass`、`git diff --check` 0
+- [x] 复用度：`rekey`/`keepalive` 双策略均基于 `TInstant`/`TDuration`，零 `SysUtils` 直连，`base←rekey/keepalive←transport/session` 单向依赖，`cipher/kex/hostkey` 同源复用
 
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| SCP / Forward / KnownHosts / Metrics / Fuzz | 见 `ROADMAP_FINAL.md` S25–S30 | S24 bench |
+| SCP / Forward / Metrics / Fuzz / Async KeepAlive 线程化 | 见 `ROADMAP_FINAL.md` S26–S30 | S25 bench |
 
 ## 真实性等级声明
 

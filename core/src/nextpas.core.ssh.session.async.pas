@@ -85,8 +85,9 @@ function SshAsyncClient: ISshAsyncClientBuilder;
 implementation
 
 uses
-  SysUtils,
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.async.base,
   nextpas.core.time.deadline,
   nextpas.core.crypto.random,
