@@ -9,7 +9,9 @@ unit nextpas.core.vfs.base;
 interface
 
 uses
-  nextpas.core.base.pathvalid;
+  nextpas.core.base.pathvalid,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv;
 
 type
   TEntryInfo = record
@@ -35,7 +37,12 @@ function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 function VfsIsRoot(const APath: string): Boolean; inline;
 
 { 路径字节序比较（'/' 分隔语义下与逐字节一致）；三后端共用同一序定义 }
-function VfsNameCompare(const AA, AB: string): Integer;
+function VfsNameCompare(const AA, AB: string): Integer; inline;
+
+{ ETag 单源：strong "hexSize-hexModTime" 与 fnv "fnv-hex8"，供 embedded/http 共用
+  避免两处字面量漂移；基于 text.conv.IntToHex 保证大小写/位宽一致 }
+function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
+function VfsETagFNV(const AHash: UInt32): string; inline;
 
 { 就地按 Name 字节序升序（INV-V8）；quick(Int64 下标)+小区间插入混合排序 }
 procedure VfsSortEntries(var AItems: TEntryArray);
@@ -58,21 +65,23 @@ begin
   Result := APath = '.';
 end;
 
-function VfsNameCompare(const AA, AB: string): Integer;
+function VfsNameCompare(const AA, AB: string): Integer; inline;
 var
-  I, N: Integer;
+  PA, PB: Pointer;
 begin
-  N := Length(AA);
-  if Length(AB) < N then
-    N := Length(AB);
-  for I := 1 to N do
-  begin
-    if Byte(AA[I]) < Byte(AB[I]) then Exit(-1);
-    if Byte(AA[I]) > Byte(AB[I]) then Exit(1);
-  end;
-  if Length(AA) < Length(AB) then Exit(-1);
-  if Length(AA) > Length(AB) then Exit(1);
-  Result := 0;
+  if Length(AA) = 0 then PA := nil else PA := @AA[1];
+  if Length(AB) = 0 then PB := nil else PB := @AB[1];
+  Result := CompareBytesOrdered(PA, PB, SizeUInt(Length(AA)), SizeUInt(Length(AB)));
+end;
+
+function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
+begin
+  Result := '"' + IntToHex(UInt64(ASize), 16) + '-' + IntToHex(UInt64(AModTime), 16) + '"';
+end;
+
+function VfsETagFNV(const AHash: UInt32): string; inline;
+begin
+  Result := '"fnv-' + IntToHex(UInt64(AHash), 8) + '"';
 end;
 
 { 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（S1/S2 实测陷阱，

@@ -117,7 +117,44 @@ begin
   Result := FWriter.Write(ABuf, ACount);
 end;
 
+const
+  CACHE_REVALIDATE = 'public, max-age=0, must-revalidate';
+
 { ===== Helpers ===== }
+
+function EscapeDispositionFilename(const S: string): string; inline;
+var
+  I, Extra, J: Integer;
+begin
+  Extra := 0;
+  for I := 1 to Length(S) do
+    if (S[I] = '\') or (S[I] = '"') then
+      Inc(Extra);
+  if Extra = 0 then
+    Exit(S);
+  SetLength(Result, Length(S) + Extra);
+  J := 1;
+  for I := 1 to Length(S) do
+  begin
+    if S[I] = '\' then
+    begin
+      Result[J] := '\';
+      Result[J + 1] := '\';
+      Inc(J, 2);
+    end
+    else if S[I] = '"' then
+    begin
+      Result[J] := '\';
+      Result[J + 1] := '"';
+      Inc(J, 2);
+    end
+    else
+    begin
+      Result[J] := S[I];
+      Inc(J);
+    end;
+  end;
+end;
 
 function IsHeadReq(const AReq: IHttpRequest): Boolean; inline;
 begin
@@ -200,7 +237,12 @@ begin
 end;
 function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
 begin
-  Result := '"' + IntToHex(ASize, 16) + '-' + IntToHex(AModTime, 16) + '"';
+  Result := VfsETagStrong(ASize, AModTime);
+end;
+
+function HttpMakeFnvETag(const AHash: UInt32): string; inline;
+begin
+  Result := VfsETagFNV(AHash);
 end;
 
 { TFileInfo.ModTime is platform nanoseconds since Unix epoch. }
@@ -209,13 +251,6 @@ begin
   if AModTimeNs < 0 then
     Exit(0);
   Result := AModTimeNs div 1000000000;
-end;
-
-{ Generate ETag from file size and modification time.
-  Format: "size-mtime" hex pair for strong ETag. }
-function GenerateETag(ASize: Int64; AModTime: Int64): string;
-begin
-  Result := HttpMakeStrongETag(ASize, AModTime);
 end;
 
 function StripWeakETag(const S: string): string; inline;
@@ -451,9 +486,7 @@ begin
   AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
   if ADownloadName <> '' then
   begin
-    LEscapedName := ADownloadName;
-    LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '\', '\\', True);
-    LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '"', '\"', True);
+    LEscapedName := EscapeDispositionFilename(ADownloadName);
     AW.GetHeaders.SetHeader('content-disposition',
       'attachment; filename="' + LEscapedName + '"');
   end;
@@ -547,7 +580,7 @@ begin
     end;
     LFileSize := LInfo.Size;
     LMime := HttpMimeFromPath(AFilePath);
-    LETag := GenerateETag(LFileSize, LInfo.ModTime);
+    LETag := HttpMakeStrongETag(LFileSize, LInfo.ModTime);
     LLastModified := FormatHttpDate(FileModTimeToUnixSeconds(LInfo.ModTime));
     HttpServeStaticStream(AReq, AW, LFileSize, LETag, LLastModified, LMime, ACacheControl,
       FileModTimeToUnixSeconds(LInfo.ModTime),
@@ -564,7 +597,7 @@ end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
 begin
-  Result := ServeFile(APath, 'public, max-age=0, must-revalidate');
+  Result := ServeFile(APath, CACHE_REVALIDATE);
 end;
 
 function ServeFile(const APath, ACacheControl: string): THttpHandlerFunc;
@@ -577,7 +610,7 @@ end;
 
 function ServeDir(const ARoot: string): THttpHandlerFunc;
 begin
-  Result := ServeDir(ARoot, 'public, max-age=0, must-revalidate');
+  Result := ServeDir(ARoot, CACHE_REVALIDATE);
 end;
 
 function ServeDir(const ARoot, ACacheControl: string): THttpHandlerFunc;
@@ -672,9 +705,9 @@ begin
         { hot path: embedded precomputed ETag — zero per-request hex alloc }
       end
       else if LInfo.ContentHash <> 0 then
-        LETag := '"fnv-' + IntToHex(LInfo.ContentHash, 8) + '"'
+        LETag := HttpMakeFnvETag(LInfo.ContentHash)
       else
-        LETag := GenerateETag(LInfo.Info.Size, LModTimeUnix);
+        LETag := HttpMakeStrongETag(LInfo.Info.Size, LModTimeUnix);
       if not LCache.TryGetLastModified(AVfsPath, LLastModified) then
       begin
         if LModTimeUnix > 0 then
@@ -686,9 +719,9 @@ begin
     else
     begin
       if LInfo.ContentHash <> 0 then
-        LETag := '"fnv-' + IntToHex(LInfo.ContentHash, 8) + '"'
+        LETag := HttpMakeFnvETag(LInfo.ContentHash)
       else
-        LETag := GenerateETag(LInfo.Info.Size, LModTimeUnix);
+        LETag := HttpMakeStrongETag(LInfo.Info.Size, LModTimeUnix);
       if LModTimeUnix > 0 then
         LLastModified := FormatHttpDate(LModTimeUnix)
       else
@@ -710,7 +743,7 @@ end;
 
 function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
 begin
-  Result := ServeVfs(AFs, 'public, max-age=0, must-revalidate');
+  Result := ServeVfs(AFs, CACHE_REVALIDATE);
 end;
 
 function ServeVfs(const AFs: IVfs; const ACacheControl: string): THttpHandlerFunc;
@@ -755,8 +788,7 @@ begin
     LFileName := APath;
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    ServeFileContentEx(APath, AReq, AW, LFileName,
-      'public, max-age=0, must-revalidate');
+    ServeFileContentEx(APath, AReq, AW, LFileName, CACHE_REVALIDATE);
   end;
 end;
 
@@ -764,8 +796,7 @@ function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc
 begin
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    ServeFileContentEx(APath, AReq, AW, ADownloadName,
-      'public, max-age=0, must-revalidate');
+    ServeFileContentEx(APath, AReq, AW, ADownloadName, CACHE_REVALIDATE);
   end;
 end;
 

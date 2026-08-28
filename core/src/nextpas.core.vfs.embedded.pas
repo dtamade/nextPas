@@ -28,12 +28,16 @@ function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.text.conv,
-  nextpas.core.time.httpdate;
+  nextpas.core.time.httpdate,
+  nextpas.core.sync;
 
 type
-  { 只读窗口流：读窗口 = blob 内 [FOffset, FOffset+FSize)，零拷贝直达 }
-  TWindowStream = class(TInterfacedObject, IStream, IReaderAt)
+  TEmbeddedVfs = class; { forward }
+
+  { 嵌入切片核心：纯 TObject，零接口计数，可被池复用 — 避免与 window 子系统 TWindow 混淆 }
+  TEmbeddedSlice = class(TObject)
   private
     FBase: PByte;
     FOffset: Int64;
@@ -41,8 +45,30 @@ type
     FPos: Int64;
     FOpen: Boolean;
     procedure CheckOpen;
+    procedure Reinit(ABase: PByte; const AOffset, ASize: Int64);
   public
     constructor Create(ABase: PByte; const AOffset, ASize: Int64);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function ReadAt(var ABuf; const ACount: SizeUInt;
+      const AOffset: Int64): SizeUInt;
+  end;
+
+  { 池化包装：IStream/IReaderAt 的接口壳，析构时把 Slice 归还池
+    FKeep 强引 Owner，保证切片窗口期内 blob 不悬垂 }
+  TEmbeddedSliceStream = class(TInterfacedObject, IStream, IReaderAt)
+  private
+    FSlice: TEmbeddedSlice;
+    FOwner: TEmbeddedVfs; { weak —仅用于归还 }
+    FKeep: IVfs;          { strong—保活 }
+  public
+    constructor Create(ASlice: TEmbeddedSlice; AOwner: TEmbeddedVfs; const AKeep: IVfs);
+    destructor Destroy; override;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -66,10 +92,15 @@ type
     FETags: array of string; { parallel ETag cache — precomputed at Create, O(1) ServeVfs }
     FLastMods: array of string; { parallel Last-Modified cache — FormatHttpDate at Create }
     FEntries: array of TResPackEntry; { parallel entry cache — zero DecodeWire on Stat/OpenRead }
+    FPool: array[0..15] of TEmbeddedSlice; { 16-slot SpinLock 池，零分配复用 }
+    FPoolCount: Integer;
+    FPoolLock: ISpinLock;
     function EntryPaths: TVfsNameArray; inline;
+    function LowerBoundPath(const APath: string): SizeInt; inline;
     function HasSubtreePath(const APath: string): Boolean;
-    function StartsWithPath(const AStr, APrefix: string): Boolean;
     function IndexOfPath(const APath: string): SizeInt;
+    function TryPopPool(out ASlice: TEmbeddedSlice): Boolean;
+    function TryPushPool(ASlice: TEmbeddedSlice): Boolean;
   public
     constructor Create(AData: PByte; ASize: SizeUInt; AOwnsBlob: Boolean);
     destructor Destroy; override;
@@ -88,9 +119,9 @@ begin
   Result := TEmbeddedVfs.Create(AData, ASize, AOwnsBlob);
 end;
 
-{ ── TWindowStream ── }
+{ ── TEmbeddedSlice ── }
 
-constructor TWindowStream.Create(ABase: PByte; const AOffset, ASize: Int64);
+constructor TEmbeddedSlice.Create(ABase: PByte; const AOffset, ASize: Int64);
 begin
   inherited Create;
   FBase := ABase;
@@ -100,13 +131,22 @@ begin
   FOpen := True;
 end;
 
-procedure TWindowStream.CheckOpen;
+procedure TEmbeddedSlice.Reinit(ABase: PByte; const AOffset, ASize: Int64);
+begin
+  FBase := ABase;
+  FOffset := AOffset;
+  FSize := ASize;
+  FPos := 0;
+  FOpen := True;
+end;
+
+procedure TEmbeddedSlice.CheckOpen;
 begin
   if not FOpen then
     raise EVfsClosed.CreateCtx('read', '', 'stream already closed');
 end;
 
-function TWindowStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   Avail: SizeUInt;
 begin
@@ -122,13 +162,13 @@ begin
   Result := Avail;
 end;
 
-function TWindowStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+function TEmbeddedSlice.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
-  Result := 0;  { 只读流：写入一律抛错，返回值仅为满足签名 }
+  Result := 0;
   raise EVfsError.CreateCtx('write', '', 'stream is read-only');
 end;
 
-function TWindowStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+function TEmbeddedSlice.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
   CheckOpen;
   case AOrigin of
@@ -143,30 +183,30 @@ begin
   Result := FPos;
 end;
 
-procedure TWindowStream.Close;
+procedure TEmbeddedSlice.Close;
 begin
   FOpen := False;
 end;
 
-function TWindowStream.GetSize: Int64;
+function TEmbeddedSlice.GetSize: Int64;
 begin
   CheckOpen;
   Result := FSize;
 end;
 
-function TWindowStream.GetPosition: Int64;
+function TEmbeddedSlice.GetPosition: Int64;
 begin
   CheckOpen;
   Result := FPos;
 end;
 
-procedure TWindowStream.SetPosition(const AValue: Int64);
+procedure TEmbeddedSlice.SetPosition(const AValue: Int64);
 begin
   CheckOpen;
   FPos := AValue;
 end;
 
-function TWindowStream.ReadAt(var ABuf; const ACount: SizeUInt;
+function TEmbeddedSlice.ReadAt(var ABuf; const ACount: SizeUInt;
   const AOffset: Int64): SizeUInt;
 var
   Avail: SizeUInt;
@@ -182,6 +222,80 @@ begin
   Result := Avail;
 end;
 
+{ ── TEmbeddedSliceStream ── }
+
+constructor TEmbeddedSliceStream.Create(ASlice: TEmbeddedSlice; AOwner: TEmbeddedVfs; const AKeep: IVfs);
+begin
+  inherited Create;
+  FSlice := ASlice;
+  FOwner := AOwner;
+  FKeep := AKeep;
+end;
+
+destructor TEmbeddedSliceStream.Destroy;
+var
+  LSlice: TEmbeddedSlice;
+  LOwner: TEmbeddedVfs;
+  LKeep: IVfs;
+begin
+  LKeep := FKeep;
+  LOwner := FOwner;
+  LSlice := FSlice;
+  FSlice := nil;
+  FOwner := nil;
+  FKeep := nil;
+  if (LSlice <> nil) and (LOwner <> nil) then
+  begin
+    if not LOwner.TryPushPool(LSlice) then
+      LSlice.Free;
+  end
+  else if LSlice <> nil then
+    LSlice.Free;
+  LKeep := nil;
+  inherited Destroy;
+end;
+
+function TEmbeddedSliceStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := FSlice.Read(ABuf, ACount);
+end;
+
+function TEmbeddedSliceStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := FSlice.Write(ABuf, ACount);
+end;
+
+function TEmbeddedSliceStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := FSlice.Seek(AOffset, AOrigin);
+end;
+
+procedure TEmbeddedSliceStream.Close;
+begin
+  FSlice.Close;
+end;
+
+function TEmbeddedSliceStream.GetSize: Int64;
+begin
+  Result := FSlice.GetSize;
+end;
+
+function TEmbeddedSliceStream.GetPosition: Int64;
+begin
+  Result := FSlice.GetPosition;
+end;
+
+procedure TEmbeddedSliceStream.SetPosition(const AValue: Int64);
+begin
+  FSlice.SetPosition(AValue);
+end;
+
+function TEmbeddedSliceStream.ReadAt(var ABuf; const ACount: SizeUInt;
+  const AOffset: Int64): SizeUInt;
+begin
+  Result := FSlice.ReadAt(ABuf, ACount, AOffset);
+end;
+
 { ── TEmbeddedVfs ── }
 
 constructor TEmbeddedVfs.Create(AData: PByte; ASize: SizeUInt;
@@ -195,6 +309,8 @@ begin
   FData := AData;
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
+  FPoolLock := SpinLock;
+  FPoolCount := 0;
   { Materialize sorted path index + parallel caches once — O(n) upfront, O(1) per ServeVfs/Stat/OpenRead.
     FEntries avoids per-request DecodeWire + respack binary search. }
   SetLength(FPaths, FRp.Count);
@@ -208,9 +324,9 @@ begin
       FPaths[I] := FRp.PathOf(E);
       FEntries[I] := E;
       if (E.Flags and RESPACK_EFLAG_HASHED) <> 0 then
-        FETags[I] := '"fnv-' + nextpas.core.text.conv.IntToHex(UInt64(E.Hash), 8) + '"'
+        FETags[I] := VfsETagFNV(E.Hash)
       else
-        FETags[I] := '"' + nextpas.core.text.conv.IntToHex(E.Size, 16) + '-' + nextpas.core.text.conv.IntToHex(UInt64(E.ModTime), 16) + '"';
+        FETags[I] := VfsETagStrong(E.Size, E.ModTime);
       if E.ModTime > 0 then
         FLastMods[I] := nextpas.core.time.httpdate.FormatHttpDate(E.ModTime)
       else
@@ -219,7 +335,16 @@ begin
 end;
 
 destructor TEmbeddedVfs.Destroy;
+var
+  I: Integer;
 begin
+  if FPoolCount > 0 then
+  begin
+    for I := 0 to FPoolCount - 1 do
+      FPool[I].Free;
+    FPoolCount := 0;
+  end;
+  FPoolLock := nil;
   SetLength(FEntries, 0);
   SetLength(FLastMods, 0);
   SetLength(FETags, 0);
@@ -228,6 +353,42 @@ begin
     FreeMem(FData);
   FData := nil;
   inherited Destroy;
+end;
+
+function TEmbeddedVfs.TryPopPool(out ASlice: TEmbeddedSlice): Boolean;
+begin
+  Result := False;
+  ASlice := nil;
+  if (FPoolLock = nil) or (FPoolCount = 0) then Exit;
+  FPoolLock.Acquire;
+  try
+    if FPoolCount > 0 then
+    begin
+      Dec(FPoolCount);
+      ASlice := FPool[FPoolCount];
+      FPool[FPoolCount] := nil;
+      Result := True;
+    end;
+  finally
+    FPoolLock.Release;
+  end;
+end;
+
+function TEmbeddedVfs.TryPushPool(ASlice: TEmbeddedSlice): Boolean;
+begin
+  Result := False;
+  if (FPoolLock = nil) or (ASlice = nil) then Exit;
+  FPoolLock.Acquire;
+  try
+    if FPoolCount < Length(FPool) then
+    begin
+      FPool[FPoolCount] := ASlice;
+      Inc(FPoolCount);
+      Result := True;
+    end;
+  finally
+    FPoolLock.Release;
+  end;
 end;
 
 function TEmbeddedVfs.EntryPaths: TVfsNameArray;
@@ -246,42 +407,55 @@ begin
   Result := HasSubtreePath(APath);
 end;
 
-function TEmbeddedVfs.HasSubtreePath(const APath: string): Boolean;
+function TEmbeddedVfs.LowerBoundPath(const APath: string): SizeInt; inline;
 var
-  Prefix: string;
   Lo, Hi, Mid: SizeInt;
+  C: Integer;
 begin
-  { 子目录存在性：排序路径首个 ≥ prefix 的项即判定点 — O(log n) }
-  Result := False;
-  if Length(FPaths) = 0 then
-    Exit;
-  Prefix := APath + '/';
   Lo := 0;
   Hi := Length(FPaths);
   while Lo < Hi do
   begin
     Mid := (Lo + Hi) shr 1;
-    if FPaths[Mid] < Prefix then
+    C := CompareBytesOrdered(Pointer(PChar(FPaths[Mid])), Pointer(PChar(APath)),
+      SizeUInt(Length(FPaths[Mid])), SizeUInt(Length(APath)));
+    if C < 0 then
       Lo := Mid + 1
     else
       Hi := Mid;
   end;
-  if (Lo < Length(FPaths)) and StartsWithPath(FPaths[Lo], Prefix) then
-    Exit(True);
+  Result := Lo;
+end;
+
+function TEmbeddedVfs.HasSubtreePath(const APath: string): Boolean;
+var
+  Lo: SizeInt;
+  QLen: Integer;
+begin
+  { 子目录存在性：零分配——以 LowerBound 直达首个 ≥ APath 项，再判 '/' 前缀
+    复用统一 LowerBoundPath，消除与 IndexOfPath 的二分重复 }
+  Result := False;
+  if Length(FPaths) = 0 then
+    Exit;
+  QLen := Length(APath);
+  Lo := LowerBoundPath(APath);
+  if Lo >= Length(FPaths) then Exit;
+  if Length(FPaths[Lo]) <= QLen then Exit;
+  if FPaths[Lo][QLen + 1] <> '/' then Exit;
+  if QLen > 0 then
+    if not CompareMem(@FPaths[Lo][1], @APath[1], SizeUInt(QLen)) then Exit;
+  Result := True;
 end;
 
 function TEmbeddedVfs.IndexOfPath(const APath: string): SizeInt;
 var
-  Lo, Hi, Mid: SizeInt;
+  Lo: SizeInt;
 begin
-  Lo := 0;
-  Hi := Length(FPaths);
-  while Lo < Hi do
-  begin
-    Mid := (Lo + Hi) shr 1;
-    if FPaths[Mid] = APath then Exit(Mid);
-    if FPaths[Mid] < APath then Lo := Mid + 1 else Hi := Mid;
-  end;
+  Lo := LowerBoundPath(APath);
+  if (Lo < Length(FPaths))
+    and (CompareBytesOrdered(Pointer(PChar(FPaths[Lo])), Pointer(PChar(APath)),
+      SizeUInt(Length(FPaths[Lo])), SizeUInt(Length(APath))) = 0) then
+    Exit(Lo);
   Result := -1;
 end;
 
@@ -311,15 +485,6 @@ begin
   end;
   ALastModified := '';
   Result := False;
-end;
-
-{ 前缀判断：显式处理空前缀（FPC Pos('',S)=0 陷阱） }
-function TEmbeddedVfs.StartsWithPath(const AStr, APrefix: string): Boolean;
-begin
-  if Length(APrefix) = 0 then
-    Exit(True);
-  Result := (Length(AStr) >= Length(APrefix))
-    and (Pos(APrefix, AStr) = 1);
 end;
 
 function TEmbeddedVfs.Stat(const APath: string): TStatInfo;
@@ -359,6 +524,8 @@ var
   Prefix: string;
   Seen: TVfsNameArray;
   SI: TStatInfo;
+  Idx: SizeInt;
+  E: TResPackEntry;
   I: SizeUInt;
 begin
   if not VfsValidPath(ADirPath, True) then
@@ -382,8 +549,24 @@ begin
   if SizeUInt(Length(Seen)) > 0 then
     for I := 0 to SizeUInt(Length(Seen)) - 1 do
     begin
-      SI := Stat(Seen[I]);
-      Result[I] := SI.Info;
+      { 零 Stat 直填：Seen 已是规范名，省 ValidPath + Stat 二次封装
+        以 IndexOfPath 直命中 FEntries；未命中即为虚拟目录 }
+      Idx := IndexOfPath(Seen[I]);
+      if Idx >= 0 then
+      begin
+        E := FEntries[Idx];
+        Result[I].Name := Seen[I];
+        Result[I].Size := Int64(E.Size);
+        Result[I].ModTime := E.ModTime;
+        Result[I].IsDir := False;
+      end
+      else
+      begin
+        Result[I].Name := Seen[I];
+        Result[I].Size := 0;
+        Result[I].ModTime := 0;
+        Result[I].IsDir := True;
+      end;
     end;
   VfsSortEntries(Result);
 end;
@@ -392,6 +575,8 @@ function TEmbeddedVfs.OpenRead(const APath: string): IStream;
 var
   Idx: SizeInt;
   E: TResPackEntry;
+  Slice: TEmbeddedSlice;
+  Keep: IVfs;
 begin
   if not VfsValidPath(APath, True) then
     raise EVfsInvalidPath.CreateCtx('open', APath, 'invalid virtual path');
@@ -403,7 +588,12 @@ begin
     raise EVfsNotFound.CreateCtx('open', APath, 'not found');
   end;
   E := FEntries[Idx];
-  Result := TWindowStream.Create(FData, Int64(E.DataOffset), Int64(E.Size));
+  if TryPopPool(Slice) then
+    Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size))
+  else
+    Slice := TEmbeddedSlice.Create(FData, Int64(E.DataOffset), Int64(E.Size));
+  Keep := Self as IVfs;
+  Result := TEmbeddedSliceStream.Create(Slice, Self, Keep);
 end;
 
 function TEmbeddedVfs.CaseSensitive: Boolean;
