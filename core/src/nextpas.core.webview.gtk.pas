@@ -78,6 +78,7 @@ type
     FAssetsIntf: IWebviewAssets;
     FAssets: TObject;
     FIdleTags: array of guint;
+    FIdleCount: Integer;
     FPendingEvals: array of PEvalRec;
     FPendingCount: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
@@ -89,6 +90,7 @@ type
 
     procedure RequireOpen;
     procedure GrowPendingEvals; inline;
+    procedure GrowIdleTags; inline;
     procedure RemovePending(ARec: PEvalRec);
     procedure SetupSessionContext;
     function ResolveContext: Pointer;
@@ -751,6 +753,12 @@ begin
     SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
 end;
 
+procedure TGtkWebview.GrowIdleTags; inline;
+begin
+  if FIdleCount = Length(FIdleTags) then
+    SetLength(FIdleTags, WebviewGrowCapacity(Length(FIdleTags)));
+end;
+
 procedure TGtkWebview.RemovePending(ARec: PEvalRec);
 var
   I, J: Integer;
@@ -981,8 +989,9 @@ begin
   LRec^.Proc := AProc;
   LTag := G_idle_add_full(G_PRIORITY_DEFAULT, @IdleTrampoline, LRec,
     @IdleDestroy);
-  SetLength(FIdleTags, Length(FIdleTags) + 1);
-  FIdleTags[High(FIdleTags)] := LTag;
+  GrowIdleTags;
+  FIdleTags[FIdleCount] := LTag;
+  Inc(FIdleCount);
 end;
 
 procedure TGtkWebview.DropIdlePendings;
@@ -994,7 +1003,7 @@ begin
     find-by-id 判存再移除，避免对陈旧 Source ID 二次 remove 触发
     GLib-CRITICAL（Dispatcher.Post 后随即 Close 的路径） }
   LCtx := G_main_context_default();
-  for I := 0 to High(FIdleTags) do
+  for I := 0 to FIdleCount - 1 do
   begin
     if LCtx = nil then
       Break;
@@ -1002,7 +1011,7 @@ begin
     if LSrc <> nil then
       G_source_remove(FIdleTags[I]);
   end;
-  FIdleTags := nil;
+  FIdleCount := 0;
 end;
 
 procedure TGtkWebview.HandleNativeDestroy;
