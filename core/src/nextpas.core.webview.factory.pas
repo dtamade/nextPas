@@ -269,8 +269,7 @@ end;
 
 function TBuilderImpl.Size(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
-  if (AWidth < 0) or (AHeight < 0) then
-    raise EWebviewInvalidState.Create('Width/Height must be >= 0');
+  CheckWebviewSize(AWidth, AHeight);
   FOptions.Width := AWidth;
   FOptions.Height := AHeight;
   Result := Self;
@@ -278,12 +277,7 @@ end;
 
 function TBuilderImpl.MinSize(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
-  if (AWidth < 0) or (AHeight < 0) then
-    raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
-  if (AWidth > 0) and (FOptions.MaxWidth > 0) and (AWidth > FOptions.MaxWidth) then
-    raise EWebviewInvalidState.Create('MinWidth must be <= MaxWidth');
-  if (AHeight > 0) and (FOptions.MaxHeight > 0) and (AHeight > FOptions.MaxHeight) then
-    raise EWebviewInvalidState.Create('MinHeight must be <= MaxHeight');
+  CheckWebviewMinSize(AWidth, AHeight, FOptions.MaxWidth, FOptions.MaxHeight);
   FOptions.MinWidth := AWidth;
   FOptions.MinHeight := AHeight;
   Result := Self;
@@ -291,12 +285,7 @@ end;
 
 function TBuilderImpl.MaxSize(AWidth, AHeight: Integer): IWebviewBuilder; inline;
 begin
-  if (AWidth < 0) or (AHeight < 0) then
-    raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
-  if (FOptions.MinWidth > 0) and (AWidth > 0) and (AWidth < FOptions.MinWidth) then
-    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
-  if (FOptions.MinHeight > 0) and (AHeight > 0) and (AHeight < FOptions.MinHeight) then
-    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+  CheckWebviewMaxSize(AWidth, AHeight, FOptions.MinWidth, FOptions.MinHeight);
   FOptions.MaxWidth := AWidth;
   FOptions.MaxHeight := AHeight;
   Result := Self;
