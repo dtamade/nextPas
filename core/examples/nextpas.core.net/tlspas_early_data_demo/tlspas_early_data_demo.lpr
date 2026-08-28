@@ -11,7 +11,9 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.client_earlydata,
   nextpas.core.http.earlydata,
-  nextpas.core.net.async.tlspas;
+  nextpas.core.http.middleware.earlydata.adaptive,
+  nextpas.core.net.async.tlspas,
+  nextpas.core.io;
 
 procedure DemoPolicyAndFingerprint;
 var Sess: TTlsPasResumptionSession; Id, Early: TBytes; Fp: TBytes;
@@ -150,8 +152,55 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure DemoAdaptiveMetricsAndPressure;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession;
+  Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; I: Integer; M: TTlsPasAdaptiveMetrics; LReq: IHttpRequest;
+  LEarly: IHttpRequestWithEarlyData;
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S21 final) ===');
+  WriteLn('--- Adaptive Metrics & Pressure (S23+S24) ---');
+  Store := TAsyncTlsPasReplayStoreFactory.CreateMemory(64, 600000);
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  Cfg.BaseLimit := 16384; Cfg.MinLimit := 512;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store, Cfg);
+  try
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $99);
+    // pressure: 60 small accepts -> Current=60 >50 triggers half
+    for I := 1 to 60 do
+    begin
+      SetLength(Early, 20); FillChar(Early[0], 20, Byte(I));
+      Early[0] := Byte(I and $FF); Early[1] := Byte((I shr 8) and $FF);
+      Obs.Decide(Id, Early, Sess, True);
+    end;
+    M := Obs.GetAdaptiveMetrics;
+    WriteLn('After 60 accepts: ', TlsPasFormatAdaptiveMetrics(M), ' (Current>50 => max half to 8192)');
+    WriteLn('Metrics via Observer: ', HttpAdaptiveEarlyDataMetrics(Obs));
+    // LogLine demo: small vs large under pressure (max 8192)
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+    if Supports(LReq, IHttpRequestWithEarlyData, LEarly) then LEarly.SetWasEarlyData(True);
+    WriteLn('LogLine small GET: ', HttpAdaptiveEarlyDataLogLine(LReq, Obs));
+    SetLength(Early, 9000); FillChar(Early[0], 9000, $AA);
+    LReq := THttpRequest.Create(hmPost, TUrl.Parse('http://example.com/upload'), hvHttp11, NewHttpHeaders, nextpas.core.io.BytesStreamFrom(Early), 9000);
+    if Supports(LReq, IHttpRequestWithEarlyData, LEarly) then LEarly.SetWasEarlyData(True);
+    WriteLn('LogLine large 9000 throttled?=', HttpAdaptiveEarlyDataIsThrottled(LReq, Obs), ' line=', HttpAdaptiveEarlyDataLogLine(LReq, Obs));
+    // high reject rate: 60 accepts +15 policy rejects -> 20% >0.1 => half again (use HasMax=false to count as RejectPolicy)
+    for I := 1 to 15 do
+    begin
+      Sess.HasMaxEarlyData := False;
+      SetLength(Early, 20); FillChar(Early[0], 20, $DD);
+      Obs.Decide(Id, Early, Sess, True);
+      Sess.HasMaxEarlyData := True;
+    end;
+    M := Obs.GetAdaptiveMetrics;
+    WriteLn('After high reject rate: ', TlsPasFormatAdaptiveMetrics(M), ' (reject 20% => half again to 4096, clamped to Min 512)');
+    Obs.Clear;
+    WriteLn('After Clear: ', TlsPasFormatAdaptiveMetrics(Obs.GetAdaptiveMetrics), ' (reset to base 16384)');
+  finally Obs.Free; end;
+end;
+
+begin
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S24 final) ===');
   WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver');
   WriteLn;
   DemoPolicyAndFingerprint;
@@ -166,5 +215,7 @@ begin
   WriteLn;
   DemoAdaptiveObserver;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S21 full chain self-proof.');
+  DemoAdaptiveMetricsAndPressure;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S24 full chain self-proof (pressure adaptive).');
 end.

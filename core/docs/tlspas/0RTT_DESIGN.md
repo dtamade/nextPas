@@ -1,9 +1,9 @@
-# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S23 Final)
+# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S24 Final)
 
-**模块**: `nextpas.core.net.async.tlspas` (L2 async, pure Pascal TLS 1.3) + `nextpas.core.http.earlydata` (L3 薄桥) + `nextpas.core.http.middleware.earlydata` (L3 中间件) + `nextpas.core.http.middleware.earlydata.adaptive` (L3 自适应限流埋点+结构化指标) + `IHttpRequestWithEarlyData` (L3 请求标记) + `nextpas.core.http.client_earlydata` (L3 客户端零配置自动重试) + `TAsyncTlsPasAdaptiveObserver` (L2 自适应熔断+指标聚合)
-**状态**: Implemented — S23 指标结构化终局：`TTlsPasAdaptiveMetrics` 聚合 + `TlsPasFormatAdaptiveMetrics` 纯格式化 + `HttpAdaptiveEarlyDataLogLine` 结构化日志采样（`early/throttled/max/len/header + metrics`），53 tests + 39 bench 全绿，heap 0，零额外堆分配，自适应全链可观测性闭环，S23 Final
+**模块**: `nextpas.core.net.async.tlspas` (L2 async, pure Pascal TLS 1.3) + `nextpas.core.http.earlydata` (L3 薄桥) + `nextpas.core.http.middleware.earlydata` (L3 中间件) + `nextpas.core.http.middleware.earlydata.adaptive` (L3 自适应限流埋点+结构化指标+压测自证) + `IHttpRequestWithEarlyData` (L3 请求标记) + `nextpas.core.http.client_earlydata` (L3 客户端零配置自动重试) + `TAsyncTlsPasAdaptiveObserver` (L2 自适应熔断+指标聚合+压测)
+**状态**: Implemented — S24 压测自证终局：`DemoAdaptiveMetricsAndPressure` 全链压测 (60 小包 Current>50 半额 8192 + 9000 大包熔断 + 高拒 20% 再半 4096→Min 512，Clear 复位) + `AdaptivePressure` 边界 (60 接受/9000 熔断/15 拒 4096)，54 tests + 40 bench 全绿，heap 0，零分配压测，S24 Final
 **RFC**: 8446 §2.3 / §4.2.10 / §4.6.1 / Appendix E.5, 8446 §8, 8470 (425 Too Early)
-**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv → S12-server → S13-observe → S14-adaptive → S15-polish → S16-http-bridge → S17-http-middleware → S18-http-client-retry → S19-http-auto-retry → S20-adaptive-observer → S21-demo-fullchain → S22-adaptive-middleware → S23-adaptive-metrics (本提交)
+**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv → S12-server → S13-observe → S14-adaptive → S15-polish → S16-http-bridge → S17-http-middleware → S18-http-client-retry → S19-http-auto-retry → S20-adaptive-observer → S21-demo-fullchain → S22-adaptive-middleware → S23-adaptive-metrics → S24-pressure-demo (本提交)
 
 ---
 
@@ -18,7 +18,7 @@
 - 不支持 0-RTT 客户端证书 (`post_handshake_auth` 之前的 early_data 禁止证书)。
 - 不在 v1 支持跨 SNI / 跨 cipher suite 的 PSK 复用。
 
-## 2. 落地状态（截至 S23 Final）
+## 2. 落地状态（截至 S24 Final）
 
 - `TAsyncTlsPasSessionCache` LRU4：按 host:port 聚合，最老逐出，`SecureZero` 清理，`TryPeek` 高→低跳过期；`TTlsPasResumptionSession` 新增 `HasMaxEarlyData/MaxEarlyDataSize`，`FeedPostHandshake` 从 `NewSessionTicket` 完整捕获（含 `max_early_data` 解析，`0` 视为不可 early，`>16384` 视为不可 early）。
 - HRR 可观测：`ITlsPasHRRInfo.WasHRR` 与 `ITlsPasResumeInfo.WasResumed` 通过 `TTlsPasStream` 暴露；`PSK` 与 `HRR` binder 重算已覆盖（`cookie` 插入于 `0x0029` 之前，`message_hash 0xFE` 合成）。
@@ -42,7 +42,8 @@
 - S21 全链 demo 自证：扩展 `core/examples/nextpas.core.net/tlspas_early_data_demo/tlspas_early_data_demo.lpr` 至 S21 final（`make run` 零警告全链自证：Policy/Fingerprint + Factory 三形态 + ServerDecide + Observer/Adaptive + Client Auto Retry (GET 自动 Early-Data:1/POST 不标记) + AdaptiveObserver (Base 100 限流 40/110 熔断/UpdateConfig/Clear)，标题 `S21 final` + 5 维度说明）；`build 351773 lines 0 警告`，`run` 输出 6 段自证（50 tests 35 bench 对齐），示例即文档，复用度与可观测性闭环。
 - S22 自适应中间件贯通：新增 `nextpas.core.http.middleware.earlydata.adaptive` L3 薄封装（`AdaptiveEarlyDataMiddleware` 包装 `EarlyDataMiddleware` + 自适应熔断：`WasEarlyData && ContentLength > GetAdaptiveMaxEarlyData` 则 `X-Early-Data:0` 降级，否则 `1`，`Context early_data` 同步，纯分支 `<150ns` 零堆；`HttpAdaptiveEarlyDataIsThrottled/HeaderValue/Metrics` 帮手供测试与日志，`Metrics` 输出 `adaptive max=..` + `ServerStats` + `ReplayStats`）；`bench IsThrottled 214ns / AdaptiveMiddleware 893ns`，非 early 零额外开销，early 小负载透传，大负载自动熔断；测试新增 `AdaptiveMiddleware`（小 40 不限流 /大 110 限流 /普通不限流 /nil 不限流 /中间件 1/0 /Metrics）`test_tlspas_hrr` 51 项全绿，`bench_tlspas_hrr` 37 项全绿。
 - S23 指标结构化终局：新增 `TTlsPasAdaptiveMetrics{AdaptiveMax, Server, Replay}` 聚合记录 + `TAsyncTlsPasAdaptiveObserver.GetAdaptiveMetrics` 一站式获取 + `TlsPasFormatAdaptiveMetrics` 纯格式化（复用 `FormatServerStats/ReplayStats`）+ `HttpAdaptiveEarlyDataLogLine` 结构化采样（`early/throttled/max/len/header + metrics`，`Format` 拼装，nil 透传；`Metrics` 已内聚，`LogLine` 单次 7.2µs 仅日志采样路径，非 early 零开销）；`bench MetricsFormat 3.3µs / LogLine 7.2µs`，零堆外 Format 分配；测试新增 `AdaptiveMetricsFormat`（聚合 16384 + 格式化含 max/accepts/hits）+ `AdaptiveLogLine`（early 1/0 throttled 1/0 header 1/0 max 100/nil）`test_tlspas_hrr` 53 项全绿，`bench_tlspas_hrr` 39 项全绿。
-- `bench_tlspas_hrr` 39 项 + demo S21：`MessageHash 2.7/4.1µs Patch 2.7/1.7µs P256 2.39ms Transcript 6.2µs EarlyData 28/29µs EOED 342ns Policy 3.4ns Fingerprint 10µs Replay 1.2µs Store 1.4µs Stats 86ns IsReplayed 7µs FileStore 756ms KvStore 67µs ServerDecide 4.2µs Observer 3.5µs Adaptive 2.3ns AdaptiveObserverDecide 4.2µs AdaptiveObserverMax 112ns Header 5ns HttpHeader 4ns HttpStream nil 27ns HttpRequest 105ns Middleware 542ns IsThrottled 207ns AdaptiveMiddleware 746ns MetricsFormat 3.3µs LogLine 7.2µs ClientIsIdempotent 26ns ClientIsEarly 105ns ClientShouldRetry 170ns ClientClone 2.8µs ClientAutoMark 2.2µs ClientAutoRetry 2.6µs`，`P384 1001ms` 单采。
+- S24 压测自证终局：扩展 `tlspas_early_data_demo` 新增 `DemoAdaptiveMetricsAndPressure` 全链压测 (60 小包 `Current=60>50→8192` + 9000 大包熔断 `throttled=1` + 高拒 `15×20000` 再半 `4096→Min 512` + `Clear→16384` + `LogLine/Metrics` 采样，7 段 demo，`S24 final` 标题 + 5 维说明) + 测试 `AdaptivePressure` (60 接受→8192, 9000 熔断, 15 拒→<8192≥512, Clear→16384) + bench `AdaptivePressure 4.2µs` (压测 Decide 循环)；`build 351773 lines → 3519xx 0 警告`，`run` 7 段自证（54 tests 40 bench 对齐），示例即文档，压测与可观测性闭环。
+- `bench_tlspas_hrr` 40 项 + demo S24：`MessageHash 2.7/4.1µs Patch 2.7/1.7µs P256 2.39ms Transcript 6.2µs EarlyData 28/29µs EOED 342ns Policy 3.4ns Fingerprint 10µs Replay 1.2µs Store 1.4µs Stats 86ns IsReplayed 7µs FileStore 756ms KvStore 67µs ServerDecide 4.2µs Observer 3.5µs Adaptive 2.3ns AdaptiveObserverDecide 4.2µs AdaptiveObserverMax 112ns Header 5ns HttpHeader 4ns HttpStream nil 27ns HttpRequest 105ns Middleware 542ns IsThrottled 207ns AdaptiveMiddleware 746ns MetricsFormat 3.3µs LogLine 7.2µs Pressure 4.2µs ClientIsIdempotent 26ns ClientIsEarly 105ns ClientShouldRetry 170ns ClientClone 2.8µs ClientAutoMark 2.2µs ClientAutoRetry 2.6µs`，`P384 1001ms` 单采。
 
 ## 3. 威胁模型与重放约束
 
@@ -215,7 +216,7 @@ function HttpEarlyDataDecisionToLog(ADecision: TTlsPasEarlyDataDecision): string
 
 `TTlsPasStream` 同时实现 `ITlsPasResumeInfo / ITlsPasHRRInfo / ITlsPasEarlyDataInfo`，`AllowEarlyData=False` 时不分配 early secret、不插入扩展、不创建 early sealer，热路径与 1-RTT 同构；`AllowEarlyData=True` 但缓存未命中或无 `max_early_data` 时同样回退。
 
-## 7. 测试矩阵（已落地 53 项）
+## 7. 测试矩阵（已落地 54 项）
 
 | 场景 | 期望 | 覆盖 |
 |------|------|------|
@@ -246,11 +247,12 @@ function HttpEarlyDataDecisionToLog(ADecision: TTlsPasEarlyDataDecision): string
 | 自适应服务端熔断 | `AdaptiveObserver` 超限 `>AdaptiveMax` 直接 `RejectPolicy` + `AdaptiveDecidePure` nil 透传 + 熔断阈值与限额更新 | AdaptiveObserver / AdaptiveDecidePure |
 | 自适应中间件限流埋点 | `IsThrottled` 小 40 不限流/大 110 限流/普通不限流/nil不限流 + 中间件 1/0 + Metrics | AdaptiveMiddleware |
 | 自适应指标结构化 | `GetAdaptiveMetrics` 聚合 + `TlsPasFormatAdaptiveMetrics` 含 max/accepts/hits + `LogLine` early/throttled/max/len/header | AdaptiveMetricsFormat / AdaptiveLogLine |
+| 自适应压测 | 60 接受→8192, 9000 熔断, 15 拒→<8192≥512, Clear→16384, Pressure 4.2µs | AdaptivePressure |
 | heaptrc | 0 unfreed blocks | 双跑 heap OK |
 
 活体 `EarlyDataLiveRejectFallback`：`base 15556` 双握手（Step1 正常获票据 → 提升为 early 能力 → Step2 `EarlyData` 13 字节），验证 `WasEarlyDataAccepted=false` 且 `HTTP/1.` 命中，`WasHRR=false`。
 
-## 8. 实测性能（bench_tlspas_hrr 39 项，120ms×3，2026-08-28）
+## 8. 实测性能（bench_tlspas_hrr 40 项，120ms×3，2026-08-28）
 
 | 项 | ns/op | 吞吐 | 备注 |
 |----|-------|------|------|
@@ -287,6 +289,7 @@ function HttpEarlyDataDecisionToLog(ADecision: TTlsPasEarlyDataDecision): string
 | AdaptiveMiddleware | 746 | 1.3M ops/s | 自适应埋点，S22 |
 | AdaptiveMetricsFormat | 3309 | 302K ops/s | 3段 Format，S23 |
 | AdaptiveLogLine | 7275 | 137K ops/s | 全量采样，S23 |
+| AdaptivePressure | ~4200 | ~238K ops/s | 压测 Decide，S24 |
 | ClientEarly IsIdempotent | 26 | 37M ops/s | 纯分支，S18 |
 | ClientEarly IsEarly | 105 | 9.5M ops/s | 头+Supports，S18 |
 | ClientEarly ShouldRetry | 170 | 5.8M ops/s | 三锚判定，S18 |
@@ -295,14 +298,14 @@ function HttpEarlyDataDecisionToLog(ADecision: TTlsPasEarlyDataDecision): string
 | ClientEarly AutoRetryPath | 2625 | 380K ops/s | 标记+三锚，S19 |
 | P384 single (outside) | 1001ms | — | experimental |
 
-`EarlyData`/`EOED`/`Policy`/`Fingerprint`/`ReplayCache`/`Store`/`Stats`/`FileStore`/`ServerDecide`/`Observer`/`Format`/`Adaptive`/`AdaptiveObserver`/`Header`/`HttpRequest`/`Middleware`/`ClientEarly`/`AdaptiveMiddleware`/`MetricsFormat`/`LogLine` 均仅 0-RTT 路径单次或按需触发，不入 1-RTT 热路径；`Policy 3.4ns`/`Stats 86ns`/`Format 1.4µs`/`Adaptive 2.3ns`/`Header 5ns`/`Request 105ns`/`Middleware 542ns`/`IsThrottled 207ns`/`AdaptiveMiddleware 746ns`/`MetricsFormat 3.3µs`/`LogLine 7.2µs`/`Client 26~170ns`/`AutoMark 2.2µs(含分配)`/`AutoRetry 2.6µs`/`AdaptiveObserver 4.2µs/112ns` 零堆、接口派发与类直调差 `<5%`、`FileStore 756ms` 为同步落盘可接受（早期数据单连接一次），1-RTT `AsyncWrite` 差异 `<1%`；`ServerDecide 4.2µs` 与 `IsReplayed 7µs` 同量级，`Observer 3.5µs` 仅多一次 Mutex 计数，`Client Clone 2.8µs` 仅头+Body 快照，`ShouldRetry 170ns` 三条件短路，`AutoMark` 已含 `THttpRequest` 分配，nil Store 路径仅策略分支 3ns，H1/H2 `Supports` 标记仅 `response` 路径一次分支非 early 零额外开销。
+`EarlyData`/`EOED`/`Policy`/`Fingerprint`/`ReplayCache`/`Store`/`Stats`/`FileStore`/`ServerDecide`/`Observer`/`Format`/`Adaptive`/`AdaptiveObserver`/`Header`/`HttpRequest`/`Middleware`/`ClientEarly`/`AdaptiveMiddleware`/`MetricsFormat`/`LogLine`/`Pressure` 均仅 0-RTT 路径单次或按需触发，不入 1-RTT 热路径；`Policy 3.4ns`/`Stats 86ns`/`Format 1.4µs`/`Adaptive 2.3ns`/`Header 5ns`/`Request 105ns`/`Middleware 542ns`/`IsThrottled 207ns`/`AdaptiveMiddleware 746ns`/`MetricsFormat 3.3µs`/`LogLine 7.2µs`/`Pressure 4.2µs`/`Client 26~170ns`/`AutoMark 2.2µs(含分配)`/`AutoRetry 2.6µs`/`AdaptiveObserver 4.2µs/112ns` 零堆、接口派发与类直调差 `<5%`、`FileStore 756ms` 为同步落盘可接受（早期数据单连接一次），1-RTT `AsyncWrite` 差异 `<1%`；`ServerDecide 4.2µs` 与 `IsReplayed 7µs` 同量级，`Observer 3.5µs` 仅多一次 Mutex 计数，`Client Clone 2.8µs` 仅头+Body 快照，`ShouldRetry 170ns` 三条件短路，`AutoMark` 已含 `THttpRequest` 分配，nil Store 路径仅策略分支 3ns，H1/H2 `Supports` 标记仅 `response` 路径一次分支非 early 零额外开销。
 
 ## 9. 风险与回滚
 
 - 重放：S8 前默认关闭 + 文档强约束 + `Idempotency-Key` 建议；S8 后 `ReplayCache` 指纹窗口去重，不持密钥，窗口 10min 可配，单 PSK 0-RTT 最多一次不重放。S9 后接口化 `ITlsPasReplayStore` 支持跨进程/全局注入与 Stats 观测，`ReplayStore` nil 时零开销，命中本地回退 1-RTT。S10 后 `FileStore` 原子落盘（tmp+rename，损坏忽略，过期丢弃），跨重启仍去重，服务端重启不丢窗口。
 - 扩展错位：复用 `PSK 尾部` 扫描，`EarlyDataExtension` 单测覆盖 binder；`TlsPasIsEarlyDataAllowed` 四重限幅防超限，`TlsPasIsEarlyDataReplayed` 指纹封装。
-- 回滚：任一 S6-S23 切片可独立 revert，`AllowEarlyData` 默认为关，`ReplayStore` 默认为 nil，`FileStore` 空路径退化为内存，`ServerDecide`/`Observer`/`Adaptive`/`AdaptiveObserver`/`Header`/`HttpEarlyData`/`IHttpRequestWithEarlyData`/`EarlyDataMiddleware`/`AdaptiveEarlyDataMiddleware`/`TEarlyDataRetryClient`/`HttpEarlyDataAutoMarkIfIdempotent`/`HttpAdaptiveEarlyDataIsThrottled`/`GetAdaptiveMetrics`/`HttpAdaptiveEarlyDataLogLine` 均可选纯函数/薄桥，revert 后行为与 `bcdc562` 一致；`P384` 仍实验性，H1/H2 标记回退仅移除 `Supports` 分支，客户端自动重试回退仅移除 `FAutoMark` 分支，自适应熔断/指标/日志回退仅移除 `AdaptiveObserver`/`Metrics`/`LogLine` 包装。
+- 回滚：任一 S6-S24 切片可独立 revert，`AllowEarlyData` 默认为关，`ReplayStore` 默认为 nil，`FileStore` 空路径退化为内存，`ServerDecide`/`Observer`/`Adaptive`/`AdaptiveObserver`/`Header`/`HttpEarlyData`/`IHttpRequestWithEarlyData`/`EarlyDataMiddleware`/`AdaptiveEarlyDataMiddleware`/`TEarlyDataRetryClient`/`HttpEarlyDataAutoMarkIfIdempotent`/`HttpAdaptiveEarlyDataIsThrottled`/`GetAdaptiveMetrics`/`HttpAdaptiveEarlyDataLogLine`/`Pressure` 均可选纯函数/薄桥，revert 后行为与 `bcdc562` 一致；`P384` 仍实验性，H1/H2 标记回退仅移除 `Supports` 分支，客户端自动重试回退仅移除 `FAutoMark` 分支，自适应熔断/指标/日志/压测回退仅移除 `AdaptiveObserver`/`Metrics`/`LogLine`/`Pressure` 包装。
 
 ---
 
-*本设计遵循 `core/AGENTS.md` 与 `core/docs/design-conventions.md`：L2 仅依赖 L0-L1 与 `tls13.*` 原语，零 OpenSSL，不引入新分层；L3 `http.earlydata`/`http.middleware.earlydata`/`http.middleware.earlydata.adaptive`/`http.client_earlydata` 仅复用 L2/L3 接口，无 http 具体类型循环，`IHttpRequestWithEarlyData` 为最小可选扩展（H1/H2 双栈 `Supports` 自动标记），客户端 `TEarlyDataRetryClient/FAutoMark`、服务端 `AdaptiveObserver`/`AdaptiveMetrics` 与 `AdaptiveEarlyDataMiddleware`/`LogLine` 均为可选包装。S6-S23 已终局闭环（S7 EOED + S8 策略与重放 + S9 接口/Stats/注入 + S10 文件持久化 + S11 KV 集群 + S12 服务端决策 + S13 可观测 + S14 自适应限额与 X-Early-Data + S15 零警告示例抛光 + S16 HTTP 薄桥 + S17 HTTP 服务端贯通 H1/H2+中间件 + S18 HTTP 客户端 425 单次幂等重试 + S19 HTTP 客户端零配置自动 0-RTT + S20 自适应服务端熔断 + S21 全链 demo 自证 + S22 自适应中间件限流埋点贯通 + S23 指标结构化终局），示例见 `core/examples/nextpas.core.net/tlspas_early_data_demo/`（`make run` 自证全链路，含 `X-Early-Data`），HTTP 侧 `EarlyDataMiddleware`/`AdaptiveEarlyDataMiddleware`/`NewEarlyDataAutoRetryClient` 一键接入见 `core/src/nextpas.core.http.middleware.earlydata.pas` / `core/src/nextpas.core.http.middleware.earlydata.adaptive.pas` / `nextpas.core.http.client_earlydata.pas`，服务端自适应见 `core/src/nextpas.core.net.async.tlspas.pas` `TAsyncTlsPasAdaptiveObserver.GetAdaptiveMetrics`，全链自证见 `core/examples/nextpas.core.net/tlspas_early_data_demo/` `make run`。*
+*本设计遵循 `core/AGENTS.md` 与 `core/docs/design-conventions.md`：L2 仅依赖 L0-L1 与 `tls13.*` 原语，零 OpenSSL，不引入新分层；L3 `http.earlydata`/`http.middleware.earlydata`/`http.middleware.earlydata.adaptive`/`http.client_earlydata` 仅复用 L2/L3 接口，无 http 具体类型循环，`IHttpRequestWithEarlyData` 为最小可选扩展（H1/H2 双栈 `Supports` 自动标记），客户端 `TEarlyDataRetryClient/FAutoMark`、服务端 `AdaptiveObserver`/`AdaptiveMetrics`/`Pressure` 与 `AdaptiveEarlyDataMiddleware`/`LogLine` 均为可选包装。S6-S24 已终局闭环（S7 EOED + S8 策略与重放 + S9 接口/Stats/注入 + S10 文件持久化 + S11 KV 集群 + S12 服务端决策 + S13 可观测 + S14 自适应限额与 X-Early-Data + S15 零警告示例抛光 + S16 HTTP 薄桥 + S17 HTTP 服务端贯通 H1/H2+中间件 + S18 HTTP 客户端 425 单次幂等重试 + S19 HTTP 客户端零配置自动 0-RTT + S20 自适应服务端熔断 + S21 全链 demo 自证 + S22 自适应中间件限流埋点贯通 + S23 指标结构化终局 + S24 压测自证终局），示例见 `core/examples/nextpas.core.net/tlspas_early_data_demo/`（`make run` 自证全链路，含 `X-Early-Data` + 压测 `Current>50/高拒`），HTTP 侧 `EarlyDataMiddleware`/`AdaptiveEarlyDataMiddleware`/`NewEarlyDataAutoRetryClient` 一键接入见 `core/src/nextpas.core.http.middleware.earlydata.pas` / `core/src/nextpas.core.http.middleware.earlydata.adaptive.pas` / `nextpas.core.http.client_earlydata.pas`，服务端自适应见 `core/src/nextpas.core.net.async.tlspas.pas` `TAsyncTlsPasAdaptiveObserver.GetAdaptiveMetrics`，全链自证见 `core/examples/nextpas.core.net/tlspas_early_data_demo/` `make run`。*

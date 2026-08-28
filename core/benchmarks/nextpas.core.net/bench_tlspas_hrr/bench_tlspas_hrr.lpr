@@ -386,6 +386,18 @@ begin
     F := HttpAdaptiveEarlyDataLogLine(GHttpReqEarly, GAdaptiveObserver);
 end;
 
+procedure BenchAdaptivePressure(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision; LId, LEarly: TBytes;
+begin
+  SetLength(LId, 4); FillChar(LId[0], 4, $AB);
+  SetLength(LEarly, 20); FillChar(LEarly[0], 20, $CD);
+  for I := 1 to aIters do
+  begin
+    LEarly[0] := Byte(I and $FF);
+    D := GAdaptiveObserver.Decide(LId, LEarly, GPolicySess, True);
+  end;
+end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -541,6 +553,7 @@ begin
     .AddLoop('AdaptiveMiddleware', @BenchAdaptiveMiddleware)
     .AddLoop('AdaptiveMetricsFormat', @BenchAdaptiveMetricsFormat)
     .AddLoop('AdaptiveLogLine', @BenchAdaptiveLogLine)
+    .AddLoop('AdaptivePressure', @BenchAdaptivePressure)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

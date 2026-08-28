@@ -1413,6 +1413,50 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure TestAdaptivePressure;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession;
+  Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; I: Integer; M: TTlsPasAdaptiveMetrics;
+begin
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  Cfg.BaseLimit := 16384; Cfg.MinLimit := 512; Cfg.MaxLimit := 16384;
+  Store := TAsyncTlsPasReplayCache.Create(64, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store, Cfg);
+  try
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $AB);
+    // 60 accepts -> Current 60 >50 => half to 8192
+    for I := 1 to 60 do
+    begin
+      SetLength(Early, 20); FillChar(Early[0], 20, Byte(I));
+      Early[0] := Byte(I and $FF); Early[1] := Byte((I shr 8) and $FF);
+      Obs.Decide(Id, Early, Sess, True);
+    end;
+    M := Obs.GetAdaptiveMetrics;
+    Check(M.AdaptiveMax=8192, 'pressure Current>50 half to 8192');
+    Check(M.Server.Accepts=60, '60 accepts');
+    // large 9000 >8192 => throttled (adaptive, not counted in ServerStats)
+    SetLength(Early, 9000); FillChar(Early[0], 9000, $CC);
+    Check(Obs.Decide(Id, Early, Sess, True)=edRejectPolicy, '9000 throttled under half');
+    // reject rate high: add 15 policy rejects via HasMax=false (within adaptive max, counts as RejectPolicy)
+    for I := 1 to 15 do
+    begin
+      Sess.HasMaxEarlyData := False;
+      SetLength(Early, 20); FillChar(Early[0], 20, $DD);
+      Obs.Decide(Id, Early, Sess, True);
+      Sess.HasMaxEarlyData := True;
+    end;
+    M := Obs.GetAdaptiveMetrics;
+    Check(M.Server.RejectPolicy>=15, 'reject policy >=15');
+    Check(M.AdaptiveMax<8192, 'further half under high reject');
+    Check(M.AdaptiveMax>=512, 'clamped to Min 512');
+    Obs.Clear;
+    M := Obs.GetAdaptiveMetrics;
+    Check(M.AdaptiveMax=16384, 'after clear base 16384');
+    Check(M.Server.Accepts=0, 'after clear 0');
+  finally Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1470,6 +1514,7 @@ begin
   GSuite.Test('AdaptiveMiddleware', @TestAdaptiveMiddleware);
   GSuite.Test('AdaptiveMetricsFormat', @TestAdaptiveMetricsFormat);
   GSuite.Test('AdaptiveLogLine', @TestAdaptiveLogLine);
+  GSuite.Test('AdaptivePressure', @TestAdaptivePressure);
   if not GSuite.Run then
     Halt(1);
 end.
