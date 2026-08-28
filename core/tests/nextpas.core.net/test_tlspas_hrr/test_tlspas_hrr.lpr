@@ -1824,6 +1824,87 @@ begin
   finally Exp.Free; Obs.Free; end;
 end;
 
+procedure TestTraceParent;
+var Ctx, Ctx2: TTlsPasTraceContext; S: string;
+begin
+  Check(TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx), 'parse sampled');
+  Check(Ctx.Valid and Ctx.Sampled, 'sampled true');
+  Check(Length(Ctx.TraceId)=16, 'trace 16');
+  Check(Length(Ctx.ParentId)=8, 'parent 8');
+  S := TlsPasFormatTraceParent(Ctx);
+  Check(S='00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', 'format roundtrip');
+  Check(TlsPasParseTraceParent(S, Ctx2) and TlsPasTraceContextEquals(Ctx, Ctx2), 'roundtrip equal');
+  Check(TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00', Ctx), 'parse not sampled');
+  Check(not Ctx.Sampled, 'sampled false');
+  Check(not TlsPasParseTraceParent('00-zzzz', Ctx), 'reject bad hex');
+  Check(not TlsPasParseTraceParent('', Ctx), 'reject empty');
+  Check(HttpParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx), 'http parse');
+  Check(HttpFormatTraceParent(Ctx)='00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', 'http format');
+  Ctx := TlsPasGenerateTraceContext(True);
+  Check(Ctx.Valid and (Length(Ctx.TraceId)=16), 'generate valid');
+  Check(TlsPasShouldSample(Ctx, 1.0), 'rate 1 true');
+  Check((not TlsPasShouldSample(Ctx, 0.0)) or Ctx.Sampled, 'rate 0 respects parent');
+  Ctx.Sampled := False; Check(not TlsPasShouldSample(Ctx, 0.0), 'rate 0 false when not sampled');
+end;
+
+procedure TestTracerSampling;
+var Noop: ITlsPasTracer; Samp: ITlsPasTracer; Ctx: TTlsPasTraceContext; Ev: TTlsPasTraceEvent; i: Integer;
+begin
+  Noop := TAsyncTlsPasNoopTracer.Create as ITlsPasTracer;
+  Ctx := TlsPasGenerateTraceContext(False);
+  Check(not Noop.ShouldSample(Ctx), 'noop not sample');
+  Noop.Trace(Default(TTlsPasTraceEvent)); Check(Noop.SampleCount=0, 'noop sample 0');
+  Samp := TAsyncTlsPasSamplingTracer.Create(1.0) as ITlsPasTracer;
+  Ctx := TlsPasGenerateTraceContext(False);
+  Check(Samp.ShouldSample(Ctx), 'rate 1 sample');
+  Ev := Default(TTlsPasTraceEvent); Ev.Trace := Ctx;
+  Samp.Trace(Ev); Check(Samp.TotalCount=1, 'total 1'); Check(Samp.SampleCount=1, 'sampled 1');
+  Samp := TAsyncTlsPasSamplingTracer.Create(0.0) as ITlsPasTracer;
+  Ctx := TlsPasGenerateTraceContext(False); Ctx.Sampled := False;
+  Check(not Samp.ShouldSample(Ctx), 'rate 0 not sample');
+  Ev.Trace := Ctx; Samp.Trace(Ev); Check(Samp.SampleCount=0, 'rate 0 sample 0');
+  // parent sampled always sampled
+  Ctx.Sampled := True; Check(Samp.ShouldSample(Ctx), 'parent sampled always');
+  // TraceDecide integration
+  Samp := TAsyncTlsPasSamplingTracer.Create(0.5) as ITlsPasTracer;
+  Ctx := TlsPasGenerateTraceContext(False);
+  Check(TlsPasTraceDecide(nil, Samp, Ctx, nil, nil, Default(TTlsPasResumptionSession), True)=edRejectPolicy, 'trace decide nil observer');
+end;
+
+procedure TestTraceMiddleware;
+var Tracer: ITlsPasTracer; Mw: IHttpMiddleware; Hdl, Next: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter; LCtx: IHttpContext; Ctx: TTlsPasTraceContext;
+begin
+  Tracer := TAsyncTlsPasSamplingTracer.Create(1.0) as ITlsPasTracer;
+  Mw := HttpTraceParentMiddleware(Tracer);
+  Next := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin AW.WriteHeader(HTTP_STATUS_OK); end);
+  Hdl := Mw.Wrap(Next);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Req.Headers.SetHeader('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
+  LCtx := NewHttpContext; (Req as IHttpRequestWithContext).SetContext(LCtx);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(Length(W.GetHeaders.Get('traceparent'))=55, 'response traceparent');
+  Check(HttpContextGetString(LCtx, CONTEXT_TRACEPARENT)<>'', 'context traceparent set');
+  Check(Tracer.TotalCount>=1, 'tracer count');
+  Check(Pos('trace=', HttpTraceLogLine(Req, nil, Tracer))>0, 'log line trace');
+  // without header should generate
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LCtx := NewHttpContext; (Req as IHttpRequestWithContext).SetContext(LCtx);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(Length(W.GetHeaders.Get('traceparent'))=55, 'generated traceparent 55');
+  Check(HttpParseTraceParent(W.GetHeaders.Get('traceparent'), Ctx) and Ctx.Valid, 'generated valid');
+  // nil tracer middleware still works
+  Mw := HttpTraceParentMiddleware;
+  Hdl := Mw.Wrap(Next);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LCtx := NewHttpContext; (Req as IHttpRequestWithContext).SetContext(LCtx);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(Length(W.GetHeaders.Get('traceparent'))=55, 'nil tracer still traceparent');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1893,6 +1974,9 @@ begin
   GSuite.Test('RegistryCached', @TestRegistryCached);
   GSuite.Test('MetricsHandler', @TestMetricsHandler);
   GSuite.Test('MetricsHandlerCachedExporter', @TestMetricsHandlerCachedExporter);
+  GSuite.Test('TraceParent', @TestTraceParent);
+  GSuite.Test('TracerSampling', @TestTracerSampling);
+  GSuite.Test('TraceMiddleware', @TestTraceMiddleware);
   if not GSuite.Run then
     Halt(1);
 end.

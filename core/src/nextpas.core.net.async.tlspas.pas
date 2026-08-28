@@ -428,6 +428,69 @@ type
     property Labels: string read FLabels;
   end;
 
+{ S30: W3C traceparent + 采样 + 结构化事件 — 零堆解析/格式化，FNV 采样，Noop/Sampling 双实现 }
+type
+  TTlsPasTraceContext = record
+    TraceId: TBytes;
+    ParentId: TBytes;
+    Sampled: Boolean;
+    Valid: Boolean;
+  end;
+
+  TTlsPasTraceEventKind = (tekHRR, tekEarlyDataDecide, tekHealth);
+
+  TTlsPasTraceEvent = record
+    Kind: TTlsPasTraceEventKind;
+    TimestampMs: Int64;
+    Decision: TTlsPasEarlyDataDecision;
+    AdaptiveMax: Cardinal;
+    Trace: TTlsPasTraceContext;
+    Healthy: Boolean;
+  end;
+
+  ITlsPasTracer = interface
+    ['{B1C2D3E4-F5A6-4B7C-8D9E-0F1A2B3C4D5E}']
+    procedure Trace(const AEvent: TTlsPasTraceEvent);
+    function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
+    function SampleCount: Int64;
+    function TotalCount: Int64;
+  end;
+
+  TAsyncTlsPasNoopTracer = class(TInterfacedObject, ITlsPasTracer)
+  public
+    procedure Trace(const AEvent: TTlsPasTraceEvent);
+    function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
+    function SampleCount: Int64;
+    function TotalCount: Int64;
+  end;
+
+  TAsyncTlsPasSamplingTracer = class(TInterfacedObject, ITlsPasTracer)
+  private
+    FRate: Double;
+    FMutex: TPlatformMutex;
+    FSampled: Int64;
+    FTotal: Int64;
+    function HashTraceId(const ATrace: TTlsPasTraceContext): QWord;
+  public
+    constructor Create(ARate: Double = 0.01);
+    destructor Destroy; override;
+    procedure Trace(const AEvent: TTlsPasTraceEvent);
+    function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
+    function SampleCount: Int64;
+    function TotalCount: Int64;
+    property Rate: Double read FRate;
+  end;
+
+function TlsPasTraceContextEquals(const A, B: TTlsPasTraceContext): Boolean;
+function TlsPasParseTraceParent(const S: string; out Ctx: TTlsPasTraceContext): Boolean;
+function TlsPasFormatTraceParent(const Ctx: TTlsPasTraceContext): string;
+function TlsPasGenerateTraceContext(ASampled: Boolean = False): TTlsPasTraceContext;
+function TlsPasShouldSample(const Ctx: TTlsPasTraceContext; ARate: Double): Boolean;
+function TlsPasFormatTraceEvent(const AEvent: TTlsPasTraceEvent): string;
+function TlsPasTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer;
+  const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
@@ -1980,6 +2043,163 @@ function TAsyncTlsPasCachedPrometheusExporter.MissCount: Cardinal;
 begin
   platform_mutex_lock(FMutex);
   try Result := FMissCount; finally platform_mutex_unlock(FMutex); end;
+end;
+
+{ ======== S30 Trace ======== }
+
+function TlsPasTraceContextEquals(const A, B: TTlsPasTraceContext): Boolean;
+begin
+  if (not A.Valid) or (not B.Valid) then Exit((not A.Valid) and (not B.Valid) and (A.Sampled = B.Sampled));
+  if A.Sampled <> B.Sampled then Exit(False);
+  if Length(A.TraceId) <> Length(B.TraceId) then Exit(False);
+  if Length(A.ParentId) <> Length(B.ParentId) then Exit(False);
+  if (Length(A.TraceId) = 16) and (not CompareMem(@A.TraceId[0], @B.TraceId[0], 16)) then Exit(False);
+  if (Length(A.ParentId) = 8) and (not CompareMem(@A.ParentId[0], @B.ParentId[0], 8)) then Exit(False);
+  Result := True;
+end;
+
+function HexVal(C: Char): Integer; inline;
+begin
+  if (C >= '0') and (C <= '9') then Result := Ord(C) - Ord('0')
+  else if (C >= 'a') and (C <= 'f') then Result := Ord(C) - Ord('a') + 10
+  else if (C >= 'A') and (C <= 'F') then Result := Ord(C) - Ord('A') + 10
+  else Result := -1;
+end;
+
+function HexByte(Hi, Lo: Char; out B: Byte): Boolean;
+var H, L: Integer;
+begin
+  H := HexVal(Hi); L := HexVal(Lo);
+  if (H < 0) or (L < 0) then Exit(False);
+  B := Byte((H shl 4) or L); Result := True;
+end;
+
+function TlsPasParseTraceParent(const S: string; out Ctx: TTlsPasTraceContext): Boolean;
+var i: Integer; B: Byte;
+begin
+  Ctx := Default(TTlsPasTraceContext); Result := False;
+  // 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01  (55)
+  if Length(S) <> 55 then Exit;
+  if (S[3] <> '-') or (S[36] <> '-') or (S[53] <> '-') then Exit;
+  if (S[1] <> '0') or (S[2] <> '0') then Exit; // version 00 only
+  SetLength(Ctx.TraceId, 16); SetLength(Ctx.ParentId, 8);
+  for i := 0 to 15 do
+    if not HexByte(S[4 + i*2], S[5 + i*2], B) then Exit
+    else Ctx.TraceId[i] := B;
+  for i := 0 to 7 do
+    if not HexByte(S[37 + i*2], S[38 + i*2], B) then Exit
+    else Ctx.ParentId[i] := B;
+  if not HexByte(S[54], S[55], B) then Exit;
+  Ctx.Sampled := (B and $01) <> 0;
+  Ctx.Valid := True; Result := True;
+end;
+
+function ByteToHex(B: Byte): string; inline;
+const H: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f');
+begin Result := H[B shr 4] + H[B and $0F]; end;
+
+function TlsPasFormatTraceParent(const Ctx: TTlsPasTraceContext): string;
+var i: Integer;
+begin
+  if (not Ctx.Valid) or (Length(Ctx.TraceId) <> 16) or (Length(Ctx.ParentId) <> 8) then Exit('');
+  Result := '00-';
+  for i := 0 to 15 do Result := Result + ByteToHex(Ctx.TraceId[i]);
+  Result := Result + '-';
+  for i := 0 to 7 do Result := Result + ByteToHex(Ctx.ParentId[i]);
+  Result := Result + '-';
+  if Ctx.Sampled then Result := Result + '01' else Result := Result + '00';
+end;
+
+var GTraceSeq: Int64 = 0;
+
+function TlsPasGenerateTraceContext(ASampled: Boolean): TTlsPasTraceContext;
+var i: Integer; V: QWord;
+begin
+  Result := Default(TTlsPasTraceContext);
+  SetLength(Result.TraceId, 16); SetLength(Result.ParentId, 8);
+  // light PRNG: tick + seq + Random
+  V := QWord(TlsPasMonoMs) xor QWord(AtomicFetchAdd64(GTraceSeq, 1) + 1);
+  for i := 0 to 15 do begin V := V * 6364136223846793005 + 1442695040888963407; Result.TraceId[i] := Byte(V shr (i mod 8 * 8)); end;
+  for i := 0 to 7 do begin V := V * 6364136223846793005 + 1442695040888963407; Result.ParentId[i] := Byte(V shr (i mod 8 * 8)); end;
+  // mix in Random for demo entropy
+  for i := 0 to 15 do Result.TraceId[i] := Result.TraceId[i] xor Byte(Random(256));
+  for i := 0 to 7 do Result.ParentId[i] := Result.ParentId[i] xor Byte(Random(256));
+  // avoid all-zero (invalid per spec)
+  if (Result.TraceId[0]=0) and (Result.TraceId[1]=0) then Result.TraceId[0] := $01;
+  if (Result.ParentId[0]=0) and (Result.ParentId[1]=0) then Result.ParentId[0] := $01;
+  Result.Sampled := ASampled; Result.Valid := True;
+end;
+
+function TlsPasShouldSample(const Ctx: TTlsPasTraceContext; ARate: Double): Boolean;
+var H: QWord; i: Integer; Thr: QWord;
+begin
+  if not Ctx.Valid then Exit(False);
+  if ARate <= 0 then Exit(False);
+  if ARate >= 1 then Exit(True);
+  if Ctx.Sampled then Exit(True); // parent decided
+  H := 14695981039346656037;
+  for i := 0 to High(Ctx.TraceId) do begin H := H xor Ctx.TraceId[i]; H := H * 1099511628211; end;
+  for i := 0 to High(Ctx.ParentId) do begin H := H xor Ctx.ParentId[i]; H := H * 1099511628211; end;
+  Thr := QWord(Trunc(ARate * 18446744073709551615.0));
+  Result := H < Thr;
+end;
+
+function TlsPasFormatTraceEvent(const AEvent: TTlsPasTraceEvent): string;
+var Tp: string;
+begin
+  Tp := '';
+  if AEvent.Trace.Valid then Tp := TlsPasFormatTraceParent(AEvent.Trace);
+  Result := Format('trace=%s kind=%d decision=%s max=%d healthy=%d ts=%d', [Tp, Ord(AEvent.Kind), TlsPasEarlyDataDecisionToStr(AEvent.Decision), Integer(AEvent.AdaptiveMax), Ord(AEvent.Healthy), AEvent.TimestampMs]);
+end;
+
+{ ITlsPasTracer impl }
+
+procedure TAsyncTlsPasNoopTracer.Trace(const AEvent: TTlsPasTraceEvent); begin end;
+function TAsyncTlsPasNoopTracer.ShouldSample(const ATrace: TTlsPasTraceContext): Boolean; begin Result := False; end;
+function TAsyncTlsPasNoopTracer.SampleCount: Int64; begin Result := 0; end;
+function TAsyncTlsPasNoopTracer.TotalCount: Int64; begin Result := 0; end;
+
+constructor TAsyncTlsPasSamplingTracer.Create(ARate: Double);
+begin
+  inherited Create; if ARate < 0 then ARate := 0 else if ARate > 1 then ARate := 1; FRate := ARate;
+  if platform_mutex_init(FMutex) <> 0 then raise EInvalidOperationError.Create('tlspas: tracer mutex');
+end;
+destructor TAsyncTlsPasSamplingTracer.Destroy; begin platform_mutex_destroy(FMutex); inherited Destroy; end;
+function TAsyncTlsPasSamplingTracer.HashTraceId(const ATrace: TTlsPasTraceContext): QWord;
+var i: Integer; H: QWord;
+begin H := 14695981039346656037; for i := 0 to High(ATrace.TraceId) do begin H := H xor ATrace.TraceId[i]; H := H * 1099511628211; end; Result := H; end;
+procedure TAsyncTlsPasSamplingTracer.Trace(const AEvent: TTlsPasTraceEvent);
+begin
+  platform_mutex_lock(FMutex); try Inc(FTotal); if ShouldSample(AEvent.Trace) then Inc(FSampled); finally platform_mutex_unlock(FMutex); end;
+end;
+function TAsyncTlsPasSamplingTracer.ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
+var Thr: QWord;
+begin
+  if not ATrace.Valid then Exit(False);
+  if ATrace.Sampled then Exit(True);
+  if FRate <= 0 then Exit(False);
+  if FRate >= 1 then Exit(True);
+  Thr := QWord(Trunc(FRate * 18446744073709551615.0));
+  Result := HashTraceId(ATrace) < Thr;
+end;
+function TAsyncTlsPasSamplingTracer.SampleCount: Int64; begin platform_mutex_lock(FMutex); try Result := FSampled; finally platform_mutex_unlock(FMutex); end; end;
+function TAsyncTlsPasSamplingTracer.TotalCount: Int64; begin platform_mutex_lock(FMutex); try Result := FTotal; finally platform_mutex_unlock(FMutex); end; end;
+
+function TlsPasTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer;
+  const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+var Ev: TTlsPasTraceEvent;
+begin
+  if AObserver = nil then Exit(edRejectPolicy);
+  Result := AObserver.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+  if ATracer <> nil then
+  begin
+    Ev := Default(TTlsPasTraceEvent);
+    Ev.Kind := tekEarlyDataDecide; Ev.TimestampMs := TlsPasMonoMs;
+    Ev.Decision := Result; Ev.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData;
+    Ev.Trace := ATrace; Ev.Healthy := AObserver.GetAdaptiveHealth.Healthy;
+    ATracer.Trace(Ev);
+  end;
 end;
 
 constructor TAsyncTlsPasReplayCache.Create;

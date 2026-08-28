@@ -11,6 +11,8 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.client_earlydata,
   nextpas.core.http.earlydata,
+  nextpas.core.http.middleware,
+  nextpas.core.http.middleware.context,
   nextpas.core.http.middleware.earlydata.adaptive,
   nextpas.core.net.async.tlspas,
   nextpas.core.io;
@@ -342,9 +344,34 @@ begin
   Exp.Free; Reg.Free; Obs.Free;
 end;
 
+procedure DemoTrace;
+var Ctx, Ctx2: TTlsPasTraceContext; S: string; Tracer: ITlsPasTracer; Ev: TTlsPasTraceEvent;
+  Mw: IHttpMiddleware; Hdl: IHttpHandler; Req: IHttpRequest; Cap: TDemoCapture; W: IHttpResponseWriter;
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S29 final) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler');
+  WriteLn('--- Trace S30 (W3C traceparent + Sampling + 结构化事件) ---');
+  Ctx := TlsPasGenerateTraceContext(True);
+  S := TlsPasFormatTraceParent(Ctx);
+  WriteLn('Generated traceparent len=', Length(S), ' valid=', TlsPasParseTraceParent(S, Ctx2) and TlsPasTraceContextEquals(Ctx, Ctx2), ' sampled=', Ctx.Sampled);
+  WriteLn('Parse W3C sampled=', TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx) and Ctx.Sampled, ' format=', TlsPasFormatTraceParent(Ctx));
+  WriteLn('ShouldSample 0.01=', TlsPasShouldSample(Ctx, 0.01), ' 1.0=', TlsPasShouldSample(Ctx, 1.0));
+  Tracer := TAsyncTlsPasSamplingTracer.Create(0.01) as ITlsPasTracer;
+  Ev := Default(TTlsPasTraceEvent); Ev.Kind := tekEarlyDataDecide; Ev.Trace := Ctx; Ev.Decision := edAccept; Ev.AdaptiveMax := 8192;
+  Tracer.Trace(Ev); WriteLn('Noop vs Sampling tracer total=', Tracer.TotalCount, ' sampled=', Tracer.SampleCount);
+  Mw := HttpTraceParentMiddleware(Tracer);
+  Hdl := Mw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin AW.WriteHeader(HTTP_STATUS_OK); end));
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Req.Headers.SetHeader('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
+  (Req as IHttpRequestWithContext).SetContext(NewHttpContext);
+  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter;
+  Hdl.ServeHTTP(Req, W);
+  WriteLn('Middleware traceparent resp=', W.GetHeaders.Get('traceparent'), ' ctx=', HttpContextGetString(HttpContextOf(Req), CONTEXT_TRACEPARENT));
+  WriteLn('TraceLogLine=', HttpTraceLogLine(Req, nil, Tracer));
+  WriteLn('FormatTraceEvent=', TlsPasFormatTraceEvent(Ev));
+end;
+
+begin
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S30 trace) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler | Trace');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -370,5 +397,7 @@ begin
   WriteLn;
   DemoMetricsHandler;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S29 metrics-handler self-proof.');
+  DemoTrace;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S30 trace self-proof.');
 end.

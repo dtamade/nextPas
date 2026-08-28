@@ -38,6 +38,12 @@ function HttpMetricsHandler(const ARegistry: TAsyncTlsPasPrometheusRegistry; con
 function HttpMetricsHandler(const AExporter: TAsyncTlsPasCachedPrometheusExporter): IHttpHandler; overload;
 function HttpRegistryMetricsTextCached(const ARegistry: TAsyncTlsPasPrometheusRegistry): string; overload;
 function HttpRegistryMetricsTextCached(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): string; overload;
+const CONTEXT_TRACEPARENT = 'tlspas.traceparent';
+function HttpParseTraceParent(const S: string; out Ctx: TTlsPasTraceContext): Boolean;
+function HttpFormatTraceParent(const Ctx: TTlsPasTraceContext): string;
+function HttpTraceParentMiddleware(const ATracer: ITlsPasTracer): IHttpMiddleware; overload;
+function HttpTraceParentMiddleware: IHttpMiddleware; overload;
+function HttpTraceLogLine(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer): string;
 
 implementation
 
@@ -245,6 +251,53 @@ begin
     AW.WriteHeader(HTTP_STATUS_OK);
     if Length(S) > 0 then AW.Write(S[1], Length(S));
   end);
+end;
+
+function HttpParseTraceParent(const S: string; out Ctx: TTlsPasTraceContext): Boolean;
+begin Result := TlsPasParseTraceParent(S, Ctx); end;
+
+function HttpFormatTraceParent(const Ctx: TTlsPasTraceContext): string;
+begin Result := TlsPasFormatTraceParent(Ctx); end;
+
+function HttpTraceParentMiddleware(const ATracer: ITlsPasTracer): IHttpMiddleware;
+begin
+  Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+  begin
+    Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var H, OutH: string; Ctx: TTlsPasTraceContext; LCtx: IHttpContext; Ev: TTlsPasTraceEvent;
+    begin
+      H := '';
+      if (AReq <> nil) and (AReq.Headers <> nil) then H := AReq.Headers.Get('traceparent');
+      if not TlsPasParseTraceParent(H, Ctx) then Ctx := TlsPasGenerateTraceContext(False);
+      LCtx := HttpContextOf(AReq);
+      if LCtx <> nil then HttpContextSetString(LCtx, CONTEXT_TRACEPARENT, TlsPasFormatTraceParent(Ctx));
+      OutH := TlsPasFormatTraceParent(Ctx);
+      if OutH <> '' then AW.GetHeaders.SetHeader('traceparent', OutH);
+      if ATracer <> nil then
+      begin
+        Ev := Default(TTlsPasTraceEvent);
+        Ev.Kind := tekEarlyDataDecide; Ev.TimestampMs := 0;
+        Ev.Trace := Ctx; Ev.Healthy := True;
+        ATracer.Trace(Ev);
+      end;
+      ANext.ServeHTTP(AReq, AW);
+    end);
+  end);
+end;
+
+function HttpTraceParentMiddleware: IHttpMiddleware;
+begin Result := HttpTraceParentMiddleware(nil); end;
+
+function HttpTraceLogLine(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer): string;
+var Tp: string; Ctx: TTlsPasTraceContext; LCtx: IHttpContext; Samp: string;
+begin
+  Tp := ''; LCtx := HttpContextOf(AReq);
+  if LCtx <> nil then Tp := HttpContextGetString(LCtx, CONTEXT_TRACEPARENT);
+  if (Tp = '') and (AReq <> nil) and (AReq.Headers <> nil) then Tp := AReq.Headers.Get('traceparent');
+  Samp := '0';
+  if TlsPasParseTraceParent(Tp, Ctx) and Ctx.Sampled then Samp := '1';
+  if ATracer <> nil then Samp := Samp + Format('/%d/%d', [ATracer.SampleCount, ATracer.TotalCount]);
+  Result := Format('trace=%s sampled=%s %s', [Tp, Samp, HttpAdaptiveEarlyDataLogLine(AReq, AObserver)]);
 end;
 
 function AdaptiveEarlyDataMiddleware(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpMiddleware;

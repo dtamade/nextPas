@@ -503,6 +503,24 @@ begin
   end;
 end;
 
+var GTraceCtx: TTlsPasTraceContext; GTraceTracer: ITlsPasTracer; GTraceMwHandler: IHttpHandler; GTraceReq: IHttpRequest;
+
+procedure BenchTraceParse(aIters: Int64);
+var I: Int64; Ctx: TTlsPasTraceContext; LOk: Boolean;
+begin for I := 1 to aIters do LOk := TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx); end;
+
+procedure BenchTraceFormat(aIters: Int64);
+var I: Int64; S: string;
+begin for I := 1 to aIters do S := TlsPasFormatTraceParent(GTraceCtx); end;
+
+procedure BenchTraceShouldSample(aIters: Int64);
+var I: Int64; L: Boolean;
+begin for I := 1 to aIters do L := GTraceTracer.ShouldSample(GTraceCtx); end;
+
+procedure BenchTraceMiddleware(aIters: Int64);
+var I: Int64;
+begin for I := 1 to aIters do GTraceMwHandler.ServeHTTP(GTraceReq, TCaptureWriterBenchHack.Get); end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -614,6 +632,11 @@ begin
   GClientEarlyResp425 := NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0 := NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0.Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
+  GTraceCtx := TlsPasGenerateTraceContext(False);
+  GTraceTracer := TAsyncTlsPasSamplingTracer.Create(0.01) as ITlsPasTracer;
+  GTraceReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  GTraceReq.Headers.SetHeader('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
+  GTraceMwHandler := HttpTraceParentMiddleware(GTraceTracer).Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
 end;
 
 var
@@ -674,6 +697,10 @@ begin
     .AddLoop('RegistryCached hit', @BenchRegistryCachedHit)
     .AddLoop('RegistryCached miss', @BenchRegistryCachedMiss)
     .AddLoop('MetricsHandler', @BenchMetricsHandler)
+    .AddLoop('Trace Parse', @BenchTraceParse)
+    .AddLoop('Trace Format', @BenchTraceFormat)
+    .AddLoop('Trace ShouldSample', @BenchTraceShouldSample)
+    .AddLoop('Trace Middleware', @BenchTraceMiddleware)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
