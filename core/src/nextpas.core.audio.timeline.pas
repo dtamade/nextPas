@@ -23,6 +23,8 @@ type
     FLoop: Boolean;
     FLock: TCriticalSection;
     FViolations: Int64;
+    FScratch: array of TTimelineTrack;
+    FScratchMix: TAudioBuffer;
     function FindTrack(ATrack: TTimelineTrackId): Integer;
     function FindClip(var ATrack: TTimelineTrack; AClip: TTimelineClipId): Integer;
     function CalcDuration: UInt64;
@@ -173,7 +175,7 @@ function TTimelineImpl.SeekTo(AFrame: UInt64): Boolean; begin FLock.Enter; try F
 
 function TTimelineImpl.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  Needed, i, j, ch, srcOff, dstOff, copyFrames: Integer;
+  Needed, i, j, ch, srcOff, dstOff, copyFrames, SnapCount: Integer;
   MixPtr: PSingle;
   HasSolo: Boolean;
   TrackGain, ClipGain, Gain: Single;
@@ -181,7 +183,6 @@ var
   Lgain, Rgain: Single;
   Clip: TTimelineClip;
   SrcPtr: PSingle;
-  SnapTracks: array of TTimelineTrack;
   SnapPos: UInt64;
   SnapLoop: Boolean;
   SnapDur: UInt64;
@@ -198,22 +199,23 @@ begin
     SnapLoop:=FLoop;
     SnapDur:=CalcDuration;
     HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
-    SetLength(SnapTracks, 0);
+    if Length(FScratch) < Length(FTracks) then SetLength(FScratch, Length(FTracks));
+    SnapCount:=0;
     for i:=0 to High(FTracks) do if FTracks[i].Alive then
     begin
       if FTracks[i].Muted then Continue;
       if HasSolo and not FTracks[i].Solo then Continue;
-      SetLength(SnapTracks, Length(SnapTracks)+1);
-      SnapTracks[High(SnapTracks)] := FTracks[i];
+      FScratch[SnapCount] := FTracks[i];
+      Inc(SnapCount);
     end;
   finally FLock.Leave; end;
-  for i:=0 to High(SnapTracks) do
+  for i:=0 to SnapCount-1 do
   begin
-    TrackGain:=SnapTracks[i].Gain;
-    TrackPan:=SnapTracks[i].Pan;
-    for j:=0 to High(SnapTracks[i].Clips) do
+    TrackGain:=FScratch[i].Gain;
+    TrackPan:=FScratch[i].Pan;
+    for j:=0 to High(FScratch[i].Clips) do
     begin
-      Clip:=SnapTracks[i].Clips[j];
+      Clip:=FScratch[i].Clips[j];
       if not Clip.Alive then Continue;
       if (Clip.StartFrame + UInt64(Clip.Buffer.FrameCount) <= SnapPos) then Continue;
       if (Clip.StartFrame >= SnapPos + UInt64(AFrames)) then Continue;

@@ -41,6 +41,10 @@ type
     FVolume: Single;
     FUnderruns: Int64;
     FViolations: Int64;
+    FScratchNodes: array of TGraphNode;
+    FScratchProcs: array of TProcessorSlot;
+    FScratchTmp: TAudioBuffer;
+    FScratchOut: TAudioBuffer;
     function FindNode(AId: Integer): Integer;
     function FindProcessor(AId: Integer): Integer;
   public
@@ -243,14 +247,11 @@ end;
 
 function TAudioGraph.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  Needed, I, J: Integer;
-  NodesSnap: array of TGraphNode;
-  ProcsSnap: array of TProcessorSlot;
-  Tmp: TAudioBuffer;
+  Needed, I, J, NCount, PCount: Integer;
   MixPtr, TmpPtr: PSingle;
   Gain: Single;
   HasData: Boolean;
-  OutBuf, SwapBuf: TAudioBuffer;
+  SwapBuf: TAudioBuffer;
 begin
   if AFrames <= 0 then Exit(0);
   Needed := AFrames * FFormat.BlockAlign;
@@ -263,15 +264,17 @@ begin
   end;
   FLock.Enter;
   try
-    SetLength(NodesSnap, 0);
+    if Length(FScratchNodes) < Length(FNodes) then SetLength(FScratchNodes, Length(FNodes));
+    NCount := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then
-    begin SetLength(NodesSnap, Length(NodesSnap)+1); NodesSnap[High(NodesSnap)] := FNodes[I]; end;
-    SetLength(ProcsSnap, 0);
+    begin FScratchNodes[NCount] := FNodes[I]; Inc(NCount); end;
+    if Length(FScratchProcs) < Length(FProcessors) then SetLength(FScratchProcs, Length(FProcessors));
+    PCount := 0;
     for I := 0 to High(FProcessors) do if FProcessors[I].Alive then
-    begin SetLength(ProcsSnap, Length(ProcsSnap)+1); ProcsSnap[High(ProcsSnap)] := FProcessors[I]; end;
+    begin FScratchProcs[PCount] := FProcessors[I]; Inc(PCount); end;
   finally FLock.Leave; end;
 
-  if Length(NodesSnap) = 0 then
+  if NCount = 0 then
   begin
     FillChar(ABuffer.Data[0], Needed, 0);
     ABuffer.FrameCount := AFrames;
@@ -282,14 +285,14 @@ begin
   FillChar(ABuffer.Data[0], Needed, 0);
   MixPtr := PSingle(@ABuffer.Data[0]);
   HasData := False;
-  SetLength(Tmp.Data, Needed);
-  Tmp.Format := FFormat;
-  Tmp.FrameCount := AFrames;
-  for I := 0 to High(NodesSnap) do
+  if Length(FScratchTmp.Data) < Needed then SetLength(FScratchTmp.Data, Needed);
+  FScratchTmp.Format := FFormat;
+  FScratchTmp.FrameCount := AFrames;
+  for I := 0 to NCount-1 do
   begin
-    Gain := NodesSnap[I].Gain * FVolume;
+    Gain := FScratchNodes[I].Gain * FVolume;
     try
-      J := NodesSnap[I].Source.FillRealtime(Tmp, AFrames);
+      J := FScratchNodes[I].Source.FillRealtime(FScratchTmp, AFrames);
     except
       InterlockedExchangeAdd64(FViolations, 1);
       Continue;
@@ -298,7 +301,7 @@ begin
     if J <> AFrames then
       InterlockedExchangeAdd64(FUnderruns, 1);
     HasData := True;
-    TmpPtr := PSingle(@Tmp.Data[0]);
+    TmpPtr := PSingle(@FScratchTmp.Data[0]);
     if Gain = 1.0 then
       for J := 0 to AFrames * FFormat.Channels - 1 do
         MixPtr[J] := MixPtr[J] + TmpPtr[J]
@@ -320,29 +323,29 @@ begin
     else if MixPtr[I] < -1.0 then MixPtr[I] := -1.0;
   end;
 
-  if Length(ProcsSnap) > 0 then
+  if PCount > 0 then
   begin
-    OutBuf.Format := FFormat;
-    OutBuf.FrameCount := AFrames;
-    SetLength(OutBuf.Data, Needed);
-    Move(ABuffer.Data[0], OutBuf.Data[0], Needed);
-    for I := 0 to High(ProcsSnap) do
+    if Length(FScratchOut.Data) < Needed then SetLength(FScratchOut.Data, Needed);
+    FScratchOut.Format := FFormat;
+    FScratchOut.FrameCount := AFrames;
+    Move(ABuffer.Data[0], FScratchOut.Data[0], Needed);
+    for I := 0 to PCount-1 do
     begin
       try
-        ProcsSnap[I].Processor.Process(OutBuf, Tmp);
-        SwapBuf := OutBuf;
-        OutBuf := Tmp;
-        Tmp := SwapBuf;
+        FScratchProcs[I].Processor.Process(FScratchOut, FScratchTmp);
+        SwapBuf := FScratchOut;
+        FScratchOut := FScratchTmp;
+        FScratchTmp := SwapBuf;
       except
         InterlockedExchangeAdd64(FViolations, 1);
       end;
     end;
-    if Length(OutBuf.Data) >= Needed then
-      Move(OutBuf.Data[0], ABuffer.Data[0], Needed)
-    else if Length(OutBuf.Data) > 0 then
+    if Length(FScratchOut.Data) >= Needed then
+      Move(FScratchOut.Data[0], ABuffer.Data[0], Needed)
+    else if Length(FScratchOut.Data) > 0 then
     begin
       FillChar(ABuffer.Data[0], Needed, 0);
-      Move(OutBuf.Data[0], ABuffer.Data[0], Min(Needed, Length(OutBuf.Data)));
+      Move(FScratchOut.Data[0], ABuffer.Data[0], Min(Needed, Length(FScratchOut.Data)));
     end;
   end;
 

@@ -11,6 +11,7 @@ FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)
 build:
 	mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
+	if [ -f mini.mp3 ]; then cp mini.mp3 $(BUILD_DIR)/mini.mp3; fi
 
 run: build
 	$(BUILD_DIR)/$(PROGRAM)

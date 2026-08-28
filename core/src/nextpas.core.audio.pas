@@ -33,7 +33,9 @@ uses
   nextpas.core.audio.timeline,
   nextpas.core.audio.game,
   nextpas.core.audio.graph,
-  nextpas.core.audio.player;
+  nextpas.core.audio.player,
+  nextpas.core.audio.pcm_wav,
+  nextpas.core.audio.simd;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -76,6 +78,8 @@ type
   TAudioDeviceInfoArray = nextpas.core.audio.device.intf.TAudioDeviceInfoArray;
   IAudioDevice = nextpas.core.audio.device.intf.IAudioDevice;
   IAudioDeviceProvider = nextpas.core.audio.device.intf.IAudioDeviceProvider;
+
+  TPcmWavData = nextpas.core.audio.pcm_wav.TPcmWavData;
 
   TGameSfxId = nextpas.core.audio.game.intf.TGameSfxId;
   TGameVoiceId = nextpas.core.audio.game.intf.TGameVoiceId;
@@ -161,6 +165,12 @@ function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const
 function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline; inline;
+
+function TryParsePcmWav(const AStream: IStream; out AData: TPcmWavData): Boolean; inline;
+function TryLoadPcmWav(const AFilePath: string; out AData: TPcmWavData): Boolean; inline;
+function AudioUseNeon: Boolean; inline;
+function AudioUseAVX2: Boolean; inline;
+function AudioSimdBackendName: string; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -411,6 +421,21 @@ begin Result := nextpas.core.audio.game.CreateGameAudioForFormat(AProvider, AFor
 
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
+
+function TryParsePcmWav(const AStream: IStream; out AData: TPcmWavData): Boolean;
+begin Result := nextpas.core.audio.pcm_wav.TryParsePcmWav(AStream, AData); end;
+
+function TryLoadPcmWav(const AFilePath: string; out AData: TPcmWavData): Boolean;
+begin Result := nextpas.core.audio.pcm_wav.TryLoadPcmWav(AFilePath, AData); end;
+
+function AudioUseNeon: Boolean;
+begin Result := nextpas.core.audio.simd.AudioUseNeon; end;
+
+function AudioUseAVX2: Boolean;
+begin Result := nextpas.core.audio.simd.AudioUseAVX2; end;
+
+function AudioSimdBackendName: string;
+begin Result := nextpas.core.audio.simd.AudioSimdBackendName; end;
 
 procedure AudioRegisterDecoderPlaceholder;
 begin

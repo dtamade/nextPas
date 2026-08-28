@@ -6,6 +6,7 @@ program bench_mp3;
 }
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
+  SysUtils,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.base,
@@ -26,21 +27,54 @@ var
   S: IStream;
   LAvail: Int64;
   P: string;
+  Candidates: array[0..2] of string;
+  Idx: Integer;
+  Dec: IAudioDecoder;
+  Buf: TAudioBuffer;
+  TestOk: Boolean;
 begin
   GHasData := False;
-  // try music888 fixtures
-  P := '/home/dtamade/projects/music888/tests/fixtures/tone_stereo_16.mp3';
-  if FileExists(P) then
+  Candidates[0] := '/home/dtamade/projects/music888/tests/fixtures/tone_stereo_16.mp3';
+  Candidates[1] := '/home/dtamade/projects/nextPas/.worktrees/core-audio-flac/core/benchmarks/nextpas.core.audio/bench_mp3/mini.mp3';
+  Candidates[2] := ExtractFilePath(ParamStr(0)) + 'mini.mp3';
+  for Idx := 0 to High(Candidates) do
   begin
-    S := nextpas.core.fs.Open(P, [fmRead]);
-    LAvail := S.Size;
-    SetLength(GData, LAvail);
-    if LAvail > 0 then S.Read(GData[0], LongInt(LAvail));
-    GBytes := LAvail;
-    GHasData := LAvail > 0;
-    Exit;
+    P := Candidates[Idx];
+    if FileExists(P) then
+    begin
+      try
+        S := nextpas.core.fs.Open(P, [fmRead]);
+        LAvail := S.Size;
+        SetLength(GData, LAvail);
+        if LAvail > 0 then S.Read(GData[0], LongInt(LAvail));
+        GBytes := LAvail;
+        if LAvail = 0 then Continue;
+        // 冒烟验证：有效 mp3 必须能解出一帧，否则视为 fixture 异常，跳过 bench
+        TestOk := False;
+        try
+          S := BytesStream(0);
+          S.Write(GData[0], Length(GData));
+          S.Position := 0;
+          Dec := CreateMp3Decoder;
+          Buf := Dec.DecodeWhole(S);
+          TestOk := Buf.FrameCount > 0;
+        except
+          TestOk := False;
+        end;
+        if not TestOk then
+        begin
+          WriteLn('bench_mp3: fixture decode failed (', P, '), skip');
+          SetLength(GData, 0);
+          GHasData := False;
+          Exit;
+        end;
+        GHasData := True;
+        Exit;
+      except
+        Continue;
+      end;
+    end;
   end;
-  // fallback: empty will be skipped in bench
   SetLength(GData, 0);
 end;
 
