@@ -108,6 +108,7 @@ type
     function FindByPrefix(const APrefix: string): Integer;
     function FindBySuffix(const ASuffix: string): Integer;
     function EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
+    function FindByGlob(const APattern: string): Integer;
     {** 提取文件条目内容并校验 CRC；目录/空文件返回 nil；
         AIndex 越界抛参数错误。重复提取同一 solid 文件夹走缓存 *}
     function Extract(AIndex: Integer): TBytes;
