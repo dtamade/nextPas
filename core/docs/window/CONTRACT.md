@@ -4,8 +4,8 @@
 **层级**：L2 家族（依赖 L0-L1：base/errors/platform.dl 缝；被 L3 的
 `gpu` / `directui` / `webview` 与外部 `game888` 复用）
 **Owner**：core-window lane
-**最后更新**：2026-08-29（3.0-input：11 后端×4件套 + 12 事件 + QtIsLoaded inline + 5× 365µs/24.3ns 4.1% 方差，13 门禁全绿）
-**版本**：3.0-input（11-backend 完全体：`wkGtk2/wkGtk3/wkGtk4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件；11×4 `base←ffi←loader←impl` 严格、共享 `gtk.impl.inc`、零 `PAnsiChar(AnsiString)`；`TWindowEvent` 新增 `KeyCode/Modifiers/Button`；本文件冻结单元布局、类型/接口签名、线程模型、不变量、错误族、Deferred 与门禁。）
+**最后更新**：2026-08-29（3.6：11 后端×4件套 + 12 事件 + QtIsLoaded inline + 5× 365µs/24.3ns 4.1% 方差 + fake 16→20 全矩阵 + bench 可复现 + shim removal 4.0，13 门禁全绿）
+**版本**：3.6（11-backend 完全体：`wkGtk2/wkGtk3/wkGtk4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件；11×4 `base←ffi←loader←impl` 严格、共享 `gtk.impl.inc`、零 `PAnsiChar(AnsiString)` Via `text.ansi`；`TWindowEvent` `KeyCode/Modifiers/Button`；legacy `window.gtk` shim 冻结 8 inline forward removal 4.0；本文件冻结单元布局、类型/接口签名、线程模型、不变量、错误族、Deferred 与门禁。）
 **对标基准**: Rust `winit` + `tao`（窗口壳最小集）/ GLFW / SDL2 Window /
 Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 

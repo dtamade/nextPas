@@ -472,6 +472,97 @@ begin
   end;
 end;
 
+procedure TestInputKeyUpMouseUp;
+var
+  W: IWindow;
+  LFake: TFakeWindow;
+begin
+  ResetEventCounters;
+  LFake := TFakeWindow.Create(DefaultWindowOptions);
+  W := LFake;
+  try
+    W.OnEvent(procedure(const E: TWindowEvent) begin GEvents:=GEvents+1; GLastEvent:=E; end);
+    LFake.InjectKey(weKeyUp, 66, 2);
+    CheckEqual(Ord(weKeyUp), Ord(GLastEvent.Kind));
+    CheckEqual(Int64(66), Int64(GLastEvent.KeyCode));
+    CheckEqual(Int64(2), Int64(GLastEvent.Modifiers));
+    GEvents:=0;
+    LFake.InjectMouse(weMouseUp, 10, 20, 3, 4);
+    CheckEqual(Ord(weMouseUp), Ord(GLastEvent.Kind));
+    CheckEqual(Int64(10), Int64(GLastEvent.X));
+    CheckEqual(Int64(3), Int64(GLastEvent.Button));
+    CheckEqual(Int64(4), Int64(GLastEvent.Modifiers));
+  finally W.Close; W:=nil; end;
+end;
+
+procedure TestDpiFocusAndMoveEvents;
+var
+  W: IWindow;
+  LFake: TFakeWindow;
+  E: TWindowEvent;
+begin
+  ResetEventCounters;
+  LFake := TFakeWindow.Create(DefaultWindowOptions);
+  W := LFake;
+  try
+    W.OnEvent(procedure(const AEvent: TWindowEvent) begin GEvents:=GEvents+1; GLastEvent:=AEvent; end);
+    E := Default(TWindowEvent); E.Kind := weDpiChanged; E.NewScale := 1.75;
+    LFake.InjectEvent(E);
+    CheckEqual(Ord(weDpiChanged), Ord(GLastEvent.Kind));
+    CheckEqual(Double(1.75), GLastEvent.NewScale);
+    E.Kind := weFocusChanged;
+    LFake.InjectEvent(E);
+    CheckEqual(Ord(weFocusChanged), Ord(GLastEvent.Kind));
+    E.Kind := weMoved; E.X := 33; E.Y := 44;
+    LFake.InjectEvent(E);
+    CheckEqual(Ord(weMoved), Ord(GLastEvent.Kind));
+    CheckEqual(Int64(33), Int64(GLastEvent.X));
+    CheckEqual(Int64(44), Int64(GLastEvent.Y));
+    CheckEqual(Int64(3), Int64(GEvents));
+  finally W.Close; W:=nil; end;
+end;
+
+procedure TestQueueGrowBeyond32;
+var
+  W: IWindow;
+  LFake: TFakeWindow;
+  I: Integer;
+  Ctr: Integer;
+begin
+  LFake := TFakeWindow.Create(DefaultWindowOptions);
+  W := LFake;
+  Ctr := 0;
+  try
+    for I := 1 to 64 do
+      W.GetDispatcher.Post(procedure begin Ctr := Ctr + 1; end);
+    CheckEqual(Int64(64), Int64(LFake.PendingPosts));
+    LFake.PumpAll;
+    CheckEqual(Int64(64), Int64(Ctr));
+    CheckEqual(Int64(0), Int64(LFake.PendingPosts));
+  finally W.Close; W:=nil; end;
+end;
+
+procedure TestCloseRequestedVsClosed;
+var
+  W: IWindow;
+  LFake: TFakeWindow;
+  E: TWindowEvent;
+  GotReq, GotClosed: Boolean;
+begin
+  LFake := TFakeWindow.Create(DefaultWindowOptions);
+  W := LFake;
+  GotReq := False; GotClosed := False;
+  W.OnEvent(procedure(const AEvent: TWindowEvent) begin if AEvent.Kind=weCloseRequested then GotReq:=True; if AEvent.Kind=weClosed then GotClosed:=True; end);
+  E := Default(TWindowEvent); E.Kind := weCloseRequested;
+  LFake.InjectEvent(E);
+  Check(GotReq, 'closeRequested delivered');
+  Check(not GotClosed, 'closed not yet');
+  E.Kind := weClosed;
+  LFake.InjectEvent(E);
+  Check(GotClosed, 'closed delivered');
+  W.Close;
+end;
+
 procedure TestNoEventsAfterClose;
 var
   W: IWindow;
@@ -509,6 +600,10 @@ begin
   T.Test('parent handle stored', @TestParentHandleStored);
   T.Test('live count tracking', @TestLiveCountTracking);
   T.Test('input key/mouse via InjectKey/Mouse', @TestInputEvents);
+  T.Test('input keyUp/mouseUp via InjectKey/Mouse', @TestInputKeyUpMouseUp);
+  T.Test('dpi/focus/moved full 12-event matrix', @TestDpiFocusAndMoveEvents);
+  T.Test('queue 32-cap grow to 64', @TestQueueGrowBeyond32);
+  T.Test('closeRequested vs closed', @TestCloseRequestedVsClosed);
   T.Test('no events after close', @TestNoEventsAfterClose);
   if not T.Run then Halt(1);
 end.

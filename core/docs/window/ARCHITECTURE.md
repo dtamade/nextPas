@@ -1,8 +1,6 @@
-# nextpas.core.window 架构设计
-
-**状态**：3.0-input（与 [CONTRACT.md](CONTRACT.md) 3.0-input 同批，11-backend 完全体 + 12 事件 + 5× 365µs/24.3ns）
+**状态**：3.6（与 [CONTRACT.md](CONTRACT.md) 3.6 同批，11-backend 完全体 + 12 事件 + fake 20 全矩阵 + bench 可复现）
 **Owner**：core-window lane
-**最后更新**：2026-08-29（3.0-input：11×4 严格 + 12 事件 + LiveGtkSmart/QtIsLoaded inline + bench 5× 4.1% 方差，13 门禁全绿）
+**最后更新**：2026-08-29（3.6：11×4 严格 + 12 事件 + LiveGtkSmart/QtIsLoaded inline + bench 5× 4.1% 方差 + legacy `window.gtk` 8 inline removal 4.0，13 门禁全绿）
 **对标基准**: Rust `winit` / `tao` · GLFW / SDL2 Window · Flutter View /
 Android `Activity.getWindow()` / iOS `UIWindow`
 

@@ -1,9 +1,9 @@
 # nextpas.core.window
 
-**状态**: 3.0-input — 11 后端×4件套 + 12 事件 + 5× 365µs/24.3ns 4.1% 方差，13 门禁全绿，`BENCH.md` 冻结（2.0 基线不变）
+**状态**: 3.6 — 11 后端×4件套 + 12 事件 + 5× 365µs/24.3ns 4.1% 方差 + fake 16→20 全矩阵，13 门禁全绿，`BENCH.md` 3.6 可复现
 **层级**: L2 系统能力（依赖 L0-L1；被 L3 的 `webview` / `gpu` / `directui` / 外部 `game888` 复用）
 **Owner**: core-window lane
-**最后更新**: 2026-08-29（3.0-input：`wkGtk2/3/4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` 11 种 + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件 + LiveGtkSmart/QtIsLoaded inline，thin-wrapper 美学 + 零 `PAnsiChar(AnsiString)`）
+**最后更新**: 2026-08-29（3.6：`wkGtk2/3/4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` 11 种 + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件 + LiveGtkSmart/QtIsLoaded inline + legacy `window.gtk` shim 8 inline removal 4.0，thin-wrapper + 零 `PAnsiChar(AnsiString)` via `text.ansi`）
 **对标基准**: Rust `winit` + `tao` / `GLFW` / `SDL2 Window` / `Flutter View` / Android `Activity.getWindow()` / iOS `UIWindow`
 
 ---

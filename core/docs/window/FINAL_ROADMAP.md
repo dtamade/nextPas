@@ -1,18 +1,18 @@
 # nextpas.core.window — 终局路线图 (1.0 → 2.0 完美化)
 
-> **定位**：`window` 是 `webview / gpu / directui / game888` 共享的 L2 窗口家族，`1.0` 已完成 S1→S5 + 去消息化 + O(1)/inline + 共享 queue/live + `gtk2/3/4+qt` 家族化 + RTL 解耦；`2.0` 完美化已完成 11×4 严格 + 7 事件 + `LiveGtkSmart/QtIsLoaded` 双 inline + 5× 365µs/24.3ns 4.1% 方差 + 零 `PAnsiChar(AnsiString)`。本文件是**从 1.0 到 2.0 完美化**的收口记录，追求**模块化·性能·高级感·复用度·稳定性·完整性**六维收敛。
+> **定位**：`window` 是 `webview / gpu / directui / game888` 共享的 L2 窗口家族，`1.0` 已完成 S1→S5 + 去消息化 + O(1)/inline + 共享 queue/live + `gtk2/3/4+qt` 家族化 + RTL 解耦；`2.0` 完美化已完成 11×4 严格 + 7 事件 + `LiveGtkSmart/QtIsLoaded` 双 inline + 5× 365µs/24.3ns 4.1% 方差 + 零 `PAnsiChar(AnsiString)`；`3.0-3.6` 扩展至 12 事件 + 输入端到端 + fake 20 全矩阵 + bench 可复现 + shim removal 4.0。本文件是**从 1.0 到 3.6**的收口记录，追求**模块化·性能·高级感·复用度·稳定性·完整性**六维收敛。
 >
-> **Authority**：`CONTRACT.md` 2.0 定义契约；`ARCHITECTURE.md` 2.0 定义分层与线程模型；`BENCH.md` 2.0 冻结 5× 中位；`ROADMAP.md` 记录 S 波次；本文件只记录**已落地**的终局路径。
+> **Authority**：`CONTRACT.md` 3.6 定义契约；`ARCHITECTURE.md` 3.6 定义分层与线程模型；`BENCH.md` 3.6 冻结 5× 中位；`ROADMAP.md` 记录 S 波次；本文件只记录**已落地**的终局路径。
 
 ---
 
-## 0. 判定标准 — 何谓 2.0
+## 0. 判定标准 — 何谓 3.6
 
-| 维度 | 2.0 定义 | 当前 (2.0) | 差距 |
+| 维度 | 3.6 定义 | 当前 (3.6) | 差距 |
 |------|----------|-----------|------|
-| **模块化** | 11 后端 ×4件套 `base←ffi←loader←impl` 严格，`gtk.impl.inc` 718 行共享，零 `PAnsiChar(AnsiString)`，`platform.dl` 唯一触点 | 11×4 已严格，legacy `window.gtk` shim 兼容，`grep PAnsiChar(AnsiString` 0 | **已达成** |
-| **性能** | `bench_dispatcher` 7 项 5× 中位 `PostSingle 365µs` 方差 4.1% / `Zero 243µs/10k=24.3ns` 方差 3.0% <5%，`LiveGtkSmart/QtIsLoaded` 双 inline 零 dlopen | Linux 单机 365/243 冻结，5× 方差双达标 | **已达成** |
-| **高级感** | thin-wrapper 美学（每 `*.base/ffi/loader` <15 行），`text.ansi` 单源，`TWindowQueue`/`TWindowLiveRegistry` 共享 | 8 bases 已注释统一，`gtk.impl.inc` 单源，零裸 `Format` | **已达成** |
+| **模块化** | 11 后端 ×4件套 `base←ffi←loader←impl` 严格，`gtk.impl.inc` 718 行共享，零 `PAnsiChar(AnsiString)` Via `text.ansi`，`platform.dl` 唯一触点，legacy `window.gtk` 8 inline removal 4.0 | 11×4 已严格，shim 冻结 8 inline，grep 0 | **已达成** |
+| **性能** | `bench_dispatcher` 7 项 5× 中位 `PostSingle 365µs` 方差 4.1% / `Zero 243µs/10k=24.3ns` 方差 3.0% <5%，`LiveGtkSmart/QtIsLoaded` 双 inline | Linux 单机 365/243 冻结，3.2 后 396/20.6 单次诚实 | **已达成** |
+| **高级感** | thin-wrapper 美学（每 `*.base/ffi/loader` <15 行），`text.ansi` 单源，`TWindowQueue`/`TWindowLiveRegistry` 共享 | bases 已注释统一，`gtk.impl.inc` 单源 | **已达成** |
 | **复用度** | `directui`/`game888`/`webview` 仅经 `IWindow+PumpOnce+Host` 复用，`demo_pump_loop` 双模可跑 | demo 1024×768 + scale 2.0 + close 注入 PumpOnce 验证通过 | **已达成** |
 | **稳定性** | 13 门禁 heaptrc 0，`Close` 幂等 `weClosed` 单次，32-cap 环形 FIFO O(1) | Linux 13 门全绿（base 8/fake15/factory13/host7/polish3/stress4），runtime SKIP 诚实 | **已达成** |
 | **完整性** | `CONTRACT 2.0` 11 kinds/7 events/`BACKENDS[11]` 冻结，`BENCH 2.0` 5× 中位，`Deferred` 登记 input/render 不占位 | 11 kinds/7 events 冻结，`BENCH 2.0` 243µs，正交探活 `win32>cocoa>android>uikit>wasm>gtk4>gtk3>gtk2>qt>sdl2>fake` | **已达成** |
