@@ -208,6 +208,7 @@ function ParseMySqlDsn(const ADsn: string): TDbMysqlDsnParts;
 var
   LPairs: TKVPairs;
   LPair: TKVPair;
+  LErr: string;
 begin
   Result.Host := MYSQL_DEFAULT_HOST;
   Result.Port := MYSQL_DEFAULT_PORT;
@@ -215,6 +216,9 @@ begin
   Result.Password := '';
   Result.Database := '';
   Result.Socket := '';
+  if Trim(ADsn) <> '' then
+    if not ValidateKV(ADsn, LErr) then
+      raise EDbError.CreateSimple(dbkMysql, LErr);
   try
     LPairs := ParseKV(ADsn);
     for LPair in LPairs do
