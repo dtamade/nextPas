@@ -150,8 +150,7 @@ var
   CH, SR: LongInt;
   LOutPos, LTotalFrames: Integer;
   LFormat: TAudioFormat;
-  Tmp: array[0..4095] of Single;
-  N: Integer;
+  N, AvailFloats: Integer;
 begin
   Result := Default(TAudioBuffer);
   FTags := Default(TAudioTags);
@@ -185,7 +184,7 @@ begin
       // 为保持稳定性，此处不强行解析，仅保留透传，完整 MergeTags 由调用方按需触发
     end;
 
-    // 复用 FOut：首跑 ~176k*4 预分配，后续零分配（对标 FLAC/MP3 11/5 预分配）
+    // 复用 FOut：首跑 ~176k*4 预分配，后续零分配；直写消除 Tmp 二次拷贝
     if FOutCap < Length(AData) * 4 then
     begin
       FOutCap := Length(AData) * 4;
@@ -197,14 +196,15 @@ begin
     LTotalFrames := 0;
     while True do
     begin
-      N := stb_vorbis_get_samples_float_interleaved(V, CH, @Tmp[0], Length(Tmp));
-      if N <= 0 then Break;
-      if LOutPos + N * CH * 4 > FOutCap then
+      if FOutCap - LOutPos < 8192 then
       begin
-        while LOutPos + N * CH * 4 > FOutCap do FOutCap := FOutCap * 2;
+        FOutCap := FOutCap * 2;
+        if FOutCap > 1024*1024*32 then FOutCap := 1024*1024*32;
         SetLength(FOut, FOutCap);
       end;
-      Move(Tmp[0], FOut[LOutPos], N * CH * SizeOf(Single));
+      AvailFloats := (FOutCap - LOutPos) div SizeOf(Single);
+      N := stb_vorbis_get_samples_float_interleaved(V, CH, PSingle(@FOut[LOutPos]), AvailFloats);
+      if N <= 0 then Break;
       Inc(LOutPos, N * CH * SizeOf(Single));
       Inc(LTotalFrames, N);
     end;
