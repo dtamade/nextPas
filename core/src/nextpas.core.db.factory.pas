@@ -27,6 +27,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.text.utils,
   nextpas.core.text.conv,
   nextpas.core.db.base,
   nextpas.core.db.intf,
@@ -118,20 +119,8 @@ var
   GLock: ILock = nil;
 
 function NormalizeName(const AName: string): string;
-var
-  L, R, I: SizeInt;
 begin
-  L := 1;
-  R := Length(AName);
-  while (L <= R) and (AName[L] <= ' ') do Inc(L);
-  while (R >= L) and (AName[R] <= ' ') do Dec(R);
-  if L > R then Exit('');
-  SetLength(Result, R - L + 1);
-  for I := L to R do
-    if AName[I] in ['A'..'Z'] then
-      Result[I - L + 1] := Chr(Ord(AName[I]) + 32)
-    else
-      Result[I - L + 1] := AName[I];
+  Result := NormalizeLowerTrim(AName);
 end;
 
 function FindEntryLocked(const AName: string): Integer;
