@@ -151,14 +151,8 @@ uses
   nextpas.core.checksum.crc32,
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
-  nextpas.core.sevenz.limits;
-
-function IsAsciiStr(const S: string): Boolean; inline;
-var LI: Integer;
-begin
-  for LI:=1 to Length(S) do if Ord(S[LI]) > 127 then Exit(False);
-  Result := True;
-end;
+  nextpas.core.sevenz.limits,
+  nextpas.core.text.unicode.utils;
 
 function AsciiLowerStr(const S: string): string; inline;
 var LI: Integer;
@@ -789,7 +783,7 @@ begin
   SetLength(FLowerNames, Length(FEntries));
   for LI := 0 to High(FEntries) do
   begin
-    if IsAsciiStr(FEntries[LI].Name) then LLower := AsciiLowerStr(FEntries[LI].Name) else LLower := LowerCase(FEntries[LI].Name);
+    if IsAsciiString(FEntries[LI].Name) then LLower := AsciiLowerStr(FEntries[LI].Name) else LLower := LowerCase(FEntries[LI].Name);
     FLowerNames[LI] := LLower;
     if not FNameMapIgnoreCase.ContainsKey(LLower) then
       FNameMapIgnoreCase.Put(LLower, LI);
@@ -803,7 +797,7 @@ function TSevenZReaderImpl.LowerBoundPrefixIgnoreCase(const APrefix: string): In
 var LLo, LHi, LMid: Integer; LCmp: Integer; LLower: string;
 begin
   EnsureIgnoreCaseBuilt;
-  if IsAsciiStr(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
   LLo := 0; LHi := Length(FSortedIdxIgnoreCase);
   while LLo < LHi do
   begin
@@ -818,7 +812,7 @@ function TSevenZReaderImpl.LowerBoundSuffixIgnoreCase(const ASuffix: string): In
 var LLo, LHi, LMid: Integer; LCmp: Integer; LLower: string;
 begin
   EnsureIgnoreCaseBuilt;
-  if IsAsciiStr(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
   LLo := 0; LHi := Length(FSortedIdxRevIgnoreCase);
   while LLo < LHi do
   begin
@@ -963,7 +957,7 @@ begin
   EnsureIgnoreCaseBuilt;
   if FNameMapIgnoreCase<>nil then
   begin
-    if IsAsciiStr(AName) then LLower := AsciiLowerStr(AName) else LLower := LowerCase(AName);
+    if IsAsciiString(AName) then LLower := AsciiLowerStr(AName) else LLower := LowerCase(AName);
     if FNameMapIgnoreCase.TryGetValue(LLower, LIdx) then
       Exit(LIdx);
   end;
@@ -1305,7 +1299,7 @@ begin
   Result := nil;
   if APrefix='' then begin Result := GetEntries; Exit; end;
   if Length(FSortedIdxIgnoreCase)=0 then Exit;
-  if IsAsciiStr(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
   LCnt := 0;
   for LPos:=LStart to High(FSortedIdxIgnoreCase) do
@@ -1334,7 +1328,7 @@ begin
   Result := nil;
   if ASuffix='' then begin Result := GetEntries; Exit; end;
   if Length(FSortedIdxRevIgnoreCase)=0 then Exit;
-  if IsAsciiStr(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);
   LCnt := 0;
   for LPos:=LStart to High(FSortedIdxRevIgnoreCase) do
@@ -1363,7 +1357,7 @@ begin
   Result := -1;
   if APrefix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
   if Length(FSortedIdxIgnoreCase)=0 then Exit(-1);
-  if IsAsciiStr(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
   if LStart >= Length(FSortedIdxIgnoreCase) then Exit(-1);
   LIdx := FSortedIdxIgnoreCase[LStart];
@@ -1379,7 +1373,7 @@ begin
   Result := -1;
   if ASuffix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
   if Length(FSortedIdxRevIgnoreCase)=0 then Exit(-1);
-  if IsAsciiStr(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);
   if LStart >= Length(FSortedIdxRevIgnoreCase) then Exit(-1);
   LIdx := FSortedIdxRevIgnoreCase[LStart];
@@ -1391,8 +1385,8 @@ end;
 function MatchesGlobIgnoreCase(const AName, APattern: string): Boolean;
 var LLowerName, LLowerPat: string;
 begin
-  if IsAsciiStr(AName) then LLowerName := AsciiLowerStr(AName) else LLowerName := LowerCase(AName);
-  if IsAsciiStr(APattern) then LLowerPat := AsciiLowerStr(APattern) else LLowerPat := LowerCase(APattern);
+  if IsAsciiString(AName) then LLowerName := AsciiLowerStr(AName) else LLowerName := LowerCase(AName);
+  if IsAsciiString(APattern) then LLowerPat := AsciiLowerStr(APattern) else LLowerPat := LowerCase(APattern);
   Result := MatchesGlob(LLowerName, LLowerPat);
 end;
 
@@ -1430,8 +1424,8 @@ begin
     gkSuffix: Exit(FindBySuffixIgnoreCase(LSuffix));
     gkPrefixSuffix:
     begin
-      if IsAsciiStr(LPrefix) then LLowerPref := AsciiLowerStr(LPrefix) else LLowerPref := LowerCase(LPrefix);
-      if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
+      if IsAsciiString(LPrefix) then LLowerPref := AsciiLowerStr(LPrefix) else LLowerPref := LowerCase(LPrefix);
+      if IsAsciiString(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
       LPos := LowerBoundPrefixIgnoreCase(LPrefix);
       while LPos < Length(FSortedIdxIgnoreCase) do
       begin
@@ -1630,7 +1624,7 @@ begin
     Exit;
   end;
   if Length(FSortedIdxIgnoreCase) = 0 then Exit;
-  if IsAsciiStr(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
   LCnt := 0;
   for LPos := LStart to High(FSortedIdxIgnoreCase) do
@@ -1672,12 +1666,12 @@ begin
   EnsureIgnoreCaseBuilt;
   Result := nil;
   LNeed := Length(APrefix) + Length(ASuffix);
-  LIsAsciiSuff := IsAsciiStr(ASuffix);
+  LIsAsciiSuff := IsAsciiString(ASuffix);
   if LIsAsciiSuff then LLowerSuff := AsciiLowerStr(ASuffix) else LLowerSuff := LowerCase(ASuffix);
   LCnt := 0;
   for LI := 0 to High(AIndices) do
   begin
-    if LIsAsciiSuff and IsAsciiStr(FEntries[AIndices[LI]].Name) then
+    if LIsAsciiSuff and IsAsciiString(FEntries[AIndices[LI]].Name) then
     begin
       if SuffixMatchesIgnoreCaseAscii(FEntries[AIndices[LI]].Name, LLowerSuff, LNeed) then Inc(LCnt);
     end else
@@ -1692,7 +1686,7 @@ begin
   LIdx := 0;
   for LI := 0 to High(AIndices) do
   begin
-    if LIsAsciiSuff and IsAsciiStr(FEntries[AIndices[LI]].Name) then
+    if LIsAsciiSuff and IsAsciiString(FEntries[AIndices[LI]].Name) then
     begin
       if SuffixMatchesIgnoreCaseAscii(FEntries[AIndices[LI]].Name, LLowerSuff, LNeed) then begin Result[LIdx] := AIndices[LI]; Inc(LIdx); end;
     end else
@@ -1746,7 +1740,7 @@ begin
     Exit;
   end;
   if Length(FSortedIdxRevIgnoreCase) = 0 then Exit;
-  if IsAsciiStr(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);
   LCnt := 0;
   for LPos := LStart to High(FSortedIdxRevIgnoreCase) do
