@@ -3442,6 +3442,49 @@ begin
   finally RemoveAll(LRoot); end;
 end;
 
+procedure TestGlobClassifyUnified;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray; Ext: TSevenZExtractedArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('b.txt', BytesOf([$02]));
+  LW.AddFile('pre_mid_post.txt', BytesOf([$03]));
+  LW.AddFile('pre_aaa_post.txt', BytesOf([$04]));
+  LW.AddFile('docs/x.txt', BytesOf([$05]));
+  LW.AddFile('a.log', BytesOf([$06]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByGlob('');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'classify empty');
+  CheckEqual(Int64(-1), Int64(LR.FindByGlob('')), 'classify empty find');
+  Arr := LR.EntriesByGlob('*');
+  CheckEqual(Int64(6), Int64(Length(Arr)), 'classify star');
+  Arr := LR.EntriesByGlob('a.txt');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'classify exact');
+  CheckEqual('a.txt', Arr[0].Name, 'classify exact name');
+  Arr := LR.EntriesByGlob('docs/*');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'classify prefix');
+  Arr := LR.EntriesByGlob('*.txt');
+  CheckEqual(Int64(5), Int64(Length(Arr)), 'classify suffix txt');
+  Arr := LR.EntriesByGlob('pre_*_post.txt');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'classify pre*suffix');
+  Arr := LR.EntriesByGlob('pre*post*');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'complex multi-star 2');
+  Arr := LR.EntriesByGlob('?.txt');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'classify q txt 2');
+  Check(LR.FindByGlob('pre_*_post.txt') >=0, 'find classify p*s');
+  CheckEqual(Int64(-1), Int64(LR.FindByGlob('nope_*_zzz')), 'find miss p*s');
+  Ext := LR.ExtractByGlob('*.log');
+  CheckEqual(Int64(1), Int64(Length(Ext)), 'extract suffix via glob');
+  Ext := LR.ExtractByGlob('pre_*_post.txt');
+  CheckEqual(Int64(2), Int64(Length(Ext)), 'extract p*s 2');
+  Arr := LR.EntriesByGlobIgnoreCase('*.TXT');
+  CheckEqual(Int64(5), Int64(Length(Arr)), 'classify ignore suffix');
+  Arr := LR.EntriesByGlobIgnoreCase('PRE_*_POST.TXT');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'classify ignore p*s');
+  CheckEqual(Int64(-1), Int64(LR.FindByGlobIgnoreCase('')), 'ignore empty find');
+  Check(LR.FindByGlobIgnoreCase('PRE_*_POST.TXT') >=0, 'ignore find p*s');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3631,6 +3674,7 @@ begin
   T.Test('extract all grouped', @TestExtractAllGrouped);
   T.Test('ignore case full', @TestIgnoreCaseFull);
   T.Test('fs ignore case to fs', @TestFsIgnoreCaseToFs);
+  T.Test('glob classify unified', @TestGlobClassifyUnified);
 
   if not T.Run then Halt(1);
 end.

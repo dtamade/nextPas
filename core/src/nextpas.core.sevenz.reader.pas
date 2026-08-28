@@ -1207,58 +1207,44 @@ begin
   Result := True;
 end;
 
+type TGlobKind = (gkEmpty, gkStar, gkExact, gkPrefix, gkSuffix, gkPrefixSuffix, gkComplex);
+
+function ClassifyGlob(const APattern: string; out APrefix, ASuffix: string): TGlobKind; inline;
+var LStarCount, LI: Integer;
+begin
+  APrefix := ''; ASuffix := '';
+  if APattern = '' then Exit(gkEmpty);
+  if APattern = '*' then Exit(gkStar);
+  if Pos('?', APattern) > 0 then Exit(gkComplex);
+  LStarCount := 0;
+  for LI := 1 to Length(APattern) do if APattern[LI] = '*' then Inc(LStarCount);
+  if LStarCount = 0 then Exit(gkExact);
+  if LStarCount = 1 then
+  begin
+    if (APattern[Length(APattern)] = '*') and (APattern[1] <> '*') then
+    begin APrefix := Copy(APattern, 1, Length(APattern)-1); Exit(gkPrefix); end;
+    if (APattern[1] = '*') and (APattern[Length(APattern)] <> '*') then
+    begin ASuffix := Copy(APattern, 2, Length(APattern)-1); Exit(gkSuffix); end;
+    if TryParseGlobMid(APattern, APrefix, ASuffix) then Exit(gkPrefixSuffix);
+  end;
+  Result := gkComplex;
+end;
+
 function TSevenZReaderImpl.EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
-var LI, LCnt, LStarCount: Integer;
-    LHasQ: Boolean;
+var LI, LCnt: Integer;
     LPrefix, LSuffix: string;
     LIdx: Integer;
     LIdx2: TSevenZIndexArray;
 begin
   Result := nil;
-  if APattern='' then Exit;
-  if APattern='*' then
-  begin
-    Result := GetEntries;
-    Exit;
-  end;
-  LHasQ := Pos('?', APattern) > 0;
-  if not LHasQ then
-  begin
-    LStarCount := 0;
-    for LI:=1 to Length(APattern) do if APattern[LI]='*' then Inc(LStarCount);
-    if LStarCount=0 then
-    begin
-      LIdx := Find(APattern);
-      if LIdx>=0 then
-      begin
-        SetLength(Result,1);
-        Result[0] := FEntries[LIdx];
-      end;
-      Exit;
-    end;
-    if LStarCount=1 then
-    begin
-      if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') then
-      begin
-        LPrefix := Copy(APattern,1,Length(APattern)-1);
-        Result := EntriesByPrefix(LPrefix);
-        Exit;
-      end;
-      if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') then
-      begin
-        LSuffix := Copy(APattern,2,Length(APattern)-1);
-        Result := EntriesBySuffix(LSuffix);
-        Exit;
-      end;
-      if TryParseGlobMid(APattern, LPrefix, LSuffix) then
-      begin
-        LIdx2 := IndicesByPrefix(LPrefix);
-        LIdx2 := FilterIndicesBySuffix(LIdx2, LPrefix, LSuffix);
-        SetLength(Result, Length(LIdx2));
-        for LI:=0 to High(LIdx2) do Result[LI] := FEntries[LIdx2[LI]];
-        Exit;
-      end;
-    end;
+  case ClassifyGlob(APattern, LPrefix, LSuffix) of
+    gkEmpty: Exit;
+    gkStar: begin Result := GetEntries; Exit; end;
+    gkExact: begin LIdx := Find(APattern); if LIdx >= 0 then begin SetLength(Result,1); Result[0] := FEntries[LIdx]; end; Exit; end;
+    gkPrefix: begin Result := EntriesByPrefix(LPrefix); Exit; end;
+    gkSuffix: begin Result := EntriesBySuffix(LSuffix); Exit; end;
+    gkPrefixSuffix: begin LIdx2 := IndicesByPrefix(LPrefix); LIdx2 := FilterIndicesBySuffix(LIdx2, LPrefix, LSuffix); SetLength(Result, Length(LIdx2)); for LI:=0 to High(LIdx2) do Result[LI] := FEntries[LIdx2[LI]]; Exit; end;
+    gkComplex: ;
   end;
   LCnt := 0;
   for LI:=0 to High(FEntries) do
@@ -1274,27 +1260,17 @@ begin
 end;
 
 function TSevenZReaderImpl.FindByGlob(const APattern: string): Integer;
-var LI: Integer; LStarCount: Integer; LPrefix, LSuffix: string; LPos, LIdx: Integer;
+var LI: Integer; LPrefix, LSuffix: string; LPos, LIdx: Integer;
 begin
   Result := -1;
-  if APattern='' then Exit(-1);
-  if APattern='*' then
-  begin
-    if Length(FEntries)>0 then Exit(0) else Exit(-1);
-  end;
-  if Pos('?', APattern)=0 then
-  begin
-    if Pos('*', APattern)=0 then Exit(Find(APattern));
-    if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') and (Pos('*', Copy(APattern,1,Length(APattern)-1))=0) then
-      Exit(FindByPrefix(Copy(APattern,1,Length(APattern)-1)));
-    if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') and (Pos('*', Copy(APattern,2,Length(APattern)-1))=0) then
-      Exit(FindBySuffix(Copy(APattern,2,Length(APattern)-1)));
-    if (Pos('*', APattern) > 1) and (Pos('*', APattern) < Length(APattern)) and (Pos('*', Copy(APattern, Pos('*', APattern)+1, Length(APattern))) = 0) then
+  case ClassifyGlob(APattern, LPrefix, LSuffix) of
+    gkEmpty: Exit(-1);
+    gkStar: begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
+    gkExact: Exit(Find(APattern));
+    gkPrefix: Exit(FindByPrefix(LPrefix));
+    gkSuffix: Exit(FindBySuffix(LSuffix));
+    gkPrefixSuffix:
     begin
-      LI := Pos('*', APattern);
-      LStarCount := LI;
-      LPrefix := Copy(APattern,1,LStarCount-1);
-      LSuffix := Copy(APattern,LStarCount+1, Length(APattern)-LStarCount);
       LPos := LowerBoundPrefix(LPrefix);
       while LPos < Length(FSortedIdx) do
       begin
@@ -1307,6 +1283,7 @@ begin
       end;
       Exit(-1);
     end;
+    gkComplex: ;
   end;
   for LI:=0 to High(FEntries) do
     if MatchesGlob(FEntries[LI].Name, APattern) then Exit(LI);
@@ -1412,46 +1389,18 @@ begin
 end;
 
 function TSevenZReaderImpl.EntriesByGlobIgnoreCase(const APattern: string): TSevenZEntryInfoArray;
-var LI, LCnt, LStarCount: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIdx: Integer; LIdx2: TSevenZIndexArray;
+var LI, LCnt: Integer; LPrefix, LSuffix: string; LIdx: Integer; LIdx2: TSevenZIndexArray;
 begin
   EnsureIgnoreCaseBuilt;
   Result := nil;
-  if APattern='' then Exit;
-  if APattern='*' then begin Result := GetEntries; Exit; end;
-  LHasQ := Pos('?', APattern) > 0;
-  if not LHasQ then
-  begin
-    LStarCount := 0;
-    for LI:=1 to Length(APattern) do if APattern[LI]='*' then Inc(LStarCount);
-    if LStarCount=0 then
-    begin
-      LIdx := FindIgnoreCase(APattern);
-      if LIdx>=0 then begin SetLength(Result,1); Result[0] := FEntries[LIdx]; end;
-      Exit;
-    end;
-    if LStarCount=1 then
-    begin
-      if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') then
-      begin
-        LPrefix := Copy(APattern,1,Length(APattern)-1);
-        Result := EntriesByPrefixIgnoreCase(LPrefix);
-        Exit;
-      end;
-      if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') then
-      begin
-        LSuffix := Copy(APattern,2,Length(APattern)-1);
-        Result := EntriesBySuffixIgnoreCase(LSuffix);
-        Exit;
-      end;
-      if TryParseGlobMid(APattern, LPrefix, LSuffix) then
-      begin
-        LIdx2 := IndicesByPrefixIgnoreCase(LPrefix);
-        LIdx2 := FilterIndicesBySuffixIgnoreCase(LIdx2, LPrefix, LSuffix);
-        SetLength(Result, Length(LIdx2));
-        for LI:=0 to High(LIdx2) do Result[LI] := FEntries[LIdx2[LI]];
-        Exit;
-      end;
-    end;
+  case ClassifyGlob(APattern, LPrefix, LSuffix) of
+    gkEmpty: Exit;
+    gkStar: begin Result := GetEntries; Exit; end;
+    gkExact: begin LIdx := FindIgnoreCase(APattern); if LIdx >= 0 then begin SetLength(Result,1); Result[0] := FEntries[LIdx]; end; Exit; end;
+    gkPrefix: begin Result := EntriesByPrefixIgnoreCase(LPrefix); Exit; end;
+    gkSuffix: begin Result := EntriesBySuffixIgnoreCase(LSuffix); Exit; end;
+    gkPrefixSuffix: begin LIdx2 := IndicesByPrefixIgnoreCase(LPrefix); LIdx2 := FilterIndicesBySuffixIgnoreCase(LIdx2, LPrefix, LSuffix); SetLength(Result, Length(LIdx2)); for LI:=0 to High(LIdx2) do Result[LI] := FEntries[LIdx2[LI]]; Exit; end;
+    gkComplex: ;
   end;
   LCnt := 0;
   for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Inc(LCnt);
@@ -1461,25 +1410,18 @@ begin
 end;
 
 function TSevenZReaderImpl.FindByGlobIgnoreCase(const APattern: string): Integer;
-var LI, LStarCount, LPos, LIdx: Integer; LPrefix, LSuffix, LLowerPref, LLowerSuff, LEntryLower: string;
+var LI, LPos, LIdx: Integer; LPrefix, LSuffix, LLowerPref, LLowerSuff, LEntryLower: string;
 begin
   EnsureIgnoreCaseBuilt;
   Result := -1;
-  if APattern='' then Exit(-1);
-  if APattern='*' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
-  if Pos('?', APattern)=0 then
-  begin
-    if Pos('*', APattern)=0 then Exit(FindIgnoreCase(APattern));
-    if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') and (Pos('*', Copy(APattern,1,Length(APattern)-1))=0) then
-      Exit(FindByPrefixIgnoreCase(Copy(APattern,1,Length(APattern)-1)));
-    if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') and (Pos('*', Copy(APattern,2,Length(APattern)-1))=0) then
-      Exit(FindBySuffixIgnoreCase(Copy(APattern,2,Length(APattern)-1)));
-    if (Pos('*', APattern) > 1) and (Pos('*', APattern) < Length(APattern)) and (Pos('*', Copy(APattern, Pos('*', APattern)+1, Length(APattern))) = 0) then
+  case ClassifyGlob(APattern, LPrefix, LSuffix) of
+    gkEmpty: Exit(-1);
+    gkStar: begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
+    gkExact: Exit(FindIgnoreCase(APattern));
+    gkPrefix: Exit(FindByPrefixIgnoreCase(LPrefix));
+    gkSuffix: Exit(FindBySuffixIgnoreCase(LSuffix));
+    gkPrefixSuffix:
     begin
-      LI := Pos('*', APattern);
-      LStarCount := LI;
-      LPrefix := Copy(APattern,1,LStarCount-1);
-      LSuffix := Copy(APattern,LStarCount+1, Length(APattern)-LStarCount);
       if IsAsciiStr(LPrefix) then LLowerPref := AsciiLowerStr(LPrefix) else LLowerPref := LowerCase(LPrefix);
       if IsAsciiStr(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
       LPos := LowerBoundPrefixIgnoreCase(LPrefix);
@@ -1495,6 +1437,7 @@ begin
       end;
       Exit(-1);
     end;
+    gkComplex: ;
   end;
   for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Exit(LI);
   Result := -1;
@@ -1842,65 +1785,35 @@ begin
 end;
 
 function TSevenZReaderImpl.TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
-var LI, LCnt, LIdx: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
+var LI, LCnt, LIdx: Integer; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
 begin
   AExtracted := nil; AError := ''; Result := False;
   try
-    if APattern='' then
-    begin
-      Result := True;
-      Exit;
-    end;
-    if APattern='*' then
-    begin
-      SetLength(AExtracted, Length(FEntries));
-      for LI:=0 to High(FEntries) do
+    case ClassifyGlob(APattern, LPrefix, LSuffix) of
+      gkEmpty: begin Result := True; Exit; end;
+      gkStar:
       begin
-        AExtracted[LI].Info := FEntries[LI];
-        AExtracted[LI].Data := Extract(LI);
+        SetLength(AExtracted, Length(FEntries));
+        for LI:=0 to High(FEntries) do
+        begin AExtracted[LI].Info := FEntries[LI]; AExtracted[LI].Data := Extract(LI); end;
+        Result := True; Exit;
       end;
-      Result := True;
-      Exit;
-    end;
-    LHasQ := Pos('?', APattern) > 0;
-    if not LHasQ then
-    begin
-      LCnt := 0; for LI:=1 to Length(APattern) do if APattern[LI]='*' then Inc(LCnt);
-      if LCnt=0 then
+      gkExact:
       begin
         LIdx := Find(APattern);
-        if LIdx >= 0 then
-        begin
-          SetLength(AExtracted,1);
-          AExtracted[0].Info := FEntries[LIdx];
-          AExtracted[0].Data := Extract(LIdx);
-        end;
-        Result := True;
-        Exit;
+        if LIdx >= 0 then begin SetLength(AExtracted,1); AExtracted[0].Info := FEntries[LIdx]; AExtracted[0].Data := Extract(LIdx); end;
+        Result := True; Exit;
       end;
-      if LCnt=1 then
+      gkPrefix: begin AExtracted := ExtractByPrefix(LPrefix); Result := True; Exit; end;
+      gkSuffix: begin AExtracted := ExtractBySuffix(LSuffix); Result := True; Exit; end;
+      gkPrefixSuffix:
       begin
-        if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') then
-        begin
-          AExtracted := ExtractByPrefix(Copy(APattern,1,Length(APattern)-1));
-          Result := True;
-          Exit;
-        end;
-        if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') then
-        begin
-          AExtracted := ExtractBySuffix(Copy(APattern,2,Length(APattern)-1));
-          Result := True;
-          Exit;
-        end;
-        if TryParseGlobMid(APattern, LPrefix, LSuffix) then
-        begin
-          LIndices := IndicesByPrefix(LPrefix);
-          LIndices := FilterIndicesBySuffix(LIndices, LPrefix, LSuffix);
-          AExtracted := ExtractIndicesGrouped(LIndices);
-          Result := True;
-          Exit;
-        end;
+        LIndices := IndicesByPrefix(LPrefix);
+        LIndices := FilterIndicesBySuffix(LIndices, LPrefix, LSuffix);
+        AExtracted := ExtractIndicesGrouped(LIndices);
+        Result := True; Exit;
       end;
+      gkComplex: ;
     end;
     SetLength(AExtracted, 0);
     LCnt := 0;
@@ -1987,38 +1900,30 @@ begin
 end;
 
 function TSevenZReaderImpl.TryExtractByGlobIgnoreCaseWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
-var LI, LCnt, LIdx: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
+var LI, LCnt, LIdx: Integer; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
 begin
   EnsureIgnoreCaseBuilt;
   AExtracted := nil; AError := ''; Result := False;
   try
-    if APattern='' then begin Result := True; Exit; end;
-    if APattern='*' then begin AExtracted := ExtractAll; Result := True; Exit; end;
-    LHasQ := Pos('?', APattern) > 0;
-    if not LHasQ then
-    begin
-      LCnt := 0; for LI:=1 to Length(APattern) do if APattern[LI]='*' then Inc(LCnt);
-      if LCnt=0 then
+    case ClassifyGlob(APattern, LPrefix, LSuffix) of
+      gkEmpty: begin Result := True; Exit; end;
+      gkStar: begin AExtracted := ExtractAll; Result := True; Exit; end;
+      gkExact:
       begin
         LIdx := FindIgnoreCase(APattern);
-        if LIdx >= 0 then
-        begin SetLength(AExtracted,1); AExtracted[0].Info := FEntries[LIdx]; AExtracted[0].Data := Extract(LIdx); end;
+        if LIdx >= 0 then begin SetLength(AExtracted,1); AExtracted[0].Info := FEntries[LIdx]; AExtracted[0].Data := Extract(LIdx); end;
         Result := True; Exit;
       end;
-      if LCnt=1 then
+      gkPrefix: begin AExtracted := ExtractByPrefixIgnoreCase(LPrefix); Result := True; Exit; end;
+      gkSuffix: begin AExtracted := ExtractBySuffixIgnoreCase(LSuffix); Result := True; Exit; end;
+      gkPrefixSuffix:
       begin
-        if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') then
-        begin AExtracted := ExtractByPrefixIgnoreCase(Copy(APattern,1,Length(APattern)-1)); Result := True; Exit; end;
-        if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') then
-        begin AExtracted := ExtractBySuffixIgnoreCase(Copy(APattern,2,Length(APattern)-1)); Result := True; Exit; end;
-        if TryParseGlobMid(APattern, LPrefix, LSuffix) then
-        begin
-          LIndices := IndicesByPrefixIgnoreCase(LPrefix);
-          LIndices := FilterIndicesBySuffixIgnoreCase(LIndices, LPrefix, LSuffix);
-          AExtracted := ExtractIndicesGrouped(LIndices);
-          Result := True; Exit;
-        end;
+        LIndices := IndicesByPrefixIgnoreCase(LPrefix);
+        LIndices := FilterIndicesBySuffixIgnoreCase(LIndices, LPrefix, LSuffix);
+        AExtracted := ExtractIndicesGrouped(LIndices);
+        Result := True; Exit;
       end;
+      gkComplex: ;
     end;
     LCnt := 0;
     for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Inc(LCnt);
