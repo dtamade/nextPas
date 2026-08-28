@@ -51,6 +51,8 @@ type
 
 function SshAsyncOpenSftp(const ASession: ISshAsyncSession; ACallback: TProcSftpOpenAsync; AContext: Pointer = nil): Boolean;
 function SshAsyncOpenSftpEx(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer = nil): Boolean;
+function SshAsyncSftpViaJumpOn(const ALoop: TAsyncLoop; const AJumpSession: ISshAsyncSession; const ATargetOpts: TSshConnectOptions; ACallback: TProcSftpOpenAsync; AContext: Pointer = nil): Boolean;
+function SshAsyncSftpViaJump(const ALoop: TAsyncLoop; const AJumpOpts, ATargetOpts: TSshConnectOptions; ACallback: TProcSftpOpenAsync; AContext: Pointer = nil): Boolean;
 
 implementation
 
@@ -69,6 +71,7 @@ type
   private
     FLoop: TAsyncLoop;
     FTransport: TAsyncSshTransport;
+    FSession: ISshAsyncSession;
     FLocalId: UInt32;
     FRemoteId: UInt32;
     FInitWindow: UInt32;
@@ -120,7 +123,8 @@ type
     procedure OnSftpSent(AErr: ESSHError; AContext: Pointer);
     procedure FailPending(AErr: ESSHError);
   public
-    constructor Create(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer);
+    constructor Create(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer); overload;
+    constructor Create(const ALoop: TAsyncLoop; const ASession: ISshAsyncSession; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer); overload;
     destructor Destroy; override;
     procedure Start;
     procedure CloseChannel;
@@ -227,6 +231,25 @@ begin
   inherited Create;
   FLoop := ALoop;
   FTransport := ATransport;
+  FSession := nil;
+  FLocalId := UInt32(InterlockedIncrement(GNextSftpChannelId)-1);
+  FInitWindow := 2097152;
+  FMaxPacket := 32768;
+  FOurWindow := FInitWindow;
+  FPeerWindow := 0;
+  FState := asOpening;
+  FOpenCb := ACallback;
+  FOpenCtx := AContext;
+  if ATimeoutMs>0 then FDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs)) else FDeadline := TDeadline.Infinite;
+  FNextId := 1;
+end;
+
+constructor TAsyncSftpChannel.Create(const ALoop: TAsyncLoop; const ASession: ISshAsyncSession; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer);
+begin
+  inherited Create;
+  FLoop := ALoop;
+  FSession := ASession;
+  if ASession <> nil then FTransport := ASession.Transport else FTransport := nil;
   FLocalId := UInt32(InterlockedIncrement(GNextSftpChannelId)-1);
   FInitWindow := 2097152;
   FMaxPacket := 32768;
@@ -243,6 +266,7 @@ destructor TAsyncSftpChannel.Destroy;
 begin
   if FTimer.IsValid then try FLoop.CancelTimer(FTimer); except end;
   if FOpTimer.IsValid then try FLoop.CancelTimer(FOpTimer); except end;
+  FSession := nil;
   inherited;
 end;
 
@@ -289,8 +313,11 @@ begin
   SendOpen;
 end;
 
+procedure SftpChannelRetryOpen(AContext: Pointer);
+begin TAsyncSftpChannel(AContext).SendOpen; end;
+
 procedure TAsyncSftpChannel.SendOpen;
-var LW: TsshWriter;
+var LW: TsshWriter; Ok: Boolean;
 begin
   LW := TsshWriter.Create(64);
   try
@@ -300,7 +327,9 @@ begin
     LW.PutUInt32(FInitWindow);
     LW.PutUInt32(FMaxPacket);
     if not FTransport.AsyncSendPacket(LW.ToBytes, @Runner_SftpOnOpenSent, Self) then
-      Fail(ESSHError.Create(sekIO,'sftp async: open send failed'));
+    begin
+      try FLoop.ScheduleAt(TDeadline.After(TDuration.FromMilliseconds(5)), @SftpChannelRetryOpen, Self); except Fail(ESSHError.Create(sekIO,'sftp async: open send failed')) end;
+    end;
   finally LW.Free; end;
 end;
 
@@ -1016,6 +1045,7 @@ type
   PSftpOpenPost = ^TSftpOpenPost;
   TSftpOpenPost = record
     Loop: TAsyncLoop;
+    Session: ISshAsyncSession;
     Transport: TAsyncSshTransport;
     TimeoutMs: Integer;
     Callback: TProcSftpOpenAsync;
@@ -1029,10 +1059,23 @@ procedure SftpOpenPostCb(AContext: Pointer);
 var P: PSftpOpenPost; Ch: TAsyncSftpChannel;
 begin
   P:=PSftpOpenPost(AContext);
+  if P^.Transport = nil then
+  begin
+    if P^.Session <> nil then P^.Transport := P^.Session.Transport;
+  end;
+  if P^.Transport.IsWriteBusy then
+  begin
+    try P^.Loop.ScheduleAt(TDeadline.After(TDuration.FromMilliseconds(5)), @SftpOpenPostCb, P); except begin P^.Session := nil; Dispose(P); end; end;
+    Exit;
+  end;
   try
-    Ch:=TAsyncSftpChannel.Create(P^.Loop, P^.Transport, P^.TimeoutMs, P^.Callback, P^.Context);
+    if P^.Session <> nil then
+      Ch:=TAsyncSftpChannel.Create(P^.Loop, P^.Session, P^.TimeoutMs, P^.Callback, P^.Context)
+    else
+      Ch:=TAsyncSftpChannel.Create(P^.Loop, P^.Transport, P^.TimeoutMs, P^.Callback, P^.Context);
     Ch.Start;
   finally
+    P^.Session := nil;
     Dispose(P);
   end;
 end;
@@ -1043,18 +1086,32 @@ begin
   P:=PSftpOpenPost(AContext);
   if Assigned(P^.Callback) then
     P^.Callback(nil, ESSHError.Create(sekIO,'sftp async: loop closed before open'), P^.Context);
+  P^.Session := nil;
   Dispose(P);
 end;
 
 function SshAsyncOpenSftp(const ASession: ISshAsyncSession; ACallback: TProcSftpOpenAsync; AContext: Pointer): Boolean;
-var Loop: TAsyncLoop; Trans: TAsyncSshTransport;
+var P: PSftpOpenPost;
 begin
   Result:=False;
   if (ASession=nil) or not Assigned(ACallback) then Exit;
-  Loop:=ASession.Loop;
-  Trans:=ASession.Transport;
-  if (Loop=nil) or (Trans=nil) then begin ACallback(nil, ESSHError.Create(sekIO,'sftp async: session not connected'), AContext); Exit(False); end;
-  Result:=SshAsyncOpenSftpEx(Loop, Trans, 5000, ACallback, AContext);
+  if (ASession.Loop=nil) or (ASession.Transport=nil) then begin ACallback(nil, ESSHError.Create(sekIO,'sftp async: session not connected'), AContext); Exit(False); end;
+  New(P);
+  P^.Loop:=ASession.Loop;
+  P^.Session:=ASession;
+  P^.Transport:=ASession.Transport;
+  P^.TimeoutMs:=5000;
+  P^.Callback:=ACallback;
+  P^.Context:=AContext;
+  try
+    P^.Loop.PostEx(@SftpOpenPostCb, P, @SftpOpenPostDiscard);
+    Result:=True;
+  except
+    P^.Session:=nil;
+    Dispose(P);
+    if Assigned(ACallback) then ACallback(nil, ESSHError.Create(sekIO,'sftp async: post open failed'), AContext);
+    Result:=False;
+  end;
 end;
 
 function SshAsyncOpenSftpEx(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer): Boolean;
@@ -1063,6 +1120,7 @@ begin
   if (ALoop=nil) or (ATransport=nil) or not Assigned(ACallback) then Exit(False);
   New(P);
   P^.Loop:=ALoop;
+  P^.Session:=nil;
   P^.Transport:=ATransport;
   P^.TimeoutMs:=ATimeoutMs;
   P^.Callback:=ACallback;
@@ -1071,12 +1129,82 @@ begin
     ALoop.PostEx(@SftpOpenPostCb, P, @SftpOpenPostDiscard);
     Result:=True;
   except
+    P^.Session:=nil;
     Dispose(P);
     if Assigned(ACallback) then
       ACallback(nil, ESSHError.Create(sekIO,'sftp async: post open failed'), AContext);
     Result:=False;
   end;
 end;
+
+
+{ SFTP via Async Jump }
+
+type
+  PSftpViaOnCtx = ^TSftpViaOnCtx;
+  TSftpViaOnCtx = record UserCb: TProcSftpOpenAsync; UserCtx: Pointer; end;
+  PSftpViaJumpCtx = ^TSftpViaJumpCtx;
+  TSftpViaJumpCtx = record Loop: TAsyncLoop; TargetOpts: TSshConnectOptions; UserCb: TProcSftpOpenAsync; UserCtx: Pointer; end;
+
+procedure SftpViaOn_SftpOpened(AFs: ISshAsyncFileSystem; AErr: ESSHError; AContext: Pointer); forward;
+procedure SftpViaOn_Connected(ASession: ISshAsyncSession; AErr: ESSHError; AContext: Pointer); forward;
+procedure SftpViaJump_SftpOpened(AFs: ISshAsyncFileSystem; AErr: ESSHError; AContext: Pointer); forward;
+procedure SftpViaJump_Connected(ASession: ISshAsyncSession; AErr: ESSHError; AContext: Pointer); forward;
+
+procedure SftpViaOn_SftpOpened(AFs: ISshAsyncFileSystem; AErr: ESSHError; AContext: Pointer);
+var C: PSftpViaOnCtx; Cb: TProcSftpOpenAsync; U: Pointer;
+begin
+  C:=PSftpViaOnCtx(AContext); Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C);
+  if Assigned(Cb) then Cb(AFs, AErr, U) else if AErr<>nil then AErr.Free;
+end;
+
+procedure SftpViaOn_Connected(ASession: ISshAsyncSession; AErr: ESSHError; AContext: Pointer);
+var C: PSftpViaOnCtx; P: PSftpViaOnCtx; Cb: TProcSftpOpenAsync; U: Pointer;
+begin
+  C:=PSftpViaOnCtx(AContext);
+  if AErr<>nil then begin Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C); if Assigned(Cb) then Cb(nil, AErr, U) else AErr.Free; Exit; end;
+  if ASession=nil then begin Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: nil session'), U); Exit; end;
+  New(P); P^.UserCb:=C^.UserCb; P^.UserCtx:=C^.UserCtx; Dispose(C);
+  if not SshAsyncOpenSftp(ASession, @SftpViaOn_SftpOpened, P) then
+  begin Cb:=P^.UserCb; U:=P^.UserCtx; Dispose(P); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: open submit failed'), U); ASession.Close; end;
+end;
+
+function SshAsyncSftpViaJumpOn(const ALoop: TAsyncLoop; const AJumpSession: ISshAsyncSession; const ATargetOpts: TSshConnectOptions; ACallback: TProcSftpOpenAsync; AContext: Pointer): Boolean;
+var C: PSftpViaOnCtx;
+begin
+  if (ALoop=nil) or (AJumpSession=nil) or not Assigned(ACallback) then Exit(False);
+  New(C); C^.UserCb:=ACallback; C^.UserCtx:=AContext;
+  Result:=SshAsyncConnectViaJumpOn(ALoop, AJumpSession, ATargetOpts, @SftpViaOn_Connected, C);
+  if not Result then Dispose(C);
+end;
+
+procedure SftpViaJump_SftpOpened(AFs: ISshAsyncFileSystem; AErr: ESSHError; AContext: Pointer);
+var C: PSftpViaJumpCtx; Cb: TProcSftpOpenAsync; U: Pointer;
+begin
+  C:=PSftpViaJumpCtx(AContext); Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C);
+  if Assigned(Cb) then Cb(AFs, AErr, U) else if AErr<>nil then AErr.Free;
+end;
+
+procedure SftpViaJump_Connected(ASession: ISshAsyncSession; AErr: ESSHError; AContext: Pointer);
+var C: PSftpViaJumpCtx; P: PSftpViaJumpCtx; Cb: TProcSftpOpenAsync; U: Pointer; Ok: Boolean;
+begin
+  C:=PSftpViaJumpCtx(AContext);
+  if AErr<>nil then begin Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C); if Assigned(Cb) then Cb(nil, AErr, U) else AErr.Free; Exit; end;
+  if ASession=nil then begin Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: nil session'), U); Exit; end;
+  New(P); P^.UserCb:=C^.UserCb; P^.UserCtx:=C^.UserCtx; Dispose(C);
+  Ok:=SshAsyncOpenSftp(ASession, @SftpViaJump_SftpOpened, P);
+  if not Ok then begin Cb:=P^.UserCb; U:=P^.UserCtx; Dispose(P); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: open submit failed'), U); ASession.Close; end;
+end;
+
+function SshAsyncSftpViaJump(const ALoop: TAsyncLoop; const AJumpOpts, ATargetOpts: TSshConnectOptions; ACallback: TProcSftpOpenAsync; AContext: Pointer): Boolean;
+var C: PSftpViaJumpCtx;
+begin
+  if (ALoop=nil) or not Assigned(ACallback) then Exit(False);
+  New(C); C^.Loop:=ALoop; C^.TargetOpts:=ATargetOpts; C^.UserCb:=ACallback; C^.UserCtx:=AContext;
+  Result:=SshAsyncConnectViaJump(ALoop, AJumpOpts, ATargetOpts, @SftpViaJump_Connected, C);
+  if not Result then Dispose(C);
+end;
+
 
 { dispatchers }
 

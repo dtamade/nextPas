@@ -87,6 +87,8 @@ type
     function IsCompressionEnabled: Boolean;
     function AsyncSendPacket(const APayload: TBytes; const ACb: TSshAsyncCb; AContext: Pointer = nil): Boolean;
     function AsyncReadPacket(const ACb: TSshAsyncPacketCb; AContext: Pointer = nil): Boolean;
+    function IsWriteBusy: Boolean;
+    function DebugState: string;
     procedure ApplyNewKeys(const ANegotiated: TSshNegotiated;
       const AIvCs, AKeyCs, AMacCs, AIvSc, AKeySc, AMacSc: TBytes);
     function AsyncDisconnect(AReason: UInt32; const ADesc: string; const ACb: TSshAsyncCb; AContext: Pointer = nil): Boolean;
@@ -190,6 +192,16 @@ end;
 function TAsyncSshTransport.IsCompressionEnabled: Boolean;
 begin
   Result := FCompressEnabled;
+end;
+
+function TAsyncSshTransport.IsWriteBusy: Boolean;
+begin
+  Result := FWriteCb <> nil;
+end;
+
+function TAsyncSshTransport.DebugState: string;
+begin
+  Result := 'cb=' + BoolToStr(FWriteCb <> nil, True) + ' buf=' + IntToStr(Length(FWriteBuf)) + ' off=' + IntToStr(FWriteOff) + ' state=' + IntToStr(Ord(FState)) + ' ptr=' + IntToStr(PtrUInt(Self));
 end;
 
 procedure TAsyncSshTransport.ApplyNewKeys(const ANegotiated: TSshNegotiated;
