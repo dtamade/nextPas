@@ -485,6 +485,9 @@ begin
   LPath := NormalizeWebviewAssetPath(ASchemeRelativePath);
   if LPath = '' then
     Exit;
+  { 单挂载根路径快路径：95% demo 单 provider 零扫描（与 MountCount inline 同源） }
+  if (Length(FMounts) = 1) and (FMounts[0].Prefix = '') then
+    Exit(FMounts[0].Provider.TryResolve(LPath, ABytes, AMimeType));
   { 已按长度降序稳定排序：首个前缀命中即最长命中，同长先挂语义天然保持 }
   for I := 0 to High(FMounts) do
     if (FMounts[I].Prefix = '') or (Pos(FMounts[I].Prefix, LPath) = 1) then
