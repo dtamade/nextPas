@@ -44,25 +44,11 @@ function VerifyOAuthState(const AState, ASecret: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.random,
   nextpas.core.encoding,
   nextpas.core.hash;
-
-function BytesToString(const AB: TBytes): string;
-begin
-  if Length(AB) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@AB[0]), Length(AB));
-end;
-
-function StringToBytes(const AValue: string): TBytes;
-begin
-  if Length(AValue) = 0 then
-    Exit(nil);
-  SetLength(Result, Length(AValue));
-  Move(PAnsiChar(AValue)^, Result[0], Length(AValue));
-end;
 
 function IsUnreservedChar(const ACh: Char): Boolean; inline;
 begin
