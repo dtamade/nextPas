@@ -73,6 +73,13 @@ type
   {** @desc 条目信息数组快照 *}
   TSevenZEntryInfoArray = array of TSevenZEntryInfo;
 
+  {** @desc 批量提取结果：条目元数据 + 解压数据（目录/空为 nil） *}
+  TSevenZExtracted = record
+    Info: TSevenZEntryInfo;
+    Data: TBytes;
+  end;
+  TSevenZExtractedArray = array of TSevenZExtracted;
+
   {** @desc 7z 归档读端：条目枚举与按索引提取（内容以字节返回） *}
   ISevenZReader = interface
     ['{7E1A6E11-3F42-4C8B-9A17-0DE07A000003}']
@@ -109,6 +116,13 @@ type
     function FindBySuffix(const ASuffix: string): Integer;
     function EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
     function FindByGlob(const APattern: string): Integer;
+    {** 批量提取：按前缀/后缀/通配匹配的全部条目一次性解压（复用 folder LRU）。
+        目录/空文件 Data 为 nil；无匹配返回空数组；损坏抛 ESevenZError *}
+    function ExtractByPrefix(const APrefix: string): TSevenZExtractedArray;
+    function ExtractBySuffix(const ASuffix: string): TSevenZExtractedArray;
+    function ExtractByGlob(const APattern: string): TSevenZExtractedArray;
+    function TryExtractByGlob(const APattern: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     {** 提取文件条目内容并校验 CRC；目录/空文件返回 nil；
         AIndex 越界抛参数错误。重复提取同一 solid 文件夹走缓存 *}
     function Extract(AIndex: Integer): TBytes;

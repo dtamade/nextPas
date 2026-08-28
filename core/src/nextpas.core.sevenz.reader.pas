@@ -81,6 +81,11 @@ type
     function FindBySuffix(const ASuffix: string): Integer;
     function EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
     function FindByGlob(const APattern: string): Integer;
+    function ExtractByPrefix(const APrefix: string): TSevenZExtractedArray;
+    function ExtractBySuffix(const ASuffix: string): TSevenZExtractedArray;
+    function ExtractByGlob(const APattern: string): TSevenZExtractedArray;
+    function TryExtractByGlob(const APattern: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     function Extract(AIndex: Integer): TBytes;
     function ExtractTo(const AWriter: IWriter; AIndex: Integer): Int64;
     function OpenStream(AIndex: Integer): IStream;
@@ -688,14 +693,13 @@ begin
 end;
 
 function TSevenZReaderImpl.LowerBoundSuffix(const ASuffix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer; LRev: string;
+var LLo, LHi, LMid: Integer; LCmp: Integer;
 begin
-  LRev := ReverseStr(ASuffix);
   LLo := 0; LHi := Length(FSortedIdxRev);
   while LLo < LHi do
   begin
     LMid := (LLo + LHi) div 2;
-    LCmp := CompareNames(ReverseStr(FEntries[FSortedIdxRev[LMid]].Name), LRev);
+    LCmp := CompareReversed(FEntries[FSortedIdxRev[LMid]].Name, ASuffix);
     if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
   end;
   Result := LLo;
@@ -1085,6 +1089,32 @@ begin
         Result := EntriesBySuffix(LSuffix);
         Exit;
       end;
+      if (Pos('*', APattern) > 1) and (Pos('*', APattern) < Length(APattern)) then
+      begin
+        LStarCount := Pos('*', APattern);
+        LPrefix := Copy(APattern,1,LStarCount-1);
+        LSuffix := Copy(APattern,LStarCount+1, Length(APattern)-LStarCount);
+        Result := EntriesByPrefix(LPrefix);
+        LCnt := 0;
+        for LI:=0 to High(Result) do
+          if (Length(Result[LI].Name) >= Length(LPrefix)+Length(LSuffix)) and
+             (Copy(Result[LI].Name, Length(Result[LI].Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
+            Inc(LCnt);
+        LI := 0;
+        LIdx := 0;
+        while LI <= High(Result) do
+        begin
+          if (Length(Result[LI].Name) >= Length(LPrefix)+Length(LSuffix)) and
+             (Copy(Result[LI].Name, Length(Result[LI].Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
+          begin
+            Result[LIdx] := Result[LI];
+            Inc(LIdx);
+          end;
+          Inc(LI);
+        end;
+        SetLength(Result, LCnt);
+        Exit;
+      end;
     end;
   end;
   LCnt := 0;
@@ -1101,7 +1131,7 @@ begin
 end;
 
 function TSevenZReaderImpl.FindByGlob(const APattern: string): Integer;
-var LI: Integer;
+var LI: Integer; LStarCount: Integer; LPrefix, LSuffix: string; LPos, LIdx: Integer;
 begin
   Result := -1;
   if APattern='' then Exit(-1);
@@ -1116,10 +1146,215 @@ begin
       Exit(FindByPrefix(Copy(APattern,1,Length(APattern)-1)));
     if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') and (Pos('*', Copy(APattern,2,Length(APattern)-1))=0) then
       Exit(FindBySuffix(Copy(APattern,2,Length(APattern)-1)));
+    if (Pos('*', APattern) > 1) and (Pos('*', APattern) < Length(APattern)) and (Pos('*', Copy(APattern, Pos('*', APattern)+1, Length(APattern))) = 0) then
+    begin
+      LI := Pos('*', APattern);
+      LStarCount := LI;
+      LPrefix := Copy(APattern,1,LStarCount-1);
+      LSuffix := Copy(APattern,LStarCount+1, Length(APattern)-LStarCount);
+      LPos := LowerBoundPrefix(LPrefix);
+      while LPos < Length(FSortedIdx) do
+      begin
+        LIdx := FSortedIdx[LPos];
+        if (Length(FEntries[LIdx].Name) < Length(LPrefix)) or (Copy(FEntries[LIdx].Name,1,Length(LPrefix)) <> LPrefix) then Break;
+        if (Length(FEntries[LIdx].Name) >= Length(LPrefix)+Length(LSuffix)) and
+           (Copy(FEntries[LIdx].Name, Length(FEntries[LIdx].Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
+          Exit(LIdx);
+        Inc(LPos);
+      end;
+      Exit(-1);
+    end;
   end;
   for LI:=0 to High(FEntries) do
     if MatchesGlob(FEntries[LI].Name, APattern) then Exit(LI);
   Result := -1;
+end;
+
+function TSevenZReaderImpl.ExtractByPrefix(const APrefix: string): TSevenZExtractedArray;
+var LStart, LPos, LIdx, LCnt, LLen: Integer;
+begin
+  Result := nil;
+  LLen := Length(APrefix);
+  if LLen=0 then
+  begin
+    SetLength(Result, Length(FEntries));
+    for LPos:=0 to High(FEntries) do
+    begin
+      Result[LPos].Info := FEntries[LPos];
+      Result[LPos].Data := Extract(LPos);
+    end;
+    Exit;
+  end;
+  if Length(FSortedIdx)=0 then Exit;
+  LStart := LowerBoundPrefix(APrefix);
+  LCnt := 0;
+  for LPos:=LStart to High(FSortedIdx) do
+  begin
+    LIdx := FSortedIdx[LPos];
+    if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name,1,LLen) <> APrefix) then Break;
+    Inc(LCnt);
+  end;
+  SetLength(Result, LCnt);
+  LCnt := 0;
+  for LPos:=LStart to High(FSortedIdx) do
+  begin
+    LIdx := FSortedIdx[LPos];
+    if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name,1,LLen) <> APrefix) then Break;
+    Result[LCnt].Info := FEntries[LIdx];
+    Result[LCnt].Data := Extract(LIdx);
+    Inc(LCnt);
+  end;
+end;
+
+function TSevenZReaderImpl.ExtractBySuffix(const ASuffix: string): TSevenZExtractedArray;
+var LStart, LPos, LIdx, LCnt, LLen: Integer;
+begin
+  Result := nil;
+  LLen := Length(ASuffix);
+  if LLen=0 then
+  begin
+    SetLength(Result, Length(FEntries));
+    for LPos:=0 to High(FEntries) do
+    begin
+      Result[LPos].Info := FEntries[LPos];
+      Result[LPos].Data := Extract(LPos);
+    end;
+    Exit;
+  end;
+  if Length(FSortedIdxRev)=0 then Exit;
+  LStart := LowerBoundSuffix(ASuffix);
+  LCnt := 0;
+  for LPos:=LStart to High(FSortedIdxRev) do
+  begin
+    LIdx := FSortedIdxRev[LPos];
+    if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name, Length(FEntries[LIdx].Name)-LLen+1, LLen) <> ASuffix) then Break;
+    Inc(LCnt);
+  end;
+  SetLength(Result, LCnt);
+  LCnt := 0;
+  for LPos:=LStart to High(FSortedIdxRev) do
+  begin
+    LIdx := FSortedIdxRev[LPos];
+    if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name, Length(FEntries[LIdx].Name)-LLen+1, LLen) <> ASuffix) then Break;
+    Result[LCnt].Info := FEntries[LIdx];
+    Result[LCnt].Data := Extract(LIdx);
+    Inc(LCnt);
+  end;
+end;
+
+function TSevenZReaderImpl.ExtractByGlob(const APattern: string): TSevenZExtractedArray;
+var LErr: string;
+begin
+  if not TryExtractByGlobWithError(APattern, Result, LErr) then
+    raise ESevenZError.Create(LErr);
+end;
+
+function TSevenZReaderImpl.TryExtractByGlob(const APattern: string; out AExtracted: TSevenZExtractedArray): Boolean;
+var LErr: string;
+begin
+  Result := TryExtractByGlobWithError(APattern, AExtracted, LErr);
+end;
+
+function TSevenZReaderImpl.TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+var LI, LCnt, LIdx, LPos, LStarPos: Integer; LHasQ: Boolean; LPrefix, LSuffix: string;
+begin
+  AExtracted := nil; AError := ''; Result := False;
+  try
+    if APattern='' then
+    begin
+      Result := True;
+      Exit;
+    end;
+    if APattern='*' then
+    begin
+      SetLength(AExtracted, Length(FEntries));
+      for LI:=0 to High(FEntries) do
+      begin
+        AExtracted[LI].Info := FEntries[LI];
+        AExtracted[LI].Data := Extract(LI);
+      end;
+      Result := True;
+      Exit;
+    end;
+    LHasQ := Pos('?', APattern) > 0;
+    if not LHasQ then
+    begin
+      LCnt := 0; for LI:=1 to Length(APattern) do if APattern[LI]='*' then Inc(LCnt);
+      if LCnt=0 then
+      begin
+        LIdx := Find(APattern);
+        if LIdx >= 0 then
+        begin
+          SetLength(AExtracted,1);
+          AExtracted[0].Info := FEntries[LIdx];
+          AExtracted[0].Data := Extract(LIdx);
+        end;
+        Result := True;
+        Exit;
+      end;
+      if LCnt=1 then
+      begin
+        if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') then
+        begin
+          AExtracted := ExtractByPrefix(Copy(APattern,1,Length(APattern)-1));
+          Result := True;
+          Exit;
+        end;
+        if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') then
+        begin
+          AExtracted := ExtractBySuffix(Copy(APattern,2,Length(APattern)-1));
+          Result := True;
+          Exit;
+        end;
+        LStarPos := Pos('*', APattern);
+        if (LStarPos > 1) and (LStarPos < Length(APattern)) then
+        begin
+          LPrefix := Copy(APattern,1,LStarPos-1);
+          LSuffix := Copy(APattern,LStarPos+1, Length(APattern)-LStarPos);
+          AExtracted := ExtractByPrefix(LPrefix);
+          LCnt := 0;
+          for LI:=0 to High(AExtracted) do
+            if (Length(AExtracted[LI].Info.Name) >= Length(LPrefix)+Length(LSuffix)) and
+               (Copy(AExtracted[LI].Info.Name, Length(AExtracted[LI].Info.Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
+              Inc(LCnt);
+          LIdx := 0; LPos := 0;
+          while LPos <= High(AExtracted) do
+          begin
+            if (Length(AExtracted[LPos].Info.Name) >= Length(LPrefix)+Length(LSuffix)) and
+               (Copy(AExtracted[LPos].Info.Name, Length(AExtracted[LPos].Info.Name)-Length(LSuffix)+1, Length(LSuffix)) = LSuffix) then
+            begin
+              AExtracted[LIdx] := AExtracted[LPos];
+              Inc(LIdx);
+            end;
+            Inc(LPos);
+          end;
+          SetLength(AExtracted, LCnt);
+          Result := True;
+          Exit;
+        end;
+      end;
+    end;
+    LCnt := 0;
+    for LI:=0 to High(FEntries) do
+      if MatchesGlob(FEntries[LI].Name, APattern) then Inc(LCnt);
+    SetLength(AExtracted, LCnt);
+    LCnt := 0;
+    for LI:=0 to High(FEntries) do
+      if MatchesGlob(FEntries[LI].Name, APattern) then
+      begin
+        AExtracted[LCnt].Info := FEntries[LI];
+        AExtracted[LCnt].Data := Extract(LI);
+        Inc(LCnt);
+      end;
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AError := E.ClassName+': '+E.Message;
+      AExtracted := nil;
+      Result := False;
+    end;
+  end;
 end;
 
 function TSevenZReaderImpl.Extract(AIndex: Integer): TBytes;
