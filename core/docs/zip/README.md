@@ -53,10 +53,12 @@ Opts.Method := zmDeflate;                        // per-entry method
 Opts.ModTimeUnixSec := UnixSec;                  // < 0 = DOS floor
 Opts.Mode := ZipRegularMode(&640);               // S_IFREG|0640 unix mode word
 W.AddEntryWithOptions('d.cfg', Data, Opts);      // dir modes normalize trailing '/'
+W.Reserve(2000);                                 // preallocate 2k entries, avoids geometric realloc
 Bytes := W.Finish;
 ```
 
-`Finish` returns the whole archive; further calls raise.
+`Finish` returns the whole archive; further calls raise. `Reserve` is a pure
+hint — byte-identical output, fail-closed on negative or post-Finish.
 Unspecified timestamps use the DOS epoch floor so identical input yields
 identical bytes (determinism). A non-zero `Mode` whose format bits declare a
 directory (`$4000`) makes the entry a directory and appends the trailing slash

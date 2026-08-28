@@ -83,6 +83,8 @@ type
       const AOptions: TZipAddOptions): ICompressWriter;
     {** 已添加条目数 *}
     function EntryCount: Integer;
+    {** 预分配条目容量：避免 2k+ 归档的几何扩容与重分配；0 为空操作，<0 raise；已用容量不足时一次性扩至 ACapacity *}
+    procedure Reserve(ACapacity: Integer);
     {** 绑定流式输出端：分块排空已暂存字节，此后逐条目透传（内存上界为
         单条目压缩尺寸）；仅允许绑定一次，重复绑定 raise。绑定后 Finish
         拒绝，终结经 FinishTo(同一 sink) 完成。sink 写入异常原样传播，
@@ -224,6 +226,7 @@ type
     function AddEntryStream(const AName: string;
       const AOptions: TZipAddOptions): ICompressWriter;
     function EntryCount: Integer;
+    procedure Reserve(ACapacity: Integer);
     procedure StreamOutputTo(const ASink: IWriter);
     function FinishTo(const ASink: IWriter): UInt64;
     function Finish: TBytes;
@@ -1012,6 +1015,18 @@ end;
 function TZipWriter.EntryCount: Integer;
 begin
   Result := FCount;
+end;
+
+procedure TZipWriter.Reserve(ACapacity: Integer);
+begin
+  CheckOpen;
+  if ACapacity < 0 then
+    raise EArgumentError.Create('zip writer: Reserve capacity must be >= 0');
+  if ACapacity = 0 then
+    Exit;
+  if FCapacity >= ACapacity then
+    Exit;
+  EnsureCapacity(ACapacity);
 end;
 
 { central directory + (zip64 EOCD) + EOCD：Finish 与 FinishTo 共享的终结
