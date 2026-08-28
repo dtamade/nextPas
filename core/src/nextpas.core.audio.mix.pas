@@ -21,7 +21,12 @@ function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
 
 implementation
 
-uses Math;
+uses Math
+{$IFDEF CPUX86_64}
+  , nextpas.core.simd.intrinsics.sse2
+  , nextpas.core.simd.intrinsics.base
+{$ENDIF}
+  ;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);
 var LNew: TBytes; LExpected: Integer;
@@ -75,9 +80,38 @@ begin
   if LSamples = 0 then Exit;
   if Length(LSrcData) < LSamples * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: src F32 data too small');
   if Length(ADst.Data) < (LDstOffset + LSamples) * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: dst F32 data too small');
-  // 性能：增益门控 + 快路径（gain≈0 跳过，gain≈1 省乘法），稳态热路径内联
+  // 性能：增益门控 + 快路径（gain≈0 跳过，gain≈1 省乘法），稳态热路径内联 + SSE2 4-wide
   if Abs(AGain) < 1e-6 then Exit;
   LDstPtr := PSingle(@ADst.Data[0]); LSrcPtr := PSingle(@LSrcData[0]);
+{$IFDEF CPUX86_64}
+  if Abs(AGain - 1.0) < 1e-6 then
+  begin
+    LI := 0;
+    while LI + 3 < LSamples do
+    begin
+      simd_storeu_ps(Pointer(PtrUInt(LDstPtr) + (LDstOffset + LI) * SizeOf(Single))^,
+        simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(LDstPtr) + (LDstOffset + LI) * SizeOf(Single))),
+                    simd_loadu_ps(Pointer(PtrUInt(LSrcPtr) + LI * SizeOf(Single)))));
+      Inc(LI, 4);
+    end;
+    for LI := LI to LSamples - 1 do
+      LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI];
+  end
+  else
+  begin
+    LI := 0;
+    while LI + 3 < LSamples do
+    begin
+      simd_storeu_ps(Pointer(PtrUInt(LDstPtr) + (LDstOffset + LI) * SizeOf(Single))^,
+        simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(LDstPtr) + (LDstOffset + LI) * SizeOf(Single))),
+                    simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(LSrcPtr) + LI * SizeOf(Single))),
+                                simd_set1_ps(AGain))));
+      Inc(LI, 4);
+    end;
+    for LI := LI to LSamples - 1 do
+      LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI] * AGain;
+  end;
+{$ELSE}
   if Abs(AGain - 1.0) < 1e-6 then
   begin
     for LI := 0 to LSamples - 1 do
@@ -88,10 +122,14 @@ begin
     for LI := 0 to LSamples - 1 do
       LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI] * AGain;
   end;
+{$ENDIF}
 end;
 
 procedure ApplyGainPtr(P: PSingle; NSamples: Integer; AGain: Single); inline;
 var LI: Integer;
+{$IFDEF CPUX86_64}
+var VGain: TM128;
+{$ENDIF}
 begin
   if Abs(AGain - 1.0) < 1e-6 then Exit;
   if Abs(AGain) < 1e-6 then
@@ -99,7 +137,19 @@ begin
     FillChar(P^, NSamples * SizeOf(Single), 0);
     Exit;
   end;
+{$IFDEF CPUX86_64}
+  VGain := simd_set1_ps(AGain);
+  LI := 0;
+  while LI + 3 < NSamples do
+  begin
+    simd_storeu_ps(Pointer(PtrUInt(P) + LI * SizeOf(Single))^,
+      simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(P) + LI * SizeOf(Single))), VGain));
+    Inc(LI, 4);
+  end;
+  for LI := LI to NSamples - 1 do P[LI] := P[LI] * AGain;
+{$ELSE}
   for LI := 0 to NSamples - 1 do P[LI] := P[LI] * AGain;
+{$ENDIF}
 end;
 
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
