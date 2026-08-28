@@ -32,10 +32,6 @@ function RawDeflateMessageCompress(const AData: TBytes;
 function RawDeflateMessageDecompress(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes;
 
-{ 7z 兼容别名：历史 sevenz writer 调用 DeflateRawCompress，语义同 RawDeflateMessageCompress }
-function DeflateRawCompress(const AData: TBytes;
-  const ALevel: TCompressionLevel = clDefault): TBytes; inline;
-
 implementation
 
 uses
@@ -784,11 +780,6 @@ begin
   finally
     inflateEnd(LStream);
   end;
-end;
-
-function DeflateRawCompress(const AData: TBytes; const ALevel: TCompressionLevel): TBytes;
-begin
-  Result := RawDeflateMessageCompress(AData, ALevel);
 end;
 
 end.
