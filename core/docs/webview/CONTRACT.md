@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.18（S23—— W2 调度与稳定收口：Win32 隐藏窗口 PostMessage 调度器（与 gtk idle 对称）、Eval pending exactly-once 泄漏修复（RemovePending+Close 协同）、UserAgent 本地缓存+DataDirectory 透传、wine Post/导航/桥/Eval 全链验证、门禁全绿 hygiene 0）
+**版本**：1.19（S24—— 门禁与性能收口：新增 test_webview_webview2_post（Win32ShellPost/UserAgent/DataDirectory 4 用例）、12 门全绿；bridge bench 基线复测（TryDecode 9µs/Resolve 5.7µs 等）无回归；文档 1.19 对齐，hygiene 0）
+**承接**：1.18（S23—— W2 调度与稳定收口：Win32 隐藏窗口 PostMessage 调度器（与 gtk idle 对称）、Eval pending exactly-once 泄漏修复（RemovePending+Close 协同）、UserAgent 本地缓存+DataDirectory 透传、wine Post/导航/桥/Eval 全链验证、门禁全绿 hygiene 0）
 **承接**：1.17（S22—— W2 导航事件真接线：NavigationStarting→OnNavStarted / NavigationCompleted→OnNavFinished+Failed（IsSuccess/WebErrorStatus）、wine 双态真触发 + 失败分支 + TriggerFakeWebMessage 桥回环验证、门禁 17/13/6/3 全绿 + wine 导航+桥全交互）
 **承接**：1.16（S21—— W2 真 controller 接线：CreateEnvironment→CreateController 异步链、WebMessageReceived 桥分发、AddScript注入、ExecuteScript/Eval 闭环、WM_SIZE bounds 同步、门禁 17/13/6/3 全绿 + wine 真 Eval 可交互）
 **承接**：1.15（S20—— W2 壳完整度：Minimize/Restore/IsMinimized、DPI 真值 GetDpiForWindow 动态绑定+分数缩放、WM_DPICHANGED ScaleChanged、FFI 完整 vtable、门禁 17/13/6/3 全绿 + wine 满态可交互）
