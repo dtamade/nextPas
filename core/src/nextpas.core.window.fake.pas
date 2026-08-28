@@ -128,43 +128,7 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex;
 
-{ ---- 回调归一化（method/proc → reference） ---- }
 
-function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler;
-begin
-  Result :=
-    procedure(const AEvent: TWindowEvent)
-    begin
-      AHandler(AEvent);
-    end;
-end;
-
-function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler;
-begin
-  Result :=
-    procedure(const AEvent: TWindowEvent)
-    begin
-      AHandler(AEvent);
-    end;
-end;
-
-function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef;
-begin
-  Result :=
-    procedure
-    begin
-      AHandler();
-    end;
-end;
-
-function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef;
-begin
-  Result :=
-    procedure
-    begin
-      AHandler();
-    end;
-end;
 
 { ---- TFakeDispatcher：互斥保护的环形 FIFO ---- }
 

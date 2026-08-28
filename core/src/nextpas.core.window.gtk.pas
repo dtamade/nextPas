@@ -61,40 +61,6 @@ begin
   Result := TryLoadWindowGtk(LInfo) and LInfo.Loaded;
 end;
 
-{ ---- Helpers for callback normalization ---- }
-
-function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler;
-begin
-  Result := procedure(const AEvent: TWindowEvent)
-    begin
-      AHandler(AEvent);
-    end;
-end;
-
-function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler;
-begin
-  Result := procedure(const AEvent: TWindowEvent)
-    begin
-      AHandler(AEvent);
-    end;
-end;
-
-function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef;
-begin
-  Result := procedure
-    begin
-      AHandler();
-    end;
-end;
-
-function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef;
-begin
-  Result := procedure
-    begin
-      AHandler();
-    end;
-end;
-
 { ---- Dispatcher via g_idle_add_full ---- }
 
 type

@@ -97,6 +97,43 @@ type
     procedure HostCloseRequested;
   end;
 
+function WindowEventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
+function WindowEventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
+function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef; inline;
+function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef; inline;
+function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
+function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
+
 implementation
+
+function WindowEventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler;
+begin
+  Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
+end;
+
+function WindowEventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler;
+begin
+  Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
+end;
+
+function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef;
+begin
+  Result := procedure begin AHandler(); end;
+end;
+
+function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef;
+begin
+  Result := procedure begin AHandler(); end;
+end;
+
+function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler;
+begin
+  Result := WindowEventMethodToRef(AHandler);
+end;
+
+function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler;
+begin
+  Result := WindowEventProcToRef(AHandler);
+end;
 
 end.
