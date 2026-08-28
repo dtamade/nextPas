@@ -45,7 +45,6 @@ const
 var
   GInitDone: Boolean = False;
   GInitOk: Boolean = False;
-  GClassRegistered: Boolean = False;
   GLoopQuit: Boolean = False;
   GLiveWindows: array of Pointer;
   GDispLock: ILock;
@@ -76,7 +75,6 @@ begin
   begin
     // If already registered, GetLastError would be 1410; treat as ok
   end;
-  GClassRegistered := True;
   if GDispLock = nil then
     GDispLock := TMutex.Create as ILock;
   // Create message-only window for dispatcher wake

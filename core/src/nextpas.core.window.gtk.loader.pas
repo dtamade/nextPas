@@ -108,8 +108,6 @@ function TryLoadWindowGtk(out AInfo: TWindowGtkLoadInfo): Boolean;
       BindReq(@gtk_events_pending, 'gtk_events_pending');
   end;
 
-var
-  LHit: string;
 begin
   if GLoaded then
   begin

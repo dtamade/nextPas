@@ -308,18 +308,13 @@ end;
 
 var
   GLiveWindows: array of TFakeWindow;
+  GFakeLiveCount: Integer = 0;
   GNextHandle: PtrUInt = $1000;
   GLastHandle: TWindowNativeHandle = nil;
 
-function FakeLiveWindowCount: Integer;
-var
-  I, LCnt: Integer;
+function FakeLiveWindowCount: Integer; inline;
 begin
-  LCnt := 0;
-  for I := 0 to High(GLiveWindows) do
-    if not GLiveWindows[I].FClosed then
-      LCnt := LCnt + 1;
-  Result := LCnt;
+  Result := GFakeLiveCount;
 end;
 
 procedure FakePumpAll;
@@ -396,12 +391,15 @@ begin
   FDispatcher := TFakeDispatcher.Create(FOwnerThread);
   SetLength(GLiveWindows, Length(GLiveWindows) + 1);
   GLiveWindows[High(GLiveWindows)] := Self;
+  Inc(GFakeLiveCount);
 end;
 
 destructor TFakeWindow.Destroy;
 var
   I: Integer;
 begin
+  if not FClosed then
+    Dec(GFakeLiveCount);
   for I := High(GLiveWindows) downto 0 do
     if GLiveWindows[I] = Self then
     begin
@@ -438,6 +436,7 @@ begin
   if LWasClosed then
     Exit;
   FClosed := True;
+  Dec(GFakeLiveCount);
   FVisible := False;
   FNativeHandle := nil;
   { 关闭后投递静默丢弃（CONTRACT §4.1） }

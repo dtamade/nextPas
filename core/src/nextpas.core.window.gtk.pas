@@ -406,24 +406,7 @@ begin
 end;
 
 function CbWindowState(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
-var
-  Self: TWindowGtk;
-  State: guint;
-  PState: PUInt32;
 begin
-  Self := TWindowGtk(AData);
-  // GdkEventWindowState layout: first fields include changed_mask/new_window_state after type/window
-  // We approximate by reading at offset 12 for demo; proper struct would be TGdkEventWindowState.
-  // Fallback: query via gdk_window_get_state on realized window.
-  if Self.FHandle <> nil then
-  begin
-    State := 0;
-    // if realized, gdk_window exists
-    // use gdk_window_get_state for truth
-    // Need GdkWindow* = gtk_widget_get_window
-    // This may be nil before realization
-    // So just query is_maximized/is_iconified via ffi? We'll query.
-  end;
   Result := 0;
 end;
 
