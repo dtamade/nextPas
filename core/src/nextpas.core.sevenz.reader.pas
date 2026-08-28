@@ -152,7 +152,7 @@ uses
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
   nextpas.core.sevenz.limits,
-  nextpas.core.text.unicode.utils;
+  nextpas.core.text.unicode.utils; // IsAsciiString 8-byte fast path reused
 
 function AsciiLowerStr(const S: string): string; inline;
 var LI: Integer;
