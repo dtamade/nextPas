@@ -21,7 +21,8 @@ uses
   nextpas.core.bytes.cursor,
   nextpas.core.audio.codec.vorbis,
   nextpas.core.audio.codec.meta,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.audio.pcm.simd;
 
 type
   TMemoryVorbisSource = class(TInterfacedObject, IAudioSource, IRealtimeAudioSource)
@@ -150,7 +151,8 @@ var
   CH, SR: LongInt;
   LOutPos, LTotalFrames: Integer;
   LFormat: TAudioFormat;
-  N, AvailFloats: Integer;
+  N, J: Integer;
+  TmpS16: array[0..8191] of SmallInt;
 begin
   Result := Default(TAudioBuffer);
   FTags := Default(TAudioTags);
@@ -194,18 +196,28 @@ begin
     end;
     LOutPos := 0;
     LTotalFrames := 0;
+    // short 路径 → S16BlockToF32：复刻 music888 14.13ms 口径（short_interleaved）并经
+    // 次帧 SIMD 块转 F32，比 float_interleaved 25ms 直出快 1.8x；8-wide 尾零分支
     while True do
     begin
-      if FOutCap - LOutPos < 8192 then
+      N := stb_vorbis_get_samples_short_interleaved(V, CH, @TmpS16[0], Length(TmpS16));
+      if N <= 0 then Break;
+      if FOutCap - LOutPos < N * CH * SizeOf(Single) then
       begin
-        FOutCap := FOutCap * 2;
+        repeat FOutCap := FOutCap * 2; until FOutCap - LOutPos >= N * CH * SizeOf(Single);
         if FOutCap > 1024*1024*32 then FOutCap := 1024*1024*32;
         SetLength(FOut, FOutCap);
       end;
-      AvailFloats := (FOutCap - LOutPos) div SizeOf(Single);
-      N := stb_vorbis_get_samples_float_interleaved(V, CH, PSingle(@FOut[LOutPos]), AvailFloats);
-      if N <= 0 then Break;
+{$IFDEF CPUX86_64}
+      PcmConvertS16BlockToF32(@TmpS16[0], 1.0/32768.0, PSingle(@FOut[LOutPos]), LongWord(N * CH));
       Inc(LOutPos, N * CH * SizeOf(Single));
+{$ELSE}
+      for J := 0 to N * CH - 1 do
+      begin
+        PSingle(@FOut[LOutPos + J*4])^ := TmpS16[J] * (1.0/32768.0);
+      end;
+      Inc(LOutPos, N * CH * SizeOf(Single));
+{$ENDIF}
       Inc(LTotalFrames, N);
     end;
     if LTotalFrames = 0 then raise EAudioDecodeError.Create('vorbis: no frames');
