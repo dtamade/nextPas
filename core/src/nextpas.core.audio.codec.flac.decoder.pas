@@ -252,40 +252,15 @@ begin
       else LDiv := 1.0 / 32768.0;
       end;
 {$IFDEF CPUX86_64}
-      if (CH = 1) and (BS >= 4) then
+      if (CH = 1) then
       begin
-        SIdx := 0;
-        while SIdx + 3 < BS do
-        begin
-          PcmConvertI32x4ToF32Clamped(@FPlanes[0][SIdx], Single(LDiv), PSingle(@FOut[LOutPos]));
-          Inc(LOutPos, 16);
-          Inc(SIdx, 4);
-        end;
-        for SIdx := SIdx to BS - 1 do
-        begin
-          V := FPlanes[0][SIdx];
-          F := PcmClampF32(Single(V * LDiv));
-          PSingle(@FOut[LOutPos])^ := F;
-          Inc(LOutPos, 4);
-        end;
+        PcmConvertI32BlockToF32Clamped(@FPlanes[0][0], Single(LDiv), PSingle(@FOut[LOutPos]), LongWord(BS));
+        Inc(LOutPos, BS * 4);
       end else
-      if (CH = 2) and (BS >= 4) then
+      if (CH = 2) then
       begin
-        SIdx := 0;
-        while SIdx + 3 < BS do
-        begin
-          PcmConvertI32x4StereoToF32Interleaved(@FPlanes[0][SIdx], @FPlanes[1][SIdx], Single(LDiv), PSingle(@FOut[LOutPos]));
-          Inc(LOutPos, 32);
-          Inc(SIdx, 4);
-        end;
-        for SIdx := SIdx to BS - 1 do
-          for CIdx := 0 to CH - 1 do
-          begin
-            V := FPlanes[CIdx][SIdx];
-            F := PcmClampF32(Single(V * LDiv));
-            PSingle(@FOut[LOutPos])^ := F;
-            Inc(LOutPos, 4);
-          end;
+        PcmConvertI32BlockStereoToF32Interleaved(@FPlanes[0][0], @FPlanes[1][0], Single(LDiv), PSingle(@FOut[LOutPos]), LongWord(BS));
+        Inc(LOutPos, BS * 8);
       end else
 {$ENDIF}
       for SIdx := 0 to BS - 1 do
