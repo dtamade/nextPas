@@ -29,6 +29,9 @@ implementation
 uses
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.aiff,
+  nextpas.core.audio.codec.flac,
+  nextpas.core.audio.codec.mp3,
+  nextpas.core.audio.codec.vorbis,
   nextpas.core.audio.errors,
   nextpas.core.exception,
   nextpas.core.fs;
@@ -45,6 +48,9 @@ begin
   GInited := True;
   AudioRegisterDecoder(@CreateWavDecoder);
   AudioRegisterDecoder(@CreateAiffDecoder);
+  AudioRegisterDecoder(@CreateFlacDecoder);
+  AudioRegisterDecoder(@CreateMp3Decoder);
+  AudioRegisterDecoder(@CreateVorbisDecoder);
 end;
 
 procedure AudioRegisterDecoder(AFactory: TDecoderFactory);

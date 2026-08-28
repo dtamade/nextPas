@@ -16,6 +16,11 @@ uses
   nextpas.core.audio.codec.aiff,
   nextpas.core.audio.codec.meta,
   nextpas.core.audio.codec.registry,
+  nextpas.core.audio.codec.flac,
+  nextpas.core.audio.codec.mp3,
+  nextpas.core.audio.codec.vorbis,
+  nextpas.core.audio.pcm.simd,
+  nextpas.core.audio.simd,
   nextpas.core.audio.resample,
   nextpas.core.audio.resample.sinc,
   nextpas.core.audio.mix,
@@ -27,10 +32,18 @@ uses
   nextpas.core.audio.timeline.intf,
   nextpas.core.audio.game.intf,
   nextpas.core.audio.graph.intf,
+  nextpas.core.audio.studio.intf,
   nextpas.core.audio.timeline,
   nextpas.core.audio.game,
   nextpas.core.audio.graph,
-  nextpas.core.audio.player;
+  nextpas.core.audio.player,
+  nextpas.core.audio.playlist,
+  nextpas.core.audio.spatial,
+  nextpas.core.audio.bus,
+  nextpas.core.audio.bank,
+  nextpas.core.audio.studio.project,
+  nextpas.core.audio.studio.sequencer,
+  nextpas.core.audio.studio.automation;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -82,6 +95,15 @@ type
   TGraphState = nextpas.core.audio.graph.intf.TGraphState;
   IAudioGraph = nextpas.core.audio.graph.intf.IAudioGraph;
   IAudioPlayer = nextpas.core.audio.graph.intf.IAudioPlayer;
+  IAudioPlaylist = nextpas.core.audio.playlist.IAudioPlaylist;
+  IAudioBus = nextpas.core.audio.bus.IAudioBus;
+  IAudioBusMixer = nextpas.core.audio.bus.IAudioBusMixer;
+  TAudioBank = nextpas.core.audio.bank.TAudioBank;
+  IStudioProject = nextpas.core.audio.studio.intf.IStudioProject;
+  IAudioSequencer = nextpas.core.audio.studio.sequencer.IAudioSequencer;
+  TAutomationCurve = nextpas.core.audio.studio.automation.TAutomationCurve;
+  TMidiNote = nextpas.core.audio.studio.sequencer.TMidiNote;
+  TAudioVector3 = nextpas.core.audio.spatial.TAudioVector3;
 
 { ---- base forwarding ---- }
 
@@ -151,6 +173,17 @@ function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const
 function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline; inline;
+function CreateFlacDecoder: IAudioDecoder; inline;
+function CreateMp3Decoder: IAudioDecoder; inline;
+function CreateVorbisDecoder: IAudioDecoder; inline;
+function FlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function Mp3Probe(const APrefix: TBytes): TAudioProbeResult; inline;
+function VorbisProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function CreateAudioPlaylist(const AFormat: TAudioFormat): IAudioPlaylist; inline;
+function CreateAudioBusMixer: IAudioBusMixer; inline;
+function CreateAudioBank: TAudioBank; inline;
+function CreateStudioProject(const AName: string; ABpm: Double; const AFormat: TAudioFormat): IStudioProject; inline;
+function CreateAudioSequencer(const AFormat: TAudioFormat; ABpm: Double): IAudioSequencer; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -371,6 +404,39 @@ begin Result := nextpas.core.audio.game.CreateGameAudioForFormat(AProvider, AFor
 
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
+
+function CreateFlacDecoder: IAudioDecoder;
+begin Result := nextpas.core.audio.codec.flac.CreateFlacDecoder; end;
+
+function CreateMp3Decoder: IAudioDecoder;
+begin Result := nextpas.core.audio.codec.mp3.CreateMp3Decoder; end;
+
+function CreateVorbisDecoder: IAudioDecoder;
+begin Result := nextpas.core.audio.codec.vorbis.CreateVorbisDecoder; end;
+
+function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := nextpas.core.audio.codec.flac.FlacProbe(APrefix); end;
+
+function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := nextpas.core.audio.codec.mp3.Mp3Probe(APrefix); end;
+
+function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := nextpas.core.audio.codec.vorbis.VorbisProbe(APrefix); end;
+
+function CreateAudioPlaylist(const AFormat: TAudioFormat): IAudioPlaylist;
+begin Result := nextpas.core.audio.playlist.CreateAudioPlaylist(AFormat); end;
+
+function CreateAudioBusMixer: IAudioBusMixer;
+begin Result := nextpas.core.audio.bus.CreateAudioBusMixer; end;
+
+function CreateAudioBank: TAudioBank;
+begin Result := nextpas.core.audio.bank.CreateAudioBank; end;
+
+function CreateStudioProject(const AName: string; ABpm: Double; const AFormat: TAudioFormat): IStudioProject;
+begin Result := nextpas.core.audio.studio.project.CreateStudioProject(AName, ABpm, AFormat); end;
+
+function CreateAudioSequencer(const AFormat: TAudioFormat; ABpm: Double): IAudioSequencer;
+begin Result := nextpas.core.audio.studio.sequencer.CreateAudioSequencer(AFormat, ABpm); end;
 
 procedure AudioRegisterDecoderPlaceholder;
 begin
