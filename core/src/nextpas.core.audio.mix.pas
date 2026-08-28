@@ -90,21 +90,26 @@ begin
   end;
 end;
 
-procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
-var NSamples, LI: Integer; P: PSingle;
+procedure ApplyGainPtr(P: PSingle; NSamples: Integer; AGain: Single); inline;
+var LI: Integer;
 begin
-  EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
-  if NSamples <= 0 then Exit;
   if Abs(AGain - 1.0) < 1e-6 then Exit;
   if Abs(AGain) < 1e-6 then
   begin
-    if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGain: data too small');
-    FillChar(ABuf.Data[0], NSamples * SizeOf(Single), 0);
+    FillChar(P^, NSamples * SizeOf(Single), 0);
     Exit;
   end;
+  for LI := 0 to NSamples - 1 do P[LI] := P[LI] * AGain;
+end;
+
+procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
+var NSamples: Integer; P: PSingle;
+begin
+  EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
+  if NSamples <= 0 then Exit;
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGain: data too small');
   P := PSingle(@ABuf.Data[0]);
-  for LI := 0 to NSamples - 1 do P[LI] := P[LI] * AGain;
+  ApplyGainPtr(P, NSamples, AGain);
 end;
 
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
@@ -133,8 +138,9 @@ begin
   P := PSingle(@ABuf.Data[0]); LPeak := 0;
   for LI := 0 to NSamples - 1 do begin LAbs := P[LI]; if LAbs < 0 then LAbs := -LAbs; if LAbs > LPeak then LPeak := LAbs; end;
   Result := LPeak;
-  if LPeak = 0 then LGain := 1 else LGain := ATarget / LPeak;
-  ApplyGain(ABuf, LGain);
+  if LPeak = 0 then Exit(0);
+  LGain := ATarget / LPeak;
+  ApplyGainPtr(P, NSamples, LGain);
 end;
 
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
@@ -146,8 +152,9 @@ begin
   P := PSingle(@ABuf.Data[0]); LSum := 0;
   for LI := 0 to NSamples - 1 do LSum := LSum + P[LI] * P[LI];
   LRms := Single(Sqrt(LSum / NSamples)); Result := LRms;
-  if LRms = 0 then LGain := 1 else LGain := ATarget / LRms;
-  ApplyGain(ABuf, LGain);
+  if LRms = 0 then Exit(0);
+  LGain := ATarget / LRms;
+  ApplyGainPtr(P, NSamples, LGain);
 end;
 
 function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
