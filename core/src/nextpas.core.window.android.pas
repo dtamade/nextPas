@@ -189,8 +189,8 @@ type
     procedure SetTitle(const ATitle: string);
     function GetTitle: string;
     procedure SetBounds(AWidth, AHeight: Integer);
-    function GetWidth: Integer;
-    function GetHeight: Integer;
+    function GetWidth: Integer; inline;
+    function GetHeight: Integer; inline;
     procedure SetResizable(AResizable: Boolean);
     procedure Maximize;
     procedure Unmaximize;
@@ -310,10 +310,10 @@ begin
   // Attach: geometry read-only → honest no-op (do not change, do not dispatch)
 end;
 
-function TWindowAndroid.GetWidth: Integer;
+function TWindowAndroid.GetWidth: Integer; inline;
 begin RequireOpen; Result := FWidth; end;
 
-function TWindowAndroid.GetHeight: Integer;
+function TWindowAndroid.GetHeight: Integer; inline;
 begin RequireOpen; Result := FHeight; end;
 
 procedure TWindowAndroid.SetResizable(AResizable: Boolean);
