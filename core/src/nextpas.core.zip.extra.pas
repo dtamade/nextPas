@@ -275,10 +275,7 @@ begin
     LPos := Result;
     WriteLE16Buf(AOut, LPos, C_WINZIP_AES_EXTRA_ID);
     WriteLE16Buf(AOut, LPos + 2, C_WINZIP_AES_EXTRA_BODY);
-    WriteLE16Buf(AOut, LPos + 4, C_WINZIP_AES_VERSION_2);
-    WriteLE16Buf(AOut, LPos + 6, C_WINZIP_AES_VENDOR_LE);
-    AOut[LPos + 8] := AAesStrength;
-    WriteLE16Buf(AOut, LPos + 9, AAesMethod);
+    EncodeWinZipAesExtraBody(AAesStrength, AAesMethod, AOut + LPos + 4);
     Inc(Result, 4 + C_WINZIP_AES_EXTRA_BODY);
   end;
 end;
@@ -317,10 +314,7 @@ begin
     LPos := Result;
     WriteLE16Buf(AOut, LPos, C_WINZIP_AES_EXTRA_ID);
     WriteLE16Buf(AOut, LPos + 2, C_WINZIP_AES_EXTRA_BODY);
-    WriteLE16Buf(AOut, LPos + 4, C_WINZIP_AES_VERSION_2);
-    WriteLE16Buf(AOut, LPos + 6, C_WINZIP_AES_VENDOR_LE);
-    AOut[LPos + 8] := AAesStrength;
-    WriteLE16Buf(AOut, LPos + 9, AAesMethod);
+    EncodeWinZipAesExtraBody(AAesStrength, AAesMethod, AOut + LPos + 4);
     Inc(Result, 4 + C_WINZIP_AES_EXTRA_BODY);
   end;
 end;

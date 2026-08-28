@@ -589,7 +589,13 @@ begin
   begin
     { 认证+加密是原地变换：先拷入重用缓冲，绝不回写调用方缓冲 }
     if Length(FScratch) < SizeInt(ACount) then
-      SetLength(FScratch, SizeInt(ACount));
+    begin
+      // 几何预留，避免 deflate 抖动切片导致逐次 ReAlloc
+      if Length(FScratch) = 0 then
+        SetLength(FScratch, 4096);
+      while Length(FScratch) < SizeInt(ACount) do
+        SetLength(FScratch, Length(FScratch) * 2);
+    end;
     Move(ABuf, FScratch[0], ACount);
     FSealer.Transform(FScratch[0], ACount);
     FOwner.EmitRaw(FScratch[0], ACount);

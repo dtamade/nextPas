@@ -72,6 +72,10 @@ function WinZipAesEqualBytes(const AA, AB: TBytes): Boolean;
 function BuildWinZipAesExtraBody(AStrengthCode: Byte;
   ARealMethod: Word): TBytes;
 
+{ 零分配版：向 AOut 写入 7 字节 extra 体，返回 7；AOut 须至少 7 字节 }
+function EncodeWinZipAesExtraBody(AStrengthCode: Byte; ARealMethod: Word;
+  AOut: PByte): SizeUInt; inline;
+
 { 写端封框：压缩后载荷 → salt+pwVerify+密文+认证码。盐取安全随机，
   随机源故障异常原样传播；空口令 raise EArgumentError }
 function SealWinZipAesPayload(const APassword: TBytes; AStrengthCode: Byte;
@@ -228,18 +232,27 @@ end;
 
 { ---- extra field 内容体 ---- }
 
+function EncodeWinZipAesExtraBody(AStrengthCode: Byte; ARealMethod: Word;
+  AOut: PByte): SizeUInt;
+begin
+  AOut[0] := Byte(C_WINZIP_AES_VERSION_2);
+  AOut[1] := 0;
+  AOut[2] := Ord('A');
+  AOut[3] := Ord('E');
+  AOut[4] := AStrengthCode;
+  AOut[5] := Byte(ARealMethod and $FF);
+  AOut[6] := Byte(ARealMethod shr 8);
+  Result := C_WINZIP_AES_EXTRA_BODY;
+end;
+
 function BuildWinZipAesExtraBody(AStrengthCode: Byte;
   ARealMethod: Word): TBytes;
+var
+  LBuf: array[0..6] of Byte;
 begin
-  Result := nil;
+  EncodeWinZipAesExtraBody(AStrengthCode, ARealMethod, @LBuf[0]);
   SetLength(Result, C_WINZIP_AES_EXTRA_BODY);
-  Result[0] := Byte(C_WINZIP_AES_VERSION_2);   { version lo：本单元固定 AE-2 }
-  Result[1] := 0;                              { version hi }
-  Result[2] := Ord('A');                       { vendor 'AE' }
-  Result[3] := Ord('E');
-  Result[4] := AStrengthCode;
-  Result[5] := Byte(ARealMethod and $FF);
-  Result[6] := Byte(ARealMethod shr 8);
+  Move(LBuf[0], Result[0], C_WINZIP_AES_EXTRA_BODY);
 end;
 
 { ---- AES-CTR 变换器 ---- }
