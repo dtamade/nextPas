@@ -381,7 +381,7 @@ type
     FHead: Integer;
     FCount: Integer;
     FOwnerThread: UInt64;
-    procedure Grow;
+    procedure Grow; inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -410,13 +410,13 @@ begin
   inherited Destroy;
 end;
 
-procedure TFakeDispatcher.Grow;
+procedure TFakeDispatcher.Grow; inline;
 var
   LNewCap, I: Integer;
   LNew: array of TWebviewProcRef;
 begin
-  LNewCap := Length(FRing) * 2;
-  if LNewCap = 0 then
+  LNewCap := WebviewGrowCapacity(Length(FRing));
+  if (Length(FRing) = 0) and (LNewCap < 16) then
     LNewCap := 16;
   SetLength(LNew, LNewCap);
   for I := 0 to FCount - 1 do
