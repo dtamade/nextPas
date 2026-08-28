@@ -116,6 +116,16 @@ type
     property Arena: IArena read GetArena;
   end;
 
+  {** Per-request 0-RTT early-data flag — set by H1/H2 server conn state
+     when the underlying TLS stream reports ITlsPasEarlyDataInfo.
+     Middleware (EarlyDataMiddleware) reads this to emit X-Early-Data. }
+  IHttpRequestWithEarlyData = interface
+    ['{B7E1A3C2-9F4D-4E8A-8B0C-1D2E3F4A5B6D}']
+    function GetWasEarlyData: Boolean;
+    procedure SetWasEarlyData(const AValue: Boolean);
+    property WasEarlyData: Boolean read GetWasEarlyData write SetWasEarlyData;
+  end;
+
   IHttpResponse = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000003}']
     function GetStatusCode: THttpStatus;

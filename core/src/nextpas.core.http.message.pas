@@ -24,7 +24,7 @@ type
   );
 
   THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions,
-    IHttpRequestWithContext, IHttpRequestWithArena)
+    IHttpRequestWithContext, IHttpRequestWithArena, IHttpRequestWithEarlyData)
   private
     type
       TPathParam = record
@@ -51,6 +51,7 @@ type
       FRequestOptions: THttpRequestOptions;
       FContext: IHttpContext;
       FArena: IArena;
+      FEarlyData: Boolean;
     procedure EnsureUrlParsed;
     procedure EnsureRequestTargetParts;
   public
@@ -84,6 +85,8 @@ type
     procedure SetContext(const ACtx: IHttpContext);
     function GetArena: IArena;
     procedure SetArena(const AArena: IArena);
+    function GetWasEarlyData: Boolean;
+    procedure SetWasEarlyData(const AValue: Boolean);
   end;
 
   THttpResponse = class(TInterfacedObject, IHttpResponse)
@@ -784,6 +787,16 @@ end;
 procedure THttpRequest.SetArena(const AArena: IArena);
 begin
   FArena := AArena;
+end;
+
+function THttpRequest.GetWasEarlyData: Boolean;
+begin
+  Result := FEarlyData;
+end;
+
+procedure THttpRequest.SetWasEarlyData(const AValue: Boolean);
+begin
+  FEarlyData := AValue;
 end;
 
 { THttpResponse }

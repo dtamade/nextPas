@@ -16,7 +16,13 @@ uses
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.posthandshake,
   nextpas.core.net.async.tlspas,
+  nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.http.headers,
+  nextpas.core.http.message,
+  nextpas.core.http.middleware,
   nextpas.core.http.earlydata,
+  nextpas.core.http.middleware.earlydata,
   nextpas.core.platform.time,
   nextpas.core.time.base;
 
@@ -282,6 +288,54 @@ begin
     H := HttpEarlyDataHeaderValueFromStream(nil);
 end;
 
+type
+  TCaptureWriterBenchHack = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    class var FInst: IHttpResponseWriter;
+    FHeaders: IHttpHeaders;
+  public
+    constructor Create;
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+    class function Get: IHttpResponseWriter; static;
+  end;
+
+var
+  GHttpReqEarly, GHttpReqNormal: IHttpRequest;
+  GHttpMw: IHttpMiddleware;
+  GHttpMwHandler: IHttpHandler;
+
+constructor TCaptureWriterBenchHack.Create;
+begin inherited Create; FHeaders := NewHttpHeaders; end;
+procedure TCaptureWriterBenchHack.WriteHeader(const AStatus: THttpStatus); begin end;
+function TCaptureWriterBenchHack.GetStatus: THttpStatus; begin Result := HTTP_STATUS_OK; end;
+function TCaptureWriterBenchHack.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
+function TCaptureWriterBenchHack.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
+procedure TCaptureWriterBenchHack.Flush; begin end;
+class function TCaptureWriterBenchHack.Get: IHttpResponseWriter;
+begin
+  if FInst = nil then FInst := TCaptureWriterBenchHack.Create;
+  Result := FInst;
+  (Result as TCaptureWriterBenchHack).FHeaders.Clear;
+end;
+
+procedure BenchHttpRequestFlag(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do
+    L := HttpEarlyDataWasEarlyData(GHttpReqEarly);
+end;
+
+procedure BenchHttpMiddlewareEarlyData(aIters: Int64);
+var I: Int64;
+begin
+  for I := 1 to aIters do
+    GHttpMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -320,6 +374,12 @@ begin
   GAdaptiveConfig := DefaultTlsPasAdaptiveLimitConfig;
   GAdaptiveServerStats := Default(TTlsPasServerStats);
   GAdaptiveReplayStats := Default(TAsyncTlsPasReplayStats);
+  // HTTP middleware fixtures
+  GHttpReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  (GHttpReqEarly as IHttpRequestWithEarlyData).SetWasEarlyData(True);
+  GHttpReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  GHttpMw := EarlyDataMiddleware;
+  GHttpMwHandler := GHttpMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
 end;
 
 var
@@ -360,6 +420,8 @@ begin
     .AddLoop('HeaderValue (X-Early-Data)', @BenchHeaderValue)
     .AddLoop('HttpEarlyData header (decision)', @BenchHttpEarlyDataHeader)
     .AddLoop('HttpEarlyData from stream nil', @BenchHttpEarlyDataStream)
+    .AddLoop('HttpRequest early flag (Supports)', @BenchHttpRequestFlag)
+    .AddLoop('HttpMiddleware early-data', @BenchHttpMiddlewareEarlyData)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;

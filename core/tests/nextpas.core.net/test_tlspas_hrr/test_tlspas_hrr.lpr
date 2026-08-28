@@ -25,7 +25,38 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.tcp,
   nextpas.core.net.async.tcp,
-  nextpas.core.http.earlydata;
+  nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.http.headers,
+  nextpas.core.http.message,
+  nextpas.core.http.middleware,
+  nextpas.core.http.middleware.context,
+  nextpas.core.http.earlydata,
+  nextpas.core.http.middleware.earlydata;
+
+type
+  TCaptureWriter = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    FHeaders: IHttpHeaders;
+  public
+    constructor Create;
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+  end;
+
+constructor TCaptureWriter.Create;
+begin
+  inherited Create;
+  FHeaders := NewHttpHeaders;
+end;
+procedure TCaptureWriter.WriteHeader(const AStatus: THttpStatus); begin end;
+function TCaptureWriter.GetStatus: THttpStatus; begin Result := HTTP_STATUS_OK; end;
+function TCaptureWriter.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
+function TCaptureWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
+procedure TCaptureWriter.Flush; begin end;
 
 procedure TestGroupKeyShareLen;
 begin
@@ -923,6 +954,56 @@ begin
   Check(HTTP_HEADER_X_EARLY_DATA='X-Early-Data', 'header const');
 end;
 
+procedure TestHttpRequestEarlyDataFlag;
+var
+  LReq: IHttpRequest;
+  LEarly: IHttpRequestWithEarlyData;
+begin
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataWasEarlyData(LReq), 'initial not early');
+  Check(HttpEarlyDataHeaderValue(LReq)='0', 'initial header 0');
+  Check(Supports(LReq, IHttpRequestWithEarlyData, LEarly), 'supports early data');
+  LEarly.SetWasEarlyData(True);
+  Check(HttpEarlyDataWasEarlyData(LReq), 'after set early');
+  Check(HttpEarlyDataHeaderValue(LReq)='1', 'header 1 after set');
+  Check(LReq.GetHeaders.Get(HTTP_HEADER_X_EARLY_DATA)='', 'request header not auto-set');
+  LEarly.SetWasEarlyData(False);
+  Check(not HttpEarlyDataWasEarlyData(LReq), 'reset not early');
+end;
+
+procedure TestHttpMiddlewareEarlyData;
+var
+  LReqEarly, LReqNormal: IHttpRequest;
+  LEarly: IHttpRequestWithEarlyData;
+  LMw: IHttpMiddleware;
+  LHandler: IHttpHandler;
+  LMwHandler: IHttpHandler;
+  LCapEarly, LCapNormal: IHttpResponseWriter;
+  LCtxEarly, LCtxNormal: IHttpContext;
+begin
+  LReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  if Supports(LReqEarly, IHttpRequestWithEarlyData, LEarly) then
+    LEarly.SetWasEarlyData(True);
+  LReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LCtxEarly := NewHttpContext;
+  LCtxNormal := NewHttpContext;
+  (LReqEarly as IHttpRequestWithContext).SetContext(LCtxEarly);
+  (LReqNormal as IHttpRequestWithContext).SetContext(LCtxNormal);
+  LMw := EarlyDataMiddleware;
+  LHandler := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+  end);
+  LMwHandler := LMw.Wrap(LHandler);
+  LCapEarly := TCaptureWriter.Create;
+  LCapNormal := TCaptureWriter.Create;
+  LMwHandler.ServeHTTP(LReqEarly, LCapEarly);
+  Check(LCapEarly.GetHeaders.Get(HTTP_HEADER_X_EARLY_DATA)='1', 'middleware early header 1');
+  Check(HttpContextGetString(LCtxEarly, CONTEXT_EARLY_DATA)='1', 'middleware early context 1');
+  LMwHandler.ServeHTTP(LReqNormal, LCapNormal);
+  Check(LCapNormal.GetHeaders.Get(HTTP_HEADER_X_EARLY_DATA)='0', 'middleware normal header 0');
+  Check(HttpContextGetString(LCtxNormal, CONTEXT_EARLY_DATA)='0', 'middleware normal context 0');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -966,6 +1047,8 @@ begin
   GSuite.Test('AdaptiveLimit', @TestAdaptiveLimit);
   GSuite.Test('HeaderValue', @TestHeaderValue);
   GSuite.Test('HttpEarlyDataBridge', @TestHttpEarlyDataBridge);
+  GSuite.Test('HttpRequestEarlyDataFlag', @TestHttpRequestEarlyDataFlag);
+  GSuite.Test('HttpMiddlewareEarlyData', @TestHttpMiddlewareEarlyData);
   if not GSuite.Run then
     Halt(1);
 end.
