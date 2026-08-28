@@ -59,6 +59,11 @@ type
     function OpenEntryByName(const AName: string): IDecompressReader;
     {** 泵送整个条目到 ADst（EOF 处校验尺寸+CRC32），返回输出字节数 *}
     function CopyEntryTo(AIndex: Integer; const ADst: IWriter): SizeUInt;
+    {** 零拷贝直写 PByte 缓冲：不分配 TBytes，直接解压到 ADst[0..ABufLen-1]，
+        返回实际解压字节数；ABufLen 不足或尺寸/CRC 不符均 raise；目录条目
+        返回 0 且不触碰缓冲。 *}
+    function ExtractToBuffer(AIndex: Integer; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+    function ExtractToBufferByName(const AName: string; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
   end;
 
 const
@@ -130,6 +135,8 @@ type
     function OpenEntry(AIndex: Integer): IDecompressReader;
     function OpenEntryByName(const AName: string): IDecompressReader;
     function CopyEntryTo(AIndex: Integer; const ADst: IWriter): SizeUInt;
+    function ExtractToBuffer(AIndex: Integer; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+    function ExtractToBufferByName(const AName: string; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
   end;
 
 
@@ -215,6 +222,8 @@ type
     function OpenEntry(AIndex: Integer): IDecompressReader;
     function OpenEntryByName(const AName: string): IDecompressReader;
     function CopyEntryTo(AIndex: Integer; const ADst: IWriter): SizeUInt;
+    function ExtractToBuffer(AIndex: Integer; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+    function ExtractToBufferByName(const AName: string; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
   end;
 
 { TSliceReader }
@@ -633,6 +642,30 @@ begin
   Result := ExtractIndex(LIdx);
 end;
 
+function TZipReaderImpl.ExtractToBuffer(AIndex: Integer; ADst: PByte;
+  ABufLen: SizeUInt): SizeUInt;
+var
+  LE: TZipEntryInfo;
+  LPayload: TBytes;
+begin
+  LE := FEntries[CheckIndex(AIndex)];
+  if LE.IsDirectory then
+    Exit(0);
+  LPayload := Copy(FData, LocatePayload(AIndex), Int64(LE.CompressedSize));
+  Result := DecompressEntryToBuffer(LE, LPayload, FPassword, ADst, ABufLen, FMaxOutputSize);
+end;
+
+function TZipReaderImpl.ExtractToBufferByName(const AName: string;
+  ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+var
+  LIdx: Integer;
+begin
+  LIdx := Find(AName);
+  if LIdx < 0 then
+    raise ENotFoundError.Create('zip: entry not found: ' + AName);
+  Result := ExtractToBuffer(LIdx, ADst, ABufLen);
+end;
+
 function TZipReaderImpl.OpenEntry(AIndex: Integer): IDecompressReader;
 var
   LE: TZipEntryInfo;
@@ -965,6 +998,30 @@ begin
   if LIdx < 0 then
     raise ENotFoundError.Create('zip: entry not found: ' + AName);
   Result := ExtractIndex(LIdx);
+end;
+
+function TZipSourceReader.ExtractToBuffer(AIndex: Integer; ADst: PByte;
+  ABufLen: SizeUInt): SizeUInt;
+var
+  LE: TZipEntryInfo;
+  LPayload: TBytes;
+begin
+  LE := FEntries[CheckIndex(AIndex)];
+  if LE.IsDirectory then
+    Exit(0);
+  Fetch(LocatePayload(AIndex), SizeUInt(LE.CompressedSize), LPayload, 'entry payload');
+  Result := DecompressEntryToBuffer(LE, LPayload, FPassword, ADst, ABufLen, FMaxOutputSize);
+end;
+
+function TZipSourceReader.ExtractToBufferByName(const AName: string;
+  ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+var
+  LIdx: Integer;
+begin
+  LIdx := Find(AName);
+  if LIdx < 0 then
+    raise ENotFoundError.Create('zip: entry not found: ' + AName);
+  Result := ExtractToBuffer(LIdx, ADst, ABufLen);
 end;
 
 function TZipSourceReader.OpenEntry(AIndex: Integer): IDecompressReader;
