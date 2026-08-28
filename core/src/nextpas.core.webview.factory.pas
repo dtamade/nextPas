@@ -338,12 +338,17 @@ begin
   Result := Self;
 end;
 
-procedure TBuilderImpl.GrowInitScripts;
-var NC: Integer;
+function GrowCapacity(ACurrent: Integer): Integer; inline;
 begin
-  NC := Length(FInitScripts);
-  if NC = 0 then NC := 4 else NC := NC * 2;
-  SetLength(FInitScripts, NC);
+  if ACurrent = 0 then
+    Result := 4
+  else
+    Result := ACurrent * 2;
+end;
+
+procedure TBuilderImpl.GrowInitScripts;
+begin
+  SetLength(FInitScripts, GrowCapacity(Length(FInitScripts)));
 end;
 
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder;
@@ -356,19 +361,13 @@ begin
 end;
 
 procedure TBuilderImpl.GrowInvokes;
-var NC: Integer;
 begin
-  NC := Length(FInvokes);
-  if NC = 0 then NC := 4 else NC := NC * 2;
-  SetLength(FInvokes, NC);
+  SetLength(FInvokes, GrowCapacity(Length(FInvokes)));
 end;
 
 procedure TBuilderImpl.GrowReady;
-var NC: Integer;
 begin
-  NC := Length(FReady);
-  if NC = 0 then NC := 4 else NC := NC * 2;
-  SetLength(FReady, NC);
+  SetLength(FReady, GrowCapacity(Length(FReady)));
 end;
 
 procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string);
