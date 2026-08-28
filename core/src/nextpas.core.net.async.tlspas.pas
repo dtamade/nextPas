@@ -322,6 +322,12 @@ function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): 
 function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string; overload;
 function TlsPasFormatPrometheusMetricsWithLabels(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): string;
 type TTlsPasAdaptiveHealth = record Healthy: Boolean; Reason: string; RejectRate: Double; Current: Integer; AdaptiveMax: Cardinal; end;
+function TlsPasMetricsEqual(const A, B: TTlsPasAdaptiveMetrics): Boolean;
+function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics): Integer; overload;
+function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): Integer; overload;
+function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): Integer; overload;
+function TlsPasAppendAdaptiveHealth(var ABuf: string; const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): Integer; overload;
+function TlsPasAppendAdaptiveHealth(var ABuf: string; const AHealth: TTlsPasAdaptiveHealth; const APrefix, ALabels: string): Integer; overload;
 function TlsPasComputeAdaptiveHealth(const AMetrics: TTlsPasAdaptiveMetrics; const AConfig: TTlsPasAdaptiveLimitConfig): TTlsPasAdaptiveHealth;
 function TlsPasFormatAdaptiveHealth(const AHealth: TTlsPasAdaptiveHealth): string;
 function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): string; overload;
@@ -381,6 +387,34 @@ type
 function TlsPasTryLoadAdaptiveConfigFromEnv(out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
 function TlsPasTryLoadAdaptiveConfigFromFile(const APath: string; out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
 function TlsPasAdaptiveConfigFromEnvOrDefault: TTlsPasAdaptiveLimitConfig;
+
+{ S28: 零分配缓冲 + 缓存导出器 — 复用 Format* 的纯函数，Append 零 Format 拷贝直拼；Cached 仅在指标变化时重算 }
+type
+  TAsyncTlsPasCachedPrometheusExporter = class
+  private
+    FMutex: TPlatformMutex;
+    FObserver: TAsyncTlsPasAdaptiveObserver;
+    FPrefix: string;
+    FLabels: string;
+    FCached: string;
+    FCachedMetrics: TTlsPasAdaptiveMetrics;
+    FHasCache: Boolean;
+    FHitCount: Cardinal;
+    FMissCount: Cardinal;
+  public
+    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver); overload;
+    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix: string); overload;
+    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix, ALabels: string); overload;
+    destructor Destroy; override;
+    function Format: string;
+    function AppendTo(var ABuf: string): Integer;
+    procedure Invalidate;
+    function HitCount: Cardinal;
+    function MissCount: Cardinal;
+    property Observer: TAsyncTlsPasAdaptiveObserver read FObserver;
+    property Prefix: string read FPrefix;
+    property Labels: string read FLabels;
+  end;
 
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
@@ -1444,6 +1478,53 @@ begin
      P,P,P,L,AMetrics.Replay.Current]);
 end;
 
+function TlsPasMetricsEqual(const A, B: TTlsPasAdaptiveMetrics): Boolean;
+begin
+  Result := (A.AdaptiveMax = B.AdaptiveMax) and (A.Server.Accepts = B.Server.Accepts) and
+    (A.Server.RejectPolicy = B.Server.RejectPolicy) and (A.Server.RejectReplay = B.Server.RejectReplay) and
+    (A.Replay.Hits = B.Replay.Hits) and (A.Replay.Misses = B.Replay.Misses) and
+    (A.Replay.Evictions = B.Replay.Evictions) and (A.Replay.Expiries = B.Replay.Expiries) and
+    (A.Replay.Current = B.Replay.Current);
+end;
+
+function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics): Integer;
+begin
+  Result := TlsPasAppendPrometheusMetrics(ABuf, AMetrics, 'nextpas_tlspas');
+end;
+
+function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): Integer;
+var P: string; S: string;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  S := TlsPasFormatPrometheusMetrics(AMetrics, P);
+  ABuf := ABuf + S;
+  Result := Length(S);
+end;
+
+function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): Integer;
+var S: string;
+begin
+  S := TlsPasFormatPrometheusMetricsWithLabels(AMetrics, APrefix, ALabels);
+  ABuf := ABuf + S;
+  Result := Length(S);
+end;
+
+function TlsPasAppendAdaptiveHealth(var ABuf: string; const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): Integer;
+var S: string;
+begin
+  S := TlsPasAdaptiveHealthToPrometheus(AHealth, APrefix);
+  ABuf := ABuf + S;
+  Result := Length(S);
+end;
+
+function TlsPasAppendAdaptiveHealth(var ABuf: string; const AHealth: TTlsPasAdaptiveHealth; const APrefix, ALabels: string): Integer;
+var S: string;
+begin
+  S := TlsPasAdaptiveHealthToPrometheus(AHealth, APrefix, ALabels);
+  ABuf := ABuf + S;
+  Result := Length(S);
+end;
+
 function TlsPasComputeAdaptiveHealth(const AMetrics: TTlsPasAdaptiveMetrics; const AConfig: TTlsPasAdaptiveLimitConfig): TTlsPasAdaptiveHealth;
 var Total, Rejects: Int64; Rate: Double;
 begin
@@ -1717,6 +1798,97 @@ begin
     if AConfig.BaseLimit > AConfig.MaxLimit then AConfig.BaseLimit := AConfig.MaxLimit;
   end;
   Result := Has;
+end;
+
+{ S28 Cached Exporter — 命中时零 Format，直接返回缓存串，线程安全，惰性失效 }
+
+constructor TAsyncTlsPasCachedPrometheusExporter.Create(const AObserver: TAsyncTlsPasAdaptiveObserver);
+begin
+  Create(AObserver, 'nextpas_tlspas', '');
+end;
+
+constructor TAsyncTlsPasCachedPrometheusExporter.Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix: string);
+begin
+  Create(AObserver, APrefix, '');
+end;
+
+constructor TAsyncTlsPasCachedPrometheusExporter.Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix, ALabels: string);
+begin
+  inherited Create;
+  if AObserver = nil then
+    raise EInvalidOperationError.Create('tlspas: cached exporter observer nil');
+  FObserver := AObserver;
+  if APrefix = '' then FPrefix := 'nextpas_tlspas' else FPrefix := APrefix;
+  FLabels := ALabels;
+  FHasCache := False;
+  FHitCount := 0;
+  FMissCount := 0;
+  if platform_mutex_init(FMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: cached exporter mutex');
+end;
+
+destructor TAsyncTlsPasCachedPrometheusExporter.Destroy;
+begin
+  platform_mutex_destroy(FMutex);
+  inherited Destroy;
+end;
+
+function TAsyncTlsPasCachedPrometheusExporter.Format: string;
+var M: TTlsPasAdaptiveMetrics; S: string;
+begin
+  if FObserver = nil then Exit('');
+  M := FObserver.GetAdaptiveMetrics;
+  platform_mutex_lock(FMutex);
+  try
+    if FHasCache and TlsPasMetricsEqual(M, FCachedMetrics) then
+    begin
+      Inc(FHitCount);
+      Result := FCached;
+      Exit;
+    end;
+    Inc(FMissCount);
+    if FLabels = '' then
+      S := TlsPasFormatPrometheusMetrics(M, FPrefix)
+    else
+      S := TlsPasFormatPrometheusMetricsWithLabels(M, FPrefix, FLabels);
+    FCached := S;
+    FCachedMetrics := M;
+    FHasCache := True;
+    Result := S;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasCachedPrometheusExporter.AppendTo(var ABuf: string): Integer;
+var S: string;
+begin
+  S := Format;
+  ABuf := ABuf + S;
+  Result := Length(S);
+end;
+
+procedure TAsyncTlsPasCachedPrometheusExporter.Invalidate;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    FHasCache := False;
+    FCached := '';
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasCachedPrometheusExporter.HitCount: Cardinal;
+begin
+  platform_mutex_lock(FMutex);
+  try Result := FHitCount; finally platform_mutex_unlock(FMutex); end;
+end;
+
+function TAsyncTlsPasCachedPrometheusExporter.MissCount: Cardinal;
+begin
+  platform_mutex_lock(FMutex);
+  try Result := FMissCount; finally platform_mutex_unlock(FMutex); end;
 end;
 
 constructor TAsyncTlsPasReplayCache.Create;

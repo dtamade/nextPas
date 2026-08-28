@@ -445,6 +445,36 @@ begin
   end;
 end;
 
+var GCachedExporter: TAsyncTlsPasCachedPrometheusExporter;
+
+procedure BenchPrometheusAppend(aIters: Int64);
+var I: Int64; M: TTlsPasAdaptiveMetrics; Buf: string;
+begin
+  M := GAdaptiveObserver.GetAdaptiveMetrics;
+  for I := 1 to aIters do
+  begin
+    Buf := '';
+    TlsPasAppendPrometheusMetrics(Buf, M);
+  end;
+end;
+
+procedure BenchCachedExporterHit(aIters: Int64);
+var I: Int64; F: string;
+begin
+  for I := 1 to aIters do F := GCachedExporter.Format;
+end;
+
+procedure BenchCachedExporterMiss(aIters: Int64);
+var I: Int64; F: string; M: TTlsPasAdaptiveMetrics;
+begin
+  for I := 1 to aIters do
+  begin
+    // force miss by invalidating each iter (worst case)
+    GCachedExporter.Invalidate;
+    F := GCachedExporter.Format;
+  end;
+end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -539,6 +569,7 @@ begin
   GPromRegistry := TAsyncTlsPasPrometheusRegistry.Create;
   GPromRegistry.Register('api', GAdaptiveObserver);
   GPromRegistry.Register('internal', GAdaptiveObserver);
+  GCachedExporter := TAsyncTlsPasCachedPrometheusExporter.Create(GAdaptiveObserver);
   // HTTP middleware fixtures
   GHttpReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   (GHttpReqEarly as IHttpRequestWithEarlyData).SetWasEarlyData(True);
@@ -609,6 +640,9 @@ begin
     .AddLoop('AdaptiveConfig FromEnv', @BenchAdaptiveConfigLoad)
     .AddLoop('AdaptiveHealth', @BenchAdaptiveHealth)
     .AddLoop('HealthPrometheus', @BenchHealthPrometheus)
+    .AddLoop('Prometheus Append (zero-alloc)', @BenchPrometheusAppend)
+    .AddLoop('CachedExporter hit', @BenchCachedExporterHit)
+    .AddLoop('CachedExporter miss', @BenchCachedExporterMiss)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

@@ -1639,6 +1639,107 @@ begin
   Check(Pos('degraded', F)>0, 'format degraded');
 end;
 
+procedure TestPrometheusAppend;
+var M: TTlsPasAdaptiveMetrics; F, Buf: string; L: Integer;
+begin
+  M := Default(TTlsPasAdaptiveMetrics);
+  M.AdaptiveMax := 16384; M.Server.Accepts := 2; M.Replay.Current := 1;
+  F := TlsPasFormatPrometheusMetrics(M);
+  Buf := '';
+  L := TlsPasAppendPrometheusMetrics(Buf, M);
+  Check(L = Length(F), 'append len equals format');
+  Check(Buf = F, 'append equals format');
+  Buf := 'prefix:';
+  L := TlsPasAppendPrometheusMetrics(Buf, M, 'myapp');
+  Check(Pos('prefix:', Buf)=1, 'prefix retained');
+  Check(Pos('myapp_adaptive_max', Buf)>0, 'custom prefix in append');
+  Buf := '';
+  L := TlsPasAppendPrometheusMetrics(Buf, M, 'myapp', 'observer="x"');
+  Check(Pos('observer="x"', Buf)>0, 'append with labels');
+  Check(TlsPasMetricsEqual(M, M), 'metrics equal self');
+  Check(not TlsPasMetricsEqual(M, Default(TTlsPasAdaptiveMetrics)), 'metrics not equal default');
+  Buf := '';
+  TlsPasAppendPrometheusMetrics(Buf, M);
+  Check(Length(Buf)>100, 'append non-empty');
+end;
+
+procedure TestCachedExporter;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Exp: TAsyncTlsPasCachedPrometheusExporter;
+  F1, F2, F3: string; Buf: string; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs, 'nextpas_tlspas');
+  try
+    F1 := Exp.Format;
+    Check(Length(F1)>100, 'first format miss');
+    Check(Exp.MissCount=1, 'miss 1');
+    Check(Exp.HitCount=0, 'hit 0');
+    F2 := Exp.Format;
+    Check(F1 = F2, 'second hit cached');
+    Check(Exp.HitCount=1, 'hit 1');
+    Buf := '';
+    Exp.AppendTo(Buf);
+    Check(Buf = F1, 'append equals cached');
+    // mutate metrics
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $AA);
+    SetLength(Early, 10); FillChar(Early[0], 10, $BB);
+    Obs.Decide(Id, Early, Sess, True);
+    F3 := Exp.Format;
+    Check(F3 <> F1, 'after decide miss new');
+    Check(Exp.MissCount=2, 'miss 2 after change');
+    Exp.Invalidate;
+    F3 := Exp.Format;
+    Check(Exp.MissCount=3, 'invalidate miss');
+    Check(HttpCachedPrometheusText(Exp) = F3, 'http wrapper equals');
+    Check(HttpCachedHealthText(Exp) <> '', 'http health not empty');
+    Check(HttpCachedPrometheusText(nil)='', 'nil exporter empty');
+  finally Exp.Free; Obs.Free; end;
+end;
+
+procedure TestHealthProperty;
+var I: Integer; Cfg: TTlsPasAdaptiveLimitConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth;
+begin
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  // chaos 100 random configs: invariants
+  for I := 1 to 100 do
+  begin
+    M.AdaptiveMax := Cardinal(500 + (I*137) mod 17000);
+    M.Server.Accepts := Int64(I*3 mod 50);
+    M.Server.RejectPolicy := Int64(I*7 mod 20);
+    M.Server.RejectReplay := Int64(I*11 mod 20);
+    M.Replay.Current := (I*19) mod 120;
+    M.Replay.Hits := Int64(I mod 30);
+    M.Replay.Misses := Int64(I mod 30);
+    M.Replay.Evictions := Int64(I mod 10);
+    M.Replay.Expiries := Int64(I mod 10);
+    H := TlsPasComputeAdaptiveHealth(M, Cfg);
+    // invariant: healthy=> not at min and not overloaded
+    if H.Healthy then
+    begin
+      Check(H.AdaptiveMax > Cfg.MinLimit, 'healthy not at min');
+      Check(H.Current <= 80, 'healthy current <=80');
+    end else
+    begin
+      Check((H.RejectRate > Cfg.RejectRateThreshold) or (H.Current > 80) or (H.AdaptiveMax <= Cfg.MinLimit), 'degraded reason valid');
+    end;
+    // clamp invariant
+    Check(Cfg.MinLimit <= Cfg.MaxLimit, 'min<=max');
+  end;
+  // edge: exactly at threshold not degraded
+  M := Default(TTlsPasAdaptiveMetrics);
+  M.Server.Accepts := 9; M.Server.RejectPolicy := 1; // 10% == threshold
+  M.Replay.Current := 0; M.AdaptiveMax := 16384;
+  H := TlsPasComputeAdaptiveHealth(M, Cfg);
+  Check(H.Healthy, 'threshold exact healthy');
+  M.Server.RejectPolicy := 2; // 18% >0.1 total 11
+  M.Server.Accepts := 9;
+  H := TlsPasComputeAdaptiveHealth(M, Cfg);
+  Check(not H.Healthy, 'over threshold degraded');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1702,6 +1803,9 @@ begin
   GSuite.Test('AdaptiveConfigEnvAndFile', @TestAdaptiveConfigEnvAndFile);
   GSuite.Test('AdaptiveHealth', @TestAdaptiveHealth);
   GSuite.Test('HealthPrometheusLabels', @TestHealthPrometheusLabels);
+  GSuite.Test('PrometheusAppend', @TestPrometheusAppend);
+  GSuite.Test('CachedExporter', @TestCachedExporter);
+  GSuite.Test('HealthProperty', @TestHealthProperty);
   if not GSuite.Run then
     Halt(1);
 end.

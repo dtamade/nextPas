@@ -31,6 +31,8 @@ function HttpAdaptiveConfigFromFile(const APath: string): TTlsPasAdaptiveLimitCo
 function HttpAdaptiveHealthJSON(const AObserver: TAsyncTlsPasAdaptiveObserver): string;
 function HttpAdaptiveHealthHandler(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpHandler;
 function HttpRegistryHealthJSON(const ARegistry: TAsyncTlsPasPrometheusRegistry): string;
+function HttpCachedPrometheusText(const AExporter: TAsyncTlsPasCachedPrometheusExporter): string;
+function HttpCachedHealthText(const AExporter: TAsyncTlsPasCachedPrometheusExporter): string;
 
 implementation
 
@@ -179,6 +181,20 @@ begin
     AW.WriteHeader(S);
     if Length(J) > 0 then AW.Write(J[1], Length(J));
   end);
+end;
+
+function HttpCachedPrometheusText(const AExporter: TAsyncTlsPasCachedPrometheusExporter): string;
+begin
+  if AExporter = nil then Exit('');
+  Result := AExporter.Format;
+end;
+
+function HttpCachedHealthText(const AExporter: TAsyncTlsPasCachedPrometheusExporter): string;
+var H: TTlsPasAdaptiveHealth;
+begin
+  if (AExporter = nil) or (AExporter.Observer = nil) then Exit('');
+  H := AExporter.Observer.GetAdaptiveHealth;
+  Result := TlsPasAdaptiveHealthToPrometheus(H, AExporter.Prefix);
 end;
 
 function AdaptiveEarlyDataMiddleware(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpMiddleware;
