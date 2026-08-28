@@ -108,6 +108,9 @@ const
   MY_BINARY_CHARSET = 63;
   { 结果缓冲起始容量（截断后按实际长度翻倍扩取） }
   MY_BUF_INITIAL = 256;
+  { DSN 缺省值（与 ParseMySqlDsn 初始化一致，单点常量防漂移） }
+  MYSQL_DEFAULT_HOST = '127.0.0.1';
+  MYSQL_DEFAULT_PORT = 3306;
 
 type
   { 绑定值逻辑形态 }
@@ -173,19 +176,19 @@ end;
 { ---- DSN 解析 ---- }
 
 procedure AssignDsnKey(var ADsn: TDbMysqlDsnParts; const AKey,
-  AValue: string);
+  AValue: string); inline;
 begin
-  if AKey = 'host' then
+  if SameText(AKey, 'host') then
     ADsn.Host := AValue
-  else if AKey = 'port' then
+  else if SameText(AKey, 'port') then
     ADsn.Port := StrToIntDef(AValue, 0)
-  else if AKey = 'user' then
+  else if SameText(AKey, 'user') then
     ADsn.User := AValue
-  else if AKey = 'password' then
+  else if SameText(AKey, 'password') then
     ADsn.Password := AValue
-  else if (AKey = 'db') or (AKey = 'database') then
+  else if SameText(AKey, 'db') or SameText(AKey, 'database') then
     ADsn.Database := AValue
-  else if AKey = 'socket' then
+  else if SameText(AKey, 'socket') then
     ADsn.Socket := AValue
   else
     raise EDbError.CreateSimple(dbkMysql, 'unknown dsn key "' + AKey + '"');
@@ -196,8 +199,8 @@ var
   I, LLen, LQuote, LStart: Integer;
   LKey, LVal: string;
 begin
-  Result.Host := '127.0.0.1';
-  Result.Port := 3306;
+  Result.Host := MYSQL_DEFAULT_HOST;
+  Result.Port := MYSQL_DEFAULT_PORT;
   Result.User := '';
   Result.Password := '';
   Result.Database := '';
@@ -216,7 +219,7 @@ begin
     if (I - LStart = 0) or (I > LLen) then
       raise EDbError.CreateSimple(dbkMysql,
         'malformed dsn near offset ' + IntToStr(I));
-    LKey := LowerCase(Copy(ADsn, LStart, I - LStart));
+    LKey := Copy(ADsn, LStart, I - LStart);
     Inc(I);  { skip '=' }
     if (I <= LLen) and ((ADsn[I] = '''') or (ADsn[I] = '"')) then
     begin
@@ -266,24 +269,24 @@ var
 begin
   P := PByte(ABase) + PtrUInt(AIndex * ANativeSize);
   { 公共前四指针两家一致：length@0 / is_null@8 / buffer@16 / error@24 }
-  PPointer(P)^ := ALength;
-  PPointer(P + 8)^ := AIsNull;
-  PPointer(P + 16)^ := ABuffer;
-  PPointer(P + 24)^ := AError;
+  PPointer(P + MYSQL_BIND_MYSQL_OFF_LENGTH)^ := ALength;
+  PPointer(P + MYSQL_BIND_MYSQL_OFF_IS_NULL)^ := AIsNull;
+  PPointer(P + MYSQL_BIND_MYSQL_OFF_BUFFER)^ := ABuffer;
+  PPointer(P + MYSQL_BIND_MYSQL_OFF_ERROR)^ := AError;
   case ANativeSize of
     SIZE_MYSQL_BIND_MYSQL:
       begin
-        PQWord(P + 40)^ := ABufferLength;
-        (P + 68)^ := Byte(ABufferType);      { 1 字节 enum }
+        PQWord(P + MYSQL_BIND_MYSQL_OFF_BUFFERLENGTH)^ := ABufferLength;
+        (P + MYSQL_BIND_MYSQL_OFF_BUFFERTYPE)^ := Byte(ABufferType);      { 1 字节 enum }
         if AIsUnsigned then
-          (P + 70)^ := 1;
+          (P + MYSQL_BIND_MYSQL_OFF_IS_UNSIGNED)^ := 1;
       end;
     SIZE_MYSQL_BIND_MARIADB:
       begin
-        PQWord(P + 64)^ := ABufferLength;
-        PCardinal(P + 96)^ := ABufferType;   { 4 字节 enum，实测 96（非 100） }
+        PQWord(P + MYSQL_BIND_MARIADB_OFF_BUFFERLENGTH)^ := ABufferLength;
+        PCardinal(P + MYSQL_BIND_MARIADB_OFF_BUFFERTYPE)^ := ABufferType;   { 4 字节 enum，实测 96（非 100） }
         if AIsUnsigned then
-          (P + 101)^ := 1;
+          (P + MYSQL_BIND_MARIADB_OFF_IS_UNSIGNED)^ := 1;
       end;
   else
     raise EDbError.CreateSimple(dbkMysql,
