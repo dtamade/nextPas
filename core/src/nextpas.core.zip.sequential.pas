@@ -332,6 +332,9 @@ begin
   LUSize := LUSize32;
   DecodeLocalExtra(LExtraBytes, LUSize, LCSize, LHasAes, LAesVersion,
     LAesVendor, LAesRealMethod, LAesStrength);
+  if ((LFlags and C_ZIP_FLAG_DESCRIPTOR) = 0) and
+     ((LUSize = UInt64($FFFFFFFF)) or (LCSize = UInt64($FFFFFFFF))) then
+    raise EParseError.Create('zip: missing Zip64 extra field: ' + LName);
   FCurrentFlags := LFlags;
   FCurrentIsDescriptor := (LFlags and C_ZIP_FLAG_DESCRIPTOR) <> 0;
   FCurrentRawMethod := LMethod;
@@ -462,7 +465,10 @@ var
       try
         LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
       except
-        Exit;
+        on E: EIOError do
+          raise;
+        on E: Exception do
+          Exit;
       end;
       if SizeUInt(Length(LDec)) <> LUSizeTmp then
         Exit;

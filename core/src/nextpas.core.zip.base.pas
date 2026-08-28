@@ -136,8 +136,18 @@ begin
         Exit;
       Continue;
     end;
-    { 段边界：[LSegStart, LI-1]；空段（如尾随 '/'）合法 }
-    if (LI - LSegStart = 2) and (AName[LSegStart] = '.') and
+    { 段边界：[LSegStart, LI-1]；尾随 '/' 的终段空合法，其余空段与 '.' 段拒绝 }
+    if LI - LSegStart = 0 then
+    begin
+      if LI <= Length(AName) then
+        Exit;
+    end
+    else if LI - LSegStart = 1 then
+    begin
+      if AName[LSegStart] = '.' then
+        Exit;
+    end
+    else if (LI - LSegStart = 2) and (AName[LSegStart] = '.') and
        (AName[LSegStart + 1] = '.') then
       Exit;
     LSegStart := LI + 1;

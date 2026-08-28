@@ -105,12 +105,17 @@ var
   LPos: SizeUInt;
   LId, LSize: Word;
   LUsed: Integer;
+  LNeedUSize, LNeedCSize, LNeedOffset, LSeenZip64: Boolean;
 begin
   AHasAes := False;
   AAesVersion := 0;
   AAesVendor := 0;
   AAesRealMethod := 0;
   AAesStrength := 0;
+  LNeedUSize := AUSize = UInt64($FFFFFFFF);
+  LNeedCSize := ACSize = UInt64($FFFFFFFF);
+  LNeedOffset := ALocalOffset = UInt64($FFFFFFFF);
+  LSeenZip64 := False;
   LPos := 0;
   while LPos + 4 <= SizeUInt(Length(AExtra)) do
   begin
@@ -120,19 +125,28 @@ begin
       raise EParseError.Create('zip: malformed extra field');
     if LId = C_ZIP64_EXTRA_ID then
     begin
+      if LSeenZip64 then
+        raise EParseError.Create('zip: duplicate Zip64 extra field');
+      LSeenZip64 := True;
       LUsed := 0;
-      if (AUSize = UInt64($FFFFFFFF)) and (LSize - LUsed >= 8) then
+      if LNeedUSize then
       begin
+        if LSize - LUsed < 8 then
+          raise EParseError.Create('zip: truncated Zip64 extra field');
         AUSize := LE64At(AExtra, LPos + 4 + SizeUInt(LUsed));
         Inc(LUsed, 8);
       end;
-      if (ACSize = UInt64($FFFFFFFF)) and (LSize - LUsed >= 8) then
+      if LNeedCSize then
       begin
+        if LSize - LUsed < 8 then
+          raise EParseError.Create('zip: truncated Zip64 extra field');
         ACSize := LE64At(AExtra, LPos + 4 + SizeUInt(LUsed));
         Inc(LUsed, 8);
       end;
-      if (ALocalOffset = UInt64($FFFFFFFF)) and (LSize - LUsed >= 8) then
+      if LNeedOffset then
       begin
+        if LSize - LUsed < 8 then
+          raise EParseError.Create('zip: truncated Zip64 extra field');
         ALocalOffset := LE64At(AExtra, LPos + 4 + SizeUInt(LUsed));
         Inc(LUsed, 8);
       end;
@@ -159,12 +173,16 @@ procedure DecodeLocalExtra(const AExtra: TBytes; var AUSize, ACSize: UInt64;
 var
   LPos: SizeUInt;
   LId, LSize: Word;
+  LNeedUSize, LNeedCSize, LSeenZip64: Boolean;
 begin
   AHasAes := False;
   AAesVersion := 0;
   AAesVendor := 0;
   AAesRealMethod := 0;
   AAesStrength := 0;
+  LNeedUSize := AUSize = UInt64($FFFFFFFF);
+  LNeedCSize := ACSize = UInt64($FFFFFFFF);
+  LSeenZip64 := False;
   LPos := 0;
   while LPos + 4 <= SizeUInt(Length(AExtra)) do
   begin
@@ -174,17 +192,27 @@ begin
       raise EParseError.Create('zip: malformed extra field');
     if LId = C_ZIP64_EXTRA_ID then
     begin
-      if LSize >= 16 then
+      if LSeenZip64 then
+        raise EParseError.Create('zip: duplicate Zip64 extra field');
+      LSeenZip64 := True;
+      if LNeedUSize and LNeedCSize then
       begin
-        if AUSize = UInt64($FFFFFFFF) then
-          AUSize := LE64At(AExtra, LPos + 4);
-        if ACSize = UInt64($FFFFFFFF) then
-          ACSize := LE64At(AExtra, LPos + 12);
+        if LSize < 16 then
+          raise EParseError.Create('zip: truncated Zip64 extra field');
+        AUSize := LE64At(AExtra, LPos + 4);
+        ACSize := LE64At(AExtra, LPos + 12);
       end
-      else if LSize >= 8 then
+      else if LNeedUSize then
       begin
-        if AUSize = UInt64($FFFFFFFF) then
-          AUSize := LE64At(AExtra, LPos + 4);
+        if LSize < 8 then
+          raise EParseError.Create('zip: truncated Zip64 extra field');
+        AUSize := LE64At(AExtra, LPos + 4);
+      end
+      else if LNeedCSize then
+      begin
+        if LSize < 8 then
+          raise EParseError.Create('zip: truncated Zip64 extra field');
+        ACSize := LE64At(AExtra, LPos + 4);
       end;
     end
     else if LId = C_WINZIP_AES_EXTRA_ID then

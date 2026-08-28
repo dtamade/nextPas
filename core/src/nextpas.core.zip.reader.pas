@@ -358,6 +358,9 @@ begin
     LExtraBytes := AC.ReadBytes(LExtraLen);
   DecodeCentralExtra(LExtraBytes, LUSize, LCSize, LLho, LHasAes,
     LAesVersion, LAesVendor, LAesRealMethod, LAesStrength);
+  if (LUSize = UInt64($FFFFFFFF)) or (LCSize = UInt64($FFFFFFFF)) or
+     (LLho = UInt64($FFFFFFFF)) then
+    raise EParseError.Create('zip: missing Zip64 extra field');
   AC.Seek(AC.Position + SizeUInt(LCommentFieldLen));
 
   AE.Name := '';
