@@ -373,9 +373,11 @@ SQL 与错误语义怎么写才可移植"。
 任何提供 ODBC 驱动的数据库均可接入——这也是国产库（达梦/openGauss/
 KingbaseES 等）的 D4 备选接入路径。契约要点：
 
-- **DSN 原文透传**：connstr（`DSN=name;UID=...;PWD=...` 或 DSN-less
-  `Driver=...;Server=...`）原样交给 SQLDriverConnect，本层不解析不
-  改写；空串 fail-fast。BusyTimeoutMs 映射 SQL_ATTR_LOGIN_TIMEOUT
+- **DSN 原文透传 + 离线词法校验**：connstr（`DSN=name;UID=...;PWD=...` 或 DSN-less
+  `Driver=...;Server=...`）原样交给 SQLDriverConnect，本层不改写；
+  空串/`malformed`/`unterminated`（含 `Driver={...` 未闭合）经
+  `text.kv` `ParseKV` 离线 fail-fast（`test_text_kv` 16 组 + `test_db_odbc_adapter` 4b/4c），
+  未触驱动管理器即抛 `EDbError(dbkOdbc)`。BusyTimeoutMs 映射 SQL_ATTR_LOGIN_TIMEOUT
   （建连窗口，秒粒度向上取整；个别驱动不认则容忍，诚实表见 db.base）。
 - **执行模型**：SQLPrepare/SQLBindParameter/SQLExecute（服务端
   prepared，参数化即注入安全）；结果 SQLFetch + SQLGetData 惰性
@@ -820,7 +822,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_largeobject # 大对象流
 make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql      # MySQL 基础三件套 loader 门禁（V3-A1，离线可跑）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql_adapter  # MySQL 适配器（V3-A2，七组离线 + 2 live env 门控，含偏移/DSN 校验自证）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_base  # ODBC base/ffi/loader（V3-A3，仅驱动管理器即可全绿；live 段 NEXTPAS_ODBC_TEST_CONN 门控）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_adapter  # ODBC 适配器（V3-A4，五组离线全绿；live 段 NEXTPAS_ODBC_TEST_CONN 门控）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_adapter  # ODBC 适配器（V3-A4，八组离线全绿 + 1 live env 门控：含 DSN 词法 fail-fast 2 组）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_trace      # 观测钩子（V3-B3，sqlite 全量离线 + pg 真机段 + mysql/odbc live 探针）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_base    # Redis 帧级/解析/归一表（V3-A5，离线）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_adapter  # Redis 适配器（V3-A5/A5.1b，离线全契约 + TLS 负路径 + live env 门控）
