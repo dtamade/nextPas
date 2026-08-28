@@ -101,9 +101,6 @@ type
 
 implementation
 
-uses
-  SysUtils;
-
 function DefaultWindowOptions: TWindowOptions;
 begin
   Result.Title := '';

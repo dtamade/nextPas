@@ -30,8 +30,9 @@ procedure WindowWin32QuitLoop;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
+  nextpas.core.text.ansi,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
   nextpas.core.sync.intf,
@@ -377,7 +378,7 @@ procedure TWindowWin32.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   FTitle := ATitle;
-  SetWindowTextA(FHandle, PAnsiChar(AnsiString(ATitle)));
+  SetWindowTextA(FHandle, PAnsiChar(StrToAnsi(ATitle)));
 end;
 
 function TWindowWin32.GetTitle: string;
@@ -387,7 +388,12 @@ var
 begin
   RequireOpen;
   N := GetWindowTextA(FHandle, @Buf[0], Length(Buf));
-  if N > 0 then Result := string(AnsiString(Copy(string(AnsiString(@Buf[0])),1,N))) else Result := FTitle;
+  if N > 0 then
+  begin
+    Buf[N] := #0;
+    Result := AnsiPtrToStr(@Buf[0]);
+  end
+  else Result := FTitle;
 end;
 
 procedure TWindowWin32.SetBounds(AWidth, AHeight: Integer);
