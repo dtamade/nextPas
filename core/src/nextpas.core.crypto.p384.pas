@@ -66,6 +66,8 @@ var
   GP384_GY: TBytes;
   GP384_P_MINUS2: TBytes;
   GP384_N_MINUS2: TBytes;
+  GP384BaseTable: array[0..15] of TJac384;
+  GP384BaseTableReady: Boolean;
 
 function HexToBytes(const AHex: string): TBytes;
 var
@@ -483,6 +485,32 @@ begin Result:=False; AResult:=P384InfinityPoint; AError:='';
   Result:=True;
 end;
 
+function IsP384BasePoint(const AP: TP384Point): Boolean;
+var LG: TP384Point;
+begin
+  LG := P384Generator;
+  Result := UnsignedBytesEqual(AP.X, LG.X) and UnsignedBytesEqual(AP.Y, LG.Y);
+end;
+
+function EnsureP384BaseTable(out AError: string): Boolean;
+var I: Integer; JP: TJac384;
+begin
+  Result := False; AError := '';
+  if GP384BaseTableReady then Exit(True);
+  if not JacFromAffine384(P384Generator, JP, AError) then Exit;
+  if Length(JP.Z)=0 then begin SetLength(JP.Z,48); FillChar(JP.Z[0],48,0); JP.Z[47]:=1; end;
+  if Length(JP.X)<48 then if not TryFixedLength48(JP.X, JP.X, AError) then Exit;
+  if Length(JP.Y)<48 then if not TryFixedLength48(JP.Y, JP.Y, AError) then Exit;
+  if Length(JP.Z)<48 then if not TryFixedLength48(JP.Z, JP.Z, AError) then Exit;
+  SetLength(GP384BaseTable[0].X,48); FillChar(GP384BaseTable[0].X[0],48,0);
+  SetLength(GP384BaseTable[0].Y,48); FillChar(GP384BaseTable[0].Y[0],48,0);
+  SetLength(GP384BaseTable[0].Z,48); FillChar(GP384BaseTable[0].Z[0],48,0);
+  GP384BaseTable[1] := JP;
+  for I:=2 to 15 do if not TryJacAdd384(GP384BaseTable[I-1], JP, GP384BaseTable[I], AError) then Exit;
+  GP384BaseTableReady := True;
+  Result := True;
+end;
+
 function TryP384ScalarMultWindowed(const AScalar: TBytes; const APoint: TP384Point;
   out AResult: TP384Point; out AError: string): Boolean;
 var LScalar48: TBytes; JP: TJac384; Table: array[0..15] of TJac384; JR, JDbl, JAdd: TJac384; LByteIndex, LHalf, W, K: Integer; LFirst: Boolean;
@@ -494,12 +522,17 @@ begin Result:=False; AResult:=P384InfinityPoint; AError:='';
   if Length(JP.X)<48 then if not TryFixedLength48(JP.X, JP.X, AError) then Exit;
   if Length(JP.Y)<48 then if not TryFixedLength48(JP.Y, JP.Y, AError) then Exit;
   if Length(JP.Z)<48 then if not TryFixedLength48(JP.Z, JP.Z, AError) then Exit;
-  // Table[0]=inf
-  SetLength(Table[0].X,48); FillChar(Table[0].X[0],48,0);
-  SetLength(Table[0].Y,48); FillChar(Table[0].Y[0],48,0);
-  SetLength(Table[0].Z,48); FillChar(Table[0].Z[0],48,0);
-  Table[1]:=JP;
-  for K:=2 to 15 do if not TryJacAdd384(Table[K-1], JP, Table[K], AError) then Exit;
+  if IsP384BasePoint(APoint) then begin
+    if not EnsureP384BaseTable(AError) then Exit;
+    Table := GP384BaseTable;
+  end else begin
+    // Table[0]=inf
+    SetLength(Table[0].X,48); FillChar(Table[0].X[0],48,0);
+    SetLength(Table[0].Y,48); FillChar(Table[0].Y[0],48,0);
+    SetLength(Table[0].Z,48); FillChar(Table[0].Z[0],48,0);
+    Table[1]:=JP;
+    for K:=2 to 15 do if not TryJacAdd384(Table[K-1], JP, Table[K], AError) then Exit;
+  end;
   SetLength(JR.X,48); FillChar(JR.X[0],48,0);
   SetLength(JR.Y,48); FillChar(JR.Y[0],48,0);
   SetLength(JR.Z,48); FillChar(JR.Z[0],48,0);
