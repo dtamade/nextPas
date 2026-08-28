@@ -61,14 +61,18 @@ procedure CheckWindowOptions(const AOptions: TWindowOptions); inline;
 
 function WindowBackendAvailable(AKind: TWindowKind): Boolean; inline;
 function DefaultWindowKind: TWindowKind; inline;
+function WindowBackendDiagnostics: string; inline;
 function CreateFakeWindow(const AOptions: TWindowOptions): IWindow; inline;
 function CreateWindowOf(AKind: TWindowKind;
   const AOptions: TWindowOptions): IWindow; inline;
 
 procedure WindowRunLoop; inline;
 procedure WindowExitLoop; inline;
+function WindowPumpOnce: Boolean; inline;
+procedure WindowPumpAll; inline;
 function FakeLiveWindowCount: Integer; inline;
 procedure FakePumpAll; inline;
+function FakeHasPendingPosts: Boolean; inline;
 
 implementation
 
@@ -92,6 +96,11 @@ begin
   Result := nextpas.core.window.factory.DefaultWindowKind;
 end;
 
+function WindowBackendDiagnostics: string;
+begin
+  Result := nextpas.core.window.factory.WindowBackendDiagnostics;
+end;
+
 function CreateFakeWindow(const AOptions: TWindowOptions): IWindow;
 begin
   Result := nextpas.core.window.factory.CreateFakeWindow(AOptions);
@@ -113,6 +122,16 @@ begin
   nextpas.core.window.factory.WindowExitLoop;
 end;
 
+function WindowPumpOnce: Boolean;
+begin
+  Result := nextpas.core.window.factory.WindowPumpOnce;
+end;
+
+procedure WindowPumpAll;
+begin
+  nextpas.core.window.factory.WindowPumpAll;
+end;
+
 function FakeLiveWindowCount: Integer;
 begin
   Result := nextpas.core.window.fake.FakeLiveWindowCount;
@@ -121,6 +140,11 @@ end;
 procedure FakePumpAll;
 begin
   nextpas.core.window.fake.FakePumpAll;
+end;
+
+function FakeHasPendingPosts: Boolean;
+begin
+  Result := nextpas.core.window.fake.FakeHasPendingPosts;
 end;
 
 end.
