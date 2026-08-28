@@ -133,6 +133,7 @@ end;
 var
   GPolicySess: TTlsPasResumptionSession;
   GReplayCache: TAsyncTlsPasReplayCache;
+  GReplayStore: ITlsPasReplayStore;
   GReplayFp: TBytes;
 
 procedure BenchPolicyAllowed(aIters: Int64);
@@ -159,6 +160,32 @@ begin
     LFp[0] := Byte(I and $FF);
     GReplayCache.CheckAndAdd(LFp, IsReplay);
   end;
+end;
+
+procedure BenchReplayStoreInterface(aIters: Int64);
+var I: Int64; IsReplay: Boolean; LFp: TBytes;
+begin
+  SetLength(LFp, 32);
+  FillChar(LFp[0], 32, $22);
+  for I := 1 to aIters do
+  begin
+    LFp[0] := Byte(I and $FF);
+    GReplayStore.CheckAndAdd(LFp, IsReplay);
+  end;
+end;
+
+procedure BenchReplayStats(aIters: Int64);
+var I: Int64; S: TAsyncTlsPasReplayStats;
+begin
+  for I := 1 to aIters do
+    S := GReplayCache.GetStats;
+end;
+
+procedure BenchReplayIsReplayed(aIters: Int64);
+var I: Int64; LIsReplay: Boolean;
+begin
+  for I := 1 to aIters do
+    LIsReplay := TlsPasIsEarlyDataReplayed(GReplayStore, GPolicySess.TicketIdentity, GCH1);
 end;
 
 procedure InitFixtures;
@@ -188,6 +215,7 @@ begin
   FillChar(GPolicySess.TicketIdentity[0], 16, $33);
 
   GReplayCache := TAsyncTlsPasReplayCache.Create(64, 600000);
+  GReplayStore := GReplayCache as ITlsPasReplayStore;
   SetLength(GReplayFp, 32);
   FillChar(GReplayFp[0], 32, $99);
 end;
@@ -217,6 +245,9 @@ begin
     .AddLoop('Policy allowed (branch)', @BenchPolicyAllowed)
     .AddLoop('Fingerprint SHA256(id+early)', @BenchFingerprint)
     .AddLoop('ReplayCache check+add', @BenchReplayCache)
+    .AddLoop('ReplayStore interface', @BenchReplayStoreInterface)
+    .AddLoop('ReplayStats GetStats', @BenchReplayStats)
+    .AddLoop('IsEarlyDataReplayed', @BenchReplayIsReplayed)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;

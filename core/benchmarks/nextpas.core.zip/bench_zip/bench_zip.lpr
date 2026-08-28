@@ -2,9 +2,9 @@ program bench_zip;
 {**
  * @desc ZIP 基准套件：以 nextpas.core.bench 规矩形态承载，替代手工 TInstant 循环。
  *       覆盖小文件容器开销 (2000×512B deflate) 与大文件吞吐 (1MB) 两面，包含
- *       stream-out、open/extract、AES、descriptor、sequential 全路径，parity 预检后
- *       经 TBenchSuite 控制迭代与样本统计，吞吐经 ACtx.SetBytes 换算，输出经
- *       PrintToConsole + benchstat/json 归档。
+ *       builder 链式、stream-out、open/extract、AES、descriptor、sequential 全路径，
+ *       parity 预检后经 TBenchSuite 控制迭代与样本统计，吞吐经 ACtx.SetBytes 换算，
+ *       输出经 PrintToConsole + benchstat/json 归档。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -184,6 +184,21 @@ begin
   for LI := 0 to BENCH_PACK_COUNT - 1 do
     LW.AddEntryDeflate(EntryName(LI), GFiles[LI]);
   LArc := LW.Finish;
+  BenchBlackBoxBytes(LArc[0], Length(LArc));
+  ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
+end;
+
+procedure BenchBuilderPack(const ACtx: IBenchContext);
+var
+  LB: IZipBuilder;
+  LI: Integer;
+  LArc: TBytes;
+begin
+  LB := ZipBuilder;
+  LB.Reserve(BENCH_PACK_COUNT);
+  for LI := 0 to BENCH_PACK_COUNT - 1 do
+    LB.AddDeflate(EntryName(LI), GFiles[LI]);
+  LArc := LB.Finish;
   BenchBlackBoxBytes(LArc[0], Length(LArc));
   ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
 end;
@@ -427,6 +442,7 @@ begin
     .SetMaxIterations(20)
     .Add('zip/pack/200x512B', @BenchPackManyDeflate)
     .Add('zip/pack-reserve/200x512B', @BenchPackWithReserve)
+    .Add('zip/builder-pack/200x512B', @BenchBuilderPack)
     .Add('zip/stream-out/200x512B', @BenchStreamOut)
     .Add('zip/open/parse-CD', @BenchOpenParse)
     .Add('zip/extract-all/200x512B', @BenchExtractAll)

@@ -88,6 +88,18 @@ begin
       LR.Entry(LI).MethodCode, ' size=', LSize);
   end;
 
+  { Fluent Builder：同等字节的高级感链式门面 }
+  WriteFile(LOut + '.builder.zip',
+    ZipBuilder
+      .Reserve(4)
+      .Add('hello-builder.txt', StrBytes('builder hello'))
+      .AddDeflate('assets/data.bin', LData)
+      .AddDirectory('builder-dir')
+      .Finish);
+  LR := NewZipReader(ReadFile(LOut + '.builder.zip'));
+  WriteLn('builder    : entries=', LR.EntryCount, ' ok=', LR.EntryCount=3);
+  DeleteFile(LOut + '.builder.zip');
+
   { 强制 Zip64 结构（预知超大归档时使用） }
   LOpts.ForceZip64 := True;
   LW := NewZipWriterWithOptions(LOpts);
