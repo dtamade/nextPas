@@ -396,8 +396,6 @@ begin
   if FClosed then Exit;
   FClosed := True;
   FVisible := False;
-  // Drop pending closures? Per CONTRACT §4.1: after last window close, post dropped.
-  // We keep global queue but Close no longer dispatches events.
   if FHandle <> nil then
   begin
     SDL_DestroyWindow(FHandle);
@@ -406,6 +404,8 @@ begin
   UnregisterLive(Pointer(Self));
   if SdlLiveWindowCount = 0 then
     GLoopQuit := True;
+  if GWaitEvent<>nil then GWaitEvent.SetEvent;
+  DispatcherWake;
 end;
 
 function TWindowSdl2.IsOnMainThread: Boolean; inline;
@@ -681,6 +681,11 @@ begin
 end;
 
 procedure WindowSdl2RunLoop;
+var
+  LEv: TSDL_Event;
+  LWin: Pointer;
+  LSelf: TWindowSdl2;
+  LEvent: TWindowEvent;
 begin
   GLoopQuit := False;
   if GWaitEvent = nil then
@@ -690,8 +695,63 @@ begin
     while SdlPollAndDispatchOnce do ;
     if SdlLiveWindowCount = 0 then Break;
     DispatcherDrain;
-    // 事件驱动等待：由 DispatcherPush/SetEvent 唤醒，而非硬编码 sleep 轮询
-    GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
+    if Assigned(SDL_WaitEventTimeout) then
+    begin
+      if SDL_WaitEventTimeout(@LEv, 16) <> 0 then
+      begin
+        if LEv.type_ = GUserEventType then
+          DispatcherDrain
+        else if LEv.type_ = SDL_QUIT then
+          GLoopQuit := True
+        else if LEv.type_ = SDL_WINDOWEVENT then
+        begin
+          LWin := FindWindowByID(LEv.window.windowID);
+          if LWin <> nil then
+          begin
+            LSelf := TWindowSdl2(LWin);
+            case LEv.window.event of
+              SDL_WINDOWEVENT_CLOSE:
+                begin
+                  LEvent.Kind := weCloseRequested;
+                  LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+                  LSelf.DoDispatch(LEvent);
+                end;
+              SDL_WINDOWEVENT_RESIZED, SDL_WINDOWEVENT_SIZE_CHANGED:
+                begin
+                  LSelf.FWidth := LEv.window.data1;
+                  LSelf.FHeight := LEv.window.data2;
+                  LEvent.Kind := weResized;
+                  LEvent.Width := LSelf.FWidth; LEvent.Height := LSelf.FHeight;
+                  LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+                  LSelf.DoDispatch(LEvent);
+                end;
+              SDL_WINDOWEVENT_MOVED:
+                begin
+                  LEvent.Kind := weMoved;
+                  LEvent.Width := 0; LEvent.Height := 0;
+                  LEvent.X := LEv.window.data1; LEvent.Y := LEv.window.data2;
+                  LEvent.NewScale := 0;
+                  LSelf.DoDispatch(LEvent);
+                end;
+              SDL_WINDOWEVENT_FOCUS_GAINED:
+                begin
+                  LEvent.Kind := weFocusIn;
+                  LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+                  LSelf.DoDispatch(LEvent);
+                end;
+              SDL_WINDOWEVENT_FOCUS_LOST:
+                begin
+                  LEvent.Kind := weFocusOut;
+                  LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
+                  LSelf.DoDispatch(LEvent);
+                end;
+            end;
+          end;
+        end;
+      end;
+    end
+    else if GWaitEvent <> nil then
+      GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
     if SdlLiveWindowCount = 0 then Break;
   end;
 end;

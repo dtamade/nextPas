@@ -23,7 +23,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
-  nextpas.core.ssh.channel;
+  nextpas.core.ssh.channel,
+  nextpas.core.ssh.transport.async;
 
 type
   ISshAsyncSession = interface
@@ -31,11 +32,15 @@ type
     function GetConnected: Boolean;
     function GetServerVersion: string;
     function GetServerHostKeyFingerprint: string;
+    function GetLoop: TAsyncLoop;
+    function GetTransport: TAsyncSshTransport;
     function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult): Boolean;
     procedure Close;
     property Connected: Boolean read GetConnected;
     property ServerVersion: string read GetServerVersion;
     property ServerHostKeyFingerprint: string read GetServerHostKeyFingerprint;
+    property Loop: TAsyncLoop read GetLoop;
+    property Transport: TAsyncSshTransport read GetTransport;
   end;
 
   TSshAsyncConnectCb = procedure(ASession: ISshAsyncSession; AErr: ESSHError; AContext: Pointer);
@@ -85,7 +90,6 @@ uses
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.kex.curve25519,
   nextpas.core.ssh.kex.dhgroup14,
-  nextpas.core.ssh.transport.async,
   nextpas.core.ssh.channel.async;
 
 type
@@ -113,6 +117,8 @@ type
     function GetConnected: Boolean;
     function GetServerVersion: string;
     function GetServerHostKeyFingerprint: string;
+    function GetLoop: TAsyncLoop;
+    function GetTransport: TAsyncSshTransport;
   public
     constructor Create(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; const AOptions: TSshConnectOptions);
     destructor Destroy; override;
@@ -259,6 +265,12 @@ function TAsyncSshSession.GetServerHostKeyFingerprint: string;
 begin
   Result := FHostKeyFingerprint;
 end;
+
+function TAsyncSshSession.GetLoop: TAsyncLoop;
+begin Result:=FLoop; end;
+
+function TAsyncSshSession.GetTransport: TAsyncSshTransport;
+begin Result:=FTransport; end;
 
 procedure TAsyncSshSession.LoadKnownHostsIfNeeded;
 begin

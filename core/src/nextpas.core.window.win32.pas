@@ -383,6 +383,8 @@ begin
   end;
   UnregisterLive(Pointer(Self));
   if Win32LiveWindowCount = 0 then GLoopQuit := True;
+  if GWaitEvent<>nil then GWaitEvent.SetEvent;
+  DispatcherWake;
 end;
 
 function TWindowWin32.IsOnMainThread: Boolean; inline;
@@ -667,8 +669,11 @@ begin
     end
     else
     begin
-      // 事件驱动等待：由 DispatcherPush/PostMessage 唤醒，而非硬编码 sleep 轮询
-      GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
+      // 行业同行做法：WaitMessage 阻塞于 OS 消息队列，PostMessage/Quit 立即唤醒
+      if Assigned(WaitMessage) then
+        WaitMessage
+      else if GWaitEvent <> nil then
+        GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
     end;
     if Win32LiveWindowCount = 0 then Break;
   end;

@@ -4,7 +4,7 @@ program test_tlspas_hrr;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.crypto.hash,
@@ -681,6 +681,56 @@ begin
   Check(LIsReplay, 'via options replay');
 end;
 
+procedure TestReplayFileStorePersist;
+var Store1, Store2: ITlsPasReplayStore; F1, F2: TBytes; IsReplay: Boolean; LOk: Boolean; LPath: string;
+begin
+  LPath := '/tmp/tlspas_replay_s10_test.dat';
+  if FileExists(LPath) then DeleteFile(LPath);
+  if FileExists(LPath + '.tmp') then DeleteFile(LPath + '.tmp');
+  Store1 := TAsyncTlsPasReplayFileStore.Create(LPath, 8, 600000) as ITlsPasReplayStore;
+  SetLength(F1, 32); FillChar(F1[0], 32, $AA);
+  SetLength(F2, 32); FillChar(F2[0], 32, $BB);
+  LOk := Store1.CheckAndAdd(F1, IsReplay);
+  Check(LOk and not IsReplay, 'file first not replay');
+  LOk := Store1.CheckAndAdd(F2, IsReplay);
+  Check(LOk and not IsReplay, 'file second not replay');
+  Check(Store1.Count=2, 'file count 2');
+  Check(FileExists(LPath), 'file persisted');
+  // reopen
+  Store1 := nil;
+  Store2 := TAsyncTlsPasReplayFileStore.Create(LPath, 8, 600000) as ITlsPasReplayStore;
+  Check(Store2.Count=2, 'reloaded count 2');
+  LOk := Store2.CheckAndAdd(F1, IsReplay);
+  Check(LOk and IsReplay, 'reloaded replay hit');
+  LOk := Store2.CheckAndAdd(F2, IsReplay);
+  Check(LOk and IsReplay, 'reloaded second hit');
+  Store2.Clear;
+  Check(Store2.Count=0, 'file clear 0');
+  // reload after clear should be empty
+  Store2 := nil;
+  Store2 := TAsyncTlsPasReplayFileStore.Create(LPath, 8, 600000) as ITlsPasReplayStore;
+  Check(Store2.Count=0, 'after clear reload 0');
+  Store2 := nil;
+  if FileExists(LPath) then DeleteFile(LPath);
+  if FileExists(LPath + '.tmp') then DeleteFile(LPath + '.tmp');
+end;
+
+procedure TestReplayFileStoreCorruption;
+var Store: ITlsPasReplayStore; LPath: string; FS: TFileStream; B: Byte;
+begin
+  LPath := '/tmp/tlspas_replay_s10_corr.dat';
+  if FileExists(LPath) then DeleteFile(LPath);
+  FS := TFileStream.Create(LPath, fmCreate);
+  try
+    B := $FF; FS.WriteBuffer(B, 1); // corrupt: size mod 40 !=0
+    B := $AA; FS.WriteBuffer(B, 1);
+  finally FS.Free; end;
+  Store := TAsyncTlsPasReplayFileStore.Create(LPath, 8, 600000) as ITlsPasReplayStore;
+  Check(Store.Count=0, 'corrupt file ignored -> 0');
+  Store := nil;
+  if FileExists(LPath) then DeleteFile(LPath);
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -713,6 +763,8 @@ begin
   GSuite.Test('ReplayStoreInterface', @TestReplayStoreInterface);
   GSuite.Test('ReplayStats', @TestReplayStats);
   GSuite.Test('ReplayStoreIntegration', @TestReplayStoreIntegration);
+  GSuite.Test('ReplayFileStorePersist', @TestReplayFileStorePersist);
+  GSuite.Test('ReplayFileStoreCorruption', @TestReplayFileStoreCorruption);
   if not GSuite.Run then
     Halt(1);
 end.

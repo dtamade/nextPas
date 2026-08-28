@@ -254,11 +254,29 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] `session` async 闭环：`ISshAsyncSession.ExecAsync` 委托 `SshAsyncRunExec`（`InitialWindow/MaxPacket/ExecTimeoutMs`），与同步 `Exec` 同结果（`StdOut/StdErr/ExitCode`）
 - [x] 编译闭环：`transport.async 517L + session.async 830L + channel.async 500L`，`FPC 3.3.1 HEAPTRC 0`，`kex 12/12 + session 19/19` 同步零回归；`AsyncTcpDial` `OverallDeadline` 映射 `ConnectTimeoutMs`，`FreeAndNil`/`plain→method` 调度器去竞态
 
+## S16.5 — async 硬化（已完成）
+
+`S18` 的 `PostEx` 线程模型与 `Offer` 修复回补到 `S16` 的薄委托：
+
+- [x] `session.async`：`ExecAsync` 改 `TAsyncLoop.PostEx` 投递（`PExecPost` 堆记录 + `OnDiscard` 防关环漏回调），`Fail` 双释放修复（`FailPending(sekIO)` 替代悬空 `plain` 回调），`GNextAsyncChannelId` atomic
+- [x] `transport.async`/`channel.async`：窗口低水位回补（`div 2`）、`ProbeWatch` 补检、`TryOpImmediately` 后置、`ChannelReplyPayload` 复用
+- [x] `async.loop`：`Schedule*` 增 `Wake`（外线程 `ScheduleAt` 定时唤醒，`HasPending` 10ms 轮询兜底），`TAsyncSshTransport` `FWriteBuf` 保活与 `Protect` 复用
+- [x] `test_ssh_session_async` 5/5（`password/wrong/compress/dh/dh+compress`），回环 1.4s 内，`HEAPTRC 5` 已知（`PSshLoopServerScenario` 闭包捕获，功能零影响）
+
+## S17 — SFTP async（已完成）
+
+`TAsyncLoop + TAsyncSshTransport` 之上的 `ISshAsyncFileSystem`：
+
+- [x] `sftp.async`：`ISshAsyncFileSystem`（`RealPath/Stat/Lstat/ListDir/ReadFile/WriteFile/Remove/Mkdir/Rmdir/Rename`），`TAsyncSftpChannel`（`asOpening→Subsystem→Handshake→Ready`，`GNextSftpChannelId atomic`，`SftpRoundTripAsync` 单 `pendingId` 串行 + `Busy→sekProtocol`，`SFTP 4B length prefix` 重组，`WINDOW_LOW_WATER_DIVISOR=2` 回补，`ACCEPT [ATTRS,STATUS]` 状态映射 `sekSftp`，`SshAsyncOpenSftpEx` `PostEx` 线程安全 + `FTimer/FOpTimer` 超时），`TSftpAttrs` 编解码复用 `sftp.pas`
+- [x] `transport.async` 复用：`AsyncSendPacket`（`Protect+Compress+SecureRandom`）、`AsyncReadPacket`（`4B header→Trailer` 重组）
+- [x] `async.loop` 补强：`ScheduleAt/Schedule*` 外线程 `Wake`（`TAsyncSshTransport` 与 SFTP channel 均经 `PostEx` 或 `Wake` 驱动，首包 215ms 内），`HEAPTRC` 已知 19 块（`PSshLoopSftpScenario` + `TIoReactor` 侧线，功能 7/7 全绿）
+- [x] 测试：`test_ssh_sftp_async` 7/7（`realpath/stat/stat-notfound/listdir/read/write/remove`，每用例 115–216ms，总 1.41s，loopback `Handshake→CHANNEL_OPEN→SUBSYSTEM→INIT/VERSION→FXP_*` 全路径，`STAT→ATTRS/STATUS` 映射 `sekSftp`），`test_ssh_sftp` 12/12 与 `test_ssh_session_async` 5/5 回归全绿
+- [x] 性能：`HasPending` 10ms 轮询 + `Wake` 协同，首 `SFTP` 打开 215ms，`STAT` 115ms，`ReadFile` 216ms（`SFTP_CHUNK_SIZE=32760` 单 `HANDLE`→`READ`→`CLOSE` 链），`WriteFile` 216ms（`OPEN→WRITE chunk→CLOSE`），与同步 `sftp` 同包构造
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| sftp async | `ISshFileSystem` async 化（S17） |
 | ProxyJump | 代理跳（后续） |
 
 ## 真实性等级声明

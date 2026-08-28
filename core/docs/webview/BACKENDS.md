@@ -158,6 +158,7 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 - `evaluateJavaScript:completionHandler:` 天然异步，直接映射 `Eval`。
 - 会话：`WKWebsiteDataStore default`/`nonPersistent`/自定义 persistent store。
 - **S25 桩状态**：`wk.ffi` 仅 `WKLoadInfo` 记录（Loaded/DllName，无 external/无逻辑）；`wk.loader` 幂等缓存（`GProbed/GInfo`）与 gtk/webview2 同纪律，当前 Linux/Windows 恒 `False`，Darwin 预留 `libobjc`/`WebKit.framework` dlopen + `objc_getClass` 探针（待 stage0 ObjC 能力探通后启用）；`wk.pas` 构造期 `TryLoadWk` fail-fast 抛 `EWebviewBackendUnavailable`，与 webview2 桩同语义；`UserAgent/Zoom` 本地缓存（`FUserAgent/FZoom`）与 `IsOnMainThread` 真线程比对（`platform_thread_id = FOwnerThread`，与 gtk/webview2 对称）已就绪，`Eval` 桩以 `EWebviewEvalFailed` 走 `AOnError` 收口、`Post` 直调（closed 则丢弃）、`WkLiveWindowCount` 计数与 `Close` 幂等同门面纪律。
+- **S26 封版**：`wk.loader` 纪律占位显式引用 `platform_dl_close` 消 hint（`_UseDlDiscipline`，`if False` 分支），`wk.pas` 桩方法以 `{$PUSH}{$HINTS OFF}/{$POP}` 洁净 stub hints、`Post` 三重载加 `FClosed` 守卫（与工厂 Close 幂等一致），全量编译 `-vh` 零 hint 噪声。
 
 ## 5. fake 后端（Wave 1，全平台）
 

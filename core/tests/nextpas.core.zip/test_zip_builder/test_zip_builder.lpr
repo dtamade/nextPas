@@ -1,6 +1,6 @@
 program test_zip_builder;
 {**
- * @desc Fluent Builder 高级感门（二十三期）：链式 `ZipBuilder` 的
+ * @desc Fluent Builder 高级感门（二十三—二十五期）：链式 `ZipBuilder` 的
  *       字节级一致性与 fail-closed 语义证明。
  *
  * 覆盖：
@@ -8,7 +8,9 @@ program test_zip_builder;
  * 2. ForceZip64 形态与结构校验；
  * 3. Finish 后 fail-closed（再次 Add/Finish 拒绝）；
  * 4. StreamTo 直写与缓冲式字节级一致；
- * 5. 混合 unicode + 权限位往返正确性（Builder 产出经 Reader 校验）。
+ * 5. 混合 unicode + 权限位往返正确性（Builder 产出经 Reader 校验）；
+ * 6. Builder 流式（含 descriptor 直写）与 Writer 全等，sequential 侧扫描定位；
+ * 7. Builder vs Writer 零成本（Reserve 链式字节级一致）。
  *}
 {$I nextpas.core.settings.inc}
 uses
@@ -238,6 +240,51 @@ begin
   Check(SameBytes(NewZipReader(LA).ExtractToBytesByName('big.bin'), LBlob), 'Builder stream roundtrip');
 end;
 
+procedure TestBuilderDescriptorParity;
+var
+  B: IZipBuilder;
+  W: IZipWriter;
+  Opts: TZipAddOptions;
+  SBuilder, SWriter: ICompressWriter;
+  LA, LB: TBytes;
+  LBlob: TBytes;
+  Seq: ISequentialZipReader;
+  Info: TZipEntryInfo;
+  S: IDecompressReader;
+  Buf: array[0..8191] of Byte;
+  N: SizeUInt;
+  LCollected: TBytes;
+begin
+  LBlob := PatternBytes(1024*256, 99);
+  Opts := DefaultZipAddOptions;
+  Opts.Method := zmDeflate;
+  Opts.DataDescriptor := True;
+  B := ZipBuilder;
+  SBuilder := B.AddEntryStream('desc.bin', Opts);
+  SBuilder.Write(LBlob[0], Length(LBlob));
+  SBuilder.Close;
+  LA := B.Finish;
+
+  W := NewZipWriter;
+  SWriter := W.AddEntryStream('desc.bin', Opts);
+  SWriter.Write(LBlob[0], Length(LBlob));
+  SWriter.Close;
+  LB := W.Finish;
+  Check(SameBytes(LA, LB), 'Builder descriptor parity vs writer');
+  Check(SameBytes(NewZipReader(LA).ExtractToBytesByName('desc.bin'), LBlob), 'Builder descriptor roundtrip via reader');
+  Seq := NewZipSequentialReader(CreateBytesStreamFrom(LA) as IReader);
+  Check(Seq.Next(Info), 'Builder descriptor seq Next');
+  Check(Info.Name='desc.bin', 'Builder descriptor seq name');
+  S := Seq.Open;
+  SetLength(LCollected,0);
+  repeat
+    N:=S.Read(Buf[0], SizeOf(Buf));
+    if N>0 then begin SetLength(LCollected, Length(LCollected)+Integer(N)); Move(Buf[0], LCollected[Length(LCollected)-Integer(N)], N); end;
+  until N=0;
+  S.Close;
+  Check(SameBytes(LCollected, LBlob), 'Builder descriptor seq roundtrip');
+end;
+
 procedure TestBuilderVsWriterZeroCost;
 var
   B: IZipBuilder;
@@ -267,6 +314,7 @@ begin
   T.Test('StreamTo identical', @TestStreamToIdentical);
   T.Test('Mixed unicode/mode roundtrip', @TestMixedUnicodeAndMode);
   T.Test('Builder stream parity', @TestBuilderStreamParity);
+  T.Test('Builder descriptor parity', @TestBuilderDescriptorParity);
   T.Test('Builder vs writer zero-cost', @TestBuilderVsWriterZeroCost);
   if not T.Run then Halt(1);
 end.

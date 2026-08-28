@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.20（S25—— W3 WKWebView 波次桩：新增 wk.ffi/loader/wk 三件套（Darwin 预留、Linux 桩 false、幂等缓存）、factory wvWk 接线（DefaultWebviewKind 探测序 W2→Gtk→Wk→Fake）、IsOnMainThread 真线程比对+UserAgent/Zoom 本地缓存、test_webview_wk_loader 3 用例、13 门全绿；文档 1.20 对齐，hygiene 0）
+**版本**：1.21（S26—— 终极封版：wk.loader 纪律占位消 hint（platform.dl 显式引用）+ wk 桩 hints 洁净（stubs {$PUSH}{$HINTS OFF}）+ Post Closed 守卫 + IsOnMainThread/UA/Zoom 缓存冻结、13 门全绿；文档 1.21 对齐，hygiene 0、bench 基线无回归、Production Ready 冻结）
+**承接**：1.20（S25—— W3 WKWebView 波次桩：新增 wk.ffi/loader/wk 三件套（Darwin 预留、Linux 桩 false、幂等缓存）、factory wvWk 接线（DefaultWebviewKind 探测序 W2→Gtk→Wk→Fake）、IsOnMainThread 真线程比对+UserAgent/Zoom 本地缓存、test_webview_wk_loader 3 用例、13 门全绿；文档 1.20 对齐，hygiene 0）
 **承接**：1.19（S24—— 门禁与性能收口：新增 test_webview_webview2_post（Win32ShellPost/UserAgent/DataDirectory 4 用例）、12 门全绿；bridge bench 基线复测（TryDecode 9µs/Resolve 5.7µs 等）无回归；文档 1.19 对齐，hygiene 0）
 **承接**：1.18（S23—— W2 调度与稳定收口：Win32 隐藏窗口 PostMessage 调度器（与 gtk idle 对称）、Eval pending exactly-once 泄漏修复（RemovePending+Close 协同）、UserAgent 本地缓存+DataDirectory 透传、wine Post/导航/桥/Eval 全链验证、门禁全绿 hygiene 0）
 **承接**：1.17（S22—— W2 导航事件真接线：NavigationStarting→OnNavStarted / NavigationCompleted→OnNavFinished+Failed（IsSuccess/WebErrorStatus）、wine 双态真触发 + 失败分支 + TriggerFakeWebMessage 桥回环验证、门禁 17/13/6/3 全绿 + wine 导航+桥全交互）

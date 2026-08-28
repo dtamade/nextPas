@@ -148,6 +148,7 @@ var
   PostQuitMessage: procedure(nExitCode: Integer); stdcall;
   GetMessageA: function(lpMsg: PMSG; hWnd: HWND; wMsgFilterMin, wMsgFilterMax: UINT): BOOL; stdcall;
   PeekMessageA: function(lpMsg: PMSG; hWnd: HWND; wMsgFilterMin, wMsgFilterMax: UINT; wRemoveMsg: UINT): BOOL; stdcall;
+  WaitMessage: function: BOOL; stdcall;
   TranslateMessage: function(lpMsg: PMSG): BOOL; stdcall;
   DispatchMessageA: function(lpMsg: PMSG): LRESULT; stdcall;
   SetWindowLongPtrA: function(hwnd: HWND; nIndex: Integer; dwNewLong: PtrInt): PtrInt; stdcall;

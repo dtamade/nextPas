@@ -119,6 +119,7 @@ begin
   Result := FClosed;
 end;
 
+{$PUSH}{$HINTS OFF}
 procedure TWkWebview.Show; begin end;
 procedure TWkWebview.Hide; begin end;
 function TWkWebview.IsVisible: Boolean; begin Result := not FClosed; end;
@@ -151,6 +152,8 @@ function TWkWebview.CanGoBack: Boolean; begin Result := False; end;
 function TWkWebview.GoBack: Boolean; begin Result := False; end;
 function TWkWebview.CanGoForward: Boolean; begin Result := False; end;
 function TWkWebview.GoForward: Boolean; begin Result := False; end;
+{$POP}
+{$PUSH}{$HINTS OFF}
 procedure TWkWebview.Eval(const AJavascript: string; ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
 var LErr: EWebviewEvalFailed;
 begin
@@ -180,9 +183,10 @@ procedure TWkWebview.OnReady(AHandler: TWebviewNotifyMethod); overload; begin en
 procedure TWkWebview.OnReady(AHandler: TWebviewNotifyProc); overload; begin end;
 function TWkWebview.GetInvokes: IWebviewInvokeRegistry; begin Result := nil; end;
 function TWkWebview.GetAssets: IWebviewAssets; begin Result := nil; end;
-procedure TWkWebview.Post(AProc: TWebviewProcRef); overload; begin if Assigned(AProc) then AProc(); end;
-procedure TWkWebview.Post(AProc: TWebviewProcMethod); overload; begin if Assigned(AProc) then AProc(); end;
-procedure TWkWebview.Post(AProc: TWebviewProc); overload; begin if Assigned(AProc) then AProc(); end;
+{$POP}
+procedure TWkWebview.Post(AProc: TWebviewProcRef); overload; begin if FClosed then Exit; if Assigned(AProc) then AProc(); end;
+procedure TWkWebview.Post(AProc: TWebviewProcMethod); overload; begin if FClosed then Exit; if Assigned(AProc) then AProc(); end;
+procedure TWkWebview.Post(AProc: TWebviewProc); overload; begin if FClosed then Exit; if Assigned(AProc) then AProc(); end;
 function TWkWebview.IsOnMainThread: Boolean; begin Result := platform_thread_id = FOwnerThread; end;
 
 end.

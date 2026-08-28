@@ -640,6 +640,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleEx(const ADelay: TDuration; ACallback: TAsyncCallback;
@@ -648,6 +649,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfterEx(ADelay, ACallback, AContext, AOnDiscard);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
@@ -656,6 +658,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfterRef(ADelay, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
@@ -664,6 +667,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfterMethod(ADelay, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleAt(const ADeadline: TDeadline; ACallback: TAsyncCallback;
@@ -672,6 +676,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.Schedule(ADeadline, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
@@ -679,6 +684,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.Cancel(AHandle);
+  if Result then Wake;
 end;
 
 function TAsyncLoop.AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
