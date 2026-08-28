@@ -17,6 +17,8 @@ type
 function IsAsciiString(const AValue: string): Boolean; inline;
 function AsciiLowerChar(const C: Char): Char; inline;
 function AsciiLowerStr(const S: string): string; inline;
+function StrHasPrefix(const S, Prefix: string): Boolean; inline;
+function StrHasSuffix(const S, Suffix: string): Boolean; inline;
 procedure EnsureOutputCapacity(var AValue: string; const ARequired: SizeInt); inline;
 procedure AppendUtf8Codepoint(var ADst: string; var AUsed: SizeInt; const ACp: TUnicodeCodepoint); inline;
 function RangeContains(const ARanges: array of TCodepointRange; const ACodePoint: TUnicodeCodepoint): Boolean;
@@ -76,6 +78,28 @@ begin
   for LI := 1 to Length(Result) do
     if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
       Result[LI] := Chr(Ord(Result[LI]) + 32);
+end;
+
+function StrHasPrefix(const S, Prefix: string): Boolean; inline;
+var LI: SizeInt;
+begin
+  if Length(Prefix) = 0 then Exit(True);
+  if Length(S) < Length(Prefix) then Exit(False);
+  for LI := 1 to Length(Prefix) do
+    if S[LI] <> Prefix[LI] then Exit(False);
+  Result := True;
+end;
+
+function StrHasSuffix(const S, Suffix: string): Boolean; inline;
+var LI, LS, LSu: SizeInt;
+begin
+  LSu := Length(Suffix);
+  if LSu = 0 then Exit(True);
+  LS := Length(S);
+  if LS < LSu then Exit(False);
+  for LI := 1 to LSu do
+    if S[LS - LSu + LI] <> Suffix[LI] then Exit(False);
+  Result := True;
 end;
 
 procedure EnsureOutputCapacity(var AValue: string; const ARequired: SizeInt);
