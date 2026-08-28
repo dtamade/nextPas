@@ -181,6 +181,24 @@ type
     function GetStats: TAsyncTlsPasReplayStats;
   end;
 
+  { 文件持久化重放存储：ITlsPasReplayStore + 原子落盘（tmp+rename），崩溃安全。
+    轻量同步写，适合服务端单机持久化；跨进程需外部 KV 时可用同接口自实现。 }
+  TAsyncTlsPasReplayFileStore = class(TInterfacedObject, ITlsPasReplayStore)
+  private
+    FPath: string;
+    FInner: TAsyncTlsPasReplayCache;
+    FMutex: TPlatformMutex;
+    procedure LoadFromFile;
+    procedure SaveToFile;
+  public
+    constructor Create(const APath: string; ACapacity: Integer = 64; AWindowMs: Int64 = 600000);
+    destructor Destroy; override;
+    function CheckAndAdd(const AFingerprint: TBytes; out IsReplay: Boolean): Boolean;
+    procedure Clear;
+    function Count: Integer;
+    function GetStats: TAsyncTlsPasReplayStats;
+  end;
+
   { 去重判定：指纹入窗口，命中则重放。封装指纹计算与 Store.CheckAndAdd，nil Store 视为不重放。 }
 function TlsPasIsEarlyDataReplayed(const AStore: ITlsPasReplayStore;
   const ATicketIdentity, AEarlyData: TBytes): Boolean;
@@ -272,6 +290,7 @@ procedure TlsPasClearEarlyDataSecrets(var ASecrets: TTlsPasEarlyDataSecrets);
 implementation
 
 uses
+  SysUtils, Classes,
   nextpas.core.errors,
   nextpas.core.system.sysutils,
   nextpas.core.encoding.base64,
@@ -1023,6 +1042,143 @@ begin
   finally
     platform_mutex_unlock(FMutex);
   end;
+end;
+
+{ ======== 文件持久化重放存储 ======== }
+
+constructor TAsyncTlsPasReplayFileStore.Create(const APath: string; ACapacity: Integer; AWindowMs: Int64);
+begin
+  inherited Create;
+  FPath := APath;
+  FInner := TAsyncTlsPasReplayCache.Create(ACapacity, AWindowMs);
+  if platform_mutex_init(FMutex) <> 0 then
+  begin
+    FInner.Free;
+    raise EInvalidOperationError.Create('tlspas: file store mutex init');
+  end;
+  LoadFromFile;
+end;
+
+destructor TAsyncTlsPasReplayFileStore.Destroy;
+begin
+  // best-effort flush
+  try SaveToFile; except end;
+  platform_mutex_destroy(FMutex);
+  FInner.Free;
+  inherited Destroy;
+end;
+
+procedure TAsyncTlsPasReplayFileStore.LoadFromFile;
+var
+  FS: TFileStream;
+  LSize: Int64;
+  LCount, I: Integer;
+  LHash: TBytes;
+  LTime: Int64;
+  LNow: Int64;
+  LBuf: TBytes;
+  LIsReplay: Boolean;
+begin
+  if FPath = '' then Exit;
+  if not FileExists(FPath) then Exit;
+  try
+    FS := TFileStream.Create(FPath, fmOpenRead or fmShareDenyWrite);
+    try
+      LSize := FS.Size;
+      if (LSize = 0) or (LSize mod 40 <> 0) then Exit; // corruption -> ignore
+      LCount := Integer(LSize div 40);
+      SetLength(LBuf, 40);
+      LNow := TlsPasMonoMs;
+      for I := 0 to LCount - 1 do
+      begin
+        FS.ReadBuffer(LBuf[0], 40);
+        SetLength(LHash, 32);
+        Move(LBuf[0], LHash[0], 32);
+        Move(LBuf[32], LTime, 8);
+        if LTime + FInner.FWindowMs <= LNow then
+        begin
+          SecureZeroBytes(LHash);
+          Continue;
+        end;
+        FInner.CheckAndAdd(LHash, LIsReplay);
+        SecureZeroBytes(LHash);
+      end;
+    finally
+      FS.Free;
+    end;
+  except
+    // 腐败或 IO 错：忽略，视为空存储
+  end;
+end;
+
+procedure TAsyncTlsPasReplayFileStore.SaveToFile;
+var
+  FS: TFileStream;
+  I: Integer;
+  LTmp: string;
+  LHash: TBytes;
+  LTime: Int64;
+begin
+  if FPath = '' then Exit;
+  LTmp := FPath + '.tmp';
+  try
+    FS := TFileStream.Create(LTmp, fmCreate);
+    try
+      platform_mutex_lock(FInner.FMutex);
+      try
+        for I := 0 to High(FInner.FHashes) do
+        begin
+          LHash := FInner.FHashes[I];
+          LTime := FInner.FTimes[I];
+          if Length(LHash) <> 32 then Continue;
+          FS.WriteBuffer(LHash[0], 32);
+          FS.WriteBuffer(LTime, 8);
+        end;
+      finally
+        platform_mutex_unlock(FInner.FMutex);
+      end;
+    finally
+      FS.Free;
+    end;
+    if FileExists(FPath) then DeleteFile(FPath);
+    RenameFile(LTmp, FPath);
+  except
+    // 落盘失败不影响内存去重
+    try if FileExists(LTmp) then DeleteFile(LTmp); except end;
+  end;
+end;
+
+function TAsyncTlsPasReplayFileStore.CheckAndAdd(const AFingerprint: TBytes; out IsReplay: Boolean): Boolean;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    Result := FInner.CheckAndAdd(AFingerprint, IsReplay);
+    if Result then
+      SaveToFile;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasReplayFileStore.Clear;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    FInner.Clear;
+    SaveToFile;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasReplayFileStore.Count: Integer;
+begin
+  Result := FInner.Count;
+end;
+
+function TAsyncTlsPasReplayFileStore.GetStats: TAsyncTlsPasReplayStats;
+begin
+  Result := FInner.GetStats;
 end;
 
 { 从 ABuf 组一条完整记录：1=取出（从缓冲移除），0=需要更多字节，

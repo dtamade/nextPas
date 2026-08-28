@@ -134,6 +134,7 @@ var
   GPolicySess: TTlsPasResumptionSession;
   GReplayCache: TAsyncTlsPasReplayCache;
   GReplayStore: ITlsPasReplayStore;
+  GFileStore: ITlsPasReplayStore;
   GReplayFp: TBytes;
 
 procedure BenchPolicyAllowed(aIters: Int64);
@@ -188,6 +189,19 @@ begin
     LIsReplay := TlsPasIsEarlyDataReplayed(GReplayStore, GPolicySess.TicketIdentity, GCH1);
 end;
 
+procedure BenchReplayFileStore(aIters: Int64);
+var I: Int64; IsReplay: Boolean; LFp: TBytes;
+begin
+  SetLength(LFp, 32);
+  FillChar(LFp[0], 32, $33);
+  for I := 1 to aIters do
+  begin
+    LFp[0] := Byte(I and $FF);
+    LFp[1] := Byte((I shr 8) and $FF);
+    GFileStore.CheckAndAdd(LFp, IsReplay);
+  end;
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -218,6 +232,9 @@ begin
   GReplayStore := GReplayCache as ITlsPasReplayStore;
   SetLength(GReplayFp, 32);
   FillChar(GReplayFp[0], 32, $99);
+  if FileExists('/tmp/bench_replay_file.dat') then DeleteFile('/tmp/bench_replay_file.dat');
+  if FileExists('/tmp/bench_replay_file.dat.tmp') then DeleteFile('/tmp/bench_replay_file.dat.tmp');
+  GFileStore := TAsyncTlsPasReplayFileStore.Create('/tmp/bench_replay_file.dat', 64, 600000) as ITlsPasReplayStore;
 end;
 
 var
@@ -248,6 +265,7 @@ begin
     .AddLoop('ReplayStore interface', @BenchReplayStoreInterface)
     .AddLoop('ReplayStats GetStats', @BenchReplayStats)
     .AddLoop('IsEarlyDataReplayed', @BenchReplayIsReplayed)
+    .AddLoop('ReplayFileStore persist', @BenchReplayFileStore)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;
