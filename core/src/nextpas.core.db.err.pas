@@ -432,12 +432,18 @@ begin
           (AErrType = 'CLUSTERDOWN') or (AErrType = 'READONLY') then
     ACategory := decConnection          { 集群路由/副本拒写 }
   else if (AErrType = 'LOADING') or (AErrType = 'BUSY') or
-          (AErrType = 'MASTERDOWN') then
-    ACategory := decCapacity            { 服务端瞬态资源态 }
+          (AErrType = 'MASTERDOWN') or (AErrType = 'TRYAGAIN') then
+    ACategory := decCapacity            { 服务端瞬态资源态/集群重试 }
   else if AErrType = 'EXECABORT' then
     ACategory := decTransaction         { MULTI 队列被 watch/语法否决 }
   else if AErrType = 'NOSCRIPT' then
-    ACategory := decNotSupported;
+    ACategory := decNotSupported
+  else if AErrType = 'CROSSSLOT' then
+    ACategory := decSyntax              { 跨槽键不满足集群约束 }
+  else if AErrType = 'WRONGTYPE' then
+  begin
+    ACategory := decConstraint;         { 类型不匹配视为约束 }
+  end;
 end;
 
 procedure ValidateDbSavepointName(const ABackend: TDbKind;
