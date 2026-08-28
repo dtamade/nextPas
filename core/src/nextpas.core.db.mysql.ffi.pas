@@ -254,4 +254,12 @@ type
 
 implementation
 
+initialization
+  Assert(SizeOf(TMysqlBindMysql) = SIZE_MYSQL_BIND_MYSQL,
+    'Oracle st_mysql_bind sizeof drift');
+  Assert(SizeOf(TMysqlBindMariadb) = SIZE_MYSQL_BIND_MARIADB,
+    'MariaDB st_mysql_bind sizeof drift');
+  Assert(SizeOf(TMysqlBindMariadb) = 112, 'MariaDB 112B pinned');
+  Assert(SizeOf(TMysqlBindMysql) = 72, 'Oracle 72B pinned');
+
 end.

@@ -177,11 +177,19 @@ end;
 
 procedure AssignDsnKey(var ADsn: TDbMysqlDsnParts; const AKey,
   AValue: string); inline;
+var
+  LPort: Int64;
 begin
   if SameText(AKey, 'host') then
     ADsn.Host := AValue
   else if SameText(AKey, 'port') then
-    ADsn.Port := StrToIntDef(AValue, 0)
+  begin
+    LPort := StrToIntDef(AValue, -1);
+    if (LPort < 1) or (LPort > 65535) then
+      raise EDbError.CreateSimple(dbkMysql,
+        'invalid port "' + AValue + '" (expected 1..65535)');
+    ADsn.Port := Integer(LPort);
+  end
   else if SameText(AKey, 'user') then
     ADsn.User := AValue
   else if SameText(AKey, 'password') then
@@ -191,7 +199,8 @@ begin
   else if SameText(AKey, 'socket') then
     ADsn.Socket := AValue
   else
-    raise EDbError.CreateSimple(dbkMysql, 'unknown dsn key "' + AKey + '"');
+    raise EDbError.CreateSimple(dbkMysql,
+      'unknown dsn key "' + AKey + '" (expected host/port/user/password/db/database/socket)');
 end;
 
 function ParseMySqlDsn(const ADsn: string): TDbMysqlDsnParts;

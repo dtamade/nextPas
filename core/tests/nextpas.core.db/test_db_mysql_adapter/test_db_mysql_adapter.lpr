@@ -4,6 +4,7 @@ program test_db_mysql_adapter;
     1 ClassifyMy 归一表：约束双码位/事务/超时/鉴权/语法/连接族/
       容量特例/协议乱序欠归一/SQLSTATE 类兜底
     2 DSN 解析：全字段、缺省值、引号值含空格@、socket、未知键 fail-fast
+    2b 偏移常量与校验：BIND 72/112 尺寸与偏移自证 + 端口 1..65535 校验
     3 占位符槽位计划：顺序恒等 / ?N 重排重写 / 字面量·反引号·三种注释隔离
     4 WriteBindSlot 双方言字节级钉死：公共前四指针、buffer_type 偏移
       与宽度分叉（Oracle 68B/1B vs MariaDB 100B/4B）、is_unsigned、多槽隔离
@@ -13,7 +14,7 @@ program test_db_mysql_adapter;
       roundtrip/列类型四分类/savepoint 回滚/能力自述
     8 大文本与截断（同门控）：超长插入 1406→decConstraint + 1024 字节
       Text 经 fetch_column 重取完整回取（>256 翻倍策略）
-  1-6 全部离线可跑，7-8 live 门控。 }
+  1-7 全部离线可跑，8-9 live 门控。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -128,6 +129,54 @@ begin
   except
     on E: EDbError do
       Check(E.Backend = dbkMysql, 'unknown key raises dbkMysql error');
+  end;
+end;
+
+{ ===== 2b ===== }
+
+procedure TestDsnValidationAndBindOffsets;
+var
+  RMy: TMysqlBindMysql;
+  RMa: TMysqlBindMariadb;
+begin
+  { 偏移常量与记录布局一一钉死（防头文件漂移） }
+  Check(PtrUInt(@RMy.BufferLength) - PtrUInt(@RMy) = PtrUInt(MYSQL_BIND_MYSQL_OFF_BUFFERLENGTH),
+    'mysql off buffer_length');
+  Check(PtrUInt(@RMy.BufferType) - PtrUInt(@RMy) = PtrUInt(MYSQL_BIND_MYSQL_OFF_BUFFERTYPE),
+    'mysql off buffer_type');
+  Check(PtrUInt(@RMy.IsUnsignedByte) - PtrUInt(@RMy) = PtrUInt(MYSQL_BIND_MYSQL_OFF_IS_UNSIGNED),
+    'mysql off is_unsigned');
+  Check(PtrUInt(@RMa.BufferLength) - PtrUInt(@RMa) = PtrUInt(MYSQL_BIND_MARIADB_OFF_BUFFERLENGTH),
+    'mariadb off buffer_length');
+  Check(PtrUInt(@RMa.BufferType) - PtrUInt(@RMa) = PtrUInt(MYSQL_BIND_MARIADB_OFF_BUFFERTYPE),
+    'mariadb off buffer_type');
+  Check(PtrUInt(@RMa.IsUnsignedByte) - PtrUInt(@RMa) = PtrUInt(MYSQL_BIND_MARIADB_OFF_IS_UNSIGNED),
+    'mariadb off is_unsigned');
+  Check(SizeOf(TMysqlBindMysql) = SIZE_MYSQL_BIND_MYSQL, 'mysql sizeof 72');
+  Check(SizeOf(TMysqlBindMariadb) = SIZE_MYSQL_BIND_MARIADB, 'mariadb sizeof 112');
+
+  { 端口范围校验 }
+  try
+    ParseMySqlDsn('port=0');
+    Check(False, 'port 0 must reject');
+  except
+    on E: EDbError do
+      Check(Pos('1..65535', E.Message) > 0, 'port 0 hint');
+  end;
+  try
+    ParseMySqlDsn('port=70000');
+    Check(False, 'port 70000 must reject');
+  except
+    on E: EDbError do
+      Check(E.Backend = dbkMysql, 'port 70000 dbkMysql');
+  end;
+  { 未知键提示包含候选列表 }
+  try
+    ParseMySqlDsn('bogus=v');
+    Check(False, 'unknown key hint');
+  except
+    on E: EDbError do
+      Check(Pos('host/port', E.Message) > 0, 'unknown hint lists keys');
   end;
 end;
 
@@ -472,6 +521,7 @@ begin
   T := TTestSuite.Create('nextpas.core.db.mysql.adapter');
   T.Test('ClassifyMy normalization table', @TestClassifyMyTable);
   T.Test('dsn parsing', @TestDsnParsing);
+  T.Test('dsn validation and bind offsets pinned', @TestDsnValidationAndBindOffsets);
   T.Test('placeholder slot plan', @TestPlaceholderSlotPlan);
   T.Test('bind marshaling both flavors', @TestWriteBindSlotBothFlavors);
   T.Test('negative connect normalized', @TestNegativeConnectNormalized);
