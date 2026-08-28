@@ -90,6 +90,7 @@ uses
   nextpas.core.exception,
   nextpas.core.base.utils,
   nextpas.core.text.conv,
+  nextpas.core.text.kv,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.tx,
@@ -205,8 +206,8 @@ end;
 
 function ParseMySqlDsn(const ADsn: string): TDbMysqlDsnParts;
 var
-  I, LLen, LQuote, LStart: Integer;
-  LKey, LVal: string;
+  LPairs: TKVPairs;
+  LPair: TKVPair;
 begin
   Result.Host := MYSQL_DEFAULT_HOST;
   Result.Port := MYSQL_DEFAULT_PORT;
@@ -214,43 +215,14 @@ begin
   Result.Password := '';
   Result.Database := '';
   Result.Socket := '';
-  LLen := Length(ADsn);
-  I := 1;
-  while I <= LLen do
-  begin
-    while (I <= LLen) and (ADsn[I] = ' ') do
-      Inc(I);
-    if I > LLen then
-      Break;
-    LStart := I;
-    while (I <= LLen) and (ADsn[I] <> '=') do
-      Inc(I);
-    if (I - LStart = 0) or (I > LLen) then
-      raise EDbError.CreateSimple(dbkMysql,
-        'malformed dsn near offset ' + IntToStr(I));
-    LKey := Copy(ADsn, LStart, I - LStart);
-    Inc(I);  { skip '=' }
-    if (I <= LLen) and ((ADsn[I] = '''') or (ADsn[I] = '"')) then
-    begin
-      LQuote := Ord(ADsn[I]);
-      Inc(I);
-      LStart := I;
-      while (I <= LLen) and (Ord(ADsn[I]) <> LQuote) do
-        Inc(I);
-      if I > LLen then
-        raise EDbError.CreateSimple(dbkMysql,
-          'unterminated quoted dsn value for "' + LKey + '"');
-      LVal := Copy(ADsn, LStart, I - LStart);
-      Inc(I);  { closing quote }
-    end
-    else
-    begin
-      LStart := I;
-      while (I <= LLen) and (ADsn[I] <> ' ') do
-        Inc(I);
-      LVal := Copy(ADsn, LStart, I - LStart);
-    end;
-    AssignDsnKey(Result, LKey, LVal);
+  try
+    LPairs := ParseKV(ADsn);
+    for LPair in LPairs do
+      AssignDsnKey(Result, LPair.Key, LPair.Value);
+  except
+    on E: EDbError do raise;
+    on E: Exception do
+      raise EDbError.CreateSimple(dbkMysql, E.Message);
   end;
 end;
 
