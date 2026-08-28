@@ -63,8 +63,11 @@ type
     FOnReady: array of TWebviewNotifyHandler;
     FOnReadyCount: Integer;
     FScaleHandlersRef: array of TWebviewScaleHandler;
+    FScaleHandlersRefCount: Integer;
     FScaleHandlersMethod: array of TWebviewScaleMethod;
+    FScaleHandlersMethodCount: Integer;
     FScaleHandlersProc: array of TWebviewScaleProc;
+    FScaleHandlersProcCount: Integer;
     {$IFDEF MSWINDOWS}
     FEnv: ICoreWebView2Environment;
     FController: ICoreWebView2Controller;
@@ -91,6 +94,9 @@ type
     procedure GrowOnNavFailed; inline;
     procedure GrowOnWindowClosed; inline;
     procedure GrowOnReady; inline;
+    procedure GrowScaleRef; inline;
+    procedure GrowScaleMethod; inline;
+    procedure GrowScaleProc; inline;
     procedure RemovePending(ARec: PEvalRec);
     {$IFDEF MSWINDOWS}
     procedure OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
@@ -615,6 +621,24 @@ begin
     SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
 end;
 
+procedure TWebView2Webview.GrowScaleRef; inline;
+begin
+  if FScaleHandlersRefCount = Length(FScaleHandlersRef) then
+    SetLength(FScaleHandlersRef, WebviewGrowCapacity(Length(FScaleHandlersRef)));
+end;
+
+procedure TWebView2Webview.GrowScaleMethod; inline;
+begin
+  if FScaleHandlersMethodCount = Length(FScaleHandlersMethod) then
+    SetLength(FScaleHandlersMethod, WebviewGrowCapacity(Length(FScaleHandlersMethod)));
+end;
+
+procedure TWebView2Webview.GrowScaleProc; inline;
+begin
+  if FScaleHandlersProcCount = Length(FScaleHandlersProc) then
+    SetLength(FScaleHandlersProc, WebviewGrowCapacity(Length(FScaleHandlersProc)));
+end;
+
 procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
 var I: Integer;
 begin
@@ -635,11 +659,11 @@ procedure TWebView2Webview.DoScaleChanged(ANewScale: Double);
 var I: Integer;
 begin
   FScale := ANewScale;
-  for I := 0 to High(FScaleHandlersRef) do
+  for I := 0 to FScaleHandlersRefCount - 1 do
     if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](ANewScale);
-  for I := 0 to High(FScaleHandlersMethod) do
+  for I := 0 to FScaleHandlersMethodCount - 1 do
     if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](ANewScale);
-  for I := 0 to High(FScaleHandlersProc) do
+  for I := 0 to FScaleHandlersProcCount - 1 do
     if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](ANewScale);
 end;
 
@@ -1126,22 +1150,25 @@ procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
   if not Assigned(AHandler) then Exit;
   EnsureScaleHook;
-  SetLength(FScaleHandlersRef, Length(FScaleHandlersRef) + 1);
-  FScaleHandlersRef[High(FScaleHandlersRef)] := AHandler;
+  GrowScaleRef;
+  FScaleHandlersRef[FScaleHandlersRefCount] := AHandler;
+  Inc(FScaleHandlersRefCount);
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleMethod);
 begin
   if not Assigned(AHandler) then Exit;
   EnsureScaleHook;
-  SetLength(FScaleHandlersMethod, Length(FScaleHandlersMethod) + 1);
-  FScaleHandlersMethod[High(FScaleHandlersMethod)] := AHandler;
+  GrowScaleMethod;
+  FScaleHandlersMethod[FScaleHandlersMethodCount] := AHandler;
+  Inc(FScaleHandlersMethodCount);
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleProc);
 begin
   if not Assigned(AHandler) then Exit;
   EnsureScaleHook;
-  SetLength(FScaleHandlersProc, Length(FScaleHandlersProc) + 1);
-  FScaleHandlersProc[High(FScaleHandlersProc)] := AHandler;
+  GrowScaleProc;
+  FScaleHandlersProc[FScaleHandlersProcCount] := AHandler;
+  Inc(FScaleHandlersProcCount);
 end;
 procedure TWebView2Webview.Navigate(const AUrl: string);
 begin
