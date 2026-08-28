@@ -862,9 +862,7 @@ begin
   if LInputSize < 10 then
     raise EIOError.Create('gzip: header too short');
   LOutLen := 0;
-  LCapacity := SizeUInt(Length(AData)) * 4;
-  if (LCapacity < SizeUInt(Length(AData))) or (LCapacity > AMaxOutputSize) then
-    LCapacity := AMaxOutputSize;
+  LCapacity := CompressInitialDecompressCapacity(SizeUInt(Length(AData)), AMaxOutputSize);
   LOffset := 0;
 
   repeat
@@ -951,11 +949,11 @@ begin
       LRequiredCapacity := LOutLen + LHave;
       if LRequiredCapacity > SizeUInt(Length(Result)) then
       begin
-        LCapacity := LRequiredCapacity;
-        if LCapacity > AMaxOutputSize div 2 then
-          LCapacity := AMaxOutputSize
-        else
-          LCapacity := LCapacity * 2;
+        LCapacity := CompressNextCapacity(LRequiredCapacity, AMaxOutputSize);
+        if LCapacity = 0 then
+          LCapacity := AMaxOutputSize;
+        if LCapacity < LRequiredCapacity then
+          LCapacity := LRequiredCapacity;
         SetLength(Result, LCapacity);
       end;
       if LHave > 0 then
