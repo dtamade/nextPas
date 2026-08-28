@@ -16,7 +16,7 @@
 | `TZipAddOptions` | 单条目完整选项：`Method` / `ModTimeUnixSec`（<0 取 DOS 下限）/ `Mode`（unix 模式字，0 取默认）/ `Password`（非空走 WinZip AE-2 加密，INV-14）/ `AesStrength`（1/2/3 = AES-128/192/256，0 取 3）/ `DataDescriptor`（仅 `AddEntryStream` 生效，INV-15） |
 | `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`MaxTotalOutputSize: UInt64`——跨条目总输出上限，0=不限（INV-17）；`Password`——WinZip AES 解密口令（INV-14） |
 | `TZipExtractOptions` | fs 解包选项：`RestoreMode` / `SkipSymlinks` / `MaxOutputSize` / `MaxTotalOutputSize` |
-| `IZipBuilder` | 链式构造器：`Add`/`AddDeflate`/`AddWithOptions`/`AddDirectory`/`Reserve`/`StreamTo`/`Finish`/`FinishTo` 薄委托 `IZipWriter`（二十三期） |
+| `IZipBuilder` | 链式构造器：`Add`/`AddDeflate`/`AddWithOptions`/`AddDirectory`/`AddEntryStream`/`Reserve`/`StreamTo`/`Finish`/`FinishTo` 薄委托 `IZipWriter`（二十三—二十四期完备） |
 
 ### 1.2 工厂函数
 
@@ -51,7 +51,7 @@
 
 ### 1.3.1 链式构造器（Fluent Builder）
 
-`IZipBuilder` 为 `IZipWriter` 的薄链式门面（`nextpas.core.zip.builder`），方法 `Add`/`AddDeflate`/`AddWithOptions`/`AddDirectory`/`Reserve`/`StreamTo` 均返回 `Self` 支持链式；`Finish`/`FinishTo`/`EntryCount` 委托写器语义，`ZipBuilder`/`ZipBuilderForceZip64` 为便捷工厂，字节形态与直接写器全等（`Reserve` 亦链式）。
+`IZipBuilder` 为 `IZipWriter` 的薄链式门面（`nextpas.core.zip.builder`），链式方法 `Add`/`AddDeflate`/`AddWithOptions`/`AddDirectory`/`Reserve`/`StreamTo` 均返回 `Self`；`AddEntryStream` 直通写器流式条目（语义与 `IZipWriter.AddEntryStream` 一致，含 `DataDescriptor` 直写与 fail-closed）；`Finish`/`FinishTo`/`EntryCount` 委托写器语义，`ZipBuilder`/`ZipBuilderForceZip64` 为便捷工厂，字节形态与直接写器全等（`Reserve` 亦链式，额外开销仅 Builder 对象本身 1 alloc）。
 
 ### 1.4 读器方法
 
