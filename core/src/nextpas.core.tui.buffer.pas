@@ -497,8 +497,20 @@ begin
           LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
           CellSetSymbolAscii(LCP^, AnsiChar(LFirst));
           CellApplyStyle(LCP^, AStyle);
-          if LCount > 1 then
-            Move(LCP^, (LCP + 1)^, (LCount - 1) * SizeOf(TCell));
+          LI := 1;
+          while LI < LCount do
+          begin
+            if LI * 2 <= LCount then
+            begin
+              Move(LCP^, (LCP + LI)^, LI * SizeOf(TCell));
+              Inc(LI, LI);
+            end
+            else
+            begin
+              Move(LCP^, (LCP + LI)^, (LCount - LI) * SizeOf(TCell));
+              Break;
+            end;
+          end;
           Result := LCount;
           Exit;
         end;
