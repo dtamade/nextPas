@@ -497,6 +497,14 @@ begin
   begin
     AFolder.BindPairs[LI].InIndex := Cardinal(AReader.ReadNumber);
     AFolder.BindPairs[LI].OutIndex := Cardinal(AReader.ReadNumber);
+    if AFolder.BindPairs[LI].InIndex >= LTotalIn then
+      raise ESevenZError.Create('bind pair InIndex out of range');
+    if AFolder.BindPairs[LI].OutIndex >= LNumCoders then
+      raise ESevenZError.Create('bind pair OutIndex out of range');
+    for LJ := 0 to LI - 1 do
+      if (AFolder.BindPairs[LJ].InIndex = AFolder.BindPairs[LI].InIndex) or
+         (AFolder.BindPairs[LJ].OutIndex = AFolder.BindPairs[LI].OutIndex) then
+        raise ESevenZError.Create('duplicate bind pair index');
   end;
   LNumPacked := LTotalIn - LNumBindPairs;
   SetLength(AFolder.PackedInIndices, LNumPacked);
@@ -668,6 +676,8 @@ begin
           LSum := 0;
           for LI := 0 to LNumFolders - 1 do
           begin
+            if LSum > High(UInt64) - AInfo.SubCounts[LI] then
+              raise ESevenZLimitError.Create('substream count overflow');
             LSum := LSum + AInfo.SubCounts[LI];
             if LSum > SEVENZ_MAX_FILE_COUNT then
               raise ESevenZLimitError.Create('total substream count out of range');
@@ -685,6 +695,8 @@ begin
             for LJ := 0 to SizeInt(AInfo.SubCounts[LI]) - 2 do
             begin
               AInfo.Substreams[LBase + LJ].Size := AReader.ReadNumber;
+              if LSum > High(UInt64) - AInfo.Substreams[LBase + LJ].Size then
+                raise ESevenZError.Create('substream size overflow');
               LSum := LSum + AInfo.Substreams[LBase + LJ].Size;
             end;
             if LSum > AInfo.Folders[LI].TotalUnpackSize then
@@ -778,6 +790,7 @@ var
   begin
     if ASub.ReadByte <> 0 then
       raise ESevenZError.Create('external names not supported');
+    LUnitBuf := nil;
     for LN := 0 to ANumFiles - 1 do
     begin
       { 手动容量跟踪的几何扩容：逐单元 SetLength 会退化为平方级拷贝 }

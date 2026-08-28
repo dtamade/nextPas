@@ -79,8 +79,6 @@ begin
     soBeginning: LNewPos := Offset;
     soCurrent:   LNewPos := FPos + Offset;
     soEnd:       LNewPos := Int64(Length(FData)) + Offset;
-  else
-    LNewPos := FPos;
   end;
   if LNewPos < 0 then LNewPos := 0;
   if LNewPos > Length(FData) then LNewPos := Length(FData);

@@ -162,6 +162,7 @@ var
   LPos: SizeInt;
   LSaltNib, LIvNib: Byte;
 begin
+  Result := nil;
   { 与解析端同一约束：非法档位/超长盐 IV 在序列化前即拒 }
   if (ANumCyclesPower > 24) and (ANumCyclesPower <> $3F) then
     raise ESevenZError.CreateFmt(

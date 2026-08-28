@@ -70,6 +70,9 @@ type
       ALevel: TSevenZCompressionLevel): TSevenZLzmaEncoded;
   end;
 
+  {** @desc 条目信息数组快照 *}
+  TSevenZEntryInfoArray = array of TSevenZEntryInfo;
+
   {** @desc 7z 归档读端：条目枚举与按索引提取（内容以字节返回） *}
   ISevenZReader = interface
     ['{7E1A6E11-3F42-4C8B-9A17-0DE07A000003}']
@@ -79,14 +82,20 @@ type
     function Entry(AIndex: Integer): TSevenZEntryInfo;
     {** 按名称查条目索引；不存在返回 -1 *}
     function Find(const AName: string): Integer;
+    {** 大小写不敏感按名称查条目索引；不存在返回 -1 *}
+    function FindIgnoreCase(const AName: string): Integer;
     {** 是否包含指定名称的条目 *}
     function Contains(const AName: string): Boolean;
     {** 按名称查条目信息；存在返回 True 并填充 AInfo *}
     function TryGetEntry(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
+    {** TryGetEntry 别名，语义一致 *}
+    function TryEntryByName(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
     {** 按名称直接取条目信息；不存在抛 EArgumentError *}
     function EntryByName(const AName: string): TSevenZEntryInfo;
     function GetIsEmpty: Boolean;
     property IsEmpty: Boolean read GetIsEmpty;
+    function GetEntries: TSevenZEntryInfoArray;
+    property Entries: TSevenZEntryInfoArray read GetEntries;
     {** 提取文件条目内容并校验 CRC；目录/空文件返回 nil；
         AIndex 越界抛参数错误。重复提取同一 solid 文件夹走缓存 *}
     function Extract(AIndex: Integer): TBytes;

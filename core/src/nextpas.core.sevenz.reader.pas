@@ -53,10 +53,13 @@ type
     function EntryCount: Integer;
     function Entry(AIndex: Integer): TSevenZEntryInfo;
     function Find(const AName: string): Integer;
+    function FindIgnoreCase(const AName: string): Integer;
     function Contains(const AName: string): Boolean;
     function TryGetEntry(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
+    function TryEntryByName(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
     function EntryByName(const AName: string): TSevenZEntryInfo;
     function GetIsEmpty: Boolean;
+    function GetEntries: TSevenZEntryInfoArray;
     function Extract(AIndex: Integer): TBytes;
     function ExtractTo(const AWriter: IWriter; AIndex: Integer): Int64;
     function OpenStream(AIndex: Integer): IStream;
@@ -628,6 +631,21 @@ begin
       Exit(LI);
 end;
 
+function TSevenZReaderImpl.FindIgnoreCase(const AName: string): Integer;
+var
+  LI: Integer;
+  LA, LB: string;
+begin
+  Result := -1;
+  LA := LowerCase(AName);
+  for LI := 0 to Length(FEntries) - 1 do
+  begin
+    LB := LowerCase(FEntries[LI].Name);
+    if LB = LA then
+      Exit(LI);
+  end;
+end;
+
 function TSevenZReaderImpl.Contains(const AName: string): Boolean;
 begin
   Result := Find(AName) >= 0;
@@ -644,6 +662,11 @@ begin
     AInfo := Default(TSevenZEntryInfo);
 end;
 
+function TSevenZReaderImpl.TryEntryByName(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
+begin
+  Result := TryGetEntry(AName, AInfo);
+end;
+
 function TSevenZReaderImpl.EntryByName(const AName: string): TSevenZEntryInfo;
 var LIdx: Integer;
 begin
@@ -656,6 +679,15 @@ end;
 function TSevenZReaderImpl.GetIsEmpty: Boolean;
 begin
   Result := Length(FEntries) = 0;
+end;
+
+function TSevenZReaderImpl.GetEntries: TSevenZEntryInfoArray;
+var LI: Integer;
+begin
+  Result := nil;
+  SetLength(Result, Length(FEntries));
+  for LI := 0 to High(FEntries) do
+    Result[LI] := FEntries[LI];
 end;
 
 function TSevenZReaderImpl.Extract(AIndex: Integer): TBytes;
@@ -696,7 +728,7 @@ begin
   if LOff + LLen > Length(LData) then
     raise ESevenZError.Create('substream window exceeds folder output');
   LHasCrc := FStreams.Substreams[LGsub].HasCrc;
-  if LHasCrc then LCrc := 0;
+  LCrc := 0;
   Result := 0;
   while LLen > 0 do
   begin

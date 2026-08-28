@@ -9,6 +9,7 @@ unit nextpas.core.sevenz.filters;
  *}
 
 {$I nextpas.core.settings.inc}
+{$PUSH}{$WARN 5024 OFF}
 
 interface
 
@@ -65,8 +66,6 @@ begin
     szfBcjArmt: Result := SEVENZ_METHOD_BCJ_ARMT;
     szfBcjRiscv:Result := SEVENZ_METHOD_BCJ_RISCV;
     szfDelta:  Result := SEVENZ_METHOD_DELTA;
-  else
-    raise ESevenZError.Create('unknown filter');
   end;
 end;
 
@@ -258,5 +257,5 @@ begin
       end;
   end;
 end;
-
+{$POP}
 end.

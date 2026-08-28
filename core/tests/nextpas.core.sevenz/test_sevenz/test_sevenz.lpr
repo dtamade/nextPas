@@ -1269,6 +1269,7 @@ function ConstBytes(const AC: array of Byte): TBytes;
 var
   LI: Integer;
 begin
+  Result := nil;
   SetLength(Result, Length(AC));
   for LI := 0 to High(AC) do
     Result[LI] := AC[LI];
@@ -2844,7 +2845,7 @@ begin
 end;
 
 procedure TestExtractToSinglePassLarge;
-var LW: ISevenZWriter; LR: ISevenZReader; LData, LBuf: TBytes; Sink: TSinkRecorder;
+var LW: ISevenZWriter; LR: ISevenZReader; LData: TBytes; Sink: TSinkRecorder;
 begin
   LData := Randomish(300*1024, 88);
   LW := TSevenZWriterImpl.Create;
@@ -2898,6 +2899,45 @@ begin
   LW.AddFile('a.txt', BytesOf([$01]));
   LR := TSevenZReaderImpl.Create(LW.Finish);
   Check(not LR.IsEmpty, 'non-empty not empty');
+end;
+
+procedure TestReaderEntries;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('b.txt', BytesOf([$02,$03]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.Entries;
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'entries len');
+  CheckEqual('a.txt', Arr[0].Name, 'entries 0');
+  CheckEqual('b.txt', Arr[1].Name, 'entries 1');
+  Arr[0].Name := 'mutated';
+  CheckEqual('a.txt', LR.Entry(0).Name, 'entries snapshot isolation');
+end;
+
+procedure TestReaderFindIgnoreCase;
+var LW: ISevenZWriter; LR: ISevenZReader;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('Docs/A.BIN', BytesOf([$01]));
+  LW.AddFile('docs/b.txt', BytesOf([$02]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  CheckEqual(Int64(0), Int64(LR.FindIgnoreCase('docs/a.bin')), 'ignorecase 0');
+  CheckEqual(Int64(0), Int64(LR.FindIgnoreCase('DOCS/A.BIN')), 'ignorecase upper');
+  CheckEqual(Int64(1), Int64(LR.FindIgnoreCase('DOCS/B.TXT')), 'ignorecase 1');
+  CheckEqual(Int64(-1), Int64(LR.FindIgnoreCase('missing.txt')), 'ignorecase miss');
+end;
+
+procedure TestReaderTryEntryByName;
+var LW: ISevenZWriter; LR: ISevenZReader; Info: TSevenZEntryInfo;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$AA]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Check(LR.TryEntryByName('a.txt', Info), 'tryentry found');
+  CheckEqual('a.txt', Info.Name, 'tryentry name');
+  Check(not LR.TryEntryByName('missing.txt', Info), 'tryentry miss');
 end;
 
 begin
@@ -3060,6 +3100,9 @@ begin
   T.Test('reader lru cache two entries', @TestReaderLruCacheTwoEntries);
   T.Test('reader entry by name', @TestReaderEntryByName);
   T.Test('reader is empty', @TestReaderIsEmpty);
+  T.Test('reader entries snapshot', @TestReaderEntries);
+  T.Test('reader find ignore case', @TestReaderFindIgnoreCase);
+  T.Test('reader try entry by name', @TestReaderTryEntryByName);
 
   if not T.Run then Halt(1);
 end.
