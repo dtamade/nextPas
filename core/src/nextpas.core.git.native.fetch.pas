@@ -42,6 +42,21 @@ uses
   nextpas.core.git.native.negotiate,
   nextpas.core.git.native.sideband;
 
+function BytesOfString(const S: string): TBytes;
+var
+  L: Integer;
+begin
+  L := Length(S);
+  SetLength(Result, L);
+  if L > 0 then Move(S[1], Result[0], L);
+end;
+
+function StringOfBytes(const B: TBytes): string;
+begin
+  SetLength(Result, Length(B));
+  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
+end;
+
 function ConcatBytes(const A, B: TBytes): TBytes;
 begin
   SetLength(Result, Length(A) + Length(B));
@@ -102,7 +117,7 @@ begin
     if ErrMsg = '' then ErrMsg := Out_.StdOut;
     raise EGitError.CreateFmt('upload-pack failed (%d): %s', [Out_.ExitCode, Trim(ErrMsg)]);
   end;
-  RespBytes := GitStringToBytes(Out_.StdOut);
+  RespBytes := BytesOfString(Out_.StdOut);
   if Length(RespBytes) = 0 then
     raise EGitError.Create('fetch: empty response from upload-pack');
   Pkts := GitPktScan(RespBytes);
@@ -119,7 +134,7 @@ begin
     if Pkt.Kind <> gpkData then Continue;
     if Length(Pkt.Data) = 0 then Continue;
     if (Length(Pkt.Data) >= 3) and (Pkt.Data[0] = Ord('E')) and (Pkt.Data[1] = Ord('R')) and (Pkt.Data[2] = Ord('R')) then
-      raise EGitError.Create('fetch: server ERR: ' + Trim(GitBytesToString(Pkt.Data)));
+      raise EGitError.Create('fetch: server ERR: ' + Trim(StringOfBytes(Pkt.Data)));
     if (Length(Pkt.Data) >= 3) and (Pkt.Data[0] = Ord('N')) and (Pkt.Data[1] = Ord('A')) and (Pkt.Data[2] = Ord('K')) then
       Continue;
     if (Length(Pkt.Data) >= 3) and (Pkt.Data[0] = Ord('A')) and (Pkt.Data[1] = Ord('C')) and (Pkt.Data[2] = Ord('K')) then
@@ -142,7 +157,7 @@ begin
         gsbProgress:
           begin
             SetLength(Demuxed.Progress, Length(Demuxed.Progress) + 1);
-            Demuxed.Progress[High(Demuxed.Progress)] := GitBytesToString(Payload);
+            Demuxed.Progress[High(Demuxed.Progress)] := StringOfBytes(Payload);
             SetLength(Demuxed.Raw, Length(Demuxed.Raw) + 1);
             Demuxed.Raw[High(Demuxed.Raw)].Kind := Kind;
             Demuxed.Raw[High(Demuxed.Raw)].Data := Payload;
@@ -150,7 +165,7 @@ begin
         gsbError:
           begin
             SetLength(Demuxed.Errors, Length(Demuxed.Errors) + 1);
-            Demuxed.Errors[High(Demuxed.Errors)] := GitBytesToString(Payload);
+            Demuxed.Errors[High(Demuxed.Errors)] := StringOfBytes(Payload);
             SetLength(Demuxed.Raw, Length(Demuxed.Raw) + 1);
             Demuxed.Raw[High(Demuxed.Raw)].Kind := Kind;
             Demuxed.Raw[High(Demuxed.Raw)].Data := Payload;

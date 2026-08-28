@@ -272,33 +272,58 @@ end;
 
 function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
 var
-  LRest, LToken: string;
-  LComma: SizeInt;
-  LServerTrim: string;
+  S: string;
+  Server: string;
+  SStart, SLen: SizeInt;
+  ServerStart, ServerLen: SizeInt;
+  RestStart, RestLen: SizeInt;
+  CommaPos: SizeInt;
+  TokenStart, TokenLen: SizeInt;
+  TStart, TLen: SizeInt;
+  VStart, VLen: SizeInt;
+  I: SizeInt;
 begin
   Result := False;
   if (AIfNoneMatch = '') or (AServerETag = '') then
     Exit;
-  LRest := Trim(AIfNoneMatch);
-  if LRest = '*' then
-    Exit(True);
-  { RFC 7232 §3.3: weak comparison — W/"x" matches "x", zero-alloc via CompareMem. }
-  LServerTrim := Trim(AServerETag);
-  while LRest <> '' do
+  S := AIfNoneMatch;
+  SStart := 1; SLen := Length(S);
+  while (SLen > 0) and (S[SStart] <= ' ') do begin Inc(SStart); Dec(SLen); end;
+  while (SLen > 0) and (S[SStart + SLen - 1] <= ' ') do Dec(SLen);
+  if SLen = 0 then Exit;
+  if (SLen = 1) and (S[SStart] = '*') then Exit(True);
+  RestStart := SStart; RestLen := SLen;
+  Server := AServerETag;
+  ServerStart := 1; ServerLen := Length(Server);
+  while (ServerLen > 0) and (Server[ServerStart] <= ' ') do begin Inc(ServerStart); Dec(ServerLen); end;
+  while (ServerLen > 0) and (Server[ServerStart + ServerLen - 1] <= ' ') do Dec(ServerLen);
+  while RestLen > 0 do
   begin
-    LComma := Pos(',', LRest);
-    if LComma > 0 then
-    begin
-      LToken := Trim(System.Copy(LRest, 1, LComma - 1));
-      LRest := Trim(System.Copy(LRest, LComma + 1, Length(LRest) - LComma));
-    end
+    CommaPos := 0;
+    for I := 1 to RestLen do
+      if S[RestStart + I - 1] = ',' then begin CommaPos := I; Break; end;
+    if CommaPos > 0 then
+      TokenLen := CommaPos - 1
     else
+      TokenLen := RestLen;
+    TokenStart := RestStart;
+    while (TokenLen > 0) and (S[TokenStart] <= ' ') do begin Inc(TokenStart); Dec(TokenLen); end;
+    while (TokenLen > 0) and (S[TokenStart + TokenLen - 1] <= ' ') do Dec(TokenLen);
+    if TokenLen > 0 then
     begin
-      LToken := Trim(LRest);
-      LRest := '';
+      TStart := TokenStart; TLen := TokenLen;
+      VStart := ServerStart; VLen := ServerLen;
+      if (TLen >= 2) and (S[TStart] = 'W') and (S[TStart + 1] = '/') then begin Inc(TStart, 2); Dec(TLen, 2); end;
+      if (VLen >= 2) and (Server[VStart] = 'W') and (Server[VStart + 1] = '/') then begin Inc(VStart, 2); Dec(VLen, 2); end;
+      if TLen = VLen then
+      begin
+        if TLen = 0 then Exit(True);
+        if CompareMem(@S[TStart], @Server[VStart], SizeUInt(TLen)) then Exit(True);
+      end;
     end;
-    if HttpWeakETagEquals(LToken, LServerTrim) then
-      Exit(True);
+    if CommaPos = 0 then Break;
+    RestStart := RestStart + CommaPos;
+    RestLen := RestLen - CommaPos;
   end;
 end;
 

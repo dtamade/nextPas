@@ -25,21 +25,15 @@ const
 
 function GitOidFromHex(const AHex: string): TGitOid;
 function GitOidToHex(const AOid: TGitOid): string;
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
-function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
+function GitOidIsValidHex(const AHex: string): Boolean;
+function GitOidSame(const AA, AB: TGitOid): Boolean;
 function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
-
-{ Raw byte <-> string helpers: 1:1 char mapping via Move, no codepage convert.
-  Hot path for pkt-line / advertise / sideband payloads. }
-function GitBytesToString(const ABytes: TBytes): string; inline;
-function GitStringToBytes(const S: string): TBytes; inline;
-function GitIsHex40(const S: string): Boolean; inline;
+function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
 
 implementation
 
-function HexVal(ACh: Char): Integer; inline;
+function HexVal(ACh: Char): Integer;
 begin
   case ACh of
     '0'..'9': Result := Ord(ACh) - Ord('0');
@@ -50,7 +44,7 @@ begin
   end;
 end;
 
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
+function GitOidIsValidHex(const AHex: string): Boolean;
 var
   I: Integer;
 begin
@@ -87,7 +81,7 @@ begin
   end;
 end;
 
-function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
+function GitOidSame(const AA, AB: TGitOid): Boolean;
 var
   I: Integer;
 begin
@@ -122,7 +116,7 @@ begin
   raise EGitError.CreateFmt('unknown git object kind "%s"', [AName]);
 end;
 
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
+function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
 begin
   // Directory entries (040000) point at trees, gitlinks (160000) at commits,
   // everything else (100644/100755/120000 regular/symlink) is blob content.
@@ -131,25 +125,6 @@ begin
   if AMode = $E000 then
     Exit(gokCommit);
   Result := gokBlob;
-end;
-
-function GitBytesToString(const ABytes: TBytes): string; inline;
-begin
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
-end;
-
-function GitStringToBytes(const S: string): TBytes; inline;
-begin
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
-end;
-
-function GitIsHex40(const S: string): Boolean; inline;
-begin
-  Result := GitOidIsValidHex(S);
 end;
 
 end.

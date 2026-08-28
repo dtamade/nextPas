@@ -37,6 +37,13 @@ function GitHasCapability(const AAdv: TGitAdvertised; const ACap: string): Boole
 
 implementation
 
+function BytesToStr(const B: TBytes): string;
+begin
+  SetLength(Result, Length(B));
+  if Length(B) > 0 then
+    Move(B[0], Result[1], Length(B));
+end;
+
 function SplitBySpace(const S: string): TStringArray;
 var
   I, Start: Integer;
@@ -62,6 +69,21 @@ begin
   end;
 end;
 
+function IsHex40(const S: string): Boolean;
+var
+  I: Integer;
+  C: Char;
+begin
+  if Length(S) <> 40 then Exit(False);
+  for I := 1 to 40 do
+  begin
+    C := S[I];
+    if not (((C >= '0') and (C <= '9')) or ((C >= 'a') and (C <= 'f')) or ((C >= 'A') and (C <= 'F'))) then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
 function GitParseAdvertise(const AStream: TBytes): TGitAdvertised;
 var
   Pkts: TGitPktArray;
@@ -84,7 +106,7 @@ begin
     if Pkts[I].Kind = gpkDelim then
       Continue;
     // gpkData
-    Line := GitBytesToString(Pkts[I].Data);
+    Line := BytesToStr(Pkts[I].Data);
     // Git pkt payloads for advertise end with LF; allow missing LF for robustness but strip if present
     if (Length(Line) > 0) and (Line[Length(Line)] = #10) then
       SetLength(Line, Length(Line) - 1);
@@ -94,7 +116,7 @@ begin
     if SpPos = 0 then
       raise EGitError.CreateFmt('advertise malformed line "%s"', [Line]);
     OidHex := Copy(Line, 1, SpPos - 1);
-    if not GitOidIsValidHex(OidHex) then
+    if not IsHex40(OidHex) then
       raise EGitError.CreateFmt('advertise bad oid "%s"', [OidHex]);
     Rest := Copy(Line, SpPos + 1, MaxInt);
     NulPos := Pos(#0, Rest);

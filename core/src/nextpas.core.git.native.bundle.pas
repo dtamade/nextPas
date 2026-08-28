@@ -82,6 +82,15 @@ begin
   Result := Copy(S, A, B - A + 1);
 end;
 
+function IsHex(const S: string): Boolean;
+var I: Integer;
+begin
+  if Length(S) <> 40 then Exit(False);
+  for I := 1 to Length(S) do
+    if not (S[I] in ['0'..'9','a'..'f','A'..'F']) then Exit(False);
+  Result := True;
+end;
+
 function LowerHex(const S: string): string;
 begin
   Result := nextpas.core.text.conv.LowerCase(S);
@@ -245,7 +254,7 @@ begin
       if Length(Line) < 42 then
         raise EGitError.CreateFmt('bundle: bad prereq line "%s"', [Line]);
       OidHex := Copy(Line, 2, 40);
-      if not GitOidIsValidHex(OidHex) then
+      if not IsHex(OidHex) then
         raise EGitError.CreateFmt('bundle: bad prereq oid "%s"', [Line]);
       Oid := GitOidFromHex(LowerHex(OidHex));
       Rest := '';
@@ -266,7 +275,7 @@ begin
       if Length(Line) < 41 then
         raise EGitError.CreateFmt('bundle: bad ref line "%s"', [Line]);
       OidHex := Copy(Line, 1, 40);
-      if not GitOidIsValidHex(OidHex) then
+      if not IsHex(OidHex) then
         raise EGitError.CreateFmt('bundle: bad ref oid "%s"', [Line]);
       if Line[41] <> ' ' then
         raise EGitError.CreateFmt('bundle: bad ref spacing "%s"', [Line]);
