@@ -5,6 +5,7 @@ unit nextpas.core.git.native.base;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.exception;
 
 type
@@ -25,15 +26,18 @@ const
 
 function GitOidFromHex(const AHex: string): TGitOid;
 function GitOidToHex(const AOid: TGitOid): string;
-function GitOidIsValidHex(const AHex: string): Boolean;
-function GitOidSame(const AA, AB: TGitOid): Boolean;
+function GitOidIsValidHex(const AHex: string): Boolean; inline;
+function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
+function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
+
+function GitBytesToString(const ABytes: TBytes): string; inline;
+function GitStringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
-function HexVal(ACh: Char): Integer;
+function HexVal(ACh: Char): Integer; inline;
 begin
   case ACh of
     '0'..'9': Result := Ord(ACh) - Ord('0');
@@ -44,7 +48,7 @@ begin
   end;
 end;
 
-function GitOidIsValidHex(const AHex: string): Boolean;
+function GitOidIsValidHex(const AHex: string): Boolean; inline;
 var
   I: Integer;
 begin
@@ -81,7 +85,7 @@ begin
   end;
 end;
 
-function GitOidSame(const AA, AB: TGitOid): Boolean;
+function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 var
   I: Integer;
 begin
