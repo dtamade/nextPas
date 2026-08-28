@@ -45,7 +45,7 @@ function ServeFileDownload(const APath: string): THttpHandlerFunc; overload;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload;
 
 {** @desc Strong ETag from size + mtime: quoted "hexsize-hexmtime". }
-function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string; inline;
 {** @desc If-None-Match match: `*`, exact quoted ETag, or comma-separated list. }
 function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
 {** @desc True when If-Modified-Since parses and resource mtime <= that instant. }
@@ -355,10 +355,45 @@ function ParseRangeHeader(const ARange: string; AFileSize: Int64;
 const
   BYTES_PREFIX = 'bytes=';
   BYTES_PREFIX_LEN = 6;
+
+  function TryParseSlice(const S: string; APos, ALen: Integer; out V: Int64): Boolean; inline;
+  var
+    I, E: Integer;
+    C: Char;
+    Neg: Boolean;
+    U: UInt64;
+  begin
+    Result := False; V := 0;
+    if ALen <= 0 then Exit;
+    I := APos; E := APos + ALen;
+    Neg := False;
+    if S[I] = '-' then begin Neg := True; Inc(I); if I >= E then Exit; end
+    else if S[I] = '+' then begin Inc(I); if I >= E then Exit; end;
+    U := 0;
+    while I < E do
+    begin
+      C := S[I];
+      if (C < '0') or (C > '9') then Exit;
+      if U > High(UInt64) div 10 then Exit;
+      U := U * 10 + UInt64(Ord(C) - 48);
+      Inc(I);
+    end;
+    if Neg then
+    begin
+      if U > UInt64(High(Int64)) + 1 then Exit;
+      V := -Int64(U);
+    end else
+    begin
+      if U > UInt64(High(Int64)) then Exit;
+      V := Int64(U);
+    end;
+    Result := True;
+  end;
+
 var
   LDashPos: SizeInt;
-  LStartStr, LEndStr: string;
   LStart, LEnd: Int64;
+  LStartLen, LEndLen: Integer;
 begin
   Result := False;
   AStart := 0;
@@ -372,13 +407,13 @@ begin
   if LDashPos = 0 then
     Exit;
 
-  LStartStr := System.Copy(ARange, BYTES_PREFIX_LEN + 1, LDashPos - BYTES_PREFIX_LEN - 1);
-  LEndStr := System.Copy(ARange, LDashPos + 1, Length(ARange) - LDashPos);
+  LStartLen := LDashPos - BYTES_PREFIX_LEN - 1;
+  LEndLen := Length(ARange) - LDashPos;
 
-  if LStartStr = '' then
+  if LStartLen = 0 then
   begin
     { Suffix range: "bytes=-500" means last 500 bytes }
-    if not TryStrToInt64(LEndStr, LEnd) then
+    if not TryParseSlice(ARange, LDashPos + 1, LEndLen, LEnd) then
       Exit;
     if LEnd <= 0 then
       Exit;
@@ -389,21 +424,21 @@ begin
   end
   else
   begin
-    if not TryStrToInt64(LStartStr, LStart) then
+    if not TryParseSlice(ARange, BYTES_PREFIX_LEN + 1, LStartLen, LStart) then
       Exit;
     if LStart < 0 then
       Exit;
     if LStart >= AFileSize then
       Exit;
     AStart := LStart;
-    if LEndStr = '' then
+    if LEndLen = 0 then
     begin
       { Open-ended: "bytes=500-" means from 500 to end }
       AEnd := AFileSize - 1;
     end
     else
     begin
-      if not TryStrToInt64(LEndStr, LEnd) then
+      if not TryParseSlice(ARange, LDashPos + 1, LEndLen, LEnd) then
         Exit;
       if LEnd < LStart then
         Exit;
@@ -493,7 +528,7 @@ begin
     AW.GetHeaders.SetHeader('content-disposition',
       'attachment; filename="' + LEscapedName + '"');
   end;
-  LIsHead := (AReq <> nil) and (AReq.Method = hmHead);
+  LIsHead := IsHeadReq(AReq);
   if AReq <> nil then
     LRangeHeader := AReq.GetHeaders.Get('range')
   else
@@ -677,6 +712,11 @@ var
   LModTimeUnix: Int64;
   LCache: IVfsETag;
 begin
+  if AFs = nil then
+  begin
+    WriteErrorHeadAware(AReq, AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', 'Internal Server Error');
+    Exit;
+  end;
   try
     try
       LInfo := AFs.Stat(AVfsPath);
@@ -755,6 +795,11 @@ begin
   var
     LRelative: string;
   begin
+    if AFs = nil then
+    begin
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', 'Internal Server Error');
+      Exit;
+    end;
     if not TryExtractRequestPath(AReq, LRelative) then
     begin
       AW.GetHeaders.SetHeader('content-length', '11');
