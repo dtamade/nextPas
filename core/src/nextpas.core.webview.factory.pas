@@ -320,18 +320,14 @@ end;
 
 function TBuilderImpl.DataDirectory(const APath: string): IWebviewBuilder; inline;
 begin
-  if (APath <> '') and FOptions.EphemeralSession then
-    raise EWebviewInvalidState.Create(
-      'EphemeralSession and DataDirectory are mutually exclusive');
+  CheckWebviewSession(FOptions.EphemeralSession, APath);
   FOptions.DataDirectory := APath;
   Result := Self;
 end;
 
 function TBuilderImpl.Ephemeral: IWebviewBuilder; inline;
 begin
-  if FOptions.DataDirectory <> '' then
-    raise EWebviewInvalidState.Create(
-      'EphemeralSession and DataDirectory are mutually exclusive');
+  CheckWebviewSession(True, FOptions.DataDirectory);
   FOptions.EphemeralSession := True;
   Result := Self;
 end;
@@ -352,9 +348,7 @@ end;
 
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder;
 begin
-  if Pos('__npw', AJavascript) > 0 then
-    raise EWebviewInvalidState.Create(
-      'InitScripts must not touch __npw (bridge owns that namespace)');
+  CheckWebviewInitScript(AJavascript);
   if FInitScriptsLen = Length(FInitScripts) then GrowInitScripts;
   FInitScripts[FInitScriptsLen] := AJavascript;
   Inc(FInitScriptsLen);
