@@ -16,8 +16,8 @@ function IsBlank(const S: string): Boolean; inline;
 function LowerCase(const S: string): string; inline;
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
 function UpperCase(const S: string): string; inline;
-function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
-function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
+function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string; inline;
+function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string; inline;
 function RepeatString(const S: string; ACount: Integer): string;
 function StrToIntDef(const S: string; ADefault: Int64): Int64;
 function BoolToStr(AValue: Boolean; const ATrueStr: string = 'True'; const AFalseStr: string = 'False'): string;
@@ -135,7 +135,7 @@ begin
     Result[I] := Chr(ToUpper(Byte(S[I])));
 end;
 
-function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string;
+function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string; inline;
 var
   LPadLen: Integer;
 begin
@@ -145,7 +145,7 @@ begin
   Result := StringOfChar(APadChar, LPadLen) + S;
 end;
 
-function PadRight(const S: string; AWidth: Integer; APadChar: Char): string;
+function PadRight(const S: string; AWidth: Integer; APadChar: Char): string; inline;
 var
   LPadLen: Integer;
 begin
