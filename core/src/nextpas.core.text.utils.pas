@@ -2,6 +2,10 @@ unit nextpas.core.text.utils;
 
 {$I nextpas.core.settings.inc}
 
+{** 2026-08-29 验证锚点：PadLeft/PadRight 单分配 loop（规避 FPC inline+字面量 Move 缺陷）、
+    NormalizeLowerTrim 单源（db.factory 唯一复用）、Lower/Upper Byte 区间、CopyStrToBuf Move；
+    配套 bench_kv 10（validate 0 allocs）与 test_text 33 heaptrc0 见 benchmarks.md 验证锚点。 *}
+
 interface
 
 uses
