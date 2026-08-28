@@ -112,6 +112,7 @@ function IsECDSAPrivateKey(const APrivateKeyBlob: TBytes): Boolean;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.tls.errors,
   nextpas.core.tls.asn1,
   nextpas.core.tls.pem,
@@ -153,14 +154,6 @@ begin
   SetLength(Result, Length(AData));
   if Length(AData) > 0 then
     Move(AData[0], Result[1], Length(AData));
-end;
-
-function StringToBytes(const AValue: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(AValue));
-  if Length(AValue) > 0 then
-    Move(AValue[1], Result[0], Length(AValue));
 end;
 
 function BlobLooksLikePEM(const ABlob: TBytes): Boolean;

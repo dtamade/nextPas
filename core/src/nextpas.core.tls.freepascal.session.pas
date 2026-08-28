@@ -161,6 +161,7 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.tls.exceptions, nextpas.core.base.utils, nextpas.core.tls.tls13.wire;
 
 const
@@ -170,17 +171,6 @@ const
   FREEPASCAL_SESSION_VERSION_V2 = 2;
   FREEPASCAL_SESSION_VERSION_V3 = 3;
   HEX_DIGITS: array[0..15] of Char = '0123456789abcdef';
-
-function StringToBytes(const AStr: string): TBytes;
-var
-  LLen: Integer;
-begin
-  Result := nil;
-  LLen := Length(AStr);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AStr[1], Result[0], LLen);
-end;
 
 procedure AppendUInt32(var ADest: TBytes; AValue: Cardinal);
 begin
