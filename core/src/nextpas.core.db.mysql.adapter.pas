@@ -78,11 +78,11 @@ function TranslatePlaceholdersMy(const ASql: string;
 
 { 把单个物理槽的绑定写入零填充原生块（双方言布局单点实现；
   AError 为截断检测出参指针，参数侧传 nil）。偏移常量来自 A1
-  门禁钉死的镜像布局。 }
+  门禁钉死的镜像布局；`inline` 消除批量绑定循环的调用开销（热路径）。 }
 procedure WriteBindSlot(ABase: Pointer; const AIndex, ANativeSize: Integer;
   ABufferType: Cardinal; ABuffer: Pointer; ABufferLength: QWord;
   AIsNull: PBoolean; AError: Pointer; ALength: PQWord;
-  const AIsUnsigned: Boolean);
+  const AIsUnsigned: Boolean); inline;
 
 implementation
 
@@ -244,7 +244,7 @@ end;
 procedure WriteBindSlot(ABase: Pointer; const AIndex, ANativeSize: Integer;
   ABufferType: Cardinal; ABuffer: Pointer; ABufferLength: QWord;
   AIsNull: PBoolean; AError: Pointer; ALength: PQWord;
-  const AIsUnsigned: Boolean);
+  const AIsUnsigned: Boolean); inline;
 var
   P: PByte;
 begin

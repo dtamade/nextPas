@@ -93,40 +93,42 @@ const
   CR_MAX_ERROR            = 2999;
 
   { ===== ER_* server error codes (subset fixed for classification) =====
-    约束族: DUP_ENTRY/DUP_KEY/NO_REFERENCED_ROW*/ROW_IS_REFERENCED*。
-    重试族: LOCK_WAIT_TIMEOUT/LOCK_DEADLOCK/LOCK_TABLE_FULL。
-    鉴权族: DBACCESS_DENIED/ACCESS_DENIED。能力族: NOT_SUPPORTED_YET 等。}
-  ER_CANT_CREATE_TABLE     = 1005;
-  ER_DB_CREATE_EXISTS      = 1007;
-  ER_BAD_DB_ERROR          = 1049;
-  ER_DBACCESS_DENIED_ERROR = 1044;
-  ER_ACCESS_DENIED_ERROR   = 1045;
-  ER_TABLE_EXISTS_ERROR    = 1050;
-  ER_BAD_TABLE_ERROR       = 1051;
-  ER_BAD_FIELD_ERROR       = 1054;
-  ER_DUP_KEY               = 1022;
-  ER_DUP_ENTRY             = 1062;
-  ER_PARSE_ERROR           = 1064;
-  ER_EMPTY_QUERY           = 1065;
-  ER_UNKNOWN_ERROR         = 1105;
-  ER_LOCK_WAIT_TIMEOUT     = 1205;
-  ER_LOCK_TABLE_FULL       = 1206;
-  ER_NOT_SUPPORTED_YET     = 1235;
-  ER_TRUCATED_WRONG_VALUE  = 1366;  { 拼写沿用历史常量名；新代码用 TRUNCATED 拼写 }
-  ER_TRUNCATED_WRONG_VALUE = 1366;  { 正确拼写别名 }
-  ER_DATA_TOO_LONG         = 1406;
-  ER_BAD_NULL_ERROR        = 1048;  { Column cannot be null }
-  ER_NO_SUCH_TABLE         = 1146;
-  ER_CHECK_CONSTRAINT_VIOLATED = 3819; { 8.0.16+ CHECK }
-  ER_CONSTRAINT_FAILED     = 4025;      { MariaDB CHECK }
-  ER_QUERY_TIMEOUT         = 3024;  { 8.0 MAX_EXECUTION_TIME }
-  ER_STATEMENT_TIMEOUT     = 1969;  { MariaDB max_statement_time }
-  ER_NO_REFERENCED_ROW     = 1216;
-  ER_ROW_IS_REFERENCED     = 1217;
-  ER_LOCK_DEADLOCK         = 1213;
-  ER_NO_REFERENCED_ROW_2   = 1452;
-  ER_ROW_IS_REFERENCED_2   = 1451;
-  ER_OPTION_PREVENTS_STATEMENT = 1290;
+    按数值升序排列，便于审计与门禁对照；分类见 db.err ClassifyMy：
+    约束族 1022/1062/1048/1366/1406/1216/1217/1451/1452/3819/4025 →
+      decConstraint；重试族 1205/1206/1213 → Transaction/Timeout；
+    鉴权 1044/1045 → Auth；语法 1054/1146/1050/1051/1064/1065 → Syntax；
+    能力 1235/1290 → NotSupported；容量/连接 1005/1105/1049/1007。 }
+  ER_CANT_CREATE_TABLE         = 1005;  { decCapacity }
+  ER_DB_CREATE_EXISTS          = 1007;  { decConnection }
+  ER_DUP_KEY                   = 1022;  { decConstraint unique }
+  ER_DBACCESS_DENIED_ERROR     = 1044;  { decAuth }
+  ER_ACCESS_DENIED_ERROR       = 1045;  { decAuth }
+  ER_BAD_NULL_ERROR            = 1048;  { decConstraint notnull }
+  ER_BAD_DB_ERROR              = 1049;  { decConnection }
+  ER_TABLE_EXISTS_ERROR        = 1050;  { decSyntax }
+  ER_BAD_TABLE_ERROR           = 1051;  { decSyntax }
+  ER_BAD_FIELD_ERROR           = 1054;  { decSyntax }
+  ER_DUP_ENTRY                 = 1062;  { decConstraint unique }
+  ER_PARSE_ERROR               = 1064;  { decSyntax }
+  ER_EMPTY_QUERY               = 1065;  { decSyntax }
+  ER_UNKNOWN_ERROR             = 1105;  { decCapacity }
+  ER_NO_SUCH_TABLE             = 1146;  { decSyntax }
+  ER_LOCK_WAIT_TIMEOUT         = 1205;  { decTimeout }
+  ER_LOCK_TABLE_FULL           = 1206;  { decTransaction }
+  ER_LOCK_DEADLOCK             = 1213;  { decTransaction }
+  ER_NO_REFERENCED_ROW         = 1216;  { decConstraint fk }
+  ER_ROW_IS_REFERENCED         = 1217;  { decConstraint fk }
+  ER_NOT_SUPPORTED_YET         = 1235;  { decNotSupported }
+  ER_OPTION_PREVENTS_STATEMENT = 1290;  { decNotSupported }
+  ER_TRUCATED_WRONG_VALUE      = 1366;  { 拼写沿用历史常量名；新代码用 TRUNCATED 拼写 }
+  ER_TRUNCATED_WRONG_VALUE     = 1366;  { 正确拼写别名 decConstraint }
+  ER_DATA_TOO_LONG             = 1406;  { decConstraint }
+  ER_ROW_IS_REFERENCED_2       = 1451;  { decConstraint fk }
+  ER_NO_REFERENCED_ROW_2       = 1452;  { decConstraint fk }
+  ER_STATEMENT_TIMEOUT         = 1969;  { decTimeout MariaDB }
+  ER_QUERY_TIMEOUT             = 3024;  { decTimeout 8.0 }
+  ER_CHECK_CONSTRAINT_VIOLATED = 3819;  { decConstraint check 8.0.16+ }
+  ER_CONSTRAINT_FAILED         = 4025;  { decConstraint check MariaDB }
 
 const
   { ===== enum_field_types (列类型元数据；adapter 映射到 TDbColumnType) ===== }
