@@ -53,10 +53,15 @@ type
     FPendingEvals: array of PEvalRec;
     FPendingCount: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
+    FOnNavStartedCount: Integer;
     FOnNavFinished: array of TWebviewNavEventHandler;
+    FOnNavFinishedCount: Integer;
     FOnNavFailed: array of TWebviewNavFailedHandler;
+    FOnNavFailedCount: Integer;
     FOnWindowClosed: array of TWebviewNotifyHandler;
+    FOnWindowClosedCount: Integer;
     FOnReady: array of TWebviewNotifyHandler;
+    FOnReadyCount: Integer;
     FScaleHandlersRef: array of TWebviewScaleHandler;
     FScaleHandlersMethod: array of TWebviewScaleMethod;
     FScaleHandlersProc: array of TWebviewScaleProc;
@@ -81,6 +86,11 @@ type
     procedure HandleNativeDestroy;
     procedure TryCreateEnvironment;
     procedure GrowPendingEvals; inline;
+    procedure GrowOnNavStarted; inline;
+    procedure GrowOnNavFinished; inline;
+    procedure GrowOnNavFailed; inline;
+    procedure GrowOnWindowClosed; inline;
+    procedure GrowOnReady; inline;
     procedure RemovePending(ARec: PEvalRec);
     {$IFDEF MSWINDOWS}
     procedure OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
@@ -427,7 +437,7 @@ begin
   end;
   Ev := Default(TWebviewNavigationEvent);
   Ev.Url := Uri;
-  for I := 0 to High(FOwner.FOnNavStarted) do
+  for I := 0 to FOwner.FOnNavStartedCount - 1 do
     FOwner.FOnNavStarted[I](Ev);
 end;
 
@@ -474,12 +484,12 @@ begin
   if Ev.IsError then
   begin
     Ev.ErrorMessage := 'WebErrorStatus=' + IntToStr(Status);
-    for I := 0 to High(FOwner.FOnNavFailed) do
+    for I := 0 to FOwner.FOnNavFailedCount - 1 do
       FOwner.FOnNavFailed[I](Ev);
   end
   else
   begin
-    for I := 0 to High(FOwner.FOnNavFinished) do
+    for I := 0 to FOwner.FOnNavFinishedCount - 1 do
       FOwner.FOnNavFinished[I](Ev);
     FOwner.FireReadyOnce;
   end;
@@ -565,6 +575,36 @@ begin
     SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
 end;
 
+procedure TWebView2Webview.GrowOnNavStarted; inline;
+begin
+  if FOnNavStartedCount = Length(FOnNavStarted) then
+    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
+end;
+
+procedure TWebView2Webview.GrowOnNavFinished; inline;
+begin
+  if FOnNavFinishedCount = Length(FOnNavFinished) then
+    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
+end;
+
+procedure TWebView2Webview.GrowOnNavFailed; inline;
+begin
+  if FOnNavFailedCount = Length(FOnNavFailed) then
+    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
+end;
+
+procedure TWebView2Webview.GrowOnWindowClosed; inline;
+begin
+  if FOnWindowClosedCount = Length(FOnWindowClosed) then
+    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
+end;
+
+procedure TWebView2Webview.GrowOnReady; inline;
+begin
+  if FOnReadyCount = Length(FOnReady) then
+    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
+end;
+
 procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
 var I: Integer;
 begin
@@ -577,7 +617,7 @@ var I: Integer;
 begin
   if FReadyFired or FClosed then Exit;
   FReadyFired := True;
-  for I := 0 to High(FOnReady) do
+  for I := 0 to FOnReadyCount - 1 do
     FOnReady[I]();
 end;
 
@@ -1220,8 +1260,9 @@ begin
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
-  SetLength(FOnNavStarted, Length(FOnNavStarted) + 1);
-  FOnNavStarted[High(FOnNavStarted)] := AHandler;
+  GrowOnNavStarted;
+  FOnNavStarted[FOnNavStartedCount] := AHandler;
+  Inc(FOnNavStartedCount);
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventMethod);
 begin
@@ -1241,8 +1282,9 @@ begin
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
-  SetLength(FOnNavFinished, Length(FOnNavFinished) + 1);
-  FOnNavFinished[High(FOnNavFinished)] := AHandler;
+  GrowOnNavFinished;
+  FOnNavFinished[FOnNavFinishedCount] := AHandler;
+  Inc(FOnNavFinishedCount);
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventMethod);
 begin
@@ -1262,8 +1304,9 @@ begin
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
-  SetLength(FOnNavFailed, Length(FOnNavFailed) + 1);
-  FOnNavFailed[High(FOnNavFailed)] := AHandler;
+  GrowOnNavFailed;
+  FOnNavFailed[FOnNavFailedCount] := AHandler;
+  Inc(FOnNavFailedCount);
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod);
 begin
@@ -1283,8 +1326,9 @@ begin
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyHandler);
 begin
-  SetLength(FOnWindowClosed, Length(FOnWindowClosed) + 1);
-  FOnWindowClosed[High(FOnWindowClosed)] := AHandler;
+  GrowOnWindowClosed;
+  FOnWindowClosed[FOnWindowClosedCount] := AHandler;
+  Inc(FOnWindowClosedCount);
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyMethod);
 begin
@@ -1304,8 +1348,9 @@ begin
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
-  SetLength(FOnReady, Length(FOnReady) + 1);
-  FOnReady[High(FOnReady)] := AHandler;
+  GrowOnReady;
+  FOnReady[FOnReadyCount] := AHandler;
+  Inc(FOnReadyCount);
   if FReadyFired then AHandler();
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyMethod);

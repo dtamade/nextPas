@@ -82,15 +82,27 @@ type
     FPendingEvals: array of PEvalRec;
     FPendingCount: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
+    FOnNavStartedCount: Integer;
     FOnNavFinished: array of TWebviewNavEventHandler;
+    FOnNavFinishedCount: Integer;
     FOnNavFailed: array of TWebviewNavFailedHandler;
+    FOnNavFailedCount: Integer;
     FOnWindowClosed: array of TWebviewNotifyHandler;
+    FOnWindowClosedCount: Integer;
     FOnReady: array of TWebviewNotifyHandler;
+    FOnReadyCount: Integer;
     FOnScaleChanged: array of TWebviewScaleHandler;
+    FOnScaleChangedCount: Integer;
 
     procedure RequireOpen;
     procedure GrowPendingEvals; inline;
     procedure GrowIdleTags; inline;
+    procedure GrowOnNavStarted; inline;
+    procedure GrowOnNavFinished; inline;
+    procedure GrowOnNavFailed; inline;
+    procedure GrowOnWindowClosed; inline;
+    procedure GrowOnReady; inline;
+    procedure GrowOnScaleChanged; inline;
     procedure RemovePending(ARec: PEvalRec);
     procedure SetupSessionContext;
     function ResolveContext: Pointer;
@@ -332,7 +344,7 @@ begin
         GtkTrace('nav started: ' + LSelf.CurrentUri);
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
-        for I := 0 to High(LSelf.FOnNavStarted) do
+        for I := 0 to LSelf.FOnNavStartedCount - 1 do
           LSelf.FOnNavStarted[I](LEv);
       end;
     WEBKIT_LOAD_FINISHED:
@@ -340,7 +352,7 @@ begin
         GtkTrace('nav finished: ' + LSelf.CurrentUri);
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
-        for I := 0 to High(LSelf.FOnNavFinished) do
+        for I := 0 to LSelf.FOnNavFinishedCount - 1 do
           LSelf.FOnNavFinished[I](LEv);
         LSelf.FireReadyOnce;
       end;
@@ -350,7 +362,7 @@ begin
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
         LEv.IsError := True;
-        for I := 0 to High(LSelf.FOnNavFailed) do
+        for I := 0 to LSelf.FOnNavFailedCount - 1 do
           LSelf.FOnNavFailed[I](LEv);
       end;
   end;
@@ -375,7 +387,7 @@ begin
     if PGError(AErr)^.Message <> nil then
       LEv.ErrorMessage := StrPas(PGError(AErr)^.Message);
   end;
-  for I := 0 to High(LSelf.FOnNavFailed) do
+  for I := 0 to LSelf.FOnNavFailedCount - 1 do
     LSelf.FOnNavFailed[I](LEv);
 end;
 
@@ -391,7 +403,7 @@ begin
   if Abs(LNew - LSelf.FScale) > 1e-9 then
   begin
     LSelf.FScale := LNew;
-    for I := 0 to High(LSelf.FOnScaleChanged) do
+    for I := 0 to LSelf.FOnScaleChangedCount - 1 do
       LSelf.FOnScaleChanged[I](LNew);
   end;
 end;
@@ -759,6 +771,42 @@ begin
     SetLength(FIdleTags, WebviewGrowCapacity(Length(FIdleTags)));
 end;
 
+procedure TGtkWebview.GrowOnNavStarted; inline;
+begin
+  if FOnNavStartedCount = Length(FOnNavStarted) then
+    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
+end;
+
+procedure TGtkWebview.GrowOnNavFinished; inline;
+begin
+  if FOnNavFinishedCount = Length(FOnNavFinished) then
+    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
+end;
+
+procedure TGtkWebview.GrowOnNavFailed; inline;
+begin
+  if FOnNavFailedCount = Length(FOnNavFailed) then
+    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
+end;
+
+procedure TGtkWebview.GrowOnWindowClosed; inline;
+begin
+  if FOnWindowClosedCount = Length(FOnWindowClosed) then
+    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
+end;
+
+procedure TGtkWebview.GrowOnReady; inline;
+begin
+  if FOnReadyCount = Length(FOnReady) then
+    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
+end;
+
+procedure TGtkWebview.GrowOnScaleChanged; inline;
+begin
+  if FOnScaleChangedCount = Length(FOnScaleChanged) then
+    SetLength(FOnScaleChanged, WebviewGrowCapacity(Length(FOnScaleChanged)));
+end;
+
 procedure TGtkWebview.RemovePending(ARec: PEvalRec);
 var
   I, J: Integer;
@@ -907,7 +955,7 @@ begin
   if FReadyFired or FClosed then
     Exit;
   FReadyFired := True;
-  for I := 0 to High(FOnReady) do
+  for I := 0 to FOnReadyCount - 1 do
     FOnReady[I]();
 end;
 
@@ -1364,8 +1412,9 @@ end;
 
 procedure TGtkWebview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
-  SetLength(FOnScaleChanged, Length(FOnScaleChanged) + 1);
-  FOnScaleChanged[High(FOnScaleChanged)] := AHandler;
+  GrowOnScaleChanged;
+  FOnScaleChanged[FOnScaleChangedCount] := AHandler;
+  Inc(FOnScaleChangedCount);
 end;
 
 procedure TGtkWebview.OnScaleChanged(AHandler: TWebviewScaleMethod);
@@ -1388,8 +1437,9 @@ end;
 
 procedure TGtkWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
-  SetLength(FOnNavStarted, Length(FOnNavStarted) + 1);
-  FOnNavStarted[High(FOnNavStarted)] := AHandler;
+  GrowOnNavStarted;
+  FOnNavStarted[FOnNavStartedCount] := AHandler;
+  Inc(FOnNavStartedCount);
 end;
 
 procedure TGtkWebview.OnNavigationStarted(AHandler: TWebviewNavEventMethod);
@@ -1412,8 +1462,9 @@ end;
 
 procedure TGtkWebview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
-  SetLength(FOnNavFinished, Length(FOnNavFinished) + 1);
-  FOnNavFinished[High(FOnNavFinished)] := AHandler;
+  GrowOnNavFinished;
+  FOnNavFinished[FOnNavFinishedCount] := AHandler;
+  Inc(FOnNavFinishedCount);
 end;
 
 procedure TGtkWebview.OnNavigationFinished(AHandler: TWebviewNavEventMethod);
@@ -1436,8 +1487,9 @@ end;
 
 procedure TGtkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
-  SetLength(FOnNavFailed, Length(FOnNavFailed) + 1);
-  FOnNavFailed[High(FOnNavFailed)] := AHandler;
+  GrowOnNavFailed;
+  FOnNavFailed[FOnNavFailedCount] := AHandler;
+  Inc(FOnNavFailedCount);
 end;
 
 procedure TGtkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod);
@@ -1460,8 +1512,9 @@ end;
 
 procedure TGtkWebview.OnWindowClosed(AHandler: TWebviewNotifyHandler);
 begin
-  SetLength(FOnWindowClosed, Length(FOnWindowClosed) + 1);
-  FOnWindowClosed[High(FOnWindowClosed)] := AHandler;
+  GrowOnWindowClosed;
+  FOnWindowClosed[FOnWindowClosedCount] := AHandler;
+  Inc(FOnWindowClosedCount);
 end;
 
 procedure TGtkWebview.OnWindowClosed(AHandler: TWebviewNotifyMethod);
@@ -1484,8 +1537,9 @@ end;
 
 procedure TGtkWebview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
-  SetLength(FOnReady, Length(FOnReady) + 1);
-  FOnReady[High(FOnReady)] := AHandler;
+  GrowOnReady;
+  FOnReady[FOnReadyCount] := AHandler;
+  Inc(FOnReadyCount);
 end;
 
 procedure TGtkWebview.OnReady(AHandler: TWebviewNotifyMethod);
