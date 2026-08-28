@@ -329,11 +329,21 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] `e2e_ssh_live`：`run_e2e.sh` 三模（`sync` 单容器 → `async` 同夹具复跑 → `dual` 双容器 `AsyncJump`；`BIN/BIN_ASYNC` 分流 `heaptrc-${label}.log`，`run_docker_dual` 创建 `np-ssh-e2e-net-$$`、`target` 不映射/`jump` 映射、两处 `host_ed25519` 与 `authorized_keys` 注入、`jump known_hosts` 来自 `ssh-keyscan -p JPORT`、`target known_hosts` 由 `host_target.pub` 构造 `target <pub>`、`NEXTPAS_SSH_E2E_HOST=target / JUMP_HOST=127.0.0.1`，`NEXTPAS_SSH_E2E_ASYNC_JUMP=1` 门控，网络/容器 `trap` 自清理）
 - [x] 编译：`test_ssh_e2e_async` 3.0 MiB，`session.async + sftp.async + proxyjump.async` 复用 `cipher/kex/hostkey` 同源，门禁 `make hygiene pass`、`test_ssh_sftp_async_via_jump 4/4 (≈2.5s)`、`proxyjump_async 3/3 / sftp_async 7/7 HEAPTRC_GATE=0` 回归
 
+## S24 — Rekey & KeepAlive（已完成核心，bench 待收口）
+
+长连接稳定性：`S23` 双容器事件化全绿后 `S24` 补齐 `RekeyLimit 1GiB/1h + KeepAlive`：
+
+- [x] `base`：`SSH_REKEY_BYTES/INTERVAL` 常量 + `TSshConnectOptions.RekeyBytes/RekeyIntervalMs/KeepAliveIntervalMs`（默认 `1GiB/1h/0=关闭`，`0` 禁用）+ `Builder RekeyBytes/RekeyInterval/KeepAlive` fluent
+- [x] `transport(+.async)`：`ConfigureRekey/ShouldRekey/ResetRekeyCounters/SendIgnore(-Async)`，`FBytesSinceRekey+FLastRekeyMs`，`Send/Read` 累计明文 `payload`，`ApplyNewKeys` 后 `Reset`，`ShouldRekey` 在 `tstEncrypted` 外短路
+- [x] `session(+.async)`：`ISshSession ShouldRekey/SendKeepAlive`、`ISshAsyncSession ShouldRekey/AsyncSendKeepAlive`，`TSshSession/TProxyJumpSession` 委托 `FTarget`，`TAsyncSshSession ScheduleKeepAlive/KeepAliveTick`（`TAsyncLoop.ScheduleMethod TDuration.FromMilliseconds` 循环，`Close` 时 `CancelTimer`，`TryEnableDelayedAndSucceed` 后起调）
+- [x] 门禁：`test_ssh_transport 9/9`、`test_ssh_session/session_async build pass`、`make hygiene pass`，`none` 零开销，异步零轮询
+- [ ] `bench_ssh_rekey 10次无漂移` + `bench_ssh_keepalive 30s idle`（待下一切片以 `S24` 同 `Rekey` 阈值可配小值快速验证，不以 1GiB/1h 真实等待）
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| Rekey / SCP / Forward / KnownHosts / Metrics / Fuzz | 见 `ROADMAP_FINAL.md` S24–S30 |
+| SCP / Forward / KnownHosts / Metrics / Fuzz | 见 `ROADMAP_FINAL.md` S25–S30 | S24 bench |
 
 ## 真实性等级声明
 
