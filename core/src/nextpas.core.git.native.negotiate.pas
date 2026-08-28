@@ -42,6 +42,28 @@ function GitParseAckStream(const AStream: TBytes): TGitAckArray;
 
 implementation
 
+function BytesToStr(const B: TBytes): string;
+begin
+  SetLength(Result, Length(B));
+  if Length(B) > 0 then
+    Move(B[0], Result[1], Length(B));
+end;
+
+function IsHex40(const S: string): Boolean;
+var
+  I: Integer;
+  C: Char;
+begin
+  if Length(S) <> 40 then Exit(False);
+  for I := 1 to 40 do
+  begin
+    C := S[I];
+    if not (((C >= '0') and (C <= '9')) or ((C >= 'a') and (C <= 'f')) or ((C >= 'A') and (C <= 'F'))) then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
 function CapsToStr(const ACaps: TStringArray): string;
 var
   I: Integer;
@@ -139,7 +161,7 @@ begin
   S := Copy(S, 5, MaxInt);
   if Length(S) < 40 then Exit(False);
   OidHex := Copy(S, 1, 40);
-  if not GitOidIsValidHex(OidHex) then Exit(False);
+  if not IsHex40(OidHex) then Exit(False);
   AAck.Oid := GitOidFromHex(OidHex);
   AAck.HasOid := True;
   Rest := Copy(S, 41, MaxInt);
@@ -161,7 +183,7 @@ function GitParseAck(const AData: TBytes; out AAck: TGitAck): Boolean;
 var
   Line: string;
 begin
-  Line := GitBytesToString(AData);
+  Line := BytesToStr(AData);
   Result := GitParseAckLine(Line, AAck);
   if not Result then
     raise EGitError.CreateFmt('invalid ACK/NAK line "%s"', [Line]);
