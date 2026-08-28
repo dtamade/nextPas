@@ -167,7 +167,7 @@
 生产单元（src/nextpas.core.zip*.pas）不得 uses 任何非 `nextpas.*` 单元——
 FPC RTL（SysUtils/Classes 等）与第三方库一律经 owner 模块间接使用；该规则由
 `test_zip_contract` 门在 CI 中机械执行。门面单元只做 re-export 与 inline
-委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/DecompressEntryVerified/IsKnownZipSig/LE*`），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享解析链（`DecodeCentralExtra/DecodeLocalExtra`），消除重复，保证校验单点一致。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
+委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/DecompressEntryVerified/IsKnownZipSig/LE*`），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享编解码链（`Decode*/Build*Extra` 对称，`nextpas.core.zip.writer/reader/sequential` 单点复用），消除重复，保证校验与字节形态单点一致。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
 
 ## 5. 测试入口
 
@@ -178,6 +178,7 @@ make focused FOCUS=core/tests/nextpas.core.zip/test_zip_sequential # 顺序读�
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fuzz       # 模糊/属性护栏：随机载荷/名/模式 seq vs mem 一致性
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fs         # 目录打包/解包/权限
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_contract   # 本契约 + 无 FPC RTL 依赖审计
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_extra      # extra 编解码对称性证明（Build/Decode 往返 + 恶意 extra）
 ```
 
 python3 zipfile 作为独立实现交叉验证源（读我们产出的归档、生成参考归档、
