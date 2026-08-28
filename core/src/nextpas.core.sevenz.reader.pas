@@ -40,9 +40,13 @@ type
     FNameMap: specialize TSwissTableStr<Integer>;        { exact → first index }
     FNameMapIgnoreCase: specialize TSwissTableStr<Integer>; { lower → first index }
     FSortedIdx: array of Integer;                           { lexicographic order for prefix }
+    FSortedIdxRev: array of Integer;                        { reversed order for suffix }
     procedure BuildNameMaps;
     procedure BuildSortedIdx;
+    procedure BuildSortedIdxRev;
     function LowerBoundPrefix(const APrefix: string): Integer;
+    function LowerBoundSuffix(const ASuffix: string): Integer;
+    function ReverseStr(const S: string): string;
     procedure ParseArchive;
     procedure ParseHeaderBlock(const AHeaderData: TBytes);
     procedure AssembleEntries;
@@ -73,6 +77,9 @@ type
     procedure ClearCache;
     function EntriesByPrefix(const APrefix: string): TSevenZEntryInfoArray;
     function EntriesBySuffix(const ASuffix: string): TSevenZEntryInfoArray;
+    function FindByPrefix(const APrefix: string): Integer;
+    function FindBySuffix(const ASuffix: string): Integer;
+    function EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
     function Extract(AIndex: Integer): TBytes;
     function ExtractTo(const AWriter: IWriter; AIndex: Integer): Int64;
     function OpenStream(AIndex: Integer): IStream;
@@ -577,6 +584,7 @@ begin
   FreeAndNil(FNameMap);
   FreeAndNil(FNameMapIgnoreCase);
   FSortedIdx := nil;
+  FSortedIdxRev := nil;
   if Length(FEntries)=0 then Exit;
   FNameMap := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
   FNameMapIgnoreCase := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
@@ -590,6 +598,7 @@ begin
       FNameMapIgnoreCase.Put(LLower, LI);
   end;
   BuildSortedIdx;
+  BuildSortedIdxRev;
 end;
 
 procedure TSevenZReaderImpl.BuildSortedIdx;
@@ -625,6 +634,67 @@ begin
   begin
     LMid := (LLo + LHi) div 2;
     LCmp := CompareNames(FEntries[FSortedIdx[LMid]].Name, APrefix);
+    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
+  end;
+  Result := LLo;
+end;
+
+function TSevenZReaderImpl.ReverseStr(const S: string): string;
+var LI: Integer;
+begin
+  SetLength(Result, Length(S));
+  for LI:=1 to Length(S) do Result[LI] := S[Length(S)-LI+1];
+end;
+
+function CompareReversed(const A, B: string): Integer; inline;
+var LI, LJ: Integer;
+begin
+  LI := Length(A); LJ := Length(B);
+  while (LI > 0) and (LJ > 0) do
+  begin
+    if A[LI] < B[LJ] then Exit(-1);
+    if A[LI] > B[LJ] then Exit(1);
+    Dec(LI); Dec(LJ);
+  end;
+  if LI = 0 then
+    if LJ = 0 then Exit(0) else Exit(-1)
+  else Exit(1);
+end;
+
+procedure TSevenZReaderImpl.BuildSortedIdxRev;
+var
+  LI: Integer;
+  procedure QuickSort(AL, AR: Integer);
+  var LI, LJ, LPivot: Integer; LTmp: Integer;
+  begin
+    LI := AL; LJ := AR; LPivot := FSortedIdxRev[(AL+AR) div 2];
+    repeat
+      while CompareReversed(FEntries[FSortedIdxRev[LI]].Name, FEntries[LPivot].Name) < 0 do Inc(LI);
+      while CompareReversed(FEntries[FSortedIdxRev[LJ]].Name, FEntries[LPivot].Name) > 0 do Dec(LJ);
+      if LI <= LJ then
+      begin
+        LTmp := FSortedIdxRev[LI]; FSortedIdxRev[LI] := FSortedIdxRev[LJ]; FSortedIdxRev[LJ] := LTmp;
+        Inc(LI); Dec(LJ);
+      end;
+    until LI > LJ;
+    if AL < LJ then QuickSort(AL, LJ);
+    if LI < AR then QuickSort(LI, AR);
+  end;
+begin
+  SetLength(FSortedIdxRev, Length(FEntries));
+  for LI:=0 to High(FSortedIdxRev) do FSortedIdxRev[LI] := LI;
+  if Length(FSortedIdxRev) > 1 then QuickSort(0, High(FSortedIdxRev));
+end;
+
+function TSevenZReaderImpl.LowerBoundSuffix(const ASuffix: string): Integer;
+var LLo, LHi, LMid: Integer; LCmp: Integer; LRev: string;
+begin
+  LRev := ReverseStr(ASuffix);
+  LLo := 0; LHi := Length(FSortedIdxRev);
+  while LLo < LHi do
+  begin
+    LMid := (LLo + LHi) div 2;
+    LCmp := CompareNames(ReverseStr(FEntries[FSortedIdxRev[LMid]].Name), LRev);
     if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
   end;
   Result := LLo;
@@ -878,7 +948,7 @@ end;
 
 function TSevenZReaderImpl.EntriesBySuffix(const ASuffix: string): TSevenZEntryInfoArray;
 var
-  LI, LCnt: Integer;
+  LStart, LIdx, LCnt, LPos: Integer;
   LSufLen: SizeInt;
 begin
   Result := nil;
@@ -888,16 +958,98 @@ begin
     Result := GetEntries;
     Exit;
   end;
+  if Length(FSortedIdxRev)=0 then Exit;
+  LStart := LowerBoundSuffix(ASuffix);
+  LCnt := 0;
+  for LPos:=LStart to High(FSortedIdxRev) do
+  begin
+    LIdx := FSortedIdxRev[LPos];
+    if (Length(FEntries[LIdx].Name) < LSufLen) or
+       (Copy(FEntries[LIdx].Name, Length(FEntries[LIdx].Name)-LSufLen+1, LSufLen) <> ASuffix) then Break;
+    Inc(LCnt);
+  end;
+  SetLength(Result, LCnt);
+  LCnt := 0;
+  for LPos:=LStart to High(FSortedIdxRev) do
+  begin
+    LIdx := FSortedIdxRev[LPos];
+    if (Length(FEntries[LIdx].Name) < LSufLen) or
+       (Copy(FEntries[LIdx].Name, Length(FEntries[LIdx].Name)-LSufLen+1, LSufLen) <> ASuffix) then Break;
+    Result[LCnt] := FEntries[LIdx];
+    Inc(LCnt);
+  end;
+end;
+
+function TSevenZReaderImpl.FindByPrefix(const APrefix: string): Integer;
+var Arr: TSevenZEntryInfoArray;
+begin
+  if APrefix='' then
+  begin
+    if Length(FEntries)>0 then Exit(0) else Exit(-1);
+  end;
+  Arr := EntriesByPrefix(APrefix);
+  if Length(Arr)=0 then Exit(-1);
+  Result := Find(Arr[0].Name);
+end;
+
+function TSevenZReaderImpl.FindBySuffix(const ASuffix: string): Integer;
+var Arr: TSevenZEntryInfoArray;
+begin
+  if ASuffix='' then
+  begin
+    if Length(FEntries)>0 then Exit(0) else Exit(-1);
+  end;
+  Arr := EntriesBySuffix(ASuffix);
+  if Length(Arr)=0 then Exit(-1);
+  Result := Find(Arr[0].Name);
+end;
+
+function MatchesGlob(const AName, APattern: string): Boolean;
+var
+  LNameLen, LPatLen: Integer;
+  LNi, LPi: Integer;
+  LStarPos, LMatchPos: Integer;
+begin
+  LNameLen := Length(AName); LPatLen := Length(APattern);
+  LNi := 1; LPi := 1; LStarPos := 0; LMatchPos := 0;
+  while LNi <= LNameLen do
+  begin
+    if (LPi <= LPatLen) and ((APattern[LPi]='?') or (APattern[LPi]=AName[LNi])) then
+    begin
+      Inc(LNi); Inc(LPi);
+    end
+    else if (LPi <= LPatLen) and (APattern[LPi]='*') then
+    begin
+      LStarPos := LPi; LMatchPos := LNi; Inc(LPi);
+    end
+    else if LStarPos <> 0 then
+    begin
+      LPi := LStarPos + 1; Inc(LMatchPos); LNi := LMatchPos;
+    end
+    else Exit(False);
+  end;
+  while (LPi <= LPatLen) and (APattern[LPi]='*') do Inc(LPi);
+  Result := LPi > LPatLen;
+end;
+
+function TSevenZReaderImpl.EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
+var LI, LCnt: Integer;
+begin
+  Result := nil;
+  if APattern='' then Exit;
+  // fast dispatch for prefix* and *suffix and * (all)
+  if APattern='*' then
+  begin
+    Result := GetEntries;
+    Exit;
+  end;
   LCnt := 0;
   for LI:=0 to High(FEntries) do
-    if (Length(FEntries[LI].Name) >= LSufLen) and
-       (Copy(FEntries[LI].Name, Length(FEntries[LI].Name)-LSufLen+1, LSufLen)=ASuffix) then
-      Inc(LCnt);
+    if MatchesGlob(FEntries[LI].Name, APattern) then Inc(LCnt);
   SetLength(Result, LCnt);
   LCnt := 0;
   for LI:=0 to High(FEntries) do
-    if (Length(FEntries[LI].Name) >= LSufLen) and
-       (Copy(FEntries[LI].Name, Length(FEntries[LI].Name)-LSufLen+1, LSufLen)=ASuffix) then
+    if MatchesGlob(FEntries[LI].Name, APattern) then
     begin
       Result[LCnt] := FEntries[LI];
       Inc(LCnt);
