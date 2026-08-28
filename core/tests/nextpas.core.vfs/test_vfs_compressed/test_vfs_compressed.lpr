@@ -197,7 +197,7 @@ begin
   Dec := CreateDecompressingVfs(Inner, daAuto);
   SI := Dec.Stat('large.bin');
   Check(SI.Info.Size = Int64(Length(Large)), 'large non-gzip stat size unchanged (header peek)');
-  Check(SI.ContentHash <> 0, 'large non-gzip stat hash preserved');
+  Check(SI.ContentHash = Inner.Stat('large.bin').ContentHash, 'large non-gzip stat hash preserved');
   Data := VfsReadAllBytes(Dec, 'large.bin');
   Check(SameBytes(Data, Large), 'large non-gzip open passthrough');
 end;
