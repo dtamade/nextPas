@@ -16,6 +16,7 @@ interface
 uses
   nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.io.intf,
   nextpas.core.time.stopwatch,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -104,6 +105,8 @@ type
     constructor Create(ATransport: TSshClientTransport;
       AInitialWindow, AMaxPacket: UInt32; ATimeoutMs: Integer);
     procedure OpenSession;
+    procedure OpenDirectTcpip(const AHost: string; APort: Word;
+      const AOriginatorIP: string = '127.0.0.1'; AOriginatorPort: Word = 0);
     procedure ExecCommand(const ACommand: string);
     procedure RequestSubsystem(const AName: string);
     { 发送通道数据：按对端 MaxPacket 与剩余信用分片，必要时泵等回补 }
@@ -119,6 +122,21 @@ type
     property RemoteId: UInt32 read FRemoteId;
     property GotClose: Boolean read FGotClose;
     property ExitStatus: Integer read FExitStatus;
+  end;
+
+  { 通道承载的双向字节流（用于 ProxyJump 的 direct-tcpip 转发） }
+  TChannelStream = class(TInterfacedObject, IReadWriteCloser)
+  private
+    FChannel: TSshChannel;
+    FClosed: Boolean;
+    FBuf: TBytes;
+    FBufPos: SizeUInt;
+  public
+    constructor Create(AChannel: TSshChannel);
+    destructor Destroy; override;
+    function Read(var ABuffer; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuffer; const ACount: SizeUInt): SizeUInt;
+    procedure Close; reintroduce;
   end;
 
 { 常用通道载荷构造（复用点：多路复用通道 slice）}
@@ -346,6 +364,59 @@ begin
         end;
       SSH_MSG_CHANNEL_OPEN_FAILURE:
         raise ESSHError.Create(sekProtocol, 'ssh channel: session open refused');
+      SSH_MSG_GLOBAL_REQUEST:
+        HandleGlobalRequest;
+    end;
+  end;
+end;
+
+procedure TSshChannel.OpenDirectTcpip(const AHost: string; APort: Word;
+  const AOriginatorIP: string; AOriginatorPort: Word);
+var
+  LW: TsshWriter;
+  LR: TsshReader;
+  LMsg: TBytes;
+begin
+  LW := TsshWriter.Create(128);
+  try
+    LW.PutByte(SSH_MSG_CHANNEL_OPEN);
+    LW.PutStringText('direct-tcpip');
+    LW.PutUInt32(FLocalId);
+    LW.PutUInt32(FInitWindow);
+    LW.PutUInt32(FMaxPacket);
+    LW.PutStringText(AHost);
+    LW.PutUInt32(APort);
+    LW.PutStringText(AOriginatorIP);
+    LW.PutUInt32(AOriginatorPort);
+    TracePkt('tx', LW.ToBytes);
+    FTransport.SendPacket(LW.ToBytes);
+  finally
+    LW.Free;
+  end;
+  while True do
+  begin
+    if TimedOut then
+      raise ESSHError.Create(sekTimeout, 'ssh channel: timeout opening direct-tcpip');
+    LMsg := PumpFiltered;
+    case LMsg[0] of
+      SSH_MSG_CHANNEL_OPEN_CONFIRMATION:
+        begin
+          LR := TsshReader.Create(LMsg);
+          try
+            LR.ReadByte;
+            LR.ReadUInt32;
+            FRemoteId := LR.ReadUInt32;
+            FPeerWindow := LR.ReadUInt32;
+            FPeerMaxPacket := LR.ReadUInt32;
+          finally
+            LR.Free;
+          end;
+          FOurWindow := FInitWindow;
+          TraceStr('direct-tcpip: confirmed remote=' + IntToStr(FRemoteId));
+          Exit;
+        end;
+      SSH_MSG_CHANNEL_OPEN_FAILURE:
+        raise ESSHError.Create(sekProtocol, 'ssh channel: direct-tcpip open refused');
       SSH_MSG_GLOBAL_REQUEST:
         HandleGlobalRequest;
     end;
@@ -773,6 +844,85 @@ destructor TSshChannel.Destroy;
 begin
   TryClose;
   inherited Destroy;
+end;
+
+{ TChannelStream }
+
+constructor TChannelStream.Create(AChannel: TSshChannel);
+begin
+  inherited Create;
+  if AChannel = nil then
+    raise ESSHError.Create(sekProtocol, 'ChannelStream: nil channel');
+  FChannel := AChannel;
+end;
+
+destructor TChannelStream.Destroy;
+begin
+  try Close; except end;
+  FChannel.Free;
+  inherited;
+end;
+
+function TChannelStream.Read(var ABuffer; const ACount: SizeUInt): SizeUInt;
+var
+  LData: TBytes;
+  LExt: Boolean;
+  LAvail, LCopy: SizeUInt;
+begin
+  if FClosed then Exit(0);
+  if ACount = 0 then Exit(0);
+  if (FBuf <> nil) and (FBufPos < SizeUInt(Length(FBuf))) then
+  begin
+    LAvail := SizeUInt(Length(FBuf)) - FBufPos;
+    LCopy := LAvail;
+    if LCopy > ACount then LCopy := ACount;
+    Move(FBuf[FBufPos], ABuffer, LCopy);
+    Inc(FBufPos, LCopy);
+    if FBufPos >= SizeUInt(Length(FBuf)) then
+    begin
+      SetLength(FBuf, 0);
+      FBufPos := 0;
+    end;
+    Result := LCopy;
+    Exit;
+  end;
+  SetLength(FBuf, 0);
+  FBufPos := 0;
+  if not FChannel.PumpData(LData, LExt) then Exit(0);
+  if LExt then Exit(0);
+  if Length(LData) = 0 then Exit(0);
+  if SizeUInt(Length(LData)) <= ACount then
+  begin
+    Move(LData[0], ABuffer, SizeUInt(Length(LData)));
+    Result := SizeUInt(Length(LData));
+    Exit;
+  end;
+  Move(LData[0], ABuffer, ACount);
+  FBuf := Copy(LData, ACount, Length(LData) - Integer(ACount));
+  FBufPos := 0;
+  Result := ACount;
+end;
+
+function TChannelStream.Write(const ABuffer; const ACount: SizeUInt): SizeUInt;
+var
+  LBytes: TBytes;
+begin
+  if FClosed then
+    raise ESSHError.Create(sekIO, 'ChannelStream: closed');
+  if ACount = 0 then Exit(0);
+  SetLength(LBytes, ACount);
+  Move(ABuffer, LBytes[0], ACount);
+  FChannel.SendData(LBytes);
+  Result := ACount;
+end;
+
+procedure TChannelStream.Close;
+begin
+  if not FClosed then
+  begin
+    FClosed := True;
+    try FChannel.Close; except end;
+  end;
 end;
 
 { ---- 高层入口 ---- }
