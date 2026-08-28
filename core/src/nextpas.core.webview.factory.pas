@@ -214,6 +214,7 @@ type
     FInvokes: array of TFakeInvokeReg;
     FReady: array of TWebviewNotifyHandler;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
+    procedure EnsureUniqueCmd(const ACmd: string);
   public
     constructor Create;
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
@@ -329,16 +330,21 @@ begin
   Result := Self;
 end;
 
+procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string);
+var I: Integer;
+begin
+  for I := 0 to High(FInvokes) do
+    if FInvokes[I].Cmd = ACmd then
+      raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
+end;
+
 function TBuilderImpl.RegisterInvoke(const ACmd: string;
   AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
-var I: Integer;
 begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('invoke handler must not be nil: %s', [ACmd]);
-  for I := 0 to High(FInvokes) do
-    if FInvokes[I].Cmd = ACmd then
-      raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
+  EnsureUniqueCmd(ACmd);
   SetLength(FInvokes, Length(FInvokes) + 1);
   FInvokes[High(FInvokes)].Cmd := ACmd;
   FInvokes[High(FInvokes)].Sync := AHandler;
@@ -348,14 +354,11 @@ end;
 
 function TBuilderImpl.RegisterAsyncInvoke(const ACmd: string;
   AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
-var I: Integer;
 begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('async invoke handler must not be nil: %s', [ACmd]);
-  for I := 0 to High(FInvokes) do
-    if FInvokes[I].Cmd = ACmd then
-      raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
+  EnsureUniqueCmd(ACmd);
   SetLength(FInvokes, Length(FInvokes) + 1);
   FInvokes[High(FInvokes)].Cmd := ACmd;
   FInvokes[High(FInvokes)].Async := AHandler;
