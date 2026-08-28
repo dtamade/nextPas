@@ -57,6 +57,9 @@ type
     { 打开 sftp 子系统并完成版本握手，返回文件操作面。
       需已认证；同一会话可多次调用（各自独立通道）。}
     function OpenFileSystem: ISshFileSystem;
+    function ShouldRekey: Boolean;
+    function SendKeepAlive(const AData: TBytes): Boolean; overload;
+    function SendKeepAlive: Boolean; overload;
 
     procedure Close;
 
@@ -188,6 +191,9 @@ type
     procedure AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
     function Exec(const ACommand: string): TSshExecResult;
     function OpenFileSystem: ISshFileSystem;
+    function ShouldRekey: Boolean;
+    function SendKeepAlive(const AData: TBytes): Boolean; overload;
+    function SendKeepAlive: Boolean; overload;
     procedure Close;
   end;
 
@@ -230,6 +236,9 @@ type
     procedure AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
     function Exec(const ACommand: string): TSshExecResult;
     function OpenFileSystem: ISshFileSystem;
+    function ShouldRekey: Boolean;
+    function SendKeepAlive(const AData: TBytes): Boolean; overload;
+    function SendKeepAlive: Boolean; overload;
     procedure Close;
   end;
 
@@ -286,6 +295,20 @@ begin
       end;
   end;
 end;
+
+function TSshSession.ShouldRekey: Boolean;
+begin
+  Result := (FTransport <> nil) and FTransport.ShouldRekey;
+end;
+
+function TSshSession.SendKeepAlive(const AData: TBytes): Boolean;
+begin
+  if (FTransport = nil) or FClosed or not FAuthenticated then Exit(False);
+  try FTransport.SendIgnore(AData); Result := True; except Result := False; end;
+end;
+
+function TSshSession.SendKeepAlive: Boolean;
+begin Result := SendKeepAlive(nil); end;
 
 function TSshSession.ExpectOneOf(const AAcceptable: array of Byte): TBytes;
 begin
@@ -905,6 +928,15 @@ begin
     raise ESSHError.Create(sekIO, 'proxy jump: no target session');
   Result := FTarget.OpenFileSystem;
 end;
+
+function TProxyJumpSession.ShouldRekey: Boolean;
+begin if FTarget <> nil then Result := FTarget.ShouldRekey else Result := False; end;
+
+function TProxyJumpSession.SendKeepAlive(const AData: TBytes): Boolean;
+begin if FTarget <> nil then Result := FTarget.SendKeepAlive(AData) else Result := False; end;
+
+function TProxyJumpSession.SendKeepAlive: Boolean;
+begin Result := SendKeepAlive(nil); end;
 
 procedure TProxyJumpSession.Close;
 begin

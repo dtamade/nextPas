@@ -35,6 +35,9 @@ type
     function GetLoop: TAsyncLoop;
     function GetTransport: TAsyncSshTransport;
     function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult; AContext: Pointer = nil): Boolean;
+    function ShouldRekey: Boolean;
+    function AsyncSendKeepAlive(const AData: TBytes; ACallback: TSshAsyncCb; AContext: Pointer = nil): Boolean;
+    function AsyncSendKeepAliveEmpty(ACallback: TSshAsyncCb; AContext: Pointer = nil): Boolean;
     procedure Close;
     property Connected: Boolean read GetConnected;
     property ServerVersion: string read GetServerVersion;
@@ -134,6 +137,9 @@ type
     constructor Create(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; const AOptions: TSshConnectOptions);
     destructor Destroy; override;
     function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult; AContext: Pointer = nil): Boolean;
+    function ShouldRekey: Boolean;
+    function AsyncSendKeepAlive(const AData: TBytes; ACallback: TSshAsyncCb; AContext: Pointer = nil): Boolean;
+    function AsyncSendKeepAliveEmpty(ACallback: TSshAsyncCb; AContext: Pointer = nil): Boolean;
     procedure Close;
   end;
 
@@ -380,6 +386,18 @@ begin
     Result := False;
   end;
 end;
+
+function TAsyncSshSession.ShouldRekey: Boolean;
+begin Result := (FTransport <> nil) and FTransport.ShouldRekey; end;
+
+function TAsyncSshSession.AsyncSendKeepAlive(const AData: TBytes; ACallback: TSshAsyncCb; AContext: Pointer): Boolean;
+begin
+  if (FTransport = nil) or FClosed or not FAuthenticated then Exit(False);
+  Result := FTransport.AsyncSendIgnore(AData, ACallback, AContext);
+end;
+
+function TAsyncSshSession.AsyncSendKeepAliveEmpty(ACallback: TSshAsyncCb; AContext: Pointer): Boolean;
+begin Result := AsyncSendKeepAlive(nil, ACallback, AContext); end;
 
 { TAsyncConnector }
 
