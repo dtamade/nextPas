@@ -424,9 +424,8 @@ var
   var
     LCrcTmp: LongWord;
     LCSizeTmp, LUSizeTmp: UInt64;
-    LPay: TBytes;
+    LPay, LPlain, LDec: TBytes;
     LCalc: LongWord;
-    LDec: TBytes;
   begin
     Result := False;
     if ADescSize = 16 then
@@ -443,41 +442,62 @@ var
     end;
     if LCSizeTmp <> APos then
       Exit;
-    if (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then
+    if (not FCurrent.IsEncrypted) and (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then
       Exit;
-    { 单条上限预筛：超限的试解压必在 Decompress 路径 raise，直接跳过避免无谓 CPU }
     if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then
       Exit;
     if APos > 0 then
     begin
       SetLength(LPay, APos);
       Move(LData^, LPay[0], APos);
-      LCalc := Crc32OfBytes(LPay);
     end
     else
-    begin
       LPay := nil;
-      LCalc := 0;
-    end;
-    if FCurrent.Method = zmStore then
-    begin
-      if LCalc <> LCrcTmp then
-        Exit;
-    end
-    else
+    if FCurrent.IsEncrypted then
     begin
       try
-        LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+        LPlain := UnsealWinZipAesPayload(FPassword, LPay, FCurrent.AesStrengthCode, FCurrent.Name);
       except
-        on E: EIOError do
-          raise;
-        on E: Exception do
-          Exit;
+        on E: EInvalidOperationError do raise;
+        on E: EIOError do raise;
+        on E: Exception do Exit;
       end;
-      if SizeUInt(Length(LDec)) <> LUSizeTmp then
-        Exit;
-      if Crc32OfBytes(LDec) <> LCrcTmp then
-        Exit;
+      if FCurrent.Method = zmStore then
+      begin
+        if UInt64(Length(LPlain)) <> LUSizeTmp then Exit;
+        if LUSizeTmp = 0 then LCalc := 0 else LCalc := Crc32OfBytes(LPlain);
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPlain, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
+    end
+    else
+    begin
+      if APos > 0 then LCalc := Crc32OfBytes(LPay) else LCalc := 0;
+      if FCurrent.Method = zmStore then
+      begin
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
     end;
     ACrc := LCrcTmp;
     ACSize := LCSizeTmp;
@@ -489,9 +509,8 @@ var
   var
     LCrcTmp: LongWord;
     LCSizeTmp, LUSizeTmp: UInt64;
-    LPay: TBytes;
+    LPay, LPlain, LDec: TBytes;
     LCalc: LongWord;
-    LDec: TBytes;
   begin
     Result := False;
     if ADescSize = 12 then
@@ -506,42 +525,61 @@ var
       LCSizeTmp := LE64Ptr(APos + 4);
       LUSizeTmp := LE64Ptr(APos + 12);
     end;
-    if LCSizeTmp <> APos then
-      Exit;
-    if (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then
-      Exit;
-    if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then
-      Exit;
+    if LCSizeTmp <> APos then Exit;
+    if (not FCurrent.IsEncrypted) and (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then Exit;
+    if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then Exit;
     if APos > 0 then
     begin
       SetLength(LPay, APos);
       Move(LData^, LPay[0], APos);
-      LCalc := Crc32OfBytes(LPay);
     end
     else
-    begin
       LPay := nil;
-      LCalc := 0;
-    end;
-    if FCurrent.Method = zmStore then
-    begin
-      if LCalc <> LCrcTmp then
-        Exit;
-    end
-    else
+    if FCurrent.IsEncrypted then
     begin
       try
-        LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+        LPlain := UnsealWinZipAesPayload(FPassword, LPay, FCurrent.AesStrengthCode, FCurrent.Name);
       except
-        on E: EIOError do
-          raise;
-        on E: Exception do
-          Exit;
+        on E: EInvalidOperationError do raise;
+        on E: EIOError do raise;
+        on E: Exception do Exit;
       end;
-      if SizeUInt(Length(LDec)) <> LUSizeTmp then
-        Exit;
-      if Crc32OfBytes(LDec) <> LCrcTmp then
-        Exit;
+      if FCurrent.Method = zmStore then
+      begin
+        if UInt64(Length(LPlain)) <> LUSizeTmp then Exit;
+        if LUSizeTmp = 0 then LCalc := 0 else LCalc := Crc32OfBytes(LPlain);
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPlain, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
+    end
+    else
+    begin
+      if APos > 0 then LCalc := Crc32OfBytes(LPay) else LCalc := 0;
+      if FCurrent.Method = zmStore then
+      begin
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
     end;
     ACrc := LCrcTmp;
     ACSize := LCSizeTmp;
@@ -549,9 +587,9 @@ var
     Result := True;
   end;
 begin
-  if FCurrent.IsEncrypted then
-    raise ENotSupportedError.Create(
-      'zip: sequential AES descriptor not supported: ' + FCurrent.Name);
+  if FCurrent.IsEncrypted and (Length(FPassword) = 0) then
+    raise EInvalidOperationError.Create(
+      'zip: entry is encrypted, no password configured: ' + FCurrent.Name);
   LBuilder := CreateBytesBuilder(8192);
   LFound := False;
   LFoundPos := 0;
@@ -694,7 +732,10 @@ begin
   SetLength(LPayload, LFoundPos);
   if LFoundPos > 0 then
     Move(LData^, LPayload[0], LFoundPos);
-  FCurrent.Crc32 := LFoundCrc;
+  if FCurrent.AesVersion = C_WINZIP_AES_VERSION_2 then
+    FCurrent.Crc32 := 0
+  else
+    FCurrent.Crc32 := LFoundCrc;
   FCurrent.CompressedSize := LFoundCSize;
   FCurrent.UncompressedSize := LFoundUSize;
   if LLen > LFoundPos + LFoundDescSize then
