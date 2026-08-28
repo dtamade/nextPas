@@ -40,23 +40,8 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.zip.base,
-  nextpas.core.zip.aes;
-
-function LE16At(const AData: TBytes; AOff: SizeUInt): Word; inline;
-begin
-  Result := Word(AData[AOff]) or (Word(AData[AOff + 1]) shl 8);
-end;
-
-function LE64At(const AData: TBytes; AOff: SizeUInt): UInt64; inline;
-var
-  LLo, LHi: LongWord;
-begin
-  LLo := LongWord(AData[AOff]) or (LongWord(AData[AOff + 1]) shl 8) or
-    (LongWord(AData[AOff + 2]) shl 16) or (LongWord(AData[AOff + 3]) shl 24);
-  LHi := LongWord(AData[AOff + 4]) or (LongWord(AData[AOff + 5]) shl 8) or
-    (LongWord(AData[AOff + 6]) shl 16) or (LongWord(AData[AOff + 7]) shl 24);
-  Result := UInt64(LLo) or (UInt64(LHi) shl 32);
-end;
+  nextpas.core.zip.aes,
+  nextpas.core.zip.common;
 
 procedure WriteLE16(var ADst: TBytes; AOff: SizeUInt; AValue: Word); inline;
 begin
