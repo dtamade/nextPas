@@ -128,6 +128,7 @@ var LSrc: IRealtimeAudioSource; LGain: Single; LNeeded: Integer;
 begin
   Result := 0;
   if AFrames <= 0 then Exit(0);
+  if AudioBytesForFrames(FFormat, AFrames)>High(Integer) then Exit(0);
   LNeeded := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < LNeeded then Exit(0);
   AudioSilentFill(ABuffer, FFormat, AFrames);

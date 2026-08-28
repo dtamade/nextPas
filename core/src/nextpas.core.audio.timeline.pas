@@ -10,6 +10,7 @@ uses
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.timeline.intf,
+  nextpas.core.audio.simd,
   nextpas.core.audio.errors;
 
 type
@@ -186,6 +187,7 @@ var
   SnapDur: UInt64;
 begin
   if AFrames<=0 then Exit(0);
+  if (AFrames>0) and (AudioBytesForFrames(FFormat, AFrames)>High(Integer)) then Exit(0);
   Needed:=AFrames*FFormat.BlockAlign;
   if Length(ABuffer.Data)<Needed then
   begin InterlockedExchangeAdd64(FViolations,1); AFrames:=Length(ABuffer.Data) div FFormat.BlockAlign; if AFrames<=0 then Exit(0); Needed:=AFrames*FFormat.BlockAlign; end;
@@ -237,8 +239,7 @@ begin
       end;
     end;
   end;
-  for i:=0 to AFrames*FFormat.Channels-1 do
-  begin if MixPtr[i]>1.0 then MixPtr[i]:=1.0 else if MixPtr[i]<-1.0 then MixPtr[i]:=-1.0; end;
+  SimdClampF32(MixPtr, AFrames*FFormat.Channels, -1.0, 1.0);
   FPosition:=SnapPos+UInt64(AFrames);
   if SnapLoop and (SnapDur>0) and (FPosition >= SnapDur) then FPosition:=FPosition mod SnapDur;
   ABuffer.FrameCount:=AFrames;

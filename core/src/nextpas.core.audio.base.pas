@@ -111,6 +111,8 @@ function AudioFormatCreate(ASampleRate, AChannels: Integer;
   ASampleFormat: TAudioSampleFormat): TAudioFormat; inline;
 
 { ---- Realtime helpers (zero-alloc, lock-free, no IO) ---- }
+// 字节预算：统一溢出守卫，供 FillRealtime 入口复用
+function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64; inline;
 // 单一真值：供 wav/aiff/timeline/bus/graph/playlist/game/sequencer 复用
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
@@ -294,6 +296,9 @@ begin
     Exit(0);
   Result := Int64((Frame * UInt64(1000000000)) div UInt64(SampleRate));
 end;
+
+function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;
+begin if AFrames<=0 then Exit(0); if not AFormat.IsValid then Exit(0); Result:=Int64(AFrames)*Int64(AFormat.BlockAlign); end;
 
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer;

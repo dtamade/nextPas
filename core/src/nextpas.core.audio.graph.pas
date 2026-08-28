@@ -256,6 +256,7 @@ var
   HasData, HasProcessor: Boolean;
 begin
   if AFrames <= 0 then Exit(0);
+  if (AFrames>0) and (AudioBytesForFrames(FFormat, AFrames)>High(Integer)) then Exit(0);
   Needed := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < Needed then
   begin
@@ -308,11 +309,7 @@ begin
     Exit;
   end;
 
-  for I := 0 to AFrames * FFormat.Channels - 1 do
-  begin
-    if MixPtr[I] > 1.0 then MixPtr[I] := 1.0
-    else if MixPtr[I] < -1.0 then MixPtr[I] := -1.0;
-  end;
+  SimdClampF32(MixPtr, AFrames * FFormat.Channels, -1.0, 1.0);
 
   HasProcessor := False;
   for I := 0 to High(FProcessors) do if FProcessors[I].Alive and Assigned(FProcessors[I].Processor) then HasProcessor := True;

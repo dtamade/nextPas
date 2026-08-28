@@ -19,6 +19,7 @@ procedure SimdAddF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain:
 procedure SimdMulF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single);
 function SimdPeakF32(const AData: PSingle; ACount: Integer): Single;
 function SimdSumSquaresF32(const AData: PSingle; ACount: Integer): Double;
+procedure SimdClampF32(AData: PSingle; ACount: Integer; ALo, AHi: Single);
 
 implementation
 
@@ -126,6 +127,24 @@ begin
     Result := Result + AData[I] * AData[I];
     Inc(I);
   end;
+end;
+
+procedure SimdClampF32(AData: PSingle; ACount: Integer; ALo, AHi: Single);
+var I, N4: Integer; V0, V1, V2, V3: Single;
+begin
+  if (AData = nil) or (ACount <= 0) then Exit;
+  N4 := ACount and not 3;
+  I := 0;
+  while I < N4 do
+  begin
+    V0:=AData[I]; if V0<ALo then V0:=ALo else if V0>AHi then V0:=AHi; AData[I]:=V0;
+    V1:=AData[I+1]; if V1<ALo then V1:=ALo else if V1>AHi then V1:=AHi; AData[I+1]:=V1;
+    V2:=AData[I+2]; if V2<ALo then V2:=ALo else if V2>AHi then V2:=AHi; AData[I+2]:=V2;
+    V3:=AData[I+3]; if V3<ALo then V3:=ALo else if V3>AHi then V3:=AHi; AData[I+3]:=V3;
+    Inc(I,4);
+  end;
+  while I < ACount do
+  begin V0:=AData[I]; if V0<ALo then V0:=ALo else if V0>AHi then V0:=AHi; AData[I]:=V0; Inc(I); end;
 end;
 
 end.
