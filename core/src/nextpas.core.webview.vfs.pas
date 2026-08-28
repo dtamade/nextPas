@@ -87,15 +87,16 @@ function TVfsAssetProvider.TryResolve(const APath: string; out ABytes: TBytes;
   out AMimeType: string): Boolean;
 var
   LNorm, LStripped: string;
-  LSlash: Integer;
+  LSlash, LStart: Integer;
 begin
   ABytes := nil;
   AMimeType := '';
-  LNorm := APath;
-  while (Length(LNorm) > 0) and (LNorm[1] = '/') do
-    Delete(LNorm, 1, 1);
-  if LNorm = '' then
+  LStart := 1;
+  while (LStart <= Length(APath)) and (APath[LStart] = '/') do
+    Inc(LStart);
+  if LStart > Length(APath) then
     Exit(False);
+  LNorm := Copy(APath, LStart, MaxInt);
   { 先试全路径（mount 前缀保留的形态） }
   if TryRead(LNorm, ABytes, AMimeType) then
     Exit(True);
