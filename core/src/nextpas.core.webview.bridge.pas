@@ -62,7 +62,7 @@ function BuildEmitScript(const AEvent, APayloadJson: string): string;
 
 { handler 错误码归一化：EWebviewInvokeError 空 Code 补默认 npw.bad_request，
   非空（含 app.* 自定义码）原样透传（§5 规则）。 }
-function NormalizeInvokeCode(const ACode: string): string;
+function NormalizeInvokeCode(const ACode: string): string; inline;
 
 type
   {** invoke handler 注册表唯一实现：六形态注册统一归一为 reference 形态
@@ -103,7 +103,7 @@ type
     function Find(const ACmd: string; out AIsAsync: Boolean;
       out ASync: TWebviewInvokeSyncHandler;
       out AAsync: TWebviewInvokeAsyncHandler): Boolean;
-    function Count: Integer;
+    function Count: Integer; inline;
   end;
 
   {** 嵌入式资产存储唯一实现：prefix 前缀路由到 provider 链，最长前缀
@@ -126,7 +126,7 @@ type
     procedure MountDirectory(const APrefix, ARootDir: string);
     function TryResolve(const ASchemeRelativePath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
-    function MountCount: Integer;
+    function MountCount: Integer; inline;
   end;
 
 const
@@ -304,7 +304,7 @@ begin
     JsStringLit(LJson) + ')';
 end;
 
-function NormalizeInvokeCode(const ACode: string): string;
+function NormalizeInvokeCode(const ACode: string): string; inline;
 begin
   if ACode = '' then
     Result := NPW_CODE_BAD_REQUEST
@@ -405,7 +405,7 @@ begin
   SetLength(FEntries, Length(FEntries) - 1);
 end;
 
-function TWebviewInvokeRegistry.Count: Integer;
+function TWebviewInvokeRegistry.Count: Integer; inline;
 begin
   Result := Length(FEntries);
 end;
@@ -491,7 +491,7 @@ begin
   Result := False;
 end;
 
-function TWebviewAssetsImpl.MountCount: Integer;
+function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := Length(FMounts);
 end;
