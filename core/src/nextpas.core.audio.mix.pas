@@ -164,6 +164,10 @@ end;
 
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
 var NSamples, LI: Integer; P: PSingle; LDelta, LStep, LGain: Single;
+{$IFDEF CPUX86_64}
+var VStep, VInc, VGain4: TM128;
+const CInc: array[0..3] of Single = (0, 1, 2, 3);
+{$ENDIF}
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit;
@@ -173,8 +177,25 @@ begin
   if NSamples = 1 then begin P[0] := P[0] * AStartGain; Exit; end;
   LDelta := AEndGain - AStartGain;
   LStep := LDelta / (NSamples - 1);
+{$IFDEF CPUX86_64}
+  VStep := simd_set1_ps(LStep);
+  VInc := simd_loadu_ps(@CInc[0]);
+  VInc := simd_mul_ps(VInc, VStep);
+  LGain := AStartGain;
+  LI := 0;
+  while LI + 3 < NSamples do
+  begin
+    VGain4 := simd_add_ps(simd_set1_ps(LGain), VInc);
+    simd_storeu_ps(Pointer(PtrUInt(P) + LI * SizeOf(Single))^,
+      simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(P) + LI * SizeOf(Single))), VGain4));
+    LGain := LGain + LStep * 4;
+    Inc(LI, 4);
+  end;
+  for LI := LI to NSamples - 1 do begin P[LI] := P[LI] * LGain; LGain := LGain + LStep; end;
+{$ELSE}
   LGain := AStartGain;
   for LI := 0 to NSamples - 1 do begin P[LI] := P[LI] * LGain; LGain := LGain + LStep; end;
+{$ENDIF}
   // 末帧钳制避免累积误差
   // P[NSamples-1] 已由循环写入 AEndGain，无需二次修正（增量法位精确于标量除法）
 end;
