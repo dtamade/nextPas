@@ -3,7 +3,7 @@
 **模块路径**：`core/src/nextpas.core.db*.pas`
 **层级**：L3 家族（依赖 L0-L2；SQLite/PostgreSQL 后端实现为 L2 子模块）
 **Owner**：core-db lane
-**最后更新**：2026-08-26（V3-B7 LISTEN/NOTIFY 成文）
+**最后更新**：2026-08-28（MySQL BIND 偏移常量化 + DSN 零分配/端口校验自证）
 **版本**：1.1（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY）
 
 ---
@@ -65,8 +65,8 @@ while Q.Step do ...;                          // 接口引用计数自动释放
   StatementTimeoutMs 仅 pg（会话级 statement_timeout）与 mysql
   （Oracle 库且服务端 ≥8.0 的 max_execution_time，SELECT 域，版本探测
   后静默降级）有对应机制；sqlite 非 0 被忽略不冒充。0 = 不设置。
-  mysql DSN 形态：空格分隔 key=value（host/port/user/password/db/socket，
-  值可用引号包裹），socket 存在时优先于 host。
+  mysql DSN 形态：空格分隔 key=value（host/port/user/password/db/database/socket，
+  值可用引号包裹），socket 存在时优先于 host；port 取值 1..65535（非范围 fail-fast decConnection，未知键提示候选 host/port/user/password/db/database/socket），缺省 host 127.0.0.1 port 3306（MYSQL_DEFAULT_* 单点常量，SameText 零分配比较）。
   **F-10 提示**：sqlite 文件库的并发读写靠 busy_timeout 排队，缺省
   0 = 立即 SQLITE_BUSY——生产文件库建议显式非零（工厂 OpenSqlitePool
   便利形态缺省烘入 `DefaultSqliteBusyTimeoutMs`）；`:memory:` 库无
@@ -218,7 +218,9 @@ MySQL/MariaDB 后端（V3-A2）方言差异：
 
 执行模型注记：mysql 的 IDbQuery 走 prepared statement 二进制协议
 （与 pg execParams 同级，参数化即注入安全）；DECIMAL 列经二进制协议
-天然以文本形态返回（length-prefixed），GetText/GetDouble 直读。
+天然以文本形态返回（length-prefixed），GetText/GetDouble 直读。双方言
+MYSQL_BIND 布局由 ffi 具名偏移常量 MYSQL_BIND_*_OFF_* 单点复用并经
+initialization/离线门 PtrUInt 自证钉死（Oracle 72B @68/70 vs MariaDB 112B @64/96/101）。
 
 ### 2.6b 查询级选项（V3-B2，TDbExecOptions）
 
@@ -816,7 +818,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_conformance  # 跨后端�
 make focused FOCUS=core/tests/nextpas.core.db/test_db_stmt_cache   # 透明语句缓存（INC-3，sqlite）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_largeobject # 大对象流（INC-8，真机双后端）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql      # MySQL 基础三件套 loader 门禁（V3-A1，离线可跑）
-make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql_adapter  # MySQL 适配器（V3-A2，六组离线 + 真机组 env 门控）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_mysql_adapter  # MySQL 适配器（V3-A2，七组离线 + 2 live env 门控，含偏移/DSN 校验自证）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_base  # ODBC base/ffi/loader（V3-A3，仅驱动管理器即可全绿；live 段 NEXTPAS_ODBC_TEST_CONN 门控）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_odbc_adapter  # ODBC 适配器（V3-A4，五组离线全绿；live 段 NEXTPAS_ODBC_TEST_CONN 门控）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_trace      # 观测钩子（V3-B3，sqlite 全量离线 + pg 真机段 + mysql/odbc live 探针）
