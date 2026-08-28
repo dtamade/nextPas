@@ -18,19 +18,19 @@
 
 *Zero 271µs/10000 = 27.1ns/次，1.1 已由 `LiveGtkSmart=3×Length` 改为门控单读（Gtk4IsLoaded→4 / Gtk3IsLoaded→3 / Gtk2IsLoaded→2），单进程仅一族加载，仍 <30ns 阈值，5×方差 5% 收敛。*
 
-## 5× 方差 (F1 硬化后, LiveGtkSmart inline → 1.1 单缓存)
+## 5× 方差 (1.2 11-backend 分裂后, qt Live inline 化 → Zero 23.8ns)
 
 | Run | PostSingle/1000 | Zero/10000 | Zero ns/次 |
 |-----|-----------------|------------|------------|
-| 1 | 361µs | 279µs | 27.9ns |
-| 2 | 389µs | 270µs | 27.0ns |
-| 3 | 382µs | 271µs | 27.1ns |
-| 4 | 365µs | 266µs | 26.6ns |
-| 5 | 364µs | 274µs | 27.4ns |
-| **中位** | **365µs** | **271µs** | **27.1ns** |
-| 方差 | ~7% | ~5% | — |
+| 1 | 365µs | 244µs | 24.4ns |
+| 2 | 365µs | 237µs | 23.7ns |
+| 3 | 355µs | 243µs | 24.3ns |
+| 4 | 354µs | 238µs | 23.8ns |
+| 5 | 369µs | 243µs | 24.3ns |
+| **中位** | **365µs** | **243µs** | **24.3ns** |
+| 方差 | ~4.1% | ~3.0% | — |
 
-> PostSingle 方差 7% 略超 5% 目标，主因高并发调度抖动；Zero 稳定在 5% 内，符合早退路径预期。1.1 单缓存后 Zero 持平 27.1ns，门控单读零锁。F3 三机矩阵需再测（Win/mac compile-only 残差诚实）。
+> PostSingle 中位 365µs 方差 4.1% <5% 达标；Zero 中位 243µs/10k=24.3ns 方差 3.0% <5% 达标。11-backend 分裂后 `QtLiveWindowCount` 去 `TryLoad` 改为 `QtIsLoaded` inline 读，Zero 由 27.1ns 降至 24.3ns。F3 三机矩阵需再测（Win/mac compile-only 残差诚实）。
 
 ## 历史演进
 
