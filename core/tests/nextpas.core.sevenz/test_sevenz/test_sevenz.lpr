@@ -3280,6 +3280,55 @@ begin
   Check(LOk and (LErr='') and (Length(Ext)=3), 'try with error ok');
   Ext := LR.ExtractByGlob('pre_*_post.txt');
   CheckEqual(Int64(0), Int64(Length(Ext)), 'extract glob miss zero');
+  LOk := LR.TryExtractByPrefix('a', Ext);
+  Check(LOk and (Length(Ext)=2), 'try prefix ok');
+  LOk := LR.TryExtractByPrefixWithError('a', Ext, LErr);
+  Check(LOk and (LErr='') and (Length(Ext)=2), 'try prefix with error');
+  LOk := LR.TryExtractBySuffix('.txt', Ext);
+  Check(LOk and (Length(Ext)=3), 'try suffix ok');
+  LOk := LR.TryExtractBySuffixWithError('.txt', Ext, LErr);
+  Check(LOk and (LErr='') and (Length(Ext)=3), 'try suffix with error');
+end;
+
+procedure TestBulkGroupedMultiFolder;
+var LW: ISevenZWriter; LR: ISevenZReader; Ext: TSevenZExtractedArray; I: Integer;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.SetFolderLimits(0,1); // one folder per file -> 4 folders
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('a2.txt', BytesOf([$02]));
+  LW.AddFile('b.txt', BytesOf([$03]));
+  LW.AddFile('b2.txt', BytesOf([$04]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Ext := LR.ExtractBySuffix('.txt'); // 4 files across 4 folders, grouped should decode each once
+  CheckEqual(Int64(4), Int64(Length(Ext)), 'grouped suffix 4');
+  for I:=0 to High(Ext) do Check(Ext[I].Data <> nil, 'grouped data non-nil '+IntToStr(I));
+  Ext := LR.ExtractByPrefix('a');
+  CheckEqual(Int64(2), Int64(Length(Ext)), 'grouped prefix a 2');
+end;
+
+procedure TestExtractByGlobToFs;
+var LW: ISevenZWriter; LR: ISevenZReader; LRoot: string; Cnt: Integer; Err: string; Ok: Boolean;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('b.txt', BytesOf([$02]));
+  LW.AddFile('c.log', BytesOf([$03]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LRoot := TempDir('', 'sevenz-glob-fs-');
+  try
+    Cnt := SevenZExtractByGlobToFs(LR, '*.txt', LRoot);
+    CheckEqual(Int64(2), Int64(Cnt), 'glob to fs cnt');
+    Check(IsFile(PathJoin([LRoot, 'a.txt'])), 'glob fs a exists');
+    Check(IsFile(PathJoin([LRoot, 'b.txt'])), 'glob fs b exists');
+    Check(not IsFile(PathJoin([LRoot, 'c.log'])), 'glob fs c not');
+    Ok := SevenZTryExtractByGlobToFs(LR, '*.txt', LRoot, Err);
+    Check(Ok and (Err=''), 'try glob to fs ok');
+    Cnt := SevenZExtractByPrefixToFs(LR, 'a', LRoot);
+    CheckEqual(Int64(1), Int64(Cnt), 'prefix to fs');
+    Cnt := SevenZExtractBySuffixToFs(LR, '.log', LRoot);
+    CheckEqual(Int64(1), Int64(Cnt), 'suffix to fs');
+  finally RemoveAll(LRoot); end;
 end;
 
 procedure TestLowerBoundSuffixZeroAlloc;
@@ -3476,6 +3525,8 @@ begin
   T.Test('glob prefix*suffix', @TestGlobPrefixStarSuffix);
   T.Test('extract by prefix suffix glob', @TestExtractByPrefixSuffixGlob);
   T.Test('lowerbound suffix zero alloc', @TestLowerBoundSuffixZeroAlloc);
+  T.Test('bulk grouped multi folder', @TestBulkGroupedMultiFolder);
+  T.Test('extract by glob to fs', @TestExtractByGlobToFs);
 
   if not T.Run then Halt(1);
 end.

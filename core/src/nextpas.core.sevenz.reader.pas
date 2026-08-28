@@ -53,6 +53,7 @@ type
     procedure CopyPackSlices(APackPos: UInt64; var ASlices: array of TBytes);
     function DecodeFolder(AFolderIdx: Integer): TBytes;
     function EntrySlice(AIndex: Integer): TBytes;
+    function ExtractIndicesGrouped(const AIdx: array of Integer): TSevenZExtractedArray;
   public
     constructor Create(const AArchive: TBytes);
     constructor CreateWithPassword(const AArchive: TBytes;
@@ -86,6 +87,10 @@ type
     function ExtractByGlob(const APattern: string): TSevenZExtractedArray;
     function TryExtractByGlob(const APattern: string; out AExtracted: TSevenZExtractedArray): Boolean;
     function TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractByPrefix(const APrefix: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractByPrefixWithError(const APrefix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractBySuffix(const ASuffix: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractBySuffixWithError(const ASuffix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     function Extract(AIndex: Integer): TBytes;
     function ExtractTo(const AWriter: IWriter; AIndex: Integer): Int64;
     function OpenStream(AIndex: Integer): IStream;
@@ -1170,19 +1175,60 @@ begin
   Result := -1;
 end;
 
+function TSevenZReaderImpl.ExtractIndicesGrouped(const AIdx: array of Integer): TSevenZExtractedArray;
+var LI, LPos, LFolderIdx, LDistinct: Integer; LFound: Boolean; LDecoded: array of TBytes; LDistinctFolders: array of Integer; LOff, LLen: SizeInt; LSub: SizeInt; LData: TBytes;
+begin
+  Result := nil;
+  if Length(AIdx)=0 then Exit;
+  SetLength(Result, Length(AIdx));
+  SetLength(LDistinctFolders, 0);
+  SetLength(LDecoded, 0);
+  for LI:=0 to High(AIdx) do
+  begin
+    Result[LI].Info := FEntries[AIdx[LI]];
+    LFolderIdx := FFolderIdxOfEntry[AIdx[LI]];
+    if LFolderIdx < 0 then
+    begin
+      Result[LI].Data := nil;
+      Continue;
+    end;
+    LFound := False;
+    for LPos:=0 to High(LDistinctFolders) do
+      if LDistinctFolders[LPos]=LFolderIdx then begin LFound:=True; LDistinct:=LPos; Break; end;
+    if not LFound then
+    begin
+      LDistinct := Length(LDistinctFolders);
+      SetLength(LDistinctFolders, LDistinct+1);
+      SetLength(LDecoded, LDistinct+1);
+      LDistinctFolders[LDistinct] := LFolderIdx;
+      LDecoded[LDistinct] := DecodeFolder(LFolderIdx);
+    end
+    else
+      LDistinct := LPos;
+    LData := LDecoded[LDistinct];
+    LOff := FEntryOffInFolder[AIdx[LI]];
+    LSub := FGlobalSubOfEntry[AIdx[LI]];
+    LLen := SizeInt(FStreams.Substreams[LSub].Size);
+    if LOff + LLen > Length(LData) then
+      raise ESevenZError.Create('substream window exceeds folder output');
+    SetLength(Result[LI].Data, LLen);
+    if LLen > 0 then
+      Move(LData[LOff], Result[LI].Data[0], LLen);
+    if FStreams.Substreams[LSub].HasCrc and (Crc32OfBytes(Result[LI].Data) <> LongWord(FStreams.Substreams[LSub].Crc)) then
+      raise ESevenZError.CreateFmt('entry %d CRC mismatch', [AIdx[LI]]);
+  end;
+end;
+
 function TSevenZReaderImpl.ExtractByPrefix(const APrefix: string): TSevenZExtractedArray;
-var LStart, LPos, LIdx, LCnt, LLen: Integer;
+var LStart, LPos, LIdx, LCnt, LLen: Integer; LIndices: array of Integer;
 begin
   Result := nil;
   LLen := Length(APrefix);
   if LLen=0 then
   begin
-    SetLength(Result, Length(FEntries));
-    for LPos:=0 to High(FEntries) do
-    begin
-      Result[LPos].Info := FEntries[LPos];
-      Result[LPos].Data := Extract(LPos);
-    end;
+    SetLength(LIndices, Length(FEntries));
+    for LPos:=0 to High(FEntries) do LIndices[LPos] := LPos;
+    Result := ExtractIndicesGrouped(LIndices);
     Exit;
   end;
   if Length(FSortedIdx)=0 then Exit;
@@ -1194,31 +1240,28 @@ begin
     if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name,1,LLen) <> APrefix) then Break;
     Inc(LCnt);
   end;
-  SetLength(Result, LCnt);
+  SetLength(LIndices, LCnt);
   LCnt := 0;
   for LPos:=LStart to High(FSortedIdx) do
   begin
     LIdx := FSortedIdx[LPos];
     if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name,1,LLen) <> APrefix) then Break;
-    Result[LCnt].Info := FEntries[LIdx];
-    Result[LCnt].Data := Extract(LIdx);
+    LIndices[LCnt] := LIdx;
     Inc(LCnt);
   end;
+  Result := ExtractIndicesGrouped(LIndices);
 end;
 
 function TSevenZReaderImpl.ExtractBySuffix(const ASuffix: string): TSevenZExtractedArray;
-var LStart, LPos, LIdx, LCnt, LLen: Integer;
+var LStart, LPos, LIdx, LCnt, LLen: Integer; LIndices: array of Integer;
 begin
   Result := nil;
   LLen := Length(ASuffix);
   if LLen=0 then
   begin
-    SetLength(Result, Length(FEntries));
-    for LPos:=0 to High(FEntries) do
-    begin
-      Result[LPos].Info := FEntries[LPos];
-      Result[LPos].Data := Extract(LPos);
-    end;
+    SetLength(LIndices, Length(FEntries));
+    for LPos:=0 to High(FEntries) do LIndices[LPos] := LPos;
+    Result := ExtractIndicesGrouped(LIndices);
     Exit;
   end;
   if Length(FSortedIdxRev)=0 then Exit;
@@ -1230,16 +1273,16 @@ begin
     if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name, Length(FEntries[LIdx].Name)-LLen+1, LLen) <> ASuffix) then Break;
     Inc(LCnt);
   end;
-  SetLength(Result, LCnt);
+  SetLength(LIndices, LCnt);
   LCnt := 0;
   for LPos:=LStart to High(FSortedIdxRev) do
   begin
     LIdx := FSortedIdxRev[LPos];
     if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name, Length(FEntries[LIdx].Name)-LLen+1, LLen) <> ASuffix) then Break;
-    Result[LCnt].Info := FEntries[LIdx];
-    Result[LCnt].Data := Extract(LIdx);
+    LIndices[LCnt] := LIdx;
     Inc(LCnt);
   end;
+  Result := ExtractIndicesGrouped(LIndices);
 end;
 
 function TSevenZReaderImpl.ExtractByGlob(const APattern: string): TSevenZExtractedArray;
@@ -1256,7 +1299,7 @@ begin
 end;
 
 function TSevenZReaderImpl.TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
-var LI, LCnt, LIdx, LPos, LStarPos: Integer; LHasQ: Boolean; LPrefix, LSuffix: string;
+var LI, LCnt, LIdx, LPos, LStarPos: Integer; LHasQ: Boolean; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
 begin
   AExtracted := nil; AError := ''; Result := False;
   try
@@ -1334,18 +1377,19 @@ begin
         end;
       end;
     end;
+    SetLength(AExtracted, 0);
     LCnt := 0;
     for LI:=0 to High(FEntries) do
       if MatchesGlob(FEntries[LI].Name, APattern) then Inc(LCnt);
-    SetLength(AExtracted, LCnt);
-    LCnt := 0;
-    for LI:=0 to High(FEntries) do
-      if MatchesGlob(FEntries[LI].Name, APattern) then
-      begin
-        AExtracted[LCnt].Info := FEntries[LI];
-        AExtracted[LCnt].Data := Extract(LI);
-        Inc(LCnt);
-      end;
+    if LCnt > 0 then
+    begin
+      SetLength(LIndices, LCnt);
+      LFill := 0;
+      for LI:=0 to High(FEntries) do
+        if MatchesGlob(FEntries[LI].Name, APattern) then
+        begin LIndices[LFill] := LI; Inc(LFill); end;
+      AExtracted := ExtractIndicesGrouped(LIndices);
+    end;
     Result := True;
   except
     on E: Exception do
@@ -1355,6 +1399,32 @@ begin
       Result := False;
     end;
   end;
+end;
+
+function TSevenZReaderImpl.TryExtractByPrefix(const APrefix: string; out AExtracted: TSevenZExtractedArray): Boolean;
+var LErr: string;
+begin
+  Result := TryExtractByPrefixWithError(APrefix, AExtracted, LErr);
+end;
+
+function TSevenZReaderImpl.TryExtractByPrefixWithError(const APrefix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+begin
+  AExtracted := nil; AError := ''; Result := False;
+  try AExtracted := ExtractByPrefix(APrefix); Result := True;
+  except on E: Exception do begin AError := E.ClassName+': '+E.Message; AExtracted := nil; Result := False; end; end;
+end;
+
+function TSevenZReaderImpl.TryExtractBySuffix(const ASuffix: string; out AExtracted: TSevenZExtractedArray): Boolean;
+var LErr: string;
+begin
+  Result := TryExtractBySuffixWithError(ASuffix, AExtracted, LErr);
+end;
+
+function TSevenZReaderImpl.TryExtractBySuffixWithError(const ASuffix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+begin
+  AExtracted := nil; AError := ''; Result := False;
+  try AExtracted := ExtractBySuffix(ASuffix); Result := True;
+  except on E: Exception do begin AError := E.ClassName+': '+E.Message; AExtracted := nil; Result := False; end; end;
 end;
 
 function TSevenZReaderImpl.Extract(AIndex: Integer): TBytes;

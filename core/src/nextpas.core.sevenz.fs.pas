@@ -35,6 +35,14 @@ function SevenZExtractToFs(const AReader: ISevenZReader; AIndex: Integer;
   const AHostPath: string): Int64;
 procedure SevenZExtractAllToFs(const AReader: ISevenZReader;
   const ABaseDir: string);
+function SevenZExtractByPrefixToFs(const AReader: ISevenZReader;
+  const APrefix, ABaseDir: string): Integer;
+function SevenZExtractBySuffixToFs(const AReader: ISevenZReader;
+  const ASuffix, ABaseDir: string): Integer;
+function SevenZExtractByGlobToFs(const AReader: ISevenZReader;
+  const APattern, ABaseDir: string): Integer;
+function SevenZTryExtractByGlobToFs(const AReader: ISevenZReader;
+  const APattern, ABaseDir: string; out AError: string): Boolean;
 
 implementation
 
@@ -208,6 +216,134 @@ begin
     LHostPath := PathJoin([ABaseDir, LEntry.Name]);
     SevenZExtractToFs(AReader, I, LHostPath);
   end;
+end;
+
+function SevenZExtractByPrefixToFs(const AReader: ISevenZReader;
+  const APrefix, ABaseDir: string): Integer;
+var Ext: TSevenZExtractedArray; I: Integer; LPath: string; LFile: IFile;
+begin
+  if AReader = nil then raise EArgumentError.Create('SevenZExtractByPrefixToFs: AReader is nil');
+  if ABaseDir = '' then raise EArgumentError.Create('SevenZExtractByPrefixToFs: ABaseDir is empty');
+  MkdirAll(ABaseDir);
+  Ext := AReader.ExtractByPrefix(APrefix);
+  Result := Length(Ext);
+  for I:=0 to High(Ext) do
+  begin
+    LPath := PathJoin([ABaseDir, Ext[I].Info.Name]);
+    if Ext[I].Info.Kind = sekDirectory then MkdirAll(LPath)
+    else
+    begin
+      if Ext[I].Data = nil then
+      begin
+        // empty file
+        if PathDir(LPath) <> '' then MkdirAll(PathDir(LPath));
+        LFile := Create(LPath); LFile.Close;
+      end
+      else
+      begin
+        if PathDir(LPath) <> '' then MkdirAll(PathDir(LPath));
+        WriteFile(LPath, Ext[I].Data);
+      end;
+      if Ext[I].Info.HasMTime then
+        Chtimes(LPath, Ext[I].Info.MTimeUnixSec*1000000000, Ext[I].Info.MTimeUnixSec*1000000000);
+    end;
+  end;
+end;
+
+function SevenZExtractBySuffixToFs(const AReader: ISevenZReader;
+  const ASuffix, ABaseDir: string): Integer;
+var Ext: TSevenZExtractedArray; I: Integer; LPath: string; LFile: IFile;
+begin
+  if AReader = nil then raise EArgumentError.Create('SevenZExtractBySuffixToFs: AReader is nil');
+  if ABaseDir = '' then raise EArgumentError.Create('SevenZExtractBySuffixToFs: ABaseDir is empty');
+  MkdirAll(ABaseDir);
+  Ext := AReader.ExtractBySuffix(ASuffix);
+  Result := Length(Ext);
+  for I:=0 to High(Ext) do
+  begin
+    LPath := PathJoin([ABaseDir, Ext[I].Info.Name]);
+    if Ext[I].Info.Kind = sekDirectory then MkdirAll(LPath)
+    else
+    begin
+      if Ext[I].Data = nil then
+      begin
+        if PathDir(LPath) <> '' then MkdirAll(PathDir(LPath));
+        LFile := Create(LPath); LFile.Close;
+      end
+      else
+      begin
+        if PathDir(LPath) <> '' then MkdirAll(PathDir(LPath));
+        WriteFile(LPath, Ext[I].Data);
+      end;
+      if Ext[I].Info.HasMTime then
+        Chtimes(LPath, Ext[I].Info.MTimeUnixSec*1000000000, Ext[I].Info.MTimeUnixSec*1000000000);
+    end;
+  end;
+end;
+
+function SevenZExtractByGlobToFs(const AReader: ISevenZReader;
+  const APattern, ABaseDir: string): Integer;
+var Err: string; Ext: TSevenZExtractedArray; I: Integer; LPath: string; LFile: IFile;
+begin
+  if AReader = nil then raise EArgumentError.Create('SevenZExtractByGlobToFs: AReader is nil');
+  if ABaseDir = '' then raise EArgumentError.Create('SevenZExtractByGlobToFs: ABaseDir is empty');
+  MkdirAll(ABaseDir);
+  Ext := AReader.ExtractByGlob(APattern);
+  Result := Length(Ext);
+  for I:=0 to High(Ext) do
+  begin
+    LPath := PathJoin([ABaseDir, Ext[I].Info.Name]);
+    if Ext[I].Info.Kind = sekDirectory then MkdirAll(LPath)
+    else
+    begin
+      if Ext[I].Data = nil then
+      begin
+        if PathDir(LPath) <> '' then MkdirAll(PathDir(LPath));
+        LFile := Create(LPath); LFile.Close;
+      end
+      else
+      begin
+        if PathDir(LPath) <> '' then MkdirAll(PathDir(LPath));
+        WriteFile(LPath, Ext[I].Data);
+      end;
+      if Ext[I].Info.HasMTime then
+        Chtimes(LPath, Ext[I].Info.MTimeUnixSec*1000000000, Ext[I].Info.MTimeUnixSec*1000000000);
+    end;
+  end;
+end;
+
+function SevenZTryExtractByGlobToFs(const AReader: ISevenZReader;
+  const APattern, ABaseDir: string; out AError: string): Boolean;
+var Ext: TSevenZExtractedArray; I: Integer; LPath: string; LFile: IFile;
+begin
+  AError := ''; Result := False;
+  if AReader = nil then begin AError := 'AReader is nil'; Exit(False); end;
+  if ABaseDir = '' then begin AError := 'ABaseDir is empty'; Exit(False); end;
+  try
+    MkdirAll(ABaseDir);
+    if not AReader.TryExtractByGlobWithError(APattern, Ext, AError) then Exit(False);
+    for I:=0 to High(Ext) do
+    begin
+      LPath := PathJoin([ABaseDir, Ext[I].Info.Name]);
+      if Ext[I].Info.Kind = sekDirectory then MkdirAll(LPath)
+      else
+      begin
+        if Ext[I].Data = nil then
+        begin
+          if PathDir(LPath) <> '' then MkdirAll(PathDir(LPath));
+          LFile := Create(LPath); LFile.Close;
+        end
+        else
+        begin
+          if PathDir(LPath) <> '' then MkdirAll(PathDir(LPath));
+          WriteFile(LPath, Ext[I].Data);
+        end;
+        if Ext[I].Info.HasMTime then
+          Chtimes(LPath, Ext[I].Info.MTimeUnixSec*1000000000, Ext[I].Info.MTimeUnixSec*1000000000);
+      end;
+    end;
+    Result := True;
+  except on E: Exception do begin AError := E.ClassName+': '+E.Message; Result := False; end; end;
 end;
 
 end.
