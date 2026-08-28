@@ -171,6 +171,7 @@ var
   GLiveAcc: TBytes;
   GLiveFound: Boolean;
   GLiveWasHRR: Boolean;
+  GLiveWasEarlyDataAccepted: Boolean;
 
 procedure LiveStopCb(AContext: Pointer);
 begin
@@ -254,7 +255,7 @@ end;
 procedure RunLiveHRR(APort: UInt16);
 var LOpts: TAsyncTlsPasClientOptions; LHRR: ITlsPasHRRInfo;
 begin
-  GLiveStream:=nil; GLiveErr:=0; GLiveReady:=False; GLiveCbCalled:=False; GLiveFinished:=False; GLiveFound:=False; GLiveWasHRR:=False; SetLength(GLiveAcc,0); GLiveBuf:=nil;
+  GLiveStream:=nil; GLiveErr:=0; GLiveReady:=False; GLiveCbCalled:=False; GLiveFinished:=False; GLiveFound:=False; GLiveWasHRR:=False; GLiveWasEarlyDataAccepted:=False; SetLength(GLiveAcc,0); GLiveBuf:=nil;
   GLiveLoop:=TAsyncLoop.Create;
   try
     GLiveLoop.Schedule(TDuration.FromSeconds(35), @LiveStopCb, nil);
@@ -267,6 +268,33 @@ begin
       GLiveLoop.Run;
     if (GLiveStream<>nil) and Supports(GLiveStream, ITlsPasHRRInfo, LHRR) then
       GLiveWasHRR:=LHRR.GetWasHRR;
+  finally
+    if GLiveBuf<>nil then begin FreeMem(GLiveBuf); GLiveBuf:=nil; end;
+    GLiveLoop.Free; GLiveLoop:=nil;
+  end;
+end;
+
+procedure RunLiveEarlyData(APort: UInt16; ACache: TAsyncTlsPasSessionCache; const AEarlyData: TBytes);
+var LOpts: TAsyncTlsPasClientOptions; LHRR: ITlsPasHRRInfo; LEarly: ITlsPasEarlyDataInfo;
+begin
+  GLiveStream:=nil; GLiveErr:=0; GLiveReady:=False; GLiveCbCalled:=False; GLiveFinished:=False; GLiveFound:=False; GLiveWasHRR:=False; GLiveWasEarlyDataAccepted:=False; SetLength(GLiveAcc,0); GLiveBuf:=nil;
+  GLiveLoop:=TAsyncLoop.Create;
+  try
+    GLiveLoop.Schedule(TDuration.FromSeconds(35), @LiveStopCb, nil);
+    LOpts:=DefaultAsyncTlsPasClientOptions;
+    LOpts.ServerName:='localhost';
+    LOpts.HandshakeDeadline:=TDeadline.After(TDuration.FromSeconds(30));
+    LOpts.Cache:=ACache;
+    LOpts.AllowEarlyData:=Length(AEarlyData)>0;
+    LOpts.EarlyData:=Copy(AEarlyData);
+    if not AsyncTlsPasConnect(GLiveLoop, '127.0.0.1', APort, LOpts, @LiveReadyCbWithRead, nil) then
+      GLiveErr:=-3201
+    else if not GLiveCbCalled then
+      GLiveLoop.Run;
+    if (GLiveStream<>nil) and Supports(GLiveStream, ITlsPasHRRInfo, LHRR) then
+      GLiveWasHRR:=LHRR.GetWasHRR;
+    if (GLiveStream<>nil) and Supports(GLiveStream, ITlsPasEarlyDataInfo, LEarly) then
+      GLiveWasEarlyDataAccepted:=LEarly.GetWasEarlyDataAccepted;
   finally
     if GLiveBuf<>nil then begin FreeMem(GLiveBuf); GLiveBuf:=nil; end;
     GLiveLoop.Free; GLiveLoop:=nil;
@@ -437,6 +465,38 @@ begin
   LSealer.Clear; LOpener.Clear; TlsPasClearEarlyDataSecrets(LSec);
 end;
 
+procedure TestEarlyDataLiveRejectFallback;
+var P: UInt16; C: TAsyncTlsPasSessionCache; S: TTlsPasResumptionSession; LOk: Boolean; LEarly: TBytes;
+begin
+  P := EnvPort('TLSPAS_HRR_BASE_PORT', 15556);
+  if not LivePortAvailable(P) then begin Check(True, 'skip early live no server'); Exit; end;
+  C := TAsyncTlsPasSessionCache.Create;
+  try
+    // Step1: normal handshake to obtain ticket (ServerName=localhost → cache key localhost:P)
+    RunLiveEarlyData(P, C, nil);
+    Check(GLiveReady, 'early step1 handshake');
+    CheckEqual(Int64(0), Int64(GLiveErr), 'step1 no error');
+    Sleep(300);
+    LOk := C.TryPeek('localhost', P, S);
+    if not LOk then begin Check(True, 'skip no ticket'); Exit; end;
+    // Promote ticket to early_data capable (synthetic max_early_data, keep PSK/binder valid)
+    S.HasMaxEarlyData := True;
+    S.MaxEarlyDataSize := 16384;
+    C.Store('localhost', P, S);
+    // Step2: early_data attempt — server without -early_data will reject but handshake must still succeed via 1-RTT fallback
+    SetLength(LEarly, 13);
+    Move(PChar('GET / HTTP/1.0'#13#10#13#10)^, LEarly[0], 13);
+    // Use small early payload (13 bytes) well below limit
+    RunLiveEarlyData(P, C, LEarly);
+    Check(GLiveCbCalled, 'early step2 callback');
+    Check(GLiveReady, 'early step2 handshake');
+    CheckEqual(Int64(0), Int64(GLiveErr), 'early step2 no error');
+    Check(GLiveFound, 'early step2 HTTP');
+    Check(not GLiveWasEarlyDataAccepted, 'early rejected fallback');
+    Check(not GLiveWasHRR, 'no HRR with early');
+  finally C.Free; end;
+end;
+
 procedure TestTicketMaxEarlyDataCapture;
 var C: TAsyncTlsPasSessionCache; S: TTlsPasResumptionSession; LOk: Boolean;
 begin
@@ -487,6 +547,7 @@ begin
   GSuite.Test('EarlyDataExtension', @TestEarlyDataExtensionSynthetic);
   GSuite.Test('EarlyDataSeal', @TestEarlyDataSealRoundTrip);
   GSuite.Test('EarlyDataTicketCache', @TestTicketMaxEarlyDataCapture);
+  GSuite.Test('EarlyDataLiveRejectFallback', @TestEarlyDataLiveRejectFallback);
   if not GSuite.Run then
     Halt(1);
 end.
