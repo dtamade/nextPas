@@ -4,6 +4,7 @@ program test_text_kv;
     1 空串/空白 2 单对 3 多对空格 4 引号包裹含空格/@/= 5 单双引号
     6 大小写保留 7 空值 8 重复键 9 异常：缺= /空key/未闭合引号
     10 ScanKV vs ParseKV 一致性 11 100 对容积 12 错误消息保真
+    13 分号分隔 14 花括号包裹 15 混合/未闭合花括号
   均为纯函数离线，不依赖 DB。 }
 
 {$I nextpas.core.settings.inc}
@@ -150,6 +151,38 @@ begin
   try ParseKV('mykey="unterminated'); Fail('must raise'); except on E: Exception do Check(Pos('mykey', E.Message)>0, 'msg preserves key'); end;
 end;
 
+procedure TestSemicolonDelimited;
+begin
+  CheckPairs('a=1;b=2;c=3', ['a','1','b','2','c','3']);
+  CheckPairs('host=db;port=3306;user=root', ['host','db','port','3306','user','root']);
+  CheckPairs('a=1; b=2 ; c=3 ', ['a','1','b','2','c','3']);
+  CheckPairs('a=1;;b=2', ['a','1','b','2']);
+end;
+
+procedure TestBraceQuoted;
+var P: TKVPairs;
+begin
+  CheckPairs('Driver={PostgreSQL Unicode};Server=localhost', ['Driver','PostgreSQL Unicode','Server','localhost']);
+  CheckPairs('Driver={DM8 ODBC DRIVER};Server=127.0.0.1;Port=5236', ['Driver','DM8 ODBC DRIVER','Server','127.0.0.1','Port','5236']);
+  CheckPairs('a={x=y;z} b=2', ['a','x=y;z','b','2']);
+  // brace value may contain spaces and semicolons
+  P := ParseKV('Driver={My Driver};DSN=mydsn');
+  CheckEqual('Driver', P[0].Key);
+  CheckEqual('My Driver', P[0].Value);
+end;
+
+procedure TestMixedAndUnterminatedBrace;
+begin
+  // mixed space and semicolon + quoted
+  CheckPairs('a=1 b=2;c=3 d=''x y'';e={v;w}', ['a','1','b','2','c','3','d','x y','e','v;w']);
+  // unterminated brace
+  try ParseKV('Driver={unterminated'); Fail('unterminated brace'); except on E: Exception do Check(Pos('unterminated', E.Message)>0, 'unterminated brace'); end;
+  // empty with semicolon
+  CheckPairs('a=;b=2', ['a','','b','2']);
+  // ScanKV parity for semicolon
+  CheckPairs('x=1;y=2', ['x','1','y','2']);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.kv');
   T.Test('empty', @TestEmpty);
@@ -165,5 +198,8 @@ begin
   T.Test('scan vs parse', @TestScanVsParse);
   T.Test('large volume 100', @TestLargeVolume);
   T.Test('error preserves key', @TestErrorMessagesPreserveKey);
+  T.Test('semicolon delimited', @TestSemicolonDelimited);
+  T.Test('brace quoted', @TestBraceQuoted);
+  T.Test('mixed and unterminated brace', @TestMixedAndUnterminatedBrace);
   if not T.Run then Halt(1);
 end.
