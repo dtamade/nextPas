@@ -183,6 +183,7 @@ make focused FOCUS=core/tests/nextpas.core.zip/test_zip_extra      # extra 编�
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_go_parity  # Go archive/zip 双向字节级对等（十九期领头羊双锚点）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_perf       # 性能回归阈值（二十期 allocs 预算，CountingMemoryManager）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_stress     # 极限压力（二十一期 70k Zip64/1k混合/Bomb/并发）
+make -C core/benchmarks/nextpas.core.zip/bench_zip regression      # 基准回归（22期 BASELINE + allocs/bytes 硬门，ns +50% 告警）
 ```
 
 python3 zipfile 作为独立实现交叉验证源（读我们产出的归档、生成参考归档、
@@ -194,4 +195,6 @@ store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuz
 （heaptrc 兼容，统计 GetMem+AllocMem+ReAllocMem）锁定 `200×512B 810→805`
 零分配基线与 `1MiB ≤12 allocs` 预算，`Reserve` 必须降低 allocs，回归即红。
 `test_zip_stress` 以 70k Zip64/1k 混合双路径/ Bomb 单值与总量/并发提取
-验证规模与敌意压力下的 fail-closed。
+验证规模与敌意压力下的 fail-closed。`bench_zip regression` 以
+`BASELINE.json` 为基线，`allocs +2` 零容忍、`bytes` 强一致、`ns +50%` 告警
+的 CI 硬门（`make baseline` 需人工审查后提交）。
