@@ -280,6 +280,7 @@ function SplitString(const S, Delimiters: string): TStringArray; inline;
 var
   I, Start, Count, Fill: Integer;
 begin
+  Result := nil;
   { 连续分隔符不产生空段:SysUtils.SplitString 语义,行拆分等场景依赖 }
   Count := 0;
   Start := 1;
