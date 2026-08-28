@@ -24,19 +24,10 @@ implementation
 uses Math, nextpas.core.audio.simd;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);
-var LNew: TBytes; LExpected: Integer;
+var LNew: TBytes;
 begin
-  if not ABuf.Format.IsValid then raise EInvalidArgument.Create('audio.mix: invalid format');
-  if ABuf.Format.SampleFormat = sfF32 then
-  begin
-    if ABuf.FrameCount < 0 then raise EInvalidArgument.Create('audio.mix: negative FrameCount');
-    LExpected := ABuf.FrameCount * ABuf.Format.BlockAlign;
-    if Length(ABuf.Data) < LExpected then raise EInvalidArgument.Create('audio.mix: data too small');
-    Exit;
-  end;
-  if ABuf.FrameCount < 0 then raise EInvalidArgument.Create('audio.mix: negative FrameCount');
-  LExpected := ABuf.FrameCount * ABuf.Format.BlockAlign;
-  if Length(ABuf.Data) < LExpected then raise EInvalidArgument.Create('audio.mix: data too small for source format');
+  AudioValidateBuffer(ABuf, 'audio.mix');
+  if ABuf.Format.SampleFormat = sfF32 then Exit;
   if ABuf.FrameCount = 0 then begin ABuf.Format.SampleFormat := sfF32; SetLength(ABuf.Data, 0); Exit; end;
   LNew := PcmConvert(ABuf.Data, ABuf.Format.SampleFormat, sfF32, ABuf.FrameCount, ABuf.Format.Channels, False);
   ABuf.Data := LNew; ABuf.Format.SampleFormat := sfF32;
@@ -48,28 +39,20 @@ var
   LDstPtr, LSrcPtr: PSingle;
   LSamples, LDstOffset, LI: Integer;
 begin
-  if not ADst.Format.IsValid then raise EInvalidArgument.Create('MixInto: dst invalid format');
-  if ADst.Format.SampleFormat <> sfF32 then raise EInvalidArgument.Create('MixInto: dst must be sfF32');
-  if ADst.FrameCount < 0 then raise EInvalidArgument.Create('MixInto: dst negative FrameCount');
-  if Length(ADst.Data) < ADst.FrameCount * ADst.Format.BlockAlign then raise EInvalidArgument.Create('MixInto: dst data too small');
-  if not ASrc.Format.IsValid then raise EInvalidArgument.Create('MixInto: src invalid format');
+  AudioValidateBuffer(ADst, 'MixInto: dst', True);
+  AudioValidateBuffer(ASrc, 'MixInto: src');
   if (ASrc.Format.SampleRate <> ADst.Format.SampleRate) or (ASrc.Format.Channels <> ADst.Format.Channels) then
     raise EInvalidArgument.Create('MixInto: rate/channels mismatch');
   if AOffset < 0 then raise EInvalidArgument.Create('MixInto: negative offset');
-  if ASrc.FrameCount < 0 then raise EInvalidArgument.Create('MixInto: src negative FrameCount');
   if AOffset + ASrc.FrameCount > ADst.FrameCount then raise EInvalidArgument.Create('MixInto: dst too small for offset+src');
   if ASrc.FrameCount = 0 then Exit;
   if ASrc.Format.SampleFormat <> sfF32 then
   begin
-    if Length(ASrc.Data) < ASrc.FrameCount * ASrc.Format.BlockAlign then raise EInvalidArgument.Create('MixInto: src data too small');
     LSrcF32 := PcmConvert(ASrc.Data, ASrc.Format.SampleFormat, sfF32, ASrc.FrameCount, ASrc.Format.Channels, False);
     LSrcData := LSrcF32;
   end
   else
-  begin
-    if Length(ASrc.Data) < ASrc.FrameCount * ASrc.Format.BlockAlign then raise EInvalidArgument.Create('MixInto: src data too small');
     LSrcData := ASrc.Data;
-  end;
   LSamples := ASrc.FrameCount * ASrc.Format.Channels;
   LDstOffset := AOffset * ADst.Format.Channels;
   if LSamples = 0 then Exit;

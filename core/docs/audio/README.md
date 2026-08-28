@@ -9,8 +9,9 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 
 | 域 | 单元 | 职责 | 依赖 |
 |---|---|---|---|
-| **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 为真值源，`BlockAlign/ByteRate/FramesForMs` | L0 only |
+| **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer` + `AudioBytesForFrames/AudioIsValidBuffer/AudioValidateBuffer` 校验 DRY + `AudioSilentFill/AudioFillMemoryRealtime` 实时真值 | L0 only |
 | **intf** | `audio.intf` | 共享面 `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | base |
+| **simd** | `audio.simd` | `SimdAdd/Mul/Peak/SumSquares/ClampF32` 4-wide（-O2 向量化 SSE2），`AudioSimdCaps` | base |
 | **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔（已预留 FLAC/MP3 由 `music888` 吸收） | base+intf |
 | **pcm** | `audio.pcm` | 纯函数 `U8/S16/S24/S32↔F32`、`Clamp`、`Interleave/Deinterleave`，`TBytes` 货币，`TPDF` 抖动 | base |
 | **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
@@ -118,14 +119,14 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-13 门合计 **180 tests**，全量 `HEAPTRC OK`：
+20 门合计 **230+ tests**，全量 `HEAPTRC OK`：
 
 ```bash
-for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
-         test_resample test_mix test_dsp test_device test_graph test_game test_timeline; do
-  make -C core/tests/nextpas.core.audio/$g clean test
+for g in pcm_wav wav aiff meta base registry flac mp3 vorbis resample mix dsp \
+         device graph game timeline playlist spatial studio automation; do
+  make -C core/tests/nextpas.core.audio/test_$g clean test
 done
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 23 文件无 ffi/vendor + 8 GUID + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 44 文件无 ffi/vendor + GUID + 实时纪律
 make hygiene && git diff --check
 ```
 
@@ -148,10 +149,10 @@ make hygiene && git diff --check
 ## 基准
 
 ```bash
-make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s
+make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # ns/op + MB/s
 ```
 
-现有 `bench_pcm_wav` 覆盖 WAV 编解码热路径；`Timeline/Graph` 的 `FillRealtime` 基准可按 `bench` 框架 `IBenchContext` 单次调用模式扩展，输出 `ns/op` 与 `MB/s`（`-O2`，HEAPTRC 关）。
+`bench_pcm_wav / bench_mix / bench_graph / bench_timeline` 均基于 `IBenchContext`，覆盖编解码与混音 `FillRealtime` 热路径（`-O2`，HEAPTRC 关），并复用 `SimdAdd/Clamp` 4-wide 实现。
 
 ## 演进与复用
 

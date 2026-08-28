@@ -110,6 +110,11 @@ function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioFormatCreate(ASampleRate, AChannels: Integer;
   ASampleFormat: TAudioSampleFormat): TAudioFormat; inline;
 
+{ ---- Validation helpers (DRY, 复用度) ---- }
+function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean = False): Boolean; inline;
+function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer; inline;
+procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean = False); inline;
+
 { ---- Realtime helpers (zero-alloc, lock-free, no IO) ---- }
 // 字节预算：统一溢出守卫，供 FillRealtime 入口复用
 function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64; inline;
@@ -295,6 +300,31 @@ begin
   if SampleRate <= 0 then
     Exit(0);
   Result := Int64((Frame * UInt64(1000000000)) div UInt64(SampleRate));
+end;
+
+function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean): Boolean;
+begin
+  Result:=False;
+  if not ABuffer.Format.IsValid then Exit;
+  if ARequireF32 and (ABuffer.Format.SampleFormat<>sfF32) then Exit;
+  if ABuffer.FrameCount<0 then Exit;
+  if Length(ABuffer.Data) < ABuffer.FrameCount * ABuffer.Format.BlockAlign then Exit;
+  Result:=True;
+end;
+
+function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer;
+begin Result:=ABuffer.FrameCount * ABuffer.Format.BlockAlign; end;
+
+procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean);
+begin
+  if not ABuffer.Format.IsValid then
+    raise EInvalidArgument.CreateFmt('%s: invalid format', [AContext]);
+  if ARequireF32 and (ABuffer.Format.SampleFormat<>sfF32) then
+    raise EInvalidArgument.CreateFmt('%s: must be sfF32', [AContext]);
+  if ABuffer.FrameCount<0 then
+    raise EInvalidArgument.CreateFmt('%s: negative FrameCount', [AContext]);
+  if Length(ABuffer.Data) < ABuffer.FrameCount * ABuffer.Format.BlockAlign then
+    raise EInvalidArgument.CreateFmt('%s: data too small', [AContext]);
 end;
 
 function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;

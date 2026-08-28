@@ -114,6 +114,9 @@ function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioChannelMaskForLayout(ALayout: TAudioChannelLayout): UInt32; inline;
 function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioChannelLayout; inline;
 function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64; inline;
+function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean = False): Boolean; inline;
+function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer; inline;
+procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean = False); inline;
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
 function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
@@ -234,6 +237,15 @@ end;
 
 function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;
 begin Result := nextpas.core.audio.base.AudioBytesForFrames(AFormat, AFrames); end;
+
+function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean): Boolean;
+begin Result := nextpas.core.audio.base.AudioIsValidBuffer(ABuffer, ARequireF32); end;
+
+function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer;
+begin Result := nextpas.core.audio.base.AudioBufferDataBytes(ABuffer); end;
+
+procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean);
+begin nextpas.core.audio.base.AudioValidateBuffer(ABuffer, AContext, ARequireF32); end;
 
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
