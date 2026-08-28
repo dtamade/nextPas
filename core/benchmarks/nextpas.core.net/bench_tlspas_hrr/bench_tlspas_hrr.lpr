@@ -248,6 +248,25 @@ begin
     F := TlsPasFormatReplayStats(S);
 end;
 
+var
+  GAdaptiveConfig: TTlsPasAdaptiveLimitConfig;
+  GAdaptiveServerStats: TTlsPasServerStats;
+  GAdaptiveReplayStats: TAsyncTlsPasReplayStats;
+
+procedure BenchAdaptiveLimit(aIters: Int64);
+var I: Int64; L: Cardinal;
+begin
+  for I := 1 to aIters do
+    L := TlsPasComputeAdaptiveMaxEarlyData(GAdaptiveServerStats, GAdaptiveReplayStats, GAdaptiveConfig);
+end;
+
+procedure BenchHeaderValue(aIters: Int64);
+var I: Int64; H: string;
+begin
+  for I := 1 to aIters do
+    H := TlsPasEarlyDataDecisionToHeaderValue(edAccept);
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -283,6 +302,9 @@ begin
   GFileStore := TAsyncTlsPasReplayFileStore.Create('/tmp/bench_replay_file.dat', 64, 600000) as ITlsPasReplayStore;
   GKvStore := TAsyncTlsPasReplayStoreFactory.CreateKv(TAsyncTlsPasMemoryKvStore.Create as ITlsPasKvStore, 64, 600000);
   GServerObserver := TAsyncTlsPasServerObserver.Create(GReplayStore);
+  GAdaptiveConfig := DefaultTlsPasAdaptiveLimitConfig;
+  GAdaptiveServerStats := Default(TTlsPasServerStats);
+  GAdaptiveReplayStats := Default(TAsyncTlsPasReplayStats);
 end;
 
 var
@@ -319,6 +341,8 @@ begin
     .AddLoop('ServerShouldAccept', @BenchServerShouldAccept)
     .AddLoop('ObserverDecide (wrap+count)', @BenchObserverDecide)
     .AddLoop('FormatReplayStats', @BenchFormatReplayStats)
+    .AddLoop('AdaptiveMaxEarlyData', @BenchAdaptiveLimit)
+    .AddLoop('HeaderValue (X-Early-Data)', @BenchHeaderValue)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;
