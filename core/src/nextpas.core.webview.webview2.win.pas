@@ -34,28 +34,28 @@ type
 
 function Win32ShellInit: Boolean;
 function Win32ShellCreate(const AGeometry: TWin32ShellGeometry): Pointer;
-procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string);
-procedure Win32ShellResize(AWin: Pointer; AW, AH: Integer);
-procedure Win32ShellShow(AWin: Pointer);
-procedure Win32ShellHide(AWin: Pointer);
-procedure Win32ShellDestroy(AWin: Pointer);
-function Win32ShellIsVisible(AWin: Pointer): Boolean;
-function Win32ShellIsMaximized(AWin: Pointer): Boolean;
-procedure Win32ShellMaximize(AWin: Pointer);
-procedure Win32ShellUnmaximize(AWin: Pointer);
-procedure Win32ShellMinimize(AWin: Pointer);
-procedure Win32ShellRestore(AWin: Pointer);
-function Win32ShellIsMinimized(AWin: Pointer): Boolean;
-function Win32ShellScaleFactor(AWin: Pointer): Double;
-procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc);
-procedure Win32ShellOnResize(AHandler: TWin32ResizeProc);
-function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean;
-function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean;
-procedure Win32ShellFocus(AWin: Pointer);
-function Win32ShellNativeHandle(AWin: Pointer): Pointer;
+procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string); inline;
+procedure Win32ShellResize(AWin: Pointer; AW, AH: Integer); inline;
+procedure Win32ShellShow(AWin: Pointer); inline;
+procedure Win32ShellHide(AWin: Pointer); inline;
+procedure Win32ShellDestroy(AWin: Pointer); inline;
+function Win32ShellIsVisible(AWin: Pointer): Boolean; inline;
+function Win32ShellIsMaximized(AWin: Pointer): Boolean; inline;
+procedure Win32ShellMaximize(AWin: Pointer); inline;
+procedure Win32ShellUnmaximize(AWin: Pointer); inline;
+procedure Win32ShellMinimize(AWin: Pointer); inline;
+procedure Win32ShellRestore(AWin: Pointer); inline;
+function Win32ShellIsMinimized(AWin: Pointer): Boolean; inline;
+function Win32ShellScaleFactor(AWin: Pointer): Double; inline;
+procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc); inline;
+procedure Win32ShellOnResize(AHandler: TWin32ResizeProc); inline;
+function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean; inline;
+function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean; inline;
+procedure Win32ShellFocus(AWin: Pointer); inline;
+function Win32ShellNativeHandle(AWin: Pointer): Pointer; inline;
 procedure Win32ShellRunMainLoop;
 procedure Win32ShellQuitMainLoop;
-function Win32ShellIsMainLoopRunning: Boolean;
+function Win32ShellIsMainLoopRunning: Boolean; inline;
 
 implementation
 
@@ -199,66 +199,66 @@ begin
   end;
 end;
 
-procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string);
+procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string); inline;
 begin
   if AWin = nil then Exit;
   SetWindowTextW(HWND(AWin), PWideChar(WideString(ATitle)));
 end;
 
-procedure Win32ShellResize(AWin: Pointer; AW, AH: Integer);
+procedure Win32ShellResize(AWin: Pointer; AW, AH: Integer); inline;
 begin
   if AWin = nil then Exit;
   SetWindowPos(HWND(AWin), 0, 0, 0, AW, AH, SWP_NOMOVE or SWP_NOZORDER);
 end;
 
-procedure Win32ShellShow(AWin: Pointer);
+procedure Win32ShellShow(AWin: Pointer); inline;
 begin
   if AWin = nil then Exit;
   ShowWindow(HWND(AWin), SW_SHOW);
   UpdateWindow(HWND(AWin));
 end;
 
-procedure Win32ShellHide(AWin: Pointer);
+procedure Win32ShellHide(AWin: Pointer); inline;
 begin
   if AWin = nil then Exit;
   ShowWindow(HWND(AWin), SW_HIDE);
 end;
 
-procedure Win32ShellDestroy(AWin: Pointer);
+procedure Win32ShellDestroy(AWin: Pointer); inline;
 begin
   if AWin = nil then Exit;
   DestroyWindow(HWND(AWin));
 end;
 
-function Win32ShellIsVisible(AWin: Pointer): Boolean;
+function Win32ShellIsVisible(AWin: Pointer): Boolean; inline;
 begin
   Result := (AWin <> nil) and IsWindowVisible(HWND(AWin));
 end;
 
-function Win32ShellIsMaximized(AWin: Pointer): Boolean;
+function Win32ShellIsMaximized(AWin: Pointer): Boolean; inline;
 begin
   Result := (AWin <> nil) and (IsZoomed(HWND(AWin)));
 end;
 
-procedure Win32ShellMaximize(AWin: Pointer);
+procedure Win32ShellMaximize(AWin: Pointer); inline;
 begin
   if AWin = nil then Exit;
   ShowWindow(HWND(AWin), SW_MAXIMIZE);
 end;
 
-procedure Win32ShellUnmaximize(AWin: Pointer);
+procedure Win32ShellUnmaximize(AWin: Pointer); inline;
 begin
   if AWin = nil then Exit;
   ShowWindow(HWND(AWin), SW_RESTORE);
 end;
 
-procedure Win32ShellMinimize(AWin: Pointer);
+procedure Win32ShellMinimize(AWin: Pointer); inline;
 begin
   if AWin = nil then Exit;
   ShowWindow(HWND(AWin), SW_MINIMIZE);
 end;
 
-procedure Win32ShellRestore(AWin: Pointer);
+procedure Win32ShellRestore(AWin: Pointer); inline;
 begin
   if AWin = nil then Exit;
   if IsIconic(HWND(AWin)) or IsZoomed(HWND(AWin)) then
@@ -267,29 +267,29 @@ begin
     ShowWindow(HWND(AWin), SW_SHOW);
 end;
 
-function Win32ShellIsMinimized(AWin: Pointer): Boolean;
+function Win32ShellIsMinimized(AWin: Pointer): Boolean; inline;
 begin
   Result := (AWin <> nil) and IsIconic(HWND(AWin));
 end;
 
-function Win32ShellScaleFactor(AWin: Pointer): Double;
+function Win32ShellScaleFactor(AWin: Pointer): Double; inline;
 begin
   if AWin = nil then Exit(1.0);
   Result := CurrentScaleForWindow(HWND(AWin));
   if Result < 0.5 then Result := 1.0;
 end;
 
-procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc);
+procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc); inline;
 begin
   GScaleHandler := AHandler;
 end;
 
-procedure Win32ShellOnResize(AHandler: TWin32ResizeProc);
+procedure Win32ShellOnResize(AHandler: TWin32ResizeProc); inline;
 begin
   GResizeHandler := AHandler;
 end;
 
-function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean;
+function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean; inline;
 var
   CR: TRect;
 begin
@@ -339,7 +339,7 @@ begin
   Result := GDispatchWnd <> 0;
 end;
 
-function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean;
+function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean; inline;
 begin
   if not Assigned(AProc) then Exit(False);
   if EnsureDispatchWnd then
@@ -350,14 +350,14 @@ begin
   Result := True;
 end;
 
-procedure Win32ShellFocus(AWin: Pointer);
+procedure Win32ShellFocus(AWin: Pointer); inline;
 begin
   if AWin = nil then Exit;
   SetForegroundWindow(HWND(AWin));
   SetFocus(HWND(AWin));
 end;
 
-function Win32ShellNativeHandle(AWin: Pointer): Pointer;
+function Win32ShellNativeHandle(AWin: Pointer): Pointer; inline;
 begin
   Result := AWin;
 end;
@@ -385,7 +385,7 @@ begin
     PostQuitMessage(0);
 end;
 
-function Win32ShellIsMainLoopRunning: Boolean;
+function Win32ShellIsMainLoopRunning: Boolean; inline;
 begin
   Result := GMainLoopRunning;
 end;
@@ -398,28 +398,28 @@ var
   GResizeStub: TWin32ResizeProc = nil;
 function Win32ShellInit: Boolean; begin Result := False; end;
 function Win32ShellCreate(const AGeometry: TWin32ShellGeometry): Pointer; begin Result := nil; end;
-procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string); begin end;
-procedure Win32ShellResize(AWin: Pointer; AW, AH: Integer); begin end;
-procedure Win32ShellShow(AWin: Pointer); begin end;
-procedure Win32ShellHide(AWin: Pointer); begin end;
-procedure Win32ShellDestroy(AWin: Pointer); begin end;
-function Win32ShellIsVisible(AWin: Pointer): Boolean; begin Result := False; end;
-function Win32ShellIsMaximized(AWin: Pointer): Boolean; begin Result := False; end;
-procedure Win32ShellMaximize(AWin: Pointer); begin end;
-procedure Win32ShellUnmaximize(AWin: Pointer); begin end;
-procedure Win32ShellMinimize(AWin: Pointer); begin end;
-procedure Win32ShellRestore(AWin: Pointer); begin end;
-function Win32ShellIsMinimized(AWin: Pointer): Boolean; begin Result := False; end;
-function Win32ShellScaleFactor(AWin: Pointer): Double; begin Result := 1.0; end;
-procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc); begin GScaleStub := AHandler; end;
-procedure Win32ShellOnResize(AHandler: TWin32ResizeProc); begin GResizeStub := AHandler; end;
-function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean; begin AWidth:=0; AHeight:=0; Result:=False; end;
-function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean; begin if Assigned(AProc) then try AProc(AData); except end; Result := Assigned(AProc); end;
-procedure Win32ShellFocus(AWin: Pointer); begin end;
-function Win32ShellNativeHandle(AWin: Pointer): Pointer; begin Result := AWin; end;
+procedure Win32ShellSetTitle(AWin: Pointer; const ATitle: string); inline; begin end;
+procedure Win32ShellResize(AWin: Pointer; AW, AH: Integer); inline; begin end;
+procedure Win32ShellShow(AWin: Pointer); inline; begin end;
+procedure Win32ShellHide(AWin: Pointer); inline; begin end;
+procedure Win32ShellDestroy(AWin: Pointer); inline; begin end;
+function Win32ShellIsVisible(AWin: Pointer): Boolean; inline; begin Result := False; end;
+function Win32ShellIsMaximized(AWin: Pointer): Boolean; inline; begin Result := False; end;
+procedure Win32ShellMaximize(AWin: Pointer); inline; begin end;
+procedure Win32ShellUnmaximize(AWin: Pointer); inline; begin end;
+procedure Win32ShellMinimize(AWin: Pointer); inline; begin end;
+procedure Win32ShellRestore(AWin: Pointer); inline; begin end;
+function Win32ShellIsMinimized(AWin: Pointer): Boolean; inline; begin Result := False; end;
+function Win32ShellScaleFactor(AWin: Pointer): Double; inline; begin Result := 1.0; end;
+procedure Win32ShellOnScaleChanged(AHandler: TWin32ScaleChangedProc); inline; begin GScaleStub := AHandler; end;
+procedure Win32ShellOnResize(AHandler: TWin32ResizeProc); inline; begin GResizeStub := AHandler; end;
+function Win32ShellClientSize(AWin: Pointer; out AWidth, AHeight: Integer): Boolean; inline; begin AWidth:=0; AHeight:=0; Result:=False; end;
+function Win32ShellPost(AProc: TWin32PostProc; AData: Pointer): Boolean; inline; begin if Assigned(AProc) then try AProc(AData); except end; Result := Assigned(AProc); end;
+procedure Win32ShellFocus(AWin: Pointer); inline; begin end;
+function Win32ShellNativeHandle(AWin: Pointer): Pointer; inline; begin Result := AWin; end;
 procedure Win32ShellRunMainLoop; begin GRunning := True; GRunning := False; end;
 procedure Win32ShellQuitMainLoop; begin end;
-function Win32ShellIsMainLoopRunning: Boolean; begin Result := GRunning; end;
+function Win32ShellIsMainLoopRunning: Boolean; inline; begin Result := GRunning; end;
 {$ENDIF}
 
 end.
