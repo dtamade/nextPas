@@ -51,6 +51,7 @@
 ## 4. 回退症状
 
 - 文本层 `Trim`/`LowerCase` 回退为 `Copy` 分配 → `ScanKV` 吞吐跌破 500MB/s
+- `PadLeft`/`PadRight` 回退为 `Move(S[1],字面量)` → 字面量 `Pad('hi',5)` 产 `32 32 32 h #0`（`'   h'#0`）截断，需 `for` 单分配 `loop`（见 `text.utils` 头注 `FPC inline+字面量 Move` 缺陷，`test_text` 字面量/变量双路径钉死）
 - 新增 `SysUtils` 直引或 `db` 门面泄漏业务逻辑 → `grep -R SysUtils/Trim(` 违反
 - 归一表误把 `BUSYGROUP` 归为容量类 → 集群语义回归
 
