@@ -175,30 +175,28 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 口径：`nextpas.core.text.kv.ParseKV/ScanKV` 单遍 `key=value` 扫描
 （分隔符空格或 `;`，`'/"/{}` 包裹），零 `TextBuilder`，`O(n)` 线性；
 四档负载 small~80B（MySQL 真实 DSN）、medium~350B（20 对 + 含 `@/=` 引号）、large~1.5KB
-（100 对）、super~5KB（~400 对/5.9KB，400×`kN=v×8;`）；`TBenchSuite` 7 样本取中位，`MinDuration=100ms, MinSamples=7`，
+（100 对）、super~42KB（~400 对/42KB，400×`kN=v×8;`）；`TBenchSuite` 7 样本取中位，`MinDuration=100ms, MinSamples=7`，
 报告 `bytes_per_op/allocs_per_op`。编译 `-O2`，对照 `FPC 3.3.1`。
 
-> 在册数字：2026-08-28 09:07 首采（shared box 静稳窗口）；09:15 复跑
-> 因共享机器负载突增（medium/large 均值约 3× 膨胀）仅作噪声对照，不
-> 替代在册。后续新增 DSN 复用方（DM/ODBC）以此为线性度基线。
+> 在册数字：2026-08-28 19:30 复采（400对 super=43048B，shared box）；后续新增 DSN 复用方（DM/ODBC）以此为线性度基线。
 
 | workload | bytes | median | mean | p95 | thr(median) | allocs |
 |---|---|---|---|---|---|---|
-| kv/parse_small~80B | 610 | 902 ns | 1147 ns | 2247 ns | 676 MB/s | 15 |
-| kv/parse_medium~350B | 2263 | 2416 ns | 3201 ns | 6353 ns | 937 MB/s | 49 |
-| kv/parse_large~1.5KB | 9728 | 9584 ns | 12505 ns | 23807 ns | 1015 MB/s | 207 |
-| kv/parse_super~5KB | 21440 | 21247 ns | 26492 ns | 47912 ns | 772 MB/s | 407 |
-| kv/scan_small~80B | 322 | 355 ns | 559 ns | 1322 ns | 906 MB/s | 13 |
-| kv/scan_large~1.5KB | 4032 | 6049 ns | 8256 ns | 20668 ns | 667 MB/s | 201 |
-| kv/scan_super~5KB | 8920 | 8917 ns | 15077 ns | 37752 ns | 719 MB/s | 401 |
+| kv/parse_small~80B | 610 | 825 ns | 1021 ns | 1791 ns | 739 MB/s | 15 |
+| kv/parse_medium~350B | 2263 | 2502 ns | 3175 ns | 5795 ns | 904 MB/s | 49 |
+| kv/parse_large~1.5KB | 9728 | 9930 ns | 12682 ns | 23581 ns | 979 MB/s | 207 |
+| kv/parse_super~5KB | 43048 | 42462 ns | 61614 ns | 135494 ns | 1013 MB/s | 809 |
+| kv/scan_small~80B | 322 | 387 ns | 567 ns | 1275 ns | 832 MB/s | 13 |
+| kv/scan_large~1.5KB | 4032 | 3760 ns | 6715 ns | 18255 ns | 1072 MB/s | 201 |
+| kv/scan_super~5KB | 20232 | 17877 ns | 29402 ns | 74793 ns | 1131 MB/s | 801 |
 
-结论：吞吐 530–1015 MB/s 量级，`large/medium/small` 均摊 ≈ 9–16 ns/byte，
-线性 `O(n)` 成立（`1.5KB/350B ≈ 4.3×` 字节、`9584/2416 ≈ 3.97×` 耗时；
-`super ~5KB/1.5KB ≈ 2.2×` 字节、`21247/9584 ≈ 2.22×` 耗时，`ScanKV` 同步线性 —
+结论：吞吐 739–1131 MB/s 量级，`large/medium/small` 均摊 ≈ 1–3 ns/byte，
+线性 `O(n)` 成立（`1.5KB/350B ≈ 4.3×` 字节、`9930/2502 ≈ 3.96×` 耗时；
+`super ~43KB/9.7KB ≈ 4.4×` 字节、`42462/9930 ≈ 4.27×` 耗时，`ScanKV` 同步线性 —
 本表为 `in-process TBenchSuite` 静稳窗口在册，供 `R0-3` 超大 DSN 线性度回归锚点；
 扫描在 shared box 上 `CV≈50–80% WARN` 为环境噪声常态，以 `filtered median` 为准）。
-`ScanKV` 零分配回调查表比 `ParseKV` 数组装箱快约 30–40%（small 355ns
-vs 902ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，印证零
+`ScanKV` 零分配回调查表比 `ParseKV` 数组装箱快约 50–60%（small 387ns
+vs 825ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，印证零
 中间 `Builder`。复用面：`db.mysql/pg/odbc dsn` + `db.redis addr` +
 `db.factory driver名` 均已零分配化（`ValidateKV` 真零分配前置 `empty`
 免 `Trim` 拷贝、非法单遍 `fail-fast` 不触达 `libpq/libmysql/odbc`；

@@ -417,6 +417,9 @@ begin
   Expect('MASTERDOWN', decCapacity, 'classify masterdown');
   Expect('EXECABORT', decTransaction, 'classify EXECABORT txn');
   Expect('NOSCRIPT', decNotSupported, 'classify NOSCRIPT');
+  Expect('CROSSSLOT', decSyntax, 'classify CROSSSLOT syntax');
+  Expect('TRYAGAIN', decCapacity, 'classify TRYAGAIN capacity');
+  Expect('WRONGTYPE', decConstraint, 'classify WRONGTYPE constraint');
   Expect('BUSYGROUP', decUnknown, 'classify BUSYGROUP under');
   Expect('TOTALLY-MADE-UP', decUnknown, 'classify unknown word');
   Expect('', decUnknown, 'classify empty word');

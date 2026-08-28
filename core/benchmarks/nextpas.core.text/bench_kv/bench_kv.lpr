@@ -25,7 +25,7 @@ begin
   if (Length(GLarge)>0) and (GLarge[Length(GLarge)]=' ') then SetLength(GLarge, Length(GLarge)-1);
 
   GSuperLarge := '';
-  for I := 1 to 200 do
+  for I := 1 to 400 do
     GSuperLarge := GSuperLarge + 'k' + IntToStr(I) + '=v' + IntToStr(I) + '_' + StringOfChar('x', 8) + ' ';
   if (Length(GSuperLarge)>0) and (GSuperLarge[Length(GSuperLarge)]=' ') then SetLength(GSuperLarge, Length(GSuperLarge)-1);
 end;
