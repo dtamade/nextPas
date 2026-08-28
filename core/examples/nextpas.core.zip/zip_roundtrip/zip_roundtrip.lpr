@@ -1,7 +1,7 @@
 program zip_roundtrip;
 {**
  * nextpas.core.zip 最小示例：打包一个目录 -> python/标准解压器可读的归档 ->
- * 解包还原，并演示 deflate 条目与 Zip64 选项。
+ * 解包还原，并演示 deflate、Zip64、WithTime、AES 与总量守卫。
  *
  * 运行：make run
  *}
@@ -12,8 +12,10 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.compress.intf,
+  nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.zip,
   nextpas.core.zip.base,
   nextpas.core.zip.sequential;
@@ -28,7 +30,7 @@ var
   LI, LSize: Integer;
   LN: SizeUInt;
   LTotal: UInt64;
-  LData, LGot: TBytes;
+  LData, LGot, LArc: TBytes;
   LSink: ICompressWriter;
   LSrc: IDecompressReader;
   LFile: IFile;
@@ -39,6 +41,8 @@ var
   LCnt: Integer;
   LRs: IDecompressReader;
   LBld: IZipBuilder;
+  LExtractOpts: TZipExtractOptions;
+  LGuardDir: string;
 
 function SameBytes(const A, B: TBytes): Boolean;
 var
@@ -198,8 +202,76 @@ begin
   WriteLn('aes256 read: ',
     BoolToStr(SameBytes(LGot, StrBytes('encrypted hello')), True));
 
+  { 总量守卫演示（INV-17）：单条与跨条目双上限，入口+流中途双重拦截 }
+  LW := NewZipWriter;
+  LW.AddEntry('a.txt', StrBytes('12345')); // 5 bytes
+  LW.AddEntry('b.txt', StrBytes('67890')); // total 10
+  LArc := LW.Finish;
+  LROpts := DefaultZipReadOptions;
+  LROpts.MaxTotalOutputSize := 9; // 10 > 9 must fail-closed
+  try
+    LR := NewZipReaderWithOptions(LArc, LROpts);
+    WriteLn('maxTotal guard: unexpected pass');
+  except
+    on E: EIOError do
+      WriteLn('maxTotal guard: ', E.ClassName, ' ', E.Message);
+    on E: Exception do
+      WriteLn('maxTotal guard: ', E.ClassName, ' ', E.Message);
+  end;
+  LROpts.MaxTotalOutputSize := 10;
+  LR := NewZipReaderWithOptions(LArc, LROpts);
+  WriteLn('maxTotal ok  : entries=', LR.EntryCount, ' total=', LR.Entry(0).UncompressedSize + LR.Entry(1).UncompressedSize);
+  { sequential 路径同受总量守卫（增量累计） }
+  LSeqSrc := CreateBytesStreamFrom(LArc) as IReader;
+  LROpts.MaxTotalOutputSize := 9;
+  LSeq := NewZipSequentialReaderWithOptions(LSeqSrc, LROpts);
+  try
+    while LSeq.Next(LInfo) do
+      LSeq.Skip;
+    WriteLn('seq maxTotal guard: unexpected pass');
+  except
+    on E: EIOError do
+      WriteLn('seq maxTotal guard: ', E.ClassName, ' ', E.Message);
+    on E: Exception do
+      WriteLn('seq maxTotal guard: ', E.ClassName, ' ', E.Message);
+  end;
+  { fs 落盘同透传总量上限 }
+  LGuardDir := GetTempDir + '/zip_roundtrip_guard';
+  RemoveAll(LGuardDir);
+  LExtractOpts := DefaultZipExtractOptions;
+  LExtractOpts.MaxTotalOutputSize := 9;
+  try
+    ZipExtractToDirWithOptions(LArc, LGuardDir, LExtractOpts);
+    WriteLn('fs maxTotal guard: unexpected pass');
+  except
+    on E: EIOError do
+      WriteLn('fs maxTotal guard: ', E.ClassName, ' ', E.Message);
+    on E: Exception do
+      WriteLn('fs maxTotal guard: ', E.ClassName, ' ', E.Message);
+  end;
+  LExtractOpts.MaxTotalOutputSize := 10;
+  ZipExtractToDirWithOptions(LArc, LGuardDir, LExtractOpts);
+  WriteLn('fs maxTotal ok  : ', ReadFileText(LGuardDir + '/a.txt') = '12345');
+  RemoveAll(LGuardDir);
+
+  { 单条上限：MaxOutputSize 入口即拦（store bomb） }
+  LROpts := DefaultZipReadOptions;
+  LROpts.MaxOutputSize := 4; // a.txt 5 > 4
+  try
+    LR := NewZipReaderWithOptions(LArc, LROpts);
+    LR.ExtractToBytesByName('a.txt');
+    WriteLn('maxOutput guard: unexpected pass');
+  except
+    on E: EIOError do
+      WriteLn('maxOutput guard: ', E.ClassName, ' ', E.Message);
+    on E: Exception do
+      WriteLn('maxOutput guard: ', E.ClassName, ' ', E.Message);
+  end;
+
   RemoveAll(LRoot);
   RemoveAll(LOut);
   DeleteFile(LOut + '.zip');
+  DeleteFile(LOut + '.stream.zip');
   DeleteFile(LAesZip);
+  WriteLn('zip_roundtrip: all demos ok');
 end.
