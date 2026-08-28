@@ -20,27 +20,21 @@ var
 
 procedure Prepare;
 var
-  I: Integer; P: PSingle;
+  I: Integer; P: PSingle; Fmt: TAudioFormat;
 begin
-  GSrc.Format := AudioFormatCreate(48000, 2, sfF32);
-  GSrc.FrameCount := 48000;
-  SetLength(GSrc.Data, GSrc.FrameCount * GSrc.Format.BlockAlign);
+  Fmt := AudioFormatCreate(48000, 2, sfF32);
+  // 复用度：统一缓冲工厂（Silence/Clone）—— 工程与单测同源
+  GSrc := AudioBufferCreateSilence(Fmt, 48000);
   P := PSingle(@GSrc.Data[0]);
   for I := 0 to GSrc.FrameCount * 2 - 1 do P[I] := 0.5;
-  GDst.Format := GSrc.Format;
-  GDst.FrameCount := GSrc.FrameCount;
-  SetLength(GDst.Data, GDst.FrameCount * GDst.Format.BlockAlign);
-  FillChar(GDst.Data[0], Length(GDst.Data), 0);
+  GDst := AudioBufferCreateSilence(Fmt, 48000);
 end;
 
 procedure BenchMixInto_Gain1(const ACtx: IBenchContext);
 var
   LDst: TAudioBuffer;
 begin
-  LDst := GDst;
-  // copy-on-bench to avoid cross-iteration pollution: shallow copy + deep data copy
-  SetLength(LDst.Data, Length(GDst.Data));
-  Move(GDst.Data[0], LDst.Data[0], Length(GDst.Data));
+  LDst := AudioBufferClone(GDst);
   MixInto(LDst, GSrc, 1.0, 0);
   GSink := GSink xor UInt64(Length(LDst.Data));
   ACtx.SetBytes(Length(GSrc.Data));
@@ -50,9 +44,7 @@ procedure BenchMixInto_Gain05(const ACtx: IBenchContext);
 var
   LDst: TAudioBuffer;
 begin
-  LDst := GDst;
-  SetLength(LDst.Data, Length(GDst.Data));
-  Move(GDst.Data[0], LDst.Data[0], Length(GDst.Data));
+  LDst := AudioBufferClone(GDst);
   MixInto(LDst, GSrc, 0.5, 0);
   GSink := GSink xor UInt64(Length(LDst.Data));
   ACtx.SetBytes(Length(GSrc.Data));
@@ -62,9 +54,7 @@ procedure BenchApplyGain_05(const ACtx: IBenchContext);
 var
   LBuf: TAudioBuffer;
 begin
-  LBuf := GSrc;
-  SetLength(LBuf.Data, Length(GSrc.Data));
-  Move(GSrc.Data[0], LBuf.Data[0], Length(GSrc.Data));
+  LBuf := AudioBufferClone(GSrc);
   ApplyGain(LBuf, 0.5);
   GSink := GSink xor UInt64(Length(LBuf.Data));
   ACtx.SetBytes(Length(LBuf.Data));
@@ -74,9 +64,7 @@ procedure BenchRamp(const ACtx: IBenchContext);
 var
   LBuf: TAudioBuffer;
 begin
-  LBuf := GSrc;
-  SetLength(LBuf.Data, Length(GSrc.Data));
-  Move(GSrc.Data[0], LBuf.Data[0], Length(GSrc.Data));
+  LBuf := AudioBufferClone(GSrc);
   ApplyGainRamp(LBuf, 0, 1.0);
   GSink := GSink xor UInt64(Length(LBuf.Data));
   ACtx.SetBytes(Length(LBuf.Data));

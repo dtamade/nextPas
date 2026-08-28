@@ -109,6 +109,8 @@ function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioCha
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioFormatCreate(ASampleRate, AChannels: Integer;
   ASampleFormat: TAudioSampleFormat): TAudioFormat; inline;
+function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
+function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer;
 
 implementation
 
@@ -286,6 +288,32 @@ begin
   if SampleRate <= 0 then
     Exit(0);
   Result := Int64((Frame * UInt64(1000000000)) div UInt64(SampleRate));
+end;
+
+function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
+var LBytes: Integer;
+begin
+  if not AFormat.IsValid then
+    raise EInvalidArgument.Create('AudioBufferCreateSilence: invalid format');
+  if AFrames < 0 then
+    raise EInvalidArgument.Create('AudioBufferCreateSilence: negative frames');
+  Result.Format := AFormat;
+  Result.FrameCount := AFrames;
+  LBytes := AFrames * AFormat.BlockAlign;
+  SetLength(Result.Data, LBytes);
+  if LBytes > 0 then
+    FillChar(Result.Data[0], LBytes, 0);
+end;
+
+function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer;
+begin
+  if not ABuf.Format.IsValid then
+    raise EInvalidArgument.Create('AudioBufferClone: invalid format');
+  if ABuf.FrameCount < 0 then
+    raise EInvalidArgument.Create('AudioBufferClone: negative FrameCount');
+  Result.Format := ABuf.Format;
+  Result.FrameCount := ABuf.FrameCount;
+  Result.Data := Copy(ABuf.Data, 0, Length(ABuf.Data));
 end;
 
 {$POP}

@@ -97,6 +97,8 @@ function AudioFormatCreate(ASampleRate, AChannels: Integer;
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioChannelMaskForLayout(ALayout: TAudioChannelLayout): UInt32; inline;
 function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioChannelLayout; inline;
+function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer; inline;
+function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer; inline;
 
 { ---- pcm forwarding ---- }
 
@@ -198,6 +200,16 @@ end;
 function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioChannelLayout;
 begin
   Result := nextpas.core.audio.base.AudioChannelLayoutForMask(AMask, AChannels);
+end;
+
+function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
+begin
+  Result := nextpas.core.audio.base.AudioBufferCreateSilence(AFormat, AFrames);
+end;
+
+function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer;
+begin
+  Result := nextpas.core.audio.base.AudioBufferClone(ABuf);
 end;
 
 function PcmClampF32(AValue: Single): Single;
