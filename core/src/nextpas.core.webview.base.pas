@@ -90,6 +90,11 @@ procedure CheckInvokeCmd(const ACmd: string);
   规则：非空且全小写 [a-z][a-z0-9+.-]*，空串返回 False（由 CheckWebviewOptions 视为用默认）。 }
 function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
 
+{ 几何校验公共抽取（S39）：builder 链式早期 Fail-Fast 与 CheckWebviewOptions 同源复用，零重复。 }
+procedure CheckWebviewSize(AWidth, AHeight: Integer);
+procedure CheckWebviewMinSize(AMinWidth, AMinHeight: Integer; AMaxWidth, AMaxHeight: Integer);
+procedure CheckWebviewMaxSize(AMaxWidth, AMaxHeight: Integer; AMinWidth, AMinHeight: Integer);
+
 { EWebviewError 族 —— 派生自框架根异常，类目定值见单元头注释表 }
 type
   EWebviewError = class(ENextPasError)
@@ -189,29 +194,44 @@ begin
   Result := True;
 end;
 
+procedure CheckWebviewSize(AWidth, AHeight: Integer);
+begin
+  if (AWidth < 0) or (AHeight < 0) then
+    raise EWebviewInvalidState.Create('Width/Height must be >= 0');
+end;
+
+procedure CheckWebviewMinSize(AMinWidth, AMinHeight: Integer; AMaxWidth, AMaxHeight: Integer);
+begin
+  if (AMinWidth < 0) or (AMinHeight < 0) then
+    raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
+  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMinWidth > AMaxWidth) then
+    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
+  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMinHeight > AMaxHeight) then
+    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+end;
+
+procedure CheckWebviewMaxSize(AMaxWidth, AMaxHeight: Integer; AMinWidth, AMinHeight: Integer);
+begin
+  if (AMaxWidth < 0) or (AMaxHeight < 0) then
+    raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
+  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMaxWidth < AMinWidth) then
+    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
+  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMaxHeight < AMinHeight) then
+    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+end;
+
 procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
 var
   LIdx: Integer;
   LToken: string;
-
 begin
   if AOptions.EphemeralSession and (AOptions.DataDirectory <> '') then
     raise EWebviewInvalidState.Create(
       'EphemeralSession and DataDirectory are mutually exclusive');
 
-  if (AOptions.Width < 0) or (AOptions.Height < 0) then
-    raise EWebviewInvalidState.Create('Width/Height must be >= 0');
-  if (AOptions.MinWidth < 0) or (AOptions.MinHeight < 0) then
-    raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
-  if (AOptions.MaxWidth < 0) or (AOptions.MaxHeight < 0) then
-    raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
-
-  if (AOptions.MinWidth > 0) and (AOptions.MaxWidth > 0)
-    and (AOptions.MaxWidth < AOptions.MinWidth) then
-    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
-  if (AOptions.MinHeight > 0) and (AOptions.MaxHeight > 0)
-    and (AOptions.MaxHeight < AOptions.MinHeight) then
-    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+  CheckWebviewSize(AOptions.Width, AOptions.Height);
+  CheckWebviewMinSize(AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight);
+  CheckWebviewMaxSize(AOptions.MaxWidth, AOptions.MaxHeight, AOptions.MinWidth, AOptions.MinHeight);
 
   if AOptions.SchemeName <> '' then
   begin
