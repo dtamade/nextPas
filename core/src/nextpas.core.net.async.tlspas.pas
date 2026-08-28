@@ -321,6 +321,11 @@ function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): st
 function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string; overload;
 function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string; overload;
 function TlsPasFormatPrometheusMetricsWithLabels(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): string;
+type TTlsPasAdaptiveHealth = record Healthy: Boolean; Reason: string; RejectRate: Double; Current: Integer; AdaptiveMax: Cardinal; end;
+function TlsPasComputeAdaptiveHealth(const AMetrics: TTlsPasAdaptiveMetrics; const AConfig: TTlsPasAdaptiveLimitConfig): TTlsPasAdaptiveHealth;
+function TlsPasFormatAdaptiveHealth(const AHealth: TTlsPasAdaptiveHealth): string;
+function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): string; overload;
+function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix, ALabels: string): string; overload;
 
 type
   { S20 自适应服务端观察器：基于 Observer 统计动态计算自适应限额并在超限时熔断(RejectPolicy)，
@@ -341,6 +346,7 @@ type
     function GetServerStats: TTlsPasServerStats;
     function GetReplayStats: TAsyncTlsPasReplayStats;
     function GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
+    function GetAdaptiveHealth: TTlsPasAdaptiveHealth;
     procedure Clear;
     procedure UpdateConfig(const AConfig: TTlsPasAdaptiveLimitConfig);
     property Config: TTlsPasAdaptiveLimitConfig read FConfig;
@@ -1436,6 +1442,74 @@ begin
      P,P,P,L,AMetrics.Replay.Evictions,
      P,P,P,L,AMetrics.Replay.Expiries,
      P,P,P,L,AMetrics.Replay.Current]);
+end;
+
+function TlsPasComputeAdaptiveHealth(const AMetrics: TTlsPasAdaptiveMetrics; const AConfig: TTlsPasAdaptiveLimitConfig): TTlsPasAdaptiveHealth;
+var Total, Rejects: Int64; Rate: Double;
+begin
+  Result.AdaptiveMax := AMetrics.AdaptiveMax;
+  Result.Current := AMetrics.Replay.Current;
+  Total := AMetrics.Server.Accepts + AMetrics.Server.RejectPolicy + AMetrics.Server.RejectReplay;
+  Rejects := AMetrics.Server.RejectPolicy + AMetrics.Server.RejectReplay;
+  if Total > 0 then Rate := Rejects / Total else Rate := 0;
+  Result.RejectRate := Rate;
+  if (Rate > AConfig.RejectRateThreshold) and (Total >= 10) then
+  begin
+    Result.Healthy := False;
+    Result.Reason := Format('reject_rate %.2f > %.2f', [Rate, AConfig.RejectRateThreshold]);
+  end
+  else if AMetrics.Replay.Current > 80 then
+  begin
+    Result.Healthy := False;
+    Result.Reason := Format('current %d > 80', [AMetrics.Replay.Current]);
+  end
+  else if AMetrics.AdaptiveMax <= AConfig.MinLimit then
+  begin
+    Result.Healthy := False;
+    Result.Reason := Format('adaptive_max %d at min %d', [Integer(AMetrics.AdaptiveMax), Integer(AConfig.MinLimit)]);
+  end
+  else
+  begin
+    Result.Healthy := True;
+    Result.Reason := 'ok';
+  end;
+end;
+
+function TlsPasFormatAdaptiveHealth(const AHealth: TTlsPasAdaptiveHealth): string;
+begin
+  if AHealth.Healthy then
+    Result := Format('healthy reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)])
+  else
+    Result := Format('degraded reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)]);
+end;
+
+function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): string;
+begin
+  Result := TlsPasAdaptiveHealthToPrometheus(AHealth, APrefix, '');
+end;
+
+function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix, ALabels: string): string;
+var P, L: string; V: Integer;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  V := Ord(AHealth.Healthy);
+  if ALabels = '' then
+    Result := Format('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
+                     '# TYPE %s_health_status gauge'#10 +
+                     '%s_health_status %d'#10, [P,P,P,V])
+  else
+    Result := Format('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
+                     '# TYPE %s_health_status gauge'#10 +
+                     '%s_health_status{%s} %d'#10, [P,P,P,ALabels,V]);
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetAdaptiveHealth: TTlsPasAdaptiveHealth;
+var M: TTlsPasAdaptiveMetrics; C: TTlsPasAdaptiveLimitConfig;
+begin
+  M := GetAdaptiveMetrics;
+  platform_mutex_lock(FConfigMutex);
+  try C := FConfig; finally platform_mutex_unlock(FConfigMutex); end;
+  Result := TlsPasComputeAdaptiveHealth(M, C);
 end;
 
 procedure TAsyncTlsPasAdaptiveObserver.Clear;

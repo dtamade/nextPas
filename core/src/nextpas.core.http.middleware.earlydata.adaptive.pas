@@ -28,11 +28,15 @@ function HttpPrometheusRegistryText(const ARegistry: TAsyncTlsPasPrometheusRegis
 function HttpPrometheusRegistryText(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): string; overload;
 function HttpAdaptiveConfigFromEnv: TTlsPasAdaptiveLimitConfig;
 function HttpAdaptiveConfigFromFile(const APath: string): TTlsPasAdaptiveLimitConfig;
+function HttpAdaptiveHealthJSON(const AObserver: TAsyncTlsPasAdaptiveObserver): string;
+function HttpAdaptiveHealthHandler(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpHandler;
+function HttpRegistryHealthJSON(const ARegistry: TAsyncTlsPasPrometheusRegistry): string;
 
 implementation
 
 uses
   SysUtils,
+  nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.context,
   nextpas.core.http.earlydata,
@@ -133,6 +137,48 @@ function HttpAdaptiveConfigFromFile(const APath: string): TTlsPasAdaptiveLimitCo
 begin
   if not TlsPasTryLoadAdaptiveConfigFromFile(APath, Result) then
     Result := DefaultTlsPasAdaptiveLimitConfig;
+end;
+
+function HttpAdaptiveHealthJSON(const AObserver: TAsyncTlsPasAdaptiveObserver): string;
+var H: TTlsPasAdaptiveHealth;
+begin
+  if AObserver = nil then
+    Exit('{"healthy":false,"reason":"observer nil"}');
+  H := AObserver.GetAdaptiveHealth;
+  Result := Format('{"healthy":%s,"reason":"%s","reject_rate":%.4f,"current":%d,"adaptive_max":%d}', [LowerCase(BoolToStr(H.Healthy, True)), H.Reason, H.RejectRate, H.Current, Integer(H.AdaptiveMax)]);
+end;
+
+function HttpRegistryHealthJSON(const ARegistry: TAsyncTlsPasPrometheusRegistry): string;
+var I: Integer; L: string;
+begin
+  if (ARegistry = nil) or (ARegistry.Count = 0) then
+    Exit('{"healthy":true,"reason":"empty registry"}');
+  Result := '{"registries":[';
+  // snapshot via FormatAllMetrics side-effect not needed; build simple healthy array via health prometheus as placeholder
+  // For lightweight, just report registry count
+  Result := Format('{"healthy":true,"count":%d}', [ARegistry.Count]);
+end;
+
+function HttpAdaptiveHealthHandler(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpHandler;
+begin
+  Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var H: TTlsPasAdaptiveHealth; J: string; S: THttpStatus;
+  begin
+    if AObserver = nil then
+    begin
+      J := '{"healthy":false,"reason":"observer nil"}';
+      AW.WriteHeader(HTTP_STATUS_SERVICE_UNAVAILABLE);
+      AW.GetHeaders.SetHeader('Content-Type', 'application/json');
+      if Length(J) > 0 then AW.Write(J[1], Length(J));
+      Exit;
+    end;
+    H := AObserver.GetAdaptiveHealth;
+    J := HttpAdaptiveHealthJSON(AObserver);
+    if H.Healthy then S := HTTP_STATUS_OK else S := HTTP_STATUS_SERVICE_UNAVAILABLE;
+    AW.GetHeaders.SetHeader('Content-Type', 'application/json');
+    AW.WriteHeader(S);
+    if Length(J) > 0 then AW.Write(J[1], Length(J));
+  end);
 end;
 
 function AdaptiveEarlyDataMiddleware(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpMiddleware;
