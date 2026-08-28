@@ -38,10 +38,10 @@
 
 | 项 | 状态 |
 |----|------|
-| Stage | **M-band**（2026-08-28）：`IWindowHost` + `WindowPumpOnce/PumpAll` + dispatcher 32cap + `test_window_host` 7用例，`bench_dispatcher` 377µs/1000，`make focused` 13门禁全绿，O(1) 活窗计数 + 热路径 inline + Diagnostics + PumpOnce 零活窗早退 |
-| 源码 | `core/src/nextpas.core.window.{base,intf,fake,factory,wasm.ffi,wasm.loader,wasm,gtk.ffi,gtk.loader,gtk,sdl2.ffi,sdl2.loader,sdl2,win32.ffi,win32.loader,win32,cocoa.ffi,cocoa.loader,cocoa,android.ffi,android.loader,android,uikit.ffi,uikit.loader,uikit}.pas + window.pas`（S1-M-band，inline 热路径 + 富错误信息） |
-| Registry | 已进入：`window` L2 draft（`core/docs/core-module-registry.md` 一行） |
-| **NEXT** | **M-band**（维护带常驻；13门禁绿，PERF 基线 377µs） |
+| Stage | **M-band**（2026-08-28）：`IWindowHost` + `WindowPumpOnce/PumpAll` + dispatcher 32cap + `test_window_host` 7用例，`bench_dispatcher` 7 项 377µs/1000（PostSingle）+ 18ns `WindowPumpOnceZero` 早退，`make focused` 13门禁全绿，O(1) 活窗计数 + 热路径 inline + Diagnostics + PumpOnce 零活窗早退 |
+| 源码 | `core/src/nextpas.core.window.{base,intf,fake,factory,wasm.ffi,wasm.loader,wasm,gtk.ffi,gtk.loader,gtk,sdl2.ffi,sdl2.loader,sdl2,win32.ffi,win32.loader,win32,cocoa.ffi,cocoa.loader,cocoa,android.ffi,android.loader,android,uikit.ffi,uikit.loader,uikit}.pas + window.pas`（S1-M-band，inline 热路径 + 富错误信息，bench 7 项分拆） |
+| Registry | 已进入：`window` L2 focused-runtime（`core/docs/core-module-registry.md` 一行） |
+| **NEXT** | **M-band**（维护带常驻；13门禁绿，PERF 基线 377µs，bench 7 项） |
 
 ---
 
@@ -143,6 +143,7 @@ Era 全堵时的合法工作池：doc-truth 对齐、flake 修复、诚实表复
 
 | 日期 | 变更 |
 |------|------|
+| 2026-08-28 | M-band bench 分拆：`bench_dispatcher` 5→7 项，新增 `WindowPumpOnceZero/10000` 183µs（≈18ns/次，零活窗早退零锁）与 `WindowPumpOnceLive/1000` 754µs 对比，验证空转成本；热路径 inline + O(1) + Diagnostics 完整闭环 |
 | 2026-08-28 | M-band perf 收口：热路径 `GetWidth/GetHeight/GetScaleFactor/NativeHandle/GetDispatcher/IsClosed` inline + `CheckWindowOptions` 富错误信息 + `O(1)` 活窗计数 + `WindowBackendDiagnostics` + `WindowPumpOnce` 零活窗早退，bench 391→377µs/1000；13 门禁全绿；NEXT=M-band 维持 |
 | 2026-08-28 | M-band 去消息化+宿主泵：`IWindowHost` + `WindowPumpOnce/PumpAll` + dispatcher 32cap + `test_window_host` 7用例 + bench 391µs/1000；13门禁全绿；NEXT=M-band 维持 |
 | 2026-08-28 | S5 mobile attach 落地：`wasm/android/uikit .ffi/loader/pas` 全接入 factory 8 后端 + `test_window_{wasm,android,uikit}_runtime` 各 3 用例；12 门禁全绿；NEXT=M-band |

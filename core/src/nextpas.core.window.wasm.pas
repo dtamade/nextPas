@@ -39,8 +39,10 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.platform.thread,
+  nextpas.core.sync.event,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
+  nextpas.core.time.base,
   nextpas.core.window.wasm.ffi,
   nextpas.core.window.wasm.loader;
 
@@ -51,6 +53,7 @@ var
   GDispRing: array of TWindowProcRef;
   GDispHead: Integer = 0;
   GDispCount: Integer = 0;
+  GWaitEvent: IEvent;
 
 function WindowWasmIsAvailable: Boolean;
 var
@@ -112,12 +115,14 @@ end;
 procedure DispatcherPush(AProc: TWindowProcRef);
 begin
   if GDispLock=nil then GDispLock := TMutex.Create as ILock;
+  if GWaitEvent=nil then GWaitEvent := CreateEvent(False);
   GDispLock.Acquire;
   try
     if GDispCount=Length(GDispRing) then DispatcherGrow;
     GDispRing[(GDispHead+GDispCount) mod Length(GDispRing)] := AProc;
     Inc(GDispCount);
   finally GDispLock.Release; end;
+  GWaitEvent.SetEvent;
 end;
 
 function DispatcherPop(out AProc: TWindowProcRef): Boolean;
@@ -457,12 +462,13 @@ begin Result := TWindowWasm.Create(AOptions); end;
 procedure WindowWasmRunLoop;
 begin
   GLoopQuit := False;
+  if GWaitEvent=nil then GWaitEvent := CreateEvent(False);
   while not GLoopQuit do
   begin
     DispatcherDrain;
     if WasmLiveWindowCount = 0 then Break;
-    // Wasm host loop is requestAnimationFrame; we just sleep
-    platform_thread_sleep_ms(1);
+    // 事件驱动等待：由 DispatcherPush/SetEvent 唤醒，宿主侧 requestAnimationFrame 衔接
+    GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
     if WasmLiveWindowCount = 0 then Break;
   end;
 end;
@@ -474,6 +480,7 @@ begin Result := DispatcherPop(LProc); if Result then try if Assigned(LProc) then
 procedure WindowWasmQuitLoop;
 begin
   GLoopQuit := True;
+  if GWaitEvent<>nil then GWaitEvent.SetEvent;
   DispatcherDrain;
 end;
 

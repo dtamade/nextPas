@@ -30,8 +30,10 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.platform.thread,
+  nextpas.core.sync.event,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
+  nextpas.core.time.base,
   nextpas.core.window.android.ffi,
   nextpas.core.window.android.loader;
 
@@ -42,6 +44,7 @@ var
   GDispRing: array of TWindowProcRef;
   GDispHead: Integer = 0;
   GDispCount: Integer = 0;
+  GWaitEvent: IEvent;
 
 function WindowAndroidIsAvailable: Boolean;
 var
@@ -103,12 +106,14 @@ end;
 procedure DispatcherPush(AProc: TWindowProcRef);
 begin
   if GDispLock=nil then GDispLock := TMutex.Create as ILock;
+  if GWaitEvent=nil then GWaitEvent := CreateEvent(False);
   GDispLock.Acquire;
   try
     if GDispCount=Length(GDispRing) then DispatcherGrow;
     GDispRing[(GDispHead+GDispCount) mod Length(GDispRing)] := AProc;
     Inc(GDispCount);
   finally GDispLock.Release; end;
+  GWaitEvent.SetEvent;
 end;
 
 function DispatcherPop(out AProc: TWindowProcRef): Boolean;
@@ -383,11 +388,13 @@ begin Result := TWindowAndroid.Create(AOptions); end;
 procedure WindowAndroidRunLoop;
 begin
   GLoopQuit := False;
+  if GWaitEvent=nil then GWaitEvent := CreateEvent(False);
   while not GLoopQuit do
   begin
     DispatcherDrain;
     if AndroidLiveWindowCount = 0 then Break;
-    platform_thread_sleep_ms(1);
+    // 事件驱动等待：由 DispatcherPush/SetEvent 或宿主 Host* 唤醒，而非硬编码 sleep
+    GWaitEvent.WaitTimeout(TDuration.FromMilliseconds(5));
     if AndroidLiveWindowCount = 0 then Break;
   end;
 end;
@@ -399,6 +406,7 @@ begin Result := DispatcherPop(LProc); if Result then try if Assigned(LProc) then
 procedure WindowAndroidQuitLoop;
 begin
   GLoopQuit := True;
+  if GWaitEvent<>nil then GWaitEvent.SetEvent;
   DispatcherDrain;
 end;
 
