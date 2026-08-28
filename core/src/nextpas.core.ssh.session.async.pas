@@ -66,6 +66,12 @@ function SshAsyncConnect(const ALoop: TAsyncLoop; const AOptions: TSshConnectOpt
   ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean; overload;
 function SshAsyncConnect(const ALoop: TAsyncLoop; const AOptions: TSshConnectOptions;
   const ADialOptions: TAsyncTcpDialOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean; overload;
+function SshAsyncConnectWithStream(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream; const AOptions: TSshConnectOptions;
+  ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean;
+function SshAsyncConnectViaJumpOn(const ALoop: TAsyncLoop; const AJumpSession: ISshAsyncSession; const ATargetOpts: TSshConnectOptions;
+  ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean;
+function SshAsyncConnectViaJump(const ALoop: TAsyncLoop; const AJumpOpts, ATargetOpts: TSshConnectOptions;
+  ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean;
 
 function SshAsyncClient: ISshAsyncClientBuilder;
 
@@ -74,6 +80,7 @@ implementation
 uses
   SysUtils,
   nextpas.core.system.sysutils,
+  nextpas.core.async.base,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.crypto.random,
@@ -90,7 +97,8 @@ uses
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.kex.curve25519,
   nextpas.core.ssh.kex.dhgroup14,
-  nextpas.core.ssh.channel.async;
+  nextpas.core.ssh.channel.async,
+  nextpas.core.ssh.proxyjump.async;
 
 type
   TAsyncExpectHandler = procedure(const APayload: TBytes; AErr: ESSHError) of object;
@@ -135,6 +143,7 @@ type
     FUserCtx: Pointer;
     FTransport: TAsyncSshTransport;
     FSession: TAsyncSshSession;
+    FProvidedStream: IAsyncTcpStream;
     FMyKexInit: TBytes;
     FPeerKexInit: TBytes;
     FNeg: TSshNegotiated;
@@ -186,7 +195,9 @@ type
     procedure DeriveAndApplyKeys;
   public
     constructor Create(const ALoop: TAsyncLoop; const AOptions: TSshConnectOptions; const ADialOptions: TAsyncTcpDialOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer);
+    constructor CreateWithStream(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream; const AOptions: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer);
     procedure Start;
+    procedure StartWithStream;
   end;
 
 // free dispatchers for transport callbacks (plain -> method)
@@ -377,6 +388,16 @@ begin
   FDialOptions := ADialOptions;
   FUserCb := ACallback;
   FUserCtx := AContext;
+end;
+constructor TAsyncConnector.CreateWithStream(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream; const AOptions: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer);
+begin inherited Create; FLoop:=ALoop; FProvidedStream:=AStream; FOptions:=AOptions; FDialOptions:=DefaultAsyncTcpDialOptions; FUserCb:=ACallback; FUserCtx:=AContext; end;
+procedure TAsyncConnector.StartWithStream;
+begin
+  if FLoop=nil then begin Fail(ESSHError.Create(sekProtocol,'async connect: nil loop')); Exit; end;
+  if FProvidedStream=nil then begin Fail(ESSHError.Create(sekProtocol,'async connect: nil stream')); Exit; end;
+  if FOptions.User='' then begin Fail(ESSHError.Create(sekProtocol,'ssh connect: user is required')); Exit; end;
+  FTransport:=TAsyncSshTransport.Create(FLoop, FProvidedStream); FSession:=TAsyncSshSession.Create(FLoop, FTransport, FOptions); FSession.FActiveUser:=FOptions.User;
+  if not FTransport.AsyncExchangeVersions(@SshAsync_OnVersionDone, Self) then Fail(ESSHError.Create(sekIO,'ssh async version exchange submit failed'));
 end;
 
 procedure TAsyncConnector.Fail(AErr: ESSHError);
@@ -875,7 +896,36 @@ begin
   Result := True;
 end;
 
+
+function SshAsyncConnectWithStream(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream; const AOptions: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer): Boolean;
+var C: TAsyncConnector;
+begin if (ALoop=nil) or (AStream=nil) or not Assigned(ACallback) then Exit(False); C:=TAsyncConnector.CreateWithStream(ALoop, AStream, AOptions, ACallback, AContext); C.StartWithStream; Result:=True; end;
+var GProxyNextChan: UInt32 = 100;
+type TProxyConn = class
+private FLoop:TAsyncLoop; FJump:ISshAsyncSession; FTargetOpts:TSshConnectOptions; FUserCb:TSshAsyncConnectCb; FUserCtx:Pointer; FLocalId:UInt32;
+  procedure Fail(AErr:ESSHError); procedure SendOpen; procedure OnOpenSent(AErr:ESSHError; AContext:Pointer); procedure OnOpenReply(const APayload:TBytes; AErr:ESSHError; AContext:Pointer); procedure StartSecondHop(AChan:IAsyncTcpStream);
+end;
+procedure Proxy_OnOpenSent(AErr:ESSHError; AContext:Pointer); forward;
+procedure Proxy_OnOpenReply(const APayload:TBytes; AErr:ESSHError; AContext:Pointer); forward;
+procedure Proxy_SecondHop(ASession:ISshAsyncSession; AErr:ESSHError; AContext:Pointer); forward;
+procedure TProxyConn.Fail(AErr:ESSHError); var Cb:TSshAsyncConnectCb; Ctx:Pointer; begin Cb:=FUserCb; Ctx:=FUserCtx; FUserCb:=nil; if Assigned(Cb) then Cb(nil,AErr,Ctx) else if AErr<>nil then AErr.Free; Free; end;
+procedure TProxyConn.SendOpen; var LW:TsshWriter; H:string; P:UInt32; begin FLocalId:=GProxyNextChan; Inc(GProxyNextChan); H:=FTargetOpts.Host; P:=FTargetOpts.Port; if H='' then H:='127.0.0.1'; if P=0 then P:=22; LW:=TsshWriter.Create(128); try LW.PutByte(SSH_MSG_CHANNEL_OPEN); LW.PutStringText('direct-tcpip'); LW.PutUInt32(FLocalId); LW.PutUInt32(2097152); LW.PutUInt32(32768); LW.PutStringText(H); LW.PutUInt32(P); LW.PutStringText('127.0.0.1'); LW.PutUInt32(0); if not FJump.Transport.AsyncSendPacket(LW.ToBytes,@Proxy_OnOpenSent,Self) then Fail(ESSHError.Create(sekIO,'proxy open send failed')); finally LW.Free; end; end;
+procedure TProxyConn.OnOpenSent(AErr:ESSHError; AContext:Pointer); begin if AErr<>nil then begin Fail(AErr); Exit; end; if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy open reply read failed')); end;
+procedure TProxyConn.OnOpenReply(const APayload:TBytes; AErr:ESSHError; AContext:Pointer); var LR:TsshReader; T:Byte; R, Rm,W,M:UInt32; Ch:IAsyncTcpStream; begin if AErr<>nil then begin Fail(AErr); Exit; end; if Length(APayload)=0 then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; T:=APayload[0]; if T in [SSH_MSG_IGNORE,SSH_MSG_DEBUG,SSH_MSG_UNIMPLEMENTED,SSH_MSG_EXT_INFO,SSH_MSG_USERAUTH_BANNER] then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; if T=SSH_MSG_CHANNEL_OPEN_FAILURE then begin Fail(ESSHError.Create(sekProtocol,'proxy open refused')); Exit; end; if T<>SSH_MSG_CHANNEL_OPEN_CONFIRMATION then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; LR:=TsshReader.Create(APayload); try LR.ReadByte; R:=LR.ReadUInt32; if R<>FLocalId then begin LR.Free; if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; Rm:=LR.ReadUInt32; W:=LR.ReadUInt32; M:=LR.ReadUInt32; finally LR.Free; end; Ch:=TAsyncChannelStream.Create(FLoop,FJump.Transport,FLocalId,Rm,W,M); StartSecondHop(Ch); end;
+procedure TProxyConn.StartSecondHop(AChan:IAsyncTcpStream); begin if not SshAsyncConnectWithStream(FLoop,AChan,FTargetOpts,@Proxy_SecondHop,Self) then Fail(ESSHError.Create(sekIO,'proxy second hop submit failed')); end;
+procedure Proxy_OnOpenSent(AErr:ESSHError; AContext:Pointer); begin TProxyConn(AContext).OnOpenSent(AErr,nil); end;
+procedure Proxy_OnOpenReply(const APayload:TBytes; AErr:ESSHError; AContext:Pointer); begin TProxyConn(AContext).OnOpenReply(APayload,AErr,nil); end;
+procedure Proxy_SecondHop(ASession:ISshAsyncSession; AErr:ESSHError; AContext:Pointer); var S:TProxyConn; Cb:TSshAsyncConnectCb; Ctx:Pointer; begin S:=TProxyConn(AContext); Cb:=S.FUserCb; Ctx:=S.FUserCtx; S.FUserCb:=nil; if AErr<>nil then begin if Assigned(Cb) then Cb(nil,AErr,Ctx) else AErr.Free; S.Free; Exit; end; if Assigned(Cb) then Cb(ASession,nil,Ctx); S.Free; end;
+function SshAsyncConnectViaJumpOn(const ALoop: TAsyncLoop; const AJumpSession: ISshAsyncSession; const ATargetOpts: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer): Boolean;
+var P:TProxyConn; begin if (ALoop=nil) or (AJumpSession=nil) or not Assigned(ACallback) then Exit(False); P:=TProxyConn.Create; P.FLoop:=ALoop; P.FJump:=AJumpSession; P.FTargetOpts:=ATargetOpts; P.FUserCb:=ACallback; P.FUserCtx:=AContext; P.SendOpen; Result:=True; end;
+type PVIACtx=^TVIACtx; TVIACtx=record Loop:TAsyncLoop; TargetOpts:TSshConnectOptions; UserCb:TSshAsyncConnectCb; UserCtx:Pointer; end;
+procedure ViaJump_OnJump(ASession:ISshAsyncSession; AErr:ESSHError; AContext:Pointer); forward;
+function SshAsyncConnectViaJump(const ALoop: TAsyncLoop; const AJumpOpts,ATargetOpts:TSshConnectOptions; ACallback:TSshAsyncConnectCb; AContext:Pointer): Boolean;
+var C:PVIACtx; begin if (ALoop=nil) or not Assigned(ACallback) then Exit(False); New(C); C^.Loop:=ALoop; C^.TargetOpts:=ATargetOpts; C^.UserCb:=ACallback; C^.UserCtx:=AContext; Result:=SshAsyncConnect(ALoop,AJumpOpts,@ViaJump_OnJump,C); if not Result then Dispose(C); end;
+procedure ViaJump_OnJump(ASession:ISshAsyncSession; AErr:ESSHError; AContext:Pointer); var C:PVIACtx; Cb:TSshAsyncConnectCb; U:Pointer; begin C:=PVIACtx(AContext); Cb:=C^.UserCb; U:=C^.UserCtx; if AErr<>nil then begin if Assigned(Cb) then Cb(nil,AErr,U) else AErr.Free; Dispose(C); Exit; end; if ASession=nil then begin if Assigned(Cb) then Cb(nil,ESSHError.Create(sekIO,'jump session nil'),U); Dispose(C); Exit; end; if not SshAsyncConnectViaJumpOn(C^.Loop,ASession,C^.TargetOpts,Cb,U) then begin if Assigned(Cb) then Cb(nil,ESSHError.Create(sekIO,'via jump on submit failed'),U); ASession.Close; end; Dispose(C); end;
+
 { Builder }
+
 
 type
   TAsyncClientBuilder = class(TInterfacedObject, ISshAsyncClientBuilder)
