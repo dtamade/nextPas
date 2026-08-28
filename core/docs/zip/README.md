@@ -289,7 +289,7 @@ Entry names from archives are untrusted input. The shared predicate
 `IsSafeZipEntryName` rejects empty names, absolute paths, drive prefixes,
 backslashes, `//` empty segments, `./` single-dot segments and `..` segments; extraction paths re-check it and raise
 `EParseError` before touching the filesystem. Declared entry sizes never
-allocate beyond the configured output cap.
+allocate beyond the configured output cap — `store` 与 `deflate` 同受 `MaxOutputSize` 单条与 `MaxTotalOutputSize` 总量守卫（`common.DecompressEntryVerified` 单点，34期 store bomb 已闭环）；`SkipSymlinks=False` 显式 opt-in 下 symlink 目标不做二次 `IsSafe` 校验（`S_IFLNK` 语义允许 `../`），调用方需自行沙箱。
 
 ## Performance
 

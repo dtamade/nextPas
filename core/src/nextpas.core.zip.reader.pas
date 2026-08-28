@@ -463,6 +463,7 @@ var
   LDiskNum, LCdStartDisk, LCount16, LCommentLen: Word;
   LCount: Int64;
   LCdSize, LCdOffset, LZ64EocdOffset: UInt64;
+  LCumTotal: UInt64;
 begin
   if FC.Length < C_EOCD_MIN_LEN then
     raise EParseError.Create('zip: truncated archive');
@@ -549,14 +550,14 @@ begin
   end;
   if FMaxTotalOutputSize <> 0 then
   begin
-    LCdSize := 0;
+    LCumTotal := 0;
     for LI := 0 to LCount - 1 do
     begin
       if FEntries[LI].UncompressedSize > FMaxTotalOutputSize then
         raise EIOError.Create('zip: total uncompressed size exceeds limit');
-      if LCdSize > FMaxTotalOutputSize - FEntries[LI].UncompressedSize then
+      if LCumTotal > FMaxTotalOutputSize - FEntries[LI].UncompressedSize then
         raise EIOError.Create('zip: total uncompressed size exceeds limit');
-      Inc(LCdSize, FEntries[LI].UncompressedSize);
+      Inc(LCumTotal, FEntries[LI].UncompressedSize);
     end;
   end;
 end;
@@ -793,6 +794,7 @@ var
   LDiskNum, LCdStartDisk, LCount16, LCommentLen: Word;
   LCount: Int64;
   LCdSize, LCdOffset, LZ64EocdOffset: UInt64;
+  LCumTotal: UInt64;
   LTail, LBuf, LCDBuf: TBytes;
   LC: IByteCursor;
 begin
@@ -890,14 +892,14 @@ begin
   end;
   if FMaxTotalOutputSize <> 0 then
   begin
-    LCdSize := 0;
+    LCumTotal := 0;
     for LI := 0 to LCount - 1 do
     begin
       if FEntries[LI].UncompressedSize > FMaxTotalOutputSize then
         raise EIOError.Create('zip: total uncompressed size exceeds limit');
-      if LCdSize > FMaxTotalOutputSize - FEntries[LI].UncompressedSize then
+      if LCumTotal > FMaxTotalOutputSize - FEntries[LI].UncompressedSize then
         raise EIOError.Create('zip: total uncompressed size exceeds limit');
-      Inc(LCdSize, FEntries[LI].UncompressedSize);
+      Inc(LCumTotal, FEntries[LI].UncompressedSize);
     end;
   end;
 end;

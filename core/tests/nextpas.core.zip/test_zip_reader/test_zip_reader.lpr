@@ -401,6 +401,33 @@ begin
   Check(LGotRaise, 'over-limit output raises io error');
 end;
 
+procedure TestStoreBombGuardByMaxOutput;
+var
+  LW: IZipWriter;
+  LRaw: TBytes;
+  LOpts: TZipReadOptions;
+  LR: IZipReader;
+  LPayload: TBytes;
+  LGotRaise: Boolean;
+begin
+  SetLength(LPayload, 4 * 1024 * 1024);
+  FillChar(LPayload[0], Length(LPayload), 0);
+  LW := NewZipWriter;
+  LW.AddEntry('store_bomb.bin', LPayload); { store, not deflate }
+  LRaw := LW.Finish;
+  LOpts := DefaultZipReadOptions;
+  LOpts.MaxOutputSize := 1024;
+  LR := NewZipReaderWithOptions(LRaw, LOpts);
+  LGotRaise := False;
+  try
+    LR.ExtractToBytes(0);
+  except
+    on E: Exception do
+      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGotRaise, 'store over-limit raises io error (P0-1)');
+end;
+
 procedure TestIndexGuards;
 var
   LR: IZipReader;
@@ -1127,6 +1154,7 @@ begin
   T.Test('Unsupported and encrypted', @TestUnsupportedAndEncrypted);
   T.Test('Unsafe name refused at extract', @TestUnsafeNameRefusedAtExtract);
   T.Test('Bomb guard by max output', @TestBombGuardByMaxOutput);
+  T.Test('Store bomb guard by max output', @TestStoreBombGuardByMaxOutput);
   T.Test('Index guards', @TestIndexGuards);
   T.Test('External attrs and symlink', @TestExternalAttrsAndSymlink);
   T.Test('Data descriptor tolerance', @TestDataDescriptorTolerance);

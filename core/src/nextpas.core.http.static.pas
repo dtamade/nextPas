@@ -119,6 +119,7 @@ end;
 
 const
   CACHE_REVALIDATE = 'public, max-age=0, must-revalidate';
+  STATIC_COPY_BUF_SIZE = 8192; { Range/全量拷贝块大小，8192 为 4K 页2×最优 }
 
 { ===== Helpers ===== }
 
@@ -180,16 +181,17 @@ end;
   Semantics: VFS canonical ValidPath + HTTP double-encoding guard.
   Reuses VfsValidPath as single source of truth, then rejects '%' and '\'
   which Go ValidPath would accept as normal chars but must be blocked after
-  UrlDecode to prevent encoded traversal. }
+  UrlDecode to prevent encoded traversal. Single-pass scan replaces double Pos. }
 function IsSafePath(const ARelative: string): Boolean;
+var
+  I: Integer;
 begin
   if ARelative = '' then
     Exit(False);
-  { After UrlDecode, any remaining '%' indicates double-encoding attempt }
-  if Pos('%', ARelative) > 0 then
-    Exit(False);
-  if Pos('\', ARelative) > 0 then
-    Exit(False);
+  { Single-pass: any '%' (double-encoding) or '\' (Windows sep) is unsafe }
+  for I := 1 to Length(ARelative) do
+    if (ARelative[I] = '%') or (ARelative[I] = '\') then
+      Exit(False);
   Result := VfsValidPath(ARelative, False);
 end;
 
@@ -426,7 +428,7 @@ end;
 procedure CopyRange(const AInput: IStream; const AWriter: IWriter;
   AStart, ACount: Int64);
 var
-  LBuf: array[0..8191] of Byte;
+  LBuf: array[0..STATIC_COPY_BUF_SIZE - 1] of Byte;
   LRemaining: Int64;
   LToRead: SizeUInt;
   LN: SizeUInt;
@@ -771,21 +773,21 @@ begin
   end;
 end;
 
+function ExtractFileNameInline(const APath: string): string; inline;
+var
+  I: SizeInt;
+begin
+  for I := Length(APath) downto 1 do
+    if APath[I] = '/' then
+      Exit(System.Copy(APath, I + 1, Length(APath) - I));
+  Result := APath;
+end;
+
 function ServeFileDownload(const APath: string): THttpHandlerFunc;
 var
   LFileName: string;
-  LSlashPos: SizeInt;
 begin
-  { Extract filename from path }
-  LFileName := '';
-  for LSlashPos := Length(APath) downto 1 do
-    if APath[LSlashPos] = '/' then
-    begin
-      LFileName := System.Copy(APath, LSlashPos + 1, Length(APath) - LSlashPos);
-      Break;
-    end;
-  if LFileName = '' then
-    LFileName := APath;
+  LFileName := ExtractFileNameInline(APath);
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     ServeFileContentEx(APath, AReq, AW, LFileName, CACHE_REVALIDATE);
