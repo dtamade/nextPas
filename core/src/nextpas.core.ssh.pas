@@ -71,6 +71,8 @@ function SshClient: ISshClientBuilder; inline;
 
 { 一步到位连接 }
 function SshConnect(const AOptions: TSshConnectOptions): ISshSession; inline;
+function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession; inline;
+function SshConnectViaJumpOn(const AJumpSession: ISshSession; const ATargetOpts: TSshConnectOptions): ISshSession; inline;
 
 { 一次性执行便捷函数（密码认证路径）}
 function SshExec(const AHost: string; APort: Word;
@@ -91,6 +93,16 @@ end;
 function SshConnect(const AOptions: TSshConnectOptions): ISshSession;
 begin
   Result := nextpas.core.ssh.session.SshConnect(AOptions);
+end;
+
+function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
+begin
+  Result := nextpas.core.ssh.session.SshConnectViaJump(ATargetOpts, AJumpOpts);
+end;
+
+function SshConnectViaJumpOn(const AJumpSession: ISshSession; const ATargetOpts: TSshConnectOptions): ISshSession;
+begin
+  Result := nextpas.core.ssh.session.SshConnectViaJumpOn(AJumpSession, ATargetOpts);
 end;
 
 function SshExec(const AHost: string; APort: Word;

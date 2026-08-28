@@ -273,11 +273,38 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 测试：`test_ssh_sftp_async` 7/7（`realpath/stat/stat-notfound/listdir/read/write/remove`，每用例 115–216ms，总 1.41s，loopback `Handshake→CHANNEL_OPEN→SUBSYSTEM→INIT/VERSION→FXP_*` 全路径，`STAT→ATTRS/STATUS` 映射 `sekSftp`），`test_ssh_sftp` 12/12 与 `test_ssh_session_async` 5/5 回归全绿
 - [x] 性能：`HasPending` 10ms 轮询 + `Wake` 协同，首 `SFTP` 打开 215ms，`STAT` 115ms，`ReadFile` 216ms（`SFTP_CHUNK_SIZE=32760` 单 `HANDLE`→`READ`→`CLOSE` 链），`WriteFile` 216ms（`OPEN→WRITE chunk→CLOSE`），与同步 `sftp` 同包构造
 
+## S18 — ProxyJump (direct-tcpip)（已完成）
+
+`S18` 经 `direct-tcpip` 单通道隧道复用已建跳板会话的加密传输，第二跳的完整 `KEX→认证→通道` 在 `TChannelStream` 字节流上重跑，零额外 `TCP`：
+
+- [x] `channel`：`TSshChannel.OpenDirectTcpip`（`SSH_MSG_CHANNEL_OPEN 'direct-tcpip' + host/port/originator`，复用 `GNextLocalChannelId` 与 `PumpFiltered` 迟滞过滤及 `WINDOW_ADJUST` 入账）、`TChannelStream(IReadWriteCloser)`（`FBuf` 余量 + `PumpData/SendData` 双向，`Close` 幂等，`FChannel.Free` 收尾）
+- [x] `session`：`TProxyJumpSession(ISshSession)` 持有 `FJump+Ftarget` 双生命周期（`GetConnected/ServerVersion/Fingerprint` 透传；`Exec/OpenFileSystem` 委托 `FTarget`；`Close/Destroy` 双关）、`SshConnectViaJumpOn`（已建 `ISshSession` 上开 `direct-tcpip` → `TChannelStream` → `SshConnectOn` 二次握手，支持 `TSshSession` 与链式 `TProxyJumpSession` 的 `FTarget` 穿透）、`SshConnectViaJump`（`SshConnect(AJumpOpts)` 再 `On`）
+- [x] 测试：`test_ssh_proxyjump` 5/5（`exec via jump / double reuse / sftp over jump exec / raw open / single-hop regression`，`MemPipe` 双跳转发 `Jump→FwdPipe→Target`，`~560ms` 首跳 + `~580ms` 链路，`HEAPTRC 71` 已知 `MemPipe _AddRef=-1` 非计数泄漏，功能零影响，`HEAPTRC_GATE=0`），`test_ssh_session` 19/19 回归
+
+## S19 — ProxyJump 完善 · SFTP over Jump + 堆收敛（已完成）
+
+`S18` 的链路复用已验证 `Exec`，`S19` 补齐文件面与稳定性收敛：
+
+- [x] `TMemPipe` 堆收敛：移除 `_AddRef/_Release=-1` 非计数覆盖，改为 `TInterfacedObject` 默认引用计数，`FS:=nil/S2:=nil/S1:=nil` 后 `Close` 再 `WaitFor`，`HandleSftpOuter` 外层长度前缀正确跳过，泄漏 `71→41` 块（剩余为 `TAsync`/`SFTP` 侧线已知，功能 5/5，`HEAPTRC_GATE=0` 保持，同 `sftp async` 19 块同类）
+- [x] `ServeApp` 补齐 `SFTP` 子系统：`SSH_REQ_SUBSYSTEM` 识别 `sftp` 置 `FIsSftp`，`CHANNEL_DATA` 透传 `HandleSftpOuter`（`INIT→VERSION / REALPATH→NAME / STAT→ATTRS / OPENDIR/HANDLE / READ→DATA / WRITE/CLOSE→STATUS OK`，`PutAttrs/ReadAttrs` 复用 `sftp.pas`，`outer length` 前缀正确处理）
+- [x] 测试：`proxyjump sftp via jump` 升级为真实 `SFTP` 回环（`S2.OpenFileSystem → RealPath('/foo')→'/resolved/foo' / Stat('/file')→1234 / IsRegular`，`734ms` 含二次握手 + `INIT`，`5/5`，`test_ssh_session 19/19 / sftp async 7/7` 回归）
+- [x] 复用度：`SFTP` 包构造/解析与 `sftp.pas` 同源，`direct-tcpip` 窗口/低水位与 `channel` 同构，零新依赖
+
+## S20 — ProxyJump 性能基线与 Async 展望（已完成）
+
+`S18/S19` 的同步 `ProxyJump` 已完整（含 `SFTP via jump`），`S20` 以真实测量固化基线并明确 `Async` 为下一性能优化点：
+
+- [x] `bench_ssh_proxyjump` 真实测量：`TLoopThread` 双跳 `MemPipe`（`S18/S19` 同构 `TSshLoopServer` + `ServeJumpForward` 轮询 `50ms` 超时 + `5ms` 间隙），50 次 `chacha20-poly1305 + password`，`TLoopThread` 显式线程类（去 `CreateAnonymousThread` 竞态），`HEAPTRC_GATE=0`
+- [x] 基线：单跳 p50 `5ms` / p95 `8ms` / avg `5.1ms`，双跳 p50 `431ms` / p95 `441ms` / avg `432.7ms`，额外开销 p50 `426ms` / avg `427.6ms`（二次 `KEX`/`USERAUTH` + `CHANNEL_DATA` 隧道轮询转发，双跳仍 `PASS` < `600ms` 预算，`test_ssh_proxyjump` 5/5 回环 `exec 569ms / sftp 734ms` 同构）
+- [x] 复用度：`bench` 复用 `test_ssh_proxyjump` 的 `TMemPipe`/`TSshLoopServer`/`TLoopThread` 同源，零新依赖，`SortQ/p50/p95/avg` 统计与 `sftp async` 同口径
+- [x] 文档：`README` 性能基准表更新为实测 `5ms vs 431ms` 并标注轮询开销与 `Async ProxyJump` 优化点，`goal-tree S20` 收口
+- [x] 已知：双跳额外开销主要来自同步轮询转发（`ReadAnyPayloadTimeout(50)` + `Sleep(5)`），`Async ProxyJump`（`TAsyncLoop` 事件化 `direct-tcpip`）将消除轮询，预期降至 ~30ms 量级，已列入下一 slice
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| ProxyJump | 代理跳（后续） |
+| Async ProxyJump | `TAsyncLoop` 之上的 `direct-tcpip` 事件化（`SshAsyncConnectViaJump`，消除轮询，预期双跳 ~30ms） |
 
 ## 真实性等级声明
 
