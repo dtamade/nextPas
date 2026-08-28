@@ -1,9 +1,9 @@
-# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S14)
+# tlspas 0-RTT 设计 — Early Data 平面 (Implemented S15 Final)
 
 **模块**: `nextpas.core.net.async.tlspas` (L2 async, pure Pascal TLS 1.3)
-**状态**: Implemented — S14 终局收口：自适应限额 + X-Early-Data 埋点 + HTTP 复用，默认 1-RTT 零开销，early_data 显式幂等启用，服务端 内存/文件/KV 观测器可配
+**状态**: Implemented — S15 终极抛光：零警告 + 示例收口 + 全链路自证，默认 1-RTT 零开销，early_data 显式幂等启用，服务端 内存/文件/KV/观测器/自适应可配
 **RFC**: 8446 §2.3 / §4.2.10 / §4.6.1 / Appendix E.5, 8446 §8
-**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv → S12-server → S13-observe → S14-adaptive (本提交)
+**关联提交**: `402184890` (LRU4+HRR) → `6f3be848b` docs/bench → `64f3e3ede` S6-keys → `62644ee02` S6-ext → `17e54cbe3` S6-record → `9889712c7` S6-e2e → `efcf72530` S7-EOED → `792efc13d` S8-policy+replay → `f38e1965f` S9-store+stats → `8afd531a5` S10-file → S11-kv → S12-server → S13-observe → S14-adaptive → S15-polish (本提交)
 
 ---
 
@@ -18,7 +18,7 @@
 - 不支持 0-RTT 客户端证书 (`post_handshake_auth` 之前的 early_data 禁止证书)。
 - 不在 v1 支持跨 SNI / 跨 cipher suite 的 PSK 复用。
 
-## 2. 落地状态（截至 S14）
+## 2. 落地状态（截至 S15 Final）
 
 - `TAsyncTlsPasSessionCache` LRU4：按 host:port 聚合，最老逐出，`SecureZero` 清理，`TryPeek` 高→低跳过期；`TTlsPasResumptionSession` 新增 `HasMaxEarlyData/MaxEarlyDataSize`，`FeedPostHandshake` 从 `NewSessionTicket` 完整捕获（含 `max_early_data` 解析，`0` 视为不可 early，`>16384` 视为不可 early）。
 - HRR 可观测：`ITlsPasHRRInfo.WasHRR` 与 `ITlsPasResumeInfo.WasResumed` 通过 `TTlsPasStream` 暴露；`PSK` 与 `HRR` binder 重算已覆盖（`cookie` 插入于 `0x0029` 之前，`message_hash 0xFE` 合成）。
@@ -32,8 +32,9 @@
 - S11 集群化：`ITlsPasKvStore` 抽象 + `TAsyncTlsPasMemoryKvStore` 内存实现（Mutex + 过期清扫，TTL=Window）+ `TAsyncTlsPasReplayKvStore` 二级（本地 LRU64 + 远端 KV，本地命中即重放，否则查 KV 命中回填本地并判重放，否则双写；`FingerprintToKey:= 'replay:' + hex(32B)`；`Factory.CreateMemory/File/Kv` 三形态统一入口；`bench KvStore 82µs/op`（含 hex + 双查 + KV 写），本地仍 0.8µs。
 - S12 服务端闭环：`TTlsPasEarlyDataDecision=(edRejectPolicy,edRejectReplay,edAccept)` + `TlsPasServerDecideEarlyData(Store, ticket||early, Session, Allow)` 一站式（先 4 重策略，不通过则 `reject_policy` 不触 Store；通过后再指纹+`CheckAndAdd`，命中 `reject_replay`，否则 `accept` 已落窗）+ `TlsPasServerShouldAcceptEarlyData` bool 便捷 + `DecisionToStr`；`nil Store` 视为永不重放保持零开销，Store 异常 fail-open 保可用性；`bench ServerDecide 5.3µs / ShouldAccept 7.2µs`。
 - S13 可观测：`TTlsPasServerStats{ Accepts, RejectPolicy, RejectReplay }` + `TlsPasFormatReplayStats`/`FormatServerStats` 纯函数格式化 + `TAsyncTlsPasServerObserver` 包装任意 `ITlsPasReplayStore` 委托 `Decide/ShouldAccept` 并 `Mutex` 计数，`GetServerStats/GetReplayStats/Clear` 一站式、`Store` 属性透传；`bench Format 1.2µs / ObserverDecide 3.2µs`，零堆、复用 S12 决策与 Store 统计。
-- S14 自适应：`TTlsPasAdaptiveLimitConfig{Base 16384, Min 512, Max 16384, RejectRateThreshold 0.1}` + `DefaultTlsPasAdaptiveLimitConfig` + `TlsPasComputeAdaptiveMaxEarlyData(ServerStats, ReplayStats, Config)` 纯函数（零堆，`Total=0→Base`，`RejectRate>0.1→Base/2`，`Current>50→再/2`，`Min/Max` 夹逼）+ `TlsPasEarlyDataDecisionToHeaderValue(edAccept→'1', else→'0')` 供 HTTP `X-Early-Data` 埋点；`Observer` 可直接产出头值，`bench Adaptive 8ns / Header 2ns`。
-- `bench_tlspas_hrr` 23 项：`MessageHash 2.6/3.5µs Patch 2.1/1.2µs P256 1.9ms Transcript 3.3µs EarlyData 17/19µs EOED 228ns Policy 2.2ns Fingerprint 4.3µs Replay 0.85µs Store 0.99µs Stats 40ns IsReplayed 4.0µs FileStore 381µs KvStore 107µs ServerDecide 4.8µs Observer 3.2µs Adaptive 8ns Header 2ns`，`P384 760ms` 单采。
+- S14 自适应：`TTlsPasAdaptiveLimitConfig{Base 16384, Min 512, Max 16384, RejectRateThreshold 0.1}` + `DefaultTlsPasAdaptiveLimitConfig` + `TlsPasComputeAdaptiveMaxEarlyData(ServerStats, ReplayStats, Config)` 纯函数（零堆，`Total=0→Base`，`RejectRate>0.1→Base/2`，`Current>50→再/2`，`Min/Max` 夹逼）+ `TlsPasEarlyDataDecisionToHeaderValue(edAccept→'1', else→'0')` 供 HTTP `X-Early-Data` 埋点；`Observer` 可直接产出头值，`bench Adaptive 2.6ns / Header 4ns`。
+- S15 终极抛光：`TlsPasEarlyDataDecisionToStr/HeaderValue` `else` 去除零 `Unreachable code` 警告、`tlspas.pas` 0 警告；新增 `core/examples/nextpas.core.net/tlspas_early_data_demo/` 单文件自证（Policy/Fingerprint/Factory三形态/ServerDecide/Observer+Adaptive/Header 全链路，`Factory reuse` 与 `X-Early-Data: 1/0` 自证），`make build` 0 警告；bench 23 项保持，`P384 760ms` 单采。
+- `bench_tlspas_hrr` 23 项：`MessageHash 2.6/3.5µs Patch 2.1/1.2µs P256 1.8ms Transcript 2.8µs EarlyData 14/19µs EOED 236ns Policy 2.2ns Fingerprint 2.8µs Replay 0.84µs Store 0.86µs Stats 38ns IsReplayed 3.2µs FileStore 193µs KvStore 60µs ServerDecide 3.3µs Observer 3.2µs Adaptive 2.6ns Header 4ns`，`P384 761ms` 单采。
 
 ## 3. 威胁模型与重放约束
 
@@ -220,4 +221,4 @@ function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecisio
 
 ---
 
-*本设计遵循 `core/AGENTS.md` 与 `core/docs/design-conventions.md`：L2 仅依赖 L0-L1 与 `tls13.*` 原语，零 OpenSSL，不引入新分层。S6-S14 已闭环（S7 EOED + S8 策略与重放 + S9 接口/Stats/注入 + S10 文件持久化 + S11 KV 集群 + S12 服务端决策 + S13 可观测 + S14 自适应限额与 X-Early-Data），后续可直接对接 HTTP 层限流与埋点。*
+*本设计遵循 `core/AGENTS.md` 与 `core/docs/design-conventions.md`：L2 仅依赖 L0-L1 与 `tls13.*` 原语，零 OpenSSL，不引入新分层。S6-S15 已终局闭环（S7 EOED + S8 策略与重放 + S9 接口/Stats/注入 + S10 文件持久化 + S11 KV 集群 + S12 服务端决策 + S13 可观测 + S14 自适应限额与 X-Early-Data + S15 零警告示例抛光），示例见 `core/examples/nextpas.core.net/tlspas_early_data_demo/`（`make run` 自证全链路）。*

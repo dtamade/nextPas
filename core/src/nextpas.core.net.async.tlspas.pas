@@ -1047,8 +1047,6 @@ begin
     edRejectPolicy: Result := 'reject_policy';
     edRejectReplay: Result := 'reject_replay';
     edAccept: Result := 'accept';
-  else
-    Result := 'unknown';
   end;
 end;
 
@@ -1174,8 +1172,6 @@ begin
   case ADecision of
     edAccept: Result := '1';
     edRejectPolicy, edRejectReplay: Result := '0';
-  else
-    Result := '0';
   end;
 end;
 
@@ -1911,9 +1907,8 @@ var
   LPos, LExtStart, LExtLen, LExtType, LExtListLen: Integer;
   LSessionIdLen, LCipherLen, LCompLen: Integer;
   LPskeExtPos, LPskeExtLen: Integer;
-  LIdentitiesLen, LIdLen, LBinderLenPos, LOldBinderLen: Integer;
+  LIdentitiesLen, LOldBinderLen: Integer;
   LBeforeBinder, LAfterBinder: TBytes;
-  LNewExtLen: Integer;
 begin
   Result := Copy(AOriginalCH);
   if Length(AOriginalCH) < 44 then Exit;
@@ -1952,8 +1947,6 @@ begin
   LIdentitiesLen := (Integer(AOriginalCH[LPos]) shl 8) or Integer(AOriginalCH[LPos+1]);
   Inc(LPos, 2 + LIdentitiesLen);
   if LPos + 2 > Length(AOriginalCH) then Exit;
-  // binders_len
-  LBinderLenPos := LPos;
   // old binder len byte at LPos+2
   if LPos + 2 + 1 > Length(AOriginalCH) then Exit;
   LOldBinderLen := AOriginalCH[LPos+2];
