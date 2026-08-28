@@ -551,6 +551,7 @@ var
   LR: TRespValue;
   LT0: QWord;
   LTimed: Boolean;
+  LTotal, LOff: Integer;
 begin
   if Length(ASteps) = 0 then
     raise EDbError.CreateSimple(dbkRedis, 'empty batch');
@@ -561,14 +562,19 @@ begin
     RespEncodeCommand(LArgs, LFrames);
     LStepFrames[I] := LFrames;
   end;
-  { 单次写 burst = 流水线关键路径 }
-  SetLength(LFrames, 0);
-  for I := 0 to High(LStepFrames) do
+  { 单次写 burst = 流水线关键路径：预求和单分配直写（避免 N 次 SetLength 重分配/拷贝） }
   begin
-    SetLength(LFrames, Length(LFrames) + Length(LStepFrames[I]));
-    if Length(LStepFrames[I]) > 0 then
-      Move(LStepFrames[I][0], LFrames[Length(LFrames) -
-        Length(LStepFrames[I])], Length(LStepFrames[I]));
+    LTotal := 0;
+    for I := 0 to High(LStepFrames) do
+      Inc(LTotal, Length(LStepFrames[I]));
+    SetLength(LFrames, LTotal);
+    LOff := 0;
+    for I := 0 to High(LStepFrames) do
+      if Length(LStepFrames[I]) > 0 then
+      begin
+        Move(LStepFrames[I][0], LFrames[LOff], Length(LStepFrames[I]));
+        Inc(LOff, Length(LStepFrames[I]));
+      end;
   end;
   LT0 := 0;
   LTimed := FTrace.BeginOp(LT0);
