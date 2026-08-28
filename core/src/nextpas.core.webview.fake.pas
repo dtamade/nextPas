@@ -1055,6 +1055,7 @@ end;
 
 procedure TFakeWebview.Emit(const AEvent, APayloadJson: string);
 begin
+  CheckWebviewEventName(AEvent);
   RequireOpen;
   if not FBridgeReady then
   begin

@@ -100,6 +100,7 @@ procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string)
 
 { 注入脚本命名空间守卫（S40）：单条脚本不得触 __npw，builder 与 CheckWebviewOptions 同源，零重复。 }
 procedure CheckWebviewInitScript(const AScript: string); inline;
+procedure CheckWebviewEventName(const AEvent: string); inline;
 
 { 资产路径归一：剥离前导 '/'，空串保持空（S52 复用抽取，bridge TryResolve 与 gtk scheme 回调同源，零重复 Delete 扫描）。 }
 function NormalizeWebviewAssetPath(const APath: string): string; inline;
