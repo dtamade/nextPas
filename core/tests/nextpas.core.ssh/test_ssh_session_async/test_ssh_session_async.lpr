@@ -266,14 +266,14 @@ var
   LOpts: TSshConnectOptions;
 begin
   Result:=False; ARes:=Default(TSshExecResult); AErrKind:=sekIO;
-  New(LSc); FillChar(LSc^, SizeOf(LSc^), 0);
+  New(LSc); LSc^:=Default(TSshLoopServerScenario);
   LSc^.AcceptUser:='testuser'; LSc^.AcceptPassword:='testpass'; LSc^.PasswordOk:=APassOk; LSc^.PubKeyOk:=APubOk;
   LSc^.StdOut1:=StringToBytes('hello-'); LSc^.StdOut2:=StringToBytes('world'); LSc^.StdErr:=StringToBytes('err-'); LSc^.ExitCode:=42;
   LSc^.HostSeed:=AHostSeed; LSc^.ForceDH:=AForceDH; LSc^.ForceCompress:=AForceComp;
   LListener:=NetTcpListen('127.0.0.1',0);
   try
     LPort:=LListener.LocalAddr.Port;
-    LServerThread:=TThread.CreateAnonymousThread(procedure var LConn: ITcpStream; Srv: TSshLoopServer; begin try LConn:=LListener.Accept; Srv:=TSshLoopServer.Create(LConn as IReadWriteCloser, LSc); try Srv.Run; finally Srv.Free; end; except end; end);
+    LServerThread:=TThread.CreateAnonymousThread(procedure var LConn:ITcpStream; Srv:TSshLoopServer; begin try LConn:=LListener.Accept; Srv:=TSshLoopServer.Create(LConn as IReadWriteCloser, LSc); try Srv.Run; finally Srv.Free; end; except end; end);
     LServerThread.FreeOnTerminate:=False; LServerThread.Start;
     LLoop:=TAsyncLoop.Create(64);
     try
@@ -304,7 +304,7 @@ begin
       SetLength(GAsyncState.ExecResult.StdOut,0); SetLength(GAsyncState.ExecResult.StdErr,0);
       LLoop.Free; end;
     LServerThread.WaitFor; LServerThread.Free;
-  finally LListener.Close; Dispose(LSc); end;
+  finally LListener.Close; Finalize(LSc^); Dispose(LSc); end;
 end;
 
 var GSeed: TBytes; GRunner: TSuiteRunner; GSuite: TTestSuite;
