@@ -122,18 +122,11 @@ type
     function DiffWorkingTree(const ARef: string): TGitDiff;
     function DiffWorkingTreeEx(const ARef: string;
       const AOptions: TGitDiffOptions): TGitDiff;
-    function WorkdirPatchText(const ARef: string; const APaths: TStringArray;
-      AShowBinary: Boolean): string;
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;
     // M5+ (2026-08-15): blame a file (libgit2 native, no CLI spawn)
     function Blame(const APath: string): TGitBlame;
     // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
     function ConfigEntries: TGitConfigEntryArray;
-    // k97: apply unified patch text to the working directory (raises on
-    // parse or hunk failure; partial writes possible — see intf comment)
-    procedure ApplyPatch(const APatch: string);
-    // k97: force-restore listed paths to their ASpec content (discard)
-    procedure CheckoutPaths(const ASpec: string; const APaths: TStringArray);
 
     // Backward compatibility with old naming
     function HasUncommit: Boolean;
@@ -1529,8 +1522,6 @@ var
 begin
   FillChar(LOpts, SizeOf(LOpts), 0);
   LOpts.version := 1;   { GIT_DIFF_OPTIONS_VERSION }
-  if AOptions.ShowBinary then
-    LOpts.flags := LOpts.flags or GIT_DIFF_SHOW_BINARY;
   if AOptions.UnifiedLines > 0 then
     LOpts.context_lines := cuint(AOptions.UnifiedLines);
   if AOptions.InterhunkLines > 0 then
@@ -1616,118 +1607,6 @@ begin
   finally
     git_object_free(LObj);
     git_tree_free(LTree);
-  end;
-end;
-
-{ k101: 工作树（含 index）相对 ARef 的完整 patch 文本——SHOW_BINARY 打开时
-  二进制 delta 出 "GIT binary patch" literal 段，git_patch_to_buf 的输出即
-  git diff 同构文本，可被 git_diff_from_buffer 整包解析回写（ApplyPatch）。
-  buf.ptr 不保证 NUL 结尾，按 size 取段 }
-function TGitRepository.WorkdirPatchText(const ARef: string;
-  const APaths: TStringArray; AShowBinary: Boolean): string;
-var
-  LObj: git_object;
-  LTree: git_tree;
-  LDiff: git_diff;
-  LOpts: git_diff_options;
-  LOptRec: TGitDiffOptions;
-  LPathStrs: TStringArray;
-  LPathPtrs: TPAnsiCharArray;
-  LN, I: csize_t;
-  LPatch: git_patch;
-  LBuf: git_buf;
-  S: string;
-begin
-  Result := '';
-  ResolveRevToTree(ARef, LObj, LTree);
-  try
-    LOptRec := Default(TGitDiffOptions);
-    LOptRec.Paths := APaths;
-    LOptRec.ShowBinary := AShowBinary;
-    BuildDiffOptions(LOptRec, LOpts, LPathStrs, LPathPtrs);
-    CheckResult(git_diff_tree_to_workdir_with_index(LDiff, FHandle, LTree,
-      @LOpts), 'Diff tree to workdir');
-    try
-      LN := git_diff_num_deltas(LDiff);
-      { csize_t 下 LN=0 时 LN-1 下溢——空差必须显式守卫 }
-      if LN > 0 then
-        for I := 0 to LN - 1 do
-        begin
-          CheckResult(git_patch_from_diff(LPatch, LDiff, I),
-            'Patch from diff');
-          try
-            FillChar(LBuf, SizeOf(LBuf), 0);
-            CheckResult(git_patch_to_buf(LBuf, LPatch), 'Patch to buf');
-            try
-              SetString(S, PChar(LBuf.ptr), LBuf.size);
-              Result := Result + S;
-            finally
-              git_buf_dispose(@LBuf);
-            end;
-          finally
-            git_patch_free(LPatch);
-          end;
-        end;
-    finally
-      git_diff_free(LDiff);
-    end;
-  finally
-    git_object_free(LObj);
-    git_tree_free(LTree);
-  end;
-end;
-
-{ k97: apply / pathspec checkout }
-
-procedure TGitRepository.ApplyPatch(const APatch: string);
-var
-  LDiff: git_diff;
-begin
-  if APatch = '' then
-    raise EGitError.Create(GIT_EINVALID, 'ApplyPatch: empty patch');
-  { full-buffer parse first: a malformed patch fails before any write }
-  CheckResult(git_diff_from_buffer(LDiff, PChar(APatch),
-    csize_t(System.Length(APatch))), 'Parse patch buffer');
-  try
-    CheckResult(git_apply(FHandle, LDiff, GIT_APPLY_LOCATION_WORKING_DIR,
-      nil), 'Apply patch');
-  finally
-    git_diff_free(LDiff);
-  end;
-end;
-
-procedure TGitRepository.CheckoutPaths(const ASpec: string;
-  const APaths: TStringArray);
-var
-  LObj: git_object;
-  LTree: git_tree;
-  LOpts: git_checkout_options;
-  LPathStrs: TStringArray;
-  LPathPtrs: TPAnsiCharArray;
-  I: Integer;
-begin
-  if System.Length(APaths) = 0 then
-    raise EGitError.Create(GIT_EINVALID, 'CheckoutPaths: empty pathspec');
-  ResolveRevToTree(ASpec, LObj, LTree);
-  try
-    LOpts := Default(git_checkout_options);
-    CheckResult(git_checkout_options_init(@LOpts,
-      GIT_CHECKOUT_OPTIONS_VERSION), 'Init checkout options');
-    LOpts.checkout_strategy := GIT_CHECKOUT_FORCE or GIT_CHECKOUT_RECREATE_MISSING;
-    SetLength(LPathStrs, System.Length(APaths));
-    SetLength(LPathPtrs, System.Length(APaths));
-    for I := 0 to High(APaths) do
-    begin
-      LPathStrs[I] := APaths[I];
-      LPathPtrs[I] := PAnsiChar(LPathStrs[I]);
-    end;
-    LOpts.paths.strings := PPChar(@LPathPtrs[0]);
-    LOpts.paths.count := csize_t(System.Length(LPathPtrs));
-    CheckResult(git_checkout_tree(FHandle, git_object(LTree), @LOpts),
-      'Checkout paths from ' + ASpec);
-  finally
-    git_tree_free(LTree);
-    git_object_free(LObj);
   end;
 end;
 
