@@ -67,6 +67,8 @@ Streaming factories reject nil readers and writers with stable argument errors.
 
 ### Bounded Deflate/Gzip Decompression
 
+Default one-shot output cap is `nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES = 32MiB` (single source; `nextpas.core.compress.GZIP_MAX_DECOMPRESS_BYTES` re-exports it, `nextpas.core.vfs.compressed.VFS_DECOMPRESS_MAX_BYTES` is a thin alias/facade via `transform` — see `core/docs/vfs/README.md` ADR 0003). `GzipDecompress`/`DeflateDecompress` enforce this cap; VFS decompressing wrapper uses the same cap for bomb protection (`ContentHash=0`/ETag disabled when transformed).
+
 `DeflateDecompress` keeps the module default one-shot output cap. If a caller needs a tighter cap for untrusted input, use the root facade bounded helpers:
 
 ```pascal

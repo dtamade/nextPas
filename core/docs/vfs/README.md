@@ -65,6 +65,10 @@ VfsWalk(Fs, '.',
 FsEmbedded := CreateEmbeddedVfs(ResPackOpen(@Blob[0], Length(Blob)));  // 嵌入包
 FsDisk     := CreateOsVfs('/srv/app');                                 // 真实目录
 FsMem      := CreateMemTreeVfs(Tree);                                  // 测试替身
+
+// L3 装饰器（压缩/加密共用模板，零 SysUtils 直引）
+FsGzip := CreateDecompressingVfs(FsEmbedded); // auto: 仅 gzip 魔数 $1F $8B 时解压，Stat 校正 Size/ContentHash，ETag 禁用防旧指纹
+FsUpper := CreateTransformingVfs(Fs, @UpperTransform, @ShouldUpper); // 任意 TBytes→TBytes 函数注入
 ```
 
 ## 架构
@@ -78,6 +82,8 @@ nextpas.core.vfs.memtree.pas    ← 内存不可变树（embedded 底座 + 测�
 nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片
 nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转换在此收口）
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
+nextpas.core.vfs.transform.pas  ← 通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc` 函数注入，零拷贝按需变换（L3，压缩/加密共用模板，Stat/OpenRead/ETag/LastModified 完整性门）
+nextpas.core.vfs.compressed.pas ← 解压薄门面：经 transform 承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
 nextpas.core.vfs.mount.pas      ← （推迟）挂载表/overlay
 ```
 
@@ -91,6 +97,8 @@ nextpas.core.vfs.mount.pas      ← （推迟）挂载表/overlay
 | `base` | L0 | 自有 `TEntryInfo/TStatInfo`，**不复用 `fs.base` 类型** |
 | `intf` | `base` + `io.intf`（IStream） | 流词汇唯一来源是 io |
 | `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader`） | |
+| `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 通用装饰器：任意 `TBytes→TBytes` 变换复用同一模板（压缩/加密共用），零 `SysUtils` 直引（`QueryInterface`） |
+| `compressed` | `transform` + `compress` | 薄门面：仅策略（`daAuto/daGzip`、`IsGzip` 谓词、`GZIP_MAX` 单源），模板复用 `transform` |
 | `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **唯一的 L2→L2 seam**，registry 记录 |
 
 ## 核心契约
@@ -222,7 +230,7 @@ P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正�
 | 路径语法采纳 Go ValidPath 含 `.` 根 | 业界事实标准；respack/vfs 两模块共享同一节定义 |
 | Sub 视图独立单元而非核心方法 | Go 将 fs.Sub 作为自由函数；包装器不改核心契约即可测试（fstest 同样强制测它） |
 | mount/overlay 推迟 | 无已落地的双源消费场景；接口留位不留桩 |
-| 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateDecompressingVfs/CreateDecryptingVfs` 或 `http Content-Encoding` 承载，避免 `L2→L2` 闭环与 `solid block` 随机访问劣化 |
+| 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs` 通用模板承载（`CreateDecompressingVfs` 为其 gzip 特化薄门面，`CreateDecryptingVfs` 同构可直接复用；`http Content-Encoding` 另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES` 单源于 `compress.base`，`vfs` 侧仅薄别名/薄门面转调，32MiB 防 bomb 与 `ContentHash=0/ETag` 禁用一致性由 `transform` 统一承载 |
 
 ## 测试计划（9 门全绿，2026-08-25）
 
