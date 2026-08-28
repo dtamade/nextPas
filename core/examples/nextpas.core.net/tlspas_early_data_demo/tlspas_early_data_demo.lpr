@@ -369,9 +369,38 @@ begin
   WriteLn('FormatTraceEvent=', TlsPasFormatTraceEvent(Ev));
 end;
 
+procedure DemoSpan;
+var Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; Ctx: TTlsPasTraceContext; J, P: string; Hdl: IHttpHandler; Req: IHttpRequest; Cap: TDemoCapture; W: IHttpResponseWriter; Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: ITlsPasTracer; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
 begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S30 trace) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler | Trace');
+  WriteLn('--- Span S31 (Memory Ring 128 + /tracez + Span Prometheus) ---');
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  Ctx := TlsPasGenerateTraceContext(True);
+  Sp := Default(TTlsPasSpan); Sp.Trace := Ctx; Sp.Name := 'tlspas.early_data'; Sp.StartMs := 100; Sp.EndMs := 105; Sp.DurationMs := 5; Sp.Decision := edAccept; Sp.AdaptiveMax := 8192; Sp.Healthy := True;
+  Exp.ExportSpan(Sp); Sp.Name := 'tlspas.hrr'; Sp.Decision := edRejectReplay; Exp.ExportSpan(Sp);
+  WriteLn('Span count=', Exp.Count, ' json len=', Length(TlsPasSpansToJSON(Exp)), ' prom=', System.Copy(TlsPasSpansToPrometheus(Exp),1,60), '...');
+  J := TlsPasSpanToJSON(Sp); WriteLn('Single span JSON contains traceparent=', Pos('traceparent', J)>0, ' decision=', Pos('reject_replay', J)>0);
+  Hdl := HttpTracezHandler(Exp);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/tracez'), hvHttp11, NewHttpHeaders, nil, 0);
+  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter; Hdl.ServeHTTP(Req, W);
+  WriteLn('Tracez JSON CT=', W.GetHeaders.Get('Content-Type'), ' status=', Ord(W.GetStatus), ' body contains early_data=', Pos('early_data', HttpTracezJSON(Exp))>0);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/tracez?prom'), hvHttp11, NewHttpHeaders, nil, 0);
+  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter; Hdl.ServeHTTP(Req, W);
+  WriteLn('Tracez Prom CT=', W.GetHeaders.Get('Content-Type'), ' contains spans_total=', Pos('spans_total', HttpSpansPrometheusText(Exp))>0);
+  // span decide integration
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Tracer := TAsyncTlsPasSamplingTracer.Create(1.0) as ITlsPasTracer;
+  Exp.Clear; Ctx := TlsPasGenerateTraceContext(True);
+  Sess := Default(TTlsPasResumptionSession);
+  Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+  SetLength(Id,4); FillChar(Id[0],4,$11); SetLength(Early,10); FillChar(Early[0],10,$22);
+  WriteLn('SpanDecide accept=', TlsPasEarlyDataDecisionToStr(TlsPasTraceSpanDecide(Obs, Tracer, Exp, Ctx, Id, Early, Sess, True)), ' count=', Exp.Count);
+  Obs.Free;
+end;
+
+begin
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S31 span) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler | Trace | Span');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -399,5 +428,7 @@ begin
   WriteLn;
   DemoTrace;
   WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S30 trace self-proof.');
+  DemoSpan;
+  WriteLn;
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S31 span self-proof.');
 end.

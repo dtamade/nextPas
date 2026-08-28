@@ -521,6 +521,20 @@ procedure BenchTraceMiddleware(aIters: Int64);
 var I: Int64;
 begin for I := 1 to aIters do GTraceMwHandler.ServeHTTP(GTraceReq, TCaptureWriterBenchHack.Get); end;
 
+var GSpanExporter: ITlsPasSpanExporter; GSpanTraceCtx: TTlsPasTraceContext; GTracezHdl: IHttpHandler; GTracezReq: IHttpRequest;
+
+procedure BenchSpanExport(aIters: Int64);
+var I: Int64; Sp: TTlsPasSpan;
+begin Sp := Default(TTlsPasSpan); Sp.Trace := GSpanTraceCtx; Sp.Name := 'tlspas.early_data'; for I := 1 to aIters do GSpanExporter.ExportSpan(Sp); end;
+
+procedure BenchSpanJSON(aIters: Int64);
+var I: Int64; S: string;
+begin for I := 1 to aIters do S := TlsPasSpansToJSON(GSpanExporter); end;
+
+procedure BenchTracezHandler(aIters: Int64);
+var I: Int64;
+begin for I := 1 to aIters do GTracezHdl.ServeHTTP(GTracezReq, TCaptureWriterBenchHack.Get); end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -637,6 +651,11 @@ begin
   GTraceReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   GTraceReq.Headers.SetHeader('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
   GTraceMwHandler := HttpTraceParentMiddleware(GTraceTracer).Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
+  GSpanTraceCtx := TlsPasGenerateTraceContext(True);
+  GSpanExporter := TAsyncTlsPasMemorySpanExporter.Create(128) as ITlsPasSpanExporter;
+  GSpanExporter.ExportSpan(Default(TTlsPasSpan));
+  GTracezReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/tracez'), hvHttp11, NewHttpHeaders, nil, 0);
+  GTracezHdl := HttpTracezHandler(GSpanExporter);
 end;
 
 var
@@ -701,6 +720,9 @@ begin
     .AddLoop('Trace Format', @BenchTraceFormat)
     .AddLoop('Trace ShouldSample', @BenchTraceShouldSample)
     .AddLoop('Trace Middleware', @BenchTraceMiddleware)
+    .AddLoop('Span Export', @BenchSpanExport)
+    .AddLoop('Span JSON', @BenchSpanJSON)
+    .AddLoop('Tracez Handler', @BenchTracezHandler)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

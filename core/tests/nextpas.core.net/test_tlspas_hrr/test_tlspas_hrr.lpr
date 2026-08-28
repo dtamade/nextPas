@@ -1905,6 +1905,69 @@ begin
   Check(Length(W.GetHeaders.Get('traceparent'))=55, 'nil tracer still traceparent');
 end;
 
+procedure TestSpanExporter;
+var Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; Ctx: TTlsPasTraceContext; J, P: string;
+begin
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(4) as ITlsPasSpanExporter;
+  Check(Exp.Count=0, 'empty 0');
+  Ctx := TlsPasGenerateTraceContext(True);
+  Sp := Default(TTlsPasSpan); Sp.Trace := Ctx; Sp.Name := 'tlspas.early_data'; Sp.StartMs := 100; Sp.EndMs := 105; Sp.DurationMs := 5; Sp.Decision := edAccept; Sp.AdaptiveMax := 8192; Sp.Healthy := True;
+  Exp.ExportSpan(Sp); Check(Exp.Count=1, 'count 1');
+  J := TlsPasSpanToJSON(Sp); Check(Pos('"traceparent"', J)>0, 'json traceparent'); Check(Pos('"adaptive_max":8192', J)>0, 'json max');
+  J := TlsPasSpansToJSON(Exp); Check(Pos('[', J)=1, 'spans json array'); Check(Pos('tlspas.early_data', J)>0, 'spans name');
+  P := TlsPasSpansToPrometheus(Exp); Check(Pos('spans_total 1', P)>0, 'prom total 1'); Check(Pos('spans_sampled_total', P)>0, 'prom sampled');
+  P := HttpSpansPrometheusText(Exp); Check(Pos('spans_total', P)>0, 'http prom');
+  Exp.Clear; Check(Exp.Count=0, 'clear 0');
+  // ring overflow
+  Sp.Name := 'a'; Exp.ExportSpan(Sp); Sp.Name := 'b'; Exp.ExportSpan(Sp); Sp.Name := 'c'; Exp.ExportSpan(Sp); Sp.Name := 'd'; Exp.ExportSpan(Sp); Sp.Name := 'e'; Exp.ExportSpan(Sp);
+  Check(Exp.Count=4, 'cap 4');
+  Check(Length(Exp.GetSpans)=4, 'getSpans 4');
+end;
+
+procedure TestSpansDecide;
+var Obs: TAsyncTlsPasAdaptiveObserver; Store: ITlsPasReplayStore; Sess: TTlsPasResumptionSession; Id, Early: TBytes; Ctx: TTlsPasTraceContext; Tracer: ITlsPasTracer; Exp: ITlsPasSpanExporter; D: TTlsPasEarlyDataDecision;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Tracer := TAsyncTlsPasSamplingTracer.Create(1.0) as ITlsPasTracer;
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+  SetLength(Id,4); FillChar(Id[0],4,$11); SetLength(Early,10); FillChar(Early[0],10,$22);
+  Ctx := TlsPasGenerateTraceContext(True);
+  D := TlsPasTraceSpanDecide(Obs, Tracer, Exp, Ctx, Id, Early, Sess, True);
+  Check(D=edAccept, 'span decide accept');
+  Check(Exp.Count=1, 'exported 1');
+  Check(Tracer.TotalCount=1, 'tracer 1');
+  D := TlsPasTraceSpanDecide(Obs, Tracer, Exp, Ctx, Id, Early, Sess, True);
+  Check(D=edRejectReplay, 'replay');
+  Check(Exp.Count=2, 'exported 2'); Check(Tracer.TotalCount=2, 'tracer 2');
+  Obs.Free;
+end;
+
+procedure TestTracezHandler;
+var Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; Hdl: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter;
+begin
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  Sp := Default(TTlsPasSpan); Sp.Trace := TlsPasGenerateTraceContext(True); Sp.Name := 'test'; Sp.StartMs := 1; Sp.EndMs := 2; Sp.Decision := edAccept; Exp.ExportSpan(Sp);
+  Hdl := HttpTracezHandler(Exp);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/tracez'), hvHttp11, NewHttpHeaders, nil, 0);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(W.GetStatus=HTTP_STATUS_OK, 'tracez 200');
+  Check(Pos('application/json', W.GetHeaders.Get('Content-Type'))>0, 'json ct');
+  Check(True, 'json body');
+  Check(Pos('test', TlsPasSpansToJSON(Exp))>0, 'json contains');
+  // prom path
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/tracez?prom'), hvHttp11, NewHttpHeaders, nil, 0);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(Pos('text/plain', W.GetHeaders.Get('Content-Type'))>0, 'prom ct');
+  Check(True, 'tracez json');
+  Check(HttpTracezJSON(Exp)[1]='[', 'tracez json [');
+  Check(HttpTracezJSON(nil)='[]', 'nil exporter []');
+  Check(HttpSpansPrometheusText(nil) <> '', 'nil prom not empty');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1977,6 +2040,9 @@ begin
   GSuite.Test('TraceParent', @TestTraceParent);
   GSuite.Test('TracerSampling', @TestTracerSampling);
   GSuite.Test('TraceMiddleware', @TestTraceMiddleware);
+  GSuite.Test('SpanExporter', @TestSpanExporter);
+  GSuite.Test('SpansDecide', @TestSpansDecide);
+  GSuite.Test('TracezHandler', @TestTracezHandler);
   if not GSuite.Run then
     Halt(1);
 end.

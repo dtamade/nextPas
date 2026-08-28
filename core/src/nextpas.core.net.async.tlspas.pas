@@ -491,6 +491,53 @@ function TlsPasTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const 
   const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
   const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
 
+{ S31: OTEL Span 导出 + /tracez + Span Prometheus — 环形缓冲 128，零堆 JSON/Prometheus，直连 Tracer }
+type
+  TTlsPasSpan = record
+    Trace: TTlsPasTraceContext;
+    Name: string;
+    StartMs: Int64;
+    EndMs: Int64;
+    Decision: TTlsPasEarlyDataDecision;
+    AdaptiveMax: Cardinal;
+    Healthy: Boolean;
+    DurationMs: Int64;
+  end;
+
+  TTlsPasSpanArray = array of TTlsPasSpan;
+  ITlsPasSpanExporter = interface
+    ['{C2D3E4F5-A6B7-4C8D-9E0F-1A2B3C4D5E6F}']
+    procedure ExportSpan(const ASpan: TTlsPasSpan);
+    function Count: Integer;
+    function GetSpans: TTlsPasSpanArray;
+    procedure Clear;
+  end;
+
+  TAsyncTlsPasMemorySpanExporter = class(TInterfacedObject, ITlsPasSpanExporter)
+  private
+    FMutex: TPlatformMutex;
+    FSpans: array of TTlsPasSpan;
+    FCap: Integer;
+    FHead: Integer;
+    FCount: Integer;
+  public
+    constructor Create(ACap: Integer = 128);
+    destructor Destroy; override;
+    procedure ExportSpan(const ASpan: TTlsPasSpan);
+    function Count: Integer;
+    function GetSpans: TTlsPasSpanArray;
+    procedure Clear;
+  end;
+
+function TlsPasSpanToJSON(const ASpan: TTlsPasSpan): string;
+function TlsPasSpansToJSON(const AExporter: ITlsPasSpanExporter): string;
+function TlsPasSpansToPrometheus(const AExporter: ITlsPasSpanExporter; const APrefix: string): string; overload;
+function TlsPasSpansToPrometheus(const AExporter: ITlsPasSpanExporter): string; overload;
+function TlsPasTraceSpanDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer;
+  const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession;
+  AAllowEarlyData: Boolean; const AName: string = 'tlspas.early_data'): TTlsPasEarlyDataDecision;
+
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
@@ -2200,6 +2247,82 @@ begin
     Ev.Trace := ATrace; Ev.Healthy := AObserver.GetAdaptiveHealth.Healthy;
     ATracer.Trace(Ev);
   end;
+end;
+
+{ ======== S31 Span ======== }
+
+constructor TAsyncTlsPasMemorySpanExporter.Create(ACap: Integer);
+begin
+  inherited Create; if ACap <= 0 then ACap := 128; FCap := ACap; SetLength(FSpans, FCap);
+  if platform_mutex_init(FMutex) <> 0 then raise EInvalidOperationError.Create('tlspas: span exporter mutex');
+end;
+destructor TAsyncTlsPasMemorySpanExporter.Destroy; begin platform_mutex_destroy(FMutex); inherited Destroy; end;
+procedure TAsyncTlsPasMemorySpanExporter.ExportSpan(const ASpan: TTlsPasSpan);
+begin
+  platform_mutex_lock(FMutex);
+  try
+    FSpans[FHead] := ASpan;
+    FHead := (FHead + 1) mod FCap;
+    if FCount < FCap then Inc(FCount);
+  finally platform_mutex_unlock(FMutex); end;
+end;
+function TAsyncTlsPasMemorySpanExporter.Count: Integer; begin platform_mutex_lock(FMutex); try Result := FCount; finally platform_mutex_unlock(FMutex); end; end;
+function TAsyncTlsPasMemorySpanExporter.GetSpans: TTlsPasSpanArray;
+var i, idx: Integer;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    SetLength(Result, FCount);
+    for i := 0 to FCount - 1 do begin idx := (FHead - FCount + i + FCap) mod FCap; Result[i] := FSpans[idx]; end;
+  finally platform_mutex_unlock(FMutex); end;
+end;
+procedure TAsyncTlsPasMemorySpanExporter.Clear; begin platform_mutex_lock(FMutex); try FCount := 0; FHead := 0; finally platform_mutex_unlock(FMutex); end; end;
+
+function TlsPasSpanToJSON(const ASpan: TTlsPasSpan): string;
+var Tp: string;
+begin
+  Tp := TlsPasFormatTraceParent(ASpan.Trace);
+  Result := Format('{"traceparent":"%s","name":"%s","start_ms":%d,"end_ms":%d,"duration_ms":%d,"decision":"%s","adaptive_max":%d,"healthy":%s}', [Tp, ASpan.Name, ASpan.StartMs, ASpan.EndMs, ASpan.DurationMs, TlsPasEarlyDataDecisionToStr(ASpan.Decision), Integer(ASpan.AdaptiveMax), LowerCase(BoolToStr(ASpan.Healthy, True))]);
+end;
+
+function TlsPasSpansToJSON(const AExporter: ITlsPasSpanExporter): string;
+var Spans: TTlsPasSpanArray; i: Integer;
+begin
+  if AExporter = nil then Exit('[]');
+  Spans := AExporter.GetSpans; Result := '[';
+  for i := 0 to High(Spans) do begin if i > 0 then Result := Result + ','; Result := Result + TlsPasSpanToJSON(Spans[i]); end;
+  Result := Result + ']';
+end;
+
+function TlsPasSpansToPrometheus(const AExporter: ITlsPasSpanExporter; const APrefix: string): string;
+var Spans: TTlsPasSpanArray; C, S: Integer; i: Integer; P: string;
+begin
+  P := APrefix; if P = '' then P := 'nextpas_tlspas';
+  if AExporter = nil then C := 0 else C := AExporter.Count;
+  Spans := nil; if AExporter <> nil then Spans := AExporter.GetSpans;
+  S := 0; for i := 0 to High(Spans) do if Spans[i].Trace.Sampled then Inc(S);
+  Result := Format('# HELP %s_spans_total Total spans exported'#10'# TYPE %s_spans_total counter'#10'%s_spans_total %d'#10'# HELP %s_spans_sampled_total Sampled spans'#10'# TYPE %s_spans_sampled_total counter'#10'%s_spans_sampled_total %d'#10, [P,P,P,C, P,P,P,S]);
+end;
+function TlsPasSpansToPrometheus(const AExporter: ITlsPasSpanExporter): string; begin Result := TlsPasSpansToPrometheus(AExporter, 'nextpas_tlspas'); end;
+
+function TlsPasTraceSpanDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer;
+  const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession;
+  AAllowEarlyData: Boolean; const AName: string): TTlsPasEarlyDataDecision;
+var T0, T1: Int64; Sp: TTlsPasSpan; Ev: TTlsPasTraceEvent;
+begin
+  T0 := TlsPasMonoMs;
+  if AObserver = nil then Result := edRejectPolicy else Result := AObserver.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+  T1 := TlsPasMonoMs;
+  if (AExporter <> nil) and ((ATracer = nil) or ATracer.ShouldSample(ATrace) or ATrace.Sampled) then
+  begin
+    Sp := Default(TTlsPasSpan);
+    Sp.Trace := ATrace; Sp.Name := AName; Sp.StartMs := T0; Sp.EndMs := T1; Sp.DurationMs := T1 - T0;
+    Sp.Decision := Result;
+    if AObserver <> nil then begin Sp.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Sp.Healthy := AObserver.GetAdaptiveHealth.Healthy; end;
+    AExporter.ExportSpan(Sp);
+  end;
+  if ATracer <> nil then begin Ev := Default(TTlsPasTraceEvent); Ev.Kind := tekEarlyDataDecide; Ev.TimestampMs := T1; Ev.Decision := Result; if AObserver <> nil then Ev.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Ev.Trace := ATrace; if AObserver <> nil then Ev.Healthy := AObserver.GetAdaptiveHealth.Healthy; ATracer.Trace(Ev); end;
 end;
 
 constructor TAsyncTlsPasReplayCache.Create;
