@@ -267,7 +267,7 @@ begin
   LFlags := SDL_WINDOW_HIDDEN or SDL_WINDOW_ALLOW_HIGHDPI;
   if FResizable then LFlags := LFlags or SDL_WINDOW_RESIZABLE;
 
-  FHandle := SDL_CreateWindow(PAnsiChar(AnsiString(FTitle)), $2FFF0000, $2FFF0000, FWidth, FHeight, LFlags);
+  FHandle := SDL_CreateWindow(PAnsiChar(StrToAnsi(FTitle)), $2FFF0000, $2FFF0000, FWidth, FHeight, LFlags);
   if FHandle = nil then
     raise EWindowNotInitialized.Create('SDL_CreateWindow failed: ' + string(AnsiString(SDL_GetError)));
   FWindowID := SDL_GetWindowID(FHandle);

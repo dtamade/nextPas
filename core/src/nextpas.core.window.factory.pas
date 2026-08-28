@@ -151,9 +151,14 @@ end;
 
 function LiveGtkSmart: Integer; inline;
 begin
-  Result := nextpas.core.window.gtk3.GtkLiveWindowCount
-          + nextpas.core.window.gtk4.Gtk4LiveWindowCount
-          + nextpas.core.window.gtk2.Gtk2LiveWindowCount;
+  { 家族化后零活窗路径应单次读：已加载族唯一，多族同时加载在单进程内不发生（Probe 顺序 4>3>2） }
+  if nextpas.core.gtk4.loader.Gtk4IsLoaded then
+    Exit(nextpas.core.window.gtk4.Gtk4LiveWindowCount);
+  if nextpas.core.gtk3.loader.Gtk3IsLoaded then
+    Exit(nextpas.core.window.gtk3.GtkLiveWindowCount);
+  if nextpas.core.gtk2.loader.Gtk2IsLoaded then
+    Exit(nextpas.core.window.gtk2.Gtk2LiveWindowCount);
+  Result := 0;
 end;
 
 procedure RunGtkSmart;

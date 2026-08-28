@@ -279,7 +279,7 @@ begin
   if not FResizable then
     Style := Style and not (WS_THICKFRAME or WS_MAXIMIZEBOX);
 
-  FHandle := CreateWindowExA(0, NEXTPAS_CLASS, PAnsiChar(AnsiString(FTitle)),
+  FHandle := CreateWindowExA(0, NEXTPAS_CLASS, PAnsiChar(StrToAnsi(FTitle)),
     Style, CW_USEDEFAULT, CW_USEDEFAULT, FWidth, FHeight, nil, nil, HInst, nil);
   if FHandle = nil then
     raise EWindowNotInitialized.Create('CreateWindowExA failed');
