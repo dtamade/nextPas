@@ -1,30 +1,6 @@
 unit nextpas.core.db.mysql.adapter;
 
-{** @desc IDbConnection/IDbQuery 的 MySQL/MariaDB 适配器（V3-A2）。
-
-       执行模型：IDbQuery 走 prepared statement 二进制协议
-       （mysql_stmt_*），与 pg 侧 execParams 同级——参数化即注入安全。
-       执行惰性触发（首个 Step），列元数据在 Step 后可读，与统一层
-       消费时序一致。
-
-       结果绑定按声明类型请求：整数族绑 LONGLONG、浮点族绑 DOUBLE、
-       其余（文本/blob/DECIMAL/日期/JSON/BIT）一律 VAR_STRING——
-       DECIMAL 在二进制协议里本就是 length-prefixed 文本，日期族由
-       客户端库转连接字符集文本；截断时按实际长度扩缓冲经
-       mysql_stmt_fetch_column 重取。
-
-       双方言 MYSQL_BIND 编组（Oracle 72B / MariaDB 112B，buffer_type
-       偏移与宽度不同）在本单元单点实现——A1 ffi 镜像钉死布局，此处
-       按 loader 探测的 flavor 选择写法，别处不得触碰原生布局。
-
-       占位符：MySQL 原生 ?。统一契约的 ?N 显式编号经槽位计划重写为
-       顺序 ? 并携带物理槽→逻辑号映射；扫描跳过字符串字面量、反引号
-       标识符、-- 与 # 行注释、块注释。
-
-       事务控制面：连接内计数式簿记（互斥锁保护），语义对齐 pg/sqlite
-       适配器；SAVEPOINT 原生支持（RELEASE 需带 SAVEPOINT 关键字，
-       与 pg 方言差异）。BEGIN IMMEDIATE 无对应语义，标志接受但为
-       no-op（契约差异登记 CONTRACT §2.3）。 *}
+{** @desc IDbConnection 的 MySQL/MariaDB 适配器（二进制 prepared statement，惰性 Step）。能力与契约见 CONTRACT §2.3/§2.11，双方言 BIND 布局单点见实现。 *}
 
 {$I nextpas.core.settings.inc}
 
