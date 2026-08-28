@@ -281,11 +281,21 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] `session`：`TProxyJumpSession(ISshSession)` 持有 `FJump+Ftarget` 双生命周期（`GetConnected/ServerVersion/Fingerprint` 透传；`Exec/OpenFileSystem` 委托 `FTarget`；`Close/Destroy` 双关）、`SshConnectViaJumpOn`（已建 `ISshSession` 上开 `direct-tcpip` → `TChannelStream` → `SshConnectOn` 二次握手，支持 `TSshSession` 与链式 `TProxyJumpSession` 的 `FTarget` 穿透）、`SshConnectViaJump`（`SshConnect(AJumpOpts)` 再 `On`）
 - [x] 测试：`test_ssh_proxyjump` 5/5（`exec via jump / double reuse / sftp over jump exec / raw open / single-hop regression`，`MemPipe` 双跳转发 `Jump→FwdPipe→Target`，`~560ms` 首跳 + `~580ms` 链路，`HEAPTRC 71` 已知 `MemPipe _AddRef=-1` 非计数泄漏，功能零影响，`HEAPTRC_GATE=0`），`test_ssh_session` 19/19 回归
 
+## S19 — ProxyJump 完善 · SFTP over Jump + 堆收敛（已完成）
+
+`S18` 的链路复用已验证 `Exec`，`S19` 补齐文件面与稳定性收敛：
+
+- [x] `TMemPipe` 堆收敛：移除 `_AddRef/_Release=-1` 非计数覆盖，改为 `TInterfacedObject` 默认引用计数，`FS:=nil/S2:=nil/S1:=nil` 后 `Close` 再 `WaitFor`，`HandleSftpOuter` 外层长度前缀正确跳过，泄漏 `71→41` 块（剩余为 `TAsync`/`SFTP` 侧线已知，功能 5/5，`HEAPTRC_GATE=0` 保持，同 `sftp async` 19 块同类）
+- [x] `ServeApp` 补齐 `SFTP` 子系统：`SSH_REQ_SUBSYSTEM` 识别 `sftp` 置 `FIsSftp`，`CHANNEL_DATA` 透传 `HandleSftpOuter`（`INIT→VERSION / REALPATH→NAME / STAT→ATTRS / OPENDIR/HANDLE / READ→DATA / WRITE/CLOSE→STATUS OK`，`PutAttrs/ReadAttrs` 复用 `sftp.pas`，`outer length` 前缀正确处理）
+- [x] 测试：`proxyjump sftp via jump` 升级为真实 `SFTP` 回环（`S2.OpenFileSystem → RealPath('/foo')→'/resolved/foo' / Stat('/file')→1234 / IsRegular`，`734ms` 含二次握手 + `INIT`，`5/5`，`test_ssh_session 19/19 / sftp async 7/7` 回归）
+- [x] 复用度：`SFTP` 包构造/解析与 `sftp.pas` 同源，`direct-tcpip` 窗口/低水位与 `channel` 同构，零新依赖
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| — | — |
+| Async ProxyJump | `TAsyncLoop` 之上的 `direct-tcpip` 事件化（`SshAsyncConnectViaJump`）待后续 slice |
+| 性能基线 | ProxyJump 双跳 vs 单跳时延基线固化 |
 
 ## 真实性等级声明
 

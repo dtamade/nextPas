@@ -59,9 +59,6 @@ type
     procedure Drain(out ADest: TBytes; ATimeoutMs: Cardinal);
     procedure DrainNB(out ADest: TBytes);
     procedure Rewind(ACount: SizeUInt);
-    function QueryInterface(constref IID: TGUID; out Obj): HResult; cdecl;
-    function _AddRef: LongInt; cdecl;
-    function _Release: LongInt; cdecl;
     property Closed: Boolean read FClosed;
   end;
 
@@ -69,9 +66,6 @@ procedure TMemPipeEnd.Rewind(ACount: SizeUInt);
 begin EnterCriticalSection(FShared^.Lock); Dec(FReadPos, ACount); LeaveCriticalSection(FShared^.Lock); end;
 constructor TMemPipeEnd.Create(AShared: PPipeShared); begin inherited Create; FShared:=AShared; FDataEvent:=RTLEventCreate; end;
 destructor TMemPipeEnd.Destroy; begin RTLEventDestroy(FDataEvent); inherited Destroy; end;
-function TMemPipeEnd.QueryInterface(constref IID: TGUID; out Obj): HResult; cdecl; begin if GetInterface(IID, Obj) then Result:=S_OK else Result:=E_NOINTERFACE; end;
-function TMemPipeEnd._AddRef: LongInt; cdecl; begin Result:=-1; end;
-function TMemPipeEnd._Release: LongInt; cdecl; begin Result:=-1; end;
 procedure TMemPipeEnd.SetPeer(APeer: TMemPipeEnd); begin FPeer:=APeer; end;
 procedure TMemPipeEnd.AppendLocked(const ASrc; ACount: SizeUInt); var LOld: SizeUInt; begin LOld:=SizeUInt(Length(FIncoming)); SetLength(FIncoming, LOld+ACount); Move(ASrc, FIncoming[LOld], ACount); end;
 function TMemPipeEnd.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -94,6 +88,9 @@ function SigBlobOf(const AAlgName: string; const ARawSig: TBytes): TBytes; var L
 function SingleBytePayloadOf(AMsg: Byte): TBytes; begin Result:=nil; SetLength(Result,1); Result[0]:=AMsg; end;
 function Ed25519PubBlob(const APub: TBytes): TBytes; var LW:TsshWriter; begin LW:=TsshWriter.Create(64); try LW.PutStringText('ssh-ed25519'); LW.PutStringBytes(APub); Result:=LW.ToBytes; finally LW.Free; end; end;
 
+function AttrsWithSizeAndPerms(ASize:UInt64; APerms:UInt32):TSftpAttrs;
+begin Result:=Default(TSftpAttrs); Result.Flags:=SSH_FILEXFER_ATTR_SIZE or SSH_FILEXFER_ATTR_PERMISSIONS; Result.Size:=ASize; Result.Permissions:=APerms; end;
+
 const CHACHA_ALG='chacha20-poly1305@openssh.com'; SERVER_IDENT='SSH-2.0-NextPas-LoopServer'; SRV_CHANNEL_ID=7; SRV_RECV_WINDOW=2097152;
 
 type PSshLoopServerScenario = ^TSshLoopServerScenario;
@@ -107,6 +104,7 @@ type PSshLoopServerScenario = ^TSshLoopServerScenario;
     FRecvSeq, FSendSeq: UInt32;
     FRecv: ISshPacketReceiver; FSend: ISshPacketSender;
     FEncrypted:Boolean; FSessionId:TBytes;
+    FIsSftp:Boolean;
     procedure SendPlainPayload(const APayload:TBytes);
     function RecvRaw(out AData:TBytes; ATimeoutMs:Integer):Boolean;
     function ReadPlainFrameBody:TBytes;
@@ -116,10 +114,11 @@ type PSshLoopServerScenario = ^TSshLoopServerScenario;
     procedure Handshake;
     procedure ServeApp;
     procedure ServeJumpForward;
+    procedure HandleSftpOuter(const AOuter:TBytes);
     procedure Fail(const AMsg:string);
   public constructor Create(AEnd:TMemPipeEnd; ASc:PSshLoopServerScenario); procedure Run; end;
 
-constructor TSshLoopServer.Create(AEnd:TMemPipeEnd; ASc:PSshLoopServerScenario); begin inherited Create; FEnd:=AEnd; FSc:=ASc; FEncrypted:=False; end;
+constructor TSshLoopServer.Create(AEnd:TMemPipeEnd; ASc:PSshLoopServerScenario); begin inherited Create; FEnd:=AEnd; FSc:=ASc; FEncrypted:=False; FIsSftp:=False; end;
 procedure TSshLoopServer.Fail(const AMsg:string); begin if not FSc^.Failed then begin FSc^.Failed:=True; FSc^.FailMsg:=AMsg; end; end;
 procedure TSshLoopServer.SendPlainPayload(const APayload:TBytes);
 var LW:TsshWriter; LPad,I:Integer; LWire:TBytes; begin LPad:=8-((4+1+Length(APayload)) mod 8); if LPad<SSH_MIN_PADDING then Inc(LPad,8); LW:=TsshWriter.Create(64+Length(APayload)); try LW.PutUInt32(UInt32(1+Length(APayload)+SizeUInt(LPad))); LW.PutByte(Byte(LPad)); LW.PutRaw(APayload); for I:=1 to LPad do LW.PutByte($30); LWire:=LW.ToBytes; FEnd.Write(LWire[0], SizeUInt(Length(LWire))); finally LW.Free; end; end;
@@ -181,7 +180,7 @@ begin
 end;
 
 procedure TSshLoopServer.ServeApp;
-var LMsg:TBytes; LR:TsshReader; LUser,LMethod,LPass,LReqName:string; LPassOk,LWantReply:Boolean; LRid:UInt32; LW:TsshWriter; begin
+var LMsg:TBytes; LR:TsshReader; LUser,LMethod,LPass,LReqName:string; LPassOk,LWantReply:Boolean; LRid:UInt32; LW:TsshWriter; LNeedFwd:TBytes; begin
   // if jump server, delegate to forward
   if FSc^.IsJump then begin ServeJumpForward; Exit; end;
   while True do begin LMsg:=ReadAnyPayload; if Length(LMsg)=0 then Exit; case LMsg[0] of
@@ -189,10 +188,36 @@ var LMsg:TBytes; LR:TsshReader; LUser,LMethod,LPass,LReqName:string; LPassOk,LWa
       SSH_MSG_SERVICE_REQUEST: begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_MSG_SERVICE_ACCEPT); LW.PutStringText(SSH_SERVICE_USERAUTH); ReplyPayload(LW.ToBytes); finally LW.Free; end; end;
       SSH_MSG_USERAUTH_REQUEST: begin LR:=TsshReader.Create(LMsg); try LR.ReadByte; LUser:=LR.ReadStringText; LR.ReadStringText; LMethod:=LR.ReadStringText; LPassOk:=False; if LMethod='password' then begin LR.ReadBoolean; LPass:=LR.ReadStringText; LPassOk:=(LUser=FSc^.AcceptUser) and (LPass=FSc^.AcceptPassword); end; finally LR.Free; end; if LPassOk then ReplyPayload(SingleBytePayloadOf(SSH_MSG_USERAUTH_SUCCESS)) else begin LW:=TsshWriter.Create(48); try LW.PutByte(SSH_MSG_USERAUTH_FAILURE); LW.PutStringText('password,publickey'); LW.PutBoolean(False); ReplyPayload(LW.ToBytes); finally LW.Free; end; end; end;
       SSH_MSG_CHANNEL_OPEN: begin LR:=TsshReader.Create(LMsg); try LR.ReadByte; LR.ReadStringText; LRid:=LR.ReadUInt32; FClientChannelId:=LRid; finally LR.Free; end; LW:=TsshWriter.Create(48); try LW.PutByte(SSH_MSG_CHANNEL_OPEN_CONFIRMATION); LW.PutUInt32(LRid); LW.PutUInt32(SRV_CHANNEL_ID); LW.PutUInt32(SRV_RECV_WINDOW); LW.PutUInt32(32768); ReplyPayload(LW.ToBytes); finally LW.Free; end; end;
-      SSH_MSG_CHANNEL_REQUEST: begin LR:=TsshReader.Create(LMsg); try LR.ReadByte; LR.ReadUInt32; LReqName:=LR.ReadStringText; LWantReply:=LR.ReadBoolean; if LReqName=SSH_REQ_EXEC then begin if LWantReply then ReplyPayload(ChannelReplyPayload(FClientChannelId, True)); LW:=TsshWriter.Create(64); try LW.PutByte(SSH_MSG_CHANNEL_DATA); LW.PutUInt32(FClientChannelId); LW.PutStringBytes(FSc^.StdOut1); ReplyPayload(LW.ToBytes); finally LW.Free; end; LW:=TsshWriter.Create(32); try LW.PutByte(SSH_MSG_CHANNEL_REQUEST); LW.PutUInt32(FClientChannelId); LW.PutStringText(SSH_REQ_EXIT_STATUS); LW.PutBoolean(True); LW.PutUInt32(FSc^.ExitCode); ReplyPayload(LW.ToBytes); finally LW.Free; end; ReplyPayload(ClosePayload(FClientChannelId)); end else if LWantReply then ReplyPayload(ChannelReplyPayload(FClientChannelId, False)); finally LR.Free; end; end;
+      SSH_MSG_CHANNEL_REQUEST: begin LR:=TsshReader.Create(LMsg); try LR.ReadByte; LR.ReadUInt32; LReqName:=LR.ReadStringText; LWantReply:=LR.ReadBoolean; if LReqName=SSH_REQ_EXEC then begin if LWantReply then ReplyPayload(ChannelReplyPayload(FClientChannelId, True)); LW:=TsshWriter.Create(64); try LW.PutByte(SSH_MSG_CHANNEL_DATA); LW.PutUInt32(FClientChannelId); LW.PutStringBytes(FSc^.StdOut1); ReplyPayload(LW.ToBytes); finally LW.Free; end; LW:=TsshWriter.Create(32); try LW.PutByte(SSH_MSG_CHANNEL_REQUEST); LW.PutUInt32(FClientChannelId); LW.PutStringText(SSH_REQ_EXIT_STATUS); LW.PutBoolean(True); LW.PutUInt32(FSc^.ExitCode); ReplyPayload(LW.ToBytes); finally LW.Free; end; ReplyPayload(ClosePayload(FClientChannelId)); end else if LReqName=SSH_REQ_SUBSYSTEM then begin if LWantReply then ReplyPayload(ChannelReplyPayload(FClientChannelId, True)); try LReqName:=LR.ReadStringText; except LReqName:=''; end; if LReqName='sftp' then FIsSftp:=True; end else if LWantReply then ReplyPayload(ChannelReplyPayload(FClientChannelId, False)); finally LR.Free; end; end;
+      SSH_MSG_CHANNEL_DATA: begin if FIsSftp then begin LR:=TsshReader.Create(LMsg); try LR.ReadByte; LR.ReadUInt32; LNeedFwd:=LR.ReadStringBytes; finally LR.Free; end; HandleSftpOuter(LNeedFwd); end; end;
       SSH_MSG_GLOBAL_REQUEST: ReplyPayload(SingleBytePayloadOf(SSH_MSG_REQUEST_FAILURE));
     end; end;
 end;
+procedure TSshLoopServer.HandleSftpOuter(const AOuter:TBytes);
+var LR:TsshReader; LType:Byte; LId:UInt32; LPath:string; LW:TsshWriter; LInner, LOuter:TBytes; LHandle:TBytes;
+begin
+  if Length(AOuter)<5 then Exit;
+  LR:=TsshReader.Create(AOuter); try LR.ReadUInt32; // outer length prefix
+  LType:=LR.ReadByte; LId:=LR.ReadUInt32; // keep LType and LId
+  // Peek remaining without consuming fully - we will re-parse per type
+  LR.Free; LR:=TsshReader.Create(AOuter); LR.ReadUInt32; LR.ReadByte; LR.ReadUInt32;
+  case LType of
+    SSH_FXP_INIT: begin LW:=TsshWriter.Create(8); try LW.PutByte(SSH_FXP_VERSION); LW.PutUInt32(3); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_REALPATH: begin LPath:=LR.ReadStringText; LW:=TsshWriter.Create(64); try LW.PutByte(SSH_FXP_NAME); LW.PutUInt32(LId); LW.PutUInt32(1); LW.PutStringText('/resolved'+LPath); LW.PutStringText('drwxr-xr-x'); PutAttrs(LW, Default(TSftpAttrs)); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_STAT, SSH_FXP_LSTAT: begin LPath:=LR.ReadStringText; if Pos('notfound',LPath)>0 then begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_FXP_STATUS); LW.PutUInt32(LId); LW.PutUInt32(SSH_FX_NO_SUCH_FILE); LW.PutStringText('not found'); LW.PutStringText('en'); LInner:=LW.ToBytes; finally LW.Free; end; end else begin LW:=TsshWriter.Create(64); try LW.PutByte(SSH_FXP_ATTRS); LW.PutUInt32(LId); PutAttrs(LW, AttrsWithSizeAndPerms(1234,$81A4)); LInner:=LW.ToBytes; finally LW.Free; end; end; end;
+    SSH_FXP_OPENDIR: begin LR.ReadStringText; LW:=TsshWriter.Create(16); try LHandle:=BytesOf('hdl1'); LW.PutByte(SSH_FXP_HANDLE); LW.PutUInt32(LId); LW.PutStringBytes(LHandle); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_READDIR: begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_FXP_STATUS); LW.PutUInt32(LId); LW.PutUInt32(SSH_FX_EOF); LW.PutStringText(''); LW.PutStringText('en'); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_OPEN: begin LPath:=LR.ReadStringText; LR.ReadUInt32; try ReadAttrs(LR); except end; LW:=TsshWriter.Create(16); try LHandle:=BytesOf('hdl1'); LW.PutByte(SSH_FXP_HANDLE); LW.PutUInt32(LId); LW.PutStringBytes(LHandle); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_READ: begin LR.ReadStringBytes; LR.ReadUInt64; LR.ReadUInt32; // handle, off, len
+                    LW:=TsshWriter.Create(16); try LW.PutByte(SSH_FXP_DATA); LW.PutUInt32(LId); LW.PutStringBytes(BytesOf('hello sftp via proxy')); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    SSH_FXP_WRITE, SSH_FXP_CLOSE, SSH_FXP_REMOVE, SSH_FXP_MKDIR, SSH_FXP_RMDIR, SSH_FXP_RENAME: begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_FXP_STATUS); LW.PutUInt32(LId); LW.PutUInt32(SSH_FX_OK); LW.PutStringText(''); LW.PutStringText('en'); LInner:=LW.ToBytes; finally LW.Free; end; end;
+    else begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_FXP_STATUS); LW.PutUInt32(LId); LW.PutUInt32(SSH_FX_OK); LW.PutStringText(''); LW.PutStringText('en'); LInner:=LW.ToBytes; finally LW.Free; end; end;
+  end; finally LR.Free; end;
+  // wrap inner with 4-byte length outer then as CHANNEL_DATA
+  LW:=TsshWriter.Create(4+Length(LInner)); try LW.PutUInt32(UInt32(Length(LInner))); LW.PutRaw(LInner); LOuter:=LW.ToBytes; finally LW.Free; end;
+  LW:=TsshWriter.Create(16+Length(LOuter)); try LW.PutByte(SSH_MSG_CHANNEL_DATA); LW.PutUInt32(FClientChannelId); LW.PutUInt32(UInt32(Length(LOuter))); LW.PutRaw(LOuter); ReplyPayload(LW.ToBytes); finally LW.Free; end;
+end;
+
 procedure TSshLoopServer.Run; begin try Handshake; if not FSc^.Failed then ServeApp; except on E:Exception do Fail(E.Message+' '+E.ClassName); end; FSc^.Done:=True; end;
 
 function RunProxyScenario(const AHostSeedJump, AHostSeedTarget: TBytes; out AResult: TSshExecResult; out AErrKind: TSshErrorKind): Boolean;
@@ -272,12 +297,33 @@ begin
   end;
 end;
 
+function RunSftpViaProxy(out AErr:string):Boolean;
+var LJumpClient, LJumpServer: TMemPipeEnd; LJumpShared: PPipeShared; LFwdA, LFwdB: TMemPipeEnd; LFwdShared: PPipeShared; LScJump, LScTarget: PSshLoopServerScenario; TJ, TT: TThread; JO, TO2: TSshConnectOptions; S1, S2: ISshSession; FS: ISshFileSystem; A: TSftpAttrs; P: string;
+begin
+  Result:=False; AErr:='';
+  New(LScJump); LScJump^:=Default(TSshLoopServerScenario); LScJump^.HostSeed:=PatternBytes($66,32); LScJump^.IsJump:=True;
+  New(LScTarget); LScTarget^:=Default(TSshLoopServerScenario); LScTarget^.HostSeed:=PatternBytes($77,32); LScTarget^.AcceptUser:='u'; LScTarget^.AcceptPassword:='p'; LScTarget^.StdOut1:=StringToBytes('x'); LScTarget^.ExitCode:=0; LScTarget^.IsJump:=False;
+  MakePipe(LJumpClient, LJumpServer, LJumpShared); MakePipe(LFwdA, LFwdB, LFwdShared); LScJump^.FwdPipe:=LFwdA;
+  TT:=TThread.CreateAnonymousThread(procedure var Srv:TSshLoopServer; begin Srv:=TSshLoopServer.Create(LFwdB, LScTarget); try Srv.Run; finally Srv.Free; end; end);
+  TJ:=TThread.CreateAnonymousThread(procedure var Srv:TSshLoopServer; begin Srv:=TSshLoopServer.Create(LJumpServer, LScJump); try Srv.Run; finally Srv.Free; end; end);
+  TT.FreeOnTerminate:=False; TJ.FreeOnTerminate:=False; TT.Start; TJ.Start; Sleep(20);
+  try JO:=DefaultSshConnectOptions('jump'); JO.Host:='jump'; JO.User:='u'; JO.Password:='p'; JO.ExecTimeoutMs:=5000;
+      TO2:=DefaultSshConnectOptions('target'); TO2.Host:='target'; TO2.User:='u'; TO2.Password:='p'; TO2.ExecTimeoutMs:=5000;
+      try S1:=SshConnectOn(LJumpClient as IReadWriteCloser, JO); S2:=SshConnectViaJumpOn(S1, TO2);
+          FS:=S2.OpenFileSystem;
+          P:=FS.RealPath('/foo'); if P<>'/resolved/foo' then begin AErr:='realpath '+P; Exit; end;
+          A:=FS.Stat('/file'); if A.Size<>1234 then begin AErr:='stat size '+IntToStr(A.Size); Exit; end;
+          S2.Close; S1.Close; FS:=nil; S2:=nil; S1:=nil; Result:=True;
+      except on E:ESSHError do AErr:=E.Message+' kind='+IntToStr(Ord(E.Kind)); on E:Exception do AErr:=E.Message; end;
+  finally try LFwdA.Close; except end; try LFwdB.Close; except end; try LJumpClient.Close; except end; try LJumpServer.Close; except end; TJ.WaitFor; TT.WaitFor; TJ.Free; TT.Free; Finalize(LScJump^); Dispose(LScJump); Finalize(LScTarget^); Dispose(LScTarget); DoneCriticalSection(LJumpShared^.Lock); Dispose(LJumpShared); DoneCriticalSection(LFwdShared^.Lock); Dispose(LFwdShared); end;
+end;
+
 var GRunner:TSuiteRunner; GSuite:TTestSuite;
 begin
   GSuite:=TTestSuite.Create('ssh proxyjump');
   GSuite.Test('proxyjump exec via jump', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($11,32), PatternBytes($33,32), R, K); CheckTrue(Ok,'proxy exec ok kind='+IntToStr(Ord(K))+' out='+BytesToText(R.StdOut)); CheckEqual(0, R.ExitCode,'exit'); end);
   GSuite.Test('proxyjump double exec reuse', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($44,32), PatternBytes($55,32), R, K); CheckTrue(Ok,'second proxy ok'); CheckEqual(0, R.ExitCode,'exit2'); Ok:=RunProxyScenario(PatternBytes($46,32), PatternBytes($57,32), R, K); CheckTrue(Ok,'third proxy ok'); end);
-  GSuite.Test('proxyjump sftp over jump exec check', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($66,32), PatternBytes($77,32), R, K); CheckTrue(Ok,'sftp-jump exec ok'); CheckEqual('via-jump-ok', BytesToText(R.StdOut),'out'); end);
+  GSuite.Test('proxyjump sftp via jump', procedure var Ok:Boolean; var Err:string; begin Ok:=RunSftpViaProxy(Err); CheckTrue(Ok,'sftp via proxy '+Err); end);
   GSuite.Test('direct-tcpip raw open not crash', procedure var K:TSshErrorKind; Ok:Boolean; begin Ok:=RunDirectTcpipRaw(K); CheckTrue(Ok,'raw ok'); end);
   GSuite.Test('single-hop regression still 0', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($77,32), PatternBytes($88,32), R, K); CheckTrue(Ok,'single-hop via proxy regression proxy still ok'); end);
   GRunner:=TSuiteRunner.Create('nextpas.core.ssh.proxyjump');
