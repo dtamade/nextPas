@@ -131,8 +131,8 @@ begin FLock.Enter; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTrack
 function TTimelineImpl.AddClip(ATrack: TTimelineTrackId; const ABuffer: TAudioBuffer; AStartFrame: UInt64; AGain: Single; APan: Single): TTimelineClipId;
 var tidx, cidx: Integer; tmp: TTimelineClip; i: Integer;
 begin
-  if not ABuffer.Format.IsValid then raise EAudioTimelineError.Create('AddClip: invalid buffer');
-  if ABuffer.Format.SampleFormat<>sfF32 then raise EAudioTimelineError.Create('AddClip: must be sfF32');
+  if not AudioIsValidBuffer(ABuffer, True) then
+    raise EAudioTimelineError.Create('AddClip: invalid buffer (F32 required)');
   if (ABuffer.Format.SampleRate<>FFormat.SampleRate) or (ABuffer.Format.Channels<>FFormat.Channels) then raise EAudioTimelineError.Create('AddClip: format mismatch');
   if AGain<0 then AGain:=0 else if AGain>4 then AGain:=4;
   if APan<-1 then APan:=-1 else if APan>1 then APan:=1;
