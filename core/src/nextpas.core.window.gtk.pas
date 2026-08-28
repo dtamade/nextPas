@@ -293,7 +293,7 @@ type
     function IsOnMainThread: Boolean; inline;
   protected
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     procedure Show;
     procedure Hide;
     function IsVisible: Boolean;
@@ -301,8 +301,8 @@ type
     procedure SetTitle(const ATitle: string);
     function GetTitle: string;
     procedure SetBounds(AWidth, AHeight: Integer);
-    function GetWidth: Integer;
-    function GetHeight: Integer;
+    function GetWidth: Integer; inline;
+    function GetHeight: Integer; inline;
     procedure SetResizable(AResizable: Boolean);
     procedure Maximize;
     procedure Unmaximize;
@@ -618,7 +618,7 @@ begin
   DoDispatch(E);
 end;
 
-function TWindowGtk.GetWidth: Integer;
+function TWindowGtk.GetWidth: Integer; inline;
 begin
   RequireOpen;
   if FHandle <> nil then
@@ -627,7 +627,7 @@ begin
     Result := FWidth;
 end;
 
-function TWindowGtk.GetHeight: Integer;
+function TWindowGtk.GetHeight: Integer; inline;
 begin
   RequireOpen;
   if FHandle <> nil then

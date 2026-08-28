@@ -262,8 +262,8 @@ type
     procedure SetTitle(const ATitle: string);
     function GetTitle: string;
     procedure SetBounds(AWidth, AHeight: Integer);
-    function GetWidth: Integer;
-    function GetHeight: Integer;
+    function GetWidth: Integer; inline;
+    function GetHeight: Integer; inline;
     procedure SetResizable(AResizable: Boolean);
     procedure Maximize;
     procedure Unmaximize;
@@ -456,7 +456,7 @@ begin
   DoDispatch(E);
 end;
 
-function TWindowWin32.GetWidth: Integer;
+function TWindowWin32.GetWidth: Integer; inline;
 var
   R: RECT;
 begin
@@ -464,7 +464,7 @@ begin
   if GetClientRect(FHandle, @R) then Result := R.right - R.left else Result := FWidth;
 end;
 
-function TWindowWin32.GetHeight: Integer;
+function TWindowWin32.GetHeight: Integer; inline;
 var
   R: RECT;
 begin

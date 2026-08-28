@@ -202,8 +202,8 @@ type
     procedure SetTitle(const ATitle: string);
     function GetTitle: string;
     procedure SetBounds(AWidth, AHeight: Integer);
-    function GetWidth: Integer;
-    function GetHeight: Integer;
+    function GetWidth: Integer; inline;
+    function GetHeight: Integer; inline;
     procedure SetResizable(AResizable: Boolean);
     procedure Maximize;
     procedure Unmaximize;
@@ -325,10 +325,10 @@ begin
   DoDispatch(E);
 end;
 
-function TWindowCocoa.GetWidth: Integer;
+function TWindowCocoa.GetWidth: Integer; inline;
 begin RequireOpen; Result := FWidth; end;
 
-function TWindowCocoa.GetHeight: Integer;
+function TWindowCocoa.GetHeight: Integer; inline;
 begin RequireOpen; Result := FHeight; end;
 
 procedure TWindowCocoa.SetResizable(AResizable: Boolean);
