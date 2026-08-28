@@ -32,6 +32,9 @@ function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
+function BytesToString(const ABytes: TBytes): string; inline;
+function StringToBytes(const AText: string): TBytes; inline;
+
 implementation
 
 uses
@@ -221,6 +224,20 @@ end;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean;
 begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
+end;
+
+function BytesToString(const ABytes: TBytes): string; inline;
+begin
+  SetLength(Result, Length(ABytes));
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
+end;
+
+function StringToBytes(const AText: string): TBytes; inline;
+begin
+  SetLength(Result, Length(AText));
+  if Length(AText) > 0 then
+    Move(AText[1], Result[0], Length(AText));
 end;
 
 end.
