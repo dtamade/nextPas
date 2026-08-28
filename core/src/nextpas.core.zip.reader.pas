@@ -122,6 +122,8 @@ type
     FMaxOutputSize: SizeUInt;
     FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
+    FScratch: TBytes;          { 几何复用缓冲，供 central extra 零分配解析（4096→2×） }
+    procedure EnsureScratch(ANeeded: SizeUInt);
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
     procedure NeedRange(APos, ALen: Int64; const AWhat: string);
@@ -336,8 +338,7 @@ var
   LDosTime, LDosDate: Word;
   LCrc, LExtAttrs: LongWord;
   LCSize, LUSize, LLho: UInt64;
-  LNameBytes: TBytes;
-  LExtraBytes: TBytes;
+  LNamePtr, LExtraPtr: PByte;
   LAesVersion, LAesVendor, LAesRealMethod: Word;
   LAesStrength: Byte;
   LHasAes: Boolean;
@@ -362,15 +363,15 @@ begin
   NeedRangeIn(AC, Int64(AC.Position),
     Int64(LNameLen) + LExtraLen + LCommentFieldLen, 'central entry body');
 
-  LNameBytes := nil;
+  LNamePtr := nil;
   if LNameLen > 0 then
-    LNameBytes := AC.ReadBytes(LNameLen);
+    LNamePtr := AC.ReadSpan(LNameLen);
 
-  LExtraBytes := nil;
+  LExtraPtr := nil;
   if LExtraLen > 0 then
-    LExtraBytes := AC.ReadBytes(LExtraLen);
-  DecodeCentralExtra(LExtraBytes, LUSize, LCSize, LLho, LHasAes,
-    LAesVersion, LAesVendor, LAesRealMethod, LAesStrength);
+    LExtraPtr := AC.ReadSpan(LExtraLen);
+  DecodeCentralExtraBuf(LExtraPtr, SizeUInt(LExtraLen), LUSize, LCSize, LLho,
+    LHasAes, LAesVersion, LAesVendor, LAesRealMethod, LAesStrength);
   if (LUSize = UInt64($FFFFFFFF)) or (LCSize = UInt64($FFFFFFFF)) or
      (LLho = UInt64($FFFFFFFF)) then
     raise EParseError.Create('zip: missing Zip64 extra field');
@@ -380,7 +381,7 @@ begin
   if LNameLen > 0 then
   begin
     SetLength(AE.Name, LNameLen);
-    Move(LNameBytes[0], PChar(AE.Name)^, SizeUInt(LNameLen));
+    Move(LNamePtr^, PChar(AE.Name)^, SizeUInt(LNameLen));
   end;
 
   { 加密条目：wire 方法 99，真实压缩方法与强度取自 0x9901 extra。
@@ -419,7 +420,7 @@ begin
   AE.ModTimeUnixSec := UnixFromDosDateTime(LDosDate, LDosTime);
   AE.LocalHeaderOffset := LLho;
   AE.IsDirectory :=
-    ((LNameLen > 0) and (LNameBytes[LNameLen - 1] = Ord('/'))) or
+    ((LNameLen > 0) and (LNamePtr[LNameLen - 1] = Ord('/'))) or
     (((LExtAttrs shr 16) and $F000) = $4000);
   AE.ExternalAttrs := LExtAttrs;
   AE.IsSymlink :=
@@ -461,6 +462,28 @@ begin
   FMaxTotalOutputSize := AMaxTotalOutput;
   FPassword := APassword;
   ParseCentralDirectory;
+end;
+
+{ 几何复用缓冲：4096 起步，翻倍至满足 ANeeded，无逐条目扩容 }
+procedure TZipReaderImpl.EnsureScratch(ANeeded: SizeUInt);
+var
+  LCap: SizeUInt;
+begin
+  if SizeUInt(Length(FScratch)) >= ANeeded then
+    Exit;
+  LCap := SizeUInt(Length(FScratch));
+  if LCap = 0 then
+    LCap := 4096;
+  while LCap < ANeeded do
+  begin
+    if LCap > High(SizeUInt) div 2 then
+    begin
+      LCap := ANeeded;
+      Break;
+    end;
+    LCap := LCap * 2;
+  end;
+  SetLength(FScratch, LCap);
 end;
 
 { 区间 [APos, APos+ALen) 必须落在缓冲区内，否则结构视为截断损坏 }
