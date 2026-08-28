@@ -63,6 +63,7 @@ type
     function EntryByNameIgnoreCase(const AName: string): TSevenZEntryInfo;
     function GetIsEmpty: Boolean;
     function GetEntries: TSevenZEntryInfoArray;
+    procedure ClearCache;
     function Extract(AIndex: Integer): TBytes;
     function ExtractTo(const AWriter: IWriter; AIndex: Integer): Int64;
     function OpenStream(AIndex: Integer): IStream;
@@ -645,10 +646,11 @@ var
 begin
   if Length(A) <> Length(B) then Exit(False);
   for LI := 1 to Length(A) do
+  begin
     if (Ord(A[LI]) > 127) or (Ord(B[LI]) > 127) then
       Exit(LowerCase(A) = LowerCase(B));
-  for LI := 1 to Length(A) do
     if AsciiLower(A[LI]) <> AsciiLower(B[LI]) then Exit(False);
+  end;
   Result := True;
 end;
 
@@ -729,6 +731,12 @@ begin
   SetLength(Result, Length(FEntries));
   for LI := 0 to High(FEntries) do
     Result[LI] := FEntries[LI];
+end;
+
+procedure TSevenZReaderImpl.ClearCache;
+begin
+  FCacheIdx[0] := -1; FCacheIdx[1] := -1;
+  FCacheData[0] := nil; FCacheData[1] := nil;
 end;
 
 function TSevenZReaderImpl.Extract(AIndex: Integer): TBytes;

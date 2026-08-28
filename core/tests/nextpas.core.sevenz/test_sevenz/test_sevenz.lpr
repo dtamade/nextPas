@@ -2974,6 +2974,49 @@ begin
   try LR.EntryByNameIgnoreCase('missing.txt'); Fail('missing ignore should raise'); except on E: EArgumentError do ; end;
 end;
 
+procedure TestReaderNonAsciiIgnoreCase;
+var LW: ISevenZWriter; LR: ISevenZReader; Info: TSevenZEntryInfo;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('München.TXT', BytesOf([$01]));
+  LW.AddFile('naïve.txt', BytesOf([$02]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  CheckEqual(Int64(0), Int64(LR.FindIgnoreCase('münchen.txt')), 'nonascii münchen lower ascii');
+  CheckEqual(Int64(-1), Int64(LR.FindIgnoreCase('MÜNCHEN.TXT')), 'nonascii münchen upper not folded');
+  Check(not LR.ContainsIgnoreCase('NAÏVE.TXT'), 'nonascii naive upper not folded');
+  Check(LR.TryGetEntryIgnoreCase('naïve.txt', Info), 'nonascii tryget exact');
+  CheckEqual('naïve.txt', Info.Name, 'nonascii tryget name');
+  CheckEqual(Int64(-1), Int64(LR.FindIgnoreCase('missing-ä.txt')), 'nonascii miss');
+end;
+
+procedure TestReaderClearCache;
+var LW: ISevenZWriter; LR: ISevenZReader; LA, LB, LGot: TBytes;
+begin
+  LA := RepeatedText(7, 400); LB := RepeatedText(11, 400);
+  LW := TSevenZWriterImpl.Create;
+  LW.SetFolderLimits(0, 1);
+  LW.AddFile('a.bin', LA);
+  LW.AddFile('b.bin', LB);
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Check(SameBytes(LR.Extract(0), LA), 'clearcache a1');
+  LR.ClearCache;
+  Check(SameBytes(LR.Extract(0), LA), 'clearcache a2 after clear');
+  Check(SameBytes(LR.Extract(1), LB), 'clearcache b after clear');
+  LR.ClearCache;
+  LR.ClearCache; // idempotent
+  Check(not LR.IsEmpty, 'clearcache not empty');
+end;
+
+procedure TestReaderEmptyIgnoreCaseEdge;
+var LW: ISevenZWriter; LR: ISevenZReader;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  CheckEqual(Int64(-1), Int64(LR.FindIgnoreCase('')), 'empty find ignore -1');
+  Check(not LR.ContainsIgnoreCase('anything'), 'empty contains ignore false');
+  Check(not LR.ContainsIgnoreCase(''), 'empty contains ignore empty false');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3140,6 +3183,9 @@ begin
   T.Test('reader contains ignore case', @TestReaderContainsIgnoreCase);
   T.Test('reader try get entry ignore case', @TestReaderTryGetEntryIgnoreCase);
   T.Test('reader entry by name ignore case', @TestReaderEntryByNameIgnoreCase);
+  T.Test('reader non ascii ignore case', @TestReaderNonAsciiIgnoreCase);
+  T.Test('reader clear cache', @TestReaderClearCache);
+  T.Test('reader empty ignore case edge', @TestReaderEmptyIgnoreCaseEdge);
 
   if not T.Run then Halt(1);
 end.
