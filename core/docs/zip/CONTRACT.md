@@ -44,6 +44,7 @@
 | `StreamOutputTo(IWriter)` | 绑定流式输出端：分块排空已暂存字节，此后逐条目透传（内存上界为单条目压缩尺寸）；仅允许绑定一次，重复绑定 raise；绑定后 `Finish` 拒绝，终结经 `FinishTo(同一 sink)` |
 | `FinishTo(IWriter): UInt64` | 终结并把完整归档直写 sink，返回写入总字节数；未绑定时自动绑定。产出与缓冲式 `Finish` 字节级一致；nil sink / 异源 sink / 未关闭条目流 raise |
 | `EntryCount` | 已添加条目数 |
+| `Reserve(ACapacity)` | 预分配条目容量（几何扩容一次性到位，无重分配；0 空操作，<0 `EArgumentError`，Finish 后 `EInvalidOperationError`） |
 | `Finish: TBytes` | 终结并返回完整归档；此后任何添加/再次 Finish raise |
 
 ### 1.4 读器方法
