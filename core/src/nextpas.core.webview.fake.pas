@@ -115,6 +115,7 @@ type
     FReloadCount: Integer;
     FStopCount: Integer;
     FHistory: array of string;
+    FHistoryCount: Integer;
     FHistIdx: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
     FOnNavStartedCount: Integer;
@@ -141,6 +142,7 @@ type
     procedure GrowOnReady; inline;
     procedure GrowOnScaleChanged; inline;
     procedure GrowQueue; inline;
+    procedure GrowHistory; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -657,6 +659,7 @@ begin
   FAssets := LAssets;
   FDroppedEmits := 0;
   FNavigateCount := 0;
+  FHistoryCount := 0;
   FHistIdx := -1;
   SetLength(GLiveWindows, Length(GLiveWindows) + 1);
   GLiveWindows[High(GLiveWindows)] := Self;
@@ -764,6 +767,12 @@ begin
   end;
 end;
 
+procedure TFakeWebview.GrowHistory; inline;
+begin
+  if FHistoryCount = Length(FHistory) then
+    SetLength(FHistory, WebviewGrowCapacity(Length(FHistory)));
+end;
+
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
@@ -782,10 +791,19 @@ begin
 end;
 
 procedure TFakeWebview.PushHistory(const AUrl: string);
+var
+  I: Integer;
 begin
-  SetLength(FHistory, FHistIdx + 2);
-  FHistory[FHistIdx + 1] := AUrl;
-  FHistIdx := FHistIdx + 1;
+  if FHistIdx + 1 < FHistoryCount then
+  begin
+    for I := FHistIdx + 2 to FHistoryCount - 1 do
+      FHistory[I] := '';
+    FHistoryCount := FHistIdx + 1;
+  end;
+  GrowHistory;
+  FHistory[FHistoryCount] := AUrl;
+  Inc(FHistoryCount);
+  FHistIdx := FHistoryCount - 1;
 end;
 
 procedure TFakeWebview.FireReadyHandlers;
@@ -1062,13 +1080,13 @@ end;
 function TFakeWebview.CanGoForward: Boolean;
 begin
   RequireOpen;
-  Result := FHistIdx < High(FHistory);
+  Result := FHistIdx + 1 < FHistoryCount;
 end;
 
 function TFakeWebview.GoForward: Boolean;
 begin
   RequireOpen;
-  if FHistIdx >= High(FHistory) then
+  if FHistIdx + 1 >= FHistoryCount then
     Exit(False);
   FHistIdx := FHistIdx + 1;
   Result := True;
