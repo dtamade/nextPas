@@ -61,7 +61,7 @@ Bytes := W.Finish;
 Fluent builder — same bytes, higher-level shape:
 
 ```pascal
-Bytes := ZipBuilder
+Bytes := ZipBuilder()
   .Reserve(2000)
   .Add('a.txt', Data)
   .AddDeflate('b.bin', Data)
@@ -69,14 +69,17 @@ Bytes := ZipBuilder
   .AddDirectory('assets')
   .Finish;
 
-Bytes := ZipBuilderForceZip64.Add('large.bin', Data).Finish;  // forced Zip64
+Bytes := ZipBuilderForceZip64().Add('large.bin', Data).Finish;  // forced Zip64
+var B: IZipBuilder;
+B := ZipBuilder();
 Cw := TCollectWriter.Create;
-N := ZipBuilder.StreamTo(Cw).Add('a.txt', Data).FinishTo(Cw); // piped, byte-identical
-// streaming entry via builder straight to writer kernel
-var S: ICompressWriter;
-S := ZipBuilder.AddEntryStream('big.bin', DefaultZipAddOptions);
+N := B.StreamTo(Cw).Add('a.txt', Data).FinishTo(Cw); // piped, byte-identical
+// streaming entry via builder straight to writer kernel (INV-15)
+var B2: IZipBuilder; var S: ICompressWriter;
+B2 := ZipBuilder();
+S := B2.AddEntryStream('big.bin', DefaultZipAddOptions);
 S.Write(Data[0], Length(Data)); S.Close;
-Bytes := ZipBuilder.Finish; // same INV-15 descriptor semantics
+Bytes := B2.Finish; // same descriptor semantics
 ```
 
 `Finish` returns the whole archive; further calls raise. `Reserve` is a pure

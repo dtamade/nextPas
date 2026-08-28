@@ -90,7 +90,7 @@ begin
 
   { Fluent Builder：同等字节的高级感链式门面 }
   WriteFile(LOut + '.builder.zip',
-    ZipBuilder
+    ZipBuilder()
       .Reserve(4)
       .Add('hello-builder.txt', StrBytes('builder hello'))
       .AddDeflate('assets/data.bin', LData)
