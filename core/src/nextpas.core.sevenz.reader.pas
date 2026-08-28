@@ -80,6 +80,7 @@ type
     function FindByPrefix(const APrefix: string): Integer;
     function FindBySuffix(const ASuffix: string): Integer;
     function EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
+    function FindByGlob(const APattern: string): Integer;
     function Extract(AIndex: Integer): TBytes;
     function ExtractTo(const AWriter: IWriter; AIndex: Integer): Int64;
     function OpenStream(AIndex: Integer): IStream;
@@ -981,27 +982,37 @@ begin
 end;
 
 function TSevenZReaderImpl.FindByPrefix(const APrefix: string): Integer;
-var Arr: TSevenZEntryInfoArray;
+var LStart, LIdx: Integer; LLen: SizeInt;
 begin
+  Result := -1;
   if APrefix='' then
   begin
     if Length(FEntries)>0 then Exit(0) else Exit(-1);
   end;
-  Arr := EntriesByPrefix(APrefix);
-  if Length(Arr)=0 then Exit(-1);
-  Result := Find(Arr[0].Name);
+  if Length(FSortedIdx)=0 then Exit(-1);
+  LLen := Length(APrefix);
+  LStart := LowerBoundPrefix(APrefix);
+  if LStart >= Length(FSortedIdx) then Exit(-1);
+  LIdx := FSortedIdx[LStart];
+  if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name,1,LLen) <> APrefix) then Exit(-1);
+  Result := LIdx;
 end;
 
 function TSevenZReaderImpl.FindBySuffix(const ASuffix: string): Integer;
-var Arr: TSevenZEntryInfoArray;
+var LStart, LIdx: Integer; LLen: SizeInt;
 begin
+  Result := -1;
   if ASuffix='' then
   begin
     if Length(FEntries)>0 then Exit(0) else Exit(-1);
   end;
-  Arr := EntriesBySuffix(ASuffix);
-  if Length(Arr)=0 then Exit(-1);
-  Result := Find(Arr[0].Name);
+  if Length(FSortedIdxRev)=0 then Exit(-1);
+  LLen := Length(ASuffix);
+  LStart := LowerBoundSuffix(ASuffix);
+  if LStart >= Length(FSortedIdxRev) then Exit(-1);
+  LIdx := FSortedIdxRev[LStart];
+  if (Length(FEntries[LIdx].Name) < LLen) or (Copy(FEntries[LIdx].Name, Length(FEntries[LIdx].Name)-LLen+1, LLen) <> ASuffix) then Exit(-1);
+  Result := LIdx;
 end;
 
 function MatchesGlob(const AName, APattern: string): Boolean;
@@ -1033,15 +1044,48 @@ begin
 end;
 
 function TSevenZReaderImpl.EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
-var LI, LCnt: Integer;
+var LI, LCnt, LStarCount: Integer;
+    LHasQ: Boolean;
+    LPrefix, LSuffix: string;
+    LIdx: Integer;
 begin
   Result := nil;
   if APattern='' then Exit;
-  // fast dispatch for prefix* and *suffix and * (all)
   if APattern='*' then
   begin
     Result := GetEntries;
     Exit;
+  end;
+  LHasQ := Pos('?', APattern) > 0;
+  if not LHasQ then
+  begin
+    LStarCount := 0;
+    for LI:=1 to Length(APattern) do if APattern[LI]='*' then Inc(LStarCount);
+    if LStarCount=0 then
+    begin
+      LIdx := Find(APattern);
+      if LIdx>=0 then
+      begin
+        SetLength(Result,1);
+        Result[0] := FEntries[LIdx];
+      end;
+      Exit;
+    end;
+    if LStarCount=1 then
+    begin
+      if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') then
+      begin
+        LPrefix := Copy(APattern,1,Length(APattern)-1);
+        Result := EntriesByPrefix(LPrefix);
+        Exit;
+      end;
+      if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') then
+      begin
+        LSuffix := Copy(APattern,2,Length(APattern)-1);
+        Result := EntriesBySuffix(LSuffix);
+        Exit;
+      end;
+    end;
   end;
   LCnt := 0;
   for LI:=0 to High(FEntries) do
@@ -1054,6 +1098,28 @@ begin
       Result[LCnt] := FEntries[LI];
       Inc(LCnt);
     end;
+end;
+
+function TSevenZReaderImpl.FindByGlob(const APattern: string): Integer;
+var LI: Integer;
+begin
+  Result := -1;
+  if APattern='' then Exit(-1);
+  if APattern='*' then
+  begin
+    if Length(FEntries)>0 then Exit(0) else Exit(-1);
+  end;
+  if Pos('?', APattern)=0 then
+  begin
+    if Pos('*', APattern)=0 then Exit(Find(APattern));
+    if (APattern[Length(APattern)]='*') and (APattern[1]<>'*') and (Pos('*', Copy(APattern,1,Length(APattern)-1))=0) then
+      Exit(FindByPrefix(Copy(APattern,1,Length(APattern)-1)));
+    if (APattern[1]='*') and (APattern[Length(APattern)]<>'*') and (Pos('*', Copy(APattern,2,Length(APattern)-1))=0) then
+      Exit(FindBySuffix(Copy(APattern,2,Length(APattern)-1)));
+  end;
+  for LI:=0 to High(FEntries) do
+    if MatchesGlob(FEntries[LI].Name, APattern) then Exit(LI);
+  Result := -1;
 end;
 
 function TSevenZReaderImpl.Extract(AIndex: Integer): TBytes;

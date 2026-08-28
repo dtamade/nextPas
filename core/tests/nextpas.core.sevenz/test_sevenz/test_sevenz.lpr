@@ -3196,6 +3196,52 @@ begin
   CheckEqual(Int64(0), Int64(Length(Arr)), 'glob * empty archive');
 end;
 
+procedure TestFindByGlob;
+var LW: ISevenZWriter; LR: ISevenZReader;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('docs/a.txt', BytesOf([$01]));
+  LW.AddFile('docs/b.txt', BytesOf([$02]));
+  LW.AddFile('src/x.pas', BytesOf([$03]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Check(LR.FindByGlob('docs/*.txt') >= 0, 'findbyglob docs star');
+  CheckEqual(Int64(-1), Int64(LR.FindByGlob('*.missing')), 'findbyglob miss');
+  Check(LR.FindByGlob('*') >= 0, 'findbyglob star');
+  CheckEqual(Int64(-1), Int64(LR.FindByGlob('')), 'findbyglob empty');
+  CheckEqual(Int64(0), Int64(LR.FindByGlob('docs/a.txt')), 'findbyglob exact');
+end;
+
+procedure TestGlobDispatch;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('b.txt', BytesOf([$02]));
+  LW.AddFile('c.pas', BytesOf([$03]));
+  LW.AddFile('docs/d.txt', BytesOf([$04]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByGlob('*.txt');
+  CheckEqual(Int64(3), Int64(Length(Arr)), 'dispatch suffix txt via suffix index');
+  Arr := LR.EntriesByGlob('docs/*');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'dispatch prefix docs via prefix index');
+  Arr := LR.EntriesByGlob('a.txt');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'dispatch exact via hash');
+  CheckEqual('a.txt', Arr[0].Name, 'dispatch exact name');
+end;
+
+procedure TestFindByPrefixNoAlloc;
+var LW: ISevenZWriter; LR: ISevenZReader; LI: Integer;
+begin
+  LW := TSevenZWriterImpl.Create;
+  for LI:=0 to 99 do LW.AddFile(Format('p_%3.3d.txt', [LI]), BytesOf([Byte(LI)]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  CheckEqual(Int64(0), Int64(LR.FindByPrefix('p_000')), 'noprefix 0');
+  CheckEqual(Int64(50), Int64(LR.FindByPrefix('p_050')), 'noprefix 50');
+  CheckEqual(Int64(-1), Int64(LR.FindByPrefix('missing_')), 'noprefix miss');
+  CheckEqual(Int64(0), Int64(LR.FindBySuffix('.txt')), 'nosuffix txt');
+  CheckEqual(Int64(-1), Int64(LR.FindBySuffix('.pas')), 'nosuffix miss');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3374,6 +3420,9 @@ begin
   T.Test('find by prefix suffix', @TestFindByPrefixSuffix);
   T.Test('entries by glob', @TestEntriesByGlob);
   T.Test('glob edge', @TestGlobEdge);
+  T.Test('find by glob', @TestFindByGlob);
+  T.Test('glob dispatch', @TestGlobDispatch);
+  T.Test('find by prefix noalloc', @TestFindByPrefixNoAlloc);
 
   if not T.Run then Halt(1);
 end.

@@ -1174,6 +1174,151 @@ begin
   Check(LMock.Calls=2, 'X-Early-Data:0 retry count 2');
 end;
 
+procedure TestHttpClientEarlyDataAutoMark;
+var LReq: IHttpRequest;
+begin
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataIsEarlyRequest(LReq), 'GET initially not early');
+  Check(HttpEarlyDataAutoMarkIfIdempotent(LReq), 'GET auto-mark true');
+  Check(HttpEarlyDataIsEarlyRequest(LReq), 'GET after auto-mark early');
+  Check(not HttpEarlyDataAutoMarkIfIdempotent(LReq), 'second auto-mark false (already early)');
+  LReq := THttpRequest.Create(hmPost, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataAutoMarkIfIdempotent(LReq), 'POST auto-mark false (non-idempotent)');
+  Check(not HttpEarlyDataIsEarlyRequest(LReq), 'POST still not early');
+  LReq := THttpRequest.Create(hmPut, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Check(not HttpEarlyDataAutoMarkIfIdempotent(LReq), 'PUT without key not auto');
+  LReq.Headers.SetHeader('Idempotency-Key', 'auto1');
+  Check(HttpEarlyDataAutoMarkIfIdempotent(LReq), 'PUT with key auto-mark');
+  Check(HttpEarlyDataIsEarlyRequest(LReq), 'PUT with key early');
+end;
+
+procedure TestHttpClientEarlyDataAutoRetryLive;
+var LInner: IHttpClient; LClient: IHttpClient; LReq: IHttpRequest; LResp: IHttpResponse; LMock: TMockTransport; LHOk: IHttpHeaders;
+begin
+  // Auto client: GET without manual Mark should still retry on 425
+  LHOk := NewHttpHeaders;
+  LHOk.SetHeader('content-type', 'text/plain');
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LHOk, 'ok')
+  ]);
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataAutoRetryClient(LInner);
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  // deliberately NOT calling HttpEarlyDataMarkRequest
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_OK, 'auto GET retry returns 200 without manual mark');
+  Check(LMock.Calls=2, 'auto GET mock called twice');
+  // POST auto should NOT mark and thus not retry
+  LHOk := NewHttpHeaders;
+  LHOk.SetHeader('content-type', 'text/plain');
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LHOk, 'ok')
+  ]);
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataAutoRetryClient(LInner);
+  LReq := THttpRequest.Create(hmPost, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_TOO_EARLY, 'auto POST not retried');
+  Check(LMock.Calls=1, 'auto POST mock once');
+  // X-Early-Data:0 with auto mark
+  LHOk := NewHttpHeaders;
+  LHOk.SetHeader('content-type', 'text/plain');
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LHOk, 'ok')
+  ]);
+  LMock.FResponses[0].Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataAutoRetryClient(LInner);
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LResp := LClient.Send(LReq);
+  Check(LResp.StatusCode=HTTP_STATUS_OK, 'auto X-Early-Data:0 retry');
+  Check(LMock.Calls=2, 'auto X-Early-Data:0 retry count 2');
+  // With* propagation: WithHeader should keep autoMark
+  LHOk := NewHttpHeaders;
+  LHOk.SetHeader('content-type', 'text/plain');
+  LMock := TMockTransport.Create([
+    NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil),
+    NewResponse(HTTP_STATUS_OK, LHOk, 'ok')
+  ]);
+  LInner := THttpClient.Create(LMock as IHttpTransport, THttpClientOptions.Default);
+  LClient := NewEarlyDataAutoRetryClient(LInner).WithHeader('X-Custom', 'v');
+  LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LResp := LClient.Send(LReq);
+  Check(LMock.Calls=2, 'WithHeader preserves autoMark');
+end;
+
+procedure TestAdaptiveObserver;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession; Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; LMax: Cardinal;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(64, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $11);
+    SetLength(Early, 100); FillChar(Early[0], 100, $22);
+    // initial: no stats -> limit base 16384, 100 accepted
+    LMax := Obs.GetAdaptiveMaxEarlyData;
+    Check(LMax=16384, 'initial adaptive 16384');
+    Check(Obs.Decide(Id, Early, Sess, True)=edAccept, 'adaptive initial accept 100');
+    Check(Obs.ShouldAccept(Id, Early, Sess, True)=False, 'adaptive second replay (same fp)');
+    // fresh fp with large payload > limit: force throttling via config Base 1000
+    Cfg := DefaultTlsPasAdaptiveLimitConfig;
+    Cfg.BaseLimit := 50; Cfg.MinLimit := 50; Cfg.MaxLimit := 16384;
+    Obs.UpdateConfig(Cfg);
+    LMax := Obs.GetAdaptiveMaxEarlyData;
+    Check(LMax=50, 'config base 50');
+    SetLength(Early, 60); FillChar(Early[0], 60, $33);
+    Check(Obs.Decide(Id, Early, Sess, True)=edRejectPolicy, 'adaptive reject >50');
+    // small payload within 50 passes
+    SetLength(Early, 40); FillChar(Early[0], 40, $44);
+    Check(Obs.Decide(Id, Early, Sess, True)=edAccept, 'adaptive accept 40 within 50');
+    // simulate high reject rate: create many policy rejects (large) to push rate >0.1
+    SetLength(Early, 60);
+    Obs.Decide(Id, Early, Sess, True); // reject
+    Obs.Decide(Id, Early, Sess, True); // reject again (different fp? need new Id)
+    SetLength(Id, 4); Id[0]:=$99;
+    SetLength(Early, 60); Obs.Decide(Id, Early, Sess, True);
+    // after rejects, adaptive limit should halve base 50 -> but Min is 50 so stays 50
+    LMax := Obs.GetAdaptiveMaxEarlyData;
+    Check(LMax>=50, 'adaptive after rejects >= min');
+    // Clear resets stats -> limit returns to base
+    Obs.Clear;
+    LMax := Obs.GetAdaptiveMaxEarlyData;
+    Check(LMax=50, 'after clear base 50');
+  finally Obs.Free; end;
+end;
+
+procedure TestAdaptiveDecidePure;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasServerObserver; Cfg: TTlsPasAdaptiveLimitConfig; Sess: TTlsPasResumptionSession; Id, Early: TBytes; D: TTlsPasEarlyDataDecision;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasServerObserver.Create(Store);
+  try
+    Cfg := DefaultTlsPasAdaptiveLimitConfig;
+    Cfg.BaseLimit := 100; Cfg.MinLimit := 50; Cfg.MaxLimit := 100;
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $55);
+    SetLength(Early, 90); FillChar(Early[0], 90, $66);
+    D := TlsPasAdaptiveDecideEarlyData(Obs, Cfg, Id, Early, Sess, True);
+    Check(D=edAccept, 'pure adaptive accept 90 <100');
+    SetLength(Early, 110); FillChar(Early[0], 110, $66);
+    D := TlsPasAdaptiveDecideEarlyData(Obs, Cfg, Id, Early, Sess, True);
+    Check(D=edRejectPolicy, 'pure adaptive reject 110 >100');
+    // nil observer still checks limit before policy: if >100 reject, else delegate nil -> accept (if policy ok)
+    SetLength(Early, 90);
+    D := TlsPasAdaptiveDecideEarlyData(nil, Cfg, Id, Early, Sess, True);
+    Check(D=edAccept, 'nil observer accept within limit');
+    SetLength(Early, 110);
+    D := TlsPasAdaptiveDecideEarlyData(nil, Cfg, Id, Early, Sess, True);
+    Check(D=edRejectPolicy, 'nil observer reject over limit');
+  finally Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1224,6 +1369,10 @@ begin
   GSuite.Test('HttpClientEarlyDataShouldRetry', @TestHttpClientEarlyDataShouldRetry);
   GSuite.Test('HttpClientEarlyDataMarkAndClone', @TestHttpClientEarlyDataMarkAndClone);
   GSuite.Test('HttpClientEarlyDataRetryClientLive', @TestHttpClientEarlyDataRetryClientLive);
+  GSuite.Test('HttpClientEarlyDataAutoMark', @TestHttpClientEarlyDataAutoMark);
+  GSuite.Test('HttpClientEarlyDataAutoRetryLive', @TestHttpClientEarlyDataAutoRetryLive);
+  GSuite.Test('AdaptiveObserver', @TestAdaptiveObserver);
+  GSuite.Test('AdaptiveDecidePure', @TestAdaptiveDecidePure);
   if not GSuite.Run then
     Halt(1);
 end.

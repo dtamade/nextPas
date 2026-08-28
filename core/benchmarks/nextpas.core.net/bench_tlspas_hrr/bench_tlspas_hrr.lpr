@@ -260,12 +260,27 @@ var
   GAdaptiveConfig: TTlsPasAdaptiveLimitConfig;
   GAdaptiveServerStats: TTlsPasServerStats;
   GAdaptiveReplayStats: TAsyncTlsPasReplayStats;
+  GAdaptiveObserver: TAsyncTlsPasAdaptiveObserver;
 
 procedure BenchAdaptiveLimit(aIters: Int64);
 var I: Int64; L: Cardinal;
 begin
   for I := 1 to aIters do
     L := TlsPasComputeAdaptiveMaxEarlyData(GAdaptiveServerStats, GAdaptiveReplayStats, GAdaptiveConfig);
+end;
+
+procedure BenchAdaptiveObserverDecide(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision;
+begin
+  for I := 1 to aIters do
+    D := GAdaptiveObserver.Decide(GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
+procedure BenchAdaptiveObserverMax(aIters: Int64);
+var I: Int64; L: Cardinal;
+begin
+  for I := 1 to aIters do
+    L := GAdaptiveObserver.GetAdaptiveMaxEarlyData;
 end;
 
 procedure BenchHeaderValue(aIters: Int64);
@@ -365,6 +380,30 @@ begin
   for I := 1 to aIters do L := HttpEarlyDataCloneWithoutEarlyData(GClientEarlyReq);
 end;
 
+var
+  GClientEarlyReqNotMarked: IHttpRequest;
+
+procedure BenchClientEarlyAutoMark(aIters: Int64);
+var I: Int64; LReq: IHttpRequest; L: Boolean;
+begin
+  for I := 1 to aIters do
+  begin
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+    L := HttpEarlyDataAutoMarkIfIdempotent(LReq);
+  end;
+end;
+
+procedure BenchClientEarlyAutoRetryPath(aIters: Int64);
+var I: Int64; LReq: IHttpRequest; LResp: IHttpResponse; L: Boolean;
+begin
+  for I := 1 to aIters do
+  begin
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+    HttpEarlyDataAutoMarkIfIdempotent(LReq);
+    L := HttpEarlyDataShouldRetry(LReq, GClientEarlyResp425);
+  end;
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -403,6 +442,7 @@ begin
   GAdaptiveConfig := DefaultTlsPasAdaptiveLimitConfig;
   GAdaptiveServerStats := Default(TTlsPasServerStats);
   GAdaptiveReplayStats := Default(TAsyncTlsPasReplayStats);
+  GAdaptiveObserver := TAsyncTlsPasAdaptiveObserver.Create(GReplayStore, GAdaptiveConfig);
   // HTTP middleware fixtures
   GHttpReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   (GHttpReqEarly as IHttpRequestWithEarlyData).SetWasEarlyData(True);
@@ -412,6 +452,7 @@ begin
   // Client early-data fixtures
   GClientEarlyReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   HttpEarlyDataMarkRequest(GClientEarlyReq);
+  GClientEarlyReqNotMarked := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   GClientEarlyResp425 := NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0 := NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0.Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
@@ -452,6 +493,8 @@ begin
     .AddLoop('ObserverDecide (wrap+count)', @BenchObserverDecide)
     .AddLoop('FormatReplayStats', @BenchFormatReplayStats)
     .AddLoop('AdaptiveMaxEarlyData', @BenchAdaptiveLimit)
+    .AddLoop('AdaptiveObserver Decide', @BenchAdaptiveObserverDecide)
+    .AddLoop('AdaptiveObserver GetMax', @BenchAdaptiveObserverMax)
     .AddLoop('HeaderValue (X-Early-Data)', @BenchHeaderValue)
     .AddLoop('HttpEarlyData header (decision)', @BenchHttpEarlyDataHeader)
     .AddLoop('HttpEarlyData from stream nil', @BenchHttpEarlyDataStream)
@@ -461,6 +504,8 @@ begin
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
     .AddLoop('ClientEarly CloneWithoutEarly', @BenchClientEarlyClone)
+    .AddLoop('ClientEarly AutoMark', @BenchClientEarlyAutoMark)
+    .AddLoop('ClientEarly AutoRetryPath', @BenchClientEarlyAutoRetryPath)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;
