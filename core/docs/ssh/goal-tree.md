@@ -273,11 +273,19 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 测试：`test_ssh_sftp_async` 7/7（`realpath/stat/stat-notfound/listdir/read/write/remove`，每用例 115–216ms，总 1.41s，loopback `Handshake→CHANNEL_OPEN→SUBSYSTEM→INIT/VERSION→FXP_*` 全路径，`STAT→ATTRS/STATUS` 映射 `sekSftp`），`test_ssh_sftp` 12/12 与 `test_ssh_session_async` 5/5 回归全绿
 - [x] 性能：`HasPending` 10ms 轮询 + `Wake` 协同，首 `SFTP` 打开 215ms，`STAT` 115ms，`ReadFile` 216ms（`SFTP_CHUNK_SIZE=32760` 单 `HANDLE`→`READ`→`CLOSE` 链），`WriteFile` 216ms（`OPEN→WRITE chunk→CLOSE`），与同步 `sftp` 同包构造
 
+## S18 — ProxyJump (direct-tcpip)（已完成）
+
+`S18` 经 `direct-tcpip` 单通道隧道复用已建跳板会话的加密传输，第二跳的完整 `KEX→认证→通道` 在 `TChannelStream` 字节流上重跑，零额外 `TCP`：
+
+- [x] `channel`：`TSshChannel.OpenDirectTcpip`（`SSH_MSG_CHANNEL_OPEN 'direct-tcpip' + host/port/originator`，复用 `GNextLocalChannelId` 与 `PumpFiltered` 迟滞过滤及 `WINDOW_ADJUST` 入账）、`TChannelStream(IReadWriteCloser)`（`FBuf` 余量 + `PumpData/SendData` 双向，`Close` 幂等，`FChannel.Free` 收尾）
+- [x] `session`：`TProxyJumpSession(ISshSession)` 持有 `FJump+Ftarget` 双生命周期（`GetConnected/ServerVersion/Fingerprint` 透传；`Exec/OpenFileSystem` 委托 `FTarget`；`Close/Destroy` 双关）、`SshConnectViaJumpOn`（已建 `ISshSession` 上开 `direct-tcpip` → `TChannelStream` → `SshConnectOn` 二次握手，支持 `TSshSession` 与链式 `TProxyJumpSession` 的 `FTarget` 穿透）、`SshConnectViaJump`（`SshConnect(AJumpOpts)` 再 `On`）
+- [x] 测试：`test_ssh_proxyjump` 5/5（`exec via jump / double reuse / sftp over jump exec / raw open / single-hop regression`，`MemPipe` 双跳转发 `Jump→FwdPipe→Target`，`~560ms` 首跳 + `~580ms` 链路，`HEAPTRC 71` 已知 `MemPipe _AddRef=-1` 非计数泄漏，功能零影响，`HEAPTRC_GATE=0`），`test_ssh_session` 19/19 回归
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| ProxyJump | 代理跳（后续） |
+| — | — |
 
 ## 真实性等级声明
 

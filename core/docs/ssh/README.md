@@ -80,9 +80,9 @@ nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析（ed25519 / 
 nextpas.core.ssh.auth.pas            ← userauth 载荷构造/解析（probe `hasSig=false` + `PK_OK` / signed）
 nextpas.core.ssh.compress.pas        ← 压缩：有状态 `zlib`/`zlib@openssh.com`（`ISshCompressor` 双 `z_stream`，`Z_SYNC_FLUSH`，1 MiB 防 bomb）
 nextpas.core.ssh.agent.pas           ← ssh-agent 协议客户端（Unix socket 长度前缀帧，List/Sign）
-nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem）
+nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem / `direct-tcpip` + `TChannelStream` 字节流）
 nextpas.core.ssh.channel.async.pas   ← 异步通道（exec `TAsyncExecRunner` + `TAsyncSftpChannel` 复用窗口/低水位回补）
-nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活）
+nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活，`ProxyJump` 经 `direct-tcpip` 复用 `TChannelStream`）
 nextpas.core.ssh.session.async.pas   ← 异步会话（`AsyncTcpDial(RFC8305)` + 状态机握手/认证，复用 cipher/kex/hostkey/compress，`Compress` 同语义）
 nextpas.core.ssh.transport.async.pas ← 异步传输（复用 cipher/compress，`Protect`/`Unprotect` 事件化）
 nextpas.core.ssh.sftp.pas            ← SFTP v3 客户端（ISshFileSystem 门面，同步 `TSshChannelWire`）
@@ -105,6 +105,7 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_compress
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_session
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_agent
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump
 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
 ```
 
