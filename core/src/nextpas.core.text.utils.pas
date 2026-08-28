@@ -3,7 +3,8 @@ unit nextpas.core.text.utils;
 {$I nextpas.core.settings.inc}
 
 {** 2026-08-29 验证锚点：PadLeft/PadRight 单分配 loop（规避 FPC inline+字面量 Move 缺陷）、
-    NormalizeLowerTrim 单源（db.factory 唯一复用）、Lower/Upper Byte 区间、CopyStrToBuf Move；
+    NormalizeLowerTrim 单源（db.factory 唯一复用）、Lower/Upper Byte 区间、CopyStrToBuf Move、
+    StrToIntDef 零分配 inline（去 Trim 拷贝，单遍空白+符号+数字扫描，含 ±2^63 边界）；
     配套 bench_kv 10（validate 0 allocs）与 test_text 33 heaptrc0 见 benchmarks.md 验证锚点。 *}
 
 interface
@@ -216,15 +217,34 @@ begin
   end;
 end;
 
-function StrToIntDef(const S: string; ADefault: Int64): Int64;
+function StrToIntDef(const S: string; ADefault: Int64): Int64; inline;
 var
-  LCode: Integer;
-  LTrimmed: string;
+  L, R, I: SizeInt;
+  LNeg: Boolean;
+  LVal: UInt64;
+  LDigit: Integer;
 begin
-  LTrimmed := Trim(S);
-  Val(LTrimmed, Result, LCode);
-  if LCode <> 0 then
-    Result := ADefault;
+  L := 1;
+  R := Length(S);
+  while (L <= R) and (S[L] <= ' ') do Inc(L);
+  while (R >= L) and (S[R] <= ' ') do Dec(R);
+  if L > R then Exit(ADefault);
+  LNeg := False;
+  I := L;
+  if S[I] = '-' then begin LNeg := True; Inc(I); end
+  else if S[I] = '+' then Inc(I);
+  if I > R then Exit(ADefault);
+  LVal := 0;
+  for I := I to R do
+  begin
+    LDigit := Ord(S[I]) - 48;
+    if (LDigit < 0) or (LDigit > 9) then Exit(ADefault);
+    if LVal > High(UInt64) div 10 then Exit(ADefault);
+    LVal := LVal * 10 + UInt64(LDigit);
+    if not LNeg and (LVal > UInt64(High(Int64))) then Exit(ADefault);
+    if LNeg and (LVal > UInt64(High(Int64)) + 1) then Exit(ADefault);
+  end;
+  if LNeg then Result := -Int64(LVal) else Result := Int64(LVal);
 end;
 
 function BoolToStr(AValue: Boolean; const ATrueStr: string; const AFalseStr: string): string;
