@@ -31,6 +31,10 @@ function RawDeflateMessageCompress(const AData: TBytes;
 function RawDeflateMessageDecompress(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes;
 
+{ 7z Deflate coder: raw DEFLATE (-15) without zlib header, Z_FINISH terminated }
+function DeflateRawCompress(const AData: TBytes;
+  const ALevel: TCompressionLevel = clDefault): TBytes;
+
 implementation
 
 uses
@@ -748,6 +752,47 @@ begin
     SetLength(Result, LOutLen);
   finally
     inflateEnd(LStream);
+  end;
+end;
+
+function DeflateRawCompress(const AData: TBytes;
+  const ALevel: TCompressionLevel): TBytes;
+var
+  LStream: z_stream;
+  LOut: TBytes;
+  LOutLen, LCapacity: SizeUInt;
+  LRet: Int32;
+  LAvailOut: LongWord;
+  LInput: pBytef;
+  LEmpty: Byte;
+begin
+  FillChar(LStream, SizeOf(LStream), 0);
+  if deflateInit2(LStream, LevelToZlib(ALevel), Z_DEFLATED, -15, 8,
+    Z_DEFAULT_STRATEGY) <> Z_OK then
+    raise EIOError.Create('raw 7z deflateInit2 failed');
+  try
+    if Length(AData) = 0 then begin LEmpty:=0; LInput:=pBytef(@LEmpty); LStream.avail_in:=0; end
+    else begin LInput:=pBytef(@AData[0]); LStream.avail_in:=ZlibInputSize(SizeUInt(Length(AData))); end;
+    LStream.next_in:=LInput;
+    LCapacity:=SizeUInt(Length(AData)) + 64;
+    if LCapacity<64 then LCapacity:=64;
+    SetLength(LOut, LCapacity);
+    LOutLen:=0;
+    repeat
+      if LOutLen>=LCapacity then begin if LCapacity>High(SizeUInt) div 2 then LCapacity:=LCapacity+65536 else LCapacity:=LCapacity*2; SetLength(LOut, LCapacity); end;
+      LStream.next_out:=@LOut[LOutLen];
+      LStream.avail_out:=ZlibAvailChunk(LCapacity-LOutLen);
+      LAvailOut:=LStream.avail_out;
+      LRet:=deflate(LStream, Z_FINISH);
+      if (LRet<>Z_OK) and (LRet<>Z_STREAM_END) and (LRet<>Z_BUF_ERROR) then
+        raise EIOError.Create('raw 7z deflate failed ('+IntToStr(LRet)+')');
+      LOutLen:=LOutLen+SizeUInt(LAvailOut-LStream.avail_out);
+      if LRet=Z_STREAM_END then Break;
+    until LStream.avail_out<>0;
+    SetLength(LOut, LOutLen);
+    Result:=LOut;
+  finally
+    deflateEnd(LStream);
   end;
 end;
 
