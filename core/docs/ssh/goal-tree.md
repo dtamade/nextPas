@@ -290,12 +290,21 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 测试：`proxyjump sftp via jump` 升级为真实 `SFTP` 回环（`S2.OpenFileSystem → RealPath('/foo')→'/resolved/foo' / Stat('/file')→1234 / IsRegular`，`734ms` 含二次握手 + `INIT`，`5/5`，`test_ssh_session 19/19 / sftp async 7/7` 回归）
 - [x] 复用度：`SFTP` 包构造/解析与 `sftp.pas` 同源，`direct-tcpip` 窗口/低水位与 `channel` 同构，零新依赖
 
+## S20 — ProxyJump 性能基线与 Async 展望（已完成）
+
+`S18/S19` 的同步 `ProxyJump` 已完整（含 `SFTP via jump`），`S20` 以真实测量固化基线并明确 `Async` 为下一性能优化点：
+
+- [x] `bench_ssh_proxyjump` 真实测量：`TLoopThread` 双跳 `MemPipe`（`S18/S19` 同构 `TSshLoopServer` + `ServeJumpForward` 轮询 `50ms` 超时 + `5ms` 间隙），50 次 `chacha20-poly1305 + password`，`TLoopThread` 显式线程类（去 `CreateAnonymousThread` 竞态），`HEAPTRC_GATE=0`
+- [x] 基线：单跳 p50 `5ms` / p95 `8ms` / avg `5.1ms`，双跳 p50 `431ms` / p95 `441ms` / avg `432.7ms`，额外开销 p50 `426ms` / avg `427.6ms`（二次 `KEX`/`USERAUTH` + `CHANNEL_DATA` 隧道轮询转发，双跳仍 `PASS` < `600ms` 预算，`test_ssh_proxyjump` 5/5 回环 `exec 569ms / sftp 734ms` 同构）
+- [x] 复用度：`bench` 复用 `test_ssh_proxyjump` 的 `TMemPipe`/`TSshLoopServer`/`TLoopThread` 同源，零新依赖，`SortQ/p50/p95/avg` 统计与 `sftp async` 同口径
+- [x] 文档：`README` 性能基准表更新为实测 `5ms vs 431ms` 并标注轮询开销与 `Async ProxyJump` 优化点，`goal-tree S20` 收口
+- [x] 已知：双跳额外开销主要来自同步轮询转发（`ReadAnyPayloadTimeout(50)` + `Sleep(5)`），`Async ProxyJump`（`TAsyncLoop` 事件化 `direct-tcpip`）将消除轮询，预期降至 ~30ms 量级，已列入下一 slice
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| Async ProxyJump | `TAsyncLoop` 之上的 `direct-tcpip` 事件化（`SshAsyncConnectViaJump`）待后续 slice |
-| 性能基线 | ProxyJump 双跳 vs 单跳时延基线固化 |
+| Async ProxyJump | `TAsyncLoop` 之上的 `direct-tcpip` 事件化（`SshAsyncConnectViaJump`，消除轮询，预期双跳 ~30ms） |
 
 ## 真实性等级声明
 
