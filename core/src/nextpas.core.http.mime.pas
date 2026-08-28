@@ -8,8 +8,8 @@ unit nextpas.core.http.mime;
 
 interface
 
-function HttpMimeFromExt(const AExt: string): string;
-function HttpMimeFromPath(const APath: string): string;
+function HttpMimeFromExt(const AExt: string): string; inline;
+function HttpMimeFromPath(const APath: string): string; inline;
 
 implementation
 
@@ -146,7 +146,7 @@ begin
     FMimeHash[I] := -1;
   for I := 0 to High(MIME_TABLE) do
   begin
-    H := HashMimeNorm(Pointer(PChar(MIME_TABLE[I].Ext)), SizeUInt(Length(MIME_TABLE[I].Ext)));
+    H := HashMimeNorm(Pointer(@MIME_TABLE[I].Ext[1]), SizeUInt(Length(MIME_TABLE[I].Ext)));
     Idx := Integer(H and UInt32(HASH_MASK));
     Probe := 0;
     while (FMimeHash[Idx] <> -1) and (Probe < HASH_SIZE) do
@@ -158,14 +158,14 @@ begin
   end;
 end;
 
-function HttpMimeFromExt(const AExt: string): string;
+function HttpMimeFromExt(const AExt: string): string; inline;
 begin
   if Length(AExt) = 0 then
     Exit('application/octet-stream');
-  Result := LookupBySlice(PChar(AExt), Length(AExt));
+  Result := LookupBySlice(PChar(@AExt[1]), Length(AExt));
 end;
 
-function HttpMimeFromPath(const APath: string): string;
+function HttpMimeFromPath(const APath: string): string; inline;
 var
   LI: SizeInt;
   DotPos: SizeInt;
@@ -185,7 +185,7 @@ begin
   end;
   if DotPos = 0 then
     Exit('application/octet-stream');
-  Result := LookupBySlice(PChar(APath) + DotPos - 1, Length(APath) - DotPos + 1);
+  Result := LookupBySlice(PChar(@APath[DotPos]), Length(APath) - DotPos + 1);
 end;
 
 initialization

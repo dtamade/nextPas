@@ -116,17 +116,35 @@ type
     function FindBySuffix(const ASuffix: string): Integer;
     function EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
     function FindByGlob(const APattern: string): Integer;
+    function EntriesByPrefixIgnoreCase(const APrefix: string): TSevenZEntryInfoArray;
+    function EntriesBySuffixIgnoreCase(const ASuffix: string): TSevenZEntryInfoArray;
+    function FindByPrefixIgnoreCase(const APrefix: string): Integer;
+    function FindBySuffixIgnoreCase(const ASuffix: string): Integer;
+    function EntriesByGlobIgnoreCase(const APattern: string): TSevenZEntryInfoArray;
+    function FindByGlobIgnoreCase(const APattern: string): Integer;
     {** 批量提取：按前缀/后缀/通配匹配的全部条目一次性解压（复用 folder LRU）。
         目录/空文件 Data 为 nil；无匹配返回空数组；损坏抛 ESevenZError *}
+    function ExtractAll: TSevenZExtractedArray;
     function ExtractByPrefix(const APrefix: string): TSevenZExtractedArray;
     function ExtractBySuffix(const ASuffix: string): TSevenZExtractedArray;
     function ExtractByGlob(const APattern: string): TSevenZExtractedArray;
+    function ExtractByPrefixIgnoreCase(const APrefix: string): TSevenZExtractedArray;
+    function ExtractBySuffixIgnoreCase(const ASuffix: string): TSevenZExtractedArray;
+    function ExtractByGlobIgnoreCase(const APattern: string): TSevenZExtractedArray;
     function TryExtractByGlob(const APattern: string; out AExtracted: TSevenZExtractedArray): Boolean;
     function TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     function TryExtractByPrefix(const APrefix: string; out AExtracted: TSevenZExtractedArray): Boolean;
     function TryExtractByPrefixWithError(const APrefix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     function TryExtractBySuffix(const ASuffix: string; out AExtracted: TSevenZExtractedArray): Boolean;
     function TryExtractBySuffixWithError(const ASuffix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractByPrefixIgnoreCase(const APrefix: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractByPrefixIgnoreCaseWithError(const APrefix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractBySuffixIgnoreCase(const ASuffix: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractBySuffixIgnoreCaseWithError(const ASuffix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractByGlobIgnoreCase(const APattern: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractByGlobIgnoreCaseWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractAll(out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractAllWithError(out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     {** 提取文件条目内容并校验 CRC；目录/空文件返回 nil；
         AIndex 越界抛参数错误。重复提取同一 solid 文件夹走缓存 *}
     function Extract(AIndex: Integer): TBytes;

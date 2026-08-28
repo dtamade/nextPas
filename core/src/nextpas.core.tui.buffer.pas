@@ -468,12 +468,66 @@ begin
   if LRemaining > AMaxWidth then LRemaining := AMaxWidth;
   if LRemaining <= 0 then Exit;
 
+  { K112: single-cell fast path — bench_tui SetString.single-cell is 'x' single ascii }
+  if (LHidden = 0) and (ALen = 1) and (LRemaining > 0) then
+  begin
+    LByte := Byte(AStr[0]);
+    if (LByte >= 32) and (LByte < $80) then
+    begin
+      PrepareWriteSpan(LCursor, AY, 1);
+      LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
+      CellSetSymbolAscii(LCP^, AnsiChar(LByte));
+      CellApplyStyle(LCP^, AStyle);
+      Result := 1;
+      Exit;
+    end;
+  end;
+
   LAscii := True;
   for LI := 0 to ALen - 1 do
     if Byte(AStr[LI]) >= $80 then begin LAscii := False; Break; end;
 
   if LAscii then
   begin
+    { K110: uniform ascii bulk fast path — bench_tui SetString.full is StringOfChar('a',100) uniform }
+    if (LHidden = 0) and (ALen > 0) then
+    begin
+      LUniform := True;
+      LFirst := Byte(AStr[0]);
+      if LFirst < 32 then LUniform := False
+      else
+        for LI := 1 to ALen - 1 do
+          if Byte(AStr[LI]) <> LFirst then begin LUniform := False; Break; end;
+      if LUniform then
+      begin
+        LCount := ALen;
+        if LCount > LRemaining then LCount := LRemaining;
+        if LCount > 0 then
+        begin
+          for LX := 0 to LCount - 1 do
+            PrepareWriteSpan(LCursor + LX, AY, 1);
+          LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
+          CellSetSymbolAscii(LCP^, AnsiChar(LFirst));
+          CellApplyStyle(LCP^, AStyle);
+          LI := 1;
+          while LI < LCount do
+          begin
+            if LI * 2 <= LCount then
+            begin
+              Move(LCP^, (LCP + LI)^, LI * SizeOf(TCell));
+              Inc(LI, LI);
+            end
+            else
+            begin
+              Move(LCP^, (LCP + LI)^, (LCount - LI) * SizeOf(TCell));
+              Break;
+            end;
+          end;
+          Result := LCount;
+          Exit;
+        end;
+      end;
+    end;
     for LI := 0 to ALen - 1 do
     begin
       LByte := Byte(AStr[LI]);

@@ -21,6 +21,7 @@ function AdaptiveEarlyDataMiddleware(const AObserver: TAsyncTlsPasAdaptiveObserv
 function HttpAdaptiveEarlyDataIsThrottled(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver): Boolean;
 function HttpAdaptiveEarlyDataHeaderValue(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver): string;
 function HttpAdaptiveEarlyDataMetrics(const AObserver: TAsyncTlsPasAdaptiveObserver): string;
+function HttpAdaptiveEarlyDataLogLine(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver): string;
 
 implementation
 
@@ -58,16 +59,29 @@ end;
 
 function HttpAdaptiveEarlyDataMetrics(const AObserver: TAsyncTlsPasAdaptiveObserver): string;
 var
-  SS: TTlsPasServerStats;
-  RS: TAsyncTlsPasReplayStats;
+  M: TTlsPasAdaptiveMetrics;
 begin
   if AObserver = nil then Exit('adaptive observer nil');
-  SS := AObserver.GetServerStats;
-  RS := AObserver.GetReplayStats;
-  Result := Format('adaptive max=%d %s %s', [
-    Integer(AObserver.GetAdaptiveMaxEarlyData),
-    TlsPasFormatServerStats(SS),
-    TlsPasFormatReplayStats(RS)
+  M := AObserver.GetAdaptiveMetrics;
+  Result := TlsPasFormatAdaptiveMetrics(M);
+end;
+
+function HttpAdaptiveEarlyDataLogLine(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver): string;
+var
+  LEarly, LThrottled: Boolean;
+  LMax: Cardinal;
+  LLen: Int64;
+begin
+  if AObserver = nil then
+    Exit(Format('early=%d throttled=%d max=nil len=%d', [Ord(False), Ord(False), -1]));
+  LEarly := HttpEarlyDataWasEarlyData(AReq);
+  LThrottled := HttpAdaptiveEarlyDataIsThrottled(AReq, AObserver);
+  LMax := AObserver.GetAdaptiveMaxEarlyData;
+  if AReq <> nil then LLen := AReq.ContentLength else LLen := -1;
+  Result := Format('early=%d throttled=%d max=%d len=%d header=%s %s', [
+    Ord(LEarly), Ord(LThrottled), Integer(LMax), Integer(LLen),
+    HttpAdaptiveEarlyDataHeaderValue(AReq, AObserver),
+    TlsPasFormatAdaptiveMetrics(AObserver.GetAdaptiveMetrics)
   ]);
 end;
 

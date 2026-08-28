@@ -311,6 +311,15 @@ function TlsPasComputeAdaptiveMaxEarlyData(const AServerStats: TTlsPasServerStat
 function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecision): string;
 
 type
+  TTlsPasAdaptiveMetrics = record
+    AdaptiveMax: Cardinal;
+    Server: TTlsPasServerStats;
+    Replay: TAsyncTlsPasReplayStats;
+  end;
+
+function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+
+type
   { S20 自适应服务端观察器：基于 Observer 统计动态计算自适应限额并在超限时熔断(RejectPolicy)，
     零额外锁(复用 Observer 锁)，供服务端在 Decide 前自动限流(RejectRate>阈值或 Current>50 限半) }
   TAsyncTlsPasAdaptiveObserver = class
@@ -328,6 +337,7 @@ type
     function GetAdaptiveMaxEarlyData: Cardinal;
     function GetServerStats: TTlsPasServerStats;
     function GetReplayStats: TAsyncTlsPasReplayStats;
+    function GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
     procedure Clear;
     procedure UpdateConfig(const AConfig: TTlsPasAdaptiveLimitConfig);
     property Config: TTlsPasAdaptiveLimitConfig read FConfig;
@@ -1289,6 +1299,22 @@ end;
 function TAsyncTlsPasAdaptiveObserver.GetReplayStats: TAsyncTlsPasReplayStats;
 begin
   Result := FInner.GetReplayStats;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
+begin
+  Result.AdaptiveMax := GetAdaptiveMaxEarlyData;
+  Result.Server := GetServerStats;
+  Result.Replay := GetReplayStats;
+end;
+
+function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+begin
+  Result := Format('adaptive max=%d %s %s', [
+    Integer(AMetrics.AdaptiveMax),
+    TlsPasFormatServerStats(AMetrics.Server),
+    TlsPasFormatReplayStats(AMetrics.Replay)
+  ]);
 end;
 
 procedure TAsyncTlsPasAdaptiveObserver.Clear;

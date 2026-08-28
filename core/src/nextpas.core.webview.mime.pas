@@ -7,14 +7,14 @@ unit nextpas.core.webview.mime;
 
 interface
 
-function GuessWebviewMime(const APath: string): string;
+function GuessWebviewMime(const APath: string): string; inline;
 
 implementation
 
 uses
   nextpas.core.http.mime;
 
-function GuessWebviewMime(const APath: string): string;
+function GuessWebviewMime(const APath: string): string; inline;
 begin
   Result := HttpMimeFromPath(APath);
 end;

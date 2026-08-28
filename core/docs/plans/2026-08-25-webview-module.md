@@ -1,5 +1,7 @@
 # nextpas.core.webview 模块设计（2026-08-25）
 
+> **归档**：本文停在 **S5**（2026-08-25），S6-S44 回溯与 S45+ 前瞻已由 `core/docs/webview/ROADMAP.md`（1.38）承接，本文仅保留 S0-S5 原始决策备查；冲突时以 `CONTRACT.md` 为准。
+
 > 状态：S0 文档阶段（v0.2 深化 + Go/Rust 对标审查完成）。
 > 本文是活动计划；稳定契约在 `core/docs/webview/`
 > （[README](../webview/README.md) / [CONTRACT](../webview/CONTRACT.md) /
