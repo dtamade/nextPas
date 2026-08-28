@@ -37,7 +37,7 @@
 
 **签署（Sign-off）**：`2026-08-29` · `nextpas.core.db 终版 20260829` · 判定：R0-2/R0-3/R1-1 已通过 `test_text 33 + test_db_redis_base 12 + bench_kv 10 + pool 21 + lib-consumer 400对 + hygiene/diff-check 0` 闭环；**R1-R5 正式终版裁定通过**，后续按独立计划演进，不阻塞本次封版校验。
 
-**复核 2026-08-29**：`main 6c0dd4222` 基线上复跑 `test_text 33 / bytes 35 / redis 12 / pool 21 / mysql 7 / git_native 114 heaptrc0` 与 `bench_kv 10 validate 0 allocs`（在册 `129/277/1102 ns`，当前 `123/354/1130 ns` 紧贴在册，0 allocs 稳，`6c0dd` 含 CopyStrToBuf/CStrToStr inline loop + StrToIntDef 双 inline + git.fetch 单次直连 O(n²)→O(n)），`make hygiene pass` / `diff-check 0` / `Trim( 2 行 text.utils 单源 + git Hex/Bytes/fetch 单源`，证据见 `benchmarks.md 验证锚点` 与 `{SCRATCH}`。
+**复核 2026-08-29**：`main 3a23647bd` 基线上复跑 `test_text 33 / bytes 35 / redis 12 / pool 21 / mysql 7 / git_native 114 / time_bucket 7 / multipart 13 heaptrc0` 与 `bench_kv 10 validate 0 allocs`（在册 `129/277/1102 ns`，当前 `123/354/1130 ns` 紧贴在册，0 allocs 稳，`3a23647` 含 time.bucket 单分配 + bytes 单源 + window 3.8 + tlspas P-384），`make hygiene pass` / `diff-check 0` / `Trim( 2 行 text.utils 单源 + git Hex/Bytes/fetch + bytes.ops 单源`，证据见 `benchmarks.md 验证锚点` 与 `{SCRATCH}`。
 
 ## 3. 证据索引
 

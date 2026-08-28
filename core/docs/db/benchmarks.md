@@ -268,8 +268,8 @@ translate_complexity（线性度成立）、batch_insert pg 四路（autocommit
 - 数字漂移 ±15% 内视为环境噪声（共享机器）；跨过阈值先查环境再谈回归。
 - 新增 bench 必须同步扩充本文口径表，缺口径的 bench 视为不存在。
 
-## 验证锚点 2026-08-29 — 同步至 main 6c0dd4222（text Copy/CStr inline loop + StrToIntDef 双 inline + git.fetch BytesConcatMany O(n²)→O(n)）
+## 验证锚点 2026-08-29 — 同步至 main 3a23647bd（perf(time) Digits/TimeBucketKey O(n) + perf(bytes) Bytes↔String 单源化 + window 3.8 + tlspas P-384）
 
-- 聚焦门：`test_text 33` / `test_bytes 35` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` / `test_git_native 114` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`6c0dd` 复跑 33/35/12/21/7/114 绿，含 CopyStrToBuf 字面量回退锁 + git Bytes/Hex 单源 + fetch 单次直连）
+- 聚焦门：`test_text 33` / `test_bytes 35` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` / `test_git_native 114` / `test_time_bucket 7` / `test_multipart 13` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`3a23647` 复跑 33/35/12/21/7/114/7/13 绿，含 time.bucket 单分配 + bytes 单源 + window 3.8）
 - 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，在册 `129/277/1102 ns` 静稳中位，当前 `123/354/1130 ns` 紧贴在册，`0 allocs` 不变量稳，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
-- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行 text.utils 单源` + `git.native Hex/Bytes/fetch 单源`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）
+- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行 text.utils 单源` + `git.native Hex/Bytes/fetch + bytes.ops 单源`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）
