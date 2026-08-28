@@ -4,7 +4,7 @@ program test_text_kv;
     1 空串/空白 2 单对 3 多对空格 4 引号包裹含空格/@/= 5 单双引号
     6 大小写保留 7 空值 8 重复键 9 异常：缺= /空key/未闭合引号
     10 ScanKV vs ParseKV 一致性 11 100 对容积 12 错误消息保真
-    13 分号分隔 14 花括号包裹 15 混合/未闭合花括号
+    13 分号分隔 14 花括号包裹 15 混合/未闭合花括号 16 ValidateKV 零分配
   均为纯函数离线，不依赖 DB。 }
 
 {$I nextpas.core.settings.inc}
@@ -183,6 +183,22 @@ begin
   CheckPairs('x=1;y=2', ['x','1','y','2']);
 end;
 
+procedure TestValidateKV;
+var LErr: string;
+begin
+  Check(ValidateKV('a=1 b=2', LErr), 'valid space');
+  Check(ValidateKV('Driver={DM8 ODBC DRIVER};Server=127.0.0.1', LErr), 'valid brace');
+  Check(ValidateKV('a=1;b=2;c=3', LErr), 'valid semicolon');
+  Check(not ValidateKV('', LErr) and (Pos('empty', LErr)>0), 'empty fails');
+  Check(not ValidateKV('   ;  ', LErr) and (Pos('empty', LErr)>0), 'whitespace only fails');
+  Check(not ValidateKV('key', LErr) and (Pos('malformed', LErr)>0), 'missing = fails');
+  Check(not ValidateKV('=value', LErr) and (Pos('malformed', LErr)>0), 'empty key fails');
+  Check(not ValidateKV('a={unterminated', LErr) and (Pos('unterminated', LErr)>0), 'unterminated brace fails');
+  Check(not ValidateKV('a=''unterminated', LErr) and (Pos('unterminated', LErr)>0), 'unterminated single fails');
+  // parity with ParseKV: same error messages
+  try ParseKV('a={x'); except on E: Exception do Check(Pos('unterminated', E.Message)>0, 'parse vs validate parity'); end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.kv');
   T.Test('empty', @TestEmpty);
@@ -201,5 +217,6 @@ begin
   T.Test('semicolon delimited', @TestSemicolonDelimited);
   T.Test('brace quoted', @TestBraceQuoted);
   T.Test('mixed and unterminated brace', @TestMixedAndUnterminatedBrace);
+  T.Test('validateKV zero-alloc', @TestValidateKV);
   if not T.Run then Halt(1);
 end.
