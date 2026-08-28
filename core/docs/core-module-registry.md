@@ -96,7 +96,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `tui` | L3 | terminal UI framework | yes | L0-L2 | focused-runtime |
 | `validation` | L3 | validation helpers | yes | L0-L2 | draft |
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
-| `webview` | L3 | desktop app shell over system engines (WebKitGTK/WebView2/WKWebView; unified IPC bridge) | yes | L0-L2 plus json owner; platform.dl | draft |
+| `webview` | L3 | desktop app shell over system engines (WebKitGTK/WebView2/WKWebView; unified IPC bridge) | yes | L0-L2 plus json owner; platform.dl | focused-runtime |
 | `window` | L2 | window shell + surface (nextpas.core.window family; first consumer webview/gpu/directui/game888) | yes | L0-L1 plus platform.dl seam | focused-runtime |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |

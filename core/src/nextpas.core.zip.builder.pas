@@ -29,9 +29,15 @@ type
     ['{7B4E9A11-8D2F-4C3A-A1F6-9C2D5E8B0A3F}']
     function Add(const AName: string; const AData: TBytes): IZipBuilder;
     function AddDeflate(const AName: string; const AData: TBytes): IZipBuilder;
+    function AddWithTime(const AName: string; const AData: TBytes;
+      const AModTimeUnixSec: Int64): IZipBuilder;
+    function AddDeflateWithTime(const AName: string; const AData: TBytes;
+      const AModTimeUnixSec: Int64): IZipBuilder;
     function AddWithOptions(const AName: string; const AData: TBytes;
       const AOptions: TZipAddOptions): IZipBuilder;
     function AddDirectory(const AName: string): IZipBuilder;
+    function AddDirectoryWithTime(const AName: string;
+      const AModTimeUnixSec: Int64): IZipBuilder;
     function AddEntryStream(const AName: string;
       const AOptions: TZipAddOptions): ICompressWriter;
     function Reserve(ACapacity: Integer): IZipBuilder;
@@ -56,9 +62,15 @@ type
     constructor Create(const AWriter: IZipWriter);
     function Add(const AName: string; const AData: TBytes): IZipBuilder;
     function AddDeflate(const AName: string; const AData: TBytes): IZipBuilder;
+    function AddWithTime(const AName: string; const AData: TBytes;
+      const AModTimeUnixSec: Int64): IZipBuilder;
+    function AddDeflateWithTime(const AName: string; const AData: TBytes;
+      const AModTimeUnixSec: Int64): IZipBuilder;
     function AddWithOptions(const AName: string; const AData: TBytes;
       const AOptions: TZipAddOptions): IZipBuilder;
     function AddDirectory(const AName: string): IZipBuilder;
+    function AddDirectoryWithTime(const AName: string;
+      const AModTimeUnixSec: Int64): IZipBuilder;
     function AddEntryStream(const AName: string;
       const AOptions: TZipAddOptions): ICompressWriter;
     function Reserve(ACapacity: Integer): IZipBuilder;
@@ -86,6 +98,20 @@ begin
   Result := Self;
 end;
 
+function TZipBuilder.AddWithTime(const AName: string; const AData: TBytes;
+  const AModTimeUnixSec: Int64): IZipBuilder;
+begin
+  FWriter.AddEntryWithTime(AName, AData, AModTimeUnixSec);
+  Result := Self;
+end;
+
+function TZipBuilder.AddDeflateWithTime(const AName: string; const AData: TBytes;
+  const AModTimeUnixSec: Int64): IZipBuilder;
+begin
+  FWriter.AddEntryDeflateWithTime(AName, AData, AModTimeUnixSec);
+  Result := Self;
+end;
+
 function TZipBuilder.AddWithOptions(const AName: string; const AData: TBytes;
   const AOptions: TZipAddOptions): IZipBuilder;
 begin
@@ -96,6 +122,13 @@ end;
 function TZipBuilder.AddDirectory(const AName: string): IZipBuilder;
 begin
   FWriter.AddDirectory(AName);
+  Result := Self;
+end;
+
+function TZipBuilder.AddDirectoryWithTime(const AName: string;
+  const AModTimeUnixSec: Int64): IZipBuilder;
+begin
+  FWriter.AddDirectoryWithTime(AName, AModTimeUnixSec);
   Result := Self;
 end;
 
