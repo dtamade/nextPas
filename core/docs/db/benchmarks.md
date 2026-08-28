@@ -207,7 +207,7 @@ vs 825ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，�
 `Val(LTail,LCode,LCode)` 冗余清理），`ODBC` 分号+花括号
 （`Driver={DM8 ODBC DRIVER};`）同源复用，`DM` 等同形态 DSN 零新增词法
 ——`text.kv` 现为 **MySQL/PG/ODBC/DM 四形态 + factory/redis 零分配**
-统一底座，`bench_text_kv` 为性能锚点（零分配不变量以本表为准，`core/src/nextpas.core.db.*` 家族 `Trim(` 0 行单源，29 门离线基线：26 db + 3 text）。
+统一底座，`bench_text_kv` 为性能锚点（零分配不变量以本表为准，`core/src/nextpas.core.db.*` 家族 `Trim(` 2 行收敛至 `text.utils` 单源——`factory NormalizeLowerTrim` + `redis Trim`，29 门离线基线：26 db + 3 text）。
 
 > **口径显式化**：本表 `bytes` = `TBenchSuite` 的 `bytes_per_op`（见 `build/bench-kv.json`），非 `Length(GSuperLarge)` 实串长度；`GSuperLarge` 实串 `Length≈7383B`（400×`kN=v_x8;` 去尾空格），而 `bytes_per_op 43048B` 为 `bench` 侧统计口径（含框架 `bytes` 计数），二者差异为口径所致，非回归。归一路径：`factory`/`redis` 统一走 `nextpas.core.text.utils.NormalizeLowerTrim` 单源（`core/src/nextpas.core.db.*` 保持 `Trim(` 0 行）。
 
@@ -268,8 +268,8 @@ translate_complexity（线性度成立）、batch_insert pg 四路（autocommit
 - 数字漂移 ±15% 内视为环境噪声（共享机器）；跨过阈值先查环境再谈回归。
 - 新增 bench 必须同步扩充本文口径表，缺口径的 bench 视为不存在。
 
-## 验证锚点 2026-08-29 — 同步至 origin/main e53a4fec5（db 锚点 eae7df2a8）
+## 验证锚点 2026-08-29 — 同步至 main b60771353（db 锚点 769c69cbd，含 redis Trim 单源化）
 
-- 聚焦门：`test_text 33` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`e53a` 复跑 33/12/21/7 绿）
-- 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，`median 126/274/1081 ns` 当前中位，历史 `125/272/1099 ns` 噪声带内，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
-- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim 0 行单源 NormalizeLowerTrim`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）
+- 聚焦门：`test_text 33` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`b607` 复跑 33/12/21/7 绿）
+- 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，在册 `129/277/1102 ns` 静稳中位，当前 `123/273/1074 ns` 紧贴在册，`0 allocs` 不变量稳，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
+- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行收敛至 text.utils 单源——factory NormalizeLowerTrim + redis Trim`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）

@@ -12,6 +12,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.sync,
   nextpas.core.errors,
+  nextpas.core.text.utils,
   nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.net,
@@ -102,16 +103,8 @@ begin
         'invalid port ":' + LTail + '"');
   end;
   begin
-    LSlash := 1;
-    LCode := Length(LHostPart);
-    while (LSlash <= LCode) and (LHostPart[LSlash] <= ' ') do Inc(LSlash);
-    while (LCode >= LSlash) and (LHostPart[LCode] <= ' ') do Dec(LCode);
-    if LSlash > LCode then
-      AOpts.Host := ''
-    else if (LSlash = 1) and (LCode = Length(LHostPart)) then
-      AOpts.Host := LHostPart
-    else
-      AOpts.Host := Copy(LHostPart, LSlash, LCode - LSlash + 1);
+    LHostPart := Trim(LHostPart);
+    AOpts.Host := LHostPart;
   end;
   if AOpts.Host = '' then
     raise EDbError.CreateSimple(dbkRedis, 'empty host');
