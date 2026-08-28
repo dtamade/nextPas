@@ -3017,6 +3017,69 @@ begin
   Check(not LR.ContainsIgnoreCase(''), 'empty contains ignore empty false');
 end;
 
+procedure TestHashIndexCorrectness;
+var LW: ISevenZWriter; LR: ISevenZReader; LI: Integer; LName: string;
+begin
+  LW := TSevenZWriterImpl.Create;
+  for LI:=0 to 199 do
+  begin
+    LName := Format('file_%3.3d.txt', [LI]);
+    LW.AddFile(LName, BytesOf([Byte(LI)]));
+  end;
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  for LI:=0 to 199 do
+  begin
+    LName := Format('file_%3.3d.txt', [LI]);
+    CheckEqual(Int64(LI), Int64(LR.Find(LName)), 'hash find exact '+LName);
+    CheckEqual(Int64(LI), Int64(LR.FindIgnoreCase(LowerCase(LName))), 'hash find ignore '+LName);
+    Check(LR.Contains(LName), 'hash contains '+LName);
+    Check(LR.ContainsIgnoreCase(UpperCase(LName)), 'hash contains ignore '+LName);
+  end;
+  CheckEqual(Int64(-1), Int64(LR.Find('missing.txt')), 'hash miss exact');
+  CheckEqual(Int64(-1), Int64(LR.FindIgnoreCase('missing.txt')), 'hash miss ignore');
+end;
+
+procedure TestEntriesByPrefix;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('docs/a.txt', BytesOf([$01]));
+  LW.AddFile('docs/b.txt', BytesOf([$02]));
+  LW.AddFile('src/main.pas', BytesOf([$03]));
+  LW.AddFile('docs/sub/c.txt', BytesOf([$04]));
+  LW.AddDirectory('docs');
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByPrefix('docs/');
+  CheckEqual(Int64(3), Int64(Length(Arr)), 'prefix docs/');
+  Arr := LR.EntriesByPrefix('src/');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'prefix src/');
+  CheckEqual('src/main.pas', Arr[0].Name, 'prefix src name');
+  Arr := LR.EntriesByPrefix('');
+  CheckEqual(Int64(5), Int64(Length(Arr)), 'prefix empty all');
+  Arr := LR.EntriesByPrefix('missing/');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'prefix miss zero');
+  Arr := LR.EntriesByPrefix('docs/a.txt');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'prefix exact');
+end;
+
+procedure TestDuplicateNameStability;
+var LW: ISevenZWriter; LR: ISevenZReader; LA, LB: TBytes;
+begin
+  // Writer allows duplicate names – reader must keep first index stable and extract slices independent
+  LA := BytesOf([$AA]); LB := BytesOf([$BB,$CC]);
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('dup.txt', LA);
+  LW.AddFile('dup.txt', LB);
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  CheckEqual(Int64(2), Int64(LR.EntryCount), 'dup count');
+  CheckEqual(Int64(0), Int64(LR.Find('dup.txt')), 'dup find first');
+  CheckEqual(Int64(0), Int64(LR.FindIgnoreCase('DUP.TXT')), 'dup find ignore first');
+  Check(SameBytes(LR.Extract(0), LA), 'dup extract 0');
+  Check(SameBytes(LR.Extract(1), LB), 'dup extract 1');
+  CheckEqual(Int64(2), Int64(Length(LR.EntriesByPrefix('dup'))), 'dup prefix both via dup');
+  CheckEqual(Int64(2), Int64(Length(LR.EntriesByPrefix('dup.txt'))), 'dup prefix both');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3186,6 +3249,9 @@ begin
   T.Test('reader non ascii ignore case', @TestReaderNonAsciiIgnoreCase);
   T.Test('reader clear cache', @TestReaderClearCache);
   T.Test('reader empty ignore case edge', @TestReaderEmptyIgnoreCaseEdge);
+  T.Test('hash index correctness 200', @TestHashIndexCorrectness);
+  T.Test('entries by prefix', @TestEntriesByPrefix);
+  T.Test('duplicate name stability', @TestDuplicateNameStability);
 
   if not T.Run then Halt(1);
 end.
