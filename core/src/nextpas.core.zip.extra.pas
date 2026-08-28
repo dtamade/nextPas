@@ -22,6 +22,14 @@ procedure DecodeLocalExtra(const AExtra: TBytes; var AUSize, ACSize: UInt64;
   var AHasAes: Boolean; var AAesVersion, AAesVendor, AAesRealMethod: Word;
   var AAesStrength: Byte);
 
+procedure DecodeCentralExtraBuf(AData: PByte; ALen: SizeUInt; var AUSize, ACSize,
+  ALocalOffset: UInt64; var AHasAes: Boolean; var AAesVersion,
+  AAesVendor, AAesRealMethod: Word; var AAesStrength: Byte);
+
+procedure DecodeLocalExtraBuf(AData: PByte; ALen: SizeUInt; var AUSize, ACSize: UInt64;
+  var AHasAes: Boolean; var AAesVersion, AAesVendor, AAesRealMethod: Word;
+  var AAesStrength: Byte);
+
 function BuildLocalExtra(const AUSize, ACSize: UInt64; ADescriptorOpen,
   ANeedsZip64: Boolean; AAesStrength: Byte; AAesMethod: Word): TBytes;
 function BuildCentralExtra(const AUSize, ACSize, ALocalOffset: UInt64;
@@ -213,6 +221,84 @@ begin
       AHasAes := True;
     end;
     Inc(LPos, 4 + LSize);
+  end;
+end;
+
+procedure DecodeCentralExtraBuf(AData: PByte; ALen: SizeUInt; var AUSize, ACSize,
+  ALocalOffset: UInt64; var AHasAes: Boolean; var AAesVersion,
+  AAesVendor, AAesRealMethod: Word; var AAesStrength: Byte);
+var
+  LPos: SizeUInt;
+  LId, LSize: Word;
+  LUsed: Integer;
+  LNeedUSize, LNeedCSize, LNeedOffset, LSeenZip64: Boolean;
+  function LE16B(AOff: SizeUInt): Word; inline;
+  begin Result := Word(AData[AOff]) or (Word(AData[AOff+1]) shl 8); end;
+  function LE32B(AOff: SizeUInt): LongWord; inline;
+  begin Result := LongWord(AData[AOff]) or (LongWord(AData[AOff+1]) shl 8) or (LongWord(AData[AOff+2]) shl 16) or (LongWord(AData[AOff+3]) shl 24); end;
+  function LE64B(AOff: SizeUInt): UInt64; inline;
+  begin Result := UInt64(LE32B(AOff)) or (UInt64(LE32B(AOff+4)) shl 32); end;
+begin
+  AHasAes := False; AAesVersion:=0; AAesVendor:=0; AAesRealMethod:=0; AAesStrength:=0;
+  LNeedUSize := AUSize = UInt64($FFFFFFFF); LNeedCSize := ACSize = UInt64($FFFFFFFF); LNeedOffset := ALocalOffset = UInt64($FFFFFFFF); LSeenZip64:=False; LPos:=0;
+  if (AData=nil) and (ALen>0) then raise EParseError.Create('zip: malformed extra field');
+  while LPos + 4 <= ALen do
+  begin
+    LId := LE16B(LPos); LSize := LE16B(LPos+2);
+    if LPos + 4 + LSize > ALen then raise EParseError.Create('zip: malformed extra field');
+    if LId = C_ZIP64_EXTRA_ID then
+    begin
+      if LSeenZip64 then raise EParseError.Create('zip: duplicate Zip64 extra field');
+      LSeenZip64:=True; LUsed:=0;
+      if LNeedUSize then begin if LSize - LUsed < 8 then raise EParseError.Create('zip: truncated Zip64 extra field'); AUSize:=LE64B(LPos+4+LUsed); Inc(LUsed,8); end;
+      if LNeedCSize then begin if LSize - LUsed < 8 then raise EParseError.Create('zip: truncated Zip64 extra field'); ACSize:=LE64B(LPos+4+LUsed); Inc(LUsed,8); end;
+      if LNeedOffset then begin if LSize - LUsed < 8 then raise EParseError.Create('zip: truncated Zip64 extra field'); ALocalOffset:=LE64B(LPos+4+LUsed); Inc(LUsed,8); end;
+    end
+    else if LId = C_WINZIP_AES_EXTRA_ID then
+    begin
+      if AHasAes or (LSize <> C_WINZIP_AES_EXTRA_BODY) then raise EParseError.Create('zip: malformed WinZip AES extra field');
+      AAesVersion:=LE16B(LPos+4); AAesVendor:=LE16B(LPos+6); AAesStrength:=AData[LPos+8]; AAesRealMethod:=LE16B(LPos+9);
+      if AAesVendor <> C_WINZIP_AES_VENDOR_LE then raise EParseError.Create('zip: unknown WinZip AES vendor id');
+      AHasAes:=True;
+    end;
+    Inc(LPos, 4+LSize);
+  end;
+end;
+
+procedure DecodeLocalExtraBuf(AData: PByte; ALen: SizeUInt; var AUSize, ACSize: UInt64;
+  var AHasAes: Boolean; var AAesVersion, AAesVendor, AAesRealMethod: Word; var AAesStrength: Byte);
+var
+  LPos: SizeUInt; LId, LSize: Word; LNeedUSize, LNeedCSize, LSeenZip64: Boolean;
+  function LE16B(AOff: SizeUInt): Word; inline;
+  begin Result := Word(AData[AOff]) or (Word(AData[AOff+1]) shl 8); end;
+  function LE32B(AOff: SizeUInt): LongWord; inline;
+  begin Result := LongWord(AData[AOff]) or (LongWord(AData[AOff+1]) shl 8) or (LongWord(AData[AOff+2]) shl 16) or (LongWord(AData[AOff+3]) shl 24); end;
+  function LE64B(AOff: SizeUInt): UInt64; inline;
+  begin Result := UInt64(LE32B(AOff)) or (UInt64(LE32B(AOff+4)) shl 32); end;
+begin
+  AHasAes:=False; AAesVersion:=0; AAesVendor:=0; AAesRealMethod:=0; AAesStrength:=0;
+  LNeedUSize:=AUSize=UInt64($FFFFFFFF); LNeedCSize:=ACSize=UInt64($FFFFFFFF); LSeenZip64:=False; LPos:=0;
+  if (AData=nil) and (ALen>0) then raise EParseError.Create('zip: malformed extra field');
+  while LPos + 4 <= ALen do
+  begin
+    LId:=LE16B(LPos); LSize:=LE16B(LPos+2);
+    if LPos+4+LSize>ALen then raise EParseError.Create('zip: malformed extra field');
+    if LId=C_ZIP64_EXTRA_ID then
+    begin
+      if LSeenZip64 then raise EParseError.Create('zip: duplicate Zip64 extra field');
+      LSeenZip64:=True;
+      if LNeedUSize and LNeedCSize then begin if LSize<16 then raise EParseError.Create('zip: truncated Zip64 extra field'); AUSize:=LE64B(LPos+4); ACSize:=LE64B(LPos+12); end
+      else if LNeedUSize then begin if LSize<8 then raise EParseError.Create('zip: truncated Zip64 extra field'); AUSize:=LE64B(LPos+4); end
+      else if LNeedCSize then begin if LSize<8 then raise EParseError.Create('zip: truncated Zip64 extra field'); ACSize:=LE64B(LPos+4); end;
+    end
+    else if LId=C_WINZIP_AES_EXTRA_ID then
+    begin
+      if AHasAes or (LSize<>C_WINZIP_AES_EXTRA_BODY) then raise EParseError.Create('zip: malformed WinZip AES extra field');
+      AAesVersion:=LE16B(LPos+4); AAesVendor:=LE16B(LPos+6); AAesStrength:=AData[LPos+8]; AAesRealMethod:=LE16B(LPos+9);
+      if AAesVendor<>C_WINZIP_AES_VENDOR_LE then raise EParseError.Create('zip: unknown WinZip AES vendor id');
+      AHasAes:=True;
+    end;
+    Inc(LPos,4+LSize);
   end;
 end;
 
