@@ -41,6 +41,8 @@ type
     FVolume: Single;
     FUnderruns: Int64;
     FViolations: Int64;
+    FScratch: TAudioBuffer;
+    FOut: TAudioBuffer;
     function FindNode(AId: Integer): Integer;
     function FindProcessor(AId: Integer): Integer;
   public
@@ -82,6 +84,10 @@ begin
   FLock := TCriticalSection.Create;
   SetLength(FNodes, 0);
   SetLength(FProcessors, 0);
+  SetLength(FScratch.Data, 1024 * 1024);
+  FScratch.Format := AFormat;
+  SetLength(FOut.Data, 1024 * 1024);
+  FOut.Format := AFormat;
   FNextId := 1;
   FPosition := 0;
   FVolume := 1.0;
@@ -244,13 +250,9 @@ end;
 function TAudioGraph.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
   Needed, I, J: Integer;
-  NodesSnap: array of TGraphNode;
-  ProcsSnap: array of TProcessorSlot;
-  Tmp: TAudioBuffer;
   MixPtr, TmpPtr: PSingle;
   Gain: Single;
-  HasData: Boolean;
-  OutBuf, SwapBuf: TAudioBuffer;
+  HasData, HasProcessor: Boolean;
 begin
   if AFrames <= 0 then Exit(0);
   Needed := AFrames * FFormat.BlockAlign;
@@ -261,17 +263,13 @@ begin
     if AFrames <= 0 then Exit(0);
     Needed := AFrames * FFormat.BlockAlign;
   end;
-  FLock.Enter;
-  try
-    SetLength(NodesSnap, 0);
-    for I := 0 to High(FNodes) do if FNodes[I].Alive then
-    begin SetLength(NodesSnap, Length(NodesSnap)+1); NodesSnap[High(NodesSnap)] := FNodes[I]; end;
-    SetLength(ProcsSnap, 0);
-    for I := 0 to High(FProcessors) do if FProcessors[I].Alive then
-    begin SetLength(ProcsSnap, Length(ProcsSnap)+1); ProcsSnap[High(ProcsSnap)] := FProcessors[I]; end;
-  finally FLock.Leave; end;
-
-  if Length(NodesSnap) = 0 then
+  if (Length(FScratch.Data) < Needed) or (Length(FOut.Data) < Needed) then
+  begin
+    InterlockedExchangeAdd64(FViolations, 1);
+    Exit(0);
+  end;
+  // realtime: iterate nodes directly without lock (snapshot-free)
+  if Length(FNodes) = 0 then
   begin
     FillChar(ABuffer.Data[0], Needed, 0);
     ABuffer.FrameCount := AFrames;
@@ -282,14 +280,15 @@ begin
   FillChar(ABuffer.Data[0], Needed, 0);
   MixPtr := PSingle(@ABuffer.Data[0]);
   HasData := False;
-  SetLength(Tmp.Data, Needed);
-  Tmp.Format := FFormat;
-  Tmp.FrameCount := AFrames;
-  for I := 0 to High(NodesSnap) do
+  FScratch.Format := FFormat;
+  FScratch.FrameCount := AFrames;
+  for I := 0 to High(FNodes) do
   begin
-    Gain := NodesSnap[I].Gain * FVolume;
+    if not FNodes[I].Alive then Continue;
+    if not Assigned(FNodes[I].Source) then Continue;
+    Gain := FNodes[I].Gain * FVolume;
     try
-      J := NodesSnap[I].Source.FillRealtime(Tmp, AFrames);
+      J := FNodes[I].Source.FillRealtime(FScratch, AFrames);
     except
       InterlockedExchangeAdd64(FViolations, 1);
       Continue;
@@ -298,7 +297,7 @@ begin
     if J <> AFrames then
       InterlockedExchangeAdd64(FUnderruns, 1);
     HasData := True;
-    TmpPtr := PSingle(@Tmp.Data[0]);
+    TmpPtr := PSingle(@FScratch.Data[0]);
     if Gain = 1.0 then
       for J := 0 to AFrames * FFormat.Channels - 1 do
         MixPtr[J] := MixPtr[J] + TmpPtr[J]
@@ -320,30 +319,33 @@ begin
     else if MixPtr[I] < -1.0 then MixPtr[I] := -1.0;
   end;
 
-  if Length(ProcsSnap) > 0 then
+  HasProcessor := False;
+  for I := 0 to High(FProcessors) do if FProcessors[I].Alive and Assigned(FProcessors[I].Processor) then HasProcessor := True;
+  if HasProcessor then
   begin
-    OutBuf.Format := FFormat;
-    OutBuf.FrameCount := AFrames;
-    SetLength(OutBuf.Data, Needed);
-    Move(ABuffer.Data[0], OutBuf.Data[0], Needed);
-    for I := 0 to High(ProcsSnap) do
+    FOut.Format := FFormat;
+    FOut.FrameCount := AFrames;
+    FScratch.Format := FFormat;
+    FScratch.FrameCount := AFrames;
+    Move(ABuffer.Data[0], FOut.Data[0], Needed);
+    for I := 0 to High(FProcessors) do
     begin
+      if not FProcessors[I].Alive then Continue;
+      if not Assigned(FProcessors[I].Processor) then Continue;
       try
-        ProcsSnap[I].Processor.Process(OutBuf, Tmp);
-        SwapBuf := OutBuf;
-        OutBuf := Tmp;
-        Tmp := SwapBuf;
+        FProcessors[I].Processor.Process(FOut, FScratch);
+        // swap buffers without alloc: exchange data pointers via temp move through ABuffer
+        Move(FScratch.Data[0], ABuffer.Data[0], Needed);
+        Move(FOut.Data[0], FScratch.Data[0], Needed);
+        Move(ABuffer.Data[0], FOut.Data[0], Needed);
       except
         InterlockedExchangeAdd64(FViolations, 1);
       end;
     end;
-    if Length(OutBuf.Data) >= Needed then
-      Move(OutBuf.Data[0], ABuffer.Data[0], Needed)
-    else if Length(OutBuf.Data) > 0 then
-    begin
-      FillChar(ABuffer.Data[0], Needed, 0);
-      Move(OutBuf.Data[0], ABuffer.Data[0], Min(Needed, Length(OutBuf.Data)));
-    end;
+    if FProcessors[High(FProcessors)].Alive then
+      Move(FOut.Data[0], ABuffer.Data[0], Needed)
+    else
+      Move(FOut.Data[0], ABuffer.Data[0], Needed);
   end;
 
   ABuffer.FrameCount := AFrames;

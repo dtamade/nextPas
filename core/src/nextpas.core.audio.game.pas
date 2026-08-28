@@ -260,7 +260,7 @@ begin
     Buf.Format.SampleFormat := sfF32;
   end;
   if (Buf.Format.SampleRate <> FFormat.SampleRate) or (Buf.Format.Channels <> FFormat.Channels) then
-    raise EAudioGraphError.Create('LoadFromFile: file format mismatch graph (resample todo)');
+    raise EAudioGraphError.Create('LoadFromFile: file format mismatch graph (resample required)');
   Result := Load(Buf);
 end;
 

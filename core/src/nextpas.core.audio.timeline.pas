@@ -181,7 +181,6 @@ var
   Lgain, Rgain: Single;
   Clip: TTimelineClip;
   SrcPtr: PSingle;
-  SnapTracks: array of TTimelineTrack;
   SnapPos: UInt64;
   SnapLoop: Boolean;
   SnapDur: UInt64;
@@ -192,28 +191,21 @@ begin
   begin InterlockedExchangeAdd64(FViolations,1); AFrames:=Length(ABuffer.Data) div FFormat.BlockAlign; if AFrames<=0 then Exit(0); Needed:=AFrames*FFormat.BlockAlign; end;
   FillChar(ABuffer.Data[0], Needed, 0);
   MixPtr:=PSingle(@ABuffer.Data[0]);
-  FLock.Enter;
-  try
-    SnapPos:=FPosition;
-    SnapLoop:=FLoop;
-    SnapDur:=CalcDuration;
-    HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
-    SetLength(SnapTracks, 0);
-    for i:=0 to High(FTracks) do if FTracks[i].Alive then
-    begin
-      if FTracks[i].Muted then Continue;
-      if HasSolo and not FTracks[i].Solo then Continue;
-      SetLength(SnapTracks, Length(SnapTracks)+1);
-      SnapTracks[High(SnapTracks)] := FTracks[i];
-    end;
-  finally FLock.Leave; end;
-  for i:=0 to High(SnapTracks) do
+  // realtime: lock-free snapshot (control plane uses lock)
+  SnapPos:=FPosition;
+  SnapLoop:=FLoop;
+  SnapDur:=CalcDuration;
+  HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
+  for i:=0 to High(FTracks) do
   begin
-    TrackGain:=SnapTracks[i].Gain;
-    TrackPan:=SnapTracks[i].Pan;
-    for j:=0 to High(SnapTracks[i].Clips) do
+    if not FTracks[i].Alive then Continue;
+    if FTracks[i].Muted then Continue;
+    if HasSolo and not FTracks[i].Solo then Continue;
+    TrackGain:=FTracks[i].Gain;
+    TrackPan:=FTracks[i].Pan;
+    for j:=0 to High(FTracks[i].Clips) do
     begin
-      Clip:=SnapTracks[i].Clips[j];
+      Clip:=FTracks[i].Clips[j];
       if not Clip.Alive then Continue;
       if (Clip.StartFrame + UInt64(Clip.Buffer.FrameCount) <= SnapPos) then Continue;
       if (Clip.StartFrame >= SnapPos + UInt64(AFrames)) then Continue;
@@ -246,11 +238,8 @@ begin
   end;
   for i:=0 to AFrames*FFormat.Channels-1 do
   begin if MixPtr[i]>1.0 then MixPtr[i]:=1.0 else if MixPtr[i]<-1.0 then MixPtr[i]:=-1.0; end;
-  FLock.Enter;
-  try
-    FPosition:=SnapPos+UInt64(AFrames);
-    if SnapLoop and (SnapDur>0) and (FPosition >= SnapDur) then FPosition:=FPosition mod SnapDur;
-  finally FLock.Leave; end;
+  FPosition:=SnapPos+UInt64(AFrames);
+  if SnapLoop and (SnapDur>0) and (FPosition >= SnapDur) then FPosition:=FPosition mod SnapDur;
   ABuffer.FrameCount:=AFrames;
   ABuffer.Format:=FFormat;
   Result:=AFrames;

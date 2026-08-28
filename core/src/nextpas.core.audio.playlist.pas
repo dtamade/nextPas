@@ -111,7 +111,7 @@ end;
 
 function TAudioPlaylist.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  LNeeded, LFramesToCopy, LOffset, LAvail, LCopied, I: Integer;
+  LNeeded, LFramesToCopy, LOffset, LAvail, LCopied: Integer;
   LSrc: PSingle;
   LDst: PSingle;
   LItem: TPlaylistItem;
@@ -123,16 +123,11 @@ begin
   FillChar(ABuffer.Data[0], LNeeded, 0);
   ABuffer.Format := FFormat;
   ABuffer.FrameCount := AFrames;
+  // realtime: lock-free snapshot (control plane uses lock)
   if FState <> psPlaying then Exit(AFrames);
-  // snapshot index/pos without alloc
-  EnterCriticalSection(FLock);
-  try
-    if (FIndex < 0) or (FIndex >= Length(FItems)) then Exit(AFrames);
-    LItem := FItems[FIndex];
-    LOffset := FPos;
-  finally
-    LeaveCriticalSection(FLock);
-  end;
+  if (FIndex < 0) or (FIndex >= Length(FItems)) then Exit(AFrames);
+  LItem := FItems[FIndex];
+  LOffset := FPos;
   LAvail := LItem.Buffer.FrameCount - LOffset;
   if LAvail <= 0 then Exit(AFrames);
   LFramesToCopy := AFrames;
@@ -143,18 +138,14 @@ begin
   LDst := PSingle(@ABuffer.Data[0]);
   LSrc := PSingle(@LItem.Buffer.Data[LOffset * FFormat.Channels]);
   SimdAddF32(LSrc, LDst, LCopied, LItem.Gain);
-  EnterCriticalSection(FLock);
-  try
-    Inc(FPos, LFramesToCopy);
-    if FPos >= LItem.Buffer.FrameCount then
-    begin
-      Inc(FIndex);
-      FPos := 0;
-      if FIndex >= Length(FItems) then
-        FState := psStopped;
-    end;
-  finally
-    LeaveCriticalSection(FLock);
+  // lock-free advance (single writer is realtime thread)
+  Inc(FPos, LFramesToCopy);
+  if FPos >= LItem.Buffer.FrameCount then
+  begin
+    Inc(FIndex);
+    FPos := 0;
+    if FIndex >= Length(FItems) then
+      FState := psStopped;
   end;
   Result := AFrames;
 end;

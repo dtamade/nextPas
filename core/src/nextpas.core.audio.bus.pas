@@ -47,6 +47,7 @@ type
     FGain: Single;
     FFormat: TAudioFormat;
     FSource: IRealtimeAudioSource;
+    FScratch: TAudioBuffer;
     FLock: TRTLCriticalSection;
     function GetId: TAudioBusId;
     function GetGain: Single;
@@ -67,6 +68,7 @@ type
   private
     FBuses: array of IAudioBus;
     FNextId: TAudioBusId;
+    FScratch: TAudioBuffer;
     FLock: TRTLCriticalSection;
   public
     constructor Create;
@@ -80,11 +82,16 @@ type
 { TAudioBus }
 
 constructor TAudioBus.Create(AId: TAudioBusId; const AFormat: TAudioFormat);
+var Cap: Integer;
 begin
   inherited Create;
   FId := AId;
   FGain := 1.0;
   FFormat := AFormat;
+  // pre-allocate realtime scratch to cover large frames without alloc in FillRealtime (8192 stereo f32)
+  Cap := 8192 * AFormat.BlockAlign;
+  SetLength(FScratch.Data, Cap);
+  FScratch.Format := AFormat;
   InitCriticalSection(FLock);
 end;
 
@@ -117,7 +124,7 @@ begin
 end;
 
 function TAudioBus.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var LSrc: IRealtimeAudioSource; LGain: Single; LNeeded: Integer; LScratch: TAudioBuffer;
+var LSrc: IRealtimeAudioSource; LGain: Single; LNeeded: Integer;
 begin
   Result := 0;
   if AFrames <= 0 then Exit(0);
@@ -126,18 +133,18 @@ begin
   FillChar(ABuffer.Data[0], LNeeded, 0);
   ABuffer.Format := FFormat;
   ABuffer.FrameCount := AFrames;
-  EnterCriticalSection(FLock);
-  try LSrc := FSource; LGain := FGain; finally LeaveCriticalSection(FLock); end;
+  // realtime: snapshot without lock (control plane uses lock)
+  LSrc := FSource;
+  LGain := FGain;
   if not Assigned(LSrc) then Exit(AFrames);
-  SetLength(LScratch.Data, LNeeded);
-  LScratch.Format := FFormat;
-  LScratch.FrameCount := AFrames;
+  if Length(FScratch.Data) < LNeeded then Exit(AFrames);
+  FScratch.FrameCount := AFrames;
   try
-    LSrc.FillRealtime(LScratch, AFrames);
+    LSrc.FillRealtime(FScratch, AFrames);
   except
     Exit(AFrames);
   end;
-  SimdAddF32(PSingle(@LScratch.Data[0]), PSingle(@ABuffer.Data[0]), AFrames * FFormat.Channels, LGain);
+  SimdAddF32(PSingle(@FScratch.Data[0]), PSingle(@ABuffer.Data[0]), AFrames * FFormat.Channels, LGain);
   Result := AFrames;
 end;
 
@@ -147,6 +154,7 @@ constructor TAudioBusMixer.Create;
 begin
   inherited Create;
   FNextId := 1;
+  SetLength(FScratch.Data, 1024 * 1024);
   InitCriticalSection(FLock);
 end;
 
@@ -195,7 +203,7 @@ begin
 end;
 
 function TAudioBusMixer.MixRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var I: Integer; LScratch: TAudioBuffer; LNeeded: Integer;
+var I: Integer; LNeeded: Integer;
 begin
   Result := 0;
   if AFrames <= 0 then Exit(0);
@@ -205,18 +213,18 @@ begin
   FillChar(ABuffer.Data[0], LNeeded, 0);
   ABuffer.Format := FBuses[0].GetFormat;
   ABuffer.FrameCount := AFrames;
-  SetLength(LScratch.Data, LNeeded);
+  if Length(FScratch.Data) < LNeeded then Exit(AFrames);
   for I := 0 to High(FBuses) do
   begin
-    LScratch.Format := FBuses[I].GetFormat;
-    LScratch.FrameCount := AFrames;
-    FillChar(LScratch.Data[0], LNeeded, 0);
+    FScratch.Format := FBuses[I].GetFormat;
+    FScratch.FrameCount := AFrames;
+    FillChar(FScratch.Data[0], LNeeded, 0);
     try
-      (FBuses[I] as IRealtimeAudioSource).FillRealtime(LScratch, AFrames);
+      (FBuses[I] as IRealtimeAudioSource).FillRealtime(FScratch, AFrames);
     except
       Continue;
     end;
-    SimdAddF32(PSingle(@LScratch.Data[0]), PSingle(@ABuffer.Data[0]), AFrames * FBuses[I].GetFormat.Channels, 1.0);
+    SimdAddF32(PSingle(@FScratch.Data[0]), PSingle(@ABuffer.Data[0]), AFrames * FBuses[I].GetFormat.Channels, 1.0);
   end;
   Result := AFrames;
 end;

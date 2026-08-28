@@ -132,7 +132,6 @@ var
   LPhase: Double;
   LFreq: Double;
   LGain: Single;
-  LNotes: array of TMidiNote;
   LPos: UInt64;
   LState: TSequencerState;
 begin
@@ -143,36 +142,29 @@ begin
   FillChar(ABuffer.Data[0], LNeeded, 0);
   ABuffer.Format := FFormat;
   ABuffer.FrameCount := AFrames;
-  EnterCriticalSection(FLock);
-  try
-    LState := FState;
-    LPos := FPos;
-    LNotes := Copy(FNotes, 0, Length(FNotes));
-  finally
-    LeaveCriticalSection(FLock);
-  end;
+  // realtime: lock-free snapshot (control plane uses lock)
+  LState := FState;
+  LPos := FPos;
   if LState <> seqPlaying then Exit(AFrames);
-  // simple sine synthesis for active notes
+  // simple sine synthesis for active notes (direct FNotes without copy)
   for I := 0 to AFrames - 1 do
   begin
     LGain := 0;
-    for J := 0 to High(LNotes) do
+    for J := 0 to High(FNotes) do
     begin
-      if (LPos + UInt64(I) >= LNotes[J].StartFrame) and
-         (LPos + UInt64(I) < LNotes[J].StartFrame + LNotes[J].DurationFrames) then
+      if (LPos + UInt64(I) >= FNotes[J].StartFrame) and
+         (LPos + UInt64(I) < FNotes[J].StartFrame + FNotes[J].DurationFrames) then
       begin
-        LFreq := MidiPitchToFreq(LNotes[J].Pitch);
+        LFreq := MidiPitchToFreq(FNotes[J].Pitch);
         LPhase := 2 * Pi * LFreq * (LPos + UInt64(I)) / FFormat.SampleRate;
-        LGain := LGain + Single(Sin(LPhase) * (LNotes[J].Velocity / 127.0) * 0.2);
+        LGain := LGain + Single(Sin(LPhase) * (FNotes[J].Velocity / 127.0) * 0.2);
       end;
     end;
     if LGain > 1 then LGain := 1 else if LGain < -1 then LGain := -1;
     for J := 0 to FFormat.Channels - 1 do
       PSingle(@ABuffer.Data[(I * FFormat.Channels + J) * 4])^ := LGain;
   end;
-  EnterCriticalSection(FLock);
-  try Inc(FPos, UInt64(AFrames));
-  finally LeaveCriticalSection(FLock); end;
+  Inc(FPos, UInt64(AFrames));
   Result := AFrames;
 end;
 
