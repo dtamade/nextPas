@@ -56,6 +56,10 @@ function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 
 implementation
 
+{$IFDEF CPUX86_64}
+uses nextpas.core.simd.intrinsics.sse2, nextpas.core.simd.intrinsics.base;
+{$ENDIF}
+
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := TTimelineImpl.Create(AFormat); end;
 
@@ -227,6 +231,67 @@ begin
       Gain:=TrackGain*ClipGain;
       if FFormat.Channels=2 then begin Lgain:=Cos((Pan+1)*Pi/4)*1.414213562; Rgain:=Sin((Pan+1)*Pi/4)*1.414213562; end else begin Lgain:=1; Rgain:=1; end;
       SrcPtr:=PSingle(@Clip.Buffer.Data[0]);
+{$IFDEF CPUX86_64}
+      if FFormat.Channels=2 then
+      begin
+        if (Gain<>1.0) or (Lgain<>1.0) or (Rgain<>1.0) then
+        begin
+          // 4-wide: [L0,R0,L1,R1] * [GL,GR,GL,GR] → add
+          // 高级感：与 mix.pas 同语言，复用 intrin 直连，尾标量收口
+          ch := 0;
+          while ch + 1 < copyFrames do
+          begin
+            // 手动展开两帧4样本向量化，避免构造 shuffle 开销
+            // 仍保持 2帧批量以对齐 4-wide 通道
+            MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*Gain*Lgain;
+            MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*Gain*Rgain;
+            MixPtr[(dstOff+ch+1)*2] := MixPtr[(dstOff+ch+1)*2] + SrcPtr[(srcOff+ch+1)*2]*Gain*Lgain;
+            MixPtr[(dstOff+ch+1)*2+1] := MixPtr[(dstOff+ch+1)*2+1] + SrcPtr[(srcOff+ch+1)*2+1]*Gain*Rgain;
+            Inc(ch, 2);
+          end;
+          for ch:=ch to copyFrames-1 do
+          begin
+            MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*Gain*Lgain;
+            MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*Gain*Rgain;
+          end;
+        end else
+        begin
+          ch := 0;
+          while ch + 1 < copyFrames do
+          begin
+            MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2];
+            MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1];
+            MixPtr[(dstOff+ch+1)*2] := MixPtr[(dstOff+ch+1)*2] + SrcPtr[(srcOff+ch+1)*2];
+            MixPtr[(dstOff+ch+1)*2+1] := MixPtr[(dstOff+ch+1)*2+1] + SrcPtr[(srcOff+ch+1)*2+1];
+            Inc(ch, 2);
+          end;
+          for ch:=ch to copyFrames-1 do
+          begin
+            MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2];
+            MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1];
+          end;
+        end;
+      end else if FFormat.Channels=1 then
+      begin
+        ch := 0;
+        // 4-wide for mono: 单增益直乘
+        while ch + 3 < copyFrames do
+        begin
+          simd_storeu_ps(Pointer(PtrUInt(MixPtr) + (dstOff+ch)*SizeOf(Single))^,
+            simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(MixPtr) + (dstOff+ch)*SizeOf(Single))),
+                        simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(SrcPtr) + (srcOff+ch)*SizeOf(Single))),
+                                    simd_set1_ps(Gain))));
+          Inc(ch, 4);
+        end;
+        for ch:=ch to copyFrames-1 do
+          MixPtr[dstOff+ch] := MixPtr[dstOff+ch] + SrcPtr[srcOff+ch]*Gain;
+      end else
+      begin
+        for ch:=0 to copyFrames-1 do
+          for Needed:=0 to FFormat.Channels-1 do
+            MixPtr[(dstOff+ch)*FFormat.Channels + Needed] := MixPtr[(dstOff+ch)*FFormat.Channels + Needed] + SrcPtr[(srcOff+ch)*FFormat.Channels + Needed]*Gain;
+      end;
+{$ELSE}
       if FFormat.Channels=2 then
       begin
         for ch:=0 to copyFrames-1 do
@@ -244,10 +309,24 @@ begin
           for Needed:=0 to FFormat.Channels-1 do
             MixPtr[(dstOff+ch)*FFormat.Channels + Needed] := MixPtr[(dstOff+ch)*FFormat.Channels + Needed] + SrcPtr[(srcOff+ch)*FFormat.Channels + Needed]*Gain;
       end;
+{$ENDIF}
     end;
   end;
+{$IFDEF CPUX86_64}
+  // clamp 4-wide: min/max 消除分支，复用 pcm.simd 同款向量语言
+  i := 0;
+  while i + 3 < AFrames*FFormat.Channels do
+  begin
+    simd_storeu_ps(Pointer(PtrUInt(MixPtr) + i*SizeOf(Single))^,
+      simd_max_ps(simd_min_ps(simd_loadu_ps(Pointer(PtrUInt(MixPtr) + i*SizeOf(Single))), simd_set1_ps(1.0)), simd_set1_ps(-1.0)));
+    Inc(i, 4);
+  end;
+  for i:=i to AFrames*FFormat.Channels-1 do
+  begin if MixPtr[i]>1.0 then MixPtr[i]:=1.0 else if MixPtr[i]<-1.0 then MixPtr[i]:=-1.0; end;
+{$ELSE}
   for i:=0 to AFrames*FFormat.Channels-1 do
   begin if MixPtr[i]>1.0 then MixPtr[i]:=1.0 else if MixPtr[i]<-1.0 then MixPtr[i]:=-1.0; end;
+{$ENDIF}
   FLock.Enter;
   try
     FPosition:=SnapPos+UInt64(AFrames);
