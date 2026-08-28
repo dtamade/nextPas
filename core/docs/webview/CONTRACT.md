@@ -4,7 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-08-28
-**版本**：1.23（S28—— 警告洁净与 Demo 高级感终极抛光：factory 2 处 case exhaustive unreachable 警告以 {$PUSH}{$WARNINGS OFF} 抑制（demo 构建 0 warnings）、demo_webview 自检双跑（plain+heaptrc）全绿、respack 构建 pass、13 门全绿；hygiene 0）
+**版本**：1.24（S29—— 主循环完整性：WebviewRunLoop/ExitLoop 补齐 WkLiveWindowCount 分支（Darwin 桩短睡让出，4 后端全量守卫）、工厂循环退出条件四后端全量、13 门全绿；hygiene 0、demo 0 warnings 保持）
+**承接**：1.23（S28—— 警告洁净与 Demo 高级感终极抛光：factory 2 处 case exhaustive unreachable 警告以 {$PUSH}{$WARNINGS OFF} 抑制（demo 构建 0 warnings）、demo_webview 自检双跑（plain+heaptrc）全绿、respack 构建 pass、13 门全绿；hygiene 0）
 **承接**：1.22（S27—— 基线与文档时效对齐：README bench_vfs/bench_bridge 过滤均值刷新至 S27 实测（vfs 681/894/217/800µs、bridge 4.18µs/622ns/2.37µs/1.06µs）、文档冻结复核、13 门全绿；hygiene 0）
 **承接**：1.21（S26—— 终极封版：wk.loader 去除未用 platform.dl 引用（Darwin 探针时再引入）+ wk 桩 hints 洁净（stubs {$PUSH}{$HINTS OFF}）+ Post Closed 守卫 + IsOnMainThread/UA/Zoom 缓存冻结、13 门全绿；文档 1.21 对齐，hygiene 0、bench 基线无回归、Production Ready 冻结）
 **承接**：1.20（S25—— W3 WKWebView 波次桩：新增 wk.ffi/loader/wk 三件套（Darwin 预留、Linux 桩 false、幂等缓存）、factory wvWk 接线（DefaultWebviewKind 探测序 W2→Gtk→Wk→Fake）、IsOnMainThread 真线程比对+UserAgent/Zoom 本地缓存、test_webview_wk_loader 3 用例、13 门全绿；文档 1.20 对齐，hygiene 0）
