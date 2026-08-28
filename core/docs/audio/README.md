@@ -138,7 +138,7 @@ make hygiene && git diff --check
 | test_meta 11 | ID3v2/Vorbis/RIFF INFO/MergeTags |
 | test_registry 9 | Probe 探测与可插拔注册 |
 | test_resample 14 | 线性/sinc 零分配与质量分级 |
-| test_mix 11 | MixInto/增益/归一/pan law |
+| test_mix 14 | MixInto(增益门控)/ApplyGain(0/1 快路径)/Ramp(增量化)/归一/pan law |
 | test_dsp 14 | Biquad(TDF-II)/Compressor/Limiter/FFT |
 | test_device 15 | Null MPSC 与 Drive/Underrun |
 | test_graph 16 | 快照混音与处理器链双缓冲 |
