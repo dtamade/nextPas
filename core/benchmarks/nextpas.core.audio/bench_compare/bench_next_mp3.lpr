@@ -87,7 +87,7 @@ var
   H: QWord;
 begin
   if Length(GStream) = 0 then BuildStream;
-  // 零拷贝旁路 + 单实例复用：与 music888 同路径
+  // raw vs wrapper distinction: raw Mp3DecodeBytes hashes PCM bytes aligned to music888 raw (3.53ms) vs wrapper (9.3); keep S16Block path distinct
   Buf := Mp3DecodeBytes(GStream);
   FramesDecoded := Buf.FrameCount div 1152; // approx
   if Buf.FrameCount = 0 then FramesDecoded := FRAME_COUNT;

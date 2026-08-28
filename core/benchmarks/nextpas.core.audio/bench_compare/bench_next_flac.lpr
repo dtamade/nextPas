@@ -108,7 +108,7 @@ var
   Buf: TAudioBuffer;
   H: QWord;
 begin
-  // 零拷贝旁路（内部 threadvar 复用 planes + FOut，首跑后 420 次零分配）
+  // raw vs wrapper distinction: raw FlacDecodeBytes bypasses IStream wrapper; hashing over f32 PCM bytes aligned to music888 raw baseline (3.83ms) vs wrapper
   Buf := FlacDecodeBytes(GFileData);
   FramesDecoded := Buf.FrameCount div 1; // frames
   TotalFrames := Buf.FrameCount;

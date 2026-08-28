@@ -291,7 +291,7 @@ implementation
   end;
 
   {$ELSE}
-  // Windows / 非 Linux：回落为 Pascal 直连 intrinsics（仍避免派发表）
+  // Windows / 非 Linux：inline Pascal 回落（无 assembler，tail<4 scalar，仍避免派发表）
   uses
     nextpas.core.simd.intrinsics.sse2,
     nextpas.core.simd.intrinsics.base;

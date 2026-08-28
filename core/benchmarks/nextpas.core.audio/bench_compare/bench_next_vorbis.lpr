@@ -96,6 +96,7 @@ begin
       Halt(1);
     end;
   end;
+  // raw vs wrapper distinction: raw VorbisDecodeBytes hashes PCM bytes; wrapper would go via IStream+DecodeWhole – keep aligned to music888 baseline
   Buf := VorbisDecodeBytes(Data);
   NSamples := Buf.FrameCount;
   H := FnvaInit;

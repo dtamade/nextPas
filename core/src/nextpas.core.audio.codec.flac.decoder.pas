@@ -133,11 +133,15 @@ begin
   if Cur.Remaining < 4 then Exit;
   // native FLAC: 'fLaC'，经 cursor 边界守卫
   if (APrefix[0]=Ord('f')) and (APrefix[1]=Ord('L')) and (APrefix[2]=Ord('a')) and (APrefix[3]=Ord('C')) then Exit(prFlac);
-  // Ogg-FLAC: OggS 容器 + 内部 FLAC 标记，扫描 ≤4KB 前缀
+  // Ogg-FLAC: OggS 容器 + 内部 FLAC 标记，扫描 ≤4KB 前缀 (capped via cursor)
   if (APrefix[0]=Ord('O')) and (APrefix[1]=Ord('g')) and (APrefix[2]=Ord('g')) and (APrefix[3]=Ord('S')) then
   begin
+    // Cur.Length already <= Length(APrefix); upper bounded by caller registry 4096 cap
     for I := 0 to Integer(Cur.Length) - 4 do
+    begin
+      if I >= 4096-4 then Break;
       if (APrefix[I]=Ord('F')) and (APrefix[I+1]=Ord('L')) and (APrefix[I+2]=Ord('A')) and (APrefix[I+3]=Ord('C')) then Exit(prFlac);
+    end;
   end;
 end;
 
@@ -251,7 +255,6 @@ begin
         32: LDiv := 1.0 / 2147483648.0;
       else LDiv := 1.0 / 32768.0;
       end;
-{$IFDEF CPUX86_64}
       if (CH = 1) then
       begin
         PcmConvertI32BlockToF32Clamped(@FPlanes[0][0], Single(LDiv), PSingle(@FOut[LOutPos]), LongWord(BS));
@@ -262,7 +265,6 @@ begin
         PcmConvertI32BlockStereoToF32Interleaved(@FPlanes[0][0], @FPlanes[1][0], Single(LDiv), PSingle(@FOut[LOutPos]), LongWord(BS));
         Inc(LOutPos, BS * 8);
       end else
-{$ENDIF}
       for SIdx := 0 to BS - 1 do
         for CIdx := 0 to CH - 1 do
         begin
