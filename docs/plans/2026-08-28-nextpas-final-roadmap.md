@@ -161,12 +161,12 @@ L3: http, websocket, tui, config, app     ← 仅 L0-L2
 
 > 用 `sevenz` 定义“什么样的 L2 才算封版”。
 
-- **163 tests**：UTF/FILETIME/LZMA2（含 stored fallback/chunk-cap）、backend 切换、writer→reader 往返、Delta/Deflate/BZip2 向量、BCJ 全家（x86/ARM/ARM64/PPC/IA64/SPARC/ARMT/RISCV）+ BCJ2 4 流、AES-256（含 `p7zip` 金库、KAT、IV 唯一性）、multi-folder（阈值/过滤/密码/plain）、流式 `AddFileFromReader/FinishTo/CreateFromReader`、`Copy`、FS 联邦、`for..in`、progress、`Move+CRC` 单遍。
-- **性能**：`FLowerNames + SortedIdxIgnoreCase/Rev + TSwissTableStr` O(1) 哈希 + `LowerBoundPrefix/Suffix` O(log N) 零分配 `CompareReversed`；`ExtractIndicesGrouped` 单 folder 单解码；`TBytesViewStream` 零拷贝；`BZip2` 9/30；bench `encode ~6 MB/s / decode pure ~17 / ffi ~42 / BCJ ~200 / Delta ~80 / extraction ~300 MB/s`。
-- **高级感**：`ExtractAll + IgnoreCase` 全族 + `Try*WithError` 無異常探針 + `FlushExtractedToFs` 统一。
-- **复用度**：`levels` 纯映射复用、`filters` 表驱动、`coders` 统一分发、`limits` 共享炸弹常数。
-- **稳定性**：`ESevenZLimitError` 炸弹（header 64MiB/pack 64MiB/total 8GiB/unpack 8GiB / 1M files/folders/streams/CRC / 64KiB name / 256KiB window）、`WriterSinglePassCrc`、`ExtractTo` 256KiB 增量 `Crc32Update`、`2-entry LRU + ClearCache`。
-- **完整性**：`README + CONTRACT + TEST` 同版，`git diff --check 0`。
+- **163 tests**：UTF/FILETIME/LZMA2（含 stored fallback/chunk-cap）、backend 切换、writer→reader 往返、Delta/Deflate/BZip2 向量、BCJ 全家（x86/ARM/ARM64/PPC/IA64/SPARC/ARMT/RISCV）+ BCJ2 4 流、AES-256（含 `p7zip` 金库、KAT、IV 唯一性）、multi-folder（阈值/过滤/密码/plain）、流式 `AddFileFromReader/FinishTo/CreateFromReader`、`Copy`、FS 联邦、`for..in`、progress、`Move+CRC` 单遍；`IgnoreCase` 全族（`EntriesByGlobIgnoreCase` O(log N) `prefix*`/`*suffix`/`p*s` 经 `LowerBound*IgnoreCase` + `ExtractBy*IgnoreCase` 分组，bench 2k 条目 `prefix*` 35k ops/s / `exact` 3M）。
+- **性能**：`FLowerNames + SortedIdxIgnoreCase/Rev + TSwissTableStr` O(1) 哈希 + `LowerBoundPrefix/Suffix` O(log N) 零分配 `CompareReversed`；`ExtractIndicesGrouped` 单 folder 单解码；`TBytesViewStream` 零拷贝；`BZip2` 9/30；bench `encode ~6 MB/s / decode pure ~17 / ffi ~42 / BCJ ~200 / Delta ~80 / extraction ~300 MB/s` + `glob IgnoreCase` (`fa2d99b48` 新增)。
+- **高级感**：`ExtractAll + IgnoreCase` 全族 + `Try*WithError` 無異常探針 + `FlushExtractedToFs` 统一 + `interop glob` 黄金用例（`scripts/sevenz-interop.sh` `helper glob`）。
+- **复用度**：`levels` 纯映射复用、`filters` 表驱动、`coders` 统一分发、`limits` 共享炸弹常数；`bench` 复用同一 2k Copy 语料。
+- **稳定性**：`ESevenZLimitError` 炸弹（header 64MiB/pack 64MiB/total 8GiB/unpack 8GiB / 1M files/folders/streams/CRC / 64KiB name / 256KiB window）、`WriterSinglePassCrc`、`ExtractTo` 256KiB 增量 `Crc32Update`、`2-entry LRU + ClearCache`；`interop wrong-password` 明确失败。
+- **完整性**：`README + CONTRACT + TEST + bench + interop` 同版，`git diff --check 0`。
 
 **推广**：所有新 L2（`zip/crypto/http`）以 `sevenz` 为 checklist 落地。
 
