@@ -32,12 +32,45 @@ var
   GInit: Boolean;
 
 function AudioSimdCaps: TSimdCaps;
+{$IFDEF CPUX86_64}
+var LHasSSE2, LHasAVX2: LongBool;
+    LEAX, LEBX, LECX, LEDX: LongWord;
+{$ENDIF}
 begin
   if not GInit then
   begin
+    GCaps.HasSSE2 := False;
+    GCaps.HasAVX2 := False;
+    GCaps.HasNEON := False;
+{$IFDEF CPUX86_64}
+    LHasSSE2 := False; LHasAVX2 := False;
+    asm
+      mov eax, 1
+      cpuid
+      mov LEAX, eax
+      mov LEBX, ebx
+      mov LECX, ecx
+      mov LEDX, edx
+    end;
+    LHasSSE2 := (LEDX and (1 shl 26)) <> 0;
+    asm
+      mov eax, 7
+      xor ecx, ecx
+      cpuid
+      mov LEAX, eax
+      mov LEBX, ebx
+      mov LECX, ecx
+      mov LEDX, edx
+    end;
+    LHasAVX2 := (LEBX and (1 shl 5)) <> 0;
+    GCaps.HasSSE2 := LHasSSE2;
+    GCaps.HasAVX2 := LHasAVX2 and LHasSSE2;
+    if not GCaps.HasSSE2 then GCaps.HasSSE2 := True; // x86_64 baseline, honesty fallback
+{$ELSE}
     GCaps.HasSSE2 := True;
     GCaps.HasAVX2 := False;
     GCaps.HasNEON := False;
+{$ENDIF}
     GInit := True;
   end;
   Result := GCaps;
@@ -143,10 +176,45 @@ end;
 
 function SimdPeakF32(const AData: PSingle; ACount: Integer): Single;
 var I, N4: Integer; V0, V1, V2, V3, M: Single;
+{$IFDEF CPUX86_64}
+var LIter: Integer; LPeak: array[0..3] of Single; LAbsMask: array[0..3] of LongWord;
+{$ENDIF}
 begin
   Result := 0;
   if (AData = nil) or (ACount <= 0) then Exit;
   N4 := ACount and not 3;
+{$IFDEF CPUX86_64}
+  if N4 > 0 then
+  begin
+    LAbsMask[0]:=$7fffffff; LAbsMask[1]:=$7fffffff; LAbsMask[2]:=$7fffffff; LAbsMask[3]:=$7fffffff;
+    for I:=0 to 3 do LPeak[I]:=0;
+    LIter := N4 shr 2;
+    asm
+      mov eax, dword ptr [LIter]
+      mov rdx, qword ptr [AData]
+      lea rcx, qword ptr [LAbsMask]
+      movups xmm4, dqword ptr [rcx]
+      xorps xmm5, xmm5
+    @Peak4Loop:
+      movups xmm0, dqword ptr [rdx]
+      andps xmm0, xmm4
+      maxps xmm5, xmm0
+      add rdx, 16
+      dec eax
+      jnz @Peak4Loop
+      lea rcx, qword ptr [LPeak]
+      movups dqword ptr [rcx], xmm5
+    end;
+    M := LPeak[0];
+    if LPeak[1] > M then M := LPeak[1];
+    if LPeak[2] > M then M := LPeak[2];
+    if LPeak[3] > M then M := LPeak[3];
+    I := N4;
+    Result := M;
+    while I < ACount do begin V0:=AData[I]; if V0<0 then V0:=-V0; if V0>Result then Result:=V0; Inc(I); end;
+    Exit;
+  end;
+{$ENDIF}
   M := 0;
   I := 0;
   while I < N4 do
@@ -168,10 +236,39 @@ end;
 
 function SimdSumSquaresF32(const AData: PSingle; ACount: Integer): Double;
 var I, N4: Integer; S: Double;
+{$IFDEF CPUX86_64}
+var LIter: Integer; LSum: array[0..3] of Single;
+{$ENDIF}
 begin
   Result := 0;
   if (AData = nil) or (ACount <= 0) then Exit;
   N4 := ACount and not 3;
+{$IFDEF CPUX86_64}
+  if N4 > 0 then
+  begin
+    for I:=0 to 3 do LSum[I]:=0;
+    LIter := N4 shr 2;
+    asm
+      mov eax, dword ptr [LIter]
+      mov rdx, qword ptr [AData]
+      xorps xmm4, xmm4
+    @Sum4Loop:
+      movups xmm0, dqword ptr [rdx]
+      mulps xmm0, xmm0
+      addps xmm4, xmm0
+      add rdx, 16
+      dec eax
+      jnz @Sum4Loop
+      lea rcx, qword ptr [LSum]
+      movups dqword ptr [rcx], xmm4
+    end;
+    S := LSum[0] + LSum[1] + LSum[2] + LSum[3];
+    I := N4;
+    while I < ACount do begin S := S + AData[I]*AData[I]; Inc(I); end;
+    Result := S;
+    Exit;
+  end;
+{$ENDIF}
   S := 0;
   I := 0;
   while I < N4 do
