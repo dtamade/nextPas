@@ -352,8 +352,10 @@ end;
   Format: "bytes=start-end" or "bytes=start-" or "bytes=-suffix" }
 function ParseRangeHeader(const ARange: string; AFileSize: Int64;
   out AStart, AEnd: Int64): Boolean;
+const
+  BYTES_PREFIX = 'bytes=';
+  BYTES_PREFIX_LEN = 6;
 var
-  LPrefix: string;
   LDashPos: SizeInt;
   LStartStr, LEndStr: string;
   LStart, LEnd: Int64;
@@ -361,17 +363,16 @@ begin
   Result := False;
   AStart := 0;
   AEnd := 0;
-  LPrefix := 'bytes=';
-  if Length(ARange) < Length(LPrefix) + 1 then
+  if Length(ARange) < BYTES_PREFIX_LEN + 1 then
     Exit;
-  if System.Copy(ARange, 1, Length(LPrefix)) <> LPrefix then
+  if System.Copy(ARange, 1, BYTES_PREFIX_LEN) <> BYTES_PREFIX then
     Exit;
 
   LDashPos := Pos('-', ARange);
   if LDashPos = 0 then
     Exit;
 
-  LStartStr := System.Copy(ARange, Length(LPrefix) + 1, LDashPos - Length(LPrefix) - 1);
+  LStartStr := System.Copy(ARange, BYTES_PREFIX_LEN + 1, LDashPos - BYTES_PREFIX_LEN - 1);
   LEndStr := System.Copy(ARange, LDashPos + 1, Length(ARange) - LDashPos);
 
   if LStartStr = '' then
