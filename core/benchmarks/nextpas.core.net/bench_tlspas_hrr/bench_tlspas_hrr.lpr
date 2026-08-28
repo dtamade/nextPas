@@ -398,6 +398,16 @@ begin
   end;
 end;
 
+procedure BenchAdaptivePrometheus(aIters: Int64);
+var I: Int64; M: TTlsPasAdaptiveMetrics; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    M := GAdaptiveObserver.GetAdaptiveMetrics;
+    F := TlsPasFormatPrometheusMetrics(M);
+  end;
+end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -554,6 +564,7 @@ begin
     .AddLoop('AdaptiveMetricsFormat', @BenchAdaptiveMetricsFormat)
     .AddLoop('AdaptiveLogLine', @BenchAdaptiveLogLine)
     .AddLoop('AdaptivePressure', @BenchAdaptivePressure)
+    .AddLoop('AdaptivePrometheus', @BenchAdaptivePrometheus)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

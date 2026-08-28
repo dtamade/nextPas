@@ -22,6 +22,8 @@ function HttpAdaptiveEarlyDataIsThrottled(const AReq: IHttpRequest; const AObser
 function HttpAdaptiveEarlyDataHeaderValue(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver): string;
 function HttpAdaptiveEarlyDataMetrics(const AObserver: TAsyncTlsPasAdaptiveObserver): string;
 function HttpAdaptiveEarlyDataLogLine(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver): string;
+function HttpAdaptiveEarlyDataPrometheusText(const AObserver: TAsyncTlsPasAdaptiveObserver): string; overload;
+function HttpAdaptiveEarlyDataPrometheusText(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix: string): string; overload;
 
 implementation
 
@@ -83,6 +85,25 @@ begin
     HttpAdaptiveEarlyDataHeaderValue(AReq, AObserver),
     TlsPasFormatAdaptiveMetrics(AObserver.GetAdaptiveMetrics)
   ]);
+end;
+
+function HttpAdaptiveEarlyDataPrometheusText(const AObserver: TAsyncTlsPasAdaptiveObserver): string;
+begin
+  Result := HttpAdaptiveEarlyDataPrometheusText(AObserver, 'nextpas_tlspas');
+end;
+
+function HttpAdaptiveEarlyDataPrometheusText(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix: string): string;
+var M: TTlsPasAdaptiveMetrics;
+begin
+  if AObserver = nil then
+    Exit(Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+                '# TYPE %s_adaptive_max gauge'#10 +
+                '%s_adaptive_max 0'#10, ['nextpas_tlspas','nextpas_tlspas','nextpas_tlspas']));
+  M := AObserver.GetAdaptiveMetrics;
+  if APrefix = '' then
+    Result := TlsPasFormatPrometheusMetrics(M)
+  else
+    Result := TlsPasFormatPrometheusMetrics(M, APrefix);
 end;
 
 function AdaptiveEarlyDataMiddleware(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpMiddleware;

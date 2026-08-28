@@ -318,6 +318,8 @@ type
   end;
 
 function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string; overload;
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string; overload;
 
 type
   { S20 自适应服务端观察器：基于 Observer 统计动态计算自适应限额并在超限时熔断(RejectPolicy)，
@@ -1315,6 +1317,54 @@ begin
     TlsPasFormatServerStats(AMetrics.Server),
     TlsPasFormatReplayStats(AMetrics.Replay)
   ]);
+end;
+
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+begin
+  Result := TlsPasFormatPrometheusMetrics(AMetrics, 'nextpas_tlspas');
+end;
+
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string;
+var P: string;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  Result :=
+    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+           '# TYPE %s_adaptive_max gauge'#10 +
+           '%s_adaptive_max %d'#10 +
+           '# HELP %s_server_accepts Total accepted early_data'#10 +
+           '# TYPE %s_server_accepts counter'#10 +
+           '%s_server_accepts %d'#10 +
+           '# HELP %s_server_reject_policy Total rejected by policy'#10 +
+           '# TYPE %s_server_reject_policy counter'#10 +
+           '%s_server_reject_policy %d'#10 +
+           '# HELP %s_server_reject_replay Total rejected by replay'#10 +
+           '# TYPE %s_server_reject_replay counter'#10 +
+           '%s_server_reject_replay %d'#10 +
+           '# HELP %s_replay_hits Replay cache hits'#10 +
+           '# TYPE %s_replay_hits counter'#10 +
+           '%s_replay_hits %d'#10 +
+           '# HELP %s_replay_misses Replay cache misses'#10 +
+           '# TYPE %s_replay_misses counter'#10 +
+           '%s_replay_misses %d'#10 +
+           '# HELP %s_replay_evictions Replay cache evictions'#10 +
+           '# TYPE %s_replay_evictions counter'#10 +
+           '%s_replay_evictions %d'#10 +
+           '# HELP %s_replay_expiries Replay cache expiries'#10 +
+           '# TYPE %s_replay_expiries counter'#10 +
+           '%s_replay_expiries %d'#10 +
+           '# HELP %s_replay_current Current replay window size'#10 +
+           '# TYPE %s_replay_current gauge'#10 +
+           '%s_replay_current %d'#10,
+    [P,P,P,Integer(AMetrics.AdaptiveMax),
+     P,P,P,AMetrics.Server.Accepts,
+     P,P,P,AMetrics.Server.RejectPolicy,
+     P,P,P,AMetrics.Server.RejectReplay,
+     P,P,P,AMetrics.Replay.Hits,
+     P,P,P,AMetrics.Replay.Misses,
+     P,P,P,AMetrics.Replay.Evictions,
+     P,P,P,AMetrics.Replay.Expiries,
+     P,P,P,AMetrics.Replay.Current]);
 end;
 
 procedure TAsyncTlsPasAdaptiveObserver.Clear;
