@@ -42,6 +42,7 @@ type
     OnError: TWebviewEvalErrorCallback;
     Done: Boolean;
     Cancel: Pointer;   { GCancellable*: Close 后保证引擎回调必达, 单点释放 }
+    Owner: Pointer;    { TGtkWebview non-owning, pending 移除用 }
   end;
   PIdleRec = ^TIdleRec;
   TIdleRec = record
@@ -78,6 +79,7 @@ type
     FAssets: TObject;
     FIdleTags: array of guint;
     FPendingEvals: array of PEvalRec;
+    FPendingCount: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
     FOnNavFinished: array of TWebviewNavEventHandler;
     FOnNavFailed: array of TWebviewNavFailedHandler;
@@ -86,6 +88,8 @@ type
     FOnScaleChanged: array of TWebviewScaleHandler;
 
     procedure RequireOpen;
+    procedure GrowPendingEvals; inline;
+    procedure RemovePending(ARec: PEvalRec);
     procedure SetupSessionContext;
     function ResolveContext: Pointer;
     procedure SetupSchemeAndShell;
@@ -574,6 +578,8 @@ begin
   begin
     { Close 已收尾：仅释放记录（所有权仍在引擎回执一侧） }
     GtkTrace('eval late callback after close, disposed');
+    if LRec^.Owner <> nil then
+      TGtkWebview(LRec^.Owner).RemovePending(LRec);
     FreeEvalRec(LRec);
     Exit;
   end;
@@ -601,6 +607,8 @@ begin
       LText := '';
     GtkTrace('eval ok: ' + Copy(LText, 1, 120));
   end;
+  if LRec^.Owner <> nil then
+    TGtkWebview(LRec^.Owner).RemovePending(LRec);
   SettleEvalGlobal(LRec, LOk, LText);
 end;
 
@@ -735,6 +743,28 @@ procedure TGtkWebview.RequireOpen;
 begin
   if FClosed then
     raise EWebviewClosed.Create('webview window is closed');
+end;
+
+procedure TGtkWebview.GrowPendingEvals; inline;
+begin
+  if FPendingCount = Length(FPendingEvals) then
+    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
+end;
+
+procedure TGtkWebview.RemovePending(ARec: PEvalRec);
+var
+  I, J: Integer;
+begin
+  for I := 0 to FPendingCount - 1 do
+    if FPendingEvals[I] = ARec then
+    begin
+      for J := I to FPendingCount - 2 do
+        FPendingEvals[J] := FPendingEvals[J + 1];
+      Dec(FPendingCount);
+      if FPendingCount < Length(FPendingEvals) then
+        FPendingEvals[FPendingCount] := nil;
+      Exit;
+    end;
 end;
 
 procedure TGtkWebview.FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
@@ -1001,7 +1031,7 @@ begin
   { 在途 eval 立即以 onerr 收尾（exactly-one）。记录不在此处释放：
     所有权单点在引擎必然到达的完成回调——迟到回执读 Done 后仅释放。
     异常实例由框架创建/触发/释放（§3.2 所有权语义）。 }
-  for I := 0 to High(FPendingEvals) do
+  for I := 0 to FPendingCount - 1 do
   begin
     LRec := FPendingEvals[I];
     if not LRec^.Done then
@@ -1025,7 +1055,8 @@ begin
       end;
     end;
   end;
-  FPendingEvals := nil;
+  FPendingCount := 0;
+  // 容量保留，待下次 Eval 复用，避免重复分配
   DropIdlePendings;
   FireNotifyHandlers(FOnWindowClosed);
   GTK_widget_destroy(FWin);
@@ -1300,8 +1331,10 @@ begin
   LRec^.OnError := AOnError;
   LRec^.Done := False;
   LRec^.Cancel := G_cancellable_new();
-  SetLength(FPendingEvals, Length(FPendingEvals) + 1);
-  FPendingEvals[High(FPendingEvals)] := LRec;
+  LRec^.Owner := Self;
+  GrowPendingEvals;
+  FPendingEvals[FPendingCount] := LRec;
+  Inc(FPendingCount);
   GtkTrace('eval dispatch: ' + Copy(AJavascript, 1, 80));
   if GtkLoadInfo().EvalPath = gepEvaluateJavascript then
     WEBKIT_web_view_evaluate_javascript(FView, PAnsiChar(AJavascript),

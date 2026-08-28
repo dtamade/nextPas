@@ -97,6 +97,7 @@ type
     FEvalQueue: array of Boolean;  // 预载结果 FIFO：True=错误（值在 FEvalResults）
     FEvalResults: array of string; // 与 FEvalQueue 平行：成功 JSON 或错误消息
     FPendingEvals: array of TFakePendingEval;
+    FPendingCount: Integer;
     FOutcomes: TFakeInvokeOutcomes;
     { DeliverFrame 协议路径产生的回执脚本（resolve/reject）捕获队列 }
     FCapturedEvals: array of string;
@@ -117,6 +118,7 @@ type
     FOnReady: array of TWebviewNotifyHandler;
     FOnScaleChanged: array of TWebviewScaleHandler;
     procedure RequireOpen;
+    procedure GrowPendingEvals; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -665,6 +667,12 @@ begin
     raise EWebviewClosed.Create('webview window is closed');
 end;
 
+procedure TFakeWebview.GrowPendingEvals; inline;
+begin
+  if FPendingCount = Length(FPendingEvals) then
+    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
+end;
+
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
@@ -716,14 +724,14 @@ begin
       Exit;
     FClosed := True;
     { 在途 Eval 统一失败收尾（CONTRACT §3.2 / INV-7 恰好一次） }
-    SetLength(LErrors, Length(FPendingEvals));
-    for I := 0 to High(FPendingEvals) do
+    SetLength(LErrors, FPendingCount);
+    for I := 0 to FPendingCount - 1 do
     begin
       FEvalScripts[FPendingEvals[I].ScriptIdx].Answered := True;
       FEvalScripts[FPendingEvals[I].ScriptIdx].ErrorMessage := 'window closed';
       LErrors[I] := FPendingEvals[I].OnError;
     end;
-    SetLength(FPendingEvals, 0);
+    FPendingCount := 0;
   finally
     FLck.Release;
   end;
@@ -998,10 +1006,11 @@ begin
     end
     else
     begin
-      SetLength(FPendingEvals, Length(FPendingEvals) + 1);
-      FPendingEvals[High(FPendingEvals)].ScriptIdx := LIdx;
-      FPendingEvals[High(FPendingEvals)].Callback := ACallback;
-      FPendingEvals[High(FPendingEvals)].OnError := AOnError;
+      GrowPendingEvals;
+      FPendingEvals[FPendingCount].ScriptIdx := LIdx;
+      FPendingEvals[FPendingCount].Callback := ACallback;
+      FPendingEvals[FPendingCount].OnError := AOnError;
+      Inc(FPendingCount);
     end;
   finally
     FLck.Release;
@@ -1196,7 +1205,7 @@ begin
   LHadPending := False;
   FLck.Acquire;
   try
-    if Length(FPendingEvals) > 0 then
+    if FPendingCount > 0 then
     begin
       LPending := FPendingEvals[0];
       ShiftEvalList;
@@ -1225,7 +1234,7 @@ begin
   LHadPending := False;
   FLck.Acquire;
   try
-    if Length(FPendingEvals) > 0 then
+    if FPendingCount > 0 then
     begin
       LPending := FPendingEvals[0];
       ShiftEvalList;
@@ -1250,9 +1259,11 @@ procedure TFakeWebview.ShiftEvalList;
 var
   I: Integer;
 begin
-  for I := 0 to High(FPendingEvals) - 1 do
+  for I := 0 to FPendingCount - 2 do
     FPendingEvals[I] := FPendingEvals[I + 1];
-  SetLength(FPendingEvals, Length(FPendingEvals) - 1);
+  Dec(FPendingCount);
+  if FPendingCount < Length(FPendingEvals) then
+    FPendingEvals[FPendingCount] := Default(TFakePendingEval);
 end;
 
 procedure TFakeWebview.FireNavigationStarted(const AUrl: string);
