@@ -144,6 +144,26 @@ type
     ['{57213F19-00E6-49FA-8E07-898EA01ECBD2}']
     function Invoke(sender: ICoreWebView2; args: ICoreWebView2WebMessageReceivedEventArgs): HRESULT; stdcall;
   end;
+  ICoreWebView2NavigationStartingEventArgs = interface(IUnknown)
+    ['{5A6B3574-8B26-4F4B-8B6E-8D279BA2A741}']
+    function get_Uri(out uri: PWSTR): HRESULT; stdcall;
+    function get_IsUserInitiated(out isUserInitiated: BOOL): HRESULT; stdcall;
+    function get_IsRedirected(out isRedirected: BOOL): HRESULT; stdcall;
+  end;
+  ICoreWebView2NavigationStartingEventHandler = interface(IUnknown)
+    ['{E97F0E24-0A1E-4A2E-8A4A-8F0E24A2E8A4}']
+    function Invoke(sender: ICoreWebView2; args: ICoreWebView2NavigationStartingEventArgs): HRESULT; stdcall;
+  end;
+  ICoreWebView2NavigationCompletedEventArgs = interface(IUnknown)
+    ['{30D68B7D-C6D9-4069-9C4B-9A2B5A2A3B4C}']
+    function get_IsSuccess(out isSuccess: BOOL): HRESULT; stdcall;
+    function get_WebErrorStatus(out status: Integer): HRESULT; stdcall;
+    function get_NavigationId(out id: ULONGLONG): HRESULT; stdcall;
+  end;
+  ICoreWebView2NavigationCompletedEventHandler = interface(IUnknown)
+    ['{8A149193-2C34-4A8B-8A5D-8F0E24A2E8A5}']
+    function Invoke(sender: ICoreWebView2; args: ICoreWebView2NavigationCompletedEventArgs): HRESULT; stdcall;
+  end;
 
 type
   { Loader 导出：CreateCoreWebView2EnvironmentWithOptions }
