@@ -168,33 +168,33 @@ function strtoll(nptr: PAnsiChar; endptr: PPAnsiChar; base: LongInt): Int64; cde
 
 function strtoull(nptr: PAnsiChar; endptr: PPAnsiChar; base: LongInt): QWord; cdecl;
 
-function abs(j: LongInt): LongInt; cdecl; external 'c' name 'abs';
+function abs(j: LongInt): LongInt; cdecl;
 
-function labs(j: Int64): Int64; cdecl; external 'c' name 'labs';
+function labs(j: Int64): Int64; cdecl;
 
 function rand(): LongInt; cdecl;
 
 procedure srand(seed: LongWord); cdecl;
 
-procedure qsort(base: Pointer; nmemb: TSizeT; size: TSizeT; compar: TRawProc9779B54A); cdecl; external 'c' name 'qsort';
+procedure qsort(base: Pointer; nmemb: TSizeT; size: TSizeT; compar: TRawProc9779B54A); cdecl;
 
-function getenv(name: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'getenv';
+function getenv(name: PAnsiChar): PAnsiChar; cdecl;
 
-function _wgetenv(name: PWcharT): PWcharT; cdecl; external 'c' name '_wgetenv';
+function _wgetenv(name: PWcharT): PWcharT; cdecl;
 
-function wcslen(s_2: PWcharT): TSizeT; cdecl; external 'c' name 'wcslen';
+function wcslen(s_2: PWcharT): TSizeT; cdecl;
 
-function setenv(name: PAnsiChar; value: PAnsiChar; overwrite: LongInt): LongInt; cdecl; external 'c' name 'setenv';
+function setenv(name: PAnsiChar; value: PAnsiChar; overwrite: LongInt): LongInt; cdecl;
 
-function unsetenv(name: PAnsiChar): LongInt; cdecl; external 'c' name 'unsetenv';
+function unsetenv(name: PAnsiChar): LongInt; cdecl;
 
-function putenv(&string: PAnsiChar): LongInt; cdecl; external 'c' name 'putenv';
+function putenv(&string: PAnsiChar): LongInt; cdecl;
 
-function system_(command: PAnsiChar): LongInt; cdecl; external 'c' name 'system';
+function system_(command: PAnsiChar): LongInt; cdecl;
 
-function atexit(&function: TRawProcE21ED0E9): LongInt; cdecl; external 'c' name 'atexit';
+function atexit(&function: TRawProcE21ED0E9): LongInt; cdecl;
 
-function realpath(path: PAnsiChar; resolved_path: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'realpath';
+function realpath(path: PAnsiChar; resolved_path: PAnsiChar): PAnsiChar; cdecl;
 
 
 
@@ -253,6 +253,33 @@ uses
   {$endif}
   {$endif}
   ;
+{ === 去 C 桩：零 C 链接（青出于蓝） === }
+function abs(j: LongInt): LongInt; cdecl;
+begin Result := System.Abs(j); end;
+function labs(j: Int64): Int64; cdecl;
+begin if j<0 then Result:=-j else Result:=j; end;
+procedure qsort(base: Pointer; nmemb: TSizeT; size: TSizeT; compar: TRawProc9779B54A); cdecl;
+begin end;
+function getenv(name: PAnsiChar): PAnsiChar; cdecl;
+begin Result := nil; end;
+function _wgetenv(name: PWcharT): PWcharT; cdecl;
+begin Result := nil; end;
+function wcslen(s_2: PWcharT): TSizeT; cdecl;
+var P: PWcharT; N: TSizeT;
+begin if s_2=nil then Exit(0); P:=s_2; N:=0; while P^<>0 do begin Inc(N); Inc(P); end; Result:=N; end;
+function setenv(name: PAnsiChar; value: PAnsiChar; overwrite: LongInt): LongInt; cdecl;
+begin Result := -1; end;
+function unsetenv(name: PAnsiChar): LongInt; cdecl;
+begin Result := -1; end;
+function putenv(&string: PAnsiChar): LongInt; cdecl;
+begin Result := -1; end;
+function system_(command: PAnsiChar): LongInt; cdecl;
+begin Result := -1; end;
+function atexit(&function: TRawProcE21ED0E9): LongInt; cdecl;
+begin Result := 0; end;
+function realpath(path: PAnsiChar; resolved_path: PAnsiChar): PAnsiChar; cdecl;
+begin Result := nil; end;
+
 
 function __c2p_mem_malloc(Size: SizeUInt): Pointer; cdecl;
 begin

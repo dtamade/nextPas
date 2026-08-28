@@ -105,14 +105,15 @@ function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
 var
   Cur: IByteCursor;
   I: Integer;
-  Search: TBytes;
+
 begin
   Result := prUnknown;
   if Length(APrefix) < 4 then Exit;
   Cur := NewByteCursor(APrefix);
-  if (APrefix[0] <> Ord('O')) or (APrefix[1] <> Ord('g')) or (APrefix[2] <> Ord('g')) or (APrefix[3] <> Ord('S')) then Exit;
-  // 扫描 ≤4KB 前缀内是否含 "vorbis"（大小写不敏感，复用度：统一走 meta 的 VorbisComment 路径）
-  for I := 0 to Length(APrefix) - 6 do
+  if Cur.Remaining < 4 then Exit;
+  if (APrefix[0]<>Ord('O')) or (APrefix[1]<>Ord('g')) or (APrefix[2]<>Ord('g')) or (APrefix[3]<>Ord('S')) then Exit;
+  // 扫描 ≤4KB 前缀内是否含 "vorbis"（大小写不敏感，cursor 边界守卫，复用 meta 路径）
+  for I := 0 to Integer(Cur.Length) - 6 do
     if ((APrefix[I] = Ord('v')) or (APrefix[I] = Ord('V'))) and
        ((APrefix[I+1] = Ord('o')) or (APrefix[I+1] = Ord('O'))) and
        ((APrefix[I+2] = Ord('r')) or (APrefix[I+2] = Ord('R'))) and
@@ -120,7 +121,6 @@ begin
        ((APrefix[I+4] = Ord('i')) or (APrefix[I+4] = Ord('I'))) and
        ((APrefix[I+5] = Ord('s')) or (APrefix[I+5] = Ord('S'))) then
       Exit(prOggVorbis);
-  if Cur.Length >= 4 then ; // keep cursor
 end;
 
 function TVorbisDecoder.Probe(const APrefix: TBytes): TAudioProbeResult;

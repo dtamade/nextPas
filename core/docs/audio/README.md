@@ -11,7 +11,7 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 |---|---|---|---|
 | **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 为真值源，`BlockAlign/ByteRate/FramesForMs` | L0 only |
 | **intf** | `audio.intf` | 共享面 `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | base |
-| **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry/codec.flac(.sse/.decoder)/codec.mp3(.sse/.decoder)/codec.vorbis(.sse/.decoder)` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔，FLAC/MP3/Vorbis 已从 `music888` 吸收（纯 Pascal，手写 SSE/NEON 位精确，`simd.dispatch` 运行时分派，`bytes.cursor`/`mem.arena` 重塑） | base+intf |
+| **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry/codec.flac(.sse/.decoder)/codec.mp3(.sse/.decoder)/codec.vorbis(.sse/.decoder)` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔，FLAC/MP3/Vorbis 已从 `music888` 吸收（纯 Pascal，手写 SSE/NEON 位精确，`simd.dispatch` 运行时分派，`bytes.cursor`/`mem.arena` 重塑，MP3/Vorbis 文件 I/O 零 C 桩 + `PcmClampF32` 复用） | base+intf |
 | **pcm** | `audio.pcm` | 纯函数 `U8/S16/S24/S32↔F32`、`Clamp`、`Interleave/Deinterleave`，`TBytes` 货币，`TPDF` 抖动 | base |
 | **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
 | **device** | `device.intf/device.null` | `IAudioDevice(0040)/IAudioDeviceProvider(0041)`，`dsClosed/Opened/Started`，MPSC `TDeviceEvent`，`InterlockedExchangeAdd64` 计数 `Underrun/Violation`，`Drive` 调 `FillRealtime` | base+intf |
@@ -152,8 +152,8 @@ make hygiene && git diff --check
 
 ```bash
 make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s
-make -C core/benchmarks/nextpas.core.audio/bench_flac clean test # 33k 帧 flac 5.6ms/5.9MB/s
-make -C core/benchmarks/nextpas.core.audio/bench_mp3 clean test  # 3.7k mp3 360µs/10MB/s (固定 -O2，规避 FPC 3.3.1 O3 错译)
+make -C core/benchmarks/nextpas.core.audio/bench_flac clean test # 33k 帧 flac 4.76ms/6.9MB/s（纯 Pascal 倒数预乘 + PcmClampF32 复用，优于 music888 逐采样除法）
+make -C core/benchmarks/nextpas.core.audio/bench_mp3 clean test  # 3.7k mp3 383µs/9.3MB/s（零 C 桩 + 倒数预乘，固定 -O2 规避 FPC 3.3.1 O3 错译）
 make -C core/benchmarks/nextpas.core.audio/bench_mix clean test  # mix 48k 立体声 1s：MixInto 178µs/2GB/s，Ramp 204µs
 bash scripts/sync-music888-audio.sh # 守卫 music888 解码核漂移（行数Δ + 去C/加护统计 + 35 文件门禁 + hygiene）
 ```

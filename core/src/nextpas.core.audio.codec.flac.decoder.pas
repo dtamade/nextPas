@@ -20,7 +20,8 @@ uses
   nextpas.core.bytes.cursor,
   nextpas.core.audio.codec.flac,
   nextpas.core.audio.codec.meta,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.audio.pcm;
 
 type
   TMemoryFlacSource = class(TInterfacedObject, IAudioSource, IRealtimeAudioSource)
@@ -110,30 +111,25 @@ begin
   Result := True;
 end;
 
-{---- Probe via TBytesCursor (复用度/稳定性) ----}
+{---- Probe via TBytesCursor (复用度/稳定性+高级感) ----}
 
 function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
 var
   Cur: IByteCursor;
-  Tag: array[0..3] of Byte;
   I: Integer;
 begin
   Result := prUnknown;
   if Length(APrefix) < 4 then Exit;
   Cur := NewByteCursor(APrefix);
-  Tag[0] := APrefix[0]; Tag[1] := APrefix[1]; Tag[2] := APrefix[2]; Tag[3] := APrefix[3];
-  if (Tag[0] = Ord('f')) and (Tag[1] = Ord('L')) and (Tag[2] = Ord('a')) and (Tag[3] = Ord('C')) then
-    Exit(prFlac);
-  if (Tag[0] = Ord('O')) and (Tag[1] = Ord('g')) and (Tag[2] = Ord('g')) and (Tag[3] = Ord('S')) then
+  if Cur.Remaining < 4 then Exit;
+  // native FLAC: 'fLaC'，经 cursor 边界守卫
+  if (APrefix[0]=Ord('f')) and (APrefix[1]=Ord('L')) and (APrefix[2]=Ord('a')) and (APrefix[3]=Ord('C')) then Exit(prFlac);
+  // Ogg-FLAC: OggS 容器 + 内部 FLAC 标记，扫描 ≤4KB 前缀
+  if (APrefix[0]=Ord('O')) and (APrefix[1]=Ord('g')) and (APrefix[2]=Ord('g')) and (APrefix[3]=Ord('S')) then
   begin
-    for I := 0 to Length(APrefix) - 4 do
-      if (APrefix[I] = Ord('F')) and (APrefix[I+1] = Ord('L')) and
-         (APrefix[I+2] = Ord('A')) and (APrefix[I+3] = Ord('C')) then
-        Exit(prFlac);
+    for I := 0 to Integer(Cur.Length) - 4 do
+      if (APrefix[I]=Ord('F')) and (APrefix[I+1]=Ord('L')) and (APrefix[I+2]=Ord('A')) and (APrefix[I+3]=Ord('C')) then Exit(prFlac);
   end;
-  // Try meta probe for VorbisComment wrapped in FLAC? not needed, keep unknown
-  // cursor remains for future id3/ogg routing via codec.meta
-  if Cur.Length >= 4 then ; // keep cursor live for contract
 end;
 
 function TFlacDecoder.Probe(const APrefix: TBytes): TAudioProbeResult;
@@ -258,8 +254,7 @@ begin
         for CIdx := 0 to CH - 1 do
         begin
           V := FPlanes[CIdx][SIdx];
-          F := Single(V * LDiv);
-          if F > 1.0 then F := 1.0 else if F < -1.0 then F := -1.0;
+          F := PcmClampF32(Single(V * LDiv));
           PSingle(@LOutBytes[LOutPos])^ := F;
           Inc(LOutPos, 4);
         end;

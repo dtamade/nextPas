@@ -108,23 +108,18 @@ end;
 function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
 var
   Cur: IByteCursor;
-  Tag: TBytes;
   Skipped: Integer;
   Tags: TAudioTags;
 begin
   Result := prUnknown;
   if Length(APrefix) < 2 then Exit;
   Cur := NewByteCursor(APrefix);
-  // ID3v2 via meta (复用度：统一标签路径)
   if TryParseID3v2(APrefix, Tags, Skipped) then Exit(prMp3);
-  if Cur.Length >= 3 then
-  begin
-    if (APrefix[0] = Ord('I')) and (APrefix[1] = Ord('D')) and (APrefix[2] = Ord('3')) then
-      Exit(prMp3);
-  end;
-  if (APrefix[0] = $FF) and ((APrefix[1] and $E0) = $E0) then
-    Exit(prMp3);
-  if Cur.Length >= 2 then ; // keep cursor live
+  if Cur.Remaining >= 3 then
+    if (APrefix[0]=Ord('I')) and (APrefix[1]=Ord('D')) and (APrefix[2]=Ord('3')) then Exit(prMp3);
+  // MP3 sync word: 0xFFE0 via cursor length guard
+  if Cur.Remaining >= 2 then
+    if (APrefix[0] = $FF) and ((APrefix[1] and $E0) = $E0) then Exit(prMp3);
 end;
 
 function TMp3Decoder.Probe(const APrefix: TBytes): TAudioProbeResult;

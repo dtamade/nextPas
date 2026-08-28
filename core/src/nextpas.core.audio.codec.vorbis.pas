@@ -352,93 +352,93 @@ const
 
 
 
-function printf(format: PAnsiChar): LongInt; cdecl; varargs; external CLIB name 'printf';
+function printf(format: PAnsiChar): LongInt; cdecl;
 
-function fprintf(stream: PFILE; format: PAnsiChar): LongInt; cdecl; varargs; external CLIB name 'fprintf';
+function fprintf(stream: PFILE; format: PAnsiChar): LongInt; cdecl;
 
-function sprintf(str: PAnsiChar; format: PAnsiChar): LongInt; cdecl; varargs; external CLIB name 'sprintf';
+function sprintf(str: PAnsiChar; format: PAnsiChar): LongInt; cdecl;
 
-function snprintf(str: PAnsiChar; size: TSizeT; format: PAnsiChar): LongInt; cdecl; varargs; external CLIB name 'snprintf';
+function snprintf(str: PAnsiChar; size: TSizeT; format: PAnsiChar): LongInt; cdecl;
 
-function sscanf(str: PAnsiChar; format: PAnsiChar): LongInt; cdecl; varargs; external CLIB name 'sscanf';
+function sscanf(str: PAnsiChar; format: PAnsiChar): LongInt; cdecl;
 
-function scanf(format: PAnsiChar): LongInt; cdecl; varargs; external CLIB name 'scanf';
+function scanf(format: PAnsiChar): LongInt; cdecl;
 
-function fscanf(stream: PFILE; format: PAnsiChar): LongInt; cdecl; varargs; external CLIB name 'fscanf';
+function fscanf(stream: PFILE; format: PAnsiChar): LongInt; cdecl;
 
-function vsnprintf(str: PAnsiChar; size: TSizeT; format: PAnsiChar; ap: Pointer): LongInt; cdecl; external CLIB name 'vsnprintf';
+function vsnprintf(str: PAnsiChar; size: TSizeT; format: PAnsiChar; ap: Pointer): LongInt; cdecl;
 
-function vfprintf(stream: PFILE; format: PAnsiChar; ap: Pointer): LongInt; cdecl; external CLIB name 'vfprintf';
+function vfprintf(stream: PFILE; format: PAnsiChar; ap: Pointer): LongInt; cdecl;
 
-function fopen(path: PAnsiChar; mode: PAnsiChar): PFILE; cdecl; external CLIB name 'fopen';
+function fopen(path: PAnsiChar; mode: PAnsiChar): PFILE; cdecl;
 
-procedure perror(s_2: PAnsiChar); cdecl; external CLIB name 'perror';
+procedure perror(s_2: PAnsiChar); cdecl;
 
-function fdopen(fd: LongInt; mode: PAnsiChar): PFILE; cdecl; external CLIB name 'fdopen';
+function fdopen(fd: LongInt; mode: PAnsiChar): PFILE; cdecl;
 
-function fclose(stream: PFILE): LongInt; cdecl; external CLIB name 'fclose';
+function fclose(stream: PFILE): LongInt; cdecl;
 
-function fread(ptr: Pointer; size: TSizeT; nmemb: TSizeT; stream: PFILE): TSizeT; cdecl; external CLIB name 'fread';
+function fread(ptr: Pointer; size: TSizeT; nmemb: TSizeT; stream: PFILE): TSizeT; cdecl;
 
-function fwrite(ptr: Pointer; size: TSizeT; nmemb: TSizeT; stream: PFILE): TSizeT; cdecl; external CLIB name 'fwrite';
+function fwrite(ptr: Pointer; size: TSizeT; nmemb: TSizeT; stream: PFILE): TSizeT; cdecl;
 
-function fflush(stream: PFILE): LongInt; cdecl; external CLIB name 'fflush';
+function fflush(stream: PFILE): LongInt; cdecl;
 
-function feof(stream: PFILE): LongInt; cdecl; external CLIB name 'feof';
+function feof(stream: PFILE): LongInt; cdecl;
 
-function ferror(stream: PFILE): LongInt; cdecl; external CLIB name 'ferror';
+function ferror(stream: PFILE): LongInt; cdecl;
 
-function fgets(s_2: PAnsiChar; size: LongInt; stream: PFILE): PAnsiChar; cdecl; external CLIB name 'fgets';
+function fgets(s_2: PAnsiChar; size: LongInt; stream: PFILE): PAnsiChar; cdecl;
 
-function fgetc(stream: PFILE): LongInt; cdecl; external CLIB name 'fgetc';
+function fgetc(stream: PFILE): LongInt; cdecl;
 
-function fputc(c: LongInt; stream: PFILE): LongInt; cdecl; external CLIB name 'fputc';
+function fputc(c: LongInt; stream: PFILE): LongInt; cdecl;
 
-function putchar(c: LongInt): LongInt; cdecl; external CLIB name 'putchar';
+function putchar(c: LongInt): LongInt; cdecl;
 
-function puts(s_2: PAnsiChar): LongInt; cdecl; external CLIB name 'puts';
+function puts(s_2: PAnsiChar): LongInt; cdecl;
 
-function getc(stream: PFILE): LongInt; cdecl; external CLIB name 'getc';
+function getc(stream: PFILE): LongInt; cdecl;
 
-function getchar(): LongInt; cdecl; external CLIB name 'getchar';
+function getchar(): LongInt; cdecl;
 
-function putc(c: LongInt; stream: PFILE): LongInt; cdecl; external CLIB name 'putc';
+function putc(c: LongInt; stream: PFILE): LongInt; cdecl;
 
-function ungetc(c: LongInt; stream: PFILE): LongInt; cdecl; external CLIB name 'ungetc';
+function ungetc(c: LongInt; stream: PFILE): LongInt; cdecl;
 
-function fseek(stream: PFILE; offset: Int64; whence: LongInt): LongInt; cdecl; external CLIB name 'fseek';
+function fseek(stream: PFILE; offset: Int64; whence: LongInt): LongInt; cdecl;
 
-function ftell(stream: PFILE): Int64; cdecl; external CLIB name 'ftell';
+function ftell(stream: PFILE): Int64; cdecl;
 
-procedure rewind(stream: PFILE); cdecl; external CLIB name 'rewind';
+procedure rewind(stream: PFILE); cdecl;
 
-function fputs(s_2: PAnsiChar; stream: PFILE): LongInt; cdecl; external CLIB name 'fputs';
+function fputs(s_2: PAnsiChar; stream: PFILE): LongInt; cdecl;
 
-function vsprintf(str: PAnsiChar; format: PAnsiChar; ap: Pointer): LongInt; cdecl; external CLIB name 'vsprintf';
+function vsprintf(str: PAnsiChar; format: PAnsiChar; ap: Pointer): LongInt; cdecl;
 
-function freopen(path: PAnsiChar; mode: PAnsiChar; stream: PFILE): PFILE; cdecl; external CLIB name 'freopen';
+function freopen(path: PAnsiChar; mode: PAnsiChar; stream: PFILE): PFILE; cdecl;
 
-function tmpfile(): PFILE; cdecl; external CLIB name 'tmpfile';
+function tmpfile(): PFILE; cdecl;
 
-function tmpnam(s_2: PAnsiChar): PAnsiChar; cdecl; external CLIB name 'tmpnam';
+function tmpnam(s_2: PAnsiChar): PAnsiChar; cdecl;
 
-function remove(pathname: PAnsiChar): LongInt; cdecl; external CLIB name 'remove';
+function remove(pathname: PAnsiChar): LongInt; cdecl;
 
-function rename(oldpath: PAnsiChar; newpath: PAnsiChar): LongInt; cdecl; external CLIB name 'rename';
+function rename(oldpath: PAnsiChar; newpath: PAnsiChar): LongInt; cdecl;
 
-function setvbuf(stream: PFILE; buf: PAnsiChar; mode: LongInt; size: TSizeT): LongInt; cdecl; external CLIB name 'setvbuf';
+function setvbuf(stream: PFILE; buf: PAnsiChar; mode: LongInt; size: TSizeT): LongInt; cdecl;
 
-procedure setbuf(stream: PFILE; buf: PAnsiChar); cdecl; external CLIB name 'setbuf';
+procedure setbuf(stream: PFILE; buf: PAnsiChar); cdecl;
 
-procedure clearerr(stream: PFILE); cdecl; external CLIB name 'clearerr';
+procedure clearerr(stream: PFILE); cdecl;
 
-function fileno(stream: PFILE): LongInt; cdecl; external CLIB name 'fileno';
+function fileno(stream: PFILE): LongInt; cdecl;
 
-function popen(command: PAnsiChar; &type: PAnsiChar): PFILE; cdecl; external CLIB name 'popen';
+function popen(command: PAnsiChar; &type: PAnsiChar): PFILE; cdecl;
 
-function pclose(stream: PFILE): LongInt; cdecl; external CLIB name 'pclose';
+function pclose(stream: PFILE): LongInt; cdecl;
 
-function calloc(nmemb: TSizeT; size: TSizeT): Pointer; cdecl; external CLIB name 'calloc';
+function calloc(nmemb: TSizeT; size: TSizeT): Pointer; cdecl;
 
 procedure abort(); cdecl;
 
@@ -643,9 +643,9 @@ function stb_vorbis_get_samples_float(f: PStbVorbis; channels: LongInt; buffer: 
   导入在 32 位 PE 上不可解引用，故 Windows 端不导入（声明保留给 C 形参表） }
 {$ifndef windows}
 var
-  stdin: PFILE; external CLIB name 'stdin';
-  stdout: PFILE; external CLIB name 'stdout';
-  stderr: PFILE; external CLIB name 'stderr';
+  stdin: PFILE = nil; { pure pascal }
+  stdout: PFILE = nil;
+  stderr: PFILE = nil;
 {$endif}
 
 implementation
@@ -655,6 +655,97 @@ uses
   nextpas.core.audio.codec.vorbis.sse,
   nextpas.core.audio.simd
   ;
+{ === 纯 Pascal 桩：stdio 零 C 链接（仅文件路径未用，内存路径纯 Pascal） === }
+function printf(format: PAnsiChar): LongInt; cdecl;
+begin Result := 0; end;
+function fprintf(stream: PFILE; format: PAnsiChar): LongInt; cdecl;
+begin Result := 0; end;
+function sprintf(str: PAnsiChar; format: PAnsiChar): LongInt; cdecl;
+begin Result := 0; end;
+function snprintf(str: PAnsiChar; size: TSizeT; format: PAnsiChar): LongInt; cdecl;
+begin Result := 0; end;
+function sscanf(str: PAnsiChar; format: PAnsiChar): LongInt; cdecl;
+begin Result := 0; end;
+function scanf(format: PAnsiChar): LongInt; cdecl;
+begin Result := 0; end;
+function fscanf(stream: PFILE; format: PAnsiChar): LongInt; cdecl;
+begin Result := 0; end;
+function vsnprintf(str: PAnsiChar; size: TSizeT; format: PAnsiChar; ap: Pointer): LongInt; cdecl;
+begin Result := 0; end;
+function vfprintf(stream: PFILE; format: PAnsiChar; ap: Pointer): LongInt; cdecl;
+begin Result := 0; end;
+function vsprintf(str: PAnsiChar; format: PAnsiChar; ap: Pointer): LongInt; cdecl;
+begin Result := 0; end;
+function fopen(path: PAnsiChar; mode: PAnsiChar): PFILE; cdecl;
+begin Result := nil; end;
+procedure perror(s_2: PAnsiChar); cdecl;
+begin end;
+function fdopen(fd: LongInt; mode: PAnsiChar): PFILE; cdecl;
+begin Result := nil; end;
+function fclose(stream: PFILE): LongInt; cdecl;
+begin Result := 0; end;
+function fread(ptr: Pointer; size: TSizeT; nmemb: TSizeT; stream: PFILE): TSizeT; cdecl;
+begin Result := 0; end;
+function fwrite(ptr: Pointer; size: TSizeT; nmemb: TSizeT; stream: PFILE): TSizeT; cdecl;
+begin Result := 0; end;
+function fflush(stream: PFILE): LongInt; cdecl;
+begin Result := 0; end;
+function feof(stream: PFILE): LongInt; cdecl;
+begin Result := 1; end;
+function ferror(stream: PFILE): LongInt; cdecl;
+begin Result := 0; end;
+function fgets(s_2: PAnsiChar; size: LongInt; stream: PFILE): PAnsiChar; cdecl;
+begin Result := nil; end;
+function fgetc(stream: PFILE): LongInt; cdecl;
+begin Result := -1; end;
+function fputc(c: LongInt; stream: PFILE): LongInt; cdecl;
+begin Result := -1; end;
+function putchar(c: LongInt): LongInt; cdecl;
+begin Result := -1; end;
+function puts(s_2: PAnsiChar): LongInt; cdecl;
+begin Result := -1; end;
+function getc(stream: PFILE): LongInt; cdecl;
+begin Result := -1; end;
+function getchar(): LongInt; cdecl;
+begin Result := -1; end;
+function putc(c: LongInt; stream: PFILE): LongInt; cdecl;
+begin Result := -1; end;
+function ungetc(c: LongInt; stream: PFILE): LongInt; cdecl;
+begin Result := -1; end;
+function fseek(stream: PFILE; offset: Int64; whence: LongInt): LongInt; cdecl;
+begin Result := -1; end;
+function ftell(stream: PFILE): Int64; cdecl;
+begin Result := -1; end;
+procedure rewind(stream: PFILE); cdecl;
+begin end;
+function fputs(s_2: PAnsiChar; stream: PFILE): LongInt; cdecl;
+begin Result := -1; end;
+function freopen(path: PAnsiChar; mode: PAnsiChar; stream: PFILE): PFILE; cdecl;
+begin Result := nil; end;
+function tmpfile(): PFILE; cdecl;
+begin Result := nil; end;
+function tmpnam(s_2: PAnsiChar): PAnsiChar; cdecl;
+begin Result := nil; end;
+function remove(pathname: PAnsiChar): LongInt; cdecl;
+begin Result := -1; end;
+function rename(oldpath: PAnsiChar; newpath: PAnsiChar): LongInt; cdecl;
+begin Result := -1; end;
+function setvbuf(stream: PFILE; buf: PAnsiChar; mode: LongInt; size: TSizeT): LongInt; cdecl;
+begin Result := -1; end;
+procedure setbuf(stream: PFILE; buf: PAnsiChar); cdecl;
+begin end;
+procedure clearerr(stream: PFILE); cdecl;
+begin end;
+function fileno(stream: PFILE): LongInt; cdecl;
+begin Result := -1; end;
+function popen(command: PAnsiChar; &type: PAnsiChar): PFILE; cdecl;
+begin Result := nil; end;
+function pclose(stream: PFILE): LongInt; cdecl;
+begin Result := -1; end;
+function calloc(nmemb: TSizeT; size: TSizeT): Pointer; cdecl;
+var L: TSizeT; P: Pointer;
+begin L := nmemb*size; GetMem(P, L); if P<>nil then FillChar(P^, L, 0); Result := P; end;
+
 
 const
   {$ifdef C2P_NO_K1}
