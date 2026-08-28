@@ -75,6 +75,31 @@ type
   end;
   TDeferredDirArray = array of TDeferredDir;
 
+procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
+var
+  LCap, LNew: Integer;
+begin
+  LCap := Length(A);
+  if LCap >= AMin then Exit;
+  if LCap = 0 then LCap := 16;
+  LNew := LCap;
+  while LNew < AMin do
+    LNew := LNew * 2;
+  SetLength(A, LNew);
+end;
+
+procedure WalkAppend(var A: TWalkArray; var ACount: Integer;
+  const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word); inline;
+begin
+  EnsureWalkCapacity(A, ACount + 1);
+  A[ACount].FRel := ARel;
+  A[ACount].FFull := AFull;
+  A[ACount].FIsDir := AIsDir;
+  A[ACount].FMtime := AMtime;
+  A[ACount].FMode := AMode;
+  Inc(ACount);
+end;
+
 procedure SortDirEntries(var A: TDirEntryArray);
 var
   LStackLo, LStackHi: array[0..63] of Integer;
@@ -143,7 +168,7 @@ end;
 
 { 深度优先收集子树：目录先于其内容，同层级按名字节序 }
 procedure CollectLevel(const AAbsDir, ARelPrefix: string;
-  var AOut: TWalkArray);
+  var AOut: TWalkArray; var ACount: Integer);
 var
   LEntries: TDirEntryArray;
   LI: Integer;
@@ -165,24 +190,16 @@ begin
     LInfo := Stat(LChildAbs);
     if LEntries[LI].IsDir then
     begin
-      SetLength(AOut, Length(AOut) + 1);
-      AOut[High(AOut)].FRel := LChildRel;
-      AOut[High(AOut)].FFull := LChildAbs;
-      AOut[High(AOut)].FIsDir := True;
-      AOut[High(AOut)].FMtime := LInfo.ModTime div 1000000000;
-      AOut[High(AOut)].FMode :=
-        ZipDirectoryMode(Word(LInfo.Permission) and $0FFF);
-      CollectLevel(LChildAbs, LChildRel, AOut);
+      WalkAppend(AOut, ACount, LChildRel, LChildAbs, True,
+        LInfo.ModTime div 1000000000,
+        ZipDirectoryMode(Word(LInfo.Permission) and $0FFF));
+      CollectLevel(LChildAbs, LChildRel, AOut, ACount);
     end
     else if LEntries[LI].FileType = ftRegular then
     begin
-      SetLength(AOut, Length(AOut) + 1);
-      AOut[High(AOut)].FRel := LChildRel;
-      AOut[High(AOut)].FFull := LChildAbs;
-      AOut[High(AOut)].FIsDir := False;
-      AOut[High(AOut)].FMtime := LInfo.ModTime div 1000000000;
-      AOut[High(AOut)].FMode :=
-        ZipRegularMode(Word(LInfo.Permission) and $0FFF);
+      WalkAppend(AOut, ACount, LChildRel, LChildAbs, False,
+        LInfo.ModTime div 1000000000,
+        ZipRegularMode(Word(LInfo.Permission) and $0FFF));
     end;
     { 符号链接/设备/FIFO/socket 跳过，见单元头注释 }
   end;
@@ -192,7 +209,7 @@ procedure ZipPackDirInto(const ADir: string; const AWriter: IZipWriter);
 var
   LRoot: TFileInfo;
   LWalks: TWalkArray;
-  LI: Integer;
+  LI, LWalksCount: Integer;
   LOpts: TZipAddOptions;
   LData: TBytes;
 begin
@@ -200,7 +217,9 @@ begin
   if not LRoot.IsDir then
     raise EArgumentError.Create('zip pack: not a directory: ' + ADir);
   SetLength(LWalks, 0);
-  CollectLevel(ADir, '', LWalks);
+  LWalksCount := 0;
+  CollectLevel(ADir, '', LWalks, LWalksCount);
+  SetLength(LWalks, LWalksCount);
   for LI := 0 to High(LWalks) do
   begin
     LOpts := DefaultZipAddOptions;
