@@ -1142,6 +1142,135 @@ begin
   CheckEqual(Int64(5), Int64(LR.EntryCount), 'total unlimited passes');
 end;
 
+function ZipReadOptsLimit10: TZipReadOptions;
+begin
+  Result := DefaultZipReadOptions;
+  Result.MaxOutputSize := 10;
+end;
+
+procedure TestExtractToBufferZeroCopy;
+var
+  LArch, LWant, LTampered: TBytes;
+  LR, LRSrc: IZipReader;
+  LSrc: IStream;
+  LIdx, LI: Integer;
+  LBuf, LByNameBuf: array of Byte;
+  LPos: Int64;
+  LGot: SizeUInt;
+  LGotRaise: Boolean;
+  LSentinel: Byte;
+
+  function BuildTinyArchive: TBytes;
+  var LW: IZipWriter;
+  begin
+    LW := NewZipWriter;
+    LW.AddEntry('s.txt', BytesOfStr('hello'));
+    LW.AddEntryDeflate('d.bin', PatternBytes(5000, 7));
+    LW.AddDirectory('emptydir/');
+    LW.AddEntryWithTime('数据/x.txt', BytesOfStr('payload'), 1787574896);
+    Result := LW.Finish;
+  end;
+
+  procedure CheckBufEquals(const ABuf: array of Byte; ASize: SizeUInt; const AWant: TBytes; const ALabel: string);
+  var J: Integer;
+  begin
+    CheckEqual(Int64(Length(AWant)), Int64(ASize), ALabel + ' size');
+    for J := 0 to High(AWant) do
+      Check(ABuf[J] = AWant[J], ALabel + ' byte ' + IntToStr(J));
+  end;
+
+begin
+  LArch := BuildTinyArchive;
+  for LI := 0 to 1 do
+  begin
+    if LI = 0 then
+    begin
+      LR := NewZipReader(LArch);
+      LRSrc := LR;
+    end
+    else
+    begin
+      LSrc := CreateBytesStreamFrom(LArch);
+      LRSrc := NewZipReaderFrom(LSrc);
+    end;
+    for LIdx := 0 to LRSrc.EntryCount - 1 do
+    begin
+      if LRSrc.Entry(LIdx).IsDirectory then
+      begin
+        LSentinel := $CC;
+        SetLength(LBuf, 4);
+        LBuf[0] := LSentinel; LBuf[1] := LSentinel; LBuf[2] := LSentinel; LBuf[3] := LSentinel;
+        LGot := LRSrc.ExtractToBuffer(LIdx, @LBuf[0], Length(LBuf));
+        CheckEqual(Int64(0), Int64(LGot), 'dir zero');
+        Check((LBuf[0]=LSentinel) and (LBuf[1]=LSentinel) and (LBuf[2]=LSentinel) and (LBuf[3]=LSentinel), 'dir untouched');
+        Continue;
+      end;
+      LWant := LRSrc.ExtractToBytes(LIdx);
+      SetLength(LBuf, Length(LWant));
+      LGot := LRSrc.ExtractToBuffer(LIdx, @LBuf[0], Length(LBuf));
+      CheckEqual(Int64(Length(LWant)), Int64(LGot), 'pbyte size ' + LRSrc.Entry(LIdx).Name);
+      CheckBufEquals(LBuf, LGot, LWant, 'pbyte bytes ' + LRSrc.Entry(LIdx).Name);
+      SetLength(LByNameBuf, Length(LWant));
+      LGot := LRSrc.ExtractToBufferByName(LRSrc.Entry(LIdx).Name, @LByNameBuf[0], Length(LByNameBuf));
+      CheckBufEquals(LByNameBuf, LGot, LWant, 'pbyte byname ' + LRSrc.Entry(LIdx).Name);
+      if Length(LWant) > 0 then
+      begin
+        LGotRaise := False;
+        try
+          SetLength(LBuf, Length(LWant) - 1);
+          if Length(LBuf) = 0 then
+            LRSrc.ExtractToBuffer(LIdx, nil, 0)
+          else
+            LRSrc.ExtractToBuffer(LIdx, @LBuf[0], Length(LBuf));
+        except
+          on E: Exception do LGotRaise := Pos('EIOError', E.ClassName) > 0;
+        end;
+        Check(LGotRaise, 'small buffer raises');
+      end;
+    end;
+    LGotRaise := False;
+    try LRSrc.ExtractToBufferByName('nope.bin', nil, 0);
+    except on E: Exception do LGotRaise := Pos('ENotFoundError', E.ClassName) > 0; end;
+    Check(LGotRaise, 'pbyte not found');
+    LGotRaise := False;
+    try
+      LIdx := LRSrc.Find('s.txt');
+      if LIdx >= 0 then LRSrc.ExtractToBuffer(LIdx, nil, 0);
+    except on E: Exception do LGotRaise := Pos('EArgumentError', E.ClassName) > 0; end;
+    Check(LGotRaise, 'nil buffer nonzero raises');
+  end;
+  { tamper: store s.txt payload at local header +30+5=35 }
+  LTampered := Copy(LArch, 0, Length(LArch));
+  LR := NewZipReader(LArch);
+  LPos := LR.Entry(LR.Find('s.txt')).LocalHeaderOffset + 30 + Length('s.txt');
+  if (LPos >= 0) and (LPos < Length(LTampered)) then
+  begin
+    LTampered[Integer(LPos)] := LTampered[Integer(LPos)] xor $01;
+    LR := NewZipReader(LTampered);
+    LIdx := LR.Find('s.txt');
+    SetLength(LBuf, Integer(LR.Entry(LIdx).UncompressedSize));
+    LGotRaise := False;
+    try LR.ExtractToBuffer(LIdx, @LBuf[0], Length(LBuf));
+    except on E: Exception do LGotRaise := Pos('EIOError', E.ClassName) > 0; end;
+    Check(LGotRaise, 'pbyte crc mismatch raises');
+  end;
+  { MaxOutput guard }
+  LIdx := NewZipReader(LArch).Find('d.bin');
+  SetLength(LBuf, 6000);
+  LGotRaise := False;
+  try
+    begin
+      LR := NewZipReaderWithOptions(LArch, DefaultZipReadOptions);
+      LRSrc := NewZipReaderWithOptions(LArch, DefaultZipReadOptions);
+    end;
+    begin
+      LR := NewZipReaderWithOptions(LArch, ZipReadOptsLimit10);
+      LR.ExtractToBuffer(LIdx, @LBuf[0], Length(LBuf));
+    end;
+  except on E: Exception do LGotRaise := Pos('EIOError', E.ClassName) > 0; end;
+  Check(LGotRaise, 'pbyte maxoutput guard');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.reader');
   T.Test('Empty archive reader', @TestEmptyArchiveReader);
@@ -1173,5 +1302,6 @@ begin
   T.Test('Source reader zip64 and max output',
     @TestSourceReaderZip64AndMaxOutput);
   T.Test('Total output limit', @TestTotalOutputLimit);
+  T.Test('ExtractToBuffer zero copy', @TestExtractToBufferZeroCopy);
   if not T.Run then Halt(1);
 end.

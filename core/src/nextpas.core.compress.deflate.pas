@@ -53,6 +53,12 @@ function RawDeflateDecompressWithMaxOutputSize(const AData: TBytes;
 function RawDeflateDecompressSized(const AData: TBytes;
   const AExpectedOutputSize, AMaxOutputSize: SizeUInt): TBytes;
 
+{** RAW inflate 直写 PByte 缓冲（零分配）：将 APayload 解压到 ADst[0..ADstLen-1]，
+    返回实际解压字节数；ADstLen 与 AMaxOutputSize 双重约束，超限或缓冲不足均 raise；
+    无分配，调用方可栈上/堆上预分配后复用。 *}
+function RawDeflateDecompressToBuffer(const AData: TBytes; const ADst: PByte;
+  const ADstLen, AMaxOutputSize: SizeUInt): SizeUInt;
+
 { 7z 兼容别名：历史 sevenz writer 调用 DeflateRawCompress，语义同 RawDeflateCompress }
 function DeflateRawCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes; inline;
@@ -60,7 +66,7 @@ function DeflateRawCompress(const AData: TBytes;
 implementation
 
 uses
-  zlib, nextpas.core.errors;
+  zlib, nextpas.core.errors, nextpas.core.exception;
 
 type
   TDeflateWriter = class(TInterfacedObject, IWriter, ICompressWriter)
@@ -995,6 +1001,65 @@ begin
     if LStream.avail_in <> 0 then
       raise EIOError.Create('raw inflate: trailing bytes after stream');
     SetLength(Result, LOutLen);
+  finally
+    inflateEnd(LStream);
+  end;
+end;
+
+function RawDeflateDecompressToBuffer(const AData: TBytes; const ADst: PByte;
+  const ADstLen, AMaxOutputSize: SizeUInt): SizeUInt;
+var
+  LStream: z_stream;
+  LRet: Int32;
+begin
+  if ADst = nil then
+  begin
+    if ADstLen <> 0 then
+      raise EArgumentError.Create('raw inflate: nil dest buffer');
+    if Length(AData) = 0 then
+      Exit(0);
+    raise EArgumentError.Create('raw inflate: dest buffer too small');
+  end;
+  if AMaxOutputSize = 0 then
+    raise EIOError.Create('raw inflate: max output size must be > 0');
+  if ADstLen > AMaxOutputSize then
+    raise EIOError.Create('raw inflate: dest buffer exceeds max output limit');
+  Result := 0;
+  FillChar(LStream, SizeOf(LStream), 0);
+  if Length(AData) > 0 then
+  begin
+    LStream.next_in := @AData[0];
+    LStream.avail_in := ZlibInputSize(SizeUInt(Length(AData)));
+  end;
+  if inflateInit2(LStream, -15) <> Z_OK then
+    raise EIOError.Create('raw inflateInit2 failed');
+  try
+    LStream.next_out := pBytef(ADst);
+    LStream.avail_out := ZlibAvailChunk(ADstLen);
+    repeat
+      LRet := inflate(LStream, Z_NO_FLUSH);
+      if LRet = Z_STREAM_END then
+        Break;
+      if (LRet <> Z_OK) and (LRet <> Z_BUF_ERROR) then
+      begin
+        if LRet = Z_DATA_ERROR then
+          raise EIOError.Create('raw inflate: corrupt stream');
+        raise EIOError.Create('raw inflate failed (' + IntToStr(LRet) + ')');
+      end;
+      if (LRet = Z_BUF_ERROR) and (LStream.avail_in = 0) and (LStream.avail_out > 0) then
+        raise EIOError.Create('raw inflate: truncated stream');
+      if LStream.avail_out = 0 then
+      begin
+        if LRet = Z_OK then
+          raise EIOError.Create('raw inflate: dest buffer too small');
+        Break;
+      end;
+    until False;
+    if LStream.avail_in <> 0 then
+      raise EIOError.Create('raw inflate: trailing bytes after stream');
+    Result := ADstLen - SizeUInt(LStream.avail_out);
+    if Result > AMaxOutputSize then
+      raise EIOError.Create('raw inflate: decompressed size exceeds limit');
   finally
     inflateEnd(LStream);
   end;
