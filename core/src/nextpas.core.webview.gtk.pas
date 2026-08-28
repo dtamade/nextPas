@@ -198,11 +198,25 @@ uses
 
 var
   GLiveWindows: array of TGtkWebview;
+  GLiveWindowsCount: Integer = 0;
   { scheme 按 context 去重：默认 context 是进程级单例，多窗口重复注册
     会被 GLib CRITICAL 拒绝，且后到处理器无法接管——必须首注册独占 }
   GRegisteredSchemeCtxs: array of Pointer;
+  GRegisteredSchemeCtxsCount: Integer = 0;
   GGtkDebugChecked: Boolean = False;
   GGtkDebugEnabled: Boolean = False;
+
+procedure GrowLiveWindows; inline;
+begin
+  if GLiveWindowsCount = Length(GLiveWindows) then
+    SetLength(GLiveWindows, WebviewGrowCapacity(Length(GLiveWindows)));
+end;
+
+procedure GrowSchemeCtxs; inline;
+begin
+  if GRegisteredSchemeCtxsCount = Length(GRegisteredSchemeCtxs) then
+    SetLength(GRegisteredSchemeCtxs, WebviewGrowCapacity(Length(GRegisteredSchemeCtxs)));
+end;
 
 { 环境门控诊断轨迹（NPW_GTK_DEBUG=1 时写 stderr），默认零开销：
   覆盖 nav/scheme/eval 三条异步轴，用于现场问题定位 }
@@ -221,7 +235,7 @@ function SchemeContextRegistered(ACtx: Pointer): Boolean;
 var
   I: Integer;
 begin
-  for I := 0 to High(GRegisteredSchemeCtxs) do
+  for I := 0 to GRegisteredSchemeCtxsCount - 1 do
     if GRegisteredSchemeCtxs[I] = ACtx then
       Exit(True);
   Result := False;
@@ -229,20 +243,23 @@ end;
 
 procedure RememberSchemeContext(ACtx: Pointer);
 begin
-  SetLength(GRegisteredSchemeCtxs, Length(GRegisteredSchemeCtxs) + 1);
-  GRegisteredSchemeCtxs[High(GRegisteredSchemeCtxs)] := ACtx;
+  GrowSchemeCtxs;
+  GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := ACtx;
+  Inc(GRegisteredSchemeCtxsCount);
 end;
 
 procedure ForgetSchemeContext(ACtx: Pointer);
 var
   I, J: Integer;
 begin
-  for I := 0 to High(GRegisteredSchemeCtxs) do
+  for I := 0 to GRegisteredSchemeCtxsCount - 1 do
     if GRegisteredSchemeCtxs[I] = ACtx then
     begin
-      for J := I to High(GRegisteredSchemeCtxs) - 1 do
+      for J := I to GRegisteredSchemeCtxsCount - 2 do
         GRegisteredSchemeCtxs[J] := GRegisteredSchemeCtxs[J + 1];
-      SetLength(GRegisteredSchemeCtxs, Length(GRegisteredSchemeCtxs) - 1);
+      Dec(GRegisteredSchemeCtxsCount);
+      if GRegisteredSchemeCtxsCount < Length(GRegisteredSchemeCtxs) then
+        GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := nil;
       Exit;
     end;
 end;
@@ -252,7 +269,7 @@ var
   I, LCnt: Integer;
 begin
   LCnt := 0;
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed then
       Inc(LCnt);
   Result := LCnt;
@@ -260,20 +277,23 @@ end;
 
 procedure RegisterLive(AWin: TGtkWebview);
 begin
-  SetLength(GLiveWindows, Length(GLiveWindows) + 1);
-  GLiveWindows[High(GLiveWindows)] := AWin;
+  GrowLiveWindows;
+  GLiveWindows[GLiveWindowsCount] := AWin;
+  Inc(GLiveWindowsCount);
 end;
 
 procedure UnregisterLive(AWin: TGtkWebview);
 var
   I, J: Integer;
 begin
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if GLiveWindows[I] = AWin then
     begin
-      for J := I to High(GLiveWindows) - 1 do
+      for J := I to GLiveWindowsCount - 2 do
         GLiveWindows[J] := GLiveWindows[J + 1];
-      SetLength(GLiveWindows, Length(GLiveWindows) - 1);
+      Dec(GLiveWindowsCount);
+      if GLiveWindowsCount < Length(GLiveWindows) then
+        GLiveWindows[GLiveWindowsCount] := nil;
       Exit;
     end;
 end;
@@ -422,13 +442,13 @@ begin
   if AView <> nil then
   begin
     { 单窗快路径：95% 场景 single-window 零扫描，牺牲 2 次比较换线性遍历 }
-    if Length(GLiveWindows) = 1 then
+    if GLiveWindowsCount = 1 then
     begin
       if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = AView) then
         Exit(GLiveWindows[0]);
       Exit(nil);
     end;
-    for I := 0 to High(GLiveWindows) do
+    for I := 0 to GLiveWindowsCount - 1 do
       if (not GLiveWindows[I].FClosed) and
          (GLiveWindows[I].FView = AView) then
         Exit(GLiveWindows[I]);
@@ -440,7 +460,7 @@ function LatestLiveWebview: TGtkWebview; inline;
 var
   I: Integer;
 begin
-  for I := High(GLiveWindows) downto 0 do
+  for I := GLiveWindowsCount - 1 downto 0 do
     if not GLiveWindows[I].FClosed then
       Exit(GLiveWindows[I]);
   Result := nil;

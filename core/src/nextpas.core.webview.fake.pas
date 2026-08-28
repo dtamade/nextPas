@@ -590,13 +590,20 @@ end;
 
 var
   GLiveWindows: array of TFakeWebview;
+  GLiveWindowsCount: Integer = 0;
+
+procedure GrowLiveWindows; inline;
+begin
+  if GLiveWindowsCount = Length(GLiveWindows) then
+    SetLength(GLiveWindows, WebviewGrowCapacity(Length(GLiveWindows)));
+end;
 
 function FakeLiveWindowCount: Integer;
 var
   I, LCnt: Integer;
 begin
   LCnt := 0;
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed then
       LCnt := LCnt + 1;
   Result := LCnt;
@@ -606,7 +613,7 @@ procedure FakePumpAll;
 var
   I: Integer;
 begin
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed then
       GLiveWindows[I].PumpOnce;
 end;
@@ -661,8 +668,9 @@ begin
   FNavigateCount := 0;
   FHistoryCount := 0;
   FHistIdx := -1;
-  SetLength(GLiveWindows, Length(GLiveWindows) + 1);
-  GLiveWindows[High(GLiveWindows)] := Self;
+  GrowLiveWindows;
+  GLiveWindows[GLiveWindowsCount] := Self;
+  Inc(GLiveWindowsCount);
 
   { Initial* 启动加载：构造即导航。优先级 InitialUrl > InitialHtml
     （CONTRACT §2.2），资产/桥请求都在主循环泵里才发生，Build 返回后的
@@ -677,11 +685,13 @@ destructor TFakeWebview.Destroy;
 var
   I: Integer;
 begin
-  for I := High(GLiveWindows) downto 0 do
+  for I := GLiveWindowsCount - 1 downto 0 do
     if GLiveWindows[I] = Self then
     begin
-      GLiveWindows[I] := GLiveWindows[High(GLiveWindows)];
-      SetLength(GLiveWindows, Length(GLiveWindows) - 1);
+      GLiveWindows[I] := GLiveWindows[GLiveWindowsCount - 1];
+      GLiveWindows[GLiveWindowsCount - 1] := nil;
+      Dec(GLiveWindowsCount);
+      Break;
     end;
   inherited Destroy;
 end;

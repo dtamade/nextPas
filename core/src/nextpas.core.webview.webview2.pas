@@ -165,13 +165,20 @@ procedure CoTaskMemFree(pv: Pointer); stdcall; external 'ole32.dll' name 'CoTask
 var
   GLive: Integer = 0;
   GLiveList: array of TWebView2Webview;
+  GLiveListCount: Integer = 0;
   GScaleHookInstalled: Boolean = False;
   GResizeHookInstalled: Boolean = False;
+
+procedure GrowLiveList; inline;
+begin
+  if GLiveListCount = Length(GLiveList) then
+    SetLength(GLiveList, WebviewGrowCapacity(Length(GLiveList)));
+end;
 
 procedure GlobalWinScaleChanged(AWin: Pointer; AScale: Double);
 var I: Integer;
 begin
-  for I := 0 to High(GLiveList) do
+  for I := 0 to GLiveListCount - 1 do
     if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
       GLiveList[I].DoScaleChanged(AScale);
 end;
@@ -179,26 +186,29 @@ end;
 procedure GlobalWinResizeChanged(AWin: Pointer; AWidth, AHeight: Integer);
 var I: Integer;
 begin
-  for I := 0 to High(GLiveList) do
+  for I := 0 to GLiveListCount - 1 do
     if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
       GLiveList[I].UpdateControllerBounds;
 end;
 
 procedure RegisterLive(AInst: TWebView2Webview);
 begin
-  SetLength(GLiveList, Length(GLiveList) + 1);
-  GLiveList[High(GLiveList)] := AInst;
+  GrowLiveList;
+  GLiveList[GLiveListCount] := AInst;
+  Inc(GLiveListCount);
 end;
 
 procedure UnregisterLive(AInst: TWebView2Webview);
 var I, J: Integer;
 begin
-  for I := 0 to High(GLiveList) do
+  for I := 0 to GLiveListCount - 1 do
     if GLiveList[I] = AInst then
     begin
-      for J := I to High(GLiveList) - 1 do
+      for J := I to GLiveListCount - 2 do
         GLiveList[J] := GLiveList[J + 1];
-      SetLength(GLiveList, Length(GLiveList) - 1);
+      Dec(GLiveListCount);
+      if GLiveListCount < Length(GLiveList) then
+        GLiveList[GLiveListCount] := nil;
       Break;
     end;
 end;
