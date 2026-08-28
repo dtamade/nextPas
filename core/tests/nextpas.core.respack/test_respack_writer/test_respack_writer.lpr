@@ -425,6 +425,29 @@ begin
   end;
 end;
 
+{ CmpPath 单源收敛回归 — 前缀重叠字节序边界，零分配 }
+procedure TestWriterCmpPathSortedEdge;
+var
+  InA: array[0..3] of TResPackInputEntry;
+  B: TResPackBlob;
+  RP: TResPack;
+begin
+  InA[0] := Ent('a/b.txt', BytesOf('b'));
+  InA[1] := Ent('a', BytesOf('a'));
+  InA[2] := Ent('a.txt', BytesOf('c'));
+  InA[3] := Ent('z.txt', BytesOf('d'));
+  B := ResPackBuild(InA, ResPackDefaultOptions);
+  try
+    RP := ResPackOpen(B.Data, B.Size);
+    Check(RP.PathOf(RP.EntryAt(0)) = 'a', 'cmp edge [0]=a');
+    Check(RP.PathOf(RP.EntryAt(1)) = 'a.txt', 'cmp edge [1]=a.txt');
+    Check(RP.PathOf(RP.EntryAt(2)) = 'a/b.txt', 'cmp edge [2]=a/b.txt');
+    Check(RP.PathOf(RP.EntryAt(3)) = 'z.txt', 'cmp edge [3]=z.txt');
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.respack.writer');
   T.Test('determinism', @TestDeterminism);
@@ -442,5 +465,6 @@ begin
   T.Test('empty pack opens', @TestEmptyPack);
   T.Test('golden snapshot', @TestGoldenSnapshot);
   T.Test('header fields sane', @TestHeaderFields);
+  T.Test('cmp path sorted edge', @TestWriterCmpPathSortedEdge);
   if not T.Run then Halt(1);
 end.
