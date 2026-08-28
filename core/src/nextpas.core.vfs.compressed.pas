@@ -26,8 +26,8 @@ function CreateDecompressingVfs(const AInner: IVfs;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.vfs.base,
@@ -188,7 +188,7 @@ var
   LInnerETag: IVfsETag;
 begin
   // Last-Modified 与压缩无关，透传内层
-  if Supports(FInner, IVfsETag, LInnerETag) then
+  if FInner.QueryInterface(IVfsETag, LInnerETag) = 0 then
     Exit(LInnerETag.TryGetLastModified(APath, ALastModified));
   ALastModified := '';
   Result := False;
