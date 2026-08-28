@@ -51,6 +51,7 @@ type
     FAssetsIntf: IWebviewAssets;
     FAssets: TObject;
     FPendingEvals: array of PEvalRec;
+    FPendingCount: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
     FOnNavFinished: array of TWebviewNavEventHandler;
     FOnNavFailed: array of TWebviewNavFailedHandler;
@@ -79,6 +80,7 @@ type
     procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
     procedure HandleNativeDestroy;
     procedure TryCreateEnvironment;
+    procedure GrowPendingEvals; inline;
     procedure RemovePending(ARec: PEvalRec);
     {$IFDEF MSWINDOWS}
     procedure OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
@@ -557,6 +559,12 @@ begin
     raise EWebviewClosed.Create('webview window is closed');
 end;
 
+procedure TWebView2Webview.GrowPendingEvals; inline;
+begin
+  if FPendingCount = Length(FPendingEvals) then
+    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
+end;
+
 procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
 var I: Integer;
 begin
@@ -588,12 +596,14 @@ end;
 procedure TWebView2Webview.RemovePending(ARec: PEvalRec);
 var I, J: Integer;
 begin
-  for I := 0 to High(FPendingEvals) do
+  for I := 0 to FPendingCount - 1 do
     if FPendingEvals[I] = ARec then
     begin
-      for J := I to High(FPendingEvals) - 1 do
+      for J := I to FPendingCount - 2 do
         FPendingEvals[J] := FPendingEvals[J + 1];
-      SetLength(FPendingEvals, Length(FPendingEvals) - 1);
+      Dec(FPendingCount);
+      if FPendingCount < Length(FPendingEvals) then
+        FPendingEvals[FPendingCount] := nil;
       Exit;
     end;
 end;
@@ -872,7 +882,7 @@ var
 begin
   if FClosed then Exit;
   FClosed := True;
-  for I := 0 to High(FPendingEvals) do
+  for I := 0 to FPendingCount - 1 do
   begin
     LRec := FPendingEvals[I];
     if not LRec^.Done then
@@ -1176,8 +1186,9 @@ begin
   LRec^.Callback := ACallback;
   LRec^.OnError := AOnError;
   LRec^.Done := False;
-  SetLength(FPendingEvals, Length(FPendingEvals) + 1);
-  FPendingEvals[High(FPendingEvals)] := LRec;
+  GrowPendingEvals;
+  FPendingEvals[FPendingCount] := LRec;
+  Inc(FPendingCount);
   LHandler := TExecuteScriptHandler.Create(Self, LRec);
   FWebView.ExecuteScript(PWideChar(WideString(AJavascript)), LHandler);
 end;
