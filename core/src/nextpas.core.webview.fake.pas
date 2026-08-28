@@ -137,7 +137,7 @@ type
   protected
     { IWebviewWindow }
     procedure Close; virtual;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     procedure Show; virtual;
     procedure Hide; virtual;
     function IsVisible: Boolean;
@@ -174,7 +174,7 @@ type
       ACallback: TWebviewEvalCallback;
       AOnError: TWebviewEvalErrorCallback); virtual;
     procedure Emit(const AEvent, APayloadJson: string); virtual;
-    function GetDispatcher: IWebviewDispatcher;
+    function GetDispatcher: IWebviewDispatcher; inline;
     function NativeHandle: TWebviewNativeHandle;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload; virtual;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventMethod); overload; virtual;
@@ -360,7 +360,7 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure PostRef(AProc: TWebviewProcRef);
-    function IsOnMainThread: Boolean;
+    function IsOnMainThread: Boolean; inline;
     function PumpOnce: Boolean;
     procedure PumpAll;
     function PendingCount: Integer;
@@ -412,7 +412,7 @@ begin
   end;
 end;
 
-function TFakeDispatcher.IsOnMainThread: Boolean;
+function TFakeDispatcher.IsOnMainThread: Boolean; inline;
 begin
   Result := platform_thread_id = FOwnerThread;
 end;
@@ -747,7 +747,7 @@ begin
     LClosed[I]();
 end;
 
-function TFakeWebview.IsClosed: Boolean;
+function TFakeWebview.IsClosed: Boolean; inline;
 begin
   Result := FClosed;
 end;
@@ -1066,7 +1066,7 @@ begin
   FEmits[High(FEmits)].PayloadJson := APayloadJson;
 end;
 
-function TFakeWebview.GetDispatcher: IWebviewDispatcher;
+function TFakeWebview.GetDispatcher: IWebviewDispatcher; inline;
 begin
   Result := FDispatcher;
 end;
