@@ -15,11 +15,14 @@ uses
   nextpas.core.encoding.gbk,
   nextpas.core.encoding.hex,
   nextpas.core.encoding.varint,
+  nextpas.core.encoding.msgpack,
   nextpas.core.encoding.url;
 
 type
   TBase64Variant = nextpas.core.encoding.base.TBase64Variant;
   THexCase = nextpas.core.encoding.base.THexCase;
+  TMsgPackValue = nextpas.core.encoding.msgpack.TMsgPackValue;
+  TMsgPackKind = nextpas.core.encoding.msgpack.TMsgPackKind;
 
 function Base32Encode(const AData: TBytes): string; inline;
 function Base32Decode(const AEncoded: string): TBytes; inline;
