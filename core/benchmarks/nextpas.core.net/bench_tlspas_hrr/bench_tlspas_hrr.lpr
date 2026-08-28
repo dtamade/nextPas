@@ -23,6 +23,7 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.http.earlydata,
   nextpas.core.http.middleware.earlydata,
+  nextpas.core.http.middleware.earlydata.adaptive,
   nextpas.core.http.client_earlydata,
   nextpas.core.platform.time,
   nextpas.core.time.base;
@@ -320,9 +321,11 @@ type
   end;
 
 var
-  GHttpReqEarly, GHttpReqNormal: IHttpRequest;
+  GHttpReqEarly, GHttpReqNormal, GHttpReqEarlyLarge: IHttpRequest;
   GHttpMw: IHttpMiddleware;
   GHttpMwHandler: IHttpHandler;
+  GAdaptiveMw: IHttpMiddleware;
+  GAdaptiveMwHandler: IHttpHandler;
 
 constructor TCaptureWriterBenchHack.Create;
 begin inherited Create; FHeaders := NewHttpHeaders; end;
@@ -350,6 +353,20 @@ var I: Int64;
 begin
   for I := 1 to aIters do
     GHttpMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
+end;
+
+procedure BenchAdaptiveIsThrottled(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do
+    L := HttpAdaptiveEarlyDataIsThrottled(GHttpReqEarly, GAdaptiveObserver);
+end;
+
+procedure BenchAdaptiveMiddleware(aIters: Int64);
+var I: Int64;
+begin
+  for I := 1 to aIters do
+    GAdaptiveMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
 end;
 
 var
@@ -449,6 +466,9 @@ begin
   GHttpReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   GHttpMw := EarlyDataMiddleware;
   GHttpMwHandler := GHttpMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
+  GAdaptiveMw := AdaptiveEarlyDataMiddleware(GAdaptiveObserver);
+  GAdaptiveMwHandler := GAdaptiveMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
+  GHttpReqEarlyLarge := GHttpReqEarly; // alias for throttled path (ContentLength 0 -> not throttled, header path exercised via Logic)
   // Client early-data fixtures
   GClientEarlyReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   HttpEarlyDataMarkRequest(GClientEarlyReq);
@@ -500,6 +520,8 @@ begin
     .AddLoop('HttpEarlyData from stream nil', @BenchHttpEarlyDataStream)
     .AddLoop('HttpRequest early flag (Supports)', @BenchHttpRequestFlag)
     .AddLoop('HttpMiddleware early-data', @BenchHttpMiddlewareEarlyData)
+    .AddLoop('Adaptive IsThrottled', @BenchAdaptiveIsThrottled)
+    .AddLoop('AdaptiveMiddleware', @BenchAdaptiveMiddleware)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

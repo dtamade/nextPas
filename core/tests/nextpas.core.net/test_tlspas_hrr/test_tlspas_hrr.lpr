@@ -33,8 +33,10 @@ uses
   nextpas.core.http.middleware.context,
   nextpas.core.http.earlydata,
   nextpas.core.http.middleware.earlydata,
+  nextpas.core.http.middleware.earlydata.adaptive,
   nextpas.core.http.client_earlydata,
-  nextpas.core.http.client;
+  nextpas.core.http.client,
+  nextpas.core.io;
 
 type
   TCaptureWriter = class(TInterfacedObject, IHttpResponseWriter)
@@ -322,7 +324,7 @@ begin
     LOpts.HandshakeDeadline:=TDeadline.After(TDuration.FromSeconds(30));
     LOpts.Cache:=ACache;
     LOpts.AllowEarlyData:=Length(AEarlyData)>0;
-    LOpts.EarlyData:=Copy(AEarlyData);
+    LOpts.EarlyData:=System.Copy(AEarlyData);
     if not AsyncTlsPasConnect(GLiveLoop, '127.0.0.1', APort, LOpts, @LiveReadyCbWithRead, nil) then
       GLiveErr:=-3201
     else if not GLiveCbCalled then
@@ -1319,6 +1321,51 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure TestAdaptiveMiddleware;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Cfg: TTlsPasAdaptiveLimitConfig;
+  LReqEarly, LReqNormal, LReqLarge: IHttpRequest; LEarly: IHttpRequestWithEarlyData;
+  LMw: IHttpMiddleware; LHandler: IHttpHandler; LMwHandler: IHttpHandler;
+  LCap: IHttpResponseWriter; LCtx: IHttpContext; LBody: TBytes;
+begin
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  Cfg.BaseLimit := 100; Cfg.MinLimit := 50; Cfg.MaxLimit := 100;
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store, Cfg);
+  try
+    // Early GET with small body (0) -> not throttled, header 1
+    LReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+    if Supports(LReqEarly, IHttpRequestWithEarlyData, LEarly) then LEarly.SetWasEarlyData(True);
+    Check(not HttpAdaptiveEarlyDataIsThrottled(LReqEarly, Obs), 'GET early small not throttled');
+    Check(HttpAdaptiveEarlyDataHeaderValue(LReqEarly, Obs)='1', 'GET early small header 1');
+    // Early GET with large ContentLength > adaptive max (110 >100) -> throttled, header 0
+    SetLength(LBody, 110); FillChar(LBody[0], 110, $11);
+    LReqLarge := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, BytesStreamFrom(LBody), 110);
+    if Supports(LReqLarge, IHttpRequestWithEarlyData, LEarly) then LEarly.SetWasEarlyData(True);
+    Check(HttpAdaptiveEarlyDataIsThrottled(LReqLarge, Obs), 'GET early large throttled');
+    Check(HttpAdaptiveEarlyDataHeaderValue(LReqLarge, Obs)='0', 'GET early large header 0');
+    // Normal (not early) never throttled even if large
+    LReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, BytesStreamFrom(LBody), 110);
+    Check(not HttpAdaptiveEarlyDataIsThrottled(LReqNormal, Obs), 'normal large not throttled');
+    Check(HttpAdaptiveEarlyDataHeaderValue(LReqNormal, Obs)='0', 'normal header 0');
+    // Nil observer never throttled
+    Check(not HttpAdaptiveEarlyDataIsThrottled(LReqEarly, nil), 'nil observer not throttled');
+    // Middleware integration: early small -> header 1, large -> header 0
+    LMw := AdaptiveEarlyDataMiddleware(Obs);
+    LHandler := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end);
+    LMwHandler := LMw.Wrap(LHandler);
+    LCap := TCaptureWriter.Create; LCtx := NewHttpContext;
+    (LReqEarly as IHttpRequestWithContext).SetContext(LCtx);
+    LMwHandler.ServeHTTP(LReqEarly, LCap);
+    Check(LCap.GetHeaders.Get(HTTP_HEADER_X_EARLY_DATA)='1', 'middleware early small 1');
+    LCap := TCaptureWriter.Create; LCtx := NewHttpContext;
+    (LReqLarge as IHttpRequestWithContext).SetContext(LCtx);
+    LMwHandler.ServeHTTP(LReqLarge, LCap);
+    Check(LCap.GetHeaders.Get(HTTP_HEADER_X_EARLY_DATA)='0', 'middleware early large throttled 0');
+    Check(Pos('adaptive max=', HttpAdaptiveEarlyDataMetrics(Obs))>0, 'metrics contains adaptive max');
+    Check(HttpAdaptiveEarlyDataMetrics(nil)='adaptive observer nil', 'metrics nil');
+  finally Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1373,6 +1420,7 @@ begin
   GSuite.Test('HttpClientEarlyDataAutoRetryLive', @TestHttpClientEarlyDataAutoRetryLive);
   GSuite.Test('AdaptiveObserver', @TestAdaptiveObserver);
   GSuite.Test('AdaptiveDecidePure', @TestAdaptiveDecidePure);
+  GSuite.Test('AdaptiveMiddleware', @TestAdaptiveMiddleware);
   if not GSuite.Run then
     Halt(1);
 end.
