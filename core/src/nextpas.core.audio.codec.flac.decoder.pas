@@ -246,18 +246,19 @@ begin
         while LOutPos + BS * CH * 4 > LOutCap do LOutCap := LOutCap * 2;
         SetLength(LOutBytes, LOutCap);
       end;
+      // 性能：除法→乘法（1/LDiv 倒数预乘），优于 music888 的逐采样除法
       case BPS of
-        8:  LDiv := 128.0;
-        16: LDiv := 32768.0;
-        24: LDiv := 8388608.0;
-        32: LDiv := 2147483648.0;
-      else LDiv := 32768.0;
+        8:  LDiv := 1.0 / 128.0;
+        16: LDiv := 1.0 / 32768.0;
+        24: LDiv := 1.0 / 8388608.0;
+        32: LDiv := 1.0 / 2147483648.0;
+      else LDiv := 1.0 / 32768.0;
       end;
       for SIdx := 0 to BS - 1 do
         for CIdx := 0 to CH - 1 do
         begin
           V := FPlanes[CIdx][SIdx];
-          F := Single(V / LDiv);
+          F := Single(V * LDiv);
           if F > 1.0 then F := 1.0 else if F < -1.0 then F := -1.0;
           PSingle(@LOutBytes[LOutPos])^ := F;
           Inc(LOutPos, 4);

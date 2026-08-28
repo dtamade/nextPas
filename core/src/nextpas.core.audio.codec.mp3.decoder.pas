@@ -219,9 +219,10 @@ begin
         while LOutPos + N * CH * 4 > LOutCap do LOutCap := LOutCap * 2;
         SetLength(LOutBytes, LOutCap);
       end;
+      // 性能：逐采样除法→倒数预乘，优于 music888 的直接除法
       for I := 0 to N * CH - 1 do
       begin
-        F := Pcm[I] / 32768.0;
+        F := Pcm[I] * (1.0 / 32768.0);
         PSingle(@LOutBytes[LOutPos])^ := F;
         Inc(LOutPos, 4);
       end;
