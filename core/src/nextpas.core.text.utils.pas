@@ -26,10 +26,10 @@ function QuotedStr(const S: string): string;
 
 {** @desc 从 AFrom(1-based)起查找子串;空子串在有效范围内命中 AFrom。
         找不到或 AFrom 越界返回 0。StrUtils.PosEx 语义。 *}
-function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer;
+function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer; inline;
 {** @desc 按 Delimiters 中任意字符切分;连续分隔符不产生空段;尾部分隔符不产生尾空段。
         SysUtils.SplitString 语义。 *}
-function SplitString(const S, Delimiters: string): TStringArray;
+function SplitString(const S, Delimiters: string): TStringArray; inline;
 
 {** @desc 拷贝字符串到定长字节缓冲(截断至 ABufLen-1,留下 NUL;不抛)。
         返回源串字符数(截断前)。线程安全(无共享状态)。 *}
@@ -157,22 +157,34 @@ end;
 
 function RepeatString(const S: string; ACount: Integer): string;
 var
-  I: Integer;
-  LChunkLen: SizeInt;
+  LCopied, LChunkLen: SizeInt;
   LPos: SizeInt;
 begin
   if (ACount <= 0) or (S = '') then
     Exit('');
   if ACount = 1 then
     Exit(S);
-
   LChunkLen := Length(S);
   SetLength(Result, LChunkLen * ACount);
-  LPos := 1;
-  for I := 1 to ACount do
+  Move(S[1], Result[1], LChunkLen);
+  if ACount = 2 then
+  begin
+    Move(S[1], Result[LChunkLen + 1], LChunkLen);
+    Exit;
+  end;
+  LPos := LChunkLen + 1;
+  LCopied := 1;
+  while LCopied * 2 <= ACount do
+  begin
+    Move(Result[1], Result[LPos], LCopied * LChunkLen);
+    Inc(LPos, LCopied * LChunkLen);
+    LCopied := LCopied * 2;
+  end;
+  while LCopied < ACount do
   begin
     Move(S[1], Result[LPos], LChunkLen);
     Inc(LPos, LChunkLen);
+    Inc(LCopied);
   end;
 end;
 
@@ -237,7 +249,7 @@ begin
   Result := '''' + StringReplace(S, '''', '''''') + '''';
 end;
 
-function PosEx(const ASubStr, AStr: string; const AFrom: Integer): Integer;
+function PosEx(const ASubStr, AStr: string; const AFrom: Integer): Integer; inline;
 var
   LI, LJ, LSubLen, LStrLen: Integer;
 begin
@@ -264,32 +276,39 @@ begin
   end;
 end;
 
-function SplitString(const S, Delimiters: string): TStringArray;
+function SplitString(const S, Delimiters: string): TStringArray; inline;
 var
-  I, Start, Count: Integer;
+  I, Start, Count, Fill: Integer;
 begin
   { 连续分隔符不产生空段:SysUtils.SplitString 语义,行拆分等场景依赖 }
-  Result := Nil;
-  SetLength(Result, 0);
   Count := 0;
   Start := 1;
   for I := 1 to Length(S) do
     if System.Pos(S[I], Delimiters) > 0 then
     begin
       if I > Start then
-      begin
         Inc(Count);
-        SetLength(Result, Count);
-        Result[Count - 1] := System.Copy(S, Start, I - Start);
+      Start := I + 1;
+    end;
+  if Start <= Length(S) then
+    Inc(Count);
+  SetLength(Result, Count);
+  if Count = 0 then
+    Exit;
+  Fill := 0;
+  Start := 1;
+  for I := 1 to Length(S) do
+    if System.Pos(S[I], Delimiters) > 0 then
+    begin
+      if I > Start then
+      begin
+        Result[Fill] := System.Copy(S, Start, I - Start);
+        Inc(Fill);
       end;
       Start := I + 1;
     end;
   if Start <= Length(S) then
-  begin
-    Inc(Count);
-    SetLength(Result, Count);
-    Result[Count - 1] := System.Copy(S, Start, Length(S) - Start + 1);
-  end;
+    Result[Fill] := System.Copy(S, Start, Length(S) - Start + 1);
 end;
 
 function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
