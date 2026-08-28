@@ -478,6 +478,7 @@ type
     function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
     function SampleCount: Int64;
     function TotalCount: Int64;
+    procedure SetRate(ARate: Double);
     property Rate: Double read FRate;
   end;
 
@@ -2250,6 +2251,8 @@ begin
   inherited Create; if ARate < 0 then ARate := 0 else if ARate > 1 then ARate := 1; FRate := ARate;
   if platform_mutex_init(FMutex) <> 0 then raise EInvalidOperationError.Create('tlspas: tracer mutex');
 end;
+procedure TAsyncTlsPasSamplingTracer.SetRate(ARate: Double);
+begin if ARate < 0 then ARate := 0 else if ARate > 1 then ARate := 1; platform_mutex_lock(FMutex); try FRate := ARate; finally platform_mutex_unlock(FMutex); end; end;
 destructor TAsyncTlsPasSamplingTracer.Destroy; begin platform_mutex_destroy(FMutex); inherited Destroy; end;
 function TAsyncTlsPasSamplingTracer.HashTraceId(const ATrace: TTlsPasTraceContext): QWord;
 var i: Integer; H: QWord;
@@ -2369,15 +2372,18 @@ end;
 function DefaultTlsPasSamplingConfig: TTlsPasSamplingConfig;
 begin Result.BaseRate := 0.01; Result.MinRate := 0.001; Result.MaxRate := 0.5; end;
 
+const C_TLSPAS_PROM_PREFIX = 'nextpas_tlspas';
+
 function TlsPasComputeAdaptiveSamplingRate(const AMetrics: TTlsPasAdaptiveMetrics; const AHealth: TTlsPasAdaptiveHealth; const AConfig: TTlsPasSamplingConfig): Double;
-var R: Double;
+var R, Thr: Double;
 begin
   R := AConfig.BaseRate;
   if not AHealth.Healthy then R := R * 5.0;
   if AMetrics.Replay.Current > 50 then R := R * 2.0;
   if AMetrics.Server.RejectPolicy + AMetrics.Server.RejectReplay > 0 then
   begin
-    if AHealth.RejectRate > AConfig.BaseRate * 10 then R := R * 3.0;
+    Thr := AConfig.BaseRate * 10; if Thr < 0.05 then Thr := 0.05;
+    if AHealth.RejectRate > Thr then R := R * 3.0;
   end;
   if R < AConfig.MinRate then R := AConfig.MinRate;
   if R > AConfig.MaxRate then R := AConfig.MaxRate;
@@ -2389,20 +2395,20 @@ end;
 function TlsPasPrometheusGauge(const AMetric, AHelp: string; AValue: Double; const APrefix: string): string;
 var P: string;
 begin
-  P := APrefix; if P = '' then P := 'nextpas_tlspas';
+  P := APrefix; if P = '' then P := C_TLSPAS_PROM_PREFIX;
   Result := Format('# HELP %s_%s %s'#10'# TYPE %s_%s gauge'#10'%s_%s %.4f'#10, [P,AMetric,AHelp,P,AMetric,P,AMetric,AValue]);
 end;
 
 function TlsPasSamplingRateToPrometheus(ARate: Double; const APrefix: string): string;
 begin Result := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', ARate, APrefix); end;
-function TlsPasSamplingRateToPrometheus(ARate: Double): string; begin Result := TlsPasSamplingRateToPrometheus(ARate, 'nextpas_tlspas'); end;
+function TlsPasSamplingRateToPrometheus(ARate: Double): string; begin Result := TlsPasSamplingRateToPrometheus(ARate, C_TLSPAS_PROM_PREFIX); end;
 
 function TlsPasSpansToOTLPJSON(const AExporter: ITlsPasSpanExporter): string;
 var Spans: TTlsPasSpanArray; i: Integer; Tp: string;
 begin
   if AExporter = nil then Exit('{"resourceSpans":[]}');
   Spans := AExporter.GetSpans;
-  Result := '{"resourceSpans":[{"resource":{},"scopeSpans":[{"spans":[';
+  Result := '{"resourceSpans":[{"resource":{"attributes":{"service.name":"nextpas"}},"scopeSpans":[{"spans":[';
   for i := 0 to High(Spans) do
   begin
     if i > 0 then Result := Result + ',';
@@ -2454,7 +2460,7 @@ begin
   R := GetAdaptiveRate; Result := TlsPasShouldSample(ATrace, R);
 end;
 procedure TAsyncTlsPasAdaptiveTracer.UpdateConfig(const AConfig: TTlsPasSamplingConfig);
-begin platform_mutex_lock(FMutex); try FConfig := AConfig; finally platform_mutex_unlock(FMutex); end; end;
+begin platform_mutex_lock(FMutex); try FConfig := AConfig; if FInner <> nil then FInner.SetRate(AConfig.BaseRate); finally platform_mutex_unlock(FMutex); end; end;
 
 function TlsPasAdaptiveTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const AAdaptiveTracer: TAsyncTlsPasAdaptiveTracer;
   const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;

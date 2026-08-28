@@ -2047,6 +2047,41 @@ begin
   Check(not FileExists(LPath + '.tmp'), 'no tmp leak');
 end;
 
+procedure TestS34Consistency;
+var C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double;
+    Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: TAsyncTlsPasAdaptiveTracer;
+    Exp: ITlsPasSpanExporter; J: string; Ctx: TTlsPasTraceContext; Ok: Boolean;
+begin
+  // UpdateConfig 同步 Inner Rate
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Tracer := TAsyncTlsPasAdaptiveTracer.Create(Obs);
+  try
+    C := DefaultTlsPasSamplingConfig; C.BaseRate := 0.2; C.MinRate := 0.001; C.MaxRate := 1.0;
+    Tracer.UpdateConfig(C);
+    Check((Tracer.Inner.Rate > 0.19) and (Tracer.Inner.Rate < 0.21), 'inner rate synced 0.2');
+    Check((Tracer.GetAdaptiveRate > 0.19) and (Tracer.GetAdaptiveRate < 0.21), 'adaptive rate reflects config');
+  finally Tracer.Free; Obs.Free; end;
+  // Thr floor 0.05：Base 0.0001 时 0.02 拒收不应触发 ×3
+  C := DefaultTlsPasSamplingConfig; C.BaseRate := 0.0001; C.MinRate := 0.00005; C.MaxRate := 1.0;
+  M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); H.Healthy := True; H.RejectRate := 0.02; M.Server.RejectPolicy := 1; M.Replay.Current := 0;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C);
+  Check(R < 0.001, 'thr floor prevents 3x at 0.02');
+  H.RejectRate := 0.06; R := TlsPasComputeAdaptiveSamplingRate(M, H, C);
+  Check(R > 0.0001, 'thr floor allows 3x at 0.06');
+  // OTLP resource完整性
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(4) as ITlsPasSpanExporter;
+  J := TlsPasSpansToOTLPJSON(Exp);
+  Check(Pos('service.name', J) > 0, 'otlp service.name');
+  Check(Pos('nextpas', J) > 0, 'otlp nextpas');
+  // traceparent fuzz：非法长度/版本/hex
+  Ok := TlsPasParseTraceParent('00-zzzz', Ctx); Check(not Ok, 'fuzz short invalid');
+  Ok := TlsPasParseTraceParent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx); Check(not Ok, 'fuzz version 01 invalid');
+  Ok := TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx); Check(Ok, 'valid traceparent ok');
+  // 前缀常量一致性
+  J := TlsPasPrometheusGauge('x', 'help', 1.0, ''); Check(Pos('nextpas_tlspas_x', J) > 0, 'prefix const');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -2126,6 +2161,7 @@ begin
   GSuite.Test('AdaptiveTracer', @TestAdaptiveTracer);
   GSuite.Test('OTLPExport', @TestOTLPExport);
   GSuite.Test('S33Polish', @TestS33Polish);
+  GSuite.Test('S34Consistency', @TestS34Consistency);
   if not GSuite.Run then
     Halt(1);
 end.

@@ -503,7 +503,7 @@ begin
   end;
 end;
 
-var GTraceCtx: TTlsPasTraceContext; GTraceTracer: ITlsPasTracer; GTraceMwHandler: IHttpHandler; GTraceReq: IHttpRequest;
+var GTraceCtx: TTlsPasTraceContext; GTraceTracer: ITlsPasTracer; GTracerConcrete: TAsyncTlsPasSamplingTracer; GTraceMwHandler: IHttpHandler; GTraceReq: IHttpRequest;
 
 procedure BenchTraceParse(aIters: Int64);
 var I: Int64; Ctx: TTlsPasTraceContext; LOk: Boolean;
@@ -552,6 +552,10 @@ begin for I := 1 to aIters do S := TlsPasSpansToOTLPJSON(GSpanExporter); end;
 procedure BenchPrometheusGauge(aIters: Int64);
 var I: Int64; S: string;
 begin for I := 1 to aIters do S := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.02, 'nextpas_tlspas'); end;
+
+procedure BenchTracerSetRate(aIters: Int64);
+var I: Int64;
+begin for I := 1 to aIters do GTracerConcrete.SetRate(0.02); end;
 
 var
   GClientEarlyReq: IHttpRequest;
@@ -664,8 +668,9 @@ begin
   GClientEarlyResp425 := NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0 := NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0.Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
+  GTracerConcrete := TAsyncTlsPasSamplingTracer.Create(0.01);
+  GTraceTracer := GTracerConcrete as ITlsPasTracer;
   GTraceCtx := TlsPasGenerateTraceContext(False);
-  GTraceTracer := TAsyncTlsPasSamplingTracer.Create(0.01) as ITlsPasTracer;
   GTraceReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   GTraceReq.Headers.SetHeader('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
   GTraceMwHandler := HttpTraceParentMiddleware(GTraceTracer).Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
@@ -746,6 +751,7 @@ begin
     .AddLoop('Adaptive Tracer', @BenchAdaptiveTracer)
     .AddLoop('OTLP JSON', @BenchOTLPJSON)
     .AddLoop('Prometheus Gauge', @BenchPrometheusGauge)
+    .AddLoop('Tracer SetRate', @BenchTracerSetRate)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
