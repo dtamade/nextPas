@@ -219,6 +219,7 @@ function realpath(path: PAnsiChar; resolved_path: PAnsiChar): PAnsiChar; cdecl;
 procedure mp3dec_init(dec: PMp3decT); cdecl;
 
 function mp3dec_decode_frame(dec: PMp3decT; mp3: PUint8T; mp3_bytes: LongInt; pcm: PMp3dSampleT; info: PMp3decFrameInfoT): LongInt; cdecl;
+function mp3dec_decode_frame_f32(dec: PMp3decT; mp3: PUint8T; mp3_bytes: LongInt; pcm_f32: PSingle; info: PMp3decFrameInfoT): LongInt; cdecl;
 
 implementation
 
@@ -8442,6 +8443,32 @@ begin
   pcm[(16 * nch)] := TMp3dSampleT(mp3d_scale_pcm(a));
 end;
 
+procedure mp3d_synth_pair_f32(pcm_f32: PSingle; nch: LongInt; z: PSingle); inline;
+var a, v: Single;
+begin
+  a := ((z[(14 * 64)] - z[0]) * 29);
+  a := (a + ((z[(1 * 64)] + z[(13 * 64)]) * 213));
+  a := (a + ((z[(12 * 64)] - z[(2 * 64)]) * 459));
+  a := (a + ((z[(3 * 64)] + z[(11 * 64)]) * 2037));
+  a := (a + ((z[(10 * 64)] - z[(4 * 64)]) * 5153));
+  a := (a + ((z[(5 * 64)] + z[(9 * 64)]) * 6574));
+  a := (a + ((z[(8 * 64)] - z[(6 * 64)]) * 37489));
+  a := (a + (z[(7 * 64)] * 75038));
+  v := a * (1.0/32768.0); if v > 1.0 then v := 1.0 else if v < -1.0 then v := -1.0;
+  pcm_f32[0] := v;
+  z := (z + 2);
+  a := (z[(14 * 64)] * 104);
+  a := (a + (z[(12 * 64)] * 1567));
+  a := (a + (z[(10 * 64)] * 9727));
+  a := (a + (z[(8 * 64)] * 64019));
+  a := (a + (z[(6 * 64)] * -9975));
+  a := (a + (z[(4 * 64)] * -45));
+  a := (a + (z[(2 * 64)] * 146));
+  a := (a + (z[(0 * 64)] * -5));
+  v := a * (1.0/32768.0); if v > 1.0 then v := 1.0 else if v < -1.0 then v := -1.0;
+  pcm_f32[(16 * nch)] := v;
+end;
+
 const
   { SSE PCM 转换常量：语义对应标量 mp3d_scale_pcm }
   SSEPCM_HI: array[0..3] of Single = (32766.5, 32766.5, 32766.5, 32766.5);
@@ -8449,6 +8476,10 @@ const
   SSEPCM_HALF: array[0..3] of Single = (0.5, 0.5, 0.5, 0.5);
   SSEPCM_I32767: array[0..3] of LongInt = (32767, 32767, 32767, 32767);
   SSEPCM_IM32768: array[0..3] of LongInt = (-32768, -32768, -32768, -32768);
+  // F32 直出：1/32768 缩放 + [-1,1] 钳制，消除 S16 截断与二次转换
+  SSEF32_SCALE: array[0..3] of Single = (0.000030517578125, 0.000030517578125, 0.000030517578125, 0.000030517578125);
+  SSEF32_ONE: array[0..3] of Single = (1.0, 1.0, 1.0, 1.0);
+  SSEF32_NEGONE: array[0..3] of Single = (-1.0, -1.0, -1.0, -1.0);
 
 {$if defined(MP3DEC_SIMD_ON) and defined(cpux86_64)}
 procedure mp3d_synth(xl: PSingle; dstl: PMp3dSampleT; nch: LongInt; lins: PSingle);
@@ -8705,6 +8736,246 @@ begin
       {$endif}
     end;
 
+    i := (i - 1);
+  end;
+end;
+
+// —— F32 直出：同蝶形，但尾部直接 *1/32768 + clamp [-1,1] 存 Single，免 S16 截断 ——
+procedure mp3d_synth_f32(xl: PSingle; dstl: PSingle; nch: LongInt; lins: PSingle);
+var
+  i: LongInt;
+  xr: PSingle;
+  dstr: PSingle;
+  zlin: PSingle;
+  w: PSingle;
+  UOff, VOff, POff, QOff: Int64;
+begin
+  xr := (xl + (576 * (nch - 1)));
+  dstr := (dstl + (nch - 1));
+  zlin := (lins + (15 * 64));
+  w := PSingle(@_static_mp3d_synth_g_win[0]);
+  zlin[(4 * 15)] := xl[(18 * 16)];
+  zlin[((4 * 15) + 1)] := xr[(18 * 16)];
+  zlin[((4 * 15) + 2)] := xl[0];
+  zlin[((4 * 15) + 3)] := xr[0];
+  zlin[(4 * 31)] := xl[(1 + (18 * 16))];
+  zlin[((4 * 31) + 1)] := xr[(1 + (18 * 16))];
+  zlin[((4 * 31) + 2)] := xl[1];
+  zlin[((4 * 31) + 3)] := xr[1];
+  mp3d_synth_pair_f32(dstr, nch, ((lins + (4 * 15)) + 1));
+  mp3d_synth_pair_f32((dstr + (32 * nch)), nch, (((lins + (4 * 15)) + 64) + 1));
+  mp3d_synth_pair_f32(dstl, nch, (lins + (4 * 15)));
+  mp3d_synth_pair_f32((dstl + (32 * nch)), nch, ((lins + (4 * 15)) + 64));
+  i := 14;
+  while (i >= 0) do
+  begin
+    zlin[(4 * i)] := xl[(18 * (31 - i))];
+    zlin[((4 * i) + 1)] := xr[(18 * (31 - i))];
+    zlin[((4 * i) + 2)] := xl[(1 + (18 * (31 - i)))];
+    zlin[((4 * i) + 3)] := xr[(1 + (18 * (31 - i)))];
+    zlin[(4 * (i + 16))] := xl[(1 + (18 * (1 + i)))];
+    zlin[((4 * (i + 16)) + 1)] := xr[(1 + (18 * (1 + i)))];
+    zlin[((4 * (i - 16)) + 2)] := xl[(18 * (1 + i))];
+    zlin[((4 * (i - 16)) + 3)] := xr[(18 * (1 + i))];
+    UOff := (15 - i) * nch * 4;
+    VOff := (17 + i) * nch * 4;
+    POff := (47 - i) * nch * 4;
+    QOff := (49 + i) * nch * 4;
+    asm
+      {$ifdef windows}
+      subq    $32, %rsp
+      movups  %xmm6, (%rsp)
+      movups  %xmm7, 16(%rsp)
+      {$endif}
+      movslq  i, %rax
+      shlq    $4, %rax
+      movq    zlin, %r10
+      leaq    (%r10,%rax), %r11
+      movq    w, %r8
+      movq    (%r8), %xmm0
+      addq    $8, %r8
+      pshufd  $0x00, %xmm0, %xmm1
+      pshufd  $0x55, %xmm0, %xmm2
+      movups  0(%r11), %xmm3
+      movups  -3840(%r11), %xmm4
+      movaps  %xmm3, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm1, %xmm0
+      addps   %xmm0, %xmm5
+      movaps  %xmm5, %xmm6
+      movaps  %xmm3, %xmm5
+      mulps   %xmm1, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm2, %xmm0
+      subps   %xmm0, %xmm5
+      movaps  %xmm5, %xmm7
+      movq    (%r8), %xmm0
+      addq    $8, %r8
+      pshufd  $0x00, %xmm0, %xmm1
+      pshufd  $0x55, %xmm0, %xmm2
+      movups  -256(%r11), %xmm3
+      movups  -3584(%r11), %xmm4
+      movaps  %xmm3, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm1, %xmm0
+      addps   %xmm0, %xmm5
+      addps   %xmm5, %xmm6
+      movaps  %xmm4, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm3, %xmm0
+      mulps   %xmm1, %xmm0
+      subps   %xmm0, %xmm5
+      addps   %xmm5, %xmm7
+      movq    (%r8), %xmm0
+      addq    $8, %r8
+      pshufd  $0x00, %xmm0, %xmm1
+      pshufd  $0x55, %xmm0, %xmm2
+      movups  -512(%r11), %xmm3
+      movups  -3328(%r11), %xmm4
+      movaps  %xmm3, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm1, %xmm0
+      addps   %xmm0, %xmm5
+      addps   %xmm5, %xmm6
+      movaps  %xmm3, %xmm5
+      mulps   %xmm1, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm2, %xmm0
+      subps   %xmm0, %xmm5
+      addps   %xmm5, %xmm7
+      movq    (%r8), %xmm0
+      addq    $8, %r8
+      pshufd  $0x00, %xmm0, %xmm1
+      pshufd  $0x55, %xmm0, %xmm2
+      movups  -768(%r11), %xmm3
+      movups  -3072(%r11), %xmm4
+      movaps  %xmm3, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm1, %xmm0
+      addps   %xmm0, %xmm5
+      addps   %xmm5, %xmm6
+      movaps  %xmm4, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm3, %xmm0
+      mulps   %xmm1, %xmm0
+      subps   %xmm0, %xmm5
+      addps   %xmm5, %xmm7
+      movq    (%r8), %xmm0
+      addq    $8, %r8
+      pshufd  $0x00, %xmm0, %xmm1
+      pshufd  $0x55, %xmm0, %xmm2
+      movups  -1024(%r11), %xmm3
+      movups  -2816(%r11), %xmm4
+      movaps  %xmm3, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm1, %xmm0
+      addps   %xmm0, %xmm5
+      addps   %xmm5, %xmm6
+      movaps  %xmm3, %xmm5
+      mulps   %xmm1, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm2, %xmm0
+      subps   %xmm0, %xmm5
+      addps   %xmm5, %xmm7
+      movq    (%r8), %xmm0
+      addq    $8, %r8
+      pshufd  $0x00, %xmm0, %xmm1
+      pshufd  $0x55, %xmm0, %xmm2
+      movups  -1280(%r11), %xmm3
+      movups  -2560(%r11), %xmm4
+      movaps  %xmm3, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm1, %xmm0
+      addps   %xmm0, %xmm5
+      addps   %xmm5, %xmm6
+      movaps  %xmm4, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm3, %xmm0
+      mulps   %xmm1, %xmm0
+      subps   %xmm0, %xmm5
+      addps   %xmm5, %xmm7
+      movq    (%r8), %xmm0
+      addq    $8, %r8
+      pshufd  $0x00, %xmm0, %xmm1
+      pshufd  $0x55, %xmm0, %xmm2
+      movups  -1536(%r11), %xmm3
+      movups  -2304(%r11), %xmm4
+      movaps  %xmm3, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm1, %xmm0
+      addps   %xmm0, %xmm5
+      addps   %xmm5, %xmm6
+      movaps  %xmm3, %xmm5
+      mulps   %xmm1, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm2, %xmm0
+      subps   %xmm0, %xmm5
+      addps   %xmm5, %xmm7
+      movq    (%r8), %xmm0
+      addq    $8, %r8
+      pshufd  $0x00, %xmm0, %xmm1
+      pshufd  $0x55, %xmm0, %xmm2
+      movups  -1792(%r11), %xmm3
+      movups  -2048(%r11), %xmm4
+      movaps  %xmm3, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm4, %xmm0
+      mulps   %xmm1, %xmm0
+      addps   %xmm0, %xmm5
+      addps   %xmm5, %xmm6
+      movaps  %xmm4, %xmm5
+      mulps   %xmm2, %xmm5
+      movaps  %xmm3, %xmm0
+      mulps   %xmm1, %xmm0
+      subps   %xmm0, %xmm5
+      addps   %xmm5, %xmm7
+      movq    %r8, w
+      // F32 直出：*scale + clamp [-1,1] 存 Single
+      movaps  %xmm6, %xmm0
+      mulps   SSEF32_SCALE(%rip), %xmm0
+      movups  SSEF32_ONE(%rip), %xmm1
+      minps   %xmm1, %xmm0
+      movups  SSEF32_NEGONE(%rip), %xmm1
+      maxps   %xmm1, %xmm0
+      movaps  %xmm7, %xmm2
+      mulps   SSEF32_SCALE(%rip), %xmm2
+      movups  SSEF32_ONE(%rip), %xmm1
+      minps   %xmm1, %xmm2
+      movups  SSEF32_NEGONE(%rip), %xmm1
+      maxps   %xmm1, %xmm2
+      movq    dstr, %r11
+      movq    dstl, %r10
+      movq    UOff, %r9
+      movq    VOff, %rcx
+      movq    POff, %rdx
+      movq    QOff, %r8
+      movss   %xmm0, (%r10,%r9)
+      pshufd  $0x39, %xmm0, %xmm0
+      movss   %xmm0, (%r11,%r9)
+      pshufd  $0x39, %xmm0, %xmm0
+      movss   %xmm0, (%r10,%rdx)
+      pshufd  $0x39, %xmm0, %xmm0
+      movss   %xmm0, (%r11,%rdx)
+      movss   %xmm2, (%r10,%rcx)
+      pshufd  $0x39, %xmm2, %xmm2
+      movss   %xmm2, (%r11,%rcx)
+      pshufd  $0x39, %xmm2, %xmm2
+      movss   %xmm2, (%r10,%r8)
+      pshufd  $0x39, %xmm2, %xmm2
+      movss   %xmm2, (%r11,%r8)
+      {$ifdef windows}
+      movups  (%rsp), %xmm6
+      movups  16(%rsp), %xmm7
+      addq    $32, %rsp
+      {$endif}
+    end;
     i := (i - 1);
   end;
 end;
@@ -9289,6 +9560,34 @@ begin
   end;
 end;
 
+procedure mp3d_synth_granule_f32(qmf_state: PSingle; grbuf: PSingle; nbands: LongInt; nch: LongInt; pcm_f32: PSingle; lins: PSingle);
+var i: LongInt;
+begin
+  i := 0;
+  while (i < nch) do
+  begin
+    mp3d_DCT_II((grbuf + (576 * i)), nbands);
+    i := i + 1;
+  end;
+  __c2p_stdlib_memcpy(lins, qmf_state, TSizeT(QWord((QWord((4 * QWord(15))) * QWord(64)))));
+  i := 0;
+  while (i < nbands) do
+  begin
+    mp3d_synth_f32((grbuf + i), (pcm_f32 + ((32 * nch) * i)), nch, (lins + (i * 64)));
+    i := i + 2;
+  end;
+  if (nch = 1) then
+  begin
+    i := 0;
+    while (i < (15 * 64)) do
+    begin
+      qmf_state[i] := lins[((nbands * 64) + i)];
+      i := i + 2;
+    end;
+  end else
+    __c2p_stdlib_memcpy(qmf_state, (lins + (nbands * 64)), TSizeT(QWord((QWord((4 * QWord(15))) * QWord(64)))));
+end;
+
 function mp3d_match_frame(hdr: PUint8T; mp3_bytes: LongInt; frame_bytes: LongInt): LongInt; inline;
 label _L__for0_step;
 var
@@ -9535,6 +9834,128 @@ begin
       end;
       _L__for1_step:
       igr := (igr + 1);
+    end;
+  end;
+  Result := LongWord((LongWord(success) * hdr_frame_samples(PUint8T(@dec^.header[0]))));
+end;
+
+function mp3dec_decode_frame_f32(dec: PMp3decT; mp3: PUint8T; mp3_bytes: LongInt; pcm_f32: PSingle; info: PMp3decFrameInfoT): LongInt; cdecl;
+label _L__for0_step, _L__for1_step;
+var
+  i: LongInt;
+  igr: LongInt;
+  frame_size: LongInt;
+  success: LongInt;
+  hdr: PUint8T;
+  bs_frame: array[0..0] of TBsT;
+  scratch_2: TMp3decScratchT;
+  main_data_begin: LongInt;
+  sci: array[0..0] of TL12ScaleInfo;
+  __c2p_tmp1: LongInt;
+  __c2p_tmp4: LongInt;
+  __c2p_tmp2: LongInt;
+  __c2p_tmp3: LongInt;
+  __c2p_tmp5: LongInt;
+  __c2p_tmp6: LongInt;
+begin
+  i := 0;
+  frame_size := 0;
+  success := 1;
+  __c2p_tmp1 := LongInt(0);
+  if ((mp3_bytes > 4) and (dec^.header[0] = 255)) then
+    __c2p_tmp1 := LongInt((hdr_compare(PUint8T(@dec^.header[0]), mp3) <> 0));
+  if (__c2p_tmp1 <> 0) then
+  begin
+    frame_size := (hdr_frame_bytes(mp3, dec^.free_format_bytes) + hdr_padding(mp3));
+    __c2p_tmp2 := LongInt(0);
+    if (frame_size <> mp3_bytes) then
+    begin
+      __c2p_tmp3 := LongInt(1);
+      if (((frame_size + 4) > mp3_bytes) = False) then
+        __c2p_tmp3 := LongInt((hdr_compare(mp3, (mp3 + frame_size)) = 0));
+      __c2p_tmp2 := LongInt((__c2p_tmp3 <> 0));
+    end;
+    if (__c2p_tmp2 <> 0) then frame_size := 0;
+  end;
+  if (frame_size = 0) then
+  begin
+    __c2p_stdlib_memset(dec, 0, TSizeT(6668));
+    i := mp3d_find_frame(mp3, mp3_bytes, @dec^.free_format_bytes, @frame_size);
+    if ((frame_size = 0) or ((i + frame_size) > mp3_bytes)) then
+    begin
+      info^.frame_bytes := i;
+      Result := 0;
+      System.Exit;
+    end;
+  end;
+  hdr := (mp3 + i);
+  __c2p_stdlib_memcpy(Pointer(@dec^.header[0]), hdr, TSizeT(4));
+  info^.frame_bytes := (i + frame_size);
+  info^.frame_offset := i;
+  if ((LongInt(hdr[3]) and 192) = 192) then __c2p_tmp4 := 1 else __c2p_tmp4 := 2;
+  info^.channels := __c2p_tmp4;
+  info^.hz := LongInt(hdr_sample_rate_hz(hdr));
+  info^.layer := (4 - ((LongInt(hdr[1]) shr 1) and 3));
+  info^.bitrate_kbps := LongInt(hdr_bitrate_kbps(hdr));
+  if (pcm_f32 = nil) then
+  begin
+    Result := hdr_frame_samples(hdr);
+    System.Exit;
+  end;
+  bs_init(PBsT(@bs_frame[0]), (hdr + 4), (frame_size - 4));
+  if ((LongInt(hdr[1]) and 1) = 0) then get_bits(PBsT(@bs_frame[0]), 16);
+  if (info^.layer = 3) then
+  begin
+    main_data_begin := L3_read_side_info(PBsT(@bs_frame[0]), PL3GrInfoT(@scratch_2.gr_info[0]), hdr);
+    if ((main_data_begin < 0) or (bs_frame[0].pos > bs_frame[0].limit)) then
+    begin
+      mp3dec_init(dec);
+      Result := 0;
+      System.Exit;
+    end;
+    success := L3_restore_reservoir(dec, PBsT(@bs_frame[0]), @scratch_2, main_data_begin);
+    if (success <> 0) then
+    begin
+      igr := 0;
+      while True do
+      begin
+        if ((LongInt(hdr[1]) and 8) <> 0) then __c2p_tmp5 := 2 else __c2p_tmp5 := 1;
+        if ((igr < __c2p_tmp5) = False) then Break;
+        __c2p_stdlib_memset(Pointer(@scratch_2.grbuf[0][0]), 0, TSizeT(QWord((QWord((576 * 2)) * 4))));
+        L3_decode(dec, @scratch_2, (PL3GrInfoT(@scratch_2.gr_info[0]) + (igr * info^.channels)), info^.channels);
+        mp3d_synth_granule_f32(PSingle(@dec^.qmf_state[0]), PSingle(@scratch_2.grbuf[0][0]), 18, info^.channels, pcm_f32, PSingle(@scratch_2.syn[0][0]));
+        _L__for0_step:
+        igr := igr + 1;
+        pcm_f32 := pcm_f32 + (576 * info^.channels);
+      end;
+    end;
+    L3_save_reservoir(dec, @scratch_2);
+  end else
+  begin
+    L12_read_scale_info(hdr, PBsT(@bs_frame[0]), PL12ScaleInfo(@sci[0]));
+    __c2p_stdlib_memset(Pointer(@scratch_2.grbuf[0][0]), 0, TSizeT(QWord((QWord((576 * 2)) * 4))));
+    i := 0;
+    igr := 0;
+    while (igr < 3) do
+    begin
+      __c2p_tmp6 := (i + L12_dequantize_granule((PSingle(@scratch_2.grbuf[0][0]) + i), PBsT(@bs_frame[0]), PL12ScaleInfo(@sci[0]), (info^.layer or 1)));
+      i := __c2p_tmp6;
+      if (12 = __c2p_tmp6) then
+      begin
+        i := 0;
+        L12_apply_scf_384(PL12ScaleInfo(@sci[0]), (PSingle(@sci[0].scf[0]) + igr), PSingle(@scratch_2.grbuf[0][0]));
+        mp3d_synth_granule_f32(PSingle(@dec^.qmf_state[0]), PSingle(@scratch_2.grbuf[0][0]), 12, info^.channels, pcm_f32, PSingle(@scratch_2.syn[0][0]));
+        __c2p_stdlib_memset(Pointer(@scratch_2.grbuf[0][0]), 0, TSizeT(QWord((QWord((576 * 2)) * 4))));
+        pcm_f32 := pcm_f32 + (384 * info^.channels);
+      end;
+      if (bs_frame[0].pos > bs_frame[0].limit) then
+      begin
+        mp3dec_init(dec);
+        Result := 0;
+        System.Exit;
+      end;
+      _L__for1_step:
+      igr := igr + 1;
     end;
   end;
   Result := LongWord((LongWord(success) * hdr_frame_samples(PUint8T(@dec^.header[0]))));

@@ -184,10 +184,10 @@ begin
       // 为保持稳定性，此处不强行解析，仅保留透传，完整 MergeTags 由调用方按需触发
     end;
 
-    // 复用 FOut：首跑 ~176k*4 预分配，后续零分配；直写消除 Tmp 二次拷贝
-    if FOutCap < Length(AData) * 4 then
+    // 复用 FOut：首跑 ~176k*4*2.5 预分配 (11x 略大但避免中途扩容)，后续零分配；直写消除 Tmp 二次拷贝
+    if FOutCap < Length(AData) * 8 then
     begin
-      FOutCap := Length(AData) * 4;
+      FOutCap := Length(AData) * 8;
       if FOutCap < 4096 * CH * 4 then FOutCap := 4096 * CH * 4;
       if FOutCap > 1024*1024*32 then FOutCap := 1024*1024*32;
       SetLength(FOut, FOutCap);
