@@ -3,7 +3,7 @@
 **状态**: M-band 稳定 — S1→S5 全后端落地，13 门禁全绿，`bench_dispatcher` 391µs/1000
 **层级**: L2 系统能力（依赖 L0-L1；被 L3 的 `webview` / `gpu` / `directui` / 外部 `game888` 复用）
 **Owner**: core-window lane
-**最后更新**: 2026-08-28（M-band 去消息化 + `IWindowHost` + `WindowPumpOnce` + 13 门禁）
+**最后更新**: 2026-08-28（M-band 去消息化 + `IWindowHost` + `WindowPumpOnce` + 13 门禁 + PumpOnce 早期退出 + `demo_pump_loop` 复用实证）
 **对标基准**: Rust `winit` + `tao` / `GLFW` / `SDL2 Window` / `Flutter View` / Android `Activity.getWindow()` / iOS `UIWindow`
 
 ---
@@ -137,6 +137,8 @@ Check(LWin.IsVisible);
 LWin.Close;
 Check(LWin.IsClosed);
 ```
+
+复用实证见 `core/examples/nextpas.core.window/demo_pump_loop/`：同一 `IWindow` 既可 `WindowRunLoop` 阻塞，也可 `WindowPumpOnce` 在 `while not Quit do begin PumpOnce; GameTick; Render; end` 中无阻塞复用（`fake` 上 `IWindowHost` 模拟宿主、`WindowPumpOnce` 零活窗快速路径），`make -C core/examples/nextpas.core.window/demo_pump_loop run` 即验（heaptrc 0）。
 
 ---
 

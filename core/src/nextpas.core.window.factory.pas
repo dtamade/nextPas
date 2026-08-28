@@ -274,6 +274,12 @@ function WindowPumpOnce: Boolean;
 var
   LDid: Boolean;
 begin
+  { 零活窗快速路径：避免 5 次 Live 计数与潜在锁竞争 }
+  if (FakeLiveWindowCount = 0) and (SdlLiveWindowCount = 0)
+     and (WasmLiveWindowCount = 0) and (AndroidLiveWindowCount = 0)
+     and (UIKitLiveWindowCount = 0) and (GtkLiveWindowCount = 0)
+     and (Win32LiveWindowCount = 0) and (CocoaLiveWindowCount = 0) then
+    Exit(False);
   Result := False;
   if FakeHasPendingPosts then
   begin
