@@ -392,4 +392,4 @@ AES 描述符对偶（INV-19）：顺序读先集密文再 `UnsealWinZipAesPaylo
 
 Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip).
 
-Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S47 已落地，S48 cookbook 定版进行中，S49—S50 方差治理与安全审计封版。
+Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S50 已落地，1.0.0 Final（`VERSION 1.0.0`，`SECURITY.md` 四模型，12门+16项全绿）。
