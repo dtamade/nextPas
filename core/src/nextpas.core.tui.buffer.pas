@@ -471,6 +471,21 @@ begin
   if LRemaining > AMaxWidth then LRemaining := AMaxWidth;
   if LRemaining <= 0 then Exit;
 
+  { K112: single-cell fast path — bench_tui SetString.single-cell is 'x' single ascii }
+  if (LHidden = 0) and (ALen = 1) and (LRemaining > 0) then
+  begin
+    LByte := Byte(AStr[0]);
+    if (LByte >= 32) and (LByte < $80) then
+    begin
+      PrepareWriteSpan(LCursor, AY, 1);
+      LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
+      CellSetSymbolAscii(LCP^, AnsiChar(LByte));
+      CellApplyStyle(LCP^, AStyle);
+      Result := 1;
+      Exit;
+    end;
+  end;
+
   LAscii := True;
   for LI := 0 to ALen - 1 do
     if Byte(AStr[LI]) >= $80 then begin LAscii := False; Break; end;
