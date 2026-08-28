@@ -215,10 +215,13 @@ type
     FInvokesLen: Integer;
     FReady: array of TWebviewNotifyHandler;
     FReadyLen: Integer;
+    FInitScripts: array of string;
+    FInitScriptsLen: Integer;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
     procedure EnsureUniqueCmd(const ACmd: string);
     procedure GrowInvokes;
     procedure GrowReady;
+    procedure GrowInitScripts;
   public
     constructor Create;
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
@@ -350,13 +353,22 @@ begin
   Result := Self;
 end;
 
+procedure TBuilderImpl.GrowInitScripts;
+var NC: Integer;
+begin
+  NC := Length(FInitScripts);
+  if NC = 0 then NC := 4 else NC := NC * 2;
+  SetLength(FInitScripts, NC);
+end;
+
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder;
 begin
   if Pos('__npw', AJavascript) > 0 then
     raise EWebviewInvalidState.Create(
       'InitScripts must not touch __npw (bridge owns that namespace)');
-  SetLength(FOptions.InitScripts, Length(FOptions.InitScripts) + 1);
-  FOptions.InitScripts[High(FOptions.InitScripts)] := AJavascript;
+  if FInitScriptsLen = Length(FInitScripts) then GrowInitScripts;
+  FInitScripts[FInitScriptsLen] := AJavascript;
+  Inc(FInitScriptsLen);
   Result := Self;
 end;
 
@@ -459,7 +471,16 @@ begin
 end;
 
 function TBuilderImpl.Build: IWebviewWindow;
+var I: Integer;
 begin
+  if FInitScriptsLen > 0 then
+  begin
+    SetLength(FOptions.InitScripts, FInitScriptsLen);
+    for I := 0 to FInitScriptsLen - 1 do
+      FOptions.InitScripts[I] := FInitScripts[I];
+  end
+  else
+    FOptions.InitScripts := nil;
   Result := ApplyTo(CreateWebviewOf(FKind, FOptions));
 end;
 
