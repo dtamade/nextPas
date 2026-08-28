@@ -61,7 +61,8 @@ uses
   nextpas.core.net.async.tcp,
   nextpas.core.fs,
   nextpas.core.platform.sync,
-  nextpas.core.tls.x509, nextpas.core.tls.x509verify;
+  nextpas.core.tls.x509, nextpas.core.tls.x509verify,
+  nextpas.core.tls.tls13.keyschedule;
 
 const
   { 底层流读写/提交失败、握手超时、解密失败 }
@@ -96,6 +97,13 @@ type
   ITlsPasHRRInfo = interface
     ['{A7F1D3E2-4C8B-4F2A-9E0D-1B2C3D4E5F6A}']
     function GetWasHRR: Boolean;
+  end;
+
+  { 0-RTT 可观测：查询 early_data 是否被服务端接受（RFC8446 §4.2.10）。
+    未启用 early_data 或 1-RTT 回退时为 False；与 WasHRR 互斥。 }
+  ITlsPasEarlyDataInfo = interface
+    ['{C3E9A1B2-5F4D-4E8A-9B0C-1D2E3F4A5B6C}']
+    function GetWasEarlyDataAccepted: Boolean;
   end;
 
   { 会话缓存：Host:Port → 恢复条目 LRU（每 host 最多 4 票据，mutex
@@ -133,6 +141,11 @@ type
     { 会话缓存：非 nil 且缓存命中时尝试 PSK 恢复（1-RTT）；服务器
       拒绝则自动回退全握手。新票据在数据相捕获后回写缓存。nil = 关闭 }
     Cache: TAsyncTlsPasSessionCache;
+    { 0-RTT 开关：True 时若缓存命中且票据 max_early_data>0，则在
+      ClientHello 中附加 early_data 扩展（RFC8446 §4.2.10）；
+      默认 False 零开销，行为与当前 1-RTT 完全一致。S6-keys 仅暴露
+      开关与派生原语，数据面仍回退 1-RTT。 }
+    AllowEarlyData: Boolean;
   end;
 
   { 异步握手完成回调：AError=0 时 AStream 为就绪 TLS 流；失败时
@@ -175,6 +188,16 @@ function TlsPasIsSupportedHRRGroup(AGroup: Word): Boolean;
 function TlsPasGroupKeyShareLen(AGroup: Word): Integer;
 function TlsPasBuildMessageHash(const ACH1: TBytes; ACipherSuite: Word): TBytes;
 
+{ 0-RTT helpers — 薄封装 keyschedule.TryDeriveTLS13ClientEarlyDataSecrets，
+  供合成验证与后续 early_data 数据面复用；零堆/零分支透传。 }
+type
+  TTlsPasEarlyDataSecrets = TTLS13EarlyDataSecrets;
+
+function TlsPasTryDeriveEarlyDataSecrets(
+  ACipherSuite: Word; const APSK, AClientHelloHandshake: TBytes;
+  out ASecrets: TTlsPasEarlyDataSecrets; out AError: string): Boolean;
+procedure TlsPasClearEarlyDataSecrets(var ASecrets: TTlsPasEarlyDataSecrets);
+
 implementation
 
 uses
@@ -201,7 +224,6 @@ uses
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.tls.tls13.recordsealer,
@@ -588,7 +610,7 @@ type
     TLS 分帧。读挂起与写挂起各一槽，互相独立。 }
   TTlsPasStream = class(TInterfacedObject, IReader, IWriter,
     IReadWriteCloser, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime,
-    IAsyncTcpStream, ITlsPasResumeInfo, ITlsPasHRRInfo)
+    IAsyncTcpStream, ITlsPasResumeInfo, ITlsPasHRRInfo, ITlsPasEarlyDataInfo)
   private
     FInner: IAsyncTcpStream;
     FLoop: TAsyncLoop;
@@ -600,6 +622,7 @@ type
     FCachePort: UInt16;
     FWasResumed: Boolean;
     FWasHRR: Boolean;
+    FWasEarlyDataAccepted: Boolean;
     FSealer: TTLS13RecordSealer;
     FOpener: TTLS13RecordOpener;
     FNetIn: TBytes;
@@ -650,12 +673,15 @@ type
       const AInner: IAsyncTcpStream; ALoop: TAsyncLoop;
       const ANetInSeed, APostHsSeed: TBytes;
       ACache: TAsyncTlsPasSessionCache; const ACacheHost: string;
-      ACachePort: UInt16; AWasResumed: Boolean; AWasHRR: Boolean = False);
+      ACachePort: UInt16; AWasResumed: Boolean; AWasHRR: Boolean = False;
+      AWasEarlyDataAccepted: Boolean = False);
     destructor Destroy; override;
     { ITlsPasResumeInfo }
     function GetWasResumed: Boolean;
     { ITlsPasHRRInfo }
     function GetWasHRR: Boolean;
+    { ITlsPasEarlyDataInfo }
+    function GetWasEarlyDataAccepted: Boolean;
     { IReader }
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     { IWriter }
@@ -2008,6 +2034,20 @@ begin
   Result.HandshakeDeadline := TDeadline.Infinite;
   Result.TrustBundlePath := '';
   Result.Cache := nil;
+  Result.AllowEarlyData := False;
+end;
+
+{ 0-RTT 薄封装：零分支透传至 keyschedule，不引入新密钥派生实现 }
+function TlsPasTryDeriveEarlyDataSecrets(
+  ACipherSuite: Word; const APSK, AClientHelloHandshake: TBytes;
+  out ASecrets: TTlsPasEarlyDataSecrets; out AError: string): Boolean;
+begin
+  Result := TryDeriveTLS13ClientEarlyDataSecrets(ACipherSuite, APSK, AClientHelloHandshake, ASecrets, AError);
+end;
+
+procedure TlsPasClearEarlyDataSecrets(var ASecrets: TTlsPasEarlyDataSecrets);
+begin
+  ClearTLS13EarlyDataSecrets(ASecrets);
 end;
 
 { 公共初始化：X25519 keypair + ClientHello（失败静默释放并 re-raise）}
@@ -2144,7 +2184,8 @@ constructor TTlsPasStream.Create(ASuite: Word;
   const AApp: TTLS13ApplicationSecrets; const AInner: IAsyncTcpStream;
   ALoop: TAsyncLoop; const ANetInSeed, APostHsSeed: TBytes;
   ACache: TAsyncTlsPasSessionCache; const ACacheHost: string;
-  ACachePort: UInt16; AWasResumed: Boolean; AWasHRR: Boolean = False);
+  ACachePort: UInt16; AWasResumed: Boolean; AWasHRR: Boolean = False;
+  AWasEarlyDataAccepted: Boolean = False);
 begin
   inherited Create;
   FSuite := ASuite;
@@ -2169,6 +2210,7 @@ begin
   FCachePort := ACachePort;
   FWasResumed := AWasResumed;
   FWasHRR := AWasHRR;
+  FWasEarlyDataAccepted := AWasEarlyDataAccepted;
   FInner := AInner;
   FLoop := ALoop;
   FNetIn := ANetInSeed;
@@ -2193,6 +2235,11 @@ end;
 function TTlsPasStream.GetWasHRR: Boolean;
 begin
   Result := FWasHRR;
+end;
+
+function TTlsPasStream.GetWasEarlyDataAccepted: Boolean;
+begin
+  Result := FWasEarlyDataAccepted;
 end;
 
 destructor TTlsPasStream.Destroy;

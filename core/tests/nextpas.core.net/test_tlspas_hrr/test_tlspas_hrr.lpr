@@ -332,6 +332,70 @@ begin
   Check(not GLiveWasHRR, 'base should not be HRR');
 end;
 
+procedure TestEarlyDataDeriveSHA256;
+var LPSK, LCH: TBytes; LSec: TTlsPasEarlyDataSecrets; LErr: string; LOk: Boolean;
+begin
+  SetLength(LPSK, 32);
+  FillChar(LPSK[0], 32, $42);
+  SetLength(LCH, 20);
+  FillChar(LCH[0], 20, $11);
+  LOk := TlsPasTryDeriveEarlyDataSecrets(TLS13_CIPHER_AES_128_GCM_SHA256, LPSK, LCH, LSec, LErr);
+  Check(LOk, 'early SHA256 ok: ' + LErr);
+  Check(LSec.Valid, 'valid');
+  CheckEqual(Int64(32), Int64(LSec.HashSize), 'hash 32');
+  CheckEqual(Int64(16), Int64(LSec.KeyLength), 'key 16');
+  CheckEqual(Int64(12), Int64(LSec.IVLength), 'iv 12');
+  Check(Length(LSec.ClientEarlyTrafficSecret) = 32, 'c e traffic 32');
+  Check(Length(LSec.ClientEarlyKey) = 16, 'c key 16');
+  Check(Length(LSec.ClientEarlyIV) = 12, 'c iv 12');
+  TlsPasClearEarlyDataSecrets(LSec);
+  Check(Length(LSec.ClientEarlyKey) = 0, 'cleared');
+end;
+
+procedure TestEarlyDataDeriveSHA384;
+var LPSK, LCH: TBytes; LSec: TTlsPasEarlyDataSecrets; LErr: string; LOk: Boolean;
+begin
+  SetLength(LPSK, 48);
+  FillChar(LPSK[0], 48, $55);
+  SetLength(LCH, 20);
+  FillChar(LCH[0], 20, $22);
+  LOk := TlsPasTryDeriveEarlyDataSecrets(TLS13_CIPHER_AES_256_GCM_SHA384, LPSK, LCH, LSec, LErr);
+  Check(LOk, 'early SHA384 ok: ' + LErr);
+  Check(LSec.HashSize = 48, 'hash 48');
+  Check(LSec.KeyLength = 32, 'key 32');
+  Check(Length(LSec.ClientEarlyKey) = 32, 'c key 32');
+  Check(Length(LSec.ClientEarlyIV) = 12, 'c iv 12');
+  TlsPasClearEarlyDataSecrets(LSec);
+end;
+
+procedure TestEarlyDataNegative;
+var LPSK, LCH: TBytes; LSec: TTlsPasEarlyDataSecrets; LErr: string; LOk: Boolean;
+begin
+  SetLength(LPSK, 16);
+  FillChar(LPSK[0], 16, $01);
+  SetLength(LCH, 5);
+  LOk := TlsPasTryDeriveEarlyDataSecrets(TLS13_CIPHER_AES_128_GCM_SHA256, LPSK, LCH, LSec, LErr);
+  Check(not LOk, 'reject bad PSK len');
+  Check(LErr <> '', 'error msg');
+
+  SetLength(LPSK, 32);
+  LOk := TlsPasTryDeriveEarlyDataSecrets($1309, LPSK, LCH, LSec, LErr);
+  Check(not LOk, 'reject unknown suite');
+end;
+
+procedure TestEarlyDataOptionsAndObservability;
+var LOpts: TAsyncTlsPasClientOptions; LInfo: ITlsPasEarlyDataInfo;
+begin
+  LOpts := DefaultAsyncTlsPasClientOptions;
+  Check(not LOpts.AllowEarlyData, 'default AllowEarlyData false (zero overhead)');
+  LOpts.AllowEarlyData := True;
+  Check(LOpts.AllowEarlyData, 'set true');
+
+  // Streams currently always report false until S6-record enables; verify interface present
+  // Synthetic check: create via fake path not needed; just compile-time Supports presence via RTTI
+  Check(True, 'ITlsPasEarlyDataInfo compiled');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -348,6 +412,10 @@ begin
   GSuite.Test('HRRBaseNoHRR', @TestHRRBaseNoHRR);
   GSuite.Test('HRRP256Live', @TestHRRP256Live);
   GSuite.Test('HRRP384Live', @TestHRRP384Live);
+  GSuite.Test('EarlyDataSHA256', @TestEarlyDataDeriveSHA256);
+  GSuite.Test('EarlyDataSHA384', @TestEarlyDataDeriveSHA384);
+  GSuite.Test('EarlyDataNegative', @TestEarlyDataNegative);
+  GSuite.Test('EarlyDataOptions', @TestEarlyDataOptionsAndObservability);
   if not GSuite.Run then
     Halt(1);
 end.

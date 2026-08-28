@@ -96,6 +96,32 @@ begin
   end;
 end;
 
+var
+  GEarlyPSK256: TBytes;
+  GEarlyPSK384: TBytes;
+
+procedure BenchEarlyDataSHA256(aIters: Int64);
+var I: Int64; LSec: TTlsPasEarlyDataSecrets; LErr: string;
+begin
+  for I := 1 to aIters do
+  begin
+    if not TlsPasTryDeriveEarlyDataSecrets(TLS13_CIPHER_AES_128_GCM_SHA256, GEarlyPSK256, GCH1, LSec, LErr) then
+      raise Exception.Create(LErr);
+    TlsPasClearEarlyDataSecrets(LSec);
+  end;
+end;
+
+procedure BenchEarlyDataSHA384(aIters: Int64);
+var I: Int64; LSec: TTlsPasEarlyDataSecrets; LErr: string;
+begin
+  for I := 1 to aIters do
+  begin
+    if not TlsPasTryDeriveEarlyDataSecrets(TLS13_CIPHER_AES_256_GCM_SHA384, GEarlyPSK384, GCH1, LSec, LErr) then
+      raise Exception.Create(LErr);
+    TlsPasClearEarlyDataSecrets(LSec);
+  end;
+end;
+
 procedure InitFixtures;
 var LPubX: TBytes;
 begin
@@ -110,6 +136,11 @@ begin
   SetLength(GPubP384, 97);
   GPubP384[0] := $04;
   FillChar(GPubP384[1], 96, $22);
+
+  SetLength(GEarlyPSK256, 32);
+  FillChar(GEarlyPSK256[0], 32, $42);
+  SetLength(GEarlyPSK384, 48);
+  FillChar(GEarlyPSK384[0], 48, $55);
 end;
 
 var
@@ -131,6 +162,8 @@ begin
     .AddLoop('Patch P384->P256 (key_share rewrite)', @BenchPatchP384ToP256)
     .AddLoop('P256 ECDHE keypair', @BenchP256KeyPair)
     .AddLoop('Transcript synthesis (msg_hash+HRR+CH2)', @BenchTranscriptSynthesis)
+    .AddLoop('EarlyData SHA256 (c e traffic)', @BenchEarlyDataSHA256)
+    .AddLoop('EarlyData SHA384 (c e traffic)', @BenchEarlyDataSHA384)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;
