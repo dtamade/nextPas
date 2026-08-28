@@ -33,6 +33,12 @@ type
     FClosed: Boolean;
     FWin: Pointer;
     FVisible: Boolean;
+    FZoom: Double;
+    FScaleHandlersRef: array of TWebviewScaleHandler;
+    FScaleHandlersMethod: array of TWebviewScaleMethod;
+    FScaleHandlersProc: array of TWebviewScaleProc;
+    procedure DoScaleChanged(ANewScale: Double);
+    procedure EnsureScaleHook;
   public
     constructor Create(const AOptions: TWebviewOptions);
     destructor Destroy; override;
@@ -94,6 +100,37 @@ uses
 
 var
   GLive: Integer = 0;
+  GLiveList: array of TWebView2Webview;
+  GScaleHookInstalled: Boolean = False;
+
+procedure GlobalWinScaleChanged(AWin: Pointer; AScale: Double);
+var
+  I: Integer;
+begin
+  for I := 0 to High(GLiveList) do
+    if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
+      GLiveList[I].DoScaleChanged(AScale);
+end;
+
+procedure RegisterLive(AInst: TWebView2Webview);
+begin
+  SetLength(GLiveList, Length(GLiveList) + 1);
+  GLiveList[High(GLiveList)] := AInst;
+end;
+
+procedure UnregisterLive(AInst: TWebView2Webview);
+var
+  I, J: Integer;
+begin
+  for I := 0 to High(GLiveList) do
+    if GLiveList[I] = AInst then
+    begin
+      for J := I to High(GLiveList) - 1 do
+        GLiveList[J] := GLiveList[J + 1];
+      SetLength(GLiveList, Length(GLiveList) - 1);
+      Break;
+    end;
+end;
 
 function WebView2LiveWindowCount: Integer;
 begin
@@ -111,6 +148,7 @@ begin
       'WebView2 runtime not found (probed WebView2Loader.dll)');
   FOptions := AOptions;
   FClosed := False;
+  FZoom := 1.0;
   Inc(GLive);
   LGeo.Title := FOptions.Title;
   LGeo.Width := FOptions.Width;
@@ -118,6 +156,7 @@ begin
   LGeo.Resizable := FOptions.Resizable;
   LGeo.StartMaximized := FOptions.Maximized;
   FWin := Win32ShellCreate(LGeo);
+  RegisterLive(Self);
   { 真实 controller 创建位：Environment → Controller → WebView，
     绑定 bridge 脚本、scheme、ExecuteScript 回调。当前桩已创建
     原生 Win32 窗口（wine 可见），WebView2 controller 待 Edge
@@ -129,10 +168,32 @@ begin
   if not FClosed then
   begin
     Dec(GLive);
+    UnregisterLive(Self);
     if FWin <> nil then
       Win32ShellDestroy(FWin);
-  end;
+  end
+  else
+    UnregisterLive(Self);
   inherited Destroy;
+end;
+
+procedure TWebView2Webview.DoScaleChanged(ANewScale: Double);
+var
+  I: Integer;
+begin
+  for I := 0 to High(FScaleHandlersRef) do
+    if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](ANewScale);
+  for I := 0 to High(FScaleHandlersMethod) do
+    if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](ANewScale);
+  for I := 0 to High(FScaleHandlersProc) do
+    if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](ANewScale);
+end;
+
+procedure TWebView2Webview.EnsureScaleHook;
+begin
+  if GScaleHookInstalled then Exit;
+  GScaleHookInstalled := True;
+  Win32ShellOnScaleChanged(@GlobalWinScaleChanged);
 end;
 
 procedure TWebView2Webview.Post(AProc: TWebviewProcRef);
@@ -157,6 +218,7 @@ begin
   if FClosed then Exit;
   FClosed := True;
   Dec(GLive);
+  UnregisterLive(Self);
   if FWin <> nil then
   begin
     Win32ShellDestroy(FWin);
@@ -239,26 +301,32 @@ end;
 procedure TWebView2Webview.Minimize;
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
+  if FWin <> nil then Win32ShellMinimize(FWin);
 end;
 procedure TWebView2Webview.Restore;
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
+  if FWin <> nil then Win32ShellRestore(FWin);
 end;
 function TWebView2Webview.IsMinimized: Boolean;
 begin
-  Result := False;
+  if FWin <> nil then Result := Win32ShellIsMinimized(FWin)
+  else Result := False;
 end;
 procedure TWebView2Webview.SetZoom(AFactor: Double);
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
+  FZoom := AFactor;
 end;
 function TWebView2Webview.GetZoom: Double;
 begin
-  Result := 1.0;
+  Result := FZoom;
 end;
 procedure TWebView2Webview.SetUserAgent(const AUserAgent: string);
 begin
   if FClosed then raise EWebviewClosed.Create('closed');
+  FOptions.Title := FOptions.Title; // keep parity: UA is WebView2 Settings, noop until controller
+  // stored intent: future ICoreWebView2Settings.put_AreDefault... / custom UA via EnvironmentOptions
 end;
 function TWebView2Webview.GetUserAgent: string;
 begin
@@ -271,12 +339,24 @@ begin
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
+  if not Assigned(AHandler) then Exit;
+  EnsureScaleHook;
+  SetLength(FScaleHandlersRef, Length(FScaleHandlersRef) + 1);
+  FScaleHandlersRef[High(FScaleHandlersRef)] := AHandler;
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleMethod);
 begin
+  if not Assigned(AHandler) then Exit;
+  EnsureScaleHook;
+  SetLength(FScaleHandlersMethod, Length(FScaleHandlersMethod) + 1);
+  FScaleHandlersMethod[High(FScaleHandlersMethod)] := AHandler;
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleProc);
 begin
+  if not Assigned(AHandler) then Exit;
+  EnsureScaleHook;
+  SetLength(FScaleHandlersProc, Length(FScaleHandlersProc) + 1);
+  FScaleHandlersProc[High(FScaleHandlersProc)] := AHandler;
 end;
 procedure TWebView2Webview.Navigate(const AUrl: string);
 begin
@@ -325,7 +405,7 @@ begin
   end;
   if Assigned(AOnError) then
   begin
-    LErr := EWebviewEvalFailed.Create('WebView2 Eval not implemented in stub');
+    LErr := EWebviewEvalFailed.Create('WebView2 Eval not implemented (controller pending S21)');
     try AOnError(LErr); finally LErr.Free; end;
   end;
 end;

@@ -1,6 +1,6 @@
-.PHONY: test test-base test-fake test-factory test-source-contracts clean
+.PHONY: test test-base test-fake test-factory test-host test-gtk-runtime test-sdl2-runtime test-win32-runtime test-cocoa-runtime test-wasm-runtime test-android-runtime test-uikit-runtime test-stress test-source-contracts clean
 
-test: test-source-contracts test-base test-fake test-factory
+test: test-source-contracts test-base test-fake test-factory test-host test-gtk-runtime test-sdl2-runtime test-win32-runtime test-cocoa-runtime test-wasm-runtime test-android-runtime test-uikit-runtime test-stress
 
 test-source-contracts:
 	$(MAKE) -C test_window_source_contracts test
@@ -14,8 +14,44 @@ test-fake:
 test-factory:
 	$(MAKE) -C test_window_factory clean test
 
+test-host:
+	$(MAKE) -C test_window_host clean test
+
+test-gtk-runtime:
+	$(MAKE) -C test_window_gtk_runtime clean test
+
+test-sdl2-runtime:
+	$(MAKE) -C test_window_sdl2_runtime clean test
+
+test-win32-runtime:
+	$(MAKE) -C test_window_win32_runtime clean test
+
+test-cocoa-runtime:
+	$(MAKE) -C test_window_cocoa_runtime clean test
+
+test-wasm-runtime:
+	$(MAKE) -C test_window_wasm_runtime clean test
+
+test-android-runtime:
+	$(MAKE) -C test_window_android_runtime clean test
+
+test-uikit-runtime:
+	$(MAKE) -C test_window_uikit_runtime clean test
+
+test-stress:
+	$(MAKE) -C test_window_stress clean test
+
 clean:
 	$(MAKE) -C test_window_base clean
 	$(MAKE) -C test_window_fake clean
 	$(MAKE) -C test_window_factory clean
+	$(MAKE) -C test_window_host clean
+	$(MAKE) -C test_window_gtk_runtime clean
+	$(MAKE) -C test_window_sdl2_runtime clean
+	$(MAKE) -C test_window_win32_runtime clean
+	$(MAKE) -C test_window_cocoa_runtime clean
+	$(MAKE) -C test_window_wasm_runtime clean
+	$(MAKE) -C test_window_android_runtime clean
+	$(MAKE) -C test_window_uikit_runtime clean
+	$(MAKE) -C test_window_stress clean
 	$(MAKE) -C test_window_source_contracts clean

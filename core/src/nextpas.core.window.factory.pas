@@ -53,56 +53,150 @@ function CreateFakeWindow(const AOptions: TWindowOptions): IWindow;
 procedure WindowRunLoop;
 procedure WindowExitLoop;
 
+{ 非阻塞泵：为 game/directui 的 tick 循环提供不阻塞的单步迭代。
+  返回 True 表示做了工作（处理了事件或投递），False 表示空转。
+  拒绝 LCL 式消息伪装：调用方只关心"是否该重绘"，不解析 WPARAM。 }
+function WindowPumpOnce: Boolean;
+procedure WindowPumpAll;
+
 implementation
 
 uses
   TypInfo,
   nextpas.core.platform.thread,
-  nextpas.core.window.fake;
+  nextpas.core.window.fake,
+  nextpas.core.window.gtk,
+  nextpas.core.window.gtk.loader,
+  nextpas.core.window.sdl2,
+  nextpas.core.window.sdl2.loader,
+  nextpas.core.window.win32,
+  nextpas.core.window.win32.loader,
+  nextpas.core.window.cocoa,
+  nextpas.core.window.cocoa.loader,
+  nextpas.core.window.wasm,
+  nextpas.core.window.wasm.loader,
+  nextpas.core.window.android,
+  nextpas.core.window.android.loader,
+  nextpas.core.window.uikit,
+  nextpas.core.window.uikit.loader;
 
 var
   GExitRequested: Boolean = False;
 
-function WindowBackendAvailable(AKind: TWindowKind): Boolean;
-begin
-  case AKind of
-    wkFake: Result := True;
-    wkGtk, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit:
-      Result := False;
-  else
-    Result := False;
+{ ---- 后端注册表：优雅扩展的唯一真相收敛点 ---- }
+type
+  TBackendProbe = function: Boolean;
+  TBackendCreate = function(const AOptions: TWindowOptions): IWindow;
+  TBackendLive = function: Integer;
+  TBackendRun = procedure;
+  TBackendQuit = procedure;
+
+  TBackendDesc = record
+    Kind: TWindowKind;
+    Probe: TBackendProbe;
+    Create: TBackendCreate;
+    Live: TBackendLive;
+    Run: TBackendRun;
+    Quit: TBackendQuit;
   end;
+  PBackendDesc = ^TBackendDesc;
+
+function ProbeFake: Boolean; begin Result := True; end;
+function LiveFake: Integer; begin Result := FakeLiveWindowCount; end;
+procedure RunFake;
+begin
+  while not GExitRequested do
+  begin
+    if FakeLiveWindowCount > 0 then FakePumpAll else Break;
+    if FakeLiveWindowCount = 0 then Break;
+    platform_thread_yield;
+    if GExitRequested then Break;
+  end;
+end;
+procedure QuitFake; begin end;
+
+function ProbeGtk: Boolean;
+var L: TWindowGtkLoadInfo; begin Result := TryLoadWindowGtk(L) and L.Loaded; end;
+
+function ProbeSdl2: Boolean;
+var L: TWindowSdl2LoadInfo; begin Result := TryLoadWindowSdl2(L) and L.Loaded; end;
+
+function ProbeWin32: Boolean;
+var L: TWindowWin32LoadInfo; begin Result := TryLoadWindowWin32(L) and L.Loaded; end;
+
+function ProbeCocoa: Boolean;
+var L: TWindowCocoaLoadInfo; begin Result := TryLoadWindowCocoa(L) and L.Loaded; end;
+
+function ProbeWasm: Boolean;
+var L: TWindowWasmLoadInfo; begin Result := TryLoadWindowWasm(L) and L.Loaded; end;
+
+function ProbeAndroid: Boolean;
+var L: TWindowAndroidLoadInfo; begin Result := TryLoadWindowAndroid(L) and L.Loaded; end;
+
+function ProbeUIKit: Boolean;
+var L: TWindowUIKitLoadInfo; begin Result := TryLoadWindowUIKit(L) and L.Loaded; end;
+
+var
+  BACKENDS: array[0..7] of TBackendDesc;
+  BACKENDS_INITED: Boolean = False;
+
+procedure InitBackends;
+begin
+  if BACKENDS_INITED then Exit;
+  BACKENDS[0].Kind := wkWin32; BACKENDS[0].Probe := @ProbeWin32; BACKENDS[0].Create := @CreateWindowWin32; BACKENDS[0].Live := @Win32LiveWindowCount; BACKENDS[0].Run := @WindowWin32RunLoop; BACKENDS[0].Quit := @WindowWin32QuitLoop;
+  BACKENDS[1].Kind := wkCocoa; BACKENDS[1].Probe := @ProbeCocoa; BACKENDS[1].Create := @CreateWindowCocoa; BACKENDS[1].Live := @CocoaLiveWindowCount; BACKENDS[1].Run := @WindowCocoaRunLoop; BACKENDS[1].Quit := @WindowCocoaQuitLoop;
+  BACKENDS[2].Kind := wkAndroid; BACKENDS[2].Probe := @ProbeAndroid; BACKENDS[2].Create := @CreateWindowAndroid; BACKENDS[2].Live := @AndroidLiveWindowCount; BACKENDS[2].Run := @WindowAndroidRunLoop; BACKENDS[2].Quit := @WindowAndroidQuitLoop;
+  BACKENDS[3].Kind := wkUIKit; BACKENDS[3].Probe := @ProbeUIKit; BACKENDS[3].Create := @CreateWindowUIKit; BACKENDS[3].Live := @UIKitLiveWindowCount; BACKENDS[3].Run := @WindowUIKitRunLoop; BACKENDS[3].Quit := @WindowUIKitQuitLoop;
+  BACKENDS[4].Kind := wkWasm; BACKENDS[4].Probe := @ProbeWasm; BACKENDS[4].Create := @CreateWindowWasm; BACKENDS[4].Live := @WasmLiveWindowCount; BACKENDS[4].Run := @WindowWasmRunLoop; BACKENDS[4].Quit := @WindowWasmQuitLoop;
+  BACKENDS[5].Kind := wkGtk; BACKENDS[5].Probe := @ProbeGtk; BACKENDS[5].Create := @CreateWindowGtk; BACKENDS[5].Live := @GtkLiveWindowCount; BACKENDS[5].Run := @WindowGtkRunMainLoop; BACKENDS[5].Quit := @WindowGtkQuitMainLoop;
+  BACKENDS[6].Kind := wkSdl2; BACKENDS[6].Probe := @ProbeSdl2; BACKENDS[6].Create := @CreateWindowSdl2; BACKENDS[6].Live := @SdlLiveWindowCount; BACKENDS[6].Run := @WindowSdl2RunLoop; BACKENDS[6].Quit := @WindowSdl2QuitLoop;
+  BACKENDS[7].Kind := wkFake; BACKENDS[7].Probe := @ProbeFake; BACKENDS[7].Create := @CreateFakeWindow; BACKENDS[7].Live := @LiveFake; BACKENDS[7].Run := @RunFake; BACKENDS[7].Quit := @QuitFake;
+  BACKENDS_INITED := True;
+end;
+
+function FindBackend(AKind: TWindowKind): PBackendDesc;
+var
+  I: Integer;
+begin
+  InitBackends;
+  for I := Low(BACKENDS) to High(BACKENDS) do
+    if BACKENDS[I].Kind = AKind then
+      Exit(@BACKENDS[I]);
+  Result := nil;
+end;
+
+function WindowBackendAvailable(AKind: TWindowKind): Boolean;
+var
+  B: PBackendDesc;
+begin
+  InitBackends;
+  B := FindBackend(AKind);
+  if B = nil then Exit(False);
+  if not Assigned(B^.Probe) then Exit(False);
+  Result := B^.Probe();
 end;
 
 function DefaultWindowKind: TWindowKind;
+var
+  I: Integer;
 begin
-  { S1：仅 fake 可用；S2 起按"平台原生 > gtk > sdl2"探测顺序实现。
-    这里先冻最简分支并写测试钉死（CONTRACT §4.3）。 }
-  if WindowBackendAvailable(wkWin32) then
-    Result := wkWin32
-  else if WindowBackendAvailable(wkCocoa) then
-    Result := wkCocoa
-  else if WindowBackendAvailable(wkAndroid) then
-    Result := wkAndroid
-  else if WindowBackendAvailable(wkUIKit) then
-    Result := wkUIKit
-  else if WindowBackendAvailable(wkGtk) then
-    Result := wkGtk
-  else if WindowBackendAvailable(wkSdl2) then
-    Result := wkSdl2
-  else
-    Result := wkFake;
+  InitBackends;
+  for I := Low(BACKENDS) to High(BACKENDS) do
+    if BACKENDS[I].Probe() then
+      Exit(BACKENDS[I].Kind);
+  Result := wkFake;
 end;
 
 function CreateFakeWindow(const AOptions: TWindowOptions): IWindow;
 begin
   CheckWindowOptions(AOptions);
-  { fake 接受 ParentHandle（供 S5 预演）；桌面后端在 CreateWindowOf 抛 Unsupported }
   Result := TFakeWindow.Create(AOptions);
 end;
 
 function CreateWindowOf(AKind: TWindowKind;
   const AOptions: TWindowOptions): IWindow;
+var
+  B: PBackendDesc;
 begin
   CheckWindowOptions(AOptions);
   if not WindowBackendAvailable(AKind) then
@@ -110,45 +204,104 @@ begin
       'window backend "%s" is not available in this build', [
       GetEnumName(TypeInfo(TWindowKind), Ord(AKind))]);
 
-  { 桌面后端 ParentHandle 诚实失败（INV-9） }
   if (AOptions.ParentHandle <> nil) and (AKind in [wkGtk, wkSdl2, wkWin32, wkCocoa]) then
     raise EWindowUnsupported.Create(
       'ParentHandle is not supported for desktop window backends');
 
-  case AKind of
-    wkFake: Result := CreateFakeWindow(AOptions);
-  else
-    raise EWindowBackendUnavailable.CreateFmt(
-      'window backend "%s" is registered but has no factory yet', [
-      GetEnumName(TypeInfo(TWindowKind), Ord(AKind))]);
-  end;
+  B := FindBackend(AKind);
+  if (B <> nil) and Assigned(B^.Create) then
+    Exit(B^.Create(AOptions));
+
+  raise EWindowBackendUnavailable.CreateFmt(
+    'window backend "%s" is registered but has no factory yet', [
+    GetEnumName(TypeInfo(TWindowKind), Ord(AKind))]);
 end;
 
 procedure WindowRunLoop;
+var
+  I: Integer;
+  B: PBackendDesc;
 begin
+  InitBackends;
   GExitRequested := False;
+  // 优先让有存活窗的原生后端的阻塞式 RunLoop 接管
+  for I := Low(BACKENDS) to High(BACKENDS) do
+  begin
+    B := @BACKENDS[I];
+    if Assigned(B^.Live) and Assigned(B^.Run) and (B^.Live() > 0) and B^.Probe() then
+    begin
+      B^.Run();
+      Exit;
+    end;
+  end;
+  // 无原生阻塞循环时的混合 pump（fake 为主，兼顾原生 LIVE 兜底）
   while not GExitRequested do
   begin
+    for I := Low(BACKENDS) to High(BACKENDS) do
+    begin
+      B := PBackendDesc(@BACKENDS[I]);
+      if Assigned(B^.Live) and Assigned(B^.Run) and (B^.Live() > 0) and B^.Probe() then
+      begin
+        B^.Run();
+        Exit;
+      end;
+    end;
     if FakeLiveWindowCount > 0 then
       FakePumpAll
     else
       Break;
-    if FakeLiveWindowCount = 0 then
+    if (FakeLiveWindowCount = 0) and (GtkLiveWindowCount = 0) and (SdlLiveWindowCount = 0)
+       and (Win32LiveWindowCount = 0) and (CocoaLiveWindowCount = 0)
+       and (WasmLiveWindowCount = 0) and (AndroidLiveWindowCount = 0) and (UIKitLiveWindowCount = 0) then
       Break;
     platform_thread_yield;
-    { 若队列已空且无退出请求，下一轮循环检查 live 计数后退出；
-      这保证 Close 后立即返回而不死等。 }
-    if FakeLiveWindowCount = 0 then
-      Break;
-    { 避免空转过快：已用 yield 让出时间片 }
-    if GExitRequested then
-      Break;
+    if GExitRequested then Break;
   end;
 end;
 
 procedure WindowExitLoop;
+var
+  I: Integer;
 begin
+  InitBackends;
   GExitRequested := True;
+  for I := Low(BACKENDS) to High(BACKENDS) do
+    if Assigned(BACKENDS[I].Quit) and BACKENDS[I].Probe() then
+      BACKENDS[I].Quit();
+end;
+
+function WindowPumpOnce: Boolean;
+var
+  LDid: Boolean;
+begin
+  { 零活窗快速路径：避免 5 次 Live 计数与潜在锁竞争 }
+  if (FakeLiveWindowCount = 0) and (SdlLiveWindowCount = 0)
+     and (WasmLiveWindowCount = 0) and (AndroidLiveWindowCount = 0)
+     and (UIKitLiveWindowCount = 0) and (GtkLiveWindowCount = 0)
+     and (Win32LiveWindowCount = 0) and (CocoaLiveWindowCount = 0) then
+    Exit(False);
+  Result := False;
+  if FakeHasPendingPosts then
+  begin
+    FakePumpAll;
+    Result := True;
+  end;
+  if SdlLiveWindowCount > 0 then
+  begin
+    LDid := SdlPollAndDispatchOnce;
+    if LDid then Result := True;
+  end;
+  if WasmLiveWindowCount > 0 then
+    if WasmPumpOnce then Result := True;
+  if AndroidLiveWindowCount > 0 then
+    if AndroidPumpOnce then Result := True;
+  if UIKitLiveWindowCount > 0 then
+    if UIKitPumpOnce then Result := True;
+end;
+
+procedure WindowPumpAll;
+begin
+  while WindowPumpOnce do ;
 end;
 
 { ---- Builder ---- }

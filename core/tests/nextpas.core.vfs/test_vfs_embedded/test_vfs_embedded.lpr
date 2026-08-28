@@ -7,6 +7,7 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.respack,
+  nextpas.core.stopwatch,
   nextpas.core.vfs;
 
 { embedded 后端专属用例：AOwnsBlob 双态生命期（heaptrc 判零泄漏）、
@@ -216,6 +217,69 @@ end;
 
 { ── 目录推导与去重共享槽位共存 ── }
 
+function Num4(AValue: Integer): string;
+begin
+  Result := '0000';
+  Result[4] := Char(Ord('0') + AValue mod 10); AValue := AValue div 10;
+  Result[3] := Char(Ord('0') + AValue mod 10); AValue := AValue div 10;
+  Result[2] := Char(Ord('0') + AValue mod 10); AValue := AValue div 10;
+  Result[1] := Char(Ord('0') + AValue mod 10);
+end;
+
+procedure TestPerf10kEmbedded;
+{ 零解码性能锁：10k 条目 Stat+OpenRead+首字节读必须在预算内完成。
+  验证 FEntries 平行缓存已消除每请求 DecodeWire 与二次二分。
+  阈值按 heaptrc -O2 慢路径留足余量，勿收紧当基准；回归为 O(n²) 会远超。 }
+const
+  ENTRY_COUNT = 10000;
+  BUDGET_MS = 800;
+var
+  Store: array of TBytes;
+  Inputs: TResPackInputArray;
+  B: TResPackBlob;
+  Fs: IVfs;
+  SW: TStopwatch;
+  I: Integer;
+  SI: TStatInfo;
+  S: IStream;
+  FoundAll: Boolean;
+  B1: Byte;
+begin
+  SetLength(Store, ENTRY_COUNT);
+  SetLength(Inputs, ENTRY_COUNT);
+  for I := 0 to ENTRY_COUNT - 1 do
+  begin
+    Store[I] := BytesOf(Num4(I) + '-0123456789abcdef0123456789abcdef');
+    Inputs[I] := Default(TResPackInputEntry);
+    Inputs[I].Path := 'gen/pack/' + Num4(I) + '.dat';
+    if Length(Store[I]) > 0 then
+      Inputs[I].Data := @Store[I][0]
+    else
+      Inputs[I].Data := nil;
+    Inputs[I].DataSize := SizeUInt(Length(Store[I]));
+  end;
+  B := ResPackBuild(Inputs, ResPackDefaultOptions);
+  Fs := CreateEmbeddedVfs(B.Data, B.Size, False);
+  try
+    FoundAll := True;
+    SW := TStopwatch.StartNew;
+    for I := 0 to ENTRY_COUNT - 1 do
+    begin
+      SI := Fs.Stat('gen/pack/' + Num4(I) + '.dat');
+      if SI.Info.Size = 0 then FoundAll := False;
+      S := Fs.OpenRead('gen/pack/' + Num4(I) + '.dat');
+      if S.Read(B1, 1) <> 1 then FoundAll := False;
+      S.Close;
+    end;
+    SW.Stop;
+    Check(FoundAll, 'perf 10k embedded all found');
+    Check(SW.ElapsedMs <= BUDGET_MS, 'perf 10k embedded Stat+OpenRead within budget');
+  finally
+    Fs := nil;
+    ResPackFreeBlob(B);
+  end;
+end;
+
 procedure TestDedupedEntriesListable;
 var
   Inputs: TResPackInputArray;
@@ -260,5 +324,6 @@ begin
   T.Test('empty pack is empty root', @TestEmptyPackEmptyRoot);
   T.Test('big content boundaries', @TestBigContentBoundaries);
   T.Test('deduped entries listable', @TestDedupedEntriesListable);
+  T.Test('perf 10k embedded zero-decode', @TestPerf10kEmbedded);
   if not T.Run then Halt(1);
 end.

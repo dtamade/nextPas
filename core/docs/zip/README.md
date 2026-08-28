@@ -9,6 +9,7 @@ ZIP archive container: read, write, filesystem pack/extract.
 | `nextpas.core.zip` | Facade: re-exports the full public surface |
 | `nextpas.core.zip.base` | Method enum, entry metadata record, signature/limit constants, entry-name safety predicate, unix/DOS time conversion |
 | `nextpas.core.zip.common` | Shared kernel：`GuardEntryReadable` / `DecompressEntryVerified` / LE* / `IsKnownZipSig` — reader 与 sequential 单点复用 |
+| `nextpas.core.zip.extra` | Shared extra codec：`Decode*` / `BuildLocalExtra` / `BuildCentralExtra` — Zip64/AES extra 链编解码单点，消除 writer/reader 重复 |
 | `nextpas.core.zip.writer` | `IZipWriter` implementation |
 | `nextpas.core.zip.reader` | `IZipReader` implementation |
 | `nextpas.core.zip.sequential` | `ISequentialZipReader` — pure sequential (pipe/HTTP body) reader |
@@ -203,7 +204,10 @@ Entries expose `ExternalAttrs` (raw central value) and `IsSymlink`
 (unix mode word `S_IFLNK` detection). Deflate output is pre-allocated from the
 declared size with a compression-ratio bound against hostile declarations.
 `NewZipReaderWithOptions` takes a per-entry output cap
-(`TZipReadOptions.MaxOutputSize`, default 1 GiB) to bound zip bombs.
+(`TZipReadOptions.MaxOutputSize`, default 1 GiB) to bound zip bombs,
+and an optional cross-entry total cap `MaxTotalOutputSize` (0=unlimited)
+to defeat the "100k × 1 MiB" bypass (INV-17); `TZipExtractOptions`
+forwards the same total.
 
 ### Streaming read
 

@@ -35,7 +35,7 @@ type
     function FakeSelf: TObject;
   end;
 
-  TFakeWindow = class(TInterfacedObject, IWindow, IFakeSelfAccess)
+  TFakeWindow = class(TInterfacedObject, IWindow, IFakeSelfAccess, IWindowHost)
   private
     FClosed: Boolean;
     FVisible: Boolean;
@@ -80,6 +80,10 @@ type
     procedure OnEvent(AHandler: TWindowEventHandler); overload; virtual;
     procedure OnEvent(AHandler: TWindowEventMethod); overload; virtual;
     procedure OnEvent(AHandler: TWindowEventProc); overload; virtual;
+    { IWindowHost }
+    procedure HostResized(AWidth, AHeight: Integer);
+    procedure HostScaleChanged(ANewScale: Double);
+    procedure HostCloseRequested;
   public
     class function FromWindow(const AWindow: IWindow): TFakeWindow; static;
     function FakeSelf: TObject;
@@ -112,6 +116,7 @@ function FakeLiveWindowCount: Integer;
 
 { 对所有活跃 fake 窗口各泵一次投递队列（factory RunLoop 用） }
 procedure FakePumpAll;
+function FakeHasPendingPosts: Boolean;
 
 { 句柄探针：返回最近一次分配的假句柄值（测试断言句柄传递链） }
 function FakeLastHandleValue: TWindowNativeHandle;
@@ -171,13 +176,13 @@ type
     FHead: Integer;
     FCount: Integer;
     FOwnerThread: UInt64;
-    procedure Grow;
+    procedure Grow; inline;
   public
     constructor Create(AOwnerThread: UInt64);
     destructor Destroy; override;
-    procedure PostRef(AProc: TWindowProcRef);
-    function IsOnMainThread: Boolean;
-    function PumpOnce: Boolean;
+    procedure PostRef(AProc: TWindowProcRef); inline;
+    function IsOnMainThread: Boolean; inline;
+    function PumpOnce: Boolean; inline;
     procedure PumpAll;
     function PendingCount: Integer;
     procedure DropAll;
@@ -207,7 +212,7 @@ var
 begin
   LNewCap := Length(FRing) * 2;
   if LNewCap = 0 then
-    LNewCap := 16;
+    LNewCap := 32;
   SetLength(LNew, LNewCap);
   for I := 0 to FCount - 1 do
     LNew[I] := FRing[(FHead + I) mod Length(FRing)];
@@ -215,25 +220,25 @@ begin
   FHead := 0;
 end;
 
-procedure TFakeDispatcher.PostRef(AProc: TWindowProcRef);
+procedure TFakeDispatcher.PostRef(AProc: TWindowProcRef); inline;
 begin
   FLck.Acquire;
   try
     if FCount = Length(FRing) then
       Grow;
     FRing[(FHead + FCount) mod Length(FRing)] := AProc;
-    FCount := FCount + 1;
+    Inc(FCount);
   finally
     FLck.Release;
   end;
 end;
 
-function TFakeDispatcher.IsOnMainThread: Boolean;
+function TFakeDispatcher.IsOnMainThread: Boolean; inline;
 begin
   Result := platform_thread_id = FOwnerThread;
 end;
 
-function TFakeDispatcher.PumpOnce: Boolean;
+function TFakeDispatcher.PumpOnce: Boolean; inline;
 var
   LProc: TWindowProcRef;
 begin
@@ -244,11 +249,12 @@ begin
     LProc := FRing[FHead];
     FRing[FHead] := nil;
     FHead := (FHead + 1) mod Length(FRing);
-    FCount := FCount - 1;
+    Dec(FCount);
   finally
     FLck.Release;
   end;
-  LProc();
+  if Assigned(LProc) then
+    LProc();
   LProc := nil;
   Result := True;
 end;
@@ -323,6 +329,16 @@ begin
   for I := 0 to High(GLiveWindows) do
     if not GLiveWindows[I].FClosed then
       GLiveWindows[I].PumpAll;
+end;
+
+function FakeHasPendingPosts: Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to High(GLiveWindows) do
+    if not GLiveWindows[I].FClosed and (GLiveWindows[I].PendingPosts > 0) then
+      Exit(True);
+  Result := False;
 end;
 
 function FakeLastHandleValue: TWindowNativeHandle;
@@ -448,7 +464,7 @@ begin
   RealClose;
 end;
 
-function TFakeWindow.IsClosed: Boolean;
+function TFakeWindow.IsClosed: Boolean; inline;
 begin
   Result := FClosed;
 end;
@@ -574,13 +590,13 @@ begin
   Result := FMinimized;
 end;
 
-function TFakeWindow.GetScaleFactor: Double;
+function TFakeWindow.GetScaleFactor: Double; inline;
 begin
   RequireOpen;
   Result := FScale;
 end;
 
-function TFakeWindow.NativeHandle: TWindowNativeHandle;
+function TFakeWindow.NativeHandle: TWindowNativeHandle; inline;
 begin
   { INV-1：Close 完成后恒为 nil；其余情况返回确定性假句柄 }
   if FClosed then
@@ -589,7 +605,7 @@ begin
     Result := FNativeHandle;
 end;
 
-function TFakeWindow.GetDispatcher: IWindowDispatcher;
+function TFakeWindow.GetDispatcher: IWindowDispatcher; inline;
 begin
   Result := FDispatcher;
 end;
@@ -682,6 +698,44 @@ end;
 function TFakeWindow.StoredParentHandle: TWindowNativeHandle;
 begin
   Result := FParentHandle;
+end;
+
+procedure TFakeWindow.HostResized(AWidth, AHeight: Integer);
+var
+  E: TWindowEvent;
+begin
+  if not (FDispatcher as TFakeDispatcher).IsOnMainThread then
+  begin FDispatcher.Post(procedure begin HostResized(AWidth, AHeight); end); Exit; end;
+  RequireOpen;
+  if AWidth < 0 then AWidth := 0;
+  if AHeight < 0 then AHeight := 0;
+  FWidth := AWidth; FHeight := AHeight;
+  E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X:=0; E.Y:=0; E.NewScale:=0;
+  DoDispatch(E);
+end;
+
+procedure TFakeWindow.HostScaleChanged(ANewScale: Double);
+var
+  E: TWindowEvent;
+begin
+  if not (FDispatcher as TFakeDispatcher).IsOnMainThread then
+  begin FDispatcher.Post(procedure begin HostScaleChanged(ANewScale); end); Exit; end;
+  RequireOpen;
+  if ANewScale <= 0 then raise EWindowInvalidState.Create('scale must be > 0');
+  FScale := ANewScale;
+  E.Kind := weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=FScale;
+  DoDispatch(E);
+end;
+
+procedure TFakeWindow.HostCloseRequested;
+var
+  E: TWindowEvent;
+begin
+  if not (FDispatcher as TFakeDispatcher).IsOnMainThread then
+  begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end;
+  RequireOpen;
+  E.Kind := weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0;
+  DoDispatch(E);
 end;
 
 end.

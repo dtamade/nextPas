@@ -218,10 +218,19 @@ begin
   Result := HttpMakeStrongETag(ASize, AModTime);
 end;
 
+function StripWeakETag(const S: string): string; inline;
+begin
+  if (Length(S) >= 2) and (S[1] = 'W') and (S[2] = '/') then
+    Result := System.Copy(S, 3, Length(S) - 2)
+  else
+    Result := S;
+end;
+
 function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
 var
   LRest, LToken: string;
   LComma: SizeInt;
+  LServerWeak: string;
 begin
   Result := False;
   if (AIfNoneMatch = '') or (AServerETag = '') then
@@ -229,6 +238,8 @@ begin
   LRest := Trim(AIfNoneMatch);
   if LRest = '*' then
     Exit(True);
+  { RFC 7232 §3.3: If-None-Match uses weak comparison — W/"x" matches "x". }
+  LServerWeak := StripWeakETag(Trim(AServerETag));
   while LRest <> '' do
   begin
     LComma := Pos(',', LRest);
@@ -242,7 +253,7 @@ begin
       LToken := Trim(LRest);
       LRest := '';
     end;
-    if LToken = AServerETag then
+    if StripWeakETag(LToken) = LServerWeak then
       Exit(True);
   end;
 end;

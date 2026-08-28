@@ -1,6 +1,6 @@
 # nextpas.core.webview 后端绑定策略
 
-**状态**: **Production Ready**（Wave 1 gtk/fake 全量 + S4-S19 打磨；bench 双基线刷新；W2 Win32 真窗口壳 via wine 已验证、WebView2 controller 待 Edge；W3 待平台）
+**状态**: **Production Ready**（Wave 1 gtk/fake 全量 + S4-S20 打磨；bench 双基线刷新；W2 Win32 真窗口壳 via wine 已验证且壳满态（DPI 分数/WM_DPICHANGED/最小化）、WebView2 controller 待 Edge S21；W3 待平台）
 本文档记录各后端的 ABI 绑定方式、版本矩阵、主线程唤醒原语、
 eval 结果语义矩阵，以及从 fafafa.webview 移植资产的清单与边界。
 
@@ -137,7 +137,9 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
   WndProc 泵出闭包。STA 一致性由"创建线程=泵线程"保证。
 - `ExecuteScript` 天然异步（completion handler），直接映射 `Eval` 契约。
 - 窗口壳经 Win32 直出（`CreateWindowEx` + 内嵌 controller `put_Bounds`）；
-  Maximize/Minimize/Restore/Focus 走 ShowWindow/SetForegroundWindow 族。
+  Maximize/Minimize/Restore/Focus 走 ShowWindow/SetForegroundWindow 族；S20 壳已满态：
+  Minimize/Restore/IsMinimized（IsIconic）、GetScaleFactor 分数值（GetDpiForWindow 动态绑定→回退
+  GetDeviceCaps，返 Double）、WM_DPICHANGED → ScaleChanged 多播（GLiveList 多实例分发）。
 - 会话：`EnvironmentOptions.UserDataFolder`（持久化自定义目录）/
   private 环境变体（Ephemeral）；W2 启动前对照当版文档定案。
 - 运行时依赖 WebView2 Runtime（Evergreen）；缺失时降级语义同 §1.2。
@@ -195,5 +197,5 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 | Wayland 下 NativeHandle 语义（无 XID） | 句柄嵌入场景受限 | Wave 1 文档标注"X11 下为 XID，Wayland 为 NULL"；嵌入场景非目标 |
 | macOS ATS 对 http dev server 的限制 | DevServerUrl 在 wk 上可能被拦 | W3 设计时决策（NSAppTransportSecurity 或提示 https） |
 | Windows WebView2 Evergreen 版本漂移 | COM v2 接口偶有新增 | 只绑定稳定子集；token 校验失败即 EWebviewBackendUnavailable |
-| GTK GetScaleFactor 仅整数（X11 典型 1/2） | HiDpi 小数缩放读不到 | 诚实表已标注；Wayland/GTK4 时代再评 |
+| GTK GetScaleFactor 仅整数（X11 典型 1/2） | HiDpi 小数缩放读不到 | 诚实表已标注；Win32 S20 已真分数（GetDpiForWindow/96.0），Wayland/GTK4 时代再评 |
 | 本机（2026-08-26 取证）WebKit 网络进程无法启动：http/file 导航零事件（连可达本地服务也不发起），仅进程内自定义 scheme 可用 | DevServerUrl 直连行为无法做引擎级 live 断言 | 门禁改用同步可观测面（资产惰性）+ scheme 404 覆盖失败接线；真机 http 行为待环境修复后补采 |

@@ -83,6 +83,20 @@ type
     procedure OnEvent(AHandler: TWindowEventProc); overload;
   end;
 
+  {** 宿主驱动扩展：仅 attach 后端（wasm/android/uikit）与 fake 暴露。
+      桌面后端不支持，QueryInterface 返回非 0。
+
+      设计立场：拒绝 LCL 式 LM_ 跨平台消息。平台特有能力不经消息号伪装，
+      而经强类型接口 + Supports 探测。宿主（Android Activity / iOS
+      UIViewController / 浏览器 JS）通过此接口把 surface/canvas 生命周期
+      事件翻译成 TWindowEvent，不经 WPARAM/LPARAM。 *}
+  IWindowHost = interface
+    ['{7E9A1B2C-3D4E-4F60-9A8B-C1D2E3F4A005}']
+    procedure HostResized(AWidth, AHeight: Integer);
+    procedure HostScaleChanged(ANewScale: Double);
+    procedure HostCloseRequested;
+  end;
+
 implementation
 
 end.

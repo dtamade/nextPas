@@ -56,7 +56,7 @@ type
     function FindAdapter(AStreamId: UInt64): TObject;
     procedure RemoveAdapter(AObj: TObject);
   public
-    constructor Create(ASession: IQuicSession);
+    constructor Create(ASession: IQuicSession; AHook: Boolean = True);
     destructor Destroy; override;
 
     {** 幂等，开 uni 控制流发 stream-type 0x00 + SETTINGS(0x04) 帧；
@@ -131,14 +131,14 @@ type
 
 { TH3Session }
 
-constructor TH3Session.Create(ASession: IQuicSession);
+constructor TH3Session.Create(ASession: IQuicSession; AHook: Boolean);
 begin
   inherited Create;
   FConn := TQuicClientConnection(ASession);
   FHasControl := False;
   FControlId := 0;
   SetLength(FAdapters, 0);
-  if FConn <> nil then
+  if (FConn <> nil) and AHook then
   begin
     FConn.HookStreamData(@HandleStreamData);
     FConn.HookStreamReset(@HandleStreamReset);
