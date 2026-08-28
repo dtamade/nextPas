@@ -69,10 +69,14 @@ function TryParseHttpDate(const ADate: string; out AUnix: Int64): Boolean;
    Injects current UTC time only when the headers do not already have one. }
 procedure HttpEnsureDateHeader(const AHeaders: IHttpHeaders);
 
+{** @desc 零分配判定 Range 头是否以 "bytes=" 开头（避免 System.Copy 临时串）。 }
+function HttpRangeHasBytesPrefix(const ARange: string): Boolean; inline;
+
 implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.fs.base,
   nextpas.core.fs.path,
   nextpas.core.text.conv,
@@ -348,6 +352,15 @@ begin
   end;
 end;
 
+function HttpRangeHasBytesPrefix(const ARange: string): Boolean;
+const
+  BYTES_PREFIX = 'bytes=';
+  BYTES_PREFIX_LEN = 6;
+begin
+  if Length(ARange) < BYTES_PREFIX_LEN then Exit(False);
+  Result := CompareMem(@ARange[1], @BYTES_PREFIX[1], BYTES_PREFIX_LEN);
+end;
+
 { Parse Range header value. Returns True if valid single range.
   Format: "bytes=start-end" or "bytes=start-" or "bytes=-suffix" }
 function ParseRangeHeader(const ARange: string; AFileSize: Int64;
@@ -400,7 +413,7 @@ begin
   AEnd := 0;
   if Length(ARange) < BYTES_PREFIX_LEN + 1 then
     Exit;
-  if System.Copy(ARange, 1, BYTES_PREFIX_LEN) <> BYTES_PREFIX then
+  if not HttpRangeHasBytesPrefix(ARange) then
     Exit;
 
   LDashPos := Pos('-', ARange);
