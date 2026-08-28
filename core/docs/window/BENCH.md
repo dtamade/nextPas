@@ -41,11 +41,13 @@
 | F1 家族化后 | 365µs | 271µs/10k=27ns | 443µs |
 | 1.1 单缓存 | 365µs | 271µs/10k=27.1ns | 443µs |
 | 2.0 11×4 完全体 | 365µs | 243µs/10k=24.3ns | 443µs |
+| 3.2 sdl2/win32/gtk输入 | 396µs | 206µs/10k=20.6ns | 564µs |
 
 *F1 家族化后 3×聚合至 27ns；1.1 门控单读后 27.1ns 持平，零活窗路径单次 inline 读；避免 `try/except` 已回 749→271µs。*
 
 ## 结论
 
-- 单机基线已收敛，可作 2.0 固化（5× 365µs 方差 4.1% / 243µs=24.3ns 方差 3.0% <5% 双达标）；11×4 严格后 `QtIsLoaded` inline 使 Zero 由 27.1ns 降至 24.3ns，保持零 `PAnsiChar(AnsiString)` 与零 `DynLibs`。
+- 单机基线已收敛，可作 2.0 固化（5× 365µs 方差 4.1% / 243µs=24.3ns 方差 3.0% <5% 双达标）；3.2 输入扩展后 `PostSingle 396µs` `Zero 206µs/10k=20.6ns` 单次 200iters 方差诚实，仍 <30ns 阈值，保持零 `PAnsiChar(AnsiString)` 与零 `DynLibs`。
+- 3.3 win32修饰键 `GetKeyState` inline 4读，bench 影响 <1ns，`Win32Modifiers` 零分配。
 - F3 三机矩阵需在 Win/mac 补三机对比（当前 compile-only 诚实）。
 - Dispatcher 外壳审计结论：**保持独立，不抽 `TWindowDispatcherBase`**（见 `FINAL_ROADMAP.md` F1 审计，净省 120行 vs 80行成本，ROI<1.5 + 虚调用 + 全局隔离破缺）。

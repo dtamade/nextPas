@@ -109,6 +109,7 @@ focused/runtime 门禁中断言可测格。
 | Focus | `present` | `RaiseWindow` | `SetForegroundWindow` | `makeKeyAndOrderFront` | `canvas.focus()`（宿主可为 no-op） | 宿主焦点（no-op） | 宿主焦点（no-op） | 状态位翻转 |
 | IsMinimized/Maximized | 查询式真值（gdk window state 位） | `SDL_WINDOW_*` 状态位 | `IsIconic/IsZoomed` | `isMiniaturized`/`isZoomed` | **诚实 no-op**：`IsMinimized=False`/`IsMaximized=False` 恒假 | **诚实 no-op** | **诚实 no-op** | 状态位 |
 | ParentHandle（attach） | **不支持**：Build 抛 `EWindowUnsupported` | 同左（S3） | 同左 | 同左 | **接受**：`ParentHandle` 携带 canvas 元素指针/id 指针（attach 唯一形态） | **必需**：携带 `ANativeWindow*`，缺失抛 `Unsupported` | **必需**：携带 `UIWindow*`，缺失抛 `Unsupported` | 记录并接受（供 attach 契约预演） |
+| weKeyDown/Up/weMouse* | `key-press/release/button-press/release/motion` 5信号（honest最小 KeyCode0） | `SDL_KEYDOWN/UP/MOUSE*` 端到端（KeyCode Modifiers Button X/Y） | `WM_KEYDOWN/UP/L/R/MBUTTON/DOWN/UP/MOUSEMOVE` 端到端（KeyCode Modifiers via GetKeyState） | honest no-op（NSEvent deferred, compile-only） | **不发**（无OS键盘） | **不发**（host驱动） | **不发**（host驱动） | `InjectKey/InjectMouse` 端到端（确定性） |
 | 几何单位换算 | 内部逻辑像素，读写按 scale 换算物理口径，往返误差 ±1px | 同左（点坐标） | 物理像素直通 | 点坐标换算，±1px | CSS 像素×`devicePixelRatio`=物理像素；`SetBounds` 写 CSS 尺度，内部×ratio 得物理往返 | 物理像素直通（只读） | 点坐标（只读，×scale） | 物理像素直通 |
 
 几何契约统一口径：`SetBounds/GetWidth/GetHeight/weResized/weMoved` 一律
