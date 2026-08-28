@@ -832,6 +832,49 @@ begin
   Check(not TryTotalLimitSequential(Archive, 0), 'total unlimited sequential');
 end;
 
+function TryDescriptorLimit(const AData: TBytes; ALimit: SizeUInt): Boolean;
+var
+  R: ISequentialZipReader;
+  Opts: TZipReadOptions;
+  Info: TZipEntryInfo;
+begin
+  Opts := DefaultZipReadOptions;
+  Opts.MaxDescriptorBuffer := ALimit;
+  R := NewZipSequentialReaderWithOptions(CreateBytesStreamFrom(AData) as IReader, Opts);
+  try
+    R.Next(Info);
+    Result := False;
+  except
+    on E: EParseError do Result := True;
+    else Result := False;
+  end;
+end;
+
+procedure TestDescriptorBufferLimit;
+var
+  W: IZipWriter;
+  Opt: TZipAddOptions;
+  S: ICompressWriter;
+  Archive, Trunc: TBytes;
+begin
+  W := NewZipWriter;
+  Opt := DefaultZipAddOptions;
+  Opt.DataDescriptor := True;
+  S := W.AddEntryStream('a.bin', Opt);
+  S.Write(PatternBytes(1024, 1)[0], 1024);
+  S.Close;
+  Archive := W.Finish;
+  Check(not TryDescriptorLimit(Archive, 10), 'valid descriptor passes even tiny limit (found before limit)');
+  Check(not TryDescriptorLimit(Archive, 0), 'default limit passes (0->512MiB)');
+  Check(not TryDescriptorLimit(Archive, 512*1024*1024), 'explicit default passes');
+  SetLength(Trunc, 30+5+1024);
+  Move(Archive[0], Trunc[0], Length(Trunc));
+  Check(TryDescriptorLimit(Trunc, 2048), 'truncated descriptor not found');
+  SetLength(Trunc, 30+5+512);
+  Move(Archive[0], Trunc[0], Length(Trunc));
+  Check(TryDescriptorLimit(Trunc, 512), 'tiny limit truncated still not found');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.sequential');
   T.Test('Empty archive', @TestEmptyArchive);
@@ -855,5 +898,6 @@ begin
   T.Test('Force Zip64 sequential', @TestSequentialWithForceZip64);
   T.Test('Skip buffered descriptor', @TestSkipBufferedDescriptor);
   T.Test('Total limit sequential', @TestTotalLimitSequential);
+  T.Test('Descriptor buffer limit', @TestDescriptorBufferLimit);
   if not T.Run then Halt(1);
 end.
