@@ -89,7 +89,7 @@ procedure WebviewExitLoop;
 implementation
 
 uses
-  TypInfo,
+  nextpas.core.atomic,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
   nextpas.core.webview.gtk.win,
@@ -99,8 +99,12 @@ uses
   nextpas.core.webview.wk.loader,
   nextpas.core.webview.wk;
 
+const
+  CWebviewKindNames: array[TWebviewKind] of string = (
+    'wvGtk', 'wvWebview2', 'wvWk', 'wvFake');
+
 var
-  GExitRequested: Boolean = False;
+  GExitRequested: Integer = 0;
 
 function DefaultWebviewKind: TWebviewKind;
 begin
@@ -148,7 +152,7 @@ begin
   if not WebviewBackendAvailable(AKind) then
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is not available in this build', [
-      GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+      CWebviewKindNames[AKind]]);
   case AKind of
     wvFake:     Result := CreateFakeWebview(AOptions);
     wvGtk:      Result := TGtkWebview.Create(AOptions);
@@ -157,7 +161,7 @@ begin
   else
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is registered but has no factory yet', [
-      GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+      CWebviewKindNames[AKind]]);
   end;
 end;
 {$POP}

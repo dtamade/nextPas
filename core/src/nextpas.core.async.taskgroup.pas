@@ -281,6 +281,7 @@ end;
 procedure TAsyncTaskGroup.RunTaskRef(ACallback: TAsyncCallbackRef; AContext: Pointer);
 var
   LCtx: PTaskWrapCtx;
+  LGene: UInt32;
 begin
   platform_mutex_lock(FLock);
   try
@@ -289,6 +290,7 @@ begin
     FState := agsRunning;
     Inc(FActiveCount);
     Inc(FTotalCount);
+    LGene := FGeneration;
   finally
     platform_mutex_unlock(FLock);
   end;
@@ -299,6 +301,7 @@ begin
   LCtx^.UserContext := AContext;
   LCtx^.Group := Pointer(Self);
   LCtx^.Done := 0;
+  LCtx^.Generation := LGene;
   FLoop.PostEx(@WrappedTaskRefCallback, LCtx, @DiscardTaskWrap);
 end;
 
