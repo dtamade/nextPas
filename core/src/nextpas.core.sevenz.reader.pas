@@ -1050,32 +1050,30 @@ begin
   Result := LIdx;
 end;
 
-function MatchesGlob(const AName, APattern: string): Boolean;
-var
-  LNameLen, LPatLen: Integer;
-  LNi, LPi: Integer;
-  LStarPos, LMatchPos: Integer;
+function MatchesGlobCore(const AName, APattern: string; AIgnoreCase: Boolean): Boolean; inline;
+var LNameLen, LPatLen, LNi, LPi, LStarPos, LMatchPos: Integer;
 begin
   LNameLen := Length(AName); LPatLen := Length(APattern);
   LNi := 1; LPi := 1; LStarPos := 0; LMatchPos := 0;
   while LNi <= LNameLen do
   begin
-    if (LPi <= LPatLen) and ((APattern[LPi]='?') or (APattern[LPi]=AName[LNi])) then
-    begin
-      Inc(LNi); Inc(LPi);
-    end
+    if (LPi <= LPatLen) and ((APattern[LPi]='?') or
+       (AIgnoreCase and (AsciiLowerChar(APattern[LPi])=AsciiLowerChar(AName[LNi])) or
+        not AIgnoreCase and (APattern[LPi]=AName[LNi]))) then
+    begin Inc(LNi); Inc(LPi); end
     else if (LPi <= LPatLen) and (APattern[LPi]='*') then
-    begin
-      LStarPos := LPi; LMatchPos := LNi; Inc(LPi);
-    end
+    begin LStarPos := LPi; LMatchPos := LNi; Inc(LPi); end
     else if LStarPos <> 0 then
-    begin
-      LPi := LStarPos + 1; Inc(LMatchPos); LNi := LMatchPos;
-    end
+    begin LPi := LStarPos + 1; Inc(LMatchPos); LNi := LMatchPos; end
     else Exit(False);
   end;
   while (LPi <= LPatLen) and (APattern[LPi]='*') do Inc(LPi);
   Result := LPi > LPatLen;
+end;
+
+function MatchesGlob(const AName, APattern: string): Boolean;
+begin
+  Result := MatchesGlobCore(AName, APattern, False);
 end;
 
 function SuffixMatchesIgnoreCaseAscii(const AName, ASuffixLower: string; const ANeed: Integer): Boolean; inline;
@@ -1228,26 +1226,10 @@ end;
 
 function MatchesGlobIgnoreCase(const AName, APattern: string): Boolean;
 var LLowerName, LLowerPat: string;
-  LNameLen, LPatLen, LNi, LPi, LStarPos, LMatchPos: Integer;
 begin
-  // ascii 快道零分配：逐字符 AsciiLowerChar 比对，避免每条目两次 LowerCase 分配
+  // ascii 快道零分配：单源 MatchesGlobCore，避免两份通配循环重复
   if IsAsciiString(AName) and IsAsciiString(APattern) then
-  begin
-    LNameLen := Length(AName); LPatLen := Length(APattern);
-    LNi := 1; LPi := 1; LStarPos := 0; LMatchPos := 0;
-    while LNi <= LNameLen do
-    begin
-      if (LPi <= LPatLen) and ((APattern[LPi]='?') or (AsciiLowerChar(APattern[LPi])=AsciiLowerChar(AName[LNi]))) then
-      begin Inc(LNi); Inc(LPi); end
-      else if (LPi <= LPatLen) and (APattern[LPi]='*') then
-      begin LStarPos := LPi; LMatchPos := LNi; Inc(LPi); end
-      else if LStarPos <> 0 then
-      begin LPi := LStarPos + 1; Inc(LMatchPos); LNi := LMatchPos; end
-      else Exit(False);
-    end;
-    while (LPi <= LPatLen) and (APattern[LPi]='*') do Inc(LPi);
-    Exit(LPi > LPatLen);
-  end;
+    Exit(MatchesGlobCore(AName, APattern, True));
   if IsAsciiString(AName) then LLowerName := AsciiLowerStr(AName) else LLowerName := LowerCase(AName);
   if IsAsciiString(APattern) then LLowerPat := AsciiLowerStr(APattern) else LLowerPat := LowerCase(APattern);
   Result := MatchesGlob(LLowerName, LLowerPat);
