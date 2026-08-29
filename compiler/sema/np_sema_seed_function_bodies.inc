@@ -424,7 +424,33 @@ begin
         path is complete. }
       SameText(Entry.Name, 'ChangeFileExt') or
       SameText(Entry.Name, 'ResolveExecutablePath') or
-      SameText(Entry.Name, 'CompilerCreateUnitAllocator') then
+      SameText(Entry.Name, 'CompilerCreateUnitAllocator') or
+      { M2 buckets wholesale: runtime-decl + method-object residual }
+      SameText(Entry.Name, 'GetCurrentThreadId') or
+      SameText(Entry.Name, 'getcwd') or
+      SameText(Entry.Name, 'platform_virtual_reserve') or
+      SameText(Entry.Name, 'platform_virtual_commit') or
+      SameText(Entry.Name, 'platform_virtual_release') or
+      SameText(Entry.Name, 'np_open') or
+      SameText(Entry.Name, 'np_opendir') or
+      SameText(Entry.Name, 'np_read') or
+      SameText(Entry.Name, 'np_readdir') or
+      SameText(Entry.Name, 'np_realpath') or
+      SameText(Entry.Name, 'np_stat') or
+      SameText(Entry.Name, 'TToolStatusEventVec.Count') or
+      SameText(Entry.Name, 'TToolStatusEventVec.Create') or
+      SameText(Entry.Name, 'TToolStatusEventVec.Push') or
+      SameText(Entry.Name, 'TStringBuilder.ToString') or
+      SameText(Entry.Name, 'Pointer.TokenCount') or
+      SameText(Entry.Name, 'Pointer.TypeCount') or
+      SameText(Entry.Name, 'Pointer.GetTypeMeta') or
+      SameText(Entry.Name, 'TFileStream.ReadBuffer') or
+      SameText(Entry.Name, 'TAstFacade.Destroy') or
+      SameText(Entry.Name, 'TInterfaceSlotMeta.InterfaceName') or
+      SameText(Entry.Name, 'TProcess.FCurrentDirectory') or
+      SameText(Entry.Name, 'TPthreadKeyDtor') or
+      SameText(Entry.Name, 'IFile.Close') or
+      SameText(Entry.Name, 'IHasher.Write') then
       Entry.Needed := True;
     FProcedureBodies[I] := Entry;
   end;
