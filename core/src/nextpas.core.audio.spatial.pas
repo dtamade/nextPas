@@ -70,8 +70,8 @@ begin
   LGain := SpatialGainFromDistance(AParams.Distance, AParams.MinDistance, AParams.MaxDistance, AParams.Rolloff);
   LPan := SpatialPanFromPosition(AParams.Position);
   LAngle := (LPan + 1) * Pi / 4;
-  LL := Cos(LAngle) * 1.414 * LGain;
-  LR := Sin(LAngle) * 1.414 * LGain;
+  LL := Cos(LAngle) * CAudioPanLawUnity * LGain;
+  LR := Sin(LAngle) * CAudioPanLawUnity * LGain;
   Result.Format := ABuffer.Format;
   Result.FrameCount := ABuffer.FrameCount;
   SetLength(Result.Data, Length(ABuffer.Data));

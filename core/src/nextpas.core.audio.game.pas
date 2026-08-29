@@ -156,8 +156,8 @@ begin
       V := V * FGain;
       if FChannels = 2 then
       begin
-        if Ch = 0 then V := V * Lgain * 1.414213562
-        else V := V * Rgain * 1.414213562;
+        if Ch = 0 then V := V * Lgain * CAudioPanLawUnity
+        else V := V * Rgain * CAudioPanLawUnity;
       end;
       OutPtr[I*FChannels + Ch] := V;
     end;

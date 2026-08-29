@@ -11,6 +11,8 @@ const
   MinAudioSampleRate = 8000;
   MaxAudioSampleRate = 192000;
   MaxAudioChannels = 8;
+  CAudioPanLawUnity = 1.4142135623730951; // sqrt(2) — equal-power pan law
+  CAudioSeqVelScale = 0.2;
 
   { WAVEFORMATEXTENSIBLE speaker bits (subset). }
   AudioMaskFrontLeft = UInt32($1);

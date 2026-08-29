@@ -33,7 +33,7 @@ type
   end;
 
 function CreateAudioSequencer(const AFormat: TAudioFormat; ABpm: Double): IAudioSequencer;
-function MidiPitchToFreq(APitch: Integer): Double;
+function MidiPitchToFreq(APitch: Integer): Double; inline;
 
 implementation
 
@@ -41,7 +41,7 @@ uses
   nextpas.core.audio.errors,
   Math;
 
-function MidiPitchToFreq(APitch: Integer): Double;
+function MidiPitchToFreq(APitch: Integer): Double; inline;
 begin
   Result := 440.0 * Power(2, (APitch - 69) / 12.0);
 end;
@@ -111,7 +111,7 @@ begin
   begin
     F := MidiPitchToFreq(FNotes[I].Pitch);
     FNoteInc[I] := 2 * Pi * F / FFormat.SampleRate;
-    FNoteVel[I] := Single(FNotes[I].Velocity / 127.0 * 0.2);
+    FNoteVel[I] := Single(FNotes[I].Velocity / 127.0 * CAudioSeqVelScale);
   end;
 end;
 
