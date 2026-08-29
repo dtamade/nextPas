@@ -35,6 +35,9 @@ function CreateAudioBank: TAudioBank;
 
 implementation
 
+uses
+  nextpas.core.audio.errors;
+
 function CreateAudioBank: TAudioBank;
 begin
   Result := TAudioBank.Create;
@@ -107,24 +110,29 @@ begin
 end;
 
 function TAudioBank.PackToBytes: TBytes;
-var I, P, K: Integer; LIdBytes: TBytes; LId: string;
+var I, P, K: Integer; LIdBytes: TBytes; LId: string; LNeed: Integer;
 begin
   Result := nil;
   EnterCriticalSection(FLock);
   try
-    SetLength(Result, 4);
+    // single grow calc avoids per-entry realloc churn; still O(n) but predictable
+    LNeed := 4;
+    for I := 0 to High(FEntries) do
+      LNeed := LNeed + 4 + Length(FEntries[I].Id) + 4;
+    if LNeed > 16*1024*1024 then
+      raise EAudioError.Create('PackToBytes: too large');
+    SetLength(Result, LNeed);
     Result[0] := Byte(Length(FEntries) and $FF);
     Result[1] := Byte((Length(FEntries) shr 8) and $FF);
     Result[2] := Byte((Length(FEntries) shr 16) and $FF);
     Result[3] := Byte((Length(FEntries) shr 24) and $FF);
+    P := 4;
     for I := 0 to High(FEntries) do
     begin
       LId := FEntries[I].Id;
       SetLength(LIdBytes, Length(LId));
       for K := 1 to Length(LId) do
         LIdBytes[K-1] := Byte(Ord(LId[K]) and $FF);
-      P := Length(Result);
-      SetLength(Result, P + 4 + Length(LIdBytes) + 4);
       Result[P] := Byte(Length(LIdBytes) and $FF);
       Result[P+1] := Byte((Length(LIdBytes) shr 8) and $FF);
       Result[P+2] := Byte((Length(LIdBytes) shr 16) and $FF);
@@ -136,7 +144,10 @@ begin
       Result[P+1] := Byte((FEntries[I].Buffer.FrameCount shr 8) and $FF);
       Result[P+2] := Byte((FEntries[I].Buffer.FrameCount shr 16) and $FF);
       Result[P+3] := Byte((FEntries[I].Buffer.FrameCount shr 24) and $FF);
+      Inc(P, 4);
     end;
+    // trim to actual P (LNeed already exact, but keep for safety)
+    if P <> Length(Result) then SetLength(Result, P);
   finally
     LeaveCriticalSection(FLock);
   end;

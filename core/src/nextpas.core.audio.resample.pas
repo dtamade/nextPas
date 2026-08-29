@@ -148,26 +148,22 @@ begin
 
   for LCh := 0 to LChannels - 1 do
   begin
+    // incremental LPos avoids per-frame division; direct PSingle avoids Move
+    LPos := 0;
     for LFrame := 0 to LDstFrames - 1 do
     begin
-      LPos := LFrame * Double(LSrcRate) / Double(ANewRate);
       LS0Idx := Trunc(LPos);
-      LFrac := LPos - Double(LS0Idx);
-      if LFrac < 0 then LFrac := 0;
-      if LFrac > 1 then LFrac := 1;
-
+      LFrac := LPos - LS0Idx;
+      if LFrac < 0 then LFrac := 0 else if LFrac > 1 then LFrac := 1;
       if (LS0Idx >= 0) and (LS0Idx < LSrcFrames) then
-        Move(LPlanes[LCh][LS0Idx * SizeOf(Single)], LS0, SizeOf(Single))
-      else
-        LS0 := 0;
-
+        LS0 := PSingle(@LPlanes[LCh][LS0Idx * SizeOf(Single)])^
+      else LS0 := 0;
       if (LS0Idx + 1 >= 0) and (LS0Idx + 1 < LSrcFrames) then
-        Move(LPlanes[LCh][(LS0Idx + 1) * SizeOf(Single)], LS1, SizeOf(Single))
-      else
-        LS1 := 0;
-
+        LS1 := PSingle(@LPlanes[LCh][(LS0Idx + 1) * SizeOf(Single)])^
+      else LS1 := 0;
       LOut := LS0 * Single(1.0 - LFrac) + LS1 * Single(LFrac);
-      Move(LOut, LDstPlanes[LCh][LFrame * SizeOf(Single)], SizeOf(Single));
+      PSingle(@LDstPlanes[LCh][LFrame * SizeOf(Single)])^ := LOut;
+      LPos := LPos + LSrcRate / ANewRate;
     end;
   end;
 
