@@ -73,15 +73,15 @@ begin
 end;
 
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
-var NSamples, LI: Integer; P: PSingle; LDelta, LDenom, LGain: Single;
+var NSamples, LI: Integer; P: PSingle; LDelta, LStep, LGain: Single;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit;
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGainRamp: data too small');
   P := PSingle(@ABuf.Data[0]);
   if NSamples = 1 then begin P[0] := P[0] * AStartGain; Exit; end;
-  LDelta := AEndGain - AStartGain; LDenom := NSamples - 1;
-  for LI := 0 to NSamples - 1 do begin LGain := AStartGain + LDelta * (LI / LDenom); P[LI] := P[LI] * LGain; end;
+  LDelta := AEndGain - AStartGain; LStep := LDelta / (NSamples - 1); LGain := AStartGain;
+  for LI := 0 to NSamples - 1 do begin P[LI] := P[LI] * LGain; LGain := LGain + LStep; end;
 end;
 
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;

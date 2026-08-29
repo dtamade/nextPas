@@ -129,7 +129,7 @@ begin for I := 0 to High(FBiquads) do FBiquads[I].Reset; end;
 
 procedure TBiquadProcessor.Process(const AInput: TAudioBuffer; out AOutput: TAudioBuffer);
 var
-  LFrames, LChannels, LCh, LFr, LCopy: Integer;
+  LFrames, LChannels, LCh, LFr, LCopy, LBiquads, LBase: Integer;
   LOutPtr: PSingle;
 begin
   AOutput.Format := AInput.Format;
@@ -140,19 +140,19 @@ begin
   if (AInput.FrameCount <= 0) or (Length(AInput.Data) = 0) then Exit;
   if AInput.Format.SampleFormat <> sfF32 then Exit;
   LFrames := AInput.FrameCount; LChannels := AInput.Format.Channels;
-  if (LChannels <= 0) or (Length(FBiquads) = 0) then Exit;
+  LBiquads := Length(FBiquads);
+  if (LChannels <= 0) or (LBiquads = 0) then Exit;
   if Length(AOutput.Data) < LFrames * LChannels * SizeOf(Single) then Exit;
   LOutPtr := PSingle(@AOutput.Data[0]);
-  // cache biquad count, avoid High() in hot loop
-  if Length(FBiquads) = 0 then Exit;
   for LFr := 0 to LFrames - 1 do
+  begin
+    LBase := LFr * LChannels;
     for LCh := 0 to LChannels - 1 do
-    begin
-      if LCh < Length(FBiquads) then
-        LOutPtr[LFr * LChannels + LCh] := FBiquads[LCh].Process(LOutPtr[LFr * LChannels + LCh])
+      if LCh < LBiquads then
+        LOutPtr[LBase + LCh] := FBiquads[LCh].Process(LOutPtr[LBase + LCh])
       else
-        LOutPtr[LFr * LChannels + LCh] := FBiquads[High(FBiquads)].Process(LOutPtr[LFr * LChannels + LCh]);
-    end;
+        LOutPtr[LBase + LCh] := FBiquads[LBiquads - 1].Process(LOutPtr[LBase + LCh]);
+  end;
 end;
 
 end.
