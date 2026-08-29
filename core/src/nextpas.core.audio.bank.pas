@@ -63,6 +63,7 @@ end;
 procedure TAudioBank.Add(const AId: string; const ABuffer: TAudioBuffer; const ATags: TAudioTags);
 var L: Integer;
 begin
+  if AId = '' then Exit;
   EnterCriticalSection(FLock);
   try
     if FindIndex(AId) >= 0 then Exit;
