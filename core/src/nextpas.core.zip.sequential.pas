@@ -18,7 +18,7 @@ uses
   nextpas.core.compress.intf,
   nextpas.core.io.intf,
   nextpas.core.zip.base,
-  nextpas.core.zip.reader;
+  nextpas.core.zip.common;
 
 type
   {** @desc 顺序 ZIP 读器：Next 推进到下一条目，Open/CopyTo 消费当前条目载荷 *}
@@ -49,10 +49,9 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
-  nextpas.core.compress.deflate,
+  nextpas.core.compress,
   nextpas.core.bytes.builder,
   nextpas.core.zip.aes,
-  nextpas.core.zip.common,
   nextpas.core.zip.extra;
 
 const

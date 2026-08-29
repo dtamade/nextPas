@@ -27,18 +27,7 @@ uses
   nextpas.core.zip.base;
 
 type
-  {** @desc 读选项：MaxOutputSize 为单条目解压输出上限（防 zip bomb），
-       0 = 采用默认上限；MaxTotalOutputSize 为跨条目总输出上限（防
-       “多小条目绕过单条目上限”型 zip bomb），0 = 不限；MaxDescriptorBuffer
-       为顺序读描述符扫描缓冲上限（防无签名描述符全缓冲 bomb），0 = 512MiB；
-       Password 供 WinZip AES 加密条目解密（AE-1/AE-2，遗留 ZipCrypto 不支持），
-       空口令遇加密条目 raise *}
-  TZipReadOptions = record
-    MaxOutputSize: SizeUInt;
-    MaxTotalOutputSize: UInt64;
-    MaxDescriptorBuffer: SizeUInt;
-    Password: TBytes;
-  end;
+  TZipReadOptions = nextpas.core.zip.base.TZipReadOptions;
 
   {** @desc ZIP 归档读器（一次性载入字节，随机访问条目） *}
   IZipReader = interface
@@ -69,10 +58,8 @@ type
   end;
 
 const
-  { 未显式配置时的单条目解压默认上限：1 GiB }
-  C_ZIP_DEFAULT_MAX_OUTPUT = SizeUInt(1) shl 30;
-  { 未显式配置时的描述符扫描缓冲默认上限：512 MiB }
-  C_ZIP_DEFAULT_MAX_DESCRIPTOR = SizeUInt(512) * 1024 * 1024;
+  C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_OUTPUT;
+  C_ZIP_DEFAULT_MAX_DESCRIPTOR = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_DESCRIPTOR;
 
 function DefaultZipReadOptions: TZipReadOptions; inline;
 
@@ -99,7 +86,7 @@ uses
   nextpas.core.exception,
   nextpas.core.bytes.cursor,
   nextpas.core.checksum.crc32,
-  nextpas.core.compress.deflate,
+  nextpas.core.compress,
   nextpas.core.zip.aes,
   nextpas.core.zip.common,
   nextpas.core.zip.extra;
@@ -429,10 +416,7 @@ end;
 
 function DefaultZipReadOptions: TZipReadOptions;
 begin
-  Result.MaxOutputSize := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result.MaxTotalOutputSize := 0;
-  Result.MaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
-  Result.Password := nil;
+  Result := nextpas.core.zip.base.DefaultZipReadOptions;
 end;
 
 function NewZipReader(const AData: TBytes): IZipReader;
@@ -719,7 +703,7 @@ begin
   LInflate := nil;
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
   begin
-    LInflate := CreateRawDeflateReaderWithMaxOutputSize(LInner,
+    LInflate := RawDeflateReaderWithMaxOutputSize(LInner,
       FMaxOutputSize);
     LInner := LInflate;
   end
@@ -1076,7 +1060,7 @@ begin
   LInflate := nil;
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
   begin
-    LInflate := CreateRawDeflateReaderWithMaxOutputSize(LInner,
+    LInflate := RawDeflateReaderWithMaxOutputSize(LInner,
       FMaxOutputSize);
     LInner := LInflate;
   end
