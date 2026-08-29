@@ -214,11 +214,23 @@ var
   Expr: TSemanticHirExpr;
 begin
   if (FSemaModel = nil) or (AExprId <= 0) then
+  begin
+    EmitHirDiagnostic('hir.lower-failed.can-lower-expr-as-address',
+      'invalid model or id=' + IntToStr(AExprId));
     Exit(False);
+  end;
   if AExprId > FSemaModel.HirExprCount then
+  begin
+    EmitHirDiagnostic('hir.lower-failed.can-lower-expr-as-address-range',
+      'AExprId out of range=' + IntToStr(AExprId));
     Exit(False);
+  end;
   if not CanLowerExpr(AExprId) then
+  begin
+    EmitHirDiagnostic('hir.lower-failed.can-lower-expr-as-address-not-lowerable',
+      'expr not lowerable id=' + IntToStr(AExprId));
     Exit(False);
+  end;
   Expr := FSemaModel.HirExprAt(AExprId - 1);
   Result := Expr.ValueClass = shvcAddress;
 end;

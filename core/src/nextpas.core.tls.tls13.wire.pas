@@ -128,16 +128,24 @@ begin
 end;
 
 procedure AppendUInt16(var ADest: TBytes; AValue: Word);
+var
+  LLen: Integer;
 begin
-  AppendByte(ADest, Byte(AValue shr 8));
-  AppendByte(ADest, Byte(AValue and $FF));
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 2);
+  ADest[LLen] := Byte(AValue shr 8);
+  ADest[LLen + 1] := Byte(AValue and $FF);
 end;
 
 procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal);
+var
+  LLen: Integer;
 begin
-  AppendByte(ADest, Byte((AValue shr 16) and $FF));
-  AppendByte(ADest, Byte((AValue shr 8) and $FF));
-  AppendByte(ADest, Byte(AValue and $FF));
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 3);
+  ADest[LLen] := Byte((AValue shr 16) and $FF);
+  ADest[LLen + 1] := Byte((AValue shr 8) and $FF);
+  ADest[LLen + 2] := Byte(AValue and $FF);
 end;
 
 function ReadUInt16(const AData: TBytes; AOffset: Integer): Word;
