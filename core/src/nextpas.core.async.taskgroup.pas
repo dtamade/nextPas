@@ -312,7 +312,7 @@ begin
   LImmediate := False;
   platform_mutex_lock(FLock);
   try
-    if FActiveCount = 0 then
+    if (FActiveCount = 0) or (FState = agsCancelled) then
       LImmediate := True
     else
     begin
@@ -333,7 +333,7 @@ begin
   LImmediate := False;
   platform_mutex_lock(FLock);
   try
-    if FActiveCount = 0 then
+    if (FActiveCount = 0) or (FState = agsCancelled) then
       LImmediate := True
     else
     begin
@@ -352,7 +352,7 @@ begin
   platform_mutex_lock(FLock);
   try
     FState := agsCancelled;
-    FActiveCount := 0;
+    Inc(FGeneration);
   finally
     platform_mutex_unlock(FLock);
   end;

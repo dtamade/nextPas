@@ -168,8 +168,8 @@ end;
 
 procedure WebviewRunLoop;
 begin
-  GExitRequested := False;
-  while not GExitRequested do
+  atomic_store(GExitRequested, 0);
+  while atomic_load(GExitRequested) = 0 do
   begin
     if GtkLiveWindowCount > 0 then
       WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
@@ -192,7 +192,7 @@ end;
 
 procedure WebviewExitLoop;
 begin
-  GExitRequested := True;
+  atomic_store(GExitRequested, 1);
   { 阻塞式主循环期间标志位不可轮询——同步触发 quit }
   if GtkLiveWindowCount > 0 then
     WinShellQuitMainLoop;
