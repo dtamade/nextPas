@@ -1228,7 +1228,26 @@ end;
 
 function MatchesGlobIgnoreCase(const AName, APattern: string): Boolean;
 var LLowerName, LLowerPat: string;
+  LNameLen, LPatLen, LNi, LPi, LStarPos, LMatchPos: Integer;
 begin
+  // ascii 快道零分配：逐字符 AsciiLowerChar 比对，避免每条目两次 LowerCase 分配
+  if IsAsciiString(AName) and IsAsciiString(APattern) then
+  begin
+    LNameLen := Length(AName); LPatLen := Length(APattern);
+    LNi := 1; LPi := 1; LStarPos := 0; LMatchPos := 0;
+    while LNi <= LNameLen do
+    begin
+      if (LPi <= LPatLen) and ((APattern[LPi]='?') or (AsciiLowerChar(APattern[LPi])=AsciiLowerChar(AName[LNi]))) then
+      begin Inc(LNi); Inc(LPi); end
+      else if (LPi <= LPatLen) and (APattern[LPi]='*') then
+      begin LStarPos := LPi; LMatchPos := LNi; Inc(LPi); end
+      else if LStarPos <> 0 then
+      begin LPi := LStarPos + 1; Inc(LMatchPos); LNi := LMatchPos; end
+      else Exit(False);
+    end;
+    while (LPi <= LPatLen) and (APattern[LPi]='*') do Inc(LPi);
+    Exit(LPi > LPatLen);
+  end;
   if IsAsciiString(AName) then LLowerName := AsciiLowerStr(AName) else LLowerName := LowerCase(AName);
   if IsAsciiString(APattern) then LLowerPat := AsciiLowerStr(APattern) else LLowerPat := LowerCase(APattern);
   Result := MatchesGlob(LLowerName, LLowerPat);
