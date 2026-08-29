@@ -1,6 +1,6 @@
 # nextpas.core.zip SECURITY — 威胁模型与 Fail-Closed
 
-本文档描述 `nextpas.core.zip` 的四项核心威胁模型与对应 fail-closed 语义，构成 `1.0 RC` 安全基线。所有边界输入均视为敌意，任何违反即 `EParseError/EIOError/ENotSupported` 显式失败，不静默。
+本文档描述 `nextpas.core.zip` 的五项核心威胁模型与对应 fail-closed 语义，构成 `1.0 RC` 安全基线。所有边界输入均视为敌意，任何违反即 `EParseError/EIOError/ENotSupported` 显式失败，不静默。
 
 ## 1. Zip-Slip（路径穿越）
 
@@ -27,7 +27,14 @@
 - **防线**：WinZip AE-2 统一报文 `EParseError('zip aes: authentication failed')`，`PBKDF2 1000轮` 派生 `encKey/authKey/pwVerify`，`pwVerify` 与 `HMAC-SHA1-80` 常量时间比对，失败不泄露分支（INV-14）；`AE-1` 保留真实 CRC 走常规校验，`AE-2` 头部 CRC 强制 0 依赖认证码；`缺口令` `EInvalidOperationError` 早拒，避免异常穿越持接口帧；`x86_64 AES-NI` 硬件加速与常时序回退。
 - **验证**：`test_zip_aes:13`（AE-1/2、强度1..3、tamper 统一报文、缺口令）、`test_zip_fuzz:AES 100组`、`bench aes-*`。
 
-## 5. 报告与处置
+## 5. Symlink Traversal（符号链接穿越）
+
+- **威胁**：归档内符号链接条目目标为 `/absolute`、`C:`、`..`、`//` 或含反斜杠，配合 `ZipExtractToDir*` 的 `MkdirAll` 逐段跟随已存在的目录符号链接，可使后续文件落盘至沙箱外（zip-slip bypass）。
+- **防线**：`MkdirAll`（`platform_fs_mkdir_p`）逐段 `lstat` 不跟随：每段前缀若为 `ftSymlink` 即 `ENOTDIR` 失败，不穿透；`ZipExtractToDirWithOptions` 在 `ADestDir` 与每个 `LParent` 落盘前 `EnsureNoSymlinkInPath` 二次校验（`IsSymlink` 不跟随）；`SkipSymlinks=False` 的符号链接创建前 `IsSafeSymlinkTarget` 拒绝绝对路径/盘符/反斜杠/空段/`..`/超长4096（INV-4 段规则复用，零分配扫描）。目录符号链接与目标穿越双重闭合。
+- **非原子语义**：解包非原子，已落盘文件不回滚；`try..finally` 保证异常时已收集的 `LDirs` 仍逆序定稿（`Chmod`/`Chtimes` 尽力，异常吞掉），需外层整体清理或改用 `ZipExtractToDirWithOptions` 的临时目录+rename 原子变体（待提供，见 `ZipExtractToDir` 双重载：`SizeUInt` 便捷与 `TZipExtractOptions` 完整语义）。
+- **验证**：`test_zip_fs:Symlink policy + hostlie + IsSafeSymlinkTarget`（新增 `IsSafeSymlinkTarget` 单元与路径 symlink 注入用例）、`platform_fs:mkdir_p symlink`。
+
+## 6. 报告与处置
 
 - 发现新的 zip 威胁向量，请在 `core/docs/zip/CONTRACT.md` 增 `INV-*` 并同步 `test_zip_contract` 门与本文件，禁止静默放宽上限。
 - 所有安全边界变更需 `12门+bench regression+hygiene` 全绿且 `BASELINE` 人工审查后方可 `make baseline` 刷新。
