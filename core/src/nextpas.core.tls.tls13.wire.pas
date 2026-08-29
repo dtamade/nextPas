@@ -96,10 +96,10 @@ type
     Length: Word;
   end;
 
-procedure AppendByte(var ADest: TBytes; AValue: Byte);
-procedure AppendBytes(var ADest: TBytes; const AData: TBytes);
-procedure AppendUInt16(var ADest: TBytes; AValue: Word);
-procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal);
+procedure AppendByte(var ADest: TBytes; AValue: Byte); inline;
+procedure AppendBytes(var ADest: TBytes; const AData: TBytes); inline;
+procedure AppendUInt16(var ADest: TBytes; AValue: Word); inline;
+procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal); inline;
 
 function ReadUInt16(const AData: TBytes; AOffset: Integer): Word;
 function ReadUInt24(const AData: TBytes; AOffset: Integer): Cardinal;
@@ -112,37 +112,24 @@ function TLS13SignatureSchemeToString(ASignatureScheme: Word): string;
 
 implementation
 
-procedure AppendByte(var ADest: TBytes; AValue: Byte);
-var
-  LLen: Integer;
+procedure AppendByte(var ADest: TBytes; AValue: Byte); inline;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 1);
-  ADest[LLen] := AValue;
+  BytesAppendByte(ADest, AValue);
 end;
 
-procedure AppendBytes(var ADest: TBytes; const AData: TBytes);
-var
-  LLen, LAppendLen: Integer;
+procedure AppendBytes(var ADest: TBytes; const AData: TBytes); inline;
 begin
-  LAppendLen := Length(AData);
-  if LAppendLen = 0 then Exit;
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + LAppendLen);
-  Move(AData[0], ADest[LLen], LAppendLen);
+  BytesAppend(ADest, AData);
 end;
 
-procedure AppendUInt16(var ADest: TBytes; AValue: Word);
+procedure AppendUInt16(var ADest: TBytes; AValue: Word); inline;
 begin
-  AppendByte(ADest, Byte(AValue shr 8));
-  AppendByte(ADest, Byte(AValue and $FF));
+  BytesAppendUInt16BE(ADest, AValue);
 end;
 
-procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal);
+procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal); inline;
 begin
-  AppendByte(ADest, Byte((AValue shr 16) and $FF));
-  AppendByte(ADest, Byte((AValue shr 8) and $FF));
-  AppendByte(ADest, Byte(AValue and $FF));
+  BytesAppendUInt24BE(ADest, AValue);
 end;
 
 function ReadUInt16(const AData: TBytes; AOffset: Integer): Word;
