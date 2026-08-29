@@ -50,6 +50,7 @@ function TryToFixedLength32(const AValue: TBytes; out AResult: TBytes; out AErro
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.constant_time,
@@ -120,21 +121,6 @@ begin
   SetLength(Result, Length(AData));
   if Length(AData) > 0 then
     Move(AData[0], Result[0], Length(AData));
-end;
-
-function ConcatBytes(const ALeft, ARight: TBytes): TBytes;
-var
-  LLeftLen: Integer;
-  LRightLen: Integer;
-begin
-  LLeftLen := Length(ALeft);
-  LRightLen := Length(ARight);
-  SetLength(Result, LLeftLen + LRightLen);
-
-  if LLeftLen > 0 then
-    Move(ALeft[0], Result[0], LLeftLen);
-  if LRightLen > 0 then
-    Move(ARight[0], Result[LLeftLen], LRightLen);
 end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes;
@@ -722,9 +708,9 @@ var
 begin
   SetLength(LTagArr, 1);
   LTagArr[0] := ATag;
-  Result := ConcatBytes(AV, LTagArr);
-  Result := ConcatBytes(Result, AX);
-  Result := ConcatBytes(Result, AH1);
+  Result := BytesConcat(AV, LTagArr);
+  Result := BytesConcat(Result, AX);
+  Result := BytesConcat(Result, AH1);
 end;
 
 function TryRFC6979NextK(
@@ -753,7 +739,7 @@ begin
 
     SetLength(LZeroTag, 1);
     LZeroTag[0] := 0;
-    AK := HMAC_SHA256(AK, ConcatBytes(AV, LZeroTag));
+    AK := HMAC_SHA256(AK, BytesConcat(AV, LZeroTag));
     AV := HMAC_SHA256(AK, AV);
   end;
 end;
@@ -1041,7 +1027,7 @@ begin
 
   SetLength(LTagArr, 1);
   LTagArr[0] := 0;
-  LK := HMAC_SHA256(LK, ConcatBytes(LV, LTagArr));
+  LK := HMAC_SHA256(LK, BytesConcat(LV, LTagArr));
   LV := HMAC_SHA256(LK, LV);
 
   AError := 'ECDSA signing failed after repeated nonce attempts';

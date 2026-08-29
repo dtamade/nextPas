@@ -40,6 +40,7 @@ function GitBundleUnbundle(const ABundlePath, ATargetGitDir: string): Integer;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.process,
   nextpas.core.hash.sha1,
@@ -50,13 +51,6 @@ uses
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
   nextpas.core.git.native.indexer;
-
-function ConcatBytes(const A, B: TBytes): TBytes;
-begin
-  SetLength(Result, Length(A) + Length(B));
-  if Length(A) > 0 then Move(A[0], Result[0], Length(A));
-  if Length(B) > 0 then Move(B[0], Result[Length(A)], Length(B));
-end;
 
 function TrimLocal(const S: string): string;
 var A, B: Integer;
@@ -421,7 +415,7 @@ begin
   HeaderText := HeaderText + #10;
   OutBytes := GitStringToBytes(HeaderText);
   PackBytes := Pack;
-  OutBytes := ConcatBytes(OutBytes, PackBytes);
+  OutBytes := BytesConcat(OutBytes, PackBytes);
   // ensure parent dir
   if PathDir(ABundlePath) <> '' then
     MkdirAll(PathDir(ABundlePath), PermDirDefault);

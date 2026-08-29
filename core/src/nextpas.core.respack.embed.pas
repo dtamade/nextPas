@@ -68,6 +68,7 @@ function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.fs.glob,
   nextpas.core.respack.dirsource,
@@ -308,15 +309,6 @@ begin
     Move(Pointer(S)^, Result[0], SizeUInt(Length(S)));
 end;
 
-function ConcatBytes(const AA, AB: TBytes): TBytes;
-begin
-  SetLength(Result, Length(AA) + Length(AB));
-  if Length(AA) > 0 then
-    Move(AA[0], Result[0], SizeUInt(Length(AA)));
-  if Length(AB) > 0 then
-    Move(AB[0], Result[Length(AA)], SizeUInt(Length(AB)));
-end;
-
 function IdentEqualCI(const AA, AB: string): Boolean;
 var
   I, N: Integer;
@@ -346,7 +338,7 @@ begin
   Head := BytesOfStr('unit ' + AUnitName + ';' + #10 +
     '{$mode objfpc}{$H+}' + #10 + #10 + 'interface' + #10 + #10);
   Tail := BytesOfStr(#10 + 'implementation' + #10 + #10 + 'end.' + #10);
-  Result := ConcatBytes(Head, ConcatBytes(Body, Tail));
+  Result := BytesConcat(Head, BytesConcat(Body, Tail));
 end;
 
 end.

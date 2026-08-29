@@ -30,6 +30,7 @@ function GitPushBranch(const ALocalGitDir, ARemoteGitDir,
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.process,
   nextpas.core.text.conv,
@@ -48,13 +49,6 @@ var I: Integer;
 begin
   for I := 0 to GitOidRawLen - 1 do if AOid.Bytes[I] <> 0 then Exit(False);
   Result := True;
-end;
-
-function ConcatBytes(const A, B: TBytes): TBytes;
-begin
-  SetLength(Result, Length(A) + Length(B));
-  if Length(A) > 0 then Move(A[0], Result[0], Length(A));
-  if Length(B) > 0 then Move(B[0], Result[Length(A)], Length(B));
 end;
 
 function BuildPack(const ALocalGitDir: string; const AUpdates: array of TGitPushUpdate): TBytes;
@@ -96,11 +90,11 @@ begin
       Line := Line + #0 + 'report-status ofs-delta delete-refs';
     Line := Line + #10;
     Pkt := GitPktEncodeStr(Line);
-    Result := ConcatBytes(Result, Pkt);
+    Result := BytesConcat(Result, Pkt);
   end;
-  Result := ConcatBytes(Result, GitPktEncodeFlush);
+  Result := BytesConcat(Result, GitPktEncodeFlush);
   if Length(APack) > 0 then
-    Result := ConcatBytes(Result, APack);
+    Result := BytesConcat(Result, APack);
 end;
 
 function ParsePushResponse(const AStream: TBytes): Boolean;
