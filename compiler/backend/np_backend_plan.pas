@@ -301,15 +301,9 @@ begin
       MIR/HIR modules themselves stay on the default heap. }
     PhaseScratch := CompilerCreateUnitAllocator;
     try
-      WriteLn(StdErr, '[pipe] backend HirBuilder.Create...');
-      Flush(StdErr);
       HirBuilder := THIRBuilder.Create(FSemaModel, nil, 0, PhaseScratch);
       try
-        WriteLn(StdErr, '[pipe] backend HirBuilder.Build...');
-        Flush(StdErr);
         HirBuilder.Build;
-        WriteLn(StdErr, '[pipe] backend HirBuilder.Build done');
-        Flush(StdErr);
         if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
         begin
           { Opt-in: HIR -> MIR -> MIR passes -> LLVM IR pipeline }
@@ -344,18 +338,12 @@ begin
         else
         begin
           { Default: HIR -> LLVM IR direct path; lines/refs on PhaseScratch }
-          WriteLn(StdErr, '[pipe] backend HirEmitter.EmitModule...');
-          Flush(StdErr);
           HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module,
             FTargetFacts.LlvmTriple, FTargetFacts.LlvmDataLayout,
             False, PhaseScratch);
           try
             HirEmitter.EmitModule;
-            WriteLn(StdErr, '[pipe] backend HirEmitter.SaveToFile...');
-            Flush(StdErr);
             HirEmitter.SaveToFile(LlvmIrArtifactPath);
-            WriteLn(StdErr, '[pipe] backend HirEmitter done');
-            Flush(StdErr);
           finally
             HirEmitter.Free;
           end;
