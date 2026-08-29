@@ -7,6 +7,7 @@ unit nextpas.compiler.ir.hir.builder;
 interface
 
 uses
+  Generics.Collections, SysUtils,
   nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.frontend.source_database,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
@@ -74,6 +75,7 @@ type
     FSretValueId: THIRValueId;
 
     FAllocas: THirAllocaVec;
+    FAllocaIndex: specialize TDictionary<string, LongInt>;
 
     FIntfVarNames: THirNameVec;
 
@@ -109,6 +111,7 @@ type
     procedure RestoreWorkBlocks(ANames: THirNameVec; AIds: THirBlockIdVec);
     procedure ClearWorkAllocas;
     procedure RestoreWorkAllocas(AEntries: THirAllocaVec);
+    procedure RebuildAllocaIndex;
     function CreateAllocaVec: THirAllocaVec;
     function CreateNameVec: THirNameVec;
     function CreateBlockIdVec: THirBlockIdVec;
@@ -498,6 +501,7 @@ begin
     FFwdFuncNames := THirNameVec.Create;
     FFwdFuncRetTypes := THirTypeIdVec.Create;
   end;
+  FAllocaIndex := specialize TDictionary<string, LongInt>.Create;
   FLegacyIntType := 0;
   FBoolType := 0;
   FStringType := 0;
@@ -522,6 +526,7 @@ begin
   FSavedBlockNames.Free;
   FSavedAllocas.Free;
   FAllocas.Free;
+  FAllocaIndex.Free;
   FBlockIds.Free;
   FBlockNames.Free;
   FPendingCleanupNodes.Free;
@@ -593,6 +598,19 @@ end;
 procedure THIRBuilder.ClearWorkAllocas;
 begin
   FAllocas.Clear;
+  if FAllocaIndex <> nil then
+    FAllocaIndex.Clear;
+end;
+
+procedure THIRBuilder.RebuildAllocaIndex;
+var
+  I: LongInt;
+begin
+  if FAllocaIndex = nil then
+    Exit;
+  FAllocaIndex.Clear;
+  for I := 0 to LongInt(FAllocas.Count) - 1 do
+    FAllocaIndex.AddOrSetValue(LowerCase(FAllocas[I].Name), I);
 end;
 
 procedure THIRBuilder.RestoreWorkAllocas(AEntries: THirAllocaVec);
@@ -602,6 +620,7 @@ begin
   ClearWorkAllocas;
   for I := 0 to LongInt(AEntries.Count) - 1 do
     FAllocas.Push(AEntries[I]);
+  RebuildAllocaIndex;
 end;
 
 procedure THIRBuilder.ClearGlobalRefs;

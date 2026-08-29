@@ -157,156 +157,132 @@ end;
 
 procedure TBackendPlan.SetTargetMetadata(const ATargetFacts: TTargetFactsView);
 begin
-  FHostId := ATargetFacts.HostId;
-  FToolchainBindingId := ATargetFacts.ToolchainBindingId;
-  FHostCompilerProfileId := ATargetFacts.HostCompilerProfileId;
-  FBackendFamily := ATargetFacts.BackendFamily;
-  FAssemblerProfileId := ATargetFacts.AssemblerProfileId;
-  FLinkerProfileId := ATargetFacts.LinkerProfileId;
-  FArchiverProfileId := ATargetFacts.ArchiverProfileId;
-  FResourceToolProfileId := ATargetFacts.ResourceToolProfileId;
-  FObjectFormat := ATargetFacts.ObjectFormat;
-  FAssemblerFlavor := ATargetFacts.AssemblerFlavor;
-  FLinkerFlavor := ATargetFacts.LinkerFlavor;
-  FRuntimeLayoutKey := ATargetFacts.RuntimeLayoutKey;
-  FTargetCSymbolPrefix := ATargetFacts.CSymbolPrefix;
-  FTargetCLibraryNaming := ATargetFacts.CLibraryNaming;
-  FLlvmTriple := ATargetFacts.LlvmTriple;
-  FLlvmDataLayout := ATargetFacts.LlvmDataLayout;
-  FSysrootMode := ATargetFacts.SysrootMode;
-  FRuntimeSdkId := ATargetFacts.RuntimeSdkId;
-  FAllowHostFallback := ATargetFacts.AllowHostFallback;
-  FToolRootKind := ATargetFacts.ToolRootKind;
-  FRuntimeRootKind := ATargetFacts.RuntimeRootKind;
-  FResponseFilePolicy := ATargetFacts.ResponseFilePolicy;
-  FLinkScriptPolicy := ATargetFacts.LinkScriptPolicy;
-  FLlvmEnabled := ATargetFacts.LlvmEnabled;
-  FLlvmExecutableSetId := ATargetFacts.LlvmExecutableSetId;
+  FTarget.Apply(ATargetFacts);
 end;
 
 function TBackendPlan.HostId: string;
 begin
-  Result := FHostId;
+  Result := FTarget.HostId;
 end;
 
 function TBackendPlan.ToolchainBindingId: string;
 begin
-  Result := FToolchainBindingId;
+  Result := FTarget.ToolchainBindingId;
 end;
 
 function TBackendPlan.HostCompilerProfileId: string;
 begin
-  Result := FHostCompilerProfileId;
+  Result := FTarget.HostCompilerProfileId;
 end;
 
 function TBackendPlan.BackendFamily: string;
 begin
-  Result := FBackendFamily;
+  Result := FTarget.BackendFamily;
 end;
 
 function TBackendPlan.AssemblerProfileId: string;
 begin
-  Result := FAssemblerProfileId;
+  Result := FTarget.AssemblerProfileId;
 end;
 
 function TBackendPlan.LinkerProfileId: string;
 begin
-  Result := FLinkerProfileId;
+  Result := FTarget.LinkerProfileId;
 end;
 
 function TBackendPlan.ArchiverProfileId: string;
 begin
-  Result := FArchiverProfileId;
+  Result := FTarget.ArchiverProfileId;
 end;
 
 function TBackendPlan.ResourceToolProfileId: string;
 begin
-  Result := FResourceToolProfileId;
+  Result := FTarget.ResourceToolProfileId;
 end;
 
 function TBackendPlan.ObjectFormat: string;
 begin
-  Result := FObjectFormat;
+  Result := FTarget.ObjectFormat;
 end;
 
 function TBackendPlan.AssemblerFlavor: string;
 begin
-  Result := FAssemblerFlavor;
+  Result := FTarget.AssemblerFlavor;
 end;
 
 function TBackendPlan.LinkerFlavor: string;
 begin
-  Result := FLinkerFlavor;
+  Result := FTarget.LinkerFlavor;
 end;
 
 function TBackendPlan.RuntimeLayoutKey: string;
 begin
-  Result := FRuntimeLayoutKey;
+  Result := FTarget.RuntimeLayoutKey;
 end;
 
 function TBackendPlan.TargetCSymbolPrefix: string;
 begin
-  Result := FTargetCSymbolPrefix;
+  Result := FTarget.TargetCSymbolPrefix;
 end;
 
 function TBackendPlan.TargetCLibraryNaming: string;
 begin
-  Result := FTargetCLibraryNaming;
+  Result := FTarget.TargetCLibraryNaming;
 end;
 
 function TBackendPlan.LlvmTriple: string;
 begin
-  Result := FLlvmTriple;
+  Result := FTarget.LlvmTriple;
 end;
 
 function TBackendPlan.LlvmDataLayout: string;
 begin
-  Result := FLlvmDataLayout;
+  Result := FTarget.LlvmDataLayout;
 end;
 
 function TBackendPlan.SysrootMode: string;
 begin
-  Result := FSysrootMode;
+  Result := FTarget.SysrootMode;
 end;
 
 function TBackendPlan.RuntimeSdkId: string;
 begin
-  Result := FRuntimeSdkId;
+  Result := FTarget.RuntimeSdkId;
 end;
 
 function TBackendPlan.AllowHostFallback: Boolean;
 begin
-  Result := FAllowHostFallback;
+  Result := FTarget.AllowHostFallback;
 end;
 
 function TBackendPlan.ToolRootKind: string;
 begin
-  Result := FToolRootKind;
+  Result := FTarget.ToolRootKind;
 end;
 
 function TBackendPlan.RuntimeRootKind: string;
 begin
-  Result := FRuntimeRootKind;
+  Result := FTarget.RuntimeRootKind;
 end;
 
 function TBackendPlan.ResponseFilePolicy: string;
 begin
-  Result := FResponseFilePolicy;
+  Result := FTarget.ResponseFilePolicy;
 end;
 
 function TBackendPlan.LinkScriptPolicy: string;
 begin
-  Result := FLinkScriptPolicy;
+  Result := FTarget.LinkScriptPolicy;
 end;
 
 function TBackendPlan.LlvmEnabled: Boolean;
 begin
-  Result := FLlvmEnabled;
+  Result := FTarget.LlvmEnabled;
 end;
 
 function TBackendPlan.LlvmExecutableSetId: string;
 begin
-  Result := FLlvmExecutableSetId;
+  Result := FTarget.LlvmExecutableSetId;
 end;
 
 procedure TBackendPlan.MarkReady;

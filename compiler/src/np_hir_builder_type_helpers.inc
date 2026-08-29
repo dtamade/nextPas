@@ -278,12 +278,18 @@ begin
   Entry.RecordSlots := 0;
   Entry.IsVarParam := AIsVarParam;
   FAllocas.Push(Entry);
+  if FAllocaIndex <> nil then
+    FAllocaIndex.AddOrSetValue(LowerCase(AName), LongInt(FAllocas.Count) - 1);
 end;
 
 function THIRBuilder.FindLocalAlloca(const AName: string): THIRValueId;
 var
   I: SizeUInt;
+  Idx: LongInt;
 begin
+  if (FAllocaIndex <> nil) and FAllocaIndex.TryGetValue(LowerCase(AName), Idx) then
+    if (Idx >= 0) and (Idx < LongInt(FAllocas.Count)) then
+      Exit(FAllocas[SizeUInt(Idx)].Value);
   if FAllocas.Count > 0 then
     for I := 0 to FAllocas.Count - 1 do
       if SameText(FAllocas[I].Name, AName) then
@@ -294,8 +300,12 @@ end;
 function THIRBuilder.FindAlloca(const AName: string): THIRValueId;
 var
   I: LongInt;
+  Idx: LongInt;
   Instr: THIRInstr;
 begin
+  if (FAllocaIndex <> nil) and FAllocaIndex.TryGetValue(LowerCase(AName), Idx) then
+    if (Idx >= 0) and (Idx < LongInt(FAllocas.Count)) then
+      Exit(FAllocas[SizeUInt(Idx)].Value);
   if FAllocas.Count > 0 then
     for I := LongInt(FAllocas.Count) - 1 downto 0 do
       if SameText(FAllocas[I].Name, AName) then
@@ -323,7 +333,11 @@ end;
 function THIRBuilder.FindAllocaType(const AName: string): THIRTypeId;
 var
   I: SizeUInt;
+  Idx: LongInt;
 begin
+  if (FAllocaIndex <> nil) and FAllocaIndex.TryGetValue(LowerCase(AName), Idx) then
+    if (Idx >= 0) and (Idx < LongInt(FAllocas.Count)) then
+      Exit(FAllocas[SizeUInt(Idx)].TypeId);
   if FAllocas.Count > 0 then
     for I := 0 to FAllocas.Count - 1 do
       if SameText(FAllocas[I].Name, AName) then
@@ -345,7 +359,11 @@ end;
 function THIRBuilder.IsVarParamAlloca(const AName: string): Boolean;
 var
   I: SizeUInt;
+  Idx: LongInt;
 begin
+  if (FAllocaIndex <> nil) and FAllocaIndex.TryGetValue(LowerCase(AName), Idx) then
+    if (Idx >= 0) and (Idx < LongInt(FAllocas.Count)) then
+      Exit(FAllocas[SizeUInt(Idx)].IsVarParam);
   if FAllocas.Count > 0 then
     for I := 0 to FAllocas.Count - 1 do
       if SameText(FAllocas[I].Name, AName) then

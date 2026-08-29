@@ -1,4 +1,7 @@
-procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
+const
+  MAX_WALK_HALT_DEPTH = 512;
+
+procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode; Depth: LongInt);
 var
   I, ArgIndex, ExprId, NodeId: LongInt;
   Child, Arg, RhsNode, BranchNode, DeclNode: TGreenNode;
@@ -411,7 +414,7 @@ var
     end;
   end;
 begin
-  if ANode = nil then
+  if (ANode = nil) or (Depth > MAX_WALK_HALT_DEPTH) then
     Exit;
   for I := 0 to ANode.ChildCount - 1 do
   begin
@@ -434,7 +437,7 @@ begin
         else
           BranchNode := nil;
         if BranchNode <> nil then
-          WalkHaltCalls(BranchNode);
+          WalkHaltCalls(BranchNode, Depth + 1);
         Continue;
       end;
       if FNoFold and (Child.ChildCount >= 2) and
@@ -455,7 +458,7 @@ begin
       end;
       if FNoFold then
         Continue;
-      WalkHaltCalls(Child);
+      WalkHaltCalls(Child, Depth + 1);
       Continue;
     end;
     if Child.NodeKind = gnkForStatement then
@@ -487,7 +490,7 @@ begin
       if FNoFold then
         LowerRuntimeCaseStatement(Child)
       else
-        WalkHaltCalls(Child);
+        WalkHaltCalls(Child, Depth + 1);
       Continue;
     end;
     if (Child.NodeKind = gnkTryFinallyStatement) and FNoFold then
@@ -878,10 +881,16 @@ begin
         (Child.ChildAt(0).NodeKind = gnkArrayAccess) and
         (Child.ChildAt(0).ChildCount >= 2) and
         (Child.ChildAt(0).ChildAt(0) <> nil) and
-        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
-        IsRuntimeArrVar(Child.ChildAt(0).ChildAt(0).Text) then
+        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) then
       begin
         Decoded := Child.ChildAt(0).ChildAt(0).Text;
+        if (not IsRuntimeArrVar(Decoded)) and
+           (not FModel.LookupStringConstValue(Decoded + '$arr_elem_type', StringValue)) then
+        begin
+          // skip non-runtime and no elem_type
+        end
+        else
+        begin
         RhsNode := nil;
         if Child.ChildCount >= 2 then
           RhsNode := Child.ChildAt(1);
@@ -930,6 +939,7 @@ begin
               Decoded + #9 + Operand + #9 + 'var ' + FuncName + #10
             );
           end;
+        end;
         end;
         Continue;
       end;
@@ -3232,7 +3242,7 @@ begin
         else
           ParamSnaps := BindCallArgs(DeclNode, Child, 0);
         try
-          WalkHaltCalls(BranchNode);
+          WalkHaltCalls(BranchNode, Depth + 1);
         finally
           PopInlining;
           RestoreCallArgs(ParamSnaps);
@@ -3345,6 +3355,6 @@ begin
         Continue;
       end;
     end;
-    WalkHaltCalls(Child);
+    WalkHaltCalls(Child, Depth + 1);
   end;
 end;

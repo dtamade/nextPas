@@ -1176,11 +1176,13 @@ begin
       { High/Low/Length of dynarray / open-array / string runtime vars. }
       if (RhsNode.NodeKind = gnkIdentifier) and
         (IsRuntimeArrVar(RhsNode.Text) or IsRuntimeStrVar(RhsNode.Text) or
-         TypeMetaIsDynArrayType(RhsNode.Text)) then
+         TypeMetaIsDynArrayType(RhsNode.Text) or
+         FModel.LookupStringConstValue(RhsNode.Text + '$arr_elem_type', Operand)) then
       begin
         if not IsRuntimeArrVar(RhsNode.Text) and
           not IsRuntimeStrVar(RhsNode.Text) and
-          TypeMetaIsDynArrayType(RhsNode.Text) then
+          (TypeMetaIsDynArrayType(RhsNode.Text) or
+           FModel.LookupStringConstValue(RhsNode.Text + '$arr_elem_type', Operand)) then
         begin
           RegisterRuntimeArrVar(RhsNode.Text);
           if FModel.LookupConstValue(RhsNode.Text + '$arr_elem_size', Folded) then

@@ -35,6 +35,35 @@ type
   TBackendArtifactVec = specialize TVec<TBackendArtifact>;
   TBackendLogicalLibraryRequestVec = specialize TVec<TBackendLogicalLibraryRequest>;
 
+  TBackendTargetDescriptor = record
+    HostId: string;
+    ToolchainBindingId: string;
+    HostCompilerProfileId: string;
+    BackendFamily: string;
+    AssemblerProfileId: string;
+    LinkerProfileId: string;
+    ArchiverProfileId: string;
+    ResourceToolProfileId: string;
+    ObjectFormat: string;
+    AssemblerFlavor: string;
+    LinkerFlavor: string;
+    RuntimeLayoutKey: string;
+    TargetCSymbolPrefix: string;
+    TargetCLibraryNaming: string;
+    LlvmTriple: string;
+    LlvmDataLayout: string;
+    SysrootMode: string;
+    RuntimeSdkId: string;
+    AllowHostFallback: Boolean;
+    ToolRootKind: string;
+    RuntimeRootKind: string;
+    ResponseFilePolicy: string;
+    LinkScriptPolicy: string;
+    LlvmEnabled: Boolean;
+    LlvmExecutableSetId: string;
+    procedure Apply(const ATargetFacts: TTargetFactsView);
+  end;
+
   TBackendPlan = class
   private
     FArtifacts: TBackendArtifactVec;
@@ -44,31 +73,7 @@ type
     FOutputKind: string;
     FPrimaryArtifactKind: string;
     FPrimaryArtifactPath: string;
-    FHostId: string;
-    FToolchainBindingId: string;
-    FHostCompilerProfileId: string;
-    FBackendFamily: string;
-    FAssemblerProfileId: string;
-    FLinkerProfileId: string;
-    FArchiverProfileId: string;
-    FResourceToolProfileId: string;
-    FObjectFormat: string;
-    FAssemblerFlavor: string;
-    FLinkerFlavor: string;
-    FRuntimeLayoutKey: string;
-    FTargetCSymbolPrefix: string;
-    FTargetCLibraryNaming: string;
-    FLlvmTriple: string;
-    FLlvmDataLayout: string;
-    FSysrootMode: string;
-    FRuntimeSdkId: string;
-    FAllowHostFallback: Boolean;
-    FToolRootKind: string;
-    FRuntimeRootKind: string;
-    FResponseFilePolicy: string;
-    FLinkScriptPolicy: string;
-    FLlvmEnabled: Boolean;
-    FLlvmExecutableSetId: string;
+    FTarget: TBackendTargetDescriptor;
   public
     constructor Create;
     destructor Destroy; override;
@@ -154,6 +159,35 @@ type
 
 implementation
 
+procedure TBackendTargetDescriptor.Apply(const ATargetFacts: TTargetFactsView);
+begin
+  HostId := ATargetFacts.HostId;
+  ToolchainBindingId := ATargetFacts.ToolchainBindingId;
+  HostCompilerProfileId := ATargetFacts.HostCompilerProfileId;
+  BackendFamily := ATargetFacts.BackendFamily;
+  AssemblerProfileId := ATargetFacts.AssemblerProfileId;
+  LinkerProfileId := ATargetFacts.LinkerProfileId;
+  ArchiverProfileId := ATargetFacts.ArchiverProfileId;
+  ResourceToolProfileId := ATargetFacts.ResourceToolProfileId;
+  ObjectFormat := ATargetFacts.ObjectFormat;
+  AssemblerFlavor := ATargetFacts.AssemblerFlavor;
+  LinkerFlavor := ATargetFacts.LinkerFlavor;
+  RuntimeLayoutKey := ATargetFacts.RuntimeLayoutKey;
+  TargetCSymbolPrefix := ATargetFacts.CSymbolPrefix;
+  TargetCLibraryNaming := ATargetFacts.CLibraryNaming;
+  LlvmTriple := ATargetFacts.LlvmTriple;
+  LlvmDataLayout := ATargetFacts.LlvmDataLayout;
+  SysrootMode := ATargetFacts.SysrootMode;
+  RuntimeSdkId := ATargetFacts.RuntimeSdkId;
+  AllowHostFallback := ATargetFacts.AllowHostFallback;
+  ToolRootKind := ATargetFacts.ToolRootKind;
+  RuntimeRootKind := ATargetFacts.RuntimeRootKind;
+  ResponseFilePolicy := ATargetFacts.ResponseFilePolicy;
+  LinkScriptPolicy := ATargetFacts.LinkScriptPolicy;
+  LlvmEnabled := ATargetFacts.LlvmEnabled;
+  LlvmExecutableSetId := ATargetFacts.LlvmExecutableSetId;
+end;
+
 constructor TBackendPlan.Create;
 begin
   inherited Create;
@@ -164,31 +198,7 @@ begin
   FOutputKind := '';
   FPrimaryArtifactKind := '';
   FPrimaryArtifactPath := '';
-  FHostId := '';
-  FToolchainBindingId := '';
-  FHostCompilerProfileId := '';
-  FBackendFamily := '';
-  FAssemblerProfileId := '';
-  FLinkerProfileId := '';
-  FArchiverProfileId := '';
-  FResourceToolProfileId := '';
-  FObjectFormat := '';
-  FAssemblerFlavor := '';
-  FLinkerFlavor := '';
-  FRuntimeLayoutKey := '';
-  FTargetCSymbolPrefix := '';
-  FTargetCLibraryNaming := '';
-  FLlvmTriple := '';
-  FLlvmDataLayout := '';
-  FSysrootMode := '';
-  FRuntimeSdkId := '';
-  FAllowHostFallback := False;
-  FToolRootKind := '';
-  FRuntimeRootKind := '';
-  FResponseFilePolicy := '';
-  FLinkScriptPolicy := '';
-  FLlvmEnabled := False;
-  FLlvmExecutableSetId := '';
+  FTarget := Default(TBackendTargetDescriptor);
 end;
 
 destructor TBackendPlan.Destroy;

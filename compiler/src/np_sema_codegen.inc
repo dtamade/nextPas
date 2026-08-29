@@ -32,7 +32,10 @@ begin
     Exit(False);
 
   ArrayName := ANode.ChildAt(0).Text;
-  if (ArrayName = '') or (not IsRuntimeArrVar(ArrayName)) then
+  if (ArrayName = '') then
+    Exit(False);
+  if (not IsRuntimeArrVar(ArrayName)) and
+     (not FModel.LookupStringConstValue(ArrayName + '$arr_elem_type', ElementTypeName)) then
     Exit(False);
   SymbolId := FModel.FindSymbolByName(ArrayName);
   if SymbolId <= 0 then

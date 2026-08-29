@@ -546,7 +546,7 @@ type
       const AArrayTypeNode: TGreenNode; out AOperand: string);
     function EvaluateStringConstant(const ANode: TGreenNode;
       out AValue: string): Boolean;
-    procedure WalkHaltCalls(const ANode: TGreenNode);
+    procedure WalkHaltCalls(const ANode: TGreenNode; Depth: LongInt = 0);
     procedure AttachRuntimeReturnExpr(const AHirNodeId: LongInt;
       const AReturnVarName: string);
     procedure AttachRuntimeConditionExpr(const AHirNodeId: LongInt;
