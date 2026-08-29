@@ -52,9 +52,12 @@ type
     FFormat: TAudioFormat;
     FBpm: Double;
     FNotes: array of TMidiNote;
+    FNoteInc: array of Double;   // 2*Pi*Freq/SampleRate, per-note cache (realtime zero-alloc)
+    FNoteVel: array of Single;   // Velocity/127*0.2
     FPos: UInt64;
     FState: TSequencerState;
     FLock: TRTLCriticalSection;
+    procedure RebuildNoteCache;
     function GetFormat: TAudioFormat;
     function Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
     function SeekTo(AFrame: UInt64): Boolean;
@@ -99,6 +102,19 @@ begin Result := FillRealtime(ABuffer, AFrames); end;
 function TAudioSequencer.SeekTo(AFrame: UInt64): Boolean;
 begin EnterCriticalSection(FLock); try FPos := AFrame; Result := True; finally LeaveCriticalSection(FLock); end; end;
 
+procedure TAudioSequencer.RebuildNoteCache;
+var I: Integer; F: Double;
+begin
+  SetLength(FNoteInc, Length(FNotes));
+  SetLength(FNoteVel, Length(FNotes));
+  for I := 0 to High(FNotes) do
+  begin
+    F := MidiPitchToFreq(FNotes[I].Pitch);
+    FNoteInc[I] := 2 * Pi * F / FFormat.SampleRate;
+    FNoteVel[I] := Single(FNotes[I].Velocity / 127.0 * 0.2);
+  end;
+end;
+
 procedure TAudioSequencer.AddNote(const ANote: TMidiNote);
 var L: Integer;
 begin
@@ -108,6 +124,7 @@ begin
     L := Length(FNotes);
     SetLength(FNotes, L + 1);
     FNotes[L] := ANote;
+    RebuildNoteCache;
   finally
     LeaveCriticalSection(FLock);
   end;
@@ -116,7 +133,7 @@ end;
 procedure TAudioSequencer.Clear;
 begin
   EnterCriticalSection(FLock);
-  try SetLength(FNotes, 0); FPos := 0;
+  try SetLength(FNotes, 0); SetLength(FNoteInc, 0); SetLength(FNoteVel, 0); FPos := 0;
   finally LeaveCriticalSection(FLock); end;
 end;
 
@@ -130,7 +147,6 @@ function TAudioSequencer.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Intege
 var
   LNeeded, I, J: Integer;
   LPhase: Double;
-  LFreq: Double;
   LGain: Single;
   LPos: UInt64;
   LState: TSequencerState;
@@ -145,7 +161,6 @@ begin
   LState := FState;
   LPos := FPos;
   if LState <> seqPlaying then Exit(AFrames);
-  // simple sine synthesis for active notes (direct FNotes without copy)
   for I := 0 to AFrames - 1 do
   begin
     LGain := 0;
@@ -154,9 +169,8 @@ begin
       if (LPos + UInt64(I) >= FNotes[J].StartFrame) and
          (LPos + UInt64(I) < FNotes[J].StartFrame + FNotes[J].DurationFrames) then
       begin
-        LFreq := MidiPitchToFreq(FNotes[J].Pitch);
-        LPhase := 2 * Pi * LFreq * (LPos + UInt64(I)) / FFormat.SampleRate;
-        LGain := LGain + Single(Sin(LPhase) * (FNotes[J].Velocity / 127.0) * 0.2);
+        LPhase := FNoteInc[J] * (LPos + UInt64(I));
+        LGain := LGain + Single(Sin(LPhase) * FNoteVel[J]);
       end;
     end;
     if LGain > 1 then LGain := 1 else if LGain < -1 then LGain := -1;

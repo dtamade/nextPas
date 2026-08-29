@@ -155,19 +155,21 @@ end;
 
 procedure TAudioBank.LoadFromBytes(const AData: TBytes);
 var Cnt, I, P, LIdLen, LFrames, K: Integer; LId: string;
+  function LE32(AP: Integer): Integer; inline;
+  begin Result := Integer(AData[AP]) or (Integer(AData[AP+1]) shl 8) or (Integer(AData[AP+2]) shl 16) or (Integer(AData[AP+3]) shl 24); end;
 begin
   EnterCriticalSection(FLock);
   try
     SetLength(FEntries, 0);
     if Length(AData) < 4 then Exit;
-    Cnt := Integer(AData[0]) or (Integer(AData[1]) shl 8) or (Integer(AData[2]) shl 16) or (Integer(AData[3]) shl 24);
+    Cnt := LE32(0);
     if Cnt < 0 then Cnt := 0;
     if Cnt > 10000 then Cnt := 10000;
     P := 4;
     for I := 0 to Cnt - 1 do
     begin
       if P + 4 > Length(AData) then Break;
-      LIdLen := Integer(AData[P]) or (Integer(AData[P+1]) shl 8) or (Integer(AData[P+2]) shl 16) or (Integer(AData[P+3]) shl 24);
+      LIdLen := LE32(P);
       Inc(P, 4);
       if (LIdLen < 0) or (P + LIdLen > Length(AData)) then Break;
       if LIdLen > 0 then
@@ -180,7 +182,7 @@ begin
         LId := '';
       Inc(P, LIdLen);
       if P + 4 > Length(AData) then Break;
-      LFrames := Integer(AData[P]) or (Integer(AData[P+1]) shl 8) or (Integer(AData[P+2]) shl 16) or (Integer(AData[P+3]) shl 24);
+      LFrames := LE32(P);
       Inc(P, 4);
       SetLength(FEntries, Length(FEntries) + 1);
       FEntries[High(FEntries)].Id := LId;
