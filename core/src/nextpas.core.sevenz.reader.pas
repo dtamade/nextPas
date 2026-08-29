@@ -1297,7 +1297,7 @@ begin
         LEntryLower := FLowerNames[LIdx];
         if not StrHasPrefix(LEntryLower, LLowerPref) then Break;
         if (Length(LEntryLower) >= Length(LLowerPref)+Length(LLowerSuff)) and
-           ((Length(LLowerSuff)=0) or (Copy(LEntryLower, Length(LEntryLower)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
+           StrHasSuffix(LEntryLower, LLowerSuff) then
           Exit(LIdx);
         Inc(LPos);
       end;
@@ -1543,7 +1543,7 @@ begin
       // fallback: lower the name
       // For non-ascii, use LowerCase
       if (Length(FLowerNames[AIndices[LI]]) >= LNeed) and
-         ((Length(LLowerSuff) = 0) or (Copy(FLowerNames[AIndices[LI]], Length(FLowerNames[AIndices[LI]])-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then Inc(LCnt);
+         StrHasSuffix(FLowerNames[AIndices[LI]], LLowerSuff) then Inc(LCnt);
     end;
   end;
   SetLength(Result, LCnt);
@@ -1556,7 +1556,7 @@ begin
     end else
     begin
       if (Length(FLowerNames[AIndices[LI]]) >= LNeed) and
-         ((Length(LLowerSuff) = 0) or (Copy(FLowerNames[AIndices[LI]], Length(FLowerNames[AIndices[LI]])-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
+         StrHasSuffix(FLowerNames[AIndices[LI]], LLowerSuff) then
       begin Result[LIdx] := AIndices[LI]; Inc(LIdx); end;
     end;
   end;
