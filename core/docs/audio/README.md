@@ -160,7 +160,7 @@ make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # ns/op + M
 - **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，后续吸收进 `codec.registry`，保持 `Probe≤4KB` 与可插拔）
 - **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`Game` 复用 `Graph` 快照路径
 - **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配（`device.null` 预分配 1M、`bus/graph` 双缓冲）/溢出守卫 `AudioBytesForFrames>High(Integer)` 全链路/异常静音 `AudioSilentFill`
-- **复用与性能**：`pcm` `PcmRead/WriteS16LE/S32LE/S24LE` 单源 LE（与 `bank.WriteLE32` 对称），`pcm.simd` 块转换 4-wide，`pcm.PcmConvert` `S16/S32↔F32` 4-wide 快 path 复用 LE helpers 零分支，`SimdAdd/Mul/Peak/SumSquares/Clamp` 硬件化复用于 `mix/timeline/graph/bus/playlist`，`mix.ApplyGainRamp` 增量步进，`spatial/timeline` 立体声 4-wide `LL/LR`，`dsp.filters` `LBiquads/LBase` 缓存，`bus` `FScratch` 自适应，`resample` 线性增量 `PSingle` + `sinc` Kaiser，`bank` `WriteLE32/LE32`，`sequencer` `Inc/Vel` + `FastSin` 2048 wavetable，`mix.PanLawGains→AudioPanLawGains` 单源，`audio` 门面 `PcmRead/WriteS16/S32/S24LE + AudioPanLawGains/PanLawGains` 全转发零逻辑，`base` 校验/填充单真相
+- **复用与性能**：`pcm` `PcmRead/WriteS16LE/S32LE/S24LE` 单源 LE（`bank.WriteLE32` 对称），`pcm.simd` 4-wide，`pcm.PcmConvert` `S16/S32↔F32` 4-wide 快 path 零分支，`SimdAdd/Mul/Peak/SumSquares/Clamp` 硬件化，`mix.ApplyGainRamp` 增量步进，`spatial/timeline` 立体声 4-wide `LL/LR`，`dsp.filters` `LBiquads/LBase`，`bus/graph` `FScratch/FOut` 自适应（稳态零分配），`resample` 线性 `PSingle` + `sinc` Kaiser，`bank` `WriteLE32/LE32`，`sequencer` `Inc/Vel` + `FastSin` 2048 wavetable，`automation.FillRealtimeValues` 单次快照 + 单调段游走替代每样本 `ValueAt` 锁，`mix.PanLawGains→AudioPanLawGains` 单源，`audio` 门面全转发零逻辑，`base` 校验/填充单真相
 
 ## 参见
 

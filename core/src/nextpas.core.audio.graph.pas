@@ -265,10 +265,17 @@ begin
     if AFrames <= 0 then Exit(0);
     Needed := AFrames * FFormat.BlockAlign;
   end;
-  if (Length(FScratch.Data) < Needed) or (Length(FOut.Data) < Needed) then
+  if Length(FScratch.Data) < Needed then
   begin
-    InterlockedExchangeAdd64(FViolations, 1);
-    Exit(0);
+    SetLength(FScratch.Data, Needed);
+    FScratch.Format := FFormat;
+    if Length(FScratch.Data) < Needed then begin InterlockedExchangeAdd64(FViolations, 1); Exit(0); end;
+  end;
+  if Length(FOut.Data) < Needed then
+  begin
+    SetLength(FOut.Data, Needed);
+    FOut.Format := FFormat;
+    if Length(FOut.Data) < Needed then begin InterlockedExchangeAdd64(FViolations, 1); Exit(0); end;
   end;
   // realtime: iterate nodes directly without lock (snapshot-free)
   if Length(FNodes) = 0 then
