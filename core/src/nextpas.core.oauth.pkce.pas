@@ -50,6 +50,13 @@ uses
   nextpas.core.encoding,
   nextpas.core.hash;
 
+function BytesToString(const AB: TBytes): string;
+begin
+  if Length(AB) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@AB[0]), Length(AB));
+end;
+
 function IsUnreservedChar(const ACh: Char): Boolean; inline;
 begin
   case ACh of
