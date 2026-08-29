@@ -15,9 +15,21 @@ type
   TDbSqlSlotArray = TSqlScanSlotArray;
 
 const
-  DBSQLSCAN_PG = SQLSCAN_PG;
-  DBSQLSCAN_MYSQL = SQLSCAN_MYSQL;
-  DBSQLSCAN_ODBC = SQLSCAN_ODBC;
+  DBSQLSCAN_PG: TDbSqlScanDialect = (
+    DoubleQuoteIdents: True;
+    BacktickIdents: False;
+    BracketIdents: False;
+    HashComments: False);
+  DBSQLSCAN_MYSQL: TDbSqlScanDialect = (
+    DoubleQuoteIdents: False;
+    BacktickIdents: True;
+    BracketIdents: False;
+    HashComments: True);
+  DBSQLSCAN_ODBC: TDbSqlScanDialect = (
+    DoubleQuoteIdents: True;
+    BacktickIdents: False;
+    BracketIdents: True;
+    HashComments: False);
 
 function SqlScanTranslateQuestion(const ASql: string; const ADialect: TDbSqlScanDialect; out ARewritten: string; out ASlots: TDbSqlSlotArray): Integer; inline;
 function SqlScanRenderDollar(const ASql: string; const ADialect: TDbSqlScanDialect): string; inline;

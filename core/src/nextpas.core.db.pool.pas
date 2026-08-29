@@ -401,14 +401,11 @@ end;
 { 冷端清扫：空闲队列最旧端只会在下次 Acquire 被动清理（惰性契约），
   规避看门狗线程。O(1) 移除 = 与尾端交换后截断（队列顺序无外部观察者） }
 procedure TDbPoolCore.EvictColdStaleLocked(const ANow: QWord);
-var
-  E: TIdleEntry;
 begin
   while (Length(FIdle) > 0) and IdleStale(FIdle[0], ANow) do
   begin
-    E := FIdle[0];
-    FIdle[0] := Default(TIdleEntry);   { 显式清引用再截断 }
-    FIdle[High(FIdle)] := E;
+    FIdle[0] := FIdle[High(FIdle)];
+    FIdle[High(FIdle)] := Default(TIdleEntry);
     SetLength(FIdle, Length(FIdle) - 1);
   end;
 end;
