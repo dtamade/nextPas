@@ -142,6 +142,14 @@ function PcmS24ToF32(AValue: Integer): Single; inline;
 function PcmF32ToS24(AValue: Single): Integer; inline;
 function PcmS32ToF32(AValue: LongInt): Single; inline;
 function PcmF32ToS32(AValue: Single): LongInt; inline;
+function PcmReadS16LE(const ABytes: TBytes; AOffset: Integer): SmallInt; inline;
+procedure PcmWriteS16LE(AValue: SmallInt; var ABytes: TBytes; AOffset: Integer); inline;
+function PcmReadS32LE(const ABytes: TBytes; AOffset: Integer): LongInt; inline;
+procedure PcmWriteS32LE(AValue: LongInt; var ABytes: TBytes; AOffset: Integer); inline;
+function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer; inline;
+procedure PcmWriteS24LE(AValue: Integer; var ABytes: TBytes; AOffset: Integer); inline;
+procedure AudioPanLawGains(APan: Single; out AL, AR: Single); inline;
+function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF; inline;
 
 { ---- wav codec forwarding (decode-first 便利) ---- }
 
@@ -317,6 +325,30 @@ function PcmF32ToS32(AValue: Single): LongInt;
 begin
   Result := nextpas.core.audio.pcm.PcmF32ToS32(AValue);
 end;
+
+function PcmReadS16LE(const ABytes: TBytes; AOffset: Integer): SmallInt;
+begin Result := nextpas.core.audio.pcm.PcmReadS16LE(ABytes, AOffset); end;
+
+procedure PcmWriteS16LE(AValue: SmallInt; var ABytes: TBytes; AOffset: Integer);
+begin nextpas.core.audio.pcm.PcmWriteS16LE(AValue, ABytes, AOffset); end;
+
+function PcmReadS32LE(const ABytes: TBytes; AOffset: Integer): LongInt;
+begin Result := nextpas.core.audio.pcm.PcmReadS32LE(ABytes, AOffset); end;
+
+procedure PcmWriteS32LE(AValue: LongInt; var ABytes: TBytes; AOffset: Integer);
+begin nextpas.core.audio.pcm.PcmWriteS32LE(AValue, ABytes, AOffset); end;
+
+function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer;
+begin Result := nextpas.core.audio.pcm.PcmReadS24LE(ABytes, AOffset); end;
+
+procedure PcmWriteS24LE(AValue: Integer; var ABytes: TBytes; AOffset: Integer);
+begin nextpas.core.audio.pcm.PcmWriteS24LE(AValue, ABytes, AOffset); end;
+
+procedure AudioPanLawGains(APan: Single; out AL, AR: Single);
+begin nextpas.core.audio.base.AudioPanLawGains(APan, AL, AR); end;
+
+function PanLawGains(APan: Single; ALawDB: Single): TPointF;
+begin Result := nextpas.core.audio.mix.PanLawGains(APan, ALawDB); end;
 
 function WavProbe(const APrefix: TBytes): TAudioProbeResult;
 begin
