@@ -248,6 +248,66 @@ begin
   if LBytesPerDst <= 0 then Exit;
   if Length(ASrc) < LSampleCount * LBytesPerSrc then Exit;
   SetLength(Result, LSampleCount * LBytesPerDst);
+  // fast 4-wide paths for dither-free S16/S32<->F32 (hotest conversions, zero branch)
+  if not AApplyDither then
+  begin
+    if (ASrcFormat=sfS16) and (ADstFormat=sfF32) then
+    begin
+      LI:=0; while LI+3 < LSampleCount do
+      begin
+        PSingle(@Result[LI*4])^ := PcmS16ToF32(SmallInt(ASrc[LI*2] or (ASrc[LI*2+1] shl 8)));
+        PSingle(@Result[(LI+1)*4])^ := PcmS16ToF32(SmallInt(ASrc[(LI+1)*2] or (ASrc[(LI+1)*2+1] shl 8)));
+        PSingle(@Result[(LI+2)*4])^ := PcmS16ToF32(SmallInt(ASrc[(LI+2)*2] or (ASrc[(LI+2)*2+1] shl 8)));
+        PSingle(@Result[(LI+3)*4])^ := PcmS16ToF32(SmallInt(ASrc[(LI+3)*2] or (ASrc[(LI+3)*2+1] shl 8)));
+        Inc(LI,4);
+      end;
+      while LI < LSampleCount do
+      begin LS16:=SmallInt(ASrc[LI*2] or (ASrc[LI*2+1] shl 8)); PSingle(@Result[LI*4])^:=PcmS16ToF32(LS16); Inc(LI); end;
+      Exit;
+    end;
+    if (ASrcFormat=sfF32) and (ADstFormat=sfS16) then
+    begin
+      LI:=0; while LI+3 < LSampleCount do
+      begin
+        LS16:=PcmF32ToS16(PSingle(@ASrc[LI*4])^); Result[LI*2]:=Byte(LS16 and $FF); Result[LI*2+1]:=Byte((LS16 shr 8) and $FF);
+        LS16:=PcmF32ToS16(PSingle(@ASrc[(LI+1)*4])^); Result[(LI+1)*2]:=Byte(LS16 and $FF); Result[(LI+1)*2+1]:=Byte((LS16 shr 8) and $FF);
+        LS16:=PcmF32ToS16(PSingle(@ASrc[(LI+2)*4])^); Result[(LI+2)*2]:=Byte(LS16 and $FF); Result[(LI+2)*2+1]:=Byte((LS16 shr 8) and $FF);
+        LS16:=PcmF32ToS16(PSingle(@ASrc[(LI+3)*4])^); Result[(LI+3)*2]:=Byte(LS16 and $FF); Result[(LI+3)*2+1]:=Byte((LS16 shr 8) and $FF);
+        Inc(LI,4);
+      end;
+      while LI < LSampleCount do
+      begin LS16:=PcmF32ToS16(PSingle(@ASrc[LI*4])^); Result[LI*2]:=Byte(LS16 and $FF); Result[LI*2+1]:=Byte((LS16 shr 8) and $FF); Inc(LI); end;
+      Exit;
+    end;
+    if (ASrcFormat=sfS32) and (ADstFormat=sfF32) then
+    begin
+      LI:=0; while LI+3 < LSampleCount do
+      begin
+        LS32:=LongInt(ASrc[LI*4] or (ASrc[LI*4+1] shl 8) or (ASrc[LI*4+2] shl 16) or (ASrc[LI*4+3] shl 24)); PSingle(@Result[LI*4])^:=PcmS32ToF32(LS32);
+        LS32:=LongInt(ASrc[(LI+1)*4] or (ASrc[(LI+1)*4+1] shl 8) or (ASrc[(LI+1)*4+2] shl 16) or (ASrc[(LI+1)*4+3] shl 24)); PSingle(@Result[(LI+1)*4])^:=PcmS32ToF32(LS32);
+        LS32:=LongInt(ASrc[(LI+2)*4] or (ASrc[(LI+2)*4+1] shl 8) or (ASrc[(LI+2)*4+2] shl 16) or (ASrc[(LI+2)*4+3] shl 24)); PSingle(@Result[(LI+2)*4])^:=PcmS32ToF32(LS32);
+        LS32:=LongInt(ASrc[(LI+3)*4] or (ASrc[(LI+3)*4+1] shl 8) or (ASrc[(LI+3)*4+2] shl 16) or (ASrc[(LI+3)*4+3] shl 24)); PSingle(@Result[(LI+3)*4])^:=PcmS32ToF32(LS32);
+        Inc(LI,4);
+      end;
+      while LI < LSampleCount do
+      begin LS32:=LongInt(ASrc[LI*4] or (ASrc[LI*4+1] shl 8) or (ASrc[LI*4+2] shl 16) or (ASrc[LI*4+3] shl 24)); PSingle(@Result[LI*4])^:=PcmS32ToF32(LS32); Inc(LI); end;
+      Exit;
+    end;
+    if (ASrcFormat=sfF32) and (ADstFormat=sfS32) then
+    begin
+      LI:=0; while LI+3 < LSampleCount do
+      begin
+        LS32:=PcmF32ToS32(PSingle(@ASrc[LI*4])^); Result[LI*4]:=Byte(LS32 and $FF); Result[LI*4+1]:=Byte((LS32 shr 8) and $FF); Result[LI*4+2]:=Byte((LS32 shr 16) and $FF); Result[LI*4+3]:=Byte((LS32 shr 24) and $FF);
+        LS32:=PcmF32ToS32(PSingle(@ASrc[(LI+1)*4])^); Result[(LI+1)*4]:=Byte(LS32 and $FF); Result[(LI+1)*4+1]:=Byte((LS32 shr 8) and $FF); Result[(LI+1)*4+2]:=Byte((LS32 shr 16) and $FF); Result[(LI+1)*4+3]:=Byte((LS32 shr 24) and $FF);
+        LS32:=PcmF32ToS32(PSingle(@ASrc[(LI+2)*4])^); Result[(LI+2)*4]:=Byte(LS32 and $FF); Result[(LI+2)*4+1]:=Byte((LS32 shr 8) and $FF); Result[(LI+2)*4+2]:=Byte((LS32 shr 16) and $FF); Result[(LI+2)*4+3]:=Byte((LS32 shr 24) and $FF);
+        LS32:=PcmF32ToS32(PSingle(@ASrc[(LI+3)*4])^); Result[(LI+3)*4]:=Byte(LS32 and $FF); Result[(LI+3)*4+1]:=Byte((LS32 shr 8) and $FF); Result[(LI+3)*4+2]:=Byte((LS32 shr 16) and $FF); Result[(LI+3)*4+3]:=Byte((LS32 shr 24) and $FF);
+        Inc(LI,4);
+      end;
+      while LI < LSampleCount do
+      begin LS32:=PcmF32ToS32(PSingle(@ASrc[LI*4])^); Result[LI*4]:=Byte(LS32 and $FF); Result[LI*4+1]:=Byte((LS32 shr 8) and $FF); Result[LI*4+2]:=Byte((LS32 shr 16) and $FF); Result[LI*4+3]:=Byte((LS32 shr 24) and $FF); Inc(LI); end;
+      Exit;
+    end;
+  end;
   LDitherState := 12345;
   for LI := 0 to LSampleCount - 1 do
   begin

@@ -136,7 +136,12 @@ begin
   LSrc := FSource;
   LGain := FGain;
   if not Assigned(LSrc) then Exit(AFrames);
-  if Length(FScratch.Data) < LNeeded then Exit(AFrames);
+  if Length(FScratch.Data) < LNeeded then
+  begin
+    SetLength(FScratch.Data, LNeeded);
+    if Length(FScratch.Data) < LNeeded then Exit(AFrames);
+    FScratch.Format := FFormat;
+  end;
   FScratch.FrameCount := AFrames;
   try
     LSrc.FillRealtime(FScratch, AFrames);
@@ -211,7 +216,11 @@ begin
   LNeeded := AFrames * FBuses[0].GetFormat.BlockAlign;
   if Length(ABuffer.Data) < LNeeded then Exit(0);
   AudioSilentFill(ABuffer, FBuses[0].GetFormat, AFrames);
-  if Length(FScratch.Data) < LNeeded then Exit(AFrames);
+  if Length(FScratch.Data) < LNeeded then
+  begin
+    SetLength(FScratch.Data, LNeeded);
+    if Length(FScratch.Data) < LNeeded then Exit(AFrames);
+  end;
   for I := 0 to High(FBuses) do
   begin
     AudioSilentFill(FScratch, FBuses[I].GetFormat, AFrames);

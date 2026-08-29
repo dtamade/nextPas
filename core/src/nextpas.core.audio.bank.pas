@@ -109,6 +109,14 @@ begin
   finally LeaveCriticalSection(FLock); end;
 end;
 
+procedure WriteLE32(var ADst: TBytes; APos, AVal: Integer); inline;
+begin
+  ADst[APos] := Byte(AVal and $FF);
+  ADst[APos+1] := Byte((AVal shr 8) and $FF);
+  ADst[APos+2] := Byte((AVal shr 16) and $FF);
+  ADst[APos+3] := Byte((AVal shr 24) and $FF);
+end;
+
 function TAudioBank.PackToBytes: TBytes;
 var I, P, K: Integer; LIdBytes: TBytes; LId: string; LNeed: Integer;
 begin
@@ -122,10 +130,7 @@ begin
     if LNeed > 16*1024*1024 then
       raise EAudioError.Create('PackToBytes: too large');
     SetLength(Result, LNeed);
-    Result[0] := Byte(Length(FEntries) and $FF);
-    Result[1] := Byte((Length(FEntries) shr 8) and $FF);
-    Result[2] := Byte((Length(FEntries) shr 16) and $FF);
-    Result[3] := Byte((Length(FEntries) shr 24) and $FF);
+    WriteLE32(Result, 0, Length(FEntries));
     P := 4;
     for I := 0 to High(FEntries) do
     begin
@@ -133,17 +138,11 @@ begin
       SetLength(LIdBytes, Length(LId));
       for K := 1 to Length(LId) do
         LIdBytes[K-1] := Byte(Ord(LId[K]) and $FF);
-      Result[P] := Byte(Length(LIdBytes) and $FF);
-      Result[P+1] := Byte((Length(LIdBytes) shr 8) and $FF);
-      Result[P+2] := Byte((Length(LIdBytes) shr 16) and $FF);
-      Result[P+3] := Byte((Length(LIdBytes) shr 24) and $FF);
+      WriteLE32(Result, P, Length(LIdBytes));
       if Length(LIdBytes) > 0 then
         Move(LIdBytes[0], Result[P+4], Length(LIdBytes));
       P := P + 4 + Length(LIdBytes);
-      Result[P] := Byte(FEntries[I].Buffer.FrameCount and $FF);
-      Result[P+1] := Byte((FEntries[I].Buffer.FrameCount shr 8) and $FF);
-      Result[P+2] := Byte((FEntries[I].Buffer.FrameCount shr 16) and $FF);
-      Result[P+3] := Byte((FEntries[I].Buffer.FrameCount shr 24) and $FF);
+      WriteLE32(Result, P, FEntries[I].Buffer.FrameCount);
       Inc(P, 4);
     end;
     // trim to actual P (LNeed already exact, but keep for safety)
