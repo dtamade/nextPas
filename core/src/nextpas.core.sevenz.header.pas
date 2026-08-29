@@ -232,7 +232,7 @@ begin
     SevenZAppendByte(AOut, Byte((AValue shr (8 * LI)) and $FF));
 end;
 
-procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt); inline;
+procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt); inline; inline;
 begin
   if ACount <= 0 then Exit;
   BytesAppend(AOut, AData, SizeUInt(ACount));
