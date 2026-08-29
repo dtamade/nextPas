@@ -1083,7 +1083,7 @@ begin
   LStart := LowerBoundPrefix(APrefix);
   if LStart >= Length(FSortedIdx) then Exit(-1);
   LIdx := FSortedIdx[LStart];
-  if (Length(FEntries[LIdx].Name) < LLen) or (not StrHasPrefix(FEntries[LIdx].Name, APrefix)) then Exit(-1);
+  if not StrHasPrefix(FEntries[LIdx].Name, APrefix) then Exit(-1);
   Result := LIdx;
 end;
 
@@ -1100,7 +1100,7 @@ begin
   LStart := LowerBoundSuffix(ASuffix);
   if LStart >= Length(FSortedIdxRev) then Exit(-1);
   LIdx := FSortedIdxRev[LStart];
-  if (Length(FEntries[LIdx].Name) < LLen) or (not StrHasSuffix(FEntries[LIdx].Name, ASuffix)) then Exit(-1);
+  if not StrHasSuffix(FEntries[LIdx].Name, ASuffix) then Exit(-1);
   Result := LIdx;
 end;
 
@@ -1235,7 +1235,7 @@ begin
       while LPos < Length(FSortedIdx) do
       begin
         LIdx := FSortedIdx[LPos];
-        if (Length(FEntries[LIdx].Name) < Length(LPrefix)) or (not StrHasPrefix(FEntries[LIdx].Name, LPrefix)) then Break;
+        if not StrHasPrefix(FEntries[LIdx].Name, LPrefix) then Break;
         if (Length(FEntries[LIdx].Name) >= Length(LPrefix)+Length(LSuffix)) and
            (StrHasSuffix(FEntries[LIdx].Name, LSuffix)) then
           Exit(LIdx);
@@ -1264,7 +1264,7 @@ begin
   begin
     LIdx := FSortedIdxIgnoreCase[LPos];
     LEntryLower := FLowerNames[LIdx];
-    if (Length(LEntryLower) < Length(LLower)) or (not StrHasPrefix(LEntryLower, LLower)) then Break;
+    if not StrHasPrefix(LEntryLower, LLower) then Break;
     Inc(LCnt);
   end;
   SetLength(Result, LCnt);
@@ -1273,7 +1273,7 @@ begin
   begin
     LIdx := FSortedIdxIgnoreCase[LPos];
     LEntryLower := FLowerNames[LIdx];
-    if (Length(LEntryLower) < Length(LLower)) or (not StrHasPrefix(LEntryLower, LLower)) then Break;
+    if not StrHasPrefix(LEntryLower, LLower) then Break;
     Result[LCnt] := FEntries[LIdx];
     Inc(LCnt);
   end;
@@ -1293,7 +1293,7 @@ begin
   begin
     LIdx := FSortedIdxRevIgnoreCase[LPos];
     LEntryLower := FLowerNames[LIdx];
-    if (Length(LEntryLower) < Length(LLower)) or (not StrHasSuffix(LEntryLower, LLower)) then Break;
+    if not StrHasSuffix(LEntryLower, LLower) then Break;
     Inc(LCnt);
   end;
   SetLength(Result, LCnt);
@@ -1302,7 +1302,7 @@ begin
   begin
     LIdx := FSortedIdxRevIgnoreCase[LPos];
     LEntryLower := FLowerNames[LIdx];
-    if (Length(LEntryLower) < Length(LLower)) or (not StrHasSuffix(LEntryLower, LLower)) then Break;
+    if not StrHasSuffix(LEntryLower, LLower) then Break;
     Result[LCnt] := FEntries[LIdx];
     Inc(LCnt);
   end;
@@ -1320,7 +1320,7 @@ begin
   if LStart >= Length(FSortedIdxIgnoreCase) then Exit(-1);
   LIdx := FSortedIdxIgnoreCase[LStart];
   LEntryLower := FLowerNames[LIdx];
-  if (Length(LEntryLower) < Length(LLower)) or (not StrHasPrefix(LEntryLower, LLower)) then Exit(-1);
+  if not StrHasPrefix(LEntryLower, LLower) then Exit(-1);
   Result := LIdx;
 end;
 
@@ -1336,7 +1336,7 @@ begin
   if LStart >= Length(FSortedIdxRevIgnoreCase) then Exit(-1);
   LIdx := FSortedIdxRevIgnoreCase[LStart];
   LEntryLower := FLowerNames[LIdx];
-  if (Length(LEntryLower) < Length(LLower)) or (not StrHasSuffix(LEntryLower, LLower)) then Exit(-1);
+  if not StrHasSuffix(LEntryLower, LLower) then Exit(-1);
   Result := LIdx;
 end;
 
@@ -1389,7 +1389,7 @@ begin
       begin
         LIdx := FSortedIdxIgnoreCase[LPos];
         LEntryLower := FLowerNames[LIdx];
-        if (Length(LEntryLower) < Length(LLowerPref)) or (not StrHasPrefix(LEntryLower, LLowerPref)) then Break;
+        if not StrHasPrefix(LEntryLower, LLowerPref) then Break;
         if (Length(LEntryLower) >= Length(LLowerPref)+Length(LLowerSuff)) and
            ((Length(LLowerSuff)=0) or (Copy(LEntryLower, Length(LEntryLower)-Length(LLowerSuff)+1, Length(LLowerSuff)) = LLowerSuff)) then
           Exit(LIdx);
@@ -1557,7 +1557,7 @@ begin
   for LPos := LStart to High(FSortedIdx) do
   begin
     LIdx := FSortedIdx[LPos];
-    if (Length(FEntries[LIdx].Name) < LLen) or (not StrHasPrefix(FEntries[LIdx].Name, APrefix)) then Break;
+    if not StrHasPrefix(FEntries[LIdx].Name, APrefix) then Break;
     Inc(LCnt);
   end;
   SetLength(Result, LCnt);
@@ -1565,7 +1565,7 @@ begin
   for LPos := LStart to High(FSortedIdx) do
   begin
     LIdx := FSortedIdx[LPos];
-    if (Length(FEntries[LIdx].Name) < LLen) or (not StrHasPrefix(FEntries[LIdx].Name, APrefix)) then Break;
+    if not StrHasPrefix(FEntries[LIdx].Name, APrefix) then Break;
     Result[LCnt] := LIdx; Inc(LCnt);
   end;
 end;
@@ -1588,7 +1588,7 @@ begin
   for LPos := LStart to High(FSortedIdxIgnoreCase) do
   begin
     LIdx := FSortedIdxIgnoreCase[LPos];
-    if (Length(FLowerNames[LIdx]) < Length(LLower)) or (not StrHasPrefix(FLowerNames[LIdx], LLower)) then Break;
+    if not StrHasPrefix(FLowerNames[LIdx], LLower) then Break;
     Inc(LCnt);
   end;
   SetLength(Result, LCnt);
@@ -1596,7 +1596,7 @@ begin
   for LPos := LStart to High(FSortedIdxIgnoreCase) do
   begin
     LIdx := FSortedIdxIgnoreCase[LPos];
-    if (Length(FLowerNames[LIdx]) < Length(LLower)) or (not StrHasPrefix(FLowerNames[LIdx], LLower)) then Break;
+    if not StrHasPrefix(FLowerNames[LIdx], LLower) then Break;
     Result[LCnt] := LIdx; Inc(LCnt);
   end;
 end;
@@ -1673,7 +1673,7 @@ begin
   for LPos := LStart to High(FSortedIdxRev) do
   begin
     LIdx := FSortedIdxRev[LPos];
-    if (Length(FEntries[LIdx].Name) < LLen) or (not StrHasSuffix(FEntries[LIdx].Name, ASuffix)) then Break;
+    if not StrHasSuffix(FEntries[LIdx].Name, ASuffix) then Break;
     Inc(LCnt);
   end;
   SetLength(Result, LCnt);
@@ -1681,7 +1681,7 @@ begin
   for LPos := LStart to High(FSortedIdxRev) do
   begin
     LIdx := FSortedIdxRev[LPos];
-    if (Length(FEntries[LIdx].Name) < LLen) or (not StrHasSuffix(FEntries[LIdx].Name, ASuffix)) then Break;
+    if not StrHasSuffix(FEntries[LIdx].Name, ASuffix) then Break;
     Result[LCnt] := LIdx; Inc(LCnt);
   end;
 end;
@@ -1704,7 +1704,7 @@ begin
   for LPos := LStart to High(FSortedIdxRevIgnoreCase) do
   begin
     LIdx := FSortedIdxRevIgnoreCase[LPos];
-    if (Length(FLowerNames[LIdx]) < Length(LLower)) or (not StrHasSuffix(FLowerNames[LIdx], LLower)) then Break;
+    if not StrHasSuffix(FLowerNames[LIdx], LLower) then Break;
     Inc(LCnt);
   end;
   SetLength(Result, LCnt);
@@ -1712,7 +1712,7 @@ begin
   for LPos := LStart to High(FSortedIdxRevIgnoreCase) do
   begin
     LIdx := FSortedIdxRevIgnoreCase[LPos];
-    if (Length(FLowerNames[LIdx]) < Length(LLower)) or (not StrHasSuffix(FLowerNames[LIdx], LLower)) then Break;
+    if not StrHasSuffix(FLowerNames[LIdx], LLower) then Break;
     Result[LCnt] := LIdx; Inc(LCnt);
   end;
 end;
