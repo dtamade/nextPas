@@ -22,6 +22,7 @@ uses
   nextpas.core.encoding.base64,
   ssh_rsa_kat,
   ssh_bcrypt_kat,
+  nextpas.core.bytes.ops,
   nextpas.core.test;
 
 function PatternBytes(APattern: Byte; ACount: Integer): TBytes;
@@ -47,16 +48,6 @@ begin
   Result := '';
   for I := 0 to High(AData) do
     Result := Result + LowerCase(IntToHex(AData[I], 2));
-end;
-
-function ConcatBytes(const A, B: TBytes): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(A) + Length(B));
-  if Length(A) > 0 then
-    Move(A[0], Result[0], Length(A));
-  if Length(B) > 0 then
-    Move(B[0], Result[Length(A)], Length(B));
 end;
 
 { ssh-ed25519 公钥 wire blob }
@@ -88,7 +79,7 @@ begin
     LW.PutUInt32(ACheck);
     LW.PutStringText(AKeyType);
     LW.PutStringBytes(Copy(APub, 0, 32));
-    LW.PutStringBytes(ConcatBytes(ASeed, Copy(APub, 0, 32)));
+    LW.PutStringBytes(BytesConcat(ASeed, Copy(APub, 0, 32)));
     LW.PutStringText('test comment');
     Result := LW.ToBytes;
   finally

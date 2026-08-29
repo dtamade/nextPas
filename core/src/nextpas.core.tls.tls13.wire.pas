@@ -131,6 +131,7 @@ procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal); inline;
 begin
   BytesAppendUInt24BE(ADest, AValue);
 end;
+end;
 
 function ReadUInt16(const AData: TBytes; AOffset: Integer): Word;
 begin

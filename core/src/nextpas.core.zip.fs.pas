@@ -7,10 +7,13 @@ unit nextpas.core.zip.fs;
  * 权限位随外部属性保留（S_IFREG/S_IFDIR | 低 12 位）；同目录内按名字节序
  * 排序，输出确定。
  * 解包：敌意条目名（zip-slip）在落盘前拒绝；重名条目按序后写覆盖；默认跳过
- * 符号链接条目，SkipSymlinks=False 时按归档保真创建真实符号链接（opt-in）；
+ * 符号链接条目，SkipSymlinks=False 时按归档保真创建真实符号链接（opt-in，
+ * 目标经 IsSafeSymlinkTarget 拒绝绝对路径/".."/空段/反斜杠/超长4096）；
  * 文件与目录的 mtime 尽力还原（DOS 时间 2 秒粒度）；unix 归档还原 posix 权限
  * 位。目录的权限与 mtime 延迟到全部内容写完后再还原（否则子条目写入会刷新
- * 目录 mtime，收紧的目录权限也可能阻断后续落盘）。
+ * 目录 mtime，收紧的目录权限也可能阻断后续落盘）。解包非原子：已落盘文件不
+ * 回滚；异常时已收集的 LDirs 仍在 finally 中逆序定稿（权限/mtime），需外层
+ * 整体清理或改用 WithOptions 的原子变体（临时目录+rename，待提供）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -49,7 +52,10 @@ procedure ZipExtractToDirWithOptions(const AData: TBytes; const ADestDir: string
 
 {** 同上，按默认选项。AMaxOutputSize=0 取读端默认上限。 *}
 procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
-  const AMaxOutputSize: SizeUInt = 0);
+  const AMaxOutputSize: SizeUInt = 0); overload;
+{** 同上，按完整选项（保留 MaxTotalOutputSize/SkipSymlinks 语义）。 *}
+procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
+  const AOptions: TZipExtractOptions); overload;
 
 implementation
 
@@ -74,6 +80,50 @@ type
     FMtimeNs: Int64;
   end;
   TDeferredDirArray = array of TDeferredDir;
+
+function IsSafeSymlinkTarget(const ATarget: string): Boolean; inline;
+var
+  LI, LSegStart: Integer;
+begin
+  Result := False;
+  if (ATarget = '') or (Length(ATarget) > 4096) then Exit;
+  if (ATarget[1] = '/') or (ATarget[1] = '\') then Exit;
+  if (Length(ATarget) >= 2) and (ATarget[2] = ':') and (UpCase(ATarget[1]) in ['A'..'Z']) then Exit;
+  if Pos('\', ATarget) > 0 then Exit;
+  LSegStart := 1;
+  for LI := 1 to Length(ATarget) + 1 do
+  begin
+    if (LI <= Length(ATarget)) and (ATarget[LI] <> '/') then Continue;
+    if LI - LSegStart = 0 then
+    begin
+      if LI <= Length(ATarget) then Exit;
+    end
+    else if (LI - LSegStart = 2) and (ATarget[LSegStart] = '.') and (ATarget[LSegStart + 1] = '.') then
+      Exit;
+    LSegStart := LI + 1;
+  end;
+  Result := True;
+end;
+
+procedure EnsureNoSymlinkInPath(const APath: string); inline;
+var
+  LI: Integer;
+  LPrefix: string;
+begin
+  if APath = '' then Exit;
+  for LI := 1 to Length(APath) do
+  begin
+    if (APath[LI] = '/') or (LI = Length(APath)) then
+    begin
+      if LI = Length(APath) then
+        LPrefix := APath
+      else
+        LPrefix := Copy(APath, 1, LI - 1);
+      if (LPrefix <> '') and IsSymlink(LPrefix) then
+        raise EParseError.Create('zip extract: symlink in path: ' + LPrefix);
+    end;
+  end;
+end;
 
 procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
 var
@@ -270,7 +320,9 @@ begin
   LOpts.MaxTotalOutputSize := AOptions.MaxTotalOutputSize;
   LR := NewZipReaderWithOptions(AData, LOpts);
   MkdirAll(ADestDir, PermDirDefault);
+  EnsureNoSymlinkInPath(ADestDir);
   SetLength(LDirs, 0);
+  try
   for LI := 0 to LR.EntryCount - 1 do
   begin
     LE := LR.Entry(LI);
@@ -295,6 +347,7 @@ begin
     if LSep > 0 then
     begin
       LParent := Copy(LFull, 1, LSep - 1);
+      EnsureNoSymlinkInPath(LParent);
       MkdirAll(LParent, PermDirDefault);
     end;
     { 仅 unix 归档（高 16 位模式字非零）还原权限；其余保持平台默认。
@@ -304,11 +357,14 @@ begin
       MkdirAll(LFull, PermDirDefault)
     else if LE.IsSymlink then
     begin
-      { opt-in 保真路径：条目载荷即链接目标文本 }
+      { opt-in 保真路径：条目载荷即链接目标文本，二次校验防绝对/..穿越 }
       LPayload := LR.ExtractToBytes(LI);
       if (Length(LPayload) = 0) or (Length(LPayload) > 4096) then
         raise EParseError.Create('zip extract: bad symlink target: ' + LE.Name);
       SetString(LTarget, PAnsiChar(@LPayload[0]), Length(LPayload));
+      if not IsSafeSymlinkTarget(LTarget) then
+        raise EParseError.Create('zip extract: refusing unsafe symlink target: ' + LE.Name + ' -> ' + LTarget);
+      EnsureNoSymlinkInPath(LParent);
       Symlink(LTarget, LFull);
     end
     else
@@ -332,13 +388,24 @@ begin
       end;
     end;
   end;
-  { 收尾逆序定稿目录：先深层后浅层，权限收紧不阻断兄弟/祖先处理 }
-  for LI := High(LDirs) downto 0 do
-  begin
-    if AOptions.RestoreMode and (LDirs[LI].FMode <> 0) then
-      Chmod(LDirs[LI].FFull,
-        TFilePermission(LDirs[LI].FMode and $0FFF));
-    Chtimes(LDirs[LI].FFull, LDirs[LI].FMtimeNs, LDirs[LI].FMtimeNs);
+  finally
+    { 收尾逆序定稿目录：先深层后浅层，权限收紧不阻断兄弟/祖先处理；
+      置于 finally 保证异常时已收集的目录仍定稿（非原子语义，见单元头）。 }
+    for LI := High(LDirs) downto 0 do
+    begin
+      if AOptions.RestoreMode and (LDirs[LI].FMode <> 0) then
+        try
+          Chmod(LDirs[LI].FFull,
+            TFilePermission(LDirs[LI].FMode and $0FFF));
+        except
+          on E: Exception do ;
+        end;
+      try
+        Chtimes(LDirs[LI].FFull, LDirs[LI].FMtimeNs, LDirs[LI].FMtimeNs);
+      except
+        on E: Exception do ;
+      end;
+    end;
   end;
 end;
 
@@ -350,6 +417,12 @@ begin
   LOpts := DefaultZipExtractOptions;
   LOpts.MaxOutputSize := AMaxOutputSize;
   ZipExtractToDirWithOptions(AData, ADestDir, LOpts);
+end;
+
+procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
+  const AOptions: TZipExtractOptions);
+begin
+  ZipExtractToDirWithOptions(AData, ADestDir, AOptions);
 end;
 
 end.

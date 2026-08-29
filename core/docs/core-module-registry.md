@@ -96,6 +96,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
+| `zip` | L2 | ZIP archive (writer/reader/sequential/fs/aes/extra/common) | yes | L0-L1 plus fs/compress/checksum/crypto owners (implementation-only fs sandbox, L2→L2 exempt via platform lstat + IsSafeSymlinkTarget) | focused-runtime |
 
 Database family: `sqlite` and `pg` are L2 backend implementations inside the
 `db` (L3) family; their units physically live under `nextpas.core.db.sqlite.*`

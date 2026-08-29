@@ -124,9 +124,7 @@ uses
   nextpas.core.ssh.keys,
   nextpas.core.ssh.rsa,
   nextpas.core.ssh.agent,
-  nextpas.core.ssh.compress,
-  nextpas.core.ssh.kex.curve25519,
-  nextpas.core.ssh.kex.dhgroup14;
+  nextpas.core.ssh.compress;
 
 const
   DISCONNECT_BY_APPLICATION = 11;
@@ -403,8 +401,7 @@ var
   LPeer: TSshPeerKexInit;
   LNeg: TSshNegotiated;
   LK, LH, LHostBlob, LSigBlob: TBytes;
-  LKexCurve: TSshKexCurve25519;
-  LKexDH: TSshKexDHGroup14;
+  LKex: ISshKeyExchange;
 begin
   FTransport.ExchangeVersions;
 
@@ -416,30 +413,13 @@ begin
   LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
   FNegotiated := LNeg;
 
-  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
-  begin
-    LKexDH := TSshKexDHGroup14.Create;
-    try
-      FTransport.SendPacket(LKexDH.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally
-      LKexDH.Free;
-    end;
-  end
-  else
-  begin
-    LKexCurve := TSshKexCurve25519.Create;
-    try
-      FTransport.SendPacket(LKexCurve.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally
-      LKexCurve.Free;
-    end;
-  end;
+  LKex := SshCreateKex(LNeg.KexAlg);
+  if LKex = nil then
+    raise ESSHError.Create(sekNegotiation, 'ssh kex: unsupported algorithm ' + LNeg.KexAlg);
+  FTransport.SendPacket(LKex.BuildInitPayload);
+  LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+  LKex.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+    LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
 
   FHostKeyBlob := LHostBlob;
   if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
@@ -459,8 +439,7 @@ var
   LPeer: TSshPeerKexInit;
   LNeg: TSshNegotiated;
   LK, LH, LHostBlob, LSigBlob: TBytes;
-  LKexCurve: TSshKexCurve25519;
-  LKexDH: TSshKexDHGroup14;
+  LKex: ISshKeyExchange;
 begin
   if FClosed or not FAuthenticated then
     raise ESSHError.Create(sekProtocol, 'ssh session: rekey outside authenticated session');
@@ -471,25 +450,13 @@ begin
   LPeerInit := ExpectOneOf([SSH_MSG_KEXINIT]);
   LPeer := SshParseKexInit(LPeerInit);
   LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
-  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
-  begin
-    LKexDH := TSshKexDHGroup14.Create;
-    try
-      FTransport.SendPacket(LKexDH.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally LKexDH.Free; end;
-  end else
-  begin
-    LKexCurve := TSshKexCurve25519.Create;
-    try
-      FTransport.SendPacket(LKexCurve.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally LKexCurve.Free; end;
-  end;
+  LKex := SshCreateKex(LNeg.KexAlg);
+  if LKex = nil then
+    raise ESSHError.Create(sekNegotiation, 'ssh kex: unsupported algorithm ' + LNeg.KexAlg);
+  FTransport.SendPacket(LKex.BuildInitPayload);
+  LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+  LKex.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+    LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
   if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
     raise ESSHError.Create(sekHostKey, 'ssh session: rekey unsupported host key blob');
   VerifyHostKey(LNeg.HostKeyAlg, LH, LSigBlob);

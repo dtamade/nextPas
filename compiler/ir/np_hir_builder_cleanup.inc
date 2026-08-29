@@ -35,10 +35,7 @@ begin
   if ElemSizeStr <> '' then
     ElemSizeVal := ParseIntExprArgTyped('int ' + ElemSizeStr + #10, ElemSizeType)
   else
-  begin
-    ElemSizeVal := EmitConstIntOfType(8, I64);
-    ElemSizeType := I64;
-  end;
+    ElemSizeVal := GetDynArrayElemSizeValue(ArrName, ElemSizeType);
   if ElemSizeVal = 0 then
     Exit;
 
@@ -147,10 +144,7 @@ begin
   if ElemSizeStr <> '' then
     ElemSizeVal := ParseIntExprArgTyped('int ' + ElemSizeStr + #10, ElemSizeType)
   else
-  begin
-    ElemSizeVal := EmitConstIntOfType(8, I64);
-    ElemSizeType := I64;
-  end;
+    ElemSizeVal := GetDynArrayElemSizeValue(ReceiverName + '.' + FieldIdxStr, ElemSizeType);
   if ElemSizeVal = 0 then Exit;
 
   PtrSlot := FieldSlotPtr(ReceiverPtr, FieldIdx);
@@ -219,10 +213,7 @@ begin
   if ElemSizeBlob <> '' then
     ElemSizeVal := ParseIntExprArgTyped(ElemSizeBlob, ElemSizeType)
   else
-  begin
-    ElemSizeVal := EmitConstIntOfType(8, I64);
-    ElemSizeType := I64;
-  end;
+    ElemSizeVal := GetDynArrayElemSizeValue(VarName, ElemSizeType);
   if ElemSizeVal = 0 then
     Exit;
   LenI64 := NormalizeScalarValueToType(LenVal, I32, I64);
@@ -252,6 +243,7 @@ var
   FieldIdx: Int64;
   FieldPtr, PtrSlot, LenSlot: THIRValueId;
   ZeroVal, ElemSizeVal: THIRValueId;
+  ElemSizeType: THIRTypeId;
   Offset: LongInt;
   SlotPtr: THIRValueId;
   Instr: THIRInstr;
@@ -338,7 +330,7 @@ begin
       LenSlot := FieldSlotPtr(RecPtr, FieldIdx + 1);
       if (PtrSlot <> 0) and (LenSlot <> 0) then
       begin
-        ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
+        ElemSizeVal := GetDynArrayElemSizeValue(TypeName + '.' + FieldName, ElemSizeType);
         FillChar(Instr, SizeOf(Instr), 0);
         Instr.ResultId := FModule.NewValue;
         Instr.Kind := hikIntrinsic;
@@ -353,7 +345,7 @@ begin
             GetIntTypeByWidth(32, True),
             GetIntTypeByWidth(64, True)),
           GetIntTypeByWidth(64, True));
-        Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
+        Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, ElemSizeType);
         EmitInstr(Instr);
       end;
     end;
@@ -527,13 +519,13 @@ var
   EntryBlock: THIRBlockId;
   ParamValueId, ObjSlot, PtrSlot, LenSlot: THIRValueId;
   PtrVal, LenVal, ElemSizeVal, NullVal, ZeroVal: THIRValueId;
+  ElemSizeType: THIRTypeId;
   Instr: THIRInstr;
   Term: THIRTerminator;
   SavedFuncId: THIRFuncId;
   SavedBlockId: THIRBlockId;
   SavedEntryBlockId: THIRBlockId;
   SavedBlockTerminated: Boolean;
-  ElemSize: Int64;
   SavedAllocas: THirAllocaVec;
   SavedBlockNames: THirNameVec;
   SavedBlockIds: THirBlockIdVec;
@@ -597,12 +589,8 @@ begin
         GetIntTypeByWidth(32, True), GetIntTypeByWidth(64, True));
       if LenVal = 0 then
         Continue;
-      if not FSemaModel.LookupConstValue(
-        AClassName + '.' + Meta.Fields[SizeUInt(I)].Name + '$arr_elem_size',
-        ElemSize) then
-        ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True))
-      else
-        ElemSizeVal := EmitConstIntOfType(ElemSize, GetIntTypeByWidth(64, True));
+      ElemSizeVal := GetDynArrayElemSizeValue(
+        AClassName + '.' + Meta.Fields[SizeUInt(I)].Name, ElemSizeType);
       if ElemSizeVal = 0 then
         Continue;
 
@@ -615,7 +603,7 @@ begin
       SetLength(Instr.Operands, 3);
       Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
       Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(64, True));
-      Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
+      Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, ElemSizeType);
       EmitInstr(Instr);
 
       FillChar(Instr, SizeOf(Instr), 0);

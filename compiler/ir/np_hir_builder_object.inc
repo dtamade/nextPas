@@ -2,8 +2,8 @@ procedure THIRBuilder.ProcessAssignArrElem(const ANode: TTypedHirNode);
 var
   TabPos, TabPos2, TabPos3: LongInt;
   ArrName, Rest, IdxBlob, ValBlob, FieldIdxStr, PlainVarName: string;
-  IdxVal, ValVal, BasePtr, ElemPtr, ObjPtr, FieldIdx, SizeVal: THIRValueId;
-  StoreType, ValueType: THIRTypeId;
+  IdxVal, ValVal, BasePtr, ElemPtr, ObjPtr, FieldIdx, SizeVal, ElemSizeVal: THIRValueId;
+  StoreType, ValueType, ElemSizeType: THIRTypeId;
   TargetResult: THIRExprResult;
   Token: string;
   Instr: THIRInstr;
@@ -90,18 +90,21 @@ begin
 
     if ANode.DisplayName = '__field_setlength__' then
     begin
-      { Element count → byte size (×8) then typed sckHeapAlloc → @np_alloc. }
       IdxVal := ParseIntExprArg(Rest);
       if IdxVal = 0 then Exit;
-      SizeVal := EmitBinOp(hikMul, GetIntTypeByWidth(64, True),
-        IdxVal, EmitConstIntOfType(8, GetIntTypeByWidth(64, True)));
+      ElemSizeVal := GetDynArrayElemSizeValue('self.' + FieldIdxStr, ElemSizeType);
+      if ElemSizeVal = 0 then Exit;
+      SizeVal := EmitBinOp(hikMul, ElemSizeType,
+        NormalizeScalarValueToType(IdxVal, GetIntType, ElemSizeType),
+        ElemSizeVal);
+      if SizeVal = 0 then Exit;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikIntrinsic;
       Instr.TypeId := GetPtrType;
       AssignSystemContract(Instr, sckHeapAlloc);
       SetLength(Instr.Operands, 1);
-      Instr.Operands[0] := MakeTypedOperand(SizeVal, GetIntTypeByWidth(64, True));
+      Instr.Operands[0] := MakeTypedOperand(SizeVal, ElemSizeType);
       EmitInstr(Instr);
       EmitStore(GetPtrType, Instr.ResultId, ElemPtr);
     end
