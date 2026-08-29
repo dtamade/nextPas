@@ -70,7 +70,7 @@ begin
     Result[Length(Result) - LLabelLen + I - 1] := Byte(LFullLabel[I]);
   AppendByte(Result, Byte(LContextLen));
   if LContextLen > 0 then
-    AppendBytes(Result, AContext);
+    BytesAppend(Result, AContext);
 end;
 
 function BuildTLS13HKDFLabelBytes(const ALabel: TBytes; const AContext: TBytes; ALength: Integer): TBytes;

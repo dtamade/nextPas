@@ -215,7 +215,7 @@ end;
 procedure AppendVector16(var ADest: TBytes; const AValue: TBytes);
 begin
   AppendUInt16(ADest, Word(Length(AValue)));
-  AppendBytes(ADest, AValue);
+  BytesAppend(ADest, AValue);
 end;
 
 function ReadVector16(const AData: TBytes; var AOffset: Integer): TBytes;

@@ -34,6 +34,7 @@ uses
   nextpas.core.tls.errors,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.tls13.wire,
+  nextpas.core.bytes.ops,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.tls.tls13.posthandshake,
@@ -740,7 +741,7 @@ begin
   Result := nil;
   AppendUInt16(Result, AType);
   AppendUInt16(Result, Word(Length(AData)));
-  AppendBytes(Result, AData);
+  BytesAppend(Result, AData);
 end;
 
 function StringToAnsiBytes(const AValue: string): TBytes;
@@ -784,7 +785,7 @@ begin
       if Length(LProtocolBytes) > 255 then
         RaiseInvalidParameter('ALPNProtocolLength');
       AppendByte(Result, Byte(Length(LProtocolBytes)));
-      AppendBytes(Result, LProtocolBytes);
+      BytesAppend(Result, LProtocolBytes);
     end;
 
     LStart := I + 1;
@@ -863,19 +864,19 @@ begin
 
     SetLength(LALPNData, 0);
     AppendUInt16(LALPNData, Word(Length(LALPNList)));
-    AppendBytes(LALPNData, LALPNList);
+    BytesAppend(LALPNData, LALPNList);
     LALPNData := BuildExtensionHeader(TLS_EXTENSION_ALPN, LALPNData);
-    AppendBytes(LExtensions, LALPNData);
+    BytesAppend(LExtensions, LALPNData);
   end;
 
   SetLength(LBody, 0);
   AppendUInt16(LBody, Word(Length(LExtensions)));
-  AppendBytes(LBody, LExtensions);
+  BytesAppend(LBody, LExtensions);
 
   SetLength(Result, 0);
   AppendByte(Result, TLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function FreePascalHandleToSocket(AHandle: THandle): TPlatformSocket; inline;

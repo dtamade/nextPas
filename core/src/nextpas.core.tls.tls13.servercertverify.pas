@@ -2574,12 +2574,12 @@ begin
   SetLength(LBody, 0);
   AppendUInt16(LBody, ASignatureScheme);
   AppendUInt16(LBody, Length(ASignature));
-  AppendBytes(LBody, ASignature);
+  BytesAppend(LBody, ASignature);
 
   SetLength(Result, 0);
   AppendByte(Result, TLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13PlaceholderSignatureFromTranscriptHash(
