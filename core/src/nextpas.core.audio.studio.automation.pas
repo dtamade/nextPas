@@ -16,6 +16,7 @@ type
   TAutomationCurve = class
   private
     FPoints: array of TAutomationPoint;
+    FSnap: array of TAutomationPoint; // realtime scratch: steady-state zero-alloc
     FLock: TRTLCriticalSection;
     function FindSegment(AFrame: UInt64; out AIdx: Integer): Boolean;
   public
@@ -55,24 +56,21 @@ begin
 end;
 
 procedure TAutomationCurve.AddPoint(AFrame: UInt64; AValue: Single);
-var L, I, J: Integer; LTmp: TAutomationPoint;
+var L, I: Integer;
 begin
   EnterCriticalSection(FLock);
   try
     L := Length(FPoints);
     SetLength(FPoints, L + 1);
-    FPoints[L].Frame := AFrame;
-    FPoints[L].Value := AValue;
-    for I := 1 to High(FPoints) do
-      for J := I downto 1 do
-        if FPoints[J].Frame < FPoints[J-1].Frame then
-        begin
-          LTmp := FPoints[J];
-          FPoints[J] := FPoints[J-1];
-          FPoints[J-1] := LTmp;
-        end
-        else
-          Break;
+    // insertion sort: shift tail until sorted (O(n), single pass, vs O(n^2) bubble)
+    I := L;
+    while (I > 0) and (FPoints[I-1].Frame > AFrame) do
+    begin
+      FPoints[I] := FPoints[I-1];
+      Dec(I);
+    end;
+    FPoints[I].Frame := AFrame;
+    FPoints[I].Value := AValue;
   finally
     LeaveCriticalSection(FLock);
   end;
@@ -128,7 +126,6 @@ end;
 
 function TAutomationCurve.FillRealtimeValues(AStartFrame: UInt64; ACount: Integer; ADst: PSingle): Integer;
 var
-  LSnap: array of TAutomationPoint;
   LSnapLen, I, LSeg: Integer;
   LFrame: UInt64;
   T: Single;
@@ -136,13 +133,14 @@ var
 begin
   Result := 0;
   if (ADst = nil) or (ACount <= 0) then Exit;
-  // snapshot points once (realtime zero-lock: single Enter/Leave, steady-state no alloc beyond copy)
+  // snapshot once: reuse FSnap scratch (steady-state zero-alloc after warm-up)
   EnterCriticalSection(FLock);
   try
     LSnapLen := Length(FPoints);
-    SetLength(LSnap, LSnapLen);
+    if Length(FSnap) < LSnapLen then
+      SetLength(FSnap, LSnapLen);
     if LSnapLen > 0 then
-      Move(FPoints[0], LSnap[0], LSnapLen * SizeOf(TAutomationPoint));
+      Move(FPoints[0], FSnap[0], LSnapLen * SizeOf(TAutomationPoint));
   finally
     LeaveCriticalSection(FLock);
   end;
@@ -153,25 +151,24 @@ begin
   end;
   // monotonic walk: segment index only moves forward as AStartFrame increases
   LSeg := -1;
-  // pre-seed LSeg for AStartFrame via binary advance
   for I := 0 to LSnapLen - 2 do
-    if AStartFrame >= LSnap[I].Frame then LSeg := I else Break;
+    if AStartFrame >= FSnap[I].Frame then LSeg := I else Break;
   for I := 0 to ACount - 1 do
   begin
     LFrame := AStartFrame + UInt64(I);
-    if LFrame <= LSnap[0].Frame then ADst[I] := LSnap[0].Value
-    else if LFrame >= LSnap[LSnapLen-1].Frame then ADst[I] := LSnap[LSnapLen-1].Value
+    if LFrame <= FSnap[0].Frame then ADst[I] := FSnap[0].Value
+    else if LFrame >= FSnap[LSnapLen-1].Frame then ADst[I] := FSnap[LSnapLen-1].Value
     else
     begin
-      while (LSeg + 1 < LSnapLen - 1) and (LFrame >= LSnap[LSeg+1].Frame) do Inc(LSeg);
-      while (LSeg >= 0) and (LFrame < LSnap[LSeg].Frame) do Dec(LSeg);
+      while (LSeg + 1 < LSnapLen - 1) and (LFrame >= FSnap[LSeg+1].Frame) do Inc(LSeg);
+      while (LSeg >= 0) and (LFrame < FSnap[LSeg].Frame) do Dec(LSeg);
       if (LSeg < 0) then LSeg := 0;
       if LSeg >= LSnapLen - 1 then LSeg := LSnapLen - 2;
-      A1 := LSnap[LSeg].Value; A2 := LSnap[LSeg+1].Value;
-      if LSeg > 0 then A0 := LSnap[LSeg-1].Value else A0 := A1;
-      if LSeg + 2 < LSnapLen then A3 := LSnap[LSeg+2].Value else A3 := A2;
-      if LSnap[LSeg+1].Frame = LSnap[LSeg].Frame then T := 0 else
-        T := (LFrame - LSnap[LSeg].Frame) / (LSnap[LSeg+1].Frame - LSnap[LSeg].Frame);
+      A1 := FSnap[LSeg].Value; A2 := FSnap[LSeg+1].Value;
+      if LSeg > 0 then A0 := FSnap[LSeg-1].Value else A0 := A1;
+      if LSeg + 2 < LSnapLen then A3 := FSnap[LSeg+2].Value else A3 := A2;
+      if FSnap[LSeg+1].Frame = FSnap[LSeg].Frame then T := 0 else
+        T := (LFrame - FSnap[LSeg].Frame) / (FSnap[LSeg+1].Frame - FSnap[LSeg].Frame);
       ADst[I] := HermiteInterpolate(A0, A1, A2, A3, T);
     end;
   end;

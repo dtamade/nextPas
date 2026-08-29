@@ -44,6 +44,8 @@ type
     FViolations: Int64;
     FScratch: TAudioBuffer;
     FOut: TAudioBuffer;
+    FNodeSnap: array of TGraphNode; // realtime scratch: steady-state zero-alloc
+    FProcSnap: array of TProcessorSlot;
     function FindNode(AId: Integer): Integer;
     function FindProcessor(AId: Integer): Integer;
   public
@@ -250,7 +252,7 @@ end;
 
 function TAudioGraph.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  Needed, I, J: Integer;
+  Needed, I, J, LSnapNodes, LSnapProcs: Integer;
   MixPtr, TmpPtr: PSingle;
   Gain: Single;
   HasData, HasProcessor: Boolean;
@@ -277,8 +279,23 @@ begin
     FOut.Format := FFormat;
     if Length(FOut.Data) < Needed then begin InterlockedExchangeAdd64(FViolations, 1); Exit(0); end;
   end;
-  // realtime: iterate nodes directly without lock (snapshot-free)
-  if Length(FNodes) = 0 then
+  // snapshot nodes/processors once (single lock, steady-state zero-alloc when counts stable)
+  FLock.Enter;
+  try
+    LSnapNodes := Length(FNodes);
+    if Length(FNodeSnap) <> LSnapNodes then
+      SetLength(FNodeSnap, LSnapNodes);
+    for I := 0 to LSnapNodes - 1 do
+      FNodeSnap[I] := FNodes[I];
+    LSnapProcs := Length(FProcessors);
+    if Length(FProcSnap) <> LSnapProcs then
+      SetLength(FProcSnap, LSnapProcs);
+    for I := 0 to LSnapProcs - 1 do
+      FProcSnap[I] := FProcessors[I];
+  finally
+    FLock.Leave;
+  end;
+  if LSnapNodes = 0 then
   begin
     AudioSilentFill(ABuffer, FFormat, AFrames);
     FPosition := FPosition + UInt64(AFrames);
@@ -290,13 +307,13 @@ begin
   HasData := False;
   FScratch.Format := FFormat;
   FScratch.FrameCount := AFrames;
-  for I := 0 to High(FNodes) do
+  for I := 0 to High(FNodeSnap) do
   begin
-    if not FNodes[I].Alive then Continue;
-    if not Assigned(FNodes[I].Source) then Continue;
-    Gain := FNodes[I].Gain * FVolume;
+    if not FNodeSnap[I].Alive then Continue;
+    if not Assigned(FNodeSnap[I].Source) then Continue;
+    Gain := FNodeSnap[I].Gain * FVolume;
     try
-      J := FNodes[I].Source.FillRealtime(FScratch, AFrames);
+      J := FNodeSnap[I].Source.FillRealtime(FScratch, AFrames);
     except
       InterlockedExchangeAdd64(FViolations, 1);
       Continue;
@@ -319,7 +336,7 @@ begin
   SimdClampF32(MixPtr, AFrames * FFormat.Channels, -1.0, 1.0);
 
   HasProcessor := False;
-  for I := 0 to High(FProcessors) do if FProcessors[I].Alive and Assigned(FProcessors[I].Processor) then HasProcessor := True;
+  for I := 0 to High(FProcSnap) do if FProcSnap[I].Alive and Assigned(FProcSnap[I].Processor) then HasProcessor := True;
   if HasProcessor then
   begin
     FOut.Format := FFormat;
@@ -327,12 +344,12 @@ begin
     FScratch.Format := FFormat;
     FScratch.FrameCount := AFrames;
     Move(ABuffer.Data[0], FOut.Data[0], Needed);
-    for I := 0 to High(FProcessors) do
+    for I := 0 to High(FProcSnap) do
     begin
-      if not FProcessors[I].Alive then Continue;
-      if not Assigned(FProcessors[I].Processor) then Continue;
+      if not FProcSnap[I].Alive then Continue;
+      if not Assigned(FProcSnap[I].Processor) then Continue;
       try
-        FProcessors[I].Processor.Process(FOut, FScratch);
+        FProcSnap[I].Processor.Process(FOut, FScratch);
         // swap buffers without alloc: exchange data pointers via temp move through ABuffer
         Move(FScratch.Data[0], ABuffer.Data[0], Needed);
         Move(FOut.Data[0], FScratch.Data[0], Needed);
@@ -341,7 +358,7 @@ begin
         InterlockedExchangeAdd64(FViolations, 1);
       end;
     end;
-    if FProcessors[High(FProcessors)].Alive then
+    if (LSnapProcs > 0) and FProcSnap[High(FProcSnap)].Alive then
       Move(FOut.Data[0], ABuffer.Data[0], Needed)
     else
       Move(FOut.Data[0], ABuffer.Data[0], Needed);

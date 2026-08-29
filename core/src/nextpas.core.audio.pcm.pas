@@ -363,13 +363,33 @@ end;
 procedure PcmInterleave(const APlanes: array of TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out ADst: TBytes);
 var
-  LFrame, LCh: Integer;
+  LFrame, LCh, LFrame4: Integer;
   LSrcOffset, LDstOffset: Integer;
 begin
   ADst := nil;
   if (AFrames <= 0) or (AChannels <= 0) or (ABytesPerSample <= 0) then Exit;
   if Length(APlanes) < AChannels then Exit;
   SetLength(ADst, AFrames * AChannels * ABytesPerSample);
+  if ABytesPerSample = 4 then
+  begin
+    LFrame4 := AFrames and not 3;
+    LFrame := 0;
+    while LFrame < LFrame4 do
+    begin
+      for LCh := 0 to AChannels - 1 do
+      begin
+        PSingle(@ADst[((LFrame)*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][LFrame*4])^;
+        PSingle(@ADst[((LFrame+1)*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][(LFrame+1)*4])^;
+        PSingle(@ADst[((LFrame+2)*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][(LFrame+2)*4])^;
+        PSingle(@ADst[((LFrame+3)*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][(LFrame+3)*4])^;
+      end;
+      Inc(LFrame, 4);
+    end;
+    for LFrame := LFrame4 to AFrames - 1 do
+      for LCh := 0 to AChannels - 1 do
+        PSingle(@ADst[(LFrame*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][LFrame*4])^;
+    Exit;
+  end;
   for LFrame := 0 to AFrames - 1 do
     for LCh := 0 to AChannels - 1 do
     begin
@@ -383,7 +403,7 @@ end;
 procedure PcmDeinterleave(const AInterleaved: TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out APlanes: TAudioPlaneArray);
 var
-  LFrame, LCh: Integer;
+  LFrame, LCh, LFrame4: Integer;
   LSrcOffset, LDstOffset: Integer;
 begin
   APlanes := nil;
@@ -391,6 +411,26 @@ begin
   SetLength(APlanes, AChannels);
   for LCh := 0 to AChannels - 1 do
     SetLength(APlanes[LCh], AFrames * ABytesPerSample);
+  if ABytesPerSample = 4 then
+  begin
+    LFrame4 := AFrames and not 3;
+    LFrame := 0;
+    while LFrame < LFrame4 do
+    begin
+      for LCh := 0 to AChannels - 1 do
+      begin
+        PSingle(@APlanes[LCh][LFrame*4])^ := PSingle(@AInterleaved[((LFrame)*AChannels+LCh)*4])^;
+        PSingle(@APlanes[LCh][(LFrame+1)*4])^ := PSingle(@AInterleaved[((LFrame+1)*AChannels+LCh)*4])^;
+        PSingle(@APlanes[LCh][(LFrame+2)*4])^ := PSingle(@AInterleaved[((LFrame+2)*AChannels+LCh)*4])^;
+        PSingle(@APlanes[LCh][(LFrame+3)*4])^ := PSingle(@AInterleaved[((LFrame+3)*AChannels+LCh)*4])^;
+      end;
+      Inc(LFrame, 4);
+    end;
+    for LFrame := LFrame4 to AFrames - 1 do
+      for LCh := 0 to AChannels - 1 do
+        PSingle(@APlanes[LCh][LFrame*4])^ := PSingle(@AInterleaved[(LFrame*AChannels+LCh)*4])^;
+    Exit;
+  end;
   for LFrame := 0 to AFrames - 1 do
     for LCh := 0 to AChannels - 1 do
     begin

@@ -43,9 +43,7 @@ var
   LCh, LFrame: Integer;
   LSrcOff: Integer;
   LF: Single;
-  LS16: SmallInt;
   LS24: Integer;
-  LS32: LongInt;
   LPos: Double;
   LS0Idx: Integer;
   LFrac: Double;
@@ -114,21 +112,14 @@ begin
             sfU8:
               LF := PcmU8ToF32(AInput.Data[LSrcOff]);
             sfS16:
-              begin
-                LS16 := SmallInt(Word(AInput.Data[LSrcOff]) or (Word(AInput.Data[LSrcOff + 1]) shl 8));
-                LF := PcmS16ToF32(LS16);
-              end;
+              LF := PcmS16ToF32(PcmReadS16LE(AInput.Data, LSrcOff));
             sfS24:
               begin
                 LS24 := PcmReadS24LE(AInput.Data, LSrcOff);
                 LF := PcmS24ToF32(LS24);
               end;
             sfS32:
-              begin
-                LS32 := LongInt(DWord(AInput.Data[LSrcOff]) or (DWord(AInput.Data[LSrcOff + 1]) shl 8) or
-                  (DWord(AInput.Data[LSrcOff + 2]) shl 16) or (DWord(AInput.Data[LSrcOff + 3]) shl 24));
-                LF := PcmS32ToF32(LS32);
-              end;
+              LF := PcmS32ToF32(PcmReadS32LE(AInput.Data, LSrcOff));
             sfF32:
               begin
                 Move(AInput.Data[LSrcOff], LF, SizeOf(Single));

@@ -45,6 +45,15 @@ var
   GSineInit: Boolean;
 
 procedure InitSineTable;
+function FastSin(APhase: Double): Single; inline;
+
+implementation
+
+uses
+  nextpas.core.audio.errors,
+  Math;
+
+procedure InitSineTable;
 var I: Integer;
 begin
   if GSineInit then Exit;
@@ -56,10 +65,8 @@ end;
 function FastSin(APhase: Double): Single; inline;
 var Idx: Double; I0, I1: Integer; Frac: Double; V0, V1: Single;
 begin
-  // Phase is radians; map to [0, SIZE) via Phase/(2Pi)*SIZE with wrap
   Idx := APhase * (C_SINE_TABLE_SIZE / (2 * Pi));
   I0 := Trunc(Idx) and C_SINE_TABLE_MASK;
-  // handle negative phase (should not occur, but guard)
   if I0 < 0 then I0 := (I0 and C_SINE_TABLE_MASK);
   Frac := Idx - Trunc(Idx);
   if Frac < 0 then Frac := Frac + 1;
@@ -67,12 +74,6 @@ begin
   V0 := GSineTable[I0]; V1 := GSineTable[I1];
   Result := V0 + (V1 - V0) * Single(Frac);
 end;
-
-implementation
-
-uses
-  nextpas.core.audio.errors,
-  Math;
 
 function MidiPitchToFreq(APitch: Integer): Double; inline;
 begin
