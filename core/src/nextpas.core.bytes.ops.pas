@@ -28,6 +28,10 @@ function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -225,6 +229,48 @@ begin
   LOldLen := Length(ADest);
   SetLength(ADest, LOldLen + Length(ASrc));
   Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+end;
+
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
+var
+  LLen: SizeUInt;
+begin
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 1);
+  ADest[LLen] := AValue;
+end;
+
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
+var
+  LLen: SizeUInt;
+begin
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 2);
+  ADest[LLen] := Byte(AValue shr 8);
+  ADest[LLen + 1] := Byte(AValue);
+end;
+
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
+var
+  LLen: SizeUInt;
+begin
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 3);
+  ADest[LLen] := Byte(AValue shr 16);
+  ADest[LLen + 1] := Byte(AValue shr 8);
+  ADest[LLen + 2] := Byte(AValue);
+end;
+
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
+var
+  LLen: SizeUInt;
+begin
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 4);
+  ADest[LLen] := Byte(AValue shr 24);
+  ADest[LLen + 1] := Byte(AValue shr 16);
+  ADest[LLen + 2] := Byte(AValue shr 8);
+  ADest[LLen + 3] := Byte(AValue);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
