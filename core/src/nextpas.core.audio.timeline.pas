@@ -323,30 +323,45 @@ begin
   begin InterlockedExchangeAdd64(FViolations,1); AFrames:=Length(ABuffer.Data) div FFormat.BlockAlign; if AFrames<=0 then Exit(0); Needed:=AFrames*FFormat.BlockAlign; end;
   FillChar(ABuffer.Data[0], Needed, 0);
   MixPtr:=PSingle(@ABuffer.Data[0]);
+  // two-phase snapshot: count+meta under lock -> alloc outside -> deep copy under lock
   FLock.Enter;
   try
     SnapPos:=FPosition;
     SnapLoop:=FLoop;
     SnapDur:=CalcDuration;
     HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
-    // count qualified
     avail:=0;
     for i:=0 to High(FTracks) do if FTracks[i].Alive then
     begin
       if FTracks[i].Muted then Continue;
       if HasSolo and not FTracks[i].Solo then Continue;
-      Inc(avail);
-    end;
-    SetLength(SnapTracks, avail);
-    avail:=0;
-    for i:=0 to High(FTracks) do if FTracks[i].Alive then
-    begin
-      if FTracks[i].Muted then Continue;
-      if HasSolo and not FTracks[i].Solo then Continue;
-      SnapTracks[avail] := FTracks[i];
       Inc(avail);
     end;
   finally FLock.Leave; end;
+  SetLength(SnapTracks, avail);
+  if avail > 0 then
+  begin
+    FLock.Enter;
+    try
+      // re-validate solo under lock (avoid TOCTOU if track set changed between phases)
+      HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
+      avail:=0;
+      for i:=0 to High(FTracks) do if FTracks[i].Alive then
+      begin
+        if FTracks[i].Muted then Continue;
+        if HasSolo and not FTracks[i].Solo then Continue;
+        if avail < Length(SnapTracks) then
+        begin
+          SnapTracks[avail] := FTracks[i];
+          // deep copy clip array to isolate snapshot from concurrent Add/RemoveClip
+          SnapTracks[avail].Clips := Copy(FTracks[i].Clips, 0, Length(FTracks[i].Clips));
+          Inc(avail);
+        end;
+      end;
+      if avail < Length(SnapTracks) then
+        SetLength(SnapTracks, avail);
+    finally FLock.Leave; end;
+  end;
   // snapshot mixing - lock free
   if SnapLoop and (SnapDur>0) and (SnapPos + UInt64(AFrames) > SnapDur) and (SnapPos < SnapDur) then
   begin

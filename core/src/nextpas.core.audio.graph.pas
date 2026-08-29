@@ -353,23 +353,36 @@ begin
     if AFrames <= 0 then Exit(0);
     Needed := AFrames * FFormat.BlockAlign;
   end;
-  // snapshot under lock with fixed capacity
+  // two-phase snapshot: count under lock -> alloc outside -> copy under lock (zero alloc inside lock)
   FLock.Enter;
   try
     AliveN := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(AliveN);
-    SetLength(NodesSnap, AliveN);
-    FillIdx := 0;
-    for I := 0 to High(FNodes) do if FNodes[I].Alive then
-    begin NodesSnap[FillIdx] := FNodes[I]; Inc(FillIdx); end;
     AliveP := 0;
     for I := 0 to High(FProcessors) do if FProcessors[I].Alive then Inc(AliveP);
-    SetLength(ProcsSnap, AliveP);
-    FillIdx := 0;
-    for I := 0 to High(FProcessors) do if FProcessors[I].Alive then
-    begin ProcsSnap[FillIdx] := FProcessors[I]; Inc(FillIdx); end;
     SnapVol := FVolume;
   finally FLock.Leave; end;
+  SetLength(NodesSnap, AliveN);
+  SetLength(ProcsSnap, AliveP);
+  if (AliveN > 0) or (AliveP > 0) then
+  begin
+    FLock.Enter;
+    try
+      FillIdx := 0;
+      for I := 0 to High(FNodes) do if FNodes[I].Alive then
+      begin
+        if FillIdx < AliveN then
+        begin NodesSnap[FillIdx] := FNodes[I]; Inc(FillIdx); end;
+      end;
+      FillIdx := 0;
+      for I := 0 to High(FProcessors) do if FProcessors[I].Alive then
+      begin
+        if FillIdx < AliveP then
+        begin ProcsSnap[FillIdx] := FProcessors[I]; Inc(FillIdx); end;
+      end;
+      SnapVol := FVolume;
+    finally FLock.Leave; end;
+  end;
 
   if Length(NodesSnap) = 0 then
   begin
