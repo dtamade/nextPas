@@ -54,7 +54,9 @@ begin
     for I := 0 to LongInt(FEntries.Count) - 1 do
     begin
       Entry := FEntries.GetPtr(SizeUInt(I));
-      Entry^.Value := nil;  { 不释放 — 所有权在调用者 }
+      if Entry^.Value <> nil then
+        Entry^.Value.Free;
+      Entry^.Value := nil;
     end;
   end;
   FEntries.Free;
@@ -87,6 +89,8 @@ begin
     if FEntries[SizeUInt(I)].Key = AKey then
     begin
       EntryPtr := FEntries.GetPtr(SizeUInt(I));
+      if (EntryPtr^.Value <> nil) and (EntryPtr^.Value <> AValue) then
+        EntryPtr^.Value.Free;
       EntryPtr^.Value := AValue;
       Exit;
     end;
@@ -108,7 +112,11 @@ begin
   begin
     EntryPtr := FEntries.GetPtr(SizeUInt(I));
     if Pos(APrefix, EntryPtr^.Key) = 1 then
+    begin
+      if EntryPtr^.Value <> nil then
+        EntryPtr^.Value.Free;
       EntryPtr^.Value := nil;
+    end;
   end;
 end;
 

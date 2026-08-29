@@ -546,13 +546,8 @@ begin
     );
     try
       Analyzer.Analyze;
-      WriteLn(StdErr, '[pipe] after Analyze');
       Flush(StdErr);
       FSemanticModel := Analyzer.DetachModel;
-      if FSemanticModel = nil then
-        WriteLn(StdErr, '[pipe] after DetachModel status=nil')
-      else
-        WriteLn(StdErr, '[pipe] after DetachModel status=', FSemanticModel.Status);
       Flush(StdErr);
       if FSemanticModel = nil then
         FSemanticStatus := 'deferred'
@@ -562,10 +557,8 @@ begin
         { Cache for incremental compilation — query DB owns the reference }
         if FSemanticStatus = 'ready' then
         begin
-          WriteLn(StdErr, '[pipe] before QueryDB.Store');
           Flush(StdErr);
           FQueryDB.Store(CacheKey, FSemanticModel);
-          WriteLn(StdErr, '[pipe] after QueryDB.Store before IncrementalCache.Save');
           Flush(StdErr);
           { Save to persistent disk cache }
           FIncrementalCache.Save(
@@ -573,31 +566,22 @@ begin
             FSourceDatabase.RootSourceText,
             [],
             FSemanticModel);
-          WriteLn(StdErr, '[pipe] after IncrementalCache.Save');
           Flush(StdErr);
         end;
       end;
     finally
-      WriteLn(StdErr, '[pipe] before Analyzer.Free');
       Flush(StdErr);
       Analyzer.Free;
-      WriteLn(StdErr, '[pipe] after Analyzer.Free before ResetScratch');
       Flush(StdErr);
       ResetScratchAllocator;
-      WriteLn(StdErr, '[pipe] after ResetScratch');
       Flush(StdErr);
     end;
-    WriteLn(StdErr, '[pipe] after Analyzer try model=',
-      PtrUInt(Pointer(FSemanticModel)), ' status=', FSemanticStatus);
     Flush(StdErr);
   finally
-    WriteLn(StdErr, '[pipe] before UnitEnd');
     Flush(StdErr);
     FMemScope.UnitEnd;
-    WriteLn(StdErr, '[pipe] after UnitEnd');
     Flush(StdErr);
   end;
-  WriteLn(StdErr, '[pipe] AnalyzeSemantics return');
   Flush(StdErr);
 end;
 
@@ -611,7 +595,6 @@ var
   LlvmOutput: string;
   PhaseScratch: Pointer;
 begin
-  WriteLn(StdErr, '[pipe] LowerToMir begin');
   Flush(StdErr);
   FMemScope.UnitBegin;
   try
@@ -682,7 +665,6 @@ begin
   finally
     FMemScope.UnitEnd;
   end;
-  WriteLn(StdErr, '[pipe] LowerToMir end status=', FMirStatus);
   Flush(StdErr);
 end;
 
@@ -690,13 +672,11 @@ procedure TCompilationSession.PlanBackend;
 var
   Planner: TBackendPlanner;
 begin
-  WriteLn(StdErr, '[pipe] PlanBackend begin');
   Flush(StdErr);
   ResetBackendState;
   if (FSemanticModel = nil) or (FMirStatus <> 'ready') then
   begin
     FBackendStatus := 'failure';
-    WriteLn(StdErr, '[pipe] PlanBackend skip failure');
     Flush(StdErr);
     Exit;
   end;
@@ -712,10 +692,8 @@ begin
     FOptions.OptLevel
   );
   try
-    WriteLn(StdErr, '[pipe] PlanBackend Planner.Plan...');
     Flush(StdErr);
     Planner.Plan;
-    WriteLn(StdErr, '[pipe] PlanBackend Planner.Plan done');
     Flush(StdErr);
     FBackendPlan := Planner.DetachPlan;
     if FBackendPlan = nil then
@@ -728,7 +706,6 @@ begin
 
   if FBackendStatus = 'ready' then
     PropagateSemanticLibraryRequestsToBackendPlan;
-  WriteLn(StdErr, '[pipe] PlanBackend end status=', FBackendStatus);
   Flush(StdErr);
 end;
 

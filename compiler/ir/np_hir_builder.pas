@@ -243,6 +243,12 @@ type
       const ASourceTypeId, ATargetTypeId: THIRTypeId): THIRValueId;
     function NormalizeInt64RuntimeValue(const AValueId: THIRValueId;
       const ATypeId: THIRTypeId): THIRValueId;
+    procedure EmitHirDiagnostic(const ACode, AMessage: string);
+    function TryNormalizeScalarValueToType(const AValueId: THIRValueId;
+      const ASourceTypeId, ATargetTypeId: THIRTypeId;
+      out AResult: THIRValueId): Boolean;
+    function GetDynArrayElemSizeValue(const AArrayName: string;
+      out ATypeId: THIRTypeId): THIRValueId;
     procedure ProcessIntfAdjust(const ANode: TTypedHirNode);
     procedure ProcessIntfAddRef(const ANode: TTypedHirNode);
     procedure ProcessIntfRelease(const ANode: TTypedHirNode);
