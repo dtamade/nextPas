@@ -55,6 +55,7 @@ type
     procedure BuildSortedIdxIgnoreCase;
     procedure BuildSortedIdxRevIgnoreCase;
     procedure EnsureIgnoreCaseBuilt;
+    function LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer; inline;
     function LowerBoundPrefix(const APrefix: string): Integer;
     function LowerBoundSuffix(const ASuffix: string): Integer;
     function LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
@@ -695,26 +696,6 @@ begin
   BuildSorted(FSortedIdxRevIgnoreCase, True, True);
 end;
 
-function TSevenZReaderImpl.LowerBoundPrefix(const APrefix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer;
-begin
-  LLo := 0; LHi := Length(FSortedIdx);
-  while LLo < LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := CompareNames(FEntries[FSortedIdx[LMid]].Name, APrefix);
-    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
-  end;
-  Result := LLo;
-end;
-
-function TSevenZReaderImpl.ReverseStr(const S: string): string;
-var LI: Integer;
-begin
-  SetLength(Result, Length(S));
-  for LI:=1 to Length(S) do Result[LI] := S[Length(S)-LI+1];
-end;
-
 function CompareReversed(const A, B: string): Integer; inline;
 var LI, LJ: Integer;
 begin
@@ -728,6 +709,13 @@ begin
   if LI = 0 then
     if LJ = 0 then Exit(0) else Exit(-1)
   else Exit(1);
+end;
+
+function TSevenZReaderImpl.ReverseStr(const S: string): string;
+var LI: Integer;
+begin
+  SetLength(Result, Length(S));
+  for LI:=1 to Length(S) do Result[LI] := S[Length(S)-LI+1];
 end;
 
 procedure TSevenZReaderImpl.EnsureIgnoreCaseBuilt;
@@ -749,47 +737,51 @@ begin
   FIgnoreCaseBuilt := True;
 end;
 
+function TSevenZReaderImpl.LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer; inline;
+var LLo, LHi, LMid, LCmp: Integer;
+begin
+  LLo := 0; LHi := Length(ASorted);
+  while LLo < LHi do
+  begin
+    LMid := (LLo + LHi) div 2;
+    if AUseLower then
+    begin
+      if ARev then LCmp := CompareReversed(FLowerNames[ASorted[LMid]], AKey)
+      else LCmp := CompareNames(FLowerNames[ASorted[LMid]], AKey);
+    end else
+    begin
+      if ARev then LCmp := CompareReversed(FEntries[ASorted[LMid]].Name, AKey)
+      else LCmp := CompareNames(FEntries[ASorted[LMid]].Name, AKey);
+    end;
+    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
+  end;
+  Result := LLo;
+end;
+
+function TSevenZReaderImpl.LowerBoundPrefix(const APrefix: string): Integer;
+begin
+  Result := LowerBoundGeneric(FSortedIdx, APrefix, False, False);
+end;
+
 function TSevenZReaderImpl.LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer; LLower: string;
+var LLower: string;
 begin
   EnsureIgnoreCaseBuilt;
   if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
-  LLo := 0; LHi := Length(FSortedIdxIgnoreCase);
-  while LLo < LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := CompareNames(FLowerNames[FSortedIdxIgnoreCase[LMid]], LLower);
-    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
-  end;
-  Result := LLo;
+  Result := LowerBoundGeneric(FSortedIdxIgnoreCase, LLower, True, False);
 end;
 
 function TSevenZReaderImpl.LowerBoundSuffixIgnoreCase(const ASuffix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer; LLower: string;
+var LLower: string;
 begin
   EnsureIgnoreCaseBuilt;
   if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
-  LLo := 0; LHi := Length(FSortedIdxRevIgnoreCase);
-  while LLo < LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := CompareReversed(FLowerNames[FSortedIdxRevIgnoreCase[LMid]], LLower);
-    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
-  end;
-  Result := LLo;
+  Result := LowerBoundGeneric(FSortedIdxRevIgnoreCase, LLower, True, True);
 end;
 
 function TSevenZReaderImpl.LowerBoundSuffix(const ASuffix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer;
 begin
-  LLo := 0; LHi := Length(FSortedIdxRev);
-  while LLo < LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := CompareReversed(FEntries[FSortedIdxRev[LMid]].Name, ASuffix);
-    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
-  end;
-  Result := LLo;
+  Result := LowerBoundGeneric(FSortedIdxRev, ASuffix, False, True);
 end;
 
 function TSevenZReaderImpl.DecodeFolder(AFolderIdx: Integer): TBytes;
