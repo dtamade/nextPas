@@ -111,6 +111,7 @@ function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioCha
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioFormatCreate(ASampleRate, AChannels: Integer;
   ASampleFormat: TAudioSampleFormat): TAudioFormat; inline;
+procedure AudioPanLawGains(APan: Single; out AL, AR: Single); inline;
 
 { ---- Validation helpers (DRY, 复用度) ---- }
 function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean = False): Boolean; inline;
@@ -127,6 +128,8 @@ function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
   AFrames: Integer): Integer; inline;
 
 implementation
+
+uses Math;
 
 {$PUSH}
 {$WARNINGS OFF}
@@ -358,6 +361,15 @@ begin
   LBytes:=Int64(AFrames)*Int64(AFormat.BlockAlign);
   if (LBytes>High(Integer)) or (Length(ABuffer.Data)<LBytes) then Exit(0);
   FillChar(ABuffer.Data[0],Integer(LBytes),0); ABuffer.Format:=AFormat; ABuffer.FrameCount:=AFrames; Result:=AFrames;
+end;
+
+procedure AudioPanLawGains(APan: Single; out AL, AR: Single);
+var A: Double;
+begin
+  if APan < -1 then APan := -1 else if APan > 1 then APan := 1;
+  A := (APan + 1) * Pi / 4;
+  AL := Single(Cos(A) * CAudioPanLawUnity);
+  AR := Single(Sin(A) * CAudioPanLawUnity);
 end;
 
 {$POP}

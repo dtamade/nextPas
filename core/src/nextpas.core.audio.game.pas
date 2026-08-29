@@ -130,10 +130,8 @@ begin
   OutPtr := PSingle(@ABuffer.Data[0]);
   SrcPtr := PSingle(@FData[0]);
   if FChannels = 2 then
-  begin
-    Lgain := Cos((FPan+1)*Pi/4);
-    Rgain := Sin((FPan+1)*Pi/4);
-  end else begin Lgain:=1; Rgain:=1; end;
+    AudioPanLawGains(FPan, Lgain, Rgain)
+  else begin Lgain:=1; Rgain:=1; end;
   for I := 0 to AFrames - 1 do
   begin
     if FPos >= FFrames then
@@ -156,8 +154,8 @@ begin
       V := V * FGain;
       if FChannels = 2 then
       begin
-        if Ch = 0 then V := V * Lgain * CAudioPanLawUnity
-        else V := V * Rgain * CAudioPanLawUnity;
+        if Ch = 0 then V := V * Lgain
+        else V := V * Rgain;
       end;
       OutPtr[I*FChannels + Ch] := V;
     end;

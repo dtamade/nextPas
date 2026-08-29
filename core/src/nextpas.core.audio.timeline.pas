@@ -217,7 +217,7 @@ begin
       if copyFrames<=0 then Continue;
       ClipGain:=Clip.Gain; Pan:=(TrackPan+ClipPan)/2;
       Gain:=TrackGain*ClipGain;
-      if FFormat.Channels=2 then begin Lgain:=Cos((Pan+1)*Pi/4)*CAudioPanLawUnity; Rgain:=Sin((Pan+1)*Pi/4)*CAudioPanLawUnity; end else begin Lgain:=1; Rgain:=1; end;
+      if FFormat.Channels=2 then AudioPanLawGains(Pan, Lgain, Rgain) else begin Lgain:=1; Rgain:=1; end;
       LG:=Gain*Lgain; RG:=Gain*Rgain;
       SrcPtr:=PSingle(@Clip.Buffer.Data[0]);
       if FFormat.Channels=2 then

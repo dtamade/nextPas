@@ -160,7 +160,7 @@ make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # ns/op + M
 - **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，后续吸收进 `codec.registry`，保持 `Probe≤4KB` 与可插拔）
 - **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`Game` 复用 `Graph` 快照路径
 - **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配（`device.null` 预分配 1M、`bus/graph` 双缓冲）/溢出守卫 `AudioBytesForFrames>High(Integer)` 全链路/异常静音 `AudioSilentFill`
-- **复用与性能**：`pcm.simd` 块转换 4-wide 展开（`PcmConvertBlockS16/S32↔F32`），`SimdAdd/Mul/Peak/SumSquares/Clamp` 硬件化复用于 `mix/timeline/graph/bus/playlist`，`spatial` 4-wide 立体声 `LL/LR` 展开，`dsp.filters` Biquad 热循环缓存化，`resample` 线性增量 `PSingle` 直访 + `sinc` Kaiser 窗预计算，`bank` 单次 `SetLength` 打包 + `LE32` 复用，`sequencer` 音符 `Inc/Vel` 零分配缓存，`CAudioPanLawUnity/CAudioSeqVelScale` 单点常量（`timeline/game/spatial/sequencer` 复用），`base` 校验/填充单真相
+- **复用与性能**：`pcm.simd` 块转换 4-wide 展开（`PcmConvertBlockS16/S32↔F32`），`SimdAdd/Mul/Peak/SumSquares/Clamp` 硬件化复用于 `mix/timeline/graph/bus/playlist`，`spatial` 4-wide 立体声 `LL/LR` 展开，`dsp.filters` Biquad 热循环缓存化，`resample` 线性增量 `PSingle` 直访 + `sinc` Kaiser 窗预计算，`bank` 单次 `SetLength` 打包 + `LE32` 复用，`sequencer` 音符 `Inc/Vel` 零分配缓存，`AudioPanLawGains` 单点声像律（`CAudioPanLawUnity`）复用于 `timeline/game/spatial`，`base` 校验/填充单真相
 
 ## 参见
 

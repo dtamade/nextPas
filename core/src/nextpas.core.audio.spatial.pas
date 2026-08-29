@@ -56,7 +56,7 @@ end;
 
 function SpatialApply(const ABuffer: TAudioBuffer; const AParams: TSpatialParams): TAudioBuffer;
 var
-  LGain, LPan, LAngle, LL, LR: Single;
+  LGain, LPan, LL, LR: Single;
   I, N: Integer;
   PSrc, PDst: PSingle;
 begin
@@ -69,9 +69,8 @@ begin
   end;
   LGain := SpatialGainFromDistance(AParams.Distance, AParams.MinDistance, AParams.MaxDistance, AParams.Rolloff);
   LPan := SpatialPanFromPosition(AParams.Position);
-  LAngle := (LPan + 1) * Pi / 4;
-  LL := Cos(LAngle) * CAudioPanLawUnity * LGain;
-  LR := Sin(LAngle) * CAudioPanLawUnity * LGain;
+  AudioPanLawGains(LPan, LL, LR);
+  LL := LL * LGain; LR := LR * LGain;
   Result.Format := ABuffer.Format;
   Result.FrameCount := ABuffer.FrameCount;
   SetLength(Result.Data, Length(ABuffer.Data));
