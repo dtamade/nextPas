@@ -185,6 +185,7 @@ var
   SnapPos: UInt64;
   SnapLoop: Boolean;
   SnapDur: UInt64;
+  N4: Integer;
 begin
   if AFrames<=0 then Exit(0);
   if (AFrames>0) and (AudioBytesForFrames(FFormat, AFrames)>High(Integer)) then Exit(0);
@@ -222,10 +223,24 @@ begin
       SrcPtr:=PSingle(@Clip.Buffer.Data[0]);
       if FFormat.Channels=2 then
       begin
-        for ch:=0 to copyFrames-1 do
+        N4:=copyFrames and not 3; ch:=0;
+        while ch < N4 do
+        begin
+          MixPtr[(dstOff+ch)*2]     := MixPtr[(dstOff+ch)*2]     + SrcPtr[(srcOff+ch)*2]*LG;
+          MixPtr[(dstOff+ch)*2+1]   := MixPtr[(dstOff+ch)*2+1]   + SrcPtr[(srcOff+ch)*2+1]*RG;
+          MixPtr[(dstOff+ch+1)*2]   := MixPtr[(dstOff+ch+1)*2]   + SrcPtr[(srcOff+ch+1)*2]*LG;
+          MixPtr[(dstOff+ch+1)*2+1] := MixPtr[(dstOff+ch+1)*2+1] + SrcPtr[(srcOff+ch+1)*2+1]*RG;
+          MixPtr[(dstOff+ch+2)*2]   := MixPtr[(dstOff+ch+2)*2]   + SrcPtr[(srcOff+ch+2)*2]*LG;
+          MixPtr[(dstOff+ch+2)*2+1] := MixPtr[(dstOff+ch+2)*2+1] + SrcPtr[(srcOff+ch+2)*2+1]*RG;
+          MixPtr[(dstOff+ch+3)*2]   := MixPtr[(dstOff+ch+3)*2]   + SrcPtr[(srcOff+ch+3)*2]*LG;
+          MixPtr[(dstOff+ch+3)*2+1] := MixPtr[(dstOff+ch+3)*2+1] + SrcPtr[(srcOff+ch+3)*2+1]*RG;
+          Inc(ch,4);
+        end;
+        while ch < copyFrames do
         begin
           MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*LG;
           MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*RG;
+          Inc(ch);
         end;
       end else if FFormat.Channels=1 then
       begin

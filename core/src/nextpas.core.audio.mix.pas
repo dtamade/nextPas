@@ -21,7 +21,7 @@ function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
 
 implementation
 
-uses Math, nextpas.core.audio.simd;
+uses nextpas.core.audio.simd;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);
 var LNew: TBytes;
@@ -109,11 +109,13 @@ begin
 end;
 
 function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
-var LPan, LAngle: Single;
+var LPan: Single; L, R: Single;
 begin
   LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1;
-  if Abs(ALawDB + 6.0) < 0.001 then begin Result.X := (1 - LPan) * 0.5; Result.Y := (1 + LPan) * 0.5; end
-  else begin LAngle := (LPan + 1) * Pi / 4.0; Result.X := Cos(LAngle); Result.Y := Sin(LAngle); end;
+  if Abs(ALawDB + 6.0) < 0.001 then begin Result.X := (1 - LPan) * 0.5; Result.Y := (1 + LPan) * 0.5; Exit; end;
+  AudioPanLawGains(LPan, L, R);
+  Result.X := L / CAudioPanLawUnity;
+  Result.Y := R / CAudioPanLawUnity;
 end;
 
 end.
