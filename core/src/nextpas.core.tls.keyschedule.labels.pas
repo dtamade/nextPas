@@ -50,7 +50,7 @@ function BuildTLS13HKDFLabelBytes(const ALabel: TBytes; const AContext: TBytes; 
 
 implementation
 
-uses nextpas.core.crypto.hkdf, nextpas.core.hash.base, nextpas.core.tls.tls13.wire;
+uses nextpas.core.bytes.ops, nextpas.core.crypto.hkdf, nextpas.core.hash.base, nextpas.core.tls.tls13.wire;
 
 function BuildTLS13HKDFLabel(const ALabel: string; const AContext: TBytes; ALength: Integer): TBytes;
 var
@@ -93,10 +93,10 @@ begin
   AppendUInt16(Result, Word(ALength));
   AppendByte(Result, Byte(Length(LFullLabel)));
   if Length(LFullLabel) > 0 then
-    AppendBytes(Result, LFullLabel);
+    BytesAppend(Result, LFullLabel);
   AppendByte(Result, Byte(LContextLen));
   if LContextLen > 0 then
-    AppendBytes(Result, AContext);
+    BytesAppend(Result, AContext);
 end;
 
 function TLS13_HKDF_Expand_Label_SHA256(

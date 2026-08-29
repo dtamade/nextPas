@@ -15,6 +15,7 @@ uses
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.tls.errors,
+  nextpas.core.bytes.ops,
   nextpas.core.text.format;
 
 const
@@ -97,6 +98,7 @@ type
   end;
 
 procedure AppendByte(var ADest: TBytes; AValue: Byte);
+procedure AppendBytes(var ADest: TBytes; const AData: TBytes); inline;
 procedure AppendUInt16(var ADest: TBytes; AValue: Word);
 procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal);
 
@@ -118,6 +120,11 @@ begin
   LLen := Length(ADest);
   SetLength(ADest, LLen + 1);
   ADest[LLen] := AValue;
+end;
+
+procedure AppendBytes(var ADest: TBytes; const AData: TBytes); inline;
+begin
+  BytesAppend(ADest, AData);
 end;
 
 procedure AppendUInt16(var ADest: TBytes; AValue: Word);

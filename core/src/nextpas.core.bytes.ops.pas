@@ -27,6 +27,7 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -214,6 +215,16 @@ end;
 function BytesConcat(const A, B: TBytes): TBytes;
 begin
   Result := SpanConcat(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
+end;
+
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
+var
+  LOldLen: SizeUInt;
+begin
+  if Length(ASrc) = 0 then Exit;
+  LOldLen := Length(ADest);
+  SetLength(ADest, LOldLen + Length(ASrc));
+  Move(ASrc[0], ADest[LOldLen], Length(ASrc));
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
