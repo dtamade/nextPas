@@ -748,16 +748,18 @@ S.Token.Cancel;                                 // 协同停泵；Destroy 同步
   NEXTPAS_REDIS_TEST_CONN 门控）。吞吐基准段待 live redis 环境可用后补采
   入册（诚实缺席登记）。
 
-### 2.20 SQL 词法扫描共享引擎（V3-C6，nextpas.core.db.sqlscan）
+### 2.20 SQL 词法扫描共享引擎（V3-C6，nextpas.core.text.sqlscan → nextpas.core.db.sqlscan thin）
 
 家族内五份复制的"字符串/标识符/注释状态机"（pg/mysql/odbc 三份占位符
-翻译 + pg.conn 参数计数 + bytea 装饰）收敛为单一纯函数单元；四消费方
+翻译 + pg.conn 参数计数 + bytea 装饰）收敛为 L1 单一纯函数单元 `nextpas.core.text.sqlscan`
+（`nextpas.core.db.sqlscan` 为 thin re-export，类型/常量/函数 inline 转发零逻辑）；四消费方
 薄委托、公开签名零变化。**换牙零漂移由黄金语料实证**：原实现 30 案例
 输出落盘 → 新引擎重放逐字节全等（含混合编号槽位 [2,1,3,2]、超 Int32
 编号回绕、未终止字面量等酷刑样本）。
 
+- **L1 零分配真源**：`nextpas.core.text.sqlscan` 单遍状态机，`text.builder` IStringBuilder 追加，`RenderDollar/MaxIndex` 不建槽数组（热路径零额外分配，L1 仅依赖 L0）。
 - **方言词法集记录化**：双引号/反引号/方括号标识符与 `#` 行注释四布尔
-  （DBSQLSCAN_PG/MYSQL/ODBC 常量）；词素互斥即方言隔离——pg 方言下
+  （`SQLSCAN_PG/MYSQL/ODBC` 真源，`DBSQLSCAN_*` 为 db 侧别名）；词素互斥即方言隔离——pg 方言下
   反引号是代码字符、mysql 下双引号是代码字符，与各后端历史行为一致。
 - **四公开面共享单遍引擎**：`SqlScanTranslateQuestion`（'?' 保形改写 +
   物理序→逻辑号槽位计划）/`SqlScanRenderDollar`（?→$N，裸 ? 走顺序
