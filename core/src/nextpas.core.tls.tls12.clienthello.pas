@@ -29,6 +29,16 @@ uses
   nextpas.core.errors,
   nextpas.core.tls.tls12.wire;
 
+procedure AppendBytes(var ADest: TBytes; const ASrc: TBytes);
+var
+  LOldLen: Integer;
+begin
+  LOldLen := Length(ADest);
+  SetLength(ADest, LOldLen + Length(ASrc));
+  if Length(ASrc) > 0 then
+    Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+end;
+
 procedure AppendByte(var ADest: TBytes; AValue: Byte);
 var
   LOldLen: Integer;
@@ -61,7 +71,7 @@ begin
   AppendUInt16(Result, Word(LListLen));
   AppendByte(Result, 0);
   AppendUInt16(Result, Word(LNameLen));
-  BytesAppend(Result, LNameBytes);
+  AppendBytes(Result, LNameBytes);
 end;
 
 function BuildSupportedGroupsExtension: TBytes;
@@ -107,7 +117,7 @@ begin
   AppendUInt16(Result, TLS12_EXT_RENEGOTIATION_INFO);
   AppendUInt16(Result, Word(Length(ARenegotiatedConnection) + 1));
   AppendByte(Result, Byte(Length(ARenegotiatedConnection)));
-  BytesAppend(Result, ARenegotiatedConnection);
+  AppendBytes(Result, ARenegotiatedConnection);
 end;
 
 function BuildALPNExtension(const AProtocols: array of string): TBytes;
@@ -124,13 +134,13 @@ begin
   begin
     LProtoBytes := StringToBytes(AProtocols[I]);
     AppendByte(LProtoList, Byte(Length(LProtoBytes)));
-    BytesAppend(LProtoList, LProtoBytes);
+    AppendBytes(LProtoList, LProtoBytes);
   end;
 
   AppendUInt16(Result, TLS12_EXT_ALPN);
   AppendUInt16(Result, Word(Length(LProtoList) + 2));
   AppendUInt16(Result, Word(Length(LProtoList)));
-  BytesAppend(Result, LProtoList);
+  AppendBytes(Result, LProtoList);
 end;
 
 function BuildTLS12ClientHello(const AOptions: TTLS12ClientHelloOptions; const AClientRandom: TBytes): TBytes;
@@ -146,13 +156,13 @@ begin
 
   if Length(AClientRandom) <> 32 then
     raise ESSLInvalidArgument.Create('ClientRandom must be 32 bytes');
-  BytesAppend(LBody, AClientRandom);
+  AppendBytes(LBody, AClientRandom);
 
   // Session ID
   if Length(AOptions.SessionID) > 0 then
   begin
     AppendByte(LBody, Byte(Length(AOptions.SessionID)));
-    BytesAppend(LBody, AOptions.SessionID);
+    AppendBytes(LBody, AOptions.SessionID);
   end
   else
     AppendByte(LBody, 0);
@@ -173,33 +183,33 @@ begin
     AppendUInt16(LCipherSuites, TLS12_CIPHER_ECDHE_RSA_WITH_AES_256_CBC_SHA384);
   end;
   AppendUInt16(LBody, Word(Length(LCipherSuites)));
-  BytesAppend(LBody, LCipherSuites);
+  AppendBytes(LBody, LCipherSuites);
 
   AppendByte(LBody, 1);
   AppendByte(LBody, 0);
 
   SetLength(LExtensions, 0);
-  BytesAppend(LExtensions, BuildSNIExtension(AOptions.ServerName));
-  BytesAppend(LExtensions, BuildSupportedGroupsExtension);
-  BytesAppend(LExtensions, BuildECPointFormatsExtension);
-  BytesAppend(LExtensions, BuildSignatureAlgorithmsExtension);
-  BytesAppend(LExtensions, BuildRenegotiationInfoExtension(AOptions.RenegotiatedConnection));
+  AppendBytes(LExtensions, BuildSNIExtension(AOptions.ServerName));
+  AppendBytes(LExtensions, BuildSupportedGroupsExtension);
+  AppendBytes(LExtensions, BuildECPointFormatsExtension);
+  AppendBytes(LExtensions, BuildSignatureAlgorithmsExtension);
+  AppendBytes(LExtensions, BuildRenegotiationInfoExtension(AOptions.RenegotiatedConnection));
   if AOptions.SupportEMS then
-    BytesAppend(LExtensions, BuildEMSExtension);
+    AppendBytes(LExtensions, BuildEMSExtension);
   if Length(AOptions.ALPNProtocols) > 0 then
-    BytesAppend(LExtensions, BuildALPNExtension(AOptions.ALPNProtocols));
+    AppendBytes(LExtensions, BuildALPNExtension(AOptions.ALPNProtocols));
 
   // session_ticket extension: empty = request ticket, non-empty = resume with ticket
   AppendUInt16(LExtensions, TLS12_EXT_SESSION_TICKET);
   AppendUInt16(LExtensions, Word(Length(AOptions.SessionTicket)));
   if Length(AOptions.SessionTicket) > 0 then
-    BytesAppend(LExtensions, AOptions.SessionTicket);
+    AppendBytes(LExtensions, AOptions.SessionTicket);
 
   AppendUInt16(LBody, Word(Length(LExtensions)));
-  BytesAppend(LBody, LExtensions);
+  AppendBytes(LBody, LExtensions);
 
   Result := TLS12BuildHandshakeHeader(TLS12_HANDSHAKE_CLIENT_HELLO, Length(LBody));
-  BytesAppend(Result, LBody);
+  AppendBytes(Result, LBody);
 end;
 
 end.

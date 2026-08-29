@@ -31,7 +31,6 @@ function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
 
 function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
@@ -225,16 +224,6 @@ end;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean;
 begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
-end;
-
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
-var
-  LOldLen: SizeUInt;
-begin
-  if Length(ASrc) = 0 then Exit;
-  LOldLen := Length(ADest);
-  SetLength(ADest, LOldLen + Length(ASrc));
-  Move(ASrc[0], ADest[LOldLen], Length(ASrc));
 end;
 
 function BytesToString(const ABytes: TBytes): string; inline;
