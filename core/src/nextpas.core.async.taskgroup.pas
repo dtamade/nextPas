@@ -195,6 +195,7 @@ begin
   FActiveCount := 0;
   FCompletedCount := 0;
   FTotalCount := 0;
+  FGeneration := 0;
   FToken := AToken;
   platform_mutex_init(FLock, PLATFORM_MUTEX_NORMAL);
   if FToken <> nil then
@@ -208,12 +209,17 @@ begin
   inherited Destroy;
 end;
 
-procedure TAsyncTaskGroup.TaskDone;
+procedure TAsyncTaskGroup.TaskDone(AGeneration: UInt32);
 begin
   platform_mutex_lock(FLock);
-  Dec(FActiveCount);
-  Inc(FCompletedCount);
-  platform_mutex_unlock(FLock);
+  try
+    if AGeneration <> FGeneration then
+      Exit;
+    Dec(FActiveCount);
+    Inc(FCompletedCount);
+  finally
+    platform_mutex_unlock(FLock);
+  end;
   CheckCompletion;
 end;
 
@@ -248,6 +254,7 @@ end;
 procedure TAsyncTaskGroup.RunTask(ACallback: TAsyncCallback; AContext: Pointer);
 var
   LCtx: PTaskWrapCtx;
+  LGene: UInt32;
 begin
   platform_mutex_lock(FLock);
   try
@@ -256,6 +263,7 @@ begin
     FState := agsRunning;
     Inc(FActiveCount);
     Inc(FTotalCount);
+    LGene := FGeneration;
   finally
     platform_mutex_unlock(FLock);
   end;
@@ -266,6 +274,7 @@ begin
   LCtx^.UserContext := AContext;
   LCtx^.Group := Pointer(Self);
   LCtx^.Done := 0;
+  LCtx^.Generation := LGene;
   FLoop.PostEx(@WrappedTaskCallback, LCtx, @DiscardTaskWrap);
 end;
 
