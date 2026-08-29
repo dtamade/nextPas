@@ -35,6 +35,39 @@ type
 function CreateAudioSequencer(const AFormat: TAudioFormat; ABpm: Double): IAudioSequencer;
 function MidiPitchToFreq(APitch: Integer): Double; inline;
 
+const
+  C_SINE_TABLE_BITS = 11;
+  C_SINE_TABLE_SIZE = 1 shl C_SINE_TABLE_BITS; // 2048
+  C_SINE_TABLE_MASK = C_SINE_TABLE_SIZE - 1;
+
+var
+  GSineTable: array[0..2047] of Single;
+  GSineInit: Boolean;
+
+procedure InitSineTable;
+var I: Integer;
+begin
+  if GSineInit then Exit;
+  for I := 0 to C_SINE_TABLE_SIZE - 1 do
+    GSineTable[I] := Sin(2 * Pi * I / C_SINE_TABLE_SIZE);
+  GSineInit := True;
+end;
+
+function FastSin(APhase: Double): Single; inline;
+var Idx: Double; I0, I1: Integer; Frac: Double; V0, V1: Single;
+begin
+  // Phase is radians; map to [0, SIZE) via Phase/(2Pi)*SIZE with wrap
+  Idx := APhase * (C_SINE_TABLE_SIZE / (2 * Pi));
+  I0 := Trunc(Idx) and C_SINE_TABLE_MASK;
+  // handle negative phase (should not occur, but guard)
+  if I0 < 0 then I0 := (I0 and C_SINE_TABLE_MASK);
+  Frac := Idx - Trunc(Idx);
+  if Frac < 0 then Frac := Frac + 1;
+  I1 := (I0 + 1) and C_SINE_TABLE_MASK;
+  V0 := GSineTable[I0]; V1 := GSineTable[I1];
+  Result := V0 + (V1 - V0) * Single(Frac);
+end;
+
 implementation
 
 uses
@@ -84,6 +117,7 @@ begin
   FState := seqStopped;
   FPos := 0;
   InitCriticalSection(FLock);
+  InitSineTable;
 end;
 
 destructor TAudioSequencer.Destroy;
@@ -170,7 +204,7 @@ begin
          (LPos + UInt64(I) < FNotes[J].StartFrame + FNotes[J].DurationFrames) then
       begin
         LPhase := FNoteInc[J] * (LPos + UInt64(I));
-        LGain := LGain + Single(Sin(LPhase) * FNoteVel[J]);
+        LGain := LGain + FastSin(LPhase) * FNoteVel[J];
       end;
     end;
     if LGain > 1 then LGain := 1 else if LGain < -1 then LGain := -1;
