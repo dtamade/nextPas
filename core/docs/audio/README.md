@@ -11,7 +11,7 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 |---|---|---|---|
 | **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer` + `AudioBytesForFrames/AudioIsValidBuffer/AudioValidateBuffer` 校验 DRY + `AudioSilentFill/AudioFillMemoryRealtime` 实时真值 | L0 only |
 | **intf** | `audio.intf` | 共享面 `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | base |
-| **simd** | `audio.simd` | `SimdAdd/Mul/Peak/SumSquares/ClampF32` 4-wide（-O2 向量化 SSE2），`AudioSimdCaps` | base |
+| **simd** | `audio.simd` | `SimdAdd/Mul/Peak/SumSquares/ClampF32` 全 4-wide 真 SSE2（x86_64 `ASMMODE INTEL` 硬件、`cpuid` 诚实、`aarch64 NEON`），`AudioSimdCaps` | base |
 | **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔（已预留 FLAC/MP3 由 `music888` 吸收） | base+intf |
 | **pcm** | `audio.pcm` | 纯函数 `U8/S16/S24/S32↔F32`、`Clamp`、`Interleave/Deinterleave`，`TBytes` 货币，`TPDF` 抖动 | base |
 | **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
@@ -152,14 +152,14 @@ make hygiene && git diff --check
 make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # ns/op + MB/s
 ```
 
-`bench_pcm_wav / bench_mix / bench_graph / bench_timeline` 均基于 `IBenchContext`，覆盖编解码与混音 `FillRealtime` 热路径（`-O2`，HEAPTRC 关），并复用 `SimdAdd/Clamp` 4-wide 实现。
+`bench_pcm_wav / bench_mix / bench_graph / bench_timeline` 均基于 `IBenchContext`，覆盖编解码与混音 `FillRealtime` 热路径（`-O2`，HEAPTRC 关），已升级为 **真 SSE2 硬件路径**（`SimdAdd/Mul/Peak/SumSquares/Clamp` 全 4-wide，x86_64 `ASMMODE INTEL` / `movups/mulps/addps/maxps/minps`，`AudioSimdCaps` 经 `cpuid leaf1/7` 诚实探测，`aarch64 NEON True`），标量尾循环兜底，bench 验证与 gate 同源。
 
 ## 演进与复用
 
 - **已完成**：PR1 base → PR2 wav → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 game → PR9 timeline
 - **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，后续吸收进 `codec.registry`，保持 `Probe≤4KB` 与可插拔）
 - **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`Game` 复用 `Graph` 快照路径
-- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配与异常静音
+- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配/溢出守卫 `AudioBytesForFrames>High(Integer)`/异常静音（`playlist/sequencer/game/device` 已扩散）
 
 ## 参见
 

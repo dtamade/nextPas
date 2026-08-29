@@ -204,6 +204,7 @@ begin
   finally
     FLock.Leave;
   end;
+  if (AFrames>0) and (AudioBytesForFrames(FFormat, AFrames)>High(Integer)) then Exit(0);
   LNeeded := AFrames * FFormat.BlockAlign;
   if Length(FScratch) <> LNeeded then
     SetLength(FScratch, LNeeded);

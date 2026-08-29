@@ -114,6 +114,7 @@ var
   Lgain, Rgain: Single;
   Needed: Integer;
 begin
+  if (AFrames>0) and (AudioBytesForFrames(FFormat, AFrames)>High(Integer)) then Exit(0);
   Needed := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < Needed then
   begin
