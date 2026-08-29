@@ -75,15 +75,26 @@ begin
   Result.Format := ABuffer.Format;
   Result.FrameCount := ABuffer.FrameCount;
   SetLength(Result.Data, Length(ABuffer.Data));
-  Move(ABuffer.Data[0], Result.Data[0], Length(ABuffer.Data));
+  if Length(ABuffer.Data) > 0 then
+    Move(ABuffer.Data[0], Result.Data[0], Length(ABuffer.Data));
   N := ABuffer.FrameCount;
   PSrc := PSingle(@ABuffer.Data[0]);
   PDst := PSingle(@Result.Data[0]);
-  for I := 0 to N - 1 do
+  // 4-wide unrolled pan/gain (stereo interleaved)
+  I := 0;
+  while I + 3 < N do
   begin
-    // mono source duplicated? for stereo preserve then apply pan
-    PDst[I * 2] := PSrc[I * 2] * LL;
-    PDst[I * 2 + 1] := PSrc[I * 2 + 1] * LR;
+    PDst[I*2] := PSrc[I*2]*LL; PDst[I*2+1] := PSrc[I*2+1]*LR;
+    PDst[(I+1)*2] := PSrc[(I+1)*2]*LL; PDst[(I+1)*2+1] := PSrc[(I+1)*2+1]*LR;
+    PDst[(I+2)*2] := PSrc[(I+2)*2]*LL; PDst[(I+2)*2+1] := PSrc[(I+2)*2+1]*LR;
+    PDst[(I+3)*2] := PSrc[(I+3)*2]*LL; PDst[(I+3)*2+1] := PSrc[(I+3)*2+1]*LR;
+    Inc(I, 4);
+  end;
+  while I < N do
+  begin
+    PDst[I*2] := PSrc[I*2]*LL;
+    PDst[I*2+1] := PSrc[I*2+1]*LR;
+    Inc(I);
   end;
 end;
 

@@ -143,6 +143,8 @@ begin
   if (LChannels <= 0) or (Length(FBiquads) = 0) then Exit;
   if Length(AOutput.Data) < LFrames * LChannels * SizeOf(Single) then Exit;
   LOutPtr := PSingle(@AOutput.Data[0]);
+  // cache biquad count, avoid High() in hot loop
+  if Length(FBiquads) = 0 then Exit;
   for LFr := 0 to LFrames - 1 do
     for LCh := 0 to LChannels - 1 do
     begin
