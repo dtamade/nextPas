@@ -97,7 +97,6 @@ type
   end;
 
 procedure AppendByte(var ADest: TBytes; AValue: Byte);
-procedure AppendBytes(var ADest: TBytes; const AData: TBytes);
 procedure AppendUInt16(var ADest: TBytes; AValue: Word);
 procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal);
 
