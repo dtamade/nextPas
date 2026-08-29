@@ -1019,7 +1019,7 @@ begin
 end;
 
 function TSevenZReaderImpl.FindByPrefix(const APrefix: string): Integer;
-var LStart, LIdx: Integer; LLen: SizeInt;
+var LStart, LIdx: Integer;
 begin
   Result := -1;
   if APrefix='' then
@@ -1027,7 +1027,6 @@ begin
     if Length(FEntries)>0 then Exit(0) else Exit(-1);
   end;
   if Length(FSortedIdx)=0 then Exit(-1);
-  LLen := Length(APrefix);
   LStart := LowerBoundPrefix(APrefix);
   if LStart >= Length(FSortedIdx) then Exit(-1);
   LIdx := FSortedIdx[LStart];
@@ -1036,7 +1035,7 @@ begin
 end;
 
 function TSevenZReaderImpl.FindBySuffix(const ASuffix: string): Integer;
-var LStart, LIdx: Integer; LLen: SizeInt;
+var LStart, LIdx: Integer;
 begin
   Result := -1;
   if ASuffix='' then
@@ -1044,7 +1043,6 @@ begin
     if Length(FEntries)>0 then Exit(0) else Exit(-1);
   end;
   if Length(FSortedIdxRev)=0 then Exit(-1);
-  LLen := Length(ASuffix);
   LStart := LowerBoundSuffix(ASuffix);
   if LStart >= Length(FSortedIdxRev) then Exit(-1);
   LIdx := FSortedIdxRev[LStart];
@@ -1089,24 +1087,6 @@ begin
   LOff := Length(AName) - Length(ASuffixLower);
   for I := 1 to Length(ASuffixLower) do
     if AsciiLowerChar(AName[LOff + I]) <> ASuffixLower[I] then Exit(False);
-  Result := True;
-end;
-
-function TryParseGlobMid(const APattern: string; out APrefix, ASuffix: string): Boolean; inline;
-var LStarCount, LStarPos, LI: Integer; LHasQ: Boolean;
-begin
-  Result := False; APrefix := ''; ASuffix := '';
-  LStarCount := 0; LStarPos := 0; LHasQ := False;
-  for LI := 1 to Length(APattern) do
-  begin
-    if APattern[LI] = '*' then begin Inc(LStarCount); LStarPos := LI; end
-    else if APattern[LI] = '?' then LHasQ := True;
-  end;
-  if LHasQ then Exit;
-  if LStarCount <> 1 then Exit;
-  if (LStarPos <= 1) or (LStarPos >= Length(APattern)) then Exit;
-  APrefix := Copy(APattern, 1, LStarPos - 1);
-  ASuffix := Copy(APattern, LStarPos + 1, Length(APattern) - LStarPos);
   Result := True;
 end;
 
