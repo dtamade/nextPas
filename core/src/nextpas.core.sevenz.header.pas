@@ -90,7 +90,7 @@ procedure SevenZAppendByte(var AOut: TBytes; AValue: Byte);
 procedure SevenZAppendUInt32BE(var AOut: TBytes; AValue: UInt32);
 procedure SevenZAppendUInt32LE(var AOut: TBytes; AValue: UInt32);
 procedure SevenZAppendUInt64LE(var AOut: TBytes; AValue: UInt64);
-procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt);
+procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt); inline;
 
 type
   { 头部顺序读取器：越界统一抛 ESevenZError }
@@ -128,6 +128,7 @@ procedure SevenZParseFilesInfo(AReader: TSevenZHeaderReader; ANumFiles: SizeInt;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
@@ -231,15 +232,10 @@ begin
     SevenZAppendByte(AOut, Byte((AValue shr (8 * LI)) and $FF));
 end;
 
-procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt);
-var
-  LBase: SizeInt;
+procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt); inline; inline;
 begin
-  if ACount <= 0 then
-    Exit;
-  LBase := Length(AOut);
-  SetLength(AOut, LBase + ACount);
-  Move(AData^, AOut[LBase], ACount);
+  if ACount <= 0 then Exit;
+  BytesAppend(AOut, AData, SizeUInt(ACount));
 end;
 
 { TSevenZHeaderReader }
