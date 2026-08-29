@@ -11,7 +11,7 @@ uses
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.factory,
-  nextpas.core.window.gtk;
+  nextpas.core.window.gtk3;
 
 var
   GRequired: Boolean;
