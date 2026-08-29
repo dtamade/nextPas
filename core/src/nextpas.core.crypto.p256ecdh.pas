@@ -20,6 +20,7 @@ function TryP256ECDHSharedSecret(const APrivateKey, APeerPublicKey: TBytes; out 
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.random,
   nextpas.core.crypto.p256.field,
@@ -34,16 +35,6 @@ const
     $BC, $E6, $FA, $AD, $A7, $17, $9E, $84,
     $F3, $B9, $CA, $C2, $FC, $63, $25, $51
   );
-
-function BytesEqual(const A, B: TBytes): Boolean;
-var
-  I: Integer;
-begin
-  if Length(A) <> Length(B) then Exit(False);
-  for I := 0 to High(A) do
-    if A[I] <> B[I] then Exit(False);
-  Result := True;
-end;
 
 function IsZeroBytes(const A: TBytes): Boolean;
 var
