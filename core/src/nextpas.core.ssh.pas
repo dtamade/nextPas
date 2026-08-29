@@ -57,7 +57,7 @@ type
   { 底层构件 re-export（二次开发/测试用）}
   ISshPacketSender = nextpas.core.ssh.cipher.ISshPacketSender;
   ISshPacketReceiver = nextpas.core.ssh.cipher.ISshPacketReceiver;
-  ISshKeyExchange = nextpas.core.ssh.kex.curve25519.ISshKeyExchange;
+  ISshKeyExchange = nextpas.core.ssh.kex.ISshKeyExchange;
   TSshClientTransport = nextpas.core.ssh.transport.TSshClientTransport;
   TSshKnownHosts = nextpas.core.ssh.hostkey.TSshKnownHosts;
   TSshAgentClient = nextpas.core.ssh.agent.TSshAgentClient;

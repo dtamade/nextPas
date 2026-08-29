@@ -35,7 +35,7 @@ type
     ServerSigBlob: TBytes;
   end;
 
-  TSshKexDHGroup14 = class
+  TSshKexDHGroup14 = class(TInterfacedObject, ISshKeyExchange)
   private
     FPriv: TBytes;
     FPub: TBytes;
@@ -103,23 +103,9 @@ end;
 function SshBuildDHGroup14HashInput(const AVc, AVs: string;
   const AClientKexInit, AServerKexInit, AHostKeyBlob,
   AClientE, AServerF, ASharedK: TBytes): TBytes;
-var
-  LW: TsshWriter;
 begin
-  LW := TsshWriter.Create(2048);
-  try
-    LW.PutStringText(AVc);
-    LW.PutStringText(AVs);
-    LW.PutStringBytes(AClientKexInit);
-    LW.PutStringBytes(AServerKexInit);
-    LW.PutStringBytes(AHostKeyBlob);
-    LW.PutMPInt(AClientE);
-    LW.PutMPInt(AServerF);
-    LW.PutMPInt(ASharedK);
-    Result := LW.ToBytes;
-  finally
-    LW.Free;
-  end;
+  Result := SshBuildKexHashInput(AVc, AVs, AClientKexInit, AServerKexInit,
+    AHostKeyBlob, AClientE, AServerF, ASharedK, False, False);
 end;
 
 function IsAllZero(const ABuf: TBytes): Boolean;
