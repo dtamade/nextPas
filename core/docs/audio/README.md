@@ -159,7 +159,8 @@ make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # ns/op + M
 - **已完成**：PR1 base → PR2 wav → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 game → PR9 timeline
 - **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，后续吸收进 `codec.registry`，保持 `Probe≤4KB` 与可插拔）
 - **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`Game` 复用 `Graph` 快照路径
-- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配/溢出守卫 `AudioBytesForFrames>High(Integer)`/异常静音（`playlist/sequencer/game/device` 已扩散）
+- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配（`device.null` 预分配 1M、`bus/graph` 双缓冲）/溢出守卫 `AudioBytesForFrames>High(Integer)` 全链路/异常静音 `AudioSilentFill`
+- **复用与性能**：`pcm.simd` 块转换 4-wide 展开（`PcmConvertBlockS16/S32↔F32`），`SimdAdd/Mul/Peak/SumSquares/Clamp` 硬件化复用于 `mix/timeline/graph/bus/playlist`，`base` 校验/填充单真相
 
 ## 参见
 
