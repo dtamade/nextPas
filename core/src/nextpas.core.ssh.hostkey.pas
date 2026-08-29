@@ -14,9 +14,10 @@ unit nextpas.core.ssh.hostkey;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.text.strings,
+  nextpas.core.text.conv,
+  nextpas.core.text.utils,
   nextpas.core.hash.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -475,9 +476,7 @@ begin
   Result := False;
   LCandidates := BlobsForHost(AHostName, APort);
   for I := 0 to High(LCandidates) do
-    if (Length(LCandidates[I]) = Length(ABlob))
-      and ((Length(ABlob) = 0)
-        or CompareMem(@LCandidates[I][0], @ABlob[0], SizeUInt(Length(ABlob)))) then
+    if TConstantTime.CompareBytes(LCandidates[I], ABlob) = 1 then
       Exit(True);
 end;
 

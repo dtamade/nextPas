@@ -12,7 +12,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.sync,
   nextpas.core.errors,
+  nextpas.core.text.utils,
   nextpas.core.text.conv,
+  nextpas.core.bytes.ops,
   nextpas.core.time,
   nextpas.core.net,
   nextpas.core.db.base,
@@ -102,16 +104,8 @@ begin
         'invalid port ":' + LTail + '"');
   end;
   begin
-    LSlash := 1;
-    LCode := Length(LHostPart);
-    while (LSlash <= LCode) and (LHostPart[LSlash] <= ' ') do Inc(LSlash);
-    while (LCode >= LSlash) and (LHostPart[LCode] <= ' ') do Dec(LCode);
-    if LSlash > LCode then
-      AOpts.Host := ''
-    else if (LSlash = 1) and (LCode = Length(LHostPart)) then
-      AOpts.Host := LHostPart
-    else
-      AOpts.Host := Copy(LHostPart, LSlash, LCode - LSlash + 1);
+    LHostPart := Trim(LHostPart);
+    AOpts.Host := LHostPart;
   end;
   if AOpts.Host = '' then
     raise EDbError.CreateSimple(dbkRedis, 'empty host');
@@ -568,15 +562,8 @@ begin
     RespEncodeCommand(LArgs, LFrames);
     LStepFrames[I] := LFrames;
   end;
-  { 单次写 burst = 流水线关键路径 }
-  SetLength(LFrames, 0);
-  for I := 0 to High(LStepFrames) do
-  begin
-    SetLength(LFrames, Length(LFrames) + Length(LStepFrames[I]));
-    if Length(LStepFrames[I]) > 0 then
-      Move(LStepFrames[I][0], LFrames[Length(LFrames) -
-        Length(LStepFrames[I])], Length(LStepFrames[I]));
-  end;
+  { 单次写 burst = 流水线关键路径：预求和单分配直写（已收敛至 bytes.ops 单源） }
+  LFrames := BytesConcatMany(LStepFrames);
   LT0 := 0;
   LTimed := FTrace.BeginOp(LT0);
   try

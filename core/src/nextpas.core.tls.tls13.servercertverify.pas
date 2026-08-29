@@ -156,14 +156,6 @@ begin
     Move(AData[0], Result[1], Length(AData));
 end;
 
-function StringToBytes(const AValue: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(AValue));
-  if Length(AValue) > 0 then
-    Move(AValue[1], Result[0], Length(AValue));
-end;
-
 function BlobLooksLikePEM(const ABlob: TBytes): Boolean;
 var
   LText: AnsiString;
@@ -2567,12 +2559,12 @@ begin
   SetLength(LBody, 0);
   AppendUInt16(LBody, ASignatureScheme);
   AppendUInt16(LBody, Length(ASignature));
-  AppendBytes(LBody, ASignature);
+  BytesAppend(LBody, ASignature);
 
   SetLength(Result, 0);
   AppendByte(Result, TLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13PlaceholderSignatureFromTranscriptHash(

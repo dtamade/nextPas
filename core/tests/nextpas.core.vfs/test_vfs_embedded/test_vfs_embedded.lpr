@@ -8,7 +8,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.respack,
   nextpas.core.stopwatch,
-  nextpas.core.vfs;
+  nextpas.core.vfs,
+  nextpas.core.vfs.base;
 
 { embedded 后端专属用例：AOwnsBlob 双态生命期（heaptrc 判零泄漏）、
   损坏 pack 的 EResPackCorrupted 原样透传、空包合法 VFS、
@@ -316,6 +317,36 @@ begin
   end;
 end;
 
+{ ── VfsDeriveChildNames 纯函数直驱：零分配语义固化 ── }
+
+procedure TestDeriveChildNamesPure;
+var
+  Paths: array of string;
+  Got: TVfsNameArray;
+begin
+  { 根路径推导：3 文件含 2 同目录前缀，dedup 后应得 3 子项 }
+  Paths := ['a/b/c.js', 'a/b/d.js', 'a/other.txt'];
+  Got := VfsDeriveChildNames(Paths, 'a/');
+  Check(Length(Got) = 2, 'derive a/ => 2 children');
+  Check(Got[0] = 'a/b', 'derive a/ child 0 = a/b');
+  Check(Got[1] = 'a/other.txt', 'derive a/ child 1 = a/other.txt');
+  { 二级目录推导 }
+  Got := VfsDeriveChildNames(Paths, 'a/b/');
+  Check(Length(Got) = 2, 'derive a/b/ => 2 files');
+  Check(Got[0] = 'a/b/c.js', 'derive a/b/ file 0');
+  Check(Got[1] = 'a/b/d.js', 'derive a/b/ file 1');
+  { 空前缀（根）推导：同前缀目录合并 }
+  Paths := ['x/one.js', 'x/two.js', 'y/file.txt'];
+  Got := VfsDeriveChildNames(Paths, '');
+  Check(Length(Got) = 2, 'derive root => 2 top children');
+  Check(Got[0] = 'x', 'derive root child 0 = x');
+  Check(Got[1] = 'y', 'derive root child 1 = y');
+  { 空输入 }
+  Paths := nil;
+  Got := VfsDeriveChildNames(Paths, '');
+  Check(Length(Got) = 0, 'derive empty => 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.vfs.embedded');
   T.Test('owned blob freed on release', @TestOwnedBlobFreed);
@@ -325,5 +356,6 @@ begin
   T.Test('big content boundaries', @TestBigContentBoundaries);
   T.Test('deduped entries listable', @TestDedupedEntriesListable);
   T.Test('perf 10k embedded zero-decode', @TestPerf10kEmbedded);
+  T.Test('derive child names pure', @TestDeriveChildNamesPure);
   if not T.Run then Halt(1);
 end.

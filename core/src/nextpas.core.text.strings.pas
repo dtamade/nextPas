@@ -676,37 +676,48 @@ end;
 
 function StringsSplitEscaped(const AStr: string; ASep: Char): TStringArray;
 var
-  LItem: string;
-  LI: Integer;
-  LUsed: Integer;
+  LBuf: string;
+  LBufLen, LUsed, LCap, LI: Integer;
 begin
   Result := nil;
   if AStr = '' then Exit;
-  LItem := '';
+  { 单分配缓冲 O(n)：避免 LItem := LItem + C 的 O(n²) 重分配；LBuf 预分配 Length(AStr) }
+  SetLength(LBuf, Length(AStr));
+  LBufLen := 0;
   LUsed := 0;
+  LCap := 8;
+  SetLength(Result, LCap);
   LI := 1;
   while LI <= Length(AStr) do
   begin
     if AStr[LI] = '\' then
     begin
-      Inc(LI);
-      if LI <= Length(AStr) then
-        LItem := LItem + AStr[LI];
+      if LI < Length(AStr) then
+      begin
+        Inc(LI);
+        Inc(LBufLen); LBuf[LBufLen] := AStr[LI];
+      end else
+      begin
+        { 尾部 одино 反斜杠保留为字面量，与测试期望 'a\'→'a\' 一致 }
+        Inc(LBufLen); LBuf[LBufLen] := '\';
+      end;
     end
     else if AStr[LI] = ASep then
     begin
+      if LUsed >= LCap then begin LCap := LCap * 2; SetLength(Result, LCap); end;
+      SetString(Result[LUsed], PChar(@LBuf[1]), LBufLen);
       Inc(LUsed);
-      if LUsed >= Length(Result) then SetLength(Result, LUsed * 2);
-      Result[LUsed - 1] := LItem;
-      LItem := '';
+      LBufLen := 0;
     end
     else
-      LItem := LItem + AStr[LI];
+    begin
+      Inc(LBufLen); LBuf[LBufLen] := AStr[LI];
+    end;
     Inc(LI);
   end;
+  if LUsed >= LCap then begin LCap := LCap * 2; SetLength(Result, LCap); end;
+  SetString(Result[LUsed], PChar(@LBuf[1]), LBufLen);
   Inc(LUsed);
-  if LUsed >= Length(Result) then SetLength(Result, LUsed * 2);
-  Result[LUsed - 1] := LItem;
   SetLength(Result, LUsed);
 end;
 

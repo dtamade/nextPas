@@ -57,7 +57,7 @@ function SshAsyncSftpViaJump(const ALoop: TAsyncLoop; const AJumpOpts, ATargetOp
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.crypto.random;
 
 const

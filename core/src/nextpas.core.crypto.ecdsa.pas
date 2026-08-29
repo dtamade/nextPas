@@ -713,9 +713,9 @@ var
 begin
   SetLength(LTagArr, 1);
   LTagArr[0] := ATag;
-  Result := ConcatBytes(AV, LTagArr);
-  Result := ConcatBytes(Result, AX);
-  Result := ConcatBytes(Result, AH1);
+  Result := BytesConcat(AV, LTagArr);
+  Result := BytesConcat(Result, AX);
+  Result := BytesConcat(Result, AH1);
 end;
 
 function TryRFC6979NextK(
@@ -744,7 +744,7 @@ begin
 
     SetLength(LZeroTag, 1);
     LZeroTag[0] := 0;
-    AK := HMAC_SHA256(AK, ConcatBytes(AV, LZeroTag));
+    AK := HMAC_SHA256(AK, BytesConcat(AV, LZeroTag));
     AV := HMAC_SHA256(AK, AV);
   end;
 end;
@@ -1032,7 +1032,7 @@ begin
 
   SetLength(LTagArr, 1);
   LTagArr[0] := 0;
-  LK := HMAC_SHA256(LK, ConcatBytes(LV, LTagArr));
+  LK := HMAC_SHA256(LK, BytesConcat(LV, LTagArr));
   LV := HMAC_SHA256(LK, LV);
 
   AError := 'ECDSA signing failed after repeated nonce attempts';

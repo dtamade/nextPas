@@ -88,7 +88,8 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.tls.pem,
-  nextpas.core.tls.tls13.wire;
+  nextpas.core.tls.tls13.wire,
+  nextpas.core.bytes.ops;
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
 begin
@@ -529,12 +530,12 @@ var
     SetLength(LBody, 0);
     AppendByte(LBody, TLS_CERT_STATUS_TYPE_OCSP);
     AppendUInt24(LBody, Length(AResponse));
-    AppendBytes(LBody, AResponse);
+    BytesAppend(LBody, AResponse);
 
     SetLength(Result, 0);
     AppendUInt16(Result, TLS_EXTENSION_STATUS_REQUEST);
     AppendUInt16(Result, Length(LBody));
-    AppendBytes(Result, LBody);
+    BytesAppend(Result, LBody);
   end;
 begin
   SetLength(AHandshake, 0);
@@ -566,11 +567,11 @@ begin
 
     SetLength(LEntry, 0);
     AppendUInt24(LEntry, LCertLen);
-    AppendBytes(LEntry, LCertificates[I]);
+    BytesAppend(LEntry, LCertificates[I]);
     AppendUInt16(LEntry, Length(LExtensions));
-    AppendBytes(LEntry, LExtensions);
+    BytesAppend(LEntry, LExtensions);
 
-    AppendBytes(LCertificateList, LEntry);
+    BytesAppend(LCertificateList, LEntry);
   end;
 
   if Length(LCertificateList) > $FFFFFF then
@@ -582,12 +583,12 @@ begin
   SetLength(LBody, 0);
   AppendByte(LBody, 0); // certificate_request_context length = 0
   AppendUInt24(LBody, Length(LCertificateList));
-  AppendBytes(LBody, LCertificateList);
+  BytesAppend(LBody, LCertificateList);
 
   SetLength(AHandshake, 0);
   AppendByte(AHandshake, TLS_HANDSHAKE_TYPE_CERTIFICATE);
   AppendUInt24(AHandshake, Length(LBody));
-  AppendBytes(AHandshake, LBody);
+  BytesAppend(AHandshake, LBody);
 
   Result := True;
 end;

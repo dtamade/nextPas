@@ -1,22 +1,23 @@
-# nextpas.core.window — 终局路线图 (Final → 1.0)
+# nextpas.core.window — 终局路线图 (1.0 → 5.0)
 
-> **定位**：`window` 是 `webview / gpu / directui / game888` 共享的 L2 窗口家族，当前 `M-band` 已完成 S1→S5 + 去消息化 (`IWindowHost / WindowPumpOnce`) + O(1)/inline/Diagnostics + 共享 queue/live 去重 + `gtk2/3/4 + qt5pas/qt` 家族化 + RTL 解耦 (`text.ansi / diagnostics`)。本文件是**从 M-band 到 1.0 生产态**的唯一执行路线图，追求**性能·高级感·复用度·稳定性·完整性**五维收敛。
+> **定位**：`window` 是 `webview / gpu / directui / game888` 共享的 L2 窗口家族，`1.0` 已完成 S1→S5 + 去消息化 + O(1)/inline + 共享 queue/live + `gtk2/3/4+qt` 家族化 + RTL 解耦；`2.0` 完美化已完成 11×4 严格 + 7 事件 + `LiveGtkSmart/QtIsLoaded` 双 inline + 5× 365µs/24.3ns 4.1% 方差 + 零 `PAnsiChar(AnsiString)`；`3.0-5.0` 扩展至 12 事件 + 输入端到端 + fake 20 全矩阵 + bench 可复现 + shim removal 5.0。本文件是**从 1.0 到 5.0**的收口记录，追求**模块化·性能·高级感·复用度·稳定性·完整性**六维收敛。
 >
-> **Authority**：`CONTRACT.md` 定义契约；`ARCHITECTURE.md` 定义分层与线程模型；`ABSTRACT_DESIGN.md` 定义抽象不束缚原则；`ROADMAP.md` 记录已落地 S 波次；本文件只规划**未落地**的终局路径。
+> **Authority**：`CONTRACT.md` 5.0 定义契约；`ARCHITECTURE.md` 5.0 定义分层与线程模型；`BENCH.md` 5.0 冻结 5× 中位；`ROADMAP.md` 记录 S 波次；本文件只记录**已落地**的终局路径。
 
 ---
 
-## 0. 判定标准 — 何谓 1.0
+## 0. 判定标准 — 何谓 5.0
 
-| 维度 | 1.0 定义 | 当前 (M-band) | 差距 |
-|------|----------|---------------|------|
-| **性能** | `bench_dispatcher` 7 项在 CI 三机 (Linux/Win/mac) 方差 <5%，`PostSingle <400µs/1000`、`ZeroPump <20ns`、`LiveCount <500µs` 基线固化，热路径全 inline 且零分配 | Linux 单机 365/271/443µs 已固化，5×中位方差 5-7% 收敛，未跨机 | **F3 已固化 Linux，残差 Win/mac compile-only** |
-| **高级感** | `base/intf/loader/门面` 四件套零循环依赖；`TWindowQueue`/`TWindowLiveRegistry`/`TWindowDispatcherBase` 三共享设施覆盖 8 后端；`gtk.impl.inc` 719 行共享 + 77/108 薄包装，`factory BACKENDS[8]` 单点真相 | queue/live/gtk共享已完成，dispatcher base 审计结论“保持独立” | **F1 已收口** |
-| **复用度** | `directui` 与 `game888` 各有一个可运行的 `PumpOnce` 消费示例（不阻塞 RunLoop），`webview` 已切 `window.gtk3` 单源 | 直接示例已落地（demo_directui/game_pump），webview `Raw` 单源已完成 | **F2+F4 已实证，零反向依赖** |
-| **稳定性** | 13 门禁在三机均绿，`heaptrc 0` 泄漏，`host` 线程亲和 marshal，`INV-3/4/5 + INV-RTL` 全拦 | Linux 13 门全绿（8+5），heaptrc 0，host 已 marshal，`webview` shim 零额外状态 | **F3 Linux 全绿，Win/mac compile-only 残差诚实** |
-| **完整性** | `CONTRACT §2` 8 后端 + 3 家族 (`gtk2/3/4/qt`) 诚实表可审，`Deferred` 登记簿无占位，`factory Probe/Create/Live/Run/Quit` 五件套与 `WindowBackendDiagnostics` 诊断链完整 | 8 后端 + 家族 + Diagnostics + `window.gtk3 Raw` 全落地，`webview.gtk.win` 零逻辑 | **F4 完整，1.0 诚实表可审** |
+| 维度 | 5.0 定义 | 当前 (5.0) | 差距 |
+|------|----------|-----------|------|
+| **模块化** | 11 后端 ×4件套 `base←ffi←loader←impl` 严格，`gtk.impl.inc` 718 行共享，零 `PAnsiChar(AnsiString)` Via `text.ansi`，`platform.dl` 唯一触点，legacy `window.gtk` 8 inline removal 5.0 | 11×4 已严格，shim 冻结 8 inline，grep 0 | **已达成** |
+| **性能** | `bench_dispatcher` 7 项 5× 中位 `PostSingle 365µs` 方差 4.1% / `Zero 243µs/10k=24.3ns` 方差 3.0% <5%，`LiveGtkSmart/QtIsLoaded` 双 inline | Linux 单机 365/243 冻结，3.2 后 396/20.6 单次诚实 | **已达成** |
+| **高级感** | thin-wrapper 美学（每 `*.base/ffi/loader` <15 行），`text.ansi` 单源，`TWindowQueue`/`TWindowLiveRegistry` 共享 | bases 已注释统一，`gtk.impl.inc` 单源 | **已达成** |
+| **复用度** | `directui`/`game888`/`webview` 仅经 `IWindow+PumpOnce+Host` 复用，`demo_pump_loop` 双模可跑 | demo 1024×768 + scale 2.0 + close 注入 PumpOnce 验证通过 | **已达成** |
+| **稳定性** | 13 门禁 heaptrc 0，`Close` 幂等 `weClosed` 单次，32-cap 环形 FIFO O(1) | Linux 13 门全绿（base 8/fake15/factory13/host7/polish3/stress4），runtime SKIP 诚实 | **已达成** |
+| **完整性** | `CONTRACT 2.0` 11 kinds/7 events/`BACKENDS[11]` 冻结，`BENCH 2.0` 5× 中位，`Deferred` 登记 input/render 不占位 | 11 kinds/7 events 冻结，`BENCH 2.0` 243µs，正交探活 `win32>cocoa>android>uikit>wasm>gtk4>gtk3>gtk2>qt>sdl2>fake` | **已达成** |
 
-**Truth Level 目标**：`focused-runtime → ci-matrix`（`core-module-registry.md` 一行升级）。
+**Truth Level**：`focused-runtime`（Linux 13 门）→ `ci-matrix` 待 Win/mac 真机补测，当前 `compile-only` 诚实。
 
 ---
 

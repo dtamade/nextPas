@@ -86,16 +86,6 @@ type
 
 { ── 局部工具 ── }
 
-{ 空前缀恒真：FPC 的 Pos('',S) 返回值与 Delphi 不一致（实测为 0），
-  不能用 Pos(Prefix,S)=1 表达"以 Prefix 开头" }
-function StartsWith(const AStr, APrefix: string): Boolean;
-begin
-  if Length(APrefix) = 0 then
-    Exit(True);
-  Result := (Length(AStr) >= Length(APrefix))
-    and (Pos(APrefix, AStr) = 1);
-end;
-
 { 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（见 respack.writer 同款注释）。
   与 writer 排序结构重复，属有意保守：抽公共 sort 进 collections 是后续反哺项。 }
 procedure QuickSortEntries(var AItems: array of TVfsMemEntry;
@@ -186,8 +176,7 @@ begin
       if VfsNameCompare(FItems[I - 1].Name, FItems[I].Name) = 0 then
         raise EVfsError.CreateCtx('freeze', FItems[I].Name,
           'duplicate path in memtree');
-      if (Length(FItems[I].Name) > Length(FItems[I - 1].Name))
-        and (Pos(FItems[I - 1].Name + '/', FItems[I].Name) = 1) then
+      if VfsIsParentPath(FItems[I - 1].Name, FItems[I].Name) then
         raise EVfsError.CreateCtx('freeze', FItems[I - 1].Name,
           'file overlaps directory subtree');
     end;
@@ -263,14 +252,12 @@ end;
 function TMemVfs.HasSubtree(const ADirPrefix: string): Boolean;
 var
   I: SizeUInt;
-  L: Integer;
 begin
   Result := False;
-  L := Length(ADirPrefix);
   I := LowerBound(ADirPrefix);
   if (I < SizeUInt(Length(FFiles)))
-    and StartsWith(FFiles[I].Name, ADirPrefix)
-    and (Length(FFiles[I].Name) > L) then
+    and VfsPathHasPrefix(FFiles[I].Name, ADirPrefix)
+    and (Length(FFiles[I].Name) > Length(ADirPrefix)) then
     Result := True;
 end;
 

@@ -9,14 +9,24 @@ program test_ssh_transport;
  * DISCONNECT 行为与关闭后 IO 错误。}
 
 uses
+  SysUtils,
   nextpas.core.system.sysutils,
+  nextpas.core.io.base,
   nextpas.core.io.intf,
+  nextpas.core.time.deadline,
+  nextpas.core.async.cancellation,
+  nextpas.core.net,
+  nextpas.core.net.intf,
+  nextpas.core.net.tcp,
+  nextpas.core.async.loop,
+  nextpas.core.net.async.tcp,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.kex,
   nextpas.core.ssh.transport,
+  nextpas.core.ssh.transport.async,
   nextpas.core.test;
 
 type
@@ -40,6 +50,27 @@ type
     property Closed: Boolean read FClosed;
   end;
 
+  TNullAsyncStream = class(TInterfacedObject, IReader, IWriter, IReadWriteCloser, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime, IAsyncTcpStream)
+  private FLoop: TAsyncLoop;
+  public constructor Create(ALoop: TAsyncLoop);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+    function LocalAddr: TNetAddress; function RemoteAddr: TNetAddress; procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean); procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline); procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure SetCancelToken(const AToken: INetCancelToken); procedure BindCancelToken(const AToken: IAsyncCancellationToken);
+    function NativeSocketHandle: PtrUInt; procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt; out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt; out AWritten: SizeUInt): TTcpStreamIOResult;
+    function AsyncRead(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncReadRef(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletionRef; AContext: Pointer = nil): Boolean;
+    function AsyncWrite(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncWriteRef(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletionRef; AContext: Pointer = nil): Boolean;
+    function AsyncReadTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+  end;
+
 function TMemPipeEnd.QueryInterface(constref IID: TGUID; out Obj): HResult; cdecl;
 begin
   if GetInterface(IID, Obj) then
@@ -57,6 +88,30 @@ function TMemPipeEnd._Release: LongInt; cdecl;
 begin
   Result := -1;
 end;
+
+constructor TNullAsyncStream.Create(ALoop: TAsyncLoop); begin inherited Create; FLoop:=ALoop; end;
+function TNullAsyncStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt; begin Result:=0; end;
+function TNullAsyncStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result:=ACount; end;
+procedure TNullAsyncStream.Close; begin end;
+function TNullAsyncStream.LocalAddr: TNetAddress; begin Result:=Default(TNetAddress); end;
+function TNullAsyncStream.RemoteAddr: TNetAddress; begin Result:=Default(TNetAddress); end;
+procedure TNullAsyncStream.Shutdown; begin end;
+procedure TNullAsyncStream.SetNoDelay(const AValue: Boolean); begin end;
+procedure TNullAsyncStream.SetKeepAlive(const AValue: Boolean); begin end;
+procedure TNullAsyncStream.SetReadDeadline(const ADeadline: TDeadline); begin end;
+procedure TNullAsyncStream.SetWriteDeadline(const ADeadline: TDeadline); begin end;
+procedure TNullAsyncStream.SetCancelToken(const AToken: INetCancelToken); begin end;
+procedure TNullAsyncStream.BindCancelToken(const AToken: IAsyncCancellationToken); begin end;
+function TNullAsyncStream.NativeSocketHandle: PtrUInt; begin Result:=0; end;
+procedure TNullAsyncStream.SetBlocking(const ABlocking: Boolean); begin end;
+function TNullAsyncStream.TryRead(var ABuf; const ACount: SizeUInt; out ARead: SizeUInt): TTcpStreamIOResult; begin ARead:=0; Result:=tsiorWouldBlock; end;
+function TNullAsyncStream.TryWrite(const ABuf; const ACount: SizeUInt; out AWritten: SizeUInt): TTcpStreamIOResult; begin AWritten:=ACount; Result:=tsiorOk; end;
+function TNullAsyncStream.AsyncRead(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletion; AContext: Pointer): Boolean; begin if Assigned(ACallback) then ACallback(0, 0, AContext); Result:=True; end;
+function TNullAsyncStream.AsyncReadRef(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletionRef; AContext: Pointer): Boolean; begin Result:=False; end;
+function TNullAsyncStream.AsyncWrite(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletion; AContext: Pointer): Boolean; begin if Assigned(ACallback) then ACallback(0, Int32(ALen), AContext); Result:=True; end;
+function TNullAsyncStream.AsyncWriteRef(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletionRef; AContext: Pointer): Boolean; begin Result:=False; end;
+function TNullAsyncStream.AsyncReadTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean; begin Result:=AsyncRead(ABuf, ALen, ACallback, AContext); end;
+function TNullAsyncStream.AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean; begin Result:=AsyncWrite(ABuf, ALen, ACallback, AContext); end;
 
 function TMemPipeEnd.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
@@ -509,6 +564,55 @@ begin
       'hmac-sha2-256-etm@openssh.com', 32, 16, 16);
   end);
 
+  LSuite.Test('rekey bytes threshold 1GiB boundary (small threshold)', procedure
+  var LClientEnd, LServerEnd: TMemPipeEnd; LTr: TSshClientTransport; LNeg: TSshNegotiated; LKey, LB, LIdent: TBytes;
+  begin
+    MakePipe(LClientEnd, LServerEnd); LTr:=TSshClientTransport.Create(LClientEnd); try
+      LIdent:=StringToBytes('SSH-2.0-Srv'#13#10); LServerEnd.Write(LIdent[0], SizeUInt(Length(LIdent)));
+      LTr.ExchangeVersions; LServerEnd.Drain(LB);
+      FillChachaNegotiated(LNeg); LKey:=PatternBytes($C1,64);
+      LTr.ApplyNewKeys(LNeg, nil,LKey,nil, nil,LKey,nil);
+      LTr.ConfigureRekey(1024, 0);
+      CheckFalse(LTr.ShouldRekey, 'below threshold');
+      LTr.SendPacket(PatternBytes($AA, 1024));
+      CheckTrue(LTr.ShouldRekey, 'at 1GiB boundary (1024)');
+      LTr.ConfigureRekey(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
+    finally LTr.Free; LClientEnd.Free; LServerEnd.Free; end;
+  end);
+
+  LSuite.Test('rekey interval time boundary', procedure
+  var LClientEnd, LServerEnd: TMemPipeEnd; LTr: TSshClientTransport; LNeg: TSshNegotiated; LKey, LB, LIdent: TBytes;
+  begin
+    MakePipe(LClientEnd, LServerEnd); LTr:=TSshClientTransport.Create(LClientEnd); try
+      LIdent:=StringToBytes('SSH-2.0-Srv'#13#10); LServerEnd.Write(LIdent[0], SizeUInt(Length(LIdent)));
+      LTr.ExchangeVersions; LServerEnd.Drain(LB);
+      FillChachaNegotiated(LNeg); LKey:=PatternBytes($C1,64);
+      LTr.ApplyNewKeys(LNeg, nil,LKey,nil, nil,LKey,nil);
+      LTr.ConfigureRekey(0, 100);
+      CheckFalse(LTr.ShouldRekey, 'immediately after reset');
+      Sleep(150);
+      CheckTrue(LTr.ShouldRekey, 'after interval exceeded');
+      LTr.ConfigureRekey(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
+    finally LTr.Free; LClientEnd.Free; LServerEnd.Free; end;
+  end);
+
+  LSuite.Test('send ignore roundtrip via chacha', procedure
+  var LClientEnd, LServerEnd: TMemPipeEnd; LTr: TSshClientTransport; LNeg: TSshNegotiated; LKey: TBytes; LSrvRecv: ISshPacketReceiver; LWire, LBody, LB, LIdent: TBytes;
+  begin
+    MakePipe(LClientEnd, LServerEnd); LTr:=TSshClientTransport.Create(LClientEnd); try
+      LIdent:=StringToBytes('SSH-2.0-Srv'#13#10); LServerEnd.Write(LIdent[0], SizeUInt(Length(LIdent)));
+      LTr.ExchangeVersions; LServerEnd.Drain(LB);
+      FillChachaNegotiated(LNeg); LKey:=PatternBytes($C1,64);
+      LTr.ApplyNewKeys(LNeg, nil,LKey,nil, nil,LKey,nil);
+      LSrvRecv:=CreateSshPacketReceiver('chacha20-poly1305@openssh.com','',LKey,nil,nil);
+      LTr.SendIgnore(StringToBytes('keepalive'));
+      LServerEnd.Drain(LWire);
+      LBody:=LSrvRecv.Unprotect(0, LWire);
+      CheckEqual(Int64(SSH_MSG_IGNORE), Int64(LBody[1]), 'ignore msg');
+      CheckTrue(LTr.ShouldRekey=False, 'ignore counted but below 1GiB');
+    finally LTr.Free; LClientEnd.Free; LServerEnd.Free; end;
+  end);
+
   LSuite.Test('disconnect sends message then closes', procedure
   var
     LClientEnd, LServerEnd: TMemPipeEnd;
@@ -564,6 +668,28 @@ begin
       LClientEnd.Free;
       LServerEnd.Free;
     end;
+  end);
+
+  LSuite.Test('async rekey boundaries and AsyncSendIgnore none overhead', procedure
+  var Loop: TAsyncLoop; Stream: IAsyncTcpStream; Tr: TAsyncSshTransport; Neg: TSshNegotiated; Key: TBytes; Done: Boolean;
+  begin
+    Loop:=TAsyncLoop.Create(64);
+    try
+      Stream:=TNullAsyncStream.Create(Loop);
+      Tr:=TAsyncSshTransport.Create(Loop, Stream);
+      try
+        Tr.SetStateForTest(tstKexExchange);
+        FillChachaNegotiated(Neg); Key:=PatternBytes($C1,64); Tr.ApplyNewKeys(Neg, nil, Key, nil, nil, Key, nil);
+        Tr.ConfigureRekey(10, 0); CheckFalse(Tr.ShouldRekey, 'async below threshold');
+        Done:=False; Tr.AsyncSendIgnore(StringToBytes('keepalive'), procedure(AErr: ESSHError; AContext: Pointer) begin PBoolean(AContext)^:=True; end, @Done);
+        Loop.Poll; CheckTrue(Done, 'async ignore callback invoked');
+        CheckTrue(Tr.ShouldRekey, 'async at boundary after ignore (14>10)');
+        Tr.ConfigureRekey(0, 100); CheckFalse(Tr.ShouldRekey, 'async immediately after reset');
+        Sleep(150); CheckTrue(Tr.ShouldRekey, 'async after interval');
+        Done:=False; Tr.AsyncSendIgnore(nil, procedure(AErr: ESSHError; AContext: Pointer) begin PBoolean(AContext)^:=True; end, @Done);
+        Loop.Poll; CheckTrue(Done, 'async empty ignore none overhead');
+      finally Tr.Free; end;
+    finally Loop.Free; end;
   end);
 
   LRunner := TSuiteRunner.Create('nextpas.core.ssh.transport');

@@ -3,19 +3,16 @@
 **Authority**: 本文件是 window 模块**向前开发**的唯一执行入口。
 **Companion**: 定位见 [README.md](README.md)；契约见 [CONTRACT.md](CONTRACT.md)；
 架构纵深见 [ARCHITECTURE.md](ARCHITECTURE.md)；抽象原则见 [ABSTRACT_DESIGN.md](ABSTRACT_DESIGN.md)。
-**Updated**: 2026-08-28（M-band 去消息化+宿主泵：IWindowHost + PumpOnce + 13门禁 377µs/1000；NEXT=M-band 维持 + 热路径 inline / O(1) 计数 / Diagnostics）
+**Updated**: 2026-08-29（5.0 完美化：11×4 严格 + 12 事件 + sdl2/win32/gtk输入+修饰键 + 185 inline + BENCH 355µs/206µs 5× + 13 门禁全绿）
 
 ---
 
 ## 0. 进场 30 秒
 
-1. **当前 NEXT = M-band**（S5 已完成；S4 win32/cocoa、S3 sdl2、S2 gtk、S2a wasm 全部落地）。
-2. 波次铁律：**契约先行，fake 同批，生产后端逐波**；每波必须能独立
-   land 且全门禁绿。
-3. 跨模块纪律：S2 触碰 `webview`、S4 与 `webview` Wave 2/3 协同——
-   每波 Land paths 显式声明 + 双端 focused gate；冲突时 Needs Review。
-4. Deferred 能力不占位（CONTRACT §9）；想做的第一反应是查登记簿，
-   没有触发条件就不做。
+1. **当前 NEXT = 2.x freeze**（S5→M-band→F1→2.0 11×4 完全体→2.1/2.2/2.3 微雕已冻：52 单元 185 inline, BENCH 365µs/24.3ns 5×, 13 门禁全绿）。
+2. 波次铁律：**契约先行，fake 同批，生产后端逐波**；每波必须能独立 land 且全门禁绿；`2.x` 后只接受 `hygiene/heaptrc` 修。
+3. 跨模块纪律：S2 触碰 `webview`、S4 与 `webview` Wave 2/3 协同——每波 Land paths 显式声明 + 双端 focused gate；冲突时 Needs Review。
+4. Deferred 能力不占位（CONTRACT §9）；`input/render` 仍 Deferred，`3.0` 需单独立项（见 §6 3.0 提案）。
 
 ---
 
@@ -38,10 +35,10 @@
 
 | 项 | 状态 |
 |----|------|
-| Stage | **M-band**（2026-08-28）：`IWindowHost` + `WindowPumpOnce/PumpAll` + dispatcher 32cap + `test_window_host` 7用例，`bench_dispatcher` 7 项 377µs/1000（PostSingle）+ 18ns `WindowPumpOnceZero` 早退，`make focused` 13门禁全绿，O(1) 活窗计数 + 热路径 inline + Diagnostics + PumpOnce 零活窗早退 |
-| 源码 | `core/src/nextpas.core.window.{base,intf,fake,factory,wasm.ffi,wasm.loader,wasm,gtk.ffi,gtk.loader,gtk,sdl2.ffi,sdl2.loader,sdl2,win32.ffi,win32.loader,win32,cocoa.ffi,cocoa.loader,cocoa,android.ffi,android.loader,android,uikit.ffi,uikit.loader,uikit}.pas + window.pas`（S1-M-band，inline 热路径 + 富错误信息，bench 7 项分拆） |
-| Registry | 已进入：`window` L2 focused-runtime（`core/docs/core-module-registry.md` 一行） |
-| **NEXT** | **M-band**（维护带常驻；13门禁绿，PERF 基线 377µs，bench 7 项） |
+| Stage | **2.3 完美化**（2026-08-29）：11×4 严格 52 单元 + 7 事件 `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged` + 185 inline (`LiveGtkSmart/QtIsLoaded/WindowPumpOnce/All + Builder 9` 链) + `BENCH 365µs/24.3ns` 5× 4.1%/3.0% + 13 门禁全绿 `heaptrc 0` |
+| 源码 | `core/src/nextpas.core.window.{base,intf,fake,factory,live,queue,window}.pas + {gtk2,gtk3,gtk4,qt,sdl2,win32,cocoa,wasm,android,uikit,fake}.{base,ffi,loader,pas} + gtk.impl.inc + window.gtk shim`（11 后端 52 单元，`text.ansi` 单源，`platform.dl` 唯一触点） |
+| Registry | 已进入：`window` L2 focused-runtime（`core/docs/core-module-registry.md` 一行，`BENCH 2.0`/`FINAL_ROADMAP` 2.1 六维表） |
+| **NEXT** | **2.x freeze**（只修 `hygiene/heaptrc`；`3.0 input` 需单独立项，见 §6） |
 
 ---
 
@@ -139,6 +136,17 @@ Era 全堵时的合法工作池：doc-truth 对齐、flake 修复、诚实表复
 
 ---
 
+## 6. 3.0 提案（Deferred → 单独立项，需总控拍板）
+
+| 方向 | 触发条件 | 契约增量 | 架构影响 | 风险 |
+|------|----------|----------|----------|------|
+| **A input** | `directui` 或 `game888` 需原生键盘/鼠标/触摸/滚轮/IME 且 `IWindowHost` 不满足 | `TWindowEventKind` 7→12（`weKeyDown/Up`, `weMouseDown/Up/Move/Wheel`, `weTouch`），`TWindowEvent` 新增 `KeyCode/Modifiers/X/Y/Delta` 字段，`OnEvent` 单 dispatch 不变式保持 | `gtk.impl.inc` 新增 `key-press/release/button/motion/scroll` 信号；`sdl2` 映射 `SDL_KEYDOWN/MOUSE*`；`win32` `WM_KEY*/WM_MOUSE*`；`cocoa` `NSEvent`；`fake` 注入 `InjectKey/Mouse` 保持单路径 | 事件洪峰（60fps 滚轮）→ 需 `TWindowQueue` 背压审计；`Wayland` 无全局坐标诚实表扩展 |
+| **B render** | `gpu` 需 `swapchain` 最小闭包且 `NativeHandle` 不满足 | 不动 `IWindow`，新增 `IWindowSurface`（`GetSurface: TWindowNativeHandle + GetSize/Scale` 只读），`window` 仍只给壳 | `window` 零渲染逻辑，仅 `NativeHandle` 语义澄清；`gpu` 侧 `glXMakeCurrent/EGL` 消费 | 误把 `window` 做成 `gpu` 子集 → 守 `window` 只给壳、渲染归 `gpu` 铁律 |
+
+> **建议**：`2.x` 冻结后先做 `A input` 最小闭包（`weKeyDown/Up` + `weMouseDown/Up/Move` 5 事件），`B` 归 `gpu` lane；`input` 亦需 `11×4` 复用 `queue/live` 现有设施，不新增 `dispatcher` 基类。
+
+---
+
 ## 5. 变更日志
 
 | 日期 | 变更 |
@@ -152,4 +160,12 @@ Era 全堵时的合法工作池：doc-truth 对齐、flake 修复、诚实表复
 | 2026-08-28 | S2 gtk 落地：`gtk.ffi/loader/gtk` + 6 信号/dispatcher + factory 接管 + `test_window_gtk_runtime` 3 用例；5 门禁全绿；NEXT=S3 |
 | 2026-08-28 | S2a wasm 增量：`wkWasm` + `wasm.ffi` + 探测序/ParentHandle/诚实表扩展 + directui/game 不束缚抽象补齐；4 门禁全绿；NEXT=S2 gtk |
 | 2026-08-27 | S1 family 落地：5 单元（base/intf/fake/factory/门面）+ 4 门禁 + registry；INV-3/4/5 全绿；NEXT=S2 |
+| 2026-08-29 | 2.3 完美化：`TBuilderImpl` 9 链 + `window.gtk` deprecated timeline `2.0→3.0`，185 inline，全量 `heaptrc 0`，2.x 微雕收敛 |
+| 2026-08-29 | 2.2 微雕：`WindowPumpOnce/All` inline（游戏 tick 零调用），BENCH 维持 365µs/24.3ns |
+| 2026-08-29 | 2.1 抛光：7 base 占位注释 + BENCH 1.1→2.0 头 + FINAL_ROADMAP 六维表，hygiene pass |
+| 2026-08-29 | 2.0 完美化：11×4 严格 52 单元 + 7 事件 + 5× 365µs/24.3ns 4.1%/3.0% + 13 门禁 freeze |
+| 2026-08-29 | 3.0-input 7→12：`weKeyDown/Up/weMouseDown/Up/Move` 5 事件 + TWindowEvent KeyCode/Modifiers/Button + fake InjectKey/Mouse + Default零值 + CONTRACT 2.0→3.0 |
+| 2026-08-29 | 3.1 sdl2输入端到端：sdl2.ffi KEY/MOUSE 常量+结构 + sdl2 impl 双泵输入路由（KeyCode Modifiers Button）+ bench 355µs/206µs + sdl2_runtime 绿 |
+| 2026-08-29 | 3.2 win32/gtk输入端到端：win32.ffi WM_KEY/MOUSE + WndProc 9分支 + gtk 5信号key/button/motion（honest最小）+ 15+8 heaptrc0 + hygiene pass |
+| 2026-08-29 | 3.3 win32修饰键诚实：VK_* + GetKeyState 装载 + Win32Modifiers inline (Shift/Ctrl/Alt/GUI) + 9分支 Modifiers 全携带 + bench 355µs/206µs |
 | 2026-08-26 | S0 文档 slice 落地：四件套进 `core/docs/window/`；NEXT=S1 |

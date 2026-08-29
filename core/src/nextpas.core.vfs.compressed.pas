@@ -56,13 +56,13 @@ type
     function IsGzipHeader(const APath: string): Boolean;
   public
     constructor Create(const AInner: IVfs);
-    function Exists(const APath: string): Boolean;
+    function Exists(const APath: string): Boolean; inline;
     function Stat(const APath: string): TStatInfo;
-    function List(const ADirPath: string): TEntryArray;
-    function OpenRead(const APath: string): IStream;
-    function CaseSensitive: Boolean;
-    function TryGetETag(const APath: string; out AETag: string): Boolean;
-    function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
+    function List(const ADirPath: string): TEntryArray; inline;
+    function OpenRead(const APath: string): IStream; inline;
+    function CaseSensitive: Boolean; inline;
+    function TryGetETag(const APath: string; out AETag: string): Boolean; inline;
+    function TryGetLastModified(const APath: string; out ALastModified: string): Boolean; inline;
   end;
 
 constructor TAutoDecompressingVfs.Create(const AInner: IVfs);
@@ -87,7 +87,7 @@ begin
   Result := IsGzipPred(LHeader);
 end;
 
-function TAutoDecompressingVfs.Exists(const APath: string): Boolean;
+function TAutoDecompressingVfs.Exists(const APath: string): Boolean; inline;
 begin
   Result := FInner.Exists(APath);
 end;
@@ -101,27 +101,27 @@ begin
   Result := FTransformVfs.Stat(APath);
 end;
 
-function TAutoDecompressingVfs.List(const ADirPath: string): TEntryArray;
+function TAutoDecompressingVfs.List(const ADirPath: string): TEntryArray; inline;
 begin
   Result := FInner.List(ADirPath);
 end;
 
-function TAutoDecompressingVfs.OpenRead(const APath: string): IStream;
+function TAutoDecompressingVfs.OpenRead(const APath: string): IStream; inline;
 begin
   Result := FTransformVfs.OpenRead(APath);
 end;
 
-function TAutoDecompressingVfs.CaseSensitive: Boolean;
+function TAutoDecompressingVfs.CaseSensitive: Boolean; inline;
 begin
   Result := FInner.CaseSensitive;
 end;
 
-function TAutoDecompressingVfs.TryGetETag(const APath: string; out AETag: string): Boolean;
+function TAutoDecompressingVfs.TryGetETag(const APath: string; out AETag: string): Boolean; inline;
 begin
   AETag := ''; Result := False;
 end;
 
-function TAutoDecompressingVfs.TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
+function TAutoDecompressingVfs.TryGetLastModified(const APath: string; out ALastModified: string): Boolean; inline;
 var LInnerETag: IVfsETag;
 begin
   if FInner.QueryInterface(IVfsETag, LInnerETag) = 0 then Exit(LInnerETag.TryGetLastModified(APath, ALastModified));

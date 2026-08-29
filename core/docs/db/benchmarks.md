@@ -207,7 +207,7 @@ vs 825ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，�
 `Val(LTail,LCode,LCode)` 冗余清理），`ODBC` 分号+花括号
 （`Driver={DM8 ODBC DRIVER};`）同源复用，`DM` 等同形态 DSN 零新增词法
 ——`text.kv` 现为 **MySQL/PG/ODBC/DM 四形态 + factory/redis 零分配**
-统一底座，`bench_text_kv` 为性能锚点（零分配不变量以本表为准，`core/src/nextpas.core.db.*` 家族 `Trim(` 0 行单源，29 门离线基线：26 db + 3 text）。
+统一底座，`bench_text_kv` 为性能锚点（零分配不变量以本表为准，`core/src/nextpas.core.db.*` 家族 `Trim(` 2 行收敛至 `text.utils` 单源——`factory NormalizeLowerTrim` + `redis Trim`，29 门离线基线：26 db + 3 text）。
 
 > **口径显式化**：本表 `bytes` = `TBenchSuite` 的 `bytes_per_op`（见 `build/bench-kv.json`），非 `Length(GSuperLarge)` 实串长度；`GSuperLarge` 实串 `Length≈7383B`（400×`kN=v_x8;` 去尾空格），而 `bytes_per_op 43048B` 为 `bench` 侧统计口径（含框架 `bytes` 计数），二者差异为口径所致，非回归。归一路径：`factory`/`redis` 统一走 `nextpas.core.text.utils.NormalizeLowerTrim` 单源（`core/src/nextpas.core.db.*` 保持 `Trim(` 0 行）。
 
@@ -267,3 +267,9 @@ translate_complexity（线性度成立）、batch_insert pg 四路（autocommit
 - 优化提交引用本文数字时必须注明「同机同口径复跑」并给出前后对照。
 - 数字漂移 ±15% 内视为环境噪声（共享机器）；跨过阈值先查环境再谈回归。
 - 新增 bench 必须同步扩充本文口径表，缺口径的 bench 视为不存在。
+
+## 验证锚点 2026-08-29 — 同步至 main 3a23647bd（perf(time) Digits/TimeBucketKey O(n) + perf(bytes) Bytes↔String 单源化 + window 3.8 + tlspas P-384）
+
+- 聚焦门：`test_text 33` / `test_bytes 35` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` / `test_git_native 114` / `test_time_bucket 7` / `test_multipart 13` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`3a23647` 复跑 33/35/12/21/7/114/7/13 绿，含 time.bucket 单分配 + bytes 单源 + window 3.8）
+- 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，在册 `129/277/1102 ns` 静稳中位，当前 `123/354/1130 ns` 紧贴在册，`0 allocs` 不变量稳，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
+- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行 text.utils 单源` + `git.native Hex/Bytes/fetch + bytes.ops 单源`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）

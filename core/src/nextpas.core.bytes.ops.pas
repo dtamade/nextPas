@@ -28,6 +28,15 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
+procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
+function BytesConcatMany(const AParts: array of TBytes): TBytes;
+function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
@@ -38,6 +47,8 @@ function CompareUnsigned(const ALeft, ARight: TBytes): Integer;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+function BytesToString(const ABytes: TBytes): string; inline;
+function StringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
@@ -143,6 +154,42 @@ begin
     Move(ASpan.Data^, Result[0], ASpan.Len);
 end;
 
+function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
+var
+  I: Integer;
+  LTotal, LOff: SizeUInt;
+begin
+  LTotal := 0;
+  for I := 0 to High(AParts) do
+    Inc(LTotal, AParts[I].Len);
+  SetLength(Result, LTotal);
+  LOff := 0;
+  for I := 0 to High(AParts) do
+    if AParts[I].Len > 0 then
+    begin
+      Move(AParts[I].Data^, Result[LOff], AParts[I].Len);
+      Inc(LOff, AParts[I].Len);
+    end;
+end;
+
+function BytesConcatMany(const AParts: array of TBytes): TBytes;
+var
+  I: Integer;
+  LTotal, LOff: SizeUInt;
+begin
+  LTotal := 0;
+  for I := 0 to High(AParts) do
+    Inc(LTotal, Length(AParts[I]));
+  SetLength(Result, LTotal);
+  LOff := 0;
+  for I := 0 to High(AParts) do
+    if Length(AParts[I]) > 0 then
+    begin
+      Move(AParts[I][0], Result[LOff], Length(AParts[I]));
+      Inc(LOff, Length(AParts[I]));
+    end;
+end;
+
 { TBytes convenience }
 
 function BytesEqual(const A, B: TBytes): Boolean;
@@ -163,6 +210,78 @@ end;
 function BytesConcat(const A, B: TBytes): TBytes;
 begin
   Result := SpanConcat(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
+end;
+
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
+var
+  LOldLen: SizeUInt;
+begin
+  if Length(ASrc) = 0 then Exit;
+  LOldLen := Length(ADest);
+  SetLength(ADest, LOldLen + Length(ASrc));
+  Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+end;
+
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline;
+var
+  LOldLen: SizeUInt;
+begin
+  if (ASrc = nil) or (ASrcLen = 0) then Exit;
+  LOldLen := Length(ADest);
+  SetLength(ADest, LOldLen + ASrcLen);
+  Move(ASrc^, ADest[LOldLen], ASrcLen);
+end;
+
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
+var
+  LLen: SizeUInt;
+begin
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 1);
+  ADest[LLen] := AValue;
+end;
+
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
+var
+  LLen: SizeUInt;
+begin
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 2);
+  ADest[LLen] := Byte(AValue shr 8);
+  ADest[LLen + 1] := Byte(AValue);
+end;
+
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
+var
+  LLen: SizeUInt;
+begin
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 3);
+  ADest[LLen] := Byte(AValue shr 16);
+  ADest[LLen + 1] := Byte(AValue shr 8);
+  ADest[LLen + 2] := Byte(AValue);
+end;
+
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
+var
+  LLen: SizeUInt;
+begin
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + 4);
+  ADest[LLen] := Byte(AValue shr 24);
+  ADest[LLen + 1] := Byte(AValue shr 16);
+  ADest[LLen + 2] := Byte(AValue shr 8);
+  ADest[LLen + 3] := Byte(AValue);
+end;
+
+procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
+var
+  LLen: SizeUInt;
+begin
+  if (AData = nil) or (ACount = 0) then Exit;
+  LLen := Length(ADest);
+  SetLength(ADest, LLen + ACount);
+  Move(AData^, ADest[LLen], ACount);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
@@ -230,6 +349,18 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := UnsignedEqual(ALeft, ARight);
+function BytesToString(const ABytes: TBytes): string; inline;
+begin
+  SetLength(Result, Length(ABytes));
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
+end;
+
+function StringToBytes(const AText: string): TBytes; inline;
+begin
+  SetLength(Result, Length(AText));
+  if Length(AText) > 0 then
+    Move(AText[1], Result[0], Length(AText));
 end;
 
 end.

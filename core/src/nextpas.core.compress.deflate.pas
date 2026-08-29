@@ -14,6 +14,7 @@ uses
 function CreateDeflateWriter(const ADst: IWriter;
   const ALevel: TCompressionLevel = clDefault): ICompressWriter;
 function CreateDeflateReader(const ASrc: IReader): IDecompressReader;
+function CreateDeflateReaderEmbedded(const ASrc: IReader): IDecompressReader;
 function CreateDeflateReaderWithMaxOutputSize(const ASrc: IReader;
   const AMaxOutputSize: SizeUInt): IDecompressReader;
 
@@ -30,6 +31,14 @@ function DeflateCompress(const AData: TBytes;
 function DeflateDecompress(const AData: TBytes): TBytes;
 function DeflateDecompressWithMaxOutputSize(const AData: TBytes;
   const AMaxOutputSize: SizeUInt): TBytes;
+
+{ Zlib stream with embedded boundary: decompress single zlib stream starting at
+  AStart and report past-the-trailer offset via AEndPos. For git pack/loose
+  where zlib streams are concatenated (RFC1950). }
+function DeflateDecompressWithEndPos(const AData: TBytes; AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes;
+function DeflateDecompressPtrWithEndPos(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes;
 
 { RFC 7692 permessage-deflate wire helpers: raw DEFLATE (windowBits=-15),
   no zlib header; empty DEFLATE block trailer stripped on compress and
@@ -99,6 +108,7 @@ type
     FPendingReadError: string;
     FBounded: Boolean;
     FRaw: Boolean;               { windowBits=-15：跳过 zlib 头预检 }
+    FEmbedded: Boolean;
     FMaxOutputSize: SizeUInt;
     FOutputSize: SizeUInt;
     procedure CheckOutputLimit(const ARead: SizeUInt);
@@ -109,6 +119,9 @@ type
   public
     constructor Create(const ASrc: IReader); overload;
     constructor Create(const ASrc: IReader; const AMaxOutputSize: SizeUInt); overload;
+    { Stops at the end of the first zlib stream and leaves trailing source
+      bytes unconsumed, for embedded-stream containers (git pack, PDF, ...). }
+    constructor CreateEmbedded(const ASrc: IReader);
     constructor CreateRaw(const ASrc: IReader); overload;
     constructor CreateRaw(const ASrc: IReader;
       const AMaxOutputSize: SizeUInt); overload;
@@ -288,6 +301,7 @@ begin
   FPendingFinishValidation := False;
   FPendingReadError := '';
   FBounded := False;
+  FEmbedded := False;
   FRaw := AWindowBits < 0;
   FMaxOutputSize := 0;
   FOutputSize := 0;
@@ -305,6 +319,12 @@ begin
   Create(ASrc);
   FBounded := True;
   FMaxOutputSize := AMaxOutputSize;
+end;
+
+constructor TDeflateReader.CreateEmbedded(const ASrc: IReader);
+begin
+  Create(ASrc);
+  FEmbedded := True;
 end;
 
 constructor TDeflateReader.CreateRaw(const ASrc: IReader);
@@ -441,10 +461,22 @@ begin
         CheckOutputLimit(Result);
         if Result > 0 then
         begin
+          if FEmbedded then
+          begin
+            ReleaseInflateState;
+            FDone := True;
+            Exit(Result);
+          end;
           FPendingFinishValidation := True;
           Exit(Result);
         end;
-        FinishStream;
+        if FEmbedded then
+        begin
+          ReleaseInflateState;
+          FDone := True;
+        end
+        else
+          FinishStream;
         Exit(0);
       end;
       if (LRet <> Z_OK) and (LRet <> Z_BUF_ERROR) then
@@ -542,6 +574,13 @@ begin
   if ASrc = nil then
     raise EArgumentError.Create('deflate: reader is nil');
   Result := TDeflateReader.Create(ASrc);
+end;
+
+function CreateDeflateReaderEmbedded(const ASrc: IReader): IDecompressReader;
+begin
+  if ASrc = nil then
+    raise EArgumentError.Create('deflate: reader is nil');
+  Result := TDeflateReader.CreateEmbedded(ASrc);
 end;
 
 function CreateRawDeflateWriter(const ADst: IWriter;
@@ -663,9 +702,7 @@ begin
     end;
     Exit(nil);
   end;
-  LCapacity := SizeUInt(Length(AData)) * 4;
-  if (LCapacity < SizeUInt(Length(AData))) or (LCapacity > AMaxOutputSize) then
-    LCapacity := AMaxOutputSize;
+  LCapacity := CompressInitialDecompressCapacity(SizeUInt(Length(AData)), AMaxOutputSize);
   SetLength(Result, LCapacity);
 
   FillChar(LStream, SizeOf(LStream), 0);
@@ -696,12 +733,9 @@ begin
         Break;
       if LOutLen >= LCapacity then
       begin
-        if LCapacity >= AMaxOutputSize then
+        LCapacity := CompressNextCapacity(LCapacity, AMaxOutputSize);
+        if LCapacity = 0 then
           raise EIOError.Create('deflate: decompressed size exceeds limit');
-        if LCapacity > AMaxOutputSize div 2 then
-          LCapacity := AMaxOutputSize
-        else
-          LCapacity := LCapacity * 2;
         SetLength(Result, LCapacity);
       end
       else if LRet = Z_BUF_ERROR then
@@ -715,6 +749,84 @@ begin
     inflateEnd(LStream);
   end;
   SetLength(Result, LOutLen);
+end;
+
+procedure ValidateZlibHeaderAtPtr(AData: PByte; ACount, AStart: SizeUInt); inline;
+var
+  Cmf, Flg: Byte;
+begin
+  if ACount < AStart + 2 then
+    raise EIOError.Create('deflate: truncated stream');
+  Cmf := AData[AStart];
+  Flg := AData[AStart + 1];
+  if (Cmf and $0F) <> Z_DEFLATED then
+    raise EIOError.Create('deflate: invalid zlib header');
+  if (Cmf shr 4) > 7 then
+    raise EIOError.Create('deflate: invalid window bits');
+  if ((Cardinal(Cmf) shl 8) or Flg) mod 31 <> 0 then
+    raise EIOError.Create('deflate: corrupt zlib header');
+  if (Flg and $20) <> 0 then
+    raise EIOError.Create('deflate: preset dictionary not supported');
+end;
+
+function DeflateDecompressPtrWithEndPos(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes;
+const
+  CBufSizeLocal = 16384;
+var
+  Strm: z_stream;
+  Ret: Integer;
+  OutBuf: array[0..CBufSizeLocal - 1] of Byte;
+  Total: SizeInt;
+  InSize: LongWord;
+begin
+  if AData = nil then
+    raise EIOError.Create('deflate: nil input');
+  ValidateZlibHeaderAtPtr(AData, ACount, AStart);
+  if (ACount - AStart) > High(LongWord) then
+    raise EIOError.Create('deflate: zlib stream too large');
+  Result := nil;
+  FillChar(Strm, SizeOf(Strm), 0);
+  Strm.next_in := pBytef(AData + AStart);
+  InSize := LongWord(ACount - AStart);
+  Strm.avail_in := InSize;
+  if inflateInit(Strm) <> Z_OK then
+    raise EIOError.Create('inflateInit failed');
+  try
+    Total := 0;
+    repeat
+      Strm.next_out := @OutBuf[0];
+      Strm.avail_out := CBufSizeLocal;
+      Ret := inflate(Strm, Z_NO_FLUSH);
+      if (Ret <> Z_OK) and (Ret <> Z_STREAM_END) and (Ret <> Z_BUF_ERROR) then
+      begin
+        if Ret = Z_DATA_ERROR then
+          raise EIOError.Create('deflate: corrupt stream');
+        raise EIOError.CreateFmt('deflate: inflate %d', [Ret]);
+      end;
+      if CBufSizeLocal - Strm.avail_out > 0 then
+      begin
+        SetLength(Result, Total + (CBufSizeLocal - Strm.avail_out));
+        Move(OutBuf[0], Result[Total], CBufSizeLocal - Strm.avail_out);
+        Inc(Total, CBufSizeLocal - Strm.avail_out);
+      end;
+      if Ret = Z_STREAM_END then Break;
+      if (Ret = Z_BUF_ERROR) and (Strm.avail_in = 0) then
+        raise EIOError.Create('deflate: truncated stream');
+    until False;
+    AEndPos := AStart + SizeUInt(Strm.total_in);
+  finally
+    inflateEnd(Strm);
+  end;
+end;
+
+function DeflateDecompressWithEndPos(const AData: TBytes; AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes;
+begin
+  if Length(AData) = 0 then
+    raise EIOError.Create('deflate: truncated stream');
+  Result := DeflateDecompressPtrWithEndPos(PByte(AData), SizeUInt(Length(AData)),
+    AStart, AEndPos);
 end;
 
 function RawDeflateMessageCompress(const AData: TBytes;
@@ -814,22 +926,15 @@ begin
   if inflateInit2(LStream, -15) <> Z_OK then
     raise EIOError.Create('raw inflateInit2 failed');
   try
-    LCapacity := SizeUInt(Length(AData)) * 4;
-    if LCapacity < 64 then
-      LCapacity := 64;
-    if LCapacity > AMaxOutputSize then
-      LCapacity := AMaxOutputSize;
+    LCapacity := CompressInitialInflateCapacity(SizeUInt(Length(AData)), AMaxOutputSize);
     SetLength(Result, LCapacity);
     LOutLen := 0;
     repeat
       if LOutLen >= LCapacity then
       begin
-        if LCapacity >= AMaxOutputSize then
+        LCapacity := CompressNextCapacity(LCapacity, AMaxOutputSize);
+        if LCapacity = 0 then
           raise EIOError.Create('raw inflate: decompressed size exceeds limit');
-        if LCapacity > AMaxOutputSize div 2 then
-          LCapacity := AMaxOutputSize
-        else
-          LCapacity := LCapacity * 2;
         SetLength(Result, LCapacity);
       end;
       LStream.next_out := @Result[LOutLen];
@@ -961,25 +1066,15 @@ begin
   if inflateInit2(LStream, -15) <> Z_OK then
     raise EIOError.Create('raw inflateInit2 failed');
   try
-    { 初始容量：调用方提示（如容器声明的未压缩尺寸）优先，避免反复扩容 }
-    LCapacity := SizeUInt(Length(AData)) * 4;
-    if ACapacityHint > LCapacity then
-      LCapacity := ACapacityHint;
-    if LCapacity < 64 then
-      LCapacity := 64;
-    if LCapacity > AMaxOutputSize then
-      LCapacity := AMaxOutputSize;
+    LCapacity := CompressInitialInflateCapacity(SizeUInt(Length(AData)), AMaxOutputSize, ACapacityHint);
     SetLength(Result, LCapacity);
     LOutLen := 0;
     repeat
       if LOutLen >= LCapacity then
       begin
-        if LCapacity >= AMaxOutputSize then
+        LCapacity := CompressNextCapacity(LCapacity, AMaxOutputSize);
+        if LCapacity = 0 then
           raise EIOError.Create('raw inflate: decompressed size exceeds limit');
-        if LCapacity > AMaxOutputSize div 2 then
-          LCapacity := AMaxOutputSize
-        else
-          LCapacity := LCapacity * 2;
         SetLength(Result, LCapacity);
       end;
       LStream.next_out := @Result[LOutLen];

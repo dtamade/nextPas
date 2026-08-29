@@ -97,6 +97,7 @@ type
     FEvalScriptsCount: Integer;
     FEvalQueue: array of Boolean;  // 预载结果 FIFO：True=错误（值在 FEvalResults）
     FEvalResults: array of string; // 与 FEvalQueue 平行：成功 JSON 或错误消息
+    FEvalQueueCount: Integer;
     FPendingEvals: array of TFakePendingEval;
     FPendingCount: Integer;
     FOutcomes: TFakeInvokeOutcomes;
@@ -114,6 +115,7 @@ type
     FReloadCount: Integer;
     FStopCount: Integer;
     FHistory: array of string;
+    FHistoryCount: Integer;
     FHistIdx: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
     FOnNavStartedCount: Integer;
@@ -139,6 +141,8 @@ type
     procedure GrowOnWindowClosed; inline;
     procedure GrowOnReady; inline;
     procedure GrowOnScaleChanged; inline;
+    procedure GrowQueue; inline;
+    procedure GrowHistory; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -377,7 +381,7 @@ type
     FHead: Integer;
     FCount: Integer;
     FOwnerThread: UInt64;
-    procedure Grow;
+    procedure Grow; inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -406,13 +410,13 @@ begin
   inherited Destroy;
 end;
 
-procedure TFakeDispatcher.Grow;
+procedure TFakeDispatcher.Grow; inline;
 var
   LNewCap, I: Integer;
   LNew: array of TWebviewProcRef;
 begin
-  LNewCap := Length(FRing) * 2;
-  if LNewCap = 0 then
+  LNewCap := WebviewGrowCapacity(Length(FRing));
+  if (Length(FRing) = 0) and (LNewCap < 16) then
     LNewCap := 16;
   SetLength(LNew, LNewCap);
   for I := 0 to FCount - 1 do
@@ -586,13 +590,20 @@ end;
 
 var
   GLiveWindows: array of TFakeWebview;
+  GLiveWindowsCount: Integer = 0;
+
+procedure GrowLiveWindows; inline;
+begin
+  if GLiveWindowsCount = Length(GLiveWindows) then
+    SetLength(GLiveWindows, WebviewGrowCapacity(Length(GLiveWindows)));
+end;
 
 function FakeLiveWindowCount: Integer;
 var
   I, LCnt: Integer;
 begin
   LCnt := 0;
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed then
       LCnt := LCnt + 1;
   Result := LCnt;
@@ -602,7 +613,7 @@ procedure FakePumpAll;
 var
   I: Integer;
 begin
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed then
       GLiveWindows[I].PumpOnce;
 end;
@@ -655,9 +666,11 @@ begin
   FAssets := LAssets;
   FDroppedEmits := 0;
   FNavigateCount := 0;
+  FHistoryCount := 0;
   FHistIdx := -1;
-  SetLength(GLiveWindows, Length(GLiveWindows) + 1);
-  GLiveWindows[High(GLiveWindows)] := Self;
+  GrowLiveWindows;
+  GLiveWindows[GLiveWindowsCount] := Self;
+  Inc(GLiveWindowsCount);
 
   { Initial* 启动加载：构造即导航。优先级 InitialUrl > InitialHtml
     （CONTRACT §2.2），资产/桥请求都在主循环泵里才发生，Build 返回后的
@@ -672,11 +685,13 @@ destructor TFakeWebview.Destroy;
 var
   I: Integer;
 begin
-  for I := High(GLiveWindows) downto 0 do
+  for I := GLiveWindowsCount - 1 downto 0 do
     if GLiveWindows[I] = Self then
     begin
-      GLiveWindows[I] := GLiveWindows[High(GLiveWindows)];
-      SetLength(GLiveWindows, Length(GLiveWindows) - 1);
+      GLiveWindows[I] := GLiveWindows[GLiveWindowsCount - 1];
+      GLiveWindows[GLiveWindowsCount - 1] := nil;
+      Dec(GLiveWindowsCount);
+      Break;
     end;
   inherited Destroy;
 end;
@@ -753,6 +768,21 @@ begin
     SetLength(FOnScaleChanged, WebviewGrowCapacity(Length(FOnScaleChanged)));
 end;
 
+procedure TFakeWebview.GrowQueue; inline;
+begin
+  if FEvalQueueCount = Length(FEvalQueue) then
+  begin
+    SetLength(FEvalQueue, WebviewGrowCapacity(Length(FEvalQueue)));
+    SetLength(FEvalResults, WebviewGrowCapacity(Length(FEvalResults)));
+  end;
+end;
+
+procedure TFakeWebview.GrowHistory; inline;
+begin
+  if FHistoryCount = Length(FHistory) then
+    SetLength(FHistory, WebviewGrowCapacity(Length(FHistory)));
+end;
+
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
@@ -771,10 +801,19 @@ begin
 end;
 
 procedure TFakeWebview.PushHistory(const AUrl: string);
+var
+  I: Integer;
 begin
-  SetLength(FHistory, FHistIdx + 2);
-  FHistory[FHistIdx + 1] := AUrl;
-  FHistIdx := FHistIdx + 1;
+  if FHistIdx + 1 < FHistoryCount then
+  begin
+    for I := FHistIdx + 2 to FHistoryCount - 1 do
+      FHistory[I] := '';
+    FHistoryCount := FHistIdx + 1;
+  end;
+  GrowHistory;
+  FHistory[FHistoryCount] := AUrl;
+  Inc(FHistoryCount);
+  FHistIdx := FHistoryCount - 1;
 end;
 
 procedure TFakeWebview.FireReadyHandlers;
@@ -1051,13 +1090,13 @@ end;
 function TFakeWebview.CanGoForward: Boolean;
 begin
   RequireOpen;
-  Result := FHistIdx < High(FHistory);
+  Result := FHistIdx + 1 < FHistoryCount;
 end;
 
 function TFakeWebview.GoForward: Boolean;
 begin
   RequireOpen;
-  if FHistIdx >= High(FHistory) then
+  if FHistIdx + 1 >= FHistoryCount then
     Exit(False);
   FHistIdx := FHistIdx + 1;
   Result := True;
@@ -1080,7 +1119,7 @@ begin
   LValue := '';
   FLck.Acquire;
   try
-    if Length(FEvalQueue) > 0 then
+    if FEvalQueueCount > 0 then
     begin
       LIsError := FEvalQueue[0];
       LValue := FEvalResults[0];
@@ -1106,13 +1145,17 @@ procedure TFakeWebview.ShiftEvalQueue;
 var
   I: Integer;
 begin
-  for I := 0 to High(FEvalQueue) - 1 do
+  for I := 0 to FEvalQueueCount - 2 do
   begin
     FEvalQueue[I] := FEvalQueue[I + 1];
     FEvalResults[I] := FEvalResults[I + 1];
   end;
-  SetLength(FEvalQueue, Length(FEvalQueue) - 1);
-  SetLength(FEvalResults, Length(FEvalResults) - 1);
+  Dec(FEvalQueueCount);
+  if FEvalQueueCount < Length(FEvalQueue) then
+  begin
+    FEvalQueue[FEvalQueueCount] := False;
+    FEvalResults[FEvalQueueCount] := '';
+  end;
 end;
 
 { 恰好一次兑现：先落记录再触发回调（回调内再入本对象是安全的） }
@@ -1302,10 +1345,10 @@ begin
     end
     else
     begin
-      SetLength(FEvalQueue, Length(FEvalQueue) + 1);
-      FEvalQueue[High(FEvalQueue)] := False;
-      SetLength(FEvalResults, Length(FEvalResults) + 1);
-      FEvalResults[High(FEvalResults)] := AResultJson;
+      GrowQueue;
+      FEvalQueue[FEvalQueueCount] := False;
+      FEvalResults[FEvalQueueCount] := AResultJson;
+      Inc(FEvalQueueCount);
     end;
   finally
     FLck.Release;
@@ -1331,10 +1374,10 @@ begin
     end
     else
     begin
-      SetLength(FEvalQueue, Length(FEvalQueue) + 1);
-      FEvalQueue[High(FEvalQueue)] := True;
-      SetLength(FEvalResults, Length(FEvalResults) + 1);
-      FEvalResults[High(FEvalResults)] := AMessage;
+      GrowQueue;
+      FEvalQueue[FEvalQueueCount] := True;
+      FEvalResults[FEvalQueueCount] := AMessage;
+      Inc(FEvalQueueCount);
     end;
   finally
     FLck.Release;

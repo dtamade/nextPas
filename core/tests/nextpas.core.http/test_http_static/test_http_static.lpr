@@ -654,6 +654,30 @@ begin
   Check(not HttpIfNoneMatchMatches('', '"abc"'), 'empty header');
 end;
 
+procedure TestHttpWeakETagEqualsPure;
+begin
+  Check(HttpWeakETagEquals('"abc"', '"abc"'), 'exact true');
+  Check(HttpWeakETagEquals('W/"abc"', '"abc"'), 'weak prefix true');
+  Check(HttpWeakETagEquals('"abc"', 'W/"abc"'), 'reverse weak true');
+  Check(HttpWeakETagEquals('W/"abc"', 'W/"abc"'), 'both weak true');
+  Check(not HttpWeakETagEquals('"abc"', '"xyz"'), 'mismatch false');
+  Check(not HttpWeakETagEquals('W/"abc"', '"xyz"'), 'weak mismatch false');
+  Check(HttpWeakETagEquals('', ''), 'empty true');
+  Check(not HttpWeakETagEquals('"a"', ''), 'empty vs value false');
+end;
+
+procedure TestHttpRangeHasBytesPrefixPure;
+begin
+  Check(HttpRangeHasBytesPrefix('bytes=0-99'), 'bytes prefix true');
+  Check(HttpRangeHasBytesPrefix('bytes=-500'), 'suffix true');
+  Check(HttpRangeHasBytesPrefix('bytes=100-'), 'open-ended true');
+  Check(HttpRangeHasBytesPrefix('bytes='), 'bare bytes= true');
+  Check(not HttpRangeHasBytesPrefix('BYTES=0-99'), 'case mismatch false');
+  Check(not HttpRangeHasBytesPrefix('bytes'), 'missing = false');
+  Check(not HttpRangeHasBytesPrefix(''), 'empty false');
+  Check(not HttpRangeHasBytesPrefix('xxbytes=0-1'), 'wrong prefix false');
+end;
+
 { HTTP-date 三格式解析（Go http.ParseTime 同集）：
   IMF-fixdate / RFC850 / ANSIC，合法矩阵 + 非法拒绝。 }
 procedure TestTryParseHttpDate;
@@ -1579,6 +1603,8 @@ begin
       @TestServeVfsEmbeddedUnknownModTime);
     T.Test('ServeVfs embedded range and unhashed fallback',
       @TestServeVfsEmbeddedRangeAndUnhashedFallback);
+    T.Test('HttpWeakETagEquals pure zero-alloc', @TestHttpWeakETagEqualsPure);
+    T.Test('HttpRangeHasBytesPrefix pure zero-alloc', @TestHttpRangeHasBytesPrefixPure);
     T.Test('TryParseHttpDate three formats', @TestTryParseHttpDate);
   if not T.Run then Halt(1);
   finally

@@ -26,7 +26,7 @@ public
   function AsyncReadTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean; function AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 end;
 implementation
-uses SysUtils, nextpas.core.ssh.buffer;
+uses nextpas.core.ssh.buffer;
 procedure ChannelStreamRetryWrite(AContext: Pointer); forward;
 procedure Channel_OnPacket(const APayload: TBytes; AErr: ESSHError; AContext: Pointer); forward;
 procedure Channel_WriteDone(AErr: ESSHError; AContext: Pointer); forward;

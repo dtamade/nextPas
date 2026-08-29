@@ -410,7 +410,28 @@ var
 begin
   if FPendingCount = 0 then
     Exit;
-  SetLength(LReleases, FOpCount);
+  // Count callbacks first to avoid allocating LReleases when all are nil (cancel ops).
+  LReleaseCount := 0;
+  for LI := 0 to FOpCount - 1 do
+    if FOps[LI].Active and Assigned(FOps[LI].Callback) then
+      Inc(LReleaseCount);
+  if LReleaseCount = 0 then
+  begin
+    for LI := 0 to FOpCount - 1 do
+    begin
+      if not FOps[LI].Active then Continue;
+      RemoveFd(FOps[LI].Fd);
+      FOps[LI].Callback := nil;
+      FOps[LI].Context := nil;
+      FOps[LI].Active := False;
+      FOps[LI].NextFree := -1;
+    end;
+    FOpCount := 0;
+    FPendingCount := 0;
+    FFreeHead := -1;
+    Exit;
+  end;
+  SetLength(LReleases, LReleaseCount);
   LReleaseCount := 0;
   for LI := 0 to FOpCount - 1 do
   begin
@@ -432,8 +453,6 @@ begin
   FOpCount := 0;
   FPendingCount := 0;
   FFreeHead := -1;
-  if LReleaseCount = 0 then
-    Exit;
   LHasException := False;
   LExceptionMessage := '';
   if FEpfd >= 0 then
@@ -457,6 +476,7 @@ begin
       end;
     end;
   end;
+  SetLength(LReleases, 0);
   if LHasException then
     raise Exception.Create(LExceptionMessage);
 end;

@@ -16,11 +16,11 @@ unit nextpas.core.ssh.session;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.base.utils,
+  nextpas.core.text.conv,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -28,7 +28,8 @@ uses
   nextpas.core.ssh.hostkey,
   nextpas.core.ssh.channel,
   nextpas.core.ssh.transport,
-  nextpas.core.ssh.sftp;
+  nextpas.core.ssh.sftp,
+  nextpas.core.ssh.keepalive;
 
 type
   { 已建立的 SSH 会话（阻塞式）}
@@ -58,6 +59,7 @@ type
       需已认证；同一会话可多次调用（各自独立通道）。}
     function OpenFileSystem: ISshFileSystem;
     function ShouldRekey: Boolean;
+    function Rekey: Boolean;
     function SendKeepAlive(const AData: TBytes): Boolean; overload;
     function SendKeepAlive: Boolean; overload;
 
@@ -168,6 +170,8 @@ type
     procedure EnsureHandshaken;
     procedure EnsureAuthenticated;
     procedure DoHandshake;
+    procedure DoRekey;
+    procedure EnsureRekeyIfNeeded;
     procedure DoServiceRequest;
     procedure VerifyHostKey(const ASigAlg: string; const AH, ASigBlob: TBytes);
     procedure LoadKnownHostsIfNeeded;
@@ -192,6 +196,7 @@ type
     function Exec(const ACommand: string): TSshExecResult;
     function OpenFileSystem: ISshFileSystem;
     function ShouldRekey: Boolean;
+    function Rekey: Boolean;
     function SendKeepAlive(const AData: TBytes): Boolean; overload;
     function SendKeepAlive: Boolean; overload;
     procedure Close;
@@ -237,6 +242,7 @@ type
     function Exec(const ACommand: string): TSshExecResult;
     function OpenFileSystem: ISshFileSystem;
     function ShouldRekey: Boolean;
+    function Rekey: Boolean;
     function SendKeepAlive(const AData: TBytes): Boolean; overload;
     function SendKeepAlive: Boolean; overload;
     procedure Close;
@@ -301,6 +307,13 @@ begin
   Result := (FTransport <> nil) and FTransport.ShouldRekey;
 end;
 
+function TSshSession.Rekey: Boolean;
+begin
+  if (FTransport = nil) or FClosed or not FAuthenticated then Exit(False);
+  if not ShouldRekey then Exit(True);
+  try DoRekey; Result := True; except Result := False; raise; end;
+end;
+
 function TSshSession.SendKeepAlive(const AData: TBytes): Boolean;
 begin
   if (FTransport = nil) or FClosed or not FAuthenticated then Exit(False);
@@ -309,6 +322,12 @@ end;
 
 function TSshSession.SendKeepAlive: Boolean;
 begin Result := SendKeepAlive(nil); end;
+
+procedure TSshSession.EnsureRekeyIfNeeded;
+begin
+  if ShouldRekey then
+    try DoRekey; except end;
+end;
 
 function TSshSession.ExpectOneOf(const AAcceptable: array of Byte): TBytes;
 begin
@@ -432,6 +451,50 @@ begin
   DeriveAndApplyNewKeys(LNeg, LK, LH);
   DoServiceRequest;
   FHandshaken := True;
+end;
+
+procedure TSshSession.DoRekey;
+var
+  LCookie, LMyInit, LPeerInit, LReply: TBytes;
+  LPeer: TSshPeerKexInit;
+  LNeg: TSshNegotiated;
+  LK, LH, LHostBlob, LSigBlob: TBytes;
+  LKexCurve: TSshKexCurve25519;
+  LKexDH: TSshKexDHGroup14;
+begin
+  if FClosed or not FAuthenticated then
+    raise ESSHError.Create(sekProtocol, 'ssh session: rekey outside authenticated session');
+  if FTransport.State <> tstEncrypted then
+    raise ESSHError.Create(sekProtocol, 'ssh session: rekey without encryption');
+  LCookie := GenerateSecureRandomBytes(16);
+  LMyInit := FTransport.SendKexInitEx(LCookie, FOptions.Compress);
+  LPeerInit := ExpectOneOf([SSH_MSG_KEXINIT]);
+  LPeer := SshParseKexInit(LPeerInit);
+  LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
+  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
+  begin
+    LKexDH := TSshKexDHGroup14.Create;
+    try
+      FTransport.SendPacket(LKexDH.BuildInitPayload);
+      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+    finally LKexDH.Free; end;
+  end else
+  begin
+    LKexCurve := TSshKexCurve25519.Create;
+    try
+      FTransport.SendPacket(LKexCurve.BuildInitPayload);
+      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+    finally LKexCurve.Free; end;
+  end;
+  if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
+    raise ESSHError.Create(sekHostKey, 'ssh session: rekey unsupported host key blob');
+  VerifyHostKey(LNeg.HostKeyAlg, LH, LSigBlob);
+  DeriveAndApplyNewKeys(LNeg, LK, LH);
+  FNegotiated := LNeg;
 end;
 
 procedure TSshSession.DeriveAndApplyNewKeys(const ANegotiated: TSshNegotiated;
@@ -666,6 +729,7 @@ end;
 function TSshSession.Exec(const ACommand: string): TSshExecResult;
 begin
   EnsureAuthenticated;
+  EnsureRekeyIfNeeded;
   Result := SshRunExec(FTransport, ACommand,
     FOptions.InitialWindowSize, FOptions.MaxPacket, FOptions.ExecTimeoutMs);
 end;
@@ -673,6 +737,7 @@ end;
 function TSshSession.OpenFileSystem: ISshFileSystem;
 begin
   EnsureAuthenticated;
+  EnsureRekeyIfNeeded;
   Result := SftpOpenOnTransport(FTransport, FOptions.InitialWindowSize,
     FOptions.MaxPacket, FOptions.ExecTimeoutMs);
 end;
@@ -931,6 +996,9 @@ end;
 
 function TProxyJumpSession.ShouldRekey: Boolean;
 begin if FTarget <> nil then Result := FTarget.ShouldRekey else Result := False; end;
+
+function TProxyJumpSession.Rekey: Boolean;
+begin if FTarget <> nil then Result := FTarget.Rekey else Result := False; end;
 
 function TProxyJumpSession.SendKeepAlive(const AData: TBytes): Boolean;
 begin if FTarget <> nil then Result := FTarget.SendKeepAlive(AData) else Result := False; end;

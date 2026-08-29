@@ -69,12 +69,6 @@ type
     // M5+（参数化）：同上带 options。
     function DiffWorkingTreeEx(const ARef: string;
       const AOptions: TGitDiffOptions): TGitDiff;
-    // k101: 工作树（含 index）相对 ARef 的完整 patch 文本——逐 delta 经
-    // git_patch_from_diff + git_patch_to_buf 连缀，与 git diff <ref> 输出同构；
-    // AShowBinary=True 时二进制 delta 以 "GIT binary patch" literal 段导出
-    // （可被 ApplyPatch 的 git_diff_from_buffer 解析回写）。无差异 → ''。
-    function WorkdirPatchText(const ARef: string; const APaths: TStringArray;
-      AShowBinary: Boolean): string;
     // M5: commit traversal from AStartRef along parents (topological + time order),
     // newest-first; ALimit <= 0 = unlimited. Unresolvable ref → EGitError.
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
@@ -86,15 +80,14 @@ type
     // 合并视图：local + worktree + global + system（同 git config --list 语义）。
     // 读取失败 → EGitError。
     function ConfigEntries: TGitConfigEntryArray;
-    // k97: apply a unified-diff patch text to the working directory.
-    // The buffer is parsed in full before the first file is written; a
-    // failing hunk raises EGitError (partial writes possible — callers
-    // wanting all-or-nothing semantics must snapshot touched files).
-    procedure ApplyPatch(const APatch: string);
-    // k97: force-restore the listed paths to their content at ASpec
-    // (discard semantics; paths absent from ASpec are left untouched —
-    // untracked removal stays the caller's job via status + fs).
-    procedure CheckoutPaths(const ASpec: string; const APaths: TStringArray);
+    // k97/k101（2026-08-26）：patch/checkout 工作区补丁辅助，三者经 git 黄金对照。
+    // ApplyPatch 将统一补丁文本原子地应用到工作区（失败则全回滚，抛 EGitError）。
+    // CheckoutPaths 从给定 revspec 强制恢复指定路径到工作区与 index。
+    // WorkdirPatchText 生成工作区相对 ARevspec 的补丁文本，AShowBinary 控制二进制段。
+    procedure ApplyPatch(const APatchText: string);
+    procedure CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
+    function WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
+      AShowBinary: Boolean): string;
   end;
 
   IGitCommit = interface

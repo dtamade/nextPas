@@ -282,7 +282,7 @@ begin
   if AWidth < 0 then AWidth := 0;
   if AHeight < 0 then AHeight := 0;
   FWidth := AWidth; FHeight := AHeight;
-  E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
 
@@ -300,7 +300,7 @@ var
   E: TWindowEvent;
 begin
   RequireOpen;
-  E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
 

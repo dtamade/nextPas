@@ -43,6 +43,17 @@ const
   SDL_WINDOWEVENT               = $200;
   SDL_USEREVENT                 = $8000;
 
+  SDL_KEYDOWN                   = $300;
+  SDL_KEYUP                     = $301;
+  SDL_MOUSEMOTION               = $400;
+  SDL_MOUSEBUTTONDOWN           = $401;
+  SDL_MOUSEBUTTONUP             = $402;
+
+  KMOD_SHIFT = $0001;
+  KMOD_CTRL  = $0040;
+  KMOD_ALT   = $0100;
+  KMOD_GUI   = $0400;
+
 type
   PSDL_Window = Pointer;
 
@@ -67,13 +78,59 @@ type
     data2: Pointer;
   end;
 
-  // Minimal SDL_Event union: type + 56 bytes payload (enough for window/user)
+  TSDL_Keysym = packed record
+    scancode: UInt32;
+    sym: Int32;
+    mod_: UInt16;
+    unused: UInt32;
+  end;
+
+  TSDL_KeyboardEvent = packed record
+    type_: UInt32;
+    timestamp: UInt32;
+    windowID: UInt32;
+    state: UInt8;
+    repeat_: UInt8;
+    padding2: UInt8;
+    padding3: UInt8;
+    keysym: TSDL_Keysym;
+  end;
+
+  TSDL_MouseButtonEvent = packed record
+    type_: UInt32;
+    timestamp: UInt32;
+    windowID: UInt32;
+    which: UInt32;
+    button: UInt8;
+    state: UInt8;
+    clicks: UInt8;
+    padding: UInt8;
+    x: Int32;
+    y: Int32;
+  end;
+
+  TSDL_MouseMotionEvent = packed record
+    type_: UInt32;
+    timestamp: UInt32;
+    windowID: UInt32;
+    which: UInt32;
+    state: UInt32;
+    x: Int32;
+    y: Int32;
+    xrel: Int32;
+    yrel: Int32;
+  end;
+
+  // Minimal SDL_Event union: type + 56 bytes payload (enough for window/user/key/mouse)
   TSDL_Event = packed record
     case Integer of
       0: (type_: UInt32);
       1: (window: TSDL_WindowEvent);
       2: (user: TSDL_UserEvent);
-      3: (padding: array[0..127] of Byte);
+      3: (key: TSDL_KeyboardEvent);
+      4: (button: TSDL_MouseButtonEvent);
+      5: (motion: TSDL_MouseMotionEvent);
+      6: (padding: array[0..127] of Byte);
   end;
   PSDL_Event = ^TSDL_Event;
 

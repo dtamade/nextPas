@@ -68,6 +68,7 @@ function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.fs.glob,
   nextpas.core.respack.dirsource,
@@ -300,23 +301,6 @@ begin
   Result := OutBuf;
 end;
 
-function BytesOfStr(const S: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(Pointer(S)^, Result[0], SizeUInt(Length(S)));
-end;
-
-function ConcatBytes(const AA, AB: TBytes): TBytes;
-begin
-  SetLength(Result, Length(AA) + Length(AB));
-  if Length(AA) > 0 then
-    Move(AA[0], Result[0], SizeUInt(Length(AA)));
-  if Length(AB) > 0 then
-    Move(AB[0], Result[Length(AA)], SizeUInt(Length(AB)));
-end;
-
 function IdentEqualCI(const AA, AB: string): Boolean;
 var
   I, N: Integer;
@@ -343,10 +327,10 @@ begin
     raise EResPackError.Create('respack.embed: UnitName must differ from ' +
       'ConstName ("' + AUnitName + '")');
   Body := ResPackEmbedIncSource(ABlob, AOpts);
-  Head := BytesOfStr('unit ' + AUnitName + ';' + #10 +
+  Head := StringToBytes('unit ' + AUnitName + ';' + #10 +
     '{$mode objfpc}{$H+}' + #10 + #10 + 'interface' + #10 + #10);
-  Tail := BytesOfStr(#10 + 'implementation' + #10 + #10 + 'end.' + #10);
-  Result := ConcatBytes(Head, ConcatBytes(Body, Tail));
+  Tail := StringToBytes(#10 + 'implementation' + #10 + #10 + 'end.' + #10);
+  Result := BytesConcatMany([Head, Body, Tail]);
 end;
 
 end.

@@ -27,7 +27,6 @@ function SshAsyncRunExec(const ATransport: TAsyncSshTransport; const ACommand: s
 implementation
 
 uses
-  SysUtils,
   nextpas.core.async.base,
   nextpas.core.ssh.buffer;
 

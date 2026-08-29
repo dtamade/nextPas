@@ -30,6 +30,9 @@ uses
   nextpas.core.ssh.sftp,
   nextpas.core.ssh.agent,
   nextpas.core.ssh.compress,
+  nextpas.core.ssh.rekey,
+  nextpas.core.ssh.keepalive,
+  nextpas.core.ssh.window,
   nextpas.core.ssh.session;
 
 type
@@ -62,6 +65,7 @@ type
   ISshCompressor = nextpas.core.ssh.compress.ISshCompressor;
   TsshWriter = nextpas.core.ssh.buffer.TsshWriter;
   TsshReader = nextpas.core.ssh.buffer.TsshReader;
+  TChannelWindow = nextpas.core.ssh.window.TChannelWindow;
 
 { 默认选项（inline 转发）}
 function DefaultSshOptions(const AHost: string): TSshConnectOptions; inline;

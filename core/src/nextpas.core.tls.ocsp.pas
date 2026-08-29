@@ -20,6 +20,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.tls.asn1,
   nextpas.core.tls.x509,
   nextpas.core.text.conv,
@@ -412,27 +413,6 @@ begin
     Move(AContent[0], Result[Offset], ContentLen);
 end;
 
-{ 连接多个 TBytes 数组 }
-function ConcatBytes(const AArrays: array of TBytes): TBytes;
-var
-  TotalLen, Offset, I: Integer;
-begin
-  TotalLen := 0;
-  for I := Low(AArrays) to High(AArrays) do
-    Inc(TotalLen, Length(AArrays[I]));
-
-  SetLength(Result, TotalLen);
-  Offset := 0;
-  for I := Low(AArrays) to High(AArrays) do
-  begin
-    if Length(AArrays[I]) > 0 then
-    begin
-      Move(AArrays[I][0], Result[Offset], Length(AArrays[I]));
-      Inc(Offset, Length(AArrays[I]));
-    end;
-  end;
-end;
-
 { 编码 AlgorithmIdentifier }
 function EncodeAlgorithmIdentifier(const AOID: string): TBytes;
 var
@@ -456,7 +436,7 @@ begin
   NullBytes[0] := $05;
   NullBytes[1] := $00;
 
-  Content := ConcatBytes([OIDBytes, NullBytes]);
+  Content := BytesConcatMany([OIDBytes, NullBytes]);
   Result := WrapInSequence(Content);
 end;
 
@@ -575,7 +555,7 @@ begin
     end;
 
     // AttributeTypeAndValue SEQUENCE
-    AttrSeq := WrapInSequence(ConcatBytes([AttrType, AttrValue]));
+    AttrSeq := WrapInSequence(BytesConcatMany([AttrType, AttrValue]));
 
     // RDN SET
     RDNSet := AttrSeq;
@@ -586,7 +566,7 @@ begin
   end;
 
   // Name SEQUENCE
-  Result := WrapInSequence(ConcatBytes(RDNs));
+  Result := WrapInSequence(BytesConcatMany(RDNs));
 end;
 
 { 将字节数组转换为十六进制字符串 }
@@ -632,7 +612,7 @@ begin
   SerialBytes := EncodeBigInteger(SerialNumber);
 
   // 组合为 SEQUENCE
-  Content := ConcatBytes([AlgIdBytes, IssuerNameHashBytes,
+  Content := BytesConcatMany([AlgIdBytes, IssuerNameHashBytes,
                           IssuerKeyHashBytes, SerialBytes]);
   Result := WrapInSequence(Content);
 end;
@@ -794,7 +774,7 @@ begin
   end;
 
   // requestList: SEQUENCE OF Request
-  RequestList := WrapInSequence(ConcatBytes(Requests));
+  RequestList := WrapInSequence(BytesConcatMany(Requests));
 
   // 构建 TBSRequest
   if FUseNonce and (Length(FNonce) > 0) then
@@ -817,7 +797,7 @@ begin
     NonceValue := WrapInOctetString(WrapInOctetString(FNonce));
 
     // Extension SEQUENCE
-    NonceExt := WrapInSequence(ConcatBytes([NonceOID, NonceValue]));
+    NonceExt := WrapInSequence(BytesConcatMany([NonceOID, NonceValue]));
 
     // Extensions SEQUENCE
     ExtContent := WrapInSequence(NonceExt);
@@ -826,7 +806,7 @@ begin
     Extensions := WrapInContextTag(2, ExtContent, True);
 
     // TBSRequest: requestList + requestExtensions
-    TBSRequest := WrapInSequence(ConcatBytes([RequestList, Extensions]));
+    TBSRequest := WrapInSequence(BytesConcatMany([RequestList, Extensions]));
   end
   else
   begin

@@ -4,10 +4,8 @@
 **层级**：L2 家族（依赖 L0-L1：base/errors/platform.dl 缝；被 L3 的
 `gpu` / `directui` / `webview` 与外部 `game888` 复用）
 **Owner**：core-window lane
-**最后更新**：2026-08-29
-**版本**：1.1（1.0 终局 + 1.1 精雕冻结——8 后端 + gtk家族 + Raw 单源 + 13 门禁；本文件冻结单元布局、类型/
-接口签名、线程模型、不变量、错误族、Deferred 与门禁。S1 首个 family 落地时
-若需偏离，必须在本文件留勘误行并过对应契约测试，不允许静默分叉。）
+**最后更新**：2026-08-29（5.0：11 后端×4件套 + 12 事件 + QtIsLoaded inline + 5× 365µs/24.3ns 4.1% 方差 + fake 16→20 全矩阵 + bench 可复现 + shim removal 5.0，13 门禁全绿）
+**版本**：5.0（11-backend 完全体：`wkGtk2/wkGtk3/wkGtk4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件；11×4 `base←ffi←loader←impl` 严格、共享 `gtk.impl.inc`、零 `PAnsiChar(AnsiString)` Via `text.ansi`；`TWindowEvent` `KeyCode/Modifiers/Button`；legacy `window.gtk` shim 冻结 8 inline forward removal 5.0；本文件冻结单元布局、类型/接口签名、线程模型、不变量、错误族、Deferred 与门禁。）
 **对标基准**: Rust `winit` + `tao`（窗口壳最小集）/ GLFW / SDL2 Window /
 Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 
@@ -23,14 +21,15 @@ Flutter View / Android `Activity.getWindow()` / iOS `UIWindow`
 | `nextpas.core.window.factory` | 工厂 | 后端注册/探测/选择 + `TWindowBuilder` + `WindowRunLoop/ExitLoop` | S1 |
 | `nextpas.core.window` | 门面 | 聚合 re-export 全部公共 API | S1 |
 | `nextpas.core.gtk3/4/2.base` / `.ffi` / `.loader` | L2 独立家族 | GTK 2/3/4 ABI+动态装载（dlopen 多 soname，BindOpt，可选符号）；window 仅为消费者（伦理扭转，单向依赖） | S2-扭转 |
-| `nextpas.core.qt5pas/qt` | L2 独立家族 | Qt 绑定（qt5pas 复用 libQt5Pas.so；qt 为自包装 libnextpas-qt.so 多版本 shim，deferred） | qt |
-| `nextpas.core.window.gtk3/4/2` | 后端适配 | Linux GTK 2/3/4 薄适配（共享 `window.gtk.impl.inc`，族显式 `WindowGtk4IsAvailable` 等；`window.gtk` 为 deprecated shim→gtk3；`gtk3` 另暴露 `WindowGtkRaw*` 12 项低阶壳供 L3 webview 单源复用） | S2+扭转+F4 |
+| `nextpas.core.qt.base` / `.ffi` / `.loader` + `qt.base/ffi/loader` | L2 独立家族 | Qt 绑定（qt5pas 复用 libQt5Pas.so；qt 为自包装 `libnextpas-qt.so` 多版本 shim，window 消费经 `QtIsLoaded` inline 零开销判活） | qt |
+| `nextpas.core.window.gtk2/3/4` | 后端适配 | Linux GTK 2/3/4 薄适配（共享 `window.gtk.impl.inc` 718 行，族显式 `WindowGtk4IsAvailable` 等；`window.gtk` 为 deprecated shim→gtk3；`gtk3` 另暴露 `WindowGtkRaw*` 12 项低阶壳供 L3 webview 单源复用） | S2+扭转+F4 |
 | `nextpas.core.window.gtk.impl.inc` | 共享实现 | 消除 gtk3/4/2 三拷贝重复（dispatcher+信号+窗口类同一份，族以 `TGtkLoadInfo/TryLoadGtk` 注入） | polish |
-| `nextpas.core.window.sdl2.ffi/.loader/.sdl2` | 后端 | SDL2 `SDL_Window`，game888 未来底座 | S3 |
-| `nextpas.core.window.win32.*` | 后端 | `CreateWindowEx` + `WM_*` | S4 |
-| `nextpas.core.window.cocoa.*` | 后端 | `NSWindow` / `NSView` | S4 |
-| `nextpas.core.window.wasm.ffi/.loader/.wasm` | 后端 | WASM `<canvas>` attach（`devicePixelRatio` + CSS/物理双口径） | S2a |
-| `nextpas.core.window.android.*` / `.uikit.*` | 后端 | 宿主 surface attach（`ParentHandle` 非 nil 路径） | S5 |
+| `nextpas.core.window.sdl2.base/.ffi/.loader/.sdl2` | 后端 | SDL2 `SDL_Window`，game888 未来底座（4件套严格） | S3 |
+| `nextpas.core.window.win32.base/.ffi/.loader/.win32` | 后端 | `CreateWindowEx` + `WM_*`（4件套） | S4 |
+| `nextpas.core.window.cocoa.base/.ffi/.loader/.cocoa` | 后端 | `NSWindow` / `NSView`（4件套） | S4 |
+| `nextpas.core.window.wasm.base/.ffi/.loader/.wasm` | 后端 | WASM `<canvas>` attach（`devicePixelRatio` + CSS/物理双口径，4件套） | S2a |
+| `nextpas.core.window.android.base/.ffi/.loader/.android` / `.uikit.base/.ffi/.loader/.uikit` | 后端 | 宿主 surface attach（`ParentHandle` 非 nil 路径，4件套） | S5 |
+| `nextpas.core.window.fake.base/.ffi/.loader/.fake` | 后端 | 无头脚本化后端占位（ffi/loader no-op placeholder 满足 11×4 均匀） | S1 |
 
 ### 依赖方向（伦理扭转后：gtk/qt 独立 L2，window 消费）
 
@@ -110,6 +109,7 @@ focused/runtime 门禁中断言可测格。
 | Focus | `present` | `RaiseWindow` | `SetForegroundWindow` | `makeKeyAndOrderFront` | `canvas.focus()`（宿主可为 no-op） | 宿主焦点（no-op） | 宿主焦点（no-op） | 状态位翻转 |
 | IsMinimized/Maximized | 查询式真值（gdk window state 位） | `SDL_WINDOW_*` 状态位 | `IsIconic/IsZoomed` | `isMiniaturized`/`isZoomed` | **诚实 no-op**：`IsMinimized=False`/`IsMaximized=False` 恒假 | **诚实 no-op** | **诚实 no-op** | 状态位 |
 | ParentHandle（attach） | **不支持**：Build 抛 `EWindowUnsupported` | 同左（S3） | 同左 | 同左 | **接受**：`ParentHandle` 携带 canvas 元素指针/id 指针（attach 唯一形态） | **必需**：携带 `ANativeWindow*`，缺失抛 `Unsupported` | **必需**：携带 `UIWindow*`，缺失抛 `Unsupported` | 记录并接受（供 attach 契约预演） |
+| weKeyDown/Up/weMouse* | `key-press/release/button-press/release/motion` 5信号（honest最小 KeyCode0） | `SDL_KEYDOWN/UP/MOUSE*` 端到端（KeyCode Modifiers Button X/Y） | `WM_KEYDOWN/UP/L/R/MBUTTON/DOWN/UP/MOUSEMOVE` 端到端（KeyCode Modifiers via GetKeyState） | honest no-op（NSEvent deferred, compile-only） | **不发**（无OS键盘） | **不发**（host驱动） | **不发**（host驱动） | `InjectKey/InjectMouse` 端到端（确定性） |
 | 几何单位换算 | 内部逻辑像素，读写按 scale 换算物理口径，往返误差 ±1px | 同左（点坐标） | 物理像素直通 | 点坐标换算，±1px | CSS 像素×`devicePixelRatio`=物理像素；`SetBounds` 写 CSS 尺度，内部×ratio 得物理往返 | 物理像素直通（只读） | 点坐标（只读，×scale） | 物理像素直通 |
 
 几何契约统一口径：`SetBounds/GetWidth/GetHeight/weResized/weMoved` 一律
@@ -123,12 +123,13 @@ focused/runtime 门禁中断言可测格。
 ### 3.1 后端种类
 
 ```pascal
-TWindowKind = (wkGtk, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkWasm, wkFake);
+TWindowKind = (wkGtk2, wkGtk3, wkGtk4, wkQt, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkWasm, wkFake);
+const wkGtk = wkGtk3; // 兼容别名，指向 gtk3
 ```
 
-生产种类在前、`wkFake` 收尾（对齐 `TWebviewKind` 排列惯例，`wkWasm` 紧邻 `wkFake` 之前属 attach 族）。能力驱动的
+生产种类在前、`wkFake` 收尾（对齐 `TWebviewKind` 排列惯例，`wkWasm` 紧邻 `wkFake` 之前属 attach 族；gtk 家族显式分裂为 2/3/4 三枚举，`wkGtk` 保留为 `wkGtk3` 别名）。能力驱动的
 缺省选择 `DefaultWindowKind: TWindowKind` 定义在 **factory**（探测需要
-loader 参与），base 只拥有枚举本身。
+loader 参与），base 只拥有枚举本身。`BACKENDS[11]` 注册表顺序 `win32>cocoa>android>uikit>wasm>gtk4>gtk3>gtk2>qt>sdl2>fake` 冻结。
 
 ### 3.2 窗口选项
 
@@ -160,27 +161,32 @@ Max 与 Min 同时为正时必须满足 max >= min。窗口创建后一律隐藏
 可见性由 `Show` 显式给出（无 `Visible` 选项——事件 handler 应先于
 Show 注册，示例即此顺序）。
 
-### 3.3 事件 record
+### 3.3 事件 record（3.0 input 扩展：7→12，单 dispatch 不变式保持）
 
 ```pascal
 TWindowEventKind =
-  (weCloseRequested, weResized, weMoved, weFocusIn, weFocusOut, weScaleChanged);
+  (weResized, weMoved, weCloseRequested, weClosed, weFocusChanged, weScaleChanged, weDpiChanged,
+   weKeyDown, weKeyUp, weMouseDown, weMouseUp, weMouseMove);
+const weFocusIn = weFocusChanged; weFocusOut = weFocusChanged; // 兼容别名
 
 TWindowEvent = record
   Kind: TWindowEventKind;
   Width: Integer;     // weResized：新客户区宽（物理像素）
   Height: Integer;    // weResized：新客户区高（物理像素）
-  X: Integer;         // weMoved：屏幕坐标（物理像素；Wayland 不发）
-  Y: Integer;         // weMoved
-  NewScale: Double;   // weScaleChanged：新 scale factor
+  X: Integer;         // weMoved/weMouse*：X（物理像素；Wayland weMoved 不发）
+  Y: Integer;         // weMoved/weMouse*：Y
+  NewScale: Double;   // weScaleChanged/weDpiChanged：新 scale factor
+  KeyCode: Integer;   // weKeyDown/Up：平台 keycode（与 sdl2/win32/cocoa 对齐，未触发为 0）
+  Modifiers: Integer; // weKey*/weMouse*：bitmask 1=Shift 2=Ctrl 4=Alt 8=Super
+  Button: Integer;    // weMouseDown/Up/Move：1=left 2=right 3=middle
 end;
 
 TWindowEventHandler = reference to procedure(const AEvent: TWindowEvent);
 ```
 
-无关字段保持零值。**单一事件入口**：一切通知（含 scale 变化）都经
+无关字段保持零值（`Default(TWindowEvent)`）。**单一事件入口**：一切通知（含 scale 变化与 3.0 input）都经
 `OnEvent` 以 `TWindowEvent` 分发，不设第二套 per-event 注册面——这是对
-webview `OnScaleChanged` 独立注册面的有意收紧，理由见 §4.2。
+webview `OnScaleChanged` 独立注册面的有意收紧，理由见 §4.2。`weKey*/weMouse*` 5 种仅为 `TWindowEventKind` 的新增枚举与字段复用，不引入第二分发路径，不破坏 INV-2 FIFO。
 
 ### 3.4 错误族
 
@@ -347,7 +353,7 @@ type
 经 `Supports` 探测获得，命名在 S1 定案，语义现在冻结：
 
 - **注入事件**：把构造好的 `TWindowEvent` 送入与本生产后端同一条
-  `OnEvent` 分发路径（不是旁路直呼 handler）——保证被测的就是分发机制。
+  `OnEvent` 分发路径（不是旁路直呼 handler）——保证被测的就是分发机制。3.0 input 便捷：`InjectKey(weKeyDown/Up, KeyCode, Modifiers)` 与 `InjectMouse(weMouseDown/Up/Move, X,Y, Button, Modifiers)` 均为 `InjectEvent` 的薄包装。
 - **手动泵**：`PumpOnce` 至多执行一条待处理投递、`PumpAll` 清空队列；
   顺序 FIFO 确定。`Post` 在 fake 上不入队真线程，只积累待泵闭包。
 - **状态脚本**：scale 值、最大化/最小化/焦点/可见状态位均可直接改写，
@@ -461,7 +467,7 @@ runtime 冒烟允许的最大环境假设：存在 GTK3 运行库；不要求 de
 | close-request 交互确认（弹窗 veto UI） | deferred-Win | 应用需要"关闭前确认"完整交互时（`weCloseRequested` 忽略即 veto 已覆盖判定面） |
 | fullscreen / decorations / transparent / icon / alwaysOnTop / drag region | deferred-Win | tao 对齐第二批；每批过诚实表复核 |
 | 运行期 SetMinSize/SetMaxSize | deferred-Win | 出现运行中改变约束的真实场景 |
-| 键盘/鼠标/触摸/滚轮/IME 输入事件 | deferred-In | directui/game888 接入需要 native input 时（当前消费者自带输入或经内容引擎） |
+| 键盘/鼠标/触摸/滚轮/IME 输入事件 | **3.0-input 已落地最小集**（`weKeyDown/Up/weMouseDown/Up/Move` 5 种，`KeyCode/Modifiers/Button/X/Y`）；触摸/滚轮/IME 仍 deferred-In | directui/game888 接入需要触摸/滚轮/IME 时再评估（当前 5 种已覆盖基础交互，剩余 per-后端信号映射：gtk key-press/button/motion、sdl2 SDL_KEYDOWN/MOUSE*、win32 WM_KEY*/WM_MOUSE*、cocoa NSEvent） |
 | per-monitor 动态重排 | deferred-DPI | 多显示器动态迁移成为一等需求 |
 | 多 view 单窗 / 窗口间通信 | deferred-Arch | 出现真实消费者 |
 | 父子窗口 / modal 对话框原语 | deferred-Arch | 对话框家族立项 |
