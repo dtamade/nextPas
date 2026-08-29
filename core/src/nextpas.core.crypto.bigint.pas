@@ -116,6 +116,10 @@ threadvar
   GLatestMontCtx: TMontgomeryContext;
   GLatestMontValid: Boolean;
 
+var
+  GP384PBigNat: TBigNat;
+  GP384PBigNatValid: Boolean;
+
 function MakeBigIntError(const ACode, AMessage: string): string;
 begin
   if ACode <> '' then
@@ -665,6 +669,154 @@ begin
   Result := True;
 end;
 
+function BigNatShiftLeft(const A: TBigNat; ABitShift: Integer): TBigNat;
+var WordShift, BitShift, I: Integer;
+    Cur: UInt64;
+    Carry: UInt32;
+begin
+  if (Length(A)=0) or (ABitShift=0) then Exit(Copy(A,0,Length(A)));
+  WordShift := ABitShift div 32;
+  BitShift := ABitShift mod 32;
+  SetLength(Result, Length(A)+WordShift+1);
+  FillChar(Result[0], Length(Result)*SizeOf(UInt32), 0);
+  Carry := 0;
+  if BitShift=0 then
+    for I:=0 to High(A) do Result[I+WordShift] := A[I]
+  else
+    for I:=0 to High(A) do
+    begin
+      Cur := (UInt64(A[I]) shl BitShift) or Carry;
+      Result[I+WordShift] := UInt32(Cur and $FFFFFFFF);
+      Carry := UInt32(Cur shr 32);
+    end;
+  if Carry<>0 then Result[High(Result)] := Carry else SetLength(Result, Length(Result)-1);
+  NormalizeBigNat(Result);
+end;
+
+function GetP384BigNat: TBigNat;
+begin
+  if not GP384PBigNatValid then
+  begin
+    SetLength(GP384PBigNat, 12);
+    GP384PBigNat[0] := $FFFFFFFF;
+    GP384PBigNat[1] := $00000000;
+    GP384PBigNat[2] := $00000000;
+    GP384PBigNat[3] := $FFFFFFFF;
+    GP384PBigNat[4] := $FFFFFFFE;
+    GP384PBigNat[5] := $FFFFFFFF;
+    GP384PBigNat[6] := $FFFFFFFF;
+    GP384PBigNat[7] := $FFFFFFFF;
+    GP384PBigNat[8] := $FFFFFFFF;
+    GP384PBigNat[9] := $FFFFFFFF;
+    GP384PBigNat[10] := $FFFFFFFF;
+    GP384PBigNat[11] := $FFFFFFFF;
+    GP384PBigNatValid := True;
+  end;
+  Result := GP384PBigNat;
+end;
+
+function IsP384Modulus(const AM: TBigNat): Boolean;
+begin
+  Result := BigNatCompare(AM, GetP384BigNat) = 0;
+end;
+
+procedure BigNatAddShifted(var A: TBigNat; const B: TBigNat; WordShift: Integer);
+var I: Integer; Carry: UInt64; Sum: UInt64;
+begin
+  if Length(B)=0 then Exit;
+  if Length(A) < Length(B)+WordShift then
+    SetLength(A, Length(B)+WordShift);
+  Carry := 0;
+  for I:=0 to High(B) do
+  begin
+    Sum := UInt64(A[I+WordShift]) + UInt64(B[I]) + Carry;
+    A[I+WordShift] := UInt32(Sum and $FFFFFFFF);
+    Carry := Sum shr 32;
+  end;
+  I := Length(B)+WordShift;
+  while Carry<>0 do
+  begin
+    if I >= Length(A) then SetLength(A, I+1);
+    Sum := UInt64(A[I]) + Carry;
+    A[I] := UInt32(Sum and $FFFFFFFF);
+    Carry := Sum shr 32;
+    Inc(I);
+  end;
+  NormalizeBigNat(A);
+end;
+
+procedure BigNatSubShifted(var A: TBigNat; const B: TBigNat; WordShift: Integer);
+var I: Integer; Borrow: Int64; Diff: Int64;
+begin
+  if Length(B)=0 then Exit;
+  Borrow := 0;
+  for I:=0 to High(B) do
+  begin
+    Diff := Int64(A[I+WordShift]) - Int64(B[I]) - Borrow;
+    if Diff <0 then
+    begin
+      A[I+WordShift] := UInt32(Diff + Int64(1 shl 32));
+      Borrow := 1;
+    end else
+    begin
+      A[I+WordShift] := UInt32(Diff);
+      Borrow := 0;
+    end;
+  end;
+  I := Length(B)+WordShift;
+  while Borrow<>0 do
+  begin
+    Diff := Int64(A[I]) - Borrow;
+    if Diff <0 then
+    begin
+      A[I] := UInt32(Diff + Int64(1 shl 32));
+      Borrow := 1;
+    end else
+    begin
+      A[I] := UInt32(Diff);
+      Borrow := 0;
+    end;
+    Inc(I);
+  end;
+  NormalizeBigNat(A);
+end;
+
+function SolinasReduceP384(const C: TBigNat): TBigNat;
+var Low, High, P: TBigNat;
+begin
+  if Length(C) <=12 then
+  begin
+    Result := Copy(C,0,Length(C));
+    P := GetP384BigNat;
+    while BigNatCompare(Result, P) >=0 do Result := BigNatSubtract(Result, P);
+    Exit;
+  end;
+  SetLength(Low, 12);
+  Move(C[0], Low[0], 12*SizeOf(UInt32));
+  NormalizeBigNat(Low);
+  SetLength(High, Length(C)-12);
+  Move(C[12], High[0], (Length(C)-12)*SizeOf(UInt32));
+  NormalizeBigNat(High);
+  P := GetP384BigNat;
+  Result := Low;
+  BigNatAddShifted(Result, High, 0);
+  BigNatAddShifted(Result, P, 1);
+  BigNatSubShifted(Result, High, 1);
+  BigNatAddShifted(Result, High, 3);
+  BigNatAddShifted(Result, High, 4);
+  P := BigNatShiftLeft(P, 32);
+  if BigNatCompare(Result, P) >=0 then
+    Result := BigNatSubtract(Result, P);
+  NormalizeBigNat(Result);
+  if Length(Result) >12 then
+    Result := SolinasReduceP384(Result)
+  else
+  begin
+    P := GetP384BigNat;
+    while BigNatCompare(Result, P) >=0 do Result := BigNatSubtract(Result, P);
+  end;
+end;
+
 procedure MontgomeryMultiplyInto(
   const ACtx: TMontgomeryContext;
   const ALeft, ARight: TBigNat;
@@ -1083,7 +1235,11 @@ begin
   LLeft := BigNatMod(LLeft, LModulus);
   LRight := BigNatMod(LRight, LModulus);
 
-  if BigNatIsOdd(LModulus) and TryGetCachedMontCtx(LModulus, LCtx, AError) then
+  if IsP384Modulus(LModulus) then
+  begin
+    LRes := SolinasReduceP384(BigNatMultiply(LLeft, LRight));
+  end
+  else if BigNatIsOdd(LModulus) and TryGetCachedMontCtx(LModulus, LCtx, AError) then
   begin
     LLeftMont := MontgomeryMultiply(LCtx, LLeft, LCtx.R2ModN);
     LRightMont := MontgomeryMultiply(LCtx, LRight, LCtx.R2ModN);
