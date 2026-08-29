@@ -1003,71 +1003,19 @@ begin
 end;
 
 function TSevenZReaderImpl.EntriesByPrefix(const APrefix: string): TSevenZEntryInfoArray;
-var
-  LStart, LIdx, LCnt, LPos: Integer;
-  LPrefixLen: SizeInt;
+var LIndices: TSevenZIndexArray; LI: Integer;
 begin
-  Result := nil;
-  LPrefixLen := Length(APrefix);
-  if LPrefixLen=0 then
-  begin
-    Result := GetEntries;
-    Exit;
-  end;
-  if Length(FSortedIdx)=0 then Exit;
-  LStart := LowerBoundPrefix(APrefix);
-  LCnt := 0;
-  for LPos:=LStart to High(FSortedIdx) do
-  begin
-    LIdx := FSortedIdx[LPos];
-    if (Length(FEntries[LIdx].Name) < LPrefixLen) or
-       (not StrHasPrefix(FEntries[LIdx].Name, APrefix)) then Break;
-    Inc(LCnt);
-  end;
-  SetLength(Result, LCnt);
-  LCnt := 0;
-  for LPos:=LStart to High(FSortedIdx) do
-  begin
-    LIdx := FSortedIdx[LPos];
-    if (Length(FEntries[LIdx].Name) < LPrefixLen) or
-       (not StrHasPrefix(FEntries[LIdx].Name, APrefix)) then Break;
-    Result[LCnt] := FEntries[LIdx];
-    Inc(LCnt);
-  end;
+  LIndices := IndicesByPrefix(APrefix);
+  SetLength(Result, Length(LIndices));
+  for LI:=0 to High(LIndices) do Result[LI] := FEntries[LIndices[LI]];
 end;
 
 function TSevenZReaderImpl.EntriesBySuffix(const ASuffix: string): TSevenZEntryInfoArray;
-var
-  LStart, LIdx, LCnt, LPos: Integer;
-  LSufLen: SizeInt;
+var LIndices: TSevenZIndexArray; LI: Integer;
 begin
-  Result := nil;
-  LSufLen := Length(ASuffix);
-  if LSufLen=0 then
-  begin
-    Result := GetEntries;
-    Exit;
-  end;
-  if Length(FSortedIdxRev)=0 then Exit;
-  LStart := LowerBoundSuffix(ASuffix);
-  LCnt := 0;
-  for LPos:=LStart to High(FSortedIdxRev) do
-  begin
-    LIdx := FSortedIdxRev[LPos];
-    if (Length(FEntries[LIdx].Name) < LSufLen) or
-       (not StrHasSuffix(FEntries[LIdx].Name, ASuffix)) then Break;
-    Inc(LCnt);
-  end;
-  SetLength(Result, LCnt);
-  LCnt := 0;
-  for LPos:=LStart to High(FSortedIdxRev) do
-  begin
-    LIdx := FSortedIdxRev[LPos];
-    if (Length(FEntries[LIdx].Name) < LSufLen) or
-       (not StrHasSuffix(FEntries[LIdx].Name, ASuffix)) then Break;
-    Result[LCnt] := FEntries[LIdx];
-    Inc(LCnt);
-  end;
+  LIndices := IndicesBySuffix(ASuffix);
+  SetLength(Result, Length(LIndices));
+  for LI:=0 to High(LIndices) do Result[LI] := FEntries[LIndices[LI]];
 end;
 
 function TSevenZReaderImpl.FindByPrefix(const APrefix: string): Integer;
@@ -1251,61 +1199,19 @@ begin
 end;
 
 function TSevenZReaderImpl.EntriesByPrefixIgnoreCase(const APrefix: string): TSevenZEntryInfoArray;
-var LStart, LPos, LIdx, LCnt: Integer; LLower, LEntryLower: string;
+var LIndices: TSevenZIndexArray; LI: Integer;
 begin
-  EnsureIgnoreCaseBuilt;
-  Result := nil;
-  if APrefix='' then begin Result := GetEntries; Exit; end;
-  if Length(FSortedIdxIgnoreCase)=0 then Exit;
-  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
-  LStart := LowerBoundPrefixIgnoreCase(APrefix);
-  LCnt := 0;
-  for LPos:=LStart to High(FSortedIdxIgnoreCase) do
-  begin
-    LIdx := FSortedIdxIgnoreCase[LPos];
-    LEntryLower := FLowerNames[LIdx];
-    if not StrHasPrefix(LEntryLower, LLower) then Break;
-    Inc(LCnt);
-  end;
-  SetLength(Result, LCnt);
-  LCnt := 0;
-  for LPos:=LStart to High(FSortedIdxIgnoreCase) do
-  begin
-    LIdx := FSortedIdxIgnoreCase[LPos];
-    LEntryLower := FLowerNames[LIdx];
-    if not StrHasPrefix(LEntryLower, LLower) then Break;
-    Result[LCnt] := FEntries[LIdx];
-    Inc(LCnt);
-  end;
+  LIndices := IndicesByPrefixIgnoreCase(APrefix);
+  SetLength(Result, Length(LIndices));
+  for LI:=0 to High(LIndices) do Result[LI] := FEntries[LIndices[LI]];
 end;
 
 function TSevenZReaderImpl.EntriesBySuffixIgnoreCase(const ASuffix: string): TSevenZEntryInfoArray;
-var LStart, LPos, LIdx, LCnt: Integer; LLower, LEntryLower: string;
+var LIndices: TSevenZIndexArray; LI: Integer;
 begin
-  EnsureIgnoreCaseBuilt;
-  Result := nil;
-  if ASuffix='' then begin Result := GetEntries; Exit; end;
-  if Length(FSortedIdxRevIgnoreCase)=0 then Exit;
-  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
-  LStart := LowerBoundSuffixIgnoreCase(ASuffix);
-  LCnt := 0;
-  for LPos:=LStart to High(FSortedIdxRevIgnoreCase) do
-  begin
-    LIdx := FSortedIdxRevIgnoreCase[LPos];
-    LEntryLower := FLowerNames[LIdx];
-    if not StrHasSuffix(LEntryLower, LLower) then Break;
-    Inc(LCnt);
-  end;
-  SetLength(Result, LCnt);
-  LCnt := 0;
-  for LPos:=LStart to High(FSortedIdxRevIgnoreCase) do
-  begin
-    LIdx := FSortedIdxRevIgnoreCase[LPos];
-    LEntryLower := FLowerNames[LIdx];
-    if not StrHasSuffix(LEntryLower, LLower) then Break;
-    Result[LCnt] := FEntries[LIdx];
-    Inc(LCnt);
-  end;
+  LIndices := IndicesBySuffixIgnoreCase(ASuffix);
+  SetLength(Result, Length(LIndices));
+  for LI:=0 to High(LIndices) do Result[LI] := FEntries[LIndices[LI]];
 end;
 
 function TSevenZReaderImpl.FindByPrefixIgnoreCase(const APrefix: string): Integer;
