@@ -21,6 +21,7 @@ function GitArchiveToFile(const AGitDir, ARef, AOutPath: string): string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
@@ -127,12 +128,6 @@ begin
   for I := 1 to L do ABuf[AOffset + I - 1] := Byte(Ord(S[I]));
 end;
 
-procedure AppendBytes(var ADest: TBytes; const ASrc: TBytes);
-var Old: SizeInt;
-begin
-  Old := Length(ADest); SetLength(ADest, Old + Length(ASrc));
-  if Length(ASrc) > 0 then Move(ASrc[0], ADest[Old], Length(ASrc));
-end;
 
 procedure AppendTarEntry(var ATar: TBytes; ARepo: TNativeRepository; const AFile: TFlatFile);
 var Header: TBytes; Kind: TGitObjectKind; Data: TBytes; LinkTarget: string; SizeVal: Int64; ModeStr: string; Chk: Integer; I: Integer; ContentPadded: TBytes; PadLen: Integer;
@@ -174,13 +169,13 @@ begin
   Chk := 0; for I := 0 to 511 do Chk := Chk + Header[I];
   WriteStringTo(Header, 148, OctalString(Chk, 6), 6);
   Header[154] := 0; Header[155] := 32;
-  AppendBytes(ATar, Header);
+  BytesAppend(ATar, Header);
   if (AFile.Mode <> $A000) and (SizeVal > 0) then
   begin
     PadLen := (512 - (Length(Data) mod 512)) mod 512;
-    AppendBytes(ATar, Data);
+    BytesAppend(ATar, Data);
     if PadLen > 0 then
-    begin SetLength(ContentPadded, PadLen); FillChar(ContentPadded[0], PadLen, 0); AppendBytes(ATar, ContentPadded); end;
+    begin SetLength(ContentPadded, PadLen); FillChar(ContentPadded[0], PadLen, 0); BytesAppend(ATar, ContentPadded); end;
   end;
 end;
 
@@ -194,7 +189,7 @@ begin
   try
     for I := 0 to High(AFlat) do AppendTarEntry(Result, Repo, AFlat[I]);
   finally Repo.Free; end;
-  SetLength(Zero, 1024); FillChar(Zero[0], 1024, 0); AppendBytes(Result, Zero);
+  SetLength(Zero, 1024); FillChar(Zero[0], 1024, 0); BytesAppend(Result, Zero);
 end;
 
 function GitArchive(const AGitDir: string; const ATreeOid: TGitOid): TBytes;

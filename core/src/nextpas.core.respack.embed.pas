@@ -301,12 +301,9 @@ begin
   Result := OutBuf;
 end;
 
-function BytesOfStr(const S: string): TBytes;
+function BytesOfStr(const S: string): TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(Pointer(S)^, Result[0], SizeUInt(Length(S)));
+  Result := StringToBytes(S);
 end;
 
 function IdentEqualCI(const AA, AB: string): Boolean;
@@ -338,7 +335,7 @@ begin
   Head := BytesOfStr('unit ' + AUnitName + ';' + #10 +
     '{$mode objfpc}{$H+}' + #10 + #10 + 'interface' + #10 + #10);
   Tail := BytesOfStr(#10 + 'implementation' + #10 + #10 + 'end.' + #10);
-  Result := BytesConcat(Head, BytesConcat(Body, Tail));
+  Result := BytesConcatMany([Head, Body, Tail]);
 end;
 
 end.
