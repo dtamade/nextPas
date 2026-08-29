@@ -60,7 +60,7 @@ type
     FState: TExecState;
     FDeadline: TDeadline;
     FTimer: TAsyncTimerHandle;
-    FFailed: Boolean;
+    FFailed: LongInt; // atomic 0/1 via InterlockedExchange
     procedure Fail(AErr: ESSHError);
     procedure Succeed;
     procedure SendOpen;
@@ -143,8 +143,7 @@ end;
 procedure TAsyncExecRunner.Fail(AErr: ESSHError);
 var Cb: TProcSshExecResult; Ctx: Pointer; Res: TSshExecResult;
 begin
-  if FFailed then begin if AErr<>nil then AErr.Free; Exit; end;
-  FFailed := True;
+  if InterlockedExchange(FFailed, 1) <> 0 then begin if AErr<>nil then AErr.Free; Exit; end;
   if FTimer.IsValid then begin FLoop.CancelTimer(FTimer); FTimer:=Default(TAsyncTimerHandle); end;
   try TryCloseChannel; except end;
   Cb := FCallback; Ctx := FCallbackCtx; Res := FResult;
@@ -156,8 +155,7 @@ end;
 procedure TAsyncExecRunner.Succeed;
 var Cb: TProcSshExecResult; Ctx: Pointer;
 begin
-  if FFailed then Exit;
-  FFailed := True;
+  if InterlockedExchange(FFailed, 1) <> 0 then Exit;
   if FTimer.IsValid then begin FLoop.CancelTimer(FTimer); FTimer:=Default(TAsyncTimerHandle); end;
   FResult.ExitCode := FExitStatus;
   Cb := FCallback; Ctx := FCallbackCtx;

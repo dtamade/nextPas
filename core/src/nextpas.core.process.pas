@@ -561,11 +561,18 @@ begin
   LChild := TCommand.New(APath).Args(AArgs).Stdin(stPiped)
     .Stdout(stPiped).Stderr(stPiped)
     .MaxOutput(cProcessDefaultMaxOutput).Spawn;
-  LStdin := LChild.TakeStdin;
-  if (LStdin <> nil) and (Length(AStdin) > 0) then
-    LStdin.Write(AStdin[0], Length(AStdin));
-  LStdin := nil;
-  Result := LChild.WaitWithOutput;
+  try
+    LStdin := LChild.TakeStdin;
+    try
+      if (LStdin <> nil) and (Length(AStdin) > 0) then
+        LStdin.Write(AStdin[0], Length(AStdin));
+    finally
+      LStdin := nil;
+    end;
+    Result := LChild.WaitWithOutput;
+  finally
+    LChild := nil;
+  end;
 end;
 
 function CaptureWithInput(const APath: string; const AArgs: array of string;
@@ -607,11 +614,18 @@ begin
   LChild := TCommand.New(APath).Args(AArgs).Dir(ADir).Stdin(stPiped)
     .Stdout(stPiped).Stderr(stPiped)
     .MaxOutput(cProcessDefaultMaxOutput).Spawn;
-  LStdin := LChild.TakeStdin;
-  if (LStdin <> nil) and (Length(AStdin) > 0) then
-    LStdin.Write(AStdin[0], Length(AStdin));
-  LStdin := nil;
-  Result := LChild.WaitWithOutput;
+  try
+    LStdin := LChild.TakeStdin;
+    try
+      if (LStdin <> nil) and (Length(AStdin) > 0) then
+        LStdin.Write(AStdin[0], Length(AStdin));
+    finally
+      LStdin := nil;
+    end;
+    Result := LChild.WaitWithOutput;
+  finally
+    LChild := nil;
+  end;
 end;
 
 function RunInWithInputString(const APath: string; const AArgs: array of string;

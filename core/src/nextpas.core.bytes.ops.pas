@@ -294,9 +294,9 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
-function StripLeadingZero(const AData: TBytes): TBytes;
+function StripLeadingZero(const AData: TBytes): TBytes; inline;
 var
-  I: Integer;
+  I, LLen: Integer;
 begin
   I := 0;
   while (I < Length(AData)) and (AData[I] = 0) do
@@ -307,7 +307,10 @@ begin
     Result[0] := 0;
     Exit;
   end;
-  Result := Copy(AData, I, Length(AData) - I);
+  LLen := Length(AData) - I;
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AData[I], Result[0], LLen);
 end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
@@ -315,10 +318,9 @@ begin
   Result := StripLeadingZero(AData);
 end;
 
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer;
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 var
   LLeft, LRight: TBytes;
-  I: Integer;
 begin
   LLeft := StripLeadingZero(ALeft);
   LRight := StripLeadingZero(ARight);
@@ -326,14 +328,9 @@ begin
     Exit(-1);
   if Length(LLeft) > Length(LRight) then
     Exit(1);
-  for I := 0 to Length(LLeft) - 1 do
-  begin
-    if LLeft[I] < LRight[I] then
-      Exit(-1);
-    if LLeft[I] > LRight[I] then
-      Exit(1);
-  end;
-  Result := 0;
+  if Length(LLeft) = 0 then
+    Exit(0);
+  Result := CompareBytesOrdered(@LLeft[0], @LRight[0], Length(LLeft), Length(LRight));
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
@@ -349,6 +346,8 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := UnsignedEqual(ALeft, ARight);
+end;
+
 function BytesToString(const ABytes: TBytes): string; inline;
 begin
   SetLength(Result, Length(ABytes));

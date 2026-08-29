@@ -1,5 +1,7 @@
 # nextpas.core
 
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](VERSION) [![FPC](https://img.shields.io/badge/FPC-3.3.1-orange)](https://www.freepascal.org/) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 nextPas 的基座框架。这里承载 `nextpas.core.*` 源码、测试、示例、benchmark 和模块文档。
 
 这份 README 只做 core 子项目导航；设计规范以 `docs/design-conventions.md` 为准。
@@ -62,6 +64,28 @@ docs/       设计文档
 scripts/    构建脚本
 build/      构建产物（git ignored）
 ```
+
+## 最小示例
+
+```bash
+# 聚合验证
+make -C core build
+make -C core/tests/nextpas.core.collections/quickstart clean test
+```
+
+```pascal
+program quickstart;
+{$mode objfpc}{$H+}
+uses nextpas.core.collections, nextpas.core.collections.vec.intf;
+var V: specialize IVec<Integer>;
+begin
+  V := specialize MakeVec<Integer>;
+  V.Push(42);
+  WriteLn(V.Pop);
+end.
+```
+
+> 版本以 `VERSION` 为准（当前 `1.0.0`），完整示例见 `examples/`。
 
 ## 设计规范
 

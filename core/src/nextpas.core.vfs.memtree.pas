@@ -435,6 +435,7 @@ end;
 procedure TMemStream.Close;
 begin
   FClosed := True;
+  SetLength(FData, 0);
 end;
 
 function TMemStream.ReadAt(var ABuf; const ACount: SizeUInt;

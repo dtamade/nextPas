@@ -1,5 +1,7 @@
 # nextPas
 
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](core/VERSION) [![FPC](https://img.shields.io/badge/FPC-3.3.1-orange)](https://www.freepascal.org/) [![License](https://img.shields.io/badge/license-MIT-green)](core/LICENSE)
+
 nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是一整套下一代 Pascal
 开发环境，而不只是一个 compiler binary。第一阶段先冻结文档、范围和验证基线，
 再逐步把 compiler kernel、toolchain control plane、`stage0` 驱动入口与运行时边界接起来。
@@ -76,6 +78,27 @@ nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是
 - 迭代推进模式：`docs/plans/2026-03-24-nextpas-iteration-mode-plan.md`
 - packages 计划：`docs/plans/2026-03-21-nextpas-phase1-packages-plan.md`
 - packages 调研：`docs/plans/support/2026-03-21-nextpas-phase1-packages-research.md`
+
+## 最小示例
+
+```bash
+# 验证环境（仓库根目录）
+make hygiene
+make test TEST_FILTER=smoke
+
+# stage0 编译并运行一个 smoke 用例
+fpc -Mobjfpc -Sh examples/smoke/hello.pas -o/tmp/hello && /tmp/hello
+```
+
+```pascal
+program hello;
+{$mode objfpc}{$H+}
+begin
+  WriteLn('hello nextPas');
+end.
+```
+
+> 版本以 `core/VERSION` 为准（当前 `1.0.0`），更多示例见 `core/examples/`。
 
 ## 仓库当前重点
 

@@ -138,9 +138,24 @@ begin
 end;
 
 destructor TSqliteDb.Destroy;
+var
+  LRC: Integer;
+  LStmt: TSqliteStmt;
 begin
   if FDb <> nil then
-    sqlite3_close_v2(FDb);
+  begin
+    LRC := sqlite3_close_v2(FDb);
+    if LRC = SQLITE_BUSY then
+    begin
+      LStmt := sqlite3_next_stmt(FDb, nil);
+      while LStmt <> nil do
+      begin
+        sqlite3_finalize(LStmt);
+        LStmt := sqlite3_next_stmt(FDb, nil);
+      end;
+      sqlite3_close_v2(FDb);
+    end;
+  end;
   inherited;
 end;
 

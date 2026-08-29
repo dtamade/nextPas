@@ -117,6 +117,8 @@ type
     procedure Close;
     { 清理路径：吞 IO 异常 }
     procedure TryClose;
+    { TChannelStream 缓冲余量的窗口回补（Destroy 前必须完成，否则对端窗口停滞） }
+    procedure ReplenishWindow(ALen: SizeUInt);
     destructor Destroy; override;
     property LocalId: UInt32 read FLocalId;
     property RemoteId: UInt32 read FRemoteId;
@@ -580,6 +582,12 @@ begin
     SendWindowAdjust(UInt32(LGiveBack));
 end;
 
+procedure TSshChannel.ReplenishWindow(ALen: SizeUInt);
+begin
+  if ALen = 0 then Exit;
+  AccountConsume(ALen);
+end;
+
 procedure TSshChannel.HandleChannelRequest(const APayload: TBytes);
 var
   LR: TsshReader;
@@ -857,10 +865,26 @@ begin
 end;
 
 destructor TChannelStream.Destroy;
+var
+  LRemain: SizeUInt;
 begin
-  try Close; except end;
+  // 窗口回补必须在 Free 之前完成；原 try Close except end 会吞掉回补/Close 异常导致对端停滞
+  LRemain := 0;
+  if (FBuf <> nil) and (FBufPos < SizeUInt(Length(FBuf))) then
+    LRemain := SizeUInt(Length(FBuf)) - FBufPos;
+  if LRemain > 0 then
+    try
+      FChannel.ReplenishWindow(LRemain);
+    except
+      // 回补失败仍继续 Close/Free，避免掩盖原始错误上下文由 Close 阶段决定
+    end;
+  try
+    Close;
+  except
+    // 析构不向外抛异常
+  end;
   FChannel.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 function TChannelStream.Read(var ABuffer; const ACount: SizeUInt): SizeUInt;
@@ -921,7 +945,7 @@ begin
   if not FClosed then
   begin
     FClosed := True;
-    try FChannel.Close; except end;
+    FChannel.Close;
   end;
 end;
 

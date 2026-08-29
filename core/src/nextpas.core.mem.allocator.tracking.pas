@@ -352,6 +352,7 @@ var
   LOldSize: SizeUInt;
   LOldAllocId: QWord;
   LOldTag: string;
+  LHasOld: Boolean;
 begin
   if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then Exit(GetMem(ASize));
@@ -360,16 +361,21 @@ begin
   try
     if Result <> nil then
     begin
-      if APtr <> nil then
-      begin
-        { Update: delete old, insert new }
-        MapDelete(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
-        MapInsert(PtrUInt(Result), ASize, LOldAllocId, LOldTag);
-      end
-      else
+      LHasOld := MapLookup(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
+      if not LHasOld then
       begin
         MapInsert(PtrUInt(Result), ASize, FNextAllocId, FCurrentTag);
         Inc(FNextAllocId);
+      end
+      else
+      begin
+        MapDelete(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
+        try
+          MapInsert(PtrUInt(Result), ASize, LOldAllocId, LOldTag);
+        except
+          MapInsert(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
+          raise;
+        end;
       end;
     end;
   finally
