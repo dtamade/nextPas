@@ -3,7 +3,8 @@ program test_ssh_session_async;
 {$I nextpas.core.settings.inc}
 
 { S16.5 gate: async session via TAsyncLoop + real TCP loopback.
-  Reuses crypto primitives, runs TSshLoopServer on blocking ITcpStream
+  Reuses nextpas.core.bytes.ops,
+  crypto primitives, runs TSshLoopServer on blocking ITcpStream
   in a server thread, client via SshAsyncConnect/ExecAsync on TAsyncLoop.
   Covers password/compress/dh + keepalive. Heaptrc 0 via named TThread. }
 
@@ -78,16 +79,6 @@ var LW: TsshWriter;
 begin
   Result:=nil; LW:=TsshWriter.Create(64);
   try LW.PutStringText('ssh-ed25519'); LW.PutStringBytes(APub); Result:=LW.ToBytes; finally LW.Free; end;
-end;
-
-function ConcatBytes(const A,B: TBytes): TBytes;
-begin
-  Result:=nil;
-  if Length(A)=0 then Exit(Copy(B,0,Length(B)));
-  if Length(B)=0 then Exit(Copy(A,0,Length(A)));
-  SetLength(Result, SizeUInt(Length(A)+Length(B)));
-  Move(A[0], Result[0], SizeUInt(Length(A)));
-  Move(B[0], Result[SizeUInt(Length(A))], SizeUInt(Length(B)));
 end;
 
 const
@@ -178,9 +169,9 @@ function TSshLoopServer.ReadPlainFrameBody: TBytes;
 var LWire, LMore: TBytes; LLen, LPadLen: UInt32;
 begin
   Result:=nil; if not RecvRaw(LWire,8000) then Exit;
-  while Length(LWire)<4 do begin if not RecvRaw(LMore,8000) then Exit; LWire:=ConcatBytes(LWire, LMore); end;
+  while Length(LWire)<4 do begin if not RecvRaw(LMore,8000) then Exit; BytesAppend(LWire, LMore); end;
   LLen:=(UInt32(LWire[0]) shl 24) or (UInt32(LWire[1]) shl 16) or (UInt32(LWire[2]) shl 8) or UInt32(LWire[3]);
-  while SizeUInt(Length(LWire)) < 4+LLen do begin if not RecvRaw(LMore,8000) then Exit; LWire:=ConcatBytes(LWire, LMore); end;
+  while SizeUInt(Length(LWire)) < 4+LLen do begin if not RecvRaw(LMore,8000) then Exit; BytesAppend(LWire, LMore); end;
   if SizeUInt(Length(LWire)) > 4+LLen then begin FBuf:=Copy(LWire, 4+Integer(LLen), Length(LWire)-4-Integer(LLen)); SetLength(LWire, 4+Integer(LLen)); end;
   LPadLen:=LWire[4]; SetLength(Result, LLen-1-LPadLen); if Length(Result)>0 then Move(LWire[5], Result[0], Length(Result));
 end;
@@ -190,11 +181,11 @@ begin
   Result:=nil;
   if not FEncrypted then begin Result:=ReadPlainFrameBody; Exit; end;
   if Length(FBuf)>=4 then begin LHeader:=Copy(FBuf,0,4); FBuf:=Copy(FBuf,4,Length(FBuf)-4); end
-  else begin if not RecvRaw(LBuf,8000) then Exit; LHeader:=LBuf; if Length(FBuf)>0 then begin LHeader:=ConcatBytes(FBuf, LHeader); FBuf:=nil; end; while Length(LHeader)<4 do begin if not RecvRaw(LMore,8000) then Exit; LHeader:=ConcatBytes(LHeader, LMore); end; if Length(LHeader)>4 then begin FBuf:=Copy(LHeader,4,Length(LHeader)-4); LHeader:=Copy(LHeader,0,4); end; end;
+  else begin if not RecvRaw(LBuf,8000) then Exit; LHeader:=LBuf; if Length(FBuf)>0 then begin LHeader:=BytesConcat(FBuf, LHeader); FBuf:=nil; end; while Length(LHeader)<4 do begin if not RecvRaw(LMore,8000) then Exit; BytesAppend(LHeader, LMore); end; if Length(LHeader)>4 then begin FBuf:=Copy(LHeader,4,Length(LHeader)-4); LHeader:=Copy(LHeader,0,4); end; end;
   LBodyLen:=FRecv.BodyLengthFromHeader(FRecvSeq, LHeader);
   SetLength(LTrailer, FRecv.TrailerSize(LBodyLen));
   LBuf:=nil; if Length(FBuf)>0 then begin LBuf:=FBuf; FBuf:=nil; end;
-  while SizeUInt(Length(LBuf)) < SizeUInt(Length(LTrailer)) do begin if not RecvRaw(LMore,8000) then Exit; LBuf:=ConcatBytes(LBuf, LMore); end;
+  while SizeUInt(Length(LBuf)) < SizeUInt(Length(LTrailer)) do begin if not RecvRaw(LMore,8000) then Exit; BytesAppend(LBuf, LMore); end;
   if SizeUInt(Length(LBuf)) > SizeUInt(Length(LTrailer)) then begin FBuf:=Copy(LBuf, Length(LTrailer), Length(LBuf)-Length(LTrailer)); SetLength(LBuf, Length(LTrailer)); end;
   LTrailer:=LBuf; SetLength(LPacket, 4+Length(LTrailer)); Move(LHeader[0], LPacket[0],4); if Length(LTrailer)>0 then Move(LTrailer[0], LPacket[4], SizeUInt(Length(LTrailer)));
   LBody:=FRecv.Unprotect(FRecvSeq, LPacket); Inc(FRecvSeq); if Length(LBody)<1 then Exit; LPadLen:=LBody[0]; if UInt32(LPadLen)>=LBodyLen then Exit; SetLength(Result, LBodyLen-1-LPadLen); if Length(Result)>0 then Move(LBody[1], Result[0], Length(Result)); if FCompEnabled and (FComp<>nil) and SshCompressionIsZlib(FNegCompSc) then Result:=FComp.Decompress(Result);
@@ -214,7 +205,7 @@ var LLine, LVc, LMyInit, LClientInit, LInit, LMsg, LReply: TBytes;
   LPrime, LGen, LSrvPriv: TBytes; LErr: string; LClientE: TBytes;
 begin
   LLine:=StringToBytes(SERVER_IDENT+#13#10); FStream.Write(LLine[0], SizeUInt(Length(LLine))); LVc:=nil;
-  repeat if not RecvRaw(LLine,8000) then begin Fail('server: no version line'); Exit; end; LText:=BytesToText(LLine); LNl:=Pos(#10, LText); if LNl>0 then begin if SizeUInt(Length(LLine)) > SizeUInt(LNl) then FBuf:=ConcatBytes(Copy(LLine, LNl, Length(LLine)-LNl), FBuf); LText:=Trim(Copy(LText,1,LNl)); if Copy(LText,1,4)='SSH-' then LVc:=StringToBytes(LText); end; until Length(LVc)>0;
+  repeat if not RecvRaw(LLine,8000) then begin Fail('server: no version line'); Exit; end; LText:=BytesToText(LLine); LNl:=Pos(#10, LText); if LNl>0 then begin if SizeUInt(Length(LLine)) > SizeUInt(LNl) then FBuf:=BytesConcat(Copy(LLine, LNl, Length(LLine)-LNl), FBuf); LText:=Trim(Copy(LText,1,LNl)); if Copy(LText,1,4)='SSH-' then LVc:=StringToBytes(LText); end; until Length(LVc)>0;
   LClientInit:=ReadPlainFrameBody; if (Length(LClientInit)=0) or (LClientInit[0]<>SSH_MSG_KEXINIT) then begin Fail('server: expected KEXINIT'); Exit; end;
   if FSc^.ForceDH or FSc^.ForceCompress then
   begin LW:=TsshWriter.Create(512); try LW.PutByte(SSH_MSG_KEXINIT); LW.PutRaw(PatternBytes($EE,16)); if FSc^.ForceDH then LW.PutNameList(['diffie-hellman-group14-sha256']) else LW.PutNameList(['curve25519-sha256','curve25519-sha256@libssh.org','diffie-hellman-group14-sha256']); LW.PutNameList(['ssh-ed25519']); LW.PutNameList(['chacha20-poly1305@openssh.com']); LW.PutNameList(['chacha20-poly1305@openssh.com']); LW.PutNameList([]); LW.PutNameList([]); if FSc^.ForceCompress then begin LW.PutNameList(['zlib@openssh.com','zlib','none']); LW.PutNameList(['zlib@openssh.com','zlib','none']); end else begin LW.PutNameList(['none']); LW.PutNameList(['none']); end; LW.PutStringText(''); LW.PutStringText(''); LW.PutBoolean(False); LW.PutUInt32(0); LMyInit:=LW.ToBytes; finally LW.Free; end;

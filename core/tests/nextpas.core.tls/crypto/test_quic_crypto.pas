@@ -3,6 +3,7 @@ program test_quic_crypto;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.system.sysutils,
   nextpas.core.crypto.aesgcm,
   nextpas.core.errors,
@@ -94,16 +95,6 @@ begin
       end;
 
   Check(False, AMessage + LDetail + ' actual=' + BytesToHex(AActual));
-end;
-
-function ConcatBytes(const ALeft, ARight: TBytes): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(ALeft) + Length(ARight));
-  if Length(ALeft) > 0 then
-    Move(ALeft[0], Result[0], Length(ALeft));
-  if Length(ARight) > 0 then
-    Move(ARight[0], Result[Length(ALeft)], Length(ARight));
 end;
 
 function SliceBytes(const AData: TBytes; AOffset, ALength: Integer): TBytes;
@@ -286,7 +277,7 @@ begin
   LHeader := HexToBytes(HEADER_HEX);
   LPlaintext := HexToBytes(PAYLOAD_HEX);
   LExpectedPacket := HexToBytes(PROTECTED_PACKET_HEX);
-  LPlaintext := ConcatBytes(LPlaintext,
+  BytesAppend(LPlaintext,
     ZeroBytes(Length(LExpectedPacket) - Length(LHeader) - 16 - Length(LPlaintext)));
   LPNOffset := Length(LHeader) - 4;
 
@@ -297,7 +288,7 @@ begin
   Check(PurePascalAESGCMEncrypt(LClientKeys.Key, LNonce, LPlaintext, LHeader, LCiphertext, LTag),
     'Client initial payload AEAD should succeed');
 
-  LPacket := ConcatBytes(LHeader, ConcatBytes(LCiphertext, LTag));
+  LPacket := BytesConcat(LHeader, BytesConcat(LCiphertext, LTag));
   LSample := SliceBytes(LPacket, LPNOffset + 4, 16);
   Check(BytesEqual(LSample, HexToBytes(SAMPLE_HEX)),
     'Client sample should match RFC 9001 Appendix A.2');
@@ -359,7 +350,7 @@ begin
   Check(PurePascalAESGCMEncrypt(LServerKeys.Key, LNonce, LPlaintext, LHeader, LCiphertext, LTag),
     'Server initial payload AEAD should succeed');
 
-  LPacket := ConcatBytes(LHeader, ConcatBytes(LCiphertext, LTag));
+  LPacket := BytesConcat(LHeader, BytesConcat(LCiphertext, LTag));
   LSample := SliceBytes(LPacket, LPNOffset + 4, 16);
   Check(BytesEqual(LSample, HexToBytes(SAMPLE_HEX)),
     'Server sample should match RFC 9001 Appendix A.3');

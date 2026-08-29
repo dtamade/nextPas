@@ -8,6 +8,7 @@ program test_ssh_keys;
  * checkint/nkeys/marker 等结构错误路径。}
 
 uses
+  nextpas.core.bytes.ops,
   SysUtils,
   nextpas.core.system.sysutils,
   nextpas.core.ssh.base,
@@ -49,16 +50,6 @@ begin
     Result := Result + LowerCase(IntToHex(AData[I], 2));
 end;
 
-function ConcatBytes(const A, B: TBytes): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(A) + Length(B));
-  if Length(A) > 0 then
-    Move(A[0], Result[0], Length(A));
-  if Length(B) > 0 then
-    Move(B[0], Result[Length(A)], Length(B));
-end;
-
 { ssh-ed25519 公钥 wire blob }
 function Ed25519PubBlob(const APub: TBytes): TBytes;
 var
@@ -88,7 +79,7 @@ begin
     LW.PutUInt32(ACheck);
     LW.PutStringText(AKeyType);
     LW.PutStringBytes(Copy(APub, 0, 32));
-    LW.PutStringBytes(ConcatBytes(ASeed, Copy(APub, 0, 32)));
+    LW.PutStringBytes(BytesConcat(ASeed, Copy(APub, 0, 32)));
     LW.PutStringText('test comment');
     Result := LW.ToBytes;
   finally

@@ -5,7 +5,8 @@ unit nextpas.core.bytes.ops;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.base.utils;
 
 function SpanEqual(const A, B: TByteSpan): Boolean;
 function SpanCompare(const A, B: TByteSpan): Integer;
@@ -27,7 +28,8 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -39,7 +41,8 @@ function StringToBytes(const AText: string): TBytes; inline;
 implementation
 
 uses
-  nextpas.core.simd;
+  nextpas.core.simd,
+  nextpas.core.simd.memutils;
 
 function SpanEqual(const A, B: TByteSpan): Boolean;
 begin
@@ -52,20 +55,19 @@ end;
 
 function SpanCompare(const A, B: TByteSpan): Integer;
 var
-  LI, LMin: SizeUInt;
+  LMin: SizeUInt;
+  LCmp: Integer;
 begin
   if A.Len < B.Len then
     LMin := A.Len
   else
     LMin := B.Len;
   if LMin > 0 then
-    for LI := 0 to LMin - 1 do
-    begin
-      if A.Data[LI] < B.Data[LI] then
-        Exit(-1);
-      if A.Data[LI] > B.Data[LI] then
-        Exit(1);
-    end;
+  begin
+    LCmp := SimdMemCompare(A.Data, B.Data, LMin);
+    if LCmp <> 0 then
+      Exit(LCmp);
+  end;
   if A.Len < B.Len then
     Result := -1
   else if A.Len > B.Len then
@@ -144,8 +146,7 @@ end;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 begin
   Result := nil;
-  if (ALength > 0) and (AOffset + ALength > ASpan.Len) then
-    raise EOutOfRange.Create('SpanCopySlice: offset+length exceeds span');
+  CheckSizeRange(AOffset, ALength, ASpan.Len);
   SetLength(Result, ALength);
   if ALength > 0 then
     Move(ASpan.Data[AOffset], Result[0], ALength);
@@ -177,22 +178,15 @@ begin
     end;
 end;
 
-function BytesConcatMany(const AParts: array of TBytes): TBytes;
+function BytesConcatMany(const AParts: array of TBytes): TBytes; inline;
 var
   I: Integer;
-  LTotal, LOff: SizeUInt;
+  LSpans: array of TByteSpan;
 begin
-  LTotal := 0;
+  SetLength(LSpans, Length(AParts));
   for I := 0 to High(AParts) do
-    Inc(LTotal, Length(AParts[I]));
-  SetLength(Result, LTotal);
-  LOff := 0;
-  for I := 0 to High(AParts) do
-    if Length(AParts[I]) > 0 then
-    begin
-      Move(AParts[I][0], Result[LOff], Length(AParts[I]));
-      Inc(LOff, Length(AParts[I]));
-    end;
+    LSpans[I] := TByteSpan.FromBytes(AParts[I]);
+  Result := SpanConcatMany(LSpans);
 end;
 
 { TBytes convenience }
@@ -225,6 +219,16 @@ begin
   LOldLen := Length(ADest);
   SetLength(ADest, LOldLen + Length(ASrc));
   Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+end;
+
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline;
+var
+  LOldLen: SizeUInt;
+begin
+  if (ASrc = nil) or (ASrcLen = 0) then Exit;
+  LOldLen := Length(ADest);
+  SetLength(ADest, LOldLen + ASrcLen);
+  Move(ASrc^, ADest[LOldLen], ASrcLen);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
