@@ -32,6 +32,10 @@ function PcmS32ToF32(AValue: LongInt): Single; inline;
 function PcmF32ToS32(AValue: Single): LongInt; inline;
 
 { 24-bit packed LE helpers (3 bytes) }
+function PcmReadS16LE(const ABytes: TBytes; AOffset: Integer): SmallInt; inline;
+procedure PcmWriteS16LE(AValue: SmallInt; var ABytes: TBytes; AOffset: Integer); inline;
+function PcmReadS32LE(const ABytes: TBytes; AOffset: Integer): LongInt; inline;
+procedure PcmWriteS32LE(AValue: LongInt; var ABytes: TBytes; AOffset: Integer); inline;
 function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer; inline;
 procedure PcmWriteS24LE(AValue: Integer; var ABytes: TBytes; AOffset: Integer); inline;
 
@@ -201,6 +205,30 @@ begin
   Result := PcmClampS32(LScaled);
 end;
 
+function PcmReadS16LE(const ABytes: TBytes; AOffset: Integer): SmallInt; inline;
+begin
+  Result := SmallInt(Word(ABytes[AOffset]) or (Word(ABytes[AOffset+1]) shl 8));
+end;
+
+procedure PcmWriteS16LE(AValue: SmallInt; var ABytes: TBytes; AOffset: Integer); inline;
+begin
+  ABytes[AOffset] := Byte(Word(AValue) and $FF);
+  ABytes[AOffset+1] := Byte((Word(AValue) shr 8) and $FF);
+end;
+
+function PcmReadS32LE(const ABytes: TBytes; AOffset: Integer): LongInt; inline;
+begin
+  Result := LongInt(DWord(ABytes[AOffset]) or (DWord(ABytes[AOffset+1]) shl 8) or (DWord(ABytes[AOffset+2]) shl 16) or (DWord(ABytes[AOffset+3]) shl 24));
+end;
+
+procedure PcmWriteS32LE(AValue: LongInt; var ABytes: TBytes; AOffset: Integer); inline;
+begin
+  ABytes[AOffset] := Byte(DWord(AValue) and $FF);
+  ABytes[AOffset+1] := Byte((DWord(AValue) shr 8) and $FF);
+  ABytes[AOffset+2] := Byte((DWord(AValue) shr 16) and $FF);
+  ABytes[AOffset+3] := Byte((DWord(AValue) shr 24) and $FF);
+end;
+
 function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer;
 var
   LB0, LB1, LB2: Byte;
@@ -255,56 +283,56 @@ begin
     begin
       LI:=0; while LI+3 < LSampleCount do
       begin
-        PSingle(@Result[LI*4])^ := PcmS16ToF32(SmallInt(ASrc[LI*2] or (ASrc[LI*2+1] shl 8)));
-        PSingle(@Result[(LI+1)*4])^ := PcmS16ToF32(SmallInt(ASrc[(LI+1)*2] or (ASrc[(LI+1)*2+1] shl 8)));
-        PSingle(@Result[(LI+2)*4])^ := PcmS16ToF32(SmallInt(ASrc[(LI+2)*2] or (ASrc[(LI+2)*2+1] shl 8)));
-        PSingle(@Result[(LI+3)*4])^ := PcmS16ToF32(SmallInt(ASrc[(LI+3)*2] or (ASrc[(LI+3)*2+1] shl 8)));
+        PSingle(@Result[LI*4])^ := PcmS16ToF32(PcmReadS16LE(ASrc, LI*2));
+        PSingle(@Result[(LI+1)*4])^ := PcmS16ToF32(PcmReadS16LE(ASrc, (LI+1)*2));
+        PSingle(@Result[(LI+2)*4])^ := PcmS16ToF32(PcmReadS16LE(ASrc, (LI+2)*2));
+        PSingle(@Result[(LI+3)*4])^ := PcmS16ToF32(PcmReadS16LE(ASrc, (LI+3)*2));
         Inc(LI,4);
       end;
       while LI < LSampleCount do
-      begin LS16:=SmallInt(ASrc[LI*2] or (ASrc[LI*2+1] shl 8)); PSingle(@Result[LI*4])^:=PcmS16ToF32(LS16); Inc(LI); end;
+      begin PSingle(@Result[LI*4])^:=PcmS16ToF32(PcmReadS16LE(ASrc, LI*2)); Inc(LI); end;
       Exit;
     end;
     if (ASrcFormat=sfF32) and (ADstFormat=sfS16) then
     begin
       LI:=0; while LI+3 < LSampleCount do
       begin
-        LS16:=PcmF32ToS16(PSingle(@ASrc[LI*4])^); Result[LI*2]:=Byte(LS16 and $FF); Result[LI*2+1]:=Byte((LS16 shr 8) and $FF);
-        LS16:=PcmF32ToS16(PSingle(@ASrc[(LI+1)*4])^); Result[(LI+1)*2]:=Byte(LS16 and $FF); Result[(LI+1)*2+1]:=Byte((LS16 shr 8) and $FF);
-        LS16:=PcmF32ToS16(PSingle(@ASrc[(LI+2)*4])^); Result[(LI+2)*2]:=Byte(LS16 and $FF); Result[(LI+2)*2+1]:=Byte((LS16 shr 8) and $FF);
-        LS16:=PcmF32ToS16(PSingle(@ASrc[(LI+3)*4])^); Result[(LI+3)*2]:=Byte(LS16 and $FF); Result[(LI+3)*2+1]:=Byte((LS16 shr 8) and $FF);
+        PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[LI*4])^), Result, LI*2);
+        PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[(LI+1)*4])^), Result, (LI+1)*2);
+        PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[(LI+2)*4])^), Result, (LI+2)*2);
+        PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[(LI+3)*4])^), Result, (LI+3)*2);
         Inc(LI,4);
       end;
       while LI < LSampleCount do
-      begin LS16:=PcmF32ToS16(PSingle(@ASrc[LI*4])^); Result[LI*2]:=Byte(LS16 and $FF); Result[LI*2+1]:=Byte((LS16 shr 8) and $FF); Inc(LI); end;
+      begin PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[LI*4])^), Result, LI*2); Inc(LI); end;
       Exit;
     end;
     if (ASrcFormat=sfS32) and (ADstFormat=sfF32) then
     begin
       LI:=0; while LI+3 < LSampleCount do
       begin
-        LS32:=LongInt(ASrc[LI*4] or (ASrc[LI*4+1] shl 8) or (ASrc[LI*4+2] shl 16) or (ASrc[LI*4+3] shl 24)); PSingle(@Result[LI*4])^:=PcmS32ToF32(LS32);
-        LS32:=LongInt(ASrc[(LI+1)*4] or (ASrc[(LI+1)*4+1] shl 8) or (ASrc[(LI+1)*4+2] shl 16) or (ASrc[(LI+1)*4+3] shl 24)); PSingle(@Result[(LI+1)*4])^:=PcmS32ToF32(LS32);
-        LS32:=LongInt(ASrc[(LI+2)*4] or (ASrc[(LI+2)*4+1] shl 8) or (ASrc[(LI+2)*4+2] shl 16) or (ASrc[(LI+2)*4+3] shl 24)); PSingle(@Result[(LI+2)*4])^:=PcmS32ToF32(LS32);
-        LS32:=LongInt(ASrc[(LI+3)*4] or (ASrc[(LI+3)*4+1] shl 8) or (ASrc[(LI+3)*4+2] shl 16) or (ASrc[(LI+3)*4+3] shl 24)); PSingle(@Result[(LI+3)*4])^:=PcmS32ToF32(LS32);
+        PSingle(@Result[LI*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, LI*4));
+        PSingle(@Result[(LI+1)*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, (LI+1)*4));
+        PSingle(@Result[(LI+2)*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, (LI+2)*4));
+        PSingle(@Result[(LI+3)*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, (LI+3)*4));
         Inc(LI,4);
       end;
       while LI < LSampleCount do
-      begin LS32:=LongInt(ASrc[LI*4] or (ASrc[LI*4+1] shl 8) or (ASrc[LI*4+2] shl 16) or (ASrc[LI*4+3] shl 24)); PSingle(@Result[LI*4])^:=PcmS32ToF32(LS32); Inc(LI); end;
+      begin PSingle(@Result[LI*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, LI*4)); Inc(LI); end;
       Exit;
     end;
     if (ASrcFormat=sfF32) and (ADstFormat=sfS32) then
     begin
       LI:=0; while LI+3 < LSampleCount do
       begin
-        LS32:=PcmF32ToS32(PSingle(@ASrc[LI*4])^); Result[LI*4]:=Byte(LS32 and $FF); Result[LI*4+1]:=Byte((LS32 shr 8) and $FF); Result[LI*4+2]:=Byte((LS32 shr 16) and $FF); Result[LI*4+3]:=Byte((LS32 shr 24) and $FF);
-        LS32:=PcmF32ToS32(PSingle(@ASrc[(LI+1)*4])^); Result[(LI+1)*4]:=Byte(LS32 and $FF); Result[(LI+1)*4+1]:=Byte((LS32 shr 8) and $FF); Result[(LI+1)*4+2]:=Byte((LS32 shr 16) and $FF); Result[(LI+1)*4+3]:=Byte((LS32 shr 24) and $FF);
-        LS32:=PcmF32ToS32(PSingle(@ASrc[(LI+2)*4])^); Result[(LI+2)*4]:=Byte(LS32 and $FF); Result[(LI+2)*4+1]:=Byte((LS32 shr 8) and $FF); Result[(LI+2)*4+2]:=Byte((LS32 shr 16) and $FF); Result[(LI+2)*4+3]:=Byte((LS32 shr 24) and $FF);
-        LS32:=PcmF32ToS32(PSingle(@ASrc[(LI+3)*4])^); Result[(LI+3)*4]:=Byte(LS32 and $FF); Result[(LI+3)*4+1]:=Byte((LS32 shr 8) and $FF); Result[(LI+3)*4+2]:=Byte((LS32 shr 16) and $FF); Result[(LI+3)*4+3]:=Byte((LS32 shr 24) and $FF);
+        PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[LI*4])^), Result, LI*4);
+        PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[(LI+1)*4])^), Result, (LI+1)*4);
+        PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[(LI+2)*4])^), Result, (LI+2)*4);
+        PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[(LI+3)*4])^), Result, (LI+3)*4);
         Inc(LI,4);
       end;
       while LI < LSampleCount do
-      begin LS32:=PcmF32ToS32(PSingle(@ASrc[LI*4])^); Result[LI*4]:=Byte(LS32 and $FF); Result[LI*4+1]:=Byte((LS32 shr 8) and $FF); Result[LI*4+2]:=Byte((LS32 shr 16) and $FF); Result[LI*4+3]:=Byte((LS32 shr 24) and $FF); Inc(LI); end;
+      begin PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[LI*4])^), Result, LI*4); Inc(LI); end;
       Exit;
     end;
   end;
@@ -315,59 +343,19 @@ begin
     { Src -> F32 }
     case ASrcFormat of
       sfU8: LF := PcmU8ToF32(ASrc[LSrcOffset]);
-      sfS16: begin
-        LS16 := SmallInt(ASrc[LSrcOffset] or (ASrc[LSrcOffset + 1] shl 8));
-        LF := PcmS16ToF32(LS16);
-      end;
-      sfS24: begin
-        LS24 := PcmReadS24LE(ASrc, LSrcOffset);
-        LF := PcmS24ToF32(LS24);
-      end;
-      sfS32: begin
-        LS32 := LongInt(ASrc[LSrcOffset] or (ASrc[LSrcOffset + 1] shl 8) or
-          (ASrc[LSrcOffset + 2] shl 16) or (ASrc[LSrcOffset + 3] shl 24));
-        LF := PcmS32ToF32(LS32);
-      end;
-      sfF32: begin
-        Move(ASrc[LSrcOffset], LF, SizeOf(Single));
-      end;
-    else
-      LF := 0;
+      sfS16: LF := PcmS16ToF32(PcmReadS16LE(ASrc, LSrcOffset));
+      sfS24: LF := PcmS24ToF32(PcmReadS24LE(ASrc, LSrcOffset));
+      sfS32: LF := PcmS32ToF32(PcmReadS32LE(ASrc, LSrcOffset));
+      sfF32: Move(ASrc[LSrcOffset], LF, SizeOf(Single));
+    else LF := 0;
     end;
     LDstOffset := LI * LBytesPerDst;
     case ADstFormat of
-      sfU8: begin
-        if AApplyDither then
-          LU8 := PcmF32ToU8Dithered(LF, LDitherState)
-        else
-          LU8 := PcmF32ToU8(LF);
-        Result[LDstOffset] := LU8;
-      end;
-      sfS16: begin
-        if AApplyDither then
-          LS16 := PcmF32ToS16Dithered(LF, LDitherState)
-        else
-          LS16 := PcmF32ToS16(LF);
-        Result[LDstOffset] := Byte(LS16 and $FF);
-        Result[LDstOffset + 1] := Byte((LS16 shr 8) and $FF);
-      end;
-      sfS24: begin
-        if AApplyDither then
-          LS24 := PcmF32ToS24Dithered(LF, LDitherState)
-        else
-          LS24 := PcmF32ToS24(LF);
-        PcmWriteS24LE(LS24, Result, LDstOffset);
-      end;
-      sfS32: begin
-        LS32 := PcmF32ToS32(LF);
-        Result[LDstOffset] := Byte(LS32 and $FF);
-        Result[LDstOffset + 1] := Byte((LS32 shr 8) and $FF);
-        Result[LDstOffset + 2] := Byte((LS32 shr 16) and $FF);
-        Result[LDstOffset + 3] := Byte((LS32 shr 24) and $FF);
-      end;
-      sfF32: begin
-        Move(LF, Result[LDstOffset], SizeOf(Single));
-      end;
+      sfU8: begin if AApplyDither then LU8:=PcmF32ToU8Dithered(LF, LDitherState) else LU8:=PcmF32ToU8(LF); Result[LDstOffset]:=LU8; end;
+      sfS16: begin if AApplyDither then LS16:=PcmF32ToS16Dithered(LF, LDitherState) else LS16:=PcmF32ToS16(LF); PcmWriteS16LE(LS16, Result, LDstOffset); end;
+      sfS24: begin if AApplyDither then LS24:=PcmF32ToS24Dithered(LF, LDitherState) else LS24:=PcmF32ToS24(LF); PcmWriteS24LE(LS24, Result, LDstOffset); end;
+      sfS32: PcmWriteS32LE(PcmF32ToS32(LF), Result, LDstOffset);
+      sfF32: Move(LF, Result[LDstOffset], SizeOf(Single));
     end;
   end;
 end;
