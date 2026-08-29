@@ -50,6 +50,7 @@ function TryToFixedLength32(const AValue: TBytes; out AResult: TBytes; out AErro
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.constant_time,
@@ -137,72 +138,62 @@ begin
     Move(ARight[0], Result[LLeftLen], LRightLen);
 end;
 
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+begin
+  Result := TByteSpan.FromBytes(AData);
+  while (Result.Len > 0) and (Result.Data^ = 0) do
+  begin
+    Inc(Result.Data);
+    Dec(Result.Len);
+  end;
+end;
+
 function StripLeadingZeroBytes(const AData: TBytes): TBytes;
 var
-  I: Integer;
+  LView: TByteSpan;
 begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-
-  if I >= Length(AData) then
+  LView := StripLeadingZeroView(AData);
+  if LView.Len = 0 then
   begin
     SetLength(Result, 1);
     Result[0] := 0;
     Exit;
   end;
-
-  Result := Copy(AData, I, Length(AData) - I);
+  Result := SpanCopySlice(LView, 0, LView.Len);
 end;
 
-function IsZeroBytes(const AData: TBytes): Boolean;
-var
-  LNorm: TBytes;
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
 begin
-  LNorm := StripLeadingZeroBytes(AData);
-  Result := (Length(LNorm) = 1) and (LNorm[0] = 0);
+  Result := StripLeadingZeroView(AData).Len = 0;
 end;
 
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer;
+function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 var
-  LLeft: TBytes;
-  LRight: TBytes;
-  I: Integer;
+  LLeft: TByteSpan;
+  LRight: TByteSpan;
 begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-
-  if Length(LLeft) < Length(LRight) then
-    Exit(-1);
-  if Length(LLeft) > Length(LRight) then
-    Exit(1);
-
-  for I := 0 to Length(LLeft) - 1 do
-  begin
-    if LLeft[I] < LRight[I] then
-      Exit(-1);
-    if LLeft[I] > LRight[I] then
-      Exit(1);
-  end;
-
-  Result := 0;
+  LLeft := StripLeadingZeroView(ALeft);
+  LRight := StripLeadingZeroView(ARight);
+  Result := SpanCompare(LLeft, LRight);
 end;
 
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
+function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := CompareUnsignedBytes(ALeft, ARight) = 0;
 end;
 
 {** 恒定时间无符号字节数组相等比较（纵深防御：签名验证路径） }
-function ConstantTimeUnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
+function ConstantTimeUnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 var
-  LLeft, LRight: TBytes;
+  LLeft, LRight: TByteSpan;
 begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-  if Length(LLeft) <> Length(LRight) then
+  LLeft := StripLeadingZeroView(ALeft);
+  LRight := StripLeadingZeroView(ARight);
+  if LLeft.Len <> LRight.Len then
     Exit(False);
-  Result := TConstantTime.CompareBytes(LLeft, LRight) = 1;
+  if LLeft.Len = 0 then
+    Exit(True);
+  Result := TConstantTime.CompareBuffer(LLeft.Data, LRight.Data, LLeft.Len) = 1;
 end;
 
 function TryUnsignedSubtractSmall(const AValue: TBytes; ASub: Byte; out AResult: TBytes): Boolean;

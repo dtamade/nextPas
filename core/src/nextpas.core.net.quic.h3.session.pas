@@ -89,11 +89,11 @@ type
     FPendLen: UInt32;
     FPendCb: TIoCompletion;
     FPendCtx: Pointer;
-    procedure DeliverData(const AData: TBytes);
+    procedure DeliverData(const AData: TBytes); inline;
     procedure MarkEof;
     function TryCompletePendingRead: Boolean;
     procedure FailPendingRead(AError: Int32);
-    function TakeFromRxBuf(ABuf: Pointer; ALen: UInt32): Integer;
+    function TakeFromRxBuf(ABuf: Pointer; ALen: UInt32): Integer; inline;
   public
     constructor Create(ASession: TH3Session;
       AConn: TQuicClientConnection; AId: UInt64);
@@ -402,38 +402,42 @@ procedure TH3Stream.BindCancelToken(const AToken: IAsyncCancellationToken);
 begin
 end;
 
-function TH3Stream.TakeFromRxBuf(ABuf: Pointer; ALen: UInt32): Integer;
+function TH3Stream.TakeFromRxBuf(ABuf: Pointer; ALen: UInt32): Integer; inline;
 var
-  LN, LI: Integer;
+  LN: Integer;
+  LRemain: Integer;
 begin
   LN := Length(FRxBuf);
-  if LN = 0 then
+  if (LN = 0) or (ALen = 0) or (ABuf = nil) then
     Exit(0);
   if UInt32(LN) < ALen then
     ALen := UInt32(LN);
   Move(FRxBuf[0], ABuf^, ALen);
-  for LI := 0 to LN - Integer(ALen) - 1 do
-    FRxBuf[LI] := FRxBuf[LI + Integer(ALen)];
-  SetLength(FRxBuf, LN - Integer(ALen));
+  LRemain := LN - Integer(ALen);
+  if LRemain > 0 then
+    Move(FRxBuf[ALen], FRxBuf[0], LRemain);
+  SetLength(FRxBuf, LRemain);
   Result := Integer(ALen);
 end;
 
-procedure TH3Stream.DeliverData(const AData: TBytes);
+procedure TH3Stream.DeliverData(const AData: TBytes); inline;
 var
-  LOld, LI: Integer;
+  LOld: Integer;
+  LLen: Integer;
 begin
-  if FClosed or (Length(AData) = 0) then
+  LLen := Length(AData);
+  if FClosed or (LLen = 0) then
     Exit;
   LOld := Length(FRxBuf);
-  if LOld + Length(AData) > 262144 then
+  if LOld + LLen > 262144 then
   begin
     FClosed := True;
     FailPendingRead(-1);
     Exit;
   end;
-  SetLength(FRxBuf, LOld + Length(AData));
-  for LI := 0 to Length(AData) - 1 do
-    FRxBuf[LOld + LI] := AData[LI];
+  SetLength(FRxBuf, LOld + LLen);
+  if LLen > 0 then
+    Move(AData[0], FRxBuf[LOld], LLen);
   TryCompletePendingRead;
 end;
 

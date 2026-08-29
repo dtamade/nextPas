@@ -44,7 +44,7 @@ uses
   nextpas.core.http.middleware.hsts,
   nextpas.core.http.message,
   nextpas.core.json,
-  nextpas.core.log,
+  nextpas.core.log.intf,
   nextpas.core.http.static,
   nextpas.core.http.form,
   nextpas.core.http.websocket,
@@ -154,8 +154,10 @@ type
   { Re-export JSON types }
   IJsonDocument = nextpas.core.json.IJsonDocument;
 
-  { Re-export log types }
-  TLogger = nextpas.core.log.TLogger;
+  { Re-export log types (L0 seam) }
+  ILogger = nextpas.core.log.intf.ILogger;
+  TLogger = nextpas.core.log.intf.ILogger;
+  TLogLevel = nextpas.core.log.intf.TLogLevel;
 
   { Re-export URL types }
   TQueryParam = nextpas.core.http.url.TQueryParam;
@@ -953,7 +955,7 @@ end;
 
 function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWith(ALogger);
+  Result := nextpas.core.http.middleware.logger.LoggerMiddleware;
 end;
 
 function LoggerMiddlewareWithExtras(
@@ -965,8 +967,7 @@ end;
 function LoggerMiddlewareWithExtrasAndLogger(
   const AExtras: TLogExtrasProvider; const ALogger: TLogger): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWithExtrasAndLogger(
-    AExtras, ALogger);
+  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWithExtras(AExtras);
 end;
 
 function RequestIdMiddleware: IHttpMiddleware;

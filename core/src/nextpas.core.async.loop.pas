@@ -264,12 +264,19 @@ begin
   end;
 end;
 
+procedure TimeoutTokenNotify(AContext: Pointer); forward;
+
 procedure TimeoutCtxDropTokenOwner(ACtx: PTimeoutCtx);
+var
+  LToken: IAsyncCancellationToken;
 begin
   if ACtx = nil then
     Exit;
   if atomic_exchange(ACtx^.TokenOwner, 0, mo_acq_rel) = 1 then
   begin
+    LToken := ACtx^.Token;
+    if LToken <> nil then
+      LToken.RemoveOnCancel(@TimeoutTokenNotify, ACtx);
     ACtx^.Token := nil;
     TimeoutCtxRelease(ACtx);
   end;

@@ -32,43 +32,178 @@ type
   PAsyncNetCancelCtx = ^TAsyncNetCancelCtx;
   TAsyncNetCancelCtx = record
     Net: INetCancelController;
+    Gateway: Pointer;
+  end;
+
+  TAsyncNetCancelGateway = class(TInterfacedObject,
+    INetCancelToken, INetCancelController, INetCancelWaitable)
+  private
+    FInner: INetCancelController;
+    FAsync: IAsyncCancellationToken;
+    FCtx: PAsyncNetCancelCtx;
+    FLinked: Boolean;
+  public
+    constructor Create(const AAsync: IAsyncCancellationToken);
+    destructor Destroy; override;
+    function IsCanceled: Boolean;
+    procedure Cancel;
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
   end;
 
 procedure AsyncNetCancelBridgeFire(AContext: Pointer);
 var
   LCtx: PAsyncNetCancelCtx;
+  LGw: TAsyncNetCancelGateway;
 begin
   LCtx := PAsyncNetCancelCtx(AContext);
   if LCtx = nil then
     Exit;
-  if LCtx^.Net <> nil then
-  begin
-    LCtx^.Net.Cancel;
-    LCtx^.Net := nil;
+  LGw := nil;
+  try
+    LGw := TAsyncNetCancelGateway(LCtx^.Gateway);
+  except
+    LGw := nil;
+  end;
+  try
+    if LCtx^.Net <> nil then
+      try
+        LCtx^.Net.Cancel;
+      except
+      end;
+    try
+      LCtx^.Net := nil;
+    except
+    end;
+  except
+  end;
+  if LGw <> nil then
+  try
+    LGw.FCtx := nil;
+    LGw.FLinked := False;
+  except
+  end;
+  try
+    LCtx^.Gateway := nil;
+  except
   end;
   Dispose(LCtx);
 end;
 
+constructor TAsyncNetCancelGateway.Create(
+  const AAsync: IAsyncCancellationToken);
+var
+  LInner: INetCancelController;
+  LCtx: PAsyncNetCancelCtx;
+begin
+  inherited Create;
+  FAsync := AAsync;
+  LInner := NewNetCancelToken;
+  FInner := LInner;
+  New(LCtx);
+  LCtx^ := Default(TAsyncNetCancelCtx);
+  LCtx^.Net := FInner;
+  LCtx^.Gateway := Self;
+  FCtx := LCtx;
+  FLinked := False;
+  try
+    FAsync.OnCancel(@AsyncNetCancelBridgeFire, FCtx);
+    FLinked := True;
+    if FCtx = nil then
+      FLinked := False;
+  except
+    FLinked := False;
+  end;
+  if FAsync.IsCancelled then
+    try
+      Cancel;
+    except
+    end;
+end;
+
+destructor TAsyncNetCancelGateway.Destroy;
+begin
+  if FLinked and (FAsync <> nil) and (FCtx <> nil) then
+    try
+      FAsync.RemoveOnCancel(@AsyncNetCancelBridgeFire, FCtx);
+    except
+    end;
+  if FCtx <> nil then
+  try
+    try
+      FCtx^.Net := nil;
+    except
+    end;
+    try
+      FCtx^.Gateway := nil;
+    except
+    end;
+    Dispose(FCtx);
+  except
+  end;
+  FCtx := nil;
+  FLinked := False;
+  FAsync := nil;
+  FInner := nil;
+  inherited Destroy;
+end;
+
+function TAsyncNetCancelGateway.IsCanceled: Boolean;
+begin
+  if FInner <> nil then
+    try
+      Result := FInner.IsCanceled;
+    except
+      Result := False;
+    end
+  else
+    Result := False;
+end;
+
+procedure TAsyncNetCancelGateway.Cancel;
+begin
+  if FInner <> nil then
+    try
+      FInner.Cancel;
+    except
+    end;
+end;
+
+function TAsyncNetCancelGateway.WakeHandle: PtrUInt;
+var
+  LW: INetCancelWaitable;
+begin
+  Result := 0;
+  if FInner = nil then
+    Exit;
+  try
+    if Supports(FInner, INetCancelWaitable, LW) then
+      Result := LW.WakeHandle;
+  except
+    Result := 0;
+  end;
+end;
+
+procedure TAsyncNetCancelGateway.DrainWake;
+var
+  LW: INetCancelWaitable;
+begin
+  if FInner = nil then
+    Exit;
+  try
+    if Supports(FInner, INetCancelWaitable, LW) then
+      LW.DrainWake;
+  except
+  end;
+end;
+
 function NetCancelFromAsync(
   const AAsync: IAsyncCancellationToken): INetCancelController;
-var
-  LCtx: PAsyncNetCancelCtx;
 begin
   Result := nil;
   if AAsync = nil then
     Exit;
-
-  Result := NewNetCancelToken;
-  New(LCtx);
-  LCtx^ := Default(TAsyncNetCancelCtx);
-  LCtx^.Net := Result;
-
-  { OnCancel fires immediately if already cancelled (and does not retain ctx).
-    Otherwise retains ctx until Cancel; Fire disposes ctx. }
-  AAsync.OnCancel(@AsyncNetCancelBridgeFire, LCtx);
-
-  if AAsync.IsCancelled and (Result <> nil) then
-    Result.Cancel;
+  Result := TAsyncNetCancelGateway.Create(AAsync);
 end;
 
 procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;

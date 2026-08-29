@@ -42,6 +42,7 @@ function SshLoadPrivateKey(const AContent: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.encoding.base64,
   nextpas.core.crypto.bcrypt_pbkdf,
   nextpas.core.crypto.bigint,
@@ -109,9 +110,10 @@ begin
     Move(PByte(PChar(AText))^, Result[0], SizeUInt(Length(AText)));
 end;
 
-function BytesEqualTrim(const A, B: TBytes): Boolean;
+function BytesEqualTrim(const A, B: TBytes): Boolean; inline;
 var
-  I, LA, LB, SA, SB: Integer;
+  LA, LB, SA, SB: Integer;
+  LSpanA, LSpanB: TByteSpan;
 begin
   LA := Length(A); SA := 0;
   while (SA < LA) and (A[SA] = 0) do Inc(SA);
@@ -121,9 +123,9 @@ begin
   LB := LB - SB;
   if LA <> LB then Exit(False);
   if LA = 0 then Exit(True);
-  for I := 0 to LA - 1 do
-    if A[SA + I] <> B[SB + I] then Exit(False);
-  Result := True;
+  LSpanA := TByteSpan.Create(@A[SA], SizeUInt(LA));
+  LSpanB := TByteSpan.Create(@B[SB], SizeUInt(LB));
+  Result := SpanEqual(LSpanA, LSpanB);
 end;
 
 function IsCrtValid(const AN, AP, AQ, AIqmp: TBytes): Boolean;

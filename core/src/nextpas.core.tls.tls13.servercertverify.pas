@@ -112,6 +112,7 @@ function IsECDSAPrivateKey(const APrivateKeyBlob: TBytes): Boolean;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.tls.errors,
   nextpas.core.tls.asn1,
   nextpas.core.tls.pem,
@@ -171,7 +172,7 @@ begin
   Result := Pos('-----BEGIN', string(LText)) > 0;
 end;
 
-function StripLeadingZeroBytes(const AData: TBytes): TBytes;
+function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 var
   I: Integer;
 begin
@@ -186,7 +187,7 @@ begin
     Exit;
   end;
 
-  Result := Copy(AData, I, Length(AData) - I);
+  Result := nextpas.core.bytes.ops.SpanClone(TByteSpan.FromBytes(AData).Slice(I, SizeUInt(Length(AData) - I)));
 end;
 
 function UnsignedBitLength(const AData: TBytes): Integer;
@@ -210,29 +211,14 @@ begin
   end;
 end;
 
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer;
+function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 var
   LLeft: TBytes;
   LRight: TBytes;
-  I: Integer;
 begin
   LLeft := StripLeadingZeroBytes(ALeft);
   LRight := StripLeadingZeroBytes(ARight);
-
-  if Length(LLeft) < Length(LRight) then
-    Exit(-1);
-  if Length(LLeft) > Length(LRight) then
-    Exit(1);
-
-  for I := 0 to Length(LLeft) - 1 do
-  begin
-    if LLeft[I] < LRight[I] then
-      Exit(-1);
-    if LLeft[I] > LRight[I] then
-      Exit(1);
-  end;
-
-  Result := 0;
+  Result := nextpas.core.bytes.ops.SpanCompare(TByteSpan.FromBytes(LLeft), TByteSpan.FromBytes(LRight));
 end;
 
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;

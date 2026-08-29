@@ -66,14 +66,15 @@ function TryQuicUnprotectPacket(const APacket: TBytes;
 
 implementation
 
-procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes);
+procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes); inline;
 var
-  LN, LI: Integer;
+  LN: Integer;
 begin
+  if Length(ATail) = 0 then
+    Exit;
   LN := Length(ABase);
   SetLength(ABase, LN + Length(ATail));
-  for LI := 0 to Length(ATail) - 1 do
-    ABase[LN + LI] := ATail[LI];
+  Move(ATail[0], ABase[LN], Length(ATail));
 end;
 
 procedure NonceOf(const AIv: TBytes; APn: UInt64; out ANonce: TBytes);

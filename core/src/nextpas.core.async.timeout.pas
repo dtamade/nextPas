@@ -93,8 +93,14 @@ begin
   { 启动超时定时器，通过 AContext 传递实例指针 }
   LHandle.FTimerHandle := ALoop.Schedule(TDuration.FromMilliseconds(AMs),
     @TimeoutCallback, Pointer(LHandle));
-  { 执行操作 }
-  AOperation(AOpContext);
+  { 执行操作，完成后取消定时器避免 HandleComplete 常驻 }
+  try
+    AOperation(AOpContext);
+    LHandle.HandleComplete;
+  except
+    LHandle.Cancel;
+    raise;
+  end;
 end;
 
 function AsyncRunWithTimeoutRef(const ALoop: TAsyncLoop; AMs: UInt32;
@@ -108,8 +114,14 @@ begin
   { 启动超时定时器，通过 AContext 传递实例指针 }
   LHandle.FTimerHandle := ALoop.Schedule(TDuration.FromMilliseconds(AMs),
     @TimeoutCallback, Pointer(LHandle));
-  { 执行操作 }
-  AOperation(AOpContext);
+  { 执行操作，完成后取消定时器避免 HandleComplete 常驻 }
+  try
+    AOperation(AOpContext);
+    LHandle.HandleComplete;
+  except
+    LHandle.Cancel;
+    raise;
+  end;
 end;
 
 { TAsyncTimeoutHandle }

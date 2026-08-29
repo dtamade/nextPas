@@ -10,11 +10,11 @@
 
 ---
 
-## 0. 官方用法（FPC 3.3.1）
+## 0. 官方用法
 
-### 0.1 门面 + 接口单元
+### 0.1 门面聚合工厂，按容器粒度引入接口
 
-`uses nextpas.core.collections` **不会**把子单元里的 open generic 接口名（如 `IVec<T>`）自动暴露给调用方。这是 FPC 3.3.1 的限制，不是门面遗漏。
+`nextpas.core.collections` 为门面聚合单元：统一提供 `MakeXxx` 工厂、回调类型与非泛型公共类型；各容器接口按容器粒度在对应 `*.intf` 单元中定义（`vec.intf` 提供 `IVec`，`hashmap.intf` 提供 `IHashMap` 等）。调用方按需以“门面 + 所需容器 `*.intf`”组合引入。
 
 **推荐写法**：
 

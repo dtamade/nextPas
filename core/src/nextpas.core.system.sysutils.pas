@@ -8,6 +8,12 @@ unit nextpas.core.system.sysutils;
  *
  * All functions delegate to nextpas.core modules — this unit is a
  * thin facade, not an implementation.
+ *
+ * Format is a documented exception with dual-path dispatch: the safe
+ * subset (%% %[-][0][width][.precision](s|d|u|x|X|f)) is handled by
+ * nextpas.core.text.format.TextFormat, all other specifiers fall back
+ * to SysUtils.Format (Fallback) — e/g/c/m/n/p, indexed args, dynamic
+ * * width and other printf surface not covered by TextFormat.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -144,7 +150,7 @@ uses
   precision). Such format strings fall back to the RTL SysUtils implementation,
   whose printf-style surface (e/g/c/m/n/p, indexed args, dynamic * width, ...)
   TextFormat does not cover. }
-function FormatNeedsSysUtilsFallback(const AFmt: string): Boolean;
+function FormatNeedsSysUtilsFallback(const AFmt: string): Boolean; inline;
 var
   LIdx, LLen: Integer;
 begin

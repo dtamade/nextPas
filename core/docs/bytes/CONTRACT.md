@@ -1,6 +1,6 @@
 # nextpas.core.bytes 代码契约
 
-**模块路径**：`core/src/nextpas.core.bytes*.pas`（5 个源文件）
+**模块路径**：`core/src/nextpas.core.bytes*.pas`（7 个源文件）
 **层级**：L1（依赖 L0: base）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-01
@@ -18,6 +18,8 @@
 | bytes.ops | TByteSpan 操作 (Equal/Compare/IndexOf/Fill/Reverse/Concat) |
 | bytes.binary | 字节序转换 (Swap16/Swap32/Swap64, HostToLE/LEToHost 等) |
 | bytes.builder | IBytesBuilder 可变字节缓冲区 |
+| bytes.cursor | IByteCursor 边界受查只读游标 |
+| bytes.stream | TByteStreamBuf 可增长缓冲流 |
 | bytes.pas | 门面 |
 
 ### 1.2 IBytesBuilder 接口
@@ -50,6 +52,13 @@ end;
 | `SpanReverse(Span)` | 反转 |
 | `SpanConcat(A, B): TBytes` | 拼接 |
 | `SpanCopySlice(Span, Offset, Len): TBytes` | 切片拷贝 |
+| `SpanClone(Span): TBytes` | 克隆 |
+| `BytesEqual(A, B): Boolean` | 字节数组比较 |
+| `BytesCompare(A, B): Integer` | 字节数组三路比较 |
+| `BytesIndexOf(Data, Needle): SizeInt` | 字节数组查找 |
+| `BytesConcat(A, B): TBytes` | 字节数组拼接 |
+| `BytesStartsWith(Data, Prefix): Boolean` | 字节数组前缀检查 |
+| `BytesEndsWith(Data, Suffix): Boolean` | 字节数组后缀检查 |
 
 ### 1.4 字节序转换
 

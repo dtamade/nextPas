@@ -24,7 +24,9 @@ function ResPackBuild(const AEntries: array of TResPackInputEntry;
 implementation
 
 uses
-  nextpas.core.base.utils;
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops;
 
 type
   TSlotInfo = record
@@ -141,11 +143,8 @@ end;
 
 function BytesEqual(const AA, AB: PByte; const ALen: SizeUInt): Boolean; inline;
 begin
-  if ALen = 0 then
-    Exit(True);   { 规避 SizeUInt 下界回绕 + 零分配块级比对 }
-  { 块级比对：FPC CompareMem 为 REPZ CMPSB/SSE 优化的内建，远快于逐字节 Pascal 循环；
-    仅在哈希碰撞回验时触发，命中时即为 dedup 共享槽位判定路径 }
-  Result := nextpas.core.base.utils.CompareMem(Pointer(AA), Pointer(AB), ALen);
+  Result := nextpas.core.bytes.ops.SpanEqual(
+    TByteSpan.Create(AA, ALen), TByteSpan.Create(AB, ALen));
 end;
 
 function ResPackBuild(const AEntries: array of TResPackInputEntry;

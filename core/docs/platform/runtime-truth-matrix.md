@@ -1,5 +1,7 @@
 # Platform Runtime Truth Matrix
 
+> **Scope (design):** This file is **platform-scoped by design** — it tracks `nextpas.core.platform` host/seam evidence only (`source-contract` / `forced-compile` via `test_platform_simulated_host_compile_matrix` 5 legs / `focused-runtime` / `ci-matrix`). It intentionally does **not** enumerate L2/L3 (fs, net, http, vfs, crypto, etc.) multi-host runtime. L2/L3 modules in `core/docs/module-registry.md` correctly remain `focused-runtime` on Linux x86_64; their host variance is delegated to L0 `platform` (see `host-capability-matrix.md` and the Host matrix separation note in `module-registry.md`). `ci-runtime-matrix` (Windows 28-gate + macOS layer A 10-gate, durable) and the simulated-host `forced-compile` matrix are separate by design — see `core/docs/platform/master-spec.md` Truth tiers and `build/verify_local.sh:core-platform-simulated-host-compile-matrix-check`.
+
 | Host / seam | Evidence | Current truth |
 | --- | --- | --- |
 | Linux readiness poller | focused-runtime | Runtime-covered through focused platform/io and consumer gates. |
@@ -18,5 +20,9 @@
 | Darwin/macOS platform fail-closed matrix | **focused-runtime** (script step only) | 9 platform gates (+ optional mem.host → total=10). Promoted platform set run 29696318492; re-green pass=10 on 29719632518. **Whole job** red does not demote this row (e.g. async accept4). |
 | Darwin/FreeBSD best-effort CI | best-effort inventory only | Skipped/failed rows are non-evidence. |
 | Android/other forced host surfaces | forced-compile | Compile truth only. |
+
+## Non-platform modules (L2/L3 — by design not in this matrix)
+
+This matrix intentionally has no per-module rows for L2/L3 (fs, net, tls, crypto, json, yaml, toml, compress, http, vfs, etc.). Their truth in `core/docs/module-registry.md` is `focused-runtime` on Linux x86_64 by design; host variance is owned by L0 `platform` (L2/L3 depend on L0-L1 only). The simulated-host `forced-compile` matrix (`test_platform_simulated_host_compile_matrix`, 5 legs darwin/android/freebsd/unix/windows × all 29 `platform.*` facades) is `forced-compile` only and must not be read as L2/L3 runtime. The durable `ci-runtime-matrix` (Windows 28-gate, macOS layer A 10-gate) is currently platform-only; L2 `fs.watch` Windows min-set (`l2-windows-ci-matrix.sh`, GHA 29759582229) is a narrow L2 exception documented above, not a general L2/L3 matrix. Promoting any other L2/L3 to `ci-runtime-matrix` requires explicit CI job + consumer ownership and a registry update — until then `focused-runtime` (Linux x86_64) is the honest claim. See `host-capability-matrix.md` for the companion honest summary.
 
 Update this file only when the evidence category changes.

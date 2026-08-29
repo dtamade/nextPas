@@ -35,6 +35,7 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.random;
@@ -96,22 +97,9 @@ begin
   Result := LAllZero;
 end;
 
-function StripLeadingZeroBytes(const AData: TBytes): TBytes;
-var
-  I: Integer;
+function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-
-  if I >= Length(AData) then
-  begin
-    SetLength(Result, 1);
-    Result[0] := 0;
-    Exit;
-  end;
-
-  Result := Copy(AData, I, Length(AData) - I);
+  Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
 end;
 
 function IsZeroBytes(const AData: TBytes): Boolean;
@@ -122,33 +110,14 @@ begin
   Result := (Length(LNorm) = 1) and (LNorm[0] = 0);
 end;
 
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer;
-var
-  LLeft, LRight: TBytes;
-  I: Integer;
+function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-
-  if Length(LLeft) < Length(LRight) then
-    Exit(-1);
-  if Length(LLeft) > Length(LRight) then
-    Exit(1);
-
-  for I := 0 to Length(LLeft) - 1 do
-  begin
-    if LLeft[I] < LRight[I] then
-      Exit(-1);
-    if LLeft[I] > LRight[I] then
-      Exit(1);
-  end;
-
-  Result := 0;
+  Result := nextpas.core.bytes.ops.CompareUnsignedBytes(ALeft, ARight);
 end;
 
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
+function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
-  Result := CompareUnsignedBytes(ALeft, ARight) = 0;
+  Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
 end;
 
 function TryFixedLength48(const AValue: TBytes; out AResult: TBytes; out AError: string): Boolean;
