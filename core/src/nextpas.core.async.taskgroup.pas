@@ -127,6 +127,7 @@ var
   LCtx: PTaskWrapCtx;
   LGroup: TAsyncTaskGroup;
   LExpected: Int32;
+  LGene: UInt32;
 begin
   LCtx := PTaskWrapCtx(AContext);
   if LCtx = nil then
@@ -134,6 +135,7 @@ begin
   LExpected := 0;
   if not atomic_compare_exchange_strong(LCtx^.Done, LExpected, 1, mo_acq_rel, mo_acquire) then
     Exit;
+  LGene := LCtx^.Generation;
   LGroup := TAsyncTaskGroup(LCtx^.Group);
   try
     if ARunUser then
@@ -143,7 +145,7 @@ begin
       else if Assigned(LCtx^.UserRef) then
         LCtx^.UserRef(LCtx^.UserContext);
       if LGroup <> nil then
-        LGroup.TaskDone;
+        LGroup.TaskDone(LGene);
     end;
   finally
     Dispose(LCtx);

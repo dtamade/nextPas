@@ -765,8 +765,13 @@ begin
     LJs := BuildRejectScript(AFrameId, ACode, AMessage)
   else
     LJs := BuildResolveScript(AFrameId, AResultJson);
-  // fire-and-forget eval (no callback)
-  Eval(LJs, nil, nil);
+  // fire-and-forget：跳 pending，直接底层 ExecuteScript（零 pending）
+{$IFDEF MSWINDOWS}
+  if FWebView <> nil then
+    FWebView.ExecuteScript(PWideChar(WideString(LJs)), nil);
+{$ELSE}
+  // 非 Windows 桩：无 controller，丢弃（与 gtk fire-and-forget 对称）
+{$ENDIF}
 end;
 
 {$IFDEF MSWINDOWS}

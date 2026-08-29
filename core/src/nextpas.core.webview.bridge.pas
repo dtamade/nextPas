@@ -319,6 +319,7 @@ end;
 
 procedure TWebviewInvokeRegistry.GrowEntries; inline;
 begin
+  Assert(FEntriesCount >= 0, 'GrowEntries count');
   if FEntriesCount = Length(FEntries) then
     SetLength(FEntries, WebviewGrowCapacity(Length(FEntries)));
 end;
@@ -447,6 +448,7 @@ end;
 
 procedure TWebviewAssetsImpl.GrowMounts; inline;
 begin
+  Assert(FMountsCount >= 0, 'GrowMounts count');
   if FMountsCount = Length(FMounts) then
     SetLength(FMounts, WebviewGrowCapacity(Length(FMounts)));
 end;

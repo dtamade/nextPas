@@ -340,6 +340,7 @@ end;
 
 procedure TBuilderImpl.GrowInitScripts; inline;
 begin
+  Assert(FInitScriptsCount >= 0, 'GrowInitScripts count');
   SetLength(FInitScripts, WebviewGrowCapacity(Length(FInitScripts)));
 end;
 
@@ -354,11 +355,13 @@ end;
 
 procedure TBuilderImpl.GrowInvokes; inline;
 begin
+  Assert(FInvokesCount >= 0, 'GrowInvokes count');
   SetLength(FInvokes, WebviewGrowCapacity(Length(FInvokes)));
 end;
 
 procedure TBuilderImpl.GrowReady; inline;
 begin
+  Assert(FReadyCount >= 0, 'GrowReady count');
   SetLength(FReady, WebviewGrowCapacity(Length(FReady)));
 end;
 
