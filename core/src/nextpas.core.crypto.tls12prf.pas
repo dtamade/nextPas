@@ -27,39 +27,9 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.crypto.hmac;
 
-function ConcatBytes(const ALeft, ARight: TBytes): TBytes;
+function ConcatLabelAndSeed(const ALabel: string; const ASeed: TBytes): TBytes; inline;
 begin
-  SetLength(Result, Length(ALeft) + Length(ARight));
-  if Length(ALeft) > 0 then Move(ALeft[0], Result[0], Length(ALeft));
-  if Length(ARight) > 0 then Move(ARight[0], Result[Length(ALeft)], Length(ARight));
-end;
-
-function ConcatLabelAndSeed(const ALabel: string; const ASeed: TBytes): TBytes;
-var
-  LLabelBytes: TBytes;
-  LLabelLen, LSeedLen: Integer;
-begin
-  LLabelBytes := StringToBytes(ALabel);
-  LLabelLen := Length(LLabelBytes);
-  LSeedLen := Length(ASeed);
-  SetLength(Result, LLabelLen + LSeedLen);
-  if LLabelLen > 0 then
-    Move(LLabelBytes[0], Result[0], LLabelLen);
-  if LSeedLen > 0 then
-    Move(ASeed[0], Result[LLabelLen], LSeedLen);
-end;
-
-function LocalConcatBytes(const ALeft, ARight: TBytes): TBytes;
-var
-  LLeftLen, LRightLen: Integer;
-begin
-  LLeftLen := Length(ALeft);
-  LRightLen := Length(ARight);
-  SetLength(Result, LLeftLen + LRightLen);
-  if LLeftLen > 0 then
-    Move(ALeft[0], Result[0], LLeftLen);
-  if LRightLen > 0 then
-    Move(ARight[0], Result[LLeftLen], LRightLen);
+  Result := BytesConcat(StringToBytes(ALabel), ASeed);
 end;
 
 function P_SHA256(const ASecret, ASeed: TBytes; ALength: Integer): TBytes;
@@ -73,7 +43,7 @@ begin
 
   while LOffset < ALength do
   begin
-    HMACResult := HMAC_SHA256(ASecret, LocalConcatBytes(A, ASeed));
+    HMACResult := HMAC_SHA256(ASecret, BytesConcat(A, ASeed));
     LCopyLen := ALength - LOffset;
     if LCopyLen > 32 then
       LCopyLen := 32;
@@ -95,7 +65,7 @@ begin
 
   while LOffset < ALength do
   begin
-    HMACResult := HMAC_SHA384(ASecret, LocalConcatBytes(A, ASeed));
+    HMACResult := HMAC_SHA384(ASecret, BytesConcat(A, ASeed));
     LCopyLen := ALength - LOffset;
     if LCopyLen > 48 then
       LCopyLen := 48;

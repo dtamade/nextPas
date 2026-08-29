@@ -301,11 +301,6 @@ begin
   Result := OutBuf;
 end;
 
-function BytesOfStr(const S: string): TBytes; inline;
-begin
-  Result := StringToBytes(S);
-end;
-
 function IdentEqualCI(const AA, AB: string): Boolean;
 var
   I, N: Integer;
@@ -332,9 +327,9 @@ begin
     raise EResPackError.Create('respack.embed: UnitName must differ from ' +
       'ConstName ("' + AUnitName + '")');
   Body := ResPackEmbedIncSource(ABlob, AOpts);
-  Head := BytesOfStr('unit ' + AUnitName + ';' + #10 +
+  Head := StringToBytes('unit ' + AUnitName + ';' + #10 +
     '{$mode objfpc}{$H+}' + #10 + #10 + 'interface' + #10 + #10);
-  Tail := BytesOfStr(#10 + 'implementation' + #10 + #10 + 'end.' + #10);
+  Tail := StringToBytes(#10 + 'implementation' + #10 + #10 + 'end.' + #10);
   Result := BytesConcatMany([Head, Body, Tail]);
 end;
 

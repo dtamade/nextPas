@@ -667,6 +667,7 @@ procedure TlsPasClearEarlyDataSecrets(var ASecrets: TTlsPasEarlyDataSecrets);
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   SysUtils, Classes,
   nextpas.core.errors,
   nextpas.core.system.sysutils,
@@ -1228,17 +1229,6 @@ begin
   Result := SHA256(AT);
 end;
 
-procedure AppendBytesTo(var ADest: TBytes; const ASrc: TBytes);
-var
-  LBase: Integer;
-begin
-  if Length(ASrc) = 0 then
-    Exit;
-  LBase := Length(ADest);
-  SetLength(ADest, LBase + Length(ASrc));
-  Move(ASrc[0], ADest[LBase], Length(ASrc));
-end;
-
 { ======== 0-RTT 策略与重放窗口 ======== }
 
 function TlsPasIsEarlyDataAllowed(const ASession: TTlsPasResumptionSession;
@@ -1259,8 +1249,8 @@ var
   LBuf: TBytes;
 begin
   SetLength(LBuf, 0);
-  AppendBytesTo(LBuf, ATicketIdentity);
-  AppendBytesTo(LBuf, AEarlyData);
+  BytesAppend(LBuf, ATicketIdentity);
+  BytesAppend(LBuf, AEarlyData);
   Result := SHA256(LBuf);
   SecureZeroBytes(LBuf);
 end;
@@ -3131,7 +3121,7 @@ begin
   if ACtx^.EarlyDataAccepted then
   begin
     LEoed := BuildTLS13EndOfEarlyDataHandshake;
-    AppendBytesTo(LTranscriptForFin, LEoed);
+    BytesAppend(LTranscriptForFin, LEoed);
   end
   else
     SetLength(LEoed, 0);
@@ -3151,26 +3141,26 @@ begin
     同一 handshake IV 下一同加密为单记录，降低往返与分片。 }
   SetLength(LFlight, 0);
   if Length(LEoed) > 0 then
-    AppendBytesTo(LFlight, LEoed);
+    BytesAppend(LFlight, LEoed);
   if ACtx^.CertRequested then
-    AppendBytesTo(LFlight, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
+    BytesAppend(LFlight, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
       0, 0, 0, 0));
-  AppendBytesTo(LFlight, LFinished);
+  BytesAppend(LFlight, LFinished);
 
   SetLength(ACtx^.TxBytes, 0);
   LRecord := TlsPasSealClientHandshakeRecord(ACtx, LFlight,
     TLS_CONTENT_TYPE_HANDSHAKE);
-  AppendBytesTo(ACtx^.TxBytes, LRecord);
+  BytesAppend(ACtx^.TxBytes, LRecord);
   ACtx^.TxOff := 0;
 
   { resumption_master_secret 输入 = Hash(CH..EOED..CF)；v1 不恢复会话，
     保留正确派生供后续批次扩展 }
   if Length(LEoed) > 0 then
-    AppendBytesTo(LTranscript, LEoed);
+    BytesAppend(LTranscript, LEoed);
   if ACtx^.CertRequested then
-    AppendBytesTo(LTranscript, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
+    BytesAppend(LTranscript, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
       0, 0, 0, 0));
-  AppendBytesTo(LTranscript, LFinished);
+  BytesAppend(LTranscript, LFinished);
   ACtx^.AppSecrets.ResumptionTranscriptHash :=
     TlsPasTranscriptHash(ACtx^.Suite, LTranscript);
 end;
@@ -3291,9 +3281,9 @@ var
 begin
   LMsgHash := TlsPasBuildMessageHash(ACH1, ACipherSuite);
   SetLength(LTranscript, 0);
-  AppendBytesTo(LTranscript, LMsgHash);
-  AppendBytesTo(LTranscript, AHRR);
-  AppendBytesTo(LTranscript, ATruncatedCH2);
+  BytesAppend(LTranscript, LMsgHash);
+  BytesAppend(LTranscript, AHRR);
+  BytesAppend(LTranscript, ATruncatedCH2);
   if TLS13CipherSuiteIsSHA384(ACipherSuite) then
     LHash := SHA384(LTranscript)
   else
@@ -3673,9 +3663,9 @@ begin
     end;
     LMsgHash := TlsPasBuildMessageHash(ACtx^.CH1Body, LInfo.SelectedCipherSuite);
     SetLength(ACtx^.HRRTranscript, 0);
-    AppendBytesTo(ACtx^.HRRTranscript, LMsgHash);
-    AppendBytesTo(ACtx^.HRRTranscript, AMsg);
-    AppendBytesTo(ACtx^.HRRTranscript, LCH2);
+    BytesAppend(ACtx^.HRRTranscript, LMsgHash);
+    BytesAppend(ACtx^.HRRTranscript, AMsg);
+    BytesAppend(ACtx^.HRRTranscript, LCH2);
     ACtx^.CHBody := LCH2;
     ACtx^.HRRSeen := True;
     ACtx^.HsBuf := nil;
@@ -3733,13 +3723,13 @@ begin
   SetLength(ACtx^.Transcript, 0);
   if ACtx^.HRRSeen then
   begin
-    AppendBytesTo(ACtx^.Transcript, ACtx^.HRRTranscript);
-    AppendBytesTo(ACtx^.Transcript, AMsg);
+    BytesAppend(ACtx^.Transcript, ACtx^.HRRTranscript);
+    BytesAppend(ACtx^.Transcript, AMsg);
   end
   else
   begin
-    AppendBytesTo(ACtx^.Transcript, ACtx^.CHBody);
-    AppendBytesTo(ACtx^.Transcript, AMsg);
+    BytesAppend(ACtx^.Transcript, ACtx^.CHBody);
+    BytesAppend(ACtx^.Transcript, AMsg);
   end;
   if LInfo.HasPreSharedKey then
   begin
@@ -3904,7 +3894,7 @@ begin
   case LInnerCt of
     TLS_CONTENT_TYPE_HANDSHAKE:
       begin
-        AppendBytesTo(ACtx^.EncBuf, LFrag);
+        BytesAppend(ACtx^.EncBuf, LFrag);
         while TlsPasTryPopHandshake(ACtx^.EncBuf, LMsg) = 1 do
         begin
           LMsgType := LMsg[0];
@@ -3935,7 +3925,7 @@ begin
             else if ACtx^.SentEarlyData then
               ACtx^.EarlyDataAccepted := False;
             ACtx^.SeenEncryptedExtensions := True;
-            AppendBytesTo(ACtx^.Transcript, LMsg);
+            BytesAppend(ACtx^.Transcript, LMsg);
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_CERTIFICATE then
           begin
@@ -3952,7 +3942,7 @@ begin
               Exit;
             end;
             ACtx^.SeenCert := True;
-            AppendBytesTo(ACtx^.Transcript, LMsg);
+            BytesAppend(ACtx^.Transcript, LMsg);
             { VerifyPeer：全链验证（日期/签名/CA 约束/信任锚/主机名）。
               失败即握手终止——绝不降级为不校验继续。 }
             if ACtx^.VerifyPeer then
@@ -3986,7 +3976,7 @@ begin
               if not TlsPasVerifyCertVerifySignature(ACtx, LScheme, LSig) then
                 Exit;
             ACtx^.SeenCertVerify := True;
-            AppendBytesTo(ACtx^.Transcript, LMsg);
+            BytesAppend(ACtx^.Transcript, LMsg);
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_FINISHED then
           begin
@@ -4024,7 +4014,7 @@ begin
               TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
-            AppendBytesTo(ACtx^.Transcript, LMsg);
+            BytesAppend(ACtx^.Transcript, LMsg);
 
             { 应用密钥派生输入 = Hash(CH..SF)，不含客户端 Finished }
             if not TryDeriveTLS13ApplicationSecrets(ACtx^.Suite,
@@ -4108,7 +4098,7 @@ begin
             end;
           TLS_CONTENT_TYPE_HANDSHAKE:
             begin
-              AppendBytesTo(ACtx^.HsBuf, LPayload);
+              BytesAppend(ACtx^.HsBuf, LPayload);
               while TlsPasTryPopHandshake(ACtx^.HsBuf, LMsg) = 1 do
               begin
                 if LMsg[0] <> TLS_HANDSHAKE_TYPE_SERVER_HELLO then
@@ -4635,7 +4625,7 @@ var
   LSess: TTlsPasResumptionSession;
 begin
   AFatal := False;
-  AppendBytesTo(FPostHs, AFragment);
+  BytesAppend(FPostHs, AFragment);
   while TlsPasTryPopHandshake(FPostHs, LMsg) = 1 do
   begin
     LMsgType := LMsg[0];
@@ -4701,7 +4691,7 @@ begin
   case LInnerCt of
     TLS_CONTENT_TYPE_APPLICATION_DATA:
       begin
-        AppendBytesTo(FPlainOut, LFrag);
+        BytesAppend(FPlainOut, LFrag);
         Result := Length(LFrag);
       end;
     TLS_CONTENT_TYPE_HANDSHAKE:
