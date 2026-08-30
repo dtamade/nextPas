@@ -101,13 +101,12 @@ begin Result:=False; AErrKind:=sekIO; AResult:=Default(TSshExecResult);
       if not GState.Session.ExecAsync('echo hi', @OnAsyncExec) then begin AErrKind:=sekIO; Exit; end;
       if not WaitFlag(GState.ExecDone, GState.Event, 8000) then begin AErrKind:=sekTimeout; Exit; end;
       if GState.ExecErr<>nil then begin WriteLn('EXEC ERR ', GState.ExecErr.Message, ' kind ', Ord(GState.ExecErr.Kind)); AErrKind:=GState.ExecErr.Kind; FreeAndNil(GState.ExecErr); Exit; end;
-      AResult:=GState.ExecResult; Result:=True; try GState.Session.Close; except end; Sleep(400);
-    finally RTLeventDestroy(GState.Event); GState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; Sleep(150); Finalize(GState); GState:=Default(TAsyncState); end;
+      AResult:=GState.ExecResult; Result:=True; GState.Session.Close;
+    finally RTLeventDestroy(GState.Event); GState.Event:=nil; LLoop.Stop; LLoopThread.WaitFor; LLoopThread.Free; end;
   finally
-    if GState.Session<>nil then begin try GState.Session.Close; except end; GState.Session:=nil; end;
+    if GState.Session<>nil then begin GState.Session.Close; GState.Session:=nil; end;
     if GState.Err<>nil then FreeAndNil(GState.Err); if GState.ExecErr<>nil then FreeAndNil(GState.ExecErr);
-    SetLength(GState.ExecResult.StdOut,0); SetLength(GState.ExecResult.StdErr,0); Finalize(GState); GState:=Default(TAsyncState);
-    if Assigned(LLoop) then begin try LLoop.Free; except end; end; if Assigned(LJumpListener) then LJumpListener.Close; try LFwdA.Close; except end; try LFwdB.Close; except end;
+    LLoop.Free; LJumpListener.Close; try LFwdA.Close; except end; try LFwdB.Close; except end;
     LScJump^.Done:=True; LScTarget^.Done:=True;
     Sleep(100);
     if not LJumpThread.Finished then LJumpThread.Terminate;
@@ -127,7 +126,4 @@ begin
   GSuite.Test('async target auth fail propagates', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunAsyncProxy(PatternBytes($33,32), PatternBytes($44,32), 'u','p', True, 'u','wrong', False, R, K); CheckTrue(not Ok,'should fail'); CheckEqual(Ord(sekAuth), Ord(K),'kind auth'); end);
   GSuite.Test('async jump auth fail propagates', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunAsyncProxy(PatternBytes($55,32), PatternBytes($66,32), 'u','wrong', False, 'u','p', True, R, K); CheckTrue(not Ok,'jump should fail'); CheckTrue(K in [sekAuth, sekIO],'kind auth/io'); end);
   GRunner:=TSuiteRunner.Create('nextpas.core.ssh.proxyjump.async'); GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary; if not GRunner.AllPassed then Halt(1);
-  Finalize(GState); GState:=Default(TAsyncState);
-  Finalize(GSuite); GSuite:=Default(TTestSuite);
-  Finalize(GRunner); GRunner:=Default(TSuiteRunner);
 end.
