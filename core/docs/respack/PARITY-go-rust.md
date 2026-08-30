@@ -1,7 +1,7 @@
 # respack / vfs — Go / Rust 对标矩阵
 
-**状态日期**：2026-08-25
-**范围**：L2 `nextpas.core.{respack,vfs}`（设计阶段）
+**状态日期**：2026-08-30（1.0 收官；S1 格式层/S2 契约/S3 后端/S4 工具链/S5 http.static 已收官，S6 装饰器勘误补齐）
+**范围**：L2 `nextpas.core.{respack,vfs}`（已落地 1.0；FORMAT 已正确无需改）
 **标杆**（均为一手来源，2026-08-25 抓取）：
 
 | 来源 | 版本/分支 | 材料 |
@@ -26,7 +26,7 @@
 | 整包完整性 | — | — | — | — | — | 每条目 FNV-1a 32（ETag 级） |
 | 强完整性（防篡改） | **SHA256 全量 + 4KB 分块哈希** | sha2 dev-dep | — | CSP 哈希注入 | — | **采纳弱化版**：可选 digest 区（每条目 SHA-256，算法由调用方注入），分块哈希推迟 |
 | 内容去重 | **同内容单副本共享 offset** | — | — | — | — | **采纳**：writer 可选项，fnv 候选 + 字节级回验 |
-| 压缩 | 无原生（transform 钩子） | include-flate | TODO 中 | **brotli 构建期压缩，读时解压分配** | — | 条目预留 `codecId` 槽位，v1 仅定义 0=store；编解码随 compress 模块 seam 后续立项 |
+| 压缩 | 无原生（transform 钩子） | include-flate | TODO 中 | **brotli 构建期压缩，读时解压分配** | — | 勘误 Done：`codecId` 槽位 + L3 `vfs.compressed` gzip 按需解压（`CreateDecompressingVfs` 经 `transform` 模板，`VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX 32MiB` 单源防 bomb，STORE 零拷贝保持） |
 | 元数据 | size/executable/integrity | metadata_only 模式 | metadata feature | — | ModTime | size/modTime/hash；"只列清单不读内容"由索引天然支持 |
 | 路径键形态 | 树形 JSON | folder/prefix/include/exclude | 目录树 | AssetKey：强制根 `/`、unix 分隔、无尾斜杠、**目录不入表** | — | 规范路径语法对齐 Go ValidPath；前导 `/` 不采用（Go unrooted 风格）；include/exclude/prefix 归工具层 |
 | 大文件流式写入 | 流式 | — | — | — | — | v1 内存构造 + 显式上限声明；超限策略 S4 基准后定 |
@@ -97,7 +97,9 @@
 | web 框架 handlers（axum/actix…） | http.static `ServeVfs(IVfs)`（S5 已落地） | Done (S5) | ETag 取条目 fnv32、条件请求/Range/MIME 与 fs 版同语义；端到端示例与三后端基准见 README「嵌入载体」节 |
 | include_dir `extract()` | 工具 extract-to-dir 选项 | Deferred→S4 | 调试/迁移用途 |
 | Tauri phf 完美哈希 O(1) | 排序数组二分 O(log n) | 定稿偏离 | 10k 条目 ≤14 次缓存友好比较；FORMAT 预留 flag bit2 hash-index 区，超大规模再启用 |
-| Tauri brotli / include-flate | codecId 登记表槽位 | Deferred | 读时分配破坏零拷贝；HTTP 编码归 http.static |
+| Tauri brotli / include-flate | `vfs.compressed` gzip 按需解压（`CreateDecompressingVfs` 经 `transform` 模板） | Done (gzip via vfs.compressed) | 勘误：原 Deferred 已由 S6 L3 装饰器补齐 gzip 实现（`daAuto` 4K HeaderPred 免全量读 + 单次 `VfsReadAllBytes` 复用零二次 IO + 32MiB 防 bomb），STORE 零拷贝保持；HTTP 编码另选承载面 |
+
+> **勘误与基准固化（2026-08-30 P0-4 1.0）**：压缩行原 `Deferred` 勘误为 `Done (gzip via vfs.compressed)`——S6 以 L3 装饰器 `vfs.transform` 通用模板 + `vfs.compressed` 薄门面补齐 gzip 按需解压（`GZIP_MAX 32MiB` 单源、`daAuto` 4K HeaderPred、`VFS_DECOMPRESS_MAX_BYTES` 薄别名），`bench_transform` 4 场景阈值已固化（`Stat/large-non-gzip/header-peek` 1MiB 非 gzip 免解压 ~972 ns、`Stat/gz/decompress` 64KiB ~51 µs、`Open/large-non-gzip/passthrough` 单次复用 ~2.26 ms、`Open/gz/decompress` ~107 µs；见 `core/docs/vfs/README.md` 基准节与 `core/docs/vfs/CONTRACT.md` §6 S6 行 + `test_vfs_compressed` 7/7 含 1MiB 头部预判功能契约）。
 
 ## 四、安全与威胁模型（企业级增补）
 

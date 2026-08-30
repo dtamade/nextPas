@@ -11,7 +11,7 @@ interface
 uses
   nextpas.core.base.pathvalid,
   nextpas.core.base.utils,
-  nextpas.core.text.conv;
+  nextpas.core.compress.base;
 
 type
   TEntryInfo = record
@@ -30,6 +30,9 @@ type
 
   TVfsNameArray = array of string;
 
+const
+  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
+
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   特例整串 '.' 表根。AAllowRoot=False 时拒绝 '.'。 }
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
@@ -45,11 +48,11 @@ function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
 function VfsNameCompare(const AA, AB: string): Integer; inline;
 
 { ETag 单源：strong "hexSize-hexModTime" 与 fnv "fnv-hex8"，供 embedded/http 共用
-  避免两处字面量漂移；基于 text.conv.IntToHex 保证大小写/位宽一致 }
+  避免两处字面量漂移；本地十六进制保证大小写/位宽一致，base 保持 L0 纯度（仅 L0 依赖）。 }
 function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
 function VfsETagFNV(const AHash: UInt32): string; inline;
 
-{ 就地按 Name 字节序升序（INV-V8）；quick(Int64 下标)+小区间插入混合排序 }
+{ 就地按 Name 字节序升序（INV-V8）；经 collections 单源 Sort（IntroSort+小区间插入） }
 procedure VfsSortEntries(var AItems: TEntryArray);
 
 { 从字节序有序的完整路径清单推导某目录的直接子项完整路径（有序、去重）。
@@ -59,6 +62,9 @@ function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
 
 implementation
+
+uses
+  nextpas.core.collections.algorithms;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 begin
@@ -94,74 +100,44 @@ begin
   Result := CompareBytesOrdered(PA, PB, SizeUInt(Length(AA)), SizeUInt(Length(AB)));
 end;
 
+const
+  HEX_DIGITS: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
+
+function VfsHex(const AValue: UInt64; const ADigits: Integer): string; inline;
+var
+  I: Integer;
+  V: UInt64;
+begin
+  SetLength(Result, ADigits);
+  V := AValue;
+  for I := ADigits - 1 downto 0 do
+  begin
+    Result[I + 1] := HEX_DIGITS[V and $F];
+    V := V shr 4;
+  end;
+end;
+
 function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
 begin
-  Result := '"' + IntToHex(UInt64(ASize), 16) + '-' + IntToHex(UInt64(AModTime), 16) + '"';
+  Result := '"' + VfsHex(UInt64(ASize), 16) + '-' + VfsHex(UInt64(AModTime), 16) + '"';
 end;
 
 function VfsETagFNV(const AHash: UInt32): string; inline;
 begin
-  Result := '"fnv-' + IntToHex(UInt64(AHash), 8) + '"';
+  Result := '"fnv-' + VfsHex(UInt64(AHash), 8) + '"';
 end;
 
-{ 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（S1/S2 实测陷阱，
-  见 respack README「实现期发现的 FPC trunk 注意事项」）。 }
-procedure VfsQuickSortEntries(var AItems: array of TEntryInfo;
-  ALow, AHigh: Int64);
-var
-  L, R: Int64;
-  PivotName: string;
-  Tmp, Key: TEntryInfo;
+{ 排序收口至 collections 单源：复用 nextpas.core.collections.algorithms.Sort，
+  消除与 memtree/respack 三处同构 QuickSort 重复；SizeInt 天然防回绕。 }
+function CompareEntryInfo(const A, B: TEntryInfo; Data: Pointer): SizeInt;
 begin
-  while ALow < AHigh do
-  begin
-    if AHigh - ALow < 16 then
-    begin
-      { 小区间插入排序：稳定、无递归 }
-      L := ALow + 1;
-      while L <= AHigh do
-      begin
-        Key := AItems[L];
-        R := L - 1;
-        while (R >= ALow) and (VfsNameCompare(AItems[R].Name, Key.Name) > 0) do
-        begin
-          AItems[R + 1] := AItems[R];
-          Dec(R);
-        end;
-        AItems[R + 1] := Key;
-        Inc(L);
-      end;
-      Exit;
-    end;
-    PivotName := AItems[(ALow + AHigh) shr 1].Name;
-    L := ALow;
-    R := AHigh;
-    while L <= R do
-    begin
-      while VfsNameCompare(AItems[L].Name, PivotName) < 0 do Inc(L);
-      while VfsNameCompare(AItems[R].Name, PivotName) > 0 do Dec(R);
-      if L <= R then
-      begin
-        if L < R then
-        begin
-          Tmp := AItems[L];
-          AItems[L] := AItems[R];
-          AItems[R] := Tmp;
-        end;
-        Inc(L);
-        Dec(R);
-      end;
-    end;
-    if ALow < R then
-      VfsQuickSortEntries(AItems, ALow, R);
-    ALow := L;
-  end;
+  Result := VfsNameCompare(A.Name, B.Name);
 end;
 
 procedure VfsSortEntries(var AItems: TEntryArray);
 begin
-  if SizeUInt(Length(AItems)) > 1 then
-    VfsQuickSortEntries(AItems, 0, Int64(Length(AItems)) - 1);
+  if Length(AItems) > 1 then
+    specialize Sort<TEntryInfo>(AItems, @CompareEntryInfo, nil);
 end;
 
 function VfsDeriveChildNames(const ASortedPaths: array of string;
