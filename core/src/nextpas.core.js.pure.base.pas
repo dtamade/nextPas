@@ -9,6 +9,7 @@ interface
 uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
+  nextpas.core.text.view,
   nextpas.core.json;
 
 type
@@ -23,6 +24,7 @@ type
 
 function JsPureValidateHostName(const AName: string): Boolean; inline;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline;
+function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer; inline;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions;
   ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
 
@@ -58,12 +60,19 @@ begin
   Result := -1;
 end;
 
+function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer;
+var I: Integer;
+begin
+  for I := 0 to High(Hosts) do if TStringView.FromStr(Hosts[I].Name).Equals(AName) then Exit(I);
+  Result := -1;
+end;
+
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions;
   ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
 var
-  LCode: string;
-  LIdx, LHostIdx: Integer;
-  LName, LArg: string;
+  LView, LNameView, LArgView: TStringView;
+  LIdx: PtrInt;
+  LHostIdx: Integer;
   LSingle: array[0..0] of TJsValue;
   LNoArgs: array of TJsValue;
   LHandler: TJsHostFunction;
@@ -90,62 +99,70 @@ begin
   if JsTrimEquals(ACode, 'undefined') then Exit(JsUndefinedValue);
   if JsTrimEquals(ACode, 'true') then Exit(JsBoolValue(True));
   if JsTrimEquals(ACode, 'false') then Exit(JsBoolValue(False));
-  LCode := TextTrim(ACode);
-  LIdx := Pos('(', LCode);
-  if LIdx > 0 then
+  LView := TStringView.FromStr(ACode).Trim;
+  LIdx := LView.IndexOf('(');
+  if LIdx >= 0 then
   begin
-    LName := TextTrim(Copy(LCode, 1, LIdx - 1));
-    LHostIdx := JsPureFindHost(Hosts, LName);
-    if LHostIdx >= 0 then
+    LNameView := LView.Slice(0, SizeUInt(LIdx)).Trim;
+    if not LNameView.IsEmpty then
     begin
-      LArg := TextTrim(Copy(LCode, LIdx + 1, Length(LCode) - LIdx - 1));
-      if (Length(LArg) >= 2) and ((LArg[1] = '"') or (LArg[1] = '''')) then
-        LArg := Copy(LArg, 2, Length(LArg) - 2);
-      if LArg = ')' then LArg := '';
-      LHasArg := LArg <> '';
-      if LHasArg then LSingle[0] := JsStringValue(LArg);
-      LThis := AGlobal;
-      case Hosts[LHostIdx].Kind of
-        0:
+      LHostIdx := JsPureFindHostView(Hosts, LNameView);
+      if LHostIdx >= 0 then
+      begin
+        if SizeUInt(LIdx) + 1 < LView.Len then
         begin
-          LHandler := Hosts[LHostIdx].Func;
-          try
-            if LHasArg then Result := LHandler(ACtx, LThis, LSingle) else Result := LHandler(ACtx, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend);
-            on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend);
+          if LView.Len >= 2 then
+            LArgView := LView.Slice(SizeUInt(LIdx) + 1, LView.Len - SizeUInt(LIdx) - 2).Trim
+          else LArgView := TStringView.Empty;
+        end else LArgView := TStringView.Empty;
+        if (LArgView.Len >= 2) and ((LArgView.Data[0] = '"') or (LArgView.Data[0] = '''')) then
+          LArgView := LArgView.Slice(1, LArgView.Len - 2);
+        if (LArgView.Len = 1) and (LArgView.Data[0] = ')') then LArgView := TStringView.Empty;
+        LHasArg := not LArgView.IsEmpty;
+        if LHasArg then LSingle[0] := JsStringValue(LArgView.ToString);
+        LThis := AGlobal;
+        case Hosts[LHostIdx].Kind of
+          0:
+          begin
+            LHandler := Hosts[LHostIdx].Func;
+            try
+              if LHasArg then Result := LHandler(ACtx, LThis, LSingle) else Result := LHandler(ACtx, LThis, LNoArgs);
+            except
+              on E: EJsError do raise;
+              on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend);
+              on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend);
+            end;
+            Exit;
           end;
-          Exit;
-        end;
-        1:
-        begin
-          LMethod := Hosts[LHostIdx].Method;
-          try
-            if LHasArg then Result := LMethod(ACtx, LThis, LSingle) else Result := LMethod(ACtx, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend);
-            on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend);
+          1:
+          begin
+            LMethod := Hosts[LHostIdx].Method;
+            try
+              if LHasArg then Result := LMethod(ACtx, LThis, LSingle) else Result := LMethod(ACtx, LThis, LNoArgs);
+            except
+              on E: EJsError do raise;
+              on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend);
+              on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend);
+            end;
+            Exit;
           end;
-          Exit;
-        end;
-        2:
-        begin
-          LProc := Hosts[LHostIdx].Proc;
-          try
-            if LHasArg then Result := LProc(ACtx, LThis, LSingle) else Result := LProc(ACtx, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend);
-            on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend);
+          2:
+          begin
+            LProc := Hosts[LHostIdx].Proc;
+            try
+              if LHasArg then Result := LProc(ACtx, LThis, LSingle) else Result := LProc(ACtx, LThis, LNoArgs);
+            except
+              on E: EJsError do raise;
+              on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend);
+              on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend);
+            end;
+            Exit;
           end;
-          Exit;
         end;
       end;
     end;
   end;
-  Result := JsStringValue(LCode);
+  Result := JsStringValue(LView.ToString);
 end;
 
 end.

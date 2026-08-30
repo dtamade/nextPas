@@ -350,50 +350,7 @@ begin
 end;
 
 function TJsFakeContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var
-  LNorm: string;
-  LFile: File;
-  LSize: Int64;
-  LContent: string;
-  LRead: LongInt;
-begin
-  EnsureNotClosed;
-  AValue := JsUndefinedValue;
-  if AFileName = '' then
-    Exit(False);
-  LNorm := FsPathAbs(AFileName);
-  if LNorm = '' then
-    Exit(False);
-  if not FileExists(LNorm) then
-    Exit(False);
-  AssignFile(LFile, LNorm);
-  {$I-}
-  Reset(LFile, 1);
-  {$I+}
-  if IOResult <> 0 then
-    Exit(False);
-  try
-    LSize := System.FileSize(LFile);
-    if (LSize < 0) or (SizeUInt(LSize) > FORMAT_BULK_PARSE_MAX_BYTES) then
-      Exit(False);
-    if LSize = 0 then
-      LContent := ''
-    else
-    begin
-      SetLength(LContent, LSize);
-      BlockRead(LFile, LContent[1], LSize, LRead);
-      if LRead <> LSize then
-        SetLength(LContent, LRead);
-    end;
-  finally
-    CloseFile(LFile);
-  end;
-  try
-    Result := TryEval(LContent, AValue);
-  except
-    Result := False;
-  end;
-end;
+var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
 
 function TJsFakeContext.Global: TJsValue;
 begin

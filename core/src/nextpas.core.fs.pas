@@ -94,6 +94,9 @@ function Watch: IFsWatcher; inline;
 function ReadFile(const APath: string): TBytes; inline;
 {** @desc 读取文件全部内容为 UTF-8 字符串 *}
 function ReadFileText(const APath: string): string; inline;
+{** @desc 尝试读取文件全部内容为 UTF-8 字符串，失败返回 False（不存在/超限/异常不抛） *}
+function TryReadFileText(const APath: string; out AContent: string): Boolean; inline; overload;
+function TryReadFileText(const APath: string; out AContent: string; AMaxBytes: SizeUInt): Boolean; overload;
 {** @desc 读取文件按行分割为字符串数组 *}
 function ReadFileLines(const APath: string): TStringArray; inline;
 {** @desc POSIX realpath：整链解析符号链接（含中间段）；不存在/环 → 异常。
@@ -307,7 +310,8 @@ function ParamStr(AIndex: Integer): string; inline;
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.format.limits;
 
 function Utf8TextToBytes(const AText: string): TBytes;
 var
@@ -349,6 +353,29 @@ end;
 function ReadFileText(const APath: string): string;
 begin
   Result := nextpas.core.fs.util.FsReadFileText(APath);
+end;
+
+function TryReadFileText(const APath: string; out AContent: string): Boolean;
+begin
+  Result := TryReadFileText(APath, AContent, FORMAT_BULK_PARSE_MAX_BYTES);
+end;
+
+function TryReadFileText(const APath: string; out AContent: string; AMaxBytes: SizeUInt): Boolean;
+var LNorm: string;
+begin
+  AContent := '';
+  Result := False;
+  if APath = '' then Exit;
+  LNorm := PathAbs(APath);
+  if LNorm = '' then Exit;
+  if not FileExists(LNorm) then Exit;
+  try
+    if SizeUInt(FileSize(LNorm)) > AMaxBytes then Exit;
+    AContent := ReadFileText(LNorm);
+    Result := True;
+  except
+    Result := False;
+  end;
 end;
 
 function ReadFileLines(const APath: string): TStringArray;
