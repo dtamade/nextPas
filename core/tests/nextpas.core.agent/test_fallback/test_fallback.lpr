@@ -14,7 +14,13 @@ uses
 { WithFallback 容灾链语义（API.md §装饰器组合；TESTING §3 test_fallback 行）：
   主成不触备、白名单内切备、白名单外直通、全链耗尽透传最后原始错误、
   流式首 delta 后失败不降级、取消后不切、OnSwitch 钩子序。
-  全程离线：本地可控桩 provider，零网络零睡眠 }
+  全程离线：本地可控桩 provider，零网络零睡眠
+  边界/Cancel/超时/并发：
+  - Cancel 边界：TestCancelledTriesNothing 验证预取消 token 下零尝试且透传 aecCancelled；流式首 delta 门后不降级已覆盖，失败流在 except 中显式 Cancel 终败不泄漏（F-H04）。
+  - 超时边界：ShouldFailover 仅基于 ErrorCode 白名单，不以超时驱逐；超时归因由 provider 层 aecTimeout 承载。
+  - 并发边界：单线程链式调用，无并发；OnSwitch 钩子单线程序。
+  悬挂指针：桩 completion 均接口持有，LComp 在失败切备前 Cancel 后置 nil，无裸指针常驻；多 provider 链接口数组持有。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；每链失败流均 Cancel 后释放，无 fd/thread 泄漏。 }
 
 type
   { 恒行为桩：Complete/Stream 按配置抛错或回一行文本；计数调用 }

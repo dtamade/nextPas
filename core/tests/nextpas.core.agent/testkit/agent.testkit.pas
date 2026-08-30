@@ -15,6 +15,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.log.intf,
+  nextpas.core.atomic.core,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
@@ -105,10 +106,144 @@ type
     procedure Clear;
   end;
 
+  { 并发峰值探针：原子在飞计数与峰值的真 CAS 提升。
+    供 loop 分组调度（W13）、限流、网关扇出等"是否真并行"断言复用。
+    Max=观测到的最大并发；Dbg* 暴露 Enter 路径用于精确定位退化 }
+  TAgentConcurrencyMeter = class
+  private
+    FCur: Int32;
+    FMax: Int32;
+  public
+    DbgCalls: Int32;
+    DbgBrk: Int32;
+    DbgCasFail: Int32;
+    DbgLastLNow: Int32;
+    DbgLastLOld: Int32;
+    function Enter: Int32;
+    procedure Leave;
+    property Max: Int32 read FMax;
+  end;
+
+{ F-M13 WithTools 第二形态便利（base 不依赖 intf 的分层约束，落位 testkit 转发 + src/tools 自由函数） }
+function KitWithTools(const ATools: array of IAgentTool): TToolSpecArray;
+
 implementation
 
 uses
-  nextpas.core.agent.provider.common;
+  nextpas.core.json,
+  nextpas.core.text.conv; // 独立预言机零依赖 provider.common（F-M19）
+
+{ ---- 独立预言机（F-M19）：与生产 BuildUpstreamError 零共享算法的快照 oracle ----
+  测试替身自带最小分类器，与 src/provider.common 双实现对照；
+  若生产分类器回归，两侧快照不一致即红（test_provider_common 快照对比亦覆盖）。 }
+
+function ScriptedWireHeaderValue(const AHeaders: TWireHeaderArray;
+  const AName: string): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(AHeaders) do
+    if SameText(AHeaders[I].Name, AName) then
+      Exit(AHeaders[I].Value);
+end;
+
+function ScriptedParsePlainInt64(const S: string; out V: Int64): Boolean;
+var
+  C: Integer;
+begin
+  Val(S, V, C);
+  Result := (C = 0) and (Length(S) > 0);
+end;
+
+function ScriptedParseRetryAfterMs(const AHeaders: TWireHeaderArray): Int64;
+var
+  LRaw: string;
+  LSecs: Int64;
+  LTmp: Int64;
+begin
+  LRaw := Trim(ScriptedWireHeaderValue(AHeaders, 'retry-after-ms'));
+  if ScriptedParsePlainInt64(LRaw, LTmp) and (LTmp >= 0) then
+    Exit(LTmp);
+  LRaw := Trim(ScriptedWireHeaderValue(AHeaders, 'retry-after'));
+  if ScriptedParsePlainInt64(LRaw, LSecs) and (LSecs >= 0) then
+  begin
+    // 秒级 ×1000 带溢出钳制（与生产侧同帽不同实现路径）
+    if LSecs > High(Int64) div 1000 then
+      Exit(High(Int64));
+    Exit(LSecs * 1000);
+  end;
+  Result := CRetryAfterUnknown;
+end;
+
+function ScriptedMatchesOverflow(const AMsg: string): Boolean;
+const
+  PH: array[0..5] of string = (
+    'context length','maximum context','token limit',
+    'too many tokens','context_length_exceeded','prompt is too long');
+var
+  L: string;
+  I: Integer;
+begin
+  L := LowerCase(AMsg);
+  for I := Low(PH) to High(PH) do
+    if Pos(PH[I], L) > 0 then Exit(True);
+  Result := False;
+end;
+
+function ScriptedExtractErrorMessage(const ABody: string): string;
+var
+  Doc: IJsonDocument;
+  LE, LM: TJsonValue;
+begin
+  Result := '';
+  if ABody = '' then Exit;
+  Doc := JsonParse(ABody);
+  if Doc.HasError then Exit;
+  LE := Doc.Root.Get('error');
+  if LE.IsObject then
+  begin
+    LM := LE.Get('message');
+    if LM.IsStr then Exit(LM.AsStr.ToString);
+    Exit('');
+  end;
+  if LE.IsStr then Exit(LE.AsStr.ToString);
+end;
+
+function ScriptedProbeRequestId(const AHeaders: TWireHeaderArray): string;
+begin
+  Result := ScriptedWireHeaderValue(AHeaders, 'x-request-id');
+  if Result <> '' then Exit;
+  Result := ScriptedWireHeaderValue(AHeaders, 'request-id');
+  if Result <> '' then Exit;
+  Result := ScriptedWireHeaderValue(AHeaders, 'anthropic-request-id');
+end;
+
+function ScriptedBuildUpstreamError(const AProvider, ABody: string;
+  AStatus: Integer; const AHeaders: TWireHeaderArray): EAgentError;
+var
+  LSnippet, LMsg, LRId: string;
+  LC: TAgentErrorCode;
+  LRA: Int64;
+begin
+  // RawBodySnippet 独立截断（不复用生产 Utf8SafeTruncate 的共享路径）
+  if Length(ABody) > 8192 then
+    LSnippet := Copy(ABody, 1, 8192)
+  else
+    LSnippet := ABody;
+  LMsg := ScriptedExtractErrorMessage(ABody);
+  if LMsg = '' then
+    LMsg := 'upstream status ' + IntToStr(AStatus);
+  LC := ErrorCodeForStatus(AStatus);
+  if (LC = aecInvalidRequest) and ScriptedMatchesOverflow(LMsg) then
+    LC := aecContextOverflow;
+  if AStatus = 429 then
+    LRA := ScriptedParseRetryAfterMs(AHeaders)
+  else
+    LRA := CRetryAfterUnknown;
+  LRId := ScriptedProbeRequestId(AHeaders);
+  Result := EAgentError.CreateUpstream(LC, AProvider, LMsg, LRId, LSnippet, LRA);
+end;
 
 { ---- TScriptedTransport ---- }
 
@@ -155,11 +290,11 @@ begin
   FLastRequest := AReq;
   LScript := PopNext;
   if LScript.RaiseUpstream and (LScript.Status <> 200) then
-    raise BuildUpstreamError(FProviderName, LScript.BodyText,
+    raise ScriptedBuildUpstreamError(FProviderName, LScript.BodyText,
       LScript.Status, LScript.Headers);
   AResp.StatusCode := LScript.Status;
   AResp.Headers := Copy(LScript.Headers, 0, Length(LScript.Headers));
-  AResp.RequestId := WireHeaderValue(LScript.Headers, 'x-request-id');
+  AResp.RequestId := ScriptedWireHeaderValue(LScript.Headers, 'x-request-id');
   AResp.BodyText := LScript.BodyText;
 end;
 
@@ -172,7 +307,7 @@ begin
   FLastRequest := AReq;
   LScript := PopNext;
   if LScript.RaiseUpstream and (LScript.Status <> 200) then
-    Exit(TScriptedFailStream.Create(BuildUpstreamError(FProviderName,
+    Exit(TScriptedFailStream.Create(ScriptedBuildUpstreamError(FProviderName,
       LScript.BodyText, LScript.Status, LScript.Headers)));
   Result := TScriptedWireStream.Create(LScript.Chunks);
 end;
@@ -323,6 +458,45 @@ end;
 procedure TCapturingLogger.Clear;
 begin
   FLines := nil;
+end;
+
+{ ---- TAgentConcurrencyMeter ---- }
+
+function TAgentConcurrencyMeter.Enter: Int32;
+var
+  LNow, LOld, LPrev: Int32;
+begin
+  Inc(DbgCalls);
+  LNow := _backend_xadd_i32(FCur, 1) + 1;
+  DbgLastLNow := LNow;
+  repeat
+    LOld := _backend_xadd_i32(FMax, 0);
+    DbgLastLOld := LOld;
+    if LNow <= LOld then
+    begin
+      Inc(DbgBrk);
+      Break;
+    end;
+    LPrev := _backend_cmpxchg_i32(FMax, LNow, LOld);
+    if LPrev = LOld then
+      Break;
+    Inc(DbgCasFail);
+  until False;
+  Result := LNow;
+end;
+
+procedure TAgentConcurrencyMeter.Leave;
+begin
+  _backend_xadd_i32(FCur, -1);
+end;
+
+function KitWithTools(const ATools: array of IAgentTool): TToolSpecArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(ATools));
+  for I := 0 to High(ATools) do
+    Result[I] := ATools[I].Spec;
 end;
 
 end.

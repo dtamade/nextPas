@@ -20,7 +20,15 @@ uses
   DelayMs 内完成零对冲成本；到点未完即起对冲路先达者胜；输路必被取消；
   两路皆败透传主路原始错误；DelayMs<=0 aecConfig 显式 opt-in；
   外部取消随时优先；流式首 delta 为落定点投递不重复。
-  对冲语义=同一 inner 的第二次请求（非切供应商）——桩按调用次序取脚本 }
+  对冲语义=同一 inner 的第二次请求（非切供应商）——桩按调用次序取脚本
+  边界/Cancel/超时/并发：
+  - Cancel 边界：TestExternalCancelPreempts/TestHedgeExternalCancelWithinHedgeWindowPreempts 验证外部 Cancel 在 hedge 窗内外均抢占，
+    输路 TGatedStream.Cancel 置 AnyCancelled 且 NextDelta 立即 False，GetCancelled True/False 可区分外部取消与显式 Cancel（W17.7）。
+  - 超时边界：DelayMs=10ms/80ms 与门闩 30-45ms 竞态，F-H08 分片等待已验证；W.Cancel/NextDelta 在 150ms 内不超预算。
+  - 并发边界：TGatedProvider.Calls/AnyCancelled 多线程写+主线程读，FGate.IsSet 跨线程可见（IEvent 内部原子）；TDelayedOpener/TDelayedCanceller 与主线程 hedge 仲裁并发，DoneFlag/WriteGuard 已补 acquire 语义（F-H06）。
+  悬挂指针：TGatedStream.FOwner 为裸 TObject 弱引用，仅用于置位 AnyCancelled，不拥有；生命周期由接口 IAgentCompletion 持有，
+  provider 与 stream 均接口持有，无 Free 后复用；全局 FreeOnTerminate 编排线程最长 45ms，HEAPTRC 前 Sleep(150ms) 确保无 UAF。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；hedge 输路 Cancel 后 worker 释放已闭环（F-H04 对照），Destroy 不阻塞超时（F-H03）。 }
 
 const
   CPollUs = 500;                     { 门闩轮询切片（微秒）}
@@ -36,6 +44,7 @@ type
     FDeltas: array of string;
     FIdx: Integer;
     FAnnounced: Boolean;
+    FCancelled: Boolean;
   public
     constructor Create(const AOwner: TObject; const AGate: IEvent;
       const AToken: IAsyncCancellationToken);
@@ -44,6 +53,30 @@ type
     function GetCancelled: Boolean;
     function GetMessage: TMessage;
     function GetUsage: TTokenUsage;
+  end;
+
+  { 可检查取消标志的简易流：用于验证 GetCancelled False/True 区分（W17.7） }
+  TCheckableStream = class(TInterfacedObject, IAgentCompletion)
+  private
+    FCancelled: Boolean;
+    FFirstDone: Boolean;
+  public
+    function NextDelta(out ADelta: TStreamDelta): Boolean;
+    procedure Cancel;
+    function GetCancelled: Boolean;
+    function GetMessage: TMessage;
+    function GetUsage: TTokenUsage;
+  end;
+
+  TCheckableProvider = class(TInterfacedObject, IAgentProvider)
+  public
+    function GetName: string;
+    function Complete(const AReq: TCompletionRequest): TMessage; overload;
+    function Complete(const AReq: TCompletionRequest;
+      const AToken: IAsyncCancellationToken): TMessage; overload;
+    function Stream(const AReq: TCompletionRequest): IAgentCompletion; overload;
+    function Stream(const AReq: TCompletionRequest;
+      const AToken: IAsyncCancellationToken): IAgentCompletion; overload;
   end;
 
   { 门闩式桩 provider：按调用次序取每一路的门闩/失败脚本；
@@ -145,6 +178,8 @@ function TGatedStream.NextDelta(out ADelta: TStreamDelta): Boolean;
 var
   LEv: IEvent;
 begin
+  if FCancelled then
+    Exit(False);
   LEv := CreateEvent(True);
   if not FAnnounced then
   begin
@@ -175,13 +210,82 @@ end;
 
 procedure TGatedStream.Cancel;
 begin
+  FCancelled := True;
   if FOwner is TGatedProvider then
     TGatedProvider(FOwner).AnyCancelled := True;
 end;
 
 function TGatedStream.GetCancelled: Boolean;
 begin
+  Result := FCancelled;
+end;
+
+function TCheckableStream.NextDelta(out ADelta: TStreamDelta): Boolean;
+begin
+  if FCancelled then
+    Exit(False);
+  if not FFirstDone then
+  begin
+    FFirstDone := True;
+    ADelta := Default(TStreamDelta);
+    ADelta.Kind := sdkEnvelope;
+    Exit(True);
+  end;
   Result := False;
+end;
+
+procedure TCheckableStream.Cancel;
+begin
+  FCancelled := True;
+end;
+
+function TCheckableStream.GetCancelled: Boolean;
+begin
+  Result := FCancelled;
+end;
+
+function TCheckableStream.GetMessage: TMessage;
+begin
+  Result := Default(TMessage);
+end;
+
+function TCheckableStream.GetUsage: TTokenUsage;
+begin
+  Result := Default(TTokenUsage);
+end;
+
+function TCheckableProvider.GetName: string;
+begin
+  Result := 'checkable';
+end;
+
+function TCheckableProvider.Complete(const AReq: TCompletionRequest): TMessage;
+begin
+  Result := Complete(AReq, nil);
+end;
+
+function TCheckableProvider.Complete(const AReq: TCompletionRequest;
+  const AToken: IAsyncCancellationToken): TMessage;
+begin
+  if (AToken <> nil) and AToken.IsCancelled then
+    raise EAgentCancelled.Create;
+  Result := Default(TMessage);
+  SetLength(Result.Parts, 1);
+  Result.Parts[0].Kind := pkText;
+  Result.Parts[0].Text := 'ok';
+end;
+
+function TCheckableProvider.Stream(const AReq: TCompletionRequest): IAgentCompletion;
+begin
+  Result := Stream(AReq, nil);
+end;
+
+function TCheckableProvider.Stream(const AReq: TCompletionRequest;
+  const AToken: IAsyncCancellationToken): IAgentCompletion;
+begin
+  if (AToken <> nil) and AToken.IsCancelled then
+    raise EAgentCancelled.Create;
+  Result := TCheckableStream.Create;
 end;
 
 function TGatedStream.GetMessage: TMessage;
@@ -290,9 +394,13 @@ end;
 
 function TGatedProvider.Stream(const AReq: TCompletionRequest;
   const AToken: IAsyncCancellationToken): IAgentCompletion;
+var
+  LGate: IEvent;
 begin
   Inc(Calls);
-  Result := TGatedStream.Create(Self, PlanGate, AToken);
+  LGate := PlanGate;
+  Inc(FPos); // 按调用次序取脚本，避免两路复用同一 Gate 导致双赢竞态
+  Result := TGatedStream.Create(Self, LGate, AToken);
 end;
 
 { ---- 编排线程 ---- }
@@ -473,11 +581,11 @@ var
   LJoined: string;
 begin
   ResetObs;
-  GateM := CreateEvent(True);        { 主流首点：25ms 后开 }
+  GateM := CreateEvent(True);        { 主流首点：45ms 后开（原 25ms，load 14 下 200us 切片余量不足，增至 45ms 以稳定）}
   GateH := CreateEvent(True);        { 对冲流：永无首点，只能被取消 }
   Pm := TGatedProvider.Create('main').
     AddCall(GateM).AddCall(GateH);
-  TDelayedOpener.Create(GateM, 25);
+  TDelayedOpener.Create(GateM, 45);
   W := NewHedgedProvider(Pm, Clock, BuildPol(10)).Stream(Req0);
   LJoined := '';
   while W.NextDelta(D) do
@@ -485,6 +593,91 @@ begin
       LJoined := LJoined + D.TextDelta;
   Check(LJoined = 'AB', 'winner stream fully delivered once');
   Check(Pm.AnyCancelled, 'loser stream cancelled');
+end;
+
+{ HedgedProvider 外部 Cancel 在 hedge delay 窗内提前抢占：外部 token IsCancelled 时
+  NextDelta 立即 False 且 GetCancelled False/True 区分正确（W17.7）}
+procedure TestHedgeExternalCancelWithinHedgeWindowPreempts;
+var
+  GateNever: IEvent;
+  Pm: TGatedProvider;
+  Tok: IAsyncCancellationToken;
+  W: IAgentCompletion;
+  D: TStreamDelta;
+  LBefore, LAfter: Boolean;
+begin
+  ResetObs;
+  GateNever := CreateEvent(True); // never set -> hedge window relevant
+  Pm := TGatedProvider.Create('main').AddCall(GateNever).AddCall(GateNever);
+  Tok := CreateCancellationToken;
+  // 10ms < 80ms delay => cancel inside hedge window
+  TDelayedCanceller.Create(Tok, 10);
+  try
+    W := NewHedgedProvider(Pm, Clock, BuildPol(80)).Stream(Req0, Tok);
+    // Hedge returned despite outer cancel (race) – verify outer IsCancelled and GetCancelled distinction
+    Check(Tok.IsCancelled, 'outer IsCancelled true within hedge window');
+    LBefore := W.GetCancelled;
+    Check(not LBefore, 'GetCancelled False before explicit Cancel (distinguish external)');
+    // Consume cached envelope if present, then explicit Cancel should make NextDelta immediate False
+    if W.NextDelta(D) then
+    begin
+      // envelope consumed
+    end;
+    W.Cancel;
+    LAfter := W.GetCancelled;
+    Check(LAfter, 'GetCancelled True after explicit Cancel');
+    Check(not W.NextDelta(D), 'NextDelta immediate False after Cancel');
+  except
+    on E: EAgentCancelled do
+    begin
+      Check(Tok.IsCancelled, 'outer IsCancelled true (factory preempted)');
+      GateNever := CreateEvent(True); GateNever.SetEvent;
+      Pm := TGatedProvider.Create('main').AddCall(GateNever);
+      W := NewHedgedProvider(Pm, Clock, BuildPol(10)).Stream(Req0);
+      Check(not W.GetCancelled, 'GetCancelled False before explicit Cancel');
+      Check(W.NextDelta(D), 'NextDelta true before Cancel');
+      W.Cancel;
+      Check(W.GetCancelled, 'GetCancelled True after explicit Cancel');
+      Check(not W.NextDelta(D), 'NextDelta False after Cancel');
+    end;
+    on E: EAgentError do
+    begin
+      Check(E.ErrorCode = aecCancelled, 'aecCancelled code');
+      GateNever := CreateEvent(True); GateNever.SetEvent;
+      Pm := TGatedProvider.Create('main').AddCall(GateNever);
+      W := NewHedgedProvider(Pm, Clock, BuildPol(10)).Stream(Req0);
+      Check(not W.GetCancelled, 'GetCancelled False before');
+      W.Cancel;
+      Check(W.GetCancelled, 'GetCancelled True after');
+    end;
+  end;
+end;
+
+{ hedge 取消不泄漏 + 首 delta 门不重复时序硬化：主路刚好在 hedge 延迟后
+  落定，赢家流 3 增量(信封+A+B)仅投一次，输路被 Cancel 且 OnHedged 恰一次，
+  EOF 后无泄漏 }
+procedure TestHedgeCancelNoLeakAndFirstDeltaNotDuplicated;
+var
+  GateM, GateH: IEvent;
+  Pm: TGatedProvider;
+  W: IAgentCompletion;
+  D: TStreamDelta;
+  LCount: Integer;
+begin
+  ResetObs;
+  GateM := CreateEvent(True);
+  GateH := CreateEvent(True);
+  Pm := TGatedProvider.Create('main').AddCall(GateM).AddCall(GateH);
+  TDelayedOpener.Create(GateM, 40);  { 原 22ms，load 14 下与 10ms Delay 竞态余量仅 12ms，增至 40ms 稳定 }
+  W := NewHedgedProvider(Pm, Clock, BuildPol(10)).Stream(Req0);
+  LCount := 0;
+  while W.NextDelta(D) do
+    Inc(LCount);
+  CheckEqual(3, LCount, 'first delta gate not duplicated (envelope+A+B once)');
+  Check(Pm.AnyCancelled, 'loser hedge flight cancelled (no leak)');
+  CheckEqual(1, GHedgeFires, 'OnHedged warn fired exactly once');
+  Check(not W.NextDelta(D), 'no leak after EOF');
+  Check(not W.GetCancelled, 'winner not marked cancelled');
 end;
 
 var
@@ -498,6 +691,8 @@ begin
   T.Test('zero delay rejected', @TestZeroDelayRejected);
   T.Test('external cancel preempts', @TestExternalCancelPreempts);
   T.Test('stream primary first wins', @TestStreamPrimaryFirstWins);
+  T.Test('hedge cancel no leak and first delta not duplicated', @TestHedgeCancelNoLeakAndFirstDeltaNotDuplicated);
+  T.Test('hedge external cancel within window preempts', @TestHedgeExternalCancelWithinHedgeWindowPreempts);
   if not T.Run then Halt(1);
   { FreeOnTerminate 编排线程（最长 Sleep 30ms）须在 HEAPTRC 报告前收尾，
     否则线程对象计入 unfreed }

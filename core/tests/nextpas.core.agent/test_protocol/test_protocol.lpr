@@ -4,6 +4,7 @@ program test_protocol;
 
 uses
   nextpas.core.base,
+  nextpas.core.json,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.fold,
@@ -275,6 +276,49 @@ begin
   Check(not Bad, 'nonzero first index legal');
 end;
 
+{ F-M18 Extra 无损往返（TESTING §2）：fold 旁路 + MergeExtraJson 后者胜 }
+procedure TestExtraRoundTrip;
+var
+  M: TMessage;
+  D1, D2, D3: TStreamDelta;
+  MJ: string;
+  Doc: IJsonDocument;
+  LE: TJsonText;
+begin
+  D1 := DText('hi');
+  D1.UnmappedJson := '{"zz_a":1,"zz_b":2}';
+  D2 := DText('!');
+  D2.UnmappedJson := '{"zz_a":9,"zz_c":3}';
+  // 同键后者胜：zz_a 应为 9
+  FoldDeltas([D1, D2], M);
+  Check(M.ExtraJson <> '', 'extra carried via fold UnmappedJson');
+  Doc := JsonParse(M.ExtraJson);
+  Check(not Doc.HasError, 'fold extra parses');
+  Check(Doc.Root.ObjectHas('zz_a'), 'has zz_a');
+  Check(Doc.Root.ObjectHas('zz_b'), 'has zz_b');
+  Check(Doc.Root.ObjectHas('zz_c'), 'has zz_c');
+  CheckEqual(Int64(9), Doc.Root.Get('zz_a').AsInt, 'after-wins zz_a=9');
+  // MergeExtraJson 直接语义：后者覆盖
+  LE := MergeExtraJson(['{"k":1,"x":10}', '{"k":2}']);
+  Doc := JsonParse(LE);
+  Check(not Doc.HasError, 'merge extra parses');
+  CheckEqual(Int64(2), Doc.Root.Get('k').AsInt, 'MergeExtraJson after-wins');
+  Check(Doc.Root.ObjectHas('x'), 'merge keeps non-conflicting key');
+  // 空输入不伪造 extra
+  D3 := DText('solo');
+  FoldDeltas([D3], M);
+  Check(M.ExtraJson = '', 'no unmapped => empty extra');
+  // 信封 + 文本间 Extra 皆并入同一终态
+  D1 := DEnvelope('mid','m');
+  D1.UnmappedJson := '{"zz_env":5}';
+  D2 := DText('body');
+  D2.UnmappedJson := '{"zz_body":6}';
+  FoldDeltas([D1, D2, DFinish(frStop)], M);
+  Doc := JsonParse(M.ExtraJson);
+  Check(Doc.Root.ObjectHas('zz_env') and Doc.Root.ObjectHas('zz_body'),
+    'envelope+delta extras merged');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -288,5 +332,6 @@ begin
   T.Test('usage finish order equivalence', @TestUsageFinishOrderEquivalence);
   T.Test('envelope and error skip', @TestEnvelopeAndErrorSkip);
   T.Test('violations', @TestViolations);
+  T.Test('extra roundtrip after-wins', @TestExtraRoundTrip);
   if not T.Run then Halt(1);
 end.
