@@ -40,8 +40,8 @@ type
     FMounts: TVfsMountArray;
     FHasRoot: Boolean;
     FRootFs: IVfs;
-    function FindMount(const APath: string; out ARemain: string; out AFs: IVfs): Boolean;
-    function IsMountPoint(const APath: string): Boolean;
+    function FindMount(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
+    function IsMountPoint(const APath: string): Boolean; inline;
   public
     constructor Create(const AMounts: array of TVfsMountEntry);
     function Exists(const APath: string): Boolean;
