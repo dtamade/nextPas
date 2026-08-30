@@ -35,7 +35,7 @@ type
     ServerSigBlob: TBytes;
   end;
 
-  TSshKexDHGroup14 = class(TInterfacedObject, ISshKeyExchange)
+  TSshKexDHGroup14 = class
   private
     FPriv: TBytes;
     FPub: TBytes;
@@ -43,6 +43,7 @@ type
     FGenerator: TBytes;
   public
     constructor Create;
+    destructor Destroy; override;
 
     function AlgorithmName: string;
     property ClientE: TBytes read FPub;
@@ -64,7 +65,8 @@ implementation
 uses
   nextpas.core.crypto.random,
   nextpas.core.crypto.hash,
-  nextpas.core.crypto.bigint;
+  nextpas.core.crypto.bigint,
+  nextpas.core.mem.secure;
 
 function SshDHGroup14Prime: TBytes;
 const
@@ -103,9 +105,23 @@ end;
 function SshBuildDHGroup14HashInput(const AVc, AVs: string;
   const AClientKexInit, AServerKexInit, AHostKeyBlob,
   AClientE, AServerF, ASharedK: TBytes): TBytes;
+var
+  LW: TsshWriter;
 begin
-  Result := SshBuildKexHashInput(AVc, AVs, AClientKexInit, AServerKexInit,
-    AHostKeyBlob, AClientE, AServerF, ASharedK, False, False);
+  LW := TsshWriter.Create(2048);
+  try
+    LW.PutStringText(AVc);
+    LW.PutStringText(AVs);
+    LW.PutStringBytes(AClientKexInit);
+    LW.PutStringBytes(AServerKexInit);
+    LW.PutStringBytes(AHostKeyBlob);
+    LW.PutMPInt(AClientE);
+    LW.PutMPInt(AServerF);
+    LW.PutMPInt(ASharedK);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
+  end;
 end;
 
 function IsAllZero(const ABuf: TBytes): Boolean;
@@ -136,6 +152,13 @@ begin
     if A[SA+I] > B[SB+I] then Exit(1);
   end;
   Result := 0;
+end;
+
+destructor TSshKexDHGroup14.Destroy;
+begin
+  SecureZeroBytes(FPriv);
+  SecureZeroBytes(FPub);
+  inherited;
 end;
 
 constructor TSshKexDHGroup14.Create;

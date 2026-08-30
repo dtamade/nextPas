@@ -40,17 +40,6 @@ const
     ('zlib@openssh.com', 'zlib', 'none');
 
 type
-  { 可插拔 KEX 契约：新算法实现此接口后即可接入会话层无需改动握手编排 }
-  ISshKeyExchange = interface
-    ['{9C1E6E10-4A11-4F72-9D30-5A0000000003}']
-    function AlgorithmName: string;
-    function BuildInitPayload: TBytes;
-    function ProcessReply(const APayload: TBytes;
-      const AVc, AVs: string;
-      const AMyKexInit, APeerKexInit: TBytes;
-      out AK, AH, AServerHostKeyBlob, AServerSigBlob: TBytes): Boolean;
-  end;
-
   { 对端 KEXINIT 各字段的名称列表 }
   TSshPeerKexInit = record
     KexAlgs: TStringArray;
@@ -92,22 +81,11 @@ function SshNegotiateEx(const APeer: TSshPeerKexInit; ACompress: Boolean): TSshN
 function SshKdfSha256(const AKMpint, AH: TBytes; AX: Byte;
   const ASessionId: TBytes; ALen: Integer): TBytes;
 
-{** RFC 4253 §8 交换散列输入共用构造：V_C||V_S||I_C||I_S||K_S||e||f||K.
- * AE/AF 决定 e/f 的线类型：True=string(字节串), False=mpint. K 恒为 mpint. *}
-function SshBuildKexHashInput(const AVc, AVs: string;
-  const AClientKexInit, AServerKexInit, AHostKeyBlob,
-  AE, AF, AK: TBytes; AEIsString, AFIsString: Boolean): TBytes;
-
-{** 工厂：按协商算法名单分发创建 ISshKeyExchange；不支持则返回 nil *}
-function SshCreateKex(const AAlg: string): ISshKeyExchange;
-
 implementation
 
 uses
   nextpas.core.crypto.hash,
-  nextpas.core.ssh.cipher,
-  nextpas.core.ssh.kex.curve25519,
-  nextpas.core.ssh.kex.dhgroup14;
+  nextpas.core.ssh.cipher;
 
 function SshPickFirstMatch(const AClientOffer: array of string;
   const AServerList: TStringArray): string;
@@ -283,37 +261,6 @@ begin
   end;
   if Length(Result) > ALen then
     SetLength(Result, ALen);
-end;
-
-function SshBuildKexHashInput(const AVc, AVs: string;
-  const AClientKexInit, AServerKexInit, AHostKeyBlob,
-  AE, AF, AK: TBytes; AEIsString, AFIsString: Boolean): TBytes;
-var
-  LW: TsshWriter;
-begin
-  LW := TsshWriter.Create(2048);
-  try
-    LW.PutStringText(AVc);
-    LW.PutStringText(AVs);
-    LW.PutStringBytes(AClientKexInit);
-    LW.PutStringBytes(AServerKexInit);
-    LW.PutStringBytes(AHostKeyBlob);
-    if AEIsString then LW.PutStringBytes(AE) else LW.PutMPInt(AE);
-    if AFIsString then LW.PutStringBytes(AF) else LW.PutMPInt(AF);
-    LW.PutMPInt(AK);
-    Result := LW.ToBytes;
-  finally
-    LW.Free;
-  end;
-end;
-
-function SshCreateKex(const AAlg: string): ISshKeyExchange;
-begin
-  Result := nil;
-  if (AAlg = 'curve25519-sha256') or (AAlg = 'curve25519-sha256@libssh.org') then
-    Result := TSshKexCurve25519.Create
-  else if AAlg = 'diffie-hellman-group14-sha256' then
-    Result := TSshKexDHGroup14.Create;
 end;
 
 end.

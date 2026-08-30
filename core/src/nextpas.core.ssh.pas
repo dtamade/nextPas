@@ -24,16 +24,25 @@ uses
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.kex,
   nextpas.core.ssh.kex.curve25519,
+  nextpas.core.ssh.kex.dhgroup14,
   nextpas.core.ssh.hostkey,
+  nextpas.core.ssh.keys,
+  nextpas.core.ssh.auth,
+  nextpas.core.ssh.rsa,
   nextpas.core.ssh.channel,
+  nextpas.core.ssh.channel.async,
   nextpas.core.ssh.transport,
+  nextpas.core.ssh.transport.async,
   nextpas.core.ssh.sftp,
+  nextpas.core.ssh.sftp.async,
   nextpas.core.ssh.agent,
   nextpas.core.ssh.compress,
   nextpas.core.ssh.rekey,
   nextpas.core.ssh.keepalive,
   nextpas.core.ssh.window,
-  nextpas.core.ssh.session;
+  nextpas.core.ssh.session,
+  nextpas.core.ssh.session.async,
+  nextpas.core.ssh.proxyjump.async;
 
 type
   { 基础类型 re-export }
@@ -57,7 +66,7 @@ type
   { 底层构件 re-export（二次开发/测试用）}
   ISshPacketSender = nextpas.core.ssh.cipher.ISshPacketSender;
   ISshPacketReceiver = nextpas.core.ssh.cipher.ISshPacketReceiver;
-  ISshKeyExchange = nextpas.core.ssh.kex.ISshKeyExchange;
+  ISshKeyExchange = nextpas.core.ssh.kex.curve25519.ISshKeyExchange;
   TSshClientTransport = nextpas.core.ssh.transport.TSshClientTransport;
   TSshKnownHosts = nextpas.core.ssh.hostkey.TSshKnownHosts;
   TSshAgentClient = nextpas.core.ssh.agent.TSshAgentClient;
@@ -66,6 +75,13 @@ type
   TsshWriter = nextpas.core.ssh.buffer.TsshWriter;
   TsshReader = nextpas.core.ssh.buffer.TsshReader;
   TChannelWindow = nextpas.core.ssh.window.TChannelWindow;
+
+  { 扩展门面: 补齐9遗漏单元 }
+  TSshPrivateKey = nextpas.core.ssh.keys.TSshPrivateKey;
+  TSshKexDHGroup14 = nextpas.core.ssh.kex.dhgroup14.TSshKexDHGroup14;
+  TAsyncSshTransport = nextpas.core.ssh.transport.async.TAsyncSshTransport;
+  ISshAsyncSession = nextpas.core.ssh.session.async.ISshAsyncSession;
+  ISshAsyncFileSystem = nextpas.core.ssh.sftp.async.ISshAsyncFileSystem;
 
 { 默认选项（inline 转发）}
 function DefaultSshOptions(const AHost: string): TSshConnectOptions; inline;

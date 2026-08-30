@@ -102,6 +102,8 @@ uses
   nextpas.core.ssh.agent,
   nextpas.core.ssh.compress,
   nextpas.core.ssh.cipher,
+  nextpas.core.ssh.kex.curve25519,
+  nextpas.core.ssh.kex.dhgroup14,
   nextpas.core.ssh.channel.async,
   nextpas.core.ssh.proxyjump.async;
 
@@ -162,7 +164,8 @@ type
     FHostKeyInfo: TSshHostKeyInfo;
     FHostKeyFingerprint: string;
     FSessionId: TBytes;
-    FKex: ISshKeyExchange;
+    FKexCurve: TSshKexCurve25519;
+    FKexDH: TSshKexDHGroup14;
     // agent
     FAgentClient: TSshAgentClient;
     FAgentIds: TSshAgentIdentityArray;
@@ -447,7 +450,8 @@ begin
   Cb := FUserCb; Ctx := FUserCtx;
   FUserCb := nil;
   FreeAndNil(FAgentClient);
-  FKex := nil;
+  FreeAndNil(FKexCurve);
+  FreeAndNil(FKexDH);
   if FSession <> nil then
   begin
     // session owns transport after OnDial; avoid double free
@@ -465,7 +469,8 @@ begin
   Cb := FUserCb; Ctx := FUserCtx;
   FUserCb := nil;
   FreeAndNil(FAgentClient);
-  FKex := nil;
+  FreeAndNil(FKexCurve);
+  FreeAndNil(FKexDH);
   Sess := FSession as ISshAsyncSession;
   FTransport := nil; // owned by session
   if Assigned(Cb) then Cb(Sess, nil, Ctx);
@@ -523,9 +528,17 @@ begin
     on E: Exception do begin Fail(ESSHError.Create(sekNegotiation, E.Message)); Exit; end;
   end;
   FSession.FNegotiated := FNeg;
-  FKex := SshCreateKex(FNeg.KexAlg);
-  if FKex = nil then begin Fail(ESSHError.Create(sekNegotiation, 'ssh kex: unsupported algorithm ' + FNeg.KexAlg)); Exit; end;
-  LInit := FKex.BuildInitPayload;
+  // Build and send KEX init according to negotiated alg
+  if FNeg.KexAlg = 'diffie-hellman-group14-sha256' then
+  begin
+    FKexDH := TSshKexDHGroup14.Create;
+    LInit := FKexDH.BuildInitPayload;
+  end
+  else
+  begin
+    FKexCurve := TSshKexCurve25519.Create;
+    LInit := FKexCurve.BuildInitPayload;
+  end;
   if not FTransport.AsyncSendPacket(LInit, @SshAsync_OnKexInitReplySent, Self) then
     Fail(ESSHError.Create(sekIO, 'ssh async kex init send failed'));
 end;
@@ -540,10 +553,15 @@ end;
 procedure TAsyncConnector.OnKexReplyRecv(const APayload: TBytes; AErr: ESSHError);
 begin
   if AErr <> nil then begin Fail(AErr); Exit; end;
-  if FKex = nil then begin Fail(ESSHError.Create(sekProtocol, 'ssh async: no kex instance')); Exit; end;
   try
-    FKex.ProcessReply(APayload, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-      FMyKexInit, FPeerKexInit, FK, FH, FHostBlob, FSigBlob);
+    if Assigned(FKexDH) then
+      FKexDH.ProcessReply(APayload, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        FMyKexInit, FPeerKexInit, FK, FH, FHostBlob, FSigBlob)
+    else if Assigned(FKexCurve) then
+      FKexCurve.ProcessReply(APayload, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        FMyKexInit, FPeerKexInit, FK, FH, FHostBlob, FSigBlob)
+    else
+      raise ESSHError.Create(sekProtocol, 'ssh async: no kex instance');
   except
     on E: ESSHError do begin Fail(E); Exit; end;
     on E: Exception do begin Fail(ESSHError.Create(sekProtocol, E.Message)); Exit; end;

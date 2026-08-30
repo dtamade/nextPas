@@ -15,16 +15,16 @@ unit nextpas.core.ssh.transport;
 interface
 
 uses
+  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.io.intf,
-  nextpas.core.text.conv,
+  nextpas.core.time.deadline,
+  nextpas.core.time.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
-  nextpas.core.ssh.cipher,
-  nextpas.core.ssh.compress,
-  nextpas.core.ssh.kex,
-  nextpas.core.ssh.rekey;
+  nextpas.core.ssh.transport.core,
+  nextpas.core.ssh.kex;
 
 type
   { 诊断钩子：非 nil 时逐包回调明文载荷（ATag='tx'/'rx'；互操作排障用，
@@ -48,18 +48,12 @@ type
   private
     FIO: IReadWriteCloser;
     FState: TSshTransportState;
-    FSendSeq: UInt32;
-    FRecvSeq: UInt32;
-    FSender: ISshPacketSender;
-    FReceiver: ISshPacketReceiver;
+    FOverallDeadline: TDeadline;
+    FCore: TSshTransportCore;
     FServerIdent: string;
     FMyKexInitPayload: TBytes;
-    FCompressor: ISshCompressor;
-    FDecompressor: ISshCompressor;
-    FCompressEnabled: Boolean;
-    FNegotiatedCompCs: string;
-    FNegotiatedCompSc: string;
-    FRekey: TSshRekeyPolicy;
+    procedure ApplyDeadlineToStream;
+    procedure CheckRekeyOrDisconnect;
     procedure SendRaw(const ABytes: TBytes);
     procedure ReadFull(var ABuf: TBytes; AOffset, ACount: SizeUInt);
     function ReadLineRaw: string;
@@ -98,7 +92,7 @@ type
 
     { 发送 DISCONNECT 并关闭底层流 }
     procedure Disconnect(AReason: UInt32; const ADesc: string);
-
+    procedure SetOverallDeadline(const ADeadline: TDeadline);
     procedure Close;
 
     property State: TSshTransportState read FState;
@@ -109,7 +103,9 @@ type
 implementation
 
 uses
-  nextpas.core.crypto.random;
+  nextpas.core.crypto.random,
+  nextpas.core.net.intf,
+  nextpas.core.mem.secure;
 
 function UInt32Bytes(AValue: UInt32): TBytes;
 begin
@@ -123,6 +119,9 @@ end;
 const
   DISCONNECT_PROTOCOL_VERSION = 2;
   DISCONNECT_CONNECTION_LOST = 10;
+  DISCONNECT_KEY_EXCHANGE_FAILED = 3;
+  DISCONNECT_MAC_ERROR = 5;
+  SSH_SEQ_REKEY_THRESHOLD = UInt32($FFFFFF00);
   RECV_HEADER_SIZE = 4;
 
 constructor TSshClientTransport.Create(const AIO: IReadWriteCloser);
@@ -130,14 +129,14 @@ begin
   inherited Create;
   FIO := AIO;
   FState := tstInit;
-  { 未协商密钥前走 none 编解码器（明文帧），NEWKEYS 后由 ApplyNewKeys 切换 }
-  FSender := CreateSshPacketSender('', '', nil, nil, nil);
-  FReceiver := CreateSshPacketReceiver('', '', nil, nil, nil);
-  FRekey.Init(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
+  FCore := TSshTransportCore.Create;
+  FOverallDeadline := TDeadline.Infinite;
 end;
 
 destructor TSshClientTransport.Destroy;
 begin
+  try Close; except end;
+  FCore.Free;
   inherited Destroy;
 end;
 
@@ -145,8 +144,35 @@ procedure TSshClientTransport.Close;
 begin
   if FState <> tstClosed then
   begin
-    FIO.Close;
+    try if FIO <> nil then FIO.Close; except end;
     FState := tstClosed;
+  end;
+end;
+
+procedure TSshClientTransport.SetOverallDeadline(const ADeadline: TDeadline);
+begin
+  FOverallDeadline := ADeadline;
+  ApplyDeadlineToStream;
+end;
+
+procedure TSshClientTransport.ApplyDeadlineToStream;
+var LStream: ITcpStream;
+begin
+  if Supports(FIO, ITcpStream, LStream) then
+  begin
+    if not FOverallDeadline.IsInfinite then
+      LStream.SetReadDeadline(FOverallDeadline)
+    else
+      LStream.SetReadDeadline(TDeadline.Infinite);
+  end;
+end;
+
+procedure TSshClientTransport.CheckRekeyOrDisconnect;
+begin
+  if (FState = tstEncrypted) and ((FCore.SendSeq >= SSH_SEQ_REKEY_THRESHOLD) or (FCore.RecvSeq >= SSH_SEQ_REKEY_THRESHOLD)) then
+  begin
+    try Disconnect(DISCONNECT_KEY_EXCHANGE_FAILED, 'ssh transport: sequence exhausted, rekey required'); except end;
+    raise ESSHError.Create(sekDisconnect, 'ssh transport: rekey required (seq exhausted)');
   end;
 end;
 
@@ -166,13 +192,18 @@ procedure TSshClientTransport.ReadFull(var ABuf: TBytes; AOffset, ACount: SizeUI
 var
   LGot: SizeUInt;
 begin
+  ApplyDeadlineToStream;
   while ACount > 0 do
   begin
+    if (not FOverallDeadline.IsInfinite) and FOverallDeadline.IsExpired then
+      raise ESSHError.Create(sekTimeout, 'ssh transport: read deadline exceeded');
     LGot := FIO.Read(ABuf[AOffset], ACount);
     if LGot = 0 then
       raise ESSHError.Create(sekIO, 'ssh transport: connection closed by peer');
     Inc(AOffset, LGot);
     Dec(ACount, LGot);
+    if (not FOverallDeadline.IsInfinite) and FOverallDeadline.IsExpired and (ACount > 0) then
+      raise ESSHError.Create(sekTimeout, 'ssh transport: read deadline exceeded');
   end;
 end;
 
@@ -185,13 +216,15 @@ begin
   SetLength(LB, 0);
   LTotal := 0;
   repeat
+    if (not FOverallDeadline.IsInfinite) and FOverallDeadline.IsExpired then
+      raise ESSHError.Create(sekTimeout, 'ssh transport: ident deadline exceeded');
     { 按需扩容后逐字节读（ReadFull 不负责增长缓冲）}
     if SizeUInt(LTotal) >= SizeUInt(Length(LB)) then
       SetLength(LB, SizeUInt(Length(LB)) + 64);
     ReadFull(LB, LTotal, 1);
     LByte := LB[LTotal];
     Inc(LTotal);
-    if LTotal > SSH_IDENT_MAX_LINE * 8 then
+    if LTotal > SSH_IDENT_MAX_LINE then
       raise ESSHError.Create(sekProtocol, 'ssh transport: ident banner too long');
   until LByte = 10;  { LF }
   { 去 CR 与 LF }
@@ -247,49 +280,32 @@ end;
 
 procedure TSshClientTransport.SetNegotiatedCompression(const ANeg: TSshNegotiated);
 begin
-  FNegotiatedCompCs := ANeg.CompCs;
-  FNegotiatedCompSc := ANeg.CompSc;
-  FCompressEnabled := False;
-  { immediate zlib activates now; delayed waits for EnableCompression }
-  if (FNegotiatedCompCs = SSH_COMP_ZLIB) or (FNegotiatedCompSc = SSH_COMP_ZLIB) then
-    EnableCompression
-  else if (FNegotiatedCompCs = SSH_COMP_NONE) and (FNegotiatedCompSc = SSH_COMP_NONE) then
-  begin
-    FCompressor := nil;
-    FDecompressor := nil;
-  end;
+  FCore.SetNegotiatedCompression(ANeg);
 end;
 
 procedure TSshClientTransport.EnableCompression;
 begin
-  if FCompressEnabled then Exit;
-  if (FNegotiatedCompCs = SSH_COMP_NONE) and (FNegotiatedCompSc = SSH_COMP_NONE) then Exit;
-  if (FCompressor = nil) or (FDecompressor = nil) then
-  begin
-    FCompressor := CreateSshZlibCompressor;
-    FDecompressor := FCompressor; // single object holds both streams
-  end;
-  FCompressEnabled := True;
+  FCore.EnableCompression;
 end;
 
 function TSshClientTransport.IsCompressionEnabled: Boolean;
 begin
-  Result := FCompressEnabled;
+  Result := FCore.IsCompressionEnabled;
 end;
 
 procedure TSshClientTransport.ConfigureRekey(ABytes: UInt64; AIntervalMs: Integer);
 begin
-  FRekey.Init(ABytes, AIntervalMs);
+  FCore.ConfigureRekey(ABytes, AIntervalMs);
 end;
 
 function TSshClientTransport.ShouldRekey: Boolean;
 begin
-  Result := FRekey.ShouldRekey(FState = tstEncrypted);
+  Result := FCore.ShouldRekey(FState = tstEncrypted);
 end;
 
 procedure TSshClientTransport.ResetRekeyCounters;
 begin
-  FRekey.Reset;
+  FCore.ResetRekeyCounters;
 end;
 
 procedure TSshClientTransport.SendIgnore(const AData: TBytes);
@@ -310,56 +326,41 @@ end;
 
 procedure TSshClientTransport.SendPacket(const APayload: TBytes);
 var
-  LPayloadLen, LPad, LBodyLen, LAad: SizeUInt;
-  LBlock: Integer;
-  LBody, LWire: TBytes;
-  LOut: TBytes;
+  LWire: TBytes;
 begin
   if FState = tstClosed then
     raise ESSHError.Create(sekIO, 'ssh transport: closed');
+  CheckRekeyOrDisconnect;
+  if (FState = tstEncrypted) and (FCore.SendSeq >= SSH_SEQ_REKEY_THRESHOLD) then
+  begin
+    try Disconnect(DISCONNECT_KEY_EXCHANGE_FAILED, 'ssh transport: send seq exhausted'); except end;
+    raise ESSHError.Create(sekDisconnect, 'ssh transport: rekey required (seq)');
+  end;
   if SshTransportDump <> nil then
     SshTransportDump('tx', APayload);
-  LOut := APayload;
-  if FCompressEnabled and (FCompressor <> nil) and (FNegotiatedCompCs <> SSH_COMP_NONE) then
-    LOut := FCompressor.Compress(APayload);
-  LPayloadLen := SizeUInt(Length(LOut));
-  LBlock := FSender.PaddingBlock;
-  { OpenSSH packet.c：AEAD/EtM 模式长度字段不进对齐区（len -= aadlen），
-    接收端强制 packlen % blocksize = 0 }
-  LAad := SizeUInt(FSender.AadLen);
-  LPad := SizeUInt(LBlock) -
-    ((SizeUInt(4 + 1) + LPayloadLen - LAad) mod SizeUInt(LBlock));
-  if LPad < SSH_MIN_PADDING then
-    Inc(LPad, SizeUInt(LBlock));
-  LBodyLen := 1 + LPayloadLen + LPad;
-
-  SetLength(LBody, LBodyLen);
-  LBody[0] := Byte(LPad);
-  if LPayloadLen > 0 then
-    Move(LOut[0], LBody[1], LPayloadLen);
-  if not SecureRandomBytes(@LBody[1 + LPayloadLen], Integer(LPad)) then
-    FillChar(LBody[1 + LPayloadLen], LPad, $2A);
-
-  LWire := FSender.Protect(LBody, FSendSeq);
-  Inc(FSendSeq);  { uint32 自然回绕 }
-  FRekey.Account(UInt64(Length(APayload)));
+  if FCore.SendSeq >= SSH_SEQ_REKEY_THRESHOLD then
+  begin
+    try Disconnect(DISCONNECT_KEY_EXCHANGE_FAILED, 'ssh transport: seq threshold reached'); except end;
+    raise ESSHError.Create(sekDisconnect, 'ssh transport: seq threshold');
+  end;
+  LWire := FCore.EncodePacket(APayload);
   SendRaw(LWire);
 end;
 
 function TSshClientTransport.ReadPacket: TBytes;
 var
-  LHeader, LTrailer, LPacket, LBody: TBytes;
-  LBodyLen, LPadLen, LPayloadLen: UInt32;
+  LHeader, LTrailer, LPacket: TBytes;
+  LBodyLen: UInt32;
 begin
   if FState = tstClosed then
     raise ESSHError.Create(sekIO, 'ssh transport: closed');
-
-  SetLength(LHeader, RECV_HEADER_SIZE);
-  ReadFull(LHeader, 0, RECV_HEADER_SIZE);
-  LBodyLen := FReceiver.BodyLengthFromHeader(FRecvSeq, LHeader);
+  try
+    SetLength(LHeader, RECV_HEADER_SIZE);
+    ReadFull(LHeader, 0, RECV_HEADER_SIZE);
+    LBodyLen := FCore.BodyLengthFromHeader(LHeader);
   if SshTransportDump <> nil then
   begin
-    SshTransportDump('rseq', UInt32Bytes(FRecvSeq));
+    SshTransportDump('rseq', UInt32Bytes(FCore.RecvSeq));
     SshTransportDump('rhdr', LHeader);
     SshTransportDump('rlen', UInt32Bytes(LBodyLen));
   end;
@@ -367,23 +368,34 @@ begin
     raise ESSHError.Create(sekProtocol,
       'ssh transport: unreasonable packet length ' + IntToStr(LBodyLen));
 
-  SetLength(LTrailer, FReceiver.TrailerSize(LBodyLen));
-  ReadFull(LTrailer, 0, SizeUInt(Length(LTrailer)));
-  { 编解码器契约：Unprotect 接收完整线上包（含长度字段）}
-  SetLength(LPacket, 4 + SizeUInt(Length(LTrailer)));
-  Move(LHeader[0], LPacket[0], 4);
-  Move(LTrailer[0], LPacket[4], SizeUInt(Length(LTrailer)));
-  LBody := FReceiver.Unprotect(FRecvSeq, LPacket);
-  Inc(FRecvSeq);
-
-  LPadLen := LBody[0];
-  if (LPadLen < SSH_MIN_PADDING) or (LPadLen >= LBodyLen) then
-    raise ESSHError.Create(sekProtocol, 'ssh transport: bad padding length');
-  LPayloadLen := LBodyLen - 1 - LPadLen;
-  Result := Copy(LBody, 1, SizeInt(LPayloadLen));
-  if FCompressEnabled and (FDecompressor <> nil) and (FNegotiatedCompSc <> SSH_COMP_NONE) then
-    Result := FDecompressor.Decompress(Result);
-  FRekey.Account(UInt64(Length(Result)));
+    SetLength(LTrailer, FCore.TrailerSize(LBodyLen));
+    ReadFull(LTrailer, 0, SizeUInt(Length(LTrailer)));
+    SetLength(LPacket, 4 + SizeUInt(Length(LTrailer)));
+    Move(LHeader[0], LPacket[0], 4);
+    if Length(LTrailer) > 0 then
+      Move(LTrailer[0], LPacket[4], SizeUInt(Length(LTrailer)));
+    Result := FCore.DecodePacket(LPacket);
+  except
+    on E: ESSHError do
+    begin
+      if E.Kind = sekCrypto then
+        try Disconnect(DISCONNECT_MAC_ERROR, E.Message); except end
+      else
+        try Disconnect(DISCONNECT_CONNECTION_LOST, E.Message); except end;
+      FState := tstClosed;
+      raise;
+    end;
+    on E: Exception do
+    begin
+      try Disconnect(DISCONNECT_CONNECTION_LOST, E.Message); except end;
+      FState := tstClosed;
+      raise ESSHError.Create(sekIO, E.Message);
+    end;
+  end;
+  if FCore.RecvSeq >= SSH_SEQ_REKEY_THRESHOLD then
+  begin
+    try Disconnect(DISCONNECT_KEY_EXCHANGE_FAILED, 'ssh transport: recv seq exhausted'); except end;
+  end;
   if SshTransportDump <> nil then
     SshTransportDump('rx', Result);
 end;
@@ -393,12 +405,8 @@ procedure TSshClientTransport.ApplyNewKeys(const ANegotiated: TSshNegotiated;
 begin
   if FState <> tstKexExchange then
     raise ESSHError.Create(sekProtocol, 'ssh transport: NEWKEYS outside kex');
-  FSender := CreateSshPacketSender(ANegotiated.EncCs, ANegotiated.MacCs,
-    AKeyCs, AIvCs, AMacCs);
-  FReceiver := CreateSshPacketReceiver(ANegotiated.EncSc, ANegotiated.MacSc,
-    AKeySc, AIvSc, AMacSc);
+  FCore.ApplyNewKeys(ANegotiated, AIvCs, AKeyCs, AMacCs, AIvSc, AKeySc, AMacSc);
   FState := tstEncrypted;
-  ResetRekeyCounters;
 end;
 
 procedure TSshClientTransport.Disconnect(AReason: UInt32; const ADesc: string);

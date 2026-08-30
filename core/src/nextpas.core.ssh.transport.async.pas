@@ -18,11 +18,9 @@ uses
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
-  nextpas.core.ssh.cipher,
-  nextpas.core.ssh.compress,
   nextpas.core.ssh.transport,
-  nextpas.core.ssh.kex,
-  nextpas.core.ssh.rekey;
+  nextpas.core.ssh.transport.core,
+  nextpas.core.ssh.kex;
 
 type
   TSshAsyncCb = procedure(AErr: ESSHError; AContext: Pointer);
@@ -34,18 +32,9 @@ type
     FLoop: TAsyncLoop;
     FStream: IAsyncTcpStream;
     FState: TSshTransportState;
-    FSendSeq: UInt32;
-    FRecvSeq: UInt32;
-    FSender: ISshPacketSender;
-    FReceiver: ISshPacketReceiver;
+    FCore: TSshTransportCore;
     FServerIdent: string;
     FMyKexInitPayload: TBytes;
-    FCompressor: ISshCompressor;
-    FDecompressor: ISshCompressor;
-    FCompressEnabled: Boolean;
-    FNegCompCs: string;
-    FNegCompSc: string;
-    FRekey: TSshRekeyPolicy;
 
     FReadHeader: TBytes;
     FReadHeaderOff: SizeUInt;
@@ -129,14 +118,13 @@ begin
   FLoop := ALoop;
   FStream := AStream;
   FState := tstInit;
-  FSender := CreateSshPacketSender('', '', nil, nil, nil);
-  FReceiver := CreateSshPacketReceiver('', '', nil, nil, nil);
-  FRekey.Init(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
+  FCore := TSshTransportCore.Create;
 end;
 
 destructor TAsyncSshTransport.Destroy;
 begin
   Close;
+  FCore.Free;
   inherited;
 end;
 
@@ -175,48 +163,32 @@ end;
 
 procedure TAsyncSshTransport.SetNegotiatedCompression(const ANeg: TSshNegotiated);
 begin
-  FNegCompCs := ANeg.CompCs;
-  FNegCompSc := ANeg.CompSc;
-  FCompressEnabled := False;
-  if (FNegCompCs = SSH_COMP_ZLIB) or (FNegCompSc = SSH_COMP_ZLIB) then
-    EnableCompression
-  else if (FNegCompCs = SSH_COMP_NONE) and (FNegCompSc = SSH_COMP_NONE) then
-  begin
-    FCompressor := nil;
-    FDecompressor := nil;
-  end;
+  FCore.SetNegotiatedCompression(ANeg);
 end;
 
 procedure TAsyncSshTransport.EnableCompression;
 begin
-  if FCompressEnabled then Exit;
-  if (FNegCompCs = SSH_COMP_NONE) and (FNegCompSc = SSH_COMP_NONE) then Exit;
-  if (FCompressor = nil) or (FDecompressor = nil) then
-  begin
-    FCompressor := CreateSshZlibCompressor;
-    FDecompressor := FCompressor;
-  end;
-  FCompressEnabled := True;
+  FCore.EnableCompression;
 end;
 
 function TAsyncSshTransport.IsCompressionEnabled: Boolean;
 begin
-  Result := FCompressEnabled;
+  Result := FCore.IsCompressionEnabled;
 end;
 
 procedure TAsyncSshTransport.ConfigureRekey(ABytes: UInt64; AIntervalMs: Integer);
 begin
-  FRekey.Init(ABytes, AIntervalMs);
+  FCore.ConfigureRekey(ABytes, AIntervalMs);
 end;
 
 function TAsyncSshTransport.ShouldRekey: Boolean;
 begin
-  Result := FRekey.ShouldRekey(FState = tstEncrypted);
+  Result := FCore.ShouldRekey(FState = tstEncrypted);
 end;
 
 procedure TAsyncSshTransport.ResetRekeyCounters;
 begin
-  FRekey.Reset;
+  FCore.ResetRekeyCounters;
 end;
 
 function TAsyncSshTransport.AsyncSendIgnore(const AData: TBytes; const ACb: TSshAsyncCb; AContext: Pointer): Boolean;
@@ -255,43 +227,33 @@ procedure TAsyncSshTransport.ApplyNewKeys(const ANegotiated: TSshNegotiated;
 begin
   if FState <> tstKexExchange then
     raise ESSHError.Create(sekProtocol, 'ssh transport: NEWKEYS outside kex');
-  FSender := CreateSshPacketSender(ANegotiated.EncCs, ANegotiated.MacCs,
-    AKeyCs, AIvCs, AMacCs);
-  FReceiver := CreateSshPacketReceiver(ANegotiated.EncSc, ANegotiated.MacSc,
-    AKeySc, AIvSc, AMacSc);
+  FCore.ApplyNewKeys(ANegotiated, AIvCs, AKeyCs, AMacCs, AIvSc, AKeySc, AMacSc);
   FState := tstEncrypted;
-  ResetRekeyCounters;
 end;
 
 procedure TAsyncSshTransport.DoSendPacket(const APayload: TBytes; const ACb: TSshAsyncCb; AContext: Pointer);
 var
-  LPayloadLen, LPad, LBodyLen, LAad: SizeUInt;
-  LBlock: Integer;
-  LBody, LWire: TBytes;
-  LOut: TBytes;
+  LWire: TBytes;
 begin
   if FState = tstClosed then
   begin
     if Assigned(ACb) then ACb(ESSHError.Create(sekIO, 'ssh transport: closed'), AContext);
     Exit;
   end;
-  LOut := APayload;
-  if FCompressEnabled and (FCompressor <> nil) and (FNegCompCs <> SSH_COMP_NONE) then
-    LOut := FCompressor.Compress(APayload);
-  LPayloadLen := SizeUInt(Length(LOut));
-  LBlock := FSender.PaddingBlock;
-  LAad := SizeUInt(FSender.AadLen);
-  LPad := SizeUInt(LBlock) - ((SizeUInt(4 + 1) + LPayloadLen - LAad) mod SizeUInt(LBlock));
-  if LPad < SSH_MIN_PADDING then Inc(LPad, SizeUInt(LBlock));
-  LBodyLen := 1 + LPayloadLen + LPad;
-  SetLength(LBody, LBodyLen);
-  LBody[0] := Byte(LPad);
-  if LPayloadLen > 0 then Move(LOut[0], LBody[1], LPayloadLen);
-  if not SecureRandomBytes(@LBody[1 + LPayloadLen], Integer(LPad)) then
-    FillChar(LBody[1 + LPayloadLen], LPad, $2A);
-  LWire := FSender.Protect(LBody, FSendSeq);
-  Inc(FSendSeq);
-  FRekey.Account(UInt64(Length(APayload)));
+  try
+    LWire := FCore.EncodePacket(APayload);
+  except
+    on E: ESSHError do
+    begin
+      if Assigned(ACb) then ACb(E, AContext) else E.Free;
+      Exit;
+    end;
+    on E: Exception do
+    begin
+      if Assigned(ACb) then ACb(ESSHError.Create(sekIO, E.Message), AContext);
+      Exit;
+    end;
+  end;
   FWriteBuf := LWire;
   FWriteOff := 0;
   FWriteCb := ACb;
@@ -370,14 +332,14 @@ begin
   if FReadHeaderOff >= 4 then
   begin
     try
-      FReadBodyLen := FReceiver.BodyLengthFromHeader(FRecvSeq, FReadHeader);
+      FReadBodyLen := FCore.BodyLengthFromHeader(FReadHeader);
     except
       on E: ESSHError do begin FailPacketCb(E); Exit; end;
       on E: Exception do begin FailPacketCb(ESSHError.Create(sekProtocol, E.Message)); Exit; end;
     end;
     if (FReadBodyLen < 1) or (FReadBodyLen > SSH_MAX_RECEIVE_PACKET) then
     begin FailPacketCb(ESSHError.Create(sekProtocol, 'ssh transport: unreasonable packet length ' + IntToStr(FReadBodyLen))); Exit; end;
-    SetLength(FReadTrailer, FReceiver.TrailerSize(FReadBodyLen));
+    SetLength(FReadTrailer, FCore.TrailerSize(FReadBodyLen));
     FReadTrailerOff := 0;
     if Length(FReadTrailer) = 0 then
     begin
@@ -406,9 +368,7 @@ end;
 
 procedure TAsyncSshTransport.HandleTrailerChunk(AResult: Int32);
 var
-  LPacket, LBody: TBytes;
-  LPadLen: Byte;
-  LPayloadLen: UInt32;
+  LPacket: TBytes;
   LResult: TBytes;
   Lcb: TSshAsyncPacketCb;
   Ctx: Pointer;
@@ -426,27 +386,11 @@ begin
   Move(FReadHeader[0], LPacket[0], 4);
   if Length(FReadTrailer) > 0 then Move(FReadTrailer[0], LPacket[4], SizeUInt(Length(FReadTrailer)));
   try
-    LBody := FReceiver.Unprotect(FRecvSeq, LPacket);
+    LResult := FCore.DecodePacket(LPacket);
   except
     on E: ESSHError do begin FailPacketCb(E); Exit; end;
     on E: Exception do begin FailPacketCb(ESSHError.Create(sekProtocol, E.Message)); Exit; end;
   end;
-  Inc(FRecvSeq);
-  if Length(LBody) < 1 then begin FailPacketCb(ESSHError.Create(sekProtocol, 'ssh transport: bad padding')); Exit; end;
-  LPadLen := LBody[0];
-  if (LPadLen < SSH_MIN_PADDING) or (UInt32(LPadLen) >= FReadBodyLen) then
-  begin FailPacketCb(ESSHError.Create(sekProtocol, 'ssh transport: bad padding length')); Exit; end;
-  LPayloadLen := FReadBodyLen - 1 - LPadLen;
-  SetLength(LResult, LPayloadLen);
-  if LPayloadLen > 0 then Move(LBody[1], LResult[0], LPayloadLen);
-  if FCompressEnabled and (FDecompressor <> nil) and (FNegCompSc <> SSH_COMP_NONE) then
-  try
-    LResult := FDecompressor.Decompress(LResult);
-  except
-    on E: ESSHError do begin FailPacketCb(E); Exit; end;
-    on E: Exception do begin FailPacketCb(ESSHError.Create(sekProtocol, E.Message)); Exit; end;
-  end;
-  FRekey.Account(UInt64(Length(LResult)));
   Lcb := FReadPacketCb; Ctx := FReadPacketCtx; FReadPacketCb := nil; FReadPacketCtx := nil;
   FReadHeader := nil; FReadTrailer := nil;
   if Assigned(Lcb) then Lcb(LResult, nil, Ctx);
