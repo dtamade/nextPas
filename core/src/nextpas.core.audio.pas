@@ -25,9 +25,11 @@ uses
   nextpas.core.audio.device.intf,
   nextpas.core.audio.device.null,
   nextpas.core.audio.timeline.intf,
+  nextpas.core.audio.sfx.intf,
   nextpas.core.audio.game.intf,
   nextpas.core.audio.graph.intf,
   nextpas.core.audio.timeline,
+  nextpas.core.audio.sfx,
   nextpas.core.audio.game,
   nextpas.core.audio.graph,
   nextpas.core.audio.player;
@@ -67,6 +69,7 @@ type
   TBiquad = nextpas.core.audio.dsp.filters.TBiquad;
   TCompressor = nextpas.core.audio.dsp.dynamics.TCompressor;
   TSingleArray = nextpas.core.audio.dsp.fft.TSingleArray;
+  TAudioPanGains = nextpas.core.audio.mix.TAudioPanGains;
 
   TDeviceState = nextpas.core.audio.device.intf.TDeviceState;
   TDeviceEvent = nextpas.core.audio.device.intf.TDeviceEvent;
@@ -74,11 +77,15 @@ type
   IAudioDevice = nextpas.core.audio.device.intf.IAudioDevice;
   IAudioDeviceProvider = nextpas.core.audio.device.intf.IAudioDeviceProvider;
 
-  TGameSfxId = nextpas.core.audio.game.intf.TGameSfxId;
-  TGameVoiceId = nextpas.core.audio.game.intf.TGameVoiceId;
-  TGamePlayParams = nextpas.core.audio.game.intf.TGamePlayParams;
+  TSfxId = nextpas.core.audio.sfx.intf.TSfxId;
+  TVoiceId = nextpas.core.audio.sfx.intf.TVoiceId;
+  TSfxPlayParams = nextpas.core.audio.sfx.intf.TSfxPlayParams;
+  ISfxAudio = nextpas.core.audio.sfx.intf.ISfxAudio;
+  TGameSfxId = TSfxId deprecated 'use TSfxId';
+  TGameVoiceId = TVoiceId deprecated 'use TVoiceId';
+  TGamePlayParams = TSfxPlayParams deprecated 'use TSfxPlayParams';
   IAudioTimeline = nextpas.core.audio.timeline.intf.IAudioTimeline;
-  IGameAudio = nextpas.core.audio.game.intf.IGameAudio;
+  IGameAudio = ISfxAudio deprecated 'use ISfxAudio';
   TGraphState = nextpas.core.audio.graph.intf.TGraphState;
   IAudioGraph = nextpas.core.audio.graph.intf.IAudioGraph;
   IAudioPlayer = nextpas.core.audio.graph.intf.IAudioPlayer;
@@ -127,7 +134,7 @@ function TryDecodeWhole(ADecoder: IAudioDecoder; const AStream: IStream; out ABu
 function TryDecodeWholeFile(const APath: string; out ABuffer: TAudioBuffer; out ATags: TAudioTags): Boolean; inline;
 function AudioOpenFileStreaming(const APath: string): IAudioSource; inline;
 
-{ ---- resample/mix/dsp forwarding (PR5) ---- }
+{ ---- resample/mix/dsp forwarding ---- }
 
 function AudioResampleLinear(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer; inline;
 function CreateLinearResampler: IAudioResampler; inline;
@@ -138,6 +145,9 @@ procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single); inline;
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single); inline;
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single; inline;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single; inline;
+function PanLawGains(APan: Single): TAudioPanGains; inline; overload;
+function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains; inline; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
+function PanLawGains0dB(APan: Single): TAudioPanGains; inline;
 
 function WindowHann(N, I: Integer): Single; inline;
 procedure FFT(var ARe, AIm: array of Single); inline;
@@ -148,14 +158,11 @@ function CreateNullAudioProvider: IAudioDeviceProvider; inline;
 function CreateAudioGraph(const AFormat: TAudioFormat): IAudioGraph; inline;
 function CreateAudioPlayer(const ADevice: IAudioDevice; const AGraph: IAudioGraph): IAudioPlayer; inline;
 function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat): IAudioPlayer; inline;
-function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline;
-function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline;
+function CreateSfxAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): ISfxAudio; inline;
+function CreateSfxAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): ISfxAudio; inline;
+function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline; deprecated 'use CreateSfxAudio';
+function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline; deprecated 'use CreateSfxAudioForFormat';
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline; inline;
-
-{ ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
-
-procedure AudioRegisterDecoderPlaceholder; inline;
-procedure AudioRegisterEncoderPlaceholder; inline;
 
 implementation
 
@@ -339,6 +346,15 @@ begin Result := nextpas.core.audio.mix.NormalizePeak(ABuf, ATarget); end;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
 begin Result := nextpas.core.audio.mix.NormalizeRMS(ABuf, ATarget); end;
 
+function PanLawGains(APan: Single): TAudioPanGains;
+begin Result := nextpas.core.audio.mix.PanLawGains(APan); end;
+
+function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains;
+begin Result := nextpas.core.audio.mix.PanLawGains(APan, ALawDB); end;
+
+function PanLawGains0dB(APan: Single): TAudioPanGains;
+begin Result := nextpas.core.audio.mix.PanLawGains0dB(APan); end;
+
 function WindowHann(N, I: Integer): Single;
 begin Result := nextpas.core.audio.dsp.fft.WindowHann(N, I); end;
 
@@ -363,21 +379,19 @@ begin Result := nextpas.core.audio.player.CreateAudioPlayer(ADevice, AGraph); en
 function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat): IAudioPlayer;
 begin Result := nextpas.core.audio.player.CreateAudioPlayerForFormat(AProvider, AFormat); end;
 
+function CreateSfxAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer): ISfxAudio;
+begin Result := nextpas.core.audio.sfx.CreateSfxAudio(ADevice, AGraph, AMaxVoices); end;
+
+function CreateSfxAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer): ISfxAudio;
+begin Result := nextpas.core.audio.sfx.CreateSfxAudioForFormat(AProvider, AFormat, AMaxVoices); end;
+
 function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer): IGameAudio;
-begin Result := nextpas.core.audio.game.CreateGameAudio(ADevice, AGraph, AMaxVoices); end;
+begin Result := CreateSfxAudio(ADevice, AGraph, AMaxVoices); end;
 
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer): IGameAudio;
-begin Result := nextpas.core.audio.game.CreateGameAudioForFormat(AProvider, AFormat, AMaxVoices); end;
+begin Result := CreateSfxAudioForFormat(AProvider, AFormat, AMaxVoices); end;
 
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
-
-procedure AudioRegisterDecoderPlaceholder;
-begin
-end;
-
-procedure AudioRegisterEncoderPlaceholder;
-begin
-end;
 
 end.
