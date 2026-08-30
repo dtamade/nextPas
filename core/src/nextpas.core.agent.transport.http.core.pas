@@ -36,6 +36,9 @@ function ReadAllBodyLimited(const AReader: IReader; ALimit: SizeInt): string;
 implementation
 
 uses
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.builder,
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.http.message,
   nextpas.core.agent.provider.common,
@@ -67,74 +70,60 @@ begin
   Result := LArr;
 end;
 
-function ReadAllBody(const AReader: IReader): string;
+function ReadAllBody(const AReader: IReader): string; inline;
 const
   CInitialCapBytes = 8 * 1024;
 var
+  LBuilder: IBytesBuilder;
   LBuf: array[0..CReadChunkBytes - 1] of Byte;
-  LAcc: string;
-  LCap: SizeInt;
   LN: SizeUInt;
-  LTotal: SizeInt;
+  LBytes: TBytes;
 begin
-  LCap := CInitialCapBytes;
-  SetLength(LAcc, LCap);
-  LTotal := 0;
+  if AReader = nil then
+    Exit('');
+  LBuilder := CreateBytesBuilder(CInitialCapBytes);
   repeat
     LN := AReader.Read(LBuf[0], CReadChunkBytes);
     if LN = 0 then
       Break;
-    if LTotal + SizeInt(LN) > CMaxSuccessBodyBytes then
+    if LBuilder.Length + LN > SizeUInt(CMaxSuccessBodyBytes) then
       raise EAgentError.CreateLocal(aecProtocol,
         'wire: response body exceeds CAgentMaxSuccessBodyBytes (8MiB) limit');
-    while LTotal + SizeInt(LN) > LCap do
-    begin
-      LCap := LCap * 2;
-      SetLength(LAcc, LCap);
-    end;
-    Move(LBuf[0], PAnsiChar(@LAcc[LTotal + 1])^, LN);
-    Inc(LTotal, SizeInt(LN));
+    LBuilder.AppendBytes(@LBuf[0], LN); { 复用 bytes.builder 几何扩容单源，零重复 }
   until False;
-  SetLength(LAcc, LTotal);
-  Result := LAcc;
+  LBytes := LBuilder.ToBytes; { 单次分配；接口自动释放，异常安全 }
+  Result := BytesToString(LBytes); { inline Move；零拷贝借用统一经 bytes.ops }
 end;
 
-function ReadAllBodyLimited(const AReader: IReader; ALimit: SizeInt): string;
+function ReadAllBodyLimited(const AReader: IReader; ALimit: SizeInt): string; inline;
 const
   CInitialCapBytes = 8 * 1024;
 var
+  LBuilder: IBytesBuilder;
   LBuf: array[0..CReadChunkBytes - 1] of Byte;
-  LAcc: string;
-  LCap: SizeInt;
   LN: SizeUInt;
-  LTotal: SizeInt;
+  LInitCap: SizeInt;
+  LBytes: TBytes;
 begin
-  LCap := CInitialCapBytes;
-  if LCap > ALimit then
-    LCap := ALimit;
-  if LCap < 1 then
-    LCap := 1;
-  SetLength(LAcc, LCap);
-  LTotal := 0;
+  if AReader = nil then
+    Exit('');
+  LInitCap := CInitialCapBytes;
+  if LInitCap > ALimit then
+    LInitCap := ALimit;
+  if LInitCap < 1 then
+    LInitCap := 1;
+  LBuilder := CreateBytesBuilder(SizeUInt(LInitCap));
   repeat
     LN := AReader.Read(LBuf[0], CReadChunkBytes);
     if LN = 0 then
       Break;
-    if LTotal + SizeInt(LN) > ALimit then
+    if LBuilder.Length + LN > SizeUInt(ALimit) then
       raise EAgentError.CreateLocal(aecProtocol,
         'wire: response body exceeds ' + IntToStr(ALimit) + ' bytes limit');
-    while LTotal + SizeInt(LN) > LCap do
-    begin
-      LCap := LCap * 2;
-      if LCap > ALimit then
-        LCap := ALimit;
-      SetLength(LAcc, LCap);
-    end;
-    Move(LBuf[0], PAnsiChar(@LAcc[LTotal + 1])^, LN);
-    Inc(LTotal, SizeInt(LN));
+    LBuilder.AppendBytes(@LBuf[0], LN); { 复用 bytes.builder 几何扩容单源，零重复；接口释放保证 }
   until False;
-  SetLength(LAcc, LTotal);
-  Result := LAcc;
+  LBytes := LBuilder.ToBytes;
+  Result := BytesToString(LBytes); { inline Move；零拷贝借用统一经 bytes.ops }
 end;
 
 function BuildPostRequest(const AReq: TWireRequest;
