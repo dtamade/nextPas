@@ -15,10 +15,10 @@
 | Gate | 覆盖 | 关键断言 |
 |------|------|---------|
 | `test_compile_skeleton`（W0）| 门面/base/errors 骨架 + 错误分类器 | 单元可编译；uses 方向符合 ARCHITECTURE §1 铁律；词表哨兵/builder/usage 值语义；ErrorCodeForStatus 全状态映射；IsRetryable 推导表；错误信封 upstream 格式与字段保真/local 默认；EAgentCancelled/EAgentMisuse 语义；facade 转发 |
-| `test_protocol` | base 词表 + fold | FoldDeltas 全词表矩阵：text/thinking 交错、tool 多槽并行折叠（index 分桶）、usage/finish 三种到达顺序等价、违例序列抛 aecProtocol、Extra 无损往返 |
+| `test_protocol` | base 词表 + fold | FoldDeltas 全词表矩阵：text/thinking 交错、tool 多槽并行折叠（index 分桶）、usage/finish 三种到达顺序等价、违例序列抛 aecProtocol、**Extra 无损往返（F-M18：ExtraJson 旁路合并+重名后者胜，G6 补 assert）** |
 | `test_sse` | agent.sse 增量解析器 | 帧跨 chunk 断裂、多行 data、CRLF/LF、BOM、event+data 组合、半帧保持状态、**UTF-8 多字节序列跨 Feed 边界断裂**（WIRE-MAPPINGS §0）、EOF 收口、恶意超长行上限 |
 | `test_transport_trace` | 请求级追踪装饰器（W11，scripted 离线） | RoundTrip/OpenStream 事件对序与字段（url/status/duration≥0/body bytes）；transport 异常路径 Status=-1 配对后原样上抛不改写失败语义；sink 回调异常直接冒泡；与 WithRetry 叠装三次尝试三对事件可见；Cancel 幂等穿透 |
-| `test_transport_stream` | transport.http + 时序 | scripted chunk 流验证**真增量时序**：喂 chunk N 即产出对应事件（不等到 EOF）；Cancel 中途立即返回 False 且 GetCancelled=True；非流式 RoundTrip 超时/连接失败归因 aecTimeout/aecTransport；**回环硬取消**（裸 TCP 恒长 chunked SSE 源）：Cancel 后 NextEvent 在 IO 切片级返回 False 而非等满请求超时，弃置未读完的流 Destroy 快速收合 worker；W7：回环 burst-then-stall 源验证 ReadIdleTimeoutMs——前两帧正常、静默超限抛 aecTimeout（GetCancelled=False 可区分取消）、不挂满 TotalTimeout，禁用时同源读满 |
+| `test_transport_stream` | transport.http + 时序 | scripted chunk 流验证**真增量时序**：喂 chunk N 即产出对应事件（不等到 EOF）；Cancel 中途立即返回 False 且 GetCancelled=True；非流式 RoundTrip 超时/连接失败归因 aecTimeout/aecTransport；**回环硬取消**（裸 TCP 恒长 chunked SSE 源）：Cancel 后 NextEvent 在 IO 切片级返回 False 而非等满请求超时（阈值文档化为 `< TotalTimeout/2` 比例断言并放宽至 5s，G6 F-M20），弃置未读完的流 Destroy 快速收合 worker；W7：回环 burst-then-stall 源验证 ReadIdleTimeoutMs——前两帧正常、静默超限抛 aecTimeout（GetCancelled=False 可区分取消）、不挂满 TotalTimeout，禁用时同源读满 |
 | `test_e2e_live` | 真实端点 E2E（**opt-in**） | 默认跳过：仅 `NEXTPAS_AGENT_E2E=1` 时执行，凭据经既有 FromEnv 变量注入（`NEXTPAS_AGENT_{OPENAI,ANTHROPIC}_*`），仓库不持有密钥。覆盖 openai Complete/Stream 往返（fold 不变量、usage 随 finish 帧）、W6 json_schema 兼容边界、W7 reasoning_effort 接受性、anthropic thinking/text 解码、ReadIdleTimeoutMs 负向无误杀；W9 起 openai responses 三测（Complete 往返/流式 text+usage/tool 调用往返），三协议支柱真网齐验；W10 起 anthropic ccmAuto 缓存请求真网往返（二级 opt-in：`NEXTPAS_AGENT_ANTHROPIC_CACHE=1`——缓存可用性随端点账号，部分网关型上游对 cache_control 回 403）。基准禁触公网铁律不受影响：本门是 test gate 且默认零网络 |
 | `test_provider_common` | provider.common 分类器直测 | ParseRetryAfterMs 三形态全集：ms 头解析/去空白/头名大小写、秒级 ×1000、ms 优先且无效 ms 落秒级、HTTP-date/垃圾/缺失→unknown、负值一律不信任；MatchesOverflowPhrases 六短语全集（WIRE-MAPPINGS §0）+大小写不敏感+任意位置子串+无误报；BuildUpstreamError 契约：400+超窗措辞→aecContextOverflow 终态、401 归因、429 携带解析出的 Retry-After |
 | `test_provider_openai` | openai 适配器 | 请求编码快照（含 sentinel 省略、Q-O1 改名、tools 编码）；响应解码快照（非流式+流式全事件序）；怪癖 Q-O2..Q-O6 各一条回归；W6：response_format json_schema strict 编码、schema 非 JSON object→aecConfig 不发网、tool_choice 四形态 wire 断言、tcmNamed 缺名→aecConfig；W7：reasoning_effort 四值编码+unset 不上送；W10：ccmAuto 零差异逐字节断言 |
@@ -31,12 +31,15 @@
 | `test_provider_responses` | OpenAI Responses 适配器（W9，scripted 离线） | 请求映射（instructions/input 数组/reasoning.effort/tool_choice 四形态/text.format schema/StopSequences 忽略+warn Q-R1）；非流式 output 三类项解码+usage details；SSE 事件全集→词表增量（created 首信封/text.delta/reasoning delta/function_call 分桶/completed usage/failed-error/incomplete 截断）；截断流 fail-closed（Q-R5）；错误信封归因；W10：ccmAuto 零差异 |
 | `test_hedge` | WithHedge 对冲装饰器（W9） | DelayMs 内完成对冲路零发起；到点未完即起对冲路先达者胜；输路必被 Cancel 且增量不外泄（流式首 delta 门）；两路皆败透传主路原始错误；DelayMs<=0 aecConfig；OnHedged 钩子上报；外部取消两路一并取消 |
 | `test_resilience` | 韧性纯函数三件 | StreamHasError 断流帧指纹判定；WaitCancelMs 取消感知等待（预取消 True、nil 源吸收、非正延迟跳过、ms→ns 超界守卫不挂死）；ClampHintMs 服务端提示与本地退避同帽收敛、负哨兵透传 |
+| `test_agent_slot_registry` | TAgentSlotRegistry 单一真源 | 基础 Find/Register、几何增长、稀疏大索引 10000/20000 线性回退、边界 256 vs 257 越限拒绝、Clear 复用、负值不注册 |
 | `test_tools` | 校验/截断/包装 | 名称/schema 注册校验 aecConfig；§1.5 参数校验全集（256KiB 预检、深度上限、required 存在性、string/number/boolean 类型核对）失败→error result；行/字节截断信封（UTF-8 安全切、双限兜底）；超时包装经 fake clock 驱动虚拟截止且迟到结果不回读；中途取消合成 cancelled error；工具异常兜底 'tool raised' 归因；ctx 令牌/序号贯通 |
 | `test_loop` | TAgentLoop 全语义 | OnEvent 事件序快照（runStart..runEnd 全轨迹）；并行证明批（原子闸门桩：真并行时 B 放行 A，退化串行即饿死暴露）；80% 预算预警一次性+roBudgetExhausted 引导收尾（引导轮 Tools=nil 断言）；防打转阈值 roDoomLoop+引导文本逐字断言；MaxToolCalls 批裁剪至余量；roRoundsExhausted；pre-hook hvBlock 合成错误回喂/hvStop 即终点不回喂；post-hook 只见截断后载荷；未知工具合成错误回喂；provider 失败→roFailed+LastError 保真不冒泡；轮界取消 roCancelled 无 FinalMessage；回调异常直接冒出 Run；W10：CacheControl 模板逐轮透传 |
 | `test_fake_provider` | fake/scripted 自身 | 脚本回放顺序、耗尽再调抛错、echo 桩；W6：带 ResponseSchemaJson/ToolChoice 的请求回放不受影响（回放即所得，不校验 schema） |
-| `test_assembly` | **真实装配链** | 经生产装配函数组装 provider（注入 scripted transport）跑通完整一轮——防"门测走 canned 绕过装配点"事故复发（code888 刀 56 教训） |
-| `test_security` | SECURITY 验收项落 CI | 捕获型 ILogger（testkit）断言脱敏表：鉴权头/请求体/RawBodySnippet 全文不入日志；256KiB 参数预检；64 键 Extra 上限；FromEnv 缺 env 返回 nil；mime 白名单 aecConfig；Utf8SafeTruncate 边界；Active 期 GetMessage 抛 EAgentMisuse |
+| `test_assembly` | **真实装配链** | 经生产装配函数组装 provider（注入 scripted transport）跑通完整一轮——防"门测走 canned 绕过装配点"事故复发（code888 刀 56）；**G6 补 429/401 装配错误（F-H24）：RaiseUpstream 走门面 Provider 挂 transport，断言码/重试/归因** |
+| `test_security` | SECURITY 验收项落 CI | 捕获型 ILogger（testkit）断言脱敏表：鉴权头/请求体/RawBodySnippet 全文不入日志；256KiB 参数预检；**64 键 Extra 上限强制非空（F-H25）**；FromEnv 缺 env 返回 nil；mime 白名单 aecConfig；Utf8SafeTruncate 边界；Active 期 GetMessage 抛 EAgentMisuse；**MaxWaitMs=0 零预算不误导 RetryAfterMs=0（F-L08）** |
 | `test_session` | W5 JSONL 转录存储 | 全词表无损往返（thinking+signature+tool_call+tool_result is_error+image+extra）；跨实例持久；torn tail 丢弃；损坏行/未知版本/未知 kind fail-closed 含行号；Delete 幂等；缺失线程空载；ThreadId 校验全集防路径穿越；Fork 干净快照且拒绝已存在目标/自 fork；双同步模式；Unicode 与转义往返；usage unknown 不伪造 0 |
+| `test_pricing` | 定价纯策略（Phase1 T1.1） | `EstimateCost` 四舍五入整数μUSD 与 2048x2048 特判、`ImageTierOf` 三档、`AgentEstimateTokens` ~4字符/token 粗估；`TPassthroughPricing` FlatCost 零IO |
+| `test_quota` | 配额标量滚动（Phase1 T1.2） | `PlatformQuotaWindowSeconds` 86400/604800/2592000、`PlatformQuotaExpired/Usage/Exceeded` 窗口过期与超限纯函数、`SerializePlatformQuotaItem` 往返 |
 
 ## 3. 测试基建
 
@@ -55,19 +58,24 @@
 
 | Bench | 度量 | 回归阈值（首版基线落地后冻结）|
 |-------|------|------|
-| `bench_fold` | 10k delta（含 50 工具槽参数片段）FoldDeltas 总耗时 | ns/op；无 per-delta SetLength 回归（分配次数随行数线性封顶）|
-| `bench_sse_feed` | 16MB SSE 流分 32KB 块 Feed | MB/s 绝对值基线 176（BENCHMARKS §2；http.sse 为文本行域引擎，无同口径对照）|
-| `bench_loop_overhead` | fake provider 下 10 轮纯文本 run 总开销 | µs/run 级；证明抽象零税 |
-| `bench_wire_codec` | Responses 编码/混合输出解码（W9）+ Anthropic 编码 unset/ccmAuto 对照（W10）四例 | µs/op p50（BENCHMARKS §2.1）；ccmAuto 与 unset 差异须在噪声带内 |
+| `bench_fold` | 10k delta（含 50 工具槽参数片段）FoldDeltas 总耗时 | ns/op；无 per-delta SetLength 回归（分配次数随行数线性封顶）；门禁 `bench_regression` 10% 断言 |
+| `bench_sse_feed` | 16MB SSE 流分 32KB 块 Feed | MB/s 绝对值基线 198（BENCHMARKS §2 2026-08-29 冻结，旧 176；http.sse 为文本行域引擎，无同口径对照）；门禁 10% |
+| `bench_loop_overhead` | fake provider 下 10 轮纯文本 run 总开销 | µs/run 级；证明抽象零税；门禁 10% |
+| `bench_wire_codec` | Responses 编码/混合输出解码（W9）+ Anthropic 编码 unset/ccmAuto 对照（W10）四例 | µs/op p50（BENCHMARKS §2.1）；ccmAuto 与 unset 差异须在噪声带内；门禁 10% |
+| `bench_wire_headers` | wire 5 头校验单遍 | ~203 ns p50 冻结；门禁 10% |
+| `bench_regression` | **横切门禁**：读五基准 `build/bench-agent-*.json` 比对冻结基线 | **劣化>10% 必议/回退**（F-H23；PERFORMANCE §5 同约束，G6 2026-08-29 加 gate），`make -C core/benchmarks/nextpas.core.agent/bench_regression check` |
 
 纪律：-O2 运行；禁止自定义计时/内循环/手算统计（design-conventions §12）。
+HEAPTRC 覆盖说明（F-M17）：`common.mk` 默认 `-gh -dHEAPTRC_ACTIVE` 覆盖全部 `test_*` gates；`test_e2e_live` 默认 skip 属有意豁免（需 `NEXTPAS_AGENT_E2E=1`）；benchmark 目标默认不带 `-gh`（性能基线零探针污染，F-M17 豁免），需堆泄漏探查时以 `BENCH_HEAPTRC=1` 另跑变体并 `HEAPTRC_GATE=1` 校验；`bench_regression` 本身不产生新分配。
 
 ## 5. 出口检查（每 wave）
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.agent/<该wave gates>
+make -C core/benchmarks/nextpas.core.agent/bench_regression check  # 10% 劣化门禁
 git diff --check
 make hygiene
 ```
 
 W4 追加全部 gates + benchmarks 数据写入 `docs/agent/BENCHMARKS.md`（landing 时建立）。
+默认值总表权威在 `API.md §10`，本文档与 `PERFORMANCE §2`/`SECURITY §3`/`BENCHMARKS §2` 仅引用常量名，F-L07 闭环。

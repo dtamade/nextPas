@@ -1,14 +1,13 @@
 {**
- * nextpas.core.agent.throttle - 客户端限流装饰器（W8）。
+ * nextpas.core.agent.throttle — 客户端限流装饰器（W8）。
  *
- * 每次 Complete/Stream 先向 gate 取票；拒绝→在 AClock 上取消感知等待
- * gate 建议毫秒后重取（建议 <=0 视为未指明，按 CIdlePollMs 轮询步进）；
+ * 每次 Complete / Stream 先向 gate 取票；拒绝 → 在 AClock 上取消感知等待
+ * gate 建议毫秒后重取（建议值 ≤ 0 视为未指明，按 CIdlePollMs 轮询步进）；
  * 累计等待超 MaxWaitMs 或重取次数超 MaxAcquires → 本地抛 aecRateLimited
- * （RetryAfterMs=gate 最近建议值，Message 带 'throttled: ' 前缀——与上游
- * 429 归因分离：本地路径从未触网）。取消打断等待立即 EAgentCancelled。
- *
- * IAgentRateGate 是细接口：NewTokenBucketGate 把 core.lockfree.ratelimit
- * 标准库令牌桶接入（标准库协同）；测试用 fake gate 自由编排拒绝序列。
+ * （RetryAfterMs = gate 最近建议值，Message 带 'throttled: ' 前缀 — 与上游
+ * 429 归因分离：本地路径从未触网，成本为零）。取消打断等待立即
+ * EAgentCancelled。IAgentRateGate 为细接口：NewTokenBucketGate 接入
+ * core.lockfree.ratelimit 标准库令牌桶；测试用 fake gate 自由编排拒绝序列。
  *}
 
 unit nextpas.core.agent.throttle;
@@ -186,20 +185,42 @@ begin
     RequireNotCancelled(LToken);
     if LSuggest <= 0 then
       LSuggest := CIdlePollMs;         { 未指明：轮询步长兜底 }
-    Inc(LWaitNo);
-    if FPolicy.OnWait <> nil then
-      FPolicy.OnWait(LWaitNo, LSuggest);
+    { 零预算快速失败：MaxWaitMs=0 不先 OnWait，且 RetryAfterMs 置 0
+      （F-L08/F-H23 零预算不误导），与 G3 分片一致 }
+    if (FPolicy.MaxWaitMs = 0) and (LSleptMs + LSuggest > FPolicy.MaxWaitMs) then
+    begin
+      LErr := EAgentError.CreateLocal(aecRateLimited,
+        'throttled: local rate gate — wait budget exceeded (client-side, no upstream request)');
+      LErr.RetryAfterMs := 0;
+      raise LErr;
+    end;
     if (LSleptMs + LSuggest > FPolicy.MaxWaitMs) or
        (LAfter = FPolicy.MaxAcquires) then
     begin
-      { 本地整形拒绝：归因分离——从未触网，前缀明示 }
+      { 预算检查在 OnWait 前已对零预算短路；非零预算仍先上报再判超窗，
+        保持 test_throttle.budget 语义 }
+      if (LSleptMs + LSuggest > FPolicy.MaxWaitMs) then
+      begin
+        Inc(LWaitNo);
+        if FPolicy.OnWait <> nil then
+          FPolicy.OnWait(LWaitNo, LSuggest);
+      end
+      else
+      begin
+        Inc(LWaitNo);
+        if FPolicy.OnWait <> nil then
+          FPolicy.OnWait(LWaitNo, LSuggest);
+      end;
       LErr := EAgentError.CreateLocal(aecRateLimited,
-        'throttled: local rate gate wait budget exceeded');
+        'throttled: local rate gate — wait budget exceeded (client-side, no upstream request)');
       LErr.RetryAfterMs := LSuggest;
       raise LErr;
     end;
+    Inc(LWaitNo);
+    if FPolicy.OnWait <> nil then
+      FPolicy.OnWait(LWaitNo, LSuggest);
     if not FClock.SleepMs(LSuggest, LToken) then
-      raise EAgentCancelled.Create;    { 取消打断等待 }
+      raise EAgentCancelled.Create;    { 取消打断等待（分片由 Clock.WaitForCancel 承载，G3 统一） }
     LSleptMs := LSleptMs + LSuggest;
   end;
 end;

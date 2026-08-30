@@ -13,10 +13,12 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.text.builder,
+  nextpas.core.text.conv,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf;
@@ -477,6 +479,9 @@ begin
   { 末段无换行 = torn tail：丢弃不计（SESSION.md §4）}
 end;
 
+{ 正例(F-L03)：Write → Sync → Close 每行落盘，SyncEachAppend=true 时
+  崩溃最多丢 torn tail（末段无 \n 丢弃，LoadFile 已实现）；False 模式
+  窗口扩大属显式权衡，行内无裸换行由 builder 转义保证 }
 procedure TJsonlTranscriptStore.Append(const AThreadId: string;
   const AMsg: TMessage);
 var
@@ -527,8 +532,11 @@ begin
   if Exists(LDstPath) then
     Misuse('fork target already exists');
 
-  LoadFile(ThreadPath(ASrcThreadId), LMsgs);
-  LSB := MakeStringBuilder(1024);
+  if Exists(ThreadPath(ASrcThreadId)) then
+    LoadFile(ThreadPath(ASrcThreadId), LMsgs)
+  else
+    LMsgs := nil;
+  LSB := MakeStringBuilder(CAgentSessionForkInitialCap);
   for I := 0 to High(LMsgs) do
   begin
     LSB.AppendStr(TranscriptMessageToJson(LMsgs[I]));

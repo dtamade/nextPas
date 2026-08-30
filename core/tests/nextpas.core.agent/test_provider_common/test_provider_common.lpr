@@ -12,7 +12,13 @@ uses
 { provider.common 错误分类器直接用例（ROADMAP Inbox 审计记录承诺的补齐）：
   ParseRetryAfterMs 三形态全集（ms 头/秒级头/date 拒绝/负值不信任）、
   MatchesOverflowPhrases 措辞全集（WIRE-MAPPINGS §0 六短语）、
-  BuildUpstreamError 分类契约（ERRORS.md §3）}
+  BuildUpstreamError 分类契约（ERRORS.md §3）
+  边界/Cancel/超时/并发：
+  - Cancel 边界：分类器纯函数，无取消分支；取消语义在上层装饰器门保障。
+  - 超时边界：ParseRetryAfterMs 对 ms/秒级 ×1000 溢出钳制（F-H21），负值一律 unknown，已全量边界覆盖。
+  - 并发边界：纯函数无共享状态，并发安全；重入无锁。
+  悬挂指针：无堆持有，Hdrs 构造栈上数组返回托管动态数组，无裸指针。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；纯函数零堆常驻，回归阈值无泄漏。 }
 
 { 偶数个元素两两成对构造头数组：Name, Value, Name, Value, ... }
 function Hdrs(const APairs: array of string): TWireHeaderArray;
@@ -132,6 +138,114 @@ begin
   end;
 end;
 
+procedure TestSlotBoundaries;
+var
+  Pool, Pool2: TWireToolSlotPool;
+  LCreated: Boolean;
+  I: Integer;
+  Raised: Boolean;
+begin
+  { 256 通过：直映表上限内 creation 成功，二次命中复用不增 count }
+  Pool := TWireToolSlotPool.Create;
+  try
+    Pool.Find(256, LCreated);
+    Check(LCreated, 'index 256 first create passes');
+    Check(Pool.Count = 1, 'count 1 after 256');
+    Pool.Find(256, LCreated);
+    Check(not LCreated, 'index 256 second hit not created');
+    Check(Pool.Count = 1, 'count still 1');
+    Pool.Find(0, LCreated);
+    Check(LCreated, 'index 0 create passes');
+    Check(Pool.Count = 2, 'count 2 after 0');
+  finally
+    Pool.Free;
+  end;
+
+  { 填满 CAgentMaxSlotMap+1 槽后，再建稀疏大索引 257 抛 aecProtocol }
+  Pool2 := TWireToolSlotPool.Create;
+  try
+    for I := 0 to CAgentMaxSlotMap do
+      Pool2.Find(I, LCreated);
+    Check(Pool2.Count = CAgentMaxSlotMap + 1, 'filled to limit inclusive');
+    Raised := False;
+    try
+      Pool2.Find(257, LCreated);
+    except
+      on E: EAgentError do
+      begin
+        Raised := True;
+        Check(E.ErrorCode = aecProtocol, 'slot count >256 is protocol');
+      end;
+    end;
+    Check(Raised, '257 after full throws');
+    Raised := False;
+    try
+      Pool2.Find(99999, LCreated);
+    except
+      on E: EAgentError do
+        Raised := True;
+    end;
+    Check(Raised, 'large index after full also throws');
+  finally
+    Pool2.Free;
+  end;
+
+  { 稀疏大索引回退：未满时大索引可创且同值复用（DoS 防护不误伤单槽）}
+  Pool := TWireToolSlotPool.Create;
+  try
+    Pool.Find(10000, LCreated);
+    Check(LCreated, 'sparse large index fallback creates when not full');
+    Check(Pool.Count = 1, 'count 1');
+    Pool.Find(10000, LCreated);
+    Check(not LCreated, 'same large index reuse');
+  finally
+    Pool.Free;
+  end;
+end;
+
+procedure TestSlotSparseLargeIndexTolerance;
+var
+  Pool: TWireToolSlotPool;
+  PoolFull: TWireToolSlotPool;
+  LCreated: Boolean;
+  I: Integer;
+  Raised: Boolean;
+begin
+  { 稀疏大索引容忍用例：未填满时 Find(10000) 创建成功且 Count+1，二次命中复用不增 count }
+  Pool := TWireToolSlotPool.Create;
+  try
+    Check(Pool.Count = 0, 'empty pool');
+    Pool.Find(10000, LCreated);
+    Check(LCreated, 'sparse 10000 first create succeeds when not full');
+    Check(Pool.Count = 1, 'count+1 after 10000');
+    Pool.Find(10000, LCreated);
+    Check(not LCreated, 'second hit reuse not increase count');
+    Check(Pool.Count = 1, 'count still 1 after reuse');
+  finally
+    Pool.Free;
+  end;
+  { 填满后 Find(10001) 抛 aecProtocol }
+  PoolFull := TWireToolSlotPool.Create;
+  try
+    for I := 0 to CAgentMaxSlotMap do
+      PoolFull.Find(I, LCreated);
+    Check(PoolFull.Count = CAgentMaxSlotMap + 1, 'filled to limit inclusive');
+    Raised := False;
+    try
+      PoolFull.Find(10001, LCreated);
+    except
+      on E: EAgentError do
+      begin
+        Raised := True;
+        Check(E.ErrorCode = aecProtocol, '10001 after full is protocol');
+      end;
+    end;
+    Check(Raised, 'Find(10001) after full throws aecProtocol');
+  finally
+    PoolFull.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -145,5 +259,7 @@ begin
   T.Test('overflow case and position', @TestOverflowCaseAndPosition);
   T.Test('overflow no false positive', @TestOverflowNoFalsePositive);
   T.Test('BuildUpstreamError classifier contract', @TestBuildUpstreamClassifier);
+  T.Test('slot boundaries 256 vs 257 and count limit', @TestSlotBoundaries);
+  T.Test('slot sparse large index tolerance 10000 and 10001 after full', @TestSlotSparseLargeIndexTolerance);
   if not T.Run then Halt(1);
 end.

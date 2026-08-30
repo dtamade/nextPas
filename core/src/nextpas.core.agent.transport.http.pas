@@ -52,8 +52,10 @@ uses
 const
   CReadChunkBytes = 32 * 1024;      { PERFORMANCE §2 读块尺寸 }
   CWaitSliceNs = 100 * 1000 * 1000; { NextEvent 等待切片：100ms }
-  CMaxErrorBodyBytes = 64 * 1024;   { 错误体累积封顶：信封摘要只需 8KB
-                                      （CMaxRawBodySnippetBytes），留 8 倍裕度 }
+  CMaxErrorBodyBytes = nextpas.core.agent.base.CAgentMaxWireTotalHeaderBytes; { alias：错误体封顶 64KiB，数值与总头上限同构但语义独立，单一真源
+                                                                                （CMaxRawBodySnippetBytes 8KiB×8裕度）}
+  CMaxSuccessBodyBytes = nextpas.core.agent.base.CAgentMaxSuccessBodyBytes; { SECURITY §3 单一真源 }
+  CWireChannelDepth = nextpas.core.agent.base.CAgentMaxSlotMap;    { alias：wire 通道 256 与 slot 上限同预算，单一真源 }
 
 type
   { ---- wire 消息通道载荷 ---- }
@@ -204,15 +206,14 @@ end;
 
 function ReadAllBody(const AReader: IReader): string;
 const
-  CInitialCapBytes = 64 * 1024;
+  CInitialCapBytes = 8 * 1024;        { 典型 2-8KB 体首包即命中，64KB 超配零填浪费 }
 var
-  LBuf: array of Byte;
+  LBuf: array[0..CReadChunkBytes - 1] of Byte; { 栈数组：省 32K 堆分配/零填，QPS 网关收益 }
   LAcc: string;
   LCap: SizeInt;
   LN: SizeUInt;
   LTotal: SizeInt;
 begin
-  SetLength(LBuf, CReadChunkBytes);
   { 倍增预分配：避免逐 chunk SetLength 的 O(n²) 重拷 }
   LCap := CInitialCapBytes;
   SetLength(LAcc, LCap);
@@ -221,6 +222,9 @@ begin
     LN := AReader.Read(LBuf[0], CReadChunkBytes);
     if LN = 0 then
       Break;
+    if LTotal + SizeInt(LN) > CMaxSuccessBodyBytes then
+      raise EAgentError.CreateLocal(aecProtocol,
+        'wire: response body exceeds CAgentMaxSuccessBodyBytes (8MiB) limit');
     while LTotal + SizeInt(LN) > LCap do
     begin
       LCap := LCap * 2;
@@ -229,7 +233,46 @@ begin
     Move(LBuf[0], PAnsiChar(@LAcc[LTotal + 1])^, LN);
     Inc(LTotal, SizeInt(LN));
   until False;
-  Result := Copy(LAcc, 1, LTotal);   { 收口到实际长度，一次分配 }
+  SetLength(LAcc, LTotal);
+  Result := LAcc;
+end;
+
+function ReadAllBodyLimited(const AReader: IReader; ALimit: SizeInt): string;
+const
+  CInitialCapBytes = 8 * 1024;
+var
+  LBuf: array[0..CReadChunkBytes - 1] of Byte;
+  LAcc: string;
+  LCap: SizeInt;
+  LN: SizeUInt;
+  LTotal: SizeInt;
+begin
+  LCap := CInitialCapBytes;
+  if LCap > ALimit then
+    LCap := ALimit;
+  if LCap < 1 then
+    LCap := 1;
+  SetLength(LAcc, LCap);
+  LTotal := 0;
+  repeat
+    LN := AReader.Read(LBuf[0], CReadChunkBytes);
+    if LN = 0 then
+      Break;
+    if LTotal + SizeInt(LN) > ALimit then
+      raise EAgentError.CreateLocal(aecProtocol,
+        'wire: response body exceeds ' + IntToStr(ALimit) + ' bytes limit');
+    while LTotal + SizeInt(LN) > LCap do
+    begin
+      LCap := LCap * 2;
+      if LCap > ALimit then
+        LCap := ALimit;
+      SetLength(LAcc, LCap);
+    end;
+    Move(LBuf[0], PAnsiChar(@LAcc[LTotal + 1])^, LN);
+    Inc(LTotal, SizeInt(LN));
+  until False;
+  SetLength(LAcc, LTotal);
+  Result := LAcc;
 end;
 
 function BuildPostRequest(const AReq: TWireRequest;
@@ -239,6 +282,7 @@ var
   B: THttpRequestBuilder;
   I: Integer;
 begin
+  AgentValidateWireHeaders(AReq.Headers);
   { builder 方法返回修改副本：必须链式接住返回值，语句式调用会把
     标量设置丢在临时副本上（Header 例外——共享 IHttpHeaders 可变）}
   B := THttpRequestBuilder.Create(hmPost, AReq.Url)
@@ -292,14 +336,17 @@ begin
   end;
   try
     LHdrs := HeadersToArray(LResp.Headers);
-    LBody := ReadAllBody(LResp.Body);
     LStatus := Integer(LResp.StatusCode);
+    if (LStatus < 200) or (LStatus > 299) then
+      LBody := ReadAllBodyLimited(LResp.Body, CMaxErrorBodyBytes)
+    else
+      LBody := ReadAllBody(LResp.Body);
     AResp.StatusCode := LStatus;
     AResp.Headers := LHdrs;
     AResp.RequestId := ProbeRequestId(LHdrs);
     AResp.BodyText := LBody;
   finally
-    LResp.Close;                     { 归还/排空连接体所有权 }
+    LResp.Close;
     LResp := nil;
   end;
   if (LStatus < 200) or (LStatus > 299) then
@@ -312,7 +359,12 @@ var
   LStream: TWireStream;
 begin
   LStream := TWireStream.Create(FProvider, FClient);
-  LStream.Start(AReq);
+  try
+    LStream.Start(AReq);
+  except
+    LStream.Free;
+    raise;
+  end;
   Result := LStream;
 end;
 
@@ -340,23 +392,48 @@ begin
 end;
 
 destructor TWireStream.Destroy;
+var
+  LSliceMs: Integer;
+  LSlices: Integer;
+  I: Integer;
+  LDone: Boolean;
 begin
-  { worker 可能仍在 Send 中：先硬取消在途请求再等收尾——等待上界从
-    "请求超时（至多 TotalTimeout 300s）"缩到 IO 切片级；消费方仍应优先
-    显式 Cancel。W2 复核结论：每流专属 worker 保留（长生命周期流的正确
-    形态），Destroy 确定性由硬取消保证 }
   if FWorker <> nil then
   begin
     if FHttpCancel <> nil then
       FHttpCancel.Cancel;
-    FWorker.WaitFor;
-    FWorker.Free;
-    FWorker := nil;
+    LSliceMs := 100;
+    LSlices := 30;
+    LDone := False;
+    for I := 1 to LSlices do
+    begin
+      if FWorker.WaitForTimeout(LSliceMs) then
+      begin
+        LDone := True;
+        Break;
+      end;
+    end;
+    if not LDone then
+    begin
+      FWorker.Free;
+      FWorker := nil;
+    end
+    else
+    begin
+      FWorker.Free;
+      FWorker := nil;
+    end;
   end;
-  FParser.Free;
-  { 通道是裸类引用（非接口持有），必须显式释放：对象 + 内部环形缓冲
-    （256×40B）每流约 10.3KB，漏 Free 即每流泄漏一对块 }
-  FChannel.Free;
+  if FParser <> nil then
+  begin
+    FParser.Free;
+    FParser := nil;
+  end;
+  if FChannel <> nil then
+  begin
+    FChannel.Free;
+    FChannel := nil;
+  end;
   inherited Destroy;
 end;
 
@@ -365,30 +442,44 @@ var
   B: THttpRequestBuilder;
   I: Integer;
 begin
+  AgentValidateWireHeaders(AReq.Headers);
   FLock := TMutex.Create;
-  FChannel := TWireMsgChannel.Create(256);
-  FParser := TSSEParser.Create;
-  FHttpCancel := NewHttpCancelToken;
-  { W7 空闲卫生：计时起点=Start（覆盖连接与首响应头等待期）}
-  FReadIdleMs := AReq.ReadIdleTimeoutMs;
-  FLastProgressMs := 0;
-  FSw := TStopwatch.StartNew;
-  { builder 方法返回修改副本：链式接住返回值（同 BuildPostRequest 注释）}
-  B := THttpRequestBuilder.Create(hmPost, AReq.Url)
-    .ContentType('application/json');
-  for I := 0 to High(AReq.Headers) do
-    B := B.Header(AReq.Headers[I].Name, AReq.Headers[I].Value);
-  if AReq.TotalTimeoutMs <> CTimeoutDefault then
-    B := B.Timeout(AReq.TotalTimeoutMs);
-  { 硬中断贯通：worker 的在途 Send 在 mid-IO 切片轮询此令牌 }
-  { SSE 路径：体不缓冲，逐块直投回调（h1 client 设计意图）}
-  B := B.CancelToken(FHttpCancel)
-    .ResponseBodyChunk(@OnBodyChunk)
-    .ResponseStatus(@OnResponseStatus)
-    .SkipBodyBuffer;
-  FRequest := B.Body(AReq.BodyJson).Build;
-  FWorker := TWorker.Create(Self);
-  FWorker.Start;
+  try
+    FChannel := TWireMsgChannel.Create(CWireChannelDepth);
+    FParser := TSSEParser.Create;
+    FHttpCancel := NewHttpCancelToken;
+    FReadIdleMs := AReq.ReadIdleTimeoutMs;
+    FLastProgressMs := 0;
+    FSw := TStopwatch.StartNew;
+    B := THttpRequestBuilder.Create(hmPost, AReq.Url)
+      .ContentType('application/json');
+    for I := 0 to High(AReq.Headers) do
+      B := B.Header(AReq.Headers[I].Name, AReq.Headers[I].Value);
+    if AReq.TotalTimeoutMs <> CTimeoutDefault then
+      B := B.Timeout(AReq.TotalTimeoutMs);
+    B := B.CancelToken(FHttpCancel)
+      .ResponseBodyChunk(@OnBodyChunk)
+      .ResponseStatus(@OnResponseStatus)
+      .SkipBodyBuffer;
+    FRequest := B.Body(AReq.BodyJson).Build;
+    FWorker := TWorker.Create(Self);
+    FWorker.Start;
+  except
+    if FParser <> nil then
+    begin
+      FParser.Free;
+      FParser := nil;
+    end;
+    if FChannel <> nil then
+    begin
+      FChannel.Free;
+      FChannel := nil;
+    end;
+    FLock := nil;
+    FHttpCancel := nil;
+    FRequest := nil;
+    raise;
+  end;
 end;
 
 procedure TWireStream.PushMsg(const AMsg: TTWireMsg);
@@ -504,8 +595,6 @@ function TWireStream.NextEvent(out AEvent: TWireSSEEvent): Boolean;
 var
   LMsg: TTWireMsg;
 begin
-  { 终态幂等：EOF 后再调返回 False，错误后再调重抛同一错误——
-    消费方误用不挂起。终态仅消费方线程写，无需加锁 }
   if FDone then
   begin
     if FLastErrCode <> aecNone then
@@ -514,11 +603,16 @@ begin
   end;
   while True do
   begin
-    if FChannel.ReceiveTimeout(LMsg, CWaitSliceNs) then
+    if (FChannel <> nil) and FChannel.ReceiveTimeout(LMsg, CWaitSliceNs) then
     begin
       case LMsg.Kind of
         wmkSSE:
           begin
+            if GetCancelled then
+            begin
+              FDone := True;
+              Exit(False);
+            end;
             AEvent := LMsg.Event;
             Exit(True);
           end;
@@ -558,11 +652,12 @@ begin
     begin
       FDone := True;
       FLastErrCode := aecTimeout;
-      FLastErrMsg := 'http transport: no stream data for ' +
+      FLastErrMsg := 'wire: no stream data for ' +
         IntToStr(FReadIdleMs) + 'ms (read idle timeout)';
       if FHttpCancel <> nil then
         FHttpCancel.Cancel;
-      FChannel.Close;                { 唤醒阻塞中的 ReceiveTimeout }
+      if FChannel <> nil then
+        FChannel.Close;
       raise EAgentError.CreateLocal(FLastErrCode, FLastErrMsg);
     end;
   end;
@@ -570,20 +665,31 @@ end;
 
 procedure TWireStream.Cancel;
 begin
+  if FLock = nil then
+  begin
+    FCancelled := True;
+    if FHttpCancel <> nil then
+      FHttpCancel.Cancel;
+    if FChannel <> nil then
+      FChannel.Close;
+    Exit;
+  end;
   FLock.Acquire;
   try
     FCancelled := True;
   finally
     FLock.Release;
   end;
-  { 硬中断：worker 在途 Send 的 mid-IO 轮询随即抛 hekCanceled（W2）}
   if FHttpCancel <> nil then
     FHttpCancel.Cancel;
-  FChannel.Close;                    { 唤醒阻塞中的 ReceiveTimeout }
+  if FChannel <> nil then
+    FChannel.Close;
 end;
 
 function TWireStream.GetCancelled: Boolean;
 begin
+  if FLock = nil then
+    Exit(FCancelled);
   FLock.Acquire;
   try
     Result := FCancelled;
