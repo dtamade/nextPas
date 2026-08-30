@@ -27,8 +27,8 @@ type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FList: array of IVfs;
-    function FindStat(const APath: string; out AInfo: TStatInfo): Boolean;
-    function FindFsForPath(const APath: string; out ARemain: string; out AFs: IVfs): Boolean;
+    function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
+    function FindFsForPath(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
   public
     constructor Create(const AList: array of IVfs);
     function Exists(const APath: string): Boolean;
@@ -62,7 +62,7 @@ begin
   end;
 end;
 
-function TOverlayVfs.FindFsForPath(const APath: string; out ARemain: string; out AFs: IVfs): Boolean;
+function TOverlayVfs.FindFsForPath(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
 var
   I: Integer;
 begin
@@ -77,7 +77,7 @@ begin
   Result := False;
 end;
 
-function TOverlayVfs.FindStat(const APath: string; out AInfo: TStatInfo): Boolean;
+function TOverlayVfs.FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
 var
   I: Integer;
 begin
@@ -94,7 +94,7 @@ begin
   Result := False;
 end;
 
-function TOverlayVfs.Exists(const APath: string): Boolean;
+function TOverlayVfs.Exists(const APath: string): Boolean; inline;
 var
   I: Integer;
 begin
