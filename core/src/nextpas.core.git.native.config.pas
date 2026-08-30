@@ -42,6 +42,9 @@ function GitConfigGetBool(const AConfig: TGitConfig; const AKey: string; out AVa
 
 implementation
 
+uses
+  nextpas.core.git.native.util;
+
 function GitConfigPath(const AGitDir: string): string;
 begin
   Result := PathJoin2(AGitDir, 'config');
@@ -60,18 +63,6 @@ begin
   for I := 1 to Length(Result) do
     if (Result[I] >= 'A') and (Result[I] <= 'Z') then
       Result[I] := Chr(Ord(Result[I]) + 32);
-end;
-
-function TrimSpaces(const S: string): string;
-var
-  L, R: Integer;
-begin
-  L := 1;
-  R := Length(S);
-  while (L <= R) and (S[L] <= ' ') do Inc(L);
-  while (R >= L) and (S[R] <= ' ') do Dec(R);
-  if R < L then Exit('');
-  Result := Copy(S, L, R - L + 1);
 end;
 
 function StripInlineComment(const S: string): string;
@@ -100,7 +91,7 @@ begin
       Continue;
     end;
     if not InQuote and ((S[I] = '#') or (S[I] = ';')) then
-      Exit(TrimSpaces(Copy(S, 1, I - 1)));
+      Exit(GitTrimSpaces(Copy(S, 1, I - 1)));
   end;
   Result := S;
 end;
@@ -169,7 +160,7 @@ end;
 
 function NormalizeKey(const AKey: string): string;
 begin
-  Result := ToLowerAscii(TrimSpaces(AKey));
+  Result := ToLowerAscii(GitTrimSpaces(AKey));
 end;
 
 function FullKey(const ASection, ASub, AKey: string): string;
@@ -267,7 +258,7 @@ begin
   for I := 0 to High(Lines) do
   begin
     Line := Lines[I];
-    Trimmed := TrimSpaces(Line);
+    Trimmed := GitTrimSpaces(Line);
     if Trimmed = '' then Continue;
     if (Trimmed[1] = '#') or (Trimmed[1] = ';') then Continue;
     if (Trimmed[1] = '[') then
@@ -276,13 +267,13 @@ begin
       if P = 0 then
         raise EGitError.CreateFmt('config bad section header "%s"', [Line]);
       Line := Copy(Trimmed, 2, P - 2);
-      Line := TrimSpaces(Line);
+      Line := GitTrimSpaces(Line);
       if Line = '' then
         raise EGitError.CreateFmt('config empty section "%s"', [Trimmed]);
       if (Pos('"', Line) > 0) then
       begin
         EqPos := Pos('"', Line);
-        CurSec := TrimSpaces(Copy(Line, 1, EqPos - 1));
+        CurSec := GitTrimSpaces(Copy(Line, 1, EqPos - 1));
         CurSub := Copy(Line, EqPos + 1, MaxInt);
         EqPos := Pos('"', CurSub);
         if EqPos = 0 then
@@ -295,7 +286,7 @@ begin
         EqPos := Pos('.', Line);
         CurSec := Copy(Line, 1, EqPos - 1);
         CurSub := Copy(Line, EqPos + 1, MaxInt);
-        CurSec := TrimSpaces(CurSec);
+        CurSec := GitTrimSpaces(CurSec);
       end
       else
       begin
@@ -307,14 +298,14 @@ begin
     EqPos := Pos('=', Line);
     if EqPos = 0 then
     begin
-      K := TrimSpaces(Line);
+      K := GitTrimSpaces(Line);
       V := '';
     end
     else
     begin
-      K := TrimSpaces(Copy(Line, 1, EqPos - 1));
+      K := GitTrimSpaces(Copy(Line, 1, EqPos - 1));
       V := Copy(Line, EqPos + 1, MaxInt);
-      V := TrimSpaces(V);
+      V := GitTrimSpaces(V);
       V := StripInlineComment(V);
       V := UnescapeValue(V);
     end;
@@ -399,7 +390,7 @@ begin
     Result := False;
     Exit;
   end;
-  V := ToLowerAscii(TrimSpaces(V));
+  V := ToLowerAscii(GitTrimSpaces(V));
   if (V = 'true') or (V = 'yes') or (V = 'on') or (V = '1') then
   begin
     AValue := True;

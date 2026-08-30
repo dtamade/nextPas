@@ -1,6 +1,6 @@
 # nextpas.core.git 代码契约
 
-**模块路径**：`core/src/nextpas.core.git*.pas`（63 个源文件）
+**模块路径**：`core/src/nextpas.core.git*.pas`（66 个源文件）
 **层级**：L2（依赖 L0: base, text, fs；native 子家族另用 compress/hash/io L1 owner）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-08-29
@@ -132,9 +132,21 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 
 ```pascal
 IGitManager = interface
+  function Initialize: Boolean;
+  procedure Finalize;
   function OpenRepository(const APath: string): IGitRepository;
-  function IsGitRepository(const APath: string): Boolean;
-  procedure InitRepository(const APath: string; ABare: Boolean);
+  function CloneRepository(const AURL, ALocalPath: string): IGitRepository;
+  function InitRepository(const APath: string; ABare: Boolean = False): IGitRepository;
+  function IsRepository(const APath: string): Boolean;
+  function DiscoverRepository(const AStartPath: string): string;
+  function GetGlobalConfig(const AKey: string): string;
+  function SetGlobalConfig(const AKey, AValue: string): Boolean;
+  function Version: string;
+  procedure SetVerifySSL(AEnabled: Boolean);
+  procedure SetCredentialAcquireHandler(AHandler: TCredentialAcquireEvent);
+  procedure SetCertificateCheckHandler(AHandler: TCertificateCheckEvent);
+  function Initialized: Boolean;
+  function VerifySSL: Boolean;
 end;
 
 IGitRepository = interface
@@ -216,6 +228,6 @@ end;
 | `test_git` | Status/Head/LookupCommit/Init/IsGitRepository（libgit2 真库，20 用例） |
 | `test_git_bindings` | 静态声明系 ABI 黄金对照（5 用例，gcc 探针 sizeof/offsetof + 运行时版本实证） |
 | `test_git_native` | native 子家族对象层/refs/status/revwalk 等（零 libgit2） |
-| `test_git_pure_manager` | 纯门面 5 用例，零 libgit2（Init/StatusEmpty/StatusWithFile/HeadAndLookup/FactoryGbAutoCompat，经 `factory.NewGitManager(gbNative)`，C4 门禁：grep 零命中 + `fpc -va Loading libgit2` TODO 占位） |
+| `test_git_pure_manager` | 纯门面 5 用例，零 libgit2（Init/StatusEmpty/StatusWithFile/HeadAndLookup/FactoryGbAutoCompat，经 `factory.NewGitManager(gbNative)`，C4 门禁：grep 零命中 + `fpc -va Loading libgit2` 双重闭环） |
 
-门禁：`scripts/git-contract-check.sh` C4 已含纯编译产物 TODO 占位（`fpc -va Loading.*libgit2` / `nm -D` 验收）；`build/verify_local.sh` 暂未聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准，Phase 4 仅文档与门禁收敛。
+门禁：`scripts/git-contract-check.sh` C4 已闭环（`fpc -va Loading.*libgit2` 实检 + `grep` 零命中）；`build/verify_local.sh` 后续聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准。

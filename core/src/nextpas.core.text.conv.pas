@@ -52,6 +52,9 @@ function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
 function SameText(const A, B: string): Boolean; inline;
 
+{** 2-digit zero pad (0..99 → "00".."99"), inline Chr path, zero SysUtils. *}
+function Pad2(const AValue: Integer): string; inline;
+
 {** Returns the position of the last occurrence of any character from ADelimiters in S.
     Returns 0 if none of the characters are found. }
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;
@@ -443,6 +446,14 @@ begin
     if ToLower(Byte(A[I])) <> ToLower(Byte(B[I])) then
       Exit(False);
   Result := True;
+end;
+
+function Pad2(const AValue: Integer): string; inline;
+begin
+  if AValue < 10 then
+    Result := '0' + Chr(Ord('0') + AValue)
+  else
+    Result := Chr(Ord('0') + AValue div 10) + Chr(Ord('0') + AValue mod 10);
 end;
 
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;

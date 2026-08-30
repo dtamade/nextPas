@@ -571,261 +571,261 @@ function GitBisectFind(const AGitDir: string; const AGoodRev, ABadRev: string; A
 
 implementation
 
-function GitOidFromHex(const AHex: string): TGitOid;
+function GitOidFromHex(const AHex: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.base.GitOidFromHex(AHex);
 end;
 
-function GitOidToHex(const AOid: TGitOid): string;
+function GitOidToHex(const AOid: TGitOid): string; inline;
 begin
   Result := nextpas.core.git.native.base.GitOidToHex(AOid);
 end;
 
-function GitOidIsValidHex(const AHex: string): Boolean;
+function GitOidIsValidHex(const AHex: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.base.GitOidIsValidHex(AHex);
 end;
 
-function GitOidSame(const AA, AB: TGitOid): Boolean;
+function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 begin
   Result := nextpas.core.git.native.base.GitOidSame(AA, AB);
 end;
 
-function GitKindToString(AKind: TGitObjectKind): string;
+function GitKindToString(AKind: TGitObjectKind): string; inline;
 begin
   Result := nextpas.core.git.native.base.GitKindToString(AKind);
 end;
 
-function GitKindFromString(const AName: string): TGitObjectKind;
+function GitKindFromString(const AName: string): TGitObjectKind; inline;
 begin
   Result := nextpas.core.git.native.base.GitKindFromString(AName);
 end;
 
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
+function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 begin
   Result := nextpas.core.git.native.base.GitKindFromMode(AMode);
 end;
 
-function GitZlibAdler32(const AData: TBytes): UInt32;
+function GitZlibAdler32(const AData: TBytes): UInt32; inline;
 begin
   Result := nextpas.core.git.native.zlib.GitZlibAdler32(AData);
 end;
 
-function GitZlibCompress(const AData: TBytes): TBytes;
+function GitZlibCompress(const AData: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.git.native.zlib.GitZlibCompress(AData);
 end;
 
 function GitZlibDecompress(const AData: TBytes; AStart: SizeUInt;
-  out AEndPos: SizeUInt): TBytes;
+  out AEndPos: SizeUInt): TBytes; inline;
 begin
   Result := nextpas.core.git.native.zlib.GitZlibDecompress(
     AData, AStart, AEndPos);
 end;
 
-function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes;
+function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
 begin
   Result := nextpas.core.git.native.loose.GitObjectHeader(AKind, ASize);
 end;
 
 function GitHashObject(AKind: TGitObjectKind;
-  const AData: TBytes): TGitOid;
+  const AData: TBytes): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.loose.GitHashObject(AKind, AData);
 end;
 
-function GitLoosePath(const AGitDir: string; const AOid: TGitOid): string;
+function GitLoosePath(const AGitDir: string; const AOid: TGitOid): string; inline;
 begin
   Result := nextpas.core.git.native.loose.GitLoosePath(AGitDir, AOid);
 end;
 
-function GitLooseExists(const AGitDir: string; const AOid: TGitOid): Boolean;
+function GitLooseExists(const AGitDir: string; const AOid: TGitOid): Boolean; inline;
 begin
   Result := nextpas.core.git.native.loose.GitLooseExists(AGitDir, AOid);
 end;
 
 function GitLooseWrite(const AGitDir: string; AKind: TGitObjectKind;
-  const AData: TBytes): TGitOid;
+  const AData: TBytes): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.loose.GitLooseWrite(AGitDir, AKind, AData);
 end;
 
 function GitLooseRead(const AGitDir: string; const AOid: TGitOid;
-  out AKind: TGitObjectKind): TBytes;
+  out AKind: TGitObjectKind): TBytes; inline;
 begin
   Result := nextpas.core.git.native.loose.GitLooseRead(AGitDir, AOid, AKind);
 end;
 
-function GitApplyDelta(const ABase, ADelta: TBytes): TBytes;
+function GitApplyDelta(const ABase, ADelta: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.git.native.pack.GitApplyDelta(ABase, ADelta);
 end;
 
-function IsGitDirShape(const APath: string): Boolean;
+function IsGitDirShape(const APath: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.refs.IsGitDirShape(APath);
 end;
 
 function GitTryDiscoverGitDir(const AStartDir: string;
-  out AGitDir: string): Boolean;
+  out AGitDir: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.refs.GitTryDiscoverGitDir(
     AStartDir, AGitDir);
 end;
 
-function GitDiscoverGitDir(const AStartDir: string): string;
+function GitDiscoverGitDir(const AStartDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.refs.GitDiscoverGitDir(AStartDir);
 end;
 
-function GitHeadRefName(const AGitDir: string): string;
+function GitHeadRefName(const AGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.refs.GitHeadRefName(AGitDir);
 end;
 
-function GitResolveHead(const AGitDir: string): TGitOid;
+function GitResolveHead(const AGitDir: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.refs.GitResolveHead(AGitDir);
 end;
 
 function GitResolveRef(const AGitDir: string;
-  const ARefName: string): TGitOid;
+  const ARefName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.refs.GitResolveRef(AGitDir, ARefName);
 end;
 
-function GitParseTree(const AData: TBytes): TGitTreeEntryArray;
+function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
 begin
   Result := nextpas.core.git.native.objmodel.GitParseTree(AData);
 end;
 
-function GitParseSignature(const ALine: string): TGitSignature;
+function GitParseSignature(const ALine: string): TGitSignature; inline;
 begin
   Result := nextpas.core.git.native.objmodel.GitParseSignature(ALine);
 end;
 
-function GitParseCommit(const AData: TBytes): TGitCommitInfo;
+function GitParseCommit(const AData: TBytes): TGitCommitInfo; inline;
 begin
   Result := nextpas.core.git.native.objmodel.GitParseCommit(AData);
 end;
 
-function GitParseTag(const AData: TBytes): TGitTagInfo;
+function GitParseTag(const AData: TBytes): TGitTagInfo; inline;
 begin
   Result := nextpas.core.git.native.objmodel.GitParseTag(AData);
 end;
 
-procedure GitSortTreeEntries(var AEntries: TGitTreeEntryArray);
+procedure GitSortTreeEntries(var AEntries: TGitTreeEntryArray); inline;
 begin
   nextpas.core.git.native.write.GitSortTreeEntries(AEntries);
 end;
 
-function GitEntryCompare(const AA, AB: TGitTreeEntry): Integer;
+function GitEntryCompare(const AA, AB: TGitTreeEntry): Integer; inline;
 begin
   Result := nextpas.core.git.native.write.GitEntryCompare(AA, AB);
 end;
 
-function GitModeToString(AMode: Cardinal): string;
+function GitModeToString(AMode: Cardinal): string; inline;
 begin
   Result := nextpas.core.git.native.write.GitModeToString(AMode);
 end;
 
-function GitSerializeTree(const AEntries: TGitTreeEntryArray): TBytes;
+function GitSerializeTree(const AEntries: TGitTreeEntryArray): TBytes; inline;
 begin
   Result := nextpas.core.git.native.write.GitSerializeTree(AEntries);
 end;
 
 function GitWriteBlob(const AGitDir: string;
-  const AContent: TBytes): TGitOid;
+  const AContent: TBytes): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.write.GitWriteBlob(AGitDir, AContent);
 end;
 
 function GitWriteTree(const AGitDir: string;
-  var AEntries: TGitTreeEntryArray): TGitOid;
+  var AEntries: TGitTreeEntryArray): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.write.GitWriteTree(AGitDir, AEntries);
 end;
 
-function GitBuildCommitBytes(const ABuilder: TGitCommitBuilder): TBytes;
+function GitBuildCommitBytes(const ABuilder: TGitCommitBuilder): TBytes; inline;
 begin
   Result := nextpas.core.git.native.write.GitBuildCommitBytes(ABuilder);
 end;
 
 function GitWriteCommit(const AGitDir: string;
-  const ABuilder: TGitCommitBuilder): TGitOid;
+  const ABuilder: TGitCommitBuilder): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.write.GitWriteCommit(AGitDir, ABuilder);
 end;
 
-function GitBuildTagBytes(const ABuilder: TGitTagBuilder): TBytes;
+function GitBuildTagBytes(const ABuilder: TGitTagBuilder): TBytes; inline;
 begin
   Result := nextpas.core.git.native.write.GitBuildTagBytes(ABuilder);
 end;
 
 function GitWriteTag(const AGitDir: string;
-  const ABuilder: TGitTagBuilder): TGitOid;
+  const ABuilder: TGitTagBuilder): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.write.GitWriteTag(AGitDir, ABuilder);
 end;
 
-function GitParseIndex(const AData: TBytes): TGitIndexFile;
+function GitParseIndex(const AData: TBytes): TGitIndexFile; inline;
 begin
   Result := nextpas.core.git.native.index.GitParseIndex(AData);
 end;
 
-function GitReadIndex(const AGitDir: string): TGitIndexFile;
+function GitReadIndex(const AGitDir: string): TGitIndexFile; inline;
 begin
   Result := nextpas.core.git.native.index.GitReadIndex(AGitDir);
 end;
 
-procedure GitSortIndexEntries(var AEntries: TGitIndexEntryArray);
+procedure GitSortIndexEntries(var AEntries: TGitIndexEntryArray); inline;
 begin
   nextpas.core.git.native.index.GitSortIndexEntries(AEntries);
 end;
 
 function GitSerializeIndex(
   const AEntries: array of TGitIndexEntry;
-  AVersion: Cardinal): TBytes;
+  AVersion: Cardinal): TBytes; inline;
 begin
   Result := nextpas.core.git.native.index.GitSerializeIndex(
     AEntries, AVersion);
 end;
 
 procedure GitWriteIndex(const AGitDir: string;
-  var AEntries: TGitIndexEntryArray; AVersion: Cardinal);
+  var AEntries: TGitIndexEntryArray; AVersion: Cardinal); inline;
 begin
   nextpas.core.git.native.index.GitWriteIndex(AGitDir, AEntries, AVersion);
 end;
 
-function GitParseCacheTree(const AData: TBytes): TGitCacheTree;
+function GitParseCacheTree(const AData: TBytes): TGitCacheTree; inline;
 begin
   Result := nextpas.core.git.native.cachetree.GitParseCacheTree(AData);
 end;
 
-function GitSerializeCacheTree(const ATree: TGitCacheTree): TBytes;
+function GitSerializeCacheTree(const ATree: TGitCacheTree): TBytes; inline;
 begin
   Result := nextpas.core.git.native.cachetree.GitSerializeCacheTree(ATree);
 end;
 
 function GitBuildIndexCacheTree(
-  const AEntries: array of TGitIndexEntry): TGitCacheTree;
+  const AEntries: array of TGitIndexEntry): TGitCacheTree; inline;
 begin
   Result := nextpas.core.git.native.index.GitBuildIndexCacheTree(AEntries);
 end;
 
-function GitSerializeIndexFile(const AFile: TGitIndexFile): TBytes;
+function GitSerializeIndexFile(const AFile: TGitIndexFile): TBytes; inline;
 begin
   Result := nextpas.core.git.native.index.GitSerializeIndexFile(AFile);
 end;
 
 procedure GitWriteIndexFile(const AGitDir: string;
-  var AFile: TGitIndexFile);
+  var AFile: TGitIndexFile); inline;
 begin
   nextpas.core.git.native.index.GitWriteIndexFile(AGitDir, AFile);
 end;
 
 function GitCollectStatus(const AGitDir, AWorkTree: string;
-  AIncludeUntracked: Boolean): TGitNativeStatusArray;
+  AIncludeUntracked: Boolean): TGitNativeStatusArray; inline;
 begin
   Result := nextpas.core.git.native.status.GitCollectStatus(
     AGitDir, AWorkTree, AIncludeUntracked);
@@ -833,7 +833,7 @@ end;
 
 function GitCollectStatus(const AGitDir, AWorkTree: string;
   AIncludeUntracked: Boolean; AFindRenames: Boolean;
-  ARenameThreshold: Integer): TGitNativeStatusArray;
+  ARenameThreshold: Integer): TGitNativeStatusArray; inline;
 begin
   Result := nextpas.core.git.native.status.GitCollectStatus(
     AGitDir, AWorkTree, AIncludeUntracked, AFindRenames, ARenameThreshold);
@@ -842,20 +842,20 @@ end;
 function GitCollectStatus(const AGitDir, AWorkTree: string;
   AIncludeUntracked: Boolean; AFindRenames: Boolean;
   ARenameThreshold: Integer; AFindCopies: Boolean;
-  ACopyThreshold: Integer): TGitNativeStatusArray;
+  ACopyThreshold: Integer): TGitNativeStatusArray; inline;
 begin
   Result := nextpas.core.git.native.status.GitCollectStatus(
     AGitDir, AWorkTree, AIncludeUntracked, AFindRenames, ARenameThreshold,
     AFindCopies, ACopyThreshold);
 end;
 
-function DefaultGitRevOptions: TGitRevOptions;
+function DefaultGitRevOptions: TGitRevOptions; inline;
 begin
   Result := nextpas.core.git.native.revwalk.DefaultGitRevOptions;
 end;
 
 function GitCollectCommits(ARepo: TNativeRepository;
-  const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray;
+  const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray; inline;
 begin
   Result := nextpas.core.git.native.revwalk.GitCollectCommits(
     ARepo, AStarts, AMaxCount);
@@ -863,7 +863,7 @@ end;
 
 function GitCollectCommits(ARepo: TNativeRepository;
   const AStarts, AHides: TGitOidArray;
-  const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitOidArray;
+  const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitOidArray; inline;
 begin
   Result := nextpas.core.git.native.revwalk.GitCollectCommits(
     ARepo, AStarts, AHides, AOptions, AMaxCount);
@@ -871,14 +871,14 @@ end;
 
 function GitCollectCommitsWithBoundary(ARepo: TNativeRepository;
   const AStarts, AHides: TGitOidArray;
-  const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitRevEntryArray;
+  const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitRevEntryArray; inline;
 begin
   Result := nextpas.core.git.native.revwalk.GitCollectCommitsWithBoundary(
     ARepo, AStarts, AHides, AOptions, AMaxCount);
 end;
 
 function GitTopoOrderCommits(ARepo: TNativeRepository;
-  const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray;
+  const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray; inline;
 begin
   Result := nextpas.core.git.native.revwalk.GitTopoOrderCommits(
     ARepo, AStarts, AMaxCount);
@@ -886,7 +886,7 @@ end;
 
 function GitTopoOrderCommits(ARepo: TNativeRepository;
   const AStarts, AHides: TGitOidArray;
-  const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitOidArray;
+  const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitOidArray; inline;
 begin
   Result := nextpas.core.git.native.revwalk.GitTopoOrderCommits(
     ARepo, AStarts, AHides, AOptions, AMaxCount);
@@ -894,1114 +894,1114 @@ end;
 
 function GitTopoOrderCommitsWithBoundary(ARepo: TNativeRepository;
   const AStarts, AHides: TGitOidArray;
-  const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitRevEntryArray;
+  const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitRevEntryArray; inline;
 begin
   Result := nextpas.core.git.native.revwalk.GitTopoOrderCommitsWithBoundary(
     ARepo, AStarts, AHides, AOptions, AMaxCount);
 end;
 
-function GitTryLoadCommitGraph(const AGitDir: string; out AGraph: TCommitGraph): Boolean;
+function GitTryLoadCommitGraph(const AGitDir: string; out AGraph: TCommitGraph): Boolean; inline;
 begin
   Result := nextpas.core.git.native.commitgraph.GitTryLoadCommitGraph(AGitDir, AGraph);
 end;
 
-function GitCommitGraphPath(const AGitDir: string): string;
+function GitCommitGraphPath(const AGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.commitgraph.GitCommitGraphPath(AGitDir);
 end;
 
-function GitVerifyCommitGraph(const AGitDir: string): Boolean;
+function GitVerifyCommitGraph(const AGitDir: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.commitgraph.GitVerifyCommitGraph(AGitDir);
 end;
 
-procedure InvalidateCommitGraphCache(const AGitDir: string);
+procedure InvalidateCommitGraphCache(const AGitDir: string); inline;
 begin
   nextpas.core.git.native.commitgraph.InvalidateCommitGraphCache(AGitDir);
 end;
 
-function GitBuildCommitGraph(const AGitDir: string; const AOids: TGitOidArray): TBytes;
+function GitBuildCommitGraph(const AGitDir: string; const AOids: TGitOidArray): TBytes; inline;
 begin
   Result := nextpas.core.git.native.commitgraph.GitBuildCommitGraph(AGitDir, AOids);
 end;
 
-function GitWriteCommitGraph(const AGitDir: string; const AOids: TGitOidArray): string;
+function GitWriteCommitGraph(const AGitDir: string; const AOids: TGitOidArray): string; inline;
 begin
   Result := nextpas.core.git.native.commitgraph.GitWriteCommitGraph(AGitDir, AOids);
 end;
 
-function GitWriteCommitGraphAll(const AGitDir: string): string;
+function GitWriteCommitGraphAll(const AGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.commitgraph.GitWriteCommitGraphAll(AGitDir);
 end;
 
-function GitReflogPath(const AGitDir, ARefName: string): string;
+function GitReflogPath(const AGitDir, ARefName: string): string; inline;
 begin
   Result := nextpas.core.git.native.reflog.GitReflogPath(AGitDir, ARefName);
 end;
 
-function GitReflogExists(const AGitDir, ARefName: string): Boolean;
+function GitReflogExists(const AGitDir, ARefName: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.reflog.GitReflogExists(AGitDir, ARefName);
 end;
 
-function GitParseReflogLine(const ALine: string): TGitReflogEntry;
+function GitParseReflogLine(const ALine: string): TGitReflogEntry; inline;
 begin
   Result := nextpas.core.git.native.reflog.GitParseReflogLine(ALine);
 end;
 
-function GitParseReflog(const AData: TBytes): TGitReflog;
+function GitParseReflog(const AData: TBytes): TGitReflog; inline;
 begin
   Result := nextpas.core.git.native.reflog.GitParseReflog(AData);
 end;
 
-function GitReadReflog(const AGitDir, ARefName: string): TGitReflog;
+function GitReadReflog(const AGitDir, ARefName: string): TGitReflog; inline;
 begin
   Result := nextpas.core.git.native.reflog.GitReadReflog(AGitDir, ARefName);
 end;
 
-function GitStashExists(const AGitDir: string): Boolean;
+function GitStashExists(const AGitDir: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashExists(AGitDir);
 end;
 
-function GitStashCount(const AGitDir: string): Integer;
+function GitStashCount(const AGitDir: string): Integer; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashCount(AGitDir);
 end;
 
-function GitStashList(const AGitDir: string): TGitStashArray;
+function GitStashList(const AGitDir: string): TGitStashArray; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashList(AGitDir);
 end;
 
-function GitStashAt(const AGitDir: string; AIndex: Integer): TGitStashEntry;
+function GitStashAt(const AGitDir: string; AIndex: Integer): TGitStashEntry; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashAt(AGitDir, AIndex);
 end;
 
 function GitStashPush(const AGitDir, AWorkTree: string; const AMessage: string;
-  AIncludeUntracked: Boolean): TGitOid;
+  AIncludeUntracked: Boolean): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashPush(AGitDir, AWorkTree, AMessage, AIncludeUntracked);
 end;
 
-function GitStashPush(const AGitDir, AWorkTree: string; const AMessage: string): TGitOid;
+function GitStashPush(const AGitDir, AWorkTree: string; const AMessage: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashPush(AGitDir, AWorkTree, AMessage);
 end;
 
-function GitStashApply(const AGitDir, AWorkTree: string; AIndex: Integer): TGitOid;
+function GitStashApply(const AGitDir, AWorkTree: string; AIndex: Integer): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashApply(AGitDir, AWorkTree, AIndex);
 end;
 
-function GitStashApply(const AGitDir, AWorkTree: string): TGitOid;
+function GitStashApply(const AGitDir, AWorkTree: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashApply(AGitDir, AWorkTree);
 end;
 
-procedure GitStashDrop(const AGitDir: string; AIndex: Integer);
+procedure GitStashDrop(const AGitDir: string; AIndex: Integer); inline;
 begin
   nextpas.core.git.native.stash.GitStashDrop(AGitDir, AIndex);
 end;
 
-procedure GitStashDrop(const AGitDir: string);
+procedure GitStashDrop(const AGitDir: string); inline;
 begin
   nextpas.core.git.native.stash.GitStashDrop(AGitDir);
 end;
 
-function GitStashPop(const AGitDir, AWorkTree: string; AIndex: Integer): TGitOid;
+function GitStashPop(const AGitDir, AWorkTree: string; AIndex: Integer): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashPop(AGitDir, AWorkTree, AIndex);
 end;
 
-function GitStashPop(const AGitDir, AWorkTree: string): TGitOid;
+function GitStashPop(const AGitDir, AWorkTree: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.stash.GitStashPop(AGitDir, AWorkTree);
 end;
 
-procedure GitStashClear(const AGitDir: string);
+procedure GitStashClear(const AGitDir: string); inline;
 begin
   nextpas.core.git.native.stash.GitStashClear(AGitDir);
 end;
 
-function GitNotesRefExists(const AGitDir, ARefName: string): Boolean;
+function GitNotesRefExists(const AGitDir, ARefName: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesRefExists(AGitDir, ARefName);
 end;
 
-function GitNotesRefExists(const AGitDir: string): Boolean;
+function GitNotesRefExists(const AGitDir: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesRefExists(AGitDir);
 end;
 
-function GitNotesList(const AGitDir, ARefName: string): TGitNoteArray;
+function GitNotesList(const AGitDir, ARefName: string): TGitNoteArray; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesList(AGitDir, ARefName);
 end;
 
-function GitNotesList(const AGitDir: string): TGitNoteArray;
+function GitNotesList(const AGitDir: string): TGitNoteArray; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesList(AGitDir);
 end;
 
-function GitNotesGet(const AGitDir: string; const ATarget: TGitOid): TBytes;
+function GitNotesGet(const AGitDir: string; const ATarget: TGitOid): TBytes; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesGet(AGitDir, ATarget);
 end;
 
-function GitNotesGet(const AGitDir, ARefName: string; const ATarget: TGitOid): TBytes;
+function GitNotesGet(const AGitDir, ARefName: string; const ATarget: TGitOid): TBytes; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesGet(AGitDir, ARefName, ATarget);
 end;
 
-function GitNotesGetStr(const AGitDir: string; const ATarget: TGitOid): string;
+function GitNotesGetStr(const AGitDir: string; const ATarget: TGitOid): string; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesGetStr(AGitDir, ATarget);
 end;
 
-function GitNotesGetStr(const AGitDir, ARefName: string; const ATarget: TGitOid): string;
+function GitNotesGetStr(const AGitDir, ARefName: string; const ATarget: TGitOid): string; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesGetStr(AGitDir, ARefName, ATarget);
 end;
 
-function GitNotesExists(const AGitDir: string; const ATarget: TGitOid): Boolean;
+function GitNotesExists(const AGitDir: string; const ATarget: TGitOid): Boolean; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesExists(AGitDir, ATarget);
 end;
 
-function GitNotesExists(const AGitDir, ARefName: string; const ATarget: TGitOid): Boolean;
+function GitNotesExists(const AGitDir, ARefName: string; const ATarget: TGitOid): Boolean; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesExists(AGitDir, ARefName, ATarget);
 end;
 
-function GitNotesAdd(const AGitDir: string; const ATarget: TGitOid; const ANote: string): TGitOid;
+function GitNotesAdd(const AGitDir: string; const ATarget: TGitOid; const ANote: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesAdd(AGitDir, ATarget, ANote);
 end;
 
-function GitNotesAdd(const AGitDir, ARefName: string; const ATarget: TGitOid; const ANote: string): TGitOid;
+function GitNotesAdd(const AGitDir, ARefName: string; const ATarget: TGitOid; const ANote: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesAdd(AGitDir, ARefName, ATarget, ANote);
 end;
 
-function GitNotesAddBytes(const AGitDir, ARefName: string; const ATarget: TGitOid; const AData: TBytes): TGitOid;
+function GitNotesAddBytes(const AGitDir, ARefName: string; const ATarget: TGitOid; const AData: TBytes): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesAddBytes(AGitDir, ARefName, ATarget, AData);
 end;
 
-function GitNotesRemove(const AGitDir, ARefName: string; const ATarget: TGitOid): Boolean;
+function GitNotesRemove(const AGitDir, ARefName: string; const ATarget: TGitOid): Boolean; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesRemove(AGitDir, ARefName, ATarget);
 end;
 
-function GitNotesRemove(const AGitDir: string; const ATarget: TGitOid): Boolean;
+function GitNotesRemove(const AGitDir: string; const ATarget: TGitOid): Boolean; inline;
 begin
   Result := nextpas.core.git.native.notes.GitNotesRemove(AGitDir, ATarget);
 end;
 
-function GitBranchList(const AGitDir: string): TGitBranchArray;
+function GitBranchList(const AGitDir: string): TGitBranchArray; inline;
 begin
   Result := nextpas.core.git.native.branch.GitBranchList(AGitDir);
 end;
 
-function GitBranchExists(const AGitDir, ABranchName: string): Boolean;
+function GitBranchExists(const AGitDir, ABranchName: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.branch.GitBranchExists(AGitDir, ABranchName);
 end;
 
-function GitBranchGetOid(const AGitDir, ABranchName: string): TGitOid;
+function GitBranchGetOid(const AGitDir, ABranchName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.branch.GitBranchGetOid(AGitDir, ABranchName);
 end;
 
-function GitBranchCurrent(const AGitDir: string): string;
+function GitBranchCurrent(const AGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.branch.GitBranchCurrent(AGitDir);
 end;
 
-function GitBranchIsDetached(const AGitDir: string): Boolean;
+function GitBranchIsDetached(const AGitDir: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.branch.GitBranchIsDetached(AGitDir);
 end;
 
-function GitBranchCreate(const AGitDir, ABranchName: string; const AOid: TGitOid): TGitOid;
+function GitBranchCreate(const AGitDir, ABranchName: string; const AOid: TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.branch.GitBranchCreate(AGitDir, ABranchName, AOid);
 end;
 
-function GitBranchCreateFromRef(const AGitDir, ABranchName, ARefName: string): TGitOid;
+function GitBranchCreateFromRef(const AGitDir, ABranchName, ARefName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.branch.GitBranchCreateFromRef(AGitDir, ABranchName, ARefName);
 end;
 
-procedure GitBranchDelete(const AGitDir, ABranchName: string);
+procedure GitBranchDelete(const AGitDir, ABranchName: string); inline;
 begin
   nextpas.core.git.native.branch.GitBranchDelete(AGitDir, ABranchName);
 end;
 
-function GitBranchRename(const AGitDir, AOldName, ANewName: string): TGitOid;
+function GitBranchRename(const AGitDir, AOldName, ANewName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.branch.GitBranchRename(AGitDir, AOldName, ANewName);
 end;
 
-function GitTagList(const AGitDir: string): TGitTagArray;
+function GitTagList(const AGitDir: string): TGitTagArray; inline;
 begin
   Result := nextpas.core.git.native.tag.GitTagList(AGitDir);
 end;
 
-function GitTagExists(const AGitDir, ATagName: string): Boolean;
+function GitTagExists(const AGitDir, ATagName: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.tag.GitTagExists(AGitDir, ATagName);
 end;
 
-function GitTagGetOid(const AGitDir, ATagName: string): TGitOid;
+function GitTagGetOid(const AGitDir, ATagName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.tag.GitTagGetOid(AGitDir, ATagName);
 end;
 
-function GitTagGetPeeled(const AGitDir, ATagName: string): TGitOid;
+function GitTagGetPeeled(const AGitDir, ATagName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.tag.GitTagGetPeeled(AGitDir, ATagName);
 end;
 
-function GitTagCreateLightweight(const AGitDir, ATagName: string; const ATargetOid: TGitOid): TGitOid;
+function GitTagCreateLightweight(const AGitDir, ATagName: string; const ATargetOid: TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.tag.GitTagCreateLightweight(AGitDir, ATagName, ATargetOid);
 end;
 
-function GitTagCreateAnnotated(const AGitDir, ATagName: string; const ATargetOid: TGitOid; const AMessage: string): TGitOid;
+function GitTagCreateAnnotated(const AGitDir, ATagName: string; const ATargetOid: TGitOid; const AMessage: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.tag.GitTagCreateAnnotated(AGitDir, ATagName, ATargetOid, AMessage);
 end;
 
-function GitTagCreateAnnotated(const AGitDir, ATagName: string; const ATargetOid: TGitOid; const AMessage, ATaggerName, ATaggerEmail: string): TGitOid;
+function GitTagCreateAnnotated(const AGitDir, ATagName: string; const ATargetOid: TGitOid; const AMessage, ATaggerName, ATaggerEmail: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.tag.GitTagCreateAnnotated(AGitDir, ATagName, ATargetOid, AMessage, ATaggerName, ATaggerEmail);
 end;
 
-procedure GitTagDelete(const AGitDir, ATagName: string);
+procedure GitTagDelete(const AGitDir, ATagName: string); inline;
 begin
   nextpas.core.git.native.tag.GitTagDelete(AGitDir, ATagName);
 end;
 
-function GitTagRename(const AGitDir, AOldName, ANewName: string): TGitOid;
+function GitTagRename(const AGitDir, AOldName, ANewName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.tag.GitTagRename(AGitDir, AOldName, ANewName);
 end;
 
-function GitLogList(const AGitDir: string; AMaxCount: Integer): TGitLogArray;
+function GitLogList(const AGitDir: string; AMaxCount: Integer): TGitLogArray; inline;
 begin
   Result := nextpas.core.git.native.log.GitLogList(AGitDir, AMaxCount);
 end;
 
-function GitLogList(const AGitDir, ARef: string; AMaxCount: Integer): TGitLogArray;
+function GitLogList(const AGitDir, ARef: string; AMaxCount: Integer): TGitLogArray; inline;
 begin
   Result := nextpas.core.git.native.log.GitLogList(AGitDir, ARef, AMaxCount);
 end;
 
-function GitLogOneline(const AGitDir: string; AMaxCount: Integer): TStringArray;
+function GitLogOneline(const AGitDir: string; AMaxCount: Integer): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.log.GitLogOneline(AGitDir, AMaxCount);
 end;
 
-function GitLogOneline(const AGitDir, ARef: string; AMaxCount: Integer): TStringArray;
+function GitLogOneline(const AGitDir, ARef: string; AMaxCount: Integer): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.log.GitLogOneline(AGitDir, ARef, AMaxCount);
 end;
 
-function GitLogFind(const AGitDir: string; const AOid: TGitOid): TGitLogEntry;
+function GitLogFind(const AGitDir: string; const AOid: TGitOid): TGitLogEntry; inline;
 begin
   Result := nextpas.core.git.native.log.GitLogFind(AGitDir, AOid);
 end;
 
-function GitLogFirstLine(const AMessage: string): string;
+function GitLogFirstLine(const AMessage: string): string; inline;
 begin
   Result := nextpas.core.git.native.log.GitLogFirstLine(AMessage);
 end;
 
-function GitDescribe(const AGitDir: string): string;
+function GitDescribe(const AGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.describe.GitDescribe(AGitDir);
 end;
 
-function GitDescribe(const AGitDir, ARef: string): string;
+function GitDescribe(const AGitDir, ARef: string): string; inline;
 begin
   Result := nextpas.core.git.native.describe.GitDescribe(AGitDir, ARef);
 end;
 
-function GitDescribeTags(const AGitDir: string): string;
+function GitDescribeTags(const AGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.describe.GitDescribeTags(AGitDir);
 end;
 
-function GitDescribeTags(const AGitDir, ARef: string): string;
+function GitDescribeTags(const AGitDir, ARef: string): string; inline;
 begin
   Result := nextpas.core.git.native.describe.GitDescribeTags(AGitDir, ARef);
 end;
 
-function GitDiffTrees(const AGitDir: string; const AOldTree, ANewTree: TGitOid): TGitDiffArray;
+function GitDiffTrees(const AGitDir: string; const AOldTree, ANewTree: TGitOid): TGitDiffArray; inline;
 begin
   Result := nextpas.core.git.native.diff.GitDiffTrees(AGitDir, AOldTree, ANewTree);
 end;
 
-function GitDiffCommits(const AGitDir: string; const AOldCommit, ANewCommit: TGitOid): TGitDiffArray;
+function GitDiffCommits(const AGitDir: string; const AOldCommit, ANewCommit: TGitOid): TGitDiffArray; inline;
 begin
   Result := nextpas.core.git.native.diff.GitDiffCommits(AGitDir, AOldCommit, ANewCommit);
 end;
 
-function GitDiffRefs(const AGitDir, AOldRef, ANewRef: string): TGitDiffArray;
+function GitDiffRefs(const AGitDir, AOldRef, ANewRef: string): TGitDiffArray; inline;
 begin
   Result := nextpas.core.git.native.diff.GitDiffRefs(AGitDir, AOldRef, ANewRef);
 end;
 
-function GitDiffNameStatus(const AGitDir: string; const AOldTree, ANewTree: TGitOid): TStringArray;
+function GitDiffNameStatus(const AGitDir: string; const AOldTree, ANewTree: TGitOid): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.diff.GitDiffNameStatus(AGitDir, AOldTree, ANewTree);
 end;
 
-function GitDiffStatSummary(const AGitDir: string; const AOldTree, ANewTree: TGitOid): string;
+function GitDiffStatSummary(const AGitDir: string; const AOldTree, ANewTree: TGitOid): string; inline;
 begin
   Result := nextpas.core.git.native.diff.GitDiffStatSummary(AGitDir, AOldTree, ANewTree);
 end;
 
-function GitBlame(const AGitDir, ARef, APath: string): TGitBlameArray;
+function GitBlame(const AGitDir, ARef, APath: string): TGitBlameArray; inline;
 begin
   Result := nextpas.core.git.native.blame.GitBlame(AGitDir, ARef, APath);
 end;
 
-function GitBlame(const AGitDir, APath: string): TGitBlameArray;
+function GitBlame(const AGitDir, APath: string): TGitBlameArray; inline;
 begin
   Result := nextpas.core.git.native.blame.GitBlame(AGitDir, APath);
 end;
 
-function GitMergeBase(const AGitDir, ARefA, ARefB: string): TGitOid;
+function GitMergeBase(const AGitDir, ARefA, ARefB: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.mergebase.GitMergeBase(AGitDir, ARefA, ARefB);
 end;
 
-function GitMergeBase(const AGitDir: string; const AOidA, AOidB: TGitOid): TGitOid;
+function GitMergeBase(const AGitDir: string; const AOidA, AOidB: TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.mergebase.GitMergeBase(AGitDir, AOidA, AOidB);
 end;
 
-function GitMergeBaseMany(const AGitDir: string; const AOids: array of TGitOid): TGitOid;
+function GitMergeBaseMany(const AGitDir: string; const AOids: array of TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.mergebase.GitMergeBaseMany(AGitDir, AOids);
 end;
 
-function GitShow(const AGitDir, ARef: string): TGitShow;
+function GitShow(const AGitDir, ARef: string): TGitShow; inline;
 begin
   Result := nextpas.core.git.native.show.GitShow(AGitDir, ARef);
 end;
 
-function GitShow(const AGitDir: string; const AOid: TGitOid): TGitShow;
+function GitShow(const AGitDir: string; const AOid: TGitOid): TGitShow; inline;
 begin
   Result := nextpas.core.git.native.show.GitShow(AGitDir, AOid);
 end;
 
-function GitShowText(const AGitDir, ARef: string): string;
+function GitShowText(const AGitDir, ARef: string): string; inline;
 begin
   Result := nextpas.core.git.native.show.GitShowText(AGitDir, ARef);
 end;
 
-function GitShowText(const AGitDir: string; const AOid: TGitOid): string;
+function GitShowText(const AGitDir: string; const AOid: TGitOid): string; inline;
 begin
   Result := nextpas.core.git.native.show.GitShowText(AGitDir, AOid);
 end;
 
-function GitShortlog(const AGitDir, ARef: string; AMaxCount: Integer): TGitShortlogArray;
+function GitShortlog(const AGitDir, ARef: string; AMaxCount: Integer): TGitShortlogArray; inline;
 begin
   Result := nextpas.core.git.native.shortlog.GitShortlog(AGitDir, ARef, AMaxCount);
 end;
 
-function GitShortlog(const AGitDir: string; AMaxCount: Integer): TGitShortlogArray;
+function GitShortlog(const AGitDir: string; AMaxCount: Integer): TGitShortlogArray; inline;
 begin
   Result := nextpas.core.git.native.shortlog.GitShortlog(AGitDir, AMaxCount);
 end;
 
-function GitShortlogText(const AGitDir, ARef: string; AMaxCount: Integer): string;
+function GitShortlogText(const AGitDir, ARef: string; AMaxCount: Integer): string; inline;
 begin
   Result := nextpas.core.git.native.shortlog.GitShortlogText(AGitDir, ARef, AMaxCount);
 end;
 
-function GitShortlogText(const AGitDir: string; AMaxCount: Integer): string;
+function GitShortlogText(const AGitDir: string; AMaxCount: Integer): string; inline;
 begin
   Result := nextpas.core.git.native.shortlog.GitShortlogText(AGitDir, AMaxCount);
 end;
 
-function GitCatFile(const AGitDir: string; const AOid: TGitOid): TGitCatFile;
+function GitCatFile(const AGitDir: string; const AOid: TGitOid): TGitCatFile; inline;
 begin
   Result := nextpas.core.git.native.catfile.GitCatFile(AGitDir, AOid);
 end;
 
-function GitCatFile(const AGitDir, ARev: string): TGitCatFile;
+function GitCatFile(const AGitDir, ARev: string): TGitCatFile; inline;
 begin
   Result := nextpas.core.git.native.catfile.GitCatFile(AGitDir, ARev);
 end;
 
-function GitCatFileType(const AGitDir: string; const AOid: TGitOid): string;
+function GitCatFileType(const AGitDir: string; const AOid: TGitOid): string; inline;
 begin
   Result := nextpas.core.git.native.catfile.GitCatFileType(AGitDir, AOid);
 end;
 
-function GitCatFileType(const AGitDir, ARev: string): string;
+function GitCatFileType(const AGitDir, ARev: string): string; inline;
 begin
   Result := nextpas.core.git.native.catfile.GitCatFileType(AGitDir, ARev);
 end;
 
-function GitCatFileSize(const AGitDir: string; const AOid: TGitOid): Integer;
+function GitCatFileSize(const AGitDir: string; const AOid: TGitOid): Integer; inline;
 begin
   Result := nextpas.core.git.native.catfile.GitCatFileSize(AGitDir, AOid);
 end;
 
-function GitCatFileSize(const AGitDir, ARev: string): Integer;
+function GitCatFileSize(const AGitDir, ARev: string): Integer; inline;
 begin
   Result := nextpas.core.git.native.catfile.GitCatFileSize(AGitDir, ARev);
 end;
 
-function GitCatFilePretty(const AGitDir: string; const AOid: TGitOid): string;
+function GitCatFilePretty(const AGitDir: string; const AOid: TGitOid): string; inline;
 begin
   Result := nextpas.core.git.native.catfile.GitCatFilePretty(AGitDir, AOid);
 end;
 
-function GitCatFilePretty(const AGitDir, ARev: string): string;
+function GitCatFilePretty(const AGitDir, ARev: string): string; inline;
 begin
   Result := nextpas.core.git.native.catfile.GitCatFilePretty(AGitDir, ARev);
 end;
 
-function DefaultGitLsFilesOptions: TGitLsFilesOptions;
+function DefaultGitLsFilesOptions: TGitLsFilesOptions; inline;
 begin
   Result := nextpas.core.git.native.lsfiles.DefaultGitLsFilesOptions;
 end;
 
-function GitLsFiles(const AGitDir: string): TStringArray;
+function GitLsFiles(const AGitDir: string): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.lsfiles.GitLsFiles(AGitDir);
 end;
 
-function GitLsFiles(const AGitDir: string; const AOptions: TGitLsFilesOptions): TStringArray;
+function GitLsFiles(const AGitDir: string; const AOptions: TGitLsFilesOptions): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.lsfiles.GitLsFiles(AGitDir, AOptions);
 end;
 
-function GitLsFilesDetailed(const AGitDir: string): TGitIndexEntryArray;
+function GitLsFilesDetailed(const AGitDir: string): TGitIndexEntryArray; inline;
 begin
   Result := nextpas.core.git.native.lsfiles.GitLsFilesDetailed(AGitDir);
 end;
 
-function GitLsFilesStage(const AGitDir: string): TStringArray;
+function GitLsFilesStage(const AGitDir: string): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.lsfiles.GitLsFilesStage(AGitDir);
 end;
 
-function GitCherryPick(const AGitDir, AWorkTree: string; const ATargetOid: TGitOid): TGitOid;
+function GitCherryPick(const AGitDir, AWorkTree: string; const ATargetOid: TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.cherrypick.GitCherryPick(AGitDir, AWorkTree, ATargetOid);
 end;
 
-function GitCherryPick(const AGitDir, AWorkTree, ATargetRef: string): TGitOid;
+function GitCherryPick(const AGitDir, AWorkTree, ATargetRef: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.cherrypick.GitCherryPick(AGitDir, AWorkTree, ATargetRef);
 end;
 
-function GitRevert(const AGitDir, AWorkTree: string; const ATargetOid: TGitOid): TGitOid;
+function GitRevert(const AGitDir, AWorkTree: string; const ATargetOid: TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.revert.GitRevert(AGitDir, AWorkTree, ATargetOid);
 end;
 
-function GitRevert(const AGitDir, AWorkTree, ATargetRef: string): TGitOid;
+function GitRevert(const AGitDir, AWorkTree, ATargetRef: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.revert.GitRevert(AGitDir, AWorkTree, ATargetRef);
 end;
 
-function GitArchive(const AGitDir: string; const ATreeOid: TGitOid): TBytes;
+function GitArchive(const AGitDir: string; const ATreeOid: TGitOid): TBytes; inline;
 begin
   Result := nextpas.core.git.native.archive.GitArchive(AGitDir, ATreeOid);
 end;
 
-function GitArchive(const AGitDir: string; const ACommitOid: TGitOid; APeelCommit: Boolean): TBytes;
+function GitArchive(const AGitDir: string; const ACommitOid: TGitOid; APeelCommit: Boolean): TBytes; inline;
 begin
   Result := nextpas.core.git.native.archive.GitArchive(AGitDir, ACommitOid, APeelCommit);
 end;
 
-function GitArchiveRef(const AGitDir, ARef: string): TBytes;
+function GitArchiveRef(const AGitDir, ARef: string): TBytes; inline;
 begin
   Result := nextpas.core.git.native.archive.GitArchiveRef(AGitDir, ARef);
 end;
 
-function GitArchiveToFile(const AGitDir, ARef, AOutPath: string): string;
+function GitArchiveToFile(const AGitDir, ARef, AOutPath: string): string; inline;
 begin
   Result := nextpas.core.git.native.archive.GitArchiveToFile(AGitDir, ARef, AOutPath);
 end;
 
-function GitParseGitModules(const AText: string): TGitSubmoduleArray;
+function GitParseGitModules(const AText: string): TGitSubmoduleArray; inline;
 begin
   Result := nextpas.core.git.native.submodule.GitParseGitModules(AText);
 end;
 
-function GitParseGitModules(const AData: TBytes): TGitSubmoduleArray;
+function GitParseGitModules(const AData: TBytes): TGitSubmoduleArray; inline;
 begin
   Result := nextpas.core.git.native.submodule.GitParseGitModules(AData);
 end;
 
-function GitListSubmodules(const AGitDir: string): TGitSubmoduleArray;
+function GitListSubmodules(const AGitDir: string): TGitSubmoduleArray; inline;
 begin
   Result := nextpas.core.git.native.submodule.GitListSubmodules(AGitDir);
 end;
 
-function GitListSubmodulesAtTree(const AGitDir: string; const ATreeOid: TGitOid): TGitSubmoduleArray;
+function GitListSubmodulesAtTree(const AGitDir: string; const ATreeOid: TGitOid): TGitSubmoduleArray; inline;
 begin
   Result := nextpas.core.git.native.submodule.GitListSubmodulesAtTree(AGitDir, ATreeOid);
 end;
 
-function GitListSubmodulesAtRef(const AGitDir, ARef: string): TGitSubmoduleArray;
+function GitListSubmodulesAtRef(const AGitDir, ARef: string): TGitSubmoduleArray; inline;
 begin
   Result := nextpas.core.git.native.submodule.GitListSubmodulesAtRef(AGitDir, ARef);
 end;
 
-function GitSubmoduleAtPath(const AGitDir, APath: string): TGitSubmodule;
+function GitSubmoduleAtPath(const AGitDir, APath: string): TGitSubmodule; inline;
 begin
   Result := nextpas.core.git.native.submodule.GitSubmoduleAtPath(AGitDir, APath);
 end;
 
-function GitParseMailmap(const AText: string): TGitMailmap;
+function GitParseMailmap(const AText: string): TGitMailmap; inline;
 begin
   Result := nextpas.core.git.native.mailmap.GitParseMailmap(AText);
 end;
 
-function GitParseMailmap(const AData: TBytes): TGitMailmap;
+function GitParseMailmap(const AData: TBytes): TGitMailmap; inline;
 begin
   Result := nextpas.core.git.native.mailmap.GitParseMailmap(AData);
 end;
 
-function GitLoadMailmap(const AGitDir: string): TGitMailmap;
+function GitLoadMailmap(const AGitDir: string): TGitMailmap; inline;
 begin
   Result := nextpas.core.git.native.mailmap.GitLoadMailmap(AGitDir);
 end;
 
-function GitMailmapResolve(const AMailmap: TGitMailmap; const AName, AEmail: string; out AOutName, AOutEmail: string): Boolean;
+function GitMailmapResolve(const AMailmap: TGitMailmap; const AName, AEmail: string; out AOutName, AOutEmail: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.mailmap.GitMailmapResolve(AMailmap, AName, AEmail, AOutName, AOutEmail);
 end;
 
-function GitMailmapResolveName(const AMailmap: TGitMailmap; const AName, AEmail: string): string;
+function GitMailmapResolveName(const AMailmap: TGitMailmap; const AName, AEmail: string): string; inline;
 begin
   Result := nextpas.core.git.native.mailmap.GitMailmapResolveName(AMailmap, AName, AEmail);
 end;
 
-function GitMailmapResolveEmail(const AMailmap: TGitMailmap; const AName, AEmail: string): string;
+function GitMailmapResolveEmail(const AMailmap: TGitMailmap; const AName, AEmail: string): string; inline;
 begin
   Result := nextpas.core.git.native.mailmap.GitMailmapResolveEmail(AMailmap, AName, AEmail);
 end;
 
-function GitParseTrailers(const AMessage: string): TGitTrailerArray;
+function GitParseTrailers(const AMessage: string): TGitTrailerArray; inline;
 begin
   Result := nextpas.core.git.native.trailer.GitParseTrailers(AMessage);
 end;
 
-function GitFindTrailer(const ATrailers: TGitTrailerArray; const AKey: string): string;
+function GitFindTrailer(const ATrailers: TGitTrailerArray; const AKey: string): string; inline;
 begin
   Result := nextpas.core.git.native.trailer.GitFindTrailer(ATrailers, AKey);
 end;
 
-function GitHasTrailer(const ATrailers: TGitTrailerArray; const AKey: string): Boolean;
+function GitHasTrailer(const ATrailers: TGitTrailerArray; const AKey: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.trailer.GitHasTrailer(ATrailers, AKey);
 end;
 
-function GitFormatTrailer(const AKey, AValue: string): string;
+function GitFormatTrailer(const AKey, AValue: string): string; inline;
 begin
   Result := nextpas.core.git.native.trailer.GitFormatTrailer(AKey, AValue);
 end;
 
-function GitFormatTrailers(const ATrailers: TGitTrailerArray): string;
+function GitFormatTrailers(const ATrailers: TGitTrailerArray): string; inline;
 begin
   Result := nextpas.core.git.native.trailer.GitFormatTrailers(ATrailers);
 end;
 
-function GitAppendTrailer(const AMessage, AKey, AValue: string): string;
+function GitAppendTrailer(const AMessage, AKey, AValue: string): string; inline;
 begin
   Result := nextpas.core.git.native.trailer.GitAppendTrailer(AMessage, AKey, AValue);
 end;
 
-function GitParseAttributes(const AText: string): TGitAttrEntries;
+function GitParseAttributes(const AText: string): TGitAttrEntries; inline;
 begin
   Result := nextpas.core.git.native.attributes.GitParseAttributes(AText);
 end;
 
-function GitParseAttributes(const AData: TBytes): TGitAttrEntries;
+function GitParseAttributes(const AData: TBytes): TGitAttrEntries; inline;
 begin
   Result := nextpas.core.git.native.attributes.GitParseAttributes(AData);
 end;
 
-function GitLoadAttributes(const AGitDir: string): TGitAttrEntries;
+function GitLoadAttributes(const AGitDir: string): TGitAttrEntries; inline;
 begin
   Result := nextpas.core.git.native.attributes.GitLoadAttributes(AGitDir);
 end;
 
-function GitAttributesFor(const AGitDir, APath: string): TGitAttrArray;
+function GitAttributesFor(const AGitDir, APath: string): TGitAttrArray; inline;
 begin
   Result := nextpas.core.git.native.attributes.GitAttributesFor(AGitDir, APath);
 end;
 
-function GitAttributesFor(const AEntries: TGitAttrEntries; const APath: string): TGitAttrArray;
+function GitAttributesFor(const AEntries: TGitAttrEntries; const APath: string): TGitAttrArray; inline;
 begin
   Result := nextpas.core.git.native.attributes.GitAttributesFor(AEntries, APath);
 end;
 
-function GitAttributeGet(const AGitDir, APath, AName: string): string;
+function GitAttributeGet(const AGitDir, APath, AName: string): string; inline;
 begin
   Result := nextpas.core.git.native.attributes.GitAttributeGet(AGitDir, APath, AName);
 end;
 
-function GitAttributeGet(const AEntries: TGitAttrEntries; const APath, AName: string): string;
+function GitAttributeGet(const AEntries: TGitAttrEntries; const APath, AName: string): string; inline;
 begin
   Result := nextpas.core.git.native.attributes.GitAttributeGet(AEntries, APath, AName);
 end;
 
-function GitCommonDir(const AGitDir: string): string;
+function GitCommonDir(const AGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.worktree.GitCommonDir(AGitDir);
 end;
 
-function GitIsWorktree(const AGitDir: string): Boolean;
+function GitIsWorktree(const AGitDir: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.worktree.GitIsWorktree(AGitDir);
 end;
 
-function GitWorktreeList(const AGitDir: string): TGitWorktreeArray;
+function GitWorktreeList(const AGitDir: string): TGitWorktreeArray; inline;
 begin
   Result := nextpas.core.git.native.worktree.GitWorktreeList(AGitDir);
 end;
 
-function GitWorktreeCount(const AGitDir: string): Integer;
+function GitWorktreeCount(const AGitDir: string): Integer; inline;
 begin
   Result := nextpas.core.git.native.worktree.GitWorktreeCount(AGitDir);
 end;
 
-function GitWorktreeAdd(const AGitDir, AWorkTreePath, ABranchName: string): TGitWorktree;
+function GitWorktreeAdd(const AGitDir, AWorkTreePath, ABranchName: string): TGitWorktree; inline;
 begin
   Result := nextpas.core.git.native.worktree.GitWorktreeAdd(AGitDir, AWorkTreePath, ABranchName);
 end;
 
-function GitWorktreeAddDetached(const AGitDir, AWorkTreePath: string; const AOid: TGitOid): TGitWorktree;
+function GitWorktreeAddDetached(const AGitDir, AWorkTreePath: string; const AOid: TGitOid): TGitWorktree; inline;
 begin
   Result := nextpas.core.git.native.worktree.GitWorktreeAddDetached(AGitDir, AWorkTreePath, AOid);
 end;
 
-procedure GitWorktreeRemove(const AGitDir, AWorkTreePath: string);
+procedure GitWorktreeRemove(const AGitDir, AWorkTreePath: string); inline;
 begin
   nextpas.core.git.native.worktree.GitWorktreeRemove(AGitDir, AWorkTreePath);
 end;
 
-procedure GitWorktreeRemove(const AGitDir, AWorkTreePath: string; AForce: Boolean);
+procedure GitWorktreeRemove(const AGitDir, AWorkTreePath: string; AForce: Boolean); inline;
 begin
   nextpas.core.git.native.worktree.GitWorktreeRemove(AGitDir, AWorkTreePath, AForce);
 end;
 
-function GitConfigPath(const AGitDir: string): string;
+function GitConfigPath(const AGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.config.GitConfigPath(AGitDir);
 end;
 
-function GitConfigExists(const AGitDir: string): Boolean;
+function GitConfigExists(const AGitDir: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.config.GitConfigExists(AGitDir);
 end;
 
-function GitParseConfig(const AData: TBytes): TGitConfig;
+function GitParseConfig(const AData: TBytes): TGitConfig; inline;
 begin
   Result := nextpas.core.git.native.config.GitParseConfig(AData);
 end;
 
-function GitReadConfig(const AGitDir: string): TGitConfig;
+function GitReadConfig(const AGitDir: string): TGitConfig; inline;
 begin
   Result := nextpas.core.git.native.config.GitReadConfig(AGitDir);
 end;
 
-function GitConfigHas(const AConfig: TGitConfig; const AKey: string): Boolean;
+function GitConfigHas(const AConfig: TGitConfig; const AKey: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.config.GitConfigHas(AConfig, AKey);
 end;
 
-function GitConfigGet(const AConfig: TGitConfig; const AKey: string): string;
+function GitConfigGet(const AConfig: TGitConfig; const AKey: string): string; inline;
 begin
   Result := nextpas.core.git.native.config.GitConfigGet(AConfig, AKey);
 end;
 
-function GitConfigGetAll(const AConfig: TGitConfig; const AKey: string): TStringArray;
+function GitConfigGetAll(const AConfig: TGitConfig; const AKey: string): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.config.GitConfigGetAll(AConfig, AKey);
 end;
 
-function GitConfigGetBool(const AConfig: TGitConfig; const AKey: string; out AValue: Boolean): Boolean;
+function GitConfigGetBool(const AConfig: TGitConfig; const AKey: string; out AValue: Boolean): Boolean; inline;
 begin
   Result := nextpas.core.git.native.config.GitConfigGetBool(AConfig, AKey, AValue);
 end;
 
-function GitPktEncode(const AData: TBytes): TBytes;
+function GitPktEncode(const AData: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktEncode(AData);
 end;
 
-function GitPktEncodeStr(const AText: string): TBytes;
+function GitPktEncodeStr(const AText: string): TBytes; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktEncodeStr(AText);
 end;
 
-function GitPktEncodeFlush: TBytes;
+function GitPktEncodeFlush: TBytes; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktEncodeFlush;
 end;
 
-function GitPktEncodeDelim: TBytes;
+function GitPktEncodeDelim: TBytes; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktEncodeDelim;
 end;
 
-function GitPktDecode(const AFrame: TBytes; out APkt: TGitPkt): Boolean;
+function GitPktDecode(const AFrame: TBytes; out APkt: TGitPkt): Boolean; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktDecode(AFrame, APkt);
 end;
 
-function GitPktIsFlush(const AFrame: TBytes): Boolean;
+function GitPktIsFlush(const AFrame: TBytes): Boolean; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktIsFlush(AFrame);
 end;
 
-function GitPktIsDelim(const AFrame: TBytes): Boolean;
+function GitPktIsDelim(const AFrame: TBytes): Boolean; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktIsDelim(AFrame);
 end;
 
-function GitPktScan(const AStream: TBytes): TGitPktArray;
+function GitPktScan(const AStream: TBytes): TGitPktArray; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktScan(AStream);
 end;
 
-function GitPktJoin(const APkts: TGitPktArray): TBytes;
+function GitPktJoin(const APkts: TGitPktArray): TBytes; inline;
 begin
   Result := nextpas.core.git.native.pktline.GitPktJoin(APkts);
 end;
 
-function GitRemoteList(const AGitDir: string): TGitRemoteArray;
+function GitRemoteList(const AGitDir: string): TGitRemoteArray; inline;
 begin
   Result := nextpas.core.git.native.remote.GitRemoteList(AGitDir);
 end;
 
-function GitRemoteFind(const AGitDir: string; const AName: string; out ARemote: TGitRemote): Boolean;
+function GitRemoteFind(const AGitDir: string; const AName: string; out ARemote: TGitRemote): Boolean; inline;
 begin
   Result := nextpas.core.git.native.remote.GitRemoteFind(AGitDir, AName, ARemote);
 end;
 
-function GitRemoteCount(const AGitDir: string): Integer;
+function GitRemoteCount(const AGitDir: string): Integer; inline;
 begin
   Result := nextpas.core.git.native.remote.GitRemoteCount(AGitDir);
 end;
 
-function GitRemoteUrl(const AGitDir: string; const AName: string): string;
+function GitRemoteUrl(const AGitDir: string; const AName: string): string; inline;
 begin
   Result := nextpas.core.git.native.remote.GitRemoteUrl(AGitDir, AName);
 end;
 
-function GitParseAdvertise(const AStream: TBytes): TGitAdvertised;
+function GitParseAdvertise(const AStream: TBytes): TGitAdvertised; inline;
 begin
   Result := nextpas.core.git.native.advertise.GitParseAdvertise(AStream);
 end;
 
-function GitParseAdvertisedRefs(const AStream: TBytes): TGitAdvertisedRefArray;
+function GitParseAdvertisedRefs(const AStream: TBytes): TGitAdvertisedRefArray; inline;
 begin
   Result := nextpas.core.git.native.advertise.GitParseAdvertisedRefs(AStream);
 end;
 
-function GitAdvertiseFind(const AAdv: TGitAdvertised; const AName: string; out ARef: TGitAdvertisedRef): Boolean;
+function GitAdvertiseFind(const AAdv: TGitAdvertised; const AName: string; out ARef: TGitAdvertisedRef): Boolean; inline;
 begin
   Result := nextpas.core.git.native.advertise.GitAdvertiseFind(AAdv, AName, ARef);
 end;
 
-function GitHasCapability(const AAdv: TGitAdvertised; const ACap: string): Boolean;
+function GitHasCapability(const AAdv: TGitAdvertised; const ACap: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.advertise.GitHasCapability(AAdv, ACap);
 end;
 
-function GitEncodeWant(const AOid: TGitOid; const ACaps: TStringArray): TBytes;
+function GitEncodeWant(const AOid: TGitOid; const ACaps: TStringArray): TBytes; inline;
 begin
   Result := nextpas.core.git.native.negotiate.GitEncodeWant(AOid, ACaps);
 end;
 
-function GitEncodeWantSimple(const AOid: TGitOid): TBytes;
+function GitEncodeWantSimple(const AOid: TGitOid): TBytes; inline;
 begin
   Result := nextpas.core.git.native.negotiate.GitEncodeWantSimple(AOid);
 end;
 
-function GitEncodeWants(const AOids: array of TGitOid; const ACaps: TStringArray): TBytes;
+function GitEncodeWants(const AOids: array of TGitOid; const ACaps: TStringArray): TBytes; inline;
 begin
   Result := nextpas.core.git.native.negotiate.GitEncodeWants(AOids, ACaps);
 end;
 
-function GitEncodeHave(const AOid: TGitOid): TBytes;
+function GitEncodeHave(const AOid: TGitOid): TBytes; inline;
 begin
   Result := nextpas.core.git.native.negotiate.GitEncodeHave(AOid);
 end;
 
-function GitEncodeDone: TBytes;
+function GitEncodeDone: TBytes; inline;
 begin
   Result := nextpas.core.git.native.negotiate.GitEncodeDone;
 end;
 
-function GitParseAck(const AData: TBytes; out AAck: TGitAck): Boolean;
+function GitParseAck(const AData: TBytes; out AAck: TGitAck): Boolean; inline;
 begin
   Result := nextpas.core.git.native.negotiate.GitParseAck(AData, AAck);
 end;
 
-function GitParseAckLine(const ALine: string; out AAck: TGitAck): Boolean;
+function GitParseAckLine(const ALine: string; out AAck: TGitAck): Boolean; inline;
 begin
   Result := nextpas.core.git.native.negotiate.GitParseAckLine(ALine, AAck);
 end;
 
-function GitParseAckStream(const AStream: TBytes): TGitAckArray;
+function GitParseAckStream(const AStream: TBytes): TGitAckArray; inline;
 begin
   Result := nextpas.core.git.native.negotiate.GitParseAckStream(AStream);
 end;
 
-function GitSidebandEncode(AKind: TGitSidebandKind; const AData: TBytes): TBytes;
+function GitSidebandEncode(AKind: TGitSidebandKind; const AData: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.git.native.sideband.GitSidebandEncode(AKind, AData);
 end;
 
-function GitSidebandEncodeStr(AKind: TGitSidebandKind; const AText: string): TBytes;
+function GitSidebandEncodeStr(AKind: TGitSidebandKind; const AText: string): TBytes; inline;
 begin
   Result := nextpas.core.git.native.sideband.GitSidebandEncodeStr(AKind, AText);
 end;
 
-function GitSidebandDecode(const APktData: TBytes; out AKind: TGitSidebandKind; out APayload: TBytes): Boolean;
+function GitSidebandDecode(const APktData: TBytes; out AKind: TGitSidebandKind; out APayload: TBytes): Boolean; inline;
 begin
   Result := nextpas.core.git.native.sideband.GitSidebandDecode(APktData, AKind, APayload);
 end;
 
-procedure GitSidebandDemux(const AStream: TBytes; out ADemuxed: TGitSidebandDemuxed);
+procedure GitSidebandDemux(const AStream: TBytes; out ADemuxed: TGitSidebandDemuxed); inline;
 begin
   nextpas.core.git.native.sideband.GitSidebandDemux(AStream, ADemuxed);
 end;
 
-function GitSidebandDemuxRaw(const AStream: TBytes): TGitSidebandArray;
+function GitSidebandDemuxRaw(const AStream: TBytes): TGitSidebandArray; inline;
 begin
   Result := nextpas.core.git.native.sideband.GitSidebandDemuxRaw(AStream);
 end;
 
-function GitSidebandJoin(const AEntries: TGitSidebandArray): TBytes;
+function GitSidebandJoin(const AEntries: TGitSidebandArray): TBytes; inline;
 begin
   Result := nextpas.core.git.native.sideband.GitSidebandJoin(AEntries);
 end;
 
-function GitBuildPackIndex(const APackData: TBytes): TBytes;
+function GitBuildPackIndex(const APackData: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.git.native.indexer.GitBuildPackIndex(APackData);
 end;
 
-function GitBuildPackIndexFile(const APackPath: string): string;
+function GitBuildPackIndexFile(const APackPath: string): string; inline;
 begin
   Result := nextpas.core.git.native.indexer.GitBuildPackIndexFile(APackPath);
 end;
 
-function GitPackIndexPath(const APackPath: string): string;
+function GitPackIndexPath(const APackPath: string): string; inline;
 begin
   Result := nextpas.core.git.native.indexer.GitPackIndexPath(APackPath);
 end;
 
-function GitFetchPack(const ARemoteGitDir: string; const AWants: array of TGitOid): TBytes;
+function GitFetchPack(const ARemoteGitDir: string; const AWants: array of TGitOid): TBytes; inline;
 begin
   Result := nextpas.core.git.native.fetch.GitFetchPack(ARemoteGitDir, AWants);
 end;
 
-function GitFetchPack(const ARemoteGitDir: string; const AWants: array of TGitOid; const AHaves: array of TGitOid): TBytes;
+function GitFetchPack(const ARemoteGitDir: string; const AWants: array of TGitOid; const AHaves: array of TGitOid): TBytes; inline;
 begin
   Result := nextpas.core.git.native.fetch.GitFetchPack(ARemoteGitDir, AWants, AHaves);
 end;
 
-function GitFetchPackSingle(const ARemoteGitDir: string; const AWant: TGitOid): TBytes;
+function GitFetchPackSingle(const ARemoteGitDir: string; const AWant: TGitOid): TBytes; inline;
 begin
   Result := nextpas.core.git.native.fetch.GitFetchPackSingle(ARemoteGitDir, AWant);
 end;
 
-function GitLsRemote(const ARemoteGitDir: string): TGitAdvertised;
+function GitLsRemote(const ARemoteGitDir: string): TGitAdvertised; inline;
 begin
   Result := nextpas.core.git.native.clone.GitLsRemote(ARemoteGitDir);
 end;
 
-function GitCloneBare(const ARemoteGitDir, ALocalGitDir: string): TGitOid;
+function GitCloneBare(const ARemoteGitDir, ALocalGitDir: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.clone.GitCloneBare(ARemoteGitDir, ALocalGitDir);
 end;
 
-function GitCloneBareHead(const ARemoteGitDir, ALocalGitDir: string): string;
+function GitCloneBareHead(const ARemoteGitDir, ALocalGitDir: string): string; inline;
 begin
   Result := nextpas.core.git.native.clone.GitCloneBareHead(ARemoteGitDir, ALocalGitDir);
 end;
 
-function GitClone(const ARemoteGitDir, ALocalWorkTree: string): TGitOid;
+function GitClone(const ARemoteGitDir, ALocalWorkTree: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.clone.GitClone(ARemoteGitDir, ALocalWorkTree);
 end;
 
-function GitCloneHead(const ARemoteGitDir, ALocalWorkTree: string): string;
+function GitCloneHead(const ARemoteGitDir, ALocalWorkTree: string): string; inline;
 begin
   Result := nextpas.core.git.native.clone.GitCloneHead(ARemoteGitDir, ALocalWorkTree);
 end;
 
-procedure GitCheckoutTree(const AGitDir, AWorkTree: string; const ATreeOid: TGitOid);
+procedure GitCheckoutTree(const AGitDir, AWorkTree: string; const ATreeOid: TGitOid); inline;
 begin
   nextpas.core.git.native.checkout.GitCheckoutTree(AGitDir, AWorkTree, ATreeOid);
 end;
 
-procedure GitCheckoutHead(const AGitDir, AWorkTree: string);
+procedure GitCheckoutHead(const AGitDir, AWorkTree: string); inline;
 begin
   nextpas.core.git.native.checkout.GitCheckoutHead(AGitDir, AWorkTree);
 end;
 
-function GitCheckoutCommit(const AGitDir, AWorkTree: string; const ACommitOid: TGitOid): TGitOid;
+function GitCheckoutCommit(const AGitDir, AWorkTree: string; const ACommitOid: TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.checkout.GitCheckoutCommit(AGitDir, AWorkTree, ACommitOid);
 end;
 
-function GitCheckoutRef(const AGitDir, AWorkTree, ARefName: string): TGitOid;
+function GitCheckoutRef(const AGitDir, AWorkTree, ARefName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.checkout.GitCheckoutRef(AGitDir, AWorkTree, ARefName);
 end;
 
-function GitOidZero: TGitOid;
+function GitOidZero: TGitOid; inline;
 begin
   Result := nextpas.core.git.native.push.GitOidZero;
 end;
 
-function GitOidIsZero(const AOid: TGitOid): Boolean;
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 begin
   Result := nextpas.core.git.native.push.GitOidIsZero(AOid);
 end;
 
-function GitPush(const ALocalGitDir, ARemoteGitDir, ARefName: string; const AOldOid, ANewOid: TGitOid): Boolean;
+function GitPush(const ALocalGitDir, ARemoteGitDir, ARefName: string; const AOldOid, ANewOid: TGitOid): Boolean; inline;
 begin
   Result := nextpas.core.git.native.push.GitPush(ALocalGitDir, ARemoteGitDir, ARefName, AOldOid, ANewOid);
 end;
 
-function GitPush(const ALocalGitDir, ARemoteGitDir: string; const AUpdates: array of TGitPushUpdate): Boolean;
+function GitPush(const ALocalGitDir, ARemoteGitDir: string; const AUpdates: array of TGitPushUpdate): Boolean; inline;
 begin
   Result := nextpas.core.git.native.push.GitPush(ALocalGitDir, ARemoteGitDir, AUpdates);
 end;
 
-function GitPushBranch(const ALocalGitDir, ARemoteGitDir, ABranchName: string): Boolean;
+function GitPushBranch(const ALocalGitDir, ARemoteGitDir, ABranchName: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.push.GitPushBranch(ALocalGitDir, ARemoteGitDir, ABranchName);
 end;
 
-function GitResetHard(const AGitDir, AWorkTree: string; const ATargetOid: TGitOid): TGitOid;
+function GitResetHard(const AGitDir, AWorkTree: string; const ATargetOid: TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.reset.GitResetHard(AGitDir, AWorkTree, ATargetOid);
 end;
 
-function GitResetHard(const AGitDir, AWorkTree, ATargetRef: string): TGitOid;
+function GitResetHard(const AGitDir, AWorkTree, ATargetRef: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.reset.GitResetHard(AGitDir, AWorkTree, ATargetRef);
 end;
 
-function GitRemotePrune(const ALocalGitDir, ARemoteName: string): TStringArray;
+function GitRemotePrune(const ALocalGitDir, ARemoteName: string): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.prune.GitRemotePrune(ALocalGitDir, ARemoteName);
 end;
 
-function GitClean(const AGitDir, AWorkTree: string): TStringArray;
+function GitClean(const AGitDir, AWorkTree: string): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree);
 end;
 
-function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs: Boolean): TStringArray;
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs: Boolean): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree, ARemoveDirs);
 end;
 
-function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored: Boolean): TStringArray;
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored: Boolean): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree, ARemoveDirs, ARemoveIgnored);
 end;
 
-function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored, ADryRun: Boolean): TStringArray;
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored, ADryRun: Boolean): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree, ARemoveDirs, ARemoveIgnored, ADryRun);
 end;
 
-function GitRevParse(const AGitDir, ARev: string): TGitOid;
+function GitRevParse(const AGitDir, ARev: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.revparse.GitRevParse(AGitDir, ARev);
 end;
 
-function GitRevParseCommit(const AGitDir, ARev: string): TGitOid;
+function GitRevParseCommit(const AGitDir, ARev: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.revparse.GitRevParseCommit(AGitDir, ARev);
 end;
 
-function GitBundleCreate(const AGitDir, ARef, ABundlePath: string): TGitOid;
+function GitBundleCreate(const AGitDir, ARef, ABundlePath: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.bundle.GitBundleCreate(AGitDir, ARef, ABundlePath);
 end;
 
-function GitBundleCreateFromRevs(const AGitDir: string; const ARevs: array of string; const ABundlePath: string): Integer;
+function GitBundleCreateFromRevs(const AGitDir: string; const ARevs: array of string; const ABundlePath: string): Integer; inline;
 begin
   Result := nextpas.core.git.native.bundle.GitBundleCreateFromRevs(AGitDir, ARevs, ABundlePath);
 end;
 
-function GitBundleCreateRange(const AGitDir, AFromRev, AToRev, ABundlePath: string): Integer;
+function GitBundleCreateRange(const AGitDir, AFromRev, AToRev, ABundlePath: string): Integer; inline;
 begin
   Result := nextpas.core.git.native.bundle.GitBundleCreateRange(AGitDir, AFromRev, AToRev, ABundlePath);
 end;
 
-function GitBundleVerify(const ABundlePath: string): Boolean;
+function GitBundleVerify(const ABundlePath: string): Boolean; inline;
 begin
   Result := nextpas.core.git.native.bundle.GitBundleVerify(ABundlePath);
 end;
 
-function GitBundleList(const ABundlePath: string): TGitBundleRefArray;
+function GitBundleList(const ABundlePath: string): TGitBundleRefArray; inline;
 begin
   Result := nextpas.core.git.native.bundle.GitBundleList(ABundlePath);
 end;
 
-function GitBundleParseHeader(const ABundlePath: string): TGitBundleHeader;
+function GitBundleParseHeader(const ABundlePath: string): TGitBundleHeader; inline;
 begin
   Result := nextpas.core.git.native.bundle.GitBundleParseHeader(ABundlePath);
 end;
 
-function GitBundleParseHeaderBytes(const AData: TBytes): TGitBundleHeader;
+function GitBundleParseHeaderBytes(const AData: TBytes): TGitBundleHeader; inline;
 begin
   Result := nextpas.core.git.native.bundle.GitBundleParseHeaderBytes(AData);
 end;
 
-function GitBundleUnbundle(const ABundlePath, ATargetGitDir: string): Integer;
+function GitBundleUnbundle(const ABundlePath, ATargetGitDir: string): Integer; inline;
 begin
   Result := nextpas.core.git.native.bundle.GitBundleUnbundle(ABundlePath, ATargetGitDir);
 end;
 
-function GitGrep(const AGitDir, ARev, APattern: string): TGitGrepHitArray;
+function GitGrep(const AGitDir, ARev, APattern: string): TGitGrepHitArray; inline;
 begin
   Result := nextpas.core.git.native.grep.GitGrep(AGitDir, ARev, APattern);
 end;
 
-function GitGrep(const AGitDir, ARev, APattern: string; AIgnoreCase: Boolean): TGitGrepHitArray;
+function GitGrep(const AGitDir, ARev, APattern: string; AIgnoreCase: Boolean): TGitGrepHitArray; inline;
 begin
   Result := nextpas.core.git.native.grep.GitGrep(AGitDir, ARev, APattern, AIgnoreCase);
 end;
 
-function GitGrepTree(const AGitDir: string; const ATreeOid: TGitOid; const APattern: string; AIgnoreCase: Boolean): TGitGrepHitArray;
+function GitGrepTree(const AGitDir: string; const ATreeOid: TGitOid; const APattern: string; AIgnoreCase: Boolean): TGitGrepHitArray; inline;
 begin
   Result := nextpas.core.git.native.grep.GitGrepTree(AGitDir, ATreeOid, APattern, AIgnoreCase);
 end;
 
-function GitBisectCandidates(const AGitDir, AGoodRev, ABadRev: string): TGitOidArray;
+function GitBisectCandidates(const AGitDir, AGoodRev, ABadRev: string): TGitOidArray; inline;
 begin
   Result := nextpas.core.git.native.bisect.GitBisectCandidates(AGitDir, AGoodRev, ABadRev);
 end;
 
-function GitBisectFind(const AGitDir: string; const AGoodRev, ABadRev: string; ACheck: TGitBisectCheck): TGitBisectResult;
+function GitBisectFind(const AGitDir: string; const AGoodRev, ABadRev: string; ACheck: TGitBisectCheck): TGitBisectResult; inline;
 begin
   Result := nextpas.core.git.native.bisect.GitBisectFind(AGitDir, AGoodRev, ABadRev, ACheck);
 end;

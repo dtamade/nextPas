@@ -30,28 +30,8 @@ function GitAppendTrailer(const AMessage, AKey, AValue: string): string;
 
 implementation
 
-function TrimSpaces(const S: string): string;
-var A,B: Integer;
-begin
-  A:=1; B:=Length(S);
-  while (A<=B) and (S[A] in [' ',#9,#10,#13]) do Inc(A);
-  while (B>=A) and (S[B] in [' ',#9,#10,#13]) do Dec(B);
-  if B<A then Exit('');
-  Result:=Copy(S,A,B-A+1);
-end;
-
-function StripCR(const S: string): string;
-begin
-  if (Length(S)>0) and (S[Length(S)]=#13) then Result:=Copy(S,1,Length(S)-1) else Result:=S;
-end;
-
-function LocalSplitLines(const S: string): TStringArray;
-var P,Start: Integer;
-begin
-  Result:=nil; Start:=1;
-  for P:=1 to Length(S)+1 do if (P>Length(S)) or (S[P]=#10) then
-  begin SetLength(Result, Length(Result)+1); Result[High(Result)]:=Copy(S, Start, P-Start); Start:=P+1; end;
-end;
+uses
+  nextpas.core.git.native.util;
 
 function IsTrailerLine(const ALine: string; out AKey, AValue: string): Boolean;
 var P: Integer; K,V: string;
@@ -60,8 +40,8 @@ begin
   // trailer line: Key ':' Value, Key non-empty after trim, may contain [A-Za-z0-9-]
   P:=Pos(':', ALine);
   if P=0 then Exit(False);
-  K:=TrimSpaces(Copy(ALine,1,P-1));
-  V:=TrimSpaces(Copy(ALine,P+1,MaxInt));
+  K:=GitTrimSpaces(Copy(ALine,1,P-1));
+  V:=GitTrimSpaces(Copy(ALine,P+1,MaxInt));
   if K='' then Exit(False);
   // reject if key contains line break or empty value with no key? value may be empty (allowed)
   AKey:=K; AValue:=V;
@@ -73,10 +53,10 @@ var Lines: TStringArray; I, StartIdx, N: Integer; K,V: string; Tmp: TGitTrailerA
 begin
   Result:=nil;
   if AMessage='' then Exit;
-  Lines:=LocalSplitLines(AMessage);
+  Lines:=GitSplitLines(AMessage);
   // Strip trailing empty lines at end (message may end with newline)
   N:=Length(Lines);
-  while (N>0) and (TrimSpaces(StripCR(Lines[N-1]))='') do Dec(N);
+  while (N>0) and (GitTrimSpaces(GitStripCR(Lines[N-1]))='') do Dec(N);
   SetLength(Lines, N);
   if N=0 then Exit;
   // Find trailer block: contiguous trailer lines at end.
@@ -86,11 +66,11 @@ begin
   Tmp:=nil;
   for I:=N-1 downto 0 do
   begin
-    if TrimSpaces(StripCR(Lines[I]))='' then
+    if GitTrimSpaces(GitStripCR(Lines[I]))='' then
     begin
       Break;
     end;
-    if IsTrailerLine(StripCR(Lines[I]), K, V) then
+    if IsTrailerLine(GitStripCR(Lines[I]), K, V) then
     begin SetLength(Tmp, Length(Tmp)+1); Tmp[High(Tmp)].Key:=K; Tmp[High(Tmp)].Value:=V; end
     else Break;
   end;
@@ -116,7 +96,7 @@ end;
 
 function GitFormatTrailer(const AKey, AValue: string): string;
 begin
-  Result:=TrimSpaces(AKey)+': '+TrimSpaces(AValue);
+  Result:=GitTrimSpaces(AKey)+': '+GitTrimSpaces(AValue);
 end;
 
 function GitFormatTrailers(const ATrailers: TGitTrailerArray): string;

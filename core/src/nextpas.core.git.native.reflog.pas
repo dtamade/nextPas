@@ -40,6 +40,9 @@ function GitReadReflog(const AGitDir, ARefName: string): TGitReflog;
 
 implementation
 
+uses
+  nextpas.core.git.native.util;
+
 function GitReflogPath(const AGitDir, ARefName: string): string;
 var
   Clean: string;
@@ -54,18 +57,6 @@ end;
 function GitReflogExists(const AGitDir, ARefName: string): Boolean;
 begin
   Result := FileExists(GitReflogPath(AGitDir, ARefName));
-end;
-
-function TrimSpaces(const S: string): string;
-var
-  L, R: Integer;
-begin
-  L := 1;
-  R := Length(S);
-  while (L <= R) and (S[L] <= ' ') do Inc(L);
-  while (R >= L) and (S[R] <= ' ') do Dec(R);
-  if R < L then Exit('');
-  Result := Copy(S, L, R - L + 1);
 end;
 
 function GitParseReflogLine(const ALine: string): TGitReflogEntry;
@@ -98,7 +89,7 @@ begin
     SigStr := Copy(ALine, 83, MaxInt);
     Msg := '';
   end;
-  SigStr := TrimSpaces(SigStr);
+  SigStr := GitTrimSpaces(SigStr);
   if SigStr = '' then
     raise EGitError.CreateFmt('reflog missing signature "%s"', [ALine]);
   Result.Committer := GitParseSignature(SigStr);

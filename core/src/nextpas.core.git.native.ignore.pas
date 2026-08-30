@@ -47,8 +47,8 @@ type
     FSources: array of TSource;
     class procedure CompileLine(const ALine: string;
       out APattern: TPattern); static;
-    class function WildSegment(const APattern, AName: string): Boolean; static;
-    class function SegmentsMatch(const APattern, APath: string): Boolean; static;
+    class function WildSegment(const APattern, AName: string): Boolean; static; inline;
+    class function SegmentsMatch(const APattern, APath: string): Boolean; static; inline;
   public
     { AText holds raw .gitignore-style lines; ABaseDir anchors embedded-
       slash patterns and scopes the whole source }
@@ -63,32 +63,11 @@ type
 
 implementation
 
-{ splits on '/', dropping empty pieces (leading/trailing/doubled) }
-function SplitSegments(const AValue: string): TStringArray;
-var
-  Start, I: Integer;
-begin
-  Result := nil;
-  Start := 1;
-  for I := 1 to Length(AValue) do
-    if AValue[I] = '/' then
-    begin
-      if I > Start then
-      begin
-        SetLength(Result, Length(Result) + 1);
-        Result[High(Result)] := Copy(AValue, Start, I - Start);
-      end;
-      Start := I + 1;
-    end;
-  if Length(AValue) >= Start then
-  begin
-    SetLength(Result, Length(Result) + 1);
-    Result[High(Result)] := Copy(AValue, Start, MaxInt);
-  end;
-end;
+uses
+  nextpas.core.git.native.wildmatch;
 
 function CountTrailingBackslashesBefore(const AValue: string;
-  APos: Integer): Integer;
+  APos: Integer): Integer; inline;
 begin
   Result := 0;
   while (APos >= 1) and (AValue[APos] = '\') do
@@ -98,11 +77,13 @@ begin
   end;
 end;
 
-function HasUnescapedChar(const AValue: string; AChar: Char): Boolean;
+function HasUnescapedChar(const AValue: string; AChar: Char): Boolean; inline;
 var
   I: Integer;
 begin
   Result := False;
+  if AChar = '/' then
+    Exit(GitHasUnescapedSlash(AValue));
   I := 1;
   while I <= Length(AValue) do
   begin
@@ -117,18 +98,18 @@ begin
   end;
 end;
 
-function BasenameOf(const APath: string): string;
+function BasenameStart(const APath: string): Integer; inline;
 var
   I: Integer;
 begin
   for I := Length(APath) downto 1 do
     if APath[I] = '/' then
-      Exit(Copy(APath, I + 1, MaxInt));
-  Result := APath;
+      Exit(I + 1);
+  Result := 1;
 end;
 
 { strips trailing unescaped spaces, gitignore(5) style }
-function TrimTrailingSpaces(const AValue: string): string;
+function TrimTrailingSpaces(const AValue: string): string; inline;
 begin
   Result := AValue;
   while (Length(Result) > 0) and (Result[Length(Result)] = ' ')
@@ -137,194 +118,17 @@ begin
     Delete(Result, Length(Result), 1);
 end;
 
-{ true when APos opens a well-formed '[...]': a closing bracket exists
-  beyond the optional negation marker }
-function OpensClass(const AValue: string; APos: Integer): Boolean;
-var
-  I: Integer;
-begin
-  Result := False;
-  I := APos + 1;
-  if (I <= Length(AValue))
-    and ((AValue[I] = '!') or (AValue[I] = '^')) then
-    Inc(I);
-  while I <= Length(AValue) do
-  begin
-    if AValue[I] = ']' then
-      Exit(True);
-    if AValue[I] = '\' then
-      Inc(I);
-    Inc(I);
-  end;
-end;
-
-{ single-segment wildcard match: '*', '?' and classes stay inside the
-  segment because neither input contains '/' }
+{ single-source delegation: all fnmatch lives in wildmatch }
 class function TGitIgnoreMatcher.WildSegment(
   const APattern, AName: string): Boolean;
-var
-  P, S, StarP, StarS: Integer;
-  HaveStar, Advanced, Matched: Boolean;
-
-  function ConsumeClass(var APos: Integer; const ACh: Char): Boolean;
-  var
-    Negate, InFirst: Boolean;
-    Lo, Hi: Char;
-  begin
-    Inc(APos); // past '['
-    Negate := False;
-    if (APos <= Length(APattern))
-      and ((APattern[APos] = '!') or (APattern[APos] = '^')) then
-    begin
-      Negate := True;
-      Inc(APos);
-    end;
-    Result := False;
-    InFirst := True;
-    while APos <= Length(APattern) do
-    begin
-      if (APattern[APos] = ']') and not InFirst then
-      begin
-        Inc(APos);
-        Break;
-      end;
-      InFirst := False;
-      if (APattern[APos] = '\') and (APos < Length(APattern)) then
-        Inc(APos);
-      if (APos + 2 <= Length(APattern)) and (APattern[APos + 1] = '-')
-        and (APattern[APos + 2] <> ']') then
-      begin
-        Lo := APattern[APos];
-        Hi := APattern[APos + 2];
-        Inc(APos, 3);
-        if (ACh >= Lo) and (ACh <= Hi) then
-          Result := True;
-      end
-      else
-      begin
-        if ACh = APattern[APos] then
-          Result := True;
-        Inc(APos);
-      end;
-    end;
-    if Negate then
-      Result := not Result;
-  end;
-
 begin
-  Result := False;
-  P := 1;
-  S := 1;
-  StarP := 0;
-  StarS := 0;
-  HaveStar := False;
-  while S <= Length(AName) do
-  begin
-    Advanced := False;
-    if P <= Length(APattern) then
-    begin
-      case APattern[P] of
-        '\':
-          if P < Length(APattern) then
-          begin
-            Inc(P);
-            if APattern[P] = AName[S] then
-            begin
-              Inc(P);
-              Inc(S);
-              Advanced := True;
-            end;
-          end;
-        '?':
-          begin
-            Inc(P);
-            Inc(S);
-            Advanced := True;
-          end;
-        '*':
-          begin
-            HaveStar := True;
-            StarP := P;
-            StarS := S;
-            Inc(P);
-            Advanced := True;
-          end;
-        '[':
-          if OpensClass(APattern, P) then
-          begin
-            Matched := ConsumeClass(P, AName[S]);
-            if Matched then
-            begin
-              Inc(S);
-              Advanced := True;
-            end;
-          end
-          else if AName[S] = '[' then
-          begin
-            Inc(P);
-            Inc(S);
-            Advanced := True;
-          end;
-      else
-        if APattern[P] = AName[S] then
-        begin
-          Inc(P);
-          Inc(S);
-          Advanced := True;
-        end;
-      end;
-    end;
-    if not Advanced then
-    begin
-      // mismatch: let the pending '*' absorb one more character; the
-      // guard allows absorbing up to and including the last one so the
-      // "star consumed everything" state is reachable on retry
-      if HaveStar and (StarS <= Length(AName)) then
-      begin
-        Inc(StarS);
-        S := StarS;
-        P := StarP + 1;
-      end
-      else
-        Exit(False);
-    end;
-  end;
-  while (P <= Length(APattern)) and (APattern[P] = '*') do
-    Inc(P);
-  Result := P > Length(APattern);
+  Result := GitWildSegment(APattern, AName);
 end;
 
-{ anchored match with '**' consuming zero or more whole segments }
 class function TGitIgnoreMatcher.SegmentsMatch(
   const APattern, APath: string): Boolean;
-var
-  PSegs, PPathSegs: TStringArray;
-
-  function Rec(AI, AJ: Integer): Boolean;
-  var
-    J: Integer;
-  begin
-    Result := False;
-    if AI > High(PSegs) then
-      Exit(AJ > High(PPathSegs));
-    if PSegs[AI] = '**' then
-    begin
-      for J := AJ to High(PPathSegs) + 1 do
-        if Rec(AI + 1, J) then
-          Exit(True);
-      Exit(False);
-    end;
-    if AJ > High(PPathSegs) then
-      Exit(False);
-    if not WildSegment(PSegs[AI], PPathSegs[AJ]) then
-      Exit(False);
-    Result := Rec(AI + 1, AJ + 1);
-  end;
-
 begin
-  PSegs := SplitSegments(APattern);
-  PPathSegs := SplitSegments(APath);
-  Result := Rec(0, 0);
+  Result := GitSegmentsMatch(APattern, APath);
 end;
 
 class procedure TGitIgnoreMatcher.CompileLine(const ALine: string;
@@ -407,6 +211,7 @@ var
   G, P: Integer;
   ScopeLen: Integer;
   Sub: string;
+  BStart: Integer;
 begin
   Result := False;
   // deepest source first; within a source the last pattern wins
@@ -432,9 +237,14 @@ begin
         if SegmentsMatch(FSources[G].Patterns[P].Text, Sub) then
           Exit(not FSources[G].Patterns[P].Negated);
       end
-      else if WildSegment(FSources[G].Patterns[P].Text,
-        BasenameOf(Sub)) then
-        Exit(not FSources[G].Patterns[P].Negated);
+      else
+      begin
+        BStart := BasenameStart(Sub);
+        if GitWildSegmentRange(FSources[G].Patterns[P].Text, 1,
+          Length(FSources[G].Patterns[P].Text), Sub, BStart,
+          Length(Sub) - BStart + 1) then
+          Exit(not FSources[G].Patterns[P].Negated);
+      end;
     end;
   end;
 end;

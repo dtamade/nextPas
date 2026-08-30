@@ -309,7 +309,7 @@ end;
 
 { ── hashsig-like similarity ─────────────────────────────────────────────── }
 
-function HashForLine(const AData: TBytes; AStart, ALen: Integer): UInt32;
+function HashForLine(const AData: TBytes; AStart, ALen: Integer): UInt32; inline;
 const
   CHashStart: UInt64 = UInt64($012345678ABCDEF0);
 var
@@ -327,7 +327,7 @@ begin
 end;
 
 procedure CollectLineHashes(const AData: TBytes; var AOut: array of UInt32;
-  var ACount: Integer);
+  var ACount: Integer); inline;
 var
   I, Start, N: Integer;
 begin
@@ -410,19 +410,18 @@ procedure SortU32(var AData: array of UInt32; ACount: Integer);
   end;
 
 var
-  Tmp: array of UInt32;
+  Tmp: array[0..255] of UInt32;
 begin
   if ACount < 2 then
     Exit;
-  SetLength(Tmp, ACount);
   MergeSort(0, ACount - 1, Tmp);
 end;
 
-function HashSigScoreForBlobs(const ADataA, ADataB: TBytes): Integer;
+function HashSigScoreForBlobs(const ADataA, ADataB: TBytes): Integer; inline;
 const
   MaxHashes = 256;
 var
-  HA, HB: array of UInt32;
+  HA, HB: array[0..255] of UInt32;
   CA, CB: Integer;
   IA, IB, Matches: Integer;
 begin
@@ -431,8 +430,6 @@ begin
     Exit(100);
   if (Length(ADataA) = 0) or (Length(ADataB) = 0) then
     Exit(0);
-  SetLength(HA, MaxHashes);
-  SetLength(HB, MaxHashes);
   CA := 0;
   CB := 0;
   CollectLineHashes(ADataA, HA, CA);

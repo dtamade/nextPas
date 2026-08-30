@@ -5,9 +5,12 @@ unit nextpas.core.git.base;
 interface
 
 uses
+  nextpas.core.exception,
   nextpas.core.text.base;
 
 type
+  EGitError = class(Exception);
+
   // High-level abstraction of branch types, avoiding direct exposure of libgit2 enums
   TGitBranchKind = (
     gbLocal,
@@ -15,7 +18,7 @@ type
     gbAll
   );
 
-  // Note: TStringArray is already defined in SysUtils, no need to redefine
+  // TStringArray 来自 nextpas.core.text.base，无需重定义
 
   // Pull fast-forward result (libgit2-first, CLI as fallback for merges)
   TGitPullFastForwardResult = (
@@ -142,7 +145,5 @@ begin
   Result.InterhunkLines := 0;
   Result.Paths := nil;
 end;
-
-end.
 
 end.

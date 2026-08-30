@@ -34,16 +34,22 @@ uses
 type
   TGitOidArray = array of TGitOid;
 
-  { sorted-bytes oid membership; shared by the streaming walk and the
-    topological planner }
+  { hash-based oid membership; O(1) avg for streaming walk and
+    topological planner — replaces O(n²) sorted+Move }
   TGitOidSet = class
   private
-    FItems: array of TGitOid; { ascending by raw bytes }
+    FBuckets: array of TGitOid;
+    FStates: array of Byte; { 0 empty, 1 occupied }
+    FCount: SizeInt;
+    FCap: SizeInt;
+    FMask: SizeInt;
+    procedure EnsureCapacity; inline;
+    procedure Rehash(ANewCap: SizeInt);
   public
     { no-op when already present }
-    procedure Add(const AOid: TGitOid);
-    function Contains(const AOid: TGitOid): Boolean;
-    function Count: SizeInt;
+    procedure Add(const AOid: TGitOid); inline;
+    function Contains(const AOid: TGitOid): Boolean; inline;
+    function Count: SizeInt; inline;
   end;
 
   TWalkEntry = record
@@ -146,52 +152,93 @@ begin
   Result := False;
 end;
 
+function GitOidHash(const AOid: TGitOid): UInt32; inline;
+var
+  I: Integer;
+begin
+  Result := UInt32(2166136261);
+  for I := 0 to GitOidRawLen - 1 do
+    Result := (Result xor UInt32(AOid.Bytes[I])) * UInt32(16777619);
+end;
+
+procedure TGitOidSet.EnsureCapacity; inline;
+begin
+  if FCap = 0 then
+    Rehash(16)
+  else if FCount * 10 >= FCap * 7 then
+    Rehash(FCap * 2);
+end;
+
+procedure TGitOidSet.Rehash(ANewCap: SizeInt);
+var
+  LOldBuckets: array of TGitOid;
+  LOldStates: array of Byte;
+  LOldCap: SizeInt;
+  I: Integer;
+  LIdx: SizeInt;
+  LHash: UInt32;
+begin
+  LOldBuckets := FBuckets;
+  LOldStates := FStates;
+  LOldCap := FCap;
+  SetLength(FBuckets, ANewCap);
+  SetLength(FStates, ANewCap);
+  FCap := ANewCap;
+  FMask := ANewCap - 1;
+  FCount := 0;
+  for I := 0 to LOldCap - 1 do
+    if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
+    begin
+      LHash := GitOidHash(LOldBuckets[I]);
+      LIdx := SizeInt(LHash and UInt32(FMask));
+      while FStates[LIdx] = 1 do
+        LIdx := (LIdx + 1) and FMask;
+      FBuckets[LIdx] := LOldBuckets[I];
+      FStates[LIdx] := 1;
+      Inc(FCount);
+    end;
+end;
+
 procedure TGitOidSet.Add(const AOid: TGitOid);
 var
-  Lo, Hi, Mid, InsAt: Integer;
+  LHash: UInt32;
+  LIdx: SizeInt;
 begin
-  Lo := 0;
-  Hi := High(FItems);
-  while Lo <= Hi do
+  EnsureCapacity;
+  LHash := GitOidHash(AOid);
+  LIdx := SizeInt(LHash and UInt32(FMask));
+  while FStates[LIdx] <> 0 do
   begin
-    Mid := (Lo + Hi) div 2;
-    if GitOidSame(FItems[Mid], AOid) then
+    if GitOidSame(FBuckets[LIdx], AOid) then
       Exit;
-    if OidLess(FItems[Mid], AOid) then
-      Lo := Mid + 1
-    else
-      Hi := Mid - 1;
+    LIdx := (LIdx + 1) and FMask;
   end;
-  InsAt := Lo;
-  SetLength(FItems, Length(FItems) + 1);
-  if InsAt < High(FItems) then
-    Move(FItems[InsAt], FItems[InsAt + 1],
-      SizeInt(High(FItems) - InsAt) * SizeOf(TGitOid));
-  FItems[InsAt] := AOid;
+  FBuckets[LIdx] := AOid; { zero-copy: 20-byte inline copy }
+  FStates[LIdx] := 1;
+  Inc(FCount);
 end;
 
 function TGitOidSet.Contains(const AOid: TGitOid): Boolean;
 var
-  Lo, Hi, Mid: Integer;
+  LHash: UInt32;
+  LIdx: SizeInt;
 begin
-  Result := False;
-  Lo := 0;
-  Hi := High(FItems);
-  while Lo <= Hi do
+  if FCount = 0 then
+    Exit(False);
+  LHash := GitOidHash(AOid);
+  LIdx := SizeInt(LHash and UInt32(FMask));
+  while FStates[LIdx] <> 0 do
   begin
-    Mid := (Lo + Hi) div 2;
-    if GitOidSame(FItems[Mid], AOid) then
+    if GitOidSame(FBuckets[LIdx], AOid) then
       Exit(True);
-    if OidLess(FItems[Mid], AOid) then
-      Lo := Mid + 1
-    else
-      Hi := Mid - 1;
+    LIdx := (LIdx + 1) and FMask;
   end;
+  Result := False;
 end;
 
 function TGitOidSet.Count: SizeInt;
 begin
-  Result := Length(FItems);
+  Result := FCount;
 end;
 
 function DefaultGitRevOptions: TGitRevOptions;
@@ -264,7 +311,7 @@ begin
           Data := ARepo.ReadObject(Oid, Kind);
         except
           on E: EGitError do
-            Continue;
+            raise;
         end;
         if Kind <> gokCommit then
           Continue;
@@ -470,7 +517,8 @@ begin
     try
       Data := FRepo.ReadObject(Cur, Kind);
     except
-      Continue;
+      on E: EGitError do
+        raise;
     end;
     if Kind <> gokCommit then
       Continue;

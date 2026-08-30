@@ -48,26 +48,8 @@ implementation
 uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.checkout;
-
-function TrimSpaces(const S: string): string;
-var
-  L, R: Integer;
-begin
-  L := 1;
-  R := Length(S);
-  while (L <= R) and (S[L] <= ' ') do Inc(L);
-  while (R >= L) and (S[R] <= ' ') do Dec(R);
-  if R < L then Exit('');
-  Result := Copy(S, L, R - L + 1);
-end;
-
-function IsZeroOidLocal(const AOid: TGitOid): Boolean;
-var I: Integer;
-begin
-  for I:=0 to GitOidRawLen-1 do if AOid.Bytes[I]<>0 then Exit(False);
-  Result:=True;
-end;
+  nextpas.core.git.native.checkout,
+  nextpas.core.git.native.util;
 
 function BaseNameOf(const APath: string): string;
 var P: Integer;
@@ -107,7 +89,7 @@ begin
   C := PathJoin2(AGitDir, 'commondir');
   if FileExists(C) then
   begin
-    Result := TrimSpaces(ReadFileText(C));
+    Result := GitTrimSpaces(ReadFileText(C));
     if not PathIsAbsolute(Result) then
       Result := PathClean(PathJoin2(AGitDir, Result))
     else
@@ -140,12 +122,12 @@ begin
   ARef := '';
   ADetached := False;
   FillChar(AOid, SizeOf(AOid), 0);
-  T := TrimSpaces(ReadFileText(PathJoin2(AGitDir, 'HEAD')));
+  T := GitTrimSpaces(ReadFileText(PathJoin2(AGitDir, 'HEAD')));
   if T = '' then
     raise EGitError.CreateFmt('worktree HEAD missing in %s', [AGitDir]);
   if Copy(T, 1, 5) = 'ref: ' then
   begin
-    ARef := TrimSpaces(Copy(T, 6, MaxInt));
+    ARef := GitTrimSpaces(Copy(T, 6, MaxInt));
     ADetached := False;
     Exit(True);
   end;
@@ -174,7 +156,7 @@ begin
     G := PathJoin2(AWorkGitDir, 'gitdir');
     if FileExists(G) then
     begin
-      P := TrimSpaces(ReadFileText(G));
+      P := GitTrimSpaces(ReadFileText(G));
       if P <> '' then
         Result.Path := PathDir(P)
       else
@@ -326,7 +308,7 @@ var MainDir, WtId, LinkedGitDir: string;
 begin
   if AGitDir='' then raise EGitError.Create('worktree add detached: gitdir empty');
   if AWorkTreePath='' then raise EGitError.Create('worktree add detached: path empty');
-  if IsZeroOidLocal(AOid) then raise EGitError.Create('worktree add detached: oid zero');
+  if GitIsZeroOid(AOid) then raise EGitError.Create('worktree add detached: oid zero');
   MainDir:=ResolveMainDir(AGitDir);
   if GitIsWorktree(AGitDir) then raise EGitError.Create('worktree add detached: cannot add from linked');
   if DirectoryExists(AWorkTreePath) and not IsDirEmptyLocal(AWorkTreePath) then

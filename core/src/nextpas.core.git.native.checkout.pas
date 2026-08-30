@@ -33,23 +33,14 @@ uses
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.index;
+  nextpas.core.git.native.index,
+  nextpas.core.git.native.util;
 
 const
   CModeTree    = $4000;
   CModeExec    = $81ED;
   CModeSymlink = $A000;
   CModeGitlink = $E000;
-
-function TrimSpacesLocal(const S: string): string;
-var L,R: Integer;
-begin
-  L:=1; R:=Length(S);
-  while (L<=R) and (S[L] <= ' ') do Inc(L);
-  while (R>=L) and (S[R] <= ' ') do Dec(R);
-  if R<L then Exit('');
-  Result:=Copy(S,L,R-L+1);
-end;
 
 function EffectiveGitDir(const AGitDir: string): string;
 var C: string;
@@ -58,7 +49,7 @@ begin
   C:=PathJoin2(AGitDir,'commondir');
   if FileExists(C) then
   begin
-    Result:=TrimSpacesLocal(ReadFileText(C));
+    Result:=GitTrimSpaces(ReadFileText(C));
     if not PathIsAbsolute(Result) then Result:=PathClean(PathJoin2(AGitDir, Result))
     else Result:=PathClean(Result);
     Exit(Result);

@@ -18,17 +18,13 @@ uses
   nextpas.core.git.native.manager,
   nextpas.core.git.libgit2;
 
-function NewGitManager(ABackend: TGitBackend): IGitManager;
+function NewGitManager(ABackend: TGitBackend): IGitManager; inline;
 begin
-  if ABackend = gbAuto then
-    ABackend := gbLibGit2;
   case ABackend of
     gbNative:
       Result := TNativeGitManager.Create;
-    gbLibGit2:
+    gbLibGit2, gbAuto:
       Result := nextpas.core.git.libgit2.NewGitManager;
-  else
-    Result := nextpas.core.git.libgit2.NewGitManager;
   end;
 end;
 

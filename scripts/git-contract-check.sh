@@ -51,8 +51,7 @@ if [ -n "$NATIVE_HITS" ]; then
 else
   ok "C4.2 native.* 闭包零 libgit2"
 fi
-# C4.3: 编译产物检查（fpc -va Loading libgit2）
-# Phase 0 仅做 grep 版，产物版待 test_git_pure_manager 落地后启用
+# C4.3: 编译产物检查（fpc -va Loading libgit2 + grep 双重）
 PURE_TEST_LPR="$TEST_DIR/test_git_pure_manager/test_git_pure_manager.lpr"
 if [ -f "$PURE_TEST_LPR" ]; then
   if grep -Rqi "libgit2" "$PURE_TEST_LPR" 2>/dev/null; then
@@ -60,11 +59,16 @@ if [ -f "$PURE_TEST_LPR" ]; then
   else
     ok "C4.3 test_git_pure_manager.lpr 零 libgit2（grep 版）"
   fi
-  # TODO(C4.3-产物): fpc -va 编译产物检查
-  # fpc -Fu"$SRC_DIR" -va "$PURE_TEST_LPR" 2>&1 | grep -q "Loading.*libgit2" && fail_check "C4.3 纯编译拉入 libgit2" || ok "C4.3 纯编译零 libgit2"
-  warn_check "C4.3 fpc -va 产物检查 TODO（待 Phase 3 纯测试落地后启用）"
+  FPC_VA_OUT=$(fpc -Fu"$SRC_DIR" -va "$PURE_TEST_LPR" -o/tmp/git-pure-va-check 2>&1 || true)
+  if echo "$FPC_VA_OUT" | grep -qi "Loading.*libgit2"; then
+    fail_check "C4.3 纯编译拉入 libgit2（fpc -va 命中 Loading libgit2）"
+    echo "$FPC_VA_OUT" | grep -i "libgit2" | sed 's/^/  /'
+  else
+    ok "C4.3 纯编译零 libgit2（fpc -va 无 Loading libgit2）"
+  fi
+  rm -f /tmp/git-pure-va-check /tmp/git-pure-va-check.o 2>/dev/null || true
 else
-  ok "C4.3 纯编译零 libgit2（test_git_pure_manager 未创建，Phase 3 前跳过；TODO: fpc -va Loading 检查）"
+  ok "C4.3 纯编译零 libgit2（test_git_pure_manager 未创建，Phase 3 前跳过）"
 fi
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"

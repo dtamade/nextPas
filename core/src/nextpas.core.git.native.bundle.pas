@@ -50,17 +50,8 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
-  nextpas.core.git.native.indexer;
-
-function TrimLocal(const S: string): string;
-var A, B: Integer;
-begin
-  A := 1; B := Length(S);
-  while (A <= B) and (S[A] in [' ', #9, #10, #13]) do Inc(A);
-  while (B >= A) and (S[B] in [' ', #9, #10, #13]) do Dec(B);
-  if A > B then Exit('');
-  Result := Copy(S, A, B - A + 1);
-end;
+  nextpas.core.git.native.indexer,
+  nextpas.core.git.native.util;
 
 function LowerHex(const S: string): string;
 begin
@@ -116,10 +107,9 @@ begin
       // first line up to LF
       P := Pos(#10, Msg);
       if P > 0 then Line := Copy(Msg, 1, P-1) else Line := Msg;
-      Line := TrimLocal(Line);
-      if (Length(Line) > 0) and (Line[Length(Line)] = #13) then
-        SetLength(Line, Length(Line)-1);
-      Result := TrimLocal(Line);
+      Line := GitTrimSpaces(Line);
+      Line := GitStripCR(Line);
+      Result := GitTrimSpaces(Line);
     finally
       Repo.Free;
     end;
@@ -145,12 +135,12 @@ begin
     RevInput := RevInput + GitOidToHex(AWants[I]) + #10;
   for I := 0 to High(AExcludes) do
     RevInput := RevInput + '^' + GitOidToHex(AExcludes[I]) + #10;
-  if TrimLocal(RevInput) = '' then
+  if GitTrimSpaces(RevInput) = '' then
     raise EGitError.Create('bundle: empty rev list');
   Out_ := RunWithInput('git', ['--git-dir=' + AGitDir, 'pack-objects', '--stdout', '--revs', '--delta-base-offset'],
     GitStringToBytes(RevInput));
   if not ProcessSucceeded(Out_) then
-    raise EGitError.CreateFmt('bundle pack-objects failed (%d): %s', [Out_.ExitCode, TrimLocal(Out_.StdErr + Out_.StdOut)]);
+    raise EGitError.CreateFmt('bundle pack-objects failed (%d): %s', [Out_.ExitCode, GitTrimSpaces(Out_.StdErr + Out_.StdOut)]);
   Result := GitStringToBytes(Out_.StdOut);
   if Length(Result) = 0 then
     raise EGitError.Create('bundle: pack-objects produced empty pack');
@@ -158,26 +148,7 @@ begin
     raise EGitError.Create('bundle: invalid pack header from pack-objects');
 end;
 
-function LocalSplitLines(const S: string): TStringArray;
-var I, Start, L: Integer;
-    Cnt: Integer;
-begin
-  Result := nil;
-  Start := 1; L := Length(S); Cnt := 0;
-  for I := 1 to L do
-    if S[I] = #10 then
-    begin
-      SetLength(Result, Cnt+1);
-      Result[Cnt] := Copy(S, Start, I - Start);
-      Inc(Cnt);
-      Start := I + 1;
-    end;
-  if Start <= L + 1 then
-  begin
-    SetLength(Result, Cnt+1);
-    Result[Cnt] := Copy(S, Start, L - Start + 1);
-  end;
-end;
+
 
 function ParseBundleHeaderBytesInternal(const AData: TBytes; out APackOff: SizeInt): TGitBundleHeader;
 var P, I: SizeInt;
@@ -205,19 +176,19 @@ begin
   // header bytes [0, P] inclusive first \n, but pack starts at P+2
   SetLength(HeaderStr, P+1);
   if P+1 > 0 then Move(AData[0], HeaderStr[1], P+1);
-  Lines := LocalSplitLines(HeaderStr);
+  Lines := GitSplitLines(HeaderStr);
   Cnt := Length(Lines);
   // SplitString includes last empty after trailing \n? Our header ends with \n before blank, so split yields last '' for the blank? Actually header ends with "ref\n" then we consumed up to P which is first \n of "\n\n", so headerStr ends with "\n", split yields last ''.
   // first line must be "# v2 git bundle"
   if Cnt = 0 then
     raise EGitError.Create('bundle: empty header');
-  if TrimLocal(Lines[0]) <> '# v2 git bundle' then
+  if GitTrimSpaces(Lines[0]) <> '# v2 git bundle' then
     raise EGitError.CreateFmt('bundle: bad header "%s"', [Lines[0]]);
   for I := 1 to High(Lines) do
   begin
     Line := Lines[I];
     if Line = '' then Continue; // blank terminator, but we already split; ignore empty
-    Line := TrimLocal(Line);
+    Line := GitTrimSpaces(Line);
     if Line = '' then Continue;
     if (Length(Line) > 0) and (Line[1] = '-') then
     begin
@@ -346,7 +317,7 @@ begin
   SetLength(PrereqComments, 0);
   for I := 0 to High(ARevs) do
   begin
-    Raw := TrimLocal(ARevs[I]);
+    Raw := GitTrimSpaces(ARevs[I]);
     if Raw = '' then Continue;
     IsExclude := (Length(Raw) > 0) and (Raw[1] in ['^','-']);
     if IsExclude then

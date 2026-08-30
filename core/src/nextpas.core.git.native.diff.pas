@@ -51,14 +51,14 @@ type
   end;
   TFlatArray = array of TFlatEntry;
 
-function IsZeroOid(const AOid: TGitOid): Boolean;
+function IsZeroOid(const AOid: TGitOid): Boolean; inline;
 var I: Integer;
 begin
   for I := 0 to GitOidRawLen - 1 do if AOid.Bytes[I] <> 0 then Exit(False);
   Result := True;
 end;
 
-function FileTypeCategory(AMode: Cardinal): Integer;
+function FileTypeCategory(AMode: Cardinal): Integer; inline;
 begin
   // 0=regular 100644, 1=exec 100755, 2=symlink 120000, 3=gitlink 160000, 4=dir (not in flat)
   case AMode of
@@ -72,7 +72,7 @@ begin
   end;
 end;
 
-function LocalCompareStr(const A, B: string): Integer;
+function LocalCompareStr(const A, B: string): Integer; inline;
 var I, L: Integer;
 begin
   L := Length(A);
@@ -83,20 +83,63 @@ begin
 end;
 
 procedure SortFlat(var A: TFlatArray);
-var I, J: Integer; T: TFlatEntry;
-begin
-  for I := 1 to High(A) do
+  procedure MergeSort(var AItems: TFlatArray; var ATemp: TFlatArray; ALo, AHi: Integer);
+  var
+    Mid, I, J, K: Integer;
   begin
-    J := I;
-    while (J > 0) and (LocalCompareStr(A[J-1].Path, A[J].Path) > 0) do
+    if ALo >= AHi then
+      Exit;
+    Mid := (ALo + AHi) div 2;
+    MergeSort(AItems, ATemp, ALo, Mid);
+    MergeSort(AItems, ATemp, Mid + 1, AHi);
+    I := ALo;
+    J := Mid + 1;
+    for K := ALo to AHi do
     begin
-      T := A[J-1]; A[J-1] := A[J]; A[J] := T;
-      Dec(J);
+      if (I <= Mid) and ((J > AHi) or (LocalCompareStr(AItems[I].Path, AItems[J].Path) <= 0)) then
+      begin
+        ATemp[K] := AItems[I];
+        Inc(I);
+      end
+      else
+      begin
+        ATemp[K] := AItems[J];
+        Inc(J);
+      end;
     end;
+    for K := ALo to AHi do
+      AItems[K] := ATemp[K];
   end;
+var
+  Temp: TFlatArray;
+begin
+  if Length(A) < 2 then
+    Exit;
+  SetLength(Temp, Length(A));
+  MergeSort(A, Temp, 0, High(A));
 end;
 
-procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray);
+function CountFlatEntries(ARepo: TNativeRepository; const ATreeOid: TGitOid): SizeInt;
+var
+  Kind: TGitObjectKind;
+  Data: TBytes;
+  Entries: TGitTreeEntryArray;
+  I: Integer;
+begin
+  Result := 0;
+  if IsZeroOid(ATreeOid) then Exit;
+  Data := ARepo.ReadObject(ATreeOid, Kind);
+  if Kind <> gokTree then
+    raise EGitError.CreateFmt('object %s is not a tree', [GitOidToHex(ATreeOid)]);
+  Entries := GitParseTree(Data);
+  for I := 0 to High(Entries) do
+    if Entries[I].Mode = $4000 then
+      Result := Result + CountFlatEntries(ARepo, Entries[I].Oid)
+    else
+      Inc(Result);
+end;
+
+procedure FillFlatEntries(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray; var APos: SizeInt);
 var
   Kind: TGitObjectKind;
   Data: TBytes;
@@ -113,25 +156,45 @@ begin
   begin
     Full := APrefix + Entries[I].Name;
     if Entries[I].Mode = $4000 then
-      CollectFlat(ARepo, Entries[I].Oid, Full + '/', AOut)
+      FillFlatEntries(ARepo, Entries[I].Oid, Full + '/', AOut, APos)
     else
     begin
-      SetLength(AOut, Length(AOut)+1);
-      AOut[High(AOut)].Path := Full;
-      AOut[High(AOut)].Mode := Entries[I].Mode;
-      AOut[High(AOut)].Oid := Entries[I].Oid;
+      AOut[APos].Path := Full;
+      AOut[APos].Mode := Entries[I].Mode;
+      AOut[APos].Oid := Entries[I].Oid;
+      Inc(APos);
     end;
   end;
 end;
 
+procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray);
+var
+  Total: SizeInt;
+  Pos: SizeInt;
+begin
+  if IsZeroOid(ATreeOid) then Exit;
+  Total := CountFlatEntries(ARepo, ATreeOid);
+  if Total = 0 then Exit;
+  Pos := Length(AOut);
+  SetLength(AOut, Pos + Total);
+  FillFlatEntries(ARepo, ATreeOid, APrefix, AOut, Pos);
+end;
+
 function BuildFlat(const AGitDir: string; const ATreeOid: TGitOid): TFlatArray;
-var Repo: TNativeRepository;
+var
+  Repo: TNativeRepository;
+  Total: SizeInt;
+  Pos: SizeInt;
 begin
   Result := nil;
   if IsZeroOid(ATreeOid) then Exit;
   Repo := TNativeRepository.Create(AGitDir);
   try
-    CollectFlat(Repo, ATreeOid, '', Result);
+    Total := CountFlatEntries(Repo, ATreeOid);
+    SetLength(Result, Total);
+    Pos := 0;
+    if Total > 0 then
+      FillFlatEntries(Repo, ATreeOid, '', Result, Pos);
   finally
     Repo.Free;
   end;
