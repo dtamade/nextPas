@@ -33,7 +33,7 @@ uses
   nextpas.core.base.utils;
 
 type
-  TMountedVfs = class(TInterfacedObject, IVfs)
+  TMountedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FMounts: TVfsMountArray;
     FHasRoot: Boolean;
@@ -47,6 +47,9 @@ type
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
     function CaseSensitive: Boolean;
+    function TryGetETag(const APath: string; out AETag: string): Boolean;
+    function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
+    function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
   end;
 
 function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
@@ -343,6 +346,54 @@ begin
   for I := 1 to High(FMounts) do
     if FMounts[I].Fs.CaseSensitive <> First then Exit(True);
   Result := First;
+end;
+
+function TMountedVfs.TryGetETag(const APath: string; out AETag: string): Boolean;
+var
+  Rem: string;
+  Fs: IVfs;
+  Intf: IVfsETag;
+begin
+  AETag := '';
+  if not FindMount(APath, Rem, Fs) then Exit(False);
+  if Supports(Fs, IVfsETag, Intf) then
+    Exit(Intf.TryGetETag(Rem, AETag));
+  Result := False;
+end;
+
+function TMountedVfs.TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
+var
+  Rem: string;
+  Fs: IVfs;
+  Intf: IVfsETag;
+begin
+  ALastModified := '';
+  if not FindMount(APath, Rem, Fs) then Exit(False);
+  if Supports(Fs, IVfsETag, Intf) then
+    Exit(Intf.TryGetLastModified(Rem, ALastModified));
+  Result := False;
+end;
+
+function TMountedVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+var
+  Rem: string;
+  Fs: IVfs;
+  Intf: IVfsServeMeta;
+  ETagIntf: IVfsETag;
+begin
+  AETag := '';
+  ALastModified := '';
+  if not FindMount(APath, Rem, Fs) then Exit(False);
+  if Supports(Fs, IVfsServeMeta, Intf) then
+    Exit(Intf.TryGetServeMeta(Rem, AETag, ALastModified));
+  if Supports(Fs, IVfsETag, ETagIntf) then
+  begin
+    Result := ETagIntf.TryGetETag(Rem, AETag);
+    if Result then
+      ETagIntf.TryGetLastModified(Rem, ALastModified);
+    Exit;
+  end;
+  Result := False;
 end;
 
 end.
