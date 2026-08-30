@@ -1,10 +1,10 @@
 # nextpas.core.io 代码契约
 
-**模块路径**：`core/src/nextpas.core.io*.pas`（22 个源文件）
+**模块路径**：`core/src/nextpas.core.io*.pas`（23 个源文件）
 **层级**：L1（依赖 L0: base, bytes, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-31
+**版本**：1.1
 
 ---
 
@@ -18,10 +18,24 @@
 | io.intf | IReader, IWriter, IFlusher 接口定义 |
 | io.binary | TBinaryReader, TBinaryWriter 二进制读写 |
 | io.buffer | TBufferedReader, TBufferedWriter 缓冲读写 |
+| io.collect | 收集器 |
 | io.linewriter | ILineWriter, TLineWriter 行写入 |
+| io.memory | TBytesStream 内存流 |
+| io.pipe | 管道 Pipe |
+| io.scanner | IScanner 扫描器 |
+| io.util | Copy/CopyN/ReadAll 等工具 |
+| io.stream_adapter | Classes 流适配 |
+| io.poller | 统一轮询器 TPoller |
+| io.reactor | io_uring Reactor (Linux) |
+| io.reactor.epoll | epoll Reactor (Linux) |
+| io.reactor.kqueue | kqueue Reactor (macOS/BSD) |
+| io.reactor.iocp | IOCP Reactor (Windows) |
+| io.uring | io_uring 底层封装 |
 | io.mapped | 内存映射文件 |
 | io.mapped.ring_buffer | 环形缓冲区 |
-| io.collect | 收集器 |
+| io.mapped.ring_buffer.sharded | 分片环形缓冲区 |
+| io.mapped.slab_pool | slab 内存池 |
+| io.async.fileio | 异步文件 IO |
 | io.pas | 门面 re-export |
 
 ### 1.2 核心接口

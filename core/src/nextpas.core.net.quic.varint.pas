@@ -15,7 +15,8 @@ unit nextpas.core.net.quic.varint;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.bytes.ops;
 
 const
   { 值域上界：2^62 - 1（首两位前缀占用） }
@@ -31,7 +32,7 @@ function QuicVarintAppend(var ABuf: TBytes; AValue: UInt64): Boolean;
 function QuicVarintEncode(AValue: UInt64): TBytes;
 
 {** @desc 追加单字节到 ABuf 尾部（包/参数序列化共用） *}
-procedure QuicBufAppendByte(var ABuf: TBytes; AValue: Byte);
+procedure QuicBufAppendByte(var ABuf: TBytes; AValue: Byte); inline;
 
 {**
  * @desc 从 ABuf[AOffset] 解码
@@ -93,13 +94,9 @@ begin
   Assert(LDummy);
 end;
 
-procedure QuicBufAppendByte(var ABuf: TBytes; AValue: Byte);
-var
-  LN: Integer;
+procedure QuicBufAppendByte(var ABuf: TBytes; AValue: Byte); inline;
 begin
-  LN := Length(ABuf);
-  SetLength(ABuf, LN + 1);
-  ABuf[LN] := AValue;
+  BytesAppendByte(ABuf, AValue);
 end;
 
 function QuicVarintDecode(const ABuf: TBytes; AOffset: Integer;

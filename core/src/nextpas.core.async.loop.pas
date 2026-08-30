@@ -264,12 +264,19 @@ begin
   end;
 end;
 
+procedure TimeoutTokenNotify(AContext: Pointer); forward;
+
 procedure TimeoutCtxDropTokenOwner(ACtx: PTimeoutCtx);
+var
+  LToken: IAsyncCancellationToken;
 begin
   if ACtx = nil then
     Exit;
   if atomic_exchange(ACtx^.TokenOwner, 0, mo_acq_rel) = 1 then
   begin
+    LToken := ACtx^.Token;
+    if LToken <> nil then
+      LToken.RemoveOnCancel(@TimeoutTokenNotify, ACtx);
     ACtx^.Token := nil;
     TimeoutCtxRelease(ACtx);
   end;
@@ -389,6 +396,7 @@ end;
 procedure TimeoutTokenNotify(AContext: Pointer);
 var
   LCtx: PTimeoutCtx;
+  LLoop: TAsyncLoop;
 begin
   LCtx := PTimeoutCtx(AContext);
   if LCtx = nil then
@@ -397,10 +405,22 @@ begin
     Exit;
   if atomic_load(LCtx^.CompletionState, mo_acquire) <> TIMEOUT_COMPLETION_PENDING then
     Exit;
-  if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
+  LLoop := LCtx^.Loop;
+  if (LLoop = nil) or (not LLoop.IsValid) then
     Exit;
+  // 稳定性：先 pin 再校验，避免 Loop 已销毁后的 Post 竞态（等价于先 Post 再 fetch_add 的加锁顺序）
   atomic_fetch_add(LCtx^.RefCount, 1, mo_acq_rel);
-  LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+  if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
+  begin
+    TimeoutCtxRelease(LCtx);
+    Exit;
+  end;
+  try
+    LLoop.Post(@TimeoutTokenCallback, LCtx);
+  except
+    TimeoutCtxRelease(LCtx);
+    raise;
+  end;
 end;
 
 function TimeoutCtxCreate(ALoop: TAsyncLoop; const ADeadline: TDeadline;
@@ -626,10 +646,14 @@ begin
     Exit;
   while FPending.TryDequeue(LItem) do
   begin
-    if Assigned(LItem.Callback) then
-      LItem.Callback(LItem.Context)
-    else if Assigned(LItem.Method) then
-      LItem.Method(LItem.Context);
+    try
+      if Assigned(LItem.Callback) then
+        LItem.Callback(LItem.Context)
+      else if Assigned(LItem.Method) then
+        LItem.Method(LItem.Context);
+    except
+      // 异常安全：Callback 异常不泄漏，继续排空
+    end;
     Inc(Result);
   end;
 end;

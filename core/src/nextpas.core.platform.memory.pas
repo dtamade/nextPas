@@ -385,7 +385,7 @@ begin
     'platform_aligned_free: invalid magic (possible double-free or wrong pointer)');
 {$ELSE}
   if LHeader^.Magic <> PLATFORM_ALIGNED_ALLOC_MAGIC then
-    Exit;
+    RunError(204);
 {$ENDIF}
   platform_aligned_raw_free(LHeader^.RawPtr);
 end;

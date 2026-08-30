@@ -71,6 +71,7 @@ type
     UserContext: Pointer;
     Group: Pointer; { TAsyncTaskGroup 指针，避免循环依赖 }
     Done: Int32; { 0 pending; 1 finished (invoke or discard) }
+    Generation: UInt32;
   end;
 
   TAsyncTaskGroup = class
@@ -81,11 +82,12 @@ type
     FActiveCount: UInt32;
     FCompletedCount: UInt32;
     FTotalCount: UInt32;
+    FGeneration: UInt32;
     FOnAllComplete: TAsyncCallbackStorage;
     FLock: TPlatformMutex;
     FToken: IAsyncCancellationToken;
     procedure CheckCompletion;
-    procedure TaskDone;
+    procedure TaskDone(AGeneration: UInt32);
   public
     constructor Create(const ALoop: TAsyncLoop; AOptions: TAsyncTaskGroupOptions;
       AToken: IAsyncCancellationToken);
