@@ -208,7 +208,7 @@ begin
   else if AChannels = 7 then
     LMask := AudioMaskFrontLeft or AudioMaskFrontRight or AudioMaskFrontCenter or
       AudioMaskLowFrequency or AudioMaskBackLeft or AudioMaskBackRight or
-      AudioMaskSideLeft or AudioMaskSideRight;
+      AudioMaskSideLeft;
 
   Result.SampleRate := ASampleRate;
   Result.Channels := AChannels;
@@ -238,17 +238,10 @@ begin
 end;
 
 function TAudioFormat.FramesForMs(AMs: Integer): Integer;
-var
-  L: Int64;
 begin
   if AMs <= 0 then
     Exit(0);
-  L := (Int64(SampleRate) * Int64(AMs)) div 1000;
-  if L > High(Integer) then
-    Exit(High(Integer));
-  if L < Low(Integer) then
-    Exit(Low(Integer));
-  Result := Integer(L);
+  Result := Integer((Int64(SampleRate) * Int64(AMs)) div 1000);
 end;
 
 function TAudioFormat.IsValid: Boolean;
@@ -282,34 +275,17 @@ begin
 end;
 
 function TAudioBuffer.SampleCount: Integer;
-var
-  L: Int64;
 begin
-  L := Int64(FrameCount) * Int64(Format.Channels);
-  if L > High(Integer) then
-    Exit(High(Integer));
-  if L < Low(Integer) then
-    Exit(Low(Integer));
-  Result := Integer(L);
+  Result := FrameCount * Format.Channels;
 end;
 
 { TAudioClock }
 
 function TAudioClock.ToDurationNs: Int64;
-var
-  LSec, LRem, LNs: UInt64;
 begin
   if SampleRate <= 0 then
     Exit(0);
-  LSec := Frame div UInt64(SampleRate);
-  LRem := Frame mod UInt64(SampleRate);
-  if LSec > High(UInt64) div 1000000000 then
-    Exit(High(Int64));
-  LNs := LSec * 1000000000;
-  LNs := LNs + (LRem * 1000000000) div UInt64(SampleRate);
-  if LNs > UInt64(High(Int64)) then
-    Exit(High(Int64));
-  Result := Int64(LNs);
+  Result := Int64((Frame * UInt64(1000000000)) div UInt64(SampleRate));
 end;
 
 {$POP}
