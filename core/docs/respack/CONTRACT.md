@@ -115,9 +115,24 @@ respack.pas       ← 门面 re-export
 
 ---
 
+## 8. S1-S5 校准表（0.9→1.0 收官）
+
+| 阶段 | 交付物 | 状态 | 门禁 / 证据 |
+|------|--------|------|-------------|
+| S1 | 格式层（FORMAT v1 恒 40 字节头、LE 位移与宿主无关、digest 4 对齐、header flags bit2-4 算法位预留） | 已收官 | test_respack_reader/writer/roundtrip 全绿；indexOffset 恒 40 + LE 位移断言 |
+| S2 | 契约（INV-R1..R10、不变量、错误表、CodecId/DigestFunc 签名） | 已收官 | CONTRACT 1.0 校准；source-contract uses 白名单全绿 |
+| S3 | 后端（vfs embedded/os/memtree/sub 零拷贝、P8 地址断言） | 已收官 | test_vfs_conformance/embedded/memtree/facade 全绿 |
+| S4 | 工具链（respack.embed + rp_pack CLI + demo_asset_embed，一键链路） | 已收官 | test_respack_embed 全绿；`make -C core/tools/respack build` + `make -C core/examples/nextpas.core.vfs/demo_asset_embed gen run` 自检绿 |
+| S5 | http.static 接入（`ServeVfs(IVfs)` 直通 embedded，ETag 取 fnv32、条件请求/Range/MIME 与 fs 版同语义） | 已收官 | test_http_static + http_static_vfs_demo 304/206/404 自检绿 |
+
+> S1-S5 已收官，**9+5 门全绿**（以 S1-S5 口径：respack 4 门 + dirsource/embed 2 门 + vfs 4 门核心 + source-contract 1 门 = 9 门核心；S4 工具链 embed + S5 http.static 2 门 + 基准/示例 3 门 = 5 门扩展；合计 14 门全绿；按 S6 含装饰器口径为 12 门闭环 + bench_transform 1 基准，全量无漂移）。
+
+---
+
 ## 变更记录
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-08-25 | 0.9 | 设计阶段契约草案（随 S0 定稿） | AI |
 | 2026-08-28 | 1.0 | 校准：indexOffset 恒 40/CONST 40；LE 位移与宿主无关；digest 4 对齐；header flags bit2-4 算法位预留；签名 CodecId/DigestFunc；门数 12 闭环 | AI |
+| 2026-08-30 | 1.0 | P0-4 收官：补 S1-S5 校准表（S1 格式层/S2 契约/S3 后端/S4 工具链/S5 http.static 已收官，9+5 门全绿；registry 与 FORMAT 已正确无需改） | AI |

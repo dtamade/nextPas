@@ -32,7 +32,7 @@ http.static 对接（S5）已落地：`ServeVfs(AFs)` 让 embedded 后端直接�
 respack 刻意做成纯格式模块：编译器自身的资源打包、离线工具都能用它，
 不需要拖进 vfs 抽象。
 
-## 目标使用形态（未实现，设计签名）
+## 目标使用形态（已实现：`ResPackOpen(@Blob…)` / `ResPackBuild`）
 
 ```pascal
 uses nextpas.core.respack;
@@ -54,6 +54,8 @@ end;
 // 写：条目列表进，单个 blob 出
 var Pack := ResPackBuild(Entries);   // 排序、去重、对齐、写索引
 ```
+
+> 已实现 `ResPackOpen(@Blob…)` / `ResPackBuild` 真实签名（见 `core/src/nextpas.core.respack*.pas` 门面）；一键链路：`make -C demo_asset_embed gen run`（worktree 内 `make -C core/examples/nextpas.core.vfs/demo_asset_embed gen run` 等价，S4 `rp_pack inc` → `.inc` → embedded → `ServeVfs` 全链路自检）。
 
 ## 架构
 
