@@ -384,21 +384,29 @@ begin
 end;
 
 destructor TFixedPool.Destroy;
+var
+  LLeak: Integer;
 begin
-  {$IFDEF DEBUG}
-  if FAllocatedCount <> 0 then
-    raise EMemFixedPoolError.Create(aeInternalError,
-      FormatAllocErrorMsg('TFixedPool', 'Destroy', FixedPoolLeakMessage(FAllocatedCount)));
-  {$ENDIF}
-  // ✅ C-3: 移除死代码分支，FRawBuffer 总是被赋值
-  if FRawBuffer <> nil then
-    FreeMemOf(FAllocator, FRawBuffer, FRawAllocSize);
-  FBuffer := nil;
-  FRawBuffer := nil;
-  FRawAllocSize := 0;
-  SetLength(FFreeStack, 0);
-  SetLength(FIsFree, 0);
-  inherited Destroy;
+  LLeak := FAllocatedCount;
+  try
+    {$IFDEF DEBUG}
+    if LLeak <> 0 then
+      raise EMemFixedPoolError.Create(aeInternalError,
+        FormatAllocErrorMsg('TFixedPool', 'Destroy', FixedPoolLeakMessage(LLeak)));
+    {$ENDIF}
+  finally
+    if FRawBuffer <> nil then
+      try
+        FreeMemOf(FAllocator, FRawBuffer, FRawAllocSize);
+      except
+      end;
+    FBuffer := nil;
+    FRawBuffer := nil;
+    FRawAllocSize := 0;
+    SetLength(FFreeStack, 0);
+    SetLength(FIsFree, 0);
+    inherited Destroy;
+  end;
 end;
 
 
@@ -479,13 +487,20 @@ begin
       FormatAllocErrorMsg('TFixedPool', 'Release', 'Double free detected'));
 
   {$IFDEF DEBUG}
-  // Poison freed memory to expose use-after-free
-  FillMem(Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize), FBlockSize, MEM_POISON_FREED);
+  try
+    FillMem(Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize), FBlockSize, MEM_POISON_FREED);
+  except
+  end;
   {$ENDIF}
   FIsFree[LIdx] := True;
   Dec(FAllocatedCount);
   Inc(FTotalFreeCalls);
   PushFreeIndex(LIdx);
+  {$IFDEF DEBUG}
+  if FAllocatedCount < 0 then
+    raise EMemFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TFixedPool', 'Release', 'AllocatedCount underflow'));
+  {$ENDIF}
 end;
 
 procedure TFixedPool.Reset;

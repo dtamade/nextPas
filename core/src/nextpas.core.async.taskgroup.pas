@@ -127,6 +127,7 @@ var
   LCtx: PTaskWrapCtx;
   LGroup: TAsyncTaskGroup;
   LExpected: Int32;
+  LGene: UInt32;
 begin
   LCtx := PTaskWrapCtx(AContext);
   if LCtx = nil then
@@ -134,6 +135,7 @@ begin
   LExpected := 0;
   if not atomic_compare_exchange_strong(LCtx^.Done, LExpected, 1, mo_acq_rel, mo_acquire) then
     Exit;
+  LGene := LCtx^.Generation;
   LGroup := TAsyncTaskGroup(LCtx^.Group);
   try
     if ARunUser then
@@ -143,7 +145,7 @@ begin
       else if Assigned(LCtx^.UserRef) then
         LCtx^.UserRef(LCtx^.UserContext);
       if LGroup <> nil then
-        LGroup.TaskDone;
+        LGroup.TaskDone(LGene);
     end;
   finally
     Dispose(LCtx);
@@ -193,6 +195,7 @@ begin
   FActiveCount := 0;
   FCompletedCount := 0;
   FTotalCount := 0;
+  FGeneration := 0;
   FToken := AToken;
   platform_mutex_init(FLock, PLATFORM_MUTEX_NORMAL);
   if FToken <> nil then
@@ -206,12 +209,17 @@ begin
   inherited Destroy;
 end;
 
-procedure TAsyncTaskGroup.TaskDone;
+procedure TAsyncTaskGroup.TaskDone(AGeneration: UInt32);
 begin
   platform_mutex_lock(FLock);
-  Dec(FActiveCount);
-  Inc(FCompletedCount);
-  platform_mutex_unlock(FLock);
+  try
+    if AGeneration <> FGeneration then
+      Exit;
+    Dec(FActiveCount);
+    Inc(FCompletedCount);
+  finally
+    platform_mutex_unlock(FLock);
+  end;
   CheckCompletion;
 end;
 
@@ -246,6 +254,7 @@ end;
 procedure TAsyncTaskGroup.RunTask(ACallback: TAsyncCallback; AContext: Pointer);
 var
   LCtx: PTaskWrapCtx;
+  LGene: UInt32;
 begin
   platform_mutex_lock(FLock);
   try
@@ -254,6 +263,7 @@ begin
     FState := agsRunning;
     Inc(FActiveCount);
     Inc(FTotalCount);
+    LGene := FGeneration;
   finally
     platform_mutex_unlock(FLock);
   end;
@@ -264,12 +274,14 @@ begin
   LCtx^.UserContext := AContext;
   LCtx^.Group := Pointer(Self);
   LCtx^.Done := 0;
+  LCtx^.Generation := LGene;
   FLoop.PostEx(@WrappedTaskCallback, LCtx, @DiscardTaskWrap);
 end;
 
 procedure TAsyncTaskGroup.RunTaskRef(ACallback: TAsyncCallbackRef; AContext: Pointer);
 var
   LCtx: PTaskWrapCtx;
+  LGene: UInt32;
 begin
   platform_mutex_lock(FLock);
   try
@@ -278,6 +290,7 @@ begin
     FState := agsRunning;
     Inc(FActiveCount);
     Inc(FTotalCount);
+    LGene := FGeneration;
   finally
     platform_mutex_unlock(FLock);
   end;
@@ -288,6 +301,7 @@ begin
   LCtx^.UserContext := AContext;
   LCtx^.Group := Pointer(Self);
   LCtx^.Done := 0;
+  LCtx^.Generation := LGene;
   FLoop.PostEx(@WrappedTaskRefCallback, LCtx, @DiscardTaskWrap);
 end;
 
@@ -298,7 +312,7 @@ begin
   LImmediate := False;
   platform_mutex_lock(FLock);
   try
-    if FActiveCount = 0 then
+    if (FActiveCount = 0) or (FState = agsCancelled) then
       LImmediate := True
     else
     begin
@@ -319,7 +333,7 @@ begin
   LImmediate := False;
   platform_mutex_lock(FLock);
   try
-    if FActiveCount = 0 then
+    if (FActiveCount = 0) or (FState = agsCancelled) then
       LImmediate := True
     else
     begin
@@ -338,7 +352,7 @@ begin
   platform_mutex_lock(FLock);
   try
     FState := agsCancelled;
-    FActiveCount := 0;
+    Inc(FGeneration);
   finally
     platform_mutex_unlock(FLock);
   end;

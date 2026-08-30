@@ -11,6 +11,7 @@ program test_ssh_session;
  * 未知拒绝 / 文件命中放行）、窗口回补帧容忍、stdout/stderr/exit-code 收集。}
 
 uses
+  nextpas.core.bytes.ops,
   cthreads,
   nextpas.core.system.sysutils,
   nextpas.core.io.intf,
@@ -270,11 +271,6 @@ begin
     end;
 end;
 
-function ConcatBytes(const A, B: TBytes): TBytes;
-begin
-  Result := ConcatAll([A, B]);
-end;
-
 function SigBlobOf(const AAlgName: string; const ARawSig: TBytes): TBytes;
 var
   LW: TsshWriter;
@@ -430,7 +426,7 @@ begin
   if Length(LWire) < 4 then
   begin
     while (Length(LWire) < 4) and RecvRaw(LMore) do
-      LWire := ConcatBytes(LWire, LMore);
+      BytesAppend(LWire, LMore);
     if Length(LWire) < 4 then
       Exit;
   end;
@@ -440,7 +436,7 @@ begin
   begin
     if not RecvRaw(LMore) then
       Exit;
-    LWire := ConcatBytes(LWire, LMore);
+    BytesAppend(LWire, LMore);
   end;
   { 帧内可能粘包：只消费本帧，剩余留给下一次（回退读位置）}
   FEnd.Rewind(SizeUInt(Length(LWire)) - (4 + LLen));
@@ -471,7 +467,7 @@ begin
   begin
     if not RecvRaw(LBuf) then
       Exit;
-    LHeader := ConcatBytes(LHeader, LBuf);
+    BytesAppend(LHeader, LBuf);
   end;
   LBodyLen := FRecv.BodyLengthFromHeader(FRecvSeq, Copy(LHeader, 0, 4));
   SetLength(LTrailer, FRecv.TrailerSize(LBodyLen));
@@ -479,7 +475,7 @@ begin
   begin
     if not RecvRaw(LBuf) then
       Exit;
-    LHeader := ConcatBytes(LHeader, LBuf);
+    BytesAppend(LHeader, LBuf);
   end;
   LPacket := Copy(LHeader, 0, 4 + SizeInt(Length(LTrailer)));
   FEnd.Rewind(SizeUInt(Length(LHeader))
@@ -1075,7 +1071,7 @@ begin
     LW.PutUInt32(ACheck);
     LW.PutStringText(AKeyType);
     LW.PutStringBytes(Copy(APub, 0, 32));
-    LW.PutStringBytes(ConcatBytes(ASeed, Copy(APub, 0, 32)));
+    LW.PutStringBytes(BytesConcat(ASeed, Copy(APub, 0, 32)));
     LW.PutStringText('loop client key');
     Result := LW.ToBytes;
   finally

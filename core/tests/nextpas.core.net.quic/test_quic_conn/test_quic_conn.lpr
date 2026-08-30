@@ -22,6 +22,7 @@ program test_quic_conn;
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.fs.path,
   nextpas.core.fs.util,
   nextpas.core.crypto.hash,
@@ -212,13 +213,6 @@ begin
   SetLength(ABuf, LN + Length(ATail));
   for LI := 0 to Length(ATail) - 1 do
     ABuf[LN + LI] := ATail[LI];
-end;
-
-function ConcatBytes(const AA, AB: TBytes): TBytes;
-begin
-  Result := nil;
-  TB(Result, AA);
-  TB(Result, AB);
 end;
 
 procedure TBByte(var ABuf: TBytes; AVal: Byte);
@@ -832,7 +826,7 @@ begin
       Check(ExtractClientHello(D1, Conn.LocalFirstDcid, LCh), 'ch extracted');
       Check(SrvFlight(GFx, LCh, sfOk, Conn.LocalFirstDcid, DI, DA, DB,
         LKeysR), 'flight built');
-      DAll := ConcatBytes(ConcatBytes(DI, DA), DB);
+      DAll := BytesConcat(BytesConcat(DI, DA), DB);
       Check(Conn.OnDatagram(DAll), 'coalesced err=' + Conn.LastError);
       Check(Conn.Phase = qcpConnected, 'connected via coalesced dgram');
     finally

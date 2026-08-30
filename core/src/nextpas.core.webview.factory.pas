@@ -89,7 +89,7 @@ procedure WebviewExitLoop;
 implementation
 
 uses
-  TypInfo,
+  nextpas.core.atomic,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
   nextpas.core.webview.gtk.win,
@@ -99,8 +99,12 @@ uses
   nextpas.core.webview.wk.loader,
   nextpas.core.webview.wk;
 
+const
+  CWebviewKindNames: array[TWebviewKind] of string = (
+    'wvGtk', 'wvWebview2', 'wvWk', 'wvFake');
+
 var
-  GExitRequested: Boolean = False;
+  GExitRequested: Integer = 0;
 
 function DefaultWebviewKind: TWebviewKind;
 begin
@@ -148,7 +152,7 @@ begin
   if not WebviewBackendAvailable(AKind) then
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is not available in this build', [
-      GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+      CWebviewKindNames[AKind]]);
   case AKind of
     wvFake:     Result := CreateFakeWebview(AOptions);
     wvGtk:      Result := TGtkWebview.Create(AOptions);
@@ -157,15 +161,15 @@ begin
   else
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is registered but has no factory yet', [
-      GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+      CWebviewKindNames[AKind]]);
   end;
 end;
 {$POP}
 
 procedure WebviewRunLoop;
 begin
-  GExitRequested := False;
-  while not GExitRequested do
+  atomic_store(GExitRequested, 0);
+  while atomic_load(GExitRequested) = 0 do
   begin
     if GtkLiveWindowCount > 0 then
       WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
@@ -188,7 +192,7 @@ end;
 
 procedure WebviewExitLoop;
 begin
-  GExitRequested := True;
+  atomic_store(GExitRequested, 1);
   { 阻塞式主循环期间标志位不可轮询——同步触发 quit }
   if GtkLiveWindowCount > 0 then
     WinShellQuitMainLoop;
@@ -340,6 +344,7 @@ end;
 
 procedure TBuilderImpl.GrowInitScripts; inline;
 begin
+  Assert(FInitScriptsCount >= 0, 'GrowInitScripts count');
   SetLength(FInitScripts, WebviewGrowCapacity(Length(FInitScripts)));
 end;
 
@@ -354,11 +359,13 @@ end;
 
 procedure TBuilderImpl.GrowInvokes; inline;
 begin
+  Assert(FInvokesCount >= 0, 'GrowInvokes count');
   SetLength(FInvokes, WebviewGrowCapacity(Length(FInvokes)));
 end;
 
 procedure TBuilderImpl.GrowReady; inline;
 begin
+  Assert(FReadyCount >= 0, 'GrowReady count');
   SetLength(FReady, WebviewGrowCapacity(Length(FReady)));
 end;
 

@@ -235,33 +235,48 @@ function SchemeContextRegistered(ACtx: Pointer): Boolean;
 var
   I: Integer;
 begin
-  for I := 0 to GRegisteredSchemeCtxsCount - 1 do
-    if GRegisteredSchemeCtxs[I] = ACtx then
-      Exit(True);
-  Result := False;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    for I := 0 to GRegisteredSchemeCtxsCount - 1 do
+      if GRegisteredSchemeCtxs[I] = ACtx then
+        Exit(True);
+    Result := False;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 procedure RememberSchemeContext(ACtx: Pointer);
 begin
-  GrowSchemeCtxs;
-  GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := ACtx;
-  Inc(GRegisteredSchemeCtxsCount);
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    GrowSchemeCtxs;
+    GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := ACtx;
+    Inc(GRegisteredSchemeCtxsCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 procedure ForgetSchemeContext(ACtx: Pointer);
 var
   I, J: Integer;
 begin
-  for I := 0 to GRegisteredSchemeCtxsCount - 1 do
-    if GRegisteredSchemeCtxs[I] = ACtx then
-    begin
-      for J := I to GRegisteredSchemeCtxsCount - 2 do
-        GRegisteredSchemeCtxs[J] := GRegisteredSchemeCtxs[J + 1];
-      Dec(GRegisteredSchemeCtxsCount);
-      if GRegisteredSchemeCtxsCount < Length(GRegisteredSchemeCtxs) then
-        GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := nil;
-      Exit;
-    end;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    for I := 0 to GRegisteredSchemeCtxsCount - 1 do
+      if GRegisteredSchemeCtxs[I] = ACtx then
+      begin
+        for J := I to GRegisteredSchemeCtxsCount - 2 do
+          GRegisteredSchemeCtxs[J] := GRegisteredSchemeCtxs[J + 1];
+        Dec(GRegisteredSchemeCtxsCount);
+        if GRegisteredSchemeCtxsCount < Length(GRegisteredSchemeCtxs) then
+          GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := nil;
+        Exit;
+      end;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 function GtkLiveWindowCount: Integer;
@@ -1389,11 +1404,13 @@ end;
 
 function TGtkWebview.GetInvokes: IWebviewInvokeRegistry;
 begin
+  RequireOpen;
   Result := FInvokesIntf;
 end;
 
 function TGtkWebview.GetAssets: IWebviewAssets;
 begin
+  RequireOpen;
   Result := FAssetsIntf;
 end;
 

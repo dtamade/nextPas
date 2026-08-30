@@ -8,19 +8,19 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils;
 
-function SpanEqual(const A, B: TByteSpan): Boolean; inline;
-function SpanCompare(const A, B: TByteSpan): Integer; inline;
+function SpanEqual(const A, B: TByteSpan): Boolean;
+function SpanCompare(const A, B: TByteSpan): Integer;
 
-function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
+function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
-function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
+function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean;
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
 
-function SpanConcat(const A, B: TByteSpan): TBytes; inline;
+function SpanConcat(const A, B: TByteSpan): TBytes;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 function SpanClone(const ASpan: TByteSpan): TBytes;
 
@@ -30,30 +30,19 @@ function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline
 function BytesConcat(const A, B: TBytes): TBytes; inline;
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
-procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
-procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
-procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
-{ Unsigned big-endian helpers (canonical single source for crypto/tls) }
-function StripLeadingZero(const AData: TBytes): TBytes;
-function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer;
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
-function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
 uses
-  nextpas.core.simd;
+  nextpas.core.simd,
+  nextpas.core.simd.memutils;
 
 function SpanEqual(const A, B: TByteSpan): Boolean;
 begin
@@ -64,9 +53,27 @@ begin
   Result := MemEqual(A.Data, B.Data, A.Len);
 end;
 
-function SpanCompare(const A, B: TByteSpan): Integer; inline;
+function SpanCompare(const A, B: TByteSpan): Integer;
+var
+  LMin: SizeUInt;
+  LCmp: Integer;
 begin
-  Result := CompareBytesOrdered(A.Data, B.Data, A.Len, B.Len);
+  if A.Len < B.Len then
+    LMin := A.Len
+  else
+    LMin := B.Len;
+  if LMin > 0 then
+  begin
+    LCmp := SimdMemCompare(A.Data, B.Data, LMin);
+    if LCmp <> 0 then
+      Exit(LCmp);
+  end;
+  if A.Len < B.Len then
+    Result := -1
+  else if A.Len > B.Len then
+    Result := 1
+  else
+    Result := 0;
 end;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt;
@@ -139,8 +146,7 @@ end;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 begin
   Result := nil;
-  if (ALength > 0) and (AOffset + ALength > ASpan.Len) then
-    raise EOutOfRange.Create('SpanCopySlice: offset+length exceeds span');
+  CheckSizeRange(AOffset, ALength, ASpan.Len);
   SetLength(Result, ALength);
   if ALength > 0 then
     Move(ASpan.Data[AOffset], Result[0], ALength);
@@ -172,22 +178,15 @@ begin
     end;
 end;
 
-function BytesConcatMany(const AParts: array of TBytes): TBytes;
+function BytesConcatMany(const AParts: array of TBytes): TBytes; inline;
 var
   I: Integer;
-  LTotal, LOff: SizeUInt;
+  LSpans: array of TByteSpan;
 begin
-  LTotal := 0;
+  SetLength(LSpans, Length(AParts));
   for I := 0 to High(AParts) do
-    Inc(LTotal, Length(AParts[I]));
-  SetLength(Result, LTotal);
-  LOff := 0;
-  for I := 0 to High(AParts) do
-    if Length(AParts[I]) > 0 then
-    begin
-      Move(AParts[I][0], Result[LOff], Length(AParts[I]));
-      Inc(LOff, Length(AParts[I]));
-    end;
+    LSpans[I] := TByteSpan.FromBytes(AParts[I]);
+  Result := SpanConcatMany(LSpans);
 end;
 
 { TBytes convenience }
@@ -232,58 +231,6 @@ begin
   Move(ASrc^, ADest[LOldLen], ASrcLen);
 end;
 
-procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
-var
-  LLen: SizeUInt;
-begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 1);
-  ADest[LLen] := AValue;
-end;
-
-procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
-var
-  LLen: SizeUInt;
-begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 2);
-  ADest[LLen] := Byte(AValue shr 8);
-  ADest[LLen + 1] := Byte(AValue);
-end;
-
-procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
-var
-  LLen: SizeUInt;
-begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 3);
-  ADest[LLen] := Byte(AValue shr 16);
-  ADest[LLen + 1] := Byte(AValue shr 8);
-  ADest[LLen + 2] := Byte(AValue);
-end;
-
-procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-var
-  LLen: SizeUInt;
-begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 4);
-  ADest[LLen] := Byte(AValue shr 24);
-  ADest[LLen + 1] := Byte(AValue shr 16);
-  ADest[LLen + 2] := Byte(AValue shr 8);
-  ADest[LLen + 3] := Byte(AValue);
-end;
-
-procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
-var
-  LLen: SizeUInt;
-begin
-  if (AData = nil) or (ACount = 0) then Exit;
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + ACount);
-  Move(AData^, ADest[LLen], ACount);
-end;
-
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
 begin
   Result := SpanStartsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(APrefix));
@@ -292,60 +239,6 @@ end;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean;
 begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
-end;
-
-function StripLeadingZero(const AData: TBytes): TBytes; inline;
-var
-  I, LLen: Integer;
-begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-  if I >= Length(AData) then
-  begin
-    SetLength(Result, 1);
-    Result[0] := 0;
-    Exit;
-  end;
-  LLen := Length(AData) - I;
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AData[I], Result[0], LLen);
-end;
-
-function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-begin
-  Result := StripLeadingZero(AData);
-end;
-
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
-var
-  LLeft, LRight: TBytes;
-begin
-  LLeft := StripLeadingZero(ALeft);
-  LRight := StripLeadingZero(ARight);
-  if Length(LLeft) < Length(LRight) then
-    Exit(-1);
-  if Length(LLeft) > Length(LRight) then
-    Exit(1);
-  if Length(LLeft) = 0 then
-    Exit(0);
-  Result := CompareBytesOrdered(@LLeft[0], @LRight[0], Length(LLeft), Length(LRight));
-end;
-
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
-begin
-  Result := CompareUnsigned(ALeft, ARight);
-end;
-
-function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
-begin
-  Result := CompareUnsigned(ALeft, ARight) = 0;
-end;
-
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
-begin
-  Result := UnsignedEqual(ALeft, ARight);
 end;
 
 function BytesToString(const ABytes: TBytes): string; inline;

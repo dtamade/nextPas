@@ -143,34 +143,77 @@ end;
 destructor TAsyncChannel.Destroy;
 var
   LChunk, LNextChunk: PDataChunk;
-  LWaiter, LNextWaiter: PReceiveWaiter;
-  LSender, LNextSender: PSendWaiter;
+  LWaiter: PReceiveWaiter;
+  LSender: PSendWaiter;
 begin
-  LChunk := FDataHead;
-  while LChunk <> nil do
-  begin
-    LNextChunk := LChunk^.Next;
-    FreeMem(LChunk^.Data, LChunk^.Size);
-    Dispose(LChunk);
-    LChunk := LNextChunk;
-  end;
-  LWaiter := FWaiterHead;
-  while LWaiter <> nil do
-  begin
-    LNextWaiter := LWaiter^.Next;
-    Dispose(LWaiter);
-    LWaiter := LNextWaiter;
-  end;
-  LSender := FSendHead;
-  while LSender <> nil do
-  begin
-    LNextSender := LSender^.Next;
-    FreeMem(LSender^.Data, LSender^.Size);
-    Dispose(LSender);
-    LSender := LNextSender;
+  platform_mutex_lock(FLock);
+  try
+    if not FClosed then
+    begin
+      FClosed := True;
+      while FWaiterHead <> nil do
+      begin
+        LWaiter := FWaiterHead;
+        FWaiterHead := LWaiter^.Next;
+        try
+          if Assigned(LWaiter^.Callback) then
+            FLoop.Post(LWaiter^.Callback, LWaiter^.Context)
+          else if Assigned(LWaiter^.Ref) then
+            FLoop.PostRef(LWaiter^.Ref, LWaiter^.Context);
+        except
+        end;
+        Dispose(LWaiter);
+      end;
+      FWaiterTail := nil;
+      while FSendHead <> nil do
+      begin
+        LSender := FSendHead;
+        FSendHead := LSender^.Next;
+        try
+          if Assigned(LSender^.Callback) then
+            FLoop.Post(LSender^.Callback, LSender^.Context)
+          else if Assigned(LSender^.Ref) then
+            FLoop.PostRef(LSender^.Ref, LSender^.Context);
+        except
+        end;
+        FreeMem(LSender^.Data, LSender^.Size);
+        Dispose(LSender);
+      end;
+      FSendTail := nil;
+    end else
+    begin
+      while FWaiterHead <> nil do
+      begin
+        LWaiter := FWaiterHead;
+        FWaiterHead := LWaiter^.Next;
+        Dispose(LWaiter);
+      end;
+      FWaiterTail := nil;
+      while FSendHead <> nil do
+      begin
+        LSender := FSendHead;
+        FSendHead := LSender^.Next;
+        FreeMem(LSender^.Data, LSender^.Size);
+        Dispose(LSender);
+      end;
+      FSendTail := nil;
+    end;
+    LChunk := FDataHead;
+    while LChunk <> nil do
+    begin
+      LNextChunk := LChunk^.Next;
+      FreeMem(LChunk^.Data, LChunk^.Size);
+      Dispose(LChunk);
+      LChunk := LNextChunk;
+    end;
+    FDataHead := nil;
+    FDataTail := nil;
+    FDataCount := 0;
+    FCurrentSize := 0;
+  finally
+    platform_mutex_unlock(FLock);
   end;
   platform_mutex_destroy(FLock);
-  { 不 Dispose(FLoop)，因为不拥有 }
   inherited;
 end;
 
