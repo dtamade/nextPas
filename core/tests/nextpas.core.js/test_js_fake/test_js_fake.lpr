@@ -567,6 +567,17 @@ begin
   finally Obj.Free; end;
 end;
 
+procedure TestCloseIdempotent;
+var Ctx: IJsContext;
+begin
+  Ctx := MakeCtx;
+  Check(not Ctx.IsClosed, 'not closed');
+  Ctx.Close;
+  Check(Ctx.IsClosed, 'closed');
+  Ctx.Close;
+  Check(Ctx.IsClosed, 'still closed');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.js.fake');
   // 值语义 6
@@ -607,8 +618,9 @@ begin
   T.Test('getsetprop noop', @TestGetSetPropNoop);
   T.Test('call noop', @TestCallNoop);
   T.Test('global is object', @TestGlobalIsObject);
-  // 生命周期 7
+  // 生命周期 8
   T.Test('isclosed', @TestIsClosedAndCloseIdempotent);
+  T.Test('close idempotent', @TestCloseIdempotent);
   T.Test('runtime opts propagate', @TestRuntimeOptionsPropagate);
   T.Test('gc idempotent', @TestCollectGarbageIdempotent);
   T.Test('tick idempotent', @TestTickIdempotent);

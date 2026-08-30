@@ -83,8 +83,7 @@ type
     procedure SetHostFunction(const AName: string; AHandler: TJsHostProc); overload;
     procedure RemoveHostFunction(const AName: string);
     procedure Tick;
-    procedure CollectGarbage;
-    function IsClosed: Boolean;
+    procedure CollectGarbage; procedure Close; function IsClosed: Boolean;
   end;
 implementation
 uses
@@ -201,17 +200,6 @@ begin
 end;
 
 
-function IsTrimEq_Fake(const S, Lit: string): Boolean; inline;
-var I,J,K: Integer;
-begin
-  I:=1; J:=Length(S);
-  while (I<=J) and (S[I] in [' ',#9,#10,#13]) do Inc(I);
-  while (J>=I) and (S[J] in [' ',#9,#10,#13]) do Dec(J);
-  if (J-I+1)<>Length(Lit) then Exit(False);
-  for K:=1 to Length(Lit) do if S[I+K-1]<>Lit[K] then Exit(False);
-  Result:=True;
-end;
-
 function TJsFakeContext.DoEval(const ACode: string): TJsValue;
 var
   LCode: string;
@@ -226,23 +214,23 @@ var
   LHasArg: Boolean;
 begin
   LNoArgs:=nil;
-  if IsTrimEq_Fake(ACode,'') then
+  if JsTrimEquals(ACode,'') then
     raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkFake);
   if (Pos('while(true)', ACode) > 0) and (FOptions.TimeoutMs > 0) then
     raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', jsbkFake);
   if (FOptions.MemoryLimit > 0) and (FOptions.MemoryLimit < 1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkFake);
-  if IsTrimEq_Fake(ACode,'1+2') then Exit(JsIntValue(3));
-  if IsTrimEq_Fake(ACode,'bad(') then
+  if JsTrimEquals(ACode,'1+2') then Exit(JsIntValue(3));
+  if JsTrimEquals(ACode,'bad(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', jsbkFake);
-  if IsTrimEq_Fake(ACode,'foo(') then
+  if JsTrimEquals(ACode,'foo(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', jsbkFake);
   if (Pos('JSON.stringify', ACode) > 0) and (Pos('x', ACode) > 0) then
     Exit(JsStringValue('{"x":1}'));
-  if IsTrimEq_Fake(ACode,'null') then Exit(JsNullValue);
-  if IsTrimEq_Fake(ACode,'undefined') then Exit(JsUndefinedValue);
-  if IsTrimEq_Fake(ACode,'true') then Exit(JsBoolValue(True));
-  if IsTrimEq_Fake(ACode,'false') then Exit(JsBoolValue(False));
+  if JsTrimEquals(ACode,'null') then Exit(JsNullValue);
+  if JsTrimEquals(ACode,'undefined') then Exit(JsUndefinedValue);
+  if JsTrimEquals(ACode,'true') then Exit(JsBoolValue(True));
+  if JsTrimEquals(ACode,'false') then Exit(JsBoolValue(False));
   LCode := TextTrim(ACode);
   LIdx := Pos('(', LCode);
   if LIdx > 0 then
@@ -541,6 +529,7 @@ begin
   EnsureNotClosed;
 end;
 
+procedure TJsFakeContext.Close; begin if FClosed then Exit; FClosed:=True; end;
 function TJsFakeContext.IsClosed: Boolean;
 begin
   Result := FClosed;

@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js`
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）
-**版本**：0.4（S0 冻结）
+**版本**：0.7（M1 落地：10 单元 + bench 全绿）
 
 ---
 
@@ -101,3 +101,4 @@ core/examples/nextpas.core.js/demo_js/
 | 2026-08-30 | 0.2 | 初版 S0–S4 |
 | 2026-08-30 | 0.3 | 生产级：门禁证据/测试布局/晋升证据显式化 |
 | 2026-08-30 | 0.4 | 冻结：12 份完整化，S0 产出与门禁对齐 ACCEPTANCE G-M0 |
+| 2026-08-30 | 0.7 | M1 落地：10 单元 + js888/v8/chakra 纯族 + bench 5 后端全绿 + Close 生命周期 |

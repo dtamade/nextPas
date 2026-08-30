@@ -39,7 +39,7 @@ type
   procedure SetHostFunction(const AName: string; AHandler: TJsHostFunction); overload;
   procedure SetHostFunction(const AName: string; AHandler: TJsHostMethod); overload;
   procedure SetHostFunction(const AName: string; AHandler: TJsHostProc); overload;
-  procedure RemoveHostFunction(const AName: string); procedure Tick; procedure CollectGarbage; function IsClosed: Boolean;
+  procedure RemoveHostFunction(const AName: string); procedure Tick; procedure CollectGarbage; procedure Close; function IsClosed: Boolean;
   end;
 implementation
 uses nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text, nextpas.core.platform.thread;
@@ -66,17 +66,6 @@ var I: Integer; C: Char; begin Result:=False; if AName='' then Exit; if Pos('..'
   for I:=1 to Length(AName) do begin C:=AName[I]; if C='.' then Continue; if not (C in ['A'..'Z','a'..'z','_','$','0'..'9']) then Exit;
     if (I>1) and (AName[I-1]<>'.') then Continue; if (C in ['0'..'9']) and ((I=1) or (AName[I-1]='.')) then Exit; end; Result:=True; end;
 
-function IsTrimEq_Js888(const S, Lit: string): Boolean; inline;
-var I,J,K: Integer;
-begin
-  I:=1; J:=Length(S);
-  while (I<=J) and (S[I] in [' ',#9,#10,#13]) do Inc(I);
-  while (J>=I) and (S[J] in [' ',#9,#10,#13]) do Dec(J);
-  if (J-I+1)<>Length(Lit) then Exit(False);
-  for K:=1 to Length(Lit) do if S[I+K-1]<>Lit[K] then Exit(False);
-  Result:=True;
-end;
-
 function TJsJs888Context.DoEval(const ACode: string): TJsValue;
 var
   LCode: string;
@@ -91,23 +80,23 @@ var
   LHasArg: Boolean;
 begin
   LNoArgs:=nil;
-  if IsTrimEq_Js888(ACode,'') then
+  if JsTrimEquals(ACode,'') then
     raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkJs888);
   if (Pos('while(true)', ACode) > 0) and (FOptions.TimeoutMs > 0) then
     raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', jsbkJs888);
   if (FOptions.MemoryLimit > 0) and (FOptions.MemoryLimit < 1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkJs888);
-  if IsTrimEq_Js888(ACode,'1+2') then Exit(JsIntValue(3));
-  if IsTrimEq_Js888(ACode,'bad(') then
+  if JsTrimEquals(ACode,'1+2') then Exit(JsIntValue(3));
+  if JsTrimEquals(ACode,'bad(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', jsbkJs888);
-  if IsTrimEq_Js888(ACode,'foo(') then
+  if JsTrimEquals(ACode,'foo(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', jsbkJs888);
   if (Pos('JSON.stringify', ACode) > 0) and (Pos('x', ACode) > 0) then
     Exit(JsStringValue('{"x":1}'));
-  if IsTrimEq_Js888(ACode,'null') then Exit(JsNullValue);
-  if IsTrimEq_Js888(ACode,'undefined') then Exit(JsUndefinedValue);
-  if IsTrimEq_Js888(ACode,'true') then Exit(JsBoolValue(True));
-  if IsTrimEq_Js888(ACode,'false') then Exit(JsBoolValue(False));
+  if JsTrimEquals(ACode,'null') then Exit(JsNullValue);
+  if JsTrimEquals(ACode,'undefined') then Exit(JsUndefinedValue);
+  if JsTrimEquals(ACode,'true') then Exit(JsBoolValue(True));
+  if JsTrimEquals(ACode,'false') then Exit(JsBoolValue(False));
   LCode := TextTrim(ACode);
   LIdx := Pos('(', LCode);
   if LIdx > 0 then
@@ -208,5 +197,6 @@ procedure TJsJs888Context.RemoveHostFunction(const AName: string);
 var LIdx,I: Integer; begin EnsureNotClosed; LIdx:=FindHost(AName); if LIdx<0 then Exit; for I:=LIdx to High(FHostFuncs)-1 do FHostFuncs[I]:=FHostFuncs[I+1]; SetLength(FHostFuncs,Length(FHostFuncs)-1); end;
 procedure TJsJs888Context.Tick; begin EnsureNotClosed; end;
 procedure TJsJs888Context.CollectGarbage; begin EnsureNotClosed; end;
+procedure TJsJs888Context.Close; begin if FClosed then Exit; FClosed:=True; end;
 function TJsJs888Context.IsClosed: Boolean; begin Result:=FClosed; end;
 end.

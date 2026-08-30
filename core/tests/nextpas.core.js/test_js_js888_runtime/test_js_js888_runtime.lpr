@@ -539,6 +539,43 @@ begin
   Check(V.IsObject, 'obj');
   V := JsArrayValue;
   Check(V.IsArray, 'arr');
+  V := JsSymbolValue('s');
+  Check(V.IsSymbol, 'sym');
+  V := JsBigIntValue(1);
+  Check(V.IsBigInt, 'bigint');
+end;
+
+procedure TestObjectComplete;
+var Ctx: IJsContext; O: TJsValue; Keys: TJsStringArray; E, Fn: TJsValue; Obj: THostObj;
+begin
+  Ctx := MakeCtx;
+  O := Ctx.NewObject;
+  Check(not Ctx.HasProp(O, 'x'), 'has false');
+  Check(not Ctx.DeleteProp(O, 'x'), 'del false');
+  Keys := Ctx.GetKeys(O);
+  Check(Length(Keys)=0, 'keys empty');
+  E := Ctx.NewError('boom', jecUnknown);
+  Check(E.IsError, 'new error');
+  Fn := Ctx.NewFunction('fn', @HostEcho);
+  Check(Fn.IsFunction, 'new fn ref');
+  Obj := THostObj.Create;
+  try
+    Fn := Ctx.NewFunction('fn2', @Obj.MethodEcho);
+    Check(Fn.IsFunction, 'new fn method');
+    Fn := Ctx.NewFunction('fn3', @HostProcEcho);
+    Check(Fn.IsFunction, 'new fn proc');
+  finally Obj.Free; end;
+end;
+
+procedure TestCloseIdempotent;
+var Ctx: IJsContext;
+begin
+  Ctx := MakeCtx;
+  Check(not Ctx.IsClosed, 'not closed');
+  Ctx.Close;
+  Check(Ctx.IsClosed, 'closed');
+  Ctx.Close;
+  Check(Ctx.IsClosed, 'still closed');
 end;
 
 begin
@@ -583,11 +620,13 @@ begin
   T.Test('global is object', @TestGlobalIsObject);
   // 生命周期 7
   T.Test('isclosed', @TestIsClosedAndCloseIdempotent);
+  T.Test('close idempotent', @TestCloseIdempotent);
   T.Test('runtime opts propagate', @TestRuntimeOptionsPropagate);
   T.Test('gc idempotent', @TestCollectGarbageIdempotent);
   T.Test('tick idempotent', @TestTickIdempotent);
   T.Test('thread affinity', @TestThreadAffinity);
   T.Test('create default', @TestCreateJsRuntimeDefault);
   T.Test('value valid kind', @TestValueIsValidAndKind);
+  T.Test('object complete', @TestObjectComplete);
   if not T.Run then Halt(1);
 end.

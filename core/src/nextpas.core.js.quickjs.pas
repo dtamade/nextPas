@@ -82,8 +82,7 @@ type
     procedure SetHostFunction(const AName: string; AHandler: TJsHostProc); overload;
     procedure RemoveHostFunction(const AName: string);
     procedure Tick;
-    procedure CollectGarbage;
-    function IsClosed: Boolean;
+    procedure CollectGarbage; procedure Close; function IsClosed: Boolean;
   end;
 
 implementation
@@ -230,6 +229,8 @@ function TJsQuickJsContext.Eval(const ACode: string; const AFileName: string): T
 var V: TJSQjsValue; S: string; FileName: RawByteString; CodeBytes: RawByteString;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
+  if JsTrimEquals(ACode,'') then
+    raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkQuickJs);
   if (FOptions.MemoryLimit>0) and (FOptions.MemoryLimit<1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkQuickJs);
   if FOptions.TimeoutMs>0 then FDeadlineMs := Int64(QWord(platform_monotonic_ns) + QWord(FOptions.TimeoutMs) * 1000000);
@@ -293,6 +294,7 @@ begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create
 procedure TJsQuickJsContext.RemoveHostFunction(const AName: string); var LIdx,I: Integer; begin EnsureNotClosed; LIdx:=FindHost(AName); if LIdx<0 then Exit; for I:=LIdx to High(FHostFuncs)-1 do FHostFuncs[I]:=FHostFuncs[I+1]; SetLength(FHostFuncs,Length(FHostFuncs)-1); end;
 procedure TJsQuickJsContext.Tick; begin EnsureNotClosed; end;
 procedure TJsQuickJsContext.CollectGarbage; begin EnsureNotClosed; if Assigned(JS_RunGCPtr) and (FRT<>nil) then JS_RunGCPtr(FRT); end;
+procedure TJsQuickJsContext.Close; begin if FClosed then Exit; if FCtx<>nil then JS_FreeContextPtr(FCtx); FCtx:=nil; if FRT<>nil then JS_FreeRuntimePtr(FRT); FRT:=nil; FClosed:=True; end;
 function TJsQuickJsContext.IsClosed: Boolean; begin Result:=FClosed; end;
 
 end.

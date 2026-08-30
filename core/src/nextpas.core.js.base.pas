@@ -52,6 +52,7 @@ type
 function JsBackendKindToString(AKind: TJsBackendKind): string; inline;
 function JsErrorCategoryToString(ACat: TJsErrorCategory): string; inline;
 function JsValueKindToString(AKind: TJsValueKind): string; inline;
+function JsTrimEquals(const S, Lit: string): Boolean; inline;
 procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);
 
 implementation
@@ -128,6 +129,17 @@ begin
     jskSymbol: Result := 'jskSymbol';
     jskBigInt: Result := 'jskBigInt';
   end;
+end;
+
+function JsTrimEquals(const S, Lit: string): Boolean;
+var I,J,K: Integer;
+begin
+  I:=1; J:=Length(S);
+  while (I<=J) and (S[I] in [' ',#9,#10,#13]) do Inc(I);
+  while (J>=I) and (S[J] in [' ',#9,#10,#13]) do Dec(J);
+  if (J-I+1)<>Length(Lit) then Exit(False);
+  for K:=1 to Length(Lit) do if S[I+K-1]<>Lit[K] then Exit(False);
+  Result:=True;
 end;
 
 procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);

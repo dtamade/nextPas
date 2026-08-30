@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-30
-**版本**：0.5（六维 P0 清零，18 份完整，待 M1 源码后晋升 1.0）
+**版本**：0.7（六维 P0 清零，10 单元 + bench 全绿，待 1.0 冻结）
 
 ---
 
@@ -337,3 +337,6 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 2026-08-30 | 0.2 | 完整化：双层值语义、三形态宿主、超时中断、线程亲和 | codex/core-js |
 | 2026-08-30 | 0.3 | 生产级完整化：uses 闭包表/源契约扫描/门禁证据/性能表/稳定性显式化 | codex/core-js |
 | 2026-08-30 | 0.4 | 冻结：12 份完整化关联（ROADMAP/ACCEPTANCE/TESTING/SECURITY/BENCHMARKS/AI_GUIDE/REVIEW） | codex/core-js |
+| 2026-08-30 | 0.5 | 增补：GAME888_BORROW/FAQ/DECISIONS，DESIGN 反哺批处理/静链动探 | codex/core-js |
+| 2026-08-30 | 0.6 | 六维硬化：demo_js 可拷贝、17 份索引、CHANGELOG/SIXDIM 闭环 | codex/core-js |
+| 2026-08-30 | 0.7 | M1 落地：10 单元（fake/js888/v8/chakra）+ Close/AsJson owner/Trim 归一 + bench 5 后端全绿 | codex/core-js |

@@ -49,7 +49,7 @@ type
     procedure SetHostFunction(const AName: string; AHandler: TJsHostMethod); overload;
     procedure SetHostFunction(const AName: string; AHandler: TJsHostProc); overload;
     procedure RemoveHostFunction(const AName: string);
-    procedure Tick; procedure CollectGarbage; function IsClosed: Boolean;
+    procedure Tick; procedure CollectGarbage; procedure Close; function IsClosed: Boolean;
   end;
 function JsUndefinedValue: TJsValue; inline; function JsNullValue: TJsValue; inline; function JsBoolValue(AValue: Boolean): TJsValue; inline;
 function JsIntValue(AValue: Int64): TJsValue; inline; function JsDoubleValue(AValue: Double): TJsValue; inline; function JsStringValue(const AValue: string): TJsValue; inline;
@@ -57,7 +57,7 @@ function JsObjectValue: TJsValue; inline; function JsArrayValue: TJsValue; inlin
 function JsSymbolValue(const ADesc: string): TJsValue; inline; function JsBigIntValue(AValue: Int64): TJsValue; inline;
 function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsPromiseValue: TJsValue; inline;
 implementation
-uses nextpas.core.base;
+uses nextpas.core.base, nextpas.core.text;
 function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; end;
 function JsNullValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNull; end;
 function JsBoolValue(AValue: Boolean): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskBoolean; Result.FBoolVal:=AValue; end;
@@ -89,7 +89,7 @@ function TJsValue.AsBool: Boolean; begin if Kind<>jskBoolean then Exit(False); R
 function TJsValue.AsInt: Int64; begin if Kind<>jskNumber then if Kind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if Kind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; begin if Kind<>jskString then if Kind=jskSymbol then Exit(FStrVal) else Exit(''); Result:=FStrVal; end;
-function TJsValue.AsJson: string; begin case Kind of jskUndefined: Result:='undefined'; jskNull: Result:='null'; jskBoolean: if FBoolVal then Result:='true' else Result:='false'; jskNumber: Result:=nextpas.core.base.IntToStr(FIntVal); jskString: Result:='"'+FStrVal+'"'; jskSymbol: Result:='Symbol('+FStrVal+')'; jskBigInt: Result:=nextpas.core.base.IntToStr(FIntVal)+'n'; else Result:=''; end; end;
+function TJsValue.AsJson: string; begin case Kind of jskUndefined: Result:='undefined'; jskNull: Result:='null'; jskBoolean: if FBoolVal then Result:='true' else Result:='false'; jskNumber: Result:=nextpas.core.text.IntToStr(FIntVal); jskString: Result:='"'+FStrVal+'"'; jskSymbol: Result:='Symbol('+FStrVal+')'; jskBigInt: Result:=nextpas.core.text.IntToStr(FIntVal)+'n'; else Result:=''; end; end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=Kind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=Kind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin Result:=Kind=jskString; if Result then V:=FStrVal else V:=''; end;
