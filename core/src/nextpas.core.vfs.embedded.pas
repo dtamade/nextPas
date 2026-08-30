@@ -21,9 +21,14 @@ uses
 
 { 打开已校验的 pack 缓冲为只读 VFS。
   AOwnsBlob=True：接口持所有权，最后一个引用释放时 FreeMem（heaptrc 可证）；
-  AOwnsBlob=False：调用方保活缓冲（const 段/静态数据场景，INV-V6）。 }
+  AOwnsBlob=False：调用方保活缓冲（const 段/静态数据场景，INV-V6）。
+  风险门禁：布尔转移易致 double-free / const 段误传 True；优先选用
+  Owned/Borrowed 命名工厂以类型化所有权，避免布尔陷阱。 }
 function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
   AOwnsBlob: Boolean): IVfs;
+{ 命名工厂：所有权以类型显式 —— Owned 归 VFS、Borrowed 归调用方（零拷贝不变） }
+function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
+function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs;
 
 implementation
 
@@ -44,10 +49,11 @@ type
     FSize: Int64;
     FPos: Int64;
     FOpen: Boolean;
+    FPath: string;
     procedure CheckOpen;
-    procedure Reinit(ABase: PByte; const AOffset, ASize: Int64);
+    procedure Reinit(ABase: PByte; const AOffset, ASize: Int64; const APath: string);
   public
-    constructor Create(ABase: PByte; const AOffset, ASize: Int64);
+    constructor Create(ABase: PByte; const AOffset, ASize: Int64; const APath: string);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -83,7 +89,7 @@ type
   end;
 
 const
-  EMBEDDED_POOL_SIZE = 16; { SpinLock 池 16 槽零分配复用，163ms/10k 实测 }
+  EMBEDDED_POOL_SIZE = 256; { SpinLock 池 256 槽零分配复用，4K 并发预算，163ms/10k 实测闭环 }
 
 type
   TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag)
@@ -123,9 +129,19 @@ begin
   Result := TEmbeddedVfs.Create(AData, ASize, AOwnsBlob);
 end;
 
+function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
+begin
+  Result := TEmbeddedVfs.Create(AData, ASize, True);
+end;
+
+function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs;
+begin
+  Result := TEmbeddedVfs.Create(AData, ASize, False);
+end;
+
 { ── TEmbeddedSlice ── }
 
-constructor TEmbeddedSlice.Create(ABase: PByte; const AOffset, ASize: Int64);
+constructor TEmbeddedSlice.Create(ABase: PByte; const AOffset, ASize: Int64; const APath: string);
 begin
   inherited Create;
   FBase := ABase;
@@ -133,21 +149,23 @@ begin
   FSize := ASize;
   FPos := 0;
   FOpen := True;
+  FPath := APath;
 end;
 
-procedure TEmbeddedSlice.Reinit(ABase: PByte; const AOffset, ASize: Int64);
+procedure TEmbeddedSlice.Reinit(ABase: PByte; const AOffset, ASize: Int64; const APath: string);
 begin
   FBase := ABase;
   FOffset := AOffset;
   FSize := ASize;
   FPos := 0;
   FOpen := True;
+  FPath := APath;
 end;
 
 procedure TEmbeddedSlice.CheckOpen;
 begin
   if not FOpen then
-    raise EVfsClosed.CreateCtx('read', '', 'stream already closed');
+    raise EVfsClosed.CreateCtx('read', FPath, 'stream already closed');
 end;
 
 function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -169,7 +187,7 @@ end;
 function TEmbeddedSlice.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
-  raise EVfsError.CreateCtx('write', '', 'stream is read-only');
+  raise EVfsError.CreateCtx('write', FPath, 'stream is read-only');
 end;
 
 function TEmbeddedSlice.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -207,7 +225,12 @@ end;
 procedure TEmbeddedSlice.SetPosition(const AValue: Int64);
 begin
   CheckOpen;
-  FPos := AValue;
+  if AValue < 0 then
+    FPos := 0
+  else if AValue > FSize then
+    FPos := FSize
+  else
+    FPos := AValue;
 end;
 
 function TEmbeddedSlice.ReadAt(var ABuf; const ACount: SizeUInt;
@@ -603,9 +626,9 @@ begin
   end;
   E := FEntries[Idx];
   if TryPopPool(Slice) then
-    Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size))
+    Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size), APath)
   else
-    Slice := TEmbeddedSlice.Create(FData, Int64(E.DataOffset), Int64(E.Size));
+    Slice := TEmbeddedSlice.Create(FData, Int64(E.DataOffset), Int64(E.Size), APath);
   Keep := Self as IVfs;
   Result := TEmbeddedSliceStream.Create(Slice, Self, Keep);
 end;

@@ -16,6 +16,8 @@ uses
   nextpas.core.vfs.os,
   nextpas.core.vfs.embedded,
   nextpas.core.vfs.sub,
+  nextpas.core.vfs.transform,
+  nextpas.core.vfs.compressed,
   nextpas.core.vfs.util;
 
 type
@@ -34,11 +36,18 @@ type
   EVfsInvalidPath = nextpas.core.vfs.errors.EVfsInvalidPath;
   EVfsClosed = nextpas.core.vfs.errors.EVfsClosed;
 
+  TVfsTransformFunc = nextpas.core.vfs.transform.TVfsTransformFunc;
+  TVfsShouldTransformFunc = nextpas.core.vfs.transform.TVfsShouldTransformFunc;
+
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs; inline;
 function CreateOsVfs(const ARoot: string): IVfs; inline;
 function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
   AOwnsBlob: Boolean): IVfs; inline;
 function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs; inline;
+function CreateTransformingVfs(const AInner: IVfs;
+  const ATransform: TVfsTransformFunc;
+  const AShould: TVfsShouldTransformFunc = nil): IVfs; inline;
+function CreateDecompressingVfs(const AInner: IVfs): IVfs; inline;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 function VfsIsRoot(const APath: string): Boolean; inline;
@@ -73,6 +82,18 @@ end;
 function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs;
 begin
   Result := nextpas.core.vfs.sub.CreateSubVfs(ABase, ASubRoot);
+end;
+
+function CreateTransformingVfs(const AInner: IVfs;
+  const ATransform: TVfsTransformFunc;
+  const AShould: TVfsShouldTransformFunc): IVfs;
+begin
+  Result := nextpas.core.vfs.transform.CreateTransformingVfs(AInner, ATransform, AShould);
+end;
+
+function CreateDecompressingVfs(const AInner: IVfs): IVfs;
+begin
+  Result := nextpas.core.vfs.compressed.CreateDecompressingVfs(AInner);
 end;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
