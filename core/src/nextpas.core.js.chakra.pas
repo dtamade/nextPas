@@ -99,6 +99,19 @@ procedure TJsChakraContext.RemoveHostFunction(const AName: string);
 var LIdx,I: Integer; begin EnsureNotClosed; LIdx:=FindHost(AName); if LIdx<0 then Exit; for I:=LIdx to High(FHostFuncs)-1 do FHostFuncs[I]:=FHostFuncs[I+1]; SetLength(FHostFuncs,Length(FHostFuncs)-1); end;
 procedure TJsChakraContext.Tick; begin EnsureNotClosed; end;
 procedure TJsChakraContext.CollectGarbage; begin EnsureNotClosed; end;
-procedure TJsChakraContext.Close; begin if FClosed then Exit; FClosed:=True; end;
+procedure TJsChakraContext.Close;
+var I: Integer;
+begin
+  if FClosed then Exit;
+  FClosed := True;
+  for I := 0 to High(FHostFuncs) do
+  begin
+    FHostFuncs[I].Name := '';
+    FHostFuncs[I].Func := nil;
+    FHostFuncs[I].Method := nil;
+    FHostFuncs[I].Proc := nil;
+  end;
+  SetLength(FHostFuncs, 0);
+end;
 function TJsChakraContext.IsClosed: Boolean; begin Result:=FClosed; end;
 end.

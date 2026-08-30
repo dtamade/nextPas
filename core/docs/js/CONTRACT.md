@@ -1,10 +1,10 @@
 # nextpas.core.js 代码契约
 
-**模块路径**：`core/src/nextpas.core.js*.pas`（已落地 10 单元：base/intf/fake/ffi/loader/quickjs/js888/v8/chakra/门面）
+**模块路径**：`core/src/nextpas.core.js*.pas`（已落地 11 单元：base/intf/fake/ffi/loader/quickjs/pure.base/js888/v8/chakra/门面）
 **层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
-**最后更新**：2026-08-30
-**版本**：0.7（六维 P0 清零，10 单元 + bench 全绿，待 1.0 冻结）
+**最后更新**：2026-08-31
+**版本**：0.8（11 单元 pure.base 单源 + V8/Chakra Close 幂等 + 5 gate 全绿）
 
 ---
 
@@ -26,14 +26,15 @@
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
 | `js.quickjs.loader` | `platform.dl` 探测与符号装载（唯一可触 `platform.dl`） | `platform.dl`、`js.base`、`js.quickjs.ffi` | `DynLibs`、`Windows/BaseUnix` |
 | `js.quickjs` | QuickJS 真实现（`uses ffi/loader`，实现 `intf`） | `js.base/intf`、`js.quickjs.ffi/loader`、`json`、`mem` | `webview.*` |
-| `js.js888` | 纯 Pascal 后端（`jsbkJs888`，零 FFI/零 dl，恒可用） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
-| `js.v8` | 纯 Pascal V8 占位（`jsbkV8`，零 FFI/零 dl，恒可用，S3 可演进为真 V8） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
-| `js.chakra` | 纯 Pascal Chakra 占位（`jsbkChakra`，零 FFI/零 dl，恒可用，S3 可演进为真 Chakra） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.pure.base` | 纯后端共享基座（`JsPure*` 零分配视图，零 FFI/零 dl） | `js.base/intf`、`text.view`、`json` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.js888` | 纯 Pascal 后端（`jsbkJs888`，零 FFI/零 dl，恒可用） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.v8` | 纯 Pascal V8 占位（`jsbkV8`，零 FFI/零 dl，恒可用，S3 可演进为真 V8） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.chakra` | 纯 Pascal Chakra 占位（`jsbkChakra`，零 FFI/零 dl，恒可用，S3 可演进为真 Chakra） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.pas` | 门面：re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 上述全部子模块 | 逻辑（纯聚合） |
 
 ```
-base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, js888, v8, chakra} ← 门面
-         ↑ 纯 Pascal 族（js888/v8/chakra）与 quickjs 平级，零 FFI/零 dl
+base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js888, v8, chakra}} ← 门面
+         ↑ pure.base 单源 168 行，js888/v8/chakra 各 104 行零 FFI/零 dl，与 quickjs 平级
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为**零 FFI/零 platform.dl/零 so、恒可用**，与 `js.fake` 同约束；尾部追加只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— `js.base/js.intf` 为后端无关契约，加新纯后端时零改动，仅新增一单元 + 门面分支 + 枚举尾部一项。
@@ -340,3 +341,4 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 2026-08-30 | 0.5 | 增补：GAME888_BORROW/FAQ/DECISIONS，DESIGN 反哺批处理/静链动探 | codex/core-js |
 | 2026-08-30 | 0.6 | 六维硬化：demo_js 可拷贝、17 份索引、CHANGELOG/SIXDIM 闭环 | codex/core-js |
 | 2026-08-30 | 0.7 | M1 落地：10 单元（fake/js888/v8/chakra）+ Close/AsJson owner/Trim 归一 + bench 5 后端全绿 | codex/core-js |
+| 2026-08-31 | 0.8 | 11 单元 pure.base 单源 + V8/Chakra/js888 Close 幂等清零 + test_js_v8/chakra 42 用例独立门禁 | codex/core-js |

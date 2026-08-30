@@ -5,8 +5,8 @@
 **层级**：L2（系统能力，只依赖 L0–L1；`webview/config/template` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js` lane（`js` 家族）
 **状态**：S0 六维冻结 P0 清零（18 份生产级，待 M1 源码）→ S1 目标 `source-contract + focused-runtime(fake)`
-**最后更新**：2026-08-30
-**版本**：0.7（六维 P0 清零，模块化/性能/高级感/复用/稳定/完整全面硬化）
+**最后更新**：2026-08-31
+**版本**：0.8（11 单元 pure.base 单源 168 行 + 5 gate 全绿，六维 P0 清零）
 
 ## 1. 模块定位
 
@@ -22,7 +22,7 @@
 
 **设计对标**：`crypto` 多后端（pure/openssl）、`compress` 的 `lz4.ffi → lz4.native`、`db` 的 `sqlite/pg` 适配器同范式。
 
-## 2. 家族布局（已落地 10 单元）
+## 2. 家族布局（已落地 11 单元）
 
 | 单元 | 职责 | 备注 |
 |------|------|------|
@@ -38,7 +38,7 @@
 | `nextpas.core.js.pas` | 门面 re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 纯聚合，不含逻辑 |
 
 ```
-base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, js888, v8, chakra(零FFI/零dl)} ← 门面
+base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure.base←{js888,v8,chakra}(零FFI/零dl 168+104×3)} ← 门面
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为零 FFI/零 dl、恒可用，与 `fake` 同约束；尾部追加只在枚举末尾加，`js.base/js.intf` 零改动。
@@ -241,3 +241,4 @@ make -C core/benchmarks/nextpas.core.js/bench_eval run
 | 2026-08-30 | 0.5 | 增补：15 份完整（GAME888_BORROW/FAQ/DECISIONS，DESIGN 反哺批处理/静链动探） |
 | 2026-08-30 | 0.6 | 六维硬化：补 demo_js.lpr 可拷贝、17 份索引、CHANGELOG/SIXDIM_REVIEW 闭环 |
 | 2026-08-30 | 0.7 | 六维 P0 清零：CONTRACT/TESTING/DESIGN/BENCHMARKS/ROADMAP/ACCEPTANCE/AI_GUIDE 18 项全面硬化 |
+| 2026-08-31 | 0.8 | 11 单元 pure.base 单源 168 行 + V8/Chakra/js888 Close 幂等 + 5 gate 全绿 |
