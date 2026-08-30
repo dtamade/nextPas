@@ -116,7 +116,7 @@ type
     Buf: TBytes;
     Len: SizeUInt;
     Cap: SizeUInt;
-    Hold: LongWord;
+    Hold: QWord;
     Bits: Integer;
   end;
 
@@ -489,24 +489,15 @@ end;
 
 procedure BwWrite(var BW: TBitWriter; AValue: LongWord; ABits: Integer); inline;
 begin
-  BW.Hold := BW.Hold or (AValue shl BW.Bits);
+  BW.Hold := BW.Hold or (QWord(AValue) shl BW.Bits);
   Inc(BW.Bits, ABits);
-  // 16-bit batch: flush 2 bytes at a time
-  while BW.Bits >= 16 do
+  while BW.Bits >= 32 do
   begin
-    BwEnsure(BW, 2);
-    PWord(@BW.Buf[BW.Len])^ := Word(BW.Hold and $FFFF);
-    Inc(BW.Len, 2);
-    BW.Hold := BW.Hold shr 16;
-    Dec(BW.Bits, 16);
-  end;
-  while BW.Bits >= 8 do
-  begin
-    BwEnsure(BW, 1);
-    BW.Buf[BW.Len] := Byte(BW.Hold);
-    Inc(BW.Len);
-    BW.Hold := BW.Hold shr 8;
-    Dec(BW.Bits, 8);
+    BwEnsure(BW, 4);
+    PLongWord(@BW.Buf[BW.Len])^ := LongWord(BW.Hold and $FFFFFFFF);
+    Inc(BW.Len, 4);
+    BW.Hold := BW.Hold shr 32;
+    Dec(BW.Bits, 32);
   end;
 end;
 
@@ -514,6 +505,14 @@ procedure BwAlign(var BW: TBitWriter); inline;
 begin
   if BW.Bits > 0 then
   begin
+    while BW.Bits >= 32 do
+    begin
+      BwEnsure(BW, 4);
+      PLongWord(@BW.Buf[BW.Len])^ := LongWord(BW.Hold and $FFFFFFFF);
+      Inc(BW.Len, 4);
+      BW.Hold := BW.Hold shr 32;
+      Dec(BW.Bits, 32);
+    end;
     if BW.Bits >= 16 then
     begin
       BwEnsure(BW, 2);
@@ -845,16 +844,18 @@ begin
         Inc(LOverflow);
       end else Inc(LBlCount[LLens[I]]);
     end;
-  // adjust
-  repeat
-    LBits := AMaxBits - 1;
+  // single-scan bl_count correction
+  LBits := AMaxBits - 1;
+  while LOverflow > 0 do
+  begin
     while (LBits > 0) and (LBlCount[LBits] = 0) do Dec(LBits);
     if LBits = 0 then Break;
     Dec(LBlCount[LBits]);
     Inc(LBlCount[LBits + 1], 2);
     Dec(LBlCount[AMaxBits]);
     Dec(LOverflow, 2);
-  until LOverflow <= 0;
+    if LBlCount[LBits] = 0 then Dec(LBits);
+  end;
   // reassign lens by frequency order
   SetLength(LSorted, ACount);
   for I := 0 to ACount - 1 do LSorted[I] := I;
@@ -1010,8 +1011,8 @@ begin
   while LPos < LLen do
   begin
     FindBest(AData, LPos, LLen, LHead, LPrev, AMaxChain, CWindowSize, LBestLen, LBestDist);
-    // nice 258 early break already in FindBest; lazy threshold >=5 per spec
-    if ALazy and (LBestLen >= 5) and (LBestLen < 258) and (LPos + 1 < LLen) then
+    // lazy threshold 4, hash chain 8 for default parity
+    if ALazy and (LBestLen >= 4) and (LBestLen < 258) and (LPos + 1 < LLen) then
     begin
       if LPos + 2 < LLen then
       begin
@@ -1452,7 +1453,7 @@ begin
     zlFastest: begin LMaxChain := 8; LLazy := False; end;
     zlBest:    begin LMaxChain := 128; LLazy := True; end;
   else
-    begin LMaxChain := 12; LLazy := True; end;
+    begin LMaxChain := 8; LLazy := False; end;
   end;
   CollectTokens(AData, LMaxChain, LLazy, LTokens, LLitFreq, LDistFreq);
   // ensure EOB
