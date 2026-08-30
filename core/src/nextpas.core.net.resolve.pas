@@ -45,6 +45,11 @@ function SplitHostPort(const AText: string; ADefaultPort: UInt16;
 { 必须带端口（1..65535）。 }
 function SplitHostPort(const AText: string; out AHost: string;
   out APort: UInt16): Boolean;
+function IsValidPort(const APort: Int64): Boolean;
+function IsValidPortU16(const APort: UInt16): Boolean;
+function TryValidatePort(const APort: Int64; out AOut: UInt16): Boolean;
+function TryValidatePortInt(const APort: Int64; out AOut: Integer): Boolean;
+function SplitHostPort(const AText: string; out AHost, APort: string): Boolean;
 { IPv6 自动加括号。 }
 function JoinHostPort(const AHost: string; APort: UInt16): string;
 
@@ -450,6 +455,48 @@ function SplitHostPort(const AText: string; out AHost: string;
   out APort: UInt16): Boolean;
 begin
   Result := SplitHostPort(AText, 0, AHost, APort) and (APort <> 0);
+end;
+
+function IsValidPort(const APort: Int64): Boolean;
+begin
+  Result := (APort >= 1) and (APort <= 65535);
+end;
+
+function IsValidPortU16(const APort: UInt16): Boolean;
+begin
+  Result := APort <> 0;
+end;
+
+function TryValidatePort(const APort: Int64; out AOut: UInt16): Boolean;
+begin
+  Result := IsValidPort(APort);
+  if Result then
+    AOut := UInt16(APort)
+  else
+    AOut := 0;
+end;
+
+function TryValidatePortInt(const APort: Int64; out AOut: Integer): Boolean;
+begin
+  Result := IsValidPort(APort);
+  if Result then
+    AOut := Integer(APort)
+  else
+    AOut := 0;
+end;
+
+function SplitHostPort(const AText: string; out AHost, APort: string): Boolean;
+var
+  LPort: UInt16;
+begin
+  Result := SplitHostPort(AText, AHost, LPort);
+  if Result then
+    APort := IntToStr(LPort)
+  else
+  begin
+    AHost := '';
+    APort := '';
+  end;
 end;
 
 function JoinHostPort(const AHost: string; APort: UInt16): string;
