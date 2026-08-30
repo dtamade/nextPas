@@ -69,6 +69,13 @@ FsMem      := CreateMemTreeVfs(Tree);                                  // 测试
 // L3 装饰器（压缩/加密共用模板，零 SysUtils 直引）
 FsGzip := CreateDecompressingVfs(FsEmbedded); // auto: 仅 gzip 魔数 $1F $8B 时解压，Stat 校正 Size/ContentHash，ETag 禁用防旧指纹
 FsUpper := CreateTransformingVfs(Fs, @UpperTransform, @ShouldUpper); // 任意 TBytes→TBytes 函数注入
+
+// 挂载复合（多源聚合，P2完整性， surpass Go fs）
+FsMounted := CreateMountedVfs([
+  VfsMountEntry('assets', FsEmbedded),
+  VfsMountEntry('uploads', FsDisk),
+  VfsMountEntry('.', FsMem)  // 根兜底
+]); // 最长匹配，List('.') 去重合并，ETag/CaseSensitive 透传
 ```
 
 ## 架构
