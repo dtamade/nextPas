@@ -112,22 +112,20 @@ uses
 const
   CWebviewKindNames: array[TWebviewKind] of string = (
     'wvGtk', 'wvWebview2', 'wvWk', 'wvFake');
+  CKindOrder: array[0..3] of TWebviewKind = (wvWebview2, wvGtk, wvWk, wvFake);
 
 var
   GExitRequested: Integer = 0;
 
 function DefaultWebviewKind: TWebviewKind;
+var
+  LKind: TWebviewKind;
 begin
-  { S18：能力驱动平台优先——wvWebview2（Windows/wine）优先于 wvGtk，
-    非对应平台探测自然失败，无 IFDEF；S25 加入 wvWk（Darwin 桩）。 }
-  if WebviewBackendAvailable(wvWebview2) then
-    Result := wvWebview2
-  else if WebviewBackendAvailable(wvGtk) then
-    Result := wvGtk
-  else if WebviewBackendAvailable(wvWk) then
-    Result := wvWk
-  else
-    Result := wvFake;
+  { S18/S25 能力驱动平台优先表驱动（CKindOrder 循环探测，无 IFDEF） }
+  for LKind in CKindOrder do
+    if WebviewBackendAvailable(LKind) then
+      Exit(LKind);
+  Result := wvFake;
 end;
 
 {$PUSH}{$WARNINGS OFF}
@@ -163,6 +161,7 @@ begin
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is not available in this build', [
       CWebviewKindNames[AKind]]);
+  // S45: RegisterBackend 表驱动预留
   case AKind of
     wvFake:     Result := CreateFakeWebview(AOptions);
     wvGtk:      Result := TGtkWebview.Create(AOptions);

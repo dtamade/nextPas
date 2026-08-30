@@ -118,6 +118,7 @@ type
       const AResultJson, ACode, AMessage: string);
     procedure PostIdle(AProc: TWebviewProcRef);
     procedure DropIdlePendings;
+    procedure SettlePendingOnClose; inline;
     procedure HandleNativeDestroy;
   protected
     { IWebviewDispatcher —— Self 双身份实现 inline 薄转发 }
@@ -547,31 +548,44 @@ function LiveWindowForView(AView: Pointer): TGtkWebview; inline;
 var
   I: Integer;
 begin
-  if AView <> nil then
-  begin
-    { 单窗快路径：95% 场景 single-window 零扫描，牺牲 2 次比较换线性遍历 }
-    if GLiveWindowsCount = 1 then
-    begin
-      if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = AView) then
-        Exit(GLiveWindows[0]);
-      Exit(nil);
-    end;
-    for I := 0 to GLiveWindowsCount - 1 do
-      if (not GLiveWindows[I].FClosed) and
-         (GLiveWindows[I].FView = AView) then
-        Exit(GLiveWindows[I]);
-  end;
   Result := nil;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if AView <> nil then
+    begin
+      { 单窗快路径：95% 场景 single-window 零扫描，牺牲 2 次比较换线性遍历 }
+      if GLiveWindowsCount = 1 then
+      begin
+        if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = AView) then
+          Result := GLiveWindows[0];
+        Exit;
+      end;
+      for I := 0 to GLiveWindowsCount - 1 do
+        if (not GLiveWindows[I].FClosed) and
+           (GLiveWindows[I].FView = AView) then
+        begin
+          Result := GLiveWindows[I];
+          Exit;
+        end;
+    end;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 function LatestLiveWebview: TGtkWebview; inline;
 var
   I: Integer;
 begin
-  for I := GLiveWindowsCount - 1 downto 0 do
-    if not GLiveWindows[I].FClosed then
-      Exit(GLiveWindows[I]);
-  Result := nil;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    for I := GLiveWindowsCount - 1 downto 0 do
+      if not GLiveWindows[I].FClosed then
+        Exit(GLiveWindows[I]);
+    Result := nil;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 { finish_error 的 GError 所有权移交 WebKit（源码 adoptGRef 模式），
@@ -587,14 +601,40 @@ end;
 procedure SchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
 var
   LSelf: TGtkWebview;
+  LKeep: IInterface;
   LPath, LMime: string;
   LBytes: TBytes;
   LBuf, LStream: Pointer;
+  LView: Pointer;
+  I: Integer;
 begin
-  LSelf := LiveWindowForView(
-    WEBKIT_uri_scheme_request_get_web_view(ARequest));
-  if LSelf = nil then
-    LSelf := LatestLiveWebview;   { 无视图请求（service worker）回退 }
+  { 拷贝指针副本提升引用计数后释放再 TryResolve，避免持有锁时阻塞 VFS }
+  LView := WEBKIT_uri_scheme_request_get_web_view(ARequest);
+  LSelf := nil;
+  LKeep := nil;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if LView <> nil then
+    begin
+      if GLiveWindowsCount = 1 then
+      begin
+        if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = LView) then
+          LSelf := GLiveWindows[0];
+      end
+      else
+        for I := 0 to GLiveWindowsCount - 1 do
+          if (not GLiveWindows[I].FClosed) and (GLiveWindows[I].FView = LView) then
+          begin LSelf := GLiveWindows[I]; Break; end;
+    end;
+    if LSelf = nil then
+      for I := GLiveWindowsCount - 1 downto 0 do
+        if not GLiveWindows[I].FClosed then
+        begin LSelf := GLiveWindows[I]; Break; end;
+    if LSelf <> nil then
+      LKeep := LSelf as IInterface;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
   if LSelf = nil then
   begin
     GtkTrace('scheme request, no live window: ' +
@@ -1190,15 +1230,12 @@ begin
   FIdleCount := 0;
 end;
 
-procedure TGtkWebview.HandleNativeDestroy;
+procedure TGtkWebview.SettlePendingOnClose; inline;
 var
   I: Integer;
   LRec: PEvalRec;
   LErr: EWebviewEvalFailed;
 begin
-  if FClosed then
-    Exit;
-  FClosed := True;
   for I := 0 to FPendingCount - 1 do
   begin
     LRec := FPendingEvals[I];
@@ -1207,7 +1244,7 @@ begin
       LRec^.Done := True;
       if Assigned(LRec^.OnError) then
       begin
-        LErr := EWebviewEvalFailed.Create('webview window is closed');
+        LErr := EWebviewEvalFailed.Create('window closed');
         try
           LRec^.OnError(LErr);
         finally
@@ -1222,6 +1259,14 @@ begin
     end;
   end;
   FPendingCount := 0;
+end;
+
+procedure TGtkWebview.HandleNativeDestroy;
+begin
+  if FClosed then
+    Exit;
+  FClosed := True;
+  SettlePendingOnClose;
   DropIdlePendings;
   FireNotifyHandlers(FOnWindowClosed);
   if GtkLiveWindowCount = 0 then
@@ -1230,10 +1275,6 @@ begin
 end;
 
 procedure TGtkWebview.Close;
-var
-  I: Integer;
-  LRec: PEvalRec;
-  LErr: EWebviewEvalFailed;
 begin
   { 幂等（CONTRACT §3 intf 承诺，与 fake 一致）；二次 Close 直接返回，
     避免对已销毁 widget 重复 destroy }
@@ -1243,32 +1284,7 @@ begin
   { 在途 eval 立即以 onerr 收尾（exactly-one）。记录不在此处释放：
     所有权单点在引擎必然到达的完成回调——迟到回执读 Done 后仅释放。
     异常实例由框架创建/触发/释放（§3.2 所有权语义）。 }
-  for I := 0 to FPendingCount - 1 do
-  begin
-    LRec := FPendingEvals[I];
-    if not LRec^.Done then
-    begin
-      LRec^.Done := True;
-      if Assigned(LRec^.OnError) then
-      begin
-        LErr := EWebviewEvalFailed.Create('webview window is closed');
-        try
-          LRec^.OnError(LErr);
-        finally
-          LErr.Free;
-        end;
-      end;
-      { 取消使引擎侧完成回执必达——记录按单点所有权在其内释放，
-        进程生命周期内无悬挂分配（heaptrc 0 兑现） }
-      if LRec^.Cancel <> nil then
-      begin
-        G_cancellable_cancel(LRec^.Cancel);
-        LRec^.Cancel := nil;
-      end;
-    end;
-  end;
-  FPendingCount := 0;
-  // 容量保留，待下次 Eval 复用，避免重复分配
+  SettlePendingOnClose;
   DropIdlePendings;
   FireNotifyHandlers(FOnWindowClosed);
   GTK_widget_destroy(FWin);
