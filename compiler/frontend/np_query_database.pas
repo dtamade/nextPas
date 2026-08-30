@@ -45,20 +45,8 @@ begin
 end;
 
 destructor TQueryDatabase.Destroy;
-var
-  I: LongInt;
-  Entry: PQueryEntry;
 begin
-  if FEntries <> nil then
-  begin
-    for I := 0 to LongInt(FEntries.Count) - 1 do
-    begin
-      Entry := FEntries.GetPtr(SizeUInt(I));
-      if Entry^.Value <> nil then
-        Entry^.Value.Free;
-      Entry^.Value := nil;
-    end;
-  end;
+  // Weak cache: session owns lifecycle, avoid double-free
   FEntries.Free;
   FEntries := nil;
   inherited Destroy;
@@ -89,8 +77,6 @@ begin
     if FEntries[SizeUInt(I)].Key = AKey then
     begin
       EntryPtr := FEntries.GetPtr(SizeUInt(I));
-      if (EntryPtr^.Value <> nil) and (EntryPtr^.Value <> AValue) then
-        EntryPtr^.Value.Free;
       EntryPtr^.Value := AValue;
       Exit;
     end;
@@ -112,11 +98,7 @@ begin
   begin
     EntryPtr := FEntries.GetPtr(SizeUInt(I));
     if Pos(APrefix, EntryPtr^.Key) = 1 then
-    begin
-      if EntryPtr^.Value <> nil then
-        EntryPtr^.Value.Free;
       EntryPtr^.Value := nil;
-    end;
   end;
 end;
 
