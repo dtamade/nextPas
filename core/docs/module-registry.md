@@ -79,7 +79,7 @@ completion claim.
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML format | `nextpas.core.yaml` | L0-L1 | focused-runtime |
-| `zlib` | L2 | zlib wrapper (RFC1950) + raw deflate (RFC1951) | `nextpas.core.zlib` | L0-L1, platform.dl, compress.base 语义复用 | focused-runtime — base/intf + pure Inflate/Deflate (fixed Huffman + Stored, 32K 窗, hash-chain) + ffi (libz.so lazy) + facade ZlibAuto (pure↔ffi 降级), `ZLIB_MAX_DECOMPRESS_BYTES=32MiB` 单源（与 compress 单源对齐）, `ZlibAdlerUpdate` NMAX 分块, `TZlibLevel` 表驱动 `0/1/-1/9`, `TTestSuite` 30 用例 adler/empty/store/bomb raw/wrapped level 0-3 32MiB limit FFI vs pure cross, `bench_zlib` 1MiB MB/s |
+| `zlib` | L2 | zlib wrapper (RFC1950) + raw deflate (RFC1951) | `nextpas.core.zlib` | L0-L1, platform.dl, compress.base 单源复用 | focused-runtime — base/intf + pure Inflate/Deflate (fixed Huffman + Stored, 32K 窗, hash-chain, `GFixedReady LongInt+GFixedLock`/`GOnceDone LongInt+GOnceLock` 双检锁) + ffi (libz.so lazy `InterlockedCompareExchange` + `TRTLCriticalSection`) + facade ZlibAuto (pure↔ffi 降级) + Try* 豪华 (`TryEncode/WithError/WithLevel*4` + `TryDecode/WithError/WithLimit*4` 于 intf/pure/ffi/门面三处一致), `ZLIB_MAX_DECOMPRESS_BYTES=32MiB` 单源（`compress.base GZIP_MAX_DECOMPRESS_BYTES` 别名）, `ZlibAdlerUpdate` NMAX 分块, `TZlibLevel` 委派 `compress.base LevelToZlib` 单源（零表拷贝）, `TTestSuite` 30 用例 adler/empty/store/bomb raw/wrapped level 0-3 32MiB limit FFI vs pure cross, `bench_zlib` 1MiB MB/s |
 
 ## Next Architecture Routes
 

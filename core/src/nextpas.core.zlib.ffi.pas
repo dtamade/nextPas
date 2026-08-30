@@ -25,8 +25,16 @@ type
   public
     function Encode(const AData: TBytes): TBytes;
     function EncodeWithLevel(const AData: TBytes; const ALevel: TZlibLevel): TBytes;
+    function TryEncode(const AData: TBytes; out AEncoded: TBytes): Boolean;
+    function TryEncodeWithError(const AData: TBytes; out AEncoded: TBytes; out AError: string): Boolean;
+    function TryEncodeWithLevel(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes): Boolean;
+    function TryEncodeWithLevelWithError(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes; out AError: string): Boolean;
     function Decode(const AData: TBytes): TBytes;
     function DecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt): TBytes;
+    function TryDecode(const AData: TBytes; out ADecoded: TBytes): Boolean;
+    function TryDecodeWithError(const AData: TBytes; out ADecoded: TBytes; out AError: string): Boolean;
+    function TryDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes): Boolean;
+    function TryDecodeWithLimitWithError(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes; out AError: string): Boolean;
     function Adler32(const AData: TBytes): LongWord;
     function Adler32Update(AAdler: LongWord; const AData: Pointer; ALen: SizeUInt): LongWord;
   end;
@@ -65,7 +73,8 @@ type
   TZVersion = function: PAnsiChar; cdecl;
 
 var
-  GOnceDone: Boolean = False;
+  GOnceDone: LongInt = 0;
+  GOnceLock: TRTLCriticalSection;
   GLibLoaded: Boolean = False;
   GLib: TPlatformLibrary;
   GCompressBound: TZCompressBound = nil;
@@ -134,10 +143,16 @@ end;
 
 function ZlibFfiAvailable: Boolean;
 begin
-  if not GOnceDone then
-  begin
-    GLibLoaded := LoadLib;
-    GOnceDone := True;
+  if InterlockedCompareExchange(GOnceDone, 0, 0) <> 0 then Exit(GLibLoaded);
+  EnterCriticalSection(GOnceLock);
+  try
+    if GOnceDone = 0 then
+    begin
+      GLibLoaded := LoadLib;
+      InterlockedExchange(GOnceDone, 1);
+    end;
+  finally
+    LeaveCriticalSection(GOnceLock);
   end;
   Result := GLibLoaded;
 end;
@@ -311,6 +326,70 @@ begin
   Result := DoDecode(AData, AMaxOutputSize);
 end;
 
+function TZlibFfiEncoder.TryEncode(const AData: nextpas.core.base.TBytes; out AEncoded: nextpas.core.base.TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := TryEncodeWithError(AData, AEncoded, LDummy);
+end;
+
+function TZlibFfiEncoder.TryEncodeWithError(const AData: nextpas.core.base.TBytes; out AEncoded: nextpas.core.base.TBytes; out AError: string): Boolean;
+begin
+  try
+    AEncoded := Encode(AData);
+    AError := '';
+    Result := True;
+  except on E: Exception do begin AEncoded := nil; AError := E.ClassName + ': ' + E.Message; Result := False; end;
+  end;
+end;
+
+function TZlibFfiEncoder.TryEncodeWithLevel(const AData: nextpas.core.base.TBytes; const ALevel: TZlibLevel; out AEncoded: nextpas.core.base.TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := TryEncodeWithLevelWithError(AData, ALevel, AEncoded, LDummy);
+end;
+
+function TZlibFfiEncoder.TryEncodeWithLevelWithError(const AData: nextpas.core.base.TBytes; const ALevel: TZlibLevel; out AEncoded: nextpas.core.base.TBytes; out AError: string): Boolean;
+begin
+  try
+    AEncoded := EncodeWithLevel(AData, ALevel);
+    AError := '';
+    Result := True;
+  except on E: Exception do begin AEncoded := nil; AError := E.ClassName + ': ' + E.Message; Result := False; end;
+  end;
+end;
+
+function TZlibFfiEncoder.TryDecode(const AData: nextpas.core.base.TBytes; out ADecoded: nextpas.core.base.TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := TryDecodeWithError(AData, ADecoded, LDummy);
+end;
+
+function TZlibFfiEncoder.TryDecodeWithError(const AData: nextpas.core.base.TBytes; out ADecoded: nextpas.core.base.TBytes; out AError: string): Boolean;
+begin
+  try
+    ADecoded := Decode(AData);
+    AError := '';
+    Result := True;
+  except on E: Exception do begin ADecoded := nil; AError := E.ClassName + ': ' + E.Message; Result := False; end;
+  end;
+end;
+
+function TZlibFfiEncoder.TryDecodeWithLimit(const AData: nextpas.core.base.TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: nextpas.core.base.TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := TryDecodeWithLimitWithError(AData, AMaxOutputSize, ADecoded, LDummy);
+end;
+
+function TZlibFfiEncoder.TryDecodeWithLimitWithError(const AData: nextpas.core.base.TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: nextpas.core.base.TBytes; out AError: string): Boolean;
+begin
+  try
+    ADecoded := DecodeWithLimit(AData, AMaxOutputSize);
+    AError := '';
+    Result := True;
+  except on E: Exception do begin ADecoded := nil; AError := E.ClassName + ': ' + E.Message; Result := False; end;
+  end;
+end;
+
 function TZlibFfiEncoder.Adler32(const AData: nextpas.core.base.TBytes): LongWord;
 begin
   Result := ZlibAdler32(AData);
@@ -323,4 +402,8 @@ end;
 
 
 
+initialization
+  InitCriticalSection(GOnceLock);
+finalization
+  DoneCriticalSection(GOnceLock);
 end.
