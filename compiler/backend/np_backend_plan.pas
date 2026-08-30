@@ -151,6 +151,7 @@ type
 implementation
 
 uses
+  SysUtils,
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
   np_hir_types, np_hir_model, np_hir_builder,
   np_hir_llvm_emitter, nextpas_json_helpers,

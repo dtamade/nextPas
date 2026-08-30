@@ -54,6 +54,32 @@ implementation
 uses
   nextpas.core.simd;
 
+function BytesNextCapacity(ANeeded: SizeUInt): SizeUInt; inline;
+begin
+  if ANeeded = 0 then Exit(0);
+  if ANeeded <= 16 then Exit(16);
+  Result := 16;
+  while Result < ANeeded do
+  begin
+    if Result > High(SizeUInt) div 2 then Exit(ANeeded);
+    Result := Result shl 1;
+  end;
+end;
+
+procedure BytesSetLogicalLength(var ADest: TBytes; ALogicalLen: SizeUInt); inline;
+var
+  P: PSizeInt;
+begin
+  if ALogicalLen = 0 then
+  begin
+    SetLength(ADest, 0);
+    Exit;
+  end;
+  if Pointer(ADest) = nil then Exit;
+  P := PSizeInt(PByte(Pointer(ADest)) - SizeOf(SizeInt));
+  P^ := SizeInt(ALogicalLen) - 1;
+end;
+
 function SpanEqual(const A, B: TByteSpan): Boolean;
 begin
   if A.Len <> B.Len then
@@ -213,64 +239,157 @@ end;
 
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNewLen, LCurCap, LNeedCap: SizeUInt;
 begin
   if Length(ASrc) = 0 then Exit;
-  LOldLen := Length(ADest);
-  SetLength(ADest, LOldLen + Length(ASrc));
-  Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+  LOldLen := SizeUInt(Length(ADest));
+  LNewLen := LOldLen + SizeUInt(Length(ASrc));
+  LCurCap := BytesNextCapacity(LOldLen);
+  LNeedCap := BytesNextCapacity(LNewLen);
+  if LCurCap <> LNeedCap then
+  begin
+    SetLength(ADest, LNeedCap);
+    Move(ASrc[0], PByte(Pointer(ADest))[LOldLen], Length(ASrc));
+    BytesSetLogicalLength(ADest, LNewLen);
+  end else
+  begin
+    if Pointer(ADest) = nil then
+      SetLength(ADest, LNeedCap);
+    Move(ASrc[0], PByte(Pointer(ADest))[LOldLen], Length(ASrc));
+    BytesSetLogicalLength(ADest, LNewLen);
+  end;
 end;
 
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNewLen, LCurCap, LNeedCap: SizeUInt;
 begin
   if (ASrc = nil) or (ASrcLen = 0) then Exit;
-  LOldLen := Length(ADest);
-  SetLength(ADest, LOldLen + ASrcLen);
-  Move(ASrc^, ADest[LOldLen], ASrcLen);
+  LOldLen := SizeUInt(Length(ADest));
+  LNewLen := LOldLen + ASrcLen;
+  LCurCap := BytesNextCapacity(LOldLen);
+  LNeedCap := BytesNextCapacity(LNewLen);
+  if LCurCap <> LNeedCap then
+  begin
+    SetLength(ADest, LNeedCap);
+    Move(ASrc^, PByte(Pointer(ADest))[LOldLen], ASrcLen);
+    BytesSetLogicalLength(ADest, LNewLen);
+  end else
+  begin
+    if Pointer(ADest) = nil then
+      SetLength(ADest, LNeedCap);
+    Move(ASrc^, PByte(Pointer(ADest))[LOldLen], ASrcLen);
+    BytesSetLogicalLength(ADest, LNewLen);
+  end;
 end;
 
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 var
-  LLen: SizeUInt;
+  LOldLen, LNewLen, LCurCap, LNeedCap: SizeUInt;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 1);
-  ADest[LLen] := AValue;
+  LOldLen := SizeUInt(Length(ADest));
+  LNewLen := LOldLen + 1;
+  LCurCap := BytesNextCapacity(LOldLen);
+  LNeedCap := BytesNextCapacity(LNewLen);
+  if LCurCap <> LNeedCap then
+  begin
+    SetLength(ADest, LNeedCap);
+    PByte(Pointer(ADest))[LOldLen] := AValue;
+    BytesSetLogicalLength(ADest, LNewLen);
+  end else
+  begin
+    if Pointer(ADest) = nil then
+      SetLength(ADest, LNeedCap);
+    PByte(Pointer(ADest))[LOldLen] := AValue;
+    BytesSetLogicalLength(ADest, LNewLen);
+  end;
 end;
 
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 var
-  LLen: SizeUInt;
+  LOldLen, LNewLen, LCurCap, LNeedCap: SizeUInt;
+  P: PByte;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 2);
-  ADest[LLen] := Byte(AValue shr 8);
-  ADest[LLen + 1] := Byte(AValue);
+  LOldLen := SizeUInt(Length(ADest));
+  LNewLen := LOldLen + 2;
+  LCurCap := BytesNextCapacity(LOldLen);
+  LNeedCap := BytesNextCapacity(LNewLen);
+  if LCurCap <> LNeedCap then
+  begin
+    SetLength(ADest, LNeedCap);
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 8);
+    P[1] := Byte(AValue);
+    BytesSetLogicalLength(ADest, LNewLen);
+  end else
+  begin
+    if Pointer(ADest) = nil then
+      SetLength(ADest, LNeedCap);
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 8);
+    P[1] := Byte(AValue);
+    BytesSetLogicalLength(ADest, LNewLen);
+  end;
 end;
 
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LLen: SizeUInt;
+  LOldLen, LNewLen, LCurCap, LNeedCap: SizeUInt;
+  P: PByte;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 3);
-  ADest[LLen] := Byte(AValue shr 16);
-  ADest[LLen + 1] := Byte(AValue shr 8);
-  ADest[LLen + 2] := Byte(AValue);
+  LOldLen := SizeUInt(Length(ADest));
+  LNewLen := LOldLen + 3;
+  LCurCap := BytesNextCapacity(LOldLen);
+  LNeedCap := BytesNextCapacity(LNewLen);
+  if LCurCap <> LNeedCap then
+  begin
+    SetLength(ADest, LNeedCap);
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 16);
+    P[1] := Byte(AValue shr 8);
+    P[2] := Byte(AValue);
+    BytesSetLogicalLength(ADest, LNewLen);
+  end else
+  begin
+    if Pointer(ADest) = nil then
+      SetLength(ADest, LNeedCap);
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 16);
+    P[1] := Byte(AValue shr 8);
+    P[2] := Byte(AValue);
+    BytesSetLogicalLength(ADest, LNewLen);
+  end;
 end;
 
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LLen: SizeUInt;
+  LOldLen, LNewLen, LCurCap, LNeedCap: SizeUInt;
+  P: PByte;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 4);
-  ADest[LLen] := Byte(AValue shr 24);
-  ADest[LLen + 1] := Byte(AValue shr 16);
-  ADest[LLen + 2] := Byte(AValue shr 8);
-  ADest[LLen + 3] := Byte(AValue);
+  LOldLen := SizeUInt(Length(ADest));
+  LNewLen := LOldLen + 4;
+  LCurCap := BytesNextCapacity(LOldLen);
+  LNeedCap := BytesNextCapacity(LNewLen);
+  if LCurCap <> LNeedCap then
+  begin
+    SetLength(ADest, LNeedCap);
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 24);
+    P[1] := Byte(AValue shr 16);
+    P[2] := Byte(AValue shr 8);
+    P[3] := Byte(AValue);
+    BytesSetLogicalLength(ADest, LNewLen);
+  end else
+  begin
+    if Pointer(ADest) = nil then
+      SetLength(ADest, LNeedCap);
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 24);
+    P[1] := Byte(AValue shr 16);
+    P[2] := Byte(AValue shr 8);
+    P[3] := Byte(AValue);
+    BytesSetLogicalLength(ADest, LNewLen);
+  end;
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
