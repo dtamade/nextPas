@@ -766,6 +766,7 @@ var
   LMime, LETag, LLastModified: string;
   LModTimeUnix: Int64;
   LCache: IVfsETag;
+  LServeMeta: IVfsServeMeta;
 begin
   if AFs = nil then
   begin
@@ -795,7 +796,22 @@ begin
     LModTimeUnix := LInfo.Info.ModTime;
     if LModTimeUnix < 0 then
       LModTimeUnix := 0;
-    if (AFs is IVfsETag) then
+    if Supports(AFs, IVfsServeMeta, LServeMeta) then
+    begin
+      if not LServeMeta.TryGetServeMeta(AVfsPath, LETag, LLastModified) then
+      begin
+        // 极少失败路径（Stat 已成功但 meta miss）回退到 hash/size
+        if LInfo.ContentHash <> 0 then
+          LETag := HttpMakeFnvETag(LInfo.ContentHash)
+        else
+          LETag := HttpMakeStrongETag(LInfo.Info.Size, LModTimeUnix);
+        if LModTimeUnix > 0 then
+          LLastModified := FormatHttpDate(LModTimeUnix)
+        else
+          LLastModified := '';
+      end;
+    end
+    else if (AFs is IVfsETag) then
     begin
       LCache := AFs as IVfsETag;
       if LCache.TryGetETag(AVfsPath, LETag) then
