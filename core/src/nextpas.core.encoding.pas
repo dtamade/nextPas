@@ -45,10 +45,89 @@ function UrlDecode(const AEncoded: string): string; inline;
 { RFC 3986 严格 percent-decode（path 语义：'+' 保持字面、非法 '%' 宽容保留） }
 function PercentDecode(const AEncoded: string): string; inline;
 
+{ 试探解包：若 AInput 去空白后呈合法 Base64（≥8、非 mod1、仅 B64 字符、'=' 仅尾部 1..2 个）则解码为 UTF-8，否则原样返回（proxy888 MaybeBase64Unwrap 反哺）。 }
+function Base64MaybeUnwrap(const AInput: string): string;
+function IsMaybeBase64(const AInput: string): Boolean;
+
 { GBK (CP936) 双字节 → UTF-8；非法序列整体返回空串（调用方回退） }
 function GbkToUtf8(const AStr: string): string; inline;
 
 implementation
+
+uses
+  nextpas.core.text.utf8;
+
+function IsMaybeBase64(const AInput: string): Boolean;
+var
+  LStripped: string;
+  LI, LEq: Integer;
+begin
+  LStripped := '';
+  for LI := 1 to Length(AInput) do
+    if (AInput[LI] <> ' ') and (AInput[LI] <> #9) and
+       (AInput[LI] <> #10) and (AInput[LI] <> #13) and (AInput[LI] <> #0) then
+      LStripped := LStripped + AInput[LI];
+  if Length(LStripped) < 8 then
+    Exit(False);
+  if (Length(LStripped) mod 4) = 1 then
+    Exit(False);
+  LEq := 0;
+  for LI := 1 to Length(LStripped) do
+    case LStripped[LI] of
+      'A'..'Z', 'a'..'z', '0'..'9', '+', '/': ;
+      '=': Inc(LEq);
+    else
+      Exit(False);
+    end;
+  if (LEq > 2) then
+    Exit(False);
+  if (LEq > 0) then
+    for LI := 1 to Length(LStripped) - LEq do
+      if LStripped[LI] = '=' then
+        Exit(False);
+  Result := True;
+end;
+
+function Base64MaybeUnwrap(const AInput: string): string;
+var
+  LStripped: string;
+  LI, LEq: Integer;
+  LByte: TBytes;
+begin
+  Result := AInput;
+  LStripped := '';
+  for LI := 1 to Length(AInput) do
+    if (AInput[LI] <> ' ') and (AInput[LI] <> #9) and
+       (AInput[LI] <> #10) and (AInput[LI] <> #13) and (AInput[LI] <> #0) then
+      LStripped := LStripped + AInput[LI];
+  if Length(LStripped) < 8 then
+    Exit;
+  if (Length(LStripped) mod 4) = 1 then
+    Exit;
+  LEq := 0;
+  for LI := 1 to Length(LStripped) do
+    case LStripped[LI] of
+      'A'..'Z', 'a'..'z', '0'..'9', '+', '/': ;
+      '=': Inc(LEq);
+    else
+      Exit;
+    end;
+  if (LEq > 2) then
+    Exit;
+  if (LEq > 0) then
+    for LI := 1 to Length(LStripped) - LEq do
+      if LStripped[LI] = '=' then
+        Exit;
+  { LEq=0 也视为可能（无 padding 的 B64），按标准库能力探测；失败回退原串 }
+  try
+    LByte := Base64Decode(LStripped);
+  except
+    Exit;
+  end;
+  if Length(LByte) = 0 then
+    Exit;
+  Result := BytesToUTF8(LByte);
+end;
 
 function Base32Encode(const AData: TBytes): string;
 begin
