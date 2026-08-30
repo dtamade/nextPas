@@ -143,8 +143,6 @@ var
   LA, LB: LongWord;
   LK: SizeUInt;
 begin
-  { 纯 Pascal 增量实现，与 git.native.zlib.GitZlibAdler32 同语义，
-    分块 NMAX 取模，保持与 RFC1950 一致；空输入原样返回。 }
   if (ALen = 0) or (AData = nil) then
     Exit(AAdler);
   LA := AAdler and $FFFF;
@@ -157,6 +155,36 @@ begin
     else
       LK := ZLIB_ADLER_NMAX;
     Dec(ALen, LK);
+    while LK >= 16 do
+    begin
+      LA := LA + P[0]; LB := LB + LA;
+      LA := LA + P[1]; LB := LB + LA;
+      LA := LA + P[2]; LB := LB + LA;
+      LA := LA + P[3]; LB := LB + LA;
+      LA := LA + P[4]; LB := LB + LA;
+      LA := LA + P[5]; LB := LB + LA;
+      LA := LA + P[6]; LB := LB + LA;
+      LA := LA + P[7]; LB := LB + LA;
+      LA := LA + P[8]; LB := LB + LA;
+      LA := LA + P[9]; LB := LB + LA;
+      LA := LA + P[10]; LB := LB + LA;
+      LA := LA + P[11]; LB := LB + LA;
+      LA := LA + P[12]; LB := LB + LA;
+      LA := LA + P[13]; LB := LB + LA;
+      LA := LA + P[14]; LB := LB + LA;
+      LA := LA + P[15]; LB := LB + LA;
+      Inc(P, 16);
+      Dec(LK, 16);
+    end;
+    while LK >= 4 do
+    begin
+      LA := LA + P[0]; LB := LB + LA;
+      LA := LA + P[1]; LB := LB + LA;
+      LA := LA + P[2]; LB := LB + LA;
+      LA := LA + P[3]; LB := LB + LA;
+      Inc(P, 4);
+      Dec(LK, 4);
+    end;
     while LK > 0 do
     begin
       LA := LA + P^;

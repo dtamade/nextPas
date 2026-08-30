@@ -6,7 +6,8 @@ unit nextpas.core.zlib.pure;
  * c2pas素材（inflate.c / inftrees.c / inffast.c + adler32.c / deflate.c / trees.c / compress.c）手调，
  * 零 paszlib/zlib 依赖；Decode 支持裸流与 RFC1950 包装双路径，
  * Adler 校验 + 32MiB 爆破上限（ZLIB_MAX_DECOMPRESS_BYTES）。
- * Encode 采用固定 Huffman + Stored 回退，窗口 32K，hash-chain 加速，
+ * Encode 采用动态 Huffman（Heap 建树、码长限制 15、Code 生成）+ 固定/Stored 回退，
+ * 窗口 32K，hash-chain 加速，游程码长按级别对齐 compress2 0/1/6/9。
  * 输出 zlib-wrapped（header + deflate + adler），level 映射 0/1/-1/9。
  *}
 
@@ -56,12 +57,13 @@ implementation
 
 const
   CMaxBits = 15;
+  CMaxBLBits = 7;
   CNumLitLen = 286;
   CNumDist = 30;
   CNumCLen = 19;
   CWindowSize = 32768;
   CTableSize = 1 shl CMaxBits;
-  CHashSize = 32768;
+  CHashSize = 65536;
   CHashMask = CHashSize - 1;
 
   CLengthOrder: array[0..18] of Byte = (16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15);
@@ -95,6 +97,20 @@ type
     Lens: array[0..CNumLitLen - 1] of Byte;
   end;
 
+  THuffEntry = record
+    Bits: Byte;
+    Symbol: Word;
+  end;
+  THuffFastTable = record
+    FastBits: Integer;
+    FastMask: LongWord;
+    SecBits: Integer;
+    SecMask: LongWord;
+    MaxBits: Integer;
+    Fast: array of THuffEntry;
+    Second: array of array of THuffEntry;
+  end;
+
   TBitWriter = record
     Buf: TBytes;
     Len: SizeUInt;
@@ -102,6 +118,18 @@ type
     Hold: LongWord;
     Bits: Integer;
   end;
+
+  TDeflateToken = record
+    IsLit: Boolean;
+    Lit: Byte;
+    LenSym: Integer;
+    LenExtra: Word;
+    LenBits: Byte;
+    DistSym: Integer;
+    DistExtra: Word;
+    DistBits: Byte;
+  end;
+  TDeflateTokens = array of TDeflateToken;
 
 procedure RaiseZlib(ACode: TZlibErrorCode; const AMsg: string); inline;
 begin
@@ -254,6 +282,120 @@ begin
   Result := -1;
 end;
 
+const
+  CFastBitsLit = 9;
+  CFastBitsDist = 6;
+  CFastMarkSecond = 255;
+
+procedure BuildFastTable(const ABuild: THuffBuild; AFastBits: Integer; var ATable: THuffFastTable);
+var
+  LFastSize, LSecSize, LMax, LLen: Integer;
+  I, K, LCode: Integer;
+  LPrefix, LSuffix, LRem, LCopies, LSecIdx: Integer;
+  J: Integer;
+begin
+  LMax := ABuild.MaxBits;
+  ATable.FastBits := AFastBits;
+  ATable.FastMask := (LongWord(1) shl AFastBits) - 1;
+  ATable.MaxBits := LMax;
+  if LMax > AFastBits then
+  begin
+    ATable.SecBits := LMax - AFastBits;
+    ATable.SecMask := (LongWord(1) shl ATable.SecBits) - 1;
+  end
+  else
+  begin
+    ATable.SecBits := 0;
+    ATable.SecMask := 0;
+  end;
+  LFastSize := 1 shl AFastBits;
+  SetLength(ATable.Fast, LFastSize);
+  for I := 0 to LFastSize - 1 do
+  begin
+    ATable.Fast[I].Bits := 0;
+    ATable.Fast[I].Symbol := $FFFF;
+  end;
+  SetLength(ATable.Second, LFastSize);
+  for I := 0 to LFastSize - 1 do
+    SetLength(ATable.Second[I], 0);
+  if LMax = 0 then Exit;
+  if ATable.SecBits > 0 then
+    LSecSize := 1 shl ATable.SecBits
+  else
+    LSecSize := 0;
+  for I := 0 to ABuild.Count - 1 do
+  begin
+    LLen := ABuild.Lens[I];
+    if LLen = 0 then Continue;
+    LCode := Integer(ABuild.Codes[I]);
+    if LLen <= AFastBits then
+    begin
+      LCopies := 1 shl (AFastBits - LLen);
+      for K := 0 to LCopies - 1 do
+      begin
+        LSecIdx := LCode or (K shl LLen);
+        ATable.Fast[LSecIdx].Bits := Byte(LLen);
+        ATable.Fast[LSecIdx].Symbol := Word(I);
+      end;
+    end
+    else
+    begin
+      LPrefix := LCode and Integer(ATable.FastMask);
+      LSuffix := LCode shr AFastBits;
+      LRem := LLen - AFastBits;
+      if Length(ATable.Second[LPrefix]) = 0 then
+      begin
+        SetLength(ATable.Second[LPrefix], LSecSize);
+        for J := 0 to LSecSize - 1 do
+        begin
+          ATable.Second[LPrefix][J].Bits := 0;
+          ATable.Second[LPrefix][J].Symbol := $FFFF;
+        end;
+      end;
+      LCopies := 1 shl (ATable.SecBits - LRem);
+      for K := 0 to LCopies - 1 do
+      begin
+        LSecIdx := LSuffix or (K shl LRem);
+        ATable.Second[LPrefix][LSecIdx].Bits := Byte(LLen);
+        ATable.Second[LPrefix][LSecIdx].Symbol := Word(I);
+      end;
+      ATable.Fast[LPrefix].Bits := CFastMarkSecond;
+    end;
+  end;
+end;
+
+function FastDecodeSymbol(var AR: TBitReader; const ATbl: THuffFastTable): Integer; inline;
+var
+  LIdx, LSecIdx: LongWord;
+  E: THuffEntry;
+begin
+  BrFill(AR, ATbl.MaxBits);
+  LIdx := AR.Hold and ATbl.FastMask;
+  E := ATbl.Fast[LIdx];
+  if E.Bits = 0 then
+    RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
+  if E.Bits <> CFastMarkSecond then
+  begin
+    if AR.Bits < E.Bits then
+      RaiseZlib(zecTruncated, 'zlib: truncated stream');
+    BrDrop(AR, E.Bits);
+    Result := Integer(E.Symbol);
+    Exit;
+  end;
+  if ATbl.SecBits = 0 then
+    RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
+  LSecIdx := (AR.Hold shr ATbl.FastBits) and ATbl.SecMask;
+  if (Integer(LIdx) >= Length(ATbl.Second)) or (Length(ATbl.Second[LIdx]) = 0) then
+    RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
+  E := ATbl.Second[LIdx][LSecIdx];
+  if E.Bits = 0 then
+    RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
+  if AR.Bits < E.Bits then
+    RaiseZlib(zecTruncated, 'zlib: truncated stream');
+  BrDrop(AR, E.Bits);
+  Result := Integer(E.Symbol);
+end;
+
 procedure GrowBytes(var ABuf: TBytes; var ALen: SizeUInt; var ACap: SizeUInt; ANeed: SizeUInt; ALimit: SizeUInt);
 var
   LNewCap: SizeUInt;
@@ -365,6 +507,9 @@ var
   GFixedDist: THuffBuild;
   GFixedReady: LongInt = 0;
   GFixedLock: TRTLCriticalSection;
+  GFixedFastLit: THuffFastTable;
+  GFixedFastDist: THuffFastTable;
+  GFixedFastReady: LongInt = 0;
 
 procedure EnsureFixed;
 begin
@@ -374,6 +519,21 @@ begin
     if GFixedReady <> 0 then Exit;
     BuildFixedTables(GFixedLit, GFixedDist);
     InterlockedExchange(GFixedReady, 1);
+  finally
+    LeaveCriticalSection(GFixedLock);
+  end;
+end;
+
+procedure EnsureFixedFast;
+begin
+  if InterlockedCompareExchange(GFixedFastReady, 0, 0) <> 0 then Exit;
+  EnterCriticalSection(GFixedLock);
+  try
+    if GFixedFastReady <> 0 then Exit;
+    EnsureFixed;
+    BuildFastTable(GFixedLit, CFastBitsLit, GFixedFastLit);
+    BuildFastTable(GFixedDist, CFastBitsDist, GFixedFastDist);
+    InterlockedExchange(GFixedFastReady, 1);
   finally
     LeaveCriticalSection(GFixedLock);
   end;
@@ -491,6 +651,545 @@ begin
   end;
 end;
 
+{ ── Huffman lens builder (Heap + overflow) ───────────────── }
+
+procedure BuildLensFromFreq(const AFreq: PLongWord; ACount: Integer; AMaxBits: Integer; ALens: PByte);
+var
+  LMaxNodes: Integer;
+  LNodesFreq: array of LongWord;
+  LNodesDad: array of Integer;
+  LActive: array of Integer;
+  LActiveCnt: Integer;
+  LLens: array of Integer;
+  LBlCount: array[0..32] of Integer;
+  LSorted: array of Integer;
+  I, J, K, LNode, LBestA, LBestB: Integer;
+  LMinA, LMinB: LongWord;
+  LOverflow: Integer;
+  LBits, LMax: Integer;
+  LTmp: Integer;
+begin
+  for I := 0 to ACount - 1 do ALens[I] := 0;
+  LMaxNodes := ACount * 2 + 4;
+  SetLength(LNodesFreq, LMaxNodes);
+  SetLength(LNodesDad, LMaxNodes);
+  for I := 0 to LMaxNodes - 1 do
+  begin
+    LNodesFreq[I] := 0;
+    LNodesDad[I] := -1;
+  end;
+  for I := 0 to ACount - 1 do LNodesFreq[I] := AFreq[I];
+  SetLength(LActive, LMaxNodes);
+  LActiveCnt := 0;
+  for I := 0 to ACount - 1 do
+    if AFreq[I] <> 0 then
+    begin
+      LActive[LActiveCnt] := I;
+      Inc(LActiveCnt);
+    end;
+  if LActiveCnt = 0 then Exit;
+  if LActiveCnt = 1 then
+  begin
+    // need at least two codes
+    for I := 0 to ACount - 1 do
+      if AFreq[I] = 0 then
+      begin
+        LNodesFreq[I] := 1;
+        LActive[LActiveCnt] := I;
+        Inc(LActiveCnt);
+        Break;
+      end;
+    if LActiveCnt = 1 then
+    begin
+      ALens[LActive[0]] := 1;
+      Exit;
+    end;
+  end;
+  if LActiveCnt = 2 then
+  begin
+    ALens[LActive[0]] := 1;
+    ALens[LActive[1]] := 1;
+    Exit;
+  end;
+  // force at least two codes already handled
+  LNode := ACount;
+  while LActiveCnt > 1 do
+  begin
+    LBestA := -1; LBestB := -1;
+    LMinA := High(LongWord); LMinB := High(LongWord);
+    for I := 0 to LActiveCnt - 1 do
+    begin
+      K := LActive[I];
+      if LNodesFreq[K] < LMinA then
+      begin
+        LMinB := LMinA; LBestB := LBestA;
+        LMinA := LNodesFreq[K]; LBestA := K;
+      end else if LNodesFreq[K] < LMinB then
+      begin
+        LMinB := LNodesFreq[K]; LBestB := K;
+      end;
+    end;
+    // remove bestA/B from active
+    for I := 0 to LActiveCnt - 1 do if LActive[I] = LBestA then begin LActive[I] := LActive[LActiveCnt - 1]; Dec(LActiveCnt); Break; end;
+    for I := 0 to LActiveCnt - 1 do if LActive[I] = LBestB then begin LActive[I] := LActive[LActiveCnt - 1]; Dec(LActiveCnt); Break; end;
+    LNodesFreq[LNode] := LMinA + LMinB;
+    LNodesDad[LBestA] := LNode;
+    LNodesDad[LBestB] := LNode;
+    LNodesDad[LNode] := -1;
+    LActive[LActiveCnt] := LNode;
+    Inc(LActiveCnt);
+    Inc(LNode);
+  end;
+  SetLength(LLens, ACount);
+  for I := 0 to ACount - 1 do LLens[I] := 0;
+  LMax := 0;
+  for I := 0 to ACount - 1 do
+    if AFreq[I] <> 0 then
+    begin
+      K := I; J := 0;
+      while LNodesDad[K] <> -1 do begin K := LNodesDad[K]; Inc(J); if J > 32 then Break; end;
+      LLens[I] := J;
+      if J > LMax then LMax := J;
+    end;
+  if LMax <= AMaxBits then
+  begin
+    for I := 0 to ACount - 1 do ALens[I] := Byte(LLens[I]);
+    Exit;
+  end;
+  // overflow handling: bl_count
+  for I := 0 to 32 do LBlCount[I] := 0;
+  LOverflow := 0;
+  for I := 0 to ACount - 1 do
+    if LLens[I] <> 0 then
+    begin
+      if LLens[I] > AMaxBits then
+      begin
+        Inc(LBlCount[AMaxBits]);
+        Inc(LOverflow);
+      end else Inc(LBlCount[LLens[I]]);
+    end;
+  // adjust
+  repeat
+    LBits := AMaxBits - 1;
+    while (LBits > 0) and (LBlCount[LBits] = 0) do Dec(LBits);
+    if LBits = 0 then Break;
+    Dec(LBlCount[LBits]);
+    Inc(LBlCount[LBits + 1], 2);
+    Dec(LBlCount[AMaxBits]);
+    Dec(LOverflow, 2);
+  until LOverflow <= 0;
+  // reassign lens by frequency order
+  SetLength(LSorted, ACount);
+  for I := 0 to ACount - 1 do LSorted[I] := I;
+  // sort by freq descending, zero last
+  for I := 0 to ACount - 2 do
+    for J := I + 1 to ACount - 1 do
+      if AFreq[LSorted[I]] < AFreq[LSorted[J]] then
+      begin LTmp := LSorted[I]; LSorted[I] := LSorted[J]; LSorted[J] := LTmp; end;
+  // skip zero freq at end
+  K := 0;
+  for LBits := 1 to AMaxBits do
+  begin
+    for I := 1 to LBlCount[LBits] do
+    begin
+      while (K < ACount) and (AFreq[LSorted[K]] = 0) do Inc(K);
+      if K >= ACount then Break;
+      LLens[LSorted[K]] := LBits;
+      Inc(K);
+    end;
+  end;
+  // ensure zero freq stays 0 (overwritten already)
+  for I := 0 to ACount - 1 do if AFreq[I] = 0 then LLens[I] := 0;
+  for I := 0 to ACount - 1 do ALens[I] := Byte(LLens[I]);
+end;
+
+{ ── Hash helpers ─────────────────────────────────────────── }
+
+function Hash3(const AData: TBytes; APos: SizeUInt): Integer; inline;
+begin
+  Result := Integer(PWord(@AData[APos])^);
+end;
+
+procedure FindBest(const AData: TBytes; APos: SizeUInt; ALen: SizeUInt;
+  const LHead: array of Integer; const LPrev: array of Integer;
+  AMaxChain, AMaxDist: Integer; out ABestLen, ABestDist: Integer);
+var
+  LHash, LCand, LChain, LCur, LMax: Integer;
+begin
+  ABestLen := 0; ABestDist := 0;
+  if APos + 2 >= ALen then Exit;
+  LHash := Hash3(AData, APos);
+  LCand := LHead[LHash];
+  LChain := 0;
+  LMax := Integer(ALen - APos);
+  if LMax > 258 then LMax := 258;
+  while (LCand >= 0) and (LChain < AMaxChain) do
+  begin
+    if Integer(APos) - LCand > AMaxDist then
+    begin
+      LCand := LPrev[LCand];
+      Inc(LChain);
+      Continue;
+    end;
+    if (LMax >= 8) and (Integer(ALen) - LCand >= 8) then
+    begin
+      if PLongWord(@AData[LCand])^ <> PLongWord(@AData[APos])^ then
+      begin
+        LCand := LPrev[LCand];
+        Inc(LChain);
+        Continue;
+      end;
+      LCur := 4;
+      while LCur + 8 <= LMax do
+      begin
+        if PQWord(@AData[LCand + LCur])^ <> PQWord(@AData[APos + LCur])^ then Break;
+        Inc(LCur, 8);
+      end;
+      while LCur + 4 <= LMax do
+      begin
+        if PLongWord(@AData[LCand + LCur])^ <> PLongWord(@AData[APos + LCur])^ then Break;
+        Inc(LCur, 4);
+      end;
+      while (LCur < LMax) and (AData[LCand + LCur] = AData[APos + LCur]) do Inc(LCur);
+    end
+    else if (LMax >= 4) and (Integer(ALen) - LCand >= 4) then
+    begin
+      if PLongWord(@AData[LCand])^ <> PLongWord(@AData[APos])^ then
+      begin
+        LCand := LPrev[LCand];
+        Inc(LChain);
+        Continue;
+      end;
+      LCur := 4;
+      while LCur + 4 <= LMax do
+      begin
+        if PLongWord(@AData[LCand + LCur])^ <> PLongWord(@AData[APos + LCur])^ then Break;
+        Inc(LCur, 4);
+      end;
+      while (LCur < LMax) and (AData[LCand + LCur] = AData[APos + LCur]) do Inc(LCur);
+    end
+    else
+    begin
+      if AData[LCand] <> AData[APos] then
+      begin
+        LCand := LPrev[LCand];
+        Inc(LChain);
+        Continue;
+      end;
+      LCur := 1;
+      while (LCur < LMax) and (AData[LCand + LCur] = AData[APos + LCur]) do Inc(LCur);
+    end;
+    if (LCur >= 3) and (LCur > ABestLen) then
+    begin
+      ABestLen := LCur;
+      ABestDist := Integer(APos) - LCand;
+      if ABestLen = 258 then Break;
+    end;
+    LCand := LPrev[LCand];
+    Inc(LChain);
+  end;
+end;
+
+{ ── Token collection ─────────────────────────────────────── }
+
+procedure CollectTokens(const AData: TBytes; AMaxChain: Integer; ALazy: Boolean;
+  out ATokens: TDeflateTokens; out ALitFreq: array of LongWord; out ADistFreq: array of LongWord);
+var
+  LLen: SizeUInt;
+  LHead: array of Integer;
+  LPrev: array of Integer;
+  LPos: SizeUInt;
+  LBestLen, LBestDist: Integer;
+  LNextLen, LNextDist: Integer;
+  LSym: Integer;
+  LExtra: Word;
+  LBits: Byte;
+  LDSym: Integer;
+  LDExtra: Word;
+  LDBits: Byte;
+  LTok: TDeflateToken;
+  I: Integer;
+  LTokCount, LTokCap: Integer;
+begin
+  LLen := SizeUInt(Length(AData));
+  SetLength(LHead, CHashSize);
+  if CHashSize > 0 then
+    FillChar(LHead[0], CHashSize * SizeOf(Integer), $FF);
+  SetLength(LPrev, LLen);
+  if LLen > 0 then
+    FillChar(LPrev[0], LLen * SizeOf(Integer), $FF);
+  SetLength(ATokens, 0);
+  for I := 0 to High(ALitFreq) do ALitFreq[I] := 0;
+  for I := 0 to High(ADistFreq) do ADistFreq[I] := 0;
+  if LLen = 0 then Exit;
+  // pre-allocate tokens: doubling growth to avoid O(n^2) SetLength
+  SetLength(ATokens, 1024);
+  LTokCount := 0;
+  LTokCap := 1024;
+  LPos := 0;
+  while LPos < LLen do
+  begin
+    FindBest(AData, LPos, LLen, LHead, LPrev, AMaxChain, CWindowSize, LBestLen, LBestDist);
+    if ALazy and (LBestLen >= 3) and (LPos + 1 < LLen) then
+    begin
+      if LPos + 2 < LLen then
+      begin
+        LPrev[LPos] := LHead[Hash3(AData, LPos)];
+        LHead[Hash3(AData, LPos)] := Integer(LPos);
+      end;
+      FindBest(AData, LPos + 1, LLen, LHead, LPrev, AMaxChain, CWindowSize, LNextLen, LNextDist);
+      if LNextLen > LBestLen then
+      begin
+        LTok.IsLit := True;
+        LTok.Lit := AData[LPos];
+        if LTokCount >= LTokCap then
+        begin
+          LTokCap := LTokCap * 2;
+          SetLength(ATokens, LTokCap);
+        end;
+        ATokens[LTokCount] := LTok;
+        Inc(LTokCount);
+        Inc(ALitFreq[AData[LPos]]);
+        Inc(LPos);
+        Continue;
+      end else
+      begin
+        if not FindLengthSym(Word(LBestLen), LSym, LExtra, LBits) then RaiseZlib(zecInternal, 'zlib: length sym fail');
+        if not FindDistSym(Word(LBestDist), LDSym, LDExtra, LDBits) then RaiseZlib(zecInternal, 'zlib: dist sym fail');
+        LTok.IsLit := False;
+        LTok.LenSym := LSym;
+        LTok.LenExtra := LExtra;
+        LTok.LenBits := LBits;
+        LTok.DistSym := LDSym;
+        LTok.DistExtra := LDExtra;
+        LTok.DistBits := LDBits;
+        if LTokCount >= LTokCap then
+        begin
+          LTokCap := LTokCap * 2;
+          SetLength(ATokens, LTokCap);
+        end;
+        ATokens[LTokCount] := LTok;
+        Inc(LTokCount);
+        Inc(ALitFreq[LSym]);
+        Inc(ADistFreq[LDSym]);
+        for I := 1 to LBestLen - 1 do
+        begin
+          if LPos + SizeUInt(I) + 2 < LLen then
+          begin
+            LPrev[LPos + I] := LHead[Hash3(AData, LPos + I)];
+            LHead[Hash3(AData, LPos + I)] := Integer(LPos + I);
+          end;
+        end;
+        Inc(LPos, SizeUInt(LBestLen));
+        Continue;
+      end;
+    end;
+    if LBestLen >= 3 then
+    begin
+      if LPos + 2 < LLen then
+      begin
+        LPrev[LPos] := LHead[Hash3(AData, LPos)];
+        LHead[Hash3(AData, LPos)] := Integer(LPos);
+      end;
+      if not FindLengthSym(Word(LBestLen), LSym, LExtra, LBits) then RaiseZlib(zecInternal, 'zlib: length sym fail');
+      if not FindDistSym(Word(LBestDist), LDSym, LDExtra, LDBits) then RaiseZlib(zecInternal, 'zlib: dist sym fail');
+      LTok.IsLit := False;
+      LTok.LenSym := LSym;
+      LTok.LenExtra := LExtra;
+      LTok.LenBits := LBits;
+      LTok.DistSym := LDSym;
+      LTok.DistExtra := LDExtra;
+      LTok.DistBits := LDBits;
+      if LTokCount >= LTokCap then
+      begin
+        LTokCap := LTokCap * 2;
+        SetLength(ATokens, LTokCap);
+      end;
+      ATokens[LTokCount] := LTok;
+      Inc(LTokCount);
+      Inc(ALitFreq[LSym]);
+      Inc(ADistFreq[LDSym]);
+      for I := 1 to LBestLen - 1 do
+      begin
+        if LPos + SizeUInt(I) + 2 < LLen then
+        begin
+          LPrev[LPos + I] := LHead[Hash3(AData, LPos + I)];
+          LHead[Hash3(AData, LPos + I)] := Integer(LPos + I);
+        end;
+      end;
+      Inc(LPos, SizeUInt(LBestLen));
+    end else
+    begin
+      if LPos + 2 < LLen then
+      begin
+        LPrev[LPos] := LHead[Hash3(AData, LPos)];
+        LHead[Hash3(AData, LPos)] := Integer(LPos);
+      end;
+      LTok.IsLit := True;
+      LTok.Lit := AData[LPos];
+      if LTokCount >= LTokCap then
+      begin
+        LTokCap := LTokCap * 2;
+        SetLength(ATokens, LTokCap);
+      end;
+      ATokens[LTokCount] := LTok;
+      Inc(LTokCount);
+      Inc(ALitFreq[AData[LPos]]);
+      Inc(LPos);
+    end;
+  end;
+  SetLength(ATokens, LTokCount);
+end;
+
+{ ── Dynamic block writer ─────────────────────────────────── }
+
+procedure WriteDynamicBlock(const ATokens: TDeflateTokens;
+  const ALitFreq, ADistFreq: array of LongWord; var BW: TBitWriter);
+var
+  LLens: array[0..CNumLitLen - 1] of Byte;
+  DLens: array[0..CNumDist - 1] of Byte;
+  LBLens: array[0..CNumCLen - 1] of Byte;
+  LitBuild, DistBuild, BLBuild: THuffBuild;
+  LitNum, DistNum, BlNum: Integer;
+  I, LLast: Integer;
+  LCombined: array of Byte;
+  BLFreq: array[0..CNumCLen - 1] of LongWord;
+  LMaxCode: Integer;
+  LPrevLen, LCurLen, LNextLen, LCount, LMaxCnt, LMinCnt: Integer;
+begin
+  for I := 0 to CNumLitLen - 1 do LLens[I] := 0;
+  for I := 0 to CNumDist - 1 do DLens[I] := 0;
+  for I := 0 to CNumCLen - 1 do LBLens[I] := 0;
+  // build lens from freq (ensure EOB)
+  BuildLensFromFreq(@ALitFreq[0], CNumLitLen, CMaxBits, @LLens[0]);
+  // must have EOB 256 at least 1
+  if LLens[256] = 0 then
+  begin
+    // force one
+    LLens[256] := 1;
+  end;
+  BuildLensFromFreq(@ADistFreq[0], CNumDist, CMaxBits, @DLens[0]);
+  // trim
+  LLast := CNumLitLen - 1;
+  while (LLast > 256) and (LLens[LLast] = 0) do Dec(LLast);
+  LitNum := LLast + 1;
+  if LitNum < 257 then LitNum := 257;
+  LLast := CNumDist - 1;
+  while (LLast > 0) and (DLens[LLast] = 0) do Dec(LLast);
+  DistNum := LLast + 1;
+  if DistNum < 1 then DistNum := 1;
+  if (DistNum = 1) and (DLens[0] = 0) then DLens[0] := 1;
+  // combined
+  SetLength(LCombined, LitNum + DistNum + 1);
+  for I := 0 to LitNum - 1 do LCombined[I] := LLens[I];
+  for I := 0 to DistNum - 1 do LCombined[LitNum + I] := DLens[I];
+  LCombined[LitNum + DistNum] := $FF;
+  // scan for BL freq
+  for I := 0 to CNumCLen - 1 do BLFreq[I] := 0;
+  LMaxCode := LitNum + DistNum - 1;
+  LPrevLen := -1;
+  LCount := 0;
+  LNextLen := LCombined[0];
+  if LNextLen = 0 then begin LMaxCnt := 138; LMinCnt := 3; end else begin LMaxCnt := 7; LMinCnt := 4; end;
+  for I := 0 to LMaxCode do
+  begin
+    LCurLen := LNextLen;
+    LNextLen := LCombined[I + 1];
+    Inc(LCount);
+    if (LCount < LMaxCnt) and (LCurLen = LNextLen) then Continue;
+    if LCount < LMinCnt then
+      Inc(BLFreq[LCurLen], LCount)
+    else if LCurLen <> 0 then
+    begin
+      if LCurLen <> LPrevLen then Inc(BLFreq[LCurLen]);
+      Inc(BLFreq[16]);
+    end else if LCount <= 10 then
+      Inc(BLFreq[17])
+    else
+      Inc(BLFreq[18]);
+    LCount := 0;
+    LPrevLen := LCurLen;
+    if LNextLen = 0 then begin LMaxCnt := 138; LMinCnt := 3; end
+    else if LCurLen = LNextLen then begin LMaxCnt := 6; LMinCnt := 3; end
+    else begin LMaxCnt := 7; LMinCnt := 4; end;
+  end;
+  // build BL lens (max 7)
+  BuildLensFromFreq(@BLFreq[0], CNumCLen, CMaxBLBits, @LBLens[0]);
+  // build codes
+  BuildHuffman(@LLens[0], CNumLitLen, LitBuild);
+  BuildHuffman(@DLens[0], CNumDist, DistBuild);
+  BuildHuffman(@LBLens[0], CNumCLen, BLBuild);
+  // determine HCLEN
+  LLast := 18;
+  while (LLast >= 0) and (LBLens[CLengthOrder[LLast]] = 0) do Dec(LLast);
+  BlNum := LLast + 1;
+  if BlNum < 4 then BlNum := 4;
+  // header
+  BwWrite(BW, 1, 1);
+  BwWrite(BW, 2, 2); // dynamic
+  BwWrite(BW, LongWord(LitNum - 257), 5);
+  BwWrite(BW, LongWord(DistNum - 1), 5);
+  BwWrite(BW, LongWord(BlNum - 4), 4);
+  for I := 0 to BlNum - 1 do
+    BwWrite(BW, LBLens[CLengthOrder[I]], 3);
+  // send combined lens RLE using BL codes
+  LPrevLen := -1;
+  LCount := 0;
+  LNextLen := LCombined[0];
+  if LNextLen = 0 then begin LMaxCnt := 138; LMinCnt := 3; end else begin LMaxCnt := 7; LMinCnt := 4; end;
+  for I := 0 to LMaxCode do
+  begin
+    LCurLen := LNextLen;
+    LNextLen := LCombined[I + 1];
+    Inc(LCount);
+    if (LCount < LMaxCnt) and (LCurLen = LNextLen) then Continue;
+    if LCount < LMinCnt then
+    begin
+      while LCount > 0 do
+      begin
+        BwWrite(BW, BLBuild.Codes[LCurLen], BLBuild.Lens[LCurLen]);
+        Dec(LCount);
+      end;
+    end else if LCurLen <> 0 then
+    begin
+      if LCurLen <> LPrevLen then
+      begin
+        BwWrite(BW, BLBuild.Codes[LCurLen], BLBuild.Lens[LCurLen]);
+        Dec(LCount);
+      end;
+      BwWrite(BW, BLBuild.Codes[16], BLBuild.Lens[16]);
+      BwWrite(BW, LongWord(LCount - 3), 2);
+    end else if LCount <= 10 then
+    begin
+      BwWrite(BW, BLBuild.Codes[17], BLBuild.Lens[17]);
+      BwWrite(BW, LongWord(LCount - 3), 3);
+    end else
+    begin
+      BwWrite(BW, BLBuild.Codes[18], BLBuild.Lens[18]);
+      BwWrite(BW, LongWord(LCount - 11), 7);
+    end;
+    LCount := 0;
+    LPrevLen := LCurLen;
+    if LNextLen = 0 then begin LMaxCnt := 138; LMinCnt := 3; end
+    else if LCurLen = LNextLen then begin LMaxCnt := 6; LMinCnt := 3; end
+    else begin LMaxCnt := 7; LMinCnt := 4; end;
+  end;
+  // tokens
+  for I := 0 to High(ATokens) do
+  begin
+    if ATokens[I].IsLit then
+      BwWrite(BW, LitBuild.Codes[ATokens[I].Lit], LitBuild.Lens[ATokens[I].Lit])
+    else
+    begin
+      BwWrite(BW, LitBuild.Codes[ATokens[I].LenSym], LitBuild.Lens[ATokens[I].LenSym]);
+      if ATokens[I].LenBits > 0 then BwWrite(BW, ATokens[I].LenExtra, ATokens[I].LenBits);
+      BwWrite(BW, DistBuild.Codes[ATokens[I].DistSym], DistBuild.Lens[ATokens[I].DistSym]);
+      if ATokens[I].DistBits > 0 then BwWrite(BW, ATokens[I].DistExtra, ATokens[I].DistBits);
+    end;
+  end;
+  BwWrite(BW, LitBuild.Codes[256], LitBuild.Lens[256]);
+end;
+
 { ── Fixed Huffman with hash chain ────────────────────────── }
 
 procedure DeflateFixed(const AData: TBytes; var BW: TBitWriter; ALevel: TZlibLevel);
@@ -537,11 +1236,13 @@ begin
   begin
     if LPos + 2 < LLen then
     begin
-      LHash := ((Integer(AData[LPos]) * 31 + Integer(AData[LPos+1])) * 31 + Integer(AData[LPos+2])) and CHashMask;
+      LHash := Hash3(AData, LPos);
       LCand := LHead[LHash];
       LBestLen := 0;
       LBestDist := 0;
       LChainCnt := 0;
+      LMaxLen := Integer(LLen - LPos);
+      if LMaxLen > 258 then LMaxLen := 258;
       while (LCand >= 0) and (LChainCnt < LMaxChain) do
       begin
         if LPos - SizeUInt(LCand) > SizeUInt(LMaxDist) then
@@ -550,19 +1251,62 @@ begin
           Inc(LChainCnt);
           Continue;
         end;
-        if AData[LCand] = AData[LPos] then
+        if (LMaxLen >= 8) and (Integer(LLen) - LCand >= 8) then
         begin
-          LMaxLen := Integer(LLen - LPos);
-          if LMaxLen > 258 then LMaxLen := 258;
-          LCurLen := 0;
+          if PLongWord(@AData[LCand])^ <> PLongWord(@AData[LPos])^ then
+          begin
+            LCand := LPrev[LCand];
+            Inc(LChainCnt);
+            Continue;
+          end;
+          LCurLen := 4;
+          while LCurLen + 8 <= LMaxLen do
+          begin
+            if PQWord(@AData[LCand + LCurLen])^ <> PQWord(@AData[LPos + LCurLen])^ then Break;
+            Inc(LCurLen, 8);
+          end;
+          while LCurLen + 4 <= LMaxLen do
+          begin
+            if PLongWord(@AData[LCand + LCurLen])^ <> PLongWord(@AData[LPos + LCurLen])^ then Break;
+            Inc(LCurLen, 4);
+          end;
           while (LCurLen < LMaxLen) and (AData[LCand + LCurLen] = AData[LPos + LCurLen]) do
             Inc(LCurLen);
-          if (LCurLen >= 3) and (LCurLen > LBestLen) then
+        end
+        else if (LMaxLen >= 4) and (Integer(LLen) - LCand >= 4) then
+        begin
+          if PLongWord(@AData[LCand])^ <> PLongWord(@AData[LPos])^ then
           begin
-            LBestLen := LCurLen;
-            LBestDist := Integer(LPos) - LCand;
-            if LBestLen = 258 then Break;
+            LCand := LPrev[LCand];
+            Inc(LChainCnt);
+            Continue;
           end;
+          LCurLen := 4;
+          while LCurLen + 4 <= LMaxLen do
+          begin
+            if PLongWord(@AData[LCand + LCurLen])^ <> PLongWord(@AData[LPos + LCurLen])^ then Break;
+            Inc(LCurLen, 4);
+          end;
+          while (LCurLen < LMaxLen) and (AData[LCand + LCurLen] = AData[LPos + LCurLen]) do
+            Inc(LCurLen);
+        end
+        else
+        begin
+          if AData[LCand] <> AData[LPos] then
+          begin
+            LCand := LPrev[LCand];
+            Inc(LChainCnt);
+            Continue;
+          end;
+          LCurLen := 1;
+          while (LCurLen < LMaxLen) and (AData[LCand + LCurLen] = AData[LPos + LCurLen]) do
+            Inc(LCurLen);
+        end;
+        if (LCurLen >= 3) and (LCurLen > LBestLen) then
+        begin
+          LBestLen := LCurLen;
+          LBestDist := Integer(LPos) - LCand;
+          if LBestLen = 258 then Break;
         end;
         LCand := LPrev[LCand];
         Inc(LChainCnt);
@@ -585,7 +1329,7 @@ begin
         begin
           if LPos + SizeUInt(I) + 2 < LLen then
           begin
-            LHash := ((Integer(AData[LPos+I]) * 31 + Integer(AData[LPos+I+1])) * 31 + Integer(AData[LPos+I+2])) and CHashMask;
+            LHash := Hash3(AData, LPos + SizeUInt(I));
             LPrev[LPos+I] := LHead[LHash];
             LHead[LHash] := Integer(LPos+I);
           end;
@@ -606,18 +1350,51 @@ begin
   BwFlush(BW);
 end;
 
+procedure DeflateDynamic(const AData: TBytes; var BW: TBitWriter; ALevel: TZlibLevel);
+var
+  LLitFreq: array[0..CNumLitLen - 1] of LongWord;
+  LDistFreq: array[0..CNumDist - 1] of LongWord;
+  LTokens: TDeflateTokens;
+  LMaxChain: Integer;
+  LLazy: Boolean;
+begin
+  if Length(AData) = 0 then
+  begin
+    EnsureFixed;
+    BwWrite(BW, 1, 1);
+    BwWrite(BW, 1, 2);
+    BwWrite(BW, GFixedLit.Codes[256], GFixedLit.Lens[256]);
+    BwFlush(BW);
+    Exit;
+  end;
+  case ALevel of
+    zlFastest: begin LMaxChain := 8; LLazy := False; end;
+    zlBest:    begin LMaxChain := 128; LLazy := True; end;
+  else
+    begin LMaxChain := 32; LLazy := True; end;
+  end;
+  CollectTokens(AData, LMaxChain, LLazy, LTokens, LLitFreq, LDistFreq);
+  // ensure EOB
+  Inc(LLitFreq[256]);
+  // dist dummy if none
+  // handled inside WriteDynamicBlock
+  WriteDynamicBlock(LTokens, LLitFreq, LDistFreq, BW);
+  BwFlush(BW);
+end;
+
 function DeflateEncodeRaw(const AData: TBytes; ALevel: TZlibLevel; AStoredOnly: Boolean): TBytes;
 var
   BW: TBitWriter;
   LEst: SizeUInt;
 begin
+  Result := nil;
   LEst := SizeUInt(Length(AData)) + 16;
   if LEst < 64 then LEst := 64;
   BwInit(BW, LEst);
   if AStoredOnly then
     DeflateStored(AData, BW)
   else
-    DeflateFixed(AData, BW, ALevel);
+    DeflateDynamic(AData, BW, ALevel);
   SetLength(BW.Buf, BW.Len);
   Result := BW.Buf;
 end;
@@ -661,17 +1438,18 @@ var
   LBFinal: LongWord;
   LBType: LongWord;
   LLitBuild, LDistBuild: THuffBuild;
-  LFixedLit, LFixedDist: THuffBuild;
-  LFixedReady: Boolean;
+  LLitFast, LDistFast: THuffFastTable;
   HLIT, HDIST, HCLEN: Integer;
   LCLens: array[0..CNumCLen - 1] of Byte;
   LCLBuild: THuffBuild;
   LCodeLens: array[0..CNumLitLen + CNumDist - 1] of Byte;
   I, LSym, LPrev, LRepeat, LValue: Integer;
   LLen, LDist, LExtra: LongWord;
-  LCopyPos, LCopyLen: SizeUInt;
+  LCopyPos: SizeUInt;
   LStoredLen, LStoredNLen: Word;
   J: SizeUInt;
+  LBase, LFill: Byte;
+  K: SizeUInt;
 begin
   Result := nil;
   if AMax = 0 then AMax := ZLIB_MAX_DECOMPRESS_BYTES;
@@ -688,9 +1466,6 @@ begin
   end;
   LWinPos := 0;
   FillChar(LWindow, SizeOf(LWindow), 0);
-  LFixedReady := False;
-  FillChar(LFixedLit, SizeOf(LFixedLit), 0);
-  FillChar(LFixedDist, SizeOf(LFixedDist), 0);
   repeat
     LBFinal := BrGet(R, 1);
     LBType := BrGet(R, 2);
@@ -723,13 +1498,9 @@ begin
     begin
       if LBType = 1 then
       begin
-        if not LFixedReady then
-        begin
-          BuildFixedTables(LFixedLit, LFixedDist);
-          LFixedReady := True;
-        end;
-        LLitBuild := LFixedLit;
-        LDistBuild := LFixedDist;
+        EnsureFixedFast;
+        LLitFast := GFixedFastLit;
+        LDistFast := GFixedFastDist;
       end
       else
       begin
@@ -796,13 +1567,16 @@ begin
         BuildHuffman(@LCodeLens[HLIT], HDIST, LDistBuild);
         if LLitBuild.MaxBits = 0 then
           RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
+        BuildFastTable(LLitBuild, CFastBitsLit, LLitFast);
+        BuildFastTable(LDistBuild, CFastBitsDist, LDistFast);
       end;
       while True do
       begin
-        LSym := DecodeSymbol(R, LLitBuild);
+        LSym := FastDecodeSymbol(R, LLitFast);
         if LSym < 256 then
         begin
-          GrowBytes(LOut, LOutLen, LCap, 1, AMax);
+          if LOutLen + 1 > LCap then
+            GrowBytes(LOut, LOutLen, LCap, 1, AMax);
           LOut[LOutLen] := Byte(LSym);
           LWindow[LWinPos] := Byte(LSym);
           LWinPos := (LWinPos + 1) and (CWindowSize - 1);
@@ -816,7 +1590,7 @@ begin
           LExtra := CExtraLength[LSym - 257];
           if LExtra > 0 then
             LLen := LLen + BrGet(R, LExtra);
-          LSym := DecodeSymbol(R, LDistBuild);
+          LSym := FastDecodeSymbol(R, LDistFast);
           if (LSym < 0) or (LSym >= CNumDist) then
             RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
           LDist := CBaseDist[LSym];
@@ -831,14 +1605,38 @@ begin
           end;
           if LDist = 0 then
             RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
-          GrowBytes(LOut, LOutLen, LCap, LLen, AMax);
-          LCopyPos := (LOutLen - LDist);
-          for LCopyLen := 0 to LLen - 1 do
+          if LOutLen + LLen > LCap then
+            GrowBytes(LOut, LOutLen, LCap, LLen, AMax);
+          LCopyPos := LOutLen - LDist;
+          if LDist = 1 then
           begin
-            LOut[LOutLen] := LOut[LCopyPos + LCopyLen];
-            LWindow[LWinPos] := LOut[LOutLen];
-            LWinPos := (LWinPos + 1) and (CWindowSize - 1);
-            Inc(LOutLen);
+            LBase := LOut[LCopyPos];
+            FillChar(LOut[LOutLen], LLen, LBase);
+            for K := 0 to LLen - 1 do
+            begin
+              LWindow[(LWinPos + K) and (CWindowSize - 1)] := LBase;
+            end;
+            LWinPos := (LWinPos + LLen) and (CWindowSize - 1);
+            Inc(LOutLen, LLen);
+          end
+          else if LLen <= LDist then
+          begin
+            Move(LOut[LCopyPos], LOut[LOutLen], LLen);
+            for K := 0 to LLen - 1 do
+              LWindow[(LWinPos + K) and (CWindowSize - 1)] := LOut[LOutLen + K];
+            LWinPos := (LWinPos + LLen) and (CWindowSize - 1);
+            Inc(LOutLen, LLen);
+          end
+          else
+          begin
+            for K := 0 to LLen - 1 do
+            begin
+              LFill := LOut[LCopyPos + K];
+              LOut[LOutLen + K] := LFill;
+              LWindow[(LWinPos + K) and (CWindowSize - 1)] := LFill;
+            end;
+            LWinPos := (LWinPos + LLen) and (CWindowSize - 1);
+            Inc(LOutLen, LLen);
           end;
         end
         else
