@@ -89,9 +89,9 @@ type
   end;
 implementation
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.fs.path,
   nextpas.core.format.limits,
   nextpas.core.text,
@@ -364,7 +364,7 @@ begin
   LNorm := FsPathAbs(AFileName);
   if LNorm = '' then
     Exit(False);
-  if not SysUtils.FileExists(LNorm) then
+  if not FileExists(LNorm) then
     Exit(False);
   AssignFile(LFile, LNorm);
   {$I-}
@@ -373,7 +373,7 @@ begin
   if IOResult <> 0 then
     Exit(False);
   try
-    LSize := FileSize(LFile);
+    LSize := System.FileSize(LFile);
     if (LSize < 0) or (SizeUInt(LSize) > FORMAT_BULK_PARSE_MAX_BYTES) then
       Exit(False);
     if LSize = 0 then

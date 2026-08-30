@@ -1,7 +1,6 @@
 program bench_eval;
 {$I nextpas.core.settings.inc}
-uses SysUtils,
-  nextpas.core.bench, nextpas.core.bench.intf, nextpas.core.json, nextpas.core.time.base,
+uses nextpas.core.exception, nextpas.core.bench, nextpas.core.bench.intf, nextpas.core.json, nextpas.core.time.base,
   nextpas.core.fs, nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js,
   nextpas.core.js.quickjs.loader;
 var GCounter: UInt64; GRuntime: IJsRuntime; GCtx: IJsContext;
@@ -35,7 +34,8 @@ begin
     try
       LResults.SaveToJSON(LFile);
     except
-      on E: Exception do WriteLn('[bench] save failed: ', E.Message);
+      on E: ENextPasError do WriteLn('[bench] save failed: ', E.Message);
+      on E: TObject do WriteLn('[bench] save failed: ', E.ClassName);
     end;
     WriteLn('counter=', GCounter, ' file=', LFile, ' (skipped)');
     Exit;
@@ -56,7 +56,8 @@ begin
     try
       LResults.SaveToJSON(LFile);
     except
-      on E: Exception do begin WriteLn('[bench] save failed: ', E.Message); raise; end;
+      on E: ENextPasError do begin WriteLn('[bench] save failed: ', E.Message); raise; end;
+      on E: TObject do begin WriteLn('[bench] save failed: ', E.ClassName); raise; end;
     end;
     WriteLn('counter=', GCounter, ' file=', LFile);
   finally
@@ -74,6 +75,7 @@ begin
     RunForBackend(jsbkChakra, 'chakra');
     RunForBackend(jsbkQuickJs, 'quickjs');
   except
-    on E: Exception do begin WriteLn('[bench] fatal: ', E.ClassName, ': ', E.Message); Halt(1); end;
+    on E: ENextPasError do begin WriteLn('[bench] fatal: ', E.ClassName, ': ', E.Message); Halt(1); end;
+    on E: TObject do begin WriteLn('[bench] fatal: ', E.ClassName); Halt(1); end;
   end;
 end.

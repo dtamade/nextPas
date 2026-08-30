@@ -42,7 +42,7 @@ type
   procedure RemoveHostFunction(const AName: string); procedure Tick; procedure CollectGarbage; procedure Close; function IsClosed: Boolean;
   end;
 implementation
-uses nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text, nextpas.core.platform.thread;
+uses nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.format.limits, nextpas.core.text, nextpas.core.platform.thread;
 constructor TJsJs888Runtime.Create(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions);
 begin inherited Create; FOptions := AOptions; CheckJsRuntimeOptions(FOptions); end;
 constructor TJsJs888Runtime.Create(const AOptions: TJsRuntimeOptions);
@@ -164,7 +164,7 @@ function TJsJs888Context.Runtime: IJsRuntime; begin EnsureNotClosed; Result:=FRu
 function TJsJs888Context.Eval(const ACode: string; const AFileName: string): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=DoEval(ACode); end;
 function TJsJs888Context.TryEval(const ACode: string; out AValue: TJsValue): Boolean; begin try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
 function TJsJs888Context.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin AValue:=JsUndefinedValue; if (AFileName='') or not FileExists(AFileName) then Exit(False); try if FileSize(AFileName)>64*1024*1024 then Exit(False); C:=ReadFileText(AFileName); Result:=TryEval(C,AValue); except Result:=False; end; end;
+var C: string; begin AValue:=JsUndefinedValue; if (AFileName='') or not FileExists(AFileName) then Exit(False); try if SizeUInt(FileSize(AFileName))>FORMAT_BULK_PARSE_MAX_BYTES then Exit(False); C:=ReadFileText(AFileName); Result:=TryEval(C,AValue); except Result:=False; end; end;
 function TJsJs888Context.Global: TJsValue; begin EnsureNotClosed; Result:=JsObjectValue; end;
 function TJsJs888Context.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsStringValue(AStr); end;
 function TJsJs888Context.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsIntValue(AValue); end;
