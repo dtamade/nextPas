@@ -66,7 +66,7 @@
 
 | 门禁 | 要求 | 命令 | 证据 |
 |------|------|------|------|
-| G-M4-1 | `test_js_js888_runtime` 恒绿（零 so），同 `test_js_fake` 40+ 用例矩阵全绿 | `make focused FOCUS=core/tests/nextpas.core.js/test_js_js888_runtime` | AllPassed + heaptrc 0 |
+| G-M4-1 | `test_js_js888_runtime` 恒绿（零 so），同 `test_js_fake` 42 用例矩阵全绿 | `make focused FOCUS=core/tests/nextpas.core.js/test_js_js888_runtime` | AllPassed + heaptrc 0 |
 | G-M4-2 | `source-contract` 纯后端零 FFI：`grep -R "platform\.dl" core/src/nextpas.core.js.js888.pas` 0 命中 | `check_source_contracts.py` | pass |
 | G-M4-3 | `js.base/js.intf` 零改动（`git diff --stat` 无 `js.base/intf`），仅 `+js.js888` + `TJsBackendKind` 尾部 `jsbkJs888` | `git diff` | 零改动证明 |
 | G-M4-4 | `bench_eval` 对 `jsbkJs888` 同口径 `ns/op+p50/p99+B/op` | `bench_eval` | 基线对齐 |

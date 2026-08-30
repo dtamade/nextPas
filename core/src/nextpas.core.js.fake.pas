@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
+  nextpas.core.text.view,
   nextpas.core.json;
 
 type
@@ -46,6 +47,7 @@ type
       Kind: Integer;
     end;
     function FindHost(const AName: string): Integer;
+    function FindHostView(const AName: TStringView): Integer; inline;
     function IsOnCreationThread: Boolean;
     procedure EnsureNotClosed;
     procedure EnsureThreadAffinity;
@@ -87,9 +89,11 @@ type
   end;
 implementation
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.fs,
+  nextpas.core.fs.path,
+  nextpas.core.format.limits,
   nextpas.core.text,
   nextpas.core.platform.thread;
 constructor TJsFakeValueRef.Create(const AValue: TJsValue);
@@ -200,11 +204,21 @@ begin
 end;
 
 
+function TJsFakeContext.FindHostView(const AName: TStringView): Integer; inline;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FHostFuncs) do
+    if TStringView.FromStr(FHostFuncs[I].Name).Equals(AName) then
+      Exit(I);
+  Result := -1;
+end;
+
 function TJsFakeContext.DoEval(const ACode: string): TJsValue;
 var
-  LCode: string;
-  LIdx, LHostIdx: Integer;
-  LName, LArg: string;
+  LView, LNameView, LArgView: TStringView;
+  LIdx: PtrInt;
+  LHostIdx: Integer;
   LSingle: array[0..0] of TJsValue;
   LNoArgs: array of TJsValue;
   LHandler: TJsHostFunction;
@@ -213,86 +227,102 @@ var
   LThis: TJsValue;
   LHasArg: Boolean;
 begin
-  LNoArgs:=nil;
-  if JsTrimEquals(ACode,'') then
+  LNoArgs := nil;
+  if JsTrimEquals(ACode, '') then
     raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkFake);
   if (Pos('while(true)', ACode) > 0) and (FOptions.TimeoutMs > 0) then
     raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', jsbkFake);
   if (FOptions.MemoryLimit > 0) and (FOptions.MemoryLimit < 1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkFake);
-  if JsTrimEquals(ACode,'1+2') then Exit(JsIntValue(3));
-  if JsTrimEquals(ACode,'bad(') then
+  if JsTrimEquals(ACode, '1+2') then Exit(JsIntValue(3));
+  if JsTrimEquals(ACode, 'bad(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', jsbkFake);
-  if JsTrimEquals(ACode,'foo(') then
+  if JsTrimEquals(ACode, 'foo(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', jsbkFake);
   if (Pos('JSON.stringify', ACode) > 0) and (Pos('x', ACode) > 0) then
     Exit(JsStringValue('{"x":1}'));
-  if JsTrimEquals(ACode,'null') then Exit(JsNullValue);
-  if JsTrimEquals(ACode,'undefined') then Exit(JsUndefinedValue);
-  if JsTrimEquals(ACode,'true') then Exit(JsBoolValue(True));
-  if JsTrimEquals(ACode,'false') then Exit(JsBoolValue(False));
-  LCode := TextTrim(ACode);
-  LIdx := Pos('(', LCode);
-  if LIdx > 0 then
+  if JsTrimEquals(ACode, 'null') then Exit(JsNullValue);
+  if JsTrimEquals(ACode, 'undefined') then Exit(JsUndefinedValue);
+  if JsTrimEquals(ACode, 'true') then Exit(JsBoolValue(True));
+  if JsTrimEquals(ACode, 'false') then Exit(JsBoolValue(False));
+  // 零分配路径：视图切片替代 TextTrim/Copy/Pos 全串扫描与分配
+  LView := TStringView.FromStr(ACode).Trim;
+  LIdx := LView.IndexOf('(');
+  if LIdx >= 0 then
   begin
-    LName := TextTrim(Copy(LCode, 1, LIdx - 1));
-    LHostIdx := FindHost(LName);
-    if LHostIdx >= 0 then
+    LNameView := LView.Slice(0, SizeUInt(LIdx)).Trim;
+    if not LNameView.IsEmpty then
     begin
-      LArg := TextTrim(Copy(LCode, LIdx + 1, Length(LCode) - LIdx - 1));
-      if (Length(LArg) >= 2) and ((LArg[1] = '"') or (LArg[1] = '''')) then
-        LArg := Copy(LArg, 2, Length(LArg) - 2);
-      if LArg = ')' then LArg := '';
-      LHasArg := LArg <> '';
-      if LHasArg then LSingle[0] := JsStringValue(LArg);
-      LThis := Global;
-      case FHostFuncs[LHostIdx].Kind of
-        0:
+      LHostIdx := FindHostView(LNameView);
+      if LHostIdx >= 0 then
+      begin
+        // 提取括号内：复刻原语义 Copy(LCode, LIdx+1, Len-LIdx-1) → 排除末尾 ')'
+        if SizeUInt(LIdx) + 1 < LView.Len then
         begin
-          LHandler := FHostFuncs[LHostIdx].Func;
-          try
-            if LHasArg then Result := LHandler(Self, LThis, LSingle) else Result := LHandler(Self, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do
-              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkFake);
-            on E: TObject do
-              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkFake);
-          end;
-          Exit;
-        end;
-        1:
-        begin
-          LMethod := FHostFuncs[LHostIdx].Method;
-          try
-            if LHasArg then Result := LMethod(Self, LThis, LSingle) else Result := LMethod(Self, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do
-              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkFake);
-            on E: TObject do
-              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkFake);
-          end;
-          Exit;
-        end;
-        2:
-        begin
-          LProc := FHostFuncs[LHostIdx].Proc;
-          try
-            if LHasArg then Result := LProc(Self, LThis, LSingle) else Result := LProc(Self, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do
-              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkFake);
-            on E: TObject do
-              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkFake);
-          end;
-          Exit;
+          if LView.Len >= 2 then
+            LArgView := LView.Slice(SizeUInt(LIdx) + 1, LView.Len - SizeUInt(LIdx) - 2).Trim
+          else
+            LArgView := TStringView.Empty;
+        end
+        else
+          LArgView := TStringView.Empty;
+        // 去引号（原 Copy 剥离首尾各一字符）
+        if (LArgView.Len >= 2) and ((LArgView.Data[0] = '"') or (LArgView.Data[0] = '''')) then
+          LArgView := LArgView.Slice(1, LArgView.Len - 2);
+        if (LArgView.Len = 1) and (LArgView.Data[0] = ')') then
+          LArgView := TStringView.Empty;
+        LHasArg := not LArgView.IsEmpty;
+        if LHasArg then
+          LSingle[0] := JsStringValue(LArgView.ToString);
+        LThis := Global;
+        case FHostFuncs[LHostIdx].Kind of
+          0:
+            begin
+              LHandler := FHostFuncs[LHostIdx].Func;
+              try
+                if LHasArg then Result := LHandler(Self, LThis, LSingle) else Result := LHandler(Self, LThis, LNoArgs);
+              except
+                on E: EJsError do raise;
+                on E: ENextPasError do
+                  raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkFake);
+                on E: TObject do
+                  raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkFake);
+              end;
+              Exit;
+            end;
+          1:
+            begin
+              LMethod := FHostFuncs[LHostIdx].Method;
+              try
+                if LHasArg then Result := LMethod(Self, LThis, LSingle) else Result := LMethod(Self, LThis, LNoArgs);
+              except
+                on E: EJsError do raise;
+                on E: ENextPasError do
+                  raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkFake);
+                on E: TObject do
+                  raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkFake);
+              end;
+              Exit;
+            end;
+          2:
+            begin
+              LProc := FHostFuncs[LHostIdx].Proc;
+              try
+                if LHasArg then Result := LProc(Self, LThis, LSingle) else Result := LProc(Self, LThis, LNoArgs);
+              except
+                on E: EJsError do raise;
+                on E: ENextPasError do
+                  raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkFake);
+                on E: TObject do
+                  raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkFake);
+              end;
+              Exit;
+            end;
         end;
       end;
     end;
   end;
-  Result := JsStringValue(LCode);
+  Result := JsStringValue(LView.ToString);
 end;
 
 function TJsFakeContext.Runtime: IJsRuntime;
@@ -321,15 +351,44 @@ end;
 
 function TJsFakeContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
 var
+  LNorm: string;
+  LFile: File;
+  LSize: Int64;
   LContent: string;
+  LRead: LongInt;
 begin
+  EnsureNotClosed;
   AValue := JsUndefinedValue;
-  if (AFileName = '') or not FileExists(AFileName) then
+  if AFileName = '' then
+    Exit(False);
+  LNorm := FsPathAbs(AFileName);
+  if LNorm = '' then
+    Exit(False);
+  if not SysUtils.FileExists(LNorm) then
+    Exit(False);
+  AssignFile(LFile, LNorm);
+  {$I-}
+  Reset(LFile, 1);
+  {$I+}
+  if IOResult <> 0 then
     Exit(False);
   try
-    if FileSize(AFileName) > 64 * 1024 * 1024 then
+    LSize := FileSize(LFile);
+    if (LSize < 0) or (SizeUInt(LSize) > FORMAT_BULK_PARSE_MAX_BYTES) then
       Exit(False);
-    LContent := ReadFileText(AFileName);
+    if LSize = 0 then
+      LContent := ''
+    else
+    begin
+      SetLength(LContent, LSize);
+      BlockRead(LFile, LContent[1], LSize, LRead);
+      if LRead <> LSize then
+        SetLength(LContent, LRead);
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+  try
     Result := TryEval(LContent, AValue);
   except
     Result := False;
@@ -529,7 +588,23 @@ begin
   EnsureNotClosed;
 end;
 
-procedure TJsFakeContext.Close; begin if FClosed then Exit; FClosed:=True; end;
+procedure TJsFakeContext.Close;
+var
+  I: Integer;
+begin
+  if FClosed then Exit;
+  FClosed := True;
+  // 释放宿主闭包引用，heaptrc 零泄漏（幂等）
+  for I := 0 to High(FHostFuncs) do
+  begin
+    FHostFuncs[I].Name := '';
+    FHostFuncs[I].Func := nil;
+    FHostFuncs[I].Method := nil;
+    FHostFuncs[I].Proc := nil;
+  end;
+  SetLength(FHostFuncs, 0);
+end;
+
 function TJsFakeContext.IsClosed: Boolean;
 begin
   Result := FClosed;

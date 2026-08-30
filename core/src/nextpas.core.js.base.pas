@@ -9,7 +9,8 @@ unit nextpas.core.js.base;
 interface
 
 uses
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.text.view;
 
 type
   TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888, jsbkV8, jsbkChakra);
@@ -131,15 +132,9 @@ begin
   end;
 end;
 
-function JsTrimEquals(const S, Lit: string): Boolean;
-var I,J,K: Integer;
+function JsTrimEquals(const S, Lit: string): Boolean; inline;
 begin
-  I:=1; J:=Length(S);
-  while (I<=J) and (S[I] in [' ',#9,#10,#13]) do Inc(I);
-  while (J>=I) and (S[J] in [' ',#9,#10,#13]) do Dec(J);
-  if (J-I+1)<>Length(Lit) then Exit(False);
-  for K:=1 to Length(Lit) do if S[I+K-1]<>Lit[K] then Exit(False);
-  Result:=True;
+  Result := TStringView.FromStr(S).Trim.Equals(TStringView.FromStr(Lit));
 end;
 
 procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);

@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js` lane
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ACCEPTANCE.md`（验收）、`GOAL_TREE.md`（目标树）、`REVIEW.md`（差距）
-**版本**：1.0（S0 定版，随实现滚动）
+**版本**：0.7（S0 定版，随实现滚动）
 **最后更新**：2026-08-30
 
 ---

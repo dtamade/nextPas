@@ -92,6 +92,8 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.text,
+  nextpas.core.text.conv,
+  nextpas.core.format.limits,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.js.quickjs.loader;
@@ -156,12 +158,8 @@ end;
 
 destructor TJsQuickJsContext.Destroy;
 begin
-  if not FClosed then
-  begin
-    if FCtx <> nil then JS_FreeContextPtr(FCtx);
-    if FRT <> nil then JS_FreeRuntimePtr(FRT);
-    FClosed := True;
-  end;
+  if not FClosed then Close;
+  SetLength(FHostFuncs, 0);
   inherited;
 end;
 
@@ -176,19 +174,17 @@ begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if A
     if (I>1) and (AName[I-1]<>'.') then Continue;
     if (C in ['0'..'9']) and ((I=1) or (AName[I-1]='.')) then Exit; end; Result:=True; end;
 
-function TJsQuickJsContext.QjsToString(const V: TJSQjsValue; Ctx: Pointer): string;
-var P: PAnsiChar; L: SizeUInt; Raw: RawByteString;
+function TJsQuickJsContext.QjsToString(const V: TJSQjsValue; Ctx: Pointer): string; inline;
+var P: PAnsiChar;
 begin
   Result := '';
   if not Assigned(JS_ToCStringPtr) then Exit('');
   P := JS_ToCStringPtr(Ctx, V);
   if P = nil then Exit('');
   try
-    L := 0; while P[L]<>#0 do Inc(L);
-    // QuickJS 返回 UTF-8，Pascal string 约定 UTF-8 原字节透传，跨平台一致
-    SetString(Raw, P, L);
-    Result := string(Raw);
-  finally JS_FreeCStringPtr(Ctx, P); end;
+    // 复用 text.conv owner：AnsiPtrToStr 单次 Move，无手写 while 求长与 RawByteString 中转
+    Result := AnsiPtrToStr(P);
+  finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(Ctx, P); end;
 end;
 
 function TJsQuickJsContext.QjsIsException(const V: TJSQjsValue): Boolean;
@@ -226,7 +222,7 @@ end;
 function TJsQuickJsContext.Runtime: IJsRuntime; begin EnsureNotClosed; Result := FRuntime; end;
 
 function TJsQuickJsContext.Eval(const ACode: string; const AFileName: string): TJsValue;
-var V: TJSQjsValue; S: string; FileName: RawByteString; CodeBytes: RawByteString;
+var V: TJSQjsValue; S: string; LFileName: string;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
   if JsTrimEquals(ACode,'') then
@@ -234,18 +230,17 @@ begin
   if (FOptions.MemoryLimit>0) and (FOptions.MemoryLimit<1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkQuickJs);
   if FOptions.TimeoutMs>0 then FDeadlineMs := Int64(QWord(platform_monotonic_ns) + QWord(FOptions.TimeoutMs) * 1000000);
-  FileName := RawByteString(AFileName);
-  if FileName='' then FileName:='eval.js';
-  // 输入 string 约定 UTF-8 原字节，跨平台不经系统 codepage 转码
-  CodeBytes := RawByteString(ACode);
-  V := JS_EvalPtr(FCtx, PAnsiChar(CodeBytes), Length(CodeBytes), PAnsiChar(FileName), JS_EVAL_TYPE_GLOBAL);
+  if AFileName='' then LFileName:='eval.js' else LFileName:=AFileName;
+  // 零分配：string 已是 UTF-8 字节序列，PAnsiChar 直接透传 + Length，无 RawByteString 整串拷贝
+  V := JS_EvalPtr(FCtx, PAnsiChar(ACode), Length(ACode), PAnsiChar(LFileName), JS_EVAL_TYPE_GLOBAL);
   if QjsIsException(V) then
   begin S := QjsGetExceptionStr(FCtx); if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V);
     raise MapJsError(S);
   end;
-  // minimal value mapping: treat as string via ToCString, then free
-  S := QjsToString(V, FCtx);
-  if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V);
+  try
+    // minimal value mapping: treat as string via ToCString, then free
+    S := QjsToString(V, FCtx);
+  finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); end;
   // heuristic mapping for test: "3" -> number, "{" -> string json, else string
   if S='3' then Result := JsIntValue(3)
   else if Pos('{"x":1}', S)>0 then Result := JsStringValue('{"x":1}')
@@ -261,8 +256,17 @@ begin try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Re
 
 function TJsQuickJsContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
 var C: string;
-begin AValue:=JsUndefinedValue; if (AFileName='') or not FileExists(AFileName) then Exit(False);
-  try if FileSize(AFileName)>64*1024*1024 then Exit(False); C:=ReadFileText(AFileName); Result:=TryEval(C, AValue); except Result:=False; end; end;
+begin
+  AValue:=JsUndefinedValue;
+  if (AFileName='') or not FileExists(AFileName) then Exit(False);
+  try
+    if SizeUInt(FileSize(AFileName)) > FORMAT_BULK_PARSE_MAX_BYTES then Exit(False);
+    C:=ReadFileText(AFileName);
+    Result:=TryEval(C, AValue);
+  except
+    Result:=False;
+  end;
+end;
 
 function TJsQuickJsContext.Global: TJsValue; begin EnsureNotClosed; Result:=JsObjectValue; end;
 function TJsQuickJsContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsStringValue(AStr); end;
@@ -294,7 +298,16 @@ begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create
 procedure TJsQuickJsContext.RemoveHostFunction(const AName: string); var LIdx,I: Integer; begin EnsureNotClosed; LIdx:=FindHost(AName); if LIdx<0 then Exit; for I:=LIdx to High(FHostFuncs)-1 do FHostFuncs[I]:=FHostFuncs[I+1]; SetLength(FHostFuncs,Length(FHostFuncs)-1); end;
 procedure TJsQuickJsContext.Tick; begin EnsureNotClosed; end;
 procedure TJsQuickJsContext.CollectGarbage; begin EnsureNotClosed; if Assigned(JS_RunGCPtr) and (FRT<>nil) then JS_RunGCPtr(FRT); end;
-procedure TJsQuickJsContext.Close; begin if FClosed then Exit; if FCtx<>nil then JS_FreeContextPtr(FCtx); FCtx:=nil; if FRT<>nil then JS_FreeRuntimePtr(FRT); FRT:=nil; FClosed:=True; end;
+procedure TJsQuickJsContext.Close;
+begin
+  if FClosed then Exit;
+  if Assigned(JS_FreeContextPtr) and (FCtx <> nil) then JS_FreeContextPtr(FCtx);
+  FCtx:=nil;
+  if Assigned(JS_FreeRuntimePtr) and (FRT <> nil) then JS_FreeRuntimePtr(FRT);
+  FRT:=nil;
+  SetLength(FHostFuncs, 0);
+  FClosed:=True;
+end;
 function TJsQuickJsContext.IsClosed: Boolean; begin Result:=FClosed; end;
 
 end.
