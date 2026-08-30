@@ -127,7 +127,7 @@ function TryDecodeWhole(ADecoder: IAudioDecoder; const AStream: IStream; out ABu
 function TryDecodeWholeFile(const APath: string; out ABuffer: TAudioBuffer; out ATags: TAudioTags): Boolean; inline;
 function AudioOpenFileStreaming(const APath: string): IAudioSource; inline;
 
-{ ---- resample/mix/dsp forwarding (PR5) ---- }
+{ ---- resample/mix/dsp forwarding ---- }
 
 function AudioResampleLinear(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer; inline;
 function CreateLinearResampler: IAudioResampler; inline;
@@ -151,11 +151,6 @@ function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const
 function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline; inline;
-
-{ ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
-
-procedure AudioRegisterDecoderPlaceholder; inline;
-procedure AudioRegisterEncoderPlaceholder; inline;
 
 implementation
 
@@ -371,13 +366,5 @@ begin Result := nextpas.core.audio.game.CreateGameAudioForFormat(AProvider, AFor
 
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
-
-procedure AudioRegisterDecoderPlaceholder;
-begin
-end;
-
-procedure AudioRegisterEncoderPlaceholder;
-begin
-end;
 
 end.

@@ -43,6 +43,8 @@ type
     FViolations: Int64;
     FScratchTmp: TBytes;
     FScratchOut: TBytes;
+    FSnapshotNodes: array of TGraphNode;
+    FSnapshotProcs: array of TProcessorSlot;
     FNodeFree: array of Integer;
     FProcFree: array of Integer;
     FNodeDead: Integer;
@@ -98,6 +100,8 @@ begin
   FViolations := 0;
   SetLength(FScratchTmp, 0);
   SetLength(FScratchOut, 0);
+  SetLength(FSnapshotNodes, 0);
+  SetLength(FSnapshotProcs, 0);
   SetLength(FNodeFree, 0);
   SetLength(FProcFree, 0);
   FNodeDead := 0;
@@ -345,15 +349,17 @@ var
   SrcFmt: TAudioFormat;
 begin
   if AFrames <= 0 then Exit(0);
-  Needed := AFrames * FFormat.BlockAlign;
+  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
   if Length(ABuffer.Data) < Needed then
   begin
     InterlockedExchangeAdd64(FViolations, 1);
     AFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
     if AFrames <= 0 then Exit(0);
-    Needed := AFrames * FFormat.BlockAlign;
+    Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
   end;
-  // two-phase snapshot: count under lock -> alloc outside -> copy under lock (zero alloc inside lock)
+  // two-phase snapshot: count under lock -> alloc outside -> copy under lock
+  // 两阶段快照契约：锁内仅计数→锁外分配→锁内深拷贝，混音无锁
+  // S4 冻结：分配仍在实时路径（SetLength 保留，文档先冻契约，S6 再零分配），混音阶段无锁
   FLock.Enter;
   try
     AliveN := 0;
@@ -362,8 +368,9 @@ begin
     for I := 0 to High(FProcessors) do if FProcessors[I].Alive then Inc(AliveP);
     SnapVol := FVolume;
   finally FLock.Leave; end;
-  SetLength(NodesSnap, AliveN);
-  SetLength(ProcsSnap, AliveP);
+  // snapshot scratch reuse: preallocated FSnapshotNodes/Procs reuse, steady zero alloc
+  if Length(FSnapshotNodes) < AliveN then SetLength(FSnapshotNodes, AliveN);
+  if Length(FSnapshotProcs) < AliveP then SetLength(FSnapshotProcs, AliveP);
   if (AliveN > 0) or (AliveP > 0) then
   begin
     FLock.Enter;
@@ -372,19 +379,19 @@ begin
       for I := 0 to High(FNodes) do if FNodes[I].Alive then
       begin
         if FillIdx < AliveN then
-        begin NodesSnap[FillIdx] := FNodes[I]; Inc(FillIdx); end;
+        begin FSnapshotNodes[FillIdx] := FNodes[I]; Inc(FillIdx); end;
       end;
       FillIdx := 0;
       for I := 0 to High(FProcessors) do if FProcessors[I].Alive then
       begin
         if FillIdx < AliveP then
-        begin ProcsSnap[FillIdx] := FProcessors[I]; Inc(FillIdx); end;
+        begin FSnapshotProcs[FillIdx] := FProcessors[I]; Inc(FillIdx); end;
       end;
       SnapVol := FVolume;
     finally FLock.Leave; end;
   end;
 
-  if Length(NodesSnap) = 0 then
+  if AliveN = 0 then
   begin
     FillChar(ABuffer.Data[0], Needed, 0);
     ABuffer.FrameCount := AFrames;
@@ -400,20 +407,20 @@ begin
   Tmp.Data := FScratchTmp;
   Tmp.Format := FFormat;
   Tmp.FrameCount := AFrames;
-  for I := 0 to High(NodesSnap) do
+  for I := 0 to AliveN - 1 do
   begin
     // mismatch not tear
-    SrcFmt := NodesSnap[I].Source.Format;
+    SrcFmt := FSnapshotNodes[I].Source.Format;
     if (SrcFmt.SampleRate <> FFormat.SampleRate) or (SrcFmt.Channels <> FFormat.Channels) then
     begin
       InterlockedExchangeAdd64(FViolations, 1);
       Continue;
     end;
-    Gain := NodesSnap[I].Gain * SnapVol;
+    Gain := FSnapshotNodes[I].Gain * SnapVol;
     // zero tmp tail guard before fill
     FillChar(Tmp.Data[0], Needed, 0);
     try
-      J := NodesSnap[I].Source.FillRealtime(Tmp, AFrames);
+      J := FSnapshotNodes[I].Source.FillRealtime(Tmp, AFrames);
     except
       InterlockedExchangeAdd64(FViolations, 1);
       Continue;
@@ -457,7 +464,7 @@ begin
     else if MixPtr[I] < -1.0 then MixPtr[I] := -1.0;
   end;
 
-  if Length(ProcsSnap) > 0 then
+  if AliveP > 0 then
   begin
     EnsureScratch(FScratchOut, Needed);
     EnsureScratch(FScratchTmp, Needed);
@@ -468,10 +475,10 @@ begin
     Tmp.Format := FFormat;
     Tmp.FrameCount := AFrames;
     Tmp.Data := FScratchTmp;
-    for I := 0 to High(ProcsSnap) do
+    for I := 0 to AliveP - 1 do
     begin
       try
-        ProcsSnap[I].Processor.Process(OutBuf, Tmp);
+        FSnapshotProcs[I].Processor.Process(OutBuf, Tmp);
         SwapBuf := OutBuf;
         OutBuf := Tmp;
         Tmp := SwapBuf;
