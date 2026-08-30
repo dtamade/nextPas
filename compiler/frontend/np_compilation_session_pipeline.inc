@@ -23,7 +23,16 @@ end;
 procedure TCompilationSession.ResetSemanticState;
 begin
   ResetIrState;
-  FreeAndNil(FSemanticModel);
+  if FSemanticModel <> nil then
+  begin
+    if (FQueryDB <> nil) and FQueryDB.ContainsValue(FSemanticModel) then
+    begin
+      FQueryDB.ForgetValue(FSemanticModel);
+      FreeAndNil(FSemanticModel);
+    end
+    else
+      FreeAndNil(FSemanticModel);
+  end;
   FSemanticStatus := 'deferred';
 end;
 
@@ -346,6 +355,26 @@ begin
     FQueryDB.InvalidatePrefix('semantic:' + Changed[I]);
   end;
 
+  { Store 泄漏补漏：DB 已 Free 被失效的 Value，Session 悬垂指针需清零 }
+  if (FSemanticModel <> nil) and (FQueryDB <> nil) and
+     (not FQueryDB.ContainsValue(FSemanticModel)) then
+  begin
+    FSemanticModel := nil;
+    FSemanticStatus := 'deferred';
+  end
+  else if FSemanticModel <> nil then
+  begin
+    for I := 0 to Length(Changed) - 1 do
+      if Changed[I] = RootPath then
+      begin
+        if FQueryDB.ContainsValue(FSemanticModel) then
+          FQueryDB.ForgetValue(FSemanticModel);
+        FSemanticModel := nil;
+        FSemanticStatus := 'deferred';
+        Break;
+      end;
+  end;
+
   { Reset state for recompilation }
   Result := True;
 end;
@@ -546,9 +575,7 @@ begin
     );
     try
       Analyzer.Analyze;
-      Flush(StdErr);
       FSemanticModel := Analyzer.DetachModel;
-      Flush(StdErr);
       if FSemanticModel = nil then
         FSemanticStatus := 'deferred'
       else
@@ -557,32 +584,22 @@ begin
         { Cache for incremental compilation — query DB owns the reference }
         if FSemanticStatus = 'ready' then
         begin
-          Flush(StdErr);
           FQueryDB.Store(CacheKey, FSemanticModel);
-          Flush(StdErr);
           { Save to persistent disk cache }
           FIncrementalCache.Save(
             FSourceDatabase.RootSourceCanonicalPath,
             FSourceDatabase.RootSourceText,
             [],
             FSemanticModel);
-          Flush(StdErr);
         end;
       end;
     finally
-      Flush(StdErr);
       Analyzer.Free;
-      Flush(StdErr);
       ResetScratchAllocator;
-      Flush(StdErr);
     end;
-    Flush(StdErr);
   finally
-    Flush(StdErr);
     FMemScope.UnitEnd;
-    Flush(StdErr);
   end;
-  Flush(StdErr);
 end;
 
 procedure TCompilationSession.LowerToMir;
@@ -595,7 +612,6 @@ var
   LlvmOutput: string;
   PhaseScratch: Pointer;
 begin
-  Flush(StdErr);
   FMemScope.UnitBegin;
   try
     ResetIrState;
@@ -665,19 +681,16 @@ begin
   finally
     FMemScope.UnitEnd;
   end;
-  Flush(StdErr);
 end;
 
 procedure TCompilationSession.PlanBackend;
 var
   Planner: TBackendPlanner;
 begin
-  Flush(StdErr);
   ResetBackendState;
   if (FSemanticModel = nil) or (FMirStatus <> 'ready') then
   begin
     FBackendStatus := 'failure';
-    Flush(StdErr);
     Exit;
   end;
 
@@ -692,9 +705,7 @@ begin
     FOptions.OptLevel
   );
   try
-    Flush(StdErr);
     Planner.Plan;
-    Flush(StdErr);
     FBackendPlan := Planner.DetachPlan;
     if FBackendPlan = nil then
       FBackendStatus := 'deferred'
@@ -706,6 +717,4 @@ begin
 
   if FBackendStatus = 'ready' then
     PropagateSemanticLibraryRequestsToBackendPlan;
-  Flush(StdErr);
 end;
-

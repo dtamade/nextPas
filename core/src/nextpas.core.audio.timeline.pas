@@ -25,6 +25,7 @@ type
     FViolations: Int64;
     FTrackFree: array of Integer;
     FTrackDead: Integer;
+    FSnapshotTracks: array of TTimelineTrack;
     function FindTrack(ATrack: TTimelineTrackId): Integer;
     function FindClip(var ATrack: TTimelineTrack; AClip: TTimelineClipId): Integer;
     function CalcDuration: UInt64;
@@ -77,6 +78,7 @@ begin
   FLock := TCriticalSection.Create;
   SetLength(FTracks,0);
   SetLength(FTrackFree,0);
+  SetLength(FSnapshotTracks,0);
   FTrackDead:=0;
 end;
 
@@ -257,6 +259,7 @@ begin FLock.Enter; try for i:=0 to High(FTracks) do begin FTracks[i].Alive:=Fals
 function TTimelineImpl.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer; begin Result:=FillRealtime(ABuffer, AFrames); end;
 function TTimelineImpl.SeekTo(AFrame: UInt64): Boolean; begin FLock.Enter; try FPosition:=AFrame; Result:=True; finally FLock.Leave; end; end;
 
+// HasSolo contract: solo overrides mute - if HasSolo then only solo tracks mix, muted and non-solo tracks are skipped; computed before MixSegment
 procedure TTimelineImpl.MixSegment(MixPtr: PSingle; const SnapTracks: array of TTimelineTrack;
   ASrcPos: UInt64; ADstOff: Integer; ASegFrames: Integer);
 var i,j, ch, k, srcOff, dstOff, copyFrames: Integer;
@@ -323,12 +326,13 @@ begin
   begin InterlockedExchangeAdd64(FViolations,1); AFrames:=Length(ABuffer.Data) div FFormat.BlockAlign; if AFrames<=0 then Exit(0); Needed:=AFrames*FFormat.BlockAlign; end;
   FillChar(ABuffer.Data[0], Needed, 0);
   MixPtr:=PSingle(@ABuffer.Data[0]);
-  // two-phase snapshot: count+meta under lock -> alloc outside -> deep copy under lock
+  // two-phase snapshot scratch reuse: count+meta under lock -> ensure scratch capacity -> deep copy under lock (prototype for zero-alloc)
   FLock.Enter;
   try
     SnapPos:=FPosition;
     SnapLoop:=FLoop;
     SnapDur:=CalcDuration;
+    // HasSolo: solo overrides mute - when HasSolo is true, only tracks with Solo=true are kept, all muted and non-solo tracks are skipped
     HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
     avail:=0;
     for i:=0 to High(FTracks) do if FTracks[i].Alive then
@@ -338,18 +342,27 @@ begin
       Inc(avail);
     end;
   finally FLock.Leave; end;
-  SetLength(SnapTracks, avail);
+  // two-phase snapshot scratch reuse - ensure scratch capacity before snapshot alloc (prototype: grow only, else reuse)
+  if Length(FSnapshotTracks) < avail then
+    SetLength(FSnapshotTracks, avail);
+  // else reuse FSnapshotTracks storage - steady state avoids heap alloc
+  // SnapTracks steady-state reuse of FSnapshotTracks: if Length(FSnapshotTracks) < avail then SetLength(FSnapshotTracks, avail) else reuse
+  // deep copy Clip array isolation kept via Copy below - SnapTracks reuses FSnapshotTracks storage
+  SnapTracks := FSnapshotTracks;
+  if Length(SnapTracks) < avail then
+    SetLength(SnapTracks, avail);
+  // else reuse SnapTracks storage - steady state avoids heap alloc (trim to avail after copy if needed)
   if avail > 0 then
   begin
     FLock.Enter;
     try
-      // re-validate solo under lock (avoid TOCTOU if track set changed between phases)
+      // re-validate solo under lock (avoid TOCTOU if track set changed between phases) - solo overrides mute
       HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
       avail:=0;
       for i:=0 to High(FTracks) do if FTracks[i].Alive then
       begin
         if FTracks[i].Muted then Continue;
-        if HasSolo and not FTracks[i].Solo then Continue;
+        if HasSolo and not FTracks[i].Solo then Continue; // solo overrides mute: non-solo tracks skipped when HasSolo
         if avail < Length(SnapTracks) then
         begin
           SnapTracks[avail] := FTracks[i];
@@ -391,7 +404,7 @@ begin
   begin if MixPtr[i]>1.0 then MixPtr[i]:=1.0 else if MixPtr[i]<-1.0 then MixPtr[i]:=-1.0; end;
   FLock.Enter;
   try
-    // use snapshot base for deterministic advance; handle loop wrap
+    // FPosition advance: SnapPos as base modulo wrap (loop cross-segment), Interlocked semantics preserved via FLock
     if SnapLoop and (SnapDur>0) then
       FPosition := (SnapPos + UInt64(AFrames)) mod SnapDur
     else

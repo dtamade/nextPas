@@ -52,9 +52,12 @@ type
     FVoices: array of record VoiceId: Integer; SfxId: Integer; NodeId: Integer; Source: TGameVoiceSource; Priority: Integer; Alive: Boolean; end;
     FNextSfx: Integer;
     FNextVoice: Integer;
+    FGameSfxDead: Integer;
+    FGameVoiceDead: Integer;
     function FindSfx(AId: Integer): Integer;
     function FindVoice(AVoice: Integer): Integer;
     procedure ReapFinished;
+    procedure MaybeCompactGame;
   public
     constructor Create(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32);
     destructor Destroy; override;
@@ -194,6 +197,8 @@ begin
   FMaxVoices := AMaxVoices;
   FNextSfx := 1;
   FNextVoice := 1;
+  FGameSfxDead := 0;
+  FGameVoiceDead := 0;
 end;
 
 destructor TGameAudio.Destroy;
@@ -218,6 +223,38 @@ function TGameAudio.FindVoice(AVoice: Integer): Integer;
 var I: Integer;
 begin for I:=0 to High(FVoices) do if FVoices[I].Alive and (FVoices[I].VoiceId=AVoice) then Exit(I); Result:=-1; end;
 
+procedure TGameAudio.MaybeCompactGame;
+var I, J, N: Integer;
+begin
+  // caller holds FLock; tombstone discipline aligned with graph.timeline (64, dead>half)
+  if (Length(FSfx) > 64) and (FGameSfxDead > Length(FSfx) div 2) then
+  begin
+    N := 0;
+    for I := 0 to High(FSfx) do if FSfx[I].Alive then Inc(N);
+    J := 0;
+    for I := 0 to High(FSfx) do if FSfx[I].Alive then
+    begin
+      if I <> J then FSfx[J] := FSfx[I];
+      Inc(J);
+    end;
+    SetLength(FSfx, N);
+    FGameSfxDead := 0;
+  end;
+  if (Length(FVoices) > 64) and (FGameVoiceDead > Length(FVoices) div 2) then
+  begin
+    N := 0;
+    for I := 0 to High(FVoices) do if FVoices[I].Alive then Inc(N);
+    J := 0;
+    for I := 0 to High(FVoices) do if FVoices[I].Alive then
+    begin
+      if I <> J then FVoices[J] := FVoices[I];
+      Inc(J);
+    end;
+    SetLength(FVoices, N);
+    FGameVoiceDead := 0;
+  end;
+end;
+
 procedure TGameAudio.ReapFinished;
 var I: Integer;
 begin
@@ -227,7 +264,9 @@ begin
       try FGraph.RemoveSource(FVoices[I].NodeId); except end;
       FVoices[I].Alive := False;
       FVoices[I].Source := nil;
+      Inc(FGameVoiceDead);
     end;
+  MaybeCompactGame;
 end;
 
 function TGameAudio.Load(const ABuffer: TAudioBuffer): TGameSfxId;
@@ -246,6 +285,7 @@ begin
     FSfx[Idx].Buffer := ABuffer;
     FSfx[Idx].Buffer.Data := Copy(ABuffer.Data, 0, Length(ABuffer.Data));
     FSfx[Idx].Alive := True;
+    MaybeCompactGame;
   finally FLock.Leave; end;
 end;
 
@@ -256,6 +296,7 @@ begin
   if not OK then raise EAudioDecodeError.CreateFmt('LoadFromFile: decode failed %s', [APath]);
   if Buf.Format.SampleFormat <> sfF32 then
   begin
+    // PcmConvert returns independent TBytes; keep separate copy to avoid aliasing AV (F-22)
     Buf.Data := PcmConvert(Buf.Data, Buf.Format.SampleFormat, sfF32, Buf.FrameCount, Buf.Format.Channels, False);
     Buf.Format.SampleFormat := sfF32;
   end;
@@ -271,8 +312,11 @@ begin
   try
     Idx := FindSfx(AId);
     if Idx<0 then Exit;
+    // only mark SFX dead; do not kill already issued Voices (voice holds independent Copy data, F-22 contract)
     FSfx[Idx].Alive := False;
     SetLength(FSfx[Idx].Buffer.Data,0);
+    Inc(FGameSfxDead);
+    MaybeCompactGame;
   finally FLock.Leave; end;
 end;
 
@@ -282,7 +326,7 @@ begin P:=TGamePlayParams.Default; Result:=Play(AId, P); end;
 
 function TGameAudio.Play(AId: TGameSfxId; const AParams: TGamePlayParams): TGameVoiceId;
 var
-  SIdx, VIdx, StealIdx, I: Integer;
+  SIdx, VIdx, StealIdx, I, AliveN: Integer;
   Src: TGameVoiceSource;
   NodeId: Integer;
 begin
@@ -291,7 +335,9 @@ begin
     ReapFinished;
     SIdx := FindSfx(AId);
     if SIdx<0 then raise EAudioGraphError.CreateFmt('Play: unknown sfx %d', [AId]);
-    if VoiceCount >= FMaxVoices then
+    AliveN := 0;
+    for I := 0 to High(FVoices) do if FVoices[I].Alive then Inc(AliveN);
+    if AliveN >= FMaxVoices then
     begin
       StealIdx := -1;
       for I:=0 to High(FVoices) do if FVoices[I].Alive then
@@ -301,6 +347,7 @@ begin
         try FGraph.RemoveSource(FVoices[StealIdx].NodeId); except end;
         FVoices[StealIdx].Alive := False;
         FVoices[StealIdx].Source := nil;
+        Inc(FGameVoiceDead);
       end;
     end;
     Src := TGameVoiceSource.Create(FSfx[SIdx].Buffer, AParams);
@@ -314,6 +361,7 @@ begin
     FVoices[VIdx].Source := Src;
     FVoices[VIdx].Priority := AParams.Priority;
     FVoices[VIdx].Alive := True;
+    MaybeCompactGame;
     try if FDevice.State <> dsStarted then FDevice.Start; except end;
   finally FLock.Leave; end;
 end;
@@ -335,6 +383,8 @@ begin
     try FGraph.RemoveSource(FVoices[Idx].NodeId); except end;
     FVoices[Idx].Alive := False;
     FVoices[Idx].Source := nil;
+    Inc(FGameVoiceDead);
+    MaybeCompactGame;
     Result := True;
   finally FLock.Leave; end;
 end;
@@ -345,7 +395,8 @@ begin
   FLock.Enter;
   try
     for I:=0 to High(FVoices) do if FVoices[I].Alive then
-    begin try FGraph.RemoveSource(FVoices[I].NodeId); except end; FVoices[I].Alive:=False; FVoices[I].Source:=nil; end;
+    begin try FGraph.RemoveSource(FVoices[I].NodeId); except end; FVoices[I].Alive:=False; FVoices[I].Source:=nil; Inc(FGameVoiceDead); end;
+    MaybeCompactGame;
   finally FLock.Leave; end;
 end;
 

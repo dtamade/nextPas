@@ -11,13 +11,15 @@ uses
 
 type
   TPointF = record X, Y: Single; end;
+  TAudioPanGains = TPointF;
 
 procedure MixInto(var ADst: TAudioBuffer; const ASrc: TAudioBuffer; AGain: Single; AOffset: Integer);
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
-function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
+function PanLawGains(APan: Single): TPointF; overload;
+function PanLawGains(APan: Single; ALawDB: Single): TPointF; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
 
 implementation
 
@@ -199,12 +201,30 @@ begin
   ApplyGain(ABuf, LGain);
 end;
 
-function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
+function PanLawGains(APan: Single): TPointF;
 var LPan, LAngle: Single;
 begin
-  LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1;
-  if Abs(ALawDB + 6.0) < 0.001 then begin Result.X := (1 - LPan) * 0.5; Result.Y := (1 + LPan) * 0.5; end
-  else begin LAngle := (LPan + 1) * Pi / 4.0; Result.X := Cos(LAngle); Result.Y := Sin(LAngle); end;
+  LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1 else LPan := APan;
+  LAngle := (LPan + 1) * Pi / 4.0;
+  Result.X := Cos(LAngle);
+  Result.Y := Sin(LAngle);
+end;
+
+function PanLawGains(APan: Single; ALawDB: Single): TPointF;
+var LPan, LAngle: Single;
+begin
+  LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1 else LPan := APan;
+  if Abs(ALawDB + 6.0) < 0.001 then
+  begin
+    Result.X := (1 - LPan) * 0.5;
+    Result.Y := (1 + LPan) * 0.5;
+  end
+  else
+  begin
+    LAngle := (LPan + 1) * Pi / 4.0;
+    Result.X := Cos(LAngle);
+    Result.Y := Sin(LAngle);
+  end;
 end;
 
 end.
