@@ -313,15 +313,15 @@ begin
   Count := 0;
   if (AUserId = '') or (ALimit < 1) then Exit;
   if ALimit > 100 then ALimit := 100;
+  Conn := APool.Acquire;
   AnchorCreatedAt := '';
   if AAfter <> '' then
   begin
-    Conn := APool.Acquire;
     Q := Conn.Query('SELECT created_at FROM wallet_ledger WHERE id = ?1 AND user_id = ?2');
     Q.BindText(1, AAfter);
     Q.BindText(2, AUserId);
     if Q.Step then AnchorCreatedAt := Q.GetText(0);
-    Q := nil; Conn := nil;
+    Q := nil;
   end;
   SQL := 'SELECT id, user_id, delta_cents, reason, coalesce(ref_id,''''), created_at FROM wallet_ledger WHERE user_id = ?1';
   BindIdx := 2;
@@ -331,7 +331,6 @@ begin
     Inc(BindIdx, 2);
   end;
   SQL := SQL + ' ORDER BY created_at DESC, id DESC LIMIT ?' + IntToStr(BindIdx);
-  Conn := APool.Acquire;
   Q := Conn.Query(SQL);
   BindIdx := 1;
   Q.BindText(BindIdx, AUserId); Inc(BindIdx);
