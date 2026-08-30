@@ -5,7 +5,8 @@ unit nextpas.core.sevenz.base;
  *
  * 拥有 7z 格式的公共词汇表：容器常量、coder method ID、header 属性 ID、
  * 条目信息 record、模块异常、UTF-16LE 名称转换和 FILETIME 时间换算。
- * 不含任何解析/压缩逻辑；实现子模块从这里取类型。
+ * 不含任何解析/压缩逻辑；实现子模块从这里取类型。炸弹与头部硬上限
+ * 亦归入本单元单源，limits 单元薄封装 re-export，避免四件套外碎片化。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -80,6 +81,23 @@ const
   { Windows FILETIME 纪元偏移：1601-01-01 与 Unix 纪元的秒差 }
   C_FILETIME_EPOCH_DELTA_SEC = 11644473600;
   C_FILETIME_TICKS_PER_SEC   = 10000000;
+
+  { 7z 炸弹与头部硬上限——单源表，limits 单元 re-export，保持 base 职责聚合；
+    与 reader/writer/header 共享，避免魔法数漂移 }
+  SEVENZ_DEFAULT_MAX_OUTPUT = UInt64(8) * 1024 * 1024 * 1024;
+  SEVENZ_MAX_HEADER_SIZE = UInt64(64) * 1024 * 1024;
+  SEVENZ_MAX_PACK_SIZE = UInt64(64) * 1024 * 1024;
+  SEVENZ_MAX_FILE_COUNT = 1000000;
+  SEVENZ_MAX_NAME_BYTES = 64 * 1024;
+  SEVENZ_EXTRACT_WINDOW = 256 * 1024;
+  SEVENZ_WRITER_CHUNK   = 64 * 1024;
+  SEVENZ_MAX_PACK_STREAMS = 1000000;
+  SEVENZ_MAX_FOLDERS      = 1000000;
+  SEVENZ_MAX_CODER_PROPS  = 1 * 1024 * 1024;
+  SEVENZ_MAX_UNPACK_SIZE  = SEVENZ_DEFAULT_MAX_OUTPUT;
+  SEVENZ_MAX_CRC_COUNT    = SEVENZ_MAX_FILE_COUNT;
+  { folder 解码缓存字节上限：2-entry MRU 总量受限，极端 solid 2×大 folder 防翻倍；单 folder 超阈值不入缓存 }
+  SEVENZ_CACHE_MAX_BYTES = UInt64(64) * 1024 * 1024;
 
 type
   {** @desc 归档内条目类别 *}

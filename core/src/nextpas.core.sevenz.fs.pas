@@ -43,6 +43,10 @@ function SevenZExtractByGlobToFs(const AReader: ISevenZReader;
   const APattern, ABaseDir: string): Integer;
 function SevenZTryExtractByGlobToFs(const AReader: ISevenZReader;
   const APattern, ABaseDir: string; out AError: string): Boolean;
+function SevenZTryExtractByPrefixToFs(const AReader: ISevenZReader;
+  const APrefix, ABaseDir: string; out AError: string): Boolean;
+function SevenZTryExtractBySuffixToFs(const AReader: ISevenZReader;
+  const ASuffix, ABaseDir: string; out AError: string): Boolean;
 function SevenZExtractByPrefixIgnoreCaseToFs(const AReader: ISevenZReader;
   const APrefix, ABaseDir: string): Integer;
 function SevenZExtractBySuffixIgnoreCaseToFs(const AReader: ISevenZReader;
@@ -294,6 +298,36 @@ begin
   try
     MkdirAll(ABaseDir);
     if not AReader.TryExtractByGlobWithError(APattern, Ext, AError) then Exit(False);
+    FlushExtractedToFs(Ext, ABaseDir);
+    Result := True;
+  except on E: Exception do begin AError := E.ClassName+': '+E.Message; Result := False; end; end;
+end;
+
+function SevenZTryExtractByPrefixToFs(const AReader: ISevenZReader;
+  const APrefix, ABaseDir: string; out AError: string): Boolean;
+var Ext: TSevenZExtractedArray;
+begin
+  AError := ''; Result := False;
+  if AReader = nil then begin AError := 'AReader is nil'; Exit(False); end;
+  if ABaseDir = '' then begin AError := 'ABaseDir is empty'; Exit(False); end;
+  try
+    MkdirAll(ABaseDir);
+    if not AReader.TryExtractByPrefixWithError(APrefix, Ext, AError) then Exit(False);
+    FlushExtractedToFs(Ext, ABaseDir);
+    Result := True;
+  except on E: Exception do begin AError := E.ClassName+': '+E.Message; Result := False; end; end;
+end;
+
+function SevenZTryExtractBySuffixToFs(const AReader: ISevenZReader;
+  const ASuffix, ABaseDir: string; out AError: string): Boolean;
+var Ext: TSevenZExtractedArray;
+begin
+  AError := ''; Result := False;
+  if AReader = nil then begin AError := 'AReader is nil'; Exit(False); end;
+  if ABaseDir = '' then begin AError := 'ABaseDir is empty'; Exit(False); end;
+  try
+    MkdirAll(ABaseDir);
+    if not AReader.TryExtractBySuffixWithError(ASuffix, Ext, AError) then Exit(False);
     FlushExtractedToFs(Ext, ABaseDir);
     Result := True;
   except on E: Exception do begin AError := E.ClassName+': '+E.Message; Result := False; end; end;

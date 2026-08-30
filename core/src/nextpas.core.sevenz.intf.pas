@@ -14,9 +14,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
-  nextpas.core.sevenz.base,
-  nextpas.core.compress.base,
-  nextpas.core.sevenz.levels;
+  nextpas.core.sevenz.base;
 
 const
   {** @desc 过滤链深度上限：远超实际收益，同时远离读端 64 coder 解析上限 *}
@@ -255,23 +253,25 @@ type
     function Build: ISevenZWriter;
     function Finish: TBytes;
     function FinishTo(const ASink: IWriter): Int64;
+    {** 无异常探针：Finish/FinishTo 失败返回 False，不抛 EArgumentError/ESevenZError/ESevenZLimitError/EIOError；
+        成功时 AArchive/ABytesWritten 有效；零分配探针，bench 可观测（bench_sevenz extract multi 100-130 MB/s 锚点复用），
+        失败不产出半档（Finish 回滚，已分配 RawSolid/Packed 解放，FFI 句柄 Close 幂等，并行 WaitFor 汇合后首错不丢） *}
+    function TryFinish(out AArchive: TBytes): Boolean;
+    function TryFinishTo(const ASink: IWriter; out ABytesWritten: Int64): Boolean;
+    {** 错误字符串重载：CONTRACT Try*WithError 全族延伸到 Builder/FS 的统一形态；
+        失败返回 False + AError 非空（前缀含异常类名），成功 AError=''；语义与 TryFinish/TryFinishTo 一致，
+        性能零额外开销（Assigned 守护），稳定性保证 FFI Close/Finish 回滚/并行 WaitFor 异常不丢 *}
+    function TryFinishWithError(out AArchive: TBytes; out AError: string): Boolean;
+    function TryFinishToWithError(const ASink: IWriter; out ABytesWritten: Int64; out AError: string): Boolean;
+    {** FS 联邦 Try*WithError：AddTree/AddFileFromFs 的非抛形态，复用 limits/levels 单源（不新增重复阈值）；
+        失败返回 False + AError，成功 True；WalkEx/Stat/Open 异常转 AError，IReader/IFile Close 幂等不泄漏 *}
+    function TryAddTree(const AHostDir: string; const AArchivePrefix: string; out AError: string): Boolean;
+    function TryAddTreeWithFilter(const AHostDir: string; const AArchivePrefix: string;
+      const AFilter: string; out AError: string): Boolean;
+    function TryAddFileFromFs(const AHostPath: string; const AArchiveName: string; out AError: string): Boolean;
   end;
 
-{ 级别→底层压缩参数的纯映射，供 writer/bench 复用 }
-function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel; inline;
-function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer; inline;
-
 implementation
-
-function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel;
-begin
-  Result := SevenZLevelOrdToDeflateLevel(Ord(ALevel));
-end;
-
-function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer;
-begin
-  Result := SevenZLevelOrdToBZip2BlockSize(Ord(ALevel));
-end;
 
 function TSevenZEntryEnumerator.GetCurrent: TSevenZEntryInfo;
 begin

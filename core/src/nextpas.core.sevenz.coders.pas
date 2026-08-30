@@ -5,7 +5,8 @@ unit nextpas.core.sevenz.coders;
  *
  * 按 folder 的 coder 有向图迭代解码（线性链为常见形态，实现支持任意绑定拓扑）。
  * LZMA 后端接口化：纯 Pascal 与 liblzma FFI 双实现运行时切换；
- * Copy/Delta 过滤器为本模块内置实现。
+ * Copy 为本模块内置；BCJ/Delta 等过滤器由 nextpas.core.sevenz.filters 单源实现，
+ * 本模块仅经 SevenZFilterConvert 分发，不再重复暴露 Delta 编解码入口。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -32,13 +33,6 @@ function SevenZAcquireDecoder: ISevenZLzmaDecoder;
 { 取当前生效的 LZMA 编码器实例 }
 function SevenZAcquireEncoder: ISevenZLzmaEncoder;
 
-{ Delta 解码过滤器（props[0]+1 为历史距离） }
-function SevenZDeltaDecode(const AProps: TBytes; const AInput: TBytes;
-  AOutSize: UInt64): TBytes;
-
-{ Delta 编码过滤器（props[0]+1 为历史距离），与解码严格互逆 }
-function SevenZDeltaEncode(const AProps: TBytes; const AInput: TBytes): TBytes;
-
 { 执行一个 folder 解码链：APackStreams 为该 folder 的 pack 流切片序列，
   返回主输出流字节。方法不支持或尺寸不符抛 ESevenZError。
   APassword 仅 AES256 coder 使用（无加密 coder 时忽略） }
@@ -55,8 +49,7 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.compress.deflate,
-  nextpas.core.compress.bzip2,
+  nextpas.core.compress,
   nextpas.core.sevenz.bcj2,
   nextpas.core.sevenz.aes,
   nextpas.core.sevenz.filters,
@@ -123,17 +116,6 @@ begin
   Result := GPascalEncoder;
 end;
 
-function SevenZDeltaDecode(const AProps: TBytes; const AInput: TBytes;
-  AOutSize: UInt64): TBytes;
-begin
-  Result := nextpas.core.sevenz.filters.SevenZDeltaDecode(AProps, AInput, AOutSize);
-end;
-
-function SevenZDeltaEncode(const AProps: TBytes; const AInput: TBytes): TBytes;
-begin
-  Result := nextpas.core.sevenz.filters.SevenZDeltaEncode(AProps, AInput);
-end;
-
 function CopyOfBytes(const ASrc: TBytes): TBytes;
 begin
   Result := nil;
@@ -187,6 +169,7 @@ begin
   except
     on E: ESevenZLimitError do raise;
     on E: EIOError do
+      { zlib path failed — fall through to raw message path; not swallowed }
       ;
   end;
   if LMax < High(SizeUInt) then
@@ -201,7 +184,12 @@ begin
       if Pos('exceeds limit', E.Message) > 0 then
         raise ESevenZLimitError.Create(E.Message)
       else
-        raise;
+        raise EParseError.Create('deflate decode failed: ' + E.Message);
+    on E: Exception do
+      if Pos('exceeds limit', E.Message) > 0 then
+        raise ESevenZLimitError.Create(E.Message)
+      else
+        raise EParseError.Create('deflate decode failed: ' + E.Message);
   end;
   if SizeUInt(Length(Result)) > LMax then
     raise ESevenZLimitError.Create('raw inflate: decompressed size exceeds limit');
@@ -235,12 +223,12 @@ begin
       if Pos('exceeds limit', E.Message) > 0 then
         raise ESevenZLimitError.Create(E.Message)
       else
-        raise;
+        raise EParseError.Create('bzip2 decode failed: ' + E.Message);
     on E: Exception do
       if Pos('exceeds limit', E.Message) > 0 then
         raise ESevenZLimitError.Create(E.Message)
       else
-        raise;
+        raise EParseError.Create('bzip2 decode failed: ' + E.Message);
   end;
 end;
 
@@ -261,7 +249,7 @@ begin
   if SevenZFilterFromMethodId(ACoder.MethodId, LFilter) then
   begin
     if Length(AInputs) <> 1 then
-      raise ESevenZError.Create('filter coder expects one input');
+      raise EParseError.Create('filter coder expects one input');
     AOut := CopyOfBytes(AInputs[0]);
     SevenZFilterConvert(AOut, LFilter, ACoder.Props, False);
   end
@@ -270,20 +258,20 @@ begin
     SEVENZ_METHOD_COPY:
       begin
         if Length(AInputs) <> 1 then
-          raise ESevenZError.Create('copy coder expects one input');
+          raise EParseError.Create('copy coder expects one input');
         AOut := CopyOfBytes(AInputs[0]);
       end;
     SEVENZ_METHOD_LZMA2:
       begin
         if Length(AInputs) <> 1 then
-          raise ESevenZError.Create('lzma2 coder expects one input');
+          raise EParseError.Create('lzma2 coder expects one input');
         AOut := SevenZAcquireDecoder.DecodeLzma2(ACoder.Props, AInputs[0],
           SizeUInt(AOutSize));
       end;
     SEVENZ_METHOD_LZMA1:
       begin
         if Length(AInputs) <> 1 then
-          raise ESevenZError.Create('lzma coder expects one input');
+          raise EParseError.Create('lzma coder expects one input');
         AOut := SevenZAcquireDecoder.DecodeLzma1(ACoder.Props, AInputs[0],
           SizeUInt(AOutSize));
       end;
@@ -291,14 +279,14 @@ begin
       begin
         { 四流序：MAIN / CALL / JUMP / RC（与参考实现绑定顺序一致） }
         if Length(AInputs) <> 4 then
-          raise ESevenZError.Create('bcj2 coder expects four inputs');
+          raise EParseError.Create('bcj2 coder expects four inputs');
         SevenZBcj2Decode(AInputs[0], AInputs[1], AInputs[2], AInputs[3],
           AOutSize, AOut);
       end;
     SEVENZ_METHOD_AES256_CRC:
       begin
         if Length(AInputs) <> 1 then
-          raise ESevenZError.Create('aes256 coder expects one input');
+          raise EParseError.Create('aes256 coder expects one input');
         SevenZAesDecryptProps(ACoder.Props, APassword, AInputs[0], AOut);
         { pack 流按 16 字节块取整加密：解密尾部可能多出填充块，
           按头部声明的逻辑尺寸截断；不足则由下方统一判损 }
