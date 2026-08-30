@@ -171,13 +171,18 @@ begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if A
     if (C in ['0'..'9']) and ((I=1) or (AName[I-1]='.')) then Exit; end; Result:=True; end;
 
 function TJsQuickJsContext.QjsToString(const V: TJSQjsValue; Ctx: Pointer): string;
-var P: PAnsiChar; L: SizeUInt;
+var P: PAnsiChar; L: SizeUInt; Raw: RawByteString;
 begin
   Result := '';
   if not Assigned(JS_ToCStringPtr) then Exit('');
   P := JS_ToCStringPtr(Ctx, V);
   if P = nil then Exit('');
-  try L := 0; while P[L]<>#0 do Inc(L); SetString(Result, P, L); finally JS_FreeCStringPtr(Ctx, P); end;
+  try
+    L := 0; while P[L]<>#0 do Inc(L);
+    // QuickJS 返回 UTF-8，Pascal string 约定 UTF-8 原字节透传，跨平台一致
+    SetString(Raw, P, L);
+    Result := string(Raw);
+  finally JS_FreeCStringPtr(Ctx, P); end;
 end;
 
 function TJsQuickJsContext.QjsIsException(const V: TJSQjsValue): Boolean;
@@ -208,15 +213,17 @@ end;
 function TJsQuickJsContext.Runtime: IJsRuntime; begin EnsureNotClosed; Result := FRuntime; end;
 
 function TJsQuickJsContext.Eval(const ACode: string; const AFileName: string): TJsValue;
-var V: TJSQjsValue; S: string; FileName: AnsiString;
+var V: TJSQjsValue; S: string; FileName: RawByteString; CodeBytes: RawByteString;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
   if (FOptions.MemoryLimit>0) and (FOptions.MemoryLimit<1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkQuickJs);
   if FOptions.TimeoutMs>0 then FDeadlineMs := Int64(QWord(platform_monotonic_ns) + QWord(FOptions.TimeoutMs) * 1000000);
-  FileName := AnsiString(AFileName);
+  FileName := RawByteString(AFileName);
   if FileName='' then FileName:='eval.js';
-  V := JS_EvalPtr(FCtx, PAnsiChar(AnsiString(ACode)), Length(ACode), PAnsiChar(FileName), JS_EVAL_TYPE_GLOBAL);
+  // 输入 string 约定 UTF-8 原字节，跨平台不经系统 codepage 转码
+  CodeBytes := RawByteString(ACode);
+  V := JS_EvalPtr(FCtx, PAnsiChar(CodeBytes), Length(CodeBytes), PAnsiChar(FileName), JS_EVAL_TYPE_GLOBAL);
   if QjsIsException(V) then
   begin S := QjsGetExceptionStr(FCtx); if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V);
     raise MapJsError(S);
