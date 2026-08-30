@@ -202,7 +202,7 @@ begin
   if not DepthWithin(Doc.Root, CTOOLS_MAX_DEPTH) then
   begin
     MakeErrInto(Result, 'arguments nesting exceeds depth ' +
-      IntToStr(CTOOLS_MAX_DEPTH));
+      nextpas.core.text.conv.IntToStr(CTOOLS_MAX_DEPTH));
     Exit;
   end;
 
@@ -427,7 +427,7 @@ begin
         (LNow - LStart >= AJobs[I].TimeoutMs) then
       begin
         SynthIfOpen(AJobs[I],
-          'tool timed out after ' + IntToStr(AJobs[I].TimeoutMs) + 'ms');
+          'tool timed out after ' + nextpas.core.text.conv.IntToStr(AJobs[I].TimeoutMs) + 'ms');
         AJobs[I].TimeoutMs := 0;
         LTimedOut[I] := True;
         if AJobs[I].ChildCancel <> nil then

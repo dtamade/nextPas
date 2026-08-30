@@ -125,9 +125,9 @@ procedure AgentValidateWireHeaders(const AHeaders: TWireHeaderArray); inline;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.json,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.view;
 
 function Utf8SafeTruncate(const S: string; AMaxBytes: Integer): string; inline;
 begin
@@ -152,12 +152,12 @@ var
     Result := AC in ['a'..'z', '0'..'9', '_'];
   end;
 begin
-  LLower := LowerCase(AMsg);
+  LLower := nextpas.core.text.conv.LowerCase(AMsg);
   Result := False;
   for I := Low(PHRASES) to High(PHRASES) do
   begin
     LLen := Length(PHRASES[I]);
-    P := Pos(PHRASES[I], LLower);
+    P := nextpas.core.text.view.IndexOfStr(LLower, PHRASES[I]);
     while P > 0 do
     begin
       LStart := P;
@@ -166,9 +166,7 @@ begin
         Exit(True);
       if LStart + 1 > Length(LLower) then
         Break;
-      P := Pos(PHRASES[I], Copy(LLower, LStart + 1, MaxInt));
-      if P > 0 then
-        P := P + LStart;
+      P := nextpas.core.text.view.IndexOfStr(LLower, PHRASES[I], LStart + 1);
     end;
   end;
 end;
@@ -187,9 +185,9 @@ var
   LSecs: Int64;
 begin
   LRaw := WireHeaderValue(AHeaders, 'retry-after-ms');
-  if ParsePlainInt64(Trim(LRaw), Result) and (Result >= 0) then
+  if ParsePlainInt64(nextpas.core.text.conv.Trim(LRaw), Result) and (Result >= 0) then
     Exit;
-  LRaw := Trim(WireHeaderValue(AHeaders, 'retry-after'));
+  LRaw := nextpas.core.text.conv.Trim(WireHeaderValue(AHeaders, 'retry-after'));
   if ParsePlainInt64(LRaw, LSecs) and (LSecs >= 0) then
   begin
     if LSecs > High(Int64) div 1000 then
@@ -243,7 +241,7 @@ begin
   LSnippet := Utf8SafeTruncate(ABody, CAgentMaxRawBodySnippetBytes);
   LMsg := ExtractErrorMessage(ABody);
   if LMsg = '' then
-    LMsg := 'upstream status ' + IntToStr(AStatus);
+    LMsg := 'upstream status ' + nextpas.core.text.conv.IntToStr(AStatus);
   LCode := ErrorCodeForStatus(AStatus);
   if (LCode = aecInvalidRequest) and MatchesOverflowPhrases(LMsg) then
     LCode := aecContextOverflow;

@@ -39,6 +39,7 @@ uses
   nextpas.core.bytes.base,
   nextpas.core.bytes.builder,
   nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.http.message,
   nextpas.core.agent.provider.common,
@@ -119,7 +120,7 @@ begin
       Break;
     if LBuilder.Length + LN > SizeUInt(ALimit) then
       raise EAgentError.CreateLocal(aecProtocol,
-        'wire: response body exceeds ' + IntToStr(ALimit) + ' bytes limit');
+        'wire: response body exceeds ' + nextpas.core.text.conv.IntToStr(ALimit) + ' bytes limit');
     LBuilder.AppendBytes(@LBuf[0], LN); { 复用 bytes.builder 几何扩容单源，零重复；接口释放保证 }
   until False;
   LBytes := LBuilder.ToBytes;

@@ -39,7 +39,7 @@ function LoopCostForMessage(const AMsg: TMessage): Int64;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.agent.pricing,
   nextpas.core.agent.textutil;
 
