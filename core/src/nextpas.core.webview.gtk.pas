@@ -194,7 +194,8 @@ function GtkLiveWindowCount: Integer;
 
 implementation
 uses
-  nextpas.core.webview.gtk.win;
+  nextpas.core.webview.gtk.win,
+  nextpas.core.sync.mutex;
 
 var
   GLiveWindows: array of TGtkWebview;
@@ -205,6 +206,7 @@ var
   GRegisteredSchemeCtxsCount: Integer = 0;
   GGtkDebugChecked: Boolean = False;
   GGtkDebugEnabled: Boolean = False;
+  GSchemeLock: TMutex = nil;
 
 procedure GrowLiveWindows; inline;
 begin
@@ -1596,5 +1598,11 @@ begin
       AHandler();
     end);
 end;
+
+initialization
+  GSchemeLock := TMutex.Create;
+
+finalization
+  FreeAndNil(GSchemeLock);
 
 end.
