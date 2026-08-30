@@ -1,0 +1,75 @@
+# js × Go / Rust 对标
+
+**范围**：`nextpas.core.js`（S1 目标：QuickJS FFI + fake）
+**标杆**：Go `dop251/goja` / `rogchap/v8go`；Rust `rquickjs` / `boa_engine`
+**版本**：0.3（S0 生产级）
+
+---
+
+## 评分卡（S1 目标）
+
+| 维度 | 分 (0–10) | 说明 |
+|------|-----------|------|
+| **正确性 Correctness** | 目标 9 | QuickJS ES2020 语法全量，错误 `Category/Species/JsStack` 透传，`fake` 确定性语义 |
+| **可用性 Usability** | 目标 8 | `CreateJsRuntime → NewContext → Eval` 一行式，宿主三形态，`TryEval` 分叉，`NewJson/ToJson` |
+| **性能 Performance** | 目标 7 | `Eval('1+2') ≤50µs` FFI 路径，`fake` ≤10µs，`bench_eval` 基线落库 |
+| **可测性 Testability** | 目标 9 | `fake` 零依赖 CI 必跑，`quickjs_runtime` 探测隔离 |
+| **可移植性 Portability** | 目标 8 | `libquickjs.so.1/0` 幂等探测，`pure` 后端兜底 Deferred |
+| **综合** | — | S1 后以 `bench_eval` 实测复核 |
+
+---
+
+## Essential 矩阵
+
+| 能力 | Go `goja` / `v8go` | Rust `rquickjs` / `boa` | nextpas S1 目标 | 状态 |
+|------|-------------------|-----------------|----------------|------|
+| 无窗 Eval | `goja.RunString` / `v8go.RunScript` | `rquickjs::Context::eval` | `IJsContext.Eval/TryEval` | 目标 |
+| 宿主函数 | `Set(name, func)` | `ctx.globals().set` | `SetHostFunction` 三形态 | 目标 |
+| 超时中断 | `Interrupt`（goja）/ `TerminateExecution`（v8go） | `set_interrupt_handler` | `TJsRuntimeOptions.TimeoutMs` + `JS_SetInterruptHandler` | 目标 |
+| 内存限 | — | `set_memory_limit` | `MemoryLimit` | 目标 |
+| JSON 互通 | `Marshal` / `JSON.stringify` | `serde` | `NewJson/ToJson` 经 `json` owner | 目标 |
+| Value 模型 | `goja.Value` 统一接口 | `rquickjs::Value` 克隆 | `TJsValue` record + `IJsValueRef` 双层 | 目标 |
+| ES Module | `require`（goja） | `module`（rquickjs） | Deferred（VFS 触发） | Deferred |
+| Worker | — | — | Deferred | Deferred |
+| Inspector | — | `inspector` | Deferred | Deferred |
+
+---
+
+## 差异与诚实 residual
+
+- `goja` 纯 Go 无 FFI，闭环但 ES2020 子集；`js` QuickJS 需 `libquickjs.so`（`JsBackendAvailable` 探测，不可用时 `fake`），但 ES2020 全量。
+- `v8go` 需 `libv8` 多版本，体积大；`js` V8 为后续尾部追加，不在 S1，避免首版超重。
+- Rust `rquickjs` 的 `Async` 调度与 `js.Tick` 同“需驱动”语义，非自动；`js` 同纪律（`Tick` 幂等）。
+- `boa` 纯 Rust，零 FFI，但性能低于 QuickJS C；`js` 的 `pure` 后端同 deferred 定位。
+- `js` 的 `TJsValue` 双层借用视图为 Pascal 特化，Go/Rust 无直接对应，但语义等价于 `TJsonValue` 借用。
+
+---
+
+## 基准对照（S1 后落库）
+
+| 场景 | nextpas 目标 | Go `goja` 参考 | Rust `rquickjs` 参考 |
+|------|--------------|----------------|---------------------|
+| `Eval('1+2')` | ≤50µs（QuickJS）/ ≤10µs（fake） | ~30µs | ~20µs |
+| `HostFunction` 往返 | ≤5µs | ~5µs | ~3µs |
+| `AsJson` 互转 | 待测 | — | — |
+
+> S1 后以 `bench_eval`（`nextpas.core.bench` 框架）在 `-O2` 下实测刷新本表。
+
+---
+
+## 测试入口（S1）
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.js/test_js_fake
+make focused FOCUS=core/tests/nextpas.core.js/test_js_quickjs_runtime   # 需 libquickjs
+make -C core/benchmarks/nextpas.core.js/bench_eval run
+```
+
+---
+
+## 变更记录
+
+| 日期 | 版本 | 变更 |
+|------|------|------|
+| 2026-08-30 | 0.2 | 初版矩阵 |
+| 2026-08-30 | 0.3 | 生产级：评分五维/基准对照/残差显式化 |

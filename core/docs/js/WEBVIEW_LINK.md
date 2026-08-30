@@ -1,7 +1,8 @@
 # js ↔ webview 联动设计
 
-**状态**：S0 联动分析，不产生代码  
+**状态**：S0 联动分析，不产生代码
 **方向**：`js` L2 底座 → `webview` L3 消费者，禁止反向依赖
+**版本**：0.3（S0 生产级）
 
 ---
 
@@ -24,7 +25,14 @@
 
 ### 2.2 错误码映射
 
-- `EJsError.Species`（`SyntaxError/ReferenceError/TypeError`）透给 `webview.bridge.BuildRejectScript` 的 `message`，`Category` 影射为 `NPW_CODE_HANDLER_ERROR / NPW_CODE_EVAL_FAILED`，不发明第二套词汇。
+| `EJsError.Category` | `webview` 桥码 |
+|---------------------|----------------|
+| `jecSyntax` | `npw.eval_failed` |
+| `jecReference/jecType/jecRange` | `npw.handler_error` |
+| `jecMemory/jecUnknown` | `npw.internal` |
+| `jecTimeout` | `npw.timeout` |
+
+- `EJsError.Species`（`SyntaxError/ReferenceError/TypeError`）透给 `webview.bridge.BuildRejectScript` 的 `message`，`Category` 影射为上表，不发明第二套词汇。
 
 ### 2.3 fake 可选真 JS 语义（收益最大）
 
@@ -37,10 +45,30 @@
 TFakeWebview.JsContext: IJsContext; // nil=退化为现有 FIFO
 ```
 
-- 有 `JsContext` 时：`Eval` 同步 `JsContext.Eval`，但仍经 `Dispatcher.Post` 异步兑现 `Callback/AOnError`，`Close` 时 `RemovePending + Done` 丢弃迟到回执（抄 `gtk.TEvalRec.Done`），守 `INV-7 exactly-once`。
+- 有 `JsContext` 时：`Eval` 同步 `JsContext.Eval`，但仍经 `Dispatcher.Post` 异步兑现 `Callback/AOnError`，`Close` 时 `RemovePending + Done` 丢弃迟到回执（抄 `gtk.TEvalRec.Done`），守 `webview CONTRACT INV-7 exactly-once`。
 - 无 `JsContext` 时：保持现有确定性 FIFO，CI 零依赖仍绿。
 
 收益：CI 无需 `libwebkit2gtk` 也能跑真 `JS` 语义的 `webview` 契约；`js.quickjs` 被 `webview` 契约间接回归。
+
+**时序图**：
+
+```mermaid
+sequenceDiagram
+  participant App as App
+  participant Fake as TFakeWebview
+  participant Js as IJsContext
+  participant Disp as Dispatcher
+  App->>Fake: Eval("1+2", CB, Err)
+  alt JsContext=nil
+    Fake->>Fake: QueueEvalResult FIFO
+  else JsContext<>nil
+    Fake->>Js: Eval("1+2") sync
+    Js-->>Fake: TJsValue(3)
+    Fake->>Disp: Post(CB("3"))
+    Disp-->>App: CB("3") on main thread
+  end
+  Note over Fake,Disp: Close 时 RemovePending + Done 丢弃迟到 exactly-once
+```
 
 ---
 
@@ -49,6 +77,7 @@ TFakeWebview.JsContext: IJsContext; // nil=退化为现有 FIFO
 - 不把 `NPW_BRIDGE_SCRIPT` 塞进 `js`，不把 `CheckInvokeCmd` 复用到 `js.SetHostFunction`（`js` 标识符规则是 JS 语言规则，不是桥协议保留 `npw./_`）。
 - 不为 `webview.InitScripts` 加 `js` 预校验（`bridge` 仍唯一权威，避免双源漂移）。
 - 不引入 `IterateOnce` 式的主循环融合预留（`webview.CONTRACT §9 deferred-LI` 已登记）。
+- 不让 `js` 直接 `Navigate` 或操作 `webview` 窗口（`js` 无窗，`webview` 有窗，职责硬隔离）。
 
 ---
 
@@ -56,13 +85,41 @@ TFakeWebview.JsContext: IJsContext; // nil=退化为现有 FIFO
 
 联动薄适配活在 `webview` 家族（例 `nextpas.core.webview.fake.js` 或 `webview.bridge.js`），`uses js.intf`，`js` 家族永不 `uses webview.*`。`core-module-registry` 中 `js` 仍是独立 L2 行，不与 `webview` 合并。
 
+**依赖图**：
+
+```
+js (L2): base ← intf ← {fake, quickjs.ffi←loader←quickjs} ← js.pas
+webview (L3): base ← intf ← {bridge,fake,gtk} ← factory ← webview.pas
+                         ╲
+                          ╲  (可选 uses, S2)
+                           ╲→ js.intf  (仅 webview.fake.js 适配)
+```
+
 ---
 
-## 5. Deferred
+## 5. 工厂与注册表
+
+- `CreateJsRuntime` 与 `CreateWebview` 工厂正交，不互相调用。
+- `js` 不注册到 `webview` 的 `DefaultWebviewKind` 探测链；`webview` 的 `wvFake` 仍为兜底，`js.jsbkFake` 独立。
+- `S1` 不改 `core-module-registry`；`S2` 的 `webview.fake.js` 适配不新增 registry 行，随 `webview` 的 `focused-runtime` 一并验证。
+
+---
+
+## 6. Deferred
 
 | 能力 | 类别 | 触发条件 |
 |------|------|----------|
 | `webview` `Eval` 经 `js` 预检语法 | deferred-Perf | 大段 `InitScripts` 引发频发线上语法错 |
-| `webview` 资产经 `js import map` 解析 | deferred-Mod | 首个 `ES Module` 消费方出现 |
+| `webview` 资产经 `js` import map 解析 | deferred-Mod | 首个 `ES Module` 消费方出现 |
+| `webview` 桥 `invoke` 经 `js` 真执行 | deferred-Arch | `webview` 需在 `fake` 中跑真 `invoke` handler JS |
 
-触发前不占位。
+触发前不占位，不留半成品接口。
+
+---
+
+## 变更记录
+
+| 日期 | 版本 | 变更 |
+|------|------|------|
+| 2026-08-30 | 0.2 | 初版三处复用 |
+| 2026-08-30 | 0.3 | 生产级：错误映射表/时序图/依赖图/工厂说明显式化 |
