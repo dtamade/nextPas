@@ -58,10 +58,8 @@ function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
-function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
-function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
-function BytesIsZero(const AData: TBytes): Boolean; inline;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
@@ -363,29 +361,27 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
-function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+function IsZeroBytes(const AData: TBytes): Boolean;
 var
-  P: PByte;
-  L: SizeUInt;
+  I: SizeInt;
 begin
-  // perf: zero-copy view, single-pass scan, no allocation; inline to eliminate call in crypto hot path
-  P := ASpan.Data;
-  L := ASpan.Len;
-  while (L > 0) and (P^ = 0) do
-  begin
-    Inc(P);
-    Dec(L);
-  end;
-  Result.Data := P;
-  Result.Len := L;
+  for I := 0 to High(AData) do
+    if AData[I] <> 0 then Exit(False);
+  Result := True;
 end;
 
-function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+function IsZeroBytes(const ASpan: TByteSpan): Boolean;
+var
+  I: SizeUInt;
 begin
-  // perf: zero-copy borrow (FromBytes is view, no alloc), lifetime tied to AData; single-pass via Span single source, inline eliminates indirection
-  if Length(AData) = 0 then
-    Exit(TByteSpan.Empty);
-  Result := StripLeadingZeroSpan(TByteSpan.FromBytes(AData));
+  for I := 0 to ASpan.Len - 1 do
+    if ASpan.Data[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+function IsAllZero(const AData: TBytes): Boolean;
+begin
+  Result := IsZeroBytes(AData);
 end;
 
 function StripLeadingZero(const AData: TBytes): TBytes; inline;

@@ -34,7 +34,8 @@ uses
   nextpas.core.crypto.random,
   nextpas.core.crypto.field25519,
   nextpas.core.crypto.errors,
-  nextpas.core.mem.secure;
+  nextpas.core.mem.secure,
+  nextpas.core.bytes.ops;
 
 procedure EnsureKeyLength(const AValue: TBytes; const AParamName: string);
 begin

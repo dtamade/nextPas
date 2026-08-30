@@ -125,6 +125,26 @@ begin
   end;
 end;
 
+function CompareUnsigned(const A, B: TBytes): Integer;
+var
+  I, LA, LB, SA, SB: Integer;
+begin
+  LA := Length(A); SA := 0;
+  while (SA < LA) and (A[SA] = 0) do Inc(SA);
+  LB := Length(B); SB := 0;
+  while (SB < LB) and (B[SB] = 0) do Inc(SB);
+  LA := LA - SA;
+  LB := LB - SB;
+  if LA < LB then Exit(-1);
+  if LA > LB then Exit(1);
+  for I := 0 to LA-1 do
+  begin
+    if A[SA+I] < B[SB+I] then Exit(-1);
+    if A[SA+I] > B[SB+I] then Exit(1);
+  end;
+  Result := 0;
+end;
+
 destructor TSshKexDHGroup14.Destroy;
 begin
   SecureZeroBytes(FPriv);
