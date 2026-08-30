@@ -78,6 +78,8 @@ type
 implementation
 
 uses
+  SysUtils,
+  nextpas.core.exception,
   nextpas.core.mem.utils;
 
 const
@@ -481,15 +483,31 @@ end;
 procedure TTrackingAllocator.ReleaseTracked;
 var
   LIdx: SizeUInt;
+  LFirstEx: Exception;
+  LCurEx: Exception;
 begin
+  LFirstEx := nil;
   FLock.Acquire;
   try
-    for LIdx := 0 to FMask do
-    begin
-      if (FKeys[LIdx] <> 0) and (FKeys[LIdx] <> TRACK_TOMBSTONE) then
-        FInner.FreeMem(Pointer(FKeys[LIdx]));
+    try
+      for LIdx := 0 to FMask do
+      begin
+        if (FKeys[LIdx] <> 0) and (FKeys[LIdx] <> TRACK_TOMBSTONE) then
+        try
+          FInner.FreeMem(Pointer(FKeys[LIdx]));
+        except
+          LCurEx := Exception(AcquireExceptionObject);
+          if LFirstEx = nil then
+            LFirstEx := LCurEx
+          else
+            LCurEx.Free;
+        end;
+      end;
+    finally
+      MapClear;
     end;
-    MapClear;
+    if LFirstEx <> nil then
+      raise LFirstEx;
   finally
     FLock.Release;
   end;
