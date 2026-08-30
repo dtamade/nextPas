@@ -4,7 +4,9 @@ program test_js_base;
 
 uses
   nextpas.core.js.base,
+  nextpas.core.js.intf,
   nextpas.core.js.quickjs.loader,
+  nextpas.core.js,
   nextpas.core.test;
 
 var
@@ -15,6 +17,8 @@ begin
   CheckEqual('jsbkFake', JsBackendKindToString(jsbkFake), 'fake');
   CheckEqual('jsbkQuickJs', JsBackendKindToString(jsbkQuickJs), 'quickjs');
   CheckEqual('jsbkJs888', JsBackendKindToString(jsbkJs888), 'js888');
+  CheckEqual('jsbkV8', JsBackendKindToString(jsbkV8), 'v8');
+  CheckEqual('jsbkChakra', JsBackendKindToString(jsbkChakra), 'chakra');
 end;
 
 procedure TestValueKindToString;
@@ -22,6 +26,8 @@ begin
   CheckEqual('jskUndefined', JsValueKindToString(jskUndefined), 'undef');
   CheckEqual('jskString', JsValueKindToString(jskString), 'str');
   CheckEqual('jskNumber', JsValueKindToString(jskNumber), 'num');
+  CheckEqual('jskSymbol', JsValueKindToString(jskSymbol), 'sym');
+  CheckEqual('jskBigInt', JsValueKindToString(jskBigInt), 'bigint');
 end;
 
 procedure TestErrorCategoryToString;
@@ -138,6 +144,24 @@ begin
   Check(Pos('quickjs', P) > 0, 'probe quickjs');
 end;
 
+procedure TestSymbolBigInt;
+var V: TJsValue;
+begin
+  V := JsSymbolValue('sym');
+  Check(V.IsSymbol, 'symbol');
+  CheckEqual('jskSymbol', JsValueKindToString(V.Kind), 'sym kind');
+  V := JsBigIntValue(123);
+  Check(V.IsBigInt, 'bigint');
+  CheckEqual('jskBigInt', JsValueKindToString(V.Kind), 'bigint kind');
+  CheckEqual(Int64(123), V.AsInt, 'bigint int');
+end;
+
+procedure TestBackendExt;
+begin
+  Check(JsBackendAvailable(jsbkV8), 'v8 avail');
+  Check(JsBackendAvailable(jsbkChakra), 'chakra avail');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.js.base');
   T.Test('JsBackendKindToString', @TestBackendKindToString);
@@ -150,5 +174,7 @@ begin
   T.Test('CheckOptions invalid', @TestCheckOptionsInvalid);
   T.Test('EJsError hierarchy', @TestEJsErrorHierarchy);
   T.Test('probe names', @TestJSProbeNames);
+  T.Test('symbol bigint', @TestSymbolBigInt);
+  T.Test('backend ext', @TestBackendExt);
   if not T.Run then Halt(1);
 end.

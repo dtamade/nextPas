@@ -1,5 +1,14 @@
 # nextpas.core.js 变更日志
 
+## 2026-08-30 — V8/Chakra 纯占位 + Symbol/BigInt + 对象完备化
+
+- 新增 `nextpas.core.js.v8.pas` / `js.chakra.pas`（各 137 行，零 FFI/零 dl，恒可用，与 fake/js888 同约束），`TJsBackendKind` 扩展至 5 值（`jsbkQuickJs/jsbkFake/jsbkJs888/jsbkV8/jsbkChakra`，尾部追加纪律）、`TJsValueKind` 扩展至 12 值（新增 `jskSymbol/jskBigInt` + `JsSymbolValue/JsBigIntValue/IsSymbol/IsBigInt`）
+- `IJsContext` 补齐 `HasProp/DeleteProp/GetKeys/NewError/NewFunction×3` 全后端实现（fake/js888/v8/chakra 返回 False/nil/JsErrorValue/JsFunctionValue 并绑定宿主三形态；QuickJS 同步 stub），门面 `CreateJsRuntime/JsBackendAvailable` 扩展纯族分支，`bench_eval` 五后端矩阵（fake/js888/v8/chakra/quickjs）同跑
+- 测试：`test_js_base` 12 项（新增 symbol/bigint + backend ext + probe 8 名）、`test_js_fake` 41 项（新增 object complete：Has/Delete/GetKeys/NewError/NewFunction 三形态）、`test_js_js888` 40 项、`test_js_quickjs` SKIP；bench：fake 630ns / js888 639ns / v8 626ns / chakra 630ns（Eval/small）、Value/ops 51-56ns，heaptrc OK，hygiene pass，wc 基准阈值内
+- 文档：CONTRACT/DESIGN/README/BENCHMARKS 同步纯族 10 单元与 5 后端矩阵
+
+
+
 **格式**：Keep a Changelog + SemVer
 **关联**：`CONTRACT §13`（稳定性）
 

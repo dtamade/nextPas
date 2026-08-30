@@ -36,5 +36,7 @@ end;
 begin
   RunForBackend(jsbkFake, 'fake');
   RunForBackend(jsbkJs888, 'js888');
+  RunForBackend(jsbkV8, 'v8');
+  RunForBackend(jsbkChakra, 'chakra');
   RunForBackend(jsbkQuickJs, 'quickjs');
 end.

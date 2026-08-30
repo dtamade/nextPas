@@ -14,11 +14,15 @@ flowchart TB
   ffi["js.quickjs.ffi<br/>cdecl external"]
   loader["js.quickjs.loader<br/>platform.dl 探测"]
   impl["js.quickjs<br/>QuickJS 真实现"]
-  pure["js.js888<br/>纯 Pascal 后端<br/>S3 追加 零FFI/零dl"]
+  pure["js.js888<br/>纯 Pascal js888<br/>零FFI/零dl"]
+  v8["js.v8<br/>纯 Pascal V8 占位<br/>零FFI/零dl"]
+  chakra["js.chakra<br/>纯 Pascal Chakra 占位<br/>零FFI/零dl"]
   facade["js.pas 门面<br/>CreateJsRuntime"]
   base --> intf --> fake --> facade
   intf --> ffi --> loader --> impl --> facade
   intf --> pure --> facade
+  intf --> v8 --> facade
+  intf --> chakra --> facade
   js -. "可选 uses" .-> webview["webview.fake.js<br/>活在 webview 家族"]
 ```
 
@@ -106,8 +110,8 @@ flowchart TB
 ## 7. 依赖与分层
 
 ```
-L2 js:  base(后端无关) → intf(不透明TJsValue) → {fake, quickjs.ffi←loader←quickjs, pure} → 门面
-         ↳ pure 与 quickjs 平级，零 ffi/零 dl，复用同 intf
+L2 js:  base(后端无关) → intf(不透明TJsValue) → {fake, quickjs.ffi←loader←quickjs, js888, v8, chakra} → 门面
+         ↳ 纯族（js888/v8/chakra）与 quickjs 平级，零 ffi/零 dl，复用同 intf
 L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)→ js.intf
          ↳ webview.fake.js 归属 webview 家族（`SIXDIM M-4`），由 js 侧提 PR、webview 侧审查
 ```

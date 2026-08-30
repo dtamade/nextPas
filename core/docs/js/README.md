@@ -1,6 +1,6 @@
 # nextpas.core.js
 
-> L2 抽象 JS 引擎：后端无关的 `IJsRuntime / IJsContext / TJsValue` 契约，QuickJS FFI 首落地，**纯 Pascal 后端 `js.js888` 零摩擦可插拔**（`js.intf` 不透明、枚举尾部追加、零 so），V8 后续可插拔。`webview` 等 L3 可在不反向依赖的前提下复用本契约。
+> L2 抽象 JS 引擎：后端无关的 `IJsRuntime / IJsContext / TJsValue` 契约，QuickJS FFI 首落地，**纯 Pascal 族 `js888/v8/chakra` 零摩擦可插拔**（零 FFI/零 dl、恒可用、`js.intf` 不透明、枚举尾部追加），QuickJS FFI 动探为真后端。`webview` 等 L3 可在不反向依赖的前提下复用本契约。
 
 **层级**：L2（系统能力，只依赖 L0–L1；`webview/config/template` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js` lane（`js` 家族）
@@ -22,7 +22,7 @@
 
 **设计对标**：`crypto` 多后端（pure/openssl）、`compress` 的 `lz4.ffi → lz4.native`、`db` 的 `sqlite/pg` 适配器同范式。
 
-## 2. 家族布局（S1 目标 7 单元）
+## 2. 家族布局（已落地 10 单元）
 
 | 单元 | 职责 | 备注 |
 |------|------|------|
@@ -32,14 +32,16 @@
 | `nextpas.core.js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`） | 只含声明，不含逻辑 |
 | `nextpas.core.js.quickjs.loader` | `platform.dl` 探测与符号装载 | 唯一可触 `platform.dl` 的单元 |
 | `nextpas.core.js.quickjs` | QuickJS 真实现 | `uses ffi/loader`，实现 `intf` |
-| `nextpas.core.js.js888` | **纯 Pascal 后端**（S3 追加，`jsbkJs888`） | 零 FFI/零 dl，平级于 `quickjs`，同 `fake` 约束 |
+| `nextpas.core.js.js888` | **纯 Pascal 后端**（`jsbkJs888` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
+| `nextpas.core.js.v8` | **纯 Pascal V8 占位**（`jsbkV8` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
+| `nextpas.core.js.chakra` | **纯 Pascal Chakra 占位**（`jsbkChakra` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
 | `nextpas.core.js.pas` | 门面 re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 纯聚合，不含逻辑 |
 
 ```
-base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure(零FFI)} ← 门面
+base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, js888, v8, chakra(零FFI/零dl)} ← 门面
 ```
 
-> **纯后端保证**：`js.js888` 为 S3 尾部追加，不在 S1 公开枚举与门面占位（`db.TDbKind` 尾部追加纪律）。后期加 `js.js888` 时 `js.base/js.intf` 零改动，仅 `+js.js888.pas` + 枚举尾部 `jsbkJs888` + 工厂分支；`js.v8.ffi / js.v8` 同理。
+> **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为零 FFI/零 dl、恒可用，与 `fake` 同约束；尾部追加只在枚举末尾加，`js.base/js.intf` 零改动。
 
 **允许依赖**：`base`、`errors`、`exception`、`json`、`text`、`mem`、`platform.dl`（仅 loader）。
 **禁止依赖**：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`。

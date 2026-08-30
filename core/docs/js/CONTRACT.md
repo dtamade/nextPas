@@ -1,6 +1,6 @@
 # nextpas.core.js 代码契约
 
-**模块路径**：`core/src/nextpas.core.js*.pas`（S1 目标 7 单元）
+**模块路径**：`core/src/nextpas.core.js*.pas`（已落地 10 单元：base/intf/fake/ffi/loader/quickjs/js888/v8/chakra/门面）
 **层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-30
@@ -26,21 +26,23 @@
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
 | `js.quickjs.loader` | `platform.dl` 探测与符号装载（唯一可触 `platform.dl`） | `platform.dl`、`js.base`、`js.quickjs.ffi` | `DynLibs`、`Windows/BaseUnix` |
 | `js.quickjs` | QuickJS 真实现（`uses ffi/loader`，实现 `intf`） | `js.base/intf`、`js.quickjs.ffi/loader`、`json`、`mem` | `webview.*` |
-| `js.js888` | 纯 Pascal 后端（S3 追加，`jsbkJs888`，零 FFI/零 dl） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
-| `js.pas` | 门面：re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 上述全部子模块（含预留 pure） | 逻辑（纯聚合） |
+| `js.js888` | 纯 Pascal 后端（`jsbkJs888`，零 FFI/零 dl，恒可用） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.v8` | 纯 Pascal V8 占位（`jsbkV8`，零 FFI/零 dl，恒可用，S3 可演进为真 V8） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.chakra` | 纯 Pascal Chakra 占位（`jsbkChakra`，零 FFI/零 dl，恒可用，S3 可演进为真 Chakra） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.pas` | 门面：re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 上述全部子模块 | 逻辑（纯聚合） |
 
 ```
-base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, js.js888} ← 门面
-         ↑ 纯 Pascal 后端 js.js888 与 quickjs 平级，不经 ffi/loader
+base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, js888, v8, chakra} ← 门面
+         ↑ 纯 Pascal 族（js888/v8/chakra）与 quickjs 平级，零 FFI/零 dl
 ```
 
-> **纯 Pascal 后端预留**：`js.js888`（`nextpas.core.js.js888.pas`，`jsbkJs888`）为后续尾部追加，**零 FFI、零 platform.dl、零 so**；`js.v8.ffi / js.v8` 同理。S1 仅 `jsbkQuickJs/jsbkFake` 两值，新增后端只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— 这是“后期方便实现纯 Pas 后端”的**契约保证**：加 js.js888 时 `js.base/js.intf` 零改动，仅新增一单元 + 门面工厂分支 + 枚举尾部一项。
+> **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为**零 FFI/零 platform.dl/零 so、恒可用**，与 `js.fake` 同约束；尾部追加只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— `js.base/js.intf` 为后端无关契约，加新纯后端时零改动，仅新增一单元 + 门面分支 + 枚举尾部一项。
 
 **纯后端扩展契约**（保证可插拔）：
 - `js.base` 的 `TJsBackendKind/TJsValueKind/TJsErrorCategory/TJsRuntimeOptions` 为**后端无关**词汇，纯后端直接复用，不新增类型
 - `js.intf` 的 `TJsValue` 为**不透明句柄**（当前 QuickJS 侧存 `JSValue`，纯侧可存自有 `TJsPureValue` 句柄 + `Context` 弱引用，版图同为 16B），对外 `Kind/As*/TryAs*` 语义完全一致
-- `js.js888` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
-- 工厂 `CreateJsRuntime(jsbkJs888)` 走纯分支，`JsBackendAvailable(jsbkJs888)=True` 恒真（零 so 探测）
+- `js.js888/js.v8/js.chakra` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
+- 工厂 `CreateJsRuntime(jsbkJs888/jsbkV8/jsbkChakra)` 走纯分支，`JsBackendAvailable(..)=True` 恒真（零 so 探测）
 
 **文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`；`js.fake` 含 `platform.thread/fs` 集成与三形态宿主，阈值放宽至 550（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 550/800（`js.fake` 550，其余 500）。
 
@@ -49,8 +51,8 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, js.js888} ← 门�
 ## 2. 核心类型（`js.base`）
 
 ```pascal
-TJsBackendKind = (jsbkQuickJs, jsbkFake); // S1 仅二值；后续尾部追加 jsbkJs888/jsbkV8（pure 恒真、QuickJS 需 so）
-TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString, jskObject, jskArray, jskFunction, jskError, jskPromise); // 后端无关
+TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888, jsbkV8, jsbkChakra); // 尾部追加纪律：新增只在末尾，保持序号稳定（db.TDbKind 同纪律）；js888/v8/chakra 恒可用，QuickJS 需 so 探测
+TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString, jskObject, jskArray, jskFunction, jskError, jskPromise, jskSymbol, jskBigInt); // 后端无关；Symbol/BigInt 为后端无关能力，后端可降级返回对应 kind
 TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory, jecTimeout, jecNotSupported, jecUnknown); // 后端无关
 TJsRuntimeOptions = record
   MemoryLimit: SizeUInt; // 0=不限；QuickJS JS_SetMemoryLimit / JS_SetGCThreshold
@@ -141,6 +143,13 @@ IJsContext = interface
   function NewArray: TJsValue;
   function NewJson(const AJson: TJsonValue): TJsValue; // TJsonValue → TJsValue（经 json，经 fs.path.Abs 归一化若涉文件）
   function ToJson(const AValue: TJsValue): IJsonDocument; // TJsValue → IJsonDocument
+  function HasProp(const AObj: TJsValue; const AName: string): Boolean;
+  function DeleteProp(const AObj: TJsValue; const AName: string): Boolean;
+  function GetKeys(const AObj: TJsValue): TJsStringArray;
+  function NewError(const AMessage: string; ACategory: TJsErrorCategory = jecUnknown): TJsValue;
+  function NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; overload;
+  function NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; overload;
+  function NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; overload;
   function GetProp(const AObj: TJsValue; const AName: string): TJsValue;
   procedure SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
   function Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
@@ -166,13 +175,13 @@ TJsHostProc     = function(ACtx: IJsContext; AThis: TJsValue; const AArgs: array
 ### 3.3 工厂
 
 ```pascal
-function CreateJsRuntime(AKind: TJsBackendKind = jsbkQuickJs;
+function CreateJsRuntime(AKind: TJsBackendKind = jsbkFake;
   const AOptions: TJsRuntimeOptions = Default): IJsRuntime;
 function JsBackendAvailable(AKind: TJsBackendKind): Boolean; // 探测 so/dll 存在性，幂等缓存
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 ```
 
-- `JsBackendAvailable` 幂等缓存探测结果，CI 无库时 `jsbkQuickJs=False`、`jsbkFake=True`。
+- `JsBackendAvailable` 幂等缓存探测结果，CI 无库时 `jsbkQuickJs=False`、`jsbkFake/jsbkJs888/jsbkV8/jsbkChakra=True`（纯族恒可用）。
 - `CreateJsRuntime(jsbkQuickJs)` 探测不到时抛 `EJsBackendUnavailable`，消息含跨平台探测名表 `libquickjs.so.1/so.0/.so, libquickjs.dylib/1.dylib, quickjs.dll/libquickjs.dll, quickjs`（`JS_QUICKJS_PROBE_NAMES[0..7]`，Windows 首探 `quickjs.dll`，macOS 首探 `dylib`）。
 
 ---

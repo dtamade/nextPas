@@ -29,6 +29,8 @@
 | `bench_value` | `TJsValue.AsString` 快路径 | ns/op + B/op=0 断言 | `SIXDIM P-3` |
 | `bench_batch` | `GetBatch/SetBatch` vs 循环 `GetProp/SetProp`（>1000 实体/帧阈值实测） | ns/op + 加速比 | `SIXDIM P-4`，阈值以实测定 |
 
+> **多后端矩阵**：`bench_eval` 对 `fake/js888/v8/chakra/quickjs` 五后端同表跑，纯族恒可用、QuickJS 无库时 SKIP，落库时同机 ratio 对比。
+
 ---
 
 ## 3. 目标与基线

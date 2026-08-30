@@ -3,6 +3,7 @@ unit nextpas.core.js;
 {$I nextpas.core.settings.inc}
 interface
 uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.fake, nextpas.core.js.js888,
+  nextpas.core.js.v8, nextpas.core.js.chakra,
   nextpas.core.json, nextpas.core.js.quickjs.loader, nextpas.core.js.quickjs;
 type
   TJsBackendKind = nextpas.core.js.base.TJsBackendKind;
@@ -32,7 +33,7 @@ const jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
 implementation
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; begin Result := TJsRuntimeOptions.Default; end;
 function JsBackendAvailable(AKind: TJsBackendKind): Boolean;
-begin case AKind of jsbkFake, jsbkJs888: Result := True; jsbkQuickJs: Result := JsQuickJsIsAvailable; jsbkV8, jsbkChakra: Result := False; else Result := False; end; end;
+begin case AKind of jsbkFake, jsbkJs888, jsbkV8, jsbkChakra: Result := True; jsbkQuickJs: Result := JsQuickJsIsAvailable; else Result := False; end; end;
 function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime;
 begin Result := CreateJsRuntime(AKind, DefaultJsRuntimeOptions); end;
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime;
@@ -41,6 +42,8 @@ begin
   case AKind of
     jsbkFake: Result := TJsFakeRuntime.Create(jsbkFake, AOptions);
     jsbkJs888: Result := TJsJs888Runtime.Create(AOptions);
+    jsbkV8: Result := TJsV8Runtime.Create(AOptions);
+    jsbkChakra: Result := TJsChakraRuntime.Create(AOptions);
     jsbkQuickJs:
       begin
         if not JsQuickJsIsAvailable then
