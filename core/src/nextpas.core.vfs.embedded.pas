@@ -340,9 +340,9 @@ begin
   { Materialize parallel caches once — FEntries 零 DecodeWire，ETag/LastMod O(1) ServeVfs。
     路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节），
     Create 442ms→<180ms 预期。 }
-  SetLength(FETags, FRp.Count);
-  SetLength(FLastMods, FRp.Count);
-  SetLength(FEntries, FRp.Count);
+  SetLength(FETags, SizeInt(FRp.Count));
+  SetLength(FLastMods, SizeInt(FRp.Count));
+  SetLength(FEntries, SizeInt(FRp.Count));
   if FRp.Count > 0 then
     for I := 0 to FRp.Count - 1 do
     begin
@@ -549,10 +549,13 @@ var
   SI: TStatInfo;
   Idx: SizeInt;
   E: TResPackEntry;
-  I, OutN, SegPos: SizeUInt;
+  I: SizeInt;
+  OutN: SizeInt;
+  SegPos: SizeInt;
   P: PByte;
   L: SizeUInt;
   Child: string;
+  ChildOff: SizeInt;
   ChildLen: SizeInt;
 begin
   if not VfsValidPath(ADirPath, True) then
@@ -569,25 +572,25 @@ begin
     Prefix := ADirPath + '/';
   PrefixLen := Length(Prefix);
 
-  // 零拷贝推导：直接扫描 FRp 10k 索引存储字节，仅分配直接子项去重后 Child 字符串（≤ 扇出），不经 FPaths 中间分配
-  SetLength(Seen, FRp.Count);
+  // 零拷贝推导：直接扫描 FRp 索引存储字节，仅分配直接子项去重后 Child 字符串（≤ 扇出）
+  SetLength(Seen, SizeInt(FRp.Count));
   OutN := 0;
-  for I := 0 to FRp.Count - 1 do
+  for I := 0 to SizeInt(FRp.Count) - 1 do
   begin
     L := FRp.StoredPathRange(I, P);
-    if L <= SizeUInt(PrefixLen) then Continue;
+    if SizeInt(L) <= PrefixLen then Continue;
     if PrefixLen > 0 then
       if not CompareMem(P, @Prefix[1], SizeUInt(PrefixLen)) then Continue;
-    // 尾段 '/' 扫描零分配
+    // '/' 扫描：零基偏移，避免 QWord 常量 -1 越界（SizeInt 带符号，-1 合法）
     SegPos := 0;
-    for ChildLen := PrefixLen + 1 to SizeInt(L) do
-      if P[ChildLen - 1] = Ord('/') then
+    for ChildOff := PrefixLen to SizeInt(L) - 1 do
+      if (P + SizeUInt(ChildOff))^ = Ord('/') then
       begin
-        SegPos := SizeUInt(ChildLen);
+        SegPos := ChildOff + 1;
         Break;
       end;
     if SegPos > 0 then
-      ChildLen := SizeInt(SegPos) - 1
+      ChildLen := SegPos - 1
     else
       ChildLen := SizeInt(L);
     SetLength(Child, ChildLen);
