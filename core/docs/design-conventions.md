@@ -868,6 +868,8 @@ build/
 | `args`       | 命令行解析                         |
 | `validation` | 数据校验（类型、范围、格式、嵌套） |
 | `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
+| `respack`    | 资源打包格式（v1 线格式、writer/reader、embed 工具链） |
+| `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |
 
 ### L3: 框架（只依赖 L0-L2）
 

@@ -6,7 +6,7 @@ L2 资源打包格式模块。把一棵文件树打包成单个带索引的二�
 **状态：S1-S5 已实现并有 gate 覆盖**
 （`base`/`writer`/`reader`/`dirsource`/`embed`/门面；六个测试 gate 全绿、heaptrc
 零泄漏；writer 含 golden 逐字节快照门禁，roundtrip 含 10k 条目 perf smoke；
-embed 含 .inc 文本确定性 golden 门禁与 extract roundtrip 门禁）。
+embed 含 .inc 文本确定性 golden 门禁与 extract roundtrip 门禁；合计 **6 门**，vfs 侧 6 门，**12 门**闭环）。
 嵌入工具链（S4）已落地：`nextpas.core.respack.embed` 单元 + `rp_pack` CLI；
 http.static 对接（S5）已落地：`ServeVfs(AFs)` 让 embedded 后端直接服务 HTTP
 （ETag 取条目 fnv32、条件请求/Range/MIME 与 fs 版同语义），端到端示例见
@@ -88,7 +88,7 @@ nextpas.core.respack.embed.pas     ← 嵌入工具链库：glob 过滤/prefix �
 | 档 | 算法 | 用途 | 成本 |
 |----|------|------|------|
 | 条目 hash | FNV-1a 32，内联实现于 `base` | HTTP ETag、去重候选键 | 近零 |
-| digest 区（可选） | **不透明 32 字节**，算法由调用方注入（典型 SHA-256） | 供应链完整性、发布审计 | 打包期一次 |
+| digest 区（可选） | **不透明 32 字节**，算法由调用方注入（典型 SHA-256，header flags bit2-4 预留算法 ID，v1 仅 0=SHA-256） | 供应链完整性、发布审计 | 打包期一次 |
 
 digest 算法不进格式的理由：SHA-256 属 L2 hash/crypto 域，而本模块仅依赖 L0——
 writer 经注入的摘要函数生产摘要，校验助手放消费侧 hash 模块。分块哈希
@@ -160,14 +160,15 @@ writer 产出的 blob 如何进入程序，由构建侧选择：
 —— 同一 consumer 代码在 `CreateOsVfs('wwwroot')` 与
 `CreateEmbeddedVfs(@DEMO_ASSETS[0], …)` 两后端上跑通。
 
-## 测试计划
+## 测试计划（12 门闭环：respack 6 + vfs 6）
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_roundtrip
-make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader    # 含损坏输入拒绝
-make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer    # 排序/去重/对齐/golden
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader    # 含损坏输入拒绝 + indexOffset 恒 40 + LE 位移验证
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer    # 排序/去重/对齐/digest 4 对齐/golden
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource # 含 extract 落盘与 mtime 回归
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_embed     # S4：glob/prefix/inc golden/roundtrip
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract   # uses 白名单 + facade 签名（12 门一致性）
 ```
 
 - round-trip：目录样例 → build → open → 逐字节比对全部条目
@@ -225,7 +226,7 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_embed     # S4�
 | 缺口 | 反哺去向 | 状态 |
 |------|----------|------|
 | 大 blob 内存映射读取 | platform/mem（文件映射 owner） | v1 不做 mmap；有需求时反哺立项，不在本模块内私调 OS API |
-| BE 平台换序 | `platform.endian` inquiry（已有） | 直接使用 |
+| BE 平台换序 | `RdU16LE/RdU32LE/RdU64LE` 位移编解码，与宿主字节序无关 | 直接使用 |
 
 ## 与既有模块的关系
 

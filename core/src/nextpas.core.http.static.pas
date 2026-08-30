@@ -126,7 +126,7 @@ end;
 
 const
   CACHE_REVALIDATE = 'public, max-age=0, must-revalidate';
-  STATIC_COPY_BUF_SIZE = 8192; { Range/全量拷贝块大小，8192 为 4K 页2×最优 }
+  STATIC_COPY_BUF_SIZE = 4096; { Range 拷贝块大小，4K 页基准几何；嵌入 VFS 零拷贝切片（TEmbeddedSlice/Move 直达 blob）已付零拷贝收益，额外缓冲仅增一次 CopyRange 重复拷贝，4K 对齐单次页系统调用最优 }
 
 { ===== Helpers ===== }
 
