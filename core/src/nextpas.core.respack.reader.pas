@@ -25,8 +25,6 @@ type
     { 40 字节 index 项 → host-order TResPackEntry。
       不用无类型参数 + absolute 叠加：FPC trunk 对该组合生成错误代码（实测）。 }
     procedure DecodeWire(const AIdx: SizeUInt; out ADest: TResPackEntry);
-    function StoredPathRange(const AIdx: SizeUInt; out AP: PByte)
-      : SizeUInt; inline;
     function CompareStoredToBuf(const AIdx: SizeUInt;
       const ABuf: PByte; const ALen: SizeUInt): Integer;
     function CompareStoredToStored(const AA, AB: SizeUInt): Integer;
@@ -54,6 +52,11 @@ type
     function ContentPtr(const AEntry: TResPackEntry): PByte; inline;
     function DigestPtr(const AIdx: SizeUInt): PByte;
     function HasDigests: Boolean; inline;
+    { P1-2 零拷贝路径视图：索引路径不落地 string，直接暴露 blob 内指针+长度
+      供 embedded 等零分配二分/前缀判定复用，单源于 base.utils.CompareBytesOrdered }
+    function StoredPathRange(const AIdx: SizeUInt; out AP: PByte): SizeUInt; inline;
+    function LowerBound(const APath: string): SizeUInt; inline;
+    function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer; inline;
   end;
 
 implementation
@@ -352,28 +355,15 @@ end;
 
 function TResPack.Search(const APath: string; out AIdx: SizeUInt): Boolean; inline;
 var
-  Lo, Hi, Mid: SizeUInt;
-  C: Integer;
-  LPtr: Pointer;
+  Idx: SizeUInt;
 begin
-  Result := False;
-  Lo := 0;
-  Hi := Count;
-  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
-  while Lo < Hi do
+  Idx := LowerBound(APath);
+  if (Idx < Count) and (ComparePathAt(Idx, APath) = 0) then
   begin
-    Mid := Lo + (Hi - Lo) div 2;
-    C := CompareStoredToBuf(Mid, PByte(LPtr), SizeUInt(Length(APath)));
-    if C = 0 then
-    begin
-      AIdx := Mid;
-      Exit(True);
-    end;
-    if C < 0 then
-      Lo := Mid + 1
-    else
-      Hi := Mid;
+    AIdx := Idx;
+    Exit(True);
   end;
+  Result := False;
 end;
 
 function TResPack.Find(const APath: string; out AEntry: TResPackEntry): Boolean;
@@ -420,6 +410,35 @@ function TResPack.StoredPathRangeOf(const AEntry: TResPackEntry;
 begin
   AP := FData + SizeUInt(FStrTabBase) + AEntry.PathOffset;
   Result := AEntry.PathLen;
+end;
+
+function TResPack.LowerBound(const APath: string): SizeUInt; inline;
+var
+  Lo, Hi, Mid: SizeUInt;
+  C: Integer;
+  LPtr: Pointer;
+begin
+  Lo := 0;
+  Hi := Count;
+  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
+  while Lo < Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    C := CompareStoredToBuf(Mid, PByte(LPtr), SizeUInt(Length(APath)));
+    if C < 0 then
+      Lo := Mid + 1
+    else
+      Hi := Mid;
+  end;
+  Result := Lo;
+end;
+
+function TResPack.ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer; inline;
+var
+  LPtr: Pointer;
+begin
+  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
+  Result := CompareStoredToBuf(AIdx, PByte(LPtr), SizeUInt(Length(APath)));
 end;
 
 end.

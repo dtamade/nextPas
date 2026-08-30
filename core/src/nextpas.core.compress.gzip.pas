@@ -473,7 +473,7 @@ begin
     Exit(False);
   if not ReadHeaderByte(LSecond) then
     raise EIOError.Create('gzip: trailing bytes after trailer');
-  if (LFirst <> $1F) or (LSecond <> $8B) then
+  if (LFirst <> GZIP_MAGIC_1) or (LSecond <> GZIP_MAGIC_2) then
     raise EIOError.Create('gzip: trailing bytes after trailer');
   StartMemberWithHeaderPrefix(LFirst, LSecond, 'gzip: header too short');
   Result := True;
@@ -887,11 +887,11 @@ begin
     if LOffset = 0 then
       raise EIOError.Create('gzip: header too short');
     if (SizeUInt(Length(AData)) - LOffset >= 2) and
-       (AData[LOffset] = $1F) and (AData[LOffset + 1] = $8B) then
+       (AData[LOffset] = GZIP_MAGIC_1) and (AData[LOffset + 1] = GZIP_MAGIC_2) then
       raise EIOError.Create('gzip: header too short');
     raise EIOError.Create('gzip: trailing bytes after trailer');
   end;
-  if (AData[LOffset] <> $1F) or (AData[LOffset + 1] <> $8B) then
+  if (AData[LOffset] <> GZIP_MAGIC_1) or (AData[LOffset + 1] <> GZIP_MAGIC_2) then
   begin
     if LOffset = 0 then
       raise EIOError.Create('gzip: invalid magic');

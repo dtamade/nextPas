@@ -100,26 +100,19 @@ begin
   Result := CompareBytesOrdered(PA, PB, SizeUInt(Length(AA)), SizeUInt(Length(AB)));
 end;
 
-function HexNibble(const ANibble: Byte): Char; inline;
-begin
-  if ANibble < 10 then
-    Result := Chr(Ord('0') + ANibble)
-  else
-    Result := Chr(Ord('A') + ANibble - 10);
-end;
+const
+  HEX_DIGITS: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
 
 function VfsHex(const AValue: UInt64; const ADigits: Integer): string; inline;
 var
   I: Integer;
   V: UInt64;
-  N: Byte;
 begin
   SetLength(Result, ADigits);
   V := AValue;
   for I := ADigits - 1 downto 0 do
   begin
-    N := Byte(V and $F);
-    Result[I + 1] := HexNibble(N);
+    Result[I + 1] := HEX_DIGITS[V and $F];
     V := V shr 4;
   end;
 end;
