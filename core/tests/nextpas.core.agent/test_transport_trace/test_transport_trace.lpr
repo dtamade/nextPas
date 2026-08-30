@@ -16,7 +16,13 @@ uses
   nextpas.core.test;
 
 { W11（API.md §3.2）：请求级追踪装饰器语义——事件对序与字段、异常路径
-  配对不改写失败语义、sink 契约、WithRetry 叠装可见性。全程 scripted 离线 }
+  配对不改写失败语义、sink 契约、WithRetry 叠装可见性。全程 scripted 离线
+  边界/Cancel/超时/并发：
+  - Cancel 边界：Cancel 幂等穿透，追踪装饰器不吞取消错误，配对事件仍按序上报。
+  - 超时边界：RoundTrip/OpenStream 的 aecTimeout/aecTransport 异常路径配对后原样上抛，不改写失败语义。
+  - 并发边界：单线程追踪记录，sink 回调异常直接冒泡（fail-fast），WithRetry 叠装三尝试三对事件并发可见。
+  悬挂指针：TraceSink/Transport 均接口持有，事件体字符串托管，无裸指针常驻；追踪装饰器不持有调用方栈上内存。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；tracing wrapper 仅转发，不额外分配常驻堆。 }
 
 const
   CReqBody = '{"model":"m","messages":[]}';

@@ -95,6 +95,13 @@ type
     function CountTokens(const AReq: TCompletionRequest): Int64;
   end;
 
+  { T1.4 用量汇（API.md §3.2）：nil 退化/线程安全不 raise（tk888 IMetricsSink 同契约） }
+  IAgentUsageSink = interface
+    ['{C3D4E5F6-A7B8-90AB-CDEF-555555000015}']
+    procedure RecordUsage(const AProvider: string; const AReq: TCompletionRequest;
+      const AUsage: TTokenUsage; ACostUsd6: Int64);
+  end;
+
   { ---- 工具 ---- }
 
   IToolContext = interface
@@ -118,6 +125,12 @@ type
     procedure Append(const AThreadId: string; const AMsg: TMessage);
     function Load(const AThreadId: string): TMessageArray;
     procedure Delete(const AThreadId: string);
+    procedure Fork(const ASrcThreadId, ADstThreadId: string);
+  end;
+
+  IAgentTranscriptFork = interface
+    ['{7A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D}']
+    procedure Fork(const ASrcThreadId, ADstThreadId: string);
   end;
 
 implementation
