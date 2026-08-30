@@ -13,19 +13,21 @@
 |----|------|
 | 框架 | `nextpas.core.bench`（`IBenchSuite + IBenchContext`），禁止自计时 |
 | 编译 | `-O2`，禁止 debug |
-| 统计 | 框架提供均值/分位数/异常值剔除，禁止手算 |
+| 统计 | 框架提供均值 + p50/p99 分位数 + 异常值剔除 + warmup 3 轮隔离，禁止手算（`SIXDIM P-1`） |
+| 内存 | `B/op`（Bytes per op）必采，`TJsValue.AsString` 快路径断言 `B/op=0` |
 | 调用 | 单次调用模式（`TBenchStatsAnalyzer.Create.Mean`），禁止内循环放大 |
 
 ---
 
 ## 2. 套件
 
-| 基准 | 场景 | 指标 |
-|------|------|------|
-| `bench_eval` | `Eval('1+2')`、`Eval('JSON.stringify({x:1})')` | ns/op |
-| `bench_host` | `SetHostFunction` + `Call` 往返 | ns/op |
-| `bench_json` | `NewJson` / `ToJson` 互转 | ns/op + B/op |
-| `bench_value` | `TJsValue.AsString` 快路径 | ns/op（零分配断言） |
+| 基准 | 场景 | 指标 | 备注 |
+|------|------|------|------|
+| `bench_eval` | `Eval('1+2')`、`Eval('JSON.stringify({x:1})')` | ns/op + p50/p99 | `SIXDIM P-1` 统计口径 |
+| `bench_host` | `SetHostFunction` + `Call` 往返 | ns/op + p50/p99 | 切片视图零分配 |
+| `bench_json` | `NewJson` / `ToJson` 互转 | ns/op + B/op | 经 `json` owner |
+| `bench_value` | `TJsValue.AsString` 快路径 | ns/op + B/op=0 断言 | `SIXDIM P-3` |
+| `bench_batch` | `GetBatch/SetBatch` vs 循环 `GetProp/SetProp`（>1000 实体/帧阈值实测） | ns/op + 加速比 | `SIXDIM P-4`，阈值以实测定 |
 
 ---
 

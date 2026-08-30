@@ -72,7 +72,7 @@ make hygiene
 | FFI | `*.ffi` 只含 `cdecl external`，`loader` 唯一 `platform.dl`（`CONTRACT INV-2`） |
 | 错误 | 默认异常 + `TryXxx` 分叉，不引入 `Result<T,E>`（`design-conventions §4`） |
 | 注释 | `{** @desc @params @return @note}`，禁止 `@complexity/@usage` 重标签 |
-| 体积 | 单单元 >800 行拆子模块 |
+| 体积 | 单单元 >800 行必拆；`js.intf` 三职责 >500 行拆 `js.value/host`（`SIXDIM M-1/M-2`） |
 
 ---
 
@@ -137,6 +137,7 @@ python3 core/tests/architecture/check_source_contracts.py
 | 契约冻结/放宽 | 人类 |
 | 里程碑排期 | 人类 |
 | 实现细节/测试用例 | AI 可生成，人类审查 |
+| 跨模块协作（`webview.fake.js` 归属 `webview` 家族） | `codex/core-js` 提 PR，`codex/core-webview` 审查（`SIXDIM M-4` 受控跨模块） |
 | 验收通过 | 人类基于证据包判定 |
 
 ---

@@ -31,7 +31,7 @@
 
 | 门禁 | 要求 | 命令 | 证据 |
 |------|------|------|------|
-| G-M0-1 | 12 份文档齐全（6 现有 + 6 新增） | `ls core/docs/js/*.md \| wc -l` | 12 |
+| G-M0-1 | 18 份文档齐全（`README+CONTRACT+DESIGN+GOAL_TREE+PARITY+WEBVIEW_LINK+REVIEW+ROADMAP+ACCEPTANCE+AI_GUIDE+TESTING+SECURITY+BENCHMARKS+GAME888_BORROW+FAQ+DECISIONS+SIXDIM_REVIEW+CHANGELOG`） | `ls core/docs/js/*.md \| wc -l` | 18 |
 | G-M0-2 | REVIEW H1–H3 清零 | 人工审查 REVIEW.md | H1–H3 已补 ROADMAP/ACCEPTANCE/AI_GUIDE |
 | G-M0-3 | 无 TODO/FIXME/产物 | `grep -R TODO core/docs/js` + `make hygiene` | 0 + pass |
 | G-M0-4 | 文档交叉引用闭环 | 人工审查 README 索引 | 12 份互链 |
@@ -42,7 +42,7 @@
 |------|------|------|------|
 | G-M1-1 | `test_js_base` 全绿 + heaptrc 0 | `make focused FOCUS=core/tests/nextpas.core.js/test_js_base` | AllPassed |
 | G-M1-2 | `test_js_fake` 全绿 + heaptrc 0（40+ 用例，见 TESTING §3） | `make focused FOCUS=core/tests/nextpas.core.js/test_js_fake` | AllPassed |
-| G-M1-3 | `source-contract` pass（INV-1/INV-2/层级） | `python3 core/tests/architecture/check_source_contracts.py` | pass |
+| G-M1-3 | `source-contract` pass（INV-1/INV-2/层级，含 `grep -R "quickjs\|v8" core/src/nextpas.core.js.base.pas` 0 命中）+ 单单元行数 ≤500/800 阈值抽样 `wc -l core/src/nextpas.core.js*.pas` | `python3 core/tests/architecture/check_source_contracts.py` + `wc -l` | pass + ≤500/800 |
 | G-M1-4 | `demo_js` 可编译运行 | `make -C core/examples/nextpas.core.js/demo_js run` | exit 0 |
 | G-M1-5 | `fpc -vh` 0 hint | `fpc -vh` | 0 |
 
@@ -60,7 +60,7 @@
 |------|------|------|------|
 | G-M3-1 | webview 13 门 + js 3 门双绿 | `make focused FOCUS=core/tests/nextpas.core.webview` + js | 全绿 |
 | G-M3-2 | `bench_eval` 基线落库（`BENCHMARKS.md` 对齐） | `bench_eval` 输出 | 基线入库 |
-| G-M3-3 | 悬垂/超时/循环引用加固用例全绿 | `test_js_fake` 扩展 | AllPassed |
+| G-M3-3 | 悬垂/超时/循环引用 + `Close` 幂等 + `INV→用例` 映射全绿 | `test_js_fake` 扩展（见 `TESTING §3` 映射） | AllPassed |
 
 ### M5 — 1.0 冻结（Production Ready）
 

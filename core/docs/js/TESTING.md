@@ -36,29 +36,34 @@ core/examples/nextpas.core.js/
 
 ## 3. 覆盖矩阵（`test_js_fake` 40+ 用例）
 
-| 域 | 用例 | 断言 |
-|----|------|------|
-| 值语义 | `Is*` 全类型、`As*` 安全默认、`TryAs*` 分叉 | `Kind` 正确，非法 `As*` 零值，`TryAs*` false |
-| Eval | `1+2=3`、`JSON` 互转、`TryEval` 分叉、`TryEvalFile` | 成功值 + 失败 false + `jskUndefined` |
-| 错误 | `SyntaxError→jecSyntax` 等 6 类 + `Species/JsStack` 透传 | Category 归一，Species 非空 |
-| 宿主 | `SetHostFunction` 三形态、`this/args`、`RemoveHostFunction` | 三形态等价，`AArgs` 切片正确 |
-| 线程 | 跨线程 `Eval` fail-fast | `EJsError(jecUnknown)` |
-| 悬垂 | `Context` 释放后 `TJsValue.IsValid=false` | `As*` 零值，`TryAs*` false |
-| 超时/内存 | `TimeoutMs` 中断、`MemoryLimit` fail-closed（fake 模拟） | `EJsTimeout`/`EJsMemoryLimit` |
-| Tick/GC | `Tick` 幂等、`CollectGarbage` 幂等、`IsClosed` 后抛 | 多次调用不崩 |
+| 域 | 用例 | 断言 | 追溯 |
+|----|------|------|------|
+| 值语义 | `Is*` 全类型、`As*` 安全默认、`TryAs*` 分叉 | `Kind` 正确，非法 `As*` 零值，`TryAs*` false | INV-7 |
+| Eval | `1+2=3`、`JSON` 互转、`TryEval` 分叉、`TryEvalFile`（经 `fs.path.Abs`） | 成功值 + 失败 false + `jskUndefined` | INV-4/5 |
+| 错误 | `SyntaxError→jecSyntax` 等 6 类 + `Species/JsStack` 透传 | Category 归一，Species 非空 | CONTRACT §4 |
+| 宿主 | `SetHostFunction` 三形态、`this/args`、`RemoveHostFunction`、空 `AArgs` 切片零分配 | 三形态等价，`AArgs` 切片正确，`B/op=0` | INV-6, R-2 |
+| 线程 | 跨线程 `Eval` fail-fast（debug 断言 / release 抛） | `EJsError(jecUnknown)` | CONTRACT §7 |
+| 悬垂 | `Context` 释放后 `TJsValue.IsValid=false`、`Close` 幂等二次 no-op | `As*` 零值，`TryAs*` false，二次 `Close` 不抛 | INV-7, S-3 |
+| 超时/内存 | `TimeoutMs` 中断、`MemoryLimit` fail-closed（fake 模拟原子 DeadlineMs） | `EJsTimeout`/`EJsMemoryLimit` | CONTRACT §7 |
+| Tick/GC | `Tick` 幂等、`CollectGarbage` 幂等、`IsClosed` 后除 `Close` 外抛 | 多次调用不崩，`IsClosed=True` 后 `Eval` 抛 | S-3 |
+| 零分配 | `TJsValue.AsString` 快路径 `B/op=0`（`nextpas.core.bench` `B/op`） | `bench_value` 断言 `BytesPerOp=0` | P-3 |
+| 复用 | `fake` 作为通用 test double 注入 `config/template`（非仅 webview） | 同契约走 `fake` 绿 | R-2 |
+
+> **INV→用例映射**（`SIXDIM S-1`）：`INV-1` 由 `source-contract` 扫描守（`grep`），`INV-2` 由 FFI 纯度扫描，`INV-3` 由枚举稳定性回归，`INV-4` 由 Eval/TryEval 分叉，`INV-5` 由 `NewJson/ToJson` 互转，`INV-6` 由宿主重入/并发 fail-fast，`INV-7` 由悬垂矩阵。
 
 ---
 
 ## 4. 边界与失败路径（必测）
 
-| 输入 | 期望 |
-|------|------|
-| `AName=""` 或 `a..b` 非法 | `EJsError(jecSyntax)` |
-| `AArgs=[]` 空参 | `AsString` 安全默认 |
-| `Eval("bad(")` 语法错 | `EJsError(jecSyntax)` + `JsStack` 非空 |
-| `TryEvalFile("nope.js")` 不存在 | `False` |
-| `IsClosed=True` 后 `Eval` | `EJsError(jecUnknown)` |
-| `MemoryLimit=0`（不限） | 不抛 |
+| 输入 | 期望 | 备注 |
+|------|------|------|
+| `AName=""` 或 `a..b` 非法 | `EJsError(jecSyntax)` |  |
+| `AArgs=[]` 空参 | `AsString` 安全默认，`B/op=0` | P-3 零分配 |
+| `Eval("bad(")` 语法错 | `EJsError(jecSyntax)` + `JsStack` 非空 |  |
+| `TryEvalFile("nope.js")` 不存在 | `False` | 路径经 `fs.path` 复用 |
+| `IsClosed=True` 后 `Eval` | `EJsError(jecUnknown)` |  |
+| `IsClosed=True` 后 `Close` 二次 | no-op 不抛，`IsClosed` 仍 `True` | S-3 幂等 |
+| `MemoryLimit=0`（不限） | 不抛 |  |
 
 ---
 

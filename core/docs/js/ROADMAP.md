@@ -19,14 +19,14 @@
 
 ## 1. 里程碑总览
 
-| 里程碑 | 名称 | 目标 | 交付物 | 依赖 | 退出条件（Exit Criteria） |
-|--------|------|------|--------|------|---------------------------|
-| **M0** | S0 文档冻结 | 可评审、可排期 | 6+6 份文档（本文 + REVIEW/ACCEPTANCE/AI_GUIDE/TESTING/SECURITY/BENCHMARKS） | 无 | REVIEW H1–H3 清零 + `make hygiene` pass + 本 ROADMAP 定版 |
-| **M1** | S1 假后端可用 | CI 零依赖绿 | `js.base/intf/fake/pas` + `test_js_base/fake` + `demo_js` | `json`, `bench`, `test` | ACCEPTANCE S1 DoD 全绿（见 ACCEPTANCE §3） |
-| **M2** | S1 QuickJS 真链路 | 本地真 JS 语义 | `js.quickjs.ffi/loader/quickjs` + `test_js_quickjs_runtime` + `bench_eval` 骨架 | `platform.dl`, `libquickjs` | M1 + `quickjs_runtime` 探测到即绿 + `bench_eval` 可跑 |
-| **M3** | S2 联动与加固 | 被 webview 间接回归 | `webview.fake.js` 适配 + `json` 互通全量 + 超时/悬垂加固 | `webview`, `json` | webview 13 门 + js 3 门双绿 + `bench_eval` 基线落库 |
-| **M4** | S3 后端扩展 | 零 so / 高性能可选 | `jsbkQuickJsPure` 或 `jsbkV8`（尾部追加） | 性能/闭环需求触发 | 对应 `test_js_*_runtime` + 枚举稳定性回归 |
-| **M5** | 1.0 冻结 | 生产级 | CONTRACT 1.0 + 变更日志 + 迁移指南 | M3 + 至少 1 个真实消费方 | ACCEPTANCE Production DoD（见 §5） |
+| 里程碑 | 名称 | 目标 | 交付物 | 依赖 | 退出条件（Exit Criteria） | 工期 | 人力 |
+|--------|------|------|--------|------|---------------------------|------|------|
+| **M0** | S0 文档冻结 | 可评审、可排期 | 18 份文档（6+6+GAME888/FAQ/DECISIONS/CHANGELOG/SIXDIM/具像化） | 无 | REVIEW H1–H3 清零 + SIXDIM P0 6 项清零 + `make hygiene` pass + 本 ROADMAP 定版 | 1 批次（已交付 0.6） | 1 lane |
+| **M1** | S1 假后端可用 | CI 零依赖绿 | `js.base/intf/fake/pas` + `test_js_base/fake` + `demo_js` | `json`, `bench`, `test` | ACCEPTANCE S1 DoD 全绿（见 ACCEPTANCE §3） | 1–2 周 | 1 人 |
+| **M2** | S1 QuickJS 真链路 | 本地真 JS 语义 | `js.quickjs.ffi/loader/quickjs` + `test_js_quickjs_runtime` + `bench_eval` 骨架 | `platform.dl`, `libquickjs` | M1 + `quickjs_runtime` 探测到即绿 + `bench_eval` 可跑 | 1–2 周 | 1 人 |
+| **M3** | S2 联动与加固 | 被 webview 间接回归 | `webview.fake.js` 适配（活在 webview 家族，`SIXDIM M-4`） + `json` 互通全量 + 超时/悬垂加固 | `webview`, `json` | webview 13 门 + js 3 门双绿 + `bench_eval` 基线落库 | 1 周 | 1 人 + webview reviewer |
+| **M4** | S3 后端扩展 | 零 so / 高性能可选 | `jsbkQuickJsPure` 或 `jsbkV8`（尾部追加） | 性能/闭环需求触发 | 对应 `test_js_*_runtime` + 枚举稳定性回归 | 按触发另排 | — |
+| **M5** | 1.0 冻结 | 生产级 | CONTRACT 1.0 + `CHANGELOG`/`PARITY` 刷新 + 迁移指南 | M3 + 至少 1 个真实消费方 | ACCEPTANCE Production DoD（见 §5） | 1 周 | 1 人 |
 
 > M4 为条件里程碑（Deferred 触发前不排期）；M0–M3 为必达路径。
 

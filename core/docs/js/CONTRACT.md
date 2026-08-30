@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-30
-**版本**：0.4（S0 冻结，12 份完整，待 M1 源码后晋升 1.0）
+**版本**：0.5（六维 P0 清零，18 份完整，待 M1 源码后晋升 1.0）
 
 ---
 
@@ -34,7 +34,7 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs} ← 门面
 
 > `js.quickjs.pure` / `js.v8.ffi` / `js.v8` 为后续尾部追加，不在 S1 公开枚举与门面占位。新增后端只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。
 
-**文件体积指引**：单单元 >800 行拆子模块（`design-conventions §2`）。
+**文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 500/800。
 
 ---
 
@@ -123,7 +123,7 @@ IJsContext = interface
   function Runtime: IJsRuntime;
   function Eval(const ACode: string; const AFileName: string = ''): TJsValue; // 同步抛 EJsError
   function TryEval(const ACode: string; out AValue: TJsValue): Boolean;       // 失败 False
-  function TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean; // 读文件后 Eval（fs 能力经 text.fs 间接）
+  function TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean; // 读文件后 Eval（路径经 fs.path.Abs/EnsureSep 复用，不自拼；`SIXDIM R-3`）
   function Global: TJsValue; // 全局对象句柄，始终有效
   function NewString(const AStr: string): TJsValue;
   function NewInt(AValue: Int64): TJsValue;
@@ -131,7 +131,7 @@ IJsContext = interface
   function NewBool(AValue: Boolean): TJsValue;
   function NewObject: TJsValue;
   function NewArray: TJsValue;
-  function NewJson(const AJson: TJsonValue): TJsValue; // TJsonValue → TJsValue（经 json）
+  function NewJson(const AJson: TJsonValue): TJsValue; // TJsonValue → TJsValue（经 json，经 fs.path.Abs 归一化若涉文件）
   function ToJson(const AValue: TJsValue): IJsonDocument; // TJsValue → IJsonDocument
   function GetProp(const AObj: TJsValue; const AName: string): TJsValue;
   procedure SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
@@ -180,7 +180,7 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 | 非法 `TJsValue` 访问 | 安全默认（`AsInt=0/AsStr=''`），不抛；`TryAs*` 显式分叉 |
 | 宿主函数内抛 `EJsError` | 透为 JS `Error` 对象，`Eval` 侧同表归一 |
 | 宿主函数内抛非 `EJsError` | 包装为 `EJsError(jecUnknown)`，`Species='Error'` |
-| `IsClosed=True` 后调用 | 抛 `EJsError(jecUnknown)` |
+| `IsClosed=True` 后调用 | 抛 `EJsError(jecUnknown)`，`Close` 自身幂等（多次 `Free/Close` 不抛，二次 `Close` 为 no-op；`SIXDIM S-3`） |
 
 `EJsError.Category` 归一表：`SyntaxError→jecSyntax`、`ReferenceError→jecReference`、`TypeError→jecType`、`RangeError→jecRange`、`InternalError/OOM→jecMemory`、`Interrupt→jecTimeout`。未匹配走 `jecUnknown`，`Species` 原样透传。
 
@@ -190,7 +190,7 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 
 - `IJsRuntime / IJsContext / IJsValueRef`：COM 引用计数，出作用域自动 `JS_FreeContext/FreeRuntime/FreeValue`。
 - `TJsValue`：借用所属 `IJsContext` 堆句柄，`Context` 必须活过所有 `TJsValue` 使用；跨线程传递前先经 `IJsValueRef` 桩化或 `AsJson` 序列化。
-- `Tick / CollectGarbage`：幂等；`IsClosed=True` 后一切方法抛 `EJsError(jecUnknown)`。
+- `Tick / CollectGarbage / Close`：幂等；`IsClosed=True` 后除 `Close/IsClosed` 外一切方法抛 `EJsError(jecUnknown)`（`SIXDIM S-3`）。
 - `SetHostFunction` 绑定的闭包寿命与 `IJsContext` 绑定；闭包捕获 `IJsContext` 时需弱引用或作用域桩，避免循环引用（文档明示，`fake` 用例演示）。
 
 ---
@@ -209,8 +209,8 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 
 ## 7. 线程模型
 
-- **线程亲和**：`IJsRuntime / IJsContext` 绑定创建线程，跨线程 `Eval` 抛 `EJsError(jecUnknown)`（debug 断言）。
-- **中断**：`TimeoutMs>0` 时 `JS_SetInterruptHandler` 以原子 `DeadlineMs` 轮询；超时后 `Eval` 抛 `EJsTimeout`，`Tick` 后可继续或重建 `Context`（QuickJS 中断后堆仍可用，V8 需 `TerminateExecution`）。
+- **线程亲和**：`IJsRuntime / IJsContext` 绑定创建线程，跨线程 `Eval` **debug 断言**、**release 抛 `EJsError(jecUnknown)`**（fail-fast，不静默；`SIXDIM S-4`）。
+- **中断**：`TimeoutMs>0` 时 `JS_SetInterruptHandler` 每 N 字节码指令轮询原子 `DeadlineMs`（`DeadlineMs` 缓存行对齐，避免 false sharing；`DESIGN §6` 量化），超时后 `Eval` 抛 `EJsTimeout`，`Tick` 后可继续或重建 `Context`（QuickJS 中断后堆仍可用，V8 需 `TerminateExecution`）。
 - 与 `webview` 联动时：`webview.Dispatcher.IsOnMainThread` 即 `JsContext` 所在线程，`webview` 的异步 `Eval` 经 `Dispatcher.Post` 兑现，不与 `js` 的同步 `Eval` 混用。
 
 ---
@@ -305,6 +305,9 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 - S0 仅文档，不承诺冻结，不改 `core-module-registry.md`。
 - S1 首个源码家族落地时以 `source-contract + focused-runtime(fake)` 入注册表，`S1-runtime`（quickjs）为增量门禁，`Production Ready` 需 `S2` 联动 + `bench_eval` 基线落库。
 - `intf` 视为冻结候选，改动必须过契约测试并更新本文档；`CONTRACT` 版本随实现晋升（0.3→1.0）。
+- **SemVer 纪律**（`SIXDIM S-2`）：`INV-1..7` 任何不变量变更必 **major**；`TJsBackendKind` 尾部追加新后端为 **minor**；`TJsValue` 快路径/错误 `Species` 文本细化不升 major。`CHANGELOG.md` 为唯一发布证据。
+
+**版本徽章**（`SIXDIM L-3`）：`README` 徽章指向 `CHANGELOG.md`，与本节 SemVer 同源；`CONTRACT` 版本与 `CHANGELOG` 条目一一对应。
 
 ---
 

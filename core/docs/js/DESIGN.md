@@ -1,8 +1,26 @@
 # nextpas.core.js 设计说明
 
-**状态**：S0 冻结，随源码落地微调
-**关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）、`REVIEW.md`（差距）、`AI_GUIDE.md`（AI 规范）
-**版本**：0.4（S0 冻结，12 份完整）
+**状态**：S0 冻结，随源码落地微调（六维 P0 清零）
+**关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）、`REVIEW.md`（差距）、`AI_GUIDE.md`（AI 规范）、`SIXDIM_REVIEW.md`（六维）
+**版本**：0.7（六维 P0 清零，18 份完整；增 mermaid/中断量化/体积预案）
+
+## 0. 分层总览（`SIXDIM L-1`）
+
+```mermaid
+flowchart TB
+  base["js.base<br/>TJsBackendKind / TJsValueKind / Options / EJsError"]
+  intf["js.intf<br/>IJsRuntime / IJsContext / TJsValue / IJsValueRef<br/>SetHostFunction x3"]
+  fake["js.fake<br/>纯 Pascal 假后端"]
+  ffi["js.quickjs.ffi<br/>cdecl external"]
+  loader["js.quickjs.loader<br/>platform.dl 探测"]
+  impl["js.quickjs<br/>真实现"]
+  facade["js.pas 门面<br/>CreateJsRuntime"]
+  base --> intf --> fake --> facade
+  intf --> ffi --> loader --> impl --> facade
+  js -. "可选 uses" .-> webview["webview.fake.js<br/>活在 webview 家族"]
+```
+
+> `base` 永不触 `intf/ffi`，`intf` 永不触 `ffi/loader`，`js` 永不 `uses webview`。
 
 ---
 
@@ -76,7 +94,7 @@
 
 ## 6. 超时与内存限
 
-- `TimeoutMs>0` 时 `JS_SetInterruptHandler` 轮询原子 `DeadlineMs`（抄 `sqlite.progress_handler`），超时抛 `EJsTimeout`，QuickJS 堆仍可用（`Tick` 后可继续）。
+- `TimeoutMs>0` 时 `JS_SetInterruptHandler` 每 N 字节码指令轮询原子 `DeadlineMs`（`DeadlineMs: Int64` 缓存行对齐 64B，避免 false sharing；game888 无此轮询，`SIXDIM P-2`），超时抛 `EJsTimeout`，QuickJS 堆仍可用（`Tick` 后可继续）。
 - `MemoryLimit>0` 时 `JS_SetMemoryLimit`/`JS_SetGCThreshold`，超限抛 `EJsMemoryLimit`，fail-closed。
 - 二者均在 `TJsRuntimeOptions` 记录，`CreateJsRuntime` 与 `IJsRuntime.Set*` 双入口，`WithMemoryLimit/WithTimeout` 为 inline 便捷。
 - V8 路径差异：`V8::TerminateExecution` 后需重建 `Context`，契约显式区分（`CONTRACT §7`）。
@@ -88,11 +106,12 @@
 ```
 L2 js:  base(intf 无) → intf → {fake, quickjs.ffi←loader←quickjs} → 门面
 L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)→ js.intf
+         ↳ webview.fake.js 归属 webview 家族（`SIXDIM M-4`），由 js 侧提 PR、webview 侧审查
 ```
 
-`js` 永不 `uses webview.*`，`webview` 的适配活在 `webview` 家族（`webview.fake.js` 或 `webview.adapter.js`），`js` 不感知。
+`js` 永不 `uses webview.*`，`webview` 的适配活在 `webview` 家族（`webview.fake.js` 或 `webview.adapter.js`），`js` 不感知。**体积预案**：`js.intf` >500 行拆 `js.value/host`，`js.quickjs` >800 行拆 `js.quickjs.runtime/value/host`（`SIXDIM M-1/M-2`）。
 
-**层级校验**：`core/tests/architecture/check_source_contracts.py` 扫描 `js` 闭包不得含 `webview/http/tui`；`base/intf` 不得含 `platform.dl`。
+**层级校验**：`core/tests/architecture/check_source_contracts.py` 扫描 `js` 闭包不得含 `webview/http/tui`；`base/intf` 不得含 `platform.dl`；`grep -R "quickjs\|v8" core/src/nextpas.core.js.base.pas` 守 `INV-1`。
 
 ---
 
