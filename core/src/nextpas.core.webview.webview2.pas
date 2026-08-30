@@ -107,11 +107,11 @@ type
   public
     constructor Create(const AOptions: TWebviewOptions);
     destructor Destroy; override;
-    { IWebviewDispatcher }
-    procedure Post(AProc: TWebviewProcRef); overload;
-    procedure Post(AProc: TWebviewProcMethod); overload;
-    procedure Post(AProc: TWebviewProc); overload;
-    function IsOnMainThread: Boolean;
+    { IWebviewDispatcher — inline 薄转发保留接口 }
+    procedure Post(AProc: TWebviewProcRef); overload; inline;
+    procedure Post(AProc: TWebviewProcMethod); overload; inline;
+    procedure Post(AProc: TWebviewProc); overload; inline;
+    function IsOnMainThread: Boolean; inline;
     { IWebviewWindow }
     procedure Close;
     function IsClosed: Boolean;
@@ -161,6 +161,7 @@ implementation
 
 uses
   nextpas.core.platform.thread,
+  nextpas.core.sync.mutex,
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.webview2.win;
 
@@ -547,12 +548,69 @@ type
     Proc: TWebviewProc;
   end;
 
+var
+  GPostRefPool: array of PPostRefRec;
+  GPostRefPoolCount: Integer = 0;
+  GPostMethodPool: array of PPostMethodRec;
+  GPostMethodPoolCount: Integer = 0;
+  GPostProcPool: array of PPostProcRec;
+  GPostProcPoolCount: Integer = 0;
+  GPostPoolLock: Pointer = nil;
+
+function PostPoolLock: TMutex; inline;
+begin
+  if GPostPoolLock = nil then
+    GPostPoolLock := TMutex.Create;
+  Result := TMutex(GPostPoolLock);
+end;
+
+function AcquirePostRefRec: PPostRefRec; inline;
+begin
+  PostPoolLock.Acquire;
+  try
+    if GPostRefPoolCount > 0 then
+    begin Dec(GPostRefPoolCount); Result := GPostRefPool[GPostRefPoolCount]; GPostRefPool[GPostRefPoolCount]:=nil; end else New(Result);
+  finally PostPoolLock.Release; end;
+end;
+
+procedure ReleasePostRefRec(A: PPostRefRec); inline;
+begin
+  if A=nil then Exit; A^.Ref:=nil;
+  PostPoolLock.Acquire;
+  try if GPostRefPoolCount=Length(GPostRefPool) then SetLength(GPostRefPool, WebviewGrowCapacity(Length(GPostRefPool)));
+    GPostRefPool[GPostRefPoolCount]:=A; Inc(GPostRefPoolCount); finally PostPoolLock.Release; end;
+end;
+
+function AcquirePostMethodRec: PPostMethodRec; inline;
+begin PostPoolLock.Acquire;
+  try if GPostMethodPoolCount>0 then begin Dec(GPostMethodPoolCount); Result:=GPostMethodPool[GPostMethodPoolCount]; GPostMethodPool[GPostMethodPoolCount]:=nil; end else New(Result); finally PostPoolLock.Release; end;
+end;
+
+procedure ReleasePostMethodRec(A: PPostMethodRec); inline;
+begin if A=nil then Exit; A^.Method:=nil;
+  PostPoolLock.Acquire;
+  try if GPostMethodPoolCount=Length(GPostMethodPool) then SetLength(GPostMethodPool, WebviewGrowCapacity(Length(GPostMethodPool)));
+    GPostMethodPool[GPostMethodPoolCount]:=A; Inc(GPostMethodPoolCount); finally PostPoolLock.Release; end;
+end;
+
+function AcquirePostProcRec: PPostProcRec; inline;
+begin PostPoolLock.Acquire;
+  try if GPostProcPoolCount>0 then begin Dec(GPostProcPoolCount); Result:=GPostProcPool[GPostProcPoolCount]; GPostProcPool[GPostProcPoolCount]:=nil; end else New(Result); finally PostPoolLock.Release; end;
+end;
+
+procedure ReleasePostProcRec(A: PPostProcRec); inline;
+begin if A=nil then Exit; A^.Proc:=nil;
+  PostPoolLock.Acquire;
+  try if GPostProcPoolCount=Length(GPostProcPool) then SetLength(GPostProcPool, WebviewGrowCapacity(Length(GPostProcPool)));
+    GPostProcPool[GPostProcPoolCount]:=A; Inc(GPostProcPoolCount); finally PostPoolLock.Release; end;
+end;
+
 procedure PostRefTrampoline(AData: Pointer); stdcall;
 var R: PPostRefRec;
 begin
   R := PPostRefRec(AData);
   try if Assigned(R^.Ref) then R^.Ref(); except end;
-  Dispose(R);
+  ReleasePostRefRec(R);
 end;
 
 procedure PostMethodTrampoline(AData: Pointer); stdcall;
@@ -560,7 +618,7 @@ var R: PPostMethodRec;
 begin
   R := PPostMethodRec(AData);
   try if Assigned(R^.Method) then R^.Method(); except end;
-  Dispose(R);
+  ReleasePostMethodRec(R);
 end;
 
 procedure PostProcTrampoline(AData: Pointer); stdcall;
@@ -568,7 +626,7 @@ var R: PPostProcRec;
 begin
   R := PPostProcRec(AData);
   try if Assigned(R^.Proc) then R^.Proc(); except end;
-  Dispose(R);
+  ReleasePostProcRec(R);
 end;
 
 class function TWebView2Webview.MapInvokeCodeSafe(E: Exception): string;
@@ -765,8 +823,13 @@ begin
     LJs := BuildRejectScript(AFrameId, ACode, AMessage)
   else
     LJs := BuildResolveScript(AFrameId, AResultJson);
-  // fire-and-forget eval (no callback)
-  Eval(LJs, nil, nil);
+  // fire-and-forget：跳 pending，直接底层 ExecuteScript（零 pending）
+{$IFDEF MSWINDOWS}
+  if FWebView <> nil then
+    FWebView.ExecuteScript(PWideChar(WideString(LJs)), nil);
+{$ELSE}
+  // 非 Windows 桩：无 controller，丢弃（与 gtk fire-and-forget 对称）
+{$ENDIF}
 end;
 
 {$IFDEF MSWINDOWS}
@@ -916,34 +979,34 @@ begin
   FSelfKeepAlive := nil;
 end;
 
-procedure TWebView2Webview.Post(AProc: TWebviewProcRef);
+procedure TWebView2Webview.Post(AProc: TWebviewProcRef); inline;
 var R: PPostRefRec;
 begin
   if not Assigned(AProc) then Exit;
   RequireOpen;
-  New(R); R^.Ref := AProc;
+  R := AcquirePostRefRec; R^.Ref := AProc;
   if not Win32ShellPost(@PostRefTrampoline, R) then
-  begin Dispose(R); try AProc(); except end; end;
+  begin ReleasePostRefRec(R); try AProc(); except end; end;
 end;
-procedure TWebView2Webview.Post(AProc: TWebviewProcMethod);
+procedure TWebView2Webview.Post(AProc: TWebviewProcMethod); inline;
 var R: PPostMethodRec;
 begin
   if not Assigned(AProc) then Exit;
   RequireOpen;
-  New(R); R^.Method := AProc;
+  R := AcquirePostMethodRec; R^.Method := AProc;
   if not Win32ShellPost(@PostMethodTrampoline, R) then
-  begin Dispose(R); try AProc(); except end; end;
+  begin ReleasePostMethodRec(R); try AProc(); except end; end;
 end;
-procedure TWebView2Webview.Post(AProc: TWebviewProc);
+procedure TWebView2Webview.Post(AProc: TWebviewProc); inline;
 var R: PPostProcRec;
 begin
   if not Assigned(AProc) then Exit;
   RequireOpen;
-  New(R); R^.Proc := AProc;
+  R := AcquirePostProcRec; R^.Proc := AProc;
   if not Win32ShellPost(@PostProcTrampoline, R) then
-  begin Dispose(R); try AProc(); except end; end;
+  begin ReleasePostProcRec(R); try AProc(); except end; end;
 end;
-function TWebView2Webview.IsOnMainThread: Boolean;
+function TWebView2Webview.IsOnMainThread: Boolean; inline;
 begin
   Result := platform_thread_id = FOwnerThread;
 end;
@@ -1414,5 +1477,16 @@ function TWebView2Webview.GetAssets: IWebviewAssets;
 begin
   Result := FAssetsIntf;
 end;
+
+initialization
+
+finalization
+  while GPostRefPoolCount > 0 do begin Dec(GPostRefPoolCount); Dispose(GPostRefPool[GPostRefPoolCount]); end;
+  SetLength(GPostRefPool, 0);
+  while GPostMethodPoolCount > 0 do begin Dec(GPostMethodPoolCount); Dispose(GPostMethodPool[GPostMethodPoolCount]); end;
+  SetLength(GPostMethodPool, 0);
+  while GPostProcPoolCount > 0 do begin Dec(GPostProcPoolCount); Dispose(GPostProcPool[GPostProcPoolCount]); end;
+  SetLength(GPostProcPool, 0);
+  if GPostPoolLock <> nil then begin TObject(GPostPoolLock).Free; GPostPoolLock := nil; end;
 
 end.

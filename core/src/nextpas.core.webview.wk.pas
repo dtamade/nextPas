@@ -117,12 +117,15 @@ implementation
 
 uses
   nextpas.core.platform.thread,
+  nextpas.core.webview.bridge,
   nextpas.core.webview.wk.loader;
 
 var
   GLive: Integer = 0;
   GLiveList: array of TWkWebview;
   GLiveListCount: Integer = 0;
+  GWkEmptyInvokes: IWebviewInvokeRegistry = nil;
+  GWkEmptyAssets: IWebviewAssets = nil;
 
 procedure GrowLiveList; inline;
 begin
@@ -518,8 +521,18 @@ begin
       AHandler;
     end);
 end;
-function TWkWebview.GetInvokes: IWebviewInvokeRegistry; begin Result := nil; end;
-function TWkWebview.GetAssets: IWebviewAssets; begin Result := nil; end;
+function TWkWebview.GetInvokes: IWebviewInvokeRegistry;
+begin
+  if GWkEmptyInvokes = nil then
+    GWkEmptyInvokes := TWebviewInvokeRegistry.Create;
+  Result := GWkEmptyInvokes;
+end;
+function TWkWebview.GetAssets: IWebviewAssets;
+begin
+  if GWkEmptyAssets = nil then
+    GWkEmptyAssets := TWebviewAssetsImpl.Create(False);
+  Result := GWkEmptyAssets;
+end;
 {$POP}
 procedure TWkWebview.Post(AProc: TWebviewProcRef); overload; begin if FClosed then Exit; if Assigned(AProc) then AProc(); end;
 procedure TWkWebview.Post(AProc: TWebviewProcMethod); overload; begin if FClosed then Exit; if Assigned(AProc) then AProc(); end;

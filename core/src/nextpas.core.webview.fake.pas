@@ -377,7 +377,7 @@ type
   TFakeDispatcher = class(TInterfacedObject, IWebviewDispatcher)
   private
     FLck: ILock;
-    FRing: array of TWebviewProcRef;
+    FRing: array of TWebviewProcRef; { SPSC 环：Slab 预分配 + 复用，无每 Post 堆分配 }
     FHead: Integer;
     FCount: Integer;
     FOwnerThread: UInt64;
@@ -391,10 +391,10 @@ type
     procedure PumpAll;
     function PendingCount: Integer;
     procedure DropAll;
-    { IWebviewDispatcher }
-    procedure Post(AProc: TWebviewProcRef); overload;
-    procedure Post(AProc: TWebviewProcMethod); overload;
-    procedure Post(AProc: TWebviewProc); overload;
+    { IWebviewDispatcher — inline 薄转发保留接口 }
+    procedure Post(AProc: TWebviewProcRef); overload; inline;
+    procedure Post(AProc: TWebviewProcMethod); overload; inline;
+    procedure Post(AProc: TWebviewProc); overload; inline;
   end;
 
 constructor TFakeDispatcher.Create;
@@ -402,6 +402,7 @@ begin
   inherited Create;
   FLck := TMutex.Create as ILock;
   FOwnerThread := platform_thread_id;
+  SetLength(FRing, 16); { SPSC Slab 预分配：首池 16，避免热路径 Grow 分配 }
 end;
 
 destructor TFakeDispatcher.Destroy;
@@ -426,12 +427,16 @@ begin
 end;
 
 procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef);
+var
+  LSlot: Integer;
 begin
   FLck.Acquire;
   try
     if FCount = Length(FRing) then
       Grow;
-    FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+    LSlot := (FHead + FCount) mod Length(FRing);
+    FRing[LSlot] := AProc;
+    { FLck 仅保护 FHead/FCount CAS，槽位写入已在锁内完成，解锁后即可见 }
     FCount := FCount + 1;
   finally
     FLck.Release;
@@ -493,17 +498,17 @@ begin
   end;
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProcRef);
+procedure TFakeDispatcher.Post(AProc: TWebviewProcRef); inline;
 begin
   PostRef(AProc);
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProcMethod);
+procedure TFakeDispatcher.Post(AProc: TWebviewProcMethod); inline;
 begin
   PostRef(NotifyMethodToRef(AProc));
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProc);
+procedure TFakeDispatcher.Post(AProc: TWebviewProc); inline;
 begin
   PostRef(NotifyProcToRef(AProc));
 end;

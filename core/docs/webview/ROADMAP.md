@@ -1,12 +1,12 @@
 # nextpas.core.webview 完整路线图
 
-**模块路径**：`core/src/nextpas.core.webview*.pas`  
-**层级**：L3 家族（依赖 L0-L2；`platform.dl` + `json` owner）  
-**Owner**：core-webview lane  
-**最后更新**：2026-08-28  
-**当前版本**：**1.68**（S51 终局冻结）
-**当前状态**：**Production Ready · focused-runtime · 冻结**（`core-module-registry` 已 `focused-runtime`，13+10+6+3 门全绿，hygiene/source-contracts 双 pass，bench 基线 S27）  
-**对标基准**：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）  
+**模块路径**：`core/src/nextpas.core.webview*.pas`
+**层级**：L3 家族（依赖 L0-L2；`platform.dl` + `json` owner）
+**Owner**：core-webview lane
+**最后更新**：2026-08-30
+**当前版本**：**1.91**（S98 六维深化）
+**当前状态**：**Production Ready · focused-runtime · 冻结**（`core-module-registry` 已 `focused-runtime`，13 gates 全绿 heaptrc 0，hygiene/source-contracts 双 pass，bench `S27 1.22GB/s / 3.26µs` → S98 无回归且 TryDecode -22%，三平台 `linux GTK / windows WebView2 wine / macOS WK 桩` 诚实）
+**对标基准**：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 **稳定契约**：[CONTRACT.md](CONTRACT.md)（权威）· [README.md](README.md)（消费面）· [BRIDGE_PROTOCOL.md](BRIDGE_PROTOCOL.md)（v1 帧）· [BACKENDS.md](BACKENDS.md)（能力诚实表）
 
 > **本文定位**：唯一前瞻路线图（living roadmap）。`core/docs/plans/2026-08-25-webview-module.md` 已归档至 S5，S6-S44 回溯与 S45+ 排期以本文为准；冲突时以 `CONTRACT.md` 为准。
@@ -21,16 +21,16 @@
 
 ---
 
-## 2. 现状快照（1.38）
+## 2. 现状快照（1.91）
 
 | 维度 | 事实 |
 |------|------|
 | **类型冻结** | `TWebviewKind` 4 值穷尽 · `TWebviewOptions` 4 不变量（Ephemeral/DataDir 互斥、尺寸非负、max≥min、scheme 小写 token）· `EWebviewError` 8 类目（ecNotFound/ecIO/ecParse/ecInternal）· `IWebviewWindow` 13 方法 composition 冻结（S31） |
 | **后端矩阵** | `fake` 全平台（测试）· `gtk` Linux WebKitGTK 4.1→4.0 dlopen 自声明 ABI · `webview2` Windows COM 真链（Env→Controller、WebMessage、ExecuteScript、WM_SIZE、DPI 真值、Post 调度，wine 可交互）· `wk` macOS 桩（恒 False，Darwin 预留） |
-| **复用收口** | `base` 7 校验 helper 全 `inline`：`IsValidWebviewSchemeToken` / `CheckWebviewSize/Min/Max/Session/InitScript` / `CheckInvokeCmd`；`factory` 容量 `GrowCapacity 4→2×` 三同构 + `builder` 14 链路全 `inline`（除 Build/Run）+ WinShell* 10 + MIME 2 全 inline，零重复校验（S39-S44） |
-| **门禁** | `test_webview_base` 10 · `test_webview_factory` 13 · `test_webview_vfs` 6 · `test_webview_wk_loader` 3 全绿 · `heaptrc 0` · `hygiene`/`source-contracts` 双 pass · `fpc -vh` 0 hint · `factory` 0 warnings（2 处 exhaustive 以 `{$WARNINGS OFF}` 抑制） |
-| **性能基线** | `bench_vfs` 过滤均值 1.22 GB/s（SmallHit 681ns / Fallback 894ns / Miss 217ns / 1M 800µs）· `bench_bridge` TryDecode 4.18µs / Resolve 622ns / Reject 2.37µs / Emit 1.06µs（S27 实测，S42 审计复核无回归） |
-| **文档** | `CONTRACT 1.38` · `README 1.38` · `BRIDGE v1` · `BACKENDS` 能力诚实表 · `PARITY` 不抄清单 |
+| **复用收口** | `base` 7 校验 helper 全 `inline`：`IsValidWebviewSchemeToken` / `CheckWebviewSize/Min/Max/Session/InitScript/EventName/DevServerUrl` / `CheckInvokeCmd`；`WebviewGrowCapacity(0→4→2×)` 全家族 inline 单源；`NormalizeWebviewAssetPath` 5 处复用；`http.mime` 65 项单源（S52-S97） |
+| **门禁** | 13 gates 全绿 `heaptrc 0`（`base 10 + factory 13 + bridge 17 + vfs 6 + wk 3` 等）· `hygiene`/`source-contracts` 双 pass · `fpc -vh` 0 hint · `factory` 0 warnings（2 处 exhaustive 以 `{$WARNINGS OFF}` 抑制） |
+| **性能基线** | `bench_vfs` 过滤均值 1.22 GB/s（SmallHit 636ns / Fallback 850ns / Miss 242ns / 1M 785µs）· `bench_bridge` TryDecode 3.26µs / Resolve 455ns / Reject 886ns / Emit 531ns（S27 1.22GB/s + S98 -22% 带 `taskset -c 2` 框架均值，哈希阈值 16） |
+| **文档** | `CONTRACT 1.91` · `README 1.91` · `ROADMAP 1.91` · `BRIDGE v1` · `BACKENDS` 能力诚实表 · `PARITY` 不抄清单 |
 
 ---
 
@@ -56,44 +56,44 @@
 
 ### 4.1 S45 — 窗口独立 lane（`nextpas.core.window`）
 
-**触发**：满足其一即立项 — (a) 第二个真实 consumer 出现（gpu/font/IDE workbench）或 (b) W2 真实现前必须收敛窗口代码。  
-**范围**：`webview.gtk.win` + `webview2.win` 纯函数式缝上移为 `window.gtk` / `window.win32` / `window.cocoa`（零 webview 概念），`IWebviewWindow` 保持组合面（消费方无感）。含 `GetScaleFactor` 浮点诚实、`WM_DPICHANGED`/`OnScaleChanged` 一等约束、Android/iOS `attach` 模型预留。  
-**验证**：`window` 独立契约测试（无 webview 依赖）+ `webview` 双窗 live 回归 + `gpu` 最小 consumer 冒烟。  
+**触发**：满足其一即立项 — (a) 第二个真实 consumer 出现（gpu/font/IDE workbench）或 (b) W2 真实现前必须收敛窗口代码。
+**范围**：`webview.gtk.win`（已 `14 inline → window.gtk3.Raw` 对称） + `webview2.win`（`22 项权威壳` 保留，S98 预留 `window.win32.Raw` 下沉 `18 项 Create/SetTitle/Resize/Show/Hide/Destroy/IsVisible/IsMaximized/Maximize/Unmaximize/Minimize/Restore/IsMinimized/ScaleFactor/ClientSize/Focus/Native/RunMainLoop`，保留 `Post/OnScaleChanged/OnResize` 调度面）上移为 `window.gtk` / `window.win32` / `window.cocoa`（零 webview 概念），`IWebviewWindow` 保持组合面（消费方无感）。含 `GetScaleFactor` 浮点诚实、`WM_DPICHANGED`/`OnScaleChanged` 一等约束、Android/iOS `attach` 模型预留。
+**验证**：`window` 独立契约测试（无 webview 依赖）+ `webview` 双窗 live 回归 + `gpu` 最小 consumer 冒烟。
 **退出**：`window` 单元 `focused-runtime`，`webview` 删除 `gtk.win`/`webview2.win` 内缝，仅保留组合。
 
 ### 4.2 S46 — W3 真实现（Darwin）
 
-**触发**：`stage0` 对 `objcclass`/`objc_msgSend` 探通（`compiler` lane 给出能力位）。  
-**范围**：`wk.ffi` 真类型 + `wk.loader` 动态探测（WebKit.framework）+ `wk` 真 `WKWebView`（`WKWebsiteDataStore` 私有/持久、`customUserAgent`、`pageZoom`、`backingScaleFactor`、`WKScriptMessageHandler` 桥、`evaluateJavaScript`），`IsOnMainThread` 真线程（`NSThread isMainThread`），`WkLiveWindowCount` 真 `NSRunLoop`。  
-**验证**：Darwin 真机建窗→`npres` 资产→`invoke` round-trip→`Eval`→`Close` 幂等；Linux 仍桩 false。  
+**触发**：`stage0` 对 `objcclass`/`objc_msgSend` 探通（`compiler` lane 给出能力位）。
+**范围**：`wk.ffi` 真类型 + `wk.loader` 动态探测（WebKit.framework）+ `wk` 真 `WKWebView`（`WKWebsiteDataStore` 私有/持久、`customUserAgent`、`pageZoom`、`backingScaleFactor`、`WKScriptMessageHandler` 桥、`evaluateJavaScript`），`IsOnMainThread` 真线程（`NSThread isMainThread`），`WkLiveWindowCount` 真 `NSRunLoop`。
+**验证**：Darwin 真机建窗→`npres` 资产→`invoke` round-trip→`Eval`→`Close` 幂等；Linux 仍桩 false。
 **退出**：`DefaultWebviewKind` 在 Darwin 优先 `wk`，`BACKENDS.md` 能力表补真值。
 
 ### 4.3 S47 — 主循环融合（`IterateOnce`）
 
-**触发**：应用真要把 `WebviewRunLoop` 接进 `TAsyncLoop`（`async` owner 提出）。  
-**范围**：`g_main_context_iteration` 自驱泵（替代 `gtk_main` 阻塞）、Win32 `MsgWaitForMultipleObjects` 融合、Wk `NSRunLoop` 限时迭代；`WebviewIterateOnce(timeout)` 非阻塞面（deferred-LI 转正）。  
-**验证**：`async` 侧 `WaitForWake` 集成冒烟 + `fake` 确定性泵。  
+**触发**：应用真要把 `WebviewRunLoop` 接进 `TAsyncLoop`（`async` owner 提出）。
+**范围**：`g_main_context_iteration` 自驱泵（替代 `gtk_main` 阻塞）、Win32 `MsgWaitForMultipleObjects` 融合、Wk `NSRunLoop` 限时迭代；`WebviewIterateOnce(timeout)` 非阻塞面（deferred-LI 转正）。
+**验证**：`async` 侧 `WaitForWake` 集成冒烟 + `fake` 确定性泵。
 **退出**：`CONTRACT §5` 循环所有权章节更新，`TAsyncLoop` 无编译期依赖保持。
 
 ### 4.4 S48 — 导航 allowlist / veto（安全）
 
-**触发**：出现必须加载远程内容的场景（外链帮助页、OAuth 回调）。  
-**范围**：`NavigateTo` 校验 + `OnNavigationStarting` veto（`allow/block`）、`OnNavigationFailed` 已有，补 `OnNavigationStarting` 可拦截面（deferred-Sec 转正）。  
-**验证**：远程 URL 默认 block、allowlist 命中放行。  
+**触发**：出现必须加载远程内容的场景（外链帮助页、OAuth 回调）。
+**范围**：`NavigateTo` 校验 + `OnNavigationStarting` veto（`allow/block`）、`OnNavigationFailed` 已有，补 `OnNavigationStarting` 可拦截面（deferred-Sec 转正）。
+**验证**：远程 URL 默认 block、allowlist 命中放行。
 **退出**：`CONTRACT §6` 威胁模型更新，示例明示 `npres` 生产、`https` 受控。
 
 ### 4.5 S49 — 窗口能力第二批（deferred-Win）
 
-**触发**：`tao` 对齐真实用例（全屏、decorations、透明、图标、always-on-top、drag region、attention）。  
-**范围**：按需逐项加 `IWebviewWindow` 方法（不预埋），每项独立 slice。  
-**验证**：对应平台诚实表 + 单测。  
+**触发**：`tao` 对齐真实用例（全屏、decorations、透明、图标、always-on-top、drag region、attention）。
+**范围**：按需逐项加 `IWebviewWindow` 方法（不预埋），每项独立 slice。
+**验证**：对应平台诚实表 + 单测。
 **退出**：`IWebviewWindow` 13→N 渐进，保持 `CONTRACT` 版本递增。
 
 ### 4.6 S51 — 性能与文档终局
 
-**触发**：S45-S49 任一落地后。  
-**范围**：`bench_vfs`/`bench_bridge` 过滤均值重测（`nextpas.core.bench`）、`README` 徽标刷新、`PARITY` 再对标。  
-**验证**：`bench` 无回归、`hygiene`/`source-contracts` 双 pass。  
+**触发**：S45-S49 任一落地后。
+**范围**：`bench_vfs`/`bench_bridge` 过滤均值重测（`nextpas.core.bench`）、`README` 徽标刷新、`PARITY` 再对标。
+**验证**：`bench` 无回归、`hygiene`/`source-contracts` 双 pass。
 **退出**：`CONTRACT 1.50` 冻结。
 
 ---
