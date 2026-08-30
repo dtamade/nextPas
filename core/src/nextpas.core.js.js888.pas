@@ -2,7 +2,7 @@ unit nextpas.core.js.js888;
 {** @desc 纯 Pascal 后端占位（零 FFI/零 platform.dl，恒可用，与 fake 同约束，S3 可演进为真解析器）。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.json;
+uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.pure.base, nextpas.core.json;
 type
   TJsJs888Runtime = class(TInterfacedObject, IJsRuntime)
   private FOptions: TJsRuntimeOptions;
@@ -14,9 +14,9 @@ type
   end;
   TJsJs888Context = class(TInterfacedObject, IJsContext)
   private FRuntime: IJsRuntime; FOptions: TJsRuntimeOptions; FClosed: Boolean; FThreadId: UInt64;
-    FHostFuncs: array of record Name: string; Func: TJsHostFunction; Method: TJsHostMethod; Proc: TJsHostProc; Kind: Integer; end;
-    function FindHost(const AName: string): Integer; function IsOnCreationThread: Boolean;
-    procedure EnsureNotClosed; procedure EnsureThreadAffinity; function ValidateHostName(const AName: string): Boolean;
+    FHostFuncs: TJsPureHostArray;
+    function FindHost(const AName: string): Integer; inline; function IsOnCreationThread: Boolean;
+    procedure EnsureNotClosed; procedure EnsureThreadAffinity; function ValidateHostName(const AName: string): Boolean; inline;
     function DoEval(const ACode: string): TJsValue; procedure DoSetHost(const AName: string);
   public constructor Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
   function Runtime: IJsRuntime; function Eval(const ACode: string; const AFileName: string = ''): TJsValue;
@@ -56,110 +56,12 @@ begin if ATimeoutMs < 0 then raise EJsError.Create('TimeoutMs must be >= 0', jec
 procedure TJsJs888Runtime.CollectGarbage; begin end;
 constructor TJsJs888Context.Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
 begin inherited Create; FRuntime := ARuntime; FOptions := AOptions; FClosed := False; FThreadId := UInt64(platform_thread_self); end;
-function TJsJs888Context.FindHost(const AName: string): Integer; inline;
-var I: Integer; begin for I:=0 to High(FHostFuncs) do if FHostFuncs[I].Name=AName then Exit(I); Result:=-1; end;
+function TJsJs888Context.FindHost(const AName: string): Integer; inline; begin Result := JsPureFindHost(FHostFuncs, AName); end;
 function TJsJs888Context.IsOnCreationThread: Boolean; inline; begin Result := UInt64(platform_thread_self)=FThreadId; end;
 procedure TJsJs888Context.EnsureNotClosed; inline; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkJs888); end;
 procedure TJsJs888Context.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkJs888); end;
-function TJsJs888Context.ValidateHostName(const AName: string): Boolean;
-var I: Integer; C: Char; begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if AName[1]='.' then Exit; if AName[Length(AName)]='.' then Exit;
-  for I:=1 to Length(AName) do begin C:=AName[I]; if C='.' then Continue; if not (C in ['A'..'Z','a'..'z','_','$','0'..'9']) then Exit;
-    if (I>1) and (AName[I-1]<>'.') then Continue; if (C in ['0'..'9']) and ((I=1) or (AName[I-1]='.')) then Exit; end; Result:=True; end;
-
-function TJsJs888Context.DoEval(const ACode: string): TJsValue;
-var
-  LCode: string;
-  LIdx, LHostIdx: Integer;
-  LName, LArg: string;
-  LSingle: array[0..0] of TJsValue;
-  LNoArgs: array of TJsValue;
-  LHandler: TJsHostFunction;
-  LMethod: TJsHostMethod;
-  LProc: TJsHostProc;
-  LThis: TJsValue;
-  LHasArg: Boolean;
-begin
-  LNoArgs:=nil;
-  if JsTrimEquals(ACode,'') then
-    raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkJs888);
-  if (Pos('while(true)', ACode) > 0) and (FOptions.TimeoutMs > 0) then
-    raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', jsbkJs888);
-  if (FOptions.MemoryLimit > 0) and (FOptions.MemoryLimit < 1024) then
-    raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkJs888);
-  if JsTrimEquals(ACode,'1+2') then Exit(JsIntValue(3));
-  if JsTrimEquals(ACode,'bad(') then
-    raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', jsbkJs888);
-  if JsTrimEquals(ACode,'foo(') then
-    raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', jsbkJs888);
-  if (Pos('JSON.stringify', ACode) > 0) and (Pos('x', ACode) > 0) then
-    Exit(JsStringValue('{"x":1}'));
-  if JsTrimEquals(ACode,'null') then Exit(JsNullValue);
-  if JsTrimEquals(ACode,'undefined') then Exit(JsUndefinedValue);
-  if JsTrimEquals(ACode,'true') then Exit(JsBoolValue(True));
-  if JsTrimEquals(ACode,'false') then Exit(JsBoolValue(False));
-  LCode := TextTrim(ACode);
-  LIdx := Pos('(', LCode);
-  if LIdx > 0 then
-  begin
-    LName := TextTrim(Copy(LCode, 1, LIdx - 1));
-    LHostIdx := FindHost(LName);
-    if LHostIdx >= 0 then
-    begin
-      LArg := TextTrim(Copy(LCode, LIdx + 1, Length(LCode) - LIdx - 1));
-      if (Length(LArg) >= 2) and ((LArg[1] = '"') or (LArg[1] = '''')) then
-        LArg := Copy(LArg, 2, Length(LArg) - 2);
-      if LArg = ')' then LArg := '';
-      LHasArg := LArg <> '';
-      if LHasArg then LSingle[0] := JsStringValue(LArg);
-      LThis := Global;
-      case FHostFuncs[LHostIdx].Kind of
-        0:
-        begin
-          LHandler := FHostFuncs[LHostIdx].Func;
-          try
-            if LHasArg then Result := LHandler(Self, LThis, LSingle) else Result := LHandler(Self, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do
-              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkJs888);
-            on E: TObject do
-              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkJs888);
-          end;
-          Exit;
-        end;
-        1:
-        begin
-          LMethod := FHostFuncs[LHostIdx].Method;
-          try
-            if LHasArg then Result := LMethod(Self, LThis, LSingle) else Result := LMethod(Self, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do
-              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkJs888);
-            on E: TObject do
-              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkJs888);
-          end;
-          Exit;
-        end;
-        2:
-        begin
-          LProc := FHostFuncs[LHostIdx].Proc;
-          try
-            if LHasArg then Result := LProc(Self, LThis, LSingle) else Result := LProc(Self, LThis, LNoArgs);
-          except
-            on E: EJsError do raise;
-            on E: ENextPasError do
-              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkJs888);
-            on E: TObject do
-              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkJs888);
-          end;
-          Exit;
-        end;
-      end;
-    end;
-  end;
-  Result := JsStringValue(LCode);
-end;
+function TJsJs888Context.ValidateHostName(const AName: string): Boolean; inline; begin Result := JsPureValidateHostName(AName); end;
+function TJsJs888Context.DoEval(const ACode: string): TJsValue; begin Result := JsPureDoEval(Self, ACode, FOptions, jsbkJs888, FHostFuncs, Global); end;
 function TJsJs888Context.Runtime: IJsRuntime; begin EnsureNotClosed; Result:=FRuntime; end;
 function TJsJs888Context.Eval(const ACode: string; const AFileName: string): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=DoEval(ACode); end;
 function TJsJs888Context.TryEval(const ACode: string; out AValue: TJsValue): Boolean; begin try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
