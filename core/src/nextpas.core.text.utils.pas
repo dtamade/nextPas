@@ -160,27 +160,27 @@ end;
 
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string; inline;
 var
-  LPadLen, I: Integer;
+  LPadLen: Integer;
 begin
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
     Exit(S);
   SetLength(Result, AWidth);
   FillChar(Result[1], LPadLen, Byte(APadChar));
-  for I := 1 to Length(S) do
-    Result[LPadLen + I] := S[I];
+  if Length(S) > 0 then
+    Move(S[1], Result[LPadLen + 1], Length(S));
 end;
 
 function PadRight(const S: string; AWidth: Integer; APadChar: Char): string; inline;
 var
-  LPadLen, I: Integer;
+  LPadLen: Integer;
 begin
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
     Exit(S);
   SetLength(Result, AWidth);
-  for I := 1 to Length(S) do
-    Result[I] := S[I];
+  if Length(S) > 0 then
+    Move(S[1], Result[1], Length(S));
   FillChar(Result[Length(S) + 1], LPadLen, Byte(APadChar));
 end;
 
@@ -375,7 +375,7 @@ end;
 function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer; inline;
 var
   P: PAnsiChar;
-  N, I: Integer;
+  N: Integer;
 begin
   P := @ABuf;
   if ABufLen > 0 then
@@ -384,8 +384,7 @@ begin
   N := Result;
   if N >= ABufLen then N := ABufLen - 1;
   if N > 0 then
-    for I := 1 to N do
-      P[I-1] := S[I];
+    Move(S[1], P^, N);
 end;
 
 function CStrToStr(const AP: PAnsiChar): string; inline;

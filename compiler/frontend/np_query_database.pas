@@ -8,6 +8,7 @@
 unit np_query_database;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../lower}
 {$UNITPATH ../../core/src}
 
 interface
@@ -15,7 +16,8 @@ interface
 uses
   SysUtils,
   nextpas.core.text.strings,
-  nextpas.core.collections.vec;
+  nextpas.core.collections.vec,
+  np_lower_query; // D分层 lower定义ILowerQuery
 
 type
   TQueryEntry = record
@@ -34,6 +36,8 @@ type
     function Get(const AKey: string; ADefault: TObject): TObject;
     procedure Store(const AKey: string; AValue: TObject);
     procedure InvalidatePrefix(const APrefix: string);
+    function ContainsValue(AValue: TObject): Boolean;
+    procedure ForgetValue(AValue: TObject);
   end;
 
 implementation
@@ -45,20 +49,8 @@ begin
 end;
 
 destructor TQueryDatabase.Destroy;
-var
-  I: LongInt;
-  Entry: PQueryEntry;
 begin
-  if FEntries <> nil then
-  begin
-    for I := 0 to LongInt(FEntries.Count) - 1 do
-    begin
-      Entry := FEntries.GetPtr(SizeUInt(I));
-      if Entry^.Value <> nil then
-        Entry^.Value.Free;
-      Entry^.Value := nil;
-    end;
-  end;
+  // 弱缓存：不 Free Value，仅释放容器
   FEntries.Free;
   FEntries := nil;
   inherited Destroy;
@@ -112,11 +104,34 @@ begin
   begin
     EntryPtr := FEntries.GetPtr(SizeUInt(I));
     if Pos(APrefix, EntryPtr^.Key) = 1 then
-    begin
-      if EntryPtr^.Value <> nil then
-        EntryPtr^.Value.Free;
       EntryPtr^.Value := nil;
-    end;
+  end;
+end;
+
+function TQueryDatabase.ContainsValue(AValue: TObject): Boolean;
+var
+  I: LongInt;
+begin
+  if (FEntries = nil) or (AValue = nil) then
+    Exit(False);
+  for I := 0 to LongInt(FEntries.Count) - 1 do
+    if FEntries[SizeUInt(I)].Value = AValue then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TQueryDatabase.ForgetValue(AValue: TObject);
+var
+  I: LongInt;
+  EntryPtr: PQueryEntry;
+begin
+  if (FEntries = nil) or (AValue = nil) then
+    Exit;
+  for I := 0 to LongInt(FEntries.Count) - 1 do
+  begin
+    EntryPtr := FEntries.GetPtr(SizeUInt(I));
+    if EntryPtr^.Value = AValue then
+      EntryPtr^.Value := nil;
   end;
 end;
 

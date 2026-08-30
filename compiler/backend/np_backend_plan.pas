@@ -9,14 +9,10 @@ unit np_backend_plan;
 interface
 
 uses
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
-  nextpas.core.mem.intf, nextpas.core.compiler.mem,
   nextpas.core.collections.vec,
+  nextpas.core.mem.intf, nextpas.core.compiler.mem,
   np_target_facts,
-  np_semantic_model, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_llvm_emitter, nextpas_json_helpers,
-  np_hir_to_mir, np_mir_model, np_mir_to_llvm,
-  np_mir_optimize, np_mir_pass_registry;
+  np_semantic_model, np_mir_model;
 
 type
   TBackendArtifact = record
@@ -153,6 +149,14 @@ type
   end;
 
 implementation
+
+uses
+  SysUtils,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
+  np_hir_types, np_hir_model, np_hir_builder,
+  np_hir_llvm_emitter, nextpas_json_helpers,
+  np_hir_to_mir, np_mir_to_llvm,
+  np_mir_optimize, np_mir_pass_registry;
 
 constructor TBackendPlan.Create;
 begin

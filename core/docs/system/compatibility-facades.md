@@ -1,8 +1,7 @@
 # S4 Compatibility Facade Design
 
 This document records the S4 compatibility boundary for `nextpas.core.system`.
-It now distinguishes minimal live TypInfo and SysUtils facades from the
-still-deferred Classes facade. Both live units are intentionally narrow; they do
+It now distinguishes minimal live TypInfo, SysUtils (**40+ functions**) and Classes (**10 types**) facades. All live units are intentionally narrow; they do
 not convert bootstrap RTL pressure into a broad public compatibility API.
 
 ## Current Decision Boundary
@@ -12,11 +11,8 @@ not convert bootstrap RTL pressure into a broad public compatibility API.
   (`nextpas.core.exception`, `nextpas.core.base`, `nextpas.core.errors`).
 - `nextpas.core.system.typinfo` has a minimal live unit for the seven-symbol
   pressure set.
-- `nextpas.core.system.sysutils` has a minimal live **compatibility facade** that
-  re-exports `Format`, `SameText`, `IntToStr`, `Trim`, and canonical exception
-  aliases. **Text implementation owner is `nextpas.core.text.conv`**; exception
-  aliases own in `nextpas.core.exception`. Sysutils does not implement text APIs.
-- `nextpas.core.system.classes` remains deferred.
+- `nextpas.core.system.sysutils` has a minimal live **compatibility facade** ( **40+ functions**: `Format`, `SameText`, `IntToStr`, `Trim`, `StrToInt`, `FloatToStr`, `FileExists`, `ExtractFilePath`, `Now`, `Sleep`, `SysErrorMessage` …). **Text implementation owner is `nextpas.core.text.conv`** (and `path`/`fs`/`platform` for non-text slices); exception aliases own in `nextpas.core.exception`. Sysutils does not implement text APIs — it is a thin delegating facade.
+- `nextpas.core.system.classes` is a **live facade** with **10 types**: `TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread` (plus `fm*` constants and `IStream`/`IReader`/`IWriter` re-exports). Narrow, stream/container-owned subset, not full `Classes` sprawl.
 - Deferred does not mean "undefined"; it means the broad public unit surface is
   not live yet and is guarded by docs plus source-contract.
 - Any future broad compatibility facade still requires named consumer pressure,
@@ -70,15 +66,13 @@ The pressure clusters into a few narrow capability families:
 | `CompareText` | no focused consumer pressure in this lane | keep deferred | do not unlock just because `SameText` is live |
 | date/time convenience | `Now`, `FormatDateTime` | only incidental pressure today | belongs to time owner, not system |
 
-### Current S4 stance
+### Current S4 stance (2026-08-31 alignment: live 40+ sysutils, 10-type classes)
 
-- A minimal live `nextpas.core.system.sysutils` unit exists.
-- The live unit exposes 40+ functions including `Format`, `SameText`, `IntToStr`, `Trim`,
-  `StrToInt`, `FloatToStr`, `FileExists`, `ExtractFilePath`, `Now`, `Sleep`, etc.
-- Do not create a mirror of FPC `SysUtils`.
-- Do not move filesystem, environment, time, or text ownership into `system`.
-- Any further `system.sysutils` shape must stay tiny and consumer-proven; do not
-  pull broad text, filesystem, environment, or time ownership into system.
+- A minimal live `nextpas.core.system.sysutils` unit exists — **40+ functions** (see § Current live minimum; `core/src/nextpas.core.system.sysutils.pas` 583 lines, `Format`/`SameText`/`IntToStr`/`Trim` + `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep`/`SysErrorMessage` etc., all delegating to `text.conv`/`path`/`fs`/`platform`).
+- A minimal live `nextpas.core.system.classes` unit exists — **10 types** (`TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread`; plus `fmCreate`/`fmOpen*`/`fmShare*` and `IStream` re-exports) as narrow bootstrap shim; `TComponent`/`TPersistent` remain deferred.
+- Do not create a mirror of FPC `SysUtils`/`Classes`.
+- Do not move filesystem, environment, time, or text ownership into `system`; classes does not own container/thread ownership beyond the 10-type shim.
+- Any further `system.sysutils`/`system.classes` shape must stay tiny and consumer-proven; do not pull broad text, filesystem, environment, or time ownership into system.
 
 ### Current live minimum
 
@@ -219,12 +213,11 @@ That does not justify:
 - streaming framework compatibility
 - designer/runtime component semantics
 
-### Current S4 stance
+### Current S4 stance (live 10-type shim, 2026-08-31)
 
-- No live `nextpas.core.system.classes` unit yet.
-- Treat current bootstrap `Classes` as proof of narrow subset pressure, not as
-  proof that the full namespace boundary is decided.
-- Any future live facade must keep IO/container ownership explicit.
+- A live `nextpas.core.system.classes` unit exists — **10 types** (`TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread`; `fmCreate`/`fmOpenRead`/`fmShareDenyNone` etc.) as narrow bootstrap shim; `TComponent`/`TPersistent`/ownership trees/streaming framework remain deferred.
+- Treat live 10-type shim as proof of narrow subset pressure, not as proof that the full `Classes` boundary is decided.
+- Any future broader `system.classes` must keep IO/container/thread ownership explicit and stay guarded by source-contract (the 10-type shim is the current live surface).
 
 ## Migration Risks
 

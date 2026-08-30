@@ -9,28 +9,24 @@ unit np_compilation_session;
 {$UNITPATH ../syntax}
 {$UNITPATH ../toolchain}
 {$UNITPATH ../targets}
+{$UNITPATH ../lower}
 {$UNITPATH ../../core/src}
 
 interface
 
 uses
-  { SameText via text.conv; full text facade is unicode-heavy under A self-compile. }
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
-  nextpas.core.time, nextpas.core.base.utils, nextpas.core.compiler.mem,
-  nextpas.core.mem.intf, nextpas.core.mem.allocator.arena,
   nextpas.core.collections.vec,
+  nextpas.core.compiler.mem, nextpas.core.mem.intf, nextpas.core.mem.allocator.arena,
   np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
-  np_lexer, np_preprocessor, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_printer, np_hir_llvm_emitter, np_source_database, np_target_facts,
-  np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
+  np_lexer, np_source_database, np_target_facts,
+  np_toolchain_plan, np_toolchain_runner,
   np_unit_graph, np_unit_resolver,
-  np_semantic_model, np_semantic_analyzer, np_workspace_model,
-  np_compiler_phase, np_mir_model, np_hir_to_mir, np_mir_optimize,
+  np_semantic_model, np_workspace_model,
+  np_compiler_phase, np_mir_model,
   np_query_database,
   np_file_change_detector,
   np_parallel_scheduler,
-  np_incremental_cache,
-  np_mir_to_llvm, nextpas_json_helpers;
+  np_incremental_cache;
 
 type
   TBuildContext = record
@@ -370,6 +366,15 @@ type
   end;
 
 implementation
+
+uses
+  SysUtils,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
+  nextpas.core.time, nextpas.core.base.utils,
+  np_preprocessor, np_hir_types, np_hir_model, np_hir_builder,
+  np_hir_printer, np_hir_llvm_emitter, nextpas_json_helpers,
+  np_hir_to_mir, np_mir_to_llvm,
+  np_mir_optimize, np_semantic_analyzer, np_toolchain_profiles;
 
 {$I np_compilation_session_helpers.inc}
 
