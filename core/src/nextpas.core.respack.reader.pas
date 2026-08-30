@@ -142,9 +142,9 @@ end;
 
 class function TResPack.Open(const AData: PByte; const ASize: SizeUInt): TResPack;
 var
-  I: SizeUInt;
+  I, J: SizeUInt;
   E: TResPackEntry;
-  MinData, DigEnd, StrLen, AlignedStrEnd, PathEnd: UInt64;
+  MinData, MaxDataEnd, StrTabEnd, DigEnd, StrLen, AlignedStrEnd, PathEnd: UInt64;
   HdrFlags: UInt32;
   IdxBase: PByte;
   Cached: array of TResPackEntry;
@@ -200,6 +200,8 @@ begin
     （Count 为 SizeUInt，0-1 回绕 ⇒ 每个循环都必须以 Count>0 为前提）
     单次 DecodeWire + 缓存：第二遍校验复用缓存零 Decode，10k 规模省 50% 解析 }
   MinData := Result.FHdr.BlobTotal;
+  MaxDataEnd := 0;
+  StrLen := 0;
   if Result.Count > 0 then
   begin
     // 缓存条目避免第二遍二次 DecodeWire
@@ -220,40 +222,70 @@ begin
         raise EResPackCorrupted.CreateStep(5, 'empty path');
       if (E.DataOffset mod RESPACK_DATA_ALIGN) <> 0 then
         raise EResPackCorrupted.CreateStep(5, 'data slot not aligned');
-      { F-CRIT-01 lower bound: data must not overlap index/string table }
-      if E.DataOffset < Result.FStrTabBase then
-        raise EResPackCorrupted.CreateStep(5, 'data offset below string table');
       { F-HIGH-02 wrap-safe: avoid UInt64 wrap on DataOffset+Size }
       if (E.Size > Result.FHdr.BlobTotal)
         or (E.DataOffset > Result.FHdr.BlobTotal - E.Size) then
         raise EResPackCorrupted.CreateStep(5, 'data range beyond blobTotal');
+      if StrLen > High(UInt64) - UInt64(E.PathLen) then
+        raise EResPackCorrupted.CreateStep(5, 'string table length overflow');
+      StrLen := StrLen + UInt64(E.PathLen);
       if E.DataOffset < MinData then
         MinData := E.DataOffset;
+      if E.Size > 0 then
+      begin
+        if E.DataOffset > High(UInt64) - E.Size then
+          raise EResPackCorrupted.CreateStep(5, 'data range overflow');
+        if E.DataOffset + E.Size > MaxDataEnd then
+          MaxDataEnd := E.DataOffset + E.Size;
+      end;
       Cached[I] := E;
     end;
     { F-HIGH-03 header HASHED is summary, entry HASHED is authoritative }
     if (HdrFlags and RESPACK_FLAG_HASHED) <> 0 then
       for I := 0 to Result.Count - 1 do
         if (Cached[I].Flags and RESPACK_EFLAG_HASHED) = 0 then
-          raise EResPackCorrupted.CreateStep(5, 'header hashed flag mismatch');
+          raise EResPackCorrupted.CreateStep(5, 'header hash flag inconsistent');
+    { 推导 string table 终点：AlignUp(FStrTabBase+StrLen,16) }
+    if Result.FStrTabBase > High(UInt64) - StrLen then
+      raise EResPackCorrupted.CreateStep(5, 'string table overflow');
+    StrTabEnd := Result.FStrTabBase + StrLen;
+    if StrTabEnd > High(UInt64) - (RESPACK_DATA_ALIGN - 1) then
+      raise EResPackCorrupted.CreateStep(5, 'string table alignment overflow');
+    StrTabEnd := (StrTabEnd + (RESPACK_DATA_ALIGN - 1)) and not UInt64(RESPACK_DATA_ALIGN - 1);
+    { 消除无符号下溢：MinData < FStrTabBase 必须先于 MinData-FStrTabBase }
+    if MinData < Result.FStrTabBase then
+      raise EResPackCorrupted.CreateStep(5, 'data overlaps strtab');
+    for I := 0 to Result.Count - 1 do
+    begin
+      E := Cached[I];
+      if E.DataOffset < StrTabEnd then
+        raise EResPackCorrupted.CreateStep(5, 'data overlaps header/index/strtab');
+    end;
+    { data 区间互不重叠，至少在 [0,DigestOffset) 内无覆盖；去重共享槽位（相同 offset+size）除外 }
+    for I := 0 to Result.Count - 1 do
+      for J := I + 1 to Result.Count - 1 do
+      begin
+        if (Cached[I].Size = 0) or (Cached[J].Size = 0) then Continue;
+        if (Cached[I].DataOffset = Cached[J].DataOffset) and (Cached[I].Size = Cached[J].Size) then Continue;
+        if (Cached[I].DataOffset < Cached[J].DataOffset + Cached[J].Size)
+          and (Cached[J].DataOffset < Cached[I].DataOffset + Cached[I].Size) then
+          raise EResPackCorrupted.CreateStep(5, 'data sections overlap');
+      end;
+  end
+  else
+  begin
+    StrTabEnd := Result.FStrTabBase;
+    MaxDataEnd := 0;
   end;
 
   { 步骤 6+7：路径范围 + 有序性 + 规范语法 — 复用缓存零 Decode
     （MinData 已在步骤 5 推导完成；步骤 6 优先于 7，错误码保持与分步一致）
     FORMAT step6: FStrTabBase+PathOffset+PathLen <= MinData；推导边界需防 MinData<FStrTabBase 下溢 }
-  StrLen := 0;
   if Result.Count > 0 then
   begin
-    { F-CRIT-01: MinData<FStrTabBase 导致 MinData-FStrTabBase 回绕，需显式拒绝 }
-    if MinData < Result.FStrTabBase then
-      raise EResPackCorrupted.CreateStep(6, 'string table bound underflow');
     for I := 0 to Result.Count - 1 do
     begin
       E := Cached[I];
-      { 累积 string table 总长（CheckedAdd 思想，防回绕） }
-      if StrLen > High(UInt64) - UInt64(E.PathLen) then
-        raise EResPackCorrupted.CreateStep(6, 'string table length overflow');
-      StrLen := StrLen + UInt64(E.PathLen);
       { F-CRIT-01/F-HIGH-02: 路径上界显式用 BlobTotal + CheckedAdd 防回绕 }
       PathEnd := UInt64(E.PathOffset) + UInt64(E.PathLen);
       if PathEnd < UInt64(E.PathOffset) then
@@ -275,7 +307,7 @@ begin
   { 步骤 8：digest 区范围 — FORMAT step8: digest 必须位于 string table 对齐后且不与数据区间相交 }
   if (Result.FHdr.Flags and RESPACK_FLAG_DIGESTED) <> 0 then
   begin
-    { F-CRIT-01: AlignUp(FStrTabBase+StrLen,4) <= DigestOffset 且区间相交判定替代 DigestOffset<MinData }
+    { F-CRIT-01: AlignUp(FStrTabBase+StrLen,4) <= DigestOffset }
     if Result.FStrTabBase > High(UInt64) - StrLen then
       raise EResPackCorrupted.CreateStep(8, 'digest string table overflow');
     AlignedStrEnd := Result.FStrTabBase + StrLen;
@@ -292,14 +324,10 @@ begin
       raise EResPackCorrupted.CreateStep(8, 'digest range overflow');
     if DigEnd > Result.FHdr.BlobTotal then
       raise EResPackCorrupted.CreateStep(8, 'digest out of range');
-    { 区间相交：digest [DigestOffset,DigEnd) vs 每个 data [DataOffset,DataOffset+Size) }
-    for I := 0 to Result.Count - 1 do
-    begin
-      E := Cached[I];
-      if E.Size = 0 then Continue;
-      if (E.DataOffset < DigEnd) and (Result.FHdr.DigestOffset < E.DataOffset + E.Size) then
-        raise EResPackCorrupted.CreateStep(8, 'digest overlaps data section');
-    end;
+    if MaxDataEnd > High(UInt64) - 3 then
+      raise EResPackCorrupted.CreateStep(8, 'digest alignment overflow');
+    if Result.FHdr.DigestOffset < ((MaxDataEnd + 3) and not UInt64(3)) then
+      raise EResPackCorrupted.CreateStep(8, 'digest overlaps data');
     Result.FDigests := AData + SizeUInt(Result.FHdr.DigestOffset);
   end;
   SetLength(Cached, 0);

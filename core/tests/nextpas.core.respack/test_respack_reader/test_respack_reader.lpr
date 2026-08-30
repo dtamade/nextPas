@@ -400,6 +400,34 @@ begin
   end;
 end;
 
+procedure CorruptDataOverlapsIndex;
+var
+  B: TResPackBlob;
+begin
+  BuildBase(B);
+  try
+    WrU64LE(B.Data + RESPACK_HEADER_SIZE + 8, 80);
+    ResPackOpen(B.Data, B.Size);
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
+procedure CorruptDigestOverlapsData;
+var
+  B: TResPackBlob;
+  DataOff: UInt64;
+begin
+  BuildDigestBase(B);
+  try
+    DataOff := RdU64LE(B.Data + RESPACK_HEADER_SIZE + 8);
+    WrU64LE(B.Data + 24, DataOff);
+    ResPackOpen(B.Data, B.Size);
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 procedure CorruptHeaderHashedMismatch;
 var
   B: TResPackBlob;
@@ -630,6 +658,16 @@ begin
   ExpectCorrupt(@CorruptDigestOutOfRange, 'step8 digest out of range');
 end;
 
+procedure WStep5DataOverlapsIndex;
+begin
+  ExpectCorruptStep(@CorruptDataOverlapsIndex, 'step5 data overlaps index', 5);
+end;
+
+procedure WStep8DigestOverlapsData;
+begin
+  ExpectCorruptStep(@CorruptDigestOverlapsData, 'step8 digest overlaps data', 8);
+end;
+
 procedure WStep5HeaderHashedMismatch;
 begin
   try
@@ -669,6 +707,9 @@ begin
   T.Test('step7 unsorted/duplicate index', @WStep7UnsortedIndex);
   T.Test('step7 non-canonical stored path', @WStep7NonCanonicalStored);
   T.Test('step8 digest out of range', @WStep8DigestOutOfRange);
+  T.Test('step5 data overlaps index (DataOffset=80)', @WStep5DataOverlapsIndex);
+  T.Test('step8 digest overlaps data', @WStep8DigestOverlapsData);
+  T.Test('step5 header HASHED inconsistent', @WStep5HeaderHashedMismatch);
   T.Test('BE header explicit LE roundtrip', @TestBEHeaderRoundTrip);
   T.Test('BE entry explicit LE roundtrip', @TestBEEntryRoundTrip);
   if not T.Run then Halt(1);

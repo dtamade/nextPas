@@ -33,12 +33,13 @@ uses
 const
   GZIP_HEADER_FIELD_MAX_SIZE = 65536;
   GZIP_HDR: array[0..9] of Byte = (
-    $1F, $8B, $08, $00,
+    GZIP_MAGIC_1, GZIP_MAGIC_2, $08, $00,
     $00, $00, $00, $00,
     $00, $FF
   );
 
 type
+  TGzipMagic = array[0..1] of Byte;
   TGzipWriter = class(TInterfacedObject, IWriter, ICompressWriter)
   private
     FDst: IWriter;
@@ -96,6 +97,19 @@ type
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Close;
   end;
+
+function IsGzipMagic(const Hdr: TGzipMagic): Boolean; inline;
+begin
+  Result := (Hdr[0] = GZIP_MAGIC_1) and (Hdr[1] = GZIP_MAGIC_2);
+end;
+
+function IsGzipMagic(const AFirst, ASecond: Byte): Boolean; inline; overload;
+var LHdr: TGzipMagic;
+begin
+  LHdr[0] := AFirst;
+  LHdr[1] := ASecond;
+  Result := IsGzipMagic(LHdr);
+end;
 
 procedure GzipReadExact(const ASrc: IReader; var ABuf; const ACount: SizeUInt;
   const AErrorMessage: string);
@@ -401,7 +415,7 @@ begin
   LHdr[0] := AFirst;
   LHdr[1] := ASecond;
   ReadHeaderExact(LHdr[2], 8, AFixedHeaderError);
-  if (LHdr[0] <> $1F) or (LHdr[1] <> $8B) then
+  if not IsGzipMagic(LHdr[0], LHdr[1]) then
     raise EIOError.Create('gzip: invalid magic');
   if LHdr[2] <> $08 then
     raise EIOError.Create('gzip: unsupported method');
