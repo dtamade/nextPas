@@ -19,7 +19,13 @@ uses
   nextpas.core.test;
 
 { anthropic 适配器语义（WIRE-MAPPINGS §2 全表 + Q-A1..A8；TESTING §3
-  test_provider_anthropic 行）：编码快照、解码归约、流帧 FSM、端到端装配 }
+  test_provider_anthropic 行）：编码快照、解码归约、流帧 FSM、端到端装配
+  边界/Cancel/超时/并发：
+  - Cancel 边界：TestProviderHonorsCancellationAtBoundary 验证预取消 token 在入口即抛 aecCancelled，未触网。
+  - 超时边界：Connect/Total 超时由 transport 代理，超窗归因 aecTimeout 已覆盖。
+  - 并发边界：WireDecoder 状态机单线程，Finalize 对未宣告分片执行 FlushUnannounced（F-M02 已注），无并发写。
+  悬挂指针：TAnthropicWireDecoder 持有 FPool 槽位与字符串托管，无裸指针跨消息；Message/Part 均为托管 record。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；Q-A8 截断 fail-closed 在 Finalize 抛 aecProtocol，不泄漏 partial_json 缓冲。 }
 
 function WSpec(const N, D, P: string): TToolSpec;
 begin
@@ -917,10 +923,10 @@ begin
   try
     C.GetMessage;
   except
-    on E: EAgentMisuse do
-      Misuse := True;
+    on E: EAgentError do
+      Misuse := (E.ErrorCode = aecProtocol) and (Pos('completion not drained', E.Message) > 0);
   end;
-  Check(Misuse, 'GetMessage before EOF misuse');
+  Check(Misuse, 'GetMessage before EOF misuse (F-H20: aecProtocol)');
 
   Text := '';
   while C.NextDelta(D) do

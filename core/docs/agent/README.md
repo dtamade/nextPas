@@ -104,6 +104,7 @@ if LProvider = nil then
 | 文档 | 角色 |
 |------|------|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 分层、单元清单、数据流、并发/取消/内存所有权模型 |
+| [`PROMPT-BUDGET.md`](PROMPT-BUDGET.md) | **Phase4 有界预算**：系统提示合并去重 + 加权 token 估算 + 簇安全截断管线（6000 B 预算、pricing 联动、grapheme 对齐） |
 | [`SESSION.md`](SESSION.md) | **W5 会话存储设计权威**：JSONL schema、崩溃恢复、fsync 节奏、Fork 语义 |
 | [`API.md`](API.md) | **公开 API 契约权威**：全部类型/接口签名与语义 |
 | [`WIRE-MAPPINGS.md`](WIRE-MAPPINGS.md) | 各厂商线级协议映射真相源（含怪癖清单） |
@@ -115,6 +116,7 @@ if LProvider = nil then
 | [`SECURITY.md`](SECURITY.md) | 密钥流转、脱敏等级、DoS 防线、fail-closed 清单 |
 | [`PERFORMANCE.md`](PERFORMANCE.md) | 热路径复杂度契约、缓冲预算、分配口径 |
 | [`TESTING.md`](TESTING.md) | 测试 gate 清单、离线纪律、基准计划 |
+| [`CHANGELOG-AGENT.md`](CHANGELOG-AGENT.md) | 面向 registry 的落地版本记录（仅 agent family） |
 | [`ROADMAP.md`](ROADMAP.md) | 实施波次与出口证据 |
 
 ## 非目标（v1）

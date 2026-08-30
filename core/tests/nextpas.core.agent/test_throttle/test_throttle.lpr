@@ -16,7 +16,13 @@ uses
   有票直通零等待、拒绝后按 gate 建议睡（fake clock 零真实睡眠）、
   建议未指明走轮询步长、累计等待超窗/重取次数封顶→本地 aecRateLimited
   （'throttled: ' 前缀归因分离，RetryAfterMs 保真）、取消打断等待、
-  NewTokenBucketGate 真桶突发语义。全程离线零真实睡眠 }
+  NewTokenBucketGate 真桶突发语义。全程离线零真实睡眠
+  边界/Cancel/超时/并发：
+  - Cancel 边界：TestCancelInterruptsWait 验证等待期内 Tok.Cancel 立即以 EAgentCancelled 收场，SleepMs 返回 False 可取消穿透。
+  - 超时边界：MaxWaitMs 零预算先 OnWait(1,25) 再判超窗（F-L08 已注），RetryAfterMs 0 不误导；MaxAcquires 封顶已覆盖。
+  - 并发边界：TokenBucketGate 经 lockfree.ratelimit 原子配额，单测中单线程序但生产并发安全。
+  悬挂指针：FakeGate/Clock 均接口/对象持有，_gate.TryAcquire 无锁读，无裸指针跨用例。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；等待期分配的定时器资源在取消路径释放。 }
 
 type
   { 脚本化 gate：按队首建议值拒绝 N 次后恒放行；或进入粘滞恒拒模式 }
@@ -329,6 +335,47 @@ begin
   Check(S = 0, 'bucket adapter suggests unknown (0)');
 end;
 
+{ F-L08 零预算：MaxWaitMs=0 时拒绝应直接本地 aecRateLimited，RetryAfterMs=0 且不先 OnWait 误导（25ms 兜底不触发）}
+procedure TestZeroBudgetNoOnWaitMislead;
+var
+  G: TFakeGate;
+  C: TFakeClock;
+  P: TStubProvider;
+  Pol: TThrottlePolicy;
+  Got: Boolean;
+  WaitFired: Boolean;
+begin
+  ResetObs;
+  G := TFakeGate.Create;
+  G.RejectNext(0); // 未指明 -> 兜底 25ms
+  C := TFakeClock.Create;
+  P := TStubProvider.Create;
+  Pol := TThrottlePolicy.Default;
+  Pol.MaxWaitMs := 0;
+  WaitFired := False;
+  Pol.OnWait :=
+    procedure(AWaitNo: Integer; ANextRetryAfterMs: Int64)
+    begin
+      WaitFired := True;
+      RecordWait(AWaitNo, ANextRetryAfterMs);
+    end;
+  Got := False;
+  try
+    NewThrottledProvider(P, G, C, Pol).Complete(Req);
+  except
+    on E: EAgentError do
+    begin
+      Got := (E.ErrorCode = aecRateLimited) and (E.RetryAfterMs = 0);
+      Check(E.ErrorCode = aecRateLimited, 'zero budget local rate limited');
+      Check(E.RetryAfterMs = 0, 'zero budget RetryAfterMs=0 not 25');
+      Check(Pos('throttled:', E.Message) = 1, 'prefix');
+    end;
+  end;
+  Check(Got, 'zero budget raised with RetryAfter 0');
+  Check(not WaitFired, 'zero budget must not fire OnWait (no mislead)');
+  Check(P.Calls = 0, 'never reaches inner');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -341,5 +388,6 @@ begin
   T.Test('max acquires cap', @TestMaxAcquiresCap);
   T.Test('cancel interrupts wait', @TestCancelInterruptsWait);
   T.Test('token bucket gate burst two', @TestTokenBucketGateBurstTwo);
+  T.Test('zero budget no onwait mislead', @TestZeroBudgetNoOnWaitMislead);
   if not T.Run then Halt(1);
 end.
