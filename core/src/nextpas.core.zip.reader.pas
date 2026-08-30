@@ -24,7 +24,8 @@ uses
   nextpas.core.base,
   nextpas.core.compress.intf,
   nextpas.core.io.intf,
-  nextpas.core.zip.base;
+  nextpas.core.zip.base,
+  nextpas.core.zip.limits;
 
 type
   TZipReadOptions = nextpas.core.zip.base.TZipReadOptions;
@@ -58,8 +59,8 @@ type
   end;
 
 const
-  C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_OUTPUT;
-  C_ZIP_DEFAULT_MAX_DESCRIPTOR = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_DESCRIPTOR;
+  C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.limits.C_ZIP_DEFAULT_MAX_OUTPUT;
+  C_ZIP_DEFAULT_MAX_DESCRIPTOR = nextpas.core.zip.limits.C_ZIP_DEFAULT_MAX_DESCRIPTOR;
 
 function DefaultZipReadOptions: TZipReadOptions; inline;
 
@@ -104,8 +105,8 @@ type
   private
     FData: TBytes;
     FC: IByteCursor;
-    FEntries: array of TZipEntryInfo;
-    FFlags: array of Word;
+    FEntries: TZipEntryInfoArray;
+    FFlags: TZipFlagArray;
     FMaxOutputSize: SizeUInt;
     FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
@@ -190,8 +191,8 @@ type
     FSrc: IStream;              { 保活源对象 }
     FAt: IReaderAt;             { 同一对象的定位读面 }
     FSize: Int64;               { 源总长（构造时缓存） }
-    FEntries: array of TZipEntryInfo;
-    FFlags: array of Word;
+    FEntries: TZipEntryInfoArray;
+    FFlags: TZipFlagArray;
     FMaxOutputSize: SizeUInt;
     FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
@@ -307,112 +308,7 @@ end;
 
 { ---- 内存 / 可定位流两种读器共用的解析与校验路径 ---- }
 
-{ 区间 [APos, APos+ALen) 必须落在 AC 缓冲内，否则结构视为截断损坏 }
-procedure NeedRangeIn(const AC: IByteCursor; APos, ALen: Int64;
-  const AWhat: string);
-begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(AC.Length)) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
-end;
-
-{ 解析单个 central 条目（游标须已对齐签名处，签名由调用方校验并消费）：
-  固定字段、文件名、extra 链（0x0001 内顺序固定：原始尺寸、压缩尺寸、
-  本地头偏移）、注释跳过 }
-procedure ParseCentralEntry(var AC: IByteCursor; out AE: TZipEntryInfo;
-  out AFlags: Word);
-var
-  LMethodCode, LNameLen, LExtraLen, LCommentFieldLen: Word;
-  LDosTime, LDosDate: Word;
-  LCrc, LExtAttrs: LongWord;
-  LCSize, LUSize, LLho: UInt64;
-  LNamePtr, LExtraPtr: PByte;
-  LAesVersion, LAesVendor, LAesRealMethod: Word;
-  LAesStrength: Byte;
-  LHasAes: Boolean;
-begin
-  AC.ReadU16LE;                              { version made by }
-  AC.ReadU16LE;                              { version needed }
-  AFlags := AC.ReadU16LE;
-  LMethodCode := AC.ReadU16LE;
-  LDosTime := AC.ReadU16LE;
-  LDosDate := AC.ReadU16LE;
-  LCrc := AC.ReadU32LE;
-  LCSize := AC.ReadU32LE;
-  LUSize := AC.ReadU32LE;
-  LNameLen := AC.ReadU16LE;
-  LExtraLen := AC.ReadU16LE;
-  LCommentFieldLen := AC.ReadU16LE;
-  AC.ReadU16LE;                              { disk number start }
-  AC.ReadU16LE;                              { internal attrs }
-  LExtAttrs := AC.ReadU32LE;
-  LLho := AC.ReadU32LE;
-
-  NeedRangeIn(AC, Int64(AC.Position),
-    Int64(LNameLen) + LExtraLen + LCommentFieldLen, 'central entry body');
-
-  LNamePtr := nil;
-  if LNameLen > 0 then
-    LNamePtr := AC.ReadSpan(LNameLen);
-
-  LExtraPtr := nil;
-  if LExtraLen > 0 then
-    LExtraPtr := AC.ReadSpan(LExtraLen);
-  DecodeCentralExtraBuf(LExtraPtr, SizeUInt(LExtraLen), LUSize, LCSize, LLho,
-    LHasAes, LAesVersion, LAesVendor, LAesRealMethod, LAesStrength);
-  if (LUSize = UInt64($FFFFFFFF)) or (LCSize = UInt64($FFFFFFFF)) or
-     (LLho = UInt64($FFFFFFFF)) then
-    raise EParseError.Create('zip: missing Zip64 extra field');
-  AC.Seek(AC.Position + SizeUInt(LCommentFieldLen));
-
-  AE.Name := '';
-  if LNameLen > 0 then
-  begin
-    SetLength(AE.Name, LNameLen);
-    Move(LNamePtr^, PChar(AE.Name)^, SizeUInt(LNameLen));
-  end;
-
-  { 加密条目：wire 方法 99，真实压缩方法与强度取自 0x9901 extra。
-    AE-2 头部 CRC 恒为 0（写端契约）；AE-1 保留真实 CRC 走常规校验 }
-  AE.IsEncrypted := (AFlags and C_ZIP_FLAG_ENCRYPTED) <> 0;
-  AE.AesVersion := 0;
-  AE.AesStrengthCode := 0;
-  if LMethodCode = C_ZIP_METHOD_WINZIP_AES then
-  begin
-    if not AE.IsEncrypted then
-      raise EParseError.Create(
-        'zip: method 99 without encryption flag: ' + AE.Name);
-    if not LHasAes then
-      raise EParseError.Create(
-        'zip: missing WinZip AES extra field: ' + AE.Name);
-    if (LAesVersion <> C_WINZIP_AES_VERSION_1) and
-       (LAesVersion <> C_WINZIP_AES_VERSION_2) then
-      raise ENotSupportedError.CreateFmt(
-        'zip: unsupported WinZip AES version %d: %s',
-        [LAesVersion, AE.Name]);
-    if (LAesStrength < 1) or (LAesStrength > 3) then
-      raise EParseError.Create('zip: invalid WinZip AES strength code');
-    AE.AesVersion := LAesVersion;
-    AE.AesStrengthCode := LAesStrength;
-    LMethodCode := LAesRealMethod;
-  end;
-
-  if LMethodCode = C_ZIP_METHOD_DEFLATE then
-    AE.Method := zmDeflate
-  else
-    AE.Method := zmStore;
-  AE.MethodCode := LMethodCode;
-  AE.Crc32 := LCrc;
-  AE.CompressedSize := LCSize;
-  AE.UncompressedSize := LUSize;
-  AE.ModTimeUnixSec := UnixFromDosDateTime(LDosDate, LDosTime);
-  AE.LocalHeaderOffset := LLho;
-  AE.IsDirectory :=
-    ((LNameLen > 0) and (LNamePtr[LNameLen - 1] = Ord('/'))) or
-    (((LExtAttrs shr 16) and $F000) = $4000);
-  AE.ExternalAttrs := LExtAttrs;
-  AE.IsSymlink :=
-    ((LExtAttrs shr 16) and $F000) = C_ZIP_UNIX_MODE_SYMLINK;
-end;
+{ 解析与校验路径已收敛至 nextpas.core.zip.common 单点（NeedRangeIn/ParseCentralEntry/ZipParseCentralEntries） }
 
 function DefaultZipReadOptions: TZipReadOptions;
 begin
@@ -484,6 +380,7 @@ var
   LDiskNum, LCdStartDisk, LCount16, LCommentLen: Word;
   LCount: Int64;
   LCdSize, LCdOffset, LZ64EocdOffset: UInt64;
+  LCDBuf: TBytes;
 begin
   if FC.Length < C_EOCD_MIN_LEN then
     raise EParseError.Create('zip: truncated archive');
@@ -553,22 +450,17 @@ begin
      (Int64(LCdOffset) + Int64(LCdSize) > Int64(FC.Length)) then
     raise EParseError.Create('zip: central directory out of bounds');
 
-  { 条目数已知：一次性分配，避免逐条目扩容 }
-  if LCount > High(Integer) - 1 then
-    raise EParseError.Create('zip: entry count out of range');
-  SetLength(FEntries, LCount);
-  SetLength(FFlags, LCount);
-
-  FC.Seek(SizeUInt(LCdOffset));
-  for LI := 0 to LCount - 1 do
+  if LCdSize > UInt64(High(SizeInt)) then
+    raise EParseError.Create('zip: central directory size exceeds SizeInt');
+  if LCdSize > 0 then
   begin
-    NeedRange(Int64(FC.Position), C_CENTRAL_HEADER_LEN, 'central header');
-    if FC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
-      raise EParseError.Create('zip: bad central header signature at ' +
-        IntToStr(Int64(FC.Position) - 4));
-    ParseCentralEntry(FC, FEntries[LI], FFlags[LI]);
-  end;
-  GuardTotalOutputSize(FEntries, FMaxTotalOutputSize);
+    if LCdOffset > UInt64(High(Int64)) then
+      raise EParseError.Create('zip: central directory offset out of range');
+    LCDBuf := Copy(FData, Int64(LCdOffset), Int64(LCdSize));
+  end
+  else
+    LCDBuf := nil;
+  ZipParseCentralEntries(LCDBuf, LCdOffset, LCount, FMaxTotalOutputSize, FEntries, FFlags);
 end;
 
 function TZipReaderImpl.CheckIndex(AIndex: Integer): Integer;
@@ -906,23 +798,8 @@ begin
      (Int64(LCdOffset) + Int64(LCdSize) > FSize) then
     raise EParseError.Create('zip: central directory out of bounds');
 
-  { 条目数已知：一次性分配，避免逐条目扩容 }
-  if LCount > High(Integer) - 1 then
-    raise EParseError.Create('zip: entry count out of range');
-  SetLength(FEntries, LCount);
-  SetLength(FFlags, LCount);
-
   Fetch(Int64(LCdOffset), SizeUInt(LCdSize), LCDBuf, 'central directory');
-  LC := NewByteCursor(LCDBuf);
-  for LI := 0 to LCount - 1 do
-  begin
-    NeedRangeIn(LC, Int64(LC.Position), C_CENTRAL_HEADER_LEN, 'central header');
-    if LC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
-      raise EParseError.Create('zip: bad central header signature at ' +
-        IntToStr(Int64(LCdOffset) + Int64(LC.Position) - 4));
-    ParseCentralEntry(LC, FEntries[LI], FFlags[LI]);
-  end;
-  GuardTotalOutputSize(FEntries, FMaxTotalOutputSize);
+  ZipParseCentralEntries(LCDBuf, LCdOffset, LCount, FMaxTotalOutputSize, FEntries, FFlags);
 end;
 
 function TZipSourceReader.CheckIndex(AIndex: Integer): Integer;

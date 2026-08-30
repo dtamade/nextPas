@@ -9,7 +9,8 @@ unit nextpas.core.zip.base;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.zip.limits;
 
 type
   {** @desc 条目压缩方法（central/local 的 method 字段已知子集） *}
@@ -35,6 +36,8 @@ type
     AesVersion: Word;            { WinZip AES 版本：0=非 AES 条目，1=AE-1，2=AE-2 }
     AesStrengthCode: Byte;       { WinZip AES 强度码：1/2/3 = AES-128/192/256 }
   end;
+  TZipEntryInfoArray = array of TZipEntryInfo;
+  TZipFlagArray = array of Word;
 
 const
   { 结构签名 }
@@ -82,9 +85,9 @@ const
   { unix 文件类型位（外部属性高字内） }
   C_ZIP_UNIX_MODE_SYMLINK = $A000;
 
-  { 单条目解压默认上限与描述符扫描缓冲上限 }
-  C_ZIP_DEFAULT_MAX_OUTPUT     = SizeUInt(1) shl 30;
-  C_ZIP_DEFAULT_MAX_DESCRIPTOR = SizeUInt(512) * 1024 * 1024;
+  { 单条目解压默认上限与描述符扫描缓冲上限（单源：zip.limits） }
+  C_ZIP_DEFAULT_MAX_OUTPUT     = nextpas.core.zip.limits.C_ZIP_DEFAULT_MAX_OUTPUT;
+  C_ZIP_DEFAULT_MAX_DESCRIPTOR = nextpas.core.zip.limits.C_ZIP_DEFAULT_MAX_DESCRIPTOR;
 
 type
   {** 读选项：MaxOutputSize 为单条目上限（0=默认1GiB），MaxTotalOutputSize 跨条目总量，MaxDescriptorBuffer 描述符扫描上限，Password 为 AES 口令 *}

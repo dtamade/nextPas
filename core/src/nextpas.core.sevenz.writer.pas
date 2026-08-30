@@ -987,14 +987,34 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       ACrc := UInt32(LCrc);
     end;
 
+  function CheckedAddU64(A, B: UInt64): UInt64; inline;
+  begin
+    if B > High(UInt64) - A then
+      raise ESevenZLimitError.Create('sevenz: size accumulation overflow');
+    Result := A + B;
+    if Result > UInt64(High(Int64)) then
+      raise ESevenZLimitError.Create('sevenz: size exceeds High(Int64)');
+  end;
+
+  procedure GuardAllocSize(ABytes: UInt64; ALimit: UInt64; const AWhat: string); inline;
+  begin
+    if ABytes > ALimit then
+      raise ESevenZLimitError.CreateFmt('sevenz: %s %d exceeds limit %d', [AWhat, ABytes, ALimit]);
+    if ABytes > UInt64(High(SizeInt)) then
+      raise ESevenZLimitError.CreateFmt('sevenz: %s %d exceeds SizeInt', [AWhat, ABytes]);
+  end;
+
   var
     LFolders: array of TFolderBuild;
     LNonEmpty: SizeInt;
     LNonEmptyIdx: array of SizeInt;
-    LGroupBytes, LGroupCount: SizeInt;
-    LFolderIdx, LI, LJ, LK: SizeInt;
+    LGroupBytes: UInt64;
+    LGroupCount: SizeInt;
+    LFolderIdx, LI, LJ: SizeInt;
+    LK: UInt64;
     LAcc: SizeInt;
-    LCursor: SizeInt;
+    LAccBytes: UInt64;
+    LCursor: UInt64;
     LBatchStart, LBatchSize: SizeInt;
     LStartHdrCrc: UInt32;
     LPlainHeader: TBytes;
@@ -1022,9 +1042,11 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       for LI := 0 to LNonEmpty - 1 do
       begin
         LJ := LNonEmptyIdx[LI];
-        LK := SizeInt(EntrySize(FEntries[LJ]));
+        LK := EntrySize(FEntries[LJ]);
+        if LK > UInt64(High(Int64)) then
+          raise ESevenZLimitError.Create('sevenz: entry size exceeds High(Int64)');
         if (LGroupCount > 0) and
-           (((FMaxFolderBytes > 0) and (UInt64(LGroupBytes + LK) > FMaxFolderBytes)) or
+           (((FMaxFolderBytes > 0) and (CheckedAddU64(LGroupBytes, LK) > FMaxFolderBytes)) or
             ((FMaxFilesPerFolder > 0) and (LGroupCount + 1 > FMaxFilesPerFolder))) then
         begin
           SetLength(LFolders, Length(LFolders) + 1);
@@ -1032,7 +1054,8 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
           LGroupBytes := 0;
           LGroupCount := 0;
         end;
-        Inc(LGroupBytes, LK);
+        LGroupBytes := CheckedAddU64(LGroupBytes, LK);
+        GuardAllocSize(LGroupBytes, SEVENZ_DEFAULT_MAX_OUTPUT, 'folder bytes');
         Inc(LGroupCount);
       end;
       if LGroupCount > 0 then
@@ -1044,44 +1067,49 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       LAcc := 0;
       for LFolderIdx := 0 to High(LFolders) do
       begin
-        LK := SizeInt(LFolders[LFolderIdx].SubCount);
-        SetLength(LFolders[LFolderIdx].SubSizes, LK);
-        SetLength(LFolders[LFolderIdx].SubCrcs, LK);
+        LK := LFolders[LFolderIdx].SubCount;
+        if LK > UInt64(High(SizeInt)) then
+          raise ESevenZLimitError.Create('sevenz: subcount exceeds SizeInt');
+        SetLength(LFolders[LFolderIdx].SubSizes, SizeInt(LK));
+        SetLength(LFolders[LFolderIdx].SubCrcs, SizeInt(LK));
         LGroupBytes := 0;
-        for LJ := 0 to LK - 1 do
+        for LJ := 0 to SizeInt(LK) - 1 do
         begin
           LI := LNonEmptyIdx[LAcc + LJ];
           LFolders[LFolderIdx].SubSizes[LJ] := EntrySize(FEntries[LI]);
-          Inc(LGroupBytes, SizeInt(EntrySize(FEntries[LI])));
+          LGroupBytes := CheckedAddU64(LGroupBytes, EntrySize(FEntries[LI]));
         end;
-        SetLength(LFolders[LFolderIdx].RawSolid, LGroupBytes);
+        GuardAllocSize(LGroupBytes, SEVENZ_DEFAULT_MAX_OUTPUT, 'folder bytes');
+        SetLength(LFolders[LFolderIdx].RawSolid, SizeInt(LGroupBytes));
         LCursor := 0;
-        for LJ := 0 to LK - 1 do
+        for LJ := 0 to SizeInt(LK) - 1 do
         begin
           LI := LNonEmptyIdx[LAcc + LJ];
           if EntrySize(FEntries[LI]) > 0 then
           begin
+            if EntrySize(FEntries[LI]) > UInt64(High(SizeInt)) then
+              raise ESevenZLimitError.Create('sevenz: entry size exceeds SizeInt');
             { 单遍 Move+CRC：分块搬运并增量更新 CRC，避免对同一数据二次扫描 }
             if FEntries[LI].Source = esReader then
             begin
               LFolders[LFolderIdx].SubCrcs[LJ] :=
                 ReadFullyWithCrc(FEntries[LI].Reader,
-                  LFolders[LFolderIdx].RawSolid[LCursor],
+                  LFolders[LFolderIdx].RawSolid[SizeInt(LCursor)],
                   SizeUInt(EntrySize(FEntries[LI])));
             end
             else
             begin
               MoveWithCrc(FEntries[LI].Data[0],
-                LFolders[LFolderIdx].RawSolid[LCursor],
+                LFolders[LFolderIdx].RawSolid[SizeInt(LCursor)],
                 SizeUInt(EntrySize(FEntries[LI])),
                 LFolders[LFolderIdx].SubCrcs[LJ]);
             end;
-            Inc(LCursor, SizeInt(EntrySize(FEntries[LI])));
+            LCursor := CheckedAddU64(LCursor, EntrySize(FEntries[LI]));
           end
           else
             LFolders[LFolderIdx].SubCrcs[LJ] := 0;
         end;
-        Inc(LAcc, LK);
+        Inc(LAcc, SizeInt(LK));
       end;
       { 逐 folder 执行过滤链与压缩，产出 Packed 与 Specs
           零过滤器时零拷贝直连 RawSolid，避免 Solid 整体二次搬运。
@@ -1134,17 +1162,20 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
           LFolders[LFolderIdx].Specs[High(LFolders[LFolderIdx].Specs)] := MakeAesSpec(LFolders[LFolderIdx].PackedData);
         end;
       { 拼接全部 pack 流为连续载荷 }
-      LAcc := 0;
+      LAccBytes := 0;
       for LFolderIdx := 0 to High(LFolders) do
-        Inc(LAcc, Length(LFolders[LFolderIdx].PackedData));
-      SetLength(APacked, LAcc);
+        LAccBytes := CheckedAddU64(LAccBytes, UInt64(Length(LFolders[LFolderIdx].PackedData)));
+      GuardAllocSize(LAccBytes, SEVENZ_DEFAULT_MAX_OUTPUT, 'pack total');
+      SetLength(APacked, SizeInt(LAccBytes));
       LCursor := 0;
       for LFolderIdx := 0 to High(LFolders) do
         if Length(LFolders[LFolderIdx].PackedData) > 0 then
         begin
-          Move(LFolders[LFolderIdx].PackedData[0], APacked[LCursor],
+          if LCursor + UInt64(Length(LFolders[LFolderIdx].PackedData)) > UInt64(High(SizeInt)) then
+            raise ESevenZLimitError.Create('sevenz: pack cursor overflow');
+          Move(LFolders[LFolderIdx].PackedData[0], APacked[SizeInt(LCursor)],
             Length(LFolders[LFolderIdx].PackedData));
-          Inc(LCursor, Length(LFolders[LFolderIdx].PackedData));
+          LCursor := CheckedAddU64(LCursor, UInt64(Length(LFolders[LFolderIdx].PackedData)));
         end;
     end
     else

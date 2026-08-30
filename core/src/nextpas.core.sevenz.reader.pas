@@ -475,15 +475,23 @@ begin
 end;
 
 procedure TSevenZReaderImpl.AssembleEntries;
+  function CheckedAddU64(A, B: UInt64): UInt64; inline;
+  begin
+    if B > High(UInt64) - A then
+      raise ESevenZLimitError.Create('sevenz: size accumulation overflow');
+    Result := A + B;
+    if Result > UInt64(High(Int64)) then
+      raise ESevenZLimitError.Create('sevenz: size exceeds High(Int64)');
+  end;
 var
   LN: SizeInt;
   LI: SizeInt;
   LJ: SizeInt;
   LE: TSevenZEntryInfo;
   LSubCursor: SizeInt;
-  LByteAcc: SizeInt;
-  LBaseAcc: SizeInt;
-  LAcc: SizeInt;
+  LByteAcc: UInt64;
+  LBaseAcc: UInt64;
+  LAcc: UInt64;
   LFolderScan: Integer;
 begin
   LN := Length(FRawFiles.Names);
@@ -507,7 +515,7 @@ begin
   for LI := 0 to High(FStreams.Folders) do
   begin
     FPackStartOfFolder[LI] := LJ;
-    FPackOffsetOfFolder[LI] := FStreams.Pack.PackPos + UInt64(LAcc);
+    FPackOffsetOfFolder[LI] := CheckedAddU64(FStreams.Pack.PackPos, LAcc);
     while LJ < Length(FStreams.Pack.Sizes) do
     begin
       if Length(FStreams.Folders[LI].PackedInIndices) = 0 then
@@ -515,26 +523,37 @@ begin
       if LJ >= FPackStartOfFolder[LI] +
          Length(FStreams.Folders[LI].PackedInIndices) then
         Break;
-      LAcc := LAcc + SizeInt(FStreams.Pack.Sizes[LJ]);
+      if FStreams.Pack.Sizes[LJ] > UInt64(High(Int64)) then
+        raise ESevenZLimitError.Create('pack stream size exceeds High(Int64)');
+      LAcc := CheckedAddU64(LAcc, FStreams.Pack.Sizes[LJ]);
+      if LAcc > C_DEFAULT_MAX_OUTPUT then
+        raise ESevenZLimitError.CreateFmt(
+          'pack total %d exceeds limit %d', [LAcc, C_DEFAULT_MAX_OUTPUT]);
+      if LAcc > UInt64(High(SizeInt)) then
+        raise ESevenZLimitError.Create('pack total exceeds SizeInt');
       Inc(LJ);
     end;
   end;
   if LJ <> Length(FStreams.Pack.Sizes) then
     raise ESevenZError.Create('pack stream assignment mismatch');
-  if UInt64(LAcc) > C_DEFAULT_MAX_OUTPUT then
-    raise ESevenZLimitError.CreateFmt(
-      'pack total %d exceeds limit %d', [UInt64(LAcc), C_DEFAULT_MAX_OUTPUT]);
   for LI := 0 to High(FStreams.Pack.Sizes) do
+  begin
     if FStreams.Pack.Sizes[LI] > C_MAX_HEADER_SIZE then
       raise ESevenZLimitError.CreateFmt(
-        'pack stream %d size %d exceeds limit', [LI, FStreams.Pack.Sizes[LI]]);
+        'pack stream %d size %d exceeds 64MiB', [LI, FStreams.Pack.Sizes[LI]]);
+    if FStreams.Pack.Sizes[LI] > C_DEFAULT_MAX_OUTPUT then
+      raise ESevenZLimitError.CreateFmt(
+        'pack stream %d size %d exceeds 8GiB', [LI, FStreams.Pack.Sizes[LI]]);
+  end;
   { 子流基址前缀和：folder -> 全局子流基址，O(1) 定位条目窗口 }
   SetLength(FSubBaseOfFolder, Length(FStreams.Folders));
   LBaseAcc := 0;
   for LI := 0 to High(FStreams.Folders) do
   begin
-    FSubBaseOfFolder[LI] := LBaseAcc;
-    Inc(LBaseAcc, SizeInt(FStreams.SubCounts[LI]));
+    if FStreams.SubCounts[LI] > UInt64(High(SizeInt)) then
+      raise ESevenZLimitError.Create('subcount exceeds SizeInt');
+    FSubBaseOfFolder[LI] := SizeInt(LBaseAcc);
+    LBaseAcc := CheckedAddU64(LBaseAcc, FStreams.SubCounts[LI]);
   end;
   { 条目装配：非空条目按顺序消费子流 }
   LSubCursor := 0;
@@ -578,22 +597,26 @@ begin
     begin
       LE.Kind := sekFile;
       while (LFolderScan < Length(FStreams.SubCounts)) and
-            ((FSubBaseOfFolder[LFolderScan] +
-              SizeInt(FStreams.SubCounts[LFolderScan])) <= LSubCursor) do
+            (CheckedAddU64(UInt64(FSubBaseOfFolder[LFolderScan]),
+              FStreams.SubCounts[LFolderScan]) <= UInt64(LSubCursor)) do
       begin
         Inc(LFolderScan);
         LByteAcc := 0;               { 进入新 folder：字节累加器归零 }
       end;
       if (LFolderScan >= Length(FStreams.SubCounts)) or
-         (LSubCursor >= FSubBaseOfFolder[LFolderScan] +
-            SizeInt(FStreams.SubCounts[LFolderScan])) then
+         (UInt64(LSubCursor) >= CheckedAddU64(UInt64(FSubBaseOfFolder[LFolderScan]),
+            FStreams.SubCounts[LFolderScan])) then
         raise ESevenZError.Create('entry exceeds declared substream count');
       FFolderIdxOfEntry[LI] := LFolderScan;
       FGlobalSubOfEntry[LI] := LSubCursor;
       { folder 输出内字节偏移：此前同 folder 子流尺寸之和 }
-      FEntryOffInFolder[LI] := LByteAcc;
+      if LByteAcc > UInt64(High(SizeInt)) then
+        raise ESevenZLimitError.Create('entry offset exceeds SizeInt');
+      FEntryOffInFolder[LI] := SizeInt(LByteAcc);
+      if FStreams.Substreams[LSubCursor].Size > UInt64(High(Int64)) then
+        raise ESevenZLimitError.Create('entry size exceeds High(Int64)');
       LE.Size := Int64(FStreams.Substreams[LSubCursor].Size);
-      Inc(LByteAcc, SizeInt(FStreams.Substreams[LSubCursor].Size));
+      LByteAcc := CheckedAddU64(LByteAcc, FStreams.Substreams[LSubCursor].Size);
       LE.HasCrc := FStreams.Substreams[LSubCursor].HasCrc;
       LE.Crc32 := FStreams.Substreams[LSubCursor].Crc;
       if FRawFiles.HasAttributes[LI] then

@@ -13,6 +13,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.cursor,
   nextpas.core.zip.base;
 
 function LE16At(const AData: TBytes; AOff: SizeUInt): Word; inline;
@@ -31,6 +32,12 @@ procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
 
+{ 单点 central 解析：供内存与定位流两读器复用，保持 CRC/尺寸/AES 语义一致 }
+procedure NeedRangeIn(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
+procedure ParseCentralEntry(var AC: IByteCursor; out AE: TZipEntryInfo; out AFlags: Word);
+procedure ZipParseCentralEntries(const ACDBuf: TBytes; ACdOffset: UInt64; ACount: Int64;
+  AMaxTotal: UInt64; out AEntries: TZipEntryInfoArray; out AFlags: TZipFlagArray);
+
 function DecompressEntryVerified(const AE: TZipEntryInfo;
   const APayload: TBytes; const APassword: TBytes;
   AMaxOutput: SizeUInt): TBytes;
@@ -43,10 +50,12 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.bytes.cursor,
   nextpas.core.checksum.crc32,
   nextpas.core.compress,
   nextpas.core.time.date,
-  nextpas.core.zip.aes;
+  nextpas.core.zip.aes,
+  nextpas.core.zip.extra;
 
 function LE16At(const AData: TBytes; AOff: SizeUInt): Word;
 begin
@@ -69,6 +78,116 @@ begin
   Result := (AValue = C_ZIP_LOCAL_SIG) or (AValue = C_ZIP_CENTRAL_SIG) or
     (AValue = C_ZIP_EOCD_SIG) or (AValue = C_ZIP64_EOCD_SIG) or
     (AValue = C_ZIP64_EOCD_LOC_SIG) or (AValue = C_ZIP_DESCRIPTOR_SIG);
+end;
+
+procedure NeedRangeIn(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
+begin
+  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(AC.Length)) then
+    raise EParseError.Create('zip: truncated ' + AWhat);
+end;
+
+procedure ParseCentralEntry(var AC: IByteCursor; out AE: TZipEntryInfo; out AFlags: Word);
+var
+  LMethodCode, LNameLen, LExtraLen, LCommentFieldLen: Word;
+  LDosTime, LDosDate: Word;
+  LCrc, LExtAttrs: LongWord;
+  LCSize, LUSize, LLho: UInt64;
+  LNamePtr, LExtraPtr: PByte;
+  LAesVersion, LAesVendor, LAesRealMethod: Word;
+  LAesStrength: Byte;
+  LHasAes: Boolean;
+begin
+  AC.ReadU16LE;
+  AC.ReadU16LE;
+  AFlags := AC.ReadU16LE;
+  LMethodCode := AC.ReadU16LE;
+  LDosTime := AC.ReadU16LE;
+  LDosDate := AC.ReadU16LE;
+  LCrc := AC.ReadU32LE;
+  LCSize := AC.ReadU32LE;
+  LUSize := AC.ReadU32LE;
+  LNameLen := AC.ReadU16LE;
+  LExtraLen := AC.ReadU16LE;
+  LCommentFieldLen := AC.ReadU16LE;
+  AC.ReadU16LE;
+  AC.ReadU16LE;
+  LExtAttrs := AC.ReadU32LE;
+  LLho := AC.ReadU32LE;
+  NeedRangeIn(AC, Int64(AC.Position), Int64(LNameLen) + LExtraLen + LCommentFieldLen, 'central entry body');
+  LNamePtr := nil;
+  if LNameLen > 0 then
+    LNamePtr := AC.ReadSpan(LNameLen);
+  LExtraPtr := nil;
+  if LExtraLen > 0 then
+    LExtraPtr := AC.ReadSpan(LExtraLen);
+  DecodeCentralExtraBuf(LExtraPtr, SizeUInt(LExtraLen), LUSize, LCSize, LLho,
+    LHasAes, LAesVersion, LAesVendor, LAesRealMethod, LAesStrength);
+  if (LUSize = UInt64($FFFFFFFF)) or (LCSize = UInt64($FFFFFFFF)) or
+     (LLho = UInt64($FFFFFFFF)) then
+    raise EParseError.Create('zip: missing Zip64 extra field');
+  AC.Seek(AC.Position + SizeUInt(LCommentFieldLen));
+  AE.Name := '';
+  if LNameLen > 0 then
+  begin
+    SetLength(AE.Name, LNameLen);
+    Move(LNamePtr^, PChar(AE.Name)^, SizeUInt(LNameLen));
+  end;
+  AE.IsEncrypted := (AFlags and C_ZIP_FLAG_ENCRYPTED) <> 0;
+  AE.AesVersion := 0;
+  AE.AesStrengthCode := 0;
+  if LMethodCode = C_ZIP_METHOD_WINZIP_AES then
+  begin
+    if not AE.IsEncrypted then
+      raise EParseError.Create('zip: method 99 without encryption flag: ' + AE.Name);
+    if not LHasAes then
+      raise EParseError.Create('zip: missing WinZip AES extra field: ' + AE.Name);
+    if (LAesVersion <> C_WINZIP_AES_VERSION_1) and
+       (LAesVersion <> C_WINZIP_AES_VERSION_2) then
+      raise ENotSupportedError.CreateFmt('zip: unsupported WinZip AES version %d: %s', [LAesVersion, AE.Name]);
+    if (LAesStrength < 1) or (LAesStrength > 3) then
+      raise EParseError.Create('zip: invalid WinZip AES strength code');
+    AE.AesVersion := LAesVersion;
+    AE.AesStrengthCode := LAesStrength;
+    LMethodCode := LAesRealMethod;
+  end;
+  if LMethodCode = C_ZIP_METHOD_DEFLATE then
+    AE.Method := zmDeflate
+  else
+    AE.Method := zmStore;
+  AE.MethodCode := LMethodCode;
+  AE.Crc32 := LCrc;
+  AE.CompressedSize := LCSize;
+  AE.UncompressedSize := LUSize;
+  AE.ModTimeUnixSec := UnixFromDosDateTime(LDosDate, LDosTime);
+  AE.LocalHeaderOffset := LLho;
+  AE.IsDirectory :=
+    ((LNameLen > 0) and (LNamePtr[LNameLen - 1] = Ord('/'))) or
+    (((LExtAttrs shr 16) and $F000) = $4000);
+  AE.ExternalAttrs := LExtAttrs;
+  AE.IsSymlink :=
+    ((LExtAttrs shr 16) and $F000) = C_ZIP_UNIX_MODE_SYMLINK;
+end;
+
+procedure ZipParseCentralEntries(const ACDBuf: TBytes; ACdOffset: UInt64; ACount: Int64;
+  AMaxTotal: UInt64; out AEntries: TZipEntryInfoArray; out AFlags: TZipFlagArray);
+var
+  LI: Integer;
+  LC: IByteCursor;
+begin
+  if ACount > High(Integer) - 1 then
+    raise EParseError.Create('zip: entry count out of range');
+  SetLength(AEntries, ACount);
+  SetLength(AFlags, ACount);
+  LC := NewByteCursor(ACDBuf);
+  for LI := 0 to ACount - 1 do
+  begin
+    NeedRangeIn(LC, Int64(LC.Position), 46, 'central header');
+    if LC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
+      raise EParseError.Create('zip: bad central header signature at ' +
+        IntToStr(Int64(ACdOffset) + Int64(LC.Position) - 4));
+    ParseCentralEntry(LC, AEntries[LI], AFlags[LI]);
+  end;
+  GuardTotalOutputSize(AEntries, AMaxTotal);
 end;
 
 procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
