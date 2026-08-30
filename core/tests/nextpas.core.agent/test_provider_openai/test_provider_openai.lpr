@@ -17,7 +17,13 @@ uses
   nextpas.core.test;
 
 { openai 适配器语义（WIRE-MAPPINGS §1 全表 + Q-O1..O7；TESTING §3
-  test_provider_openai 行）：编码快照、解码归约、流帧 FSM、端到端装配 }
+  test_provider_openai 行）：编码快照、解码归约、流帧 FSM、端到端装配
+  边界/Cancel/超时/并发：
+  - Cancel 边界：Token 在 Stream 首帧前预取消则立即抛 aecCancelled，流中途 Cancel 经 TWireBackedCompletion 传播。
+  - 超时边界：TotalTimeout/ConnectTimeout 由 transport 代理，超窗归因 aecTimeout/aecTransport 已在上层验证。
+  - 并发边界：WireDecoder 跨断裂重入安全，Fold 单线程合并无并发写；工具槽 256 上限已验证。
+  悬挂指针：TWireBackedCompletion 持有 FDecoder/FSource 接口，未 Finalize 前 Destroy 主动 Cancel+Finalize（F-H17），无裸指针常驻。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；快照编解码纯函数零泄漏，Decoded Message 经接口持有。 }
 
 function WSpec(const N, D, P: string): TToolSpec;
 begin
@@ -642,10 +648,10 @@ begin
   try
     C.GetMessage;
   except
-    on E: EAgentMisuse do
-      Misuse := True;
+    on E: EAgentError do
+      Misuse := (E.ErrorCode = aecProtocol) and (Pos('completion not drained', E.Message) > 0);
   end;
-  Check(Misuse, 'GetMessage before EOF misuse');
+  Check(Misuse, 'GetMessage before EOF misuse (F-H20: aecProtocol)');
 
   Text := '';
   while C.NextDelta(D) do

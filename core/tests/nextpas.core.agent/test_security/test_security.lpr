@@ -13,6 +13,7 @@ uses
   nextpas.core.agent.tools,
   nextpas.core.agent.provider.openai,
   nextpas.core.agent.provider.anthropic,
+  nextpas.core.agent.provider.common,
   agent.testkit,
   nextpas.core.test;
 
@@ -21,7 +22,13 @@ uses
   绝不回显、mime 白名单 fail-closed 且零 wire 请求、256KiB 参数预检、
   截断 UTF-8 安全切边界、Extra 未知键捕获上限。
   深度覆盖仍在各自归属门（test_sse 行上限 / provider 门编码细节等），
-  本门是跨切面汇总防线。 }
+  本门是跨切面汇总防线。
+  边界/Cancel/超时/并发：
+  - Cancel 边界：此门不涉取消；取消语义由 transport/hedge/loop 门保障。
+  - 超时边界：此门不涉超时；超时由 throttle/transport 门保障。
+  - 并发边界：单线程门；CaptureExtraJson 64 键上限在单消息维度 F-M15 已注，跨轮合并 Fold 层二次截断由 loop 门保障。
+  悬挂指针：ILogger 捕获桩与 ExtraJson 字符串均为托管类型，无裸指针；TJsonlTranscriptStore 等不跨门。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；Utf8SafeTruncate 边界 Extra 非空强制断言（F-H25）已闭环，零捕获假绿已消。 }
 
 function ScriptResp(AStatus: Integer; const ABody: string): TScriptResponse;
 begin
@@ -147,10 +154,10 @@ begin
   try
     C.GetMessage;
   except
-    on Ex: EAgentMisuse do
-      Raised := True;
+    on Ex: EAgentError do
+      Raised := (Ex.ErrorCode = aecProtocol) and (Pos('completion not drained', Ex.Message) > 0);
   end;
-  Check(Raised, 'GetMessage before EOF raises EAgentMisuse');
+  Check(Raised, 'GetMessage before EOF raises aecProtocol completion not drained (F-H20)');
 end;
 
 { 密钥与完整请求体永不入日志；RawBodySnippet 全文只随异常对象走 }
@@ -234,15 +241,51 @@ begin
   P := NewOpenAIProvider(Opts);
 
   M := P.Complete(TCompletionRequest.New('m').WithUserText('go'));
-  if M.ExtraJson <> '' then
+  // F-H25 假绿修复：Extra 捕获必须非空且 ≤64（单消息维度上限强制）
+  Check(M.ExtraJson <> '', 'extra captured is mandatory (non-empty)');
+  Doc := JsonParse(M.ExtraJson);
+  Check(not Doc.HasError, 'captured extra parses');
+  Check((Integer(Doc.Root.ObjectLen) > 0) and
+    (Integer(Doc.Root.ObjectLen) <= 64),
+    'extra capture 1..64 keys');
+end;
+
+{ W17.5 Extra 64 键直验：65 个未知键 → CaptureExtraJson 仅留 64 并 warn（SECURITY §3，单一真源 CMaxExtraKeys/base.CAgentMaxExtraKeys）}
+procedure TestCaptureExtraDirect65Warn;
+var
+  JsonStr: string;
+  Doc, CapDoc: IJsonDocument;
+  LogObj: TCapturingLogger;
+  ILog: ILogger;
+  Captured: TJsonText;
+  K: Integer;
+  Lines: TStringArray;
+  HasWarn: Boolean;
+begin
+  JsonStr := '{';
+  for K := 0 to 64 do
   begin
-    Doc := JsonParse(M.ExtraJson);
-    Check(not Doc.HasError, 'captured extra parses');
-    Check(Integer(Doc.Root.ObjectLen) <= 64,
-      'extra capture capped at 64 keys');
-  end
-  else
-    Check(True, 'no extra captured is also acceptable');
+    if K > 0 then JsonStr := JsonStr + ',';
+    JsonStr := JsonStr + '"zz_unknown_' + IntToStr(K) + '":' + IntToStr(K);
+  end;
+  JsonStr := JsonStr + '}';
+  Doc := JsonParse(JsonStr);
+  Check(not Doc.HasError, '65-key json parses');
+  LogObj := TCapturingLogger.Create;
+  ILog := LogObj;
+  Captured := CaptureExtraJson(Doc.Root, [], CMaxExtraKeys, ILog);
+  Check(Captured <> '', 'capture non-empty at 64 cap');
+  CapDoc := JsonParse(Captured);
+  Check(not CapDoc.HasError, 'captured extra parses (direct)');
+  CheckEqual(64, Integer(CapDoc.Root.ObjectLen), 'direct cap keeps 64');
+  Check(not CapDoc.Root.ObjectHas('zz_unknown_64'), '65th key dropped');
+  Check(CapDoc.Root.ObjectHas('zz_unknown_0'), 'first key kept');
+  Lines := LogObj.Lines;
+  HasWarn := False;
+  for K := 0 to High(Lines) do
+    if Pos('capture limit', Lines[K]) > 0 then HasWarn := True;
+  Check(HasWarn, 'warn emitted on cap');
+  CheckEqual(CAgentMaxExtraKeys, CMaxExtraKeys, 'alias equals base single source');
 end;
 
 var
@@ -256,5 +299,6 @@ begin
   T.Test('get message before eof misuse', @TestGetMessageBeforeEofMisuse);
   T.Test('secrets never in logs', @TestSecretsNeverInLogs);
   T.Test('extra keys capped at 64', @TestExtraKeysCappedAt64);
+  T.Test('capture extra 65 warn (direct)', @TestCaptureExtraDirect65Warn);
   if not T.Run then Halt(1);
 end.

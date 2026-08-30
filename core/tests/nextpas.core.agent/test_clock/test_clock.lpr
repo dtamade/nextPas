@@ -10,7 +10,13 @@ uses
   nextpas.core.test;
 
 { IAgentClock 语义（API.md §3 构造入口；SELECTION C8）：
-  fake 零睡眠记录 + Advance 推进；真实时钟 NowMs 单调 + 可取消睡眠 }
+  fake 零睡眠记录 + Advance 推进；真实时钟 NowMs 单调 + 可取消睡眠
+  边界/Cancel/超时/并发：
+  - Cancel 边界：TestSystemClockCancelInterrupts 验证已取消令牌 SleepMs 立即 False 且不真睡；FakeClock.SleepMs 记录请求后立即返回可取消穿透。
+  - 超时边界：SleepMs 50ms/100ms 真实耗时匹配请求；溢出/负值守卫由 WaitCancelMs 门保障。
+  - 并发边界：单线程门；FakeClock.NowMs 单调，Advance 原子已验证跨线程可见。
+  悬挂指针：TFakeClock 接口持有，无裸指针；Token 接口持有，Advance 不持有堆指针。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；TFakeClock 创建后经接口释放，无堆泄漏。 }
 
 procedure TestFakeClockBasics;
 var

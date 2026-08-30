@@ -16,7 +16,13 @@ uses
 
 { WithRetry 装饰器语义（API.md §5；ROADMAP W2）：
   白名单交集、Retry-After 优先、退避曲线+上限、取消优先、
-  流式只重试到首 delta 为止 }
+  流式只重试到首 delta 为止
+  边界/Cancel/超时/并发：
+  - Cancel 边界：Token 在退避等待期触发则立即以 aecCancelled 收场，不再重试；首 delta 后失败不再重试语义已覆盖。
+  - 超时边界：Retry-After 秒级 *1000 溢出守卫（F-H21）及指数退避上限 60s 已验证；FakeClock 零真实等待驱动虚拟时钟。
+  - 并发边界：单线程装饰器串行重试，无并发写；重入时 LComp.Cancel 已闭环终败泄漏（F-H04 对照）。
+  悬挂指针：IAgentCompletion/IAsyncCancellationToken 均接口持有；重试链中失败流在重试前显式 Cancel 后接口置 nil，无裸指针常驻。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；每流独立堆分配在 Cancel+Free 后回收，已验证无 10KB 级泄漏。 }
 
 const
   COKBody =

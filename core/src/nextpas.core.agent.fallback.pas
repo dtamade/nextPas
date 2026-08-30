@@ -184,9 +184,21 @@ begin
       Exit;
     except
       on E: EAgentCancelled do
+      begin
+        if LComp <> nil then
+          try
+            LComp.Cancel;
+          except
+          end;
         raise;
+      end;
       on E: EAgentError do
       begin
+        if LComp <> nil then
+          try
+            LComp.Cancel;
+          except
+          end;
         LFail.Capture(E);
         if (I = High(FChain)) or (not ShouldFailover(E)) then
           raise;

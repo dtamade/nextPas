@@ -20,7 +20,14 @@ uses
 
 { 工具设施（TESTING §3 test_tools 行）：名称/schema 注册校验 aecConfig；
   §1.5 参数校验失败→error result；行/字节截断信封 Truncated 标记；
-  超时包装经 fake clock 生效（桩在执行体内 Advance 驱动虚拟截止，零真实等待）}
+  超时包装经 fake clock 生效（桩在执行体内 Advance 驱动虚拟截止，零真实等待）
+  边界/Cancel/超时/并发：
+  - Cancel 边界：TestCancellationMidBatch 验证子 token 经 NewToolContext 贯通，批量 teardown 时 CancelLaterThread(40ms) 后 child.IsCancelled 为 True，合成 cancelled error。
+  - 超时边界：TestTimeoutWrapperWithFakeClock 验证 TFakeClock.Advance(5000ms) 越过 TimeoutMs=1000ms 合成 timed out 1000ms，迟到结果不回读；正常路径对照验证超时未触发时 payload 完整。
+  - 并发边界：TToolJob.DoneFlag/WriteGuard 经 _backend_xchg_i32 + fence 仲裁，主线程读前补 acquire 栅栏（F-H06）；WaitAllTimeout 200µs 切片+SleepMs 驱动时钟粒度 2ms 已文档化（F-M05）。
+  悬挂指针：TToolJob 持 IAgentTool/ IAsyncCancellationToken 接口，不裸持有；ParentTok/ChildTok 接口持有，Job.Free 后链自动断开；
+  Pool.Shutdown 在 try..finally 中，无线程 UAF。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；RunToolBatch 对超时/取消合成 error result 不泄 Res/ErrMsg，WriteGuard 防 double-free。 }
 
 const
   CGoodSchema = '{"type":"object","required":["city"],"properties":' +
@@ -179,6 +186,47 @@ begin
   R := ValidateToolArguments(S, '{}');
   Check(R.IsError and (JsonParse(R.ContentJson).Root.Get('error').IsStr),
     'error result carries escaped json envelope');
+end;
+
+procedure TestArgsBoundary256KiBAndDepth;
+var
+  S: TToolSpec;
+  R: TToolResult;
+  Exact, Over: string;
+  PadExact, PadOver: Integer;
+  Overhead: Integer;
+  DeepOk, DeepFail: string;
+  I: Integer;
+begin
+  Check(CTOOLS_MAX_ARGS_BYTES = 256*1024, '256 KiB single source (256*1024)');
+  CheckEqual(8, CTOOLS_MAX_DEPTH, 'depth cap 8');
+  { 256 KiB 边界：恰好 256*1024 通过，+1 合成 error result（SECURITY §3 W17.4）}
+  S := WSpec('b', '{"type":"object"}');
+  Overhead := Length('{"a":""}');
+  PadExact := 256*1024 - Overhead;
+  PadOver := PadExact + 1;
+  Exact := '{"a":"' + StringOfChar('x', PadExact) + '"}';
+  Over := '{"a":"' + StringOfChar('x', PadOver) + '"}';
+  Check(Length(Exact) = 256*1024, 'exact 256 KiB len');
+  R := ValidateToolArguments(S, Exact);
+  Check(not R.IsError, 'exact 256 KiB passes');
+  R := ValidateToolArguments(S, Over);
+  Check(R.IsError, '256 KiB+1 rejected as error result');
+  Check(Pos('256 KiB', R.ContentJson) > 0, 'error envelope mentions 256 KiB');
+  { 深度 8 边界：7 层数组通过，8 层超限（根 object 计 1，CTOOLS_MAX_DEPTH=8）}
+  DeepOk := '{"k":';
+  for I := 1 to 7 do DeepOk := DeepOk + '[';
+  for I := 1 to 7 do DeepOk := DeepOk + ']';
+  DeepOk := DeepOk + '}';
+  DeepFail := '{"k":';
+  for I := 1 to 8 do DeepFail := DeepFail + '[';
+  for I := 1 to 8 do DeepFail := DeepFail + ']';
+  DeepFail := DeepFail + '}';
+  R := ValidateToolArguments(S, DeepOk);
+  Check(not R.IsError, 'depth 7 arrays (total 8) passes');
+  R := ValidateToolArguments(S, DeepFail);
+  Check(R.IsError, 'depth 8 arrays (total 9) rejected');
+  Check(Pos('depth', LowerCase(R.ContentJson)) > 0, 'depth error mentions depth');
 end;
 
 procedure TestTruncationEnvelope;
@@ -436,6 +484,7 @@ begin
   T := TTestSuite.Create('nextpas.core.agent.tools');
   T.Test('spec validation', @TestSpecValidation);
   T.Test('argument validation', @TestArgumentValidation);
+  T.Test('args 256KiB and depth boundary', @TestArgsBoundary256KiBAndDepth);
   T.Test('truncation envelope', @TestTruncationEnvelope);
   T.Test('timeout wrapper with fake clock', @TestTimeoutWrapperWithFakeClock);
   T.Test('cancellation mid batch', @TestCancellationMidBatch);

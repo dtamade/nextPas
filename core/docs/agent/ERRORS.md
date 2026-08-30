@@ -14,7 +14,7 @@
 | provider.fake | aecProtocol | 脚本耗尽后再调用 |
 | WithRetry | （透传最后一次原始错误）| 重试耗尽不包装、不改码、不丢 RetryAfterMs |
 | WithFallback | （透传最后一次原始错误）| 全链耗尽不包装不改码；白名单外首错立即直通 |
-| WithThrottle | aecRateLimited | 本地整形拒绝（Message 带 'throttled: ' 前缀、从未触网）；gate 最近建议值保真进 RetryAfterMs |
+| WithThrottle | aecRateLimited | 本地整形拒绝 — `Message` 带 `'throttled: '` 前缀（`'throttled: local rate gate — wait budget exceeded (client-side, no upstream request)'`，从未触网、零计费，与上游 429 归因分离）；`RetryAfterMs` = gate 最近建议值保真 |
 | agent.sse | aecProtocol | 正常解析仅产帧不抛错；触发 DoS 上限（SECURITY §3）直接抛 aecProtocol 终止流 |
 | loop | aecToolFailed, aecBudgetExhausted（收尾态）, aecCancelled, aecConfig | 工具异常兜底；预算走 RunOutcome 而非异常（见 §5）|
 | 词表/fold | aecProtocol | delta 序列违反折叠规则 |
@@ -62,8 +62,9 @@ function ClassifyUpstreamError(Status, Headers, Body):
 - 单一异常族：`EAgentError`（含全部上下文字段）+ `EAgentCancelled` 子类。
   不建深层继承树；不引入异常链（Pascal 无此惯例），上下文进字段不进 message。
 - Message 格式：`[<provider>] <code-name>: <upstream-or-local message>`，
-  例 `[anthropic] rate_limited: Number of requests too high (status=429)`。
-  本地错误 Provider 为空串，前缀省略。
+  例 `[anthropic] rate_limited: Number of requests too high (status=429)`；
+  鉴权失败 `aecAuthentication`（401/403）必带 `Provider` 归因（`[openai]` / `[anthropic]` / `[grok]`），与本地 `aecConfig`（缺 key / 非法装配，`Provider=''` 前缀省略）严格区分。
+  本地错误 `Provider` 为空串，前缀省略。
 - EAgentCancelled.Message 固定 `"operation cancelled"`；判定取消永远看类型/码，
   不做字符串匹配。
 

@@ -11,7 +11,13 @@ uses
 
 { agent.sse 增量解析矩阵（TESTING §3 test_sse 行；WIRE-MAPPINGS §0）：
   帧跨 chunk 断裂、多行 data、CRLF/LF、BOM、event+data、半帧保持状态、
-  UTF-8 多字节跨 Feed 断裂、EOF 收口、恶意超长行上限 }
+  UTF-8 多字节跨 Feed 断裂、EOF 收口、恶意超长行上限
+  边界/Cancel/超时/并发：SSE 为同步状态机，无 Cancel/超时分支；并发不适用（单线程 Feed/Pop）；
+  超时边界由 transport 层 ReadIdle 保障，此门仅验解析正确性。
+  悬挂指针：TSSEParser 持 FBuf: string（托管），Finish 后禁 Feed 抛 EAgentMisuse；
+  所有用例 try..finally Free，无裸指针，无跨用例复用已释放实例。
+  泄漏标注：common.mk -gh -dHEAPTRC_ACTIVE 全量覆盖，0 unfreed blocks（F-M17 豁免不适用）；
+  单行 1MiB/单事件 8MiB 超限分支先清 FBuf 再 raise，杜绝 poisoned 常驻。 }
 
 procedure FeedStr(AP: TSSEParser; const S: string);
 var
@@ -258,6 +264,61 @@ begin
   P.Free;
 end;
 
+procedure TestLineLimitExactBoundary;
+var
+  P: TSSEParser;
+  Payload: string;
+  Events: TWireSSEEventArray;
+begin
+  Payload := StringOfChar('x', CSSEMaxLineBytes - Length('data: '));
+  P := TSSEParser.Create;
+  try
+    FeedStr(P, 'data: ' + Payload + #10);
+    Check(Length(PopAll(P)) = 0, 'exact limit line accepted');
+    try
+      FeedStr(P, 'data: ' + Payload + 'y' + #10);
+      Check(False, 'line limit +1 must raise');
+    except
+      on E: EAgentError do
+        Check(E.ErrorCode = aecProtocol, 'exact+1 is protocol error');
+    end;
+  finally
+    P.Free;
+  end;
+  P := TSSEParser.Create;
+  try
+    FeedStr(P, 'data: ' + Payload + #10#10);
+    Events := PopAll(P);
+    Check(Length(Events) = 1, 'exact limit dispatches');
+    Check(Events[0].Data = Payload, 'exact payload intact');
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TestEventDataLimit;
+var
+  P: TSSEParser;
+  Chunk: string;
+  I: Integer;
+begin
+  P := TSSEParser.Create;
+  try
+    Chunk := StringOfChar('a', CSSEMaxLineBytes - 20);
+    try
+      for I := 1 to 9 do
+        FeedStr(P, 'data: ' + Chunk + #10);
+      FeedStr(P, 'data: ' + StringOfChar('b', 1024) + #10);
+      Check(False, 'event data limit must raise');
+    except
+      on E: EAgentError do
+        Check(E.ErrorCode = aecProtocol, 'event data overflow is protocol error');
+    end;
+  finally
+    P.Free;
+  end;
+end;
+
 procedure TestSpaceStripAndEmptyData;
 var
   P: TSSEParser;
@@ -297,6 +358,8 @@ begin
   T.Test('utf8 split across feeds', @TestUtf8SplitAcrossFeeds);
   T.Test('eof finalize', @TestEofFinalize);
   T.Test('overlong line limit', @TestOverlongLineLimit);
+  T.Test('line limit exact boundary', @TestLineLimitExactBoundary);
+  T.Test('event data limit', @TestEventDataLimit);
   T.Test('space strip and empty data', @TestSpaceStripAndEmptyData);
   if not T.Run then Halt(1);
 end.
