@@ -26,6 +26,12 @@ const
   BENCH_FILE = 'assets/file0000.bin';
   RANGE_HDR = 'bytes=0-255';
   INDEX_BODY = '<!doctype html><html><body>servevfs bench</body></html>';
+  { budgets: README 7.0µs/16.3µs measured, 800ms suite budget text → code gate 5× headroom }
+  BUDGET_EMBEDDED_NS = 35000;
+  BUDGET_MEMTREE_NS = 35000;
+  BUDGET_OS_NS = 80000;
+  BUDGET_RANGE_NS = 35000;
+  BUDGET_MISS_NS = 35000;
 
 type
   { 最小请求桩：ServeVfs 只触 Path/PathParam/GetHeaders }
@@ -345,6 +351,40 @@ begin
     raise Exception.Create('bench: embedded miss request failed');
 end;
 
+procedure CheckBudgetThresholds(const AResults: IBenchResults);
+var
+  R: TBenchResult;
+  REmb, ROs: TBenchResult;
+  Ratio: Double;
+begin
+  R := AResults.GetByName('servevfs/embedded/200-full-4k');
+  if R.NsPerOp > BUDGET_EMBEDDED_NS then
+    raise Exception.CreateFmt('budget exceeded embedded/200-full: %.0f > %d ns/op', [R.NsPerOp, BUDGET_EMBEDDED_NS]);
+  REmb := R;
+  R := AResults.GetByName('servevfs/memtree/200-full-4k');
+  if R.NsPerOp > BUDGET_MEMTREE_NS then
+    raise Exception.CreateFmt('budget exceeded memtree/200-full: %.0f > %d ns/op', [R.NsPerOp, BUDGET_MEMTREE_NS]);
+  R := AResults.GetByName('servevfs/os/200-full-4k');
+  if R.NsPerOp > BUDGET_OS_NS then
+    raise Exception.CreateFmt('budget exceeded os/200-full: %.0f > %d ns/op', [R.NsPerOp, BUDGET_OS_NS]);
+  ROs := R;
+  // ratio gate locks README 2.3× claim (embedded zero-copy window vs os stat/open)
+  if (REmb.NsPerOp > 0) and (ROs.NsPerOp > 0) then
+  begin
+    Ratio := ROs.NsPerOp / REmb.NsPerOp;
+    if (Ratio < 1.5) or (Ratio > 4.0) then
+      raise Exception.CreateFmt('budget exceeded os/embedded ratio %.2f outside [1.5,4.0] (README 2.3x)', [Ratio]);
+    WriteLn('ratio: os/embedded=', Ratio:0:2, 'x');
+  end;
+  R := AResults.GetByName('servevfs/embedded/206-range');
+  if R.NsPerOp > BUDGET_RANGE_NS then
+    raise Exception.CreateFmt('budget exceeded embedded/206-range: %.0f > %d ns/op', [R.NsPerOp, BUDGET_RANGE_NS]);
+  R := AResults.GetByName('servevfs/embedded/404-miss');
+  if R.NsPerOp > BUDGET_MISS_NS then
+    raise Exception.CreateFmt('budget exceeded embedded/404-miss: %.0f > %d ns/op', [R.NsPerOp, BUDGET_MISS_NS]);
+  WriteLn('budget: all 5 within threshold (embedded ', BUDGET_EMBEDDED_NS, ' os ', BUDGET_OS_NS, ' ns/op)');
+end;
+
 { 计时区外的正确性首验：任何一项语义漂移直接失败，不让基准测错误路径 }
 procedure VerifySmoke;
 var
@@ -389,17 +429,18 @@ begin
     WriteLn('=== servevfs handler-direct benchmark ===');
     WriteLn('payload: ', FILE_COUNT + 1, ' entries; full=4KiB, range=256B');
     WriteLn;
-    TBenchSuite.Create('servevfs')
-      .SetWarmupIters(50)
-      .SetMinSamples(15)
-      .SetMaxIterations(20000)
-      .SetMinDuration(TDuration.FromMilliseconds(300))
-      .Add('servevfs/embedded/200-full-4k', @BenchEmbFull)
-      .Add('servevfs/memtree/200-full-4k', @BenchMemFull)
-      .Add('servevfs/os/200-full-4k', @BenchOsFull)
-      .Add('servevfs/embedded/206-range', @BenchEmbRange)
-      .Add('servevfs/embedded/404-miss', @BenchEmbMiss)
-      .Run;
+    CheckBudgetThresholds(
+      TBenchSuite.Create('servevfs')
+        .SetWarmupIters(50)
+        .SetMinSamples(15)
+        .SetMaxIterations(20000)
+        .SetMinDuration(TDuration.FromMilliseconds(300))
+        .Add('servevfs/embedded/200-full-4k', @BenchEmbFull)
+        .Add('servevfs/memtree/200-full-4k', @BenchMemFull)
+        .Add('servevfs/os/200-full-4k', @BenchOsFull)
+        .Add('servevfs/embedded/206-range', @BenchEmbRange)
+        .Add('servevfs/embedded/404-miss', @BenchEmbMiss)
+        .Run);
 
     RemoveAll(GOsDir);
   except
