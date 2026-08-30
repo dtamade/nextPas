@@ -302,6 +302,16 @@ begin
   end;
 end;
 
+procedure FillLedgerEntry(const Q: IDbQuery; out E: TWalletLedgerEntry);
+begin
+  E.Id := Q.GetText(0);
+  E.UserId := Q.GetText(1);
+  E.DeltaCents := Q.GetInt64(2);
+  E.Reason := Q.GetText(3);
+  E.RefId := Q.GetText(4);
+  E.CreatedAt := Q.GetText(5);
+end;
+
 function WalletListLedger(const APool: TDbPool; const AUserId, AAfter: string; ALimit: Integer): TWalletLedgerArray;
 var
   Conn: IDbConnection;
@@ -343,12 +353,7 @@ begin
   while Q.Step do
   begin
     if Count >= Length(Result) then SetLength(Result, Count + 16);
-    Result[Count].Id := Q.GetText(0);
-    Result[Count].UserId := Q.GetText(1);
-    Result[Count].DeltaCents := Q.GetInt64(2);
-    Result[Count].Reason := Q.GetText(3);
-    Result[Count].RefId := Q.GetText(4);
-    Result[Count].CreatedAt := Q.GetText(5);
+    FillLedgerEntry(Q, Result[Count]);
     Inc(Count);
   end;
   SetLength(Result, Count);
