@@ -14,7 +14,8 @@ interface
 
 uses
   nextpas.core.exception,
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.compress.base;
 
 const
   { Adler-32 契约：RFC1950 §8.2，初始值 1，模 65521，NMAX 分块 }
@@ -26,8 +27,8 @@ const
   ZLIB_WINDOW_BITS_DEFAULT = 15;
   ZLIB_WINDOW_BITS_RAW = -15;
 
-  { 单源解压上限：与 compress GZIP_MAX_DECOMPRESS_BYTES 对齐，32 MiB }
-  ZLIB_MAX_DECOMPRESS_BYTES = SizeUInt(32) * 1024 * 1024;
+  { 单源解压上限：别名自 compress.base GZIP_MAX_DECOMPRESS_BYTES，单源 32 MiB }
+  ZLIB_MAX_DECOMPRESS_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
 
   { zlib 头合法性掩码，供后续实现复用（不含逻辑，仅载体） }
   ZLIB_CMF_DEFLATED = Byte($08);
@@ -83,11 +84,6 @@ implementation
 uses
   SysUtils;
 
-const
-  { Ord(zlNone..zlBest) -> zlib level 整型；zlDefault 映射到 Z_DEFAULT_COMPRESSION(-1) }
-  CZlibLevelToZlibMap: array[0..3] of Int32 = (0, 1, -1, 9);
-  CZlibLevelToOrdMap: array[0..3] of Integer = (0, 1, 2, 3);
-
 constructor EZlibError.Create(ACode: TZlibErrorCode; const AMessage: string);
 var
   LCat: TErrorCategory;
@@ -125,12 +121,12 @@ end;
 
 function ZlibLevelToZlib(const ALevel: TZlibLevel): Int32; inline;
 begin
-  Result := CZlibLevelToZlibMap[Ord(ALevel)];
+  Result := nextpas.core.compress.base.LevelToZlib(TCompressionLevel(Ord(ALevel)));
 end;
 
 function ZlibLevelToCompressOrd(const ALevel: TZlibLevel): Integer; inline;
 begin
-  Result := CZlibLevelToOrdMap[Ord(ALevel)];
+  Result := Ord(ALevel);
 end;
 
 function TryZlibLevelFromOrd(AOrd: Integer; out ALevel: TZlibLevel): Boolean; inline;

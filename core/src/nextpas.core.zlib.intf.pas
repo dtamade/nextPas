@@ -24,6 +24,10 @@ type
     function Encode(const AData: TBytes): TBytes;
     function EncodeWithLevel(const AData: TBytes;
       const ALevel: TZlibLevel): TBytes;
+    function TryEncode(const AData: TBytes; out AEncoded: TBytes): Boolean;
+    function TryEncodeWithError(const AData: TBytes; out AEncoded: TBytes; out AError: string): Boolean;
+    function TryEncodeWithLevel(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes): Boolean;
+    function TryEncodeWithLevelWithError(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes; out AError: string): Boolean;
     function Adler32(const AData: TBytes): LongWord;
     function Adler32Update(AAdler: LongWord; const AData: Pointer;
       ALen: SizeUInt): LongWord;
@@ -35,6 +39,10 @@ type
     function Decode(const AData: TBytes): TBytes;
     function DecodeWithLimit(const AData: TBytes;
       const AMaxOutputSize: SizeUInt): TBytes;
+    function TryDecode(const AData: TBytes; out ADecoded: TBytes): Boolean;
+    function TryDecodeWithError(const AData: TBytes; out ADecoded: TBytes; out AError: string): Boolean;
+    function TryDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes): Boolean;
+    function TryDecodeWithLimitWithError(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes; out AError: string): Boolean;
     function Adler32(const AData: TBytes): LongWord;
     function Adler32Update(AAdler: LongWord; const AData: Pointer;
       ALen: SizeUInt): LongWord;
