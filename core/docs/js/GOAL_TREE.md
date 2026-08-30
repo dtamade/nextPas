@@ -2,17 +2,17 @@
 
 **Owner**：`codex/core-js`
 **层级**：L2
-**关联**：`CONTRACT.md`（冻结面）、`DESIGN.md`（决策）
-**版本**：0.3（S0 生产级）
+**关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）
+**版本**：0.4（S0 冻结）
 
 ---
 
-## S0 文档设计（当前）
+## S0 文档冻结（当前）
 
-- 产出：`README / CONTRACT 0.3 / DESIGN 0.3 / WEBVIEW_LINK / GOAL_TREE / PARITY-go-rust`
-- 门禁：`make hygiene` pass，不改 `core-module-registry`
-- 完成标志：本文档与 `CONTRACT 0.3` 在 `codex/core-js` 上提交，`fpc -vh` 0 hint（文档无代码）
-- 证据：`git diff --check` 0，`build-hygiene-check.sh` pass
+- 产出：12 份完整（`README/CONTRACT/DESIGN/GOAL_TREE/WEBVIEW_LINK/PARITY` 0.4 + `ROADMAP/ACCEPTANCE/AI_GUIDE/TESTING/SECURITY/BENCHMARKS/REVIEW` 1.0）
+- 门禁：`ACCEPTANCE G-M0` 全绿 + `make hygiene` pass，不改 `core-module-registry`
+- 完成标志：`REVIEW H1–H3` 清零，12 份互链闭环
+- 证据：`git diff --check` 0 + `ls core/docs/js/*.md | wc -l` 12
 
 ---
 
@@ -100,3 +100,4 @@ core/examples/nextpas.core.js/demo_js/
 |------|------|------|
 | 2026-08-30 | 0.2 | 初版 S0–S4 |
 | 2026-08-30 | 0.3 | 生产级：门禁证据/测试布局/晋升证据显式化 |
+| 2026-08-30 | 0.4 | 冻结：12 份完整化，S0 产出与门禁对齐 ACCEPTANCE G-M0 |

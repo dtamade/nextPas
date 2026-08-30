@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-30
-**版本**：0.3（S0 生产级完整化，冻结候选，待源码落地晋升 1.0）
+**版本**：0.4（S0 冻结，12 份完整，待 M1 源码后晋升 1.0）
 
 ---
 
@@ -12,7 +12,7 @@
 
 无窗 JS 执行：以 `IJsRuntime / IJsContext` 承载 GC 堆与全局对象，`TJsValue` 轻量句柄 + `IJsValueRef` 自动根化双层值语义，宿主函数三形态绑定，`Eval/TryEval` 同步 exactly-once，超时/内存限可中断；后端首选 QuickJS FFI，纯 Pascal 与 V8 后续尾部追加。
 
-**阅读顺序**：`README.md`（定位与快速开始）→ 本契约（冻结面）→ `DESIGN.md`（决策）→ `WEBVIEW_LINK.md`（联动）→ `GOAL_TREE.md`（阶段）。
+**阅读顺序**：`README.md`（定位）→ 本契约（冻结面）→ `DESIGN.md`（决策）→ `ROADMAP.md`（执行）→ `ACCEPTANCE.md`（验收）→ `TESTING/SECURITY/BENCHMARKS`（方法）→ `AI_GUIDE`（执行纪律）。
 
 ---
 
@@ -315,3 +315,4 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 2026-08-30 | 0.1 | 初稿（7 单元草图） | codex/core-js |
 | 2026-08-30 | 0.2 | 完整化：双层值语义、三形态宿主、超时中断、线程亲和 | codex/core-js |
 | 2026-08-30 | 0.3 | 生产级完整化：uses 闭包表/源契约扫描/门禁证据/性能表/稳定性显式化 | codex/core-js |
+| 2026-08-30 | 0.4 | 冻结：12 份完整化关联（ROADMAP/ACCEPTANCE/TESTING/SECURITY/BENCHMARKS/AI_GUIDE/REVIEW） | codex/core-js |

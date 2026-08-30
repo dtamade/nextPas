@@ -4,9 +4,9 @@
 
 **层级**：L2（系统能力，只依赖 L0–L1；`webview/config/template` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js` lane（`js` 家族）
-**状态**：S0 文档设计（无源码落地，registry 尚未注册）→ S1 目标 `source-contract + focused-runtime(fake)`
+**状态**：S0 文档冻结（12 份生产级，待 M1 源码）→ S1 目标 `source-contract + focused-runtime(fake)`
 **最后更新**：2026-08-30
-**版本**：0.3（S0 生产级完整化，待源码落地后晋升 1.0）
+**版本**：0.4（S0 冻结，12 份完整，见 REVIEW H1–H3 清零）
 
 ## 1. 模块定位
 
@@ -177,15 +177,22 @@ make -C core/benchmarks/nextpas.core.js/bench_eval run
 
 `js` 是 L2 底座，`webview` 是 L3 消费者。复用仅三处：**JSON 同源、错误码映射、`fake` 可选注入真语义**，适配活在 `webview` 家族，不进本家族。详见 `WEBVIEW_LINK.md`。
 
-## 10. 文档索引
+## 10. 文档索引（12 份完整）
 
-| 文档 | 内容 |
-|------|------|
-| `CONTRACT.md` | 公开 API、错误与不变量、依赖边界、测试/性能门禁（冻结候选） |
-| `DESIGN.md` | 架构决策：为何 QuickJS 首选、双层值模型、FFI 纪律、取舍与风险 |
-| `GOAL_TREE.md` | S0–S5 阶段目标与晋升门槛 |
-| `WEBVIEW_LINK.md` | 与 `webview` 的联动、时序图与 Deferred 登记 |
-| `PARITY-go-rust.md` | Go `goja` / Rust `rquickjs/boa` 对标与残差 |
+| 文档 | 内容 | 关联 |
+|------|------|------|
+| `CONTRACT.md` | 公开 API、错误与不变量、依赖边界、测试/性能门禁（冻结候选） | `ACCEPTANCE` 验收 |
+| `DESIGN.md` | 架构决策：为何 QuickJS 首选、双层值模型、FFI 纪律、取舍与风险 | `REVIEW` 决策 |
+| `GOAL_TREE.md` | S0–S5 阶段目标与晋升门槛 | `ROADMAP` 执行 |
+| `ROADMAP.md` | 里程碑 M0–M5、交付物、依赖图、风险、版本 | `ACCEPTANCE` DoD |
+| `ACCEPTANCE.md` | DoD、门禁矩阵、证据链、晋升规则 | `ROADMAP` 退出条件 |
+| `TESTING.md` | 组织、覆盖矩阵、边界、CI | `CONTRACT §10` |
+| `SECURITY.md` | 威胁模型、缓解、攻击面 | `CONTRACT §8` |
+| `BENCHMARKS.md` | 方法、套件、目标、回归阈值 | `CONTRACT §11` |
+| `WEBVIEW_LINK.md` | 与 `webview` 的联动、时序图与 Deferred | `DESIGN §7` |
+| `PARITY-go-rust.md` | Go `goja` / Rust `rquickjs/boa` 对标与残差 | `BENCHMARKS` |
+| `AI_GUIDE.md` | 现代 AI 开发规范（agent/审查/验证） | 全模块 |
+| `REVIEW.md` | 穿透式审查：H1–H3 硬差距 + N1–N7 幼稚病 | 0.3→0.4 依据 |
 
 ## 11. 稳定性与注册
 
@@ -199,4 +206,5 @@ make -C core/benchmarks/nextpas.core.js/bench_eval run
 |------|------|------|
 | 2026-08-30 | 0.1 | 初稿（7 单元草图） |
 | 2026-08-30 | 0.2 | 完整化：双层值语义、三形态宿主、超时中断、线程亲和 |
-| 2026-08-30 | 0.3 | 生产级完整化：架构速览/错误表/安全/测试基准显式化，对齐 webview/json 最佳实践 |
+| 2026-08-30 | 0.3 | 生产级完整化：架构速览/错误表/安全/测试基准显式化 |
+| 2026-08-30 | 0.4 | 冻结：12 份完整（ROADMAP/ACCEPTANCE/AI_GUIDE/TESTING/SECURITY/BENCHMARKS/REVIEW 补齐，索引闭环） |

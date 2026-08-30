@@ -1,8 +1,8 @@
 # nextpas.core.js 设计说明
 
-**状态**：S0 设计冻结候选，随源码落地微调
-**关联**：`CONTRACT.md`（冻结面）、`WEBVIEW_LINK.md`（联动）、`GOAL_TREE.md`（阶段）、`PARITY-go-rust.md`（对标）
-**版本**：0.3（S0 生产级）
+**状态**：S0 冻结，随源码落地微调
+**关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）、`REVIEW.md`（差距）、`AI_GUIDE.md`（AI 规范）
+**版本**：0.4（S0 冻结，12 份完整）
 
 ---
 
@@ -148,3 +148,4 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 |------|------|------|
 | 2026-08-30 | 0.2 | 初稿：双层/FFI/超时 |
 | 2026-08-30 | 0.3 | 生产级：备选方案/消费者审计/基准设计/风险扩展 |
+| 2026-08-30 | 0.4 | 冻结：关联 ROADMAP/ACCEPTANCE/AI_GUIDE，12 份闭环 |
