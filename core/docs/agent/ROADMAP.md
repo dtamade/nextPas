@@ -23,6 +23,7 @@ http.sse 文本行域），合并经审计判定不立项 |
 | **W10 提示缓存断点（v1.1 第五批，2026-08-26 立项）** | 词表 `TCacheControlMode` + `WithCacheControl`；anthropic 编码器 ccmAuto 三断点放置（tools 尾/system 数组形态/末条消息尾块，≤4 厂商预算，空载体跳过）；openai/grok/responses 族自动缓存零差异声明；PERFORMANCE §6 标记元数据条款；loop 以请求模板透传零改动消费 | test_provider_anthropic / test_provider_openai / test_provider_responses 扩测全绿（含 HEAPTRC 泄漏门）/ test_loop 跨轮标记移动+内容字节稳定断言 / test_e2e_live 扩 anthropic 缓存往返真网测（二级 opt-in `NEXTPAS_AGENT_ANTHROPIC_CACHE=1`，端点需缓存权限）+ 三基准 A/B 无回归 + Ready 报告 |
 | **W11 请求级追踪（v1.1 第六批，2026-08-26 立项）** | 词表 `TTraceRequestInfo`/`TTraceResponseInfo`/`IAgentTraceSink`；`NewTracedTransport` 装饰器——IAgentTransport 一处包装三适配器全覆盖，RoundTrip/OpenStream 前后事件对、异常路径 Status=-1 配对后原样上抛、与 WithRetry 叠装自然 N 对事件可见、IAgentClock 注入零睡眠 | 新门 `test_transport_trace` 全绿（含 HEAPTRC 泄漏门）+ 三基准无回归 + Ready 报告 |
 | **W12 Token 预估能力接口（v1.1 第七批，2026-08-26 立项）** | 接缝接口 `IAgentTokenCounter`（`CountTokens`，Supports 探测，仅 anthropic 实现）；anthropic count_tokens 端点映射——POST {base}/v1/messages/count_tokens，请求体与 §2.1 同构但减 max_tokens/stream 两键，响应 `{"input_tokens":N}` 缺键即 aecProtocol；纯编解码器 `EncodeAnthropicCountTokensRequest`/`BuildAnthropicCountTokensUrl` 公开直测（D13）；openai/grok/responses 族无厂商端点诚实不实现该接口 | test_provider_anthropic 扩测全绿（含 HEAPTRC 泄漏门）+ 四基准 A/B 无回归 + Ready 报告 |
+| **W13 批内混合调度精化（v1.1 第八批，2026-08-26 立项）** | `tcParallel` 分组调度——按调用序贪心分组：相邻 tcParallel 段整段并行（RunToolBatch 一次提交），非 tcParallel 调用独占执行（单元素批）；修复旧"全有全无"规则下一个非并行调用把整批拖成全串行的并行度塌缩；声明语义严格保持（任一时刻要么恰好一个非并行任务独占，要么只有 tcParallel 任务在跑）；全并行/全串行特例与旧行为一致，超时/取消/合成管线不变；同波诚实评估能力标志词表回归——NeedsConfirm 经 PreHook 已可表达不设标志防死词表，Idempotent/ReadOnly 无模块内消费者维持裁撤 | test_loop 扩混合批测全绿（P,P,N 会合证组内并发+独占探针 / P,N,P 孤立完成不饿死 / N,N 保序回归）含 HEAPTRC 泄漏门 + 四基准 A/B 无回归 + Ready 报告 |
 
 ## Wave 内顺序约束
 
@@ -153,6 +154,11 @@ v1.1 第一批立项顺序：**Structured Output → tool_choice**（余项按�
   /v1/responses，真网验证条件成立）；Gemini 半边仍留本项待触发】
 - **工具能力标志回归**：tcIdempotent/tcReadOnly/tcNeedsConfirm 消费语义立项后
   回归 TToolCapability 词表（v1 已裁撤至仅 tcParallel——冷读评审指认死词表）。
+  【评估结论 2026-08-26（W13 同波）：NeedsConfirm 确认门语义 PreHook 已完备
+  表达——同步回调在提交前运行、可阻塞等外部批准，设标志属重复表达面；
+  Idempotent/ReadOnly 无模块内消费者（loop 重试哲学=模型驱动，不做工具级
+  自动重试）维持裁撤。重新触发条件=出现真实消费者（审计分类/会话级确认
+  状态机），届时先立消费语义节再回归词表】
 - **loop 全局工具并发上限**（D14 明确 v1 不做）——出现跨批资源争用证据时立项。
 
 ## 明确不做（v1 冻结）

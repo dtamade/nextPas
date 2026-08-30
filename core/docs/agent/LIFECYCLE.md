@@ -27,11 +27,11 @@
 规则：
 
 - `GetMessage` 首次调用完成 fold 收口并缓存；重复调用返回同一结果（幂等）。
-- `GetUsage` 适用同一缓存/幂等规则（EOF 后有效；Active 期访问同报
-  'completion not drained'）。
-- Active 期调用 GetMessage/GetUsage 属消费方时序违反：直接 raise
-  `EAgentError[aecProtocol]`，message 固定 `'completion not drained'`
-  （不新增公开错误码位）。
+- `GetUsage` 适用同一缓存 / 幂等规则（EOF 后有效；Active 期访问同报
+  `'completion not drained — drain NextDelta until False before GetUsage'`）。
+- Active 期调用 `GetMessage` / `GetUsage` 属消费方时序违反：直接 raise
+  `EAgentError[aecProtocol]`，`message` 以 `'completion not drained'` 起头
+  （完整文案：`'completion not drained — drain NextDelta until False before GetMessage/GetUsage'`），不新增公开错误码位 — 语义清晰，可断言前缀。
 - Cancel 在任意状态幂等；Terminal 后调用无副作用。
 
 ## 2. 流式全链路时序（真增量）
@@ -71,7 +71,8 @@ Run()（阻塞直至终态）:
   RoundStart → Infer(provider.Stream + drain)
      ├─ 无工具调用 → Done(roCompleted)
      └─ 有工具调用 → ToolExecPhase:
-            并行判定（全 tcParallel 才并行；串/并行都经线程池执行，§5）
+            分组调度（相邻 tcParallel 段整段并行，非 tcParallel
+            调用独占执行；数组序即执行序，串/并行都经线程池，§5）
             for each call: PreHook → Validate → Execute → PostHook → Truncate
             （hvStop 立即收束 → Done）
         终止检查（预算耗尽 / 防打转 ≥N / MaxRounds 用尽）
@@ -92,6 +93,13 @@ Run()（阻塞直至终态）:
   超时）。池实例由 loop 构造注入（未注入则构造自有池随实例 Shutdown）。
   统一执行路径使超时语义对串/并行一致。（W3 施工修订：原 SubmitBatch +
   批级一次汇合措辞与实现不符。）
+- **批内调度（W13 修订）**：`tcParallel` 从"全有全无"精化为分组——按调用序
+  贪心分组：相邻 `tcParallel` 段整段并行（RunToolBatch 一次提交），非
+  `tcParallel` 调用独占执行（单元素批）。修复旧规则下一个非并行调用把整批
+  拖成全串行的并行度塌缩。声明语义严格保持：任一时刻要么恰好一个非并行任务
+  独占运行，要么只有 `tcParallel` 任务在跑——工具的并发声明永不被违反。
+  全并行/全串行两特例与旧行为一致（单组/逐个）。各组经同一 RunToolBatch
+  管线，超时/取消/合成语义不变。
 - **为何不是 async.taskgroup**：已核实其工厂绑定 `TAsyncLoop`，面向事件循环
   runtime；同步阻塞的工具批次用它需凭空造 Loop，属设施错配。
 - **失败隔离**：每工具持有父令牌的子令牌（async.cancellation.CreateChildToken），
@@ -130,3 +138,122 @@ Run()（阻塞直至终态）:
 | 同 loop 实例并发两次 Run | 否 | run 间共享 transcript 与选项；并发宿主每 agent 建 loop 实例（实例作用域原则）|
 | Cancel 与 NextDelta 跨线程 | 是 | 核心设计场景（§ERRORS 5 表）|
 | FromEnv/工厂函数并发调用 | 是 | 只读 env + 纯构造 |
+
+## 8. 交互示例
+
+> 本节为可跑伪码——演示 `sdkThinkingDelta` 思考态与 `tcParallel` 分组防塌缩
+> 的真实时序；与 `PROMPT-BUDGET.md` 有界快照预算正交，可直接贴入 `core/tests` 做单测骨架。
+
+### 8.1 sdkThinkingDelta：思考中 → 首 TextDelta 生成中（`task888:752`）
+
+`task888:752` 的 TUI 细节——`thinking` 段到达即切「思考中」态，首个 `sdkTextDelta` 到达切「生成中」：
+
+```pascal
+uses nextpas.core.agent;
+
+procedure StreamWithThinking(const AProvider: IAgentProvider);
+var
+  LComp: IAgentCompletion;
+  LD: TStreamDelta;
+  LThinking, LAnswer: string;
+  LInThinking: Boolean;
+begin
+  LComp := AProvider.Stream(
+    TCompletionRequest.New('claude-sonnet-4')
+      .WithSystem('你是一个简洁的助手')
+      .WithUserText('用一句话介绍 TLS 1.3')
+      .WithThinking(tsTrue, 2048));
+  LInThinking := False;
+  while LComp.NextDelta(LD) do
+    case LD.Kind of
+      sdkThinkingDelta:
+        begin
+          if not LInThinking then begin LInThinking := True; WriteLn('[思考中]'); end;
+          LThinking := LThinking + LD.TextDelta; // 增量追加，簇安全渲染见 PERFORMANCE §7.1
+          // Signature 透传：LD.Signature 随 thinking delta 携带，fold 时并入 pkThinking.Signature
+        end;
+      sdkTextDelta:
+        begin
+          if LInThinking then begin LInThinking := False; WriteLn('[生成中]'); end;
+          LAnswer := LAnswer + LD.TextDelta;
+          Write(LD.TextDelta); // 首 token 即时（PERFORMANCE §1 真增量）
+        end;
+      sdkToolCallStart, sdkToolCallDelta, sdkToolCallEnd: ; // fold 内部累积
+      sdkFinish: WriteLn(#10'[finish:', Ord(LD.FinishReason), ']');
+      sdkUsage: ; // usage/finish 异序由 fold 抹平，GetUsage 统一读取
+    end;
+  if LComp.GetCancelled then Exit; // 取消归并为 EOF 形态（§1）
+  WriteLn(#10'Final: ', MessageText(LComp.GetMessage));
+end;
+```
+
+要点：`sdkThinkingDelta` 与 `sdkTextDelta` 在 `fold.TAssistantBuild` 中分属 `btkThinking` / `btkText` 槽，`FlushCurrentPart` 在类别切换时才开新 `pkThinking`/`pkText` part——
+思考与正文交错时各自成段，思考段 `Signature` 透传保留（`API.md §4`）。
+
+### 8.2 tcParallel 分组防塌缩 + 预算预警 + UsageSink 可跑伪码
+
+`W13` 前「全有全无」：一批中有一个非并行声明即整批串行（并行度塌缩）；
+`W13` 后贪心分组——相邻 `tcParallel` 段整段并行，非并行独占执行（`§5`）：
+
+```pascal
+uses nextpas.core.agent, nextpas.core.agent.pricing, nextpas.core.thread.pool;
+
+type
+  TMySink = class(TInterfacedObject, IAgentUsageSink)
+    procedure RecordUsage(const AProvider: string; const AReq: TCompletionRequest;
+      const AUsage: TTokenUsage; ACostUsd6: Int64);
+  end;
+
+procedure TMySink.RecordUsage(const AProvider: string; const AReq: TCompletionRequest;
+  const AUsage: TTokenUsage; ACostUsd6: Int64);
+begin
+  // 线程安全且不抛异常（API.md §3.4 约定）；nil 退化由 loop 侧 Assigned 守卫
+  WriteLn(Format('[usage] %s in=%d out=%d cost=%d μUSD', [AProvider, AUsage.InputTokens, AUsage.OutputTokens, ACostUsd6]));
+end;
+
+procedure RunWithBudgetAndGrouping;
+var
+  LProvider: IAgentProvider;
+  LLoop: TAgentLoop;
+  LRun: IAgentLoopRun;
+  LPool: IThreadPool;
+begin
+  LProvider := NewFakeProvider(
+    '[{"deltas":[{"kind":"tool_call_start","index":0,"id":"c1","name":"search"},' +
+    '{"kind":"tool_call_start","index":1,"id":"c2","name":"fetch"},' + // P,P
+    '{"kind":"tool_call_start","index":2,"id":"c3","name":"confirm"},' + // N
+    '{"kind":"tool_call_start","index":3,"id":"c4","name":"search"},' +
+    '{"kind":"tool_call_start","index":4,"id":"c5","name":"search"},' + // P,P
+    '{"kind":"finish","reason":"tool_calls"}]},' +
+    '{"deltas":[{"kind":"text_delta","text":"done"},{"kind":"finish","reason":"stop"}]}]');
+  LPool := CreateThreadPool(4); // 需真并行请注入 ≥2 线程池；一参构造自建池为 1 线程串行退化（ARCHITECTURE §6）
+  LLoop := TAgentLoop.Create(LProvider, LPool);
+  // 注册工具：search/fetch 声明 tcParallel，confirm 不声明 → 分组为 [P,P] [N] [P,P]
+  LLoop.AddTool(TSearchTool.Create);  // Spec.Capabilities := [tcParallel]
+  LLoop.AddTool(TFetchTool.Create);   // [tcParallel]
+  LLoop.AddTool(TConfirmTool.Create); // []
+
+  LLoop.Options.RequestBase := TCompletionRequest.New('fake-model')
+    .WithSystem('你是助手'); // BuildSystemText 去重见 PROMPT-BUDGET.md §2
+  LLoop.Options.MaxOutputTokens := 6000; // 预算；80% 时 levBudgetWarning 一次
+  LLoop.Options.UsageSink := TMySink.Create; // 每轮 AccumulateUsage 后 EstimateCost 透传
+  LLoop.SetEventHook(procedure(const E: TLoopEvent)
+    begin
+      if E.Kind = levBudgetWarning then WriteLn(Format('[warn] round %d budget 80%%', [E.Round]));
+    end);
+
+  LRun := LLoop.Run('查资料并确认');
+  // 断言：P,P 组内并发、N 独占、后 P,P 再并发；全程经同一 RunToolBatch 管线，超时/取消/合成语义不变（§5）
+  // 预算：OutUsed ≥ MaxOutputTokens 时触发引导收尾 → 禁工具再推理一次 → roBudgetExhausted
+  WriteLn('Outcome=', Ord(LRun.Outcome), ' Final=', MessageText(LRun.FinalMessage));
+  WriteLn('Usage out=', LRun.TotalUsage.OutputTokens, ' cost μUSD=', EstimateCost(LRun.TotalUsage));
+  LLoop.Free;
+  LPool.Shutdown;
+end;
+```
+
+该伪码可直接以 `NewFakeProvider` 脚本离线验证三点：
+
+1. `sdkThinkingDelta` 首段与 `sdkTextDelta` 首段的态切分；
+2. `[P,P][N][P,P]` 三组时序（`§5` 贪心分组探针：组内并发闸门、独占探针不饿死）；
+3. `levBudgetWarning` 80% 一次性与 `UsageSink` 的 `EstimateCost` 联动（`PROMPT-BUDGET.md §7`）。

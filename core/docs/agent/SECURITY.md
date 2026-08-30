@@ -27,14 +27,20 @@ RawBodySnippet 全文（摘要仅随异常对象走，日志只记 code 与长�
 
 ## 3. DoS / 恶意输入防线（全部 fail-closed）
 
-| 面 | 上限/规则 | 超限行为 |
-|----|----------|---------|
-| SSE 单行长度 | 1 MiB | 抛 aecProtocol，终止流 |
-| 单事件 data 总量 | 8 MiB | 同上 |
-| 工具参数 JSON 大小 | 256 KiB（校验前预检） | 合成 error result 回喂（不算流错误）|
-| 工具结果回喂 | TruncateLines/TruncateBytes（loop 默认 2000 行 / 64 KiB） | 截断 + Truncated=True |
-| RawBodySnippet | 8 KiB UTF-8 安全截断 | — |
-| Extra 无损捕获字段数 | 单消息/part 64 个未知键 | 超出丢弃并 warn（防病态响应膨胀内存）|
+> 权威默认值总表在 `API.md §10`，本表为安全视角的引用；数值与单位以 API 表为准，三表一致性由 `test_security` 锚定（F-L07 G6 2026-08-29）。
+
+| 面 | 上限/规则 | 权威常量（单一真源 `nextpas.core.agent.base`） | 追踪 | 超限行为 |
+|----|----------|--------------------------------|------|---------|
+| SSE 单行长度 | 1 MiB | `CSSEMaxLineBytes`（`sse` 单元，值同 `CAgentMax*` 族） | — | 抛 aecProtocol，终止流 |
+| 单事件 data 总量 | 8 MiB | `CSSEMaxEventDataBytes` | — | 同上 |
+| 工具参数 JSON 大小 | 256 KiB（校验前预检） | `CAgentMaxToolArgsBytes`（`tools CTOOL_ARGS_MAX_BYTES` 为 alias） | — | 合成 error result 回喂（不算流错误）|
+| 工具结果回喂 | TruncateLines/TruncateBytes（loop 默认 2000 行 / 64 KiB） | `TAgentLoopOptions.TruncateLines/TruncateBytes` | — | 截断 + Truncated=True |
+| wire 单头大小 | 8 KiB（名+值） | `CAgentMaxWireHeaderValueBytes`（`provider.common` 为兼容 alias） | SEC-04 | 抛 aecProtocol，请求不上送（兼容网关畸形头）|
+| wire 总头大小 | 64 KiB（累计） | `CAgentMaxWireTotalHeaderBytes`（`provider.common` 为兼容 alias） | SEC-08 | 同上 |
+| 成功体累积上限 | 8 MiB | `CAgentMaxSuccessBodyBytes`（`transport.http CMaxSuccessBodyBytes`/`provider.common` 为兼容 alias） | — | 抛 aecProtocol，截断体以 RawBodySnippet 保真 |
+| RawBodySnippet | 8 KiB UTF-8 安全截断 | `CAgentMaxRawBodySnippetBytes`（`provider.common CMaxRawBodySnippetBytes` 为兼容 alias） | — | — |
+| Extra 无损捕获字段数 | 单消息/part 64 个未知键 | `CAgentMaxExtraKeys`（`provider.common CMaxExtraKeys` 为兼容 alias） | — | 超出丢弃并 warn（防病态响应膨胀内存）|
+| 工具槽位总数/索引 | 256 | `CAgentMaxSlotMap` | — | 超限抛 aecProtocol |
 
 理由：这些上限防御的是**被攻破或恶意的"兼容网关"**——OpenAI-compatible 生态里
 BaseUrl 可指向任意第三方，响应即不可信输入。

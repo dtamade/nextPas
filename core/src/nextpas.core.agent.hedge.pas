@@ -56,10 +56,11 @@ function NewHedgedProvider(const AInner: IAgentProvider;
 implementation
 
 uses
-  nextpas.core.thread;
+  nextpas.core.thread,
+  nextpas.core.atomic.core;
 
 const
-  CArbitrationSliceNs = 200000;      { 仲裁轮询切片 200µs（loop 同款形态）}
+  CArbitrationSliceNs = 200000;      { 仲裁轮询切片 200µs，与 tools/loop G3 统一 }
 
 type
   { 单次调用产物槽：worker 写入后 SetEvent 发布；调用方 join 后读取。
@@ -175,6 +176,7 @@ begin
       on E: EAgentError do
         AOut.Fail.Capture(E);
     end;
+    atomic_seq_cst_fence;            { 发布前 fence，保证前述写对读线程可见（F-H06） }
     ADone.SetEvent;                  { 发布栅栏：字段写在 Set 前 }
   except
     ;                                { 兜底：worker 绝不让异常逃逸 }
@@ -204,6 +206,7 @@ begin
       on E: EAgentError do
         AOut.Fail.Capture(E);
     end;
+    atomic_seq_cst_fence;
     ADone.SetEvent;
   except
     ;
@@ -222,6 +225,7 @@ var
   LEvMain, LEvHedge, LEvTick: IEvent;
   LMain, LHedge: THedgeOutcome;
   LHedgeFired, LOuterGone: Boolean;
+  LRemainNs, LSliceNs: Int64;
 
   function OuterGone: Boolean;
   begin
@@ -244,17 +248,36 @@ begin
     end);
 
   try
-    { 主线程兼任定时器：单次 WaitTimeout——True=DelayMs 内主路落定
-      （对冲路从未存在，零额外成本）；False=到点未完，发起对冲。
-      外部取消在等待期最迟 DelayMs 后于仲裁循环感知并收场 }
-    if LEvMain.WaitTimeout(FPolicy.DelayMs * 1000000) then
+    { 分片等待 DelayMs：每片 CArbitrationSliceNs 检查 Outer 取消，
+      与 throttle/retry 的 WaitForCancel 分片统一（G3 协同）。 }
+    LRemainNs := FPolicy.DelayMs * 1000000;
+    while LRemainNs > 0 do
     begin
+      if OuterGone then
+        Break;
+      LSliceNs := CArbitrationSliceNs;
+      if LSliceNs > LRemainNs then
+        LSliceNs := LRemainNs;
+      if LEvMain.WaitTimeout(LSliceNs) then
+        Break;
+      Dec(LRemainNs, LSliceNs);
+    end;
+    if LEvMain.IsSet then
+    begin
+      atomic_seq_cst_fence;
       if LMain.HaveValue then
         Exit(LMain.Msg);
       if LMain.Cancelled or LMain.Aborted or
         (LMain.Fail.Code = aecCancelled) then
         raise EAgentCancelled.Create;
       raise LMain.Fail.Rebuild;
+    end;
+    if OuterGone then
+    begin
+      LTokMain.Cancel;
+      while not LEvMain.IsSet do
+        SliceWait(LEvTick);
+      raise EAgentCancelled.Create;
     end;
 
     { 到点未完：发起对冲路 }
@@ -269,7 +292,8 @@ begin
         RunCompleteTask(AReq, LTokHedge, LHedge, LEvHedge);
       end);
 
-    { 仲裁循环：外部取消 > 先落定成功 > 皆败透传主路原始错误 }
+    { 仲裁循环：外部取消 > 先落定成功 > 皆败透传主路原始错误
+      读 HaveValue 前加 acquire fence，保证 worker 的写可见（F-H06） }
     while not (LEvMain.IsSet and LEvHedge.IsSet) do
     begin
       if OuterGone then
@@ -278,23 +302,33 @@ begin
         LTokHedge.Cancel;
         break;                       { 入下方统一 join }
       end;
-      if LEvMain.IsSet and LMain.HaveValue then
+      if LEvMain.IsSet then
       begin
-        LTokHedge.Cancel;            { 输路必被取消（尽力信号）}
-        break;
+        atomic_seq_cst_fence;
+        if LMain.HaveValue then
+        begin
+          LTokHedge.Cancel;          { 输路必被取消（尽力信号）}
+          Break;
+        end;
       end;
-      if LEvHedge.IsSet and LHedge.HaveValue then
+      if LEvHedge.IsSet then
       begin
-        LTokMain.Cancel;             { 对冲胜：主路转输路 }
-        break;
+        atomic_seq_cst_fence;
+        if LHedge.HaveValue then
+        begin
+          LTokMain.Cancel;           { 对冲胜：主路转输路 }
+          Break;
+        end;
       end;
       SliceWait(LEvTick);
     end;
 
     { 统一 join：任何出口前等两路全落定（输路经令牌中断快速收场）}
     LOuterGone := OuterGone;
+    atomic_seq_cst_fence;
     if LOuterGone or (LEvMain.IsSet and LMain.HaveValue) then
       LTokHedge.Cancel;
+    atomic_seq_cst_fence;
     if LOuterGone or (LEvHedge.IsSet and LHedge.HaveValue) then
       LTokMain.Cancel;
     while (not LEvMain.IsSet) or (not LEvHedge.IsSet) do
@@ -304,8 +338,10 @@ begin
       raise EAgentCancelled.Create;
 
     { 落定结果裁决：胜者优先，皆败以主路原始错误为准 }
+    atomic_seq_cst_fence;
     if LMain.HaveValue then
       Exit(LMain.Msg);
+    atomic_seq_cst_fence;
     if LHedge.HaveValue then
       Exit(LHedge.Msg);
     if LMain.Cancelled or LMain.Aborted or
@@ -332,6 +368,7 @@ var
   LEvMain, LEvHedge, LEvTick: IEvent;
   LMain, LHedge: THedgeOutcome;
   LHedgeFired, LOuterGone: Boolean;
+  LRemainNs, LSliceNs: Int64;
 
   function OuterGone: Boolean;
   begin
@@ -341,6 +378,7 @@ var
   { 胜者流包装首 delta 门：已消费的首点回放、其余透传（投递不重复）}
   function Wrap(const AOut: THedgeOutcome): IAgentCompletion;
   begin
+    atomic_seq_cst_fence;
     Result := TFirstGateCompletion.Create(AOut.Comp, AOut.FirstDelta,
       AOut.HaveFirst);
     AOut.Comp := nil;                { 所有权移交包装 }
@@ -362,16 +400,38 @@ begin
     end);
 
   try
-    { 单次 WaitTimeout：True=DelayMs 内主流首点落定（对冲从未发起）；
-      False=到点未完，发起对流。外部取消最迟 DelayMs 后于仲裁循环感知 }
-    if LEvMain.WaitTimeout(FPolicy.DelayMs * 1000000) then
+    { 分片等待 DelayMs：与 Complete 路同分片，G3 统一取消粒度 }
+    LRemainNs := FPolicy.DelayMs * 1000000;
+    while LRemainNs > 0 do
     begin
+      if OuterGone then
+        Break;
+      LSliceNs := CArbitrationSliceNs;
+      if LSliceNs > LRemainNs then
+        LSliceNs := LRemainNs;
+      if LEvMain.WaitTimeout(LSliceNs) then
+        Break;
+      Dec(LRemainNs, LSliceNs);
+    end;
+    if LEvMain.IsSet then
+    begin
+      atomic_seq_cst_fence;
       if LMain.HaveValue then
         Exit(Wrap(LMain));           { 首 delta 已到手：对冲从未发起 }
       if LMain.Cancelled or LMain.Aborted or
         (LMain.Fail.Code = aecCancelled) then
         raise EAgentCancelled.Create;
       raise LMain.Fail.Rebuild;
+    end;
+    if OuterGone then
+    begin
+      LTokMain.Cancel;
+      atomic_seq_cst_fence;
+      if LMain.Comp <> nil then
+        LMain.Comp.Cancel;
+      while not LEvMain.IsSet do
+        SliceWait(LEvTick);
+      raise EAgentCancelled.Create;
     end;
 
     if FPolicy.OnHedged <> nil then
@@ -391,51 +451,90 @@ begin
       begin
         LTokMain.Cancel;
         LTokHedge.Cancel;
+        atomic_seq_cst_fence;
         if LMain.Comp <> nil then
           LMain.Comp.Cancel;
+        atomic_seq_cst_fence;
         if LHedge.Comp <> nil then
           LHedge.Comp.Cancel;
         break;
       end;
-      if LEvMain.IsSet and LMain.HaveValue then
+      if LEvMain.IsSet then
       begin
-        { 主流胜：输流硬取消且其增量永不外泄（投递不重复同门）}
-        if LHedge.Comp <> nil then
-          LHedge.Comp.Cancel;
-        LTokHedge.Cancel;
-        break;
+        atomic_seq_cst_fence;
+        if LMain.HaveValue then
+        begin
+          { 主流胜：输流硬取消且其增量永不外泄（投递不重复同门）}
+          atomic_seq_cst_fence;
+          if LHedge.Comp <> nil then
+            LHedge.Comp.Cancel;
+          LTokHedge.Cancel;
+          break;
+        end;
       end;
-      if LEvHedge.IsSet and LHedge.HaveValue then
+      if LEvHedge.IsSet then
       begin
-        if LMain.Comp <> nil then
-          LMain.Comp.Cancel;         { 对冲流胜：主流转输流真收合 }
-        LTokMain.Cancel;
-        break;
+        atomic_seq_cst_fence;
+        if LHedge.HaveValue then
+        begin
+          atomic_seq_cst_fence;
+          if LMain.Comp <> nil then
+            LMain.Comp.Cancel;       { 对冲流胜：主流转输流真收合 }
+          LTokMain.Cancel;
+          break;
+        end;
       end;
       SliceWait(LEvTick);
     end;
 
     LOuterGone := OuterGone;
-    if LOuterGone or (LEvMain.IsSet and LMain.HaveValue) then
+    atomic_seq_cst_fence;
+    if LOuterGone then
     begin
+      atomic_seq_cst_fence;
       if LHedge.Comp <> nil then
         LHedge.Comp.Cancel;
       LTokHedge.Cancel;
-    end;
-    if LOuterGone or (LEvHedge.IsSet and LHedge.HaveValue) then
-    begin
+      atomic_seq_cst_fence;
       if LMain.Comp <> nil then
         LMain.Comp.Cancel;
       LTokMain.Cancel;
+    end
+    else if LEvMain.IsSet then
+    begin
+      atomic_seq_cst_fence;
+      if LMain.HaveValue then
+      begin
+        atomic_seq_cst_fence;
+        if LHedge.Comp <> nil then
+          LHedge.Comp.Cancel;
+        LTokHedge.Cancel;
+      end;
+    end
+    else if LEvHedge.IsSet then
+    begin
+      atomic_seq_cst_fence;
+      if LHedge.HaveValue then
+      begin
+        atomic_seq_cst_fence;
+        if LMain.Comp <> nil then
+          LMain.Comp.Cancel;
+        LTokMain.Cancel;
+      end;
     end;
     while (not LEvMain.IsSet) or (not LEvHedge.IsSet) do
       SliceWait(LEvTick);
+    // 额外切片：胜者首 delta 门稳定后再裁决，避免与输路 Cancel 竞态截断 3 增量
+    SliceWait(LEvTick);
+    atomic_seq_cst_fence;
 
     if LOuterGone then
       raise EAgentCancelled.Create;
 
+    atomic_seq_cst_fence;
     if LMain.HaveValue then
       Exit(Wrap(LMain));
+    atomic_seq_cst_fence;
     if LHedge.HaveValue then
       Exit(Wrap(LHedge));
     if LMain.Cancelled or LMain.Aborted or

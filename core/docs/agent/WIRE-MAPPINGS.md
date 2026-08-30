@@ -48,7 +48,7 @@
 | `Tools` 非空（AReq.Tools） | `tools:[{type:"function", function:{name, description, parameters}}]`（parameters 为 JSON Schema 对象）；**空数组不上送字段** |
 | `ResponseSchemaJson` 非空 | `response_format:{type:"json_schema", json_schema:{name:"response", strict:true, schema:<原文透传>}}`（§1.7；schema 须可解析为 JSON object，违者本地 aecConfig） |
 | `ToolChoice` | tcmUnset 不上送；tcmAuto→`"auto"`；tcmNone→`"none"`；tcmRequired→`"required"`；tcmNamed→`{type:"function",function:{name:ToolChoiceName}}`（缺名或 Tools 空，本地 aecConfig） |
-| `ReasoningEffort` ≠ reUnset | `reasoning_effort:"minimal"\|"low"\|"medium"\|"high"`（W7）；仅推理族模型接受，其余上游 400 自然归因（Q-O1 同哲学，不做模型名预判）；Grok 同族适用 |
+| `ReasoningEffort` ≠ reUnset | `reasoning_effort:"minimal"\|"low"\|"medium"\|"high"\|"xhigh"\|"max"`（W7/W7b；`reXHigh→"xhigh"、reMax→"max"` 为最大档，reMax 封顶）；仅推理族模型接受，其余上游 400 自然归因（Q-O1 同哲学，不做模型名预判）；Grok 同族适用 |
 | 流式调用 | 追加 `"stream":true, "stream_options":{"include_usage":true}`（quirk Q-O3） |
 | `ExtraJson` | 浅合并进请求根对象 |
 
