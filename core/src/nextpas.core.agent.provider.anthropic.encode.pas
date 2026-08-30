@@ -27,10 +27,10 @@ function EncodeAnthropicCountTokensRequest(
 implementation
 
 uses
-  SysUtils,
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.text.builder,
+  nextpas.core.text.conv,
   nextpas.core.agent.errors,
   nextpas.core.agent.provider.common;
 
@@ -59,30 +59,29 @@ begin
   Result := False;
   AMime := '';
   APayload := '';
-  if (Copy(AUri, 1, Length(CPREFIX)) <> CPREFIX) or (Length(AUri) < 6) then
+  if (System.Copy(AUri, 1, Length(CPREFIX)) <> CPREFIX) or (Length(AUri) < 6) then
     Exit;
-  LRest := Copy(AUri, Length(CPREFIX) + 1, MaxInt);
-  LSemi := Pos(';', LRest);
+  LRest := System.Copy(AUri, Length(CPREFIX) + 1, MaxInt);
+  LSemi := System.Pos(';', LRest);
   if LSemi < 2 then
     Exit;
-  LMeta := Copy(LRest, 1, LSemi - 1);
-  APayload := Copy(LRest, LSemi + 1, MaxInt);
-  if Copy(APayload, 1, 7) <> 'base64,' then
+  LMeta := System.Copy(LRest, 1, LSemi - 1);
+  APayload := System.Copy(LRest, LSemi + 1, MaxInt);
+  if System.Copy(APayload, 1, 7) <> 'base64,' then
     Exit;
-  APayload := Copy(APayload, 8, MaxInt);
-  if Copy(LMeta, 1, 6) <> 'image/' then
+  APayload := System.Copy(APayload, 8, MaxInt);
+  if System.Copy(LMeta, 1, 6) <> 'image/' then
     Exit;
   AMime := LMeta;
   Result := (APayload <> '') and MimeAllowed(AMime);
 end;
-
 procedure WriteImageSource(ABld: IJsonBuilder; const AImageUrl: string);
 var
   LMime, LPayload: string;
 begin
   ABld.Key('source');
   ABld.BeginObject;
-  if Copy(AImageUrl, 1, 5) = 'data:' then
+  if System.Copy(AImageUrl, 1, 5) = 'data:' then
   begin
     if not ParseDataUri(AImageUrl, LMime, LPayload) then
       raise EAgentError.CreateLocal(aecConfig,
@@ -95,8 +94,8 @@ begin
     ABld.Key('data');
     ABld.Str(LPayload);
   end
-  else if (Copy(AImageUrl, 1, 7) = 'http://') or
-    (Copy(AImageUrl, 1, 8) = 'https://') then
+  else if (System.Copy(AImageUrl, 1, 7) = 'http://') or
+    (System.Copy(AImageUrl, 1, 8) = 'https://') then
   begin
     ABld.Key('type');
     ABld.Str('url');
@@ -114,7 +113,7 @@ var
   Doc: IJsonDocument;
 begin
   ABld.Key('input');
-  if Trim(AArgs) = '' then
+  if nextpas.core.text.conv.Trim(AArgs) = '' then
   begin
     ABld.RawJson('{}');
     Exit;
@@ -270,7 +269,7 @@ begin
     ABld.BeginObject;
     AgentWriteToolIdentity(ABld, ASpecs[I]);
     ABld.Key('input_schema');
-    if Trim(ASpecs[I].ParametersJson) = '' then
+    if nextpas.core.text.conv.Trim(ASpecs[I].ParametersJson) = '' then
       ABld.RawJson('{"type":"object"}')
     else
     begin

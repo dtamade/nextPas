@@ -30,6 +30,7 @@ implementation
 
 uses
   nextpas.core.http.base,
+  nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.http.message,
   nextpas.core.agent.provider.common,
@@ -400,7 +401,7 @@ begin
       FDone := True;
       FLastErrCode := aecTimeout;
       FLastErrMsg := 'wire: no stream data for ' +
-        IntToStr(FReadIdleMs) + 'ms (read idle timeout)';
+        nextpas.core.text.conv.IntToStr(FReadIdleMs) + 'ms (read idle timeout)';
       if FHttpCancel <> nil then
         FHttpCancel.Cancel;
       if FChannel <> nil then

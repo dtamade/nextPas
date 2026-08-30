@@ -19,6 +19,7 @@ uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.text.builder,
+  nextpas.core.text.conv,
   nextpas.core.agent.base,
   nextpas.core.agent.errors;
 
@@ -105,7 +106,7 @@ var
 begin
   if Length(ALine) > CSSEMaxLineBytes then
     ProtocolError('sse line exceeds '
-      + IntToStr(CSSEMaxLineBytes) + ' bytes limit');
+      + nextpas.core.text.conv.IntToStr(CSSEMaxLineBytes) + ' bytes limit');
   if ALine = '' then
   begin
     DispatchFrame;
@@ -113,11 +114,11 @@ begin
   end;
   if ALine[1] = ':' then
     Exit;                            { 注释/keep-alive 行 }
-  LColon := Pos(':', ALine);
+  LColon := System.Pos(':', ALine);
   if LColon = 0 then
     Exit;                            { 无冒号行按 SSE 规范忽略 }
-  LField := Copy(ALine, 1, LColon - 1);
-  LValue := Copy(ALine, LColon + 1, MaxInt);
+  LField := System.Copy(ALine, 1, LColon - 1);
+  LValue := System.Copy(ALine, LColon + 1, MaxInt);
   if (LValue <> '') and (LValue[1] = ' ') then
     Delete(LValue, 1, 1);            { 规范：冒号后单个空格剥离 }
   if LField = 'data' then
@@ -126,7 +127,7 @@ begin
     begin
       if FDataBuf.Len + SizeUInt(Length(LValue)) + 1 > CSSEMaxEventDataByte then
         ProtocolError('sse event data exceeds '
-          + IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
+          + nextpas.core.text.conv.IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
       FDataBuf.AppendStr(#10);
       FDataBuf.AppendStr(LValue);
     end
@@ -134,7 +135,7 @@ begin
     begin
       if Length(LValue) > CSSEMaxEventDataByte then
         ProtocolError('sse event data exceeds '
-          + IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
+          + nextpas.core.text.conv.IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
       if FDataBuf = nil then
         FDataBuf := MakeStringBuilder(CSSEDataBufInitialCap)
       else
@@ -237,7 +238,7 @@ begin
   begin
     FLineStart := Length(FBuf);
     ProtocolError('sse line exceeds '
-      + IntToStr(CSSEMaxLineBytes) + ' bytes limit');
+      + nextpas.core.text.conv.IntToStr(CSSEMaxLineBytes) + ' bytes limit');
   end;
 
   { 已消费前缀压实，防长流内存无界增长：单源 SpanCopySlice 复用 bytes.ops }
