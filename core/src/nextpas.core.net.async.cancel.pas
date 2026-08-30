@@ -26,6 +26,7 @@ procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.net.cancel;
 
 type
