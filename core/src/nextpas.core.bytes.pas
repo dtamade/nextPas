@@ -64,6 +64,9 @@ function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+{ String <-> bytes (single source via bytes.ops) }
+function BytesToString(const ABytes: TBytes): string; inline;
+function StringToBytes(const AText: string): TBytes; inline;
 
 { Binary: swap }
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
@@ -232,6 +235,7 @@ begin
   Result := nextpas.core.bytes.ops.BytesEndsWith(AData, ASuffix);
 end;
 
+<<<<<<< HEAD
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.bytes.ops.StripLeadingZero(AData);
@@ -260,6 +264,17 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
+end;
+
+function BytesToString(const ABytes: TBytes): string;
+begin
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
+end;
+
+function StringToBytes(const AText: string): TBytes;
+begin
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
+end;
 end;
 
 { Binary: swap }
