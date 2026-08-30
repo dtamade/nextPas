@@ -21,12 +21,26 @@ type
     Kind: Integer;
   end;
   TJsPureHostArray = array of TJsPureHostRec;
+  TJsPureProp = record Name: string; Value: TJsValue; end;
+  TJsPureObject = record Id: Int64; Props: array of TJsPureProp; end;
+  TJsPureHeap = array of TJsPureObject;
 
 function JsPureValidateHostName(const AName: string): Boolean; inline;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline;
 function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer; inline;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions;
   ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
+// 对象堆（零 FFI，纯族单源，线性查找，小对象零分配）
+function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
+function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
+function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
+function JsPureHeapHasProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
+function JsPureHeapDeleteProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
+function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;
+function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
+procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
+procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
+function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 
 implementation
 uses
@@ -65,6 +79,105 @@ var I: Integer;
 begin
   for I := 0 to High(Hosts) do if TStringView.FromStr(Hosts[I].Name).Equals(AName) then Exit(I);
   Result := -1;
+end;
+
+function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
+begin Result := V.IsObject or V.IsArray; end;
+
+function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
+var I: Integer;
+begin
+  if not JsPureIsHeapObject(Obj) then Exit(-1);
+  for I := 0 to High(Heap) do if Heap[I].Id = JsObjectId(Obj) then Exit(I);
+  Result := -1;
+end;
+
+function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
+var Id: Int64;
+begin
+  Id := Int64(Length(Heap)) + 1;
+  if Id = 0 then Id := 1;
+  SetLength(Heap, Length(Heap)+1);
+  Heap[High(Heap)].Id := Id;
+  SetLength(Heap[High(Heap)].Props, 0);
+  Result := JsHeapObjectValue(Id);
+end;
+
+function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
+var Id: Int64;
+begin
+  Id := Int64(Length(Heap)) + 1;
+  if Id = 0 then Id := 1;
+  SetLength(Heap, Length(Heap)+1);
+  Heap[High(Heap)].Id := Id;
+  SetLength(Heap[High(Heap)].Props, 0);
+  Result := JsHeapArrayValue(Id);
+end;
+
+function JsPureHeapHasProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
+var Idx, I: Integer;
+begin
+  Result := False;
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  for I := 0 to High(Heap[Idx].Props) do if Heap[Idx].Props[I].Name = Name then Exit(True);
+end;
+
+function JsPureHeapDeleteProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
+var Idx, I, J: Integer;
+begin
+  Result := False;
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  for I := 0 to High(Heap[Idx].Props) do if Heap[Idx].Props[I].Name = Name then
+  begin
+    for J := I to High(Heap[Idx].Props)-1 do Heap[Idx].Props[J] := Heap[Idx].Props[J+1];
+    SetLength(Heap[Idx].Props, Length(Heap[Idx].Props)-1);
+    Exit(True);
+  end;
+end;
+
+function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;
+var Idx, I: Integer;
+begin
+  Result := nil;
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  SetLength(Result, Length(Heap[Idx].Props));
+  for I := 0 to High(Heap[Idx].Props) do Result[I] := Heap[Idx].Props[I].Name;
+end;
+
+function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
+var Idx, I: Integer;
+begin
+  Result := JsUndefinedValue;
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  for I := 0 to High(Heap[Idx].Props) do if Heap[Idx].Props[I].Name = Name then Exit(Heap[Idx].Props[I].Value);
+end;
+
+procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
+var Idx, I: Integer;
+begin
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  for I := 0 to High(Heap[Idx].Props) do if Heap[Idx].Props[I].Name = Name then
+  begin Heap[Idx].Props[I].Value := Val; Exit; end;
+  I := Length(Heap[Idx].Props);
+  SetLength(Heap[Idx].Props, I+1);
+  Heap[Idx].Props[I].Name := Name;
+  Heap[Idx].Props[I].Value := Val;
+end;
+
+procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
+var I, J: Integer;
+begin
+  for I := 0 to High(Heap) do
+  begin
+    for J := 0 to High(Heap[I].Props) do Heap[I].Props[J].Name := '';
+    SetLength(Heap[I].Props, 0);
+  end;
+  SetLength(Heap, 0);
 end;
 
 function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean; inline;

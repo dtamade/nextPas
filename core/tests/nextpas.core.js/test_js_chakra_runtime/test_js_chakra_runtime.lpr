@@ -428,14 +428,33 @@ begin
 end;
 
 procedure TestGetSetPropNoop;
-var Ctx: IJsContext; O, V: TJsValue;
+var Ctx: IJsContext; O, O2, V: TJsValue; Keys: TJsStringArray;
 begin
   Ctx := MakeCtx;
   O := Ctx.NewObject;
   V := JsStringValue('v');
   Ctx.SetProp(O, 'k', V);
   V := Ctx.GetProp(O, 'k');
-  Check(V.IsUndefined, 'fake getprop undef');
+  Check(V.IsString and (V.AsString='v'), 'getprop v');
+  Check(Ctx.HasProp(O, 'k'), 'hasprop true');
+  Keys := Ctx.GetKeys(O);
+  Check(Length(Keys)=1, 'keys 1');
+  Check(Keys[0]='k', 'key k');
+  Check(not Ctx.HasProp(O, 'missing'), 'has false missing');
+  Ctx.SetProp(O, 'k', JsStringValue('v2'));
+  Check(Ctx.GetProp(O, 'k').AsString='v2', 'overwrite');
+  Check(Ctx.DeleteProp(O, 'k'), 'delete true');
+  Check(not Ctx.HasProp(O, 'k'), 'has after delete');
+  Check(Ctx.GetProp(O, 'k').IsUndefined, 'undef after delete');
+  Keys := Ctx.GetKeys(O);
+  Check(Length(Keys)=0, 'keys empty after delete');
+  Check(not Ctx.DeleteProp(O, 'k'), 'delete false again');
+  O2 := Ctx.NewObject;
+  Ctx.SetProp(O2, 'k', JsStringValue('other'));
+  Check(not Ctx.HasProp(O, 'k'), 'isolation');
+  Check(Ctx.GetProp(O2, 'k').AsString='other', 'isolation value');
+  Check(not Ctx.HasProp(JsUndefinedValue, 'x'), 'undef has false');
+  Check(Ctx.GetProp(JsUndefinedValue, 'x').IsUndefined, 'undef get undef');
 end;
 
 procedure TestCallNoop;
@@ -449,11 +468,17 @@ begin
 end;
 
 procedure TestGlobalIsObject;
-var Ctx: IJsContext; G: TJsValue;
+var Ctx: IJsContext; G1, G2: TJsValue;
 begin
   Ctx := MakeCtx;
-  G := Ctx.Global;
-  Check(G.IsObject, 'global obj');
+  G1 := Ctx.Global;
+  G2 := Ctx.Global;
+  Check(G1.IsObject, 'global obj');
+  Check(G2.IsObject, 'global2 obj');
+  Check(JsObjectId(G1)=JsObjectId(G2), 'global stable id');
+  Ctx.SetProp(G1, 'gx', JsStringValue('gv'));
+  Check(Ctx.GetProp(G2, 'gx').AsString='gv', 'global prop persisted');
+  Check(Ctx.HasProp(G1, 'gx'), 'global hasprop');
 end;
 
 { 36-42: 生命周期/线程/Tick/GC }
