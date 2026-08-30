@@ -17,6 +17,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.builder,
   nextpas.core.agent.base,
   nextpas.core.agent.errors;
@@ -31,7 +32,7 @@ type
   { Feed 式解析：Feed 原始字节 → PopEvent 取已完成帧 → Finish 收口 }
   TSSEParser = class
   private
-    FBuf: AnsiString;                { 原始字节缓冲；未完成行恒起于队首 }
+    FBuf: TBytes;                    { 原始字节缓冲；未完成行恒起于队首，复用 bytes.ops 单源 }
     FLineStart: SizeInt;             { 未完成行的起始偏移（0-based）}
     FBOMCheck: Boolean;              { 首部 UTF-8 BOM 待判定 }
     FFinished: Boolean;
@@ -56,12 +57,26 @@ type
 
 implementation
 
-{ S 是否为 UTF-8 BOM 的前缀（长度可不足 3）}
-function IsBOMPrefix(const S: AnsiString): Boolean;
+{ 单源字节切片转 string：零拷贝视图 + 单次 Move，inline 消除调用开销 }
+function BytesSliceToString(const ABuf: TBytes; const AOff, ALen: SizeUInt): string; inline;
+var
+  LSpan: TByteSpan;
 begin
-  Result := (Length(S) >= 1) and (S[1] = #$EF)
-    and ((Length(S) < 2) or (S[2] = #$BB))
-    and ((Length(S) < 3) or (S[3] = #$BF));
+  if ALen = 0 then
+    Exit('');
+  { 零拷贝借用：Slice 仅建视图，不分配；生命周期绑 ABuf }
+  LSpan := TByteSpan.FromBytes(ABuf).Slice(AOff, ALen);
+  SetLength(Result, LSpan.Len);
+  if LSpan.Len > 0 then
+    Move(LSpan.Data^, Result[1], LSpan.Len);
+end;
+
+{ TBytes 版 BOM 前缀判定，inline 单源（复用 bytes.ops 视图语义）}
+function IsBOMPrefixBytes(const ABuf: TBytes): Boolean; inline;
+begin
+  Result := (Length(ABuf) >= 1) and (ABuf[0] = $EF)
+    and ((Length(ABuf) < 2) or (ABuf[1] = $BB))
+    and ((Length(ABuf) < 3) or (ABuf[2] = $BF));
 end;
 
 constructor TSSEParser.Create;
@@ -72,7 +87,7 @@ end;
 
 procedure TSSEParser.ProtocolError(const AMsg: string);
 begin
-  FBuf := '';
+  FBuf := nil;
   FLineStart := 0;
   FDead := True;
   FFinished := True;
@@ -162,191 +177,76 @@ end;
 
 procedure TSSEParser.Feed(const ASpan: TByteSpan);
 var
-  LSpanOff: SizeInt;
-  LSpanRem: SizeInt;
-  LFirst: SizeInt;
+  I: SizeInt;
+  LLineEnd: SizeInt;
   LTmp: string;
-  LLineStart, I: SizeInt;
-  LNeed: Integer;
-  LCombined: AnsiString;
-  P: PByte;
-  LData: PByte;
-  LLen: SizeUInt;
-
-  function SpanByte(AIdx: SizeInt): Byte; inline;
-  begin
-    Result := LData[AIdx];
-  end;
-
-  function MakeLineFromSpan(AStart, ABeforeLF: SizeInt): string;
-  var
-    LLen: Integer;
-    LEnd: SizeInt;
-  begin
-    LLen := Integer(ABeforeLF - AStart);
-    if (LLen > 0) and (SpanByte(ABeforeLF - 1) = 13) then
-      Dec(LLen); // 去尾 CR
-    if LLen <= 0 then
-      Exit('');
-    SetString(Result, PAnsiChar(LData + AStart), LLen);
-  end;
-
 begin
   if FFinished then
     raise EAgentMisuse.Create('Feed after Finish');
   if ASpan.Len = 0 then
     Exit;
-  P := PByte(ASpan.Data);
-  LData := P;
-  LLen := ASpan.Len;
 
-  { 首部 UTF-8 BOM 零拷贝判定：仅探测前 3 字节，避免整包搬运 }
+  { 单源追加：复用 bytes.ops BytesAppend，不手工 SetLength+Move }
+  BytesAppend(FBuf, ASpan.Data, ASpan.Len);
+
+  { 首部 UTF-8 BOM 跳过；不足 3 字节且是 BOM 前缀时留待下一 Feed 判定（零拷贝探测） }
   if FBOMCheck then
   begin
-    LNeed := 0;
-    LCombined := '';
-    if Length(FBuf) > 0 then
-      LCombined := FBuf;
-    // 拼至多 3 字节用于判定
-    LNeed := 3 - Length(LCombined);
-    if LNeed > 0 then
+    if Length(FBuf) >= 3 then
     begin
-      if SizeInt(ASpan.Len) < LNeed then
-        LNeed := SizeInt(ASpan.Len);
-      SetLength(LCombined, Length(LCombined) + LNeed);
-      if LNeed > 0 then
-        Move(P^, LCombined[Length(FBuf) + 1], LNeed);
-    end;
-    if Length(LCombined) < 3 then
+      if (FBuf[0] = $EF) and (FBuf[1] = $BB) and (FBuf[2] = $BF) then
+        { 单源切片：复用 SpanCopySlice 去 BOM，零手工 Delete }
+        FBuf := SpanCopySlice(TByteSpan.FromBytes(FBuf), 3, SizeUInt(Length(FBuf) - 3));
+      FBOMCheck := False;
+    end
+    else if IsBOMPrefixBytes(FBuf) then
+      Exit
+    else
+      FBOMCheck := False;
+  end;
+
+  I := FLineStart;
+  while I < Length(FBuf) do
+  begin
+    if FBuf[I] = 10 then
     begin
-      if IsBOMPrefix(LCombined) then
-      begin
-        // 仍为 BOM 前缀，缓存等待更多字节
-        SetLength(FBuf, Length(FBuf) + SizeInt(ASpan.Len));
-        if SizeInt(ASpan.Len) > 0 then
-          Move(P^, FBuf[Length(FBuf) - SizeInt(ASpan.Len) + 1], ASpan.Len);
-        Exit;
-      end
-      else
-        FBOMCheck := False;
-        // 非 BOM 前缀，继续处理（FBuf 仍为之前的尾，保留）
+      { LF 终止；去尾部 CR（CRLF 形态）}
+      LLineEnd := I;
+      if (LLineEnd > FLineStart) and (FBuf[LLineEnd - 1] = 13) then
+        Dec(LLineEnd);
+      LTmp := BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(LLineEnd - FLineStart));
+      FLineStart := I + 1;
+      ProcessLine(LTmp);
+      Inc(I);
+    end
+    else if (FBuf[I] = 13) and (I + 1 < Length(FBuf))
+      and (FBuf[I + 1] = 10) then
+    begin
+      { CRLF 终止 }
+      LTmp := BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(I - FLineStart));
+      FLineStart := I + 2;
+      ProcessLine(LTmp);
+      Inc(I, 2);
     end
     else
-    begin
-      if (LCombined[1] = #$EF) and (LCombined[2] = #$BB) and (LCombined[3] = #$BF) then
-      begin
-        // 去除 BOM：FBuf 中的前缀部分清掉，Span 偏移前移
-        if Length(FBuf) >= 3 then
-          Delete(FBuf, 1, 3)
-        else
-        begin
-          LSpanOff := 3 - Length(FBuf);
-          FBuf := '';
-          // 调整 Span 视图，避免搬运整包，仅偏移指针与长度
-          LData := LData + LSpanOff;
-          LLen := LLen - SizeUInt(LSpanOff);
-          P := LData;
-        end;
-        if Length(FBuf) = 3 then // 上面 Delete 后可能剩 0，但 LCombined 已处理
-          ;
-      end;
-      FBOMCheck := False;
-    end;
-    if Length(FBuf) > 0 then
-    begin
-      // BOM 判定阶段可能已将 ASpan 小段拷入 FBuf 用于前缀探测（仅 <3 字节路径），需避免重复处理
-      // 若 FBOMCheck 已完成且 FBuf 仍含 <3 字节的探测残留（非 BOM 前缀情况），保留为行尾继续处理
-    end;
+      Inc(I);
   end;
 
-  // 若仍有未完成行尾（FBuf），先尝试与当前 Span 首段拼出首行
-  if Length(FBuf) > 0 then
+  { 未完成行限长检查（SECURITY §3）：缓冲内已无终止符，剩余即单行 }
+  if (Length(FBuf) - FLineStart) > CSSEMaxLineBytes then
   begin
-    // 寻找 Span 内首个 LF
-    LFirst := -1;
-    for I := 0 to SizeInt(LLen) - 1 do
-      if LData[I] = 10 then
-      begin
-        LFirst := I;
-        Break;
-      end;
-    if LFirst < 0 then
-    begin
-      // 无换行，整包并入尾
-      if SizeInt(Length(FBuf) + LLen) > CSSEMaxLineBytes then
-      begin
-        FBuf := '';
-        FLineStart := 0;
-        FDead := True;
-        FFinished := True;
-        ProtocolError('sse line exceeds ' + IntToStr(CSSEMaxLineBytes) + ' bytes limit');
-      end;
-      SetLength(FBuf, Length(FBuf) + SizeInt(LLen));
-      if LLen > 0 then
-        Move(LData^, FBuf[Length(FBuf) - SizeInt(LLen) + 1], LLen);
-      Exit;
-    end;
-    // 首行 = FBuf + Span[0 .. LFirst-1]（去尾 CR）
-    LTmp := FBuf;
-    if LFirst > 0 then
-    begin
-      SetLength(LTmp, Length(LTmp) + LFirst);
-      Move(LData^, LTmp[Length(FBuf) + 1], LFirst);
-    end;
-    if (Length(LTmp) > 0) and (LTmp[Length(LTmp)] = #13) then
-      SetLength(LTmp, Length(LTmp) - 1);
-    FBuf := '';
-    FLineStart := 0;
-    ProcessLine(LTmp);
-    LSpanOff := LFirst + 1;
-  end
-  else
-    LSpanOff := 0;
-
-  // 剩余 Span 段按 LF 切行，零拷贝：仅在 ProcessLine 时按需拷行
-  LSpanRem := SizeInt(LLen) - LSpanOff;
-  if LSpanRem <= 0 then
-    Exit;
-  LLineStart := LSpanOff;
-  I := LSpanOff;
-  while I < SizeInt(LLen) do
-  begin
-    if LData[I] = 10 then
-    begin
-      LTmp := MakeLineFromSpan(LLineStart, I);
-      ProcessLine(LTmp);
-      LLineStart := I + 1;
-    end
-    else if (LData[I] = 13) and (I + 1 < SizeInt(LLen)) and (LData[I + 1] = 10) then
-    begin
-      // CRLF 两字节终止（兼容分支）
-      LTmp := MakeLineFromSpan(LLineStart, I);
-      ProcessLine(LTmp);
-      LLineStart := I + 2;
-      Inc(I); // 额外跳过 LF，与 while 的 Inc 合并实现 I+2 步进
-    end;
-    Inc(I);
+    FLineStart := Length(FBuf);
+    ProtocolError('sse line exceeds '
+      + IntToStr(CSSEMaxLineBytes) + ' bytes limit');
   end;
 
-  // 尾部未完成行拷入 FBuf
-  if LLineStart < SizeInt(LLen) then
+  { 已消费前缀压实，防长流内存无界增长：单源 SpanCopySlice 复用 bytes.ops }
+  if FLineStart > 0 then
   begin
-    LSpanRem := SizeInt(LLen) - LLineStart;
-    if LSpanRem > CSSEMaxLineBytes then
-    begin
-      FBuf := '';
-      FLineStart := 0;
-      FDead := True;
-      FFinished := True;
-      ProtocolError('sse line exceeds ' + IntToStr(CSSEMaxLineBytes) + ' bytes limit');
-    end;
-    SetLength(FBuf, LSpanRem);
-    Move(LData[LLineStart], FBuf[1], LSpanRem);
-    FLineStart := 0;
-  end
-  else
-  begin
-    FBuf := '';
+    if FLineStart < Length(FBuf) then
+      FBuf := SpanCopySlice(TByteSpan.FromBytes(FBuf), SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart))
+    else
+      FBuf := nil;
     FLineStart := 0;
   end;
 end;
@@ -380,11 +280,11 @@ begin
   { 挂起的未终止行按最后一行处理（Q-O4 宽容收口）}
   if FLineStart < Length(FBuf) then
   begin
-    LTmp := Copy(FBuf, FLineStart + 1, MaxInt);
+    LTmp := BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart));
     FLineStart := Length(FBuf);
     ProcessLine(LTmp);
   end;
-  FBuf := '';
+  FBuf := nil;
   DispatchFrame;
 end;
 

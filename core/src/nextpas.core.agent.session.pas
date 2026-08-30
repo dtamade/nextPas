@@ -12,8 +12,8 @@ unit nextpas.core.agent.session;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.text.format,
   nextpas.core.fs,
   nextpas.core.json,
   nextpas.core.json.builder,
@@ -69,6 +69,9 @@ function IsValidThreadId(const AThreadId: string): Boolean;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 const
   ROLE_NAMES: array[TMessageRole] of string =
     ('system', 'user', 'assistant', 'tool');
@@ -80,7 +83,7 @@ const
 function Corrupt(ALineNo: Integer; const AWhy: string): ETranscriptCorrupt;
 begin
   Result := ETranscriptCorrupt.CreateLocal(aecProtocol,
-    Format('transcript line %d: %s', [ALineNo, AWhy]));
+    TextFormat('transcript line %d: %s', [ALineNo, AWhy]));
 end;
 
 procedure Misuse(const AWhy: string);
@@ -92,15 +95,6 @@ procedure ValidateThreadId(const AThreadId: string);
 begin
   if not IsValidThreadId(AThreadId) then
     Misuse('thread id violates charset policy');   { 不回显原值 }
-end;
-
-{ 字节保真拷贝：H+ 模式下 string 即 UTF-8 字节序列（config.export 同款惯用法）}
-function TextToBytes(const S: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(PAnsiChar(S)^, Result[0], Length(S));
 end;
 
 function IsValidThreadId(const AThreadId: string): Boolean;
@@ -542,7 +536,7 @@ begin
     LSB.AppendStr(TranscriptMessageToJson(LMsgs[I]));
     LSB.AppendChar(#10);
   end;
-  WriteAtomic(LDstPath, TextToBytes(LSB.ToString));
+  WriteAtomic(LDstPath, StringToBytes(LSB.ToString));
 end;
 
 function NewJsonlTranscriptStore(const ARootDir: string;
