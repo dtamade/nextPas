@@ -44,6 +44,8 @@ type
     function ReadBytes(ACount: SizeUInt): TBytes;
     {** 同上；不足 ACount 返回 False 不推进 *}
     function TryReadBytes(ACount: SizeUInt; out AOut: TBytes): Boolean;
+    {** 返回当前位置的裸指针并推进 ACount（零拷贝切片）；越界 raise *}
+    function ReadSpan(ACount: SizeUInt): PByte;
   end;
 
 {** TBytes 构造游标。 *}
@@ -84,6 +86,7 @@ type
     function PeekU64LE(AAt: SizeUInt): UInt64;
     function ReadBytes(ACount: SizeUInt): TBytes;
     function TryReadBytes(ACount: SizeUInt; out AOut: TBytes): Boolean;
+    function ReadSpan(ACount: SizeUInt): PByte;
   end;
 
 function NewByteCursor(const AData: TBytes): IByteCursor;
@@ -231,6 +234,16 @@ begin
   if not Result then
     Exit;
   AOut := ReadBytes(ACount);
+end;
+
+function TByteCursor.ReadSpan(ACount: SizeUInt): PByte;
+begin
+  CheckRange(FPos, ACount);
+  if ACount = 0 then
+    Result := nil
+  else
+    Result := FData + FPos;
+  Inc(FPos, ACount);
 end;
 
 end.

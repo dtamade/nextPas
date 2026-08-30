@@ -115,8 +115,9 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
-  nextpas.core.compress.deflate,
+  nextpas.core.compress,
   nextpas.core.zip.aes,
+  nextpas.core.zip.common,
   nextpas.core.zip.extra;
 
 const
@@ -502,7 +503,7 @@ begin
     if FMeta.FAesStrength > 0 then
       FSealer := NewWinZipAesSealer(APassword, FMeta.FAesStrength);
     if FMeta.FMethod = C_ZIP_METHOD_DEFLATE then
-      FDeflate := CreateRawDeflateWriter(TPushSink.Create(Self));
+      FDeflate := RawDeflateWriter(TPushSink.Create(Self));
     AOwner.AppendLocalEntry(FMeta, nil, True);
     if FSealer <> nil then
       AOwner.EmitRaw(PByte(FSealer.Header)^,
@@ -513,7 +514,7 @@ begin
   begin
     FBuffer := CreateBytesBuilder(4096);
     if AMeta.FMethod = C_ZIP_METHOD_DEFLATE then
-      FDeflate := CreateRawDeflateWriter(TBuilderSink.Create(FBuffer));
+      FDeflate := RawDeflateWriter(TBuilderSink.Create(FBuffer));
   end;
 end;
 

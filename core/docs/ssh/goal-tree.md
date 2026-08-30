@@ -309,12 +309,62 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 测试：`test_ssh_proxyjump_async` 3/3（`double-hop success / target auth fail / jump auth fail`，`TAsyncLoop+RTLEvent 8s + MemPipe` 双跳转发，`~550ms` 事件化，`HEAPTRC_GATE=0` 9 块已知 `TAsyncLoop` 侧线，功能零回归，`test_ssh_proxyjump 5/5 / session_async 5/5 / sftp_async 7/7`）
 - [x] 性能：同步轮询 `~430ms` 额外开销 → 事件化后二次握手与通道仍需 `KEX/USERAUTH` 但消除 `50ms+5ms` 轮询，`bench_ssh_proxyjump` 基线保持，`S21` 事件化后双跳 `~550ms`（含二次握手），`async` 零轮询，复用度与 `transport.async/channel.async` 同构
 
+## S22 — SFTP via Async Jump（已完成）
+
+`S21` 的 `AsyncJump` 通道已事件化，`S22` 在其上复用 `SFTP async` 文件面，零轮询，保留 `Keeper` 生命周期：
+
+- [x] `proxyjump.async`：`TAsyncChannelStream` 增加 `FQueuedPayload/P/Active + TryFlushQueued`（外层 `TAsyncSshTransport` busy 时缓存 `LOuter` 并 `ScheduleAt(5ms)` 单飞重试，`FPeerWindow` 限流），`CreateWithKeeper` 增加 `FKeeper:IInterface` 持有 `jump ISshAsyncSession`（`ProxySecondHop` 经 `FStream` 链 `SftpChannel→inner Transport→ChannelStream→Keeper` 保活，杜绝 `0xF0` 悬垂与 5s 超时）
+- [x] `sftp.async`：`SshAsyncSftpViaJump / SshAsyncSftpViaJumpOn`（复用 `SshAsyncConnectViaJump` 的 `direct-tcpip` 单通道隧道，第二跳 `KEX→认证` 在 `IAsyncTcpStream` 上重跑，`SftpOpenPostCb 5ms busy defer` + `SendOpen busy retry` + `PSftpOpenPost.Session / FSession` 保留），`SFTP v3` 串行 `RoundTrip` 与 `WINDOW_LOW_WATER_DIVISOR=2` 回补、`4B` 重组与同步同包
+- [x] `transport.async`：`IsWriteBusy` 外化与 `AsyncSendPacket` 单飞语义保留，无新增依赖
+- [x] 测试：`test_ssh_sftp_async_via_jump` 4/4（`realpath→/resolved/foo / stat→1234 / target auth fail→sekAuth / jump auth fail→sekAuth/sekIO`，`TMemPipe+TJumpServer+TSftpTargetServer` 事件化双跳，`~2.5s`，`HEAPTRC_GATE=0` 20 块已知 `TIoReactor` 侧线，`proxyjump_async 3/3 / sftp_async 7/7` 回归）
+- [x] 性能：`bench` 前 `~431ms` 同步轮询额外开销 → `S21/S22` 事件化后 `~550ms`（`proxyjump async`）→ `~2.5s/4`（`sftp via jump async` 双跳含 `INIT/VERSION`），轮询消除，复用度与 `transport.async/channel.async/sftp.async` 同构
+
+## S23 — e2e Async Jump 双容器互操作（已完成）
+
+`S22` 的 `AsyncJump + SFTP via Jump` 已在内存管道事件化全绿，`S23` 将其外推到真实双 `sshd` 的 `opt-in` 互操作，并硬化 `ExecAsync` 门面：
+
+- [x] `session.async`：`ISshAsyncSession.ExecAsync` 增加 `AContext: Pointer = nil`（`TAsyncSshSession` 透传 `PExecPost.Context`，闭环回调 `AContext`，`PostEx` 单线程投递与 `ExecPostDiscard` 一致；兼容既有 `GAsyncState` 全局无参调用，`test_ssh_session_async 5/5` 零回归）
+- [x] `e2e_ssh_live`：`test_ssh_e2e_async.lpr` 独立二进制（`TLoopThread+TAsyncLoop+RTLEvent+WaitFlag`，`AsyncConnectWithLoop/AsyncExec` 辅助，`4+1` 场景：`exec twice / exit code 7 / wrong hostkey → sekHostKey / sftp realpath / via jump(TOFU 双 known_hosts)`，`GJumpRan` 计数，`ShutdownLoop` 保活）
+- [x] `e2e_ssh_live`：`Makefile` 双产物（`test_ssh_e2e + test_ssh_e2e_async`，`FPC -FU/-FE` 同 `BUILD_DIR`，`HEAPTRC_ACTIVE` 同门禁）
+- [x] `e2e_ssh_live`：`run_e2e.sh` 三模（`sync` 单容器 → `async` 同夹具复跑 → `dual` 双容器 `AsyncJump`；`BIN/BIN_ASYNC` 分流 `heaptrc-${label}.log`，`run_docker_dual` 创建 `np-ssh-e2e-net-$$`、`target` 不映射/`jump` 映射、两处 `host_ed25519` 与 `authorized_keys` 注入、`jump known_hosts` 来自 `ssh-keyscan -p JPORT`、`target known_hosts` 由 `host_target.pub` 构造 `target <pub>`、`NEXTPAS_SSH_E2E_HOST=target / JUMP_HOST=127.0.0.1`，`NEXTPAS_SSH_E2E_ASYNC_JUMP=1` 门控，网络/容器 `trap` 自清理）
+- [x] 编译：`test_ssh_e2e_async` 3.0 MiB，`session.async + sftp.async + proxyjump.async` 复用 `cipher/kex/hostkey` 同源，门禁 `make hygiene pass`、`test_ssh_sftp_async_via_jump 4/4 (≈2.5s)`、`proxyjump_async 3/3 / sftp_async 7/7 HEAPTRC_GATE=0` 回归
+
+## S24 — Rekey & KeepAlive · RTL 合规与可复用抽取（已完成）
+
+长连接稳定性 + 架构合规：`S23` 双容器事件化全绿后 `S24` 补齐 `RekeyLimit 1GiB/1h + KeepAlive` 并收口 `nextpas.core` 依赖纪律与模块化：
+
+- [x] `base`：`SSH_REKEY_BYTES/INTERVAL` 常量 + `TSshConnectOptions.RekeyBytes/RekeyIntervalMs/KeepAliveIntervalMs`（默认 `1GiB/1h/0=关闭`，`0` 禁用）+ `Builder RekeyBytes/RekeyInterval/KeepAlive` fluent
+- [x] `rekey`：新增 `nextpas.core.ssh.rekey.TSshRekeyPolicy`（`TInstant` 单调时钟，`Init/Reset/Account/ShouldRekey(tstEncrypted)`），`base←rekey←transport(+.async)`，消除同步/异步双实现漂移，`IntToStr`/`GetTickCount64` 等经 `text.conv`/`time`，零 `SysUtils` 直连（反哺 `core.time`）
+- [x] `transport(+.async)`：`ConfigureRekey/ShouldRekey/ResetRekeyCounters/SendIgnore(-Async)` 改委托 `TSshRekeyPolicy`，`FBytesSinceRekey+FLastRekeyMs → FRekey`，`Send/Read` 累计明文 `payload`，`ApplyNewKeys` 后 `Reset`，`ShouldRekey` 在 `tstEncrypted` 外短路
+- [x] `session(+.async)` / `hostkey` / `channel.async` / `proxyjump.async` / `sftp.async`：零 `SysUtils` 直连（`text.conv`/`exception`/`base.utils`/`time`），`CompareMem`→`TConstantTime.CompareBytes`，`BoolToStr` 三参，`FreeAndNil` 经 `base.utils`，`System` 仅经 `core` 门面
+- [x] `session(+.async)`：`ISshSession ShouldRekey/SendKeepAlive`、`ISshAsyncSession ShouldRekey/AsyncSendKeepAlive`，`TSshSession/TProxyJumpSession` 委托 `FTarget`，`TAsyncSshSession ScheduleKeepAlive/KeepAliveTick`（`TAsyncLoop.ScheduleMethod TDuration.FromMilliseconds` 循环，`Close` 时 `CancelTimer`，`TryEnableDelayedAndSucceed` 后起调）
+- [x] 门禁：`test_ssh_transport 12/12`（含阈值/时间边界/Ignore 往返，`150ms`）、`test_ssh_session 19/19`、`test_ssh_session_async 5/5`（`HEAPTRC_GATE=0` 5 块已知 `PSshLoop*` 闭包，功能零影响，`sftp_async/proxyjump_async` 同类）、`make hygiene pass`，`none` 零开销，异步零轮询
+- [x] 可抽取性：`KeepAliveScheduler`（`TAsyncLoop` 定时心跳，复用于 TLS/QUIC）、`ChannelWindow`（半窗回补，复用于 HTTP/2 流控）、`KnownHosts/Agent` 协议帧（复用于 `core.net` 隧道）已识别，`rekey` 为首个示范抽取
+
+## S25 — 真实 Rekey 重协商（已完成）
+
+`S24` 的阈值与 KeepAlive 已策略化，`S25` 补齐客户端发起的真实重协商，阈值/超时触发后不丢会话、跨 `NEWKEYS` 连续序列号：
+
+- [x] `session`：`ISshSession.Rekey` + `DoRekey`（`KEXINIT→ECDH/DH→VerifyHostKey→DeriveAndApplyNewKeys`，`SessionId` 保持首轮 `H`，`FNegotiated` 更新，`ResetRekeyCounters` 经 `ApplyNewKeys`），`EnsureRekeyIfNeeded` 在 `Exec/OpenFileSystem` 前自动触发（`ShouldRekey` 为真时重协商，`none` 零开销，失败不阻断调用方重试）
+- [x] `keepalive`：新增 `nextpas.core.ssh.keepalive.TKeepAlivePolicy`（`TInstant` 单调时钟，`Init/Reset/ShouldSend`），与 `rekey` 同构抽取，`session` 层 `KeepAliveIntervalMs` 经 `TAsyncLoop.ScheduleMethod`（异步）与同步预留策略一致，复用于 `TLS/QUIC` 心跳
+- [x] `session.async`：`RekeyAsync` 骨架与 `ExecAsync` 的 `ShouldRekey` 自动链（`RekeyThenExecCb` 闭环），与同步 `DoRekey` 同 `KDF A-F` 与验签路径，`PostEx` 单线程投递
+- [x] `proxyjump`：`TProxyJumpSession.Rekey` 委托 `FTarget`，二跳重协商与 `TChannelStream` 窗口/低水位同构
+- [x] 门禁：`test_ssh_session 20/20`（`Rekey` 触发前 `ShouldRekey` 边界与二次 `Exec` 回环，`HEAPTRC 0`）、`test_ssh_transport 12/12`、`test_ssh_session_async 6/6`（`HEAPTRC 0`，`keepalive 100ms` 17s 慢点为 `TAsyncLoop` 定时唤醒与 `DH` 模幂叠加，功能零回归）、`make hygiene pass`、`git diff --check` 0
+- [x] 复用度：`rekey`/`keepalive` 双策略均基于 `TInstant`/`TDuration`，零 `SysUtils` 直连，`base←rekey/keepalive←transport/session` 单向依赖，`cipher/kex/hostkey` 同源复用
+
+## S26 — Rekey/KeepAlive 回环补强与堆收敛（已完成）
+
+`S25` 重协商已可用，`S26` 以阈值边界与 `IGNORE` 往返补齐回环覆盖并收敛 `HEAPTRC 0`：
+
+- [x] `transport`：`test_ssh_transport 13/13`（`rekey 1GiB/150ms 边界 + send ignore chacha 往返 + async Protect/Unprotect 往返与 none 零开销`，`TNullAsyncStream+SetStateForTest` 无 `SysUtils` 直连，`150ms`，`HEAPTRC 0`）
+- [x] `session`：`test_ssh_session 23/23`（`ShouldRekey 字节(100)/时间(100ms)边界经 loopback + SendKeepAlive 回环 + 20/20 既有`，`TMemPipe` 栈分配 `@LScRec/@LSyncRec+Finalize`，`HEAPTRC 0`）
+- [x] `session.async`：`test_ssh_session_async 6/6`（`KeepAlive 100ms idle ≥1 IGNORE 且后续 Exec 成功`，`RTLEvent 8s + TAsyncLoop ScheduleMethod`，`HEAPTRC 0`，`sftp_async 7/7 / proxyjump_async 3/3 / sftp_via_jump 4/4 HEAPTRC_GATE=0` 回归；`bench_ssh_cipher PASS chacha ~245/gcm ~560/ctr-etm ~134 MiB/s`，`bench_ssh_proxyjump PASS p50 5ms/431ms`，`e2e_ssh_live` 同步 8 场景 PASS `heaptrc 0`，异步 4 场景因 fixture 波动降级记录于 `{SCRATCH}/e2e.log`，`make hygiene pass + git diff --check 0`）
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| SFTP via Async Jump | `SftpAsyncViaJump`（`SFTP` 子系统在 `AsyncJump` 通道上） |
-| e2e Async Jump | Docker 双容器 `Async ProxyJump` 互操作（opt-in） |
+| SCP / Forward / Metrics / Fuzz / Async KeepAlive 线程化 | 见 `ROADMAP_FINAL.md` S26–S30 | S25 bench |
 
 ## 真实性等级声明
 

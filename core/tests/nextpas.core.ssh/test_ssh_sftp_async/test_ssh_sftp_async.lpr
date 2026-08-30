@@ -65,6 +65,18 @@ const CHACHA_ALG='chacha20-poly1305@openssh.com'; SERVER_IDENT='SSH-2.0-NextPas-
 type PSshLoopSftpScenario=^TSshLoopSftpScenario;
   TSshLoopSftpScenario=record HostSeed:TBytes; Done:Boolean; Failed:Boolean; FailMsg:string; FileData:TBytes; FileName:string; end;
 
+  TAsyncLoopThread = class(TThread)
+  private FLoop: TAsyncLoop;
+  protected procedure Execute; override;
+  public constructor Create(ALoop: TAsyncLoop);
+  end;
+
+  TAsyncSftpServerThread = class(TThread)
+  private FListener: ITcpListener; FSc: PSshLoopSftpScenario;
+  protected procedure Execute; override;
+  public constructor Create(AListener: ITcpListener; ASc: PSshLoopSftpScenario);
+  end;
+
   TSshLoopSftpServer=class
   private
     FStream:IReadWriteCloser; FSc:PSshLoopSftpScenario;
@@ -82,6 +94,21 @@ type PSshLoopSftpScenario=^TSshLoopSftpScenario;
     procedure HandleSftpPacket(const APkt:TBytes);
     procedure SendSftpReply(const APkt:TBytes);
   public constructor Create(AStream:IReadWriteCloser; ASc:PSshLoopSftpScenario); procedure Run; end;
+
+constructor TAsyncLoopThread.Create(ALoop: TAsyncLoop); begin inherited Create(True); FreeOnTerminate:=False; FLoop:=ALoop; end;
+procedure TAsyncLoopThread.Execute; begin FLoop.Run; end;
+
+constructor TAsyncSftpServerThread.Create(AListener: ITcpListener; ASc: PSshLoopSftpScenario);
+begin inherited Create(True); FreeOnTerminate:=False; FListener:=AListener; FSc:=ASc; end;
+procedure TAsyncSftpServerThread.Execute;
+var LConn: ITcpStream; Srv: TSshLoopSftpServer;
+begin
+  try
+    LConn:=FListener.Accept;
+    Srv:=TSshLoopSftpServer.Create(LConn as IReadWriteCloser, FSc);
+    try Srv.Run; finally Srv.Free; end;
+  except end;
+end;
 
 constructor TSshLoopSftpServer.Create(AStream:IReadWriteCloser; ASc:PSshLoopSftpScenario); begin inherited Create; FStream:=AStream; FSc:=ASc; FEncrypted:=False; SetLength(FBuf,0); FSftpHandle:=BytesOf('hdl1'); end;
 procedure TSshLoopSftpServer.Fail(const AMsg:string); begin if not FSc^.Failed then begin FSc^.Failed:=True; FSc^.FailMsg:=AMsg; end; end;
@@ -252,17 +279,19 @@ function RunSftpScenario(const AHostSeed:TBytes; const AOp:string; out APathRes:
 var LListener:ITcpListener; LPort:Word; LSc:PSshLoopSftpScenario; LServerThread:TThread; LLoop:TAsyncLoop; LLoopThread:TThread; LOpts:TSshConnectOptions;
 begin
   Result:=False; AErrKind:=sekIO; APathRes:=''; AData:=nil; ADir:=nil;
+  LServerThread:=nil; LLoop:=nil; LLoopThread:=nil; LListener:=nil;
+  LOpts:=Default(TSshConnectOptions);
   New(LSc); LSc^:=Default(TSshLoopSftpScenario); LSc^.HostSeed:=AHostSeed; LSc^.FileData:=BytesOf('hello sftp async'); LSc^.FileName:='/tmp/test';
   LListener:=NetTcpListen('127.0.0.1',0);
   try
     LPort:=LListener.LocalAddr.Port;
-    LServerThread:=TThread.CreateAnonymousThread(procedure var LConn:ITcpStream; Srv:TSshLoopSftpServer; begin try LConn:=LListener.Accept; Srv:=TSshLoopSftpServer.Create(LConn as IReadWriteCloser, LSc); try Srv.Run; finally Srv.Free; end; except end; end);
-    LServerThread.FreeOnTerminate:=False; LServerThread.Start;
+    LServerThread:=TAsyncSftpServerThread.Create(LListener, LSc);
+    LServerThread.Start;
     LLoop:=TAsyncLoop.Create(64);
     try
       if GState.Session<>nil then GState.Session:=nil; if GState.Err<>nil then FreeAndNil(GState.Err); if GState.FsErr<>nil then FreeAndNil(GState.FsErr); GState:=Default(TAsyncSftpTestState); GState.Event:=RTLEventCreate;
       try
-        LLoopThread:=TThread.CreateAnonymousThread(procedure begin LLoop.Run; end); LLoopThread.FreeOnTerminate:=False; LLoopThread.Start;
+        LLoopThread:=TAsyncLoopThread.Create(LLoop); LLoopThread.Start;
         LOpts:=DefaultSshConnectOptions('127.0.0.1'); LOpts.Host:='127.0.0.1'; LOpts.Port:=LPort; LOpts.User:='testuser'; LOpts.Password:='testpass'; LOpts.ExecTimeoutMs:=5000; LOpts.ConnectTimeoutMs:=3000;
         if not SshAsyncConnect(LLoop, LOpts, @OnConnect, nil) then begin GState.Err:=ESSHError.Create(sekIO,'dial submit failed'); GState.Done:=True; end;
         if not WaitForFlag(GState.Done, GState.Event, 15000) then begin AErrKind:=sekTimeout; Exit; end;
@@ -288,12 +317,13 @@ begin
           Result:=False; Exit; end;
         if GState.FsErr<>nil then begin AErrKind:=GState.FsErr.Kind; FreeAndNil(GState.FsErr); Exit; end;
         APathRes:=GState.PathResult; AAttrs:=GState.Attrs; ADir:=GState.Dir; AData:=GState.Data; Result:=True;
-        GState.Fs.Close;
-        GState.Session.Close;
-      finally RTLeventDestroy(GState.Event); GState.Event:=nil; LLoop.Stop; LLoopThread.WaitFor; LLoopThread.Free; end;
-    finally if GState.Session<>nil then begin GState.Session.Close; GState.Session:=nil; end; if GState.Err<>nil then FreeAndNil(GState.Err); if GState.FsErr<>nil then FreeAndNil(GState.FsErr); GState.Fs:=nil; SetLength(GState.Data,0); SetLength(GState.Dir,0); LLoop.Free; end;
-    LServerThread.WaitFor; LServerThread.Free;
-  finally LListener.Close; Finalize(LSc^); Dispose(LSc); end;
+        try GState.Fs.Close; except end;
+        try GState.Session.Close; except end;
+        Sleep(200);
+      finally RTLeventDestroy(GState.Event); GState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; Sleep(50); end;
+    finally if GState.Session<>nil then begin GState.Session.Close; GState.Session:=nil; end; if GState.Err<>nil then FreeAndNil(GState.Err); if GState.FsErr<>nil then FreeAndNil(GState.FsErr); GState.Fs:=nil; SetLength(GState.Data,0); SetLength(GState.Dir,0); SetLength(GState.PathResult,0); if Assigned(LLoop) then LLoop.Free; end;
+    if Assigned(LServerThread) then begin LServerThread.WaitFor; LServerThread.Free; end;
+  finally Finalize(LOpts); if Assigned(LListener) then LListener.Close; SetLength(LSc^.FileData,0); SetLength(LSc^.HostSeed,0); Finalize(LSc^); Dispose(LSc); end;
 end;
 
 var GSeed:TBytes; GRunner:TSuiteRunner; GSuite:TTestSuite;

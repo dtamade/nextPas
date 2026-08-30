@@ -4,7 +4,7 @@
 **层级**：L3 家族（依赖 L0-L2；`platform.dl` + `json` owner）  
 **Owner**：core-webview lane  
 **最后更新**：2026-08-28  
-**当前版本**：**1.38**（S44 Builder 全 inline，14+7 全路径 inline，零重复）  
+**当前版本**：**1.68**（S51 终局冻结）
 **当前状态**：**Production Ready · focused-runtime · 冻结**（`core-module-registry` 已 `focused-runtime`，13+10+6+3 门全绿，hygiene/source-contracts 双 pass，bench 基线 S27）  
 **对标基准**：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）  
 **稳定契约**：[CONTRACT.md](CONTRACT.md)（权威）· [README.md](README.md)（消费面）· [BRIDGE_PROTOCOL.md](BRIDGE_PROTOCOL.md)（v1 帧）· [BACKENDS.md](BACKENDS.md)（能力诚实表）
@@ -27,7 +27,7 @@
 |------|------|
 | **类型冻结** | `TWebviewKind` 4 值穷尽 · `TWebviewOptions` 4 不变量（Ephemeral/DataDir 互斥、尺寸非负、max≥min、scheme 小写 token）· `EWebviewError` 8 类目（ecNotFound/ecIO/ecParse/ecInternal）· `IWebviewWindow` 13 方法 composition 冻结（S31） |
 | **后端矩阵** | `fake` 全平台（测试）· `gtk` Linux WebKitGTK 4.1→4.0 dlopen 自声明 ABI · `webview2` Windows COM 真链（Env→Controller、WebMessage、ExecuteScript、WM_SIZE、DPI 真值、Post 调度，wine 可交互）· `wk` macOS 桩（恒 False，Darwin 预留） |
-| **复用收口** | `base` 7 校验 helper 全 `inline`：`IsValidWebviewSchemeToken` / `CheckWebviewSize/Min/Max/Session/InitScript` / `CheckInvokeCmd`；`factory` 容量 `GrowCapacity 4→2×` 三同构 + `builder` 14 链路全 `inline`（除 Build/Run），零重复校验（S39-S44） |
+| **复用收口** | `base` 7 校验 helper 全 `inline`：`IsValidWebviewSchemeToken` / `CheckWebviewSize/Min/Max/Session/InitScript` / `CheckInvokeCmd`；`factory` 容量 `GrowCapacity 4→2×` 三同构 + `builder` 14 链路全 `inline`（除 Build/Run）+ WinShell* 10 + MIME 2 全 inline，零重复校验（S39-S44） |
 | **门禁** | `test_webview_base` 10 · `test_webview_factory` 13 · `test_webview_vfs` 6 · `test_webview_wk_loader` 3 全绿 · `heaptrc 0` · `hygiene`/`source-contracts` 双 pass · `fpc -vh` 0 hint · `factory` 0 warnings（2 处 exhaustive 以 `{$WARNINGS OFF}` 抑制） |
 | **性能基线** | `bench_vfs` 过滤均值 1.22 GB/s（SmallHit 681ns / Fallback 894ns / Miss 217ns / 1M 800µs）· `bench_bridge` TryDecode 4.18µs / Resolve 622ns / Reject 2.37µs / Emit 1.06µs（S27 实测，S42 审计复核无回归） |
 | **文档** | `CONTRACT 1.38` · `README 1.38` · `BRIDGE v1` · `BACKENDS` 能力诚实表 · `PARITY` 不抄清单 |
@@ -89,7 +89,7 @@
 **验证**：对应平台诚实表 + 单测。  
 **退出**：`IWebviewWindow` 13→N 渐进，保持 `CONTRACT` 版本递增。
 
-### 4.6 S50 — 性能与文档终局
+### 4.6 S51 — 性能与文档终局
 
 **触发**：S45-S49 任一落地后。  
 **范围**：`bench_vfs`/`bench_bridge` 过滤均值重测（`nextpas.core.bench`）、`README` 徽标刷新、`PARITY` 再对标。  
@@ -132,7 +132,7 @@
 - **M1（S45）**：`window` 独立 `focused-runtime`，`webview` 双窗 live 回归绿。
 - **M2（S46）**：Darwin 真 `WKWebView` 可交互，`DefaultWebviewKind` 在 Darwin 优先 `wk`。
 - **M3（S47-S48）**：`IterateOnce` + `allowlist` 转正，`async` 集成冒烟绿。
-- **M4（S50）**：`CONTRACT 1.50` 冻结，bench 无回归，`README` 对齐。
+- **M4（S51）**：`CONTRACT 1.50` 冻结，bench 无回归，`README` 对齐。
 
 每个里程碑一个可回滚 commit，`worktree clean` + `focused gate` + `hygiene` + `git diff --check` 后经 `landing/*` 候选分支 `cherry-pick` 入 `main`（不 raw merge lane）。
 

@@ -9,9 +9,11 @@ completion claim.
 | Level | Meaning |
 | --- | --- |
 | `source-contract` | Source, docs, owner boundary, unsupported behavior, or public surface is locked by a focused contract. |
-| `forced-compile` | A non-native host/branch compiles, but no runtime behavior is proven. |
-| `focused-runtime` | A focused gate ran behavior on a named host or path. |
-| `ci-runtime-matrix` | Runtime proof is repeated in CI across the named host/arch matrix. |
+| `forced-compile` | A non-native host/branch compiles, but no runtime behavior is proven. Carrier for platform facades: `test_platform_simulated_host_compile_matrix` (5 legs: darwin/android/freebsd/unix via `-dNEXTPAS_FORCE_HOST_*`, windows via `-Twin64 -Px86_64`; all 29 `platform.*` facades) — compile coherence only. |
+| `focused-runtime` | A focused gate ran behavior on a named host or path. Today most L1/L2/L3 are Linux x86_64 focused-runtime by design. |
+| `ci-runtime-matrix` | Runtime proof is repeated in CI across the named host/arch matrix (durable). Currently **platform-scoped** only: Windows 28-gate `platform-windows-ci-matrix.sh` on `windows-latest` + macOS layer A 10-gate `platform-macos-ci-matrix.sh`. L2/L3 intentionally remain `focused-runtime` (Linux x86_64); host variance is owned by L0 `platform`. |
+
+> **Host matrix separation (design):** `ci-runtime-matrix` (durable CI runtime) and the simulated-host `forced-compile` matrix are intentionally separate. The simulated-host matrix (`core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix`, 5 legs × all 29 `platform.*` facades) proves compile coherence and stays `forced-compile`; it does **not** promote to `ci-runtime-matrix`. The durable `ci-runtime-matrix` is currently **platform-only** (Windows 28 + macOS 10 platform gates, see `core/docs/platform/runtime-truth-matrix.md` and `core/docs/platform/host-capability-matrix.md`). L2/L3 modules (fs, net, http, vfs, crypto, etc.) therefore correctly show `focused-runtime` on Linux x86_64 in the registry — their host variance is delegated to L0 `platform` via layering, not claimed independently. Promoting any L2/L3 to `ci-runtime-matrix` requires explicit consumer + CI ownership and would be recorded here and in `runtime-truth-matrix.md`.
 
 ## Registry
 
@@ -25,7 +27,7 @@ completion claim.
 | `bytes` | L1 | byte containers | `nextpas.core.bytes` | L0, documented text/encoding seam | focused-runtime |
 | `cbor` | L2 | CBOR format (RFC 8949 deterministic subset) | `nextpas.core.cbor` | L0-L1 | focused-runtime |
 | `collections` | L1 | data structures | `nextpas.core.collections` | L0 | focused-runtime |
-| `compress` | L2 | compression formats | `nextpas.core.compress` | L0-L1, provider FFI | focused-runtime — `compress.base GZIP_MAX_DECOMPRESS_BYTES=32MiB`单源（门面重导出，`vfs.compressed VFS_DECOMPRESS_MAX_BYTES`已收敛为薄别名/薄门面经`transform`承载） |
+| `compress` | L2 | compression formats | `nextpas.core.compress` | L0-L1, provider FFI | focused-runtime — `compress.base GZIP_MAX_DECOMPRESS_BYTES=32MiB` 单源（门面重导出，`vfs.compressed VFS_DECOMPRESS_MAX_BYTES` 已收敛为薄别名/薄门面经 `transform` 承载） |
 | `config` | L3 | config facade | `nextpas.core.config` | L0-L2 formats | focused-runtime |
 | `contracts` | L0 | assertion helpers | `nextpas.core.contracts` | base/errors | focused-runtime |
 | `cookie` | L2 | cookie grammar | `nextpas.core.cookie` | L0-L1 | source-contract |
@@ -74,7 +76,7 @@ completion claim.
 | `toml` | L2 | TOML format | `nextpas.core.toml` | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI | `nextpas.core.tui` | L0-L2 | focused-runtime partial |
 | `validation` | L2 | validation helpers | `nextpas.core.validation` | L0-L1 | focused-runtime |
-| `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub + facade + transform decorator) | `nextpas.core.vfs` | L0-L1; os seam is the single fs/path L2→L2; embedded adds respack.reader; transform/compressed adds compress.base (GZIP_MAX 32MiB单源) L2→L2 decorator seam | focused-runtime ×12 (respack5+vfs5+transform/compressed2, source-contract共享1, bench_transform基准1), source-contract — embedded `FPaths/FEntries/FETags/FLastMods` parallel cache (O(log n) index, O(1) ETag/Last-Modified, zero `DecodeWire`), `TEmbeddedSlice/TEmbeddedSliceStream` 零拷贝+`SpinLock` `EMBEDDED_POOL_SIZE` 16 槽池化 (10k 163ms, `heaptrc 0`)，`List` 零 `Stat` 直填 `FEntries`，`VfsNameCompare` 直通 `base.utils CompareBytesOrdered` + `VfsETagStrong/FNV` 单源消 `embedded/http` 字面量重复，`HasSubtreePath/IndexOfPath` 共用 `LowerBoundPath` + `CompareBytesOrdered` 显式字节序 + `CompareMem` 前缀 + `PChar→@S[1]` 显式化 + `LPtr/Llen` 缓存 + `inline` 热路径，移除 `StartsWithPath` 死代码；`transform` 通用字节变换装饰器（`TVfsTransformFunc/TVfsShouldTransformFunc`函数注入，L3，零拷贝按需变换：`Stat`单源`Size/ContentHash`校正、`OpenRead`单次`VfsReadAllBytes`复用`Pointer`判等零二次IO、`TryGetETag`禁用/`TryGetLastModified`透传、`Op/Path`完整`'wrap'/'stat'/'open'`+`'transform failed'`包装、`CaseSensitive/List`透传，四件套门面`vfs.pas`重导出`CreateTransformingVfs`；稳定性：`nil`守卫/`Should`短路/池化无关资源零泄漏）+ `compressed` 薄门面（经`transform`承载gzip：策略仅留`VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX`单源32MiB防bomb与`daAuto/daGzip`语义+`IsGzipPred`2字节+`COMPRESSED_HEADER_PEEK`4096头预判HeaderPred免`Stat`全量读，`Stat`/`OpenRead`复用`transform`单次读取+`402`头窥证据，ETag统一禁用）；回绕/悬垂/两段式/池资源闭环见CONTRACT §2/§5；bench_transform 4场景阈值锁定S6性能契约 |
+| `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub + facade + transform decorator) | `nextpas.core.vfs` | L0-L1; os seam is the single fs/path L2→L2; embedded adds respack.reader; transform/compressed adds compress.base (GZIP_MAX 32MiB 单源) L2→L2 decorator seam | focused-runtime, source-contract — embedded `FPaths/FEntries/FETags/FLastMods` parallel cache (O(log n) index, O(1) ETag/Last-Modified, zero `DecodeWire`), `TEmbeddedSlice/TEmbeddedSliceStream` 零拷贝+`SpinLock` `EMBEDDED_POOL_SIZE` 16 槽池化 (10k 163ms, `heaptrc 0`)，`List` 零 `Stat` 直填 `FEntries`，`VfsNameCompare` 直通 `base.utils CompareBytesOrdered` + `VfsETagStrong/FNV` 单源消 `embedded/http` 字面量重复，`HasSubtreePath/IndexOfPath` 共用 `LowerBoundPath` + `CompareBytesOrdered` 显式字节序 + `CompareMem` 前缀 + `PChar→@S[1]` 显式化 + `LPtr/Llen` 缓存 + `inline` 热路径，移除 `StartsWithPath` 死代码；`transform` 通用字节变换装饰器（`TVfsTransformFunc/TVfsShouldTransformFunc` 函数注入，L3，零拷贝按需变换：`Stat` 单源 `Size/ContentHash` 校正、`OpenRead` 单次 `VfsReadAllBytes` 复用 `LData` 消二次 `FInner.OpenRead` 磁盘 IO（`Should` 假/`Pointer` 未变时 `CreateBytesStreamFrom(LData)` 复用已读缓冲，省一次系统调用）+ `Pointer` 去重、`TryGetETag` 禁用防旧指纹、`TryGetLastModified` 经 `QueryInterface` 透传；`compressed` 为 `transform` 薄门面仅保留策略 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，`STORE` 零拷贝与 32MiB 防 bomb 由 `transform` 承载，`daAuto` 4K 头部预判避免 `Stat` 全量读取（非 gzip 直接返回内层 `Stat`，省一次 `VfsReadAllBytes`），`bench_transform` 4 项基准固化（`Stat/header-peek 972ns` 等），合规 `nextpas.core.exception` + `QueryInterface` 无 `SysUtils` 直引） |
 | `webview` | L3 | desktop app shell over system web engines (WebKitGTK/WebView2/WKWebView backends; unified IPC bridge) | `nextpas.core.webview` | L0-L2 plus json owner; platform.dl | focused-runtime, source-contract — S37 容量与 Fail-Fast 完整性（`IsValidWebviewSchemeToken` 复用 + Builder `GrowInvokes/GrowReady` 2× + Scheme/几何早筛 + `CONTRACT 1.31`） |
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |
@@ -87,5 +89,7 @@ completion claim.
 2. System final facade: TypInfo/SysUtils/Classes decisions tied to real compiler
    and core consumers.
 3. Mem L0 debt zero: remove or re-home the allowlisted L0 dependency debt.
-4. Platform runtime truth matrix: real host runtime evidence stays separate from
-   source-contract and forced-compile truth.
+4. Platform runtime truth matrix: `runtime-truth-matrix.md` is **platform-scoped** by design
+   (20 rows); real host runtime (`ci-runtime-matrix` + `focused-runtime`) stays
+   separate from `source-contract`/`forced-compile` (simulated-host 5-leg matrix).
+   L2/L3 host truth is owned by L0 `platform` until explicit promotion.

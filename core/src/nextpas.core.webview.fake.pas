@@ -94,29 +94,55 @@ type
     FInvokes: TObject;             // 非拥有别名：同类私有访问用
     FAssets: TObject;              // 同上
     FEvalScripts: TFakeEvalRecords;
+    FEvalScriptsCount: Integer;
     FEvalQueue: array of Boolean;  // 预载结果 FIFO：True=错误（值在 FEvalResults）
     FEvalResults: array of string; // 与 FEvalQueue 平行：成功 JSON 或错误消息
+    FEvalQueueCount: Integer;
     FPendingEvals: array of TFakePendingEval;
+    FPendingCount: Integer;
     FOutcomes: TFakeInvokeOutcomes;
+    FOutcomesCount: Integer;
     { DeliverFrame 协议路径产生的回执脚本（resolve/reject）捕获队列 }
     FCapturedEvals: array of string;
+    FCapturedCount: Integer;
     FEmits: array of record
       Event: string;
       PayloadJson: string;
     end;
+    FEmitsCount: Integer;
     FDroppedEmits: Integer;
     FNavigateCount: Integer;
     FReloadCount: Integer;
     FStopCount: Integer;
     FHistory: array of string;
+    FHistoryCount: Integer;
     FHistIdx: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
+    FOnNavStartedCount: Integer;
     FOnNavFinished: array of TWebviewNavEventHandler;
+    FOnNavFinishedCount: Integer;
     FOnNavFailed: array of TWebviewNavFailedHandler;
+    FOnNavFailedCount: Integer;
     FOnWindowClosed: array of TWebviewNotifyHandler;
+    FOnWindowClosedCount: Integer;
     FOnReady: array of TWebviewNotifyHandler;
+    FOnReadyCount: Integer;
     FOnScaleChanged: array of TWebviewScaleHandler;
+    FOnScaleChangedCount: Integer;
     procedure RequireOpen;
+    procedure GrowPendingEvals; inline;
+    procedure GrowOutcomes; inline;
+    procedure GrowEvalScripts; inline;
+    procedure GrowEmits; inline;
+    procedure GrowCaptured; inline;
+    procedure GrowOnNavStarted; inline;
+    procedure GrowOnNavFinished; inline;
+    procedure GrowOnNavFailed; inline;
+    procedure GrowOnWindowClosed; inline;
+    procedure GrowOnReady; inline;
+    procedure GrowOnScaleChanged; inline;
+    procedure GrowQueue; inline;
+    procedure GrowHistory; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -137,7 +163,7 @@ type
   protected
     { IWebviewWindow }
     procedure Close; virtual;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     procedure Show; virtual;
     procedure Hide; virtual;
     function IsVisible: Boolean;
@@ -174,7 +200,7 @@ type
       ACallback: TWebviewEvalCallback;
       AOnError: TWebviewEvalErrorCallback); virtual;
     procedure Emit(const AEvent, APayloadJson: string); virtual;
-    function GetDispatcher: IWebviewDispatcher;
+    function GetDispatcher: IWebviewDispatcher; inline;
     function NativeHandle: TWebviewNativeHandle;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload; virtual;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventMethod); overload; virtual;
@@ -355,12 +381,12 @@ type
     FHead: Integer;
     FCount: Integer;
     FOwnerThread: UInt64;
-    procedure Grow;
+    procedure Grow; inline;
   public
     constructor Create;
     destructor Destroy; override;
     procedure PostRef(AProc: TWebviewProcRef);
-    function IsOnMainThread: Boolean;
+    function IsOnMainThread: Boolean; inline;
     function PumpOnce: Boolean;
     procedure PumpAll;
     function PendingCount: Integer;
@@ -384,13 +410,13 @@ begin
   inherited Destroy;
 end;
 
-procedure TFakeDispatcher.Grow;
+procedure TFakeDispatcher.Grow; inline;
 var
   LNewCap, I: Integer;
   LNew: array of TWebviewProcRef;
 begin
-  LNewCap := Length(FRing) * 2;
-  if LNewCap = 0 then
+  LNewCap := WebviewGrowCapacity(Length(FRing));
+  if (Length(FRing) = 0) and (LNewCap < 16) then
     LNewCap := 16;
   SetLength(LNew, LNewCap);
   for I := 0 to FCount - 1 do
@@ -412,7 +438,7 @@ begin
   end;
 end;
 
-function TFakeDispatcher.IsOnMainThread: Boolean;
+function TFakeDispatcher.IsOnMainThread: Boolean; inline;
 begin
   Result := platform_thread_id = FOwnerThread;
 end;
@@ -564,13 +590,20 @@ end;
 
 var
   GLiveWindows: array of TFakeWebview;
+  GLiveWindowsCount: Integer = 0;
+
+procedure GrowLiveWindows; inline;
+begin
+  if GLiveWindowsCount = Length(GLiveWindows) then
+    SetLength(GLiveWindows, WebviewGrowCapacity(Length(GLiveWindows)));
+end;
 
 function FakeLiveWindowCount: Integer;
 var
   I, LCnt: Integer;
 begin
   LCnt := 0;
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed then
       LCnt := LCnt + 1;
   Result := LCnt;
@@ -580,7 +613,7 @@ procedure FakePumpAll;
 var
   I: Integer;
 begin
-  for I := 0 to High(GLiveWindows) do
+  for I := 0 to GLiveWindowsCount - 1 do
     if not GLiveWindows[I].FClosed then
       GLiveWindows[I].PumpOnce;
 end;
@@ -633,9 +666,11 @@ begin
   FAssets := LAssets;
   FDroppedEmits := 0;
   FNavigateCount := 0;
+  FHistoryCount := 0;
   FHistIdx := -1;
-  SetLength(GLiveWindows, Length(GLiveWindows) + 1);
-  GLiveWindows[High(GLiveWindows)] := Self;
+  GrowLiveWindows;
+  GLiveWindows[GLiveWindowsCount] := Self;
+  Inc(GLiveWindowsCount);
 
   { Initial* 启动加载：构造即导航。优先级 InitialUrl > InitialHtml
     （CONTRACT §2.2），资产/桥请求都在主循环泵里才发生，Build 返回后的
@@ -650,11 +685,13 @@ destructor TFakeWebview.Destroy;
 var
   I: Integer;
 begin
-  for I := High(GLiveWindows) downto 0 do
+  for I := GLiveWindowsCount - 1 downto 0 do
     if GLiveWindows[I] = Self then
     begin
-      GLiveWindows[I] := GLiveWindows[High(GLiveWindows)];
-      SetLength(GLiveWindows, Length(GLiveWindows) - 1);
+      GLiveWindows[I] := GLiveWindows[GLiveWindowsCount - 1];
+      GLiveWindows[GLiveWindowsCount - 1] := nil;
+      Dec(GLiveWindowsCount);
+      Break;
     end;
   inherited Destroy;
 end;
@@ -665,42 +702,134 @@ begin
     raise EWebviewClosed.Create('webview window is closed');
 end;
 
+procedure TFakeWebview.GrowPendingEvals; inline;
+begin
+  if FPendingCount = Length(FPendingEvals) then
+    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
+end;
+
+procedure TFakeWebview.GrowOutcomes; inline;
+begin
+  if FOutcomesCount = Length(FOutcomes) then
+    SetLength(FOutcomes, WebviewGrowCapacity(Length(FOutcomes)));
+end;
+
+procedure TFakeWebview.GrowEvalScripts; inline;
+begin
+  if FEvalScriptsCount = Length(FEvalScripts) then
+    SetLength(FEvalScripts, WebviewGrowCapacity(Length(FEvalScripts)));
+end;
+
+procedure TFakeWebview.GrowEmits; inline;
+begin
+  if FEmitsCount = Length(FEmits) then
+    SetLength(FEmits, WebviewGrowCapacity(Length(FEmits)));
+end;
+
+procedure TFakeWebview.GrowCaptured; inline;
+begin
+  if FCapturedCount = Length(FCapturedEvals) then
+    SetLength(FCapturedEvals, WebviewGrowCapacity(Length(FCapturedEvals)));
+end;
+
+procedure TFakeWebview.GrowOnNavStarted; inline;
+begin
+  if FOnNavStartedCount = Length(FOnNavStarted) then
+    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
+end;
+
+procedure TFakeWebview.GrowOnNavFinished; inline;
+begin
+  if FOnNavFinishedCount = Length(FOnNavFinished) then
+    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
+end;
+
+procedure TFakeWebview.GrowOnNavFailed; inline;
+begin
+  if FOnNavFailedCount = Length(FOnNavFailed) then
+    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
+end;
+
+procedure TFakeWebview.GrowOnWindowClosed; inline;
+begin
+  if FOnWindowClosedCount = Length(FOnWindowClosed) then
+    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
+end;
+
+procedure TFakeWebview.GrowOnReady; inline;
+begin
+  if FOnReadyCount = Length(FOnReady) then
+    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
+end;
+
+procedure TFakeWebview.GrowOnScaleChanged; inline;
+begin
+  if FOnScaleChangedCount = Length(FOnScaleChanged) then
+    SetLength(FOnScaleChanged, WebviewGrowCapacity(Length(FOnScaleChanged)));
+end;
+
+procedure TFakeWebview.GrowQueue; inline;
+begin
+  if FEvalQueueCount = Length(FEvalQueue) then
+  begin
+    SetLength(FEvalQueue, WebviewGrowCapacity(Length(FEvalQueue)));
+    SetLength(FEvalResults, WebviewGrowCapacity(Length(FEvalResults)));
+  end;
+end;
+
+procedure TFakeWebview.GrowHistory; inline;
+begin
+  if FHistoryCount = Length(FHistory) then
+    SetLength(FHistory, WebviewGrowCapacity(Length(FHistory)));
+end;
+
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
   FLck.Acquire;
   try
-    SetLength(FOutcomes, Length(FOutcomes) + 1);
-    FOutcomes[High(FOutcomes)].Cmd := ACmd;
-    FOutcomes[High(FOutcomes)].IsError := AIsError;
-    FOutcomes[High(FOutcomes)].ResultJson := AResultJson;
-    FOutcomes[High(FOutcomes)].Code := ACode;
-    FOutcomes[High(FOutcomes)].Message := AMessage;
+    GrowOutcomes;
+    FOutcomes[FOutcomesCount].Cmd := ACmd;
+    FOutcomes[FOutcomesCount].IsError := AIsError;
+    FOutcomes[FOutcomesCount].ResultJson := AResultJson;
+    FOutcomes[FOutcomesCount].Code := ACode;
+    FOutcomes[FOutcomesCount].Message := AMessage;
+    Inc(FOutcomesCount);
   finally
     FLck.Release;
   end;
 end;
 
 procedure TFakeWebview.PushHistory(const AUrl: string);
+var
+  I: Integer;
 begin
-  SetLength(FHistory, FHistIdx + 2);
-  FHistory[FHistIdx + 1] := AUrl;
-  FHistIdx := FHistIdx + 1;
+  if FHistIdx + 1 < FHistoryCount then
+  begin
+    for I := FHistIdx + 2 to FHistoryCount - 1 do
+      FHistory[I] := '';
+    FHistoryCount := FHistIdx + 1;
+  end;
+  GrowHistory;
+  FHistory[FHistoryCount] := AUrl;
+  Inc(FHistoryCount);
+  FHistIdx := FHistoryCount - 1;
 end;
 
 procedure TFakeWebview.FireReadyHandlers;
 var
   I: Integer;
 begin
-  for I := 0 to High(FOnReady) do
+  for I := 0 to FOnReadyCount - 1 do
     FOnReady[I]();
 end;
 
 procedure TFakeWebview.AppendEvalScript(const AScript: string);
 begin
-  SetLength(FEvalScripts, Length(FEvalScripts) + 1);
-  FEvalScripts[High(FEvalScripts)].Script := AScript;
-  FEvalScripts[High(FEvalScripts)].Answered := False;
+  GrowEvalScripts;
+  FEvalScripts[FEvalScriptsCount].Script := AScript;
+  FEvalScripts[FEvalScriptsCount].Answered := False;
+  Inc(FEvalScriptsCount);
 end;
 
 procedure TFakeWebview.Close;
@@ -716,14 +845,14 @@ begin
       Exit;
     FClosed := True;
     { 在途 Eval 统一失败收尾（CONTRACT §3.2 / INV-7 恰好一次） }
-    SetLength(LErrors, Length(FPendingEvals));
-    for I := 0 to High(FPendingEvals) do
+    SetLength(LErrors, FPendingCount);
+    for I := 0 to FPendingCount - 1 do
     begin
       FEvalScripts[FPendingEvals[I].ScriptIdx].Answered := True;
       FEvalScripts[FPendingEvals[I].ScriptIdx].ErrorMessage := 'window closed';
       LErrors[I] := FPendingEvals[I].OnError;
     end;
-    SetLength(FPendingEvals, 0);
+    FPendingCount := 0;
   finally
     FLck.Release;
   end;
@@ -738,8 +867,8 @@ begin
       LErrObj.Free;
     end;
   end;
-  SetLength(LClosed, Length(FOnWindowClosed));
-  for I := 0 to High(FOnWindowClosed) do
+  SetLength(LClosed, FOnWindowClosedCount);
+  for I := 0 to FOnWindowClosedCount - 1 do
     LClosed[I] := FOnWindowClosed[I];
   { 关闭后投递静默丢弃（契约 §3.1） }
   (FDispatcher as TFakeDispatcher).DropAll;
@@ -747,7 +876,7 @@ begin
     LClosed[I]();
 end;
 
-function TFakeWebview.IsClosed: Boolean;
+function TFakeWebview.IsClosed: Boolean; inline;
 begin
   Result := FClosed;
 end;
@@ -889,8 +1018,9 @@ end;
 procedure TFakeWebview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
   RequireOpen;
-  SetLength(FOnScaleChanged, Length(FOnScaleChanged) + 1);
-  FOnScaleChanged[High(FOnScaleChanged)] := AHandler;
+  GrowOnScaleChanged;
+  FOnScaleChanged[FOnScaleChangedCount] := AHandler;
+  Inc(FOnScaleChangedCount);
 end;
 
 procedure TFakeWebview.OnScaleChanged(AHandler: TWebviewScaleMethod);
@@ -916,7 +1046,7 @@ begin
   LEvent.IsError := False;
   LEvent.ErrorCode := 0;
   LEvent.ErrorMessage := '';
-  for I := 0 to High(FOnNavStarted) do
+  for I := 0 to FOnNavStartedCount - 1 do
     FOnNavStarted[I](LEvent);
   FireReadyHandlers;
 end;
@@ -960,13 +1090,13 @@ end;
 function TFakeWebview.CanGoForward: Boolean;
 begin
   RequireOpen;
-  Result := FHistIdx < High(FHistory);
+  Result := FHistIdx + 1 < FHistoryCount;
 end;
 
 function TFakeWebview.GoForward: Boolean;
 begin
   RequireOpen;
-  if FHistIdx >= High(FHistory) then
+  if FHistIdx + 1 >= FHistoryCount then
     Exit(False);
   FHistIdx := FHistIdx + 1;
   Result := True;
@@ -983,13 +1113,13 @@ var
 begin
   RequireOpen;
   AppendEvalScript(AJavascript);
-  LIdx := High(FEvalScripts);
+  LIdx := FEvalScriptsCount - 1;
   LHasQueued := False;
   LIsError := False;
   LValue := '';
   FLck.Acquire;
   try
-    if Length(FEvalQueue) > 0 then
+    if FEvalQueueCount > 0 then
     begin
       LIsError := FEvalQueue[0];
       LValue := FEvalResults[0];
@@ -998,10 +1128,11 @@ begin
     end
     else
     begin
-      SetLength(FPendingEvals, Length(FPendingEvals) + 1);
-      FPendingEvals[High(FPendingEvals)].ScriptIdx := LIdx;
-      FPendingEvals[High(FPendingEvals)].Callback := ACallback;
-      FPendingEvals[High(FPendingEvals)].OnError := AOnError;
+      GrowPendingEvals;
+      FPendingEvals[FPendingCount].ScriptIdx := LIdx;
+      FPendingEvals[FPendingCount].Callback := ACallback;
+      FPendingEvals[FPendingCount].OnError := AOnError;
+      Inc(FPendingCount);
     end;
   finally
     FLck.Release;
@@ -1014,13 +1145,17 @@ procedure TFakeWebview.ShiftEvalQueue;
 var
   I: Integer;
 begin
-  for I := 0 to High(FEvalQueue) - 1 do
+  for I := 0 to FEvalQueueCount - 2 do
   begin
     FEvalQueue[I] := FEvalQueue[I + 1];
     FEvalResults[I] := FEvalResults[I + 1];
   end;
-  SetLength(FEvalQueue, Length(FEvalQueue) - 1);
-  SetLength(FEvalResults, Length(FEvalResults) - 1);
+  Dec(FEvalQueueCount);
+  if FEvalQueueCount < Length(FEvalQueue) then
+  begin
+    FEvalQueue[FEvalQueueCount] := False;
+    FEvalResults[FEvalQueueCount] := '';
+  end;
 end;
 
 { 恰好一次兑现：先落记录再触发回调（回调内再入本对象是安全的） }
@@ -1055,18 +1190,20 @@ end;
 
 procedure TFakeWebview.Emit(const AEvent, APayloadJson: string);
 begin
+  CheckWebviewEventName(AEvent);
   RequireOpen;
   if not FBridgeReady then
   begin
     FDroppedEmits := FDroppedEmits + 1;
     Exit;
   end;
-  SetLength(FEmits, Length(FEmits) + 1);
-  FEmits[High(FEmits)].Event := AEvent;
-  FEmits[High(FEmits)].PayloadJson := APayloadJson;
+  GrowEmits;
+  FEmits[FEmitsCount].Event := AEvent;
+  FEmits[FEmitsCount].PayloadJson := APayloadJson;
+  Inc(FEmitsCount);
 end;
 
-function TFakeWebview.GetDispatcher: IWebviewDispatcher;
+function TFakeWebview.GetDispatcher: IWebviewDispatcher; inline;
 begin
   Result := FDispatcher;
 end;
@@ -1079,8 +1216,9 @@ end;
 procedure TFakeWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
   RequireOpen;
-  SetLength(FOnNavStarted, Length(FOnNavStarted) + 1);
-  FOnNavStarted[High(FOnNavStarted)] := AHandler;
+  GrowOnNavStarted;
+  FOnNavStarted[FOnNavStartedCount] := AHandler;
+  Inc(FOnNavStartedCount);
 end;
 
 procedure TFakeWebview.OnNavigationStarted(AHandler: TWebviewNavEventMethod);
@@ -1096,8 +1234,9 @@ end;
 procedure TFakeWebview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
   RequireOpen;
-  SetLength(FOnNavFinished, Length(FOnNavFinished) + 1);
-  FOnNavFinished[High(FOnNavFinished)] := AHandler;
+  GrowOnNavFinished;
+  FOnNavFinished[FOnNavFinishedCount] := AHandler;
+  Inc(FOnNavFinishedCount);
 end;
 
 procedure TFakeWebview.OnNavigationFinished(AHandler: TWebviewNavEventMethod);
@@ -1113,8 +1252,9 @@ end;
 procedure TFakeWebview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
   RequireOpen;
-  SetLength(FOnNavFailed, Length(FOnNavFailed) + 1);
-  FOnNavFailed[High(FOnNavFailed)] := AHandler;
+  GrowOnNavFailed;
+  FOnNavFailed[FOnNavFailedCount] := AHandler;
+  Inc(FOnNavFailedCount);
 end;
 
 procedure TFakeWebview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod);
@@ -1129,8 +1269,9 @@ end;
 
 procedure TFakeWebview.OnWindowClosed(AHandler: TWebviewNotifyHandler);
 begin
-  SetLength(FOnWindowClosed, Length(FOnWindowClosed) + 1);
-  FOnWindowClosed[High(FOnWindowClosed)] := AHandler;
+  GrowOnWindowClosed;
+  FOnWindowClosed[FOnWindowClosedCount] := AHandler;
+  Inc(FOnWindowClosedCount);
 end;
 
 procedure TFakeWebview.OnWindowClosed(AHandler: TWebviewNotifyMethod);
@@ -1146,8 +1287,9 @@ end;
 procedure TFakeWebview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
   RequireOpen;
-  SetLength(FOnReady, Length(FOnReady) + 1);
-  FOnReady[High(FOnReady)] := AHandler;
+  GrowOnReady;
+  FOnReady[FOnReadyCount] := AHandler;
+  Inc(FOnReadyCount);
 end;
 
 procedure TFakeWebview.OnReady(AHandler: TWebviewNotifyMethod);
@@ -1195,7 +1337,7 @@ begin
   LHadPending := False;
   FLck.Acquire;
   try
-    if Length(FPendingEvals) > 0 then
+    if FPendingCount > 0 then
     begin
       LPending := FPendingEvals[0];
       ShiftEvalList;
@@ -1203,10 +1345,10 @@ begin
     end
     else
     begin
-      SetLength(FEvalQueue, Length(FEvalQueue) + 1);
-      FEvalQueue[High(FEvalQueue)] := False;
-      SetLength(FEvalResults, Length(FEvalResults) + 1);
-      FEvalResults[High(FEvalResults)] := AResultJson;
+      GrowQueue;
+      FEvalQueue[FEvalQueueCount] := False;
+      FEvalResults[FEvalQueueCount] := AResultJson;
+      Inc(FEvalQueueCount);
     end;
   finally
     FLck.Release;
@@ -1224,7 +1366,7 @@ begin
   LHadPending := False;
   FLck.Acquire;
   try
-    if Length(FPendingEvals) > 0 then
+    if FPendingCount > 0 then
     begin
       LPending := FPendingEvals[0];
       ShiftEvalList;
@@ -1232,10 +1374,10 @@ begin
     end
     else
     begin
-      SetLength(FEvalQueue, Length(FEvalQueue) + 1);
-      FEvalQueue[High(FEvalQueue)] := True;
-      SetLength(FEvalResults, Length(FEvalResults) + 1);
-      FEvalResults[High(FEvalResults)] := AMessage;
+      GrowQueue;
+      FEvalQueue[FEvalQueueCount] := True;
+      FEvalResults[FEvalQueueCount] := AMessage;
+      Inc(FEvalQueueCount);
     end;
   finally
     FLck.Release;
@@ -1249,9 +1391,11 @@ procedure TFakeWebview.ShiftEvalList;
 var
   I: Integer;
 begin
-  for I := 0 to High(FPendingEvals) - 1 do
+  for I := 0 to FPendingCount - 2 do
     FPendingEvals[I] := FPendingEvals[I + 1];
-  SetLength(FPendingEvals, Length(FPendingEvals) - 1);
+  Dec(FPendingCount);
+  if FPendingCount < Length(FPendingEvals) then
+    FPendingEvals[FPendingCount] := Default(TFakePendingEval);
 end;
 
 procedure TFakeWebview.FireNavigationStarted(const AUrl: string);
@@ -1261,7 +1405,7 @@ var
 begin
   RequireOpen;
   LEvent.Url := AUrl;
-  for I := 0 to High(FOnNavStarted) do
+  for I := 0 to FOnNavStartedCount - 1 do
     FOnNavStarted[I](LEvent);
 end;
 
@@ -1272,7 +1416,7 @@ var
 begin
   RequireOpen;
   LEvent.Url := AUrl;
-  for I := 0 to High(FOnNavFinished) do
+  for I := 0 to FOnNavFinishedCount - 1 do
     FOnNavFinished[I](LEvent);
 end;
 
@@ -1287,7 +1431,7 @@ begin
   LEvent.IsError := True;
   LEvent.ErrorCode := ACode;
   LEvent.ErrorMessage := AMessage;
-  for I := 0 to High(FOnNavFailed) do
+  for I := 0 to FOnNavFailedCount - 1 do
     FOnNavFailed[I](LEvent);
 end;
 
@@ -1312,25 +1456,26 @@ begin
   if ANewScale <= 0 then
     raise EWebviewInvalidState.Create('scale factor must be > 0');
   FScale := ANewScale;
-  for I := 0 to High(FOnScaleChanged) do
+  for I := 0 to FOnScaleChangedCount - 1 do
     FOnScaleChanged[I](ANewScale);
 end;
 
 procedure TFakeWebview.EnqueueReceipt(AFrameId: Int64; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
-  SetLength(FCapturedEvals, Length(FCapturedEvals) + 1);
+  GrowCaptured;
   if AIsError then
-    FCapturedEvals[High(FCapturedEvals)] :=
+    FCapturedEvals[FCapturedCount] :=
       BuildRejectScript(AFrameId, ACode, AMessage)
   else
-    FCapturedEvals[High(FCapturedEvals)] :=
+    FCapturedEvals[FCapturedCount] :=
       BuildResolveScript(AFrameId, AResultJson);
+  Inc(FCapturedCount);
 end;
 
 function TFakeWebview.CaptureEvalCount: Integer;
 begin
-  Result := Length(FCapturedEvals);
+  Result := FCapturedCount;
 end;
 
 function TFakeWebview.CaptureEvalAt(AIndex: Integer): string;
@@ -1367,10 +1512,20 @@ begin
       on E: Exception do
       begin
         if E is EWebviewInvokeError then
+        begin
           RecordOutcome(ACmd, True, '',
-            MapInvokeCode(EWebviewInvokeError(E).Code), E.Message)
+            MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+          if AFrameId >= 0 then
+            EnqueueReceipt(AFrameId, True, '',
+              MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+        end
         else
+        begin
           RecordOutcome(ACmd, True, '', NPW_CODE_HANDLER_ERROR, E.Message);
+          if AFrameId >= 0 then
+            EnqueueReceipt(AFrameId, True, '', NPW_CODE_HANDLER_ERROR,
+              E.Message);
+        end;
       end;
     end;
   end
@@ -1423,7 +1578,7 @@ end;
 
 function TFakeWebview.OutcomeCount: Integer;
 begin
-  Result := Length(FOutcomes);
+  Result := FOutcomesCount;
 end;
 
 function TFakeWebview.OutcomeAt(AIndex: Integer): TFakeInvokeOutcome;
@@ -1433,14 +1588,14 @@ end;
 
 function TFakeWebview.LastOutcome: TFakeInvokeOutcome;
 begin
-  if Length(FOutcomes) = 0 then
+  if FOutcomesCount = 0 then
     raise EWebviewInvalidState.Create('no invoke outcomes recorded');
-  Result := FOutcomes[High(FOutcomes)];
+  Result := FOutcomes[FOutcomesCount - 1];
 end;
 
 function TFakeWebview.EmitCount: Integer;
 begin
-  Result := Length(FEmits);
+  Result := FEmitsCount;
 end;
 
 function TFakeWebview.DroppedEmitCount: Integer;
@@ -1450,16 +1605,16 @@ end;
 
 function TFakeWebview.LastEmitEvent: string;
 begin
-  if Length(FEmits) = 0 then
+  if FEmitsCount = 0 then
     raise EWebviewInvalidState.Create('no emits recorded');
-  Result := FEmits[High(FEmits)].Event;
+  Result := FEmits[FEmitsCount - 1].Event;
 end;
 
 function TFakeWebview.LastEmitPayloadJson: string;
 begin
-  if Length(FEmits) = 0 then
+  if FEmitsCount = 0 then
     raise EWebviewInvalidState.Create('no emits recorded');
-  Result := FEmits[High(FEmits)].PayloadJson;
+  Result := FEmits[FEmitsCount - 1].PayloadJson;
 end;
 
 function TFakeWebview.NavigateCount: Integer;
@@ -1469,7 +1624,7 @@ end;
 
 function TFakeWebview.EvalRecordCount: Integer;
 begin
-  Result := Length(FEvalScripts);
+  Result := FEvalScriptsCount;
 end;
 
 function TFakeWebview.EvalRecordAt(AIndex: Integer): TFakeEvalRecord;

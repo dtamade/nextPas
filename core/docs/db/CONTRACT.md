@@ -748,16 +748,18 @@ S.Token.Cancel;                                 // 协同停泵；Destroy 同步
   NEXTPAS_REDIS_TEST_CONN 门控）。吞吐基准段待 live redis 环境可用后补采
   入册（诚实缺席登记）。
 
-### 2.20 SQL 词法扫描共享引擎（V3-C6，nextpas.core.db.sqlscan）
+### 2.20 SQL 词法扫描共享引擎（V3-C6，nextpas.core.text.sqlscan → nextpas.core.db.sqlscan thin）
 
 家族内五份复制的"字符串/标识符/注释状态机"（pg/mysql/odbc 三份占位符
-翻译 + pg.conn 参数计数 + bytea 装饰）收敛为单一纯函数单元；四消费方
+翻译 + pg.conn 参数计数 + bytea 装饰）收敛为 L1 单一纯函数单元 `nextpas.core.text.sqlscan`
+（`nextpas.core.db.sqlscan` 为 thin re-export，类型/常量/函数 inline 转发零逻辑）；四消费方
 薄委托、公开签名零变化。**换牙零漂移由黄金语料实证**：原实现 30 案例
 输出落盘 → 新引擎重放逐字节全等（含混合编号槽位 [2,1,3,2]、超 Int32
 编号回绕、未终止字面量等酷刑样本）。
 
+- **L1 零分配真源**：`nextpas.core.text.sqlscan` 单遍状态机，`text.builder` IStringBuilder 追加，`RenderDollar/MaxIndex` 不建槽数组（热路径零额外分配，L1 仅依赖 L0）。
 - **方言词法集记录化**：双引号/反引号/方括号标识符与 `#` 行注释四布尔
-  （DBSQLSCAN_PG/MYSQL/ODBC 常量）；词素互斥即方言隔离——pg 方言下
+  （`SQLSCAN_PG/MYSQL/ODBC` 真源，`DBSQLSCAN_*` 为 db 侧别名）；词素互斥即方言隔离——pg 方言下
   反引号是代码字符、mysql 下双引号是代码字符，与各后端历史行为一致。
 - **四公开面共享单遍引擎**：`SqlScanTranslateQuestion`（'?' 保形改写 +
   物理序→逻辑号槽位计划）/`SqlScanRenderDollar`（?→$N，裸 ? 走顺序
@@ -870,4 +872,4 @@ test_db_odbc_adapter（V3-A3/A4）在仅有驱动管理器（unixODBC）而无�
 
 C8.5 扫尾（2026-08-28）：`string(AnsiString` 家族全量清零（`pg.conn/pg.adapter/pg.listen/sqlite.conn/sqlite.adapter/pg.loader/mysql.loader` 共 15 处 → `AnsiPtrToStr`，唯一剩余为 `odbc.loader` 注释内示例），`grep -rn "string(AnsiString" core/src/nextpas.core.db*.pas` 仅注释豁免。
 
-* text.kv 共享词法内核（2026-08-28）：`nextpas.core.text.kv` L0 纯函数 `ParseKV/ScanKV/ValidateKV` 空格或 ';' 分隔 key=value、单引号/双引号/花括号包裹扫描器（单遍 O(n)，零 TextBuilder，`ValidateKV` 零分配不抛），MySQL/PG DSN 已委托且空值免 `Trim` 真零分配、ODBC `connstr` 经 `ValidateKV` 零分配校验（分号+花括号同源）再进驱动管理器、`redis` host 去 `Trim` 双拷贝（`LStart/LEnd` 扫描零拷贝直赋）、`factory` 归一去 `LowerCase(Trim)` 双拷贝、`Val` 冗余清理—— `Trim(` 在 `core/src/nextpas.core.db.*` 全族 `0` 行（`grep -rn "Trim("` 0 行），DM 等同形态零新增词法；离线 `test_text_kv` 17 组自证（空串/引号/@/=/大小写/空值/重复/异常/Scan一致性/100 对容积/分号/花括号/混合/ValidateKV），`bench_text_kv` 在册 `benchmarks.md`—— small 902ns/676 MB/s、medium 2416ns/937 MB/s、large 9584ns/1015 MB/s、scan_small 355ns 线性 `O(n)` 实证（`1.5KB/350B≈4.3×` 字节→`3.97×` 耗时），为后续 DSN 复用方性能锚点。
+* text.kv 共享词法内核（2026-08-28）：`nextpas.core.text.kv` L0 纯函数 `ParseKV/ScanKV/ValidateKV`（单遍 `O(n)`，零 `TextBuilder`/`ValidateKV` 零分配）。MySQL/PG/ODBC/redis/factory 均已零分配化，口径与零分配门以 `benchmarks.md §bench_text_kv` 为单源（`core/src/nextpas.core.db.*` 家族零分配不变量详该表）；DM 等同形态零新增词法；离线 `test_text_kv` 17 组自证，`bench_text_kv` 在册见 `benchmarks.md`。

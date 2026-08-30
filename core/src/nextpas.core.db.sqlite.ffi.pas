@@ -32,6 +32,7 @@ function sqlite3_step(AStmt: TSqliteStmt): Integer; cdecl; external SQLITE3_LIB;
 function sqlite3_finalize(AStmt: TSqliteStmt): Integer; cdecl; external SQLITE3_LIB;
 function sqlite3_reset(AStmt: TSqliteStmt): Integer; cdecl; external SQLITE3_LIB;
 function sqlite3_clear_bindings(AStmt: TSqliteStmt): Integer; cdecl; external SQLITE3_LIB;
+function sqlite3_next_stmt(ADb: TSqliteHandle; AStmt: TSqliteStmt): TSqliteStmt; cdecl; external SQLITE3_LIB;
 
 { V3-B6 异步取消原语。sqlite3_interrupt 线程安全（可从任意线程调用，
   使在途 sqlite3_step 以 SQLITE_INTERRUPT 收场）。progress_handler：

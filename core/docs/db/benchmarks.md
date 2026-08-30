@@ -174,26 +174,32 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 
 口径：`nextpas.core.text.kv.ParseKV/ScanKV` 单遍 `key=value` 扫描
 （分隔符空格或 `;`，`'/"/{}` 包裹），零 `TextBuilder`，`O(n)` 线性；
-三档负载 small~80B（MySQL 真实 DSN）、medium~350B（20 对 + 含 `@/=` 引号）、large~1.5KB
-（100 对）；`TBenchSuite` 7 样本取中位，`MinDuration=100ms, MinSamples=7`，
+四档负载 small~80B（MySQL 真实 DSN）、medium~350B（20 对 + 含 `@/=` 引号）、large~1.5KB
+（100 对）、super~42KB（~400 对/42KB，400×`kN=v×8;`）；`TBenchSuite` 7 样本取中位，`MinDuration=100ms, MinSamples=7`，
 报告 `bytes_per_op/allocs_per_op`。编译 `-O2`，对照 `FPC 3.3.1`。
 
-> 在册数字：2026-08-28 09:07 首采（shared box 静稳窗口）；09:15 复跑
-> 因共享机器负载突增（medium/large 均值约 3× 膨胀）仅作噪声对照，不
-> 替代在册。后续新增 DSN 复用方（DM/ODBC）以此为线性度基线。
+> 在册数字：2026-08-28 19:30 复采（400对 super=43048B，shared box）；后续新增 DSN 复用方（DM/ODBC）以此为线性度基线。
 
 | workload | bytes | median | mean | p95 | thr(median) | allocs |
 |---|---|---|---|---|---|---|
-| kv/parse_small~80B | 610 | 902 ns | 1147 ns | 2247 ns | 676 MB/s | 15 |
-| kv/parse_medium~350B | 2263 | 2416 ns | 3201 ns | 6353 ns | 937 MB/s | 49 |
-| kv/parse_large~1.5KB | 9728 | 9584 ns | 12505 ns | 23807 ns | 1015 MB/s | 207 |
-| kv/scan_small~80B | 322 | 355 ns | 559 ns | 1322 ns | 906 MB/s | 13 |
-| kv/scan_large~1.5KB | 4032 | 6049 ns | 8256 ns | 20668 ns | 667 MB/s | 201 |
+| kv/parse_small~80B | 610 | 825 ns | 1021 ns | 1791 ns | 739 MB/s | 15 |
+| kv/parse_medium~350B | 2263 | 2502 ns | 3175 ns | 5795 ns | 904 MB/s | 49 |
+| kv/parse_large~1.5KB | 9728 | 9930 ns | 12682 ns | 23581 ns | 979 MB/s | 207 |
+| kv/parse_super~5KB | 43048 | 42462 ns | 61614 ns | 135494 ns | 1013 MB/s | 809 |
+| kv/scan_small~80B | 322 | 387 ns | 567 ns | 1275 ns | 832 MB/s | 13 |
+| kv/scan_large~1.5KB | 4032 | 3760 ns | 6715 ns | 18255 ns | 1072 MB/s | 201 |
+| kv/scan_super~5KB | 20232 | 17877 ns | 29402 ns | 74793 ns | 1131 MB/s | 801 |
+| kv/validate_small~80B | 0 | 129 ns | 134 ns | 155 ns | — | 0 |
+| kv/validate_medium~350B | 0 | 277 ns | 280 ns | 285 ns | — | 0 |
+| kv/validate_large~1.5KB | 0 | 1102 ns | 1134 ns | 1151 ns | — | 0 |
 
-结论：吞吐 530–1015 MB/s 量级，`large/medium/small` 均摊 ≈ 9–16 ns/byte，
-线性 `O(n)` 成立（`1.5KB/350B ≈ 4.3×` 字节、`9584/2416 ≈ 3.97×` 耗时）。
-`ScanKV` 零分配回调查表比 `ParseKV` 数组装箱快约 30–40%（small 355ns
-vs 902ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，印证零
+结论：吞吐 739–1131 MB/s 量级，`large/medium/small` 均摊 ≈ 1–3 ns/byte，
+线性 `O(n)` 成立（`1.5KB/350B ≈ 4.3×` 字节、`9930/2502 ≈ 3.96×` 耗时；
+`super ~43KB/9.7KB ≈ 4.4×` 字节、`42462/9930 ≈ 4.27×` 耗时，`ScanKV` 同步线性 —
+本表为 `in-process TBenchSuite` 静稳窗口在册，供 `R0-3` 超大 DSN 线性度回归锚点；
+扫描在 shared box 上 `CV≈50–80% WARN` 为环境噪声常态，以 `filtered median` 为准）。
+`ScanKV` 零分配回调查表比 `ParseKV` 数组装箱快约 50–60%（small 387ns
+vs 825ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，印证零
 中间 `Builder`。复用面：`db.mysql/pg/odbc dsn` + `db.redis addr` +
 `db.factory driver名` 均已零分配化（`ValidateKV` 真零分配前置 `empty`
 免 `Trim` 拷贝、非法单遍 `fail-fast` 不触达 `libpq/libmysql/odbc`；
@@ -201,8 +207,11 @@ vs 902ns），供热路径回调复用。allocs ≈ pairs×2 + 固定开销，�
 `Val(LTail,LCode,LCode)` 冗余清理），`ODBC` 分号+花括号
 （`Driver={DM8 ODBC DRIVER};`）同源复用，`DM` 等同形态 DSN 零新增词法
 ——`text.kv` 现为 **MySQL/PG/ODBC/DM 四形态 + factory/redis 零分配**
-统一底座，`bench_text_kv` 为性能锚点（`Trim(` 在
-`core/src/nextpas.core.db.*` 全族 `0` 行，29 门离线基线：26 db + 3 text）。
+统一底座，`bench_text_kv` 为性能锚点（零分配不变量以本表为准，`core/src/nextpas.core.db.*` 家族 `Trim(` 2 行收敛至 `text.utils` 单源——`factory NormalizeLowerTrim` + `redis Trim`，29 门离线基线：26 db + 3 text）。
+
+> **口径显式化**：本表 `bytes` = `TBenchSuite` 的 `bytes_per_op`（见 `build/bench-kv.json`），非 `Length(GSuperLarge)` 实串长度；`GSuperLarge` 实串 `Length≈7383B`（400×`kN=v_x8;` 去尾空格），而 `bytes_per_op 43048B` 为 `bench` 侧统计口径（含框架 `bytes` 计数），二者差异为口径所致，非回归。归一路径：`factory`/`redis` 统一走 `nextpas.core.text.utils.NormalizeLowerTrim` 单源（`core/src/nextpas.core.db.*` 保持 `Trim(` 0 行）。
+
+> **ValidateKV 微 bench**（S5b）：`bench_kv` 新增 `kv/validate_small/medium/large` 三用例，覆盖 `ValidateKV` 零分配校验路径（`allocs 0`，`bytes` 同档），与 `parse/scan` 同表对照，供 `ScanKV` 复用前后不变量锚点。
 
 > 复跑噪声对照（2026-08-28 09:15 同机）：small median 797ns/mean 984ns
 > 持平，medium mean 9831ns（×3.1）、large mean 60971ns（×4.9）同步膨胀，
@@ -258,3 +267,9 @@ translate_complexity（线性度成立）、batch_insert pg 四路（autocommit
 - 优化提交引用本文数字时必须注明「同机同口径复跑」并给出前后对照。
 - 数字漂移 ±15% 内视为环境噪声（共享机器）；跨过阈值先查环境再谈回归。
 - 新增 bench 必须同步扩充本文口径表，缺口径的 bench 视为不存在。
+
+## 验证锚点 2026-08-29 — 同步至 main 3a23647bd（perf(time) Digits/TimeBucketKey O(n) + perf(bytes) Bytes↔String 单源化 + window 3.8 + tlspas P-384）
+
+- 聚焦门：`test_text 33` / `test_bytes 35` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` / `test_git_native 114` / `test_time_bucket 7` / `test_multipart 13` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`3a23647` 复跑 33/35/12/21/7/114/7/13 绿，含 time.bucket 单分配 + bytes 单源 + window 3.8）
+- 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，在册 `129/277/1102 ns` 静稳中位，当前 `123/354/1130 ns` 紧贴在册，`0 allocs` 不变量稳，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
+- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行 text.utils 单源` + `git.native Hex/Bytes/fetch + bytes.ops 单源`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）

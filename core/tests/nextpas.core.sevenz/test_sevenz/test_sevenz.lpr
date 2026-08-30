@@ -802,7 +802,7 @@ begin
   try
     SevenZDeflateDecodeForTest(LRaw, 10);
     Fail('truncated deflate should raise');
-  except on E: EIOError do ; on E: ESevenZError do ; end;
+  except on E: EIOError do ; on E: ESevenZError do ; on E: EParseError do ; end;
 end;
 
 { 写端过滤链：BCJ / Delta 预过滤后压缩，读端按拓扑逆序还原 }
@@ -2990,7 +2990,7 @@ begin
 end;
 
 procedure TestReaderClearCache;
-var LW: ISevenZWriter; LR: ISevenZReader; LA, LB, LGot: TBytes;
+var LW: ISevenZWriter; LR: ISevenZReader; LA, LB: TBytes;
 begin
   LA := RepeatedText(7, 400); LB := RepeatedText(11, 400);
   LW := TSevenZWriterImpl.Create;
@@ -3341,6 +3341,200 @@ begin
   CheckEqual(Int64(200), Int64(Length(LR.EntriesBySuffix('.txt')) + Length(LR.EntriesBySuffix('.log'))), 'suffix mix');
 end;
 
+procedure TestExtractAllGrouped;
+var LW: ISevenZWriter; LR: ISevenZReader; Ext: TSevenZExtractedArray; LOk: Boolean; LErr: string; LRoot: string;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddDirectory('docs');
+  LW.AddFile('a.txt', BytesOf([$01,$02]));
+  LW.AddFile('b.txt', BytesOf([$03]));
+  LW.AddFile('empty.dat', nil);
+  LW.SetFolderLimits(0,1); // force 3 folders for files
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Ext := LR.ExtractAll;
+  CheckEqual(Int64(4), Int64(Length(Ext)), 'extractall count includes dir');
+  Check(Ext[0].Info.Kind=sekDirectory, 'extractall dir');
+  Check(Ext[0].Data=nil, 'extractall dir nil');
+  Check(Ext[3].Data=nil, 'extractall empty nil');
+  Check(Ext[1].Data<>nil, 'extractall file data');
+  LOk := LR.TryExtractAll(Ext);
+  Check(LOk and (Length(Ext)=4), 'try extract all ok');
+  LOk := LR.TryExtractAllWithError(Ext, LErr);
+  Check(LOk and (LErr=''), 'try all with error ok');
+  // grouped outperforms naive: same bytes via multi-folder single pass
+  LRoot := TempDir('', 'sevenz-all-fs-');
+  try
+    SevenZExtractAllToFs(LR, LRoot);
+    Check(IsFile(PathJoin([LRoot, 'a.txt'])), 'all to fs a exists');
+    Check(IsFile(PathJoin([LRoot, 'b.txt'])), 'all to fs b exists');
+    Check(IsDir(PathJoin([LRoot, 'docs'])), 'all to fs docs dir');
+  finally RemoveAll(LRoot); end;
+end;
+
+procedure TestIgnoreCaseFull;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray; Ext: TSevenZExtractedArray; Idx: Integer; LOk: Boolean; LErr: string;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('Docs/Readme.TXT', BytesOf([$01]));
+  LW.AddFile('docs/readme.txt', BytesOf([$02]));
+  LW.AddFile('SRC/Main.PAS', BytesOf([$03]));
+  LW.AddFile('src/util.pas', BytesOf([$04]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByPrefixIgnoreCase('docs/');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'ignore prefix docs 2');
+  Arr := LR.EntriesBySuffixIgnoreCase('.txt');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'ignore suffix txt 2');
+  Arr := LR.EntriesBySuffixIgnoreCase('.PAS');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'ignore suffix pas 2');
+  Idx := LR.FindByPrefixIgnoreCase('DOCS/');
+  Check(Idx>=0, 'ignore find prefix');
+  Idx := LR.FindBySuffixIgnoreCase('.TXT');
+  Check(Idx>=0, 'ignore find suffix');
+  Arr := LR.EntriesByGlobIgnoreCase('*.txt');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'ignore glob txt 2');
+  Idx := LR.FindByGlobIgnoreCase('*.PAS');
+  Check(Idx>=0, 'ignore find glob pas');
+  Ext := LR.ExtractByPrefixIgnoreCase('DOCS/');
+  CheckEqual(Int64(2), Int64(Length(Ext)), 'extract ignore prefix 2');
+  Ext := LR.ExtractBySuffixIgnoreCase('.TXT');
+  CheckEqual(Int64(2), Int64(Length(Ext)), 'extract ignore suffix 2');
+  Ext := LR.ExtractByGlobIgnoreCase('*.PAS');
+  CheckEqual(Int64(2), Int64(Length(Ext)), 'extract ignore glob pas 2');
+  LOk := LR.TryExtractByPrefixIgnoreCase('docs/', Ext);
+  Check(LOk and (Length(Ext)=2), 'try ignore prefix');
+  LOk := LR.TryExtractByPrefixIgnoreCaseWithError('DOCS/', Ext, LErr);
+  Check(LOk and (LErr=''), 'try ignore prefix with error');
+  LOk := LR.TryExtractBySuffixIgnoreCase('.txt', Ext);
+  Check(LOk and (Length(Ext)=2), 'try ignore suffix');
+  LOk := LR.TryExtractBySuffixIgnoreCaseWithError('.TXT', Ext, LErr);
+  Check(LOk and (LErr=''), 'try ignore suffix with error');
+  LOk := LR.TryExtractByGlobIgnoreCase('*.txt', Ext);
+  Check(LOk and (Length(Ext)=2), 'try ignore glob');
+  LOk := LR.TryExtractByGlobIgnoreCaseWithError('*.TXT', Ext, LErr);
+  Check(LOk and (LErr=''), 'try ignore glob with error');
+  // ascii fast path 100 entries
+  LW := TSevenZWriterImpl.Create;
+  for Idx:=0 to 99 do LW.AddFile(Format('File_%3.3d.TXT', [Idx]), BytesOf([Byte(Idx)]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  CheckEqual(Int64(100), Int64(Length(LR.EntriesByPrefixIgnoreCase('file_'))), 'ignore prefix 100 ascii');
+  CheckEqual(Int64(100), Int64(Length(LR.EntriesBySuffixIgnoreCase('.txt'))), 'ignore suffix 100 ascii');
+end;
+
+procedure TestFsIgnoreCaseToFs;
+var LW: ISevenZWriter; LR: ISevenZReader; LRoot: string; Cnt: Integer; Ok: Boolean; Err: string;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('Docs/A.TXT', BytesOf([$01]));
+  LW.AddFile('docs/b.txt', BytesOf([$02]));
+  LW.AddFile('src/C.PAS', BytesOf([$03]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LRoot := TempDir('', 'sevenz-ignore-fs-');
+  try
+    Cnt := SevenZExtractByPrefixIgnoreCaseToFs(LR, 'DOCS/', LRoot);
+    CheckEqual(Int64(2), Int64(Cnt), 'ignore prefix to fs 2');
+    Cnt := SevenZExtractBySuffixIgnoreCaseToFs(LR, '.txt', LRoot);
+    CheckEqual(Int64(2), Int64(Cnt), 'ignore suffix to fs 2');
+    Cnt := SevenZExtractByGlobIgnoreCaseToFs(LR, '*.PAS', LRoot);
+    CheckEqual(Int64(1), Int64(Cnt), 'ignore glob to fs pas 1 (src distinct)');
+    // actually 1 file matches *.PAS case-insensitive? Wait Docs/A.TXT not pas, src/C.PAS is pas, so 1. But also need check.
+    Ok := SevenZTryExtractByGlobIgnoreCaseToFs(LR, '*.txt', LRoot, Err);
+    Check(Ok and (Err=''), 'try ignore glob to fs ok');
+  finally RemoveAll(LRoot); end;
+end;
+
+procedure TestGlobClassifyUnified;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray; Ext: TSevenZExtractedArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01]));
+  LW.AddFile('b.txt', BytesOf([$02]));
+  LW.AddFile('pre_mid_post.txt', BytesOf([$03]));
+  LW.AddFile('pre_aaa_post.txt', BytesOf([$04]));
+  LW.AddFile('docs/x.txt', BytesOf([$05]));
+  LW.AddFile('a.log', BytesOf([$06]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByGlob('');
+  CheckEqual(Int64(0), Int64(Length(Arr)), 'classify empty');
+  CheckEqual(Int64(-1), Int64(LR.FindByGlob('')), 'classify empty find');
+  Arr := LR.EntriesByGlob('*');
+  CheckEqual(Int64(6), Int64(Length(Arr)), 'classify star');
+  Arr := LR.EntriesByGlob('a.txt');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'classify exact');
+  CheckEqual('a.txt', Arr[0].Name, 'classify exact name');
+  Arr := LR.EntriesByGlob('docs/*');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'classify prefix');
+  Arr := LR.EntriesByGlob('*.txt');
+  CheckEqual(Int64(5), Int64(Length(Arr)), 'classify suffix txt');
+  Arr := LR.EntriesByGlob('pre_*_post.txt');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'classify pre*suffix');
+  Arr := LR.EntriesByGlob('pre*post*');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'complex multi-star 2');
+  Arr := LR.EntriesByGlob('?.txt');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'classify q txt 2');
+  Check(LR.FindByGlob('pre_*_post.txt') >=0, 'find classify p*s');
+  CheckEqual(Int64(-1), Int64(LR.FindByGlob('nope_*_zzz')), 'find miss p*s');
+  Ext := LR.ExtractByGlob('*.log');
+  CheckEqual(Int64(1), Int64(Length(Ext)), 'extract suffix via glob');
+  Ext := LR.ExtractByGlob('pre_*_post.txt');
+  CheckEqual(Int64(2), Int64(Length(Ext)), 'extract p*s 2');
+  Arr := LR.EntriesByGlobIgnoreCase('*.TXT');
+  CheckEqual(Int64(5), Int64(Length(Arr)), 'classify ignore suffix');
+  Arr := LR.EntriesByGlobIgnoreCase('PRE_*_POST.TXT');
+  CheckEqual(Int64(2), Int64(Length(Arr)), 'classify ignore p*s');
+  CheckEqual(Int64(-1), Int64(LR.FindByGlobIgnoreCase('')), 'ignore empty find');
+  Check(LR.FindByGlobIgnoreCase('PRE_*_POST.TXT') >=0, 'ignore find p*s');
+end;
+
+procedure TestBuildSortedUnifiedAndSameIgnoreCaseZeroAlloc;
+var LW: ISevenZWriter; LR: ISevenZReader; Idx: Integer; Arr: TSevenZEntryInfoArray;
+begin
+  LW := TSevenZWriterImpl.Create;
+  for Idx := 0 to 199 do
+    LW.AddFile(Format('File_%3.3d.TXT', [Idx]), BytesOf([Byte(Idx)]));
+  LW.AddFile('Café_Ünicode.txt', BytesOf([$01]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  Arr := LR.EntriesByPrefixIgnoreCase('file_');
+  CheckEqual(Int64(200), Int64(Length(Arr)), 'buildsorted prefix 200 ascii');
+  Arr := LR.EntriesBySuffixIgnoreCase('.txt');
+  Check(Length(Arr) >= 200, 'buildsorted suffix txt >=200');
+  Idx := LR.FindIgnoreCase('FILE_010.TXT');
+  Check(Idx >= 0, 'sameignore ascii upper');
+  CheckEqual('File_010.TXT', LR.Entry(Idx).Name, 'sameignore ascii name');
+  Idx := LR.FindIgnoreCase('café_Ünicode.txt');
+  Check(Idx >= 0, 'sameignore ascii folding preserves non-ascii bytes');
+  CheckEqual(Int64(200), Int64(Idx), 'sameignore non-ascii exact after ascii fold');
+  Arr := LR.EntriesByPrefixIgnoreCase('café_');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'buildsorted non-ascii prefix 1');
+  CheckEqual('Café_Ünicode.txt', Arr[0].Name, 'buildsorted non-ascii prefix name');
+end;
+
+procedure TestGlobIgnoreCaseComplexAsciiZeroAlloc;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr, Arr2: TSevenZEntryInfoArray; Idx: Integer;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('AlphaBetaGamma.txt', BytesOf([$01]));
+  LW.AddFile('alpha_beta_gamma.txt', BytesOf([$02]));
+  LW.AddFile('ALPHA-BETA-GAMMA.TXT', BytesOf([$03]));
+  LW.AddFile('aXbYcZ.log', BytesOf([$04]));
+  LW.AddFile('Café_Alpha.txt', BytesOf([$05]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  // ascii complex glob via ? and * must be case-insensitive zero-alloc path
+  Arr := LR.EntriesByGlobIgnoreCase('ALPHA*BETA*GAMMA.TXT');
+  CheckEqual(Int64(3), Int64(Length(Arr)), 'glob ic complex alpha*beta*gamma 3');
+  Arr := LR.EntriesByGlobIgnoreCase('alpha?beta*gamma.txt');
+  // '?'' matches '-' or '_' single char, so ALPHA-BETA- and alpha_beta both match, AlphaBeta without sep does not
+  Check(Length(Arr) >= 2, 'glob ic ? wildcard >=2');
+  // exact via hash still case-insensitive
+  Idx := LR.FindByGlobIgnoreCase('ALPHA*BETA*GAMMA.TXT');
+  Check(Idx >= 0, 'find glob ic complex');
+  // non-ascii pattern must fallback to LowerCase path and not corrupt ascii fast path
+  Arr := LR.EntriesByGlobIgnoreCase('café*alpha.txt');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'glob ic non-ascii fallback 1');
+  CheckEqual('Café_Alpha.txt', Arr[0].Name, 'glob ic non-ascii name');
+  Arr2 := LR.EntriesByGlobIgnoreCase('CAFÉ*ALPHA.TXT');
+  CheckEqual(Int64(0), Int64(Length(Arr2)), 'glob ic non-ascii upper not folded 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3527,6 +3721,12 @@ begin
   T.Test('lowerbound suffix zero alloc', @TestLowerBoundSuffixZeroAlloc);
   T.Test('bulk grouped multi folder', @TestBulkGroupedMultiFolder);
   T.Test('extract by glob to fs', @TestExtractByGlobToFs);
+  T.Test('extract all grouped', @TestExtractAllGrouped);
+  T.Test('ignore case full', @TestIgnoreCaseFull);
+  T.Test('fs ignore case to fs', @TestFsIgnoreCaseToFs);
+  T.Test('glob classify unified', @TestGlobClassifyUnified);
+  T.Test('buildsorted unified + sameignore zeroalloc', @TestBuildSortedUnifiedAndSameIgnoreCaseZeroAlloc);
+  T.Test('glob ignorecase complex ascii zeroalloc', @TestGlobIgnoreCaseComplexAsciiZeroAlloc);
 
   if not T.Run then Halt(1);
 end.

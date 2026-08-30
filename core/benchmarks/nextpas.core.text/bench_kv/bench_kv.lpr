@@ -5,7 +5,7 @@ uses nextpas.core.base, nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.text.kv;
 var
   GSink: UInt64;
-  GSmall, GMedium, GLarge: string;
+  GSmall, GMedium, GLarge, GSuperLarge: string;
 
 procedure BuildFixtures;
 var I: Integer;
@@ -23,6 +23,11 @@ begin
   for I := 1 to 100 do
     GLarge := GLarge + 'k' + IntToStr(I) + '=v' + IntToStr(I) + ' ';
   if (Length(GLarge)>0) and (GLarge[Length(GLarge)]=' ') then SetLength(GLarge, Length(GLarge)-1);
+
+  GSuperLarge := '';
+  for I := 1 to 400 do
+    GSuperLarge := GSuperLarge + 'k' + IntToStr(I) + '=v' + IntToStr(I) + '_' + StringOfChar('x', 8) + ' ';
+  if (Length(GSuperLarge)>0) and (GSuperLarge[Length(GSuperLarge)]=' ') then SetLength(GSuperLarge, Length(GSuperLarge)-1);
 end;
 
 procedure BenchParseSmall(const ACtx: IBenchContext);
@@ -70,6 +75,46 @@ begin
   GSink := GSink xor UInt64(LCount);
 end;
 
+procedure BenchParseSuperLarge(const ACtx: IBenchContext);
+var P: TKVPairs;
+begin
+  P := ParseKV(GSuperLarge);
+  GSink := GSink xor UInt64(Length(P));
+end;
+
+procedure BenchScanSuperLarge(const ACtx: IBenchContext);
+var LCount: Integer;
+begin
+  LCount := 0;
+  ScanKV(GSuperLarge,
+    procedure(const AKey, AValue: string)
+    begin
+      Inc(LCount);
+    end);
+  GSink := GSink xor UInt64(LCount);
+end;
+
+procedure BenchValidateSmall(const ACtx: IBenchContext);
+var LErr: string; LOk: Boolean;
+begin
+  LOk := ValidateKV(GSmall, LErr);
+  GSink := GSink xor UInt64(Ord(LOk)) xor UInt64(Length(LErr));
+end;
+
+procedure BenchValidateMedium(const ACtx: IBenchContext);
+var LErr: string; LOk: Boolean;
+begin
+  LOk := ValidateKV(GMedium, LErr);
+  GSink := GSink xor UInt64(Ord(LOk)) xor UInt64(Length(LErr));
+end;
+
+procedure BenchValidateLarge(const ACtx: IBenchContext);
+var LErr: string; LOk: Boolean;
+begin
+  LOk := ValidateKV(GLarge, LErr);
+  GSink := GSink xor UInt64(Ord(LOk)) xor UInt64(Length(LErr));
+end;
+
 var
   LResults: IBenchResults;
 begin
@@ -82,8 +127,13 @@ begin
     .Add('kv/parse_small~80B', @BenchParseSmall)
     .Add('kv/parse_medium~350B', @BenchParseMedium)
     .Add('kv/parse_large~1.5KB', @BenchParseLarge)
+    .Add('kv/parse_super~5KB', @BenchParseSuperLarge)
     .Add('kv/scan_small~80B', @BenchScanSmall)
     .Add('kv/scan_large~1.5KB', @BenchScanLarge)
+    .Add('kv/scan_super~5KB', @BenchScanSuperLarge)
+    .Add('kv/validate_small~80B', @BenchValidateSmall)
+    .Add('kv/validate_medium~350B', @BenchValidateMedium)
+    .Add('kv/validate_large~1.5KB', @BenchValidateLarge)
     .Run;
   WriteLn(LResults.PrintToConsole);
   WriteLn('sink=', GSink);

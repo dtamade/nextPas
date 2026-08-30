@@ -3,6 +3,8 @@ CORE_ROOT := ../../..
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.ssh/e2e_ssh_live
 PROGRAM := test_ssh_e2e
 SOURCE := $(PROGRAM).lpr
+PROGRAM_ASYNC := test_ssh_e2e_async
+SOURCE_ASYNC := $(PROGRAM_ASYNC).lpr
 # 与 common.mk 同级的编译面（含 heaptrc），泄漏门禁由 run_e2e.sh 执行
 FPC_FLAGS ?= -MObjFPC -Sh -Sg -O2 -gl -gh -dHEAPTRC_ACTIVE
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
@@ -12,6 +14,7 @@ FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)
 build:
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
+	$(FPC) $(FPC_FLAGS) $(SOURCE_ASYNC)
 
 run: test
 

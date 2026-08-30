@@ -28,17 +28,25 @@ function TimeBucketKey(const AUnixSeconds: Int64;
 implementation
 
 { Int64 → 十进制字符串（纯 System 算术，无 FPC RTL 依赖——core 契约
-  仅 nextpas.core.system 域可用 RTL）。 }
+  仅 nextpas.core.system 域可用 RTL；单分配缓冲 O(n) 替代 Chr+Result O(n²)）。 }
 function Digits(const AValue: Int64): string;
 var
   LRem: Int64;
+  LBuf: array[0..19] of Char;
+  LLen, I: Integer;
 begin
-  Result := '';
+  if AValue = 0 then Exit('0');
   LRem := AValue;
-  repeat
-    Result := Chr(Ord('0') + LRem mod 10) + Result;
+  LLen := 0;
+  while LRem > 0 do
+  begin
+    LBuf[LLen] := Chr(Ord('0') + LRem mod 10);
     LRem := LRem div 10;
-  until LRem = 0;
+    Inc(LLen);
+  end;
+  SetLength(Result, LLen);
+  for I := 0 to LLen - 1 do
+    Result[I + 1] := LBuf[LLen - 1 - I];
 end;
 
 function TimeBucketKey(const AUnixSeconds: Int64;
@@ -46,7 +54,7 @@ function TimeBucketKey(const AUnixSeconds: Int64;
 var
   LBucket: Int64;
   LDigits: string;
-  LI: Integer;
+  LPad: Integer;
 begin
   if ABucketSeconds < 1 then
     raise EArgumentError.Create('time bucket: bucket seconds must be >= 1');
@@ -58,10 +66,11 @@ begin
   if Length(LDigits) > AWidth then
     raise EArgumentError.Create(
       'time bucket: width too small for bucket index ' + LDigits);
-  Result := '';
-  for LI := 1 to AWidth - Length(LDigits) do
-    Result := Result + '0';
-  Result := Result + LDigits;
+  LPad := AWidth - Length(LDigits);
+  if LPad > 0 then
+    Result := StringOfChar('0', LPad) + LDigits
+  else
+    Result := LDigits;
 end;
 
 end.

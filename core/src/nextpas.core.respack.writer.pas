@@ -24,7 +24,9 @@ function ResPackBuild(const AEntries: array of TResPackInputEntry;
 implementation
 
 uses
-  nextpas.core.base.utils;
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops;
 
 type
   TSlotInfo = record
@@ -37,6 +39,17 @@ const
   BUCKET_MIN = 256;
   BUCKET_MAX = 65536;
 
+{ 路径字节序比较单源：Writer 内三处排序/去重比较（插入、快排双探针、重复检测）
+  原各以 CompareBytesOrdered+Pointer(@Path[1])+PathLens 重复 4 行，现收敛为
+  单一 inline 纯函数，零额外分配，复用 L0 有序原语，高级感与可维护性封口。 }
+function CmpPath(const AEntries: array of TResPackInputEntry;
+  const ALens: array of Word; AI, AJ: SizeUInt): Integer; inline;
+begin
+  Result := nextpas.core.base.utils.CompareBytesOrdered(
+    Pointer(@AEntries[AI].Path[1]), Pointer(@AEntries[AJ].Path[1]),
+    SizeUInt(ALens[AI]), SizeUInt(ALens[AJ]));
+end;
+
 { 小区间插入排序：稳定、无递归；quick 在区间 <16 时切换到此。
   注意所有排序下标一律 Int64：Hoare 分区的 R 会越过下界一次，
   无符号类型在此回绕导致越界访问（FPC trunk 实测），有符号则天然安全。
@@ -47,20 +60,13 @@ procedure InsertionSortPaths(var AOrder: array of SizeUInt;
 var
   I, J: Int64;
   Key: SizeUInt;
-  KeyPtr: Pointer;
-  KeyLen: SizeUInt;
 begin
   I := ALow + 1;
   while I <= AHigh do
   begin
     Key := AOrder[I];
-    KeyPtr := Pointer(@AEntries[Key].Path[1]);
-    KeyLen := SizeUInt(APathLens[Key]);
     J := I - 1;
-    while (J >= ALow)
-      and (nextpas.core.base.utils.CompareBytesOrdered(
-        Pointer(@AEntries[AOrder[J]].Path[1]), KeyPtr,
-        SizeUInt(APathLens[AOrder[J]]), KeyLen) > 0) do
+    while (J >= ALow) and (CmpPath(AEntries, APathLens, AOrder[J], Key) > 0) do
     begin
       AOrder[J + 1] := AOrder[J];
       Dec(J);
@@ -86,8 +92,6 @@ procedure QuickSortPaths(var AOrder: array of SizeUInt;
 var
   L, R: Int64;
   Pivot: Int64;
-  PivotPtr: Pointer;
-  PivotLen: SizeUInt;
 begin
   while ALow < AHigh do
   begin
@@ -98,19 +102,13 @@ begin
     end;
     Pivot := (ALow + AHigh) shr 1;
     Swap(Pivot, AHigh);
-    PivotPtr := Pointer(@AEntries[AOrder[AHigh]].Path[1]);
-    PivotLen := SizeUInt(APathLens[AOrder[AHigh]]);
     L := ALow;
     R := AHigh - 1;
     while L <= R do
     begin
-      while (L <= R) and (nextpas.core.base.utils.CompareBytesOrdered(
-        Pointer(@AEntries[AOrder[L]].Path[1]), PivotPtr,
-        SizeUInt(APathLens[AOrder[L]]), PivotLen) < 0) do
+      while (L <= R) and (CmpPath(AEntries, APathLens, AOrder[L], AOrder[AHigh]) < 0) do
         Inc(L);
-      while (L <= R) and (nextpas.core.base.utils.CompareBytesOrdered(
-        Pointer(@AEntries[AOrder[R]].Path[1]), PivotPtr,
-        SizeUInt(APathLens[AOrder[R]]), PivotLen) >= 0) do
+      while (L <= R) and (CmpPath(AEntries, APathLens, AOrder[R], AOrder[AHigh]) >= 0) do
         Dec(R);
       if L < R then
       begin
@@ -141,11 +139,8 @@ end;
 
 function BytesEqual(const AA, AB: PByte; const ALen: SizeUInt): Boolean; inline;
 begin
-  if ALen = 0 then
-    Exit(True);   { 规避 SizeUInt 下界回绕 + 零分配块级比对 }
-  { 块级比对：FPC CompareMem 为 REPZ CMPSB/SSE 优化的内建，远快于逐字节 Pascal 循环；
-    仅在哈希碰撞回验时触发，命中时即为 dedup 共享槽位判定路径 }
-  Result := nextpas.core.base.utils.CompareMem(Pointer(AA), Pointer(AB), ALen);
+  Result := nextpas.core.bytes.ops.SpanEqual(
+    TByteSpan.Create(AA, ALen), TByteSpan.Create(AB, ALen));
 end;
 
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
@@ -208,10 +203,7 @@ begin
       QuickSortPaths(Order, AEntries, PathLens, 0, Int64(N) - 1);
     for I := 1 to N - 1 do
     begin
-      if nextpas.core.base.utils.CompareBytesOrdered(
-        Pointer(@AEntries[Order[I]].Path[1]),
-        Pointer(@AEntries[Order[I - 1]].Path[1]),
-        SizeUInt(PathLens[Order[I]]), SizeUInt(PathLens[Order[I - 1]])) = 0 then
+      if CmpPath(AEntries, PathLens, Order[I], Order[I - 1]) = 0 then
         raise EResPackDuplicatePath.Create('respack: duplicate path "'
           + AEntries[Order[I]].Path + '"');
     end;

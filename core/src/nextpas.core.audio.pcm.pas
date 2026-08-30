@@ -199,6 +199,8 @@ function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer;
 var
   LB0, LB1, LB2: Byte;
 begin
+  if (AOffset < 0) or (Length(ABytes) < AOffset + 3) then
+    raise EInvalidArgument.CreateFmt('PcmReadS24LE: offset %d out of range [0..%d]', [AOffset, Length(ABytes) - 3]);
   LB0 := ABytes[AOffset];
   LB1 := ABytes[AOffset + 1];
   LB2 := ABytes[AOffset + 2];
@@ -209,6 +211,8 @@ end;
 
 procedure PcmWriteS24LE(AValue: Integer; var ABytes: TBytes; AOffset: Integer);
 begin
+  if (AOffset < 0) or (Length(ABytes) < AOffset + 3) then
+    raise EInvalidArgument.CreateFmt('PcmWriteS24LE: offset %d out of range [0..%d]', [AOffset, Length(ABytes) - 3]);
   ABytes[AOffset] := Byte(AValue and $FF);
   ABytes[AOffset + 1] := Byte((AValue shr 8) and $FF);
   ABytes[AOffset + 2] := Byte((AValue shr 16) and $FF);
@@ -228,19 +232,28 @@ var
   LS24: Integer;
   LS32: LongInt;
 begin
-  Result := nil;
-  if (AFrames <= 0) or (AChannels <= 0) then Exit;
+  if (AFrames <= 0) or (AChannels <= 0) then
+    raise EInvalidArgument.CreateFmt('PcmConvert: invalid frames %d channels %d', [AFrames, AChannels]);
+  if (Ord(ASrcFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ASrcFormat) > Ord(High(TAudioSampleFormat))) then
+    raise EInvalidArgument.Create('PcmConvert: invalid src format');
+  if (Ord(ADstFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ADstFormat) > Ord(High(TAudioSampleFormat))) then
+    raise EInvalidArgument.Create('PcmConvert: invalid dst format');
+  LBytesPerSrc := AudioBytesPerSample(ASrcFormat);
+  LBytesPerDst := AudioBytesPerSample(ADstFormat);
+  if LBytesPerSrc <= 0 then
+    raise EInvalidArgument.Create('PcmConvert: unsupported src bytes per sample');
+  if LBytesPerDst <= 0 then
+    raise EInvalidArgument.Create('PcmConvert: unsupported dst bytes per sample');
   if ASrcFormat = ADstFormat then
   begin
+    if Length(ASrc) < AFrames * AChannels * LBytesPerSrc then
+      raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), AFrames * AChannels * LBytesPerSrc]);
     Result := Copy(ASrc, 0, Length(ASrc));
     Exit;
   end;
   LSampleCount := AFrames * AChannels;
-  LBytesPerSrc := AudioBytesPerSample(ASrcFormat);
-  LBytesPerDst := AudioBytesPerSample(ADstFormat);
-  if LBytesPerSrc <= 0 then Exit;
-  if LBytesPerDst <= 0 then Exit;
-  if Length(ASrc) < LSampleCount * LBytesPerSrc then Exit;
+  if Length(ASrc) < LSampleCount * LBytesPerSrc then
+    raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), LSampleCount * LBytesPerSrc]);
   SetLength(Result, LSampleCount * LBytesPerDst);
   LDitherState := 12345;
   for LI := 0 to LSampleCount - 1 do

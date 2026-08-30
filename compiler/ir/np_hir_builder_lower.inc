@@ -151,18 +151,34 @@ begin
           (HirTypeIsInt(ResultType) or
            (FModule.Types.GetType(ResultType).Kind = htkPointer));
         if not Result then
+        begin
+          EmitHirDiagnostic('hir.lower-failed.can-lower-call',
+            'call header invalid');
           Exit(False);
+        end;
         for I := 0 to (SemanticHirChildCount(AExpr.Children) - 1) do
         begin
           if not (AExpr.Op[I + 1] in ['i', 'p', 'r']) then
+          begin
+            EmitHirDiagnostic('hir.lower-failed.can-lower-call-arg-kind',
+              'invalid op char idx=' + IntToStr(I));
             Exit(False);
+          end;
           if AExpr.Op[I + 1] = 'r' then
           begin
             if not CanLowerExprAsAddress(AExpr.Children[SizeUInt(I)]) then
+            begin
+              EmitHirDiagnostic('hir.lower-failed.can-lower-call-ref-arg',
+                'ref arg not addressable idx=' + IntToStr(I));
               Exit(False);
+            end;
           end
           else if not CanLowerExpr(AExpr.Children[SizeUInt(I)]) then
+          begin
+            EmitHirDiagnostic('hir.lower-failed.can-lower-call-arg',
+              'arg not lowerable idx=' + IntToStr(I));
             Exit(False);
+          end;
         end;
       end;
     shekVirtualCall, shekInterfaceCall:
@@ -178,18 +194,34 @@ begin
            (FModule.Types.GetType(ResultType).Kind = htkPointer)) and
           CanLowerExprAsAddress(AExpr.Children[SizeUInt(0)]);
         if not Result then
+        begin
+          EmitHirDiagnostic('hir.lower-failed.can-lower-vcall',
+            'vcall header invalid');
           Exit(False);
+        end;
         for I := 1 to (SemanticHirChildCount(AExpr.Children) - 1) do
         begin
           if not (AExpr.Op[I + 1] in ['i', 'p', 'r']) then
+          begin
+            EmitHirDiagnostic('hir.lower-failed.can-lower-vcall-arg-kind',
+              'invalid op char idx=' + IntToStr(I));
             Exit(False);
+          end;
           if AExpr.Op[I + 1] = 'r' then
           begin
             if not CanLowerExprAsAddress(AExpr.Children[SizeUInt(I)]) then
+            begin
+              EmitHirDiagnostic('hir.lower-failed.can-lower-vcall-ref-arg',
+                'ref arg not addressable idx=' + IntToStr(I));
               Exit(False);
+            end;
           end
           else if not CanLowerExpr(AExpr.Children[SizeUInt(I)]) then
+          begin
+            EmitHirDiagnostic('hir.lower-failed.can-lower-vcall-arg',
+              'arg not lowerable idx=' + IntToStr(I));
             Exit(False);
+          end;
         end;
       end;
   else
@@ -202,9 +234,17 @@ var
   Expr: TSemanticHirExpr;
 begin
   if (FSemaModel = nil) or (AExprId <= 0) then
+  begin
+    EmitHirDiagnostic('hir.lower-failed.can-lower-expr',
+      'invalid model or id=' + IntToStr(AExprId));
     Exit(False);
+  end;
   if AExprId > FSemaModel.HirExprCount then
+  begin
+    EmitHirDiagnostic('hir.lower-failed.can-lower-expr-range',
+      'AExprId out of range=' + IntToStr(AExprId));
     Exit(False);
+  end;
   Expr := FSemaModel.HirExprAt(AExprId - 1);
   Result := CanLowerExprKind(Expr);
 end;
@@ -214,11 +254,23 @@ var
   Expr: TSemanticHirExpr;
 begin
   if (FSemaModel = nil) or (AExprId <= 0) then
+  begin
+    EmitHirDiagnostic('hir.lower-failed.can-lower-expr-as-address',
+      'invalid model or id=' + IntToStr(AExprId));
     Exit(False);
+  end;
   if AExprId > FSemaModel.HirExprCount then
+  begin
+    EmitHirDiagnostic('hir.lower-failed.can-lower-expr-as-address-range',
+      'AExprId out of range=' + IntToStr(AExprId));
     Exit(False);
+  end;
   if not CanLowerExpr(AExprId) then
+  begin
+    EmitHirDiagnostic('hir.lower-failed.can-lower-expr-as-address-not-lowerable',
+      'expr not lowerable id=' + IntToStr(AExprId));
     Exit(False);
+  end;
   Expr := FSemaModel.HirExprAt(AExprId - 1);
   Result := Expr.ValueClass = shvcAddress;
 end;

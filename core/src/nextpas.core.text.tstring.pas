@@ -92,7 +92,8 @@ function StringCompare(const A, B: TString): SizeInt;
 implementation
 
 uses
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.simd;
 
 
 {$ASSERTIONS ON}
@@ -425,58 +426,9 @@ begin
   Move(LData^, PByte(Result)^, LLen);
 end;
 
-{ 安全内存比较 — 无越界读, 兼容 ASan/Valgrind }
-{ 1-4B: 栈上 zero-padded 4B 比较 }
-{ 5-8B: 栈上 zero-padded 8B 比较 }
-{ 9-16B: 首尾重叠 i64 比较 (两端各 ≥8B, 无越界) }
-{ >16B: 逐字节 }
-function FastMemEqual(const A, B; ALen: SizeUInt): Boolean;
-var
-  LA, LB: PByte;
-  LA4, LB4: Cardinal;
-  LA8, LB8: Int64;
-  I: SizeUInt;
+function FastMemEqual(const A, B; ALen: SizeUInt): Boolean; inline;
 begin
-  case ALen of
-    0: Result := True;
-    1..4:
-    begin
-      { 栈上 zero-padded 比较, 无越界读 }
-      LA4 := 0;
-      LB4 := 0;
-      Move(A, LA4, ALen);
-      Move(B, LB4, ALen);
-      Result := LA4 = LB4;
-    end;
-    5..8:
-    begin
-      { 栈上 zero-padded 比较, 无越界读 }
-      LA8 := 0;
-      LB8 := 0;
-      Move(A, LA8, ALen);
-      Move(B, LB8, ALen);
-      Result := LA8 = LB8;
-    end;
-    9..16:
-    begin
-      { 首尾重叠 i64: 两端各读 8B, 9≤ALen≤16 时无越界 }
-      LA := PByte(@A);
-      LB := PByte(@B);
-      Result := (PInt64(LA)^ = PInt64(LB)^) and
-                (PInt64(LA + ALen - 8)^ = PInt64(LB + ALen - 8)^);
-    end;
-  else
-    { 通用路径: 逐字节 }
-    LA := PByte(@A);
-    LB := PByte(@B);
-    Result := True;
-    for I := 0 to ALen - 1 do
-      if LA[I] <> LB[I] then
-      begin
-        Result := False;
-        Exit;
-      end;
-  end;
+  Result := MemEqual(@A, @B, ALen);
 end;
 
 function StringEqual(const A, B: TString): Boolean;

@@ -51,14 +51,23 @@ type
     FAssetsIntf: IWebviewAssets;
     FAssets: TObject;
     FPendingEvals: array of PEvalRec;
+    FPendingCount: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
+    FOnNavStartedCount: Integer;
     FOnNavFinished: array of TWebviewNavEventHandler;
+    FOnNavFinishedCount: Integer;
     FOnNavFailed: array of TWebviewNavFailedHandler;
+    FOnNavFailedCount: Integer;
     FOnWindowClosed: array of TWebviewNotifyHandler;
+    FOnWindowClosedCount: Integer;
     FOnReady: array of TWebviewNotifyHandler;
+    FOnReadyCount: Integer;
     FScaleHandlersRef: array of TWebviewScaleHandler;
+    FScaleHandlersRefCount: Integer;
     FScaleHandlersMethod: array of TWebviewScaleMethod;
+    FScaleHandlersMethodCount: Integer;
     FScaleHandlersProc: array of TWebviewScaleProc;
+    FScaleHandlersProcCount: Integer;
     {$IFDEF MSWINDOWS}
     FEnv: ICoreWebView2Environment;
     FController: ICoreWebView2Controller;
@@ -79,6 +88,15 @@ type
     procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
     procedure HandleNativeDestroy;
     procedure TryCreateEnvironment;
+    procedure GrowPendingEvals; inline;
+    procedure GrowOnNavStarted; inline;
+    procedure GrowOnNavFinished; inline;
+    procedure GrowOnNavFailed; inline;
+    procedure GrowOnWindowClosed; inline;
+    procedure GrowOnReady; inline;
+    procedure GrowScaleRef; inline;
+    procedure GrowScaleMethod; inline;
+    procedure GrowScaleProc; inline;
     procedure RemovePending(ARec: PEvalRec);
     {$IFDEF MSWINDOWS}
     procedure OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
@@ -153,13 +171,20 @@ procedure CoTaskMemFree(pv: Pointer); stdcall; external 'ole32.dll' name 'CoTask
 var
   GLive: Integer = 0;
   GLiveList: array of TWebView2Webview;
+  GLiveListCount: Integer = 0;
   GScaleHookInstalled: Boolean = False;
   GResizeHookInstalled: Boolean = False;
+
+procedure GrowLiveList; inline;
+begin
+  if GLiveListCount = Length(GLiveList) then
+    SetLength(GLiveList, WebviewGrowCapacity(Length(GLiveList)));
+end;
 
 procedure GlobalWinScaleChanged(AWin: Pointer; AScale: Double);
 var I: Integer;
 begin
-  for I := 0 to High(GLiveList) do
+  for I := 0 to GLiveListCount - 1 do
     if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
       GLiveList[I].DoScaleChanged(AScale);
 end;
@@ -167,26 +192,29 @@ end;
 procedure GlobalWinResizeChanged(AWin: Pointer; AWidth, AHeight: Integer);
 var I: Integer;
 begin
-  for I := 0 to High(GLiveList) do
+  for I := 0 to GLiveListCount - 1 do
     if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
       GLiveList[I].UpdateControllerBounds;
 end;
 
 procedure RegisterLive(AInst: TWebView2Webview);
 begin
-  SetLength(GLiveList, Length(GLiveList) + 1);
-  GLiveList[High(GLiveList)] := AInst;
+  GrowLiveList;
+  GLiveList[GLiveListCount] := AInst;
+  Inc(GLiveListCount);
 end;
 
 procedure UnregisterLive(AInst: TWebView2Webview);
 var I, J: Integer;
 begin
-  for I := 0 to High(GLiveList) do
+  for I := 0 to GLiveListCount - 1 do
     if GLiveList[I] = AInst then
     begin
-      for J := I to High(GLiveList) - 1 do
+      for J := I to GLiveListCount - 2 do
         GLiveList[J] := GLiveList[J + 1];
-      SetLength(GLiveList, Length(GLiveList) - 1);
+      Dec(GLiveListCount);
+      if GLiveListCount < Length(GLiveList) then
+        GLiveList[GLiveListCount] := nil;
       Break;
     end;
 end;
@@ -425,7 +453,7 @@ begin
   end;
   Ev := Default(TWebviewNavigationEvent);
   Ev.Url := Uri;
-  for I := 0 to High(FOwner.FOnNavStarted) do
+  for I := 0 to FOwner.FOnNavStartedCount - 1 do
     FOwner.FOnNavStarted[I](Ev);
 end;
 
@@ -472,12 +500,12 @@ begin
   if Ev.IsError then
   begin
     Ev.ErrorMessage := 'WebErrorStatus=' + IntToStr(Status);
-    for I := 0 to High(FOwner.FOnNavFailed) do
+    for I := 0 to FOwner.FOnNavFailedCount - 1 do
       FOwner.FOnNavFailed[I](Ev);
   end
   else
   begin
-    for I := 0 to High(FOwner.FOnNavFinished) do
+    for I := 0 to FOwner.FOnNavFinishedCount - 1 do
       FOwner.FOnNavFinished[I](Ev);
     FOwner.FireReadyOnce;
   end;
@@ -557,6 +585,60 @@ begin
     raise EWebviewClosed.Create('webview window is closed');
 end;
 
+procedure TWebView2Webview.GrowPendingEvals; inline;
+begin
+  if FPendingCount = Length(FPendingEvals) then
+    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
+end;
+
+procedure TWebView2Webview.GrowOnNavStarted; inline;
+begin
+  if FOnNavStartedCount = Length(FOnNavStarted) then
+    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
+end;
+
+procedure TWebView2Webview.GrowOnNavFinished; inline;
+begin
+  if FOnNavFinishedCount = Length(FOnNavFinished) then
+    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
+end;
+
+procedure TWebView2Webview.GrowOnNavFailed; inline;
+begin
+  if FOnNavFailedCount = Length(FOnNavFailed) then
+    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
+end;
+
+procedure TWebView2Webview.GrowOnWindowClosed; inline;
+begin
+  if FOnWindowClosedCount = Length(FOnWindowClosed) then
+    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
+end;
+
+procedure TWebView2Webview.GrowOnReady; inline;
+begin
+  if FOnReadyCount = Length(FOnReady) then
+    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
+end;
+
+procedure TWebView2Webview.GrowScaleRef; inline;
+begin
+  if FScaleHandlersRefCount = Length(FScaleHandlersRef) then
+    SetLength(FScaleHandlersRef, WebviewGrowCapacity(Length(FScaleHandlersRef)));
+end;
+
+procedure TWebView2Webview.GrowScaleMethod; inline;
+begin
+  if FScaleHandlersMethodCount = Length(FScaleHandlersMethod) then
+    SetLength(FScaleHandlersMethod, WebviewGrowCapacity(Length(FScaleHandlersMethod)));
+end;
+
+procedure TWebView2Webview.GrowScaleProc; inline;
+begin
+  if FScaleHandlersProcCount = Length(FScaleHandlersProc) then
+    SetLength(FScaleHandlersProc, WebviewGrowCapacity(Length(FScaleHandlersProc)));
+end;
+
 procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
 var I: Integer;
 begin
@@ -569,7 +651,7 @@ var I: Integer;
 begin
   if FReadyFired or FClosed then Exit;
   FReadyFired := True;
-  for I := 0 to High(FOnReady) do
+  for I := 0 to FOnReadyCount - 1 do
     FOnReady[I]();
 end;
 
@@ -577,23 +659,25 @@ procedure TWebView2Webview.DoScaleChanged(ANewScale: Double);
 var I: Integer;
 begin
   FScale := ANewScale;
-  for I := 0 to High(FScaleHandlersRef) do
+  for I := 0 to FScaleHandlersRefCount - 1 do
     if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](ANewScale);
-  for I := 0 to High(FScaleHandlersMethod) do
+  for I := 0 to FScaleHandlersMethodCount - 1 do
     if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](ANewScale);
-  for I := 0 to High(FScaleHandlersProc) do
+  for I := 0 to FScaleHandlersProcCount - 1 do
     if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](ANewScale);
 end;
 
 procedure TWebView2Webview.RemovePending(ARec: PEvalRec);
 var I, J: Integer;
 begin
-  for I := 0 to High(FPendingEvals) do
+  for I := 0 to FPendingCount - 1 do
     if FPendingEvals[I] = ARec then
     begin
-      for J := I to High(FPendingEvals) - 1 do
+      for J := I to FPendingCount - 2 do
         FPendingEvals[J] := FPendingEvals[J + 1];
-      SetLength(FPendingEvals, Length(FPendingEvals) - 1);
+      Dec(FPendingCount);
+      if FPendingCount < Length(FPendingEvals) then
+        FPendingEvals[FPendingCount] := nil;
       Exit;
     end;
 end;
@@ -872,7 +956,7 @@ var
 begin
   if FClosed then Exit;
   FClosed := True;
-  for I := 0 to High(FPendingEvals) do
+  for I := 0 to FPendingCount - 1 do
   begin
     LRec := FPendingEvals[I];
     if not LRec^.Done then
@@ -1066,22 +1150,25 @@ procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
   if not Assigned(AHandler) then Exit;
   EnsureScaleHook;
-  SetLength(FScaleHandlersRef, Length(FScaleHandlersRef) + 1);
-  FScaleHandlersRef[High(FScaleHandlersRef)] := AHandler;
+  GrowScaleRef;
+  FScaleHandlersRef[FScaleHandlersRefCount] := AHandler;
+  Inc(FScaleHandlersRefCount);
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleMethod);
 begin
   if not Assigned(AHandler) then Exit;
   EnsureScaleHook;
-  SetLength(FScaleHandlersMethod, Length(FScaleHandlersMethod) + 1);
-  FScaleHandlersMethod[High(FScaleHandlersMethod)] := AHandler;
+  GrowScaleMethod;
+  FScaleHandlersMethod[FScaleHandlersMethodCount] := AHandler;
+  Inc(FScaleHandlersMethodCount);
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleProc);
 begin
   if not Assigned(AHandler) then Exit;
   EnsureScaleHook;
-  SetLength(FScaleHandlersProc, Length(FScaleHandlersProc) + 1);
-  FScaleHandlersProc[High(FScaleHandlersProc)] := AHandler;
+  GrowScaleProc;
+  FScaleHandlersProc[FScaleHandlersProcCount] := AHandler;
+  Inc(FScaleHandlersProcCount);
 end;
 procedure TWebView2Webview.Navigate(const AUrl: string);
 begin
@@ -1176,8 +1263,9 @@ begin
   LRec^.Callback := ACallback;
   LRec^.OnError := AOnError;
   LRec^.Done := False;
-  SetLength(FPendingEvals, Length(FPendingEvals) + 1);
-  FPendingEvals[High(FPendingEvals)] := LRec;
+  GrowPendingEvals;
+  FPendingEvals[FPendingCount] := LRec;
+  Inc(FPendingCount);
   LHandler := TExecuteScriptHandler.Create(Self, LRec);
   FWebView.ExecuteScript(PWideChar(WideString(AJavascript)), LHandler);
 end;
@@ -1209,8 +1297,9 @@ begin
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
-  SetLength(FOnNavStarted, Length(FOnNavStarted) + 1);
-  FOnNavStarted[High(FOnNavStarted)] := AHandler;
+  GrowOnNavStarted;
+  FOnNavStarted[FOnNavStartedCount] := AHandler;
+  Inc(FOnNavStartedCount);
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventMethod);
 begin
@@ -1230,8 +1319,9 @@ begin
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
-  SetLength(FOnNavFinished, Length(FOnNavFinished) + 1);
-  FOnNavFinished[High(FOnNavFinished)] := AHandler;
+  GrowOnNavFinished;
+  FOnNavFinished[FOnNavFinishedCount] := AHandler;
+  Inc(FOnNavFinishedCount);
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventMethod);
 begin
@@ -1251,8 +1341,9 @@ begin
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
-  SetLength(FOnNavFailed, Length(FOnNavFailed) + 1);
-  FOnNavFailed[High(FOnNavFailed)] := AHandler;
+  GrowOnNavFailed;
+  FOnNavFailed[FOnNavFailedCount] := AHandler;
+  Inc(FOnNavFailedCount);
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod);
 begin
@@ -1272,8 +1363,9 @@ begin
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyHandler);
 begin
-  SetLength(FOnWindowClosed, Length(FOnWindowClosed) + 1);
-  FOnWindowClosed[High(FOnWindowClosed)] := AHandler;
+  GrowOnWindowClosed;
+  FOnWindowClosed[FOnWindowClosedCount] := AHandler;
+  Inc(FOnWindowClosedCount);
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyMethod);
 begin
@@ -1293,8 +1385,9 @@ begin
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
-  SetLength(FOnReady, Length(FOnReady) + 1);
-  FOnReady[High(FOnReady)] := AHandler;
+  GrowOnReady;
+  FOnReady[FOnReadyCount] := AHandler;
+  Inc(FOnReadyCount);
   if FReadyFired then AHandler();
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyMethod);

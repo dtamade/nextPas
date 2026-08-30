@@ -104,15 +104,15 @@ begin
   CheckEqual('a', A[0], 'plain[0]');
   CheckEqual('c', A[2], 'plain[2]');
 
-  A := StringsSplitEscaped('a\\,b', ',');
+  A := StringsSplitEscaped('a\,b', ',');
   CheckEqual(Int64(1), Int64(Length(A)), 'escaped comma count');
   CheckEqual('a,b', A[0], 'escaped comma value');
 
-  A := StringsSplitEscaped('x\\\\y', ',');
+  A := StringsSplitEscaped('x\\y', ',');
   CheckEqual(Int64(1), Int64(Length(A)), 'escaped backslash count');
-  CheckEqual('x\\y', A[0], 'escaped backslash value');
+  CheckEqual('x\y', A[0], 'escaped backslash value');
 
-  A := StringsSplitEscaped('a,b\\,c,d', ',');
+  A := StringsSplitEscaped('a,b\,c,d', ',');
   CheckEqual(Int64(3), Int64(Length(A)), 'mixed count');
   CheckEqual('b,c', A[1], 'mixed middle');
 
@@ -120,9 +120,9 @@ begin
   CheckEqual(Int64(2), Int64(Length(A)), 'trailing delimiter count');
   CheckEqual('', A[1], 'trailing empty');
 
-  A := StringsSplitEscaped('a\\', ',');
+  A := StringsSplitEscaped('a\', ',');
   CheckEqual(Int64(1), Int64(Length(A)), 'trailing escape count');
-  CheckEqual('a\\', A[0], 'trailing escape value');
+  CheckEqual('a\', A[0], 'trailing escape value');
 end;
 
 
@@ -313,6 +313,7 @@ begin
   T.Test('Reverse', @TestReverse);
   T.Test('Join', @TestJoin);
   T.Test('Split', @TestSplit);
+  T.Test('SplitEscaped', @TestSplitEscaped);
   T.Test('Filter', @TestFilter);
   T.Test('Map', @TestMap);
   T.Test('Unique', @TestUnique);

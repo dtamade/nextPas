@@ -14,7 +14,7 @@
 | `TZipEntryInfo` | central directory 条目元数据；尺寸/偏移为 UInt64（Zip64 宽度）；含 `ExternalAttrs` 原值与 `IsSymlink` 判定；加密条目另有 `IsEncrypted` / `AesVersion`（1=AE-1，2=AE-2）/ `AesStrengthCode`，`MethodCode` 为解密后的真实压缩方法 |
 | `TZipWriteOptions` | `ForceZip64: Boolean`——无条件产出 Zip64 结构 |
 | `TZipAddOptions` | 单条目完整选项：`Method` / `ModTimeUnixSec`（<0 取 DOS 下限）/ `Mode`（unix 模式字，0 取默认）/ `Password`（非空走 WinZip AE-2 加密，INV-14）/ `AesStrength`（1/2/3 = AES-128/192/256，0 取 3）/ `DataDescriptor`（仅 `AddEntryStream` 生效，INV-15） |
-| `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`MaxTotalOutputSize: UInt64`——跨条目总输出上限，0=不限（INV-17）；`Password`——WinZip AES 解密口令（INV-14） |
+| `TZipReadOptions` | `MaxOutputSize: SizeUInt`——单条目解压上限，0 取默认 1 GiB；`MaxTotalOutputSize: UInt64`——跨条目总输出上限，0=不限（INV-17）；`MaxDescriptorBuffer: SizeUInt`——顺序读描述符扫描缓冲上限，0 取 512MiB（INV-16）；`Password`——WinZip AES 解密口令（INV-14） |
 | `TZipExtractOptions` | fs 解包选项：`RestoreMode` / `SkipSymlinks` / `MaxOutputSize` / `MaxTotalOutputSize` |
 | `IZipBuilder` | 链式构造器：`Add`/`AddDeflate`/`AddWithTime`/`AddDeflateWithTime`/`AddWithOptions`/`AddDirectory`/`AddDirectoryWithTime`/`AddEntryStream`/`Reserve`/`StreamTo`/`Finish`/`FinishTo` 薄委托 `IZipWriter`（三十一—三十二期对称完备） |
 
@@ -25,7 +25,7 @@
 | `NewZipWriter` / `NewZipWriterWithOptions` | 写器；顺序追加、一次性 Finish |
 | `NewZipReader` / `NewZipReaderWithOptions` | 读器；构造时解析 central directory，非法结构立即 raise |
 | `NewZipReaderFrom` / `NewZipReaderFromWithOptions` | 从可定位流打开：经 IReaderAt 定位读按需取数（EOCD/central/条目载荷），不整体载入、不改写调用方流位置；源须同时实现 IStream 与 IReaderAt，否则 ENotSupportedError；多条目流可并发打开 |
-| `NewZipSequentialReader` / `NewZipSequentialReaderWithOptions` | 从纯顺序流打开：仅靠 local header + data descriptor 前进，不整载、不要求 seek，与七期描述符写端对偶；源为任意 IReader（HTTP body/管道）；一次仅一流，MaxOutputSize 与口令语义与读端一致 |
+| `NewZipSequentialReader` / `NewZipSequentialReaderWithOptions` | 从纯顺序流打开：仅靠 local header + data descriptor 前进，不整载、不要求 seek，与七期描述符写端对偶；源为任意 IReader（HTTP body/管道）；一次仅一流，MaxOutputSize/MaxTotal/MaxDescriptorBuffer 与口令语义与读端一致 |
 | `DefaultZipWriteOptions` / `DefaultZipAddOptions` / `DefaultZipReadOptions` / `DefaultZipExtractOptions` | 各选项默认值 |
 | `ZipPackDirInto` / `ZipPackDir` | 目录递归打包（携带 mtime 与 posix 权限位） |
 | `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录 |
@@ -63,6 +63,7 @@
 | `ExtractToBytesByName(Name)` | 同上按名；缺失 raise ENotFoundError |
 | `OpenEntry(Index) / OpenEntryByName(Name): IDecompressReader` | 流式打开：pull 式增量解压不物化输出；读到 EOF（返回 0）时强制尺寸+CRC32 校验；可同读器多流并发；EOF 前放弃则跳过校验 |
 | `CopyEntryTo(Index, IWriter): SizeUInt` | 泵送整条目到任意写端，EOF 处校验，返回输出字节数 |
+| `ExtractToBuffer(Index, PByte, SizeUInt): SizeUInt` / `ExtractToBufferByName` | 零拷贝直写 PByte 缓冲（INV-18）：不分配 TBytes，直接解压到 `ADst[0..ABufLen-1]`，返回实解字节数；`ABufLen` 不足/尺寸/CRC/MaxOutput 均 fail-closed；目录条目返回 0 |
 
 ### 1.5 顺序读器方法
 
@@ -132,13 +133,12 @@
   `DataDescriptor=False`，既有缓冲/暂存路径字节级行为不变。
 - **[INV-16]** 顺序读契约：`NewZipSequentialReader*` 从任意 `IReader` 顺序
   消费，仅靠 local header + data descriptor 前进，不整载、不要求 seek，
-  与 INV-15 对偶。`Next` 在描述符条目上增量扫描定位描述符（签名
-  `$08074B50` + `LCSize==APos`/`LUSize≤MaxOutput` 预筛 + CRC/尺寸强校验 + 下一条目签名预检，防载荷内假签名导致的 `O(n·m)` 试解压 CPU bomb——35期先验 `IsKnownZipSig` 再试解；当前实现
-  要求描述符带签名，无签名描述符视为截断），并通过 pushback 保证跨条目
+  与 INV-15 对偶。`Next` 在描述符条目上增量扫描定位描述符（有签名
+  `16/24` 与无签名 `12/20` 均支持——`LCSize==APos`/`LUSize≤MaxOutput` 预筛 + CRC/尺寸强校验 + 下一条目签名预检，防载荷内假签名导致的 `O(n·m)` 试解压 CPU bomb——35期先验 `IsKnownZipSig` 再试解，42期补无签名兼容，44期 AES 描述符经 `UnsealWinZipAesPayload` 解帧后再 CRC/试解压），并通过 pushback 保证跨条目
   字节级精确；非描述符条目按 local 声明尺寸精确有界。`Open` /
   `CopyTo`/`Skip` 语义与读端一致（Guard/解压/CRC/MaxOutput/口令），
   一次仅一流，重复打开或未 `Next` 时 `EInvalidOperationError`；截断
-  结构 `EParseError`，不支持的 AES 描述符 `ENotSupportedError`。目录判定
+  结构 `EParseError`（`descriptor not found` 含缓冲上限 `MaxDescriptorBuffer` 默认 512MiB 可配，45期与 `MaxOutput/MaxTotal` 正交），`AES+descriptor` 已打通（44期），`缺口令` 仍 `EInvalidOperationError`。目录判定
   仅认尾随 `/`（无 external attrs），与随机读的 `S_IFDIR` 判定互为已知差
   异，见 §6 Known Limitations。
 - **[INV-17]** 总输出守卫：`TZipReadOptions.MaxTotalOutputSize` 为跨条目
@@ -147,6 +147,12 @@
   `Σ UncompressedSize` 做溢出安全求和并 fail-closed（`EIOError`）；
   顺序读路径在 `Next` 归一真实尺寸后增量累计，超限即 `EIOError`；
   单值已超限或累加溢出均拒绝；`TZipExtractOptions` 同步透传该上限。
+- **[INV-18]** `PByte` 零拷贝直写（S43）：`IZipReader.ExtractToBuffer*` 与
+  `common.DecompressEntryToBuffer` 共享校验内核；store 经 `Move` 直写、
+  deflate 经 `RawDeflateDecompressToBuffer` 增量泵送到调用方缓冲，无
+  `TBytes` 中间物化；`ADstLen < UncompressedSize`/`MaxOutputSize` 超限/
+  尺寸/CRC 均 fail-closed；`ADst=nil` 仅允 `UncompressedSize=0`（目录/空）。
+- **[INV-19]** `AES+descriptor` 对偶（S44）：顺序读 `CollectDescriptorPayload` 先集密文再经 `UnsealWinZipAesPayload`（按 `AesStrength` 解帧）校验 `CRC/尺寸/试解压`，`MaxOutput` 对解密后明文尺寸预筛，与 Writer `INV-15` `AES 描述符` 路径对偶；`缺口令` `EInvalidOperationError`，认证失败统一 `EParseError('zip aes: authentication failed')`。
 
 ## 3. 错误模型
 
@@ -169,14 +175,14 @@
 | 单条目解压超过 MaxOutputSize | `EIOError`（来自 raw inflate 上限语义） |
 | 跨条目总输出超过 MaxTotalOutputSize | `EIOError('zip: total uncompressed size exceeds limit')` |
 | 顺序读未 Next 或重复打开流 | `EInvalidOperationError` |
-| 顺序读 AES 描述符 | `ENotSupportedError` |
+| 顺序读 AES 描述符缺口令 | `EInvalidOperationError` |
 
 ## 4. 源契约
 
 生产单元（src/nextpas.core.zip*.pas）不得 uses 任何非 `nextpas.*` 单元——
 FPC RTL（SysUtils/Classes 等）与第三方库一律经 owner 模块间接使用；该规则由
 `test_zip_contract` 门在 CI 中机械执行。门面单元只做 re-export 与 inline
-委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/GuardTotalOutputSize/DecompressEntryVerified/IsKnownZipSig/LE*`，39期 `GuardTotalOutputSize` 单点化消除两读端总量校验重复），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享编解码链（`Decode*/Build*`/`Encode*` 对称——`Build*` 为堆便捷包装，`Encode*` 为栈上零分配（`PByte+SizeUInt` 直写，`aes.EncodeWinZipAesExtraBody` 同为栈上 7 字节零堆），`writer` 逐条目经 64 字节栈缓冲与 `FScratch` 几何预留复用），`nextpas.core.zip.sequential` 去 `Copy` 双重拷贝（41期零拷贝切片与 PushBack 复用，顺序提取达内存读同量级）；示例 `zip_roundtrip` 覆盖内存/顺序/fs 三路径与 `MaxOutput/MaxTotal` 守卫全演示（四十期定版）。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
+委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/GuardTotalOutputSize/DecompressEntryVerified/DecompressEntryToBuffer/IsKnownZipSig/LE*`，39期 `GuardTotalOutputSize` 单点化、43期 `DecompressEntryToBuffer` PByte 零拷贝与 `RawDeflateDecompressToBuffer`），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享编解码链（`Decode*/Build*`/`Encode*` 对称——`Build*` 为堆便捷包装，`Encode*` 为栈上零分配（`PByte+SizeUInt` 直写，`aes.EncodeWinZipAesExtraBody` 同为栈上 7 字节零堆），`writer` 逐条目经 64 字节栈缓冲与 `FScratch` 几何预留复用），`nextpas.core.zip.sequential` 去 `Copy` 双重拷贝（41期零拷贝切片与 PushBack 复用）并兼容无签名描述符（42期 12/20/16/24 四形态）与 `AES+descriptor`（44期经 `Unseal` 解帧校验）。示例 `zip_roundtrip` 覆盖内存/顺序/fs 三路径与 `MaxOutput/MaxTotal` 守卫全演示（四十期定版）。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
 
 ## 5. 测试入口
 
@@ -211,5 +217,4 @@ store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuz
 ## 6. Known Limitations
 
 - 顺序读目录判定仅认尾随 `/`，随机读另认 `S_IFDIR`/`S_IFLNK`（external attrs 高位）；见 INV-16。
-- Data descriptor 当前要求带签名 `$08074B50`，无签名描述符视为截断（`EParseError('descriptor not found')`）；兼容性见 INV-16。
 - `extra` 的 `LE*` 已收口至 `nextpas.core.zip.common`，`WriteLE*` 栈直写与 `PByte`/`TBytes` 双形态保留；`Build*` 为堆便捷包装，写端一律走 `Encode*` 零分配路径（`aes.EncodeWinZipAesExtraBody` 同为栈上 7 字节零堆，`BuildWinZipAesExtraBody` 为其堆包装）。

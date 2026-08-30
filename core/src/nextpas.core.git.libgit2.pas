@@ -89,9 +89,10 @@ type
     function Blame(const APath: string): TGitBlame;
     // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
     function ConfigEntries: TGitConfigEntryArray;
-    procedure ApplyPatch(const APatch: string);
-    procedure CheckoutPaths(const ASpec: string; const APaths: TStringArray);
-    function WorkdirPatchText(const ARef: string; const APaths: TStringArray;
+    // k97/k101: patch/checkout helpers
+    procedure ApplyPatch(const APatchText: string);
+    procedure CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
+    function WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
       AShowBinary: Boolean): string;
 
     // Worktree operations (IGitWorktreeExt)
@@ -459,21 +460,20 @@ begin
   Result := FRepo.ConfigEntries;
 end;
 
-procedure TGitRepositoryImpl.ApplyPatch(const APatch: string);
+procedure TGitRepositoryImpl.ApplyPatch(const APatchText: string);
 begin
-  FRepo.ApplyPatch(APatch);
+  FRepo.ApplyPatch(APatchText);
 end;
 
-function TGitRepositoryImpl.WorkdirPatchText(const ARef: string;
-  const APaths: TStringArray; AShowBinary: Boolean): string;
+procedure TGitRepositoryImpl.CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
 begin
-  Result := FRepo.WorkdirPatchText(ARef, APaths, AShowBinary);
+  FRepo.CheckoutPaths(ARevspec, APaths);
 end;
 
-procedure TGitRepositoryImpl.CheckoutPaths(const ASpec: string;
-  const APaths: TStringArray);
+function TGitRepositoryImpl.WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
+  AShowBinary: Boolean): string;
 begin
-  FRepo.CheckoutPaths(ASpec, APaths);
+  Result := FRepo.WorkdirPatchText(ARevspec, APaths, AShowBinary);
 end;
 
 function TGitRepositoryImpl.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;

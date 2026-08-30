@@ -70,7 +70,8 @@ implementation
 
 uses
   nextpas.core.tls.exceptions,
-  nextpas.core.tls.tls13.wire;
+  nextpas.core.tls.tls13.wire,
+  nextpas.core.bytes.ops;
 
 function ReadUInt32BE(const AData: TBytes; AOffset: Integer): Cardinal;
 begin
@@ -179,11 +180,11 @@ begin
   AppendByte(Result, Byte(ATicketAgeAdd and $FF));
 
   AppendByte(Result, Byte(Length(ATicketNonce)));
-  AppendBytes(Result, ATicketNonce);
+  BytesAppend(Result, ATicketNonce);
   AppendUInt16(Result, Word(Length(ATicket)));
-  AppendBytes(Result, ATicket);
+  BytesAppend(Result, ATicket);
   AppendUInt16(Result, Word(Length(AExtensions)));
-  AppendBytes(Result, AExtensions);
+  BytesAppend(Result, AExtensions);
 end;
 
 function TryParseTLS13NewSessionTicket(

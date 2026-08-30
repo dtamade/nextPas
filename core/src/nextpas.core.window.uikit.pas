@@ -22,7 +22,7 @@ function UIKitPumpOnce: Boolean;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
@@ -304,15 +304,15 @@ begin OnEvent(EventProcToRef(AHandler)); end;
 
 procedure TWindowUIKit.HostResized(AWidth, AHeight: Integer);
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostResized(AWidth, AHeight); end); Exit; end; RequireOpen; if AWidth<0 then AWidth:=0; if AHeight<0 then AHeight:=0; FWidth:=AWidth; FHeight:=AHeight; E.Kind:=weResized; E.Width:=FWidth; E.Height:=FHeight; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostResized(AWidth, AHeight); end); Exit; end; RequireOpen; if AWidth<0 then AWidth:=0; if AHeight<0 then AHeight:=0; FWidth:=AWidth; FHeight:=AHeight; E := Default(TWindowEvent); E.Kind:=weResized; E.Width:=FWidth; E.Height:=FHeight; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
 
 procedure TWindowUIKit.HostScaleChanged(ANewScale: Double);
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostScaleChanged(ANewScale); end); Exit; end; RequireOpen; E.Kind:=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=ANewScale; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostScaleChanged(ANewScale); end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=ANewScale; DoDispatch(E); end;
 
 procedure TWindowUIKit.HostCloseRequested;
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
 
 function CreateWindowUIKit(const AOptions: TWindowOptions): IWindow;
 begin Result := TWindowUIKit.Create(AOptions); end;

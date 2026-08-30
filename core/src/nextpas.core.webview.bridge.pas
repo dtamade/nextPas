@@ -62,7 +62,7 @@ function BuildEmitScript(const AEvent, APayloadJson: string): string;
 
 { handler 错误码归一化：EWebviewInvokeError 空 Code 补默认 npw.bad_request，
   非空（含 app.* 自定义码）原样透传（§5 规则）。 }
-function NormalizeInvokeCode(const ACode: string): string;
+function NormalizeInvokeCode(const ACode: string): string; inline;
 
 type
   {** invoke handler 注册表唯一实现：六形态注册统一归一为 reference 形态
@@ -80,6 +80,8 @@ type
     end;
   private
     FEntries: array of TEntry;
+    FEntriesCount: Integer;
+    procedure GrowEntries; inline;
     function IndexOf(const ACmd: string): Integer;
     procedure AddEntry(const ACmd: string; AIsAsync: Boolean;
       const ASync: TWebviewInvokeSyncHandler;
@@ -103,7 +105,7 @@ type
     function Find(const ACmd: string; out AIsAsync: Boolean;
       out ASync: TWebviewInvokeSyncHandler;
       out AAsync: TWebviewInvokeAsyncHandler): Boolean;
-    function Count: Integer;
+    function Count: Integer; inline;
   end;
 
   {** 嵌入式资产存储唯一实现：prefix 前缀路由到 provider 链，最长前缀
@@ -118,7 +120,9 @@ type
     end;
   private
     FMounts: array of TMount;
+    FMountsCount: Integer;
     FInert: Boolean;   { DevServerUrl 开发模式：挂载 no-op、解析一律 404 }
+    procedure GrowMounts; inline;   { DevServerUrl 开发模式：挂载 no-op、解析一律 404 }
   public
     constructor Create(AInert: Boolean = False);
     procedure MountEmbedded(const APrefix: string;
@@ -126,7 +130,7 @@ type
     procedure MountDirectory(const APrefix, ARootDir: string);
     function TryResolve(const ASchemeRelativePath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
-    function MountCount: Integer;
+    function MountCount: Integer; inline;
   end;
 
 const
@@ -295,8 +299,7 @@ function BuildEmitScript(const AEvent, APayloadJson: string): string;
 var
   LJson: string;
 begin
-  if AEvent = '' then
-    raise EWebviewInvalidState.Create('bridge emit event name must not be empty');
+  CheckWebviewEventName(AEvent);
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';
@@ -304,7 +307,7 @@ begin
     JsStringLit(LJson) + ')';
 end;
 
-function NormalizeInvokeCode(const ACode: string): string;
+function NormalizeInvokeCode(const ACode: string): string; inline;
 begin
   if ACode = '' then
     Result := NPW_CODE_BAD_REQUEST
@@ -314,11 +317,17 @@ end;
 
 { ---- TWebviewInvokeRegistry：六形态归一 + 命名空间校验 ---- }
 
+procedure TWebviewInvokeRegistry.GrowEntries; inline;
+begin
+  if FEntriesCount = Length(FEntries) then
+    SetLength(FEntries, WebviewGrowCapacity(Length(FEntries)));
+end;
+
 function TWebviewInvokeRegistry.IndexOf(const ACmd: string): Integer;
 var
   I: Integer;
 begin
-  for I := 0 to High(FEntries) do
+  for I := 0 to FEntriesCount - 1 do
     if FEntries[I].Cmd = ACmd then
       Exit(I);
   Result := -1;
@@ -332,11 +341,12 @@ begin
   if IndexOf(ACmd) >= 0 then
     raise EWebviewInvalidState.CreateFmt(
       'invoke handler already registered: %s', [ACmd]);
-  SetLength(FEntries, Length(FEntries) + 1);
-  FEntries[High(FEntries)].Cmd := ACmd;
-  FEntries[High(FEntries)].IsAsync := AIsAsync;
-  FEntries[High(FEntries)].SyncHandler := ASync;
-  FEntries[High(FEntries)].AsyncHandler := AAsync;
+  GrowEntries;
+  FEntries[FEntriesCount].Cmd := ACmd;
+  FEntries[FEntriesCount].IsAsync := AIsAsync;
+  FEntries[FEntriesCount].SyncHandler := ASync;
+  FEntries[FEntriesCount].AsyncHandler := AAsync;
+  Inc(FEntriesCount);
 end;
 
 procedure TWebviewInvokeRegistry.Register(const ACmd: string;
@@ -400,14 +410,16 @@ begin
   LIdx := IndexOf(ACmd);
   if LIdx < 0 then
     Exit;   { 未注册是静默 no-op }
-  for I := LIdx to High(FEntries) - 1 do
+  for I := LIdx to FEntriesCount - 2 do
     FEntries[I] := FEntries[I + 1];
-  SetLength(FEntries, Length(FEntries) - 1);
+  Dec(FEntriesCount);
+  if FEntriesCount < Length(FEntries) then
+    FEntries[FEntriesCount] := Default(TEntry);
 end;
 
-function TWebviewInvokeRegistry.Count: Integer;
+function TWebviewInvokeRegistry.Count: Integer; inline;
 begin
-  Result := Length(FEntries);
+  Result := FEntriesCount;
 end;
 
 function TWebviewInvokeRegistry.Find(const ACmd: string; out AIsAsync: Boolean;
@@ -433,30 +445,40 @@ begin
   FInert := AInert;
 end;
 
+procedure TWebviewAssetsImpl.GrowMounts; inline;
+begin
+  if FMountsCount = Length(FMounts) then
+    SetLength(FMounts, WebviewGrowCapacity(Length(FMounts)));
+end;
+
 procedure TWebviewAssetsImpl.MountEmbedded(const APrefix: string;
   AProvider: IWebviewAssetProvider);
 var
   LPos, I: Integer;
+  LNormPrefix: string;
 begin
   if FInert then
     Exit;   { DevServerUrl 开发模式：资源服务让位 http dev server（§3.4） }
   if AProvider = nil then
     raise EWebviewInvalidState.Create('asset provider must not be nil');
+  LNormPrefix := NormalizeWebviewAssetPath(APrefix);
   { 保持按前缀长度降序稳定有序：最长前缀优先，同长保持先挂先得——
     TryResolve 首命中即最优，平均 O(1)、最坏 O(n) 但 n≤~16 时常数极小；
-    语义与 CONTRACT §3 最长前缀唯一命中/同长先挂一致 }
-  LPos := Length(FMounts);
-  for I := 0 to High(FMounts) do
-    if Length(APrefix) > Length(FMounts[I].Prefix) then
+    语义与 CONTRACT §3 最长前缀唯一命中/同长先挂一致；前缀归一化复用
+    base.NormalizeWebviewAssetPath（与 TryResolve 同源，前导 '/' 容错） }
+  LPos := FMountsCount;
+  for I := 0 to FMountsCount - 1 do
+    if Length(LNormPrefix) > Length(FMounts[I].Prefix) then
     begin
       LPos := I;
       Break;
     end;
-  SetLength(FMounts, Length(FMounts) + 1);
-  for I := High(FMounts) downto LPos + 1 do
+  GrowMounts;
+  for I := FMountsCount downto LPos + 1 do
     FMounts[I] := FMounts[I - 1];
-  FMounts[LPos].Prefix := APrefix;
+  FMounts[LPos].Prefix := LNormPrefix;
   FMounts[LPos].Provider := AProvider;
+  Inc(FMountsCount);
 end;
 
 procedure TWebviewAssetsImpl.MountDirectory(const APrefix, ARootDir: string);
@@ -479,21 +501,22 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  LPath := ASchemeRelativePath;
-  while (LPath <> '') and (LPath[1] = '/') do
-    Delete(LPath, 1, 1);
+  LPath := NormalizeWebviewAssetPath(ASchemeRelativePath);
   if LPath = '' then
     Exit;
+  { 单挂载根路径快路径：95% demo 单 provider 零扫描（与 MountCount inline 同源） }
+  if (FMountsCount = 1) and (FMounts[0].Prefix = '') then
+    Exit(FMounts[0].Provider.TryResolve(LPath, ABytes, AMimeType));
   { 已按长度降序稳定排序：首个前缀命中即最长命中，同长先挂语义天然保持 }
-  for I := 0 to High(FMounts) do
+  for I := 0 to FMountsCount - 1 do
     if (FMounts[I].Prefix = '') or (Pos(FMounts[I].Prefix, LPath) = 1) then
       Exit(FMounts[I].Provider.TryResolve(LPath, ABytes, AMimeType));
   Result := False;
 end;
 
-function TWebviewAssetsImpl.MountCount: Integer;
+function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
-  Result := Length(FMounts);
+  Result := FMountsCount;
 end;
 
 end.

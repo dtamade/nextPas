@@ -24,6 +24,7 @@ uses
   nextpas.core.checksum.crc32,
   nextpas.core.fs,
   nextpas.core.io,
+  nextpas.core.io.memory,
   nextpas.core.process,
   nextpas.core.zip,
   nextpas.core.zip.base;
@@ -133,6 +134,47 @@ var LI: Integer;
 begin
   SetLength(Result, ALen);
   for LI := 0 to ALen-1 do Result[LI] := Byte((LI*3 + ASeed + (LI shr 5)) mod 251);
+end;
+
+function StripDescriptorSignature(const AZip: TBytes): TBytes;
+var LI, LJ, LK: Integer; LStripped: Integer; LEocd, LCentral, LNext: Integer;
+begin
+  Result := System.Copy(AZip, 0, Length(AZip));
+  LStripped := 0;
+  LI := 0;
+  while LI <= Length(Result) - 4 do
+  begin
+    if (Result[LI]= $50) and (Result[LI+1]= $4B) and (Result[LI+2]= $07) and (Result[LI+3]= $08) then
+    begin
+      if (LI+6 <= Length(Result)) and (Result[LI+4]=$50) and (Result[LI+5]=$4B) then begin Inc(LI); Continue; end;
+      for LJ := LI to High(Result)-4 do Result[LJ] := Result[LJ+4];
+      SetLength(Result, Length(Result)-4);
+      Inc(LStripped);
+    end
+    else Inc(LI);
+    if LStripped >=2 then Break;
+    if (LI > 0) and (LI+3 < Length(Result)) and (Result[LI]= $50) and (Result[LI+1]= $4B) and (Result[LI+2]= $01) and (Result[LI+3]= $02) then Break;
+  end;
+  if LStripped=0 then Exit;
+  LEocd := -1;
+  for LI := Length(Result)-22 downto 0 do
+    if (Result[LI]= $50) and (Result[LI+1]= $4B) and (Result[LI+2]= $05) and (Result[LI+3]= $06) then begin LEocd:=LI; Break; end;
+  if LEocd <0 then Exit;
+  LK := Integer(LongWord(Result[LEocd+16]) or (LongWord(Result[LEocd+17]) shl 8) or (LongWord(Result[LEocd+18]) shl 16) or (LongWord(Result[LEocd+19]) shl 24));
+  Dec(LK, 4*LStripped);
+  Result[LEocd+16]:=Byte(LK); Result[LEocd+17]:=Byte(LK shr 8); Result[LEocd+18]:=Byte(LK shr 16); Result[LEocd+19]:=Byte(LK shr 24);
+  LCentral := LK;
+  LI := LCentral;
+  if (LI>=0) and (LI+46 <= Length(Result)) then
+  begin
+    LNext := LI + 46 + (Word(Result[LI+28]) or (Word(Result[LI+29]) shl 8)) + (Word(Result[LI+30]) or (Word(Result[LI+31]) shl 8)) + (Word(Result[LI+32]) or (Word(Result[LI+33]) shl 8));
+    if (LNext+46 <= Length(Result)) and (Result[LNext]= $50) and (Result[LNext+1]= $4B) then
+    begin
+      LK := Integer(LongWord(Result[LNext+42]) or (LongWord(Result[LNext+43]) shl 8) or (LongWord(Result[LNext+44]) shl 16) or (LongWord(Result[LNext+45]) shl 24));
+      Dec(LK, 4);
+      Result[LNext+42]:=Byte(LK); Result[LNext+43]:=Byte(LK shr 8); Result[LNext+44]:=Byte(LK shr 16); Result[LNext+45]:=Byte(LK shr 24);
+    end;
+  end;
 end;
 
 {---- Pascal -> Go ----}
@@ -316,6 +358,47 @@ begin
   end;
 end;
 
+procedure TestDescriptorNoSigParity;
+var LDir: string; LW: IZipWriter; LZip, LNoSig: TBytes; R: IZipReader; LGot, LExp: TBytes; Opt: TZipAddOptions; S: ICompressWriter;
+  RSeq: ISequentialZipReader; Info: TZipEntryInfo; LS: IDecompressReader; Buf: array[0..4095] of Byte; N: SizeUInt; Got2: TBytes;
+begin
+  EnsureGo;
+  LDir := TempDir(GetTempDir, 'zipgo-nosig');
+  try
+    LW := NewZipWriter;
+    Opt := DefaultZipAddOptions; Opt.Method := zmStore; Opt.DataDescriptor := True;
+    S := LW.AddEntryStream('a.txt', Opt);
+    LExp := BytesOfStr('no-sig hello store');
+    if Length(LExp)>0 then S.Write(LExp[0], Length(LExp));
+    S.Close;
+    Opt.Method := zmDeflate; Opt.DataDescriptor := True;
+    S := LW.AddEntryStream('b.bin', Opt);
+    LGot := PatternBytes(4096, 77);
+    S.Write(LGot[0], Length(LGot));
+    S.Close;
+    LZip := LW.Finish;
+    LNoSig := StripDescriptorSignature(LZip);
+    Check(Length(LNoSig) = Length(LZip)-8, 'noSig stripped 2 descriptors');
+    R := NewZipReader(LNoSig);
+    Check(SameBytes(R.ExtractToBytesByName('a.txt'), LExp), 'nosig a.txt random');
+    Check(SameBytes(R.ExtractToBytesByName('b.bin'), LGot), 'nosig b.bin random');
+    RSeq := NewZipSequentialReader(CreateBytesStreamFrom(LNoSig) as IReader);
+    Check(RSeq.Next(Info) and (Info.Name='a.txt'), 'nosig seq a name');
+    LS := RSeq.Open; Got2:=nil; repeat N:=LS.Read(Buf[0], SizeOf(Buf)); if N>0 then begin SetLength(Got2, Length(Got2)+Integer(N)); Move(Buf[0], Got2[Length(Got2)-Integer(N)], N); end; until N=0; LS.Close;
+    Check(SameBytes(Got2, LExp), 'nosig seq a content');
+    Check(RSeq.Next(Info) and (Info.Name='b.bin'), 'nosig seq b name');
+    LS := RSeq.Open; Got2:=nil; repeat N:=LS.Read(Buf[0], SizeOf(Buf)); if N>0 then begin SetLength(Got2, Length(Got2)+Integer(N)); Move(Buf[0], Got2[Length(Got2)-Integer(N)], N); end; until N=0; LS.Close;
+    Check(SameBytes(Got2, LGot), 'nosig seq b content');
+    WriteFile(LDir + '/nosig.zip', LNoSig);
+    GoVerify(LDir + '/nosig.zip', WriteManifest(LDir + '/m.tsv', [
+      ManifestLine('a.txt', 0, LExp),
+      ManifestLine('b.bin', 8, LGot)
+    ]));
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.go_parity');
   T.Test('Pascal->Go basic', @TestPascalToGoBasic);
@@ -324,5 +407,6 @@ begin
   T.Test('Go->Pascal basic', @TestGoToPascalBasic);
   T.Test('Go->Pascal fuzz 30', @TestGoToPascalFuzz);
   T.Test('Bidirectional parity', @TestBidirectionalParity);
+  T.Test('Descriptor no-sig parity', @TestDescriptorNoSigParity);
   if not T.Run then Halt(1);
 end.

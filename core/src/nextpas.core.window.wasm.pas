@@ -36,8 +36,9 @@ function WasmPumpOnce: Boolean;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
+  nextpas.core.text.ansi,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
   nextpas.core.sync.intf,
@@ -137,6 +138,7 @@ type
   TWindowWasm = class(TInterfacedObject, IWindow, IWindowHost)
   private
     FCanvasTarget: string;
+    FCanvasTargetAnsi: AnsiString;
     FCanvasHandle: TWindowNativeHandle;
     FClosed: Boolean;
     FVisible: Boolean;
@@ -189,9 +191,15 @@ type
 function TWindowWasm.ResolveTarget: PAnsiChar;
 begin
   if FCanvasTarget = '' then
-    Result := '#canvas'
+  begin
+    FCanvasTargetAnsi := '#canvas';
+    Result := PAnsiChar(FCanvasTargetAnsi);
+  end
   else
-    Result := PAnsiChar(AnsiString(FCanvasTarget));
+  begin
+    FCanvasTargetAnsi := StrToAnsi(FCanvasTarget);
+    Result := PAnsiChar(FCanvasTargetAnsi);
+  end;
 end;
 
 function TWindowWasm.QueryScale: Double;
@@ -220,7 +228,7 @@ begin
   begin
     P := PAnsiChar(AOptions.ParentHandle);
     if P <> nil then
-      FCanvasTarget := string(AnsiString(P))
+      FCanvasTarget := AnsiPtrToStr(P)
     else
       FCanvasTarget := '#canvas';
   end
@@ -329,7 +337,7 @@ begin
     emscripten_set_element_css_size(ResolveTarget, FCssW, FCssH);
   if Assigned(emscripten_set_canvas_element_size) then
     emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E.Kind := weResized; E.Width := FPhysW; E.Height := FPhysH; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FPhysW; E.Height := FPhysH; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
 
@@ -391,7 +399,7 @@ begin
   FPhysW:=Round(FCssW*FScale); FPhysH:=Round(FCssH*FScale);
   if Assigned(emscripten_set_element_css_size) then emscripten_set_element_css_size(ResolveTarget, FCssW, FCssH);
   if Assigned(emscripten_set_canvas_element_size) then emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E.Kind:=weResized; E.Width:=FPhysW; E.Height:=FPhysH; E.X:=0; E.Y:=0; E.NewScale:=0;
+  E := Default(TWindowEvent); E.Kind :=weResized; E.Width:=FPhysW; E.Height:=FPhysH; E.X:=0; E.Y:=0; E.NewScale:=0;
   DoDispatch(E);
 end;
 
@@ -404,13 +412,13 @@ begin
   FScale:=ANewScale;
   FPhysW:=Round(FCssW*FScale); FPhysH:=Round(FCssH*FScale);
   if Assigned(emscripten_set_canvas_element_size) then emscripten_set_canvas_element_size(ResolveTarget, FPhysW, FPhysH);
-  E.Kind:=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=FScale;
+  E := Default(TWindowEvent); E.Kind :=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=FScale;
   DoDispatch(E);
 end;
 
 procedure TWindowWasm.HostCloseRequested;
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
 
 function CreateWindowWasm(const AOptions: TWindowOptions): IWindow;
 begin Result := TWindowWasm.Create(AOptions); end;

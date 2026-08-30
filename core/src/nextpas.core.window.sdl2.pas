@@ -32,8 +32,9 @@ procedure WindowSdl2QuitLoop;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
+  nextpas.core.text.ansi,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
   nextpas.core.sync.intf,
@@ -266,7 +267,7 @@ begin
   LFlags := SDL_WINDOW_HIDDEN or SDL_WINDOW_ALLOW_HIGHDPI;
   if FResizable then LFlags := LFlags or SDL_WINDOW_RESIZABLE;
 
-  FHandle := SDL_CreateWindow(PAnsiChar(AnsiString(FTitle)), $2FFF0000, $2FFF0000, FWidth, FHeight, LFlags);
+  FHandle := SDL_CreateWindow(PAnsiChar(StrToAnsi(FTitle)), $2FFF0000, $2FFF0000, FWidth, FHeight, LFlags);
   if FHandle = nil then
     raise EWindowNotInitialized.Create('SDL_CreateWindow failed: ' + string(AnsiString(SDL_GetError)));
   FWindowID := SDL_GetWindowID(FHandle);
@@ -377,7 +378,7 @@ procedure TWindowSdl2.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   FTitle := ATitle;
-  SDL_SetWindowTitle(FHandle, PAnsiChar(AnsiString(ATitle)));
+  SDL_SetWindowTitle(FHandle, PAnsiChar(StrToAnsi(ATitle)));
 end;
 
 function TWindowSdl2.GetTitle: string;
@@ -386,7 +387,7 @@ var
 begin
   RequireOpen;
   P := SDL_GetWindowTitle(FHandle);
-  if P <> nil then Result := string(AnsiString(P)) else Result := FTitle;
+  if P <> nil then Result := AnsiPtrToStr(P) else Result := FTitle;
 end;
 
 procedure TWindowSdl2.SetBounds(AWidth, AHeight: Integer);
@@ -398,7 +399,7 @@ begin
   if AHeight < 0 then AHeight := 0;
   FWidth := AWidth; FHeight := AHeight;
   SDL_SetWindowSize(FHandle, AWidth, AHeight);
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
@@ -434,7 +435,7 @@ var
 begin
   RequireOpen;
   SDL_MaximizeWindow(FHandle);
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
@@ -528,6 +529,25 @@ end;
 
 { ---- Global SDL event pump ---- }
 
+function SdlModToWindowMod(AMod: UInt16): Integer; inline;
+begin
+  Result := 0;
+  if (AMod and KMOD_SHIFT) <> 0 then Result := Result or 1;
+  if (AMod and KMOD_CTRL) <> 0 then Result := Result or 2;
+  if (AMod and KMOD_ALT) <> 0 then Result := Result or 4;
+  if (AMod and KMOD_GUI) <> 0 then Result := Result or 8;
+end;
+
+function SdlButtonToWindowButton(AButton: UInt8): Integer; inline;
+begin
+  case AButton of
+    1: Result := 1;
+    3: Result := 2;
+    2: Result := 3;
+    else Result := AButton;
+  end;
+end;
+
 function SdlPollAndDispatchOnce: Boolean;
 var
   E: TSDL_Event;
@@ -558,7 +578,7 @@ begin
     case E.window.event of
       SDL_WINDOWEVENT_CLOSE:
         begin
-          LEvent.Kind := weCloseRequested;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weCloseRequested;
           LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
@@ -566,14 +586,14 @@ begin
         begin
           LSelf.FWidth := E.window.data1;
           LSelf.FHeight := E.window.data2;
-          LEvent.Kind := weResized;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weResized;
           LEvent.Width := LSelf.FWidth; LEvent.Height := LSelf.FHeight;
           LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
       SDL_WINDOWEVENT_MOVED:
         begin
-          LEvent.Kind := weMoved;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weMoved;
           LEvent.Width := 0; LEvent.Height := 0;
           LEvent.X := E.window.data1; LEvent.Y := E.window.data2;
           LEvent.NewScale := 0;
@@ -581,16 +601,81 @@ begin
         end;
       SDL_WINDOWEVENT_FOCUS_GAINED:
         begin
-          LEvent.Kind := weFocusIn;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weFocusIn;
           LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
       SDL_WINDOWEVENT_FOCUS_LOST:
         begin
-          LEvent.Kind := weFocusOut;
+          LEvent := Default(TWindowEvent); LEvent.Kind := weFocusOut;
           LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
           LSelf.DoDispatch(LEvent);
         end;
+    end;
+  end;
+
+  if E.type_ = SDL_KEYDOWN then
+  begin
+    LWin := FindWindowByID(E.key.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weKeyDown;
+      LEvent.KeyCode := E.key.keysym.sym;
+      LEvent.Modifiers := SdlModToWindowMod(E.key.keysym.mod_);
+      LSelf.DoDispatch(LEvent);
+    end;
+  end
+  else if E.type_ = SDL_KEYUP then
+  begin
+    LWin := FindWindowByID(E.key.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weKeyUp;
+      LEvent.KeyCode := E.key.keysym.sym;
+      LEvent.Modifiers := SdlModToWindowMod(E.key.keysym.mod_);
+      LSelf.DoDispatch(LEvent);
+    end;
+  end
+  else if E.type_ = SDL_MOUSEBUTTONDOWN then
+  begin
+    LWin := FindWindowByID(E.button.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseDown;
+      LEvent.X := E.button.x; LEvent.Y := E.button.y;
+      LEvent.Button := SdlButtonToWindowButton(E.button.button);
+      LEvent.Modifiers := 0;
+      LSelf.DoDispatch(LEvent);
+    end;
+  end
+  else if E.type_ = SDL_MOUSEBUTTONUP then
+  begin
+    LWin := FindWindowByID(E.button.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseUp;
+      LEvent.X := E.button.x; LEvent.Y := E.button.y;
+      LEvent.Button := SdlButtonToWindowButton(E.button.button);
+      LEvent.Modifiers := 0;
+      LSelf.DoDispatch(LEvent);
+    end;
+  end
+  else if E.type_ = SDL_MOUSEMOTION then
+  begin
+    LWin := FindWindowByID(E.motion.windowID);
+    if LWin <> nil then
+    begin
+      LSelf := TWindowSdl2(LWin);
+      LEvent := Default(TWindowEvent); LEvent.Kind := weMouseMove;
+      LEvent.X := E.motion.x; LEvent.Y := E.motion.y;
+      LEvent.Button := 0;
+      LEvent.Modifiers := 0;
+      if (E.motion.state and 1) <> 0 then LEvent.Button := 1;
+      LSelf.DoDispatch(LEvent);
     end;
   end;
 end;
@@ -627,7 +712,7 @@ begin
             case LEv.window.event of
               SDL_WINDOWEVENT_CLOSE:
                 begin
-                  LEvent.Kind := weCloseRequested;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weCloseRequested;
                   LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
                   LSelf.DoDispatch(LEvent);
                 end;
@@ -635,14 +720,14 @@ begin
                 begin
                   LSelf.FWidth := LEv.window.data1;
                   LSelf.FHeight := LEv.window.data2;
-                  LEvent.Kind := weResized;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weResized;
                   LEvent.Width := LSelf.FWidth; LEvent.Height := LSelf.FHeight;
                   LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
                   LSelf.DoDispatch(LEvent);
                 end;
               SDL_WINDOWEVENT_MOVED:
                 begin
-                  LEvent.Kind := weMoved;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weMoved;
                   LEvent.Width := 0; LEvent.Height := 0;
                   LEvent.X := LEv.window.data1; LEvent.Y := LEv.window.data2;
                   LEvent.NewScale := 0;
@@ -650,18 +735,38 @@ begin
                 end;
               SDL_WINDOWEVENT_FOCUS_GAINED:
                 begin
-                  LEvent.Kind := weFocusIn;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weFocusIn;
                   LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
                   LSelf.DoDispatch(LEvent);
                 end;
               SDL_WINDOWEVENT_FOCUS_LOST:
                 begin
-                  LEvent.Kind := weFocusOut;
+                  LEvent := Default(TWindowEvent); LEvent.Kind := weFocusOut;
                   LEvent.Width := 0; LEvent.Height := 0; LEvent.X := 0; LEvent.Y := 0; LEvent.NewScale := 0;
                   LSelf.DoDispatch(LEvent);
                 end;
             end;
           end;
+        end else if LEv.type_ = SDL_KEYDOWN then
+        begin
+          LWin := FindWindowByID(LEv.key.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weKeyDown; LEvent.KeyCode := LEv.key.keysym.sym; LEvent.Modifiers := SdlModToWindowMod(LEv.key.keysym.mod_); LSelf.DoDispatch(LEvent); end;
+        end else if LEv.type_ = SDL_KEYUP then
+        begin
+          LWin := FindWindowByID(LEv.key.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weKeyUp; LEvent.KeyCode := LEv.key.keysym.sym; LEvent.Modifiers := SdlModToWindowMod(LEv.key.keysym.mod_); LSelf.DoDispatch(LEvent); end;
+        end else if LEv.type_ = SDL_MOUSEBUTTONDOWN then
+        begin
+          LWin := FindWindowByID(LEv.button.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseDown; LEvent.X := LEv.button.x; LEvent.Y := LEv.button.y; LEvent.Button := SdlButtonToWindowButton(LEv.button.button); LSelf.DoDispatch(LEvent); end;
+        end else if LEv.type_ = SDL_MOUSEBUTTONUP then
+        begin
+          LWin := FindWindowByID(LEv.button.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseUp; LEvent.X := LEv.button.x; LEvent.Y := LEv.button.y; LEvent.Button := SdlButtonToWindowButton(LEv.button.button); LSelf.DoDispatch(LEvent); end;
+        end else if LEv.type_ = SDL_MOUSEMOTION then
+        begin
+          LWin := FindWindowByID(LEv.motion.windowID);
+          if LWin <> nil then begin LSelf := TWindowSdl2(LWin); LEvent := Default(TWindowEvent); LEvent.Kind := weMouseMove; LEvent.X := LEv.motion.x; LEvent.Y := LEv.motion.y; LSelf.DoDispatch(LEvent); end;
         end;
       end;
     end

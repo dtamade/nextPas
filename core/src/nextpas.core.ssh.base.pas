@@ -27,6 +27,10 @@ const
   SSH_MIN_PADDING = 4;                 { RFC 4253 §6：padding 至少 4 字节 }
   SSH_MIN_PAD_BLOCK = 8;               { 未加密时总长对齐块下限 }
 
+  { Rekey 阈值（ROADMAP S24）：1 GiB / 1h，与 OpenSSH 默认一致 }
+  SSH_REKEY_BYTES = UInt64(1) * 1024 * 1024 * 1024;
+  SSH_REKEY_INTERVAL_MS = 3600 * 1000;
+
   { RFC 4250 消息号（通用）}
   SSH_MSG_DISCONNECT = 1;
   SSH_MSG_IGNORE = 2;
@@ -112,6 +116,9 @@ type
     ConnectTimeoutMs: Integer;       { 预留：当前阻塞 IO 未接入超时 }
     ExecTimeoutMs: Integer;          { Exec 输出收集超时，<=0 表示无限等待 }
     Compress: Boolean;               { True：协商 zlib@openssh.com / zlib，延迟/即时激活 }
+    RekeyBytes: UInt64;                { 0=禁用，否则达阈值触发重协商，默认 1GiB }
+    RekeyIntervalMs: Integer;          { 0=禁用，否则超期触发，默认 1h }
+    KeepAliveIntervalMs: Integer;      { 0=禁用，否则空闲达阈值发 SSH_MSG_IGNORE }
     InitialWindowSize: UInt32;
     MaxPacket: UInt32;
   end;
@@ -129,6 +136,9 @@ begin
   Result.StrictHostKeyChecking := False;
   Result.ConnectTimeoutMs := 10000;
   Result.ExecTimeoutMs := 120000;
+  Result.RekeyBytes := SSH_REKEY_BYTES;
+  Result.RekeyIntervalMs := SSH_REKEY_INTERVAL_MS;
+  Result.KeepAliveIntervalMs := 0;
   Result.InitialWindowSize := SSH_DEFAULT_WINDOW_SIZE;
   Result.MaxPacket := SSH_DEFAULT_MAX_PACKET;
 end;

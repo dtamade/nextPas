@@ -16,6 +16,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.time.base,
   nextpas.core.async.loop,
   nextpas.core.async.cancellation,
   nextpas.core.net.async.tcp,
@@ -34,7 +35,10 @@ type
     function GetServerHostKeyFingerprint: string;
     function GetLoop: TAsyncLoop;
     function GetTransport: TAsyncSshTransport;
-    function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult): Boolean;
+    function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult; AContext: Pointer = nil): Boolean;
+    function ShouldRekey: Boolean;
+    function AsyncSendKeepAlive(const AData: TBytes; ACallback: TSshAsyncCb; AContext: Pointer = nil): Boolean;
+    function AsyncSendKeepAliveEmpty(ACallback: TSshAsyncCb; AContext: Pointer = nil): Boolean;
     procedure Close;
     property Connected: Boolean read GetConnected;
     property ServerVersion: string read GetServerVersion;
@@ -58,6 +62,9 @@ type
     function StrictHostKey(AValue: Boolean): ISshAsyncClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshAsyncClientBuilder;
     function Compress(AValue: Boolean): ISshAsyncClientBuilder;
+    function RekeyBytes(AValue: UInt64): ISshAsyncClientBuilder;
+    function RekeyIntervalMs(AValue: Integer): ISshAsyncClientBuilder;
+    function KeepAliveIntervalMs(AValue: Integer): ISshAsyncClientBuilder;
     function DialOptions(const AValue: TAsyncTcpDialOptions): ISshAsyncClientBuilder;
     function AsyncConnect(const ALoop: TAsyncLoop; ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean;
   end;
@@ -78,10 +85,10 @@ function SshAsyncClient: ISshAsyncClientBuilder;
 implementation
 
 uses
-  SysUtils,
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.async.base,
-  nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.crypto.random,
   nextpas.core.crypto.ed25519,
@@ -95,8 +102,6 @@ uses
   nextpas.core.ssh.agent,
   nextpas.core.ssh.compress,
   nextpas.core.ssh.cipher,
-  nextpas.core.ssh.kex.curve25519,
-  nextpas.core.ssh.kex.dhgroup14,
   nextpas.core.ssh.channel.async,
   nextpas.core.ssh.proxyjump.async;
 
@@ -120,8 +125,11 @@ type
     FNegotiated: TSshNegotiated;
     FAuthenticated: Boolean;
     FClosed: Boolean;
+    FKeepAliveHandle: TAsyncTimerHandle;
     procedure LoadKnownHostsIfNeeded;
     procedure VerifyHostKey(const ASigAlg: string; const AH, ASigBlob: TBytes);
+    procedure ScheduleKeepAlive;
+    procedure KeepAliveTick(AContext: Pointer);
     function GetConnected: Boolean;
     function GetServerVersion: string;
     function GetServerHostKeyFingerprint: string;
@@ -130,7 +138,10 @@ type
   public
     constructor Create(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; const AOptions: TSshConnectOptions);
     destructor Destroy; override;
-    function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult): Boolean;
+    function ExecAsync(const ACommand: string; ACallback: TProcSshExecResult; AContext: Pointer = nil): Boolean;
+    function ShouldRekey: Boolean;
+    function AsyncSendKeepAlive(const AData: TBytes; ACallback: TSshAsyncCb; AContext: Pointer = nil): Boolean;
+    function AsyncSendKeepAliveEmpty(ACallback: TSshAsyncCb; AContext: Pointer = nil): Boolean;
     procedure Close;
   end;
 
@@ -151,8 +162,7 @@ type
     FHostKeyInfo: TSshHostKeyInfo;
     FHostKeyFingerprint: string;
     FSessionId: TBytes;
-    FKexCurve: TSshKexCurve25519;
-    FKexDH: TSshKexDHGroup14;
+    FKex: ISshKeyExchange;
     // agent
     FAgentClient: TSshAgentClient;
     FAgentIds: TSshAgentIdentityArray;
@@ -313,9 +323,28 @@ begin
   if not FClosed then
   begin
     FClosed := True;
+    if (FLoop <> nil) and FKeepAliveHandle.IsValid then
+      FLoop.CancelTimer(FKeepAliveHandle);
+    FKeepAliveHandle := Default(TAsyncTimerHandle);
     if FTransport <> nil then
       FTransport.Close;
   end;
+end;
+
+procedure TAsyncSshSession.ScheduleKeepAlive;
+begin
+  if FClosed or not FAuthenticated then Exit;
+  if FOptions.KeepAliveIntervalMs <= 0 then Exit;
+  if (FLoop = nil) or (FTransport = nil) then Exit;
+  FKeepAliveHandle := FLoop.ScheduleMethod(TDuration.FromMilliseconds(UInt64(FOptions.KeepAliveIntervalMs)), @KeepAliveTick, Self);
+end;
+
+procedure TAsyncSshSession.KeepAliveTick(AContext: Pointer);
+begin
+  if FClosed or not FAuthenticated then Exit;
+  if FTransport <> nil then
+    FTransport.AsyncSendIgnore(nil, nil, nil);
+  ScheduleKeepAlive;
 end;
 
 procedure ExecPostCb(AContext: Pointer);
@@ -338,25 +367,25 @@ begin
   Dispose(P);
 end;
 
-function TAsyncSshSession.ExecAsync(const ACommand: string; ACallback: TProcSshExecResult): Boolean;
+function TAsyncSshSession.ExecAsync(const ACommand: string; ACallback: TProcSshExecResult; AContext: Pointer): Boolean;
 var P: PExecPost;
 begin
   if not FAuthenticated then
   begin
     if Assigned(ACallback) then
-      ACallback(Default(TSshExecResult), ESSHError.Create(sekAuth, 'ssh session: not authenticated'), nil);
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekAuth, 'ssh session: not authenticated'), AContext);
     Exit(False);
   end;
   if FClosed then
   begin
     if Assigned(ACallback) then
-      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: closed'), nil);
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: closed'), AContext);
     Exit(False);
   end;
   if (FLoop = nil) or (FTransport = nil) then
   begin
     if Assigned(ACallback) then
-      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: invalid state'), nil);
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: invalid state'), AContext);
     Exit(False);
   end;
   New(P);
@@ -366,17 +395,29 @@ begin
   P^.MaxPacket := FOptions.MaxPacket;
   P^.TimeoutMs := FOptions.ExecTimeoutMs;
   P^.Callback := ACallback;
-  P^.Context := nil;
+  P^.Context := AContext;
   try
     FLoop.PostEx(@ExecPostCb, P, @ExecPostDiscard);
     Result := True;
   except
     Dispose(P);
     if Assigned(ACallback) then
-      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: post exec failed'), nil);
+      ACallback(Default(TSshExecResult), ESSHError.Create(sekIO,'ssh session: post exec failed'), AContext);
     Result := False;
   end;
 end;
+
+function TAsyncSshSession.ShouldRekey: Boolean;
+begin Result := (FTransport <> nil) and FTransport.ShouldRekey; end;
+
+function TAsyncSshSession.AsyncSendKeepAlive(const AData: TBytes; ACallback: TSshAsyncCb; AContext: Pointer): Boolean;
+begin
+  if (FTransport = nil) or FClosed or not FAuthenticated then Exit(False);
+  Result := FTransport.AsyncSendIgnore(AData, ACallback, AContext);
+end;
+
+function TAsyncSshSession.AsyncSendKeepAliveEmpty(ACallback: TSshAsyncCb; AContext: Pointer): Boolean;
+begin Result := AsyncSendKeepAlive(nil, ACallback, AContext); end;
 
 { TAsyncConnector }
 
@@ -396,7 +437,7 @@ begin
   if FLoop=nil then begin Fail(ESSHError.Create(sekProtocol,'async connect: nil loop')); Exit; end;
   if FProvidedStream=nil then begin Fail(ESSHError.Create(sekProtocol,'async connect: nil stream')); Exit; end;
   if FOptions.User='' then begin Fail(ESSHError.Create(sekProtocol,'ssh connect: user is required')); Exit; end;
-  FTransport:=TAsyncSshTransport.Create(FLoop, FProvidedStream); FSession:=TAsyncSshSession.Create(FLoop, FTransport, FOptions); FSession.FActiveUser:=FOptions.User;
+  FTransport:=TAsyncSshTransport.Create(FLoop, FProvidedStream); FTransport.ConfigureRekey(FOptions.RekeyBytes, FOptions.RekeyIntervalMs); FSession:=TAsyncSshSession.Create(FLoop, FTransport, FOptions); FSession.FActiveUser:=FOptions.User;
   if not FTransport.AsyncExchangeVersions(@SshAsync_OnVersionDone, Self) then Fail(ESSHError.Create(sekIO,'ssh async version exchange submit failed'));
 end;
 
@@ -406,8 +447,7 @@ begin
   Cb := FUserCb; Ctx := FUserCtx;
   FUserCb := nil;
   FreeAndNil(FAgentClient);
-  FreeAndNil(FKexCurve);
-  FreeAndNil(FKexDH);
+  FKex := nil;
   if FSession <> nil then
   begin
     // session owns transport after OnDial; avoid double free
@@ -425,8 +465,7 @@ begin
   Cb := FUserCb; Ctx := FUserCtx;
   FUserCb := nil;
   FreeAndNil(FAgentClient);
-  FreeAndNil(FKexCurve);
-  FreeAndNil(FKexDH);
+  FKex := nil;
   Sess := FSession as ISshAsyncSession;
   FTransport := nil; // owned by session
   if Assigned(Cb) then Cb(Sess, nil, Ctx);
@@ -447,6 +486,7 @@ begin
   if AError <> 0 then begin Fail(ESSHError.Create(sekIO, 'ssh async dial failed (' + IntToStr(AError) + ')')); Exit; end;
   if AStream = nil then begin Fail(ESSHError.Create(sekIO, 'ssh async dial: nil stream')); Exit; end;
   FTransport := TAsyncSshTransport.Create(FLoop, AStream);
+  FTransport.ConfigureRekey(FOptions.RekeyBytes, FOptions.RekeyIntervalMs);
   FSession := TAsyncSshSession.Create(FLoop, FTransport, FOptions);
   FSession.FActiveUser := FOptions.User;
   if not FTransport.AsyncExchangeVersions(@SshAsync_OnVersionDone, Self) then
@@ -483,17 +523,9 @@ begin
     on E: Exception do begin Fail(ESSHError.Create(sekNegotiation, E.Message)); Exit; end;
   end;
   FSession.FNegotiated := FNeg;
-  // Build and send KEX init according to negotiated alg
-  if FNeg.KexAlg = 'diffie-hellman-group14-sha256' then
-  begin
-    FKexDH := TSshKexDHGroup14.Create;
-    LInit := FKexDH.BuildInitPayload;
-  end
-  else
-  begin
-    FKexCurve := TSshKexCurve25519.Create;
-    LInit := FKexCurve.BuildInitPayload;
-  end;
+  FKex := SshCreateKex(FNeg.KexAlg);
+  if FKex = nil then begin Fail(ESSHError.Create(sekNegotiation, 'ssh kex: unsupported algorithm ' + FNeg.KexAlg)); Exit; end;
+  LInit := FKex.BuildInitPayload;
   if not FTransport.AsyncSendPacket(LInit, @SshAsync_OnKexInitReplySent, Self) then
     Fail(ESSHError.Create(sekIO, 'ssh async kex init send failed'));
 end;
@@ -508,15 +540,10 @@ end;
 procedure TAsyncConnector.OnKexReplyRecv(const APayload: TBytes; AErr: ESSHError);
 begin
   if AErr <> nil then begin Fail(AErr); Exit; end;
+  if FKex = nil then begin Fail(ESSHError.Create(sekProtocol, 'ssh async: no kex instance')); Exit; end;
   try
-    if Assigned(FKexDH) then
-      FKexDH.ProcessReply(APayload, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        FMyKexInit, FPeerKexInit, FK, FH, FHostBlob, FSigBlob)
-    else if Assigned(FKexCurve) then
-      FKexCurve.ProcessReply(APayload, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        FMyKexInit, FPeerKexInit, FK, FH, FHostBlob, FSigBlob)
-    else
-      raise ESSHError.Create(sekProtocol, 'ssh async: no kex instance');
+    FKex.ProcessReply(APayload, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+      FMyKexInit, FPeerKexInit, FK, FH, FHostBlob, FSigBlob);
   except
     on E: ESSHError do begin Fail(E); Exit; end;
     on E: Exception do begin Fail(ESSHError.Create(sekProtocol, E.Message)); Exit; end;
@@ -793,6 +820,7 @@ begin
   FSession.FNegotiated := FNeg;
   FSession.FSessionId := FSessionId;
   FreeAndNil(FAgentClient);
+  FSession.ScheduleKeepAlive;
   Succeed;
 end;
 
@@ -911,7 +939,7 @@ procedure Proxy_SecondHop(ASession:ISshAsyncSession; AErr:ESSHError; AContext:Po
 procedure TProxyConn.Fail(AErr:ESSHError); var Cb:TSshAsyncConnectCb; Ctx:Pointer; begin Cb:=FUserCb; Ctx:=FUserCtx; FUserCb:=nil; if Assigned(Cb) then Cb(nil,AErr,Ctx) else if AErr<>nil then AErr.Free; Free; end;
 procedure TProxyConn.SendOpen; var LW:TsshWriter; H:string; P:UInt32; begin FLocalId:=GProxyNextChan; Inc(GProxyNextChan); H:=FTargetOpts.Host; P:=FTargetOpts.Port; if H='' then H:='127.0.0.1'; if P=0 then P:=22; LW:=TsshWriter.Create(128); try LW.PutByte(SSH_MSG_CHANNEL_OPEN); LW.PutStringText('direct-tcpip'); LW.PutUInt32(FLocalId); LW.PutUInt32(2097152); LW.PutUInt32(32768); LW.PutStringText(H); LW.PutUInt32(P); LW.PutStringText('127.0.0.1'); LW.PutUInt32(0); if not FJump.Transport.AsyncSendPacket(LW.ToBytes,@Proxy_OnOpenSent,Self) then Fail(ESSHError.Create(sekIO,'proxy open send failed')); finally LW.Free; end; end;
 procedure TProxyConn.OnOpenSent(AErr:ESSHError; AContext:Pointer); begin if AErr<>nil then begin Fail(AErr); Exit; end; if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy open reply read failed')); end;
-procedure TProxyConn.OnOpenReply(const APayload:TBytes; AErr:ESSHError; AContext:Pointer); var LR:TsshReader; T:Byte; R, Rm,W,M:UInt32; Ch:IAsyncTcpStream; begin if AErr<>nil then begin Fail(AErr); Exit; end; if Length(APayload)=0 then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; T:=APayload[0]; if T in [SSH_MSG_IGNORE,SSH_MSG_DEBUG,SSH_MSG_UNIMPLEMENTED,SSH_MSG_EXT_INFO,SSH_MSG_USERAUTH_BANNER] then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; if T=SSH_MSG_CHANNEL_OPEN_FAILURE then begin Fail(ESSHError.Create(sekProtocol,'proxy open refused')); Exit; end; if T<>SSH_MSG_CHANNEL_OPEN_CONFIRMATION then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; LR:=TsshReader.Create(APayload); try LR.ReadByte; R:=LR.ReadUInt32; if R<>FLocalId then begin LR.Free; if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; Rm:=LR.ReadUInt32; W:=LR.ReadUInt32; M:=LR.ReadUInt32; finally LR.Free; end; Ch:=TAsyncChannelStream.Create(FLoop,FJump.Transport,FLocalId,Rm,W,M); StartSecondHop(Ch); end;
+procedure TProxyConn.OnOpenReply(const APayload:TBytes; AErr:ESSHError; AContext:Pointer); var LR:TsshReader; T:Byte; R, Rm,W,M:UInt32; Ch:IAsyncTcpStream; begin if AErr<>nil then begin Fail(AErr); Exit; end; if Length(APayload)=0 then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; T:=APayload[0]; if T in [SSH_MSG_IGNORE,SSH_MSG_DEBUG,SSH_MSG_UNIMPLEMENTED,SSH_MSG_EXT_INFO,SSH_MSG_USERAUTH_BANNER] then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; if T=SSH_MSG_CHANNEL_OPEN_FAILURE then begin Fail(ESSHError.Create(sekProtocol,'proxy open refused')); Exit; end; if T<>SSH_MSG_CHANNEL_OPEN_CONFIRMATION then begin if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; LR:=TsshReader.Create(APayload); try LR.ReadByte; R:=LR.ReadUInt32; if R<>FLocalId then begin LR.Free; if not FJump.Transport.AsyncReadPacket(@Proxy_OnOpenReply,Self) then Fail(ESSHError.Create(sekIO,'proxy re-read failed')); Exit; end; Rm:=LR.ReadUInt32; W:=LR.ReadUInt32; M:=LR.ReadUInt32; finally LR.Free; end; Ch:=TAsyncChannelStream.CreateWithKeeper(FLoop,FJump.Transport,FJump as IInterface,FLocalId,Rm,W,M); StartSecondHop(Ch); end;
 procedure TProxyConn.StartSecondHop(AChan:IAsyncTcpStream); begin if not SshAsyncConnectWithStream(FLoop,AChan,FTargetOpts,@Proxy_SecondHop,Self) then Fail(ESSHError.Create(sekIO,'proxy second hop submit failed')); end;
 procedure Proxy_OnOpenSent(AErr:ESSHError; AContext:Pointer); begin TProxyConn(AContext).OnOpenSent(AErr,nil); end;
 procedure Proxy_OnOpenReply(const APayload:TBytes; AErr:ESSHError; AContext:Pointer); begin TProxyConn(AContext).OnOpenReply(APayload,AErr,nil); end;
@@ -946,6 +974,9 @@ type
     function StrictHostKey(AValue: Boolean): ISshAsyncClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshAsyncClientBuilder;
     function Compress(AValue: Boolean): ISshAsyncClientBuilder;
+    function RekeyBytes(AValue: UInt64): ISshAsyncClientBuilder;
+    function RekeyIntervalMs(AValue: Integer): ISshAsyncClientBuilder;
+    function KeepAliveIntervalMs(AValue: Integer): ISshAsyncClientBuilder;
     function DialOptions(const AValue: TAsyncTcpDialOptions): ISshAsyncClientBuilder;
     function AsyncConnect(const ALoop: TAsyncLoop; ACallback: TSshAsyncConnectCb; AContext: Pointer = nil): Boolean;
   end;
@@ -969,6 +1000,9 @@ function TAsyncClientBuilder.KnownHostsFile(const AValue: string): ISshAsyncClie
 function TAsyncClientBuilder.StrictHostKey(AValue: Boolean): ISshAsyncClientBuilder; begin FOptions.StrictHostKeyChecking := AValue; Result := Self; end;
 function TAsyncClientBuilder.ExecTimeoutMs(AValue: Integer): ISshAsyncClientBuilder; begin FOptions.ExecTimeoutMs := AValue; Result := Self; end;
 function TAsyncClientBuilder.Compress(AValue: Boolean): ISshAsyncClientBuilder; begin FOptions.Compress := AValue; Result := Self; end;
+function TAsyncClientBuilder.RekeyBytes(AValue: UInt64): ISshAsyncClientBuilder; begin FOptions.RekeyBytes := AValue; Result := Self; end;
+function TAsyncClientBuilder.RekeyIntervalMs(AValue: Integer): ISshAsyncClientBuilder; begin FOptions.RekeyIntervalMs := AValue; Result := Self; end;
+function TAsyncClientBuilder.KeepAliveIntervalMs(AValue: Integer): ISshAsyncClientBuilder; begin FOptions.KeepAliveIntervalMs := AValue; Result := Self; end;
 function TAsyncClientBuilder.DialOptions(const AValue: TAsyncTcpDialOptions): ISshAsyncClientBuilder; begin FDialOptions := AValue; FHasDialOptions := True; Result := Self; end;
 function TAsyncClientBuilder.AsyncConnect(const ALoop: TAsyncLoop; ACallback: TSshAsyncConnectCb; AContext: Pointer): Boolean;
 begin

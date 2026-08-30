@@ -65,6 +65,8 @@ LResult := SshExec('host', 22, 'user', 'pass', 'ls -l');
 nextpas.core.ssh.pas                 ← 门面：纯 re-export + 便捷函数
 nextpas.core.ssh.base.pas            ← 协议常量、消息号、选项记录
 nextpas.core.ssh.errors.pas          ← ESSHError + 错误分类
+nextpas.core.ssh.rekey.pas           ← Rekey 策略（`TSshRekeyPolicy`，`TInstant` 单调时钟，同步/异步 transport 复用，零 `SysUtils` 直连）
+nextpas.core.ssh.keepalive.pas       ← KeepAlive 策略（`TKeepAlivePolicy`，`TInstant` 单调时钟，同步预留/异步 `TAsyncLoop.ScheduleMethod`，零 `SysUtils` 直连）
 nextpas.core.ssh.buffer.pas          ← RFC 4251 wire 类型读写器
 nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM）
 nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机（阻塞）
@@ -80,9 +82,9 @@ nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析（ed25519 / 
 nextpas.core.ssh.auth.pas            ← userauth 载荷构造/解析（probe `hasSig=false` + `PK_OK` / signed）
 nextpas.core.ssh.compress.pas        ← 压缩：有状态 `zlib`/`zlib@openssh.com`（`ISshCompressor` 双 `z_stream`，`Z_SYNC_FLUSH`，1 MiB 防 bomb）
 nextpas.core.ssh.agent.pas           ← ssh-agent 协议客户端（Unix socket 长度前缀帧，List/Sign）
-nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem）
+nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem / `direct-tcpip` + `TChannelStream` 字节流）
 nextpas.core.ssh.channel.async.pas   ← 异步通道（exec `TAsyncExecRunner` + `TAsyncSftpChannel` 复用窗口/低水位回补）
-nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活）
+nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活，`ProxyJump` 经 `direct-tcpip` 复用 `TChannelStream`）
 nextpas.core.ssh.session.async.pas   ← 异步会话（`AsyncTcpDial(RFC8305)` + 状态机握手/认证，复用 cipher/kex/hostkey/compress，`Compress` 同语义）
 nextpas.core.ssh.transport.async.pas ← 异步传输（复用 cipher/compress，`Protect`/`Unprotect` 事件化）
 nextpas.core.ssh.sftp.pas            ← SFTP v3 客户端（ISshFileSystem 门面，同步 `TSshChannelWire`）
@@ -105,6 +107,7 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_compress
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_session
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_agent
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump
 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
 ```
 
@@ -190,6 +193,16 @@ ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
 | 解压上限 | 1 MiB | `SSH_COMP_MAX_DECOMPRESSED` 防 bomb |
 | 有状态增益 | 第 2 包 1 KiB `A*` 压缩后显著小于首包 | `Z_SYNC_FLUSH` 保留滑动窗口 |
 
+**ProxyJump**（`MemPipe` 双跳, `bench_ssh_proxyjump` 50 次, `-O3`, `HEAPTRC_GATE=0`, `TLoopThread` 轮询转发）：
+
+| 路径 | p50 | p95 | avg | 备注 |
+| --- | --- | --- | --- | --- |
+| 单跳 `exec` | 5ms | 8ms | 5.1ms | `SshConnectOn` 直连 |
+| 双跳 `exec via jump` | 431ms | 441ms | 432.7ms | `SshConnectViaJumpOn` (`direct-tcpip` + 二次握手 + `ServeJumpForward` 轮询) |
+| 额外开销 | 426ms | — | 427.6ms | 含二次 `KEX`/`USERAUTH` + `CHANNEL_DATA` 隧道轮询转发（`50ms` 超时 + `5ms` 间隙，`Async ProxyJump` 事件化为后续优化点） |
+
+`test_ssh_proxyjump` 5/5 回环 (`exec` 569ms / `sftp via jump` 734ms 含 `INIT`) 与 `bench` 同构 `MemPipe`，`SFTP via jump` (`S2.OpenFileSystem → RealPath/Stat`) 复用 `sftp.pas` 同包；双跳额外开销主要来自同步轮询转发，单跳零回归。
+
 ## 已知限制
 
 - 加密私钥仅支持 `aes256-ctr` + `bcrypt`（KDF rounds≥1，salt 非空）；
@@ -199,7 +212,8 @@ ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
 - 压缩已支持 `zlib@openssh.com`（延迟，推荐）与 `zlib`（即时），默认 `Compress=False` 零开销；按需 `SshClient.Compress(True)` 或 `TSshConnectOptions.Compress:=True` 开启。`async` 路径同语义（`none` 零开销，延迟/即时激活一致）。
 - AEAD 算法协商的 MAC 字段被忽略（chacha/gcm 内建认证），与 OpenSSH 行为一致；
   CTR 类必须搭配 ETM MAC。
-- `async` 会话 `ISshAsyncSession.ExecAsync` 已完整（`channel.async:TAsyncExecRunner`，`Open→Exec→Pump` 与窗口/超时一致，`TAsyncLoop` 单线程）；握手/认证/Exec 全链路事件化，`none` 零开销。`SFTP async`（`sftp.async:ISshAsyncFileSystem`）经 `TAsyncSftpChannel`（`PostEx` + `SftpRoundTripAsync` 单 pending + `WINDOW_LOW_WATER_DIVISOR` 回补 + `4B` 重组，`215ms` 首包）与同步同包构造，`test_ssh_sftp_async` 7/7 全绿。
-- 对真实 OpenSSH 服务器的互操作已由 e2e_ssh_live 验证（本地 Docker Alpine 9.7 与
-  远程 Debian OpenSSH 10.0p2 均 8 场景通过，含 SFTP 回路、RSA/CRT/ECDSA 认证与加密私钥认证）；
-  该门为 opt-in，不进默认 gate。
+- `async` 会话 `ISshAsyncSession.ExecAsync` 已完整可传参（`ExecAsync(Cmd,Cb,Ctx)`，`PExecPost.Context` 透传，`PostEx` 单线程，兼容无参调用）；`channel.async:TAsyncExecRunner`（`Open→Exec→Pump` 与窗口/超时一致，`TAsyncLoop` 单线程）；握手/认证/Exec 全链路事件化，`none` 零开销。`SFTP async`（`sftp.async:ISshAsyncFileSystem`）经 `TAsyncSftpChannel`（`PostEx` + `SftpRoundTripAsync` 单 pending + `WINDOW_LOW_WATER_DIVISOR` 回补 + `4B` 重组，`215ms` 首包）与同步同包构造，`test_ssh_sftp_async` 7/7 全绿；`SFTP via AsyncJump` 见上条；`e2e async` 双二进制门禁见上条。
+- `ProxyJump` 已完整：同步（`direct-tcpip` + `TChannelStream` 隧道、`TProxyJumpSession` 委托、`SFTP via jump` 734ms, `bench_ssh_proxyjump` 双跳 p50 431ms vs 单跳 5ms）与异步（`proxyjump.async:TAsyncChannelStream` 无轮询 + `session.async:TAsyncProxyConnector/CreateWithKeeper` + `TProxyConn Keeper`，`proxyjump_async 3/3 ~550ms` 零轮询）；`SFTP via AsyncJump`（`SshAsyncSftpViaJump/On` 复用单 `direct-tcpip` 通道 + `Keeper` 保活 + `FQueuedPayload 5ms` 重试，`sftp_via_jump 4/4 ~2.5s`，`HEAPTRC_GATE=0` 20 块已知 `TIoReactor` 侧线，`sftp_async 7/7` 回归，事件化额外开销较同步轮询已消除，仅剩二次 `KEX/USERAUTH`）。
+- `Rekey/KeepAlive`（S24–S26）：`RekeyLimit 1GiB/1h`（`ConfigureRekey` 可配，`ShouldRekey` 按 `tstEncrypted` + 字节/时间阈值，`ApplyNewKeys` 后 `Reset` 不漂移序列号/窗口），`SendKeepAlive/AsyncSendKeepAlive` 为 `SSH_MSG_IGNORE` 空心跳（`none` 零开销），`async` 侧 `TAsyncLoop.ScheduleMethod` 周期调度 `KeepAliveIntervalMs`（`0` 禁用，`Close` 时 `CancelTimer`），`ProxyJump` 透传 `FTarget`；`TSshRekeyPolicy` 已抽取为独立 `nextpas.core.ssh.rekey` 模块（`base←rekey←transport(+.async)`，`TInstant` 单调时钟，消除双实现漂移，`IntToStr`/`GetTickCount64` 等经 `nextpas.core.text.conv`/`time`，零 `SysUtils` 直连）；`S26` 补齐回环边界（`transport 13/13` 含 `async Protect/Unprotect + none`，`session 23/23` 字节/时间边界 + `SendKeepAlive` 回环，`session.async 6/6` KeepAlive 100ms 触发后 Exec 仍成功，`HEAPTRC 0`）。
+- `RTL 合规与可抽取性`：`nextpas.core.ssh` 全量经 `nextpas.core` 解决（`time`/`text.conv`/`exception`/`base.utils`），零 `SysUtils`/`Classes` 直连（`tests` 除外）；缺失能力反哺 `core`（如 `time.GetTickCount64`/`TInstant`），新策略模块 `rekey` 为示范；可进一步抽取候选：`KeepAliveScheduler`（`TAsyncLoop` 定时心跳，复用于 TLS/QUIC）、`ChannelWindow`（`WINDOW_LOW_WATER_DIVISOR` 回补，复用于 HTTP/2 流控）、`KnownHosts`/`Agent` 协议帧（复用于 `core.net` 隧道）。
+- 对真实 OpenSSH 服务器的互操作已由 `e2e_ssh_live` 验证：同步 `test_ssh_e2e` 本地 Docker Alpine 9.7 与远程 Debian OpenSSH 10.0p2 均 8 场景通过（SFTP 回路、RSA/CRT/ECDSA 与加密私钥）；异步 `test_ssh_e2e_async` 单跳 4 场景 + `via jump` 单容器复跑同门禁，双容器 `AsyncJump`（`target` 内网 + `jump` 映射、双 `known_hosts`、`NEXTPAS_SSH_E2E_ASYNC_JUMP=1`）为 `opt-in` 额外门，`run_e2e.sh` 统一 `heaptrc 0` 泄漏检查与 `--network` 清理。

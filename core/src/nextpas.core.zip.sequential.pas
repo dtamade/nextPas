@@ -3,9 +3,10 @@ unit nextpas.core.zip.sequential;
  * @desc ZIP 顺序读端：从纯顺序 IReader（HTTP body/管道）按 local header +
  *       data descriptor 前进，不整载、不要求 seek。支持 store/deflate、
  *       Zip64 宽度、UTF-8 名称、空/目录条目；描述符条目通过增量扫描定位
- *       描述符（签名 $08074B50），以 CRC/尺寸强校验避免载荷内误判，并
- *       通过 pushback 保证跨条目字节级精确。与内存/定位流读端共享校验
- *       语义（GuardEntryReadable、DecompressEntryVerified 等价路径）。
+ *       描述符（有签名 16/24 与无签名 12/20 四形态），以 CRC/尺寸强校验
+ *       + 次头部签名预检避免载荷内误判，并通过 pushback 保证跨条目字节级
+ *       精确。与内存/定位流读端共享校验语义（GuardEntryReadable、
+ *       DecompressEntryVerified 等价路径）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -17,7 +18,7 @@ uses
   nextpas.core.compress.intf,
   nextpas.core.io.intf,
   nextpas.core.zip.base,
-  nextpas.core.zip.reader;
+  nextpas.core.zip.common;
 
 type
   {** @desc 顺序 ZIP 读器：Next 推进到下一条目，Open/CopyTo 消费当前条目载荷 *}
@@ -48,10 +49,9 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
-  nextpas.core.compress.deflate,
+  nextpas.core.compress,
   nextpas.core.bytes.builder,
   nextpas.core.zip.aes,
-  nextpas.core.zip.common,
   nextpas.core.zip.extra;
 
 const
@@ -76,6 +76,7 @@ type
     FSrc: IReader;
     FMaxOutput: SizeUInt;
     FMaxTotalOutput: UInt64;
+    FMaxDescriptorBuffer: SizeUInt;
     FCumulative: UInt64;
     FPassword: TBytes;
     FIndex: Integer;
@@ -101,7 +102,7 @@ type
     function MakeDecompressedReader: IDecompressReader;
   public
     constructor Create(const ASource: IReader; AMaxOutput: SizeUInt;
-      AMaxTotalOutput: UInt64; const APassword: TBytes);
+      AMaxTotalOutput: UInt64; AMaxDescriptorBuffer: SizeUInt; const APassword: TBytes);
     function Next(out AInfo: TZipEntryInfo): Boolean;
     function Current: TZipEntryInfo;
     function EntryIndex: Integer;
@@ -164,7 +165,7 @@ begin
 end;
 
 constructor TSequentialZipReader.Create(const ASource: IReader;
-  AMaxOutput: SizeUInt; AMaxTotalOutput: UInt64; const APassword: TBytes);
+  AMaxOutput: SizeUInt; AMaxTotalOutput: UInt64; AMaxDescriptorBuffer: SizeUInt; const APassword: TBytes);
 begin
   inherited Create;
   if ASource = nil then
@@ -172,6 +173,10 @@ begin
   FSrc := ASource;
   FMaxOutput := AMaxOutput;
   FMaxTotalOutput := AMaxTotalOutput;
+  if AMaxDescriptorBuffer = 0 then
+    FMaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR
+  else
+    FMaxDescriptorBuffer := AMaxDescriptorBuffer;
   FCumulative := 0;
   FPassword := Copy(APassword);
   FIndex := -1;
@@ -423,9 +428,8 @@ var
   var
     LCrcTmp: LongWord;
     LCSizeTmp, LUSizeTmp: UInt64;
-    LPay: TBytes;
+    LPay, LPlain, LDec: TBytes;
     LCalc: LongWord;
-    LDec: TBytes;
   begin
     Result := False;
     if ADescSize = 16 then
@@ -442,41 +446,144 @@ var
     end;
     if LCSizeTmp <> APos then
       Exit;
-    if (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then
+    if (not FCurrent.IsEncrypted) and (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then
       Exit;
-    { 单条上限预筛：超限的试解压必在 Decompress 路径 raise，直接跳过避免无谓 CPU }
     if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then
       Exit;
     if APos > 0 then
     begin
       SetLength(LPay, APos);
       Move(LData^, LPay[0], APos);
-      LCalc := Crc32OfBytes(LPay);
     end
     else
-    begin
       LPay := nil;
-      LCalc := 0;
-    end;
-    if FCurrent.Method = zmStore then
-    begin
-      if LCalc <> LCrcTmp then
-        Exit;
-    end
-    else
+    if FCurrent.IsEncrypted then
     begin
       try
-        LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+        LPlain := UnsealWinZipAesPayload(FPassword, LPay, FCurrent.AesStrengthCode, FCurrent.Name);
       except
-        on E: EIOError do
-          raise;
-        on E: Exception do
-          Exit;
+        on E: EInvalidOperationError do raise;
+        on E: EIOError do raise;
+        on E: Exception do Exit;
       end;
-      if SizeUInt(Length(LDec)) <> LUSizeTmp then
-        Exit;
-      if Crc32OfBytes(LDec) <> LCrcTmp then
-        Exit;
+      if FCurrent.Method = zmStore then
+      begin
+        if UInt64(Length(LPlain)) <> LUSizeTmp then Exit;
+        if LUSizeTmp = 0 then LCalc := 0 else LCalc := Crc32OfBytes(LPlain);
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPlain, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
+    end
+    else
+    begin
+      if APos > 0 then LCalc := Crc32OfBytes(LPay) else LCalc := 0;
+      if FCurrent.Method = zmStore then
+      begin
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
+    end;
+    ACrc := LCrcTmp;
+    ACSize := LCSizeTmp;
+    AUSize := LUSizeTmp;
+    Result := True;
+  end;
+  function TryNoSigAt(APos: SizeUInt; ADescSize: SizeUInt; out ACrc: LongWord;
+    out ACSize, AUSize: UInt64): Boolean;
+  var
+    LCrcTmp: LongWord;
+    LCSizeTmp, LUSizeTmp: UInt64;
+    LPay, LPlain, LDec: TBytes;
+    LCalc: LongWord;
+  begin
+    Result := False;
+    if ADescSize = 12 then
+    begin
+      LCrcTmp := LE32Ptr(APos + 0);
+      LCSizeTmp := LE32Ptr(APos + 4);
+      LUSizeTmp := LE32Ptr(APos + 8);
+    end
+    else
+    begin
+      LCrcTmp := LE32Ptr(APos + 0);
+      LCSizeTmp := LE64Ptr(APos + 4);
+      LUSizeTmp := LE64Ptr(APos + 12);
+    end;
+    if LCSizeTmp <> APos then Exit;
+    if (not FCurrent.IsEncrypted) and (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then Exit;
+    if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then Exit;
+    if APos > 0 then
+    begin
+      SetLength(LPay, APos);
+      Move(LData^, LPay[0], APos);
+    end
+    else
+      LPay := nil;
+    if FCurrent.IsEncrypted then
+    begin
+      try
+        LPlain := UnsealWinZipAesPayload(FPassword, LPay, FCurrent.AesStrengthCode, FCurrent.Name);
+      except
+        on E: EInvalidOperationError do raise;
+        on E: EIOError do raise;
+        on E: Exception do Exit;
+      end;
+      if FCurrent.Method = zmStore then
+      begin
+        if UInt64(Length(LPlain)) <> LUSizeTmp then Exit;
+        if LUSizeTmp = 0 then LCalc := 0 else LCalc := Crc32OfBytes(LPlain);
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPlain, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
+    end
+    else
+    begin
+      if APos > 0 then LCalc := Crc32OfBytes(LPay) else LCalc := 0;
+      if FCurrent.Method = zmStore then
+      begin
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
     end;
     ACrc := LCrcTmp;
     ACSize := LCSizeTmp;
@@ -484,9 +591,9 @@ var
     Result := True;
   end;
 begin
-  if FCurrent.IsEncrypted then
-    raise ENotSupportedError.Create(
-      'zip: sequential AES descriptor not supported: ' + FCurrent.Name);
+  if FCurrent.IsEncrypted and (Length(FPassword) = 0) then
+    raise EInvalidOperationError.Create(
+      'zip: entry is encrypted, no password configured: ' + FCurrent.Name);
   LBuilder := CreateBytesBuilder(8192);
   LFound := False;
   LFoundPos := 0;
@@ -518,77 +625,121 @@ begin
     LBuilder.AppendBytes(@LChunk[0], LRead);
     LLen := LBuilder.Length;
     LData := LBuilder.Data;
-    if LLen < 16 then
+    if LLen < 12 then
       Continue;
     if LPrevLen > 40 then
       LScanStart := Integer(LPrevLen) - 40
     else
       LScanStart := 0;
-    LScanEnd := Integer(LLen) - 16;
+    LScanEnd := Integer(LLen) - 12;
     for LPos := LScanStart to LScanEnd do
     begin
-      if LE32Ptr(SizeUInt(LPos)) <> C_ZIP_DESCRIPTOR_SIG then
-        Continue;
-      if LLen - SizeUInt(LPos) >= 16 then
+      if LE32Ptr(SizeUInt(LPos)) = C_ZIP_DESCRIPTOR_SIG then
       begin
-        { 先验 next sig 已知性与尺寸自洽，再进重校验（CRC/试解压），避免载荷
-          内大量假签名触发 O(n·m) 试解压的 CPU bomb }
-        if LLen - SizeUInt(LPos + 16) >= 4 then
+        if LLen - SizeUInt(LPos) >= 16 then
         begin
-          if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 16))) then
+          { 先验 next sig 已知性与尺寸自洽，再进重校验（CRC/试解压），避免载荷
+            内大量假签名触发 O(n·m) 试解压的 CPU bomb }
+          if LLen - SizeUInt(LPos + 16) >= 4 then
           begin
-            { 24 位描述符可能仍成立，延后至 24 分支再判 }
+            if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 16))) then
+            begin
+              { 24 位描述符可能仍成立，延后至 24 分支再判 }
+            end
+            else if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
+            begin
+              LFound := True;
+              LFoundPos := SizeUInt(LPos);
+              LFoundCrc := LCandCrc;
+              LFoundCSize := LCandCSize;
+              LFoundUSize := LCandUSize;
+              LFoundDescSize := 16;
+              Break;
+            end;
           end
           else if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
-          begin
-            LFound := True;
-            LFoundPos := SizeUInt(LPos);
-            LFoundCrc := LCandCrc;
-            LFoundCSize := LCandCSize;
-            LFoundUSize := LCandUSize;
-            LFoundDescSize := 16;
-            Break;
-          end;
-        end
-        else if TryDescriptorAt(SizeUInt(LPos), 16, LCandCrc, LCandCSize, LCandUSize) then
-          Continue; { 尾部截断，待更多数据 }
-      end;
-      if LLen - SizeUInt(LPos) >= 24 then
-      begin
-        if LLen - SizeUInt(LPos + 24) >= 4 then
+            Continue; { 尾部截断，待更多数据 }
+        end;
+        if LLen - SizeUInt(LPos) >= 24 then
         begin
-          if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 24))) then
+          if LLen - SizeUInt(LPos + 24) >= 4 then
+          begin
+            if not IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 24))) then
+            begin
+              { no-sig 分支延后 }
+            end
+            else if TryDescriptorAt(SizeUInt(LPos), 24, LCandCrc, LCandCSize64, LCandUSize64) then
+            begin
+              LFound := True;
+              LFoundPos := SizeUInt(LPos);
+              LFoundCrc := LCandCrc;
+              LFoundCSize := LCandCSize64;
+              LFoundUSize := LCandUSize64;
+              LFoundDescSize := 24;
+              Break;
+            end;
+          end
+          else
             Continue;
+        end;
+        if LFound then Break;
+      end;
+      { 无签名描述符：12 字节 (crc+u32+u32) 与 20 字节 (crc+u64+u64)，以次头部签名预检为门 }
+      if LLen - SizeUInt(LPos) >= 12 then
+      begin
+        if LLen - SizeUInt(LPos + 12) >= 4 then
+        begin
+          if IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 12))) then
+            if TryNoSigAt(SizeUInt(LPos), 12, LCandCrc, LCandCSize, LCandUSize) then
+            begin
+              LFound := True;
+              LFoundPos := SizeUInt(LPos);
+              LFoundCrc := LCandCrc;
+              LFoundCSize := LCandCSize;
+              LFoundUSize := LCandUSize;
+              LFoundDescSize := 12;
+              Break;
+            end;
         end
         else
           Continue;
-        if TryDescriptorAt(SizeUInt(LPos), 24, LCandCrc, LCandCSize64, LCandUSize64) then
+      end;
+      if LLen - SizeUInt(LPos) >= 20 then
+      begin
+        if LLen - SizeUInt(LPos + 20) >= 4 then
         begin
-          LFound := True;
-          LFoundPos := SizeUInt(LPos);
-          LFoundCrc := LCandCrc;
-          LFoundCSize := LCandCSize64;
-          LFoundUSize := LCandUSize64;
-          LFoundDescSize := 24;
-          Break;
-        end;
-      end
-      else if LLen - SizeUInt(LPos) > 0 then
-        Continue;
+          if IsKnownZipSig(LE32Ptr(SizeUInt(LPos + 20))) then
+            if TryNoSigAt(SizeUInt(LPos), 20, LCandCrc, LCandCSize64, LCandUSize64) then
+            begin
+              LFound := True;
+              LFoundPos := SizeUInt(LPos);
+              LFoundCrc := LCandCrc;
+              LFoundCSize := LCandCSize64;
+              LFoundUSize := LCandUSize64;
+              LFoundDescSize := 20;
+              Break;
+            end;
+        end
+        else
+          Continue;
+      end;
     end;
     if LFound then
       Break;
     if (LLen > 64 * 1024 * 1024) and (LLen > FMaxOutput) then
       raise EParseError.Create('zip: descriptor not found for ' +
         FCurrent.Name);
-    if LLen > 512 * 1024 * 1024 then
+    if LLen > FMaxDescriptorBuffer then
       raise EParseError.Create('zip: descriptor not found for ' +
         FCurrent.Name);
   until False;
   SetLength(LPayload, LFoundPos);
   if LFoundPos > 0 then
     Move(LData^, LPayload[0], LFoundPos);
-  FCurrent.Crc32 := LFoundCrc;
+  if FCurrent.AesVersion = C_WINZIP_AES_VERSION_2 then
+    FCurrent.Crc32 := 0
+  else
+    FCurrent.Crc32 := LFoundCrc;
   FCurrent.CompressedSize := LFoundCSize;
   FCurrent.UncompressedSize := LFoundUSize;
   if LLen > LFoundPos + LFoundDescSize then
@@ -771,13 +922,16 @@ end;
 function NewZipSequentialReaderWithOptions(const ASource: IReader;
   const AOptions: TZipReadOptions): ISequentialZipReader;
 var
-  LMax: SizeUInt;
+  LMax, LDesc: SizeUInt;
 begin
   LMax := AOptions.MaxOutputSize;
   if LMax = 0 then
     LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
+  LDesc := AOptions.MaxDescriptorBuffer;
+  if LDesc = 0 then
+    LDesc := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
   Result := TSequentialZipReader.Create(ASource, LMax,
-    AOptions.MaxTotalOutputSize, AOptions.Password);
+    AOptions.MaxTotalOutputSize, LDesc, AOptions.Password);
 end;
 
 end.

@@ -66,25 +66,25 @@ function TryQuicUnprotectPacket(const APacket: TBytes;
 
 implementation
 
-procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes);
+procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes); inline;
 var
-  LN, LI: Integer;
+  LN: Integer;
 begin
+  if Length(ATail) = 0 then
+    Exit;
   LN := Length(ABase);
   SetLength(ABase, LN + Length(ATail));
-  for LI := 0 to Length(ATail) - 1 do
-    ABase[LN + LI] := ATail[LI];
+  Move(ATail[0], ABase[LN], Length(ATail));
 end;
 
-procedure NonceOf(const AIv: TBytes; APn: UInt64; out ANonce: TBytes);
+procedure NonceOf(const AIv: TBytes; APn: UInt64; out ANonce: TBytes); inline;
 var
   LPn12: array[0..11] of Byte;
   LI: Integer;
 begin
   SetLength(ANonce, 12);
   { 注意：x86 上 shr 位数 >= 64 会回绕（mod 64），高 4 字节必须显式置零 }
-  for LI := 0 to 11 do
-    LPn12[LI] := 0;
+  FillChar(LPn12[0], SizeOf(LPn12), 0);
   for LI := 0 to 7 do
     LPn12[11 - LI] := Byte(APn shr (8 * LI));
   for LI := 0 to 11 do
@@ -190,8 +190,12 @@ begin
   else
     LFirstByte := AClearHeader[0] xor (LMask[0] and $1F);
   QuicBufAppendByte(Result, LFirstByte);
-  for LI := 1 to Length(AClearHeader) - 1 do
-    QuicBufAppendByte(Result, AClearHeader[LI]);
+  if Length(AClearHeader) > 1 then
+  begin
+    LI := Length(Result);
+    SetLength(Result, LI + Length(AClearHeader) - 1);
+    Move(AClearHeader[1], Result[LI], Length(AClearHeader) - 1);
+  end;
   for LI := 0 to APnLen - 1 do
     QuicBufAppendByte(Result, LPnWire[LI] xor LMask[LI + 1]);
   SpanConcatInto(Result, LCipher);
@@ -270,8 +274,12 @@ begin
 
   LAad := nil;
   QuicBufAppendByte(LAad, LFirstClear);
-  for LI := 1 to LInfo.PnOffset - 1 do
-    QuicBufAppendByte(LAad, APacket[LI]);
+  if LInfo.PnOffset > 1 then
+  begin
+    LI := Length(LAad);
+    SetLength(LAad, LI + LInfo.PnOffset - 1);
+    Move(APacket[1], LAad[LI], LInfo.PnOffset - 1);
+  end;
   SpanConcatInto(LAad, LPnWire);
 
   NonceOf(AKeys.Iv, APn, LNonce);

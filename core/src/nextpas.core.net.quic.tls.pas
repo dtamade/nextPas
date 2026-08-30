@@ -129,14 +129,12 @@ uses
   nextpas.core.crypto.chacha20poly1305,
   nextpas.core.tls.keyschedule.labels;
 
-function BytesOfConst(const AConst: array of Byte): TBytes;
-var
-  LI: Integer;
+function BytesOfConst(const AConst: array of Byte): TBytes; inline;
 begin
   Result := nil;
   SetLength(Result, Length(AConst));
-  for LI := Low(AConst) to High(AConst) do
-    Result[LI] := AConst[LI];
+  if Length(AConst) > 0 then
+    Move(AConst[Low(AConst)], Result[0], Length(AConst));
 end;
 
 function DeriveQuicInitialSecrets(const ADestCid: TBytes): TQuicInitialSecrets;
@@ -178,7 +176,6 @@ function QuicHeaderProtectionMaskForSuite(const AHpKey, ASample: TBytes;
 var
   LBlock: TBytes;
   LCounter: UInt32;
-  LI: Integer;
   LNonce12: TBytes;
 begin
   Result := nil;
@@ -192,8 +189,7 @@ begin
     LCounter := UInt32(ASample[0]) or (UInt32(ASample[1]) shl 8) or
       (UInt32(ASample[2]) shl 16) or (UInt32(ASample[3]) shl 24);
     SetLength(LNonce12, 12);
-    for LI := 0 to 11 do
-      LNonce12[LI] := ASample[LI + 4];
+    Move(ASample[4], LNonce12[0], 12);
     LBlock := ChaCha20Block(AHpKey, LNonce12, LCounter);
     Result := SpanCopySlice(TByteSpan.FromBytes(LBlock), 0, 5);
   end
@@ -219,20 +215,17 @@ begin
 end;
 
 function QuicHeaderProtectionMaskAESPrepared(
-  const APrepared: TQuicHpAesPrepared; const ASample: TBytes): TBytes;
+  const APrepared: TQuicHpAesPrepared; const ASample: TBytes): TBytes; inline;
 var
   LIn, LOut: TAESBlock;
-  LI: Integer;
 begin
   Result := nil;
   if (APrepared.Nr <= 0) or (Length(ASample) <> 16) then
     Exit;
-  for LI := 0 to 15 do
-    LIn[LI] := ASample[LI];
+  Move(ASample[0], LIn[0], 16);
   AESEncryptBlock(LIn, LOut, APrepared.Expanded, APrepared.Nr);
   SetLength(Result, 16);
-  for LI := 0 to 15 do
-    Result[LI] := LOut[LI];
+  Move(LOut[0], Result[0], 16);
 end;
 
 end.

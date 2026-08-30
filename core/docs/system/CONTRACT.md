@@ -1,10 +1,10 @@
 # nextpas.core.system 代码契约
 
-**模块路径**：`core/src/nextpas.core.system*.pas`（6 个源文件）
+**模块路径**：`core/src/nextpas.core.system*.pas`（8 个源文件）
 **层级**：L0（根模块，依赖 FPC RTL）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-30
+**版本**：1.1
 
 ---
 
@@ -17,18 +17,46 @@
 | system.pas | 根门面，re-export 基础类型/常量/运行时契约 |
 | system.contracts | 运行时契约常量（np.system.*） |
 | system.memmanager | 内存管理器集成 |
+| system.heap | 堆原语封装（GetMem/FreeMem/ReallocMem/Move 唯一所有者） |
+| system.errors | 异常分类门面（38 exception + 18 error category） |
 | system.classes | Classes 最小门面 |
 | system.sysutils | SysUtils 兼容薄门面（文本 API 实现 owner = `text.conv`，非本单元） |
 | system.typinfo | TypInfo 最小门面 |
 
 ### 1.2 运行时契约
 
+> 契约常量来源：`core/src/nextpas.core.system.contracts.pas`（28 个）
+
 ```pascal
 const
-  NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';
-  np_system_process_init = 'np.system.process_init';
-  np_system_process_fini = 'np.system.process_fini';
-  np_system_object_free = 'np.system.object_free';
+  NPSYSTEM_PROCESS_INIT = 'np.system.process_init';
+  NPSYSTEM_PROCESS_FINI = 'np.system.process_fini';
+  NPSYSTEM_UNIT_INIT = 'np.system.unit_init';
+  NPSYSTEM_UNIT_FINI = 'np.system.unit_fini';
+  NPSYSTEM_HALT = 'np.system.halt';
+  NPSYSTEM_STRING_INIT = 'np.system.string_init';
+  NPSYSTEM_STRING_FINI = 'np.system.string_fini';
+  NPSYSTEM_STRING_ASSIGN = 'np.system.string_assign';
+  NPSYSTEM_DYNARRAY_INIT = 'np.system.dynarray_init';
+  NPSYSTEM_DYNARRAY_FINI = 'np.system.dynarray_fini';
+  NPSYSTEM_DYNARRAY_SET_LENGTH = 'np.system.dynarray_set_length';
+  NPSYSTEM_INTERFACE_ADDREF = 'np.system.interface_addref';
+  NPSYSTEM_INTERFACE_RELEASE = 'np.system.interface_release';
+  NPSYSTEM_MANAGED_RECORD_INIT = 'np.system.managed_record_init';
+  NPSYSTEM_MANAGED_RECORD_FINI = 'np.system.managed_record_fini';
+  NPSYSTEM_HEAP_ALLOC = 'np.system.heap_alloc';
+  NPSYSTEM_HEAP_FREE = 'np.system.heap_free';
+  NPSYSTEM_OBJECT_ALLOC = 'np.system.object_alloc';
+  NPSYSTEM_OBJECT_FREE = 'np.system.object_free';
+  NPSYSTEM_OBJECT_FREE_DESTROY = 'np.system.object_free.destroy';
+  NPSYSTEM_OBJECT_FREE_CLEANUP = 'np.system.object_free.cleanup';
+  NPSYSTEM_OBJECT_FREE_RELEASE = 'np.system.object_free.release';
+  NPSYSTEM_RUNTIME_FAULT = 'np.system.runtime_fault';
+  NPSYSTEM_EXCEPTION_TRY_PUSH = 'np.system.exception_try_push';
+  NPSYSTEM_EXCEPTION_TRY_POP = 'np.system.exception_try_pop';
+  NPSYSTEM_EXCEPTION_RAISE = 'np.system.exception_raise';
+  NPSYSTEM_EXCEPTION_FINALLY_END = 'np.system.exception_finally_end';
+  NPSYSTEM_EXCEPTION_EXCEPT_END = 'np.system.exception_except_end';
 ```
 
 ### 1.3 基础类型 Re-export

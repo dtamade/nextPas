@@ -15,15 +15,16 @@ unit nextpas.core.ssh.transport;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.io.intf,
+  nextpas.core.text.conv,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.compress,
-  nextpas.core.ssh.kex;
+  nextpas.core.ssh.kex,
+  nextpas.core.ssh.rekey;
 
 type
   { 诊断钩子：非 nil 时逐包回调明文载荷（ATag='tx'/'rx'；互操作排障用，
@@ -58,6 +59,7 @@ type
     FCompressEnabled: Boolean;
     FNegotiatedCompCs: string;
     FNegotiatedCompSc: string;
+    FRekey: TSshRekeyPolicy;
     procedure SendRaw(const ABytes: TBytes);
     procedure ReadFull(var ABuf: TBytes; AOffset, ACount: SizeUInt);
     function ReadLineRaw: string;
@@ -77,6 +79,12 @@ type
     procedure SetNegotiatedCompression(const ANeg: TSshNegotiated);
     procedure EnableCompression;
     function IsCompressionEnabled: Boolean;
+    { Rekey / KeepAlive（S24）}
+    procedure ConfigureRekey(ABytes: UInt64; AIntervalMs: Integer);
+    function ShouldRekey: Boolean;
+    procedure SendIgnore(const AData: TBytes); overload;
+    procedure SendIgnore; overload;
+    procedure ResetRekeyCounters;
 
     { 帧化发送一条消息载荷（含消息号字节）}
     procedure SendPacket(const APayload: TBytes);
@@ -125,6 +133,7 @@ begin
   { 未协商密钥前走 none 编解码器（明文帧），NEWKEYS 后由 ApplyNewKeys 切换 }
   FSender := CreateSshPacketSender('', '', nil, nil, nil);
   FReceiver := CreateSshPacketReceiver('', '', nil, nil, nil);
+  FRekey.Init(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
 end;
 
 destructor TSshClientTransport.Destroy;
@@ -268,6 +277,37 @@ begin
   Result := FCompressEnabled;
 end;
 
+procedure TSshClientTransport.ConfigureRekey(ABytes: UInt64; AIntervalMs: Integer);
+begin
+  FRekey.Init(ABytes, AIntervalMs);
+end;
+
+function TSshClientTransport.ShouldRekey: Boolean;
+begin
+  Result := FRekey.ShouldRekey(FState = tstEncrypted);
+end;
+
+procedure TSshClientTransport.ResetRekeyCounters;
+begin
+  FRekey.Reset;
+end;
+
+procedure TSshClientTransport.SendIgnore(const AData: TBytes);
+var LW: TsshWriter;
+begin
+  LW := TsshWriter.Create(1 + 4 + Length(AData));
+  try
+    LW.PutByte(SSH_MSG_IGNORE);
+    LW.PutStringBytes(AData);
+    SendPacket(LW.ToBytes);
+  finally LW.Free; end;
+end;
+
+procedure TSshClientTransport.SendIgnore;
+begin
+  SendIgnore(nil);
+end;
+
 procedure TSshClientTransport.SendPacket(const APayload: TBytes);
 var
   LPayloadLen, LPad, LBodyLen, LAad: SizeUInt;
@@ -302,6 +342,7 @@ begin
 
   LWire := FSender.Protect(LBody, FSendSeq);
   Inc(FSendSeq);  { uint32 自然回绕 }
+  FRekey.Account(UInt64(Length(APayload)));
   SendRaw(LWire);
 end;
 
@@ -342,6 +383,7 @@ begin
   Result := Copy(LBody, 1, SizeInt(LPayloadLen));
   if FCompressEnabled and (FDecompressor <> nil) and (FNegotiatedCompSc <> SSH_COMP_NONE) then
     Result := FDecompressor.Decompress(Result);
+  FRekey.Account(UInt64(Length(Result)));
   if SshTransportDump <> nil then
     SshTransportDump('rx', Result);
 end;
@@ -356,6 +398,7 @@ begin
   FReceiver := CreateSshPacketReceiver(ANegotiated.EncSc, ANegotiated.MacSc,
     AKeySc, AIvSc, AMacSc);
   FState := tstEncrypted;
+  ResetRekeyCounters;
 end;
 
 procedure TSshClientTransport.Disconnect(AReason: UInt32; const ADesc: string);

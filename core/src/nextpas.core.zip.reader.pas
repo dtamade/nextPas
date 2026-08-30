@@ -27,16 +27,7 @@ uses
   nextpas.core.zip.base;
 
 type
-  {** @desc 读选项：MaxOutputSize 为单条目解压输出上限（防 zip bomb），
-       0 = 采用默认上限；MaxTotalOutputSize 为跨条目总输出上限（防
-       “多小条目绕过单条目上限”型 zip bomb），0 = 不限；Password 供
-       WinZip AES 加密条目解密（AE-1/AE-2，遗留 ZipCrypto 不支持），
-       空口令遇加密条目 raise *}
-  TZipReadOptions = record
-    MaxOutputSize: SizeUInt;
-    MaxTotalOutputSize: UInt64;
-    Password: TBytes;
-  end;
+  TZipReadOptions = nextpas.core.zip.base.TZipReadOptions;
 
   {** @desc ZIP 归档读器（一次性载入字节，随机访问条目） *}
   IZipReader = interface
@@ -59,11 +50,16 @@ type
     function OpenEntryByName(const AName: string): IDecompressReader;
     {** 泵送整个条目到 ADst（EOF 处校验尺寸+CRC32），返回输出字节数 *}
     function CopyEntryTo(AIndex: Integer; const ADst: IWriter): SizeUInt;
+    {** 零拷贝直写 PByte 缓冲：不分配 TBytes，直接解压到 ADst[0..ABufLen-1]，
+        返回实际解压字节数；ABufLen 不足或尺寸/CRC 不符均 raise；目录条目
+        返回 0 且不触碰缓冲。 *}
+    function ExtractToBuffer(AIndex: Integer; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+    function ExtractToBufferByName(const AName: string; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
   end;
 
 const
-  { 未显式配置时的单条目解压默认上限：1 GiB }
-  C_ZIP_DEFAULT_MAX_OUTPUT = SizeUInt(1) shl 30;
+  C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_OUTPUT;
+  C_ZIP_DEFAULT_MAX_DESCRIPTOR = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_DESCRIPTOR;
 
 function DefaultZipReadOptions: TZipReadOptions; inline;
 
@@ -90,7 +86,7 @@ uses
   nextpas.core.exception,
   nextpas.core.bytes.cursor,
   nextpas.core.checksum.crc32,
-  nextpas.core.compress.deflate,
+  nextpas.core.compress,
   nextpas.core.zip.aes,
   nextpas.core.zip.common,
   nextpas.core.zip.extra;
@@ -113,6 +109,8 @@ type
     FMaxOutputSize: SizeUInt;
     FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
+    FScratch: TBytes;          { 几何复用缓冲，供 central extra 零分配解析（4096→2×） }
+    procedure EnsureScratch(ANeeded: SizeUInt);
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
     procedure NeedRange(APos, ALen: Int64; const AWhat: string);
@@ -130,6 +128,8 @@ type
     function OpenEntry(AIndex: Integer): IDecompressReader;
     function OpenEntryByName(const AName: string): IDecompressReader;
     function CopyEntryTo(AIndex: Integer; const ADst: IWriter): SizeUInt;
+    function ExtractToBuffer(AIndex: Integer; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+    function ExtractToBufferByName(const AName: string; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
   end;
 
 
@@ -215,6 +215,8 @@ type
     function OpenEntry(AIndex: Integer): IDecompressReader;
     function OpenEntryByName(const AName: string): IDecompressReader;
     function CopyEntryTo(AIndex: Integer; const ADst: IWriter): SizeUInt;
+    function ExtractToBuffer(AIndex: Integer; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+    function ExtractToBufferByName(const AName: string; ADst: PByte; ABufLen: SizeUInt): SizeUInt;
   end;
 
 { TSliceReader }
@@ -323,8 +325,7 @@ var
   LDosTime, LDosDate: Word;
   LCrc, LExtAttrs: LongWord;
   LCSize, LUSize, LLho: UInt64;
-  LNameBytes: TBytes;
-  LExtraBytes: TBytes;
+  LNamePtr, LExtraPtr: PByte;
   LAesVersion, LAesVendor, LAesRealMethod: Word;
   LAesStrength: Byte;
   LHasAes: Boolean;
@@ -349,15 +350,15 @@ begin
   NeedRangeIn(AC, Int64(AC.Position),
     Int64(LNameLen) + LExtraLen + LCommentFieldLen, 'central entry body');
 
-  LNameBytes := nil;
+  LNamePtr := nil;
   if LNameLen > 0 then
-    LNameBytes := AC.ReadBytes(LNameLen);
+    LNamePtr := AC.ReadSpan(LNameLen);
 
-  LExtraBytes := nil;
+  LExtraPtr := nil;
   if LExtraLen > 0 then
-    LExtraBytes := AC.ReadBytes(LExtraLen);
-  DecodeCentralExtra(LExtraBytes, LUSize, LCSize, LLho, LHasAes,
-    LAesVersion, LAesVendor, LAesRealMethod, LAesStrength);
+    LExtraPtr := AC.ReadSpan(LExtraLen);
+  DecodeCentralExtraBuf(LExtraPtr, SizeUInt(LExtraLen), LUSize, LCSize, LLho,
+    LHasAes, LAesVersion, LAesVendor, LAesRealMethod, LAesStrength);
   if (LUSize = UInt64($FFFFFFFF)) or (LCSize = UInt64($FFFFFFFF)) or
      (LLho = UInt64($FFFFFFFF)) then
     raise EParseError.Create('zip: missing Zip64 extra field');
@@ -367,7 +368,7 @@ begin
   if LNameLen > 0 then
   begin
     SetLength(AE.Name, LNameLen);
-    Move(LNameBytes[0], PChar(AE.Name)^, SizeUInt(LNameLen));
+    Move(LNamePtr^, PChar(AE.Name)^, SizeUInt(LNameLen));
   end;
 
   { 加密条目：wire 方法 99，真实压缩方法与强度取自 0x9901 extra。
@@ -406,7 +407,7 @@ begin
   AE.ModTimeUnixSec := UnixFromDosDateTime(LDosDate, LDosTime);
   AE.LocalHeaderOffset := LLho;
   AE.IsDirectory :=
-    ((LNameLen > 0) and (LNameBytes[LNameLen - 1] = Ord('/'))) or
+    ((LNameLen > 0) and (LNamePtr[LNameLen - 1] = Ord('/'))) or
     (((LExtAttrs shr 16) and $F000) = $4000);
   AE.ExternalAttrs := LExtAttrs;
   AE.IsSymlink :=
@@ -415,9 +416,7 @@ end;
 
 function DefaultZipReadOptions: TZipReadOptions;
 begin
-  Result.MaxOutputSize := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result.MaxTotalOutputSize := 0;
-  Result.Password := nil;
+  Result := nextpas.core.zip.base.DefaultZipReadOptions;
 end;
 
 function NewZipReader(const AData: TBytes): IZipReader;
@@ -447,6 +446,28 @@ begin
   FMaxTotalOutputSize := AMaxTotalOutput;
   FPassword := APassword;
   ParseCentralDirectory;
+end;
+
+{ 几何复用缓冲：4096 起步，翻倍至满足 ANeeded，无逐条目扩容 }
+procedure TZipReaderImpl.EnsureScratch(ANeeded: SizeUInt);
+var
+  LCap: SizeUInt;
+begin
+  if SizeUInt(Length(FScratch)) >= ANeeded then
+    Exit;
+  LCap := SizeUInt(Length(FScratch));
+  if LCap = 0 then
+    LCap := 4096;
+  while LCap < ANeeded do
+  begin
+    if LCap > High(SizeUInt) div 2 then
+    begin
+      LCap := ANeeded;
+      Break;
+    end;
+    LCap := LCap * 2;
+  end;
+  SetLength(FScratch, LCap);
 end;
 
 { 区间 [APos, APos+ALen) 必须落在缓冲区内，否则结构视为截断损坏 }
@@ -633,6 +654,30 @@ begin
   Result := ExtractIndex(LIdx);
 end;
 
+function TZipReaderImpl.ExtractToBuffer(AIndex: Integer; ADst: PByte;
+  ABufLen: SizeUInt): SizeUInt;
+var
+  LE: TZipEntryInfo;
+  LPayload: TBytes;
+begin
+  LE := FEntries[CheckIndex(AIndex)];
+  if LE.IsDirectory then
+    Exit(0);
+  LPayload := Copy(FData, LocatePayload(AIndex), Int64(LE.CompressedSize));
+  Result := DecompressEntryToBuffer(LE, LPayload, FPassword, ADst, ABufLen, FMaxOutputSize);
+end;
+
+function TZipReaderImpl.ExtractToBufferByName(const AName: string;
+  ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+var
+  LIdx: Integer;
+begin
+  LIdx := Find(AName);
+  if LIdx < 0 then
+    raise ENotFoundError.Create('zip: entry not found: ' + AName);
+  Result := ExtractToBuffer(LIdx, ADst, ABufLen);
+end;
+
 function TZipReaderImpl.OpenEntry(AIndex: Integer): IDecompressReader;
 var
   LE: TZipEntryInfo;
@@ -658,7 +703,7 @@ begin
   LInflate := nil;
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
   begin
-    LInflate := CreateRawDeflateReaderWithMaxOutputSize(LInner,
+    LInflate := RawDeflateReaderWithMaxOutputSize(LInner,
       FMaxOutputSize);
     LInner := LInflate;
   end
@@ -967,6 +1012,30 @@ begin
   Result := ExtractIndex(LIdx);
 end;
 
+function TZipSourceReader.ExtractToBuffer(AIndex: Integer; ADst: PByte;
+  ABufLen: SizeUInt): SizeUInt;
+var
+  LE: TZipEntryInfo;
+  LPayload: TBytes;
+begin
+  LE := FEntries[CheckIndex(AIndex)];
+  if LE.IsDirectory then
+    Exit(0);
+  Fetch(LocatePayload(AIndex), SizeUInt(LE.CompressedSize), LPayload, 'entry payload');
+  Result := DecompressEntryToBuffer(LE, LPayload, FPassword, ADst, ABufLen, FMaxOutputSize);
+end;
+
+function TZipSourceReader.ExtractToBufferByName(const AName: string;
+  ADst: PByte; ABufLen: SizeUInt): SizeUInt;
+var
+  LIdx: Integer;
+begin
+  LIdx := Find(AName);
+  if LIdx < 0 then
+    raise ENotFoundError.Create('zip: entry not found: ' + AName);
+  Result := ExtractToBuffer(LIdx, ADst, ABufLen);
+end;
+
 function TZipSourceReader.OpenEntry(AIndex: Integer): IDecompressReader;
 var
   LE: TZipEntryInfo;
@@ -991,7 +1060,7 @@ begin
   LInflate := nil;
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
   begin
-    LInflate := CreateRawDeflateReaderWithMaxOutputSize(LInner,
+    LInflate := RawDeflateReaderWithMaxOutputSize(LInner,
       FMaxOutputSize);
     LInner := LInflate;
   end

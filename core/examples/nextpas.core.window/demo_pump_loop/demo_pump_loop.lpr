@@ -44,8 +44,9 @@ begin
         weResized: WriteLn('[event] resized ', AEvent.Width, 'x', AEvent.Height);
         weScaleChanged: WriteLn('[event] scale ', AEvent.NewScale:0:2);
         weMoved: WriteLn('[event] moved ', AEvent.X, ',', AEvent.Y);
-        weFocusIn: WriteLn('[event] focus in');
-        weFocusOut: WriteLn('[event] focus out');
+        weFocusChanged: WriteLn('[event] focus changed');
+        weDpiChanged: WriteLn('[event] dpi changed');
+        weClosed: WriteLn('[event] closed');
       end;
     end);
 

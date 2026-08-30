@@ -320,6 +320,7 @@ function IsProcessAlive(APid: Int32): Boolean;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.os.env,
   nextpas.core.platform.args,
   nextpas.core.platform.process,
@@ -560,30 +561,24 @@ begin
   LChild := TCommand.New(APath).Args(AArgs).Stdin(stPiped)
     .Stdout(stPiped).Stderr(stPiped)
     .MaxOutput(cProcessDefaultMaxOutput).Spawn;
-  LStdin := LChild.TakeStdin;
-  if (LStdin <> nil) and (Length(AStdin) > 0) then
-    LStdin.Write(AStdin[0], Length(AStdin));
-  LStdin := nil;
-  Result := LChild.WaitWithOutput;
+  try
+    LStdin := LChild.TakeStdin;
+    try
+      if (LStdin <> nil) and (Length(AStdin) > 0) then
+        LStdin.Write(AStdin[0], Length(AStdin));
+    finally
+      LStdin := nil;
+    end;
+    Result := LChild.WaitWithOutput;
+  finally
+    LChild := nil;
+  end;
 end;
 
 function CaptureWithInput(const APath: string; const AArgs: array of string;
   const AStdin: TBytes): string;
 begin
   Result := RunWithInput(APath, AArgs, AStdin).StdOut;
-end;
-
-function StringToBytes(const AStr: string): TBytes;
-var
-  LLen: Integer;
-begin
-  { SizeOf(Char) is 1 in AnsiString (H+) mode, but 2 in Delphi Unicode mode.
-    This defensive multiplication ensures correctness if the compiler mode changes. }
-  LLen := Length(AStr) * SizeOf(Char);
-  Result := nil;
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AStr[1], Result[0], LLen);
 end;
 
 function RunWithInputString(const APath: string; const AArgs: array of string;
@@ -619,11 +614,18 @@ begin
   LChild := TCommand.New(APath).Args(AArgs).Dir(ADir).Stdin(stPiped)
     .Stdout(stPiped).Stderr(stPiped)
     .MaxOutput(cProcessDefaultMaxOutput).Spawn;
-  LStdin := LChild.TakeStdin;
-  if (LStdin <> nil) and (Length(AStdin) > 0) then
-    LStdin.Write(AStdin[0], Length(AStdin));
-  LStdin := nil;
-  Result := LChild.WaitWithOutput;
+  try
+    LStdin := LChild.TakeStdin;
+    try
+      if (LStdin <> nil) and (Length(AStdin) > 0) then
+        LStdin.Write(AStdin[0], Length(AStdin));
+    finally
+      LStdin := nil;
+    end;
+    Result := LChild.WaitWithOutput;
+  finally
+    LChild := nil;
+  end;
 end;
 
 function RunInWithInputString(const APath: string; const AArgs: array of string;

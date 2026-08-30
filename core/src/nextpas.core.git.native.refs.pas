@@ -1,0 +1,183 @@
+unit nextpas.core.git.native.refs;
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.base,
+  nextpas.core.fs,
+  nextpas.core.git.native.base;
+
+{ Ref resolution over loose refs (.git/<name> files), packed-refs, and HEAD.
+  Also discovers the git directory walking upward from a working dir. }
+
+function GitTryDiscoverGitDir(const AStartDir: string;
+  out AGitDir: string): Boolean;
+function GitDiscoverGitDir(const AStartDir: string): string;
+{ True when APath itself has the git directory shape (HEAD/objects/refs) }
+function IsGitDirShape(const APath: string): Boolean;
+function GitHeadRefName(const AGitDir: string): string;
+function GitResolveHead(const AGitDir: string): TGitOid;
+function GitResolveRef(const AGitDir: string; const ARefName: string): TGitOid;
+
+implementation
+
+const
+  CMaxSymDepth = 8;
+
+function IsGitDirShape(const APath: string): Boolean;
+begin
+  Result := DirectoryExists(PathJoin2(APath, 'objects'))
+    and DirectoryExists(PathJoin2(APath, 'refs'))
+    and FileExists(PathJoin2(APath, 'HEAD'));
+end;
+
+// Resolves a ".git" entry that may be a real directory or a gitfile pointer
+function ResolveDotGitEntry(const ADotGit: string): string;
+var
+  Text, Target: string;
+begin
+  if DirectoryExists(ADotGit) then
+    Exit(ADotGit);
+  if not FileExists(ADotGit) then
+    Exit('');
+  Text := ReadFileText(ADotGit);
+  if Copy(Text, 1, 7) <> 'gitdir:' then
+    Exit('');
+  Target := Trim(Copy(Text, 8, MaxInt));
+  if Target = '' then
+    Exit('');
+  if not PathIsAbsolute(Target) then
+    Target := PathJoin2(PathDir(ADotGit), Target);
+  if IsGitDirShape(Target) then
+    Exit(Target);
+  Result := '';
+end;
+
+function GitTryDiscoverGitDir(const AStartDir: string;
+  out AGitDir: string): Boolean;
+var
+  P, DotGit: string;
+begin
+  Result := False;
+  AGitDir := '';
+  P := AStartDir;
+  while P <> '' do
+  begin
+    DotGit := PathJoin2(P, '.git');
+    AGitDir := ResolveDotGitEntry(DotGit);
+    if AGitDir <> '' then
+      Exit(True);
+    // bare repository shape at P itself
+    if IsGitDirShape(P) then
+    begin
+      AGitDir := P;
+      Exit(True);
+    end;
+    if (P = '/') or (Length(P) <= 1) then
+      Break;
+    P := PathDir(P);
+  end;
+end;
+
+function GitDiscoverGitDir(const AStartDir: string): string;
+begin
+  if not GitTryDiscoverGitDir(AStartDir, Result) then
+    raise EGitError.CreateFmt(
+      'not a git repository (or any parent): %s', [AStartDir]);
+end;
+
+function ReadRefFileText(const APath: string): string;
+begin
+  Result := Trim(ReadFileText(APath));
+end;
+
+procedure ParsePackedRefs(const AGitDir: string; const ARefName: string;
+  out AOid: TGitOid; out AFound: Boolean);
+var
+  Lines: TStringArray;
+  I, Sp: Integer;
+  Line, Hex, Name: string;
+begin
+  AFound := False;
+  if not FileExists(PathJoin2(AGitDir, 'packed-refs')) then
+    Exit;
+  Lines := ReadFileLines(PathJoin2(AGitDir, 'packed-refs'));
+  for I := 0 to Length(Lines) - 1 do
+  begin
+    Line := Trim(Lines[I]);
+    if (Line = '') or (Line[1] = '#') or (Line[1] = '^') then
+      Continue;
+    Sp := Pos(' ', Line);
+    if Sp < 41 then
+      Continue;
+    Hex := Copy(Line, 1, Sp - 1);
+    Name := Trim(Copy(Line, Sp + 1, MaxInt));
+    if Name = ARefName then
+    begin
+      AOid := GitOidFromHex(Hex);
+      AFound := True;
+      Exit;
+    end;
+  end;
+end;
+
+function GitHeadRefName(const AGitDir: string): string;
+var
+  Text: string;
+begin
+  Result := '';
+  Text := ReadRefFileText(PathJoin2(AGitDir, 'HEAD'));
+  if Copy(Text, 1, 5) = 'ref: ' then
+    Result := Trim(Copy(Text, 6, MaxInt));
+end;
+
+function ResolveRefDepth(const AGitDir: string; const ARefName: string;
+  ADepth: Integer): TGitOid;
+var
+  Path: string;
+  Text: string;
+  Found: Boolean;
+begin
+  if ADepth > CMaxSymDepth then
+    raise EGitError.CreateFmt('symbolic ref chain too deep at "%s"',
+      [ARefName]);
+  Path := PathJoin2(AGitDir, ARefName);
+  if FileExists(Path) then
+  begin
+    Text := ReadRefFileText(Path);
+    if Copy(Text, 1, 5) = 'ref: ' then
+      Exit(ResolveRefDepth(AGitDir, Trim(Copy(Text, 6, MaxInt)),
+        ADepth + 1));
+    Result := GitOidFromHex(Text);
+    Exit;
+  end;
+  ParsePackedRefs(AGitDir, ARefName, Result, Found);
+  if not Found then
+    raise EGitError.CreateFmt('ref "%s" not found in %s', [ARefName, AGitDir]);
+end;
+
+function GitResolveRef(const AGitDir: string; const ARefName: string): TGitOid;
+begin
+  Result := ResolveRefDepth(AGitDir, ARefName, 0);
+end;
+
+function GitResolveHead(const AGitDir: string): TGitOid;
+var
+  RefName: string;
+begin
+  RefName := GitHeadRefName(AGitDir);
+  if RefName = '' then
+  begin
+    // detached HEAD stores the raw oid
+    Result := GitOidFromHex(
+      ReadRefFileText(PathJoin2(AGitDir, 'HEAD')));
+    Exit;
+  end;
+  Result := GitResolveRef(AGitDir, RefName);
+end;
+
+end.

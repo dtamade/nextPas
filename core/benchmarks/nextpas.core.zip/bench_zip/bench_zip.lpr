@@ -376,6 +376,33 @@ begin
   ACtx.SetBytes(BIG_SIZE);
 end;
 
+procedure BenchExtractPByte1MB(const ACtx: IBenchContext);
+var
+  LR: IZipReader;
+  LBuf: array of Byte;
+  LN: SizeUInt;
+begin
+  LR := NewZipReader(GBigArchive);
+  SetLength(LBuf, BIG_SIZE);
+  LN := LR.ExtractToBuffer(0, @LBuf[0], Length(LBuf));
+  BenchBlackBoxBytes(LBuf[0], LN);
+  ACtx.SetBytes(BIG_SIZE);
+end;
+
+procedure BenchCopyTo1MB(const ACtx: IBenchContext);
+var
+  LR: IZipReader;
+  LNull: IWriter;
+  LN: SizeUInt;
+begin
+  LR := NewZipReader(GBigArchive);
+  LNull := TNullWriter.Create;
+  LN := LR.CopyEntryTo(0, LNull);
+  BenchBlackBoxBytes(LNull, SizeOf(LNull));
+  if LN = 0 then BenchBlackBoxBytes(LNull, 0);
+  ACtx.SetBytes(BIG_SIZE);
+end;
+
 var
   LResults: IBenchResults;
   LW: IZipWriter;
@@ -436,10 +463,10 @@ begin
   CheckBytesEqual(LR.ExtractToBytes(0), LGot, 'sequential 1MB verify');
 
   LResults := TBenchSuite.Create('zip')
-    .SetMinDuration(TDuration.FromMilliseconds(200))
-    .SetMinSamples(5)
+    .SetMinDuration(TDuration.FromMilliseconds(300))
+    .SetMinSamples(7)
     .SetWarmupIters(1)
-    .SetMaxIterations(20)
+    .SetMaxIterations(25)
     .Add('zip/pack/200x512B', @BenchPackManyDeflate)
     .Add('zip/pack-reserve/200x512B', @BenchPackWithReserve)
     .Add('zip/builder-pack/200x512B', @BenchBuilderPack)
@@ -454,6 +481,8 @@ begin
     .Add('zip/staged-pack/1MB', @BenchStagedPack)
     .Add('zip/seq-extract-all/200x512B', @BenchSeqExtractAll)
     .Add('zip/seq-read/1MB', @BenchSeqRead1MB)
+    .Add('zip/extract-pbyte/1MB', @BenchExtractPByte1MB)
+    .Add('zip/copy-to/1MB', @BenchCopyTo1MB)
     .Run;
   WriteLn(LResults.PrintToConsole);
   WriteLn('benchstat: ', LResults.ToBenchstat);

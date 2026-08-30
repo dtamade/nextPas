@@ -202,6 +202,37 @@ begin
   WriteLn('aes256 read: ',
     BoolToStr(SameBytes(LGot, StrBytes('encrypted hello')), True));
 
+  { PByte 零拷贝直写演示（INV-18）：无 TBytes 物化，store/deflate 共享校验内核 }
+  LW := NewZipWriter;
+  SetLength(LGot, 1024);
+  for LI := 0 to High(LGot) do LGot[LI] := Byte(LI and $FF);
+  LW.AddEntry('pbyte.bin', LGot);
+  LArc := LW.Finish;
+  LR := NewZipReader(LArc);
+  SetLength(LData, 1024);
+  LN := LR.ExtractToBufferByName('pbyte.bin', @LData[0], SizeUInt(Length(LData)));
+  WriteLn('pbyte      : bytes=', LN, ' ok=', SameBytes(LGot, LData) and (LN=1024));
+  // 目录/空条目返回 0 且不触碰缓冲
+  LW := NewZipWriter; LW.AddDirectory('empty-dir'); LArc := LW.Finish;
+  LR := NewZipReader(LArc);
+  LN := LR.ExtractToBufferByName('empty-dir/', nil, 0);
+  WriteLn('pbyte dir  : bytes=', LN, ' ok=', LN=0);
+
+  { AES 描述符对偶演示（INV-19）：DataDescriptor + AES 顺序读先集密文再解帧 }
+  LW := NewZipWriter;
+  LAesOpts := DefaultZipAddOptions; LAesOpts.Method := zmDeflate; LAesOpts.Password := StrBytes('desc-pw'); LAesOpts.AesStrength := 1; LAesOpts.DataDescriptor := True;
+  LSink := LW.AddEntryStream('aes-desc.bin', LAesOpts);
+  SetLength(LGot, 2048); for LI:=0 to High(LGot) do LGot[LI]:=Byte((LI*5) and $FF);
+  LSink.Write(LGot[0], Length(LGot)); LSink.Close;
+  WriteFile(LAesZip+'.desc', LW.Finish);
+  LROpts := DefaultZipReadOptions; LROpts.Password := StrBytes('desc-pw');
+  LR := NewZipReaderWithOptions(ReadFile(LAesZip+'.desc'), LROpts);
+  WriteLn('aes-desc random: ok=', SameBytes(LR.ExtractToBytesByName('aes-desc.bin'), LGot));
+  LSeqSrc := CreateBytesStreamFrom(ReadFile(LAesZip+'.desc')) as IReader;
+  LSeq := NewZipSequentialReaderWithOptions(LSeqSrc, LROpts);
+  if LSeq.Next(LInfo) then begin LRs:=LSeq.Open; SetLength(LData,0); repeat LN:=LRs.Read(LChunk[0], SizeOf(LChunk)); if LN>0 then begin SetLength(LData, Length(LData)+Integer(LN)); Move(LChunk[0], LData[Length(LData)-Integer(LN)], LN); end; until LN=0; LRs.Close; WriteLn('aes-desc seq   : ok=', SameBytes(LData, LGot)); end;
+  DeleteFile(LAesZip+'.desc');
+
   { 总量守卫演示（INV-17）：单条与跨条目双上限，入口+流中途双重拦截 }
   LW := NewZipWriter;
   LW.AddEntry('a.txt', StrBytes('12345')); // 5 bytes

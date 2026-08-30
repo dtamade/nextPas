@@ -506,3 +506,53 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.EmitHirDiagnostic(const ACode, AMessage: string);
+var
+  Instr: THIRInstr;
+begin
+  WriteLn(StdErr, '[hir-diagnostic] ', ACode, ': ', AMessage);
+  Flush(StdErr);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikCall;
+  Instr.TypeId := GetIntType;
+  Instr.CallTarget := '';
+  EmitInstr(Instr);
+end;
+
+function THIRBuilder.TryNormalizeScalarValueToType(
+  const AValueId: THIRValueId; const ASourceTypeId, ATargetTypeId: THIRTypeId;
+  out AResult: THIRValueId): Boolean;
+begin
+  AResult := NormalizeScalarValueToType(AValueId, ASourceTypeId, ATargetTypeId);
+  Result := AResult <> 0;
+  if not Result then
+    EmitHirDiagnostic('hir.normalize-failed',
+      'normalize failed ' + IntToStr(ATargetTypeId));
+end;
+
+function THIRBuilder.GetDynArrayElemSizeValue(const AArrayName: string;
+  out ATypeId: THIRTypeId): THIRValueId;
+var
+  ElemSize: Int64;
+  ElemType: string;
+  Meta: TTypeMetadata;
+  I64: THIRTypeId;
+begin
+  I64 := GetIntTypeByWidth(64, True);
+  ATypeId := I64;
+  Result := 0;
+  if (FSemaModel <> nil) and
+    FSemaModel.LookupConstValue(AArrayName + '$arr_elem_size', ElemSize) then
+    Exit(EmitConstIntOfType(ElemSize, I64));
+  if (FSemaModel <> nil) and
+    FSemaModel.LookupStringConstValue(AArrayName + '$arr_elem_type', ElemType) and
+    (ElemType <> '') then
+  begin
+    if FSemaModel.GetTypeMetaByName(ElemType, Meta) and (Meta.Size > 0) then
+      Exit(EmitConstIntOfType(Meta.Size, I64));
+  end;
+  EmitHirDiagnostic('hir.elem-size-unknown',
+    'elem size unknown for ' + AArrayName);
+end;
+

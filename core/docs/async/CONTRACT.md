@@ -1,6 +1,6 @@
 # nextpas.core.async 代码契约
 
-**模块路径**：`core/src/nextpas.core.async*.pas`（15 个源文件）
+**模块路径**：`core/src/nextpas.core.async*.pas`（17 个源文件）
 **层级**：L1（依赖 L0: base, sync）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
@@ -29,6 +29,7 @@
 | async.semaphore | IAsyncSemaphore (异步信号量) |
 | async.channel | IAsyncChannel (异步通道) |
 | async.condvar | IAsyncCondVar (异步条件变量) |
+| async.cancellation | IAsyncCancellationToken (取消令牌/父子传播) |
 | async.pas | 门面 (re-exports) |
 
 ### 1.2 核心类型

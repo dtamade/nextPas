@@ -5,7 +5,7 @@ program test_ssh_session_async;
 { S16.5 gate: async session via TAsyncLoop + real TCP loopback.
   Reuses crypto primitives, runs TSshLoopServer on blocking ITcpStream
   in a server thread, client via SshAsyncConnect/ExecAsync on TAsyncLoop.
-  Covers password/compress/dh. Heaptrc 0. }
+  Covers password/compress/dh + keepalive. Heaptrc 0 via named TThread. }
 
 uses
   cthreads,
@@ -103,6 +103,19 @@ type
     StdOut1: TBytes; StdOut2: TBytes; StdErr: TBytes; ExitCode: UInt32;
     HostSeed: TBytes; ForceDH: Boolean; ForceCompress: Boolean;
     Failed: Boolean; FailMsg: string; Done: Boolean; MsgCount: Integer; Msg1Type: Byte; Msg1Len: Integer;
+    IgnoreCount: Integer;
+  end;
+
+  TAsyncLoopThread = class(TThread)
+  private FLoop: TAsyncLoop;
+  protected procedure Execute; override;
+  public constructor Create(ALoop: TAsyncLoop);
+  end;
+
+  TAsyncServerThread = class(TThread)
+  private FListener: ITcpListener; FSc: PSshLoopServerScenario;
+  protected procedure Execute; override;
+  public constructor Create(AListener: ITcpListener; ASc: PSshLoopServerScenario);
   end;
 
   TSshLoopServer = class
@@ -124,6 +137,22 @@ type
     constructor Create(AStream: IReadWriteCloser; ASc: PSshLoopServerScenario);
     procedure Run;
   end;
+
+constructor TAsyncLoopThread.Create(ALoop: TAsyncLoop);
+begin inherited Create(True); FreeOnTerminate:=False; FLoop:=ALoop; end;
+procedure TAsyncLoopThread.Execute; begin FLoop.Run; end;
+
+constructor TAsyncServerThread.Create(AListener: ITcpListener; ASc: PSshLoopServerScenario);
+begin inherited Create(True); FreeOnTerminate:=False; FListener:=AListener; FSc:=ASc; end;
+procedure TAsyncServerThread.Execute;
+var LConn: ITcpStream; Srv: TSshLoopServer;
+begin
+  try
+    LConn:=FListener.Accept;
+    Srv:=TSshLoopServer.Create(LConn as IReadWriteCloser, FSc);
+    try Srv.Run; finally Srv.Free; end;
+  except end;
+end;
 
 constructor TSshLoopServer.Create(AStream: IReadWriteCloser; ASc: PSshLoopServerScenario);
 begin inherited Create; FStream:=AStream; FSc:=ASc; FEncrypted:=False; SetLength(FBuf,0); end;
@@ -212,6 +241,7 @@ begin
   begin
     LMsg:=ReadAnyPayload; if Length(LMsg)=0 then Exit; Inc(FSc^.MsgCount); if FSc^.MsgCount=1 then begin FSc^.Msg1Type:=LMsg[0]; FSc^.Msg1Len:=Length(LMsg); end;
     case LMsg[0] of
+      SSH_MSG_IGNORE: Inc(FSc^.IgnoreCount);
       SSH_MSG_DISCONNECT: Exit;
       SSH_MSG_SERVICE_REQUEST: begin LW:=TsshWriter.Create(32); try LW.PutByte(SSH_MSG_SERVICE_ACCEPT); LW.PutStringText(SSH_SERVICE_USERAUTH); ReplyPayload(LW.ToBytes); finally LW.Free; end; end;
       SSH_MSG_USERAUTH_REQUEST:
@@ -266,6 +296,8 @@ var
   LOpts: TSshConnectOptions;
 begin
   Result:=False; ARes:=Default(TSshExecResult); AErrKind:=sekIO;
+  LServerThread:=nil; LLoop:=nil; LLoopThread:=nil; LListener:=nil;
+  LOpts:=Default(TSshConnectOptions);
   New(LSc); LSc^:=Default(TSshLoopServerScenario);
   LSc^.AcceptUser:='testuser'; LSc^.AcceptPassword:='testpass'; LSc^.PasswordOk:=APassOk; LSc^.PubKeyOk:=APubOk;
   LSc^.StdOut1:=StringToBytes('hello-'); LSc^.StdOut2:=StringToBytes('world'); LSc^.StdErr:=StringToBytes('err-'); LSc^.ExitCode:=42;
@@ -273,8 +305,8 @@ begin
   LListener:=NetTcpListen('127.0.0.1',0);
   try
     LPort:=LListener.LocalAddr.Port;
-    LServerThread:=TThread.CreateAnonymousThread(procedure var LConn:ITcpStream; Srv:TSshLoopServer; begin try LConn:=LListener.Accept; Srv:=TSshLoopServer.Create(LConn as IReadWriteCloser, LSc); try Srv.Run; finally Srv.Free; end; except end; end);
-    LServerThread.FreeOnTerminate:=False; LServerThread.Start;
+    LServerThread:=TAsyncServerThread.Create(LListener, LSc);
+    LServerThread.Start;
     LLoop:=TAsyncLoop.Create(64);
     try
       if GAsyncState.Session<>nil then GAsyncState.Session:=nil;
@@ -283,8 +315,8 @@ begin
       GAsyncState:=Default(TAsyncTestState);
       GAsyncState.Event:=RTLEventCreate;
       try
-        LLoopThread:=TThread.CreateAnonymousThread(procedure begin LLoop.Run; end);
-        LLoopThread.FreeOnTerminate:=False; LLoopThread.Start;
+        LLoopThread:=TAsyncLoopThread.Create(LLoop);
+        LLoopThread.Start;
         LOpts:=DefaultSshConnectOptions('127.0.0.1'); LOpts.Host:='127.0.0.1'; LOpts.Port:=LPort; LOpts.User:=AUser; LOpts.Password:=APass; LOpts.Compress:=AForceComp; LOpts.ExecTimeoutMs:=5000; LOpts.ConnectTimeoutMs:=3000;
         if not SshAsyncConnect(LLoop, LOpts, @OnAsyncConnect, nil) then begin GAsyncState.Err:=ESSHError.Create(sekIO,'dial submit failed'); GAsyncState.Done:=True; end;
         if not WaitForFlag(GAsyncState.Done, GAsyncState.Event, 8000) then begin AErrKind:=sekTimeout; Exit; end;
@@ -296,15 +328,84 @@ begin
         if GAsyncState.ExecErr<>nil then begin AErrKind:=GAsyncState.ExecErr.Kind; FreeAndNil(GAsyncState.ExecErr); Exit; end;
         ARes:=GAsyncState.ExecResult; Result:=True;
         GAsyncState.Session.Close;
-      finally RTLeventDestroy(GAsyncState.Event); GAsyncState.Event:=nil; LLoop.Stop; LLoopThread.WaitFor; LLoopThread.Free; end;
+      finally RTLeventDestroy(GAsyncState.Event); GAsyncState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; end;
     finally
       if GAsyncState.Session<>nil then begin GAsyncState.Session.Close; GAsyncState.Session:=nil; end;
       if GAsyncState.Err<>nil then FreeAndNil(GAsyncState.Err);
       if GAsyncState.ExecErr<>nil then FreeAndNil(GAsyncState.ExecErr);
       SetLength(GAsyncState.ExecResult.StdOut,0); SetLength(GAsyncState.ExecResult.StdErr,0);
-      LLoop.Free; end;
-    LServerThread.WaitFor; LServerThread.Free;
-  finally LListener.Close; Finalize(LSc^); Dispose(LSc); end;
+      if Assigned(LLoop) then LLoop.Free;
+    end;
+  finally
+    if Assigned(LServerThread) then begin LServerThread.WaitFor; LServerThread.Free; end;
+    Finalize(LOpts);
+    if Assigned(LListener) then LListener.Close;
+    LSc^.AcceptUser:=''; LSc^.AcceptPassword:='';
+    SetLength(LSc^.StdOut1,0); SetLength(LSc^.StdOut2,0); SetLength(LSc^.StdErr,0);
+    SetLength(LSc^.HostSeed,0);
+    Finalize(LSc^); Dispose(LSc);
+  end;
+end;
+
+function RunAsyncScenarioWithKeepAlive(const AHostSeed: TBytes; AKeepAliveMs: Integer; out AIgnoreCount: Integer; out ARes: TSshExecResult; out AErrKind: TSshErrorKind): Boolean;
+var
+  LListener: ITcpListener; LPort: Word; LSc: PSshLoopServerScenario;
+  LServerThread: TThread; LLoop: TAsyncLoop; LLoopThread: TThread;
+  LOpts: TSshConnectOptions;
+begin
+  Result:=False; AIgnoreCount:=0; ARes:=Default(TSshExecResult); AErrKind:=sekIO;
+  LServerThread:=nil; LLoop:=nil; LLoopThread:=nil; LListener:=nil;
+  LOpts:=Default(TSshConnectOptions);
+  New(LSc); LSc^:=Default(TSshLoopServerScenario);
+  LSc^.AcceptUser:='testuser'; LSc^.AcceptPassword:='testpass'; LSc^.PasswordOk:=True;
+  LSc^.StdOut1:=StringToBytes('hello-'); LSc^.StdOut2:=StringToBytes('world'); LSc^.StdErr:=StringToBytes('err-'); LSc^.ExitCode:=42;
+  LSc^.HostSeed:=AHostSeed;
+  LListener:=NetTcpListen('127.0.0.1',0);
+  try
+    LPort:=LListener.LocalAddr.Port;
+    LServerThread:=TAsyncServerThread.Create(LListener, LSc);
+    LServerThread.Start;
+    LLoop:=TAsyncLoop.Create(64);
+    try
+      if GAsyncState.Session<>nil then GAsyncState.Session:=nil;
+      if GAsyncState.Err<>nil then FreeAndNil(GAsyncState.Err);
+      if GAsyncState.ExecErr<>nil then FreeAndNil(GAsyncState.ExecErr);
+      GAsyncState:=Default(TAsyncTestState);
+      GAsyncState.Event:=RTLEventCreate;
+      try
+        LLoopThread:=TAsyncLoopThread.Create(LLoop);
+        LLoopThread.Start;
+        LOpts:=DefaultSshConnectOptions('127.0.0.1'); LOpts.Host:='127.0.0.1'; LOpts.Port:=LPort; LOpts.User:='testuser'; LOpts.Password:='testpass';
+        LOpts.KeepAliveIntervalMs:=AKeepAliveMs; LOpts.ExecTimeoutMs:=5000; LOpts.ConnectTimeoutMs:=3000;
+        if not SshAsyncConnect(LLoop, LOpts, @OnAsyncConnect, nil) then begin GAsyncState.Err:=ESSHError.Create(sekIO,'dial submit failed'); GAsyncState.Done:=True; end;
+        if not WaitForFlag(GAsyncState.Done, GAsyncState.Event, 8000) then begin AErrKind:=sekTimeout; Exit; end;
+        if GAsyncState.Err<>nil then begin AErrKind:=GAsyncState.Err.Kind; FreeAndNil(GAsyncState.Err); Exit; end;
+        if GAsyncState.Session=nil then Exit;
+        Sleep(350);
+        AIgnoreCount:=LSc^.IgnoreCount;
+        GAsyncState.ExecDone:=False; RTLeventResetEvent(GAsyncState.Event);
+        if not GAsyncState.Session.ExecAsync('echo hi', @OnAsyncExec) then begin AErrKind:=sekIO; Exit; end;
+        if not WaitForFlag(GAsyncState.ExecDone, GAsyncState.Event, 8000) then begin AErrKind:=sekTimeout; Exit; end;
+        if GAsyncState.ExecErr<>nil then begin AErrKind:=GAsyncState.ExecErr.Kind; FreeAndNil(GAsyncState.ExecErr); Exit; end;
+        ARes:=GAsyncState.ExecResult; Result:=True;
+        GAsyncState.Session.Close;
+      finally RTLeventDestroy(GAsyncState.Event); GAsyncState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; end;
+    finally
+      if GAsyncState.Session<>nil then begin GAsyncState.Session.Close; GAsyncState.Session:=nil; end;
+      if GAsyncState.Err<>nil then FreeAndNil(GAsyncState.Err);
+      if GAsyncState.ExecErr<>nil then FreeAndNil(GAsyncState.ExecErr);
+      SetLength(GAsyncState.ExecResult.StdOut,0); SetLength(GAsyncState.ExecResult.StdErr,0);
+      if Assigned(LLoop) then LLoop.Free;
+    end;
+  finally
+    if Assigned(LServerThread) then begin LServerThread.WaitFor; LServerThread.Free; end;
+    Finalize(LOpts);
+    if Assigned(LListener) then LListener.Close;
+    LSc^.AcceptUser:=''; LSc^.AcceptPassword:='';
+    SetLength(LSc^.StdOut1,0); SetLength(LSc^.StdOut2,0); SetLength(LSc^.StdErr,0);
+    SetLength(LSc^.HostSeed,0);
+    Finalize(LSc^); Dispose(LSc);
+  end;
 end;
 
 var GSeed: TBytes; GRunner: TSuiteRunner; GSuite: TTestSuite;
@@ -316,6 +417,7 @@ begin
   GSuite.Test('compress delayed async', procedure var R: TSshExecResult; K: TSshErrorKind; Ok: Boolean; begin Ok:=RunAsyncScenario(GSeed, 'testuser','testpass', True, False, False, True, 'echo hi', R, K); CheckTrue(Ok, 'compress ok'); CheckEqual('hello-world', BytesToText(R.StdOut), 'stdout compress'); end);
   GSuite.Test('dh fallback async', procedure var R: TSshExecResult; K: TSshErrorKind; Ok: Boolean; begin Ok:=RunAsyncScenario(GSeed, 'testuser','testpass', True, False, True, False, 'echo hi', R, K); CheckTrue(Ok, 'dh ok'); CheckEqual('hello-world', BytesToText(R.StdOut), 'stdout dh'); end);
   GSuite.Test('dh+compress async', procedure var R: TSshExecResult; K: TSshErrorKind; Ok: Boolean; begin Ok:=RunAsyncScenario(GSeed, 'testuser','testpass', True, False, True, True, 'echo hi', R, K); CheckTrue(Ok, 'dh+compress ok'); CheckEqual('hello-world', BytesToText(R.StdOut), 'stdout dh+compress'); end);
+  GSuite.Test('keepalive 100ms idle does not break exec', procedure var R: TSshExecResult; K: TSshErrorKind; Ok: Boolean; IC: Integer; begin Ok:=RunAsyncScenarioWithKeepAlive(GSeed, 100, IC, R, K); CheckTrue(Ok, 'keepalive exec ok'); CheckTrue(IC>=1, 'at least one IGNORE received (got '+IntToStr(IC)+')'); CheckEqual('hello-world', BytesToText(R.StdOut), 'stdout after keepalive'); end);
   GRunner:=TSuiteRunner.Create('nextpas.core.ssh.session.async');
   GRunner.Add(GSuite);
   GRunner.RunAll;

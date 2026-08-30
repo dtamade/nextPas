@@ -23,6 +23,7 @@ uses
   nextpas.core.compress.base,
   nextpas.core.sevenz.base,
   nextpas.core.sevenz.intf,
+  nextpas.core.sevenz.levels,
   nextpas.core.sevenz.filters,
   nextpas.core.sevenz.reader,
   nextpas.core.sevenz.writer,
@@ -159,14 +160,16 @@ begin
   Result := nextpas.core.sevenz.writer.SevenZCreateWriterBuilder;
 end;
 
+{ 级别映射：门面单层直连 levels 纯映射（inline 零额外调用，writer/bench/facade 同源），
+  避免 levels→intf→门面两跳冗余；bench_sevenz 复用同阈值可观测 }
 function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel;
 begin
-  Result := nextpas.core.sevenz.intf.SevenZLevelToDeflateLevel(ALevel);
+  Result := SevenZLevelOrdToDeflateLevel(Ord(ALevel));
 end;
 
 function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer;
 begin
-  Result := nextpas.core.sevenz.intf.SevenZLevelToBZip2BlockSize(ALevel);
+  Result := SevenZLevelOrdToBZip2BlockSize(Ord(ALevel));
 end;
 
 function SevenZCreateReader(const AArchive: TBytes): ISevenZReader;

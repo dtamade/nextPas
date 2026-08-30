@@ -6,7 +6,8 @@ uses
   nextpas.core.exception,
   nextpas.core.io.base,
   nextpas.core.io.intf,
-  nextpas.core.vfs;
+  nextpas.core.vfs,
+  nextpas.core.vfs.base;
 
 var
   T: TTestSuite;
@@ -351,6 +352,28 @@ begin
   end;
 end;
 
+procedure TestPrefixPure;
+begin
+  Check(VfsPathHasPrefix('a/b/c', ''), 'empty prefix true');
+  Check(VfsPathHasPrefix('a/b', 'a/b'), 'equal prefix true');
+  Check(VfsPathHasPrefix('a/b/c', 'a/b'), 'prefix true');
+  Check(not VfsPathHasPrefix('a/b', 'a/b/c'), 'longer prefix false');
+  Check(VfsPathHasPrefix('a/bc', 'a/b'), 'byte prefix true');
+  Check(not VfsPathHasPrefix('x/y', 'a'), 'different prefix false');
+  Check(not VfsPathHasPrefix('', 'a'), 'empty path false');
+end;
+
+procedure TestParentPure;
+begin
+  Check(VfsIsParentPath('a', 'a/b'), 'a parent a/b');
+  Check(VfsIsParentPath('a', 'a/b/c'), 'a parent deep');
+  Check(not VfsIsParentPath('a', 'a'), 'equal not parent');
+  Check(not VfsIsParentPath('a/b', 'a/c'), 'sibling not parent');
+  Check(not VfsIsParentPath('a', 'ab/c'), 'prefix mismatch not parent');
+  Check(not VfsIsParentPath('a/b', 'a/bc'), 'missing slash not parent');
+  Check(VfsIsParentPath('ab', 'ab/c'), 'ab parent ab/c');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.vfs.memtree');
   T.Test('stat file', @TestStatFile);
@@ -367,5 +390,7 @@ begin
   T.Test('walk stop', @TestWalkStop);
   T.Test('case sensitive', @TestCaseSensitive);
   T.Test('frozen builder rejects add', @TestFrozenBuilderRejectsAdd);
+  T.Test('prefix pure', @TestPrefixPure);
+  T.Test('parent pure', @TestParentPure);
   if not T.Run then Halt(1);
 end.

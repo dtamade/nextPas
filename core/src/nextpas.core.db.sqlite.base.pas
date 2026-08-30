@@ -17,6 +17,7 @@ const
   { Result codes (sqlite3.h) }
   SQLITE_OK          = 0;
   SQLITE_ERROR       = 1;
+  SQLITE_BUSY        = 5;
   SQLITE_ROW         = 100;
   SQLITE_DONE        = 101;
 

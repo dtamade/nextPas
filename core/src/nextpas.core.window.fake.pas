@@ -100,6 +100,9 @@ type
     { 注入事件：走与生产后端同一条 DoDispatch 路径；跨线程时经
       Dispatcher.Post marshal，需 Pump 兑现 }
     procedure InjectEvent(const AEvent: TWindowEvent);
+    { 输入便捷注入（3.0）：等价于构造 TWindowEvent 后 InjectEvent }
+    procedure InjectKey(AKind: TWindowEventKind; AKeyCode, AModifiers: Integer);
+    procedure InjectMouse(AKind: TWindowEventKind; AX, AY, AButton, AModifiers: Integer);
 
     { 状态脚本：直接改写内部状态并可选择是否产生对应事件 }
     procedure SetScale(ANewScale: Double);
@@ -479,6 +482,8 @@ begin
   FWidth := AWidth;
   FHeight := AHeight;
   { 同步产生 weResized 事件，走同一分发路径 }
+  LEvent := Default(TWindowEvent);
+
   LEvent.Kind := weResized;
   LEvent.Width := FWidth;
   LEvent.Height := FHeight;
@@ -513,6 +518,8 @@ begin
   RequireOpen;
   FMaximized := True;
   FMinimized := False;
+  LEvent := Default(TWindowEvent);
+
   LEvent.Kind := weResized;
   LEvent.Width := FWidth;
   LEvent.Height := FHeight;
@@ -623,6 +630,29 @@ begin
       end);
 end;
 
+procedure TFakeWindow.InjectKey(AKind: TWindowEventKind; AKeyCode, AModifiers: Integer);
+var
+  E: TWindowEvent;
+begin
+  E := Default(TWindowEvent);
+  E.Kind := AKind;
+  E.KeyCode := AKeyCode;
+  E.Modifiers := AModifiers;
+  InjectEvent(E);
+end;
+
+procedure TFakeWindow.InjectMouse(AKind: TWindowEventKind; AX, AY, AButton, AModifiers: Integer);
+var
+  E: TWindowEvent;
+begin
+  E := Default(TWindowEvent);
+  E.Kind := AKind;
+  E.X := AX; E.Y := AY;
+  E.Button := AButton;
+  E.Modifiers := AModifiers;
+  InjectEvent(E);
+end;
+
 procedure TFakeWindow.SetScale(ANewScale: Double);
 var
   LEvent: TWindowEvent;
@@ -631,6 +661,8 @@ begin
   if ANewScale <= 0 then
     raise EWindowInvalidState.Create('scale must be > 0');
   FScale := ANewScale;
+  LEvent := Default(TWindowEvent);
+
   LEvent.Kind := weScaleChanged;
   LEvent.Width := 0;
   LEvent.Height := 0;

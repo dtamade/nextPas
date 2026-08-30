@@ -30,6 +30,9 @@ uses
   nextpas.core.ssh.sftp,
   nextpas.core.ssh.agent,
   nextpas.core.ssh.compress,
+  nextpas.core.ssh.rekey,
+  nextpas.core.ssh.keepalive,
+  nextpas.core.ssh.window,
   nextpas.core.ssh.session;
 
 type
@@ -54,7 +57,7 @@ type
   { 底层构件 re-export（二次开发/测试用）}
   ISshPacketSender = nextpas.core.ssh.cipher.ISshPacketSender;
   ISshPacketReceiver = nextpas.core.ssh.cipher.ISshPacketReceiver;
-  ISshKeyExchange = nextpas.core.ssh.kex.curve25519.ISshKeyExchange;
+  ISshKeyExchange = nextpas.core.ssh.kex.ISshKeyExchange;
   TSshClientTransport = nextpas.core.ssh.transport.TSshClientTransport;
   TSshKnownHosts = nextpas.core.ssh.hostkey.TSshKnownHosts;
   TSshAgentClient = nextpas.core.ssh.agent.TSshAgentClient;
@@ -62,6 +65,7 @@ type
   ISshCompressor = nextpas.core.ssh.compress.ISshCompressor;
   TsshWriter = nextpas.core.ssh.buffer.TsshWriter;
   TsshReader = nextpas.core.ssh.buffer.TsshReader;
+  TChannelWindow = nextpas.core.ssh.window.TChannelWindow;
 
 { 默认选项（inline 转发）}
 function DefaultSshOptions(const AHost: string): TSshConnectOptions; inline;
@@ -71,6 +75,8 @@ function SshClient: ISshClientBuilder; inline;
 
 { 一步到位连接 }
 function SshConnect(const AOptions: TSshConnectOptions): ISshSession; inline;
+function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession; inline;
+function SshConnectViaJumpOn(const AJumpSession: ISshSession; const ATargetOpts: TSshConnectOptions): ISshSession; inline;
 
 { 一次性执行便捷函数（密码认证路径）}
 function SshExec(const AHost: string; APort: Word;
@@ -91,6 +97,16 @@ end;
 function SshConnect(const AOptions: TSshConnectOptions): ISshSession;
 begin
   Result := nextpas.core.ssh.session.SshConnect(AOptions);
+end;
+
+function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
+begin
+  Result := nextpas.core.ssh.session.SshConnectViaJump(ATargetOpts, AJumpOpts);
+end;
+
+function SshConnectViaJumpOn(const AJumpSession: ISshSession; const ATargetOpts: TSshConnectOptions): ISshSession;
+begin
+  Result := nextpas.core.ssh.session.SshConnectViaJumpOn(AJumpSession, ATargetOpts);
 end;
 
 function SshExec(const AHost: string; APort: Word;

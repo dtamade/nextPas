@@ -14,9 +14,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
-  nextpas.core.sevenz.base,
-  nextpas.core.compress.base,
-  nextpas.core.sevenz.levels;
+  nextpas.core.sevenz.base;
 
 const
   {** @desc 过滤链深度上限：远超实际收益，同时远离读端 64 coder 解析上限 *}
@@ -116,17 +114,35 @@ type
     function FindBySuffix(const ASuffix: string): Integer;
     function EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
     function FindByGlob(const APattern: string): Integer;
+    function EntriesByPrefixIgnoreCase(const APrefix: string): TSevenZEntryInfoArray;
+    function EntriesBySuffixIgnoreCase(const ASuffix: string): TSevenZEntryInfoArray;
+    function FindByPrefixIgnoreCase(const APrefix: string): Integer;
+    function FindBySuffixIgnoreCase(const ASuffix: string): Integer;
+    function EntriesByGlobIgnoreCase(const APattern: string): TSevenZEntryInfoArray;
+    function FindByGlobIgnoreCase(const APattern: string): Integer;
     {** 批量提取：按前缀/后缀/通配匹配的全部条目一次性解压（复用 folder LRU）。
         目录/空文件 Data 为 nil；无匹配返回空数组；损坏抛 ESevenZError *}
+    function ExtractAll: TSevenZExtractedArray;
     function ExtractByPrefix(const APrefix: string): TSevenZExtractedArray;
     function ExtractBySuffix(const ASuffix: string): TSevenZExtractedArray;
     function ExtractByGlob(const APattern: string): TSevenZExtractedArray;
+    function ExtractByPrefixIgnoreCase(const APrefix: string): TSevenZExtractedArray;
+    function ExtractBySuffixIgnoreCase(const ASuffix: string): TSevenZExtractedArray;
+    function ExtractByGlobIgnoreCase(const APattern: string): TSevenZExtractedArray;
     function TryExtractByGlob(const APattern: string; out AExtracted: TSevenZExtractedArray): Boolean;
     function TryExtractByGlobWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     function TryExtractByPrefix(const APrefix: string; out AExtracted: TSevenZExtractedArray): Boolean;
     function TryExtractByPrefixWithError(const APrefix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     function TryExtractBySuffix(const ASuffix: string; out AExtracted: TSevenZExtractedArray): Boolean;
     function TryExtractBySuffixWithError(const ASuffix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractByPrefixIgnoreCase(const APrefix: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractByPrefixIgnoreCaseWithError(const APrefix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractBySuffixIgnoreCase(const ASuffix: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractBySuffixIgnoreCaseWithError(const ASuffix: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractByGlobIgnoreCase(const APattern: string; out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractByGlobIgnoreCaseWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
+    function TryExtractAll(out AExtracted: TSevenZExtractedArray): Boolean;
+    function TryExtractAllWithError(out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
     {** 提取文件条目内容并校验 CRC；目录/空文件返回 nil；
         AIndex 越界抛参数错误。重复提取同一 solid 文件夹走缓存 *}
     function Extract(AIndex: Integer): TBytes;
@@ -237,23 +253,25 @@ type
     function Build: ISevenZWriter;
     function Finish: TBytes;
     function FinishTo(const ASink: IWriter): Int64;
+    {** 无异常探针：Finish/FinishTo 失败返回 False，不抛 EArgumentError/ESevenZError/ESevenZLimitError/EIOError；
+        成功时 AArchive/ABytesWritten 有效；零分配探针，bench 可观测（bench_sevenz extract multi 100-130 MB/s 锚点复用），
+        失败不产出半档（Finish 回滚，已分配 RawSolid/Packed 解放，FFI 句柄 Close 幂等，并行 WaitFor 汇合后首错不丢） *}
+    function TryFinish(out AArchive: TBytes): Boolean;
+    function TryFinishTo(const ASink: IWriter; out ABytesWritten: Int64): Boolean;
+    {** 错误字符串重载：CONTRACT Try*WithError 全族延伸到 Builder/FS 的统一形态；
+        失败返回 False + AError 非空（前缀含异常类名），成功 AError=''；语义与 TryFinish/TryFinishTo 一致，
+        性能零额外开销（Assigned 守护），稳定性保证 FFI Close/Finish 回滚/并行 WaitFor 异常不丢 *}
+    function TryFinishWithError(out AArchive: TBytes; out AError: string): Boolean;
+    function TryFinishToWithError(const ASink: IWriter; out ABytesWritten: Int64; out AError: string): Boolean;
+    {** FS 联邦 Try*WithError：AddTree/AddFileFromFs 的非抛形态，复用 limits/levels 单源（不新增重复阈值）；
+        失败返回 False + AError，成功 True；WalkEx/Stat/Open 异常转 AError，IReader/IFile Close 幂等不泄漏 *}
+    function TryAddTree(const AHostDir: string; const AArchivePrefix: string; out AError: string): Boolean;
+    function TryAddTreeWithFilter(const AHostDir: string; const AArchivePrefix: string;
+      const AFilter: string; out AError: string): Boolean;
+    function TryAddFileFromFs(const AHostPath: string; const AArchiveName: string; out AError: string): Boolean;
   end;
 
-{ 级别→底层压缩参数的纯映射，供 writer/bench 复用 }
-function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel; inline;
-function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer; inline;
-
 implementation
-
-function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel;
-begin
-  Result := SevenZLevelOrdToDeflateLevel(Ord(ALevel));
-end;
-
-function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer;
-begin
-  Result := SevenZLevelOrdToBZip2BlockSize(Ord(ALevel));
-end;
 
 function TSevenZEntryEnumerator.GetCurrent: TSevenZEntryInfo;
 begin

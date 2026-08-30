@@ -756,14 +756,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
 
 - 默认 `IHttpClient.Send` / `IHttpTransport.RoundTrip` 仍为串行一流。同连接多路走 **`IHttpTransportMultiplex.RoundTripMany`**（`Supports` 探测；H2 实现，H1 无此接口）。
 - `RoundTripMany`：同 authority（scheme/host/port）；响应按请求下标排序；受 peer `MaxConcurrentStreams` 约束；流 ID 客户端奇数递增；GOAWAY 期间未完成且 stream id > last-stream-id → `hekProtocol`；cancel 与单次 RoundTrip 同源（首请求 token）。
-- OpenSSL backend heaptrc（**Wave X4 + R2 dig + R4 fix**）：
-  - X4 修 `FPinValidator` 未释放（每 `CreateContext` ~32B → FreeAndNil）。
-  - R2 曾诚实 Park **1×41B**（heaptrc size 41、无帧；process-lifetime）。
-  - **R4**：根因 = `TOpenSSLLibrary.InvalidateCapabilitiesCache` 对含
-    `BackendVersion: string` 的 `TSSLBackendCapabilities` 使用 `FillChar`，
-    在 library `Finalize` 时 orphan 版本串（内容 `OpenSSL x.y.z …`）。
-    修为 `FCapabilitiesCache := Default(TSSLBackendCapabilities)`（及同模式
-    其它 backend）。`test_http_client` HTTPS 全量路径 **0 unfreed**。
+- OpenSSL backend heaptrc：能力缓存值语义重置，test_http_client heaptrc 0 unfreed。
 - **Q3-3 / RH-1 / C-A H1 HTTPS**：
   - **Client H1 direct HTTPS**（`TLSContext` + `https://`）：生产路径；smoke
     见 `test_http_https_smoke`（吞吐 + p50/p99；heaptrc **0 unfreed**）。

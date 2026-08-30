@@ -96,6 +96,7 @@ function UnpackTertiary(const AWeight: UInt32): Byte;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.text.unicode.normalize,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.props,
@@ -124,14 +125,9 @@ const
   IMPLICIT_BASE_OTHER_HAN = $FB80;
   IMPLICIT_BASE_UNASSIGNED = $FBC0;
 
-function BytesEqual(const A: PByte; const B: PByte; const ALen: SizeInt): Boolean;
-var
-  I: SizeInt;
+function BytesEqual(const A: PByte; const B: PByte; const ALen: SizeInt): Boolean; inline;
 begin
-  for I := 0 to ALen - 1 do
-    if A[I] <> B[I] then
-      Exit(False);
-  Result := True;
+  Result := CompareMem(A, B, SizeUInt(ALen));
 end;
 
 function GetCaseLevel(const ACp: TUnicodeCodepoint): Byte;

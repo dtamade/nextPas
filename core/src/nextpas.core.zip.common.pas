@@ -21,6 +21,11 @@ function LE64At(const AData: TBytes; AOff: SizeUInt): UInt64; inline;
 
 function IsKnownZipSig(AValue: LongWord): Boolean; inline;
 
+{ 时间转换（base 纯记录层外的时间逻辑下沉至 common） }
+procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
+function DosMinUnixSec: Int64; inline;
+function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
+
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
@@ -30,12 +35,17 @@ function DecompressEntryVerified(const AE: TZipEntryInfo;
   const APayload: TBytes; const APassword: TBytes;
   AMaxOutput: SizeUInt): TBytes;
 
+function DecompressEntryToBuffer(const AE: TZipEntryInfo;
+  const APayload: TBytes; const APassword: TBytes;
+  const ADst: PByte; const ADstLen: SizeUInt; AMaxOutput: SizeUInt): SizeUInt;
+
 implementation
 
 uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
-  nextpas.core.compress.deflate,
+  nextpas.core.compress,
+  nextpas.core.time.date,
   nextpas.core.zip.aes;
 
 function LE16At(const AData: TBytes; AOff: SizeUInt): Word;
@@ -59,6 +69,42 @@ begin
   Result := (AValue = C_ZIP_LOCAL_SIG) or (AValue = C_ZIP_CENTRAL_SIG) or
     (AValue = C_ZIP_EOCD_SIG) or (AValue = C_ZIP64_EOCD_SIG) or
     (AValue = C_ZIP64_EOCD_LOC_SIG) or (AValue = C_ZIP_DESCRIPTOR_SIG);
+end;
+
+procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
+var
+  LMinSec, LMaxSec, LRem: Int64;
+  LD: TDate;
+begin
+  LMinSec := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
+  LMaxSec := Int64(TDate.Create(C_DOS_MAX_YEAR, 12, 31).ToUnixDays) * 86400 + 86399;
+  if AUnixSec < LMinSec then AUnixSec := LMinSec
+  else if AUnixSec > LMaxSec then AUnixSec := LMaxSec;
+  LD := TDate.FromUnixDays(Integer(AUnixSec div 86400));
+  LRem := AUnixSec mod 86400;
+  ADosDate := Word(((LD.GetYear - C_DOS_MIN_YEAR) shl 9) or (LD.GetMonth shl 5) or LD.GetDay);
+  ADosTime := Word(((LRem div 3600) shl 11) or (((LRem mod 3600) div 60) shl 5) or ((LRem mod 60) div 2));
+end;
+
+function DosMinUnixSec: Int64;
+begin
+  Result := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
+end;
+
+function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
+var
+  LYear, LMonth, LDay, LHour, LMin, LSec: Integer;
+  LD: TDate;
+begin
+  LYear := C_DOS_MIN_YEAR + Integer(ADosDate shr 9);
+  LMonth := Integer((ADosDate shr 5) and $0F);
+  LDay := Integer(ADosDate and $1F);
+  LHour := Integer(ADosTime shr 11);
+  LMin := Integer((ADosTime shr 5) and $3F);
+  LSec := Integer((ADosTime and $1F) shl 1);
+  if not TDate.TryCreate(LYear, LMonth, LDay, LD) then
+    LD := TDate.Create(C_DOS_MIN_YEAR, 1, 1);
+  Result := Int64(LD.ToUnixDays) * 86400 + LHour * 3600 + LMin * 60 + LSec;
 end;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
@@ -128,6 +174,71 @@ begin
   end
   else if Crc32OfBytes(Result) <> AE.Crc32 then
     raise EIOError.Create('zip: crc mismatch for ' + AE.Name);
+end;
+
+function DecompressEntryToBuffer(const AE: TZipEntryInfo;
+  const APayload: TBytes; const APassword: TBytes;
+  const ADst: PByte; const ADstLen: SizeUInt; AMaxOutput: SizeUInt): SizeUInt;
+var
+  LHint: UInt64;
+  LCompressed: TBytes;
+  LOutLen: SizeUInt;
+  LCrc: LongWord;
+begin
+  if ADst = nil then
+  begin
+    if AE.UncompressedSize <> 0 then
+      raise EArgumentError.Create('zip: nil dest buffer for ' + AE.Name);
+    Exit(0);
+  end;
+  if AE.IsEncrypted and (AE.AesVersion > 0) then
+    LCompressed := UnsealWinZipAesPayload(APassword, APayload,
+      AE.AesStrengthCode, AE.Name)
+  else
+    LCompressed := APayload;
+  if AE.MethodCode = C_ZIP_METHOD_DEFLATE then
+  begin
+    LHint := AE.UncompressedSize;
+    if LHint > UInt64(Length(LCompressed)) * 16 + 65536 then
+      LHint := UInt64(Length(LCompressed)) * 16 + 65536;
+    if ADstLen < AE.UncompressedSize then
+      raise EIOError.Create('zip: dest buffer too small for ' + AE.Name);
+    if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
+      raise EIOError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
+    LOutLen := RawDeflateDecompressToBuffer(LCompressed, ADst, ADstLen, AMaxOutput);
+  end
+  else if AE.MethodCode = C_ZIP_METHOD_STORE then
+  begin
+    if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
+      raise EIOError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
+    if ADstLen < AE.UncompressedSize then
+      raise EIOError.Create('zip: dest buffer too small for ' + AE.Name);
+    if UInt64(Length(LCompressed)) <> AE.UncompressedSize then
+      raise EIOError.Create('zip: decompressed size mismatch for ' + AE.Name);
+    if AE.UncompressedSize > 0 then
+      Move(LCompressed[0], ADst^, SizeUInt(AE.UncompressedSize));
+    LOutLen := SizeUInt(AE.UncompressedSize);
+  end
+  else
+    raise ENotSupportedError.Create('zip: unsupported compression method ' +
+      IntToStr(AE.MethodCode) + ': ' + AE.Name);
+  if UInt64(LOutLen) <> AE.UncompressedSize then
+    raise EIOError.Create('zip: decompressed size mismatch for ' + AE.Name);
+  if AE.AesVersion = C_WINZIP_AES_VERSION_2 then
+  begin
+    if AE.Crc32 <> 0 then
+      raise EParseError.Create('zip: AE-2 entry with nonzero crc field: ' + AE.Name);
+  end
+  else
+  begin
+    if LOutLen = 0 then
+      LCrc := 0
+    else
+      LCrc := Crc32Of(ADst^, LOutLen);
+    if LCrc <> AE.Crc32 then
+      raise EIOError.Create('zip: crc mismatch for ' + AE.Name);
+  end;
+  Result := LOutLen;
 end;
 
 end.

@@ -1,15 +1,6 @@
 unit nextpas.core.db.pg.adapter;
 
-{** @desc IDbConnection/IDbQuery 的 PostgreSQL 适配器。
-       包装 nextpas.core.db.pg.conn 的类表面并统一错误模型
-       （EPgError -> EDbError，SqlState/Severity/Detail 字段透传）。
-
-       事务控制面：连接内计数式簿记（互斥锁保护），语义对齐
-       db.sqlite.tx——嵌套 Begin 加深、内层 Commit 只降计数、任意
-       深度 Rollback 回滚整事务并清零。libpq 无 autocommit 探针，
-       裸 BEGIN 混用检测不适用本后端（契约差异见 core/docs/db）。
-
-       所有权：适配器持有被包装的 TPgConn/TPgQuery 并在析构时释放。 *}
+{** @desc IDbConnection 的 PostgreSQL 适配器（libpq 类表面统一错误/事务簿记）。能力与契约见 CONTRACT §2.3/§2.6/§2.11，事务/池语义同 sqlite 家族。 *}
 
 {$I nextpas.core.settings.inc}
 

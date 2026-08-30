@@ -156,6 +156,7 @@ uses
   nextpas.core.atomic,
   nextpas.core.base.utils,
   nextpas.core.bytes,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.hash.base,
@@ -262,26 +263,7 @@ type
 
 { Helpers }
 
-function StringToBytes(const AValue: string): TBytes;
-var
-  LLen: SizeInt;
-begin
-  Result := nil;
-  LLen := Length(AValue);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AValue[1], Result[0], LLen);
-end;
 
-function BytesToString(const AValue: TBytes): string;
-var
-  LLen: SizeInt;
-begin
-  LLen := Length(AValue);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AValue[0], Result[1], LLen);
-end;
 
 class function TWebSocketOptions.Default: TWebSocketOptions;
 begin

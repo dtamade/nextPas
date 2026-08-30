@@ -103,6 +103,7 @@ function JwtDecode(const AToken: string): TJwtClaims;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.random,
   nextpas.core.encoding,
@@ -140,21 +141,6 @@ begin
     LDiff := LDiff or (BA xor BB);
   end;
   Result := LDiff = 0;
-end;
-
-function BytesToString(const AB: TBytes): string;
-begin
-  if Length(AB) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@AB[0]), Length(AB));
-end;
-
-function StringToBytes(const AValue: string): TBytes;
-begin
-  if Length(AValue) = 0 then
-    Exit(nil);
-  SetLength(Result, Length(AValue));
-  Move(PAnsiChar(AValue)^, Result[0], Length(AValue));
 end;
 
 { 拆三段并 base64url 解码 header/payload；ASigningInput 为原始

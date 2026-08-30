@@ -704,6 +704,39 @@ begin
   end;
 end;
 
+procedure TestPoolDoubleCloseIdempotent;
+var
+  Pool: TDbPool;
+begin
+  Pool := TDbPool.Create(SqliteFactory, TDbPoolPolicy.Default);
+  try
+    Pool.Close;
+    Pool.Close;
+    Check(True, 'pool double close idempotent');
+  finally
+    Pool.Free;
+  end;
+  Check(True, 'pool free after double close safe');
+end;
+
+procedure TestPoolAcquireAfterClose;
+var
+  Pool: TDbPool;
+  Raised: Boolean;
+begin
+  Pool := TDbPool.Create(SqliteFactory, TDbPoolPolicy.Default);
+  Pool.Close;
+  Raised := False;
+  try
+    Pool.Acquire;
+  except
+    on E: EDbError do
+      Raised := (E.Category = decUnknown) and (Pos('pool: closed', E.Message) > 0);
+  end;
+  Check(Raised, 'pool acquire after close -> decUnknown pool: closed');
+  Pool.Free;
+end;
+
 begin
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.pool.v2');
@@ -728,5 +761,7 @@ begin
   T.Test('scoped writer helper releases lease', @TestScopedWriterHelper);
   T.Test('scoped read helper releases lease', @TestScopedReadHelper);
   T.Test('scoped lease nil body rejected', @TestScopedNilBody);
+  T.Test('pool double close idempotent', @TestPoolDoubleCloseIdempotent);
+  T.Test('pool acquire after close', @TestPoolAcquireAfterClose);
   if not T.Run then Halt(1);
 end.

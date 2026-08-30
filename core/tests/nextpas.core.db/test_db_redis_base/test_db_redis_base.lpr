@@ -21,7 +21,8 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.err,
   nextpas.core.db.redis.base,
-  nextpas.core.db.redis.resp;
+  nextpas.core.db.redis.resp,
+  nextpas.core.db.redis.adapter;
 
 var
   T: TTestSuite;
@@ -417,9 +418,37 @@ begin
   Expect('MASTERDOWN', decCapacity, 'classify masterdown');
   Expect('EXECABORT', decTransaction, 'classify EXECABORT txn');
   Expect('NOSCRIPT', decNotSupported, 'classify NOSCRIPT');
+  Expect('CROSSSLOT', decSyntax, 'classify CROSSSLOT syntax');
+  Expect('TRYAGAIN', decCapacity, 'classify TRYAGAIN capacity');
+  Expect('WRONGTYPE', decConstraint, 'classify WRONGTYPE constraint');
   Expect('BUSYGROUP', decUnknown, 'classify BUSYGROUP under');
+  Expect('NOGROUP', decUnknown, 'classify NOGROUP under (Redis 7 stream)');
   Expect('TOTALLY-MADE-UP', decUnknown, 'classify unknown word');
   Expect('', decUnknown, 'classify empty word');
+end;
+
+procedure TestRedisAddrParseFail;
+begin
+  ExpectEDbError(
+    procedure
+    begin
+      ConnectRedis(':6379');
+    end, 'empty host');
+  ExpectEDbError(
+    procedure
+    begin
+      ConnectRedis('127.0.0.1:0');
+    end, 'invalid port 0');
+  ExpectEDbError(
+    procedure
+    begin
+      ConnectRedis('127.0.0.1/16');
+    end, 'db index out of range');
+  ExpectEDbError(
+    procedure
+    begin
+      ConnectRedis('127.0.0.1/-1');
+    end, 'negative db index');
 end;
 
 begin
@@ -435,5 +464,6 @@ begin
   T.Test('error type', @TestErrorType);
   T.Test('info field value', @TestInfoFieldValue);
   T.Test('classify redis table', @TestClassifyRedisTable);
+  T.Test('redis addr parse fail', @TestRedisAddrParseFail);
   if not T.Run then Halt(1);
 end.

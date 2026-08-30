@@ -293,7 +293,7 @@ allocate beyond the configured output cap — `store` 与 `deflate` 同受 `MaxO
 
 ## Performance
 
-`core/benchmarks/nextpas.core.zip/bench_zip` 以 `nextpas.core.bench` `TBenchSuite` 规矩承载（`SetMinDuration 200ms`/`MinSamples 5`/`MaxIterations 20`，`ACtx.SetBytes` 换算吞吐，`PrintToConsole`+`ToBenchstat`+`SaveToJSON` 归档），覆盖 `200×512B` 小容器（bench 轻量化；`2000×512B` 全量 parity 另作预检）与 `1MiB` 吞吐两面（含 `pack-reserve`/`builder-pack`/`stream-out`/`descriptor`/`staged`/`seq-*`/`aes-*` 14 项），Go `archive/zip` 对比在 `compare_go/` 与 `test_zip_go_parity` 双向对等门（十九期领头羊双锚点：Python zipfile + Go archive/zip，各自独立验证 store/deflate、unicode、1MiB、20×混合、30 fuzz 的字节级一致）。Reader 解析用 `nextpas.core.bytes.cursor` 边界检查 + 单次分配条目数组；CRC32 为 `nextpas.core.checksum.crc32` slice-by-8；`nextpas.core.zip.extra` 逐条目经 64 字节栈缓冲 `Encode*` 零分配（`pack 200×512B` `810→805 allocs`），`Reserve` 预分配消除 2k+ 几何重分配，`StreamOutputTo` 后 `DrainStaged` 以内板指针分块直写（零拷贝排空）；`test_zip_perf` 以 `CountingMemoryManager`（heaptrc 兼容）锁定 `200×512B ≤815 / Reserve ≤810 / 1MiB ≤12 allocs` 预算，回归即红（二十期阈值门）；`test_zip_stress` 以 `70k Zip64`（1.07s）/`1k 混合双路径`/`Bomb 单值与总量`/`并发提取` 验证极限压力下的规模与 fail-closed（二十一期）；`BASELINE.json` + `check_regression.py` 以 `allocs +2` 硬预算、`bytes` 强一致、`ns +50%` 告警构成 `make regression` CI 硬门（`make baseline` 需人工审查，二十二期）；三十四期补 `store` bomb `MaxOutput` 入口守卫与 `fs` 几何预分配（70k 目录 `O(n²)→O(n)`），三十五期顺序读 `IsKnownZipSig` 先验再试解防 `O(n·m)` CPU bomb，三十六期 `aes.EncodeWinZipAesExtraBody` 栈上零堆与 `FScratch` 几何预留，三十七期 `LCumTotal` 去复用与 store bomb 回归，三十八期 `INV-8/11/16` 入约，三十九期 `GuardTotalOutputSize` 单点化消除两读端重复，四十期示例与契约定版——`zip_roundtrip` 补 `MaxOutput/MaxTotal` 守卫全链演示（内存/顺序/fs 三路径 fail-closed）与 Builder WithTime 对称收口，四十一期顺序读零拷贝——`TSeqSliceReader` 去 `Copy` 双重拷贝与 `PushBack` 去 `Copy`，`seq-extract-all` 循 `DecompressEntryVerified` 单点复用直达切片，`seq-read/1MB` 达内存读同量级。
+`core/benchmarks/nextpas.core.zip/bench_zip` 以 `nextpas.core.bench` `TBenchSuite` 规矩承载（`SetMinDuration 300ms`/`MinSamples 7`/`MaxIterations 25` 四十九期方差治理后 `aes-*` CV `<5%`，`ACtx.SetBytes` 换算吞吐，`PrintToConsole`+`ToBenchstat`+`SaveToJSON` 归档），覆盖 `200×512B` 小容器（bench 轻量化；`2000×512B` 全量 parity 另作预检）与 `1MiB` 吞吐两面（含 `pack-reserve`/`builder-pack`/`stream-out`/`descriptor`/`staged`/`seq-*`/`aes-*`/`pbyte`/`copy-to` 16项），Go `archive/zip` 对比在 `compare_go/` 与 `test_zip_go_parity` 双向对等门（十九期领头羊双锚点：Python zipfile + Go archive/zip，各自独立验证 store/deflate、unicode、1MiB、20×混合、30 fuzz 的字节级一致，四十七期扩至 7门含 no-sig 100+ fuzz）。Reader 解析用 `nextpas.core.bytes.cursor` 边界检查 + 单次分配条目数组（四十六期 `ReadSpan+DecodeCentralExtraBuf` 零分配，`open/parse-CD 4004→2004 allocs`）；CRC32 为 `nextpas.core.checksum.crc32` slice-by-8；`nextpas.core.zip.extra` 逐条目经 64 字节栈缓冲 `Encode*` 零分配（`pack 200×512B` `810→805 allocs`），`Reserve` 预分配消除 2k+ 几何重分配，`StreamOutputTo` 后 `DrainStaged` 以内板指针分块直写（零拷贝排空）；`test_zip_perf` 以 `CountingMemoryManager`（heaptrc 兼容）锁定 `200×512B ≤815 / Reserve ≤810 / 1MiB ≤12 allocs` 预算，回归即红（二十期阈值门）；`test_zip_stress` 以 `70k Zip64`（1.07s）/`1k 混合双路径`/`Bomb 单值与总量`/`并发提取` 验证极限压力下的规模与 fail-closed（二十一期）；`BASELINE.json` + `check_regression.py` 以 `allocs +2` 硬预算、`bytes` 强一致、`ns +50%` 告警构成 `make regression` CI 硬门（`make baseline` 需人工审查，二十二期）；三十四期补 `store` bomb `MaxOutput` 入口守卫与 `fs` 几何预分配（70k 目录 `O(n²)→O(n)`），三十五期顺序读 `IsKnownZipSig` 先验再试解防 `O(n·m)` CPU bomb，三十六期 `aes.EncodeWinZipAesExtraBody` 栈上零堆与 `FScratch` 几何预留，三十七期 `LCumTotal` 去复用与 store bomb 回归，三十八期 `INV-8/11/16` 入约，三十九期 `GuardTotalOutputSize` 单点化消除两读端重复，四十期示例与契约定版——`zip_roundtrip` 补 `MaxOutput/MaxTotal` 守卫全链演示（内存/顺序/fs 三路径 fail-closed）与 Builder WithTime 对称收口，四十一期顺序读零拷贝——`TSeqSliceReader` 去 `Copy` 双重拷贝与 `PushBack` 去 `Copy`，`seq-extract-all` 循 `DecompressEntryVerified` 单点复用直达切片，四十二期描述符无签名兼容——`CollectDescriptorPayload` 支持 `12/20` 无签名与 `16/24` 有签名四形态，四十三期 PByte 零拷贝直写 `ExtractToBuffer` 共享内核、四十四期 AES 描述符对偶、四十五期阈值可配、四十六期中央零分配、四十八期 Cookbook 定版、四十九期方差治理。
 
 Sequential read reuses the same `DecompressEntryVerified` kernel via
 `nextpas.core.zip.common`（reader/sequential 单点复用，fail-closed 语义一致），
@@ -301,4 +301,95 @@ Sequential read reuses the same `DecompressEntryVerified` kernel via
 顺序约 `300-400 MB/s`（视机器与 `benchstat` 方差），管道扫描开销可预期；`bench_zip`
 的 `BenchSequential` 为锚点（方差高时回归以 `allocs` 硬门为准，`ns` 仅告警）。
 
+## Cookbook
+
+### 1. 防 bomb 双上限（MaxOutput / MaxTotal）
+
+```pascal
+var RO: TZipReadOptions;
+RO := DefaultZipReadOptions;
+RO.MaxOutputSize := 64*1024*1024;        // 单条目 64 MiB 上限，超限 EIOError
+RO.MaxTotalOutputSize := 256*1024*1024;  // 100k×1MiB 绕过上限，超限 EIOError
+R := NewZipReaderWithOptions(Bytes, RO); // 入口守卫
+S := R.OpenEntry(0);                     // 流中途同受守卫
+// 顺序与 fs 落盘同语义：NewZipSequentialReaderWithOptions / ZipExtractToDirWithOptions
+```
+
+`store` 与 `deflate` 在 `common.DecompressEntryVerified` 单点受检，声明尺寸不参与正确性判定，仅作预分配提示（INV-8），超限 `EIOError` fail-closed（见 `zip_roundtrip` 三路径演示）。
+
+### 2. 描述符流式（常数内存）
+
+```pascal
+var S: ICompressWriter; var Opt: TZipAddOptions;
+Opt := DefaultZipAddOptions; Opt.Method := zmDeflate; Opt.DataDescriptor := True;
+S := W.AddEntryStream('big.bin', Opt); // local 头立即落盘，压缩字节直通输出管道
+S.Write(Chunk[0], ChunkLen); S.Close; // 紧贴数据补描述符 12/16/20/24 四形态
+// 读端：NewZipSequentialReader 从管道增量扫描，不整档
+// MaxDescriptorBuffer 默认 512MiB 可配，与 MaxOutput 正交（INV-16）
+```
+
+写端内存上界为单条目压缩尺寸直写时降至常数；读端 `CollectDescriptorPayload` 先验 `IsKnownZipSig` 再试解，防 `O(n·m)` CPU bomb。
+
+### 3. PByte 零拷贝直写（INV-18）
+
+```pascal
+var Buf: array[0..1048575] of Byte; var N: SizeUInt;
+N := R.ExtractToBufferByName('big.bin', @Buf[0], SizeOf(Buf)); // 无 TBytes 物化
+// store 经 Move 直写，deflate 经 RawDeflateDecompressToBuffer 泵送
+// 缓冲不足 / 尺寸/CRC/MaxOutput 超限均 fail-closed，目录返回 0
+// 共用 DecompressEntryToBuffer 内核，与 ExtractToBytes 字节一致
+```
+
+`1MiB` 预算 `≤8 allocs`，`bench 16项` 已锁 `extract-pbyte/1MB 7 allocs` / `copy-to 9 allocs`。
+
+### 4. Builder 高级感链式
+
+```pascal
+Bytes := ZipBuilder().Reserve(2000)
+  .Add('a.txt', Data).AddDeflate('b.bin', Data)
+  .AddWithTime('c.txt', Data, 1700000000)
+  .AddDirectory('logs').Finish; // 与 IZipWriter 字节级一致，薄委托仅 1 alloc
+// StreamTo / AddEntryStream 同链式，语义与写端一致
+```
+
+`Reserve` 几何预分配一次性到位，`StreamTo` 后 `FinishTo` 直写管道，确定性输出。
+
+### 5. StreamOutputTo 常数内存落盘
+
+```pascal
+var Sink: IWriter; // 文件/HTTP body
+W := NewZipWriter; W.StreamOutputTo(Sink);
+ZipPackDirInto('/src', W); // 已暂存分块排空，此后逐条目透传
+N := W.FinishTo(Sink); // 内存恒为单条目压缩尺寸，字节级一致
+```
+
+绑定后 `Finish` 拒绝，短写 `EIOError`，失败弃用写器。
+
+### 6. AES 口令生命周期
+
+```pascal
+var O: TZipAddOptions; var RO: TZipReadOptions;
+O.Password := StrBytes('hunter2'); O.AesStrength := 3; // 1=128,2=192,3=256
+W.AddEntryWithOptions('secret.txt', Data, O); // 产出 AE-2，头 CRC 置 0，盐随机，输出非确定
+RO.Password := StrBytes('hunter2'); R := NewZipReaderWithOptions(Arc, RO);
+Data2 := R.ExtractToBytesByName('secret.txt'); // 缺口令 EInvalidOperation，认证失败 EParseError('zip aes: authentication failed')
+```
+
+AES 描述符对偶（INV-19）：顺序读先集密文再 `UnsealWinZipAesPayload` 解帧校验，`MaxOutput` 对明文预筛。
+
+## Migration（FPC System/SysUtils → nextpas.core）
+
+| FPC 写法 | nextpas.core 写法 | 说明 |
+|----------|-------------------|------|
+| `SysUtils.Format` / `IntToStr` | `nextpas.core.text.conv` | 文本转换单点 |
+| `TBytes = array of Byte` / `SizeInt` | `nextpas.core.base` | 基础类型别名 |
+| `TStream` / `TMemoryStream` | `IStream` / `IReader` / `IWriter` / `CreateBytesStreamFrom` | 流接口化，零拷贝切片 |
+| `CRC32` 手写 | `nextpas.core.checksum.crc32` | slice-by-8 |
+| `TFileStream.Create` | `nextpas.core.fs.Open/Create` + `nextpas.core.io` | 文件与流分离 |
+| `Exception` | `nextpas.core.exception` 分类（`EParseError`/`EIOError`/`ENotSupported` 等） | 错误语义显式 |
+
+`core/src` 禁 `uses` 非 `nextpas.*`，FPC 单元经 `units/<target>/` stub 桥接，逐步以 `nextpas.core.*` 类型替代遗留类型，stub 自然废弃。
+
 Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip).
+
+Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S47 已落地，S48 cookbook 定版进行中，S49—S50 方差治理与安全审计封版。

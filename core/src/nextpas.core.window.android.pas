@@ -27,7 +27,7 @@ function AndroidPumpOnce: Boolean;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
@@ -325,17 +325,17 @@ begin
   RequireOpen;
   if AWidth<0 then AWidth:=0; if AHeight<0 then AHeight:=0;
   FWidth:=AWidth; FHeight:=AHeight;
-  E.Kind:=weResized; E.Width:=FWidth; E.Height:=FHeight; E.X:=0; E.Y:=0; E.NewScale:=0;
+  E := Default(TWindowEvent); E.Kind :=weResized; E.Width:=FWidth; E.Height:=FHeight; E.X:=0; E.Y:=0; E.NewScale:=0;
   DoDispatch(E);
 end;
 
 procedure TWindowAndroid.HostScaleChanged(ANewScale: Double);
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostScaleChanged(ANewScale); end); Exit; end; RequireOpen; E.Kind:=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=ANewScale; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostScaleChanged(ANewScale); end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weScaleChanged; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=ANewScale; DoDispatch(E); end;
 
 procedure TWindowAndroid.HostCloseRequested;
 var E: TWindowEvent;
-begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
+begin if not IsOnMainThread then begin FDispatcher.Post(procedure begin HostCloseRequested; end); Exit; end; RequireOpen; E := Default(TWindowEvent); E.Kind:=weCloseRequested; E.Width:=0; E.Height:=0; E.X:=0; E.Y:=0; E.NewScale:=0; DoDispatch(E); end;
 
 function CreateWindowAndroid(const AOptions: TWindowOptions): IWindow;
 begin Result := TWindowAndroid.Create(AOptions); end;

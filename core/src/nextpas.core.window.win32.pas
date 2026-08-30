@@ -30,8 +30,9 @@ procedure WindowWin32QuitLoop;
 implementation
 
 uses
-  SysUtils,
+
   nextpas.core.errors,
+  nextpas.core.text.ansi,
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
   nextpas.core.sync.intf,
@@ -278,7 +279,7 @@ begin
   if not FResizable then
     Style := Style and not (WS_THICKFRAME or WS_MAXIMIZEBOX);
 
-  FHandle := CreateWindowExA(0, NEXTPAS_CLASS, PAnsiChar(AnsiString(FTitle)),
+  FHandle := CreateWindowExA(0, NEXTPAS_CLASS, PAnsiChar(StrToAnsi(FTitle)),
     Style, CW_USEDEFAULT, CW_USEDEFAULT, FWidth, FHeight, nil, nil, HInst, nil);
   if FHandle = nil then
     raise EWindowNotInitialized.Create('CreateWindowExA failed');
@@ -377,7 +378,7 @@ procedure TWindowWin32.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   FTitle := ATitle;
-  SetWindowTextA(FHandle, PAnsiChar(AnsiString(ATitle)));
+  SetWindowTextA(FHandle, PAnsiChar(StrToAnsi(ATitle)));
 end;
 
 function TWindowWin32.GetTitle: string;
@@ -387,7 +388,12 @@ var
 begin
   RequireOpen;
   N := GetWindowTextA(FHandle, @Buf[0], Length(Buf));
-  if N > 0 then Result := string(AnsiString(Copy(string(AnsiString(@Buf[0])),1,N))) else Result := FTitle;
+  if N > 0 then
+  begin
+    Buf[N] := #0;
+    Result := AnsiPtrToStr(@Buf[0]);
+  end
+  else Result := FTitle;
 end;
 
 procedure TWindowWin32.SetBounds(AWidth, AHeight: Integer);
@@ -401,7 +407,7 @@ begin
   FWidth := AWidth; FHeight := AHeight;
   if GetWindowRect(FHandle, @R) then
     MoveWindow(FHandle, R.left, R.top, AWidth, AHeight, True);
-  E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
 
@@ -434,7 +440,7 @@ var
 begin
   RequireOpen;
   ShowWindow(FHandle, SW_MAXIMIZE);
-  E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+  E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
 
@@ -506,6 +512,19 @@ begin OnEvent(EventMethodToRef(AHandler)); end;
 procedure TWindowWin32.OnEvent(AHandler: TWindowEventProc);
 begin OnEvent(EventProcToRef(AHandler)); end;
 
+function Win32Modifiers: Integer; inline;
+begin
+  Result := 0;
+  if Assigned(GetKeyState) then
+  begin
+    if (GetKeyState(VK_SHIFT) and $8000) <> 0 then Result := Result or 1;
+    if (GetKeyState(VK_CONTROL) and $8000) <> 0 then Result := Result or 2;
+    if (GetKeyState(VK_MENU) and $8000) <> 0 then Result := Result or 4;
+    if (GetKeyState(VK_LWIN) and $8000) <> 0 then Result := Result or 8;
+    if (GetKeyState(VK_RWIN) and $8000) <> 0 then Result := Result or 8;
+  end;
+end;
+
 function TWindowWin32.WndProc(hwnd: HWND; msg: UINT; wParam: WPARAM; lParam: LPARAM): LRESULT;
 var
   E: TWindowEvent;
@@ -515,7 +534,7 @@ begin
   case msg of
     WM_CLOSE:
       begin
-        E.Kind := weCloseRequested; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weCloseRequested; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
         DoDispatch(E);
         Exit(0);
       end;
@@ -527,14 +546,14 @@ begin
           begin
             FWidth := R.right - R.left;
             FHeight := R.bottom - R.top;
-            E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
+            E := Default(TWindowEvent); E.Kind := weResized; E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
             DoDispatch(E);
           end;
         end;
       end;
     WM_MOVE:
       begin
-        E.Kind := weMoved; E.Width := 0; E.Height := 0;
+        E := Default(TWindowEvent); E.Kind := weMoved; E.Width := 0; E.Height := 0;
         E.X := SmallInt(wParam and $FFFF); E.Y := SmallInt((wParam shr 16) and $FFFF);
         E.NewScale := 0;
         DoDispatch(E);
@@ -549,18 +568,64 @@ begin
       end;
     WM_SETFOCUS:
       begin
-        E.Kind := weFocusIn; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weFocusIn; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
         DoDispatch(E);
       end;
     WM_KILLFOCUS:
       begin
-        E.Kind := weFocusOut; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+        E := Default(TWindowEvent); E.Kind := weFocusOut; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
         DoDispatch(E);
       end;
     WM_DPICHANGED:
       begin
-        E.Kind := weScaleChanged; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0;
+        E := Default(TWindowEvent); E.Kind := weScaleChanged; E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0;
         E.NewScale := HIWORD(wParam) / 96.0;
+        DoDispatch(E);
+      end;
+    WM_KEYDOWN:
+      begin
+        E := Default(TWindowEvent); E.Kind := weKeyDown; E.KeyCode := Integer(wParam); E.Modifiers := Win32Modifiers;
+        E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF);
+        DoDispatch(E);
+      end;
+    WM_KEYUP:
+      begin
+        E := Default(TWindowEvent); E.Kind := weKeyUp; E.KeyCode := Integer(wParam); E.Modifiers := Win32Modifiers;
+        DoDispatch(E);
+      end;
+    WM_LBUTTONDOWN:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1; E.Modifiers := Win32Modifiers;
+        DoDispatch(E);
+      end;
+    WM_LBUTTONUP:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 1; E.Modifiers := Win32Modifiers;
+        DoDispatch(E);
+      end;
+    WM_RBUTTONDOWN:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2; E.Modifiers := Win32Modifiers;
+        DoDispatch(E);
+      end;
+    WM_RBUTTONUP:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 2; E.Modifiers := Win32Modifiers;
+        DoDispatch(E);
+      end;
+    WM_MBUTTONDOWN:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseDown; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3; E.Modifiers := Win32Modifiers;
+        DoDispatch(E);
+      end;
+    WM_MBUTTONUP:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseUp; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 3; E.Modifiers := Win32Modifiers;
+        DoDispatch(E);
+      end;
+    WM_MOUSEMOVE:
+      begin
+        E := Default(TWindowEvent); E.Kind := weMouseMove; E.X := SmallInt(lParam and $FFFF); E.Y := SmallInt((lParam shr 16) and $FFFF); E.Button := 0; E.Modifiers := Win32Modifiers;
         DoDispatch(E);
       end;
     WM_DISPATCH:

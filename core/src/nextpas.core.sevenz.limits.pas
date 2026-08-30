@@ -3,35 +3,31 @@ unit nextpas.core.sevenz.limits;
 {**
  * nextpas.core.sevenz.limits - 7z 炸弹与头部硬上限纯常量
  *
- * 集中管理所有解码期硬上限，reader / writer / bench / test 共享同一
- * 常量源，避免两处硬编码漂移。纯常量单元，不依赖 intf 的接口声明。
+ * 薄封装：单源在 nextpas.core.sevenz.base，历史路径通过别名保持兼容，
+ * reader / writer / header / test 复用同一常量源，避免硬编码漂移。
  *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
+uses
+  nextpas.core.sevenz.base;
+
 const
-  { 单次解压默认上限：防御头部谎报尺寸导致的分配炸弹 }
-  SEVENZ_DEFAULT_MAX_OUTPUT = UInt64(8) * 1024 * 1024 * 1024;
-  { 头部字节上限：NextHeaderSize 超此阈值视为炸弹头（64 MiB 远超正常 header） }
-  SEVENZ_MAX_HEADER_SIZE = UInt64(64) * 1024 * 1024;
-  { 单条 pack 流上限：单流即超 64 MiB 视为炸弹 }
-  SEVENZ_MAX_PACK_SIZE = UInt64(64) * 1024 * 1024;
-  { 条目数上限：防御头部谎报 NumFiles }
-  SEVENZ_MAX_FILE_COUNT = 1000000;
-  { 单条目名 UTF-16LE 字节上限（含终止符前）：64 KiB }
-  SEVENZ_MAX_NAME_BYTES = 64 * 1024;
-  { 流式窗口大小（读端 ExtractTo 与写端 Move+CRC 共用） }
-  SEVENZ_EXTRACT_WINDOW = 256 * 1024;
-  SEVENZ_WRITER_CHUNK   = 64 * 1024;
-  { 头部结构数量上限 }
-  SEVENZ_MAX_PACK_STREAMS = 1000000;
-  SEVENZ_MAX_FOLDERS      = 1000000;
-  SEVENZ_MAX_CODER_PROPS  = 1 * 1024 * 1024;
-  { 解压输出与编码属性复用上限（与 DEFAULT_MAX_OUTPUT 同源，消除魔法数） }
-  SEVENZ_MAX_UNPACK_SIZE  = SEVENZ_DEFAULT_MAX_OUTPUT;
-  SEVENZ_MAX_CRC_COUNT    = SEVENZ_MAX_FILE_COUNT;
+  SEVENZ_DEFAULT_MAX_OUTPUT = nextpas.core.sevenz.base.SEVENZ_DEFAULT_MAX_OUTPUT;
+  SEVENZ_MAX_HEADER_SIZE = nextpas.core.sevenz.base.SEVENZ_MAX_HEADER_SIZE;
+  SEVENZ_MAX_PACK_SIZE = nextpas.core.sevenz.base.SEVENZ_MAX_PACK_SIZE;
+  SEVENZ_MAX_FILE_COUNT = nextpas.core.sevenz.base.SEVENZ_MAX_FILE_COUNT;
+  SEVENZ_MAX_NAME_BYTES = nextpas.core.sevenz.base.SEVENZ_MAX_NAME_BYTES;
+  SEVENZ_EXTRACT_WINDOW = nextpas.core.sevenz.base.SEVENZ_EXTRACT_WINDOW;
+  SEVENZ_WRITER_CHUNK   = nextpas.core.sevenz.base.SEVENZ_WRITER_CHUNK;
+  SEVENZ_MAX_PACK_STREAMS = nextpas.core.sevenz.base.SEVENZ_MAX_PACK_STREAMS;
+  SEVENZ_MAX_FOLDERS      = nextpas.core.sevenz.base.SEVENZ_MAX_FOLDERS;
+  SEVENZ_MAX_CODER_PROPS  = nextpas.core.sevenz.base.SEVENZ_MAX_CODER_PROPS;
+  SEVENZ_MAX_UNPACK_SIZE  = nextpas.core.sevenz.base.SEVENZ_MAX_UNPACK_SIZE;
+  SEVENZ_MAX_CRC_COUNT    = nextpas.core.sevenz.base.SEVENZ_MAX_CRC_COUNT;
+  SEVENZ_CACHE_MAX_BYTES = nextpas.core.sevenz.base.SEVENZ_CACHE_MAX_BYTES;
 
 implementation
 

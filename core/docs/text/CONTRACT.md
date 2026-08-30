@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.text*.pas`
 **层级**：L1（依赖 L0: base, exception 等）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20
-**版本**：1.3
+**最后更新**：2026-08-30
+**版本**：1.4
 
 ---
 

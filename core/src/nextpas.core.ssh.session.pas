@@ -16,11 +16,11 @@ unit nextpas.core.ssh.session;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.base.utils,
+  nextpas.core.text.conv,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -28,7 +28,8 @@ uses
   nextpas.core.ssh.hostkey,
   nextpas.core.ssh.channel,
   nextpas.core.ssh.transport,
-  nextpas.core.ssh.sftp;
+  nextpas.core.ssh.sftp,
+  nextpas.core.ssh.keepalive;
 
 type
   { 已建立的 SSH 会话（阻塞式）}
@@ -57,6 +58,10 @@ type
     { 打开 sftp 子系统并完成版本握手，返回文件操作面。
       需已认证；同一会话可多次调用（各自独立通道）。}
     function OpenFileSystem: ISshFileSystem;
+    function ShouldRekey: Boolean;
+    function Rekey: Boolean;
+    function SendKeepAlive(const AData: TBytes): Boolean; overload;
+    function SendKeepAlive: Boolean; overload;
 
     procedure Close;
 
@@ -79,6 +84,9 @@ type
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
     function Compress(AValue: Boolean): ISshClientBuilder;
+    function RekeyBytes(AValue: UInt64): ISshClientBuilder;
+    function RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
+    function KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
     { 建立 TCP、完成握手并按已填选项认证 }
     function Connect: ISshSession;
   end;
@@ -96,6 +104,10 @@ function SshConnectOn(const AIO: IReadWriteCloser;
 function SshCreateSession(const AIO: IReadWriteCloser;
   const AOptions: TSshConnectOptions): ISshSession;
 
+function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
+function SshConnectViaJumpOn(const AJumpSession: ISshSession;
+  const ATargetOpts: TSshConnectOptions): ISshSession;
+
 { Fluent 构造器入口 }
 
 
@@ -112,9 +124,7 @@ uses
   nextpas.core.ssh.keys,
   nextpas.core.ssh.rsa,
   nextpas.core.ssh.agent,
-  nextpas.core.ssh.compress,
-  nextpas.core.ssh.kex.curve25519,
-  nextpas.core.ssh.kex.dhgroup14;
+  nextpas.core.ssh.compress;
 
 const
   DISCONNECT_BY_APPLICATION = 11;
@@ -158,6 +168,8 @@ type
     procedure EnsureHandshaken;
     procedure EnsureAuthenticated;
     procedure DoHandshake;
+    procedure DoRekey;
+    procedure EnsureRekeyIfNeeded;
     procedure DoServiceRequest;
     procedure VerifyHostKey(const ASigAlg: string; const AH, ASigBlob: TBytes);
     procedure LoadKnownHostsIfNeeded;
@@ -181,6 +193,10 @@ type
     procedure AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
     function Exec(const ACommand: string): TSshExecResult;
     function OpenFileSystem: ISshFileSystem;
+    function ShouldRekey: Boolean;
+    function Rekey: Boolean;
+    function SendKeepAlive(const AData: TBytes): Boolean; overload;
+    function SendKeepAlive: Boolean; overload;
     procedure Close;
   end;
 
@@ -200,7 +216,34 @@ type
     function StrictHostKey(AValue: Boolean): ISshClientBuilder;
     function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
     function Compress(AValue: Boolean): ISshClientBuilder;
+    function RekeyBytes(AValue: UInt64): ISshClientBuilder;
+    function RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
+    function KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
     function Connect: ISshSession;
+  end;
+
+  TProxyJumpSession = class(TInterfacedObject, ISshSession)
+  private
+    FJump: ISshSession;
+    FTarget: ISshSession;
+  public
+    constructor Create(const AJump, ATarget: ISshSession);
+    destructor Destroy; override;
+    function GetConnected: Boolean;
+    function GetServerVersion: string;
+    function GetServerHostKeyFingerprint: string;
+    procedure AuthenticateWithPassword(const AUser, APassword: string);
+    procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
+    procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
+    procedure AuthenticateWithAgent(const APath: string);
+    procedure AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
+    function Exec(const ACommand: string): TSshExecResult;
+    function OpenFileSystem: ISshFileSystem;
+    function ShouldRekey: Boolean;
+    function Rekey: Boolean;
+    function SendKeepAlive(const AData: TBytes): Boolean; overload;
+    function SendKeepAlive: Boolean; overload;
+    procedure Close;
   end;
 
 { TSshSession }
@@ -212,6 +255,7 @@ begin
   FIO := AIO;
   FOptions := AOptions;
   FTransport := TSshClientTransport.Create(AIO);
+  FTransport.ConfigureRekey(AOptions.RekeyBytes, AOptions.RekeyIntervalMs);
   FKnownHosts := nil;
   FKnownHostsLoaded := False;
 end;
@@ -254,6 +298,33 @@ begin
         { 关闭路径的断连失败不影响调用方；底层流仍会被释放 }
       end;
   end;
+end;
+
+function TSshSession.ShouldRekey: Boolean;
+begin
+  Result := (FTransport <> nil) and FTransport.ShouldRekey;
+end;
+
+function TSshSession.Rekey: Boolean;
+begin
+  if (FTransport = nil) or FClosed or not FAuthenticated then Exit(False);
+  if not ShouldRekey then Exit(True);
+  try DoRekey; Result := True; except Result := False; raise; end;
+end;
+
+function TSshSession.SendKeepAlive(const AData: TBytes): Boolean;
+begin
+  if (FTransport = nil) or FClosed or not FAuthenticated then Exit(False);
+  try FTransport.SendIgnore(AData); Result := True; except Result := False; end;
+end;
+
+function TSshSession.SendKeepAlive: Boolean;
+begin Result := SendKeepAlive(nil); end;
+
+procedure TSshSession.EnsureRekeyIfNeeded;
+begin
+  if ShouldRekey then
+    try DoRekey; except end;
 end;
 
 function TSshSession.ExpectOneOf(const AAcceptable: array of Byte): TBytes;
@@ -330,8 +401,7 @@ var
   LPeer: TSshPeerKexInit;
   LNeg: TSshNegotiated;
   LK, LH, LHostBlob, LSigBlob: TBytes;
-  LKexCurve: TSshKexCurve25519;
-  LKexDH: TSshKexDHGroup14;
+  LKex: ISshKeyExchange;
 begin
   FTransport.ExchangeVersions;
 
@@ -343,30 +413,13 @@ begin
   LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
   FNegotiated := LNeg;
 
-  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
-  begin
-    LKexDH := TSshKexDHGroup14.Create;
-    try
-      FTransport.SendPacket(LKexDH.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally
-      LKexDH.Free;
-    end;
-  end
-  else
-  begin
-    LKexCurve := TSshKexCurve25519.Create;
-    try
-      FTransport.SendPacket(LKexCurve.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally
-      LKexCurve.Free;
-    end;
-  end;
+  LKex := SshCreateKex(LNeg.KexAlg);
+  if LKex = nil then
+    raise ESSHError.Create(sekNegotiation, 'ssh kex: unsupported algorithm ' + LNeg.KexAlg);
+  FTransport.SendPacket(LKex.BuildInitPayload);
+  LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+  LKex.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+    LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
 
   FHostKeyBlob := LHostBlob;
   if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
@@ -378,6 +431,37 @@ begin
   DeriveAndApplyNewKeys(LNeg, LK, LH);
   DoServiceRequest;
   FHandshaken := True;
+end;
+
+procedure TSshSession.DoRekey;
+var
+  LCookie, LMyInit, LPeerInit, LReply: TBytes;
+  LPeer: TSshPeerKexInit;
+  LNeg: TSshNegotiated;
+  LK, LH, LHostBlob, LSigBlob: TBytes;
+  LKex: ISshKeyExchange;
+begin
+  if FClosed or not FAuthenticated then
+    raise ESSHError.Create(sekProtocol, 'ssh session: rekey outside authenticated session');
+  if FTransport.State <> tstEncrypted then
+    raise ESSHError.Create(sekProtocol, 'ssh session: rekey without encryption');
+  LCookie := GenerateSecureRandomBytes(16);
+  LMyInit := FTransport.SendKexInitEx(LCookie, FOptions.Compress);
+  LPeerInit := ExpectOneOf([SSH_MSG_KEXINIT]);
+  LPeer := SshParseKexInit(LPeerInit);
+  LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
+  LKex := SshCreateKex(LNeg.KexAlg);
+  if LKex = nil then
+    raise ESSHError.Create(sekNegotiation, 'ssh kex: unsupported algorithm ' + LNeg.KexAlg);
+  FTransport.SendPacket(LKex.BuildInitPayload);
+  LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+  LKex.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+    LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+  if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
+    raise ESSHError.Create(sekHostKey, 'ssh session: rekey unsupported host key blob');
+  VerifyHostKey(LNeg.HostKeyAlg, LH, LSigBlob);
+  DeriveAndApplyNewKeys(LNeg, LK, LH);
+  FNegotiated := LNeg;
 end;
 
 procedure TSshSession.DeriveAndApplyNewKeys(const ANegotiated: TSshNegotiated;
@@ -612,6 +696,7 @@ end;
 function TSshSession.Exec(const ACommand: string): TSshExecResult;
 begin
   EnsureAuthenticated;
+  EnsureRekeyIfNeeded;
   Result := SshRunExec(FTransport, ACommand,
     FOptions.InitialWindowSize, FOptions.MaxPacket, FOptions.ExecTimeoutMs);
 end;
@@ -619,6 +704,7 @@ end;
 function TSshSession.OpenFileSystem: ISshFileSystem;
 begin
   EnsureAuthenticated;
+  EnsureRekeyIfNeeded;
   Result := SftpOpenOnTransport(FTransport, FOptions.InitialWindowSize,
     FOptions.MaxPacket, FOptions.ExecTimeoutMs);
 end;
@@ -696,6 +782,15 @@ begin
   FOptions.Compress := AValue;
   Result := Self;
 end;
+
+function TSshClientBuilder.RekeyBytes(AValue: UInt64): ISshClientBuilder;
+begin FOptions.RekeyBytes := AValue; Result := Self; end;
+
+function TSshClientBuilder.RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
+begin FOptions.RekeyIntervalMs := AValue; Result := Self; end;
+
+function TSshClientBuilder.KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
+begin FOptions.KeepAliveIntervalMs := AValue; Result := Self; end;
 
 function TSshClientBuilder.Connect: ISshSession;
 begin
@@ -790,6 +885,143 @@ function SshCreateSession(const AIO: IReadWriteCloser;
   const AOptions: TSshConnectOptions): ISshSession;
 begin
   Result := TSshSession.CreateInternal(AIO, AOptions);
+end;
+
+{ TProxyJumpSession }
+
+constructor TProxyJumpSession.Create(const AJump, ATarget: ISshSession);
+begin
+  inherited Create;
+  FJump := AJump;
+  FTarget := ATarget;
+end;
+
+destructor TProxyJumpSession.Destroy;
+begin
+  try
+    if FTarget <> nil then FTarget.Close;
+  except end;
+  try
+    if FJump <> nil then FJump.Close;
+  except end;
+  inherited;
+end;
+
+function TProxyJumpSession.GetConnected: Boolean;
+begin
+  Result := (FTarget <> nil) and FTarget.GetConnected;
+end;
+
+function TProxyJumpSession.GetServerVersion: string;
+begin
+  if FTarget <> nil then Result := FTarget.GetServerVersion else Result := '';
+end;
+
+function TProxyJumpSession.GetServerHostKeyFingerprint: string;
+begin
+  if FTarget <> nil then Result := FTarget.GetServerHostKeyFingerprint else Result := '';
+end;
+
+procedure TProxyJumpSession.AuthenticateWithPassword(const AUser, APassword: string);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithPassword(AUser, APassword);
+end;
+
+procedure TProxyJumpSession.AuthenticateWithPrivateKeyData(const AContent: string);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithPrivateKeyData(AContent);
+end;
+
+procedure TProxyJumpSession.AuthenticateWithPrivateKeyData(const AContent, APassphrase: string);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithPrivateKeyData(AContent, APassphrase);
+end;
+
+procedure TProxyJumpSession.AuthenticateWithAgent(const APath: string);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithAgent(APath);
+end;
+
+procedure TProxyJumpSession.AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
+begin
+  if FTarget <> nil then FTarget.AuthenticateWithAgentOn(AAgentIO);
+end;
+
+function TProxyJumpSession.Exec(const ACommand: string): TSshExecResult;
+begin
+  if FTarget = nil then
+    raise ESSHError.Create(sekIO, 'proxy jump: no target session');
+  Result := FTarget.Exec(ACommand);
+end;
+
+function TProxyJumpSession.OpenFileSystem: ISshFileSystem;
+begin
+  if FTarget = nil then
+    raise ESSHError.Create(sekIO, 'proxy jump: no target session');
+  Result := FTarget.OpenFileSystem;
+end;
+
+function TProxyJumpSession.ShouldRekey: Boolean;
+begin if FTarget <> nil then Result := FTarget.ShouldRekey else Result := False; end;
+
+function TProxyJumpSession.Rekey: Boolean;
+begin if FTarget <> nil then Result := FTarget.Rekey else Result := False; end;
+
+function TProxyJumpSession.SendKeepAlive(const AData: TBytes): Boolean;
+begin if FTarget <> nil then Result := FTarget.SendKeepAlive(AData) else Result := False; end;
+
+function TProxyJumpSession.SendKeepAlive: Boolean;
+begin Result := SendKeepAlive(nil); end;
+
+procedure TProxyJumpSession.Close;
+begin
+  if FTarget <> nil then try FTarget.Close; except end;
+  if FJump <> nil then try FJump.Close; except end;
+end;
+
+function SshConnectViaJumpOn(const AJumpSession: ISshSession;
+  const ATargetOpts: TSshConnectOptions): ISshSession;
+var
+  LJumpImpl: TSshSession;
+  LChan: TSshChannel;
+  LStream: IReadWriteCloser;
+  LTarget: ISshSession;
+begin
+  if AJumpSession = nil then
+    raise ESSHError.Create(sekProtocol, 'proxy jump: nil jump session');
+  if not (AJumpSession is TSshSession) and not (AJumpSession is TProxyJumpSession) then
+    raise ESSHError.Create(sekUnsupported, 'proxy jump: unsupported jump session type');
+  if AJumpSession is TProxyJumpSession then
+    LJumpImpl := TProxyJumpSession(AJumpSession).FTarget as TSshSession
+  else
+    LJumpImpl := AJumpSession as TSshSession;
+  if LJumpImpl.FTransport = nil then
+    raise ESSHError.Create(sekIO, 'proxy jump: jump transport nil');
+  LChan := TSshChannel.Create(LJumpImpl.FTransport,
+    ATargetOpts.InitialWindowSize, ATargetOpts.MaxPacket, ATargetOpts.ExecTimeoutMs);
+  try
+    LChan.OpenDirectTcpip(ATargetOpts.Host, ATargetOpts.Port);
+    LStream := TChannelStream.Create(LChan);
+    LChan := nil;
+    LTarget := SshConnectOn(LStream, ATargetOpts);
+    Result := TProxyJumpSession.Create(AJumpSession, LTarget);
+  except
+    LChan.Free;
+    raise;
+  end;
+end;
+
+function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
+var
+  LJump: ISshSession;
+begin
+  LJump := SshConnect(AJumpOpts);
+  try
+    Result := SshConnectViaJumpOn(LJump, ATargetOpts);
+  except
+    LJump.Close;
+    raise;
+  end;
 end;
 
 end.

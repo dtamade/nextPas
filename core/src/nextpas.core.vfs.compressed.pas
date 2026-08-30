@@ -10,7 +10,6 @@ unit nextpas.core.vfs.compressed;
 interface
 
 uses
-  nextpas.core.vfs.base,
   nextpas.core.vfs.intf,
   nextpas.core.compress.base;
 
@@ -18,7 +17,7 @@ type
   TDecompressAlgo = (daAuto, daGzip);
 
 const
-  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.vfs.base.VFS_DECOMPRESS_MAX_BYTES;
+  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
 
 function CreateDecompressingVfs(const AInner: IVfs;
   const AAlgo: TDecompressAlgo = daAuto): IVfs;
@@ -30,6 +29,7 @@ uses
   nextpas.core.exception,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
+  nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.transform,
   nextpas.core.vfs.util,

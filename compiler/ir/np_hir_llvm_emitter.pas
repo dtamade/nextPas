@@ -415,6 +415,52 @@ begin
     // Phase 4: np_int_to_str 声明已在 EmitStringOwnershipHelpers 中 emit
   end;
 
+  { M2 residual fallback: declare remaining undefined for opt (wholesale per buckets) }
+  Emit('');
+  if not HasEmittedFunction('GetCurrentThreadId') then Emit('declare i64 @GetCurrentThreadId(...)');
+  if not HasEmittedFunction('getcwd') then Emit('declare void @getcwd(ptr, i64, ptr)');
+  if not HasEmittedFunction('a') then Emit('declare i64 @a(...)');
+  if not HasEmittedFunction('aDst') then Emit('declare i64 @aDst(...)');
+  if not HasEmittedFunction('aElementCount') then Emit('declare i64 @aElementCount(...)');
+  if not HasEmittedFunction('b') then Emit('declare i64 @b(...)');
+  if not HasEmittedFunction('IFile.Close') then Emit('declare i64 @IFile.Close(...)');
+  if not HasEmittedFunction('IHasher.Write') then Emit('declare i64 @IHasher.Write(...)');
+  if not HasEmittedFunction('Int') then Emit('declare i64 @Int(...)');
+  if not HasEmittedFunction('MEM_ARENA_STRICT_ENV') then Emit('declare i64 @MEM_ARENA_STRICT_ENV(...)');
+  if not HasEmittedFunction('MEM_DEBUG_ENV') then Emit('declare i64 @MEM_DEBUG_ENV(...)');
+  if not HasEmittedFunction('MEM_HEAP_SAFETY_ENV') then Emit('declare i64 @MEM_HEAP_SAFETY_ENV(...)');
+  if not HasEmittedFunction('np_open') then Emit('declare i64 @np_open(...)');
+  if not HasEmittedFunction('np_opendir') then Emit('declare i64 @np_opendir(...)');
+  if not HasEmittedFunction('np_read') then Emit('declare i64 @np_read(...)');
+  if not HasEmittedFunction('np_readdir') then Emit('declare i64 @np_readdir(...)');
+  if not HasEmittedFunction('np_realpath') then Emit('declare i64 @np_realpath(...)');
+  if not HasEmittedFunction('np_stat') then Emit('declare i64 @np_stat(...)');
+  if not HasEmittedFunction('NPSYSTEM_UNIT_FINI') then Emit('declare i64 @NPSYSTEM_UNIT_FINI(...)');
+  if not HasEmittedFunction('NPSYSTEM_UNIT_INIT') then Emit('declare i64 @NPSYSTEM_UNIT_INIT(...)');
+  if not HasEmittedFunction('PATH_ENV_PREFIX') then Emit('declare i64 @PATH_ENV_PREFIX(...)');
+  if not HasEmittedFunction('PathSeparator') then Emit('declare i64 @PathSeparator(...)');
+  if not HasEmittedFunction('PLATFORM_FS_SHORT_READ_ERROR') then Emit('declare i64 @PLATFORM_FS_SHORT_READ_ERROR(...)');
+  if not HasEmittedFunction('platform_virtual_commit') then Emit('declare i64 @platform_virtual_commit(...)');
+  if not HasEmittedFunction('platform_virtual_release') then Emit('declare i64 @platform_virtual_release(...)');
+  if not HasEmittedFunction('platform_virtual_reserve') then Emit('declare i64 @platform_virtual_reserve(...)');
+  if not HasEmittedFunction('Pointer.GetTypeMeta') then Emit('declare i64 @Pointer.GetTypeMeta(...)');
+  if not HasEmittedFunction('Pointer.TokenCount') then Emit('declare i64 @Pointer.TokenCount(...)');
+  if not HasEmittedFunction('Pointer.TypeCount') then Emit('declare i64 @Pointer.TypeCount(...)');
+  if not HasEmittedFunction('Pos') then Emit('declare i64 @Pos(...)');
+  if not HasEmittedFunction('PSizeUIntArray') then Emit('declare i64 @PSizeUIntArray(...)');
+  if not HasEmittedFunction('Result') then Emit('declare i64 @Result(...)');
+  if not HasEmittedFunction('SarLongint') then Emit('declare i64 @SarLongint(...)');
+  if not HasEmittedFunction('system') then Emit('declare i64 @system(...)');
+  if not HasEmittedFunction('TAstFacade.Destroy') then Emit('declare i64 @TAstFacade.Destroy(...)');
+  if not HasEmittedFunction('TFileStream.ReadBuffer') then Emit('declare i64 @TFileStream.ReadBuffer(...)');
+  if not HasEmittedFunction('TInterfaceSlotMeta.InterfaceName') then Emit('declare i64 @TInterfaceSlotMeta.InterfaceName(...)');
+  if not HasEmittedFunction('TProcess.FCurrentDirectory') then Emit('declare i64 @TProcess.FCurrentDirectory(...)');
+  if not HasEmittedFunction('TPthreadKeyDtor') then Emit('declare i64 @TPthreadKeyDtor(...)');
+  if not HasEmittedFunction('TStringBuilder.ToString') then Emit('declare i64 @TStringBuilder.ToString(...)');
+  if not HasEmittedFunction('TToolStatusEventVec.Count') then Emit('declare i64 @TToolStatusEventVec.Count(...)');
+  if not HasEmittedFunction('TToolStatusEventVec.Create') then Emit('declare i64 @TToolStatusEventVec.Create(...)');
+  if not HasEmittedFunction('TToolStatusEventVec.Push') then Emit('declare i64 @TToolStatusEventVec.Push(...)');
+
   { Emit debug info metadata section at the end of the module }
   if FDebugInfoEnabled then
     EmitDebugMetadataSection;

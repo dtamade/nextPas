@@ -2,9 +2,7 @@ unit nextpas.core.vfs.memtree;
 
 {** @desc 内存不可变树：Builder（可变期）→ Freeze → IVfs 快照。
   fstest.MapFS 对等物；embedded 后端底座与测试替身。目录由路径隐含推导（INV-V8），
-  文件与同名子树重叠在 Freeze 时拒绝，保持模型干净。
-  不变快照：AddFile 防御拷贝（Copy），Freeze 后清 Builder 侧避免双驻留；
-  零拷贝边界见 CONTRACT INV-V6（embedded 才零拷贝，memtree 为堆拷贝快照）。 }
+  文件与同名子树重叠在 Freeze 时拒绝，保持模型干净。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -45,9 +43,6 @@ type
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
 
 implementation
-
-uses
-  nextpas.core.collections.algorithms;
 
 type
   TMemVfs = class(TInterfacedObject, IVfs)
@@ -91,22 +86,50 @@ type
 
 { ── 局部工具 ── }
 
-{ 空前缀恒真：FPC 的 Pos('',S) 返回值与 Delphi 不一致（实测为 0），
-  不能用 Pos(Prefix,S)=1 表达"以 Prefix 开头" }
-function StartsWith(const AStr, APrefix: string): Boolean;
+{ 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（见 respack.writer 同款注释）。
+  与 writer 排序结构重复，属有意保守：抽公共 sort 进 collections 是后续反哺项。 }
+procedure QuickSortEntries(var AItems: array of TVfsMemEntry;
+  ALow, AHigh: Int64);
+var
+  L, R: Int64;
+  P, Tmp: TVfsMemEntry;
 begin
-  if Length(APrefix) = 0 then
-    Exit(True);
-  Result := (Length(AStr) >= Length(APrefix))
-    and (Pos(APrefix, AStr) = 1);
-end;
-
-{ 排序收口至 collections 单源：复用 nextpas.core.collections.algorithms.Sort，
-  消除与 vfs.base/respack.writer 三处同构 QuickSort 重复；SizeInt
-  天然避免 Hoare 分区在无符号下标上的回绕陷阱（原 Int64 注释同理）。 }
-function CompareMemEntry(const A, B: TVfsMemEntry; Data: Pointer): SizeInt;
-begin
-  Result := VfsNameCompare(A.Name, B.Name);
+  while ALow < AHigh do
+  begin
+    if AHigh - ALow = 1 then
+    begin
+      if VfsNameCompare(AItems[ALow].Name, AItems[AHigh].Name) > 0 then
+      begin
+        P := AItems[ALow]; AItems[ALow] := AItems[AHigh]; AItems[AHigh] := P;
+      end;
+      Exit;
+    end;
+    P := AItems[(ALow + AHigh) shr 1];
+    L := ALow; R := AHigh;
+    while L <= R do
+    begin
+      while VfsNameCompare(AItems[L].Name, P.Name) < 0 do Inc(L);
+      while VfsNameCompare(AItems[R].Name, P.Name) > 0 do Dec(R);
+      if L <= R then
+      begin
+        if L < R then
+        begin
+          Tmp := AItems[L]; AItems[L] := AItems[R]; AItems[R] := Tmp;
+        end;
+        Inc(L); Dec(R);
+      end;
+    end;
+    if R - ALow < AHigh - L then
+    begin
+      if ALow < R then QuickSortEntries(AItems, ALow, R);
+      ALow := L;
+    end
+    else
+    begin
+      if L < AHigh then QuickSortEntries(AItems, L, AHigh);
+      AHigh := R;
+    end;
+  end;
 end;
 
 { ── TVfsTreeBuilder ── }
@@ -116,8 +139,6 @@ begin
   inherited Destroy;
 end;
 
-{ 构造期 Op 白名单：'add'/'freeze' 属 Builder 生命周期，不在 INV-V4
-  运行时 Op 集合 {'stat','open','list','read'} 内，CONTRACT 显式允许。 }
 procedure TVfsTreeBuilder.CheckMutable;
 begin
   if FFrozen then
@@ -136,8 +157,7 @@ begin
   N := SizeUInt(Length(FItems));
   SetLength(FItems, N + 1);
   FItems[N].Name := APath;
-  { 防御拷贝：Freeze 后为不可变快照，外部对 AData 的后续修改不得污染视图（F-MED-14） }
-  FItems[N].Data := Copy(AData);
+  FItems[N].Data := AData;
   FItems[N].ModTime := AModTime;
   FItems[N].Hash := AHash;
 end;
@@ -149,23 +169,20 @@ begin
   CheckMutable;
   if SizeUInt(Length(FItems)) > 1 then
   begin
-    specialize Sort<TVfsMemEntry>(FItems, @CompareMemEntry, nil);
+    QuickSortEntries(FItems, 0, Int64(Length(FItems)) - 1);
     { 查重/重叠检查：Length-1 在 SizeUInt 上回绕 ⇒ 仅在 >1 时执行 }
     for I := 1 to SizeUInt(Length(FItems)) - 1 do
     begin
       if VfsNameCompare(FItems[I - 1].Name, FItems[I].Name) = 0 then
         raise EVfsError.CreateCtx('freeze', FItems[I].Name,
           'duplicate path in memtree');
-      if (Length(FItems[I].Name) > Length(FItems[I - 1].Name))
-        and (Pos(FItems[I - 1].Name + '/', FItems[I].Name) = 1) then
+      if VfsIsParentPath(FItems[I - 1].Name, FItems[I].Name) then
         raise EVfsError.CreateCtx('freeze', FItems[I - 1].Name,
           'file overlaps directory subtree');
     end;
   end;
   FFrozen := True;
   Result := TMemVfs.Create(FItems);
-  { 双驻留消除：FItems 已拷贝至 TMemVfs.FFiles，清空 Builder 侧避免双份常驻（F-LOW-02） }
-  SetLength(FItems, 0);
 end;
 
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
@@ -235,14 +252,12 @@ end;
 function TMemVfs.HasSubtree(const ADirPrefix: string): Boolean;
 var
   I: SizeUInt;
-  L: Integer;
 begin
   Result := False;
-  L := Length(ADirPrefix);
   I := LowerBound(ADirPrefix);
   if (I < SizeUInt(Length(FFiles)))
-    and StartsWith(FFiles[I].Name, ADirPrefix)
-    and (Length(FFiles[I].Name) > L) then
+    and VfsPathHasPrefix(FFiles[I].Name, ADirPrefix)
+    and (Length(FFiles[I].Name) > Length(ADirPrefix)) then
     Result := True;
 end;
 
@@ -324,14 +339,7 @@ begin
   SetLength(Result, SizeUInt(Length(Seen)));
   for I := 0 to SizeUInt(Length(Seen)) - 1 do
   begin
-    try
-      StatInto(Seen[I], Info);
-    except
-      on E: EVfsNotFound do
-        raise EVfsNotFound.CreateCtx('list', ADirPath, E.Message);
-      on E: EVfsError do
-        raise EVfsError.CreateCtx('list', ADirPath, E.Message);
-    end;
+    StatInto(Seen[I], Info);
     Result[I] := Info.Info;
   end;
   VfsSortEntries(Result);
@@ -427,6 +435,7 @@ end;
 procedure TMemStream.Close;
 begin
   FClosed := True;
+  SetLength(FData, 0);
 end;
 
 function TMemStream.ReadAt(var ABuf; const ACount: SizeUInt;
@@ -435,7 +444,6 @@ var
   Avail: SizeUInt;
 begin
   CheckOpen;
-  { 负偏移统一返回 0（与 io.memory.TBytesStream 一致，F-MED-13），不抛异常 }
   if (AOffset < 0) or (AOffset >= Length(FData)) then
     Exit(0);
   Avail := SizeUInt(Length(FData)) - SizeUInt(AOffset);

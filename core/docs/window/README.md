@@ -1,9 +1,9 @@
 # nextpas.core.window
 
-**状态**: M-band 稳定 — S1→S5 全后端落地，13 门禁全绿，`bench_dispatcher` 370µs/1000（PostSingle，O(1)+inline+共享队列 370/Zero 167µs/16ns）
+**状态**: 5.0 — 11 后端×4件套 + 12 事件 + 5× 365µs/24.3ns 4.1% 方差 + fake 16→20 全矩阵，13 门禁全绿，`BENCH.md` 5.0 可复现
 **层级**: L2 系统能力（依赖 L0-L1；被 L3 的 `webview` / `gpu` / `directui` / 外部 `game888` 复用）
 **Owner**: core-window lane
-**最后更新**: 2026-08-28（M5 共享队列 6 合1 + finalization 0泄漏 + 13 门禁 + Host/PumpOnce + O(1)+inline）
+**最后更新**: 2026-08-29（5.0：`wkGtk2/3/4/wkQt/wkSdl2/wkWin32/wkCocoa/wkAndroid/wkUIKit/wkWasm/wkFake` 11 种 + `weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件 + LiveGtkSmart/QtIsLoaded inline + legacy `window.gtk` shim 8 inline removal 5.0，thin-wrapper + 零 `PAnsiChar(AnsiString)` via `text.ansi`）
 **对标基准**: Rust `winit` + `tao` / `GLFW` / `SDL2 Window` / `Flutter View` / Android `Activity.getWindow()` / iOS `UIWindow`
 
 ---
@@ -21,7 +21,7 @@ platform(L0) ──► window(L2) ──► gpu(L3) ──► directui(L3)
 ```
 
 * **tui 不需要本模块**（终端格网，无窗口概念），但 `gpu` / `webview` / `directui` / `game888` 全部需要窗口 — 这就是把 `window` 独立在 L2 而非藏在某个 L3 内部的根本理由。
-* 当前散落在 `nextpas.core.webview.gtk.win`（内部缝 `WinShell*` 纯函数转发）、`nextpas.core.gpu.gl`（自管 `glXGetProcAddress`）、`game888.graphics.window`（私有 SDL2 窗口）三处的窗口能力收敛到同一契约。
+* `nextpas.core.webview.gtk.win` 已在 F4 单源化为 `window.gtk3 Raw` 的 `inline` shim（零逻辑，窗口创建已收敛），`nextpas.core.gpu.gl`（自管 `glXGetProcAddress`）、`game888.graphics.window`（私有 SDL2 窗口）待 `gpu` 波次同理收敛。
 
 **命名说明**：公共模块名定为 `window` 而非 `shell`。`shell` 仅见于 Eclipse SWT 与 Wayland 协议的极小范围，主流跨平台框架清一色叫 `Window`（`winit::Window` / `tao::Window` / `QWindow` / `SDL_Window` / `GLFWwindow`，Android 自身即 `Activity.getWindow()`、iOS 即 `UIWindow`），Flutter 称 `FlutterView` 亦为同一语义。移动端的 `attach 到宿主 Surface（Activity/UIView）` 只是 `WindowKind = Embedded` 的一种实现形态，不是另一个概念；与 `tui` / `webview` 的 `view` 亦不混淆。文档内唯一需要解释的是 `Window = TopLevel on desktop, Embedded Surface on Android/iOS`。
 
@@ -33,8 +33,8 @@ platform(L0) ──► window(L2) ──► gpu(L3) ──► directui(L3)
 |---|---|---|
 | 生命周期 | `Create / Show / Hide / Close(幂等) / IsClosed / IsVisible / Focus` | `close-request veto（关闭前确认）` |
 | 标题与几何 | `Title / SetBounds(Width/Height) / Min/Max / Resizable / Maximized-Minimize-Restore / GetBounds` | `decorations / transparent / alwaysOnTop / icon / fullscreen / dragRegion` |
-| DPI | `GetScaleFactor: Double（GTK 整数诚实升格） / weScaleChanged`，逻辑坐标 = 物理像素 / scale | `per-monitor dynamic reflow` |
-| 输入与事件 | `OnEvent(TWindowEvent)` 统一分发（Close/Resized/Moved/FocusIn/Out/ScaleChanged），主线程投递 `IWindowDispatcher.Post`（拒绝 `LM_` 消息伪装） | `键盘/鼠标/触摸/滚轮细分事件、IME` |
+| DPI | `GetScaleFactor: Double（GTK 整数诚实升格） / weScaleChanged+weDpiChanged`，逻辑坐标 = 物理像素 / scale | `per-monitor dynamic reflow` |
+| 输入与事件 | `OnEvent(TWindowEvent)` 统一分发（`weResized/weMoved/weCloseRequested/weClosed/weFocusChanged/weScaleChanged/weDpiChanged/weKeyDown/weKeyUp/weMouseDown/weMouseUp/weMouseMove` 12 事件，`KeyCode/Modifiers/Button/X/Y`），主线程投递 `IWindowDispatcher.Post`（拒绝 `LM_` 消息伪装） | `触摸/滚轮/IME（剩余 deferred-In）` |
 | 句柄 | `NativeHandle: TWindowNativeHandle`（X11 XID / HWND / NSWindow* / ANativeWindow* / Wayland nil / WASM canvas 诚实表） | — |
 | 主循环 | `WindowRunLoop / WindowExitLoop`（阻塞至末窗关闭或显式退出）；`WindowPumpOnce / PumpAll` 非阻塞单步（M-band，game/directui tick 复用）；`fake` 提供确定性驱动 | `IterateOnce` 完整融入 `TAsyncLoop`（已以 `PumpOnce` 最小落地） |
 | 宿主驱动 | `IWindowHost.HostResized/HostScaleChanged/HostCloseRequested`（`wasm/android/uikit/fake` 经 `Supports` 探测，M-band） | — |
@@ -47,16 +47,20 @@ platform(L0) ──► window(L2) ──► gpu(L3) ──► directui(L3)
 ## 依赖方向
 
 ```
-base ← intf ← fake ─┐
-                 factory ← 门面
-base ← gtk.ffi ← gtk.loader ← gtk ─┘
-              sdl2.ffi ← sdl2.loader ← sdl2 ─┘  （同位）
-              win32.* / cocoa.* / android.*  同 gtk 位，波次接入
+gtk2/3/4.base ← gtk2/3/4.ffi ← gtk2/3/4.loader (独立 L2 家族，不知 window；thin-wrapper 美学)
+qt.base ← qt.ffi ← qt.loader (独立 L2，QtIsLoaded inline 零开销)
+                │
+base ← intf ← fake.base/ffi/loader ← fake ─┐  │ one-way 消费
+                 factory(BACKENDS[11]) ← 门面 ←─┘  (gtk4>gtk3>gtk2>qt>sdl2 智能回退)
+base ← window.gtk2/3/4 ←┘  (薄适配，共享 gtk.impl.inc 718 行；window.gtk 为 shim；gtk3 Raw 12项供 webview 单源)
+              sdl2.base/ffi/loader ← sdl2 ─┐  （11×4 严格，同位）
+              win32/cocoa/wasm/android/uikit 同位 base/ffi/loader 4件套
+  webview.gtk.win (L3 shim) ──► window.gtk3 Raw (单源已收口)
 ```
 
 * `base` / `intf` 禁止 `uses` 任何后端、`factory`、`bridge`。
-* `*.ffi` 只含 ABI 类型与函数指针变量，无逻辑、无 `external`。
-* `*.loader` 是家族内唯一允许触碰动态装载设施的单元，原语一律来自 `nextpas.core.platform.dl`，**禁止 `DynLibs`**。
+* `*.ffi` 只含 ABI 类型与函数指针变量，无逻辑、无 `external`；gtk/qt 的 `ffi` 已提升为独立 L2 家族，`window` 仅消费。
+* `*.loader` 是家族内唯一允许触碰动态装载设施的单元，原语一律来自 `nextpas.core.platform.dl`，**禁止 `DynLibs`**；factory 对 `wkGtk` 以 `ProbeGtk4|3|2` 聚合与 `CreateGtkSmart` 回退。
 * 生产单元（非 loader）禁止出现 `Windows` / `BaseUnix` / `Unix` / `ctypes` 等 raw host units。
 
 ---
@@ -65,16 +69,17 @@ base ← gtk.ffi ← gtk.loader ← gtk ─┘
 
 | 后端 | 平台 | 窗口实现 | 波次 | 探活 |
 |------|------|----------|------|------|
-| `win32` | Windows | `CreateWindowEx` + `WM_*` + message-only `PostMessage` | S4 | `WindowWin32IsAvailable` |
-| `cocoa` | macOS | `NSWindow` / `NSView` + `dispatch_async` | S4 | `WindowCocoaIsAvailable` |
-| `android` | Android | `ANativeWindow` attach 到 `Activity`（`ParentHandle` 必需，`IWindowHost` 驱动） | S5 | `WindowAndroidIsAvailable` |
-| `uikit` | iOS | `UIWindow` attach（`ParentHandle` 必需，`IWindowHost`） | S5 | `WindowUIKitIsAvailable` |
-| `wasm` | Browser | `<canvas>` attach（`ParentHandle` canvas id，CSS×`devicePixelRatio`，`IWindowHost`） | S5 | `WindowWasmIsAvailable` |
-| `gtk` | Linux | GTK3 `GtkWindow`（`g_idle_add_full` + 6 信号） | S2 | `WindowGtkIsAvailable` |
-| `sdl2` | 全平台（含 game888 复用） | `SDL_Window` / `SDL_CreateWindow` + user-event | S3 | `WindowSdl2IsAvailable` |
-| `fake` | 全平台无头 | 纯 Pascal 脚本化驱动（`IWindowHost` 全实现） | S1 | 恒真（CI 唯一载体） |
+| `win32` | Windows | `CreateWindowEx` + `WM_*` + message-only `PostMessage`（4件套） | S4 | `WindowWin32IsAvailable` |
+| `cocoa` | macOS | `NSWindow` / `NSView` + `dispatch_async`（4件套） | S4 | `WindowCocoaIsAvailable` |
+| `android` | Android | `ANativeWindow` attach 到 `Activity`（`ParentHandle` 必需，`IWindowHost` 驱动，4件套） | S5 | `WindowAndroidIsAvailable` |
+| `uikit` | iOS | `UIWindow` attach（`ParentHandle` 必需，`IWindowHost`，4件套） | S5 | `WindowUIKitIsAvailable` |
+| `wasm` | Browser | `<canvas>` attach（`ParentHandle` canvas id，CSS×`devicePixelRatio`，`IWindowHost`，4件套） | S2a | `WindowWasmIsAvailable` |
+| `gtk2/3/4` | Linux | GTK 2/3/4 `GtkWindow`（`g_idle_add_full` + 6 信号，共享 `gtk.impl.inc` 718 行；`wkGtk` 兼容别名→`wkGtk3`，智能回退 gtk4>gtk3>gtk2，`WindowGtk4/3/2IsAvailable`；`gtk3` Raw 12项低阶壳供 webview 单源） | S2+扭转+F4 | `WindowGtkIsAvailable`（聚合） / `ProbeGtk4/3/2` / `WindowGtkRawIsAvailable` |
+| `qt` | Linux | `libnextpas-qt.so`（qt.base/ffi/loader 独立 L2，`QtIsLoaded` inline 零开销，compile-only 诚实） | qt | `ProbeQt` / `QtLiveWindowCount` inline |
+| `sdl2` | 全平台（含 game888 复用） | `SDL_Window` / `SDL_CreateWindow` + user-event（4件套） | S3 | `WindowSdl2IsAvailable` |
+| `fake` | 全平台无头 | 纯 Pascal 脚本化驱动（`IWindowHost` 全实现，4件套 placeholder） | S1 | 恒真（CI 唯一载体） |
 
-> 探测顺序 `win32 > cocoa > android > uikit > wasm > gtk > sdl2 > fake`，`DefaultWindowKind` 能力驱动；`bench_dispatcher` 370µs/1000 `PostSingle`（32cap 共享队列，O(1)+`GetWidth/GetHeight`/`IsClosed`/`GetDispatcher`/`IsOnMainThread` inline + `CheckWindowOptions` 富错误信息；`WindowPumpOnceZero` 167µs/10000 ≈16ns/次早退、7 项分拆 430µs Live 对比，0 泄漏）。
+> 探测顺序 `win32>cocoa>android>uikit>wasm>gtk4>gtk3>gtk2>qt>sdl2>fake` 11 枚举冻结；`WindowBackendDiagnostics` 按 `BACKENDS[11]` 输出 soname；`bench_dispatcher` 5×中位 `PostSingle 365µs` 方差 4.1% / `WindowPumpOnceZero 243µs/10k=24.3ns` 方差 3.0% <5% 达标（`LiveGtkSmart` + `QtIsLoaded` 双 inline 门控，零 dlopen 热路径，32cap 环形 FIFO，0 泄漏）。
 
 ---
 
@@ -158,6 +163,8 @@ Check(LWin.IsClosed);
 
 | 文档 | 内容 |
 |------|------|
-| `CONTRACT.md` | 冻结契约：单元布局、类型/接口签名、线程模型、不变量、错误、Deferred、测试门禁、宿主与非阻塞泵 |
-| `ARCHITECTURE.md` | 架构纵深：抽取缝、后端矩阵、事件/DPI/主循环、去消息化、与 gpu/webview/game888/directui 的组合 |
-| `ROADMAP.md` | 分波实施图：S1→S5 全后端 + M-band（13 门禁，370/167/430µs，0泄漏） |
+| `CONTRACT.md` | 冻结契约：单元布局、类型/接口签名、线程模型、不变量、错误、Deferred、测试门禁、宿主与非阻塞泵（含 `Raw` 内缝） |
+| `ARCHITECTURE.md` | 架构纵深：抽取缝、后端矩阵、事件/DPI/主循环、去消息化、与 gpu/webview/game888/directui 的组合（F4 单源） |
+| `FINAL_ROADMAP.md` | 终局路线图：M-band→F1-F5 五维收敛至 1.0（含 5×方差与 `Raw` 单源决策） |
+| `BENCH.md` | 性能基线：7 项中位 + 5×方差 + 三机残差诚实表 |
+| `ROADMAP.md` | 分波实施图：S1→S5 全后端 + M-band→1.0（13 门禁，365/271µs，0泄漏） |

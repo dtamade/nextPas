@@ -239,6 +239,48 @@ begin
   WriteLn(TextFormat('container extract multi     %6.1f MB/s', [(DATA_SIZE*CONTAINER_ITER/1048576.0)/LElapsed]));
 end;
 
+procedure BenchGlobIgnoreCase;
+const N = 2000; ITER = 5000;
+var
+  LW: ISevenZWriter;
+  LR: ISevenZReader;
+  LArchive: TBytes;
+  LJ: Integer;
+  LStart: TInstant;
+  LElapsed: Double;
+  LRes: TSevenZEntryInfoArray;
+  LName: string;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.SetLevel(szclNone);
+  for LJ := 0 to N - 1 do
+  begin
+    LName := TextFormat('pref_%04d_suf.TXT', [LJ]);
+    if (LJ mod 500) = 0 then LW.AddDirectory(TextFormat('pref_%04d', [LJ]));
+    LW.AddFile(LName, TBytes.Create(Byte(LJ and $FF)));
+  end;
+  LArchive := LW.Finish;
+  LR := TSevenZReaderImpl.Create(LArchive);
+  LRes := LR.EntriesByGlobIgnoreCase('pref_00*');
+  if Length(LRes) = 0 then raise EInvalidOperationError.Create('bench glob warm failed');
+  LStart := TInstant.Now;
+  for LJ := 1 to ITER do LRes := LR.EntriesByGlobIgnoreCase('pref_00*');
+  LElapsed := LStart.Elapsed.AsSecondsF;
+  WriteLn(TextFormat('glob IgnoreCase prefix*   %6.0f ops/s  hits=%d', [ITER/LElapsed, Length(LRes)]));
+  LStart := TInstant.Now;
+  for LJ := 1 to ITER do LRes := LR.EntriesByGlobIgnoreCase('*_suf.txt');
+  LElapsed := LStart.Elapsed.AsSecondsF;
+  WriteLn(TextFormat('glob IgnoreCase *suffix   %6.0f ops/s  hits=%d', [ITER/LElapsed, Length(LRes)]));
+  LStart := TInstant.Now;
+  for LJ := 1 to ITER do LRes := LR.EntriesByGlobIgnoreCase('pref_*_suf.txt');
+  LElapsed := LStart.Elapsed.AsSecondsF;
+  WriteLn(TextFormat('glob IgnoreCase p*s      %6.0f ops/s  hits=%d', [ITER/LElapsed, Length(LRes)]));
+  LStart := TInstant.Now;
+  for LJ := 1 to ITER do LRes := LR.EntriesByGlobIgnoreCase('PREF_0100_SUF.txt');
+  LElapsed := LStart.Elapsed.AsSecondsF;
+  WriteLn(TextFormat('glob IgnoreCase exact     %6.0f ops/s  hits=%d', [ITER/LElapsed, Length(LRes)]));
+end;
+
 var
   LSaved: TSevenZLzmaBackend;
   LFfiOk: Boolean;
@@ -268,6 +310,8 @@ begin
   SevenZSetLzmaBackend(LSaved);
   BenchContainerRoundtrip;
   BenchContainerParallel;
+  WriteLn;
+  BenchGlobIgnoreCase;
   WriteLn;
   WriteLn('done.');
 end.

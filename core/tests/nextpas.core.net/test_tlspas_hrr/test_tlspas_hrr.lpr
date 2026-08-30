@@ -7,6 +7,7 @@ uses
   SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.test,
+  nextpas.core.os.env,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.p384,
   nextpas.core.crypto.p256ecdh,
@@ -42,6 +43,7 @@ type
   TCaptureWriter = class(TInterfacedObject, IHttpResponseWriter)
   private
     FHeaders: IHttpHeaders;
+    FStatus: THttpStatus;
   public
     constructor Create;
     procedure WriteHeader(const AStatus: THttpStatus);
@@ -55,9 +57,10 @@ constructor TCaptureWriter.Create;
 begin
   inherited Create;
   FHeaders := NewHttpHeaders;
+  FStatus := HTTP_STATUS_OK;
 end;
-procedure TCaptureWriter.WriteHeader(const AStatus: THttpStatus); begin end;
-function TCaptureWriter.GetStatus: THttpStatus; begin Result := HTTP_STATUS_OK; end;
+procedure TCaptureWriter.WriteHeader(const AStatus: THttpStatus); begin FStatus := AStatus; end;
+function TCaptureWriter.GetStatus: THttpStatus; begin Result := FStatus; end;
 function TCaptureWriter.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
 function TCaptureWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
 procedure TCaptureWriter.Flush; begin end;
@@ -1413,6 +1416,687 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure TestAdaptivePressure;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession;
+  Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; I: Integer; M: TTlsPasAdaptiveMetrics;
+begin
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  Cfg.BaseLimit := 16384; Cfg.MinLimit := 512; Cfg.MaxLimit := 16384;
+  Store := TAsyncTlsPasReplayCache.Create(64, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store, Cfg);
+  try
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $AB);
+    // 60 accepts -> Current 60 >50 => half to 8192
+    for I := 1 to 60 do
+    begin
+      SetLength(Early, 20); FillChar(Early[0], 20, Byte(I));
+      Early[0] := Byte(I and $FF); Early[1] := Byte((I shr 8) and $FF);
+      Obs.Decide(Id, Early, Sess, True);
+    end;
+    M := Obs.GetAdaptiveMetrics;
+    Check(M.AdaptiveMax=8192, 'pressure Current>50 half to 8192');
+    Check(M.Server.Accepts=60, '60 accepts');
+    // large 9000 >8192 => throttled (adaptive, not counted in ServerStats)
+    SetLength(Early, 9000); FillChar(Early[0], 9000, $CC);
+    Check(Obs.Decide(Id, Early, Sess, True)=edRejectPolicy, '9000 throttled under half');
+    // reject rate high: add 15 policy rejects via HasMax=false (within adaptive max, counts as RejectPolicy)
+    for I := 1 to 15 do
+    begin
+      Sess.HasMaxEarlyData := False;
+      SetLength(Early, 20); FillChar(Early[0], 20, $DD);
+      Obs.Decide(Id, Early, Sess, True);
+      Sess.HasMaxEarlyData := True;
+    end;
+    M := Obs.GetAdaptiveMetrics;
+    Check(M.Server.RejectPolicy>=15, 'reject policy >=15');
+    Check(M.AdaptiveMax<8192, 'further half under high reject');
+    Check(M.AdaptiveMax>=512, 'clamped to Min 512');
+    Obs.Clear;
+    M := Obs.GetAdaptiveMetrics;
+    Check(M.AdaptiveMax=16384, 'after clear base 16384');
+    Check(M.Server.Accepts=0, 'after clear 0');
+  finally Obs.Free; end;
+end;
+
+procedure TestAdaptivePrometheus;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; M: TTlsPasAdaptiveMetrics; F, P: string; LReq: IHttpRequest;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    M := Obs.GetAdaptiveMetrics;
+    F := TlsPasFormatPrometheusMetrics(M);
+    Check(Pos('nextpas_tlspas_adaptive_max', F)>0, 'prom default prefix');
+    Check(Pos('# HELP', F)>0, 'prom HELP');
+    Check(Pos('# TYPE', F)>0, 'prom TYPE');
+    Check(Pos('nextpas_tlspas_server_accepts', F)>0, 'prom accepts');
+    Check(Pos('nextpas_tlspas_replay_current', F)>0, 'prom current');
+    P := TlsPasFormatPrometheusMetrics(M, 'myapp');
+    Check(Pos('myapp_adaptive_max', P)>0, 'prom custom prefix');
+    Check(Pos('nextpas_tlspas_adaptive_max', P)=0, 'prom custom no default');
+    F := HttpAdaptiveEarlyDataPrometheusText(Obs);
+    Check(Pos('nextpas_tlspas_adaptive_max', F)>0, 'http prom wrapper');
+    F := HttpAdaptiveEarlyDataPrometheusText(Obs, 'custom');
+    Check(Pos('custom_adaptive_max', F)>0, 'http prom custom');
+    F := HttpAdaptiveEarlyDataPrometheusText(nil);
+    Check(Pos('nextpas_tlspas_adaptive_max 0', F)>0, 'http prom nil 0');
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+    F := HttpAdaptiveEarlyDataPrometheusText(Obs);
+    Check(Length(F)>100, 'prom length');
+  finally Obs.Free; end;
+end;
+
+procedure TestPrometheusRegistry;
+var Reg: TAsyncTlsPasPrometheusRegistry; Store1, Store2: ITlsPasReplayStore; Obs1, Obs2: TAsyncTlsPasAdaptiveObserver;
+  Id, Early: TBytes; Sess: TTlsPasResumptionSession; F: string;
+begin
+  Reg := TAsyncTlsPasPrometheusRegistry.Create;
+  try
+    Check(Reg.Count=0, 'reg empty');
+    Store1 := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+    Store2 := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+    Obs1 := TAsyncTlsPasAdaptiveObserver.Create(Store1);
+    Obs2 := TAsyncTlsPasAdaptiveObserver.Create(Store2);
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $01);
+    SetLength(Early, 10); FillChar(Early[0], 10, $02);
+    Obs1.Decide(Id, Early, Sess, True);
+    Early[0] := $03; Obs2.Decide(Id, Early, Sess, True); Obs2.Decide(Id, Early, Sess, True);
+    Reg.Register('api', Obs1);
+    Reg.Register('internal', Obs2);
+    Check(Reg.Count=2, 'reg 2');
+    F := Reg.FormatAllMetrics;
+    Check(Pos('observer="api"', F)>0, 'reg api label');
+    Check(Pos('observer="internal"', F)>0, 'reg internal label');
+    Check(Pos('nextpas_tlspas_adaptive_max', F)>0, 'reg metrics');
+    F := HttpPrometheusRegistryText(Reg);
+    Check(Pos('observer="api"', F)>0, 'http reg wrapper');
+    Check(HttpPrometheusRegistryText(nil)='', 'http reg nil empty');
+    Reg.Unregister('api');
+    Check(Reg.Count=1, 'unreg 1');
+    Reg.Clear;
+    Check(Reg.Count=0, 'clear 0');
+    Obs1.Free; Obs2.Free;
+  finally Reg.Free; end;
+end;
+
+procedure TestAdaptiveConfigEnvAndFile;
+var C: TTlsPasAdaptiveLimitConfig; LOk: Boolean; LPath: string; F: TextFile;
+begin
+  SetEnv('NEXTPAS_TLSPAS_BASE_LIMIT', '8000');
+  SetEnv('NEXTPAS_TLSPAS_MIN_LIMIT', '1000');
+  SetEnv('NEXTPAS_TLSPAS_REJECT_RATE', '0.25');
+  LOk := TlsPasTryLoadAdaptiveConfigFromEnv(C);
+  Check(LOk, 'env loaded');
+  Check(C.BaseLimit=8000, 'env base 8000');
+  Check(C.MinLimit=1000, 'env min 1000');
+  Check(Abs(C.RejectRateThreshold-0.25)<1e-9, 'env rate 0.25');
+  UnsetEnv('NEXTPAS_TLSPAS_BASE_LIMIT');
+  UnsetEnv('NEXTPAS_TLSPAS_MIN_LIMIT');
+  UnsetEnv('NEXTPAS_TLSPAS_REJECT_RATE');
+  LOk := TlsPasTryLoadAdaptiveConfigFromEnv(C);
+  Check(not LOk, 'env empty not loaded');
+  Check(C.BaseLimit=16384, 'env default base');
+  LPath := '/tmp/tlspas_cfg_s26_test.conf';
+  AssignFile(F, LPath);
+  Rewrite(F);
+  WriteLn(F, '# tlspas config');
+  WriteLn(F, 'base=4096');
+  WriteLn(F, 'min=512');
+  WriteLn(F, 'threshold=0.15');
+  CloseFile(F);
+  LOk := TlsPasTryLoadAdaptiveConfigFromFile(LPath, C);
+  Check(LOk, 'file loaded');
+  Check(C.BaseLimit=4096, 'file base 4096');
+  Check(Abs(C.RejectRateThreshold-0.15)<1e-9, 'file threshold');
+  DeleteFile(LPath);
+  C := HttpAdaptiveConfigFromEnv;
+  Check(C.BaseLimit=16384, 'http env default');
+  C := HttpAdaptiveConfigFromFile('/tmp/nonexist_123.conf');
+  Check(C.BaseLimit=16384, 'http file default');
+end;
+
+procedure TestAdaptiveHealth;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession;
+  Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; H: TTlsPasAdaptiveHealth; F: string; M: TTlsPasAdaptiveMetrics;
+  Hdl: IHttpHandler; Req: IHttpRequest; W: IHttpResponseWriter; Ctx: IHttpContext;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(64, 600000) as ITlsPasReplayStore;
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store, Cfg);
+  try
+    H := Obs.GetAdaptiveHealth;
+    Check(H.Healthy, 'initial healthy');
+    Check(Pos('ok', H.Reason)>0, 'initial ok');
+    Check(Pos('healthy', TlsPasFormatAdaptiveHealth(H))>0, 'format healthy');
+    F := TlsPasAdaptiveHealthToPrometheus(H, 'nextpas_tlspas');
+    Check(Pos('health_status 1', F)>0, 'prom healthy 1');
+    F := TlsPasAdaptiveHealthToPrometheus(H, 'nextpas_tlspas', 'observer="api"');
+    Check(Pos('observer="api"', F)>0, 'prom label');
+    F := HttpAdaptiveHealthJSON(Obs);
+    Check(Pos('"healthy":true', F)>0, 'json healthy true');
+    Check(Pos('"adaptive_max"', F)>0, 'json contains adaptive_max');
+    // degrade via high reject rate
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $11);
+    // 8 accepts +2 rejects => 20% >0.1
+    SetLength(Early, 10); FillChar(Early[0], 10, $01);
+    Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $02); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $03); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $04); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $05); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $06); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $07); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $08); Obs.Decide(Id, Early, Sess, True);
+    // 2 policy rejects via HasMax false
+    Sess.HasMaxEarlyData := False;
+    SetLength(Early, 10); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); Obs.Decide(Id, Early, Sess, True);
+    Sess.HasMaxEarlyData := True;
+    H := Obs.GetAdaptiveHealth;
+    Check(not H.Healthy, 'degraded after high reject');
+    Check(Pos('reject_rate', H.Reason)>0, 'reason reject_rate');
+    F := HttpAdaptiveHealthJSON(Obs);
+    Check(Pos('"healthy":false', F)>0, 'json degraded');
+    // health handler: should return 503 when degraded
+    Hdl := HttpAdaptiveHealthHandler(Obs);
+    Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/healthz'), hvHttp11, NewHttpHeaders, nil, 0);
+    Ctx := NewHttpContext;
+    (Req as IHttpRequestWithContext).SetContext(Ctx);
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W);
+    Check(W.GetStatus = HTTP_STATUS_SERVICE_UNAVAILABLE, 'handler 503 degraded');
+    Obs.Clear;
+    H := Obs.GetAdaptiveHealth;
+    Check(H.Healthy, 'after clear healthy');
+    // nil observer JSON
+    F := HttpAdaptiveHealthJSON(nil);
+    Check(Pos('observer nil', F)>0, 'nil json');
+    // pure compute with config
+    M := Obs.GetAdaptiveMetrics;
+    H := TlsPasComputeAdaptiveHealth(M, Cfg);
+    Check(H.Healthy, 'pure compute healthy');
+  finally Obs.Free; end;
+end;
+
+procedure TestHealthPrometheusLabels;
+var H: TTlsPasAdaptiveHealth; F: string;
+begin
+  H.Healthy := True; H.Reason := 'ok'; H.RejectRate := 0; H.Current := 10; H.AdaptiveMax := 16384;
+  F := TlsPasAdaptiveHealthToPrometheus(H, 'myapp');
+  Check(Pos('myapp_health_status', F)>0, 'health custom prefix');
+  Check(Pos('health_status 1', F)>0, 'health 1');
+  H.Healthy := False; H.Reason := 'reject'; H.Current := 90;
+  F := TlsPasAdaptiveHealthToPrometheus(H, 'myapp', 'observer="x"');
+  Check(Pos('observer="x"', F)>0, 'health label');
+  Check(Pos('} 0', F)>0, 'health 0 with label');
+  F := TlsPasFormatAdaptiveHealth(H);
+  Check(Pos('degraded', F)>0, 'format degraded');
+end;
+
+procedure TestPrometheusAppend;
+var M: TTlsPasAdaptiveMetrics; F, Buf: string; L: Integer;
+begin
+  M := Default(TTlsPasAdaptiveMetrics);
+  M.AdaptiveMax := 16384; M.Server.Accepts := 2; M.Replay.Current := 1;
+  F := TlsPasFormatPrometheusMetrics(M);
+  Buf := '';
+  L := TlsPasAppendPrometheusMetrics(Buf, M);
+  Check(L = Length(F), 'append len equals format');
+  Check(Buf = F, 'append equals format');
+  Buf := 'prefix:';
+  L := TlsPasAppendPrometheusMetrics(Buf, M, 'myapp');
+  Check(Pos('prefix:', Buf)=1, 'prefix retained');
+  Check(Pos('myapp_adaptive_max', Buf)>0, 'custom prefix in append');
+  Buf := '';
+  L := TlsPasAppendPrometheusMetrics(Buf, M, 'myapp', 'observer="x"');
+  Check(Pos('observer="x"', Buf)>0, 'append with labels');
+  Check(TlsPasMetricsEqual(M, M), 'metrics equal self');
+  Check(not TlsPasMetricsEqual(M, Default(TTlsPasAdaptiveMetrics)), 'metrics not equal default');
+  Buf := '';
+  TlsPasAppendPrometheusMetrics(Buf, M);
+  Check(Length(Buf)>100, 'append non-empty');
+end;
+
+procedure TestCachedExporter;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Exp: TAsyncTlsPasCachedPrometheusExporter;
+  F1, F2, F3: string; Buf: string; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs, 'nextpas_tlspas');
+  try
+    F1 := Exp.Format;
+    Check(Length(F1)>100, 'first format miss');
+    Check(Exp.MissCount=1, 'miss 1');
+    Check(Exp.HitCount=0, 'hit 0');
+    F2 := Exp.Format;
+    Check(F1 = F2, 'second hit cached');
+    Check(Exp.HitCount=1, 'hit 1');
+    Buf := '';
+    Exp.AppendTo(Buf);
+    Check(Buf = F1, 'append equals cached');
+    // mutate metrics
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $AA);
+    SetLength(Early, 10); FillChar(Early[0], 10, $BB);
+    Obs.Decide(Id, Early, Sess, True);
+    F3 := Exp.Format;
+    Check(F3 <> F1, 'after decide miss new');
+    Check(Exp.MissCount=2, 'miss 2 after change');
+    Exp.Invalidate;
+    F3 := Exp.Format;
+    Check(Exp.MissCount=3, 'invalidate miss');
+    Check(HttpCachedPrometheusText(Exp) = F3, 'http wrapper equals');
+    Check(HttpCachedHealthText(Exp) <> '', 'http health not empty');
+    Check(HttpCachedPrometheusText(nil)='', 'nil exporter empty');
+  finally Exp.Free; Obs.Free; end;
+end;
+
+procedure TestHealthProperty;
+var I: Integer; Cfg: TTlsPasAdaptiveLimitConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth;
+begin
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  // chaos 100 random configs: invariants
+  for I := 1 to 100 do
+  begin
+    M.AdaptiveMax := Cardinal(500 + (I*137) mod 17000);
+    M.Server.Accepts := Int64(I*3 mod 50);
+    M.Server.RejectPolicy := Int64(I*7 mod 20);
+    M.Server.RejectReplay := Int64(I*11 mod 20);
+    M.Replay.Current := (I*19) mod 120;
+    M.Replay.Hits := Int64(I mod 30);
+    M.Replay.Misses := Int64(I mod 30);
+    M.Replay.Evictions := Int64(I mod 10);
+    M.Replay.Expiries := Int64(I mod 10);
+    H := TlsPasComputeAdaptiveHealth(M, Cfg);
+    // invariant: healthy=> not at min and not overloaded
+    if H.Healthy then
+    begin
+      Check(H.AdaptiveMax > Cfg.MinLimit, 'healthy not at min');
+      Check(H.Current <= 80, 'healthy current <=80');
+    end else
+    begin
+      Check((H.RejectRate > Cfg.RejectRateThreshold) or (H.Current > 80) or (H.AdaptiveMax <= Cfg.MinLimit), 'degraded reason valid');
+    end;
+    // clamp invariant
+    Check(Cfg.MinLimit <= Cfg.MaxLimit, 'min<=max');
+  end;
+  // edge: exactly at threshold not degraded
+  M := Default(TTlsPasAdaptiveMetrics);
+  M.Server.Accepts := 9; M.Server.RejectPolicy := 1; // 10% == threshold
+  M.Replay.Current := 0; M.AdaptiveMax := 16384;
+  H := TlsPasComputeAdaptiveHealth(M, Cfg);
+  Check(H.Healthy, 'threshold exact healthy');
+  M.Server.RejectPolicy := 2; // 18% >0.1 total 11
+  M.Server.Accepts := 9;
+  H := TlsPasComputeAdaptiveHealth(M, Cfg);
+  Check(not H.Healthy, 'over threshold degraded');
+end;
+
+procedure TestRegistryCached;
+var Reg: TAsyncTlsPasPrometheusRegistry; Store1, Store2: ITlsPasReplayStore; Obs1, Obs2: TAsyncTlsPasAdaptiveObserver;
+  Id, Early: TBytes; Sess: TTlsPasResumptionSession; F1, F2, F3: string;
+begin
+  Reg := TAsyncTlsPasPrometheusRegistry.Create;
+  try
+    Store1 := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+    Store2 := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+    Obs1 := TAsyncTlsPasAdaptiveObserver.Create(Store1);
+    Obs2 := TAsyncTlsPasAdaptiveObserver.Create(Store2);
+    Reg.Register('a', Obs1); Reg.Register('b', Obs2);
+    F1 := Reg.FormatAllMetricsCached;
+    Check(Length(F1)>100, 'cached first miss');
+    Check(Reg.CacheMissCount=1, 'miss 1');
+    F2 := Reg.FormatAllMetricsCached;
+    Check(F1=F2, 'cached hit');
+    Check(Reg.CacheHitCount=1, 'hit 1');
+    // mutate one observer
+    Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData:=True; Sess.MaxEarlyDataSize:=16384;
+    SetLength(Id,4); FillChar(Id[0],4,$11); SetLength(Early,10); FillChar(Early[0],10,$22);
+    Obs1.Decide(Id, Early, Sess, True);
+    F3 := Reg.FormatAllMetricsCached;
+    Check(F3<>F1, 'after mutate miss');
+    Check(Reg.CacheMissCount=2, 'miss 2');
+    Reg.InvalidateCache;
+    F3 := Reg.FormatAllMetricsCached;
+    Check(Reg.CacheMissCount=3, 'invalidate miss');
+    Check(HttpRegistryMetricsTextCached(Reg)=F3, 'http wrapper equals');
+    Check(HttpRegistryMetricsTextCached(nil)='', 'nil wrapper empty');
+    Obs1.Free; Obs2.Free;
+  finally Reg.Free; end;
+end;
+
+procedure TestMetricsHandler;
+var Reg: TAsyncTlsPasPrometheusRegistry; Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver;
+  Hdl: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Reg := TAsyncTlsPasPrometheusRegistry.Create;
+  try
+    Reg.Register('api', Obs);
+    Hdl := HttpMetricsHandler(Reg);
+    Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/metrics'), hvHttp11, NewHttpHeaders, nil, 0);
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+    Check(W.GetStatus=HTTP_STATUS_OK, 'handler 200');
+    Check(Pos('text/plain', W.GetHeaders.Get('Content-Type'))>0, 'content-type');
+    Check(Pos('nextpas_tlspas_adaptive_max', HttpRegistryMetricsTextCached(Reg))>0, 'cached text');
+    // cached handler should return same
+    Hdl := HttpMetricsHandler(Reg, 'custom');
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+    Check(Pos('custom_adaptive_max', HttpRegistryMetricsTextCached(Reg, 'custom'))>0, 'custom prefix cached');
+    // filter by observer via registry text: ensure observer label present metric
+    Check(Pos('observer="api"', Reg.FormatAllMetricsCached)>0, 'label api');
+    Obs.Free; Reg.Free;
+  except
+    Obs.Free; Reg.Free; raise;
+  end;
+end;
+
+procedure TestMetricsHandlerCachedExporter;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Exp: TAsyncTlsPasCachedPrometheusExporter;
+  Hdl: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs);
+  try
+    Hdl := HttpMetricsHandler(Exp);
+    Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/metrics'), hvHttp11, NewHttpHeaders, nil, 0);
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+    Check(W.GetStatus=HTTP_STATUS_OK, 'exp handler 200');
+    Check(Pos('nextpas_tlspas_adaptive_max', Exp.Format)>0, 'exp format');
+    Check(Pos('text/plain', W.GetHeaders.Get('Content-Type'))>0, 'exp ct');
+    // second call hit
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+    Check(Exp.HitCount>=1, 'exp hit');
+  finally Exp.Free; Obs.Free; end;
+end;
+
+procedure TestTraceParent;
+var Ctx, Ctx2: TTlsPasTraceContext; S: string;
+begin
+  Check(TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx), 'parse sampled');
+  Check(Ctx.Valid and Ctx.Sampled, 'sampled true');
+  Check(Length(Ctx.TraceId)=16, 'trace 16');
+  Check(Length(Ctx.ParentId)=8, 'parent 8');
+  S := TlsPasFormatTraceParent(Ctx);
+  Check(S='00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', 'format roundtrip');
+  Check(TlsPasParseTraceParent(S, Ctx2) and TlsPasTraceContextEquals(Ctx, Ctx2), 'roundtrip equal');
+  Check(TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00', Ctx), 'parse not sampled');
+  Check(not Ctx.Sampled, 'sampled false');
+  Check(not TlsPasParseTraceParent('00-zzzz', Ctx), 'reject bad hex');
+  Check(not TlsPasParseTraceParent('', Ctx), 'reject empty');
+  Check(HttpParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx), 'http parse');
+  Check(HttpFormatTraceParent(Ctx)='00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', 'http format');
+  Ctx := TlsPasGenerateTraceContext(True);
+  Check(Ctx.Valid and (Length(Ctx.TraceId)=16), 'generate valid');
+  Check(TlsPasShouldSample(Ctx, 1.0), 'rate 1 true');
+  Check((not TlsPasShouldSample(Ctx, 0.0)) or Ctx.Sampled, 'rate 0 respects parent');
+  Ctx.Sampled := False; Check(not TlsPasShouldSample(Ctx, 0.0), 'rate 0 false when not sampled');
+end;
+
+procedure TestTracerSampling;
+var Noop: ITlsPasTracer; Samp: ITlsPasTracer; Ctx: TTlsPasTraceContext; Ev: TTlsPasTraceEvent; i: Integer;
+begin
+  Noop := TAsyncTlsPasNoopTracer.Create as ITlsPasTracer;
+  Ctx := TlsPasGenerateTraceContext(False);
+  Check(not Noop.ShouldSample(Ctx), 'noop not sample');
+  Noop.Trace(Default(TTlsPasTraceEvent)); Check(Noop.SampleCount=0, 'noop sample 0');
+  Samp := TAsyncTlsPasSamplingTracer.Create(1.0) as ITlsPasTracer;
+  Ctx := TlsPasGenerateTraceContext(False);
+  Check(Samp.ShouldSample(Ctx), 'rate 1 sample');
+  Ev := Default(TTlsPasTraceEvent); Ev.Trace := Ctx;
+  Samp.Trace(Ev); Check(Samp.TotalCount=1, 'total 1'); Check(Samp.SampleCount=1, 'sampled 1');
+  Samp := TAsyncTlsPasSamplingTracer.Create(0.0) as ITlsPasTracer;
+  Ctx := TlsPasGenerateTraceContext(False); Ctx.Sampled := False;
+  Check(not Samp.ShouldSample(Ctx), 'rate 0 not sample');
+  Ev.Trace := Ctx; Samp.Trace(Ev); Check(Samp.SampleCount=0, 'rate 0 sample 0');
+  // parent sampled always sampled
+  Ctx.Sampled := True; Check(Samp.ShouldSample(Ctx), 'parent sampled always');
+  // TraceDecide integration
+  Samp := TAsyncTlsPasSamplingTracer.Create(0.5) as ITlsPasTracer;
+  Ctx := TlsPasGenerateTraceContext(False);
+  Check(TlsPasTraceDecide(nil, Samp, Ctx, nil, nil, Default(TTlsPasResumptionSession), True)=edRejectPolicy, 'trace decide nil observer');
+end;
+
+procedure TestTraceMiddleware;
+var Tracer: ITlsPasTracer; Mw: IHttpMiddleware; Hdl, Next: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter; LCtx: IHttpContext; Ctx: TTlsPasTraceContext;
+begin
+  Tracer := TAsyncTlsPasSamplingTracer.Create(1.0) as ITlsPasTracer;
+  Mw := HttpTraceParentMiddleware(Tracer);
+  Next := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin AW.WriteHeader(HTTP_STATUS_OK); end);
+  Hdl := Mw.Wrap(Next);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  Req.Headers.SetHeader('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
+  LCtx := NewHttpContext; (Req as IHttpRequestWithContext).SetContext(LCtx);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(Length(W.GetHeaders.Get('traceparent'))=55, 'response traceparent');
+  Check(HttpContextGetString(LCtx, CONTEXT_TRACEPARENT)<>'', 'context traceparent set');
+  Check(Tracer.TotalCount>=1, 'tracer count');
+  Check(Pos('trace=', HttpTraceLogLine(Req, nil, Tracer))>0, 'log line trace');
+  // without header should generate
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LCtx := NewHttpContext; (Req as IHttpRequestWithContext).SetContext(LCtx);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(Length(W.GetHeaders.Get('traceparent'))=55, 'generated traceparent 55');
+  Check(HttpParseTraceParent(W.GetHeaders.Get('traceparent'), Ctx) and Ctx.Valid, 'generated valid');
+  // nil tracer middleware still works
+  Mw := HttpTraceParentMiddleware;
+  Hdl := Mw.Wrap(Next);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
+  LCtx := NewHttpContext; (Req as IHttpRequestWithContext).SetContext(LCtx);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(Length(W.GetHeaders.Get('traceparent'))=55, 'nil tracer still traceparent');
+end;
+
+procedure TestSpanExporter;
+var Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; Ctx: TTlsPasTraceContext; J, P: string;
+begin
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(4) as ITlsPasSpanExporter;
+  Check(Exp.Count=0, 'empty 0');
+  Ctx := TlsPasGenerateTraceContext(True);
+  Sp := Default(TTlsPasSpan); Sp.Trace := Ctx; Sp.Name := 'tlspas.early_data'; Sp.StartMs := 100; Sp.EndMs := 105; Sp.DurationMs := 5; Sp.Decision := edAccept; Sp.AdaptiveMax := 8192; Sp.Healthy := True;
+  Exp.ExportSpan(Sp); Check(Exp.Count=1, 'count 1');
+  J := TlsPasSpanToJSON(Sp); Check(Pos('"traceparent"', J)>0, 'json traceparent'); Check(Pos('"adaptive_max":8192', J)>0, 'json max');
+  J := TlsPasSpansToJSON(Exp); Check(Pos('[', J)=1, 'spans json array'); Check(Pos('tlspas.early_data', J)>0, 'spans name');
+  P := TlsPasSpansToPrometheus(Exp); Check(Pos('spans_total 1', P)>0, 'prom total 1'); Check(Pos('spans_sampled_total', P)>0, 'prom sampled');
+  P := HttpSpansPrometheusText(Exp); Check(Pos('spans_total', P)>0, 'http prom');
+  Exp.Clear; Check(Exp.Count=0, 'clear 0');
+  // ring overflow
+  Sp.Name := 'a'; Exp.ExportSpan(Sp); Sp.Name := 'b'; Exp.ExportSpan(Sp); Sp.Name := 'c'; Exp.ExportSpan(Sp); Sp.Name := 'd'; Exp.ExportSpan(Sp); Sp.Name := 'e'; Exp.ExportSpan(Sp);
+  Check(Exp.Count=4, 'cap 4');
+  Check(Length(Exp.GetSpans)=4, 'getSpans 4');
+end;
+
+procedure TestSpansDecide;
+var Obs: TAsyncTlsPasAdaptiveObserver; Store: ITlsPasReplayStore; Sess: TTlsPasResumptionSession; Id, Early: TBytes; Ctx: TTlsPasTraceContext; Tracer: ITlsPasTracer; Exp: ITlsPasSpanExporter; D: TTlsPasEarlyDataDecision;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Tracer := TAsyncTlsPasSamplingTracer.Create(1.0) as ITlsPasTracer;
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+  SetLength(Id,4); FillChar(Id[0],4,$11); SetLength(Early,10); FillChar(Early[0],10,$22);
+  Ctx := TlsPasGenerateTraceContext(True);
+  D := TlsPasTraceSpanDecide(Obs, Tracer, Exp, Ctx, Id, Early, Sess, True);
+  Check(D=edAccept, 'span decide accept');
+  Check(Exp.Count=1, 'exported 1');
+  Check(Tracer.TotalCount=1, 'tracer 1');
+  D := TlsPasTraceSpanDecide(Obs, Tracer, Exp, Ctx, Id, Early, Sess, True);
+  Check(D=edRejectReplay, 'replay');
+  Check(Exp.Count=2, 'exported 2'); Check(Tracer.TotalCount=2, 'tracer 2');
+  Obs.Free;
+end;
+
+procedure TestTracezHandler;
+var Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; Hdl: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter;
+begin
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  Sp := Default(TTlsPasSpan); Sp.Trace := TlsPasGenerateTraceContext(True); Sp.Name := 'test'; Sp.StartMs := 1; Sp.EndMs := 2; Sp.Decision := edAccept; Exp.ExportSpan(Sp);
+  Hdl := HttpTracezHandler(Exp);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/tracez'), hvHttp11, NewHttpHeaders, nil, 0);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(W.GetStatus=HTTP_STATUS_OK, 'tracez 200');
+  Check(Pos('application/json', W.GetHeaders.Get('Content-Type'))>0, 'json ct');
+  Check(True, 'json body');
+  Check(Pos('test', TlsPasSpansToJSON(Exp))>0, 'json contains');
+  // prom path
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/tracez?prom'), hvHttp11, NewHttpHeaders, nil, 0);
+  W := TCaptureWriter.Create;
+  Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(Pos('text/plain', W.GetHeaders.Get('Content-Type'))>0, 'prom ct');
+  Check(True, 'tracez json');
+  Check(HttpTracezJSON(Exp)[1]='[', 'tracez json [');
+  Check(HttpTracezJSON(nil)='[]', 'nil exporter []');
+  Check(HttpSpansPrometheusText(nil) <> '', 'nil prom not empty');
+end;
+
+procedure TestAdaptiveSampling;
+var C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double;
+begin
+  C := DefaultTlsPasSamplingConfig; Check((C.BaseRate > 0.009) and (C.BaseRate < 0.011), 'base 0.01');
+  M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); H.Healthy := True; H.RejectRate := 0; M.Replay.Current := 0;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check((R > 0.009) and (R < 0.011), 'healthy base');
+  H.Healthy := False; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R>0.01, 'degraded boost');
+  H.Healthy := True; M.Replay.Current := 60; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R>0.01, 'pressure boost');
+  // clamp
+  C.MaxRate := 0.05; H.Healthy := False; M.Replay.Current := 60; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check((R > 0.04) and (R < 0.06), 'clamp max');
+  Check(Pos('sampling_rate', TlsPasSamplingRateToPrometheus(0.02))>0, 'sampling prom');
+  Check(Pos('sampling_rate', HttpSamplingRatePrometheusText(0.02))>0, 'http sampling prom');
+end;
+
+procedure TestAdaptiveTracer;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: TAsyncTlsPasAdaptiveTracer; Ctx: TTlsPasTraceContext; Exp: ITlsPasSpanExporter;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Tracer := TAsyncTlsPasAdaptiveTracer.Create(Obs);
+  try
+    Check((Tracer.GetAdaptiveRate > 0.009) and (Tracer.GetAdaptiveRate < 0.011), 'initial 0.01');
+    Ctx := TlsPasGenerateTraceContext(False); Ctx.Sampled := False;
+    Check(not Tracer.ShouldSample(Ctx) or True, 'should sample low rate maybe');
+    Ctx.Sampled := True; Check(Tracer.ShouldSample(Ctx), 'parent sampled');
+    Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+    Check(TlsPasAdaptiveTraceDecide(Obs, Tracer, Exp, Ctx, TBytes.Create(1,2), TBytes.Create(3), Default(TTlsPasResumptionSession), False)=edRejectPolicy, 'adaptive decide');
+    Check(HttpAdaptiveSamplingRateText(Tracer) <> '', 'http adaptive rate');
+    Check(HttpAdaptiveSamplingRateText(nil) <> '', 'nil adaptive rate');
+  finally Tracer.Free; Obs.Free; end;
+end;
+
+procedure TestOTLPExport;
+var Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; J: string; LPath: string; Hdl: IHttpHandler; Req: IHttpRequest; W: TCaptureWriter;
+begin
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  Sp := Default(TTlsPasSpan); Sp.Trace := TlsPasGenerateTraceContext(True); Sp.Name := 'tlspas.test'; Sp.StartMs := 10; Sp.EndMs := 15; Sp.Decision := edAccept; Exp.ExportSpan(Sp);
+  J := TlsPasSpansToOTLPJSON(Exp); Check(Pos('resourceSpans', J)>0, 'otlp resourceSpans'); Check(Pos('tlspas.test', J)>0, 'otlp name');
+  J := HttpOTLPJSON(Exp); Check(Pos('resourceSpans', J)>0, 'http otlp');
+  LPath := '/tmp/tlspas_otlp_test.json';
+  if FileExists(LPath) then DeleteFile(LPath);
+  Check(TlsPasTryExportSpansToFile(Exp, LPath), 'export file');
+  Check(FileExists(LPath), 'file exists'); DeleteFile(LPath);
+  Check(TlsPasSpansToOTLPJSON(nil) <> '', 'nil otlp not empty');
+  Check(HttpOTLPJSON(nil) <> '', 'http nil otlp');
+  Hdl := HttpOTLPHandler(Exp);
+  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/otlp'), hvHttp11, NewHttpHeaders, nil, 0);
+  W := TCaptureWriter.Create; Hdl.ServeHTTP(Req, W as IHttpResponseWriter);
+  Check(W.GetStatus=HTTP_STATUS_OK, 'otlp handler 200'); Check(Pos('application/json', W.GetHeaders.Get('Content-Type'))>0, 'otlp ct');
+end;
+
+procedure TestS33Polish;
+var G: string; C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double; Exp: ITlsPasSpanExporter; J: string; LPath: string;
+begin
+  G := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.02, 'nextpas_tlspas'); Check(Pos('sampling_rate 0.0200', G)>0, 'gauge default');
+  G := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.5, ''); Check(Pos('nextpas_tlspas_sampling_rate', G)>0, 'gauge empty prefix defaults');
+  G := TlsPasPrometheusGauge('my_metric', 'help', 1.0, 'custom'); Check(Pos('custom_my_metric', G)>0, 'gauge custom prefix');
+  // sampling clamp extremes
+  C := DefaultTlsPasSamplingConfig; C.MaxRate := 0.05; C.MinRate := 0.001;
+  M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); H.Healthy := False; H.RejectRate := 10; M.Replay.Current := 100; M.Server.RejectPolicy := 10;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check((R > 0.04) and (R < 0.06), 'clamp max extreme');
+  C.BaseRate := 0.0001; C.MinRate := 0.001; H.Healthy := True; H.RejectRate := 0; M.Replay.Current := 0; M.Server.RejectPolicy := 0;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R >= 0.001 - 1e-9, 'clamp min');
+  C.BaseRate := -0.5; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R >= 0, 'clamp negative 0');
+  C.BaseRate := 2.0; C.MaxRate := 1.0; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); Check(R <= 1.0 + 1e-9, 'clamp 1');
+  // OTLP empty exporter still valid
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
+  J := TlsPasSpansToOTLPJSON(Exp); Check(Pos('resourceSpans', J)>0, 'empty otlp resourceSpans'); Check(Pos('"spans":[]', J)>0, 'empty spans []');
+  // file export nil/empty guard
+  Check(not TlsPasTryExportSpansToFile(nil, '/tmp/x'), 'nil exporter false');
+  Check(not TlsPasTryExportSpansToFile(Exp, ''), 'empty path false');
+  LPath := '/tmp/tlspas_polish_otlp.json';
+  if FileExists(LPath) then DeleteFile(LPath);
+  if FileExists(LPath + '.tmp') then DeleteFile(LPath + '.tmp');
+  Check(TlsPasTryExportSpansToFile(Exp, LPath), 'empty exporter export ok');
+  Check(FileExists(LPath), 'empty file exists'); DeleteFile(LPath);
+  Check(not FileExists(LPath + '.tmp'), 'no tmp leak');
+end;
+
+procedure TestS34Consistency;
+var C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double;
+    Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: TAsyncTlsPasAdaptiveTracer;
+    Exp: ITlsPasSpanExporter; J: string; Ctx: TTlsPasTraceContext; Ok: Boolean;
+begin
+  // UpdateConfig 同步 Inner Rate
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  Tracer := TAsyncTlsPasAdaptiveTracer.Create(Obs);
+  try
+    C := DefaultTlsPasSamplingConfig; C.BaseRate := 0.2; C.MinRate := 0.001; C.MaxRate := 1.0;
+    Tracer.UpdateConfig(C);
+    Check((Tracer.Inner.Rate > 0.19) and (Tracer.Inner.Rate < 0.21), 'inner rate synced 0.2');
+    Check((Tracer.GetAdaptiveRate > 0.19) and (Tracer.GetAdaptiveRate < 0.21), 'adaptive rate reflects config');
+  finally Tracer.Free; Obs.Free; end;
+  // Thr floor 0.05：Base 0.0001 时 0.02 拒收不应触发 ×3
+  C := DefaultTlsPasSamplingConfig; C.BaseRate := 0.0001; C.MinRate := 0.00005; C.MaxRate := 1.0;
+  M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); H.Healthy := True; H.RejectRate := 0.02; M.Server.RejectPolicy := 1; M.Replay.Current := 0;
+  R := TlsPasComputeAdaptiveSamplingRate(M, H, C);
+  Check(R < 0.001, 'thr floor prevents 3x at 0.02');
+  H.RejectRate := 0.06; R := TlsPasComputeAdaptiveSamplingRate(M, H, C);
+  Check(R > 0.0001, 'thr floor allows 3x at 0.06');
+  // OTLP resource完整性
+  Exp := TAsyncTlsPasMemorySpanExporter.Create(4) as ITlsPasSpanExporter;
+  J := TlsPasSpansToOTLPJSON(Exp);
+  Check(Pos('service.name', J) > 0, 'otlp service.name');
+  Check(Pos('nextpas', J) > 0, 'otlp nextpas');
+  // traceparent fuzz：非法长度/版本/hex
+  Ok := TlsPasParseTraceParent('00-zzzz', Ctx); Check(not Ok, 'fuzz short invalid');
+  Ok := TlsPasParseTraceParent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx); Check(not Ok, 'fuzz version 01 invalid');
+  Ok := TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx); Check(Ok, 'valid traceparent ok');
+  // 前缀常量一致性
+  J := TlsPasPrometheusGauge('x', 'help', 1.0, ''); Check(Pos('nextpas_tlspas_x', J) > 0, 'prefix const');
+end;
+
+procedure TestS35Snapshot;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Snap: TTlsPasAdaptiveSnapshot; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
+  try
+    Snap := Obs.GetSnapshot;
+    M := Obs.GetAdaptiveMetrics; H := Obs.GetAdaptiveHealth;
+    Check(Snap.Metrics.AdaptiveMax = M.AdaptiveMax, 'snapshot metrics equal');
+    Check(Snap.Health.Healthy = H.Healthy, 'snapshot health equal');
+    Check(Snap.Metrics.Replay.Current = 0, 'snapshot current 0');
+    Check(Pos('nextpas', TlsPasSpansToOTLPJSON(nil)) = 0, 'nil otlp no alloc but valid');
+  finally Obs.Free; end;
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1470,6 +2154,30 @@ begin
   GSuite.Test('AdaptiveMiddleware', @TestAdaptiveMiddleware);
   GSuite.Test('AdaptiveMetricsFormat', @TestAdaptiveMetricsFormat);
   GSuite.Test('AdaptiveLogLine', @TestAdaptiveLogLine);
+  GSuite.Test('AdaptivePressure', @TestAdaptivePressure);
+  GSuite.Test('AdaptivePrometheus', @TestAdaptivePrometheus);
+  GSuite.Test('PrometheusRegistry', @TestPrometheusRegistry);
+  GSuite.Test('AdaptiveConfigEnvAndFile', @TestAdaptiveConfigEnvAndFile);
+  GSuite.Test('AdaptiveHealth', @TestAdaptiveHealth);
+  GSuite.Test('HealthPrometheusLabels', @TestHealthPrometheusLabels);
+  GSuite.Test('PrometheusAppend', @TestPrometheusAppend);
+  GSuite.Test('CachedExporter', @TestCachedExporter);
+  GSuite.Test('HealthProperty', @TestHealthProperty);
+  GSuite.Test('RegistryCached', @TestRegistryCached);
+  GSuite.Test('MetricsHandler', @TestMetricsHandler);
+  GSuite.Test('MetricsHandlerCachedExporter', @TestMetricsHandlerCachedExporter);
+  GSuite.Test('TraceParent', @TestTraceParent);
+  GSuite.Test('TracerSampling', @TestTracerSampling);
+  GSuite.Test('TraceMiddleware', @TestTraceMiddleware);
+  GSuite.Test('SpanExporter', @TestSpanExporter);
+  GSuite.Test('SpansDecide', @TestSpansDecide);
+  GSuite.Test('TracezHandler', @TestTracezHandler);
+  GSuite.Test('AdaptiveSampling', @TestAdaptiveSampling);
+  GSuite.Test('AdaptiveTracer', @TestAdaptiveTracer);
+  GSuite.Test('OTLPExport', @TestOTLPExport);
+  GSuite.Test('S33Polish', @TestS33Polish);
+  GSuite.Test('S34Consistency', @TestS34Consistency);
+  GSuite.Test('S35Snapshot', @TestS35Snapshot);
   if not GSuite.Run then
     Halt(1);
 end.

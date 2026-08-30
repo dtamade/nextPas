@@ -365,15 +365,15 @@ end;
 
 function UTF8BytesToString(const AData: TBytes): string;
 var
-  LUTF8: RawByteString;
+  LLen: SizeInt;
 begin
   Result := '';
-  if Length(AData) = 0 then
+  LLen := Length(AData);
+  if LLen = 0 then
     Exit;
-  SetLength(LUTF8, Length(AData));
-  Move(AData[0], LUTF8[1], Length(AData));
-  SetCodePage(LUTF8, CP_UTF8, False);
-  Result := string(UTF8String(LUTF8));
+  SetLength(Result, LLen);
+  Move(AData[0], Result[1], LLen);
+  SetCodePage(RawByteString(Result), CP_UTF8, False);
 end;
 
 function StringToUTF8Bytes(const AStr: string): TBytes;
@@ -382,6 +382,16 @@ var
   LLen: SizeInt;
 begin
   Result := nil;
+  if Length(AStr) = 0 then
+    Exit;
+  if StringCodePage(AStr) = CP_UTF8 then
+  begin
+    LLen := Length(AStr);
+    SetLength(Result, LLen);
+    if LLen > 0 then
+      Move(AStr[1], Result[0], LLen);
+    Exit;
+  end;
   LUTF8 := UTF8String(AStr);
   LLen := Length(LUTF8);
   SetLength(Result, LLen);

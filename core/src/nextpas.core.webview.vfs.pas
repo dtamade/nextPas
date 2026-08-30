@@ -39,7 +39,7 @@ type
   TVfsAssetProvider = class(TInterfacedObject, IWebviewAssetProvider)
   private
     FVfs: IVfs;
-    function GuessMime(const APath: string): string;
+    function GuessMime(const APath: string): string; inline;
     function TryRead(const APath: string; out ABytes: TBytes;
       out AMime: string): Boolean;
   public
@@ -61,7 +61,7 @@ begin
   FVfs := AVfs;
 end;
 
-function TVfsAssetProvider.GuessMime(const APath: string): string;
+function TVfsAssetProvider.GuessMime(const APath: string): string; inline;
 begin
   Result := GuessWebviewMime(APath);
 end;

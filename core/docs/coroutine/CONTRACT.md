@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.coroutine*.pas`（3 个源文件）
 **层级**：L1（依赖 L0: base）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-30
+**版本**：1.1
 
 ---
 
@@ -95,3 +95,4 @@ TCoroutineState = (csRunning, csWaiting, csCompleted, csStopped);
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |

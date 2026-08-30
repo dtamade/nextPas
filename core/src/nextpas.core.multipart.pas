@@ -5,6 +5,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.multipart.base;
 
@@ -97,15 +98,7 @@ begin
   Result := -1;
 end;
 
-function StringToBytes(const S: string): TBytes;
-var
-  I: Integer;
-begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  for I := 1 to Length(S) do
-    Result[I - 1] := Byte(S[I]);
-end;
+
 
 { Extract quoted or unquoted parameter value from header }
 function ExtractParam(const AHeader: string; const AParamName: string): string;

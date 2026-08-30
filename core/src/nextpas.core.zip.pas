@@ -31,7 +31,7 @@ type
   TZipEntryInfo = nextpas.core.zip.base.TZipEntryInfo;
   TZipWriteOptions = nextpas.core.zip.writer.TZipWriteOptions;
   TZipAddOptions = nextpas.core.zip.writer.TZipAddOptions;
-  TZipReadOptions = nextpas.core.zip.reader.TZipReadOptions;
+  TZipReadOptions = nextpas.core.zip.base.TZipReadOptions;
   TZipExtractOptions = nextpas.core.zip.fs.TZipExtractOptions;
   IZipWriter = nextpas.core.zip.writer.IZipWriter;
   IZipBuilder = nextpas.core.zip.builder.IZipBuilder;
@@ -43,13 +43,18 @@ type
   IDecompressReader = nextpas.core.compress.intf.IDecompressReader;
 
 const
-  C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.reader.C_ZIP_DEFAULT_MAX_OUTPUT;
+  C_ZIP_DEFAULT_MAX_OUTPUT = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_OUTPUT;
+  C_ZIP_DEFAULT_MAX_DESCRIPTOR = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_DESCRIPTOR;
 
 function NewZipWriter: IZipWriter; inline;
 function DefaultZipWriteOptions: TZipWriteOptions; inline;
 function NewZipWriterWithOptions(const AOptions: TZipWriteOptions): IZipWriter; inline;
 function DefaultZipAddOptions: TZipAddOptions; inline;
 function DefaultZipReadOptions: TZipReadOptions; inline;
+function ZipUnixModeOf(const AEntry: TZipEntryInfo): Word; inline;
+function ZipRegularMode(APermissionBits: Word): Word; inline;
+function ZipDirectoryMode(APermissionBits: Word): Word; inline;
+
 function NewZipReader(const AData: TBytes): IZipReader; inline;
 function NewZipReaderWithOptions(const AData: TBytes;
   const AOptions: TZipReadOptions): IZipReader; inline;
@@ -95,9 +100,24 @@ begin
   Result := nextpas.core.zip.writer.DefaultZipAddOptions;
 end;
 
+function ZipUnixModeOf(const AEntry: TZipEntryInfo): Word;
+begin
+  Result := nextpas.core.zip.base.ZipUnixModeOf(AEntry);
+end;
+
+function ZipRegularMode(APermissionBits: Word): Word;
+begin
+  Result := nextpas.core.zip.base.ZipRegularMode(APermissionBits);
+end;
+
+function ZipDirectoryMode(APermissionBits: Word): Word;
+begin
+  Result := nextpas.core.zip.base.ZipDirectoryMode(APermissionBits);
+end;
+
 function DefaultZipReadOptions: TZipReadOptions;
 begin
-  Result := nextpas.core.zip.reader.DefaultZipReadOptions;
+  Result := nextpas.core.zip.base.DefaultZipReadOptions;
 end;
 
 function NewZipReader(const AData: TBytes): IZipReader;

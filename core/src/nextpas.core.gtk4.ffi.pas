@@ -1,10 +1,15 @@
-unit nextpas.core.window.gtk.ffi;
+unit nextpas.core.gtk4.ffi;
 
-{** @desc GTK3 窗口子集 ABI 声明层（window 家族）。
+{** @desc GTK4 窗口子集 ABI 声明层（gtk4 家族）。
        只含窗口壳必需的 GLib/GTK 类型与函数指针变量——无逻辑、无 external；
-       绑定真相归 window.gtk.loader（经 nextpas.core.platform.dl）。
+       绑定真相归 gtk4.loader（经 nextpas.core.platform.dl）。
 
-       来源：GTK3 / GLib / GObject 官方头（gtk/gtk.h, gdk/gdk.h, glib.h）。
+       来源：GTK4 / GLib / GObject 官方头（gtk/gtk.h, gdk/gdk.h, glib.h）。
+       GTK4 差异见 base 注释与本单元各符号注释：
+       - gtk_window_set_child / gtk_window_get_child 替代 gtk_container_add
+       - gtk_widget_set_visible / gtk_widget_show 替代 gtk_widget_show_all 语义
+       - gtk_window_present 替代 gdk_window_get_state 后的呈现路径
+       - gdk_surface_get_state 替代 gdk_window_get_state
        本单元禁止 uses 家族其他单元（INV-5）。 *}
 
 {$I nextpas.core.settings.inc}
@@ -60,7 +65,7 @@ var
   { GObject }
   g_object_unref: procedure(AObject: Pointer); cdecl;
 
-  { GTK3 窗口壳 }
+  { GTK4 窗口壳 — 保留自 GTK3 的通用窗口壳 }
   gtk_init_check: function(AArgc: PInt32; AArgv: PPAnsiChar): gboolean; cdecl;
   gtk_window_new: function(AType: gint): Pointer; cdecl;
   gtk_window_set_title: procedure(AWindow: Pointer; ATitle: PAnsiChar); cdecl;
@@ -87,6 +92,14 @@ var
   gtk_main_quit: procedure; cdecl;
   gtk_main_iteration_do: function(ABlocking: gboolean): gboolean; cdecl;
   gtk_events_pending: function: gboolean; cdecl;
+
+  { GTK4 特有 — 可选绑定（BindOpt），缺失时保持 nil }
+  gtk_window_set_child: procedure(AWindow: Pointer; AChild: Pointer); cdecl;
+  gtk_window_get_child: function(AWindow: Pointer): Pointer; cdecl;
+  gtk_widget_set_visible: procedure(AWidget: Pointer; AVisible: gboolean); cdecl;
+  gtk_widget_show: procedure(AWidget: Pointer); cdecl;
+  gtk_window_present: procedure(AWindow: Pointer); cdecl;
+  gdk_surface_get_state: function(ASurface: Pointer): guint; cdecl;
 
 implementation
 

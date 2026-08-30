@@ -115,7 +115,8 @@ function TryLoadWindowWin32(out AInfo: TWindowWin32LoadInfo): Boolean;
       BindReq(@TranslateMessage, 'TranslateMessage') and
       BindReq(@DispatchMessageA, 'DispatchMessageA') and
       BindReq(@SetWindowLongPtrA, 'SetWindowLongPtrA') and
-      BindReq(@GetWindowLongPtrA, 'GetWindowLongPtrA');
+      BindReq(@GetWindowLongPtrA, 'GetWindowLongPtrA') and
+      BindReq(@GetKeyState, 'GetKeyState');
     BindOpt(@GetDpiForWindow, 'GetDpiForWindow');
     BindOpt(@WaitMessage, 'WaitMessage');
   end;

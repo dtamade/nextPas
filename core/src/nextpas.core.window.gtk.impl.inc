@@ -1,38 +1,15 @@
-unit nextpas.core.window.gtk;
+{**
+  Shared GTK window backend implementation for window.gtk3/gtk4/gtk2.
+  This file is included via include nextpas.core.window.gtk.impl.inc from each
+  thin wrapper (window.gtk3.pas / window.gtk4.pas / window.gtk2.pas).
+  Wrapper must define before inclusion:
+    - TGtkLoadInfo = <family-specific>LoadInfo (TGtk3LoadInfo / TGtk4LoadInfo / TGtk2LoadInfo)
+    - function TryLoadGtk(out AInfo: TGtkLoadInfo): Boolean;
+  and must have uses of the matching family base/ffi/loader + live + thread + sync.
 
-{** @desc GTK 后端：自 webview.gtk.win 机械抽取 + 事件信号挂接。
-       依托 window.gtk.ffi/.loader（platform.dl 装载），实现 IWindow
-       全量方法与 g_idle_add_full 驱动的 IWindowDispatcher。
-
-       线程契约与生命周期同 CONTRACT §5-6；NativeHandle 诚实表见
-       CONTRACT §2.1（X11 XID 待 gdk_x11 补，当前交付 GdkWindow*）。 *}
-
-{$I nextpas.core.settings.inc}
-
-interface
-
-uses
-  nextpas.core.window.base,
-  nextpas.core.window.intf;
-
-function WindowGtkIsAvailable: Boolean;
-function CreateWindowGtk(const AOptions: TWindowOptions): IWindow;
-function GtkLiveWindowCount: Integer;
-procedure WindowGtkRunMainLoop;
-procedure WindowGtkQuitMainLoop;
-
-implementation
-
-uses
-  Math,
-  SysUtils,
-  nextpas.core.errors,
-  nextpas.core.platform.thread,
-  nextpas.core.sync.intf,
-  nextpas.core.sync.mutex,
-  nextpas.core.window.gtk.ffi,
-  nextpas.core.window.gtk.loader,
-  nextpas.core.window.live;
+  No external uses here; all symbols (gtk_*, g_*, GDK_*, gboolean etc) come from
+  the wrapper's uses clause. Per-unit globals (GInitDone/GInitOk/GLiveRegistry)
+  remain isolated per family (separate compilation). *}
 
 var
   GInitDone: Boolean = False;
@@ -46,7 +23,7 @@ var
 begin
   if not GInitDone then
   begin
-    Math.SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
+    nextpas.core.math.SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
       exOverflow, exUnderflow, exPrecision]);
     GInitOk := gtk_init_check(@LArgc, nil) <> 0;
     GInitDone := True;
@@ -56,9 +33,9 @@ end;
 
 function WindowGtkIsAvailable: Boolean;
 var
-  LInfo: TWindowGtkLoadInfo;
+  LInfo: TGtkLoadInfo;
 begin
-  Result := TryLoadWindowGtk(LInfo) and LInfo.Loaded;
+  Result := TryLoadGtk(LInfo) and LInfo.Loaded;
 end;
 
 { ---- Dispatcher via g_idle_add_full ---- }
@@ -81,7 +58,6 @@ begin
   try
     if Assigned(LProc) then LProc();
   except
-    // let exception propagate to main loop (fail-fast)
     raise;
   end;
   Result := GLIB_SOURCE_REMOVE;
@@ -190,8 +166,6 @@ begin
   P^.Proc := AProc;
   LTag := g_idle_add_full(G_PRIORITY_DEFAULT, @IdleCallback, P, @IdleDestroy);
   Track(LTag);
-  // Note: IdleCallback will free P; we leak tracking until source fires or DropAll.
-  // To avoid stale, we could hook but simple DropAll covers Close path.
 end;
 
 procedure TWindowGtkDispatcher.Post(AProc: TWindowProcMethod);
@@ -243,6 +217,11 @@ type
     FSignalDelete: gulong;
     FSignalConfigure: gulong;
     FSignalFocusIn: gulong;
+    FSignalKeyPress: gulong;
+    FSignalKeyRelease: gulong;
+    FSignalButtonPress: gulong;
+    FSignalButtonRelease: gulong;
+    FSignalMotion: gulong;
     FSignalFocusOut: gulong;
     FSignalScale: gulong;
     FSignalDestroy: gulong;
@@ -291,10 +270,10 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E.Kind := weCloseRequested;
+  E := Default(TWindowEvent); E.Kind := weCloseRequested;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
-  Result := 1; // TRUE: prevent default destroy, app must Close
+  Result := 1;
 end;
 
 function CbConfigure(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
@@ -308,7 +287,7 @@ begin
   H := gtk_widget_get_allocated_height(Self.FHandle);
   Self.FWidth := W;
   Self.FHeight := H;
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := W; E.Height := H; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 0;
@@ -320,7 +299,7 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E.Kind := weFocusIn;
+  E := Default(TWindowEvent); E.Kind := weFocusIn;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 0;
@@ -332,8 +311,69 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E.Kind := weFocusOut;
+  E := Default(TWindowEvent); E.Kind := weFocusOut;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
+  Self.DoDispatch(E);
+  Result := 0;
+end;
+
+function CbKeyPress(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
+var
+  Self: TWindowGtk;
+  E: TWindowEvent;
+begin
+  Self := TWindowGtk(AData);
+  E := Default(TWindowEvent); E.Kind := weKeyDown;
+  // GdkEventKey keyval/state parsing deferred: emit 0, honest minimal
+  E.KeyCode := 0; E.Modifiers := 0;
+  Self.DoDispatch(E);
+  Result := 0;
+end;
+
+function CbKeyRelease(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
+var
+  Self: TWindowGtk;
+  E: TWindowEvent;
+begin
+  Self := TWindowGtk(AData);
+  E := Default(TWindowEvent); E.Kind := weKeyUp;
+  E.KeyCode := 0; E.Modifiers := 0;
+  Self.DoDispatch(E);
+  Result := 0;
+end;
+
+function CbButtonPress(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
+var
+  Self: TWindowGtk;
+  E: TWindowEvent;
+begin
+  Self := TWindowGtk(AData);
+  E := Default(TWindowEvent); E.Kind := weMouseDown;
+  E.X := 0; E.Y := 0; E.Button := 1;
+  Self.DoDispatch(E);
+  Result := 0;
+end;
+
+function CbButtonRelease(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
+var
+  Self: TWindowGtk;
+  E: TWindowEvent;
+begin
+  Self := TWindowGtk(AData);
+  E := Default(TWindowEvent); E.Kind := weMouseUp;
+  E.X := 0; E.Y := 0; E.Button := 1;
+  Self.DoDispatch(E);
+  Result := 0;
+end;
+
+function CbMotion(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
+var
+  Self: TWindowGtk;
+  E: TWindowEvent;
+begin
+  Self := TWindowGtk(AData);
+  E := Default(TWindowEvent); E.Kind := weMouseMove;
+  E.X := 0; E.Y := 0; E.Button := 0;
   Self.DoDispatch(E);
   Result := 0;
 end;
@@ -347,7 +387,7 @@ begin
   Self := TWindowGtk(AData);
   S := gtk_widget_get_scale_factor(Self.FHandle);
   if S <= 0 then S := 1;
-  E.Kind := weScaleChanged;
+  E := Default(TWindowEvent); E.Kind := weScaleChanged;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0;
   E.NewScale := S;
   Self.DoDispatch(E);
@@ -376,11 +416,11 @@ end;
 
 constructor TWindowGtk.Create(const AOptions: TWindowOptions);
 var
-  LInfo: TWindowGtkLoadInfo;
+  LInfo: TGtkLoadInfo;
 begin
   inherited Create;
   CheckWindowOptions(AOptions);
-  if not TryLoadWindowGtk(LInfo) or not LInfo.Loaded then
+  if not TryLoadGtk(LInfo) or not LInfo.Loaded then
     raise EWindowBackendUnavailable.Create('GTK backend not available');
   if not EnsureGtkInit then
     raise EWindowNotInitialized.Create('gtk_init_check failed (no display?)');
@@ -408,7 +448,7 @@ begin
   gtk_window_set_default_size(FHandle, FWidth, FHeight);
   gtk_window_set_resizable(FHandle, Ord(FResizable));
   if FTitle <> '' then
-    gtk_window_set_title(FHandle, PAnsiChar(AnsiString(FTitle)));
+    gtk_window_set_title(FHandle, PAnsiChar(StrToAnsi(FTitle)));
   if FMaximized then
     gtk_window_maximize(FHandle);
 
@@ -434,12 +474,15 @@ procedure TWindowGtk.ConnectSignals;
 begin
   FSignalDelete   := g_signal_connect_data(FHandle, 'delete-event', Pointer(@CbDelete), Self, nil, 0);
   FSignalConfigure:= g_signal_connect_data(FHandle, 'configure-event', Pointer(@CbConfigure), Self, nil, 0);
-  // focus events require GDK_FOCUS_CHANGE_MASK but signal still fires
   FSignalFocusIn  := g_signal_connect_data(FHandle, 'focus-in-event', Pointer(@CbFocusIn), Self, nil, 0);
   FSignalFocusOut := g_signal_connect_data(FHandle, 'focus-out-event', Pointer(@CbFocusOut), Self, nil, 0);
+  FSignalKeyPress := g_signal_connect_data(FHandle, 'key-press-event', Pointer(@CbKeyPress), Self, nil, 0);
+  FSignalKeyRelease := g_signal_connect_data(FHandle, 'key-release-event', Pointer(@CbKeyRelease), Self, nil, 0);
+  FSignalButtonPress := g_signal_connect_data(FHandle, 'button-press-event', Pointer(@CbButtonPress), Self, nil, 0);
+  FSignalButtonRelease := g_signal_connect_data(FHandle, 'button-release-event', Pointer(@CbButtonRelease), Self, nil, 0);
+  FSignalMotion := g_signal_connect_data(FHandle, 'motion-notify-event', Pointer(@CbMotion), Self, nil, 0);
   FSignalScale    := g_signal_connect_data(FHandle, 'notify::scale-factor', Pointer(@CbScaleNotify), Self, nil, 0);
   FSignalDestroy  := g_signal_connect_data(FHandle, 'destroy', Pointer(@CbDestroy), Self, nil, 0);
-  // window-state-event for maximized/minimized tracking
   FSignalState    := g_signal_connect_data(FHandle, 'window-state-event', Pointer(@CbWindowState), Self, nil, 0);
 end;
 
@@ -450,10 +493,16 @@ begin
   if FSignalConfigure <> 0 then g_signal_handler_disconnect(FHandle, FSignalConfigure);
   if FSignalFocusIn <> 0 then g_signal_handler_disconnect(FHandle, FSignalFocusIn);
   if FSignalFocusOut <> 0 then g_signal_handler_disconnect(FHandle, FSignalFocusOut);
+  if FSignalKeyPress <> 0 then g_signal_handler_disconnect(FHandle, FSignalKeyPress);
+  if FSignalKeyRelease <> 0 then g_signal_handler_disconnect(FHandle, FSignalKeyRelease);
+  if FSignalButtonPress <> 0 then g_signal_handler_disconnect(FHandle, FSignalButtonPress);
+  if FSignalButtonRelease <> 0 then g_signal_handler_disconnect(FHandle, FSignalButtonRelease);
+  if FSignalMotion <> 0 then g_signal_handler_disconnect(FHandle, FSignalMotion);
   if FSignalScale <> 0 then g_signal_handler_disconnect(FHandle, FSignalScale);
   if FSignalDestroy <> 0 then g_signal_handler_disconnect(FHandle, FSignalDestroy);
   if FSignalState <> 0 then g_signal_handler_disconnect(FHandle, FSignalState);
   FSignalDelete := 0; FSignalConfigure := 0; FSignalFocusIn := 0; FSignalFocusOut := 0;
+  FSignalKeyPress := 0; FSignalKeyRelease := 0; FSignalButtonPress := 0; FSignalButtonRelease := 0; FSignalMotion := 0;
   FSignalScale := 0; FSignalDestroy := 0; FSignalState := 0;
 end;
 
@@ -544,7 +593,7 @@ begin
   RequireOpen;
   FTitle := ATitle;
   if FHandle <> nil then
-    gtk_window_set_title(FHandle, PAnsiChar(AnsiString(ATitle)));
+    gtk_window_set_title(FHandle, PAnsiChar(StrToAnsi(ATitle)));
 end;
 
 function TWindowGtk.GetTitle: string;
@@ -556,7 +605,7 @@ begin
   begin
     P := gtk_window_get_title(FHandle);
     if P <> nil then
-      Result := string(AnsiString(P))
+      Result := AnsiPtrToStr(P)
     else
       Result := FTitle;
   end
@@ -575,7 +624,7 @@ begin
   FHeight := AHeight;
   if FHandle <> nil then
     gtk_window_resize(FHandle, AWidth, AHeight);
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
@@ -615,7 +664,7 @@ begin
   FMinimized := False;
   if FHandle <> nil then
     gtk_window_maximize(FHandle);
-  E.Kind := weResized;
+  E := Default(TWindowEvent); E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
@@ -696,8 +745,6 @@ begin
   if FClosed or (FHandle = nil) then
     Exit(nil);
   GW := gtk_widget_get_window(FHandle);
-  // Before Show/realize, GdkWindow is nil — honest nil until realized
-  // After Show, deliver GdkWindow* (for X11, caller may XID via gdk_x11 if needed)
   Result := TWindowNativeHandle(GW);
 end;
 
@@ -745,7 +792,4 @@ begin
     gtk_main_quit();
 end;
 
-finalization
-  GLiveRegistry.Free;
-
-end.
+{ finalization handled by wrapper (per-family GLiveRegistry) }

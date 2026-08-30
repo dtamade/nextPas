@@ -57,6 +57,32 @@ if [[ ! -f "$SRC/nextpas.core.window.factory.pas" ]]; then
   fail=1
 fi
 
+# --- INV-6: legacy window.gtk shim freeze (4.0) — 禁止新 uses window.gtk 裸名 ---
+for f in "$SRC"/nextpas.core.window*.pas; do
+  [[ -e "$f" ]] || continue
+  bn="$(basename "$f")"
+  if [[ "$bn" == "nextpas.core.window.gtk.pas" || "$bn" == "nextpas.core.window.gtk.ffi.pas" || "$bn" == "nextpas.core.window.gtk.loader.pas" ]]; then
+    continue
+  fi
+  hits="$(strip_comments "$f" | grep -Ec "nextpas\.core\.window\.gtk\b" || true)"
+  if [[ "$hits" -ne 0 ]]; then
+    echo "FAIL: legacy shim 'window.gtk' used in $bn (INV-6, use window.gtk3), $hits hit(s)"
+    fail=1
+  fi
+done
+if [[ ! -f "$SRC/nextpas.core.window.pas" ]]; then
+  echo "FAIL: missing facade nextpas.core.window.pas"
+  fail=1
+fi
+if [[ ! -f "$SRC/nextpas.core.window.fake.pas" ]]; then
+  echo "FAIL: missing fake unit nextpas.core.window.fake.pas"
+  fail=1
+fi
+if [[ ! -f "$SRC/nextpas.core.window.factory.pas" ]]; then
+  echo "FAIL: missing factory unit nextpas.core.window.factory.pas"
+  fail=1
+fi
+
 # --- INV-4 家族内复核：raw host units 缺席（先剥注释再扫描） ---
 strip_comments() {
   perl -0777 -pe 's/\{.*?\}//gs; s/\(\*.*?\*\)//gs; s{//[^\n]*}{}g' "$1"

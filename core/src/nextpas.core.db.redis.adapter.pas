@@ -1,36 +1,7 @@
 unit nextpas.core.db.redis.adapter;
 
-{** @desc IDbConnection/IDbQuery 的 Redis 原生适配器（V3-A5）。
-
-       定位：RESP2 协议原生客户端（无 C 库依赖），键值面映射到统
-       一层。命令文本 = 空白分词的命令行（GET key / SET key val），
-       ?/?N 占位符替换为独立 bulk 参数——RESP 长度前缀天然二进制
-       安全，注入安全由协议构造保证（无转义路径）。
-
-       执行模型：IDbQuery 惰性执行（首个 Step 发命令并解析完整回
-       复；后续 Step 只遍历已解析行，无 IO）；Reset 重臂（下次
-       Step 重发命令，对齐 odbc Reset 语义）。
-
-       回复 → 行映射（诚实最小面）：array 回复每元素一行；
-       simple/bulk/integer 标量一行；null 零行；error 回复在执行点
-       抛 EDbError（db.err ClassifyRedis 归一）。单列列名 'reply'。
-
-       事务控制面：MULTI/EXEC/DISCARD 直映。MULTI 期间命令被服务
-       端排队，本层透明收到 +QUEUED（消费方读到的是排队标记而非
-       结果——Redis 固有语义）；CommitTxn 校验 EXEC 数组内错误元素
-       后丢弃载荷（排队命令的实际结果不经统一层暴露）；EXECABORT
-       → decTransaction。AImmediate 无对应语义接受为 no-op。
-
-       能力降级矩阵（诚实契约，CONTRACT §2.13 同文）：
-         - Savepoints / StmtCacheControl / LargeObjects /
-           NativeBool / MultiStatementExec / StatementTimeout：False。
-         - BatchExecutor：True——真流水线（一次写 burst + N 读），
-           sqlite 式精确到步的错误定位。
-         - CaseSensitiveIdentifiers：True（键二进制敏感）。
-         - MaxPlaceholders：999 保守下界。
-
-       观测钩子：§2.12 四后端同构接线（attach-catch-up、首个执行窗
-       口计时一次、错误类目透传）。 *}
+{** @desc IDbConnection 的 Redis 原生适配器（RESP2 流水线/MULTI 直映，惰性 Query/Reset，单列 'reply'）。 *}
+{** 能力降级与观测同构见 CONTRACT §2.12/§2.13；命令分词/回复映射/事务语义详实现（单源以 CONTRACT 为准）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -41,7 +12,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.sync,
   nextpas.core.errors,
+  nextpas.core.text.utils,
   nextpas.core.text.conv,
+  nextpas.core.bytes.ops,
   nextpas.core.time,
   nextpas.core.net,
   nextpas.core.db.base,
@@ -130,7 +103,10 @@ begin
       raise EDbError.CreateSimple(dbkRedis,
         'invalid port ":' + LTail + '"');
   end;
-  AOpts.Host := Trim(LHostPart);
+  begin
+    LHostPart := Trim(LHostPart);
+    AOpts.Host := LHostPart;
+  end;
   if AOpts.Host = '' then
     raise EDbError.CreateSimple(dbkRedis, 'empty host');
   { 统一层连接选项映射（advisory）：StatementTimeoutMs 作为 IO
@@ -586,15 +562,8 @@ begin
     RespEncodeCommand(LArgs, LFrames);
     LStepFrames[I] := LFrames;
   end;
-  { 单次写 burst = 流水线关键路径 }
-  SetLength(LFrames, 0);
-  for I := 0 to High(LStepFrames) do
-  begin
-    SetLength(LFrames, Length(LFrames) + Length(LStepFrames[I]));
-    if Length(LStepFrames[I]) > 0 then
-      Move(LStepFrames[I][0], LFrames[Length(LFrames) -
-        Length(LStepFrames[I])], Length(LStepFrames[I]));
-  end;
+  { 单次写 burst = 流水线关键路径：预求和单分配直写（已收敛至 bytes.ops 单源） }
+  LFrames := BytesConcatMany(LStepFrames);
   LT0 := 0;
   LTimed := FTrace.BeginOp(LT0);
   try

@@ -18,7 +18,7 @@ type
   TWkLoadInfo = WKLoadInfo;
 
 function TryLoadWk(out AInfo: TWkLoadInfo): Boolean;
-function WkLoadInfo: TWkLoadInfo;
+function WkLoadInfo: TWkLoadInfo; inline;
 
 implementation
 
@@ -44,7 +44,7 @@ begin
   Result := False;
 end;
 
-function WkLoadInfo: TWkLoadInfo;
+function WkLoadInfo: TWkLoadInfo; inline;
 begin
   if not GProbed then
     TryLoadWk(Result)

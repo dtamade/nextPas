@@ -133,20 +133,13 @@ function GetHashAlgorithmName(AAlgorithm: THashAlgorithm): string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.hash.md5,
   nextpas.core.hash.sha1,
   nextpas.core.hash.sha256,
   nextpas.core.hash.sha512,
   nextpas.core.hash.blake2b,
   nextpas.core.hash.util;
-
-function StringToBytes(const S: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
-end;
 
 function HashOf(AInner: IHasher; const AData: TBytes): TBytes;
 begin
