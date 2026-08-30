@@ -67,6 +67,45 @@ begin
   Result := -1;
 end;
 
+function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean; inline;
+var I: Integer; Neg: Boolean; C: Char; U: UInt64;
+begin
+  Result := False; OutVal := 0;
+  if V.IsEmpty then Exit;
+  I := 0; Neg := False;
+  if V.Data[0] = '-' then begin Neg := True; I := 1; if V.Len = 1 then Exit; end
+  else if V.Data[0] = '+' then begin I := 1; if V.Len = 1 then Exit; end;
+  U := 0;
+  while I < Integer(V.Len) do
+  begin
+    C := V.Data[I];
+    if (C < '0') or (C > '9') then Exit;
+    U := U * 10 + UInt64(Ord(C) - Ord('0'));
+    if U > UInt64(High(Int64)) + Ord(Neg) then Exit;
+    Inc(I);
+  end;
+  if Neg then OutVal := -Int64(U) else OutVal := Int64(U);
+  Result := True;
+end;
+
+function TryPureIntAdd(const V: TStringView; out OutVal: TJsValue): Boolean; inline;
+var P: PtrInt; L, R: TStringView; A, B: Int64;
+begin
+  Result := False;
+  P := V.IndexOf('+');
+  if P < 0 then Exit;
+  // 禁止多 '+'，禁止 '(' / JSON / 宿主 已在外层先判
+  if V.IndexOf('(') >= 0 then Exit;
+  L := V.Slice(0, SizeUInt(P)).Trim;
+  R := V.Slice(SizeUInt(P)+1, V.Len - SizeUInt(P) -1).Trim;
+  if L.IsEmpty or R.IsEmpty then Exit;
+  // 左右仅允许 [+-]?[0-9]+，避免把 'a+b' 误判
+  if not TryPureInt(L, A) then Exit;
+  if not TryPureInt(R, B) then Exit;
+  OutVal := JsIntValue(A + B);
+  Result := True;
+end;
+
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions;
   ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
 var
@@ -80,6 +119,7 @@ var
   LProc: TJsHostProc;
   LThis: TJsValue;
   LHasArg: Boolean;
+  LAdd: TJsValue;
 begin
   LNoArgs := nil;
   if JsTrimEquals(ACode, '') then
@@ -88,7 +128,6 @@ begin
     raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
   if (AOptions.MemoryLimit > 0) and (AOptions.MemoryLimit < 1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', ABackend);
-  if JsTrimEquals(ACode, '1+2') then Exit(JsIntValue(3));
   if JsTrimEquals(ACode, 'bad(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', ABackend);
   if JsTrimEquals(ACode, 'foo(') then
@@ -100,6 +139,7 @@ begin
   if JsTrimEquals(ACode, 'true') then Exit(JsBoolValue(True));
   if JsTrimEquals(ACode, 'false') then Exit(JsBoolValue(False));
   LView := TStringView.FromStr(ACode).Trim;
+  if TryPureIntAdd(LView, LAdd) then Exit(LAdd);
   LIdx := LView.IndexOf('(');
   if LIdx >= 0 then
   begin
