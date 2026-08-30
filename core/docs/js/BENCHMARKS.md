@@ -44,6 +44,18 @@
 
 基线落库格式：`操作 迭代 总耗时 ns/op 吞吐`，与 `bench` 框架对齐，随 `PARITY-go-rust.md` 对照刷新。
 
+### 3.1 实测基线（2026-08-31, Linux x86_64 44c, FPC 3.3.1, -O2, bench_eval 5 后端矩阵）
+
+| 后端 | Eval/small ns/op | Eval/host ns/op (B/op) | JSON/interop ns/op (B/op) | Value/ops ns/op (B/op) | 备注 |
+|------|------------------|------------------------|---------------------------|------------------------|------|
+| fake | 191 | 493 (18/1) | 1685 (176/1) | 72 (0/0) | 纯桩基线 |
+| js888 | 244 | 606 (18/1) | 1612 (176/1) | 94 (0/0) | 纯 Pascal 单源 |
+| v8 | 435 | 933 (18/1) | 1878 (176/1) | 77 (0/0) | 纯桩占位 |
+| chakra | 340 | 561 (18/1) | 1879 (176/1) | 50 (0/0) | 纯桩占位 |
+| quickjs | SKIP | SKIP | SKIP | SKIP | 无 `libquickjs.so`（探针 8 名完整，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 fail-closed） |
+
+> 纯族 `Value/ops` 零分配符合 `B/op=0` 断言；`Eval/host` 的 18B/1 alloc 为宿主参 `TStringView→string` 单次分配，后续 `js888 M3c` 将归零。详见 `build/bench-eval-*.json` 落盘。
+
 ---
 
 ## 4. 回归阈值
@@ -61,4 +73,5 @@
 | 日期 | 版本 | 变更 |
 |------|------|------|
 | 2026-08-30 | 1.0 | 首版：方法 + 套件 + 目标 + 回归阈值 |
+| 2026-08-31 | 1.1 | 落盘 5 后端对照基线（fake/js888/v8/chakra 实测 + quickjs SKIP）+ B/op 断言 |
 
