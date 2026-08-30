@@ -27,10 +27,12 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 const jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
   jsbkFake = nextpas.core.js.base.jsbkFake;
   jsbkJs888 = nextpas.core.js.base.jsbkJs888;
+  jsbkV8 = nextpas.core.js.base.jsbkV8;
+  jsbkChakra = nextpas.core.js.base.jsbkChakra;
 implementation
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; begin Result := TJsRuntimeOptions.Default; end;
 function JsBackendAvailable(AKind: TJsBackendKind): Boolean;
-begin case AKind of jsbkFake, jsbkJs888: Result := True; jsbkQuickJs: Result := JsQuickJsIsAvailable; else Result := False; end; end;
+begin case AKind of jsbkFake, jsbkJs888: Result := True; jsbkQuickJs: Result := JsQuickJsIsAvailable; jsbkV8, jsbkChakra: Result := False; else Result := False; end; end;
 function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime;
 begin Result := CreateJsRuntime(AKind, DefaultJsRuntimeOptions); end;
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime;

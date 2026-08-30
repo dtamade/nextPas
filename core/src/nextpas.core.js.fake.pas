@@ -67,6 +67,13 @@ type
     function NewArray: TJsValue;
     function NewJson(const AJson: TJsonValue): TJsValue;
     function ToJson(const AValue: TJsValue): IJsonDocument;
+    function HasProp(const AObj: TJsValue; const AName: string): Boolean;
+    function DeleteProp(const AObj: TJsValue; const AName: string): Boolean;
+    function GetKeys(const AObj: TJsValue): TJsStringArray;
+    function NewError(const AMessage: string; ACategory: TJsErrorCategory = jecUnknown): TJsValue;
+    function NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; overload;
+    function NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; overload;
+    function NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; overload;
     function GetProp(const AObj: TJsValue; const AName: string): TJsValue;
     procedure SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
     function Call(const AFunc: TJsValue; const AThis: TJsValue;
@@ -408,6 +415,13 @@ begin
   end;
   Result := JsonParse(LJson);
 end;
+function TJsFakeContext.HasProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result := False; end;
+function TJsFakeContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result := False; end;
+function TJsFakeContext.GetKeys(const AObj: TJsValue): TJsStringArray; begin EnsureNotClosed; Result := nil; end;
+function TJsFakeContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result := JsErrorValue(AMessage); end;
+function TJsFakeContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName, AHandler); Result := JsFunctionValue(AName); end;
+function TJsFakeContext.NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName, AHandler); Result := JsFunctionValue(AName); end;
+function TJsFakeContext.NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName, AHandler); Result := JsFunctionValue(AName); end;
 
 function TJsFakeContext.GetProp(const AObj: TJsValue; const AName: string): TJsValue;
 begin

@@ -12,9 +12,9 @@ uses
   nextpas.core.exception;
 
 type
-  TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888);
+  TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888, jsbkV8, jsbkChakra);
   TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString,
-    jskObject, jskArray, jskFunction, jskError, jskPromise);
+    jskObject, jskArray, jskFunction, jskError, jskPromise, jskSymbol, jskBigInt);
   TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory,
     jecTimeout, jecNotSupported, jecUnknown);
 
@@ -91,6 +91,8 @@ begin
     jsbkQuickJs: Result := 'jsbkQuickJs';
     jsbkFake: Result := 'jsbkFake';
     jsbkJs888: Result := 'jsbkJs888';
+    jsbkV8: Result := 'jsbkV8';
+    jsbkChakra: Result := 'jsbkChakra';
   end;
 end;
 
@@ -123,6 +125,8 @@ begin
     jskFunction: Result := 'jskFunction';
     jskError: Result := 'jskError';
     jskPromise: Result := 'jskPromise';
+    jskSymbol: Result := 'jskSymbol';
+    jskBigInt: Result := 'jskBigInt';
   end;
 end;
 
