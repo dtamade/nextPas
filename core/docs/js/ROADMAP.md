@@ -48,7 +48,7 @@
 
 | 项 | 内容 |
 |----|------|
-| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤500 行）、`js.pas` 门面（≤80 行） |
+| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 fs/thread 集成）、`js.pas` 门面（≤80 行） |
 | 测试 | `test_js_base`（选项/枚举/错误族）、`test_js_fake`（契约全量 40+ 用例，见 TESTING §3） |
 | 示例 | `demo_js`（`1+2`/`echo`/`JSON` 三段） |
 | 基准 | `bench_eval` 骨架（可编译，未落基线） |
@@ -58,10 +58,10 @@
 
 | 项 | 内容 |
 |----|------|
-| 源码 | `js.quickjs.ffi.pas`（仅 `cdecl external`）、`js.quickjs.loader.pas`（`platform.dl` 探测，≤250 行）、`js.quickjs.pas`（≤600 行） |
+| 源码 | `js.quickjs.ffi.pas`（`cdecl` 指针类型，无 `external`）、`js.quickjs.loader.pas`（`platform.dl` 8 名跨平台探测，≤250 行）、`js.quickjs.pas`（≤600 行） |
 | 测试 | `test_js_quickjs_runtime`（`1+2`/`JSON`/`超时`/`webview 桥 dry-run`），无库时 SKIP |
 | 基准 | `bench_eval` 可跑，输出 `ns/op`（未冻结） |
-| 风险 | `libquickjs.so` 多名差异 → 缓解：loader 三名探测 + `JsBackendAvailable` 矩阵测试 |
+| 风险 | `libquickjs` 多名跨平台差异 → 缓解：loader 8 名跨平台探测 + `JsBackendAvailable` 矩阵测试 |
 
 ### M3 — S2 联动与加固
 

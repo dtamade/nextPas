@@ -42,7 +42,7 @@
 |------|------|------|------|
 | G-M1-1 | `test_js_base` 全绿 + heaptrc 0 | `make focused FOCUS=core/tests/nextpas.core.js/test_js_base` | AllPassed |
 | G-M1-2 | `test_js_fake` 全绿 + heaptrc 0（40+ 用例，见 TESTING §3） | `make focused FOCUS=core/tests/nextpas.core.js/test_js_fake` | AllPassed |
-| G-M1-3 | `source-contract` pass（INV-1/INV-2/层级，含 `grep -R "quickjs\|v8" core/src/nextpas.core.js.base.pas` 0 命中）+ 单单元行数 ≤500/800 阈值抽样 `wc -l core/src/nextpas.core.js*.pas` | `python3 core/tests/architecture/check_source_contracts.py` + `wc -l` | pass + ≤500/800 |
+| G-M1-3 | `source-contract` pass（INV-1/INV-2/层级，含 `grep -R "quickjs\|v8" core/src/nextpas.core.js.base.pas` 0 命中）+ 单单元行数 ≤550/800 阈值抽样 `wc -l core/src/nextpas.core.js*.pas`（`js.fake` 550，其余 500） | `python3 core/tests/architecture/check_source_contracts.py` + `wc -l` | pass + ≤550/800 |
 | G-M1-4 | `demo_js` 可编译运行 | `make -C core/examples/nextpas.core.js/demo_js run` | exit 0 |
 | G-M1-5 | `fpc -vh` 0 hint | `fpc -vh` | 0 |
 

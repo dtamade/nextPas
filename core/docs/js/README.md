@@ -144,7 +144,7 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 
 - **双层值模型**：`TJsValue` record 不透明轻量句柄（16B，零接口，QuickJS 侧 `JSValue`/纯侧自有句柄同版图）+ `IJsValueRef` 自动根化（抄 `json` 的 `TJsonValue + IJsonDocument`）。
 - **同步 Eval**：`js.Eval` 同线程同步，`webview.Eval` 异步 exactly-once，二者不混用；`webview.fake` 可选注入 `IJsContext` 时仍经 `Dispatcher.Post` 兑现。
-- **FFI 纪律**：`*.ffi` 只含 `cdecl external`，`*.loader` 唯一可触 `platform.dl`，探测 `libquickjs.so.1 → .so.0 → quickjs` 幂等缓存；`js.js888/js.fake` 禁 `platform.dl/ffi`，恒可用。
+- **FFI 纪律**：`*.ffi` 只含 `cdecl` 函数指针类型（无 `external` 链接依赖），`*.loader` 唯一可触 `platform.dl`，跨平台 8 名探测 `so.1/so.0/.so/dylib/1.dylib/dll/quickjs` 幂等缓存；`js.js888/js.fake` 禁 `platform.dl/ffi`，恒可用。
 - **纯后端保证**：`js.intf` 不暴露 `JSValue`，`TJsValueKind/TJsErrorCategory/TJsRuntimeOptions` 后端无关，`js.js888` 与 `fake` 同约束，故后期加纯后端时 `base/intf` 零改动（见 `DESIGN §9`）。
 
 详见 `DESIGN.md §9` 与 `CONTRACT.md §1/§9`。

@@ -63,14 +63,14 @@ flowchart TB
 ## 3. FFI 纪律（为何 loader 分离）
 
 - `*.ffi` 只含 `cdecl external` 声明（`design-conventions §6`），不含 `platform.dl`，不含逻辑，编译期可语法检查（`fpc -vh` 0 hint）。
-- `*.loader` 唯一可触 `platform.dl`，幂等缓存 `TryLoadQuickJs(out Info)`，探测 `libquickjs.so.1 → .so.0 → quickjs` 三名，失败时 `JsBackendAvailable=False`，`CreateJsRuntime` 抛 `EJsBackendUnavailable`（含探测名表），不让编译锁死（同 `webview.gtk.loader` 探测 `libwebkit2gtk-4.1/4.0`）。
+- `*.loader` 唯一可触 `platform.dl`，幂等缓存 `TryLoadQuickJs`，跨平台探测 `JS_QUICKJS_PROBE_NAMES[0..7]`（`so.1/so.0/.so/dylib/1.dylib/dll/quickjs`，Windows 首探 `quickjs.dll`，macOS 首探 `dylib`），失败时 `JsBackendAvailable=False`，`CreateJsRuntime` 抛 `EJsBackendUnavailable`（含 8 名表），不让编译锁死（同 `webview.gtk.loader`）。
 - 禁止 `DynLibs`（`gate policy: raw host units 仅限 owner path`），统一走 `platform.dl` 的 `DlOpen/DlSym/DlClose`。
 
 **测试**：`test_js_quickjs_runtime` 前置 `JsBackendAvailable` 探测，CI 无库时 SKIP，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 强制 fail 用于本地验证。
 
 **静链 vs 动探**（game888 对比，见 `GAME888_BORROW.md §4`）：
 - `game888` 静链 `{$linklib quickjs}` + `libquickjs.a` + `qjs_fpc_bridge.c`（单二进制、无探测、inline 直链）适合游戏客户端
-- `nextpas` 动探 `platform.dl` + `libquickjs.so.1/0`（多后端可插拔、`fake` 兜底）适合框架库
+- `nextpas` 动探 `platform.dl` + `JS_QUICKJS_PROBE_NAMES[0..7]` 8 名跨平台探测（多后端可插拔、`fake` 兜底）适合框架库
 - 二者对偶，`js` 选动探因需 `fake` 与尾部追加
 
 ---

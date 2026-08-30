@@ -27,7 +27,7 @@
 |------|------|------|
 | T1 | `MemoryLimit`（`JS_SetMemoryLimit`）+ `TimeoutMs`（`JS_SetInterruptHandler` 原子 Deadline） | `test_js_fake` 超时/内存限模拟 + `quickjs_runtime` 真中断 |
 | T2 | 默认不暴露 `os/fs/process`；`SetHostFunction` 需显式注册，文档明示攻击面 | `AI_GUIDE` C7 审查 + `SECURITY` 示例白名单 |
-| T3 | `platform.dl` 三名探测 + `JsBackendAvailable` 缓存 + 版本无关 ABI（QuickJS-NG 兼容） | `loader` 矩阵测试 |
+| T3 | `platform.dl` 8 名跨平台探测 + `JsBackendAvailable` 幂等缓存 + 版本无关 ABI（QuickJS-NG 兼容） | `loader` 矩阵测试 |
 | T4 | `IsValid` + `TryAs*` + 线程亲和 fail-fast + 重入允许但并发禁止（INV-6/INV-7） | `TESTING §3` 悬垂/线程矩阵 |
 | T5 | 二进制走 `TBytes` + `AsJson` base64，经 `encoding` owner，不做裸帧 | `CONTRACT INV-5` + `json` 审查 |
 

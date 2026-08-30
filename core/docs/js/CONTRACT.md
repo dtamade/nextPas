@@ -42,7 +42,7 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, js.js888} ← 门�
 - `js.js888` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
 - 工厂 `CreateJsRuntime(jsbkJs888)` 走纯分支，`JsBackendAvailable(jsbkJs888)=True` 恒真（零 so 探测）
 
-**文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 500/800。
+**文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`；`js.fake` 含 `platform.thread/fs` 集成与三形态宿主，阈值放宽至 550（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 550/800（`js.fake` 550，其余 500）。
 
 ---
 
@@ -173,7 +173,7 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 ```
 
 - `JsBackendAvailable` 幂等缓存探测结果，CI 无库时 `jsbkQuickJs=False`、`jsbkFake=True`。
-- `CreateJsRuntime(jsbkQuickJs)` 探测不到时抛 `EJsBackendUnavailable`，消息含探测名表 `libquickjs.so.1 / libquickjs.so.0 / quickjs`。
+- `CreateJsRuntime(jsbkQuickJs)` 探测不到时抛 `EJsBackendUnavailable`，消息含跨平台探测名表 `libquickjs.so.1/so.0/.so, libquickjs.dylib/1.dylib, quickjs.dll/libquickjs.dll, quickjs`（`JS_QUICKJS_PROBE_NAMES[0..7]`，Windows 首探 `quickjs.dll`，macOS 首探 `dylib`）。
 
 ---
 
@@ -181,7 +181,7 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 
 | API | 失败行为 |
 |-----|----------|
-| `CreateJsRuntime(jsbkQuickJs)` 探测不到库 | 抛 `EJsBackendUnavailable`（消息含探测名表 `libquickjs.so.1/0`） |
+| `CreateJsRuntime(jsbkQuickJs)` 探测不到库 | 抛 `EJsBackendUnavailable`（消息含跨平台 8 名表 `so.1/so.0/.so/dylib/1.dylib/dll`，见 `JS_QUICKJS_PROBE_NAMES`） |
 | `IJsContext.Eval` 语法/运行时错误 | 抛 `EJsError`，`Category` 归一（`jecSyntax/jecReference/jecType/jecRange`），`Species/JsStack` 透传 |
 | `TryEval / TryEvalFile` 失败 | 返回 `False`，`AValue=jskUndefined`，不抛 |
 | 超时/内存限 | `EJsTimeout` / `EJsMemoryLimit`，`Tick` 后可恢复或需重建 `Context` |
