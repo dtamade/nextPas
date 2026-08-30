@@ -285,34 +285,49 @@ function GtkLiveWindowCount: Integer;
 var
   I, LCnt: Integer;
 begin
-  LCnt := 0;
-  for I := 0 to GLiveWindowsCount - 1 do
-    if not GLiveWindows[I].FClosed then
-      Inc(LCnt);
-  Result := LCnt;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    LCnt := 0;
+    for I := 0 to GLiveWindowsCount - 1 do
+      if not GLiveWindows[I].FClosed then
+        Inc(LCnt);
+    Result := LCnt;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 procedure RegisterLive(AWin: TGtkWebview);
 begin
-  GrowLiveWindows;
-  GLiveWindows[GLiveWindowsCount] := AWin;
-  Inc(GLiveWindowsCount);
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    GrowLiveWindows;
+    GLiveWindows[GLiveWindowsCount] := AWin;
+    Inc(GLiveWindowsCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 procedure UnregisterLive(AWin: TGtkWebview);
 var
   I, J: Integer;
 begin
-  for I := 0 to GLiveWindowsCount - 1 do
-    if GLiveWindows[I] = AWin then
-    begin
-      for J := I to GLiveWindowsCount - 2 do
-        GLiveWindows[J] := GLiveWindows[J + 1];
-      Dec(GLiveWindowsCount);
-      if GLiveWindowsCount < Length(GLiveWindows) then
-        GLiveWindows[GLiveWindowsCount] := nil;
-      Exit;
-    end;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    for I := 0 to GLiveWindowsCount - 1 do
+      if GLiveWindows[I] = AWin then
+      begin
+        for J := I to GLiveWindowsCount - 2 do
+          GLiveWindows[J] := GLiveWindows[J + 1];
+        Dec(GLiveWindowsCount);
+        if GLiveWindowsCount < Length(GLiveWindows) then
+          GLiveWindows[GLiveWindowsCount] := nil;
+        Exit;
+      end;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 { ---- cdecl trampolines ---- }
@@ -1100,10 +1115,37 @@ begin
 end;
 
 procedure TGtkWebview.HandleNativeDestroy;
+var
+  I: Integer;
+  LRec: PEvalRec;
+  LErr: EWebviewEvalFailed;
 begin
   if FClosed then
     Exit;
   FClosed := True;
+  for I := 0 to FPendingCount - 1 do
+  begin
+    LRec := FPendingEvals[I];
+    if not LRec^.Done then
+    begin
+      LRec^.Done := True;
+      if Assigned(LRec^.OnError) then
+      begin
+        LErr := EWebviewEvalFailed.Create('webview window is closed');
+        try
+          LRec^.OnError(LErr);
+        finally
+          LErr.Free;
+        end;
+      end;
+      if LRec^.Cancel <> nil then
+      begin
+        G_cancellable_cancel(LRec^.Cancel);
+        LRec^.Cancel := nil;
+      end;
+    end;
+  end;
+  FPendingCount := 0;
   DropIdlePendings;
   FireNotifyHandlers(FOnWindowClosed);
   if GtkLiveWindowCount = 0 then
