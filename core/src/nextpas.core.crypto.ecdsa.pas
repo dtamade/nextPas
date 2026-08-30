@@ -140,46 +140,27 @@ end;
 
 function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
 begin
-  Result := TByteSpan.FromBytes(AData);
-  while (Result.Len > 0) and (Result.Data^ = 0) do
-  begin
-    Inc(Result.Data);
-    Dec(Result.Len);
-  end;
+  Result := nextpas.core.bytes.ops.StripLeadingZeroView(AData);
 end;
 
-function StripLeadingZeroBytes(const AData: TBytes): TBytes;
-var
-  LView: TByteSpan;
+function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 begin
-  LView := StripLeadingZeroView(AData);
-  if LView.Len = 0 then
-  begin
-    SetLength(Result, 1);
-    Result[0] := 0;
-    Exit;
-  end;
-  Result := SpanCopySlice(LView, 0, LView.Len);
+  Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
 end;
 
 function IsZeroBytes(const AData: TBytes): Boolean; inline;
 begin
-  Result := StripLeadingZeroView(AData).Len = 0;
+  Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
-var
-  LLeft: TByteSpan;
-  LRight: TByteSpan;
 begin
-  LLeft := StripLeadingZeroView(ALeft);
-  LRight := StripLeadingZeroView(ARight);
-  Result := SpanCompare(LLeft, LRight);
+  Result := nextpas.core.bytes.ops.CompareUnsignedBytes(ALeft, ARight);
 end;
 
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
-  Result := CompareUnsignedBytes(ALeft, ARight) = 0;
+  Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
 end;
 
 {** 恒定时间无符号字节数组相等比较（纵深防御：签名验证路径） }
@@ -187,8 +168,8 @@ function ConstantTimeUnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; i
 var
   LLeft, LRight: TByteSpan;
 begin
-  LLeft := StripLeadingZeroView(ALeft);
-  LRight := StripLeadingZeroView(ARight);
+  LLeft := nextpas.core.bytes.ops.StripLeadingZeroView(ALeft);
+  LRight := nextpas.core.bytes.ops.StripLeadingZeroView(ARight);
   if LLeft.Len <> LRight.Len then
     Exit(False);
   if LLeft.Len = 0 then
