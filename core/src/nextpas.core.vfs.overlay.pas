@@ -126,16 +126,52 @@ begin
   raise EVfsNotFound.CreateCtx('stat', APath, 'not found');
 end;
 
+type
+  TOverlayTemp = record
+    Entry: TEntryInfo;
+    Prio: Integer;
+  end;
+
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
-  I, J, K, OutN: Integer;
+  I, J, OutN, TempN, Cap: Integer;
   Cur: TEntryArray;
-  Already: Boolean;
   LStat: TStatInfo;
+  Temp: array of TOverlayTemp;
+  procedure EnsureTemp(const Need: Integer);
+  begin
+    if Length(Temp) < Need then SetLength(Temp, Need);
+  end;
+  procedure SortTemp(var A: array of TOverlayTemp; L, R: Integer);
+  var
+    Ii, Jj: Integer;
+    Pivot: TOverlayTemp;
+    Tmp: TOverlayTemp;
+    Cmp: Integer;
+  begin
+    repeat
+      Ii := L; Jj := R;
+      Pivot := A[(L + R) shr 1];
+      repeat
+        Cmp := VfsNameCompare(A[Ii].Entry.Name, Pivot.Entry.Name);
+        if Cmp = 0 then Cmp := A[Ii].Prio - Pivot.Prio;
+        while Cmp < 0 do begin Inc(Ii); Cmp := VfsNameCompare(A[Ii].Entry.Name, Pivot.Entry.Name); if Cmp = 0 then Cmp := A[Ii].Prio - Pivot.Prio; end;
+        Cmp := VfsNameCompare(A[Jj].Entry.Name, Pivot.Entry.Name);
+        if Cmp = 0 then Cmp := A[Jj].Prio - Pivot.Prio;
+        while Cmp > 0 do begin Dec(Jj); Cmp := VfsNameCompare(A[Jj].Entry.Name, Pivot.Entry.Name); if Cmp = 0 then Cmp := A[Jj].Prio - Pivot.Prio; end;
+        if Ii <= Jj then
+        begin
+          Tmp := A[Ii]; A[Ii] := A[Jj]; A[Jj] := Tmp;
+          Inc(Ii); Dec(Jj);
+        end;
+      until Ii > Jj;
+      if L < Jj then SortTemp(A, L, Jj);
+      L := Ii;
+    until Ii >= R;
+  end;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
-  // 需至少一层能 Stat 认定为目录，否则 NotFound/NotADirectory
   if not VfsIsRoot(ADirPath) then
   begin
     if not FindStat(ADirPath, LStat) then
@@ -143,30 +179,36 @@ begin
     if not LStat.Info.IsDir then
       raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is a file');
   end;
-  SetLength(Result, 0);
-  OutN := 0;
-  // 按优先级合并：首层优先，去重
+  TempN := 0; Cap := 0;
   for I := 0 to High(FList) do
   begin
-    try
-      Cur := FList[I].List(ADirPath);
-    except
-      on E: EVfsNotFound do Continue;
-      on E: EVfsNotADirectory do Continue;
+    try Cur := FList[I].List(ADirPath);
+    except on E: EVfsNotFound do Continue; on E: EVfsNotADirectory do Continue; end;
+    if Length(Cur) = 0 then Continue;
+    if TempN + Length(Cur) > Cap then
+    begin
+      Cap := TempN + Length(Cur);
+      EnsureTemp(Cap);
     end;
     for J := 0 to High(Cur) do
     begin
-      Already := False;
-      for K := 0 to OutN - 1 do
-        if Result[K].Name = Cur[J].Name then begin Already := True; Break; end;
-      if Already then Continue;
-      if OutN >= Length(Result) then SetLength(Result, OutN + 1);
-      Result[OutN] := Cur[J];
-      Inc(OutN);
+      Temp[TempN].Entry := Cur[J];
+      Temp[TempN].Prio := I;
+      Inc(TempN);
     end;
   end;
+  if TempN = 0 then Exit(nil);
+  SetLength(Temp, TempN);
+  SortTemp(Temp, 0, TempN - 1);
+  SetLength(Result, TempN);
+  OutN := 0;
+  for I := 0 to TempN - 1 do
+  begin
+    if (OutN > 0) and (Result[OutN - 1].Name = Temp[I].Entry.Name) then Continue;
+    Result[OutN] := Temp[I].Entry;
+    Inc(OutN);
+  end;
   SetLength(Result, OutN);
-  VfsSortEntries(Result);
 end;
 
 function TOverlayVfs.OpenRead(const APath: string): IStream;
