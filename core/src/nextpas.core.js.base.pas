@@ -12,7 +12,7 @@ uses
   nextpas.core.exception;
 
 type
-  TJsBackendKind = (jsbkQuickJs, jsbkFake);
+  TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888);
   TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString,
     jskObject, jskArray, jskFunction, jskError, jskPromise);
   TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory,
@@ -96,6 +96,7 @@ begin
   case AKind of
     jsbkQuickJs: Result := 'jsbkQuickJs';
     jsbkFake: Result := 'jsbkFake';
+    jsbkJs888: Result := 'jsbkJs888';
   end;
 end;
 

@@ -196,15 +196,22 @@ begin
 end;
 
 function TJsQuickJsContext.MapJsError(const Msg: string): EJsError;
-var Cat: TJsErrorCategory; Species: string;
+var Cat: TJsErrorCategory; Species, Head: string; P: Integer;
 begin
   Cat := jecUnknown; Species := 'Error';
-  if Pos('SyntaxError', Msg) > 0 then begin Cat := jecSyntax; Species := 'SyntaxError'; end
+  P := Pos(':', Msg);
+  if P > 1 then Head := TextTrim(Copy(Msg, 1, P-1)) else Head := '';
+  if Head = 'SyntaxError' then begin Cat := jecSyntax; Species := 'SyntaxError'; end
+  else if Head = 'ReferenceError' then begin Cat := jecReference; Species := 'ReferenceError'; end
+  else if Head = 'TypeError' then begin Cat := jecType; Species := 'TypeError'; end
+  else if Head = 'RangeError' then begin Cat := jecRange; Species := 'RangeError'; end
+  else if Head = 'InternalError' then begin Cat := jecMemory; Species := 'InternalError'; end
+  else if (Pos('InternalError', Msg) > 0) or (Pos('Out of memory', Msg) > 0) then begin Cat := jecMemory; Species := 'InternalError'; end
+  else if (Head = 'Interrupt') or (Pos('Interrupt', Msg) > 0) or (Pos('interrupt', Msg) > 0) then begin Cat := jecTimeout; Species := 'Interrupt'; end
+  else if Pos('SyntaxError', Msg) > 0 then begin Cat := jecSyntax; Species := 'SyntaxError'; end
   else if Pos('ReferenceError', Msg) > 0 then begin Cat := jecReference; Species := 'ReferenceError'; end
   else if Pos('TypeError', Msg) > 0 then begin Cat := jecType; Species := 'TypeError'; end
-  else if Pos('RangeError', Msg) > 0 then begin Cat := jecRange; Species := 'RangeError'; end
-  else if Pos('InternalError', Msg) > 0 then Cat := jecMemory
-  else if Pos('Interrupt', Msg) > 0 then Cat := jecTimeout;
+  else if Pos('RangeError', Msg) > 0 then begin Cat := jecRange; Species := 'RangeError'; end;
   if Cat = jecTimeout then Result := EJsTimeout.Create(Msg, Cat, Species, Msg, jsbkQuickJs)
   else if Cat = jecMemory then Result := EJsMemoryLimit.Create(Msg, Cat, Species, Msg, jsbkQuickJs)
   else Result := EJsError.Create(Msg, Cat, Species, Msg, jsbkQuickJs);

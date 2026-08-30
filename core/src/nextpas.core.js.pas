@@ -1,8 +1,8 @@
 unit nextpas.core.js;
-{** @desc JS 门面：re-export + 工厂。 *}
+{** @desc JS 门面：re-export + 工厂（零摩擦可插拔）。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.fake,
+uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.fake, nextpas.core.js.js888,
   nextpas.core.json, nextpas.core.js.quickjs.loader, nextpas.core.js.quickjs;
 type
   TJsBackendKind = nextpas.core.js.base.TJsBackendKind;
@@ -26,10 +26,11 @@ function JsBackendAvailable(AKind: TJsBackendKind): Boolean;
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 const jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
   jsbkFake = nextpas.core.js.base.jsbkFake;
+  jsbkJs888 = nextpas.core.js.base.jsbkJs888;
 implementation
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; begin Result := TJsRuntimeOptions.Default; end;
 function JsBackendAvailable(AKind: TJsBackendKind): Boolean;
-begin case AKind of jsbkFake: Result := True; jsbkQuickJs: Result := JsQuickJsIsAvailable; else Result := False; end; end;
+begin case AKind of jsbkFake, jsbkJs888: Result := True; jsbkQuickJs: Result := JsQuickJsIsAvailable; else Result := False; end; end;
 function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime;
 begin Result := CreateJsRuntime(AKind, DefaultJsRuntimeOptions); end;
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime;
@@ -37,6 +38,7 @@ begin
   CheckJsRuntimeOptions(AOptions);
   case AKind of
     jsbkFake: Result := TJsFakeRuntime.Create(jsbkFake, AOptions);
+    jsbkJs888: Result := TJsJs888Runtime.Create(AOptions);
     jsbkQuickJs:
       begin
         if not JsQuickJsIsAvailable then

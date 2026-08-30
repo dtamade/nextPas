@@ -13,6 +13,7 @@ procedure TestBackendKindToString;
 begin
   CheckEqual('jsbkFake', JsBackendKindToString(jsbkFake), 'fake');
   CheckEqual('jsbkQuickJs', JsBackendKindToString(jsbkQuickJs), 'quickjs');
+  CheckEqual('jsbkJs888', JsBackendKindToString(jsbkJs888), 'js888');
 end;
 
 procedure TestValueKindToString;
