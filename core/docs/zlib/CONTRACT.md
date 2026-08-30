@@ -48,11 +48,11 @@ TZlibBackend = (zbAuto, zbPurePascal, zbFfi);
 | `ZLIB_ADLER_INIT = 1` | Adler-32 初始值（RFC1950 §8.2） |
 | `ZLIB_ADLER_MOD = 65521` | Adler 模数 |
 | `ZLIB_ADLER_NMAX = 5552` | 分块取模阈值 |
-| `ZLIB_MAX_DECOMPRESS_BYTES = 32MiB` | 解压上限单源（与 `compress.base GZIP_MAX_DECOMPRESS_BYTES` 对齐，门面重导出 `ZLIB_MAX_DECOMPRESS_BYTES_ALIAS`） |
+| `ZLIB_MAX_DECOMPRESS_BYTES = 32MiB` | 解压上限单源（`compress.base GZIP_MAX_DECOMPRESS_BYTES` 别名，门面重导出 `ZLIB_MAX_DECOMPRESS_BYTES_ALIAS`） |
 | `ZLIB_WINDOW_BITS_DEFAULT = 15` | zlib 包装 |
 | `ZLIB_WINDOW_BITS_RAW = -15` | 裸流 |
 | `ZlibAdlerUpdate(AAdler, AData, ALen): LongWord` | 增量 Adler，空输入原样返回 |
-| `ZlibLevelToZlib(ALevel): Int32` | `zlNone->0, zlFastest->1, zlDefault->-1, zlBest->9` 表驱动 O(1) |
+| `ZlibLevelToZlib(ALevel): Int32` | `zlNone->0, zlFastest->1, zlDefault->-1, zlBest->9` 委派 `compress.base LevelToZlib` 单源（零表拷贝） |
 | `ZlibPureEncode/WithLevel`, `ZlibPureEncodeRaw*` | 纯 Pascal 编码（固定 Huffman + Stored 回退，窗口 32K，hash-chain） |
 | `ZlibPureDecode/WithLimit`, `ZlibPureDecodeRaw*` | 纯 Pascal 解码（自动识别 wrapped/raw，Adler 校验，limit） |
 | `ZlibFfiEncode/Decode*`, `ZlibFfiAvailable` | FFI 编解码与可用性探针；不可用时抛 `zecUnsupported` |
@@ -60,21 +60,22 @@ TZlibBackend = (zbAuto, zbPurePascal, zbFfi);
 | `ZlibAcquireEncoder/Decoder` | 按当前后端的编解码器（纯/FFI） |
 | `ZlibEncode/Decode*` `ZlibEncodeRaw/DecodeRaw*` | 门面便捷（inline 直达当前后端；Raw 固定走纯 Pascal） |
 | `ZlibAdler/AdlerOf/AdlerUpdateWrap` | 门面 Adler 便捷 |
+| `ZlibTryEncode*` `ZlibTryDecode*` (`WithError`/`WithLevel`/`WithLimit`) | 豪华 Try*：Bool 守卫 + WithError 诊断，门面直达当前后端 IZlibEncoder/Decoder 亦提供同族 |
 | `ZlibPureEncode/Decode` `ZlibFfiEncodeWrap/DecodeWrap` | 直连探针便于回归 |
 
 ---
 
 ## 2. 不变量
 
-- **[INV-Z1]** 级别映射表驱动且复用 `compress.base` 语义：`zlNone=0, zlFastest=1, zlDefault=-1(Z_DEFAULT_COMPRESSION), zlBest=9`，`TryZlibLevelFromOrd` 保证 Ord 往返。
+- **[INV-Z1]** 级别映射委派至 `compress.base LevelToZlib` 单源（零表拷贝）：`zlNone=0, zlFastest=1, zlDefault=-1(Z_DEFAULT_COMPRESSION), zlBest=9`，`TryZlibLevelFromOrd` 保证 Ord 往返。
 - **[INV-Z2]** Adler-32 与 RFC1950 一致：初值 1、分块 NMAX=5552 取模、空输入返回初值，增量语义与 `Crc32Update` 对齐。
-- **[INV-Z3]** 单源解压上限：`ZLIB_MAX_DECOMPRESS_BYTES = 32MiB`，任何 `Decode*WithLimit(0)` 或 `Decode*` 默认值收敛至该上限；超过抛 `EZlibError(zecLimitExceeded, 'zlib: decompressed size exceeds limit')`，映射 `ecResourceExhausted`。
+- **[INV-Z3]** 单源解压上限：`ZLIB_MAX_DECOMPRESS_BYTES` 为 `compress.base GZIP_MAX_DECOMPRESS_BYTES` 别名（32MiB），任何 `Decode*WithLimit(0)` 或 `Decode*` 默认值收敛至该上限；超过抛 `EZlibError(zecLimitExceeded, 'zlib: decompressed size exceeds limit')`，映射 `ecResourceExhausted`。
 - **[INV-Z4]** 编码输出为 RFC1950 zlib 包装（`header 2B + deflate + adler 4B`），空输入仍输出合法流（header+empty stored block+adler）；`zlNone` 强制 Stored（不压缩）路径。
 - **[INV-Z5]** 解码双路径：`Decode` 自动识别 `IsValidZlibHeader` → wrapped（截去 2B 头与 4B adler 后 raw inflate + adler 校验）或 raw（直接 inflate）；`DecodeRaw` 强制 raw；截断/损坏/头非法/超限分别抛 `zecTruncated`/`zecCorruptStream`/`zecLimitExceeded`。
 - **[INV-Z6]** Adler 强制校验：wrapped 路径解后计算 `ZlibAdlerUpdate(INIT, decoded)` 与尾部 4B 大端比较，不符抛 `zecCorruptStream('adler mismatch')`；空解码结果 adler 取 INIT。
 - **[INV-Z7]** FFI 懒加载零硬依赖：`ZlibFfiAvailable` 首次调用 `platform.dl` 探针 `libz.so.1/.so/.so.1.0` 的 `compressBound/compress2/uncompress/zlibVersion` 四符号齐全才可用；`NEXTPAS_USE_ZLIB_NATIVE` 静态分支供编译期验证；不可用时 `ZlibFfiEncode/Decode` 抛 `zecUnsupported('libz not available')`，`zbAuto/zbFfi` 自动回落纯 Pascal。
 - **[INV-Z8]** 后端选择与 facades：`zbPurePascal` 固定纯、`zbFfi` 按可用性降级、`zbAuto` 按 FFI 可用性自动切换；`ZlibEncodeRaw*` 固定走纯 Pascal 避免 FFI raw 不支持分歧；`compress.deflate/gzip` 保持薄转发（仍经 paszlib），`sevenz.coders` 可经 `IZlibEncoder/Decoder` 复用。
-- **[INV-Z9]** 纯度与并发：纯 Pascal 编解码器无全局可变状态（固定表 `GFixed*` 惰性初始化只读）、FFI 编解码器无共享状态；一次性函数为纯函数，并发安全由调用方保证。
+- **[INV-Z9]** 纯度与并发：纯 Pascal 编解码器无全局可变状态（固定表 `GFixed*` 双检锁惰性初始化 + `Interlocked`，`GFixedReady LongInt+GFixedLock`/`GOnceDone LongInt+GOnceLock` 两把临界区）、FFI 编解码器无共享状态；一次性函数与 Try* 均为纯函数，并发安全由调用方保证；Try* 族捕获异常返回 Bool/`AError`，不抛异常。
 - **[INV-Z10]** 窗口与头校验：`ZLIB_CMF_DEFLATED=$08`、`ZLIB_CMF_WINDOW_MASK=$F0` 掩码仅作载体，`IsValidZlibHeader` 校验 `CMF 高 4bit <=7`、`mod 31 ==0`、`FDICT bit($20)==0`。
 
 ---

@@ -25,8 +25,16 @@ type
   public
     function Encode(const AData: TBytes): TBytes;
     function EncodeWithLevel(const AData: TBytes; const ALevel: TZlibLevel): TBytes;
+    function TryEncode(const AData: TBytes; out AEncoded: TBytes): Boolean;
+    function TryEncodeWithError(const AData: TBytes; out AEncoded: TBytes; out AError: string): Boolean;
+    function TryEncodeWithLevel(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes): Boolean;
+    function TryEncodeWithLevelWithError(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes; out AError: string): Boolean;
     function Decode(const AData: TBytes): TBytes;
     function DecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt): TBytes;
+    function TryDecode(const AData: TBytes; out ADecoded: TBytes): Boolean;
+    function TryDecodeWithError(const AData: TBytes; out ADecoded: TBytes; out AError: string): Boolean;
+    function TryDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes): Boolean;
+    function TryDecodeWithLimitWithError(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes; out AError: string): Boolean;
     function Adler32(const AData: TBytes): LongWord;
     function Adler32Update(AAdler: LongWord; const AData: Pointer; ALen: SizeUInt): LongWord;
   end;
@@ -355,13 +363,20 @@ end;
 var
   GFixedLit: THuffBuild;
   GFixedDist: THuffBuild;
-  GFixedReady: Boolean = False;
+  GFixedReady: LongInt = 0;
+  GFixedLock: TRTLCriticalSection;
 
 procedure EnsureFixed;
 begin
-  if GFixedReady then Exit;
-  BuildFixedTables(GFixedLit, GFixedDist);
-  GFixedReady := True;
+  if InterlockedCompareExchange(GFixedReady, 0, 0) <> 0 then Exit;
+  EnterCriticalSection(GFixedLock);
+  try
+    if GFixedReady <> 0 then Exit;
+    BuildFixedTables(GFixedLit, GFixedDist);
+    InterlockedExchange(GFixedReady, 1);
+  finally
+    LeaveCriticalSection(GFixedLock);
+  end;
 end;
 
 { ── Helpers for length/distance symbol ───────────────────── }
@@ -962,6 +977,70 @@ begin
   Result := ZlibPureDecodeWithLimit(AData, AMaxOutputSize);
 end;
 
+function TZlibPureDecoder.TryEncode(const AData: TBytes; out AEncoded: TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := TryEncodeWithError(AData, AEncoded, LDummy);
+end;
+
+function TZlibPureDecoder.TryEncodeWithError(const AData: TBytes; out AEncoded: TBytes; out AError: string): Boolean;
+begin
+  try
+    AEncoded := Encode(AData);
+    AError := '';
+    Result := True;
+  except on E: Exception do begin AEncoded := nil; AError := E.ClassName + ': ' + E.Message; Result := False; end;
+  end;
+end;
+
+function TZlibPureDecoder.TryEncodeWithLevel(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := TryEncodeWithLevelWithError(AData, ALevel, AEncoded, LDummy);
+end;
+
+function TZlibPureDecoder.TryEncodeWithLevelWithError(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes; out AError: string): Boolean;
+begin
+  try
+    AEncoded := EncodeWithLevel(AData, ALevel);
+    AError := '';
+    Result := True;
+  except on E: Exception do begin AEncoded := nil; AError := E.ClassName + ': ' + E.Message; Result := False; end;
+  end;
+end;
+
+function TZlibPureDecoder.TryDecode(const AData: TBytes; out ADecoded: TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := TryDecodeWithError(AData, ADecoded, LDummy);
+end;
+
+function TZlibPureDecoder.TryDecodeWithError(const AData: TBytes; out ADecoded: TBytes; out AError: string): Boolean;
+begin
+  try
+    ADecoded := Decode(AData);
+    AError := '';
+    Result := True;
+  except on E: Exception do begin ADecoded := nil; AError := E.ClassName + ': ' + E.Message; Result := False; end;
+  end;
+end;
+
+function TZlibPureDecoder.TryDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := TryDecodeWithLimitWithError(AData, AMaxOutputSize, ADecoded, LDummy);
+end;
+
+function TZlibPureDecoder.TryDecodeWithLimitWithError(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes; out AError: string): Boolean;
+begin
+  try
+    ADecoded := DecodeWithLimit(AData, AMaxOutputSize);
+    AError := '';
+    Result := True;
+  except on E: Exception do begin ADecoded := nil; AError := E.ClassName + ': ' + E.Message; Result := False; end;
+  end;
+end;
+
 function TZlibPureDecoder.Adler32(const AData: TBytes): LongWord;
 begin
   Result := ZlibAdler32(AData);
@@ -972,4 +1051,8 @@ begin
   Result := ZlibAdlerUpdate(AAdler, AData, ALen);
 end;
 
+initialization
+  InitCriticalSection(GFixedLock);
+finalization
+  DoneCriticalSection(GFixedLock);
 end.

@@ -59,6 +59,15 @@ function ZlibDecode(const AData: TBytes): TBytes; inline;
 function ZlibDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt): TBytes; inline;
 function ZlibDecodeRaw(const AData: TBytes): TBytes; inline;
 function ZlibDecodeRawWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt): TBytes; inline;
+{ Try* 豪华 API：Bool 守卫 + WithError 诊断，门面直达当前后端 IZlibEncoder/Decoder }
+function ZlibTryEncode(const AData: TBytes; out AEncoded: TBytes): Boolean;
+function ZlibTryEncodeWithError(const AData: TBytes; out AEncoded: TBytes; out AError: string): Boolean;
+function ZlibTryEncodeWithLevel(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes): Boolean;
+function ZlibTryEncodeWithLevelWithError(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes; out AError: string): Boolean;
+function ZlibTryDecode(const AData: TBytes; out ADecoded: TBytes): Boolean;
+function ZlibTryDecodeWithError(const AData: TBytes; out ADecoded: TBytes; out AError: string): Boolean;
+function ZlibTryDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes): Boolean;
+function ZlibTryDecodeWithLimitWithError(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes; out AError: string): Boolean;
 
 { Adler 便捷：复用 intf 无状态 helper }
 function ZlibAdler(const AData: TBytes): LongWord; inline;
@@ -259,6 +268,50 @@ end;
 function ZlibFfiDecodeWrap(const AData: TBytes): TBytes;
 begin
   Result := nextpas.core.zlib.ffi.ZlibFfiDecode(AData);
+end;
+
+function ZlibTryEncode(const AData: TBytes; out AEncoded: TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := ZlibTryEncodeWithError(AData, AEncoded, LDummy);
+end;
+
+function ZlibTryEncodeWithError(const AData: TBytes; out AEncoded: TBytes; out AError: string): Boolean;
+begin
+  Result := ZlibAcquireEncoder.TryEncodeWithError(AData, AEncoded, AError);
+end;
+
+function ZlibTryEncodeWithLevel(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := ZlibTryEncodeWithLevelWithError(AData, ALevel, AEncoded, LDummy);
+end;
+
+function ZlibTryEncodeWithLevelWithError(const AData: TBytes; const ALevel: TZlibLevel; out AEncoded: TBytes; out AError: string): Boolean;
+begin
+  Result := ZlibAcquireEncoder.TryEncodeWithLevelWithError(AData, ALevel, AEncoded, AError);
+end;
+
+function ZlibTryDecode(const AData: TBytes; out ADecoded: TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := ZlibTryDecodeWithError(AData, ADecoded, LDummy);
+end;
+
+function ZlibTryDecodeWithError(const AData: TBytes; out ADecoded: TBytes; out AError: string): Boolean;
+begin
+  Result := ZlibAcquireDecoder.TryDecodeWithError(AData, ADecoded, AError);
+end;
+
+function ZlibTryDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes): Boolean;
+var LDummy: string;
+begin
+  Result := ZlibTryDecodeWithLimitWithError(AData, AMaxOutputSize, ADecoded, LDummy);
+end;
+
+function ZlibTryDecodeWithLimitWithError(const AData: TBytes; const AMaxOutputSize: SizeUInt; out ADecoded: TBytes; out AError: string): Boolean;
+begin
+  Result := ZlibAcquireDecoder.TryDecodeWithLimitWithError(AData, AMaxOutputSize, ADecoded, AError);
 end;
 
 end.
