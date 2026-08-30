@@ -87,7 +87,7 @@ end;
 
 procedure TestVfsSourcesNoFpcRtl;
 const
-  FILES: array[0..8] of string = (
+  FILES: array[0..10] of string = (
     'src/nextpas.core.vfs.pas',
     'src/nextpas.core.vfs.base.pas',
     'src/nextpas.core.vfs.intf.pas',
@@ -96,7 +96,9 @@ const
     'src/nextpas.core.vfs.util.pas',
     'src/nextpas.core.vfs.os.pas',
     'src/nextpas.core.vfs.embedded.pas',
-    'src/nextpas.core.vfs.sub.pas');
+    'src/nextpas.core.vfs.sub.pas',
+    'src/nextpas.core.vfs.transform.pas',
+    'src/nextpas.core.vfs.compressed.pas');
 var
   I: Integer;
 begin
@@ -120,7 +122,7 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..11] of string = (
+  NO_SEAM: array[0..13] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
@@ -132,7 +134,9 @@ const
     'src/nextpas.core.vfs.memtree.pas',
     'src/nextpas.core.vfs.util.pas',
     'src/nextpas.core.vfs.embedded.pas',
-    'src/nextpas.core.vfs.sub.pas');
+    'src/nextpas.core.vfs.sub.pas',
+    'src/nextpas.core.vfs.transform.pas',
+    'src/nextpas.core.vfs.compressed.pas');
 var
   I: Integer;
   Src: string;
@@ -152,6 +156,14 @@ begin
   Src := LoadSourceText('src/nextpas.core.respack.dirsource.pas');
   Check(Pos('nextpas.core.fs', Src) > 0,
     'dirsource declares fs dependency');
+
+  { compress 缝隙：transform/compressed 唯一允许的 L2→L2 decorator 缝隙，登记于 module-registry }
+  Src := LoadSourceText('src/nextpas.core.vfs.compressed.pas');
+  Check(Pos('nextpas.core.compress', Src) > 0,
+    'compressed declares compress dependency');
+  Src := LoadSourceText('src/nextpas.core.vfs.transform.pas');
+  Check(Pos('nextpas.core.fs', Src) = 0,
+    'transform must not reference fs');
 end;
 
 procedure TestExceptionRootDiscipline;
