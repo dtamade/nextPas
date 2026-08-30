@@ -276,7 +276,7 @@ procedure OnVoid(AErr:ESSHError; AContext:Pointer); begin GState.FsErr:=AErr; GS
 function WaitForFlag(var ADone:Boolean; AEvent:PRTLEvent; ATimeoutMs:Integer):Boolean; var LStart:QWord; begin LStart:=GetTickCount64; while not ADone do begin if GetTickCount64-LStart>UInt64(ATimeoutMs) then Exit(False); RTLeventWaitFor(AEvent,20); end; Result:=True; end;
 
 function RunSftpScenario(const AHostSeed:TBytes; const AOp:string; out APathRes:string; out AAttrs:TSftpAttrs; out ADir:TSftpDirEntryArray; out AData:TBytes; out AErrKind:TSshErrorKind):Boolean;
-var LListener:ITcpListener; LPort:Word; LSc:PSshLoopSftpScenario; LServerThread:TThread; LLoop:TAsyncLoop; LLoopThread:TThread; LOpts:TSshConnectOptions; LI: Integer;
+var LListener:ITcpListener; LPort:Word; LSc:PSshLoopSftpScenario; LServerThread:TThread; LLoop:TAsyncLoop; LLoopThread:TThread; LOpts:TSshConnectOptions;
 begin
   Result:=False; AErrKind:=sekIO; APathRes:=''; AData:=nil; ADir:=nil;
   LServerThread:=nil; LLoop:=nil; LLoopThread:=nil; LListener:=nil;
@@ -319,10 +319,9 @@ begin
         APathRes:=GState.PathResult; AAttrs:=GState.Attrs; ADir:=GState.Dir; AData:=GState.Data; Result:=True;
         try GState.Fs.Close; except end;
         try GState.Session.Close; except end;
-        Sleep(300);
-        if Assigned(LLoop) then for LI:=0 to 25 do begin if not LLoop.HasPendingIo then Break; Sleep(20); end;
-      finally RTLeventDestroy(GState.Event); GState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; Sleep(100); if Assigned(LLoop) then for LI:=0 to 25 do begin if not LLoop.HasPendingIo then Break; Sleep(20); end; Finalize(GState); GState:=Default(TAsyncSftpTestState); end;
-    finally if GState.Session<>nil then begin try GState.Session.Close; except end; GState.Session:=nil; end; if GState.Err<>nil then FreeAndNil(GState.Err); if GState.FsErr<>nil then FreeAndNil(GState.FsErr); GState.Fs:=nil; SetLength(GState.Data,0); SetLength(GState.Dir,0); SetLength(GState.PathResult,0); Finalize(GState); GState:=Default(TAsyncSftpTestState); if Assigned(LLoop) then begin try LLoop.Free; except end; end; end;
+        Sleep(200);
+      finally RTLeventDestroy(GState.Event); GState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; Sleep(50); end;
+    finally if GState.Session<>nil then begin GState.Session.Close; GState.Session:=nil; end; if GState.Err<>nil then FreeAndNil(GState.Err); if GState.FsErr<>nil then FreeAndNil(GState.FsErr); GState.Fs:=nil; SetLength(GState.Data,0); SetLength(GState.Dir,0); SetLength(GState.PathResult,0); if Assigned(LLoop) then LLoop.Free; end;
     if Assigned(LServerThread) then begin LServerThread.WaitFor; LServerThread.Free; end;
   finally Finalize(LOpts); if Assigned(LListener) then LListener.Close; SetLength(LSc^.FileData,0); SetLength(LSc^.HostSeed,0); Finalize(LSc^); Dispose(LSc); end;
 end;
@@ -340,5 +339,5 @@ begin
   GSuite.Test('remove async', procedure var P:string; A:TSftpAttrs; D:TSftpDirEntryArray; Da:TBytes; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunSftpScenario(GSeed,'remove',P,A,D,Da,K); CheckTrue(Ok,'remove ok'); end);
   GRunner:=TSuiteRunner.Create('nextpas.core.ssh.sftp.async');
   GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary; if not GRunner.AllPassed then Halt(1);
-  Finalize(GState); GState:=Default(TAsyncSftpTestState); SetLength(GSeed,0); Finalize(GSuite); GSuite:=Default(TTestSuite); Finalize(GRunner); GRunner:=Default(TSuiteRunner);
+  GState:=Default(TAsyncSftpTestState); SetLength(GSeed,0); GSuite:=Default(TTestSuite); GRunner:=Default(TSuiteRunner);
 end.
