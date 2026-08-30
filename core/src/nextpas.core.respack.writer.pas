@@ -236,6 +236,7 @@ begin
   begin
     // 桶数取 2 的幂且 ≥ 2×N，平均 0.5 槽/桶，碰撞探测近常数；N*2 溢出安全
     BucketCount := BUCKET_MIN;
+    Target := 0;
     if not TryMulSizeUInt(N, 2, Target) then
       Target := High(SizeUInt);
     while (BucketCount < Target) and (BucketCount < BUCKET_MAX) do

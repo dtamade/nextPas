@@ -205,6 +205,7 @@ begin
   MinData := Result.FHdr.BlobTotal;
   MaxDataEnd := 0;
   StrLen := 0;
+  Cached := nil;
   if Result.Count > 0 then
   begin
     // 缓存条目避免第二遍二次 DecodeWire

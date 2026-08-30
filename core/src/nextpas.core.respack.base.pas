@@ -229,6 +229,7 @@ var
   Tmp: array[0..15] of AnsiChar;
   I, J: Integer;
 begin
+  FillChar(Tmp, SizeOf(Tmp), 0);
   if AValue = 0 then
     Exit('0');
   I := High(Tmp);
