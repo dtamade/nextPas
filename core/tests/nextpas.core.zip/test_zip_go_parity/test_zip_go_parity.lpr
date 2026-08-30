@@ -177,6 +177,80 @@ begin
   end;
 end;
 
+function LE32At(const AB: TBytes; AOff: Integer): LongWord; inline;
+begin
+  Result := LongWord(AB[AOff]) or (LongWord(AB[AOff+1]) shl 8) or (LongWord(AB[AOff+2]) shl 16) or (LongWord(AB[AOff+3]) shl 24);
+end;
+
+function LE16At(const AB: TBytes; AOff: Integer): Word; inline;
+begin
+  Result := Word(AB[AOff]) or (Word(AB[AOff+1]) shl 8);
+end;
+
+const
+  C_PY_NOSIG_CHECK =
+    'import sys, zipfile, zlib'#10 +
+    'zpath, mpath = sys.argv[1], sys.argv[2]'#10 +
+    'rows = []'#10 +
+    'for line in open(mpath, encoding=''utf-8''):'#10 +
+    '    line=line.rstrip(''\n'')'#10 +
+    '    if not line: continue'#10 +
+    '    n,m,h = line.split(''\t'')'#10 +
+    '    rows.append((n,int(m),h))'#10 +
+    'z=zipfile.ZipFile(zpath)'#10 +
+    'assert z.testzip() is None, ''testzip failed'''#10 +
+    'infos=z.infolist()'#10 +
+    'assert len(infos)==len(rows), f''count {len(infos)} != {len(rows)}'''#10 +
+    'for info,(name,method,hexdata) in zip(infos, rows):'#10 +
+    '    assert info.filename==name, f''name {info.filename!r} != {name!r}'''#10 +
+    '    assert info.compress_type==method, f''method {info.compress_type} != {method}'''#10 +
+    '    data=z.read(info)'#10 +
+    '    assert data.hex()==hexdata, f''content mismatch {name}'''#10 +
+    'print(''PY CROSSCHECK OK'')'#10;
+
+procedure PythonCrossCheck(const AZipPath, AManifestPath: string);
+var LPy: string; LOut: TProcessOutput;
+begin
+  if not TryLookPath('python3', LPy) then
+    raise EInvalidOperationError.Create('python3 not found for descriptor no-sig cross check');
+  LOut := Command(LPy).Arg('-c').Arg(C_PY_NOSIG_CHECK).Arg(AZipPath).Arg(AManifestPath).Output;
+  Check(ProcessSucceeded(LOut), 'python no-sig cross exit ok: ' + Trim(LOut.StdErr) + ' / ' + Trim(LOut.StdOut));
+  Check(Pos('PY CROSSCHECK OK', LOut.StdOut) > 0, 'python no-sig cross marker');
+end;
+
+procedure AssertEocdOffsetsIndependent(const AZip: TBytes; const ALabel: string);
+var LEocd, LCentralOff, LCentralSize, LEntryCount, LI, LLocalOff, LNameLen, LExtraLen, LCommentLen, LNext: Integer;
+begin
+  LEocd := -1;
+  for LI := Length(AZip)-22 downto 0 do
+    if (AZip[LI]=$50) and (AZip[LI+1]=$4B) and (AZip[LI+2]=$05) and (AZip[LI+3]=$06) then begin LEocd:=LI; Break; end;
+  Check(LEocd >= 0, ALabel + ': EOCD found');
+  LEntryCount := LE16At(AZip, LEocd+8);
+  LCentralSize := Integer(LE32At(AZip, LEocd+12));
+  LCentralOff := Integer(LE32At(AZip, LEocd+16));
+  Check(LCentralOff >= 0, ALabel+': central offset non-negative');
+  Check(LCentralOff + LCentralSize = LEocd, ALabel+': central range reaches EOCD');
+  Check(LE32At(AZip, LCentralOff) = $02014B50, ALabel+': central signature at offset');
+  for LI := 0 to LEntryCount-1 do
+  begin
+    Check(LCentralOff+46 <= Length(AZip), ALabel+': central entry bounds');
+    Check(LE32At(AZip, LCentralOff) = $02014B50, ALabel+': central entry sig');
+    LLocalOff := Integer(LE32At(AZip, LCentralOff+42));
+    Check(LLocalOff >= 0, ALabel+': local offset non-negative');
+    Check(LLocalOff+30 <= Length(AZip), ALabel+': local header in bounds');
+    Check(LE32At(AZip, LLocalOff) = $04034B50, ALabel+': local header sig for entry '+IntToStr(LI));
+    LNameLen := LE16At(AZip, LCentralOff+28);
+    LExtraLen := LE16At(AZip, LCentralOff+30);
+    LCommentLen := LE16At(AZip, LCentralOff+32);
+    LNext := LCentralOff + 46 + LNameLen + LExtraLen + LCommentLen;
+    if LI < LEntryCount-1 then
+      Check(LE32At(AZip, LNext)= $02014B50, ALabel+': next central sig')
+    else
+      Check(LNext = LEocd, ALabel+': last central reaches EOCD');
+    LCentralOff := LNext;
+  end;
+end;
+
 {---- Pascal -> Go ----}
 procedure TestPascalToGoBasic;
 var LW: IZipWriter; LZip: TBytes; LDir: string; LManifest: string;
@@ -362,7 +436,6 @@ procedure TestDescriptorNoSigParity;
 var LDir: string; LW: IZipWriter; LZip, LNoSig: TBytes; R: IZipReader; LGot, LExp: TBytes; Opt: TZipAddOptions; S: ICompressWriter;
   RSeq: ISequentialZipReader; Info: TZipEntryInfo; LS: IDecompressReader; Buf: array[0..4095] of Byte; N: SizeUInt; Got2: TBytes;
 begin
-  EnsureGo;
   LDir := TempDir(GetTempDir, 'zipgo-nosig');
   try
     LW := NewZipWriter;
@@ -379,6 +452,8 @@ begin
     LZip := LW.Finish;
     LNoSig := StripDescriptorSignature(LZip);
     Check(Length(LNoSig) = Length(LZip)-8, 'noSig stripped 2 descriptors');
+    AssertEocdOffsetsIndependent(LZip, 'original sig');
+    AssertEocdOffsetsIndependent(LNoSig, 'nosig stripped');
     R := NewZipReader(LNoSig);
     Check(SameBytes(R.ExtractToBytesByName('a.txt'), LExp), 'nosig a.txt random');
     Check(SameBytes(R.ExtractToBytesByName('b.bin'), LGot), 'nosig b.bin random');
@@ -390,7 +465,7 @@ begin
     LS := RSeq.Open; Got2:=nil; repeat N:=LS.Read(Buf[0], SizeOf(Buf)); if N>0 then begin SetLength(Got2, Length(Got2)+Integer(N)); Move(Buf[0], Got2[Length(Got2)-Integer(N)], N); end; until N=0; LS.Close;
     Check(SameBytes(Got2, LGot), 'nosig seq b content');
     WriteFile(LDir + '/nosig.zip', LNoSig);
-    GoVerify(LDir + '/nosig.zip', WriteManifest(LDir + '/m.tsv', [
+    PythonCrossCheck(LDir + '/nosig.zip', WriteManifest(LDir + '/m.tsv', [
       ManifestLine('a.txt', 0, LExp),
       ManifestLine('b.bin', 8, LGot)
     ]));

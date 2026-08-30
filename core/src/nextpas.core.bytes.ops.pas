@@ -34,7 +34,6 @@ procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -272,16 +271,6 @@ begin
   ADest[LLen + 1] := Byte(AValue shr 16);
   ADest[LLen + 2] := Byte(AValue shr 8);
   ADest[LLen + 3] := Byte(AValue);
-end;
-
-procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
-var
-  LLen: SizeUInt;
-begin
-  if (AData = nil) or (ACount = 0) then Exit;
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + ACount);
-  Move(AData^, ADest[LLen], ACount);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;

@@ -9,8 +9,8 @@ unit nextpas.core.zip.aes;
  *       同时接受 AE-1（保留真实 CRC32，走常规校验）与 AE-2。遗留 ZipCrypto
  *       不在此单元职责内（读器按 ENotSupportedError 拒绝）。
  *
- *       错误模型：口令校验值或认证码不匹配统一 EParseError('zip aes:
- *       authentication failed')（不区分失败点，避免区分性 oracle）；
+ *       错误模型：口令校验值或认证码不匹配统一 EZipAuthError('zip aes:
+ *       authentication failed')（继承 EParseError，不区分失败点，避免区分性 oracle）；
  *       帧截断/强度非法 → EParseError/EArgumentError；未配置口令 →
  *       EInvalidOperationError；盐取自安全随机，随机源故障原样传播。
  *}
@@ -21,6 +21,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.hash.intf,
   nextpas.core.io.intf,
   nextpas.core.crypto.aes.ct64,
@@ -144,7 +145,7 @@ function NewWinZipAesSealer(const APassword: TBytes;
 implementation
 
 uses
-  nextpas.core.exception,
+  nextpas.core.zip.base,
   nextpas.core.hash.base,
   nextpas.core.crypto.pbkdf2,
   nextpas.core.crypto.hmac,
@@ -422,7 +423,7 @@ begin
   LKeys := DeriveWinZipAesKeys(APassword, LSalt, AStrengthCode);
   { 校验值与认证码失败统一报错，避免可区分的失败点 oracle }
   if not WinZipAesEqualBytes(LStoredPwv, LKeys.PwVerify) then
-    raise EParseError.Create('zip aes: authentication failed: ' + AName);
+    raise EZipAuthError.Create('zip aes: authentication failed: ' + AName);
 
   LBodyOfs := LSaltLen + C_WINZIP_AES_PWVERIFY_LEN;
   LBodyLen := Length(APayload) - LBodyOfs - C_WINZIP_AES_AUTH_LEN;
@@ -437,7 +438,7 @@ begin
   if not WinZipAesEqualBytes(Copy(LDigest, 0, C_WINZIP_AES_AUTH_LEN),
     Copy(APayload, Length(APayload) - C_WINZIP_AES_AUTH_LEN,
     C_WINZIP_AES_AUTH_LEN)) then
-    raise EParseError.Create('zip aes: authentication failed: ' + AName);
+    raise EZipAuthError.Create('zip aes: authentication failed: ' + AName);
 
   LCipher := TWinZipAesCtr.Create(LKeys.EncKey);
   try
@@ -481,7 +482,7 @@ begin
 
   LKeys := DeriveWinZipAesKeys(APassword, LSalt, AStrengthCode);
   if not WinZipAesEqualBytes(LHead, LKeys.PwVerify) then
-    raise EParseError.Create('zip aes: authentication failed: ' + AName);
+    raise EZipAuthError.Create('zip aes: authentication failed: ' + AName);
 
   FCipher := TWinZipAesCtr.Create(LKeys.EncKey);
   FAuth := NewWinZipAesAuth(LKeys.AuthKey);
@@ -541,7 +542,7 @@ begin
   LDigest := FAuth.SumBytes;
   if not WinZipAesEqualBytes(LTail,
     Copy(LDigest, 0, C_WINZIP_AES_AUTH_LEN)) then
-    raise EParseError.Create('zip aes: authentication failed: ' + FName);
+    raise EZipAuthError.Create('zip aes: authentication failed: ' + FName);
   FDone := True;
   Result := 0;
 end;
