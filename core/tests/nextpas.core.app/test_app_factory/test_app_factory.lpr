@@ -193,6 +193,42 @@ begin
   CheckEqual(0, A.WindowCount, 'count 0');
 end;
 
+procedure TestAppTryGetWindow;
+var
+  A: IApp;
+  W: IWebviewWindow;
+  Ok: Boolean;
+begin
+  A := TAppBuilder.New.Kind(wvFake).Build;
+  Ok := A.TryGetWindow(0, W);
+  Check(Ok, 'TryGet 0 ok');
+  Check(W = A.MainWindow, 'TryGet 0 is main');
+  Ok := A.TryGetWindow(5, W);
+  Check(not Ok, 'TryGet oob false');
+  Check(W = nil, 'TryGet oob nil');
+  A.Close;
+  Ok := A.TryGetWindow(0, W);
+  Check(not Ok, 'TryGet after close false');
+end;
+
+procedure TestAppNewWindowKindInherit;
+var
+  A: IApp;
+  W2: IWebviewWindow;
+  LFake: TFakeWebview;
+begin
+  A := TAppBuilder.New.Kind(wvFake).Build;
+  W2 := A.NewWindowBuilder.Build;
+  // inherit wvFake, so FromWindow should succeed (fake)
+  LFake := TFakeWebview.FromWindow(W2);
+  Check(LFake <> nil, 'inherited kind is fake');
+  A.AddWindow(W2);
+  CheckEqual(2, A.WindowCount);
+  W2.Close;
+  CheckEqual(1, A.WindowCount);
+  A.Close;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -206,5 +242,7 @@ begin
   T.Test('getwindow bounds', @TestAppGetWindowBounds);
   T.Test('auto remove weak and snapshot', @TestAppAutoRemoveWeakAndSnapshot);
   T.Test('app onwindowclosed', @TestAppOnWindowClosed);
+  T.Test('trygetwindow', @TestAppTryGetWindow);
+  T.Test('new window kind inherit', @TestAppNewWindowKindInherit);
   if not T.Run then Halt(1);
 end.

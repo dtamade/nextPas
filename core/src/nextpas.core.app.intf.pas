@@ -28,9 +28,10 @@ type
     property MainWindow: IWebviewWindow read GetMainWindow;
     function WindowCount: Integer;
     function GetWindow(AIdx: Integer): IWebviewWindow;
+    function TryGetWindow(AIdx: Integer; out AWin: IWebviewWindow): Boolean;
     function GetWindows: TAppWindows;
     function NewWindowBuilder: IWebviewBuilder;
-    function NewWindow: IWebviewBuilder; // alias, app-aware
+    function NewWindow: IWebviewBuilder; // alias, app-aware (Kind 透传)
     procedure AddWindow(AWin: IWebviewWindow);
     procedure RemoveWindow(AWin: IWebviewWindow);
     procedure OnWindowClosed(AHandler: TAppWindowClosedHandler); overload;

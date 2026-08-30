@@ -39,6 +39,7 @@ type
     FMain: IWebviewWindow;
     FWindows: array of IWebviewWindow;
     FCount: Integer;
+    FKind: TAppKind;
     FOnClosed: array of TAppWindowClosedHandler;
     FOnClosedCount: Integer;
     FOnClosedM: array of TAppWindowClosedMethod;
@@ -54,11 +55,12 @@ type
     procedure FireWindowClosed(const AWin: IWebviewWindow);
     procedure CompactClosed;
   public
-    constructor Create(const AWindow: IWebviewWindow);
+    constructor Create(const AWindow: IWebviewWindow; AKind: TAppKind);
     destructor Destroy; override;
     function GetMainWindow: IWebviewWindow;
     function WindowCount: Integer;
     function GetWindow(AIdx: Integer): IWebviewWindow;
+    function TryGetWindow(AIdx: Integer; out AWin: IWebviewWindow): Boolean;
     function GetWindows: TAppWindows;
     function NewWindowBuilder: IWebviewBuilder;
     function NewWindow: IWebviewBuilder;
@@ -76,6 +78,7 @@ type
   TAppBuilderImpl = class(TInterfacedObject, IAppBuilder)
   private
     FBuilder: IWebviewBuilder;
+    FKind: TAppKind;
     FMounts: array of TMountRec;
     FMountCount: Integer;
     procedure GrowMounts; inline;
@@ -137,10 +140,11 @@ end;
 
 { TAppImpl }
 
-constructor TAppImpl.Create(const AWindow: IWebviewWindow);
+constructor TAppImpl.Create(const AWindow: IWebviewWindow; AKind: TAppKind);
 begin
   inherited Create;
   FMain := AWindow;
+  FKind := AKind;
   SetLength(FWindows, 0); FCount:=0;
   SetLength(FOnClosed, 0); FOnClosedCount:=0;
   SetLength(FOnClosedM, 0); FOnClosedMCount:=0;
@@ -238,6 +242,20 @@ begin
   Result:=FWindows[AIdx];
 end;
 
+function TAppImpl.TryGetWindow(AIdx: Integer; out AWin: IWebviewWindow): Boolean;
+begin
+  CompactClosed;
+  if (AIdx < 0) or (AIdx >= FCount) then
+  begin
+    AWin := nil;
+    Result := False;
+  end else
+  begin
+    AWin := FWindows[AIdx];
+    Result := True;
+  end;
+end;
+
 function TAppImpl.GetWindows: TAppWindows;
 var I: Integer;
 begin
@@ -249,7 +267,7 @@ end;
 
 function TAppImpl.NewWindowBuilder: IWebviewBuilder;
 begin
-  Result := nextpas.core.webview.factory.TWebviewBuilder.New;
+  Result := nextpas.core.webview.factory.TWebviewBuilder.New.Kind(FKind);
 end;
 
 function TAppImpl.NewWindow: IWebviewBuilder;
@@ -340,6 +358,7 @@ constructor TAppBuilderImpl.Create;
 begin
   inherited Create;
   FBuilder := nextpas.core.webview.factory.TWebviewBuilder.New;
+  FKind := DefaultAppKind;
 end;
 
 procedure TAppBuilderImpl.GrowMounts; inline;
@@ -532,6 +551,7 @@ end;
 function TAppBuilderImpl.Kind(AKind: TWebviewKind): IAppBuilder;
 begin
   FBuilder.Kind(AKind);
+  FKind := AKind;
   Result := Self;
 end;
 
@@ -541,7 +561,7 @@ var
 begin
   LWin := FBuilder.Build;
   ApplyMounts(LWin);
-  Result := TAppImpl.Create(LWin);
+  Result := TAppImpl.Create(LWin, FKind);
 end;
 
 procedure TAppBuilderImpl.Run(const AUrl: string);
