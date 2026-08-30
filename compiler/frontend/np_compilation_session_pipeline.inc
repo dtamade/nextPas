@@ -524,6 +524,12 @@ begin
   CachedModel := FQueryDB.Get(CacheKey, nil);
   if (CachedModel <> nil) and (CachedModel is TSemanticModel) then
   begin
+    if FSemanticModel <> TSemanticModel(CachedModel) then
+    begin
+      if (FSemanticModel <> nil) and (FQueryDB <> nil) and FQueryDB.ContainsValue(FSemanticModel) then
+        FQueryDB.ForgetValue(FSemanticModel);
+      FreeAndNil(FSemanticModel);
+    end;
     FSemanticModel := TSemanticModel(CachedModel);
     FSemanticStatus := FSemanticModel.Status;
     { Do NOT call ResetSemanticState — it would free the cached model }
@@ -542,6 +548,12 @@ begin
       [],
       DiskModel) then
     begin
+      if FSemanticModel <> DiskModel then
+      begin
+        if (FSemanticModel <> nil) and (FQueryDB <> nil) and FQueryDB.ContainsValue(FSemanticModel) then
+          FQueryDB.ForgetValue(FSemanticModel);
+        FreeAndNil(FSemanticModel);
+      end;
       FSemanticModel := DiskModel;
       FSemanticStatus := FSemanticModel.Status;
       { Store in-memory cache too }
@@ -661,9 +673,13 @@ begin
     else if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
     begin
       HirBuilder := THIRBuilder.Create(
-        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator);
+        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator, FDiagnosticsSink);
       try
-        HirBuilder.Build;
+        if not HirBuilder.Build then
+        begin
+          FMirStatus := 'failure';
+          Exit;
+        end;
         HirPath := ChangeFileExt(FOptions.BuildContext.ResolvedSourcePath, '.hir');
         { HIR dump lines on FScratchAllocator TVec }
         HirPrinter := THIRPrinter.Create(HirBuilder.Module, FScratchAllocator);

@@ -116,6 +116,7 @@ type
     function ResolvedUnitCount: LongInt;
     function ResolvedUnitAt(const AIndex: LongInt): TResolvedUnit;
     function EdgeCount: LongInt;
+    function EdgeAt(const AIndex: LongInt): TUnitGraphEdge;
     procedure SetRootName(const AName: string);
     function RootName: string;
     procedure MarkReady;
@@ -433,6 +434,18 @@ begin
   Result := LongInt(FEdges.Count);
 end;
 
+function TUnitGraph.EdgeAt(const AIndex: LongInt): TUnitGraphEdge;
+begin
+  if (AIndex < 0) or (AIndex >= LongInt(FEdges.Count)) then
+  begin
+    Result.Kind := ugeRootRequest;
+    Result.SourceUnitId := '';
+    Result.TargetUnitId := '';
+    Exit;
+  end;
+  Result := FEdges[AIndex];
+end;
+
 procedure TUnitGraph.SetRootName(const AName: string);
 begin
   FRootName := AName;
@@ -466,6 +479,7 @@ var
   SystemIdx: LongInt;
   Deg: LongInt;
 begin
+  Result := nil;
   N := LongInt(FResolvedUnits.Count);
   E := LongInt(FEdges.Count);
 
