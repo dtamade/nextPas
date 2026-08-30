@@ -48,6 +48,11 @@
 
 **测试**：`test_js_quickjs_runtime` 前置 `JsBackendAvailable` 探测，CI 无库时 SKIP，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 强制 fail 用于本地验证。
 
+**静链 vs 动探**（game888 对比，见 `GAME888_BORROW.md §4`）：
+- `game888` 静链 `{$linklib quickjs}` + `libquickjs.a` + `qjs_fpc_bridge.c`（单二进制、无探测、inline 直链）适合游戏客户端
+- `nextpas` 动探 `platform.dl` + `libquickjs.so.1/0`（多后端可插拔、`fake` 兜底）适合框架库
+- 二者对偶，`js` 选动探因需 `fake` 与尾部追加
+
 ---
 
 ## 4. 同步 Eval vs webview 异步 Eval
@@ -101,10 +106,11 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 
 ## 9. 取舍与非目标
 
-- 不做 ES Module / VFS / Worker / Inspector（Deferred，见 CONTRACT §12）。
+- 不做 ES Module / VFS / Worker / Inspector（Deferred，见 CONTRACT §12；game888 的 `ModuleNormalize/Loader + js_std_add_helpers` 为参考实现，见 `GAME888_BORROW.md B4`）。
 - 不做 `TJsValue` 的类式 DOM（`json` 已废止 class-DOM，前车之鉴）。
 - 序列化一律经 `json` owner，不手写扫描。
 - 不做 `TJsValue` 的运算符重载（Pascal 风格显式 `As*`/`TryAs*`）。
+- 热循环批处理（`ecs_batch_get/set`）不进 S1，`>1000` 实体/帧触发时加 `GetBatch/SetBatch`（game888 B3，见 `GAME888_BORROW.md`）。
 
 ---
 
@@ -116,6 +122,9 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 | `template` 预编译 | 无窗求值 + 超时 | 是（`TimeoutMs` + `Eval` 同步） |
 | `config` 规则脚本 | 宿主函数 + JSON 互通 | 是（`SetHostFunction` + `NewJson/ToJson`） |
 | `tui` 脚本扩展 | 纯 Pascal 后端（零 so） | Deferred（`jsbkQuickJsPure`） |
+| `game888` ECS 脚本 | 批量 `ecs_*` + 热重载 | 借鉴：`TJSGameRuntime` 多桥组合在消费侧（`GAME888_BORROW.md B6`），`js` 不内置 ECS |
+
+---
 
 ---
 
@@ -139,6 +148,7 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 - `core/docs/db/CONTRACT.md`（尾部追加枚举、工厂探测）
 - `core/docs/crypto/CONTRACT.md`（多后端分层）
 - `core/docs/bench/README.md`（基准框架）
+- `core/docs/js/GAME888_BORROW.md`（game888 借鉴审计）
 
 ---
 
@@ -149,3 +159,4 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 | 2026-08-30 | 0.2 | 初稿：双层/FFI/超时 |
 | 2026-08-30 | 0.3 | 生产级：备选方案/消费者审计/基准设计/风险扩展 |
 | 2026-08-30 | 0.4 | 冻结：关联 ROADMAP/ACCEPTANCE/AI_GUIDE，12 份闭环 |
+| 2026-08-30 | 0.5 | 增补：game888 借鉴（静链/动探、批处理、模块加载器、多桥组合） |

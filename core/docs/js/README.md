@@ -6,7 +6,7 @@
 **Owner**：`codex/core-js` lane（`js` 家族）
 **状态**：S0 文档冻结（12 份生产级，待 M1 源码）→ S1 目标 `source-contract + focused-runtime(fake)`
 **最后更新**：2026-08-30
-**版本**：0.4（S0 冻结，12 份完整，见 REVIEW H1–H3 清零）
+**版本**：0.5（S0 冻结，15 份完整，含 game888 借鉴与 FAQ/决策）
 
 ## 1. 模块定位
 
@@ -191,6 +191,9 @@ make -C core/benchmarks/nextpas.core.js/bench_eval run
 | `BENCHMARKS.md` | 方法、套件、目标、回归阈值 | `CONTRACT §11` |
 | `WEBVIEW_LINK.md` | 与 `webview` 的联动、时序图与 Deferred | `DESIGN §7` |
 | `PARITY-go-rust.md` | Go `goja` / Rust `rquickjs/boa` 对标与残差 | `BENCHMARKS` |
+| `GAME888_BORROW.md` | game888 借鉴审计（6 借鉴 + 4 不借鉴 + 静链/动探） | `DESIGN` |
+| `FAQ.md` | 常见问题/运营/性能陷阱 | `CONTRACT/SECURITY` |
+| `DECISIONS.md` | ADR-001–005 决策日志 | `DESIGN` |
 | `AI_GUIDE.md` | 现代 AI 开发规范（agent/审查/验证） | 全模块 |
 | `REVIEW.md` | 穿透式审查：H1–H3 硬差距 + N1–N7 幼稚病 | 0.3→0.4 依据 |
 
@@ -208,3 +211,4 @@ make -C core/benchmarks/nextpas.core.js/bench_eval run
 | 2026-08-30 | 0.2 | 完整化：双层值语义、三形态宿主、超时中断、线程亲和 |
 | 2026-08-30 | 0.3 | 生产级完整化：架构速览/错误表/安全/测试基准显式化 |
 | 2026-08-30 | 0.4 | 冻结：12 份完整（ROADMAP/ACCEPTANCE/AI_GUIDE/TESTING/SECURITY/BENCHMARKS/REVIEW 补齐，索引闭环） |
+| 2026-08-30 | 0.5 | 增补：15 份完整（GAME888_BORROW/FAQ/DECISIONS，DESIGN 反哺批处理/静链动探） |
