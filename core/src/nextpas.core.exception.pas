@@ -15,6 +15,7 @@ type
   Exception = SysUtils.Exception;
   ExceptClass = SysUtils.ExceptClass;
   EConvertError = SysUtils.EConvertError;
+  ERangeError = SysUtils.ERangeError;
   EAssertionFailed = SysUtils.EAssertionFailed;
   EAbort = SysUtils.EAbort;
   EArgumentException = SysUtils.EArgumentException;
@@ -36,6 +37,7 @@ type
   ExceptClass = class of Exception;
 
   EConvertError = class(Exception);
+  ERangeError = class(Exception);
   EAssertionFailed = class(Exception);
   EAbort = class(Exception);
   EArgumentException = class(Exception);
