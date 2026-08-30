@@ -64,9 +64,9 @@ function TJsV8Context.ValidateHostName(const AName: string): Boolean; inline; be
 function TJsV8Context.DoEval(const ACode: string): TJsValue; begin Result := JsPureDoEval(Self, ACode, FOptions, jsbkV8, FHostFuncs, Global); end;
 function TJsV8Context.Runtime: IJsRuntime; begin EnsureNotClosed; Result:=FRuntime; end;
 function TJsV8Context.Eval(const ACode: string; const AFileName: string): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=DoEval(ACode); end;
-function TJsV8Context.TryEval(const ACode: string; out AValue: TJsValue): Boolean; begin try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
+function TJsV8Context.TryEval(const ACode: string; out AValue: TJsValue): Boolean; begin EnsureNotClosed; try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
 function TJsV8Context.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
+var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
 function TJsV8Context.Global: TJsValue; begin EnsureNotClosed; Result:=FGlobal; end;
 function TJsV8Context.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsStringValue(AStr); end;
 function TJsV8Context.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsIntValue(AValue); end;
@@ -87,7 +87,7 @@ function TJsV8Context.NewFunction(const AName: string; AHandler: TJsHostMethod):
 function TJsV8Context.NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=JsFunctionValue(AName); end;
 function TJsV8Context.GetProp(const AObj: TJsValue; const AName: string): TJsValue; begin EnsureNotClosed; Result:=JsPureHeapGetProp(FHeap, AObj, AName); end;
 procedure TJsV8Context.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue); begin EnsureNotClosed; JsPureHeapSetProp(FHeap, AObj, AName, AVal); end;
-function TJsV8Context.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=JsUndefinedValue; end;
+function TJsV8Context.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=JsPureCall(Self, FHostFuncs, AFunc, AThis, AArgs, jsbkV8); end;
 procedure TJsV8Context.DoSetHost(const AName: string); begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create('Invalid host function name: '+AName,jecSyntax,'SyntaxError','',jsbkV8); end;
 procedure TJsV8Context.SetHostFunction(const AName: string; AHandler: TJsHostFunction);
 var LIdx: Integer; begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkV8); LIdx:=FindHost(AName); if LIdx>=0 then begin FHostFuncs[LIdx].Func:=AHandler; FHostFuncs[LIdx].Kind:=0; Exit; end; SetLength(FHostFuncs,Length(FHostFuncs)+1); FHostFuncs[High(FHostFuncs)].Name:=AName; FHostFuncs[High(FHostFuncs)].Func:=AHandler; FHostFuncs[High(FHostFuncs)].Kind:=0; end;

@@ -41,6 +41,7 @@ function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const N
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
 procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
 
 implementation
 uses
@@ -178,6 +179,22 @@ begin
     SetLength(Heap[I].Props, 0);
   end;
   SetLength(Heap, 0);
+end;
+
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
+var LIdx: Integer; LName: string;
+begin
+  Result := JsUndefinedValue;
+  if not AFunc.IsFunction then Exit;
+  LName := JsFunctionName(AFunc);
+  if LName = '' then Exit;
+  LIdx := JsPureFindHost(Hosts, LName);
+  if LIdx < 0 then Exit;
+  case Hosts[LIdx].Kind of
+    0: try Result := Hosts[LIdx].Func(ACtx, AThis, AArgs); except on E: EJsError do raise; on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend); on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend); end;
+    1: try Result := Hosts[LIdx].Method(ACtx, AThis, AArgs); except on E: EJsError do raise; on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend); on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend); end;
+    2: try Result := Hosts[LIdx].Proc(ACtx, AThis, AArgs); except on E: EJsError do raise; on E: ENextPasError do raise EJsError.Create(E.Message, jecUnknown, 'Error', '', ABackend); on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', ABackend); end;
+  end;
 end;
 
 function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean; inline;

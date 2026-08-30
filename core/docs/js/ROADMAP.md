@@ -3,8 +3,8 @@
 **Owner**：`codex/core-js` lane
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ACCEPTANCE.md`（验收）、`GOAL_TREE.md`（目标树）、`REVIEW.md`（差距）
-**版本**：0.7（S0 定版，随实现滚动）
-**最后更新**：2026-08-30
+**版本**：0.8（S0 定版，随实现滚动，M3b 基准与纯族 321 行体量同步）
+**最后更新**：2026-08-31
 
 ---
 
@@ -48,10 +48,10 @@
 
 | 项 | 内容 |
 |----|------|
-| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 fs/thread 集成）、`js.pas` 门面（≤80 行） |
+| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 fs/thread 集成）、`js.pas` 门面（≤80 行）；纯族 `pure.base` 321 行 + `js.js888/v8/chakra` 各 ~119 行（单单元 <550，阈值内，M3b 实测） |
 | 测试 | `test_js_base`（选项/枚举/错误族）、`test_js_fake`（契约全量 40+ 用例，见 TESTING §3） |
 | 示例 | `demo_js`（`1+2`/`echo`/`JSON` 三段） |
-| 基准 | `bench_eval` 骨架（可编译，未落基线） |
+| 基准 | `bench_eval` 骨架（可编译，未落基线，M3b 已刷新 5 后端矩阵 179/633/1089/962/SKIP） |
 | 风险 | `TJsValue` 借用语义误用 → 缓解：`IsValid` + `TryAs*` + `TESTING` 悬垂矩阵 |
 
 ### M2 — S1 QuickJS 真链路
@@ -84,7 +84,7 @@ M0 (文档)
 ```
 
 - 外部依赖：`json`（M1）、`platform.dl`（M2）、`webview`（M3）
-- 内部依赖：`base(后端无关) ← intf(不透明) ← {fake, ffi←loader←quickjs, js.js888(零ffi)} ← 门面`（CONTRACT §1；纯后端与 fake 同约束，`js.intf` 零改动）
+- 内部依赖：`base(后端无关) ← intf(不透明) ← {fake, ffi←loader←quickjs, pure.base(321 行)←{js888,v8,chakra}(各~119 行,零ffi)} ← 门面`（CONTRACT §1；纯族 321 行体量阈值内，与 fake 同约束，`js.intf` 零改动）
 
 ---
 
@@ -118,8 +118,8 @@ M0 (文档)
 | 0.3 | M0 前 | 骨架 |
 | 0.4 | M0 冻结 | 12 份文档生产级 |
 | 0.5 | M1 | 假后端可用 |
-| 0.8 | M4 | `js.js888` 零摩擦落地（`jsbkJs888` 尾部，`js.intf` 零改动） |
-| 0.9 | M2–M3 | 真链路+联动 |
+| 0.8 | M4 | `js.js888` 零摩擦落地（`jsbkJs888` 尾部，`js.intf` 零改动，纯族 321 行阈值内） |
+| 0.9 | M2–M3 | 真链路+联动（M3b 基准 5 后端 179/633/1089/962/SKIP 落库） |
 | 1.0 | M5 | 生产级冻结（semver，见 CONTRACT §13） |
 
 ---
@@ -129,4 +129,5 @@ M0 (文档)
 | 日期 | 版本 | 变更 |
 |------|------|------|
 | 2026-08-30 | 1.0 | 首版：M0–M5 里程碑 + 依赖 + 风险 |
+| 2026-08-31 | 1.1 | M3b 同步：BENCHMARKS 5 后端矩阵刷新（179/633/1089/962/SKIP）+ Value/ops 同步 + 纯族 321 行体量阈值内（CONTRACT/BENCHMARKS 对齐） |
 

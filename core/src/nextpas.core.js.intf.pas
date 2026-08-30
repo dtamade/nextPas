@@ -58,7 +58,7 @@ function JsHeapObjectValue(AId: Int64): TJsValue; inline;
 function JsHeapArrayValue(AId: Int64): TJsValue; inline;
 function JsObjectId(const V: TJsValue): Int64; inline;
 function JsSymbolValue(const ADesc: string): TJsValue; inline; function JsBigIntValue(AValue: Int64): TJsValue; inline;
-function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsPromiseValue: TJsValue; inline;
+function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsFunctionName(const V: TJsValue): string; inline; function JsPromiseValue: TJsValue; inline;
 implementation
 uses nextpas.core.base, nextpas.core.text;
 function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; end;
@@ -77,6 +77,7 @@ function JsBigIntValue(AValue: Int64): TJsValue; begin Result:=JsUndefinedValue;
 function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskError; Result.FStrVal:=AMessage; end;
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
+function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
 function TJsValue.Kind: TJsValueKind; begin if not FValid then Result:=jskUndefined else Result:=FKind; end;
 function TJsValue.IsValid: Boolean; begin Result:=FValid; end;
 function TJsValue.IsUndefined: Boolean; begin Result:=Kind=jskUndefined; end;

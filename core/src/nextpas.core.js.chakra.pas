@@ -64,9 +64,9 @@ function TJsChakraContext.ValidateHostName(const AName: string): Boolean; inline
 function TJsChakraContext.DoEval(const ACode: string): TJsValue; begin Result := JsPureDoEval(Self, ACode, FOptions, jsbkChakra, FHostFuncs, Global); end;
 function TJsChakraContext.Runtime: IJsRuntime; begin EnsureNotClosed; Result:=FRuntime; end;
 function TJsChakraContext.Eval(const ACode: string; const AFileName: string): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=DoEval(ACode); end;
-function TJsChakraContext.TryEval(const ACode: string; out AValue: TJsValue): Boolean; begin try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
+function TJsChakraContext.TryEval(const ACode: string; out AValue: TJsValue): Boolean; begin EnsureNotClosed; try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
 function TJsChakraContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
+var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
 function TJsChakraContext.Global: TJsValue; begin EnsureNotClosed; Result:=FGlobal; end;
 function TJsChakraContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsStringValue(AStr); end;
 function TJsChakraContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsIntValue(AValue); end;
@@ -87,7 +87,7 @@ function TJsChakraContext.NewFunction(const AName: string; AHandler: TJsHostMeth
 function TJsChakraContext.NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=JsFunctionValue(AName); end;
 function TJsChakraContext.GetProp(const AObj: TJsValue; const AName: string): TJsValue; begin EnsureNotClosed; Result:=JsPureHeapGetProp(FHeap, AObj, AName); end;
 procedure TJsChakraContext.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue); begin EnsureNotClosed; JsPureHeapSetProp(FHeap, AObj, AName, AVal); end;
-function TJsChakraContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=JsUndefinedValue; end;
+function TJsChakraContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=JsPureCall(Self, FHostFuncs, AFunc, AThis, AArgs, jsbkChakra); end;
 procedure TJsChakraContext.DoSetHost(const AName: string); begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create('Invalid host function name: '+AName,jecSyntax,'SyntaxError','',jsbkChakra); end;
 procedure TJsChakraContext.SetHostFunction(const AName: string; AHandler: TJsHostFunction);
 var LIdx: Integer; begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkChakra); LIdx:=FindHost(AName); if LIdx>=0 then begin FHostFuncs[LIdx].Func:=AHandler; FHostFuncs[LIdx].Kind:=0; Exit; end; SetLength(FHostFuncs,Length(FHostFuncs)+1); FHostFuncs[High(FHostFuncs)].Name:=AName; FHostFuncs[High(FHostFuncs)].Func:=AHandler; FHostFuncs[High(FHostFuncs)].Kind:=0; end;
