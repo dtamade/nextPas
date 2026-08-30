@@ -142,12 +142,11 @@ begin
       if not WaitFlag(GVia.OpDone, GVia.Event, 12000) then begin AErrKind:=sekTimeout; Exit; end;
       if GVia.FsErr<>nil then begin AErrKind:=GVia.FsErr.Kind; FreeAndNil(GVia.FsErr); Exit; end;
       APathRes:=GVia.PathResult; AAttrs:=GVia.Attrs; AData:=GVia.Data; Result:=True;
-      try GVia.Fs.Close; except end; Sleep(400);
-    finally RTLeventDestroy(GVia.Event); GVia.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; Sleep(150); Finalize(GVia); GVia:=Default(TSftpViaState); end;
+      GVia.Fs.Close;
+    finally RTLeventDestroy(GVia.Event); GVia.Event:=nil; LLoop.Stop; LLoopThread.WaitFor; LLoopThread.Free; end;
   finally
-    if GVia.Fs<>nil then begin try GVia.Fs.Close; except end; GVia.Fs:=nil; end; if GVia.Err<>nil then FreeAndNil(GVia.Err); if GVia.FsErr<>nil then FreeAndNil(GVia.FsErr);
-    SetLength(GVia.Data,0); SetLength(GVia.PathResult,0); SetLength(GVia.Dir,0); Finalize(GVia); GVia:=Default(TSftpViaState);
-    if Assigned(LLoop) then begin try LLoop.Free; except end; end; if Assigned(LJumpListener) then LJumpListener.Close; try LFwdA.Close; except end; try LFwdB.Close; except end;
+    if GVia.Fs<>nil then begin GVia.Fs.Close; GVia.Fs:=nil; end; if GVia.Err<>nil then FreeAndNil(GVia.Err); if GVia.FsErr<>nil then FreeAndNil(GVia.FsErr);
+    LLoop.Free; LJumpListener.Close; try LFwdA.Close; except end; try LFwdB.Close; except end;
     LScJump^.Done:=True; LScTarget^.Done:=True; Sleep(100);
     if not LJumpThread.Finished then LJumpThread.Terminate; if not LTargetThread.Finished then LTargetThread.Terminate;
     LJumpThread.WaitFor; LTargetThread.WaitFor; LJumpThread.Free; LTargetThread.Free;
@@ -162,7 +161,4 @@ begin
   GSuite.Test('target auth fail propagates', procedure var P:string; A:TSftpAttrs; D:TBytes; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunSftpViaJump(PatternBytes($55,32), PatternBytes($66,32), 'u','p', True, 'u','wrong', False, 'realpath', P, A, D, K); CheckTrue(not Ok,'should fail'); CheckEqual(Ord(sekAuth), Ord(K),'kind'); end);
   GSuite.Test('jump auth fail propagates', procedure var P:string; A:TSftpAttrs; D:TBytes; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunSftpViaJump(PatternBytes($77,32), PatternBytes($88,32), 'u','wrong', False, 'u','p', True, 'realpath', P, A, D, K); CheckTrue(not Ok,'jump fail'); CheckTrue(K in [sekAuth,sekIO],'kind'); end);
   GRunner:=TSuiteRunner.Create('nextpas.core.ssh.sftp.async.via.jump'); GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary; if not GRunner.AllPassed then Halt(1);
-  Finalize(GVia); GVia:=Default(TSftpViaState);
-  Finalize(GSuite); GSuite:=Default(TTestSuite);
-  Finalize(GRunner); GRunner:=Default(TSuiteRunner);
 end.
