@@ -1,7 +1,7 @@
 # respack / vfs — Go / Rust 对标矩阵
 
-**状态日期**：2026-08-30（1.0 收官；S1 格式层/S2 契约/S3 后端/S4 工具链/S5 http.static 已收官，S6 装饰器勘误补齐）
-**范围**：L2 `nextpas.core.{respack,vfs}`（已落地 1.0；FORMAT 已正确无需改）
+**状态日期**：2026-08-31（1.4 双视图收官；mount/overlay 游戏热更超越 Go）
+**范围**：L2 `nextpas.core.{respack,vfs}`（已落地 1.4；FORMAT 已正确无需改，overlay 不动格式）
 **标杆**（均为一手来源，2026-08-25 抓取）：
 
 | 来源 | 版本/分支 | 材料 |
@@ -54,6 +54,7 @@
 | 开发态工作流 | — | rust-embed debug 默认读磁盘（免重编译） | **同构方案已存在**：开发接 `os` 后端、发布接 `embedded`，consumer 零改动 |
 | MIME 推断 | net/http 按扩展名 | rust-embed 独立 mime_guess crate | 保持消费侧（http.static）职责 |
 | 零拷贝 | embed.FS 文件实现 Seeker+ReaderAt，指向静态数据 | Tauri Cow::Borrowed 切片 | 维持设计：切片直指 blob，接口持引用保活 |
+| 多源聚合 | Go `io/fs` 无（单 FS） | — | **超越**：`mount` 异前缀最长匹配 + `overlay` 同根优先级 patch>dlc>base（游戏 Unreal Pak / Unity AssetBundle 热更模型，List去重合并，ETag优先透传，`O(n log n)`） |
 
 ## 三、Essential API 覆盖矩阵（符号级，2026-08-25 深化）
 
@@ -98,6 +99,7 @@
 | include_dir `extract()` | 工具 extract-to-dir 选项 | Deferred→S4 | 调试/迁移用途 |
 | Tauri phf 完美哈希 O(1) | 排序数组二分 O(log n) | 定稿偏离 | 10k 条目 ≤14 次缓存友好比较；FORMAT 预留 flag bit2 hash-index 区，超大规模再启用 |
 | Tauri brotli / include-flate | `vfs.compressed` gzip 按需解压（`CreateDecompressingVfs` 经 `transform` 模板） | Done (gzip via vfs.compressed) | 勘误：原 Deferred 已由 S6 L3 装饰器补齐 gzip 实现（`daAuto` 4K HeaderPred 免全量读 + 单次 `VfsReadAllBytes` 复用零二次 IO + 32MiB 防 bomb），STORE 零拷贝保持；HTTP 编码另选承载面 |
+| 游戏热更叠加 | Unreal Pak `Mount` + Order / Unity `AssetBundle` patch | — | **超越 Go**：`CreateOverlayVfs([Patch,Dlc,Base])` 同根优先级首命中，`List` 排序后线性去重 `O(n log n)`，`demo_game_pack` 可运行示例 |
 
 > **勘误与基准固化（2026-08-30 P0-4 1.0）**：压缩行原 `Deferred` 勘误为 `Done (gzip via vfs.compressed)`——S6 以 L3 装饰器 `vfs.transform` 通用模板 + `vfs.compressed` 薄门面补齐 gzip 按需解压（`GZIP_MAX 32MiB` 单源、`daAuto` 4K HeaderPred、`VFS_DECOMPRESS_MAX_BYTES` 薄别名），`bench_transform` 4 场景阈值已固化（`Stat/large-non-gzip/header-peek` 1MiB 非 gzip 免解压 ~972 ns、`Stat/gz/decompress` 64KiB ~51 µs、`Open/large-non-gzip/passthrough` 单次复用 ~2.26 ms、`Open/gz/decompress` ~107 µs；见 `core/docs/vfs/README.md` 基准节与 `core/docs/vfs/CONTRACT.md` §6 S6 行 + `test_vfs_compressed` 7/7 含 1MiB 头部预判功能契约）。
 
