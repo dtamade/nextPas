@@ -97,86 +97,14 @@ implementation
 uses
   SysUtils,
   nextpas.core.agent.pricing,
-  nextpas.core.agent.textutil;
+  nextpas.core.agent.textutil,
+  nextpas.core.agent.loop.run;
 
 const
   CDEFAULT_MAX_ROUNDS = 10;
   CDEFAULT_DOOM_THRESHOLD = 3;
   CDEFAULT_TRUNCATE_LINES = 2000;
   CDEFAULT_TRUNCATE_BYTES = 65536;
-
-type
-  TLoopRun = class(TInterfacedObject, IAgentLoopRun)
-  private
-    FOutcome: TLoopOutcome;
-    FFinal: TMessage;
-    FHasFinal: Boolean;
-    FTranscript: TMessageArray;
-    FTotal: TTokenUsage;
-    FLastError: EAgentError;
-  public
-    destructor Destroy; override;
-    procedure InitUsageUnknowns;
-    procedure AccumulateUsage(const AU: TTokenUsage);
-    function FinalMessage: TMessage;
-    function TryGetFinalMessage(out AMsg: TMessage): Boolean;
-    function Transcript: TMessageArray;
-    function Outcome: TLoopOutcome;
-    function TotalUsage: TTokenUsage;
-    function LastError: EAgentError;
-    property WOutcome: TLoopOutcome read FOutcome write FOutcome;
-    property WFinal: TMessage read FFinal write FFinal;
-    property WHasFinal: Boolean read FHasFinal write FHasFinal;
-    property WTranscript: TMessageArray read FTranscript write FTranscript;
-    property WLastError: EAgentError read FLastError write FLastError;
-  end;
-
-procedure TLoopRun.InitUsageUnknowns;
-begin
-  LoopInitUsageUnknown(FTotal);
-end;
-
-procedure TLoopRun.AccumulateUsage(const AU: TTokenUsage);
-begin
-  LoopAccumulateUsage(FTotal, AU);
-end;
-
-destructor TLoopRun.Destroy;
-begin
-  FLastError.Free;
-  inherited Destroy;
-end;
-
-function TLoopRun.FinalMessage: TMessage;
-begin
-  Result := FFinal;
-end;
-
-function TLoopRun.TryGetFinalMessage(out AMsg: TMessage): Boolean;
-begin
-  AMsg := FFinal;
-  Result := FHasFinal;
-end;
-
-function TLoopRun.Transcript: TMessageArray;
-begin
-  Result := Copy(FTranscript, 0, Length(FTranscript));
-end;
-
-function TLoopRun.Outcome: TLoopOutcome;
-begin
-  Result := FOutcome;
-end;
-
-function TLoopRun.TotalUsage: TTokenUsage;
-begin
-  Result := FTotal;
-end;
-
-function TLoopRun.LastError: EAgentError;
-begin
-  Result := FLastError;
-end;
 
 { ---- TAgentLoop ---- }
 
