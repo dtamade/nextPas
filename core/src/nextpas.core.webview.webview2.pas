@@ -701,7 +701,8 @@ procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotify
 var I: Integer;
 begin
   for I := 0 to High(AList) do
-    AList[I]();
+    if Assigned(AList[I]) then
+      AList[I]();
 end;
 
 procedure TWebView2Webview.FireReadyOnce;

@@ -150,6 +150,49 @@ begin
   A.Close;
 end;
 
+procedure TestAppAutoRemoveWeakAndSnapshot;
+var
+  A: IApp;
+  W2, W3: IWebviewWindow;
+  Arr: TAppWindows;
+begin
+  A := TAppBuilder.New.Kind(wvFake).Build;
+  W2 := A.NewWindowBuilder.Build; A.AddWindow(W2);
+  W3 := A.NewWindowBuilder.Build; A.AddWindow(W3);
+  CheckEqual(3, A.WindowCount, '3 alive');
+  Arr := A.GetWindows; CheckEqual(3, Length(Arr), 'snapshot 3');
+  W2.Close; // auto weak remove
+  CheckEqual(2, A.WindowCount, 'after close 2');
+  Arr := A.GetWindows; CheckEqual(2, Length(Arr), 'snapshot 2');
+  Check(Arr[0]=A.MainWindow, 'snapshot 0 main');
+  Check(Arr[1]=W3, 'snapshot 1 is W3 (W2 removed)');
+  // GetWindow now compacted: index 1 should be W3 after removal
+  Check(A.GetWindow(1)=W3, 'GetWindow compacted');
+  A.Close;
+  CheckEqual(0, A.WindowCount, 'all closed 0');
+end;
+
+procedure TestAppOnWindowClosed;
+var
+  A: IApp;
+  W2: IWebviewWindow;
+  Fired: Integer;
+  LastWin: IWebviewWindow;
+begin
+  Fired:=0; LastWin:=nil;
+  A := TAppBuilder.New.Kind(wvFake).Build;
+  A.OnWindowClosed(procedure(const AW: IWebviewWindow) begin Inc(Fired); LastWin:=AW; end);
+  W2 := A.NewWindowBuilder.Build; A.AddWindow(W2);
+  CheckEqual(0, Fired, 'no fire yet');
+  W2.Close;
+  CheckEqual(1, Fired, 'fired once');
+  Check(LastWin=W2, 'payload is closed window');
+  // main close also fires
+  A.MainWindow.Close;
+  CheckEqual(2, Fired, 'second fire for main');
+  CheckEqual(0, A.WindowCount, 'count 0');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -161,5 +204,7 @@ begin
   T.Test('mount via builder', @TestAppMountViaBuilder);
   T.Test('options validation', @TestAppOptionsValidation);
   T.Test('getwindow bounds', @TestAppGetWindowBounds);
+  T.Test('auto remove weak and snapshot', @TestAppAutoRemoveWeakAndSnapshot);
+  T.Test('app onwindowclosed', @TestAppOnWindowClosed);
   if not T.Run then Halt(1);
 end.

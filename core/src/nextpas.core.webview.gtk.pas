@@ -996,7 +996,8 @@ var
   I: Integer;
 begin
   for I := 0 to High(AList) do
-    AList[I]();
+    if Assigned(AList[I]) then
+      AList[I]();
 end;
 
 procedure TGtkWebview.SetupSessionContext;

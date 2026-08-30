@@ -1,11 +1,10 @@
 unit nextpas.core.app.intf;
 
 {** @desc nextpas.core.app L3 家族：应用壳接口。
-       P2：App 持有窗口集合（精确 WindowCount + Add/Remove + GetWindow）、
-       app-aware NewWindow（Build 自动注册并钩 OnWindowClosed 自摘）、
-       Builder 聚合资产挂载（MountEmbedded/MountDirectory）与 webview 同语义。
+       P3：弱表自动摘除（GAppMap + TMutex）、App 级 OnWindowClosed 聚合、
+       GetWindows 快照与存活过滤；Builder 聚合资产挂载与 webview 同语义。
 
-       线程契约：Add/Remove/Count 仅主线程；P2 仍单线程精确，P3 再上 GSchemeLock。 *}
+       线程契约：Add/Remove/Count 仅主线程；弱表以 TMutex 守卫跨线程 Close。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -17,16 +16,26 @@ uses
   nextpas.core.webview.factory;
 
 type
+  TAppWindows = array of IWebviewWindow;
+
+  TAppWindowClosedHandler = reference to procedure(const AWindow: IWebviewWindow);
+  TAppWindowClosedMethod  = procedure(const AWindow: IWebviewWindow) of object;
+  TAppWindowClosedProc    = procedure(const AWindow: IWebviewWindow);
+
   IApp = interface
     ['{A1B2C3D4-E5F6-47A8-9B0C-112233445501}']
     function GetMainWindow: IWebviewWindow;
     property MainWindow: IWebviewWindow read GetMainWindow;
     function WindowCount: Integer;
     function GetWindow(AIdx: Integer): IWebviewWindow;
+    function GetWindows: TAppWindows;
     function NewWindowBuilder: IWebviewBuilder;
     function NewWindow: IWebviewBuilder; // alias, app-aware
     procedure AddWindow(AWin: IWebviewWindow);
     procedure RemoveWindow(AWin: IWebviewWindow);
+    procedure OnWindowClosed(AHandler: TAppWindowClosedHandler); overload;
+    procedure OnWindowClosed(AHandler: TAppWindowClosedMethod); overload;
+    procedure OnWindowClosed(AHandler: TAppWindowClosedProc); overload;
     procedure Run;
     procedure Quit;
     procedure Close;

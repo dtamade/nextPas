@@ -39,18 +39,34 @@ type
     FMain: IWebviewWindow;
     FWindows: array of IWebviewWindow;
     FCount: Integer;
+    FOnClosed: array of TAppWindowClosedHandler;
+    FOnClosedCount: Integer;
+    FOnClosedM: array of TAppWindowClosedMethod;
+    FOnClosedMCount: Integer;
+    FOnClosedP: array of TAppWindowClosedProc;
+    FOnClosedPCount: Integer;
     procedure GrowWindows; inline;
+    procedure GrowOnClosed; inline;
+    procedure GrowOnClosedM; inline;
+    procedure GrowOnClosedP; inline;
     procedure HookWindowClose(ALockedWin: IWebviewWindow);
+    procedure HandleAnyWindowClosed;
+    procedure FireWindowClosed(const AWin: IWebviewWindow);
+    procedure CompactClosed;
   public
     constructor Create(const AWindow: IWebviewWindow);
     destructor Destroy; override;
     function GetMainWindow: IWebviewWindow;
     function WindowCount: Integer;
     function GetWindow(AIdx: Integer): IWebviewWindow;
+    function GetWindows: TAppWindows;
     function NewWindowBuilder: IWebviewBuilder;
     function NewWindow: IWebviewBuilder;
     procedure AddWindow(AWin: IWebviewWindow);
     procedure RemoveWindow(AWin: IWebviewWindow);
+    procedure OnWindowClosed(AHandler: TAppWindowClosedHandler); overload;
+    procedure OnWindowClosed(AHandler: TAppWindowClosedMethod); overload;
+    procedure OnWindowClosed(AHandler: TAppWindowClosedProc); overload;
     procedure Run;
     procedure Quit;
     procedure Close;
@@ -125,13 +141,13 @@ constructor TAppImpl.Create(const AWindow: IWebviewWindow);
 begin
   inherited Create;
   FMain := AWindow;
-  SetLength(FWindows, 0);
-  FCount := 0;
+  SetLength(FWindows, 0); FCount:=0;
+  SetLength(FOnClosed, 0); FOnClosedCount:=0;
+  SetLength(FOnClosedM, 0); FOnClosedMCount:=0;
+  SetLength(FOnClosedP, 0); FOnClosedPCount:=0;
   if (FMain <> nil) then
   begin
-    SetLength(FWindows, 4);
-    FWindows[0] := FMain;
-    FCount := 1;
+    SetLength(FWindows, 4); FWindows[0]:=FMain; FCount:=1;
     HookWindowClose(FMain);
   end;
 end;
@@ -139,6 +155,9 @@ end;
 destructor TAppImpl.Destroy;
 begin
   SetLength(FWindows, 0);
+  SetLength(FOnClosed, 0);
+  SetLength(FOnClosedM, 0);
+  SetLength(FOnClosedP, 0);
   inherited;
 end;
 
@@ -147,33 +166,85 @@ begin
   SetLength(FWindows, WebviewGrowCapacity(Length(FWindows)));
 end;
 
+procedure TAppImpl.GrowOnClosed; inline;
+begin
+  SetLength(FOnClosed, WebviewGrowCapacity(Length(FOnClosed)));
+end;
+
+procedure TAppImpl.GrowOnClosedM; inline;
+begin
+  SetLength(FOnClosedM, WebviewGrowCapacity(Length(FOnClosedM)));
+end;
+
+procedure TAppImpl.GrowOnClosedP; inline;
+begin
+  SetLength(FOnClosedP, WebviewGrowCapacity(Length(FOnClosedP)));
+end;
+
 procedure TAppImpl.HookWindowClose(ALockedWin: IWebviewWindow);
 begin
-  // P2: keep window list explicit; auto-remove deferred to P3 (weak table) to avoid cycles.
-  // WindowCount is computed via IsClosed live check, so list growth is bounded and no leak.
+  ALockedWin.OnWindowClosed(
+    procedure
+    begin
+      HandleAnyWindowClosed;
+    end);
 end;
 
-function TAppImpl.GetMainWindow: IWebviewWindow;
+procedure TAppImpl.HandleAnyWindowClosed;
+var I,J: Integer; LWin: IWebviewWindow;
 begin
-  Result := FMain;
+  I:=0;
+  while I < FCount do
+  begin
+    LWin:=FWindows[I];
+    if (LWin<>nil) and LWin.IsClosed then
+    begin
+      for J:=I to FCount-2 do FWindows[J]:=FWindows[J+1];
+      FWindows[FCount-1]:=nil; Dec(FCount);
+      FireWindowClosed(LWin);
+    end else Inc(I);
+  end;
 end;
+
+procedure TAppImpl.FireWindowClosed(const AWin: IWebviewWindow);
+var I: Integer;
+begin
+  for I:=0 to FOnClosedCount-1 do if Assigned(FOnClosed[I]) then try FOnClosed[I](AWin); except end;
+  for I:=0 to FOnClosedMCount-1 do if Assigned(FOnClosedM[I]) then try FOnClosedM[I](AWin); except end;
+  for I:=0 to FOnClosedPCount-1 do if Assigned(FOnClosedP[I]) then try FOnClosedP[I](AWin); except end;
+end;
+
+procedure TAppImpl.CompactClosed;
+var I,J: Integer;
+begin
+  J:=0;
+  for I:=0 to FCount-1 do if (FWindows[I]<>nil) and not FWindows[I].IsClosed then begin if J<>I then FWindows[J]:=FWindows[I]; Inc(J); end;
+  for I:=J to FCount-1 do FWindows[I]:=nil; FCount:=J;
+end;
+
+function TAppImpl.GetMainWindow: IWebviewWindow; begin Result:=FMain; end;
 
 function TAppImpl.WindowCount: Integer;
-var
-  I, LAlive: Integer;
 begin
-  LAlive := 0;
-  for I := 0 to FCount - 1 do
-    if (FWindows[I] <> nil) and (not FWindows[I].IsClosed) then
-      Inc(LAlive);
-  Result := LAlive;
+  CompactClosed;
+  Result:=FCount;
 end;
 
 function TAppImpl.GetWindow(AIdx: Integer): IWebviewWindow;
 begin
+  CompactClosed;
   if (AIdx < 0) or (AIdx >= FCount) then
     raise EAppInvalidState.CreateFmt('window index %d out of range [0,%d)', [AIdx, FCount]);
-  Result := FWindows[AIdx];
+  Result:=FWindows[AIdx];
+end;
+
+function TAppImpl.GetWindows: TAppWindows;
+var I: Integer;
+begin
+  Result:=nil;
+  CompactClosed;
+  SetLength(Result, FCount);
+  for I:=0 to FCount-1 do Result[I]:=FWindows[I];
 end;
 
 function TAppImpl.NewWindowBuilder: IWebviewBuilder;
@@ -202,18 +273,36 @@ begin
 end;
 
 procedure TAppImpl.RemoveWindow(AWin: IWebviewWindow);
-var
-  I, J: Integer;
+var I,J: Integer;
 begin
-  for I := 0 to FCount - 1 do
-    if FWindows[I] = AWin then
-    begin
-      for J := I to FCount - 2 do
-        FWindows[J] := FWindows[J + 1];
-      FWindows[FCount - 1] := nil;
-      Dec(FCount);
-      Exit;
-    end;
+  for I:=0 to FCount-1 do if FWindows[I]=AWin then
+  begin
+    for J:=I to FCount-2 do FWindows[J]:=FWindows[J+1];
+    FWindows[FCount-1]:=nil; Dec(FCount);
+    FireWindowClosed(AWin);
+    Exit;
+  end;
+end;
+
+procedure TAppImpl.OnWindowClosed(AHandler: TAppWindowClosedHandler);
+begin
+  if not Assigned(AHandler) then raise EAppInvalidState.Create('OnWindowClosed handler must not be nil');
+  if FOnClosedCount=Length(FOnClosed) then GrowOnClosed;
+  FOnClosed[FOnClosedCount]:=AHandler; Inc(FOnClosedCount);
+end;
+
+procedure TAppImpl.OnWindowClosed(AHandler: TAppWindowClosedMethod);
+begin
+  if not Assigned(AHandler) then raise EAppInvalidState.Create('OnWindowClosed handler must not be nil');
+  if FOnClosedMCount=Length(FOnClosedM) then GrowOnClosedM;
+  FOnClosedM[FOnClosedMCount]:=AHandler; Inc(FOnClosedMCount);
+end;
+
+procedure TAppImpl.OnWindowClosed(AHandler: TAppWindowClosedProc);
+begin
+  if not Assigned(AHandler) then raise EAppInvalidState.Create('OnWindowClosed handler must not be nil');
+  if FOnClosedPCount=Length(FOnClosedP) then GrowOnClosedP;
+  FOnClosedP[FOnClosedPCount]:=AHandler; Inc(FOnClosedPCount);
 end;
 
 procedure TAppImpl.Run;
@@ -229,10 +318,15 @@ end;
 procedure TAppImpl.Close;
 var
   I: Integer;
+  LSnapshot: array of IWebviewWindow;
 begin
+  // Snapshot to avoid index shift when HandleAnyWindowClosed mutates FWindows.
+  SetLength(LSnapshot, FCount);
   for I := 0 to FCount - 1 do
-    if (FWindows[I] <> nil) and (not FWindows[I].IsClosed) then
-      FWindows[I].Close;
+    LSnapshot[I] := FWindows[I];
+  for I := 0 to High(LSnapshot) do
+    if (LSnapshot[I] <> nil) and (not LSnapshot[I].IsClosed) then
+      LSnapshot[I].Close;
 end;
 
 function TAppImpl.IsClosed: Boolean;
