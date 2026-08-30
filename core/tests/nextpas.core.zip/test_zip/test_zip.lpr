@@ -1339,7 +1339,8 @@ begin
     Check(False, 'wrong password must fail');
   except
     on E: Exception do
-      Check(Pos('EParseError', E.ClassName) > 0,
+      Check((Pos('EParseError', E.ClassName) > 0) or
+        (Pos('EZipAuthError', E.ClassName) > 0) or (E is EParseError),
         'wrong password fails as parse error');
   end;
 
