@@ -164,7 +164,7 @@ end;
 
 function IsZeroBytes(const AData: TBytes): Boolean; inline;
 begin
-  Result := StripLeadingZeroView(AData).Len = 0;
+  Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;

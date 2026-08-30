@@ -46,6 +46,9 @@ function CompareUnsigned(const ALeft, ARight: TBytes): Integer;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
+function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 
@@ -400,6 +403,29 @@ end;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean;
 begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
+end;
+
+function IsZeroBytes(const AData: TBytes): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(AData) do
+    if AData[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+function IsZeroBytes(const ASpan: TByteSpan): Boolean;
+var
+  I: SizeUInt;
+begin
+  for I := 0 to ASpan.Len - 1 do
+    if ASpan.Data[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+function IsAllZero(const AData: TBytes): Boolean;
+begin
+  Result := IsZeroBytes(AData);
 end;
 
 function StripLeadingZero(const AData: TBytes): TBytes; inline;

@@ -32,15 +32,28 @@ implementation
 
 function GitZlibAdler32(const AData: TBytes): UInt32;
 var
-  I: SizeInt;
+  I, LRem, LBlock, J: SizeInt;
   A, B: UInt32;
 begin
   A := 1;
   B := 0;
-  for I := 0 to Length(AData) - 1 do
+  LRem := Length(AData);
+  I := 0;
+  while LRem > 0 do
   begin
-    A := (A + AData[I]) mod 65521;
-    B := (B + A) mod 65521;
+    if LRem > 5552 then
+      LBlock := 5552
+    else
+      LBlock := LRem;
+    for J := 0 to LBlock - 1 do
+    begin
+      A := A + AData[I + J];
+      B := B + A;
+    end;
+    Inc(I, LBlock);
+    Dec(LRem, LBlock);
+    A := A mod 65521;
+    B := B mod 65521;
   end;
   Result := (B shl 16) or A;
 end;

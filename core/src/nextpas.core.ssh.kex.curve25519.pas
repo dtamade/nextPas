@@ -164,16 +164,6 @@ begin
   end;
 end;
 
-function IsAllZero(const ABuf: TBytes): Boolean;
-var
-  I: Integer;
-begin
-  for I := 0 to High(ABuf) do
-    if ABuf[I] <> 0 then
-      Exit(False);
-  Result := True;
-end;
-
 function TSshKexCurve25519.ProcessReply(const APayload: TBytes;
   const AVc, AVs: string;
   const AMyKexInit, APeerKexInit: TBytes;
@@ -215,7 +205,7 @@ begin
     LX25519Err) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: x25519 failed: '
       + string(LX25519Err));
-  if IsAllZero(LShared) then
+  if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
 
   Result.SharedSecret := LShared;
