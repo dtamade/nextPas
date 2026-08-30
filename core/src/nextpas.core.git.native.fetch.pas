@@ -38,6 +38,7 @@ uses
   nextpas.core.process,
   nextpas.core.hash.sha1,
   nextpas.core.text.conv,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.pktline,
   nextpas.core.git.native.negotiate,
   nextpas.core.git.native.sideband;
@@ -89,26 +90,28 @@ begin
   Caps[0] := 'side-band-64k';
   Caps[1] := 'ofs-delta';
   Caps[2] := 'multi_ack';
-  Request := nil;
+  // Reserve batch: collect Parts then BytesConcatMany (was ConcatBytes O(n2))
+  var Parts: array of TBytes;
+  var PartCount: Integer;
+  SetLength(Parts, Length(AWants) + Length(AHaves) + 4);
+  PartCount := 0;
   for I := 0 to High(AWants) do
   begin
     if I = 0 then
-      Tmp := GitEncodeWant(AWants[I], Caps)
+      Parts[PartCount] := GitEncodeWant(AWants[I], Caps)
     else
-      Tmp := GitEncodeWantSimple(AWants[I]);
-    Request := ConcatBytes(Request, Tmp);
+      Parts[PartCount] := GitEncodeWantSimple(AWants[I]);
+    Inc(PartCount);
   end;
-  Tmp := GitPktEncodeFlush;
-  Request := ConcatBytes(Request, Tmp);
+  Parts[PartCount] := GitPktEncodeFlush; Inc(PartCount);
   for I := 0 to High(AHaves) do
   begin
-    Tmp := GitEncodeHave(AHaves[I]);
-    Request := ConcatBytes(Request, Tmp);
+    Parts[PartCount] := GitEncodeHave(AHaves[I]); Inc(PartCount);
   end;
-  Tmp := GitEncodeDone;
-  Request := ConcatBytes(Request, Tmp);
-  Tmp := GitPktEncodeFlush;
-  Request := ConcatBytes(Request, Tmp);
+  Parts[PartCount] := GitEncodeDone; Inc(PartCount);
+  Parts[PartCount] := GitPktEncodeFlush; Inc(PartCount);
+  SetLength(Parts, PartCount);
+  Request := BytesConcatMany(Parts);
 
   Out_ := RunWithInput('git', ['upload-pack', '--stateless-rpc', ARemoteGitDir], Request);
   if not ProcessSucceeded(Out_) then
@@ -126,6 +129,9 @@ begin
   Demuxed.Errors := nil;
   Demuxed.Raw := nil;
   HasPack := False;
+  // Reserve batch for DataBytes: collect payload parts then BytesConcatMany (was per-packet SetLength+Move O(n2))
+  SetLength(DataParts, Length(Pkts));
+  DataCount := 0;
   for I := 0 to High(Pkts) do
   begin
     Pkt := Pkts[I];
@@ -146,9 +152,10 @@ begin
       case Kind of
         gsbData:
           begin
-            SetLength(Demuxed.DataBytes, Length(Demuxed.DataBytes) + Length(Payload));
-            if Length(Payload) > 0 then
-              Move(Payload[0], Demuxed.DataBytes[Length(Demuxed.DataBytes) - Length(Payload)], Length(Payload));
+            // BytesConcatMany batch: collect part, single alloc later
+            if DataCount >= Length(DataParts) then SetLength(DataParts, DataCount + 16);
+            DataParts[DataCount] := Payload;
+            Inc(DataCount);
             SetLength(Demuxed.Raw, Length(Demuxed.Raw) + 1);
             Demuxed.Raw[High(Demuxed.Raw)].Kind := Kind;
             Demuxed.Raw[High(Demuxed.Raw)].Data := Payload;
@@ -173,6 +180,10 @@ begin
       end;
     end;
   end;
+  if DataCount > 0 then
+    Demuxed.DataBytes := BytesConcatMany(Copy(DataParts, 0, DataCount))
+  else
+    Demuxed.DataBytes := nil;
   if not HasPack then
   begin
     Result := nil;

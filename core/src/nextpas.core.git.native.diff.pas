@@ -41,7 +41,8 @@ uses
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.revparse;
+  nextpas.core.git.native.revparse,
+  nextpas.core.git.native.push;
 
 type
   TFlatEntry = record
@@ -50,13 +51,6 @@ type
     Oid: TGitOid;
   end;
   TFlatArray = array of TFlatEntry;
-
-function IsZeroOid(const AOid: TGitOid): Boolean;
-var I: Integer;
-begin
-  for I := 0 to GitOidRawLen - 1 do if AOid.Bytes[I] <> 0 then Exit(False);
-  Result := True;
-end;
 
 function FileTypeCategory(AMode: Cardinal): Integer;
 begin
@@ -104,7 +98,7 @@ var
   I: Integer;
   Full: string;
 begin
-  if IsZeroOid(ATreeOid) then Exit;
+  if GitOidIsZero(ATreeOid) then Exit;
   Data := ARepo.ReadObject(ATreeOid, Kind);
   if Kind <> gokTree then
     raise EGitError.CreateFmt('object %s is not a tree', [GitOidToHex(ATreeOid)]);
@@ -128,7 +122,7 @@ function BuildFlat(const AGitDir: string; const ATreeOid: TGitOid): TFlatArray;
 var Repo: TNativeRepository;
 begin
   Result := nil;
-  if IsZeroOid(ATreeOid) then Exit;
+  if GitOidIsZero(ATreeOid) then Exit;
   Repo := TNativeRepository.Create(AGitDir);
   try
     CollectFlat(Repo, ATreeOid, '', Result);
