@@ -7,7 +7,7 @@
 include_dir / Go embed 逐项决策记录）。
 
 - 版本：`1`
-- 字节序：固定 little-endian；大端平台由 reader 显式换序（`platform.endian` inquiry 判定）
+- 字节序：固定 little-endian；所有多字节字段经 `RdU16LE/RdU32LE/RdU64LE` 位移编解码，与宿主字节序无关（BE 平台显式换序）
 - 所有 offset 均为相对 blob 起点的绝对偏移
 - 所有保留字段必须写 0，reader 必须拒绝非 0 保留值（防误扩展）
 
@@ -36,7 +36,7 @@ blobTotal      └────────────────────�
 |------|------|------|------|------|
 | 0x00 | 4 | `magic` | bytes | `'N' 'P' 'R' 'S'` |
 | 0x04 | 4 | `version` | u32 LE | 必须 = 1 |
-| 0x08 | 4 | `flags` | u32 LE | bit0 = 全部条目 hash 有效；bit1 = digest 区存在；其余必须为 0 |
+| 0x08 | 4 | `flags` | u32 LE | bit0 = 全部条目 hash 有效；bit1 = digest 区存在；bit2-4 = digest 算法 ID（0=SHA-256 预留，其余拒绝）；bit5+ 必须为 0 |
 | 0x0C | 4 | `entryCount` | u32 LE | 条目数 |
 | 0x10 | 8 | `indexOffset` | u64 LE | index 起始偏移（v1 恒为 40） |
 | 0x18 | 8 | `digestOffset` | u64 LE | digest 区起始；无则 0 |
@@ -131,7 +131,7 @@ header flags bit1 置位时存在：`entryCount × 32` 字节数组，与 index 
 
 1. 缓冲长度 ≥ 40；magic 匹配
 2. `version = 1`；header `flags` 未知位全 0；bit1 置位时 `digestOffset ≠ 0`
-3. `indexOffset ≥ 40` 且 `indexOffset + entryCount×40 ≤ blobTotal`
+3. `indexOffset = 40`（v1 恒为 40，无间隙）且 `indexOffset + entryCount×40 ≤ blobTotal`
 4. 缓冲实际长度 ≥ `blobTotal`（允许多余尾部字节，供追加场景）
 5. 每个 entry：`reserved` 全零、`codecId` 在登记表内、entry flags 未知位 0、
    `pathLen > 0`、`dataOffset % 16 = 0`、`dataOffset + size ≤ blobTotal`；
@@ -171,16 +171,16 @@ SHA-256 digest，modTime 已知。字节序比较 `'a' < 'i'`，故 app.js 在�
 | data: app.js | 0x090 | 25 | 结束于 0x0A9 |
 | padding | 0x0A9 | 7 | 补到 16 对齐 |
 | data: index.html | 0x0B0 | 389 | 结束于 0x235 |
-| padding | 0x235 | 3 | 补到 4 对齐（digest 区自然对齐即可） |
-| digest 区 | 0x238 | 64 | 2 × 32 B SHA-256 |
+| padding | 0x235 | 3 | 补到 4 字节对齐（digest 区起点 `AlignUp(...,4)`，4 对齐即可） |
+| digest 区 | 0x238 | 64 | 2 × 32 B SHA-256（32 字节不透明，算法由 header flags bit2-4 标识，v1 仅 0=SHA-256） |
 | 结束 | 0x278 | — | = blobTotal ✓ |
 
 ## 版本化与扩展策略
 
 - 加字段：优先用 `reserved`、flag 位与登记表机制；reader 拒绝未知置位保证不会静默
   误解新格式
-- **预留位登记**：header flags **bit2 = hash-index 区**（未来 O(1) 路径查找索引，
-  对标 Tauri phf 完美哈希的扩展槽）。v1 reader 见 bit2 置位即拒绝；启用须伴随本表
-  更新与版本评审，不动既有布局
+- **预留位登记**：
+  - header flags **bit2-4 = digest 算法 ID**（0=SHA-256，1-7 预留，v1 writer 恒写 0；reader 拒绝非 0 算法，仅当 bit1 置位时校验）
+  - header flags **bit5 = hash-index 区**（未来 O(1) 路径查找索引，对标 Tauri phf）；bit5+ 拒绝；启用须伴随本表更新与版本评审，不动既有布局
 - 改布局/语义：`version` 递增；reader 只接受自己认识的版本集合 `{1}`
 - 新压缩编解码：走 `codecId` 登记表 + compress 模块 seam，独立立项
