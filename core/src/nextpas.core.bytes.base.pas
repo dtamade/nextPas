@@ -22,6 +22,23 @@ const
   BYTES_BUILDER_DEFAULT_CAPACITY = SizeUInt(256);
   BYTES_BUILDER_MIN_GROW = SizeUInt(64);
 
+function NextCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt; inline;
+
 implementation
+
+function NextCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+begin
+  Result := ACurrent;
+  while Result < ARequired do
+  begin
+    if Result <= High(SizeUInt) div 2 then
+      Result := Result * 2
+    else
+    begin
+      Result := ARequired;
+      Break;
+    end;
+  end;
+end;
 
 end.

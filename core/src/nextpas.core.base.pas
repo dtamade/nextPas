@@ -316,6 +316,9 @@ function HexStr(AValue: UInt64; ADigits: Integer = 0): string;
 
 implementation
 
+uses
+  nextpas.core.base.utils;
+
 { Base validation exceptions }
 
 class function EInvariantViolation.DefaultCategory: nextpas.core.exception.TErrorCategory;
@@ -665,9 +668,7 @@ end;
 function TByteSpan.Slice(const AOffset, ALength: SizeUInt): TByteSpan;
 begin
   RequireNonEmptyPointer(Data, Len, 'TByteSpan.Slice');
-  if (AOffset > Len) or (ALength > Len - AOffset) then
-    raise EOutOfRange.CreateFmt('TByteSpan.Slice: offset %d + length %d > span length %d',
-      [AOffset, ALength, Len]);
+  CheckSizeRange(AOffset, ALength, Len);
   if ALength = 0 then
     Exit(TByteSpan.Empty);
   Result.Data := Data + AOffset;

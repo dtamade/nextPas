@@ -57,6 +57,7 @@ function NewByteCursorAt(const AData: PByte; ALen: SizeUInt): IByteCursor;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.exception;
 
 type
@@ -121,11 +122,12 @@ end;
 
 procedure TByteCursor.CheckRange(APos, ALen: SizeUInt);
 begin
-  { APos + ALen 溢出安全：APos、ALen 均 ≤ High(SizeUInt)，先比大小 }
-  if (ALen > FLen) or (APos > FLen - ALen) then
-    raise EIndexOutOfRangeError.Create(
-      'byte cursor: range out of bounds (pos=' + IntToStr(Int64(APos)) +
-      ', len=' + IntToStr(Int64(ALen)) + ', size=' + IntToStr(Int64(FLen)) + ')');
+  try
+    CheckSizeRange(APos, ALen, FLen);
+  except
+    on E: EOutOfRange do
+      raise EIndexOutOfRangeError.Create(E.Message);
+  end;
 end;
 
 function TByteCursor.Length: SizeUInt;
