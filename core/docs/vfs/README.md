@@ -10,6 +10,7 @@ respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，�
 是首个 L3 consumer，embedded/os 双后端经同一 handler 服务 HTTP（ETag 取
 ContentHash fnv32，未知 mtime 跳过 IMS 协商）。
 嵌入工作流示例见 `core/examples/nextpas.core.vfs/demo_asset_embed/`；
+游戏热更示例见 `core/examples/nextpas.core.vfs/demo_game_pack/`（`CreateOverlayVfs` 三层叠加）；
 端到端 HTTP 示例见 `core/examples/nextpas.core.http/http_static_vfs_demo/`
 （os/embedded 双后端开发态-发布态切换，资源经 respack S4 工具链生成）。
 实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
