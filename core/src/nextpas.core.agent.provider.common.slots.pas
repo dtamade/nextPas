@@ -130,7 +130,8 @@ procedure RequireNotCancelled(const AToken: IAsyncCancellationToken);
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.agent.fold;
 
 procedure AddStreamDelta(var AArr: TStreamDeltaArray;
@@ -163,7 +164,7 @@ var
 begin
   if AIdx < 0 then
     raise EAgentError.CreateLocal(aecProtocol,
-      'tool slot index <0: ' + IntToStr(AIdx));
+      'tool slot index <0: ' + nextpas.core.text.conv.IntToStr(AIdx));
   if FReg.TryFind(AIdx, LPos) then
   begin
     Result := LPos;
@@ -172,7 +173,7 @@ begin
   end;
   if FReg.Count > CAgentMaxSlotMap then
     raise EAgentError.CreateLocal(aecProtocol,
-      'tool slot count exceeds ' + IntToStr(CAgentMaxSlotMap));
+      'tool slot count exceeds ' + nextpas.core.text.conv.IntToStr(CAgentMaxSlotMap));
   Result := Length(FSlots);
   SetLength(FSlots, Result + 1);
   FSlots[Result] := Default(TWireToolSlot);
@@ -258,7 +259,7 @@ begin
     begin
       if ALog <> nil then
         ALog.Warn(ASrc + ': flushing tool call slot ' +
-          IntToStr(FSlots[I].Index) + ' whose name never arrived');
+          nextpas.core.text.conv.IntToStr(FSlots[I].Index) + ' whose name never arrived');
       Announce(I, ADeltas);
     end;
 end;
@@ -275,7 +276,7 @@ begin
     begin
       if ALog <> nil then
         ALog.Warn(ASrc + ': flushing tool call slot ' +
-          IntToStr(FSlots[I].Index) + ' whose name never arrived');
+          nextpas.core.text.conv.IntToStr(FSlots[I].Index) + ' whose name never arrived');
       AnnounceBuilder(I, ABuilder);
     end;
 end;

@@ -20,7 +20,6 @@ unit nextpas.core.agent.provider.common;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.log.intf,
   nextpas.core.async.cancellation,

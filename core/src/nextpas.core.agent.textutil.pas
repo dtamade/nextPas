@@ -63,7 +63,7 @@ begin
     Exit('');
   if LLen = Length(S) then
     Exit(S);
-  Result := Copy(S, 1, LLen);
+  Result := System.Copy(S, 1, LLen);
 end;
 
 function AgentEstimateTokens(const S: string): Int64; inline;

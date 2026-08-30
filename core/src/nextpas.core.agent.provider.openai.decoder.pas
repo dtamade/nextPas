@@ -24,10 +24,10 @@ function NewOpenAIWireDecoder(const ALog: ILogger = nil): IAgentWireDecoder;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.text.builder,
+  nextpas.core.text.conv,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.provider.common;
@@ -236,7 +236,7 @@ begin
   begin
     if LChoices.ArrayLen > 1 then
       WarnLog(FLog, 'openai: dropping ' +
-        IntToStr(Int64(LChoices.ArrayLen) - 1) +
+        nextpas.core.text.conv.IntToStr(Int64(LChoices.ArrayLen) - 1) +
         ' extra choice(s) beyond index 0 (Q-O7)');
     if LChoices.ArrayLen > 0 then
     begin

@@ -456,7 +456,7 @@ begin
     if LText[LPos] = #10 then
     begin
       Inc(LLineNo);
-      LLine := Copy(LText, LSegStart, LPos - LSegStart);
+      LLine := System.Copy(LText, LSegStart, LPos - LSegStart);
       LN := Length(LLine);
       if (LN > 0) and (LLine[LN] = #13) then
         System.Delete(LLine, LN, 1);   { Windows CRLF 兼容；类方法 Delete 遮蔽需限定 }

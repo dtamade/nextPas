@@ -26,10 +26,10 @@ procedure DecodeOpenAIResponse(const ABody: TJsonText;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.text.builder,
+  nextpas.core.text.conv,
   nextpas.core.agent.errors,
   nextpas.core.agent.provider.common;
 
@@ -133,7 +133,7 @@ begin
     ProtocolError(ABody, 'empty choices array');
   if LChoices.ArrayLen > 1 then
     WarnLog(ALog, 'openai: dropping ' +
-      IntToStr(Int64(LChoices.ArrayLen) - 1) +
+      nextpas.core.text.conv.IntToStr(Int64(LChoices.ArrayLen) - 1) +
       ' extra choice(s) beyond index 0 (Q-O7)');
   LC0 := LChoices.ArrayGet(0);
 

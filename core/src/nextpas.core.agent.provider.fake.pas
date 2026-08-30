@@ -257,7 +257,7 @@ begin
   if FNext >= Length(FScripts) then
     raise EAgentError.CreateLocal(aecProtocol,
       'fake provider: script exhausted');
-  ADeltas := Copy(FScripts[FNext], 0, Length(FScripts[FNext]));
+  ADeltas := System.Copy(FScripts[FNext], 0, Length(FScripts[FNext]));
   Inc(FNext);
 end;
 
@@ -300,7 +300,7 @@ end;
 constructor TFakeCompletion.Create(const ADeltas: TStreamDeltaArray);
 begin
   inherited Create;
-  FDeltas := Copy(ADeltas, 0, Length(ADeltas));
+  FDeltas := System.Copy(ADeltas, 0, Length(ADeltas));
 end;
 
 function TFakeCompletion.NextDelta(out ADelta: TStreamDelta): Boolean;
