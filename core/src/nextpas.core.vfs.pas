@@ -17,6 +17,7 @@ uses
   nextpas.core.vfs.embedded,
   nextpas.core.vfs.sub,
   nextpas.core.vfs.mount,
+  nextpas.core.vfs.overlay,
   nextpas.core.vfs.transform,
   nextpas.core.vfs.compressed,
   nextpas.core.vfs.util;
@@ -54,6 +55,7 @@ function CreateTransformingVfs(const AInner: IVfs;
 function CreateDecompressingVfs(const AInner: IVfs): IVfs; inline;
 function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry; inline;
 function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs; inline;
+function CreateOverlayVfs(const AList: array of IVfs): IVfs; inline;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 function VfsIsRoot(const APath: string): Boolean; inline;
@@ -110,6 +112,11 @@ end;
 function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
 begin
   Result := nextpas.core.vfs.mount.CreateMountedVfs(AMounts);
+end;
+
+function CreateOverlayVfs(const AList: array of IVfs): IVfs;
+begin
+  Result := nextpas.core.vfs.overlay.CreateOverlayVfs(AList);
 end;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;

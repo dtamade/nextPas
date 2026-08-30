@@ -76,6 +76,9 @@ FsMounted := CreateMountedVfs([
   VfsMountEntry('uploads', FsDisk),
   VfsMountEntry('.', FsMem)  // 根兜底
 ]); // 最长匹配，List('.') 去重合并，ETag/CaseSensitive 透传
+
+// 叠加视图（游戏 patch>dlc>base 热更模型，P2+完整性）
+FsGame := CreateOverlayVfs([FsPatch, FsDLC, FsBase]); // 同根优先级叠加，首命中胜出，List去重合并
 ```
 
 ## 架构
@@ -90,6 +93,7 @@ nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片
 nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转换在此收口）
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
 nextpas.core.vfs.mount.pas      ← CreateMountedVfs：多 IVfs 前缀最长匹配挂载复合（P2 完整性， surpass Go fs）
+nextpas.core.vfs.overlay.pas    ← CreateOverlayVfs：多 IVfs 同根优先级叠加（游戏 patch>dlc>base 热更，去重合并，ETag优先透传）
 nextpas.core.vfs.transform.pas  ← 通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc` 函数注入，零拷贝按需变换（L3，压缩/加密共用模板，Stat/OpenRead/ETag/LastModified 完整性门）
 nextpas.core.vfs.compressed.pas ← 解压薄门面：经 transform 承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
 ```
@@ -237,9 +241,10 @@ P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正�
 | 路径语法采纳 Go ValidPath 含 `.` 根 | 业界事实标准；respack/vfs 两模块共享同一节定义 |
 | Sub 视图独立单元而非核心方法 | Go 将 fs.Sub 作为自由函数；包装器不改核心契约即可测试（fstest 同样强制测它） |
 | mount 复合视图 | P2 完整性：多源资产聚合最长匹配，List 根去重合并，Op/Path 保持调用方视角，超越 Go 单包 |
+| overlay 叠加视图 | 游戏热更 patch>dlc>base 优先级叠加，同根首命中，List去重合并，独立于 mount 的正交能力 |
 | 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs` 通用模板承载（`CreateDecompressingVfs` 为其 gzip 特化薄门面，`CreateDecryptingVfs` 同构可直接复用；`http Content-Encoding` 另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES` 单源于 `compress.base`，`vfs` 侧仅薄别名/薄门面转调，32MiB 防 bomb 与 `ContentHash=0/ETag` 禁用一致性由 `transform` 统一承载 |
 
-## 测试计划（14 门全绿，2026-08-30：P2挂载后）
+## 测试计划（14 门全绿，2026-08-30：P2叠加后）
 
 ```bash
 # respack 格式层
@@ -253,7 +258,7 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded            # 双态生命期 + 损坏透传
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance         # 属性电池 P1-P8+V12 × 后端矩阵
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade              # 便利函数 + 开发/发布态切换
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_mount               # 挂载复合 7例（P2完整性）
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_mount               # 挂载+叠加双视图 10例（P2完整性+游戏热更）
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_transform           # 通用变换装饰器
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_compressed          # 解压薄门面
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # uses 白名单门禁

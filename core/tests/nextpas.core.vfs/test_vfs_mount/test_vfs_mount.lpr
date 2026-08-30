@@ -171,6 +171,56 @@ begin
   Check(not Mounted.Exists('a/x.txt'), 'mount: nested parent not file');
 end;
 
+procedure TestOverlayPriority;
+var
+  FsBase, FsPatch, Overlay: IVfs;
+  B: TBytes;
+begin
+  FsBase := MakeMem(['textures/hero.png', 'common.txt'], ['base-hero', 'base-common']);
+  FsPatch := MakeMem(['textures/hero.png'], ['patch-hero']);
+  Overlay := CreateOverlayVfs([FsPatch, FsBase]);
+  B := VfsReadAllBytes(Overlay, 'textures/hero.png');
+  Check((Length(B)=10) and (B[0]=Ord('p')), 'overlay: patch overrides base');
+  B := VfsReadAllBytes(Overlay, 'common.txt');
+  Check(B[0]=Ord('b'), 'overlay: fallback to base');
+end;
+
+procedure TestOverlayListDedup;
+var
+  FsA, FsB, Overlay: IVfs;
+  L: TEntryArray;
+begin
+  FsA := MakeMem(['a.txt', 'shared.txt'], ['1','a']);
+  FsB := MakeMem(['b.txt', 'shared.txt'], ['2','b']);
+  Overlay := CreateOverlayVfs([FsA, FsB]);
+  L := Overlay.List('.');
+  Check(Length(L)=3, 'overlay: list dedup 3');
+  Check((L[0].Name='a.txt') and (L[1].Name='b.txt') and (L[2].Name='shared.txt'), 'overlay: list sorted dedup');
+end;
+
+procedure TestOverlayETagPriority;
+var
+  FsEmb, FsMem, Overlay: IVfs;
+  ETag: string;
+  OK: Boolean;
+  Inputs: TResPackInputArray;
+  Bufs: array of TBytes;
+  Blob: TResPackBlob;
+begin
+  FsMem := MakeMem(['a.txt'], ['mem']);
+  SetLength(Bufs,1); SetLength(Inputs,1);
+  Bufs[0]:=StrToBytes('emb');
+  Inputs[0].Path:='a.txt'; Inputs[0].Data:=@Bufs[0][0]; Inputs[0].DataSize:=3; Inputs[0].ModTime:=0;
+  Blob:=ResPackBuild(Inputs, ResPackDefaultOptions);
+  FsEmb:=CreateEmbeddedVfs(Blob.Data, Blob.Size, True);
+  Overlay:=CreateOverlayVfs([FsEmb, FsMem]);
+  OK:=(Overlay as IVfsETag).TryGetETag('a.txt', ETag);
+  Check(OK and (ETag<>''), 'overlay: ETag from priority ETag source');
+  Overlay:=CreateOverlayVfs([FsMem, FsEmb]);
+  OK:=(Overlay as IVfsETag).TryGetETag('a.txt', ETag);
+  Check(not OK, 'overlay: first without ETag => false even if second has it');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -182,5 +232,8 @@ begin
   T.Test('case sensitive', @TestMountCaseSensitive);
   T.Test('not found', @TestMountNotFound);
   T.Test('nested', @TestMountNested);
+  T.Test('overlay priority', @TestOverlayPriority);
+  T.Test('overlay list dedup', @TestOverlayListDedup);
+  T.Test('overlay etag priority', @TestOverlayETagPriority);
   if not T.Run then Halt(1);
 end.
