@@ -8,15 +8,17 @@
 
 ```mermaid
 flowchart TB
-  base["js.base<br/>TJsBackendKind / TJsValueKind / Options / EJsError"]
-  intf["js.intf<br/>IJsRuntime / IJsContext / TJsValue / IJsValueRef<br/>SetHostFunction x3"]
-  fake["js.fake<br/>纯 Pascal 假后端"]
+  base["js.base<br/>TJsBackendKind / TJsValueKind / Options / EJsError<br/>后端无关"]
+  intf["js.intf<br/>IJsRuntime / IJsContext / TJsValue 不透明<br/>SetHostFunction x3"]
+  fake["js.fake<br/>纯 Pascal 假后端<br/>零依赖"]
   ffi["js.quickjs.ffi<br/>cdecl external"]
   loader["js.quickjs.loader<br/>platform.dl 探测"]
-  impl["js.quickjs<br/>真实现"]
+  impl["js.quickjs<br/>QuickJS 真实现"]
+  pure["js.pure<br/>纯 Pascal 后端<br/>S3 追加 零FFI/零dl"]
   facade["js.pas 门面<br/>CreateJsRuntime"]
   base --> intf --> fake --> facade
   intf --> ffi --> loader --> impl --> facade
+  intf --> pure --> facade
   js -. "可选 uses" .-> webview["webview.fake.js<br/>活在 webview 家族"]
 ```
 
@@ -28,7 +30,7 @@ flowchart TB
 
 - **轻量可嵌入**：QuickJS 单 so < 500KB，启动 < 1ms，GC 堆可 `SetMemoryLimit`，适合 `webview.fake` 的无头语义与 CI。`libquickjs.so` 在 Debian/Arch 均有包，探测成本低。
 - **C ABI 稳定**：`JS_NewRuntime / JS_NewContext / JS_Eval / JS_Call / JS_SetInterruptHandler` 十年稳定，FFI 成本 1 文件；V8 需 C++ 桥 + `libv8.so` 多版本 + `v8::Isolate` 线程模型，`pure Pascal` 需重实现解析器与字节码，皆作后续尾部追加。
-- **抽象价值**：消费方只依赖 `js.intf`，`jsbkQuickJs → jsbkV8/jsbkQuickJsPure` 一行切换，与 `db` 的 `sqlite/pg` 同纪律；`webview/config/template` 等 L3 无需感知引擎差异。
+- **抽象价值**：消费方只依赖 `js.intf`，`jsbkQuickJs → jsbkPure/jsbkV8` 一行切换，与 `db` 的 `sqlite/pg` 同纪律；`webview/config/template` 等 L3 无需感知引擎差异。**纯后端承诺**：`js.intf` 不暴露 `JSValue`，`TJsValue` 不透明，`TJsRuntimeOptions` 后端无关，故加 `js.pure` 时 `base/intf` 零改动。
 
 对标：`crypto` 的多后端（pure/openssl）、`compress` 的 `lz4.ffi → lz4.native` 同范式。
 
@@ -37,7 +39,7 @@ flowchart TB
 | 方案 | 优点 | 缺点 | 结论 |
 |------|------|------|------|
 | `duktape` | 更小（~200KB） | ES5 为主，ES2020 缺失多，生态弱 | 放弃 |
-| `goja` 纯 Go 思路的纯 Pascal QuickJS | 零 FFI，闭环 | 需重实现解析器/字节码，年级工作量 | Deferred（`jsbkQuickJsPure`） |
+| `goja` 纯 Go 思路的纯 Pascal QuickJS | 零 FFI，闭环 | 需重实现解析器/字节码，年级工作量 | Deferred（`jsbkPure`，见 §9 纯后端扩展点） |
 | `V8` 首选 | 性能最强 | 体积大（>10MB）、C++ ABI 脆弱、构建重 | Deferred（`jsbkV8`） |
 | `QuickJS-NG` | QuickJS 分支，维护活跃 | 与原版 ABI 兼容，未来可在 loader 中同名探测 | 兼容路径（`libquickjs.so.1` 同探测） |
 
@@ -104,14 +106,15 @@ flowchart TB
 ## 7. 依赖与分层
 
 ```
-L2 js:  base(intf 无) → intf → {fake, quickjs.ffi←loader←quickjs} → 门面
+L2 js:  base(后端无关) → intf(不透明TJsValue) → {fake, quickjs.ffi←loader←quickjs, pure} → 门面
+         ↳ pure 与 quickjs 平级，零 ffi/零 dl，复用同 intf
 L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)→ js.intf
          ↳ webview.fake.js 归属 webview 家族（`SIXDIM M-4`），由 js 侧提 PR、webview 侧审查
 ```
 
-`js` 永不 `uses webview.*`，`webview` 的适配活在 `webview` 家族（`webview.fake.js` 或 `webview.adapter.js`），`js` 不感知。**体积预案**：`js.intf` >500 行拆 `js.value/host`，`js.quickjs` >800 行拆 `js.quickjs.runtime/value/host`（`SIXDIM M-1/M-2`）。
+`js` 永不 `uses webview.*`，`webview` 的适配活在 `webview` 家族（`webview.fake.js` 或 `webview.adapter.js`），`js` 不感知。**体积预案**：`js.intf` >500 行拆 `js.value/host`，`js.quickjs` >800 行拆 `js.quickjs.runtime/value/host`，`js.pure` 同 800 阈值（`SIXDIM M-1/M-2`）；**纯后端约束**：`js.pure` 禁 `platform.dl/ffi`，与 `js.fake` 同检。
 
-**层级校验**：`core/tests/architecture/check_source_contracts.py` 扫描 `js` 闭包不得含 `webview/http/tui`；`base/intf` 不得含 `platform.dl`；`grep -R "quickjs\|v8" core/src/nextpas.core.js.base.pas` 守 `INV-1`。
+**层级校验**：`core/tests/architecture/check_source_contracts.py` 扫描 `js` 闭包不得含 `webview/http/tui`；`base/intf` 不得含 `platform.dl`；`grep -R "quickjs\|v8" core/src/nextpas.core.js.base.pas` 守 `INV-1`；`grep -R "platform\.dl" core/src/nextpas.core.js.pure.pas` 0 命中。
 
 ---
 
@@ -123,7 +126,23 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 
 ---
 
-## 9. 取舍与非目标
+## 9. 纯 Pascal 后端扩展点（保证后期方便）
+
+**目标**：S3 以 `js.pure` 落纯 Pas 后端时，`js.base/js.intf` 零改动，消费方一行切换 `jsbkQuickJs → jsbkPure`，同套 `test_js_fake` 用例对纯后端全绿。
+
+| 项 | 约定 | 说明 |
+|---|---|---|
+| 模块 | `nextpas.core.js.pure.pas` 单单元（>800 再拆 `js.pure.*`），平级于 `js.quickjs`，不经 `ffi/loader` | 零 `platform.dl`，`JsBackendAvailable(jsbkPure)=True` 恒真 |
+| 枚举 | `TJsBackendKind` 尾部追加 `jsbkPure`（S1 仅 2 值，S3 加第 3 值） | `CreateJsRuntime(jsbkPure, SameOptions)` 同签名 |
+| 值语义 | `TJsValue` 不透明句柄版图保持 16B，纯侧自有 `TJsPureValue`/`TJsPureHeap` 句柄，`Kind/As*/TryAs*/IsValid` 与 QuickJS 侧**完全同契约** | `CONTRACT §3.1` 已后端无关 |
+| 中断/内存 | `TimeoutMs` 由纯侧自有 `DeadlineMs` 轮询（同 QuickJS 的 `JS_SetInterruptHandler` 语义，抛 `EJsTimeout`），`MemoryLimit` 由纯侧堆计数 fail-closed 抛 `EJsMemoryLimit` | `CONTRACT §7/§8` 同错误码 |
+| 宿主/JSON | `SetHostFunction` 三形态 + `NewJson/ToJson` + `GetProp/SetProp/Call` 语义逐字同 `js.intf`，纯侧经 `json` owner | `TESTING §3` 同矩阵 |
+| 测试 | 纯后端必过 `test_js_fake` 同矩阵 + `test_js_pure_runtime`（新增，恒跑无需 so），`bench_eval` 对纯后端同 `ns/op` 口径 | `ACCEPTANCE G-M4` |
+| 演进 | 纯侧可先满足 ES5 + 常用 ES2020 子集（`let/const/arrow/…` 按需），`PARITY` 记“纯/QuickJS 语义差”；不等全量 ES 再落地 | 避免年级阻塞 |
+
+> **为何现在就能保证**：`js.intf` 未暴露任何 `JSValue/JSRuntime*` 类型，`TJsValueKind/TJsErrorCategory/TJsRuntimeOptions` 已后端无关，`fake` 已证明“零 FFI 后端可过同契约”—— 纯后端复用 `fake` 的同约束，仅把 `Eval` 换成真解释器。
+
+## 9.1 取舍与非目标
 
 - 不做 ES Module / VFS / Worker / Inspector（Deferred，见 CONTRACT §12；game888 的 `ModuleNormalize/Loader + js_std_add_helpers` 为参考实现，见 `GAME888_BORROW.md B4`）。
 - 不做 `TJsValue` 的类式 DOM（`json` 已废止 class-DOM，前车之鉴）。

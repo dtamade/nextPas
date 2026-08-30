@@ -21,18 +21,26 @@
 | 单元 | 职责 | 允许 uses | 禁止 |
 |------|------|-----------|------|
 | `js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 族 | `exception`、`errors`、`base` | 任何 `js.*`、`platform`、`json` |
-| `js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` / `IJsValueRef` / `TJsHostFunction` 三形态 | `js.base`、`json.types`（仅 `TJsonValue` 类型引用） | `js.fake`/`js.quickjs.*`、`platform.dl` |
+| `js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` / `IJsValueRef` / `TJsHostFunction` 三形态（**后端无关**，不暴露 `JSValue`） | `js.base`、`json.types`（仅 `TJsonValue` 类型引用） | `js.fake`/`js.quickjs.*`/`js.pure`、`platform.dl` |
 | `js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑，确定性语义） | `js.base`、`js.intf`、`json` | `platform.dl`、`*.ffi` |
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
 | `js.quickjs.loader` | `platform.dl` 探测与符号装载（唯一可触 `platform.dl`） | `platform.dl`、`js.base`、`js.quickjs.ffi` | `DynLibs`、`Windows/BaseUnix` |
 | `js.quickjs` | QuickJS 真实现（`uses ffi/loader`，实现 `intf`） | `js.base/intf`、`js.quickjs.ffi/loader`、`json`、`mem` | `webview.*` |
-| `js.pas` | 门面：re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 上述全部子模块 | 逻辑（纯聚合） |
+| `js.pure` | 纯 Pascal 后端（S3 追加，`jsbkPure`，零 FFI/零 dl） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.pas` | 门面：re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 上述全部子模块（含预留 pure） | 逻辑（纯聚合） |
 
 ```
-base ← intf ← {fake, quickjs.ffi ← loader ← quickjs} ← 门面
+base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure} ← 门面
+         ↑ 纯 Pascal 后端与 quickjs 平级，不经 ffi/loader
 ```
 
-> `js.quickjs.pure` / `js.v8.ffi` / `js.v8` 为后续尾部追加，不在 S1 公开枚举与门面占位。新增后端只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。
+> **纯 Pascal 后端预留**：`js.pure`（或 `js.quickjs.pure`）为后续尾部追加，**零 FFI、零 platform.dl、零 so**；`js.v8.ffi / js.v8` 同理。S1 仅 `jsbkQuickJs/jsbkFake` 两值，新增后端只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— 这是“后期方便实现纯 Pas 后端”的**契约保证**：加 pure 后端时 `js.base/js.intf` 零改动，仅新增一单元 + 门面工厂分支 + 枚举尾部一项。
+
+**纯后端扩展契约**（保证可插拔）：
+- `js.base` 的 `TJsBackendKind/TJsValueKind/TJsErrorCategory/TJsRuntimeOptions` 为**后端无关**词汇，纯后端直接复用，不新增类型
+- `js.intf` 的 `TJsValue` 为**不透明句柄**（当前 QuickJS 侧存 `JSValue`，纯侧可存自有 `TJsPureValue` 句柄 + `Context` 弱引用，版图同为 16B），对外 `Kind/As*/TryAs*` 语义完全一致
+- `js.pure` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
+- 工厂 `CreateJsRuntime(jsbkPure)` 走纯分支，`JsBackendAvailable(jsbkPure)=True` 恒真（零 so 探测）
 
 **文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 500/800。
 
@@ -41,9 +49,9 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs} ← 门面
 ## 2. 核心类型（`js.base`）
 
 ```pascal
-TJsBackendKind = (jsbkQuickJs, jsbkFake); // S1 仅二值；后续尾部追加 jsbkV8/jsbkQuickJsPure
-TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString, jskObject, jskArray, jskFunction, jskError, jskPromise);
-TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory, jecTimeout, jecNotSupported, jecUnknown);
+TJsBackendKind = (jsbkQuickJs, jsbkFake); // S1 仅二值；后续尾部追加 jsbkPure/jsbkV8（pure 恒真、QuickJS 需 so）
+TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString, jskObject, jskArray, jskFunction, jskError, jskPromise); // 后端无关
+TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory, jecTimeout, jecNotSupported, jecUnknown); // 后端无关
 TJsRuntimeOptions = record
   MemoryLimit: SizeUInt; // 0=不限；QuickJS JS_SetMemoryLimit / JS_SetGCThreshold
   TimeoutMs: Integer;    // 0=不限；经 JS_SetInterruptHandler 异步中断
@@ -78,7 +86,7 @@ EJsMemoryLimit        = class(EJsError); // 内存限
 ### 3.1 值语义
 
 ```pascal
-TJsValue = record // 轻量句柄，16 字节以内，零接口开销；寿命绑所属 IJsContext
+TJsValue = record // 轻量句柄，不透明 16B 以内，零接口开销；寿命绑所属 IJsContext（QuickJS 侧为 JSValue，纯侧为自有句柄，版图一致）
   function Kind: TJsValueKind; inline;
   function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
   function IsBool: Boolean; inline; function IsNumber: Boolean; inline;
@@ -102,8 +110,8 @@ IJsValueRef = interface // ergonomic 自动 Dup/Free 包装，存 TJsValue 句�
 end;
 ```
 
-- `TJsValue` 持 `JSValue` 句柄 + 所属 `IJsContext` 弱引用；`Dup/Free` 由 `IJsValueRef` 或 `Ctx.Retain/Release` 显式管理，`TJsValue` 析构不隐式 `Free`（record 无析构，靠 `IJsValueRef` 或作用域 `Retain` 桩）。
-- `Context` 释放后一切 `TJsValue` 失效（`IsValid=False`，`As*` 安全默认，`TryAs*` → `False`）。
+- `TJsValue` 持**后端无关不透明句柄** + 所属 `IJsContext` 弱引用（QuickJS 为 `JSValue`，纯后端为自有 `TJsPureValue`/`TJsPureHeap` 句柄，版图同 ≤16B）；`Dup/Free` 由 `IJsValueRef` 或 `Ctx.Retain/Release` 显式管理，`TJsValue` 析构不隐式 `Free`（record 无析构，靠 `IJsValueRef` 或作用域 `Retain` 桩）。
+- `Context` 释放后一切 `TJsValue` 失效（`IsValid=False`，`As*` 安全默认，`TryAs*` → `False`），**与后端无关**。
 
 ### 3.2 运行时与上下文
 
@@ -180,7 +188,7 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 | 非法 `TJsValue` 访问 | 安全默认（`AsInt=0/AsStr=''`），不抛；`TryAs*` 显式分叉 |
 | 宿主函数内抛 `EJsError` | 透为 JS `Error` 对象，`Eval` 侧同表归一 |
 | 宿主函数内抛非 `EJsError` | 包装为 `EJsError(jecUnknown)`，`Species='Error'` |
-| `IsClosed=True` 后调用 | 抛 `EJsError(jecUnknown)`，`Close` 自身幂等（多次 `Free/Close` 不抛，二次 `Close` 为 no-op；`SIXDIM S-3`） |
+| `IsClosed=True` 后调用（QuickJS/纯 同） | 抛 `EJsError(jecUnknown)`，`Close` 自身幂等（多次 `Free/Close` 不抛，二次 `Close` 为 no-op；`SIXDIM S-3`） |
 
 `EJsError.Category` 归一表：`SyntaxError→jecSyntax`、`ReferenceError→jecReference`、`TypeError→jecType`、`RangeError→jecRange`、`InternalError/OOM→jecMemory`、`Interrupt→jecTimeout`。未匹配走 `jecUnknown`，`Species` 原样透传。
 

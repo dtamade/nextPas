@@ -1,6 +1,6 @@
 # nextpas.core.js
 
-> L2 抽象 JS 引擎：后端无关的 `IJsRuntime / IJsContext / TJsValue` 契约，QuickJS FFI 首落地，QuickJS 纯 Pascal 与 V8 后续可插拔。`webview` 等 L3 可在不反向依赖的前提下复用本契约。
+> L2 抽象 JS 引擎：后端无关的 `IJsRuntime / IJsContext / TJsValue` 契约，QuickJS FFI 首落地，**纯 Pascal 后端 `js.pure` 零摩擦可插拔**（`js.intf` 不透明、枚举尾部追加、零 so），V8 后续可插拔。`webview` 等 L3 可在不反向依赖的前提下复用本契约。
 
 **层级**：L2（系统能力，只依赖 L0–L1；`webview/config/template` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js` lane（`js` 家族）
@@ -26,19 +26,20 @@
 
 | 单元 | 职责 | 备注 |
 |------|------|------|
-| `nextpas.core.js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 载体 | 纯数据类型，零后端依赖 |
-| `nextpas.core.js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` / `IJsValueRef` / `TJsHostFunction` 三形态 | 小接口+组合，引用计数自动释放 |
-| `nextpas.core.js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑） | 确定性语义，模拟超时/内存限 |
+| `nextpas.core.js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 载体（**后端无关**） | 纯数据类型，零后端依赖 |
+| `nextpas.core.js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` 不透明 / `IJsValueRef` / `TJsHostFunction` 三形态 | 小接口+组合，引用计数自动释放，不暴露 `JSValue` |
+| `nextpas.core.js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑） | 确定性语义，模拟超时/内存限，**纯后端的同约束前身** |
 | `nextpas.core.js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`） | 只含声明，不含逻辑 |
 | `nextpas.core.js.quickjs.loader` | `platform.dl` 探测与符号装载 | 唯一可触 `platform.dl` 的单元 |
 | `nextpas.core.js.quickjs` | QuickJS 真实现 | `uses ffi/loader`，实现 `intf` |
+| `nextpas.core.js.pure` | **纯 Pascal 后端**（S3 追加，`jsbkPure`） | 零 FFI/零 dl，平级于 `quickjs`，同 `fake` 约束 |
 | `nextpas.core.js.pas` | 门面 re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 纯聚合，不含逻辑 |
 
 ```
-base ← intf ← {fake, quickjs.ffi ← loader ← quickjs} ← 门面
+base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure(零FFI)} ← 门面
 ```
 
-> `js.quickjs.pure` / `js.v8.ffi` / `js.v8` 为后续尾部追加，不在 S1 公开枚举与门面占位（`db.TDbKind` 尾部追加纪律）。新增后端只在 `TJsBackendKind` 末尾加，序号稳定。
+> **纯后端保证**：`js.pure` 为 S3 尾部追加，不在 S1 公开枚举与门面占位（`db.TDbKind` 尾部追加纪律）。后期加 `js.pure` 时 `js.base/js.intf` 零改动，仅 `+js.pure.pas` + 枚举尾部 `jsbkPure` + 工厂分支；`js.v8.ffi / js.v8` 同理。
 
 **允许依赖**：`base`、`errors`、`exception`、`json`、`text`、`mem`、`platform.dl`（仅 loader）。
 **禁止依赖**：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`。
@@ -136,16 +137,17 @@ end.
 ## 4. 架构速览
 
 ```
-L2 js:  base(intf 无) → intf → {fake, quickjs.ffi←loader←quickjs} → 门面(js.pas)
+L2 js:  base(后端无关) → intf(不透明TJsValue) → {fake, quickjs.ffi←loader←quickjs, pure(零FFI)} → 门面(js.pas)
 L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)→ js.intf
               适配活在 webview 家族，js 永不 uses webview
 ```
 
-- **双层值模型**：`TJsValue` record 轻量句柄（16B，零接口）+ `IJsValueRef` 自动根化（抄 `json` 的 `TJsonValue + IJsonDocument`）。
+- **双层值模型**：`TJsValue` record 不透明轻量句柄（16B，零接口，QuickJS 侧 `JSValue`/纯侧自有句柄同版图）+ `IJsValueRef` 自动根化（抄 `json` 的 `TJsonValue + IJsonDocument`）。
 - **同步 Eval**：`js.Eval` 同线程同步，`webview.Eval` 异步 exactly-once，二者不混用；`webview.fake` 可选注入 `IJsContext` 时仍经 `Dispatcher.Post` 兑现。
-- **FFI 纪律**：`*.ffi` 只含 `cdecl external`，`*.loader` 唯一可触 `platform.dl`，探测 `libquickjs.so.1 → .so.0 → quickjs` 幂等缓存。
+- **FFI 纪律**：`*.ffi` 只含 `cdecl external`，`*.loader` 唯一可触 `platform.dl`，探测 `libquickjs.so.1 → .so.0 → quickjs` 幂等缓存；`js.pure/js.fake` 禁 `platform.dl/ffi`，恒可用。
+- **纯后端保证**：`js.intf` 不暴露 `JSValue`，`TJsValueKind/TJsErrorCategory/TJsRuntimeOptions` 后端无关，`js.pure` 与 `fake` 同约束，故后期加纯后端时 `base/intf` 零改动（见 `DESIGN §9`）。
 
-详见 `DESIGN.md` 与 `CONTRACT.md §6/§9`。
+详见 `DESIGN.md §9` 与 `CONTRACT.md §1/§9`。
 
 ## 5. 线程与生命周期
 
@@ -175,9 +177,11 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 ## 8. 测试与基准
 
 ```bash
-# S1 契约（CI 必跑，零外部依赖）
+# S1 契约（CI 必跑，零外部依赖；纯后端亦同矩阵）
 make focused FOCUS=core/tests/nextpas.core.js/test_js_fake
 make focused FOCUS=core/tests/nextpas.core.js/test_js_base
+# S3 纯后端（零 so，恒跑）
+make focused FOCUS=core/tests/nextpas.core.js/test_js_pure_runtime
 
 # S1 运行时（探测到 libquickjs 才跑）
 make focused FOCUS=core/tests/nextpas.core.js/test_js_quickjs_runtime

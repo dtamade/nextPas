@@ -62,13 +62,22 @@
 | G-M3-2 | `bench_eval` 基线落库（`BENCHMARKS.md` 对齐） | `bench_eval` 输出 | 基线入库 |
 | G-M3-3 | 悬垂/超时/循环引用 + `Close` 幂等 + `INV→用例` 映射全绿 | `test_js_fake` 扩展（见 `TESTING §3` 映射） | AllPassed |
 
+### M4 — 纯 Pascal 后端（S3，`js.pure`）
+
+| 门禁 | 要求 | 命令 | 证据 |
+|------|------|------|------|
+| G-M4-1 | `test_js_pure_runtime` 恒绿（零 so），同 `test_js_fake` 40+ 用例矩阵全绿 | `make focused FOCUS=core/tests/nextpas.core.js/test_js_pure_runtime` | AllPassed + heaptrc 0 |
+| G-M4-2 | `source-contract` 纯后端零 FFI：`grep -R "platform\.dl" core/src/nextpas.core.js.pure.pas` 0 命中 | `check_source_contracts.py` | pass |
+| G-M4-3 | `js.base/js.intf` 零改动（`git diff --stat` 无 `js.base/intf`），仅 `+js.pure` + `TJsBackendKind` 尾部 `jsbkPure` | `git diff` | 零改动证明 |
+| G-M4-4 | `bench_eval` 对 `jsbkPure` 同口径 `ns/op+p50/p99+B/op` | `bench_eval` | 基线对齐 |
+
 ### M5 — 1.0 冻结（Production Ready）
 
 | 门禁 | 要求 |
 |------|------|
-| G-P1 | M3 全绿 + 至少 1 个真实消费方（如 `webview.fake.js` 或 `template` 预编译） |
+| G-P1 | M3 全绿 + 至少 1 个真实消费方（如 `webview.fake.js` 或 `template` 预编译）+ M4 纯后端门禁（若已触发） |
 | G-P2 | CONTRACT 1.0 冻结 + CHANGELOG + 迁移指南 |
-| G-P3 | `PARITY-go-rust` 基准对照已刷新（实测，非目标值） |
+| G-P3 | `PARITY-go-rust` 基准对照已刷新（含纯/QuickJS 双基线实测） |
 | G-P4 | `core-module-registry.md` 晋升 `focused-runtime`（或更高） |
 
 ---
@@ -94,7 +103,7 @@
 
 | 触发 | 动作 |
 |------|------|
-| 契约变更（`CONTRACT` 改） | 必跑 `test_js_fake` + `source-contract` + `bench_eval` 回归 |
+| 契约变更（`CONTRACT` 改） | 必跑 `test_js_fake` + `test_js_pure_runtime`（若有） + `source-contract` + `bench_eval` 回归 |
 | 错误语义变更 | 必补边界/失败路径用例（`TESTING §4`） |
 | 内存/句柄生命周期变更 | 必跑 heaptrc + 追踪分配器（`TESTING §5`） |
 | 跨模块变更（`webview.fake.js`） | 必跑双方 focused gate（`AGENTS.md` 跨模块纪律） |

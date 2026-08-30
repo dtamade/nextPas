@@ -9,10 +9,10 @@
 
 ## S0 文档冻结（当前）
 
-- 产出：12 份完整（`README/CONTRACT/DESIGN/GOAL_TREE/WEBVIEW_LINK/PARITY` 0.4 + `ROADMAP/ACCEPTANCE/AI_GUIDE/TESTING/SECURITY/BENCHMARKS/REVIEW` 1.0）
-- 门禁：`ACCEPTANCE G-M0` 全绿 + `make hygiene` pass，不改 `core-module-registry`
-- 完成标志：`REVIEW H1–H3` 清零，12 份互链闭环
-- 证据：`git diff --check` 0 + `ls core/docs/js/*.md | wc -l` 12
+- 产出：18 份完整（`README/CONTRACT/DESIGN/GOAL_TREE/WEBVIEW_LINK/PARITY` 0.5 + `ROADMAP/ACCEPTANCE/AI_GUIDE/TESTING/SECURITY/BENCHMARKS/REVIEW/SIXDIM_REVIEW/CHANGELOG/GAME888_BORROW/FAQ/DECISIONS` 1.0；纯后端可插拔保证见 `DESIGN §9`）
+- 门禁：`ACCEPTANCE G-M0` 18 份全绿 + `make hygiene` pass + `SIXDIM P0` 清零，不改 `core-module-registry`
+- 完成标志：`REVIEW H1–H3` 清零 + `SIXDIM P0` 6 项清零，18 份互链闭环
+- 证据：`git diff --check` 0 + `ls core/docs/js/*.md | wc -l` 18
 
 ---
 
@@ -54,14 +54,14 @@ core/examples/nextpas.core.js/demo_js/
 
 ---
 
-## S3 后端扩展（尾部追加）
+## S3 后端扩展（尾部追加，**纯 Pas 保证**）
 
-| 目标 | 内容 | 条件 |
-|------|------|------|
-| `js.quickjs.pure` | 纯 Pascal QuickJS（零 so），`jsbkQuickJsPure` 尾部追加 | 零依赖闭环需求 |
-| `js.v8.ffi/loader/v8` | V8 C++ 桥（`libv8.so`），`jsbkV8` 尾部追加，`TerminateExecution` 语义 | 性能需求 |
+| 目标 | 内容 | 条件 | 保证 |
+|------|------|------|------|
+| `js.pure` | 纯 Pascal 后端（零 so/零 FFI/零 dl），`jsbkPure` 尾部追加，`js.intf` 零改动，同契约 `Eval/TryEval/宿主/JSON/超时` 全绿 | 零依赖闭环需求 | `js.base/intf` 不动，仅 `+js.pure.pas` + `+jsbkPure` + 工厂分支（见 `DESIGN §9`） |
+| `js.v8.ffi/loader/v8` | V8 C++ 桥（`libv8.so`），`jsbkV8` 尾部追加，`TerminateExecution` 语义 | 性能需求 | 同尾部纪律 |
 
-纪律：枚举尾部追加，序号稳定；`ffi` 无逻辑，`loader` 唯一 `platform.dl`。
+纪律：枚举尾部追加，序号稳定；`ffi` 无逻辑，`loader` 唯一 `platform.dl`；**纯后端与 `fake` 同约束**（禁 `platform.dl/ffi`），`TJsValue` 不透明已隔离 QuickJS `JSValue`。
 
 ---
 
@@ -79,10 +79,10 @@ core/examples/nextpas.core.js/demo_js/
 
 | 级别 | 条件 | 证据 |
 |------|------|------|
-| `source-contract` | `base/intf` 不含后端符号，`ffi` 无逻辑，`loader` 唯一 `platform.dl` | `check_source_contracts.py` pass |
+| `source-contract` | `base/intf` 不含后端符号（含纯后端预留，不暴露 `JSValue`），`ffi` 无逻辑，`loader` 唯一 `platform.dl`，`js.pure` 禁 `platform.dl` | `check_source_contracts.py` pass |
 | `focused-runtime` | `test_js_fake` + `test_js_base` 全绿 + `heaptrc 0` | `make focused` 全绿 |
-| `S1-runtime` | `test_js_quickjs_runtime`（有库）全绿 | 本地 + Linux CI |
-| `Production Ready` | `S2` 联动全绿 + `bench_eval` 基线落库 + `hygiene/source-contract` 双 pass | 13+3 门 + bench |
+| `S1-runtime` | `test_js_quickjs_runtime`（有库）全绿；`S3` 后 `test_js_pure_runtime` 恒绿（零 so） | 本地 + Linux CI |
+| `Production Ready` | `S2` 联动全绿 + `bench_eval` 基线落库（含纯/QuickJS 双基线） + `hygiene/source-contract` 双 pass | 13+3 门 + bench |
 
 ---
 

@@ -12,12 +12,13 @@
 ```
 core/tests/nextpas.core.js/
   test_js_base/              # TJsBackendKind / TJsValueKind / TJsRuntimeOptions / EJsError 族
-  test_js_fake/              # 契约全量（CI 必跑，零外部依赖）
+  test_js_fake/              # 契约全量（CI 必跑，零外部依赖，后端无关）
   test_js_quickjs_runtime/   # 真 QuickJS（需 libquickjs，探测隔离）
+  test_js_pure_runtime/      # 纯 Pascal 后端（S3 追加，零 so，恒跑，同 fake 矩阵）
 core/benchmarks/nextpas.core.js/
-  bench_eval/                # Eval / HostFunction / JSON 互转（nextpas.core.bench）
+  bench_eval/                # Eval / HostFunction / JSON 互转（对 QuickJS/纯 同口径）
 core/examples/nextpas.core.js/
-  demo_js/                   # 1+2 / echo / JSON 三段最小 demo
+  demo_js/                   # 1+2 / echo / JSON 三段最小 demo（jsbkFake/jsbkQuickJs/jsbkPure 一行切换）
 ```
 
 每个测试/基准/示例为独立 `.lpr`，各自 `Makefile` 含 `clean` + `test`（或 `run`）。
@@ -79,9 +80,10 @@ core/examples/nextpas.core.js/
 
 | 环境 | 运行 |
 |------|------|
-| Linux CI（无 libquickjs） | `test_js_base` + `test_js_fake` 必绿，`quickjs_runtime` SKIP |
-| Linux 本地（有 libquickjs） | 全量绿（含 `quickjs_runtime` + `bench_eval`） |
-| 无库强制 | `NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 SKIP 视为 fail |
+| Linux CI（无 libquickjs） | `test_js_base` + `test_js_fake` 必绿，`quickjs_runtime` SKIP，`pure_runtime`（若已落地）恒绿 |
+| Linux 本地（有 libquickjs） | 全量绿（含 `quickjs_runtime` + `pure_runtime` + `bench_eval`） |
+| 纯后端落地后 | `test_js_fake` 与 `test_js_pure_runtime` 同矩阵全绿（纯后端零 so，CI 恒跑） |
+| 无库强制 | `NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 `quickjs_runtime` SKIP 视为 fail（纯后端不受此开关影响） |
 
 ---
 
