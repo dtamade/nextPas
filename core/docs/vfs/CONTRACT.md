@@ -143,7 +143,7 @@ end;
 | test_vfs_embedded | 8 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口（池化16槽SpinLock零分配，S6后新增2例） |
 | test_vfs_conformance | 7 | 属性电池 P1–P8+INV-V12 × {3 后端} × {整树, Sub}（一个用例跑满矩阵） |
 | test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 + Decompress/ETag 重导出签名 |
-| test_vfs_mount | 6 | 挂载复合视图：basic/longest/duplicate/etag/case/notfound（P2完整性，最长匹配+ETag/ServeMeta透传+CaseSensitive一致性） |
+| test_vfs_mount | 7 | 挂载复合视图：basic/longest/duplicate/etag/case/notfound/nested（P2完整性，最长匹配+ETag/ServeMeta透传+CaseSensitive一致性+嵌套聚合） |
 | test_vfs_transform | 6 | 通用变换装饰器：upper变换/谓词选择/透传/错误' transform failed' Op/Path包装/ETag禁用/CaseSensitive透传（L3模板，压缩/加密共用，Op/Path高级感） |
 | test_vfs_compressed | 7 | 解压薄门面：daAuto/gzip自动解压Stat Size/ContentHash校正/ETag禁用/daGzip强制失败/空包/大文件4K头预判HeaderPred（GZIP_MAX单源32MiB） |
 | test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含transform/compressed/mount L2→L2装饰器seam白名单） |
