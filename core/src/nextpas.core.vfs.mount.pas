@@ -23,6 +23,8 @@ type
   end;
   TVfsMountArray = array of TVfsMountEntry;
 
+function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry; inline;
+
 { AMounts 至少1项；Prefix 必须 ValidPath(AllowRoot True) 且去重；Fs 非空。
   '.' 与 '' 等价为根；根挂载与前缀挂载不可混搭重复（根唯一）。 }
 function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
@@ -51,6 +53,12 @@ type
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
     function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
   end;
+
+function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry; inline;
+begin
+  Result.Prefix := APrefix;
+  Result.Fs := AFs;
+end;
 
 function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
 begin

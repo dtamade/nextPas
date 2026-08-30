@@ -26,6 +26,8 @@ type
   TEntryArray = nextpas.core.vfs.base.TEntryArray;
   TStatInfo = nextpas.core.vfs.base.TStatInfo;
   IVfs = nextpas.core.vfs.intf.IVfs;
+  IVfsETag = nextpas.core.vfs.intf.IVfsETag;
+  IVfsServeMeta = nextpas.core.vfs.intf.IVfsServeMeta;
   TVfsMemEntry = nextpas.core.vfs.memtree.TVfsMemEntry;
   TVfsTreeBuilder = nextpas.core.vfs.memtree.TVfsTreeBuilder;
   TVfsVisitProc = nextpas.core.vfs.util.TVfsVisitProc;
@@ -50,6 +52,7 @@ function CreateTransformingVfs(const AInner: IVfs;
   const ATransform: TVfsTransformFunc;
   const AShould: TVfsShouldTransformFunc = nil): IVfs; inline;
 function CreateDecompressingVfs(const AInner: IVfs): IVfs; inline;
+function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry; inline;
 function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs; inline;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
@@ -97,6 +100,11 @@ end;
 function CreateDecompressingVfs(const AInner: IVfs): IVfs;
 begin
   Result := nextpas.core.vfs.compressed.CreateDecompressingVfs(AInner);
+end;
+
+function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry;
+begin
+  Result := nextpas.core.vfs.mount.VfsMountEntry(APrefix, AFs);
 end;
 
 function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
