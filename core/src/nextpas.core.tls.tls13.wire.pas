@@ -13,6 +13,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.tls.errors,
   nextpas.core.text.format;
@@ -130,7 +131,6 @@ end;
 procedure AppendUInt24(var ADest: TBytes; AValue: Cardinal); inline;
 begin
   BytesAppendUInt24BE(ADest, AValue);
-end;
 end;
 
 function ReadUInt16(const AData: TBytes; AOffset: Integer): Word;
