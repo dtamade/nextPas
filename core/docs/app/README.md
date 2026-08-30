@@ -8,14 +8,14 @@
 - **app 补 Tauri App 水位**：应用持有窗口集合与主循环；`Builder → App → Window` 三层与 `tauri::Builder` 对齐
 - **薄封装**：所有校验/分发复用 `webview.base/factory` 单源，不产生重复逻辑
 
-## P2 能力（0.2）
+## P3 能力（0.3）
 
 - `TAppBuilder.New.Title().Size()...MountEmbedded/MountDirectory...Build` 首窗聚合资产挂载（`npres://` 最长前缀唯一命中）
-- `IApp.MainWindow / WindowCount / GetWindow / NewWindowBuilder / NewWindow / AddWindow / RemoveWindow / Run / Quit / Close` 多窗精确计数（`WebviewGrowCapacity 0→4→2×` 单源，`IsClosed` 存活过滤，`HookWindowClose` 强循环规避）
-- `Kind(wvFake)` 钉测试确定性；缺省 `DefaultAppKind` 能力探测驱动；多窗经 `AddWindow` 聚合，共享同一 `WebviewRunLoop`
-- 示例：`demo_app` 自检（eval 6*7=42 → sum 42 → all steps）+ 非自检双窗展示
+- `IApp.MainWindow / WindowCount / GetWindow / GetWindows / NewWindowBuilder / NewWindow / AddWindow / RemoveWindow / OnWindowClosed×3 / Run / Quit / Close` 自动摘除（`HandleAnyWindowClosed` 弱闭包 + `CompactClosed` 惰性回收，快照不含已关窗）
+- `Kind(wvFake)` 钉测试确定性；缺省 `DefaultAppKind` 能力探测驱动；多窗经 `AddWindow` 聚合，共享同一 `WebviewRunLoop`，`OnWindowClosed` 聚合所有窗口关闭事件
+- 示例：`demo_app --selftest` 事件驱动矩阵 + 非自检双窗展示；`test_app_factory` 9/9 heaptrc 0
 
-P3 预留：弱引用自动摘除（`HookWindowClose` 真弱表）、托盘/菜单、窗口事件聚合、ACL、CLI/respack 深度集成
+P4 预留：托盘/菜单、窗口事件更细聚合、ACL、CLI/respack 深度集成
 
 ## 快速开始
 

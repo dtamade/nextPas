@@ -1,8 +1,8 @@
 unit nextpas.core.app;
 
 {** @desc nextpas.core.app 门面：聚合 re-export 应用壳全部公共 API。
-       P1 单窗封装（App 拥有首窗 + 共享 RunLoop），多窗经
-       IApp.NewWindowBuilder 再 Build 独立窗口；零逻辑零重复。 *}
+       P3 自动摘除 + OnWindowClosed 聚合 + GetWindows 快照；多窗薄封装，
+       零逻辑重复，复用 webview 单源（WebviewGrowCapacity / CheckWebviewOptions）。 *}
 
 {$I nextpas.core.settings.inc}
 
