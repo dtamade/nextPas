@@ -1,10 +1,10 @@
 # nextpas.core.vfs 代码契约
 
-**模块路径**：`core/src/nextpas.core.vfs*.pas`（9 个源文件）
-**层级**：L2（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader）
+**模块路径**：`core/src/nextpas.core.vfs*.pas`（11 个源文件：base/intf/errors/memtree/embedded/os/sub/util + transform/compressed L3装饰器 + 门面）
+**层级**：L2（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`transform/compressed` L3装饰器例外依赖 compress.base GZIP_MAX单源）
 **Owner**：AI（respack/vfs lane）
-**最后更新**：2026-08-25
-**版本**：1.0（S3 落地，按实现校准）
+**最后更新**：2026-08-30
+**版本**：1.2（S6装饰器落地：vfs.transform通用模板 + vfs.compressed薄门面，12门闭环补齐）
 
 ---
 
@@ -13,14 +13,17 @@
 ### 1.1 模块结构
 
 ```
-vfs.base      ← TEntryInfo/TStatInfo、ValidPath 工具、常量
-vfs.intf      ← IVfs 契约
-vfs.errors    ← EVfsError(Op/Path) 及子类
-vfs.memtree   ← 内存不可变树 + Builder
-vfs.embedded  ← respack blob → IVfs（零拷贝切片）
+vfs.base      ← TEntryInfo/TStatInfo、ValidPath 工具、常量（ValidPath单源 base.pathvalid，GZIP_MAX单源 compress.base）
+vfs.intf      ← IVfs/IVfsETag 契约
+vfs.errors    ← EVfsError(Op/Path) 及子类（Op∈{'stat','open','list','read','wrap'}）
+vfs.memtree   ← 内存不可变树 + Builder（Int64下标防回绕、防御拷贝防悬垂、两段式Freeze）
+vfs.embedded  ← respack blob → IVfs（零拷贝切片，EMBEDDED_POOL_SIZE=16 SpinLock池化）
 vfs.os        ← nextpas.core.fs → IVfs 适配
 vfs.sub       ← 重定根视图包装（Go fs.Sub 对等物）
-vfs.pas       ← 门面 re-export + 便利函数
+vfs.util      ← 便利函数（VfsStat/List/ReadAll/Walk，Go包级辅助同构）
+vfs.transform ← L3通用字节变换装饰器：TVfsTransformFunc/Should注入，零拷贝按需变换（压缩/加密共用模板，ETag禁用，单次读取复用）
+vfs.compressed← L3解压薄门面：经transform承载gzip（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源32MiB防bomb，daAuto 4K头预判HeaderPred，ETag禁用）
+vfs.pas       ← 门面 re-export + 便利函数 + ETag/Decompress重导出（IVfsETag/VFS_DECOMPRESS_MAX_BYTES/daGzip/daAuto + CreateTransformingVfs）
 ```
 
 ### 1.2 核心签名（设计定稿）
@@ -31,9 +34,12 @@ vfs.pas       ← 门面 re-export + 便利函数
 | 装配 | `CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt; AOwnsBlob: Boolean): IVfs` | 零拷贝后端；`AOwnsBlob=True` 时 blob 归 VFS 所有 |
 | 装配 | `CreateOsVfs(const ARoot: string): IVfs` | 真实目录后端 |
 | 视图 | `CreateSubVfs(AFs: IVfs; const ASubRoot: string): IVfs` | 重定根，不改底层实例 |
+| 装饰 | `CreateTransformingVfs(AInner: IVfs; ATransform: TVfsTransformFunc; AShould: TVfsShouldTransformFunc): IVfs` | L3通用变换装饰器：泛型字节变换（压缩/加密共用模板），Stat单源Size/ContentHash校正，OpenRead单次VfsReadAllBytes复用零二次IO，ETag禁用，Op/Path完整（'wrap'/'stat'/'open'） |
+| 装饰 | `CreateDecompressingVfs(AInner: IVfs; AAlgo: TDecompressAlgo=daAuto): IVfs` | 解压薄门面（经transform）：`daGzip` 按gzip魔数按需解压，`VFS_DECOMPRESS_MAX_BYTES=32MiB→GZIP_MAX`单源防bomb，`daAuto` 4K头预判HeaderPred免Stat全量读，ETag禁用 |
 | 遍历 | `VfsWalk(AFs: IVfs; const ARoot: string; ACallback): Boolean` | 字典序全树遍历（Go WalkDir 对等物）；回调可置 AStop 中止 |
 | 便利 | `VfsStat(AFs; APath): TStatInfo` / `VfsList(AFs; ADir): TEntryArray` | 门面包函数，与 Go 包级辅助同构 |
 | 便利 | `VfsReadAllBytes(AFs; APath): TBytes` / `VfsReadAllText(...): string` | 门面函数，非接口方法 |
+| ETag | `IVfsETag.TryGetETag` + `VfsETagStrong/VfsETagFNV` + `VFS_DECOMPRESS_MAX_BYTES` | 门面重导出：embedded 预计算 ETag 零分配命中，压缩装饰器 ETag 禁用 |
 
 ```pascal
 IVfs = interface
@@ -111,28 +117,35 @@ end;
 
 ---
 
-## 6. 性能契约（设计目标，S3 基准校准）
+## 6. 性能契约（S3基准 + S6装饰器校准，HeaderPred/零拷贝实测）
 
-| 操作 | 目标 |
-|------|------|
-| Exists/Stat（embedded） | 二分查找，无分配 |
-| OpenRead（embedded） | O(1) 切片构造，零内容复制 |
-| List（embedded） | 有序区间扫描，一次数组分配 |
-| OpenRead（os） | 经 fs.Open，句柄级开销 |
-| Sub 视图转发 | O(1) 包装，无树复制 |
-| VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 |
+| 操作 | 目标 | 证据 |
+|------|------|------|
+| Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire |
+| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；16槽SpinLock池化10k 163ms 4.9×预算，heaptrc0 |
+| List（embedded） | 有序区间扫描，一次数组分配 | FEntries直填零Stat，VfsDeriveChildNames单次分配 |
+| OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
+| Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |
+| VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 | WalkLevel批量List，字典序确定性 |
+| Stat(large非gzip) | 4K头预判免全量读 | TAutoDecompressingVfs.IsGzipHeader 4096 peek + IsGzipPred 2字节判定，TargetL 1MiB非gzip Stat零解压，bench_transform Stat/large-non-gzip阈值锁定 |
+| OpenRead(非gzip) | 单次VfsReadAllBytes复用零二次IO | TTransformingVfs.OpenRead Should假时复用已读LData，省二次FInner.OpenRead系统调用；bench_transform Open/large-non-gzip阈值锁定 |
+| OpenRead/Stat(gzip) | 按需GzipTransform，32MiB防bomb | GzipDecompressWithMaxOutputSize(VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源)，ContentHash=0/ETag禁用 |
 
 ---
 
-## 7. 测试覆盖（S3 实测校准，2026-08-25）
+## 7. 测试覆盖（S6实测校准，2026-08-30：12门闭环 respack5 + vfs5 + transform/compressed2）
 
 | 测试目录 | 用例数 | 说明 |
 |----------|--------|------|
-| test_vfs_memtree | 14 | Builder/Freeze/错误语义/`.` 根/IReaderAt |
-| test_vfs_embedded | 6 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口 |
+| test_vfs_memtree | 14 | Builder/Freeze/错误语义/`.` 根/IReaderAt（Int64防回绕/防御拷贝/两段式/零双驻留） |
+| test_vfs_embedded | 6 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口（池化16槽SpinLock零分配） |
 | test_vfs_conformance | 7 | 属性电池 P1–P8+INV-V12 × {3 后端} × {整树, Sub}（一个用例跑满矩阵） |
-| test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 |
-| test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`） |
+| test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 + Decompress/ETag 重导出签名 |
+| test_vfs_transform | 6 | 通用变换装饰器：upper变换/谓词选择/透传/错误' transform failed' Op/Path包装/ETag禁用/CaseSensitive透传（L3模板，压缩/加密共用，Op/Path高级感） |
+| test_vfs_compressed | 7 | 解压薄门面：daAuto/gzip自动解压Stat Size/ContentHash校正/ETag禁用/daGzip强制失败/空包/大文件4K头预判HeaderPred（GZIP_MAX单源32MiB） |
+| test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含transform/compressed L2→L2装饰器seam白名单） |
+
+合计 7 门（vfs侧）；respack侧5门（writer/reader/roundtrip/dirsource/embed），source-contract共享1门，合计 **12 门**闭环（respack5+vfs5+新增2；另bench_transform 1基准阈值）。heaptrc 0 leak为所有gate门禁。
 
 - 原设计的独立 `test_vfs_os` 门折叠进 conformance：os 行为断言在电池里以真实目录
   夹具全覆盖，独立门只会复制夹具（README 测试计划节有记录）
@@ -146,3 +159,5 @@ end;
 |------|------|----------|------|
 | 2026-08-25 | 0.9 | 设计阶段契约草案（随 S0 定稿） | AI |
 | 2026-08-25 | 1.0 | S3 落地：三后端+Sub+门面实现；INV-V7/V10/V11/V12 补验证方式；测试表按实测校准；os 门折叠进 conformance 的偏离记录 | AI |
+| 2026-08-28 | 1.1 | facade 校准：补 `CreateDecompressingVfs(AAlgo)` 重载与 `IVfsETag/VFS_DECOMPRESS_MAX_BYTES` 重导出；门数 12 闭环 | AI |
+| 2026-08-30 | 1.2 | S6装饰器落地：vfs.transform通用模板 + vfs.compressed薄门面（GZIP_MAX单源/4K HeaderPred/单次读取复用/池化复用度/OpPath高级感）；12门补齐（respack5+vfs5+2）+ bench_transform阈值；性能契约添HeaderPred/零二次IO证据 | AI |

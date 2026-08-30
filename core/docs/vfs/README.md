@@ -4,8 +4,8 @@ L2 只读虚拟文件树模块。把"一棵文件树"抽象成统一接口：真
 respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，不关心内容来自二进制
 内嵌数据还是文件系统。
 
-**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数全部实现；
-9 个验证门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
+**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地、S6 装饰器落地（G6闭环）。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数 + L3装饰器（transform通用模板/compressed薄门面）全部实现；
+12 个验证门全绿（含 fstest 级一致性电池与源契约门禁，respack 5 + vfs 5 + transform/compressed2 =12闭环，另bench_transform基准），heaptrc 零泄漏。
 `vfs.mount`（overlay/挂载表）推迟；S5 已完成：`nextpas.core.http.static.ServeVfs(AFs)`
 是首个 L3 consumer，embedded/os 双后端经同一 handler 服务 HTTP（ETag 取
 ContentHash fnv32，未知 mtime 跳过 IMS 协商）。
@@ -65,33 +65,45 @@ VfsWalk(Fs, '.',
 FsEmbedded := CreateEmbeddedVfs(ResPackOpen(@Blob[0], Length(Blob)));  // 嵌入包
 FsDisk     := CreateOsVfs('/srv/app');                                 // 真实目录
 FsMem      := CreateMemTreeVfs(Tree);                                  // 测试替身
+
+// L3装饰器（门面重导出，按需启用）
+// 通用变换（压缩/加密共用模板，ETag禁用，Op/Path完整）
+FsTransformed := CreateTransformingVfs(FsEmbedded, @MyTransform, @MyPred); // 泛型TVfsTransformFunc注入，零二次IO复用
+// 解压薄门面（经transform，GZIP_MAX单源32MiB防bomb，daAuto 4K头预判）
+FsGzip := CreateDecompressingVfs(FsEmbedded, daGzip); // 按 gzip 魔数按需解压，Stat 校正 Size/ContentHash，ETag 禁用；上限 VFS_DECOMPRESS_MAX_BYTES=32MiB
+FsAuto := CreateDecompressingVfs(FsEmbedded);          // daAuto 4K头预判HeaderPred，默认策略
 ```
 
 ## 架构
 
 ```
-nextpas.core.vfs.pas            ← 门面：re-export + 便利函数（ReadAll/Walk/Stat/List）inline 转发
-nextpas.core.vfs.base.pas       ← TEntryInfo/TStatInfo record、规范路径工具、常量
-nextpas.core.vfs.intf.pas       ← IVfs 接口契约
-nextpas.core.vfs.errors.pas     ← EVfsError(含 Op/Path) 及子类
-nextpas.core.vfs.memtree.pas    ← 内存不可变树（embedded 底座 + 测试替身）+ Builder
-nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片
+nextpas.core.vfs.pas            ← 门面：re-export + 便利函数（ReadAll/Walk/Stat/List）+ ETag/Decompress/Transform重导出
+nextpas.core.vfs.base.pas       ← TEntryInfo/TStatInfo record、规范路径工具、常量（VfsETagStrong/FNV 单源，VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX薄别名单源，ValidPath单源base.pathvalid）
+nextpas.core.vfs.intf.pas       ← IVfs/IVfsETag 契约（ETag 预计算快速路径）
+nextpas.core.vfs.errors.pas     ← EVfsError(含 Op/Path) 及子类（Op='stat'/'open'/'list'/'read'/'wrap'，Path为虚拟路径）
+nextpas.core.vfs.memtree.pas    ← 内存不可变树（embedded 底座 + 测试替身）+ Builder（Int64防回绕/防御拷贝防悬垂/两段式Freeze/零双驻留）
+nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片（FPaths/FEntries/FETags/FLastMods平行缓存，16槽SpinLock池化）
 nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转换在此收口）
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
+nextpas.core.vfs.util.pas       ← 便利函数（VfsStat/List/ReadAll/Walk，Go包级辅助同构，Length回绕守卫）
+nextpas.core.vfs.transform.pas  ← 通用字节变换装饰器：TVfsTransformFunc/TVfsShouldTransformFunc函数注入，零拷贝按需变换（L3，压缩/加密共用模板，Stat/OpenRead/ETag/LastModified完整性门）
+nextpas.core.vfs.compressed.pas ← 解压薄门面：经 transform 承载 gzip（策略仅留 VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源与daAuto/daGzip语义，STORE零拷贝与32MiB防bomb由transform承载）
 nextpas.core.vfs.mount.pas      ← （推迟）挂载表/overlay
 ```
 
-依赖方向：`base/errors ← intf ← memtree/embedded/os/sub ← 门面`；
-`embedded` 额外依赖 `respack.reader`；`os` 额外依赖 `nextpas.core.fs`。
+依赖方向：`base/errors ← intf ← memtree/embedded/os/sub/util ← transform(通用模板) ← compressed(薄门面) ← 门面`；
+`embedded` 额外依赖 `respack.reader`；`os` 额外依赖 `nextpas.core.fs`；`transform/compressed` 额外依赖 `compress.base`（GZIP_MAX 32MiB单源，L3装饰器seam）；四件套与L0-L3分层守恒（base←intf←实现←门面，仅向下依赖）。
 
 ### 依赖白名单
 
 | 单元 | 允许依赖 | 说明 |
 |------|----------|------|
-| `base` | L0 | 自有 `TEntryInfo/TStatInfo`，**不复用 `fs.base` 类型** |
+| `base` | L0 | 自有 `TEntryInfo/TStatInfo`，**不复用 `fs.base` 类型**；ValidPath委托base.pathvalid单源，GZIP_MAX不落地（由compressed单源compress.base） |
 | `intf` | `base` + `io.intf`（IStream） | 流词汇唯一来源是 io |
-| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader`） | |
-| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **唯一的 L2→L2 seam**，registry 记录 |
+| `memtree`/`embedded`/`sub`/`util` | `intf/base`（`embedded` 另加 `respack.reader`） | util纯组合无新增依赖 |
+| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **L2→L2 seam**（fs/path），registry记录 |
+| `transform` | `intf/base` + `io.memory` + `util` | **L3装饰器seam**，L3单向依赖L2，无L2→L2闭环 |
+| `compressed` | `transform` + `compress` | 薄门面：仅策略（`daAuto/daGzip`、`IsGzip`谓词、`GZIP_MAX`单源），模板复用`transform` |
 
 ## 核心契约
 
@@ -222,22 +234,27 @@ P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正�
 | 路径语法采纳 Go ValidPath 含 `.` 根 | 业界事实标准；respack/vfs 两模块共享同一节定义 |
 | Sub 视图独立单元而非核心方法 | Go 将 fs.Sub 作为自由函数；包装器不改核心契约即可测试（fstest 同样强制测它） |
 | mount/overlay 推迟 | 无已落地的双源消费场景；接口留位不留桩 |
-| 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateDecompressingVfs/CreateDecryptingVfs` 或 `http Content-Encoding` 承载，避免 `L2→L2` 闭环与 `solid block` 随机访问劣化 |
+| 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs`通用模板承载（`CreateDecompressingVfs`为其gzip特化薄门面，`CreateDecryptingVfs`同构可直接复用；`http Content-Encoding`另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES`单源于`compress.base`，`vfs`侧仅薄别名/薄门面转调，32MiB防bomb与`ContentHash=0/ETag`禁用一致性由`transform`统一承载 |
 
-## 测试计划（9 门全绿，2026-08-25）
+## 测试计划（12 门全绿，2026-08-30：respack5 + vfs5 + transform/compressed2 =12闭环 + bench_transform基准）
 
 ```bash
-# respack 格式层
-make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer      # 含 golden 逐字节快照
-make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader
+# respack 格式层（5 门）
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer      # 含 golden 逐字节快照 + digest 4 对齐
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader      # 含 indexOffset 恒 40 + LE 位移校验
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_roundtrip   # 含 10k 条目 perf smoke
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
-# vfs 视图层
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_embed       # S4 工具链
+# vfs 视图层（5 门 + 2装饰器 + 1 bench）
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded            # 双态生命期 + 损坏透传
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance         # 属性电池 P1-P8+V12 × 后端矩阵
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade              # 便利函数 + 开发/发布态切换
-make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # uses 白名单门禁
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade              # 便利函数 + 开发/发布态切换 + Decompress/ETag 重导出签名
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_transform           # L3通用变换：谓词选择/透传/错误OpPath包装/ETag禁用/HeaderPred复用度
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_compressed          # L3解压薄门面：daAuto 4K头预判/GZIP_MAX单源32MiB/空包/大文件头窥
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # uses 白名单 + facade 签名一致性（12 门）
+# 基准阈值（bench_transform：Stat header-peek / Open 单次复用 4场景）
+make -C core/benchmarks/nextpas.core.vfs/bench_transform clean bench
 ```
 
 - 各后端单元门覆盖自身实现细节；conformance 门锁跨后端语义一致
