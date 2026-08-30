@@ -4,6 +4,7 @@ program test_js_base;
 
 uses
   nextpas.core.js.base,
+  nextpas.core.js.quickjs.loader,
   nextpas.core.test;
 
 var
@@ -124,16 +125,17 @@ begin
 end;
 
 procedure TestJSProbeNames;
+var P: string;
 begin
-  CheckEqual('libquickjs.so.1', JS_QUICKJS_PROBE_NAMES[0], 'probe0');
-  CheckEqual('libquickjs.so.0', JS_QUICKJS_PROBE_NAMES[1], 'probe1');
-  CheckEqual('libquickjs.so', JS_QUICKJS_PROBE_NAMES[2], 'probe2');
-  CheckEqual('libquickjs.dylib', JS_QUICKJS_PROBE_NAMES[3], 'probe3');
-  CheckEqual('libquickjs.1.dylib', JS_QUICKJS_PROBE_NAMES[4], 'probe4');
-  CheckEqual('quickjs.dll', JS_QUICKJS_PROBE_NAMES[5], 'probe5');
-  CheckEqual('libquickjs.dll', JS_QUICKJS_PROBE_NAMES[6], 'probe6');
-  CheckEqual('quickjs', JS_QUICKJS_PROBE_NAMES[7], 'probe7');
-  CheckEqual(Int64(8), Int64(Length(JS_QUICKJS_PROBE_NAMES)), 'probe len 8');
+  P := JsQuickJsProbeNames;
+  Check(Pos('libquickjs.so.1', P) > 0, 'probe so.1');
+  Check(Pos('libquickjs.so.0', P) > 0, 'probe so.0');
+  Check(Pos('libquickjs.so', P) > 0, 'probe so');
+  Check(Pos('libquickjs.dylib', P) > 0, 'probe dylib');
+  Check(Pos('libquickjs.1.dylib', P) > 0, 'probe 1.dylib');
+  Check(Pos('quickjs.dll', P) > 0, 'probe dll');
+  Check(Pos('libquickjs.dll', P) > 0, 'probe lib dll');
+  Check(Pos('quickjs', P) > 0, 'probe quickjs');
 end;
 
 begin

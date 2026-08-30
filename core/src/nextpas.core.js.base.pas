@@ -54,12 +54,6 @@ function JsErrorCategoryToString(ACat: TJsErrorCategory): string; inline;
 function JsValueKindToString(AKind: TJsValueKind): string; inline;
 procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);
 
-const
-  JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
-    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so',
-    'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
-  );
-
 implementation
 
 class function TJsRuntimeOptions.Default: TJsRuntimeOptions;

@@ -6,7 +6,8 @@ uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.json;
 type
   TJsJs888Runtime = class(TInterfacedObject, IJsRuntime)
   private FOptions: TJsRuntimeOptions;
-  public constructor Create(const AOptions: TJsRuntimeOptions);
+  public constructor Create(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions); overload;
+  constructor Create(const AOptions: TJsRuntimeOptions); overload;
   function Kind: TJsBackendKind; function Options: TJsRuntimeOptions;
   function NewContext: IJsContext; procedure SetMemoryLimit(ALimit: SizeUInt);
   procedure SetTimeout(ATimeoutMs: Integer); procedure CollectGarbage;
@@ -35,6 +36,8 @@ type
   end;
 implementation
 uses nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.text, nextpas.core.platform.thread;
+constructor TJsJs888Runtime.Create(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions);
+begin inherited Create; FOptions := AOptions; CheckJsRuntimeOptions(FOptions); end;
 constructor TJsJs888Runtime.Create(const AOptions: TJsRuntimeOptions);
 begin inherited Create; FOptions := AOptions; CheckJsRuntimeOptions(FOptions); end;
 function TJsJs888Runtime.Kind: TJsBackendKind; begin Result := jsbkJs888; end;

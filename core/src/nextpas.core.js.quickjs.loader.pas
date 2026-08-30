@@ -10,6 +10,10 @@ procedure JsQuickJsUnload;
 implementation
 uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi;
 var GLib: TPlatformLibrary; GAvailable: Integer = -1; GLoaded: Boolean = False;
+const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
+    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so',
+    'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
+  );
 function JsQuickJsProbeNames: string;
 begin
   {$IFDEF NEXTPAS_WINDOWS}
