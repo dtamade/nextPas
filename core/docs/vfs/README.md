@@ -79,6 +79,11 @@ FsMounted := CreateMountedVfs([
 
 // 叠加视图（游戏 patch>dlc>base 热更模型，P2+完整性）
 FsGame := CreateOverlayVfs([FsPatch, FsDLC, FsBase]); // 同根优先级叠加，首命中胜出，List去重合并
+
+// 大包 mmap 零驻留（游戏 500MiB+ 纹理包，经 platform/mem mmap）
+Map := TMemoryMap.Create; Map.OpenFile('assets.pak', mmaRead, [mmfShared]);
+FsPak := CreateEmbeddedVfsBorrowed(Map.BaseAddress, Map.Size); // 零拷贝，Map 生命期覆盖 FsPak
+FsGame2 := CreateOverlayVfs([FsPatch, FsPak]); // patch 覆盖 mmap 包
 ```
 
 ## 架构
