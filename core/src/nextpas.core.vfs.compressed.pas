@@ -45,7 +45,7 @@ end;
 
 function IsGzipPred(const AData: TBytes): Boolean; inline;
 begin
-  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
+  Result := (Length(AData) >= 2) and (AData[0] = GZIP_MAGIC_1) and (AData[1] = GZIP_MAGIC_2);
 end;
 
 type

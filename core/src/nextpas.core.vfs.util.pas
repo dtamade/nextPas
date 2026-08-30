@@ -1,6 +1,8 @@
 unit nextpas.core.vfs.util;
 
-{** @desc 基于 IVfs 的组合辅助：包级 Stat/List/ReadAll/Walk（Go io/fs 包函数同构）。 }
+{** @desc 基于 IVfs 的组合辅助：包级 Stat/List/ReadAll/Walk（Go io/fs 包函数同构）。
+  四件套归位：helpers 层（base ← intf ← helpers(util) ← 门面），门面完整 re-export；
+  不持有状态，仅组合 IVfs 原语，保持零拷贝与性能语义不变。 }
 
 {$I nextpas.core.settings.inc}
 

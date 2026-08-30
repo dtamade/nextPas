@@ -55,7 +55,7 @@ end;
 var Pack := ResPackBuild(Entries, ResPackDefaultOptions); // 排序、去重、对齐、写索引
 ```
 
-> 已实现 `ResPackOpen(@Blob…)` / `ResPackBuild` 真实签名（见 `core/src/nextpas.core.respack*.pas` 门面；`ResPackBuild(Entries, ResPackDefaultOptions)` 双参）；一键链路：`make -C core/examples/nextpas.core.vfs/demo_asset_embed gen run`（`rp_pack inc` → `.inc` → embedded → `ServeVfs` 全链路自检）。
+> 已实现 `ResPackOpen(@Blob…)` / `ResPackBuild` 真实签名（见 `core/src/nextpas.core.respack*.pas` 门面）；一键链路：`make -C demo_asset_embed gen run`（worktree 内 `make -C core/examples/nextpas.core.vfs/demo_asset_embed gen run` 等价，S4 `rp_pack inc` → `.inc` → embedded → `ServeVfs` 全链路自检）。
 
 ## 架构
 
