@@ -1,9 +1,7 @@
 # S4 Compatibility Matrix
 
 This matrix turns current S4 pressure into concrete review inputs. TypInfo has
-a minimal live unit, SysUtils has a minimal live exception-formatting plus
-`SameText`, `IntToStr`, and `Trim` facade, and Classes plus broader reflection
-remain deferred.
+a minimal live unit, SysUtils has a minimal live **40+ functions** facade (`Format`/`SameText`/`IntToStr`/`Trim` + `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep` …), and Classes has a minimal live **10-type** facade (`TStream`/`THandleStream`/`TMemoryStream`/`TFileStream`/`TSeekOrigin`/`TList`/`TInterfaceList`/`TStringList`/`TDuplicates`/`TThread`); broader reflection remains deferred.
 
 | Capability | Live evidence | Current provider | Recommended nextPas stance | Current S4 decision | Future unlock gate |
 | --- | --- | --- | --- | --- | --- |
@@ -21,9 +19,9 @@ remain deferred.
 | TypInfo collections consumer gate | `core/tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr` | `nextpas.core.collections.element_manager` consuming minimal live `nextpas.core.system.typinfo` | prove managed-array helpers through `TElementManager<string>` allocation, copy, grow, shrink, zero, and free paths | live consumer proof; no new API | system TypInfo collections consumer gate with heaptrc proof |
 | `GetTypeKind` | `core/src/nextpas.core.collections.hashmap.swiss.pas`, `core/src/nextpas.core.collections.btree.pas`, `core/src/nextpas.core.collections.concurrent.hashmap.pas` | compiler/System compile-truth imported with the minimal facade | keep tied to compiler/runtime type truth; do not fake a wrapper | minimal live compile-truth contract | collection contract gate proving stable type-kind semantics |
 | TypInfo minimal pressure audit | `core/docs/system/typinfo-minimal-pressure.md` | minimal live unit plus source-contract guard | seven-symbol set only; no property reflection | accepted by minimal live unlock | compiler TypInfo contract + collections managed-lifetime + heaptrc gate |
-| `TFileStream` | `compiler/toolchain/np_toolchain_runner.pas`, multiple TLS/context units | bootstrap `Classes` | if ever surfaced, treat as IO-facing compatibility seam only | no live `nextpas.core.system.classes` unit | toolchain + file IO consumer gate with leak proof |
-| `TStringList` | `rtl/core/classes/np_classes.pas`, compiler/tooling and TLS helpers | bootstrap `Classes` | consider only as a narrow compatibility subset, not container ownership | no live `nextpas.core.system.classes` unit | focused consumer gate proving exact subset |
-| file mode constants | `fmCreate`, `fmOpenRead`, `fmShareDenyNone` in stream users | bootstrap `Classes` | keep coupled to any future `TFileStream` review, not standalone expansion | no live `nextpas.core.system.classes` unit | same gate as `TFileStream` |
+| `TFileStream` | `compiler/toolchain/np_toolchain_runner.pas`, multiple TLS/context units | **live** `nextpas.core.system.classes` (10-type shim: `TSeekOrigin`/`TStream`/`THandleStream`/`TMemoryStream`/`TFileStream`…) | IO-facing compatibility seam only; `TComponent`/`TPersistent` remain deferred | **live** 10-type shim (2026-08-31) | toolchain + file IO consumer gate with leak proof (heaptrc 0) |
+| `TStringList` | `rtl/core/classes/np_classes.pas`, compiler/tooling and TLS helpers | **live** `nextpas.core.system.classes` (10-type shim) | narrow compatibility subset, not container ownership | **live** 10-type shim | focused consumer gate proving exact subset |
+| file mode constants | `fmCreate`, `fmOpenRead`, `fmShareDenyNone` (+ `fmShareDenyWrite`/`fmShareExclusive` etc.) in stream users | **live** `nextpas.core.system.classes` (10-type shim) | keep coupled to 10-type `TFileStream` shim, not standalone expansion | **live** 10-type shim | same gate as `TFileStream` |
 | `TObject.Free` compatibility | compiler semantic model around object/class truth | compiler/runtime System truth, not core facade | keep under compiler/runtime and `nextpas.core.system` root contract | already documented at root; not a `classes` starter API | compiler/runtime integration gate |
 | property reflection helpers | no focused consumer pressure in this lane | historical `TypInfo` surface | out of scope until compiler-backed RTTI model exists | do not add | dedicated reflection design review |
 | `TComponent` / `TPersistent` / streaming framework | no focused consumer pressure in this lane | historical `Classes` surface | explicitly out of scope | do not add | separate architecture plan required |
@@ -32,12 +30,8 @@ remain deferred.
 
 - Real pressure exists today for bootstrap `SysUtils`, `TypInfo`, and a small
   `Classes` subset.
-- SysUtils pressure is enough for a minimal exception-formatting plus
-  `SameText`, `IntToStr`, and `Trim` unit, but not for path, file,
-  environment, time, parsing, case conversion, or broad string-helper
-  compatibility.
-- The pressure is not yet proof that a public `nextpas.core.system.classes`
-  unit should exist.
+- SysUtils pressure is enough for a minimal live **40+ functions** unit (`Format`/`SameText`/`IntToStr`/`Trim` plus `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep` delegating to `text.conv`/`path`/`fs`/`platform`), but not for broader path, file, environment, time, parsing, case conversion sprawl.
+- The 10-type `nextpas.core.system.classes` shim is the current live proof that a narrow public `system.classes` subset can exist without owning `TComponent`/`TPersistent`.
 - `TypInfo` has the strongest architectural pressure, so it now has a minimal
   live unit, but it also has the highest ABI risk.
 - The TypInfo candidate is narrowed in `typinfo-minimal-pressure.md`; the live

@@ -3,7 +3,7 @@
 **模块路径**：`core/src/nextpas.core.bytes*.pas`（7 个源文件）
 **层级**：L1（依赖 L0: base）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-30
+**最后更新**：2026-08-31
 **版本**：1.1
 
 ---
@@ -22,21 +22,39 @@
 | bytes.stream | TByteStreamBuf 可增长缓冲流 |
 | bytes.pas | 门面 |
 
-### 1.2 IBytesBuilder 接口
+### 1.2 IBytesBuilder 接口（与 `bytes.builder.pas` 实现一致）
 
 ```pascal
 IBytesBuilder = interface
-  function Append(const AData; ASize: SizeUInt): IBytesBuilder;
-  function AppendByte(AByte: Byte): IBytesBuilder;
-  function AppendBytes(const ABytes: TBytes): IBytesBuilder;
-  function AppendSpan(const ASpan: TByteSpan): IBytesBuilder;
-  procedure Clear;
+  ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
+  function GetLength: SizeUInt;
+  function GetCapacity: SizeUInt;
+  function GetData: PByte;
+  procedure AppendByte(const AValue: Byte);
+  procedure AppendBytes(const AData: PByte; const ACount: SizeUInt);
+  procedure AppendSpan(const ASpan: TByteSpan);
+  procedure AppendUInt16LE(const AValue: UInt16);
+  procedure AppendUInt16BE(const AValue: UInt16);
+  procedure AppendUInt32LE(const AValue: UInt32);
+  procedure AppendUInt32BE(const AValue: UInt32);
+  procedure AppendUInt64LE(const AValue: UInt64);
+  procedure AppendUInt64BE(const AValue: UInt64);
+  procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
+  function WrittenSpan: TByteSpan;
   function ToBytes: TBytes;
-  function ToSpan: TByteSpan;
-  function Length: SizeUInt;
-  function Capacity: SizeUInt;
+  procedure Clear;
+  procedure Reserve(const AAdditional: SizeUInt);
+  procedure Truncate(const ANewLen: SizeUInt);
+  property Length: SizeUInt read GetLength;
+  property Capacity: SizeUInt read GetCapacity;
+  property Data: PByte read GetData;
 end;
+
+function CreateBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder;
+function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder;
 ```
+
+门面 `MakeBytesBuilder` / `CreateBytesBuilder` 为 thin inline 转发；`IByteCursor` 与 `TByteStreamBuf` 见 1.5/1.6（cursor/stream 独立单元，合计 7 文件）。
 
 ### 1.3 Span 操作
 
@@ -106,8 +124,12 @@ end;
 
 | 测试目录 | 说明 |
 |----------|------|
-| test_bytes | Span 操作 + 字节序 + Builder |
-| **合计** | **1 个测试目录** |
+| test_bytes | Span 操作 + 字节序 + Builder（`bytes.ops`/`binary`/`builder` 基础） |
+| test_cursor | `IByteCursor` 边界受查只读游标（Seek/TrySeek/ReadU*LE/BE/Peek/ReadBytes/TryReadBytes/ReadSpan） |
+| test_stream | `TByteStreamBuf` 可增长缓冲流（Append/Consume/Compact/ReserveAppend/EnsureCapacity/TailSpace） |
+| **合计** | **3 个测试目录** |
+
+> 7 文件门面：`bytes.base` / `ops` / `binary` / `builder` / `cursor` / `stream` / `bytes.pas`；`cursor` 与 `stream` 为独立实现单元，契约与源码一致。
 
 ---
 
@@ -117,3 +139,4 @@ end;
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |
+| 2026-08-31 | 1.1 | 时效修复：补 cursor/stream 7 文件、IBytesBuilder 与实现一致、测试 3 目录（test_bytes/test_cursor/test_stream） | Claude |

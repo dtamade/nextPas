@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.collections*.pas`（约 84 个单元）
 **层级**：L1（依赖 L0：`base`、`mem`、`errors`/`exception`）
 **Owner**：collections lane（本 worktree）
-**最后更新**：2026-07-20
-**版本**：1.1
+**最后更新**：2026-08-31
+**版本**：1.8
 
 权威状态见同目录 [`STATUS.md`](STATUS.md)。活动进度以本文与 STATUS 为准；根目录 `task_plan.collections.md` / `findings.collections.md` / `progress.collections.md` **不作为**当前契约源。
 
@@ -242,7 +242,7 @@ LruCache 的 `Get` 是缓存命中/近用语义，**不要**按上表改名或�
 
 ### 6.1 Focused suites（`core/tests/nextpas.core.collections/`）
 
-`test_base`, `test_bitset`, `test_btree_custom_comparer`, `test_btree_managed_lifecycle`, `test_btree_managed_returns`, `test_btreemap`, `test_btreeset`, `test_circularbuffer`, `test_collections_killer`, `test_concurrent_hashmap`, `test_concurrent_hashmap_managed_returns`, `test_contracts`, `test_deque`, `test_error_paths`, `test_facade`, `test_forwardlist`, `test_forwardlist_managed_zero`, `test_hashmap`, `test_hashset`, `test_linkedhashmap`, `test_linkedhashset`, `test_list`, `test_lrucache`, `test_managed_stress`, `test_managed_types`, `test_multimap`, `test_multiset`, `test_priorityqueue`, `test_queue`, `test_rbtreemap_custom_comparer_data`, `test_rbtreemap_range_managed_state`, `test_skiplist`, `test_slice_contract`, `test_slotregistry`, `test_smallvec`, `test_stack`, `test_swiss_adapter`, `test_swisstable`, `test_swisstable_custom_callbacks`, `test_swisstable_managed_returns`, `test_treemap`, `test_treeset`, `test_trie`, `test_vec`, `test_vecdeque_full`
+`test_base`, `test_bitset`, `test_btree_custom_comparer`, `test_btree_managed_lifecycle`, `test_btree_managed_returns`, `test_btreemap`, `test_btreeset`, `test_circularbuffer`, `test_collections_killer`, `test_concurrent_hashmap`, `test_concurrent_hashmap_managed_returns`, `test_contracts`, `test_deque`, `test_error_paths`, `test_facade`, `test_forwardlist`, `test_forwardlist_managed_zero`, `test_hashmap`, `test_hashset`, `test_linkedhashmap`, `test_linkedhashset`, `test_list`, `test_lrucache`, `test_managed_stress`, `test_managed_types`, `test_multimap`, `test_multiset`, `test_priorityqueue`, `test_queue`, `test_rbtreemap_custom_comparer_data`, `test_rbtreemap_range_managed_state`, `test_skiplist`, `test_slice_contract`, `test_slotregistry`, `test_smallvec`, `test_source_contracts`, `test_stack`, `test_swiss_adapter`, `test_swisstable`, `test_swisstable_custom_callbacks`, `test_swisstable_managed_returns`, `test_treemap`, `test_treeset`, `test_trie`, `test_vec`, `test_vecdeque_full`
 
 ### 6.2 门禁
 
@@ -251,6 +251,7 @@ LruCache 的 `Get` 是缓存命中/近用语义，**不要**按上表改名或�
 | 创建/销毁 | heaptrc 0 unfreed blocks（leak-sensitive suites） |
 | 公共 API | 有 focused 覆盖；改契约补测试 |
 | Span 溢出 | `test_slice_contract` + `test_contracts` + `test_error_paths` |
+| 源码契约（source-contract） | `test_source_contracts`（`nextpas.core.collections.*` 不得直引 `SysUtils`/`Classes`，仅门面白名单；`make focused` 强制校验） |
 
 ### 6.3 常用命令
 
@@ -285,3 +286,4 @@ make -C core/tests/nextpas.core.collections/test_vec clean test
 | 2026-07-20 | 1.5 | Phase E：LinkedHashMap 双表 Swiss；插入序仍由链表维护 |
 | 2026-07-20 | 1.6 | 可用性 Wave：测试 RTL 隔离 + source-contract；MakeTreeSet(compare)；HashMix→base；TMemAllocator 统一；ERRORS.md；bench Makefile |
 | 2026-07-21 | 1.7 | Ensure vs EnsureCapacity 对照表；有序 map 选型 §5.1；CORE-API 导读；空容器 EEmptyCollection；可编译 examples |
+| 2026-08-31 | 1.8 | 时效修复：补 source-contract 门禁目录（`test_source_contracts`）与 2026-08-31 对齐 |

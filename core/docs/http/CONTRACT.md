@@ -1,16 +1,16 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（约 **82** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
+**模块路径**：`core/src/nextpas.core.http*.pas`（**92** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-26（M-4 security 停滞用例 ReadTimeout 语义对齐）
-**版本**：3.51
+**最后更新**：2026-08-31（文件数 92 校正 + taxonomy 正序）
+**版本**：3.52
 
 ---
 
 ## 概要
 
-HTTP 运行时:服务端与客户端,含 WebSocket 客户端、SSE、multipart、代理与 Cookie 支持;L3 依赖 net/tls/json/io/text(约 82 个生产源文件)。
+HTTP 运行时:服务端与客户端,含 WebSocket 客户端、SSE、multipart、代理与 Cookie 支持;L3 依赖 net/tls/json/io/text(**92** 个生产源文件)。
 
 ## 1. 模块边界
 
@@ -302,22 +302,22 @@ end;
   （metrics/日志友好）。`CreateOp(..., Status)` 在 `hekStatus` 保留 Status。
 - **不**要求 Op-everywhere；`hekArgument` 前置条件通常不填 Op。
 
-#### Kind 分类表
+#### Kind 分类表（正序：按 Kind 字母序，与 `THttpErrorKind` 定义一致）
 
 | Kind | Category | 含义 | 典型 Op / 备注 |
 |------|----------|------|----------------|
-| `hekUnknown` | ecNetwork | 仅 `Create(string)` 兼容 | 新代码禁止用 |
 | `hekArgument` | ecInvalidArgument | 调用方前置条件、配置、消息形状 | 通常无 Op |
-| `hekTimeout` | ecTimeout | 读/写/连接 deadline | `transport` |
-| `hekConnect` | ecNetwork | dial / CONNECT / nil response / 传输连通 | `connect` `round_trip` `transport` `download` `websocket` |
-| `hekProtocol` | ecNetwork | HTTP/应用层协议违规 | `transport` `content_encoding` `json` |
-| `hekParse` | ecParse | 方法/URL/响应行等解析失败 | `transport` |
-| `hekRedirect` | ecNetwork | 重定向策略失败 | `redirect` |
 | `hekBody` | ecNetwork | body 读写/解码失败 | `redirect` `download` `content_encoding` `transport` |
-| `hekUpgrade` | ecNetwork | WebSocket 升级协商失败 | 通常无 Op |
+| `hekCanceled` | ecCancelled | 协作取消 | `cancel` `transport` |
+| `hekConnect` | ecNetwork | dial / CONNECT / nil response / 传输连通 | `connect` `round_trip` `transport` `download` `websocket` |
+| `hekParse` | ecParse | 方法/URL/响应行等解析失败 | `transport` |
+| `hekProtocol` | ecNetwork | HTTP/应用层协议违规 | `transport` `content_encoding` `json` |
+| `hekRedirect` | ecNetwork | 重定向策略失败 | `redirect` |
 | `hekRegistry` | ecNetwork | transport registry | 通常无 Op |
 | `hekStatus` | ecNetwork | ensure-2xx 非 2xx | `ensure` `download`（Status 保留） |
-| `hekCanceled` | ecCancelled | 协作取消 | `cancel` `transport` |
+| `hekTimeout` | ecTimeout | 读/写/连接 deadline | `transport` |
+| `hekUnknown` | ecNetwork | 仅 `Create(string)` 兼容 | 新代码禁止用 |
+| `hekUpgrade` | ecNetwork | WebSocket 升级协商失败 | 通常无 Op |
 
 #### Q3-2 Go-aligned matrix（超时 / 取消 / 413 / 431）
 
@@ -897,3 +897,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |
 | 2026-07-20 | 3.22 | RH-1：TLS stream `ITcpStreamRuntime` → HTTPS pool keep-alive reuse |
+| 2026-08-31 | 3.52 | 时效修复：文件数 82→92 校正（`ls core/src/nextpas.core.http*.pas`），taxonomy 按 Kind 字母正序 |
