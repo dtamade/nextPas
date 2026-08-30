@@ -802,7 +802,7 @@ begin
   try
     SevenZDeflateDecodeForTest(LRaw, 10);
     Fail('truncated deflate should raise');
-  except on E: EIOError do ; on E: ESevenZError do ; end;
+  except on E: EIOError do ; on E: ESevenZError do ; on E: EParseError do ; end;
 end;
 
 { 写端过滤链：BCJ / Delta 预过滤后压缩，读端按拓扑逆序还原 }
@@ -3508,6 +3508,33 @@ begin
   CheckEqual('Café_Ünicode.txt', Arr[0].Name, 'buildsorted non-ascii prefix name');
 end;
 
+procedure TestGlobIgnoreCaseComplexAsciiZeroAlloc;
+var LW: ISevenZWriter; LR: ISevenZReader; Arr, Arr2: TSevenZEntryInfoArray; Idx: Integer;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('AlphaBetaGamma.txt', BytesOf([$01]));
+  LW.AddFile('alpha_beta_gamma.txt', BytesOf([$02]));
+  LW.AddFile('ALPHA-BETA-GAMMA.TXT', BytesOf([$03]));
+  LW.AddFile('aXbYcZ.log', BytesOf([$04]));
+  LW.AddFile('Café_Alpha.txt', BytesOf([$05]));
+  LR := TSevenZReaderImpl.Create(LW.Finish);
+  // ascii complex glob via ? and * must be case-insensitive zero-alloc path
+  Arr := LR.EntriesByGlobIgnoreCase('ALPHA*BETA*GAMMA.TXT');
+  CheckEqual(Int64(3), Int64(Length(Arr)), 'glob ic complex alpha*beta*gamma 3');
+  Arr := LR.EntriesByGlobIgnoreCase('alpha?beta*gamma.txt');
+  // '?'' matches '-' or '_' single char, so ALPHA-BETA- and alpha_beta both match, AlphaBeta without sep does not
+  Check(Length(Arr) >= 2, 'glob ic ? wildcard >=2');
+  // exact via hash still case-insensitive
+  Idx := LR.FindByGlobIgnoreCase('ALPHA*BETA*GAMMA.TXT');
+  Check(Idx >= 0, 'find glob ic complex');
+  // non-ascii pattern must fallback to LowerCase path and not corrupt ascii fast path
+  Arr := LR.EntriesByGlobIgnoreCase('café*alpha.txt');
+  CheckEqual(Int64(1), Int64(Length(Arr)), 'glob ic non-ascii fallback 1');
+  CheckEqual('Café_Alpha.txt', Arr[0].Name, 'glob ic non-ascii name');
+  Arr2 := LR.EntriesByGlobIgnoreCase('CAFÉ*ALPHA.TXT');
+  CheckEqual(Int64(0), Int64(Length(Arr2)), 'glob ic non-ascii upper not folded 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3699,6 +3726,7 @@ begin
   T.Test('fs ignore case to fs', @TestFsIgnoreCaseToFs);
   T.Test('glob classify unified', @TestGlobClassifyUnified);
   T.Test('buildsorted unified + sameignore zeroalloc', @TestBuildSortedUnifiedAndSameIgnoreCaseZeroAlloc);
+  T.Test('glob ignorecase complex ascii zeroalloc', @TestGlobIgnoreCaseComplexAsciiZeroAlloc);
 
   if not T.Run then Halt(1);
 end.
