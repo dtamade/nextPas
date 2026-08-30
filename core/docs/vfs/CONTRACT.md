@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.vfs*.pas`（13 个源文件：base/intf/errors/memtree/embedded/os/sub/mount/overlay/util + transform/compressed L3装饰器 + 门面）
 **层级**：L2（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖；`transform/compressed` L3装饰器例外依赖 compress.base GZIP_MAX单源）
 **Owner**：AI（respack/vfs lane）
-**最后更新**：2026-08-30
-**版本**：1.4（P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型 + mount/overlay 双视图，14门闭环）
+**最后更新**：2026-08-31
+**版本**：1.4（P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型 + mount/overlay 双视图，13门闭环）
 
 ---
 
@@ -137,7 +137,7 @@ end;
 
 ---
 
-## 7. 测试覆盖（P2/S6实测校准，2026-08-30：13门闭环 respack5 + vfs6 + transform/compressed2）
+## 7. 测试覆盖（P2/S6实测校准，2026-08-31：13门闭环 respack5 + vfs8）
 
 | 测试目录 | 用例数 | 说明 |
 |----------|--------|------|
@@ -150,7 +150,7 @@ end;
 | test_vfs_compressed | 7 | 解压薄门面：daAuto/gzip自动解压Stat Size/ContentHash校正/ETag禁用/daGzip强制失败/空包/大文件4K头预判HeaderPred（GZIP_MAX单源32MiB） |
 | test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含transform/compressed/mount/overlay L2→L2装饰器seam白名单） |
 
-合计 8 门（vfs侧含mount10）；respack侧5门（writer/reader/roundtrip/dirsource/embed），source-contract共享1门，合计 **14 门**闭环（respack5+vfs8；另bench_transform 1基准阈值）。heaptrc 0 leak为所有gate门禁。
+合计 8 门（vfs侧含mount10）；respack侧5门（writer/reader/roundtrip/dirsource/embed），合计 **13 门**闭环（respack5+vfs8；另bench_transform 1基准阈值，source-contract并入vfs8）。heaptrc 0 leak为所有gate门禁。
 
 - 原设计的独立 `test_vfs_os` 门折叠进 conformance：os 行为断言在电池里以真实目录
   夹具全覆盖，独立门只会复制夹具（README 测试计划节有记录）
@@ -167,4 +167,4 @@ end;
 | 2026-08-28 | 1.1 | facade 校准：补 `CreateDecompressingVfs(AAlgo)` 重载与 `IVfsETag/VFS_DECOMPRESS_MAX_BYTES` 重导出；门数 12 闭环 | AI |
 | 2026-08-30 | 1.2 | S6装饰器落地：vfs.transform通用模板 + vfs.compressed薄门面（GZIP_MAX单源/4K HeaderPred/单次读取复用/池化复用度/OpPath高级感）；12门补齐（respack5+vfs5+2）+ bench_transform阈值；性能契约添HeaderPred/零二次IO证据 | AI |
 | 2026-08-30 | 1.3 | P2挂载复合落地：vfs.mount 前缀最长匹配复合+ETag/ServeMeta透传+CaseSensitive一致性，mount门禁6例，13门闭环 | AI |
-| 2026-08-30 | 1.4 | P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型，overlay 3例（priority/list dedup/etag），14门闭环 | AI |
+| 2026-08-31 | 1.4 | P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型，overlay 3例（priority/list dedup/etag），13门闭环 | AI |

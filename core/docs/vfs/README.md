@@ -4,9 +4,9 @@ L2 只读虚拟文件树模块。把"一棵文件树"抽象成统一接口：真
 respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，不关心内容来自二进制
 内嵌数据还是文件系统。
 
-**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地、P2 挂载复合已落地。** 三后端（memtree/embedded/os）+ Sub/mount 双视图 + 门面便利函数全部实现；
-9 个验证门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
-`vfs.mount`（`CreateMountedVfs` 前缀最长匹配复合）已落地；S5 已完成：`nextpas.core.http.static.ServeVfs(AFs)`
+**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地、P2 挂载+叠加双视图已落地。** 三后端（memtree/embedded/os）+ Sub/mount/overlay 三视图 + 门面便利函数全部实现；
+13 门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
+`vfs.mount`（`CreateMountedVfs`）+ `vfs.overlay`（`CreateOverlayVfs` 游戏 patch>dlc>base）已落地；S5 已完成：`nextpas.core.http.static.ServeVfs(AFs)`
 是首个 L3 consumer，embedded/os 双后端经同一 handler 服务 HTTP（ETag 取
 ContentHash fnv32，未知 mtime 跳过 IMS 协商）。
 嵌入工作流示例见 `core/examples/nextpas.core.vfs/demo_asset_embed/`；
@@ -249,7 +249,7 @@ P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正�
 | overlay 叠加视图 | 游戏热更 patch>dlc>base 优先级叠加，同根首命中，List去重合并，独立于 mount 的正交能力 |
 | 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs` 通用模板承载（`CreateDecompressingVfs` 为其 gzip 特化薄门面，`CreateDecryptingVfs` 同构可直接复用；`http Content-Encoding` 另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES` 单源于 `compress.base`，`vfs` 侧仅薄别名/薄门面转调，32MiB 防 bomb 与 `ContentHash=0/ETag` 禁用一致性由 `transform` 统一承载 |
 
-## 测试计划（14 门全绿，2026-08-30：P2叠加后）
+## 测试计划（13 门全绿，2026-08-31：P2叠加后）
 
 ```bash
 # respack 格式层
