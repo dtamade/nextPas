@@ -151,6 +151,26 @@ begin
   Check(OK, 'mount: missing raises NotFound');
 end;
 
+procedure TestMountNested;
+var
+  Fs1, Fs2, Mounted: IVfs;
+  L: TEntryArray;
+begin
+  Fs1 := MakeMem(['x.txt'], ['1']);
+  Fs2 := MakeMem(['y.txt'], ['2']);
+  Mounted := CreateMountedVfs([
+    VfsMountEntry('a/b', Fs1),
+    VfsMountEntry('a/c', Fs2)
+  ]);
+  L := Mounted.List('a');
+  Check(Length(L) = 2, 'mount: nested list a 2 children');
+  Check((L[0].Name = 'b') and (L[1].Name = 'c'), 'mount: nested sorted');
+  L := Mounted.List('a/b');
+  Check((Length(L) = 1) and (L[0].Name = 'x.txt'), 'mount: nested leaf');
+  Check(Mounted.Exists('a/b/x.txt'), 'mount: nested exists');
+  Check(not Mounted.Exists('a/x.txt'), 'mount: nested parent not file');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -161,5 +181,6 @@ begin
   T.Test('etag passthrough', @TestMountETag);
   T.Test('case sensitive', @TestMountCaseSensitive);
   T.Test('not found', @TestMountNotFound);
+  T.Test('nested', @TestMountNested);
   if not T.Run then Halt(1);
 end.
