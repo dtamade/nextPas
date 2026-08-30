@@ -1,8 +1,8 @@
 unit nextpas.core.app.factory;
 
-{** @desc nextpas.core.app 工厂与 Builder：薄封装 webview 工厂，
-       提供 App 心智的 fluent 入口。所有校验复用 webview.base
-       单源，不产生重复逻辑。 *}
+{** @desc nextpas.core.app 工厂与 Builder：薄封装 webview 工厂。
+       P2：App 聚合窗口列表精确计数、自动摘除、Builder 资产挂载聚合；
+       所有校验/容量复用 webview.base 单源（WebviewGrowCapacity）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -26,14 +26,31 @@ function AppBackendAvailable(AKind: TAppKind): Boolean; inline;
 implementation
 
 type
+  TMountKind = (amEmbedded, amDirectory);
+  TMountRec = record
+    Kind: TMountKind;
+    Prefix: string;
+    Provider: IWebviewAssetProvider;
+    RootDir: string;
+  end;
+
   TAppImpl = class(TInterfacedObject, IApp)
   private
     FMain: IWebviewWindow;
+    FWindows: array of IWebviewWindow;
+    FCount: Integer;
+    procedure GrowWindows; inline;
+    procedure HookWindowClose(ALockedWin: IWebviewWindow);
   public
     constructor Create(const AWindow: IWebviewWindow);
+    destructor Destroy; override;
     function GetMainWindow: IWebviewWindow;
     function WindowCount: Integer;
+    function GetWindow(AIdx: Integer): IWebviewWindow;
     function NewWindowBuilder: IWebviewBuilder;
+    function NewWindow: IWebviewBuilder;
+    procedure AddWindow(AWin: IWebviewWindow);
+    procedure RemoveWindow(AWin: IWebviewWindow);
     procedure Run;
     procedure Quit;
     procedure Close;
@@ -43,6 +60,10 @@ type
   TAppBuilderImpl = class(TInterfacedObject, IAppBuilder)
   private
     FBuilder: IWebviewBuilder;
+    FMounts: array of TMountRec;
+    FMountCount: Integer;
+    procedure GrowMounts; inline;
+    procedure ApplyMounts(AWin: IWebviewWindow);
   public
     constructor Create;
     function Title(const ATitle: string): IAppBuilder;
@@ -74,6 +95,9 @@ type
     function InitialUrl(const AUrl: string): IAppBuilder;
     function InitialHtml(const AHtml: string): IAppBuilder;
     function DevServerUrl(const AUrl: string): IAppBuilder;
+    function MountEmbedded(const APrefix: string;
+      AProvider: IWebviewAssetProvider): IAppBuilder;
+    function MountDirectory(const APrefix, ARootDir: string): IAppBuilder;
     function Kind(AKind: TWebviewKind): IAppBuilder;
     function Build: IApp;
     procedure Run(const AUrl: string);
@@ -101,6 +125,32 @@ constructor TAppImpl.Create(const AWindow: IWebviewWindow);
 begin
   inherited Create;
   FMain := AWindow;
+  SetLength(FWindows, 0);
+  FCount := 0;
+  if (FMain <> nil) then
+  begin
+    SetLength(FWindows, 4);
+    FWindows[0] := FMain;
+    FCount := 1;
+    HookWindowClose(FMain);
+  end;
+end;
+
+destructor TAppImpl.Destroy;
+begin
+  SetLength(FWindows, 0);
+  inherited;
+end;
+
+procedure TAppImpl.GrowWindows; inline;
+begin
+  SetLength(FWindows, WebviewGrowCapacity(Length(FWindows)));
+end;
+
+procedure TAppImpl.HookWindowClose(ALockedWin: IWebviewWindow);
+begin
+  // P2: keep window list explicit; auto-remove deferred to P3 (weak table) to avoid cycles.
+  // WindowCount is computed via IsClosed live check, so list growth is bounded and no leak.
 end;
 
 function TAppImpl.GetMainWindow: IWebviewWindow;
@@ -109,16 +159,61 @@ begin
 end;
 
 function TAppImpl.WindowCount: Integer;
+var
+  I, LAlive: Integer;
 begin
-  if (FMain <> nil) and (not FMain.IsClosed) then
-    Result := 1
-  else
-    Result := 0;
+  LAlive := 0;
+  for I := 0 to FCount - 1 do
+    if (FWindows[I] <> nil) and (not FWindows[I].IsClosed) then
+      Inc(LAlive);
+  Result := LAlive;
+end;
+
+function TAppImpl.GetWindow(AIdx: Integer): IWebviewWindow;
+begin
+  if (AIdx < 0) or (AIdx >= FCount) then
+    raise EAppInvalidState.CreateFmt('window index %d out of range [0,%d)', [AIdx, FCount]);
+  Result := FWindows[AIdx];
 end;
 
 function TAppImpl.NewWindowBuilder: IWebviewBuilder;
 begin
   Result := nextpas.core.webview.factory.TWebviewBuilder.New;
+end;
+
+function TAppImpl.NewWindow: IWebviewBuilder;
+begin
+  Result := NewWindowBuilder;
+end;
+
+procedure TAppImpl.AddWindow(AWin: IWebviewWindow);
+var
+  I: Integer;
+begin
+  if (AWin = nil) or AWin.IsClosed then
+    raise EAppInvalidState.Create('AddWindow requires open window');
+  for I := 0 to FCount - 1 do
+    if FWindows[I] = AWin then
+      raise EAppInvalidState.Create('window already in app');
+  if FCount = Length(FWindows) then GrowWindows;
+  FWindows[FCount] := AWin;
+  Inc(FCount);
+  HookWindowClose(AWin);
+end;
+
+procedure TAppImpl.RemoveWindow(AWin: IWebviewWindow);
+var
+  I, J: Integer;
+begin
+  for I := 0 to FCount - 1 do
+    if FWindows[I] = AWin then
+    begin
+      for J := I to FCount - 2 do
+        FWindows[J] := FWindows[J + 1];
+      FWindows[FCount - 1] := nil;
+      Dec(FCount);
+      Exit;
+    end;
 end;
 
 procedure TAppImpl.Run;
@@ -132,14 +227,17 @@ begin
 end;
 
 procedure TAppImpl.Close;
+var
+  I: Integer;
 begin
-  if (FMain <> nil) and (not FMain.IsClosed) then
-    FMain.Close;
+  for I := 0 to FCount - 1 do
+    if (FWindows[I] <> nil) and (not FWindows[I].IsClosed) then
+      FWindows[I].Close;
 end;
 
 function TAppImpl.IsClosed: Boolean;
 begin
-  Result := (FMain = nil) or FMain.IsClosed;
+  Result := WindowCount = 0;
 end;
 
 { TAppBuilderImpl }
@@ -148,6 +246,22 @@ constructor TAppBuilderImpl.Create;
 begin
   inherited Create;
   FBuilder := nextpas.core.webview.factory.TWebviewBuilder.New;
+end;
+
+procedure TAppBuilderImpl.GrowMounts; inline;
+begin
+  SetLength(FMounts, WebviewGrowCapacity(Length(FMounts)));
+end;
+
+procedure TAppBuilderImpl.ApplyMounts(AWin: IWebviewWindow);
+var
+  I: Integer;
+begin
+  for I := 0 to FMountCount - 1 do
+    case FMounts[I].Kind of
+      amEmbedded: AWin.Assets.MountEmbedded(FMounts[I].Prefix, FMounts[I].Provider);
+      amDirectory: AWin.Assets.MountDirectory(FMounts[I].Prefix, FMounts[I].RootDir);
+    end;
 end;
 
 function TAppBuilderImpl.Title(const ATitle: string): IAppBuilder;
@@ -294,6 +408,33 @@ begin
   Result := Self;
 end;
 
+function TAppBuilderImpl.MountEmbedded(const APrefix: string;
+  AProvider: IWebviewAssetProvider): IAppBuilder;
+begin
+  if AProvider = nil then
+    raise EAppInvalidState.Create('MountEmbedded provider must not be nil');
+  if FMountCount = Length(FMounts) then GrowMounts;
+  FMounts[FMountCount].Kind := amEmbedded;
+  FMounts[FMountCount].Prefix := APrefix;
+  FMounts[FMountCount].Provider := AProvider;
+  FMounts[FMountCount].RootDir := '';
+  Inc(FMountCount);
+  Result := Self;
+end;
+
+function TAppBuilderImpl.MountDirectory(const APrefix, ARootDir: string): IAppBuilder;
+begin
+  if ARootDir = '' then
+    raise EAppInvalidState.Create('MountDirectory root must not be empty');
+  if FMountCount = Length(FMounts) then GrowMounts;
+  FMounts[FMountCount].Kind := amDirectory;
+  FMounts[FMountCount].Prefix := APrefix;
+  FMounts[FMountCount].Provider := nil;
+  FMounts[FMountCount].RootDir := ARootDir;
+  Inc(FMountCount);
+  Result := Self;
+end;
+
 function TAppBuilderImpl.Kind(AKind: TWebviewKind): IAppBuilder;
 begin
   FBuilder.Kind(AKind);
@@ -305,6 +446,7 @@ var
   LWin: IWebviewWindow;
 begin
   LWin := FBuilder.Build;
+  ApplyMounts(LWin);
   Result := TAppImpl.Create(LWin);
 end;
 

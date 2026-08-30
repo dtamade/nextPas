@@ -8,14 +8,14 @@
 - **app 补 Tauri App 水位**：应用持有窗口集合与主循环；`Builder → App → Window` 三层与 `tauri::Builder` 对齐
 - **薄封装**：所有校验/分发复用 `webview.base/factory` 单源，不产生重复逻辑
 
-## P1 范围
+## P2 能力（0.2）
 
-- `TAppBuilder.New.Title().Size().Build` 单窗 + `Run/RunHtml` 便捷
-- `IApp.MainWindow / NewWindowBuilder / Run / Quit / Close` 生命周期
-- `Kind(wvFake)` 钉测试确定性；缺省 `DefaultAppKind` 能力探测驱动
-- 多窗经 `NewWindowBuilder` 再 `Build` 独立窗口，共享同一 `WebviewRunLoop`
+- `TAppBuilder.New.Title().Size()...MountEmbedded/MountDirectory...Build` 首窗聚合资产挂载（`npres://` 最长前缀唯一命中）
+- `IApp.MainWindow / WindowCount / GetWindow / NewWindowBuilder / NewWindow / AddWindow / RemoveWindow / Run / Quit / Close` 多窗精确计数（`WebviewGrowCapacity 0→4→2×` 单源，`IsClosed` 存活过滤，`HookWindowClose` 强循环规避）
+- `Kind(wvFake)` 钉测试确定性；缺省 `DefaultAppKind` 能力探测驱动；多窗经 `AddWindow` 聚合，共享同一 `WebviewRunLoop`
+- 示例：`demo_app` 自检（eval 6*7=42 → sum 42 → all steps）+ 非自检双窗展示
 
-P2 预留：多窗计数、托盘/菜单、ACL、CLI/respack 集成（见 ROADMAP）
+P3 预留：弱引用自动摘除（`HookWindowClose` 真弱表）、托盘/菜单、窗口事件聚合、ACL、CLI/respack 深度集成
 
 ## 快速开始
 
@@ -25,15 +25,18 @@ uses nextpas.core.app;
 TAppBuilder.New
   .Title('My App')
   .Size(1040, 700)
+  .MountEmbedded('', MyProvider)          // 聚合挂载，Build 时批量落盘
   .RegisterInvoke('ping', function(const P: string): string begin Result:='{"pong":true}'; end)
   .RunHtml('<h1>Hello</h1>');
 ```
 
-多窗：
+多窗（精确计数）：
 
 ```pascal
-var App: IApp; W2: IWebviewWindow;
-App := TAppBuilder.New.Title('Hub').Build;
-W2 := App.NewWindowBuilder.Title('Second').Build;
-App.Run; // 阻塞至所有窗口关闭或 App.Quit
+var App: IApp; W2, W3: IWebviewWindow;
+App := TAppBuilder.New.Title('Hub').Build;               // Count=1
+W2 := App.NewWindowBuilder.Title('Second').Build; App.AddWindow(W2); // Count=2
+W3 := App.NewWindow.Title('Third').Build;   App.AddWindow(W3);      // Count=3
+W2.Close; // Count→2（IsClosed 过滤）
+App.Run;  // 阻塞至所有窗口关闭或 App.Quit
 ```

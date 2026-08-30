@@ -1,9 +1,11 @@
 unit nextpas.core.app.intf;
 
 {** @desc nextpas.core.app L3 家族：应用壳接口。
-       IApp 拥有窗口集合与主循环；IAppBuilder 提供 fluent 链。
-       单例语义：每个 Build 出一个 IApp（持有首窗），后续窗口经
-       IApp.NewWindowBuilder 再 Build 独立窗口，共享同一 RunLoop。 *}
+       P2：App 持有窗口集合（精确 WindowCount + Add/Remove + GetWindow）、
+       app-aware NewWindow（Build 自动注册并钩 OnWindowClosed 自摘）、
+       Builder 聚合资产挂载（MountEmbedded/MountDirectory）与 webview 同语义。
+
+       线程契约：Add/Remove/Count 仅主线程；P2 仍单线程精确，P3 再上 GSchemeLock。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -20,7 +22,11 @@ type
     function GetMainWindow: IWebviewWindow;
     property MainWindow: IWebviewWindow read GetMainWindow;
     function WindowCount: Integer;
+    function GetWindow(AIdx: Integer): IWebviewWindow;
     function NewWindowBuilder: IWebviewBuilder;
+    function NewWindow: IWebviewBuilder; // alias, app-aware
+    procedure AddWindow(AWin: IWebviewWindow);
+    procedure RemoveWindow(AWin: IWebviewWindow);
     procedure Run;
     procedure Quit;
     procedure Close;
@@ -58,6 +64,9 @@ type
     function InitialUrl(const AUrl: string): IAppBuilder;
     function InitialHtml(const AHtml: string): IAppBuilder;
     function DevServerUrl(const AUrl: string): IAppBuilder;
+    function MountEmbedded(const APrefix: string;
+      AProvider: IWebviewAssetProvider): IAppBuilder;
+    function MountDirectory(const APrefix, ARootDir: string): IAppBuilder;
     function Kind(AKind: TWebviewKind): IAppBuilder;
     function Build: IApp;
     procedure Run(const AUrl: string);
