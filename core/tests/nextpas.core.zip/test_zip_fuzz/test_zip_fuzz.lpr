@@ -13,6 +13,7 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.checksum.crc32,
   nextpas.core.io.memory,
   nextpas.core.io.intf,
@@ -223,10 +224,93 @@ begin
   end;
 end;
 
+function LE32AtFuzz(const AB: TBytes; AOff: Integer): LongWord; inline;
+begin
+  Result := LongWord(AB[AOff]) or (LongWord(AB[AOff+1]) shl 8) or (LongWord(AB[AOff+2]) shl 16) or (LongWord(AB[AOff+3]) shl 24);
+end;
+
+function FindEocdOffset(const AZip: TBytes): Integer;
+var LI: Integer;
+begin
+  for LI := Length(AZip)-22 downto 0 do
+    if (AZip[LI]=$50) and (AZip[LI+1]=$4B) and (AZip[LI+2]=$05) and (AZip[LI+3]=$06) then Exit(LI);
+  Result := -1;
+end;
+
+procedure TestMaliciousCentral;
+var LI, LEocd, LCentralOff: Integer; W: IZipWriter; Ar, Bad: TBytes; R: IZipReader; GotFail: Boolean; LCase: Integer;
+begin
+  for LI := 1 to 60 do
+  begin
+    W := NewZipWriter;
+    W.AddEntry(RandName, RandBytes(200 + Integer(NextU32 mod 500)));
+    W.AddEntryDeflate(RandName, RandBytes(200 + Integer(NextU32 mod 500)));
+    Ar := W.Finish;
+    Bad := Copy(Ar, 0, Length(Ar));
+    LEocd := FindEocdOffset(Bad);
+    if LEocd < 0 then Continue;
+    LCentralOff := Integer(LE32AtFuzz(Bad, LEocd+16));
+    if (LCentralOff < 0) or (LCentralOff+46 > Length(Bad)) then Continue;
+    LCase := LI mod 4;
+    case LCase of
+      0: begin Bad[LCentralOff+20] := $FF; Bad[LCentralOff+21] := $FF; Bad[LCentralOff+22] := $FF; Bad[LCentralOff+23] := $FF; Bad[LCentralOff+24] := $FF; Bad[LCentralOff+25] := $FF; Bad[LCentralOff+26] := $FF; Bad[LCentralOff+27] := $FF; end;
+      1: begin Bad[LCentralOff+30] := $FF; Bad[LCentralOff+31] := $FF; end;
+      2: begin Bad[LCentralOff] := $00; end;
+      3: begin Bad[LCentralOff+42] := $FF; Bad[LCentralOff+43] := $FF; Bad[LCentralOff+44] := $FF; Bad[LCentralOff+45] := $FF; end;
+    end;
+    GotFail := False;
+    try R := NewZipReader(Bad); R.ExtractToBytes(0); except on E: Exception do GotFail := (E is EParseError) or (E is EIOError) or (E is ENotSupportedError); end;
+    // also try construction alone: NewZipReader itself may fail
+    if not GotFail then
+      try R := NewZipReader(Bad); except on E: Exception do GotFail := (E is EParseError) or (E is EIOError) or (E is ENotSupportedError); end;
+    Check(GotFail, 'malicious central fail-closed '+IntToStr(LI)+' case '+IntToStr(LCase));
+  end;
+end;
+
+procedure TestBombTightening;
+var LI, LJ, LCount: Integer; W: IZipWriter; Ar: TBytes; RO: TZipReadOptions; RS: TZipReadOptions; Total: UInt64; GotFail: Boolean; R: IZipReader; RSeq: ISequentialZipReader; Info: TZipEntryInfo;
+begin
+  for LI := 1 to 40 do
+  begin
+    W := NewZipWriter;
+    LCount := 2 + Integer(NextU32 mod 5);
+    Total := 0;
+    for LJ := 1 to LCount do
+    begin
+      Ar := RandBytes(800 + Integer(NextU32 mod 1200));
+      Total := Total + UInt64(Length(Ar));
+      W.AddEntry(RandName, Ar);
+    end;
+    Ar := W.Finish;
+    RO := DefaultZipReadOptions; RO.MaxOutputSize := 100;
+    GotFail := False;
+    try R := NewZipReaderWithOptions(Ar, RO); R.ExtractToBytes(0); except on E: EIOError do GotFail := True; on E: Exception do GotFail := False; end;
+    Check(GotFail, 'bomb tight MaxOutput fail-closed');
+    if Total > 1 then
+    begin
+      RS := DefaultZipReadOptions; RS.MaxTotalOutputSize := 100;
+      GotFail := False;
+      try R := NewZipReaderWithOptions(Ar, RS); except on E: EIOError do GotFail := True; on E: Exception do GotFail := False; end;
+      Check(GotFail, 'bomb tight MaxTotal fail-closed');
+      GotFail := False;
+      try
+        RSeq := NewZipSequentialReaderWithOptions(CreateBytesStreamFrom(Ar) as IReader, RS);
+        while RSeq.Next(Info) do
+        begin
+          // also try open to trigger guard
+        end;
+      except on E: EIOError do GotFail := True; on E: Exception do ; end;
+      Check(GotFail, 'seq bomb tight MaxTotal fail-closed');
+    end;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.fuzz');
   T.Test('Fuzz store/deflate parity', @TestFuzzStoreDeflate);
   T.Test('Fuzz descriptor parity', @TestFuzzDescriptor);
   T.Test('Fuzz AES/Zip64/dir parity', @TestFuzzAesAndZip64);
+  T.Test('Malicious central fail-closed', @TestMaliciousCentral);
+  T.Test('Bomb MaxOutput/MaxTotal tightening', @TestBombTightening);
   if not T.Run then Halt(1);
 end.

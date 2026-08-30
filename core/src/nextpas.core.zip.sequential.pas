@@ -42,7 +42,7 @@ type
 
 function NewZipSequentialReader(const ASource: IReader): ISequentialZipReader;
 function NewZipSequentialReaderWithOptions(const ASource: IReader;
-  const AOptions: TZipReadOptions): ISequentialZipReader;
+  const AOptions: nextpas.core.zip.base.TZipReadOptions): ISequentialZipReader;
 
 implementation
 
@@ -920,7 +920,7 @@ begin
 end;
 
 function NewZipSequentialReaderWithOptions(const ASource: IReader;
-  const AOptions: TZipReadOptions): ISequentialZipReader;
+  const AOptions: nextpas.core.zip.base.TZipReadOptions): ISequentialZipReader;
 var
   LMax, LDesc: SizeUInt;
 begin

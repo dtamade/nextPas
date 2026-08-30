@@ -44,7 +44,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
-  nextpas.core.compress,
+  nextpas.core.compress.deflate,
   nextpas.core.time.date,
   nextpas.core.zip.aes;
 
@@ -127,9 +127,9 @@ begin
   for LI := 0 to High(AEntries) do
   begin
     if AEntries[LI].UncompressedSize > AMaxTotal then
-      raise EIOError.Create('zip: total uncompressed size exceeds limit');
+      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
     if LCum > AMaxTotal - AEntries[LI].UncompressedSize then
-      raise EIOError.Create('zip: total uncompressed size exceeds limit');
+      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
     Inc(LCum, AEntries[LI].UncompressedSize);
   end;
 end;
@@ -157,7 +157,7 @@ begin
   else if AE.MethodCode = C_ZIP_METHOD_STORE then
   begin
     if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
-      raise EIOError.Create('zip: decompressed size exceeds limit for ' +
+      raise EZipLimitError.Create('zip: decompressed size exceeds limit for ' +
         AE.Name);
     Result := LCompressed;
   end
@@ -204,13 +204,13 @@ begin
     if ADstLen < AE.UncompressedSize then
       raise EIOError.Create('zip: dest buffer too small for ' + AE.Name);
     if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
-      raise EIOError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
+      raise EZipLimitError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
     LOutLen := RawDeflateDecompressToBuffer(LCompressed, ADst, ADstLen, AMaxOutput);
   end
   else if AE.MethodCode = C_ZIP_METHOD_STORE then
   begin
     if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
-      raise EIOError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
+      raise EZipLimitError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
     if ADstLen < AE.UncompressedSize then
       raise EIOError.Create('zip: dest buffer too small for ' + AE.Name);
     if UInt64(Length(LCompressed)) <> AE.UncompressedSize then

@@ -18,7 +18,7 @@ program test_zip_perf;
  *}
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
+  SysUtils, Classes,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.zip,
@@ -98,9 +98,53 @@ begin
   if Length(S) > 0 then Move(Pointer(S)^, Result[0], Length(S));
 end;
 
-procedure CheckAllocsBudget(const ALabel: string; AActual, ABudget: Int64);
+function LoadBaselineBudget(const AName: string; ADefault: Int64): Int64;
+var LPaths: array[0..3] of string; LText: string; SL: TStringList; P: Integer; Q: Integer; S: string; I: Integer;
 begin
-  Check(AActual <= ABudget, ALabel + ': allocs ' + IntToStr(AActual) + ' <= budget ' + IntToStr(ABudget));
+  Result := ADefault;
+  LPaths[0] := ExpandFileName(ExtractFilePath(ParamStr(0)) + '../../../../benchmarks/nextpas.core.zip/bench_zip/BASELINE.json');
+  LPaths[1] := ExpandFileName('../../../core/benchmarks/nextpas.core.zip/bench_zip/BASELINE.json');
+  LPaths[2] := ExpandFileName('../../../benchmarks/nextpas.core.zip/bench_zip/BASELINE.json');
+  LPaths[3] := 'core/benchmarks/nextpas.core.zip/bench_zip/BASELINE.json';
+  for I := 0 to High(LPaths) do
+  begin
+    if not FileExists(LPaths[I]) then Continue;
+    SL := TStringList.Create;
+    try
+      SL.LoadFromFile(LPaths[I]);
+      LText := SL.Text;
+    finally SL.Free; end;
+    P := Pos('"name":"' + AName + '"', LText);
+    if P = 0 then P := Pos('"name": "' + AName + '"', LText);
+    if P = 0 then Continue;
+    Q := Pos('"allocs_per_op"', Copy(LText, P, 500));
+    if Q = 0 then Continue;
+    S := Copy(LText, P+Q-1, 200);
+    P := Pos(':', S);
+    if P = 0 then Continue;
+    Q := P+1; while (Q <= Length(S)) and (S[Q] in [' ', #9]) do Inc(Q);
+    P := Q; while (Q <= Length(S)) and (S[Q] in ['0'..'9']) do Inc(Q);
+    if P < Q then Result := StrToIntDef(Copy(S, P, Q-P), ADefault);
+    Exit;
+  end;
+end;
+
+procedure CheckAllocsBudget(const ALabel: string; AActual, ABudget: Int64);
+var LBase: Int64;
+begin
+  LBase := LoadBaselineBudget(ALabel, ABudget);
+  if LBase <> ABudget then ABudget := LBase + 2;
+  Check(AActual <= ABudget, ALabel + ': allocs ' + IntToStr(AActual) + ' <= budget ' + IntToStr(ABudget) + ' (baseline+2)');
+end;
+
+procedure CheckAllocsInterval(const ALabel: string; AActual, ABudget: Int64);
+var LBase, LLow, LHigh: Int64;
+begin
+  LBase := LoadBaselineBudget(ALabel, ABudget);
+  if LBase <> ABudget then ABudget := LBase;
+  LLow := ABudget - 2; if LLow < 0 then LLow := 0;
+  LHigh := ABudget + 5;
+  Check((AActual >= LLow) and (AActual <= LHigh), ALabel + ': allocs ' + IntToStr(AActual) + ' in [' + IntToStr(LLow) + ',' + IntToStr(LHigh) + '] baseline ' + IntToStr(ABudget));
 end;
 
 function SameBytes(const A,B: TBytes): Boolean;

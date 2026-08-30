@@ -68,7 +68,7 @@ function NewZipReader(const AData: TBytes): IZipReader;
 
 {** 同上，带输出上限选项（MaxOutputSize=0 取默认上限）。 *}
 function NewZipReaderWithOptions(const AData: TBytes;
-  const AOptions: TZipReadOptions): IZipReader;
+  const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 
 {** 从可定位流打开归档：经 IReaderAt 定位读按需取数（EOCD/central/条目
     载荷），不整体载入，不改写调用方流位置。ASource 须同时实现 IStream
@@ -78,7 +78,7 @@ function NewZipReaderFrom(const ASource: IStream): IZipReader;
 
 {** 同上，带输出上限选项（MaxOutputSize=0 取默认上限）。 *}
 function NewZipReaderFromWithOptions(const ASource: IStream;
-  const AOptions: TZipReadOptions): IZipReader;
+  const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 
 implementation
 
@@ -425,7 +425,7 @@ begin
 end;
 
 function NewZipReaderWithOptions(const AData: TBytes;
-  const AOptions: TZipReadOptions): IZipReader;
+  const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 var
   LMax: SizeUInt;
 begin
@@ -1118,7 +1118,7 @@ begin
 end;
 
 function NewZipReaderFromWithOptions(const ASource: IStream;
-  const AOptions: TZipReadOptions): IZipReader;
+  const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 var
   LMax: SizeUInt;
 begin
