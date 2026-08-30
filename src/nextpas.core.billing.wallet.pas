@@ -63,7 +63,7 @@ begin
     TDbMigration.Create(15, [
       'create table if not exists wallet_balances ( user_id text primary key references user_profiles(id) on delete cascade, balance_cents integer not null default 0 check (balance_cents >= 0), updated_at text not null default (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')) );',
       'create table if not exists wallet_ledger ( id text primary key, user_id text not null references user_profiles(id) on delete cascade, delta_cents integer not null, reason text not null, ref_id text, created_at text not null default (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')) );',
-      'create index if not exists idx_wallet_ledger_user on wallet_ledger(user_id, created_at desc);',
+      'create index if not exists idx_wallet_ledger_user on wallet_ledger(user_id, created_at desc, id desc);',
       'create table if not exists redeem_codes ( code text primary key, total_cents integer not null check (total_cents > 0), remaining_uses integer not null check (remaining_uses >= 0), max_uses integer not null check (max_uses > 0), expires_at text, created_at text not null default (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')) );',
       'create table if not exists redeem_redemptions ( code text not null references redeem_codes(code) on delete cascade, user_id text not null references user_profiles(id) on delete cascade, redeemed_at text not null default (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')), primary key (code, user_id) );'
     ])
@@ -313,15 +313,15 @@ begin
   Count := 0;
   if (AUserId = '') or (ALimit < 1) then Exit;
   if ALimit > 100 then ALimit := 100;
+  Conn := APool.Acquire;
   AnchorCreatedAt := '';
   if AAfter <> '' then
   begin
-    Conn := APool.Acquire;
     Q := Conn.Query('SELECT created_at FROM wallet_ledger WHERE id = ?1 AND user_id = ?2');
     Q.BindText(1, AAfter);
     Q.BindText(2, AUserId);
     if Q.Step then AnchorCreatedAt := Q.GetText(0);
-    Q := nil; Conn := nil;
+    Q := nil;
   end;
   SQL := 'SELECT id, user_id, delta_cents, reason, coalesce(ref_id,''''), created_at FROM wallet_ledger WHERE user_id = ?1';
   BindIdx := 2;
@@ -331,7 +331,6 @@ begin
     Inc(BindIdx, 2);
   end;
   SQL := SQL + ' ORDER BY created_at DESC, id DESC LIMIT ?' + IntToStr(BindIdx);
-  Conn := APool.Acquire;
   Q := Conn.Query(SQL);
   BindIdx := 1;
   Q.BindText(BindIdx, AUserId); Inc(BindIdx);
