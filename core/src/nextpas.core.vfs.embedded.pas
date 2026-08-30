@@ -265,6 +265,7 @@ var
   LKeep: IVfs;
 begin
   LKeep := FKeep;
+  if LKeep = nil then ;
   LOwner := FOwner;
   LSlice := FSlice;
   FSlice := nil;

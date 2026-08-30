@@ -158,6 +158,7 @@ var
   I: Integer;
   LTotal, LOff: SizeUInt;
 begin
+  Result := nil;
   LTotal := 0;
   for I := 0 to High(AParts) do
     Inc(LTotal, AParts[I].Len);
@@ -176,6 +177,7 @@ var
   I: Integer;
   LTotal, LOff: SizeUInt;
 begin
+  Result := nil;
   LTotal := 0;
   for I := 0 to High(AParts) do
     Inc(LTotal, Length(AParts[I]));
@@ -287,6 +289,7 @@ function StripLeadingZero(const AData: TBytes): TBytes; inline;
 var
   I, LLen: Integer;
 begin
+  Result := nil;
   I := 0;
   while (I < Length(AData)) and (AData[I] = 0) do
     Inc(I);
@@ -339,6 +342,7 @@ end;
 
 function BytesToString(const ABytes: TBytes): string; inline;
 begin
+  Result := '';
   SetLength(Result, Length(ABytes));
   if Length(ABytes) > 0 then
     Move(ABytes[0], Result[1], Length(ABytes));
@@ -346,6 +350,7 @@ end;
 
 function StringToBytes(const AText: string): TBytes; inline;
 begin
+  Result := nil;
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
     Move(AText[1], Result[0], Length(AText));
