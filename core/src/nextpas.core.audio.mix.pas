@@ -10,14 +10,15 @@ uses
   nextpas.core.audio.pcm;
 
 type
-  TPointF = record X, Y: Single; end;
+  TAudioPanGains = record X, Y: Single; end;
 
 procedure MixInto(var ADst: TAudioBuffer; const ASrc: TAudioBuffer; AGain: Single; AOffset: Integer);
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
-function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
+function PanLawGains(APan: Single): TAudioPanGains; overload;
+function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
 
 implementation
 
@@ -199,7 +200,14 @@ begin
   ApplyGain(ABuf, LGain);
 end;
 
-function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
+function PanLawGains(APan: Single): TAudioPanGains; overload;
+var LPan, LAngle: Single;
+begin
+  LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1;
+  LAngle := (LPan + 1) * Pi / 4.0; Result.X := Cos(LAngle); Result.Y := Sin(LAngle);
+end;
+
+function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains; overload;
 var LPan, LAngle: Single;
 begin
   LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1;

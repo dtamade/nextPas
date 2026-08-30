@@ -115,7 +115,7 @@ begin
 end;
 
 procedure T.TestPanLaw;
-var G: TPointF;
+var G: TAudioPanGains;
 begin
   G:=PanLawGains(-1); CheckNear(1,G.X,1e-3,'pan -1 left');
   G:=PanLawGains(1); CheckNear(1,G.Y,1e-3,'pan 1 right');

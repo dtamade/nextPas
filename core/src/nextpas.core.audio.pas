@@ -68,7 +68,6 @@ type
   TCompressor = nextpas.core.audio.dsp.dynamics.TCompressor;
   TSingleArray = nextpas.core.audio.dsp.fft.TSingleArray;
   TAudioPanGains = nextpas.core.audio.mix.TAudioPanGains;
-  TPointF = nextpas.core.audio.mix.TPointF;
 
   TDeviceState = nextpas.core.audio.device.intf.TDeviceState;
   TDeviceEvent = nextpas.core.audio.device.intf.TDeviceEvent;

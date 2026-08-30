@@ -233,7 +233,7 @@ var
   LS32: LongInt;
 begin
   if (AFrames <= 0) or (AChannels <= 0) then
-    raise EInvalidArgument.CreateFmt('PcmConvert: invalid frames %d channels %d', [AFrames, AChannels]);
+  begin SetLength(Result, 0); Exit; end;
   if (Ord(ASrcFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ASrcFormat) > Ord(High(TAudioSampleFormat))) then
     raise EInvalidArgument.Create('PcmConvert: invalid src format');
   if (Ord(ADstFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ADstFormat) > Ord(High(TAudioSampleFormat))) then
@@ -244,16 +244,20 @@ begin
     raise EInvalidArgument.Create('PcmConvert: unsupported src bytes per sample');
   if LBytesPerDst <= 0 then
     raise EInvalidArgument.Create('PcmConvert: unsupported dst bytes per sample');
+  if Int64(AFrames) * Int64(AChannels) > High(Integer) then
+    raise EInvalidArgument.Create('PcmConvert: frames*channels overflow');
   if ASrcFormat = ADstFormat then
   begin
-    if Length(ASrc) < AFrames * AChannels * LBytesPerSrc then
-      raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), AFrames * AChannels * LBytesPerSrc]);
+    if Int64(Length(ASrc)) < Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc) then
+      raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)]);
     Result := Copy(ASrc, 0, Length(ASrc));
     Exit;
   end;
   LSampleCount := AFrames * AChannels;
-  if Length(ASrc) < LSampleCount * LBytesPerSrc then
-    raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), LSampleCount * LBytesPerSrc]);
+  if Int64(Length(ASrc)) < Int64(LSampleCount) * Int64(LBytesPerSrc) then
+    raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(LSampleCount) * Int64(LBytesPerSrc)]);
+  if Int64(LSampleCount) * Int64(LBytesPerDst) > 16*1024*1024 then
+    raise EInvalidArgument.CreateFmt('PcmConvert: dst %d bytes exceeds 16MiB limit', [Int64(LSampleCount) * Int64(LBytesPerDst)]);
   SetLength(Result, LSampleCount * LBytesPerDst);
   LDitherState := 12345;
   for LI := 0 to LSampleCount - 1 do
