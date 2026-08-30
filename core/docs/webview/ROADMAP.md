@@ -4,8 +4,8 @@
 **层级**：L3 家族（依赖 L0-L2；`platform.dl` + `json` owner）  
 **Owner**：core-webview lane  
 **最后更新**：2026-08-30  
-**当前版本**：**1.88**（S95 完整性冻结）
-**当前状态**：**Production Ready · focused-runtime · 冻结**（`core-module-registry` 已 `focused-runtime`，13 gates 全绿 heaptrc 0，hygiene/source-contracts 双 pass，bench S27→S95 无回归）  
+**当前版本**：**1.90**（S97 跨平台文档冻结）
+**当前状态**：**Production Ready · focused-runtime · 冻结**（`core-module-registry` 已 `focused-runtime`，13 gates 全绿 heaptrc 0，hygiene/source-contracts 双 pass，bench S27→S95→S97 无回归，三平台 `linux GTK / windows WebView2 wine / macOS WK 桩` 诚实）  
 **对标基准**：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）  
 **稳定契约**：[CONTRACT.md](CONTRACT.md)（权威）· [README.md](README.md)（消费面）· [BRIDGE_PROTOCOL.md](BRIDGE_PROTOCOL.md)（v1 帧）· [BACKENDS.md](BACKENDS.md)（能力诚实表）
 
@@ -21,16 +21,16 @@
 
 ---
 
-## 2. 现状快照（1.88）
+## 2. 现状快照（1.90）
 
 | 维度 | 事实 |
 |------|------|
 | **类型冻结** | `TWebviewKind` 4 值穷尽 · `TWebviewOptions` 4 不变量（Ephemeral/DataDir 互斥、尺寸非负、max≥min、scheme 小写 token）· `EWebviewError` 8 类目（ecNotFound/ecIO/ecParse/ecInternal）· `IWebviewWindow` 13 方法 composition 冻结（S31） |
 | **后端矩阵** | `fake` 全平台（测试）· `gtk` Linux WebKitGTK 4.1→4.0 dlopen 自声明 ABI · `webview2` Windows COM 真链（Env→Controller、WebMessage、ExecuteScript、WM_SIZE、DPI 真值、Post 调度，wine 可交互）· `wk` macOS 桩（恒 False，Darwin 预留） |
-| **复用收口** | `base` 7 校验 helper 全 `inline`：`IsValidWebviewSchemeToken` / `CheckWebviewSize/Min/Max/Session/InitScript/EventName/DevServerUrl` / `CheckInvokeCmd`；`WebviewGrowCapacity(0→4→2×)` 全家族 inline 单源；`NormalizeWebviewAssetPath` 5 处复用；`http.mime` 65 项单源（S52-S95） |
+| **复用收口** | `base` 7 校验 helper 全 `inline`：`IsValidWebviewSchemeToken` / `CheckWebviewSize/Min/Max/Session/InitScript/EventName/DevServerUrl` / `CheckInvokeCmd`；`WebviewGrowCapacity(0→4→2×)` 全家族 inline 单源；`NormalizeWebviewAssetPath` 5 处复用；`http.mime` 65 项单源（S52-S97） |
 | **门禁** | 13 gates 全绿 `heaptrc 0`（`base 10 + factory 13 + bridge 17 + vfs 6 + wk 3` 等）· `hygiene`/`source-contracts` 双 pass · `fpc -vh` 0 hint · `factory` 0 warnings（2 处 exhaustive 以 `{$WARNINGS OFF}` 抑制） |
-| **性能基线** | `bench_vfs` 过滤均值 1.22 GB/s（SmallHit 681ns / Fallback 894ns / Miss 217ns / 1M 800µs）· `bench_bridge` TryDecode 4.18µs / Resolve 622ns / Reject 2.37µs / Emit 1.06µs（S27 基线 → S95 复测无回归，哈希/零拷/池化零额外分配） |
-| **文档** | `CONTRACT 1.88` · `README 1.88` · `ROADMAP 1.88` · `BRIDGE v1` · `BACKENDS` 能力诚实表 · `PARITY` 不抄清单 |
+| **性能基线** | `bench_vfs` 过滤均值 1.22 GB/s（SmallHit 681ns / Fallback 894ns / Miss 217ns / 1M 800µs）· `bench_bridge` TryDecode 4.18µs / Resolve 622ns / Reject 2.37µs / Emit 1.06µs（S27 基线 → S95→S97 无回归，哈希/零拷/池化零额外分配） |
+| **文档** | `CONTRACT 1.90` · `README 1.90` · `ROADMAP 1.90` · `BRIDGE v1` · `BACKENDS` 能力诚实表 · `PARITY` 不抄清单 |
 
 ---
 
