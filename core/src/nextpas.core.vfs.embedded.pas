@@ -29,6 +29,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.mem,
   nextpas.core.text.conv,
   nextpas.core.time.httpdate,
   nextpas.core.sync;
@@ -354,8 +355,9 @@ begin
   SetLength(FETags, 0);
   SetLength(FPaths, 0);
   if FOwnsBlob and (FData <> nil) then
-    FreeMem(FData);
+    FreeMem(FData, FSize);
   FData := nil;
+  FSize := 0;
   inherited Destroy;
 end;
 

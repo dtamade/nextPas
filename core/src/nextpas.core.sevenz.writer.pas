@@ -92,8 +92,6 @@ type
   private
     FWriter: ISevenZWriter;
     FImpl: TSevenZWriterImpl;
-    FProgress: TSevenZProgressEvent;
-    procedure ApplyProgress;
   public
     constructor Create; reintroduce;
     function AddFile(const AName: string; const AData: TBytes): ISevenZWriterBuilder;
@@ -1109,10 +1107,9 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
               LThreads[LI].WaitFor;
               if LThreads[LI].HasErr then
                 raise EIOError.Create('parallel folder encode failed: ' + LThreads[LI].ErrMsg);
-            end;
-            if Assigned(FProgress) then
-              for LI := 0 to LBatchSize - 1 do
+              if Assigned(FProgress) then
                 FProgress(Self, LBatchStart + LI + 1, Length(LFolders));
+            end;
           finally
             for LI := 0 to High(LThreads) do
               if Assigned(LThreads[LI]) then
@@ -1339,16 +1336,8 @@ end;
 function TSevenZWriterBuilderImpl.WithProgress(
   AProgress: TSevenZProgressEvent): ISevenZWriterBuilder;
 begin
-  FProgress := AProgress;
-  if Assigned(FImpl) then
-    FImpl.SetProgress(AProgress);
+  FWriter.SetProgress(AProgress);
   Result := Self;
-end;
-
-procedure TSevenZWriterBuilderImpl.ApplyProgress;
-begin
-  if Assigned(FProgress) and Assigned(FImpl) then
-    FImpl.SetProgress(FProgress);
 end;
 
 function TSevenZWriterBuilderImpl.AddTree(const AHostDir: string;
@@ -1374,19 +1363,16 @@ end;
 
 function TSevenZWriterBuilderImpl.Build: ISevenZWriter;
 begin
-  ApplyProgress;
   Result := FWriter;
 end;
 
 function TSevenZWriterBuilderImpl.Finish: TBytes;
 begin
-  ApplyProgress;
   Result := FWriter.Finish;
 end;
 
 function TSevenZWriterBuilderImpl.FinishTo(const ASink: IWriter): Int64;
 begin
-  ApplyProgress;
   Result := FWriter.FinishTo(ASink);
 end;
 

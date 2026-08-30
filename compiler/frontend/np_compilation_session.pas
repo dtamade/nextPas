@@ -9,6 +9,7 @@ unit np_compilation_session;
 {$UNITPATH ../syntax}
 {$UNITPATH ../toolchain}
 {$UNITPATH ../targets}
+{$UNITPATH ../src}
 {$UNITPATH ../../core/src}
 
 interface

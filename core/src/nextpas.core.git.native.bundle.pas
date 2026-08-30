@@ -46,6 +46,7 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.hash.intf,
   nextpas.core.text.conv,
+  nextpas.core.text.builder,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
@@ -139,12 +140,25 @@ function BuildPackFromRevs(const AGitDir: string; const AWants: array of TGitOid
 var RevInput: string;
     I: Integer;
     Out_: TProcessOutput;
+    LBuilder: TBufStringBuilder;
 begin
-  RevInput := '';
-  for I := 0 to High(AWants) do
-    RevInput := RevInput + GitOidToHex(AWants[I]) + #10;
-  for I := 0 to High(AExcludes) do
-    RevInput := RevInput + '^' + GitOidToHex(AExcludes[I]) + #10;
+  LBuilder.Init(256);
+  try
+    for I := 0 to High(AWants) do
+    begin
+      LBuilder.AppendStr(GitOidToHex(AWants[I]));
+      LBuilder.AppendChar(#10);
+    end;
+    for I := 0 to High(AExcludes) do
+    begin
+      LBuilder.AppendChar('^');
+      LBuilder.AppendStr(GitOidToHex(AExcludes[I]));
+      LBuilder.AppendChar(#10);
+    end;
+    RevInput := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
   if TrimLocal(RevInput) = '' then
     raise EGitError.Create('bundle: empty rev list');
   Out_ := RunWithInput('git', ['--git-dir=' + AGitDir, 'pack-objects', '--stdout', '--revs', '--delta-base-offset'],
@@ -332,8 +346,10 @@ var Wants: array of TGitOid;
     Oid: TGitOid;
     Pack: TBytes;
     HeaderText: string;
-    OutBytes, PackBytes: TBytes;
+    OutBytes: TBytes;
     Comment: string;
+    LHeader: TBufStringBuilder;
+    LHeaderBytes: TBytes;
 begin
   if ABundlePath = '' then
     raise EGitError.Create('bundle: empty bundle path');
@@ -407,15 +423,32 @@ begin
   if Length(Wants) = 0 then
     raise EGitError.Create('bundle: no want refs resolved');
   Pack := BuildPackFromRevs(AGitDir, Wants, Excludes);
-  HeaderText := '# v2 git bundle' + #10;
-  for I := 0 to High(Excludes) do
-    HeaderText := HeaderText + '-' + GitOidToHex(Excludes[I]) + ' ' + PrereqComments[I] + #10;
-  for I := 0 to High(Wants) do
-    HeaderText := HeaderText + GitOidToHex(Wants[I]) + ' ' + WantNames[I] + #10;
-  HeaderText := HeaderText + #10;
-  OutBytes := GitStringToBytes(HeaderText);
-  PackBytes := Pack;
-  OutBytes := BytesConcat(OutBytes, PackBytes);
+  LHeader.Init(256);
+  try
+    LHeader.AppendStr('# v2 git bundle'#10);
+    for I := 0 to High(Excludes) do
+    begin
+      LHeader.AppendChar('-');
+      LHeader.AppendStr(GitOidToHex(Excludes[I]));
+      LHeader.AppendChar(' ');
+      LHeader.AppendStr(PrereqComments[I]);
+      LHeader.AppendChar(#10);
+    end;
+    for I := 0 to High(Wants) do
+    begin
+      LHeader.AppendStr(GitOidToHex(Wants[I]));
+      LHeader.AppendChar(' ');
+      LHeader.AppendStr(WantNames[I]);
+      LHeader.AppendChar(#10);
+    end;
+    LHeader.AppendChar(#10);
+    HeaderText := LHeader.ToString;
+  finally
+    LHeader.Done;
+  end;
+  LHeaderBytes := GitStringToBytes(HeaderText);
+  // bytes.ops 单源流式一次分配，替代临拼 BytesConcat(OutBytes, PackBytes)
+  OutBytes := BytesConcatMany([LHeaderBytes, Pack]);
   // ensure parent dir
   if PathDir(ABundlePath) <> '' then
     MkdirAll(PathDir(ABundlePath), PermDirDefault);

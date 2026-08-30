@@ -328,7 +328,7 @@ generic function MakeList<T>(const aSrc: array of T; aAllocator: TMemAllocator):
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize IList<T>; overload;
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IList<T>; overload;
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IList<T>; overload;
-generic function MakeList<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IList<T>; overload;
+generic function MakeList<T>({%H-}aCapacity: SizeUInt; aAllocator: TMemAllocator; {%H-}aGrowStrategy: TGrowthStrategy): specialize IList<T>; inline; overload;
 
 // ==== ForwardList (source-based) ====
 
@@ -796,13 +796,9 @@ end;
 
 
 
-generic function MakeList<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IList<T>;
+generic function MakeList<T>({%H-}aCapacity: SizeUInt; aAllocator: TMemAllocator; {%H-}aGrowStrategy: TGrowthStrategy): specialize IList<T>; inline;
 begin
-  // 当前 List 实现不区分容量，保持接口一致性
-  if aAllocator <> nil then
-    Exit(specialize TList<T>.Create(aAllocator))
-  else
-    Exit(specialize TList<T>.Create);
+  Result := specialize TList<T>.Create(aAllocator);
 end;
 
 

@@ -4,6 +4,7 @@ unit np_backend_plan;
 {$UNITPATH ../ir}
 {$UNITPATH ../targets}
 {$UNITPATH ../diagnostics}
+{$UNITPATH ../src}
 {$UNITPATH ../../core/src}
 
 interface

@@ -49,9 +49,9 @@ function FloatToStr(const AValue: Double): string;
 function CurrToStr(const AValue: Currency): string;
 function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string;
 
-{ Bytes helpers (SysUtils-compat for tests / facades) }
-function BytesOf(const AStr: string): TBytes;
-function StringOf(const ABytes: TBytes): string;
+{ Bytes helpers (SysUtils-compat for tests / facades) — single source via bytes.ops }
+function BytesOf(const AStr: string): TBytes; inline;
+function StringOf(const ABytes: TBytes): string; inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; overload;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; overload;
@@ -133,6 +133,7 @@ implementation
 
 uses
   SysUtils,
+  nextpas.core.bytes.ops,
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.base.utils,
@@ -285,18 +286,12 @@ end;
 
 function BytesOf(const AStr: string): TBytes;
 begin
-  Result := nil;
-  SetLength(Result, Length(AStr));
-  if Length(AStr) > 0 then
-    Move(AStr[1], Result[0], Length(AStr));
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
 function StringOf(const ABytes: TBytes): string;
 begin
-  Result := '';
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
 end;
 
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;

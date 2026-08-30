@@ -49,7 +49,8 @@ implementation
 
 uses
   nextpas.core.text.builder,
-  nextpas.core.text.char;
+  nextpas.core.text.char,
+  nextpas.core.text.view;
 
 function Trim(const S: string): string; inline;
 var
@@ -326,8 +327,9 @@ end;
 
 function SplitString(const S, Delimiters: string): TStringArray; inline;
 var
-  I, Start, Count, Fill: Integer;
+  I, LStart, LCount, LCap: Integer;
   DelimSet: array[0..255] of Boolean;
+  LView, LSeg: TStringView;
 begin
   Result := nil;
   if (S = '') or (Delimiters = '') then
@@ -342,40 +344,47 @@ begin
   FillChar(DelimSet, SizeOf(DelimSet), 0);
   for I := 1 to Length(Delimiters) do
     DelimSet[Byte(Delimiters[I])] := True;
-  Count := 0;
-  Start := 1;
-  for I := 1 to Length(S) do
-    if DelimSet[Byte(S[I])] then
+  LView := TStringView.FromStr(S);
+  LCap := 0;
+  LCount := 0;
+  LStart := 0;
+  for I := 0 to Integer(LView.Len) - 1 do
+    if DelimSet[Byte(LView.Data[I])] then
     begin
-      if I > Start then
-        Inc(Count);
-      Start := I + 1;
-    end;
-  if Start <= Length(S) then
-    Inc(Count);
-  SetLength(Result, Count);
-  if Count = 0 then
-    Exit;
-  Fill := 0;
-  Start := 1;
-  for I := 1 to Length(S) do
-    if DelimSet[Byte(S[I])] then
-    begin
-      if I > Start then
+      if I > LStart then
       begin
-        Result[Fill] := System.Copy(S, Start, I - Start);
-        Inc(Fill);
+        if LCount >= LCap then
+        begin
+          if LCap = 0 then LCap := 4 else LCap := LCap * 2;
+          SetLength(Result, LCap);
+        end;
+        LSeg := LView.Slice(SizeUInt(LStart), SizeUInt(I - LStart));
+        Result[LCount] := LSeg.ToString;
+        Inc(LCount);
       end;
-      Start := I + 1;
+      LStart := I + 1;
     end;
-  if Start <= Length(S) then
-    Result[Fill] := System.Copy(S, Start, Length(S) - Start + 1);
+  if SizeUInt(LStart) < LView.Len then
+  begin
+    if LCount >= LCap then
+    begin
+      if LCap = 0 then LCap := 4 else LCap := LCap * 2;
+      SetLength(Result, LCap);
+    end;
+    LSeg := LView.Slice(SizeUInt(LStart), LView.Len - SizeUInt(LStart));
+    Result[LCount] := LSeg.ToString;
+    Inc(LCount);
+  end;
+  if LCount = 0 then
+    Result := nil
+  else
+    SetLength(Result, LCount);
 end;
 
 function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer; inline;
 var
   P: PAnsiChar;
-  N, I: Integer;
+  N: Integer;
 begin
   P := @ABuf;
   if ABufLen > 0 then
@@ -384,8 +393,7 @@ begin
   N := Result;
   if N >= ABufLen then N := ABufLen - 1;
   if N > 0 then
-    for I := 1 to N do
-      P[I-1] := S[I];
+    Move(S[1], P^, N);
 end;
 
 function CStrToStr(const AP: PAnsiChar): string; inline;

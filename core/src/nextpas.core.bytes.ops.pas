@@ -9,6 +9,7 @@ uses
   nextpas.core.base.utils;
 
 function SpanEqual(const A, B: TByteSpan): Boolean;
+function SpanEqualIgnoreCase(const A, B: TByteSpan): Boolean;
 function SpanCompare(const A, B: TByteSpan): Integer;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt;
@@ -25,6 +26,7 @@ function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt)
 function SpanClone(const ASpan: TByteSpan): TBytes;
 
 function BytesEqual(const A, B: TBytes): Boolean; inline;
+function BytesEqualIgnoreCase(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
@@ -42,6 +44,8 @@ implementation
 
 uses
   nextpas.core.simd,
+  nextpas.core.simd.base,
+  nextpas.core.simd.vec,
   nextpas.core.simd.memutils;
 
 function SpanEqual(const A, B: TByteSpan): Boolean;
@@ -51,6 +55,52 @@ begin
   if (A.Len = 0) or (A.Data = B.Data) then
     Exit(True);
   Result := MemEqual(A.Data, B.Data, A.Len);
+end;
+
+function SpanEqualIgnoreCase(const A, B: TByteSpan): Boolean;
+var
+  LPos: SizeUInt;
+  LTmpA, LTmpB: array[0..31] of Byte;
+  I: SizeUInt;
+  LB1, LB2: Byte;
+begin
+  if A.Len <> B.Len then
+    Exit(False);
+  if (A.Len = 0) or (A.Data = B.Data) then
+    Exit(True);
+  if (A.Data = nil) or (B.Data = nil) then
+    Exit(False);
+  LPos := 0;
+  while LPos + VecWidth <= A.Len do
+  begin
+    for I := 0 to VecWidth - 1 do
+    begin
+      LB1 := A.Data[LPos + I];
+      if (LB1 >= 65) and (LB1 <= 90) then
+        LB1 := LB1 or $20;
+      LTmpA[I] := LB1;
+      LB2 := B.Data[LPos + I];
+      if (LB2 >= 65) and (LB2 <= 90) then
+        LB2 := LB2 or $20;
+      LTmpB[I] := LB2;
+    end;
+    if VecCmpEq2(@LTmpA[0], @LTmpB[0]) <> TVecMask(not TVecMask(0)) then
+      Exit(False);
+    Inc(LPos, VecWidth);
+  end;
+  while LPos < A.Len do
+  begin
+    LB1 := A.Data[LPos];
+    if (LB1 >= 65) and (LB1 <= 90) then
+      LB1 := LB1 or $20;
+    LB2 := B.Data[LPos];
+    if (LB2 >= 65) and (LB2 <= 90) then
+      LB2 := LB2 or $20;
+    if LB1 <> LB2 then
+      Exit(False);
+    Inc(LPos);
+  end;
+  Result := True;
 end;
 
 function SpanCompare(const A, B: TByteSpan): Integer;
@@ -181,12 +231,19 @@ end;
 function BytesConcatMany(const AParts: array of TBytes): TBytes; inline;
 var
   I: Integer;
-  LSpans: array of TByteSpan;
+  LTotal, LOff: SizeUInt;
 begin
-  SetLength(LSpans, Length(AParts));
+  LTotal := 0;
   for I := 0 to High(AParts) do
-    LSpans[I] := TByteSpan.FromBytes(AParts[I]);
-  Result := SpanConcatMany(LSpans);
+    Inc(LTotal, SizeUInt(Length(AParts[I])));
+  SetLength(Result, LTotal);
+  LOff := 0;
+  for I := 0 to High(AParts) do
+    if Length(AParts[I]) > 0 then
+    begin
+      Move(AParts[I][0], Result[LOff], Length(AParts[I]));
+      Inc(LOff, SizeUInt(Length(AParts[I])));
+    end;
 end;
 
 { TBytes convenience }
@@ -194,6 +251,11 @@ end;
 function BytesEqual(const A, B: TBytes): Boolean;
 begin
   Result := SpanEqual(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
+end;
+
+function BytesEqualIgnoreCase(const A, B: TBytes): Boolean;
+begin
+  Result := SpanEqualIgnoreCase(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
 function BytesCompare(const A, B: TBytes): Integer;

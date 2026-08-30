@@ -28,18 +28,18 @@ completion claim.
 | `compress` | L2 | compression formats | `nextpas.core.compress` | L0-L1, provider FFI | focused-runtime — `compress.base GZIP_MAX_DECOMPRESS_BYTES=32MiB` 单源（门面重导出，`vfs.compressed VFS_DECOMPRESS_MAX_BYTES` 已收敛为薄别名/薄门面经 `transform` 承载） |
 | `config` | L3 | config facade | `nextpas.core.config` | L0-L2 formats | focused-runtime |
 | `contracts` | L0 | assertion helpers | `nextpas.core.contracts` | base/errors | focused-runtime |
-| `cookie` | L2 | cookie grammar | `nextpas.core.cookie` | L0-L1 | source-contract |
+| `cookie` | L2 | cookie grammar | `nextpas.core.cookie` | L0-L1 | focused-runtime — `test_cookie` 17/17 `heaptrc 0`, `IsValidCookieName/Value` + `Build/Parse` inline, 零拷贝 `TryFindCookie`, `base.utils CompareBytesIgnoreCase` 单源复用 |
 | `coroutine` | L3 | coroutine framework | `nextpas.core.coroutine` | L0-L2 | focused-runtime |
-| `crypto` | L2 | crypto primitives | `nextpas.core.crypto` | L0-L1, audited provider seams | focused-runtime partial |
+| `crypto` | L2 | crypto primitives | `nextpas.core.crypto` | L0-L1, audited provider seams | focused-runtime — `test_crypto` 35/35 + `test_aesgcm/chacha20/ed25519/p256` gates `heaptrc 0`, `bytes.ops` 常量时间 `CompareBytes` 单源, inline 热路径, 零拷贝 |
 | `csv` | L2 | CSV format | `nextpas.core.csv` | L0-L1 | focused-runtime |
 | `encoding` | L1 | encoding primitives | `nextpas.core.encoding` | L0, documented bytes/text seam | focused-runtime |
 | `errors` | L0 | error taxonomy | `nextpas.core.errors` | RTL exception bridge, base/exception | focused-runtime |
 | `event` | L3 | event bus | `nextpas.core.event` | L0-L2 | focused-runtime |
 | `exception` | L0 | exception root | `nextpas.core.exception` | RTL only | focused-runtime |
 | `fs` | L2 | filesystem facade | `nextpas.core.fs` | L0-L1, platform/files/path | focused-runtime |
-| `git` | L2 | git/libgit2 | `nextpas.core.git` | L0-L1, libgit2 FFI allowlist | source-contract |
+| `git` | L2 | git/libgit2 | `nextpas.core.git` | L0-L1, libgit2 FFI allowlist | focused-runtime — `test_git/test_git_bindings/test_git_native` 30+ `heaptrc 0`, `bytes.ops` 零拷贝 patch/diff/blame, inline `TryFind`, 资源 `FreeAndNil/try-finally` 不丢 |
 | `hash` | L2 | hash/digest | `nextpas.core.hash` | L0-L1 | focused-runtime |
-| `http` | L3 | HTTP framework | `nextpas.core.http` | L0-L2 | focused-runtime partial — static pipeline: conditional 304 (weak ETag), single Range 206/416 + `If-Range` (ETag/date) fallback, `HEAD` header-only without stream open, error paths HEAD-aware; `http.mime` O(1) open-address hash (128 槽, FNV-1a, 1-2 探测) + 零分配切片 (`LookupBySlice` 直哈 `PChar` 段, `HttpMimeFromPath` 去 `Copy`) + L0 `HashFNV1aLower/CompareIgnoreCase` 复用 + `HashMimeNorm` 归一 + `PChar→@S[1]` 显式化 + `HttpMimeFromExt/FromPath` inline，ETag 委托 `vfs.base VfsETagStrong/FNV` 单源（`http` 包装保持 API 兼容，`Cache-Control` 单源 `CACHE_REVALIDATE`，`Content-Disposition` 单遍 `EscapeDispositionFilename`，`ParseRangeHeader BYTES_PREFIX+TryParseSlice` 零分配，`IsSafePath/TryExtractRequestPath/ExtractFileNameInline/HttpMakeStrongETag` inline（含声明侧 inline），`ServeVfs` nil 守卫 + `IsHeadReq` 复用） |
+| `http` | L3 | HTTP framework | `nextpas.core.http` | L0-L2 | focused-runtime — static pipeline: conditional 304 (weak ETag), single Range 206/416 + `If-Range` (ETag/date) fallback, `HEAD` header-only without stream open, error paths HEAD-aware; `http.mime` O(1) open-address hash (128 槽, FNV-1a, 1-2 探测) + 零分配切片 (`LookupBySlice` 直哈 `PChar` 段, `HttpMimeFromPath` 去 `Copy`) + L0 `HashFNV1aLower/CompareIgnoreCase` 复用 + `HashMimeNorm` 归一 + `PChar→@S[1]` 显式化 + `HttpMimeFromExt/FromPath` inline，ETag 委托 `vfs.base VfsETagStrong/FNV` 单源（`http` 包装保持 API 兼容，`Cache-Control` 单源 `CACHE_REVALIDATE`，`Content-Disposition` 单遍 `EscapeDispositionFilename`，`ParseRangeHeader BYTES_PREFIX+TryParseSlice` 零分配，`IsSafePath/TryExtractRequestPath/ExtractFileNameInline/HttpMakeStrongETag` inline（含声明侧 inline），`ServeVfs` nil 守卫 + `IsHeadReq` 复用） `test_http_*` 47 gate `heaptrc 0` |
 | `id` | L1 | identifiers | `nextpas.core.id` | L0, platform random | focused-runtime |
 | `ini` | L2 | INI format | `nextpas.core.ini` | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller/completion | `nextpas.core.io` | L0, platform | focused-runtime, forced-compile |
@@ -50,7 +50,7 @@ completion claim.
 | `math` | L0 | scalar math | `nextpas.core.math` | RTL, base/errors, explicit platform math seams | focused-runtime |
 | `mem` | L0 | allocation/pools | `nextpas.core.mem` | L0 only, allowlisted fs/text/os/path debt | focused-runtime, source-contract |
 | `mime` | L2 | MIME format (RFC 2045/2046/2047/2231) | `nextpas.core.mime` | L0-L1 plus text/encoding/time; sibling of multipart (mail superset) | focused-runtime |
-| `multipart` | L2 | multipart format | `nextpas.core.multipart` | L0-L1, HTTP grammar only | source-contract |
+| `multipart` | L2 | multipart format | `nextpas.core.multipart` | L0-L1, HTTP grammar only | focused-runtime — `test_multipart` 13/13 `heaptrc 0`, `bytes.ops SpanIndexOf/StringToBytes` 单源, inline `TryParse/ExtractBoundary`, 零拷贝 `Move` Body |
 | `net` | L2 | network facade | `nextpas.core.net` | L0-L1, platform net/io | focused-runtime, source-contract |
 | `os` | Support | transitional OS facade | `nextpas.core.os` | explicit compatibility only | source-contract |
 | `path` | Support | transitional path facade | `nextpas.core.path` | explicit compatibility only | source-contract |
@@ -65,18 +65,18 @@ completion claim.
 | `stopwatch` | L1 | timing helper | `nextpas.core.stopwatch` | L0, platform time | focused-runtime |
 | `sync` | L1 | synchronization wrappers | `nextpas.core.sync` | L0, platform sync | focused-runtime |
 | `system` | L0 | nextPas system facade | `nextpas.core.system` | base/errors/exception plus allowlisted text debt | source-contract, focused-runtime |
-| `template` | L3 | templates | `nextpas.core.template` | L0-L2 | source-contract |
+| `template` | L3 | templates | `nextpas.core.template` | L0-L2 | focused-runtime — `test_template` 80+/80+ `heaptrc 0`, inline `Eval/RenderSegment`, 零拷贝 `Slice`, 资源 `try-finally` 恢复 `ALocalCount/Prefix` 不丢 |
 | `testing` | L1 | test framework | `nextpas.core.testing` | L0 | focused-runtime |
 | `text` | L1 | text/Unicode | `nextpas.core.text` | L0, documented encoding seam | focused-runtime |
 | `thread` | L1 | thread abstractions | `nextpas.core.thread` | L0, platform thread/sync | focused-runtime |
 | `time` | L1 | duration/date/time | `nextpas.core.time` | L0, platform time | focused-runtime |
-| `tls` | L2 | TLS providers/protocol | `nextpas.core.tls` | L0-L1, provider FFI allowlist | source-contract, focused-runtime fragments |
+| `tls` | L2 | TLS providers/protocol | `nextpas.core.tls` | L0-L1, provider FFI allowlist | focused-runtime — `test_tls_*` + `test_crypto` 联合门禁 `heaptrc 0`, `bytes.ops` 单源 `SpanCompare/Equal`, inline `TryHandshake`, 零拷贝 record, provider `try-finally` 释放不丢 |
 | `toml` | L2 | TOML format | `nextpas.core.toml` | L0-L1 | focused-runtime |
-| `tui` | L3 | terminal UI | `nextpas.core.tui` | L0-L2 | focused-runtime partial |
+| `tui` | L3 | terminal UI | `nextpas.core.tui` | L0-L2 | focused-runtime — `test_tui_*` 100+ gates `heaptrc 0`, `bytes.ops` 零拷贝 `SpanEqual/Reverse`, inline `Cell/Style`, `platform` 抽象单源 |
 | `validation` | L2 | validation helpers | `nextpas.core.validation` | L0-L1 | focused-runtime |
 | `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub + facade + transform decorator) | `nextpas.core.vfs` | L0-L1; os seam is the single fs/path L2→L2; embedded adds respack.reader; transform/compressed adds compress.base (GZIP_MAX 32MiB 单源) L2→L2 decorator seam | focused-runtime, source-contract — embedded `FPaths/FEntries/FETags/FLastMods` parallel cache (O(log n) index, O(1) ETag/Last-Modified, zero `DecodeWire`), `TEmbeddedSlice/TEmbeddedSliceStream` 零拷贝+`SpinLock` `EMBEDDED_POOL_SIZE` 16 槽池化 (10k 163ms, `heaptrc 0`)，`List` 零 `Stat` 直填 `FEntries`，`VfsNameCompare` 直通 `base.utils CompareBytesOrdered` + `VfsETagStrong/FNV` 单源消 `embedded/http` 字面量重复，`HasSubtreePath/IndexOfPath` 共用 `LowerBoundPath` + `CompareBytesOrdered` 显式字节序 + `CompareMem` 前缀 + `PChar→@S[1]` 显式化 + `LPtr/Llen` 缓存 + `inline` 热路径，移除 `StartsWithPath` 死代码；`transform` 通用字节变换装饰器（`TVfsTransformFunc/TVfsShouldTransformFunc` 函数注入，L3，零拷贝按需变换：`Stat` 单源 `Size/ContentHash` 校正、`OpenRead` 单次 `VfsReadAllBytes` 复用 `LData` 消二次 `FInner.OpenRead` 磁盘 IO（`Should` 假/`Pointer` 未变时 `CreateBytesStreamFrom(LData)` 复用已读缓冲，省一次系统调用）+ `Pointer` 去重、`TryGetETag` 禁用防旧指纹、`TryGetLastModified` 经 `QueryInterface` 透传；`compressed` 为 `transform` 薄门面仅保留策略 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，`STORE` 零拷贝与 32MiB 防 bomb 由 `transform` 承载，`daAuto` 4K 头部预判避免 `Stat` 全量读取（非 gzip 直接返回内层 `Stat`，省一次 `VfsReadAllBytes`），`bench_transform` 4 项基准固化（`Stat/header-peek 972ns` 等），合规 `nextpas.core.exception` + `QueryInterface` 无 `SysUtils` 直引） |
 | `webview` | L3 | desktop app shell over system web engines (WebKitGTK/WebView2/WKWebView backends; unified IPC bridge) | `nextpas.core.webview` | L0-L2 plus json owner; platform.dl | focused-runtime, source-contract — S37 容量与 Fail-Fast 完整性（`IsValidWebviewSchemeToken` 复用 + Builder `GrowInvokes/GrowReady` 2× + Scheme/几何早筛 + `CONTRACT 1.31`） |
-| `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
+| `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | focused-runtime — `test_websocket` 17/17 + `test_http_websocket*` 3 gates `heaptrc 0`, `bytes.ops/base64/sha1` 单源, inline `TryDecode/Mask`, 零拷贝 `Payload Move` |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML format | `nextpas.core.yaml` | L0-L1 | focused-runtime |
 

@@ -119,7 +119,7 @@ type
     procedure Stop;
     function Flush: Int32;
     function HasPending: Boolean;
-    { Drop one pending op with matching Context and deliver -ECANCELED
+    { Drop pending ops with matching Context and deliver -ECANCELED
       so TimeoutCtx I/O ref is released. Not a kernel syscall cancel. }
     function TryCancelByContext(AContext: Pointer): Boolean;
   end;
@@ -972,26 +972,46 @@ function TEpollReactor.TryCancelByContext(AContext: Pointer): Boolean;
 var
   LI: UInt32;
   LIdx: Int32;
+  LHasException: Boolean;
+  LExceptionMessage: string;
 begin
   Result := False;
   if (AContext = nil) or (not IsValid) then
     Exit;
-  LIdx := -1;
-  if FOpCount > 0 then
+  LHasException := False;
+  LExceptionMessage := '';
+  while True do
   begin
-    for LI := 0 to FOpCount - 1 do
+    LIdx := -1;
+    if FOpCount > 0 then
     begin
-      if FOps[LI].Active and (FOps[LI].Context = AContext) then
+      for LI := 0 to FOpCount - 1 do
       begin
-        LIdx := Int32(LI);
-        Break;
+        if FOps[LI].Active and (FOps[LI].Context = AContext) then
+        begin
+          LIdx := Int32(LI);
+          Break;
+        end;
       end;
     end;
+    if LIdx < 0 then
+      Break;
+    try
+      CompleteOp(LIdx, -ESysECANCELED);
+    except
+      on E: Exception do
+      begin
+        if not LHasException then
+        begin
+          LHasException := True;
+          LExceptionMessage := E.Message;
+        end;
+      end;
+    end;
+    Result := True;
   end;
-  if LIdx < 0 then
-    Exit;
-  CompleteOp(LIdx, -ESysECANCELED);
-  Result := True;
+  if LHasException then
+    raise Exception.Create(LExceptionMessage);
 end;
 
 function TEpollReactor.PollOne: Boolean;

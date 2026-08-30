@@ -8,4 +8,4 @@
 #
 # Keep -Fucompiler/lower and -Fucore/src here so CI rebuild/verify cannot drift.
 # shellcheck disable=SC2034
-STAGE0_FPC_FLAGS="-Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src"
+STAGE0_FPC_FLAGS="-Fucompiler/src -Ficompiler/src -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src"

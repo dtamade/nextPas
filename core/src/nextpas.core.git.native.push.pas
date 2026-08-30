@@ -80,21 +80,21 @@ end;
 function BuildRequest(const AUpdates: array of TGitPushUpdate; const APack: TBytes): TBytes;
 var I: Integer;
     Line: string;
-    Pkt: TBytes;
+    Parts: array of TBytes;
 begin
-  Result := nil;
+  SetLength(Parts, Length(AUpdates) + 1 + Ord(Length(APack) > 0));
   for I := 0 to High(AUpdates) do
   begin
     Line := GitOidToHex(AUpdates[I].OldOid) + ' ' + GitOidToHex(AUpdates[I].NewOid) + ' ' + AUpdates[I].RefName;
     if I = 0 then
       Line := Line + #0 + 'report-status ofs-delta delete-refs';
     Line := Line + #10;
-    Pkt := GitPktEncodeStr(Line);
-    Result := BytesConcat(Result, Pkt);
+    Parts[I] := GitPktEncodeStr(Line);
   end;
-  Result := BytesConcat(Result, GitPktEncodeFlush);
+  Parts[Length(AUpdates)] := GitPktEncodeFlush;
   if Length(APack) > 0 then
-    Result := BytesConcat(Result, APack);
+    Parts[High(Parts)] := APack;
+  Result := BytesConcatMany(Parts);
 end;
 
 function ParsePushResponse(const AStream: TBytes): Boolean;

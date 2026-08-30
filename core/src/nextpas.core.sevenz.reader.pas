@@ -59,7 +59,6 @@ type
     function LowerBoundSuffix(const ASuffix: string): Integer;
     function LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
     function LowerBoundSuffixIgnoreCase(const ASuffix: string): Integer;
-    function ReverseStr(const S: string): string;
     procedure ParseArchive;
     procedure ParseHeaderBlock(const AHeaderData: TBytes);
     procedure AssembleEntries;
@@ -706,13 +705,6 @@ begin
     if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
   end;
   Result := LLo;
-end;
-
-function TSevenZReaderImpl.ReverseStr(const S: string): string;
-var LI: Integer;
-begin
-  SetLength(Result, Length(S));
-  for LI:=1 to Length(S) do Result[LI] := S[Length(S)-LI+1];
 end;
 
 function CompareReversed(const A, B: string): Integer; inline;
@@ -1922,8 +1914,10 @@ end;
 
 function TSevenZReaderImpl.GetEnumerator: TSevenZEntryEnumerator;
 begin
-  Result.FReader := Self;
-  Result.FIndex := -1;
+  if Length(FEntries) > 0 then
+    Result := SevenZEntryEnumeratorCreate(@FEntries[0], Length(FEntries))
+  else
+    Result := SevenZEntryEnumeratorCreate(nil, 0);
 end;
 
 end.

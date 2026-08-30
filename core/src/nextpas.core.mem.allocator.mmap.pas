@@ -294,12 +294,18 @@ begin
   FLock.Init;
 
   if aReservationSize < HeaderSize + SizeOf(Pointer) then
+  begin
+    FLock.Done;
     raise EAllocError.Create(aeInvalidLayout,
       FormatAllocErrorMsg('TMemoryMapAllocator', 'Create', 'invalid reservation size (' + IntToStr(Int64(aReservationSize)) + ')'));
+  end;
   {$IF SizeOf(SizeUInt) < SizeOf(UInt64)}
   if aReservationSize > High(SizeUInt) then
+  begin
+    FLock.Done;
     raise EAllocError.Create(aeInvalidLayout,
       FormatAllocErrorMsg('TMemoryMapAllocator', 'Create', 'reservation size exceeds addressable range (' + IntToStr(Int64(aReservationSize)) + ')'));
+  end;
   {$ENDIF}
 
   FMap := TMemoryMap.Create;

@@ -21,6 +21,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.bytes,
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.chacha20poly1305,
   nextpas.core.net.quic.varint,
@@ -66,14 +67,12 @@ function TryQuicUnprotectPacket(const APacket: TBytes;
 
 implementation
 
-procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes);
-var
-  LN, LI: Integer;
+procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes); inline;
 begin
-  LN := Length(ABase);
-  SetLength(ABase, LN + Length(ATail));
-  for LI := 0 to Length(ATail) - 1 do
-    ABase[LN + LI] := ATail[LI];
+  if Length(ATail) = 0 then
+    Exit;
+  ABase := nextpas.core.bytes.ops.SpanConcat(TByteSpan.FromBytes(ABase),
+    TByteSpan.FromBytes(ATail));
 end;
 
 procedure NonceOf(const AIv: TBytes; APn: UInt64; out ANonce: TBytes);

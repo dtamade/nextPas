@@ -95,7 +95,7 @@ type
       FFragmentOpen: Boolean;
       FFragmentOpcode: Byte;
       FFragmentSize: UInt64;
-      FFragmentPayload: TBytes;
+      FFragmentParts: array of TBytes;
       FProtocolError: Boolean;
       FTooLarge: Boolean;
       FClosed: Boolean;
@@ -137,7 +137,7 @@ type
 implementation
 
 uses
-  nextpas.core.bytes,
+  nextpas.core.bytes.ops,
   nextpas.core.text.utf8,
   nextpas.core.tls.random;
 
@@ -242,7 +242,7 @@ begin
   FFragmentOpen := False;
   FFragmentOpcode := 0;
   FFragmentSize := 0;
-  FFragmentPayload := nil;
+  FFragmentParts := nil;
   FProtocolError := False;
   FTooLarge := False;
   FClosed := False;
@@ -606,24 +606,26 @@ begin
     FFragmentOpen := True;
     FFragmentOpcode := FOpcode;
     FFragmentSize := FPayloadLen;
-    FFragmentPayload := AFrame.Payload;
+    SetLength(FFragmentParts, 1);
+    FFragmentParts[0] := AFrame.Payload;
     Exit(nwsDecodeFrame);
   end;
 
   if FOpcode = Byte(WS_OPCODE_CONTINUATION) then
   begin
-    FFragmentPayload := BytesConcat(FFragmentPayload, AFrame.Payload);
+    SetLength(FFragmentParts, Length(FFragmentParts) + 1);
+    FFragmentParts[High(FFragmentParts)] := AFrame.Payload;
     Inc(FFragmentSize, FPayloadLen);
     if FFin then
     begin
-      { 终片：归并成全消息（Opcode 还原为起始数据帧） }
+      { 终片：归并成全消息（Opcode 还原为起始数据帧），批量单分配 }
       AFrame.Opcode := FFragmentOpcode;
-      AFrame.Payload := FFragmentPayload;
+      AFrame.Payload := BytesConcatMany(FFragmentParts);
       AFrame.Fin := True;
       FFragmentOpen := False;
       FFragmentOpcode := 0;
       FFragmentSize := 0;
-      FFragmentPayload := nil;
+      FFragmentParts := nil;
       if (AFrame.Opcode = Byte(WS_OPCODE_TEXT)) and
          (not WsIsValidTextPayload(AFrame.Payload)) then
       begin
