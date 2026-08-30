@@ -125,7 +125,7 @@ for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
          test_resample test_mix test_dsp test_device test_graph test_game test_timeline; do
   make -C core/tests/nextpas.core.audio/$g clean test
 done
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 23 文件无 ffi/vendor + 8 GUID + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 26 文件无 ffi/vendor + 11 GUID + 实时纪律
 make hygiene && git diff --check
 ```
 
@@ -148,10 +148,10 @@ make hygiene && git diff --check
 ## 基准
 
 ```bash
-make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s
+make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s -O2, HEAPTRC 关
 ```
 
-现有 `bench_pcm_wav` 覆盖 WAV 编解码热路径；`Timeline/Graph` 的 `FillRealtime` 基准可按 `bench` 框架 `IBenchContext` 单次调用模式扩展，输出 `ns/op` 与 `MB/s`（`-O2`，HEAPTRC 关）。
+`bench_pcm_wav` 8 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs`（`GWrite*` 预分配，`Graph/Timeline` 零分配快照）。
 
 ## 演进与复用
 

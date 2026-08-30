@@ -119,7 +119,12 @@ end;
 
 function TNullAudioDevice.GetPosition: TAudioClock;
 begin
-  Result.Frame := FPosition;
+  FLock.Enter;
+  try
+    Result.Frame := FPosition;
+  finally
+    FLock.Leave;
+  end;
   Result.SampleRate := FFormat.SampleRate;
 end;
 
@@ -204,9 +209,13 @@ begin
   finally
     FLock.Leave;
   end;
-  LNeeded := AFrames * FFormat.BlockAlign;
+  LNeeded := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
+  if LNeeded < 0 then LNeeded := 0;
+  if Int64(LNeeded) > 16*1024*1024 then
+    raise EAudioDeviceError.CreateFmt('Drive: %d bytes exceeds 16MiB limit', [LNeeded]);
   if Length(FScratch) <> LNeeded then
     SetLength(FScratch, LNeeded);
+  // FScratch reuse — zero alloc steady state: LBuf.Data shares backing, no Copy/Move
   LBuf.Data := FScratch;
   LBuf.Format := FFormat;
   LBuf.FrameCount := AFrames;
@@ -214,10 +223,16 @@ begin
     LRet := FSource.FillRealtime(LBuf, AFrames);
   except
     InterlockedExchangeAdd64(FViolations, 1);
-    FillChar(LBuf.Data[0], Length(LBuf.Data), 0);
+    if Length(LBuf.Data) > 0 then
+      FillChar(LBuf.Data[0], Length(LBuf.Data), 0);
     LRet := AFrames;
     PushEvent(devDeviceError, 'FillRealtime raised exception — muted');
-    FPosition := FPosition + UInt64(AFrames);
+    FLock.Enter;
+    try
+      FPosition := FPosition + UInt64(AFrames);
+    finally
+      FLock.Leave;
+    end;
     Exit(AFrames);
   end;
   if LRet < 0 then
@@ -234,7 +249,12 @@ begin
     Result := 0;
     Exit;
   end;
-  FPosition := FPosition + UInt64(AFrames);
+  FLock.Enter;
+  try
+    FPosition := FPosition + UInt64(AFrames);
+  finally
+    FLock.Leave;
+  end;
   if LRet < AFrames then
   begin
     InterlockedExchangeAdd64(FUnderruns, 1);

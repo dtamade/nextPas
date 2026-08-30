@@ -67,6 +67,8 @@ type
   TBiquad = nextpas.core.audio.dsp.filters.TBiquad;
   TCompressor = nextpas.core.audio.dsp.dynamics.TCompressor;
   TSingleArray = nextpas.core.audio.dsp.fft.TSingleArray;
+  TAudioPanGains = nextpas.core.audio.mix.TAudioPanGains;
+  TPointF = nextpas.core.audio.mix.TPointF;
 
   TDeviceState = nextpas.core.audio.device.intf.TDeviceState;
   TDeviceEvent = nextpas.core.audio.device.intf.TDeviceEvent;
@@ -127,7 +129,7 @@ function TryDecodeWhole(ADecoder: IAudioDecoder; const AStream: IStream; out ABu
 function TryDecodeWholeFile(const APath: string; out ABuffer: TAudioBuffer; out ATags: TAudioTags): Boolean; inline;
 function AudioOpenFileStreaming(const APath: string): IAudioSource; inline;
 
-{ ---- resample/mix/dsp forwarding (PR5) ---- }
+{ ---- resample/mix/dsp forwarding ---- }
 
 function AudioResampleLinear(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer; inline;
 function CreateLinearResampler: IAudioResampler; inline;
@@ -138,6 +140,8 @@ procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single); inline;
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single); inline;
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single; inline;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single; inline;
+function PanLawGains(APan: Single): TAudioPanGains; inline; overload;
+function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains; inline; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
 
 function WindowHann(N, I: Integer): Single; inline;
 procedure FFT(var ARe, AIm: array of Single); inline;
@@ -151,11 +155,6 @@ function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const
 function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline; inline;
-
-{ ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
-
-procedure AudioRegisterDecoderPlaceholder; inline;
-procedure AudioRegisterEncoderPlaceholder; inline;
 
 implementation
 
@@ -339,6 +338,12 @@ begin Result := nextpas.core.audio.mix.NormalizePeak(ABuf, ATarget); end;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
 begin Result := nextpas.core.audio.mix.NormalizeRMS(ABuf, ATarget); end;
 
+function PanLawGains(APan: Single): TAudioPanGains;
+begin Result := nextpas.core.audio.mix.PanLawGains(APan); end;
+
+function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains;
+begin Result := nextpas.core.audio.mix.PanLawGains(APan, ALawDB); end;
+
 function WindowHann(N, I: Integer): Single;
 begin Result := nextpas.core.audio.dsp.fft.WindowHann(N, I); end;
 
@@ -371,13 +376,5 @@ begin Result := nextpas.core.audio.game.CreateGameAudioForFormat(AProvider, AFor
 
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
-
-procedure AudioRegisterDecoderPlaceholder;
-begin
-end;
-
-procedure AudioRegisterEncoderPlaceholder;
-begin
-end;
 
 end.
