@@ -75,8 +75,11 @@
 | git.native.bundle | 束（`bundle` v2 创建/校验/列表/落盘，`pack-objects --revs --delta-base-offset` 生成 pack、`SHA-1` 尾校验、`-` 前提与标题、跨 `git bundle verify/list-heads/fetch` 黄金） |
 | git.native.grep | 搜索（`grep` 树内全文检索，`HEAD`/`ref`/`tree` 起点、`-i` 大小写折叠、行号/路径/行文本、二进制跳过、`path:lineNo:line` 排序，对齐 `git grep -n`） |
 | git.native.bisect | 二分（`bisect` 首坏提交定位，`good..bad` 候选经 `revwalk` topo 排除 + 二分回调，对齐 `git bisect` 线性史） |
+| git.factory | TGitBackend + NewGitManager 选择层（唯一跨轨汇聚点，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
+| git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
+| git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
 | git.native | 子家族门面 re-export |
-| git.pas | 门面 re-export |
+| git.pas | 门面 re-export（inline NewGitManager → factory.NewGitManager(gbAuto)，存量零改动） |
 
 ### 1.1.1 native 子家族（2026-08-25 起）
 
@@ -120,6 +123,7 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 
 - 默认消费路径是运行时加载系；静态声明系服务需要完整 ABI 面
   （如绑定生成器、ABI 审计、未来静态链接发行形态）的场景。
+- 选择层默认仍走 libgit2：`nextpas.core.git.factory.NewGitManager(gbAuto)` 首版等价 `gbLibGit2`，存量 `uses nextpas.core.git; NewGitManager;` 零改动；纯路径需显式 `gbNative` 或直连 `native.manager`（见 PURE-BACKEND.md §2-§3 迁移公告）。
 - 两套符号词汇不同（运行时系 C 风格 `git_oid`，静态系 Pascal 风格
   `TGitOid`），**不做名字统一**；任何一侧的增补以各自 gate 为准。
 - 再生成与坑清单见 `bindings-pitfalls.md`。
@@ -147,6 +151,22 @@ IGitCommit = interface
   function Timestamp: TInstant;
 end;
 ```
+
+选择层（`nextpas.core.git.factory`，唯一跨轨汇聚点）：
+
+```pascal
+type
+  TGitBackend = (gbNative, gbLibGit2, gbAuto);
+function NewGitManager(ABackend: TGitBackend = gbAuto): IGitManager;
+```
+
+| 枚举 | 语义 | 首版行为 |
+|------|------|----------|
+| `gbNative` | 创建 `TNativeGitManager`，仅依赖 `native.*`，零 libgit2；未实现方法抛 `EGitError('not implemented for native backend: <Method>')` | 纯路径 |
+| `gbLibGit2` | 创建 `TLibGit2Manager`，经 `platform.dl` 的 `dlopen/dlsym` 运行时加载 `libgit2` | 兼容路径 |
+| `gbAuto` | 策略别名，首版恒等于 `gbLibGit2`，下版本切 `gbNative` 前发迁移公告 | 默认兼容，详见 `PURE-BACKEND.md` §3 |
+
+门面保留无参重载以兼容存量：`nextpas.core.git.NewGitManager` inline 转发 `factory.NewGitManager(gbAuto)`，语义与重构前一致；纯消费显式传 `gbNative` 或直连 `nextpas.core.git.native.manager.TNativeGitManager.Create`。
 
 ### 1.3 核心类型
 
@@ -191,4 +211,11 @@ end;
 
 ## 6. 测试覆盖
 
-- `test_git`: Status/Head/LookupCommit/Init/IsGitRepository
+| 测试集 | 覆盖 |
+|--------|------|
+| `test_git` | Status/Head/LookupCommit/Init/IsGitRepository（libgit2 真库，20 用例） |
+| `test_git_bindings` | 静态声明系 ABI 黄金对照（5 用例，gcc 探针 sizeof/offsetof + 运行时版本实证） |
+| `test_git_native` | native 子家族对象层/refs/status/revwalk 等（零 libgit2） |
+| `test_git_pure_manager` | 纯门面 5 用例，零 libgit2（Init/StatusEmpty/StatusWithFile/HeadAndLookup/FactoryGbAutoCompat，经 `factory.NewGitManager(gbNative)`，C4 门禁：grep 零命中 + `fpc -va Loading libgit2` TODO 占位） |
+
+门禁：`scripts/git-contract-check.sh` C4 已含纯编译产物 TODO 占位（`fpc -va Loading.*libgit2` / `nm -D` 验收）；`build/verify_local.sh` 暂未聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准，Phase 4 仅文档与门禁收敛。
