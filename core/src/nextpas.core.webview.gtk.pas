@@ -120,10 +120,10 @@ type
     procedure DropIdlePendings;
     procedure HandleNativeDestroy;
   protected
-    { IWebviewDispatcher —— Self 双身份实现 }
-    procedure Post(AProc: TWebviewProcRef); overload;
-    procedure Post(AProc: TWebviewProcMethod); overload;
-    procedure Post(AProc: TWebviewProc); overload;
+    { IWebviewDispatcher —— Self 双身份实现 inline 薄转发 }
+    procedure Post(AProc: TWebviewProcRef); overload; inline;
+    procedure Post(AProc: TWebviewProcMethod); overload; inline;
+    procedure Post(AProc: TWebviewProc); overload; inline;
     function IsOnMainThread: Boolean; inline;
 
     { IWebviewWindow }
@@ -207,6 +207,11 @@ var
   GGtkDebugChecked: Boolean = False;
   GGtkDebugEnabled: Boolean = False;
   GSchemeLock: TMutex = nil;
+  { Dispatcher 池化：Slab 复用 PIdleRec / PCompletionMarshal，零每 Post 堆分配 }
+  GIdlePool: array of PIdleRec;
+  GIdlePoolCount: Integer = 0;
+  GCompletionPool: array of PCompletionMarshal;
+  GCompletionPoolCount: Integer = 0;
 
 procedure GrowLiveWindows; inline;
 begin
@@ -218,6 +223,77 @@ procedure GrowSchemeCtxs; inline;
 begin
   if GRegisteredSchemeCtxsCount = Length(GRegisteredSchemeCtxs) then
     SetLength(GRegisteredSchemeCtxs, WebviewGrowCapacity(Length(GRegisteredSchemeCtxs)));
+end;
+
+{ ---- Dispatcher 池化：Slab 复用 ---- }
+function AcquireIdleRec: PIdleRec; inline;
+begin
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GIdlePoolCount > 0 then
+    begin
+      Dec(GIdlePoolCount);
+      Result := GIdlePool[GIdlePoolCount];
+      GIdlePool[GIdlePoolCount] := nil;
+    end
+    else
+      New(Result);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
+end;
+
+procedure ReleaseIdleRec(A: PIdleRec); inline;
+begin
+  if A = nil then Exit;
+  A^.Proc := nil;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GIdlePoolCount = Length(GIdlePool) then
+      SetLength(GIdlePool, WebviewGrowCapacity(Length(GIdlePool)));
+    GIdlePool[GIdlePoolCount] := A;
+    Inc(GIdlePoolCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
+end;
+
+function AcquireCompletionRec: PCompletionMarshal; inline;
+begin
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GCompletionPoolCount > 0 then
+    begin
+      Dec(GCompletionPoolCount);
+      Result := GCompletionPool[GCompletionPoolCount];
+      GCompletionPool[GCompletionPoolCount] := nil;
+    end
+    else
+      New(Result);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
+end;
+
+procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
+begin
+  if A = nil then Exit;
+  A^.Win := nil;
+  A^.FrameId := 0;
+  A^.Cmd := '';
+  A^.IsError := False;
+  A^.ResultJson := '';
+  A^.Code := '';
+  A^.MsgText := '';
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GCompletionPoolCount = Length(GCompletionPool) then
+      SetLength(GCompletionPool, WebviewGrowCapacity(Length(GCompletionPool)));
+    GCompletionPool[GCompletionPoolCount] := A;
+    Inc(GCompletionPoolCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 { 环境门控诊断轨迹（NPW_GTK_DEBUG=1 时写 stderr），默认零开销：
@@ -348,7 +424,7 @@ end;
 
 procedure IdleDestroy(AUserData: Pointer); cdecl;
 begin
-  Dispose(PIdleRec(AUserData));
+  ReleaseIdleRec(PIdleRec(AUserData));
 end;
 
 procedure DestroyCb(AWidget: Pointer; AUserData: Pointer); cdecl;
@@ -563,7 +639,7 @@ end;
 
 procedure CompletionMarshalDestroy(AUserData: Pointer); cdecl;
 begin
-  Dispose(PCompletionMarshal(AUserData));
+  ReleaseCompletionRec(PCompletionMarshal(AUserData));
 end;
 
 { ---- 单元级 eval 结算助手（不依赖 Self，迟到回执安全）---- }
@@ -710,8 +786,8 @@ var
   LRec: PCompletionMarshal;
 begin
   { 只捕获局部值拷贝进 marshal 记录；completion 自身可先于泵释放，
-    窗口存活由 keep-alive 保证 }
-  New(LRec);
+    窗口存活由 keep-alive 保证 — Slab 池化零每 Post 堆分配，G_idle_add_full 保留 }
+  LRec := AcquireCompletionRec;
   LRec^.Win := FWin;
   LRec^.FrameId := FFrameId;
   LRec^.Cmd := FCmd;
@@ -1085,7 +1161,7 @@ var
   LRec: PIdleRec;
   LTag: guint;
 begin
-  New(LRec);
+  LRec := AcquireIdleRec;
   LRec^.Proc := AProc;
   LTag := G_idle_add_full(G_PRIORITY_DEFAULT, @IdleTrampoline, LRec,
     @IdleDestroy);
@@ -1201,14 +1277,14 @@ begin
   FSelfKeepAlive := nil;
 end;
 
-{ ---- dispatcher 身份 ---- }
+{ ---- dispatcher 身份 — inline 薄转发保留接口 ---- }
 
-procedure TGtkWebview.Post(AProc: TWebviewProcRef);
+procedure TGtkWebview.Post(AProc: TWebviewProcRef); inline;
 begin
   PostIdle(AProc);
 end;
 
-procedure TGtkWebview.Post(AProc: TWebviewProcMethod);
+procedure TGtkWebview.Post(AProc: TWebviewProcMethod); inline;
 begin
   PostIdle(
     procedure
@@ -1217,7 +1293,7 @@ begin
     end);
 end;
 
-procedure TGtkWebview.Post(AProc: TWebviewProc);
+procedure TGtkWebview.Post(AProc: TWebviewProc); inline;
 begin
   PostIdle(
     procedure
@@ -1645,6 +1721,18 @@ initialization
   GSchemeLock := TMutex.Create;
 
 finalization
+  while GIdlePoolCount > 0 do
+  begin
+    Dec(GIdlePoolCount);
+    Dispose(GIdlePool[GIdlePoolCount]);
+  end;
+  SetLength(GIdlePool, 0);
+  while GCompletionPoolCount > 0 do
+  begin
+    Dec(GCompletionPoolCount);
+    Dispose(GCompletionPool[GCompletionPoolCount]);
+  end;
+  SetLength(GCompletionPool, 0);
   FreeAndNil(GSchemeLock);
 
 end.

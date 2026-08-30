@@ -101,6 +101,8 @@ procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string)
 { 注入脚本命名空间守卫（S40）：单条脚本不得触 __npw，builder 与 CheckWebviewOptions 同源，零重复。 }
 procedure CheckWebviewInitScript(const AScript: string); inline;
 procedure CheckWebviewEventName(const AEvent: string); inline;
+{ 开发模式 URL 校验（S95）：非空时必须是 http/https 绝对 URL，与 CheckWebviewOptions 同源复用。 }
+procedure CheckWebviewDevServerUrl(const AUrl: string); inline;
 function WebviewGrowCapacity(ACurrent: Integer): Integer; inline;
 
 { 资产路径归一：剥离前导 '/'，空串保持空（S52 复用抽取，bridge TryResolve 与 gtk scheme 回调同源，零重复 Delete 扫描）。 }
@@ -264,6 +266,14 @@ begin
     raise EWebviewInvalidState.Create('webview event name must not be empty');
 end;
 
+procedure CheckWebviewDevServerUrl(const AUrl: string); inline;
+begin
+  if AUrl = '' then Exit;
+  if (Copy(AUrl, 1, 7) = 'http://') or (Copy(AUrl, 1, 8) = 'https://') then Exit;
+  raise EWebviewInvalidState.CreateFmt(
+    'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
+end;
+
 function WebviewGrowCapacity(ACurrent: Integer): Integer; inline;
 begin
   if ACurrent = 0 then
@@ -293,6 +303,8 @@ begin
 
   for LIdx := 0 to High(AOptions.InitScripts) do
     CheckWebviewInitScript(AOptions.InitScripts[LIdx]);
+
+  CheckWebviewDevServerUrl(AOptions.DevServerUrl);
 end;
 
 procedure CheckInvokeCmd(const ACmd: string); inline;
