@@ -299,7 +299,7 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 能力 | 类别 | 触发条件 |
 |------|------|----------|
 | ES Module / import map / VFS 资源加载 | deferred-Mod | 首个需 `import` 的消费方出现 |
-| V8 后端 / QuickJS 纯 Pascal 后端 | deferred-Backend | 性能或零依赖闭环需求出现 |
+| V8 后端 / `js.js888` 后端 | deferred-Backend | 性能或零依赖闭环需求出现 |
 | Promise/async 显式调度扩展 | deferred-Runtime | 真 `await` 消费方出现 |
 | Worker/SharedArrayBuffer | deferred-Thread | 多线程脚本需求出现 |
 | 调试器 Inspector / SourceMap | deferred-Tooling | 诊断需求出现 |

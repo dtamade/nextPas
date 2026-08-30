@@ -60,7 +60,7 @@
 - `DESIGN.md` §3/§11 已补 B2/B3 权衡与批处理 Deferred
 - `ROADMAP.md` M3 已引 B4/B5 为 Deferred 触发参考
 - `CONTRACT.md` §9 已保留 `platform.dl` 唯一 loader 纪律（与 game888 静链对偶）
-- 本文档为借鉴审计唯一事实源，后续 `pure/V8` 触发时复审
+- 本文档为借鉴审计唯一事实源，后续 `js.js888/V8` 触发时复审
 
 ---
 

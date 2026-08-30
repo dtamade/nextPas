@@ -79,12 +79,12 @@
 ```
 M0 (文档)
  └─→ M1 (base/intf/fake) ─→ M2 (ffi/loader/quickjs) ─→ M3 (联动/基准)
-                              └─→ M4 (pure/V8, 条件)
+                              └─→ M4 (js.js888/V8, 条件)
                                             └─→ M5 (1.0 冻结)
 ```
 
 - 外部依赖：`json`（M1）、`platform.dl`（M2）、`webview`（M3）
-- 内部依赖：`base(后端无关) ← intf(不透明) ← {fake, ffi←loader←quickjs, pure(零ffi)} ← 门面`（CONTRACT §1；纯后端与 fake 同约束，`js.intf` 零改动）
+- 内部依赖：`base(后端无关) ← intf(不透明) ← {fake, ffi←loader←quickjs, js.js888(零ffi)} ← 门面`（CONTRACT §1；纯后端与 fake 同约束，`js.intf` 零改动）
 
 ---
 
@@ -103,7 +103,7 @@ M0 (文档)
 
 | 风险 | 概率 | 影响 | 缓解 | 触发 |
 |------|------|------|------|------|
-| QuickJS 上游停更 | 中 | 高 | `QuickJS-NG` 同 ABI 探测 + `pure` 兜底 | M2 探测失败 |
+| QuickJS 上游停更 | 中 | 高 | `QuickJS-NG` 同 ABI 探测 + `js.js888` 兜底 | M2 探测失败 |
 | `TJsValue` 悬垂误用 | 高 | 中 | `IsValid`/`TryAs*` + TESTING 悬垂矩阵 | M1 测试 |
 | 宿主闭包循环引用 | 中 | 中 | 弱引用文档 + 审查清单 | M1/M3 |
 | `libquickjs` 多版本差异 | 高 | 低 | 三名探测 + 矩阵测试 | M2 |
@@ -118,6 +118,7 @@ M0 (文档)
 | 0.3 | M0 前 | 骨架 |
 | 0.4 | M0 冻结 | 12 份文档生产级 |
 | 0.5 | M1 | 假后端可用 |
+| 0.8 | M4 | `js.js888` 零摩擦落地（`jsbkJs888` 尾部，`js.intf` 零改动） |
 | 0.9 | M2–M3 | 真链路+联动 |
 | 1.0 | M5 | 生产级冻结（semver，见 CONTRACT §13） |
 
