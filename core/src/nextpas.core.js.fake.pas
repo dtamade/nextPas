@@ -149,10 +149,10 @@ begin
   FRuntime := ARuntime;
   FOptions := AOptions;
   FClosed := False;
-  FThreadId := platform_thread_id;
+  FThreadId := UInt64(platform_thread_self);
 end;
 
-function TJsFakeContext.FindHost(const AName: string): Integer;
+function TJsFakeContext.FindHost(const AName: string): Integer; inline;
 var
   I: Integer;
 begin
@@ -162,18 +162,18 @@ begin
   Result := -1;
 end;
 
-function TJsFakeContext.IsOnCreationThread: Boolean;
+function TJsFakeContext.IsOnCreationThread: Boolean; inline;
 begin
-  Result := platform_thread_id = FThreadId;
+  Result := UInt64(platform_thread_self) = FThreadId;
 end;
 
-procedure TJsFakeContext.EnsureNotClosed;
+procedure TJsFakeContext.EnsureNotClosed; inline;
 begin
   if FClosed then
     raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkFake);
 end;
 
-procedure TJsFakeContext.EnsureThreadAffinity;
+procedure TJsFakeContext.EnsureThreadAffinity; inline;
 begin
   if not IsOnCreationThread then
     raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkFake);
@@ -200,32 +200,50 @@ begin
   Result := True;
 end;
 
+
+function IsTrimEq_Fake(const S, Lit: string): Boolean; inline;
+var I,J,K: Integer;
+begin
+  I:=1; J:=Length(S);
+  while (I<=J) and (S[I] in [' ',#9,#10,#13]) do Inc(I);
+  while (J>=I) and (S[J] in [' ',#9,#10,#13]) do Dec(J);
+  if (J-I+1)<>Length(Lit) then Exit(False);
+  for K:=1 to Length(Lit) do if S[I+K-1]<>Lit[K] then Exit(False);
+  Result:=True;
+end;
+
 function TJsFakeContext.DoEval(const ACode: string): TJsValue;
 var
   LCode: string;
   LIdx, LHostIdx: Integer;
   LName, LArg: string;
-  LArgs: array of TJsValue;
+  LSingle: array[0..0] of TJsValue;
+  LNoArgs: array of TJsValue;
   LHandler: TJsHostFunction;
   LMethod: TJsHostMethod;
   LProc: TJsHostProc;
   LThis: TJsValue;
+  LHasArg: Boolean;
 begin
-  LCode := TextTrim(ACode);
-  if LCode = '' then
+  LNoArgs:=nil;
+  if IsTrimEq_Fake(ACode,'') then
     raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkFake);
-  if (Pos('while(true)', LCode) > 0) and (FOptions.TimeoutMs > 0) then
+  if (Pos('while(true)', ACode) > 0) and (FOptions.TimeoutMs > 0) then
     raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', jsbkFake);
   if (FOptions.MemoryLimit > 0) and (FOptions.MemoryLimit < 1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkFake);
-  if LCode = '1+2' then
-    Exit(JsIntValue(3));
-  if (Pos('JSON.stringify', LCode) > 0) and (Pos('x', LCode) > 0) then
-    Exit(JsStringValue('{"x":1}'));
-  if LCode = 'bad(' then
+  if IsTrimEq_Fake(ACode,'1+2') then Exit(JsIntValue(3));
+  if IsTrimEq_Fake(ACode,'bad(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', jsbkFake);
-  if LCode = 'foo(' then
+  if IsTrimEq_Fake(ACode,'foo(') then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', jsbkFake);
+  if (Pos('JSON.stringify', ACode) > 0) and (Pos('x', ACode) > 0) then
+    Exit(JsStringValue('{"x":1}'));
+  if IsTrimEq_Fake(ACode,'null') then Exit(JsNullValue);
+  if IsTrimEq_Fake(ACode,'undefined') then Exit(JsUndefinedValue);
+  if IsTrimEq_Fake(ACode,'true') then Exit(JsBoolValue(True));
+  if IsTrimEq_Fake(ACode,'false') then Exit(JsBoolValue(False));
+  LCode := TextTrim(ACode);
   LIdx := Pos('(', LCode);
   if LIdx > 0 then
   begin
@@ -237,19 +255,15 @@ begin
       if (Length(LArg) >= 2) and ((LArg[1] = '"') or (LArg[1] = '''')) then
         LArg := Copy(LArg, 2, Length(LArg) - 2);
       if LArg = ')' then LArg := '';
-      SetLength(LArgs, 0);
-      if LArg <> '' then
-      begin
-        SetLength(LArgs, 1);
-        LArgs[0] := JsStringValue(LArg);
-      end;
+      LHasArg := LArg <> '';
+      if LHasArg then LSingle[0] := JsStringValue(LArg);
       LThis := Global;
       case FHostFuncs[LHostIdx].Kind of
         0:
         begin
           LHandler := FHostFuncs[LHostIdx].Func;
           try
-            Result := LHandler(Self, LThis, LArgs);
+            if LHasArg then Result := LHandler(Self, LThis, LSingle) else Result := LHandler(Self, LThis, LNoArgs);
           except
             on E: EJsError do raise;
             on E: ENextPasError do
@@ -263,7 +277,7 @@ begin
         begin
           LMethod := FHostFuncs[LHostIdx].Method;
           try
-            Result := LMethod(Self, LThis, LArgs);
+            if LHasArg then Result := LMethod(Self, LThis, LSingle) else Result := LMethod(Self, LThis, LNoArgs);
           except
             on E: EJsError do raise;
             on E: ENextPasError do
@@ -277,7 +291,7 @@ begin
         begin
           LProc := FHostFuncs[LHostIdx].Proc;
           try
-            Result := LProc(Self, LThis, LArgs);
+            if LHasArg then Result := LProc(Self, LThis, LSingle) else Result := LProc(Self, LThis, LNoArgs);
           except
             on E: EJsError do raise;
             on E: ENextPasError do
@@ -290,10 +304,6 @@ begin
       end;
     end;
   end;
-  if LCode = 'null' then Exit(JsNullValue);
-  if LCode = 'undefined' then Exit(JsUndefinedValue);
-  if LCode = 'true' then Exit(JsBoolValue(True));
-  if LCode = 'false' then Exit(JsBoolValue(False));
   Result := JsStringValue(LCode);
 end;
 

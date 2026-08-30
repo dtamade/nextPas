@@ -138,7 +138,7 @@ begin
   FRuntime := ARuntime;
   FOptions := AOptions;
   FClosed := False;
-  FThreadId := platform_thread_id;
+  FThreadId := UInt64(platform_thread_self);
   FDeadlineMs := 0;
   if not JsQuickJsLoad then
     raise EJsBackendUnavailable.Create('QuickJS not loaded', jecUnknown, 'Error', '', jsbkQuickJs);
@@ -166,10 +166,10 @@ begin
   inherited;
 end;
 
-function TJsQuickJsContext.FindHost(const AName: string): Integer; var I: Integer; begin for I:=0 to High(FHostFuncs) do if FHostFuncs[I].Name=AName then Exit(I); Result:=-1; end;
-function TJsQuickJsContext.IsOnCreationThread: Boolean; begin Result := platform_thread_id = FThreadId; end;
-procedure TJsQuickJsContext.EnsureNotClosed; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkQuickJs); end;
-procedure TJsQuickJsContext.EnsureThreadAffinity; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkQuickJs); end;
+function TJsQuickJsContext.FindHost(const AName: string): Integer; inline; var I: Integer; begin for I:=0 to High(FHostFuncs) do if FHostFuncs[I].Name=AName then Exit(I); Result:=-1; end;
+function TJsQuickJsContext.IsOnCreationThread: Boolean; inline; begin Result := UInt64(platform_thread_self) = FThreadId; end;
+procedure TJsQuickJsContext.EnsureNotClosed; inline; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkQuickJs); end;
+procedure TJsQuickJsContext.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkQuickJs); end;
 function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; var I: Integer; C: Char;
 begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if AName[1]='.' then Exit; if AName[Length(AName)]='.' then Exit;
   for I:=1 to Length(AName) do begin C:=AName[I]; if C='.' then Continue;

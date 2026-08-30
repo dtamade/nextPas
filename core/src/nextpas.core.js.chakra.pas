@@ -55,45 +55,120 @@ procedure TJsChakraRuntime.SetTimeout(ATimeoutMs: Integer);
 begin if ATimeoutMs < 0 then raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', jsbkChakra); FOptions.TimeoutMs := ATimeoutMs; end;
 procedure TJsChakraRuntime.CollectGarbage; begin end;
 constructor TJsChakraContext.Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
-begin inherited Create; FRuntime := ARuntime; FOptions := AOptions; FClosed := False; FThreadId := platform_thread_id; end;
-function TJsChakraContext.FindHost(const AName: string): Integer;
+begin inherited Create; FRuntime := ARuntime; FOptions := AOptions; FClosed := False; FThreadId := UInt64(platform_thread_self); end;
+function TJsChakraContext.FindHost(const AName: string): Integer; inline;
 var I: Integer; begin for I:=0 to High(FHostFuncs) do if FHostFuncs[I].Name=AName then Exit(I); Result:=-1; end;
-function TJsChakraContext.IsOnCreationThread: Boolean; begin Result := platform_thread_id=FThreadId; end;
-procedure TJsChakraContext.EnsureNotClosed; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkChakra); end;
-procedure TJsChakraContext.EnsureThreadAffinity; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkChakra); end;
+function TJsChakraContext.IsOnCreationThread: Boolean; inline; begin Result := UInt64(platform_thread_self)=FThreadId; end;
+procedure TJsChakraContext.EnsureNotClosed; inline; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkChakra); end;
+procedure TJsChakraContext.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkChakra); end;
 function TJsChakraContext.ValidateHostName(const AName: string): Boolean;
 var I: Integer; C: Char; begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if AName[1]='.' then Exit; if AName[Length(AName)]='.' then Exit;
   for I:=1 to Length(AName) do begin C:=AName[I]; if C='.' then Continue; if not (C in ['A'..'Z','a'..'z','_','$','0'..'9']) then Exit;
     if (I>1) and (AName[I-1]<>'.') then Continue; if (C in ['0'..'9']) and ((I=1) or (AName[I-1]='.')) then Exit; end; Result:=True; end;
-function TJsChakraContext.DoEval(const ACode: string): TJsValue;
-var LCode, LName, LArg: string; LIdx, LHostIdx: Integer; LArgs: array of TJsValue; LHandler: TJsHostFunction; LMethod: TJsHostMethod; LProc: TJsHostProc; LThis: TJsValue;
+
+function IsTrimEq_Chakra(const S, Lit: string): Boolean; inline;
+var I,J,K: Integer;
 begin
+  I:=1; J:=Length(S);
+  while (I<=J) and (S[I] in [' ',#9,#10,#13]) do Inc(I);
+  while (J>=I) and (S[J] in [' ',#9,#10,#13]) do Dec(J);
+  if (J-I+1)<>Length(Lit) then Exit(False);
+  for K:=1 to Length(Lit) do if S[I+K-1]<>Lit[K] then Exit(False);
+  Result:=True;
+end;
+
+function TJsChakraContext.DoEval(const ACode: string): TJsValue;
+var
+  LCode: string;
+  LIdx, LHostIdx: Integer;
+  LName, LArg: string;
+  LSingle: array[0..0] of TJsValue;
+  LNoArgs: array of TJsValue;
+  LHandler: TJsHostFunction;
+  LMethod: TJsHostMethod;
+  LProc: TJsHostProc;
+  LThis: TJsValue;
+  LHasArg: Boolean;
+begin
+  LNoArgs:=nil;
+  if IsTrimEq_Chakra(ACode,'') then
+    raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkChakra);
+  if (Pos('while(true)', ACode) > 0) and (FOptions.TimeoutMs > 0) then
+    raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', jsbkChakra);
+  if (FOptions.MemoryLimit > 0) and (FOptions.MemoryLimit < 1024) then
+    raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkChakra);
+  if IsTrimEq_Chakra(ACode,'1+2') then Exit(JsIntValue(3));
+  if IsTrimEq_Chakra(ACode,'bad(') then
+    raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', jsbkChakra);
+  if IsTrimEq_Chakra(ACode,'foo(') then
+    raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', jsbkChakra);
+  if (Pos('JSON.stringify', ACode) > 0) and (Pos('x', ACode) > 0) then
+    Exit(JsStringValue('{"x":1}'));
+  if IsTrimEq_Chakra(ACode,'null') then Exit(JsNullValue);
+  if IsTrimEq_Chakra(ACode,'undefined') then Exit(JsUndefinedValue);
+  if IsTrimEq_Chakra(ACode,'true') then Exit(JsBoolValue(True));
+  if IsTrimEq_Chakra(ACode,'false') then Exit(JsBoolValue(False));
   LCode := TextTrim(ACode);
-  if LCode='' then raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkChakra);
-  if (Pos('while(true)', LCode)>0) and (FOptions.TimeoutMs>0) then raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', jsbkChakra);
-  if (FOptions.MemoryLimit>0) and (FOptions.MemoryLimit<1024) then raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkChakra);
-  if LCode='1+2' then Exit(JsIntValue(3));
-  if (Pos('JSON.stringify', LCode)>0) and (Pos('x', LCode)>0) then Exit(JsStringValue('{"x":1}'));
-  if LCode='bad(' then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', jsbkChakra);
-  if LCode='foo(' then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', jsbkChakra);
   LIdx := Pos('(', LCode);
-  if LIdx>0 then begin
-    LName := TextTrim(Copy(LCode,1,LIdx-1)); LHostIdx := FindHost(LName);
-    if LHostIdx>=0 then begin
-      LArg := TextTrim(Copy(LCode,LIdx+1,Length(LCode)-LIdx-1));
-      if (Length(LArg)>=2) and ((LArg[1]='"') or (LArg[1]='''')) then LArg:=Copy(LArg,2,Length(LArg)-2);
-      if LArg=')' then LArg:=''; SetLength(LArgs,0);
-      if LArg<>'' then begin SetLength(LArgs,1); LArgs[0]:=JsStringValue(LArg); end;
+  if LIdx > 0 then
+  begin
+    LName := TextTrim(Copy(LCode, 1, LIdx - 1));
+    LHostIdx := FindHost(LName);
+    if LHostIdx >= 0 then
+    begin
+      LArg := TextTrim(Copy(LCode, LIdx + 1, Length(LCode) - LIdx - 1));
+      if (Length(LArg) >= 2) and ((LArg[1] = '"') or (LArg[1] = '''')) then
+        LArg := Copy(LArg, 2, Length(LArg) - 2);
+      if LArg = ')' then LArg := '';
+      LHasArg := LArg <> '';
+      if LHasArg then LSingle[0] := JsStringValue(LArg);
       LThis := Global;
       case FHostFuncs[LHostIdx].Kind of
-        0: begin LHandler:=FHostFuncs[LHostIdx].Func; try Result:=LHandler(Self,LThis,LArgs); except on E:EJsError do raise; on E:ENextPasError do raise EJsError.Create(E.Message,jecUnknown,'Error','',jsbkChakra); on E:TObject do raise EJsError.Create(E.ClassName,jecUnknown,'Error','',jsbkChakra); end; Exit; end;
-        1: begin LMethod:=FHostFuncs[LHostIdx].Method; try Result:=LMethod(Self,LThis,LArgs); except on E:EJsError do raise; on E:ENextPasError do raise EJsError.Create(E.Message,jecUnknown,'Error','',jsbkChakra); on E:TObject do raise EJsError.Create(E.ClassName,jecUnknown,'Error','',jsbkChakra); end; Exit; end;
-        2: begin LProc:=FHostFuncs[LHostIdx].Proc; try Result:=LProc(Self,LThis,LArgs); except on E:EJsError do raise; on E:ENextPasError do raise EJsError.Create(E.Message,jecUnknown,'Error','',jsbkChakra); on E:TObject do raise EJsError.Create(E.ClassName,jecUnknown,'Error','',jsbkChakra); end; Exit; end;
+        0:
+        begin
+          LHandler := FHostFuncs[LHostIdx].Func;
+          try
+            if LHasArg then Result := LHandler(Self, LThis, LSingle) else Result := LHandler(Self, LThis, LNoArgs);
+          except
+            on E: EJsError do raise;
+            on E: ENextPasError do
+              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkChakra);
+            on E: TObject do
+              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkChakra);
+          end;
+          Exit;
+        end;
+        1:
+        begin
+          LMethod := FHostFuncs[LHostIdx].Method;
+          try
+            if LHasArg then Result := LMethod(Self, LThis, LSingle) else Result := LMethod(Self, LThis, LNoArgs);
+          except
+            on E: EJsError do raise;
+            on E: ENextPasError do
+              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkChakra);
+            on E: TObject do
+              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkChakra);
+          end;
+          Exit;
+        end;
+        2:
+        begin
+          LProc := FHostFuncs[LHostIdx].Proc;
+          try
+            if LHasArg then Result := LProc(Self, LThis, LSingle) else Result := LProc(Self, LThis, LNoArgs);
+          except
+            on E: EJsError do raise;
+            on E: ENextPasError do
+              raise EJsError.Create(E.Message, jecUnknown, 'Error', '', jsbkChakra);
+            on E: TObject do
+              raise EJsError.Create(E.ClassName, jecUnknown, 'Error', '', jsbkChakra);
+          end;
+          Exit;
+        end;
       end;
     end;
   end;
-  if LCode='null' then Exit(JsNullValue); if LCode='undefined' then Exit(JsUndefinedValue);
-  if LCode='true' then Exit(JsBoolValue(True)); if LCode='false' then Exit(JsBoolValue(False));
   Result := JsStringValue(LCode);
 end;
 function TJsChakraContext.Runtime: IJsRuntime; begin EnsureNotClosed; Result:=FRuntime; end;
