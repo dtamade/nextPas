@@ -69,10 +69,7 @@ implementation
 
 procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes); inline;
 begin
-  if Length(ATail) = 0 then
-    Exit;
-  ABase := nextpas.core.bytes.ops.SpanConcat(TByteSpan.FromBytes(ABase),
-    TByteSpan.FromBytes(ATail));
+  nextpas.core.bytes.ops.BytesAppend(ABase, ATail);
 end;
 
 procedure NonceOf(const AIv: TBytes; APn: UInt64; out ANonce: TBytes);

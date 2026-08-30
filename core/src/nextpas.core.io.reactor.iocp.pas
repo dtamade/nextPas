@@ -395,7 +395,9 @@ begin
           begin
             LHasException := True;
             LExceptionMessage := E.Message;
-          end;
+          end
+          else
+            LExceptionMessage := LExceptionMessage + LineEnding + E.Message;
         end;
       end;
     finally
@@ -607,8 +609,6 @@ begin
   LPort := FPort;
   if LPort <> 0 then
     PostQueuedCompletionStatus(HANDLE(LPort), 0, 0, nil);
-  FPort := 0;
-  FMaxEvents := 0;
   try
     if atomic_load(FPendingCount, mo_acquire) > 0 then
     begin
@@ -617,6 +617,8 @@ begin
     end;
     IocpReleasePendingOps(Self, ERROR_OPERATION_ABORTED);
   finally
+    FPort := 0;
+    FMaxEvents := 0;
     if LPort <> 0 then
       CloseHandle(HANDLE(LPort));
   end;

@@ -44,10 +44,10 @@ function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
 function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 
 {== Encoding — byte<->string conversions ==}
-function UTF8BytesToString(const AData: TBytes): string;
-function StringToUTF8Bytes(const AStr: string): TBytes;
-function ASCIIBytesToString(const AData: TBytes): string;
-function StringToASCIIBytes(const AStr: string): TBytes;
+function UTF8BytesToString(const AData: TBytes): string; inline;
+function StringToUTF8Bytes(const AStr: string): TBytes; inline;
+function ASCIIBytesToString(const AData: TBytes): string; inline;
+function StringToASCIIBytes(const AStr: string): TBytes; inline;
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
 function SameText(const A, B: string): Boolean; inline;
@@ -66,6 +66,7 @@ function AnsiPtrToStr(const AStr: PAnsiChar): string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   { ASCII SameText only — do not pull text.compare (unicode.casefold/normalize). }
   nextpas.core.text.char,
@@ -363,46 +364,24 @@ end;
 
 {== Encoding — byte<->string conversions ==}
 
-function UTF8BytesToString(const AData: TBytes): string;
-var
-  LUTF8: RawByteString;
+function UTF8BytesToString(const AData: TBytes): string; inline;
 begin
-  Result := '';
-  if Length(AData) = 0 then
-    Exit;
-  SetLength(LUTF8, Length(AData));
-  Move(AData[0], LUTF8[1], Length(AData));
-  SetCodePage(LUTF8, CP_UTF8, False);
-  Result := string(UTF8String(LUTF8));
+  Result := nextpas.core.bytes.ops.BytesToString(AData);
 end;
 
-function StringToUTF8Bytes(const AStr: string): TBytes;
-var
-  LUTF8: UTF8String;
-  LLen: SizeInt;
+function StringToUTF8Bytes(const AStr: string): TBytes; inline;
 begin
-  Result := nil;
-  LUTF8 := UTF8String(AStr);
-  LLen := Length(LUTF8);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(LUTF8[1], Result[0], LLen);
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
-function ASCIIBytesToString(const AData: TBytes): string;
+function ASCIIBytesToString(const AData: TBytes): string; inline;
 begin
-  Result := '';
-  SetLength(Result, Length(AData));
-  if Length(AData) > 0 then
-    Move(AData[0], Result[1], Length(AData));
+  Result := nextpas.core.bytes.ops.BytesToString(AData);
 end;
 
-function StringToASCIIBytes(const AStr: string): TBytes;
+function StringToASCIIBytes(const AStr: string): TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(AStr));
-  if Length(AStr) > 0 then
-    Move(AStr[1], Result[0], Length(AStr));
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;

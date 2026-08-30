@@ -16,6 +16,7 @@ interface
 uses
   nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.time.stopwatch,
   nextpas.core.ssh.base,
@@ -144,9 +145,12 @@ function EofPayload(ARemoteId: UInt32): TBytes;
 function ClosePayload(ARemoteId: UInt32): TBytes;
 function ChannelReplyPayload(ARemoteId: UInt32; AOk: Boolean): TBytes;
 function GlobalReplyPayload(AOk: Boolean): TBytes;
-procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes);
+procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes); inline;
 
 implementation
+
+uses
+  nextpas.core.base.utils;
 
 procedure TraceStr(const ALine: string);
 begin
@@ -190,15 +194,9 @@ var
 
 { ---- 载荷构造 ---- }
 
-procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes);
-var
-  LOld: SizeUInt;
+procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes); inline;
 begin
-  if Length(ASrc) = 0 then
-    Exit;
-  LOld := SizeUInt(Length(ADst));
-  SetLength(ADst, LOld + SizeUInt(Length(ASrc)));
-  Move(ASrc[0], ADst[LOld], SizeUInt(Length(ASrc)));
+  BytesAppend(ADst, ASrc);
 end;
 
 function SingleIdPayload(AMsg: Byte; ARemoteId: UInt32): TBytes;
@@ -576,6 +574,11 @@ begin
     Inc(LGiveBack, SizeUInt(FInitWindow) - FOurWindow);
     FOurWindow := FInitWindow;
   end;
+  while LGiveBack > High(UInt32) do
+  begin
+    SendWindowAdjust(High(UInt32));
+    Dec(LGiveBack, High(UInt32));
+  end;
   if LGiveBack > 0 then
     SendWindowAdjust(UInt32(LGiveBack));
 end;
@@ -616,6 +619,8 @@ function TSshChannel.PumpFiltered: TBytes;
 var
   LR: TsshReader;
   LRid: UInt32;
+  LAdd: UInt32;
+  LNew: SizeUInt;
 begin
   while True do
   begin
@@ -647,7 +652,10 @@ begin
       try
         LR.ReadByte;
         LR.ReadUInt32;
-        FPeerWindow := FPeerWindow + LR.ReadUInt32;
+        LAdd := LR.ReadUInt32;
+        if not TryAddSizeUInt(FPeerWindow, SizeUInt(LAdd), LNew) then
+          raise ESSHError.Create(sekProtocol, 'ssh channel: peer window overflow');
+        FPeerWindow := LNew;
       finally
         LR.Free;
       end;

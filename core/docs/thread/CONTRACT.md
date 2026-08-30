@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.thread*.pas`（8 个源文件）
 **层级**：L1（依赖 L0: base, sync）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-18
+**版本**：1.1
 
 ---
 
@@ -111,3 +111,4 @@ function CancellationSource: ICancellationSource;
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-08-18 | 1.1 | 补充 ThreadPool(AWorkerCount) 使用建议（44 核实测：小池 4-8 优于 0(=44)） | Claude |

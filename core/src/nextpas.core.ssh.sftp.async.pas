@@ -57,6 +57,7 @@ function SshAsyncSftpViaJump(const ALoop: TAsyncLoop; const AJumpOpts, ATargetOp
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.crypto.random;
 
@@ -191,13 +192,9 @@ procedure Runner_SftpOnSent(AErr: ESSHError; AContext: Pointer); forward;
 
 { Helpers }
 
-procedure AppendChunkAsync(var ADst: TBytes; const ASrc: TBytes);
-var LOld: SizeUInt;
+procedure AppendChunkAsync(var ADst: TBytes; const ASrc: TBytes); inline;
 begin
-  if Length(ASrc)=0 then Exit;
-  LOld := SizeUInt(Length(ADst));
-  SetLength(ADst, LOld + SizeUInt(Length(ASrc)));
-  Move(ASrc[0], ADst[LOld], SizeUInt(Length(ASrc)));
+  nextpas.core.bytes.ops.BytesAppend(ADst, ASrc);
 end;
 
 function SftpStatusName(ACode: UInt32): string;
@@ -309,7 +306,12 @@ end;
 procedure TAsyncSftpChannel.Start;
 begin
   if FTransport=nil then begin Fail(ESSHError.Create(sekProtocol,'sftp async: nil transport')); Exit; end;
-  if not FDeadline.IsInfinite then FTimer := FLoop.ScheduleAt(FDeadline, @Runner_SftpOnTimeout, Self);
+  if not FDeadline.IsInfinite then
+    try
+      FTimer := FLoop.ScheduleAt(FDeadline, @Runner_SftpOnTimeout, Self);
+    except
+      on E: Exception do begin Fail(ESSHError.Create(sekIO, 'sftp async: schedule failed: '+E.Message)); Exit; end;
+    end;
   SendOpen;
 end;
 
@@ -622,10 +624,15 @@ begin
   FPendingCtx:=AContext;
   // op timeout reuse deadline interval if finite else infinite
   if not FDeadline.IsInfinite then
-  begin
+  try
     // per-op: reuse original timeout as upper bound
     FOpDeadline:=FDeadline; // still absolute - may be too short for long ops but ok
     FOpTimer:=FLoop.ScheduleAt(FOpDeadline, @Runner_SftpOnOpTimeout, Self);
+  except
+    FBusy:=False;
+    SetLength(FPendingAccept,0);
+    FPendingRawCb:=nil; FPendingCtx:=nil;
+    raise;
   end;
   LW:=TsshWriter.Create(5+Length(APayload));
   try LW.PutByte(AType); LW.PutUInt32(LId); LW.PutRaw(APayload); LInner:=LW.ToBytes; finally LW.Free; end;
@@ -711,8 +718,14 @@ begin
   if not Assigned(ACallback) then Exit(False);
   LW:=TsshWriter.Create(64);
   try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
-  New(P); P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
-  Result:=FChannel.SftpRoundTripAsync(SSH_FXP_REALPATH, LTail, [SSH_FXP_NAME], @SftpDispatchRealPath, P);
+  New(P);
+  try
+    P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
+    Result:=FChannel.SftpRoundTripAsync(SSH_FXP_REALPATH, LTail, [SSH_FXP_NAME], @SftpDispatchRealPath, P);
+  except
+    Dispose(P);
+    raise;
+  end;
   if not Result then Dispose(P);
 end;
 
@@ -723,8 +736,14 @@ begin
   if not Assigned(ACallback) then Exit(False);
   LW:=TsshWriter.Create(64);
   try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
-  New(P); P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
-  Result:=FChannel.SftpRoundTripAsync(SSH_FXP_STAT, LTail, [SSH_FXP_ATTRS, SSH_FXP_STATUS], @SftpDispatchStat, P);
+  New(P);
+  try
+    P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
+    Result:=FChannel.SftpRoundTripAsync(SSH_FXP_STAT, LTail, [SSH_FXP_ATTRS, SSH_FXP_STATUS], @SftpDispatchStat, P);
+  except
+    Dispose(P);
+    raise;
+  end;
   if not Result then Dispose(P);
 end;
 
@@ -735,8 +754,14 @@ begin
   if not Assigned(ACallback) then Exit(False);
   LW:=TsshWriter.Create(64);
   try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
-  New(P); P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
-  Result:=FChannel.SftpRoundTripAsync(SSH_FXP_LSTAT, LTail, [SSH_FXP_ATTRS, SSH_FXP_STATUS], @SftpDispatchStat, P);
+  New(P);
+  try
+    P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext;
+    Result:=FChannel.SftpRoundTripAsync(SSH_FXP_LSTAT, LTail, [SSH_FXP_ATTRS, SSH_FXP_STATUS], @SftpDispatchStat, P);
+  except
+    Dispose(P);
+    raise;
+  end;
   if not Result then Dispose(P);
 end;
 
@@ -790,8 +815,14 @@ begin
   if not Assigned(ACallback) then Exit(False);
   LW:=TsshWriter.Create(64);
   try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
-  New(P); P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
-  Result:=FChannel.SftpRoundTripAsync(SSH_FXP_REMOVE, LTail, [SSH_FXP_STATUS], @SftpDispatchVoid, P);
+  New(P);
+  try
+    P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
+    Result:=FChannel.SftpRoundTripAsync(SSH_FXP_REMOVE, LTail, [SSH_FXP_STATUS], @SftpDispatchVoid, P);
+  except
+    Dispose(P);
+    raise;
+  end;
   if not Result then Dispose(P);
 end;
 
@@ -802,8 +833,14 @@ begin
   if not Assigned(ACallback) then Exit(False);
   LW:=TsshWriter.Create(80);
   try LW.PutStringText(APath); PutAttrs(LW, Default(TSftpAttrs)); LTail:=LW.ToBytes; finally LW.Free; end;
-  New(P); P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
-  Result:=FChannel.SftpRoundTripAsync(SSH_FXP_MKDIR, LTail, [SSH_FXP_STATUS], @SftpDispatchVoid, P);
+  New(P);
+  try
+    P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
+    Result:=FChannel.SftpRoundTripAsync(SSH_FXP_MKDIR, LTail, [SSH_FXP_STATUS], @SftpDispatchVoid, P);
+  except
+    Dispose(P);
+    raise;
+  end;
   if not Result then Dispose(P);
 end;
 
@@ -814,8 +851,14 @@ begin
   if not Assigned(ACallback) then Exit(False);
   LW:=TsshWriter.Create(64);
   try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
-  New(P); P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
-  Result:=FChannel.SftpRoundTripAsync(SSH_FXP_RMDIR, LTail, [SSH_FXP_STATUS], @SftpDispatchVoid, P);
+  New(P);
+  try
+    P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=APath;
+    Result:=FChannel.SftpRoundTripAsync(SSH_FXP_RMDIR, LTail, [SSH_FXP_STATUS], @SftpDispatchVoid, P);
+  except
+    Dispose(P);
+    raise;
+  end;
   if not Result then Dispose(P);
 end;
 
@@ -826,8 +869,14 @@ begin
   if not Assigned(ACallback) then Exit(False);
   LW:=TsshWriter.Create(128);
   try LW.PutStringText(AOldPath); LW.PutStringText(ANewPath); LTail:=LW.ToBytes; finally LW.Free; end;
-  New(P); P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=AOldPath+' -> '+ANewPath;
-  Result:=FChannel.SftpRoundTripAsync(SSH_FXP_RENAME, LTail, [SSH_FXP_STATUS], @SftpDispatchVoid, P);
+  New(P);
+  try
+    P^.Fs:=Self; P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Path:=AOldPath+' -> '+ANewPath;
+    Result:=FChannel.SftpRoundTripAsync(SSH_FXP_RENAME, LTail, [SSH_FXP_STATUS], @SftpDispatchVoid, P);
+  except
+    Dispose(P);
+    raise;
+  end;
   if not Result then Dispose(P);
 end;
 
@@ -1073,7 +1122,12 @@ begin
       Ch:=TAsyncSftpChannel.Create(P^.Loop, P^.Session, P^.TimeoutMs, P^.Callback, P^.Context)
     else
       Ch:=TAsyncSftpChannel.Create(P^.Loop, P^.Transport, P^.TimeoutMs, P^.Callback, P^.Context);
-    Ch.Start;
+    try
+      Ch.Start;
+    except
+      Ch.Free;
+      raise;
+    end;
   finally
     P^.Session := nil;
     Dispose(P);
@@ -1097,13 +1151,13 @@ begin
   if (ASession=nil) or not Assigned(ACallback) then Exit;
   if (ASession.Loop=nil) or (ASession.Transport=nil) then begin ACallback(nil, ESSHError.Create(sekIO,'sftp async: session not connected'), AContext); Exit(False); end;
   New(P);
-  P^.Loop:=ASession.Loop;
-  P^.Session:=ASession;
-  P^.Transport:=ASession.Transport;
-  P^.TimeoutMs:=5000;
-  P^.Callback:=ACallback;
-  P^.Context:=AContext;
   try
+    P^.Loop:=ASession.Loop;
+    P^.Session:=ASession;
+    P^.Transport:=ASession.Transport;
+    P^.TimeoutMs:=5000;
+    P^.Callback:=ACallback;
+    P^.Context:=AContext;
     P^.Loop.PostEx(@SftpOpenPostCb, P, @SftpOpenPostDiscard);
     Result:=True;
   except
@@ -1119,13 +1173,13 @@ var P: PSftpOpenPost;
 begin
   if (ALoop=nil) or (ATransport=nil) or not Assigned(ACallback) then Exit(False);
   New(P);
-  P^.Loop:=ALoop;
-  P^.Session:=nil;
-  P^.Transport:=ATransport;
-  P^.TimeoutMs:=ATimeoutMs;
-  P^.Callback:=ACallback;
-  P^.Context:=AContext;
   try
+    P^.Loop:=ALoop;
+    P^.Session:=nil;
+    P^.Transport:=ATransport;
+    P^.TimeoutMs:=ATimeoutMs;
+    P^.Callback:=ACallback;
+    P^.Context:=AContext;
     ALoop.PostEx(@SftpOpenPostCb, P, @SftpOpenPostDiscard);
     Result:=True;
   except
@@ -1164,17 +1218,30 @@ begin
   C:=PSftpViaOnCtx(AContext);
   if AErr<>nil then begin Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C); if Assigned(Cb) then Cb(nil, AErr, U) else AErr.Free; Exit; end;
   if ASession=nil then begin Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: nil session'), U); Exit; end;
-  New(P); P^.UserCb:=C^.UserCb; P^.UserCtx:=C^.UserCtx; Dispose(C);
-  if not SshAsyncOpenSftp(ASession, @SftpViaOn_SftpOpened, P) then
-  begin Cb:=P^.UserCb; U:=P^.UserCtx; Dispose(P); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: open submit failed'), U); ASession.Close; end;
+  New(P);
+  try
+    P^.UserCb:=C^.UserCb; P^.UserCtx:=C^.UserCtx; Dispose(C); C:=nil;
+    if not SshAsyncOpenSftp(ASession, @SftpViaOn_SftpOpened, P) then
+    begin Cb:=P^.UserCb; U:=P^.UserCtx; Dispose(P); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: open submit failed'), U); ASession.Close; end;
+  except
+    if C<>nil then Dispose(C);
+    Dispose(P);
+    raise;
+  end;
 end;
 
 function SshAsyncSftpViaJumpOn(const ALoop: TAsyncLoop; const AJumpSession: ISshAsyncSession; const ATargetOpts: TSshConnectOptions; ACallback: TProcSftpOpenAsync; AContext: Pointer): Boolean;
 var C: PSftpViaOnCtx;
 begin
   if (ALoop=nil) or (AJumpSession=nil) or not Assigned(ACallback) then Exit(False);
-  New(C); C^.UserCb:=ACallback; C^.UserCtx:=AContext;
-  Result:=SshAsyncConnectViaJumpOn(ALoop, AJumpSession, ATargetOpts, @SftpViaOn_Connected, C);
+  New(C);
+  try
+    C^.UserCb:=ACallback; C^.UserCtx:=AContext;
+    Result:=SshAsyncConnectViaJumpOn(ALoop, AJumpSession, ATargetOpts, @SftpViaOn_Connected, C);
+  except
+    Dispose(C);
+    raise;
+  end;
   if not Result then Dispose(C);
 end;
 
@@ -1191,17 +1258,30 @@ begin
   C:=PSftpViaJumpCtx(AContext);
   if AErr<>nil then begin Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C); if Assigned(Cb) then Cb(nil, AErr, U) else AErr.Free; Exit; end;
   if ASession=nil then begin Cb:=C^.UserCb; U:=C^.UserCtx; Dispose(C); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: nil session'), U); Exit; end;
-  New(P); P^.UserCb:=C^.UserCb; P^.UserCtx:=C^.UserCtx; Dispose(C);
-  Ok:=SshAsyncOpenSftp(ASession, @SftpViaJump_SftpOpened, P);
-  if not Ok then begin Cb:=P^.UserCb; U:=P^.UserCtx; Dispose(P); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: open submit failed'), U); ASession.Close; end;
+  New(P);
+  try
+    P^.UserCb:=C^.UserCb; P^.UserCtx:=C^.UserCtx; Dispose(C); C:=nil;
+    Ok:=SshAsyncOpenSftp(ASession, @SftpViaJump_SftpOpened, P);
+    if not Ok then begin Cb:=P^.UserCb; U:=P^.UserCtx; Dispose(P); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp via jump: open submit failed'), U); ASession.Close; end;
+  except
+    if C<>nil then Dispose(C);
+    Dispose(P);
+    raise;
+  end;
 end;
 
 function SshAsyncSftpViaJump(const ALoop: TAsyncLoop; const AJumpOpts, ATargetOpts: TSshConnectOptions; ACallback: TProcSftpOpenAsync; AContext: Pointer): Boolean;
 var C: PSftpViaJumpCtx;
 begin
   if (ALoop=nil) or not Assigned(ACallback) then Exit(False);
-  New(C); C^.Loop:=ALoop; C^.TargetOpts:=ATargetOpts; C^.UserCb:=ACallback; C^.UserCtx:=AContext;
-  Result:=SshAsyncConnectViaJump(ALoop, AJumpOpts, ATargetOpts, @SftpViaJump_Connected, C);
+  New(C);
+  try
+    C^.Loop:=ALoop; C^.TargetOpts:=ATargetOpts; C^.UserCb:=ACallback; C^.UserCtx:=AContext;
+    Result:=SshAsyncConnectViaJump(ALoop, AJumpOpts, ATargetOpts, @SftpViaJump_Connected, C);
+  except
+    Dispose(C);
+    raise;
+  end;
   if not Result then Dispose(C);
 end;
 

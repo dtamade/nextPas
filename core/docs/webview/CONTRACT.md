@@ -441,9 +441,9 @@ end;
 ```
 
 - 前缀路由语义（S4 钉死，bridge 门禁回归覆盖）：
-  最长前缀唯一命中，同长并列取先挂；空前缀 = 根挂载匹配一切
-  （FPC `Pos('',s)` 返回 0，路由显式豁免）；请求路径归一为剥离前导
-  `/` 的相对形态，provider 收到同一形态；前缀命中但 provider 返回
+  最长前缀唯一命中，同长并列取先挂；空前缀 = 根挂载匹配一切非空请求
+  （FPC `Pos('',s)` 返回 0，路由显式豁免仅对非空 `LPath` 生效）；请求路径归一为剥离前导
+  `/` 的相对形态（`base.NormalizeWebviewAssetPath` 单源 inline 零拷贝：剥离前导 '/'，空串保持空），provider 收到同一形态；归一后空路径（`''`/`'/'`/`'///'`→`''`）直接 404，不进入前缀匹配——即使存在空前缀根挂载亦不命中（`TWebviewAssetsImpl.TryResolve` `LPath=''`→`False`、`TVfsAssetProvider.TryResolve` 空→`False` 同源闭环，404 正常业务路径不抛异常）；前缀命中但 provider 返回
   False 即 404，不跨挂载回退（命名空间硬隔离）。
 - MIME 表内置 ~30 条常见映射，未命中回退 `application/octet-stream`。
 - scheme 名默认 `npres`；URL 形态 `npres://<mount>/<path>`。
@@ -542,9 +542,9 @@ procedure WebviewExitLoop;
 
 | 门禁 | 载体 | 要求 |
 |------|------|------|
-| 契约测试（CI 必跑） | `tests/nextpas.core.webview/test_*`，全走 fake | base 校验（含 Ephemeral/DataDirectory 互斥）、bridge 编解码 round-trip/坏帧/pending 生命周期、fake 全接口行为矩阵（窗口状态机/zoom/UA/scale 事件）、factory 选择逻辑、INV-7 exactly-one 性质 |
+| 契约测试（CI 必跑） | `tests/nextpas.core.webview/test_*`（含 `test_webview_grow`、`test_webview_webview2_post`），全走 fake/桩 | base 校验（含 Ephemeral/DataDirectory 互斥）、`WebviewGrowCapacity(0→4→2×)` 单源 inline 容量语义与 Count 精确性（`test_webview_grow` 4 用例：容量表/序列/移除/零界，heaptrc 0）、bridge 编解码 round-trip/坏帧/pending 生命周期、fake 全接口行为矩阵（窗口状态机/zoom/UA/scale 事件）、factory 选择逻辑、WebView2 Post/UA/DataDirectory（`test_webview_webview2_post` 4 用例：`Win32ShellPost` 原语 Linux 桩同步/Win 隐藏窗口异步回退、Post 三形态、UA 本地缓存、DataDirectory 透传，loader 不可用时 SKIP 诚实）、INV-7 exactly-one 性质 |
 | source-contract | `tests/architecture/source_contracts/` 扩展 | INV-4/INV-5 静态扫描；`*.ffi` 无逻辑检查 |
-| 运行时冒烟（本地/Linux CI） | `test_webview_gtk_runtime` | 探测到 libwebkit2gtk 才跑；Xvfb 下建窗→NavigateToString→eval round-trip→invoke round-trip→zoom/UA 读写→close 幂等；未探测到输出 SKIP 并以 `NEXTPAS_WEBVIEW_GTK_REQUIRED=1` 强制 |
+| 运行时冒烟（本地/Linux CI） | `test_webview_gtk_backend` | 探测到 libwebkit2gtk 才跑；Xvfb 下建窗→NavigateToString→eval round-trip→invoke round-trip→zoom/UA 读写→close 幂等；未探测到输出 SKIP 并以 `NEXTPAS_WEBVIEW_GTK_REQUIRED=1` 强制 |
 | compile-only | 非 Linux host | gtk/webview2 单元参与语法级编译门禁（不链接） |
 | benchmark | `benchmarks/nextpas.core.webview/bench_bridge` | 帧编码/解码 ns/op、dispatcher Post 往返延迟（nextpas.core.bench 框架，禁自定义计时） |
 

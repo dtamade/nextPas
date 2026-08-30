@@ -42,27 +42,16 @@ function StringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
-uses
-  nextpas.core.simd,
-  nextpas.core.simd.base,
-  nextpas.core.simd.vec,
-  nextpas.core.simd.memutils;
-
 function SpanEqual(const A, B: TByteSpan): Boolean;
 begin
   if A.Len <> B.Len then
     Exit(False);
   if (A.Len = 0) or (A.Data = B.Data) then
     Exit(True);
-  Result := MemEqual(A.Data, B.Data, A.Len);
+  Result := CompareMem(A.Data, B.Data, A.Len);
 end;
 
 function SpanEqualIgnoreCase(const A, B: TByteSpan): Boolean;
-var
-  LPos: SizeUInt;
-  LTmpA, LTmpB: array[0..31] of Byte;
-  I: SizeUInt;
-  LB1, LB2: Byte;
 begin
   if A.Len <> B.Len then
     Exit(False);
@@ -70,85 +59,47 @@ begin
     Exit(True);
   if (A.Data = nil) or (B.Data = nil) then
     Exit(False);
-  LPos := 0;
-  while LPos + VecWidth <= A.Len do
-  begin
-    for I := 0 to VecWidth - 1 do
-    begin
-      LB1 := A.Data[LPos + I];
-      if (LB1 >= 65) and (LB1 <= 90) then
-        LB1 := LB1 or $20;
-      LTmpA[I] := LB1;
-      LB2 := B.Data[LPos + I];
-      if (LB2 >= 65) and (LB2 <= 90) then
-        LB2 := LB2 or $20;
-      LTmpB[I] := LB2;
-    end;
-    if VecCmpEq2(@LTmpA[0], @LTmpB[0]) <> TVecMask(not TVecMask(0)) then
-      Exit(False);
-    Inc(LPos, VecWidth);
-  end;
-  while LPos < A.Len do
-  begin
-    LB1 := A.Data[LPos];
-    if (LB1 >= 65) and (LB1 <= 90) then
-      LB1 := LB1 or $20;
-    LB2 := B.Data[LPos];
-    if (LB2 >= 65) and (LB2 <= 90) then
-      LB2 := LB2 or $20;
-    if LB1 <> LB2 then
-      Exit(False);
-    Inc(LPos);
-  end;
-  Result := True;
+  Result := CompareBytesIgnoreCase(A.Data, B.Data, A.Len, B.Len) = 0;
 end;
 
 function SpanCompare(const A, B: TByteSpan): Integer;
-var
-  LMin: SizeUInt;
-  LCmp: Integer;
 begin
-  if A.Len < B.Len then
-    LMin := A.Len
-  else
-    LMin := B.Len;
-  if LMin > 0 then
-  begin
-    LCmp := SimdMemCompare(A.Data, B.Data, LMin);
-    if LCmp <> 0 then
-      Exit(LCmp);
-  end;
-  if A.Len < B.Len then
-    Result := -1
-  else if A.Len > B.Len then
-    Result := 1
-  else
-    Result := 0;
+  Result := CompareBytesOrdered(A.Data, B.Data, A.Len, B.Len);
 end;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt;
 var
-  LResult: PtrInt;
+  I: SizeUInt;
 begin
   if AHaystack.Len = 0 then
     Exit(-1);
-  LResult := MemFindByte(AHaystack.Data, AHaystack.Len, ANeedle);
-  Result := SizeInt(LResult);
+  if AHaystack.Data = nil then
+    Exit(-1);
+  for I := 0 to AHaystack.Len - 1 do
+    if AHaystack.Data[I] = ANeedle then
+      Exit(SizeInt(I));
+  Result := -1;
 end;
 
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 var
-  LResult: PtrInt;
+  I: SizeUInt;
+  LMax: SizeUInt;
 begin
   if ANeedle.Len = 0 then
     Exit(0);
   if ANeedle.Len > AHaystack.Len then
     Exit(-1);
-  LResult := nextpas.core.simd.BytesIndexOf(AHaystack.Data, AHaystack.Len, ANeedle.Data, ANeedle.Len);
-  Result := SizeInt(LResult);
+  if (AHaystack.Data = nil) or (ANeedle.Data = nil) then
+    Exit(-1);
+  LMax := AHaystack.Len - ANeedle.Len;
+  for I := 0 to LMax do
+    if (AHaystack.Data[I] = ANeedle.Data[0]) and CompareMem(@AHaystack.Data[I], ANeedle.Data, ANeedle.Len) then
+      Exit(SizeInt(I));
+  Result := -1;
 end;
 
-function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean;
+function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 begin
   Result := SpanIndexOf(AHaystack, ANeedle) >= 0;
 end;
@@ -159,7 +110,7 @@ begin
     Exit(True);
   if APrefix.Len > AData.Len then
     Exit(False);
-  Result := MemEqual(AData.Data, APrefix.Data, APrefix.Len);
+  Result := CompareMem(AData.Data, APrefix.Data, APrefix.Len);
 end;
 
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
@@ -168,19 +119,37 @@ begin
     Exit(True);
   if ASuffix.Len > AData.Len then
     Exit(False);
-  Result := MemEqual(AData.Data + (AData.Len - ASuffix.Len), ASuffix.Data, ASuffix.Len);
+  Result := CompareMem(AData.Data + (AData.Len - ASuffix.Len), ASuffix.Data, ASuffix.Len);
 end;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 begin
-  if ASpan.Len > 0 then
-    MemSet(ASpan.Data, ASpan.Len, AValue);
+  if ASpan.Len = 0 then
+    Exit;
+  if ASpan.Data = nil then
+    raise EArgumentNil.Create('SpanFill: data is nil');
+  FillChar(ASpan.Data^, ASpan.Len, AValue);
 end;
 
 procedure SpanReverse(const ASpan: TByteSpan);
+var
+  LLo, LHi: SizeUInt;
+  LTmp: Byte;
 begin
-  if ASpan.Len > 1 then
-    MemReverse(ASpan.Data, ASpan.Len);
+  if ASpan.Len <= 1 then
+    Exit;
+  if ASpan.Data = nil then
+    raise EArgumentNil.Create('SpanReverse: data is nil');
+  LLo := 0;
+  LHi := ASpan.Len - 1;
+  while LLo < LHi do
+  begin
+    LTmp := ASpan.Data[LLo];
+    ASpan.Data[LLo] := ASpan.Data[LHi];
+    ASpan.Data[LHi] := LTmp;
+    Inc(LLo);
+    Dec(LHi);
+  end;
 end;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;
@@ -248,27 +217,27 @@ end;
 
 { TBytes convenience }
 
-function BytesEqual(const A, B: TBytes): Boolean;
+function BytesEqual(const A, B: TBytes): Boolean; inline;
 begin
   Result := SpanEqual(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
-function BytesEqualIgnoreCase(const A, B: TBytes): Boolean;
+function BytesEqualIgnoreCase(const A, B: TBytes): Boolean; inline;
 begin
   Result := SpanEqualIgnoreCase(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
-function BytesCompare(const A, B: TBytes): Integer;
+function BytesCompare(const A, B: TBytes): Integer; inline;
 begin
   Result := SpanCompare(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
-function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt;
+function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 begin
   Result := SpanIndexOf(TByteSpan.FromBytes(AData), ANeedle);
 end;
 
-function BytesConcat(const A, B: TBytes): TBytes;
+function BytesConcat(const A, B: TBytes): TBytes; inline;
 begin
   Result := SpanConcat(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
@@ -293,12 +262,12 @@ begin
   Move(ASrc^, ADest[LOldLen], ASrcLen);
 end;
 
-function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
+function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 begin
   Result := SpanStartsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(APrefix));
 end;
 
-function BytesEndsWith(const AData, ASuffix: TBytes): Boolean;
+function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;

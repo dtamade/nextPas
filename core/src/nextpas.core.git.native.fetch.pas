@@ -59,6 +59,9 @@ var
   Payload: TBytes;
   Parts: array of TBytes;
   PartCount: Integer;
+  DataParts: array of TBytes;
+  DataPartCount: Integer;
+  ProgressCount, ErrorCount, RawCount: Integer;
 begin
   if Length(AWants) = 0 then
     raise EGitError.Create('fetch: want list empty');
@@ -106,6 +109,15 @@ begin
   Demuxed.Errors := nil;
   Demuxed.Raw := nil;
   HasPack := False;
+  { 响应侧与请求侧一致：收集 DataParts 再 BytesConcatMany 一次分配，消除循环内 SetLength+Move O(n²) }
+  SetLength(DataParts, Length(Pkts));
+  DataPartCount := 0;
+  SetLength(Demuxed.Progress, Length(Pkts));
+  ProgressCount := 0;
+  SetLength(Demuxed.Errors, Length(Pkts));
+  ErrorCount := 0;
+  SetLength(Demuxed.Raw, Length(Pkts));
+  RawCount := 0;
   for I := 0 to High(Pkts) do
   begin
     Pkt := Pkts[I];
@@ -126,33 +138,37 @@ begin
       case Kind of
         gsbData:
           begin
-            SetLength(Demuxed.DataBytes, Length(Demuxed.DataBytes) + Length(Payload));
-            if Length(Payload) > 0 then
-              Move(Payload[0], Demuxed.DataBytes[Length(Demuxed.DataBytes) - Length(Payload)], Length(Payload));
-            SetLength(Demuxed.Raw, Length(Demuxed.Raw) + 1);
-            Demuxed.Raw[High(Demuxed.Raw)].Kind := Kind;
-            Demuxed.Raw[High(Demuxed.Raw)].Data := Payload;
+            DataParts[DataPartCount] := Payload;
+            Inc(DataPartCount);
+            Demuxed.Raw[RawCount].Kind := Kind;
+            Demuxed.Raw[RawCount].Data := Payload;
+            Inc(RawCount);
             HasPack := True;
           end;
         gsbProgress:
           begin
-            SetLength(Demuxed.Progress, Length(Demuxed.Progress) + 1);
-            Demuxed.Progress[High(Demuxed.Progress)] := GitBytesToString(Payload);
-            SetLength(Demuxed.Raw, Length(Demuxed.Raw) + 1);
-            Demuxed.Raw[High(Demuxed.Raw)].Kind := Kind;
-            Demuxed.Raw[High(Demuxed.Raw)].Data := Payload;
+            Demuxed.Progress[ProgressCount] := GitBytesToString(Payload);
+            Inc(ProgressCount);
+            Demuxed.Raw[RawCount].Kind := Kind;
+            Demuxed.Raw[RawCount].Data := Payload;
+            Inc(RawCount);
           end;
         gsbError:
           begin
-            SetLength(Demuxed.Errors, Length(Demuxed.Errors) + 1);
-            Demuxed.Errors[High(Demuxed.Errors)] := GitBytesToString(Payload);
-            SetLength(Demuxed.Raw, Length(Demuxed.Raw) + 1);
-            Demuxed.Raw[High(Demuxed.Raw)].Kind := Kind;
-            Demuxed.Raw[High(Demuxed.Raw)].Data := Payload;
+            Demuxed.Errors[ErrorCount] := GitBytesToString(Payload);
+            Inc(ErrorCount);
+            Demuxed.Raw[RawCount].Kind := Kind;
+            Demuxed.Raw[RawCount].Data := Payload;
+            Inc(RawCount);
           end;
       end;
     end;
   end;
+  SetLength(DataParts, DataPartCount);
+  Demuxed.DataBytes := BytesConcatMany(DataParts);
+  SetLength(Demuxed.Progress, ProgressCount);
+  SetLength(Demuxed.Errors, ErrorCount);
+  SetLength(Demuxed.Raw, RawCount);
   if not HasPack then
   begin
     Result := nil;

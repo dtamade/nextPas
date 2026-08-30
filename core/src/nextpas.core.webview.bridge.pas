@@ -33,6 +33,7 @@ const
   NPW_CODE_HANDLER_ERROR = 'npw.handler_error';
   NPW_CODE_BAD_REQUEST = 'npw.bad_request';
   NPW_CODE_CLOSED = 'npw.closed';
+  NPW_CODE_TIMEOUT = 'npw.timeout';
   NPW_CODE_EVAL_FAILED = 'npw.eval_failed';
 
   { JS 分配帧 id 的上界：u53 安全整数（Number.MAX_SAFE_INTEGER） }
@@ -110,8 +111,10 @@ type
 
   {** 嵌入式资产存储唯一实现：prefix 前缀路由到 provider 链，最长前缀
       优先；TryResolve 未命中返回 False（404 正常业务路径）。
-      MountDirectory 需要文件系统 owner 支撑，W1 显式不支持（抛
-      ENotSupportedError），落位时由 fs owner 接管实现。 *}
+      MountDirectory 需要文件系统 owner 支撑，W1 显式不支持抛
+      ENotSupportedError(ecNotSupported)（CONTRACT §3.4，门禁
+      test_webview_bridge 断言异常分类/消息可观测），落位时由 fs owner
+      接管实现。契约可观测性：异常类/分类/消息文本为稳定契约。 *}
   TWebviewAssetsImpl = class(TInterfacedObject, IWebviewAssets)
   private type
     TMount = record
@@ -127,6 +130,8 @@ type
     constructor Create(AInert: Boolean = False);
     procedure MountEmbedded(const APrefix: string;
       AProvider: IWebviewAssetProvider);
+    { CONTRACT §3.4：非惰性下抛 ENotSupportedError(ecNotSupported)，
+      消息含 'directory asset mounts are not supported yet' }
     procedure MountDirectory(const APrefix, ARootDir: string);
     function TryResolve(const ASchemeRelativePath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
@@ -485,8 +490,10 @@ end;
 
 procedure TWebviewAssetsImpl.MountDirectory(const APrefix, ARootDir: string);
 begin
-  { 文件系统支撑归 fs owner；W1 显式不支持（CONTRACT §3.4 同 fake 立场）。
-    开发模式同样 no-op 语义优先于不支持错误——保持两模式观感一致 }
+  { CONTRACT §3.4：文件系统支撑归 fs owner，W1 显式不支持抛
+    ENotSupportedError(ecNotSupported)，消息稳定可断言；门禁
+    test_webview_bridge 覆盖 FInert/非惰性双路径与 Category 校验。
+    开发模式 no-op 优先于不支持错误——保持两模式观感一致，无资源泄漏。 }
   if FInert then
     Exit;
   raise ENotSupportedError.Create('directory asset mounts are not supported yet');

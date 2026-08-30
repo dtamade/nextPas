@@ -41,36 +41,37 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.compress,
-  nextpas.core.checksum.crc32;
+  nextpas.core.checksum.crc32,
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.binary;
 
 const
   PNG_SIGNATURE: array[0..7] of Byte = (
     $89, $50, $4E, $47, $0D, $0A, $1A, $0A);
 
-procedure PutBe32(ADst: PByte; AValue: LongWord);
+procedure PutBe32(ADst: PByte; AValue: LongWord); inline;
 begin
-  ADst[0] := Byte(AValue shr 24);
-  ADst[1] := Byte(AValue shr 16);
-  ADst[2] := Byte(AValue shr 8);
-  ADst[3] := Byte(AValue);
+  nextpas.core.bytes.binary.WriteUInt32BE(ADst, AValue);
 end;
 
-{ 追加 chunk: 长度(4 BE) + 类型(4 ASCII) + 数据 + CRC32(类型+数据) }
+{ 追加 chunk: 长度(4 BE) + 类型(4 ASCII) + 数据 + CRC32(类型+数据) — 单源 via bytes.ops/bytes.binary }
 procedure AppendChunk(var ADst: TBytes; const AType: AnsiString;
-  const AData: PByte; ADataLen: SizeUInt);
+  const AData: PByte; ADataLen: SizeUInt); inline;
 var
-  Base: SizeUInt;
+  LLenBE: array[0..3] of Byte;
+  LCrcBE: array[0..3] of Byte;
   Crc: LongWord;
 begin
-  Base := Length(ADst);
-  SetLength(ADst, Base + 12 + ADataLen);
-  PutBe32(@ADst[Base], LongWord(ADataLen));
-  Move(AType[1], ADst[Base + 4], 4);
-  if ADataLen > 0 then
-    Move(AData^, ADst[Base + 8], ADataLen);
-  Crc := Crc32Update(0, @ADst[Base + 4], 4);
-  Crc := Crc32Update(Crc, AData, ADataLen);
-  PutBe32(@ADst[Base + 8 + ADataLen], Crc);
+  nextpas.core.bytes.binary.WriteUInt32BE(@LLenBE[0], LongWord(ADataLen));
+  nextpas.core.bytes.ops.BytesAppend(ADst, @LLenBE[0], 4);
+  nextpas.core.bytes.ops.BytesAppend(ADst, PByte(@AType[1]), 4);
+  if (AData <> nil) and (ADataLen > 0) then
+    nextpas.core.bytes.ops.BytesAppend(ADst, AData, ADataLen);
+  Crc := Crc32Update(0, PByte(@AType[1]), 4);
+  if (AData <> nil) and (ADataLen > 0) then
+    Crc := Crc32Update(Crc, AData, ADataLen);
+  nextpas.core.bytes.binary.WriteUInt32BE(@LCrcBE[0], Crc);
+  nextpas.core.bytes.ops.BytesAppend(ADst, @LCrcBE[0], 4);
 end;
 
 function PngEncodeRgba(const APixels: TBytes; AWidth, AHeight: Integer): TBytes;

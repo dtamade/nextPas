@@ -192,7 +192,8 @@ begin
       if Assigned(LEntry^.Callback) then
         LEntry^.Callback(LEntry^.Context);
     except
-      { 吞掉回调异常，不影响取消传播 }
+      on E: Exception do
+        WriteLn(StdErr, '[async.cancellation] callback failed: ', E.ClassName, ': ', E.Message);
     end;
     LEntry := LEntry^.Next;
   end;
@@ -319,7 +320,8 @@ begin
         if Assigned(ACallback) then
           ACallback(AContext);
       except
-        { 吞掉回调异常 }
+        on E: Exception do
+          WriteLn(StdErr, '[async.cancellation] OnCancel callback failed: ', E.ClassName, ': ', E.Message);
       end;
       Exit;
     end;
