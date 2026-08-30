@@ -232,7 +232,7 @@ P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正�
 | mount 复合视图 | P2 完整性：多源资产聚合最长匹配，List 根去重合并，Op/Path 保持调用方视角，超越 Go 单包 |
 | 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs` 通用模板承载（`CreateDecompressingVfs` 为其 gzip 特化薄门面，`CreateDecryptingVfs` 同构可直接复用；`http Content-Encoding` 另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES` 单源于 `compress.base`，`vfs` 侧仅薄别名/薄门面转调，32MiB 防 bomb 与 `ContentHash=0/ETag` 禁用一致性由 `transform` 统一承载 |
 
-## 测试计划（9 门全绿，2026-08-25）
+## 测试计划（14 门全绿，2026-08-30：P2挂载后）
 
 ```bash
 # respack 格式层
@@ -240,11 +240,15 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer      # �
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_roundtrip   # 含 10k 条目 perf smoke
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_embed
 # vfs 视图层
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded            # 双态生命期 + 损坏透传
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance         # 属性电池 P1-P8+V12 × 后端矩阵
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade              # 便利函数 + 开发/发布态切换
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_mount               # 挂载复合 7例（P2完整性）
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_transform           # 通用变换装饰器
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_compressed          # 解压薄门面
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # uses 白名单门禁
 ```
 
