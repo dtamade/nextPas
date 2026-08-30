@@ -21,6 +21,51 @@ printf "\n${BOLD}C3: 门面+测试${NC}\n"
 [ -f "$SRC_DIR/nextpas.core.git.pas" ] && ok "门面文件存在" || warn_check "git.pas 门面缺失"
 TEST_COUNT=$(find "$TEST_DIR" -mindepth 1 -maxdepth 1 -type d -name 'test_*' 2>/dev/null | wc -l)
 if [ "$TEST_COUNT" -gt 0 ]; then ok "测试目录: $TEST_COUNT"; else warn_check "无测试"; fi
+printf "\n${BOLD}C4: 纯后端零 libgit2${NC}\n"
+# C4.1: native.manager / native.repository 零 libgit2（grep 闭包，单元级依赖）
+NATIVE_MANAGER="$SRC_DIR/nextpas.core.git.native.manager.pas"
+NATIVE_REPO="$SRC_DIR/nextpas.core.git.native.repository.pas"
+if [ -f "$NATIVE_MANAGER" ]; then
+  if grep -q "nextpas\.core\.git\.libgit2" "$NATIVE_MANAGER" 2>/dev/null; then
+    fail_check "C4.1 native.manager 潜入 libgit2: $NATIVE_MANAGER"
+  else
+    ok "C4.1 native.manager 零 libgit2"
+  fi
+else
+  ok "C4.1 native.manager 零 libgit2（文件未创建，Phase 1 前跳过）"
+fi
+if [ -f "$NATIVE_REPO" ]; then
+  if grep -q "nextpas\.core\.git\.libgit2" "$NATIVE_REPO" 2>/dev/null; then
+    fail_check "C4.1 native.repository 潜入 libgit2: $NATIVE_REPO"
+  else
+    ok "C4.1 native.repository 零 libgit2"
+  fi
+else
+  ok "C4.1 native.repository 零 libgit2（文件未创建，Phase 1 前跳过）"
+fi
+# C4.2: native.* 闭包扫描（所有 native.* 单元 uses 不得拉入 libgit2 轨道）
+NATIVE_HITS=$(grep -R "nextpas\.core\.git\.libgit2" "$SRC_DIR"/nextpas.core.git.native.*.pas 2>/dev/null || true)
+if [ -n "$NATIVE_HITS" ]; then
+  fail_check "C4.2 native.* 闭包含 libgit2"
+  printf "%s\n" "$NATIVE_HITS" | sed 's/^/  /'
+else
+  ok "C4.2 native.* 闭包零 libgit2"
+fi
+# C4.3: 编译产物检查（fpc -va Loading libgit2）
+# Phase 0 仅做 grep 版，产物版待 test_git_pure_manager 落地后启用
+PURE_TEST_LPR="$TEST_DIR/test_git_pure_manager/test_git_pure_manager.lpr"
+if [ -f "$PURE_TEST_LPR" ]; then
+  if grep -Rqi "libgit2" "$PURE_TEST_LPR" 2>/dev/null; then
+    fail_check "C4.3 test_git_pure_manager.lpr 含 libgit2 引用"
+  else
+    ok "C4.3 test_git_pure_manager.lpr 零 libgit2（grep 版）"
+  fi
+  # TODO(C4.3-产物): fpc -va 编译产物检查
+  # fpc -Fu"$SRC_DIR" -va "$PURE_TEST_LPR" 2>&1 | grep -q "Loading.*libgit2" && fail_check "C4.3 纯编译拉入 libgit2" || ok "C4.3 纯编译零 libgit2"
+  warn_check "C4.3 fpc -va 产物检查 TODO（待 Phase 3 纯测试落地后启用）"
+else
+  ok "C4.3 纯编译零 libgit2（test_git_pure_manager 未创建，Phase 3 前跳过；TODO: fpc -va Loading 检查）"
+fi
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"
 if [ "$fail" -gt 0 ]; then printf "\n${RED}${BOLD}契约门禁: 失败${NC}\n"; exit 1

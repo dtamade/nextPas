@@ -18,10 +18,11 @@ uses
   nextpas.core.exception, nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
   nextpas.core.git.base,
+  nextpas.core.git.native.base,
   nextpas.core.text.format;
 
 type
-  EGitError = class(Exception)
+  EGitError = class(nextpas.core.git.native.base.EGitError)
   private
     FErrorCode: Integer;
     FErrorClass: Integer;
