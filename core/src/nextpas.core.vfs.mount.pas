@@ -334,8 +334,15 @@ begin
 end;
 
 function TMountedVfs.CaseSensitive: Boolean;
+var
+  I: Integer;
+  First: Boolean;
 begin
-  Result := True;
+  if Length(FMounts) = 0 then Exit(True);
+  First := FMounts[0].Fs.CaseSensitive;
+  for I := 1 to High(FMounts) do
+    if FMounts[I].Fs.CaseSensitive <> First then Exit(True);
+  Result := First;
 end;
 
 end.
