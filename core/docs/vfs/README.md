@@ -4,9 +4,9 @@ L2 只读虚拟文件树模块。把"一棵文件树"抽象成统一接口：真
 respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，不关心内容来自二进制
 内嵌数据还是文件系统。
 
-**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数全部实现；
+**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地、P2 挂载复合已落地。** 三后端（memtree/embedded/os）+ Sub/mount 双视图 + 门面便利函数全部实现；
 9 个验证门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
-`vfs.mount`（overlay/挂载表）推迟；S5 已完成：`nextpas.core.http.static.ServeVfs(AFs)`
+`vfs.mount`（`CreateMountedVfs` 前缀最长匹配复合）已落地；S5 已完成：`nextpas.core.http.static.ServeVfs(AFs)`
 是首个 L3 consumer，embedded/os 双后端经同一 handler 服务 HTTP（ETag 取
 ContentHash fnv32，未知 mtime 跳过 IMS 协商）。
 嵌入工作流示例见 `core/examples/nextpas.core.vfs/demo_asset_embed/`；
@@ -82,9 +82,9 @@ nextpas.core.vfs.memtree.pas    ← 内存不可变树（embedded 底座 + 测�
 nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片
 nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转换在此收口）
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
+nextpas.core.vfs.mount.pas      ← CreateMountedVfs：多 IVfs 前缀最长匹配挂载复合（P2 完整性， surpass Go fs）
 nextpas.core.vfs.transform.pas  ← 通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc` 函数注入，零拷贝按需变换（L3，压缩/加密共用模板，Stat/OpenRead/ETag/LastModified 完整性门）
 nextpas.core.vfs.compressed.pas ← 解压薄门面：经 transform 承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
-nextpas.core.vfs.mount.pas      ← （推迟）挂载表/overlay
 ```
 
 依赖方向：`base/errors ← intf ← memtree/embedded/os/sub ← 门面`；
@@ -229,7 +229,7 @@ P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正�
 | 目录条目 Size 为后端事实值，不入可移植契约 | os 如实报告磁盘 inode 大小，memtree/embedded 无此概念报 0；Go io/fs 同样不约束目录 FileInfo 细节。文件 Size/ModTime 才是跨后端一致承诺（facade gate 树签名只比较可移植字段） |
 | 路径语法采纳 Go ValidPath 含 `.` 根 | 业界事实标准；respack/vfs 两模块共享同一节定义 |
 | Sub 视图独立单元而非核心方法 | Go 将 fs.Sub 作为自由函数；包装器不改核心契约即可测试（fstest 同样强制测它） |
-| mount/overlay 推迟 | 无已落地的双源消费场景；接口留位不留桩 |
+| mount 复合视图 | P2 完整性：多源资产聚合最长匹配，List 根去重合并，Op/Path 保持调用方视角，超越 Go 单包 |
 | 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs` 通用模板承载（`CreateDecompressingVfs` 为其 gzip 特化薄门面，`CreateDecryptingVfs` 同构可直接复用；`http Content-Encoding` 另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES` 单源于 `compress.base`，`vfs` 侧仅薄别名/薄门面转调，32MiB 防 bomb 与 `ContentHash=0/ETag` 禁用一致性由 `transform` 统一承载 |
 
 ## 测试计划（9 门全绿，2026-08-25）
