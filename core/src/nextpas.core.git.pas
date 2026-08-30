@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.git.base,
   nextpas.core.git.intf,
-  nextpas.core.git.libgit2;
+  nextpas.core.git.factory,
+  nextpas.core.git.native.base;
 
 type
   TGitBranchKind = nextpas.core.git.base.TGitBranchKind;
@@ -40,7 +41,7 @@ type
   IGitWorktree = nextpas.core.git.intf.IGitWorktree;
   IGitWorktreeExt = nextpas.core.git.intf.IGitWorktreeExt;
   IGitManager = nextpas.core.git.intf.IGitManager;
-  EGitError = nextpas.core.git.libgit2.EGitError;
+  EGitError = nextpas.core.git.native.base.EGitError;
 
 const
   gbLocal = nextpas.core.git.base.gbLocal;
@@ -73,9 +74,9 @@ function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
 
-function NewGitManager: IGitManager;
+function NewGitManager: IGitManager; inline;
 begin
-  Result := nextpas.core.git.libgit2.NewGitManager;
+  Result := nextpas.core.git.factory.NewGitManager(gbAuto);
 end;
 
 function DefaultGitDiffOptions: TGitDiffOptions;
