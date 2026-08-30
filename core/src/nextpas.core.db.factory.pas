@@ -99,7 +99,7 @@ var
   GDrivers: array of TDbDriverEntry;
   GLock: ILock = nil;
 
-function NormalizeName(const AName: string): string;
+function NormalizeName(const AName: string): string; inline;
 begin
   Result := NormalizeLowerTrim(AName);
 end;

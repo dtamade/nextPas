@@ -8,8 +8,7 @@ unit nextpas.core.db.redis.transport;
           （回放 canned RESP 字节流，无需真实服务端）；
        2. 未来 TLS/Unix-socket 变体只增实现不改消费方。
 
-       分层：db(L2) → net(L2) 同层单向依赖，符合 design-conventions
-       「同层内允许单向依赖」。 *}
+       分层：db(L3) → net(L2) 单向依赖（设计规范 L2同层允许单向，db家族为L3） *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,6 +1,6 @@
 unit nextpas.core.db.pg.adapter;
 
-{** @desc IDbConnection 的 PostgreSQL 适配器（libpq 类表面统一错误/事务簿记）。能力与契约见 CONTRACT §2.3/§2.6/§2.11，事务/池语义同 sqlite 家族。 *}
+{** @desc IDbConnection 的 PostgreSQL 适配器（libpq 类表面统一错误/事务簿记）。能力与契约见 CONTRACT §2.3/§2.6/§2.11，事务/池语义同 sqlite 家族。 体积注记：本单元约1310行超 800 行软阈值，内聚性强（适配器单职责），暂不拆分，拆分预留见 roadmap。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -815,7 +815,7 @@ end;
 
 function TDbPgConnection.SupportsArrayBinding: Boolean;
 begin
-  Result := True;   { unnest 数组展开路径，V3-C2 }
+  Result := True;   { unnest 数组展开路径，V3-C2 } // 静态按 pg 协议系声明，openGauss 等衍生库运行时方言缺口由消费方探测后降级（见 national-db-guide §2.1）
 end;
 
 { ---- IDbCancelControl（V3-B6）---- }

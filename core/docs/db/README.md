@@ -80,7 +80,7 @@ DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
 | 统一驱动工厂（`DbOpen/DbOpenPool`） | ✅ | ✅ | ✅ | ✅ | ✅ 可插拔 | §2.14 |
 | sqlite 调优预设（WAL+NORMAL+FK + 回读校验） | ✅ | — | — | — | — | §2.15 |
 | TLS 契约成文（责任表；pg/redis 透传；mysql 排期） | N/A | ✅ `verify-full` | —（排期） | 驱动透传 | ✅ `UseTls` | §2.1-TLS |
-| 参数级批量绑定（`IDbArrayBinding`） | — | ✅ `unnest` 6× | — | — | — | §2.16 |
+| 参数级批量绑定（`IDbArrayBinding`） | — | ✅ `unnest` 6× | — | — | — | §2.16 | 探测 DbCapabilities 或 DbArrayBinding(Q) 是否为 nil 再构建 unnest 方言（见 §2.16）
 | 异步挂载与取消（`TDbAsync` 单飞 + 令牌→`PQcancel`） | ✅ | ✅ | ✅ | — | — | §2.17 |
 | LISTEN/NOTIFY 订阅（专用连接+泵线程；重连重放） | N/A | ✅ | N/A | N/A | — | §2.18 |
 | SUBSCRIBE/PSUBSCRIBE（RESP2 推送+确认簿记） | — | — | — | — | ✅ | §2.19 |

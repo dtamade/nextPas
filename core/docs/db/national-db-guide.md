@@ -45,7 +45,7 @@ Conn := ConnectPostgres('host=127.0.0.1 port=55432 dbname=postgres ' +
 - **真机**：`opengauss/opengauss:5.0.0` x86（2.05GB）`docker run -e GS_PASSWORD -p 55432:5432`，为兼容香草 libpq 需 `password_encryption_type=0`（md5）+ `pg_hba md5` + `gs_ctl reload`（默认 `sha256` 会报 `none of the server's SASL mechanisms are supported`，方案已固化到 §4.5 脚本）。初建用户 `opengauss` 禁止远程，须另建 `testuser` 远程可达。
 - **门禁**（`NEXTPAS_PG_TEST_CONN='host=127.0.0.1 port=55432 dbname=postgres user=testuser …'`）：
   - `test_db_pg 13 passed heaptrc 0` / `test_db_conformance 2 passed` / `test_db_trace 5 passed`（含 pg 段 `postgres trace live 117ms`）
-  - `test_db_array_bind`  **16 passed, 3 failed** — `unnest(int[],text[])` 多列重载与 `WITH ORDINALITY` 在 openGauss 缺失（`function unnest(integer[], text[]) does not exist` / `syntax error at "WITH ORDINALITY"`），**方言鸿沟诚实记录**：array_bind 在此库应降级为 `IDbBatchExecutor` 批路径（能力矩阵 SupportsArrayBinding 仍 True，但消费方应探能力后按库容退化）。
+  - `test_db_array_bind`  **16 passed, 3 failed** — `unnest(int[],text[])` 多列重载与 `WITH ORDINALITY` 在 openGauss 缺失（`function unnest(integer[], text[]) does not exist` / `syntax error at "WITH ORDINALITY"`），**方言鸿沟诚实记录**：array_bind 在此库应降级为 `IDbBatchExecutor` 批路径（能力矩阵 SupportsArrayBinding 仍 True，但消费方应探能力后按库容退化）。能力位诚实注记：PgOpenListener 等走统一能力探测 DbCapabilities(Conn).SupportsArrayBinding 时，openGauss 该能力在运行时仍报 True（契约按 pg 协议系静态声明），消费方对 array 场景应先探能力再构建方言 SQL，或以 try..except 回退到 batch 路径（见 CONTRACT §2.16 使用前置）。
 - 预期差异：错误消息措辞与社区 PG 不同，但 **SqlState 保留**——统一层归一只消费 SqlState（§2.2），类目归一已验证不受影响；约束/事务/savepoint 全量通过。
 
 ### 2.2 KingbaseES（pg 协议）
