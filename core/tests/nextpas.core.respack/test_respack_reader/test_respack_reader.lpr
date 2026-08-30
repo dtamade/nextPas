@@ -5,7 +5,8 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.respack,
-  nextpas.core.respack.base;
+  nextpas.core.respack.base,
+  nextpas.core.platform.base;
 
 var
   T: TTestSuite;
@@ -99,6 +100,17 @@ begin
     Check(False, AMsg + ' (accepted!)');
   except
     on E: EResPackCorrupted do Check(True, AMsg);
+    on E: Exception do Check(False, AMsg + ' wrong exception class');
+  end;
+end;
+
+procedure ExpectCorruptStep(AProc: TTestProc; const AMsg: string; const AExpectStep: Integer);
+begin
+  try
+    AProc();
+    Check(False, AMsg + ' (accepted!)');
+  except
+    on E: EResPackCorrupted do Check(E.Step = AExpectStep, AMsg);
     on E: Exception do Check(False, AMsg + ' wrong exception class');
   end;
 end;
@@ -388,6 +400,21 @@ begin
   end;
 end;
 
+procedure CorruptHeaderHashedMismatch;
+var
+  B: TResPackBlob;
+begin
+  BuildBase(B);
+  try
+    { header HASHED set, but clear entry 0 HASHED → step5 }
+    WrU16LE(B.Data + RESPACK_HEADER_SIZE + 6,
+      RdU16LE(B.Data + RESPACK_HEADER_SIZE + 6) and not Word(RESPACK_EFLAG_HASHED));
+    ResPackOpen(B.Data, B.Size);
+  finally
+    ResPackFreeBlob(B);
+  end;
+end;
+
 procedure DigestBaseOpensFine;
 var
   B: TResPackBlob;
@@ -409,6 +436,116 @@ begin
   finally
     ResPackFreeBlob(B);
   end;
+end;
+
+{ ── BE 显式换序门禁（P0-5）：FORMAT.md 固定 LE，RdU*LE/WrU*LE 位移编解码与宿主无关；
+  host LE 下 BE buffer 经 RdU*LE 读回必为 byte-swap，host BE 时同理显式换序；
+  联动 platform.base.CURRENT_ENDIAN / platform.info.CurrentEndian 探测，但编解码
+  不依赖宿主，WrU*LE 逆序写入即得 BE 对照。 ── }
+
+function SwapU16BE(const V: Word): Word; inline;
+begin
+  Result := Word((V shr 8) or (V shl 8));
+end;
+
+function SwapU32BE(const V: UInt32): UInt32; inline;
+begin
+  Result := (V shr 24) or ((V shr 8) and $0000FF00) or ((V shl 8) and $00FF0000) or (V shl 24);
+end;
+
+function SwapU64BE(const V: UInt64): UInt64; inline;
+begin
+  Result := (UInt64(SwapU32BE(UInt32(V))) shl 32) or SwapU32BE(UInt32(V shr 32));
+end;
+
+procedure WrU32BE(AData: PByte; const AValue: UInt32); inline;
+begin
+  { WrU32LE 逆序写入：BE 对照 = LE helper 的字节逆序 }
+  AData[0] := Byte(AValue shr 24);
+  AData[1] := Byte(AValue shr 16);
+  AData[2] := Byte(AValue shr 8);
+  AData[3] := Byte(AValue);
+end;
+
+procedure WrU64BE(AData: PByte; const AValue: UInt64); inline;
+begin
+  WrU32BE(AData, UInt32(AValue shr 32));
+  WrU32BE(AData + 4, UInt32(AValue));
+end;
+
+procedure TestBEHeaderRoundTrip;
+var
+  BufLE: array[0..RESPACK_HEADER_SIZE - 1] of Byte;
+  BufBE: array[0..RESPACK_HEADER_SIZE - 1] of Byte;
+  V32: UInt32;
+  V64: UInt64;
+begin
+  { 联动 platform.endian：当前 host 应为 LE，本门禁在 LE 下验证 BE 对照的显式换序 }
+  Check(CURRENT_ENDIAN = endLittle, 'host LE for BE gate');
+  FillChar(BufLE[0], SizeOf(BufLE), 0);
+  FillChar(BufBE[0], SizeOf(BufBE), 0);
+  V32 := $01020304;
+  V64 := UInt64($0102030405060708);
+  { LE 正向：WrU*LE → RdU*LE 往返 }
+  WrU32LE(@BufLE[4], V32);
+  WrU64LE(@BufLE[16], V64);
+  Check(RdU32LE(@BufLE[4]) = V32, 'BE gate: LE header u32 roundtrip');
+  Check(RdU64LE(@BufLE[16]) = V64, 'BE gate: LE header u64 roundtrip');
+  { BE 对照：WrU*LE 逆序写入（此处用 WrU*BE）→ RdU*LE 读回应为 byte-swap }
+  WrU32BE(@BufBE[4], V32);
+  WrU64BE(@BufBE[16], V64);
+  Check(RdU32LE(@BufBE[4]) = SwapU32BE(V32), 'BE gate: BE header u32 swap');
+  Check(RdU64LE(@BufBE[16]) = SwapU64BE(V64), 'BE gate: BE header u64 swap');
+  { 交叉验证：LE 的 BE 逆序即 BE 的 LE 逆序 }
+  Check(RdU32LE(@BufBE[4]) <> V32, 'BE gate: BE header u32 not LE');
+end;
+
+procedure TestBEEntryRoundTrip;
+var
+  BufLE: array[0..RESPACK_ENTRY_SIZE - 1] of Byte;
+  BufBE: array[0..RESPACK_ENTRY_SIZE - 1] of Byte;
+  PathOff: UInt32;
+  PathLen: Word;
+  Flags: Word;
+  DataOff: UInt64;
+  FSize: UInt64;
+  HVal: UInt32;
+begin
+  Check(CURRENT_ENDIAN = endLittle, 'host LE for BE gate entry');
+  FillChar(BufLE[0], SizeOf(BufLE), 0);
+  FillChar(BufBE[0], SizeOf(BufBE), 0);
+  PathOff := $0A0B0C0D;
+  PathLen := $1234;
+  Flags := $0102;
+  DataOff := UInt64($1122334455667788);
+  FSize := UInt64($AABBCCDD00112233);
+  HVal := $DEADBEEF;
+  { LE 正向 }
+  WrU32LE(@BufLE[0], PathOff);
+  WrU16LE(@BufLE[4], PathLen);
+  WrU16LE(@BufLE[6], Flags);
+  WrU64LE(@BufLE[8], DataOff);
+  WrU64LE(@BufLE[16], FSize);
+  WrU32LE(@BufLE[32], HVal);
+  Check(RdU32LE(@BufLE[0]) = PathOff, 'BE gate: LE entry PathOff');
+  Check(RdU16LE(@BufLE[4]) = PathLen, 'BE gate: LE entry PathLen');
+  Check(RdU16LE(@BufLE[6]) = Flags, 'BE gate: LE entry Flags');
+  Check(RdU64LE(@BufLE[8]) = DataOff, 'BE gate: LE entry DataOff');
+  Check(RdU64LE(@BufLE[16]) = FSize, 'BE gate: LE entry Size');
+  Check(RdU32LE(@BufLE[32]) = HVal, 'BE gate: LE entry Hash');
+  { BE 对照：WrU*LE 逆序写入 }
+  WrU32BE(@BufBE[0], PathOff);
+  BufBE[4] := Byte(PathLen shr 8); BufBE[5] := Byte(PathLen);
+  BufBE[6] := Byte(Flags shr 8); BufBE[7] := Byte(Flags);
+  WrU64BE(@BufBE[8], DataOff);
+  WrU64BE(@BufBE[16], FSize);
+  WrU32BE(@BufBE[32], HVal);
+  Check(RdU32LE(@BufBE[0]) = SwapU32BE(PathOff), 'BE gate: BE entry PathOff swap');
+  Check(RdU16LE(@BufBE[4]) = SwapU16BE(PathLen), 'BE gate: BE entry PathLen swap');
+  Check(RdU16LE(@BufBE[6]) = SwapU16BE(Flags), 'BE gate: BE entry Flags swap');
+  Check(RdU64LE(@BufBE[8]) = SwapU64BE(DataOff), 'BE gate: BE entry DataOff swap');
+  Check(RdU64LE(@BufBE[16]) = SwapU64BE(FSize), 'BE gate: BE entry Size swap');
+  Check(RdU32LE(@BufBE[32]) = SwapU32BE(HVal), 'BE gate: BE entry Hash swap');
 end;
 
 { ── 包装层：把"构造损坏包并期待拒绝"的异常收进断言 ── }
@@ -493,6 +630,23 @@ begin
   ExpectCorrupt(@CorruptDigestOutOfRange, 'step8 digest out of range');
 end;
 
+procedure WStep5HeaderHashedMismatch;
+begin
+  try
+    CorruptHeaderHashedMismatch;
+    Check(False, 'step5 header hash flag inconsistent (accepted!)');
+  except
+    on E: EResPackCorrupted do
+    begin
+      Check(E.Step = 5, 'step5 header hash flag inconsistent step=5');
+      Check(Pos('header hash flag inconsistent', E.Message) > 0,
+        'step5 header hash flag inconsistent message');
+    end;
+    on E: Exception do
+      Check(False, 'step5 header hash flag inconsistent wrong class: ' + E.ClassName);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.respack.reader');
   T.Test('happy open/find/content', @TestHappyOpen);
@@ -515,5 +669,7 @@ begin
   T.Test('step7 unsorted/duplicate index', @WStep7UnsortedIndex);
   T.Test('step7 non-canonical stored path', @WStep7NonCanonicalStored);
   T.Test('step8 digest out of range', @WStep8DigestOutOfRange);
+  T.Test('BE header explicit LE roundtrip', @TestBEHeaderRoundTrip);
+  T.Test('BE entry explicit LE roundtrip', @TestBEEntryRoundTrip);
   if not T.Run then Halt(1);
 end.
