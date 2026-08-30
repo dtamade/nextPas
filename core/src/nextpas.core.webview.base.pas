@@ -166,6 +166,9 @@ type
 
 implementation
 
+uses
+  SysUtils;
+
 function DefaultWebviewOptions: TWebviewOptions;
 begin
   Result.Title := '';
@@ -267,9 +270,26 @@ begin
 end;
 
 procedure CheckWebviewDevServerUrl(const AUrl: string); inline;
+var
+  L: string;
 begin
-  if AUrl = '' then Exit;
-  if (Copy(AUrl, 1, 7) = 'http://') or (Copy(AUrl, 1, 8) = 'https://') then Exit;
+  L := Trim(AUrl);
+  if L = '' then Exit;
+  if Pos(' ', L) <> 0 then
+    raise EWebviewInvalidState.CreateFmt(
+      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
+  if Copy(L, 1, 7) = 'http://' then
+  begin
+    if Length(L) > 7 then Exit;
+    raise EWebviewInvalidState.CreateFmt(
+      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
+  end;
+  if Copy(L, 1, 8) = 'https://' then
+  begin
+    if Length(L) > 8 then Exit;
+    raise EWebviewInvalidState.CreateFmt(
+      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
+  end;
   raise EWebviewInvalidState.CreateFmt(
     'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
 end;
