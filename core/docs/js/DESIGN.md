@@ -124,6 +124,21 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 - **测试框架**：`nextpas.core.test`（`TTestSuite + TSuiteRunner`），`fake` 契约测试全量走 `fake` 后端，`quickjs_runtime` 仅在探测到库时跑。
 - **Heaptrc**：所有 `focused` 套件 `heaptrc 0 leaks` 为门禁（`mem` 契约）。
 
+## 8.1 复用与反哺纪律（基本要求）
+
+**铁律**：`js` 内**禁止重复造轮子、禁止低质量/手写性能代码**。一律复用 `nextpas.core` owner 能力，缺口**毫不犹豫反哺 owner**：
+
+| 能力 | Owner | `js` 内禁止 | 反哺方式 |
+|------|-------|-------------|----------|
+| JSON 解析/转义 | `json` | 手写扫描/拼接 | 提 `json` PR 加能力/修性能，`js` 只 `uses json` |
+| 路径归一化 | `fs.path` | 自拼 `EnsureSep/Abs` | 提 `fs.path` PR，`js.TryEvalFile` 直接复用 |
+| 动态库探测 | `platform.dl` | `DynLibs/Windows/BaseUnix` | 仅 `loader` 触 `platform.dl`，`js.js888/js.fake` 零触 |
+| 计时/基准 | `bench` | `GetTickCount64` 自计时 | `bench_eval` 必须 `nextpas.core.bench` |
+| 测试 | `test` | 手写 runner | 必须 `nextpas.core.test` |
+| 二进制 base64 | `encoding` | 裸 base64 | 走 `encoding` owner |
+
+> 违例即 `source-contract` 失败：`grep -R "SysUtils.*Format\|GetTickCount" core/src/nextpas.core.js.*` 零容忍；`DESIGN` 评审必查“是否可反哺”。
+
 ---
 
 ## 9. 纯 Pascal 后端扩展点（保证后期方便）
@@ -159,7 +174,7 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 | `webview.fake` | 无 `libwebkit2gtk` 时的真 JS 语义回归 | 是（可选 `JsContext` 注入，CI 仍零依赖） |
 | `template` 预编译 | 无窗求值 + 超时 | 是（`TimeoutMs` + `Eval` 同步） |
 | `config` 规则脚本 | 宿主函数 + JSON 互通 | 是（`SetHostFunction` + `NewJson/ToJson`） |
-| `tui` 脚本扩展 | 纯 Pascal 后端（零 so） | Deferred（`jsbkQuickJsPure`） |
+| `tui` 脚本扩展 | 纯 Pascal 后端（零 so） | Deferred（`jsbkJs888`，见 §9） |
 | `game888` ECS 脚本 | 批量 `ecs_*` + 热重载 | 借鉴：`TJSGameRuntime` 多桥组合在消费侧（`GAME888_BORROW.md B6`），`js` 不内置 ECS |
 
 ---
@@ -174,7 +189,7 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 | 宿主闭包循环引用（`Context` ↔ 闭包） | 文档明示弱引用/作用域桩，`fake` 用例演示 |
 | `libquickjs` 多名探测差异 | loader 幂等缓存 + `JsBackendAvailable` 探测矩阵测试 |
 | 超时后堆不可用（V8 路径） | 契约写明 V8 需重建 `Context`，QuickJS 可续 |
-| QuickJS 上游停更 | `QuickJS-NG` 同 ABI 兼容探测，`pure` 后端兜底 |
+| QuickJS 上游停更 | `QuickJS-NG` 同 ABI 兼容探测，`js.js888` 后端兜底 |
 
 ---
 

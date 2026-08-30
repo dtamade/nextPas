@@ -86,10 +86,11 @@ make hygiene
 | C4 | 线程亲和 | `Eval` 未做创建线程校验 |
 | C5 | 悬垂安全 | `TJsValue` 未 `IsValid` 守卫 |
 | C6 | 闭包循环 | `SetHostFunction` 捕获 `IJsContext` 未弱引用 |
-| C7 | 序列化 | 手写转义而非 `json` owner |
+| C7 | 序列化/复用 | 手写转义而非 `json` owner；手写路径归一而非 `fs.path`；自造 `platform.dl` 外的 dl |
 | C8 | 风格 | `+=`/`COPERATORS`/`Tab`/`大写单元名` |
 | C9 | 测试覆盖 | 公共 API 无边界/失败路径用例 |
-| C10 | 证据 | 无 `heaptrc 0` 或 `make hygiene` 输出即声称完成 |
+| C10 | 复用与反哺 | 在 `js` 内重复造轮子/低质量性能代码而未反哺 owner（`json/text/mem/fs.path/bench/test`）；发现 owner 缺口未提 `core` 反哺 PR |
+| C11 | 证据 | 无 `heaptrc 0` 或 `make hygiene` 输出即声称完成 |
 
 ---
 

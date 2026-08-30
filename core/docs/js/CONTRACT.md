@@ -30,11 +30,11 @@
 | `js.pas` | 门面：re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 上述全部子模块（含预留 pure） | 逻辑（纯聚合） |
 
 ```
-base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure} ← 门面
-         ↑ 纯 Pascal 后端与 quickjs 平级，不经 ffi/loader
+base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, js.js888} ← 门面
+         ↑ 纯 Pascal 后端 js.js888 与 quickjs 平级，不经 ffi/loader
 ```
 
-> **纯 Pascal 后端预留**：`js.js888`（或 `js.js888`）为后续尾部追加，**零 FFI、零 platform.dl、零 so**；`js.v8.ffi / js.v8` 同理。S1 仅 `jsbkQuickJs/jsbkFake` 两值，新增后端只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— 这是“后期方便实现纯 Pas 后端”的**契约保证**：加 pure 后端时 `js.base/js.intf` 零改动，仅新增一单元 + 门面工厂分支 + 枚举尾部一项。
+> **纯 Pascal 后端预留**：`js.js888`（`nextpas.core.js.js888.pas`，`jsbkJs888`）为后续尾部追加，**零 FFI、零 platform.dl、零 so**；`js.v8.ffi / js.v8` 同理。S1 仅 `jsbkQuickJs/jsbkFake` 两值，新增后端只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— 这是“后期方便实现纯 Pas 后端”的**契约保证**：加 js.js888 时 `js.base/js.intf` 零改动，仅新增一单元 + 门面工厂分支 + 枚举尾部一项。
 
 **纯后端扩展契约**（保证可插拔）：
 - `js.base` 的 `TJsBackendKind/TJsValueKind/TJsErrorCategory/TJsRuntimeOptions` 为**后端无关**词汇，纯后端直接复用，不新增类型
@@ -232,10 +232,11 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 
 ---
 
-## 9. 依赖边界
+## 9. 依赖与复用边界（复用度铁律）
 
-- 允许：`base`、`errors`、`exception`、`json`、`text.view/builder`、`mem`、`platform.dl`（仅 loader）
-- 禁止：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`；`base/intf` 出现 `platform.dl` 或后端符号
+- 允许：`base`、`errors`、`exception`、`json`、`text.view/builder`、`mem`、`platform.dl`（仅 loader）、`fs.path`（`TryEvalFile` 归一化）、`encoding`（`TBytes` base64 若涉二进制）
+- 禁止：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`；`base/intf` 出现 `platform.dl` 或后端符号；**禁止在 `js.*` 内自造 `json` 解析/转义、`fs` 归一化、计时、bench、test runner**（一律复用 `json`/`fs.path`/`nextpas.core.bench`/`nextpas.core.test` owner）
+- **复用与反哺纪律**（基本要求）：开发中发现 `json/text/mem/platform.dl/fs.path` 缺口或性能瓶颈，**毫不犹豫反哺 owner 模块**（提 `core/docs/...` 变更 + 加回归），禁止在 `js` 内堆 workaround/重复造轮子/抄低质量代码；`AI_GUIDE §5 C7/C9` 同检，`ACCEPTANCE G-M1-3` 的 `source-contract` 禁止 `js` 内出现 `SysUtils` 手写转义/自计时
 
 **Source-contract 扫描**（`core/tests/architecture/check_source_contracts.py`）：
 
