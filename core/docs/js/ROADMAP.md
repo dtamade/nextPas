@@ -25,7 +25,7 @@
 | **M1** | S1 假后端可用 | CI 零依赖绿 | `js.base/intf/fake/pas` + `test_js_base/fake` + `demo_js` | `json`, `bench`, `test` | ACCEPTANCE S1 DoD 全绿（见 ACCEPTANCE §3） | 1–2 周 | 1 人 |
 | **M2** | S1 QuickJS 真链路 | 本地真 JS 语义 | `js.quickjs.ffi/loader/quickjs` + `test_js_quickjs_runtime` + `bench_eval` 骨架 | `platform.dl`, `libquickjs` | M1 + `quickjs_runtime` 探测到即绿 + `bench_eval` 可跑 | 1–2 周 | 1 人 |
 | **M3** | S2 联动与加固 | 被 webview 间接回归 | `webview.fake.js` 适配（活在 webview 家族，`SIXDIM M-4`） + `json` 互通全量 + 超时/悬垂加固 | `webview`, `json` | webview 13 门 + js 3 门双绿 + `bench_eval` 基线落库 | 1 周 | 1 人 + webview reviewer |
-| **M4** | S3 后端扩展（**纯 Pas 保证**） | 零 so / 高性能可选 | `js.pure`（`jsbkPure` 尾部追加，零 FFI/零 dl，`js.intf` 零改动）或 `jsbkV8` | 性能/闭环需求触发 | `test_js_pure_runtime` 恒绿 + `test_js_fake` 同矩阵全绿 + 枚举稳定性回归 + `bench_eval` 对纯同口径 | 按触发另排 | 1 人 |
+| **M4** | S3 后端扩展（**纯 Pas 保证**） | 零 so / 高性能可选 | `js.js888`（`jsbkJs888` 尾部追加，零 FFI/零 dl，`js.intf` 零改动）或 `jsbkV8` | 性能/闭环需求触发 | `test_js_js888_runtime` 恒绿 + `test_js_fake` 同矩阵全绿 + 枚举稳定性回归 + `bench_eval` 对纯同口径 | 按触发另排 | 1 人 |
 | **M5** | 1.0 冻结 | 生产级 | CONTRACT 1.0 + `CHANGELOG`/`PARITY` 刷新 + 迁移指南 | M3 + 至少 1 个真实消费方 | ACCEPTANCE Production DoD（见 §5） | 1 周 | 1 人 |
 
 > M4 为条件里程碑（Deferred 触发前不排期）；M0–M3 为必达路径。

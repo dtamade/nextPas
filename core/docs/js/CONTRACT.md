@@ -21,12 +21,12 @@
 | 单元 | 职责 | 允许 uses | 禁止 |
 |------|------|-----------|------|
 | `js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 族 | `exception`、`errors`、`base` | 任何 `js.*`、`platform`、`json` |
-| `js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` / `IJsValueRef` / `TJsHostFunction` 三形态（**后端无关**，不暴露 `JSValue`） | `js.base`、`json.types`（仅 `TJsonValue` 类型引用） | `js.fake`/`js.quickjs.*`/`js.pure`、`platform.dl` |
+| `js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` / `IJsValueRef` / `TJsHostFunction` 三形态（**后端无关**，不暴露 `JSValue`） | `js.base`、`json.types`（仅 `TJsonValue` 类型引用） | `js.fake`/`js.quickjs.*`/`js.js888`、`platform.dl` |
 | `js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑，确定性语义） | `js.base`、`js.intf`、`json` | `platform.dl`、`*.ffi` |
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
 | `js.quickjs.loader` | `platform.dl` 探测与符号装载（唯一可触 `platform.dl`） | `platform.dl`、`js.base`、`js.quickjs.ffi` | `DynLibs`、`Windows/BaseUnix` |
 | `js.quickjs` | QuickJS 真实现（`uses ffi/loader`，实现 `intf`） | `js.base/intf`、`js.quickjs.ffi/loader`、`json`、`mem` | `webview.*` |
-| `js.pure` | 纯 Pascal 后端（S3 追加，`jsbkPure`，零 FFI/零 dl） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.js888` | 纯 Pascal 后端（S3 追加，`jsbkJs888`，零 FFI/零 dl） | `js.base/intf`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.pas` | 门面：re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 上述全部子模块（含预留 pure） | 逻辑（纯聚合） |
 
 ```
@@ -34,13 +34,13 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure} ← 门面
          ↑ 纯 Pascal 后端与 quickjs 平级，不经 ffi/loader
 ```
 
-> **纯 Pascal 后端预留**：`js.pure`（或 `js.quickjs.pure`）为后续尾部追加，**零 FFI、零 platform.dl、零 so**；`js.v8.ffi / js.v8` 同理。S1 仅 `jsbkQuickJs/jsbkFake` 两值，新增后端只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— 这是“后期方便实现纯 Pas 后端”的**契约保证**：加 pure 后端时 `js.base/js.intf` 零改动，仅新增一单元 + 门面工厂分支 + 枚举尾部一项。
+> **纯 Pascal 后端预留**：`js.js888`（或 `js.js888`）为后续尾部追加，**零 FFI、零 platform.dl、零 so**；`js.v8.ffi / js.v8` 同理。S1 仅 `jsbkQuickJs/jsbkFake` 两值，新增后端只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— 这是“后期方便实现纯 Pas 后端”的**契约保证**：加 pure 后端时 `js.base/js.intf` 零改动，仅新增一单元 + 门面工厂分支 + 枚举尾部一项。
 
 **纯后端扩展契约**（保证可插拔）：
 - `js.base` 的 `TJsBackendKind/TJsValueKind/TJsErrorCategory/TJsRuntimeOptions` 为**后端无关**词汇，纯后端直接复用，不新增类型
 - `js.intf` 的 `TJsValue` 为**不透明句柄**（当前 QuickJS 侧存 `JSValue`，纯侧可存自有 `TJsPureValue` 句柄 + `Context` 弱引用，版图同为 16B），对外 `Kind/As*/TryAs*` 语义完全一致
-- `js.pure` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
-- 工厂 `CreateJsRuntime(jsbkPure)` 走纯分支，`JsBackendAvailable(jsbkPure)=True` 恒真（零 so 探测）
+- `js.js888` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
+- 工厂 `CreateJsRuntime(jsbkJs888)` 走纯分支，`JsBackendAvailable(jsbkJs888)=True` 恒真（零 so 探测）
 
 **文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 500/800。
 
@@ -49,7 +49,7 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure} ← 门面
 ## 2. 核心类型（`js.base`）
 
 ```pascal
-TJsBackendKind = (jsbkQuickJs, jsbkFake); // S1 仅二值；后续尾部追加 jsbkPure/jsbkV8（pure 恒真、QuickJS 需 so）
+TJsBackendKind = (jsbkQuickJs, jsbkFake); // S1 仅二值；后续尾部追加 jsbkJs888/jsbkV8（pure 恒真、QuickJS 需 so）
 TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString, jskObject, jskArray, jskFunction, jskError, jskPromise); // 后端无关
 TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory, jecTimeout, jecNotSupported, jecUnknown); // 后端无关
 TJsRuntimeOptions = record
