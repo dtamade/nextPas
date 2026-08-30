@@ -221,7 +221,7 @@ begin
   end;
 end;
 
-function DecodeSymbol(var AR: TBitReader; const ABuild: THuffBuild): Integer; inline;
+function DecodeSymbol(var AR: TBitReader; const ABuild: THuffBuild): Integer;
 var
   LLen: Integer;
   LPeek: LongWord;
@@ -438,7 +438,6 @@ var
   LPos, LRem, LChunk: SizeUInt;
   LBFinal: LongWord;
   LLen: Word;
-  I: SizeUInt;
 begin
   LPos := 0;
   LRem := SizeUInt(Length(AData));
@@ -468,10 +467,10 @@ begin
     BW.Buf[BW.Len] := Byte(LLen shr 8); Inc(BW.Len);
     BW.Buf[BW.Len] := Byte((not LLen) and $FF); Inc(BW.Len);
     BW.Buf[BW.Len] := Byte((not LLen shr 8) and $FF); Inc(BW.Len);
-    for I := 0 to LChunk - 1 do
+    if LChunk > 0 then
     begin
-      BW.Buf[BW.Len] := AData[LPos + I];
-      Inc(BW.Len);
+      Move(AData[LPos], BW.Buf[BW.Len], LChunk);
+      Inc(BW.Len, LChunk);
     end;
     Inc(LPos, LChunk);
   end;
@@ -697,13 +696,11 @@ begin
       if LStoredLen > 0 then
       begin
         GrowBytes(LOut, LOutLen, LCap, LStoredLen, AMax);
+        Move(R.Data[R.Pos], LOut[LOutLen], LStoredLen);
         for J := 0 to LStoredLen - 1 do
-        begin
-          LOut[LOutLen] := R.Data[R.Pos + J];
-          LWindow[LWinPos] := R.Data[R.Pos + J];
-          LWinPos := (LWinPos + 1) and (CWindowSize - 1);
-          Inc(LOutLen);
-        end;
+          LWindow[(LWinPos + J) and (CWindowSize - 1)] := R.Data[R.Pos + J];
+        LWinPos := (LWinPos + LStoredLen) and (CWindowSize - 1);
+        Inc(LOutLen, LStoredLen);
         Inc(R.Pos, LStoredLen);
       end;
     end
