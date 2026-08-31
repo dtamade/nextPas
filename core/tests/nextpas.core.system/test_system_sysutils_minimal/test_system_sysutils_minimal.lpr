@@ -200,6 +200,71 @@ begin
     'Supports should reject interface the object does not implement');
 end;
 
+procedure TestEncodeDateMatchesRtlEpoch;
+begin
+  Check(nextpas.core.system.sysutils.EncodeDate(1899, 12, 30) = 0,
+    'EncodeDate should pin the RTL epoch 1899-12-30 to 0.0');
+  Check(nextpas.core.system.sysutils.EncodeDate(1900, 1, 1) = 2,
+    'EncodeDate should count days from epoch');
+  Check(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) = 46251,
+    'EncodeDate should match RTL value for modern ISO dates');
+  Check(nextpas.core.system.sysutils.EncodeDate(2024, 2, 29) = 45351,
+    'EncodeDate should handle leap days');
+  Check(nextpas.core.system.sysutils.EncodeDate(9999, 12, 31) = 2958465,
+    'EncodeDate should cover the full Word year range');
+end;
+
+procedure TestEncodeDateInvalidRaises;
+begin
+  try
+    nextpas.core.system.sysutils.EncodeDate(2026, 2, 30);
+    Check(False, 'EncodeDate should reject 2026-02-30');
+  except
+    on E: nextpas.core.exception.EConvertError do Check(True, 'EncodeDate raises EConvertError for bad day');
+  end;
+  try
+    nextpas.core.system.sysutils.EncodeDate(2026, 13, 1);
+    Check(False, 'EncodeDate should reject month 13');
+  except
+    on E: nextpas.core.exception.EConvertError do Check(True, 'EncodeDate raises EConvertError for bad month');
+  end;
+end;
+
+procedure TestEncodeDateWholeDayDifference;
+begin
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 17)) = 0,
+    'whole-day difference should be 0 for same date');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 16)) = 1,
+    'whole-day difference should span yesterday');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 18)) = -1,
+    'whole-day difference should be negative for tomorrow');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2024, 3, 1) -
+              nextpas.core.system.sysutils.EncodeDate(2024, 2, 28)) = 2,
+    'whole-day difference should span leap years');
+end;
+
+procedure TestBytesOfConstantArgumentContent;
+var
+  A, B: TBytes;
+  I: Integer;
+begin
+  { 回归防护：BytesOf 直收常量串实参。若实现恢复 inline，
+    FPC 常量传播会把 AStr[1] 折叠成单字符值，Move 拷出栈上垃圾。
+    内容必须逐字节等于字面量，不能只对长度和首字节成立。 }
+  A := nextpas.core.system.sysutils.BytesOf('-----BEGIN TEST KEY-----' + LineEnding + 'AQID');
+  Check(Length(A) = Length('-----BEGIN TEST KEY-----' + LineEnding + 'AQID'),
+    'BytesOf should preserve constant argument length');
+  for I := 0 to High(A) do
+    Check(A[I] = Ord(('-----BEGIN TEST KEY-----' + LineEnding + 'AQID')[I + 1]),
+      'BytesOf should copy every byte of a constant argument');
+  B := nextpas.core.system.sysutils.BytesOf(StringOf(A));
+  Check((Length(B) = Length(A)) and CompareMem(@B[0], @A[0], Length(A)),
+    'StringOf/BytesOf round trip should preserve bytes');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -215,6 +280,10 @@ begin
   T.Test('BoolToStr follows SysUtils semantics', @TestBoolToStrSysUtilsSemantics);
   T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
   T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
+  T.Test('BytesOf copies constant argument content', @TestBytesOfConstantArgumentContent);
   T.Test('Supports queries interfaces', @TestSupportsInterfaceQuery);
+  T.Test('EncodeDate matches RTL epoch values', @TestEncodeDateMatchesRtlEpoch);
+  T.Test('EncodeDate rejects invalid dates', @TestEncodeDateInvalidRaises);
+  T.Test('EncodeDate spans whole days', @TestEncodeDateWholeDayDifference);
   if not T.Run then Halt(1);
 end.

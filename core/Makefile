@@ -14,6 +14,10 @@ EXAMPLES_DIR := examples
 BENCHMARKS_DIR := benchmarks
 COMPILE_ONLY_TEST_DIRS := tests/nextpas.core.math/test_trig_host_compile_gate tests/nextpas.core.math/test_impl_simd_win64_compile_gate
 
+# 手工运行的真机取证/E2E 门：需外部对端（如 aioquic 回显服务器），
+# 目录内刻意不提供 test 目标（见其 Makefile 注释），聚合器必须跳过。
+MANUAL_RUN_TEST_DIRS := tests/nextpas.core.net.quic/e2e_quic_echo tests/nextpas.core.net.quic/e2e_quic_h3
+
 # compile-only opt-in gate:tests/nextpas.core.math/test_trig_host_compile_gate
 # compile-only opt-in gate:tests/nextpas.core.math/test_impl_simd_win64_compile_gate
 
@@ -43,7 +47,7 @@ test: dirs
 	fi
 	@find $(TESTS_DIR) -mindepth 2 -name Makefile | sort | while read mk; do \
 		dir=$$(dirname "$$mk"); \
-		case " $(COMPILE_ONLY_TEST_DIRS) " in *" $$dir "*) continue ;; esac; \
+		case " $(COMPILE_ONLY_TEST_DIRS) $(MANUAL_RUN_TEST_DIRS) " in *" $$dir "*) continue ;; esac; \
 		echo "Running test project: $$dir"; \
 		$(MAKE) -C "$$dir" test || exit 1; \
 		echo ""; \

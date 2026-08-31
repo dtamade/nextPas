@@ -45,7 +45,7 @@ end;
 
 function IsGzipPred(const AData: TBytes): Boolean; inline;
 begin
-  Result := (Length(AData) >= 2) and (AData[0] = GZIP_MAGIC_1) and (AData[1] = GZIP_MAGIC_2);
+  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
 end;
 
 type
@@ -84,7 +84,7 @@ begin
   end;
   try
     LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
-    Result := (LRead >= 2) and (LBuf[0] = GZIP_MAGIC_1) and (LBuf[1] = GZIP_MAGIC_2);
+    Result := (LRead >= 2) and (LBuf[0] = $1F) and (LBuf[1] = $8B);
   finally
     LStream.Close;
   end;
@@ -111,11 +111,7 @@ end;
 
 function TAutoDecompressingVfs.OpenRead(const APath: string): IStream; inline;
 begin
-  // 为什么改：daAuto 对非 gzip 大文件避免全量 VfsReadAllBytes，仅 4K 头部预判后直通内层，省 1MiB 分配与拷贝（D05，bench 2.26ms→~4µs）
-  if not IsGzipHeader(APath) then
-    Result := FInner.OpenRead(APath)
-  else
-    Result := FTransformVfs.OpenRead(APath);
+  Result := FTransformVfs.OpenRead(APath);
 end;
 
 function TAutoDecompressingVfs.CaseSensitive: Boolean; inline;

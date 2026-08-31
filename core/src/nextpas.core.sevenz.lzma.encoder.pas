@@ -192,7 +192,7 @@ end;
 
 { 贪心哈希链查找：返回最佳匹配长度（< C_MIN_MATCH 表示无匹配），ADist 带出距离 }
 function FindBestMatch(var AE: TEngine; APos: SizeUInt; ARoom: SizeUInt;
-  ANiceLen: SizeUInt; out ADist: SizeUInt): SizeUInt;
+  ANiceLen: SizeUInt; AChainLimit: SizeUInt; out ADist: SizeUInt): SizeUInt;
 var
   LCand: Int32;
   LLimit: SizeUInt;
@@ -210,7 +210,7 @@ begin
   LLimit := ARoom;
   if LLimit > C_MAX_MATCH then
     LLimit := C_MAX_MATCH;
-  LChain := 128;
+  LChain := AChainLimit;
   while (LCand >= 0) and (LChain > 0) do
   begin
     {$PUSH}{$Q-}{$R-}
@@ -424,7 +424,7 @@ end;
 { 主编码循环：从当前 Pos 编码到 AChunkLimit 或码流触及软上限为止。
   每个操作先经 IsMatch/IsRep 概率位声明类型，再编载荷 }
 procedure RunEncodeRange(var AE: TEngine; AChunkLimit: SizeUInt;
-  ARcBuf: TSevenZOutBuffer; ANiceLen: SizeUInt);
+  ARcBuf: TSevenZOutBuffer; ANiceLen: SizeUInt; AChain: SizeUInt);
 var
   LBestLen: SizeUInt;
   LBestDist: SizeUInt;
@@ -446,7 +446,7 @@ begin
       begin
         HashInsert(AE, AE.Pos);
         LBestLen := FindBestMatch(AE, AE.Pos, AChunkLimit - AE.Pos, ANiceLen,
-          LBestDist);
+          AChain, LBestDist);
       end;
     end;
     LPeeked := False;
@@ -461,7 +461,7 @@ begin
       begin
         HashInsert(AE, AE.Pos + 1);
         LNextLen := FindBestMatch(AE, AE.Pos + 1, AChunkLimit - AE.Pos - 1,
-          ANiceLen, LNextDist);
+          ANiceLen, AChain, LNextDist);
         if LNextLen > LBestLen then
         begin
           EncodeLiteral(AE);
@@ -495,15 +495,25 @@ begin
   end;
 end;
 
-procedure LevelParams(ALevel: TSevenZCompressionLevel; out ANice: SizeUInt);
+procedure LevelParams(ALevel: TSevenZCompressionLevel; out ANice: SizeUInt;
+  out AChain: SizeUInt);
 begin
   case ALevel of
     szclFastest:
-      ANice := 32;
+      begin
+        ANice := 32;
+        AChain := 32;
+      end;
     szclBest:
-      ANice := C_MAX_MATCH;
+      begin
+        ANice := C_MAX_MATCH;
+        AChain := 256;
+      end;
   else
-    ANice := 128;
+    begin
+      ANice := 128;
+      AChain := 128;
+    end;
   end;
 end;
 
@@ -548,6 +558,7 @@ var
   LE: TEngine;
   LSize: SizeUInt;
   LNice: SizeUInt;
+  LChain: SizeUInt;
   LChunkStart: SizeUInt;
   LChunkLimit: SizeUInt;
   LConsumed: SizeUInt;
@@ -591,7 +602,7 @@ begin
       LE.Rc := nil;
       ResetState(LE);
       MatcherAlloc(LE);
-      LevelParams(ALevel, LNice);
+      LevelParams(ALevel, LNice, LChain);
       LFirstChunk := True;
       LAfterUncomp := False;
       while LE.Pos < LSize do
@@ -619,7 +630,7 @@ begin
           try
             LE.Rc := LRc;
             LRc.Init;
-            RunEncodeRange(LE, LChunkLimit, LChunkBuf, LNice);
+            RunEncodeRange(LE, LChunkLimit, LChunkBuf, LNice, LChain);
             LRc.Flush;
           finally
             LE.Rc := nil;

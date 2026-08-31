@@ -6,8 +6,6 @@ unit nextpas.core.db.odbc.adapter;
        （含达梦/openGauss/KingbaseES 等国产库——路线图 D4 备选路径）
        经本适配器接入统一面；驱动专属特性不冒充，能力缺口诚实登记。
 
-       体积注记：本单元约1420行超 800 行软阈值，内聚性强（适配器单职责），暂不拆分，拆分预留见 roadmap。
-
        执行模型：IDbQuery 走 SQLPrepare/SQLBindParameter/SQLExecute
        （服务端 prepared，参数化即注入安全）；结果经 SQLFetch +
        SQLGetData 惰性物化（每行每列首次访问取一次，行内缓存）。
@@ -53,9 +51,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.db.base,
-  nextpas.core.db.sqlscan,
   nextpas.core.db.intf,
-  nextpas.core.db.capprobe,
   nextpas.core.db.odbc.base;
 
 type
@@ -70,10 +66,7 @@ type
   BackendCode=诊断 NativeError）。空 DSN fail-fast。 }
 function ConnectOdbc(const ADsn: string): IDbConnection;
 function ConnectOdbc(const ADsn: string;
-  const AOptions: TDbConnectOptions): IDbConnection; overload;
-function ConnectOdbc(const ADsn: string;
-  const AOptions: TDbConnectOptions;
-  const AStmtCacheCapacity: Integer): IDbConnection; overload;
+  const AOptions: TDbConnectOptions): IDbConnection;
 
 { ---- 纯函数导出供门禁离线验证 ---- }
 
@@ -86,19 +79,14 @@ function TranslatePlaceholdersOdbc(const ASql: string;
 implementation
 
 uses
-  nextpas.core.exception,
-  nextpas.core.base.utils,
   nextpas.core.text.conv,
-  nextpas.core.text.format,
-  nextpas.core.text.kv,
-  nextpas.core.db.bulk,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.tx,
   nextpas.core.sync,
   nextpas.core.text.builder,
-  nextpas.core.collections.lrucache.intf,
-  nextpas.core.collections.lrucache,
   nextpas.core.db.odbc.ffi,
   nextpas.core.db.odbc.loader;
 
@@ -132,37 +120,6 @@ type
     IntVal: Int64;
     Data: TBytes;
   end;
-
-  { 空闲语句持有者：LRU 值形态（接口托管防搬移泄漏，见 mysql 侧同纪律）}
-  IOdbcStmtHolder = interface
-    ['{C2D8E4A1-5B9F-4A6E-8C3D-2E1F0A9B8C7D}']
-    function Detach: Pointer;
-    function Slots: TIntArray;
-    function ParamCount: Integer;
-    function Rewritten: string;
-  end;
-
-  TOdbcStmtHolder = class(TInterfacedObject, IOdbcStmtHolder)
-  private
-    FStmt: Pointer;
-    FSlots: TIntArray;
-    FParamCount: Integer;
-    FRewritten: string;
-  public
-    constructor Create(AStmt: Pointer; const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
-    destructor Destroy; override;
-    function Detach: Pointer;
-    function Slots: TIntArray;
-    function ParamCount: Integer;
-    function Rewritten: string;
-  end;
-
-  IOdbcStmtHome = interface
-    ['{D3E9F5B2-6C0A-4B7F-9D4E-3F2A1B0C9D8E}']
-    procedure ReturnStmt(const ASql: string; AStmt: Pointer; const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
-  end;
-
-  IOdbcStmtCache = specialize ILruCache<string, IOdbcStmtHolder>;
 
 { ---- 错误桥接 ---- }
 { 惯例：异常对象非引用计数——单次直接构造最终 EDbError 并 raise，
@@ -203,14 +160,14 @@ begin
     LNative := LDiag[0].NativeError;
     LMsg := LDiag[0].Message;
     if LMsg = '' then
-      LMsg := TextFormat('odbc: %s failed [%s/%d]',
+      LMsg := Format('odbc: %s failed [%s/%d]',
         [AContext, LSs, LNative]);
   end
   else
   begin
     LSs := '';
     LNative := 0;
-    LMsg := TextFormat('odbc: %s failed [retcode %d, no diagnostics]',
+    LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
   ClassifyOdbcEx(LSs, LNative, AMyFlavor, LCategory, LConstraint);
@@ -234,14 +191,14 @@ begin
     LNative := LDiag[0].NativeError;
     LMsg := LDiag[0].Message;
     if LMsg = '' then
-      LMsg := TextFormat('odbc: %s failed [%s/%d]',
+      LMsg := Format('odbc: %s failed [%s/%d]',
         [AContext, LSs, LNative]);
   end
   else
   begin
     LSs := '';
     LNative := 0;
-    LMsg := TextFormat('odbc: %s failed [retcode %d, no diagnostics]',
+    LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
   sql_freeHandle(SQL_HANDLE_STMT, AStmt);
@@ -254,12 +211,152 @@ end;
 function TranslatePlaceholdersOdbc(const ASql: string;
   out ARewritten: string; out ASlots: TIntArray): Integer;
 var
-  LSlots: TDbSqlSlotArray;
+  LB: IStringBuilder;
+  I: Integer;
+  C: Char;
+  InStr, InDq, InBrk, InLineC, InBlockC: Boolean;
+  N, Seq, LCount, LCap: Integer;
 begin
-  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
-  Result := SqlScanTranslateQuestion(ASql, DBSQLSCAN_ODBC,
-    ARewritten, LSlots);
-  ASlots := LSlots;
+  LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
+  ARewritten := '';
+  LCap := 8;
+  SetLength(ASlots, LCap);
+  LCount := 0;
+  Seq := 0;
+  InStr := False;
+  InDq := False;
+  InBrk := False;
+  InLineC := False;
+  InBlockC := False;
+  I := 1;
+  while I <= Length(ASql) do
+  begin
+    C := ASql[I];
+    if InLineC then
+    begin
+      LB.AppendChar(C);
+      if C = #10 then
+        InLineC := False;
+    end
+    else if InBlockC then
+    begin
+      LB.AppendChar(C);
+      if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
+      begin
+        LB.AppendChar('/');
+        InBlockC := False;
+        Inc(I);
+      end;
+    end
+    else if InStr then
+    begin
+      LB.AppendChar(C);
+      if C = '''' then
+      begin
+        if (I < Length(ASql)) and (ASql[I + 1] = '''') then
+        begin
+          LB.AppendChar('''');
+          Inc(I);
+        end
+        else
+          InStr := False;
+      end;
+    end
+    else if InDq then
+    begin
+      LB.AppendChar(C);
+      if C = '"' then
+      begin
+        if (I < Length(ASql)) and (ASql[I + 1] = '"') then
+        begin
+          LB.AppendChar('"');
+          Inc(I);
+        end
+        else
+          InDq := False;
+      end;
+    end
+    else if InBrk then
+    begin
+      LB.AppendChar(C);
+      if C = ']' then
+      begin
+        if (I < Length(ASql)) and (ASql[I + 1] = ']') then
+        begin
+          LB.AppendChar(']');
+          Inc(I);
+        end
+        else
+          InBrk := False;
+      end;
+    end
+    else
+    begin
+      case C of
+        '''' :
+          begin
+            InStr := True;
+            LB.AppendChar(C);
+          end;
+        '"' :
+          begin
+            InDq := True;
+            LB.AppendChar(C);
+          end;
+        '[' :
+          begin
+            InBrk := True;
+            LB.AppendChar(C);
+          end;
+        '-' :
+          begin
+            if (I < Length(ASql)) and (ASql[I + 1] = '-') then
+              InLineC := True;
+            LB.AppendChar(C);
+          end;
+        '/' :
+          begin
+            if (I < Length(ASql)) and (ASql[I + 1] = '*') then
+            begin
+              InBlockC := True;
+              Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
+              Continue;
+            end;
+            LB.AppendChar(C);
+          end;
+        '?' :
+          begin
+            Inc(I);
+            N := 0;
+            while (I <= Length(ASql)) and (ASql[I] in ['0'..'9']) do
+            begin
+              N := N * 10 + (Ord(ASql[I]) - Ord('0'));
+              Inc(I);
+            end;
+            if N = 0 then
+            begin
+              Inc(Seq);
+              N := Seq;
+            end;
+            LB.AppendChar('?');
+            if LCount >= LCap then
+            begin
+              LCap := LCap * 2;
+              SetLength(ASlots, LCap);
+            end;
+            ASlots[LCount] := N;
+            Inc(LCount);
+            Continue;
+          end;
+      else
+        LB.AppendChar(C);
+      end;
+    end;
+    Inc(I);
+  end;
+  SetLength(ASlots, LCount);
+  ARewritten := LB.ToString;
+  Result := LCount;
 end;
 
 { ---- TOdbcQuery ---- }
@@ -288,8 +385,6 @@ type
       OnQuery（首 Step 计时，同周期后续 Step 不再发）}
     FTrace: TDbTraceHub;
     FSql: string;                     { 统一契约原文（? 原样进摘要）}
-    FRewritten: string;               { 服务端 prepare 形态（缓存 key 关联）}
-    FHome: IOdbcStmtHome;             { 归还通道；nil = 直通 }
     FEmitted: Boolean;
     FMyFlavor: Boolean;               { MySQL 系驱动：允许码位提精 }
     procedure CheckIndex(const AIndex: Integer);
@@ -306,11 +401,7 @@ type
   public
     constructor Create(ADbc: Pointer; AStmt: Pointer;
       const ASlots: TIntArray; AServerParamCount: Integer;
-      const ASql: string; ATrace: TDbTraceHub; AMyFlavor: Boolean); overload;
-    constructor Create(ADbc: Pointer; AStmt: Pointer;
-      const ASlots: TIntArray; AServerParamCount: Integer;
-      const ASql: string; ATrace: TDbTraceHub; AMyFlavor: Boolean;
-      const AHome: IOdbcStmtHome; const ARewritten: string); overload;
+      const ASql: string; ATrace: TDbTraceHub; AMyFlavor: Boolean);
     destructor Destroy; override;
 
     procedure BindText(AIndex: Integer; const AValue: string);
@@ -334,14 +425,6 @@ type
 constructor TDbOdbcQuery.Create(ADbc: Pointer; AStmt: Pointer;
   const ASlots: TIntArray; AServerParamCount: Integer;
   const ASql: string; ATrace: TDbTraceHub; AMyFlavor: Boolean);
-begin
-  Create(ADbc, AStmt, ASlots, AServerParamCount, ASql, ATrace, AMyFlavor, nil, '');
-end;
-
-constructor TDbOdbcQuery.Create(ADbc: Pointer; AStmt: Pointer;
-  const ASlots: TIntArray; AServerParamCount: Integer;
-  const ASql: string; ATrace: TDbTraceHub; AMyFlavor: Boolean;
-  const AHome: IOdbcStmtHome; const ARewritten: string);
 var
   I: Integer;
 begin
@@ -366,8 +449,6 @@ begin
   for I := 0 to FParamCount - 1 do
     FLogical[I].Kind := obkNone;
   FSql := ASql;
-  FRewritten := ARewritten;
-  FHome := AHome;
   FTrace := ATrace;
   FEmitted := False;
 end;
@@ -377,18 +458,9 @@ begin
   FreeExecutionState;
   if FStmt <> nil then
   begin
-    if FHome <> nil then
-    begin
-      FHome.ReturnStmt(FSql, FStmt, FSlots, FParamCount, FRewritten);
-      FStmt := nil;
-    end
-    else
-    begin
-      sql_freeHandle(SQL_HANDLE_STMT, FStmt);
-      FStmt := nil;
-    end;
+    sql_freeHandle(SQL_HANDLE_STMT, FStmt);
+    FStmt := nil;
   end;
-  FHome := nil;
   inherited Destroy;
 end;
 
@@ -952,8 +1024,7 @@ end;
 
 type
   TDbOdbcConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
-    IDbBatchExecutor, IDbCapabilities, IDbTraceControl, IDbBulkCopy,
-    IDbStmtCacheControl, IOdbcStmtHome)
+    IDbBatchExecutor, IDbCapabilities, IDbTraceControl)
   private
     FEnv, FDbc: Pointer;
     FLock: INativeMutex;
@@ -966,13 +1037,8 @@ type
     FDriverName: string;        { SQL_DRIVER_NAME（诊断 + flavor 判定）}
     FMyFlavor: Boolean;         { MySQL 系驱动：错误码位可提精 }
     FStmtTimeoutSec: Integer;   { 0 = 关；>0 每语句设 QUERY_TIMEOUT }
-    FServerVersion: Integer;
-    FServerVersionProbed: Boolean;
     { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
     FTrace: TDbTraceHub;
-    FBulk: TDbBulkBuffer;
-    FCache: IOdbcStmtCache;
-    procedure BulkExec(const ASql: string);
     procedure ApplyAutoCommit(const AOn: Boolean);
     procedure RestoreAutoCommitOn;
     procedure DoExec(const ASql: string; const ATimeoutSec: Integer);
@@ -983,8 +1049,7 @@ type
     procedure ProbeCapabilities;
   public
     constructor Create(AEnv, ADbc: Pointer;
-      const AOptions: TDbConnectOptions;
-      const AStmtCacheCapacity: Integer = DEFAULT_ODBC_STMT_CACHE_CAPACITY);
+      const AOptions: TDbConnectOptions);
     destructor Destroy; override;
 
     { IDbTraceControl }
@@ -1018,80 +1083,15 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
-    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
-    function ServerVersion: Integer;
-    function SupportsNativeVector: Boolean;
-    function SupportsJsonPath: Boolean;
-    function SupportsRangeTypes: Boolean;
-    function SupportsBulkCopy: Boolean;
-
-    { IDbStmtCacheControl }
-    procedure Clear;
-    function Size: Integer;
-    function HitRate: Double;
-
-    { IOdbcStmtHome }
-    procedure ReturnStmt(const ASql: string; AStmt: Pointer; const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
-
-    { IDbBulkCopy V4.3: 单事务批量行复制（复用 Exec 批，V4.3 universal） }
-    procedure BeginCopy(const ATable: string; const AColumns: array of string);
-    procedure WriteRow(const AValues: array of string);
-    procedure EndCopy;
-    procedure AbortCopy;
   end;
-
-{ ---- TOdbcStmtHolder ---- }
-
-constructor TOdbcStmtHolder.Create(AStmt: Pointer; const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
-var I: Integer;
-begin
-  inherited Create;
-  FStmt := AStmt;
-  SetLength(FSlots, Length(ASlots));
-  for I := 0 to High(ASlots) do FSlots[I] := ASlots[I];
-  FParamCount := AParamCount;
-  FRewritten := ARewritten;
-end;
-
-destructor TOdbcStmtHolder.Destroy;
-begin
-  if FStmt <> nil then
-  begin
-    sql_freeHandle(SQL_HANDLE_STMT, FStmt);
-    FStmt := nil;
-  end;
-  inherited Destroy;
-end;
-
-function TOdbcStmtHolder.Detach: Pointer;
-begin
-  Result := FStmt;
-  FStmt := nil;
-end;
-
-function TOdbcStmtHolder.Slots: TIntArray;
-begin
-  Result := FSlots;
-end;
-
-function TOdbcStmtHolder.ParamCount: Integer;
-begin
-  Result := FParamCount;
-end;
-
-function TOdbcStmtHolder.Rewritten: string;
-begin
-  Result := FRewritten;
-end;
 
 constructor TDbOdbcConnection.Create(AEnv, ADbc: Pointer;
-  const AOptions: TDbConnectOptions;
-  const AStmtCacheCapacity: Integer);
+  const AOptions: TDbConnectOptions);
 begin
   inherited Create;
   FEnv := AEnv;
@@ -1104,8 +1104,6 @@ begin
   FStmtTimeoutSec := 0;
   if AOptions.StatementTimeoutMs > 0 then
     FStmtTimeoutSec := (AOptions.StatementTimeoutMs + 999) div 1000;
-  if AStmtCacheCapacity > 0 then
-    FCache := specialize TLruCache<string, IOdbcStmtHolder>.Create(SizeUInt(AStmtCacheCapacity));
   FTrace := TDbTraceHub.Create;
   { OnAcquire 由 SetListener 挂载时补发（§2.12），ctor 不预发 }
   ProbeCapabilities;
@@ -1128,7 +1126,6 @@ destructor TDbOdbcConnection.Destroy;
 begin
   FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
   FreeAndNil(FTrace);
-  FCache := nil;
   if FDbc <> nil then
   begin
     sql_disconnect(FDbc);   { 尽力而为：已断连时错误可忽略 }
@@ -1275,11 +1272,6 @@ begin
     DoExec(ASql, FStmtTimeoutSec);
 end;
 
-procedure TDbOdbcConnection.BulkExec(const ASql: string);
-begin
-  Exec(ASql);
-end;
-
 function TDbOdbcConnection.Query(const ASql: string;
   const AOptions: TDbExecOptions): IDbQuery;
 begin
@@ -1297,21 +1289,7 @@ var
   LSlots: TIntArray;
   S: Pointer;
   LRc, LN: SmallInt;
-  Holder: IOdbcStmtHolder;
 begin
-  if (FCache <> nil) and FCache.Get(ASql, Holder) then
-  begin
-    FCache.Remove(ASql);
-    S := Holder.Detach;
-    LSlots := Holder.Slots;
-    LRewritten := Holder.Rewritten;
-    LN := SmallInt(Holder.ParamCount);
-    Holder := nil;
-    if ATimeoutSec > 0 then
-      sql_setStmtAttr(S, SQL_ATTR_QUERY_TIMEOUT, Pointer(PtrInt(ATimeoutSec)), 0);
-    Result := TDbOdbcQuery.Create(FDbc, S, LSlots, Integer(LN), ASql, FTrace, FMyFlavor, Self as IOdbcStmtHome, LRewritten);
-    Exit;
-  end;
   TranslatePlaceholdersOdbc(ASql, LRewritten, LSlots);
   S := nil;
   LRc := sql_allocHandle(SQL_HANDLE_STMT, FDbc, S);
@@ -1332,7 +1310,7 @@ begin
     RaiseOdbcStmtClose(S, LRc, FMyFlavor, 'SQLNumParams');
   { 成功路径句柄移交 TDbOdbcQuery；其构造期槽位失配会自清句柄 }
   Result := TDbOdbcQuery.Create(FDbc, S, LSlots, Integer(LN), ASql,
-    FTrace, FMyFlavor, Self as IOdbcStmtHome, LRewritten);
+    FTrace, FMyFlavor);
 end;
 
 function TDbOdbcConnection.Query(const ASql: string): IDbQuery;
@@ -1399,6 +1377,8 @@ begin
 end;
 
 procedure TDbOdbcConnection.RollbackTxn;
+var
+  LRc: SmallInt;
 begin
   FLock.Acquire;
   try
@@ -1407,7 +1387,7 @@ begin
         'RollbackTxn without a matching BeginTxn on this connection');
     { 任意深度 = 回滚整个事务（对齐 sqlite/pg）；回滚失败吞掉
       （服务端可能已自行中止事务），原异常由调用方重抛 }
-    sql_endTran(SQL_HANDLE_DBC, FDbc, SQL_ROLLBACK);
+    LRc := sql_endTran(SQL_HANDLE_DBC, FDbc, SQL_ROLLBACK);
     RestoreAutoCommitOn;
     FDepth := 0;
   finally
@@ -1475,52 +1455,12 @@ end;
 
 function TDbOdbcConnection.SupportsStmtCacheControl: Boolean;
 begin
-  Result := True;
-end;
-
-procedure TDbOdbcConnection.Clear;
-begin
-  if FCache <> nil then
-    FCache.Clear;
-end;
-
-function TDbOdbcConnection.Size: Integer;
-begin
-  if FCache <> nil then
-    Result := Integer(FCache.GetSize)
-  else
-    Result := 0;
-end;
-
-function TDbOdbcConnection.HitRate: Double;
-begin
-  if FCache <> nil then
-    Result := FCache.GetHitRate
-  else
-    Result := 0.0;
-end;
-
-procedure TDbOdbcConnection.ReturnStmt(const ASql: string; AStmt: Pointer; const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
-begin
-  if AStmt = nil then Exit;
-  if FCache <> nil then
-  begin
-    sql_closeCursor(AStmt);
-    { 尝试重置绑定：失败则弃置 }
-    FCache.Put(ASql, TOdbcStmtHolder.Create(AStmt, ASlots, AParamCount, ARewritten));
-  end
-  else
-    sql_freeHandle(SQL_HANDLE_STMT, AStmt);
+  Result := False;  { A4 未接语句缓存（C 线排期）}
 end;
 
 function TDbOdbcConnection.SupportsLargeObjects: Boolean;
 begin
   Result := False;  { 统一层无 LO 面（网关无跨驱动 LO 语义）}
-end;
-
-function TDbOdbcConnection.SupportsArrayBinding: Boolean;
-begin
-  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
 end;
 
 function TDbOdbcConnection.SupportsNativeBool: Boolean;
@@ -1550,62 +1490,6 @@ begin
     同级的保守下界 }
 end;
 
-
-function TDbOdbcConnection.ServerVersion: Integer;
-begin
-  if FServerVersionProbed then Exit(FServerVersion);
-  FServerVersionProbed := True;
-  { FProductVersion 已是 ProbeCapabilities 期 GetInfoStr(SQL_DBMS_VER) 结果；
-    驱动不支持时为空串，ParseServerVersion 返回 0 诚实（Probe* 随之 false）。 }
-  if FProductVersion <> '' then
-    FServerVersion := ParseServerVersion(FProductVersion)
-  else
-    FServerVersion := ParseServerVersion(GetInfoStr(SQL_DBMS_VER));
-  Result := FServerVersion;
-end;
-
-function TDbOdbcConnection.SupportsNativeVector: Boolean;
-begin
-  Result := ProbeNativeVector(ServerVersion, False);
-end;
-
-function TDbOdbcConnection.SupportsJsonPath: Boolean;
-begin
-  Result := ProbeJsonPath(ServerVersion);
-end;
-
-function TDbOdbcConnection.SupportsRangeTypes: Boolean;
-begin
-  Result := ProbeRangeTypes(ServerVersion);
-end;
-
-function TDbOdbcConnection.SupportsBulkCopy: Boolean;
-begin
-  Result := ProbeSupportsBulkCopy(dbkOdbc, ServerVersion);
-end;
-
-procedure TDbOdbcConnection.BeginCopy(const ATable: string;
-  const AColumns: array of string);
-begin
-  DbBulkBeginCopy(FBulk, dbkOdbc, ATable, AColumns);
-end;
-
-procedure TDbOdbcConnection.WriteRow(const AValues: array of string);
-begin
-  DbBulkWriteRow(FBulk, dbkOdbc, AValues);
-end;
-
-procedure TDbOdbcConnection.EndCopy;
-begin
-  DbBulkEndCopy(FBulk, MaxPlaceholders, InTransaction, SupportsSavepoints,
-    @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
-end;
-
-procedure TDbOdbcConnection.AbortCopy;
-begin
-  DbBulkAbortCopy(FBulk);
-end;
-
 { ---- 工厂 ---- }
 
 function ConnectOdbc(const ADsn: string): IDbConnection;
@@ -1613,31 +1497,17 @@ begin
   Result := ConnectOdbc(ADsn, TDbConnectOptions.Default);
 end;
 
-procedure ValidateOdbcConnStr(const AConnStr: string);
-var
-  LErr: string;
-begin
-  if not ValidateKV(AConnStr, LErr) then
-    raise EDbError.CreateSimple(dbkOdbc, LErr);
-end;
-
 function ConnectOdbc(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection;
-begin
-  Result := ConnectOdbc(ADsn, AOptions, DEFAULT_ODBC_STMT_CACHE_CAPACITY);
-end;
-
-function ConnectOdbc(const ADsn: string;
-  const AOptions: TDbConnectOptions;
-  const AStmtCacheCapacity: Integer): IDbConnection;
 var
   LEnv, LDbc: Pointer;
   LRc: SmallInt;
   LOut: array[0..C_OUT_CONN_STR - 1] of AnsiChar;
   LOutLen: SmallInt;
 begin
-  ValidateOdbcConnStr(ADsn);
   OdbcEnsureLoaded;
+  if Trim(ADsn) = '' then
+    raise EDbError.CreateSimple(dbkOdbc, 'empty dsn');
   LEnv := nil;
   LDbc := nil;
   LRc := sql_allocHandle(SQL_HANDLE_ENV, nil, LEnv);
@@ -1668,7 +1538,7 @@ begin
         RaiseOdbcH(SQL_HANDLE_DBC, LDbc, LRc, False, 'SQLDriverConnect');
       { 句柄所有权在此移交连接对象；构造期不再抛错（探测全为
         best effort），故移交后无双重释放窗口 }
-      Result := TDbOdbcConnection.Create(LEnv, LDbc, AOptions, AStmtCacheCapacity);
+      Result := TDbOdbcConnection.Create(LEnv, LDbc, AOptions);
     except
       sql_freeHandle(SQL_HANDLE_DBC, LDbc);   { 仅覆盖建连窗口 }
       raise;

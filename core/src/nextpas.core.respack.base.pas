@@ -8,7 +8,6 @@ unit nextpas.core.respack.base;
 interface
 
 uses
-  nextpas.core.base,
   nextpas.core.exception;
 
 const
@@ -93,9 +92,7 @@ type
 
   { 错误层级：全部挂在 exception 根上，不触碰 SysUtils。
     对齐 vfs EVfsError(Op/Path) 范式：Op/Path 结构化定位，message 保留
-    详情后缀 (op=…, path=…) 质感；CreateStep 补充 Op/Path 重载。
-    同处 base 原因：错误与 LE/FNV/路径同为 L0 零依赖基座，独立 errors 单元
-    会引入循环或过度拆分；待错误增长再拆分。 }
+    详情后缀 (op=…, path=…) 质感；CreateStep 补充 Op/Path 重载。 }
   EResPackError = class(Exception)
   private
     FOp: string;
@@ -137,7 +134,7 @@ function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32;
   分隔、段非空非'.'非'..'、反斜杠为普通字符；特例 '.' 表根。
   文件条目场景 AFileEntry=True 时拒绝根。 }
 function ResPackValidPath(const APath: string;
-  const AFileEntry: Boolean): Boolean; inline;
+  const AFileEntry: Boolean): Boolean;
 
 { 默认构建选项 }
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
@@ -203,7 +200,7 @@ begin
 end;
 
 function ResPackValidPath(const APath: string;
-  const AFileEntry: Boolean): Boolean; inline;
+  const AFileEntry: Boolean): Boolean;
 begin
   Result := BaseValidPath(APath, not AFileEntry);
 end;
@@ -226,10 +223,25 @@ begin
   ABlob.Owned := False;
 end;
 
-{ 十进制整数转字符串 — 复用 L0 base.IntToStr 单源（inline 转发，避免重复实现；不引 L1 text.conv 以保 L0 分层） }
-function ResPackUIntToStr(AValue: UInt32): string; inline;
+{ 十进制整数转字符串（局部实现，避免引入 SysUtils/text 依赖） }
+function ResPackUIntToStr(AValue: UInt32): string;
+var
+  Tmp: array[0..15] of AnsiChar;
+  I, J: Integer;
 begin
-  Result := nextpas.core.base.IntToStr(UInt64(AValue));
+  FillChar(Tmp, SizeOf(Tmp), 0);
+  if AValue = 0 then
+    Exit('0');
+  I := High(Tmp);
+  while AValue > 0 do
+  begin
+    Tmp[I] := AnsiChar(Ord('0') + (AValue mod 10));
+    Dec(I);
+    AValue := AValue div 10;
+  end;
+  SetLength(Result, High(Tmp) - I);
+  for J := 1 to High(Tmp) - I do
+    Result[J] := Char(Tmp[I + J]);
 end;
 
 constructor EResPackError.Create(const AMsg: string);

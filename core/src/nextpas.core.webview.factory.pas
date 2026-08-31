@@ -20,10 +20,10 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.platform.thread,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
-  nextpas.core.webview.fake,
-  nextpas.core.window.intf;
+  nextpas.core.webview.fake;
 
 type
   {** fluent 构建器。COM 引用计数生命周期，消费方不手写释放。 *}
@@ -41,10 +41,20 @@ type
     function Ephemeral: IWebviewBuilder;
     function AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
     function RegisterInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
+      AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder; overload;
+    function RegisterInvoke(const ACmd: string;
+      AHandler: TWebviewInvokeSyncMethod): IWebviewBuilder; overload;
+    function RegisterInvoke(const ACmd: string;
+      AHandler: TWebviewInvokeSyncProc): IWebviewBuilder; overload;
     function RegisterAsyncInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
-    function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
+      AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder; overload;
+    function RegisterAsyncInvoke(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncMethod): IWebviewBuilder; overload;
+    function RegisterAsyncInvoke(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncProc): IWebviewBuilder; overload;
+    function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder; overload;
+    function OnReady(AHandler: TWebviewNotifyMethod): IWebviewBuilder; overload;
+    function OnReady(AHandler: TWebviewNotifyProc): IWebviewBuilder; overload;
     { 构造期导航（S9）：两者均进 FOptions，由后端构造期按优先级启动
       （InitialUrl 优先于 InitialHtml；Run/RunHtml 参数优先于两者）。 }
     function InitialUrl(const AUrl: string): IWebviewBuilder;
@@ -55,7 +65,6 @@ type
     { 显式钉后端（fake 等确定性场景）；缺省 = DefaultWebviewKind 能力驱动，
       Build 时不可用按工厂语义 fail-fast }
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
-    function Parent(const AWindow: IWindow): IWebviewBuilder;
     function Build: IWebviewWindow;
     procedure Run(const AUrl: string);
     procedure RunHtml(const AHtml: string);
@@ -76,46 +85,47 @@ function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
 function CreateFakeWebview(
   const AOptions: TWebviewOptions): IWebviewWindow;
 
-function CreateFakeWebviewOn(const AParent: IWindow;
-  const AOptions: TWebviewOptions): IWebviewWindow;
-
 { 按 kind 创建；不可用抛 EWebviewBackendUnavailable（消息含已探测 kind 表）}
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
 
-function CreateWebviewOn(const AParent: IWindow;
-  const AOptions: TWebviewOptions): IWebviewWindow;
+{ 阻塞直到所有窗口关闭或 WebviewExitLoop；gtk 活跃窗口存在时进入
+  GTK 主循环（最后窗口 destroy 触发 quit 返回），否则 fake 泵循环 }
+procedure WebviewRunLoop;
 
-{ M6 单泵统一：WebviewRunLoop/WebviewExitLoop 为 WindowRunLoop/WindowExitLoop 的 deprecated shim（inline 转发），单泵归 window.factory }
-procedure WebviewRunLoop; inline; deprecated 'Use WindowRunLoop';
-procedure WebviewExitLoop; inline; deprecated 'Use WindowExitLoop';
+{ 从任意线程请求退出 RunLoop（幂等）}
+procedure WebviewExitLoop;
 
 implementation
 
 uses
-  TypInfo,
-  nextpas.core.window.base,
-  nextpas.core.window.factory,
-  nextpas.core.window.fake,
+  nextpas.core.atomic,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
+  nextpas.core.webview.gtk.win,
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.webview2,
+  nextpas.core.webview.webview2.win,
   nextpas.core.webview.wk.loader,
   nextpas.core.webview.wk;
 
+const
+  CWebviewKindNames: array[TWebviewKind] of string = (
+    'wvGtk', 'wvWebview2', 'wvWk', 'wvFake');
+  CKindOrder: array[0..3] of TWebviewKind = (wvWebview2, wvGtk, wvWk, wvFake);
+
+var
+  GExitRequested: Integer = 0;
+
 function DefaultWebviewKind: TWebviewKind;
+var
+  LKind: TWebviewKind;
 begin
-  { S18：能力驱动平台优先——wvWebview2（Windows/wine）优先于 wvGtk，
-    非对应平台探测自然失败，无 IFDEF；S25 加入 wvWk（Darwin 桩）。 }
-  if WebviewBackendAvailable(wvWebview2) then
-    Result := wvWebview2
-  else if WebviewBackendAvailable(wvGtk) then
-    Result := wvGtk
-  else if WebviewBackendAvailable(wvWk) then
-    Result := wvWk
-  else
-    Result := wvFake;
+  { S18/S25 能力驱动平台优先表驱动（CKindOrder 循环探测，无 IFDEF） }
+  for LKind in CKindOrder do
+    if WebviewBackendAvailable(LKind) then
+      Exit(LKind);
+  Result := wvFake;
 end;
 
 {$PUSH}{$WARNINGS OFF}
@@ -143,33 +153,6 @@ begin
   Result := TFakeWebview.Create(AOptions);
 end;
 
-function CreateFakeWebviewOn(const AParent: IWindow;
-  const AOptions: TWebviewOptions): IWebviewWindow;
-begin
-  CheckWebviewOptions(AOptions);
-  if AParent = nil then
-    raise EWebviewInvalidState.Create('CreateFakeWebviewOn: AParent must not be nil');
-  Result := TFakeWebview.CreateOn(AParent, AOptions);
-end;
-
-function CreateWebviewOn(const AParent: IWindow;
-  const AOptions: TWebviewOptions): IWebviewWindow;
-var
-  LKind: TWebviewKind;
-  LFakeAcc: nextpas.core.window.fake.IFakeSelfAccess;
-begin
-  CheckWebviewOptions(AOptions);
-  if AParent = nil then
-    Exit(CreateWebviewOf(DefaultWebviewKind, AOptions));
-  if (AParent.QueryInterface(
-      nextpas.core.window.fake.IFakeSelfAccess, LFakeAcc) = 0) then
-    Exit(TFakeWebview.CreateOn(AParent, AOptions));
-  LKind := DefaultWebviewKind;
-  if (LKind = wvGtk) and WebviewBackendAvailable(wvGtk) then
-    Exit(TGtkWebview.CreateOn(AParent, AOptions));
-  Result := TFakeWebview.CreateOn(AParent, AOptions);
-end;
-
 {$PUSH}{$WARNINGS OFF}
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
@@ -177,7 +160,8 @@ begin
   if not WebviewBackendAvailable(AKind) then
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is not available in this build', [
-      GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+      CWebviewKindNames[AKind]]);
+  // S45: RegisterBackend 表驱动预留
   case AKind of
     wvFake:     Result := CreateFakeWebview(AOptions);
     wvGtk:      Result := TGtkWebview.Create(AOptions);
@@ -186,19 +170,44 @@ begin
   else
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is registered but has no factory yet', [
-      GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+      CWebviewKindNames[AKind]]);
   end;
 end;
 {$POP}
 
-procedure WebviewRunLoop; inline;
+procedure WebviewRunLoop;
 begin
-  WindowRunLoop;
+  atomic_store(GExitRequested, 0);
+  while atomic_load(GExitRequested) = 0 do
+  begin
+    if GtkLiveWindowCount > 0 then
+      WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
+    else if WebView2LiveWindowCount > 0 then
+      Win32ShellRunMainLoop { Win32 消息泵（wine 真窗口可交互）}
+    else if WkLiveWindowCount > 0 then
+      begin
+        // Wk 桩：无 NSRunLoop 阻塞，短睡让出 CPU 等待 Close（Darwin 真实现接 NSApplication run）
+        platform_thread_sleep_ms(10);
+      end
+    else if FakeLiveWindowCount > 0 then
+      FakePumpAll
+    else
+      Break;
+    if (GtkLiveWindowCount = 0) and (WebView2LiveWindowCount = 0) and (WkLiveWindowCount = 0) and (FakeLiveWindowCount = 0) then
+      Break;
+    platform_thread_yield;
+  end;
 end;
 
-procedure WebviewExitLoop; inline;
+procedure WebviewExitLoop;
 begin
-  WindowExitLoop;
+  atomic_store(GExitRequested, 1);
+  { 阻塞式主循环期间标志位不可轮询——同步触发 quit }
+  if GtkLiveWindowCount > 0 then
+    WinShellQuitMainLoop;
+  if WebView2LiveWindowCount > 0 then
+    Win32ShellQuitMainLoop;
+  // Wk 桩无需显式 quit（Darwin 真实现为 NSApplication stop），仅置标志位即可
 end;
 
 { ---- Builder ---- }
@@ -215,7 +224,6 @@ type
   private
     FOptions: TWebviewOptions;
     FKind: TWebviewKind;
-    FParent: IWindow;
     FInvokes: array of TFakeInvokeReg;
     FInvokesCount: Integer;
     FReady: array of TWebviewNotifyHandler;
@@ -230,7 +238,6 @@ type
   public
     constructor Create;
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
-    function Parent(const AWindow: IWindow): IWebviewBuilder;
     function Title(const ATitle: string): IWebviewBuilder;
     function Size(AWidth, AHeight: Integer): IWebviewBuilder;
     function MinSize(AWidth, AHeight: Integer): IWebviewBuilder;
@@ -243,10 +250,20 @@ type
     function Ephemeral: IWebviewBuilder;
     function AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
     function RegisterInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
+      AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder; overload;
+    function RegisterInvoke(const ACmd: string;
+      AHandler: TWebviewInvokeSyncMethod): IWebviewBuilder; overload;
+    function RegisterInvoke(const ACmd: string;
+      AHandler: TWebviewInvokeSyncProc): IWebviewBuilder; overload;
     function RegisterAsyncInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
-    function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
+      AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder; overload;
+    function RegisterAsyncInvoke(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncMethod): IWebviewBuilder; overload;
+    function RegisterAsyncInvoke(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncProc): IWebviewBuilder; overload;
+    function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder; overload;
+    function OnReady(AHandler: TWebviewNotifyMethod): IWebviewBuilder; overload;
+    function OnReady(AHandler: TWebviewNotifyProc): IWebviewBuilder; overload;
     function InitialUrl(const AUrl: string): IWebviewBuilder;
     function InitialHtml(const AHtml: string): IWebviewBuilder;
     function DevServerUrl(const AUrl: string): IWebviewBuilder;
@@ -344,14 +361,9 @@ begin
   Result := Self;
 end;
 
-function TBuilderImpl.Parent(const AWindow: IWindow): IWebviewBuilder; inline;
-begin
-  FParent := AWindow;
-  Result := Self;
-end;
-
 procedure TBuilderImpl.GrowInitScripts; inline;
 begin
+  Assert(FInitScriptsCount >= 0, 'GrowInitScripts count');
   SetLength(FInitScripts, WebviewGrowCapacity(Length(FInitScripts)));
 end;
 
@@ -366,11 +378,13 @@ end;
 
 procedure TBuilderImpl.GrowInvokes; inline;
 begin
+  Assert(FInvokesCount >= 0, 'GrowInvokes count');
   SetLength(FInvokes, WebviewGrowCapacity(Length(FInvokes)));
 end;
 
 procedure TBuilderImpl.GrowReady; inline;
 begin
+  Assert(FReadyCount >= 0, 'GrowReady count');
   SetLength(FReady, WebviewGrowCapacity(Length(FReady)));
 end;
 
@@ -422,6 +436,64 @@ begin
   Result := Self;
 end;
 
+function TBuilderImpl.RegisterInvoke(const ACmd: string;
+  AHandler: TWebviewInvokeSyncMethod): IWebviewBuilder;
+begin
+  Result := RegisterInvoke(ACmd,
+    function(const APayloadJson: string): string
+    begin
+      Result := AHandler(APayloadJson);
+    end);
+end;
+
+function TBuilderImpl.RegisterInvoke(const ACmd: string;
+  AHandler: TWebviewInvokeSyncProc): IWebviewBuilder;
+begin
+  Result := RegisterInvoke(ACmd,
+    function(const APayloadJson: string): string
+    begin
+      Result := AHandler(APayloadJson);
+    end);
+end;
+
+function TBuilderImpl.RegisterAsyncInvoke(const ACmd: string;
+  AHandler: TWebviewInvokeAsyncMethod): IWebviewBuilder;
+begin
+  Result := RegisterAsyncInvoke(ACmd,
+    procedure(const APayloadJson: string; const ACompletion: IWebviewInvokeCompletion)
+    begin
+      AHandler(APayloadJson, ACompletion);
+    end);
+end;
+
+function TBuilderImpl.RegisterAsyncInvoke(const ACmd: string;
+  AHandler: TWebviewInvokeAsyncProc): IWebviewBuilder;
+begin
+  Result := RegisterAsyncInvoke(ACmd,
+    procedure(const APayloadJson: string; const ACompletion: IWebviewInvokeCompletion)
+    begin
+      AHandler(APayloadJson, ACompletion);
+    end);
+end;
+
+function TBuilderImpl.OnReady(AHandler: TWebviewNotifyMethod): IWebviewBuilder;
+begin
+  Result := OnReady(
+    procedure
+    begin
+      AHandler();
+    end);
+end;
+
+function TBuilderImpl.OnReady(AHandler: TWebviewNotifyProc): IWebviewBuilder;
+begin
+  Result := OnReady(
+    procedure
+    begin
+      AHandler();
+    end);
+end;
+
 function TBuilderImpl.InitialUrl(const AUrl: string): IWebviewBuilder; inline;
 begin
   FOptions.InitialUrl := AUrl;
@@ -436,6 +508,7 @@ end;
 
 function TBuilderImpl.DevServerUrl(const AUrl: string): IWebviewBuilder; inline;
 begin
+  CheckWebviewDevServerUrl(AUrl);
   FOptions.DevServerUrl := AUrl;
   Result := Self;
 end;
@@ -467,10 +540,7 @@ begin
   end
   else
     FOptions.InitScripts := nil;
-  if FParent <> nil then
-    Result := ApplyTo(CreateWebviewOn(FParent, FOptions))
-  else
-    Result := ApplyTo(CreateWebviewOf(FKind, FOptions));
+  Result := ApplyTo(CreateWebviewOf(FKind, FOptions));
 end;
 
 procedure TBuilderImpl.Run(const AUrl: string);
@@ -479,7 +549,7 @@ var
 begin
   LWin := Build;
   LWin.Navigate(AUrl);
-  WindowRunLoop;
+  WebviewRunLoop;
 end;
 
 procedure TBuilderImpl.RunHtml(const AHtml: string);
@@ -488,7 +558,7 @@ var
 begin
   LWin := Build;
   LWin.NavigateToString(AHtml);
-  WindowRunLoop;
+  WebviewRunLoop;
 end;
 
 initialization

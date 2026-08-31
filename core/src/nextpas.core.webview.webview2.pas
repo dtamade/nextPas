@@ -24,9 +24,7 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
-  nextpas.core.webview.webview2.ffi,
-  nextpas.core.window.base,
-  nextpas.core.window.intf;
+  nextpas.core.webview.webview2.ffi;
 
 type
   PEvalRec = ^TEvalRec;
@@ -41,9 +39,10 @@ type
     FOptions: TWebviewOptions;
     FUserAgent: string;
     FClosed: Boolean;
-    FWindow: IWindow;
-    FOwnsWindow: Boolean;
+    FWin: Pointer;
+    FVisible: Boolean;
     FZoom: Double;
+    FScale: Double;
     FReadyFired: Boolean;
     FOwnerThread: UInt64;
     FSelfKeepAlive: IInterface;
@@ -79,14 +78,15 @@ type
     FBridgeScriptId: WideString;
     {$ENDIF}
     procedure RequireOpen;
-    procedure HandleWindowEvent(const AEvent: TWindowEvent);
+    procedure DoScaleChanged(ANewScale: Double);
+    procedure EnsureScaleHook;
+    procedure EnsureResizeHook;
     procedure UpdateControllerBounds;
     procedure DispatchFrame(const AFrame: TWebviewFrame);
     procedure SendReceipt(AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
     procedure FireReadyOnce;
     procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
     procedure HandleNativeDestroy;
-    function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
     procedure TryCreateEnvironment;
     procedure GrowPendingEvals; inline;
     procedure GrowOnNavStarted; inline;
@@ -106,24 +106,22 @@ type
     class function MapInvokeCodeSafe(E: Exception): string; static;
   public
     constructor Create(const AOptions: TWebviewOptions);
-    constructor CreateOn(AWindow: IWindow; const AOptions: TWebviewOptions);
     destructor Destroy; override;
-    function GetWindow: IWindow;
-    { IWebviewDispatcher }
-    procedure Post(AProc: TWebviewProcRef); overload;
-    procedure Post(AProc: TWebviewProcMethod); overload;
-    procedure Post(AProc: TWebviewProc); overload;
-    function IsOnMainThread: Boolean;
+    { IWebviewDispatcher — inline 薄转发保留接口 }
+    procedure Post(AProc: TWebviewProcRef); overload; inline;
+    procedure Post(AProc: TWebviewProcMethod); overload; inline;
+    procedure Post(AProc: TWebviewProc); overload; inline;
+    function IsOnMainThread: Boolean; inline;
     { IWebviewWindow }
     procedure Close;
     function IsClosed: Boolean;
-    procedure Show; inline; procedure Hide; inline; function IsVisible: Boolean; inline;
-    procedure Focus; inline;
-    procedure SetTitle(const ATitle: string); inline; function GetTitle: string; inline;
-    procedure SetBounds(AWidth, AHeight: Integer); inline; function GetWidth: Integer; inline; function GetHeight: Integer; inline;
-    procedure SetResizable(AResizable: Boolean); inline;
-    procedure Maximize; inline; procedure Unmaximize; inline; function IsMaximized: Boolean; inline;
-    procedure Minimize; inline; procedure Restore; inline; function IsMinimized: Boolean; inline;
+    procedure Show; procedure Hide; function IsVisible: Boolean;
+    procedure Focus;
+    procedure SetTitle(const ATitle: string); function GetTitle: string;
+    procedure SetBounds(AWidth, AHeight: Integer); function GetWidth: Integer; function GetHeight: Integer;
+    procedure SetResizable(AResizable: Boolean);
+    procedure Maximize; procedure Unmaximize; function IsMaximized: Boolean;
+    procedure Minimize; procedure Restore; function IsMinimized: Boolean;
     procedure SetZoom(AFactor: Double); function GetZoom: Double;
     procedure SetUserAgent(const AUserAgent: string); function GetUserAgent: string;
     function GetScaleFactor: Double;
@@ -163,8 +161,9 @@ implementation
 
 uses
   nextpas.core.platform.thread,
+  nextpas.core.sync.mutex,
   nextpas.core.webview.webview2.loader,
-  nextpas.core.window.factory;
+  nextpas.core.webview.webview2.win;
 
 {$IFDEF MSWINDOWS}
 procedure CoTaskMemFree(pv: Pointer); stdcall; external 'ole32.dll' name 'CoTaskMemFree';
@@ -174,11 +173,29 @@ var
   GLive: Integer = 0;
   GLiveList: array of TWebView2Webview;
   GLiveListCount: Integer = 0;
+  GScaleHookInstalled: Boolean = False;
+  GResizeHookInstalled: Boolean = False;
 
 procedure GrowLiveList; inline;
 begin
   if GLiveListCount = Length(GLiveList) then
     SetLength(GLiveList, WebviewGrowCapacity(Length(GLiveList)));
+end;
+
+procedure GlobalWinScaleChanged(AWin: Pointer; AScale: Double);
+var I: Integer;
+begin
+  for I := 0 to GLiveListCount - 1 do
+    if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
+      GLiveList[I].DoScaleChanged(AScale);
+end;
+
+procedure GlobalWinResizeChanged(AWin: Pointer; AWidth, AHeight: Integer);
+var I: Integer;
+begin
+  for I := 0 to GLiveListCount - 1 do
+    if (GLiveList[I] <> nil) and (GLiveList[I].FWin = AWin) then
+      GLiveList[I].UpdateControllerBounds;
 end;
 
 procedure RegisterLive(AInst: TWebView2Webview);
@@ -531,12 +548,69 @@ type
     Proc: TWebviewProc;
   end;
 
+var
+  GPostRefPool: array of PPostRefRec;
+  GPostRefPoolCount: Integer = 0;
+  GPostMethodPool: array of PPostMethodRec;
+  GPostMethodPoolCount: Integer = 0;
+  GPostProcPool: array of PPostProcRec;
+  GPostProcPoolCount: Integer = 0;
+  GPostPoolLock: Pointer = nil;
+
+function PostPoolLock: TMutex; inline;
+begin
+  if GPostPoolLock = nil then
+    GPostPoolLock := TMutex.Create;
+  Result := TMutex(GPostPoolLock);
+end;
+
+function AcquirePostRefRec: PPostRefRec; inline;
+begin
+  PostPoolLock.Acquire;
+  try
+    if GPostRefPoolCount > 0 then
+    begin Dec(GPostRefPoolCount); Result := GPostRefPool[GPostRefPoolCount]; GPostRefPool[GPostRefPoolCount]:=nil; end else New(Result);
+  finally PostPoolLock.Release; end;
+end;
+
+procedure ReleasePostRefRec(A: PPostRefRec); inline;
+begin
+  if A=nil then Exit; A^.Ref:=nil;
+  PostPoolLock.Acquire;
+  try if GPostRefPoolCount=Length(GPostRefPool) then SetLength(GPostRefPool, WebviewGrowCapacity(Length(GPostRefPool)));
+    GPostRefPool[GPostRefPoolCount]:=A; Inc(GPostRefPoolCount); finally PostPoolLock.Release; end;
+end;
+
+function AcquirePostMethodRec: PPostMethodRec; inline;
+begin PostPoolLock.Acquire;
+  try if GPostMethodPoolCount>0 then begin Dec(GPostMethodPoolCount); Result:=GPostMethodPool[GPostMethodPoolCount]; GPostMethodPool[GPostMethodPoolCount]:=nil; end else New(Result); finally PostPoolLock.Release; end;
+end;
+
+procedure ReleasePostMethodRec(A: PPostMethodRec); inline;
+begin if A=nil then Exit; A^.Method:=nil;
+  PostPoolLock.Acquire;
+  try if GPostMethodPoolCount=Length(GPostMethodPool) then SetLength(GPostMethodPool, WebviewGrowCapacity(Length(GPostMethodPool)));
+    GPostMethodPool[GPostMethodPoolCount]:=A; Inc(GPostMethodPoolCount); finally PostPoolLock.Release; end;
+end;
+
+function AcquirePostProcRec: PPostProcRec; inline;
+begin PostPoolLock.Acquire;
+  try if GPostProcPoolCount>0 then begin Dec(GPostProcPoolCount); Result:=GPostProcPool[GPostProcPoolCount]; GPostProcPool[GPostProcPoolCount]:=nil; end else New(Result); finally PostPoolLock.Release; end;
+end;
+
+procedure ReleasePostProcRec(A: PPostProcRec); inline;
+begin if A=nil then Exit; A^.Proc:=nil;
+  PostPoolLock.Acquire;
+  try if GPostProcPoolCount=Length(GPostProcPool) then SetLength(GPostProcPool, WebviewGrowCapacity(Length(GPostProcPool)));
+    GPostProcPool[GPostProcPoolCount]:=A; Inc(GPostProcPoolCount); finally PostPoolLock.Release; end;
+end;
+
 procedure PostRefTrampoline(AData: Pointer); stdcall;
 var R: PPostRefRec;
 begin
   R := PPostRefRec(AData);
   try if Assigned(R^.Ref) then R^.Ref(); except end;
-  Dispose(R);
+  ReleasePostRefRec(R);
 end;
 
 procedure PostMethodTrampoline(AData: Pointer); stdcall;
@@ -544,7 +618,7 @@ var R: PPostMethodRec;
 begin
   R := PPostMethodRec(AData);
   try if Assigned(R^.Method) then R^.Method(); except end;
-  Dispose(R);
+  ReleasePostMethodRec(R);
 end;
 
 procedure PostProcTrampoline(AData: Pointer); stdcall;
@@ -552,7 +626,7 @@ var R: PPostProcRec;
 begin
   R := PPostProcRec(AData);
   try if Assigned(R^.Proc) then R^.Proc(); except end;
-  Dispose(R);
+  ReleasePostProcRec(R);
 end;
 
 class function TWebView2Webview.MapInvokeCodeSafe(E: Exception): string;
@@ -627,7 +701,8 @@ procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotify
 var I: Integer;
 begin
   for I := 0 to High(AList) do
-    AList[I]();
+    if Assigned(AList[I]) then
+      AList[I]();
 end;
 
 procedure TWebView2Webview.FireReadyOnce;
@@ -639,20 +714,16 @@ begin
     FOnReady[I]();
 end;
 
-procedure TWebView2Webview.HandleWindowEvent(const AEvent: TWindowEvent);
+procedure TWebView2Webview.DoScaleChanged(ANewScale: Double);
 var I: Integer;
 begin
-  if FClosed then Exit;
-  case AEvent.Kind of
-    weResized: UpdateControllerBounds;
-    weScaleChanged, weDpiChanged:
-      begin
-        for I := 0 to FScaleHandlersRefCount - 1 do if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](AEvent.NewScale);
-        for I := 0 to FScaleHandlersMethodCount - 1 do if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](AEvent.NewScale);
-        for I := 0 to FScaleHandlersProcCount - 1 do if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](AEvent.NewScale);
-      end;
-    weClosed, weCloseRequested: HandleNativeDestroy;
-  end;
+  FScale := ANewScale;
+  for I := 0 to FScaleHandlersRefCount - 1 do
+    if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](ANewScale);
+  for I := 0 to FScaleHandlersMethodCount - 1 do
+    if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](ANewScale);
+  for I := 0 to FScaleHandlersProcCount - 1 do
+    if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](ANewScale);
 end;
 
 procedure TWebView2Webview.RemovePending(ARec: PEvalRec);
@@ -670,24 +741,36 @@ begin
     end;
 end;
 
-function TWebView2Webview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
+procedure TWebView2Webview.EnsureScaleHook;
 begin
-  Result := DefaultWindowOptions;
-  Result.Title := AOptions.Title;
-  Result.Width := AOptions.Width;
-  Result.Height := AOptions.Height;
-  Result.Resizable := AOptions.Resizable;
-  Result.Maximized := AOptions.Maximized;
+  if GScaleHookInstalled then Exit;
+  GScaleHookInstalled := True;
+  Win32ShellOnScaleChanged(@GlobalWinScaleChanged);
+end;
+
+procedure TWebView2Webview.EnsureResizeHook;
+begin
+  if GResizeHookInstalled then Exit;
+  GResizeHookInstalled := True;
+  Win32ShellOnResize(@GlobalWinResizeChanged);
 end;
 
 procedure TWebView2Webview.UpdateControllerBounds;
 {$IFDEF MSWINDOWS}
-var R: tagRECT;
+var
+  R: tagRECT;
+  W, H: Integer;
 begin
   if FController = nil then Exit;
-  if FWindow = nil then Exit;
-  R.Left := 0; R.Top := 0; R.Right := FWindow.GetWidth; R.Bottom := FWindow.GetHeight;
-  FController.put_Bounds(R);
+  if FWin = nil then Exit;
+  if Win32ShellClientSize(FWin, W, H) then
+  begin
+    R.Left := 0;
+    R.Top := 0;
+    R.Right := W;
+    R.Bottom := H;
+    FController.put_Bounds(R);
+  end;
 end;
 {$ELSE}
 begin
@@ -741,8 +824,13 @@ begin
     LJs := BuildRejectScript(AFrameId, ACode, AMessage)
   else
     LJs := BuildResolveScript(AFrameId, AResultJson);
-  // fire-and-forget eval (no callback)
-  Eval(LJs, nil, nil);
+  // fire-and-forget：跳 pending，直接底层 ExecuteScript（零 pending）
+{$IFDEF MSWINDOWS}
+  if FWebView <> nil then
+    FWebView.ExecuteScript(PWideChar(WideString(LJs)), nil);
+{$ELSE}
+  // 非 Windows 桩：无 controller，丢弃（与 gtk fire-and-forget 对称）
+{$ENDIF}
 end;
 
 {$IFDEF MSWINDOWS}
@@ -758,15 +846,12 @@ end;
 procedure TWebView2Webview.OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
 var
   LHandler: ICoreWebView2CreateCoreWebView2ControllerCompletedHandler;
-  LParent: Pointer;
 begin
   if FClosed then Exit;
   if (errorCode <> S_OK) or (AEnv = nil) then Exit;
   FEnv := AEnv;
   LHandler := TControllerCompletedHandler.Create(Self);
-  LParent := nil;
-  if FWindow <> nil then LParent := FWindow.NativeHandle;
-  FEnv.CreateCoreWebView2Controller(LParent, LHandler);
+  FEnv.CreateCoreWebView2Controller(FWin, LHandler);
 end;
 
 procedure TWebView2Webview.OnControllerCreated(errorCode: LongInt; const ACtrl: ICoreWebView2Controller);
@@ -839,7 +924,9 @@ end;
 {$ENDIF}
 
 constructor TWebView2Webview.Create(const AOptions: TWebviewOptions);
-var LInfo: TWebView2LoadInfo;
+var
+  LInfo: TWebView2LoadInfo;
+  LGeo: TWin32ShellGeometry;
 begin
   CheckWebviewOptions(AOptions);
   if not TryLoadWebView2(LInfo) then
@@ -847,47 +934,28 @@ begin
   FOptions := AOptions;
   FClosed := False;
   FZoom := 1.0;
+  FScale := 1.0;
   Inc(GLive);
   FOwnerThread := platform_thread_id;
   FInvokesIntf := TWebviewInvokeRegistry.Create;
   FInvokes := FInvokesIntf as TObject;
   FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
   FAssets := FAssetsIntf as TObject;
-  FWindow := CreateWindowOf(wkWin32, WindowOptionsOf(AOptions));
-  FOwnsWindow := True;
-  FWindow.OnEvent(@HandleWindowEvent);
+  LGeo.Title := FOptions.Title;
+  LGeo.Width := FOptions.Width;
+  LGeo.Height := FOptions.Height;
+  LGeo.Resizable := FOptions.Resizable;
+  LGeo.StartMaximized := FOptions.Maximized;
+  FWin := Win32ShellCreate(LGeo);
   RegisterLive(Self);
+  EnsureScaleHook;
+  EnsureResizeHook;
   FSelfKeepAlive := Self;
   TryCreateEnvironment;
-end;
-
-constructor TWebView2Webview.CreateOn(AWindow: IWindow; const AOptions: TWebviewOptions);
-var LInfo: TWebView2LoadInfo;
-begin
-  if AWindow = nil then raise EWebviewInvalidState.Create('Parent window is nil');
-  CheckWebviewOptions(AOptions);
-  if not TryLoadWebView2(LInfo) then
-    raise EWebviewBackendUnavailable.Create('WebView2 runtime not found');
-  FOptions := AOptions;
-  FClosed := False;
-  FZoom := 1.0;
-  Inc(GLive);
-  FOwnerThread := platform_thread_id;
-  FInvokesIntf := TWebviewInvokeRegistry.Create;
-  FInvokes := FInvokesIntf as TObject;
-  FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
-  FAssets := FAssetsIntf as TObject;
-  FWindow := AWindow;
-  FOwnsWindow := False;
-  FWindow.OnEvent(@HandleWindowEvent);
-  RegisterLive(Self);
-  FSelfKeepAlive := Self;
-  TryCreateEnvironment;
-end;
-
-function TWebView2Webview.GetWindow: IWindow;
-begin
-  Result := FWindow;
+  if FOptions.InitialUrl = '' then
+  begin
+    // InitialHtml path handled after controller ready; if no controller, also try direct navigate fallback (will no-op until ready)
+  end;
 end;
 
 destructor TWebView2Webview.Destroy;
@@ -896,8 +964,8 @@ begin
   begin
     Dec(GLive);
     UnregisterLive(Self);
-    if FOwnsWindow and (FWindow <> nil) then
-      FWindow.Close;
+    if FWin <> nil then
+      Win32ShellDestroy(FWin);
   end
   else
     UnregisterLive(Self);
@@ -912,25 +980,34 @@ begin
   FSelfKeepAlive := nil;
 end;
 
-procedure TWebView2Webview.Post(AProc: TWebviewProcRef);
+procedure TWebView2Webview.Post(AProc: TWebviewProcRef); inline;
+var R: PPostRefRec;
 begin
   if not Assigned(AProc) then Exit;
   RequireOpen;
-  FWindow.Dispatcher.Post(AProc);
+  R := AcquirePostRefRec; R^.Ref := AProc;
+  if not Win32ShellPost(@PostRefTrampoline, R) then
+  begin ReleasePostRefRec(R); try AProc(); except end; end;
 end;
-procedure TWebView2Webview.Post(AProc: TWebviewProcMethod);
+procedure TWebView2Webview.Post(AProc: TWebviewProcMethod); inline;
+var R: PPostMethodRec;
 begin
   if not Assigned(AProc) then Exit;
   RequireOpen;
-  FWindow.Dispatcher.Post(AProc);
+  R := AcquirePostMethodRec; R^.Method := AProc;
+  if not Win32ShellPost(@PostMethodTrampoline, R) then
+  begin ReleasePostMethodRec(R); try AProc(); except end; end;
 end;
-procedure TWebView2Webview.Post(AProc: TWebviewProc);
+procedure TWebView2Webview.Post(AProc: TWebviewProc); inline;
+var R: PPostProcRec;
 begin
   if not Assigned(AProc) then Exit;
   RequireOpen;
-  FWindow.Dispatcher.Post(AProc);
+  R := AcquirePostProcRec; R^.Proc := AProc;
+  if not Win32ShellPost(@PostProcTrampoline, R) then
+  begin ReleasePostProcRec(R); try AProc(); except end; end;
 end;
-function TWebView2Webview.IsOnMainThread: Boolean;
+function TWebView2Webview.IsOnMainThread: Boolean; inline;
 begin
   Result := platform_thread_id = FOwnerThread;
 end;
@@ -983,9 +1060,13 @@ begin
   FController := nil;
   FEnv := nil;
   {$ENDIF}
-  if FOwnsWindow and (FWindow <> nil) then
-    FWindow.Close;
-  FWindow := nil;
+  if FWin <> nil then
+  begin
+    Win32ShellDestroy(FWin);
+    FWin := nil;
+  end;
+  if GLive = 0 then
+    Win32ShellQuitMainLoop;
   FSelfKeepAlive := nil;
 end;
 
@@ -994,89 +1075,97 @@ begin
   Result := FClosed;
 end;
 
-procedure TWebView2Webview.Show; inline;
+procedure TWebView2Webview.Show;
 begin
   RequireOpen;
-  FWindow.Show;
+  FVisible := True;
+  if FWin <> nil then Win32ShellShow(FWin);
   UpdateControllerBounds;
 end;
-procedure TWebView2Webview.Hide; inline;
+procedure TWebView2Webview.Hide;
 begin
   RequireOpen;
-  FWindow.Hide;
+  FVisible := False;
+  if FWin <> nil then Win32ShellHide(FWin);
 end;
-function TWebView2Webview.IsVisible: Boolean; inline;
+function TWebView2Webview.IsVisible: Boolean;
 begin
   if FClosed then Exit(False);
-  Result := FWindow.IsVisible;
+  if FWin <> nil then Result := Win32ShellIsVisible(FWin)
+  else Result := FVisible;
 end;
-procedure TWebView2Webview.Focus; inline;
+procedure TWebView2Webview.Focus;
 begin
   RequireOpen;
-  FWindow.Focus;
+  if FWin <> nil then Win32ShellFocus(FWin);
 end;
-procedure TWebView2Webview.SetTitle(const ATitle: string); inline;
+procedure TWebView2Webview.SetTitle(const ATitle: string);
 begin
   RequireOpen;
   FOptions.Title := ATitle;
-  FWindow.SetTitle(ATitle);
+  if FWin <> nil then Win32ShellSetTitle(FWin, ATitle);
 end;
 function TWebView2Webview.GetTitle: string;
 begin
   RequireOpen;
-  Result := FWindow.GetTitle;
+  Result := FOptions.Title;
 end;
-procedure TWebView2Webview.SetBounds(AWidth, AHeight: Integer); inline;
+procedure TWebView2Webview.SetBounds(AWidth, AHeight: Integer);
 begin
   RequireOpen;
-  FWindow.SetBounds(AWidth, AHeight);
+  FOptions.Width := AWidth; FOptions.Height := AHeight;
+  if FWin <> nil then Win32ShellResize(FWin, AWidth, AHeight);
   UpdateControllerBounds;
 end;
-function TWebView2Webview.GetWidth: Integer; inline;
+function TWebView2Webview.GetWidth: Integer;
 begin
   RequireOpen;
-  Result := FWindow.GetWidth;
+  Result := FOptions.Width;
 end;
-function TWebView2Webview.GetHeight: Integer; inline;
+function TWebView2Webview.GetHeight: Integer;
 begin
   RequireOpen;
-  Result := FWindow.GetHeight;
+  Result := FOptions.Height;
 end;
-procedure TWebView2Webview.SetResizable(AResizable: Boolean); inline;
+procedure TWebView2Webview.SetResizable(AResizable: Boolean);
 begin
   RequireOpen;
-  FWindow.SetResizable(AResizable);
+  FOptions.Resizable := AResizable;
 end;
-procedure TWebView2Webview.Maximize; inline;
+procedure TWebView2Webview.Maximize;
 begin
   RequireOpen;
-  FWindow.Maximize;
+  FOptions.Maximized := True;
+  if FWin <> nil then Win32ShellMaximize(FWin);
   UpdateControllerBounds;
 end;
-procedure TWebView2Webview.Unmaximize; inline;
+procedure TWebView2Webview.Unmaximize;
 begin
   RequireOpen;
-  FWindow.Unmaximize;
+  FOptions.Maximized := False;
+  if FWin <> nil then Win32ShellUnmaximize(FWin);
   UpdateControllerBounds;
 end;
-function TWebView2Webview.IsMaximized: Boolean; inline;
+function TWebView2Webview.IsMaximized: Boolean;
 begin
-  Result := FWindow.IsMaximized;
+  if FWin <> nil then Result := Win32ShellIsMaximized(FWin)
+  else Result := FOptions.Maximized;
 end;
-procedure TWebView2Webview.Minimize; inline;
+procedure TWebView2Webview.Minimize;
 begin
   RequireOpen;
-  FWindow.Minimize;
+  if FWin <> nil then Win32ShellMinimize(FWin);
 end;
-procedure TWebView2Webview.Restore; inline;
+procedure TWebView2Webview.Restore;
 begin
   RequireOpen;
-  FWindow.Restore;
+  if FWin <> nil then Win32ShellRestore(FWin);
   UpdateControllerBounds;
 end;
-function TWebView2Webview.IsMinimized: Boolean; inline;
+function TWebView2Webview.IsMinimized: Boolean;
 begin
-  Result := FWindow.IsMinimized;
+  if FWin <> nil then Result := Win32ShellIsMinimized(FWin)
+  else Result := False;
 end;
 procedure TWebView2Webview.SetZoom(AFactor: Double);
 begin
@@ -1118,11 +1207,13 @@ begin
 end;
 function TWebView2Webview.GetScaleFactor: Double;
 begin
-  Result := FWindow.GetScaleFactor;
+  if FWin <> nil then Result := Win32ShellScaleFactor(FWin)
+  else Result := FScale;
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
   if not Assigned(AHandler) then Exit;
+  EnsureScaleHook;
   GrowScaleRef;
   FScaleHandlersRef[FScaleHandlersRefCount] := AHandler;
   Inc(FScaleHandlersRefCount);
@@ -1130,6 +1221,7 @@ end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleMethod);
 begin
   if not Assigned(AHandler) then Exit;
+  EnsureScaleHook;
   GrowScaleMethod;
   FScaleHandlersMethod[FScaleHandlersMethodCount] := AHandler;
   Inc(FScaleHandlersMethodCount);
@@ -1137,6 +1229,7 @@ end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleProc);
 begin
   if not Assigned(AHandler) then Exit;
+  EnsureScaleHook;
   GrowScaleProc;
   FScaleHandlersProc[FScaleHandlersProcCount] := AHandler;
   Inc(FScaleHandlersProcCount);
@@ -1259,12 +1352,11 @@ begin
 end;
 function TWebView2Webview.GetDispatcher: IWebviewDispatcher;
 begin
-  if FWindow <> nil then Result := FWindow.Dispatcher as IWebviewDispatcher
-  else Result := Self as IWebviewDispatcher;
+  Result := Self as IWebviewDispatcher;
 end;
 function TWebView2Webview.NativeHandle: TWebviewNativeHandle;
 begin
-  if FWindow <> nil then Result := FWindow.NativeHandle
+  if FWin <> nil then Result := Win32ShellNativeHandle(FWin)
   else Result := nil;
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
@@ -1386,5 +1478,16 @@ function TWebView2Webview.GetAssets: IWebviewAssets;
 begin
   Result := FAssetsIntf;
 end;
+
+initialization
+
+finalization
+  while GPostRefPoolCount > 0 do begin Dec(GPostRefPoolCount); Dispose(GPostRefPool[GPostRefPoolCount]); end;
+  SetLength(GPostRefPool, 0);
+  while GPostMethodPoolCount > 0 do begin Dec(GPostMethodPoolCount); Dispose(GPostMethodPool[GPostMethodPoolCount]); end;
+  SetLength(GPostMethodPool, 0);
+  while GPostProcPoolCount > 0 do begin Dec(GPostProcPoolCount); Dispose(GPostProcPool[GPostProcPoolCount]); end;
+  SetLength(GPostProcPool, 0);
+  if GPostPoolLock <> nil then begin TObject(GPostPoolLock).Free; GPostPoolLock := nil; end;
 
 end.
