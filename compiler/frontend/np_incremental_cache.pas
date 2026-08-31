@@ -335,24 +335,31 @@ end;
 
 function HashStr(const AStr: string): TBytes;
 var
-  Tmp: TBytes;
+  Digest: TSHA256Digest;
+  Dummy: Byte;
 begin
-  SetLength(Tmp, Length(AStr));
   if Length(AStr) > 0 then
-    Move(AStr[1], Tmp[0], Length(AStr));
-  Result := HashBytes(Tmp);
+    Digest := SHA256Of(AStr[1], SizeUInt(Length(AStr)))
+  else
+  begin
+    Dummy := 0;
+    Digest := SHA256Of(Dummy, 0);
+  end;
+  SetLength(Result, 32);
+  Move(Digest[0], Result[0], 32);
 end;
 
 function CombineHashes(const A, B: TBytes): TBytes;
 var
-  Tmp: TBytes;
+  H: IHasher;
+  Digest: TSHA256Digest;
 begin
-  SetLength(Tmp, Length(A) + Length(B));
-  if Length(A) > 0 then
-    Move(A[0], Tmp[0], Length(A));
-  if Length(B) > 0 then
-    Move(B[0], Tmp[Length(A)], Length(B));
-  Result := HashBytes(Tmp);
+  H := NewSHA256;
+  if Length(A) > 0 then H.Write(A[0], SizeUInt(Length(A)));
+  if Length(B) > 0 then H.Write(B[0], SizeUInt(Length(B)));
+  H.Sum(Digest, SHA256_DIGEST_SIZE);
+  SetLength(Result, 32);
+  Move(Digest[0], Result[0], 32);
 end;
 
 { --- TIncrementalCache --- }
