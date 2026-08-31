@@ -31,7 +31,9 @@ function CreateSincResampler(AQuality: TResampleQuality = rsGood): IAudioResampl
 implementation
 
 uses
-  Math,
+  nextpas.core.math.base,
+  nextpas.core.math.scalar,
+  nextpas.core.math.trig,
   nextpas.core.audio.pcm,
   nextpas.core.audio.errors;
 
@@ -91,7 +93,7 @@ end;
 function TSincResampler.Sinc(AX: Double): Double;
 begin
   if Abs(AX) < 1e-12 then Exit(1.0);
-  Result := Sin(Pi * AX) / (Pi * AX);
+  Result := Sin(PI_VALUE * AX) / (PI_VALUE * AX);
 end;
 
 function TSincResampler.Resample(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer;

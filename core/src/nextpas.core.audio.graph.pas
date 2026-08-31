@@ -8,7 +8,7 @@ uses
   SysUtils,
   Classes,
   SyncObjs,
-  Math,
+  nextpas.core.math.scalar,
   nextpas.core.base,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,

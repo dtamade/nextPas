@@ -51,21 +51,23 @@ implementation
 
 uses
   nextpas.core.audio.errors,
-  Math;
+  nextpas.core.math.base,
+  nextpas.core.math.scalar,
+  nextpas.core.math.trig;
 
 procedure InitSineTable;
 var I: Integer;
 begin
   if GSineInit then Exit;
   for I := 0 to C_SINE_TABLE_SIZE - 1 do
-    GSineTable[I] := Sin(2 * Pi * I / C_SINE_TABLE_SIZE);
+    GSineTable[I] := Sin(2 * PI_VALUE * I / C_SINE_TABLE_SIZE);
   GSineInit := True;
 end;
 
 function FastSin(APhase: Double): Single; inline;
 var Idx: Double; I0, I1: Integer; Frac: Double; V0, V1: Single;
 begin
-  Idx := APhase * (C_SINE_TABLE_SIZE / (2 * Pi));
+  Idx := APhase * (C_SINE_TABLE_SIZE / (2 * PI_VALUE));
   I0 := Trunc(Idx) and C_SINE_TABLE_MASK;
   if I0 < 0 then I0 := (I0 and C_SINE_TABLE_MASK);
   Frac := Idx - Trunc(Idx);
@@ -86,7 +88,7 @@ type
     FFormat: TAudioFormat;
     FBpm: Double;
     FNotes: array of TMidiNote;
-    FNoteInc: array of Double;   // 2*Pi*Freq/SampleRate, per-note cache (realtime zero-alloc)
+    FNoteInc: array of Double;   // 2*PI_VALUE*Freq/SampleRate, per-note cache (realtime zero-alloc)
     FNoteVel: array of Single;   // Velocity/127*0.2
     FPos: UInt64;
     FState: TSequencerState;
@@ -145,7 +147,7 @@ begin
   for I := 0 to High(FNotes) do
   begin
     F := MidiPitchToFreq(FNotes[I].Pitch);
-    FNoteInc[I] := 2 * Pi * F / FFormat.SampleRate;
+    FNoteInc[I] := 2 * PI_VALUE * F / FFormat.SampleRate;
     FNoteVel[I] := Single(FNotes[I].Velocity / 127.0 * CAudioSeqVelScale);
   end;
 end;

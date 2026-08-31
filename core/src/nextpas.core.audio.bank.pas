@@ -5,7 +5,7 @@ unit nextpas.core.audio.bank;
 interface
 
 uses
-  SysUtils, Math,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,

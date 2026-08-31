@@ -5,7 +5,7 @@ unit nextpas.core.audio.sfx;
 interface
 
 uses
-  Classes, Math,
+  Classes,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,

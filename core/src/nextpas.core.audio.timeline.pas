@@ -5,7 +5,10 @@ unit nextpas.core.audio.timeline;
 interface
 
 uses
-  Classes, SyncObjs, Math,
+  Classes, SyncObjs,
+  nextpas.core.math.base,
+  nextpas.core.math.scalar,
+  nextpas.core.math.trig,
   nextpas.core.base,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
@@ -286,7 +289,7 @@ begin
       if copyFrames<=0 then Continue;
       ClipGain:=Clip.Gain; Pan:=(TrackPan+ClipPan)/2;
       Gain:=TrackGain*ClipGain;
-      if FFormat.Channels=2 then begin Lgain:=Cos((Pan+1)*Pi/4)*1.414213562; Rgain:=Sin((Pan+1)*Pi/4)*1.414213562; end else begin Lgain:=1; Rgain:=1; end;
+      if FFormat.Channels=2 then begin Lgain:=Cos((Pan+1)*PI_VALUE/4)*1.414213562; Rgain:=Sin((Pan+1)*PI_VALUE/4)*1.414213562; end else begin Lgain:=1; Rgain:=1; end;
       SrcPtr:=PSingle(@Clip.Buffer.Data[0]);
       if FFormat.Channels=2 then
       begin
