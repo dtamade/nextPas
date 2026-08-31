@@ -122,6 +122,7 @@ uses
   nextpas.core.json.builder,
   nextpas.core.text.builder,
   nextpas.core.text.compare,
+  nextpas.core.text.view,
   nextpas.core.agent.errors,
   nextpas.core.agent.textutil;
 
@@ -179,7 +180,6 @@ function AgentUtf8SafeCutLen(const S: string; AMaxBytes: Integer): Integer; inli
 begin
   Result := nextpas.core.agent.textutil.AgentUtf8SafeCutLen(S, AMaxBytes);
 end;
-
 
 function AgentUtf8SafeTruncate(const S: string; AMaxBytes: Integer): string; inline;
 begin
@@ -270,7 +270,8 @@ begin
     Exit(S);
   if (AMaxLines <= 0) and (AMaxBytes <= 0) then
     Exit(S);
-  if ((AMaxLines <= 0) or (Pos(#10, S) = 0)) and ((AMaxBytes <= 0) or (Length(S) <= AMaxBytes)) then
+  if ((AMaxLines <= 0) or (nextpas.core.text.view.IndexOfStr(S, #10) < 0)) and
+     ((AMaxBytes <= 0) or (Length(S) <= AMaxBytes)) then
     Exit(S);
   { 单遍行截断长度（零分配）：求 LLineLen }
   if AMaxLines > 0 then
