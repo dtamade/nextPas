@@ -52,74 +52,19 @@ uses
   nextpas.core.fs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.revparse;
+  nextpas.core.git.native.revparse,
+  nextpas.core.git.native.common,
+  nextpas.core.git.native.util;
 
-function TrimSpaces(const S: string): string;
-var A,B: Integer;
+function TrimSpaces(const S: string): string; inline;
 begin
-  A:=1; B:=Length(S);
-  while (A<=B) and (S[A] in [' ',#9,#10,#13]) do Inc(A);
-  while (B>=A) and (S[B] in [' ',#9,#10,#13]) do Dec(B);
-  if B<A then Exit('');
-  Result:=Copy(S,A,B-A+1);
-end;
-
-function IsZeroOidLocal(const AOid: TGitOid): Boolean;
-var I: Integer;
-begin
-  for I:=0 to GitOidRawLen-1 do if AOid.Bytes[I]<>0 then Exit(False);
-  Result:=True;
-end;
-
-function LocalEndsWith(const S,Suf: string): Boolean;
-begin Result:=(Length(S)>=Length(Suf)) and (Copy(S,Length(S)-Length(Suf)+1,Length(Suf))=Suf); end;
-
-function LocalSplitLines(const S: string): TStringArray;
-var P,Start: Integer;
-begin
-  Result:=nil; Start:=1;
-  for P:=1 to Length(S)+1 do if (P>Length(S)) or (S[P]=#10) then
-  begin SetLength(Result,Length(Result)+1); Result[High(Result)]:=Copy(S,Start,P-Start); Start:=P+1; end;
+  Result := GitTrimSpaces(S);
 end;
 
 function StripCR(const S: string): string;
 begin if (Length(S)>0) and (S[Length(S)]=#13) then Result:=Copy(S,1,Length(S)-1) else Result:=S; end;
 
-function WorktreeDir(const AGitDir: string): string;
-var P: Integer;
-begin
-  if LocalEndsWith(AGitDir,'/.git') then Result:=Copy(AGitDir,1,Length(AGitDir)-5)
-  else if LocalEndsWith(AGitDir,'.git') then begin P:=Length(AGitDir); while (P>0) and (AGitDir[P]<>'/') do Dec(P); if P>0 then Result:=Copy(AGitDir,1,P-1) else Result:='.'; end
-  else Result:=AGitDir;
-end;
-
-function FindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
-var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer;
-begin
-  Result:=False;
-  if IsZeroOidLocal(ATreeOid) then Exit;
-  Data:=ARepo.ReadObject(ATreeOid, Kind);
-  if Kind<>gokTree then Exit;
-  Entries:=GitParseTree(Data);
-  for I:=0 to High(Entries) do if Entries[I].Name=AName then begin AOid:=Entries[I].Oid; Result:=True; Exit; end;
-end;
-
-function PeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var Kind: TGitObjectKind; Data: TBytes; CInfo: TGitCommitInfo; TInfo: TGitTagInfo; Depth: Integer;
-begin
-  Result:=AOid; Depth:=0;
-  while Depth<16 do
-  begin
-    Data:=ARepo.ReadObject(Result, Kind);
-    case Kind of
-      gokCommit: begin CInfo:=GitParseCommit(Data); Result:=CInfo.Tree; Exit; end;
-      gokTree: Exit;
-      gokTag: begin TInfo:=GitParseTag(Data); Result:=TInfo.Target; Inc(Depth); end;
-    else raise EGitError.CreateFmt('attributes: object %s is not tree/commit/tag', [GitOidToHex(AOid)]);
-    end;
-  end;
-  raise EGitError.Create('attributes: tag peel too deep');
-end;
+// FindBlobInTree / PeelToTree reused from nextpas.core.git.native.common (single source)
 
 // ---- pattern matching ----
 
@@ -264,7 +209,7 @@ function GitParseAttributes(const AText: string): TGitAttrEntries;
 var Lines: TStringArray; I,J: Integer; L,Pat: string; Tokens: TStringArray; Entry: TGitAttrEntry; Attr: TGitAttr;
 begin
   Result:=nil;
-  Lines:=LocalSplitLines(AText);
+  Lines:=GitSplitLines(AText);
   for I:=0 to High(Lines) do
   begin
     L:=TrimSpaces(StripCR(Lines[I]));
@@ -297,14 +242,14 @@ function GitLoadAttributes(const AGitDir: string): TGitAttrEntries;
 var WDir,F: string; Data: TBytes; Repo: TNativeRepository; Oid,TreeOid,BlobOid: TGitOid; Kind: TGitObjectKind;
 begin
   Result:=nil;
-  WDir:=WorktreeDir(AGitDir);
+  WDir:=GitWorktreeDir(AGitDir);
   F:=PathJoin2(WDir,'.gitattributes');
   if FileExists(F) then begin Data:=ReadFile(F); Exit(GitParseAttributes(Data)); end;
   try Oid:=GitRevParse(AGitDir,'HEAD'); except Exit(nil); end;
   Repo:=TNativeRepository.Create(AGitDir);
   try
-    try TreeOid:=PeelToTree(Repo,Oid); except Exit(nil); end;
-    if not FindBlobInTree(Repo,TreeOid,'.gitattributes',BlobOid) then Exit(nil);
+    try TreeOid:=GitPeelToTree(Repo,Oid); except Exit(nil); end;
+    if not GitFindBlobInTree(Repo,TreeOid,'.gitattributes',BlobOid) then Exit(nil);
     Data:=Repo.ReadObject(BlobOid, Kind);
     if Kind<>gokBlob then Exit(nil);
     Result:=GitParseAttributes(Data);

@@ -169,74 +169,186 @@ type
   TMatch = record OldIdx, NewIdx: Integer; end;
   TMatchArray = array of TMatch;
 
+// -- Hirschberg/LCS helpers: zero-copy slice via (off,len), inline hot path --
+// reuse single source HashString (nextpas.core.base, FNV-1a) — no duplicate hash
+type
+  TIntArray = array of Integer;
+
+function NextPow2(AValue: Integer): Integer; inline;
+begin
+  Result := 1;
+  while Result < AValue do Result := Result shl 1;
+end;
+
+// LCS forward row: O(bLen) memory, zero-copy via offsets
+function LcsForward(const AOld: TStringArray; aOff, aLen: Integer;
+  const ANew: TStringArray; bOff, bLen: Integer): TIntArray; inline;
+var
+  Prev, Cur, Tmp: TIntArray;
+  I, J: Integer;
+begin
+  SetLength(Prev, bLen + 1);
+  SetLength(Cur, bLen + 1);
+  for I := 1 to aLen do
+  begin
+    Cur[0] := 0;
+    for J := 1 to bLen do
+      if AOld[aOff + I - 1] = ANew[bOff + J - 1] then
+        Cur[J] := Prev[J - 1] + 1
+      else if Prev[J] >= Cur[J - 1] then
+        Cur[J] := Prev[J]
+      else
+        Cur[J] := Cur[J - 1];
+    Tmp := Prev; Prev := Cur; Cur := Tmp;
+  end;
+  Result := Prev;
+end;
+
+// LCS on reversed slices — same O(bLen) memory, zero-copy
+function LcsForwardRev(const AOld: TStringArray; aOff, aLen: Integer;
+  const ANew: TStringArray; bOff, bLen: Integer): TIntArray; inline;
+var
+  Prev, Cur, Tmp: TIntArray;
+  I, J: Integer;
+begin
+  SetLength(Prev, bLen + 1);
+  SetLength(Cur, bLen + 1);
+  for I := 1 to aLen do
+  begin
+    Cur[0] := 0;
+    for J := 1 to bLen do
+      if AOld[aOff + aLen - I] = ANew[bOff + bLen - J] then
+        Cur[J] := Prev[J - 1] + 1
+      else if Prev[J] >= Cur[J - 1] then
+        Cur[J] := Prev[J]
+      else
+        Cur[J] := Cur[J - 1];
+    Tmp := Prev; Prev := Cur; Cur := Tmp;
+  end;
+  Result := Prev;
+end;
+
+procedure HirschbergCollect(const AOld, ANew: TStringArray;
+  aOff, aLen, bOff, bLen: Integer; var Acc: TMatchArray); forward;
+
+procedure HirschbergCollect(const AOld, ANew: TStringArray;
+  aOff, aLen, bOff, bLen: Integer; var Acc: TMatchArray);
+var
+  Mid, BestK, BestVal, J, V: Integer;
+  L1, LRev: TIntArray;
+  Cnt: Integer;
+begin
+  if (aLen = 0) or (bLen = 0) then Exit;
+  if aLen = 1 then
+  begin
+    for J := 0 to bLen - 1 do
+      if AOld[aOff] = ANew[bOff + J] then
+      begin
+        Cnt := Length(Acc);
+        SetLength(Acc, Cnt + 1);
+        Acc[Cnt].OldIdx := aOff;
+        Acc[Cnt].NewIdx := bOff + J;
+        Break;
+      end;
+    Exit;
+  end;
+  if bLen = 1 then
+  begin
+    for J := 0 to aLen - 1 do
+      if AOld[aOff + J] = ANew[bOff] then
+      begin
+        Cnt := Length(Acc);
+        SetLength(Acc, Cnt + 1);
+        Acc[Cnt].OldIdx := aOff + J;
+        Acc[Cnt].NewIdx := bOff;
+        Break;
+      end;
+    Exit;
+  end;
+  Mid := aLen div 2;
+  L1 := LcsForward(AOld, aOff, Mid, ANew, bOff, bLen);
+  LRev := LcsForwardRev(AOld, aOff + Mid, aLen - Mid, ANew, bOff, bLen);
+  BestK := 0; BestVal := -1;
+  for J := 0 to bLen do
+  begin
+    V := L1[J] + LRev[bLen - J];
+    if V > BestVal then
+    begin
+      BestVal := V;
+      BestK := J;
+    end;
+  end;
+  HirschbergCollect(AOld, ANew, aOff, Mid, bOff, BestK, Acc);
+  HirschbergCollect(AOld, ANew, aOff + Mid, aLen - Mid, bOff + BestK, bLen - BestK, Acc);
+end;
+
+function ComputeMatchesFallback(const AOld, ANew: TStringArray): TMatchArray; inline;
+type
+  THashEntry = record Used: Boolean; Hash: THashCode; Idx: Integer; Line: string; end;
+var
+  Table: array of THashEntry;
+  Mask, I, J, Pos: Integer;
+  H: THashCode;
+  N, M: Integer;
+begin
+  Result := nil;
+  N := Length(AOld); M := Length(ANew);
+  if (N = 0) or (M = 0) then Exit;
+  Mask := NextPow2(N * 2 + 1) - 1;
+  SetLength(Table, Mask + 1);
+  for I := 0 to N - 1 do
+  begin
+    H := HashString(AOld[I]);
+    Pos := Integer(H and THashCode(Mask));
+    while Table[Pos].Used do
+    begin
+      if (Table[Pos].Hash = H) and (Table[Pos].Line = AOld[I]) then Break;
+      Pos := (Pos + 1) and Mask;
+    end;
+    if not Table[Pos].Used then
+    begin
+      Table[Pos].Used := True;
+      Table[Pos].Hash := H;
+      Table[Pos].Idx := I;
+      Table[Pos].Line := AOld[I];
+    end;
+  end;
+  SetLength(Result, 0);
+  for J := 0 to M - 1 do
+  begin
+    H := HashString(ANew[J]);
+    Pos := Integer(H and THashCode(Mask));
+    while Table[Pos].Used do
+    begin
+      if (Table[Pos].Hash = H) and (Table[Pos].Line = ANew[J]) then
+      begin
+        SetLength(Result, Length(Result) + 1);
+        Result[High(Result)].OldIdx := Table[Pos].Idx;
+        Result[High(Result)].NewIdx := J;
+        Break;
+      end;
+      Pos := (Pos + 1) and Mask;
+    end;
+  end;
+end;
+
 function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray;
 var
-  n, m, I, J, K: Integer;
-  dp: array of Integer;
-  Matches: TMatchArray;
-
-  function Idx(Ai, Aj: Integer): Integer; inline;
-  begin
-    Result := Ai * (m + 1) + Aj;
-  end;
-
+  n, m: Integer;
+  Acc: TMatchArray;
 begin
   Result := nil;
   n := Length(AOld);
   m := Length(ANew);
   if (n = 0) or (m = 0) then Exit;
-  // guard large files: fall back to hashed exact line scan (first occurrence)
   if (Int64(n) * Int64(m) > 10000000) then
   begin
-    // naive fallback: for each new line, find first equal old line
-    SetLength(Matches, 0);
-    for J := 0 to m - 1 do
-      for I := 0 to n - 1 do
-        if AOld[I] = ANew[J] then
-        begin
-          SetLength(Matches, Length(Matches) + 1);
-          Matches[High(Matches)].OldIdx := I;
-          Matches[High(Matches)].NewIdx := J;
-          Break;
-        end;
-    Result := Matches;
+    Result := ComputeMatchesFallback(AOld, ANew);
     Exit;
   end;
-  SetLength(dp, (n + 1) * (m + 1));
-  for I := 1 to n do
-    for J := 1 to m do
-      if AOld[I - 1] = ANew[J - 1] then
-        dp[Idx(I, J)] := dp[Idx(I - 1, J - 1)] + 1
-      else if dp[Idx(I - 1, J)] >= dp[Idx(I, J - 1)] then
-        dp[Idx(I, J)] := dp[Idx(I - 1, J)]
-      else
-        dp[Idx(I, J)] := dp[Idx(I, J - 1)];
-
-  // backtrack
-  I := n; J := m;
-  SetLength(Matches, 0);
-  while (I > 0) and (J > 0) do
-  begin
-    if AOld[I - 1] = ANew[J - 1] then
-    begin
-      SetLength(Matches, Length(Matches) + 1);
-      Matches[High(Matches)].OldIdx := I - 1;
-      Matches[High(Matches)].NewIdx := J - 1;
-      Dec(I); Dec(J);
-    end
-    else if dp[Idx(I - 1, J)] >= dp[Idx(I, J - 1)] then
-      Dec(I)
-    else
-      Dec(J);
-  end;
-  // reverse to ascending NewIdx order
-  SetLength(Result, Length(Matches));
-  K := 0;
-  for I := High(Matches) downto 0 do
-  begin
-    Result[K] := Matches[I];
-    Inc(K);
-  end;
+  Acc := nil;
+  HirschbergCollect(AOld, ANew, 0, n, 0, m, Acc);
+  Result := Acc;
 end;
 
 function PeelToCommit(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;

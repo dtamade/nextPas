@@ -27,31 +27,10 @@ uses
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.revparse;
+  nextpas.core.git.native.revparse,
+  nextpas.core.git.native.common;
 
-function PeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var Kind: TGitObjectKind; Data: TBytes; CInfo: TGitCommitInfo; TInfo: TGitTagInfo; Depth: Integer;
-begin
-  Result := AOid; Depth := 0;
-  while Depth < 16 do
-  begin
-    Data := ARepo.ReadObject(Result, Kind);
-    case Kind of
-      gokCommit: begin CInfo := GitParseCommit(Data); Result := CInfo.Tree; Exit; end;
-      gokTree: Exit;
-      gokTag: begin TInfo := GitParseTag(Data); Result := TInfo.Target; Inc(Depth); end;
-    else raise EGitError.CreateFmt('archive: object %s is not a tree/commit/tag', [GitOidToHex(AOid)]);
-    end;
-  end;
-  raise EGitError.Create('archive: tag peel too deep');
-end;
-
-function IsZeroOid(const AOid: TGitOid): Boolean;
-var I: Integer;
-begin
-  for I := 0 to GitOidRawLen - 1 do if AOid.Bytes[I] <> 0 then Exit(False);
-  Result := True;
-end;
+// PeelToTree reused from nextpas.core.git.native.common (single source)
 
 type
   TFlatFile = record
@@ -64,7 +43,7 @@ type
 procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatFileArray);
 var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer; Full: string;
 begin
-  if IsZeroOid(ATreeOid) then Exit;
+  if GitOidIsZero(ATreeOid) then Exit;
   Data := ARepo.ReadObject(ATreeOid, Kind);
   if Kind <> gokTree then raise EGitError.CreateFmt('archive: object %s is not a tree', [GitOidToHex(ATreeOid)]);
   Entries := GitParseTree(Data);
@@ -87,7 +66,7 @@ function BuildFlat(const AGitDir: string; const ATreeOid: TGitOid): TFlatFileArr
 var Repo: TNativeRepository;
 begin
   Result := nil;
-  if IsZeroOid(ATreeOid) then Exit;
+  if GitOidIsZero(ATreeOid) then Exit;
   Repo := TNativeRepository.Create(AGitDir);
   try CollectFlat(Repo, ATreeOid, '', Result);
   finally Repo.Free; end;
@@ -196,7 +175,7 @@ function GitArchive(const AGitDir: string; const ATreeOid: TGitOid): TBytes;
 var Flat: TFlatFileArray;
 begin
   if AGitDir = '' then raise EGitError.Create('archive: gitdir empty');
-  if IsZeroOid(ATreeOid) then raise EGitError.Create('archive: empty tree');
+  if GitOidIsZero(ATreeOid) then raise EGitError.Create('archive: empty tree');
   Flat := BuildFlat(AGitDir, ATreeOid);
   SortFlat(Flat);
   Result := BuildTar(AGitDir, Flat);
@@ -207,7 +186,7 @@ var Repo: TNativeRepository; TreeOid: TGitOid;
 begin
   if not APeelCommit then Exit(GitArchive(AGitDir, ACommitOid));
   Repo := TNativeRepository.Create(AGitDir);
-  try TreeOid := PeelToTree(Repo, ACommitOid);
+  try TreeOid := GitPeelToTree(Repo, ACommitOid);
   finally Repo.Free; end;
   Result := GitArchive(AGitDir, TreeOid);
 end;
@@ -219,7 +198,7 @@ begin
   try Oid := GitRevParse(AGitDir, ARef);
   except Oid := GitResolveRef(AGitDir, ARef); end;
   Repo := TNativeRepository.Create(AGitDir);
-  try TreeOid := PeelToTree(Repo, Oid);
+  try TreeOid := GitPeelToTree(Repo, Oid);
   finally Repo.Free; end;
   Result := GitArchive(AGitDir, TreeOid);
 end;

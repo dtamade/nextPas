@@ -5,31 +5,22 @@ unit nextpas.core.git.factory;
 interface
 
 uses
-  nextpas.core.git.intf;
+  nextpas.core.git.intf,
+  nextpas.core.git.libgit2.backend;
 
 type
-  TGitBackend = (gbNative, gbLibGit2, gbAuto);
+  EGitError = nextpas.core.git.libgit2.backend.EGitError;
 
-function NewGitManager(ABackend: TGitBackend = gbAuto): IGitManager;
+function NewGitManager: IGitManager;
 
 implementation
 
 uses
-  nextpas.core.git.native.manager,
   nextpas.core.git.libgit2;
 
-function NewGitManager(ABackend: TGitBackend): IGitManager;
+function NewGitManager: IGitManager;
 begin
-  if ABackend = gbAuto then
-    ABackend := gbLibGit2;
-  case ABackend of
-    gbNative:
-      Result := TNativeGitManager.Create;
-    gbLibGit2:
-      Result := nextpas.core.git.libgit2.NewGitManager;
-  else
-    Result := nextpas.core.git.libgit2.NewGitManager;
-  end;
+  Result := nextpas.core.git.libgit2.NewGitManager;
 end;
 
 end.

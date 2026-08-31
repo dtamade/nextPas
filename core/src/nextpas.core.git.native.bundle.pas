@@ -46,6 +46,7 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.hash.intf,
   nextpas.core.text.conv,
+  nextpas.core.git.native.util,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
@@ -158,27 +159,6 @@ begin
     raise EGitError.Create('bundle: invalid pack header from pack-objects');
 end;
 
-function LocalSplitLines(const S: string): TStringArray;
-var I, Start, L: Integer;
-    Cnt: Integer;
-begin
-  Result := nil;
-  Start := 1; L := Length(S); Cnt := 0;
-  for I := 1 to L do
-    if S[I] = #10 then
-    begin
-      SetLength(Result, Cnt+1);
-      Result[Cnt] := Copy(S, Start, I - Start);
-      Inc(Cnt);
-      Start := I + 1;
-    end;
-  if Start <= L + 1 then
-  begin
-    SetLength(Result, Cnt+1);
-    Result[Cnt] := Copy(S, Start, L - Start + 1);
-  end;
-end;
-
 function ParseBundleHeaderBytesInternal(const AData: TBytes; out APackOff: SizeInt): TGitBundleHeader;
 var P, I: SizeInt;
     HeaderStr, Line: string;
@@ -205,7 +185,7 @@ begin
   // header bytes [0, P] inclusive first \n, but pack starts at P+2
   SetLength(HeaderStr, P+1);
   if P+1 > 0 then Move(AData[0], HeaderStr[1], P+1);
-  Lines := LocalSplitLines(HeaderStr);
+  Lines := GitSplitLines(HeaderStr);
   Cnt := Length(Lines);
   // SplitString includes last empty after trailing \n? Our header ends with \n before blank, so split yields last '' for the blank? Actually header ends with "ref\n" then we consumed up to P which is first \n of "\n\n", so headerStr ends with "\n", split yields last ''.
   // first line must be "# v2 git bundle"
