@@ -7,6 +7,7 @@ uses
   SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.test,
+  nextpas.core.os.env,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.p384,
   nextpas.core.crypto.p256ecdh,
@@ -1485,6 +1486,77 @@ begin
   finally Obs.Free; end;
 end;
 
+procedure TestPrometheusRegistry;
+var Reg: TAsyncTlsPasPrometheusRegistry; Store1, Store2: ITlsPasReplayStore; Obs1, Obs2: TAsyncTlsPasAdaptiveObserver;
+  Id, Early: TBytes; Sess: TTlsPasResumptionSession; F: string;
+begin
+  Reg := TAsyncTlsPasPrometheusRegistry.Create;
+  try
+    Check(Reg.Count=0, 'reg empty');
+    Store1 := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+    Store2 := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
+    Obs1 := TAsyncTlsPasAdaptiveObserver.Create(Store1);
+    Obs2 := TAsyncTlsPasAdaptiveObserver.Create(Store2);
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $01);
+    SetLength(Early, 10); FillChar(Early[0], 10, $02);
+    Obs1.Decide(Id, Early, Sess, True);
+    Early[0] := $03; Obs2.Decide(Id, Early, Sess, True); Obs2.Decide(Id, Early, Sess, True);
+    Reg.Register('api', Obs1);
+    Reg.Register('internal', Obs2);
+    Check(Reg.Count=2, 'reg 2');
+    F := Reg.FormatAllMetrics;
+    Check(Pos('observer="api"', F)>0, 'reg api label');
+    Check(Pos('observer="internal"', F)>0, 'reg internal label');
+    Check(Pos('nextpas_tlspas_adaptive_max', F)>0, 'reg metrics');
+    F := HttpPrometheusRegistryText(Reg);
+    Check(Pos('observer="api"', F)>0, 'http reg wrapper');
+    Check(HttpPrometheusRegistryText(nil)='', 'http reg nil empty');
+    Reg.Unregister('api');
+    Check(Reg.Count=1, 'unreg 1');
+    Reg.Clear;
+    Check(Reg.Count=0, 'clear 0');
+    Obs1.Free; Obs2.Free;
+  finally Reg.Free; end;
+end;
+
+procedure TestAdaptiveConfigEnvAndFile;
+var C: TTlsPasAdaptiveLimitConfig; LOk: Boolean; LPath: string; F: TextFile;
+begin
+  SetEnv('NEXTPAS_TLSPAS_BASE_LIMIT', '8000');
+  SetEnv('NEXTPAS_TLSPAS_MIN_LIMIT', '1000');
+  SetEnv('NEXTPAS_TLSPAS_REJECT_RATE', '0.25');
+  LOk := TlsPasTryLoadAdaptiveConfigFromEnv(C);
+  Check(LOk, 'env loaded');
+  Check(C.BaseLimit=8000, 'env base 8000');
+  Check(C.MinLimit=1000, 'env min 1000');
+  Check(Abs(C.RejectRateThreshold-0.25)<1e-9, 'env rate 0.25');
+  UnsetEnv('NEXTPAS_TLSPAS_BASE_LIMIT');
+  UnsetEnv('NEXTPAS_TLSPAS_MIN_LIMIT');
+  UnsetEnv('NEXTPAS_TLSPAS_REJECT_RATE');
+  LOk := TlsPasTryLoadAdaptiveConfigFromEnv(C);
+  Check(not LOk, 'env empty not loaded');
+  Check(C.BaseLimit=16384, 'env default base');
+  LPath := '/tmp/tlspas_cfg_s26_test.conf';
+  AssignFile(F, LPath);
+  Rewrite(F);
+  WriteLn(F, '# tlspas config');
+  WriteLn(F, 'base=4096');
+  WriteLn(F, 'min=512');
+  WriteLn(F, 'threshold=0.15');
+  CloseFile(F);
+  LOk := TlsPasTryLoadAdaptiveConfigFromFile(LPath, C);
+  Check(LOk, 'file loaded');
+  Check(C.BaseLimit=4096, 'file base 4096');
+  Check(Abs(C.RejectRateThreshold-0.15)<1e-9, 'file threshold');
+  DeleteFile(LPath);
+  C := HttpAdaptiveConfigFromEnv;
+  Check(C.BaseLimit=16384, 'http env default');
+  C := HttpAdaptiveConfigFromFile('/tmp/nonexist_123.conf');
+  Check(C.BaseLimit=16384, 'http file default');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1544,6 +1616,8 @@ begin
   GSuite.Test('AdaptiveLogLine', @TestAdaptiveLogLine);
   GSuite.Test('AdaptivePressure', @TestAdaptivePressure);
   GSuite.Test('AdaptivePrometheus', @TestAdaptivePrometheus);
+  GSuite.Test('PrometheusRegistry', @TestPrometheusRegistry);
+  GSuite.Test('AdaptiveConfigEnvAndFile', @TestAdaptiveConfigEnvAndFile);
   if not GSuite.Run then
     Halt(1);
 end.

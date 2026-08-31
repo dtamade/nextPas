@@ -24,6 +24,10 @@ function HttpAdaptiveEarlyDataMetrics(const AObserver: TAsyncTlsPasAdaptiveObser
 function HttpAdaptiveEarlyDataLogLine(const AReq: IHttpRequest; const AObserver: TAsyncTlsPasAdaptiveObserver): string;
 function HttpAdaptiveEarlyDataPrometheusText(const AObserver: TAsyncTlsPasAdaptiveObserver): string; overload;
 function HttpAdaptiveEarlyDataPrometheusText(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix: string): string; overload;
+function HttpPrometheusRegistryText(const ARegistry: TAsyncTlsPasPrometheusRegistry): string; overload;
+function HttpPrometheusRegistryText(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): string; overload;
+function HttpAdaptiveConfigFromEnv: TTlsPasAdaptiveLimitConfig;
+function HttpAdaptiveConfigFromFile(const APath: string): TTlsPasAdaptiveLimitConfig;
 
 implementation
 
@@ -104,6 +108,31 @@ begin
     Result := TlsPasFormatPrometheusMetrics(M)
   else
     Result := TlsPasFormatPrometheusMetrics(M, APrefix);
+end;
+
+function HttpPrometheusRegistryText(const ARegistry: TAsyncTlsPasPrometheusRegistry): string;
+begin
+  Result := HttpPrometheusRegistryText(ARegistry, 'nextpas_tlspas');
+end;
+
+function HttpPrometheusRegistryText(const ARegistry: TAsyncTlsPasPrometheusRegistry; const APrefix: string): string;
+begin
+  if ARegistry = nil then Exit('');
+  if APrefix = '' then
+    Result := ARegistry.FormatAllMetrics
+  else
+    Result := ARegistry.FormatAllMetrics(APrefix);
+end;
+
+function HttpAdaptiveConfigFromEnv: TTlsPasAdaptiveLimitConfig;
+begin
+  Result := TlsPasAdaptiveConfigFromEnvOrDefault;
+end;
+
+function HttpAdaptiveConfigFromFile(const APath: string): TTlsPasAdaptiveLimitConfig;
+begin
+  if not TlsPasTryLoadAdaptiveConfigFromFile(APath, Result) then
+    Result := DefaultTlsPasAdaptiveLimitConfig;
 end;
 
 function AdaptiveEarlyDataMiddleware(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpMiddleware;
