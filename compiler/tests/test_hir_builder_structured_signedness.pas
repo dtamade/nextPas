@@ -3,9 +3,9 @@ program test_hir_builder_structured_signedness;
 {$mode objfpc}{$H+}
 
 uses
-  np_hir_builder,
-  np_hir_llvm_emitter,
-  np_semantic_model;
+  nextpas.compiler.ir.hir.builder,
+  nextpas.compiler.ir.hir.llvm_emitter,
+  nextpas.compiler.sema.semantic_model;
 
 var
   Model: TSemanticModel;

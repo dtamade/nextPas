@@ -3,8 +3,8 @@ program test_hir_late_alloca_hoist;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_types, np_hir_model,
-  np_hir_builder, np_hir_llvm_emitter;
+  SysUtils, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model,
+  nextpas.compiler.ir.hir.builder, nextpas.compiler.ir.hir.llvm_emitter;
 
 var
   SemaModel: TSemanticModel;

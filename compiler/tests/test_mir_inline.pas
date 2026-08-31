@@ -4,8 +4,8 @@ program test_mir_inline;
 
 uses
   SysUtils,
-  np_mir_model, np_mir_optimize,
-  np_mir_pass_inline;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize,
+  nextpas.compiler.ir.mir.pass.inline;
 
 procedure Fail(const AMessage: string);
 begin

@@ -3,8 +3,8 @@ program test_hir_class_new_arg_types;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_types, np_hir_model,
-  np_hir_builder, np_hir_llvm_emitter, np_hir_verifier;
+  SysUtils, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model,
+  nextpas.compiler.ir.hir.builder, nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.ir.hir.verifier;
 
 var
   SemaModel: TSemanticModel;
