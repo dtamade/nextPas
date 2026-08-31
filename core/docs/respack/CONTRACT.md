@@ -136,3 +136,4 @@ respack.pas       ← 门面 re-export
 | 2026-08-25 | 0.9 | 设计阶段契约草案（随 S0 定稿） | AI |
 | 2026-08-28 | 1.0 | 校准：indexOffset 恒 40/CONST 40；LE 位移与宿主无关；digest 4 对齐；header flags bit2-4 算法位预留；签名 CodecId/DigestFunc；门数 12 闭环 | AI |
 | 2026-08-30 | 1.0 | P0-4 收官：补 S1-S5 校准表（S1 格式层/S2 契约/S3 后端/S4 工具链/S5 http.static 已收官，9+5 门全绿；registry 与 FORMAT 已正确无需改） | AI |
+| 2026-08-31 | 1.4 | P2叠加落地同步 + polish3 零分配与稳定性（CompareMem/IsGzipHeader/VfsReadAllBytes 时效对齐 vfs 1.4） | AI |

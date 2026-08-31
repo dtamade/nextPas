@@ -63,7 +63,7 @@ VfsWalk(Fs, '.',
   end);
 
 // 后端装配视角
-FsEmbedded := CreateEmbeddedVfs(ResPackOpen(@Blob[0], Length(Blob)));  // 嵌入包
+FsEmbedded := CreateEmbeddedVfs(@Blob[0], Length(Blob), False); // 嵌入包（或 CreateEmbeddedVfsBorrowed；ResPackOpen 返回 TResPack，非 PByte）
 FsDisk     := CreateOsVfs('/srv/app');                                 // 真实目录
 FsMem      := CreateMemTreeVfs(Tree);                                  // 测试替身
 

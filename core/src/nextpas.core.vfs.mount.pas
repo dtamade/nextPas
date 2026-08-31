@@ -269,17 +269,18 @@ begin
         Result[OutN].IsDir := True;
         Inc(OutN);
       end;
-    // 若有根挂载，合并其根 List 去重
+    // 若有根挂载，合并其根 List 去重 — 预分配消逐条 +1 重分配抖动
     if FHasRoot then
     begin
       BaseList := FRootFs.List('.');
+      if Length(Result) < OutN + Length(BaseList) then
+        SetLength(Result, OutN + Length(BaseList));
       for I := 0 to High(BaseList) do
       begin
         Already := False;
         for J := 0 to OutN - 1 do
           if Result[J].Name = BaseList[I].Name then begin Already := True; Break; end;
         if Already then Continue;
-        if OutN >= Length(Result) then SetLength(Result, OutN + 1);
         Result[OutN] := BaseList[I];
         Inc(OutN);
       end;

@@ -192,6 +192,8 @@ begin
     end;
   if TotalInput > AOpts.MaxTotalInputBytes then
     raise EResPackTooLarge.Create('respack: total input exceeds limit');
+  if AOpts.CodecId <> RESPACK_CODEC_STORE then
+    raise EResPackError.Create('respack: unsupported CodecId, v1 only store(0)');
 
   { ── 排序 ── }
   SetLength(Order, N);
