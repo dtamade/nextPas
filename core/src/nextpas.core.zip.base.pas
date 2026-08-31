@@ -123,6 +123,9 @@ procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
 {** DOS 纪元下限（1980-01-01T00:00:00Z）对应的 unix 秒；确定性时间戳默认值。 *}
 function DosMinUnixSec: Int64; inline;
 
+{** DOS 纪元上限（2107-12-31T23:59:59Z）对应的 unix 秒；钳制上界。 *}
+function DosMaxUnixSec: Int64; inline;
+
 {** 从外部属性高 16 位取 unix 模式字（S_IFMT|rwx）。 *}
 function ZipUnixModeOf(const AEntry: TZipEntryInfo): Word; inline;
 
@@ -234,6 +237,11 @@ end;
 function DosMinUnixSec: Int64;
 begin
   Result := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
+end;
+
+function DosMaxUnixSec: Int64;
+begin
+  Result := C_DOS_MAX_UNIX;
 end;
 
 function ZipUnixModeOf(const AEntry: TZipEntryInfo): Word;

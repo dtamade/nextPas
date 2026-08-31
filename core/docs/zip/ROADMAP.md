@@ -32,6 +32,11 @@
 | S48 | Cookbook 定版：`README` 6式与 `Migration`，`zip_roundtrip` 增 `PByte/AES-desc` |
 | S49 | 方差治理：`300ms/7/25` 使 `aes-*` CV `<5%` 无 WARN |
 | S50 | 安全审计与 RC：`SECURITY.md` 四模型，`1.0.0-rc.1` 冻结 |
+| S51 | 单源与纯化收敛（1.0.1 巡检）：`IsSafe inline + common DOS 委托 base 去 time.date`、`compress 5 one-shot 纯 Pas 兜底` |
+| S52 | 注册表完整性：`module-registry` 增 `zip/zlib` L2 条目，12门+双锚点+bench 单源收敛 |
+| S53 | 常量化收敛：`C_DOS_MIN/MAX_UNIX` 常量去 `TDate` 构造，`DosMinUnixSec` inline 常量返回 |
+| S54 | 验证平台期：三门全绿 `27/32/30` 验证，无新增债务，完美 plateau 证据 |
+| S55 | 对称补齐：`DosMaxUnixSec` 对称暴露，`base/common` 双 `inline` 单源 |
 
 **当前门**：12门全绿 `[HEAPTRC] OK`（`test_zip 27`/`reader 27`/`sequential 22`/`fs 7`/`contract 5`/`extra 6`/`builder 9`/`fuzz 3`/`aes 13`/`go_parity 7`/`perf 5`/`stress 4`）+ `bench 16项` `allocs+2` 硬门 + `zip_roundtrip all demos ok` + `hygiene/diff --check` 通过 + `linux-x86_64/win64` 交叉编译通过。
 
@@ -70,6 +75,21 @@
 
 ### S50 — 安全审计与 Release Candidate · 已落地
 - `SECURITY.md` 四模型，`1.0.0-rc.1` → `1.0.0 Final`
+
+### S51 — 单源与纯化收敛（1.0.1 巡检）· 模块化/性能/复用度 — 已落地
+- `zip.base IsSafe inline` 热路径可内联；`zip.common DOS 28行去重委托 base 单源`，移除 `time.date`；`compress.deflate 5 one-shot 纯 Pas 兜底（zbAuto）`，无 `libz.so` 可移植
+
+### S52 — 注册表完整性（1.0.1 巡检）· 完整性 — 已落地
+- `module-registry` 增 `zip/zlib` L2 条目，12门+双锚点+bench 完整性闭环
+
+### S53 — 常量化收敛（1.0.1 巡检）· 性能 — 已落地
+- `C_DOS_MIN/MAX_UNIX` 常量（315532800/4354819199）去 `TDate.Create` 构造，`DosDateTimeFromUnix` 钳制零分配，`DosMinUnixSec` inline 常量返回
+
+### S54 — 验证平台期（1.0.1 巡检）· 稳定性 — 已落地
+- 三门全绿 `27/32/30` 验证，无新增债务，完美 plateau 证据化
+
+### S55 — 对称补齐（1.0.1 巡检）· 模块化/完整性 — 已落地
+- `DosMaxUnixSec` 对称暴露，`base/common` 双 `inline` 单源，`C_DOS_MAX_UNIX` 常量复用，边界契约对称闭环
 
 ## 4. 度量与硬门（1.0.0 冻结）
 
