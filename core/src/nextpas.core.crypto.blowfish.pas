@@ -15,7 +15,6 @@ unit nextpas.core.crypto.blowfish;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base;
 
 type
