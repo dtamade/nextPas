@@ -231,7 +231,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt16LE(var ASpan: TByteSpan; out AValue: UInt16): Boolean;
+function TryReadUInt16LE(var ASpan: TByteSpan; out AValue: UInt16): Boolean; inline;
 begin
   if ASpan.Len < 2 then
     Exit(False);
@@ -241,7 +241,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt16BE(var ASpan: TByteSpan; out AValue: UInt16): Boolean;
+function TryReadUInt16BE(var ASpan: TByteSpan; out AValue: UInt16): Boolean; inline;
 begin
   if ASpan.Len < 2 then
     Exit(False);
@@ -251,7 +251,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt32LE(var ASpan: TByteSpan; out AValue: UInt32): Boolean;
+function TryReadUInt32LE(var ASpan: TByteSpan; out AValue: UInt32): Boolean; inline;
 begin
   if ASpan.Len < 4 then
     Exit(False);
@@ -261,7 +261,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt32BE(var ASpan: TByteSpan; out AValue: UInt32): Boolean;
+function TryReadUInt32BE(var ASpan: TByteSpan; out AValue: UInt32): Boolean; inline;
 begin
   if ASpan.Len < 4 then
     Exit(False);
@@ -271,7 +271,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt64LE(var ASpan: TByteSpan; out AValue: UInt64): Boolean;
+function TryReadUInt64LE(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
 begin
   if ASpan.Len < 8 then
     Exit(False);
@@ -281,7 +281,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt64BE(var ASpan: TByteSpan; out AValue: UInt64): Boolean;
+function TryReadUInt64BE(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
 begin
   if ASpan.Len < 8 then
     Exit(False);

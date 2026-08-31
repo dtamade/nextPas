@@ -112,6 +112,9 @@ function TLS13SignatureSchemeToString(ASignatureScheme: Word): string;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 procedure AppendByte(var ADest: TBytes; AValue: Byte); inline;
 begin
   BytesAppendByte(ADest, AValue);

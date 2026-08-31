@@ -79,8 +79,6 @@ begin
   FViolations := 0;
   SetLength(FEvents, 0);
   FConsecutiveUnderruns := 0;
-  // pre-allocate Drive scratch to avoid per-Drive GetMem (realtime zero-alloc)
-  SetLength(FScratch, 1024 * 1024);
 end;
 
 destructor TNullAudioDevice.Destroy;
@@ -121,7 +119,12 @@ end;
 
 function TNullAudioDevice.GetPosition: TAudioClock;
 begin
-  Result.Frame := FPosition;
+  FLock.Enter;
+  try
+    Result.Frame := FPosition;
+  finally
+    FLock.Leave;
+  end;
   Result.SampleRate := FFormat.SampleRate;
 end;
 
@@ -206,11 +209,13 @@ begin
   finally
     FLock.Leave;
   end;
-  if (AFrames>0) and (AudioBytesForFrames(FFormat, AFrames)>High(Integer)) then Exit(0);
-  LNeeded := AFrames * FFormat.BlockAlign;
-  if Length(FScratch) < LNeeded then
+  LNeeded := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
+  if LNeeded < 0 then LNeeded := 0;
+  if Int64(LNeeded) > 16*1024*1024 then
+    raise EAudioDeviceError.CreateFmt('Drive: %d bytes exceeds 16MiB limit', [LNeeded]);
+  if Length(FScratch) <> LNeeded then
     SetLength(FScratch, LNeeded);
-  // share pre-allocated scratch without per-Drive copy-alloc (zero-alloc)
+  // FScratch reuse — zero alloc steady state: LBuf.Data shares backing, no Copy/Move
   LBuf.Data := FScratch;
   LBuf.Format := FFormat;
   LBuf.FrameCount := AFrames;
@@ -218,11 +223,16 @@ begin
     LRet := FSource.FillRealtime(LBuf, AFrames);
   except
     InterlockedExchangeAdd64(FViolations, 1);
-    // realtime mute without FillChar on raw bytes — use canonical SilentFill
-    AudioSilentFill(LBuf, FFormat, AFrames);
+    if Length(LBuf.Data) > 0 then
+      FillChar(LBuf.Data[0], Length(LBuf.Data), 0);
     LRet := AFrames;
     PushEvent(devDeviceError, 'FillRealtime raised exception — muted');
-    FPosition := FPosition + UInt64(AFrames);
+    FLock.Enter;
+    try
+      FPosition := FPosition + UInt64(AFrames);
+    finally
+      FLock.Leave;
+    end;
     Exit(AFrames);
   end;
   if LRet < 0 then
@@ -239,7 +249,12 @@ begin
     Result := 0;
     Exit;
   end;
-  FPosition := FPosition + UInt64(AFrames);
+  FLock.Enter;
+  try
+    FPosition := FPosition + UInt64(AFrames);
+  finally
+    FLock.Leave;
+  end;
   if LRet < AFrames then
   begin
     InterlockedExchangeAdd64(FUnderruns, 1);

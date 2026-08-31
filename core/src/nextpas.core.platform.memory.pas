@@ -395,7 +395,7 @@ begin
     'platform_aligned_free: invalid magic (possible double-free or wrong pointer)');
 {$ELSE}
   if LHeader^.Magic <> PLATFORM_ALIGNED_ALLOC_MAGIC then
-    Exit;
+    RunError(204);
 {$ENDIF}
 {$IFDEF NEXTPAS_MACOS}
   if platform_aligned_alloc_backend <> paabFallback then

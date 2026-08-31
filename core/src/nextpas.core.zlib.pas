@@ -1,7 +1,7 @@
 unit nextpas.core.zlib;
 
 {**
- * @desc nextpas.core.zlib - 门面：四件套聚合（base/intf/zlib888/ffi，pure 为薄兼容）
+ * @desc nextpas.core.zlib - 门面：四件套聚合（base/intf/pure/ffi）
  *
  * 依赖方向 base <- intf <- 具体实现 <- 门面；门面仅 re-export + inline
  * 转发，零逻辑。ZlibAuto 默认为纯 Pascal，FFI 可用时自动切换；
@@ -17,7 +17,7 @@ uses
   nextpas.core.base,
   nextpas.core.zlib.base,
   nextpas.core.zlib.intf,
-  nextpas.core.zlib.zlib888,
+  nextpas.core.zlib.pure,
   nextpas.core.zlib.ffi;
 
 type
@@ -252,12 +252,12 @@ end;
 
 function ZlibPureEncode(const AData: TBytes): TBytes;
 begin
-  Result := nextpas.core.zlib.zlib888.ZlibPureEncodeWithLevel(AData, zlDefault);
+  Result := nextpas.core.zlib.pure.ZlibPureEncodeWithLevel(AData, zlDefault);
 end;
 
 function ZlibPureDecode(const AData: TBytes): TBytes;
 begin
-  Result := nextpas.core.zlib.zlib888.ZlibPureDecode(AData);
+  Result := nextpas.core.zlib.pure.ZlibPureDecode(AData);
 end;
 
 function ZlibFfiEncodeWrap(const AData: TBytes; const ALevel: TZlibLevel): TBytes;

@@ -32,10 +32,6 @@ function PcmS32ToF32(AValue: LongInt): Single; inline;
 function PcmF32ToS32(AValue: Single): LongInt; inline;
 
 { 24-bit packed LE helpers (3 bytes) }
-function PcmReadS16LE(const ABytes: TBytes; AOffset: Integer): SmallInt; inline;
-procedure PcmWriteS16LE(AValue: SmallInt; var ABytes: TBytes; AOffset: Integer); inline;
-function PcmReadS32LE(const ABytes: TBytes; AOffset: Integer): LongInt; inline;
-procedure PcmWriteS32LE(AValue: LongInt; var ABytes: TBytes; AOffset: Integer); inline;
 function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer; inline;
 procedure PcmWriteS24LE(AValue: Integer; var ABytes: TBytes; AOffset: Integer); inline;
 
@@ -53,12 +49,6 @@ procedure PcmInterleave(const APlanes: array of TBytes; AFrames, AChannels: Inte
   ABytesPerSample: Integer; out ADst: TBytes);
 procedure PcmDeinterleave(const AInterleaved: TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out APlanes: TAudioPlaneArray);
-
-{ ---- Memory-source realtime helper (re-export from base: single truth) ---- }
-function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
-  var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
-function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
-  AFrames: Integer): Integer; inline;
 
 { ---- TPDF dither noise [-1,1) LSB scaled ---- }
 function PcmTpdfNoise(var AState: UInt32): Single; inline;
@@ -205,34 +195,12 @@ begin
   Result := PcmClampS32(LScaled);
 end;
 
-function PcmReadS16LE(const ABytes: TBytes; AOffset: Integer): SmallInt; inline;
-begin
-  Result := SmallInt(Word(ABytes[AOffset]) or (Word(ABytes[AOffset+1]) shl 8));
-end;
-
-procedure PcmWriteS16LE(AValue: SmallInt; var ABytes: TBytes; AOffset: Integer); inline;
-begin
-  ABytes[AOffset] := Byte(Word(AValue) and $FF);
-  ABytes[AOffset+1] := Byte((Word(AValue) shr 8) and $FF);
-end;
-
-function PcmReadS32LE(const ABytes: TBytes; AOffset: Integer): LongInt; inline;
-begin
-  Result := LongInt(DWord(ABytes[AOffset]) or (DWord(ABytes[AOffset+1]) shl 8) or (DWord(ABytes[AOffset+2]) shl 16) or (DWord(ABytes[AOffset+3]) shl 24));
-end;
-
-procedure PcmWriteS32LE(AValue: LongInt; var ABytes: TBytes; AOffset: Integer); inline;
-begin
-  ABytes[AOffset] := Byte(DWord(AValue) and $FF);
-  ABytes[AOffset+1] := Byte((DWord(AValue) shr 8) and $FF);
-  ABytes[AOffset+2] := Byte((DWord(AValue) shr 16) and $FF);
-  ABytes[AOffset+3] := Byte((DWord(AValue) shr 24) and $FF);
-end;
-
 function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer;
 var
   LB0, LB1, LB2: Byte;
 begin
+  if (AOffset < 0) or (Length(ABytes) < AOffset + 3) then
+    raise EInvalidArgument.CreateFmt('PcmReadS24LE: offset %d out of range [0..%d]', [AOffset, Length(ABytes) - 3]);
   LB0 := ABytes[AOffset];
   LB1 := ABytes[AOffset + 1];
   LB2 := ABytes[AOffset + 2];
@@ -243,6 +211,8 @@ end;
 
 procedure PcmWriteS24LE(AValue: Integer; var ABytes: TBytes; AOffset: Integer);
 begin
+  if (AOffset < 0) or (Length(ABytes) < AOffset + 3) then
+    raise EInvalidArgument.CreateFmt('PcmWriteS24LE: offset %d out of range [0..%d]', [AOffset, Length(ABytes) - 3]);
   ABytes[AOffset] := Byte(AValue and $FF);
   ABytes[AOffset + 1] := Byte((AValue shr 8) and $FF);
   ABytes[AOffset + 2] := Byte((AValue shr 16) and $FF);
@@ -262,80 +232,33 @@ var
   LS24: Integer;
   LS32: LongInt;
 begin
-  Result := nil;
-  if (AFrames <= 0) or (AChannels <= 0) then Exit;
+  if (AFrames <= 0) or (AChannels <= 0) then
+  begin SetLength(Result, 0); Exit; end;
+  if (Ord(ASrcFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ASrcFormat) > Ord(High(TAudioSampleFormat))) then
+    raise EInvalidArgument.Create('PcmConvert: invalid src format');
+  if (Ord(ADstFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ADstFormat) > Ord(High(TAudioSampleFormat))) then
+    raise EInvalidArgument.Create('PcmConvert: invalid dst format');
+  LBytesPerSrc := AudioBytesPerSample(ASrcFormat);
+  LBytesPerDst := AudioBytesPerSample(ADstFormat);
+  if LBytesPerSrc <= 0 then
+    raise EInvalidArgument.Create('PcmConvert: unsupported src bytes per sample');
+  if LBytesPerDst <= 0 then
+    raise EInvalidArgument.Create('PcmConvert: unsupported dst bytes per sample');
+  if Int64(AFrames) * Int64(AChannels) > High(Integer) then
+    raise EInvalidArgument.Create('PcmConvert: frames*channels overflow');
   if ASrcFormat = ADstFormat then
   begin
+    if Int64(Length(ASrc)) < Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc) then
+      raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)]);
     Result := Copy(ASrc, 0, Length(ASrc));
     Exit;
   end;
   LSampleCount := AFrames * AChannels;
-  LBytesPerSrc := AudioBytesPerSample(ASrcFormat);
-  LBytesPerDst := AudioBytesPerSample(ADstFormat);
-  if LBytesPerSrc <= 0 then Exit;
-  if LBytesPerDst <= 0 then Exit;
-  if Length(ASrc) < LSampleCount * LBytesPerSrc then Exit;
+  if Int64(Length(ASrc)) < Int64(LSampleCount) * Int64(LBytesPerSrc) then
+    raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(LSampleCount) * Int64(LBytesPerSrc)]);
+  if Int64(LSampleCount) * Int64(LBytesPerDst) > 16*1024*1024 then
+    raise EInvalidArgument.CreateFmt('PcmConvert: dst %d bytes exceeds 16MiB limit', [Int64(LSampleCount) * Int64(LBytesPerDst)]);
   SetLength(Result, LSampleCount * LBytesPerDst);
-  // fast 4-wide paths for dither-free S16/S32<->F32 (hotest conversions, zero branch)
-  if not AApplyDither then
-  begin
-    if (ASrcFormat=sfS16) and (ADstFormat=sfF32) then
-    begin
-      LI:=0; while LI+3 < LSampleCount do
-      begin
-        PSingle(@Result[LI*4])^ := PcmS16ToF32(PcmReadS16LE(ASrc, LI*2));
-        PSingle(@Result[(LI+1)*4])^ := PcmS16ToF32(PcmReadS16LE(ASrc, (LI+1)*2));
-        PSingle(@Result[(LI+2)*4])^ := PcmS16ToF32(PcmReadS16LE(ASrc, (LI+2)*2));
-        PSingle(@Result[(LI+3)*4])^ := PcmS16ToF32(PcmReadS16LE(ASrc, (LI+3)*2));
-        Inc(LI,4);
-      end;
-      while LI < LSampleCount do
-      begin PSingle(@Result[LI*4])^:=PcmS16ToF32(PcmReadS16LE(ASrc, LI*2)); Inc(LI); end;
-      Exit;
-    end;
-    if (ASrcFormat=sfF32) and (ADstFormat=sfS16) then
-    begin
-      LI:=0; while LI+3 < LSampleCount do
-      begin
-        PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[LI*4])^), Result, LI*2);
-        PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[(LI+1)*4])^), Result, (LI+1)*2);
-        PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[(LI+2)*4])^), Result, (LI+2)*2);
-        PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[(LI+3)*4])^), Result, (LI+3)*2);
-        Inc(LI,4);
-      end;
-      while LI < LSampleCount do
-      begin PcmWriteS16LE(PcmF32ToS16(PSingle(@ASrc[LI*4])^), Result, LI*2); Inc(LI); end;
-      Exit;
-    end;
-    if (ASrcFormat=sfS32) and (ADstFormat=sfF32) then
-    begin
-      LI:=0; while LI+3 < LSampleCount do
-      begin
-        PSingle(@Result[LI*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, LI*4));
-        PSingle(@Result[(LI+1)*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, (LI+1)*4));
-        PSingle(@Result[(LI+2)*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, (LI+2)*4));
-        PSingle(@Result[(LI+3)*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, (LI+3)*4));
-        Inc(LI,4);
-      end;
-      while LI < LSampleCount do
-      begin PSingle(@Result[LI*4])^:=PcmS32ToF32(PcmReadS32LE(ASrc, LI*4)); Inc(LI); end;
-      Exit;
-    end;
-    if (ASrcFormat=sfF32) and (ADstFormat=sfS32) then
-    begin
-      LI:=0; while LI+3 < LSampleCount do
-      begin
-        PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[LI*4])^), Result, LI*4);
-        PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[(LI+1)*4])^), Result, (LI+1)*4);
-        PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[(LI+2)*4])^), Result, (LI+2)*4);
-        PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[(LI+3)*4])^), Result, (LI+3)*4);
-        Inc(LI,4);
-      end;
-      while LI < LSampleCount do
-      begin PcmWriteS32LE(PcmF32ToS32(PSingle(@ASrc[LI*4])^), Result, LI*4); Inc(LI); end;
-      Exit;
-    end;
-  end;
   LDitherState := 12345;
   for LI := 0 to LSampleCount - 1 do
   begin
@@ -343,19 +266,59 @@ begin
     { Src -> F32 }
     case ASrcFormat of
       sfU8: LF := PcmU8ToF32(ASrc[LSrcOffset]);
-      sfS16: LF := PcmS16ToF32(PcmReadS16LE(ASrc, LSrcOffset));
-      sfS24: LF := PcmS24ToF32(PcmReadS24LE(ASrc, LSrcOffset));
-      sfS32: LF := PcmS32ToF32(PcmReadS32LE(ASrc, LSrcOffset));
-      sfF32: Move(ASrc[LSrcOffset], LF, SizeOf(Single));
-    else LF := 0;
+      sfS16: begin
+        LS16 := SmallInt(ASrc[LSrcOffset] or (ASrc[LSrcOffset + 1] shl 8));
+        LF := PcmS16ToF32(LS16);
+      end;
+      sfS24: begin
+        LS24 := PcmReadS24LE(ASrc, LSrcOffset);
+        LF := PcmS24ToF32(LS24);
+      end;
+      sfS32: begin
+        LS32 := LongInt(ASrc[LSrcOffset] or (ASrc[LSrcOffset + 1] shl 8) or
+          (ASrc[LSrcOffset + 2] shl 16) or (ASrc[LSrcOffset + 3] shl 24));
+        LF := PcmS32ToF32(LS32);
+      end;
+      sfF32: begin
+        Move(ASrc[LSrcOffset], LF, SizeOf(Single));
+      end;
+    else
+      LF := 0;
     end;
     LDstOffset := LI * LBytesPerDst;
     case ADstFormat of
-      sfU8: begin if AApplyDither then LU8:=PcmF32ToU8Dithered(LF, LDitherState) else LU8:=PcmF32ToU8(LF); Result[LDstOffset]:=LU8; end;
-      sfS16: begin if AApplyDither then LS16:=PcmF32ToS16Dithered(LF, LDitherState) else LS16:=PcmF32ToS16(LF); PcmWriteS16LE(LS16, Result, LDstOffset); end;
-      sfS24: begin if AApplyDither then LS24:=PcmF32ToS24Dithered(LF, LDitherState) else LS24:=PcmF32ToS24(LF); PcmWriteS24LE(LS24, Result, LDstOffset); end;
-      sfS32: PcmWriteS32LE(PcmF32ToS32(LF), Result, LDstOffset);
-      sfF32: Move(LF, Result[LDstOffset], SizeOf(Single));
+      sfU8: begin
+        if AApplyDither then
+          LU8 := PcmF32ToU8Dithered(LF, LDitherState)
+        else
+          LU8 := PcmF32ToU8(LF);
+        Result[LDstOffset] := LU8;
+      end;
+      sfS16: begin
+        if AApplyDither then
+          LS16 := PcmF32ToS16Dithered(LF, LDitherState)
+        else
+          LS16 := PcmF32ToS16(LF);
+        Result[LDstOffset] := Byte(LS16 and $FF);
+        Result[LDstOffset + 1] := Byte((LS16 shr 8) and $FF);
+      end;
+      sfS24: begin
+        if AApplyDither then
+          LS24 := PcmF32ToS24Dithered(LF, LDitherState)
+        else
+          LS24 := PcmF32ToS24(LF);
+        PcmWriteS24LE(LS24, Result, LDstOffset);
+      end;
+      sfS32: begin
+        LS32 := PcmF32ToS32(LF);
+        Result[LDstOffset] := Byte(LS32 and $FF);
+        Result[LDstOffset + 1] := Byte((LS32 shr 8) and $FF);
+        Result[LDstOffset + 2] := Byte((LS32 shr 16) and $FF);
+        Result[LDstOffset + 3] := Byte((LS32 shr 24) and $FF);
+      end;
+      sfF32: begin
+        Move(LF, Result[LDstOffset], SizeOf(Single));
+      end;
     end;
   end;
 end;
@@ -363,33 +326,13 @@ end;
 procedure PcmInterleave(const APlanes: array of TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out ADst: TBytes);
 var
-  LFrame, LCh, LFrame4: Integer;
+  LFrame, LCh: Integer;
   LSrcOffset, LDstOffset: Integer;
 begin
   ADst := nil;
   if (AFrames <= 0) or (AChannels <= 0) or (ABytesPerSample <= 0) then Exit;
   if Length(APlanes) < AChannels then Exit;
   SetLength(ADst, AFrames * AChannels * ABytesPerSample);
-  if ABytesPerSample = 4 then
-  begin
-    LFrame4 := AFrames and not 3;
-    LFrame := 0;
-    while LFrame < LFrame4 do
-    begin
-      for LCh := 0 to AChannels - 1 do
-      begin
-        PSingle(@ADst[((LFrame)*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][LFrame*4])^;
-        PSingle(@ADst[((LFrame+1)*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][(LFrame+1)*4])^;
-        PSingle(@ADst[((LFrame+2)*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][(LFrame+2)*4])^;
-        PSingle(@ADst[((LFrame+3)*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][(LFrame+3)*4])^;
-      end;
-      Inc(LFrame, 4);
-    end;
-    for LFrame := LFrame4 to AFrames - 1 do
-      for LCh := 0 to AChannels - 1 do
-        PSingle(@ADst[(LFrame*AChannels+LCh)*4])^ := PSingle(@APlanes[LCh][LFrame*4])^;
-    Exit;
-  end;
   for LFrame := 0 to AFrames - 1 do
     for LCh := 0 to AChannels - 1 do
     begin
@@ -403,7 +346,7 @@ end;
 procedure PcmDeinterleave(const AInterleaved: TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out APlanes: TAudioPlaneArray);
 var
-  LFrame, LCh, LFrame4: Integer;
+  LFrame, LCh: Integer;
   LSrcOffset, LDstOffset: Integer;
 begin
   APlanes := nil;
@@ -411,26 +354,6 @@ begin
   SetLength(APlanes, AChannels);
   for LCh := 0 to AChannels - 1 do
     SetLength(APlanes[LCh], AFrames * ABytesPerSample);
-  if ABytesPerSample = 4 then
-  begin
-    LFrame4 := AFrames and not 3;
-    LFrame := 0;
-    while LFrame < LFrame4 do
-    begin
-      for LCh := 0 to AChannels - 1 do
-      begin
-        PSingle(@APlanes[LCh][LFrame*4])^ := PSingle(@AInterleaved[((LFrame)*AChannels+LCh)*4])^;
-        PSingle(@APlanes[LCh][(LFrame+1)*4])^ := PSingle(@AInterleaved[((LFrame+1)*AChannels+LCh)*4])^;
-        PSingle(@APlanes[LCh][(LFrame+2)*4])^ := PSingle(@AInterleaved[((LFrame+2)*AChannels+LCh)*4])^;
-        PSingle(@APlanes[LCh][(LFrame+3)*4])^ := PSingle(@AInterleaved[((LFrame+3)*AChannels+LCh)*4])^;
-      end;
-      Inc(LFrame, 4);
-    end;
-    for LFrame := LFrame4 to AFrames - 1 do
-      for LCh := 0 to AChannels - 1 do
-        PSingle(@APlanes[LCh][LFrame*4])^ := PSingle(@AInterleaved[(LFrame*AChannels+LCh)*4])^;
-    Exit;
-  end;
   for LFrame := 0 to AFrames - 1 do
     for LCh := 0 to AChannels - 1 do
     begin
@@ -440,14 +363,6 @@ begin
       Move(AInterleaved[LSrcOffset], APlanes[LCh][LDstOffset], ABytesPerSample);
     end;
 end;
-
-function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
-  var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-begin Result:=nextpas.core.audio.base.AudioFillMemoryRealtime(ASrc,APos,ABuffer,AFrames); end;
-
-function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
-  AFrames: Integer): Integer;
-begin Result:=nextpas.core.audio.base.AudioSilentFill(ABuffer,AFormat,AFrames); end;
 
 {$POP}
 

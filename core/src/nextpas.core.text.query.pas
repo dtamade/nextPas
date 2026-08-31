@@ -51,16 +51,12 @@ end;
 function UriWsParams(const AQuery: string; out AIsWs: Boolean;
   out APath, AHost: string): Boolean;
 var
-  LT, LLower: string;
+  LT: string;
 begin
   Result := False;
   AIsWs := False;
   APath := '';
   AHost := '';
-  { ed= early-data 陷阱 fail-closed：任何 ed 参数出现即拒绝 }
-  LLower := LowerCase(AQuery);
-  if Pos('ed=', LLower) > 0 then
-    Exit;
   QueryValueOf(AQuery, 'type', LT);
   LT := LowerCase(Trim(LT));
   if (LT <> '') and (LT <> 'tcp') and (LT <> 'ws') then
@@ -70,7 +66,7 @@ begin
     AIsWs := True;
     QueryValueOf(AQuery, 'path', APath);
     QueryValueOf(AQuery, 'host', AHost);
-    if Pos('ed=', LowerCase(APath)) > 0 then
+    if Pos('?ed=', APath) > 0 then
       Exit(False);
   end;
   Result := True;
