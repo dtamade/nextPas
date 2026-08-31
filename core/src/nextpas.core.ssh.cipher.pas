@@ -70,6 +70,7 @@ function SshAesCtrCrypt(const AKey, AIV, AInput: TBytes): TBytes;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.aesni,
   nextpas.core.crypto.aes.ct64,
@@ -335,7 +336,7 @@ end;
 
 function TSshChachaSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
-  LNonce, LMask, LEncLen, LPolyKey, LCt, LTag, LMacData: TBytes;
+  LNonce, LMask, LEncLen, LPolyKey, LCt, LTag: TBytes;
 begin
   { OpenSSH PROTOCOL.chacha20poly1305：
     - 前 32B（main）：counter=0 派生 poly key；counter=1 起加密载荷
@@ -343,24 +344,29 @@ begin
     - Poly1305 直接覆盖 encLen||ct（无 RFC 8439 的 pad16 与长度块） }
   LNonce := ChachaNonce(ASeq);
   LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
-  SetLength(LEncLen, 4);
-  PutU32BE(LEncLen, 0, UInt32(Length(ABodyPlain)) xor U32BEOf(LMask, 0));
-  LCt := ChaCha20Xor(FMainKey, LNonce, 1, ABodyPlain);
-  LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
-  SetLength(LPolyKey, 32);
-  SetLength(LMacData, 4 + SizeUInt(Length(LCt)));
-  Move(LEncLen[0], LMacData[0], 4);
-  if Length(LCt) > 0 then
-    Move(LCt[0], LMacData[4], SizeUInt(Length(LCt)));
-  LTag := Poly1305Raw(LPolyKey, LMacData);
-  Result := nil;
-  SetLength(Result, 4 + SizeUInt(Length(LCt)) + CHACHA_TAG);
-  Move(LEncLen[0], Result[0], 4);
-  if Length(LCt) > 0 then
-    Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
-  Move(LTag[0], Result[4 + SizeUInt(Length(LCt))], CHACHA_TAG);
-  SecureZeroBytes(LPolyKey);
-  SecureZeroBytes(LMacData);
+  try
+    SetLength(LEncLen, 4);
+    PutU32BE(LEncLen, 0, UInt32(Length(ABodyPlain)) xor U32BEOf(LMask, 0));
+    LCt := ChaCha20Xor(FMainKey, LNonce, 1, ABodyPlain);
+    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
+    SetLength(LPolyKey, 32);
+    try
+      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.FromBytes(LEncLen), TByteSpan.FromBytes(LCt)]);
+      Result := nil;
+      SetLength(Result, 4 + SizeUInt(Length(LCt)) + CHACHA_TAG);
+      Move(LEncLen[0], Result[0], 4);
+      if Length(LCt) > 0 then
+        Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
+      Move(LTag[0], Result[4 + SizeUInt(Length(LCt))], CHACHA_TAG);
+    finally
+      SecureZeroBytes(LPolyKey);
+      SecureZeroBytes(LTag);
+      SecureZeroBytes(LCt);
+    end;
+  finally
+    SecureZeroBytes(LMask);
+    SecureZeroBytes(LNonce);
+  end;
 end;
 
 constructor TSshChachaReceiver.Create(const AKeyMaterial: TBytes);
@@ -380,11 +386,17 @@ end;
 
 function TSshChachaReceiver.BodyLengthFromHeader(ASeq: UInt32; const AHeader: TBytes): UInt32;
 var
-  LMask: TBytes;
+  LMask, LNonce: TBytes;
 begin
   { 长度字段被 header key 流掩码；counter=0 首块前 4 字节为掩码 }
-  LMask := ChaCha20Block(FHeaderKey, ChachaNonce(ASeq), 0);
-  Result := U32BEOf(AHeader, 0) xor U32BEOf(LMask, 0);
+  LNonce := ChachaNonce(ASeq);
+  LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
+  try
+    Result := U32BEOf(AHeader, 0) xor U32BEOf(LMask, 0);
+  finally
+    SecureZeroBytes(LMask);
+    SecureZeroBytes(LNonce);
+  end;
 end;
 
 function TSshChachaReceiver.TrailerSize(ABodyLen: UInt32): UInt32;
@@ -394,7 +406,7 @@ end;
 
 function TSshChachaReceiver.Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
 var
-  LEncLen, LCt, LTag, LNonce, LPolyKey, LExpect, LMacData: TBytes;
+  LEncLen, LCt, LTag, LNonce, LPolyKey, LExpect: TBytes;
 begin
   if SizeUInt(Length(AWire)) < 4 + CHACHA_TAG then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: chacha packet truncated');
@@ -407,11 +419,7 @@ begin
     LNonce := ChachaNonce(ASeq);
     LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
     SetLength(LPolyKey, 32);
-    SetLength(LMacData, 4 + SizeUInt(Length(LCt)));
-    Move(LEncLen[0], LMacData[0], 4);
-    if Length(LCt) > 0 then
-      Move(LCt[0], LMacData[4], SizeUInt(Length(LCt)));
-    LExpect := Poly1305Raw(LPolyKey, LMacData);
+    LExpect := Poly1305RawSpans(LPolyKey, [TByteSpan.FromBytes(LEncLen), TByteSpan.FromBytes(LCt)]);
     if TConstantTime.CompareBytes(LExpect, LTag) <> 1 then
       raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha AEAD verify failed');
     Result := ChaCha20Xor(FMainKey, LNonce, 1, LCt);
@@ -419,7 +427,6 @@ begin
     SecureZeroBytes(LTag);
     SecureZeroBytes(LExpect);
     SecureZeroBytes(LPolyKey);
-    SecureZeroBytes(LMacData);
   end;
 end;
 

@@ -83,31 +83,10 @@ function SshBuildCurve25519HashInput(const AVc, AVs: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.hash,
   nextpas.core.mem.secure;
-
-{ 无符号拼接 }
-function ConcatAll(const AParts: array of TBytes): TBytes;
-var
-  I: Integer;
-  LTot, LPos: SizeUInt;
-begin
-  Result := nil;
-  LTot := 0;
-  for I := 0 to High(AParts) do
-    Inc(LTot, SizeUInt(Length(AParts[I])));
-  SetLength(Result, LTot);
-  LPos := 0;
-  for I := 0 to High(AParts) do
-  begin
-    if Length(AParts[I]) > 0 then
-    begin
-      Move(AParts[I][0], Result[LPos], SizeUInt(Length(AParts[I])));
-      Inc(LPos, SizeUInt(Length(AParts[I])));
-    end;
-  end;
-end;
 
 constructor TSshKexCurve25519.Create;
 begin
@@ -164,16 +143,6 @@ begin
   end;
 end;
 
-function IsAllZero(const ABuf: TBytes): Boolean;
-var
-  I: Integer;
-begin
-  for I := 0 to High(ABuf) do
-    if ABuf[I] <> 0 then
-      Exit(False);
-  Result := True;
-end;
-
 function TSshKexCurve25519.ProcessReply(const APayload: TBytes;
   const AVc, AVs: string;
   const AMyKexInit, APeerKexInit: TBytes;
@@ -215,7 +184,7 @@ begin
     LX25519Err) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: x25519 failed: '
       + string(LX25519Err));
-  if IsAllZero(LShared) then
+  if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
 
   Result.SharedSecret := LShared;

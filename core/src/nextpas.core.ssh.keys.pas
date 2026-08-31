@@ -42,9 +42,11 @@ function SshLoadPrivateKey(const AContent: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.encoding.base64,
   nextpas.core.crypto.bcrypt_pbkdf,
   nextpas.core.crypto.bigint,
+  nextpas.core.mem.secure,
   nextpas.core.ssh.cipher;
 
 { 按 '#' 换行切分（替代 SysUtils 字符串助手的多分隔符 Split）}
@@ -101,29 +103,14 @@ begin
     Result := Result + Trim(LLines[I]);
 end;
 
-function StringToBytesPass(const AText: string): TBytes;
+function StringToBytesPass(const AText: string): TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(PByte(PChar(AText))^, Result[0], SizeUInt(Length(AText)));
+  Result := StringToBytes(AText);
 end;
 
-function BytesEqualTrim(const A, B: TBytes): Boolean;
-var
-  I, LA, LB, SA, SB: Integer;
+function BytesEqualTrim(const A, B: TBytes): Boolean; inline;
 begin
-  LA := Length(A); SA := 0;
-  while (SA < LA) and (A[SA] = 0) do Inc(SA);
-  LB := Length(B); SB := 0;
-  while (SB < LB) and (B[SB] = 0) do Inc(SB);
-  LA := LA - SA;
-  LB := LB - SB;
-  if LA <> LB then Exit(False);
-  if LA = 0 then Exit(True);
-  for I := 0 to LA - 1 do
-    if A[SA + I] <> B[SB + I] then Exit(False);
-  Result := True;
+  Result := CompareUnsigned(A, B) = 0;
 end;
 
 function IsCrtValid(const AN, AP, AQ, AIqmp: TBytes): Boolean;
@@ -224,8 +211,12 @@ begin
     SetLength(LIV, 16);
     Move(LDerived[0], LKey[0], 32);
     Move(LDerived[32], LIV[0], 16);
+    SecureZeroBytes(LDerived);
+    SecureZeroBytes(LPassBytes);
     { AES-256-CTR：CTR 初值为 IV，全零计数器跨块递增（SshAesCtrCrypt 封装）}
     LPrivSection := SshAesCtrCrypt(LKey, LIV, LPrivEnc);
+    SecureZeroBytes(LKey);
+    SecureZeroBytes(LIV);
     if (Length(LPrivSection) mod 16) <> 0 then
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: decrypted priv section not block aligned');
   end
