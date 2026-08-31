@@ -1,10 +1,10 @@
 {**
- * nextpas.core.image.png - 最小 PNG 编码器（8-bit RGBA）
+ * nextpas.core.image.png - 最小 PNG 编码器（8-bit RGBA/RGB/Gray）
  *
  * 产出标准 PNG 文件字节：签名 + IHDR + IDAT + IEND。
  * 每扫描行前置 filter byte 0（None），IDAT 用 zlib 流（core compress.deflate）。
- * 颜色类型 6（RGBA），位深 8，无隔行。
- * 纯 Pascal 实现，不依赖 FPC RTL。
+ * 颜色类型 0(灰度)/2(RGB)/6(RGBA)，位深 8，无隔行。
+ * 纯 Pascal 实现，不依赖 FPC RTL，零 SysUtils/Graphics。
  *}
 
 unit nextpas.core.image.png;
@@ -23,6 +23,8 @@ uses
     @return PNG 文件字节（可直接写盘）
     @raises EArgumentError 宽度/高度 ≤ 0 或缓冲长度与尺寸不符 *}
 function PngEncodeRgba(const APixels: TBytes; AWidth, AHeight: Integer): TBytes;
+function PngEncodeRgb(const APixels: TBytes; AWidth, AHeight: Integer): TBytes;
+function PngEncodeGray(const APixels: TBytes; AWidth, AHeight: Integer): TBytes;
 
 {** k54（code888 反哺）：PNG 文件字节 → RGBA 位图（与编码对称的最小面）。
     支持：位深 8 × color type 0(灰度)/2(RGB)/6(RGBA) × filter 0-4 × 无隔行；
@@ -31,8 +33,7 @@ function PngEncodeRgba(const APixels: TBytes; AWidth, AHeight: Integer): TBytes;
     @param AWidth 输出位图宽度（> 0）
     @param AHeight 输出位图高度（> 0）
     @return RGBA 缓冲（W * H * 4，灰度/RGB 源 alpha 恒 $FF）
-    @raises EArgumentError 数据形态不支持（位深/色型/隔行/宽高 ≤ 0）
-    @raises EIOError 签名/结构/CRC/流损坏 *}
+    @raises EImageDecodeError 形态/结构/签名/CRC/解压/滤波失败 *}
 function PngDecodeRgba(const AData: TBytes;
   out AWidth, AHeight: Integer): TBytes;
 
@@ -40,19 +41,18 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.graphics.errors,
   nextpas.core.compress,
-  nextpas.core.checksum.crc32;
+  nextpas.core.checksum.crc32,
+  nextpas.core.bytes.binary;
 
 const
   PNG_SIGNATURE: array[0..7] of Byte = (
     $89, $50, $4E, $47, $0D, $0A, $1A, $0A);
 
-procedure PutBe32(ADst: PByte; AValue: LongWord);
+procedure PutBe32(ADst: PByte; AValue: LongWord); inline;
 begin
-  ADst[0] := Byte(AValue shr 24);
-  ADst[1] := Byte(AValue shr 16);
-  ADst[2] := Byte(AValue shr 8);
-  ADst[3] := Byte(AValue);
+  WriteUInt32BE(ADst, UInt32(AValue));
 end;
 
 { 追加 chunk: 长度(4 BE) + 类型(4 ASCII) + 数据 + CRC32(类型+数据) }
@@ -81,10 +81,10 @@ var
   Ihdr: array[0..12] of Byte;
 begin
   if (AWidth <= 0) or (AHeight <= 0) then
-    raise EArgumentError.Create('png: width/height must be > 0');
+    raise EArgumentError.Create('nextpas.core.image.png.pas: PngEncodeRgba width/height must be >0 (W=' + IntToStr(AWidth) + ' H=' + IntToStr(AHeight) + ')');
   PixelLen := SizeUInt(AWidth) * SizeUInt(AHeight) * 4;
   if SizeUInt(Length(APixels)) <> PixelLen then
-    raise EArgumentError.Create('png: pixel buffer length mismatch');
+    raise EArgumentError.Create('nextpas.core.image.png.pas: PngEncodeRgba pixel buffer length mismatch (got ' + IntToStr(Length(APixels)) + ' expected ' + IntToStr(Int64(PixelLen)) + ')');
 
   Result := nil;
   SetLength(Result, 8);
@@ -115,6 +115,64 @@ begin
   AppendChunk(Result, 'IEND', nil, 0);
 end;
 
+function PngEncodeRgb(const APixels: TBytes; AWidth, AHeight: Integer): TBytes;
+var
+  I, RowLen, PixelLen: SizeUInt;
+  Raw: TBytes;
+  P: PByte;
+  Ihdr: array[0..12] of Byte;
+begin
+  if (AWidth <= 0) or (AHeight <= 0) then
+    raise EArgumentError.Create('nextpas.core.image.png.pas: PngEncodeRgb width/height must be >0 (W=' + IntToStr(AWidth) + ' H=' + IntToStr(AHeight) + ')');
+  PixelLen := SizeUInt(AWidth) * SizeUInt(AHeight) * 3;
+  if SizeUInt(Length(APixels)) <> PixelLen then
+    raise EArgumentError.Create('nextpas.core.image.png.pas: PngEncodeRgb pixel buffer length mismatch (got ' + IntToStr(Length(APixels)) + ' expected ' + IntToStr(Int64(PixelLen)) + ')');
+  Result := nil; SetLength(Result, 8); Move(PNG_SIGNATURE, Result[0], 8);
+  FillChar(Ihdr, SizeOf(Ihdr), 0);
+  PutBe32(@Ihdr[0], LongWord(AWidth)); PutBe32(@Ihdr[4], LongWord(AHeight));
+  Ihdr[8] := 8; Ihdr[9] := 2;
+  AppendChunk(Result, 'IHDR', @Ihdr[0], SizeOf(Ihdr));
+  RowLen := SizeUInt(AWidth) * 3;
+  SetLength(Raw, (RowLen + 1) * SizeUInt(AHeight));
+  P := @Raw[0];
+  for I := 0 to SizeUInt(AHeight) - 1 do
+  begin
+    P[0] := 0; Move(APixels[I * RowLen], P[1], RowLen); Inc(P, RowLen + 1);
+  end;
+  Raw := DeflateCompress(Raw);
+  AppendChunk(Result, 'IDAT', @Raw[0], Length(Raw));
+  AppendChunk(Result, 'IEND', nil, 0);
+end;
+
+function PngEncodeGray(const APixels: TBytes; AWidth, AHeight: Integer): TBytes;
+var
+  I, RowLen, PixelLen: SizeUInt;
+  Raw: TBytes;
+  P: PByte;
+  Ihdr: array[0..12] of Byte;
+begin
+  if (AWidth <= 0) or (AHeight <= 0) then
+    raise EArgumentError.Create('nextpas.core.image.png.pas: PngEncodeGray width/height must be >0 (W=' + IntToStr(AWidth) + ' H=' + IntToStr(AHeight) + ')');
+  PixelLen := SizeUInt(AWidth) * SizeUInt(AHeight);
+  if SizeUInt(Length(APixels)) <> PixelLen then
+    raise EArgumentError.Create('nextpas.core.image.png.pas: PngEncodeGray pixel buffer length mismatch (got ' + IntToStr(Length(APixels)) + ' expected ' + IntToStr(Int64(PixelLen)) + ')');
+  Result := nil; SetLength(Result, 8); Move(PNG_SIGNATURE, Result[0], 8);
+  FillChar(Ihdr, SizeOf(Ihdr), 0);
+  PutBe32(@Ihdr[0], LongWord(AWidth)); PutBe32(@Ihdr[4], LongWord(AHeight));
+  Ihdr[8] := 8; Ihdr[9] := 0;
+  AppendChunk(Result, 'IHDR', @Ihdr[0], SizeOf(Ihdr));
+  RowLen := SizeUInt(AWidth);
+  SetLength(Raw, (RowLen + 1) * SizeUInt(AHeight));
+  P := @Raw[0];
+  for I := 0 to SizeUInt(AHeight) - 1 do
+  begin
+    P[0] := 0; Move(APixels[I * RowLen], P[1], RowLen); Inc(P, RowLen + 1);
+  end;
+  Raw := DeflateCompress(Raw);
+  AppendChunk(Result, 'IDAT', @Raw[0], Length(Raw));
+  AppendChunk(Result, 'IEND', nil, 0);
+end;
+
 function PngDecodeRgba(const AData: TBytes;
   out AWidth, AHeight: Integer): TBytes;
 var
@@ -126,12 +184,9 @@ var
   LRaw, LPrev, LRow: TBytes;
   LA, B, Cc, P, PA, PB, PC, LPred, LStride: Integer;
 
-  function Be32(AIdx: Integer): LongWord;
+  function Be32(AIdx: Integer): LongWord; inline;
   begin
-    Result := (LongWord(AData[AIdx]) shl 24) or
-      (LongWord(AData[AIdx + 1]) shl 16) or
-      (LongWord(AData[AIdx + 2]) shl 8) or
-      LongWord(AData[AIdx + 3]);
+    Result := LongWord(ReadUInt32BE(@AData[AIdx]));
   end;
 
   function Paeth(A, B, C: Integer): Integer;
@@ -151,12 +206,12 @@ begin
   AWidth := 0;
   AHeight := 0;
   if Length(AData) < 8 then
-    raise EIOError.Create('png: truncated (no signature)');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba truncated (no signature, got ' + IntToStr(Length(AData)) + ' expected 8)');
   if (AData[0] <> PNG_SIGNATURE[0]) or (AData[1] <> PNG_SIGNATURE[1]) or
      (AData[2] <> PNG_SIGNATURE[2]) or (AData[3] <> PNG_SIGNATURE[3]) or
      (AData[4] <> PNG_SIGNATURE[4]) or (AData[5] <> PNG_SIGNATURE[5]) or
      (AData[6] <> PNG_SIGNATURE[6]) or (AData[7] <> PNG_SIGNATURE[7]) then
-    raise EIOError.Create('png: bad signature');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba bad signature');
 
   { chunk 循环：IHDR 必首、IDAT 聚合、IEND 终止、辅助跳过容忍 }
   LIhdrPos := 0;
@@ -165,26 +220,26 @@ begin
   while True do
   begin
     if LPos + 12 > LongWord(Length(AData)) then
-      raise EIOError.Create('png: truncated chunk header');
+      raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba truncated chunk header (pos=' + IntToStr(Int64(LPos)) + ' have ' + IntToStr(Length(AData) - Integer(LPos)) + ' need 12)');
     LLen := Be32(Integer(LPos));
     if LLen > $7FFFFFFF then
-      raise EIOError.Create('png: chunk length overflow');
+      raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba chunk length overflow (len=' + IntToStr(Int64(LLen)) + ' at pos=' + IntToStr(Int64(LPos)) + ')');
     if LPos + 12 + LLen > LongWord(Length(AData)) then
-      raise EIOError.Create('png: truncated chunk data');
+      raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba truncated chunk data (pos=' + IntToStr(Int64(LPos)) + ' len=' + IntToStr(Int64(LLen)) + ' need ' + IntToStr(Int64(LPos + 12 + LLen)) + ' have ' + IntToStr(Length(AData)) + ')');
     LCrcStored := Be32(Integer(LPos + 8 + Integer(LLen)));
     LCrcCalc := Crc32Update(0, @AData[LPos + 4], 4);
     if LLen > 0 then
       LCrcCalc := Crc32Update(LCrcCalc, @AData[LPos + 8], LLen);
     if LCrcCalc <> LCrcStored then
-      raise EIOError.Create('png: chunk crc mismatch');
+      raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba chunk crc mismatch (type=' + Chr(AData[LPos + 4]) + Chr(AData[LPos + 5]) + Chr(AData[LPos + 6]) + Chr(AData[LPos + 7]) + ' pos=' + IntToStr(Int64(LPos)) + ' expected ' + IntToStr(Int64(LCrcStored)) + ' got ' + IntToStr(Int64(LCrcCalc)) + ')');
 
     if (AData[LPos + 4] = Ord('I')) and (AData[LPos + 5] = Ord('H')) and
        (AData[LPos + 6] = Ord('D')) and (AData[LPos + 7] = Ord('R')) then
     begin
       if LIhdrPos <> 0 then
-        raise EIOError.Create('png: duplicate IHDR');
+        raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba duplicate IHDR (pos=' + IntToStr(Int64(LPos)) + ')');
       if LLen <> 13 then
-        raise EIOError.Create('png: IHDR length != 13');
+        raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba IHDR length !=13 (got ' + IntToStr(Int64(LLen)) + ' at pos=' + IntToStr(Int64(LPos)) + ')');
       LIhdrPos := LPos;
     end
     else if (AData[LPos + 4] = Ord('I')) and (AData[LPos + 5] = Ord('D')) and
@@ -202,7 +257,7 @@ begin
   end;
 
   if LIhdrPos = 0 then
-    raise EIOError.Create('png: missing IHDR');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba missing IHDR');
 
   { IHDR 解析 + 形态校验（fail-closed：不支持即报错，不静默坏图） }
   AWidth := Integer(Be32(Integer(LIhdrPos + 8)));
@@ -211,26 +266,38 @@ begin
   LColor := AData[LIhdrPos + 17];
   LInterlace := AData[LIhdrPos + 20];
   if (AWidth <= 0) or (AHeight <= 0) then
-    raise EArgumentError.Create('png: width/height must be > 0');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba width/height must be >0 (W=' + IntToStr(AWidth) + ' H=' + IntToStr(AHeight) + ')');
+  if (AWidth > 16384) or (AHeight > 16384) then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba width/height exceeds 16384 cap (W=' + IntToStr(AWidth) + ' H=' + IntToStr(AHeight) + ')');
   if LDepth <> 8 then
-    raise EArgumentError.Create('png: unsupported bit depth (need 8)');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba unsupported bit depth (need 8 got ' + IntToStr(LDepth) + ')');
   if not (LColor in [0, 2, 6]) then
-    raise EArgumentError.Create('png: unsupported color type (need 0/2/6)');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba unsupported color type (need 0/2/6 got ' + IntToStr(LColor) + ')');
   if LInterlace <> 0 then
-    raise EArgumentError.Create('png: interlaced images not supported');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba interlaced not supported (got ' + IntToStr(LInterlace) + ')');
 
   case LColor of
     0: LBpp := 1;
     2: LBpp := 3;
     else LBpp := 4;
   end;
+  if AWidth > High(Integer) div LBpp then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba width*bpp overflow (W=' + IntToStr(AWidth) + ' bpp=' + IntToStr(LBpp) + ')');
   RowLen := AWidth * LBpp;
+  if RowLen >= High(Integer) then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba RowLen+1 overflow (RowLen=' + IntToStr(RowLen) + ')');
+  if AHeight > High(Integer) div (RowLen + 1) then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba RowLen*Height overflow (RowLen=' + IntToStr(RowLen) + ' H=' + IntToStr(AHeight) + ' RowLen+1=' + IntToStr(RowLen + 1) + ')');
+  if AWidth > High(Integer) div AHeight then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba width*height overflow (W=' + IntToStr(AWidth) + ' H=' + IntToStr(AHeight) + ')');
+  if (AWidth * AHeight) > High(Integer) div 4 then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba width*height*4 overflow (W=' + IntToStr(AWidth) + ' H=' + IntToStr(AHeight) + ')');
 
   if Length(LIdat) = 0 then
-    raise EIOError.Create('png: missing IDAT');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba missing IDAT');
   LRaw := DeflateDecompress(LIdat);
   if Length(LRaw) <> (RowLen + 1) * AHeight then
-    raise EIOError.Create('png: decompressed size mismatch');
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba decompressed size mismatch (expected ' + IntToStr((RowLen + 1) * AHeight) + ' got ' + IntToStr(Length(LRaw)) + ' RowLen=' + IntToStr(RowLen) + ' H=' + IntToStr(AHeight) + ')');
 
   { 反滤波逐行还原 + 转 RGBA 输出 }
   Result := nil;
@@ -241,7 +308,7 @@ begin
   begin
     LStride := Y * (RowLen + 1);
     if LRaw[LStride] > 4 then
-      raise EIOError.Create('png: invalid filter byte');
+      raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba invalid filter byte (got ' + IntToStr(LRaw[LStride]) + ' at row ' + IntToStr(Y) + ')');
     for X := 0 to RowLen - 1 do
     begin
       LA := 0;
