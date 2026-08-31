@@ -62,7 +62,6 @@ function DkimSignMail(const ARawMail: string; const ADomain,
 implementation
 
 uses
-  nextpas.core.bytes.ops,
   nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.constant_time,
@@ -111,6 +110,26 @@ begin
   if Length(AData) > 0 then
     LH.Write(AData[0], Length(AData));
   Result := LH.SumBytes;
+end;
+
+function BytesToString(const AData: TBytes): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  SetLength(Result, Length(AData));
+  for I := 1 to Length(AData) do
+    Result[I] := Chr(AData[I - 1]);
+end;
+
+function StrToBytes(const AStr: string): TBytes;
+var
+  I: Integer;
+begin
+  Result := nil;
+  SetLength(Result, Length(AStr));
+  for I := 1 to Length(AStr) do
+    Result[I - 1] := Byte(AStr[I]);
 end;
 
 { 宽松 base64: 去空白、补 padding(RFC 4648 §3.2 允许省略 '=') }
@@ -956,7 +975,7 @@ begin
 
   { bh = SHA-256(canonicalize(body))(RFC 6376 §3.7 步骤 5.1/5.2) }
   ExtractHeadersSection(ARawMail, LBody, LHasBody);
-  LBh := Sha256Of(StringToBytes(DkimCanonicalizeBody(LBody, ACanonBody)));
+  LBh := Sha256Of(StrToBytes(DkimCanonicalizeBody(LBody, ACanonBody)));
 
   { 头值(b= 空占位, 单物理行); tag 顺序 v,a,c,d,s,h,bh,b 钉死 }
   LHdrs := '';
@@ -1062,7 +1081,7 @@ begin
   { 1. body hash(INV-5): 先于密钥查询 }
   ExtractHeadersSection(ARawMail, LBody, LHasBody);
   LCanonBody := DkimCanonicalizeBody(LBody, LSig.CanonBody);
-  LHashBody := Sha256Of(StringToBytes(LCanonBody));
+  LHashBody := Sha256Of(StrToBytes(LCanonBody));
   if Length(LHashBody) <> Length(LSig.BodyHash) then
   begin
     AError := 'body hash length mismatch';
