@@ -37,12 +37,17 @@ begin
   Result := Integer(H and $7FFFFFFF);
 end;
 
+function ClampB(A: Integer): Byte; inline;
+begin
+  if A < 0 then Result := 0 else if A > 255 then Result := 255 else Result := Byte(A);
+end;
+
 function LerpColor(C1, C2: TColor32; T: Single): TColor32;
 var R1, G1, B1, A1, R2, G2, B2, A2: Integer;
 begin
   R1 := Color32R(C1); G1 := Color32G(C1); B1 := Color32B(C1); A1 := Color32A(C1);
   R2 := Color32R(C2); G2 := Color32G(C2); B2 := Color32B(C2); A2 := Color32A(C2);
-  Result := Color32(nextpas.core.math.scalar.ClampByte(Integer(Round(R1 + (R2 - R1) * T))), nextpas.core.math.scalar.ClampByte(Integer(Round(G1 + (G2 - G1) * T))), nextpas.core.math.scalar.ClampByte(Integer(Round(B1 + (B2 - B1) * T))), nextpas.core.math.scalar.ClampByte(Integer(Round(A1 + (A2 - A1) * T))));
+  Result := Color32(ClampB(Integer(Round(R1 + (R2 - R1) * T))), ClampB(Integer(Round(G1 + (G2 - G1) * T))), ClampB(Integer(Round(B1 + (B2 - B1) * T))), ClampB(Integer(Round(A1 + (A2 - A1) * T))));
 end;
 
 function ProcCheckerboard(Size, TileSize: Integer; C1, C2: TColor32): TBitmap;
@@ -105,15 +110,15 @@ begin
         while K < SegLen do
         begin
           N := (SimpleHash(X + K, Y) mod 20) - 10;
-          R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-          G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N div 2);
-          B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N div 3);
+          R := ClampB(Integer(BR) + N);
+          G := ClampB(Integer(BG) + N div 2);
+          B := ClampB(Integer(BB) + N div 3);
           PackedC := RgbaToPixelLE(R, G, B, 255);
           Run := 1;
           while K + Run < SegLen do
           begin
             N2 := (SimpleHash(X + K + Run, Y) mod 20) - 10;
-            if (nextpas.core.math.scalar.ClampByte(Integer(BR) + N2) <> R) or (nextpas.core.math.scalar.ClampByte(Integer(BG) + N2 div 2) <> G) or (nextpas.core.math.scalar.ClampByte(Integer(BB) + N2 div 3) <> B) then Break;
+            if (ClampB(Integer(BR) + N2) <> R) or (ClampB(Integer(BG) + N2 div 2) <> G) or (ClampB(Integer(BB) + N2 div 3) <> B) then Break;
             Inc(Run);
           end;
           if Run > 1 then
@@ -142,33 +147,33 @@ begin
     while X + 3 < Size do
     begin
       N := (SimpleHash(X, Y) mod (Variation * 2 + 1)) - Variation;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
       N := (SimpleHash(X + 1, Y) mod (Variation * 2 + 1)) - Variation;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
       N := (SimpleHash(X + 2, Y) mod (Variation * 2 + 1)) - Variation;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
       N := (SimpleHash(X + 3, Y) mod (Variation * 2 + 1)) - Variation;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
       Inc(X, 4);
     end;
     while X < Size do
     begin
       N := (SimpleHash(X, Y) mod (Variation * 2 + 1)) - Variation;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
       Inc(X);
     end;
@@ -203,33 +208,33 @@ begin
     while X + 3 < Size do
     begin
       N := (SimpleHash(X, Y * 7) mod 16) - 8;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
       N := (SimpleHash(X + 1, Y * 7) mod 16) - 8;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
       N := (SimpleHash(X + 2, Y * 7) mod 16) - 8;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
       N := (SimpleHash(X + 3, Y * 7) mod 16) - 8;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
       Inc(X, 4);
     end;
     while X < Size do
     begin
       N := (SimpleHash(X, Y * 7) mod 16) - 8;
-      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
-      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
-      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      R := ClampB(Integer(BR) + N);
+      G := ClampB(Integer(BG) + N);
+      B := ClampB(Integer(BB) + N);
       WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
       Inc(X);
     end;
@@ -247,7 +252,7 @@ begin
         3: begin SX := (SX + 1) mod Size; if SY > 0 then Dec(SY); end;
       end;
       P := Result.GetPixelPtr(SX, SY);
-      P[0] := nextpas.core.math.scalar.ClampByte(Integer(P[0]) + 30); P[1] := nextpas.core.math.scalar.ClampByte(Integer(P[1]) + 30); P[2] := nextpas.core.math.scalar.ClampByte(Integer(P[2]) + 30);
+      P[0] := ClampB(Integer(P[0]) + 30); P[1] := ClampB(Integer(P[1]) + 30); P[2] := ClampB(Integer(P[2]) + 30);
     end;
   end;
 end;
@@ -315,34 +320,34 @@ begin
       Dist := System.Sqrt(DX2[X] + DY2); N := (SimpleHash(X, Y) mod 6) - 3; Dist := Dist + N;
       Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
       if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
-      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
-      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
-      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
-      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      R := ClampB(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := ClampB(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := ClampB(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := ClampB(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
       WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
       Dist := System.Sqrt(DX2[X + 1] + DY2); N := (SimpleHash(X + 1, Y) mod 6) - 3; Dist := Dist + N;
       Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
       if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
-      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
-      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
-      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
-      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      R := ClampB(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := ClampB(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := ClampB(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := ClampB(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
       WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
       Dist := System.Sqrt(DX2[X + 2] + DY2); N := (SimpleHash(X + 2, Y) mod 6) - 3; Dist := Dist + N;
       Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
       if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
-      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
-      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
-      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
-      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      R := ClampB(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := ClampB(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := ClampB(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := ClampB(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
       WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
       Dist := System.Sqrt(DX2[X + 3] + DY2); N := (SimpleHash(X + 3, Y) mod 6) - 3; Dist := Dist + N;
       Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
       if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
-      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
-      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
-      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
-      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      R := ClampB(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := ClampB(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := ClampB(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := ClampB(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
       WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
       Inc(X, 4);
     end;
@@ -351,10 +356,10 @@ begin
       Dist := System.Sqrt(DX2[X] + DY2); N := (SimpleHash(X, Y) mod 6) - 3; Dist := Dist + N;
       Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
       if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
-      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
-      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
-      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
-      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      R := ClampB(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := ClampB(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := ClampB(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := ClampB(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
       WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
       Inc(X);
     end;
