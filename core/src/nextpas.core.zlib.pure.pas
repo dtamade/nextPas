@@ -780,7 +780,27 @@ begin
   SetLength(LHeap, LMaxNodes);
   LHeapCnt := 0;
   for I := 0 to ACount - 1 do
-    if AFreq[I] <> 0 then HeapPush(I);
+    if AFreq[I] <> 0 then
+    begin
+      LHeap[LHeapCnt] := I;
+      Inc(LHeapCnt);
+    end;
+  // heapify bottom-up — O(n) vs O(n log n) push
+  for I := (LHeapCnt div 2) - 1 downto 0 do
+  begin
+    K := I;
+    while True do
+    begin
+      J := K * 2 + 1;
+      if J >= LHeapCnt then Break;
+      LNode := J;
+      if (J + 1 < LHeapCnt) and (LNodesFreq[LHeap[J + 1]] < LNodesFreq[LHeap[J]]) then
+        LNode := J + 1;
+      if LNodesFreq[LHeap[K]] <= LNodesFreq[LHeap[LNode]] then Break;
+      LTmp := LHeap[K]; LHeap[K] := LHeap[LNode]; LHeap[LNode] := LTmp;
+      K := LNode;
+    end;
+  end;
   if LHeapCnt = 0 then Exit;
   if LHeapCnt = 1 then
   begin
@@ -893,7 +913,7 @@ end;
 
 procedure FindBest(const AData: TBytes; APos: SizeUInt; ALen: SizeUInt;
   const LHead: array of Integer; const LPrev: array of Integer;
-  AMaxChain, AMaxDist: Integer; out ABestLen, ABestDist: Integer);
+  AMaxChain, AMaxDist, ANice: Integer; out ABestLen, ABestDist: Integer);
 var
   LHash, LCand, LChain, LCur, LMax: Integer;
 begin
@@ -904,11 +924,13 @@ begin
   LChain := 0;
   LMax := Integer(ALen - APos);
   if LMax > 258 then LMax := 258;
+  if ANice <= 0 then ANice := 258;
+  if ANice > 258 then ANice := 258;
   while (LCand >= 0) and (LChain < AMaxChain) do
   begin
     if Integer(APos) - LCand > AMaxDist then
     begin
-      LCand := LPrev[LCand];
+      LCand := LPrev[LCand and CWindowMask];
       Inc(LChain);
       Continue;
     end;
@@ -916,7 +938,7 @@ begin
     begin
       if PLongWord(@AData[LCand])^ <> PLongWord(@AData[APos])^ then
       begin
-        LCand := LPrev[LCand];
+        LCand := LPrev[LCand and CWindowMask];
         Inc(LChain);
         Continue;
       end;
@@ -937,7 +959,7 @@ begin
     begin
       if PLongWord(@AData[LCand])^ <> PLongWord(@AData[APos])^ then
       begin
-        LCand := LPrev[LCand];
+        LCand := LPrev[LCand and CWindowMask];
         Inc(LChain);
         Continue;
       end;
@@ -953,7 +975,7 @@ begin
     begin
       if AData[LCand] <> AData[APos] then
       begin
-        LCand := LPrev[LCand];
+        LCand := LPrev[LCand and CWindowMask];
         Inc(LChain);
         Continue;
       end;
@@ -964,16 +986,16 @@ begin
     begin
       ABestLen := LCur;
       ABestDist := Integer(APos) - LCand;
-      if ABestLen = 258 then Break;
+      if ABestLen >= ANice then Break;
     end;
-    LCand := LPrev[LCand];
+    LCand := LPrev[LCand and CWindowMask];
     Inc(LChain);
   end;
 end;
 
 { ── Token collection ─────────────────────────────────────── }
 
-procedure CollectTokens(const AData: TBytes; AMaxChain: Integer; ALazy: Boolean;
+procedure CollectTokens(const AData: TBytes; AMaxChain, ANice, ALazyThresh, AMaxDist: Integer;
   out ATokens: TDeflateTokens; out ALitFreq: array of LongWord; out ADistFreq: array of LongWord);
 var
   LLen: SizeUInt;
@@ -996,13 +1018,13 @@ begin
   SetLength(LHead, CHashSize);
   if CHashSize > 0 then
     FillChar(LHead[0], CHashSize * SizeOf(Integer), $FF);
-  SetLength(LPrev, LLen);
-  if LLen > 0 then
-    FillChar(LPrev[0], LLen * SizeOf(Integer), $FF);
+  SetLength(LPrev, CWindowSize);
+  FillChar(LPrev[0], CWindowSize * SizeOf(Integer), $FF);
   SetLength(ATokens, 0);
   for I := 0 to High(ALitFreq) do ALitFreq[I] := 0;
   for I := 0 to High(ADistFreq) do ADistFreq[I] := 0;
   if LLen = 0 then Exit;
+  EnsureLenDist;
   // pre-allocate tokens: doubling growth to avoid O(n^2) SetLength
   SetLength(ATokens, 1024);
   LTokCount := 0;
@@ -1010,16 +1032,16 @@ begin
   LPos := 0;
   while LPos < LLen do
   begin
-    FindBest(AData, LPos, LLen, LHead, LPrev, AMaxChain, CWindowSize, LBestLen, LBestDist);
-    // lazy threshold 4, hash chain 8 for default parity
-    if ALazy and (LBestLen >= 4) and (LBestLen < 258) and (LPos + 1 < LLen) then
+    FindBest(AData, LPos, LLen, LHead, LPrev, AMaxChain, AMaxDist, ANice, LBestLen, LBestDist);
+    // lazy: ALazyThresh = 0 disables, 4 classic, 8-16 for best speed
+    if (ALazyThresh > 0) and (LBestLen >= ALazyThresh) and (LBestLen < 258) and (LPos + 1 < LLen) then
     begin
       if LPos + 2 < LLen then
       begin
-        LPrev[LPos] := LHead[Hash3(AData, LPos)];
+        LPrev[LPos and CWindowMask] := LHead[Hash3(AData, LPos)];
         LHead[Hash3(AData, LPos)] := Integer(LPos);
       end;
-      FindBest(AData, LPos + 1, LLen, LHead, LPrev, AMaxChain, CWindowSize, LNextLen, LNextDist);
+      FindBest(AData, LPos + 1, LLen, LHead, LPrev, AMaxChain, AMaxDist, ANice, LNextLen, LNextDist);
       if LNextLen > LBestLen then
       begin
         LTok.IsLit := True;
@@ -1036,8 +1058,10 @@ begin
         Continue;
       end else
       begin
-        if not FindLengthSym(Word(LBestLen), LSym, LExtra, LBits) then RaiseZlib(zecInternal, 'zlib: length sym fail');
-        if not FindDistSym(Word(LBestDist), LDSym, LDExtra, LDBits) then RaiseZlib(zecInternal, 'zlib: dist sym fail');
+        LSym := GLenSym[LBestLen]; LExtra := GLenExtra[LBestLen]; LBits := GLenBits[LBestLen];
+        if LSym < 0 then RaiseZlib(zecInternal, 'zlib: length sym fail');
+        LDSym := GDistSym[LBestDist]; LDExtra := GDistExtra[LBestDist]; LDBits := GDistBits[LBestDist];
+        if LDSym < 0 then RaiseZlib(zecInternal, 'zlib: dist sym fail');
         LTok.IsLit := False;
         LTok.LenSym := LSym;
         LTok.LenExtra := LExtra;
@@ -1054,14 +1078,15 @@ begin
         Inc(LTokCount);
         Inc(ALitFreq[LSym]);
         Inc(ADistFreq[LDSym]);
-        for I := 1 to LBestLen - 1 do
-        begin
-          if LPos + SizeUInt(I) + 2 < LLen then
+        if AMaxDist >= CWindowSize then
+          for I := 1 to LBestLen - 1 do
           begin
-            LPrev[LPos + I] := LHead[Hash3(AData, LPos + I)];
-            LHead[Hash3(AData, LPos + I)] := Integer(LPos + I);
+            if LPos + SizeUInt(I) + 2 < LLen then
+            begin
+              LPrev[(LPos + SizeUInt(I)) and CWindowMask] := LHead[Hash3(AData, LPos + I)];
+              LHead[Hash3(AData, LPos + I)] := Integer(LPos + I);
+            end;
           end;
-        end;
         Inc(LPos, SizeUInt(LBestLen));
         Continue;
       end;
@@ -1070,11 +1095,13 @@ begin
     begin
       if LPos + 2 < LLen then
       begin
-        LPrev[LPos] := LHead[Hash3(AData, LPos)];
+        LPrev[LPos and CWindowMask] := LHead[Hash3(AData, LPos)];
         LHead[Hash3(AData, LPos)] := Integer(LPos);
       end;
-      if not FindLengthSym(Word(LBestLen), LSym, LExtra, LBits) then RaiseZlib(zecInternal, 'zlib: length sym fail');
-      if not FindDistSym(Word(LBestDist), LDSym, LDExtra, LDBits) then RaiseZlib(zecInternal, 'zlib: dist sym fail');
+      LSym := GLenSym[LBestLen]; LExtra := GLenExtra[LBestLen]; LBits := GLenBits[LBestLen];
+      if LSym < 0 then RaiseZlib(zecInternal, 'zlib: length sym fail');
+      LDSym := GDistSym[LBestDist]; LDExtra := GDistExtra[LBestDist]; LDBits := GDistBits[LBestDist];
+      if LDSym < 0 then RaiseZlib(zecInternal, 'zlib: dist sym fail');
       LTok.IsLit := False;
       LTok.LenSym := LSym;
       LTok.LenExtra := LExtra;
@@ -1091,20 +1118,21 @@ begin
       Inc(LTokCount);
       Inc(ALitFreq[LSym]);
       Inc(ADistFreq[LDSym]);
-      for I := 1 to LBestLen - 1 do
-      begin
-        if LPos + SizeUInt(I) + 2 < LLen then
+      if AMaxDist >= CWindowSize then
+        for I := 1 to LBestLen - 1 do
         begin
-          LPrev[LPos + I] := LHead[Hash3(AData, LPos + I)];
-          LHead[Hash3(AData, LPos + I)] := Integer(LPos + I);
+          if LPos + SizeUInt(I) + 2 < LLen then
+          begin
+            LPrev[(LPos + SizeUInt(I)) and CWindowMask] := LHead[Hash3(AData, LPos + I)];
+            LHead[Hash3(AData, LPos + I)] := Integer(LPos + I);
+          end;
         end;
-      end;
       Inc(LPos, SizeUInt(LBestLen));
     end else
     begin
       if LPos + 2 < LLen then
       begin
-        LPrev[LPos] := LHead[Hash3(AData, LPos)];
+        LPrev[LPos and CWindowMask] := LHead[Hash3(AData, LPos)];
         LHead[Hash3(AData, LPos)] := Integer(LPos);
       end;
       LTok.IsLit := True;
@@ -1126,7 +1154,7 @@ end;
 { ── Dynamic block writer ─────────────────────────────────── }
 
 procedure WriteDynamicBlock(const ATokens: TDeflateTokens;
-  const ALitFreq, ADistFreq: array of LongWord; var BW: TBitWriter);
+  const ALitFreq, ADistFreq: array of LongWord; var BW: TBitWriter; AIsLast: Boolean);
 var
   LLens: array[0..CNumLitLen - 1] of Byte;
   DLens: array[0..CNumDist - 1] of Byte;
@@ -1207,7 +1235,7 @@ begin
   BlNum := LLast + 1;
   if BlNum < 4 then BlNum := 4;
   // header
-  BwWrite(BW, 1, 1);
+  if AIsLast then BwWrite(BW, 1, 1) else BwWrite(BW, 0, 1);
   BwWrite(BW, 2, 2); // dynamic
   BwWrite(BW, LongWord(LitNum - 257), 5);
   BwWrite(BW, LongWord(DistNum - 1), 5);
@@ -1281,7 +1309,7 @@ var
   LHead: array[0..CHashSize - 1] of Integer;
   LPrev: array of Integer;
   LHash: Integer;
-  LCand, LBestLen, LBestDist, LCurLen, LMaxLen, LMaxChain, LChainCnt: Integer;
+  LCand, LBestLen, LBestDist, LCurLen, LMaxLen, LMaxChain, LChainCnt, LNice: Integer;
   LSym: Integer;
   LWExtra: Word;
   LEBits: Byte;
@@ -1302,13 +1330,13 @@ begin
     Exit;
   end;
   for I := 0 to CHashSize - 1 do LHead[I] := -1;
-  SetLength(LPrev, LLen);
-  for I := 0 to Integer(LLen) - 1 do LPrev[I] := -1;
+  SetLength(LPrev, CWindowSize);
+  FillChar(LPrev[0], CWindowSize * SizeOf(Integer), $FF);
   case ALevel of
-    zlFastest: LMaxChain := 8;
-    zlBest:    LMaxChain := 128;
+    zlFastest: begin LMaxChain := 8; LNice := 8; end;
+    zlBest:    begin LMaxChain := 128; LNice := 258; end;
   else
-    LMaxChain := 32;
+    begin LMaxChain := 8; LNice := 32; end;
   end;
   LMaxDist := CWindowSize;
   BwWrite(BW, 1, 1);
@@ -1329,7 +1357,7 @@ begin
       begin
         if LPos - SizeUInt(LCand) > SizeUInt(LMaxDist) then
         begin
-          LCand := LPrev[LCand];
+          LCand := LPrev[LCand and CWindowMask];
           Inc(LChainCnt);
           Continue;
         end;
@@ -1337,7 +1365,7 @@ begin
         begin
           if PLongWord(@AData[LCand])^ <> PLongWord(@AData[LPos])^ then
           begin
-            LCand := LPrev[LCand];
+            LCand := LPrev[LCand and CWindowMask];
             Inc(LChainCnt);
             Continue;
           end;
@@ -1359,7 +1387,7 @@ begin
         begin
           if PLongWord(@AData[LCand])^ <> PLongWord(@AData[LPos])^ then
           begin
-            LCand := LPrev[LCand];
+            LCand := LPrev[LCand and CWindowMask];
             Inc(LChainCnt);
             Continue;
           end;
@@ -1376,7 +1404,7 @@ begin
         begin
           if AData[LCand] <> AData[LPos] then
           begin
-            LCand := LPrev[LCand];
+            LCand := LPrev[LCand and CWindowMask];
             Inc(LChainCnt);
             Continue;
           end;
@@ -1388,12 +1416,12 @@ begin
         begin
           LBestLen := LCurLen;
           LBestDist := Integer(LPos) - LCand;
-          if LBestLen = 258 then Break;
+          if LBestLen >= LNice then Break;
         end;
-        LCand := LPrev[LCand];
+        LCand := LPrev[LCand and CWindowMask];
         Inc(LChainCnt);
       end;
-      LPrev[LPos] := LHead[LHash];
+      LPrev[LPos and CWindowMask] := LHead[LHash];
       LHead[LHash] := Integer(LPos);
       if LBestLen >= 3 then
       begin
@@ -1412,7 +1440,7 @@ begin
           if LPos + SizeUInt(I) + 2 < LLen then
           begin
             LHash := Hash3(AData, LPos + SizeUInt(I));
-            LPrev[LPos+I] := LHead[LHash];
+            LPrev[(LPos + SizeUInt(I)) and CWindowMask] := LHead[LHash];
             LHead[LHash] := Integer(LPos+I);
           end;
         end;
@@ -1437,8 +1465,10 @@ var
   LLitFreq: array[0..CNumLitLen - 1] of LongWord;
   LDistFreq: array[0..CNumDist - 1] of LongWord;
   LTokens: TDeflateTokens;
-  LMaxChain: Integer;
-  LLazy: Boolean;
+  LMaxChain, LNice, LLazyThresh, LBlockSize, LMaxDist: Integer;
+  LLen, LPos, LChunk: SizeUInt;
+  LSlice: TBytes;
+  LIsLast: Boolean;
 begin
   if Length(AData) = 0 then
   begin
@@ -1450,17 +1480,37 @@ begin
     Exit;
   end;
   case ALevel of
-    zlFastest: begin LMaxChain := 8; LLazy := False; end;
-    zlBest:    begin LMaxChain := 128; LLazy := True; end;
+    zlFastest: begin LMaxChain := 8; LNice := 8; LLazyThresh := 0; LBlockSize := 0; LMaxDist := 2048; end;
+    zlBest: begin LMaxChain := 128; LNice := 32; LLazyThresh := 0; LBlockSize := 0; LMaxDist := CWindowSize; end;
   else
-    begin LMaxChain := 8; LLazy := False; end;
+    begin LMaxChain := 8; LNice := 32; LLazyThresh := 0; LBlockSize := 0; LMaxDist := CWindowSize; end;
   end;
-  CollectTokens(AData, LMaxChain, LLazy, LTokens, LLitFreq, LDistFreq);
-  // ensure EOB
-  Inc(LLitFreq[256]);
-  // dist dummy if none
-  // handled inside WriteDynamicBlock
-  WriteDynamicBlock(LTokens, LLitFreq, LDistFreq, BW);
+  LLen := SizeUInt(Length(AData));
+  if (LBlockSize <= 0) or (LLen <= SizeUInt(LBlockSize)) then
+  begin
+    CollectTokens(AData, LMaxChain, LNice, LLazyThresh, LMaxDist, LTokens, LLitFreq, LDistFreq);
+    Inc(LLitFreq[256]);
+    WriteDynamicBlock(LTokens, LLitFreq, LDistFreq, BW, True);
+    BwFlush(BW);
+    Exit;
+  end;
+  LPos := 0;
+  while LPos < LLen do
+  begin
+    LChunk := LLen - LPos;
+    if LChunk > SizeUInt(LBlockSize) then LChunk := SizeUInt(LBlockSize);
+    // avoid tiny tail < 4KB
+    if (LChunk < 4096) and (LPos + LChunk < LLen) then
+      LChunk := LLen - LPos;
+    SetLength(LSlice, LChunk);
+    if LChunk > 0 then
+      Move(AData[LPos], LSlice[0], LChunk);
+    CollectTokens(LSlice, LMaxChain, LNice, LLazyThresh, LMaxDist, LTokens, LLitFreq, LDistFreq);
+    Inc(LLitFreq[256]);
+    LIsLast := (LPos + LChunk >= LLen);
+    WriteDynamicBlock(LTokens, LLitFreq, LDistFreq, BW, LIsLast);
+    Inc(LPos, LChunk);
+  end;
   BwFlush(BW);
 end;
 
