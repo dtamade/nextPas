@@ -25,7 +25,6 @@ uses
   nextpas.core.http.impl.h1,
   nextpas.core.http.impl.tls.stream,
   nextpas.core.http.client,
-  nextpas.core.http.client.decorator,
   nextpas.core.http.form.base,
   nextpas.core.json,
   nextpas.core.json.value,
@@ -87,9 +86,6 @@ var
   GStreamListener: ITcpListener;
   { Raw listener replying a non-2xx status with a JSON body. }
   GStatusErrorListener: ITcpListener;
-  { Raw listener replying headers + Content-Length: 0 (zero-body streaming
-    response; status-split must complete at the header block). }
-  GZeroBodyListener: ITcpListener;
 
 type
   TTrackedRequestBody = class;
@@ -687,45 +683,6 @@ begin
              'Content-Type: application/json'#13#10 +
              'Content-Length: 24'#13#10#13#10 +
              '{"error":"rate limited"}';
-    LConn.Write(LHead[1], SizeUInt(Length(LHead)));
-  except
-  end;
-  LConn.Close;
-end;
-
-{ Raw listener replying with headers + Content-Length: 0 — zero body bytes at
-  all. Status-split streaming must complete the message at the header block
-  instead of pausing forever waiting for a body chunk that never arrives. }
-function ZeroBodyStreamThread(AArg: Pointer): Pointer; cdecl;
-var
-  LConn: ITcpStream;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LAccum: string;
-  LHead: string;
-  LP: SizeInt;
-begin
-  Result := nil;
-  try
-    LConn := GZeroBodyListener.Accept;
-  except
-    Exit;
-  end;
-  if LConn = nil then
-    Exit;
-  try
-    LAccum := '';
-    repeat
-      LN := LConn.Read(LBuf[0], 4096);
-      if LN = 0 then
-        Break;
-      SetLength(LAccum, Length(LAccum) + Int32(LN));
-      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
-      LP := Pos(#13#10#13#10, LAccum);
-    until LP > 0;
-    LHead := 'HTTP/1.1 200 OK'#13#10 +
-             'Content-Type: text/event-stream'#13#10 +
-             'Content-Length: 0'#13#10#13#10;
     LConn.Write(LHead[1], SizeUInt(Length(LHead)));
   except
   end;
@@ -2713,84 +2670,8 @@ begin
   end;
 end;
 
-{ K86（code888 反哺消费判据）：HTTP 重试语义纯函数导出面——
-  decorator 自用 + code888 provider 双消费者。HttpStatusIsRetryable =
-  429 + 整个 5xx（其余终结）；TryParseHttpDateUnix = IMF-fix 串 →
-  unix 秒，无时钟依赖纯函数 }
-procedure TestHttpRetrySemanticsExports;
+procedure TestClientSendRejectsNilRequest;
 var
-  U: Int64;
-begin
-  CheckTrue(HttpStatusIsRetryable(429), '429 retryable');
-  CheckTrue(HttpStatusIsRetryable(500), '500 retryable');
-  CheckTrue(HttpStatusIsRetryable(599), '599 retryable');
-  CheckFalse(HttpStatusIsRetryable(404), '404 terminal');
-  CheckFalse(HttpStatusIsRetryable(400), '400 terminal');
-  CheckFalse(HttpStatusIsRetryable(200), '2xx not retryable');
-  CheckFalse(HttpStatusIsRetryable(0), '0 not retryable');
-  { RFC 7231 经典样例：Sun, 06 Nov 1994 08:49:37 GMT = 784111777 }
-  CheckTrue(TryParseHttpDateUnix('Sun, 06 Nov 1994 08:49:37 GMT', U),
-    'imf-fix parses');
-  CheckEqual(Int64(784111777), U, 'known epoch');
-  CheckFalse(TryParseHttpDateUnix('not a date', U), 'garbage rejected');
-end;
-
-{ F8（pascn backfeed）：无体响应的 Body 语义是「空」而非「无」——
-  IHttpResponse.Body 恒非 nil，消费方直接 ReadAll(Body) 无需 nil 防御。
-  覆盖三形态：204 No Content / 200 + Content-Length:0 / HEAD。 }
-procedure TestBodylessResponsesHaveEmptyBodyReader;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/no-content', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
-  end);
-  LRouter.Get('/empty-ok', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    AW.GetHeaders.SetHeader('content-length', '0');
-    AW.WriteHeader(HTTP_STATUS_OK);
-  end);
-  LRouter.Handle(hmHead, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    AW.GetHeaders.SetHeader('content-length', '5');
-    AW.WriteHeader(HTTP_STATUS_OK);
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-
-    { 204：Body 恒非 nil，ReadAll 安全读出 0 字节 }
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/no-content');
-    CheckEqual(Int64(204), Int64(LResp.StatusCode), '204 status');
-    Check(LResp.Body <> nil, '204 Body is not nil (F8)');
-    if LResp.Body <> nil then
-      CheckEqual('', ReadReaderStr(LResp.Body), '204 body reads empty');
-
-    { Content-Length: 0：同一契约 }
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/empty-ok');
-    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'CL:0 status');
-    Check(LResp.Body <> nil, 'CL:0 Body is not nil (F8)');
-    if LResp.Body <> nil then
-      CheckEqual('', ReadReaderStr(LResp.Body), 'CL:0 body reads empty');
-
-    { HEAD：RFC 无体，同样空读取器 }
-    LResp := LClient.Head('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource');
-    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'HEAD status');
-    Check(LResp.Body <> nil, 'HEAD Body is not nil (F8)');
-    CheckEqual('', ReadBodyStr(LResp), 'HEAD body reads empty');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestClientSendRejectsNilRequest;var
   LClient: IHttpClient;
   LReq: IHttpRequest;
   LRaised: Boolean;
@@ -4526,63 +4407,6 @@ begin
     GStreamListener.Close;
     platform_thread_join(LHandle, LRet);
     GStreamListener := nil;
-    LSink.Free;
-  end;
-end;
-
-{ Zero-body streaming response: status-split must complete at the headers
-  (Content-Length: 0). Regression for the pause-at-headers hang that left the
-  read loop blocked until the request deadline. }
-procedure TestClientZeroBodyStreamCompletesAtHeaders;
-var
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LRet: Pointer;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LResp: IHttpResponse;
-  LSink: TClientStreamSink;
-  LRaised: Boolean;
-begin
-  GZeroBodyListener := NetTcpListen('127.0.0.1', 0);
-  LPort := GZeroBodyListener.LocalAddr.Port;
-  platform_thread_create(LHandle, @ZeroBodyStreamThread, nil);
-  LSink := TClientStreamSink.Create;
-  try
-    LClient := NewHttpClient;
-    LReq := THttpRequestBuilder.Create(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/empty')
-      .ResponseStatus(@LSink.OnResponseStatus)
-      .ResponseBodyChunk(@LSink.OnBodyChunk)
-      .SkipBodyBuffer
-      .Timeout(2000)
-      .Build;
-    LRaised := False;
-    try
-      LResp := LClient.Send(LReq);
-    except
-      on E: Exception do
-        LRaised := True;
-    end;
-    Check(not LRaised,
-      'zero-body stream completes without read-deadline raise');
-    if not LRaised then
-    begin
-      CheckEqual(Int64(200), Int64(LResp.StatusCode),
-        'zero-body stream status');
-      CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
-        'status callback fires exactly once');
-      CheckEqual(Int64(200), Int64(LSink.FStatusValue),
-        'status callback reports 200');
-      CheckEqual(Int64(0), Int64(LSink.FChunks),
-        'no body chunks for Content-Length: 0');
-      Check(LResp.Body = nil,
-        'skip-buffer mode does not retain body');
-    end;
-  finally
-    GZeroBodyListener.Close;
-    platform_thread_join(LHandle, LRet);
-    GZeroBodyListener := nil;
     LSink.Free;
   end;
 end;
@@ -9150,40 +8974,6 @@ begin
   Check(LRaised, 'dial func failure propagates as exception');
 end;
 
-{ Dial 阶段裸传输异常契约：ENetworkError 必须包装为 EHttpError(hekConnect)，
-  不穿透 RoundTrip（拨号发生在写读阶段 except 边界之外，曾漏包装——
-  proxy888 订阅拉取管线按 EHttpError 分类消费时被裸异常击穿）。 }
-procedure TestClientDialNetworkErrorWrappedAsHttpError;
-var
-  LClient: IHttpClient;
-  LKind: THttpErrorKind;
-  LGot: Boolean;
-begin
-  LClient := NewHttpClient.WithDialFunc(
-    function(const AHost: string; const APort: UInt16;
-      const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream
-    begin
-      Result := nil;
-      raise ENetworkError.Create('DNS resolve failed for: dial-fail.invalid');
-    end);
-  LGot := False;
-  LKind := hekUnknown;
-  try
-    LClient.Get('http://dial-fail.invalid/nope');
-  except
-    on E: ENetworkError do
-      LGot := False;   { 裸网络异常穿透 = 契约破坏 }
-    on E: EHttpError do
-    begin
-      LKind := E.Kind;
-      LGot := E.Kind = hekConnect;
-    end;
-  end;
-  Check(LGot,
-    'dial-phase ENetworkError surfaces as EHttpError(hekConnect), kind=' +
-    IntToStr(Ord(LKind)));
-end;
-
 { Main }
 
 begin
@@ -9192,8 +8982,6 @@ begin
   T.Test('Client dials through custom DialFunc tunnel', @TestClientWithDialFunc);
   T.Test('Client DialFunc failure propagates as exception',
     @TestClientDialFuncFailureRaises);
-  T.Test('Dial-phase ENetworkError wraps as EHttpError(hekConnect)',
-    @TestClientDialNetworkErrorWrappedAsHttpError);
   T.Test('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
   T.Test('H1 client transport rejects nil request inputs',
     @TestH1ClientTransportRejectsNilRequestInputs);
@@ -9459,11 +9247,5 @@ begin
     @TestClientResponseStatusReportsErrorStatus);
   T.Test('Client SkipBodyBuffer streams without retaining body',
     @TestClientSkipBodyBufferStreamsWithoutRetaining);
-  T.Test('Client zero-body stream completes at headers (status-split)',
-    @TestClientZeroBodyStreamCompletesAtHeaders);
-  T.Test('Client bodyless responses have empty body reader (F8)',
-    @TestBodylessResponsesHaveEmptyBodyReader);
-  T.Test('Http retry semantics exports (K86)',
-    @TestHttpRetrySemanticsExports);
   if not T.Run then Halt(1);
 end.

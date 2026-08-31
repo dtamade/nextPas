@@ -94,6 +94,9 @@ function Watch: IFsWatcher; inline;
 function ReadFile(const APath: string): TBytes; inline;
 {** @desc 读取文件全部内容为 UTF-8 字符串 *}
 function ReadFileText(const APath: string): string; inline;
+{** @desc 尝试读取文件全部内容为 UTF-8 字符串，失败返回 False（不存在/超限/异常不抛） *}
+function TryReadFileText(const APath: string; out AContent: string): Boolean; inline; overload;
+function TryReadFileText(const APath: string; out AContent: string; AMaxBytes: SizeUInt): Boolean; overload;
 {** @desc 读取文件按行分割为字符串数组 *}
 function ReadFileLines(const APath: string): TStringArray; inline;
 {** @desc POSIX realpath：整链解析符号链接（含中间段）；不存在/环 → 异常。
@@ -207,9 +210,18 @@ procedure WalkFiles(const ARoot: string; const AFunc: TWalkFunc); inline;
 procedure WalkFilesEx(const ARoot: string; const AFunc: TWalkFuncEx;
   AUserData: Pointer); inline;
 {**
- * @desc 列出目录中匹配 glob 模式的文件名（门面 inline 转发至 fs.glob.Glob）
+ * @desc 列出目录中匹配 glob 模式的文件名
+ *
+ * @params
+ *   ADir      目录路径
+ *   APattern  glob 模式（如 '*.txt', 'test_?.pas'）
+ *
+ * @return 匹配的完整路径数组
+ *
+ * @note 只搜索当前目录，不递归
+ * @note 使用 PathMatch 进行模式匹配
  *}
-function Glob(const ADir, APattern: string): TStringArray; inline;
+function Glob(const ADir, APattern: string): TStringArray;
 {** @desc 递归匹配文件系统 glob 模式（支持 ** 递归目录）
  *
  * @param ADir  根目录
@@ -299,7 +311,7 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.platform.args;
+  nextpas.core.format.limits;
 
 function Utf8TextToBytes(const AText: string): TBytes;
 var
@@ -309,7 +321,7 @@ begin
   LLen := Length(AText);
   SetLength(Result, LLen);
   if LLen > 0 then
-    Move(PAnsiChar(AText)^, Result[0], LLen);
+    Move(AText[1], Result[0], LLen);
 end;
 
 function Open(const APath: string; const AMode: TFileMode): IFile;
@@ -341,6 +353,29 @@ end;
 function ReadFileText(const APath: string): string;
 begin
   Result := nextpas.core.fs.util.FsReadFileText(APath);
+end;
+
+function TryReadFileText(const APath: string; out AContent: string): Boolean;
+begin
+  Result := TryReadFileText(APath, AContent, FORMAT_BULK_PARSE_MAX_BYTES);
+end;
+
+function TryReadFileText(const APath: string; out AContent: string; AMaxBytes: SizeUInt): Boolean;
+var LNorm: string;
+begin
+  AContent := '';
+  Result := False;
+  if APath = '' then Exit;
+  LNorm := PathAbs(APath);
+  if LNorm = '' then Exit;
+  if not FileExists(LNorm) then Exit;
+  try
+    if SizeUInt(FileSize(LNorm)) > AMaxBytes then Exit;
+    AContent := ReadFileText(LNorm);
+    Result := True;
+  except
+    Result := False;
+  end;
 end;
 
 function ReadFileLines(const APath: string): TStringArray;
@@ -563,8 +598,35 @@ begin
 end;
 
 function Glob(const ADir, APattern: string): TStringArray;
+var
+  LEntries: TDirEntryArray;
+  LCount, I: Integer;
 begin
-  Result := nextpas.core.fs.glob.Glob(ADir, APattern);
+  Result := nil;
+  try
+    LEntries := ReadDir(ADir);
+  except
+    on E: ENotFoundError do
+      { Directory doesn't exist — return empty }
+      Exit;
+  end;
+  LCount := 0;
+  for I := 0 to High(LEntries) do
+  begin
+    if nextpas.core.fs.path.FsPathMatch(APattern, LEntries[I].Name) then
+    begin
+      if LCount >= Length(Result) then
+      begin
+        if Length(Result) = 0 then
+          SetLength(Result, 16)
+        else
+          SetLength(Result, Length(Result) * 2);
+      end;
+      Result[LCount] := nextpas.core.fs.path.FsPathJoin([ADir, LEntries[I].Name]);
+      Inc(LCount);
+    end;
+  end;
+  SetLength(Result, LCount);
 end;
 
 function FsGlob(const ADir, APattern: string): TStringArray;
@@ -756,31 +818,12 @@ end;
 
 function ParamCount: Integer;
 begin
-  Result := platform_args_count;
-  if Result < 0 then
-    Result := 0;
+  Result := System.ParamCount;
 end;
 
 function ParamStr(AIndex: Integer): string;
-var
-  LBuf: array[0..1023] of AnsiChar;
-  LRes: Int32;
-  LHeap: array of AnsiChar;
 begin
-  Result := '';
-  LRes := platform_args_get(Int32(AIndex), @LBuf[0], Int32(Length(LBuf)));
-  if LRes < 0 then
-    Exit('');
-  if LRes < Int32(Length(LBuf)) then
-  begin
-    SetString(Result, PAnsiChar(@LBuf[0]), LRes);
-    Exit;
-  end;
-  SetLength(LHeap, LRes + 1);
-  LRes := platform_args_get(Int32(AIndex), PAnsiChar(LHeap), Int32(Length(LHeap)));
-  if LRes < 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(LHeap), LRes);
+  Result := System.ParamStr(AIndex);
 end;
 
 end.

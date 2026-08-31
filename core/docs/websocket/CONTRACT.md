@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.websocket*.pas`（帧层）+ `core/src/nextpas.core.http.websocket*.pas`（连接层与 Room）
 **层级**：L3（依赖 L0-L2: net, tls, http）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-31
-**版本**：1.2
+**最后更新**：2026-08-18
+**版本**：1.1
 
 ---
 
@@ -71,4 +71,3 @@ end;
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-08-18 | 1.1 | Room/广播层（B6 pascn backfeed）：IWebSocketRoom + 有界管理器落 http.websocket.room | Claude |
-| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

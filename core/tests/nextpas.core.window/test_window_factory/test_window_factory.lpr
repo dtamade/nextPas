@@ -16,7 +16,7 @@ uses
   nextpas.core.window.fake,
   nextpas.core.window.factory,
   nextpas.core.window.gtk3,
-  nextpas.core.window.gtk3.loader,
+  nextpas.core.gtk3.loader,
   nextpas.core.window.sdl2,
   nextpas.core.window.sdl2.loader,
   nextpas.core.window.win32,
@@ -36,7 +36,7 @@ var
 begin
   Check(WindowBackendAvailable(wkFake), 'fake always available');
   LGtkAvail := WindowBackendAvailable(wkGtk);
-  Check(LGtkAvail = WindowGtkIsAvailable, 'gtk availability matches loader probe');
+  Check(LGtkAvail = WindowGtk3IsAvailable, 'gtk availability matches loader probe');
   LSdl2Avail := WindowBackendAvailable(wkSdl2);
   Check(LSdl2Avail = WindowSdl2IsAvailable, 'sdl2 availability matches loader probe');
   LWin32Avail := WindowBackendAvailable(wkWin32);
@@ -467,7 +467,7 @@ begin
   T.Test('wasm parent handle is attach friendly', @TestWasmParentHandleIsAttachFriendly);
   T.Test('attach requires parent handle', @TestAttachRequiresParentHandle);
   LOk := T.Run;
-  UnloadWindowGtk;
+  UnloadGtk3;
   UnloadWindowSdl2;
   UnloadWindowWin32;
   UnloadWindowCocoa;

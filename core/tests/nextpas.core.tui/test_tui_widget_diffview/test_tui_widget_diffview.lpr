@@ -338,6 +338,33 @@ begin
   Check(LDiffView <> nil, 'FromUnifiedDiff empty should not be nil');
 end;
 
+procedure TestUnifiedToLinesMultiHunkLineNumbers;
+var
+  LLines: TDiffLineArray;
+  LDiff: AnsiString;
+begin
+  // two hunks: the real @@ start numbers must drive Old/NewNum — the old
+  // inline parser reset to 1 for every hunk and misnumbered the second one
+  LDiff := '@@ -5,2 +5,2 @@' + LineEnding +
+           ' ctx' + LineEnding +
+           '-old5' + LineEnding +
+           '+new5' + LineEnding +
+           '@@ -20,1 +21,1 @@' + LineEnding +
+           '-old20' + LineEnding;
+  LLines := TDiffView.UnifiedToLines(LDiff);
+  Check(Length(LLines) = 6, 'multi-hunk line count');
+  Check((LLines[0].Kind = dlHeader), 'hunk1 header present');
+  Check((LLines[1].Kind = dlContext) and (LLines[1].OldNum = 5)
+    and (LLines[1].NewNum = 5), 'hunk1 context uses real start numbers');
+  Check((LLines[2].Kind = dlRemoved) and (LLines[2].OldNum = 6),
+    'hunk1 removed number');
+  Check((LLines[3].Kind = dlAdded) and (LLines[3].NewNum = 6),
+    'hunk1 added number');
+  Check(LLines[4].Kind = dlHeader, 'hunk2 header present');
+  Check((LLines[5].Kind = dlRemoved) and (LLines[5].OldNum = 20),
+    'hunk2 removed keeps its own start (regression for reset-to-1 bug)');
+end;
+
 procedure TestDiffViewMultipleLines;
 var
   LDiffView: IDiffView;
@@ -395,6 +422,8 @@ begin
   T.Test('TDiffView.Render empty', @TestDiffViewRenderEmpty);
   T.Test('TDiffView.Render small area', @TestDiffViewRenderSmallArea);
   T.Test('TDiffView.FromUnifiedDiff empty', @TestDiffViewFromUnifiedDiffEmpty);
+  T.Test('TDiffView.UnifiedToLines multi-hunk line numbers',
+    @TestUnifiedToLinesMultiHunkLineNumbers);
   T.Test('TDiffView multiple lines', @TestDiffViewMultipleLines);
   if not T.Run then Halt(1);
 end.
