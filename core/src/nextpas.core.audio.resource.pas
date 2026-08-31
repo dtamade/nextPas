@@ -5,7 +5,7 @@ unit nextpas.core.audio.resource;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, // P12 debt: TThread via Classes — to be migrated to nextpas.core.sync/async
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,

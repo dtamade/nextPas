@@ -85,6 +85,29 @@ type
     DefaultFormat: TAudioFormat;
   end;
 
+  { 3D spatial primitives — canonical in base (P12 promotion from spatial.intf) }
+  TAudioVec3 = record X, Y, Z: Single; end;
+  TAudioDistanceModel = (dmInverse, dmLinear, dmExponent);
+  TAudioListener = record
+    Position: TAudioVec3;
+    Velocity: TAudioVec3;
+    Forward: TAudioVec3; // default (0,0,-1)
+    Up: TAudioVec3;      // default (0,1,0)
+    Gain: Single;        // default 1.0
+  end;
+  TAudioSpatialParams = record
+    Position: TAudioVec3;
+    Velocity: TAudioVec3;
+    MinDistance: Single; // 1.0
+    MaxDistance: Single; // 100
+    Rolloff: Single;     // 1.0
+    DistanceModel: TAudioDistanceModel;
+    DopplerFactor: Single; // 1.0, 0=disable
+    ConeInnerAngle: Single;
+    ConeOuterAngle: Single;
+    ConeOuterGain: Single;
+  end;
+
   { 设备生命周期事件分类（经 MPSC 上报） }
   TDeviceEventKind = (
     devStarted,        // Start 完成

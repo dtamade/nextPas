@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.audio*.pas`（36 个源文件，当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）
 **层级**：L2（只依赖 L0–L1；`io`/`fs` 为 L2 显式允许依赖，`registry+resource` 与 `wav file helper (codec.wav)` 已在 `core/docs/core-module-registry.md` 登记为 `L0-L1 plus io/fs registry+resource, wav file helper`）
 **Owner**：audio lane
-**最后更新**：2026-08-31
-**版本**：1.1（同步 36 files/16门 218 tests；`test_game` 为 deprecated 兼容门；ideal 45 9 files 预留与 DESIGN §9 同词）
+**最后更新**：2026-09-02
+**版本**：1.2（P12 promotion — `TAudioSpatialParams` 等 canonical 至 `audio.base`，`spatial.intf` alias 兼容；同步 36 files/16门 218 tests）
 
 ---
 
@@ -18,7 +18,7 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` �
 
 | 单元 | 职责 | 四件套角色 |
 |------|------|-----------|
-| `audio.base` | `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 真值源，`BlockAlign/ByteRate/FramesForMs/IsValid`，`TAudioProbeResult` | base |
+| `audio.base` | `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 真值源，`BlockAlign/ByteRate/FramesForMs/IsValid`，`TAudioProbeResult`，`TAudioVec3/TAudioListener/TAudioSpatialParams`（P12 canonical） | base |
 | `audio.intf` | `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | intf |
 | `audio.codec.intf` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，`TAudioEncodeOptions` | intf |
 | `audio.codec.wav` | WAV 容器（8..32 位 + float + extensible 5.1/7.1 + fact/bext/rf64） | impl |
@@ -44,9 +44,9 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` �
 | `audio.game` | SFX 池同 `sfx` 行为，薄转发 deprecated 兼容（test_game 15 为 deprecated 兼容门） | impl |
 | `audio.timeline.intf` | `IAudioTimeline(0060)` | intf |
 | `audio.timeline` | `Track/Clip` 排序混音 `solo/mute/loop`，快照化 `FillRealtime`，热点立体声展开，`two-phase snapshot + deep copy clip array + snapshot mixing - lock free` | impl |
-| `audio.spatial.intf` | `IAudioSpatialSource(0051)`，纯函数 `AudioSpatialize/AudioCompute*` 驻留 intf 债务（to be moved to spatial.calc/base, keep for P5 compatibility） | intf |
+| `audio.spatial.intf` | `IAudioSpatialSource(0051)`，`TAudio*` 均 `base` alias 兼容（P12 promotion），纯函数 `AudioSpatialize/AudioCompute*` 仍驻留 intf（to be moved to spatial.calc） | intf |
 | `audio.spatial` | 3D panning：`two-phase snapshot + EnsureScratch + snapshot mixing - lock free`，`PcmConvert in FillRealtime is allowed but keep F32 — offline path preallocated, realtime path already F32 via EnsureF32` | impl |
-| `audio.event.intf` | `IAudioEventSystem(0052)`，`event.intf uses spatial.intf for TAudioSpatialParams` 债务（to be promoted to audio.base） | intf |
+| `audio.event.intf` | `IAudioEventSystem(0052)`，`TAudioSpatialParams` 已 canonical 至 `base`（P12），`spatial.intf` alias 兼容保留 | intf |
 | `audio.event` | Event system：`two-phase snapshot + EnsureScratch/EnsureEventCapacity/EnsureInstanceCapacity + snapshot mixing - lock free` | impl |
 | `audio.bank.intf` | `IAudioBank(0053)` | intf |
 | `audio.bank` | SoundBank：`two-phase snapshot + EnsureScratch/EnsureBankCapacity + PanLawGains0dB + TRecursiveMutex + deep copy + snapshot mixing - lock free` | impl |
@@ -227,8 +227,8 @@ IAudioResourceManager = interface ['{F1A2B3C4-D5E6-7890-ABCD-A00000000054}'] // 
 
 - `Sfx` 音色池 `MaxVoices` 窃取，`Load/Play/StopVoice/MasterGain`，`LoadFromFile` 经 `PcmConvert`，`SFX lock -> Graph lock` 锁序，`PanLawGains0dB` 共用；`Game` 为 deprecated 薄转发（`test_game` 15 为 deprecated 兼容门，统一按 `ISfxAudio` 0050 校验）。
 - `Timeline` 即 `IRealtimeAudioSource` 可直连 `Device/Graph`；`FillRealtime` 快照化（拷 `Position/Loop/Duration` + 存活轨），排序混音，`solo` 覆盖 `mute`，`Pan` 热点展开同 `Mix`，`snapshot mixing - lock free`，`deep copy clip array`。
-- `Spatial` 3D panning：`AudioSpatialize/AudioCompute*` 纯函数驻留 `spatial.intf` 债务（to be moved to spatial.calc/base, keep for P5 compatibility），`spatial.pas` 实时路径 `PcmConvert in FillRealtime is allowed but keep F32 — offline path preallocated, realtime path already F32 via EnsureF32`。
-- `Event` 依赖 `spatial.intf for TAudioSpatialParams` 债务（to be promoted to audio.base），`two-phase snapshot + EnsureScratch/EnsureEventCapacity/EnsureInstanceCapacity + snapshot mixing - lock free`。
+- `Spatial` 3D panning：`TAudio*` 均 `base` canonical（P12），纯函数仍驻留 `spatial.intf`（to be moved to spatial.calc），`spatial.pas` 实时路径 `PcmConvert in FillRealtime is allowed but keep F32 — offline path preallocated, realtime path already F32 via EnsureF32`。
+- `Event` 已 canonical 至 `base`（P12），`two-phase snapshot + EnsureScratch/EnsureEventCapacity/EnsureInstanceCapacity + snapshot mixing - lock free`。
 - `Bank/Resource`：`Bank` 复用 `PanLawGains0dB`、`TRecursiveMutex`、`EnsureBankCapacity` 几何扩容、深拷贝隔离、`snapshot mixing - lock free`；`Resource` 为 `AsyncLoad dedup+ProbeFile`、`TRecursiveMutex`、`EnsureCapacityLocked` 几何扩容、`ReleaseAll`、`Bank协同`，`fs` 豁免登记为 `registry+resource, wav file helper`。
 - 理想态 45 — 9 files 预留 `flac/mp3/vorbis/studio/playlist` 等由 `music888` 以 `Probe≤4KB` 可插拔吸收（与 DESIGN §9 同词）。
 
@@ -270,7 +270,7 @@ IAudioResourceManager = interface ['{F1A2B3C4-D5E6-7890-ABCD-A00000000054}'] // 
 ## 5. 依赖边界
 
 - 允许：`base/exception/errors`（L0），`bytes/text/encoding/collections/sync/platform/mem/io/fs` 等 L0-L1；`io/fs` 为 L2 容器 IO 必要依赖（显式允许，`registry+resource` 与 `wav file helper (codec.wav)` 已登记为 `L0-L1 plus io/fs registry+resource, wav file helper`）。
-- 禁止：任何 `*.ffi/vendor/miniaudio/mpg123/opusfile`（gate `grep -qi "\.ffi|vendor"` 强校验）；`SyncObjs/Classes/SysUtils` 的直接宿主依赖为债务 8 文件（`device.null/graph/sfx/timeline/spatial/event/bank/resource`，`game` 为薄转发），目标迁移至 `nextpas.core.sync/platform`（`FINDINGS F-17`）。
+- 禁止：任何 `*.ffi/vendor/miniaudio/mpg123/opusfile`（gate `grep -qi "\.ffi|vendor"` 强校验）；`Classes/SysUtils` 债务收敛至 5 文件（`sfx/timeline/event/bank/resource`，`device.null/graph/spatial` 已去冗余，`P11/P12`），最终目标 `nextpas.core.sync/platform`（`FINDINGS F-17`）。
 - 同层 `L2→L2` 仅允许 `io/fs/compress` 等已登记豁免（`registry+resource, wav file helper` 显式登记），不引入 `crypto/compress` 越层。
 
 ---
@@ -337,3 +337,4 @@ make hygiene && git diff --check
 |------|------|------|
 | 2026-08-30 | 1.0 | 首次冻结：对齐 26 单元 + 11 GUID + 双平面纪律 + Probe≤4KB + 180 用例门禁 |
 | 2026-08-31 | 1.1 | 同步 36 files/16门 218 tests；test_game 为 deprecated 兼容门；ideal 45 9 files 预留与 DESIGN §9 同词（flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）；17 GUID (unique; 15 realtime domain) |
+| 2026-09-02 | 1.2 | P12 promotion — `TAudioSpatialParams` 等 canonical 至 `base`，`spatial.intf` alias 兼容；`device.null/graph/bank` 死依赖收敛（P11）；`resource` TThread 债务标注 |

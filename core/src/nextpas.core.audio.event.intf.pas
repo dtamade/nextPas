@@ -1,4 +1,4 @@
-// debt: event.intf uses spatial.intf for TAudioSpatialParams (to be promoted to audio.base)
+// P12: TAudioSpatialParams canonical in base (spatial.intf alias kept for compatibility)
 unit nextpas.core.audio.event.intf;
 
 {$I nextpas.core.settings.inc}
