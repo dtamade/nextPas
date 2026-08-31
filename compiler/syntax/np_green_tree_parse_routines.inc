@@ -327,7 +327,7 @@ begin
     (CurrentToken(ALexer, ACursor).Kind = tkColon) then
   begin
     Inc(ACursor);
-    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
     if TypeNode <> nil then
     begin
       Node.AppendChild(TypeNode);
