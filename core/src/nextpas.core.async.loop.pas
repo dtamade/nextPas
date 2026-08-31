@@ -504,8 +504,7 @@ begin
       try
         DiscardPendingItem(LItem);
       except
-        LErr := Exception(AcquireExceptionObject);
-        NoteError(LErr);
+        { Close must continue releasing owned resources even if a discard hook fails. }
       end;
       LItem.Callback := nil;
       LItem.Method := nil;

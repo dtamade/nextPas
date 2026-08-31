@@ -452,6 +452,18 @@ begin
   LSegStart := 1;
   LLineNo := 0;
   LPos := 1;
+  { 预扫描行数：一次分配避免逐行 SetLength O(n²) 重分配 }
+  LN := 0;
+  while LPos <= LLen do
+  begin
+    if LText[LPos] = #10 then
+      Inc(LN);
+    Inc(LPos);
+  end;
+  if LN > 0 then
+    SetLength(AMsgs, LN);
+  LN := 0;
+  LPos := 1;
   while LPos <= LLen do
   begin
     if LText[LPos] = #10 then
@@ -459,20 +471,21 @@ begin
       Inc(LLineNo);
       LLine := nextpas.core.text.TextSlice(LText,
         SizeUInt(LSegStart - 1), SizeUInt(LPos - LSegStart));
-      LN := Length(LLine);
-      if (LN > 0) and (LLine[LN] = #13) then
-        LLine := nextpas.core.text.TextSlice(LLine, 0, SizeUInt(LN - 1));
+      if (Length(LLine) > 0) and (LLine[Length(LLine)] = #13) then
+        LLine := nextpas.core.text.TextSlice(LLine, 0, SizeUInt(Length(LLine) - 1));
       { Windows CRLF 兼容；切片即时拷贝语义与 Copy 等价 }
       if LLine <> '' then
       begin
         LM := TranscriptMessageFromJson(LLine, LLineNo);
-        SetLength(AMsgs, Length(AMsgs) + 1);
-        AMsgs[High(AMsgs)] := LM;
+        AMsgs[LN] := LM;
+        Inc(LN);
       end;
       LSegStart := LPos + 1;
     end;
     Inc(LPos);
   end;
+  if LN < Length(AMsgs) then
+    SetLength(AMsgs, LN);
   { 末段无换行 = torn tail：丢弃不计（SESSION.md §4）}
 end;
 
