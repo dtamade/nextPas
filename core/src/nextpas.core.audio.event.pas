@@ -124,11 +124,17 @@ procedure TEventVoice.SetPitch(APitch: Single); begin if APitch < 0.25 then APit
 procedure TEventVoice.SetPosition(const APos: TAudioVec3); begin FSpatial.Position := APos; end;
 
 function TEventVoice.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var OutPtr, SrcPtr: PSingle; I, Ch, Idx0, Idx1: Integer; Frac, V0, V1, V: Single; LG: TAudioPanGains; LGain, LPan: Single; LAtt: Single; Needed: Integer;
+var OutPtr, SrcPtr: PSingle; I, Ch, Idx0, Idx1: Integer; Frac, V0, V1, V: Single; LG: TAudioPanGains; LGain, LPan: Single; LAtt: Single; Needed: Integer; Needed64: Int64;
 begin
-  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
-  if Needed < 0 then
-    Needed := 0;
+  Needed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
+  if (Needed64 < 0) or (Needed64 > High(Integer)) then
+  begin
+    if Needed64 < 0 then Needed64 := 0 else Needed64 := High(Integer);
+    AFrames := Integer(Needed64 div Int64(FFormat.BlockAlign));
+    if AFrames <= 0 then Exit(0);
+    Needed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
+  end;
+  Needed := Integer(Needed64);
   if Length(ABuffer.Data) < Needed then
   begin
     AFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
@@ -263,9 +269,18 @@ var
   LCount: Integer;
   LGlobalGain: Single;
   LListenerSnap: TAudioListener;
+  LNeed64: Int64;
 begin
   if AFrames <=0 then Exit(0);
-  LNeed := AFrames * FFormat.BlockAlign;
+  LNeed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
+  if (LNeed64 < 0) or (LNeed64 > High(Integer)) then
+  begin
+    if LNeed64 < 0 then LNeed64 := 0 else LNeed64 := High(Integer);
+    AFrames := Integer(LNeed64 div Int64(FFormat.BlockAlign));
+    if AFrames <=0 then Exit(0);
+    LNeed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
+  end;
+  LNeed := Integer(LNeed64);
   if Length(ABuffer.Data) < LNeed then
   begin
     LFrames := Length(ABuffer.Data) div FFormat.BlockAlign;

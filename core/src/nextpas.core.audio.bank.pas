@@ -633,19 +633,30 @@ end;
 
 function TAudioBank.GetViolations: Int64;
 begin
-  Result := FViolations;
+  Result := InterlockedExchangeAdd64(FViolations, 0);
 end;
 
 function TAudioBank.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
   Needed, AliveN, I, J: Integer;
+  Needed64: Int64;
   Snap: array of TBankVoiceSource;
   Tmp: TAudioBuffer;
   MixPtr, TmpPtr: PSingle;
   HasData: Boolean;
 begin
   if AFrames <= 0 then Exit(0);
-  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
+  Needed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
+  if (Needed64 < 0) or (Needed64 > High(Integer)) then
+  begin
+    InterlockedExchangeAdd64(FViolations, 1);
+    if Needed64 < 0 then Needed64 := 0;
+    if Needed64 > High(Integer) then Needed64 := High(Integer);
+    AFrames := Integer(Needed64 div Int64(FFormat.BlockAlign));
+    if AFrames <= 0 then Exit(0);
+    Needed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
+  end;
+  Needed := Integer(Needed64);
   if Length(ABuffer.Data) < Needed then
   begin
     InterlockedExchangeAdd64(FViolations, 1);
