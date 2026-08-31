@@ -204,14 +204,16 @@ begin
   else
     LHeaders := NewHttpHeaders;
   LHeaders.Remove(HTTP_HEADER_EARLY_DATA);
-  { Body 克隆：若为 IStream 则快照，否则透传 nil（流式 body 不可重试已在 ShouldRetry 前拦截）。 }
-  if (AReq.Body <> nil) and Supports(AReq.Body, IStream, LStream) then
+  // Body 克隆：仅 IStream 可快照重试，非 IStream 流式体不可重试
+  if AReq.Body = nil then
+    LBody := nil
+  else if Supports(AReq.Body, IStream, LStream) then
   begin
     LBodyBytes := ReadAll(AReq.Body);
     LBody := BytesStreamFrom(LBodyBytes);
   end
   else
-    LBody := AReq.Body;
+    Exit(nil);
   LCloned := THttpRequest.Create(AReq.Method, AReq.Url, AReq.Version, LHeaders, LBody, AReq.ContentLength);
   if Supports(LCloned, IHttpRequestWithEarlyData, LEarly) then
     LEarly.SetWasEarlyData(False);
@@ -245,11 +247,25 @@ var
 begin
   if FAutoMark then
     HttpEarlyDataAutoMarkIfIdempotent(AReq);
-  LResp := FInner.Send(AReq);
+  try
+    LResp := FInner.Send(AReq);
+  except
+    raise;
+  end;
   if HttpEarlyDataShouldRetry(AReq, LResp) then
   begin
+    if (AReq.Body <> nil) and not Supports(AReq.Body, IStream) then
+    begin
+      Result := LResp;
+      Exit;
+    end;
     HttpReleaseResponseBody(LResp);
     LRetryReq := HttpEarlyDataCloneWithoutEarlyData(AReq);
+    if LRetryReq = nil then
+    begin
+      Result := LResp;
+      Exit;
+    end;
     Result := FInner.Send(LRetryReq);
     Exit;
   end;
