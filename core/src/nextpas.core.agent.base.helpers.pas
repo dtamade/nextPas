@@ -120,6 +120,7 @@ implementation
 uses
   nextpas.core.json,
   nextpas.core.json.builder,
+  nextpas.core.text,
   nextpas.core.text.builder,
   nextpas.core.text.compare,
   nextpas.core.text.view,
@@ -256,7 +257,7 @@ begin
     end;
   if LCutPos = 0 then
     Exit(S);
-  Result := Copy(S, 1, LCutPos);
+  Result := nextpas.core.text.TextSlice(S, 0, SizeUInt(LCutPos));
 end;
 
 
@@ -312,7 +313,7 @@ begin
   if LFinalLen = Length(S) then
     Result := S
   else
-    Result := Copy(S, 1, LFinalLen);
+    Result := nextpas.core.text.TextSlice(S, 0, SizeUInt(LFinalLen));
   ATruncated := ATruncated or (LFinalLen <> Length(S));
 end;
 
@@ -336,7 +337,7 @@ begin
     LBase := ADefault;
   while (LBase <> '') and (LBase[Length(LBase)] = '/') do
     Delete(LBase, Length(LBase), 1);
-  if (Length(LBase) >= 3) and (Copy(LBase, Length(LBase) - 2, 3) = '/v1') then
+  if (Length(LBase) >= 3) and (nextpas.core.text.TextEndsWith(LBase, '/v1')) then
     Result := LBase + ASuffix
   else
     Result := LBase + '/v1' + ASuffix;
