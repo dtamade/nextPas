@@ -45,6 +45,8 @@ begin
     Dec(B);
   if B < A then
     Exit('');
+  if (A = 1) and (B = Length(S)) then
+    Exit(S); // zero-copy when already trimmed
   Result := Copy(S, A, B - A + 1);
 end;
 

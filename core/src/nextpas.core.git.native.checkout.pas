@@ -33,7 +33,8 @@ uses
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.index;
+  nextpas.core.git.native.index,
+  nextpas.core.git.native.util;
 
 const
   CModeTree    = $4000;
@@ -47,14 +48,9 @@ begin
   if Length(B) > 0 then Move(B[0], Result[1], Length(B));
 end;
 
-function TrimSpacesLocal(const S: string): string;
-var L,R: Integer;
+function TrimSpacesLocal(const S: string): string; inline;
 begin
-  L:=1; R:=Length(S);
-  while (L<=R) and (S[L] <= ' ') do Inc(L);
-  while (R>=L) and (S[R] <= ' ') do Dec(R);
-  if R<L then Exit('');
-  Result:=Copy(S,L,R-L+1);
+  Result := GitTrimSpaces(S);
 end;
 
 function EffectiveGitDir(const AGitDir: string): string;

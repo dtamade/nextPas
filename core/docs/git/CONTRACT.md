@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.git*.pas`（66 个源文件）
 **层级**：L2（依赖 L0: base, text, fs；native 子家族另用 compress/hash/io L1 owner）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-29
-**版本**: 2.0
+**最后更新**：2026-08-31
+**版本**: 2.1
 
 ---
 
@@ -221,6 +221,7 @@ TGitStatusEntryArray = array of TGitStatusEntry;
 - **[INV-O1] Ownership 单一所有者**：`TNativeRepository` 独占 `objects/pack/*.pack` 的 `IMappedFile` 句柄（`TPackFile.FMapped: IMappedFile`，`PByte+Size` 零拷贝视图），析构时 `Free` 全部 packs；`IMappedFile` 引用计数归仓，禁止拷贝共享。`WriteAtomic`/`GitWriteIndex` 临时文件句柄由调用帧 `try..finally` 保证释放。`TBytes` 读取结果所有权移交调用方（调用方持有，零拷贝 `PByte+Len` 变体不拥有内存，需在 `TPackFile` 生命周期内使用）。
 - **[INV-O2] Exactly-once 单次交付**：`revwalk` 每提交恰一次 `ReadObject+Parse`（发射零重复开销，`seen` 入队时标记）；`GitZlibDecompress*` 每 zlib 流恰一次 inflate（`AEndPos` 精确边界，无重读）；`status/rename` 每路径恰一次归并（porcelain 分组序，conflict 跳过 rename）。重复调用不产生重复副作用。
 - **[INV-O3] 单源复用**：`ignore/attributes` 通配一律委托 `git.native.wildmatch`（`GitWildSegment*`/`GitSegmentsMatch`，inline 热路径）；`Adler-32` 一律委托 `nextpas.core.checksum.adler32`（`Adler32Update`/`Adler32OfBytes`，`ADLER32_INIT/MOD/NMAX` 单源，`PByte+Len` 零拷贝）；`Span/Bytes` 比较一律委托 `nextpas.core.bytes.ops`（`SpanEqual/SpanCompare` 等，`bytes.ops` 单源）；`zlib` 一律委托 `nextpas.core.compress`（`Deflate*`/`CreateDeflateReaderEmbedded`）。禁止手写重复循环。
+- **[INV-O4] 新增行为不变式**：`DiscoverRepository(const AStartPath: string): string` 纯查询无副作用，`AStartPath=''` 或不可达返回 `''`（不抛），逐级上溯寻 `.git` 目录、命中 worktree 时解析 `.git` 文件 `gitdir: <path>` 返回 worktree 根，`PathClean` 规范绝对路径；`CloneRepository(const AURL,ALocalPath: string): IGitRepository` 成功返回非空句柄且落盘为有效仓（`HEAD`/`config`/`objects/pack`），失败不留半仓且抛 `EGitError`（native 抛 `not implemented`）；`CommitOnHead(const AMessage,AAuthorName,AAuthorEmail: string): string` 要求 `AMessage<>''` 否则 `EGitError(GIT_EINVALID)`，`index→write_tree→lookup_tree→signature→commit_create(HEAD)` 全链 `try/finally` 释放句柄，成功返回 40-hex OID；`AddWorktree(const AName,APath,ARef: string; ADetach: Boolean): IGitWorktree` 要求 `AName<>''且APath<>''` 否则 `EGitError(GIT_EINVALIDSPEC)`，同名抛 `EGitError`，创建 `worktrees/<id>/commondir+gitdir+HEAD`，`PruneWorktree` 仅清元数据不删工作区；`SetVerifySSL(AEnabled: Boolean)`/`VerifySSL` 为 Manager 粒度标志默认 `True`（`FVerifySSL`），仅影响后续网络操作（Clone/Fetch/Push 的 `http.sslVerify`），同 Manager 可见跨 Manager 不共享
 
 ---
 
@@ -229,14 +230,18 @@ TGitStatusEntryArray = array of TGitStatusEntry;
 - 仓库不存在抛 `EGitError`
 - libgit2 错误抛 `EGitError`（含错误码）
 - **[INV-E1] 异常不丢**：所有 `EIOError` → `EGitError` 映射保留 `EGitError` 原样 `raise`（`on E: EGitError do raise`），其余异常包装为 `EGitError` 且不吞栈；`TPackFile/LoadPacks/Index` 解析失败经 `try..finally/try..except` 释放已分配句柄/内存后重抛，确保 `EGitError` 不丢失且资源不泄漏。
+- **[INV-E2] 新增行为错误契约**：`DiscoverRepository` 返回 `''` 不抛（空串与不可达均空）；`CloneRepository` 失败抛 `EGitError` 含 `git_clone` 错误码（native 抛 `EGitError('not implemented for native backend: CloneRepository')`）；`CommitOnHead` 空消息 `EGitError(GIT_EINVALID,'message required')`，`index/tree/signature/commit_create` 任一步 `rc<>GIT_OK` 抛 `EGitError(rc,'<step> failed')` 且 `try/finally` 释放 `git_index/git_tree/git_signature/git_commit`；`AddWorktree/LookupWorktree` 参数缺失 `EGitError(GIT_EINVALIDSPEC)`，底层 `git_worktree_*` 非 `GIT_OK` 抛 `EGitError(rc,'<op> failed')`，`ListWorktrees` 失败抛 `EGitError` 且 `git_strarray_free` 保证释放；`SetVerifySSL/SetCredential*` 未接线时传入非空处理器抛 `EGitError(GIT_EUSER/'not supported')` 而非静默忽略；`GitOidIsValidHex` 失败抛 `EGitError` 不返回哨兵，`inline` 零拷贝路径亦不掩盖错误
 
 ---
 
 ## 4. 线程安全
 
-- IGitManager 线程安全
-- IGitRepository 非线程安全
-- `TNativeRepository`/`TPackFile` 非线程安全（mmap `PByte` 零拷贝视图，调用方同步）
+- `IGitManager` 线程安全：`Initialize/Finalize/IsRepository/DiscoverRepository/CloneRepository/GetGlobalConfig/SetGlobalConfig/SetVerifySSL/VerifySSL/Version` 均可在任意线程并发调用；`Finalize` 延迟释放（`FActiveHandles>0` 时置 `FFinalizeRequested`，`ReleaseHandle` 归零后自动 `Finalize`），`CloneRepository` 内部串行化 `git_clone` 且异常不破坏 Manager 状态
+- `IGitRepository` / `IGitRepositoryExt` / `IGitWorktreeExt` 非线程安全：`Status/Head/CommitByHash/Diff/RevWalk/Blame/ConfigEntries/ApplyPatch/CheckoutPaths/WorkdirPatchText/AddWorktree/CommitOnHead/PruneWorktree` 均需外部互斥，mmap `PByte` 零拷贝视图调用方同步
+- `SetVerifySSL` / `VerifySSL` 原子可见：`FVerifySSL` 为 Manager 私有字段，`SetVerifySSL` 写入后 `VerifySSL` 立即可见（libgit2 额外同步 `git_config_set_string(http.sslVerify)`），跨线程以最后写入为准，不保证跨 Manager 一致性
+- `DiscoverRepository` 纯读无锁：仅读文件系统与 `.git` 文件，不改 Manager 状态，可与 `CloneRepository` 并发但结果取决于文件系统时序
+- `CommitOnHead` / `AddWorktree` 非线程安全且不可重入：依赖 `git_index` / `git_worktree` 句柄，调用期间禁止同仓并发
+- 文档与门禁约束：`CONTRACT.md` 本节与 `scripts/git-contract-check.sh` C5 共同作为线程安全契约门禁，新增 Manager/Repository 方法必须在此节声明线程模型
 
 ---
 
@@ -247,6 +252,7 @@ TGitStatusEntryArray = array of TGitStatusEntry;
 - **[INV-M1] 资源释放**：`TPackFile.Create` 失败时已分配 `IMappedFile` 随实例析构释放；`TNativeRepository.LoadPacks` 批内异常回滚已建 packs（`try..except Free`）；`Deflate/Gzip` 流的 `inflateEnd/deflateEnd` 在 `try..finally`/`destructor` 中释放；`WriteAtomic` 先写临时文件后原子 rename，异常不留残余。
 - **[INV-M2] Heaptrc 零泄漏**：`test_git_native`（≈114）/`test_git`/`test_git_bindings` 全门以 `-gh` 编译，`HEAPTRC=haltonnotreleased,log` 双 pin（dump 存在 + `0 unfreed memory blocks`）为硬门禁；`make focused FOCUS=core/tests/nextpas.core.git/test_git_native` 必须通过。
 - **[INV-M3] 性能 inline/零拷贝**：`GitOidIsValidHex/GitOidSame/GitKindFromMode/GitZlibAdler32(PByte)` 等热路径 `inline`；`GitZlibDecompressPtr`/`Adler32Update(AData: PByte; ALen: SizeUInt)` 为 `Pointer+Len` 零拷贝（`TByteSpan` 视图），`SpanEqual/BytesEqual` 复用 `bytes.ops` 的 `MemEqual/CompareBytesOrdered` 零分配路径；证据见 `bytes.ops` 单源与 `bench`。
+- **[INV-M4] 新增行为内存契约**：`CloneRepository` 成功句柄由 `TGitRepositoryImpl` 接管（`FRepo.Free`+`ReleaseHandle`），失败无句柄泄漏；`AddWorktree` 返回 `TGitWorktreeImpl` 持有 `git_worktree`（`git_worktree_add` 句柄故意不 `git_worktree_free` 规避 libgit2 1.9 double-free，随仓释放，见 libgit2.pas 注释）；`CommitOnHead` 全量 `try/finally` 配对释放 `git_index/git_tree/git_commit/git_signature/git_reference`，异常路径亦释放且 `EGitError` 不丢；`ListWorktrees/PullFastForward` 等 `git_strarray/git_diff/git_revwalk` 均 `try/finally` 释放，`StatusEntries` 的 `New(Dispose)` 列表异常时逐项 `Dispose`
 
 ---
 

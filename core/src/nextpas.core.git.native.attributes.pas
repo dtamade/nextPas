@@ -56,14 +56,9 @@ uses
   nextpas.core.git.native.common,
   nextpas.core.git.native.util;
 
-function TrimSpaces(const S: string): string;
-var A,B: Integer;
+function TrimSpaces(const S: string): string; inline;
 begin
-  A:=1; B:=Length(S);
-  while (A<=B) and (S[A] in [' ',#9,#10,#13]) do Inc(A);
-  while (B>=A) and (S[B] in [' ',#9,#10,#13]) do Dec(B);
-  if B<A then Exit('');
-  Result:=Copy(S,A,B-A+1);
+  Result := GitTrimSpaces(S);
 end;
 
 function StripCR(const S: string): string;
