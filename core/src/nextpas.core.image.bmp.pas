@@ -21,7 +21,9 @@ uses
   nextpas.core.errors,
   nextpas.core.graphics.errors,
   nextpas.core.bytes.binary,
-  nextpas.core.mem.base;
+  nextpas.core.mem.base,
+  nextpas.core.image.base,
+  nextpas.core.image.dispatch;
 
 procedure PutLe16(ABuf: PByte; AVal: Word); inline;
 begin
@@ -203,5 +205,13 @@ begin
     end;
   end;
 end;
+
+function BmpProbe(const AData: TBytes): Boolean;
+begin
+  Result := (Length(AData) >= 2) and (AData[0] = Ord('B')) and (AData[1] = Ord('M'));
+end;
+
+initialization
+  ImageRegisterCodec(ifBmp, @BmpProbe, @BmpDecodeRgba, True);
 
 end.

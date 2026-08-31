@@ -23,7 +23,9 @@ uses
   nextpas.core.errors,
   nextpas.core.graphics.errors,
   nextpas.core.image.jpeg.loader,
-  nextpas.core.mem.base;
+  nextpas.core.mem.base,
+  nextpas.core.image.base,
+  nextpas.core.image.dispatch;
 
 function JpegIsAvailable: Boolean;
 begin
@@ -70,5 +72,13 @@ begin
   raise ENotImplementedError.Create('jpeg: decode wiring pending (S2 FFI)');
   Result := nil;
 end;
+
+function JpegProbe(const AData: TBytes): Boolean;
+begin
+  Result := (Length(AData) >= 2) and (AData[0] = $FF) and (AData[1] = $D8);
+end;
+
+initialization
+  ImageRegisterCodec(ifJpeg, @JpegProbe, @JpegDecodeRgba, False);
 
 end.

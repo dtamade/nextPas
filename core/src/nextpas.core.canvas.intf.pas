@@ -30,10 +30,14 @@ type
     class function Solid(AColor: TColor32): TBrush; static;
     class function Linear(const AGrad: TGradient): TBrush; overload; static;
     class function Radial(const AGrad: TGradient): TBrush; overload; static;
-    class function Linear(const AColors: TColor32Array; const AStops: TSingleArray): TBrush; overload; static;
-    class function Linear(const AColors: TColor32Array; const AStops: TSingleArray; const ATransform: TMat2D): TBrush; overload; static;
-    class function Radial(const AColors: TColor32Array; const AStops: TSingleArray): TBrush; overload; static;
-    class function Radial(const AColors: TColor32Array; const AStops: TSingleArray; const ATransform: TMat2D): TBrush; overload; static;
+    class function Linear(const AColors: array of TColor32): TBrush; overload; static;
+    class function Linear(const AColors: array of TColor32; const AStops: array of Single): TBrush; overload; static;
+    class function Linear(const AColors: array of TColor32; const AStops: array of Single; const ATransform: TMat2D): TBrush; overload; static;
+    class function Linear(const AColors: array of TColor32; const ATransform: TMat2D): TBrush; overload; static;
+    class function Radial(const AColors: array of TColor32): TBrush; overload; static;
+    class function Radial(const AColors: array of TColor32; const AStops: array of Single): TBrush; overload; static;
+    class function Radial(const AColors: array of TColor32; const AStops: array of Single; const ATransform: TMat2D): TBrush; overload; static;
+    class function Radial(const AColors: array of TColor32; const ATransform: TMat2D): TBrush; overload; static;
     function WithTransform(const M: TMat2D): TBrush; inline;
     function WithOpacity(A: Single): TBrush;
     property Kind: TBrushKind read FKind;
@@ -150,29 +154,99 @@ begin
   Result.FGradient := AGrad;
 end;
 
-class function TBrush.Linear(const AColors: TColor32Array; const AStops: TSingleArray): TBrush;
+class function TBrush.Linear(const AColors: array of TColor32): TBrush;
+var
+  LC: TColor32Array;
+  I: Integer;
+  G: TGradient;
+begin
+  SetLength(LC, Length(AColors));
+  for I := 0 to High(AColors) do
+    LC[I] := AColors[I];
+  G := TGradient.Create(gkLinear, LC, nil, TMat2D.Identity);
+  Result := Linear(G);
+end;
+
+class function TBrush.Linear(const AColors: array of TColor32; const AStops: array of Single): TBrush;
 begin
   Result := Linear(AColors, AStops, TMat2D.Identity);
 end;
 
-class function TBrush.Linear(const AColors: TColor32Array; const AStops: TSingleArray; const ATransform: TMat2D): TBrush;
+class function TBrush.Linear(const AColors: array of TColor32; const AStops: array of Single; const ATransform: TMat2D): TBrush;
 var
+  LC: TColor32Array;
+  LS: TSingleArray;
   G: TGradient;
+  I: Integer;
 begin
-  G := TGradient.Create(gkLinear, AColors, AStops, ATransform);
+  SetLength(LC, Length(AColors));
+  for I := 0 to High(AColors) do
+    LC[I] := AColors[I];
+  SetLength(LS, Length(AStops));
+  for I := 0 to High(AStops) do
+    LS[I] := AStops[I];
+  G := TGradient.Create(gkLinear, LC, LS, ATransform);
   Result := Linear(G);
 end;
 
-class function TBrush.Radial(const AColors: TColor32Array; const AStops: TSingleArray): TBrush;
+class function TBrush.Linear(const AColors: array of TColor32; const ATransform: TMat2D): TBrush;
+var
+  LC: TColor32Array;
+  I: Integer;
+  G: TGradient;
+begin
+  SetLength(LC, Length(AColors));
+  for I := 0 to High(AColors) do
+    LC[I] := AColors[I];
+  G := TGradient.Create(gkLinear, LC, nil, ATransform);
+  Result := Linear(G);
+end;
+
+class function TBrush.Radial(const AColors: array of TColor32): TBrush;
+var
+  LC: TColor32Array;
+  I: Integer;
+  G: TGradient;
+begin
+  SetLength(LC, Length(AColors));
+  for I := 0 to High(AColors) do
+    LC[I] := AColors[I];
+  G := TGradient.Create(gkRadial, LC, nil, TMat2D.Identity);
+  Result := Radial(G);
+end;
+
+class function TBrush.Radial(const AColors: array of TColor32; const AStops: array of Single): TBrush;
 begin
   Result := Radial(AColors, AStops, TMat2D.Identity);
 end;
 
-class function TBrush.Radial(const AColors: TColor32Array; const AStops: TSingleArray; const ATransform: TMat2D): TBrush;
+class function TBrush.Radial(const AColors: array of TColor32; const AStops: array of Single; const ATransform: TMat2D): TBrush;
 var
+  LC: TColor32Array;
+  LS: TSingleArray;
+  G: TGradient;
+  I: Integer;
+begin
+  SetLength(LC, Length(AColors));
+  for I := 0 to High(AColors) do
+    LC[I] := AColors[I];
+  SetLength(LS, Length(AStops));
+  for I := 0 to High(AStops) do
+    LS[I] := AStops[I];
+  G := TGradient.Create(gkRadial, LC, LS, ATransform);
+  Result := Radial(G);
+end;
+
+class function TBrush.Radial(const AColors: array of TColor32; const ATransform: TMat2D): TBrush;
+var
+  LC: TColor32Array;
+  I: Integer;
   G: TGradient;
 begin
-  G := TGradient.Create(gkRadial, AColors, AStops, ATransform);
+  SetLength(LC, Length(AColors));
+  for I := 0 to High(AColors) do
+    LC[I] := AColors[I];
+  G := TGradient.Create(gkRadial, LC, nil, ATransform);
   Result := Radial(G);
 end;
 

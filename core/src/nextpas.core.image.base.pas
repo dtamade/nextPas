@@ -36,8 +36,10 @@ type
     procedure Clear;
     function IsEmpty: Boolean; inline;
     function BytePerPixel: Integer; inline;
-    function GetPixelPtr(X, Y: Integer): PByte; inline;
-    function RowPtr(Y: Integer): PByte; inline;
+    function GetPixelPtr(X, Y: Integer): PByte;
+    function ConstPixelPtr(X, Y: Integer): PByte; inline;
+    function RowPtr(Y: Integer): PByte;
+    function ConstRowPtr(Y: Integer): PByte; inline;
     function ToCompact: TBytes;
     procedure Premultiply;
     procedure Unpremultiply;
@@ -144,6 +146,24 @@ begin
   Off := Y * FStride + X * Bpp;
   if (Off < 0) or (Off + Bpp > Length(FPixels)) then
     raise EArgumentError.Create('nextpas.core.image.base.pas: GetPixelPtr offset out of bounds');
+  EnsureUnique;
+  Result := @FPixels[Off];
+end;
+
+function TBitmap.ConstPixelPtr(X, Y: Integer): PByte;
+var
+  Off, Bpp: Integer;
+begin
+  if GetIsEmpty or (Length(FPixels) = 0) or (FWidth <= 0) or (FHeight <= 0) then
+    raise EArgumentError.Create('nextpas.core.image.base.pas: ConstPixelPtr on empty bitmap');
+  if (X < 0) or (X >= FWidth) or (Y < 0) or (Y >= FHeight) then
+    raise EArgumentError.Create('nextpas.core.image.base.pas: ConstPixelPtr out of bounds');
+  Bpp := BytePerPixel;
+  if Y > High(Integer) div FStride then
+    raise EArgumentError.Create('nextpas.core.image.base.pas: ConstPixelPtr Y*Stride overflow');
+  Off := Y * FStride + X * Bpp;
+  if (Off < 0) or (Off + Bpp > Length(FPixels)) then
+    raise EArgumentError.Create('nextpas.core.image.base.pas: ConstPixelPtr offset out of bounds');
   Result := @FPixels[Off];
 end;
 
@@ -161,6 +181,24 @@ begin
   RowBytes := FWidth * BytePerPixel;
   if (Off < 0) or (Off + RowBytes > Length(FPixels)) then
     raise EArgumentError.Create('nextpas.core.image.base.pas: RowPtr offset out of bounds');
+  EnsureUnique;
+  Result := @FPixels[Off];
+end;
+
+function TBitmap.ConstRowPtr(Y: Integer): PByte;
+var
+  Off, RowBytes: Integer;
+begin
+  if GetIsEmpty or (Length(FPixels) = 0) or (FWidth <= 0) or (FHeight <= 0) then
+    raise EArgumentError.Create('nextpas.core.image.base.pas: ConstRowPtr on empty bitmap');
+  if (Y < 0) or (Y >= FHeight) then
+    raise EArgumentError.Create('nextpas.core.image.base.pas: ConstRowPtr out of bounds');
+  if Y > High(Integer) div FStride then
+    raise EArgumentError.Create('nextpas.core.image.base.pas: ConstRowPtr Y*Stride overflow');
+  Off := Y * FStride;
+  RowBytes := FWidth * BytePerPixel;
+  if (Off < 0) or (Off + RowBytes > Length(FPixels)) then
+    raise EArgumentError.Create('nextpas.core.image.base.pas: ConstRowPtr offset out of bounds');
   Result := @FPixels[Off];
 end;
 
@@ -215,27 +253,35 @@ end;
 
 procedure TBitmap.Premultiply;
 var
-  Y, X: Integer;
+  Y, N4, Tail: Integer;
   P: PByte;
   A: Byte;
+  Base: PByte;
 begin
   if FFormat = bfGray8 then Exit;
-  if GetIsEmpty or (Length(FPixels) = 0) then Exit;
+  if GetIsEmpty or (Length(FPixels) = 0) or (FWidth <= 0) or (FHeight <= 0) then Exit;
   EnsureUnique;
+  Base := @FPixels[0];
   for Y := 0 to FHeight - 1 do
   begin
-    P := RowPtr(Y);
-    for X := 0 to FWidth - 1 do
+    P := Base + Y * FStride;
+    N4 := FWidth shr 2;
+    Tail := FWidth and 3;
+    while N4 > 0 do
     begin
-      A := P[3];
-      if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end
-      else if A <> 255 then
-      begin
-        P[0] := Byte((P[0] * A) div 255);
-        P[1] := Byte((P[1] * A) div 255);
-        P[2] := Byte((P[2] * A) div 255);
-      end;
-      Inc(P, 4);
+      A := P[3]; if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A <> 255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+      A := P[3]; if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A <> 255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+      A := P[3]; if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A <> 255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+      A := P[3]; if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A <> 255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+      Dec(N4);
+    end;
+    case Tail of
+      3: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+      2: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+      1: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
     end;
   end;
 end;
@@ -243,31 +289,40 @@ end;
 function TBitmap.Clone: TBitmap;
 begin
   Result := Self;
-  if Length(Result.FPixels) > 0 then SetLength(Result.FPixels, Length(Result.FPixels));
+  // COW share: O(1) shallow copy, deep copy deferred to EnsureUnique on write
 end;
 
 procedure TBitmap.Unpremultiply;
 var
-  Y, X: Integer;
+  Y, N4, Tail: Integer;
   P: PByte;
   A: Byte;
+  Base: PByte;
 begin
   if FFormat = bfGray8 then Exit;
-  if GetIsEmpty or (Length(FPixels) = 0) then Exit;
+  if GetIsEmpty or (Length(FPixels) = 0) or (FWidth <= 0) or (FHeight <= 0) then Exit;
   EnsureUnique;
+  Base := @FPixels[0];
   for Y := 0 to FHeight - 1 do
   begin
-    P := RowPtr(Y);
-    for X := 0 to FWidth - 1 do
+    P := Base + Y * FStride;
+    N4 := FWidth shr 2;
+    Tail := FWidth and 3;
+    while N4 > 0 do
     begin
-      A := P[3];
-      if (A <> 0) and (A <> 255) then
-      begin
-        P[0] := Byte((P[0] * 255) div A);
-        P[1] := Byte((P[1] * 255) div A);
-        P[2] := Byte((P[2] * 255) div A);
-      end;
-      Inc(P, 4);
+      A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+      A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+      A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+      A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+      Dec(N4);
+    end;
+    case Tail of
+      3: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
+      2: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
+      1: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
     end;
   end;
 end;
