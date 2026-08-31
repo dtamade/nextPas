@@ -25,8 +25,6 @@ type
     { 40 字节 index 项 → host-order TResPackEntry。
       不用无类型参数 + absolute 叠加：FPC trunk 对该组合生成错误代码（实测）。 }
     procedure DecodeWire(const AIdx: SizeUInt; out ADest: TResPackEntry);
-    function StoredPathRange(const AIdx: SizeUInt; out AP: PByte)
-      : SizeUInt; inline;
     function CompareStoredToBuf(const AIdx: SizeUInt;
       const ABuf: PByte; const ALen: SizeUInt): Integer;
     function CompareStoredToStored(const AA, AB: SizeUInt): Integer;
@@ -54,6 +52,11 @@ type
     function ContentPtr(const AEntry: TResPackEntry): PByte; inline;
     function DigestPtr(const AIdx: SizeUInt): PByte;
     function HasDigests: Boolean; inline;
+    { P1-2 零拷贝路径视图：索引路径不落地 string，直接暴露 blob 内指针+长度
+      供 embedded 等零分配二分/前缀判定复用，单源于 base.utils.CompareBytesOrdered }
+    function StoredPathRange(const AIdx: SizeUInt; out AP: PByte): SizeUInt; inline;
+    function LowerBound(const APath: string): SizeUInt; inline;
+    function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer; inline;
   end;
 
 implementation
@@ -79,7 +82,7 @@ end;
 function TResPack.DigestPtr(const AIdx: SizeUInt): PByte;
 begin
   if FDigests = nil then
-    raise EResPackCorrupted.Create('respack: pack has no digest section');
+    raise EResPackCorrupted.CreateCtx('digest', '', 'respack: pack has no digest section');
   Result := FDigests + AIdx * RESPACK_DIGEST_SIZE;
 end;
 
@@ -142,9 +145,9 @@ end;
 
 class function TResPack.Open(const AData: PByte; const ASize: SizeUInt): TResPack;
 var
-  I: SizeUInt;
+  I, J: SizeUInt;
   E: TResPackEntry;
-  MinData, DigEnd: UInt64;
+  MinData, MaxDataEnd, StrTabEnd, DigEnd, StrLen, AlignedStrEnd, PathEnd: UInt64;
   HdrFlags: UInt32;
   IdxBase: PByte;
   Cached: array of TResPackEntry;
@@ -173,6 +176,9 @@ begin
   if ((HdrFlags and RESPACK_FLAG_DIGESTED) <> 0)
     and (Result.FHdr.DigestOffset = 0) then
     raise EResPackCorrupted.CreateStep(2, 'digest flag set but offset zero');
+  if ((HdrFlags and RESPACK_FLAG_ALGO_MASK) shr RESPACK_FLAG_ALGO_SHIFT)
+    <> UInt32(RESPACK_DIGEST_ALGO_SHA256) then
+    raise EResPackCorrupted.CreateStep(2, 'unknown digest algorithm');
 
   { 步骤 3：index 范围（u32×40 在 u64 内无溢出） }
   if (Result.FHdr.IndexOffset < RESPACK_HEADER_SIZE)
@@ -197,6 +203,9 @@ begin
     （Count 为 SizeUInt，0-1 回绕 ⇒ 每个循环都必须以 Count>0 为前提）
     单次 DecodeWire + 缓存：第二遍校验复用缓存零 Decode，10k 规模省 50% 解析 }
   MinData := Result.FHdr.BlobTotal;
+  MaxDataEnd := 0;
+  StrLen := 0;
+  Cached := nil;
   if Result.Count > 0 then
   begin
     // 缓存条目避免第二遍二次 DecodeWire
@@ -217,23 +226,79 @@ begin
         raise EResPackCorrupted.CreateStep(5, 'empty path');
       if (E.DataOffset mod RESPACK_DATA_ALIGN) <> 0 then
         raise EResPackCorrupted.CreateStep(5, 'data slot not aligned');
-      if E.DataOffset + E.Size > Result.FHdr.BlobTotal then
+      { F-HIGH-02 wrap-safe: avoid UInt64 wrap on DataOffset+Size }
+      if (E.Size > Result.FHdr.BlobTotal)
+        or (E.DataOffset > Result.FHdr.BlobTotal - E.Size) then
         raise EResPackCorrupted.CreateStep(5, 'data range beyond blobTotal');
+      if StrLen > High(UInt64) - UInt64(E.PathLen) then
+        raise EResPackCorrupted.CreateStep(5, 'string table length overflow');
+      StrLen := StrLen + UInt64(E.PathLen);
       if E.DataOffset < MinData then
         MinData := E.DataOffset;
+      if E.Size > 0 then
+      begin
+        if E.DataOffset > High(UInt64) - E.Size then
+          raise EResPackCorrupted.CreateStep(5, 'data range overflow');
+        if E.DataOffset + E.Size > MaxDataEnd then
+          MaxDataEnd := E.DataOffset + E.Size;
+      end;
       Cached[I] := E;
     end;
-  end;
-
-  { 步骤 6+7：路径范围 + 有序性 + 规范语法 — 复用缓存零 Decode
-    （MinData 已在步骤 5 推导完成；步骤 6 优先于 7，错误码保持与分步一致） }
-  if Result.Count > 0 then
+    { F-HIGH-03 header HASHED is summary, entry HASHED is authoritative }
+    if (HdrFlags and RESPACK_FLAG_HASHED) <> 0 then
+      for I := 0 to Result.Count - 1 do
+        if (Cached[I].Flags and RESPACK_EFLAG_HASHED) = 0 then
+          raise EResPackCorrupted.CreateStep(5, 'header hash flag inconsistent');
+    { 推导 string table 终点：AlignUp(FStrTabBase+StrLen,16) }
+    if Result.FStrTabBase > High(UInt64) - StrLen then
+      raise EResPackCorrupted.CreateStep(5, 'string table overflow');
+    StrTabEnd := Result.FStrTabBase + StrLen;
+    if StrTabEnd > High(UInt64) - (RESPACK_DATA_ALIGN - 1) then
+      raise EResPackCorrupted.CreateStep(5, 'string table alignment overflow');
+    StrTabEnd := (StrTabEnd + (RESPACK_DATA_ALIGN - 1)) and not UInt64(RESPACK_DATA_ALIGN - 1);
+    { 消除无符号下溢：MinData < FStrTabBase 必须先于 MinData-FStrTabBase }
+    if MinData < Result.FStrTabBase then
+      raise EResPackCorrupted.CreateStep(5, 'data overlaps strtab');
     for I := 0 to Result.Count - 1 do
     begin
       E := Cached[I];
-      if UInt64(E.PathOffset) + UInt64(E.PathLen)
-        > MinData - Result.FStrTabBase then
+      if E.DataOffset < StrTabEnd then
+        raise EResPackCorrupted.CreateStep(5, 'data overlaps header/index/strtab');
+    end;
+    { data 区间互不重叠，至少在 [0,DigestOffset) 内无覆盖；去重共享槽位（相同 offset+size）除外 }
+    for I := 0 to Result.Count - 1 do
+      for J := I + 1 to Result.Count - 1 do
+      begin
+        if (Cached[I].Size = 0) or (Cached[J].Size = 0) then Continue;
+        if (Cached[I].DataOffset = Cached[J].DataOffset) and (Cached[I].Size = Cached[J].Size) then Continue;
+        if (Cached[I].DataOffset < Cached[J].DataOffset + Cached[J].Size)
+          and (Cached[J].DataOffset < Cached[I].DataOffset + Cached[I].Size) then
+          raise EResPackCorrupted.CreateStep(5, 'data sections overlap');
+      end;
+  end
+  else
+  begin
+    StrTabEnd := Result.FStrTabBase;
+    MaxDataEnd := 0;
+  end;
+
+  { 步骤 6+7：路径范围 + 有序性 + 规范语法 — 复用缓存零 Decode
+    （MinData 已在步骤 5 推导完成；步骤 6 优先于 7，错误码保持与分步一致）
+    FORMAT step6: FStrTabBase+PathOffset+PathLen <= MinData；推导边界需防 MinData<FStrTabBase 下溢 }
+  if Result.Count > 0 then
+  begin
+    for I := 0 to Result.Count - 1 do
+    begin
+      E := Cached[I];
+      { F-CRIT-01/F-HIGH-02: 路径上界显式用 BlobTotal + CheckedAdd 防回绕 }
+      PathEnd := UInt64(E.PathOffset) + UInt64(E.PathLen);
+      if PathEnd < UInt64(E.PathOffset) then
+        raise EResPackCorrupted.CreateStep(6, 'path range overflow');
+      if PathEnd > MinData - Result.FStrTabBase then
         raise EResPackCorrupted.CreateStep(6, 'path beyond string table bound');
+      { 显式 BlobTotal 上界（复用 base 溢出思想：BlobTotal - FStrTabBase 安全差值） }
+      if PathEnd > Result.FHdr.BlobTotal - Result.FStrTabBase then
+        raise EResPackCorrupted.CreateStep(6, 'path beyond blobTotal');
       if I > 0 then
         if Result.CompareCachedEntries(Cached[I - 1], Cached[I]) >= 0 then
           raise EResPackCorrupted.CreateStep(7,
@@ -241,19 +306,35 @@ begin
       if not ResPackValidPath(Result.PathOf(E), True) then
         raise EResPackCorrupted.CreateStep(7, 'non-canonical path stored');
     end;
-  SetLength(Cached, 0);
+  end;
 
-  { 步骤 8：digest 区范围 }
+  { 步骤 8：digest 区范围 — FORMAT step8: digest 必须位于 string table 对齐后且不与数据区间相交 }
   if (Result.FHdr.Flags and RESPACK_FLAG_DIGESTED) <> 0 then
   begin
-    if Result.FHdr.DigestOffset < MinData then
-      raise EResPackCorrupted.CreateStep(8, 'digest overlaps data section');
-    DigEnd := Result.FHdr.DigestOffset
-      + UInt64(Result.FHdr.EntryCount) * RESPACK_DIGEST_SIZE;
+    { F-CRIT-01: AlignUp(FStrTabBase+StrLen,4) <= DigestOffset }
+    if Result.FStrTabBase > High(UInt64) - StrLen then
+      raise EResPackCorrupted.CreateStep(8, 'digest string table overflow');
+    AlignedStrEnd := Result.FStrTabBase + StrLen;
+    if AlignedStrEnd > High(UInt64) - 3 then
+      raise EResPackCorrupted.CreateStep(8, 'digest alignment overflow');
+    AlignedStrEnd := (AlignedStrEnd + 3) and not UInt64(3);
+    if AlignedStrEnd > Result.FHdr.DigestOffset then
+      raise EResPackCorrupted.CreateStep(8, 'digest overlaps string table');
+    { digest 区尾端： CheckedAdd 思想防回绕，显式 BlobTotal 上界 }
+    if UInt64(Result.FHdr.EntryCount) > High(UInt64) div RESPACK_DIGEST_SIZE then
+      raise EResPackCorrupted.CreateStep(8, 'digest size overflow');
+    DigEnd := Result.FHdr.DigestOffset + UInt64(Result.FHdr.EntryCount) * RESPACK_DIGEST_SIZE;
+    if DigEnd < Result.FHdr.DigestOffset then
+      raise EResPackCorrupted.CreateStep(8, 'digest range overflow');
     if DigEnd > Result.FHdr.BlobTotal then
       raise EResPackCorrupted.CreateStep(8, 'digest out of range');
+    if MaxDataEnd > High(UInt64) - 3 then
+      raise EResPackCorrupted.CreateStep(8, 'digest alignment overflow');
+    if Result.FHdr.DigestOffset < ((MaxDataEnd + 3) and not UInt64(3)) then
+      raise EResPackCorrupted.CreateStep(8, 'digest overlaps data');
     Result.FDigests := AData + SizeUInt(Result.FHdr.DigestOffset);
   end;
+  SetLength(Cached, 0);
 
   Result.FOpen := True;
 end;
@@ -275,28 +356,15 @@ end;
 
 function TResPack.Search(const APath: string; out AIdx: SizeUInt): Boolean; inline;
 var
-  Lo, Hi, Mid: SizeUInt;
-  C: Integer;
-  LPtr: Pointer;
+  Idx: SizeUInt;
 begin
-  Result := False;
-  Lo := 0;
-  Hi := Count;
-  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
-  while Lo < Hi do
+  Idx := LowerBound(APath);
+  if (Idx < Count) and (ComparePathAt(Idx, APath) = 0) then
   begin
-    Mid := Lo + (Hi - Lo) div 2;
-    C := CompareStoredToBuf(Mid, PByte(LPtr), SizeUInt(Length(APath)));
-    if C = 0 then
-    begin
-      AIdx := Mid;
-      Exit(True);
-    end;
-    if C < 0 then
-      Lo := Mid + 1
-    else
-      Hi := Mid;
+    AIdx := Idx;
+    Exit(True);
   end;
+  Result := False;
 end;
 
 function TResPack.Find(const APath: string; out AEntry: TResPackEntry): Boolean;
@@ -314,15 +382,15 @@ end;
 function TResPack.Stat(const APath: string): TResPackEntry;
 begin
   if not ResPackValidPath(APath, True) then
-    raise EResPackInvalidPath.Create('respack: invalid path "' + APath + '"');
+    raise EResPackInvalidPath.CreateCtx('stat', APath, 'respack: invalid path "' + APath + '"');
   if not Find(APath, Result) then
-    raise EResPackNotFound.Create('respack: path not found "' + APath + '"');
+    raise EResPackNotFound.CreateCtx('stat', APath, 'respack: path not found "' + APath + '"');
 end;
 
 function TResPack.EntryAt(const AIdx: SizeUInt): TResPackEntry;
 begin
   if (not FOpen) or (AIdx >= Count) then
-    raise EResPackError.Create('respack: entry index out of range');
+    raise EResPackError.CreateCtx('entry', '', 'respack: entry index out of range');
   DecodeWire(AIdx, Result);
 end;
 
@@ -343,6 +411,35 @@ function TResPack.StoredPathRangeOf(const AEntry: TResPackEntry;
 begin
   AP := FData + SizeUInt(FStrTabBase) + AEntry.PathOffset;
   Result := AEntry.PathLen;
+end;
+
+function TResPack.LowerBound(const APath: string): SizeUInt; inline;
+var
+  Lo, Hi, Mid: SizeUInt;
+  C: Integer;
+  LPtr: Pointer;
+begin
+  Lo := 0;
+  Hi := Count;
+  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
+  while Lo < Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    C := CompareStoredToBuf(Mid, PByte(LPtr), SizeUInt(Length(APath)));
+    if C < 0 then
+      Lo := Mid + 1
+    else
+      Hi := Mid;
+  end;
+  Result := Lo;
+end;
+
+function TResPack.ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer; inline;
+var
+  LPtr: Pointer;
+begin
+  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
+  Result := CompareStoredToBuf(AIdx, PByte(LPtr), SizeUInt(Length(APath)));
 end;
 
 end.

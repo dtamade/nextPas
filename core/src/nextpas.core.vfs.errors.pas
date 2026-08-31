@@ -1,6 +1,8 @@
 unit nextpas.core.vfs.errors;
 
 {** @desc vfs 异常层级：EVfsError(Op/Path) 及子类（Go PathError 对等物）。
+  四件套归位：intf 子层（base ← intf(errors) ← 实现 ← 门面），
+  与 vfs.intf 同层，不单独构成 base 层；错误分类见 CONTRACT INV-V4/V5。
   全部挂 nextpas.core.exception.Exception 根，不触碰 SysUtils。 }
 
 {$I nextpas.core.settings.inc}
