@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.respack*.pas`（6 个源文件，已落地）
 **层级**：L2（依赖 L0-L1；`dirsource`/`embed` 例外依赖 `fs`/`fs.glob`，`embed` 复用 `bytes.ops`/`fs.glob` 现有单源无重复）
 **Owner**：AI（respack/vfs lane）
-**最后更新**：2026-08-30
-**版本**：1.0（S1-S5 落地校准；FORMAT v1 恒 40/LE 位移/digest 4 对齐/算法位预留；S4 embed 已补录）
+**最后更新**：2026-08-31
+**版本**：1.4（S1-S5 落地校准；FORMAT v1 恒 40/LE 位移/digest 4 对齐/算法位预留；S4 embed 已补录；S6 mount/overlay + polish2 稳定性补齐）
 
 ---
 

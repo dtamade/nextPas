@@ -42,15 +42,20 @@ function VfsReadAllBytes(const AFs: IVfs; const APath: string): TBytes;
 var
   S: IStream;
   Total, Got: SizeUInt;
+  LSize: Int64;
 begin
   Result := nil;
   S := AFs.OpenRead(APath);
   try
-    SetLength(Result, S.Size);
+    LSize := S.Size;
+    if (LSize < 0) or (UInt64(LSize) > UInt64(High(SizeInt))) then
+      raise EVfsError.CreateCtx('read', APath, 'declared size out of range');
+    SetLength(Result, LSize);
     Total := 0;
-    while Total < SizeUInt(S.Size) do
+    while Total < SizeUInt(LSize) do
     begin
-      if Total >= SizeUInt(Length(Result)) then Break;
+      if Total >= SizeUInt(Length(Result)) then
+        raise EVfsError.CreateCtx('read', APath, 'truncated: size exceeds addressable length');
       Got := S.Read(Result[Total], SizeUInt(Length(Result)) - Total);
       if Got = 0 then
         raise EVfsError.CreateCtx('read', APath,

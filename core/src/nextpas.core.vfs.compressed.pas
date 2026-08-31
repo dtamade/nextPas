@@ -73,7 +73,7 @@ begin
 end;
 
 function TAutoDecompressingVfs.IsGzipHeader(const APath: string): Boolean;
-var LStream: IStream; LBuf: array[0..COMPRESSED_HEADER_PEEK-1] of Byte; LRead: SizeUInt; LHeader: TBytes;
+var LStream: IStream; LBuf: array[0..COMPRESSED_HEADER_PEEK-1] of Byte; LRead: SizeUInt;
 begin
   Result := False;
   try
@@ -83,9 +83,7 @@ begin
   end;
   try
     LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
-    SetLength(LHeader, LRead);
-    if LRead > 0 then Move(LBuf[0], LHeader[0], LRead);
-    Result := IsGzipPred(LHeader);
+    Result := (LRead >= 2) and (LBuf[0] = $1F) and (LBuf[1] = $8B);
   finally
     LStream.Close;
   end;

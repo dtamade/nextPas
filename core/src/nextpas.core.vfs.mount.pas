@@ -163,7 +163,7 @@ begin
       Exit(True);
     end;
     if (Length(APath) > Length(Pre)) and (APath[Length(Pre) + 1] = '/')
-      and (Copy(APath, 1, Length(Pre)) = Pre) then
+      and CompareMem(@APath[1], @Pre[1], Length(Pre)) then
     begin
       ARemain := Copy(APath, Length(Pre) + 2, MaxInt);
       AFs := FMounts[I].Fs;
@@ -305,7 +305,7 @@ begin
     if VfsIsRoot(FMounts[I].Prefix) then Continue;
     if (Length(FMounts[I].Prefix) > Length(ADirPath))
       and (FMounts[I].Prefix[Length(ADirPath) + 1] = '/')
-      and (Copy(FMounts[I].Prefix, 1, Length(ADirPath)) = ADirPath) then
+      and CompareMem(@FMounts[I].Prefix[1], @ADirPath[1], Length(ADirPath)) then
     begin
       Child := Copy(FMounts[I].Prefix, Length(ADirPath) + 2, MaxInt);
       SL := Pos('/', Child);
