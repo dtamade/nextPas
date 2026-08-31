@@ -418,7 +418,15 @@ function ParseTypeReference(
   var ACursor: LongInt;
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
-): TGreenNode; forward;
+): TGreenNode; overload; forward;
+
+function ParseTypeReference(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId;
+  const ATree: TGreenTree
+): TGreenNode; overload; forward;
 
 function ParseAnonymousRoutineExpression(
   const ALexer: TLexerResult;
