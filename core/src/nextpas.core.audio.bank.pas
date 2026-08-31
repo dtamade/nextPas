@@ -54,6 +54,7 @@ type
     procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
     procedure EnsureBankCapacity(ANeeded: Integer); inline;
     procedure EnsureVoiceCapacity(ANeeded: Integer); inline;
+    procedure EnsureSnapshotVoices(ANeeded: Integer); inline;
     function FindEntry(AId: Integer): Integer;
     function FindByNameIdx(const AName: string): Integer;
     function FindVoice(AVoice: Integer): Integer;
@@ -259,6 +260,14 @@ begin
   if Length(FVoices) <> LCap then SetLength(FVoices, LCap);
 end;
 
+procedure TAudioBank.EnsureSnapshotVoices(ANeeded: Integer);
+var LCap: Integer;
+begin
+  LCap := Length(FSnapshotVoices);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotVoices) <> LCap then SetLength(FSnapshotVoices, LCap);
+end;
+
 function TAudioBank.FindEntry(AId: Integer): Integer;
 var I: Integer;
 begin
@@ -430,15 +439,9 @@ begin
     end else
     begin
       EnsureBankCapacity(Length(FEntries) + 1);
-      Idx := 0;
-      while (Idx < Length(FEntries)) and FEntries[Idx].Alive do Inc(Idx);
       Idx := -1;
       for I := 0 to High(FEntries) do if not FEntries[I].Alive then begin Idx := I; Break; end;
-      if Idx < 0 then
-      begin
-        Idx := Length(FEntries);
-        SetLength(FEntries, Idx + 1);
-      end;
+      if Idx < 0 then raise EAudioGraphError.Create('Bank.Add: capacity ensure failed');
     end;
     FEntries[Idx].Id := Result;
     FEntries[Idx].Name := AName;
@@ -570,13 +573,9 @@ begin
     if VIdx < 0 then
     begin
       EnsureVoiceCapacity(Length(FVoices) + 1);
-      VIdx := 0;
-      while (VIdx < Length(FVoices)) and FVoices[VIdx].Alive do Inc(VIdx);
-      if VIdx >= Length(FVoices) then
-      begin
-        VIdx := Length(FVoices);
-        SetLength(FVoices, VIdx + 1);
-      end;
+      VIdx := -1;
+      for I := 0 to High(FVoices) do if not FVoices[I].Alive then begin VIdx := I; Break; end;
+      if VIdx < 0 then raise EAudioGraphError.Create('Bank.Play: capacity ensure failed');
     end;
     FVoices[VIdx].VoiceId := Result;
     FVoices[VIdx].BankId := AId;
@@ -664,8 +663,7 @@ begin
     FLock.Release;
   end;
   EnsureScratch(FScratchTmp, Needed);
-  if Length(FSnapshotVoices) < AliveN then
-    SetLength(FSnapshotVoices, AliveN);
+  EnsureSnapshotVoices(AliveN);
   if AliveN = 0 then
   begin
     ABuffer.FrameCount := AFrames;

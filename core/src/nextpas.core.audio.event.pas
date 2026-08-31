@@ -61,6 +61,7 @@ type
     // capacity polish: geometric growth, call outside lock alloc region
     procedure EnsureEventCapacity(ANeeded: Integer); inline;
     procedure EnsureInstanceCapacity(ANeeded: Integer); inline;
+    procedure EnsureSnapshotVoices(ANeeded: Integer); inline;
     function FindEvent(AId: TAudioEventId): Integer;
     function FindInstance(AId: TAudioEventInstanceId): Integer;
     procedure ReapFinished;
@@ -242,6 +243,14 @@ begin
   if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
 end;
 
+procedure TAudioEventSystemImpl.EnsureSnapshotVoices(ANeeded: Integer);
+var LCap: Integer;
+begin
+  LCap := Length(FSnapshotVoices);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotVoices) <> LCap then SetLength(FSnapshotVoices, LCap);
+end;
+
 function TAudioEventSystemImpl.GetFormat: TAudioFormat; begin Result := FFormat; end;
 function TAudioEventSystemImpl.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer; begin Result := FillRealtime(ABuffer, AFrames); end;
 function TAudioEventSystemImpl.SeekTo(AFrame: UInt64): Boolean; begin Result := False; end;
@@ -277,9 +286,8 @@ begin
     LGlobalGain := FGlobalParams[0];
     LListenerSnap := FListener;
   finally FLock.Release; end;
-  // snapshot scratch reuse: preallocated FSnapshotVoices reuse, steady zero alloc
-  if Length(FSnapshotVoices) < LCount then
-    SetLength(FSnapshotVoices, LCount);
+  // snapshot scratch reuse: geometric EnsureSnapshotVoices, steady zero alloc
+  EnsureSnapshotVoices(LCount);
   if LCount > 0 then
   begin
     FLock.Acquire;
