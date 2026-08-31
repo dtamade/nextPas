@@ -73,6 +73,11 @@ type
   TPQfreeCancel = procedure(ACancel: PGcancel); cdecl;
   TPQcancel     = function(ACancel: PGcancel; AErrBuf: PAnsiChar;
     AErrBufSize: Integer): Integer; cdecl;
+  { COPY BINARY 高速路径（V4.3 bulk）：PGRES_COPY_IN 流式装载 }
+  TPQputCopyData = function(AConn: PGconn; ABuffer: PAnsiChar;
+    ALen: Integer): Integer; cdecl;
+  TPQputCopyEnd = function(AConn: PGconn; AErrMsg: PAnsiChar): Integer; cdecl;
+  TPQgetResult  = function(AConn: PGconn): PGresult; cdecl;
   { V3-B7 LISTEN/NOTIFY 订阅面 }
   TPQnotifies    = function(AConn: PGconn): PPGnotify; cdecl;
   TPQfreemem     = procedure(APtr: Pointer); cdecl;
@@ -117,6 +122,9 @@ var
   pq_getCancel:  TPQgetCancel;
   pq_freeCancel: TPQfreeCancel;
   pq_cancel:     TPQcancel;
+  pq_putCopyData: TPQputCopyData;
+  pq_putCopyEnd:  TPQputCopyEnd;
+  pq_getResult:   TPQgetResult;
   { V3-B7 LISTEN/NOTIFY }
   pq_notifies:   TPQnotifies;
   pq_freemem:    TPQfreemem;

@@ -6,7 +6,7 @@ unit nextpas.core.db.sqlite.adapter;
        autocommit 守卫与嵌套计数语义原样保留。
 
        所有权：适配器持有被包装的 TSqliteDb/TSqliteQuery 并在析构
-       时释放；消费方只持有接口引用，不手写 Free。 *}
+       时释放；消费方只持有接口引用，不手写 Free。 体积注记：本单元约1050行超 800 行软阈值，内聚性强（适配器单职责），暂不拆分，拆分预留见 roadmap。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -17,6 +17,7 @@ uses
   nextpas.core.exception,
   nextpas.core.db.base,
   nextpas.core.db.intf,
+  nextpas.core.db.capprobe,
   nextpas.core.db.trace,
   nextpas.core.db.sqlite.base,
   nextpas.core.db.sqlite.conn;
@@ -52,6 +53,7 @@ uses
   nextpas.core.text.scan,
   nextpas.core.atomic,
   nextpas.core.db.err,
+  nextpas.core.db.bulk,
   { 直接用 lrucache 子单元：collections 门面对泛型接口名不可透传
     （实证），且本处需具名特化类型作字段类型 }
   nextpas.core.collections.lrucache.intf,
@@ -194,12 +196,20 @@ type
   TDbSqliteConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
     IDbSavepointControl, IDbBatchExecutor, IDbStmtCacheControl,
     IDbRowBlobControl, IDbCapabilities, IDbTraceControl, ISqliteStmtHome,
-    IDbCancelControl)
+    IDbCancelControl, IDbBulkCopy)
   private
     FDb: TSqliteDb;
+    FBulk: TDbBulkBuffer;
+    FServerVersion: Integer;
+    FServerVersionProbed: Boolean;
     { V3-B6 取消标志：0 = 无取消；1 = RequestCancel 已请求。原子访问
       （跨线程写、progress handler 在 sqlite 工作线程读）。 }
     FCancelFlag: Integer;
+    { progress_handler 恢复状态：Arm 前保存、Disarm 恢复，避免无条件覆盖 }
+    FCancelArmed: Boolean;
+    FCancelPrevOps: Integer;
+    FCancelPrevHandler: TSqliteProgressHandler;
+    FCancelPrevArg: Pointer;
     { 空闲预编译语句池：键 = 原始 SQL，借出即移除（同 SQL 并发活动
       查询各持独立实例），归还回插；LRU 只管空闲驱逐。
       nil = 缓存关闭直通。单连接单逻辑线程（CONTRACT §2.1），
@@ -207,6 +217,7 @@ type
     FCache: ISqliteStmtCache;
     { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
     FTrace: TDbTraceHub;
+    procedure BulkExec(const ASql: string);
   public
     constructor Create(ADb: TSqliteDb;
       const AStmtCacheCapacity: Integer);     { 取得所有权 }
@@ -259,6 +270,17 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
+
+    { IDbBulkCopy V4.2: 单事务批量行复制（复用 Exec 批） }
+    procedure BeginCopy(const ATable: string; const AColumns: array of string);
+    procedure WriteRow(const AValues: array of string);
+    procedure EndCopy;
+    procedure AbortCopy;
 
     { ISqliteStmtHome：查询析构的归还通道（实现区接口，单元内可见） }
     procedure ReturnStmt(const ASql: string; AStmt: TSqliteQuery);
@@ -646,6 +668,11 @@ begin
   Exec(ASql);
 end;
 
+procedure TDbSqliteConnection.BulkExec(const ASql: string);
+begin
+  Exec(ASql);
+end;
+
 function TDbSqliteConnection.Query(const ASql: string): IDbQuery;
 var
   Stmt: TSqliteQuery;
@@ -779,16 +806,26 @@ end;
 
 function TDbSqliteConnection.ArmCancel: Boolean;
 begin
+  if FCancelArmed then
+    Exit(True);
+  { 保存既有 handler 状态以便恢复；SQLite 无 getter，首次 Arm 前视为无 handler }
+  FCancelPrevOps := 0;
+  FCancelPrevHandler := nil;
+  FCancelPrevArg := nil;
   FCancelFlag := 0;
   sqlite3_progress_handler(FDb.Handle, 10000,
     @SqliteCancelProbe, @FCancelFlag);
+  FCancelArmed := True;
   Result := True;
 end;
 
 procedure TDbSqliteConnection.DisarmCancel;
 begin
+  if not FCancelArmed then
+    Exit;
   atomic_exchange(FCancelFlag, 0, mo_acq_rel);
-  sqlite3_progress_handler(FDb.Handle, 0, nil, nil);
+  sqlite3_progress_handler(FDb.Handle, FCancelPrevOps, FCancelPrevHandler, FCancelPrevArg);
+  FCancelArmed := False;
 end;
 
 procedure TDbSqliteConnection.RequestCancel;
@@ -824,6 +861,62 @@ begin
   { SQLITE_MAX_VARIABLE_NUMBER 跨版本保守下界：999 自古保证；
     libsqlite3 ≥3.32 实际默认 32766。消费方按 ≤999 编码全后端安全。 }
   Result := 999;
+end;
+
+
+function TDbSqliteConnection.ServerVersion: Integer;
+begin
+  if FServerVersionProbed then Exit(FServerVersion);
+  FServerVersionProbed := True;
+  FServerVersion := ParseServerVersion(sqlite3_libversion());
+  Result := FServerVersion;
+end;
+
+function TDbSqliteConnection.SupportsNativeVector: Boolean;
+begin
+  Result := ProbeNativeVector(ServerVersion, False);
+end;
+
+function TDbSqliteConnection.SupportsJsonPath: Boolean;
+begin
+  Result := ProbeJsonPath(ServerVersion);
+end;
+
+function TDbSqliteConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := ProbeRangeTypes(ServerVersion);
+end;
+
+function TDbSqliteConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := ProbeSupportsBulkCopy(dbkSqlite, ServerVersion);
+end;
+
+procedure TDbSqliteConnection.BeginCopy(const ATable: string; const AColumns: array of string);
+begin
+  FBulk.BeginCopy(dbkSqlite, ATable, AColumns);
+end;
+
+procedure TDbSqliteConnection.WriteRow(const AValues: array of string);
+begin
+  FBulk.WriteRow(dbkSqlite, AValues);
+end;
+
+procedure TDbSqliteConnection.EndCopy;
+begin
+  if not FBulk.IsActive then Exit;
+  try
+    if FBulk.RowCount = 0 then Exit;
+    DbBulkFlushBuffer(FBulk, MaxPlaceholders, InTransaction,
+      @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
+  finally
+    AbortCopy;
+  end;
+end;
+
+procedure TDbSqliteConnection.AbortCopy;
+begin
+  FBulk.Clear;
 end;
 
 { ---- IDbRowBlobControl ---- }
@@ -991,18 +1084,24 @@ function InternalConnectSqlite(const APath: string;
   const AOptions: TDbConnectOptions; const APragmas: TDbSqlitePragmas;
   const AStmtCacheCapacity: Integer): IDbConnection;
 var
-  Db: TSqliteDb;
+  LConn: TSqliteDb;
 begin
+  LConn := nil;
   try
-    Db := TSqliteDb.Create(APath);
-    { 锁等待上限（INC-7）：非语句执行超时，语义见 db.base 注释 }
-    if AOptions.BusyTimeoutMs > 0 then
-      Db.Exec('PRAGMA busy_timeout = ' + IntToStr(AOptions.BusyTimeoutMs));
-    ApplySqlitePragmas(Db, APath, APragmas);
-  except
-    on E: ESqliteError do RaiseSqliteAsDb(E);
+    try
+      LConn := TSqliteDb.Create(APath);
+      { 锁等待上限（INC-7）：非语句执行超时，语义见 db.base 注释 }
+      if AOptions.BusyTimeoutMs > 0 then
+        LConn.Exec('PRAGMA busy_timeout = ' + IntToStr(AOptions.BusyTimeoutMs));
+      ApplySqlitePragmas(LConn, APath, APragmas);
+      Result := TDbSqliteConnection.Create(LConn, AStmtCacheCapacity);
+      LConn := nil;
+    except
+      on E: ESqliteError do RaiseSqliteAsDb(E);
+    end;
+  finally
+    LConn.Free;
   end;
-  Result := TDbSqliteConnection.Create(Db, AStmtCacheCapacity);
 end;
 
 function ConnectSqlite(const APath: string;

@@ -128,34 +128,30 @@ end;
 constructor TSqliteDb.Create(const APath: string; const AFlags: Integer);
 var
   LRC: Integer;
+  LErr: string;
+  LExt: Integer;
 begin
   inherited Create;
   FPath := APath;
+  FDb := nil;
   LRC := sqlite3_open_v2(PAnsiChar(AnsiString(APath)), FDb, AFlags, nil);
   if LRC <> SQLITE_OK then
-    raise ESqliteError.Create(LRC, sqlite3_extended_errcode(FDb),
-      AnsiPtrToStr(sqlite3_errmsg(FDb)));
+  begin
+    LErr := AnsiPtrToStr(sqlite3_errmsg(FDb));
+    LExt := sqlite3_extended_errcode(FDb);
+    if FDb <> nil then
+    begin
+      sqlite3_close_v2(FDb);
+      FDb := nil;
+    end;
+    raise ESqliteError.Create(LRC, LExt, LErr);
+  end;
 end;
 
 destructor TSqliteDb.Destroy;
-var
-  LRC: Integer;
-  LStmt: TSqliteStmt;
 begin
   if FDb <> nil then
-  begin
-    LRC := sqlite3_close_v2(FDb);
-    if LRC = SQLITE_BUSY then
-    begin
-      LStmt := sqlite3_next_stmt(FDb, nil);
-      while LStmt <> nil do
-      begin
-        sqlite3_finalize(LStmt);
-        LStmt := sqlite3_next_stmt(FDb, nil);
-      end;
-      sqlite3_close_v2(FDb);
-    end;
-  end;
+    sqlite3_close_v2(FDb);
   inherited;
 end;
 

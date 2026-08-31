@@ -174,8 +174,11 @@ begin
     Q := AConn.Query('SELECT version, checksum FROM ' + DB_MIGRATIONS_TABLE +
       ' ORDER BY version ASC');
   except
-    on EDbError do
-      Exit(nil);                         { 表缺失：视为空库 }
+    on E: EDbError do
+      if Pos('no such table', LowerCase(E.Message)) > 0 then
+        Exit(nil)                        { 表缺失：视为空库（仅此一种静默） }
+      else
+        raise;
   end;
   try
     LCount := 0;
