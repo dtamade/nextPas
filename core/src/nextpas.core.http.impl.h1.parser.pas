@@ -55,12 +55,6 @@ type
        body chunk). Passing nil clears it. }
     procedure SetOnBodyChunk(
       const AChunkProc: THttpResponseBodyChunkProc);
-    { Split response status from body dispatch: when enabled, the parse pauses
-       right after the final response's headers so the transport can notify the
-       status (Pascal context) before any body chunk callback fires. The pause
-       is auto-resumed on the next Execute call. Informational (1xx except 101)
-       responses never pause: they carry no body and are not the final status. }
-    procedure SetPauseAtHeaders(const AValue: Boolean);
   end;
 
 function NewH1RequestParser: IH1Parser;
@@ -71,16 +65,10 @@ function NewH1ResponseParser(const ASkipBody: Boolean): IH1Parser; overload;
    nil and PARSER_BODY_MAX_CAPACITY does not apply. }
 function NewH1ResponseParser(const ASkipBody, ASkipBodyBuffer: Boolean): IH1Parser; overload;
 
-{ 空请求元数据：nil 解析器回退值。托管记录的 Default 零值必须在属主
-  单元内构造——消费方单元生成跨单元归属的 $_zero_ 初始化数据会触发
-  FPC ppu 符号归属冲突（app 消费图下必现，core 内部图侥幸不触发） }
-function EmptyH1RequestMetadata: TH1RequestMetadata;
-
 implementation
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.http.impl.h1.llhttp,
   nextpas.core.http.headers,
@@ -113,8 +101,6 @@ type
     FBody: TBytes;
     FBodySize: SizeUInt;
     FOnBodyChunk: THttpResponseBodyChunkProc;
-    FStatusSplit: Boolean;
-    FPausedAtHeaders: Boolean;
     FHeadersComplete: Boolean;
     FComplete: Boolean;
     FError: Boolean;
@@ -178,7 +164,6 @@ type
     procedure Reset;
     procedure SetOnBodyChunk(
       const AChunkProc: THttpResponseBodyChunkProc);
-    procedure SetPauseAtHeaders(const AValue: Boolean);
   end;
 
 { Callback helpers }
@@ -193,11 +178,6 @@ const
     The BodyLimit middleware is the primary size control; this prevents
     unbounded allocation if the middleware is not configured. }
   PARSER_BODY_MAX_CAPACITY: SizeUInt = 32 * 1024 * 1024;
-
-function EmptyH1RequestMetadata: TH1RequestMetadata;
-begin
-  Result := Default(TH1RequestMetadata);
-end;
 
 function LowerTrim(const AValue: string): string; inline;
 begin
@@ -273,15 +253,6 @@ begin
   Result := True;
 end;
 
-procedure UpdateConnectionMetadataFromCapturedValue(var AMetadata: TH1RequestMetadata;
-  const AValue: string; const AValuePtr: PAnsiChar; const AValueLen: SizeUInt); inline;
-begin
-  AMetadata.ConnectionClose := CapturedHeaderValueEquals(AValue,
-    AValuePtr, AValueLen, 'close');
-  AMetadata.ConnectionKeepAlive := CapturedHeaderValueEquals(AValue,
-    AValuePtr, AValueLen, 'keep-alive');
-end;
-
 function SpanTrimBounds(const AValuePtr: PAnsiChar; const AValueLen: SizeUInt;
   out AStart, AStop: SizeUInt): Boolean; inline;
 begin
@@ -306,8 +277,6 @@ var
   LNegative: Boolean;
   LCh: AnsiChar;
 begin
-  LStart := 0;
-  LStop := 0;
   AResult := 0;
   if (AValuePtr = nil) or
      (not SpanTrimBounds(AValuePtr, AValueLen, LStart, LStop)) then
@@ -459,6 +428,13 @@ begin
     end;
     LStart := LPos + 1;
   end;
+end;
+
+function BytesToString(const AData: TBytes; const ASize: SizeUInt): string;
+begin
+  SetLength(Result, SizeInt(ASize));
+  if ASize > 0 then
+    Move(AData[0], Result[1], ASize);
 end;
 
 { TSharedBytesReader }
@@ -644,28 +620,7 @@ begin
       Exit;
   end
   else
-  begin
     LSelf.FStatusCode := p0^.status_code;
-    { Status-split mode: pause right after the final response's headers so the
-       transport can signal the status (Pascal context) before any body chunk
-       is dispatched. Regular informational (1xx, except 101) responses carry
-       no body and are not the final status, so they must NOT pause — llhttp
-       flows straight on to the next message within the same Execute.
-       Zero-body final responses (HEAD skip, 204/304, explicit
-       Content-Length: 0) also must NOT pause: the message completes at the
-       header block, and pausing would leave the transport read loop waiting
-       for body bytes that can never arrive (observed: hangs until the read
-       deadline, e.g. an SSE upstream answering with an empty body). }
-    if LSelf.FStatusSplit and
-       (not (HttpStatusIsInformational(LSelf.FStatusCode) and
-             (LSelf.FStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS))) and
-       (not (((p0^.flags and F_SKIPBODY) <> 0) or
-             (LSelf.FStatusCode = HTTP_STATUS_NO_CONTENT) or
-             (LSelf.FStatusCode = HTTP_STATUS_NOT_MODIFIED) or
-             (((p0^.flags and F_CONTENT_LENGTH) <> 0) and
-              (p0^.content_length = 0)))) then
-      Exit(HPE_PAUSED);
-  end;
   Result := 0;
 end;
 
@@ -776,26 +731,8 @@ begin
     Exit(0);
   end;
 
-  { Resume a headers-pause from a previous Execute (status-split mode). }
-  if FPausedAtHeaders then
-  begin
-    llhttp_resume(@FParser);
-    FPausedAtHeaders := False;
-  end;
-
   LErrno := llhttp_execute(@FParser, ABuf, ALen);
   MaterializeCurrentHeaderSpans;
-  if (LErrno = HPE_PAUSED) and (not FComplete) then
-  begin
-    { Status-split pause: the final response's headers are complete but the
-       message is not — llhttp parked right after the header block. Not an
-       error; the next Execute resumes it via llhttp_resume. }
-    FError := False;
-    FErrorMsg := '';
-    FPausedAtHeaders := True;
-    Result := ConsumedUntilErrorPosition(ABuf, ALen);
-    Exit;
-  end;
   if (LErrno = HPE_PAUSED) and FComplete then
   begin
     FError := False;
@@ -1000,8 +937,7 @@ begin
     Exit('');
   if FSkipBodyBuffer then
     Exit('');
-  // single-source zero-copy: bytes.ops.BytesToString(slice) = one SetLength + one Move, inline, no temp TBytes copy
-  Result := nextpas.core.bytes.ops.BytesToString(FBody, 0, FBodySize);
+  Result := BytesToString(FBody, FBodySize);
 end;
 
 function TH1Parser.GetBodySize: Int64;
@@ -1157,8 +1093,10 @@ begin
     if FRequestMetadataSawConnection then
       Exit;
     FRequestMetadataSawConnection := True;
-    UpdateConnectionMetadataFromCapturedValue(FPendingRequestMetadata,
-      AValue, AValuePtr, AValueLen);
+    FPendingRequestMetadata.ConnectionClose := CapturedHeaderValueEquals(AValue,
+      AValuePtr, AValueLen, 'close');
+    FPendingRequestMetadata.ConnectionKeepAlive :=
+      CapturedHeaderValueEquals(AValue, AValuePtr, AValueLen, 'keep-alive');
     Exit;
   end;
 
@@ -1278,7 +1216,6 @@ begin
   FErrorKind := pekNone;
   FHeaderCompleteUserError := False;
   FTrailerBytes := 0;
-  FPausedAtHeaders := False;
   ClearRequestMetadataCache;
   ClearCurrentHeaderSpans;
   llhttp_reset(@FParser);
@@ -1290,11 +1227,6 @@ procedure TH1Parser.SetOnBodyChunk(
   const AChunkProc: THttpResponseBodyChunkProc);
 begin
   FOnBodyChunk := AChunkProc;
-end;
-
-procedure TH1Parser.SetPauseAtHeaders(const AValue: Boolean);
-begin
-  FStatusSplit := AValue;
 end;
 
 { Factory functions }

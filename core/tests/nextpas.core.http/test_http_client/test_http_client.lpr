@@ -173,7 +173,6 @@ type
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
-    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
   end;
@@ -469,7 +468,6 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
-    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
@@ -684,88 +682,6 @@ begin
              'Content-Length: 24'#13#10#13#10 +
              '{"error":"rate limited"}';
     LConn.Write(LHead[1], SizeUInt(Length(LHead)));
-  except
-  end;
-  LConn.Close;
-end;
-
-{ Raw listener replying with the FULL response (headers + body) in a single
-  write — mirrors a coalesced read where llhttp sees the final headers and the
-  whole body inside one Execute call. This is the exact shape that used to
-  dispatch body chunks before the ResponseStatus callback. }
-function CoalescedBodyThread(AArg: Pointer): Pointer; cdecl;
-var
-  LConn: ITcpStream;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LAccum: string;
-  LHead: string;
-  LP: SizeInt;
-begin
-  Result := nil;
-  try
-    LConn := GStreamListener.Accept;
-  except
-    Exit;
-  end;
-  if LConn = nil then
-    Exit;
-  try
-    LAccum := '';
-    repeat
-      LN := LConn.Read(LBuf[0], 4096);
-      if LN = 0 then
-        Break;
-      SetLength(LAccum, Length(LAccum) + Int32(LN));
-      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
-      LP := Pos(#13#10#13#10, LAccum);
-    until LP > 0;
-    LHead := 'HTTP/1.1 200 OK'#13#10'Content-Length: 11'#13#10#13#10 +
-             'hello world';
-    LConn.Write(LHead[1], SizeUInt(Length(LHead)));
-  except
-  end;
-  LConn.Close;
-end;
-
-{ Raw listener sending a lone 100 Continue first (so the client consumes it in
-  its own read and resets to a fresh parser for the final response), then the
-  final 200 with headers + body coalesced in one write. Exercises the
-  status-split mount on the informational-reset parser. }
-function InformationalThenCoalescedThread(AArg: Pointer): Pointer; cdecl;
-var
-  LConn: ITcpStream;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LAccum: string;
-  LInform: string;
-  LFinal: string;
-  LP: SizeInt;
-begin
-  Result := nil;
-  try
-    LConn := GStreamListener.Accept;
-  except
-    Exit;
-  end;
-  if LConn = nil then
-    Exit;
-  try
-    LAccum := '';
-    repeat
-      LN := LConn.Read(LBuf[0], 4096);
-      if LN = 0 then
-        Break;
-      SetLength(LAccum, Length(LAccum) + Int32(LN));
-      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
-      LP := Pos(#13#10#13#10, LAccum);
-    until LP > 0;
-    LInform := 'HTTP/1.1 100 Continue'#13#10#13#10;
-    LConn.Write(LInform[1], SizeUInt(Length(LInform)));
-    platform_thread_sleep_ns(200000000);
-    LFinal := 'HTTP/1.1 200 OK'#13#10'Content-Length: 11'#13#10#13#10 +
-              'hello world';
-    LConn.Write(LFinal[1], SizeUInt(Length(LFinal)));
   except
   end;
   LConn.Close;
@@ -1833,11 +1749,6 @@ begin
   Result := 0;
 end;
 
-function TNilHeadersRequest.GetRemoteIp: string;
-begin
-  Result := GetRemoteAddr;
-end;
-
 function TNilHeadersRequest.GetRemoteAddr: string;
 begin
   Result := '';
@@ -2608,11 +2519,6 @@ begin
 end;
 
 function TDownloadClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
-begin
-  Result := Self;
-end;
-
-function TDownloadClient.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
 begin
   Result := Self;
 end;
@@ -4234,96 +4140,6 @@ begin
       'status+chunk sink received full body');
     CheckEqual('hello world', ReadBodyStr(LResp),
       'buffered body intact when status callback is set');
-  finally
-    GStreamListener.Close;
-    platform_thread_join(LHandle, LRet);
-    GStreamListener := nil;
-    LSink.Free;
-  end;
-end;
-
-procedure TestClientResponseStatusPrecedesCoalescedBodyChunk;
-var
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LRet: Pointer;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LResp: IHttpResponse;
-  LSink: TClientStreamSink;
-begin
-  { Headers + body arrive in a single read: llhttp parses the final response
-    headers and the body inside one Execute call. Regression guard — the
-    status callback must still fire before any body chunk (coalesced-read
-    ordering used to be inverted and dropped streamed frames). }
-  GStreamListener := NetTcpListen('127.0.0.1', 0);
-  LPort := GStreamListener.LocalAddr.Port;
-  platform_thread_create(LHandle, @CoalescedBodyThread, nil);
-  LSink := TClientStreamSink.Create;
-  try
-    LClient := NewHttpClient;
-    LReq := THttpRequestBuilder.Create(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/coalesced')
-      .ResponseStatus(@LSink.OnResponseStatus)
-      .ResponseBodyChunk(@LSink.OnBodyChunk).Build;
-    LResp := LClient.Send(LReq);
-    CheckEqual(Int64(200), Int64(LResp.StatusCode),
-      'coalesced response status');
-    CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
-      'status callback fires exactly once on coalesced response');
-    CheckEqual(Int64(200), Int64(LSink.FStatusValue),
-      'status callback reports 200 on coalesced response');
-    Check(LSink.FStatusOrder > 0, 'status callback observed in order trace');
-    Check(LSink.FFirstChunkOrder > LSink.FStatusOrder,
-      'status callback fires before first body chunk on coalesced response');
-    CheckEqual('hello world', LSink.FTotal,
-      'coalesced response body fully streamed to chunk sink');
-    CheckEqual('hello world', ReadBodyStr(LResp),
-      'buffered body intact on coalesced response');
-  finally
-    GStreamListener.Close;
-    platform_thread_join(LHandle, LRet);
-    GStreamListener := nil;
-    LSink.Free;
-  end;
-end;
-
-procedure TestClientResponseStatusPrecedesCoalescedBodyChunkAfterInformational;
-var
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LRet: Pointer;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LResp: IHttpResponse;
-  LSink: TClientStreamSink;
-begin
-  { A lone 1xx forces the transport to reset to a fresh parser for the final
-    response; that parser must also split status from body when the final
-    response's headers + body arrive coalesced. Regression guard for the
-    status-split mount on the informational-reset parser. }
-  GStreamListener := NetTcpListen('127.0.0.1', 0);
-  LPort := GStreamListener.LocalAddr.Port;
-  platform_thread_create(LHandle, @InformationalThenCoalescedThread, nil);
-  LSink := TClientStreamSink.Create;
-  try
-    LClient := NewHttpClient;
-    LReq := THttpRequestBuilder.Create(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/inform-then-coalesced')
-      .ResponseStatus(@LSink.OnResponseStatus)
-      .ResponseBodyChunk(@LSink.OnBodyChunk).Build;
-    LResp := LClient.Send(LReq);
-    CheckEqual(Int64(200), Int64(LResp.StatusCode),
-      'final response status after informational reset');
-    CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
-      'status callback fires exactly once after informational reset');
-    CheckEqual(Int64(200), Int64(LSink.FStatusValue),
-      'status callback reports final 200, not the 100');
-    Check(LSink.FStatusOrder > 0, 'status callback observed in order trace');
-    Check(LSink.FFirstChunkOrder > LSink.FStatusOrder,
-      'status callback fires before first body chunk after informational reset');
-    CheckEqual('hello world', LSink.FTotal,
-      'final body fully streamed after informational reset');
   finally
     GStreamListener.Close;
     platform_thread_join(LHandle, LRet);
@@ -8893,95 +8709,11 @@ end;
 
 { HttpPostString/PutString/PatchString/DeleteString tests }
 
-{ DialFunc 测试全局记录（匿名函数避免闭包捕获，沿用代理测试的全局模式） }
-var
-  GDialFuncCount: Integer = 0;
-  GDialFuncHost: string = '';
-  GDialFuncPort: UInt16 = 0;
-  GDialFuncServerPort: UInt16 = 0;
-
-{ DialFunc 注入：连接经自定义拨号建立（SOCKS5 隧道等语义）；拨号函数收到
-  请求 URL 的目标 host/port；请求/响应经隧道完整往返。 }
-procedure TestClientWithDialFunc;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LBody: string;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/dialed', procedure(const AReq: IHttpRequest;
-    const AW: IHttpResponseWriter)
-  var
-    LB: string;
-  begin
-    LB := 'via-dial';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Length(LB)));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LB[1], Length(LB));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    GDialFuncCount := 0;
-    GDialFuncHost := '';
-    GDialFuncPort := 0;
-    GDialFuncServerPort := LPort;
-    LClient := NewHttpClient.WithDialFunc(
-      function(const AHost: string; const APort: UInt16;
-        const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream
-      begin
-        Inc(GDialFuncCount);
-        GDialFuncHost := AHost;
-        GDialFuncPort := APort;
-        { 隧道语义：拨号函数决定实际连接目标（本例落到进程内服务器） }
-        Result := TcpConnect('127.0.0.1', GDialFuncServerPort);
-      end);
-    LResp := LClient.Get('http://dial-target.test:8080/dialed');
-    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200 via dial func');
-    LBody := ReadBodyStr(LResp);
-    CheckEqual('via-dial', LBody, 'body matches');
-    CheckEqual(1, GDialFuncCount, 'dial func invoked once');
-    CheckEqual('dial-target.test', GDialFuncHost, 'dial receives request host');
-    CheckEqual(Int64(8080), Int64(GDialFuncPort), 'dial receives request port');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-{ DialFunc 失败必须以异常上抛（传输层语义），不得返回 nil 让上层崩溃。 }
-procedure TestClientDialFuncFailureRaises;
-var
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LClient := NewHttpClient.WithDialFunc(
-    function(const AHost: string; const APort: UInt16;
-      const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream
-    begin
-      Result := nil;
-      raise EHttpError.Create(hekConnect, 'dial func: tunnel failed (test)');
-    end);
-  LRaised := False;
-  try
-    LClient.Get('http://127.0.0.1:1/nope');
-  except
-    on E: Exception do
-      LRaised := True;
-  end;
-  Check(LRaised, 'dial func failure propagates as exception');
-end;
-
 { Main }
 
 begin
   T := TTestSuite.Create('nextpas.core.http.client');
   T.Test('Client GET returns 200 + body', @TestClientGet200);
-  T.Test('Client dials through custom DialFunc tunnel', @TestClientWithDialFunc);
-  T.Test('Client DialFunc failure propagates as exception',
-    @TestClientDialFuncFailureRaises);
   T.Test('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
   T.Test('H1 client transport rejects nil request inputs',
     @TestH1ClientTransportRejectsNilRequestInputs);
@@ -9239,10 +8971,6 @@ begin
     @TestClientPutPatchDeleteStringMethods);
   T.Test('Client ResponseStatus fires before body chunks',
     @TestClientResponseStatusFiresBeforeBodyChunks);
-  T.Test('Client ResponseStatus precedes coalesced body chunk',
-    @TestClientResponseStatusPrecedesCoalescedBodyChunk);
-  T.Test('Client ResponseStatus precedes coalesced body chunk after 1xx',
-    @TestClientResponseStatusPrecedesCoalescedBodyChunkAfterInformational);
   T.Test('Client ResponseStatus reports non-2xx error status',
     @TestClientResponseStatusReportsErrorStatus);
   T.Test('Client SkipBodyBuffer streams without retaining body',
