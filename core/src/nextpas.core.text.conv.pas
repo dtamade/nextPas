@@ -19,29 +19,29 @@ function BoolToStr(const AValue: Boolean; const ATrueStr: string;
 function StrToInt(const AStr: string): Int64; inline;
 function StrToIntDef(const AStr: string; const ADefault: Int64): Int64; inline;
 function StrToInt64Def(const AStr: string; const ADefault: Int64): Int64; inline;
-function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
-function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
+function TryStrToInt(const AStr: string; out AValue: Int64): Boolean; inline;
+function TryStrToInt(const AStr: string; out AValue: Integer): Boolean; inline;
 function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean; inline;
 function StrToFloat(const AStr: string): Double; inline;
-function StrToFloatDef(const AStr: string; const ADefault: Double): Double;
-function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
-function TryStrToFloat(const AStr: string; out AValue: Single): Boolean;
+function StrToFloatDef(const AStr: string; const ADefault: Double): Double; inline;
+function TryStrToFloat(const AStr: string; out AValue: Double): Boolean; inline;
+function TryStrToFloat(const AStr: string; out AValue: Single): Boolean; inline;
 
 function Format(const AFmt: string; const AArgs: array of const): string; deprecated 'Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat';
 
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
-function LowerCase(const AStr: string): string;
+function LowerCase(const AStr: string): string; inline;
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
-function UpperCase(const AStr: string): string;
-function Trim(const AStr: string): string;
-function TrimLeft(const AStr: string): string;
-function TrimRight(const AStr: string): string;
-function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean = False): string;
+function UpperCase(const AStr: string): string; inline;
+function Trim(const AStr: string): string; inline;
+function TrimLeft(const AStr: string): string; inline;
+function TrimRight(const AStr: string): string; inline;
+function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean = False): string; inline;
 
 function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
-function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
-function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
-function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string; inline;
+function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean; inline;
+function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean; inline;
 
 {== Encoding — byte<->string conversions ==}
 { single-source via bytes.ops: BytesToString/StringToBytes (SetLength+Move inline zero-copy) }

@@ -15,8 +15,8 @@ unit nextpas.core.db.redis.resp;
 interface
 
 uses
-  nextpas.core.base,
   nextpas.core.text.conv,
+  nextpas.core.base,
   nextpas.core.db.base,
   nextpas.core.db.redis.base;
 

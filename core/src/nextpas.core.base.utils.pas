@@ -7,7 +7,7 @@ interface
 uses nextpas.core.base;
 
 {** 对象生命周期工具 *}
-procedure FreeAndNil(var AObj);
+procedure FreeAndNil(var AObj); inline;
 procedure SafeFree(var AObj); inline;
 
 {** 内存操作（System 内建的包装，确保接口一致） *}
@@ -33,7 +33,7 @@ function NToHs(AValue: Word): Word; overload; inline;
 function NToHs(AValue: LongWord): LongWord; overload; inline;
 
 {** 接口查询 *}
-procedure ClearOutInterface(out AIntf);
+procedure ClearOutInterface(out AIntf); inline;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 

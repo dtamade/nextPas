@@ -24,21 +24,19 @@ unit nextpas.core.db.pool;
     - 预热：MinConnections 在 Create 内建满，失败 fail-fast 抛原建连错。
     - 线程模型：池方法线程安全（互斥锁保护簿记；信号量阻塞不持锁；
       接口引用计数为原子操作）。连接本身仍遵循 CONTRACT §2.1 一连接
-      一逻辑线程。池为单生命周期：Close/Free 后不可复用，需重建。 体积注记：本单元约834行超 800 行软阈值，内聚性强（池单职责），暂不拆分，拆分预留见 roadmap。 *}
+      一逻辑线程。池为单生命周期：Close/Free 后不可复用，需重建。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.sync,
-  nextpas.core.text.conv,
-  nextpas.core.text.format,
   nextpas.core.time,
   nextpas.core.db.base,
-  nextpas.core.db.intf,
-  nextpas.core.db.tx;
+  nextpas.core.db.intf;
 
 type
   { 连接工厂闭包：后端特化唯一入口 }
@@ -110,15 +108,6 @@ type
     { 单写连接：全池仅一条，被占用期间再次 Writer 按 AcquireTimeoutMs
       排队或抛 decCapacity }
     function Writer: IDbConnection;
-
-    { ===== 作用域租约（租约绑定纪律的结构化收口，B13 续）===== }
-    { FPC 接口临时量为例程级生命周期：Acquire/Writer 的函数结果一旦
-      直接内联传参（const 形参绑定）或经全局托管变量中转，池化租约
-      被隐藏引用拖过语句边界、直至所在例程退出（五格矩阵实证）。
-      WithRead/WithWriter 把租约约束在实现内的局部变量上
-      （try..finally 置空归还），消费方从结构上不可能滞留。 }
-    procedure WithRead(const ABody: TDbConnProc);
-    procedure WithWriter(const ABody: TDbConnProc);
     { 关闭并清空空闲连接与写连接，停止出借；已取出的代理归还时直接
       销毁其底层连接（排空语义，不等待）。幂等。 }
     procedure Close;
@@ -392,9 +381,6 @@ end;
 function TDbPoolCore.IdleStale(const AEntry: TIdleEntry;
   const ANow: QWord): Boolean;
 begin
-  // Default 空洞不过期：冷端清扫与惰性复用跳过无持引用条目
-  if AEntry.Conn = nil then
-    Exit(False);
   if Stale(AEntry.CreatedTick, ANow) then
     Exit(True);
   Result := (FPolicy.IdleTimeoutSec > 0) and
@@ -404,12 +390,14 @@ end;
 { 冷端清扫：空闲队列最旧端只会在下次 Acquire 被动清理（惰性契约），
   规避看门狗线程。O(1) 移除 = 与尾端交换后截断（队列顺序无外部观察者） }
 procedure TDbPoolCore.EvictColdStaleLocked(const ANow: QWord);
+var
+  E: TIdleEntry;
 begin
   while (Length(FIdle) > 0) and IdleStale(FIdle[0], ANow) do
   begin
-    // 修正反向交换截断：旧代码 FIdle[0]:=Default;FIdle[High]:=E 产生空洞
-    FIdle[0] := FIdle[High(FIdle)];
-    FIdle[High(FIdle)] := Default(TIdleEntry);
+    E := FIdle[0];
+    FIdle[0] := Default(TIdleEntry);   { 显式清引用再截断 }
+    FIdle[High(FIdle)] := E;
     SetLength(FIdle, Length(FIdle) - 1);
   end;
 end;
@@ -526,7 +514,7 @@ begin
       LRole := 'read';
     N := Length(FPending);
     SetLength(FPending, N + 1);
-    FPending[N] := TextFormat(
+    FPending[N] := Format(
       'pool: lease leak suspected — held %dms (threshold %dms), %s lease',
       [LHeldMs, FPolicy.LeakDetectionThresholdMs, LRole]);
     if FOutstanding[I].FrameCount > 0 then
@@ -596,11 +584,7 @@ begin
   FLock.Acquire;
   try
     UnregisterLeaseLocked(P);            { V3-C3：出账 }
-    if IsWriter then
-    begin
-      // 写租约不入读空闲队列，维持单写隔离（仅释放写信号量）
-    end
-    else if (not FClosed) and (not P.FDiscarded) then
+    if (not FClosed) and (not P.FDiscarded) then
     begin
       E.Conn := P.FInner;
       E.CreatedTick := P.FCreatedTick; { 绝对寿命跨租期累计 }
@@ -647,13 +631,6 @@ begin
     if not FReadSlots.TryAcquire then
       raise EDbError.CreateSimple(dbkUnknown,
         'pool: read connections exhausted');
-  end;
-
-  // 信号量已得后复检关团：Close 可能在等待期间发生
-  if FClosed then
-  begin
-    FReadSlots.Release;
-    raise EDbError.CreateSimple(dbkUnknown, 'pool: closed');
   end;
 
   try
@@ -714,13 +691,6 @@ begin
   begin
     if not FWriterSlot.TryAcquire then
       raise EDbError.CreateSimple(dbkUnknown, 'pool: writer occupied');
-  end;
-
-  // 写槽已得后复检关团：避免 Close 后写连接被继续颁发
-  if FClosed then
-  begin
-    FWriterSlot.Release;
-    raise EDbError.CreateSimple(dbkUnknown, 'pool: closed');
   end;
 
   try
@@ -808,34 +778,6 @@ end;
 function TDbPool.Writer: IDbConnection;
 begin
   Result := FCore.AcquireWriter;
-end;
-
-procedure TDbPool.WithRead(const ABody: TDbConnProc);
-var
-  LConn: IDbConnection;
-begin
-  if ABody = nil then
-    raise EDbError.CreateSimple(dbkUnknown, 'pool: nil scoped-lease callback');
-  LConn := FCore.AcquireRead;
-  try
-    ABody(LConn);
-  finally
-    LConn := nil;                          { 局部变量置空 = 即时归还 }
-  end;
-end;
-
-procedure TDbPool.WithWriter(const ABody: TDbConnProc);
-var
-  LConn: IDbConnection;
-begin
-  if ABody = nil then
-    raise EDbError.CreateSimple(dbkUnknown, 'pool: nil scoped-lease callback');
-  LConn := FCore.AcquireWriter;
-  try
-    ABody(LConn);
-  finally
-    LConn := nil;                          { 局部变量置空 = 即时归还 }
-  end;
 end;
 
 procedure TDbPool.Close;

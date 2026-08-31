@@ -37,7 +37,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `coroutine` | L3 | coroutine scheduler | yes | L0-L2 | focused-runtime |
 | `crypto` | L2 | cryptography | yes | L0-L1 plus backend owners | source-contract + focused-runtime |
 | `csv` | L2 | CSV parser/writer | yes | L0-L1 | focused-runtime |
-| `db` | L3 | unified database access family: IDbConnection/IDbQuery over sqlite/pg/mysql/odbc/redis/dm 6 backends (`nextpas.core.db.*`; `nextpas.core.db.sqlite.*`/`pg.*`/`mysql.*`/`odbc.*`/`redis.*`/`dm.*` are L2 backend implementations; bulk 5× 单源 + Len 零中间串) | yes | L0-L2 (sqlite/pg/mysql/odbc/redis/dm owners are in-family) | focused-runtime |
+| `db` | L3 | unified database access family: IDbConnection/IDbQuery over sqlite+pg backends (`nextpas.core.db.*`; `nextpas.core.db.sqlite.*` and `nextpas.core.db.pg.*` are the L2 backend implementations) | yes | L0-L2 (sqlite/pg owners are in-family) | focused-runtime |
 | `deliverability` | L2 | SPF/DKIM/DMARC email authentication | yes | L0-L1 plus crypto/hash/dns owner | focused-runtime |
 | `dns` | L2 | DNS record codec + UDP resolver | yes | L0-L1 plus net owner | focused-runtime |
 | `encoding` | L1 | codecs | yes | L0 plus bytes/text seam | focused-runtime |
@@ -48,7 +48,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `format` | L2 support | shared format parse limits | no | L0-L1 | focused-runtime |
 | `fs` | L2 | filesystem | yes | L0-L1; platform owns raw OS truth | focused-runtime |
 | `geoip` | L2 | IP→country GeoIP lookup | yes | L0-L2 | focused-runtime |
-| `git` | L2 | git object layer: libgit2 backend plus pure-Pascal native subfamily (`nextpas.core.git.native.*`: loose/pack/refs/objmodel, no external binary); dual-track libgit2 declarations — runtime dlopen track (ffi/binding/backend) plus full auto-generated static unit `nextpas.core.git.libgit2.bindings` (c2pas888, golden-tested vs gcc probe) | yes | L0-L1 plus libgit2 FFI owner, compress/hash/io owners (native) | draft |
+| `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
 | `graph` | L3 | Microsoft Graph REST mail client (`nextpas.core.graph.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |
@@ -59,13 +59,12 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `ini` | L2 | INI format | yes | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller abstractions | yes | L0 plus approved L1 | focused-runtime |
 | `json` | L2 | JSON parser/writer | yes | L0-L1 | focused-runtime |
-| `js` | L2 | JS scripting engine (`nextpas.core.js.*`; QuickJS FFI via `platform.dl` + pure Pascal `js888/v8/chakra` backends, `json` interop) | yes | L0-L1 plus platform.dl/json owners | source-contract + focused-runtime |
 | `jwt` | L2 | JWT RFC 7519 HS256 sign/verify (`nextpas.core.jwt`; `auth` family standalone unit) | yes | L0-L1 plus crypto/json owners | focused-runtime |
 | `lockfree` | L1 | lock-free structures | yes | L0 plus approved L1 | focused-runtime |
 | `log` | L3 | logging runtime | yes | L0-L2; `log.intf` is L0 seam | focused-runtime |
 | `mail` | L3 | mail/SMTP domain | yes | L0-L2 | focused-runtime |
 | `math` | L0 | scalar/math contracts | yes | L0 only | focused-runtime |
-| `mem` | L0 | allocators/pools | yes | L0 only (RTL + base/errors/platform/mem; bytes.ops/crypto single-source via owner, zero-copy/inline) | source-contract |
+| `mem` | L0 with debt | allocators/pools | yes | L0 only; explicit debt allowlist | source-contract |
 | `mime` | L2 | MIME format layer | yes | L0-L1 | focused-runtime |
 | `multipart` | L2 | multipart format | yes | L0-L1 | focused-runtime |
 | `net` | L2 | networking | yes | L0-L1 | focused-runtime |
@@ -73,22 +72,21 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `oauth` | L3 | OAuth2 authorization-code client + PKCE (RFC 6749 §4.1 / RFC 7636; `nextpas.core.oauth.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
-| `pg` | L2 backend of `db` | PostgreSQL database (libpq FFI, dlopen); units live at `nextpas.core.db.pg.*` (legacy `nextpas.core.pg.*` shims deleted in the G2 sweep) | yes | L0-L1; platform.dl | focused-runtime |
+| `pg` | L2 backend of `db` | compat shim re-exporting `nextpas.core.db.pg`（libpq FFI, dlopen；G2 删除后因并行项目依赖于 2026-08-25 恢复） | yes | L0-L1; platform.dl | focused-runtime |
 | `platform` | L0 | host ABI and OS semantics | yes | host owner `platform.*.base/ffi`, L0 only | source-contract + focused-runtime |
 | `process` | L2 | process management | yes | L0-L1 | focused-runtime |
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
-| `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy `nextpas.core.sqlite.*` shims deleted in the G2 sweep) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
+| `sqlite` | L2 backend of `db` | compat shim re-exporting `nextpas.core.db.sqlite`（system libsqlite3 FFI；G2 删除后因并行项目依赖于 2026-08-25 恢复，v1 TSqlitePool/migrate 专用面不回归） | yes | L0-L1 | focused-runtime |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
 | `system` | L0 root facade exception | RTL frontier facade | yes | L0 plus explicit text/io/path/fs debt | source-contract |
 | `template` | L3 | templating | yes | L0-L2 | draft |
 | `test` | L1 | test framework | yes | L0 | focused-runtime |
 | `text` | L1 | text/unicode helpers | yes | L0 plus bytes/encoding seam | focused-runtime |
-| `text.sql` | L1 | SQL quoting (escape/ident/literal/Len/Write single-source, zero SysUtils, bulk 零中间串直写) | yes | L0 (exception) | focused-runtime — `nextpas.core.text.sql`供 db 族与 http/config 复用；Len 直通 bulk 预分配 |
 | `thread` | L1 | threads/tasks/channels | yes | L0 plus approved L1 | focused-runtime |
 | `time` | L1 | date/time APIs | yes | L0 plus approved L1 | focused-runtime |
 | `tls` | L2 | TLS stack/backends | yes | L0-L1 plus explicit backend FFI owners | source-contract + focused-runtime |
@@ -98,13 +96,17 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
+| `zip` | L2 | ZIP archive writer (store entries, Zip32 limits, UTF-8 names, zip-slip rejection) | yes | L0-L1 | focused-runtime |
 
-Database family: `sqlite` and `pg` are L2 backend implementations inside the
-`db` (L3) family; their units physically live under `nextpas.core.db.sqlite.*`
-and `nextpas.core.db.pg.*`. The legacy `nextpas.core.sqlite.*` /
+Database family: backends are L2 implementations inside the `db` family —
+currently `sqlite`, `pg`, `mysql`, `odbc` and `redis`, physically under
+`nextpas.core.db.<backend>.*`. The legacy `nextpas.core.sqlite.*` /
 `nextpas.core.pg.*` unit names were deleted in the G2 consumer sweep
-(2026-08-25); the ffi units never had shims. Design record:
-`core/docs/plans/2026-08-23-db-module-boundary.md`.
+(2026-08-25); the ffi units never had shims. Backend-specific dependency
+facts: `redis` adds same-layer one-way `net`/`time`/`sync`; the FFI loaders
+(`pg`, `mysql`, `odbc`) use `platform.dl`. Design record:
+`core/docs/plans/2026-08-23-db-module-boundary.md`; backend contracts:
+`core/docs/db/CONTRACT.md`.
 
 ## Gate policy
 

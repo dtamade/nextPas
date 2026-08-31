@@ -116,10 +116,10 @@ function HTonN(AValue: LongWord): LongWord; overload; inline;
 function NToHs(AValue: Word): Word; overload; inline;
 function NToHs(AValue: LongWord): LongWord; overload; inline;
 
-function VarType(const V: Variant): TVarType;
-function VarIsNull(const V: Variant): Boolean;
-function VarIsEmpty(const V: Variant): Boolean;
-function VarIsClear(const V: Variant): Boolean;
+function VarType(const V: Variant): TVarType; inline;
+function VarIsNull(const V: Variant): Boolean; inline;
+function VarIsEmpty(const V: Variant): Boolean; inline;
+function VarIsClear(const V: Variant): Boolean; inline;
 
 implementation
 

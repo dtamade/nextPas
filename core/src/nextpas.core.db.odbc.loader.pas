@@ -38,9 +38,8 @@ procedure OdbcRaise(AHandleType: SmallInt; AHandle: Pointer;
 implementation
 
 uses
-  nextpas.core.platform.dl,
-  nextpas.core.text.conv,
   nextpas.core.text.format,
+  nextpas.core.platform.dl,
   nextpas.core.exception,
   nextpas.core.db.odbc.ffi;
 
