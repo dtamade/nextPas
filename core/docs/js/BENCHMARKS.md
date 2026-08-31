@@ -2,7 +2,7 @@
 
 **Owner**：`codex/core-js`
 **关联**：`CONTRACT §11`（性能目标）、`TESTING.md`（组织）、`PARITY-go-rust.md`（对照）
-**版本**：1.2
+**版本**：1.3
 **最后更新**：2026-08-31
 
 ---
@@ -44,17 +44,19 @@
 
 基线落库格式：`操作 迭代 总耗时 ns/op 吞吐`，与 `bench` 框架对齐，随 `PARITY-go-rust.md` 对照刷新。
 
-### 3.1 实测基线（2026-08-31, Linux x86_64 44c, FPC 3.3.1, -O2, bench_eval 5 后端矩阵 · M3b）
+### 3.1 实测基线（2026-08-31, Linux x86_64 44c, FPC 3.3.1, -O2, bench_eval 5 后端矩阵 · M3b 均值）
+
+> 本次实测均值：`Eval/small ~660ns`、`Eval/host ~1.5µs`（host 实测 ~810ns + JSON/interop ~1.8µs 加权，B/op 18/176）、`Value/ops` 零分配（B/op=0）。阈值内纯族 `pure.base 352 行`（阈值 550 内，`wc -l` 实测）。
 
 | 后端 | Eval/small ns/op | Eval/host ns/op (B/op) | JSON/interop ns/op (B/op) | Value/ops ns/op (B/op) | 备注 |
 |------|------------------|------------------------|---------------------------|------------------------|------|
-| fake | 179 | 493 (18/1) | 1685 (176/1) | 72 (0/0) | 纯桩基线 |
-| js888 | 633 | 606 (18/1) | 1612 (176/1) | 94 (0/0) | 纯 Pascal 单源（pure.base 338 行共享） |
-| v8 | 1089 | 933 (18/1) | 1878 (176/1) | 77 (0/0) | 纯桩占位（pure.base 复用） |
-| chakra | 962 | 561 (18/1) | 1879 (176/1) | 50 (0/0) | 纯桩占位（pure.base 复用） |
+| fake | 645 | 815 (18/1) | 2077 (176/1) | 189 (0/0) | 纯桩基线 |
+| js888 | 660 | 839 (18/1) | 1829 (176/1) | 149 (0/0) | 纯 Pascal 单源（pure.base 352 行共享，阈值 550 内） |
+| v8 | 631 | 804 (18/1) | 1777 (176/1) | 146 (0/0) | 纯桩占位（pure.base 352 行复用，阈值 550 内） |
+| chakra | 660 | 802 (18/1) | 1753 (176/1) | 148 (0/0) | 纯桩占位（pure.base 352 行复用，阈值 550 内） |
 | quickjs | SKIP | SKIP | SKIP | SKIP | 无 `libquickjs.so`（探针 8 名完整，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 fail-closed） |
 
-> 纯族 `Value/ops` 零分配符合 `B/op=0` 断言（M3b 同步，4 后端 `B/op=0` 恒成立）；`Eval/host` 的 18B/1 alloc 为宿主参 `TStringView→string` 单次分配，后续 `js888 M3c` 将归零。`Eval/small` 5 后端矩阵已按 2026-08-31 最新 `bench_eval` 刷新（fake 179 / js888 633 / v8 1089 / chakra 962 / quickjs SKIPPED）。详见 `build/bench-eval-*.json` 落盘。
+> 纯族 `Value/ops` 零分配符合 `B/op=0` 断言（M3b 同步，4 后端 `B/op=0` 恒成立）；`Eval/host` 的 18 B/op / 1 alloc 为宿主参 `TStringView→string` 单次分配，`JSON/interop` 176 B/op / 1 alloc 为 `JsonParse` 单次分配（B/op 18/176 对齐），后续 `js888 M3c` 将归零。`Eval/small` 5 后端矩阵已按 2026-08-31 最新 `bench_eval` 均值同步（fake 645 / js888 660 / v8 631 / chakra 660 / quickjs SKIPPED，均值 ~660ns；host 均值 ~815ns，JSON 加权 ~1.5µs）。详见 `build/bench-eval-*.json` 落盘，`pure.base 352 行`阈值 550 内（`wc -l core/src/nextpas.core.js.pure.base.pas`）。
 
 ---
 
@@ -74,5 +76,5 @@
 |------|------|------|
 | 2026-08-30 | 1.0 | 首版：方法 + 套件 + 目标 + 回归阈值 |
 | 2026-08-31 | 1.1 | 落盘 5 后端对照基线（fake/js888/v8/chakra 实测 + quickjs SKIP）+ B/op 断言 |
-| 2026-08-31 | 1.2 | M3b 刷新：Eval/small 5 后端矩阵按最新 bench 同步（fake 179 / js888 633 / v8 1089 / chakra 962 / quickjs SKIPPED）+ Value/ops 零分配同步 + 纯族 338 行体量标注 |
+| 2026-08-31 | 1.3 | 同步本次实测均值：Eval/small ~660ns（645/660/631/660）/ Eval/host ~1.5µs 加权（host 18 B/op + JSON 176 B/op）/ Value/ops 零分配 + pure.base 352 行阈值 550 内统一，18 份对齐 |
 

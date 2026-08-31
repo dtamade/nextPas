@@ -42,6 +42,8 @@ type
     FThreadId: UInt64;
     FContextId: UInt64;
     FHostFuncs: TJsPureHostArray;
+    FHeap: TJsPureHeap;
+    FGlobal: TJsValue;
     function FindHost(const AName: string): Integer; inline;
     function FindHostView(const AName: TStringView): Integer; inline;
     function IsOnCreationThread: Boolean;
@@ -151,6 +153,7 @@ begin
   FClosed := False;
   FThreadId := UInt64(platform_thread_self);
   FContextId := JsContextRegister;
+  FGlobal := Bind(JsPureHeapNewObject(FHeap));
 end;
 
 function TJsFakeContext.FindHost(const AName: string): Integer; inline;
@@ -226,7 +229,7 @@ var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFi
 function TJsFakeContext.Global: TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsObjectValue);
+  Result := FGlobal;
 end;
 
 function TJsFakeContext.NewString(const AStr: string): TJsValue;
@@ -423,7 +426,6 @@ begin
   if FClosed then Exit;
   FClosed := True;
   JsContextClose(FContextId);
-  // 释放宿主闭包引用，heaptrc 零泄漏（幂等）
   for I := 0 to High(FHostFuncs) do
   begin
     FHostFuncs[I].Name := '';
@@ -432,6 +434,8 @@ begin
     FHostFuncs[I].Proc := nil;
   end;
   SetLength(FHostFuncs, 0);
+  JsPureHeapClear(FHeap);
+  FGlobal := JsUndefinedValue;
 end;
 
 function TJsFakeContext.IsClosed: Boolean;

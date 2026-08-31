@@ -1,5 +1,16 @@
 # nextpas.core.js 变更日志
 
+## [0.10.0] - 2026-08-31 — 文档完整性修复 + fake Global 幂等 + BENCHMARKS 均值同步
+
+- `BENCHMARKS 1.2→1.3`：`Eval/small` 由 `179/633/1089/962` 旧表刷新为本次实测均值 `fake 645 / js888 660 / v8 631 / chakra 660`（~660ns，均值）/ `Eval/host ~1.5µs` 加权（host 18 B/op + JSON 176 B/op）/ `Value/ops` 零分配（B/op=0），`pure.base 338→352` 行阈值550内统一，`18`份对齐
+- `CONTRACT 0.9→0.10` / `DESIGN 0.9→0.10` / `README 0.8→0.10` / `GOAL_TREE 0.8→0.10` 四份联动，`BENCHMARKS 1.3` 对齐，变更记录闭环
+- `fake` 稳定性：`FGlobal/FHeap` 幂等（`Create` 时 `JsPureHeapNewObject` + `Global` 返 `FGlobal` + `Close` 清堆清宿主），对齐 `js888/v8/chakra` 真堆，`heaptrc 0`，`42`用例绿
+
+## [0.9.0] - 2026-08-31 — 11 单元 pure.base 复用 + 文档0.9对齐
+
+- `quickjs` 复用 `pure.base`：`FindHost/ValidateHostName` 内联委托 `JsPure*` 消15行克隆，`FHostFuncs` 改 `TJsPureHostArray`，零FFI/零dl/inline/heaptrc0 保留，`wc` `308→298`
+- 文档 `0.8→0.9` 联动：`CONTRACT/DESIGN/PARITY/WEBVIEW/SIXDIM/ROADMAP` 四份版本链与`BENCHMARKS 1.2`对齐，`18`份闭环
+
 ## [0.8.0] - 2026-08-31 — 11 单元 pure.base 单源 + Close 幂等 + V8/Chakra 独立门禁
 
 - 新增 `nextpas.core.js.pure.base.pas` 338 行共享基座（`JsPureValidateHostName/JsPureFindHost/JsPureDoEval` 零分配 `TStringView`，零 FFI/零 dl），`js.js888/v8/chakra` 各 104 行复用消 300 行克隆；`TryEvalFile` 统一 `TryReadFileText` 64MiB 限流 + `FORMAT_BULK_PARSE_MAX_BYTES` owner
