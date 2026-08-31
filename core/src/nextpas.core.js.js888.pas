@@ -15,8 +15,8 @@ type
   TJsJs888Context = class(TInterfacedObject, IJsContext)
   private FRuntime: IJsRuntime; FOptions: TJsRuntimeOptions; FClosed: Boolean; FThreadId: UInt64; FContextId: UInt64;
     FHostFuncs: TJsPureHostArray; FHeap: TJsPureHeap; FGlobal: TJsValue;
-    function FindHost(const AName: string): Integer; inline; function IsOnCreationThread: Boolean;
-    procedure EnsureNotClosed; procedure EnsureThreadAffinity; function ValidateHostName(const AName: string): Boolean; inline;
+    function FindHost(const AName: string): Integer; inline; function IsOnCreationThread: Boolean; inline;
+    procedure EnsureNotClosed; inline; procedure EnsureThreadAffinity; inline; function ValidateHostName(const AName: string): Boolean; inline;
     function DoEval(const ACode: string): TJsValue; procedure DoSetHost(const AName: string);
     function Bind(const V: TJsValue): TJsValue; inline;
   public constructor Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
@@ -98,9 +98,9 @@ begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Ho
 procedure TJsJs888Context.SetHostFunction(const AName: string; AHandler: TJsHostProc);
 begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkJs888); JsPureHostSet(FHostFuncs, AName, AHandler, 2); end;
 procedure TJsJs888Context.RemoveHostFunction(const AName: string);
-begin EnsureNotClosed; JsPureHostRemove(FHostFuncs, AName); end;
-procedure TJsJs888Context.Tick; begin EnsureNotClosed; end;
-procedure TJsJs888Context.CollectGarbage; begin EnsureNotClosed; end;
+begin if FClosed then Exit; EnsureThreadAffinity; JsPureHostRemove(FHostFuncs, AName); end;
+procedure TJsJs888Context.Tick; begin if FClosed then Exit; EnsureThreadAffinity; end;
+procedure TJsJs888Context.CollectGarbage; begin if FClosed then Exit; EnsureThreadAffinity; end;
 procedure TJsJs888Context.Close;
 var I: Integer;
 begin

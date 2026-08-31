@@ -265,6 +265,7 @@ function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextI
 begin
   if AJson.IsStr then Result := JsValueBindContext(JsStringValue(AJson.AsStr.ToString), AContextId)
   else if AJson.IsInt then Result := JsValueBindContext(JsIntValue(AJson.AsInt), AContextId)
+  else if AJson.IsReal then Result := JsValueBindContext(JsDoubleValue(AJson.AsFloat), AContextId)
   else if AJson.IsBool then Result := JsValueBindContext(JsBoolValue(AJson.AsBool), AContextId)
   else if AJson.IsNull then Result := JsValueBindContext(JsNullValue, AContextId)
   else if AJson.IsArray then Result := JsValueBindContext(JsPureHeapNewArray(Heap), AContextId)
@@ -273,10 +274,18 @@ begin
 end;
 
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
+var LDouble: Double;
 begin
   case AValue.Kind of
     jskString: Result := '"' + AValue.AsString + '"';
-    jskNumber: Result := nextpas.core.text.IntToStr(AValue.AsInt);
+    jskNumber:
+      begin
+        LDouble := AValue.AsDouble;
+        if LDouble = Double(AValue.AsInt) then
+          Result := nextpas.core.text.IntToStr(AValue.AsInt)
+        else
+          Result := nextpas.core.text.FloatToStr(LDouble);
+      end;
     jskBoolean: if AValue.AsBool then Result := 'true' else Result := 'false';
     jskNull: Result := 'null';
   else Result := 'null';

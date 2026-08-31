@@ -46,9 +46,9 @@ type
     FGlobal: TJsValue;
     function FindHost(const AName: string): Integer; inline;
     function FindHostView(const AName: TStringView): Integer; inline;
-    function IsOnCreationThread: Boolean;
-    procedure EnsureNotClosed;
-    procedure EnsureThreadAffinity;
+    function IsOnCreationThread: Boolean; inline;
+    procedure EnsureNotClosed; inline;
+    procedure EnsureThreadAffinity; inline;
     function ValidateHostName(const AName: string): Boolean; inline;
     function DoEval(const ACode: string): TJsValue; inline;
     procedure DoSetHost(const AName: string);
@@ -339,18 +339,21 @@ end;
 
 procedure TJsFakeContext.RemoveHostFunction(const AName: string);
 begin
-  EnsureNotClosed;
+  if FClosed then Exit;
+  EnsureThreadAffinity;
   JsPureHostRemove(FHostFuncs, AName);
 end;
 
 procedure TJsFakeContext.Tick;
 begin
-  EnsureNotClosed;
+  if FClosed then Exit;
+  EnsureThreadAffinity;
 end;
 
 procedure TJsFakeContext.CollectGarbage;
 begin
-  EnsureNotClosed;
+  if FClosed then Exit;
+  EnsureThreadAffinity;
 end;
 
 procedure TJsFakeContext.Close;

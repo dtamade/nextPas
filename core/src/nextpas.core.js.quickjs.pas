@@ -40,8 +40,8 @@ type
     FHostFuncs: TJsPureHostArray;
     FDeadlineMs: Int64;
     function FindHost(const AName: string): Integer; inline;
-    function IsOnCreationThread: Boolean;
-    procedure EnsureNotClosed; function Bind(const V: TJsValue): TJsValue; inline; procedure EnsureThreadAffinity;
+    function IsOnCreationThread: Boolean; inline;
+    procedure EnsureNotClosed; inline; function Bind(const V: TJsValue): TJsValue; inline; procedure EnsureThreadAffinity; inline;
     function ValidateHostName(const AName: string): Boolean; inline;
     function QjsToString(const V: TJSQjsValue; Ctx: Pointer): string;
     function QjsIsException(const V: TJSQjsValue): Boolean;
@@ -277,9 +277,9 @@ procedure TJsQuickJsContext.SetHostFunction(const AName: string; AHandler: TJsHo
 begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create('Invalid host function name: '+AName,jecSyntax,'SyntaxError','',jsbkQuickJs); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkQuickJs); JsPureHostSet(FHostFuncs, AName, AHandler, 1); end;
 procedure TJsQuickJsContext.SetHostFunction(const AName: string; AHandler: TJsHostProc);
 begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create('Invalid host function name: '+AName,jecSyntax,'SyntaxError','',jsbkQuickJs); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkQuickJs); JsPureHostSet(FHostFuncs, AName, AHandler, 2); end;
-procedure TJsQuickJsContext.RemoveHostFunction(const AName: string); begin EnsureNotClosed; JsPureHostRemove(FHostFuncs, AName); end;
-procedure TJsQuickJsContext.Tick; begin EnsureNotClosed; end;
-procedure TJsQuickJsContext.CollectGarbage; begin EnsureNotClosed; if Assigned(JS_RunGCPtr) and (FRT<>nil) then JS_RunGCPtr(FRT); end;
+procedure TJsQuickJsContext.RemoveHostFunction(const AName: string); begin if FClosed then Exit; EnsureThreadAffinity; JsPureHostRemove(FHostFuncs, AName); end;
+procedure TJsQuickJsContext.Tick; begin if FClosed then Exit; EnsureThreadAffinity; end;
+procedure TJsQuickJsContext.CollectGarbage; begin if FClosed then Exit; EnsureThreadAffinity; if Assigned(JS_RunGCPtr) and (FRT<>nil) then JS_RunGCPtr(FRT); end;
 procedure TJsQuickJsContext.Close;
 begin
   if FClosed then Exit;
