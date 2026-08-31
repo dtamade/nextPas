@@ -235,25 +235,25 @@ end;
 function TJsFakeContext.NewString(const AStr: string): TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsStringValue(AStr));
+  Result := JsPureNewString(AStr, FContextId);
 end;
 
 function TJsFakeContext.NewInt(AValue: Int64): TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsIntValue(AValue));
+  Result := JsPureNewInt(AValue, FContextId);
 end;
 
 function TJsFakeContext.NewDouble(AValue: Double): TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsDoubleValue(AValue));
+  Result := JsPureNewDouble(AValue, FContextId);
 end;
 
 function TJsFakeContext.NewBool(AValue: Boolean): TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsBoolValue(AValue));
+  Result := JsPureNewBool(AValue, FContextId);
 end;
 
 function TJsFakeContext.NewObject: TJsValue;

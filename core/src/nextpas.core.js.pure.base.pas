@@ -47,6 +47,10 @@ procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
 // Json 工厂克隆收敛：fake/js888/v8/chakra 四 pure 后端同分支，仅纯计算零 FFI/零 dl
+function JsPureNewString(const AStr: string; AContextId: UInt64): TJsValue; inline;
+function JsPureNewInt(AValue: Int64; AContextId: UInt64): TJsValue; inline;
+function JsPureNewDouble(AValue: Double; AContextId: UInt64): TJsValue; inline;
+function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
@@ -55,7 +59,9 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text;
+  nextpas.core.text,
+  nextpas.core.text.builder,
+  nextpas.core.json.writer;
 
 function JsPureValidateHostName(const AName: string): Boolean;
 var I: Integer; C: Char;
@@ -261,6 +267,18 @@ begin
   end;
 end;
 
+function JsPureNewString(const AStr: string; AContextId: UInt64): TJsValue; inline;
+begin Result := JsValueBindContext(JsStringValue(AStr), AContextId); end;
+
+function JsPureNewInt(AValue: Int64; AContextId: UInt64): TJsValue; inline;
+begin Result := JsValueBindContext(JsIntValue(AValue), AContextId); end;
+
+function JsPureNewDouble(AValue: Double; AContextId: UInt64): TJsValue; inline;
+begin Result := JsValueBindContext(JsDoubleValue(AValue), AContextId); end;
+
+function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
+begin Result := JsValueBindContext(JsBoolValue(AValue), AContextId); end;
+
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 begin
   if AJson.IsStr then Result := JsValueBindContext(JsStringValue(AJson.AsStr.ToString), AContextId)
@@ -274,10 +292,18 @@ begin
 end;
 
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
-var LDouble: Double;
+var LDouble: Double; B: TStringBuilder; W: TJsonWriter;
 begin
   case AValue.Kind of
-    jskString: Result := '"' + AValue.AsString + '"';
+    jskString:
+      begin
+        B.Init(32);
+        try
+          W.Init(B);
+          W.Str(AValue.AsString);
+          Result := B.ToString;
+        finally B.Done; end;
+      end;
     jskNumber:
       begin
         LDouble := AValue.AsDouble;

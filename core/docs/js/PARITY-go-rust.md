@@ -2,7 +2,7 @@
 
 **范围**：`nextpas.core.js`（S1 目标：QuickJS FFI + fake）
 **标杆**：Go `dop251/goja` / `rogchap/v8go`；Rust `rquickjs` / `boa_engine`
-**版本**：1.0rc（11 单元 pure.base 单源 352 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0rc/BENCHMARKS 1.3 对齐，18 份对齐）
+**版本**：1.0（11 单元 pure.base 单源 464 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
 
 ---
 
@@ -77,5 +77,5 @@ make -C core/benchmarks/nextpas.core.js/bench_eval run
 | 2026-08-30 | 0.7 | 实测：bench_eval 5 后端（fake 164ns / js888 194ns / v8 170ns / chakra 200ns）全绿，目标 ≤10µs 达成 |
 | 2026-08-31 | 0.8 | 11 单元 pure.base 单源 338 行 + V8/Chakra Close 幂等 + 5 gate 全绿，18 份对齐 |
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（18 份对齐） |
-| 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.3 同步实测均值 ~660ns（645/660/631/660）/ host ~1.5µs 加权 / B/op 18/176 + pure.base 352 行阈值550内统一，18 份对齐 |
-| 2026-08-31 | 1.0rc | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0rc，BENCHMARKS 1.3 保持，其余引用同步 1.0rc，18份对齐 |
+| 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.4 同步实测均值 ~660ns（645/660/631/660）/ host ~1.5µs 加权 / B/op 18/176 + pure.base 464 行阈值550内统一，18 份对齐 |
+| 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.4 保持，其余引用同步 1.0，18份对齐 |

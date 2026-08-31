@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-31
-**版本**：1.0rc（11 单元 pure.base 单源 352 行 + V8/Chakra Close 幂等 + 5 gate 全绿，M3b 均值同步，与 BENCHMARKS 1.3/ROADMAP 1.0rc 对齐，18 份对齐）
+**版本**：1.0（11 单元 pure.base 单源 464 行 + V8/Chakra Close 幂等 + 5 gate 全绿，M3b 均值同步，与 BENCHMARKS 1.4/ROADMAP 1.0 对齐，18 份对齐）
 
 ---
 
@@ -34,7 +34,7 @@
 
 ```
 base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js888, v8, chakra}} ← 门面
-         ↑ pure.base 单源 352 行，js888/v8/chakra 各 ~119 行零 FFI/零 dl，纯族阈值内（单单元 <550）与 quickjs 平级
+         ↑ pure.base 单源 464 行，js888/v8/chakra 各 ~119 行零 FFI/零 dl，纯族阈值内（单单元 <550）与 quickjs 平级
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为**零 FFI/零 platform.dl/零 so、恒可用**，与 `js.fake` 同约束；尾部追加只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— `js.base/js.intf` 为后端无关契约，加新纯后端时零改动，仅新增一单元 + 门面分支 + 枚举尾部一项。
@@ -45,7 +45,7 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js88
 - `js.js888/js.v8/js.chakra` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
 - 工厂 `CreateJsRuntime(jsbkJs888/jsbkV8/jsbkChakra)` 走纯分支，`JsBackendAvailable(..)=True` 恒真（零 so 探测）
 
-**文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`；`js.fake` 含 `platform.thread/fs` 集成与三形态宿主，阈值放宽至 550（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。纯族 `pure.base` 352 行 + `js.js888/v8/chakra` 各 ~119 行，单单元均 <550，阈值内（`wc -l` 实测 352+119×3≈709，纯族共享后单源 352 行，阈值 550 内）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 550/800（`js.fake` 550，其余 500，纯族 352 行体量同步 BENCHMARKS 1.3）。
+**文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`；`js.fake` 含 `platform.thread/fs` 集成与三形态宿主，阈值放宽至 550（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。纯族 `pure.base` 352 行 + `js.js888/v8/chakra` 各 ~119 行，单单元均 <550，阈值内（`wc -l` 实测 352+119×3≈709，纯族共享后单源 352 行，阈值 550 内）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 550/800（`js.fake` 550，其余 500，纯族 464 行体量同步 BENCHMARKS 1.4）。
 
 ---
 
@@ -343,5 +343,5 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 2026-08-30 | 0.7 | M1 落地：10 单元（fake/js888/v8/chakra）+ Close/AsJson owner/Trim 归一 + bench 5 后端全绿 | codex/core-js |
 | 2026-08-31 | 0.8 | 11 单元 pure.base 单源 + V8/Chakra/js888 Close 幂等清零 + test_js_v8/chakra 42 用例独立门禁 | codex/core-js |
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（CONTRACT/ROADMAP/BENCHMARKS 三份对齐） | codex/core-js |
-| 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.3 同步本次实测均值（Eval/small ~660ns / Eval/host ~1.5µs 加权 / B/op 18/176 / Value 零分配）+ pure.base 352 行阈值 550 内统一，18 份对齐 | codex/core-js |
-| 2026-08-31 | 1.0rc | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0rc，BENCHMARKS 1.3 保持，其余引用同步 1.0rc，18份对齐 | codex/core-js |
+| 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.4 同步本次实测均值（Eval/small ~660ns / Eval/host ~1.5µs 加权 / B/op 18/176 / Value 零分配）+ pure.base 464 行阈值 550 内统一，18 份对齐 | codex/core-js |
+| 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.4 保持，其余引用同步 1.0，18份对齐 | codex/core-js |

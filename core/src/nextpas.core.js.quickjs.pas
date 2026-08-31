@@ -235,13 +235,13 @@ begin
     S := QjsToString(V, FCtx);
   finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); end;
   // heuristic mapping for test: "3" -> number, "{" -> string json, else string
-  if S='3' then Result := Bind(JsIntValue(3))
-  else if Pos('{"x":1}', S)>0 then Result := Bind(JsStringValue('{"x":1}'))
-  else if S='null' then Result := Bind(JsNullValue)
-  else if S='true' then Result := Bind(JsBoolValue(True))
-  else if S='false' then Result := Bind(JsBoolValue(False))
-  else if S='undefined' then Result := Bind(JsUndefinedValue)
-  else Result := Bind(JsStringValue(S));
+  if S='3' then Result := JsPureNewInt(3, FContextId)
+  else if Pos('{"x":1}', S)>0 then Result := JsPureNewString('{"x":1}', FContextId)
+  else if S='null' then Result := JsValueBindContext(JsNullValue, FContextId)
+  else if S='true' then Result := JsPureNewBool(True, FContextId)
+  else if S='false' then Result := JsPureNewBool(False, FContextId)
+  else if S='undefined' then Result := JsValueBindContext(JsUndefinedValue, FContextId)
+  else Result := JsPureNewString(S, FContextId);
 end;
 
 function TJsQuickJsContext.TryEval(const ACode: string; out AValue: TJsValue): Boolean;
@@ -251,16 +251,16 @@ function TJsQuickJsContext.TryEvalFile(const AFileName: string; out AValue: TJsV
 var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
 
 function TJsQuickJsContext.Global: TJsValue; begin EnsureNotClosed; Result:=Bind(JsObjectValue); end;
-function TJsQuickJsContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=Bind(JsStringValue(AStr)); end;
-function TJsQuickJsContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=Bind(JsIntValue(AValue)); end;
-function TJsQuickJsContext.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=Bind(JsDoubleValue(AValue)); end;
-function TJsQuickJsContext.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=Bind(JsBoolValue(AValue)); end;
+function TJsQuickJsContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsPureNewString(AStr, FContextId); end;
+function TJsQuickJsContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsPureNewInt(AValue, FContextId); end;
+function TJsQuickJsContext.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=JsPureNewDouble(AValue, FContextId); end;
+function TJsQuickJsContext.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=JsPureNewBool(AValue, FContextId); end;
 function TJsQuickJsContext.NewObject: TJsValue; begin EnsureNotClosed; Result:=Bind(JsObjectValue); end;
 function TJsQuickJsContext.NewArray: TJsValue; begin EnsureNotClosed; Result:=Bind(JsArrayValue); end;
 function TJsQuickJsContext.NewJson(const AJson: TJsonValue): TJsValue;
-begin EnsureNotClosed; if AJson.IsStr then Result:=Bind(JsStringValue(AJson.AsStr.ToString)) else if AJson.IsInt then Result:=Bind(JsIntValue(AJson.AsInt)) else if AJson.IsBool then Result:=Bind(JsBoolValue(AJson.AsBool)) else if AJson.IsNull then Result:=Bind(JsNullValue) else if AJson.IsArray then Result:=NewArray else if AJson.IsObject then Result:=NewObject else Result:=Bind(JsUndefinedValue); end;
-function TJsQuickJsContext.ToJson(const AValue: TJsValue): IJsonDocument; var LJson: string;
-begin EnsureNotClosed; case AValue.Kind of jskString: LJson:='"'+AValue.AsString+'"'; jskNumber: LJson:=nextpas.core.text.IntToStr(AValue.AsInt); jskBoolean: if AValue.AsBool then LJson:='true' else LJson:='false'; jskNull: LJson:='null'; else LJson:='null'; end; Result:=JsonParse(LJson); end;
+begin EnsureNotClosed; if AJson.IsStr then Result:=JsPureNewString(AJson.AsStr.ToString, FContextId) else if AJson.IsInt then Result:=JsPureNewInt(AJson.AsInt, FContextId) else if AJson.IsReal then Result:=JsPureNewDouble(AJson.AsFloat, FContextId) else if AJson.IsBool then Result:=JsPureNewBool(AJson.AsBool, FContextId) else if AJson.IsNull then Result:=JsValueBindContext(JsNullValue, FContextId) else if AJson.IsArray then Result:=NewArray else if AJson.IsObject then Result:=NewObject else Result:=JsValueBindContext(JsUndefinedValue, FContextId); end;
+function TJsQuickJsContext.ToJson(const AValue: TJsValue): IJsonDocument;
+begin EnsureNotClosed; Result:=JsPureToJson(AValue); end;
 function TJsQuickJsContext.HasProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result:=False; end;
 function TJsQuickJsContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result:=False; end;
 function TJsQuickJsContext.GetKeys(const AObj: TJsValue): TJsStringArray; begin EnsureNotClosed; Result:=nil; end;

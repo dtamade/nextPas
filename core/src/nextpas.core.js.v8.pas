@@ -70,10 +70,10 @@ function TJsV8Context.TryEval(const ACode: string; out AValue: TJsValue): Boolea
 function TJsV8Context.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
 var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
 function TJsV8Context.Global: TJsValue; begin EnsureNotClosed; Result:=FGlobal; end;
-function TJsV8Context.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=Bind(JsStringValue(AStr)); end;
-function TJsV8Context.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=Bind(JsIntValue(AValue)); end;
-function TJsV8Context.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=Bind(JsDoubleValue(AValue)); end;
-function TJsV8Context.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=Bind(JsBoolValue(AValue)); end;
+function TJsV8Context.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsPureNewString(AStr, FContextId); end;
+function TJsV8Context.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsPureNewInt(AValue, FContextId); end;
+function TJsV8Context.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=JsPureNewDouble(AValue, FContextId); end;
+function TJsV8Context.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=JsPureNewBool(AValue, FContextId); end;
 function TJsV8Context.NewObject: TJsValue; begin EnsureNotClosed; Result:=Bind(JsPureHeapNewObject(FHeap)); end;
 function TJsV8Context.NewArray: TJsValue; begin EnsureNotClosed; Result:=Bind(JsPureHeapNewArray(FHeap)); end;
 function TJsV8Context.NewJson(const AJson: TJsonValue): TJsValue;

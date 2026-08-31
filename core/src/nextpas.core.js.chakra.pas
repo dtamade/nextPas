@@ -70,10 +70,10 @@ function TJsChakraContext.TryEval(const ACode: string; out AValue: TJsValue): Bo
 function TJsChakraContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
 var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
 function TJsChakraContext.Global: TJsValue; begin EnsureNotClosed; Result:=FGlobal; end;
-function TJsChakraContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=Bind(JsStringValue(AStr)); end;
-function TJsChakraContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=Bind(JsIntValue(AValue)); end;
-function TJsChakraContext.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=Bind(JsDoubleValue(AValue)); end;
-function TJsChakraContext.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=Bind(JsBoolValue(AValue)); end;
+function TJsChakraContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsPureNewString(AStr, FContextId); end;
+function TJsChakraContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsPureNewInt(AValue, FContextId); end;
+function TJsChakraContext.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=JsPureNewDouble(AValue, FContextId); end;
+function TJsChakraContext.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=JsPureNewBool(AValue, FContextId); end;
 function TJsChakraContext.NewObject: TJsValue; begin EnsureNotClosed; Result:=Bind(JsPureHeapNewObject(FHeap)); end;
 function TJsChakraContext.NewArray: TJsValue; begin EnsureNotClosed; Result:=Bind(JsPureHeapNewArray(FHeap)); end;
 function TJsChakraContext.NewJson(const AJson: TJsonValue): TJsValue;
