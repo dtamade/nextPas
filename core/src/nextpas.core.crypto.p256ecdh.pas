@@ -36,21 +36,36 @@ const
     $F3, $B9, $CA, $C2, $FC, $63, $25, $51
   );
 
-function BytesEqual(const A, B: TBytes): Boolean; inline;
+function IsZeroBytes(const A: TBytes): Boolean;
+var
+  I: Integer;
 begin
-  Result := nextpas.core.bytes.ops.BytesEqual(A, B);
+  if Length(A) = 0 then Exit(True);
+  for I := 0 to High(A) do
+    if A[I] <> 0 then Exit(False);
+  Result := True;
 end;
 
-function IsZeroBytes(const A: TBytes): Boolean; inline;
+function CompareBigEndian(const A, B: TBytes): Integer;
+var
+  I: Integer;
+  LA, LB: TBytes;
+  LOffA, LOffB: Integer;
 begin
-  Result := nextpas.core.bytes.ops.IsZeroBytes(A);
-end;
-
-function CompareBigEndian(const A, B: TBytes): Integer; inline;
-begin
-  Result := nextpas.core.bytes.ops.CompareUnsignedSpan(
-    nextpas.core.bytes.ops.StripLeadingZeroView(A),
-    nextpas.core.bytes.ops.StripLeadingZeroView(B));
+  LA := A;
+  LB := B;
+  LOffA := 0;
+  while (LOffA < Length(LA)) and (LA[LOffA] = 0) do Inc(LOffA);
+  LOffB := 0;
+  while (LOffB < Length(LB)) and (LB[LOffB] = 0) do Inc(LOffB);
+  if (Length(LA) - LOffA) < (Length(LB) - LOffB) then Exit(-1);
+  if (Length(LA) - LOffA) > (Length(LB) - LOffB) then Exit(1);
+  for I := 0 to (Length(LA) - LOffA - 1) do
+  begin
+    if LA[LOffA + I] < LB[LOffB + I] then Exit(-1);
+    if LA[LOffA + I] > LB[LOffB + I] then Exit(1);
+  end;
+  Result := 0;
 end;
 
 function IsValidPrivateScalar(const A: TBytes): Boolean;
@@ -151,6 +166,8 @@ var
   LPeerPoint: TECPoint;
   LSharedPoint: TECPoint;
   LSharedX: TBytes;
+  I: Integer;
+  LZero: Boolean;
 begin
   Result := False;
   SetLength(ASharedSecret, 0);
@@ -176,7 +193,14 @@ begin
     Exit;
   end;
   if not TryToFixedLength32(LSharedPoint.X, LSharedX, AError) then Exit;
-  if IsZeroBytes(LSharedX) then
+  LZero := True;
+  for I := 0 to High(LSharedX) do
+    if LSharedX[I] <> 0 then
+    begin
+      LZero := False;
+      Break;
+    end;
+  if LZero then
   begin
     SecureZeroBytes(LSharedX);
     AError := 'P-256 ECDH shared secret is all-zero';

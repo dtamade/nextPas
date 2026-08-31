@@ -1615,22 +1615,6 @@ begin
   Result := True;
 end;
 
-function BytesEqual(const ALeft, ARight: TBytes): Boolean;
-var
-  I: Integer;
-begin
-  if Length(ALeft) <> Length(ARight) then
-    Exit(False);
-
-  for I := 0 to Length(ALeft) - 1 do
-  begin
-    if ALeft[I] <> ARight[I] then
-      Exit(False);
-  end;
-
-  Result := True;
-end;
-
 function RSAKeyOctetLength(const AModulus: TBytes): Integer;
 var
   LBitLength: Integer;
