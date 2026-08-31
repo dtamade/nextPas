@@ -45,7 +45,7 @@ end;
 
 function IsGzipPred(const AData: TBytes): Boolean; inline;
 begin
-  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
+  Result := (Length(AData) >= 2) and (AData[0] = GZIP_MAGIC_1) and (AData[1] = GZIP_MAGIC_2);
 end;
 
 type
@@ -84,7 +84,7 @@ begin
   end;
   try
     LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
-    Result := (LRead >= 2) and (LBuf[0] = $1F) and (LBuf[1] = $8B);
+    Result := (LRead >= 2) and (LBuf[0] = GZIP_MAGIC_1) and (LBuf[1] = GZIP_MAGIC_2);
   finally
     LStream.Close;
   end;

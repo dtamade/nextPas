@@ -106,8 +106,9 @@ begin
   Result := '"fnv-' + IntToHex(UInt64(AHash), 8) + '"';
 end;
 
-{ 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（S1/S2 实测陷阱，
-  见 respack README「实现期发现的 FPC trunk 注意事项」）。 }
+{ 排序实现单源：Hoare+Int64 下标防回绕 + 阈值16插入排序，复用 base.utils.CompareBytesOrdered。
+  刻意置于 base（而非 collections）以保 L0 零依赖，writer/overlay/memtree 均透传此单源；
+  下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（S1/S2 实测陷阱，见 respack README）。 }
 procedure VfsQuickSortEntries(var AItems: array of TEntryInfo;
   ALow, AHigh: Int64);
 var
