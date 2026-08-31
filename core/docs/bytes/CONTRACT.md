@@ -1,10 +1,10 @@
 # nextpas.core.bytes 代码契约
 
 **模块路径**：`core/src/nextpas.core.bytes*.pas`（7 个源文件）
-**层级**：L1（依赖 L0: base）
+**层级**：L1（依赖 L0: base, platform.base）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-08-31
-**版本**：1.2
+**版本**：1.3
 
 ---
 
@@ -14,7 +14,7 @@
 
 | 文件 | 职责 |
 |------|------|
-| bytes.base | TEndianness 枚举 (endLittle/endBig), NATIVE_ENDIAN 常量 |
+| bytes.base | TEndianness/TEndian/TByteOrder 别名自 platform.base, NATIVE_ENDIAN 委托 platform.base.CURRENT_ENDIAN (target-aware via NEXTPAS_BIG_ENDIAN) |
 | bytes.ops | TByteSpan 操作 (Equal/Compare/IndexOf/Fill/Reverse/Concat) |
 | bytes.binary | 字节序转换 (Swap16/Swap32/Swap64, HostToLE/LEToHost 等) |
 | bytes.builder | IBytesBuilder 可变字节缓冲区 |
@@ -75,7 +75,7 @@ end;
 
 - **[INV-1]** Span 操作中 nil + 非零长度触发 EArgumentNil
 - **[INV-2]** IBytesBuilder 内部 buffer 按需增长（capacity ≥ length）
-- **[INV-3]** NATIVE_ENDIAN 在编译时确定
+- **[INV-3]** NATIVE_ENDIAN 委托 platform.base.CURRENT_ENDIAN (target-aware via NEXTPAS_BIG_ENDIAN, 不再直连 FPC_BIG_ENDIAN); 编译时确定且与目标一致, bytes.binary ToEndian* inline 比较零拷贝
 
 ---
 
@@ -120,3 +120,4 @@ end;
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |
 | 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
+| 2026-08-31 | 1.3 | 匠心修复：bytes.base NATIVE_ENDIAN 委托 platform.base.CURRENT_ENDIAN, 新增 NEXTPAS_BIG_ENDIAN target-aware | fix |
