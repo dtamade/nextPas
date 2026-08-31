@@ -12,6 +12,9 @@ unit nextpas.core.agent.textutil;
 
 interface
 
+uses
+  nextpas.core.text;
+
 function AgentUtf8SafeCutLen(const S: string; AMaxBytes: Integer): Integer; inline;
 function AgentUtf8SafeTruncate(const S: string; AMaxBytes: Integer): string; inline;
 function AgentEstimateTokens(const S: string): Int64; inline;
@@ -63,7 +66,7 @@ begin
     Exit('');
   if LLen = Length(S) then
     Exit(S);
-  Result := System.Copy(S, 1, LLen);
+  Result := nextpas.core.text.TextSlice(S, 0, SizeUInt(LLen));
 end;
 
 function AgentEstimateTokens(const S: string): Int64; inline;

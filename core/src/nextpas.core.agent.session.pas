@@ -13,6 +13,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.text,
   nextpas.core.text.format,
   nextpas.core.fs,
   nextpas.core.json,
@@ -456,10 +457,12 @@ begin
     if LText[LPos] = #10 then
     begin
       Inc(LLineNo);
-      LLine := System.Copy(LText, LSegStart, LPos - LSegStart);
+      LLine := nextpas.core.text.TextSlice(LText,
+        SizeUInt(LSegStart - 1), SizeUInt(LPos - LSegStart));
       LN := Length(LLine);
       if (LN > 0) and (LLine[LN] = #13) then
-        System.Delete(LLine, LN, 1);   { Windows CRLF 兼容；类方法 Delete 遮蔽需限定 }
+        LLine := nextpas.core.text.TextSlice(LLine, 0, SizeUInt(LN - 1));
+      { Windows CRLF 兼容；切片即时拷贝语义与 Copy 等价 }
       if LLine <> '' then
       begin
         LM := TranscriptMessageFromJson(LLine, LLineNo);

@@ -32,6 +32,7 @@ implementation
 uses
   nextpas.core.json,
   nextpas.core.json.builder,
+  nextpas.core.text,
   nextpas.core.text.builder,
   nextpas.core.agent.errors,
   nextpas.core.agent.provider.common;
@@ -49,7 +50,8 @@ begin
   Result := False;
   for I := Low(COPENAI_MAX_COMPLETION_TOKENS_PREFIXES) to
     High(COPENAI_MAX_COMPLETION_TOKENS_PREFIXES) do
-    if System.Pos(COPENAI_MAX_COMPLETION_TOKENS_PREFIXES[I], AModel) = 1 then
+    if nextpas.core.text.TextStartsWith(AModel,
+      COPENAI_MAX_COMPLETION_TOKENS_PREFIXES[I]) then
       Exit(True);
 end;
 
