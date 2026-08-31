@@ -153,7 +153,7 @@ begin
                 begin
                   Inc(ACursor);
                   ElementNode := ParseTypeReference(ALexer, ACursor,
-                    ADiagnostics, ARootFileId);
+                    ADiagnostics, ARootFileId, ATree);
                   if ElementNode <> nil then
                   begin
                     IndexNode.AppendChild(ElementNode);
@@ -374,7 +374,7 @@ begin
               end
               else
                 ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                  ARootFileId);
+                  ARootFileId, ATree);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);
@@ -401,7 +401,7 @@ begin
             begin
               Inc(ACursor);
               ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
+                ARootFileId, ATree);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);
@@ -412,7 +412,7 @@ begin
               begin
                 Inc(ACursor);
                 ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                  ARootFileId);
+                  ARootFileId, ATree);
                 if ElementNode <> nil then
                 begin
                   TypeNode.AppendChild(ElementNode);
@@ -434,7 +434,7 @@ begin
               TypeNode.Text := 'of';
               Inc(ACursor);
               ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
+                ARootFileId, ATree);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);
@@ -731,7 +731,7 @@ begin
                   begin
                     Inc(ACursor);
                     FieldTypeNode := ParseTypeReference(ALexer, ACursor,
-                      ADiagnostics, ARootFileId);
+                      ADiagnostics, ARootFileId, ATree);
                     UsedOriginalTypeNode := False;
                     if FieldTypeNode <> nil then
                       for K := FieldGroupStart to TypeNode.ChildCount - 1 do
@@ -758,7 +758,7 @@ begin
                 begin
                   Inc(ACursor);
                   FieldTypeNode := ParseTypeReference(ALexer, ACursor,
-                    ADiagnostics, ARootFileId);
+                    ADiagnostics, ARootFileId, ATree);
                   if FieldTypeNode <> nil then
                   begin
                     ElementNode.AppendChild(FieldTypeNode);
@@ -808,7 +808,7 @@ begin
             begin
               Inc(ACursor);
               ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
+                ARootFileId, ATree);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);
@@ -996,7 +996,7 @@ begin
           begin
             Inc(ACursor);
             MatchTokenSilent(ALexer, ACursor, tkOfKeyword);
-            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
             if TypeNode <> nil then
             begin
               Decl.AppendChild(TypeNode);
@@ -1009,7 +1009,7 @@ begin
             { Keep '^Pointee' text — same contract as ParseTypeReference.
               Dropping the caret made `PFoo = ^TFoo` look like a value alias of
               TFoo (often a record), so locals/returns became recvar/sret. }
-            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
             if TypeNode <> nil then
             begin
               if (Length(TypeNode.Text) = 0) or (TypeNode.Text[1] <> '^') then
@@ -1045,7 +1045,7 @@ begin
                 ALexer,
                 ACursor,
                 ADiagnostics,
-                ARootFileId
+                ARootFileId, ATree
               );
               { { TypeNode.Free; } // record, no Free needed } // owned by tree FFacades
             end;
@@ -1098,7 +1098,7 @@ begin
               Inc(ACursor);
           end;
       else
-        TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+        TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
         if TypeNode <> nil then
         begin
           Decl.AppendChild(TypeNode);

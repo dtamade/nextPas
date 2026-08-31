@@ -790,12 +790,7 @@ var
               (CurrentToken(ALexer, ACursor).Kind = tkColon) then
             begin
               Inc(ACursor);
-              RHS := ParseTypeReference(
-                ALexer,
-                ACursor,
-                ADiagnostics,
-                ARootFileId
-              );
+              RHS := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
               { RHS.Free; } // record, no Free needed
             end;
             if (ACursor < ALexer.TokenCount) and

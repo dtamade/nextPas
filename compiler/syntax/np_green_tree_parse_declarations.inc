@@ -39,7 +39,7 @@ begin
       Exit(nil);
     end;
 
-    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ActiveExpressionTree);
     if TypeNode <> nil then
     begin
       Node.AppendChild(TypeNode);
@@ -150,7 +150,7 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkColon) then
     begin
       Inc(ACursor);
-      TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+      TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
       if TypeNode <> nil then
       begin
         for I := 0 to List.ChildCount - 1 do
@@ -250,7 +250,7 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkColon) then
     begin
       Inc(ACursor);
-      TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+      TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
       if TypeNode <> nil then
       begin
         for I := 0 to Section.ChildCount - 1 do
@@ -338,7 +338,7 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkColon) then
     begin
       Inc(ACursor);
-      ValueExpr := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+      ValueExpr := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
       if ValueExpr <> nil then
       begin
         Decl.AppendChild(ValueExpr);
