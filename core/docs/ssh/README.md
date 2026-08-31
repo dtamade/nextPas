@@ -75,13 +75,11 @@ nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM�
 nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机（阻塞，薄包装 `transport.core`）
 nextpas.core.ssh.transport.async.pas ← 异步传输层（`TAsyncLoop+IAsyncTcpStream`，版本交换与二进制包事件化，复用 `transport.core`）
 nextpas.core.ssh.kex.pas             ← KEXINIT 协商 + 密钥推导（`SHA256 KDF A-F`）
-nextpas.core.ssh.kex.curve25519.pas  ← curve25519-sha256 客户端交换（X25519，`IsAllZero` 拒绝）
+nextpas.core.ssh.kex.curve25519.pas  ← curve25519-sha256 客户端交换（X25519，`IsZeroBytes` 单源拒绝）
 nextpas.core.ssh.kex.dhgroup14.pas   ← diffie-hellman-group14-sha256 客户端交换（回退，`TryBigIntModExp` 2048-bit MODP）
 nextpas.core.ssh.hostkey.pas         ← 主机密钥解析 / 验签 / 指纹 / known_hosts（ed25519/rsa/ecdsa-p256）
 nextpas.core.ssh.rsa.pas             ← RSA PKCS#1 v1.5 签名/验签核（DigestInfo 单一来源）
-nextpas.core.crypto.blowfish.pas     ← Blowfish 分组密码（bcrypt 底座，OpenBSD 语义）
-nextpas.core.crypto.bcrypt_pbkdf.pas ← bcrypt_pbkdf 密钥派生（OpenSSH 加密私钥 KDF）
-nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析（ed25519 / ssh-rsa，未加密与 aes256-ctr+bcrypt 加密）
+nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析（ed25519 / ssh-rsa，未加密与 aes256-ctr+bcrypt 加密，依赖 crypto.blowfish / bcrypt_pbkdf）
 nextpas.core.ssh.auth.pas            ← userauth 载荷构造/解析（probe `hasSig=false` + `PK_OK` / signed）
 nextpas.core.ssh.compress.pas        ← 压缩：有状态 `zlib`/`zlib@openssh.com`（`ISshCompressor` 双 `z_stream`，`Z_SYNC_FLUSH`，1 MiB 防 bomb，经 `compress.zlib.ffi` 唯一入口）
 nextpas.core.ssh.agent.pas           ← ssh-agent 协议客户端（Unix socket 长度前缀帧，List/Sign，经 `intf+net.ffi` 注入）
@@ -109,10 +107,15 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_keys
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_transport
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_compress
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_session
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_session_async
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp_async
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp_async_via_jump
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_agent
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump_async
 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
+make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_proxyjump
 ```
 
 核心验证手段是 **回环测试**：测试内实现一个最小 SSH 服务端（走同样的底层原语但独立的
