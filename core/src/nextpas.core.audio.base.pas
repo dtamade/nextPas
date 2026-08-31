@@ -109,6 +109,9 @@ function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioCha
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioFormatCreate(ASampleRate, AChannels: Integer;
   ASampleFormat: TAudioSampleFormat): TAudioFormat; inline;
+// single-source geometric growth for all Ensure*Capacity variants
+procedure AudioEnsureCapacity(var ACap: Integer; ANeeded: Integer; AInit: Integer = 4); inline;
+function AudioEnsureBytesCapacity(var ABytes: TBytes; ANeeded: Integer): Integer; inline;
 
 implementation
 
@@ -218,6 +221,24 @@ begin
   { Normalize layout via mask for canonical cases }
   if (AChannels in [1, 2, 4, 6, 8]) then
     Result.ChannelLayout := AudioChannelLayoutForMask(Result.ChannelMask, Result.Channels);
+end;
+
+// single-source geometric growth for all Ensure*Capacity variants
+procedure AudioEnsureCapacity(var ACap: Integer; ANeeded: Integer; AInit: Integer); inline;
+begin
+  if ACap >= ANeeded then Exit;
+  if ACap < AInit then ACap := AInit;
+  while ACap < ANeeded do ACap := ACap * 2;
+end;
+
+function AudioEnsureBytesCapacity(var ABytes: TBytes; ANeeded: Integer): Integer; inline;
+var
+  LCap: Integer;
+begin
+  LCap := Length(ABytes);
+  AudioEnsureCapacity(LCap, ANeeded);
+  if Length(ABytes) < LCap then SetLength(ABytes, LCap);
+  Result := LCap;
 end;
 
 { TAudioFormat }

@@ -44,8 +44,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
-  nextpas.core.compress,
-  nextpas.core.time.date,
+  nextpas.core.compress.deflate,
   nextpas.core.zip.aes;
 
 function LE16At(const AData: TBytes; AOff: SizeUInt): Word;
@@ -72,39 +71,18 @@ begin
 end;
 
 procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
-var
-  LMinSec, LMaxSec, LRem: Int64;
-  LD: TDate;
 begin
-  LMinSec := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
-  LMaxSec := Int64(TDate.Create(C_DOS_MAX_YEAR, 12, 31).ToUnixDays) * 86400 + 86399;
-  if AUnixSec < LMinSec then AUnixSec := LMinSec
-  else if AUnixSec > LMaxSec then AUnixSec := LMaxSec;
-  LD := TDate.FromUnixDays(Integer(AUnixSec div 86400));
-  LRem := AUnixSec mod 86400;
-  ADosDate := Word(((LD.GetYear - C_DOS_MIN_YEAR) shl 9) or (LD.GetMonth shl 5) or LD.GetDay);
-  ADosTime := Word(((LRem div 3600) shl 11) or (((LRem mod 3600) div 60) shl 5) or ((LRem mod 60) div 2));
+  nextpas.core.zip.base.DosDateTimeFromUnix(AUnixSec, ADosDate, ADosTime);
 end;
 
 function DosMinUnixSec: Int64;
 begin
-  Result := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
+  Result := nextpas.core.zip.base.DosMinUnixSec;
 end;
 
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
-var
-  LYear, LMonth, LDay, LHour, LMin, LSec: Integer;
-  LD: TDate;
 begin
-  LYear := C_DOS_MIN_YEAR + Integer(ADosDate shr 9);
-  LMonth := Integer((ADosDate shr 5) and $0F);
-  LDay := Integer(ADosDate and $1F);
-  LHour := Integer(ADosTime shr 11);
-  LMin := Integer((ADosTime shr 5) and $3F);
-  LSec := Integer((ADosTime and $1F) shl 1);
-  if not TDate.TryCreate(LYear, LMonth, LDay, LD) then
-    LD := TDate.Create(C_DOS_MIN_YEAR, 1, 1);
-  Result := Int64(LD.ToUnixDays) * 86400 + LHour * 3600 + LMin * 60 + LSec;
+  Result := nextpas.core.zip.base.UnixFromDosDateTime(ADosDate, ADosTime);
 end;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
@@ -127,9 +105,9 @@ begin
   for LI := 0 to High(AEntries) do
   begin
     if AEntries[LI].UncompressedSize > AMaxTotal then
-      raise EIOError.Create('zip: total uncompressed size exceeds limit');
+      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
     if LCum > AMaxTotal - AEntries[LI].UncompressedSize then
-      raise EIOError.Create('zip: total uncompressed size exceeds limit');
+      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
     Inc(LCum, AEntries[LI].UncompressedSize);
   end;
 end;
@@ -157,7 +135,7 @@ begin
   else if AE.MethodCode = C_ZIP_METHOD_STORE then
   begin
     if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
-      raise EIOError.Create('zip: decompressed size exceeds limit for ' +
+      raise EZipLimitError.Create('zip: decompressed size exceeds limit for ' +
         AE.Name);
     Result := LCompressed;
   end
@@ -204,13 +182,13 @@ begin
     if ADstLen < AE.UncompressedSize then
       raise EIOError.Create('zip: dest buffer too small for ' + AE.Name);
     if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
-      raise EIOError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
+      raise EZipLimitError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
     LOutLen := RawDeflateDecompressToBuffer(LCompressed, ADst, ADstLen, AMaxOutput);
   end
   else if AE.MethodCode = C_ZIP_METHOD_STORE then
   begin
     if (AMaxOutput > 0) and (AE.UncompressedSize > UInt64(AMaxOutput)) then
-      raise EIOError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
+      raise EZipLimitError.Create('zip: decompressed size exceeds limit for ' + AE.Name);
     if ADstLen < AE.UncompressedSize then
       raise EIOError.Create('zip: dest buffer too small for ' + AE.Name);
     if UInt64(Length(LCompressed)) <> AE.UncompressedSize then

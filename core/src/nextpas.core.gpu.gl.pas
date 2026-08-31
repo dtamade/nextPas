@@ -4,26 +4,24 @@ unit nextpas.core.gpu.gl;
 
 // OpenGL 3.3 Core runtime loader.
 //
-// Resolves all GL function pointers via glXGetProcAddress from libGL.so.1.
-// Requires glx_load (nextpas.core.platform.x11) to have succeeded first
-// so that glXGetProcAddress is available.
-//
-// glXGetProcAddress is the correct way to resolve GL extension functions;
-// dlsym cannot resolve them on GLVND systems. This is the loader pattern
-// recommended by Khronos and all major GPU vendors.
+// Resolves all GL function pointers via platform.dl abstraction.
+// Opens libGL.so.1 (Linux) / opengl32.dll (Windows) with
+// platform_dl_open and resolves glXGetProcAddress/wglGetProcAddress
+// via platform_dl_sym. GL symbols are then resolved through that
+// proc-address helper with dlsym fallback for core exports.
+// No direct dependency on nextpas.core.platform.x11.
 
 interface
 
 uses
-  nextpas.core.platform.x11.ffi,
+  nextpas.core.platform.dl,
   nextpas.core.gpu.gl.ffi;
 
 const
   GL_ERR_NOT_LOADED  = -20;
   GL_ERR_LOAD_FAILED = -21;
 
-{ Load all GL function pointers via glXGetProcAddress. Returns 0 on success.
-  Requires glx_is_loaded = True. }
+{ Load all GL function pointers via platform.dl. Returns 0 on success. }
 function gl_load: Int32;
 procedure gl_unload;
 function gl_is_loaded: Boolean;
@@ -31,155 +29,213 @@ function gl_is_loaded: Boolean;
 implementation
 
 var
+  GLib: TPlatformLibrary;
   GLoaded: Boolean = False;
   GRefCount: Int32 = 0;
+  GGetProc: Pointer = nil;
 
-{ Helper: resolve a single GL function via glXGetProcAddress.
-  Returns True on success, False if the symbol is not found. }
+type
+  TGLGetProcAddress = function(AProcName: PAnsiChar): Pointer; cdecl;
+
+{ Helper: resolve a single GL function via proc-address helper. }
 function ResolveGL(var APtr: Pointer; AName: PAnsiChar): Boolean;
+var
+  F: TGLGetProcAddress;
+  Tmp: Pointer;
 begin
-  APtr := glXGetProcAddress(AName);
+  APtr := nil;
+  if GGetProc <> nil then
+  begin
+    F := TGLGetProcAddress(GGetProc);
+    APtr := F(AName);
+  end;
+  if APtr = nil then
+  begin
+    if platform_dl_sym(GLib, AName, Tmp) = 0 then
+      APtr := Tmp;
+  end;
   Result := APtr <> nil;
 end;
 
+function TryOpenGLLib: Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  if platform_dl_open('opengl32.dll', PLATFORM_DL_NOW, GLib) = 0 then
+    Exit(True);
+  Result := False;
+{$ELSE}
+  if platform_dl_open('libGL.so.1', PLATFORM_DL_NOW, GLib) = 0 then
+    Exit(True);
+  if platform_dl_open('libGL.so', PLATFORM_DL_NOW, GLib) = 0 then
+    Exit(True);
+  Result := False;
+{$ENDIF}
+end;
+
 function gl_load: Int32;
+var
+  LAddr: Pointer;
+  procedure FailClose;
+  begin
+    GGetProc := nil;
+    platform_dl_close(GLib);
+  end;
 begin
   if GLoaded then
   begin
     Inc(GRefCount);
-    Exit(X11_SUCCESS);
+    Exit(0);
   end;
 
-  if @glXGetProcAddress = nil then
+  if not TryOpenGLLib then
     Exit(GL_ERR_NOT_LOADED);
+
+{$IFDEF NEXTPAS_WINDOWS}
+  if platform_dl_sym(GLib, 'wglGetProcAddress', LAddr) = 0 then
+    GGetProc := LAddr
+  else
+    GGetProc := nil;
+{$ELSE}
+  if platform_dl_sym(GLib, 'glXGetProcAddress', LAddr) = 0 then
+    GGetProc := LAddr
+  else
+    GGetProc := nil;
+  if (GGetProc = nil) and (platform_dl_sym(GLib, 'glXGetProcAddressARB', LAddr) = 0) then
+    GGetProc := LAddr;
+  if GGetProc = nil then
+  begin
+    platform_dl_close(GLib);
+    Exit(GL_ERR_NOT_LOADED);
+  end;
+{$ENDIF}
 
   { State management }
   if not ResolveGL(Pointer(glEnable), 'glEnable') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glDisable), 'glDisable') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glBlendFunc), 'glBlendFunc') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glViewport), 'glViewport') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glScissor), 'glScissor') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glClear), 'glClear') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glClearColor), 'glClearColor') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { Textures }
   if not ResolveGL(Pointer(glActiveTexture), 'glActiveTexture') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glGenTextures), 'glGenTextures') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glDeleteTextures), 'glDeleteTextures') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glBindTexture), 'glBindTexture') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glTexImage2D), 'glTexImage2D') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glTexSubImage2D), 'glTexSubImage2D') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glTexParameteri), 'glTexParameteri') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glPixelStorei), 'glPixelStorei') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glGenerateMipmap), 'glGenerateMipmap') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { Buffers }
   if not ResolveGL(Pointer(glGenBuffers), 'glGenBuffers') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glDeleteBuffers), 'glDeleteBuffers') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glBindBuffer), 'glBindBuffer') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glBufferData), 'glBufferData') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glBufferSubData), 'glBufferSubData') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glMapBuffer), 'glMapBuffer') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glUnmapBuffer), 'glUnmapBuffer') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { VAO }
   if not ResolveGL(Pointer(glGenVertexArrays), 'glGenVertexArrays') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glDeleteVertexArrays), 'glDeleteVertexArrays') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glBindVertexArray), 'glBindVertexArray') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { Shaders }
   if not ResolveGL(Pointer(glCreateShader), 'glCreateShader') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glDeleteShader), 'glDeleteShader') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glShaderSource), 'glShaderSource') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glCompileShader), 'glCompileShader') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glGetShaderiv), 'glGetShaderiv') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glGetShaderInfoLog), 'glGetShaderInfoLog') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { Programs }
   if not ResolveGL(Pointer(glCreateProgram), 'glCreateProgram') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glDeleteProgram), 'glDeleteProgram') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glAttachShader), 'glAttachShader') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glLinkProgram), 'glLinkProgram') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glGetProgramiv), 'glGetProgramiv') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glGetProgramInfoLog), 'glGetProgramInfoLog') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glUseProgram), 'glUseProgram') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { Vertex attributes }
   if not ResolveGL(Pointer(glVertexAttribPointer), 'glVertexAttribPointer') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glEnableVertexAttribArray), 'glEnableVertexAttribArray') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glDisableVertexAttribArray), 'glDisableVertexAttribArray') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { Uniforms }
   if not ResolveGL(Pointer(glGetUniformLocation), 'glGetUniformLocation') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glUniform1i), 'glUniform1i') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glUniform1f), 'glUniform1f') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glUniform2f), 'glUniform2f') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glUniform3f), 'glUniform3f') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glUniform4f), 'glUniform4f') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glUniformMatrix4fv), 'glUniformMatrix4fv') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { Draw }
   if not ResolveGL(Pointer(glDrawArrays), 'glDrawArrays') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   { Get string / errors }
   if not ResolveGL(Pointer(glGetString), 'glGetString') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
   if not ResolveGL(Pointer(glGetError), 'glGetError') then
-    Exit(GL_ERR_LOAD_FAILED);
+    begin FailClose; Exit(GL_ERR_LOAD_FAILED); end;
 
   GLoaded := True;
   GRefCount := 1;
-  Result := X11_SUCCESS;
+  Result := 0;
 end;
 
 procedure gl_unload;
@@ -262,6 +318,8 @@ begin
   Pointer(glGetString) := nil;
   Pointer(glGetError) := nil;
 
+  GGetProc := nil;
+  platform_dl_close(GLib);
   GLoaded := False;
 end;
 

@@ -11,6 +11,8 @@ uses
 
 function HexEncode(const AData: TBytes; const ACase: THexCase = hcLower): string;
 function HexDecode(const AHex: string): TBytes;
+function HexVal(C: Char): Integer; inline;
+function UuidHexToBytes(const AUUIDHex: string): TBytes;
 
 implementation
 
@@ -146,6 +148,41 @@ begin
     LD^ := Byte(LHi shl 4) or Byte(LLo); Inc(LD);
     Inc(LI, 2);
   end;
+end;
+
+function HexVal(C: Char): Integer;
+begin
+  case C of
+    '0'..'9': Result := Ord(C) - Ord('0');
+    'a'..'f': Result := Ord(C) - Ord('a') + 10;
+    'A'..'F': Result := Ord(C) - Ord('A') + 10;
+  else
+    Result := -1;
+  end;
+end;
+
+function UuidHexToBytes(const AUUIDHex: string): TBytes;
+var LRaw: array[0..15] of Byte;
+  LP, LI, LNib: Integer;
+begin
+  Result := nil;
+  if Length(AUUIDHex) = 0 then Exit;
+  FillChar(LRaw[0], SizeOf(LRaw), 0);
+  LP := 0;
+  for LI := 1 to Length(AUUIDHex) do
+  begin
+    if AUUIDHex[LI] = '-' then Continue;
+    LNib := HexVal(AUUIDHex[LI]);
+    if LNib < 0 then Exit;
+    if Odd(LP) then
+      LRaw[LP shr 1] := (LRaw[LP shr 1] shl 4) or Byte(LNib)
+    else
+      LRaw[LP shr 1] := Byte(LNib);
+    Inc(LP);
+  end;
+  if LP <> 32 then Exit;
+  SetLength(Result, 16);
+  Move(LRaw[0], Result[0], 16);
 end;
 
 initialization

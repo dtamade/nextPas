@@ -6,7 +6,8 @@ unit nextpas.core.ssh.buffer;
  * TsshReader 做反向解析。所有越界访问抛 ESSHError(sekProtocol)。
  *
  * 约定：string 与 TBytes 之间按原始字节透传（UTF-8 由调用方保证），
- * 不在本单元做字符集转换。 *}
+ * 不在本单元做字符集转换。PutStringText 入口显式校验 UTF-8，
+ * 非法即抛 sekProtocol；STATUS 描述等读侧非法 UTF-8 走替换。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -16,6 +17,8 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.text.strings,
+  nextpas.core.text.utf8,
+  nextpas.core.ssh.base,
   nextpas.core.ssh.errors;
 
 type
@@ -105,12 +108,25 @@ begin
 end;
 
 procedure TsshWriter.Ensure(ACount: SizeUInt);
+var
+  LNeed: SizeUInt;
+  LNewCap: SizeUInt;
 begin
-  if FLen + ACount > SizeUInt(Length(FBuf)) then
+  if FLen > High(SizeUInt) - ACount then
+    raise ESSHError.Create(sekProtocol, 'ssh buffer: writer overflow');
+  LNeed := FLen + ACount;
+  if LNeed > SizeUInt(Length(FBuf)) then
   begin
     if ACount < 256 then
       ACount := 256;
-    SetLength(FBuf, SizeUInt(Length(FBuf)) + ACount + (SizeUInt(Length(FBuf)) shr 1));
+    LNewCap := SizeUInt(Length(FBuf)) + ACount + (SizeUInt(Length(FBuf)) shr 1);
+    if LNewCap > SSH_MAX_RECEIVE_PACKET + 1024 then
+      LNewCap := SSH_MAX_RECEIVE_PACKET + 1024;
+    if LNeed > LNewCap then
+      raise ESSHError.Create(sekProtocol, 'ssh buffer: packet too large');
+    if LNewCap < LNeed then
+      LNewCap := LNeed;
+    SetLength(FBuf, LNewCap);
   end;
 end;
 
@@ -162,6 +178,8 @@ end;
 
 procedure TsshWriter.PutStringText(const AText: string);
 begin
+  if (Length(AText) > 0) and (not UTF8IsValid(PByte(PChar(AText)), SizeUInt(Length(AText)))) then
+    raise ESSHError.Create(sekProtocol, 'ssh buffer: PutStringText requires UTF-8');
   PutUInt32(UInt32(Length(AText)));
   if Length(AText) > 0 then
     PutRaw(PByte(Pointer(AText)), SizeUInt(Length(AText)));
@@ -325,6 +343,8 @@ var
   LO: SizeUInt;
 begin
   LBlob := ReadStringBytes;
+  if (Length(LBlob) > 0) and ((LBlob[0] and $80) <> 0) then
+    raise ESSHError.Create(sekProtocol, 'ssh buffer: mpint negative');
   Result := nil;
   LO := 0;
   while (LO < SizeUInt(Length(LBlob))) and (LBlob[LO] = 0) do

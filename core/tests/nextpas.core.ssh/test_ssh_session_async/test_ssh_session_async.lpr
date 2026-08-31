@@ -327,14 +327,16 @@ begin
         if not WaitForFlag(GAsyncState.ExecDone, GAsyncState.Event, 8000) then begin AErrKind:=sekTimeout; Exit; end;
         if GAsyncState.ExecErr<>nil then begin AErrKind:=GAsyncState.ExecErr.Kind; FreeAndNil(GAsyncState.ExecErr); Exit; end;
         ARes:=GAsyncState.ExecResult; Result:=True;
-        GAsyncState.Session.Close;
-      finally RTLeventDestroy(GAsyncState.Event); GAsyncState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; end;
+        try GAsyncState.Session.Close; except end;
+        Sleep(200);
+      finally RTLeventDestroy(GAsyncState.Event); GAsyncState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; Sleep(50); Finalize(GAsyncState); GAsyncState:=Default(TAsyncTestState); end;
     finally
-      if GAsyncState.Session<>nil then begin GAsyncState.Session.Close; GAsyncState.Session:=nil; end;
+      if GAsyncState.Session<>nil then begin try GAsyncState.Session.Close; except end; GAsyncState.Session:=nil; end;
       if GAsyncState.Err<>nil then FreeAndNil(GAsyncState.Err);
       if GAsyncState.ExecErr<>nil then FreeAndNil(GAsyncState.ExecErr);
       SetLength(GAsyncState.ExecResult.StdOut,0); SetLength(GAsyncState.ExecResult.StdErr,0);
-      if Assigned(LLoop) then LLoop.Free;
+      Finalize(GAsyncState); GAsyncState:=Default(TAsyncTestState);
+      if Assigned(LLoop) then begin try LLoop.Free; except end; end;
     end;
   finally
     if Assigned(LServerThread) then begin LServerThread.WaitFor; LServerThread.Free; end;
@@ -388,14 +390,16 @@ begin
         if not WaitForFlag(GAsyncState.ExecDone, GAsyncState.Event, 8000) then begin AErrKind:=sekTimeout; Exit; end;
         if GAsyncState.ExecErr<>nil then begin AErrKind:=GAsyncState.ExecErr.Kind; FreeAndNil(GAsyncState.ExecErr); Exit; end;
         ARes:=GAsyncState.ExecResult; Result:=True;
-        GAsyncState.Session.Close;
-      finally RTLeventDestroy(GAsyncState.Event); GAsyncState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; end;
+        try GAsyncState.Session.Close; except end;
+        Sleep(200);
+      finally RTLeventDestroy(GAsyncState.Event); GAsyncState.Event:=nil; if Assigned(LLoop) then LLoop.Stop; if Assigned(LLoopThread) then begin LLoopThread.WaitFor; LLoopThread.Free; end; Sleep(50); Finalize(GAsyncState); GAsyncState:=Default(TAsyncTestState); end;
     finally
-      if GAsyncState.Session<>nil then begin GAsyncState.Session.Close; GAsyncState.Session:=nil; end;
+      if GAsyncState.Session<>nil then begin try GAsyncState.Session.Close; except end; GAsyncState.Session:=nil; end;
       if GAsyncState.Err<>nil then FreeAndNil(GAsyncState.Err);
       if GAsyncState.ExecErr<>nil then FreeAndNil(GAsyncState.ExecErr);
       SetLength(GAsyncState.ExecResult.StdOut,0); SetLength(GAsyncState.ExecResult.StdErr,0);
-      if Assigned(LLoop) then LLoop.Free;
+      Finalize(GAsyncState); GAsyncState:=Default(TAsyncTestState);
+      if Assigned(LLoop) then begin try LLoop.Free; except end; end;
     end;
   finally
     if Assigned(LServerThread) then begin LServerThread.WaitFor; LServerThread.Free; end;
@@ -423,8 +427,8 @@ begin
   GRunner.RunAll;
   GRunner.Summary;
   if not GRunner.AllPassed then Halt(1);
-  GAsyncState:=Default(TAsyncTestState);
+  Finalize(GAsyncState); GAsyncState:=Default(TAsyncTestState);
   SetLength(GSeed,0);
-  GSuite:=Default(TTestSuite);
-  GRunner:=Default(TSuiteRunner);
+  Finalize(GSuite); GSuite:=Default(TTestSuite);
+  Finalize(GRunner); GRunner:=Default(TSuiteRunner);
 end.

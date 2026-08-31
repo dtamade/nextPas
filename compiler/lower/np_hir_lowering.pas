@@ -22,13 +22,11 @@ uses
   np_ast_facade,
   np_semantic_model,
   np_sema_builtins,
-  np_sema_type_check,
+  np_sema_overload,
   np_sema_runtime_vars,
   np_hir_model,
   np_source_database,
-  np_diagnostics_sink,
-  np_sema_overload,
-  np_base_types;
+  np_diagnostics_sink;
 
 type
   { 回调函数类型 — 用于桥接尚未提取到独立模块的方法 }
@@ -136,6 +134,10 @@ function HirLowering_IsRuntimeStrVar(const Ctx: TSemaHirLoweringContext;
   const AName: string): Boolean;
 
 implementation
+
+uses
+  np_sema_type_check,
+  np_base_types;
 
 { === 标签发射 === }
 

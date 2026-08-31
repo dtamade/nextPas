@@ -9,11 +9,9 @@ completion claim.
 | Level | Meaning |
 | --- | --- |
 | `source-contract` | Source, docs, owner boundary, unsupported behavior, or public surface is locked by a focused contract. |
-| `forced-compile` | A non-native host/branch compiles, but no runtime behavior is proven. Carrier for platform facades: `test_platform_simulated_host_compile_matrix` (5 legs: darwin/android/freebsd/unix via `-dNEXTPAS_FORCE_HOST_*`, windows via `-Twin64 -Px86_64`; all 29 `platform.*` facades) — compile coherence only. |
-| `focused-runtime` | A focused gate ran behavior on a named host or path. Today most L1/L2/L3 are Linux x86_64 focused-runtime by design. |
-| `ci-runtime-matrix` | Runtime proof is repeated in CI across the named host/arch matrix (durable). Currently **platform-scoped** only: Windows 28-gate `platform-windows-ci-matrix.sh` on `windows-latest` + macOS layer A 10-gate `platform-macos-ci-matrix.sh`. L2/L3 intentionally remain `focused-runtime` (Linux x86_64); host variance is owned by L0 `platform`. |
-
-> **Host matrix separation (design):** `ci-runtime-matrix` (durable CI runtime) and the simulated-host `forced-compile` matrix are intentionally separate. The simulated-host matrix (`core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix`, 5 legs × all 29 `platform.*` facades) proves compile coherence and stays `forced-compile`; it does **not** promote to `ci-runtime-matrix`. The durable `ci-runtime-matrix` is currently **platform-only** (Windows 28 + macOS 10 platform gates, see `core/docs/platform/runtime-truth-matrix.md` and `core/docs/platform/host-capability-matrix.md`). L2/L3 modules (fs, net, http, vfs, crypto, etc.) therefore correctly show `focused-runtime` on Linux x86_64 in the registry — their host variance is delegated to L0 `platform` via layering, not claimed independently. Promoting any L2/L3 to `ci-runtime-matrix` requires explicit consumer + CI ownership and would be recorded here and in `runtime-truth-matrix.md`.
+| `forced-compile` | A non-native host/branch compiles, but no runtime behavior is proven. |
+| `focused-runtime` | A focused gate ran behavior on a named host or path. |
+| `ci-runtime-matrix` | Runtime proof is repeated in CI across the named host/arch matrix. |
 
 ## Registry
 
@@ -40,9 +38,15 @@ completion claim.
 | `exception` | L0 | exception root | `nextpas.core.exception` | RTL only | focused-runtime |
 | `fs` | L2 | filesystem facade | `nextpas.core.fs` | L0-L1, platform/files/path | focused-runtime |
 | `git` | L2 | git/libgit2 | `nextpas.core.git` | L0-L1, libgit2 FFI allowlist | source-contract |
+| `graphics` | L1 | graphics base types (Color/Rect/Mat2D/Path/Gradient, subunits `graphics.base`, `graphics.color`, `graphics.path` via `nextpas.core.graphics.*`) | `nextpas.core.graphics` | L0 only (`base`, `math`, `errors`) | draft |
+| `graphics.effect` | L2 | filter graph (Blur/Shadow/Hue/LUT) + procedural textures (`nextpas.core.graphics.effect.*`) | `nextpas.core.graphics.effect` | L0-L1 plus `image`/`thread` owners | draft |
 | `hash` | L2 | hash/digest | `nextpas.core.hash` | L0-L1 | focused-runtime |
 | `http` | L3 | HTTP framework | `nextpas.core.http` | L0-L2 | focused-runtime partial — static pipeline: conditional 304 (weak ETag), single Range 206/416 + `If-Range` (ETag/date) fallback, `HEAD` header-only without stream open, error paths HEAD-aware; `http.mime` O(1) open-address hash (128 槽, FNV-1a, 1-2 探测) + 零分配切片 (`LookupBySlice` 直哈 `PChar` 段, `HttpMimeFromPath` 去 `Copy`) + L0 `HashFNV1aLower/CompareIgnoreCase` 复用 + `HashMimeNorm` 归一 + `PChar→@S[1]` 显式化 + `HttpMimeFromExt/FromPath` inline，ETag 委托 `vfs.base VfsETagStrong/FNV` 单源（`http` 包装保持 API 兼容，`Cache-Control` 单源 `CACHE_REVALIDATE`，`Content-Disposition` 单遍 `EscapeDispositionFilename`，`ParseRangeHeader BYTES_PREFIX+TryParseSlice` 零分配，`IsSafePath/TryExtractRequestPath/ExtractFileNameInline/HttpMakeStrongETag` inline（含声明侧 inline），`ServeVfs` nil 守卫 + `IsHeadReq` 复用） |
 | `id` | L1 | identifiers | `nextpas.core.id` | L0, platform random | focused-runtime |
+| `image` | L2 | image encoding (subunits `image.base` (`TBitmap` Stride 64B COW, `TImageInfo`), `image.intf`, `image.png/bmp/jpeg/webp` via `nextpas.core.image.*`) | `nextpas.core.image` | L0-L1 (`base`, `errors`, `mem`, `bytes`, `compress`, `checksum`) plus `graphics` L1 owner | draft |
+| `canvas` | L2 | 2D canvas (`ICanvas` + CPU raster `canvas.intf`/`canvas.raster` via `nextpas.core.canvas.*`, tiled 16x16 + `simd.raster`) | `nextpas.core.canvas` | L0-L2 (`graphics` L1 + `image`/`vector` L2, `simd` L0) | draft |
+| `vector` | L2 | vector kernel (Path boolean/Stroke/Dash + tess scanline, subunits `vector.path`/`vector.tess` via `nextpas.core.vector.*`) | `nextpas.core.vector` | L0-L1 (`graphics` owners, `math`) | draft |
+| `gpu.canvas` | L3 | bitmap→Texture/Atlas bridge (`TAtlas`/`TAtlasRegion`/`ScaleFactor` via `nextpas.core.gpu.canvas`) | `nextpas.core.gpu.canvas` | L0-L2 (`graphics` L1) plus `gpu` owner | draft |
 | `ini` | L2 | INI format | `nextpas.core.ini` | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller/completion | `nextpas.core.io` | L0, platform | focused-runtime, forced-compile |
 | `json` | L2 | JSON format | `nextpas.core.json` | L0-L1 | focused-runtime |
@@ -91,7 +95,5 @@ completion claim.
 2. System final facade: TypInfo/SysUtils/Classes decisions tied to real compiler
    and core consumers.
 3. Mem L0 debt zero: remove or re-home the allowlisted L0 dependency debt.
-4. Platform runtime truth matrix: `runtime-truth-matrix.md` is **platform-scoped** by design
-   (20 rows); real host runtime (`ci-runtime-matrix` + `focused-runtime`) stays
-   separate from `source-contract`/`forced-compile` (simulated-host 5-leg matrix).
-   L2/L3 host truth is owned by L0 `platform` until explicit promotion.
+4. Platform runtime truth matrix: real host runtime evidence stays separate from
+   source-contract and forced-compile truth.

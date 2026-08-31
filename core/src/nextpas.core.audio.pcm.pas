@@ -59,6 +59,20 @@ implementation
 {$WARNINGS OFF}
 {$HINTS OFF}
 
+var
+  GPcmScratch: TBytes;
+
+procedure EnsurePcmScratch(ANeeded: Integer); inline;
+var
+  Cap: Integer;
+begin
+  if Length(GPcmScratch) >= ANeeded then Exit;
+  Cap := Length(GPcmScratch);
+  if Cap < 256 then Cap := 256;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(GPcmScratch, Cap);
+end;
+
 function PcmClampF32(AValue: Single): Single;
 begin
   if AValue < -1.0 then Exit(-1.0);
@@ -223,17 +237,19 @@ function PcmConvert(const ASrc: TBytes; ASrcFormat, ADstFormat: TAudioSampleForm
 var
   LSampleCount: Integer;
   LI: Integer;
-  LSrcOffset, LDstOffset: Integer;
   LBytesPerSrc, LBytesPerDst: Integer;
-  LF: Single;
   LDitherState: UInt32;
+  LSrcPtr: PByte;
+  LDstPtr: PByte;
+  LF32: PSingle;
   LU8: Byte;
   LS16: SmallInt;
   LS24: Integer;
   LS32: LongInt;
+  LF: Single;
 begin
   if (AFrames <= 0) or (AChannels <= 0) then
-    raise EInvalidArgument.CreateFmt('PcmConvert: invalid frames %d channels %d', [AFrames, AChannels]);
+  begin SetLength(Result, 0); Exit; end;
   if (Ord(ASrcFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ASrcFormat) > Ord(High(TAudioSampleFormat))) then
     raise EInvalidArgument.Create('PcmConvert: invalid src format');
   if (Ord(ADstFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ADstFormat) > Ord(High(TAudioSampleFormat))) then
@@ -244,78 +260,108 @@ begin
     raise EInvalidArgument.Create('PcmConvert: unsupported src bytes per sample');
   if LBytesPerDst <= 0 then
     raise EInvalidArgument.Create('PcmConvert: unsupported dst bytes per sample');
+  if Int64(AFrames) * Int64(AChannels) > High(Integer) then
+    raise EInvalidArgument.Create('PcmConvert: frames*channels overflow');
   if ASrcFormat = ADstFormat then
   begin
-    if Length(ASrc) < AFrames * AChannels * LBytesPerSrc then
-      raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), AFrames * AChannels * LBytesPerSrc]);
+    if Int64(Length(ASrc)) < Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc) then
+      raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)]);
     Result := Copy(ASrc, 0, Length(ASrc));
     Exit;
   end;
   LSampleCount := AFrames * AChannels;
-  if Length(ASrc) < LSampleCount * LBytesPerSrc then
-    raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), LSampleCount * LBytesPerSrc]);
+  if Int64(Length(ASrc)) < Int64(LSampleCount) * Int64(LBytesPerSrc) then
+    raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(LSampleCount) * Int64(LBytesPerSrc)]);
+  if Int64(LSampleCount) * Int64(LBytesPerDst) > 16*1024*1024 then
+    raise EInvalidArgument.CreateFmt('PcmConvert: dst %d bytes exceeds 16MiB limit', [Int64(LSampleCount) * Int64(LBytesPerDst)]);
+  // EnsureScratch 预分配：复用全局 F32 中间缓冲，稳态零分配
+  EnsurePcmScratch(LSampleCount * SizeOf(Single));
+  LF32 := PSingle(@GPcmScratch[0]);
+  // 批处理分支：按 src 格式分发，外层分支内层紧凑循环，避免逐采样 case
+  case ASrcFormat of
+    sfU8:
+      for LI := 0 to LSampleCount - 1 do
+        LF32[LI] := PcmU8ToF32(ASrc[LI]);
+    sfS16:
+      for LI := 0 to LSampleCount - 1 do
+      begin
+        LS16 := SmallInt(ASrc[LI*2] or (ASrc[LI*2 + 1] shl 8));
+        LF32[LI] := PcmS16ToF32(LS16);
+      end;
+    sfS24:
+      for LI := 0 to LSampleCount - 1 do
+      begin
+        LS24 := PcmReadS24LE(ASrc, LI*3);
+        LF32[LI] := PcmS24ToF32(LS24);
+      end;
+    sfS32:
+      for LI := 0 to LSampleCount - 1 do
+      begin
+        LS32 := LongInt(ASrc[LI*4] or (ASrc[LI*4 + 1] shl 8) or
+          (ASrc[LI*4 + 2] shl 16) or (ASrc[LI*4 + 3] shl 24));
+        LF32[LI] := PcmS32ToF32(LS32);
+      end;
+    sfF32:
+      for LI := 0 to LSampleCount - 1 do
+        Move(ASrc[LI*4], LF32[LI], SizeOf(Single));
+  else
+    for LI := 0 to LSampleCount - 1 do LF32[LI] := 0;
+  end;
   SetLength(Result, LSampleCount * LBytesPerDst);
   LDitherState := 12345;
-  for LI := 0 to LSampleCount - 1 do
-  begin
-    LSrcOffset := LI * LBytesPerSrc;
-    { Src -> F32 }
-    case ASrcFormat of
-      sfU8: LF := PcmU8ToF32(ASrc[LSrcOffset]);
-      sfS16: begin
-        LS16 := SmallInt(ASrc[LSrcOffset] or (ASrc[LSrcOffset + 1] shl 8));
-        LF := PcmS16ToF32(LS16);
+  LDstPtr := PByte(@Result[0]);
+  // 批处理分支：按 dst 格式分发，抖动分支亦外提
+  case ADstFormat of
+    sfU8:
+      if AApplyDither then
+        for LI := 0 to LSampleCount - 1 do
+        begin
+          LU8 := PcmF32ToU8Dithered(LF32[LI], LDitherState);
+          LDstPtr[LI] := LU8;
+        end
+      else
+        for LI := 0 to LSampleCount - 1 do
+          LDstPtr[LI] := PcmF32ToU8(LF32[LI]);
+    sfS16:
+      if AApplyDither then
+        for LI := 0 to LSampleCount - 1 do
+        begin
+          LS16 := PcmF32ToS16Dithered(LF32[LI], LDitherState);
+          LDstPtr[LI*2] := Byte(LS16 and $FF);
+          LDstPtr[LI*2 + 1] := Byte((LS16 shr 8) and $FF);
+        end
+      else
+        for LI := 0 to LSampleCount - 1 do
+        begin
+          LS16 := PcmF32ToS16(LF32[LI]);
+          LDstPtr[LI*2] := Byte(LS16 and $FF);
+          LDstPtr[LI*2 + 1] := Byte((LS16 shr 8) and $FF);
+        end;
+    sfS24:
+      if AApplyDither then
+        for LI := 0 to LSampleCount - 1 do
+        begin
+          LS24 := PcmF32ToS24Dithered(LF32[LI], LDitherState);
+          PcmWriteS24LE(LS24, Result, LI*3);
+        end
+      else
+        for LI := 0 to LSampleCount - 1 do
+        begin
+          LS24 := PcmF32ToS24(LF32[LI]);
+          PcmWriteS24LE(LS24, Result, LI*3);
+        end;
+    sfS32:
+      for LI := 0 to LSampleCount - 1 do
+      begin
+        LS32 := PcmF32ToS32(LF32[LI]);
+        LDstPtr[LI*4] := Byte(LS32 and $FF);
+        LDstPtr[LI*4 + 1] := Byte((LS32 shr 8) and $FF);
+        LDstPtr[LI*4 + 2] := Byte((LS32 shr 16) and $FF);
+        LDstPtr[LI*4 + 3] := Byte((LS32 shr 24) and $FF);
       end;
-      sfS24: begin
-        LS24 := PcmReadS24LE(ASrc, LSrcOffset);
-        LF := PcmS24ToF32(LS24);
-      end;
-      sfS32: begin
-        LS32 := LongInt(ASrc[LSrcOffset] or (ASrc[LSrcOffset + 1] shl 8) or
-          (ASrc[LSrcOffset + 2] shl 16) or (ASrc[LSrcOffset + 3] shl 24));
-        LF := PcmS32ToF32(LS32);
-      end;
-      sfF32: begin
-        Move(ASrc[LSrcOffset], LF, SizeOf(Single));
-      end;
-    else
-      LF := 0;
-    end;
-    LDstOffset := LI * LBytesPerDst;
-    case ADstFormat of
-      sfU8: begin
-        if AApplyDither then
-          LU8 := PcmF32ToU8Dithered(LF, LDitherState)
-        else
-          LU8 := PcmF32ToU8(LF);
-        Result[LDstOffset] := LU8;
-      end;
-      sfS16: begin
-        if AApplyDither then
-          LS16 := PcmF32ToS16Dithered(LF, LDitherState)
-        else
-          LS16 := PcmF32ToS16(LF);
-        Result[LDstOffset] := Byte(LS16 and $FF);
-        Result[LDstOffset + 1] := Byte((LS16 shr 8) and $FF);
-      end;
-      sfS24: begin
-        if AApplyDither then
-          LS24 := PcmF32ToS24Dithered(LF, LDitherState)
-        else
-          LS24 := PcmF32ToS24(LF);
-        PcmWriteS24LE(LS24, Result, LDstOffset);
-      end;
-      sfS32: begin
-        LS32 := PcmF32ToS32(LF);
-        Result[LDstOffset] := Byte(LS32 and $FF);
-        Result[LDstOffset + 1] := Byte((LS32 shr 8) and $FF);
-        Result[LDstOffset + 2] := Byte((LS32 shr 16) and $FF);
-        Result[LDstOffset + 3] := Byte((LS32 shr 24) and $FF);
-      end;
-      sfF32: begin
-        Move(LF, Result[LDstOffset], SizeOf(Single));
-      end;
-    end;
+    sfF32:
+      for LI := 0 to LSampleCount - 1 do
+        Move(LF32[LI], LDstPtr[LI*4], SizeOf(Single));
   end;
 end;
 

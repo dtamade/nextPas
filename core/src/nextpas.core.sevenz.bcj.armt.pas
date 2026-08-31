@@ -12,7 +12,8 @@ unit nextpas.core.sevenz.bcj.armt;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.sevenz.bcj.utils;
 
 procedure SevenZBcjArmtConvert(var AData: TBytes; AStartOffset: UInt32;
   AEncode: Boolean);
@@ -39,11 +40,11 @@ begin
               ((UInt32(AData[LI + 3]) and 7) shl 8) or
               UInt32(AData[LI + 2]);
       LSrc := LSrc shl 1;
-      LPC := AStartOffset + UInt32(LI) + 4;
+      LPC := AddPc(AddPc(AStartOffset, UInt32(LI)), 4);
       if AEncode then
-        LDest := LPC + LSrc
+        LDest := AddPc(LPC, LSrc)
       else
-        LDest := LSrc - LPC;
+        LDest := SubPc(LSrc, LPC);
       LDest := LDest shr 1;
       AData[LI + 1] := $F0 or Byte((LDest shr 19) and $7);
       AData[LI] := Byte((LDest shr 11) and $FF);

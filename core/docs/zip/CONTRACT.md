@@ -194,6 +194,7 @@ make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fuzz       # 模糊/属�
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_fs         # 目录打包/解包/权限
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_contract   # 本契约 + 无 FPC RTL 依赖审计
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_extra      # extra 编解码对称性证明（Build/Decode 往返 + 恶意 extra）
+make focused FOCUS=core/tests/nextpas.core.zip/test_zip_aes        # AES 加密门：AE-1/AE-2、强度1..3、口令校验与认证码、篡改 fail-closed
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_go_parity  # Go archive/zip 双向字节级对等（十九期领头羊双锚点）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_perf       # 性能回归阈值（二十期 allocs 预算，CountingMemoryManager）
 make focused FOCUS=core/tests/nextpas.core.zip/test_zip_stress     # 极限压力（二十一期 70k Zip64/1k混合/Bomb/并发）

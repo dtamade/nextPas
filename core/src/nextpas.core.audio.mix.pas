@@ -10,18 +10,38 @@ uses
   nextpas.core.audio.pcm;
 
 type
-  TPointF = record X, Y: Single; end;
+  TAudioPanGains = record X, Y: Single; end;
+
+const
+  CAudioSqrt2 = 1.4142135623730951; // sqrt(2) — 0dB center scale (PanLaw -3dB * sqrt2 = 0dB)
 
 procedure MixInto(var ADst: TAudioBuffer; const ASrc: TAudioBuffer; AGain: Single; AOffset: Integer);
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
-function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
+function PanLawGains(APan: Single): TAudioPanGains; overload;
+function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
+function PanLawGains0dB(APan: Single): TAudioPanGains; inline; // 0dB center (1.0) — timeline/game reuse, PanLaw -3dB * sqrt2
+function AudioClampGain(AGain: Double): Double; inline; // 0..4 clamp, reuse PcmClampF32 semantics — timeline/bank/sfx reuse point
+function AudioClampPan(APan: Double): Double; inline; // -1..1 clamp, reuse PcmClampF32 semantics — timeline/bank/sfx reuse point
 
 implementation
 
 uses Math;
+
+var
+  GMixScratch: TBytes;
+
+procedure EnsureScratch(ANeeded: Integer); inline;
+var Cap: Integer;
+begin
+  if Length(GMixScratch) >= ANeeded then Exit;
+  Cap := Length(GMixScratch);
+  if Cap < 256 then Cap := 256;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(GMixScratch, Cap);
+end;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);
 var LNew: TBytes; LExpected: Int64;
@@ -44,14 +64,13 @@ end;
 
 procedure MixInto(var ADst: TAudioBuffer; const ASrc: TAudioBuffer; AGain: Single; AOffset: Integer);
 var
-  LSrcF32, LSrcData: TBytes;
+  LSrcData: TBytes;
   LDstPtr, LSrcPtr: PSingle;
   LSamples, LDstOffset, LI: Integer;
   LExpected: Int64;
   LStack: array[0..4095] of Single;
   LUseStack: Boolean;
   LAlias: Boolean;
-  LBytesPerSample: Integer;
 begin
   if not ADst.Format.IsValid then raise EInvalidArgument.Create('MixInto: dst invalid format');
   if ADst.Format.SampleFormat <> sfF32 then raise EInvalidArgument.Create('MixInto: dst must be sfF32');
@@ -81,29 +100,34 @@ begin
   LAlias := (ASrc.Format.SampleFormat = sfF32) and (Pointer(ADst.Data) = Pointer(ASrc.Data)) and (Length(ADst.Data) > 0);
   if ASrc.Format.SampleFormat <> sfF32 then
   begin
-    LBytesPerSample := AudioBytesPerSample(ASrc.Format.SampleFormat);
     if LUseStack then
     begin
-      // stack scratch conversion (F-30 small-block reuse)
-      for LI := 0 to LSamples - 1 do
-      begin
-        case ASrc.Format.SampleFormat of
-          sfU8: LStack[LI] := PcmU8ToF32(ASrc.Data[LI * LBytesPerSample]);
-          sfS16: LStack[LI] := PcmS16ToF32(SmallInt(Word(ASrc.Data[LI*2]) or (Word(ASrc.Data[LI*2+1]) shl 8)));
-          sfS24: LStack[LI] := PcmS24ToF32(PcmReadS24LE(ASrc.Data, LI*3));
-          sfS32: LStack[LI] := PcmS32ToF32(LongInt(DWord(ASrc.Data[LI*4]) or (DWord(ASrc.Data[LI*4+1]) shl 8) or (DWord(ASrc.Data[LI*4+2]) shl 16) or (DWord(ASrc.Data[LI*4+3]) shl 24)));
-        else
-          LStack[LI] := 0;
-        end;
+      // 批处理分支：外层按格式分发，内层紧凑循环，避免逐采样 case；小块栈复用零分配
+      case ASrc.Format.SampleFormat of
+        sfU8: for LI := 0 to LSamples - 1 do LStack[LI] := PcmU8ToF32(ASrc.Data[LI]);
+        sfS16: for LI := 0 to LSamples - 1 do LStack[LI] := PcmS16ToF32(SmallInt(Word(ASrc.Data[LI*2]) or (Word(ASrc.Data[LI*2+1]) shl 8)));
+        sfS24: for LI := 0 to LSamples - 1 do LStack[LI] := PcmS24ToF32(PcmReadS24LE(ASrc.Data, LI*3));
+        sfS32: for LI := 0 to LSamples - 1 do LStack[LI] := PcmS32ToF32(LongInt(DWord(ASrc.Data[LI*4]) or (DWord(ASrc.Data[LI*4+1]) shl 8) or (DWord(ASrc.Data[LI*4+2]) shl 16) or (DWord(ASrc.Data[LI*4+3]) shl 24)));
+      else
+        for LI := 0 to LSamples - 1 do LStack[LI] := 0;
       end;
       LSrcPtr := @LStack[0];
       LSrcData := nil;
     end
     else
     begin
-      LSrcF32 := PcmConvert(ASrc.Data, ASrc.Format.SampleFormat, sfF32, ASrc.FrameCount, ASrc.Format.Channels, False);
-      LSrcData := LSrcF32;
-      LSrcPtr := PSingle(@LSrcData[0]);
+      // EnsureScratch 预分配：大块非 F32 经指数增长 scratch 复用，稳态零分配
+      EnsureScratch(LSamples * SizeOf(Single));
+      LSrcPtr := PSingle(@GMixScratch[0]);
+      case ASrc.Format.SampleFormat of
+        sfU8: for LI := 0 to LSamples - 1 do LSrcPtr[LI] := PcmU8ToF32(ASrc.Data[LI]);
+        sfS16: for LI := 0 to LSamples - 1 do LSrcPtr[LI] := PcmS16ToF32(SmallInt(Word(ASrc.Data[LI*2]) or (Word(ASrc.Data[LI*2+1]) shl 8)));
+        sfS24: for LI := 0 to LSamples - 1 do LSrcPtr[LI] := PcmS24ToF32(PcmReadS24LE(ASrc.Data, LI*3));
+        sfS32: for LI := 0 to LSamples - 1 do LSrcPtr[LI] := PcmS32ToF32(LongInt(DWord(ASrc.Data[LI*4]) or (DWord(ASrc.Data[LI*4+1]) shl 8) or (DWord(ASrc.Data[LI*4+2]) shl 16) or (DWord(ASrc.Data[LI*4+3]) shl 24)));
+      else
+        for LI := 0 to LSamples - 1 do LSrcPtr[LI] := 0;
+      end;
+      LSrcData := GMixScratch;
     end;
   end
   else
@@ -119,9 +143,9 @@ begin
       end
       else
       begin
-        SetLength(LSrcF32, LSamples * SizeOf(Single));
-        Move(ASrc.Data[0], LSrcF32[0], LSamples * SizeOf(Single));
-        LSrcData := LSrcF32;
+        EnsureScratch(LSamples * SizeOf(Single));
+        Move(ASrc.Data[0], GMixScratch[0], LSamples * SizeOf(Single));
+        LSrcData := GMixScratch;
         LSrcPtr := PSingle(@LSrcData[0]);
       end;
     end
@@ -199,12 +223,43 @@ begin
   ApplyGain(ABuf, LGain);
 end;
 
-function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
+function PanLawGains(APan: Single): TAudioPanGains; overload;
+var LPan, LAngle: Single;
+begin
+  LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1;
+  LAngle := (LPan + 1) * Pi / 4.0; Result.X := Cos(LAngle); Result.Y := Sin(LAngle);
+end;
+
+function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains; overload;
 var LPan, LAngle: Single;
 begin
   LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1;
   if Abs(ALawDB + 6.0) < 0.001 then begin Result.X := (1 - LPan) * 0.5; Result.Y := (1 + LPan) * 0.5; end
   else begin LAngle := (LPan + 1) * Pi / 4.0; Result.X := Cos(LAngle); Result.Y := Sin(LAngle); end;
+end;
+
+function PanLawGains0dB(APan: Single): TAudioPanGains;
+begin
+  // 复用 PanLawGains 0dB center：等功率 -3dB * sqrt2 = 0dB 中心增益 1.0，供 timeline/sfx/bank/spatial/event 共用
+  Result := PanLawGains(APan);
+  Result.X := Result.X * CAudioSqrt2;
+  Result.Y := Result.Y * CAudioSqrt2;
+end;
+
+function AudioClampGain(AGain: Double): Double; inline;
+begin
+  // reuse PcmClampF32 semantics for gain range 0..4 — timeline/bank/sfx reuse point
+  if AGain < 0 then Exit(0);
+  if AGain > 4 then Exit(4);
+  Result := AGain;
+end;
+
+function AudioClampPan(APan: Double): Double; inline;
+begin
+  // reuse PcmClampF32 semantics for pan range -1..1 — timeline/bank/sfx reuse point
+  if APan < -1 then Exit(-1);
+  if APan > 1 then Exit(1);
+  Result := APan;
 end;
 
 end.

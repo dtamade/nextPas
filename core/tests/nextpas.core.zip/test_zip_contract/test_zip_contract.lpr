@@ -325,6 +325,37 @@ begin
   Check(Pos('clean:', LMakefile) > 0, 'example Makefile has clean target');
 end;
 
+procedure TestEnumerationConsistency;
+var
+  LContract: string;
+  LExpected: array[0..11] of string;
+  LI: Integer;
+  LBaseline: string;
+begin
+  LContract := ReadText('docs/zip/CONTRACT.md');
+  LExpected[0] := 'test_zip ';
+  LExpected[1] := 'test_zip_reader';
+  LExpected[2] := 'test_zip_sequential';
+  LExpected[3] := 'test_zip_fuzz';
+  LExpected[4] := 'test_zip_fs';
+  LExpected[5] := 'test_zip_contract';
+  LExpected[6] := 'test_zip_extra';
+  LExpected[7] := 'test_zip_aes';
+  LExpected[8] := 'test_zip_go_parity';
+  LExpected[9] := 'test_zip_perf';
+  LExpected[10] := 'test_zip_stress';
+  LExpected[11] := 'test_zip_builder';
+  for LI := Low(LExpected) to High(LExpected) do
+    Check(Pos(LExpected[LI], LContract) > 0, 'contract lists ' + Trim(LExpected[LI]));
+  Check(Pos('test_zip_aes', LContract) > 0, 'contract has test_zip_aes gate');
+  // BUILD: ensure perf budget unified via BASELINE
+  LBaseline := ReadText('benchmarks/nextpas.core.zip/bench_zip/BASELINE.json');
+  Check(Pos('zip/pack/200x512B', LBaseline) > 0, 'baseline has pack entry');
+  Check(Pos('"allocs_per_op":810', LBaseline) > 0, 'baseline allocs 810 present');
+  // ensure no duplicate thresholds drift: contract mentions 810→805
+  Check(Pos('810', LContract) > 0, 'contract mentions 810 baseline');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.contract');
   T.Test('No FPC RTL dependencies', @TestNoFpcRtlDependencies);
@@ -332,5 +363,6 @@ begin
   T.Test('Facade purity', @TestFacadePurity);
   T.Test('Docs contract', @TestDocsContract);
   T.Test('Example project exists', @TestExampleProjectExists);
+  T.Test('Enumeration consistency', @TestEnumerationConsistency);
   if not T.Run then Halt(1);
 end.

@@ -34,7 +34,6 @@ procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -43,10 +42,18 @@ function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 { Unsigned big-endian helpers (canonical single source for crypto/tls) }
 function StripLeadingZero(const AData: TBytes): TBytes;
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer;
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
+function BytesIsZero(const AData: TBytes): Boolean; inline;
+function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 
@@ -212,7 +219,7 @@ begin
   Result := SpanConcat(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 var
   LOldLen: SizeUInt;
 begin
@@ -222,7 +229,7 @@ begin
   Move(ASrc[0], ADest[LOldLen], Length(ASrc));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 var
   LOldLen: SizeUInt;
 begin
@@ -274,16 +281,6 @@ begin
   ADest[LLen + 3] := Byte(AValue);
 end;
 
-procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
-var
-  LLen: SizeUInt;
-begin
-  if (AData = nil) or (ACount = 0) then Exit;
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + ACount);
-  Move(AData^, ADest[LLen], ACount);
-end;
-
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
 begin
   Result := SpanStartsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(APrefix));
@@ -294,23 +291,33 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+begin
+  Result := ASpan;
+  while (Result.Len > 0) and (Result.Data^ = 0) do
+  begin
+    Inc(Result.Data);
+    Dec(Result.Len);
+  end;
+end;
+
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+begin
+  Result := StripLeadingZeroSpan(TByteSpan.FromBytes(AData));
+end;
+
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
 var
-  I, LLen: Integer;
+  LView: TByteSpan;
 begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-  if I >= Length(AData) then
+  LView := StripLeadingZeroView(AData);
+  if LView.Len = 0 then
   begin
     SetLength(Result, 1);
     Result[0] := 0;
     Exit;
   end;
-  LLen := Length(AData) - I;
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AData[I], Result[0], LLen);
+  Result := SpanClone(LView);
 end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
@@ -318,19 +325,24 @@ begin
   Result := StripLeadingZero(AData);
 end;
 
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 var
-  LLeft, LRight: TBytes;
+  LLeft, LRight: TByteSpan;
 begin
-  LLeft := StripLeadingZero(ALeft);
-  LRight := StripLeadingZero(ARight);
-  if Length(LLeft) < Length(LRight) then
+  LLeft := StripLeadingZeroSpan(ALeft);
+  LRight := StripLeadingZeroSpan(ARight);
+  if LLeft.Len < LRight.Len then
     Exit(-1);
-  if Length(LLeft) > Length(LRight) then
+  if LLeft.Len > LRight.Len then
     Exit(1);
-  if Length(LLeft) = 0 then
+  if LLeft.Len = 0 then
     Exit(0);
-  Result := CompareBytesOrdered(@LLeft[0], @LRight[0], Length(LLeft), Length(LRight));
+  Result := CompareBytesOrdered(LLeft.Data, LRight.Data, LLeft.Len, LRight.Len);
+end;
+
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+begin
+  Result := CompareUnsignedSpan(StripLeadingZeroView(ALeft), StripLeadingZeroView(ARight));
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
@@ -346,6 +358,35 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := UnsignedEqual(ALeft, ARight);
+end;
+
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+begin
+  Result := CompareUnsignedSpan(ALeft, ARight) = 0;
+end;
+
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
+var I: Integer;
+begin
+  for I := 0 to High(AData) do if AData[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline;
+var I: SizeUInt;
+begin
+  for I := 0 to ASpan.Len - 1 do if ASpan.Data[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+function BytesIsZero(const AData: TBytes): Boolean; inline;
+begin
+  Result := IsZeroBytes(AData);
+end;
+
+function IsAllZero(const AData: TBytes): Boolean; inline;
+begin
+  Result := IsZeroBytes(AData);
 end;
 
 function BytesToString(const ABytes: TBytes): string; inline;
