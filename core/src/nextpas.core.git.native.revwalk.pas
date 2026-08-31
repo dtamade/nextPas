@@ -34,20 +34,20 @@ uses
 type
   TGitOidArray = array of TGitOid;
 
-  { hash oid membership; shared by the streaming walk and the
-    topological planner - open-addressing power-of-two, linear probe,
-    zero-copy hash over raw bytes, O(1) average insert/lookup }
+  { hash-based oid membership; O(1) avg for streaming walk and
+    topological planner — replaces O(n²) sorted+Move }
   TGitOidSet = class
   private
-    FItems: array of TGitOid;
-    FUsed: array of Boolean;
+    FBuckets: array of TGitOid;
+    FStates: array of Byte; { 0 empty, 1 occupied }
     FCount: SizeInt;
-    FCapMask: Integer; { -1 when empty, else Cap-1 }
-    procedure Grow;
-    function HashOid(const AOid: TGitOid): SizeUInt; inline;
+    FCap: SizeInt;
+    FMask: SizeInt;
+    procedure EnsureCapacity; inline;
+    procedure Rehash(ANewCap: SizeInt);
   public
     { no-op when already present }
-    procedure Add(const AOid: TGitOid);
+    procedure Add(const AOid: TGitOid); inline;
     function Contains(const AOid: TGitOid): Boolean; inline;
     function Count: SizeInt; inline;
   end;
@@ -152,95 +152,91 @@ begin
   Result := False;
 end;
 
-function TGitOidSet.HashOid(const AOid: TGitOid): SizeUInt; inline;
+function GitOidHash(const AOid: TGitOid): UInt32; inline;
 var
   I: Integer;
-  H: LongWord;
 begin
-  H := LongWord($811C9DC5);
+  Result := UInt32(2166136261);
   for I := 0 to GitOidRawLen - 1 do
-  begin
-    {$PUSH}{$Q-}{$R-}
-    H := (H xor LongWord(AOid.Bytes[I])) * LongWord($01000193);
-    {$POP}
-  end;
-  Result := SizeUInt(H);
+    Result := (Result xor UInt32(AOid.Bytes[I])) * UInt32(16777619);
 end;
 
-procedure TGitOidSet.Grow;
-var
-  OldItems: array of TGitOid;
-  OldUsed: array of Boolean;
-  OldCap, NewCap, I, Idx: Integer;
-  H: SizeUInt;
+procedure TGitOidSet.EnsureCapacity; inline;
 begin
-  OldCap := Length(FItems);
-  if OldCap = 0 then
-    NewCap := 16
-  else
-    NewCap := OldCap * 2;
-  OldItems := FItems;
-  OldUsed := FUsed;
-  SetLength(FItems, NewCap);
-  SetLength(FUsed, NewCap);
-  if NewCap > 0 then
-    FillChar(FUsed[0], NewCap * SizeOf(Boolean), 0);
-  FCapMask := NewCap - 1;
+  if FCap = 0 then
+    Rehash(16)
+  else if FCount * 10 >= FCap * 7 then
+    Rehash(FCap * 2);
+end;
+
+procedure TGitOidSet.Rehash(ANewCap: SizeInt);
+var
+  LOldBuckets: array of TGitOid;
+  LOldStates: array of Byte;
+  LOldCap: SizeInt;
+  I: Integer;
+  LIdx: SizeInt;
+  LHash: UInt32;
+begin
+  LOldBuckets := FBuckets;
+  LOldStates := FStates;
+  LOldCap := FCap;
+  SetLength(FBuckets, ANewCap);
+  SetLength(FStates, ANewCap);
+  FCap := ANewCap;
+  FMask := ANewCap - 1;
   FCount := 0;
-  for I := 0 to OldCap - 1 do
-    if (I < Length(OldUsed)) and OldUsed[I] then
+  for I := 0 to LOldCap - 1 do
+    if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
     begin
-      H := HashOid(OldItems[I]);
-      Idx := Integer(H and SizeUInt(FCapMask));
-      while FUsed[Idx] do
-        Idx := (Idx + 1) and FCapMask;
-      FItems[Idx] := OldItems[I];
-      FUsed[Idx] := True;
+      LHash := GitOidHash(LOldBuckets[I]);
+      LIdx := SizeInt(LHash and UInt32(FMask));
+      while FStates[LIdx] = 1 do
+        LIdx := (LIdx + 1) and FMask;
+      FBuckets[LIdx] := LOldBuckets[I];
+      FStates[LIdx] := 1;
       Inc(FCount);
     end;
 end;
 
 procedure TGitOidSet.Add(const AOid: TGitOid);
 var
-  Idx: Integer;
-  H: SizeUInt;
+  LHash: UInt32;
+  LIdx: SizeInt;
 begin
-  if Length(FItems) = 0 then
-    Grow
-  else if FCount * 4 >= Length(FItems) * 3 then
-    Grow;
-  H := HashOid(AOid);
-  Idx := Integer(H and SizeUInt(FCapMask));
-  while FUsed[Idx] do
+  EnsureCapacity;
+  LHash := GitOidHash(AOid);
+  LIdx := SizeInt(LHash and UInt32(FMask));
+  while FStates[LIdx] <> 0 do
   begin
-    if GitOidSame(FItems[Idx], AOid) then
+    if GitOidSame(FBuckets[LIdx], AOid) then
       Exit;
-    Idx := (Idx + 1) and FCapMask;
+    LIdx := (LIdx + 1) and FMask;
   end;
-  FItems[Idx] := AOid;
-  FUsed[Idx] := True;
+  FBuckets[LIdx] := AOid; { zero-copy: 20-byte inline copy }
+  FStates[LIdx] := 1;
   Inc(FCount);
 end;
 
-function TGitOidSet.Contains(const AOid: TGitOid): Boolean; inline;
+function TGitOidSet.Contains(const AOid: TGitOid): Boolean;
 var
-  Idx: Integer;
-  H: SizeUInt;
+  LHash: UInt32;
+  LIdx: SizeInt;
 begin
-  if Length(FItems) = 0 then
+  if FCount = 0 then
     Exit(False);
-  H := HashOid(AOid);
-  Idx := Integer(H and SizeUInt(FCapMask));
-  while FUsed[Idx] do
+  LHash := GitOidHash(AOid);
+  LIdx := SizeInt(LHash and UInt32(FMask));
+  while FStates[LIdx] <> 0 do
   begin
-    if GitOidSame(FItems[Idx], AOid) then
+    if GitOidSame(FBuckets[LIdx], AOid) then
       Exit(True);
-    Idx := (Idx + 1) and FCapMask;
+    LIdx := (LIdx + 1) and FMask;
   end;
   Result := False;
 end;
 
-function TGitOidSet.Count: SizeInt; inline;
+function TGitOidSet.Count: SizeInt;
 begin
   Result := FCount;
 end;
@@ -315,7 +311,7 @@ begin
           Data := ARepo.ReadObject(Oid, Kind);
         except
           on E: EGitError do
-            Continue;
+            raise;
         end;
         if Kind <> gokCommit then
           Continue;
@@ -521,7 +517,8 @@ begin
     try
       Data := FRepo.ReadObject(Cur, Kind);
     except
-      Continue;
+      on E: EGitError do
+        raise;
     end;
     if Kind <> gokCommit then
       Continue;

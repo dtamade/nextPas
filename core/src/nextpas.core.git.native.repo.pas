@@ -42,23 +42,32 @@ var
   IdxPaths: TStringArray;
   I, Count: Integer;
   IdxPath, PackPath: string;
+  LPack: TPackFile;
 begin
   SetLength(FPacks, 0);
   if not DirectoryExists(PathJoin2(FGitDir, 'objects')) then
     Exit;
   IdxPaths := Glob(PathJoin2(FGitDir, PathJoin(['objects', 'pack'])),
     '*.idx');
-  for I := 0 to Length(IdxPaths) - 1 do
-  begin
-    IdxPath := IdxPaths[I];
-    if Length(IdxPath) < 5 then
-      Continue;
-    PackPath := Copy(IdxPath, 1, Length(IdxPath) - 4) + '.pack';
-    if not FileExists(PackPath) then
-      Continue;
-    Count := Length(FPacks);
-    SetLength(FPacks, Count + 1);
-    FPacks[Count] := TPackFile.Create(IdxPath, PackPath);
+  try
+    for I := 0 to Length(IdxPaths) - 1 do
+    begin
+      IdxPath := IdxPaths[I];
+      if Length(IdxPath) < 5 then
+        Continue;
+      PackPath := Copy(IdxPath, 1, Length(IdxPath) - 4) + '.pack';
+      if not FileExists(PackPath) then
+        Continue;
+      LPack := TPackFile.Create(IdxPath, PackPath);
+      Count := Length(FPacks);
+      SetLength(FPacks, Count + 1);
+      FPacks[Count] := LPack;
+    end;
+  except
+    for I := 0 to Length(FPacks) - 1 do
+      FPacks[I].Free;
+    SetLength(FPacks, 0);
+    raise;
   end;
 end;
 

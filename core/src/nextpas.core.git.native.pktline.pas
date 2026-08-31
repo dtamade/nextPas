@@ -175,12 +175,12 @@ end;
 
 function GitPktScan(const AStream: TBytes): TGitPktArray;
 var
-  Pos, Len, H, I: Integer;
-  Pkt: TGitPkt;
-  Frame: TBytes;
+  Pos, Len, H, I, Count, Idx: Integer;
 begin
   Result := nil;
+  // Pass 1: count packets, validate framing (mirrors GitPktJoin pre-calc Total)
   Pos := 0;
+  Count := 0;
   while Pos < Length(AStream) do
   begin
     if Pos + 4 > Length(AStream) then
@@ -193,35 +193,56 @@ begin
       H := (H shl 4) or HexVal(Char(AStream[Pos+I]));
     Len := H;
     if Len = 0 then
+      Inc(Pos, 4)
+    else if Len = 1 then
+      Inc(Pos, 4)
+    else
     begin
-      SetLength(Frame, 4);
-      Move(AStream[Pos], Frame[0], 4);
-      GitPktDecode(Frame, Pkt);
-      SetLength(Result, Length(Result)+1);
-      Result[High(Result)] := Pkt;
-      Inc(Pos, 4);
-      Continue;
+      if Len < 4 then
+        raise EGitError.CreateFmt('pkt-line scan invalid len %d at %d', [Len, Pos]);
+      if Len > GitPktMaxSize then
+        raise EGitError.CreateFmt('pkt-line length %d > max', [Len]);
+      if Len = 4 then
+        raise EGitError.Create('pkt-line empty payload (0004) forbidden');
+      if Pos + Len > Length(AStream) then
+        raise EGitError.CreateFmt('pkt-line scan truncated payload need %d have %d', [Len, Length(AStream)-Pos]);
+      Inc(Pos, Len);
     end;
-    if Len = 1 then
+    Inc(Count);
+  end;
+  SetLength(Result, Count);
+  if Count = 0 then
+    Exit;
+  // Pass 2: zero-copy fill — no per-packet Frame alloc/Move, single payload Move
+  Pos := 0;
+  Idx := 0;
+  while Pos < Length(AStream) do
+  begin
+    H := 0;
+    for I := 0 to 3 do
+      H := (H shl 4) or HexVal(Char(AStream[Pos+I]));
+    Len := H;
+    if Len = 0 then
     begin
-      SetLength(Frame, 4);
-      Move(AStream[Pos], Frame[0], 4);
-      GitPktDecode(Frame, Pkt);
-      SetLength(Result, Length(Result)+1);
-      Result[High(Result)] := Pkt;
+      Result[Idx].Kind := gpkFlush;
+      Result[Idx].Data := nil;
       Inc(Pos, 4);
-      Continue;
+    end
+    else if Len = 1 then
+    begin
+      Result[Idx].Kind := gpkDelim;
+      Result[Idx].Data := nil;
+      Inc(Pos, 4);
+    end
+    else
+    begin
+      Result[Idx].Kind := gpkData;
+      SetLength(Result[Idx].Data, Len - 4);
+      if Len - 4 > 0 then
+        Move(AStream[Pos+4], Result[Idx].Data[0], Len - 4);
+      Inc(Pos, Len);
     end;
-    if Len < 4 then
-      raise EGitError.CreateFmt('pkt-line scan invalid len %d at %d', [Len, Pos]);
-    if Pos + Len > Length(AStream) then
-      raise EGitError.CreateFmt('pkt-line scan truncated payload need %d have %d', [Len, Length(AStream)-Pos]);
-    SetLength(Frame, Len);
-    Move(AStream[Pos], Frame[0], Len);
-    GitPktDecode(Frame, Pkt);
-    SetLength(Result, Length(Result)+1);
-    Result[High(Result)] := Pkt;
-    Inc(Pos, Len);
+    Inc(Idx);
   end;
 end;
 

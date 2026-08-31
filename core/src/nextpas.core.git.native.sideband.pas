@@ -41,7 +41,7 @@ type
 function GitSidebandEncode(AKind: TGitSidebandKind; const AData: TBytes): TBytes; inline;
 function GitSidebandEncodeStr(AKind: TGitSidebandKind; const AText: string): TBytes; inline;
 function GitSidebandDecode(const APktData: TBytes; out AKind: TGitSidebandKind; out APayload: TBytes): Boolean; inline;
-procedure GitSidebandDemux(const AStream: TBytes; out ADemuxed: TGitSidebandDemuxed);
+procedure GitSidebandDemux(const AStream: TBytes; out ADemuxed: TGitSidebandDemuxed); inline;
 function GitSidebandDemuxRaw(const AStream: TBytes): TGitSidebandArray; inline;
 function GitSidebandJoin(const AEntries: TGitSidebandArray): TBytes;
 
@@ -108,10 +108,11 @@ begin
   end;
 end;
 
-procedure GitSidebandDemux(const AStream: TBytes; out ADemuxed: TGitSidebandDemuxed);
+procedure GitSidebandDemux(const AStream: TBytes; out ADemuxed: TGitSidebandDemuxed); inline;
 var
   Arr: TGitSidebandArray;
   I: Integer;
+  LTotal, LOff: SizeUInt;
   Txt: string;
 begin
   Arr := GitSidebandDemuxRaw(AStream);
@@ -119,15 +120,21 @@ begin
   ADemuxed.DataBytes := nil;
   ADemuxed.Progress := nil;
   ADemuxed.Errors := nil;
+  // single allocation zero-copy: pre-sum avoids O(n²) SetLength/Move and heap fragmentation
+  LTotal := 0;
+  for I := 0 to High(Arr) do
+    if Arr[I].Kind = gsbData then
+      Inc(LTotal, Length(Arr[I].Data));
+  SetLength(ADemuxed.DataBytes, LTotal);
+  LOff := 0;
   for I := 0 to High(Arr) do
   begin
     case Arr[I].Kind of
       gsbData:
         begin
-          Txt := '';
-          SetLength(ADemuxed.DataBytes, Length(ADemuxed.DataBytes) + Length(Arr[I].Data));
           if Length(Arr[I].Data) > 0 then
-            Move(Arr[I].Data[0], ADemuxed.DataBytes[Length(ADemuxed.DataBytes)-Length(Arr[I].Data)], Length(Arr[I].Data));
+            Move(Arr[I].Data[0], ADemuxed.DataBytes[LOff], Length(Arr[I].Data));
+          Inc(LOff, Length(Arr[I].Data));
         end;
       gsbProgress:
         begin

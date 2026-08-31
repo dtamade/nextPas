@@ -7,7 +7,9 @@ unit nextpas.core.git.libgit2.ffi;
 interface
 
 uses
-nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.git.libgit2.base;
 
 const
   {$IFDEF MSWINDOWS}
@@ -482,6 +484,36 @@ type
   end;
   Pgit_blame_hunk = ^git_blame_hunk;
 
+  // ── Vocabulary bridge: unified aliases (base/ffi reuse, zero libgit2 closure) ──
+  // ffi remains canonical FFI seam; base owns shared handles/OID; T-prefix aliases
+  // expose Pascal-style vocabulary for consumers that previously used bindings' TGitOid.
+  TGitRepositoryHandle = git_repository;
+  TGitOid20 = git_oid;
+
+// Inline zero-copy helpers (performance: no heap, no SysUtils)
+function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
+function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
+procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
+
 implementation
+
+function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
+begin
+  Result := CompareMem(@A.id[0], @B.id[0], SizeOf(A.id));
+end;
+
+function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
+var
+  I: Integer;
+begin
+  for I := 0 to High(A.id) do
+    if A.id[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
+begin
+  Move(Src.id[0], Dst.id[0], SizeOf(Src.id));
+end;
 
 end.

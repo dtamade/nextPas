@@ -36,22 +36,16 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.fs,
-  nextpas.core.git.native.util,
-  nextpas.core.git.native.common,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.revparse;
-
-function TrimSpaces(const S: string): string; inline;
-begin
-  Result := GitTrimSpaces(S);
-end;
+  nextpas.core.git.native.revparse,
+  nextpas.core.git.native.util;
 
 function UnquoteValue(const S: string): string;
 var T: string; I: Integer; C: Char;
 begin
-  T:=TrimSpaces(S);
+  T:=GitTrimSpaces(S);
   if (Length(T)>=2) and (T[1]='"') and (T[Length(T)]='"') then
   begin
     Result:='';
@@ -76,7 +70,6 @@ begin
     end;
   end else
   begin
-    // strip trailing comment outside quotes (already handled by caller for this path)
     Result:=T;
   end;
 end;
@@ -95,22 +88,20 @@ begin
 end;
 
 function ExtractSubmoduleName(const AHeader: string): string;
-var H,Inner: string; P1,P2: Integer;
+var H,Inner: string;
 begin
-  H:=TrimSpaces(AHeader);
-  // expect [submodule "name"]
+  H:=GitTrimSpaces(AHeader);
   if (Length(H)<2) or (H[1]<>'[') or (H[Length(H)]<>']') then Exit('');
-  Inner:=TrimSpaces(Copy(H,2,Length(H)-2));
+  Inner:=GitTrimSpaces(Copy(H,2,Length(H)-2));
   if Length(Inner)<9 then Exit('');
-  // case-insensitive check for 'submodule'
   if LowerCase(Copy(Inner,1,9))<>'submodule' then Exit('');
-  Inner:=TrimSpaces(Copy(Inner,10, MaxInt));
+  Inner:=GitTrimSpaces(Copy(Inner,10, MaxInt));
   if (Length(Inner)<2) or (Inner[1]<>'"') or (Inner[Length(Inner)]<>'"') then Exit('');
   Result:=Copy(Inner,2,Length(Inner)-2);
 end;
 
-function LowerKey(const S: string): string;
-begin Result:=LowerCase(TrimSpaces(S)); end;
+function LowerKey(const S: string): string; inline;
+begin Result:=LowerCase(GitTrimSpaces(S)); end;
 
 function GitParseGitModules(const AText: string): TGitSubmoduleArray;
 var Lines: TStringArray; I: Integer; Line, Key, Val, CurName: string; EqPos: Integer; Cur: TGitSubmodule; HasCur: Boolean;
@@ -132,9 +123,8 @@ begin
   for I:=0 to High(Lines) do
   begin
     Line:=Lines[I];
-    // strip CR
-    if (Length(Line)>0) and (Line[Length(Line)]=#13) then Delete(Line, Length(Line),1);
-    Line:=TrimSpaces(Line);
+    Line:=GitStripCR(Line);
+    Line:=GitTrimSpaces(Line);
     if Line='' then Continue;
     if (Line[1]='#') or (Line[1]=';') then Continue;
     if Line[1]='[' then
@@ -149,13 +139,12 @@ begin
     EqPos:=Pos('=', Line);
     if EqPos=0 then Continue;
     Key:=LowerKey(Copy(Line,1,EqPos-1));
-    Val:=TrimSpaces(Copy(Line, EqPos+1, MaxInt));
+    Val:=GitTrimSpaces(Copy(Line, EqPos+1, MaxInt));
     Val:=StripComment(Val);
     Val:=UnquoteValue(Val);
     if Key='path' then Cur.Path:=Val
     else if Key='url' then Cur.Url:=Val
     else if Key='branch' then Cur.Branch:=Val;
-    // update/ignore others
   end;
   FlushCur;
 end;
@@ -172,7 +161,6 @@ end;
 function GitListSubmodules(const AGitDir: string): TGitSubmoduleArray;
 var WDir, F: string; Data: TBytes;
 begin
-  // prefer worktree .gitmodules, fallback to HEAD tree
   WDir:=GitWorktreeDir(AGitDir);
   F:=PathJoin2(WDir, '.gitmodules');
   if FileExists(F) then
@@ -180,22 +168,18 @@ begin
     Data:=ReadFile(F);
     Exit(GitParseGitModules(Data));
   end;
-  // fallback to HEAD
   try Result:=GitListSubmodulesAtRef(AGitDir, 'HEAD');
   except Result:=nil; end;
 end;
-
-// FindBlobInTree / PeelToTree reused from nextpas.core.git.native.common (single source)
 
 function GitListSubmodulesAtTree(const AGitDir: string; const ATreeOid: TGitOid): TGitSubmoduleArray;
 var Repo: TNativeRepository; TreeOid, BlobOid: TGitOid; Kind: TGitObjectKind; Data: TBytes;
 begin
   Result:=nil;
-  if GitOidIsZero(ATreeOid) then Exit;
+  if GitIsZeroOid(ATreeOid) then Exit;
   Repo:=TNativeRepository.Create(AGitDir);
   try
     TreeOid:=ATreeOid;
-    // if caller passed commit oid, peel to tree
     try
       Data:=Repo.ReadObject(TreeOid, Kind);
       if Kind=gokCommit then
@@ -206,7 +190,6 @@ begin
         TreeOid:=GitPeelToTree(Repo, TreeOid);
       end;
     except
-      // not found -> empty
       Exit;
     end;
     if not GitFindBlobInTree(Repo, TreeOid, '.gitmodules', BlobOid) then Exit;

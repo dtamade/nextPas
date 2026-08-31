@@ -1,4 +1,8 @@
 unit nextpas.core.git.libgit2.binding;
+{** @desc libgit2 运行时加载层：通过 platform.dl 动态绑定 FFI 符号。
+       职责：仅做 dlopen/dlsym 与符号转发，不定义类型词汇；类型词汇
+       复用 nextpas.core.git.libgit2.base → nextpas.core.git.libgit2.ffi，
+       与静态轨道 nextpas.core.git.libgit2.bindings 互补（base/ffi 分工）。 *}
 
 {$I nextpas.core.settings.inc}
 // acq:allow-style-file
@@ -227,6 +231,7 @@ procedure git_worktree_free(wt: git_worktree); cdecl;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.platform.dl,
   nextpas.core.os.env;
 
@@ -239,14 +244,26 @@ begin
   {$ENDIF}
 end;
 
-function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
+function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer; inline;
 var
   LAddr: Pointer;
 begin
+  // Zero-copy symbol lookup; no heap, no SysUtils.
   if platform_dl_sym(ALib, AName, LAddr) = 0 then
     Result := LAddr
   else
     Result := nil;
+end;
+
+// Inline zero-copy OID helpers (performance: Move/CompareMem, no allocation)
+procedure BindingCopyOid(out Dst: git_oid; const Src: git_oid); inline;
+begin
+  Move(Src.id[0], Dst.id[0], SizeOf(Src.id));
+end;
+
+function BindingOidEquals(const A, B: git_oid): Boolean; inline;
+begin
+  Result := CompareMem(@A.id[0], @B.id[0], SizeOf(A.id));
 end;
 
 const

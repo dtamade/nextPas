@@ -2,12 +2,20 @@ unit nextpas.core.git.libgit2.bindings;
 {** @desc libgit2 全量 C ABI 绑定（自动生成）。
        来源：c2pas888 --header-unit 翻译 include/git2.h（libgit2 v1.x, linux-x86_64-lp64）。
        再生成命令与 shim 说明见 core/docs/git/bindings-pitfalls.md。
-       不要手工编辑本单元：改 libgit2 头后重跑管线。 *}
+       不要手工编辑本单元：改 libgit2 头后重跑管线。
+       词汇复用：本单元为静态 external 轨道，与运行时轨道(ffi/binding)
+       通过 nextpas.core.git.libgit2.base 共享基础词汇与零拷贝助手，
+       职责按 base(类型)/ffi(ABI)/binding(加载) 分工复用。 *}
 
 interface
 {$I nextpas.core.settings.inc}
+uses
+  nextpas.core.base.utils,
+  nextpas.core.git.libgit2.base;
 
 type
+  // Base/FFI reuse bridge: static track (TGitOid 33B) supplements base's 20B git_oid;
+  // handles remain opaque Pointer/PGit* duality bridged via base's shared aliases.
   TTimeT = Int64;
   TGitCertT = LongInt;
   TGitCredentialT = LongInt;
@@ -4091,7 +4099,25 @@ function git_transaction_commit(tx: PGitTransaction): LongInt; cdecl; external '
 
 procedure git_transaction_free(tx: PGitTransaction); cdecl; external 'c' name 'git_transaction_free';
 
+// ── Bridge inline helpers (zero-copy, no SysUtils) ──
+// Unified vocabulary: base's git_oid (20B) ↔ TGitOid (33B) via Move; handles remain opaque.
+// base provides canonical 20B git_oid; this unit's TGitOid is 33B static-track extension.
+function BindingsGitOidEquals(const A, B: TGitOid): Boolean; inline;
+procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
+
 implementation
+
+function BindingsGitOidEquals(const A, B: TGitOid): Boolean; inline;
+begin
+  Result := (A.&type = B.&type) and CompareMem(@A.id[0], @B.id[0], SizeOf(A.id));
+end;
+
+procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
+begin
+  Dst.&type := Src.&type;
+  Move(Src.id[0], Dst.id[0], SizeOf(Src.id));
+end;
+
 
 procedure abort(); cdecl;
 begin
