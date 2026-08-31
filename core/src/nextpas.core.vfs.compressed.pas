@@ -81,10 +81,14 @@ begin
   except
     on E: Exception do raise EVfsError.CreateCtx('stat', APath, E.Message);
   end;
-  LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
-  SetLength(LHeader, LRead);
-  if LRead > 0 then Move(LBuf[0], LHeader[0], LRead);
-  Result := IsGzipPred(LHeader);
+  try
+    LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
+    SetLength(LHeader, LRead);
+    if LRead > 0 then Move(LBuf[0], LHeader[0], LRead);
+    Result := IsGzipPred(LHeader);
+  finally
+    LStream.Close;
+  end;
 end;
 
 function TAutoDecompressingVfs.Exists(const APath: string): Boolean; inline;

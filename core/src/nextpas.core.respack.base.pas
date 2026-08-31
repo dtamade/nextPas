@@ -127,7 +127,7 @@ procedure WrU16LE(AData: PByte; const AValue: Word); inline;
 procedure WrU32LE(AData: PByte; const AValue: UInt32); inline;
 procedure WrU64LE(AData: PByte; const AValue: UInt64); inline;
 
-{ FNV-1a 32（内联实现决策见 README 设计决策记录） }
+{ FNV-1a 32 — respack 内联 6 行以保持 L0 零依赖（不引 L1 checksum），checksum.fnv32 为他处单源；README 已记录设计决策，属有意双源 }
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32;
 
 { Go io/fs.ValidPath 语义（FORMAT.md 路径规范）：UTF-8、unrooted、'/'
