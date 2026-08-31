@@ -87,8 +87,8 @@ type
     InSize: SizeUInt;
     Pos: SizeUInt;
     Rc: TSevenZRcEncoder;
-    Head: array of SizeInt;
-    Prev: array of SizeInt;
+    Head: array of Int32;
+    Prev: array of Int32;
     Watermark: SizeUInt;           { 已插入链的位置上界；防重插成环 }
   end;
 
@@ -115,10 +115,10 @@ procedure MatcherAlloc(var AE: TEngine);
 begin
   SetLength(AE.Head, C_HASH_SIZE);
   if Length(AE.Head) > 0 then
-    FillChar(AE.Head[0], SizeInt(Length(AE.Head)) * SizeOf(SizeInt), $FF);
+    FillChar(AE.Head[0], Length(AE.Head) * SizeOf(Int32), $FF);
   SetLength(AE.Prev, SizeInt(AE.InSize));
   if Length(AE.Prev) > 0 then
-    FillChar(AE.Prev[0], SizeInt(Length(AE.Prev)) * SizeOf(SizeInt), $FF);
+    FillChar(AE.Prev[0], Length(AE.Prev) * SizeOf(Int32), $FF);
   AE.Watermark := 0;
 end;
 
@@ -156,7 +156,7 @@ begin
   begin
     LH := Hash4(AE, APos);
     AE.Prev[APos] := AE.Head[LH];
-    AE.Head[LH] := SizeInt(APos);
+    AE.Head[LH] := Int32(APos);
     AE.Watermark := APos + 1;
   end;
 end;
@@ -179,6 +179,12 @@ begin
   if LN > AMax then
     LN := AMax;
   {$PUSH}{$Q-}{$R-}
+  while (Result + 8 <= LN) do
+  begin
+    if PUInt64(AE.InBuf + APos + Result)^ <> PUInt64(AE.InBuf + LSrc + Result)^ then
+      Break;
+    Inc(Result, 8);
+  end;
   while (Result < LN) and (AE.InBuf[APos + Result] = AE.InBuf[LSrc + Result]) do
     Inc(Result);
   {$POP}
@@ -188,7 +194,7 @@ end;
 function FindBestMatch(var AE: TEngine; APos: SizeUInt; ARoom: SizeUInt;
   ANiceLen: SizeUInt; out ADist: SizeUInt): SizeUInt;
 var
-  LCand: SizeInt;
+  LCand: Int32;
   LLimit: SizeUInt;
   LDist: SizeUInt;
   LLen: SizeUInt;
