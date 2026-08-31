@@ -12,7 +12,6 @@ unit nextpas.core.ssh.kex.curve25519;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.buffer,
