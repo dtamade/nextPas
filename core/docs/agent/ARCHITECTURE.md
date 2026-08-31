@@ -51,7 +51,9 @@
 | 单元 | 层 | 职责 | 允许依赖 |
 |------|---|------|---------|
 | `nextpas.core.agent` | 门面 | 纯 re-export 公共词表与入口函数 | 全部子单元 |
-| `nextpas.core.agent.textutil.pas` | 复用 | UTF-8 安全截断单一真源 `AgentUtf8SafeCutLen/Truncate`（inline 纯函数零开销，base/provider/tools 共享）| —（无依赖） |
+| `nextpas.core.agent.textutil.pas` | 复用 | UTF-8 安全截断转发薄壳（单一真源在 `nextpas.core.text.utf8`，`AgentUtf8SafeCutLen/Truncate` 为公共 API 冻结名转发；`AgentEstimateTokens` 估算）| nextpas.core.text |
+| `nextpas.core.agent.base.slotmap.pas` | 词表 | 槽位注册表 `TAgentSlotRegistry`/`TAgentSlotMap`/`AgentSlotMapEnsureSize`（O(1) 直映+稀疏回退，fold/provider 共享单一真源，2026-08-31 自 helpers 拆出）| agent.base.constants |
+| `nextpas.core.agent.base.deltabuilder.pas` | 词表 | 增量构建器 `TAgentDeltaBuilder`/`PStreamDelta`（Count/Cap 几何增长，三路解码器高频路径共享，2026-08-31 自 helpers 拆出）| agent.base.types |
 | `nextpas.core.agent.base.pas` | 词表 | TMessage/TPart/TStreamDelta/TTokenUsage/TCompletionRequest/TToolSpec/TAgentErrorCode、枚举、sentinel 常量、TTriState、TJsonText、TWire* wire 词表（纯词表零 IO，只依赖底座；`Utf8Cut` 透传 textutil）| core.base, agent.textutil |
 | `nextpas.core.agent.errors.pas` | 错误 | EAgentError/EAgentCancelled 异常类、HTTP status→错误码分类器（枚举在 base）| agent.base, core.base |
 | `nextpas.core.agent.intf.pas` | 接缝 | IAgentProvider/IAgentCompletion/IAgentTransport/IAgentWireStream/IAgentWireDecoder/IAgentTool/IToolExecutor/IAgentClock/IAgentTranscriptStore | base, errors, async.cancellation |
@@ -88,7 +90,7 @@
 | `nextpas.core.agent.pricing.pas` | 策略 | **Phase1 T1.1（2026-08-30）**：纯策略计费：`TModelPricing`/`EstimateCost`（`(prompt*per1k+500) div 1000 + (completion*per1k*rate+5000) div 10000` 整数μUSD，四舍五入同源 `tk888.billing.pas:22,212`）+ `TPassthroughPricing`/`ImageTierOf`（max-edge ≤1024→1000 ≤2048→2000 else 4000，含 `2048x2048→2000` 特判 `billing:470`）零IO纯函数，无堆分配 | agent.base |
 
 体积指引：单文件 >800 行必须拆分（provider.* 各子域预期 ~500-700 行，含 wire 映射注释；超出即拆 `provider.<name>.<aspect>` 子模块）。
-现状（2026-08-30 perfection）：`provider.common` 291+565+109+519（common/wire/extra/slots 薄壳+三子域）/ `provider.openai` 326/348/232/359（门面/encode/decode/decoder）/ `provider.openai.responses` 256/307/245/441（门面/encode/decode/decoder）/ `provider.anthropic` 397+449+196+332（门面/encode/decode/decoder）—— provider 域 14/14 <800 全达标（含 fake 386）；`base` 248+36+586+664（门面/constants/types/helpers 薄壳+三子域，已 <800）/ `loop` 57+97+120+183+744（门面/types/budget/exec/impl，impl 744 为循环稳定聚合点暂不拆）/ `transport.http` 701 / `hedge` 465 / `session` 546（700 上下为受控聚合点，行数监控不回落即零增量承诺，详表见上）。
+现状（2026-08-31 反哺收口）：`provider.common` 291+565+109+519（common/wire/extra/slots 薄壳+三子域）/ `provider.openai` 326/348/232/359（门面/encode/decode/decoder）/ `provider.openai.responses` 256/307/245/441（门面/encode/decode/decoder）/ `provider.anthropic` 397+449+196+332（门面/encode/decode/decoder）—— provider 域 14/14 <800 全达标（含 fake 386）；`base` 248+36+586+414 + `slotmap` 145 + `deltabuilder` 128（门面/constants/types/helpers 纯函数 + 槽位注册表/增量构建器独立单元，均 <800）/ `loop` 57+97+120+183+744（门面/types/budget/exec/impl，impl 744 为循环稳定聚合点暂不拆）/ `transport.http` 701 / `hedge` 465 / `session` 551（700 上下为受控聚合点，行数监控不回落即零增量承诺，详表见上）。
 
 ## 3. 数据流
 
