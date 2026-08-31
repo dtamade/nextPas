@@ -36,47 +36,19 @@ const
     $F3, $B9, $CA, $C2, $FC, $63, $25, $51
   );
 
-function IsZeroBytes(const A: TBytes): Boolean;
-var
-  I: Integer;
-begin
-  if Length(A) = 0 then Exit(True);
-  for I := 0 to High(A) do
-    if A[I] <> 0 then Exit(False);
-  Result := True;
-end;
 
-function CompareBigEndian(const A, B: TBytes): Integer;
-var
-  I: Integer;
-  LA, LB: TBytes;
-  LOffA, LOffB: Integer;
-begin
-  LA := A;
-  LB := B;
-  LOffA := 0;
-  while (LOffA < Length(LA)) and (LA[LOffA] = 0) do Inc(LOffA);
-  LOffB := 0;
-  while (LOffB < Length(LB)) and (LB[LOffB] = 0) do Inc(LOffB);
-  if (Length(LA) - LOffA) < (Length(LB) - LOffB) then Exit(-1);
-  if (Length(LA) - LOffA) > (Length(LB) - LOffB) then Exit(1);
-  for I := 0 to (Length(LA) - LOffA - 1) do
-  begin
-    if LA[LOffA + I] < LB[LOffB + I] then Exit(-1);
-    if LA[LOffA + I] > LB[LOffB + I] then Exit(1);
-  end;
-  Result := 0;
-end;
+
+
 
 function IsValidPrivateScalar(const A: TBytes): Boolean;
 var
   LOrder: TBytes;
 begin
   if Length(A) <> 32 then Exit(False);
-  if IsZeroBytes(A) then Exit(False);
+  if nextpas.core.bytes.ops.IsZeroBytes(A) then Exit(False);
   SetLength(LOrder, 32);
   Move(P256_ORDER_N[0], LOrder[0], 32);
-  if CompareBigEndian(A, LOrder) >= 0 then Exit(False);
+  if nextpas.core.bytes.ops.CompareUnsigned(A, LOrder) >= 0 then Exit(False);
   Result := True;
 end;
 
