@@ -873,9 +873,10 @@ build/
 
 | 模块        | 职责                                                       |
 | ----------- | ---------------------------------------------------------- |
+| `db`        | 数据库家族（6 后端 sqlite/pg/mysql/odbc/redis/dm + Bulk/CapProbe/sqlscan，L3 家族详 `core/docs/db/CONTRACT.md`） |
 | `log`       | 完整日志实现（格式化、输出、异步）                         |
 | `config`    | 配置管理（多源、热加载）                                   |
-| `redis`     | Redis 客户端                                               |
+| `redis`     | Redis 客户端（L2 能力，L3 框架面经 db.redis 统一）          |
 | `http`      | HTTP 服务器/客户端（路由、中间件、静态文件、SSE、OpenAPI） |
 | `websocket` | WebSocket（帧协议、Room、广播）                            |
 | `mail`      | 消息模型/RFC5322 地址/MIME 桥接（依赖 mime）/SMTP 客户端 + 事件驱动 SMTP 服务器（net.server poll-driven 会话）；IMAP/POP3 后续批次 |
