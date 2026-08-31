@@ -7,6 +7,9 @@ interface
 uses
   np_error_recovery;
 
+type
+  TErrorRecovery = np_error_recovery.TErrorRecovery;
+
 implementation
 
 end.

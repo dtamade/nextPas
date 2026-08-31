@@ -7,6 +7,10 @@ interface
 uses
   np_mir_pass_licm;
 
+type
+  TMirBlockIdVec = np_mir_pass_licm.TMirBlockIdVec;
+  TMirLicmPass = np_mir_pass_licm.TMirLicmPass;
+
 implementation
 
 end.

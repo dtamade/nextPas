@@ -23,13 +23,6 @@ type
   TDiagnosticByteCountResolver = np_diagnostics_sink.TDiagnosticByteCountResolver;
   TDiagnosticsSink = np_diagnostics_sink.TDiagnosticsSink;
 
-function CloneOverloadCandidatesFromArray(const ACandidates: TOverloadCandidateArray): TOverloadCandidateVec; inline;
-
 implementation
-
-function CloneOverloadCandidatesFromArray(const ACandidates: TOverloadCandidateArray): TOverloadCandidateVec; inline;
-begin
-  Result := np_diagnostics_sink.CloneOverloadCandidatesFromArray(ACandidates);
-end;
 
 end.

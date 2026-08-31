@@ -7,6 +7,9 @@ interface
 uses
   np_diagnostics_json;
 
+type
+  TDiagnosticsJson = np_diagnostics_json.TDiagnosticsJson;
+
 implementation
 
 end.

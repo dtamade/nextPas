@@ -11,7 +11,6 @@ type
   TSourceFileId = np_source_database.TSourceFileId;
   TSourceLineOffsetVec = np_source_database.TSourceLineOffsetVec;
   TSourceFileEntry = np_source_database.TSourceFileEntry;
-  PSourceFileEntry = np_source_database.PSourceFileEntry;
   TSourceFileEntryVec = np_source_database.TSourceFileEntryVec;
   TLineCol = np_source_database.TLineCol;
   TSourceDatabase = np_source_database.TSourceDatabase;
