@@ -18,11 +18,18 @@ uses
   nextpas.core.exception, nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
   nextpas.core.git.base,
-  nextpas.core.git.native.base,
   nextpas.core.text.format;
 
 type
-  EGitError = nextpas.core.git.native.base.EGitError;
+  EGitError = class(Exception)
+  private
+    FErrorCode: Integer;
+    FErrorClass: Integer;
+  public
+    constructor Create(AErrorCode: Integer; const AOperation: string = '');
+    property ErrorCode: Integer read FErrorCode;
+    property ErrorClass: Integer read FErrorClass;
+  end;
 
   TGitOID = record
     Data: git_oid;
@@ -120,11 +127,6 @@ type
     function Blame(const APath: string): TGitBlame;
     // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
     function ConfigEntries: TGitConfigEntryArray;
-    // k97/k101: patch/checkout helpers via git CLI golden对照
-    procedure ApplyPatch(const APatchText: string);
-    procedure CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
-    function WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
-      AShowBinary: Boolean): string;
 
     // Backward compatibility with old naming
     function HasUncommit: Boolean;
@@ -244,8 +246,7 @@ function GitTimeToString(const ATime: TGitTime): string;
 implementation
 
 uses
-  nextpas.core.base.utils, nextpas.core.text.strings,
-  nextpas.core.process, nextpas.core.os.env;
+  nextpas.core.base.utils, nextpas.core.text.strings;
 
 { Local helpers replacing SysUtils functions to avoid TBytes/TStringArray conflicts }
 
@@ -404,6 +405,12 @@ begin
   Result := 0;
 end;
 
+procedure CheckGitResult(AResult: Integer; const AOperation: string);
+begin
+  if AResult <> GIT_OK then
+    raise EGitError.Create(AResult, AOperation);
+end;
+
 function GetGitErrorMessage: string;
 var
   Error: Pgit_error_t;
@@ -415,29 +422,16 @@ begin
     Result := 'Unknown error';
 end;
 
-function CreateGitError(AErrorCode: Integer; const AOperation: string): EGitError; inline;
+constructor EGitError.Create(AErrorCode: Integer; const AOperation: string);
 var
-  Err: Pgit_error_t;
-  Detail: string;
-  Klass: Integer;
+  ErrorMsg: string;
 begin
-  Err := git_error_last();
-  Klass := 0;
-  if Assigned(Err) and Assigned(Err^.message) then
-  begin
-    Detail := string(Err^.message);
-    Klass := Err^.klass;
-  end else
-    Detail := 'Unknown error';
+  FErrorCode := AErrorCode;
+  FErrorClass := 0;
+  ErrorMsg := GetGitErrorMessage;
   if AOperation <> '' then
-    Detail := AOperation + ': ' + Detail;
-  Result := EGitError.Create(AErrorCode, Klass, Detail);
-end;
-
-procedure CheckGitResult(AResult: Integer; const AOperation: string);
-begin
-  if AResult <> GIT_OK then
-    raise CreateGitError(AResult, AOperation);
+    ErrorMsg := AOperation + ': ' + ErrorMsg;
+  inherited Create(ErrorMsg);
 end;
 
 constructor TGitSignature.Create(const AName, AEmail: string; const AWhen: TGitTime);
@@ -625,7 +619,7 @@ end;
 procedure TGitRepository.CheckResult(AResult: Integer; const AOperation: string);
 begin
   if AResult <> GIT_OK then
-    raise CreateGitError(AResult, AOperation);
+    raise EGitError.Create(AResult, AOperation);
 end;
 
 function TGitRepository.GetPath: string;
@@ -654,7 +648,7 @@ var
 begin
   rc := git_repository_head(RefHandle, FHandle);
   if rc <> GIT_OK then
-    raise CreateGitError(rc, 'Get HEAD reference');
+    raise EGitError.Create(rc, 'Get HEAD reference');
   Result := TGitReference.Create(Self, RefHandle);
 end;
 
@@ -691,7 +685,7 @@ begin
 
   // For other errors, raise exception
   if rc <> GIT_OK then
-    raise CreateGitError(rc, 'Get HEAD reference');
+    raise EGitError.Create(rc, 'Get HEAD reference');
 
   // Get branch name from reference
   HeadRef := TGitReference.Create(Self, RefHandle);
@@ -711,7 +705,6 @@ var
   rc: cint;
 begin
   Result := nil;
-  List := nil;
   try
     CheckGitResult(git_branch_iterator_new(Iterator, FHandle, AType), 'New branch iterator');
     try
@@ -720,7 +713,7 @@ begin
         rc := git_branch_next(RefHandle, BranchType, Iterator);
         if rc = GIT_ITEROVER then Break;
         if rc <> GIT_OK then
-          raise CreateGitError(rc, 'Iterate branches');
+          raise EGitError.Create(rc, 'Iterate branches');
         BranchName := string(git_reference_name(RefHandle));
         List.Add(BranchName);
         git_reference_free(RefHandle);
@@ -1444,7 +1437,7 @@ begin
   AObj := nil;
   ATree := nil;
   if ASpec = '' then
-    raise EGitError.Create(GIT_ENOTFOUND, 0, 'Resolve revspec (empty)');
+    raise EGitError.Create(GIT_ENOTFOUND, 'Resolve revspec (empty)');
   CheckResult(git_revparse_single(AObj, FHandle, PChar(ASpec)), 'Resolve revspec ' + ASpec);
   try
     // git_object_peel yields a borrowed-into-new reference; caller frees both.
@@ -1681,7 +1674,7 @@ begin
         if rc = GIT_ITEROVER then
           Break;
         if rc <> GIT_OK then
-          raise CreateGitError(rc, 'Iterate config entries');
+          raise EGitError.Create(rc, 'Iterate config entries');
         if LEntry <> nil then
         begin
           SetLength(Result, N + 1);
@@ -1698,100 +1691,6 @@ begin
   finally
     git_config_free(Cfg);
   end;
-end;
-
-procedure TGitRepository.ApplyPatch(const APatchText: string);
-var
-  LWorkDir, LTmpPatch: string;
-  LOut: TProcessOutput;
-begin
-  if APatchText = '' then
-    Exit;
-  LWorkDir := GetWorkDir;
-  if LWorkDir = '' then
-    raise EGitError.Create(GIT_EINVALID, 0, 'ApplyPatch: bare repository has no workdir');
-  LTmpPatch := PathJoin([GetTempDir, 'nextpas_patch_apply.patch']);
-  WriteFileText(LTmpPatch, APatchText);
-  try
-    LOut := RunIn('/usr/bin/git', ['apply', '--whitespace=nowarn', LTmpPatch], LWorkDir);
-    if LOut.ExitCode <> 0 then
-      raise EGitError.Create(GIT_EAPPLYFAIL, 0, 'ApplyPatch: ' + Trim(LOut.StdErr + sLineBreak + LOut.StdOut));
-  finally
-    try
-      if FileExists(LTmpPatch) then
-        DeleteFile(LTmpPatch);
-    except
-    end;
-  end;
-end;
-
-procedure TGitRepository.CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
-var
-  LWorkDir: string;
-  LArgs: TStringArray;
-  LOut: TProcessOutput;
-  I: Integer;
-begin
-  if Trim(ARevspec) = '' then
-    raise EGitError.Create(GIT_EINVALIDSPEC, 0, 'CheckoutPaths: revspec required');
-  if Length(APaths) = 0 then
-    Exit;
-  LWorkDir := GetWorkDir;
-  if LWorkDir = '' then
-    raise EGitError.Create(GIT_EINVALID, 0, 'CheckoutPaths: bare repository has no workdir');
-  SetLength(LArgs, 2 + 1 + Length(APaths));
-  LArgs[0] := 'checkout';
-  LArgs[1] := ARevspec;
-  LArgs[2] := '--';
-  for I := 0 to High(APaths) do
-    LArgs[3 + I] := APaths[I];
-  LOut := RunIn('/usr/bin/git', LArgs, LWorkDir);
-  if LOut.ExitCode <> 0 then
-    raise EGitError.Create(GIT_EINVALIDSPEC, 0, 'CheckoutPaths: ' + Trim(LOut.StdErr + sLineBreak + LOut.StdOut));
-end;
-
-function TGitRepository.WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
-  AShowBinary: Boolean): string;
-var
-  LWorkDir: string;
-  LArgs: TStringArray;
-  LOut: TProcessOutput;
-  I, N, LPos: Integer;
-begin
-  Result := '';
-  LWorkDir := GetWorkDir;
-  if LWorkDir = '' then
-    raise EGitError.Create(GIT_EINVALID, 0, 'WorkdirPatchText: bare repository has no workdir');
-  N := 1;
-  if AShowBinary then Inc(N);
-  if Trim(ARevspec) <> '' then Inc(N);
-  if Length(APaths) > 0 then Inc(N, 1 + Length(APaths));
-  SetLength(LArgs, N);
-  LArgs[0] := 'diff';
-  LPos := 1;
-  if AShowBinary then
-  begin
-    LArgs[LPos] := '--binary';
-    Inc(LPos);
-  end;
-  if Trim(ARevspec) <> '' then
-  begin
-    LArgs[LPos] := ARevspec;
-    Inc(LPos);
-  end;
-  if Length(APaths) > 0 then
-  begin
-    LArgs[LPos] := '--';
-    Inc(LPos);
-    for I := 0 to High(APaths) do
-      LArgs[LPos + I] := APaths[I];
-  end;
-  LOut := RunIn('/usr/bin/git', LArgs, LWorkDir);
-  if LOut.ExitCode <> 0 then
-    raise EGitError.Create(GIT_EINVALIDSPEC, 0, 'WorkdirPatchText: ' + Trim(LOut.StdErr));
-  Result := LOut.StdOut;
-  if Trim(Result) = '' then
-    Result := '';
 end;
 
 function TGitRepository.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;
@@ -1824,7 +1723,7 @@ begin
       rc := git_revwalk_next(LOID, LWalk);
       if rc = GIT_ITEROVER then Break;
       if rc <> GIT_OK then
-        raise CreateGitError(rc, 'Iterate revwalk');
+        raise EGitError.Create(rc, 'Iterate revwalk');
       LCommitOID.Data := LOID;
       SetLength(LCommits, Length(LCommits) + 1);
       LCommits[High(LCommits)] := GetCommit(LCommitOID);
