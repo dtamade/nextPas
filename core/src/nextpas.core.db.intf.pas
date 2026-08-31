@@ -235,6 +235,26 @@ type
     { 单语句占位符上限的保守下界：sqlite=999（跨版本保证值，
       新栈实际更高）、pg/mysql 协议上限 65535 }
     function MaxPlaceholders: Integer;
+    { 服务端版本整数：major*10000+minor*100+patch（pg server_version_num 同构）；
+      0 = 未探测或网关/键值不探 }
+    function ServerVersion: Integer;
+    { V4 高级能力（V3-E 探针预留，当前诚实 false，未来升 true 不破契约） }
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
+  end;
+
+  {** Bulk copy 高速面（V4.3 universal：sqlite/pg/mysql/odbc/dm 单事务批量已实现，redis 键值 honest false）。
+      语义：单事务内行复制（pg COPY BINARY 未来高速路径预留）。
+      契约：BeginCopy 前置，WriteRow 逐行，EndCopy 提交；任一步失败回滚。
+      IDbCapabilities.SupportsBulkCopy ⇔ QI 互证（conformance 钉死）。 *}
+  IDbBulkCopy = interface
+    ['{A1B2C3D4-E5F6-4711-8899-AABBCCDDEEFF}']
+    procedure BeginCopy(const ATable: string; const AColumns: array of string);
+    procedure WriteRow(const AValues: array of string);
+    procedure EndCopy;
+    procedure AbortCopy;
   end;
 
   {** 观测钩子监听器（V3-B3）：连接生命周期与执行事件的同步回调面。

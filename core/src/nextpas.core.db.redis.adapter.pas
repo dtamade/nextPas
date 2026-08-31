@@ -1,6 +1,6 @@
 unit nextpas.core.db.redis.adapter;
 
-{** @desc IDbConnection 的 Redis 原生适配器（RESP2 流水线/MULTI 直映，惰性 Query/Reset，单列 'reply'）。 *}
+{** @desc IDbConnection 的 Redis 原生适配器（RESP2 流水线/MULTI 直映，惰性 Query/Reset，单列 'reply'）。 体积注记：本单元约900行超 800 行软阈值，内聚性强（适配器单职责），暂不拆分，拆分预留见 roadmap。 *}
 {** 能力降级与观测同构见 CONTRACT §2.12/§2.13；命令分词/回复映射/事务语义详实现（单源以 CONTRACT 为准）。 *}
 
 {$I nextpas.core.settings.inc}
@@ -14,11 +14,13 @@ uses
   nextpas.core.errors,
   nextpas.core.text.utils,
   nextpas.core.text.conv,
+  nextpas.core.text.kv,
   nextpas.core.bytes.ops,
   nextpas.core.time,
   nextpas.core.net,
   nextpas.core.db.base,
   nextpas.core.db.intf,
+  nextpas.core.db.capprobe,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.redis.base,
@@ -75,10 +77,87 @@ var
   LHostPart, LTail: string;
   LSlash, LColon: Integer;
   LCode: Integer;
+  LIsKv: Boolean;
+  LKvHost: string;
+  LKvPort: string;
+  LKvDb: string;
+  LHasKvKey: Boolean;
 begin
   AOpts := TDbRedisConnectOptions.Default;
   AOpts.Host := '';
   AOpts.Port := DB_REDIS_DEFAULT_PORT;
+  { KV 复用：若串含 '=' 则走 text.kv ScanKV（host/port/db 键），
+    兼容空格/分号分隔与引号包裹；失败则回落传统 host[:port][/db]。
+    零分配校验先行，键大小写不敏感。 }
+  LIsKv := Pos('=', AAddr) > 0;
+  if LIsKv then
+  begin
+    LKvHost := '';
+    LKvPort := '';
+    LKvDb := '';
+    LHasKvKey := False;
+    try
+      ScanKV(AAddr,
+        procedure(const AKey, AValue: string)
+        begin
+          if SameText(AKey, 'host') or SameText(AKey, 'addr') then
+          begin
+            LKvHost := AValue;
+            LHasKvKey := True;
+          end
+          else if SameText(AKey, 'port') then
+          begin
+            LKvPort := AValue;
+            LHasKvKey := True;
+          end
+          else if SameText(AKey, 'db') or SameText(AKey, 'database') or
+                  SameText(AKey, 'dbindex') then
+          begin
+            LKvDb := AValue;
+            LHasKvKey := True;
+          end
+          else if SameText(AKey, 'password') or SameText(AKey, 'pass') then
+          begin
+            { 密码键在地址串中忽略（由 ConnectRedis 选项面承载），
+              仅作键识别以判定 KV 形态有效 }
+            LHasKvKey := True;
+          end;
+        end);
+    except
+      on E: Exception do
+        raise EDbError.CreateSimple(dbkRedis, E.Message);
+    end;
+    if LHasKvKey then
+    begin
+      if LKvHost <> '' then
+        AOpts.Host := Trim(LKvHost);
+      if LKvPort <> '' then
+      begin
+        Val(LKvPort, AOpts.Port, LCode);
+        if (LCode <> 0) or (AOpts.Port = 0) then
+          raise EDbError.CreateSimple(dbkRedis,
+            'invalid port "' + LKvPort + '"');
+      end;
+      if LKvDb <> '' then
+      begin
+        Val(LKvDb, AOpts.DbIndex, LCode);
+        if (LCode <> 0) or (AOpts.DbIndex < 0) then
+          raise EDbError.CreateSimple(dbkRedis,
+            'invalid db index "' + LKvDb + '"');
+        if AOpts.DbIndex > 16383 then
+          raise EDbError.CreateSimple(dbkRedis,
+            'db index out of range (0..16383)');
+      end;
+      if AOpts.Host = '' then
+        raise EDbError.CreateSimple(dbkRedis, 'empty host');
+      if AOptions.StatementTimeoutMs > 0 then
+        AOpts.IoTimeoutMs := AOptions.StatementTimeoutMs;
+      Exit;
+    end;
+    { 无已知键但含 '=' -> 视为畸形 KV，不回落以暴露明确错误 }
+    raise EDbError.CreateSimple(dbkRedis,
+      'invalid redis address kv "' + AAddr + '"');
+  end;
   LHostPart := AAddr;
   LSlash := Pos('/', LHostPart);
   if LSlash > 0 then
@@ -90,9 +169,11 @@ begin
       raise EDbError.CreateSimple(dbkRedis,
         'invalid db index "/' + LTail + '"');
   end;
-  if AOpts.DbIndex > 15 then
+  { 放宽上限：0..16383（远超默认 0..15，适配可配置 databases），
+    错误消息保留清晰范围提示 }
+  if AOpts.DbIndex > 16383 then
     raise EDbError.CreateSimple(dbkRedis,
-      'db index out of range (0..15)');
+      'db index out of range (0..16383)');
   LColon := Pos(':', LHostPart);
   if LColon > 0 then
   begin
@@ -174,6 +255,11 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
   end;
 
 type
@@ -553,8 +639,9 @@ var
   LT0: QWord;
   LTimed: Boolean;
 begin
+  { 空列表 no-op：与 pg/mysql 的空批一致，避免调用方分支特判 }
   if Length(ASteps) = 0 then
-    raise EDbError.CreateSimple(dbkRedis, 'empty batch');
+    Exit;
   SetLength(LStepFrames, Length(ASteps));
   for I := 0 to High(ASteps) do
   begin
@@ -650,6 +737,31 @@ begin
   Result := 999;   { 保守下界，与家族一致 }
 end;
 
+
+function TDbRedisConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbRedisConnection.SupportsNativeVector: Boolean;
+begin
+  Result := ProbeNativeVector(ServerVersion, False);
+end;
+
+function TDbRedisConnection.SupportsJsonPath: Boolean;
+begin
+  Result := ProbeJsonPath(ServerVersion);
+end;
+
+function TDbRedisConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := ProbeRangeTypes(ServerVersion);
+end;
+
+function TDbRedisConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := ProbeSupportsBulkCopy(dbkRedis, ServerVersion);
+end;
 { ---- TDbRedisQuery ---- }
 
 constructor TDbRedisQuery.Create(AConn: TDbRedisConnection;

@@ -11,6 +11,7 @@ unit nextpas.core.db.redis.subscribe;
        关闭）→ 增量 RESP 解析 → 推送帧投递进内建有界记录队列；
        消费方 Receive 阻塞取用。
 
+       体积注记：本单元约1170行超 800 行软阈值，内聚性强（订阅会话单职责），暂不拆分，拆分预留见 roadmap。
        底座全部来自 core 家族（不在本单元造平行宇宙），骨架自
        nextpas.core.db.pg.listen 泛化：
        - 线程运行时初始化：nextpas.core.thread.init；
@@ -246,9 +247,11 @@ begin
   Result := RespBytesToStr(AB);
 end;
 
-{ 取消桥（Token.Cancel）：置停泵位并惊动断线退避等待。连接在途时
-  泵阻塞在带 deadline 的 Recv 上，最迟一个 IO deadline 内察觉
-  （IRedisTransport 无中断面，该延迟诚实登记于单元头）。 }
+{ 取消桥（Token.Cancel）：置停泵位并惊动断线退避等待与数据等待。
+  连接在途时泵阻塞在带 deadline 的 Recv 上，最迟一个 IO deadline
+  内察觉（IRedisTransport 无中断面，该延迟诚实登记于单元头）；
+  hole-aware：同时惊动 FData 让 Receive 尾窗口及时察觉停泵，
+  不让已入队消息在停泵后仍被睡满节拍。 }
 procedure RedisSubscriberStopBridge(AData: Pointer);
 var
   LSub: TRedisSubscriber;
@@ -257,7 +260,10 @@ begin
   if LSub <> nil then
   begin
     LSub.StopPump;
-    LSub.FIdle.SetEvent;
+    if LSub.FIdle <> nil then
+      LSub.FIdle.SetEvent;
+    if LSub.FData <> nil then
+      LSub.FData.SetEvent;
   end;
 end;
 
@@ -455,6 +461,8 @@ begin
   atomic_exchange(FStopping, 1, mo_acq_rel);
   if FIdle <> nil then
     FIdle.SetEvent;
+  if FData <> nil then
+    FData.SetEvent;
   if FPool <> nil then
   begin
     FPool.WaitAll;                     { 泵自然收尾后才动池 }
@@ -779,9 +787,39 @@ begin
 end;
 
 procedure TRedisSubscriber.MarkDisconnected(const ADiag: string);
+var
+  LPos: Integer;
+  LValue: TRespValue;
+  LNeedMore: Boolean;
+  LView: TBytes;
 begin
+  { hole-aware 尾窗口：断线前若 FRcvBuf 中已有完整帧（上一轮 Recv
+    已到但尚未及 Consume 就被判对端关闭），先尽力投递再丢半帧，
+    不让已完整到达的消息因“半帧丢弃”一并丢失。 }
+  if FHaveLen > 0 then
+  begin
+    LView := Copy(FRcvBuf, 0, FHaveLen);
+    LPos := 0;
+    try
+      while LPos < FHaveLen do
+      begin
+        if not RespTryParse(LView, LPos, LValue, LNeedMore) then
+          Break;
+        ConsumeFrame(LValue);
+      end;
+      if LPos > 0 then
+      begin
+        if LPos < FHaveLen then
+          Move(FRcvBuf[LPos], FRcvBuf[0], FHaveLen - LPos);
+        Dec(FHaveLen, LPos);
+        if FHaveLen < 0 then FHaveLen := 0;
+      end;
+    except
+      { 解析异常已在外层转断线，此处静默忽略以保活计数 }
+    end;
+  end;
   FTransport := nil;
-  FHaveLen := 0;                       { 丢弃半帧残料 }
+  FHaveLen := 0;                       { 丢弃半帧残料（不完整尾） }
   FLk.Acquire;
   try
     FConnected := False;
@@ -895,6 +933,10 @@ var
   LNeedMore: Boolean;
   LView: TBytes;
 begin
+  { hole-aware 取消检查：已置停泵位时不再阻塞 Recv，直接让外层
+    循环感知停止并进入尾窗口投递 }
+  if (atomic_load(FStopping, mo_acquire) <> 0) or FToken.IsCancelled then
+    Exit;
   if FHaveLen >= MAX_FRAME_BYTES then
   begin
     MarkDisconnected('frame too large');
@@ -1017,17 +1059,42 @@ end;
 
 procedure TRedisSubscriber.PumpLoop;
 var
-  LCmds: TSubCmdArray;
-  I: Integer;
   LNextRetryMs: Int64;
+  LPos: Integer;
+  LValue: TRespValue;
+  LNeedMore: Boolean;
+  LView: TBytes;
 begin
   LNextRetryMs := 0;
   try
     PumpLoopBody(LNextRetryMs);
   finally
-    { 任务体任何未预见的异常路径都必须落存活位——否则消费方 Receive
-      永远等不到 stopped 语义（防御性收尾，正常路径经两处 Break 到此） }
+    { hole-aware 收尾：泵退出前尽力把 FRcvBuf 中已完整到达的帧
+      投递进环形队列（不计 Gap），再落存活位并惊动 FData，让
+      Receive 尾窗口能取尽余量而非睡满节拍后才察觉 stopped。 }
+    if FHaveLen > 0 then
+    try
+      LView := Copy(FRcvBuf, 0, FHaveLen);
+      LPos := 0;
+      while LPos < FHaveLen do
+      begin
+        if not RespTryParse(LView, LPos, LValue, LNeedMore) then
+          Break;
+        ConsumeFrame(LValue);
+      end;
+      if LPos > 0 then
+      begin
+        if LPos < FHaveLen then
+          Move(FRcvBuf[LPos], FRcvBuf[0], FHaveLen - LPos);
+        Dec(FHaveLen, LPos);
+        if FHaveLen < 0 then FHaveLen := 0;
+      end;
+    except
+      FHaveLen := 0;
+    end;
     atomic_exchange(FPumpAlive, 0, mo_acq_rel);
+    if FData <> nil then FData.SetEvent;
+    if FIdle <> nil then FIdle.SetEvent;
   end;
 end;
 
