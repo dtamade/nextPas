@@ -136,6 +136,7 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.bytes.ops,
   nextpas.core.path,
   nextpas.core.fs,
@@ -532,22 +533,22 @@ begin
   Result := nextpas.core.platform.error.platform_get_last_error();
 end;
 
-function ExceptAddr: Pointer; inline;
+function ExceptAddr: Pointer;
 begin
-  Result := System.ExceptAddr;
+  Result := SysUtils.ExceptAddr;
 end;
 
-function ExceptFrameCount: LongInt; inline;
+function ExceptFrameCount: LongInt;
 begin
-  Result := System.ExceptFrameCount;
+  Result := SysUtils.ExceptFrameCount;
 end;
 
-function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
+function ExceptFrameAt(const AIndex: LongInt): CodePointer;
 begin
-  if (AIndex < 0) or (AIndex >= System.ExceptFrameCount) then
+  if (AIndex < 0) or (AIndex >= SysUtils.ExceptFrameCount) then
     Result := nil
   else
-    Result := System.ExceptFrames[AIndex];
+    Result := SysUtils.ExceptFrames[AIndex];
 end;
 
 end.
