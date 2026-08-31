@@ -127,7 +127,7 @@ end;
 | 操作 | 目标 | 证据 |
 |------|------|------|
 | Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire |
-| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；16槽SpinLock池化10k 163ms 4.9×预算，heaptrc0 |
+| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；256槽SpinLock池化10k 163ms 4.9×预算，heaptrc0 |
 | List（embedded） | 有序区间扫描，一次数组分配 | FEntries直填零Stat，VfsDeriveChildNames单次分配 |
 | OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
 | Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |
@@ -143,7 +143,7 @@ end;
 | 测试目录 | 用例数 | 说明 |
 |----------|--------|------|
 | test_vfs_memtree | 16 | Builder/Freeze/错误语义/`.` 根/IReaderAt（Int64防回绕/防御拷贝/两段式/零双驻留，S6后新增2例） |
-| test_vfs_embedded | 8 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口（池化16槽SpinLock零分配，S6后新增2例） |
+| test_vfs_embedded | 8 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口（池化256槽SpinLock零分配，S6后新增2例） |
 | test_vfs_conformance | 7 | 属性电池 P1–P8+INV-V12 × {3 后端} × {整树, Sub}（一个用例跑满矩阵） |
 | test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 + Decompress/ETag 重导出签名 |
 | test_vfs_mount | 10 | 挂载+叠加双视图：basic/longest/duplicate/etag/case/notfound/nested + overlay priority/list dedup/etag priority（P2+游戏热更完整性，最长匹配+优先级叠加双模型） |
