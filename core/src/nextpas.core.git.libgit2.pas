@@ -13,10 +13,10 @@ type
   TGitManagerImpl = class(TInterfacedObject, IGitManager)
   private
     FMgr: TGitManager;
-    FActiveHandles: Integer;
+    FActiveHandles: LongInt;
     FFinalizeRequested: Boolean;
-    procedure AcquireHandle;
-    procedure ReleaseHandle;
+    procedure AcquireHandle; inline;
+    procedure ReleaseHandle; inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -186,16 +186,24 @@ begin
   inherited Destroy;
 end;
 
-procedure TGitManagerImpl.AcquireHandle;
+procedure TGitManagerImpl.AcquireHandle; inline;
 begin
-  Inc(FActiveHandles);
+  InterlockedIncrement(FActiveHandles);
 end;
 
-procedure TGitManagerImpl.ReleaseHandle;
+procedure TGitManagerImpl.ReleaseHandle; inline;
+var
+  LNew: LongInt;
 begin
-  if FActiveHandles > 0 then
-    Dec(FActiveHandles);
-  if (FActiveHandles = 0) and FFinalizeRequested then
+  if InterlockedExchangeAdd(FActiveHandles, 0) <= 0 then
+    Exit;
+  LNew := InterlockedDecrement(FActiveHandles);
+  if LNew < 0 then
+  begin
+    InterlockedIncrement(FActiveHandles);
+    Exit;
+  end;
+  if (LNew = 0) and FFinalizeRequested then
     Finalize;
 end;
 
@@ -208,7 +216,7 @@ end;
 
 procedure TGitManagerImpl.Finalize;
 begin
-  if FActiveHandles > 0 then
+  if InterlockedExchangeAdd(FActiveHandles, 0) > 0 then
   begin
     FFinalizeRequested := True;
     Exit;

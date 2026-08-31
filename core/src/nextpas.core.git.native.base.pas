@@ -27,9 +27,15 @@ function GitOidFromHex(const AHex: string): TGitOid;
 function GitOidToHex(const AOid: TGitOid): string;
 function GitOidIsValidHex(const AHex: string): Boolean;
 function GitOidSame(const AA, AB: TGitOid): Boolean;
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
+
+{ Shared helpers single-sourced for git native subfamily: suffix test and
+  worktree-dir derivation. Zero-copy scan, inline. }
+function GitEndsWith(const S, Suffix: string): Boolean; inline;
+function GitWorktreeDir(const AGitDir: string): string; inline;
 
 implementation
 
@@ -91,6 +97,16 @@ begin
   Result := True;
 end;
 
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
+var
+  I: Integer;
+begin
+  for I := 0 to GitOidRawLen - 1 do
+    if AOid.Bytes[I] <> 0 then
+      Exit(False);
+  Result := True;
+end;
+
 function GitKindToString(AKind: TGitObjectKind): string;
 begin
   case AKind of
@@ -116,7 +132,7 @@ begin
   raise EGitError.CreateFmt('unknown git object kind "%s"', [AName]);
 end;
 
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
+function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 begin
   // Directory entries (040000) point at trees, gitlinks (160000) at commits,
   // everything else (100644/100755/120000 regular/symlink) is blob content.
@@ -125,6 +141,29 @@ begin
   if AMode = $E000 then
     Exit(gokCommit);
   Result := gokBlob;
+end;
+
+function GitEndsWith(const S, Suffix: string): Boolean; inline;
+var LS, LSu, I: Integer;
+begin
+  LS:=Length(S); LSu:=Length(Suffix);
+  if LSu=0 then Exit(True);
+  if LS<LSu then Exit(False);
+  // zero-copy: compare suffix in place, no Copy allocation
+  for I:=1 to LSu do if S[LS-LSu+I]<>Suffix[I] then Exit(False);
+  Result:=True;
+end;
+
+function GitWorktreeDir(const AGitDir: string): string; inline;
+var P: Integer;
+begin
+  if GitEndsWith(AGitDir,'/.git') then Result:=Copy(AGitDir,1,Length(AGitDir)-5)
+  else if GitEndsWith(AGitDir,'.git') then
+  begin
+    P:=Length(AGitDir);
+    while (P>0) and (AGitDir[P]<>'/') do Dec(P);
+    if P>0 then Result:=Copy(AGitDir,1,P-1) else Result:='.';
+  end else Result:=AGitDir;
 end;
 
 end.

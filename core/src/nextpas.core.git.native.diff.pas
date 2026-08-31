@@ -42,7 +42,8 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
-  nextpas.core.git.native.push;
+  nextpas.core.git.native.push,
+  nextpas.core.git.native.common;
 
 type
   TFlatEntry = record
@@ -132,45 +133,14 @@ begin
   SortFlat(Result);
 end;
 
-function PeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var
-  Kind: TGitObjectKind;
-  Data: TBytes;
-  Info: TGitCommitInfo;
-  TagInfo: TGitTagInfo;
-  Depth: Integer;
-begin
-  Result := AOid;
-  Depth := 0;
-  while Depth < 16 do
-  begin
-    Data := ARepo.ReadObject(Result, Kind);
-    if Kind = gokCommit then
-    begin
-      Info := GitParseCommit(Data);
-      Result := Info.Tree;
-      Exit;
-    end
-    else if Kind = gokTag then
-    begin
-      TagInfo := GitParseTag(Data);
-      Result := TagInfo.Target;
-      Inc(Depth);
-    end
-    else if Kind = gokTree then
-      Exit
-    else
-      raise EGitError.CreateFmt('object %s is not commit/tree/tag', [GitOidToHex(AOid)]);
-  end;
-  raise EGitError.Create('peel too deep');
-end;
+// PeelToTree reused from nextpas.core.git.native.common (single source)
 
 function PeelCommitOrTree(const AGitDir: string; const AOid: TGitOid): TGitOid;
 var Repo: TNativeRepository;
 begin
   Repo := TNativeRepository.Create(AGitDir);
   try
-    Result := PeelToTree(Repo, AOid);
+    Result := GitPeelToTree(Repo, AOid);
   finally
     Repo.Free;
   end;
