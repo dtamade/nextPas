@@ -439,10 +439,11 @@ begin
     begin
       ConnectRedis('127.0.0.1:0');
     end, 'invalid port 0');
+  { 上限已放宽至 16383（远超默认 0..15），/16 视为合法库；越界校验改用 16384 }
   ExpectEDbError(
     procedure
     begin
-      ConnectRedis('127.0.0.1/16');
+      ConnectRedis('127.0.0.1/16384');
     end, 'db index out of range');
   ExpectEDbError(
     procedure

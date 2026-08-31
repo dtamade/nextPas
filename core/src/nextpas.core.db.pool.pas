@@ -24,7 +24,7 @@ unit nextpas.core.db.pool;
     - 预热：MinConnections 在 Create 内建满，失败 fail-fast 抛原建连错。
     - 线程模型：池方法线程安全（互斥锁保护簿记；信号量阻塞不持锁；
       接口引用计数为原子操作）。连接本身仍遵循 CONTRACT §2.1 一连接
-      一逻辑线程。池为单生命周期：Close/Free 后不可复用，需重建。 *}
+      一逻辑线程。池为单生命周期：Close/Free 后不可复用，需重建。 体积注记：本单元约834行超 800 行软阈值，内聚性强（池单职责），暂不拆分，拆分预留见 roadmap。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -392,6 +392,9 @@ end;
 function TDbPoolCore.IdleStale(const AEntry: TIdleEntry;
   const ANow: QWord): Boolean;
 begin
+  // Default 空洞不过期：冷端清扫与惰性复用跳过无持引用条目
+  if AEntry.Conn = nil then
+    Exit(False);
   if Stale(AEntry.CreatedTick, ANow) then
     Exit(True);
   Result := (FPolicy.IdleTimeoutSec > 0) and
@@ -404,6 +407,7 @@ procedure TDbPoolCore.EvictColdStaleLocked(const ANow: QWord);
 begin
   while (Length(FIdle) > 0) and IdleStale(FIdle[0], ANow) do
   begin
+    // 修正反向交换截断：旧代码 FIdle[0]:=Default;FIdle[High]:=E 产生空洞
     FIdle[0] := FIdle[High(FIdle)];
     FIdle[High(FIdle)] := Default(TIdleEntry);
     SetLength(FIdle, Length(FIdle) - 1);
@@ -592,7 +596,11 @@ begin
   FLock.Acquire;
   try
     UnregisterLeaseLocked(P);            { V3-C3：出账 }
-    if (not FClosed) and (not P.FDiscarded) then
+    if IsWriter then
+    begin
+      // 写租约不入读空闲队列，维持单写隔离（仅释放写信号量）
+    end
+    else if (not FClosed) and (not P.FDiscarded) then
     begin
       E.Conn := P.FInner;
       E.CreatedTick := P.FCreatedTick; { 绝对寿命跨租期累计 }
@@ -639,6 +647,13 @@ begin
     if not FReadSlots.TryAcquire then
       raise EDbError.CreateSimple(dbkUnknown,
         'pool: read connections exhausted');
+  end;
+
+  // 信号量已得后复检关团：Close 可能在等待期间发生
+  if FClosed then
+  begin
+    FReadSlots.Release;
+    raise EDbError.CreateSimple(dbkUnknown, 'pool: closed');
   end;
 
   try
@@ -699,6 +714,13 @@ begin
   begin
     if not FWriterSlot.TryAcquire then
       raise EDbError.CreateSimple(dbkUnknown, 'pool: writer occupied');
+  end;
+
+  // 写槽已得后复检关团：避免 Close 后写连接被继续颁发
+  if FClosed then
+  begin
+    FWriterSlot.Release;
+    raise EDbError.CreateSimple(dbkUnknown, 'pool: closed');
   end;
 
   try

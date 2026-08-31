@@ -12,6 +12,7 @@ interface
 uses
   nextpas.core.graphics.base,
   nextpas.core.graphics.path,
+  nextpas.core.graphics.text,
   nextpas.core.image.base;
 
 type
@@ -40,7 +41,7 @@ type
     property Gradient: TGradient read FGradient;
   end;
 
-  TGlyphRun = nextpas.core.graphics.base.TGlyphRun;
+  TGlyphRun = nextpas.core.graphics.text.TGlyphRun;
 
   ICanvas = interface
     ['{A1B2C3D4-E5F6-47A8-9B0C-1D2E3F4A5B6C}']

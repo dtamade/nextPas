@@ -88,8 +88,7 @@
   聚合（含 .gitignore + rename/copy 检测）+ revwalk + commit-graph 读写+缓存（`Build/Write/WriteAll/Verify/Invalidate` + `Stat` 缓存） + reflog + stash（含 push/pop/apply/drop/clear）+ notes + branch + tag + log + describe + diff + blame + mergebase + show + shortlog + catfile + lsfiles + cherrypick + revert + archive + submodule + mailmap + trailer + attributes + bundle + grep + bisect + worktree + config + pkt-line + remote + advertise + negotiate + sideband + indexer + clone + checkout + push + reset + prune + clean + revparse）。
   不实现网络协议；
   远期网络与更深相似度调优仍由 libgit2 后端承接。
-- `EGitError`（git.native.base）是 native 子家族的统一错误类型；
-  libgit2.backend 内的同名声明为历史遗留，后续统一时收敛到 base。
+- `EGitError` 唯一定义于 `git.native.base`（含 `ErrorCode`/`ErrorClass`），`git.libgit2.backend` 为类型别名 `EGitError = native.base.EGitError`，`CreateGitError` 内联封装 `git_error_last`；已收敛，无双源。
 - pack 读取需要"流结束即停"的解压语义，来自 compress 模块的
   `DeflateReaderEmbedded`（TDeflateReader.CreateEmbedded）。
 - 已知限制：index v1 不支持；idx CRC 表不校验；delta 链深度上限 64；

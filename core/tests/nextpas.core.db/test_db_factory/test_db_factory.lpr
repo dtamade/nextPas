@@ -15,6 +15,7 @@ uses
   nextpas.core.db.intf,
   nextpas.core.db,
   nextpas.core.db.factory,
+  nextpas.core.db.factory.builtin,
   nextpas.core.db.pool;
 
 type
@@ -115,17 +116,17 @@ end;
 
 { ---- 用例 ---- }
 
-{ 内建注册表快照：五个规范名，字典序 }
+{ 内建注册表快照：六个规范名，字典序 }
 procedure TestBuiltinRegistrySnapshot;
 const
-  C_EXPECTED: array[0..4] of string =
-    ('mysql', 'odbc', 'postgres', 'redis', 'sqlite');
+  C_EXPECTED: array[0..5] of string =
+    ('dm', 'mysql', 'odbc', 'postgres', 'redis', 'sqlite');
 var
   LNames: TDbDriverNames;
   I: Integer;
 begin
   LNames := DbRegisteredDrivers;
-  CheckEqual(5, Length(LNames), 'builtin count');
+  CheckEqual(6, Length(LNames), 'builtin count');
   for I := 0 to High(C_EXPECTED) do
     CheckEqual(C_EXPECTED[I], LNames[I], 'sorted name ' + IntToStr(I));
 end;
