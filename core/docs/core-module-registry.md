@@ -23,7 +23,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `async` | L1 | event loop/runtime | yes | L0 plus approved L1 | source-contract + focused-runtime |
 | `auth` | L3 | JWT/session/authentication token primitives (`nextpas.core.auth.*`, `nextpas.core.jwt`) | yes | L0-L2 plus crypto/hash/encoding owners | focused-runtime |
 | `atomic` | L0 | atomic primitives | yes | L0 only | focused-runtime |
-| `audio` | L2 | PCM WAV container codec | yes | L0-L2 (io/fs owner) | focused-runtime |
+| `audio` | L2 | container codec / pcm / dsp / device / graph+player / sfx(game-compat) / timeline / spatial / event / bank / resource 七域+扩展（`nextpas.core.audio.*` pure Pascal, realtime zero-alloc; current 38 files, ideal 45） | yes | L0-L1 plus io/fs (L2 explicit allow; container I/O seam via IStream, registry only) | focused-runtime |
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
@@ -96,7 +96,8 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
-| `zip` | L2 | ZIP archive container (store/deflate/Zip64/AES/descriptor/sequential/builder/fs) | yes | L0-L1 plus compress/checksum/io owners | focused-runtime |
+| `zip` | L2 | ZIP archive (writer/reader/sequential/fs/aes/extra/common) | yes | L0-L1 plus fs/compress/checksum/crypto owners (implementation-only fs sandbox, L2→L2 exempt via platform lstat + IsSafeSymlinkTarget) | focused-runtime |
+| `sevenz` | L2 | 7z container (aes/bcj/lzma/fs) | yes | L0-L1 plus io/fs/compress/checksum/crypto/hash owners (L2→L2 exempt via platform lstat, like zip/audio) | focused-runtime |
 
 Database family: `sqlite` and `pg` are L2 backend implementations inside the
 `db` (L3) family; their units physically live under `nextpas.core.db.sqlite.*`
