@@ -1,0 +1,12 @@
+unit nextpas.compiler.ir.mir_pass_inline_heuristic;
+
+{$mode objfpc}{$H+}
+
+interface
+
+uses
+  np_mir_pass_inline_heuristic;
+
+implementation
+
+end.
