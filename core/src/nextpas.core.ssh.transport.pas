@@ -15,8 +15,8 @@ unit nextpas.core.ssh.transport;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.time.deadline,
   nextpas.core.time.base,
