@@ -68,7 +68,7 @@ function TJsV8Context.Runtime: IJsRuntime; begin EnsureNotClosed; Result:=FRunti
 function TJsV8Context.Eval(const ACode: string; const AFileName: string): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=DoEval(ACode); end;
 function TJsV8Context.TryEval(const ACode: string; out AValue: TJsValue): Boolean; begin EnsureNotClosed; try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
 function TJsV8Context.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
+var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; try C:=ReadFileText(AFileName); except Exit(False) end; Result:=TryEval(C, AValue); end;
 function TJsV8Context.Global: TJsValue; begin EnsureNotClosed; Result:=FGlobal; end;
 function TJsV8Context.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsPureNewString(AStr, FContextId); end;
 function TJsV8Context.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsPureNewInt(AValue, FContextId); end;

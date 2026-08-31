@@ -248,7 +248,7 @@ function TJsQuickJsContext.TryEval(const ACode: string; out AValue: TJsValue): B
 begin EnsureNotClosed; try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
 
 function TJsQuickJsContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
+var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; try C:=ReadFileText(AFileName); except Exit(False) end; Result:=TryEval(C, AValue); end;
 
 function TJsQuickJsContext.Global: TJsValue; begin EnsureNotClosed; Result:=Bind(JsObjectValue); end;
 function TJsQuickJsContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsPureNewString(AStr, FContextId); end;

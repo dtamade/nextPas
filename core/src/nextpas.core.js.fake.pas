@@ -224,7 +224,7 @@ begin
 end;
 
 function TJsFakeContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
+var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; try C:=ReadFileText(AFileName); except Exit(False) end; Result:=TryEval(C, AValue); end;
 
 function TJsFakeContext.Global: TJsValue;
 begin
