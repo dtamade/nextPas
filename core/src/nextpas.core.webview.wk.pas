@@ -17,6 +17,7 @@ interface
 
 uses
   nextpas.core.webview.base,
+  nextpas.core.window.intf,
   nextpas.core.webview.intf;
 
 type
@@ -65,6 +66,7 @@ type
     procedure DoScaleChanged(ANewScale: Double);
   public
     constructor Create(const AOptions: TWebviewOptions);
+    function GetWindow: IWindow;
     procedure Close; function IsClosed: Boolean;
     procedure Show; procedure Hide; function IsVisible: Boolean;
     procedure Focus;
@@ -219,6 +221,11 @@ begin
         FOnWindowClosed[I]();
       except
       end;
+end;
+
+function TWkWebview.GetWindow: IWindow;
+begin
+  Result := nil;
 end;
 
 function TWkWebview.IsClosed: Boolean;

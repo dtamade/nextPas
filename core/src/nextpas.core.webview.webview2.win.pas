@@ -1,19 +1,11 @@
 unit nextpas.core.webview.webview2.win;
 
-{** @desc Win32 窗口壳内部缝：create/title/geometry/state/focus/loop 的
-       薄函数式封装。签名不含任何 webview 概念、只依赖 Windows API
-       （或 Linux 桩），与 gtk.win 对称——为未来 nextpas.core.window
-       独立模块的抽取预备缝第二极：Win32 缝 + GTK 缝同构，消费方无感。
-
-       立场：不做策略决策（布局/默认值归调用方），只做机械转发与
-       句柄纪律（ShowWindow 统一出口、WM_DESTROY 幂等 Quit 等）。
-
-       S20 补齐：
-       - Minimize/Restore/IsMinimized（IsIconic/ShowWindow SW_*）
-       - DPI 真值：GetDpiForWindow 动态绑定（user32），回退 GetDeviceCaps
-         取 LOGPIXELSX/96；GetScaleFactor 返 Double（1.25 等分数值可达）
-       - WM_DPICHANGED → ScaleChanged 回调（进程级单回调，够单窗语义；
-         多窗时按 HWND 过滤分发——当前单回调对应最近注册窗口，保持简单） *}
+{** @desc Deprecated shim: thin re-export of window.win32.
+       M5 has-a 组合后 webview2 不再自建 Win32 壳，统一复用
+       nextpas.core.window.win32 的 WM_SIZE/WM_DPICHANGED 转译与
+       IWindow.OnEvent → put_Bounds 同步。本单元保留仅为兼容旧测试
+       对 Win32Shell* 的直接调用，内部转发或桩实现，新代码请直接
+       uses nextpas.core.window.win32 / window.factory。 *}
 
 {$I nextpas.core.settings.inc}
 

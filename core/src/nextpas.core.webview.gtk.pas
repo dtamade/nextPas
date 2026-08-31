@@ -30,6 +30,7 @@ uses
   nextpas.core.errors,
   nextpas.core.platform.thread,
   nextpas.core.webview.base,
+  nextpas.core.window.intf,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
   nextpas.core.webview.gtk.ffi,
@@ -128,6 +129,7 @@ type
     function IsOnMainThread: Boolean; inline;
 
     { IWebviewWindow }
+    function GetWindow: IWindow; virtual;
     procedure Close; virtual;
     function IsClosed: Boolean; inline;
     procedure Show; virtual;
@@ -1059,6 +1061,11 @@ begin
   end;
   UnregisterLive(Self);
   inherited Destroy;
+end;
+
+function TGtkWebview.GetWindow: IWindow;
+begin
+  Result := nil;
 end;
 
 function TGtkWebview.IsClosed: Boolean; inline;

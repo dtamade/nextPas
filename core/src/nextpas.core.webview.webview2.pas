@@ -22,6 +22,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.webview.base,
+  nextpas.core.window.intf,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
   nextpas.core.webview.webview2.ffi;
@@ -114,6 +115,7 @@ type
     procedure Post(AProc: TWebviewProc); overload; inline;
     function IsOnMainThread: Boolean; inline;
     { IWebviewWindow }
+    function GetWindow: IWindow;
     procedure Close;
     function IsClosed: Boolean;
     procedure Show; procedure Hide; function IsVisible: Boolean;
@@ -1076,6 +1078,11 @@ begin
   if GLive = 0 then
     Win32ShellQuitMainLoop;
   FSelfKeepAlive := nil;
+end;
+
+function TWebView2Webview.GetWindow: IWindow;
+begin
+  Result := nil;
 end;
 
 function TWebView2Webview.IsClosed: Boolean;
