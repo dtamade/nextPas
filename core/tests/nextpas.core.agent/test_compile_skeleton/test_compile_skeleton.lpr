@@ -184,6 +184,7 @@ begin
   nextpas.core.agent.AgentInitUsageUnknown(U);
   Check(U.InputTokens = CUsageUnknown, 'facade InitUsageUnknown fwd');
   Check(nextpas.core.agent.AgentJoinWireUrl('https://api.example.com/', 'https://fallback', '/chat') = 'https://api.example.com/v1/chat', 'facade JoinWireUrl fwd');
+  Check(nextpas.core.agent.AgentJoinWireUrl('https://api.example.com/v1', 'https://fallback', '/chat') = 'https://api.example.com/v1/chat', 'facade JoinWireUrl keeps existing /v1');
   Check(nextpas.core.agent.AgentBuildSystemText('sys', nil) = 'sys', 'facade BuildSystemText fwd');
   SetLength(H, 1);
   H[0].Name := 'Authorization';

@@ -64,6 +64,9 @@ procedure FoldDeltas(const ADeltas: array of TStreamDelta; out AMsg: TMessage);
 
 implementation
 
+uses
+  nextpas.core.text.conv;
+
 constructor TAssistantBuild.Create;
 begin
   inherited Create;
@@ -177,10 +180,10 @@ begin
           ProtocolError('tool call start missing index');
         if FindSlot(ADelta.ToolIndex) >= 0 then
           ProtocolError('duplicate tool call start index '
-            + IntToStr(ADelta.ToolIndex));
+            + nextpas.core.text.conv.IntToStr(ADelta.ToolIndex));
         if FReg.Count > CAgentMaxSlotMap then
           ProtocolError('tool slot count exceeds '
-            + IntToStr(CAgentMaxSlotMap));
+            + nextpas.core.text.conv.IntToStr(CAgentMaxSlotMap));
         FlushCurrentPart;
         if FPartsLen >= FPartsCap then
         begin
@@ -218,10 +221,10 @@ begin
         LSlot := FindSlot(ADelta.ToolIndex);
         if LSlot < 0 then
           ProtocolError('tool call delta before start (index '
-            + IntToStr(ADelta.ToolIndex) + ')');
+            + nextpas.core.text.conv.IntToStr(ADelta.ToolIndex) + ')');
         if not FSlots[LSlot].Open then
           ProtocolError('tool call delta after end (index '
-            + IntToStr(ADelta.ToolIndex) + ')');
+            + nextpas.core.text.conv.IntToStr(ADelta.ToolIndex) + ')');
         FSlots[LSlot].Args.AppendStr(ADelta.ArgumentsDelta);
       end;
     sdkToolCallEnd:
@@ -231,7 +234,7 @@ begin
         LSlot := FindSlot(ADelta.ToolIndex);
         if LSlot < 0 then
           ProtocolError('tool call end for unknown slot (index '
-            + IntToStr(ADelta.ToolIndex) + ')');
+            + nextpas.core.text.conv.IntToStr(ADelta.ToolIndex) + ')');
         { End 是建议性事件：重复 End 宽容忽略（幂等）}
         FSlots[LSlot].Open := False;
       end;
