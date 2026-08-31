@@ -97,6 +97,7 @@ begin
 
   FSourceDatabase := TSourceDatabase.Create;
   FDiagnosticsSink := TDiagnosticsSink.CreateDefault;
+  FDiagnosticsSink.BindByteCountResolver(@FSourceDatabase.ResolveDiagnosticByteCount);
   FTargetFacts := TargetFacts;
   FOptions := Options;
   if FOptions.CommandName = '' then

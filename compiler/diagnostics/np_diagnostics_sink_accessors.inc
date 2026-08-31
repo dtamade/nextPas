@@ -18,7 +18,11 @@ begin
   EmitErrorAtSpan(
     ACode,
     APhase,
-    BuildCoreSourceSpan(AFileId, AByteOffset, 0),
+    BuildCoreSourceSpan(
+      AFileId,
+      AByteOffset,
+      ResolveByteCount(AFileId, AByteOffset)
+    ),
     AMessageText
   );
 end;
@@ -43,7 +47,7 @@ begin
   Event.PrimarySpan := BuildCoreSourceSpan(
     AFileId,
     AByteOffset,
-    0
+    ResolveByteCount(AFileId, AByteOffset)
   );
   Event.MessageText := AMessageText;
 
@@ -87,15 +91,21 @@ procedure TDiagnosticsSink.EmitErrorWithPayload(
 );
 var
   Event: TDiagnosticRecord;
+  EffectiveSpan: TCoreSourceSpan;
 begin
   if FDiagnostics = nil then
     FDiagnostics := TDiagnosticRecordVec.Create;
+  EffectiveSpan := APrimarySpan;
+  if (EffectiveSpan.ByteSpan.Count <= 0) and (EffectiveSpan.FileId > 0) then
+    EffectiveSpan.ByteSpan.Count := ResolveByteCount(
+      EffectiveSpan.FileId, EffectiveSpan.ByteSpan.Offset
+    );
   Event := Default(TDiagnosticRecord);
   Event.Id := BuildDiagnosticId(SizeInt(FDiagnostics.Count) + 1);
   Event.Code := ACode;
   Event.Phase := APhase;
   Event.Severity := 'error';
-  Event.PrimarySpan := APrimarySpan;
+  Event.PrimarySpan := EffectiveSpan;
   Event.MessageText := AMessageText;
   Event.Payload := APayload;
   FDiagnostics.Push(Event);

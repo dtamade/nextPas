@@ -211,7 +211,9 @@ var
 begin
   Payload := Default(TDiagnosticPayload);
   Payload.Kind := dpkNone;
-  Span := BuildCoreSourceSpan(AFileId, AByteOffset, 0);
+  Span := BuildCoreSourceSpan(
+    AFileId, AByteOffset, ASink.ResolveByteCount(AFileId, AByteOffset)
+  );
 
   ASink.EmitErrorWithPayload(ACode, APhase, Span, AMessage, Payload);
 

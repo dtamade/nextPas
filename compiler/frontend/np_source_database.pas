@@ -65,6 +65,10 @@ type
     ): TLineCol;
     { Get display path for a file (for debug info filename). }
     function DisplayPathForFileId(const AFileId: TSourceFileId): string;
+    function ResolveDiagnosticByteCount(
+      const AFileId: TCoreId;
+      const AByteOffset: LongInt
+    ): LongInt;
   end;
 
 implementation
@@ -309,6 +313,143 @@ begin
     if FFiles[SizeUInt(Index)].FileId = AFileId then
       Exit(FFiles[SizeUInt(Index)].DisplayPath);
   Result := '';
+end;
+
+function TSourceDatabase.ResolveDiagnosticByteCount(
+  const AFileId: TCoreId;
+  const AByteOffset: LongInt
+): LongInt;
+var
+  Src: string;
+  Len, StartIdx, Idx: LongInt;
+  Ch, NextCh: Char;
+  LineCol: TLineCol;
+  Entry: PSourceFileEntry;
+  NextLineStart: LongInt;
+  FileIdx: LongInt;
+  function IsIdentStart(const C: Char): Boolean; inline;
+  begin Result := (C in ['A'..'Z', 'a'..'z', '_']); end;
+  function IsIdentCont(const C: Char): Boolean; inline;
+  begin Result := (C in ['A'..'Z', 'a'..'z', '0'..'9', '_']); end;
+begin
+  Result := 1;
+  if (AFileId <= 0) or (AByteOffset < 0) then Exit(0);
+  Src := SourceTextForFileId(AFileId);
+  Len := Length(Src);
+  if Len = 0 then Exit(1);
+  StartIdx := AByteOffset + 1;
+  if (StartIdx < 1) or (StartIdx > Len) then Exit(1);
+  Ch := Src[StartIdx];
+  if StartIdx < Len then
+  begin
+    NextCh := Src[StartIdx + 1];
+    if ((Ch = ':') and (NextCh = '=')) or ((Ch = '<') and (NextCh = '>')) or ((Ch = '<') and (NextCh = '=')) or ((Ch = '>') and (NextCh = '=')) or ((Ch = '.') and (NextCh = '.')) or ((Ch = '+') and (NextCh = '=')) or ((Ch = '-') and (NextCh = '=')) or ((Ch = '*') and (NextCh = '=')) or ((Ch = '/') and (NextCh = '=')) then Exit(2);
+  end;
+  if IsIdentStart(Ch) then
+  begin
+    Idx := StartIdx + 1;
+    while (Idx <= Len) and IsIdentCont(Src[Idx]) do Inc(Idx);
+    Result := Idx - StartIdx;
+    if Result < 1 then Result := 1;
+    Exit;
+  end;
+  if (Ch in ['0'..'9']) then
+  begin
+    Idx := StartIdx + 1;
+    while (Idx <= Len) and (Src[Idx] in ['0'..'9', 'A'..'F', 'a'..'f', '_']) do Inc(Idx);
+    if (Idx <= Len) and (Src[Idx] = '.') and (Idx < Len) and (Src[Idx+1] in ['0'..'9']) then
+    begin
+      Inc(Idx);
+      while (Idx <= Len) and (Src[Idx] in ['0'..'9']) do Inc(Idx);
+      if (Idx <= Len) and (Src[Idx] in ['e','E']) then
+      begin
+        Inc(Idx);
+        if (Idx <= Len) and (Src[Idx] in ['+','-']) then Inc(Idx);
+        while (Idx <= Len) and (Src[Idx] in ['0'..'9']) do Inc(Idx);
+      end;
+    end else if (Idx <= Len) and (Src[Idx] in ['e','E']) then
+    begin
+      Inc(Idx);
+      if (Idx <= Len) and (Src[Idx] in ['+','-']) then Inc(Idx);
+      while (Idx <= Len) and (Src[Idx] in ['0'..'9']) do Inc(Idx);
+    end;
+    Result := Idx - StartIdx;
+    if Result < 1 then Result := 1;
+    Exit;
+  end;
+  if (Ch = '$') and (StartIdx < Len) and (Src[StartIdx+1] in ['0'..'9','A'..'F','a'..'f']) then
+  begin
+    Idx := StartIdx + 2;
+    while (Idx <= Len) and (Src[Idx] in ['0'..'9','A'..'F','a'..'f']) do Inc(Idx);
+    Exit(Idx - StartIdx);
+  end;
+  if (Ch = '&') and (StartIdx < Len) and (Src[StartIdx+1] in ['0'..'7']) then
+  begin
+    Idx := StartIdx + 2;
+    while (Idx <= Len) and (Src[Idx] in ['0'..'7']) do Inc(Idx);
+    Exit(Idx - StartIdx);
+  end;
+  if (Ch = '%') and (StartIdx < Len) and (Src[StartIdx+1] in ['0','1']) then
+  begin
+    Idx := StartIdx + 2;
+    while (Idx <= Len) and (Src[Idx] in ['0','1']) do Inc(Idx);
+    Exit(Idx - StartIdx);
+  end;
+  if Ch = '''' then
+  begin
+    Idx := StartIdx + 1;
+    while Idx <= Len do
+    begin
+      if Src[Idx] = '''' then
+      begin
+        Inc(Idx);
+        if (Idx <= Len) and (Src[Idx] = '''') then Inc(Idx) else Break;
+      end else if Src[Idx] in [#10,#13] then Break else Inc(Idx);
+    end;
+    Result := Idx - StartIdx;
+    if Result < 1 then Result := 1;
+    Exit;
+  end;
+  if Ch = '#' then
+  begin
+    Idx := StartIdx + 1;
+    if (Idx <= Len) and (Src[Idx] = '$') then
+    begin
+      Inc(Idx);
+      while (Idx <= Len) and (Src[Idx] in ['0'..'9','A'..'F','a'..'f']) do Inc(Idx);
+    end else while (Idx <= Len) and (Src[Idx] in ['0'..'9']) do Inc(Idx);
+    while (Idx <= Len) and (Src[Idx] = '''') do
+    begin
+      Inc(Idx);
+      while (Idx <= Len) and (Src[Idx] <> '''') and not (Src[Idx] in [#10,#13]) do Inc(Idx);
+      if (Idx <= Len) and (Src[Idx] = '''') then
+      begin Inc(Idx); if (Idx <= Len) and (Src[Idx] = '''') then Inc(Idx) else Break; end else Break;
+    end;
+    Result := Idx - StartIdx;
+    if Result < 1 then Result := 1;
+    Exit;
+  end;
+  if Ch in [';',',',':','=','<','>','+','-','*','/','(',')','[',']','@','^','.', '#','$'] then Exit(1);
+  if Ch in [#9,#10,#13,' '] then
+  begin
+    FileIdx := AFileId - 1;
+    if (FFiles <> nil) and (FileIdx >=0) and (FileIdx < LongInt(FFiles.Count)) then
+    begin
+      BuildLineIndexForFile(FileIdx);
+      Entry := FFiles.GetPtr(SizeUInt(FileIdx));
+      LineCol := ByteOffsetToLineCol(AFileId, AByteOffset);
+      if LineCol.Line < LongInt(Entry^.LineOffsets.Count) then
+        NextLineStart := Entry^.LineOffsets[SizeUInt(LineCol.Line)]
+      else NextLineStart := Len;
+      Result := NextLineStart - AByteOffset;
+      while (Result > 1) and (StartIdx + Result -1 <= Len) and (Src[StartIdx+Result-1] in [#10,#13]) do Dec(Result);
+      if Result < 1 then Result := 1;
+      if Result > 80 then Result := 1;
+      Exit;
+    end;
+    Exit(1);
+  end;
+  Result := 1;
 end;
 
 end.
