@@ -5,6 +5,9 @@ unit nextpas_json_helpers;
 interface
 
 uses
+  nextpas.core.text.view,
+  nextpas.core.text.builder,
+  nextpas.core.text.escape,
   nextpas.core.text.conv;
 
 function JsonEscape(const Value: string): string;
@@ -43,24 +46,18 @@ implementation
 
 function JsonEscape(const Value: string): string;
 var
-  Index: SizeInt;
+  View: TStringView;
+  Builder: TBufStringBuilder;
 begin
-  Result := '';
-  for Index := 1 to Length(Value) do
-    case Value[Index] of
-      '\':
-        Result := Result + '\\';
-      '"':
-        Result := Result + '\"';
-      #10:
-        Result := Result + '\n';
-      #13:
-        Result := Result + '\r';
-      #9:
-        Result := Result + '\t';
-    else
-      Result := Result + Value[Index];
-    end;
+  if Value = '' then Exit('');
+  View := TStringView.Create(PAnsiChar(@Value[1]), SizeUInt(Length(Value)));
+  Builder.Init(SizeUInt(Length(Value) + 16));
+  try
+    JsonEscapeToBuilder(View, Builder);
+    Result := Builder.ToString;
+  finally
+    Builder.Done;
+  end;
 end;
 
 function JsonString(const Value: string): string;
