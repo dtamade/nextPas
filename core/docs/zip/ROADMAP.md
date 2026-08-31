@@ -39,6 +39,8 @@
 | S55 | 对称补齐：`DosMaxUnixSec` 对称暴露，`base/common` 双 `inline` 单源 |
 | S56 | 回归修复：`C_DOS_MIN/MAX` 常量化还原 + `DosDateTimeFromUnix` 零构造 |
 | S57 | 尾隙收敛：`UnixFromDosDateTime` 去 `Create` 验证，`FromUnixDays` 单源回退 |
+| S58 | 委托对称：`zip.common` 时间委托四子 `inline` 零成本 |
+| S59 | 984合流验证：三门全绿再验证 + 113/r9 基线对齐 |
 
 **当前门**：12门全绿 `[HEAPTRC] OK`（`test_zip 27`/`reader 27`/`sequential 22`/`fs 7`/`contract 5`/`extra 6`/`builder 9`/`fuzz 3`/`aes 13`/`go_parity 7`/`perf 5`/`stress 4`）+ `bench 16项` `allocs+2` 硬门 + `zip_roundtrip all demos ok` + `hygiene/diff --check` 通过 + `linux-x86_64/win64` 交叉编译通过。
 
@@ -98,6 +100,12 @@
 
 ### S57 — 尾隙零验证收敛（1.0.1 巡检）· 性能/稳定性 — 已落地
 - `UnixFromDosDateTime` 失效回退 `TDate.Create` 去验证，改 `FromUnixDays(C_DOS_MIN_UNIX div 86400)` 单源零构造，与 `DosDateTimeFromUnix` 常量化对偶，`base` 全链路零 `Create`，三门全绿
+
+### S58 — 委托对称零成本（1.0.1 巡检）· 性能/模块化 — 已落地
+- `zip.common` 时间委托四子 `DosDateTime/UnixFromDos/DosMin/DosMax` 全 `inline` 零成本，与 `base` 常量化对偶，`common` 委托链路对称闭环，三门全绿
+
+### S59 — 984合流验证平台期（1.0.1 巡检）· 稳定性/完整性 — 已落地
+- `984e2df` 113/r9 合流后基线对齐验证：`zip` `27/32/30` 三门全绿 + `math` 轸断再修复，`ROADMAP` `S58` 回补，完美 plateau 证据化
 
 ## 4. 度量与硬门（1.0.0 冻结）
 

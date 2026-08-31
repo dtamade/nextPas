@@ -144,7 +144,7 @@ procedure ResPackFreeBlob(var ABlob: TResPackBlob);
 implementation
 
 uses
-  nextpas.core.base.pathvalid;
+  nextpas.core.bytes.pathvalid;
 
 function RdU16LE(AData: PByte): Word;
 begin
@@ -202,7 +202,7 @@ end;
 function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean;
 begin
-  Result := BaseValidPath(APath, not AFileEntry);
+  Result := BytesValidPath(APath, not AFileEntry);
 end;
 
 function ResPackDefaultOptions: TResPackBuildOptions;

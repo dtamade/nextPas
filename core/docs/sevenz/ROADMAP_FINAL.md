@@ -16,7 +16,7 @@
 | 高级感 | `ExtractAll` + `IgnoreCase` 全族 + `Try*WithError` + `FlushExtractedToFs` | API 一致、for..in、Builder 链式、progress 零开销 |
 | 复用度 | `levels/filters/coders/limits` 纯映射表驱动；`sevenz.fs` 去重 | 单 truth，无复制 |
 | 稳定性 | `ESevenZLimitError` 炸弹全门；`Move+CRC` 单遍；`LRU 2-entry + ClearCache` | 64MiB/8GiB/1M/64KiB/256KiB 全覆盖 |
-| 完整性 | `README + CONTRACT + TEST` 同版，bench + interop 双证 | `scripts/sevenz-interop.sh` p7zip 17.05 双向 |
+| 完整性 | `README + TEST` 同版，bench + interop 双证（`CONTRACT.md` 缺口已记录，暂以 `README/API Overview` + `base/intf/limits` 不变量为权威，独立 `CONTRACT.md` 待补） | `scripts/sevenz-interop.sh` p7zip 17.05 双向 |
 
 ## 下一完美增量（可选，不阻塞封版）
 

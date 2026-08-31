@@ -80,6 +80,9 @@ function SshBytesFromText(const AText: string): TBytes;
 
 implementation
 
+uses
+  nextpas.core.mem.utils;
+
 function SshTextFromBytes(const ABytes: TBytes): string;
 begin
   Result := '';
@@ -211,15 +214,40 @@ end;
 
 procedure TsshWriter.PutNameList(const ANames: array of string);
 var
-  I: Integer;
+  I: SizeInt;
+  LTotal, LPos: SizeInt;
   LJoined: string;
 begin
-  LJoined := '';
-  for I := 0 to High(ANames) do
+  if Length(ANames) = 0 then
   begin
-    if I > 0 then
-      LJoined := LJoined + ',';
-    LJoined := LJoined + ANames[I];
+    PutStringText('');
+    Exit;
+  end;
+  if Length(ANames) = 1 then
+  begin
+    PutStringText(ANames[0]);
+    Exit;
+  end;
+  LTotal := 0;
+  for I := 0 to High(ANames) do
+    Inc(LTotal, Length(ANames[I]));
+  Inc(LTotal, High(ANames));
+  SetLength(LJoined, LTotal);
+  LPos := 1;
+  if Length(ANames[0]) > 0 then
+  begin
+    CopyNonOverlap(@ANames[0][1], @LJoined[LPos], SizeUInt(Length(ANames[0])));
+    Inc(LPos, Length(ANames[0]));
+  end;
+  for I := 1 to High(ANames) do
+  begin
+    LJoined[LPos] := ',';
+    Inc(LPos);
+    if Length(ANames[I]) > 0 then
+    begin
+      CopyNonOverlap(@ANames[I][1], @LJoined[LPos], SizeUInt(Length(ANames[I])));
+      Inc(LPos, Length(ANames[I]));
+    end;
   end;
   PutStringText(LJoined);
 end;

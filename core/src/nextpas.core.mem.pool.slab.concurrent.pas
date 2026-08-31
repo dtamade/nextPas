@@ -49,7 +49,6 @@ type
      *}
     FInner: TSlabPool;
     FLock: TMemMutex;
-    FGuard: Pointer; // 哨兵：alive 时 = Self，Destroy 时置 nil，配合 PurgeDead 避免 threadvar 悬垂 UAF
   public
     constructor Create(aCapacity: SizeUInt; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
     constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator = nil); overload;
@@ -85,6 +84,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.platform.thread;
+
 const
   {** TLS 缓存容量：每线程最多缓存的指针数 *}
   TLS_SLAB_CACHE_SIZE = 32;
@@ -107,75 +109,125 @@ type
 
 threadvar
   GTlsSlabCache: TTlsSlabCache;
-
-var
-  GDeadLock: TMemMutex;
-  GDeadList: array of Pointer;
-  GDeadCount: Integer;
-  GDeadLockInited: Boolean;
+  GTlsSlabRegistered: Boolean;
 
 { ---------------------------------------------------------------------------
-  TLS 缓存内部函数 — UAF 修复：FGuard 哨兵 + PurgeDead 零拷贝紧凑
+  Global TLS registry for cross-thread flush on Destroy
   --------------------------------------------------------------------------- }
 
-function IsDeadPool(APool: Pointer): Boolean;
+const
+  MAX_SLAB_TLS_SLOTS = 64;
+
+type
+  PSlabTlsCache = ^TTlsSlabCache;
+  TSlabTlsSlot = record
+    ThreadId: QWord;
+    Cache: PSlabTlsCache;
+    Active: Boolean;
+  end;
+
+var
+  GSlabTlsRegistry: array[0..MAX_SLAB_TLS_SLOTS - 1] of TSlabTlsSlot;
+  GSlabTlsLock: TMemMutex;
+  GSlabTlsLockInited: Boolean = False;
+  GSlabTlsKey: TPlatformTLSKey;
+  GSlabTlsKeyCreated: Boolean = False;
+
+procedure SlabTlsEnsureLockInited; inline;
+begin
+  if not GSlabTlsLockInited then
+  begin
+    GSlabTlsLock.Init;
+    GSlabTlsLockInited := True;
+  end;
+end;
+
+procedure SlabTlsLock; inline;
+begin
+  SlabTlsEnsureLockInited;
+  GSlabTlsLock.Acquire;
+end;
+
+procedure SlabTlsUnlock; inline;
+begin
+  GSlabTlsLock.Release;
+end;
+
+procedure SlabTlsThreadExit(AData: Pointer); cdecl; forward;
+
+procedure EnsureSlabTlsKey; inline;
+begin
+  if not GSlabTlsKeyCreated then
+  begin
+    SlabTlsEnsureLockInited;
+    GSlabTlsKeyCreated := platform_tls_create_with_destructor(GSlabTlsKey, @SlabTlsThreadExit) = 0;
+  end;
+end;
+
+procedure RegisterSlabTlsCache; inline;
+var
+  LSlot: SizeUInt;
+  LId: QWord;
+begin
+  if GTlsSlabRegistered then Exit;
+  EnsureSlabTlsKey;
+  LId := platform_thread_id;
+  LSlot := SizeUInt(LId) and (MAX_SLAB_TLS_SLOTS - 1);
+  SlabTlsLock;
+  try
+    GSlabTlsRegistry[LSlot].ThreadId := LId;
+    GSlabTlsRegistry[LSlot].Cache := @GTlsSlabCache;
+    GSlabTlsRegistry[LSlot].Active := True;
+  finally
+    SlabTlsUnlock;
+  end;
+  GTlsSlabRegistered := True;
+  if GSlabTlsKeyCreated then
+    platform_tls_set(GSlabTlsKey, @GTlsSlabCache);
+end;
+
+procedure SlabTlsThreadExit(AData: Pointer); cdecl;
 var
   I: Integer;
+  LSlot: SizeUInt;
 begin
-  if (APool = nil) or (not GDeadLockInited) then
-    Exit(False);
-  GDeadLock.Acquire;
+  if AData = nil then Exit;
+  // Clear count to discard dangling pointers (pool may already be destroyed).
+  // We do not call pool FreeMem here to avoid UAF; destruction path already
+  // flushed live pools via registry iteration.
+  GTlsSlabCache.Count := 0;
+  SlabTlsLock;
   try
-    for I := 0 to GDeadCount - 1 do
-      if GDeadList[I] = APool then
-        Exit(True);
-    Result := False;
+    for I := 0 to MAX_SLAB_TLS_SLOTS - 1 do
+      if GSlabTlsRegistry[I].Cache = PSlabTlsCache(AData) then
+      begin
+        GSlabTlsRegistry[I].Active := False;
+        GSlabTlsRegistry[I].Cache := nil;
+        GSlabTlsRegistry[I].ThreadId := 0;
+        Break;
+      end;
+    // Fallback: also clear by thread id hash if not found above
+    LSlot := SizeUInt(platform_thread_id) and (MAX_SLAB_TLS_SLOTS - 1);
+    if GSlabTlsRegistry[LSlot].Cache = PSlabTlsCache(AData) then
+    begin
+      GSlabTlsRegistry[LSlot].Active := False;
+      GSlabTlsRegistry[LSlot].Cache := nil;
+    end;
   finally
-    GDeadLock.Release;
+    SlabTlsUnlock;
   end;
+  GTlsSlabRegistered := False;
 end;
 
-procedure RegisterDeadPool(APool: Pointer);
-begin
-  if APool = nil then Exit;
-  if not GDeadLockInited then Exit;
-  GDeadLock.Acquire;
-  try
-    if GDeadCount = Length(GDeadList) then
-      SetLength(GDeadList, GDeadCount + 16);
-    GDeadList[GDeadCount] := APool;
-    Inc(GDeadCount);
-  finally
-    GDeadLock.Release;
-  end;
-end;
-
-// 零拷贝紧凑：移除已死亡池的悬垂条目，不拷贝有效条目之外的内存
-procedure PurgeDead(var ACache: TTlsSlabCache);
-var
-  I, W: Integer;
-begin
-  if ACache.Count = 0 then Exit;
-  W := 0;
-  for I := 0 to ACache.Count - 1 do
-  begin
-    if IsDeadPool(ACache.Entries[I].Pool) then
-      Continue; // 悬垂条目：丢弃，不归还（池已销毁）
-    if W <> I then
-      ACache.Entries[W] := ACache.Entries[I];
-    Inc(W);
-  end;
-  ACache.Count := W;
-end;
+{ ---------------------------------------------------------------------------
+  TLS 缓存内部函数
+  --------------------------------------------------------------------------- }
 
 {** 从 TLS 缓存弹出匹配池实例且实际大小 >= 请求大小的条目 *}
 function TlsCachePop(var ACache: TTlsSlabCache; APool: Pointer; AMinSize: SizeUInt): Pointer;
 var
   I, L: Integer;
 begin
-  // 热路径先惰性清理悬垂条目（FGuard 哨兵）
-  if ACache.Count > 0 then
-    PurgeDead(ACache);
   for I := ACache.Count - 1 downto 0 do
   begin
     if (ACache.Entries[I].Pool = APool) and (ACache.Entries[I].Size >= AMinSize) then
@@ -194,9 +246,6 @@ end;
 {** 向 TLS 缓存压入条目。返回 True 表示成功，False 表示缓存已满 *}
 function TlsCachePush(var ACache: TTlsSlabCache; APtr: Pointer; ASize: SizeUInt; APool: Pointer): Boolean;
 begin
-  // 热路径先惰性清理悬垂条目
-  if ACache.Count > 0 then
-    PurgeDead(ACache);
   if ACache.Count >= TLS_SLAB_CACHE_SIZE then
     Exit(False);
   ACache.Entries[ACache.Count].Ptr := APtr;
@@ -212,6 +261,20 @@ procedure TlsCacheFlushPoolEntries(var ACache: TTlsSlabCache; APool: Pointer;
 var
   I, LWrite: Integer;
 begin
+  if AInner = nil then
+  begin
+    // Pool already destroyed: discard entries without touching allocator
+    LWrite := 0;
+    for I := 0 to ACache.Count - 1 do
+      if ACache.Entries[I].Pool <> APool then
+      begin
+        if LWrite <> I then
+          ACache.Entries[LWrite] := ACache.Entries[I];
+        Inc(LWrite);
+      end;
+    ACache.Count := LWrite;
+    Exit;
+  end;
   LWrite := 0;
   for I := 0 to ACache.Count - 1 do
   begin
@@ -227,6 +290,25 @@ begin
   ACache.Count := LWrite;
 end;
 
+procedure FlushAllTlsCachesForPool(APool: Pointer; AInner: TSlabPool);
+var
+  I: Integer;
+  LCache: PSlabTlsCache;
+begin
+  SlabTlsLock;
+  try
+    for I := 0 to MAX_SLAB_TLS_SLOTS - 1 do
+    begin
+      if not GSlabTlsRegistry[I].Active then Continue;
+      LCache := GSlabTlsRegistry[I].Cache;
+      if (LCache = nil) or (LCache = @GTlsSlabCache) then Continue;
+      TlsCacheFlushPoolEntries(LCache^, APool, AInner);
+    end;
+  finally
+    SlabTlsUnlock;
+  end;
+end;
+
 { TSlabPoolConcurrent }
 
 constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; AAllocator: IAllocator; aMinShift: SizeUInt);
@@ -234,7 +316,6 @@ begin
   inherited Create;
   FLock.Init;
   FInner := TSlabPool.Create(aCapacity, AAllocator, aMinShift);
-  FGuard := Pointer(Self);
 end;
 
 constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator);
@@ -242,17 +323,17 @@ begin
   inherited Create;
   FLock.Init;
   FInner := TSlabPool.Create(aCapacity, AConfig, AAllocator);
-  FGuard := Pointer(Self);
 end;
 
 destructor TSlabPoolConcurrent.Destroy;
+var
+  LInner: TSlabPool;
 begin
-  // 哨兵失效：先标记 dead，再清理当前线程 TLS，避免悬垂 UAF
-  FGuard := nil;
-  RegisterDeadPool(Pointer(Self));
-  PurgeDead(GTlsSlabCache);
-  // 零拷贝紧凑前先尽量归还（对 alive 池有效，dead 池的条目已被 PurgeDead 丢弃）
-  TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), FInner);
+  LInner := FInner;
+  // Flush current thread's cache
+  TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), LInner);
+  // Flush all other threads' caches that hold this pool
+  FlushAllTlsCachesForPool(Pointer(Self), LInner);
   FLock.Acquire;
   try
     FreeAndNil(FInner);
@@ -312,8 +393,12 @@ begin
 end;
 
 procedure TSlabPoolConcurrent.Reset;
+var
+  LInner: TSlabPool;
 begin
-  TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), FInner);
+  LInner := FInner;
+  TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), LInner);
+  FlushAllTlsCachesForPool(Pointer(Self), LInner);
   FLock.Acquire;
   try
     FInner.Reset;
@@ -333,7 +418,7 @@ var
   LCount: Integer;
 begin
   if ASize = 0 then Exit(nil);
-
+  RegisterSlabTlsCache;
   { 热路径：从 TLS 缓存取（零锁）。条目存储的是实际分配大小（>= 请求大小） }
   LPtr := TlsCachePop(GTlsSlabCache, Pointer(Self), ASize);
   if LPtr <> nil then
@@ -398,7 +483,7 @@ var
   LSize: SizeUInt;
 begin
   if APtr = nil then Exit;
-
+  RegisterSlabTlsCache;
   { 热路径：尝试放回 TLS 缓存（零锁）。存储实际分配大小以便后续 GetMem 匹配。 }
   LSize := FInner.MemSizeOf(APtr);
   if TlsCachePush(GTlsSlabCache, APtr, LSize, Pointer(Self)) then
@@ -514,13 +599,12 @@ begin
 end;
 
 initialization
-  GDeadLock.Init;
-  GDeadLockInited := True;
+  EnsureSlabTlsKey;
 
 finalization
-  GDeadLockInited := False;
-  GDeadLock.Done;
-  SetLength(GDeadList, 0);
-  GDeadCount := 0;
+  if GSlabTlsKeyCreated then
+    platform_tls_destroy_dtor(GSlabTlsKey);
+  if GSlabTlsLockInited then
+    GSlabTlsLock.Done;
 
 end.

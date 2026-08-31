@@ -358,7 +358,12 @@ end;
 procedure TMemStream.SetPosition(const AValue: Int64);
 begin
   CheckOpen;
-  FPos := AValue;
+  if AValue < 0 then
+    FPos := 0
+  else if AValue > Length(FData) then
+    FPos := Length(FData)
+  else
+    FPos := AValue;
 end;
 
 function TMemStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -366,6 +371,8 @@ var
   Avail: SizeUInt;
 begin
   CheckOpen;
+  if FPos < 0 then
+    FPos := 0;
   if FPos >= Length(FData) then
     Exit(0);
   Avail := SizeUInt(Length(FData)) - SizeUInt(FPos);
@@ -391,6 +398,10 @@ begin
     soCurrent:   FPos := FPos + AOffset;
     soEnd:       FPos := Length(FData) + AOffset;
   end;
+  if FPos < 0 then
+    FPos := 0
+  else if FPos > Length(FData) then
+    FPos := Length(FData);
   Result := FPos;
 end;
 

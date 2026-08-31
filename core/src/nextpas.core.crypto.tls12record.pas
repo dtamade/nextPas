@@ -59,6 +59,7 @@ const
 
 function BuildMACInput(ASeqNum: UInt64; AContentType: Byte; AFragmentLen: Integer): TBytes;
 begin
+  Result := nil;
   SetLength(Result, 13);
   Result[0] := Byte(ASeqNum shr 56);
   Result[1] := Byte(ASeqNum shr 48);
@@ -115,6 +116,7 @@ begin
   if LPadLen = 0 then
     LPadLen := AES_BLOCK_SIZE;
   LTotalLen := Length(AData) + LPadLen;
+  Result := nil;
   SetLength(Result, LTotalLen);
   Move(AData[0], Result[0], Length(AData));
   for I := Length(AData) to LTotalLen - 1 do

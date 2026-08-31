@@ -1360,6 +1360,7 @@ function TBindIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>
 begin
   Result := nil;
   { Bind generators don't shrink directly — shrink the inner generator }
+  Result := nil;
   SetLength(Result, 3);
   Result[0] := 0;
   Result[1] := AValue div 2;

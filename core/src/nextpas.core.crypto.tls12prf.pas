@@ -24,8 +24,23 @@ function TLS12PRF_SHA384(
 implementation
 
 uses
-  nextpas.core.bytes.ops,
   nextpas.core.crypto.hmac;
+
+function ConcatBytes(const ALeft, ARight: TBytes): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(ALeft) + Length(ARight));
+  if Length(ALeft) > 0 then Move(ALeft[0], Result[0], Length(ALeft));
+  if Length(ARight) > 0 then Move(ARight[0], Result[Length(ALeft)], Length(ARight));
+end;
+
+function StringToBytes(const AValue: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AValue));
+  if Length(AValue) > 0 then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
 
 function ConcatLabelAndSeed(const ALabel: string; const ASeed: TBytes): TBytes;
 var
@@ -35,6 +50,7 @@ begin
   LLabelBytes := StringToBytes(ALabel);
   LLabelLen := Length(LLabelBytes);
   LSeedLen := Length(ASeed);
+  Result := nil;
   SetLength(Result, LLabelLen + LSeedLen);
   if LLabelLen > 0 then
     Move(LLabelBytes[0], Result[0], LLabelLen);
@@ -42,18 +58,33 @@ begin
     Move(ASeed[0], Result[LLabelLen], LSeedLen);
 end;
 
+function LocalConcatBytes(const ALeft, ARight: TBytes): TBytes;
+var
+  LLeftLen, LRightLen: Integer;
+begin
+  LLeftLen := Length(ALeft);
+  LRightLen := Length(ARight);
+  Result := nil;
+  SetLength(Result, LLeftLen + LRightLen);
+  if LLeftLen > 0 then
+    Move(ALeft[0], Result[0], LLeftLen);
+  if LRightLen > 0 then
+    Move(ARight[0], Result[LLeftLen], LRightLen);
+end;
+
 function P_SHA256(const ASecret, ASeed: TBytes; ALength: Integer): TBytes;
 var
   A, ANext, HMACResult: TBytes;
   LOffset, LCopyLen: Integer;
 begin
+  Result := nil;
   SetLength(Result, ALength);
   A := HMAC_SHA256(ASecret, ASeed);
   LOffset := 0;
 
   while LOffset < ALength do
   begin
-    HMACResult := HMAC_SHA256(ASecret, BytesConcat(A, ASeed));
+    HMACResult := HMAC_SHA256(ASecret, LocalConcatBytes(A, ASeed));
     LCopyLen := ALength - LOffset;
     if LCopyLen > 32 then
       LCopyLen := 32;
@@ -69,13 +100,14 @@ var
   A, ANext, HMACResult: TBytes;
   LOffset, LCopyLen: Integer;
 begin
+  Result := nil;
   SetLength(Result, ALength);
   A := HMAC_SHA384(ASecret, ASeed);
   LOffset := 0;
 
   while LOffset < ALength do
   begin
-    HMACResult := HMAC_SHA384(ASecret, BytesConcat(A, ASeed));
+    HMACResult := HMAC_SHA384(ASecret, LocalConcatBytes(A, ASeed));
     LCopyLen := ALength - LOffset;
     if LCopyLen > 48 then
       LCopyLen := 48;

@@ -228,14 +228,12 @@ procedure QuicConnCloseAppAppend(var ABuf: TBytes; AErrorCode: UInt64;
 
 implementation
 
-procedure AppendTailBytes(var ABuf: TBytes; const ATail: TBytes);
-var
-  LN, LI: Integer;
+uses
+  nextpas.core.bytes.ops;
+
+procedure AppendTailBytes(var ABuf: TBytes; const ATail: TBytes); inline;
 begin
-  LN := Length(ABuf);
-  SetLength(ABuf, LN + Length(ATail));
-  for LI := 0 to Length(ATail) - 1 do
-    ABuf[LN + LI] := ATail[LI];
+  BytesAppend(ABuf, ATail);
 end;
 
 { 内部：从 APos 读 AExtraCount 组 gap/len 续段，构建含 first 的完整

@@ -30,7 +30,7 @@ type
     function TrimRight: TStringView;
 
     function Equals(const AOther: TStringView): Boolean;
-    function EqualsIgnoreCase(const AOther: TStringView): Boolean;
+    function EqualsIgnoreCase(const AOther: TStringView): Boolean; inline;
     function StartsWith(const APrefix: TStringView): Boolean;
     function EndsWith(const ASuffix: TStringView): Boolean;
 
@@ -67,6 +67,8 @@ function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): strin
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.char,
   nextpas.core.simd.base,
   nextpas.core.simd.vec;
@@ -194,22 +196,17 @@ begin
   Result := True;
 end;
 
-function TStringView.EqualsIgnoreCase(const AOther: TStringView): Boolean;
-var
-  LPos: SizeUInt;
+function TStringView.EqualsIgnoreCase(const AOther: TStringView): Boolean; inline;
 begin
   if FLen <> AOther.FLen then
     Exit(False);
   if FLen = 0 then
     Exit(True);
-  LPos := 0;
-  while LPos < FLen do
-  begin
-    if ToLower(Byte(FData[LPos])) <> ToLower(Byte(AOther.FData[LPos])) then
-      Exit(False);
-    Inc(LPos);
-  end;
-  Result := True;
+  if FData = AOther.FData then
+    Exit(True);
+  Result := SpanEqualIgnoreCase(
+    TByteSpan.Create(PByte(FData), FLen),
+    TByteSpan.Create(PByte(AOther.FData), AOther.FLen));
 end;
 
 function TStringView.StartsWith(const APrefix: TStringView): Boolean;

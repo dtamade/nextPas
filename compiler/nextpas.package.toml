@@ -3,4 +3,4 @@ name = "nextpas.compiler"
 version = "0.1.0"
 
 [sources]
-roots = ["src", "frontend", "diagnostics", "targets", "syntax", "sema", "lower", "ir", "backend", "toolchain"]
+roots = ["frontend", "diagnostics", "targets", "syntax", "sema", "lower", "ir", "backend", "toolchain", "src"]

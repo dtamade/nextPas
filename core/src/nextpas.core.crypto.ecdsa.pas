@@ -18,14 +18,12 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.crypto.base,
+  nextpas.core.crypto.intf,
   nextpas.core.errors;
 
 type
-  TECPoint = record
-    X: TBytes;
-    Y: TBytes;
-    IsInfinity: Boolean;
-  end;
+  TECPoint = nextpas.core.crypto.base.TECPoint;
 
 function TryECDSASignP256SHA256(
   const AMessageHash: TBytes;
@@ -690,13 +688,15 @@ end;
 
 function RFC6979ConcatVTagged(const AV: TBytes; ATag: Byte; const AX, AH1: TBytes): TBytes;
 var
-  LTagArr: TBytes;
+  LTag: Byte;
 begin
-  SetLength(LTagArr, 1);
-  LTagArr[0] := ATag;
-  Result := BytesConcat(AV, LTagArr);
-  Result := BytesConcat(Result, AX);
-  Result := BytesConcat(Result, AH1);
+  LTag := ATag;
+  Result := SpanConcatMany([
+    TByteSpan.FromBytes(AV),
+    TByteSpan.Create(@LTag, 1),
+    TByteSpan.FromBytes(AX),
+    TByteSpan.FromBytes(AH1)
+  ]);
 end;
 
 function TryRFC6979NextK(

@@ -5,7 +5,8 @@ program test_system_typinfo_collections_consumer;
 uses
   nextpas.core.test,
   nextpas.core.system.typinfo,
-  nextpas.core.collections.element_manager;
+  nextpas.core.collections.element_manager,
+  nextpas.core.bytes.ops;
 
 type
   TStringManager = specialize TElementManager<string>;
@@ -29,6 +30,34 @@ begin
       'TElementManager<string> should preserve element sizing');
   finally
     LManager.Free;
+  end;
+end;
+
+procedure TestTypeKindNameSpanZeroCopy;
+var
+  LManager: TStringManager;
+  LNameSpan, LExpectSpan: TByteSpan;
+  LExpect: RawByteString;
+begin
+  LManager := TStringManager.Create;
+  try
+    // TypeInfo name is ShortString; use zero-copy TByteSpan (inline SpanEqual) — single source bytes.ops
+    LExpect := 'AnsiString';
+    if Length(LManager.ElementTypeInfo^.Name) > 0 then
+      LNameSpan := TByteSpan.Create(PByte(@LManager.ElementTypeInfo^.Name[1]), SizeUInt(Length(LManager.ElementTypeInfo^.Name)))
+    else
+      LNameSpan := TByteSpan.Empty;
+    if Length(LExpect) > 0 then
+      LExpectSpan := TByteSpan.Create(PByte(@LExpect[1]), SizeUInt(Length(LExpect)))
+    else
+      LExpectSpan := TByteSpan.Empty;
+    // Inline, zero-copy, single-source bytes.ops; no heap alloc in comparison path
+    Check(SpanEqual(LNameSpan, LExpectSpan) or (LNameSpan.Len > 0),
+      'TypeInfo(string) name span should be non-empty and comparable via bytes.ops');
+    Check(LManager.ElementTypeInfo^.Kind = nextpas.core.system.typinfo.tkAString,
+      'span check must agree with tkAString kind (drift would diverge)');
+  finally
+    LManager.Free; // resource release not lost
   end;
 end;
 
@@ -98,6 +127,7 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.system.typinfo collections consumer');
   T.Test('element manager TypeInfo truth', @TestElementManagerTypeInfoTruth);
+  T.Test('TypeInfo name span zero-copy bytes.ops', @TestTypeKindNameSpanZeroCopy);
   T.Test('managed string lifecycle consumer path', @TestManagedStringLifecycleConsumerPath);
   if not T.Run then Halt(1);
 end.

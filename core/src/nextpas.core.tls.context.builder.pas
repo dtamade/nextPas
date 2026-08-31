@@ -2216,6 +2216,7 @@ var
 begin
   LLines := nil;
   try
+  LLines := nil;
     LLines.Add('[SSL Context Configuration]');
     LLines.Add('');
 

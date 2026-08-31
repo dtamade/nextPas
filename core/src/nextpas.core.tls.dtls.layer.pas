@@ -88,6 +88,7 @@ var
   LLen: Integer;
 begin
   LLen := Length(APayload);
+  Result := nil;
   SetLength(Result, 13 + LLen);
   Result[0] := AContentType;
   Result[1] := Hi(DTLS_VERSION_1_2);
@@ -149,6 +150,7 @@ var
   LMaxFrag, LOffset, LRemaining, LFragLen: Integer;
   LFrag: TBytes;
 begin
+  Result := nil;
   SetLength(Result, 0);
   LMaxFrag := FMTU - 13 - 12;
   if LMaxFrag < 1 then LMaxFrag := 1;
@@ -211,6 +213,7 @@ begin
   LTotal := 0;
   for I := 0 to High(FRetransmitQueue) do
     Inc(LTotal, Length(FRetransmitQueue[I].Data));
+  Result := nil;
   SetLength(Result, LTotal);
   LPos := 0;
   for I := 0 to High(FRetransmitQueue) do

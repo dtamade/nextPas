@@ -46,6 +46,7 @@ uses
   nextpas.core.encoding.base64,
   nextpas.core.crypto.bcrypt_pbkdf,
   nextpas.core.crypto.bigint,
+  nextpas.core.mem.secure,
   nextpas.core.ssh.cipher;
 
 { 按 '#' 换行切分（替代 SysUtils 字符串助手的多分隔符 Split）}
@@ -102,6 +103,16 @@ begin
     Result := Result + Trim(LLines[I]);
 end;
 
+function StringToBytesPass(const AText: string): TBytes; inline;
+begin
+  Result := StringToBytes(AText);
+end;
+
+function BytesEqualTrim(const A, B: TBytes): Boolean; inline;
+begin
+  Result := CompareUnsigned(A, B) = 0;
+end;
+
 function IsCrtValid(const AN, AP, AQ, AIqmp: TBytes): Boolean;
 var
   LProd, LCheck: TBytes;
@@ -114,7 +125,7 @@ begin
     Exit;
   if not TryBigIntMulFromUnsignedBytes(AP, AQ, LProd, LErr) then
     Exit;
-  if not UnsignedEqual(LProd, AN) then
+  if not BytesEqualTrim(LProd, AN) then
     Exit;
   if not TryBigIntModMulFromUnsignedBytes(AQ, AIqmp, AP, LCheck, LErr) then
     Exit;
@@ -191,7 +202,7 @@ begin
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: bcrypt salt empty');
     if LRounds < 1 then
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: bcrypt rounds must be >= 1');
-    LPassBytes := StringToBytes(APassphrase);
+    LPassBytes := StringToBytesPass(APassphrase);
     if Length(LPassBytes) = 0 then
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: passphrase required for encrypted key');
     if not TryBcryptPbkdf(LPassBytes, LSalt, 48, LRounds, LDerived, LErr) then
@@ -200,8 +211,12 @@ begin
     SetLength(LIV, 16);
     Move(LDerived[0], LKey[0], 32);
     Move(LDerived[32], LIV[0], 16);
+    SecureZeroBytes(LDerived);
+    SecureZeroBytes(LPassBytes);
     { AES-256-CTR：CTR 初值为 IV，全零计数器跨块递增（SshAesCtrCrypt 封装）}
     LPrivSection := SshAesCtrCrypt(LKey, LIV, LPrivEnc);
+    SecureZeroBytes(LKey);
+    SecureZeroBytes(LIV);
     if (Length(LPrivSection) mod 16) <> 0 then
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: decrypted priv section not block aligned');
   end
