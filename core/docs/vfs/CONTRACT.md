@@ -43,7 +43,8 @@ vfs.pas       ← 门面 re-export + 便利函数 + ETag/Decompress/Mount/Overla
 | 遍历 | `VfsWalk(AFs: IVfs; const ARoot: string; ACallback): Boolean` | 字典序全树遍历（Go WalkDir 对等物）；回调可置 AStop 中止 |
 | 便利 | `VfsStat(AFs; APath): TStatInfo` / `VfsList(AFs; ADir): TEntryArray` | 门面包函数，与 Go 包级辅助同构 |
 | 便利 | `VfsReadAllBytes(AFs; APath): TBytes` / `VfsReadAllText(...): string` | 门面函数，非接口方法 |
-| ETag | `IVfsETag.TryGetETag` + `VfsETagStrong/VfsETagFNV` + `VFS_DECOMPRESS_MAX_BYTES` | 门面重导出：embedded 预计算 ETag 零分配命中，压缩装饰器 ETag 禁用 |
+| ETag | `IVfsETag.TryGetETag` + `VfsETagStrong/VfsETagFNV` + `VFS_DECOMPRESS_MAX_BYTES` | 门面重导出：embedded 预计算 ETag 零分配命中，压缩装饰器 ETag 禁用；`VfsETagStrong/FNV` 单源消 `embedded/http` 字面量重复 |
+| 路径 | `VfsPathHasPrefix/VfsIsParentPath` + `VfsNameCompare/VfsSortEntries` | 门面重导出：前缀/父子判定与字节序比较单源 `base.utils CompareBytesOrdered`，`mount/overlay` 共用 |
 
 ```pascal
 IVfs = interface
