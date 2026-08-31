@@ -47,10 +47,11 @@ runtime completeness, self-hosting, or production readiness.
 - FPC 路径：`fpc.inc` re-export FPC System 类型
 - nextPas 路径：`kernel.inc` → 17 个子模块（base/str/intf/cls/rtti/except/mem/memmgr/lifecycle/endian/barrier/intrinsics/thread/io/comp）
 
-门面文件：
+门面文件（2026-08-31 实证：sysutils 40+ 函数、classes 10 类型 live）：
 - `system.pas` — 根门面，re-export 基础类型和常量
 - `typinfo.pas` — RTTI 门面（PTypeInfo/TTypeKind/GetPropInfo/GetEnumName/GetEnumValue）
-- `sysutils.pas` — SysUtils 门面（40+ 函数：数值转换/字符串/日期时间/文件系统/路径/环境变量）
+- `sysutils.pas` — SysUtils 门面（**40+ 函数**：`Format`/`SameText`/`IntToStr`/`Trim`/`StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep`/`SysErrorMessage` 等，委托 `text.conv`/`path`/`fs`/`platform`）
+- `classes.pas` — Classes 窄门面（**10 类型**：`TSeekOrigin`/`TStream`/`THandleStream`/`TMemoryStream`/`TFileStream`/`TList`/`TInterfaceList`/`TStringList`/`TDuplicates`/`TThread` + `fm*`）
 - `errors.pas` — 异常分类门面（38 exception + 18 error category）
 
 ### Root facade live surface (historical inventory)
@@ -72,7 +73,7 @@ runtime completeness, self-hosting, or production readiness.
 | `FillByte`, `IndexChar`, `CompareChar`, `MemPos`, `StackTop` | `nextpas.core.system` (kernel) | Bulk fill/search/compare intrinsics. |
 | `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData` | `nextpas.core.system.typinfo` | RTTI type aliases for compiler/runtime. |
 | `GetPropInfo`, `GetEnumName`, `GetEnumValue` | `nextpas.core.system.typinfo` | RTTI access functions. |
-| `Format`, `SameText`, `IntToStr`, `Trim` + text/bytes helpers (`IntToHex`, `StrToInt`, `FloatToStr`, `BytesOf`/`StringOf`, `TrimLeft`/`UpperCase`, `Pos`, `ExceptAddr` etc.) | **owner: `nextpas.core.text.conv`/`text.format`/`bytes.ops`/`base.utils`** (no fs/path/time/platform slices); surface: `nextpas.core.system.sysutils` | SysUtils **S4 minimal thin facade only** — re-exports / forwards to owner modules; fs/path/time/env belong to `fs`/`path`/`time`/`os.env` owners, never system. |
+| `Format`, `SameText`, `IntToStr`, `Trim` + 40+ SysUtils-named functions | **owner: `nextpas.core.text.conv`** (and path/fs/platform for non-text slices); surface: `nextpas.core.system.sysutils` | SysUtils **compatibility facade only** — re-exports / forwards to owner modules; never the implementation owner of text APIs. |
 
 S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
 compiler/runtime handshake names, not public ABI and not current facade functions.
@@ -94,8 +95,7 @@ a live facade re-exporting all 38 exception type aliases and 18 error-category
 constants from their canonical owners (`nextpas.core.exception`, `nextpas.core.base`,
 `nextpas.core.errors`). `nextpas.core.system.typinfo`
 has a live unit covering PTypeInfo, TTypeKind, PTypeData, TTypeData, GetPropInfo,
-GetEnumName, GetEnumValue. `nextpas.core.system.sysutils` has a live unit with 40+ functions
-delegating to owner modules (text.conv, path, fs, platform). `nextpas.core.system.classes` is live as a minimal stream shim (TStream/TFileStream/TStringList etc.); broader Classes surface remains deferred.
+GetEnumName, GetEnumValue. `nextpas.core.system.sysutils` has a live unit with **40+ functions** ( `Format`/`SameText`/`IntToStr`/`Trim` + `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep` delegating to `text.conv`/`path`/`fs`/`platform`) and `nextpas.core.system.classes` has a live **10-type** shim (`TSeekOrigin`/`TStream`/`THandleStream`/`TMemoryStream`/`TFileStream`/`TList`/`TInterfaceList`/`TStringList`/`TDuplicates`/`TThread` + `fm*`).
 
 The system focused gate also includes a collections consumer proof for
 `TElementManager<string>` so TypInfo managed-array helpers stay tied to a real
@@ -175,25 +175,24 @@ barriers, atomic operation ordering, and common concurrency patterns.
 | `nextpas.core.io` | stream and IO owner; no system IO facade in S0/S1. |
 | atomic/sync/thread modules | concurrency owners; system does not own locks, atomics or scheduler policy. |
 
-Historical S4 boundary note:
+Historical S4 boundary note (2026-08-31 live 40+ sysutils / 10-type classes):
 
 - `system.errors` is live as an exception taxonomy facade, re-exporting all 38
   exception type aliases and 18 error-category constants from canonical owners
-- `system.classes` is live as a stream-only bootstrap shim (TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin). TThread, TList, TInterfacedObject remain outside system scope and belong to their respective owner modules (thread, collections, base).
-- `system.sysutils` is a **live S4 minimal thin facade** (not implementation owner) with text/bytes helpers only: `Format`/`SameText`/`CompareStr` (→ `text.*`), numeric `IntToStr`/`StrToInt`/`FloatToStr`/`BoolToStr` (→ `text.conv`/`text.utils`), `BytesOf`/`StringOf` (→ `bytes.ops` zero-copy), `CompareMem`/`Supports`/`HexStr` (→ `base.utils`), `Trim`/`UpperCase`/`Pos` (→ `text.conv`/`text.view`), `ExceptAddr`/`ExceptFrame*` (→ `exception`). No fs/path/time/env/process/error slices — those belong to `fs`/`path`/`time`/`os.env`/`platform` owners. Do not document sysutils as owner of those domains.
+- `system.classes` is **live** as a **10-type** bootstrap shim (`TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread` + `fmCreate`/`fmOpen*`/`fmShare*`; `IStream`/`IReader`/`IWriter` re-exports from `nextpas.core.io`). `TComponent`/`TPersistent`/`TInterfacedObject` remain outside system scope and belong to their respective owner modules (thread, collections, base). Broader Classes remain deferred beyond the live shim — see `compatibility-facades.md` gate.
+- `system.sysutils` is a **live thin facade** (not implementation owner) with **40+** SysUtils-named functions: text (`Format`, `SameText`, `IntToStr`, `Trim` → **owner `text.conv`**), numeric parsing (`StrToInt`/`StrToFloat` → `text.conv`), date/time (`Now`/`FormatDateTime` → `time`/`platform`), filesystem (`FileExists`/`ForceDirectories` → `fs`), path (`ExtractFile*` → `path`), environment (`GetEnvironmentVariable` → `platform`), timing (`Sleep`), error helpers (`SysErrorMessage`). Do not document sysutils as owner of these domains. Facades remain delegating to owner modules.
 - `system.typinfo` is live for `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData`, `GetPropInfo`, `GetEnumName`, `GetEnumValue`
 - `TypeInfo` and `GetTypeKind` are compiler/System compile-truth imports made
   available to consumers after the facade is in `uses`; they are not unit-owned wrapper functions in `nextpas.core.system.typinfo`
 - `TTypeKind` aliases cover live collections kind consumers, but do not expose
   property metadata or reflection layout
 - deferred means “documented and guarded by source-contract”, not “silently available”
-- Classes remain deferred beyond the stream shim; broader Classes surface is not a current phase gate
 - any broader compatibility facade must arrive with real consumer pressure and focused API tests
 
-## Contract Names
+## Contract Names (27 live vocabulary · 2026-08-31)
 
 The stable architecture docs already use explicit runtime contract names. `nextpas.core.system`
-documents them here but does not claim implementation readiness in this slice:
+documents them here but does not claim implementation readiness in this slice. Full ledger is `contract-coverage-table.md` (27 contracts; `np.system.managed_record_init` vocabulary deferred, counted separately).
 
 | Contract | Meaning | Current state |
 | --- | --- | --- |
@@ -202,8 +201,28 @@ documents them here but does not claim implementation readiness in this slice:
 | `np.system.unit_init` | run a unit initialization entry | future compiler/runtime only |
 | `np.system.unit_fini` | run a unit finalization entry | future compiler/runtime only |
 | `np.system.halt` | explicit program termination | compiler/HIR contract live; no callable public facade |
-| `np.system.object_free` | object `Free` nil guard, destructor, optional cleanup and release intent | compiler/HIR contract live; no callable public facade |
-| `np.system.runtime_fault` | non-ignorable runtime fault | future compiler/runtime only |
+| `np.system.object_free` | object `Free` nil guard + destroy/cleanup/release lifecycle | compiler/HIR contract live; no callable public facade |
+| `np.system.object_free.destroy` | owned destructor call inside object-free lifecycle | compiler selects effective `Destroy` |
+| `np.system.object_free.cleanup` | optional field cleanup before heap release | compiler-planned cleanup |
+| `np.system.object_free.release` | release object allocation after destroy/cleanup | system contract over `mem` |
+| `np.system.object_alloc` | class instance allocation | HIR `sckObjectAlloc` → `np_object_alloc` |
+| `np.system.heap_alloc` | allocate runtime-managed storage via canonical heap | system contract over `nextpas.core.mem` |
+| `np.system.heap_free` | release runtime-managed storage via canonical heap | system contract over `nextpas.core.mem` |
+| `np.system.string_init` | initialize managed string slot to empty | HIR `sckStringInit` → `np_tstring_init` |
+| `np.system.string_fini` | finalize managed string slot | HIR `sckStringFini` → `np_tstring_fini` |
+| `np.system.string_assign` | assign managed string with correct lifetime | HIR `sckStringAssign` → `np_tstring_assign` |
+| `np.system.dynarray_init` | initialize dynamic array slot to nil | vocabulary (store-based nil) |
+| `np.system.dynarray_fini` | finalize array slot and managed elements | HIR `sckDynArrayFini` → `np_dynarray_release` |
+| `np.system.dynarray_set_length` | resize array preserving initialized prefix | HIR `sckDynArraySetLength` → `np_dynarray_resize` |
+| `np.system.interface_addref` | retain interface reference | HIR `sckInterfaceAddRef` → `np_intf_addref` |
+| `np.system.interface_release` | release interface reference | HIR `sckInterfaceRelease` → `np_intf_release` |
+| `np.system.managed_record_fini` | finalize managed fields in record (reverse order) | HIR `sckManagedRecordFini` (marker + nested string/dynarray) |
+| `np.system.runtime_fault` | non-ignorable runtime fault | backend fault helpers (`@np_allocator_fault` etc.) |
+| `np.system.exception_try_push` | push exception frame | HIR `sckExceptionTryPush` → `np_try_push` |
+| `np.system.exception_try_pop` | pop exception frame | HIR `sckExceptionTryPop` → `np_try_pop` |
+| `np.system.exception_raise` | raise exception through current frame | HIR `sckExceptionRaise` → `np_raise` |
+| `np.system.exception_finally_end` | complete finally and resume propagation | HIR `sckExceptionFinallyEnd` → `np_finally_end` |
+| `np.system.exception_except_end` | complete except and resume normal flow | HIR `sckExceptionExceptEnd` → `np_except_end` |
 
 Process-level startup and shutdown currently have compiler semantic seed truth:
 program, library and package roots project exact `runtime-contract` entries for

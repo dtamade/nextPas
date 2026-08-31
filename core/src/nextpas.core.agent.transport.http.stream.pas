@@ -293,9 +293,6 @@ begin
   begin
     if Length(FErrBody) < CMaxErrorBodyBytes then
     begin
-      { 追加并截断至上限：几何预留避免逐 chunk O(n²) 重分配 }
-      if SizeInt(ASize) > CMaxErrorBodyBytes - Length(FErrBody) then
-        ASize := SizeUInt(CMaxErrorBodyBytes - Length(FErrBody));
       SetLength(FErrBody, Length(FErrBody) + SizeInt(ASize));
       Move(AData^, PAnsiChar(@FErrBody[Length(FErrBody) - SizeInt(ASize) + 1])^,
         ASize);

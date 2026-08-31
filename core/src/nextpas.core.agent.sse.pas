@@ -176,10 +176,8 @@ begin
   if ASpan.Len = 0 then
     Exit;
 
-  { 单源追加：手工 SetLength+Move（BytesAppend inline 跨单元展开在 -O2 下长度错乱） }
-  SetLength(FBuf, Length(FBuf) + SizeInt(ASpan.Len));
-  if ASpan.Len > 0 then
-    Move(ASpan.Data^, FBuf[Length(FBuf) - SizeInt(ASpan.Len)], ASpan.Len);
+  { 单源追加：复用 bytes.ops BytesAppend，不手工 SetLength+Move }
+  BytesAppend(FBuf, ASpan.Data, ASpan.Len);
 
   { 首部 UTF-8 BOM 跳过；不足 3 字节且是 BOM 前缀时留待下一 Feed 判定（零拷贝探测） }
   if FBOMCheck then
@@ -202,9 +200,9 @@ begin
   LFull := TByteSpan.FromBytes(FBuf);
   while FLineStart < Length(FBuf) do
   begin
-      I := nextpas.core.bytes.ops.SpanIndexOf(
+    I := nextpas.core.bytes.ops.SpanIndexOf(
       LFull.Slice(SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart)), 10);
-      if I < 0 then
+    if I < 0 then
       Break;
     Inc(I, FLineStart);
     LLineEnd := I;

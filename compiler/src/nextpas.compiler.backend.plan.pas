@@ -1,4 +1,4 @@
-unit nextpas.compiler.backend.plan;
+unit np_backend_plan;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../ir}
@@ -9,14 +9,10 @@ unit nextpas.compiler.backend.plan;
 interface
 
 uses
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
-  nextpas.core.mem.intf, nextpas.core.compiler.mem,
   nextpas.core.collections.vec,
-  nextpas.compiler.targets.facts,
-  nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.builder,
-  nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.diagnostics.json_helpers,
-  nextpas.compiler.ir.hir.to_mir, nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.to_llvm,
-  nextpas.compiler.ir.mir.optimize, nextpas.compiler.ir.mir.pass.registry;
+  nextpas.core.mem.intf, nextpas.core.compiler.mem,
+  np_target_facts,
+  np_semantic_model, np_mir_model;
 
 type
   TBackendArtifact = record
@@ -35,35 +31,6 @@ type
   TBackendArtifactVec = specialize TVec<TBackendArtifact>;
   TBackendLogicalLibraryRequestVec = specialize TVec<TBackendLogicalLibraryRequest>;
 
-  TBackendTargetDescriptor = record
-    HostId: string;
-    ToolchainBindingId: string;
-    HostCompilerProfileId: string;
-    BackendFamily: string;
-    AssemblerProfileId: string;
-    LinkerProfileId: string;
-    ArchiverProfileId: string;
-    ResourceToolProfileId: string;
-    ObjectFormat: string;
-    AssemblerFlavor: string;
-    LinkerFlavor: string;
-    RuntimeLayoutKey: string;
-    TargetCSymbolPrefix: string;
-    TargetCLibraryNaming: string;
-    LlvmTriple: string;
-    LlvmDataLayout: string;
-    SysrootMode: string;
-    RuntimeSdkId: string;
-    AllowHostFallback: Boolean;
-    ToolRootKind: string;
-    RuntimeRootKind: string;
-    ResponseFilePolicy: string;
-    LinkScriptPolicy: string;
-    LlvmEnabled: Boolean;
-    LlvmExecutableSetId: string;
-    procedure Apply(const ATargetFacts: TTargetFactsView);
-  end;
-
   TBackendPlan = class
   private
     FArtifacts: TBackendArtifactVec;
@@ -73,7 +40,31 @@ type
     FOutputKind: string;
     FPrimaryArtifactKind: string;
     FPrimaryArtifactPath: string;
-    FTarget: TBackendTargetDescriptor;
+    FHostId: string;
+    FToolchainBindingId: string;
+    FHostCompilerProfileId: string;
+    FBackendFamily: string;
+    FAssemblerProfileId: string;
+    FLinkerProfileId: string;
+    FArchiverProfileId: string;
+    FResourceToolProfileId: string;
+    FObjectFormat: string;
+    FAssemblerFlavor: string;
+    FLinkerFlavor: string;
+    FRuntimeLayoutKey: string;
+    FTargetCSymbolPrefix: string;
+    FTargetCLibraryNaming: string;
+    FLlvmTriple: string;
+    FLlvmDataLayout: string;
+    FSysrootMode: string;
+    FRuntimeSdkId: string;
+    FAllowHostFallback: Boolean;
+    FToolRootKind: string;
+    FRuntimeRootKind: string;
+    FResponseFilePolicy: string;
+    FLinkScriptPolicy: string;
+    FLlvmEnabled: Boolean;
+    FLlvmExecutableSetId: string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -159,34 +150,13 @@ type
 
 implementation
 
-procedure TBackendTargetDescriptor.Apply(const ATargetFacts: TTargetFactsView);
-begin
-  HostId := ATargetFacts.HostId;
-  ToolchainBindingId := ATargetFacts.ToolchainBindingId;
-  HostCompilerProfileId := ATargetFacts.HostCompilerProfileId;
-  BackendFamily := ATargetFacts.BackendFamily;
-  AssemblerProfileId := ATargetFacts.AssemblerProfileId;
-  LinkerProfileId := ATargetFacts.LinkerProfileId;
-  ArchiverProfileId := ATargetFacts.ArchiverProfileId;
-  ResourceToolProfileId := ATargetFacts.ResourceToolProfileId;
-  ObjectFormat := ATargetFacts.ObjectFormat;
-  AssemblerFlavor := ATargetFacts.AssemblerFlavor;
-  LinkerFlavor := ATargetFacts.LinkerFlavor;
-  RuntimeLayoutKey := ATargetFacts.RuntimeLayoutKey;
-  TargetCSymbolPrefix := ATargetFacts.CSymbolPrefix;
-  TargetCLibraryNaming := ATargetFacts.CLibraryNaming;
-  LlvmTriple := ATargetFacts.LlvmTriple;
-  LlvmDataLayout := ATargetFacts.LlvmDataLayout;
-  SysrootMode := ATargetFacts.SysrootMode;
-  RuntimeSdkId := ATargetFacts.RuntimeSdkId;
-  AllowHostFallback := ATargetFacts.AllowHostFallback;
-  ToolRootKind := ATargetFacts.ToolRootKind;
-  RuntimeRootKind := ATargetFacts.RuntimeRootKind;
-  ResponseFilePolicy := ATargetFacts.ResponseFilePolicy;
-  LinkScriptPolicy := ATargetFacts.LinkScriptPolicy;
-  LlvmEnabled := ATargetFacts.LlvmEnabled;
-  LlvmExecutableSetId := ATargetFacts.LlvmExecutableSetId;
-end;
+uses
+  SysUtils,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
+  np_hir_types, np_hir_model, np_hir_builder,
+  np_hir_llvm_emitter, nextpas_json_helpers,
+  np_hir_to_mir, np_mir_to_llvm,
+  np_mir_optimize, np_mir_pass_registry;
 
 constructor TBackendPlan.Create;
 begin
@@ -198,7 +168,31 @@ begin
   FOutputKind := '';
   FPrimaryArtifactKind := '';
   FPrimaryArtifactPath := '';
-  FTarget := Default(TBackendTargetDescriptor);
+  FHostId := '';
+  FToolchainBindingId := '';
+  FHostCompilerProfileId := '';
+  FBackendFamily := '';
+  FAssemblerProfileId := '';
+  FLinkerProfileId := '';
+  FArchiverProfileId := '';
+  FResourceToolProfileId := '';
+  FObjectFormat := '';
+  FAssemblerFlavor := '';
+  FLinkerFlavor := '';
+  FRuntimeLayoutKey := '';
+  FTargetCSymbolPrefix := '';
+  FTargetCLibraryNaming := '';
+  FLlvmTriple := '';
+  FLlvmDataLayout := '';
+  FSysrootMode := '';
+  FRuntimeSdkId := '';
+  FAllowHostFallback := False;
+  FToolRootKind := '';
+  FRuntimeRootKind := '';
+  FResponseFilePolicy := '';
+  FLinkScriptPolicy := '';
+  FLlvmEnabled := False;
+  FLlvmExecutableSetId := '';
 end;
 
 destructor TBackendPlan.Destroy;

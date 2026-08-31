@@ -267,6 +267,49 @@ function TlsPasServerShouldAcceptEarlyData(const AStore: ITlsPasReplayStore;
   const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
 function TlsPasEarlyDataDecisionToStr(ADecision: TTlsPasEarlyDataDecision): string;
 
+  { S13 可观测：服务端决策统计 + 格式化，零堆纯函数，供日志/HTTP X-Early-Data 埋点 }
+type
+  TTlsPasServerStats = record
+    Accepts: Int64;
+    RejectPolicy: Int64;
+    RejectReplay: Int64;
+  end;
+
+function TlsPasFormatReplayStats(const AStats: TAsyncTlsPasReplayStats): string;
+function TlsPasFormatServerStats(const AStats: TTlsPasServerStats): string;
+
+type
+  { 服务端观测器：包装任意 ITlsPasReplayStore，委托 TlsPasServerDecideEarlyData 并计数，Mutex 保护 }
+  TAsyncTlsPasServerObserver = class
+  private
+    FStore: ITlsPasReplayStore;
+    FMutex: TPlatformMutex;
+    FStats: TTlsPasServerStats;
+  public
+    constructor Create(const AStore: ITlsPasReplayStore);
+    destructor Destroy; override;
+    function Decide(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+    function ShouldAccept(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+    function GetServerStats: TTlsPasServerStats;
+    function GetReplayStats: TAsyncTlsPasReplayStats;
+    procedure Clear;
+    property Store: ITlsPasReplayStore read FStore;
+  end;
+
+  { S14 自适应限额与 HTTP 埋点：纯函数，零堆，基于观测统计动态限额，供服务端限流与 X-Early-Data 头 }
+type
+  TTlsPasAdaptiveLimitConfig = record
+    BaseLimit: Cardinal;
+    MinLimit: Cardinal;
+    MaxLimit: Cardinal;
+    RejectRateThreshold: Double;
+  end;
+
+function DefaultTlsPasAdaptiveLimitConfig: TTlsPasAdaptiveLimitConfig;
+function TlsPasComputeAdaptiveMaxEarlyData(const AServerStats: TTlsPasServerStats;
+  const AReplayStats: TAsyncTlsPasReplayStats; const AConfig: TTlsPasAdaptiveLimitConfig): Cardinal;
+function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecision): string;
+
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
@@ -1006,6 +1049,133 @@ begin
     edAccept: Result := 'accept';
   else
     Result := 'unknown';
+  end;
+end;
+
+function TlsPasFormatReplayStats(const AStats: TAsyncTlsPasReplayStats): string;
+begin
+  Result := Format('hits=%d misses=%d evictions=%d expiries=%d current=%d',
+    [AStats.Hits, AStats.Misses, AStats.Evictions, AStats.Expiries, AStats.Current]);
+end;
+
+function TlsPasFormatServerStats(const AStats: TTlsPasServerStats): string;
+begin
+  Result := Format('accepts=%d reject_policy=%d reject_replay=%d',
+    [AStats.Accepts, AStats.RejectPolicy, AStats.RejectReplay]);
+end;
+
+constructor TAsyncTlsPasServerObserver.Create(const AStore: ITlsPasReplayStore);
+begin
+  inherited Create;
+  FStore := AStore;
+  if platform_mutex_init(FMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: server observer mutex init');
+end;
+
+destructor TAsyncTlsPasServerObserver.Destroy;
+begin
+  platform_mutex_destroy(FMutex);
+  inherited Destroy;
+end;
+
+function TAsyncTlsPasServerObserver.Decide(const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+begin
+  Result := TlsPasServerDecideEarlyData(FStore, ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+  platform_mutex_lock(FMutex);
+  try
+    case Result of
+      edAccept: Inc(FStats.Accepts);
+      edRejectPolicy: Inc(FStats.RejectPolicy);
+      edRejectReplay: Inc(FStats.RejectReplay);
+    end;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasServerObserver.ShouldAccept(const ATicketIdentity, AEarlyData: TBytes;
+  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+begin
+  Result := Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData) = edAccept;
+end;
+
+function TAsyncTlsPasServerObserver.GetServerStats: TTlsPasServerStats;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    Result := FStats;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasServerObserver.GetReplayStats: TAsyncTlsPasReplayStats;
+begin
+  if Assigned(FStore) then
+    Result := FStore.GetStats
+  else
+  begin
+    FillChar(Result, SizeOf(Result), 0);
+  end;
+end;
+
+procedure TAsyncTlsPasServerObserver.Clear;
+begin
+  if Assigned(FStore) then
+    FStore.Clear;
+  platform_mutex_lock(FMutex);
+  try
+    FillChar(FStats, SizeOf(FStats), 0);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function DefaultTlsPasAdaptiveLimitConfig: TTlsPasAdaptiveLimitConfig;
+begin
+  Result.BaseLimit := 16384;
+  Result.MinLimit := 512;
+  Result.MaxLimit := 16384;
+  Result.RejectRateThreshold := 0.1;
+end;
+
+function TlsPasComputeAdaptiveMaxEarlyData(const AServerStats: TTlsPasServerStats;
+  const AReplayStats: TAsyncTlsPasReplayStats; const AConfig: TTlsPasAdaptiveLimitConfig): Cardinal;
+var Total, Rejects: Int64; Rate: Double; LBase, LTmp: Cardinal;
+begin
+  Total := AServerStats.Accepts + AServerStats.RejectPolicy + AServerStats.RejectReplay;
+  if Total = 0 then
+    Exit(AConfig.BaseLimit);
+  Rejects := AServerStats.RejectPolicy + AServerStats.RejectReplay;
+  Rate := Rejects / Total;
+  if Rate > AConfig.RejectRateThreshold then
+  begin
+    LTmp := AConfig.BaseLimit div 2;
+    if LTmp < AConfig.MinLimit then LTmp := AConfig.MinLimit;
+    LBase := LTmp;
+  end
+  else
+  begin
+    LBase := AConfig.BaseLimit;
+    if LBase > AConfig.MaxLimit then LBase := AConfig.MaxLimit;
+  end;
+  if AReplayStats.Current > 50 then
+  begin
+    LTmp := LBase div 2;
+    if LTmp < AConfig.MinLimit then LTmp := AConfig.MinLimit;
+    LBase := LTmp;
+  end;
+  Result := LBase;
+end;
+
+function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecision): string;
+begin
+  case ADecision of
+    edAccept: Result := '1';
+    edRejectPolicy, edRejectReplay: Result := '0';
+  else
+    Result := '0';
   end;
 end;
 

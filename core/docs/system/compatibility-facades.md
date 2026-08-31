@@ -1,9 +1,8 @@
 # S4 Compatibility Facade Design
 
 This document records the S4 compatibility boundary for `nextpas.core.system`.
-It now distinguishes minimal live TypInfo, SysUtils and Classes shim facades.
-All three are intentionally narrow; they do not convert bootstrap RTL pressure
-into a broad public compatibility API.
+It now distinguishes minimal live TypInfo, SysUtils (**40+ functions**) and Classes (**10 types**) facades. All live units are intentionally narrow; they do
+not convert bootstrap RTL pressure into a broad public compatibility API.
 
 ## Current Decision Boundary
 
@@ -12,12 +11,9 @@ into a broad public compatibility API.
   (`nextpas.core.exception`, `nextpas.core.base`, `nextpas.core.errors`).
 - `nextpas.core.system.typinfo` has a minimal live unit for the seven-symbol
   pressure set.
-- `nextpas.core.system.sysutils` has a minimal live **compatibility facade** that
-  re-exports `Format`, `SameText`, `IntToStr`, `Trim`, and canonical exception
-  aliases. **Text implementation owner is `nextpas.core.text.conv`**; exception
-  aliases own in `nextpas.core.exception`. Sysutils does not implement text APIs.
-- `nextpas.core.system.classes` is live as a minimal stream shim (TStream/TFileStream/TStringList/THandleStream/TMemoryStream/TStringStream/TSeekOrigin + file mode constants); broader Classes surface (TComponent/TPersistent/streaming) remains deferred.
-- Deferred does not mean "undefined"; it means the broader public unit surface is
+- `nextpas.core.system.sysutils` has a minimal live **compatibility facade** ( **40+ functions**: `Format`, `SameText`, `IntToStr`, `Trim`, `StrToInt`, `FloatToStr`, `FileExists`, `ExtractFilePath`, `Now`, `Sleep`, `SysErrorMessage` …). **Text implementation owner is `nextpas.core.text.conv`** (and `path`/`fs`/`platform` for non-text slices); exception aliases own in `nextpas.core.exception`. Sysutils does not implement text APIs — it is a thin delegating facade.
+- `nextpas.core.system.classes` is a **live facade** with **10 types**: `TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread` (plus `fm*` constants and `IStream`/`IReader`/`IWriter` re-exports). Narrow, stream/container-owned subset, not full `Classes` sprawl.
+- Deferred does not mean "undefined"; it means the broad public unit surface is
   not live yet and is guarded by docs plus source-contract.
 - Any future broad compatibility facade still requires named consumer pressure,
   focused tests, and controller review.
@@ -70,33 +66,34 @@ The pressure clusters into a few narrow capability families:
 | `CompareText` | no focused consumer pressure in this lane | keep deferred | do not unlock just because `SameText` is live |
 | date/time convenience | `Now`, `FormatDateTime` | only incidental pressure today | belongs to time owner, not system |
 
-### Current S4 stance
+### Current S4 stance (2026-08-31 alignment: live 40+ sysutils, 10-type classes)
 
-- A minimal live `nextpas.core.system.sysutils` unit exists — S4 minimal (text/conv only).
-- The live unit exposes only owner-delegated text/bytes helpers: `Format`, `SameText`,
-  `IntToStr`/`Int64ToStr`/`IntToHex`, `StrToInt`/`StrToInt64`/`TryStrToInt`/`StrToFloat`,
-  `FloatToStr`/`CurrToStr`/`BoolToStr`, `BytesOf`/`StringOf` (zero-copy via `bytes.ops`),
-  `CompareMem`/`Supports`/`HexStr`, `Trim`/`TrimLeft`/`TrimRight`/`UpperCase`/`LowerCase`,
-  `Pos` (via `text.view` zero-copy), and `ExceptAddr`/`ExceptFrame*` (via `exception`);
-  filesystem, path, time, environment, process, and platform-error ownership stays with
-  `fs`/`path`/`time`/`os.env`/`platform` owners — no `FileExists`, `ExtractFilePath`,
-  `Now`, `Sleep`, `GetEnvironmentVariable`, `SysErrorMessage` in the facade.
-- Do not create a mirror of FPC `SysUtils`.
-- Do not move filesystem, environment, time, or text ownership into `system`.
-- Any further `system.sysutils` shape must stay tiny and consumer-proven; do not
-  pull broad text, filesystem, environment, or time ownership into system.
+- A minimal live `nextpas.core.system.sysutils` unit exists — **40+ functions** (see § Current live minimum; `core/src/nextpas.core.system.sysutils.pas` 583 lines, `Format`/`SameText`/`IntToStr`/`Trim` + `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep`/`SysErrorMessage` etc., all delegating to `text.conv`/`path`/`fs`/`platform`).
+- A minimal live `nextpas.core.system.classes` unit exists — **10 types** (`TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread`; plus `fmCreate`/`fmOpen*`/`fmShare*` and `IStream` re-exports) as narrow bootstrap shim; `TComponent`/`TPersistent` remain deferred.
+- Do not create a mirror of FPC `SysUtils`/`Classes`.
+- Do not move filesystem, environment, time, or text ownership into `system`; classes does not own container/thread ownership beyond the 10-type shim.
+- Any further `system.sysutils`/`system.classes` shape must stay tiny and consumer-proven; do not pull broad text, filesystem, environment, or time ownership into system.
 
 ### Current live minimum
 
-The live contract is the S4 minimal text/conv facade (no fs/path/time):
+The live contract includes 40+ functions:
 
-- `Format` (→ `text.format.TextFormat`), `SameText`/`CompareStr` (→ `text.conv`/`text.compare`)
-- `IntToStr`, `Int64ToStr`, `IntToHex`, `StrToInt`/`StrToInt64`/`TryStrToInt`/`TryStrToInt64`/`StrToIntDef`/`StrToInt64Def`/`StrToFloat`/`FloatToStr`/`CurrToStr`/`BoolToStr` (→ `text.conv`/`text.utils`)
-- `BytesOf`/`StringOf` (→ `bytes.ops` single-source zero-copy), `CompareMem`/`Supports`/`HexStr` (→ `base`/`base.utils`)
-- `Trim`/`TrimLeft`/`TrimRight`/`UpperCase`/`LowerCase` (→ `text.conv`)
-- `Pos` (→ `text.view.IndexOfStr` zero-copy view, inline)
-- `ExceptAddr`/`ExceptFrameCount`/`ExceptFrameAt` (→ `exception`, inline single-source)
-- `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`, `TBytes`, `TStringArray` (type aliases)
+- `Format`, `SameText`, `IntToStr`, `Trim`
+- `StrToInt`, `StrToInt64`, `StrToFloat` (numeric parsing)
+- `FloatToStr`, `CurrToStr` (numeric formatting)
+- `DateTimeToStr`, `DateToStr`, `TimeToStr` (date/time formatting)
+- `Now`, `Date`, `Time` (date/time access)
+- `FileExists`, `DirectoryExists` (filesystem checks)
+- `CreateDir`, `RemoveDir`, `ForceDirectories` (directory ops)
+- `DeleteFile`, `RenameFile`, `CopyFile` (file ops)
+- `ExtractFilePath`, `ExtractFileName`, `ExtractFileExt` (path ops)
+- `ChangeFileExt`, `IncludeTrailingPathDelimiter` (path manipulation)
+- `GetCurrentDir`, `SetCurrentDir` (working directory)
+- `ParamCount`, `ParamStr` (command line)
+- `GetEnvironmentVariable` (environment)
+- `Sleep` (timing)
+- `SysErrorMessage`, `GetLastOSError` (error handling)
+- `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`
 
 Anything larger should trigger `Needs Review`, including:
 
@@ -159,14 +156,7 @@ This is the strongest real S4 pressure, but it is also the highest-risk area:
 - The live surface is a narrow runtime-truth facade, not string-based
   reflection sugar.
 - The unit exposes `PTypeInfo`, `TTypeKind`, the kind constants used by live
-  consumers, and the managed-array helper wrappers. Implemented symbols are
-  owner-isolated: string params/results via `nextpas.core.text.conv` (Trim,
-  canonical spelling), error taxonomy via `nextpas.core.exception`
-  (EArgumentNil/EConvertError), and zero-copy bytes handling single-sourced
-  through `nextpas.core.bytes.ops` (no duplicate Move loops). Direct
-  `System.InitializeArray/FinalizeArray/CopyArray` truth is still lowered to
-  FPC System runtime, but validated through exception owner with inline
-  zero-copy forwarding (perf: inline + early exit, no payload alloc).
+  consumers, and the managed-array helper wrappers.
 - `TypeInfo` and `GetTypeKind` remain compiler/System compile-truth symbols;
   consumers use them unqualified after importing the facade, not as ordinary
   `nextpas.core.system.typinfo.TypeInfo(...)` wrapper functions.
@@ -206,10 +196,10 @@ Pressure today is mostly bootstrap/tooling/file-handling pressure:
 - `rtl/core/classes/np_classes.pas` currently implements `TFileStream`,
   `TStringList`, and file mode constants
 
-### Why the live shim stays narrow
+### Why this is not enough for a live facade
 
 `Classes` is historically huge and stateful. Current evidence only supports a
-very small subset (now live as stream shim):
+very small subset:
 
 - `TFileStream`
 - `TStringList`
@@ -223,11 +213,11 @@ That does not justify:
 - streaming framework compatibility
 - designer/runtime component semantics
 
-### Current S4 stance
+### Current S4 stance (live 10-type shim, 2026-08-31)
 
-- `nextpas.core.system.classes` is live as a minimal stream shim: TStream/TFileStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin/TList/TInterfaceList/TDuplicates/TThread + file mode constants (fmCreate/fmOpenRead/fmShareDenyNone); TComponent/TPersistent/streaming remain deferred.
-- Bootstrap `Classes` pressure is satisfied by this narrow shim, not by a full namespace boundary.
-- Any broader facade must keep IO/container ownership explicit.
+- A live `nextpas.core.system.classes` unit exists — **10 types** (`TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread`; `fmCreate`/`fmOpenRead`/`fmShareDenyNone` etc.) as narrow bootstrap shim; `TComponent`/`TPersistent`/ownership trees/streaming framework remain deferred.
+- Treat live 10-type shim as proof of narrow subset pressure, not as proof that the full `Classes` boundary is decided.
+- Any future broader `system.classes` must keep IO/container/thread ownership explicit and stay guarded by source-contract (the 10-type shim is the current live surface).
 
 ## Migration Risks
 

@@ -21,6 +21,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.bytes,
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.chacha20poly1305,
   nextpas.core.net.quic.varint,
@@ -67,14 +68,8 @@ function TryQuicUnprotectPacket(const APacket: TBytes;
 implementation
 
 procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes); inline;
-var
-  LN: Integer;
 begin
-  if Length(ATail) = 0 then
-    Exit;
-  LN := Length(ABase);
-  SetLength(ABase, LN + Length(ATail));
-  Move(ATail[0], ABase[LN], Length(ATail));
+  BytesAppend(ABase, ATail);
 end;
 
 procedure NonceOf(const AIv: TBytes; APn: UInt64; out ANonce: TBytes); inline;
@@ -152,7 +147,7 @@ function QuicProtectPacket(const AClearHeader: TBytes; APn: UInt64;
   const AKeys: TQuicPacketKeys): TBytes;
 var
   LPnWire, LAad, LNonce, LCipher, LSample, LMask: TBytes;
-  LI: Integer;
+  LI, LOff: Integer;
   LFirstByte: Byte;
 begin
   Result := nil;
@@ -196,8 +191,10 @@ begin
     SetLength(Result, LI + Length(AClearHeader) - 1);
     Move(AClearHeader[1], Result[LI], Length(AClearHeader) - 1);
   end;
+  LOff := Length(Result);
+  SetLength(Result, LOff + APnLen);
   for LI := 0 to APnLen - 1 do
-    QuicBufAppendByte(Result, LPnWire[LI] xor LMask[LI + 1]);
+    Result[LOff + LI] := LPnWire[LI] xor LMask[LI + 1];
   SpanConcatInto(Result, LCipher);
 end;
 
@@ -250,13 +247,13 @@ begin
   LPnLen := (LFirstClear and $03) + 1;
   if Length(APacket) < LInfo.PnOffset + LPnLen + cQuicTagLen then
     Exit;
-  LPnWire := nil;
-  for LI := 0 to LPnLen - 1 do
-    QuicBufAppendByte(LPnWire,
-      APacket[LInfo.PnOffset + LI] xor LMask[LI + 1]);
+  SetLength(LPnWire, LPnLen);
   LTrunc := 0;
   for LI := 0 to LPnLen - 1 do
+  begin
+    LPnWire[LI] := APacket[LInfo.PnOffset + LI] xor LMask[LI + 1];
     LTrunc := (LTrunc shl 8) or LPnWire[LI];
+  end;
   APn := QuicPnDecode(ALargestPn, LTrunc, LPnLen * 8);
 
   { 受保护区裁剪（长头按 Length 字段；短头到包尾）并重建 AAD。

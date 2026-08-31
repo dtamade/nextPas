@@ -40,10 +40,13 @@ function GitPktEncodeDelim: TBytes; inline;
 function GitPktDecode(const AFrame: TBytes; out APkt: TGitPkt): Boolean; inline;
 function GitPktIsFlush(const AFrame: TBytes): Boolean; inline;
 function GitPktIsDelim(const AFrame: TBytes): Boolean; inline;
-function GitPktScan(const AStream: TBytes): TGitPktArray;
-function GitPktJoin(const APkts: TGitPktArray): TBytes;
+function GitPktScan(const AStream: TBytes): TGitPktArray; inline;
+function GitPktJoin(const APkts: TGitPktArray): TBytes; inline;
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
 
 function HexNibble(AVal: Byte): Char; inline;
 begin
@@ -173,12 +176,12 @@ begin
   Result := True;
 end;
 
-function GitPktScan(const AStream: TBytes): TGitPktArray;
+function GitPktScan(const AStream: TBytes): TGitPktArray; inline;
 var
   Pos, Len, H, I, Count, Idx: Integer;
 begin
   Result := nil;
-  // Pass 1: count packets, validate framing (mirrors GitPktJoin pre-calc Total)
+  // Pass 1: count packets + validate headers — no per-packet alloc, preserves EGitError semantics
   Pos := 0;
   Count := 0;
   while Pos < Length(AStream) do
@@ -210,10 +213,10 @@ begin
     end;
     Inc(Count);
   end;
+  if Count = 0 then Exit;
+  // Single allocation — eliminates O(n²) growth; resource released by managed array on exception
   SetLength(Result, Count);
-  if Count = 0 then
-    Exit;
-  // Pass 2: zero-copy fill — no per-packet Frame alloc/Move, single payload Move
+  // Pass 2: zero-copy fill — single Move per data payload directly from stream slice, no Frame temp
   Pos := 0;
   Idx := 0;
   while Pos < Length(AStream) do
@@ -239,37 +242,61 @@ begin
       Result[Idx].Kind := gpkData;
       SetLength(Result[Idx].Data, Len - 4);
       if Len - 4 > 0 then
-        Move(AStream[Pos+4], Result[Idx].Data[0], Len - 4);
+        Move(AStream[Pos + 4], Result[Idx].Data[0], Len - 4);
       Inc(Pos, Len);
     end;
     Inc(Idx);
   end;
 end;
 
-function GitPktJoin(const APkts: TGitPktArray): TBytes;
+function GitPktJoin(const APkts: TGitPktArray): TBytes; inline;
 var
-  I, Total, Off: Integer;
-  Enc: TBytes;
+  I, Total, Off, L: Integer;
 begin
   Total := 0;
   for I := 0 to High(APkts) do
     case APkts[I].Kind of
       gpkFlush: Inc(Total, 4);
       gpkDelim: Inc(Total, 4);
-      gpkData: Inc(Total, 4 + Length(APkts[I].Data));
+      gpkData:
+        begin
+          if Length(APkts[I].Data) = 0 then
+            raise EGitError.Create('pkt-line data payload must not be empty (len 0004 forbidden)');
+          L := Length(APkts[I].Data) + 4;
+          if L > GitPktMaxSize then
+            raise EGitError.CreateFmt('pkt-line too large %d > %d', [L, GitPktMaxSize]);
+          Inc(Total, L);
+        end;
     end;
   SetLength(Result, Total);
   Off := 0;
+  // zero-copy: single allocation + direct header encode + single Move per payload (no Enc temp)
   for I := 0 to High(APkts) do
-  begin
     case APkts[I].Kind of
-      gpkFlush: Enc := GitPktEncodeFlush;
-      gpkDelim: Enc := GitPktEncodeDelim;
-      gpkData: Enc := GitPktEncode(APkts[I].Data);
+      gpkFlush:
+        begin
+          Result[Off] := Ord('0'); Result[Off+1] := Ord('0');
+          Result[Off+2] := Ord('0'); Result[Off+3] := Ord('0');
+          Inc(Off, 4);
+        end;
+      gpkDelim:
+        begin
+          Result[Off] := Ord('0'); Result[Off+1] := Ord('0');
+          Result[Off+2] := Ord('0'); Result[Off+3] := Ord('1');
+          Inc(Off, 4);
+        end;
+      gpkData:
+        begin
+          L := Length(APkts[I].Data) + 4;
+          Result[Off] := Byte(HexNibble((L shr 12) and $F));
+          Result[Off+1] := Byte(HexNibble((L shr 8) and $F));
+          Result[Off+2] := Byte(HexNibble((L shr 4) and $F));
+          Result[Off+3] := Byte(HexNibble(L and $F));
+          if Length(APkts[I].Data) > 0 then
+            Move(APkts[I].Data[0], Result[Off+4], Length(APkts[I].Data));
+          Inc(Off, L);
+        end;
     end;
-    Move(Enc[0], Result[Off], Length(Enc));
-    Inc(Off, Length(Enc));
-  end;
 end;
 
 end.

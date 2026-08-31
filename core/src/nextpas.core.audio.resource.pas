@@ -202,14 +202,11 @@ begin
 end;
 
 procedure TAudioResourceManagerImpl.EnsureCapacityLocked(ANeeded: Integer);
-var
-  Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FItems) >= ANeeded then Exit;
-  Cap := Length(FItems);
-  if Cap < 4 then Cap := 4;
-  while Cap < ANeeded do Cap := Cap * 2;
-  SetLength(FItems, Cap);
+  LCap := Length(FItems);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FItems) <> LCap then SetLength(FItems, LCap);
 end;
 
 procedure TAudioResourceManagerImpl.SetState(AIndex: Integer; AState: TAudioResourceState; const ABuffer: TAudioBuffer; const ATags: TAudioTags);

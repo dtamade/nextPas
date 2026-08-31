@@ -1,4 +1,4 @@
-unit nextpas.compiler.frontend.compilation_session;
+unit np_compilation_session;
 
 {$mode objfpc}{$H+}
 {$UNITPATH .}
@@ -9,29 +9,24 @@ unit nextpas.compiler.frontend.compilation_session;
 {$UNITPATH ../syntax}
 {$UNITPATH ../toolchain}
 {$UNITPATH ../targets}
+{$UNITPATH ../lower}
 {$UNITPATH ../../core/src}
 
 interface
 
 uses
-  { SameText via text.conv; full text facade is unicode-heavy under A self-compile. }
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
-  nextpas.core.time, nextpas.core.base.utils, nextpas.core.compiler.mem,
-  nextpas.core.mem.intf, nextpas.core.mem.allocator.arena,
   nextpas.core.collections.vec,
-  nextpas.compiler.syntax.ast_facade, nextpas.compiler.backend.plan, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.green_tree,
-  nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.preprocessor, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.builder,
-  nextpas.compiler.ir.hir.printer, nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts,
-  nextpas.compiler.toolchain.plan, nextpas.compiler.toolchain.profiles, nextpas.compiler.toolchain.runner,
-  nextpas.compiler.frontend.unit_graph, nextpas.compiler.frontend.unit_resolver,
-  nextpas.compiler.sema.semantic_model, nextpas.compiler.sema.analyzer, nextpas.compiler.frontend.workspace_model,
-  nextpas.compiler.frontend.compiler_phase, nextpas.compiler.ir.mir.model, nextpas.compiler.ir.hir.to_mir, nextpas.compiler.ir.mir.optimize,
-  nextpas.compiler.frontend.query_database,
-  nextpas.compiler.frontend.file_change_detector,
-  nextpas.compiler.frontend.parallel_scheduler,
-  nextpas.compiler.frontend.incremental_cache,
-  nextpas.compiler.frontend.phase_timing,
-  nextpas.compiler.ir.mir.to_llvm, nextpas.compiler.diagnostics.json_helpers;
+  nextpas.core.compiler.mem, nextpas.core.mem.intf, nextpas.core.mem.allocator.arena,
+  np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
+  np_lexer, np_source_database, np_target_facts,
+  np_toolchain_plan, np_toolchain_runner,
+  np_unit_graph, np_unit_resolver,
+  np_semantic_model, np_workspace_model,
+  np_compiler_phase, np_mir_model,
+  np_query_database,
+  np_file_change_detector,
+  np_parallel_scheduler,
+  np_incremental_cache;
 
 type
   TBuildContext = record
@@ -371,6 +366,15 @@ type
   end;
 
 implementation
+
+uses
+  SysUtils,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
+  nextpas.core.time, nextpas.core.base.utils,
+  np_preprocessor, np_hir_types, np_hir_model, np_hir_builder,
+  np_hir_printer, np_hir_llvm_emitter, nextpas_json_helpers,
+  np_hir_to_mir, np_mir_to_llvm,
+  np_mir_optimize, np_semantic_analyzer, np_toolchain_profiles;
 
 {$I np_compilation_session_helpers.inc}
 

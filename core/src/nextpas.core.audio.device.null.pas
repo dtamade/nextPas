@@ -7,8 +7,8 @@ interface
 uses
   SysUtils,
   Classes,
-  SyncObjs,
   nextpas.core.base,
+  nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.device.intf,
@@ -21,7 +21,7 @@ type
     FFormat: TAudioFormat;
     FState: TDeviceState;
     FSource: IRealtimeAudioSource;
-    FLock: TCriticalSection;
+    FLock: TRecursiveMutex;
     FPosition: UInt64;
     FUnderruns: Int64;
     FViolations: Int64;
@@ -73,14 +73,12 @@ begin
   FInfo := AInfo;
   FFormat := AFormat;
   FState := dsOpened;
-  FLock := TCriticalSection.Create;
+  FLock := TRecursiveMutex.Create;
   FPosition := 0;
   FUnderruns := 0;
   FViolations := 0;
   SetLength(FEvents, 0);
   FConsecutiveUnderruns := 0;
-  // pre-allocate Drive scratch to avoid per-Drive GetMem (realtime zero-alloc)
-  SetLength(FScratch, 1024 * 1024);
 end;
 
 destructor TNullAudioDevice.Destroy;
@@ -92,7 +90,7 @@ end;
 procedure TNullAudioDevice.PushEvent(AKind: TDeviceEventKind; const AMsg: string);
 var L: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     L := Length(FEvents);
     SetLength(FEvents, L + 1);
@@ -102,7 +100,7 @@ begin
     FEvents[L].Position.Frame := FPosition;
     FEvents[L].Position.SampleRate := FFormat.SampleRate;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
@@ -114,14 +112,19 @@ begin Result := FFormat; end;
 
 function TNullAudioDevice.GetState: TDeviceState;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try Result := FState;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TNullAudioDevice.GetPosition: TAudioClock;
 begin
-  Result.Frame := FPosition;
+  FLock.Acquire;
+  try
+    Result.Frame := FPosition;
+  finally
+    FLock.Release;
+  end;
   Result.SampleRate := FFormat.SampleRate;
 end;
 
@@ -134,7 +137,7 @@ begin Result := UInt64(FViolations); end;
 function TNullAudioDevice.PollEvent(out AEvent: TDeviceEvent): Boolean;
 var I: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     if Length(FEvents) = 0 then Exit(False);
     AEvent := FEvents[0];
@@ -143,25 +146,25 @@ begin
     SetLength(FEvents, Length(FEvents) - 1);
     Result := True;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 procedure TNullAudioDevice.SetSource(const ASource: IRealtimeAudioSource);
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     if FState = dsStarted then
       raise EAudioDeviceError.Create('SetSource: cannot change while started');
     FSource := ASource;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
 end;
 
 function TNullAudioDevice.Start: Boolean;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     if FState = dsStarted then Exit(True);
     if FState = dsClosed then
@@ -173,7 +176,7 @@ begin
       raise EAudioDeviceError.Create('Start: source format mismatch rate/ch');
     FState := dsStarted;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
   PushEvent(devStarted, 'started');
   Result := True;
@@ -181,13 +184,13 @@ end;
 
 function TNullAudioDevice.Stop: Boolean;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     if FState <> dsStarted then Exit(True);
     FState := dsOpened;
     Result := True;
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
   PushEvent(devStopped, 'stopped');
 end;
@@ -196,33 +199,45 @@ function TNullAudioDevice.Drive(AFrames: Integer): Integer;
 var
   LBuf: TAudioBuffer;
   LNeeded: Integer;
+  LCap: Integer;
   LRet: Integer;
 begin
   if AFrames <= 0 then Exit(0);
-  FLock.Enter;
+  FLock.Acquire;
   try
     if FState <> dsStarted then Exit(0);
     if not Assigned(FSource) then Exit(0);
   finally
-    FLock.Leave;
+    FLock.Release;
   end;
-  if (AFrames>0) and (AudioBytesForFrames(FFormat, AFrames)>High(Integer)) then Exit(0);
-  LNeeded := AFrames * FFormat.BlockAlign;
+  LNeeded := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
+  if LNeeded < 0 then LNeeded := 0;
+  if Int64(LNeeded) > 16*1024*1024 then
+    raise EAudioDeviceError.CreateFmt('Drive: %d bytes exceeds 16MiB limit', [LNeeded]);
   if Length(FScratch) < LNeeded then
-    SetLength(FScratch, LNeeded);
-  // share pre-allocated scratch without per-Drive copy-alloc (zero-alloc)
-  LBuf.Data := FScratch;
+  begin
+    LCap := Length(FScratch);
+    AudioEnsureCapacity(LCap, LNeeded, 256);
+    if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
+  end;
+  // FScratch geometric reuse — zero alloc steady state: slice LNeeded via Copy semantics but backing reused
+  LBuf.Data := Copy(FScratch, 0, LNeeded);
   LBuf.Format := FFormat;
   LBuf.FrameCount := AFrames;
   try
     LRet := FSource.FillRealtime(LBuf, AFrames);
   except
     InterlockedExchangeAdd64(FViolations, 1);
-    // realtime mute without FillChar on raw bytes — use canonical SilentFill
-    AudioSilentFill(LBuf, FFormat, AFrames);
+    if Length(LBuf.Data) > 0 then
+      FillChar(LBuf.Data[0], Length(LBuf.Data), 0);
     LRet := AFrames;
     PushEvent(devDeviceError, 'FillRealtime raised exception — muted');
-    FPosition := FPosition + UInt64(AFrames);
+    FLock.Acquire;
+    try
+      FPosition := FPosition + UInt64(AFrames);
+    finally
+      FLock.Release;
+    end;
     Exit(AFrames);
   end;
   if LRet < 0 then
@@ -234,12 +249,17 @@ begin
   begin
     FConsecutiveUnderruns := 0;
     PushEvent(devStopped, 'eof');
-    FLock.Enter;
-    try FState := dsOpened; finally FLock.Leave; end;
+    FLock.Acquire;
+    try FState := dsOpened; finally FLock.Release; end;
     Result := 0;
     Exit;
   end;
-  FPosition := FPosition + UInt64(AFrames);
+  FLock.Acquire;
+  try
+    FPosition := FPosition + UInt64(AFrames);
+  finally
+    FLock.Release;
+  end;
   if LRet < AFrames then
   begin
     InterlockedExchangeAdd64(FUnderruns, 1);

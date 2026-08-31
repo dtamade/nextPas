@@ -160,7 +160,7 @@ end;
 
 function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string; inline;
 var
-  LPadLen, I: Integer;
+  LPadLen: Integer;
 begin
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
@@ -173,7 +173,7 @@ end;
 
 function PadRight(const S: string; AWidth: Integer; APadChar: Char): string; inline;
 var
-  LPadLen, I: Integer;
+  LPadLen: Integer;
 begin
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then

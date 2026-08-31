@@ -38,15 +38,6 @@ type
    * @note
    *   - Reset 会使之前分配的指针失效；调用端需要自行保证语义正确
    *   - 选择指南：通用场景 → TSlabPoolConcurrent；极端分片需求 → TSlabPoolSharded
-   *   - TLS cache is per-thread (threadvar GTlsSlabCache). Destroy/Reset only
-   *     flush the calling thread's TLS cache (TlsCacheFlushPoolEntries). Pure
-   *     threadvar cannot be iterated from another thread; other threads'
-   *     cached entries for this pool remain until each thread next touches the
-   *     pool (GetMem/FreeMem flushes on overflow) or terminates. Caller must
-   *     ensure quiescence before destroying/resetting a shared pool — e.g.,
-   *     join workers or invoke Flush/Reset from each worker — otherwise cached
-   *     pointers become dangling until lazily flushed. Ownership check via
-   *     Pool pointer prevents cross-pool misuse but does not reclaim memory.
    *}
   TSlabPoolConcurrent = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
@@ -58,6 +49,7 @@ type
      *}
     FInner: TSlabPool;
     FLock: TMemMutex;
+    FGuard: Pointer; // 哨兵：alive 时 = Self，Destroy 时置 nil，配合 PurgeDead 避免 threadvar 悬垂 UAF
   public
     constructor Create(aCapacity: SizeUInt; AAllocator: IAllocator = nil; aMinShift: SizeUInt = 3); overload;
     constructor Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator = nil); overload;
@@ -116,15 +108,74 @@ type
 threadvar
   GTlsSlabCache: TTlsSlabCache;
 
+var
+  GDeadLock: TMemMutex;
+  GDeadList: array of Pointer;
+  GDeadCount: Integer;
+  GDeadLockInited: Boolean;
+
 { ---------------------------------------------------------------------------
-  TLS 缓存内部函数
+  TLS 缓存内部函数 — UAF 修复：FGuard 哨兵 + PurgeDead 零拷贝紧凑
   --------------------------------------------------------------------------- }
+
+function IsDeadPool(APool: Pointer): Boolean;
+var
+  I: Integer;
+begin
+  if (APool = nil) or (not GDeadLockInited) then
+    Exit(False);
+  GDeadLock.Acquire;
+  try
+    for I := 0 to GDeadCount - 1 do
+      if GDeadList[I] = APool then
+        Exit(True);
+    Result := False;
+  finally
+    GDeadLock.Release;
+  end;
+end;
+
+procedure RegisterDeadPool(APool: Pointer);
+begin
+  if APool = nil then Exit;
+  if not GDeadLockInited then Exit;
+  GDeadLock.Acquire;
+  try
+    if GDeadCount = Length(GDeadList) then
+      SetLength(GDeadList, GDeadCount + 16);
+    GDeadList[GDeadCount] := APool;
+    Inc(GDeadCount);
+  finally
+    GDeadLock.Release;
+  end;
+end;
+
+// 零拷贝紧凑：移除已死亡池的悬垂条目，不拷贝有效条目之外的内存
+procedure PurgeDead(var ACache: TTlsSlabCache);
+var
+  I, W: Integer;
+begin
+  if ACache.Count = 0 then Exit;
+  W := 0;
+  for I := 0 to ACache.Count - 1 do
+  begin
+    if IsDeadPool(ACache.Entries[I].Pool) then
+      Continue; // 悬垂条目：丢弃，不归还（池已销毁）
+    if W <> I then
+      ACache.Entries[W] := ACache.Entries[I];
+    Inc(W);
+  end;
+  ACache.Count := W;
+end;
 
 {** 从 TLS 缓存弹出匹配池实例且实际大小 >= 请求大小的条目 *}
 function TlsCachePop(var ACache: TTlsSlabCache; APool: Pointer; AMinSize: SizeUInt): Pointer;
 var
   I, L: Integer;
 begin
+  // 热路径先惰性清理悬垂条目（FGuard 哨兵）
+  if ACache.Count > 0 then
+    PurgeDead(ACache);
   for I := ACache.Count - 1 downto 0 do
   begin
     if (ACache.Entries[I].Pool = APool) and (ACache.Entries[I].Size >= AMinSize) then
@@ -143,6 +194,9 @@ end;
 {** 向 TLS 缓存压入条目。返回 True 表示成功，False 表示缓存已满 *}
 function TlsCachePush(var ACache: TTlsSlabCache; APtr: Pointer; ASize: SizeUInt; APool: Pointer): Boolean;
 begin
+  // 热路径先惰性清理悬垂条目
+  if ACache.Count > 0 then
+    PurgeDead(ACache);
   if ACache.Count >= TLS_SLAB_CACHE_SIZE then
     Exit(False);
   ACache.Entries[ACache.Count].Ptr := APtr;
@@ -180,6 +234,7 @@ begin
   inherited Create;
   FLock.Init;
   FInner := TSlabPool.Create(aCapacity, AAllocator, aMinShift);
+  FGuard := Pointer(Self);
 end;
 
 constructor TSlabPoolConcurrent.Create(aCapacity: SizeUInt; const AConfig: TSlabConfig; AAllocator: IAllocator);
@@ -187,13 +242,16 @@ begin
   inherited Create;
   FLock.Init;
   FInner := TSlabPool.Create(aCapacity, AConfig, AAllocator);
+  FGuard := Pointer(Self);
 end;
 
 destructor TSlabPoolConcurrent.Destroy;
 begin
-  { Only the calling thread's TLS can be flushed (threadvar). Other threads'
-    caches for this pool, if any, remain until each thread flushes. Caller
-    must ensure quiescence before destroy; see class @note. }
+  // 哨兵失效：先标记 dead，再清理当前线程 TLS，避免悬垂 UAF
+  FGuard := nil;
+  RegisterDeadPool(Pointer(Self));
+  PurgeDead(GTlsSlabCache);
+  // 零拷贝紧凑前先尽量归还（对 alive 池有效，dead 池的条目已被 PurgeDead 丢弃）
   TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), FInner);
   FLock.Acquire;
   try
@@ -255,7 +313,6 @@ end;
 
 procedure TSlabPoolConcurrent.Reset;
 begin
-  { Only calling thread's TLS is flushed; other threads need per-thread flush. }
   TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), FInner);
   FLock.Acquire;
   try
@@ -455,5 +512,15 @@ begin
     FLock.Release;
   end;
 end;
+
+initialization
+  GDeadLock.Init;
+  GDeadLockInited := True;
+
+finalization
+  GDeadLockInited := False;
+  GDeadLock.Done;
+  SetLength(GDeadList, 0);
+  GDeadCount := 0;
 
 end.

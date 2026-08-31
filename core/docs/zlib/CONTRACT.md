@@ -1,10 +1,10 @@
 # nextpas.core.zlib 代码契约
 
-**模块路径**：`core/src/nextpas.core.zlib*.pas`（5 个源文件：base/intf/zlib888/ffi/pas，pure 为薄兼容）
+**模块路径**：`core/src/nextpas.core.zlib*.pas`（5 个源文件）
 **层级**：L2（依赖 L0-L1: base, exception, platform.dl, compress.base 语义复用）
 **Owner**：AI（core-zlib lane）
-**最后更新**：2026-08-31
-**版本**：1.1（S1-S5 收敛）
+**最后更新**：2026-08-30
+**版本**：1.0（S1-S5 收敛）
 
 ---
 
@@ -16,10 +16,9 @@
 |------|------|
 | zlib.base | 基础类型与常量：`TZlibLevel`、`TZlibErrorCode`、`EZlibError`、Adler-32 常量与 `ZlibAdlerUpdate`、`ZlibLevelToZlib` |
 | zlib.intf | 接口契约 `IZlibEncoder`/`IZlibDecoder` + 无状态 Adler 辅助 `ZlibAdler32*` |
-| zlib.zlib888 | 纯 Pascal Deflate/Inflate：raw `-15` 与 zlib-wrapped `15` 双路径，32MiB 防 bomb，Adler 校验（302+ P6 的 111/634 性能，Stored 单块大块 Move） |
-| zlib.pure | 薄兼容门面：`unit nextpas.core.zlib.pure; uses zlib888` 并 re-export 全量 public 符号（旧 uses 兼容） |
+| zlib.pure | 纯 Pascal Deflate/Inflate：raw `-15` 与 zlib-wrapped `15` 双路径，32MiB 防 bomb，Adler 校验 |
 | zlib.ffi | libz 动态绑定 FFI 后端（`compressBound/compress2/uncompress/zlibVersion`，懒加载 `libz.so[.1]`） |
-| zlib.pas | 门面四件套聚合 + `ZlibAuto` 后端选择与便捷函数（uses zlib888，pure 保留兼容） |
+| zlib.pas | 门面四件套聚合 + `ZlibAuto` 后端选择与便捷函数 |
 
 ### 1.2 核心类型
 
@@ -117,10 +116,10 @@ TZlibBackend = (zbAuto, zbPurePascal, zbFfi);
 
 | 操作 | 目标 | 实测（x86_64 Linux, -O3） |
 |------|------|---------------------------|
-| zlib888 encode default 1MiB | ≥ 5 MB/s | 见 `bench_zlib`（`zlib pure encode default` 行，pure 为 thin compat 指向 zlib888） |
-| zlib888 decode 1MiB | ≥ 20 MB/s | 见 `bench_zlib`（`zlib pure decode` 行，pure 兼容） |
-| ffi encode 1MiB（可用时） | ≥ zlib888 | 同 `bench_zlib ffi` 行 |
-| ffi decode 1MiB（可用时） | ≥ zlib888 | 同 `bench_zlib ffi` 行 |
+| pure encode default 1MiB | ≥ 5 MB/s | 见 `bench_zlib`（`zlib pure encode default` 行） |
+| pure decode 1MiB | ≥ 20 MB/s | 见 `bench_zlib`（`zlib pure decode` 行） |
+| ffi encode 1MiB（可用时） | ≥ pure | 同 `bench_zlib ffi` 行 |
+| ffi decode 1MiB（可用时） | ≥ pure | 同 `bench_zlib ffi` 行 |
 | raw 路径 | 与 wrapped 同阶 | `bench_zlib raw` 行 |
 
 基准入口：`make -C core/benchmarks/nextpas.core.zlib/bench_zlib run`
@@ -131,7 +130,7 @@ TZlibBackend = (zbAuto, zbPurePascal, zbFfi);
 
 | 测试目录 | 用例数 | 说明 |
 |----------|--------|------|
-| `test_zlib` | 30 | adler/empty/store/bomb、raw/wrapped、level 0/1/2/3、32MiB 限、FFI vs zlib888 交叉（pure thin compat）；`TTestSuite` + heaptrc 0 |
+| `test_zlib` | 30 | adler/empty/store/bomb、raw/wrapped、level 0/1/2/3、32MiB 限、FFI vs pure 交叉；`TTestSuite` + heaptrc 0 |
 
 30 用例清单：`adler_empty_is_init`、`adler_single_byte_A`、`adler_incremental_matches_one_shot`、`adler_wrapped_vs_raw_consistent`、`empty_wrapped_roundtrip`、`empty_raw_roundtrip`、`empty_wrapped_produces_header_and_adler`、`store_zlNone_roundtrip_1KB`、`store_zlNone_len_greater_than_input`、`level_fastest/default/best_roundtrip`、`level_none_is_stored_not_deflated`、`wrapped/raw_encode_decode_roundtrip_256KB`、`wrapped_decode_accepts_wrapped`、`wrapped_decode_fallback_accepts_raw`、`raw_decode_of_wrapped_not_equal`、`truncated/corrupt/adler_mismatch_raises`、`bomb_default_limit_32MiB_exceeded`、`bomb_custom_small_limit_raises`、`bomb_exact_limit_passes`、`bomb_raw_limit_enforced`、`ffi_available_check`、`ffi_pure_cross_both_directions`、`facade_auto_roundtrip_1MiB`、`facade_raw_wrapped_separation`
 
@@ -149,4 +148,3 @@ TZlibBackend = (zbAuto, zbPurePascal, zbFfi);
 | 2026-08-27 | 0.5 | S2-S3 pure inflate/deflate 收敛 | AI |
 | 2026-08-28 | 0.8 | S4 ffi + facade ZlibAuto | AI |
 | 2026-08-30 | 1.0 | S5 收敛：六维（base/intf+pure+ffi+facade+contracts+tests/bench）完整，30 用例 + bench_zlib + registry | AI |
-| 2026-08-31 | 1.1 | 重命名 pure→zlib888（302+ P6 的 111/634 性能保留），pure 薄兼容保留；zlNone Stored 单次大块 Move 优化（bench none 546→865+） | AI |

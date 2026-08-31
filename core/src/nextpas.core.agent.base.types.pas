@@ -302,19 +302,11 @@ type
   { 合并 ExtraJson（与 TCompletionRequest.WithExtraJson 共置以消循环） }
   function MergeExtraJson(const ATexts: array of TJsonText): TJsonText;
 
-  { 动态数组深拷贝（FPC 编译器内建 Copy 魔法，替代裸 Copy(X,0,Length(X)) 九处重复） }
-  generic function CloneArray<T>(const A: specialize TArray<T>): specialize TArray<T>;
-
 implementation
 
 uses
   nextpas.core.json,
   nextpas.core.json.builder;
-
-generic function CloneArray<T>(const A: specialize TArray<T>): specialize TArray<T>;
-begin
-  Result := Copy(A, 0, Length(A));
-end;
 
 function TTokenUsage.Known: Boolean;
 begin
@@ -398,13 +390,13 @@ end;
 function TCompletionRequest.WithStop(const ASeq: TStringArray): TCompletionRequest;
 begin
   Result := Self;
-  Result.StopSequences := specialize CloneArray<string>(ASeq);
+  Result.StopSequences := Copy(ASeq, 0, Length(ASeq));
 end;
 
 function TCompletionRequest.WithTools(const ASpecs: TToolSpecArray): TCompletionRequest;
 begin
   Result := Self;
-  Result.Tools := specialize CloneArray<TToolSpec>(ASpecs);
+  Result.Tools := Copy(ASpecs, 0, Length(ASpecs));
 end;
 
 function TCompletionRequest.WithResponseSchema(
@@ -474,7 +466,7 @@ function TCompletionRequest.WithMessages(
   const AMsgs: TMessageArray): TCompletionRequest;
 begin
   Result := Self;
-  Result.Messages := specialize CloneArray<TMessage>(AMsgs);
+  Result.Messages := Copy(AMsgs, 0, Length(AMsgs));
 end;
 
 function TCompletionRequest.WithMessage(const AMsg: TMessage): TCompletionRequest;
