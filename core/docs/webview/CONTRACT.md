@@ -85,38 +85,40 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 | `nextpas.core.webview.fake` | 测试后端 | 无头脚本化后端：记录调用、手动驱动回调，契约测试全走它 | W1 |
 | `nextpas.core.webview.gtk.ffi` | ABI | WebKitGTK/GLib/GTK3 类型与函数指针变量声明（无 external） | W1 |
 | `nextpas.core.webview.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`），版本探测 4.1→4.0 | W1 |
-| `nextpas.core.webview.gtk.win` | **内缝** | 窗口壳操作的纯函数式内部实现（无 webview 概念）；**窗口模块抽取预备缝**，见 §1.1 | W1 |
-| `nextpas.core.webview.gtk` | 后端 | Linux 实现：窗口壳、scheme、idle dispatch、WebKitGTK 信号桥接 | W1 |
+| `nextpas.core.webview.gtk.win` | **deprecated shim** | `WinShell*` 全量 `inline` 转发至 `nextpas.core.window.gtk3` 的 `IWindow` 实现（M6 has-a 收口后废弃）；后端不再直触 GTK 壳，见 §1.1 | W1→M6 废弃 |
+| `nextpas.core.webview.gtk` | 后端 | Linux 实现：**has-a `IWindow`**（`nextpas.core.window` L2）+ WebKit 视图挂载、scheme、idle dispatch、WebKitGTK 信号桥接 | W1→M6 has-a |
 | `nextpas.core.webview.mime` | 共享 | MIME 二分快表（12 项，vfs/未来 provider 唯一事实源） | S13 |
 | `nextpas.core.webview.vfs` | 适配 | `IVfs → IWebviewAssetProvider`（respack/vfs 集成，CONTRACT §3.4 唯一收口） | S11 |
 | `nextpas.core.webview.factory` | 工厂 | 后端注册/探测/选择 + `TWebviewBuilder` | W1 |
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
 | `nextpas.core.webview.webview2.ffi` | ABI | WebView2 COM 完整 vtable（ICoreWebView2/Controller/Environment/Settings + UserAgent + WebMessageArgs/Navigation handlers，无 external） | **W2 S23 完整（含 UA）** |
 | `nextpas.core.webview.webview2.loader` | 装载 | WebView2Loader.dll 探测与符号装载（platform.dl，wine 兼容） | **W2 桩已落地（S18）** |
-| `nextpas.core.webview.webview2.win` | **内缝** | Win32 窗口壳纯函数式实现（Minimize/Restore/DPI 真值/WM_DPICHANGED/WM_SIZE/Post 隐藏窗口调度，与 gtk.win 对称） | **W2 S23 携 Post 调度（与 gtk idle 对称）** |
-| `nextpas.core.webview.webview2` | 后端 | Windows 实现：Win32 满态壳 + WebView2 controller 真接线（Env→Controller 异步链、ExecuteScript/WebMessage/ навигация、Post 调度、pending exactly-once、UA/DataDirectory） | **W2 S23 调度与稳定收口（wine 全交互）** |
+| `nextpas.core.webview.webview2.win` | **deprecated shim** | `Win32Shell*` 桩 `inline`（M6 has-a 收口后废弃）；真 Win32 壳由 `nextpas.core.window.win32` 的 `IWindow` 提供，见 §1.1 | W2→M6 废弃 |
+| `nextpas.core.webview.webview2` | 后端 | Windows 实现：**has-a `IWindow`**（`nextpas.core.window` L2）+ WebView2 controller 真接线（Env→Controller 异步链、ExecuteScript/WebMessage、Post 调度、pending exactly-once、UA/DataDirectory） | **W2 S23 调度收口→M6 has-a** |
 | `nextpas.core.webview.wk.ffi` | ABI | WKWebView 类型与探针结果（无 external，无逻辑） | **W3 S25 桩** |
 | `nextpas.core.webview.wk.loader` | 装载 | WK 运行时探测（经 `platform.dl` 预留，Darwin 桩；幂等缓存，与 gtk/webview2 同纪律） | **W3 S25 桩（恒 False）** |
-| `nextpas.core.webview.wk` | 后端 | macOS 桩：fail-fast + UserAgent/Zoom 本地缓存 + 真线程 IsOnMainThread；Darwin 真实现待 ObjC 探通 | **W3 S25 桩** |
+| `nextpas.core.webview.wk` | 后端 | macOS 桩：**has-a `IWindow`**（`nextpas.core.window` L2，M6 has-a）+ fail-fast + UserAgent/Zoom 本地缓存 + 真线程 IsOnMainThread；Darwin 真实现待 ObjC 探通 | **W3 S25 桩→M6 has-a** |
 
 ### 依赖方向
 
 ```
-base ← intf ← {bridge, mime} ← {gtk, fake, vfs} ← factory ← 门面
-                    └── (webview2/wk 同 gtk 位)
+base ← intf ← bridge ← fake/gtk(uses window) → factory → 门面    （L3→L2 has-a）
+              └── mime/vfs 同桥位；webview2/wk 同 gtk 位（均 has-a IWindow）
 gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
+window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）
 ```
 
-- **`base` 与 `intf` 禁止 uses 任何后端、bridge、factory、vfs 单元。**
-- `bridge` 禁止 uses 任何后端/vfs/factory 单元；它只认识 `intf` 的契约。
+- **`base` 与 `intf` 禁止 uses 任何后端、bridge、factory、vfs、window 单元**（`intf` 仅在 M6 后例外允许 `uses window.intf` 以暴露 `IWindow` 类型与 `Window` 属性，仍禁止触后端实现）。
+- `bridge` 禁止 uses 任何后端/vfs/factory/window 单元；它只认识 `intf` 的契约。
 - `*.ffi` 只含 ABI 类型与函数指针声明，不含逻辑、不含 `external`。
 - `*.loader` 只做装载与探测，是唯一允许触碰动态加载设施的后端侧单元；
   动态加载原语一律来自 `nextpas.core.platform.dl`，
   **禁止使用 FPC `DynLibs` 单元**（gate policy：raw host units 仅限 owner path）。
+- **webview→window**：`nextpas.core.webview.fake/gtk/webview2/wk/factory` 允许 `uses nextpas.core.window.*`（has-a 组合，L3→L2）；`gtk.ffi/loader` 等 `ffi/loader` 仍仅经 `platform.dl`，不直触 `DynLibs`。
 
-**落地状态**（S5 后）：`base` / `intf` / `bridge` / `fake` / `factory` /
-门面与 `gtk.ffi` / `gtk.loader` / `gtk.win` / `gtk` 已全部落地；
-`gtk.win` 即 §1.1 预定的抽取预备缝（签名零 webview 概念）。
+**落地状态**（M6 has-a 收口后）：`base` / `intf`（`uses window.intf` 暴露 `IWindow`）/ `bridge` / `fake`(has-a) / `factory`(has-a) /
+门面与 `gtk.ffi` / `gtk.loader` / `gtk`(has-a) 已全部落地；
+`gtk.win`/`webview2.win` 已退化为 `deprecated shim`（`inline` 转发至 `window`），见 §1.1。
 webview2（W2）/ wk（W3）按波次接入同一 bridge 与 factory 位。
 S4 打磨：scheme 未命中走真实 GError 404；IsMinimized 查询式真值；
 DefaultWebviewKind 能力探测驱动（无 IFDEF）；资产路由语义见 §3。
@@ -143,22 +145,29 @@ S0 文档 slice 不改注册表。
   这是它独立于 webview 存在的核心理由之一。
 
 **节奏控制**（fafafa 教训 + 受控跨模块纪律）：Wave 1 **不新建窗口模块**。
-窗口壳以可机械抽取的内部缝实现：
+窗口壳以可机械抽取的内部缝实现（历史）：
 
 - `nextpas.core.webview.gtk.win`：纯函数式 GTK 窗口操作（create/title/
   geometry/state/focus/loop），签名不含任何 webview 概念，只依赖
   `gtk.ffi/gtk.loader`；
 - `nextpas.core.webview.gtk` 组合"窗口缝 + webview 内容"并实现 IWebviewWindow。
 
-抽取触发条件（满足其一即立独立 lane 做受控跨模块 slice）：
+**M6 has-a 收口（已兑现，见 §1 依赖图）**：`nextpas.core.window` 独立 Lane 已落地（L2），
+`webview.fake/gtk/webview2/wk` 全量改为 `has-a IWindow`（`FWindow: IWindow`，`Builder.Parent(const AParent: IWindow)` / `CreateWebviewOn(const AParent: IWindow; ...)`），
+`gtk.win`/`webview2.win` 退化为 `deprecated shim`（`inline` 转发至 `window.gtk3`/`window.win32`），
+`IWebviewWindow` 不再直接暴露 `Show/SetTitle/SetBounds` 等窗口壳方法，统一经 `Window: IWindow` 组合访问；
+`WebviewRunLoop`/`WebviewExitLoop` 收敛为 `WindowRunLoop`/`WindowExitLoop` 的 `deprecated shim`（单泵归 `window.factory`，见 §5）。
+
+抽取触发条件（历史，已满足其一即立独立 lane 做受控跨模块 slice）：
 (a) 第二个真实 consumer 出现（GPU UI 栈 / IDE workbench / 对话框家族）；
 (b) Wave 2 webview2 后端落地前——届时 Win32 缝与 GTK 缝一起上移，
 避免两套后端各养一份窗口代码。抽取后 `IWebviewWindow` 保持不变
-（组合面），消费方无感。
+（组合面），消费方无感（M6 后消费方改为 `View.Window.Show` 等）。
 
 > **S16 生产就绪**：`gtk.win` 缝已冻结为纯函数式接口、零 webview 概念、
 > 签名单测可机械迁移；`demo` 骨架屏/错误边界已验证恢复路径（`grid.skeleton` +
 > `errCard` + `showErr`），为窗口独立提供消费侧回归锚点。
+> **M6 has-a 兑现**：窗口壳已单源至 `window` 家族，`webview` 仅持有 `IWindow` 组合面。
 
 ---
 
@@ -477,12 +486,13 @@ end;
 6. 与 `async.loop` 的关系：本模块不 uses `TAsyncLoop`；应用层自行把两者接起来
    （示例演示）。保持 webview 对 async owner 无编译期依赖，避免 L3 内部交叉。
 
-## 5. 主循环与多窗口
+## 5. 主循环与多窗口（M6 单泵统一）
 
 ```pascal
-{ factory 提供；阻塞直到所有窗口关闭或 ExitLoop }
-procedure WebviewRunLoop;
-procedure WebviewExitLoop;
+{ M6 起：WebviewRunLoop/WebviewExitLoop 为 WindowRunLoop/WindowExitLoop 的 deprecated shim（inline 转发，单泵归 window.factory）。
+  新代码应直接使用 window.factory 的 WindowRunLoop/WindowExitLoop；webview 侧保留 shim 仅为兼容。 }
+procedure WebviewRunLoop; inline; deprecated 'Use WindowRunLoop';
+procedure WebviewExitLoop; inline; deprecated 'Use WindowExitLoop';
 ```
 
 **窗口创建分解**（多窗口的正式路径）：
@@ -498,9 +508,9 @@ procedure WebviewExitLoop;
   404），无视图请求（service worker）回落最新活跃窗口。gtk_backend
   门禁以双窗 live 用例钉死该语义。
 
-- GTK：`gtk_main` / `gtk_main_quit`。
+- **单泵统一（M6）**：`WebviewRunLoop`/`WebviewExitLoop` 仅为 `WindowRunLoop`/`WindowExitLoop` 的 `inline deprecated` 转发（`factory` → `window.factory`），主循环所有权归 `nextpas.core.window.factory` 单泵；`webview` 不再自持 `gtk_main` 泵。GTK 侧 `gtk_main` / `gtk_main_quit` 由 `window` 单泵驱动，`webview` 仅经 `IWindow` 组合间接受益。
 - RunLoop 期间宿主不得再占用该线程做长计算；后台工作走第 4 节姿势。
-- fake 后端提供手动泵（`PumpOnce`）供确定性测试。
+- fake 后端提供手动泵（`PumpOnce`）供确定性测试（`window` 侧 `FakePumpAll` 与 `webview` 侧 `FakePumpAll` 同步经 `IWindow` has-a 复用）。
 - **与宿主事件循环融合**（`IterateOnce`：单步迭代一次主循环、非阻塞或限时）：
   这是未来把 GLib context 接进 `TAsyncLoop.WaitForWake` 的关键面，涉及各后端
   循环所有权设计（gtk_main vs g_main_context_iteration 自驱泵），**登记为
@@ -527,9 +537,9 @@ procedure WebviewExitLoop;
 - INV-2 invoke 帧 id 由 **JS 侧**在页面生命周期内单调递增分配；native pending 表
   以该 id 为键，窗口销毁时全部 pending 以 `npw.closed` reject；id 不被 native
   解释、不复用。（eval 回执不经此通道——native 侧回调直接绑定 Eval 调用。）
-- INV-3 `bridge` 对帧的编解码是无处不在的唯一权威；任何后端不得私自解析 payload。
+- INV-3 `bridge` 对帧的编解码是无处不在的唯一权威；任何后端不得私自解析 payload。`webview`→`window` 为 L3→L2 has-a 允许，`bridge` 仍禁止 `uses window`（协议层保持纯净）。
 - INV-4 `base`/`intf` 的 uses 闭包里不出现 `webview.gtk*`、`webview.fake`、
-  `webview.factory`、`webview.bridge`（source-contract 门禁冻结）。
+  `webview.factory`、`webview.bridge`（source-contract 门禁冻结）；`webview` 生产单元（`fake/gtk/webview2/wk/factory`）允许 `uses window.*`（L3→L2 has-a，M6 收口），`base` 仍禁止 `uses window`，`intf` 仅例外观 `uses window.intf` 以暴露 `IWindow`/`Window` 组合面。
 - INV-5 生产单元（非 loader）不出现 FPC host units（`DynLibs`/`Windows`/
   `BaseUnix`/`ctypes`…）；GTK/Win32/ObjC 真相全部收敛在后端 `ffi`+`loader`。
 - INV-6 每个 public 异步入口都有超时或不超时的明确语义并写入注释；
