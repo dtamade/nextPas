@@ -93,6 +93,8 @@ begin
   // Reserve batch: collect Parts then BytesConcatMany (was ConcatBytes O(n2))
   var Parts: array of TBytes;
   var PartCount: Integer;
+  var DataParts: array of TBytes;
+  var DataCount: Integer;
   SetLength(Parts, Length(AWants) + Length(AHaves) + 4);
   PartCount := 0;
   for I := 0 to High(AWants) do
@@ -181,8 +183,10 @@ begin
     end;
   end;
   if DataCount > 0 then
-    Demuxed.DataBytes := BytesConcatMany(Copy(DataParts, 0, DataCount))
-  else
+  begin
+    SetLength(DataParts, DataCount);
+    Demuxed.DataBytes := BytesConcatMany(DataParts);
+  end else
     Demuxed.DataBytes := nil;
   if not HasPack then
   begin

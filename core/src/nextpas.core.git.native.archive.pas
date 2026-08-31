@@ -72,7 +72,7 @@ begin
   finally Repo.Free; end;
 end;
 
-function LocalCompareStr(const A, B: string): Integer;
+function LocalCompareStr(const A, B: string): Integer; inline;
 var I, L: Integer;
 begin
   L := Length(A); if Length(B) < L then L := Length(B);
@@ -81,13 +81,28 @@ begin
 end;
 
 procedure SortFlat(var A: TFlatFileArray);
-var I, J: Integer; T: TFlatFile;
-begin
-  for I := 1 to High(A) do
-  begin J := I;
-    while (J > 0) and (LocalCompareStr(A[J-1].Path, A[J].Path) > 0) do
-    begin T := A[J-1]; A[J-1] := A[J]; A[J] := T; Dec(J); end;
+  procedure MergeSort(var AItems: TFlatFileArray; var ATemp: TFlatFileArray; ALo, AHi: Integer); inline;
+  var Mid, I, J, K: Integer;
+  begin
+    if ALo >= AHi then Exit;
+    Mid := (ALo + AHi) div 2;
+    MergeSort(AItems, ATemp, ALo, Mid);
+    MergeSort(AItems, ATemp, Mid + 1, AHi);
+    I := ALo; J := Mid + 1;
+    for K := ALo to AHi do
+    begin
+      if (I <= Mid) and ((J > AHi) or (LocalCompareStr(AItems[I].Path, AItems[J].Path) <= 0)) then
+      begin ATemp[K] := AItems[I]; Inc(I); end
+      else
+      begin ATemp[K] := AItems[J]; Inc(J); end;
+    end;
+    for K := ALo to AHi do AItems[K] := ATemp[K];
   end;
+var Temp: TFlatFileArray;
+begin
+  if Length(A) < 2 then Exit;
+  SetLength(Temp, Length(A));
+  MergeSort(A, Temp, 0, High(A));
 end;
 
 function OctalString(AValue: Int64; AWidth: Integer): string;
@@ -100,7 +115,7 @@ begin
   Result := Result + S;
 end;
 
-procedure WriteStringTo(var ABuf: TBytes; AOffset: Integer; const S: string; AFieldLen: Integer);
+procedure WriteStringTo(var ABuf: TBytes; AOffset: Integer; const S: string; AFieldLen: Integer); inline;
 var I, L: Integer;
 begin
   L := Length(S); if L > AFieldLen then L := AFieldLen;
@@ -108,67 +123,74 @@ begin
 end;
 
 
-procedure AppendTarEntry(var ATar: TBytes; ARepo: TNativeRepository; const AFile: TFlatFile);
-var Header: TBytes; Kind: TGitObjectKind; Data: TBytes; LinkTarget: string; SizeVal: Int64; ModeStr: string; Chk: Integer; I: Integer; ContentPadded: TBytes; PadLen: Integer;
-begin
-  if AFile.Mode = $A000 then // symlink 0120000
-  begin
-    Data := ARepo.ReadObject(AFile.Oid, Kind);
-    if Kind <> gokBlob then raise EGitError.Create('symlink not blob');
-    SetLength(LinkTarget, Length(Data));
-    if Length(Data) > 0 then Move(Data[0], LinkTarget[1], Length(Data));
-    SizeVal := 0;
-  end else
-  begin
-    Data := ARepo.ReadObject(AFile.Oid, Kind);
-    if Kind <> gokBlob then raise EGitError.Create('archive file not blob');
-    LinkTarget := '';
-    SizeVal := Length(Data);
-  end;
-
-  SetLength(Header, 512);
-  FillChar(Header[0], 512, 0);
-  if AFile.Mode = $A000 then ModeStr := '0000777'
-  else if AFile.Mode = $81ED then ModeStr := '0000755'
-  else ModeStr := '0000644';
-  // USTAR: 0:100 name, 100:8 mode, 108:8 uid, 116:8 gid, 124:12 size, 136:12 mtime, 148:8 chksum, 156:1 typeflag
-  WriteStringTo(Header, 0, AFile.Path, 100);
-  WriteStringTo(Header, 100, ModeStr, 7);
-  WriteStringTo(Header, 108, '0000000', 7);
-  WriteStringTo(Header, 116, '0000000', 7);
-  WriteStringTo(Header, 124, OctalString(SizeVal, 11), 11);
-  WriteStringTo(Header, 136, OctalString(0, 11), 11); // mtime 0 for determinism
-  // chksum initially spaces
-  for I := 148 to 155 do Header[I] := 32;
-  if AFile.Mode = $A000 then Header[156] := Ord('2') else Header[156] := Ord('0');
-  if AFile.Mode = $A000 then WriteStringTo(Header, 157, LinkTarget, 100);
-  WriteStringTo(Header, 257, 'ustar', 5);
-  WriteStringTo(Header, 263, '00', 2);
-  // compute chksum: sum of all 512 bytes unsigned
-  Chk := 0; for I := 0 to 511 do Chk := Chk + Header[I];
-  WriteStringTo(Header, 148, OctalString(Chk, 6), 6);
-  Header[154] := 0; Header[155] := 32;
-  BytesAppend(ATar, Header);
-  if (AFile.Mode <> $A000) and (SizeVal > 0) then
-  begin
-    PadLen := (512 - (Length(Data) mod 512)) mod 512;
-    BytesAppend(ATar, Data);
-    if PadLen > 0 then
-    begin SetLength(ContentPadded, PadLen); FillChar(ContentPadded[0], PadLen, 0); BytesAppend(ATar, ContentPadded); end;
-  end;
-end;
-
 function BuildTar(const AGitDir: string; const AFlat: TFlatFileArray): TBytes;
-var Repo: TNativeRepository; I: Integer; Zero: TBytes;
+var Repo: TNativeRepository; I, J, Pos: Integer; Total: SizeInt; Chk: Integer; SizeVal: Int64; ModeStr: string; LinkTarget: string; Kind: TGitObjectKind; Data: TBytes; Datas: array of TBytes; Links: array of string; Sizes: array of SizeInt; PadLen: SizeInt;
 begin
   Result := nil;
   if Length(AFlat) = 0 then
-  begin SetLength(Zero, 1024); FillChar(Zero[0], 1024, 0); Result := Zero; Exit; end;
+  begin SetLength(Result, 1024); FillChar(Result[0], 1024, 0); Exit; end;
   Repo := TNativeRepository.Create(AGitDir);
   try
-    for I := 0 to High(AFlat) do AppendTarEntry(Result, Repo, AFlat[I]);
+    SetLength(Datas, Length(AFlat));
+    SetLength(Links, Length(AFlat));
+    SetLength(Sizes, Length(AFlat));
+    Total := 0;
+    for I := 0 to High(AFlat) do
+    begin
+      if AFlat[I].Mode = $A000 then
+      begin
+        Data := Repo.ReadObject(AFlat[I].Oid, Kind);
+        if Kind <> gokBlob then raise EGitError.Create('symlink not blob');
+        SetLength(LinkTarget, Length(Data));
+        if Length(Data) > 0 then Move(Data[0], LinkTarget[1], Length(Data));
+        Links[I] := LinkTarget;
+        Sizes[I] := 0;
+        Datas[I] := nil;
+        Total := Total + 512;
+      end else
+      begin
+        Data := Repo.ReadObject(AFlat[I].Oid, Kind);
+        if Kind <> gokBlob then raise EGitError.Create('archive file not blob');
+        Datas[I] := Data;
+        Links[I] := '';
+        Sizes[I] := Length(Data);
+        Total := Total + 512 + ((Sizes[I] + 511) and not SizeInt(511));
+      end;
+    end;
+    Total := Total + 1024;
+    SetLength(Result, Total);
+    Pos := 0;
+    for I := 0 to High(AFlat) do
+    begin
+      FillChar(Result[Pos], 512, 0);
+      if AFlat[I].Mode = $A000 then ModeStr := '0000777'
+      else if AFlat[I].Mode = $81ED then ModeStr := '0000755'
+      else ModeStr := '0000644';
+      SizeVal := Sizes[I];
+      WriteStringTo(Result, Pos + 0, AFlat[I].Path, 100);
+      WriteStringTo(Result, Pos + 100, ModeStr, 7);
+      WriteStringTo(Result, Pos + 108, '0000000', 7);
+      WriteStringTo(Result, Pos + 116, '0000000', 7);
+      WriteStringTo(Result, Pos + 124, OctalString(SizeVal, 11), 11);
+      WriteStringTo(Result, Pos + 136, OctalString(0, 11), 11);
+      for J := 148 to 155 do Result[Pos + J] := 32;
+      if AFlat[I].Mode = $A000 then Result[Pos + 156] := Ord('2') else Result[Pos + 156] := Ord('0');
+      if AFlat[I].Mode = $A000 then WriteStringTo(Result, Pos + 157, Links[I], 100);
+      WriteStringTo(Result, Pos + 257, 'ustar', 5);
+      WriteStringTo(Result, Pos + 263, '00', 2);
+      Chk := 0; for J := 0 to 511 do Chk := Chk + Result[Pos + J];
+      WriteStringTo(Result, Pos + 148, OctalString(Chk, 6), 6);
+      Result[Pos + 154] := 0; Result[Pos + 155] := 32;
+      Inc(Pos, 512);
+      if (AFlat[I].Mode <> $A000) and (Sizes[I] > 0) then
+      begin
+        Move(Datas[I][0], Result[Pos], Sizes[I]);
+        PadLen := ((Sizes[I] + 511) and not SizeInt(511)) - Sizes[I];
+        Inc(Pos, Sizes[I] + PadLen);
+      end;
+    end;
+    FillChar(Result[Pos], 1024, 0);
   finally Repo.Free; end;
-  SetLength(Zero, 1024); FillChar(Zero[0], 1024, 0); BytesAppend(Result, Zero);
 end;
 
 function GitArchive(const AGitDir: string; const ATreeOid: TGitOid): TBytes;

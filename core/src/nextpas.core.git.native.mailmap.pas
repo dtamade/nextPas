@@ -38,6 +38,8 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.fs,
+  nextpas.core.text.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.util,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
@@ -49,13 +51,11 @@ begin
   Result := GitTrimSpaces(S);
 end;
 
-function LowerEmail(const S: string): string;
-begin Result:=LowerCase(S); end;
+function LowerEmail(const S: string): string; inline;
+begin Result:=nextpas.core.text.utils.LowerCase(S); end;
 
-function StripCr(const S: string): string;
-begin
-  if (Length(S)>0) and (S[Length(S)]=#13) then Result:=Copy(S,1,Length(S)-1) else Result:=S;
-end;
+function StripCr(const S: string): string; inline;
+begin Result:=GitStripCR(S); end;
 
 // Parse one mailmap line into entry. Returns False if empty/comment/invalid.
 function TryParseMailmapLine(const ALine: string; out AEntry: TGitMailmapEntry): Boolean;
@@ -141,12 +141,11 @@ begin
   end;
 end;
 
-function GitParseMailmap(const AData: TBytes): TGitMailmap;
+function GitParseMailmap(const AData: TBytes): TGitMailmap; inline;
 var S: string;
 begin
   if Length(AData)=0 then Exit(nil);
-  SetLength(S, Length(AData));
-  Move(AData[0], S[1], Length(AData));
+  S:=nextpas.core.bytes.ops.BytesToString(AData);
   Result:=GitParseMailmap(S);
 end;
 
