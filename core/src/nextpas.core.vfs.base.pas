@@ -2,14 +2,14 @@ unit nextpas.core.vfs.base;
 
 {** @desc vfs 基座：条目 record、规范路径语法（Go io/fs.ValidPath 对等语义，
   权威文本见 core/docs/respack/FORMAT.md「路径规范」）。路径校验委托
-  nextpas.core.base.pathvalid 单一事实源，不再本地重复实现。 }
+  nextpas.core.bytes.pathvalid 单一事实源，不再本地重复实现。 }
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
-  nextpas.core.base.pathvalid,
+  nextpas.core.bytes.pathvalid,
   nextpas.core.base.utils,
   nextpas.core.compress.base;
 
@@ -68,7 +68,7 @@ uses
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 begin
-  Result := BaseValidPath(APath, AAllowRoot);
+  Result := BytesValidPath(APath, AAllowRoot);
 end;
 
 function VfsIsRoot(const APath: string): Boolean;

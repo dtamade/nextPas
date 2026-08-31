@@ -24,16 +24,20 @@ type
   {** @desc 写端进度回调：ADone / ATotal 为已完成/总 folder 数 *}
   TSevenZProgressEvent = procedure (Sender: TObject; ADone, ATotal: Integer) of object;
 
-  ISevenZReader = interface; { forward for enumerator }
+  ISevenZReader = interface; { forward }
 
-  {** @desc 读端 for..in 枚举器 *}
+  PSevenZEntryInfo = ^TSevenZEntryInfo;
+  {** @desc 读端 for..in 枚举器 — 值语义、inline、零分配：仅视图指针+计数+索引，无托管字段，不触发 _AddRef/_Release；有效期与 ISevenZReader 宿主一致 *}
   TSevenZEntryEnumerator = record
-    FReader: ISevenZReader;
+    FData: PSevenZEntryInfo;
+    FCount: Integer;
     FIndex: Integer;
-    function GetCurrent: TSevenZEntryInfo;
-    function MoveNext: Boolean;
+    function GetCurrent: TSevenZEntryInfo; inline;
+    function MoveNext: Boolean; inline;
     property Current: TSevenZEntryInfo read GetCurrent;
   end;
+
+function SevenZEntryEnumeratorCreate(const AData: PSevenZEntryInfo; ACount: Integer): TSevenZEntryEnumerator; inline;
 
   {** @desc LZMA 编解码后端选择：Auto 按 FFI 可用性自动降级 *}
   TSevenZLzmaBackend = (szlbAuto, szlbPurePascal, szlbFfi);
@@ -95,8 +99,8 @@ type
     function ContainsIgnoreCase(const AName: string): Boolean;
     {** 按名称查条目信息；存在返回 True 并填充 AInfo *}
     function TryGetEntry(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
-    {** TryGetEntry 别名，语义一致 *}
-    function TryEntryByName(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
+    {** @deprecated Use TryGetEntry *}
+    function TryEntryByName(const AName: string; out AInfo: TSevenZEntryInfo): Boolean; deprecated 'Use TryGetEntry';
     {** 大小写不敏感按名称查条目信息 *}
     function TryGetEntryIgnoreCase(const AName: string; out AInfo: TSevenZEntryInfo): Boolean;
     {** 按名称直接取条目信息；不存在抛 EArgumentError *}
@@ -218,6 +222,8 @@ type
         阈值为 0 表示该维度不限制；Finish 后设置抛错 *}
     procedure SetFolderLimits(AMaxUncompressedBytes: UInt64;
       AMaxFilesPerFolder: Integer);
+    {** 设置进度回调：每完成一个 folder 触发一次，Assigned 守卫零开销；Finish 后设置抛错 *}
+    procedure SetProgress(AProgress: TSevenZProgressEvent);
     {** 终结并返回完整归档字节；此后任何 Add*/Finish 均 raise *}
     function Finish: TBytes;
     {** 终结并把签名头/pack 流/头部顺序写入 ASink，返回总字节数；
@@ -275,13 +281,20 @@ implementation
 
 function TSevenZEntryEnumerator.GetCurrent: TSevenZEntryInfo;
 begin
-  Result := FReader.Entry(FIndex);
+  Result := FData[FIndex];
 end;
 
 function TSevenZEntryEnumerator.MoveNext: Boolean;
 begin
   Inc(FIndex);
-  Result := FIndex < FReader.EntryCount;
+  Result := FIndex < FCount;
+end;
+
+function SevenZEntryEnumeratorCreate(const AData: PSevenZEntryInfo; ACount: Integer): TSevenZEntryEnumerator;
+begin
+  Result.FData := AData;
+  Result.FCount := ACount;
+  Result.FIndex := -1;
 end;
 
 end.

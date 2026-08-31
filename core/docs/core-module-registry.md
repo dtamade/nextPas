@@ -26,6 +26,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `audio` | L2 | PCM WAV container codec | yes | L0-L2 (io/fs owner) | focused-runtime |
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
+| `billing` | L3 | billing/wallet domain (wallet balances, ledger, redeem codes; implementation lives in `nextpas.core.db.wallet` single source, `nextpas.core.billing.wallet` is deprecated thin facade) | yes | L0-L2 plus db/id/time owners | draft |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
 | `collections` | L1 | containers | yes | L0 plus approved L1 | focused-runtime |
 | `compiler` | tooling | compiler mem/arena helpers | yes | L0 mem owners | draft |

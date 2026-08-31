@@ -69,17 +69,18 @@ implementation
 
 procedure SpanConcatInto(var ABase: TBytes; const ATail: TBytes); inline;
 begin
-  BytesAppend(ABase, ATail);
+  nextpas.core.bytes.ops.BytesAppend(ABase, ATail);
 end;
 
-procedure NonceOf(const AIv: TBytes; APn: UInt64; out ANonce: TBytes); inline;
+procedure NonceOf(const AIv: TBytes; APn: UInt64; out ANonce: TBytes);
 var
   LPn12: array[0..11] of Byte;
   LI: Integer;
 begin
   SetLength(ANonce, 12);
   { 注意：x86 上 shr 位数 >= 64 会回绕（mod 64），高 4 字节必须显式置零 }
-  FillChar(LPn12[0], SizeOf(LPn12), 0);
+  for LI := 0 to 11 do
+    LPn12[LI] := 0;
   for LI := 0 to 7 do
     LPn12[11 - LI] := Byte(APn shr (8 * LI));
   for LI := 0 to 11 do
@@ -147,7 +148,7 @@ function QuicProtectPacket(const AClearHeader: TBytes; APn: UInt64;
   const AKeys: TQuicPacketKeys): TBytes;
 var
   LPnWire, LAad, LNonce, LCipher, LSample, LMask: TBytes;
-  LI, LOff: Integer;
+  LI: Integer;
   LFirstByte: Byte;
 begin
   Result := nil;
@@ -185,16 +186,10 @@ begin
   else
     LFirstByte := AClearHeader[0] xor (LMask[0] and $1F);
   QuicBufAppendByte(Result, LFirstByte);
-  if Length(AClearHeader) > 1 then
-  begin
-    LI := Length(Result);
-    SetLength(Result, LI + Length(AClearHeader) - 1);
-    Move(AClearHeader[1], Result[LI], Length(AClearHeader) - 1);
-  end;
-  LOff := Length(Result);
-  SetLength(Result, LOff + APnLen);
+  for LI := 1 to Length(AClearHeader) - 1 do
+    QuicBufAppendByte(Result, AClearHeader[LI]);
   for LI := 0 to APnLen - 1 do
-    Result[LOff + LI] := LPnWire[LI] xor LMask[LI + 1];
+    QuicBufAppendByte(Result, LPnWire[LI] xor LMask[LI + 1]);
   SpanConcatInto(Result, LCipher);
 end;
 
@@ -247,13 +242,13 @@ begin
   LPnLen := (LFirstClear and $03) + 1;
   if Length(APacket) < LInfo.PnOffset + LPnLen + cQuicTagLen then
     Exit;
-  SetLength(LPnWire, LPnLen);
+  LPnWire := nil;
+  for LI := 0 to LPnLen - 1 do
+    QuicBufAppendByte(LPnWire,
+      APacket[LInfo.PnOffset + LI] xor LMask[LI + 1]);
   LTrunc := 0;
   for LI := 0 to LPnLen - 1 do
-  begin
-    LPnWire[LI] := APacket[LInfo.PnOffset + LI] xor LMask[LI + 1];
     LTrunc := (LTrunc shl 8) or LPnWire[LI];
-  end;
   APn := QuicPnDecode(ALargestPn, LTrunc, LPnLen * 8);
 
   { 受保护区裁剪（长头按 Length 字段；短头到包尾）并重建 AAD。
@@ -271,12 +266,8 @@ begin
 
   LAad := nil;
   QuicBufAppendByte(LAad, LFirstClear);
-  if LInfo.PnOffset > 1 then
-  begin
-    LI := Length(LAad);
-    SetLength(LAad, LI + LInfo.PnOffset - 1);
-    Move(APacket[1], LAad[LI], LInfo.PnOffset - 1);
-  end;
+  for LI := 1 to LInfo.PnOffset - 1 do
+    QuicBufAppendByte(LAad, APacket[LI]);
   SpanConcatInto(LAad, LPnWire);
 
   NonceOf(AKeys.Iv, APn, LNonce);

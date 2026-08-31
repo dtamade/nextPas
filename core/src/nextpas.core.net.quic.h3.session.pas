@@ -31,7 +31,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.async.loop,
   nextpas.core.async.cancellation,
-  nextpas.core.time.deadline;
+  nextpas.core.time.deadline,
+  nextpas.core.bytes.ops;
 
 type
   { 复用 net.quic.h3 已有类型 }
@@ -422,8 +423,7 @@ end;
 
 procedure TH3Stream.DeliverData(const AData: TBytes); inline;
 var
-  LOld: Integer;
-  LLen: Integer;
+  LOld, LLen: Integer;
 begin
   LLen := Length(AData);
   if FClosed or (LLen = 0) then
@@ -435,9 +435,7 @@ begin
     FailPendingRead(-1);
     Exit;
   end;
-  SetLength(FRxBuf, LOld + LLen);
-  if LLen > 0 then
-    Move(AData[0], FRxBuf[LOld], LLen);
+  nextpas.core.bytes.ops.BytesAppend(FRxBuf, AData);
   TryCompletePendingRead;
 end;
 

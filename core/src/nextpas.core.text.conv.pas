@@ -19,32 +19,31 @@ function BoolToStr(const AValue: Boolean; const ATrueStr: string;
 function StrToInt(const AStr: string): Int64; inline;
 function StrToIntDef(const AStr: string; const ADefault: Int64): Int64; inline;
 function StrToInt64Def(const AStr: string; const ADefault: Int64): Int64; inline;
-function TryStrToInt(const AStr: string; out AValue: Int64): Boolean; inline;
-function TryStrToInt(const AStr: string; out AValue: Integer): Boolean; inline;
+function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
+function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
 function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean; inline;
 function StrToFloat(const AStr: string): Double; inline;
-function StrToFloatDef(const AStr: string; const ADefault: Double): Double; inline;
-function TryStrToFloat(const AStr: string; out AValue: Double): Boolean; inline;
-function TryStrToFloat(const AStr: string; out AValue: Single): Boolean; inline;
+function StrToFloatDef(const AStr: string; const ADefault: Double): Double;
+function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
+function TryStrToFloat(const AStr: string; out AValue: Single): Boolean;
 
 function Format(const AFmt: string; const AArgs: array of const): string; deprecated 'Use nextpas.core.text.format.TextFormat or nextpas.core.text.TextFormat';
 
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
-function LowerCase(const AStr: string): string; inline;
+function LowerCase(const AStr: string): string;
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
-function UpperCase(const AStr: string): string; inline;
-function Trim(const AStr: string): string; inline;
-function TrimLeft(const AStr: string): string; inline;
-function TrimRight(const AStr: string): string; inline;
-function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean = False): string; inline;
+function UpperCase(const AStr: string): string;
+function Trim(const AStr: string): string;
+function TrimLeft(const AStr: string): string;
+function TrimRight(const AStr: string): string;
+function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean = False): string;
 
 function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
-function IntToHex(const AValue: UInt64; const ADigits: Integer): string; inline;
-function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean; inline;
-function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean; inline;
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
+function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
+function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 
 {== Encoding — byte<->string conversions ==}
-{ single-source via bytes.ops: BytesToString/StringToBytes (SetLength+Move inline zero-copy) }
 function UTF8BytesToString(const AData: TBytes): string; inline;
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
 function ASCIIBytesToString(const AData: TBytes): string; inline;
@@ -52,9 +51,6 @@ function StringToASCIIBytes(const AStr: string): TBytes; inline;
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
 function SameText(const A, B: string): Boolean; inline;
-
-{** 2-digit zero pad (0..99 → "00".."99"), inline Chr path, zero SysUtils. *}
-function Pad2(const AValue: Integer): string; inline;
 
 {** Returns the position of the last occurrence of any character from ADelimiters in S.
     Returns 0 if none of the characters are found. }
@@ -70,8 +66,8 @@ function AnsiPtrToStr(const AStr: PAnsiChar): string;
 implementation
 
 uses
-  nextpas.core.errors,
   nextpas.core.bytes.ops,
+  nextpas.core.errors,
   { ASCII SameText only — do not pull text.compare (unicode.casefold/normalize). }
   nextpas.core.text.char,
   nextpas.core.text.format,
@@ -92,20 +88,37 @@ end;
 
 {== Float/String conversion ==}
 
-function FloatToStr(const AValue: Double): string; inline;
-var
-  LBuf: array[0..31] of AnsiChar;
-  LLen: Int32;
+function FloatToStr(const AValue: Double): string;
+var LI, LDot: Integer;
+  C: Char;
 begin
-  // perf: Ryu/Schubfach fast-path via text.number.FloatToBuffer — single-pass
-  // shortest round-trip, no Str() (locale-aware FormatSettings) + trailing-zero
-  // scan + second locale-normalize loop. inline: wrapper is `inline` so caller
-  // can elide frame; zero-copy: stack buf → single Move into Result heap.
-  // stability: no heap/tmp alloc, no exception path, Move is noexcept.
-  LLen := FloatToBuffer(AValue, @LBuf[0]);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(LBuf[0], Result[1], SizeUInt(LLen));
+  Str(AValue:0:15, Result);
+  { Find the decimal separator (could be '.' or ',' depending on locale) }
+  LDot := 0;
+  for LI := 1 to Length(Result) do
+    if Result[LI] in ['.', ','] then
+    begin
+      LDot := LI;
+      Break;
+    end;
+  if LDot > 0 then
+  begin
+    C := Result[LDot];
+    LI := Length(Result);
+    while (LI > LDot) and (Result[LI] = '0') do
+      Dec(LI);
+    if LI = LDot then
+      SetLength(Result, LDot - 1)
+    else
+      SetLength(Result, LI);
+    { Normalize to '.' for locale-independent output }
+    if C <> '.' then
+    begin
+      LDot := Pos(C, Result);
+      if LDot > 0 then
+        Result[LDot] := '.';
+    end;
+  end;
 end;
 
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
@@ -350,30 +363,15 @@ begin
 end;
 
 {== Encoding — byte<->string conversions ==}
-{ perf: inline zero-copy forward to bytes.ops single source (SetLength+Move);
-  no duplicate Move logic; exception-safe (no alloc beyond callee). }
 
 function UTF8BytesToString(const AData: TBytes): string; inline;
 begin
   Result := nextpas.core.bytes.ops.BytesToString(AData);
-  if Result <> '' then
-    SetCodePage(RawByteString(Result), CP_UTF8, False);
 end;
 
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
-var
-  LUTF8: UTF8String;
 begin
-  Result := nil;
-  if Length(AStr) = 0 then
-    Exit;
-  if StringCodePage(AStr) = CP_UTF8 then
-  begin
-    Result := nextpas.core.bytes.ops.StringToBytes(AStr);
-    Exit;
-  end;
-  LUTF8 := UTF8String(AStr);
-  Result := nextpas.core.bytes.ops.StringToBytes(string(LUTF8));
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
 function ASCIIBytesToString(const AData: TBytes): string; inline;
@@ -414,14 +412,6 @@ begin
     if ToLower(Byte(A[I])) <> ToLower(Byte(B[I])) then
       Exit(False);
   Result := True;
-end;
-
-function Pad2(const AValue: Integer): string; inline;
-begin
-  if AValue < 10 then
-    Result := '0' + Chr(Ord('0') + AValue)
-  else
-    Result := Chr(Ord('0') + AValue div 10) + Chr(Ord('0') + AValue mod 10);
 end;
 
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;

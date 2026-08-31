@@ -28,6 +28,7 @@ implementation
 
 uses
   nextpas.core.async.base,
+  nextpas.core.bytes.ops,
   nextpas.core.ssh.buffer;
 
 const
@@ -93,13 +94,9 @@ procedure Runner_OnTimeout(AContext: Pointer); forward;
 
 { Helpers }
 
-procedure AppendChunkAsync(var ADst: TBytes; const ASrc: TBytes);
-var LOld: SizeUInt;
+procedure AppendChunkAsync(var ADst: TBytes; const ASrc: TBytes); inline;
 begin
-  if Length(ASrc)=0 then Exit;
-  LOld := SizeUInt(Length(ADst));
-  SetLength(ADst, LOld + SizeUInt(Length(ASrc)));
-  Move(ASrc[0], ADst[LOld], SizeUInt(Length(ASrc)));
+  BytesAppend(ADst, ASrc);
 end;
 
 constructor TAsyncExecRunner.Create(const ATransport: TAsyncSshTransport; const ACommand: string;

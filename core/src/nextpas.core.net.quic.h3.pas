@@ -19,6 +19,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.net.quic.varint;
 
 const
@@ -211,18 +212,6 @@ end;
 
 { ---- RFC 7541 §5.1 前缀整数（QPACK 复用同一线格式） ---- }
 
-procedure AppendTail(var ABuf: TBytes; const ATail: TBytes);
-var
-  LN, LI: Integer;
-begin
-  if Length(ATail) = 0 then
-    Exit;
-  LN := Length(ABuf);
-  SetLength(ABuf, LN + Length(ATail));
-  for LI := 0 to Length(ATail) - 1 do
-    ABuf[LN + LI] := ATail[LI];
-end;
-
 procedure PrefixIntAppend(var ABuf: TBytes; APrefixBits: Byte;
   AFirstByteFlags: Byte; AValue: UInt64);
 var
@@ -342,7 +331,7 @@ procedure QuicH3FrameAppend(var ABuf: TBytes; AType: UInt64;
 begin
   QuicVarintAppend(ABuf, AType);
   QuicVarintAppend(ABuf, UInt64(Length(APayload)));
-  AppendTail(ABuf, APayload);
+  BytesAppend(ABuf, APayload);
 end;
 
 function TryQuicH3FrameParse(const ABuf: TBytes; AOfs: Integer;

@@ -42,10 +42,10 @@ type
 
     procedure AppendByte(const AByte: Byte); inline;
     procedure AppendChar(const ACh: AnsiChar); inline;
-    procedure AppendChars(const ACh: AnsiChar; const ACount: SizeUInt);
-    procedure AppendView(const AView: TStringView);
-    procedure AppendStr(const AStr: string);
-    procedure AppendBytes(const AData: PAnsiChar; const ALen: SizeUInt);
+    procedure AppendChars(const ACh: AnsiChar; const ACount: SizeUInt); inline;
+    procedure AppendView(const AView: TStringView); inline;
+    procedure AppendStr(const AStr: string); inline;
+    procedure AppendBytes(const AData: PAnsiChar; const ALen: SizeUInt); inline;
     procedure AppendInt(const AValue: Int64);
     procedure AppendUInt(const AValue: UInt64);
     procedure AppendHex(const AValue: UInt64; const AMinDigits: Int32 = 1);
@@ -272,7 +272,7 @@ begin
   Inc(FLen);
 end;
 
-procedure TBufStringBuilder.AppendChars(const ACh: AnsiChar; const ACount: SizeUInt);
+procedure TBufStringBuilder.AppendChars(const ACh: AnsiChar; const ACount: SizeUInt); inline;
 begin
   if ACount = 0 then Exit;
   if FLen + ACount > FCap then
@@ -281,7 +281,7 @@ begin
   Inc(FLen, ACount);
 end;
 
-procedure TBufStringBuilder.AppendView(const AView: TStringView);
+procedure TBufStringBuilder.AppendView(const AView: TStringView); inline;
 begin
   if AView.Len = 0 then Exit;
   if AView.Data = nil then
@@ -292,7 +292,7 @@ begin
   Inc(FLen, AView.Len);
 end;
 
-procedure TBufStringBuilder.AppendStr(const AStr: string);
+procedure TBufStringBuilder.AppendStr(const AStr: string); inline;
 var
   L: SizeUInt;
 begin
@@ -304,7 +304,7 @@ begin
   Inc(FLen, L);
 end;
 
-procedure TBufStringBuilder.AppendBytes(const AData: PAnsiChar; const ALen: SizeUInt);
+procedure TBufStringBuilder.AppendBytes(const AData: PAnsiChar; const ALen: SizeUInt); inline;
 begin
   if ALen = 0 then Exit;
   if AData = nil then

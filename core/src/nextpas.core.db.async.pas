@@ -337,23 +337,49 @@ begin
   LSelf := Self;
   { 全部装配先行（句柄 + 级联），最后才入队可见——见单元头时序不变式 }
   New(LOp);
-  LHandle := TDbAsyncHandle.Create(LCtrl);
-  LHeld := LHandle;                     { 首个接口引用先行（rc 0→1） }
-  LOp^.HandleRaw := LHandle;            { 对象身份：零开销分发 }
-  LOp^.HandleRef := LHandle;            { 托管引用保活（引用计数 +1） }
-  LOp^.Work := AWork;
+  LOp^.HandleRaw := nil;
+  LOp^.HandleRef := nil;
+  LOp^.Work := nil;
   LOp^.Child := nil;
-  if AToken <> nil then
-  begin
-    LChild := AToken.CreateChildToken;
-    LChild.OnCancel(@DbCancelBridgeProc, LOp);
-    LOp^.Child := LChild;
+  LHeld := nil;
+  LChild := nil;
+  try
+    LHandle := TDbAsyncHandle.Create(LCtrl);
+    LHeld := LHandle;                     { 首个接口引用先行（rc 0→1） }
+    LOp^.HandleRaw := LHandle;            { 对象身份：零开销分发 }
+    LOp^.HandleRef := LHandle;            { 托管引用保活（引用计数 +1） }
+    LOp^.Work := AWork;
+    if AToken <> nil then
+    begin
+      LChild := AToken.CreateChildToken;
+      LChild.OnCancel(@DbCancelBridgeProc, LOp);
+      LOp^.Child := LChild;
+      LChild := nil;
+    end;
+    { 取消面只在异步操作期间安装（sqlite 进度回调有每 N 步成本，
+      常驻会污染同连接的同步直调——默认零成本硬规则）；与级联注册
+      同属入队前装配。 }
+    if LCtrl <> nil then
+      LCtrl.ArmCancel;
+  except
+    if LOp^.Child <> nil then
+    begin
+      LOp^.Child.DetachFromParent;
+      LOp^.Child := nil;
+    end;
+    if LChild <> nil then
+    begin
+      LChild.DetachFromParent;
+      LChild := nil;
+    end;
+    if LCtrl <> nil then
+      try
+        LCtrl.DisarmCancel;
+      except
+      end;
+    Dispose(LOp);
+    raise;
   end;
-  { 取消面只在异步操作期间安装（sqlite 进度回调有每 N 步成本，
-    常驻会污染同连接的同步直调——默认零成本硬规则）；与级联注册
-    同属入队前装配。 }
-  if LCtrl <> nil then
-    LCtrl.ArmCancel;
   { 锁内单出口置位，冲突在锁外抛（FPC 工具链坑：锁持 try-finally 内
     raise 泄漏调用方临时接口——工厂 DbRegisterDriver 同款规避） }
   FLk.Acquire;
@@ -372,7 +398,10 @@ begin
       LOp^.Child := nil;
     end;
     if LCtrl <> nil then
-      LCtrl.DisarmCancel;
+      try
+        LCtrl.DisarmCancel;
+      except
+      end;
     Dispose(LOp);                       { 托管字段引用一并释放 }
     raise EDbError.CreateSimple(dbkUnknown,
       'db async: 上一调用仍在途（单飞模型，禁止并发提交）');
@@ -398,7 +427,10 @@ begin
       LOp^.Child := nil;
     end;
     if LCtrl <> nil then
-      LCtrl.DisarmCancel;
+      try
+        LCtrl.DisarmCancel;
+      except
+      end;
     Dispose(LOp);                       { 托管字段引用一并释放 }
     raise;                              { 锁外重抛，生命周期照常管理 }
   end;

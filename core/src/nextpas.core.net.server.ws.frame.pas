@@ -95,8 +95,7 @@ type
       FFragmentOpen: Boolean;
       FFragmentOpcode: Byte;
       FFragmentSize: UInt64;
-      FFragmentPayload: TBytes;
-      FFragmentCap: SizeUInt;
+      FFragmentParts: array of TBytes;
       FProtocolError: Boolean;
       FTooLarge: Boolean;
       FClosed: Boolean;
@@ -106,10 +105,6 @@ type
       procedure FinalizeFrameHeader;
       function TryStartFrame: TNetWsDecodeCode;
       procedure TryConsumePayload;
-      // 分片归并：指数扩容 + 单次 Move 零拷贝，inline 摊还 O(n)；复用 bytes 语义不新增重复实现
-      procedure InitFragmentPayload(const AData: TBytes); inline;
-      procedure AppendFragmentPayload(const AData: TBytes); inline;
-      function TakeFragmentPayload: TBytes; inline;
       function FinishFrame(out AFrame: TNetWsFrame): TNetWsDecodeCode;
   public
     class function Create(const AIsClient: Boolean = False;
@@ -142,7 +137,7 @@ type
 implementation
 
 uses
-  nextpas.core.bytes,
+  nextpas.core.bytes.ops,
   nextpas.core.text.utf8,
   nextpas.core.tls.random;
 
@@ -247,8 +242,7 @@ begin
   FFragmentOpen := False;
   FFragmentOpcode := 0;
   FFragmentSize := 0;
-  FFragmentPayload := nil;
-  FFragmentCap := 0;
+  FFragmentParts := nil;
   FProtocolError := False;
   FTooLarge := False;
   FClosed := False;
@@ -562,85 +556,6 @@ begin
   Dec(FPayloadPending, LTake);
 end;
 
-{ 分片缓冲：指数扩容摊还 O(n)，Move 零拷贝追加；inline 降低调用开销。 }
-procedure TNetWsFrameDecoder.InitFragmentPayload(const AData: TBytes); inline;
-var
-  LLen: SizeUInt;
-  LCap: SizeUInt;
-begin
-  LLen := Length(AData);
-  FFragmentSize := LLen;
-  if LLen = 0 then
-  begin
-    FFragmentCap := 0;
-    FFragmentPayload := nil;
-    Exit;
-  end;
-  LCap := LLen;
-  if LCap < 256 then
-    LCap := 256
-  else
-    LCap := LCap * 2;
-  if LCap < LLen then
-    LCap := LLen;
-  FFragmentCap := LCap;
-  SetLength(FFragmentPayload, LCap);
-  Move(AData[0], FFragmentPayload[0], LLen);
-end;
-
-procedure TNetWsFrameDecoder.AppendFragmentPayload(const AData: TBytes); inline;
-var
-  LAdd: SizeUInt;
-  LNeed: UInt64;
-  LNewCap: SizeUInt;
-begin
-  LAdd := Length(AData);
-  if LAdd = 0 then
-    Exit;
-  LNeed := FFragmentSize + UInt64(LAdd);
-  if LNeed > FFragmentCap then
-  begin
-    LNewCap := FFragmentCap;
-    if LNewCap < 256 then
-      LNewCap := 256;
-    while LNewCap < LNeed do
-    begin
-      if LNewCap <= High(SizeUInt) div 2 then
-        LNewCap := LNewCap * 2
-      else
-      begin
-        LNewCap := SizeUInt(LNeed);
-        Break;
-      end;
-    end;
-    SetLength(FFragmentPayload, LNewCap);
-    FFragmentCap := LNewCap;
-  end;
-  Move(AData[0], FFragmentPayload[SizeUInt(FFragmentSize)], LAdd);
-  FFragmentSize := LNeed;
-end;
-
-function TNetWsFrameDecoder.TakeFragmentPayload: TBytes; inline;
-begin
-  if FFragmentSize = 0 then
-  begin
-    Result := nil;
-    FFragmentPayload := nil;
-    FFragmentCap := 0;
-    FFragmentOpen := False;
-    FFragmentOpcode := 0;
-    Exit;
-  end;
-  SetLength(FFragmentPayload, SizeUInt(FFragmentSize));
-  FFragmentCap := SizeUInt(FFragmentSize);
-  Result := FFragmentPayload;
-  FFragmentPayload := nil;
-  FFragmentCap := 0;
-  FFragmentSize := 0;
-  FFragmentOpen := False;
-  FFragmentOpcode := 0;
-end;
-
 { 当前帧整帧负载齐备后组装并走分片归并；与阻塞 ReadFrame 返回语义一致。
   组装的帧写入 AFrame，返回码指示后续状态。 }
 function TNetWsFrameDecoder.FinishFrame(out AFrame: TNetWsFrame): TNetWsDecodeCode;
@@ -687,22 +602,30 @@ begin
       end;
       Exit(nwsDecodeFrame);
     end;
-    { 非终数据帧：开分片（阻塞 ReadFrame 同款），原样产出；指数预留摊还 O(n) }
+    { 非终数据帧：开分片（阻塞 ReadFrame 同款），原样产出 }
     FFragmentOpen := True;
     FFragmentOpcode := FOpcode;
-    InitFragmentPayload(AFrame.Payload);
+    FFragmentSize := FPayloadLen;
+    SetLength(FFragmentParts, 1);
+    FFragmentParts[0] := AFrame.Payload;
     Exit(nwsDecodeFrame);
   end;
 
   if FOpcode = Byte(WS_OPCODE_CONTINUATION) then
   begin
-    AppendFragmentPayload(AFrame.Payload);
+    SetLength(FFragmentParts, Length(FFragmentParts) + 1);
+    FFragmentParts[High(FFragmentParts)] := AFrame.Payload;
+    Inc(FFragmentSize, FPayloadLen);
     if FFin then
     begin
-      { 终片：归并成全消息（Opcode 还原为起始数据帧）；Take 截断并移交所有权，零拷贝 }
+      { 终片：归并成全消息（Opcode 还原为起始数据帧），批量单分配 }
       AFrame.Opcode := FFragmentOpcode;
-      AFrame.Payload := TakeFragmentPayload;
+      AFrame.Payload := BytesConcatMany(FFragmentParts);
       AFrame.Fin := True;
+      FFragmentOpen := False;
+      FFragmentOpcode := 0;
+      FFragmentSize := 0;
+      FFragmentParts := nil;
       if (AFrame.Opcode = Byte(WS_OPCODE_TEXT)) and
          (not WsIsValidTextPayload(AFrame.Payload)) then
       begin

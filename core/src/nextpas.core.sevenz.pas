@@ -2,11 +2,13 @@ unit nextpas.core.sevenz;
 {**
  * @desc nextpas.core.sevenz 的容器门面。
  *
- * 聚合 7z 归档读端/写端、条目元数据、错误类型与 LZMA 编解码器后端
- * 契约，方便消费者只 `uses nextpas.core.sevenz` 即可完成常见读写。
+ * 聚合 7z 归档读端/写端、文件系统联邦层、条目元数据、错误类型与
+ * LZMA 编解码器后端契约，方便消费者只 `uses nextpas.core.sevenz`
+ * 即可完成常见读写与宿主文件系统联办。
  *
  * 范围原则：
- *   - 容器级能力通过类型别名与 inline forward 暴露。
+ *   - 容器级能力（含 sevenz.fs 联邦层 AddTree/AddFileFromFs/ExtractToFs/
+ *     FlushExtractedToFs 全族）通过类型别名与 inline forward 显式转发。
  *   - 头部 TLV/varint 编解码、区间编码器等低层机制留在对应子模块，
  *     避免门面膨胀。
  *   - 需要定制 folder/coder 拓扑时直接引用
@@ -27,6 +29,7 @@ uses
   nextpas.core.sevenz.filters,
   nextpas.core.sevenz.reader,
   nextpas.core.sevenz.writer,
+  nextpas.core.sevenz.fs,
   nextpas.core.compress.bzip2;
 
 type
@@ -102,6 +105,24 @@ function SevenZCreateReaderFrom(const AReader: IReader): ISevenZReader; inline;
 function SevenZCreateReaderFromWithPassword(const AReader: IReader; const APassword: string): ISevenZReader; inline;
 function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel; inline;
 function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer; inline;
+
+{ 文件系统联邦层：宿主文件 ↔ 归档条目（L2 单入口显式转发，复用 fs 单源实现） }
+procedure SevenZAddFileFromFs(const AWriter: ISevenZWriter; const AHostPath, AEntryName: string); inline;
+procedure SevenZAddFileFromFsWithTime(const AWriter: ISevenZWriter; const AHostPath, AEntryName: string; AUseFsMTime: Boolean); inline;
+procedure SevenZAddTree(const AWriter: ISevenZWriter; const AHostDir, AEntryPrefix: string); inline;
+procedure SevenZAddTreeWithFilter(const AWriter: ISevenZWriter; const AHostDir, AEntryPrefix: string; const AInclude: string); inline;
+function SevenZExtractToFs(const AReader: ISevenZReader; AIndex: Integer; const AHostPath: string): Int64; inline;
+procedure SevenZExtractAllToFs(const AReader: ISevenZReader; const ABaseDir: string); inline;
+function SevenZExtractByPrefixToFs(const AReader: ISevenZReader; const APrefix, ABaseDir: string): Integer; inline;
+function SevenZExtractBySuffixToFs(const AReader: ISevenZReader; const ASuffix, ABaseDir: string): Integer; inline;
+function SevenZExtractByGlobToFs(const AReader: ISevenZReader; const APattern, ABaseDir: string): Integer; inline;
+function SevenZTryExtractByGlobToFs(const AReader: ISevenZReader; const APattern, ABaseDir: string; out AError: string): Boolean; inline;
+function SevenZExtractByPrefixIgnoreCaseToFs(const AReader: ISevenZReader; const APrefix, ABaseDir: string): Integer; inline;
+function SevenZExtractBySuffixIgnoreCaseToFs(const AReader: ISevenZReader; const ASuffix, ABaseDir: string): Integer; inline;
+function SevenZExtractByGlobIgnoreCaseToFs(const AReader: ISevenZReader; const APattern, ABaseDir: string): Integer; inline;
+function SevenZTryExtractByGlobIgnoreCaseToFs(const AReader: ISevenZReader; const APattern, ABaseDir: string; out AError: string): Boolean; inline;
+function SevenZTryExtractByPrefixIgnoreCaseToFs(const AReader: ISevenZReader; const APrefix, ABaseDir: string; out AError: string): Boolean; inline;
+function SevenZTryExtractBySuffixIgnoreCaseToFs(const AReader: ISevenZReader; const ASuffix, ABaseDir: string; out AError: string): Boolean; inline;
 
 implementation
 
@@ -190,6 +211,86 @@ end;
 function SevenZCreateReaderFromWithPassword(const AReader: IReader; const APassword: string): ISevenZReader;
 begin
   Result := TSevenZReaderImpl.CreateFromReaderWithPassword(AReader, APassword);
+end;
+
+procedure SevenZAddFileFromFs(const AWriter: ISevenZWriter; const AHostPath, AEntryName: string);
+begin
+  nextpas.core.sevenz.fs.SevenZAddFileFromFs(AWriter, AHostPath, AEntryName);
+end;
+
+procedure SevenZAddFileFromFsWithTime(const AWriter: ISevenZWriter; const AHostPath, AEntryName: string; AUseFsMTime: Boolean);
+begin
+  nextpas.core.sevenz.fs.SevenZAddFileFromFsWithTime(AWriter, AHostPath, AEntryName, AUseFsMTime);
+end;
+
+procedure SevenZAddTree(const AWriter: ISevenZWriter; const AHostDir, AEntryPrefix: string);
+begin
+  nextpas.core.sevenz.fs.SevenZAddTree(AWriter, AHostDir, AEntryPrefix);
+end;
+
+procedure SevenZAddTreeWithFilter(const AWriter: ISevenZWriter; const AHostDir, AEntryPrefix: string; const AInclude: string);
+begin
+  nextpas.core.sevenz.fs.SevenZAddTreeWithFilter(AWriter, AHostDir, AEntryPrefix, AInclude);
+end;
+
+function SevenZExtractToFs(const AReader: ISevenZReader; AIndex: Integer; const AHostPath: string): Int64;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZExtractToFs(AReader, AIndex, AHostPath);
+end;
+
+procedure SevenZExtractAllToFs(const AReader: ISevenZReader; const ABaseDir: string);
+begin
+  nextpas.core.sevenz.fs.SevenZExtractAllToFs(AReader, ABaseDir);
+end;
+
+function SevenZExtractByPrefixToFs(const AReader: ISevenZReader; const APrefix, ABaseDir: string): Integer;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZExtractByPrefixToFs(AReader, APrefix, ABaseDir);
+end;
+
+function SevenZExtractBySuffixToFs(const AReader: ISevenZReader; const ASuffix, ABaseDir: string): Integer;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZExtractBySuffixToFs(AReader, ASuffix, ABaseDir);
+end;
+
+function SevenZExtractByGlobToFs(const AReader: ISevenZReader; const APattern, ABaseDir: string): Integer;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZExtractByGlobToFs(AReader, APattern, ABaseDir);
+end;
+
+function SevenZTryExtractByGlobToFs(const AReader: ISevenZReader; const APattern, ABaseDir: string; out AError: string): Boolean;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZTryExtractByGlobToFs(AReader, APattern, ABaseDir, AError);
+end;
+
+function SevenZExtractByPrefixIgnoreCaseToFs(const AReader: ISevenZReader; const APrefix, ABaseDir: string): Integer;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZExtractByPrefixIgnoreCaseToFs(AReader, APrefix, ABaseDir);
+end;
+
+function SevenZExtractBySuffixIgnoreCaseToFs(const AReader: ISevenZReader; const ASuffix, ABaseDir: string): Integer;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZExtractBySuffixIgnoreCaseToFs(AReader, ASuffix, ABaseDir);
+end;
+
+function SevenZExtractByGlobIgnoreCaseToFs(const AReader: ISevenZReader; const APattern, ABaseDir: string): Integer;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZExtractByGlobIgnoreCaseToFs(AReader, APattern, ABaseDir);
+end;
+
+function SevenZTryExtractByGlobIgnoreCaseToFs(const AReader: ISevenZReader; const APattern, ABaseDir: string; out AError: string): Boolean;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZTryExtractByGlobIgnoreCaseToFs(AReader, APattern, ABaseDir, AError);
+end;
+
+function SevenZTryExtractByPrefixIgnoreCaseToFs(const AReader: ISevenZReader; const APrefix, ABaseDir: string; out AError: string): Boolean;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZTryExtractByPrefixIgnoreCaseToFs(AReader, APrefix, ABaseDir, AError);
+end;
+
+function SevenZTryExtractBySuffixIgnoreCaseToFs(const AReader: ISevenZReader; const ASuffix, ABaseDir: string; out AError: string): Boolean;
+begin
+  Result := nextpas.core.sevenz.fs.SevenZTryExtractBySuffixIgnoreCaseToFs(AReader, ASuffix, ABaseDir, AError);
 end;
 
 end.

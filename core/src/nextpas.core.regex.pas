@@ -77,6 +77,9 @@ function RegexQuoteMeta(const AStr: string): string;
 
 implementation
 
+uses
+  nextpas.core.text.builder;
+
 { TRegex }
 
 class function TRegex.Compile(const APattern: string): TRegex;
@@ -378,19 +381,44 @@ var
   LMatches: TMatchArray;
   i: SizeInt;
   LPos: SizeUInt;
+  LBuilder: TBufStringBuilder;
+  LSegLen: SizeUInt;
+  LInputLen: SizeUInt;
+  LReplLen: SizeUInt;
+  LReserve: SizeUInt;
 begin
   LMatches := FindAll(AInput);
   if Length(LMatches) = 0 then Exit(AInput);
-
-  Result := '';
-  LPos := 1;
+  LInputLen := SizeUInt(Length(AInput));
+  LReplLen := SizeUInt(Length(AReplacement));
+  // single-alloc via reserve: input + repl*count - sum(match len) (bytes.ops single-source idea, inline Move)
+  LReserve := LInputLen + LReplLen * SizeUInt(Length(LMatches));
   for i := 0 to High(LMatches) do
-  begin
-    Result := Result + Copy(AInput, LPos, SizeUInt(LMatches[i].Start + 1) - LPos);
-    Result := Result + AReplacement;
-    LPos := SizeUInt(LMatches[i].Start + LMatches[i].Len + 1);
+    if SizeUInt(LMatches[i].Len) <= LReserve then
+      Dec(LReserve, SizeUInt(LMatches[i].Len))
+    else
+      LReserve := 0;
+  LBuilder.Init(LReserve);
+  try
+    LPos := 1;
+    for i := 0 to High(LMatches) do
+    begin
+      if SizeUInt(LMatches[i].Start + 1) > LPos then
+      begin
+        LSegLen := SizeUInt(LMatches[i].Start + 1) - LPos;
+        if LSegLen > 0 then
+          LBuilder.AppendBytes(@AInput[LPos], LSegLen);
+      end;
+      if LReplLen > 0 then
+        LBuilder.AppendStr(AReplacement);
+      LPos := SizeUInt(LMatches[i].Start + LMatches[i].Len + 1);
+    end;
+    if LPos <= LInputLen then
+      LBuilder.AppendBytes(@AInput[LPos], LInputLen - LPos + 1);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
-  Result := Result + Copy(AInput, LPos, Length(AInput) - SizeInt(LPos) + 1);
 end;
 
 function TRegex.ReplaceFirstFunc(const AInput: string; AFunc: TReplaceFunc): string;
@@ -409,21 +437,39 @@ var
   LMatches: TMatchArray;
   i: SizeInt;
   LPos: SizeUInt;
+  LBuilder: TBufStringBuilder;
+  LSegLen: SizeUInt;
+  LInputLen: SizeUInt;
+  LRepl: string;
 begin
   if not Assigned(AFunc) then
     raise ERegexError.Create('nil replacement callback');
   LMatches := FindAll(AInput);
   if Length(LMatches) = 0 then Exit(AInput);
-
-  Result := '';
-  LPos := 1;
-  for i := 0 to High(LMatches) do
-  begin
-    Result := Result + Copy(AInput, LPos, SizeUInt(LMatches[i].Start + 1) - LPos);
-    Result := Result + AFunc(AInput, LMatches[i]);
-    LPos := SizeUInt(LMatches[i].Start + LMatches[i].Len + 1);
+  LInputLen := SizeUInt(Length(AInput));
+  // builder zero-copy path; reserve at least input len to avoid first grow
+  LBuilder.Init(LInputLen + 64);
+  try
+    LPos := 1;
+    for i := 0 to High(LMatches) do
+    begin
+      if SizeUInt(LMatches[i].Start + 1) > LPos then
+      begin
+        LSegLen := SizeUInt(LMatches[i].Start + 1) - LPos;
+        if LSegLen > 0 then
+          LBuilder.AppendBytes(@AInput[LPos], LSegLen);
+      end;
+      LRepl := AFunc(AInput, LMatches[i]);
+      if LRepl <> '' then
+        LBuilder.AppendStr(LRepl);
+      LPos := SizeUInt(LMatches[i].Start + LMatches[i].Len + 1);
+    end;
+    if LPos <= LInputLen then
+      LBuilder.AppendBytes(@AInput[LPos], LInputLen - LPos + 1);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
-  Result := Result + Copy(AInput, LPos, Length(AInput) - SizeInt(LPos) + 1);
 end;
 
 function TRegex.ReplaceAllExpand(const AInput, ATemplate: string): string;
@@ -431,6 +477,9 @@ var
   LMatches: TMatchArray;
   i: SizeInt;
   LPos: SizeUInt;
+  LBuilder: TBufStringBuilder;
+  LSegLen: SizeUInt;
+  LInputLen: SizeUInt;
 
   procedure ValidateTemplate;
   var
@@ -446,11 +495,9 @@ var
         Inc(j);
         Continue;
       end;
-
       if j >= LTplLen then
         raise ERegexError.Create('malformed replacement template');
       Inc(j);
-
       if ATemplate[j] = '{' then
       begin
         Inc(j);
@@ -461,7 +508,6 @@ var
         if (j > LTplLen) or (ATemplate[j] <> '}') then
           raise ERegexError.Create('malformed replacement template');
       end;
-
       Inc(j);
     end;
   end;
@@ -472,63 +518,77 @@ var
     LTplLen: SizeInt;
     LIdx: SizeInt;
     LName: string;
+    LExpand: TBufStringBuilder;
+    LStart: SizeInt;
+    LVal: string;
   begin
-    Result := '';
-    LTplLen := Length(ATemplate);
-    j := 1;
-    while j <= LTplLen do
-    begin
-      if ATemplate[j] = '$' then
+    // builder zero-copy single-source (bytes.ops inline Move)
+    LExpand.Init(SizeUInt(Length(ATemplate)) + 32);
+    try
+      LTplLen := Length(ATemplate);
+      j := 1;
+      while j <= LTplLen do
       begin
-        if j >= LTplLen then
-          raise ERegexError.Create('malformed replacement template');
-        Inc(j);
         if ATemplate[j] = '$' then
         begin
-          Result := Result + '$';
+          if j >= LTplLen then
+            raise ERegexError.Create('malformed replacement template');
           Inc(j);
-        end
-        else if ATemplate[j] = '0' then
-        begin
-          Result := Result + AMatch.Value(AInput);
-          Inc(j);
-        end
-        else if (ATemplate[j] >= '1') and (ATemplate[j] <= '9') then
-        begin
-          LIdx := Ord(ATemplate[j]) - Ord('1');
-          if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
-            Result := Result + AMatch.Groups[LIdx].Value(AInput);
-          Inc(j);
-        end
-        else if (ATemplate[j] = '{') then
-        begin
-          Inc(j);
-          LName := '';
-          while (j <= LTplLen) and (ATemplate[j] <> '}') do
+          if ATemplate[j] = '$' then
           begin
-            LName := LName + ATemplate[j];
+            LExpand.AppendChar('$');
+            Inc(j);
+          end
+          else if ATemplate[j] = '0' then
+          begin
+            LVal := AMatch.Value(AInput);
+            if LVal <> '' then LExpand.AppendStr(LVal);
+            Inc(j);
+          end
+          else if (ATemplate[j] >= '1') and (ATemplate[j] <= '9') then
+          begin
+            LIdx := Ord(ATemplate[j]) - Ord('1');
+            if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
+            begin
+              LVal := AMatch.Groups[LIdx].Value(AInput);
+              if LVal <> '' then LExpand.AppendStr(LVal);
+            end;
+            Inc(j);
+          end
+          else if ATemplate[j] = '{' then
+          begin
+            Inc(j);
+            LStart := j;
+            while (j <= LTplLen) and (ATemplate[j] <> '}') do Inc(j);
+            if (j > LTplLen) or (ATemplate[j] <> '}') then
+              raise ERegexError.Create('malformed replacement template');
+            if j = LStart then
+              raise ERegexError.Create('malformed replacement template');
+            LName := Copy(ATemplate, LStart, j - LStart);
+            Inc(j);
+            LIdx := GroupIndexByName(LName);
+            if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
+            begin
+              LVal := AMatch.Groups[LIdx].Value(AInput);
+              if LVal <> '' then LExpand.AppendStr(LVal);
+            end;
+          end
+          else
+          begin
+            LExpand.AppendChar('$');
+            LExpand.AppendChar(ATemplate[j]);
             Inc(j);
           end;
-          if (j > LTplLen) or (ATemplate[j] <> '}') then
-            raise ERegexError.Create('malformed replacement template');
-          if LName = '' then
-            raise ERegexError.Create('malformed replacement template');
-          Inc(j);
-          LIdx := GroupIndexByName(LName);
-          if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
-            Result := Result + AMatch.Groups[LIdx].Value(AInput);
         end
         else
         begin
-          Result := Result + '$' + ATemplate[j];
+          LExpand.AppendChar(ATemplate[j]);
           Inc(j);
         end;
-      end
-      else
-      begin
-        Result := Result + ATemplate[j];
-        Inc(j);
       end;
+      Result := LExpand.ToString;
+    finally
+      LExpand.Done;
     end;
   end;
 
@@ -536,16 +596,27 @@ begin
   ValidateTemplate;
   LMatches := FindAll(AInput);
   if Length(LMatches) = 0 then Exit(AInput);
-
-  Result := '';
-  LPos := 1;
-  for i := 0 to High(LMatches) do
-  begin
-    Result := Result + Copy(AInput, LPos, SizeUInt(LMatches[i].Start + 1) - LPos);
-    Result := Result + ExpandTemplate(LMatches[i]);
-    LPos := SizeUInt(LMatches[i].Start + LMatches[i].Len + 1);
+  LInputLen := SizeUInt(Length(AInput));
+  LBuilder.Init(LInputLen + SizeUInt(Length(ATemplate)) + 64);
+  try
+    LPos := 1;
+    for i := 0 to High(LMatches) do
+    begin
+      if SizeUInt(LMatches[i].Start + 1) > LPos then
+      begin
+        LSegLen := SizeUInt(LMatches[i].Start + 1) - LPos;
+        if LSegLen > 0 then
+          LBuilder.AppendBytes(@AInput[LPos], LSegLen);
+      end;
+      LBuilder.AppendStr(ExpandTemplate(LMatches[i]));
+      LPos := SizeUInt(LMatches[i].Start + LMatches[i].Len + 1);
+    end;
+    if LPos <= LInputLen then
+      LBuilder.AppendBytes(@AInput[LPos], LInputLen - LPos + 1);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
-  Result := Result + Copy(AInput, LPos, Length(AInput) - SizeInt(LPos) + 1);
 end;
 
 function TRegex.Split(const AInput: string; AMaxSplits: SizeInt = -1): TStringArray;
@@ -731,15 +802,25 @@ const
   MetaChars = '\.+*?()[]{}|^$';
 var
   i: SizeInt;
-  ch: Char;
+  LExtra: SizeInt;
+  LPos: SizeInt;
 begin
-  Result := '';
+  // single-alloc via pre-count (bytes.ops inline Move single-source)
+  LExtra := 0;
+  for i := 1 to Length(AStr) do
+    if Pos(AStr[i], MetaChars) > 0 then Inc(LExtra);
+  if LExtra = 0 then Exit(AStr);
+  SetLength(Result, Length(AStr) + LExtra);
+  LPos := 1;
   for i := 1 to Length(AStr) do
   begin
-    ch := AStr[i];
-    if Pos(ch, MetaChars) > 0 then
-      Result := Result + '\';
-    Result := Result + ch;
+    if Pos(AStr[i], MetaChars) > 0 then
+    begin
+      Result[LPos] := '\';
+      Inc(LPos);
+    end;
+    Result[LPos] := AStr[i];
+    Inc(LPos);
   end;
 end;
 
