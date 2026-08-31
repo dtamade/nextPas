@@ -18,6 +18,7 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 if ! fpc -B \
   -Fu"$REPO_ROOT/compiler/syntax" \
   -Fu"$REPO_ROOT/compiler/diagnostics" \
+  -Fu"$REPO_ROOT/compiler/src" \
   -Fu"$REPO_ROOT/compiler/frontend" \
   -Fu"$REPO_ROOT/compiler/sema" \
   -Fu"$REPO_ROOT/compiler/lower" \

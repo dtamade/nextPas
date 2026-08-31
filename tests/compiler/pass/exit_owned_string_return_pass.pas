@@ -5,7 +5,7 @@ program test_exit_owned_string_return_pass;
   sema.c6h4-owned-string-return-deferred-consumer. The owned-string temporary
   lives for the entire function scope (Exit is equivalent to Result := Expr).
   Depends on the gnkExitStatement handler in
-  compiler/sema/np_semantic_analyzer.pas (NodeConsumesOwnedStringReturnDeferred).
+  compiler/sema/nextpas.compiler.sema.analyzer.pas (NodeConsumesOwnedStringReturnDeferred).
 
   Producer registration: the program-level warmup assignments (GWarmup := F())
   run through ScanTopLevelOwnedStringReturnConsumers ->
@@ -18,7 +18,7 @@ program test_exit_owned_string_return_pass;
   producers and the test would pass as an empty no-op. Thanks to registration,
   deleting the gnkExitStatement handler makes Exit(producer()) fall through to the
   generic for-loop with AInsideDirectOwnedAssignmentRhs=False, hitting the
-  deferred branch at np_semantic_analyzer.pas:1832 and emitting a C6-H4 error at
+  deferred branch at nextpas.compiler.sema.analyzer.pas:1832 and emitting a C6-H4 error at
   build time (failing this fixture).
 
   Pattern 1/2 (hard guard): removing the handler regressess the build.

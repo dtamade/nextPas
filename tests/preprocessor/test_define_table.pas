@@ -3,7 +3,7 @@ program test_define_table;
 {$mode objfpc}{$H+}
 
 uses
-  np_preprocessor;
+  nextpas.compiler.syntax.preprocessor;
 
 var
   Failures: LongInt = 0;

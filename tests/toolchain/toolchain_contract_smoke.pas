@@ -15,10 +15,10 @@ program toolchain_contract_smoke;
 {$UNITPATH ../../tools/stage0}
 
 uses
-  Classes, SysUtils, BaseUnix, target_config, np_backend_plan,
-  np_diagnostics_sink, np_package_manifest, np_package_workflow,
-  np_source_database, np_target_facts, np_toolchain_plan, np_unit_resolver,
-  np_workspace_model, np_toolchain_runner;
+  Classes, SysUtils, BaseUnix, nextpas.driver.target_config, nextpas.compiler.backend.plan,
+  nextpas.compiler.diagnostics.sink, nextpas.compiler.frontend.package_manifest, nextpas.compiler.frontend.package_workflow,
+  nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts, nextpas.compiler.toolchain.plan, nextpas.compiler.frontend.unit_resolver,
+  nextpas.compiler.frontend.workspace_model, nextpas.compiler.toolchain.runner;
 
 function BuildFactsFromConfig(const AConfig: TTargetConfig): TTargetFactsView;
 begin

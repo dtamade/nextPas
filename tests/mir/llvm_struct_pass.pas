@@ -10,7 +10,7 @@ program test_llvm_struct;
 }
 
 uses
-  np_mir_model, np_mir_to_llvm;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.to_llvm;
 
 function Contains(const Haystack, Needle: string): Boolean;
 begin

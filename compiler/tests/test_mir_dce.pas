@@ -4,7 +4,7 @@ program test_mir_dce;
 
 uses
   SysUtils,
-  np_mir_model, np_mir_optimize, np_mir_pass_dce;
+  nextpas.compiler.ir.mir.model, nextpas.compiler.ir.mir.optimize, nextpas.compiler.ir.mir.pass.dce;
 
 procedure Fail(const AMsg: string);
 begin

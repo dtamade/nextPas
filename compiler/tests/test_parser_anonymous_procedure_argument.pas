@@ -3,9 +3,9 @@ program test_parser_anonymous_procedure_argument;
 {$mode objfpc}{$H+}
 
 uses
-  np_diagnostics_sink,
-  np_green_tree,
-  np_lexer;
+  nextpas.compiler.diagnostics.sink,
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer;
 
 function CountNodesByKind(const ANode: TGreenNode;
   const AKind: TGreenNodeKind): LongInt;

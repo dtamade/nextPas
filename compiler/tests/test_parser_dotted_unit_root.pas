@@ -3,10 +3,10 @@ program test_parser_dotted_unit_root;
 {$mode objfpc}{$H+}
 
 uses
-  np_ast_facade,
-  np_diagnostics_sink,
-  np_green_tree,
-  np_lexer;
+  nextpas.compiler.syntax.ast_facade,
+  nextpas.compiler.diagnostics.sink,
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer;
 
 var
   Diagnostics: TDiagnosticsSink;

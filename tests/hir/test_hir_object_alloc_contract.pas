@@ -3,8 +3,8 @@ program test_hir_object_alloc_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_types, np_hir_model,
-  np_hir_builder, np_hir_llvm_emitter, np_hir_verifier, np_system_contracts;
+  SysUtils, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model,
+  nextpas.compiler.ir.hir.builder, nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.ir.hir.verifier, nextpas.compiler.ir.system_contracts;
 
 procedure Fail(const AMessage: string);
 begin

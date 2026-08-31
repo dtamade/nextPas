@@ -2,13 +2,11 @@ unit np_text_primitives;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../base}
-{$UNITPATH ../sysutils}
-{$UNITPATH ../classes}
 
 interface
 
 uses
-  Classes, SysUtils, np_base_types;
+  SysUtils, np_base_types, nextpas.core.exception, nextpas.core.fs.util;
 
 function NormalizeCoreIdentity(const AValue: string): string;
 function NormalizeCorePath(const APath: string): string;
@@ -52,9 +50,6 @@ function TryReadCoreTextFile(
   out ACanonicalPath: string;
   out ASourceText: string
 ): TCoreResult;
-var
-  Stream: TFileStream;
-  Buffer: RawByteString;
 begin
   ACanonicalPath := '';
   ASourceText := '';
@@ -66,21 +61,22 @@ begin
   if not FileExists(ACanonicalPath) then
     Exit(BuildCoreResult(crcNotFound, 'file not found: ' + ACanonicalPath));
 
+  { Read via nextpas.core.fs.util instead of FPC TFileStream so the compile
+    chain stops consuming the Classes stub. FsReadFileText handles BOM /
+    UTF-8 / UTF-16 and falls back to Latin-1 for non-UTF-8 (net improvement
+    over the old raw byte conversion). Catch on the concrete core exception
+    types: under FPC, ENextPasError derives from SysUtils.Exception; under
+    nextPas, the SysUtils stub Exception is an unrelated class(TObject), so
+    `on Exception` would not match here. }
   try
-    Stream := TFileStream.Create(ACanonicalPath, fmOpenRead or fmShareDenyNone);
-    try
-      SetLength(Buffer, Stream.Size);
-      if Stream.Size > 0 then
-        Stream.ReadBuffer(Buffer[1], Stream.Size);
-    finally
-      Stream.Free;
-    end;
+    ASourceText := FsReadFileText(ACanonicalPath);
   except
-    on Exception do
+    on E: ENotFoundError do
+      Exit(BuildCoreResult(crcNotFound, 'file not found: ' + ACanonicalPath));
+    on E: ENextPasError do
       Exit(BuildCoreResult(crcIoError, 'failed to read file: ' + ACanonicalPath));
   end;
 
-  ASourceText := string(Buffer);
   { Avoid bare zero-arg `BuildCoreOkResult` — stage0 residual-calls it as
     @BuildCoreOkResult() without body/sret. Materialize TCoreResult fields. }
   Result.Code := crcOk;
