@@ -140,9 +140,6 @@ implementation
 uses
   SysUtils,
   nextpas.core.bytes.ops,
-  nextpas.core.path,
-  nextpas.core.fs,
-  nextpas.core.os.env,
   nextpas.core.platform.error,
   nextpas.core.base.utils,
   nextpas.core.text.compare,
@@ -368,110 +365,136 @@ begin
   Result := LDate.ToJulianDay - DELPHI_EPOCH_JDN;
 end;
 
-{ File system — delegates to nextpas.core.fs }
+{ File system — delegates to SysUtils (L0: FPC RTL, avoids L2 fs) }
 
-function FileExists(const AFileName: string): Boolean;
+function FileExists(const AFileName: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.FileExists(AFileName);
+  Result := SysUtils.FileExists(AFileName);
 end;
 
-function DirectoryExists(const ADirectory: string): Boolean;
+function DirectoryExists(const ADirectory: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DirectoryExists(ADirectory);
+  Result := SysUtils.DirectoryExists(ADirectory);
 end;
 
-function CreateDir(const ADir: string): Boolean;
+function CreateDir(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.ForceDirectories(ADir);
+  Result := SysUtils.CreateDir(ADir);
 end;
 
-function RemoveDir(const ADir: string): Boolean;
+function RemoveDir(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DeleteFile(ADir);
+  Result := SysUtils.RemoveDir(ADir);
 end;
 
-function ForceDirectories(const ADir: string): Boolean;
+function ForceDirectories(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.ForceDirectories(ADir);
+  Result := SysUtils.ForceDirectories(ADir);
 end;
 
-function DeleteFile(const AFileName: string): Boolean;
+function DeleteFile(const AFileName: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DeleteFile(AFileName);
+  Result := SysUtils.DeleteFile(AFileName);
 end;
 
-function RenameFile(const AOldName, ANewName: string): Boolean;
+function RenameFile(const AOldName, ANewName: string): Boolean; inline;
 begin
-  try
-    nextpas.core.fs.Rename(AOldName, ANewName);
-    Result := True;
-  except
-    on E: Exception do
-      Result := False;
-  end;
+  Result := SysUtils.RenameFile(AOldName, ANewName);
 end;
 
 function CopyFile(const ASrcName, ADestName: string): Boolean;
+var
+  LSrc, LDst: File;
+  LBuf: array[0..8191] of Byte;
+  LRead, LWritten: LongInt;
 begin
-  Result := nextpas.core.fs.CopyFile(ASrcName, ADestName) >= 0;
+  // single-source copy via System file ops; no L2 fs dependency, resource-safe
+  Result := False;
+  if not SysUtils.FileExists(ASrcName) then Exit(False);
+  AssignFile(LSrc, ASrcName);
+  {$I-}
+  Reset(LSrc, 1);
+  if IOResult <> 0 then Exit(False);
+  try
+    AssignFile(LDst, ADestName);
+    Rewrite(LDst, 1);
+    if IOResult <> 0 then Exit(False);
+    try
+      repeat
+        BlockRead(LSrc, LBuf, SizeOf(LBuf), LRead);
+        if LRead > 0 then
+        begin
+          BlockWrite(LDst, LBuf, LRead, LWritten);
+          if (IOResult <> 0) or (LWritten <> LRead) then Exit(False);
+        end;
+      until LRead = 0;
+      Result := True;
+    finally
+      CloseFile(LDst);
+    end;
+  finally
+    CloseFile(LSrc);
+  end;
 end;
 
-{ Path manipulation — delegates to nextpas.core.path }
+{ Path manipulation — delegates to SysUtils (L0: FPC RTL, avoids L2 path) }
 
-function ExtractFilePath(const AFileName: string): string;
+function ExtractFilePath(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFilePath(AFileName);
+  Result := SysUtils.ExtractFilePath(AFileName);
 end;
 
-function ExtractFileName(const AFileName: string): string;
+function ExtractFileName(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileName(AFileName);
+  Result := SysUtils.ExtractFileName(AFileName);
 end;
 
-function ExtractFileExt(const AFileName: string): string;
+function ExtractFileExt(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileExt(AFileName);
+  Result := SysUtils.ExtractFileExt(AFileName);
 end;
 
-function ExtractFileDir(const AFileName: string): string;
+function ExtractFileDir(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileDir(AFileName);
+  Result := SysUtils.ExtractFileDir(AFileName);
 end;
 
-function ExtractFileDrive(const AFileName: string): string;
+function ExtractFileDrive(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileDrive(AFileName);
+  Result := SysUtils.ExtractFileDrive(AFileName);
 end;
 
-function ChangeFileExt(const AFileName, ANewExt: string): string;
+function ChangeFileExt(const AFileName, ANewExt: string): string; inline;
 begin
-  Result := nextpas.core.path.ChangeFileExt(AFileName, ANewExt);
+  Result := SysUtils.ChangeFileExt(AFileName, ANewExt);
 end;
 
-function IncludeTrailingPathDelimiter(const APath: string): string;
+function IncludeTrailingPathDelimiter(const APath: string): string; inline;
 begin
-  Result := nextpas.core.path.IncludeTrailingPathDelimiter(APath);
+  Result := SysUtils.IncludeTrailingPathDelimiter(APath);
 end;
 
-function ExcludeTrailingPathDelimiter(const APath: string): string;
+function ExcludeTrailingPathDelimiter(const APath: string): string; inline;
 begin
-  Result := nextpas.core.path.ExcludeTrailingPathDelimiter(APath);
+  Result := SysUtils.ExcludeTrailingPathDelimiter(APath);
 end;
 
-function ExpandFileName(const AFileName: string): string;
+function ExpandFileName(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExpandFileName(AFileName);
+  Result := SysUtils.ExpandFileName(AFileName);
 end;
 
-function GetTempDir: string;
+function GetTempDir: string; inline;
 begin
-  Result := nextpas.core.fs.GetTempDir;
+  Result := SysUtils.GetTempDir;
+  if (Result <> '') and (Result[Length(Result)] <> PathDelim) then
+    Result := Result + PathDelim;
 end;
 
-function GetTempDir(Global: Boolean): string;
+function GetTempDir(Global: Boolean): string; inline;
 begin
-  { Global flag ignored — single temp root on nextPas fs facade }
-  Result := nextpas.core.fs.GetTempDir;
+  // Global flag ignored — single temp root on SysUtils facade
+  Result := GetTempDir;
 end;
 
 function GetProcessID: SizeUInt;
@@ -480,22 +503,18 @@ begin
   Result := SizeUInt(System.GetProcessID);
 end;
 
-{ Working directory — delegates to fs owner (thin facade). }
+{ Working directory — delegates to SysUtils (L0: FPC RTL, avoids L2 fs) }
 
 function GetCurrentDir: string; inline;
 begin
-  Result := nextpas.core.fs.GetCurrentDir;
+  Result := SysUtils.GetCurrentDir;
 end;
 
-function SetCurrentDir(const ADir: string): Boolean;
+function SetCurrentDir(const ADir: string): Boolean; inline;
 begin
-  try
-    nextpas.core.fs.SetCwd(ADir);
-    Result := True;
-  except
-    on E: Exception do
-      Result := False;
-  end;
+  {$I-}
+  ChDir(ADir);
+  Result := IOResult = 0;
 end;
 
 { Command line — delegates to System }
@@ -510,11 +529,11 @@ begin
   Result := System.ParamStr(AIndex);
 end;
 
-{ Environment — delegates to os.env owner (thin facade). }
+{ Environment — delegates to SysUtils (L0: FPC RTL, avoids Support os.env) }
 
 function GetEnvironmentVariable(const AName: string): string; inline;
 begin
-  Result := nextpas.core.os.env.GetEnvironmentVariable(AName);
+  Result := SysUtils.GetEnvironmentVariable(AName);
 end;
 
 { Timing — delegates to time owner (thin facade). }
@@ -545,22 +564,22 @@ begin
   Result := nextpas.core.platform.error.platform_get_last_error();
 end;
 
-function ExceptAddr: Pointer;
+function ExceptAddr: Pointer; inline;
 begin
-  Result := SysUtils.ExceptAddr;
+  { single-source: owner nextpas.core.exception; inline zero-copy forward }
+  Result := nextpas.core.exception.ExceptAddr;
 end;
 
-function ExceptFrameCount: LongInt;
+function ExceptFrameCount: LongInt; inline;
 begin
-  Result := SysUtils.ExceptFrameCount;
+  { single-source: owner nextpas.core.exception; inline zero-copy forward }
+  Result := nextpas.core.exception.ExceptFrameCount;
 end;
 
-function ExceptFrameAt(const AIndex: LongInt): CodePointer;
+function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 begin
-  if (AIndex < 0) or (AIndex >= SysUtils.ExceptFrameCount) then
-    Result := nil
-  else
-    Result := SysUtils.ExceptFrames[AIndex];
+  { single-source: owner nextpas.core.exception; inline with bounds guard, no exception loss }
+  Result := nextpas.core.exception.ExceptFrameAt(AIndex);
 end;
 
 end.

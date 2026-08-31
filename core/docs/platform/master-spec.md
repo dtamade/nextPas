@@ -74,8 +74,9 @@ the documented **28 platform gates** only — never “29-gate” (extra is mem.
   GHA **30198722396** @ `20f9c6de6` layer A **pass=11 fail=0** (job red there
   was non-platform `http.threaded_host` log.pas — does **not** demote layer A).
 
-Darwin `platform.memory` honest residual (not a demotion): SysGetMem
-aligned-alloc fallback; FillChar+barrier secure-zero; MAP_ANON+mprotect reserve.
+Darwin `platform.memory` native completeness: mmap-aligned alloc (heaptrc-
+agnostic, inline header carve, zero-copy shrink; 16MiB cap) + FillChar+barrier
+secure-zero; MAP_ANON+mprotect reserve/decommit/munmap.
 
 D2.c / Batch-5 promote is **scoped**: it does **not** claim full-host macOS
 parity or treat best-effort whole-suite inventory as evidence.
