@@ -22,8 +22,7 @@ uses
   nextpas.core.errors,
   nextpas.core.platform.thread,
   nextpas.core.webview.base,
-  nextpas.core.webview.intf,
-  nextpas.core.webview.fake;
+  nextpas.core.webview.intf;
 
 type
   {** fluent 构建器。COM 引用计数生命周期，消费方不手写释放。 *}
@@ -90,6 +89,7 @@ implementation
 
 uses
   TypInfo,
+  nextpas.core.webview.fake,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
   nextpas.core.webview.gtk.win,
