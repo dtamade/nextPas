@@ -5,12 +5,6 @@ unit nextpas.core.git.libgit2.binding;
 
 interface
 
-{$IFDEF NEXTPAS_CORE_GIT_LIBGIT2_STATIC}
-  {$IFDEF DARWIN}
-  {$linklib git2}
-  {$ENDIF}
-{$ENDIF}
-
 uses nextpas.core.base, nextpas.core.exception, nextpas.core.git.libgit2.ffi;
 
 // Basic library functions
@@ -397,12 +391,13 @@ type
     opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl;
   TLibGit2_git_worktree_free = procedure(wt: git_worktree); cdecl;
 
-{$IFDEF NEXTPAS_CORE_GIT_LIBGIT2_STATIC}
-function static_git_libgit2_init: cint; cdecl; external LIBGIT2_LIB name 'git_libgit2_init';
-function static_git_libgit2_shutdown: cint; cdecl; external LIBGIT2_LIB name 'git_libgit2_shutdown';
-function static_git_libgit2_version(major, minor, rev: Pcint): cint; cdecl; external LIBGIT2_LIB name 'git_libgit2_version';
-function static_git_repository_open(out repo: git_repository; const path: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_repository_open';
-function static_git_repository_init(out repo: git_repository; const path: PChar; is_bare: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_repository_init';
+var
+  GLibGit2Handle: TPlatformLibrary;
+  GLibGit2Loaded: Boolean = False;
+  GLibGit2LoadedPath: string = '';
+  GLibGit2Lock: TRTLCriticalSection;
+  dyn_git_libgit2_init: TLibGit2_git_libgit2_init = nil;
+  dyn_git_libgit2_shutdown: TLibGit2_git_libgit2_shutdown = nil;
 function static_git_repository_discover(out out_buf: git_buf; const start_path: PChar; across_fs: cint; const ceiling_dirs: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_repository_discover';
 function static_git_repository_head(out head_ref: git_reference; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_head';
 function static_git_repository_is_bare(repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_is_bare';
