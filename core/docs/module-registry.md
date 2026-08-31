@@ -81,6 +81,8 @@ completion claim.
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML format | `nextpas.core.yaml` | L0-L1 | focused-runtime |
+| `zip` | L2 | ZIP archive (store/deflate/Zip64/AES/descriptor/sequential) | `nextpas.core.zip` | L0-L1 plus compress/zlib/aes/crc32/time | focused-runtime, source-contract — 12门 `HEAPTRC OK` + 双锚点 Python/Go + bench 16项 + S51 单源与纯化收敛（`IsSafe inline`、`common DOS 委托 base`、`compress 5 one-shot 纯 Pas 兜底`） |
+| `zlib` | L2 | zlib pure/ffi (RFC1950/1951) | `nextpas.core.zlib` | L0-L1 plus platform.dl/compress.base | focused-runtime, source-contract — 5 文件四件套（`base/intf/pure/ffi/pas`）、`zbAuto` 纯优先回落、32MiB bomb、`Adler-32` 单源 |
 
 ## Next Architecture Routes
 
