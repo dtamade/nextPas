@@ -127,7 +127,7 @@ end;
 procedure TSevenZRcDecoder.Normalize; inline;
 begin
   {$PUSH}{$Q-}{$R-}
-  if FRange < C_RC_TOP_VALUE then
+  while FRange < C_RC_TOP_VALUE do
   begin
     FRange := FRange shl 8;
     FCode := (FCode shl 8) or NextByte;
@@ -320,7 +320,7 @@ end;
 
 procedure TSevenZRcEncoder.Normalize; inline;
 begin
-  if FRange < C_RC_TOP_VALUE then
+  while FRange < C_RC_TOP_VALUE do
   begin
     FRange := FRange shl 8;
     ShiftLow;
