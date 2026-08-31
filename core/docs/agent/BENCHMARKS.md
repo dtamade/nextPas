@@ -76,6 +76,10 @@ decode 体 = reasoning/function_call/message 14 输出项混合。出体字节�
 ## 4. 回归门禁 `bench_regression`（F-H23 闭环，G6 2026-08-29）
 
 > 单一事实源：`core/benchmarks/nextpas.core.agent/bench_regression/`（`make bench-regression`，阈值 10% p50）。
+> **v2（2026-08-31）噪声感知**：`check_regression.py` 读 `/proc/loadavg` 负载比（load1/nproc），
+> 超 `NOISE_RATIO=0.6`（实测 0.63 负载下 loop 曾波动 +34%）时超阈值降级为 WARN 而非 REGRESSION——
+> 高负载下先做同负载 A/B 对比证伪再定论（2026-08-31 实测 0.73 负载下 +25.5% 误报被 A/B 证伪）；
+> `sample_count < 3` 的读数 skip（不可信）。
 
 - 对比口径：**p50**（StdDev 抖动不计）；基线为 `build/bench-agent-*.json` 冻结值（`§2–§2.2`），CI 以 `bench_regression` 读取冻结 JSON 并 `performance-compare --threshold 10%` 断言。
 - 任何 wave 收口跑五基准（`bench_fold` / `bench_sse_feed` / `bench_loop_overhead` / `bench_wire_codec` / `bench_wire_headers`），劣化 **>10%** 必须在整改记录解释或回退；**无叙事的劣化不落地**（PERFORMANCE §5 同约束）。
