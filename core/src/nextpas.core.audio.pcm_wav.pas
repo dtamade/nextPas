@@ -119,11 +119,7 @@ begin
       ClearPcmWavData(AData);
       Result := False;
     end;
-    on E: Exception do
-    begin
-      ClearPcmWavData(AData);
-      Result := False;
-    end;
+    else raise;
   end;
 end;
 
