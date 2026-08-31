@@ -1,10 +1,14 @@
 # Agent Landing 操作手册 — 待 main 稳定窗口
 
-> 状态：**待执行**（2026-08-31 15:00 创建）
+> 状态：**待执行**（2026-08-31 15:00 创建，14:40 更新）
 > 背景：agent perfection 线（W13-W18）+ 反哺收口已完整验证，候选分支就绪；
 > main 当前处于多 lane 高频合入期（1-2 min/commit），且 agent 域被其他同事
 > 占用（`9104ab2da fix(core,ssh): agent heaptrc 收口`），landing 需等待
 > agent 域外部工作收敛 + main 合入高峰过去。
+> 最新：worktree 分支 HEAD `56ac144e2`（含 landing 手册）；
+> 可验证 gate（不依赖 compress）全绿：test_sse 13/13、test_provider_common 11/11；
+> test_compile_skeleton/test_codecs 受外部 `compress.deflate` 未完成重构阻塞
+> （`ZlibPure*` 缺失，与 agent 无关，待外部收敛后复跑）。
 
 ## 资产位置
 
