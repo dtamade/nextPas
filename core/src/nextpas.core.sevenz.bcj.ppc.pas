@@ -15,7 +15,8 @@ unit nextpas.core.sevenz.bcj.ppc;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.sevenz.bcj.utils;
 
 procedure SevenZBcjPpcConvert(var AData: TBytes; AStartOffset: UInt32;
   AEncode: Boolean);
@@ -40,9 +41,9 @@ begin
         (UInt32(AData[LI + 1]) shl 16) or (UInt32(AData[LI + 2]) shl 8) or
         (UInt32(AData[LI + 3]) and not UInt32(3)));
       if AEncode then
-        LDest := UInt32(AStartOffset) + UInt32(LI) + LSrc
+        LDest := AddPc(AddPc(UInt32(AStartOffset), UInt32(LI)), LSrc)
       else
-        LDest := LSrc - (UInt32(AStartOffset) + UInt32(LI));
+        LDest := SubPc(LSrc, AddPc(UInt32(AStartOffset), UInt32(LI)));
       AData[LI] := $48 or Byte((LDest shr 24) and $03);
       AData[LI + 1] := Byte((LDest shr 16) and $FF);
       AData[LI + 2] := Byte((LDest shr 8) and $FF);

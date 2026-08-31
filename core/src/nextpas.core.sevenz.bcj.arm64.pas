@@ -14,28 +14,13 @@ unit nextpas.core.sevenz.bcj.arm64;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.sevenz.bcj.utils;
 
 procedure SevenZBcjArm64Convert(var AData: TBytes; AStartOffset: UInt32;
   AEncode: Boolean);
 
 implementation
-
-function Read32Le(const AData: TBytes; AOff: SizeInt): UInt32; inline;
-begin
-  {$PUSH}{$Q-}{$R-}
-  Result := UInt32(AData[AOff]) or (UInt32(AData[AOff + 1]) shl 8) or
-    (UInt32(AData[AOff + 2]) shl 16) or (UInt32(AData[AOff + 3]) shl 24);
-  {$POP}
-end;
-
-procedure Write32Le(var AData: TBytes; AOff: SizeInt; AVal: UInt32); inline;
-begin
-  AData[AOff] := Byte(AVal and $FF);
-  AData[AOff + 1] := Byte((AVal shr 8) and $FF);
-  AData[AOff + 2] := Byte((AVal shr 16) and $FF);
-  AData[AOff + 3] := Byte((AVal shr 24) and $FF);
-end;
 
 procedure SevenZBcjArm64Convert(var AData: TBytes; AStartOffset: UInt32;
   AEncode: Boolean);
@@ -51,7 +36,7 @@ begin
   while LI < LSize do
   begin
     LPC := AStartOffset + UInt32(LI);
-    LInstr := Read32Le(AData, LI);
+    LInstr := ReadLE32(AData, LI);
     if (LInstr shr 26) = $25 then
     begin
       { BL:26 位 }
@@ -59,18 +44,18 @@ begin
       LInstr := $94000000;
       LPC := LPC shr 2;
       if not AEncode then
-        LPC := 0 - LPC;
+        LPC := SubPc(0, LPC);
       {$PUSH}{$Q-}{$R-}
-      LInstr := LInstr or ((LSrc + LPC) and $03FFFFFF);
+      LInstr := LInstr or ((AddPc(LSrc, LPC)) and $03FFFFFF);
       {$POP}
-      Write32Le(AData, LI, LInstr);
+      WriteLE32(AData, LI, LInstr);
     end
     else if (LInstr and $9F000000) = $90000000 then
     begin
       { ADRP }
       LSrc := ((LInstr shr 29) and 3) or ((LInstr shr 3) and $001FFFFC);
       {$PUSH}{$Q-}{$R-}
-      if ((LSrc + $00020000) and $001C0000) <> 0 then
+      if ((AddPc(LSrc, $00020000)) and $001C0000) <> 0 then
       begin
         Inc(LI, 4);
         Continue;
@@ -78,13 +63,13 @@ begin
       LInstr := LInstr and $9000001F;
       LPC := LPC shr 12;
       if not AEncode then
-        LPC := 0 - LPC;
-      LDest := LSrc + LPC;
+        LPC := SubPc(0, LPC);
+      LDest := AddPc(LSrc, LPC);
       LInstr := LInstr or ((LDest and 3) shl 29);
       LInstr := LInstr or ((LDest and $0003FFFC) shl 3);
-      LInstr := LInstr or ((0 - (LDest and $00020000)) and $00E00000);
+      LInstr := LInstr or ((SubPc(0, (LDest and $00020000))) and $00E00000);
       {$POP}
-      Write32Le(AData, LI, LInstr);
+      WriteLE32(AData, LI, LInstr);
     end;
     Inc(LI, 4);
   end;

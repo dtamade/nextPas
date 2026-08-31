@@ -14,7 +14,8 @@ unit nextpas.core.sevenz.bcj.arm;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.sevenz.bcj.utils;
 
 { BCJ ARM 原位转换。AEncode=True 编码（绝对→相对取反？按 xz 定义
   is_encoder=True 为相对→绝对），AStartOffset 为镜像基址（props 小端） }
@@ -40,11 +41,11 @@ begin
       LSrc := (UInt32(AData[LI + 2]) shl 16) or (UInt32(AData[LI + 1]) shl 8) or
         UInt32(AData[LI]);
       LSrc := LSrc shl 2;
-      LPC := AStartOffset + UInt32(LI) + 8;
+      LPC := AddPc(AddPc(AStartOffset, UInt32(LI)), 8);
       if AEncode then
-        LDest := LPC + LSrc
+        LDest := AddPc(LPC, LSrc)
       else
-        LDest := LSrc - LPC;
+        LDest := SubPc(LSrc, LPC);
       LDest := LDest shr 2;
       AData[LI + 2] := Byte((LDest shr 16) and $FF);
       AData[LI + 1] := Byte((LDest shr 8) and $FF);

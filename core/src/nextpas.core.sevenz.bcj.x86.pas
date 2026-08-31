@@ -16,7 +16,8 @@ unit nextpas.core.sevenz.bcj.x86;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.sevenz.bcj.utils;
 
 { BCJ x86 原位转换。AEncode=True：绝对→相对（编码方向）；
   AEncode=False：相对→绝对（解码方向）。AStartIp 为镜像基址
@@ -89,11 +90,11 @@ begin
         (UInt32(AData[LBP + 2]) shl 8) or UInt32(AData[LBP + 1]);
       while True do
       begin
-        LCur := UInt32(AStartIp) + UInt32(LNowPos + LBP + 5);
+        LCur := AddPc(UInt32(AStartIp), UInt32(LNowPos + LBP + 5));
         if AEncode then
-          LDest := LSrc + LCur
+          LDest := AddPc(LSrc, LCur)
         else
-          LDest := LSrc - LCur;
+          LDest := SubPc(LSrc, LCur);
         if LPrevMask = 0 then
           Break;
         LI := Int64(C_MASK_TO_BIT_NUMBER[LPrevMask shr 1]);
