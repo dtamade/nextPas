@@ -20,6 +20,7 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.text.conv,
   np_semantic_model;
 
@@ -91,7 +92,6 @@ type
 implementation
 
 uses
-  nextpas.core.base,
   nextpas.core.bytes.builder,
   nextpas.core.bytes.cursor,
   nextpas.core.hash;
