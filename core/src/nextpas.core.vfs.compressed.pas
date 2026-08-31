@@ -79,6 +79,7 @@ begin
   try
     LStream := FInner.OpenRead(APath);
   except
+    on E: EVfsError do raise;
     on E: Exception do raise EVfsError.CreateCtx('stat', APath, E.Message);
   end;
   try
