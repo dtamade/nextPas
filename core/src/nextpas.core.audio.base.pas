@@ -85,29 +85,6 @@ type
     DefaultFormat: TAudioFormat;
   end;
 
-  { 3D spatial primitives — canonical in base (P12 promotion from spatial.intf) }
-  TAudioVec3 = record X, Y, Z: Single; end;
-  TAudioDistanceModel = (dmInverse, dmLinear, dmExponent);
-  TAudioListener = record
-    Position: TAudioVec3;
-    Velocity: TAudioVec3;
-    Forward: TAudioVec3; // default (0,0,-1)
-    Up: TAudioVec3;      // default (0,1,0)
-    Gain: Single;        // default 1.0
-  end;
-  TAudioSpatialParams = record
-    Position: TAudioVec3;
-    Velocity: TAudioVec3;
-    MinDistance: Single; // 1.0
-    MaxDistance: Single; // 100
-    Rolloff: Single;     // 1.0
-    DistanceModel: TAudioDistanceModel;
-    DopplerFactor: Single; // 1.0, 0=disable
-    ConeInnerAngle: Single;
-    ConeOuterAngle: Single;
-    ConeOuterGain: Single;
-  end;
-
   { 设备生命周期事件分类（经 MPSC 上报） }
   TDeviceEventKind = (
     devStarted,        // Start 完成
@@ -132,9 +109,8 @@ function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioCha
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioFormatCreate(ASampleRate, AChannels: Integer;
   ASampleFormat: TAudioSampleFormat): TAudioFormat; inline;
-// single-source geometric growth for all Ensure*Capacity variants
-procedure AudioEnsureCapacity(var ACap: Integer; ANeeded: Integer; AInit: Integer = 4); inline;
-function AudioEnsureBytesCapacity(var ABytes: TBytes; ANeeded: Integer): Integer; inline;
+function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
+function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer;
 
 implementation
 
@@ -234,7 +210,7 @@ begin
   else if AChannels = 7 then
     LMask := AudioMaskFrontLeft or AudioMaskFrontRight or AudioMaskFrontCenter or
       AudioMaskLowFrequency or AudioMaskBackLeft or AudioMaskBackRight or
-      AudioMaskSideLeft or AudioMaskSideRight;
+      AudioMaskSideLeft;
 
   Result.SampleRate := ASampleRate;
   Result.Channels := AChannels;
@@ -244,24 +220,6 @@ begin
   { Normalize layout via mask for canonical cases }
   if (AChannels in [1, 2, 4, 6, 8]) then
     Result.ChannelLayout := AudioChannelLayoutForMask(Result.ChannelMask, Result.Channels);
-end;
-
-// single-source geometric growth for all Ensure*Capacity variants
-procedure AudioEnsureCapacity(var ACap: Integer; ANeeded: Integer; AInit: Integer); inline;
-begin
-  if ACap >= ANeeded then Exit;
-  if ACap < AInit then ACap := AInit;
-  while ACap < ANeeded do ACap := ACap * 2;
-end;
-
-function AudioEnsureBytesCapacity(var ABytes: TBytes; ANeeded: Integer): Integer; inline;
-var
-  LCap: Integer;
-begin
-  LCap := Length(ABytes);
-  AudioEnsureCapacity(LCap, ANeeded);
-  if Length(ABytes) < LCap then SetLength(ABytes, LCap);
-  Result := LCap;
 end;
 
 { TAudioFormat }
@@ -282,17 +240,10 @@ begin
 end;
 
 function TAudioFormat.FramesForMs(AMs: Integer): Integer;
-var
-  L: Int64;
 begin
   if AMs <= 0 then
     Exit(0);
-  L := (Int64(SampleRate) * Int64(AMs)) div 1000;
-  if L > High(Integer) then
-    Exit(High(Integer));
-  if L < Low(Integer) then
-    Exit(Low(Integer));
-  Result := Integer(L);
+  Result := Integer((Int64(SampleRate) * Int64(AMs)) div 1000);
 end;
 
 function TAudioFormat.IsValid: Boolean;
@@ -326,34 +277,43 @@ begin
 end;
 
 function TAudioBuffer.SampleCount: Integer;
-var
-  L: Int64;
 begin
-  L := Int64(FrameCount) * Int64(Format.Channels);
-  if L > High(Integer) then
-    Exit(High(Integer));
-  if L < Low(Integer) then
-    Exit(Low(Integer));
-  Result := Integer(L);
+  Result := FrameCount * Format.Channels;
 end;
 
 { TAudioClock }
 
 function TAudioClock.ToDurationNs: Int64;
-var
-  LSec, LRem, LNs: UInt64;
 begin
   if SampleRate <= 0 then
     Exit(0);
-  LSec := Frame div UInt64(SampleRate);
-  LRem := Frame mod UInt64(SampleRate);
-  if LSec > High(UInt64) div 1000000000 then
-    Exit(High(Int64));
-  LNs := LSec * 1000000000;
-  LNs := LNs + (LRem * 1000000000) div UInt64(SampleRate);
-  if LNs > UInt64(High(Int64)) then
-    Exit(High(Int64));
-  Result := Int64(LNs);
+  Result := Int64((Frame * UInt64(1000000000)) div UInt64(SampleRate));
+end;
+
+function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
+var LBytes: Integer;
+begin
+  if not AFormat.IsValid then
+    raise EInvalidArgument.Create('AudioBufferCreateSilence: invalid format');
+  if AFrames < 0 then
+    raise EInvalidArgument.Create('AudioBufferCreateSilence: negative frames');
+  Result.Format := AFormat;
+  Result.FrameCount := AFrames;
+  LBytes := AFrames * AFormat.BlockAlign;
+  SetLength(Result.Data, LBytes);
+  if LBytes > 0 then
+    FillChar(Result.Data[0], LBytes, 0);
+end;
+
+function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer;
+begin
+  if not ABuf.Format.IsValid then
+    raise EInvalidArgument.Create('AudioBufferClone: invalid format');
+  if ABuf.FrameCount < 0 then
+    raise EInvalidArgument.Create('AudioBufferClone: negative FrameCount');
+  Result.Format := ABuf.Format;
+  Result.FrameCount := ABuf.FrameCount;
+  Result.Data := Copy(ABuf.Data, 0, Length(ABuf.Data));
 end;
 
 {$POP}

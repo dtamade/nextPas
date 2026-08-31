@@ -5,10 +5,13 @@ uses nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core
 type T = class
   procedure TestMixInto_Basic;
   procedure TestMixInto_Gain;
+  procedure TestMixInto_GainZero;
+  procedure TestMixInto_GainOne;
   procedure TestMixInto_Offset;
   procedure TestMixInto_S16_Src;
   procedure TestMixInto_MismatchThrows;
   procedure TestApplyGain;
+  procedure TestApplyGain_ZeroOne;
   procedure TestApplyGainRamp;
   procedure TestNormalizePeak;
   procedure TestNormalizeRMS;
@@ -51,6 +54,22 @@ begin
   P:=PSingle(@D.Data[0]); CheckNear(1.0,P[0],1e-6,'gain 0.5*2=1');
 end;
 
+procedure T.TestMixInto_GainZero;
+var D,S: TAudioBuffer; P: PSingle;
+begin
+  D:=MakeF32(48000,1,10,5.0); S:=MakeF32(48000,1,10,10.0);
+  MixInto(D,S,0,0);
+  P:=PSingle(@D.Data[0]); CheckNear(5.0,P[0],1e-6,'gain 0 no change'); CheckNear(5.0,P[9],1e-6,'gain 0 tail');
+end;
+
+procedure T.TestMixInto_GainOne;
+var D,S: TAudioBuffer; P: PSingle;
+begin
+  D:=MakeF32(48000,1,10,1.0); S:=MakeF32(48000,1,10,2.0);
+  MixInto(D,S,1.0,0);
+  P:=PSingle(@D.Data[0]); CheckNear(3.0,P[0],1e-6,'gain 1 add');
+end;
+
 procedure T.TestMixInto_Offset;
 var D,S: TAudioBuffer;
 begin
@@ -83,6 +102,15 @@ var B: TAudioBuffer; P: PSingle;
 begin
   B:=MakeF32(48000,1,4,1.0); ApplyGain(B,0.5);
   P:=PSingle(@B.Data[0]); CheckNear(0.5,P[0],1e-6,'gain 0.5'); CheckNear(0.5,P[3],1e-6,'gain last');
+end;
+
+procedure T.TestApplyGain_ZeroOne;
+var B: TAudioBuffer; P: PSingle;
+begin
+  B:=MakeF32(48000,1,4,2.0); ApplyGain(B,0);
+  P:=PSingle(@B.Data[0]); CheckNear(0,P[0],1e-6,'gain 0 zero'); CheckNear(0,P[3],1e-6,'gain 0 tail');
+  B:=MakeF32(48000,1,4,2.0); ApplyGain(B,1.0);
+  P:=PSingle(@B.Data[0]); CheckNear(2.0,P[0],1e-6,'gain 1 no-op');
 end;
 
 procedure T.TestApplyGainRamp;
@@ -135,10 +163,13 @@ begin
   C:=T.Create; S:=TTestSuite.Create('nextpas.core.audio.mix');
   S.Test('mixinto basic', @C.TestMixInto_Basic);
   S.Test('mixinto gain', @C.TestMixInto_Gain);
+  S.Test('mixinto gain zero', @C.TestMixInto_GainZero);
+  S.Test('mixinto gain one', @C.TestMixInto_GainOne);
   S.Test('mixinto offset', @C.TestMixInto_Offset);
   S.Test('mixinto s16 src', @C.TestMixInto_S16_Src);
   S.Test('mixinto mismatch throws', @C.TestMixInto_MismatchThrows);
   S.Test('apply gain', @C.TestApplyGain);
+  S.Test('apply gain zero/one', @C.TestApplyGain_ZeroOne);
   S.Test('apply gain ramp', @C.TestApplyGainRamp);
   S.Test('normalize peak', @C.TestNormalizePeak);
   S.Test('normalize rms', @C.TestNormalizeRMS);

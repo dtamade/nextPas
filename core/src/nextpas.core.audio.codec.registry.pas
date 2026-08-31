@@ -33,6 +33,9 @@ implementation
 uses
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.aiff,
+  nextpas.core.audio.codec.flac.decoder,
+  nextpas.core.audio.codec.mp3.decoder,
+  nextpas.core.audio.codec.vorbis.decoder,
   nextpas.core.audio.errors,
   nextpas.core.exception,
   nextpas.core.fs,
@@ -51,6 +54,9 @@ begin
   GInited := True;
   AudioRegisterDecoder(@CreateWavDecoder);
   AudioRegisterDecoder(@CreateAiffDecoder);
+  AudioRegisterDecoder(@CreateFlacDecoder);
+  AudioRegisterDecoder(@CreateMp3Decoder);
+  AudioRegisterDecoder(@CreateVorbisDecoder);
 end;
 
 procedure AudioRegisterDecoder(AFactory: TDecoderFactory);
@@ -89,9 +95,29 @@ var
   LDec: IAudioDecoder;
   LRes: TAudioProbeResult;
   I: Integer;
+  LCapped: TBytes;
 begin
   Result := prUnknown;
   if Length(APrefix) = 0 then Exit;
+  // Probe capped <=4KB via bytes.cursor semantics: never inspect beyond 4096 prefix
+  if Length(APrefix) > 4096 then
+  begin
+    SetLength(LCapped, 4096);
+    Move(APrefix[0], LCapped[0], 4096);
+    LFactories := SnapshotFactories;
+    for I := 0 to High(LFactories) do
+    begin
+      try
+        LDec := LFactories[I]();
+        if not Assigned(LDec) then Continue;
+        LRes := LDec.Probe(LCapped);
+        if LRes <> prUnknown then Exit(LRes);
+      except
+        Continue;
+      end;
+    end;
+    Exit;
+  end;
   LFactories := SnapshotFactories;
   for I := 0 to High(LFactories) do
   begin
