@@ -19,7 +19,8 @@ function BZip2FfiIsAvailable: Boolean;
 implementation
 
 uses
-  Classes, SysUtils, bzip2stream,
+  Classes, bzip2stream,
+  nextpas.core.text.utils,
   nextpas.core.errors,
   nextpas.core.compress.bzip2.ffi;
 
