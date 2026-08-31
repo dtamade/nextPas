@@ -11,6 +11,7 @@ uses
   nextpas.core.exception,
   nextpas.core.db.base,
   nextpas.core.db.intf,
+  nextpas.core.db.capprobe,
   nextpas.core.db.pg.base,
   nextpas.core.db.pg.conn;
 
@@ -375,6 +376,11 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
 
     { IDbCancelControl（V3-B6）：Arm/Disarm 为无操作（PQcancel 无需
       武装），RequestCancel 经 PQcancel 尽力中断 }
@@ -864,6 +870,31 @@ end;
 function TDbPgConnection.MaxPlaceholders: Integer;
 begin
   Result := 65535;  { 扩展协议参数上限 }
+end;
+
+function TDbPgConnection.ServerVersion: Integer;
+begin
+  Result := FConn.ServerVersion;
+end;
+
+function TDbPgConnection.SupportsNativeVector: Boolean;
+begin
+  Result := ProbeNativeVector(ServerVersion, False);
+end;
+
+function TDbPgConnection.SupportsJsonPath: Boolean;
+begin
+  Result := ProbeJsonPath(ServerVersion);
+end;
+
+function TDbPgConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := ProbeRangeTypes(ServerVersion);
+end;
+
+function TDbPgConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := ProbeSupportsBulkCopy(dbkPostgres, ServerVersion);
 end;
 
 destructor TDbPgConnection.Destroy;
