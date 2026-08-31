@@ -5,24 +5,18 @@ unit nextpas.compiler.syntax.preprocessor;
 interface
 
 uses
-<<<<<<<< HEAD:compiler/syntax/np_preprocessor.pas
-  nextpas.compiler.syntax.preprocessor;
-========
-  nextpas.core.mem.intf,
-  nextpas.core.collections.vec,
-  np_base_types, nextpas.compiler.syntax.lexer;
->>>>>>>> codex/compiler-system:compiler/src/nextpas.compiler.syntax.preprocessor.pas
+  np_preprocessor;
 
 type
-  TIncludePathVec = nextpas.compiler.syntax.preprocessor.TIncludePathVec;
-  TFileIncludeResolver = nextpas.compiler.syntax.preprocessor.TFileIncludeResolver;
-  TDefineEntry = nextpas.compiler.syntax.preprocessor.TDefineEntry;
-  TDefineEntryVec = nextpas.compiler.syntax.preprocessor.TDefineEntryVec;
-  TDefineTable = nextpas.compiler.syntax.preprocessor.TDefineTable;
-  TConditionalFrame = nextpas.compiler.syntax.preprocessor.TConditionalFrame;
-  TConditionalFrameVec = nextpas.compiler.syntax.preprocessor.TConditionalFrameVec;
-  TTokenVec = nextpas.compiler.syntax.preprocessor.TTokenVec;
-  TPreprocessor = nextpas.compiler.syntax.preprocessor.TPreprocessor;
+  IIncludeResolver = np_preprocessor.IIncludeResolver;
+  TIncludePathVec = np_preprocessor.TIncludePathVec;
+  TFileIncludeResolver = np_preprocessor.TFileIncludeResolver;
+  TDefineEntry = np_preprocessor.TDefineEntry;
+  TDefineEntryVec = np_preprocessor.TDefineEntryVec;
+  TDefineTable = np_preprocessor.TDefineTable;
+  TConditionalFrame = np_preprocessor.TConditionalFrame;
+  TConditionalFrameVec = np_preprocessor.TConditionalFrameVec;
+  TPreprocessor = np_preprocessor.TPreprocessor;
 
 implementation
 
