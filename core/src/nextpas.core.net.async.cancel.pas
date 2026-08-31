@@ -26,6 +26,7 @@ procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
 implementation
 
 uses
+  nextpas.core.system,
   nextpas.core.net.cancel;
 
 type
@@ -177,7 +178,7 @@ begin
   if FInner = nil then
     Exit;
   try
-    if Supports(FInner, INetCancelWaitable, LW) then
+    if nextpas.core.system.Supports(FInner, INetCancelWaitable, LW) then
       Result := LW.WakeHandle;
   except
     Result := 0;
@@ -191,7 +192,7 @@ begin
   if FInner = nil then
     Exit;
   try
-    if Supports(FInner, INetCancelWaitable, LW) then
+    if nextpas.core.system.Supports(FInner, INetCancelWaitable, LW) then
       LW.DrainWake;
   except
   end;
