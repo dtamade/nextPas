@@ -5,8 +5,10 @@ unit nextpas.core.audio.timeline;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, Math,
+  SysUtils, Classes, Math,
   nextpas.core.base,
+  nextpas.core.audio.mix,
+  nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.timeline.intf,
@@ -21,11 +23,16 @@ type
     FNextClip: Integer;
     FPosition: UInt64;
     FLoop: Boolean;
-    FLock: TCriticalSection;
+    FLock: TRecursiveMutex;
     FViolations: Int64;
     FTrackFree: array of Integer;
     FTrackDead: Integer;
     FSnapshotTracks: array of TTimelineTrack;
+    // scratch for per-Track clip counts during FillRealtime snapshot — reuse to keep zero alloc
+    FSnapshotClipNeeds: array of Integer;
+    procedure EnsureSnapshotCapacity(ANeeded: Integer);
+    procedure EnsureSnapshotClipCapacity(ATrack: Integer; ANeeded: Integer);
+    procedure EnsureSnapshotClipNeedsCapacity(ANeeded: Integer); inline;
     function FindTrack(ATrack: TTimelineTrackId): Integer;
     function FindClip(var ATrack: TTimelineTrack; AClip: TTimelineClipId): Integer;
     function CalcDuration: UInt64;
@@ -75,7 +82,7 @@ begin
   FNextClip := 1;
   FPosition := 0;
   FLoop := False;
-  FLock := TCriticalSection.Create;
+  FLock := TRecursiveMutex.Create;
   SetLength(FTracks,0);
   SetLength(FTrackFree,0);
   SetLength(FSnapshotTracks,0);
@@ -85,9 +92,9 @@ end;
 destructor TTimelineImpl.Destroy; begin FLock.Free; inherited; end;
 
 function TTimelineImpl.GetFormat: TAudioFormat; begin Result := FFormat; end;
-function TTimelineImpl.GetPosition: UInt64; begin FLock.Enter; try Result:=FPosition; finally FLock.Leave; end; end;
-function TTimelineImpl.GetLoop: Boolean; begin FLock.Enter; try Result:=FLoop; finally FLock.Leave; end; end;
-procedure TTimelineImpl.SetLoop(ALoop: Boolean); begin FLock.Enter; try FLoop:=ALoop; finally FLock.Leave; end; end;
+function TTimelineImpl.GetPosition: UInt64; begin FLock.Acquire; try Result:=FPosition; finally FLock.Release; end; end;
+function TTimelineImpl.GetLoop: Boolean; begin FLock.Acquire; try Result:=FLoop; finally FLock.Release; end; end;
+procedure TTimelineImpl.SetLoop(ALoop: Boolean); begin FLock.Acquire; try FLoop:=ALoop; finally FLock.Release; end; end;
 
 function TTimelineImpl.ValidateGain(AGain: Single): Single;
 begin
@@ -118,6 +125,31 @@ begin
   FTrackDead:=0;
 end;
 
+procedure TTimelineImpl.EnsureSnapshotCapacity(ANeeded: Integer);
+var LCap: Integer;
+begin
+  LCap := Length(FSnapshotTracks);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotTracks) <> LCap then SetLength(FSnapshotTracks, LCap);
+end;
+
+procedure TTimelineImpl.EnsureSnapshotClipCapacity(ATrack: Integer; ANeeded: Integer);
+var LCap: Integer;
+begin
+  if (ATrack < 0) or (ATrack >= Length(FSnapshotTracks)) then Exit;
+  LCap := Length(FSnapshotTracks[ATrack].Clips);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotTracks[ATrack].Clips) <> LCap then SetLength(FSnapshotTracks[ATrack].Clips, LCap);
+end;
+
+procedure TTimelineImpl.EnsureSnapshotClipNeedsCapacity(ANeeded: Integer);
+var LCap: Integer;
+begin
+  LCap := Length(FSnapshotClipNeeds);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotClipNeeds) <> LCap then SetLength(FSnapshotClipNeeds, LCap);
+end;
+
 function TTimelineImpl.CalcDuration: UInt64;
 var i,j: Integer; e: UInt64;
 begin
@@ -127,7 +159,7 @@ begin
     begin e := FTracks[i].Clips[j].StartFrame + UInt64(FTracks[i].Clips[j].Buffer.FrameCount); if e > Result then Result := e; end;
 end;
 
-function TTimelineImpl.GetDuration: UInt64; begin FLock.Enter; try Result:=CalcDuration; finally FLock.Leave; end; end;
+function TTimelineImpl.GetDuration: UInt64; begin FLock.Acquire; try Result:=CalcDuration; finally FLock.Release; end; end;
 
 function TTimelineImpl.FindTrack(ATrack: TTimelineTrackId): Integer;
 var i: Integer; begin for i:=0 to High(FTracks) do if FTracks[i].Alive and (FTracks[i].Id=ATrack) then Exit(i); Result:=-1; end;
@@ -139,7 +171,7 @@ function TTimelineImpl.AddTrack(AGain: Single): TTimelineTrackId;
 var idx: Integer;
 begin
   AGain:=ValidateGain(AGain);
-  FLock.Enter; try
+  FLock.Acquire; try
     Result:=FNextTrack; Inc(FNextTrack);
     if Length(FTrackFree)>0 then
     begin
@@ -152,13 +184,13 @@ begin
       idx:=Length(FTracks); SetLength(FTracks, idx+1);
       FTracks[idx].Id:=Result; FTracks[idx].Gain:=AGain; FTracks[idx].Pan:=0; FTracks[idx].Muted:=False; FTracks[idx].Solo:=False; FTracks[idx].Alive:=True; SetLength(FTracks[idx].Clips,0);
     end;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TTimelineImpl.RemoveTrack(ATrack: TTimelineTrackId): Boolean;
 var idx: Integer;
 begin
-  FLock.Enter; try
+  FLock.Acquire; try
     idx:=FindTrack(ATrack); if idx<0 then Exit(False);
     FTracks[idx].Alive:=False;
     SetLength(FTracks[idx].Clips,0);
@@ -167,24 +199,24 @@ begin
     Inc(FTrackDead);
     MaybeCompactTracks;
     Result:=True;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TTimelineImpl.SetTrackGain(ATrack: TTimelineTrackId; AGain: Single): Boolean;
 var idx: Integer;
-begin if IsNan(AGain) or IsInfinite(AGain) then Exit(False); AGain:=ValidateGain(AGain); FLock.Enter; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTracks[idx].Gain:=AGain; Result:=True; finally FLock.Leave; end; end;
+begin if IsNan(AGain) or IsInfinite(AGain) then Exit(False); AGain:=ValidateGain(AGain); FLock.Acquire; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTracks[idx].Gain:=AGain; Result:=True; finally FLock.Release; end; end;
 
 function TTimelineImpl.SetTrackPan(ATrack: TTimelineTrackId; APan: Single): Boolean;
 var idx: Integer;
-begin APan:=ValidatePan(APan); FLock.Enter; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTracks[idx].Pan:=APan; Result:=True; finally FLock.Leave; end; end;
+begin APan:=ValidatePan(APan); FLock.Acquire; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTracks[idx].Pan:=APan; Result:=True; finally FLock.Release; end; end;
 
 function TTimelineImpl.SetTrackMute(ATrack: TTimelineTrackId; AMuted: Boolean): Boolean;
 var idx: Integer;
-begin FLock.Enter; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTracks[idx].Muted:=AMuted; Result:=True; finally FLock.Leave; end; end;
+begin FLock.Acquire; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTracks[idx].Muted:=AMuted; Result:=True; finally FLock.Release; end; end;
 
 function TTimelineImpl.SetTrackSolo(ATrack: TTimelineTrackId; ASolo: Boolean): Boolean;
 var idx: Integer;
-begin FLock.Enter; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTracks[idx].Solo:=ASolo; Result:=True; finally FLock.Leave; end; end;
+begin FLock.Acquire; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTracks[idx].Solo:=ASolo; Result:=True; finally FLock.Release; end; end;
 
 function TTimelineImpl.AddClip(ATrack: TTimelineTrackId; const ABuffer: TAudioBuffer; AStartFrame: UInt64; AGain: Single; APan: Single): TTimelineClipId;
 var tidx, cidx, reuseIdx, i: Integer; tmp: TTimelineClip;
@@ -194,7 +226,7 @@ begin
   if (ABuffer.Format.SampleRate<>FFormat.SampleRate) or (ABuffer.Format.Channels<>FFormat.Channels) then raise EAudioTimelineError.Create('AddClip: format mismatch');
   AGain:=ValidateGain(AGain);
   APan:=ValidatePan(APan);
-  FLock.Enter; try
+  FLock.Acquire; try
     tidx:=FindTrack(ATrack); if tidx<0 then raise EAudioTimelineError.Create('AddClip: unknown track');
     Result:=FNextClip; Inc(FNextClip);
     // tombstone reuse for clips
@@ -219,13 +251,13 @@ begin
     // if reused dead slot caused unsorted, full sort pass for alive entries (small N)
     // compact threshold per track if dead > half
     // simple heuristic: if many dead, compact later on remove
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TTimelineImpl.RemoveClip(ATrack: TTimelineTrackId; AClip: TTimelineClipId): Boolean;
 var tidx, cidx, i, dead: Integer;
 begin
-  FLock.Enter; try
+  FLock.Acquire; try
     tidx:=FindTrack(ATrack); if tidx<0 then Exit(False);
     cidx:=FindClip(FTracks[tidx], AClip); if cidx<0 then Exit(False);
     FTracks[tidx].Clips[cidx].Alive:=False;
@@ -241,23 +273,23 @@ begin
       SetLength(FTracks[tidx].Clips, dead);
     end;
     Result:=True;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TTimelineImpl.TrackCount: Integer;
 var i,c: Integer;
-begin FLock.Enter; try c:=0; for i:=0 to High(FTracks) do if FTracks[i].Alive then Inc(c); Result:=c; finally FLock.Leave; end; end;
+begin FLock.Acquire; try c:=0; for i:=0 to High(FTracks) do if FTracks[i].Alive then Inc(c); Result:=c; finally FLock.Release; end; end;
 
 function TTimelineImpl.ClipCount(ATrack: TTimelineTrackId): Integer;
 var tidx,i,c: Integer;
-begin FLock.Enter; try tidx:=FindTrack(ATrack); if tidx<0 then Exit(0); c:=0; for i:=0 to High(FTracks[tidx].Clips) do if FTracks[tidx].Clips[i].Alive then Inc(c); Result:=c; finally FLock.Leave; end; end;
+begin FLock.Acquire; try tidx:=FindTrack(ATrack); if tidx<0 then Exit(0); c:=0; for i:=0 to High(FTracks[tidx].Clips) do if FTracks[tidx].Clips[i].Alive then Inc(c); Result:=c; finally FLock.Release; end; end;
 
 procedure TTimelineImpl.Clear;
 var i: Integer;
-begin FLock.Enter; try for i:=0 to High(FTracks) do begin FTracks[i].Alive:=False; SetLength(FTracks[i].Clips,0); end; SetLength(FTracks,0); SetLength(FTrackFree,0); FTrackDead:=0; FPosition:=0; finally FLock.Leave; end; end;
+begin FLock.Acquire; try for i:=0 to High(FTracks) do begin FTracks[i].Alive:=False; SetLength(FTracks[i].Clips,0); end; SetLength(FTracks,0); SetLength(FTrackFree,0); FTrackDead:=0; FPosition:=0; finally FLock.Release; end; end;
 
 function TTimelineImpl.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer; begin Result:=FillRealtime(ABuffer, AFrames); end;
-function TTimelineImpl.SeekTo(AFrame: UInt64): Boolean; begin FLock.Enter; try FPosition:=AFrame; Result:=True; finally FLock.Leave; end; end;
+function TTimelineImpl.SeekTo(AFrame: UInt64): Boolean; begin FLock.Acquire; try FPosition:=AFrame; Result:=True; finally FLock.Release; end; end;
 
 // HasSolo contract: solo overrides mute - if HasSolo then only solo tracks mix, muted and non-solo tracks are skipped; computed before MixSegment
 procedure TTimelineImpl.MixSegment(MixPtr: PSingle; const SnapTracks: array of TTimelineTrack;
@@ -266,6 +298,7 @@ var i,j, ch, k, srcOff, dstOff, copyFrames: Integer;
   TrackGain, ClipGain, Gain: Single;
   TrackPan, ClipPan, Pan: Single;
   Lgain, Rgain: Single;
+  LG: TAudioPanGains;
   Clip: TTimelineClip;
   SrcPtr: PSingle;
 begin
@@ -286,7 +319,7 @@ begin
       if copyFrames<=0 then Continue;
       ClipGain:=Clip.Gain; Pan:=(TrackPan+ClipPan)/2;
       Gain:=TrackGain*ClipGain;
-      if FFormat.Channels=2 then begin Lgain:=Cos((Pan+1)*Pi/4)*1.414213562; Rgain:=Sin((Pan+1)*Pi/4)*1.414213562; end else begin Lgain:=1; Rgain:=1; end;
+      if FFormat.Channels=2 then begin LG := PanLawGains0dB(Pan); Lgain := LG.X; Rgain := LG.Y; end else begin Lgain:=1; Rgain:=1; end;
       SrcPtr:=PSingle(@Clip.Buffer.Data[0]);
       if FFormat.Channels=2 then
       begin
@@ -311,14 +344,14 @@ end;
 
 function TTimelineImpl.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  Needed, i, avail: Integer;
+  Needed, i, avail, k, LNeed, NewCap: Integer;
   MixPtr: PSingle;
   HasSolo: Boolean;
-  SnapTracks: array of TTimelineTrack;
   SnapPos: UInt64;
   SnapLoop: Boolean;
   SnapDur: UInt64;
   FirstFrames, SecondFrames: Integer;
+  SnapTracks: array of TTimelineTrack;
 begin
   if AFrames<=0 then Exit(0);
   Needed:=Integer(Int64(AFrames)*Int64(FFormat.BlockAlign));
@@ -328,7 +361,7 @@ begin
   FillChar(ABuffer.Data[0], Needed, 0);
   MixPtr:=PSingle(@ABuffer.Data[0]);
   // two-phase snapshot scratch reuse: count+meta under lock -> ensure scratch capacity -> deep copy under lock (prototype for zero-alloc)
-  FLock.Enter;
+  FLock.Acquire;
   try
     SnapPos:=FPosition;
     SnapLoop:=FLoop;
@@ -342,20 +375,30 @@ begin
       if HasSolo and not FTracks[i].Solo then Continue;
       Inc(avail);
     end;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
   // two-phase snapshot scratch reuse - ensure scratch capacity before snapshot alloc (prototype: grow only, else reuse)
-  if Length(FSnapshotTracks) < avail then
-    SetLength(FSnapshotTracks, avail);
+  EnsureSnapshotCapacity(avail);
   // else reuse FSnapshotTracks storage - steady state avoids heap alloc
   // SnapTracks steady-state reuse of FSnapshotTracks: if Length(FSnapshotTracks) < avail then SetLength(FSnapshotTracks, avail) else reuse
   // deep copy Clip array isolation kept via Copy below - SnapTracks reuses FSnapshotTracks storage
   SnapTracks := FSnapshotTracks;
-  if Length(SnapTracks) < avail then
-    SetLength(SnapTracks, avail);
-  // else reuse SnapTracks storage - steady state avoids heap alloc (trim to avail after copy if needed)
   if avail > 0 then
   begin
-    FLock.Enter;
+    EnsureSnapshotClipNeedsCapacity(avail);
+    FLock.Acquire;
+    try
+      HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
+      k:=0;
+      for i:=0 to High(FTracks) do if FTracks[i].Alive then
+      begin
+        if FTracks[i].Muted then Continue;
+        if HasSolo and not FTracks[i].Solo then Continue;
+        if k < avail then begin FSnapshotClipNeeds[k]:=Length(FTracks[i].Clips); Inc(k); end;
+      end;
+    finally FLock.Release; end;
+    for k:=0 to avail-1 do
+      EnsureSnapshotClipCapacity(k, FSnapshotClipNeeds[k]);
+    FLock.Acquire;
     try
       // re-validate solo under lock (avoid TOCTOU if track set changed between phases) - solo overrides mute
       HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
@@ -364,17 +407,28 @@ begin
       begin
         if FTracks[i].Muted then Continue;
         if HasSolo and not FTracks[i].Solo then Continue; // solo overrides mute: non-solo tracks skipped when HasSolo
-        if avail < Length(SnapTracks) then
+        if avail < Length(FSnapshotTracks) then
         begin
-          SnapTracks[avail] := FTracks[i];
+          LNeed:=Length(FTracks[i].Clips);
+          // debt: ensured by EnsureSnapshotClipCapacity outside lock — no alloc here
           // deep copy clip array to isolate snapshot from concurrent Add/RemoveClip
-          SnapTracks[avail].Clips := Copy(FTracks[i].Clips, 0, Length(FTracks[i].Clips));
+          for k:=0 to LNeed-1 do
+            FSnapshotTracks[avail].Clips[k]:=FTracks[i].Clips[k];
+          for k:=LNeed to High(FSnapshotTracks[avail].Clips) do
+            FSnapshotTracks[avail].Clips[k].Alive:=False;
+          FSnapshotTracks[avail].Id:=FTracks[i].Id;
+          FSnapshotTracks[avail].Gain:=FTracks[i].Gain;
+          FSnapshotTracks[avail].Pan:=FTracks[i].Pan;
+          FSnapshotTracks[avail].Muted:=FTracks[i].Muted;
+          FSnapshotTracks[avail].Solo:=FTracks[i].Solo;
+          FSnapshotTracks[avail].Alive:=FTracks[i].Alive;
           Inc(avail);
         end;
       end;
-      if avail < Length(SnapTracks) then
-        SetLength(SnapTracks, avail);
-    finally FLock.Leave; end;
+      for k:=avail to High(FSnapshotTracks) do
+        FSnapshotTracks[k].Alive:=False;
+    finally FLock.Release; end;
+    SnapTracks := FSnapshotTracks;
   end;
   // snapshot mixing - lock free
   if SnapLoop and (SnapDur>0) and (SnapPos + UInt64(AFrames) > SnapDur) and (SnapPos < SnapDur) then
@@ -403,14 +457,14 @@ begin
   end;
   for i:=0 to AFrames*FFormat.Channels-1 do
   begin if MixPtr[i]>1.0 then MixPtr[i]:=1.0 else if MixPtr[i]<-1.0 then MixPtr[i]:=-1.0; end;
-  FLock.Enter;
+  FLock.Acquire;
   try
     // FPosition advance: SnapPos as base modulo wrap (loop cross-segment), Interlocked semantics preserved via FLock
     if SnapLoop and (SnapDur>0) then
       FPosition := (SnapPos + UInt64(AFrames)) mod SnapDur
     else
       FPosition := SnapPos + UInt64(AFrames);
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
   ABuffer.FrameCount:=AFrames;
   ABuffer.Format:=FFormat;
   Result:=AFrames;

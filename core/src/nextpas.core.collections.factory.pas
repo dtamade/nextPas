@@ -1,29 +1,26 @@
 unit nextpas.core.collections.factory;
-{**
- * @desc Collections factory owned implementation.
- *  Holds all concrete container creation so facade stays pure forwarding.
- *}
 
 {$I nextpas.core.settings.inc}
+{$DEFINE NEXTPAS_COLLECTIONS_FACADE}
 
 interface
 
 uses
   nextpas.core.base,
+  nextpas.core.math,
+  nextpas.core.mem.utils,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.arr.base,
   nextpas.core.collections.arr.intf,
   nextpas.core.collections.vec.base,
   nextpas.core.collections.vec.intf,
+  nextpas.core.collections.queue.intf,
+  nextpas.core.collections.deque.intf,
   nextpas.core.collections.vecdeque.base,
   nextpas.core.collections.vecdeque.intf,
-  nextpas.core.collections.deque.intf,
-  nextpas.core.collections.queue.intf,
-  nextpas.core.collections.list.intf,
-  nextpas.core.collections.forward_list.intf,
-  nextpas.core.collections.stack.intf,
-  nextpas.core.collections.circularbuffer.intf,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.hashset.intf,
@@ -43,44 +40,162 @@ uses
   nextpas.core.collections.trie.intf,
   nextpas.core.collections.lrucache.base,
   nextpas.core.collections.lrucache.intf,
+  nextpas.core.collections.element_manager.base,
+  nextpas.core.collections.element_manager.intf,
+  nextpas.core.collections.list.intf,
+  nextpas.core.collections.forward_list.intf,
+  nextpas.core.collections.stack.intf,
+  nextpas.core.collections.circularbuffer.intf,
   nextpas.core.collections.priorityqueue.base,
   nextpas.core.collections.priorityqueue.intf,
   nextpas.core.collections.bitset.base,
   nextpas.core.collections.bitset.intf,
+  nextpas.core.collections.arr,
+  nextpas.core.collections.slice,
+  nextpas.core.collections.iterators,
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.builder,
+  nextpas.core.collections.node,
+  nextpas.core.collections.smallvec.base,
+  nextpas.core.collections.trie.base,
+  nextpas.core.collections.vec,
+  nextpas.core.collections.smallvec,
+  nextpas.core.collections.vecdeque,
+  nextpas.core.collections.forward_list,
+  nextpas.core.collections.deque,
+  nextpas.core.collections.queue,
+  nextpas.core.collections.stack,
+  nextpas.core.collections.list,
+  nextpas.core.collections.circularbuffer,
+  nextpas.core.collections.slotregistry,
+  nextpas.core.collections.element_manager,
+  nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap.swiss.adapter,
+  nextpas.core.collections.hashset,
+  nextpas.core.collections.linkedhashmap,
+  nextpas.core.collections.linkedhashset,
+  nextpas.core.collections.multimap,
+  nextpas.core.collections.multiset,
+  nextpas.core.collections.tree.rb,
+  nextpas.core.collections.orderedmap.rb,
+  nextpas.core.collections.treemap,
+  nextpas.core.collections.tree_set,
+  nextpas.core.collections.btree,
   nextpas.core.collections.btree.intf,
+  nextpas.core.collections.skiplist,
+  nextpas.core.collections.trie,
+  nextpas.core.collections.priorityqueue,
+  nextpas.core.collections.lrucache,
+  nextpas.core.collections.bitset,
   nextpas.core.collections.concurrent.map.intf,
-  nextpas.core.mem.intf,
+  nextpas.core.collections.concurrent.hashmap,
   nextpas.core.mem.allocator.base;
 
-// Vec / VecDeque
+type
+  ICollection = nextpas.core.collections.intf.ICollection;
+  IBitSet = nextpas.core.collections.bitset.intf.IBitSet;
+  ISlotRegistryItem = nextpas.core.collections.slotregistry.ISlotRegistryItem;
+  PPtrIter = nextpas.core.collections.base.PPtrIter;
+  TPtrIter = nextpas.core.collections.base.TPtrIter;
+  TCollection = nextpas.core.collections.base.TCollection;
+  TCollectionClass = nextpas.core.collections.base.TCollectionClass;
+  TMergePosition = nextpas.core.collections.vecdeque.base.TMergePosition;
+  TSortAlgorithm = nextpas.core.collections.vecdeque.base.TSortAlgorithm;
+  TRandomGeneratorFunc = nextpas.core.collections.base.TRandomGeneratorFunc;
+  TRandomGeneratorMethod = nextpas.core.collections.base.TRandomGeneratorMethod;
+  TRandomGeneratorRefFunc = nextpas.core.collections.base.TRandomGeneratorRefFunc;
+  TGrowFunc = nextpas.core.collections.base.TGrowFunc;
+  TGrowMethod = nextpas.core.collections.base.TGrowMethod;
+  TGrowRefFunc = nextpas.core.collections.base.TGrowRefFunc;
+  TGrowProxyMethod = nextpas.core.collections.base.TGrowProxyMethod;
+  generic TPredicateFunc<T> = function(const aElement: T; aData: Pointer): Boolean;
+  generic TPredicateMethod<T> = function(const aElement: T; aData: Pointer): Boolean of object;
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+  generic TPredicateRefFunc<T> = reference to function(const aElement: T): Boolean;
+  {$ENDIF}
+  generic TMapperFunc<T,U> = function(const aElement: T; aData: Pointer): U;
+  generic TMapperMethod<T,U> = function(const aElement: T; aData: Pointer): U of object;
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+  generic TMapperRefFunc<T,U> = reference to function(const aElement: T): U;
+  {$ENDIF}
+  generic TCompareFunc<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt;
+  generic TCompareMethod<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt of object;
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+  generic TCompareRefFunc<T> = reference to function(const aLeft, aRight: T): SizeInt;
+  {$ENDIF}
+  generic TEqualsFunc<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean;
+  generic TEqualsMethod<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean of object;
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+  generic TEqualsRefFunc<T> = reference to function(const aLeft, aRight: T): Boolean;
+  {$ENDIF}
+  generic TKeyHashFunc<K> = function(const AKey: K): UInt32;
+  generic TKeyEqualsFunc<K> = function(const L, R: K): Boolean;
+  generic TSkipListCompareFunc<K> = function(const A, B: K): SizeInt;
+  generic TValueSupplierFunc<V> = function: V;
+  generic TValueModifierProc<V> = procedure(var Value: V);
+  generic TKeyValueCallback<K,V> = procedure(const aEntry: specialize TMapEntry<K,V>; aData: Pointer);
+  generic TTreeValueSupplierFunc<V> = function: V;
+  generic TTreeValueModifierProc<V> = procedure(var Value: V);
+  generic THashFunc<T> = function(const aValue: T; aData: Pointer): UInt64;
+  generic TBTreeCompareFunc<T> = function(const A, B: T; aData: Pointer): SizeInt;
+  IGrowthStrategy = nextpas.core.collections.base.IGrowthStrategy;
+  TGrowthStrategy = nextpas.core.collections.base.TGrowthStrategy;
+  TGrowthStrategyClass = nextpas.core.collections.base.TGrowthStrategyClass;
+  TCustomGrowthStrategy = nextpas.core.collections.base.TCustomGrowthStrategy;
+  TCalcGrowStrategy = nextpas.core.collections.base.TCalcGrowStrategy;
+  TDoublingGrowStrategy = nextpas.core.collections.base.TDoublingGrowStrategy;
+  TFixedGrowStrategy = nextpas.core.collections.base.TFixedGrowStrategy;
+  TFactorGrowStrategy = nextpas.core.collections.base.TFactorGrowStrategy;
+  TPowerOfTwoGrowStrategy = nextpas.core.collections.base.TPowerOfTwoGrowStrategy;
+  TGoldenRatioGrowStrategy = nextpas.core.collections.base.TGoldenRatioGrowStrategy;
+  TAlignedWrapperStrategy = nextpas.core.collections.base.TAlignedWrapperStrategy;
+  TExactGrowStrategy = nextpas.core.collections.base.TExactGrowStrategy;
+
+const
+  ARRAY_DEFAULT_SWAP_BUFFER_SIZE = nextpas.core.collections.arr.base.ARRAY_DEFAULT_SWAP_BUFFER_SIZE;
+  INSERTION_SORT_THRESHOLD = nextpas.core.collections.arr.base.INSERTION_SORT_THRESHOLD;
+  VEC_DEFAULT_CAPACITY = nextpas.core.collections.vec.base.VEC_DEFAULT_CAPACITY;
+  DEFAULT_SWAP_BUFFER_SIZE = nextpas.core.collections.vec.base.DEFAULT_SWAP_BUFFER_SIZE;
+  VECDEQUE_DEFAULT_CAPACITY = nextpas.core.collections.vecdeque.base.VECDEQUE_DEFAULT_CAPACITY;
+  DEFAULT_MAX_LOAD_FACTOR = nextpas.core.collections.hashmap.base.DEFAULT_MAX_LOAD_FACTOR;
+  SKIPLIST_MAX_LEVEL = nextpas.core.collections.skiplist.base.SKIPLIST_MAX_LEVEL;
+  SKIPLIST_P = nextpas.core.collections.skiplist.base.SKIPLIST_P;
+  BITSET_BITS_PER_WORD = nextpas.core.collections.bitset.base.BITSET_BITS_PER_WORD;
+  BITSET_DEFAULT_CAPACITY = nextpas.core.collections.bitset.base.BITSET_DEFAULT_CAPACITY;
+  SLOT_REGISTRY_DEFAULT_CAPACITY = nextpas.core.collections.slotregistry.SLOT_REGISTRY_DEFAULT_CAPACITY;
+  PRIORITYQUEUE_DEFAULT_CAPACITY = nextpas.core.collections.priorityqueue.base.PRIORITYQUEUE_DEFAULT_CAPACITY;
+  PRIORITYQUEUE_MIN_CAPACITY = nextpas.core.collections.priorityqueue.base.PRIORITYQUEUE_MIN_CAPACITY;
+  SMALLVEC_MIN_HEAP_CAPACITY = nextpas.core.collections.smallvec.base.SMALLVEC_MIN_HEAP_CAPACITY;
+  TRIE_ALPHABET_SIZE = nextpas.core.collections.trie.base.TRIE_ALPHABET_SIZE;
+  TRIE_ALPHABET_LAST_INDEX = nextpas.core.collections.trie.base.TRIE_ALPHABET_LAST_INDEX;
+  TRIE_KEYS_GROWTH_STEP = nextpas.core.collections.trie.base.TRIE_KEYS_GROWTH_STEP;
+
+function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
+function FactorGrow(aFactor: Double): IGrowthStrategy;
+function DoublingGrow: IGrowthStrategy;
+function ExactGrow: IGrowthStrategy;
+function GoldenRatioGrow: IGrowthStrategy;
+
 generic function MakeVec<T>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IVec<T>;
 generic function MakeVec<T>(const aSrc: array of T; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IVec<T>;
 generic function MakeVec<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IVec<T>;
 generic function MakeVec<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IVec<T>;
 generic function MakeVecDeque<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IDeque<T>;
-generic function MakeVecDeque<T>: specialize IDeque<T>;
-
-// Arr
 generic function MakeArr<T>(aAllocator: TMemAllocator = nil): specialize IArray<T>;
 generic function MakeArr<T>(const aSrc: array of T; aAllocator: TMemAllocator = nil): specialize IArray<T>;
 generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator = nil): specialize IArray<T>;
 generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aData: Pointer): specialize IArray<T>;
 generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator = nil): specialize IArray<T>;
-generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IArray<T>;
-
-// Hash / Swiss
 {$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
-generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
-generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
-generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
-generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
-generic function MakeMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
-generic function MakeMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
-generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
-generic function MakeSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
+  generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
+  generic function MakeSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
 {$ENDIF}
-
-// Ordered
 generic function MakeTreeMap<K,V>(aCapacity: SizeUInt = 0; aCompare: specialize TCompareFunc<K> = nil; aAllocator: TMemAllocator = nil): specialize ITreeMap<K,V>;
 generic function MakeTreeSet<T>(aAllocator: TMemAllocator = nil): specialize ITreeSet<T>;
 generic function MakeTreeSet<T>(aCompare: specialize TCompareFunc<T>; aAllocator: TMemAllocator = nil; aCompareData: Pointer = nil): specialize ITreeSet<T>;
@@ -99,8 +214,8 @@ generic function MakeMultiMap<K,V>: specialize IMultiMap<K,V>;
 generic function MakeMultiSet<T>: specialize IMultiSet<T>;
 function MakeBitSet(aInitialCapacity: SizeUInt = BITSET_DEFAULT_CAPACITY; aAllocator: TMemAllocator = nil): IBitSet;
 generic function MakeConcurrentHashMap<K,V>(aInitialCapacityPerSegment: SizeUInt = 0): specialize IConcurrentMap<K,V>;
-
-// Deque / Queue / Stack / List / ForwardList (source-based overloads)
+{$IFDEF NEXTPAS_COLLECTIONS_FACADE}
+generic function MakeVecDeque<T>: specialize IDeque<T>; overload;
 generic function MakeDeque<T>: specialize IDeque<T>; overload;
 generic function MakeDeque<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IDeque<T>; overload;
 generic function MakeDeque<T>(const aSrc: array of T; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IDeque<T>; overload;
@@ -108,7 +223,6 @@ generic function MakeDeque<T>(const aSrcCollection: TCollection; aAllocator: TMe
 generic function MakeDeque<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IDeque<T>; overload;
 generic function MakeDeque<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IDeque<T>; overload;
 generic function MakeDeque<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IDeque<T>; overload;
-
 generic function MakeQueue<T>: specialize IQueue<T>; overload;
 generic function MakeQueue<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IQueue<T>; overload;
 generic function MakeQueue<T>(const aSrc: array of T; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IQueue<T>; overload;
@@ -116,13 +230,11 @@ generic function MakeQueue<T>(const aSrcCollection: TCollection; aAllocator: TMe
 generic function MakeQueue<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IQueue<T>; overload;
 generic function MakeQueue<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IQueue<T>; overload;
 generic function MakeQueue<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IQueue<T>; overload;
-
 generic function MakeStack<T>: specialize IStack<T>; overload;
 generic function MakeStack<T>(aAllocator: TMemAllocator): specialize IStack<T>; overload;
 generic function MakeStack<T>(const aSrc: array of T; aAllocator: TMemAllocator = nil): specialize IStack<T>; overload;
 generic function MakeStack<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator = nil): specialize IStack<T>; overload;
 generic function MakeStack<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator = nil): specialize IStack<T>; overload;
-
 generic function MakeList<T>: specialize IList<T>; overload;
 generic function MakeList<T>(aAllocator: TMemAllocator): specialize IList<T>; overload;
 generic function MakeList<T>(const aSrc: array of T): specialize IList<T>; overload;
@@ -131,47 +243,45 @@ generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IList<T>; overload;
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IList<T>; overload;
 generic function MakeList<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IList<T>; overload;
-
 generic function MakeForwardList<T>: specialize IForwardList<T>; overload;
 generic function MakeForwardList<T>(aAllocator: TMemAllocator): specialize IForwardList<T>; overload;
 generic function MakeForwardList<T>(const aSrc: array of T): specialize IForwardList<T>; overload;
 generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IForwardList<T>; overload;
-generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>; overload;
-generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator): specialize IForwardList<T>; overload;
-generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>; overload;
 generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize IForwardList<T>; overload;
 generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IForwardList<T>; overload;
 generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>; overload;
+generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>; overload;
+generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator): specialize IForwardList<T>; overload;
+generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>; overload;
+{$ENDIF}
 
 implementation
 
-uses
-  nextpas.core.mem.default,
-  nextpas.core.collections.vec,
-  nextpas.core.collections.arr,
-  nextpas.core.collections.vecdeque,
-  nextpas.core.collections.list,
-  nextpas.core.collections.forward_list,
-  nextpas.core.collections.stack,
-  nextpas.core.collections.circularbuffer,
-  nextpas.core.collections.hashmap.swiss.adapter,
-  nextpas.core.collections.hashset,
-  nextpas.core.collections.linkedhashmap,
-  nextpas.core.collections.linkedhashset,
-  nextpas.core.collections.multimap,
-  nextpas.core.collections.multiset,
-  nextpas.core.collections.orderedmap.rb,
-  nextpas.core.collections.treemap,
-  nextpas.core.collections.tree_set,
-  nextpas.core.collections.btree,
-  nextpas.core.collections.skiplist,
-  nextpas.core.collections.trie,
-  nextpas.core.collections.priorityqueue,
-  nextpas.core.collections.lrucache,
-  nextpas.core.collections.bitset,
-  nextpas.core.collections.concurrent.hashmap;
+function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.base.FixedGrow(aStep);
+end;
 
-// Vec
+function FactorGrow(aFactor: Double): IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.base.FactorGrow(aFactor);
+end;
+
+function DoublingGrow: IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.base.DoublingGrow;
+end;
+
+function ExactGrow: IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.base.ExactGrow;
+end;
+
+function GoldenRatioGrow: IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.base.GoldenRatioGrow;
+end;
+
 generic function MakeVec<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IVec<T>;
 begin
   Exit(specialize TVec<T>.Create(aCapacity, aAllocator, aGrowStrategy));
@@ -192,41 +302,6 @@ begin
   Exit(specialize TVec<T>.Create(aSrc, aElementCount, aAllocator, aGrowStrategy));
 end;
 
-// VecDeque
-generic function MakeVecDeque<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>;
-begin
-  Exit(specialize TVecDeque<T>.Create(aCapacity, aAllocator, aGrowStrategy));
-end;
-
-generic function MakeVecDeque<T>: specialize IDeque<T>;
-var
-  LDeque: specialize TVecDeque<T>;
-begin
-  LDeque := specialize TVecDeque<T>.Create(DefaultAllocator());
-  Result := LDeque;
-end;
-
-// Arr
-generic function MakeArr<T>(aAllocator: TMemAllocator): specialize IArray<T>;
-begin
-  Exit(specialize TArray<T>.Create(0, aAllocator));
-end;
-
-generic function MakeArr<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IArray<T>;
-begin
-  Exit(specialize TArray<T>.Create(aSrc, aAllocator));
-end;
-
-generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator): specialize IArray<T>;
-begin
-  Exit(specialize TArray<T>.Create(aSrcCollection, aAllocator));
-end;
-
-generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aData: Pointer): specialize IArray<T>;
-begin
-  Exit(specialize TArray<T>.Create(aSrcCollection, aAllocator, aData));
-end;
-
 generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IArray<T>;
 begin
   Exit(specialize TArray<T>.Create(aSrc, aElementCount, aAllocator));
@@ -237,161 +312,127 @@ begin
   Exit(specialize TArray<T>.Create(aSrc, aElementCount, aAllocator, aData));
 end;
 
-// Hash / Swiss
-{$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
-generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashMap<K,V>;
+generic function MakeVecDeque<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>;
 begin
-  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
+  Exit(specialize TVecDeque<T>.Create(aCapacity, aAllocator, aGrowStrategy));
 end;
 
-generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator): specialize IHashMap<K,V>;
+{$IFDEF NEXTPAS_COLLECTIONS_FACADE}
+generic function MakeVecDeque<T>: specialize IDeque<T>;
+var
+  LDeque: specialize TVecDeque<T>;
 begin
-  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, aHash, aEquals, aAllocator);
+  LDeque := specialize TVecDeque<T>.Create(DefaultAllocator());
+  Result := LDeque;
 end;
 
-generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashMap<K,V>;
+generic function MakeForwardList<T>: specialize IForwardList<T>;
 begin
-  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
+  Result := specialize MakeForwardList<T>(TMemAllocator(nil));
 end;
 
-generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator): specialize IHashMap<K,V>;
+generic function MakeForwardList<T>(aAllocator: TMemAllocator): specialize IForwardList<T>;
+var LI: specialize IForwardList<T>;
 begin
-  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, aHash, aEquals, aAllocator);
+  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aAllocator)
+  else LI := specialize TForwardList<T>.Create;
+  Result := LI;
 end;
 
-generic function MakeHashSet<K>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashSet<K>;
+generic function MakeForwardList<T>(const aSrc: array of T): specialize IForwardList<T>;
 begin
-  Result := specialize THashSet<K>.Create(aCapacity, nil, nil, aAllocator);
+  Result := specialize MakeForwardList<T>(aSrc, TMemAllocator(nil));
 end;
 
-generic function MakeMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashMap<K,V>;
+generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IForwardList<T>;
+var LI: specialize IForwardList<T>;
 begin
-  Result := specialize MakeHashMap<K,V>(aCapacity, aAllocator);
+  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrc, aAllocator)
+  else LI := specialize TForwardList<T>.Create(aSrc);
+  Result := LI;
 end;
 
-generic function MakeMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator): specialize IHashMap<K,V>;
+generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator): specialize IForwardList<T>;
+var LI: specialize IForwardList<T>;
 begin
-  Result := specialize MakeHashMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
+  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrcCollection, aAllocator)
+  else LI := specialize TForwardList<T>.Create(aSrcCollection);
+  Result := LI;
 end;
 
-generic function MakeSet<K>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashSet<K>;
+generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize IForwardList<T>;
 begin
-  Result := specialize MakeHashSet<K>(aCapacity, aAllocator);
-end;
-{$ENDIF}
-
-// Tree / ordered
-generic function MakeTreeMap<K,V>(aCapacity: SizeUInt; aCompare: specialize TCompareFunc<K>; aAllocator: TMemAllocator): specialize ITreeMap<K,V>;
-begin
-  Result := specialize TTreeMap<K,V>.Create(aAllocator, aCompare);
+  Result := specialize MakeForwardList<T>(aSrc, aElementCount, TMemAllocator(nil));
 end;
 
-generic function MakeTreeSet<T>(aAllocator: TMemAllocator): specialize ITreeSet<T>;
+generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IForwardList<T>;
 begin
-  if aAllocator <> nil then
-    Result := specialize TTreeSet<T>.Create(aAllocator)
-  else
-    Result := specialize TTreeSet<T>.Create;
+  Result := specialize MakeForwardList<T>(aSrc, aElementCount, aAllocator, nil);
 end;
 
-generic function MakeTreeSet<T>(aCompare: specialize TCompareFunc<T>; aAllocator: TMemAllocator; aCompareData: Pointer): specialize ITreeSet<T>;
+generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>;
+var LI: specialize IForwardList<T>;
 begin
-  Result := specialize TTreeSet<T>.Create(aAllocator, aCompare, aCompareData);
+  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrcCollection, aAllocator, aData)
+  else LI := specialize TForwardList<T>.Create(aSrcCollection, DefaultAllocator(), aData);
+  Result := LI;
 end;
 
-generic function MakeLinkedHashSet<T>: specialize ILinkedHashSet<T>;
+generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>;
+var LI: specialize IForwardList<T>;
 begin
-  Result := specialize TLinkedHashSet<T>.Create;
+  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrc, aAllocator, aData)
+  else LI := specialize TForwardList<T>.Create(aSrc, DefaultAllocator(), aData);
+  Result := LI;
 end;
 
-generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: TMemAllocator): specialize IRBTreeMap<K,V>;
+generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>;
+var LI: specialize IForwardList<T>;
 begin
-  if aAllocator <> nil then
-    Result := specialize TRBTreeMap<K,V>.Create(aKeyComparer, aAllocator)
-  else
-    Result := specialize TRBTreeMap<K,V>.Create(aKeyComparer);
+  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrc, aElementCount, aAllocator, aData)
+  else LI := specialize TForwardList<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData);
+  Result := LI;
 end;
 
-generic function MakeBTreeMap<K,V>(aCompare: specialize TBTreeCompareFunc<K>): specialize IBTreeMap<K,V>;
+generic function MakeList<T>: specialize IList<T>;
 begin
-  Result := specialize TBTreeMap<K,V>.Create(specialize TBTreeMap<K,V>.TKeyCompareFunc(aCompare));
+  Result := specialize MakeList<T>(TMemAllocator(nil));
 end;
 
-generic function MakeBTreeSet<T>(aCompare: specialize TBTreeCompareFunc<T>): specialize IBTreeSet<T>;
+generic function MakeList<T>(aAllocator: TMemAllocator): specialize IList<T>;
+var LObj: specialize TList<T>;
 begin
-  Result := specialize TBTreeSet<T>.Create(specialize TBTreeSet<T>.TCompareFunc(aCompare));
+  if aAllocator <> nil then LObj := specialize TList<T>.Create(aAllocator)
+  else LObj := specialize TList<T>.Create;
+  Result := LObj;
 end;
 
-generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;
+generic function MakeList<T>(const aSrc: array of T): specialize IList<T>;
 begin
-  Result := specialize TSkipList<K,V>.Create;
+  Result := specialize MakeList<T>(aSrc, TMemAllocator(nil));
 end;
 
-generic function MakeSkipList<K,V>(aCompare: specialize TSkipListCompareFunc<K>): specialize ISkipList<K,V>;
+generic function MakeList<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IList<T>;
+var LObj: specialize TList<T>;
 begin
-  Result := specialize TSkipList<K,V>.Create(aCompare);
+  if aAllocator <> nil then LObj := specialize TList<T>.Create(aSrc, aAllocator)
+  else LObj := specialize TList<T>.Create(aSrc);
+  Result := LObj;
 end;
 
-generic function MakeTrie<V>: specialize ITrie<V>;
+generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize IList<T>;
 begin
-  Result := specialize TTrie<V>.Create;
+  Result := specialize MakeList<T>(aSrc, aElementCount, TMemAllocator(nil));
 end;
 
-generic function MakeLruCache<K,V>(aMaxSize: SizeUInt; aAllocator: TMemAllocator; aHash: specialize THashFunc<K>; aEquals: specialize TEqualsFunc<K>; aHashData: Pointer; aEqualsData: Pointer): specialize ILruCache<K,V>;
+generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IList<T>;
 begin
-  Result := specialize TLruCache<K,V>.Create(aMaxSize, aAllocator, aHash, aEquals, aHashData, aEqualsData);
+  Result := specialize MakeList<T>(aSrc, aElementCount, aAllocator, nil);
 end;
 
-generic function MakeLinkedHashMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize ILinkedHashMap<K,V>;
-begin
-  if aAllocator <> nil then
-    Result := specialize TLinkedHashMap<K,V>.Create(aCapacity, aAllocator)
-  else
-    Result := specialize TLinkedHashMap<K,V>.Create(aCapacity);
-end;
-
-generic function MakeCircularBuffer<T>(aCapacity: SizeUInt; aOverwriteOldest: Boolean): specialize ICircularBuffer<T>;
-begin
-  Result := specialize TCircularBuffer<T>.Create(aCapacity, aOverwriteOldest);
-end;
-
-generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IPriorityQueue<T>;
-begin
-  Result := specialize TPriorityQueue<T>.Create(aComparer, aCapacity, aAllocator);
-end;
-
-generic function MakeMultiMap<K,V>: specialize IMultiMap<K,V>;
-begin
-  Result := specialize TMultiMap<K,V>.Create;
-end;
-
-generic function MakeMultiSet<T>: specialize IMultiSet<T>;
-begin
-  Result := specialize TMultiSet<T>.Create;
-end;
-
-function MakeBitSet(aInitialCapacity: SizeUInt; aAllocator: TMemAllocator): IBitSet;
-begin
-  if aAllocator <> nil then
-    Result := TBitSet.Create(aInitialCapacity, aAllocator)
-  else
-    Result := TBitSet.Create(aInitialCapacity);
-end;
-
-generic function MakeConcurrentHashMap<K,V>(aInitialCapacityPerSegment: SizeUInt): specialize IConcurrentMap<K,V>;
-begin
-  Result := specialize TConcurrentHashMap<K,V>.Create(nil, nil, aInitialCapacityPerSegment);
-end;
-
-// Deque factories
 generic function MakeDeque<T>: specialize IDeque<T>;
 begin
   Result := specialize MakeDeque<T>(0, TMemAllocator(nil), TGrowthStrategy(nil));
-end;
-
-generic function MakeDeque<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>;
-begin
-  Exit(specialize TVecDeque<T>.Create(aCapacity, aAllocator, aGrowStrategy));
 end;
 
 generic function MakeDeque<T>(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>;
@@ -459,15 +500,9 @@ begin
     Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData));
 end;
 
-// Queue factories (delegate to VecDeque)
 generic function MakeQueue<T>: specialize IQueue<T>;
 begin
   Result := specialize MakeQueue<T>(0, TMemAllocator(nil), TGrowthStrategy(nil));
-end;
-
-generic function MakeQueue<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IQueue<T>;
-begin
-  Exit(specialize TVecDeque<T>.Create(aCapacity, aAllocator, aGrowStrategy));
 end;
 
 generic function MakeQueue<T>(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IQueue<T>;
@@ -535,7 +570,6 @@ begin
     Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData));
 end;
 
-// Stack factories
 generic function MakeStack<T>: specialize IStack<T>;
 begin
   Result := specialize MakeStack<T>(TMemAllocator(nil));
@@ -606,49 +640,34 @@ begin
   end;
 end;
 
-// List factories
-generic function MakeList<T>: specialize IList<T>;
-begin
-  Result := specialize MakeList<T>(TMemAllocator(nil));
-end;
-
-generic function MakeList<T>(aAllocator: TMemAllocator): specialize IList<T>;
-var LObj: specialize TList<T>;
-begin
-  if aAllocator <> nil then LObj := specialize TList<T>.Create(aAllocator)
-  else LObj := specialize TList<T>.Create;
-  Result := LObj;
-end;
-
-generic function MakeList<T>(const aSrc: array of T): specialize IList<T>;
-begin
-  Result := specialize MakeList<T>(aSrc, TMemAllocator(nil));
-end;
-
-generic function MakeList<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IList<T>;
-var LObj: specialize TList<T>;
-begin
-  if aAllocator <> nil then LObj := specialize TList<T>.Create(aSrc, aAllocator)
-  else LObj := specialize TList<T>.Create(aSrc);
-  Result := LObj;
-end;
-
-generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize IList<T>;
-begin
-  Result := specialize MakeList<T>(aSrc, aElementCount, TMemAllocator(nil));
-end;
-
-generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IList<T>;
-begin
-  Result := specialize MakeList<T>(aSrc, aElementCount, aAllocator, nil);
-end;
-
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IList<T>;
 var LObj: specialize TList<T>;
 begin
   if aAllocator <> nil then LObj := specialize TList<T>.Create(aSrc, aElementCount, aAllocator, aData)
   else LObj := specialize TList<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData);
   Result := LObj;
+end;
+
+{$ENDIF}
+
+generic function MakeArr<T>(aAllocator: TMemAllocator): specialize IArray<T>;
+begin
+  Exit(specialize TArray<T>.Create(0, aAllocator));
+end;
+
+generic function MakeArr<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IArray<T>;
+begin
+  Exit(specialize TArray<T>.Create(aSrc, aAllocator));
+end;
+
+generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator): specialize IArray<T>;
+begin
+  Exit(specialize TArray<T>.Create(aSrcCollection, aAllocator));
+end;
+
+generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aData: Pointer): specialize IArray<T>;
+begin
+  Exit(specialize TArray<T>.Create(aSrcCollection, aAllocator, aData));
 end;
 
 generic function MakeList<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IList<T>;
@@ -659,73 +678,158 @@ begin
     Exit(specialize TList<T>.Create);
 end;
 
-// ForwardList factories
-generic function MakeForwardList<T>: specialize IForwardList<T>;
+generic function MakeDeque<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>;
 begin
-  Result := specialize MakeForwardList<T>(TMemAllocator(nil));
+  Exit(specialize TVecDeque<T>.Create(aCapacity, aAllocator, aGrowStrategy));
 end;
 
-generic function MakeForwardList<T>(aAllocator: TMemAllocator): specialize IForwardList<T>;
-var LI: specialize IForwardList<T>;
+generic function MakeQueue<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IQueue<T>;
 begin
-  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aAllocator)
-  else LI := specialize TForwardList<T>.Create;
-  Result := LI;
+  Exit(specialize TVecDeque<T>.Create(aCapacity, aAllocator, aGrowStrategy));
 end;
 
-generic function MakeForwardList<T>(const aSrc: array of T): specialize IForwardList<T>;
+{$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
+generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
 begin
-  Result := specialize MakeForwardList<T>(aSrc, TMemAllocator(nil));
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
 end;
 
-generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IForwardList<T>;
-var LI: specialize IForwardList<T>;
+generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
 begin
-  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrc, aAllocator)
-  else LI := specialize TForwardList<T>.Create(aSrc);
-  Result := LI;
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, aHash, aEquals, aAllocator);
 end;
 
-generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>;
-var LI: specialize IForwardList<T>;
+generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
 begin
-  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrc, aAllocator, aData)
-  else LI := specialize TForwardList<T>.Create(aSrc, DefaultAllocator(), aData);
-  Result := LI;
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
 end;
 
-generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator): specialize IForwardList<T>;
-var LI: specialize IForwardList<T>;
+generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
 begin
-  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrcCollection, aAllocator)
-  else LI := specialize TForwardList<T>.Create(aSrcCollection);
-  Result := LI;
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, aHash, aEquals, aAllocator);
 end;
 
-generic function MakeForwardList<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>;
-var LI: specialize IForwardList<T>;
+generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
 begin
-  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrcCollection, aAllocator, aData)
-  else LI := specialize TForwardList<T>.Create(aSrcCollection, DefaultAllocator(), aData);
-  Result := LI;
+  Result := specialize THashSet<K>.Create(aCapacity, nil, nil, aAllocator);
 end;
 
-generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize IForwardList<T>;
+generic function MakeMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
 begin
-  Result := specialize MakeForwardList<T>(aSrc, aElementCount, TMemAllocator(nil));
+  Result := specialize MakeHashMap<K,V>(aCapacity, aAllocator);
 end;
 
-generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IForwardList<T>;
+generic function MakeMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
 begin
-  Result := specialize MakeForwardList<T>(aSrc, aElementCount, aAllocator, nil);
+  Result := specialize MakeHashMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
 end;
 
-generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>;
-var LI: specialize IForwardList<T>;
+generic function MakeSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
 begin
-  if aAllocator <> nil then LI := specialize TForwardList<T>.Create(aSrc, aElementCount, aAllocator, aData)
-  else LI := specialize TForwardList<T>.Create(aSrc, aElementCount, DefaultAllocator(), aData);
-  Result := LI;
+  Result := specialize MakeHashSet<K>(aCapacity, aAllocator);
+end;
+{$ENDIF}
+
+generic function MakeTreeMap<K,V>(aCapacity: SizeUInt = 0; aCompare: specialize TCompareFunc<K> = nil; aAllocator: TMemAllocator = nil): specialize ITreeMap<K,V>;
+begin
+  Result := specialize TTreeMap<K,V>.Create(aAllocator, aCompare);
+end;
+
+generic function MakeTreeSet<T>(aAllocator: TMemAllocator = nil): specialize ITreeSet<T>;
+begin
+  if aAllocator <> nil then
+    Result := specialize TTreeSet<T>.Create(aAllocator)
+  else
+    Result := specialize TTreeSet<T>.Create;
+end;
+
+generic function MakeTreeSet<T>(aCompare: specialize TCompareFunc<T>; aAllocator: TMemAllocator; aCompareData: Pointer): specialize ITreeSet<T>;
+begin
+  Result := specialize TTreeSet<T>.Create(aAllocator, aCompare, aCompareData);
+end;
+
+generic function MakeLinkedHashSet<T>: specialize ILinkedHashSet<T>;
+begin
+  Result := specialize TLinkedHashSet<T>.Create;
+end;
+
+generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: TMemAllocator = nil): specialize IRBTreeMap<K,V>;
+begin
+  if aAllocator <> nil then
+    Result := specialize TRBTreeMap<K,V>.Create(aKeyComparer, aAllocator)
+  else
+    Result := specialize TRBTreeMap<K,V>.Create(aKeyComparer);
+end;
+
+generic function MakeBTreeMap<K,V>(aCompare: specialize TBTreeCompareFunc<K>): specialize IBTreeMap<K,V>;
+begin
+  Result := specialize TBTreeMap<K,V>.Create(specialize TBTreeMap<K,V>.TKeyCompareFunc(aCompare));
+end;
+
+generic function MakeBTreeSet<T>(aCompare: specialize TBTreeCompareFunc<T>): specialize IBTreeSet<T>;
+begin
+  Result := specialize TBTreeSet<T>.Create(specialize TBTreeSet<T>.TCompareFunc(aCompare));
+end;
+
+generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;
+begin
+  Result := specialize TSkipList<K,V>.Create;
+end;
+
+generic function MakeSkipList<K,V>(aCompare: specialize TSkipListCompareFunc<K>): specialize ISkipList<K,V>;
+begin
+  Result := specialize TSkipList<K,V>.Create(aCompare);
+end;
+
+generic function MakeTrie<V>: specialize ITrie<V>;
+begin
+  Result := specialize TTrie<V>.Create;
+end;
+
+generic function MakeLruCache<K,V>(aMaxSize: SizeUInt; aAllocator: TMemAllocator = nil; aHash: specialize THashFunc<K> = nil; aEquals: specialize TEqualsFunc<K> = nil; aHashData: Pointer = nil; aEqualsData: Pointer = nil): specialize ILruCache<K,V>;
+begin
+  Result := specialize TLruCache<K,V>.Create(aMaxSize, aAllocator, aHash, aEquals, aHashData, aEqualsData);
+end;
+
+generic function MakeLinkedHashMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize ILinkedHashMap<K,V>;
+begin
+  if aAllocator <> nil then
+    Result := specialize TLinkedHashMap<K,V>.Create(aCapacity, aAllocator)
+  else
+    Result := specialize TLinkedHashMap<K,V>.Create(aCapacity);
+end;
+
+generic function MakeCircularBuffer<T>(aCapacity: SizeUInt; aOverwriteOldest: Boolean): specialize ICircularBuffer<T>;
+begin
+  Result := specialize TCircularBuffer<T>.Create(aCapacity, aOverwriteOldest);
+end;
+
+generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IPriorityQueue<T>;
+begin
+  Result := specialize TPriorityQueue<T>.Create(aComparer, aCapacity, aAllocator);
+end;
+
+generic function MakeMultiMap<K,V>: specialize IMultiMap<K,V>;
+begin
+  Result := specialize TMultiMap<K,V>.Create;
+end;
+
+generic function MakeMultiSet<T>: specialize IMultiSet<T>;
+begin
+  Result := specialize TMultiSet<T>.Create;
+end;
+
+function MakeBitSet(aInitialCapacity: SizeUInt; aAllocator: TMemAllocator): IBitSet;
+begin
+  if aAllocator <> nil then
+    Result := TBitSet.Create(aInitialCapacity, aAllocator)
+  else
+    Result := TBitSet.Create(aInitialCapacity);
+end;
+
+generic function MakeConcurrentHashMap<K,V>(aInitialCapacityPerSegment: SizeUInt = 0): specialize IConcurrentMap<K,V>;
+begin
+  Result := specialize TConcurrentHashMap<K,V>.Create(nil, nil, aInitialCapacityPerSegment);
 end;
 
 end.

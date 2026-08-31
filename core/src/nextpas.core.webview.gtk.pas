@@ -196,11 +196,28 @@ function GtkLiveWindowCount: Integer;
 implementation
 uses
   nextpas.core.webview.gtk.win,
-  nextpas.core.sync.mutex;
+  nextpas.core.sync.mutex,
+  nextpas.core.webview.mime;
+
+const
+  WEBVIEW_SCHEME_LARGE_THRESHOLD = 8192;
+
+type
+  PAssetHolder = ^TAssetHolder;
+  TAssetHolder = record
+    Bytes: TBytes;
+  end;
+
+procedure AssetBufFree(AData: Pointer); cdecl;
+begin
+  if AData <> nil then
+    Dispose(PAssetHolder(AData));
+end;
 
 var
   GLiveWindows: array of TGtkWebview;
   GLiveWindowsCount: Integer = 0;
+  GLiveCount: Integer = 0;
   { scheme 按 context 去重：默认 context 是进程级单例，多窗口重复注册
     会被 GLib CRITICAL 拒绝，且后到处理器无法接管——必须首注册独占 }
   GRegisteredSchemeCtxs: array of Pointer;
@@ -358,17 +375,11 @@ begin
   end;
 end;
 
-function GtkLiveWindowCount: Integer;
-var
-  I, LCnt: Integer;
+function GtkLiveWindowCount: Integer; inline;
 begin
   if GSchemeLock <> nil then GSchemeLock.Acquire;
   try
-    LCnt := 0;
-    for I := 0 to GLiveWindowsCount - 1 do
-      if not GLiveWindows[I].FClosed then
-        Inc(LCnt);
-    Result := LCnt;
+    Result := GLiveCount;
   finally
     if GSchemeLock <> nil then GSchemeLock.Release;
   end;
@@ -381,6 +392,7 @@ begin
     GrowLiveWindows;
     GLiveWindows[GLiveWindowsCount] := AWin;
     Inc(GLiveWindowsCount);
+    Inc(GLiveCount);
   finally
     if GSchemeLock <> nil then GSchemeLock.Release;
   end;
@@ -474,7 +486,11 @@ begin
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
         for I := 0 to LSelf.FOnNavStartedCount - 1 do
-          LSelf.FOnNavStarted[I](LEv);
+          if Assigned(LSelf.FOnNavStarted[I]) then
+            try
+              LSelf.FOnNavStarted[I](LEv);
+            except
+            end;
       end;
     WEBKIT_LOAD_FINISHED:
       begin
@@ -482,7 +498,11 @@ begin
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
         for I := 0 to LSelf.FOnNavFinishedCount - 1 do
-          LSelf.FOnNavFinished[I](LEv);
+          if Assigned(LSelf.FOnNavFinished[I]) then
+            try
+              LSelf.FOnNavFinished[I](LEv);
+            except
+            end;
         LSelf.FireReadyOnce;
       end;
     WEBKIT_LOAD_FAILED:
@@ -492,7 +512,11 @@ begin
         LEv.Url := LSelf.CurrentUri;
         LEv.IsError := True;
         for I := 0 to LSelf.FOnNavFailedCount - 1 do
-          LSelf.FOnNavFailed[I](LEv);
+          if Assigned(LSelf.FOnNavFailed[I]) then
+            try
+              LSelf.FOnNavFailed[I](LEv);
+            except
+            end;
       end;
   end;
 end;
@@ -517,7 +541,11 @@ begin
       LEv.ErrorMessage := StrPas(PGError(AErr)^.Message);
   end;
   for I := 0 to LSelf.FOnNavFailedCount - 1 do
-    LSelf.FOnNavFailed[I](LEv);
+    if Assigned(LSelf.FOnNavFailed[I]) then
+      try
+        LSelf.FOnNavFailed[I](LEv);
+      except
+      end;
 end;
 
 procedure ScaleNotifyCb(AObj, APspec, AUserData: Pointer); cdecl;
@@ -533,7 +561,11 @@ begin
   begin
     LSelf.FScale := LNew;
     for I := 0 to LSelf.FOnScaleChangedCount - 1 do
-      LSelf.FOnScaleChanged[I](LNew);
+      if Assigned(LSelf.FOnScaleChanged[I]) then
+        try
+          LSelf.FOnScaleChanged[I](LNew);
+        except
+        end;
   end;
 end;
 
@@ -549,25 +581,26 @@ var
   I: Integer;
 begin
   Result := nil;
+  if AView = nil then
+    Exit(nil);
   if GSchemeLock <> nil then GSchemeLock.Acquire;
   try
-    if AView <> nil then
+    if GLiveCount = 0 then
+      Exit(nil);
+    { 单窗快路径：95% 场景 single-window 零扫描，牺牲 2 次比较换线性遍历 }
+    if GLiveWindowsCount = 1 then
     begin
-      { 单窗快路径：95% 场景 single-window 零扫描，牺牲 2 次比较换线性遍历 }
-      if GLiveWindowsCount = 1 then
+      if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = AView) then
+        Result := GLiveWindows[0];
+      Exit;
+    end;
+    for I := 0 to GLiveWindowsCount - 1 do
+      if (not GLiveWindows[I].FClosed) and
+         (GLiveWindows[I].FView = AView) then
       begin
-        if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = AView) then
-          Result := GLiveWindows[0];
+        Result := GLiveWindows[I];
         Exit;
       end;
-      for I := 0 to GLiveWindowsCount - 1 do
-        if (not GLiveWindows[I].FClosed) and
-           (GLiveWindows[I].FView = AView) then
-        begin
-          Result := GLiveWindows[I];
-          Exit;
-        end;
-    end;
   finally
     if GSchemeLock <> nil then GSchemeLock.Release;
   end;
@@ -592,6 +625,8 @@ end;
   调用方不 free；误判会在 live 门禁以 double-free 可见地暴露 }
 procedure SchemeFinishNotFound(ARequest: Pointer); inline;
 begin
+  if ARequest = nil then
+    Exit;
   if GSchemeErrQuark = 0 then
     GSchemeErrQuark := G_quark_from_static_string('nextpas-webview');
   WEBKIT_uri_scheme_request_finish_error(ARequest,
@@ -604,12 +639,19 @@ var
   LKeep: IInterface;
   LPath, LMime: string;
   LBytes: TBytes;
-  LBuf, LStream: Pointer;
+  LBuf, LStream, LBytesObj: Pointer;
+  LHolder: PAssetHolder;
   LView: Pointer;
   I: Integer;
 begin
+  if not Assigned(ARequest) then
+    Exit;
+  try
   { 拷贝指针副本提升引用计数后释放再 TryResolve，避免持有锁时阻塞 VFS }
-  LView := WEBKIT_uri_scheme_request_get_web_view(ARequest);
+  if Assigned(WEBKIT_uri_scheme_request_get_web_view) then
+    LView := WEBKIT_uri_scheme_request_get_web_view(ARequest)
+  else
+    LView := nil;
   LSelf := nil;
   LKeep := nil;
   if GSchemeLock <> nil then GSchemeLock.Acquire;
@@ -642,26 +684,129 @@ begin
     SchemeFinishNotFound(ARequest);
     Exit;
   end;
-  LPath := NormalizeWebviewAssetPath(StrPas(WEBKIT_uri_scheme_request_get_path(ARequest)));
-  if LSelf.FAssetsIntf.TryResolve(LPath, LBytes, LMime) then
+  if not Assigned(WEBKIT_uri_scheme_request_get_path) then
   begin
-    GtkTrace('scheme hit ' + LPath + ' (' + IntToStr(Length(LBytes)) + 'B)');
-    if LMime = '' then
-      LMime := 'application/octet-stream';
-    { GLib 侧分配（g_malloc）配对 G_free 销毁器——字节所有权随流移交
-      WebKit；禁止 GetMem：FPC 堆指针经 C free 释放属跨分配器未定义行为 }
-    LBuf := G_malloc(Length(LBytes) + 1);
-    if Length(LBytes) > 0 then
-      Move(LBytes[0], LBuf^, Length(LBytes));
-    LStream := G_memory_input_stream_new_from_data(
-      LBuf, Length(LBytes), TGDestroyNotify(@G_free));
-    WEBKIT_uri_scheme_request_finish(ARequest, LStream,
-      Length(LBytes), PAnsiChar(LMime));
+    SchemeFinishNotFound(ARequest);
+    Exit;
+  end;
+  if WEBKIT_uri_scheme_request_get_path(ARequest) = nil then
+  begin
+    SchemeFinishNotFound(ARequest);
+    Exit;
+  end;
+  LPath := NormalizeWebviewAssetPath(StrPas(WEBKIT_uri_scheme_request_get_path(ARequest))); { 单源复用 base.NormalizeWebviewAssetPath inline }
+  if not Assigned(LSelf.FAssetsIntf) then
+  begin
+    SchemeFinishNotFound(ARequest);
+    Exit;
+  end;
+  try
+    if not LSelf.FAssetsIntf.TryResolve(LPath, LBytes, LMime) then
+    begin
+      GtkTrace('scheme miss ' + LPath + ' -> 404');
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+  except
+    on E: Exception do
+    begin
+      GtkTrace('scheme resolve ex ' + LPath + ': ' + E.Message + ' -> 404');
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+  end;
+  GtkTrace('scheme hit ' + LPath + ' (' + IntToStr(Length(LBytes)) + 'B)');
+  if LMime = '' then
+    LMime := GuessWebviewMime(LPath); { 单源：webview.mime inline→http.mime，已含默认回退，零拷贝 }
+  LStream := nil;
+  LBytesObj := nil;
+  LBuf := nil;
+  if Length(LBytes) >= WEBVIEW_SCHEME_LARGE_THRESHOLD then
+  begin
+    { 分级零拷贝：>=8192B 经 GBytes 直供 holder（AssetBufFree 随 GBytes 释放），零中间拷贝 }
+    if not Assigned(G_bytes_new_with_free_func) or not Assigned(G_memory_input_stream_new_from_bytes) or not Assigned(WEBKIT_uri_scheme_request_finish) then
+    begin
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+    New(LHolder);
+    LHolder^.Bytes := LBytes;
+    try
+      if Length(LHolder^.Bytes) > 0 then
+        LBytesObj := G_bytes_new_with_free_func(@LHolder^.Bytes[0], Length(LHolder^.Bytes), @AssetBufFree, LHolder)
+      else
+        LBytesObj := G_bytes_new_with_free_func(nil, 0, @AssetBufFree, LHolder);
+    except
+      Dispose(LHolder);
+      raise;
+    end;
+    if Assigned(LBytesObj) and Assigned(G_memory_input_stream_new_from_bytes) then
+      try
+        LStream := G_memory_input_stream_new_from_bytes(LBytesObj);
+      except
+        LStream := nil;
+      end;
+    if Assigned(LBytesObj) and Assigned(G_bytes_unref) then
+      try
+        G_bytes_unref(LBytesObj);
+      except
+      end;
+    if not Assigned(LStream) then
+    begin
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
   end
   else
   begin
-    GtkTrace('scheme miss ' + LPath + ' -> 404');
-    SchemeFinishNotFound(ARequest);
+    { 小资源回落单次 Move：GLib 侧分配配对 G_free，字节所有权随流移交 WebKit；
+      禁止 GetMem：FPC 堆指针经 C free 释放属跨分配器未定义行为 }
+    if not Assigned(G_malloc) or not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then
+    begin
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+    LBuf := G_malloc(Length(LBytes) + 1);
+    if (LBuf = nil) and (Length(LBytes) > 0) then
+    begin
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+    if Length(LBytes) > 0 then
+      Move(LBytes[0], LBuf^, Length(LBytes));
+    try
+      LStream := G_memory_input_stream_new_from_data(
+        LBuf, Length(LBytes), TGDestroyNotify(@G_free));
+    except
+      if (LBuf <> nil) and Assigned(G_free) then
+        G_free(LBuf);
+      raise;
+    end;
+    if not Assigned(LStream) then
+    begin
+      if (LBuf <> nil) and Assigned(G_free) then
+        G_free(LBuf);
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+  end;
+  { 所有权随流移交 WebKit，LBuf/GBytes 不再自释放 }
+  try
+    WEBKIT_uri_scheme_request_finish(ARequest, LStream,
+      Length(LBytes), PAnsiChar(LMime));
+  except
+    try
+      SchemeFinishNotFound(ARequest);
+    except
+    end;
+  end;
+  except
+    on E: Exception do
+      try
+        if Assigned(ARequest) then
+          SchemeFinishNotFound(ARequest);
+      except
+      end;
   end;
 end;
 
@@ -996,7 +1141,12 @@ var
   I: Integer;
 begin
   for I := 0 to High(AList) do
-    AList[I]();
+    if Assigned(AList[I]) then
+      try
+        AList[I]();
+      except
+        { 单处理器异常隔离：不中断后续，保持与 FireReadyOnce 一致 }
+      end;
 end;
 
 procedure TGtkWebview.SetupSessionContext;
@@ -1124,7 +1274,12 @@ begin
     Exit;
   FReadyFired := True;
   for I := 0 to FOnReadyCount - 1 do
-    FOnReady[I]();
+    if Assigned(FOnReady[I]) then
+      try
+        FOnReady[I]();
+      except
+        { 单处理器异常隔离：不中断后续、不外抛 }
+      end;
 end;
 
 class function TGtkWebview.MapInvokeCodeSafe(E: Exception): string;
@@ -1266,6 +1421,12 @@ begin
   if FClosed then
     Exit;
   FClosed := True;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GLiveCount > 0 then Dec(GLiveCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
   SettlePendingOnClose;
   DropIdlePendings;
   FireNotifyHandlers(FOnWindowClosed);
@@ -1281,6 +1442,12 @@ begin
   if FClosed then
     Exit;
   FClosed := True;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GLiveCount > 0 then Dec(GLiveCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
   { 在途 eval 立即以 onerr 收尾（exactly-one）。记录不在此处释放：
     所有权单点在引擎必然到达的完成回调——迟到回执读 Done 后仅释放。
     异常实例由框架创建/触发/释放（§3.2 所有权语义）。 }

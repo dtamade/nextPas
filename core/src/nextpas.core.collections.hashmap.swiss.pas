@@ -53,6 +53,7 @@ type
     TRetainFunc = function(const AKey: K; const AValue: V): Boolean;
     TVisitFunc = procedure(const AKey: K; const AValue: V);
     TVisitCtxFunc = procedure(const AKey: K; const AValue: V; AContext: Pointer);
+    TVisitCtxExFunc = function(const AKey: K; const AValue: V; AContext: Pointer): Boolean;
     TKeyArray = array of K;
     PSlot = ^TSlot;
     TSlot = record

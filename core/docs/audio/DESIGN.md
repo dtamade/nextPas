@@ -1,6 +1,6 @@
 # nextpas.core.audio 设计文档（Draft v3.2 — SFX canonical + spatial/event/bank/resource 七域+扩展）
 
-> 权威来源：本文档为 `nextpas.core.audio` 设计真值源；`check_source_contract.sh` 为 gate 真值源（当前 38 files，理想态 45）。`README.md` 为入口概览。
+> 权威来源：本文档为 `nextpas.core.audio` 设计真值源；`check_source_contract.sh` 为 gate 真值源（当前 36 files，理想态 45）。`README.md` 为入口概览。
 
 ## 1. 目标与非目标
 
@@ -15,9 +15,9 @@ L2 nextpas.core.audio (仅依赖 L0-L1；io/fs 为显式允许 — 同层豁免)
 ```
 
 - `base` 不依赖同模块任何文件；`intf` 依赖 `base`；`impl` 依赖 `intf+base`；`facade` 聚合 re-export。
-- L2 理论仅依赖 L0-L1；`io` 为 L1 流抽象（IStream 缝），`fs` 为 L2 文件系统。`codec.registry` 直引 `nextpas.core.fs` 属同层 `L2→L2` 豁免债务，已在 `core/docs/core-module-registry.md` 显式登记为 `L0-L1 plus io/fs (container I/O seam via IStream, registry only)`，gate 允许通过。替代方案（interface 注入文件打开）已评估，当前选择直引以保持 API 极简，后续可迁至 `IFileSystem` 注入而不改契约。
+- L2 理论仅依赖 L0-L1；`io` 为 L1 流抽象（IStream 缝），`fs` 为 L2 文件系统。`codec.registry`/`resource` 直引 `nextpas.core.fs` 属同层 `L2→L2` 豁免债务，已在 `core/docs/core-module-registry.md` 显式登记为 `L0-L1 plus io/fs (container I/O seam via IStream, registry+resource, wav file helper)`，gate 允许通过。替代方案（interface 注入文件打开）已评估，当前选择直引以保持 API 极简，后续可迁至 `IFileSystem` 注入而不改契约。
 - L2 禁止 `*.ffi/vendor/miniaudio/mpg123/opusfile`（gate `grep -qi "\.ffi|vendor"`）。
-- 债务：`SyncObjs/Classes/SysUtils` 直引 4 文件（`device.null/graph/sfx/timeline`，`game` 为薄转发）→ 目标 `nextpas.core.sync`。
+- 债务：`SyncObjs/Classes/SysUtils` 直引 8 文件（`device.null/graph/sfx/timeline/spatial/event/bank/resource`，`game` 为薄转发）→ 目标 `nextpas.core.sync`。
 
 ## 3. 统一货币
 
@@ -97,9 +97,9 @@ L2 nextpas.core.audio (仅依赖 L0-L1；io/fs 为显式允许 — 同层豁免)
 
 ## 10. 验证
 
-`223 tests HEAPTRC OK (16门，sfx canonical + bank/resource)` + `38文件无ffi/vendor（当前 38，理想态 45）` + `15 GUID (含 sfx 0050 canonical + spatial 0051 + event 0052 + bank 0053 + resource 0054)` + `实时纪律 + two-phase/EnsureScratch/PanLawGains` + `bench 8项` + `hygiene` 为 `focused-runtime` 必要条件（见 `README.md` 测试矩阵与 `check_source_contract.sh`）。
+`223 tests HEAPTRC OK (16门，sfx canonical + bank/resource)` + `36文件无ffi/vendor（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）` + `17 GUID frozen (unique; 15 realtime domain + sfx 0050 canonical + spatial 0051 + event 0052 + bank 0053 + resource 0054)` + `实时纪律 + two-phase/EnsureScratch/PanLawGains` + `bench 10项` + `hygiene` 为 `focused-runtime` 必要条件（见 `README.md` 测试矩阵与 `check_source_contract.sh`）。
 
 ```
-bench_pcm_wav 8 项：Parse/64KB, Parse/1MB, Write/1MB, Graph/1K, Graph/4K, Timeline/1K, TimelineLoop/1K, Device.Drive/1K
-Graph/Timeline/Device 零分配快照，GWrite 预分配，输出 ns/op + MB/s -O2
+bench_pcm_wav 10 项：Parse/64KB, Parse/1MB, Write/1MB, Graph/1K, Graph/4K, Timeline/1K, TimelineLoop/1K, Device.Drive/1K, Bank/1K, Resource/TryGet
+Graph/Timeline/Device/Bank/Resource 零分配快照，GWrite 预分配，输出 ns/op + MB/s -O2
 ```

@@ -123,14 +123,20 @@ procedure TEventVoice.SetPitch(APitch: Single); begin if APitch < 0.25 then APit
 procedure TEventVoice.SetPosition(const APos: TAudioVec3); begin FSpatial.Position := APos; end;
 
 function TEventVoice.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var OutPtr, SrcPtr: PSingle; I, Ch, Idx0, Idx1: Integer; Frac, V0, V1, V: Single; LG: TAudioPanGains; LGain, LPan: Single; LAtt: Single;
+var OutPtr, SrcPtr: PSingle; I, Ch, Idx0, Idx1: Integer; Frac, V0, V1, V: Single; LG: TAudioPanGains; LGain, LPan: Single; LAtt: Single; Needed: Integer;
 begin
-  if Length(ABuffer.Data) < AFrames * FFormat.BlockAlign then
+  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
+  if Needed < 0 then
+    Needed := 0;
+  if Length(ABuffer.Data) < Needed then
   begin
     AFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
     if AFrames <= 0 then Exit(0);
+    Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
+    if Needed < 0 then
+      Needed := 0;
   end;
-  if FEof and not FLoop then begin FillChar(ABuffer.Data[0], AFrames*FFormat.BlockAlign, 0); ABuffer.FrameCount := AFrames; Exit(0); end;
+  if FEof and not FLoop then begin FillChar(ABuffer.Data[0], Needed, 0); ABuffer.FrameCount := AFrames; Exit(0); end;
   LAtt := AudioComputeAttenuation(FListener, FSpatial);
   LPan := AudioComputePan(FListener, FSpatial.Position);
   LPan := (LPan + FPan) * 0.5;
@@ -191,17 +197,19 @@ begin
 end;
 
 procedure TAudioEventSystemImpl.EnsureEventCapacity(ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FEvents) >= ANeeded then Exit;
-  Cap := Length(FEvents); if Cap<4 then Cap:=4; while Cap<ANeeded do Cap:=Cap*2; SetLength(FEvents, Cap);
+  LCap := Length(FEvents);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FEvents) <> LCap then SetLength(FEvents, LCap);
 end;
 
 procedure TAudioEventSystemImpl.EnsureInstanceCapacity(ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FInstances) >= ANeeded then Exit;
-  Cap := Length(FInstances); if Cap<8 then Cap:=8; while Cap<ANeeded do Cap:=Cap*2; SetLength(FInstances, Cap);
+  LCap := Length(FInstances);
+  AudioEnsureCapacity(LCap, ANeeded, 8);
+  if Length(FInstances) <> LCap then SetLength(FInstances, LCap);
 end;
 
 function TAudioEventSystemImpl.FindEvent(AId: TAudioEventId): Integer;
@@ -227,8 +235,11 @@ begin
 end;
 
 procedure TAudioEventSystemImpl.EnsureScratch(ANeeded: Integer);
+var LCap: Integer;
 begin
-  if Length(FScratch) < ANeeded then SetLength(FScratch, ANeeded);
+  LCap := Length(FScratch);
+  AudioEnsureCapacity(LCap, ANeeded, 256);
+  if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
 end;
 
 function TAudioEventSystemImpl.GetFormat: TAudioFormat; begin Result := FFormat; end;

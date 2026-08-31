@@ -9,9 +9,11 @@ completion claim.
 | Level | Meaning |
 | --- | --- |
 | `source-contract` | Source, docs, owner boundary, unsupported behavior, or public surface is locked by a focused contract. |
-| `forced-compile` | A non-native host/branch compiles, but no runtime behavior is proven. |
-| `focused-runtime` | A focused gate ran behavior on a named host or path. |
-| `ci-runtime-matrix` | Runtime proof is repeated in CI across the named host/arch matrix. |
+| `forced-compile` | A non-native host/branch compiles, but no runtime behavior is proven. Carrier for platform facades: `test_platform_simulated_host_compile_matrix` (5 legs: darwin/android/freebsd/unix via `-dNEXTPAS_FORCE_HOST_*`, windows via `-Twin64 -Px86_64`; all 29 `platform.*` facades) — compile coherence only. |
+| `focused-runtime` | A focused gate ran behavior on a named host or path. Today most L1/L2/L3 are Linux x86_64 focused-runtime by design. |
+| `ci-runtime-matrix` | Runtime proof is repeated in CI across the named host/arch matrix (durable). Currently **platform-scoped** only: Windows 28-gate `platform-windows-ci-matrix.sh` on `windows-latest` + macOS layer A 10-gate `platform-macos-ci-matrix.sh`. L2/L3 intentionally remain `focused-runtime` (Linux x86_64); host variance is owned by L0 `platform`. |
+
+> **Host matrix separation (design):** `ci-runtime-matrix` (durable CI runtime) and the simulated-host `forced-compile` matrix are intentionally separate. The simulated-host matrix (`core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix`, 5 legs × all 29 `platform.*` facades) proves compile coherence and stays `forced-compile`; it does **not** promote to `ci-runtime-matrix`. The durable `ci-runtime-matrix` is currently **platform-only** (Windows 28 + macOS 10 platform gates, see `core/docs/platform/runtime-truth-matrix.md` and `core/docs/platform/host-capability-matrix.md`). L2/L3 modules (fs, net, http, vfs, crypto, etc.) therefore correctly show `focused-runtime` on Linux x86_64 in the registry — their host variance is delegated to L0 `platform` via layering, not claimed independently. Promoting any L2/L3 to `ci-runtime-matrix` requires explicit consumer + CI ownership and would be recorded here and in `runtime-truth-matrix.md`.
 
 ## Registry
 
@@ -79,7 +81,6 @@ completion claim.
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | source-contract |
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML format | `nextpas.core.yaml` | L0-L1 | focused-runtime |
-| `zlib` | L2 | zlib wrapper (RFC1950) + raw deflate (RFC1951) | `nextpas.core.zlib` | L0-L1, platform.dl, compress.base 单源复用 | focused-runtime — base/intf + pure Inflate/Deflate (fixed Huffman + Stored, 32K 窗, hash-chain, `GFixedReady LongInt+GFixedLock`/`GOnceDone LongInt+GOnceLock` 双检锁) + ffi (libz.so lazy `InterlockedCompareExchange` + `TRTLCriticalSection`) + facade ZlibAuto (pure↔ffi 降级) + Try* 豪华 (`TryEncode/WithError/WithLevel*4` + `TryDecode/WithError/WithLimit*4` 于 intf/pure/ffi/门面三处一致), `ZLIB_MAX_DECOMPRESS_BYTES=32MiB` 单源（`compress.base GZIP_MAX_DECOMPRESS_BYTES` 别名）, `ZlibAdlerUpdate` NMAX 分块, `TZlibLevel` 委派 `compress.base LevelToZlib` 单源（零表拷贝）, `TTestSuite` 30 用例 adler/empty/store/bomb raw/wrapped level 0-3 32MiB limit FFI vs pure cross, `bench_zlib` 1MiB MB/s |
 
 ## Next Architecture Routes
 
@@ -88,5 +89,7 @@ completion claim.
 2. System final facade: TypInfo/SysUtils/Classes decisions tied to real compiler
    and core consumers.
 3. Mem L0 debt zero: remove or re-home the allowlisted L0 dependency debt.
-4. Platform runtime truth matrix: real host runtime evidence stays separate from
-   source-contract and forced-compile truth.
+4. Platform runtime truth matrix: `runtime-truth-matrix.md` is **platform-scoped** by design
+   (20 rows); real host runtime (`ci-runtime-matrix` + `focused-runtime`) stays
+   separate from `source-contract`/`forced-compile` (simulated-host 5-leg matrix).
+   L2/L3 host truth is owned by L0 `platform` until explicit promotion.
