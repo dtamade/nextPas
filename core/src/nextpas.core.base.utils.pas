@@ -61,12 +61,12 @@ begin
   LTemp.Free;
 end;
 
-procedure SafeFree(var AObj);
+procedure SafeFree(var AObj); inline;
 begin
   FreeAndNil(AObj);
 end;
 
-procedure ZeroMem(ADst: Pointer; ASize: SizeUInt);
+procedure ZeroMem(ADst: Pointer; ASize: SizeUInt); inline;
 begin
   if ASize = 0 then
     Exit;
@@ -75,7 +75,7 @@ begin
   FillChar(ADst^, ASize, 0);
 end;
 
-procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte);
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte); inline;
 begin
   if ASize = 0 then
     Exit;
@@ -84,7 +84,7 @@ begin
   FillChar(ADst^, ASize, AValue);
 end;
 
-procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt);
+procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 begin
   if ASize = 0 then
     Exit;
@@ -95,14 +95,14 @@ begin
   Move(ASrc^, ADst^, ASize);
 end;
 
-function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
+function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 begin
   if ASize = 0 then Exit(True);
   if (A = nil) or (B = nil) then Exit(False);
   Result := System.CompareByte(A^, B^, ASize) = 0;
 end;
 
-function CompareBytesOrdered(A, B: Pointer; ALen, BLen: SizeUInt): Integer;
+function CompareBytesOrdered(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
 var
   N: SizeUInt;
   C: SizeInt;
@@ -125,7 +125,7 @@ begin
   Result := 0;
 end;
 
-function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer;
+function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
 var
   N, I: SizeUInt;
   CA, CB: Byte;
@@ -152,7 +152,7 @@ begin
   Result := 0;
 end;
 
-function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32;
+function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
 var
   I: SizeUInt;
   P: PByte;
@@ -170,21 +170,21 @@ begin
   Result := H;
 end;
 
-function TryAddSizeUInt(const ALeft, ARight: SizeUInt; var ASum: SizeUInt): Boolean;
+function TryAddSizeUInt(const ALeft, ARight: SizeUInt; var ASum: SizeUInt): Boolean; inline;
 begin
   Result := ALeft <= MAX_SIZE_UINT - ARight;
   if Result then
     ASum := ALeft + ARight;
 end;
 
-function CheckedAddSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt;
+function CheckedAddSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
 begin
   Result := 0;
   if not TryAddSizeUInt(ALeft, ARight, Result) then
     raise EOverflow.Create('CheckedAddSizeUInt: size overflow');
 end;
 
-function TryMulSizeUInt(const ALeft, ARight: SizeUInt; var AProduct: SizeUInt): Boolean;
+function TryMulSizeUInt(const ALeft, ARight: SizeUInt; var AProduct: SizeUInt): Boolean; inline;
 begin
   if (ALeft = 0) or (ARight = 0) then
   begin
@@ -197,7 +197,7 @@ begin
     AProduct := ALeft * ARight;
 end;
 
-function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt;
+function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
 begin
   Result := 0;
   if not TryMulSizeUInt(ALeft, ARight, Result) then

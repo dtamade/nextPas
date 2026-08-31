@@ -633,10 +633,14 @@ begin
     Exit;
   while FPending.TryDequeue(LItem) do
   begin
-    if Assigned(LItem.Callback) then
-      LItem.Callback(LItem.Context)
-    else if Assigned(LItem.Method) then
-      LItem.Method(LItem.Context);
+    try
+      if Assigned(LItem.Callback) then
+        LItem.Callback(LItem.Context)
+      else if Assigned(LItem.Method) then
+        LItem.Method(LItem.Context);
+    except
+      { Isolate per-item failure: keep draining so remaining Posts are not stranded. }
+    end;
     Inc(Result);
   end;
 end;

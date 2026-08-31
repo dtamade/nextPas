@@ -64,6 +64,8 @@ function Max(AA, AB: Single): Single; overload;
 function Clamp(const AValue, AMin, AMax: Double): Double; overload; inline;
 function Clamp(const AValue, AMin, AMax: Single): Single; overload;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; overload; inline;
+function ClampByte(const AValue: Int32): Byte; overload; inline;
+function ClampByte(const AValue: Single): Byte; overload; inline;
 function Lerp(const AA, AB, AT: Double): Double; overload;
 function Lerp(const AA, AB, AT: Single): Single; overload;
 function InverseLerp(const AA, AB, AValue: Double): Double; overload;
@@ -1197,6 +1199,16 @@ begin
     Result := AMax
   else
     Result := AValue;
+end;
+
+function ClampByte(const AValue: Int32): Byte;
+begin
+  Result := Byte(Clamp(AValue, Int32(0), Int32(255)));
+end;
+
+function ClampByte(const AValue: Single): Byte;
+begin
+  Result := Byte(Clamp(Int32(System.Round(AValue)), Int32(0), Int32(255)));
 end;
 
 function Lerp(const AA, AB, AT: Single): Single;

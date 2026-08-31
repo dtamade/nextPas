@@ -59,12 +59,12 @@ implementation
 
 { Swap }
 
-function SwapUInt16(const AValue: UInt16): UInt16;
+function SwapUInt16(const AValue: UInt16): UInt16; inline;
 begin
   Result := ((AValue shr 8) and $FF) or ((AValue and $FF) shl 8);
 end;
 
-function SwapUInt32(const AValue: UInt32): UInt32;
+function SwapUInt32(const AValue: UInt32): UInt32; inline;
 begin
   Result := ((AValue shr 24) and $000000FF) or
             ((AValue shr 8)  and $0000FF00) or
@@ -72,7 +72,7 @@ begin
             ((AValue shl 24) and $FF000000);
 end;
 
-function SwapUInt64(const AValue: UInt64): UInt64;
+function SwapUInt64(const AValue: UInt64): UInt64; inline;
 begin
   Result := ((AValue shr 56) and $00000000000000FF) or
             ((AValue shr 40) and $000000000000FF00) or
@@ -86,7 +86,7 @@ end;
 
 { Conditional swap }
 
-function ToEndian16(const AValue: UInt16; const AEndian: TEndianness): UInt16;
+function ToEndian16(const AValue: UInt16; const AEndian: TEndianness): UInt16; inline;
 begin
   if AEndian = NATIVE_ENDIAN then
     Result := AValue
@@ -94,7 +94,7 @@ begin
     Result := SwapUInt16(AValue);
 end;
 
-function ToEndian32(const AValue: UInt32; const AEndian: TEndianness): UInt32;
+function ToEndian32(const AValue: UInt32; const AEndian: TEndianness): UInt32; inline;
 begin
   if AEndian = NATIVE_ENDIAN then
     Result := AValue
@@ -102,7 +102,7 @@ begin
     Result := SwapUInt32(AValue);
 end;
 
-function ToEndian64(const AValue: UInt64; const AEndian: TEndianness): UInt64;
+function ToEndian64(const AValue: UInt64; const AEndian: TEndianness): UInt64; inline;
 begin
   if AEndian = NATIVE_ENDIAN then
     Result := AValue
@@ -110,46 +110,46 @@ begin
     Result := SwapUInt64(AValue);
 end;
 
-function FromEndian16(const AValue: UInt16; const AEndian: TEndianness): UInt16;
+function FromEndian16(const AValue: UInt16; const AEndian: TEndianness): UInt16; inline;
 begin
   Result := ToEndian16(AValue, AEndian);
 end;
 
-function FromEndian32(const AValue: UInt32; const AEndian: TEndianness): UInt32;
+function FromEndian32(const AValue: UInt32; const AEndian: TEndianness): UInt32; inline;
 begin
   Result := ToEndian32(AValue, AEndian);
 end;
 
-function FromEndian64(const AValue: UInt64; const AEndian: TEndianness): UInt64;
+function FromEndian64(const AValue: UInt64; const AEndian: TEndianness): UInt64; inline;
 begin
   Result := ToEndian64(AValue, AEndian);
 end;
 
 { Read from pointer }
 
-function ReadUInt16LE(const ASrc: PByte): UInt16;
+function ReadUInt16LE(const ASrc: PByte): UInt16; inline;
 begin
   Result := UInt16(ASrc[0]) or (UInt16(ASrc[1]) shl 8);
 end;
 
-function ReadUInt16BE(const ASrc: PByte): UInt16;
+function ReadUInt16BE(const ASrc: PByte): UInt16; inline;
 begin
   Result := (UInt16(ASrc[0]) shl 8) or UInt16(ASrc[1]);
 end;
 
-function ReadUInt32LE(const ASrc: PByte): UInt32;
+function ReadUInt32LE(const ASrc: PByte): UInt32; inline;
 begin
   Result := UInt32(ASrc[0]) or (UInt32(ASrc[1]) shl 8) or
             (UInt32(ASrc[2]) shl 16) or (UInt32(ASrc[3]) shl 24);
 end;
 
-function ReadUInt32BE(const ASrc: PByte): UInt32;
+function ReadUInt32BE(const ASrc: PByte): UInt32; inline;
 begin
   Result := (UInt32(ASrc[0]) shl 24) or (UInt32(ASrc[1]) shl 16) or
             (UInt32(ASrc[2]) shl 8) or UInt32(ASrc[3]);
 end;
 
-function ReadUInt64LE(const ASrc: PByte): UInt64;
+function ReadUInt64LE(const ASrc: PByte): UInt64; inline;
 begin
   Result := UInt64(ASrc[0]) or (UInt64(ASrc[1]) shl 8) or
             (UInt64(ASrc[2]) shl 16) or (UInt64(ASrc[3]) shl 24) or
@@ -157,7 +157,7 @@ begin
             (UInt64(ASrc[6]) shl 48) or (UInt64(ASrc[7]) shl 56);
 end;
 
-function ReadUInt64BE(const ASrc: PByte): UInt64;
+function ReadUInt64BE(const ASrc: PByte): UInt64; inline;
 begin
   Result := (UInt64(ASrc[0]) shl 56) or (UInt64(ASrc[1]) shl 48) or
             (UInt64(ASrc[2]) shl 40) or (UInt64(ASrc[3]) shl 32) or
@@ -167,19 +167,19 @@ end;
 
 { Write to pointer }
 
-procedure WriteUInt16LE(const ADst: PByte; const AValue: UInt16);
+procedure WriteUInt16LE(const ADst: PByte; const AValue: UInt16); inline;
 begin
   ADst[0] := Byte(AValue);
   ADst[1] := Byte(AValue shr 8);
 end;
 
-procedure WriteUInt16BE(const ADst: PByte; const AValue: UInt16);
+procedure WriteUInt16BE(const ADst: PByte; const AValue: UInt16); inline;
 begin
   ADst[0] := Byte(AValue shr 8);
   ADst[1] := Byte(AValue);
 end;
 
-procedure WriteUInt32LE(const ADst: PByte; const AValue: UInt32);
+procedure WriteUInt32LE(const ADst: PByte; const AValue: UInt32); inline;
 begin
   ADst[0] := Byte(AValue);
   ADst[1] := Byte(AValue shr 8);
@@ -187,7 +187,7 @@ begin
   ADst[3] := Byte(AValue shr 24);
 end;
 
-procedure WriteUInt32BE(const ADst: PByte; const AValue: UInt32);
+procedure WriteUInt32BE(const ADst: PByte; const AValue: UInt32); inline;
 begin
   ADst[0] := Byte(AValue shr 24);
   ADst[1] := Byte(AValue shr 16);
@@ -195,7 +195,7 @@ begin
   ADst[3] := Byte(AValue);
 end;
 
-procedure WriteUInt64LE(const ADst: PByte; const AValue: UInt64);
+procedure WriteUInt64LE(const ADst: PByte; const AValue: UInt64); inline;
 begin
   ADst[0] := Byte(AValue);
   ADst[1] := Byte(AValue shr 8);
@@ -207,7 +207,7 @@ begin
   ADst[7] := Byte(AValue shr 56);
 end;
 
-procedure WriteUInt64BE(const ADst: PByte; const AValue: UInt64);
+procedure WriteUInt64BE(const ADst: PByte; const AValue: UInt64); inline;
 begin
   ADst[0] := Byte(AValue shr 56);
   ADst[1] := Byte(AValue shr 48);
@@ -221,7 +221,7 @@ end;
 
 { Advancing cursor reads }
 
-function TryReadUInt8(var ASpan: TByteSpan; out AValue: Byte): Boolean;
+function TryReadUInt8(var ASpan: TByteSpan; out AValue: Byte): Boolean; inline;
 begin
   if ASpan.Len < 1 then
     Exit(False);
@@ -293,7 +293,7 @@ end;
 
 { Advancing cursor writes }
 
-function TryWriteUInt8(var ASpan: TByteSpan; const AValue: Byte): Boolean;
+function TryWriteUInt8(var ASpan: TByteSpan; const AValue: Byte): Boolean; inline;
 begin
   if ASpan.Len < 1 then
     Exit(False);

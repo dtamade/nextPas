@@ -833,6 +833,7 @@ make focused FOCUS=core/tests/nextpas.core.db/test_db_sqlite_pragmas  # C5 调�
 make focused FOCUS=core/tests/nextpas.core.db/test_db_array_bind  # C2 参数级批量绑定（sqlite 离线诚实契约 + pg 真机段）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_async      # B6 异步挂载与取消（sqlite 离线 + pg 真机 PQcancel 段）
 make focused FOCUS=core/tests/nextpas.core.db/test_db_pg_listen  # B7 LISTEN/NOTIFY 订阅（真机，NEXTPAS_PG_TEST_CONN 门控）
+make focused FOCUS=core/tests/nextpas.core.db/test_db_redis_subscribe  # Redis SUBSCRIBE 订阅（V3-B8，离线回放；live 段需 NEXTPAS_REDIS_TEST_CONN）
 make focused FOCUS=core/tests/nextpas.core.http.middleware/test_session_sqlite  # 消费方回归
 ```
 

@@ -75,7 +75,8 @@ function DeflateRawCompress(const AData: TBytes;
 implementation
 
 uses
-  zlib, nextpas.core.errors, nextpas.core.exception;
+  zlib, nextpas.core.errors, nextpas.core.exception,
+  nextpas.core.zlib.base, nextpas.core.zlib, nextpas.core.zlib.pure;
 
 type
   TDeflateWriter = class(TInterfacedObject, IWriter, ICompressWriter)
@@ -157,6 +158,22 @@ begin
   if ACount > SizeUInt(High(LongWord)) then
     raise EIOError.Create('deflate: input size exceeds limit');
   Result := LongWord(ACount);
+end;
+
+function CompressLevelToZlibLevel(const ALevel: TCompressionLevel): TZlibLevel; inline;
+begin
+  case ALevel of
+    clNone: Result := zlNone;
+    clFastest: Result := zlFastest;
+    clBest: Result := zlBest;
+  else
+    Result := zlDefault;
+  end;
+end;
+
+function UsePureBackend: Boolean; inline;
+begin
+  Result := not ZlibFfiIsAvailable or (ZlibActiveBackend = zbPurePascal);
 end;
 
 { TDeflateWriter }
@@ -623,6 +640,8 @@ var
   LEmptyInput: Byte;
   LInput: pBytef;
 begin
+  if UsePureBackend then
+    Exit(ZlibPureEncodeWithLevel(AData, CompressLevelToZlibLevel(ALevel)));
   Result := nil;
   LDstLen := compressBound(ZlibInputSize(SizeUInt(Length(AData))));
   if LDstLen = 0 then
@@ -658,6 +677,8 @@ var
   LInputSize: LongWord;
   LByte: Byte;
 begin
+  if UsePureBackend then
+    Exit(ZlibPureDecodeWithLimit(AData, AMaxOutputSize));
   if Length(AData) < 2 then
     raise EIOError.Create('deflate: truncated stream');
   if (Length(AData) >= 2) and IsInvalidZlibHeader(AData[0], AData[1]) then
@@ -975,6 +996,8 @@ var
   LEmpty: Byte;
   LInput: pBytef;
 begin
+  if UsePureBackend then
+    Exit(ZlibPureEncodeRawWithLevel(AData, CompressLevelToZlibLevel(ALevel)));
   { 完整 raw 流：Z_FINISH 直至 Z_STREAM_END，不剥尾部空块。 }
   FillChar(LStream, SizeOf(LStream), 0);
   if deflateInit2(LStream, LevelToZlib(ALevel), Z_DEFLATED, -15, 8,
@@ -1054,6 +1077,8 @@ var
   LAvailOut: LongWord;
   LRet: Int32;
 begin
+  if UsePureBackend then
+    Exit(ZlibPureDecodeRawWithLimit(AData, AMaxOutputSize));
   if AMaxOutputSize = 0 then
     raise EIOError.Create('raw inflate: max output size must be > 0');
   Result := nil;
@@ -1106,7 +1131,17 @@ function RawDeflateDecompressToBuffer(const AData: TBytes; const ADst: PByte;
 var
   LStream: z_stream;
   LRet: Int32;
+  LDecoded: TBytes;
 begin
+  if UsePureBackend then
+  begin
+    LDecoded := ZlibPureDecodeRawWithLimit(AData, AMaxOutputSize);
+    if SizeUInt(Length(LDecoded)) > ADstLen then
+      raise EIOError.Create('raw inflate: dest buffer too small');
+    if Length(LDecoded) > 0 then
+      Move(LDecoded[0], ADst^, SizeUInt(Length(LDecoded)));
+    Exit(SizeUInt(Length(LDecoded)));
+  end;
   if ADst = nil then
   begin
     if ADstLen <> 0 then

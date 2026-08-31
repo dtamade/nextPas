@@ -20,7 +20,7 @@
 ```pascal
 const
   NEXTPAS_CORE_NAME = 'nextpas.core';
-  NEXTPAS_CORE_VERSION = '0.1.0';
+  NEXTPAS_CORE_VERSION = '1.0.0';
   MAX_SIZE_INT = High(SizeInt);
   MAX_SIZE_UINT = High(SizeUInt);
   MIN_SIZE_INT = Low(SizeInt);

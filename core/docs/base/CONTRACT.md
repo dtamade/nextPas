@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.base*.pas`（2 个源文件，1101 行）
 **层级**：L0（根模块，仅依赖 FPC RTL + nextpas.core.exception）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-30
-**版本**：1.1
+**最后更新**：2026-07-01
+**版本**：1.0
 
 ---
 
@@ -15,7 +15,7 @@
 ```pascal
 const
   NEXTPAS_CORE_NAME = 'nextpas.core';
-  NEXTPAS_CORE_VERSION = '0.1.0';
+  NEXTPAS_CORE_VERSION = '1.0.0';
 ```
 
 ### 1.2 规范类型别名
@@ -320,4 +320,3 @@ TByteSpan: 非拥有视图
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |
-| 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |

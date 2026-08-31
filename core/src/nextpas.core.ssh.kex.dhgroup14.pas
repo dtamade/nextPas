@@ -63,6 +63,7 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.random,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.bigint,
@@ -124,36 +125,6 @@ begin
   end;
 end;
 
-function IsAllZero(const ABuf: TBytes): Boolean;
-var
-  I: Integer;
-begin
-  for I := 0 to High(ABuf) do
-    if ABuf[I] <> 0 then
-      Exit(False);
-  Result := True;
-end;
-
-function CompareUnsigned(const A, B: TBytes): Integer;
-var
-  I, LA, LB, SA, SB: Integer;
-begin
-  LA := Length(A); SA := 0;
-  while (SA < LA) and (A[SA] = 0) do Inc(SA);
-  LB := Length(B); SB := 0;
-  while (SB < LB) and (B[SB] = 0) do Inc(SB);
-  LA := LA - SA;
-  LB := LB - SB;
-  if LA < LB then Exit(-1);
-  if LA > LB then Exit(1);
-  for I := 0 to LA-1 do
-  begin
-    if A[SA+I] < B[SB+I] then Exit(-1);
-    if A[SA+I] > B[SB+I] then Exit(1);
-  end;
-  Result := 0;
-end;
-
 destructor TSshKexDHGroup14.Destroy;
 begin
   SecureZeroBytes(FPriv);
@@ -170,7 +141,7 @@ begin
   FPrime := SshDHGroup14Prime;
   FGenerator := SshDHGroup14Generator;
   FPriv := GenerateSecureRandomBytes(32);
-  if (Length(FPriv) = 0) or IsAllZero(FPriv) then
+  if (Length(FPriv) = 0) or IsZeroBytes(FPriv) then
   begin
     FPriv[0] := $7F;
     FPriv[High(FPriv)] := $01;
@@ -235,17 +206,17 @@ begin
 
   if Length(LServerF) = 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f empty');
-  if (CompareUnsigned(LServerF, SshDHGroup14Generator) <= 0)
-    or (CompareUnsigned(LServerF, SshDHGroup14Prime) >= 0) then
+  if (CompareUnsignedSpan(StripLeadingZeroView(LServerF), StripLeadingZeroView(SshDHGroup14Generator)) <= 0)
+    or (CompareUnsignedSpan(StripLeadingZeroView(LServerF), StripLeadingZeroView(SshDHGroup14Prime)) >= 0) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f out of range');
-  if IsAllZero(LServerF) then
+  if IsZeroBytes(LServerF) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f all zero');
 
   if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, SshDHGroup14Prime, LShared, LErr) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
-  if IsAllZero(LShared) then
+  if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
-  if CompareUnsigned(LShared, SshDHGroup14Prime) >= 0 then
+  if CompareUnsignedSpan(StripLeadingZeroView(LShared), StripLeadingZeroView(SshDHGroup14Prime)) >= 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: shared secret out of range');
 
   Result.SharedSecret := LShared;

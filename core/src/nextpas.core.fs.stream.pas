@@ -164,7 +164,11 @@ begin
   try
     LFile.Lock(AKind);
   except
-    LFile.Close;
+    try
+      LFile.Close;
+    except
+      // Preserve original Lock exception; Close failure is secondary.
+    end;
     LFile := nil;
     raise;
   end;

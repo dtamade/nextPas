@@ -111,6 +111,10 @@ const
     '<div class="row"><button class="primary" id="pushBtn" aria-label="Request native push">Request native push</button>' +
     '<span class="val" id="pushOut">&#8212;</span></div>'#10 +
     '<div class="muted">invoke triggers native Emit; page listens</div></div>'#10 +
+    '<div class="card"><h2>Missing asset &#183; 404</h2>'#10 +
+    '<div class="row"><button class="primary" id="missBtn" aria-label="Fetch missing asset">Fetch missing.txt (404)</button>' +
+    '<span class="val" id="missOut">&#8212;</span></div>'#10 +
+    '<div class="muted">npres:// 404 → text/plain empty body (namespace isolation)</div></div>'#10 +
     '<div class="card" style="grid-column:1/-1"><h2>Event log</h2>'#10 +
     '<div class="log" id="log" role="log" aria-live="polite" aria-atomic="false"></div></div>'#10 +
     '</div></div>'#10 +
@@ -164,6 +168,10 @@ const
     '__npw.invoke("demo.push",{}).then(function(r){lastOp(t0);' +
     'logLine("invoke demo.push → "+JSON.stringify(r)+", awaiting event")},' +
     'function(e){logLine("demo.push failed: "+JSON.stringify(e));showErr("push: "+JSON.stringify(e))})})'#10 +
+    '$("missBtn").addEventListener("click",function(){' +
+    'var t0=performance.now();$("missOut").textContent="…";' +
+    'fetch("npres://app/missing.txt").then(function(r){$("missOut").textContent=r.status;lastOp(t0);' +
+    'logLine("fetch missing → "+r.status);if(!r.ok)showErr("404 as expected: "+r.status)}).catch(function(e){$("missOut").textContent="ERR";logLine("fetch missing failed: "+e);showErr(e)})})'#10 +
     'function __npwSelf(kind){var p=null;'#10 +
     'if(kind==="sum")p=__npw.invoke("demo.sum",{a:19,b:23});' +
     'else if(kind==="counter")p=__npw.invoke("demo.counter",{});' +

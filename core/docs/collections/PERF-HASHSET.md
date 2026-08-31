@@ -1,6 +1,8 @@
 # HashSet / Set 性能快照
 
-**日期**：2026-07-21（同机重跑，可用性 P2-C）
+> **时效声明（2026-08-31 刷新）**：本文件为**归档快照**，绝对数值仅反映 2026-07-21 同机重跑（`fb1ead4d8` 附近），已超 30 天新鲜度阈值，**不得作为对外性能宣称**。对外宣称或门禁判定以本机 `make -C core/benchmarks/nextpas.core.collections bench-set` 重跑为准；跨机硬门禁不入库（见 `core/docs/test/CONTRACT.md` perf 策略）。
+
+**日期**：2026-07-21（同机重跑，可用性 P2-C；归档快照，待同机重跑刷新）
 **后端**：`THashSet` → `TSwissHashMap<K,Byte>`
 **机器**：Linux x86_64，44 cores（`nproc=44`），FPC 3.3.1
 **主机**：dtamade，kernel 6.12.74+deb13+1-amd64
@@ -40,7 +42,7 @@
 | HashSet.Contains(hit) | 4.02 ms | 3.89 ms | 一致 |
 | TreeSet.Add | 35.30 ms | 38.41 ms | 有噪声；CV 4.6% |
 
-**结论**：Swiss-backed HashSet 相对 TreeSet 的优势仍成立；绝对数字仅用于同机对照，勿跨机硬比。
+**结论**：Swiss-backed HashSet 相对 TreeSet 的优势仍成立；绝对数字仅用于同机对照，勿跨机硬比。**门禁脱节说明**：本快照不接入 CI 硬门禁；当前门禁为可复现的 bench 入口与相对比值（同机 `bench_set`），对外宣称前必须重跑刷新本文件日期与表格。
 
 ## 对照说明
 
@@ -48,9 +50,15 @@
   **不可与本表直接比绝对数字**（机型、FPC 选项、bench 框架、是否含 Create/Free 循环均可能不同）。
 - 本 `BenchHashSetAdd` 在每次 iteration 内 **Create + N×Add + Free**，是吞吐型整表构建，不是单次 Add 微计时。
 
+## 时效与门禁
+
+- **新鲜度**：>30 天未刷新即视为归档，本文件自 2026-07-21 已归档；刷新时更新文首日期、表格与 Landing SHA。
+- **对外宣称**：禁止直接引用归档绝对值，须附同机重跑命令与机器指纹（`nproc`/`FPC 版本`/`-O3 -Xs`）。
+- **门禁关系**：`core/benchmarks/nextpas.core.collections/bench_set` 为可复现门禁入口（产物进 `core/build/`，零拷贝/复用现有 `bench` 框架与 `bytes.ops` 等单源，不新增重复类型）；CI 仅做同机相对回归与可用性校验，不设跨机绝对值硬门禁。
+
 ## 复现
 
-推荐 Makefile 入口（产物进 `core/build/`）：
+推荐 Makefile 入口（产物进 `core/build/`，与门禁一致）：
 
 ```bash
 export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"

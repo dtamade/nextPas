@@ -81,6 +81,10 @@ var
     AConnectFlags: guint): gulong; cdecl;
   G_memory_input_stream_new_from_data: function(AData: Pointer;
     ALen: gssize; ADestroy: TGDestroyNotify): Pointer; cdecl;
+  G_memory_input_stream_new_from_bytes: function(ABytes: Pointer): Pointer; cdecl;
+  G_bytes_new_with_free_func: function(AData: Pointer; ASize: NativeUInt;
+    ADestroy: TGDestroyNotify; AUserData: Pointer): Pointer; cdecl;
+  G_bytes_unref: procedure(ABytes: Pointer); cdecl;
   G_malloc: function(ASize: NativeUInt): Pointer; cdecl;
   G_free: procedure(AMem: Pointer); cdecl;
   G_quark_from_static_string: function(AString: PAnsiChar): GQuark; cdecl;
