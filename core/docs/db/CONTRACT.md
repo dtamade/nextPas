@@ -20,9 +20,9 @@
 | `nextpas.core.db.trace` | 观测 | `TDbTraceHub` + `IDbTraceListener`/`IDbTraceControl` 实现（§2.12，默认零成本） |
 | `nextpas.core.db.pool` | L3 池 | `TDbPool` 通用池（任意后端 `IDbConnection`，读池+单写者，策略九字段，见 §2.7） |
 | `nextpas.core.db.factory` | L3 工厂 | `IDbDriver` 注册表 + `DbOpen/DbOpenPool` 统一入口（6 驱动 sqlite/pg/mysql/odbc/redis/dm 自注册，见 §2.14） |
-| `nextpas.core.db.sqlscan` | L0 共享引擎 | 单遍词法扫描：`SqlScanTranslateQuestion/SqlScanRenderDollar/SqlScanMaxPlaceholderIndex/SqlScanDecorate`（pg/mysql/odbc/dm 占位符同源，见 §2.20） |
+| `nextpas.core.db.sqlscan` | L1 共享引擎 | 单遍词法扫描：`SqlScanTranslateQuestion/SqlScanRenderDollar/SqlScanMaxPlaceholderIndex/SqlScanDecorate`（pg/mysql/odbc/dm 占位符同源，依托 `text.builder`，见 §2.20） |
 | `nextpas.core.db.capprobe` | L0 探针 | `ParseServerVersion` + `ProbeNativeVector/ProbeJsonPath/ProbeRangeTypes/ProbeBulkCopy`（`ServerVersion 0→false` honest，`PG≥140000` 仅 `COPY BINARY` 预留，当前 5/6 bulk hard-coded `true`，见 §2.22） |
-| `nextpas.core.db.bulk` | L0 复用件 | `TDbBulkBuffer` + `DbBulkEscape`/`DbBulkFlushChunked` 单源（5 后端共用，详 §2.22） |
+| `nextpas.core.db.bulk` | L3 家族复用件 | `TDbBulkBuffer` + `DbBulkEscape`/`DbBulkFlushChunked` 单源（5 后端共用，依托 `db.base`/`text.sql` 单源，详 §2.22） |
 | `nextpas.core.db.async` | L3 异步 | `TDbAsyncExecutor` 单飞 + 令牌→`IDbCancelControl`（`PQcancel`/中断，见 §2.17，不进门面） |
 | `nextpas.core.db.sqlite.*` | L2 后端 | SQLite 实现：base/ffi/conn/pool/tx + 门面 `sqlite`（7 单元，含适配） |
 | `nextpas.core.db.sqlite.adapter` | 适配 | IDbConnection/IDbQuery 的 SQLite 包装（`ConnectSqlite`） |
