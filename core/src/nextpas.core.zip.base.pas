@@ -112,7 +112,7 @@ type
 
 {** 名称安全谓词：非空、非绝对路径、无盘符前缀、无反斜杠、无 '..' 段。
     尾随 '/'（目录条目）合法。 *}
-function IsSafeZipEntryName(const AName: string): Boolean;
+function IsSafeZipEntryName(const AName: string): Boolean; inline;
 
 {** 同 IsSafeZipEntryName，不满足时 raise EArgumentError（写端入参校验用）。 *}
 procedure ValidateZipEntryName(const AName: string);
@@ -159,7 +159,7 @@ begin
   inherited Create(AMessage);
 end;
 
-function IsSafeZipEntryName(const AName: string): Boolean;
+function IsSafeZipEntryName(const AName: string): Boolean; inline;
 var
   LI, LSegStart: Integer;
 begin
