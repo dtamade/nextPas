@@ -46,7 +46,7 @@ function CreateSpatialSource(const ASource: IRealtimeAudioSource; const AListene
 
 implementation
 
-uses Math, SysUtils, nextpas.core.audio.mix;
+uses Math, nextpas.core.audio.mix;
 
 function CreateSpatialSource(const ASource: IRealtimeAudioSource; const AListener: TAudioListener; const AParams: TAudioSpatialParams): IAudioSpatialSource;
 begin

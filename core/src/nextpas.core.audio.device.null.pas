@@ -5,7 +5,6 @@ unit nextpas.core.audio.device.null;
 interface
 
 uses
-  SysUtils,
   Classes,
   SyncObjs,
   nextpas.core.base,
