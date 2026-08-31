@@ -9,7 +9,6 @@ uses
 
 type
   TQueryEntry = np_query_database.TQueryEntry;
-  PQueryEntry = np_query_database.PQueryEntry;
   TQueryEntryVec = np_query_database.TQueryEntryVec;
   TQueryIndexMap = np_query_database.TQueryIndexMap;
   TQueryDatabase = np_query_database.TQueryDatabase;

@@ -8,7 +8,6 @@ uses
   np_preprocessor;
 
 type
-  IIncludeResolver = np_preprocessor.IIncludeResolver;
   TIncludePathVec = np_preprocessor.TIncludePathVec;
   TFileIncludeResolver = np_preprocessor.TFileIncludeResolver;
   TDefineEntry = np_preprocessor.TDefineEntry;
@@ -16,6 +15,7 @@ type
   TDefineTable = np_preprocessor.TDefineTable;
   TConditionalFrame = np_preprocessor.TConditionalFrame;
   TConditionalFrameVec = np_preprocessor.TConditionalFrameVec;
+  TTokenVec = np_preprocessor.TTokenVec;
   TPreprocessor = np_preprocessor.TPreprocessor;
 
 implementation

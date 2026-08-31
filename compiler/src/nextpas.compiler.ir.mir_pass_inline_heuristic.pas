@@ -7,6 +7,9 @@ interface
 uses
   np_mir_pass_inline_heuristic;
 
+type
+  TMirInlineHeuristicPass = np_mir_pass_inline_heuristic.TMirInlineHeuristicPass;
+
 implementation
 
 end.

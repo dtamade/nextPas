@@ -7,6 +7,9 @@ interface
 uses
   np_mir_pass_devirt;
 
+type
+  TMirDevirtPass = np_mir_pass_devirt.TMirDevirtPass;
+
 implementation
 
 end.

@@ -7,6 +7,11 @@ interface
 uses
   np_hir_to_mir;
 
+type
+  THirMirValueMapEntry = np_hir_to_mir.THirMirValueMapEntry;
+  THirMirValueMap = np_hir_to_mir.THirMirValueMap;
+  THirToMirLowering = np_hir_to_mir.THirToMirLowering;
+
 implementation
 
 end.
