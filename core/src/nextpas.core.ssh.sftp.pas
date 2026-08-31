@@ -18,8 +18,8 @@ unit nextpas.core.ssh.sftp;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
