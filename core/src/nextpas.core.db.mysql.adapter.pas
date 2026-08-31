@@ -1755,29 +1755,23 @@ end;
 
 procedure TDbMyConnection.BeginCopy(const ATable: string; const AColumns: array of string);
 begin
-  FBulk.BeginCopy(dbkMysql, ATable, AColumns);
+  DbBulkBeginCopy(FBulk, dbkMysql, ATable, AColumns);
 end;
 
 procedure TDbMyConnection.WriteRow(const AValues: array of string);
 begin
-  FBulk.WriteRow(dbkMysql, AValues);
+  DbBulkWriteRow(FBulk, dbkMysql, AValues);
 end;
 
 procedure TDbMyConnection.EndCopy;
 begin
-  if not FBulk.IsActive then Exit;
-  try
-    if FBulk.RowCount = 0 then Exit;
-    DbBulkFlushBuffer(FBulk, MaxPlaceholders, InTransaction,
-      @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
-  finally
-    FBulk.Clear;
-  end;
+  DbBulkEndCopy(FBulk, MaxPlaceholders, InTransaction, SupportsSavepoints,
+    @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
 end;
 
 procedure TDbMyConnection.AbortCopy;
 begin
-  FBulk.Clear;
+  DbBulkAbortCopy(FBulk);
 end;
 
 { ---- 工厂 ---- }

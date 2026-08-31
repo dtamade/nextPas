@@ -35,7 +35,6 @@ uses
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.text.kv,
-  nextpas.core.text.sql,
   nextpas.core.db.sqlscan,
   nextpas.core.db.bulk,
   nextpas.core.db.err,
@@ -91,8 +90,9 @@ begin
 end;
 
 { ---- BulkCopy 标识符引用（V4.3 completeness）----
-  单源复用：双引号逻辑收口至 nextpas.core.db.base.DbBulkQuoteIdent /
-  nextpas.core.db.bulk.DbBulkColList / nextpas.core.text.sql.SqlQuoteQualifiedIdent，pg 适配器仅作薄包装，无重复实现，零 SysUtils。 }
+  单源复用：双引号逻辑收口至 nextpas.core.db.bulk.DbBulkQuoteIdent /
+  DbBulkQuoteQualifiedIdent / DbBulkColList（L3 家族复用件单源，零 text.sql 直引），
+  pg 适配器仅作薄包装，无重复实现，零 SysUtils。 }
 function PgQuoteIdent(const S: string): string; inline;
 begin
   Result := DbBulkQuoteIdent(S);
@@ -100,7 +100,7 @@ end;
 
 function PgQuoteQualifiedIdent(const S: string): string; inline;
 begin
-  Result := SqlQuoteQualifiedIdent(S);
+  Result := DbBulkQuoteQualifiedIdent(S);
 end;
 
 function PgQuotedColList(const ACols: TDbStringArray): string; inline;
@@ -978,29 +978,23 @@ end;
 
 procedure TDbPgConnection.BeginCopy(const ATable: string; const AColumns: array of string);
 begin
-  FBulk.BeginCopy(dbkPostgres, ATable, AColumns);
+  DbBulkBeginCopy(FBulk, dbkPostgres, ATable, AColumns);
 end;
 
 procedure TDbPgConnection.WriteRow(const AValues: array of string);
 begin
-  FBulk.WriteRow(dbkPostgres, AValues);
+  DbBulkWriteRow(FBulk, dbkPostgres, AValues);
 end;
 
 procedure TDbPgConnection.EndCopy;
 begin
-  if not FBulk.IsActive then Exit;
-  try
-    if FBulk.RowCount = 0 then Exit;
-    DbBulkFlushBuffer(FBulk, MaxPlaceholders, InTransaction,
-      @PgExec, @BeginTxn, @CommitTxn, @RollbackTxn);
-  finally
-    AbortCopy;
-  end;
+  DbBulkEndCopy(FBulk, MaxPlaceholders, InTransaction, SupportsSavepoints,
+    @PgExec, @BeginTxn, @CommitTxn, @RollbackTxn);
 end;
 
 procedure TDbPgConnection.AbortCopy;
 begin
-  FBulk.Clear;
+  DbBulkAbortCopy(FBulk);
 end;
 
 destructor TDbPgConnection.Destroy;

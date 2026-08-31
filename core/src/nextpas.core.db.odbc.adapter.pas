@@ -1587,31 +1587,23 @@ end;
 procedure TDbOdbcConnection.BeginCopy(const ATable: string;
   const AColumns: array of string);
 begin
-  FBulk.BeginCopy(dbkOdbc, ATable, AColumns);
+  DbBulkBeginCopy(FBulk, dbkOdbc, ATable, AColumns);
 end;
 
 procedure TDbOdbcConnection.WriteRow(const AValues: array of string);
 begin
-  FBulk.WriteRow(dbkOdbc, AValues);
+  DbBulkWriteRow(FBulk, dbkOdbc, AValues);
 end;
 
 procedure TDbOdbcConnection.EndCopy;
 begin
-  if not FBulk.IsActive then
-    Exit;
-  try
-    if FBulk.RowCount = 0 then
-      Exit;
-    DbBulkFlushBuffer(FBulk, MaxPlaceholders, InTransaction,
-      @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
-  finally
-    FBulk.Clear;
-  end;
+  DbBulkEndCopy(FBulk, MaxPlaceholders, InTransaction, SupportsSavepoints,
+    @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
 end;
 
 procedure TDbOdbcConnection.AbortCopy;
 begin
-  FBulk.Clear;
+  DbBulkAbortCopy(FBulk);
 end;
 
 { ---- 工厂 ---- }

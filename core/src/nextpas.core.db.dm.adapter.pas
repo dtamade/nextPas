@@ -812,29 +812,23 @@ end;
 
 procedure TDbDmConnection.BeginCopy(const ATable: string; const AColumns: array of string);
 begin
-  FBulk.BeginCopy(dbkDm, ATable, AColumns);
+  DbBulkBeginCopy(FBulk, dbkDm, ATable, AColumns);
 end;
 
 procedure TDbDmConnection.WriteRow(const AValues: array of string);
 begin
-  FBulk.WriteRow(dbkDm, AValues);
+  DbBulkWriteRow(FBulk, dbkDm, AValues);
 end;
 
 procedure TDbDmConnection.EndCopy;
 begin
-  if not FBulk.IsActive then Exit;
-  try
-    if FBulk.RowCount = 0 then Exit;
-    DbBulkFlushBuffer(FBulk, MaxPlaceholders, InTransaction,
-      @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
-  finally
-    AbortCopy;
-  end;
+  DbBulkEndCopy(FBulk, MaxPlaceholders, InTransaction, SupportsSavepoints,
+    @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
 end;
 
 procedure TDbDmConnection.AbortCopy;
 begin
-  FBulk.Clear;
+  DbBulkAbortCopy(FBulk);
 end;
 
 function TDbDmConnection.ArmCancel: Boolean;

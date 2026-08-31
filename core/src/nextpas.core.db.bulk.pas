@@ -2,9 +2,11 @@ unit nextpas.core.db.bulk;
 
 {** @desc BulkCopy 缓冲复用（V4.3+）：5 后端共用的表/列/行缓冲与校验。
        零后端依赖（仅 db.base 的 TDbKind/EDbError/DbBulk* 文本单源），L3 家族复用件（依托 db.base/text.sql 单源），
-       零 SysUtils，PAnsiChar 预估+DbBulkWrite* 单遍直写（零 LCap 双扫，无 L1 builder 直引）。
+       零 SysUtils，PAnsiChar 准长+Tail 直写（LCap 经 DbBulk*Len 准计，零过度预留，无 L1 builder）。
        适配器各持一份实例，BeginCopy/WriteRow/AbortCopy 委托本缓冲，
-       EndCopy 的事务分支与 Exec 通道仍由适配器自管（事务模型各异）。 *}
+       EndCopy 的事务分支与 Exec 通道仍由适配器自管（事务模型各异）。
+       性能注记：薄包装 DbBulkEscape/DbBulkWriteEscape 按 chunk 单次转译 ESqlError->EDbError（非 per-row 逐格 try），
+       500 行/chunk 字面量 INSERT 故意 bypass IDbStmtCacheControl LRU 64（bench_db_stmt_cache 2.1-2.4× 为参数化 point-query 收益，正交 by design vs parameterized bulk）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -23,6 +25,7 @@ type
     FRows: TDbBulkRows;
     FRowCount: Integer;
     FActive: Boolean;
+    FBackend: TDbKind;
   public
     procedure Clear;
     procedure BeginCopy(const ATable: string; const AColumns: array of string); overload;
@@ -40,8 +43,10 @@ type
 
   { 语句缓存容量与 Bulk fallback 单源于 db.base（接口默认值可见性要求） }
 
-{ Bulk text single-source via nextpas.core.text.sql (SqlEscape/SqlQuoteIdent single scan, 0 SysUtils).
-  薄包装转译 ESqlError/通用异常为 EDbError 指定 Backend，零 SysUtils。 }
+{ Bulk text single-source via nextpas.core.text.sql (SqlEscape/SqlQuoteIdent/SqlCheckNul single scan, 0 SysUtils).
+  薄包装转译 ESqlError/通用异常为 EDbError 指定 Backend，零 SysUtils（per-call try 保留，热路径 stitch 按 chunk 单次 try 非 per-row）。
+  DbBulkEscapeLen 单源于 SqlEscapeLen ('' 计数)；DbBulkCheckNul 单源于 SqlCheckNul (纯 NUL 扫描，无 '' 计数)，
+  避免前者经长度计算附带 NUL 拒绝的语义耦合与后端 NUL 语义掩盖。 }
 function DbBulkEscape(const S: string): string; overload;
 function DbBulkEscape(const S: string; const ABackend: TDbKind): string; overload;
 function DbBulkEscapeLen(const S: string): Integer; overload;
@@ -54,6 +59,8 @@ function DbBulkQuotedIdentLen(const AIdent: string): Integer; overload;
 function DbBulkQuotedIdentLen(const AIdent: string; const ABackend: TDbKind): Integer; overload;
 function DbBulkWriteQuotedIdent(Dst: PAnsiChar; const S: string): Integer; overload;
 function DbBulkWriteQuotedIdent(Dst: PAnsiChar; const S: string; const ABackend: TDbKind): Integer; overload;
+function DbBulkQuoteQualifiedIdent(const AIdent: string): string; overload;
+function DbBulkQuoteQualifiedIdent(const AIdent: string; const ABackend: TDbKind): string; overload;
 procedure DbBulkValidateIdent(const ABackend: TDbKind; const AIdent: string);
 function DbBulkLiteralNull: string; inline;
 function DbBulkLiteralText(const S: string): string; overload;
@@ -63,16 +70,24 @@ function DbBulkLiteralTextLen(const S: string; const ABackend: TDbKind): Integer
 function DbBulkWriteLiteralText(Dst: PAnsiChar; const S: string): Integer; overload;
 function DbBulkWriteLiteralText(Dst: PAnsiChar; const S: string; const ABackend: TDbKind): Integer; overload;
 function DbBulkLiteralBlob(const ABytes: array of Byte): string;
-function DbBulkCheckNul(const S: string): Integer; overload;
-function DbBulkCheckNul(const S: string; const ABackend: TDbKind): Integer; overload;
+{ NUL 校验单源于 text.sql SqlCheckNul 的纯扫描（0 SysUtils），不复用 EscapeLen 的 '' 计数路径；
+  与 DbBulkEscape/TDbBulkBuffer 复用正交：前者仅判截断，后者经 DbBulkEscape 单遍转义。 }
+procedure DbBulkCheckNul(const S: string); overload;
+procedure DbBulkCheckNul(const S: string; const ABackend: TDbKind); overload;
 
 { SQL stitch helpers (V4.3 reuse close): ColList/ValList/INSERT built once }
-function DbBulkColList(const ACols: TDbStringArray): string;
+function DbBulkColList(const ACols: TDbStringArray): string; overload;
+function DbBulkColList(const ACols: TDbStringArray; const ABackend: TDbKind): string; overload;
 function DbBulkValList(const ARow: array of string): string;
 function DbBulkInsertSql(const ATable, AColList: string; const ARow: array of string): string;
 function DbBulkMultiInsertSql(const ATable: string; const ACols: TDbStringArray;
-  const ARows: TDbBulkRows; const AFrom, ACount: Integer): string;
-{ Chunk sizing derived from MaxPlaceholders (conservative 999) and column count }
+  const ARows: TDbBulkRows; const AFrom, ACount: Integer): string; overload;
+function DbBulkMultiInsertSql(const ATable: string; const ACols: TDbStringArray;
+  const ARows: TDbBulkRows; const AFrom, ACount: Integer; const ABackend: TDbKind): string; overload;
+{ Chunk sizing derived from MaxPlaceholders (conservative 999) and column count
+  Literal 500 rows/chunk (DbBulkFallbackChunkRows) intentionally bypasses IDbStmtCacheControl LRU 64
+  (2.1-2.4x in bench_db_stmt_cache is parameterized point-query gain, orthogonal by design; each chunk
+  generates unique SQL length => no cache hit, vs parameterized bulk trade-off unmeasured). }
 function DbBulkChunkRows(const AMaxPlaceholders, AColumnCount, ARowCount: Integer): Integer;
 
 { Flush helper: single-source for InTransaction branching (avoid 5× duplicate loops). 0 SysUtils. }
@@ -88,7 +103,19 @@ procedure DbBulkFlushChunked(
   const AInTxn: Boolean;
   const AExec: TDbBulkExecProc;
   const ABeginTxn: TDbBulkBeginProc;
-  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc);
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc;
+  const ABackend: TDbKind = dbkUnknown); overload;
+procedure DbBulkFlushChunked(
+  const ATable: string;
+  const ACols: TDbStringArray;
+  const ARows: TDbBulkRows;
+  const AChunkRows: Integer;
+  const AInTxn: Boolean;
+  const ASupportsSavepoints: Boolean;
+  const AExec: TDbBulkExecProc;
+  const ABeginTxn: TDbBulkBeginProc;
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc;
+  const ABackend: TDbKind = dbkUnknown); overload;
 { Buffer-level wrapper: collapses 4× identical LCols/LRows/LChunk/Flush stanza
   (sqlite/odbc/mysql/dm) into single TDbBulkBuffer call. Keeps InTransaction
   branching inside DbBulkFlushChunked; chunk derived from MaxPlaceholders. }
@@ -98,7 +125,31 @@ procedure DbBulkFlushBuffer(
   const AInTxn: Boolean;
   const AExec: TDbBulkExecProc;
   const ABeginTxn: TDbBulkBeginProc;
-  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc);
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc); overload;
+procedure DbBulkFlushBuffer(
+  const ABuffer: TDbBulkBuffer;
+  const AMaxPlaceholders: Integer;
+  const AInTxn: Boolean;
+  const ASupportsSavepoints: Boolean;
+  const AExec: TDbBulkExecProc;
+  const ABeginTxn: TDbBulkBeginProc;
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc); overload;
+{ BulkCopy outer wrappers (5 adapters × 4-5 lines): single source to avoid
+  drift of MaxPlaceholders heterogeneity (999→500 vs 65535→10000) and
+  InTransaction SAVEPOINT/BEGIN branching; thin inline delegations. }
+procedure DbBulkBeginCopy(var ABuffer: TDbBulkBuffer; ABackend: TDbKind;
+  const ATable: string; const AColumns: array of string); inline;
+procedure DbBulkWriteRow(var ABuffer: TDbBulkBuffer; ABackend: TDbKind;
+  const AValues: array of string); inline;
+procedure DbBulkAbortCopy(var ABuffer: TDbBulkBuffer); inline;
+procedure DbBulkEndCopy(var ABuffer: TDbBulkBuffer; AMaxPlaceholders: Integer;
+  AInTxn: Boolean; const AExec: TDbBulkExecProc;
+  const ABeginTxn: TDbBulkBeginProc;
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc); overload;
+procedure DbBulkEndCopy(var ABuffer: TDbBulkBuffer; AMaxPlaceholders: Integer;
+  AInTxn: Boolean; ASupportsSavepoints: Boolean; const AExec: TDbBulkExecProc;
+  const ABeginTxn: TDbBulkBeginProc;
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc); overload;
 
 implementation
 
@@ -116,10 +167,7 @@ begin
   try
     Result := SqlEscape(S);
   except
-    on E: EDbError do
-      if E.Backend = dbkUnknown then
-        raise EDbError.CreateWithCategory(ABackend, E.Category, E.Constraint, E.Message)
-      else raise;
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
     on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
 end;
@@ -132,12 +180,12 @@ end;
 function DbBulkQuoteIdent(const AIdent: string; const ABackend: TDbKind): string;
 begin
   try
-    Result := SqlQuoteIdent(AIdent);
+    if ABackend = dbkMysql then
+      Result := SqlQuoteIdentMysql(AIdent)
+    else
+      Result := SqlQuoteIdent(AIdent);
   except
-    on E: EDbError do
-      if E.Backend = dbkUnknown then
-        raise EDbError.CreateWithCategory(ABackend, E.Category, E.Constraint, E.Message)
-      else raise;
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
     on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
 end;
@@ -205,10 +253,7 @@ begin
   try
     Result := SqlEscapeLen(S);
   except
-    on E: EDbError do
-      if E.Backend = dbkUnknown then
-        raise EDbError.CreateWithCategory(ABackend, E.Category, E.Constraint, E.Message)
-      else raise;
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
     on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
 end;
@@ -221,12 +266,12 @@ end;
 function DbBulkQuotedIdentLen(const AIdent: string; const ABackend: TDbKind): Integer;
 begin
   try
-    Result := SqlQuotedIdentLen(AIdent);
+    if ABackend = dbkMysql then
+      Result := SqlQuotedIdentLenMysql(AIdent)
+    else
+      Result := SqlQuotedIdentLen(AIdent);
   except
-    on E: EDbError do
-      if E.Backend = dbkUnknown then
-        raise EDbError.CreateWithCategory(ABackend, E.Category, E.Constraint, E.Message)
-      else raise;
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
     on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
 end;
@@ -241,10 +286,7 @@ begin
   try
     Result := SqlWriteEscape(Dst, S);
   except
-    on E: EDbError do
-      if E.Backend = dbkUnknown then
-        raise EDbError.CreateWithCategory(ABackend, E.Category, E.Constraint, E.Message)
-      else raise;
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
     on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
 end;
@@ -257,12 +299,30 @@ end;
 function DbBulkWriteQuotedIdent(Dst: PAnsiChar; const S: string; const ABackend: TDbKind): Integer;
 begin
   try
-    Result := SqlWriteQuotedIdent(Dst, S);
+    if ABackend = dbkMysql then
+      Result := SqlWriteQuotedIdentMysql(Dst, S)
+    else
+      Result := SqlWriteQuotedIdent(Dst, S);
   except
-    on E: EDbError do
-      if E.Backend = dbkUnknown then
-        raise EDbError.CreateWithCategory(ABackend, E.Category, E.Constraint, E.Message)
-      else raise;
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
+    on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
+  end;
+end;
+
+function DbBulkQuoteQualifiedIdent(const AIdent: string): string;
+begin
+  Result := DbBulkQuoteQualifiedIdent(AIdent, dbkUnknown);
+end;
+
+function DbBulkQuoteQualifiedIdent(const AIdent: string; const ABackend: TDbKind): string;
+begin
+  try
+    if ABackend = dbkMysql then
+      Result := SqlQuoteQualifiedIdentMysql(AIdent)
+    else
+      Result := SqlQuoteQualifiedIdent(AIdent);
+  except
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
     on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
 end;
@@ -277,10 +337,7 @@ begin
   try
     Result := SqlWriteLiteralText(Dst, S);
   except
-    on E: EDbError do
-      if E.Backend = dbkUnknown then
-        raise EDbError.CreateWithCategory(ABackend, E.Category, E.Constraint, E.Message)
-      else raise;
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
     on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
 end;
@@ -290,20 +347,17 @@ begin
   DbBulkQuotedIdentLen(AIdent, ABackend);
 end;
 
-function DbBulkCheckNul(const S: string): Integer;
+procedure DbBulkCheckNul(const S: string);
 begin
-  Result := DbBulkCheckNul(S, dbkUnknown);
+  DbBulkCheckNul(S, dbkUnknown);
 end;
 
-function DbBulkCheckNul(const S: string; const ABackend: TDbKind): Integer;
+procedure DbBulkCheckNul(const S: string; const ABackend: TDbKind);
 begin
   try
-    Result := SqlEscapeLen(S);
+    SqlCheckNul(S);
   except
-    on E: EDbError do
-      if E.Backend = dbkUnknown then
-        raise EDbError.CreateWithCategory(ABackend, E.Category, E.Constraint, E.Message)
-      else raise;
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
     on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
 end;
@@ -317,6 +371,7 @@ begin
   for I := 0 to FRowCount - 1 do
     FRows[I] := nil;
   FRowCount := 0;
+  FBackend := dbkUnknown;
 end;
 
 procedure TDbBulkBuffer.BeginCopy(const ATable: string; const AColumns: array of string);
@@ -355,6 +410,7 @@ begin
       SetLength(FRows, AExpectedRows);
   end;
   FRowCount := 0;
+  FBackend := ABackend;
   FActive := True;
 end;
 
@@ -410,100 +466,149 @@ begin
   Result := FRowCount;
 end;
 
-{ SQL stitch — raw PAnsiChar 单遍：预估 LCap+DbBulkWrite* 直写（零 L1 builder，零 LCap 双扫）；零 SysUtils }
+{ SQL stitch — PAnsiChar 准长+Tail 直写：LCap 经 Sql*Len 准计（零过度预留，零 L1 builder）；零 SysUtils；ColList 复用 text.sql 单源；
+  热路径 ValList/InsertSql/MultiInsertSql 按调用单次 try 转译 ESqlError->EDbError，非 per-row/ per-cell 逐格 try（N=10000 开销收敛至 chunk 级）。 }
 
 function DbBulkColList(const ACols: TDbStringArray): string;
-var I, L, LCap: Integer; P, P0: PAnsiChar;
 begin
-  if Length(ACols) = 0 then Exit('');
-  LCap := 0;
-  for I := 0 to High(ACols) do Inc(LCap, Length(ACols[I]) * 2 + 2 + 2);
-  SetLength(Result, LCap);
-  P := PAnsiChar(Result); P0 := P;
-  for I := 0 to High(ACols) do
-  begin
-    if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
-    L := DbBulkWriteQuotedIdent(P, ACols[I]); Inc(P, L);
+  Result := DbBulkColList(ACols, dbkUnknown);
+end;
+
+function DbBulkColList(const ACols: TDbStringArray; const ABackend: TDbKind): string;
+begin
+  try
+    if ABackend = dbkMysql then
+      Result := SqlColListMysql(ACols)
+    else
+      Result := SqlColList(ACols);
+  except
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
+    on E: Exception do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
-  SetLength(Result, P - P0);
 end;
 
 function DbBulkValList(const ARow: array of string): string;
 var I, L, LCap: Integer; P, P0: PAnsiChar;
 begin
   if Length(ARow) = 0 then Exit('');
-  LCap := 0;
-  for I := 0 to High(ARow) do Inc(LCap, Length(ARow[I]) * 2 + 2 + 2);
-  SetLength(Result, LCap);
-  P := PAnsiChar(Result); P0 := P;
-  for I := 0 to High(ARow) do
-  begin
-    if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
-    L := DbBulkWriteLiteralText(P, ARow[I]); Inc(P, L);
+  try
+    LCap := 0;
+    for I := 0 to High(ARow) do
+    begin
+      if I > 0 then Inc(LCap, 2);
+      Inc(LCap, SqlLiteralTextLen(ARow[I]));
+    end;
+    SetLength(Result, LCap);
+    if LCap = 0 then Exit;
+    P := PAnsiChar(Result); P0 := P;
+    for I := 0 to High(ARow) do
+    begin
+      if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
+      L := SqlWriteLiteralText(P, ARow[I]); Inc(P, L);
+    end;
+    SetLength(Result, P - P0);
+  except
+    on E: ESqlError do raise EDbError.CreateSimple(dbkUnknown, E.Message);
   end;
-  SetLength(Result, P - P0);
 end;
 
 function DbBulkInsertSql(const ATable, AColList: string; const ARow: array of string): string;
 const CIns = 'INSERT INTO '; CParen = ' ('; CValues = ') VALUES ('; CRParen = ')';
 var I, L, LCap: Integer; P, P0: PAnsiChar;
 begin
-  LCap := Length(CIns) + Length(ATable) * 2 + 2 + Length(CParen) + Length(AColList) + Length(CValues) + Length(CRParen);
-  for I := 0 to High(ARow) do Inc(LCap, Length(ARow[I]) * 2 + 2 + 2);
-  SetLength(Result, LCap);
-  P := PAnsiChar(Result); P0 := P;
-  Move(PAnsiChar(CIns)^, P^, Length(CIns)); Inc(P, Length(CIns));
-  L := DbBulkWriteQuotedIdent(P, ATable); Inc(P, L);
-  Move(PAnsiChar(CParen)^, P^, Length(CParen)); Inc(P, Length(CParen));
-  if Length(AColList) > 0 then begin Move(PAnsiChar(AColList)^, P^, Length(AColList)); Inc(P, Length(AColList)); end;
-  Move(PAnsiChar(CValues)^, P^, Length(CValues)); Inc(P, Length(CValues));
-  for I := 0 to High(ARow) do
-  begin
-    if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
-    L := DbBulkWriteLiteralText(P, ARow[I]); Inc(P, L);
+  try
+    LCap := Length(CIns) + SqlQuotedIdentLen(ATable) + Length(CParen) + Length(AColList) + Length(CValues) + Length(CRParen);
+    for I := 0 to High(ARow) do
+    begin
+      if I > 0 then Inc(LCap, 2);
+      Inc(LCap, SqlLiteralTextLen(ARow[I]));
+    end;
+    SetLength(Result, LCap);
+    P := PAnsiChar(Result); P0 := P;
+    Move(PAnsiChar(CIns)^, P^, Length(CIns)); Inc(P, Length(CIns));
+    L := SqlWriteQuotedIdent(P, ATable); Inc(P, L);
+    Move(PAnsiChar(CParen)^, P^, Length(CParen)); Inc(P, Length(CParen));
+    if Length(AColList) > 0 then begin Move(PAnsiChar(AColList)^, P^, Length(AColList)); Inc(P, Length(AColList)); end;
+    Move(PAnsiChar(CValues)^, P^, Length(CValues)); Inc(P, Length(CValues));
+    for I := 0 to High(ARow) do
+    begin
+      if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
+      L := SqlWriteLiteralText(P, ARow[I]); Inc(P, L);
+    end;
+    Move(PAnsiChar(CRParen)^, P^, Length(CRParen)); Inc(P, Length(CRParen));
+    SetLength(Result, P - P0);
+  except
+    on E: ESqlError do raise EDbError.CreateSimple(dbkUnknown, E.Message);
   end;
-  Move(PAnsiChar(CRParen)^, P^, Length(CRParen)); Inc(P, Length(CRParen));
-  SetLength(Result, P - P0);
 end;
 
 function DbBulkMultiInsertSql(const ATable: string; const ACols: TDbStringArray;
   const ARows: TDbBulkRows; const AFrom, ACount: Integer): string;
+begin
+  Result := DbBulkMultiInsertSql(ATable, ACols, ARows, AFrom, ACount, dbkUnknown);
+end;
+
+function DbBulkMultiInsertSql(const ATable: string; const ACols: TDbStringArray;
+  const ARows: TDbBulkRows; const AFrom, ACount: Integer; const ABackend: TDbKind): string;
 const CIns = 'INSERT INTO '; CParen = ' ('; CValues = ') VALUES ';
 var I, J, E, L, LCap: Integer; P, P0: PAnsiChar;
+  function QuotedLen(const S: string): Integer; inline;
+  begin
+    if ABackend = dbkMysql then Result := SqlQuotedIdentLenMysql(S)
+    else Result := SqlQuotedIdentLen(S);
+  end;
+  function WriteQuoted(Dst: PAnsiChar; const S: string): Integer; inline;
+  begin
+    if ABackend = dbkMysql then Result := SqlWriteQuotedIdentMysql(Dst, S)
+    else Result := SqlWriteQuotedIdent(Dst, S);
+  end;
+
 begin
   if ACount <= 0 then Exit('');
-  LCap := Length(CIns) + Length(ATable) * 2 + 2 + Length(CParen) + Length(CValues);
-  for I := 0 to High(ACols) do Inc(LCap, Length(ACols[I]) * 2 + 2 + 2);
-  E := AFrom + ACount - 1;
-  for I := AFrom to E do
-  begin
-    Inc(LCap, 2); // '(' ')'
-    for J := 0 to High(ARows[I]) do Inc(LCap, Length(ARows[I][J]) * 2 + 2 + 2);
-    Inc(LCap, 2); // ', ' between rows
-  end;
-  SetLength(Result, LCap);
-  P := PAnsiChar(Result); P0 := P;
-  Move(PAnsiChar(CIns)^, P^, Length(CIns)); Inc(P, Length(CIns));
-  L := DbBulkWriteQuotedIdent(P, ATable); Inc(P, L);
-  Move(PAnsiChar(CParen)^, P^, Length(CParen)); Inc(P, Length(CParen));
-  for I := 0 to High(ACols) do
-  begin
-    if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
-    L := DbBulkWriteQuotedIdent(P, ACols[I]); Inc(P, L);
-  end;
-  Move(PAnsiChar(CValues)^, P^, Length(CValues)); Inc(P, Length(CValues));
-  for I := AFrom to E do
-  begin
-    if I > AFrom then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
-    P[0] := '('; Inc(P);
-    for J := 0 to High(ARows[I]) do
+  try
+    LCap := Length(CIns) + QuotedLen(ATable) + Length(CParen) + Length(CValues);
+    for I := 0 to High(ACols) do
     begin
-      if J > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
-      L := DbBulkWriteLiteralText(P, ARows[I][J]); Inc(P, L);
+      if I > 0 then Inc(LCap, 2);
+      Inc(LCap, QuotedLen(ACols[I]));
     end;
-    P[0] := ')'; Inc(P);
+    E := AFrom + ACount - 1;
+    for I := AFrom to E do
+    begin
+      if I > AFrom then Inc(LCap, 2); // ', ' between rows
+      Inc(LCap, 2); // '(' ')'
+      for J := 0 to High(ARows[I]) do
+      begin
+        if J > 0 then Inc(LCap, 2);
+        Inc(LCap, SqlLiteralTextLen(ARows[I][J]));
+      end;
+    end;
+    SetLength(Result, LCap);
+    P := PAnsiChar(Result); P0 := P;
+    Move(PAnsiChar(CIns)^, P^, Length(CIns)); Inc(P, Length(CIns));
+    L := WriteQuoted(P, ATable); Inc(P, L);
+    Move(PAnsiChar(CParen)^, P^, Length(CParen)); Inc(P, Length(CParen));
+    for I := 0 to High(ACols) do
+    begin
+      if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
+      L := WriteQuoted(P, ACols[I]); Inc(P, L);
+    end;
+    Move(PAnsiChar(CValues)^, P^, Length(CValues)); Inc(P, Length(CValues));
+    for I := AFrom to E do
+    begin
+      if I > AFrom then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
+      P[0] := '('; Inc(P);
+      for J := 0 to High(ARows[I]) do
+      begin
+        if J > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
+        L := SqlWriteLiteralText(P, ARows[I][J]); Inc(P, L);
+      end;
+      P[0] := ')'; Inc(P);
+    end;
+    SetLength(Result, P - P0);
+  except
+    on E: ESqlError do raise EDbError.CreateSimple(ABackend, E.Message);
   end;
-  SetLength(Result, P - P0);
 end;
 
 function DbBulkChunkRows(const AMaxPlaceholders, AColumnCount, ARowCount: Integer): Integer;
@@ -530,7 +635,24 @@ procedure DbBulkFlushChunked(
   const AInTxn: Boolean;
   const AExec: TDbBulkExecProc;
   const ABeginTxn: TDbBulkBeginProc;
-  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc);
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc;
+  const ABackend: TDbKind = dbkUnknown); overload;
+begin
+  DbBulkFlushChunked(ATable, ACols, ARows, AChunkRows, AInTxn, True,
+    AExec, ABeginTxn, ACommitTxn, ARollbackTxn, ABackend);
+end;
+
+procedure DbBulkFlushChunked(
+  const ATable: string;
+  const ACols: TDbStringArray;
+  const ARows: TDbBulkRows;
+  const AChunkRows: Integer;
+  const AInTxn: Boolean;
+  const ASupportsSavepoints: Boolean;
+  const AExec: TDbBulkExecProc;
+  const ABeginTxn: TDbBulkBeginProc;
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc;
+  const ABackend: TDbKind = dbkUnknown); overload;
   procedure DoFlush;
   var I, LRemain: Integer;
   begin
@@ -539,9 +661,9 @@ procedure DbBulkFlushChunked(
     begin
       LRemain := Length(ARows) - I;
       if LRemain > AChunkRows then
-        AExec(DbBulkMultiInsertSql(ATable, ACols, ARows, I, AChunkRows))
+        AExec(DbBulkMultiInsertSql(ATable, ACols, ARows, I, AChunkRows, ABackend))
       else
-        AExec(DbBulkMultiInsertSql(ATable, ACols, ARows, I, LRemain));
+        AExec(DbBulkMultiInsertSql(ATable, ACols, ARows, I, LRemain, ABackend));
       Inc(I, AChunkRows);
     end;
   end;
@@ -551,29 +673,20 @@ begin
   if (Length(ARows) = 0) or (AChunkRows <= 0) then Exit;
   if AInTxn then
   begin
-    try
+    if ASupportsSavepoints then
+    begin
       AExec('SAVEPOINT ' + CBulkSp);
-    except
       try
         DoFlush;
+        try AExec('RELEASE SAVEPOINT ' + CBulkSp); except end;
       except
-        try ARollbackTxn(); except end;
+        try AExec('ROLLBACK TO SAVEPOINT ' + CBulkSp); except end;
+        try AExec('RELEASE SAVEPOINT ' + CBulkSp); except end;
         raise;
       end;
-      Exit;
-    end;
-    try
+    end
+    else
       DoFlush;
-      try
-        AExec('RELEASE SAVEPOINT ' + CBulkSp);
-      except
-        try AExec('RELEASE ' + CBulkSp); except end;
-      end;
-    except
-      try AExec('ROLLBACK TO SAVEPOINT ' + CBulkSp); except try AExec('ROLLBACK TO ' + CBulkSp); except end; end;
-      try AExec('RELEASE SAVEPOINT ' + CBulkSp); except try AExec('RELEASE ' + CBulkSp); except end; end;
-      raise;
-    end;
   end
   else
   begin
@@ -588,13 +701,67 @@ begin
   end;
 end;
 
+procedure DbBulkBeginCopy(var ABuffer: TDbBulkBuffer; ABackend: TDbKind;
+  const ATable: string; const AColumns: array of string);
+begin
+  ABuffer.BeginCopy(ABackend, ATable, AColumns);
+end;
+
+procedure DbBulkWriteRow(var ABuffer: TDbBulkBuffer; ABackend: TDbKind;
+  const AValues: array of string);
+begin
+  ABuffer.WriteRow(ABackend, AValues);
+end;
+
+procedure DbBulkAbortCopy(var ABuffer: TDbBulkBuffer);
+begin
+  ABuffer.Clear;
+end;
+
+procedure DbBulkEndCopy(var ABuffer: TDbBulkBuffer; AMaxPlaceholders: Integer;
+  AInTxn: Boolean; const AExec: TDbBulkExecProc;
+  const ABeginTxn: TDbBulkBeginProc;
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc); overload;
+begin
+  DbBulkEndCopy(ABuffer, AMaxPlaceholders, AInTxn, True,
+    AExec, ABeginTxn, ACommitTxn, ARollbackTxn);
+end;
+
+procedure DbBulkEndCopy(var ABuffer: TDbBulkBuffer; AMaxPlaceholders: Integer;
+  AInTxn: Boolean; ASupportsSavepoints: Boolean; const AExec: TDbBulkExecProc;
+  const ABeginTxn: TDbBulkBeginProc;
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc); overload;
+begin
+  if not ABuffer.IsActive then Exit;
+  try
+    if ABuffer.RowCount = 0 then Exit;
+    DbBulkFlushBuffer(ABuffer, AMaxPlaceholders, AInTxn, ASupportsSavepoints,
+      AExec, ABeginTxn, ACommitTxn, ARollbackTxn);
+  finally
+    ABuffer.Clear;
+  end;
+end;
+
 procedure DbBulkFlushBuffer(
   const ABuffer: TDbBulkBuffer;
   const AMaxPlaceholders: Integer;
   const AInTxn: Boolean;
   const AExec: TDbBulkExecProc;
   const ABeginTxn: TDbBulkBeginProc;
-  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc);
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc); overload;
+begin
+  DbBulkFlushBuffer(ABuffer, AMaxPlaceholders, AInTxn, True,
+    AExec, ABeginTxn, ACommitTxn, ARollbackTxn);
+end;
+
+procedure DbBulkFlushBuffer(
+  const ABuffer: TDbBulkBuffer;
+  const AMaxPlaceholders: Integer;
+  const AInTxn: Boolean;
+  const ASupportsSavepoints: Boolean;
+  const AExec: TDbBulkExecProc;
+  const ABeginTxn: TDbBulkBeginProc;
+  const ACommitTxn, ARollbackTxn: TDbBulkTxnProc); overload;
 var
   LCols: TDbStringArray;
   LRows: TDbBulkRows;
@@ -604,8 +771,8 @@ begin
   LCols := ABuffer.Columns;
   LRows := ABuffer.Rows;
   LChunk := DbBulkChunkRows(AMaxPlaceholders, Length(LCols), ABuffer.RowCount);
-  DbBulkFlushChunked(ABuffer.TableName, LCols, LRows, LChunk, AInTxn,
-    AExec, ABeginTxn, ACommitTxn, ARollbackTxn);
+  DbBulkFlushChunked(ABuffer.TableName, LCols, LRows, LChunk, AInTxn, ASupportsSavepoints,
+    AExec, ABeginTxn, ACommitTxn, ARollbackTxn, ABuffer.FBackend);
 end;
 
 end.

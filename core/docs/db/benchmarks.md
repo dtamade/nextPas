@@ -39,7 +39,7 @@ NEXTPAS_PG_TEST_CONN='host=/var/run/postgresql dbname=nextpas_pg_test user='"$US
 | J1 | 裸驱动开销比：统一层 vs 直调 conn 层 insert+select 耗时比 | **≤1.15×** | ✅（见下，本次噪声内持平） |
 | J2 | 池读路径建连数不变式：8 线程锤满 3000 轮，工厂建连数 == MaxReadConnections | 恰好相等 | ✅ opens=4/4 |
 | J3 | 大对象流式内存界：128MB blob 流式读写 RSS 峰值增量 | ≤ 数 MB（chunk 级） | ✅ +0.2MB |
-| J4 | bulk 单事务批量：`sqlite bulk/txloop`、`pg bulk/batch` 比值（`bench_db_bulk_copy` 5/6 hard-coded `true`，`redis` honest `—` via `ProbeBulkCopy(0)=false`；`PG COPY BINARY` `ProbeBulkCopy: PG≥140000` 为探针函数延迟微基准、与 data bulk 吞吐正交已隔离） | **≤1.5×** | ✅ 0.52–0.55× sqlite live-only（bulk 11 ms vs txloop 21 ms，同机 N=10000，TDbBulkBuffer+DbBulkEscape+builder Tail 直写单扫 + InTransaction 分支，J4 live-verified 仅 sqlite，heterogeneity incomplete honest）；pg/mysql/odbc/dm offline Skip（无 synthetic proxy，已移除 sqlite proxy 合成以防 false 0.52× parity 掩盖 dialect/transaction/MaxPlaceholders 异构，live 需 NEXTPAS_*_TEST_CONN 同机 roundtrip，CI 缺省 Skip，completeness 1.4 未达成），ProbeBulkCopy 500k 次探针微基准与 data bulk 正交已隔离，字面量 `500 行/chunk` bypass `IDbStmtCacheControl` LRU 为预期见 §bench_db_bulk_copy |
+| J4 | bulk 单事务批量：`sqlite bulk/txloop`、`pg bulk/batch` 比值（`bench_db_bulk_copy` 5/6 capability `true` via `ProbeSupportsBulkCopy` hard-coded, `redis` honest `—` via `ProbeBulkCopy(0)=false`；`PG COPY BINARY` `ProbeBulkCopy: PG≥140000` 为探针函数延迟微基准、与 data bulk 吞吐正交已隔离; performance heterogeneity incomplete honest） | **≤1.5× (sqlite-only)** | ⚠️ partial 0.52–0.55× sqlite live-only（bulk 11 ms vs txloop 21 ms，同机 N=10000，TDbBulkBuffer+DbBulkEscape+builder Tail 直写单扫 + InTransaction 分支，J4 live-verified 仅 sqlite，heterogeneity incomplete honest）；pg/mysql/odbc/dm offline Skip（无 synthetic proxy，已移除 sqlite proxy 合成以防 false 0.52× parity 掩盖 dialect/transaction/MaxPlaceholders 异构，live 需 NEXTPAS_*_TEST_CONN 同机 roundtrip，CI 缺省 Skip，completeness 1.4 未达成），ProbeBulkCopy 500k 次探针微基准与 data bulk 正交已隔离，字面量 `500 行/chunk` bypass `IDbStmtCacheControl` LRU 为预期见 §bench_db_bulk_copy |
 
 ## 逐 bench 口径与本次数字
 
@@ -122,6 +122,8 @@ scan=范围扫 N_SCAN=2,000 次；cached 模式预热一轮进稳态后计量，
 | scan | pg | 2,275 ops/s | 3,053 ops/s | 1.34× | — |
 
 > **与 bulk 字面量路径正交**：本表 `2.1–2.4×` 为参数化 point 查询经 `IDbStmtCacheControl` LRU（键 = 原始 SQL 文本，`pg` 规范形含 `::bytea` cast 分键）的命中收益；`bench_db_bulk_copy` 的 `500 行/chunk` 字面量 `INSERT` 每次产生唯一长度 SQL 文本，故意 bypass LRU——每个 chunk 指纹不同无法命中，缓存收益不适用于 bulk，为预期非缺陷（详 CONTRACT §2.8/§2.22 横向对照）。
+
+> **dm/mysql/odbc honest-incomplete（luxury parity gap）**：本册 `bench_db_stmt_cache` 仅 sqlite/pg 提供 live point 2.1–2.4× / scan 1.1–1.34× 数字；dm/mysql/odbc 的同款 LRU 64（`SupportsStmtCacheControl=True`）已落地但尚无 live cache hit 数据，parity not yet measured，luxury verification gap 如实登记——`bench_db_stmt_cache.lpr` 已支持 `NEXTPAS_MYSQL/ODBC/DM_TEST_CONN` live 段，同机 roundtrip 方为异构真测，无 synthetic proxy；CONTRACT §2.8 / README 矩阵 `impl*` 以本文 honest 为准。
 
 ### bench_db_blob_stream —— 大对象流式内存界（J3）
 
