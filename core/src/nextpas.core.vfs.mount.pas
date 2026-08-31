@@ -81,6 +81,7 @@ constructor TMountedVfs.Create(const AMounts: array of TVfsMountEntry);
 var
   I, J: Integer;
   P: string;
+  TmpFs: IVfs;
 begin
   inherited Create;
   if Length(AMounts) = 0 then
@@ -117,12 +118,9 @@ begin
         FMounts[I].Prefix := FMounts[J].Prefix;
         FMounts[J].Prefix := P;
         // swap Fs: 局部临时承载，避免复用 FRootFs 字段造成可读性/重入歧义
-        begin
-          var TmpFs: IVfs;
-          TmpFs := FMounts[I].Fs;
-          FMounts[I].Fs := FMounts[J].Fs;
-          FMounts[J].Fs := TmpFs;
-        end;
+        TmpFs := FMounts[I].Fs;
+        FMounts[I].Fs := FMounts[J].Fs;
+        FMounts[J].Fs := TmpFs;
       end;
   // re-evaluate root after sort
   FHasRoot := False;
