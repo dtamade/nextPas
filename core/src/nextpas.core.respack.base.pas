@@ -92,7 +92,9 @@ type
 
   { 错误层级：全部挂在 exception 根上，不触碰 SysUtils。
     对齐 vfs EVfsError(Op/Path) 范式：Op/Path 结构化定位，message 保留
-    详情后缀 (op=…, path=…) 质感；CreateStep 补充 Op/Path 重载。 }
+    详情后缀 (op=…, path=…) 质感；CreateStep 补充 Op/Path 重载。
+    同处 base 原因：错误与 LE/FNV/路径同为 L0 零依赖基座，独立 errors 单元
+    会引入循环或过度拆分；待错误增长再拆分。 }
   EResPackError = class(Exception)
   private
     FOp: string;
