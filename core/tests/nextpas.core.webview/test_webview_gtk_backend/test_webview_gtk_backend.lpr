@@ -164,14 +164,14 @@ begin
 
   try
     { 可见性与属性往返均为同步 FFI 属性读写，无需任何等待 }
-    W.SetTitle('npw-gate');
-    W.Show;
-    Check(W.IsVisible, 'visible after show');
+    W.Window.SetTitle('npw-gate');
+    W.Window.Show;
+    Check(W.Window.IsVisible, 'visible after show');
     W.SetZoom(1.5);
     Check(Abs(W.GetZoom - 1.5) < 1e-9, 'zoom roundtrip');
     W.SetUserAgent('npw-gate/1.0');
     CheckEqual('npw-gate/1.0', W.GetUserAgent, 'ua roundtrip');
-    CheckEqual('npw-gate', W.GetTitle, 'title roundtrip');
+    CheckEqual('npw-gate', W.Window.GetTitle, 'title roundtrip');
 
     { 内容加载完成是引擎事件；完成后 eval 回执亦为事件 }
     W.OnNavigationFinished(
@@ -342,7 +342,7 @@ begin
   try
     LNorm.Assets.MountEmbedded('', LProv);
     AttachNavSignal(LNorm, WC_NAV_B);
-    LNorm.Show;
+    LNorm.Window.Show;
     LNorm.Navigate('npres://app/hello.txt');
     AwaitChannel(WC_NAV_B, 'post-dev normal window finished');
     EvalAwait(LNorm, 'document.body.innerText', LBody);

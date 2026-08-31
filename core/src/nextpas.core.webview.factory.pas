@@ -100,6 +100,7 @@ uses
   TypInfo,
   nextpas.core.window.base,
   nextpas.core.window.factory,
+  nextpas.core.window.fake,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
   nextpas.core.webview.gtk.win,
@@ -162,10 +163,19 @@ end;
 
 function CreateWebviewOn(const AParent: IWindow;
   const AOptions: TWebviewOptions): IWebviewWindow;
+var
+  LKind: TWebviewKind;
+  LFakeAcc: nextpas.core.window.fake.IFakeSelfAccess;
 begin
   CheckWebviewOptions(AOptions);
   if AParent = nil then
     Exit(CreateWebviewOf(DefaultWebviewKind, AOptions));
+  if (AParent.QueryInterface(
+      nextpas.core.window.fake.IFakeSelfAccess, LFakeAcc) = 0) then
+    Exit(TFakeWebview.CreateOn(AParent, AOptions));
+  LKind := DefaultWebviewKind;
+  if (LKind = wvGtk) and WebviewBackendAvailable(wvGtk) then
+    Exit(TGtkWebview.CreateOn(AParent, AOptions));
   Result := TFakeWebview.CreateOn(AParent, AOptions);
 end;
 

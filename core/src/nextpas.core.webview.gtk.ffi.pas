@@ -131,6 +131,7 @@ var
   GTK_widget_destroy: procedure(AWidget: Pointer); cdecl;
   GTK_widget_get_allocated_width: function(AWidget: Pointer): Int32; cdecl;
   GTK_widget_get_allocated_height: function(AWidget: Pointer): Int32; cdecl;
+  GTK_widget_set_size_request: procedure(AWidget: Pointer; AWidth, AHeight: Int32); cdecl;
   GDK_window_get_state: function(AWindow: Pointer): guint; cdecl;
   GTK_container_add: procedure(AContainer: Pointer; AWidget: Pointer); cdecl;
   GTK_main: procedure; cdecl;
