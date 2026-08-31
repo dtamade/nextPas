@@ -73,18 +73,21 @@ begin
 end;
 
 function TAutoDecompressingVfs.IsGzipHeader(const APath: string): Boolean;
-var LStream: IStream; LBuf: array[0..COMPRESSED_HEADER_PEEK-1] of Byte; LRead: SizeUInt; LHeader: TBytes;
+var LStream: IStream; LBuf: array[0..COMPRESSED_HEADER_PEEK-1] of Byte; LRead: SizeUInt;
 begin
   Result := False;
   try
     LStream := FInner.OpenRead(APath);
   except
+    on E: EVfsError do raise;
     on E: Exception do raise EVfsError.CreateCtx('stat', APath, E.Message);
   end;
-  LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
-  SetLength(LHeader, LRead);
-  if LRead > 0 then Move(LBuf[0], LHeader[0], LRead);
-  Result := IsGzipPred(LHeader);
+  try
+    LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
+    Result := (LRead >= 2) and (LBuf[0] = $1F) and (LBuf[1] = $8B);
+  finally
+    LStream.Close;
+  end;
 end;
 
 function TAutoDecompressingVfs.Exists(const APath: string): Boolean; inline;

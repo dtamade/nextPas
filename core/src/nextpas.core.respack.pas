@@ -41,6 +41,9 @@ type
 const
   RESPACK_VERSION = nextpas.core.respack.base.RESPACK_VERSION;
   RESPACK_CODEC_STORE = nextpas.core.respack.base.RESPACK_CODEC_STORE;
+  RESPACK_FLAG_ALGO_MASK = nextpas.core.respack.base.RESPACK_FLAG_ALGO_MASK;
+  RESPACK_FLAG_ALGO_SHIFT = nextpas.core.respack.base.RESPACK_FLAG_ALGO_SHIFT;
+  RESPACK_DIGEST_ALGO_SHA256 = nextpas.core.respack.base.RESPACK_DIGEST_ALGO_SHA256;
   RESPACK_INC_DEFAULT_BYTES_PER_LINE =
     nextpas.core.respack.embed.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
 
