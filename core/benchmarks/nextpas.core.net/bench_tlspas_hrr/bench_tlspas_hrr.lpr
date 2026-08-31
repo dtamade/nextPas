@@ -428,6 +428,23 @@ begin
   end;
 end;
 
+procedure BenchAdaptiveHealth(aIters: Int64);
+var I: Int64; H: TTlsPasAdaptiveHealth;
+begin
+  for I := 1 to aIters do
+    H := GAdaptiveObserver.GetAdaptiveHealth;
+end;
+
+procedure BenchHealthPrometheus(aIters: Int64);
+var I: Int64; H: TTlsPasAdaptiveHealth; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    H := GAdaptiveObserver.GetAdaptiveHealth;
+    F := TlsPasAdaptiveHealthToPrometheus(H, 'nextpas_tlspas');
+  end;
+end;
+
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -590,6 +607,8 @@ begin
     .AddLoop('AdaptivePrometheus', @BenchAdaptivePrometheus)
     .AddLoop('PrometheusRegistry 2 observers', @BenchPrometheusRegistry)
     .AddLoop('AdaptiveConfig FromEnv', @BenchAdaptiveConfigLoad)
+    .AddLoop('AdaptiveHealth', @BenchAdaptiveHealth)
+    .AddLoop('HealthPrometheus', @BenchHealthPrometheus)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

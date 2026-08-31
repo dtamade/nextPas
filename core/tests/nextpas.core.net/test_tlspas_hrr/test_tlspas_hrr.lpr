@@ -43,6 +43,7 @@ type
   TCaptureWriter = class(TInterfacedObject, IHttpResponseWriter)
   private
     FHeaders: IHttpHeaders;
+    FStatus: THttpStatus;
   public
     constructor Create;
     procedure WriteHeader(const AStatus: THttpStatus);
@@ -56,9 +57,10 @@ constructor TCaptureWriter.Create;
 begin
   inherited Create;
   FHeaders := NewHttpHeaders;
+  FStatus := HTTP_STATUS_OK;
 end;
-procedure TCaptureWriter.WriteHeader(const AStatus: THttpStatus); begin end;
-function TCaptureWriter.GetStatus: THttpStatus; begin Result := HTTP_STATUS_OK; end;
+procedure TCaptureWriter.WriteHeader(const AStatus: THttpStatus); begin FStatus := AStatus; end;
+function TCaptureWriter.GetStatus: THttpStatus; begin Result := FStatus; end;
 function TCaptureWriter.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
 function TCaptureWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
 procedure TCaptureWriter.Flush; begin end;
@@ -1557,6 +1559,86 @@ begin
   Check(C.BaseLimit=16384, 'http file default');
 end;
 
+procedure TestAdaptiveHealth;
+var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Sess: TTlsPasResumptionSession;
+  Id, Early: TBytes; Cfg: TTlsPasAdaptiveLimitConfig; H: TTlsPasAdaptiveHealth; F: string; M: TTlsPasAdaptiveMetrics;
+  Hdl: IHttpHandler; Req: IHttpRequest; W: IHttpResponseWriter; Ctx: IHttpContext;
+begin
+  Store := TAsyncTlsPasReplayCache.Create(64, 600000) as ITlsPasReplayStore;
+  Cfg := DefaultTlsPasAdaptiveLimitConfig;
+  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store, Cfg);
+  try
+    H := Obs.GetAdaptiveHealth;
+    Check(H.Healthy, 'initial healthy');
+    Check(Pos('ok', H.Reason)>0, 'initial ok');
+    Check(Pos('healthy', TlsPasFormatAdaptiveHealth(H))>0, 'format healthy');
+    F := TlsPasAdaptiveHealthToPrometheus(H, 'nextpas_tlspas');
+    Check(Pos('health_status 1', F)>0, 'prom healthy 1');
+    F := TlsPasAdaptiveHealthToPrometheus(H, 'nextpas_tlspas', 'observer="api"');
+    Check(Pos('observer="api"', F)>0, 'prom label');
+    F := HttpAdaptiveHealthJSON(Obs);
+    Check(Pos('"healthy":true', F)>0, 'json healthy true');
+    Check(Pos('"adaptive_max"', F)>0, 'json contains adaptive_max');
+    // degrade via high reject rate
+    Sess := Default(TTlsPasResumptionSession);
+    Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
+    SetLength(Id, 4); FillChar(Id[0], 4, $11);
+    // 8 accepts +2 rejects => 20% >0.1
+    SetLength(Early, 10); FillChar(Early[0], 10, $01);
+    Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $02); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $03); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $04); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $05); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $06); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $07); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); FillChar(Early[0], 10, $08); Obs.Decide(Id, Early, Sess, True);
+    // 2 policy rejects via HasMax false
+    Sess.HasMaxEarlyData := False;
+    SetLength(Early, 10); Obs.Decide(Id, Early, Sess, True);
+    SetLength(Early, 10); Obs.Decide(Id, Early, Sess, True);
+    Sess.HasMaxEarlyData := True;
+    H := Obs.GetAdaptiveHealth;
+    Check(not H.Healthy, 'degraded after high reject');
+    Check(Pos('reject_rate', H.Reason)>0, 'reason reject_rate');
+    F := HttpAdaptiveHealthJSON(Obs);
+    Check(Pos('"healthy":false', F)>0, 'json degraded');
+    // health handler: should return 503 when degraded
+    Hdl := HttpAdaptiveHealthHandler(Obs);
+    Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/healthz'), hvHttp11, NewHttpHeaders, nil, 0);
+    Ctx := NewHttpContext;
+    (Req as IHttpRequestWithContext).SetContext(Ctx);
+    W := TCaptureWriter.Create;
+    Hdl.ServeHTTP(Req, W);
+    Check(W.GetStatus = HTTP_STATUS_SERVICE_UNAVAILABLE, 'handler 503 degraded');
+    Obs.Clear;
+    H := Obs.GetAdaptiveHealth;
+    Check(H.Healthy, 'after clear healthy');
+    // nil observer JSON
+    F := HttpAdaptiveHealthJSON(nil);
+    Check(Pos('observer nil', F)>0, 'nil json');
+    // pure compute with config
+    M := Obs.GetAdaptiveMetrics;
+    H := TlsPasComputeAdaptiveHealth(M, Cfg);
+    Check(H.Healthy, 'pure compute healthy');
+  finally Obs.Free; end;
+end;
+
+procedure TestHealthPrometheusLabels;
+var H: TTlsPasAdaptiveHealth; F: string;
+begin
+  H.Healthy := True; H.Reason := 'ok'; H.RejectRate := 0; H.Current := 10; H.AdaptiveMax := 16384;
+  F := TlsPasAdaptiveHealthToPrometheus(H, 'myapp');
+  Check(Pos('myapp_health_status', F)>0, 'health custom prefix');
+  Check(Pos('health_status 1', F)>0, 'health 1');
+  H.Healthy := False; H.Reason := 'reject'; H.Current := 90;
+  F := TlsPasAdaptiveHealthToPrometheus(H, 'myapp', 'observer="x"');
+  Check(Pos('observer="x"', F)>0, 'health label');
+  Check(Pos('} 0', F)>0, 'health 0 with label');
+  F := TlsPasFormatAdaptiveHealth(H);
+  Check(Pos('degraded', F)>0, 'format degraded');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -1618,6 +1700,8 @@ begin
   GSuite.Test('AdaptivePrometheus', @TestAdaptivePrometheus);
   GSuite.Test('PrometheusRegistry', @TestPrometheusRegistry);
   GSuite.Test('AdaptiveConfigEnvAndFile', @TestAdaptiveConfigEnvAndFile);
+  GSuite.Test('AdaptiveHealth', @TestAdaptiveHealth);
+  GSuite.Test('HealthPrometheusLabels', @TestHealthPrometheusLabels);
   if not GSuite.Run then
     Halt(1);
 end.
