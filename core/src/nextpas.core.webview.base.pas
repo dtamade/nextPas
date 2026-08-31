@@ -167,7 +167,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.utils;
 
 function DefaultWebviewOptions: TWebviewOptions;
 begin
