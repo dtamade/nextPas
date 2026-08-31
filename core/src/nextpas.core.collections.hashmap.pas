@@ -388,7 +388,7 @@ begin
   b := Byte((FBitmap + byteIdx)^ shr bitIdx);
   if b <> 0 then
   begin
-    Result := (byteIdx shl 3) + bitIdx + SizeUInt(nextpas.core.simd.bitops.Ctz32(b));
+    Result := (byteIdx shl 3) + bitIdx + SizeUInt(Ctz32(b));
     if Result < FCapacity then
       Exit;
     Exit(FCapacity);
@@ -402,7 +402,7 @@ begin
     b := (FBitmap + byteIdx)^;
     if b <> 0 then
     begin
-      Result := (byteIdx shl 3) + SizeUInt(nextpas.core.simd.bitops.Ctz32(b));
+      Result := (byteIdx shl 3) + SizeUInt(Ctz32(b));
       if Result < FCapacity then
         Exit;
       Exit(FCapacity);
@@ -420,9 +420,9 @@ begin
       if w <> 0 then
       begin
         {$IF SizeOf(SizeUInt) = 8}
-        baseBit := SizeUInt(nextpas.core.simd.bitops.Ctz64(w));
+        baseBit := SizeUInt(Ctz64(w));
         {$ELSE}
-        baseBit := SizeUInt(nextpas.core.simd.bitops.Ctz32(w));
+        baseBit := SizeUInt(Ctz32(w));
         {$ENDIF}
         Result := ((wordBase + i * SizeOf(SizeUInt)) shl 3) + baseBit;
         if Result < FCapacity then
@@ -438,7 +438,7 @@ begin
     b := (FBitmap + byteIdx)^;
     if b <> 0 then
     begin
-      Result := (byteIdx shl 3) + SizeUInt(nextpas.core.simd.bitops.Ctz32(b));
+      Result := (byteIdx shl 3) + SizeUInt(Ctz32(b));
       if Result < FCapacity then
         Exit;
       Exit(FCapacity);
