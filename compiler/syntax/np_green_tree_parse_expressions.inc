@@ -823,14 +823,22 @@ function ParseTypeReference(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
   const ADiagnostics: TDiagnosticsSink;
-  const ARootFileId: TSourceFileId
-): TGreenNode;
+  const ARootFileId: TSourceFileId;
+  const ATree: TGreenTree
+): TGreenNode; overload;
 var
   Token: TToken;
   NameNode, ArgNode, RangeNode: TGreenNode;
   SpecArgs: string;
   FullName: string;
   Depth: LongInt;
+  function NewNode(const AKind: TGreenNodeKind; const AOff, ALen: LongInt; const ATxt: string): TGreenNode; inline;
+  begin
+    if ATree <> nil then
+      NewNode := TGreenNode.Create(ATree, AKind, AOff, ALen, ATxt)
+    else
+      NewNode := TGreenNode.Create(AKind, AOff, ALen, ATxt);
+  end;
 begin
   if ACursor >= ALexer.TokenCount then
     Exit(nil);
@@ -846,10 +854,10 @@ begin
           (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
         begin
           Inc(ACursor);
-          Result := TGreenNode.Create(gnkArrayType, Token.ByteOffset, 0, '');
-          Result.AppendChild(TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+          Result := NewNode(gnkArrayType, Token.ByteOffset, 0, '');
+          Result.AppendChild(NewNode(gnkIdentifier, Token.ByteOffset,
             Length(FullName), FullName));
-          ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+          ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
           if ArgNode <> nil then
             Result.AppendChild(ArgNode);
           MatchTokenSilent(ALexer, ACursor, tkRBracket);
@@ -896,18 +904,18 @@ begin
             Break;
         end;
 
-        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+        Result := NewNode(gnkIdentifier, Token.ByteOffset,
           Length(FullName), FullName);
       end;
     tkStringKeyword, tkFileKeyword:
       begin
-        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+        Result := NewNode(gnkIdentifier, Token.ByteOffset,
           Length(Token.Lexeme), Token.Lexeme);
         Inc(ACursor);
       end;
     tkArrayKeyword:
       begin
-        Result := TGreenNode.Create(gnkArrayType, Token.ByteOffset, 0, '');
+        Result := NewNode(gnkArrayType, Token.ByteOffset, 0, '');
         RangeNode := nil;
         Inc(ACursor);
         if MatchTokenSilent(ALexer, ACursor, tkLBracket) then
@@ -925,14 +933,14 @@ begin
           if (ACursor < ALexer.TokenCount) and
             (CurrentToken(ALexer, ACursor).Kind = tkConstKeyword) then
           begin
-            ArgNode := TGreenNode.Create(gnkIdentifier,
+            ArgNode := NewNode(gnkIdentifier,
               CurrentToken(ALexer, ACursor).ByteOffset,
               Length(CurrentToken(ALexer, ACursor).Lexeme),
               CurrentToken(ALexer, ACursor).Lexeme);
             Inc(ACursor);
           end
           else
-            ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+            ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
           if ArgNode <> nil then
             Result.AppendChild(ArgNode);
           if RangeNode <> nil then
@@ -943,7 +951,7 @@ begin
       end;
     tkSetKeyword:
       begin
-        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset, 0, 'set');
+        Result := NewNode(gnkIdentifier, Token.ByteOffset, 0, 'set');
         Inc(ACursor);
         MatchTokenSilent(ALexer, ACursor, tkOfKeyword);
         while (ACursor < ALexer.TokenCount) and
@@ -955,12 +963,12 @@ begin
     tkCaret:
       begin
         Inc(ACursor);
-        Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+        Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
         if Result <> nil then
         begin
           FullName := '^' + Result.Text;
           NameNode := Result;
-          Result := TGreenNode.Create(NameNode.NodeKind, NameNode.ByteOffset,
+          Result := NewNode(NameNode.NodeKind, NameNode.ByteOffset,
             Length(FullName), FullName);
           { { NameNode.Free; } // record, no Free needed } // owned by tree FFacades
         end;
@@ -968,7 +976,7 @@ begin
     tkSpecializeKeyword:
       begin
         Inc(ACursor);
-        Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+        Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
         if (Result <> nil) and (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
         begin
@@ -993,7 +1001,7 @@ begin
           MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
           FullName := Result.Text + SpecArgs;
           NameNode := Result;
-          Result := TGreenNode.Create(NameNode.NodeKind, NameNode.ByteOffset,
+          Result := NewNode(NameNode.NodeKind, NameNode.ByteOffset,
             Length(FullName), FullName);
           { { NameNode.Free; } // record, no Free needed } // owned by tree FFacades
         end;
@@ -1022,19 +1030,19 @@ begin
           begin
             Inc(ACursor);
             NameNode := ParseTypeReference(
-              ALexer, ACursor, ADiagnostics, ARootFileId);
+              ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
             { { NameNode.Free; } // record, no Free needed } // owned by tree FFacades
           end;
         end;
-        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+        Result := NewNode(gnkIdentifier, Token.ByteOffset,
           Length(Token.Lexeme), Token.Lexeme);
       end;
     tkRecordKeyword, tkObjectKeyword:
       begin
         if Token.Kind = tkRecordKeyword then
-          Result := TGreenNode.Create(gnkRecordType, Token.ByteOffset, 0, '')
+          Result := NewNode(gnkRecordType, Token.ByteOffset, 0, '')
         else
-          Result := TGreenNode.Create(gnkRecordType, Token.ByteOffset, 0, 'object');
+          Result := NewNode(gnkRecordType, Token.ByteOffset, 0, 'object');
         Inc(ACursor);
         SkipDirectives(ALexer, ACursor);
         Depth := 1;
@@ -1067,3 +1075,13 @@ begin
   end;
 end;
 
+
+function ParseTypeReference(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): TGreenNode; overload;
+begin
+  Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ActiveExpressionTree);
+end;

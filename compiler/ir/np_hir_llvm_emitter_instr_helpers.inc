@@ -1,6 +1,6 @@
 
 uses
-  SysUtils, nextpas.core.text.conv, np_system_contracts;
+  SysUtils, nextpas.core.text.conv, np_llvm_utils, np_system_contracts;
 
 const
   NP_ALLOCATOR_PAGE_SIZE = 4096;
@@ -146,7 +146,7 @@ begin
     htkVoid: Result := 'void';
     htkBool: Result := 'i1';
     htkChar: Result := 'i8';
-    htkInt: Result := 'i' + IntToStr(T.BitWidth);
+    htkInt: Result := NpBitWidthToLlvmIntType(T.BitWidth);
     htkFloat:
       case T.FloatWidth of
         fwF32: Result := 'float';

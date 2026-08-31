@@ -250,13 +250,28 @@ begin
 end;
 
 {**
- * TGreenNode.Create — backward-compatible factory
- *
- * Directly allocates node data in ActiveExpressionTree's compact storage
- * and registers Self as the facade in FFacades.
+ * TGreenNode.Create — backward-compatible factory via ActiveExpressionTree
+ * Prefer Create(ATree, ...) for explicit single-source allocation.
  * FNodes[i] and FFacades[i] are strictly 1:1.
  *}
 constructor TGreenNode.Create(
+  const ANodeKind: TGreenNodeKind;
+  const AByteOffset: LongInt;
+  const AByteLength: LongInt;
+  const AText: string
+);
+begin
+  if ActiveExpressionTree = nil then
+  begin
+    FOwner := nil;
+    FIndex := -1;
+    Exit;
+  end;
+  Self := TGreenNode.Create(ActiveExpressionTree, ANodeKind, AByteOffset, AByteLength, AText);
+end;
+
+constructor TGreenNode.Create(
+  const ATree: TGreenTree;
   const ANodeKind: TGreenNodeKind;
   const AByteOffset: LongInt;
   const AByteLength: LongInt;
@@ -266,38 +281,26 @@ var
   Data: TGreenNodeData;
   Idx: LongInt;
 begin
-  if ActiveExpressionTree <> nil then
+  if (ATree = nil) or ATree.IsFrozen then
   begin
-    if ActiveExpressionTree.IsFrozen then
-    begin
-      FOwner := nil;
-      FIndex := -1;
-      Exit;
-    end;
-    FOwner := ActiveExpressionTree;
-
-    Data.Kind := ANodeKind;
-    Data.ByteOffset := AByteOffset;
-    Data.ByteLength := AByteLength;
-    Data.TextStart := Length(FOwner.FNodeText);
-    Data.TextLen := Length(AText);
-    Data.ChildStart := -1;
-    Data.ChildCount := 0;
-    Data.ChildCapacity := 0;
-
-    FOwner.FNodeText := FOwner.FNodeText + AText;
-    Idx := FOwner.FNodes.Count;
-    FOwner.FNodes.Push(Data);
-    FIndex := Idx;
-
-    { Register Self as the facade for this index }
-    FOwner.FFacades.Push(Self);
+    FOwner := nil;
+    FIndex := -1;
     Exit;
   end;
-
-  { Fallback: no active tree (should not happen in normal parsing) }
-  FOwner := nil;
-  FIndex := -1;
+  FOwner := ATree;
+  Data.Kind := ANodeKind;
+  Data.ByteOffset := AByteOffset;
+  Data.ByteLength := AByteLength;
+  Data.TextStart := Length(FOwner.FNodeText);
+  Data.TextLen := Length(AText);
+  Data.ChildStart := -1;
+  Data.ChildCount := 0;
+  Data.ChildCapacity := 0;
+  FOwner.FNodeText := FOwner.FNodeText + AText;
+  Idx := FOwner.FNodes.Count;
+  FOwner.FNodes.Push(Data);
+  FIndex := Idx;
+  FOwner.FFacades.Push(Self);
 end;
 
 constructor TGreenNode.CreateFacade(AOwner: TGreenTree; AIndex: LongInt);

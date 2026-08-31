@@ -513,7 +513,6 @@ end;
 
 procedure TCompilationSession.AnalyzeSemantics;
 var
-  Analyzer: TSemanticAnalyzer;
   CacheKey: string;
   CachedModel: TObject;
   DiskModel: TSemanticModel;
@@ -577,38 +576,24 @@ begin
     if PhaseScratch = nil then
       ; { OOM soft: analyzer still runs on default heap if scratch nil }
 
-    Analyzer := TSemanticAnalyzer.Create(
-      FAstFacade,
-      FUnitGraph,
-      FDiagnosticsSink,
-      FRootFileId,
-      FOptions.NoFold,
-      FScratchAllocator
-    );
-    try
-      Analyzer.Analyze;
-      FSemanticModel := Analyzer.DetachModel;
-      if FSemanticModel = nil then
-        FSemanticStatus := 'deferred'
-      else
+    FSemanticModel := LowerAnalyzeSemantics(
+      FAstFacade, FUnitGraph, FDiagnosticsSink, FRootFileId,
+      FOptions.NoFold, FScratchAllocator);
+    if FSemanticModel = nil then
+      FSemanticStatus := 'deferred'
+    else
+    begin
+      FSemanticStatus := FSemanticModel.Status;
+      if FSemanticStatus = 'ready' then
       begin
-        FSemanticStatus := FSemanticModel.Status;
-        { Cache for incremental compilation — query DB owns the reference }
-        if FSemanticStatus = 'ready' then
-        begin
-          FQueryDB.Store(CacheKey, FSemanticModel);
-          { Save to persistent disk cache }
-          FIncrementalCache.Save(
-            FSourceDatabase.RootSourceCanonicalPath,
-            FSourceDatabase.RootSourceText,
-            [],
-            FSemanticModel);
-        end;
+        FQueryDB.Store(CacheKey, FSemanticModel);
+        FIncrementalCache.Save(
+          FSourceDatabase.RootSourceCanonicalPath,
+          FSourceDatabase.RootSourceText,
+          [], FSemanticModel);
       end;
-    finally
-      Analyzer.Free;
-      ResetScratchAllocator;
     end;
+    ResetScratchAllocator;
   finally
     FMemScope.UnitEnd;
   end;
@@ -616,12 +601,6 @@ end;
 
 procedure TCompilationSession.LowerToMir;
 var
-  HirBuilder: THIRBuilder;
-  HirPrinter: THIRPrinter;
-  HirPath: string;
-  Lowering: THirToMirLowering;
-  LlvmTranslator: TMirToLlvmTranslator;
-  LlvmOutput: string;
   PhaseScratch: Pointer;
 begin
   FMemScope.UnitBegin;
@@ -638,62 +617,10 @@ begin
     if PhaseScratch = nil then
       ; { soft OOM }
 
-    // MIR lowering is enabled via NEXTPAS_MIR=1 env var (opt-in during development)
-    if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
-    begin
-      { HIR/MIR working storage on FScratchAllocator; MIR module detaches to heap. }
-      HirBuilder := THIRBuilder.Create(
-        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator);
-      try
-        HirBuilder.Build;
-
-        Lowering := THirToMirLowering.Create(HirBuilder.Module, FScratchAllocator);
-        try
-          Lowering.Lower;
-          FMirModule := Lowering.DetachModule;
-        finally
-          Lowering.Free;
-        end;
-
-        if GetEnvironmentVariable('NEXTPAS_MIR_DUMP') = '1' then
-        begin
-          { MIR→LLVM output lines on FScratchAllocator TVec }
-          LlvmTranslator := TMirToLlvmTranslator.Create(FMirModule, FScratchAllocator);
-          try
-            LlvmOutput := LlvmTranslator.Translate;
-          finally
-            LlvmTranslator.Free;
-          end;
-        end;
-      finally
-        HirBuilder.Free;
-        ResetScratchAllocator;
-      end;
-    end
-    else if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
-    begin
-      HirBuilder := THIRBuilder.Create(
-        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator, FDiagnosticsSink);
-      try
-        if not HirBuilder.Build then
-        begin
-          FMirStatus := 'failure';
-          Exit;
-        end;
-        HirPath := ChangeFileExt(FOptions.BuildContext.ResolvedSourcePath, '.hir');
-        { HIR dump lines on FScratchAllocator TVec }
-        HirPrinter := THIRPrinter.Create(HirBuilder.Module, FScratchAllocator);
-        try
-          HirPrinter.Print;
-          HirPrinter.SaveToFile(HirPath);
-        finally
-          HirPrinter.Free;
-        end;
-      finally
-        HirBuilder.Free;
-        ResetScratchAllocator;
-      end;
-    end;
+    FMirModule := LowerBuildMirModule(
+      FSemanticModel, FSourceDatabase, FRootFileId,
+      FScratchAllocator, FDiagnosticsSink, FMirStatus);
+    ResetScratchAllocator;
   finally
     FMemScope.UnitEnd;
   end;

@@ -56,7 +56,8 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  np_llvm_utils;
 
 constructor TMirToLlvmTranslator.Create(const AModule: TMirModule;
   AAllocator: IAllocator);
@@ -109,16 +110,7 @@ end;
 function TMirToLlvmTranslator.LlvmTypeName(ABitWidth: LongInt;
   AIsSigned: Boolean): string;
 begin
-  case ABitWidth of
-    0:  Result := 'void';
-    1:  Result := 'i1';
-    8:  Result := 'i8';
-    16: Result := 'i16';
-    32: Result := 'i32';
-    64: Result := 'i64';
-  else
-    Result := 'i' + IntToStr(ABitWidth);
-  end;
+  Result := NpBitWidthToLlvmType(ABitWidth, AIsSigned);
 end;
 
 function TMirToLlvmTranslator.LlvmTypeForOperand(const AOp: TMirOperand): string;

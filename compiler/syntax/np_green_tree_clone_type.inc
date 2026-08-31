@@ -17,7 +17,7 @@
     end;
   end;
 begin
-  Section := TGreenNode.Create(gnkTypeSection,
+  Section := TGreenNode.Create(ATree, gnkTypeSection,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
   AParent.AppendChild(Section);
   Inc(ATree.FNodeCount);
@@ -45,13 +45,13 @@ begin
     NameToken := CurrentToken(ALexer, ACursor);
     { Store directive info in node text }
     if IsCompilerRoot then
-      Decl := TGreenNode.Create(gnkTypeDecl, NameToken.ByteOffset, 0,
+      Decl := TGreenNode.Create(ATree, gnkTypeDecl, NameToken.ByteOffset, 0,
         'compiler_root:' + NameToken.Lexeme)
     else if IsCompilerTypeKind then
-      Decl := TGreenNode.Create(gnkTypeDecl, NameToken.ByteOffset, 0,
+      Decl := TGreenNode.Create(ATree, gnkTypeDecl, NameToken.ByteOffset, 0,
         'compiler_type_kind:' + NameToken.Lexeme)
     else
-      Decl := TGreenNode.Create(gnkTypeDecl, NameToken.ByteOffset, 0,
+      Decl := TGreenNode.Create(ATree, gnkTypeDecl, NameToken.ByteOffset, 0,
         NameToken.Lexeme);
     Section.AppendChild(Decl);
     Inc(ATree.FNodeCount);
@@ -60,7 +60,7 @@ begin
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
     begin
-      TypeParamNode := TGreenNode.Create(gnkTypeParamList,
+      TypeParamNode := TGreenNode.Create(ATree, gnkTypeParamList,
         CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
       Inc(ACursor);
       while (ACursor < ALexer.TokenCount) and
@@ -83,7 +83,7 @@ begin
               Inc(ACursor);
             end;
           end;
-          ElementNode := TGreenNode.Create(gnkIdentifier,
+          ElementNode := TGreenNode.Create(ATree, gnkIdentifier,
             CurrentToken(ALexer, ACursor - 1).ByteOffset, 0, SpecArgs);
           TypeParamNode.AppendChild(ElementNode);
           Inc(ATree.FNodeCount);
@@ -114,7 +114,7 @@ begin
       case CurrentToken(ALexer, ACursor).Kind of
         tkRecordKeyword:
           begin
-            TypeNode := TGreenNode.Create(gnkRecordType,
+            TypeNode := TGreenNode.Create(ATree, gnkRecordType,
               CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
             Decl.AppendChild(TypeNode);
             Inc(ATree.FNodeCount);
@@ -127,7 +127,7 @@ begin
             begin
               if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
               begin
-                IndexNode := TGreenNode.Create(gnkVarDecl,
+                IndexNode := TGreenNode.Create(ATree, gnkVarDecl,
                   CurrentToken(ALexer, ACursor).ByteOffset, 0,
                   CurrentToken(ALexer, ACursor).Lexeme);
                 TypeNode.AppendChild(IndexNode);
@@ -140,7 +140,7 @@ begin
                   if (ACursor < ALexer.TokenCount) and
                     (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                   begin
-                    IndexNode := TGreenNode.Create(gnkVarDecl,
+                    IndexNode := TGreenNode.Create(ATree, gnkVarDecl,
                       CurrentToken(ALexer, ACursor).ByteOffset, 0,
                       CurrentToken(ALexer, ACursor).Lexeme);
                     TypeNode.AppendChild(IndexNode);
@@ -153,7 +153,7 @@ begin
                 begin
                   Inc(ACursor);
                   ElementNode := ParseTypeReference(ALexer, ACursor,
-                    ADiagnostics, ARootFileId);
+                    ADiagnostics, ARootFileId, ATree);
                   if ElementNode <> nil then
                   begin
                     IndexNode.AppendChild(ElementNode);
@@ -166,7 +166,7 @@ begin
                 [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
                  tkPublishedKeyword] then
               begin
-                ElementNode := TGreenNode.Create(gnkVisibilityLabel,
+                ElementNode := TGreenNode.Create(ATree, gnkVisibilityLabel,
                   CurrentToken(ALexer, ACursor).ByteOffset, 0,
                   CurrentToken(ALexer, ACursor).Lexeme);
                 TypeNode.AppendChild(ElementNode);
@@ -199,7 +199,7 @@ begin
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                 begin
-                  ElementNode := TGreenNode.Create(gnkClassProperty,
+                  ElementNode := TGreenNode.Create(ATree, gnkClassProperty,
                     CurrentToken(ALexer, ACursor).ByteOffset, 0,
                     CurrentToken(ALexer, ACursor).Lexeme);
                   TypeNode.AppendChild(ElementNode);
@@ -213,7 +213,7 @@ begin
                       ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
                        (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword)) then
                     begin
-                      IndexNode := TGreenNode.Create(gnkIdentifier,
+                      IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                         CurrentToken(ALexer, ACursor).ByteOffset, 0,
                         CurrentToken(ALexer, ACursor).Lexeme);
                       ElementNode.AppendChild(IndexNode);
@@ -233,7 +233,7 @@ begin
                       if (ACursor < ALexer.TokenCount) and
                         (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                       begin
-                        IndexNode := TGreenNode.Create(gnkIdentifier,
+                        IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                           CurrentToken(ALexer, ACursor).ByteOffset, 0,
                           'read:' + CurrentToken(ALexer, ACursor).Lexeme);
                         ElementNode.AppendChild(IndexNode);
@@ -248,7 +248,7 @@ begin
                       if (ACursor < ALexer.TokenCount) and
                         (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                       begin
-                        IndexNode := TGreenNode.Create(gnkIdentifier,
+                        IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                           CurrentToken(ALexer, ACursor).ByteOffset, 0,
                           'write:' + CurrentToken(ALexer, ACursor).Lexeme);
                         ElementNode.AppendChild(IndexNode);
@@ -343,7 +343,7 @@ begin
           end;
         tkArrayKeyword:
           begin
-            TypeNode := TGreenNode.Create(gnkArrayType,
+            TypeNode := TGreenNode.Create(ATree, gnkArrayType,
               CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
             RangeNode := nil;
             Decl.AppendChild(TypeNode);
@@ -366,7 +366,7 @@ begin
               if (ACursor < ALexer.TokenCount) and
                 (CurrentToken(ALexer, ACursor).Kind = tkConstKeyword) then
               begin
-                ElementNode := TGreenNode.Create(gnkIdentifier,
+                ElementNode := TGreenNode.Create(ATree, gnkIdentifier,
                   CurrentToken(ALexer, ACursor).ByteOffset,
                   Length(CurrentToken(ALexer, ACursor).Lexeme),
                   CurrentToken(ALexer, ACursor).Lexeme);
@@ -374,7 +374,7 @@ begin
               end
               else
                 ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                  ARootFileId);
+                  ARootFileId, ATree);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);
@@ -391,7 +391,7 @@ begin
           end;
         tkClassKeyword:
           begin
-            TypeNode := TGreenNode.Create(gnkClassType,
+            TypeNode := TGreenNode.Create(ATree, gnkClassType,
               CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
             Decl.AppendChild(TypeNode);
             Inc(ATree.FNodeCount);
@@ -401,7 +401,7 @@ begin
             begin
               Inc(ACursor);
               ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
+                ARootFileId, ATree);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);
@@ -412,7 +412,7 @@ begin
               begin
                 Inc(ACursor);
                 ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                  ARootFileId);
+                  ARootFileId, ATree);
                 if ElementNode <> nil then
                 begin
                   TypeNode.AppendChild(ElementNode);
@@ -434,7 +434,7 @@ begin
               TypeNode.Text := 'of';
               Inc(ACursor);
               ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
+                ARootFileId, ATree);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);
@@ -464,7 +464,7 @@ begin
                 [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
                  tkPublishedKeyword] then
               begin
-                ElementNode := TGreenNode.Create(gnkVisibilityLabel,
+                ElementNode := TGreenNode.Create(ATree, gnkVisibilityLabel,
                   CurrentToken(ALexer, ACursor).ByteOffset, 0,
                   CurrentToken(ALexer, ACursor).Lexeme);
                 TypeNode.AppendChild(ElementNode);
@@ -512,7 +512,7 @@ begin
                  tkGenericKeyword, tkClassKeyword] then
               begin
                 MethodModifiers := TokenKindName(CurrentToken(ALexer, ACursor).Kind);
-                ElementNode := TGreenNode.Create(gnkClassMethod,
+                ElementNode := TGreenNode.Create(ATree, gnkClassMethod,
                   CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
                 Inc(ACursor);
                 while (ACursor < ALexer.TokenCount) and
@@ -524,7 +524,7 @@ begin
                 if (ACursor < ALexer.TokenCount) and
                   IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
                 begin
-                  ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                  ElementNode.AppendChild(TGreenNode.Create(ATree, gnkIdentifier,
                     CurrentToken(ALexer, ACursor).ByteOffset, 0,
                     CurrentToken(ALexer, ACursor).Lexeme));
                   Inc(ATree.FNodeCount);
@@ -551,7 +551,7 @@ begin
                     ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
                      (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword)) then
                   begin
-                    ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                    ElementNode.AppendChild(TGreenNode.Create(ATree, gnkIdentifier,
                       CurrentToken(ALexer, ACursor).ByteOffset, 0,
                       CurrentToken(ALexer, ACursor).Lexeme));
                     Inc(ATree.FNodeCount);
@@ -586,7 +586,7 @@ begin
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                 begin
-                  ElementNode := TGreenNode.Create(gnkClassProperty,
+                  ElementNode := TGreenNode.Create(ATree, gnkClassProperty,
                     CurrentToken(ALexer, ACursor).ByteOffset, 0,
                     CurrentToken(ALexer, ACursor).Lexeme);
                   TypeNode.AppendChild(ElementNode);
@@ -599,7 +599,7 @@ begin
                     if (ACursor < ALexer.TokenCount) and
                       (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                     begin
-                      IndexNode := TGreenNode.Create(gnkIdentifier,
+                      IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                         CurrentToken(ALexer, ACursor).ByteOffset, 0,
                         CurrentToken(ALexer, ACursor).Lexeme);
                       ElementNode.AppendChild(IndexNode);
@@ -619,7 +619,7 @@ begin
                       if (ACursor < ALexer.TokenCount) and
                         (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                       begin
-                        IndexNode := TGreenNode.Create(gnkIdentifier,
+                        IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                           CurrentToken(ALexer, ACursor).ByteOffset, 0,
                           'read:' + CurrentToken(ALexer, ACursor).Lexeme);
                         ElementNode.AppendChild(IndexNode);
@@ -634,7 +634,7 @@ begin
                       if (ACursor < ALexer.TokenCount) and
                         (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                       begin
-                        IndexNode := TGreenNode.Create(gnkIdentifier,
+                        IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                           CurrentToken(ALexer, ACursor).ByteOffset, 0,
                           'write:' + CurrentToken(ALexer, ACursor).Lexeme);
                         ElementNode.AppendChild(IndexNode);
@@ -691,7 +691,7 @@ begin
                       end;
                     end;
                   end;
-                  ElementNode := TGreenNode.Create(gnkIdentifier,
+                  ElementNode := TGreenNode.Create(ATree, gnkIdentifier,
                     CurrentToken(ALexer, ACursor - 1).ByteOffset, 0,
                     'where:' + SpecArgs);
                   TypeNode.AppendChild(ElementNode);
@@ -701,7 +701,7 @@ begin
               end
               else if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
               begin
-                ElementNode := TGreenNode.Create(gnkClassField,
+                ElementNode := TGreenNode.Create(ATree, gnkClassField,
                   CurrentToken(ALexer, ACursor).ByteOffset, 0,
                   CurrentToken(ALexer, ACursor).Lexeme);
                 Inc(ACursor);
@@ -718,7 +718,7 @@ begin
                     if (ACursor < ALexer.TokenCount) and
                       (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                     begin
-                      ElementNode := TGreenNode.Create(gnkClassField,
+                      ElementNode := TGreenNode.Create(ATree, gnkClassField,
                         CurrentToken(ALexer, ACursor).ByteOffset, 0,
                         CurrentToken(ALexer, ACursor).Lexeme);
                       TypeNode.AppendChild(ElementNode);
@@ -731,7 +731,7 @@ begin
                   begin
                     Inc(ACursor);
                     FieldTypeNode := ParseTypeReference(ALexer, ACursor,
-                      ADiagnostics, ARootFileId);
+                      ADiagnostics, ARootFileId, ATree);
                     UsedOriginalTypeNode := False;
                     if FieldTypeNode <> nil then
                       for K := FieldGroupStart to TypeNode.ChildCount - 1 do
@@ -758,7 +758,7 @@ begin
                 begin
                   Inc(ACursor);
                   FieldTypeNode := ParseTypeReference(ALexer, ACursor,
-                    ADiagnostics, ARootFileId);
+                    ADiagnostics, ARootFileId, ATree);
                   if FieldTypeNode <> nil then
                   begin
                     ElementNode.AppendChild(FieldTypeNode);
@@ -798,7 +798,7 @@ begin
           end;
         tkInterfaceKeyword:
           begin
-            TypeNode := TGreenNode.Create(gnkClassType,
+            TypeNode := TGreenNode.Create(ATree, gnkClassType,
               CurrentToken(ALexer, ACursor).ByteOffset, 0, 'interface');
             Decl.AppendChild(TypeNode);
             Inc(ATree.FNodeCount);
@@ -808,7 +808,7 @@ begin
             begin
               Inc(ACursor);
               ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
+                ARootFileId, ATree);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);
@@ -842,14 +842,14 @@ begin
                 if CurrentToken(ALexer, ACursor).Kind in
                   [tkProcedureKeyword, tkFunctionKeyword] then
                 begin
-                  ElementNode := TGreenNode.Create(gnkClassMethod,
+                  ElementNode := TGreenNode.Create(ATree, gnkClassMethod,
                     CurrentToken(ALexer, ACursor).ByteOffset, 0,
                     TokenKindName(CurrentToken(ALexer, ACursor).Kind));
                   Inc(ACursor);
                   if (ACursor < ALexer.TokenCount) and
                     (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                   begin
-                    ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                    ElementNode.AppendChild(TGreenNode.Create(ATree, gnkIdentifier,
                       CurrentToken(ALexer, ACursor).ByteOffset, 0,
                       CurrentToken(ALexer, ACursor).Lexeme));
                     Inc(ATree.FNodeCount);
@@ -867,7 +867,7 @@ begin
                       ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
                        (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword)) then
                     begin
-                      ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                      ElementNode.AppendChild(TGreenNode.Create(ATree, gnkIdentifier,
                         CurrentToken(ALexer, ACursor).ByteOffset, 0,
                         CurrentToken(ALexer, ACursor).Lexeme));
                       Inc(ATree.FNodeCount);
@@ -884,7 +884,7 @@ begin
                   if (ACursor < ALexer.TokenCount) and
                     (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                   begin
-                    ElementNode := TGreenNode.Create(gnkClassProperty,
+                    ElementNode := TGreenNode.Create(ATree, gnkClassProperty,
                       CurrentToken(ALexer, ACursor).ByteOffset, 0,
                       CurrentToken(ALexer, ACursor).Lexeme);
                     TypeNode.AppendChild(ElementNode);
@@ -897,7 +897,7 @@ begin
                       if (ACursor < ALexer.TokenCount) and
                         (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                       begin
-                        IndexNode := TGreenNode.Create(gnkIdentifier,
+                        IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                           CurrentToken(ALexer, ACursor).ByteOffset, 0,
                           CurrentToken(ALexer, ACursor).Lexeme);
                         ElementNode.AppendChild(IndexNode);
@@ -917,7 +917,7 @@ begin
                         if (ACursor < ALexer.TokenCount) and
                           (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                         begin
-                          IndexNode := TGreenNode.Create(gnkIdentifier,
+                          IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                             CurrentToken(ALexer, ACursor).ByteOffset, 0,
                             'read:' + CurrentToken(ALexer, ACursor).Lexeme);
                           ElementNode.AppendChild(IndexNode);
@@ -932,7 +932,7 @@ begin
                         if (ACursor < ALexer.TokenCount) and
                           (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                         begin
-                          IndexNode := TGreenNode.Create(gnkIdentifier,
+                          IndexNode := TGreenNode.Create(ATree, gnkIdentifier,
                             CurrentToken(ALexer, ACursor).ByteOffset, 0,
                             'write:' + CurrentToken(ALexer, ACursor).Lexeme);
                           ElementNode.AppendChild(IndexNode);
@@ -962,7 +962,7 @@ begin
           end;
         tkLParen:
           begin
-            TypeNode := TGreenNode.Create(gnkEnumType,
+            TypeNode := TGreenNode.Create(ATree, gnkEnumType,
               CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
             Decl.AppendChild(TypeNode);
             Inc(ATree.FNodeCount);
@@ -973,7 +973,7 @@ begin
             begin
               if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
               begin
-                TypeNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                TypeNode.AppendChild(TGreenNode.Create(ATree, gnkIdentifier,
                   CurrentToken(ALexer, ACursor).ByteOffset,
                   Length(CurrentToken(ALexer, ACursor).Lexeme),
                   CurrentToken(ALexer, ACursor).Lexeme));
@@ -996,7 +996,7 @@ begin
           begin
             Inc(ACursor);
             MatchTokenSilent(ALexer, ACursor, tkOfKeyword);
-            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
             if TypeNode <> nil then
             begin
               Decl.AppendChild(TypeNode);
@@ -1009,7 +1009,7 @@ begin
             { Keep '^Pointee' text — same contract as ParseTypeReference.
               Dropping the caret made `PFoo = ^TFoo` look like a value alias of
               TFoo (often a record), so locals/returns became recvar/sret. }
-            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
             if TypeNode <> nil then
             begin
               if (Length(TypeNode.Text) = 0) or (TypeNode.Text[1] <> '^') then
@@ -1045,7 +1045,7 @@ begin
                 ALexer,
                 ACursor,
                 ADiagnostics,
-                ARootFileId
+                ARootFileId, ATree
               );
               { { TypeNode.Free; } // record, no Free needed } // owned by tree FFacades
             end;
@@ -1069,7 +1069,7 @@ begin
             if (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind = tkRecordKeyword) then
             begin
-              TypeNode := TGreenNode.Create(gnkRecordType,
+              TypeNode := TGreenNode.Create(ATree, gnkRecordType,
                 CurrentToken(ALexer, ACursor).ByteOffset, 0, 'packed');
               Decl.AppendChild(TypeNode);
               Inc(ATree.FNodeCount);
@@ -1098,7 +1098,7 @@ begin
               Inc(ACursor);
           end;
       else
-        TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+        TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
         if TypeNode <> nil then
         begin
           Decl.AppendChild(TypeNode);
