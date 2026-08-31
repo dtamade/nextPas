@@ -17,6 +17,8 @@ uses
   nextpas.core.base,
   nextpas.core.agent.base.constants,
   nextpas.core.agent.base.types,
+  nextpas.core.agent.base.slotmap,
+  nextpas.core.agent.base.deltabuilder,
   nextpas.core.agent.base.helpers;
 
 { ---- Constants re-export (SECURITY §3 单一真源) ---- }
@@ -74,12 +76,12 @@ type
   TWireSSEEventArray = nextpas.core.agent.base.types.TWireSSEEventArray;
   TCompletionRequest = nextpas.core.agent.base.types.TCompletionRequest;
 
-{ ---- Slot / Builder re-export (helpers → 单一真源) ---- }
+{ ---- Slot / Builder re-export (slotmap/deltabuilder → 单一真源) ---- }
 type
-  TAgentSlotMap = nextpas.core.agent.base.helpers.TAgentSlotMap;
-  TAgentSlotRegistry = nextpas.core.agent.base.helpers.TAgentSlotRegistry;
-  PStreamDelta = nextpas.core.agent.base.helpers.PStreamDelta;
-  TAgentDeltaBuilder = nextpas.core.agent.base.helpers.TAgentDeltaBuilder;
+  TAgentSlotMap = nextpas.core.agent.base.slotmap.TAgentSlotMap;
+  TAgentSlotRegistry = nextpas.core.agent.base.slotmap.TAgentSlotRegistry;
+  PStreamDelta = nextpas.core.agent.base.deltabuilder.PStreamDelta;
+  TAgentDeltaBuilder = nextpas.core.agent.base.deltabuilder.TAgentDeltaBuilder;
 
 { ---- Enum literals re-export (preserve `uses base;` literal visibility) ---- }
 const
@@ -222,7 +224,7 @@ end;
 
 procedure AgentSlotMapEnsureSize(var AMap: TAgentSlotMap; AIdx: Integer); inline;
 begin
-  nextpas.core.agent.base.helpers.AgentSlotMapEnsureSize(AMap, AIdx);
+  nextpas.core.agent.base.slotmap.AgentSlotMapEnsureSize(AMap, AIdx);
 end;
 
 procedure AgentValidateWireHeaders(const AHeaders: TWireHeaderArray); inline;
