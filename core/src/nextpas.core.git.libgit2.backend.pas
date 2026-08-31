@@ -22,15 +22,7 @@ uses
   nextpas.core.text.format;
 
 type
-  EGitError = class(nextpas.core.git.native.base.EGitError)
-  private
-    FErrorCode: Integer;
-    FErrorClass: Integer;
-  public
-    constructor Create(AErrorCode: Integer; const AOperation: string = '');
-    property ErrorCode: Integer read FErrorCode;
-    property ErrorClass: Integer read FErrorClass;
-  end;
+  EGitError = nextpas.core.git.native.base.EGitError;
 
   TGitOID = record
     Data: git_oid;
@@ -412,12 +404,6 @@ begin
   Result := 0;
 end;
 
-procedure CheckGitResult(AResult: Integer; const AOperation: string);
-begin
-  if AResult <> GIT_OK then
-    raise EGitError.Create(AResult, AOperation);
-end;
-
 function GetGitErrorMessage: string;
 var
   Error: Pgit_error_t;
@@ -429,16 +415,29 @@ begin
     Result := 'Unknown error';
 end;
 
-constructor EGitError.Create(AErrorCode: Integer; const AOperation: string);
+function CreateGitError(AErrorCode: Integer; const AOperation: string): EGitError; inline;
 var
-  ErrorMsg: string;
+  Err: Pgit_error_t;
+  Detail: string;
+  Klass: Integer;
 begin
-  FErrorCode := AErrorCode;
-  FErrorClass := 0;
-  ErrorMsg := GetGitErrorMessage;
+  Err := git_error_last();
+  Klass := 0;
+  if Assigned(Err) and Assigned(Err^.message) then
+  begin
+    Detail := string(Err^.message);
+    Klass := Err^.klass;
+  end else
+    Detail := 'Unknown error';
   if AOperation <> '' then
-    ErrorMsg := AOperation + ': ' + ErrorMsg;
-  inherited Create(ErrorMsg);
+    Detail := AOperation + ': ' + Detail;
+  Result := EGitError.Create(AErrorCode, Klass, Detail);
+end;
+
+procedure CheckGitResult(AResult: Integer; const AOperation: string);
+begin
+  if AResult <> GIT_OK then
+    raise CreateGitError(AResult, AOperation);
 end;
 
 constructor TGitSignature.Create(const AName, AEmail: string; const AWhen: TGitTime);
@@ -626,7 +625,7 @@ end;
 procedure TGitRepository.CheckResult(AResult: Integer; const AOperation: string);
 begin
   if AResult <> GIT_OK then
-    raise EGitError.Create(AResult, AOperation);
+    raise CreateGitError(AResult, AOperation);
 end;
 
 function TGitRepository.GetPath: string;
@@ -655,7 +654,7 @@ var
 begin
   rc := git_repository_head(RefHandle, FHandle);
   if rc <> GIT_OK then
-    raise EGitError.Create(rc, 'Get HEAD reference');
+    raise CreateGitError(rc, 'Get HEAD reference');
   Result := TGitReference.Create(Self, RefHandle);
 end;
 
@@ -692,7 +691,7 @@ begin
 
   // For other errors, raise exception
   if rc <> GIT_OK then
-    raise EGitError.Create(rc, 'Get HEAD reference');
+    raise CreateGitError(rc, 'Get HEAD reference');
 
   // Get branch name from reference
   HeadRef := TGitReference.Create(Self, RefHandle);
@@ -721,7 +720,7 @@ begin
         rc := git_branch_next(RefHandle, BranchType, Iterator);
         if rc = GIT_ITEROVER then Break;
         if rc <> GIT_OK then
-          raise EGitError.Create(rc, 'Iterate branches');
+          raise CreateGitError(rc, 'Iterate branches');
         BranchName := string(git_reference_name(RefHandle));
         List.Add(BranchName);
         git_reference_free(RefHandle);
@@ -1445,7 +1444,7 @@ begin
   AObj := nil;
   ATree := nil;
   if ASpec = '' then
-    raise EGitError.Create(GIT_ENOTFOUND, 'Resolve revspec (empty)');
+    raise EGitError.Create(GIT_ENOTFOUND, 0, 'Resolve revspec (empty)');
   CheckResult(git_revparse_single(AObj, FHandle, PChar(ASpec)), 'Resolve revspec ' + ASpec);
   try
     // git_object_peel yields a borrowed-into-new reference; caller frees both.
@@ -1682,7 +1681,7 @@ begin
         if rc = GIT_ITEROVER then
           Break;
         if rc <> GIT_OK then
-          raise EGitError.Create(rc, 'Iterate config entries');
+          raise CreateGitError(rc, 'Iterate config entries');
         if LEntry <> nil then
         begin
           SetLength(Result, N + 1);
@@ -1710,13 +1709,13 @@ begin
     Exit;
   LWorkDir := GetWorkDir;
   if LWorkDir = '' then
-    raise EGitError.Create(GIT_EINVALID, 'ApplyPatch: bare repository has no workdir');
+    raise EGitError.Create(GIT_EINVALID, 0, 'ApplyPatch: bare repository has no workdir');
   LTmpPatch := PathJoin([GetTempDir, 'nextpas_patch_apply.patch']);
   WriteFileText(LTmpPatch, APatchText);
   try
     LOut := RunIn('/usr/bin/git', ['apply', '--whitespace=nowarn', LTmpPatch], LWorkDir);
     if LOut.ExitCode <> 0 then
-      raise EGitError.Create(GIT_EAPPLYFAIL, 'ApplyPatch: ' + Trim(LOut.StdErr + sLineBreak + LOut.StdOut));
+      raise EGitError.Create(GIT_EAPPLYFAIL, 0, 'ApplyPatch: ' + Trim(LOut.StdErr + sLineBreak + LOut.StdOut));
   finally
     try
       if FileExists(LTmpPatch) then
@@ -1734,12 +1733,12 @@ var
   I: Integer;
 begin
   if Trim(ARevspec) = '' then
-    raise EGitError.Create(GIT_EINVALIDSPEC, 'CheckoutPaths: revspec required');
+    raise EGitError.Create(GIT_EINVALIDSPEC, 0, 'CheckoutPaths: revspec required');
   if Length(APaths) = 0 then
     Exit;
   LWorkDir := GetWorkDir;
   if LWorkDir = '' then
-    raise EGitError.Create(GIT_EINVALID, 'CheckoutPaths: bare repository has no workdir');
+    raise EGitError.Create(GIT_EINVALID, 0, 'CheckoutPaths: bare repository has no workdir');
   SetLength(LArgs, 2 + 1 + Length(APaths));
   LArgs[0] := 'checkout';
   LArgs[1] := ARevspec;
@@ -1748,7 +1747,7 @@ begin
     LArgs[3 + I] := APaths[I];
   LOut := RunIn('/usr/bin/git', LArgs, LWorkDir);
   if LOut.ExitCode <> 0 then
-    raise EGitError.Create(GIT_EINVALIDSPEC, 'CheckoutPaths: ' + Trim(LOut.StdErr + sLineBreak + LOut.StdOut));
+    raise EGitError.Create(GIT_EINVALIDSPEC, 0, 'CheckoutPaths: ' + Trim(LOut.StdErr + sLineBreak + LOut.StdOut));
 end;
 
 function TGitRepository.WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
@@ -1762,7 +1761,7 @@ begin
   Result := '';
   LWorkDir := GetWorkDir;
   if LWorkDir = '' then
-    raise EGitError.Create(GIT_EINVALID, 'WorkdirPatchText: bare repository has no workdir');
+    raise EGitError.Create(GIT_EINVALID, 0, 'WorkdirPatchText: bare repository has no workdir');
   N := 1;
   if AShowBinary then Inc(N);
   if Trim(ARevspec) <> '' then Inc(N);
@@ -1789,7 +1788,7 @@ begin
   end;
   LOut := RunIn('/usr/bin/git', LArgs, LWorkDir);
   if LOut.ExitCode <> 0 then
-    raise EGitError.Create(GIT_EINVALIDSPEC, 'WorkdirPatchText: ' + Trim(LOut.StdErr));
+    raise EGitError.Create(GIT_EINVALIDSPEC, 0, 'WorkdirPatchText: ' + Trim(LOut.StdErr));
   Result := LOut.StdOut;
   if Trim(Result) = '' then
     Result := '';
@@ -1825,7 +1824,7 @@ begin
       rc := git_revwalk_next(LOID, LWalk);
       if rc = GIT_ITEROVER then Break;
       if rc <> GIT_OK then
-        raise EGitError.Create(rc, 'Iterate revwalk');
+        raise CreateGitError(rc, 'Iterate revwalk');
       LCommitOID.Data := LOID;
       SetLength(LCommits, Length(LCommits) + 1);
       LCommits[High(LCommits)] := GetCommit(LCommitOID);

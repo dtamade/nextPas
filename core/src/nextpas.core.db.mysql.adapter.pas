@@ -1,6 +1,6 @@
 unit nextpas.core.db.mysql.adapter;
 
-{** @desc IDbConnection 的 MySQL/MariaDB 适配器（二进制 prepared statement，惰性 Step）。能力与契约见 CONTRACT §2.3/§2.11，双方言 BIND 布局单点见实现。 *}
+{** @desc IDbConnection 的 MySQL/MariaDB 适配器（二进制 prepared statement，惰性 Step）。能力与契约见 CONTRACT §2.3/§2.11，双方言 BIND 布局单点见实现。 体积注记：本单元约1580行超 800 行软阈值，内聚性强（适配器单职责），暂不拆分，拆分预留见 roadmap。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -11,6 +11,7 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.sqlscan,
   nextpas.core.db.intf,
+  nextpas.core.db.capprobe,
   nextpas.core.db.mysql.base;
 
 type
@@ -38,7 +39,10 @@ function ConnectMysql(const ADsn: string): IDbConnection;
   max_execution_time（SELECT 域；版本探测后静默降级。MariaDB 的
   max_statement_time 语法不同，登记路线图缺口账本）。 }
 function ConnectMysql(const ADsn: string;
-  const AOptions: TDbConnectOptions): IDbConnection; inline;
+  const AOptions: TDbConnectOptions): IDbConnection; overload;
+function ConnectMysql(const ADsn: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection; overload;
 
 { ---- 纯函数导出供门禁离线验证 ---- }
 
@@ -67,11 +71,14 @@ uses
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.text.kv,
+  nextpas.core.db.bulk,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.tx,
   nextpas.core.sync,
   nextpas.core.text.builder,
+  nextpas.core.collections.lrucache.intf,
+  nextpas.core.collections.lrucache,
   nextpas.core.db.mysql.ffi,
   nextpas.core.db.mysql.loader;
 
@@ -99,6 +106,38 @@ type
     TextVal: string;        { 字符串按框架约定即 utf8 字节，直存 }
     BlobVal: TBytes;
   end;
+
+type
+  { 空闲语句持有者：LRU 的值形态（接口托管杜绝容器搬移泄漏，见 sqlite 侧同纪律）}
+  IMysqlStmtHolder = interface
+    ['{A3B9C4E2-5F11-4A2D-9E7C-1D2F3A4B5C6D}']
+    function Detach: TMysqlStmt;
+    function Slots: TIntArray;
+    function ParamCount: Integer;
+    function Rewritten: string;
+  end;
+
+  TMyStmtHolder = class(TInterfacedObject, IMysqlStmtHolder)
+  private
+    FStmt: TMysqlStmt;
+    FSlots: TIntArray;
+    FParamCount: Integer;
+    FRewritten: string;
+  public
+    constructor Create(AStmt: TMysqlStmt; const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
+    destructor Destroy; override;
+    function Detach: TMysqlStmt;
+    function Slots: TIntArray;
+    function ParamCount: Integer;
+    function Rewritten: string;
+  end;
+
+  IMysqlStmtHome = interface
+    ['{B4C0D5F3-6A22-4B3E-8F8D-2E3F4A5B6C7E}']
+    procedure ReturnStmt(const ASql: string; AStmt: TMysqlStmt; const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
+  end;
+
+  IMysqlStmtCache = specialize ILruCache<string, IMysqlStmtHolder>;
 
 { ---- 错误桥接 ---- }
 { 惯例：异常对象非引用计数——单次直接构造最终 EDbError 并 raise，
@@ -258,6 +297,50 @@ begin
   end;
 end;
 
+{ ---- 空闲句柄持有者 ---- }
+
+constructor TMyStmtHolder.Create(AStmt: TMysqlStmt; const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
+var I: Integer;
+begin
+  inherited Create;
+  FStmt := AStmt;
+  SetLength(FSlots, Length(ASlots));
+  for I := 0 to High(ASlots) do FSlots[I] := ASlots[I];
+  FParamCount := AParamCount;
+  FRewritten := ARewritten;
+end;
+
+destructor TMyStmtHolder.Destroy;
+begin
+  if FStmt <> nil then
+  begin
+    my_stmtClose(FStmt);
+    FStmt := nil;
+  end;
+  inherited Destroy;
+end;
+
+function TMyStmtHolder.Detach: TMysqlStmt;
+begin
+  Result := FStmt;
+  FStmt := nil;
+end;
+
+function TMyStmtHolder.Slots: TIntArray;
+begin
+  Result := FSlots;
+end;
+
+function TMyStmtHolder.ParamCount: Integer;
+begin
+  Result := FParamCount;
+end;
+
+function TMyStmtHolder.Rewritten: string;
+begin
+  Result := FRewritten;
+end;
+
 { ---- TDbMyQuery ---- }
 
 type
@@ -296,7 +379,15 @@ type
       OnQuery（首 Step 计时，同周期后续 Step 不再发）}
     FTrace: TDbTraceHub;
     FSql: string;                     { 统一契约原文（? 原样进摘要）}
+    FRewritten: string;               { 服务端 prepare 形态（缓存 key 关联）}
+    FHome: IMysqlStmtHome;            { 归还通道；nil = 无缓存直通 }
     FEmitted: Boolean;
+    { V3-B2 查询级超时恢复（advisory）：仅 Oracle 库 ≥8.0 时 Query(opts)
+      在建对象时 SET max_execution_time 并记住原值，析构恢复；
+      不支持方言/版本则忽略（与 pg sqlite advisory 一致）。 }
+    FRestoreNeeded: Boolean;
+    FRestoreMs: Int64;
+    procedure RestoreTimeoutIfNeeded;
     procedure CheckIndex(const AIndex: Integer);
     procedure RequireAllBound;
     procedure ExecuteIfNeeded;
@@ -310,7 +401,8 @@ type
     constructor Create(AConnH: TMysql; AStmt: TMysqlStmt;
       const AFlavor: TMysqlFlavor; const ASlots: TIntArray;
       AServerParamCount: Integer; const ASql: string;
-      ATrace: TDbTraceHub);
+      ATrace: TDbTraceHub; const AHome: IMysqlStmtHome = nil;
+      const ARewritten: string = '');
     destructor Destroy; override;
 
     procedure BindText(AIndex: Integer; const AValue: string);
@@ -334,7 +426,8 @@ type
   {** @desc MySQL 统一连接：Exec 走文本协议（多语句排空），Query 走
       prepared stmt；事务/保存点计数簿记对齐 pg 适配器。 *}
   TDbMyConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
-    IDbSavepointControl, IDbBatchExecutor, IDbCapabilities, IDbTraceControl)
+    IDbSavepointControl, IDbBatchExecutor, IDbStmtCacheControl,
+    IDbCapabilities, IDbTraceControl, IDbBulkCopy, IMysqlStmtHome)
   private
     FConnH: TMysql;
     FFlavor: TMysqlFlavor;
@@ -342,15 +435,24 @@ type
     FDepth: Integer;
     { INC-7 语句超时能力在建连期探测定格：仅 Oracle 库且服务端 ≥8.0 }
     FSupportsStmtTimeout: Boolean;
+    FServerVersion: Integer;
+    FServerVersionProbed: Boolean;
     { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
     FTrace: TDbTraceHub;
+    { B2 超时恢复失败记录（吞错修复） }
+    FLastError: string;
+    FBulk: TDbBulkBuffer;
+    FCache: IMysqlStmtCache;
     procedure MyExecRaw(const ASql: string);
+    procedure BulkExec(const ASql: string);
     { 读回 @@session.max_execution_time 当前值（B2 超时恢复基线）；
       MariaDB/旧版无此变量 → 返回 0（advisory 忽略路径） }
     function MySessionMaxExecMs: Int64;
   public
-    constructor Create(AConnH: TMysql; const AFlavor: TMysqlFlavor);
+    constructor Create(AConnH: TMysql; const AFlavor: TMysqlFlavor;
+      const AStmtCacheCapacity: Integer = DEFAULT_MYSQL_STMT_CACHE_CAPACITY);
     destructor Destroy; override;
+    property LastError: string read FLastError;
 
     { IDbTraceControl }
     procedure SetListener(const AListener: IDbTraceListener);
@@ -381,6 +483,15 @@ type
     { IDbBatchExecutor }
     procedure ExecuteBatch(const ASteps: TDbSqlSteps);
 
+    { IDbStmtCacheControl }
+    procedure Clear;
+    function Size: Integer;
+    function HitRate: Double;
+
+    { IMysqlStmtHome }
+    procedure ReturnStmt(const ASql: string; AStmt: TMysqlStmt;
+      const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
+
     { IDbCapabilities（V3-B1）——Kind 由 IDbConnection.Kind 承担 }
     function ProductName: string;
     function ProductVersion: string;
@@ -394,11 +505,23 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
+
+    { IDbBulkCopy V4.3: 单事务批量行复制（复用 Exec 批） }
+    procedure BeginCopy(const ATable: string; const AColumns: array of string);
+    procedure WriteRow(const AValues: array of string);
+    procedure EndCopy;
+    procedure AbortCopy;
   end;
 
 constructor TDbMyQuery.Create(AConnH: TMysql; AStmt: TMysqlStmt;
   const AFlavor: TMysqlFlavor; const ASlots: TIntArray;
-  AServerParamCount: Integer; const ASql: string; ATrace: TDbTraceHub);
+  AServerParamCount: Integer; const ASql: string; ATrace: TDbTraceHub;
+  const AHome: IMysqlStmtHome; const ARewritten: string);
 var
   I: Integer;
 begin
@@ -406,6 +529,8 @@ begin
   FConnH := AConnH;
   FStmt := AStmt;
   FFlavor := AFlavor;
+  FHome := AHome;
+  FRewritten := ARewritten;
   if FFlavor = mfMariadb then
     FNativeSize := SIZE_MYSQL_BIND_MARIADB
   else
@@ -429,16 +554,65 @@ begin
   FSql := ASql;
   FTrace := ATrace;
   FEmitted := False;
+  FRestoreNeeded := False;
+  FRestoreMs := 0;
+end;
+
+procedure TDbMyQuery.RestoreTimeoutIfNeeded;
+var
+  LS: string;
+  LRes: TMysqlRes;
+begin
+  if not FRestoreNeeded then
+    Exit;
+  FRestoreNeeded := False;
+  if FConnH = nil then
+    Exit;
+  LS := 'SET SESSION max_execution_time=' + IntToStr(FRestoreMs);
+  try
+    if my_realQuery(FConnH, PAnsiChar(AnsiString(LS)),
+      QWord(Length(LS))) <> 0 then
+      Exit;
+    if my_fieldCount(FConnH) > 0 then
+    begin
+      LRes := my_storeResult(FConnH);
+      if LRes <> nil then
+        my_freeResult(LRes);
+    end;
+    while my_moreResults(FConnH) do
+    begin
+      if my_nextResult(FConnH) > 0 then
+        Break;
+      if my_fieldCount(FConnH) > 0 then
+      begin
+        LRes := my_storeResult(FConnH);
+        if LRes <> nil then
+          my_freeResult(LRes);
+      end;
+    end;
+  except
+    { 析构恢复失败吞掉：连接可能已关闭或服务端已断开，不掩盖析构链 }
+  end;
 end;
 
 destructor TDbMyQuery.Destroy;
 begin
+  RestoreTimeoutIfNeeded;
   FreeExecutionState;
   if FStmt <> nil then
   begin
-    my_stmtClose(FStmt);
-    FStmt := nil;
+    if FHome <> nil then
+    begin
+      FHome.ReturnStmt(FSql, FStmt, FSlots, FParamCount, FRewritten);
+      FStmt := nil;
+    end
+    else
+    begin
+      my_stmtClose(FStmt);
+      FStmt := nil;
+    end;
   end;
+  FHome := nil;
   inherited Destroy;
 end;
 
@@ -568,77 +742,103 @@ begin
   begin
     GetMem(FParamNative, FParamCount * FNativeSize);
     FillChar(FParamNative^, SizeUInt(FParamCount * FNativeSize), 0);
-    GetMem(FParamNulls, SizeUInt(FParamCount));
-    FillChar(FParamNulls^, SizeUInt(FParamCount), 0);
-    GetMem(FParamLens, SizeUInt(FParamCount) * SizeOf(QWord));
-    FillChar(FParamLens^, SizeUInt(FParamCount) * SizeOf(QWord), 0);
-    SetLength(FParamBufs, FParamCount);
-    for I := 0 to FParamCount - 1 do
-    begin
-      LLogical := FSlots[I] - 1;
-      case FLogical[LLogical].Kind of
-        mbkInt:
+    try
+      GetMem(FParamNulls, SizeUInt(FParamCount));
+      FillChar(FParamNulls^, SizeUInt(FParamCount), 0);
+      try
+        GetMem(FParamLens, SizeUInt(FParamCount) * SizeOf(QWord));
+        FillChar(FParamLens^, SizeUInt(FParamCount) * SizeOf(QWord), 0);
+        try
+          SetLength(FParamBufs, FParamCount);
+          for I := 0 to FParamCount - 1 do
           begin
-            SetLength(FParamBufs[I], SizeOf(Int64));
-            Move(FLogical[LLogical].IntVal, FParamBufs[I][0], SizeOf(Int64));
-            WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_LONGLONG,
-              @FParamBufs[I][0], QWord(SizeOf(Int64)), nil, nil,
-              @FParamLens[I], False);
+            LLogical := FSlots[I] - 1;
+            case FLogical[LLogical].Kind of
+              mbkInt:
+                begin
+                  SetLength(FParamBufs[I], SizeOf(Int64));
+                  Move(FLogical[LLogical].IntVal, FParamBufs[I][0], SizeOf(Int64));
+                  WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_LONGLONG,
+                    @FParamBufs[I][0], QWord(SizeOf(Int64)), nil, nil,
+                    @FParamLens[I], False);
+                end;
+              mbkDouble:
+                begin
+                  SetLength(FParamBufs[I], SizeOf(Double));
+                  Move(FLogical[LLogical].DblVal, FParamBufs[I][0],
+                    SizeOf(Double));
+                  WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_DOUBLE,
+                    @FParamBufs[I][0], QWord(SizeOf(Double)), nil, nil,
+                    @FParamLens[I], False);
+                end;
+              mbkText:
+                begin
+                  LLen := Length(FLogical[LLogical].TextVal);
+                  { 至少 1 字节：空串参数也需合法缓冲地址 }
+                  if LLen = 0 then
+                    SetLength(FParamBufs[I], 1)
+                  else
+                    SetLength(FParamBufs[I], LLen);
+                  if LLen > 0 then
+                    Move(FLogical[LLogical].TextVal[1], FParamBufs[I][0],
+                      SizeUInt(LLen));
+                  FParamLens[I] := QWord(LLen);
+                  WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_STRING,
+                    @FParamBufs[I][0], QWord(LLen), nil, nil,
+                    @FParamLens[I], False);
+                end;
+              mbkBlob:
+                begin
+                  LLen := Length(FLogical[LLogical].BlobVal);
+                  if LLen = 0 then
+                    SetLength(FParamBufs[I], 1)
+                  else
+                    SetLength(FParamBufs[I], LLen);
+                  if LLen > 0 then
+                    Move(FLogical[LLogical].BlobVal[0], FParamBufs[I][0],
+                      SizeUInt(LLen));
+                  FParamLens[I] := QWord(LLen);
+                  WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_STRING,
+                    @FParamBufs[I][0], QWord(LLen), nil, nil,
+                    @FParamLens[I], False);
+                end;
+              mbkNull:
+                begin
+                  FParamNulls[I] := True;
+                  WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_NULL,
+                    nil, 0, @FParamNulls[I], nil, @FParamLens[I], False);
+                end;
+            end;
           end;
-        mbkDouble:
-          begin
-            SetLength(FParamBufs[I], SizeOf(Double));
-            Move(FLogical[LLogical].DblVal, FParamBufs[I][0],
-              SizeOf(Double));
-            WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_DOUBLE,
-              @FParamBufs[I][0], QWord(SizeOf(Double)), nil, nil,
-              @FParamLens[I], False);
-          end;
-        mbkText:
-          begin
-            LLen := Length(FLogical[LLogical].TextVal);
-            { 至少 1 字节：空串参数也需合法缓冲地址 }
-            if LLen = 0 then
-              SetLength(FParamBufs[I], 1)
-            else
-              SetLength(FParamBufs[I], LLen);
-            if LLen > 0 then
-              Move(FLogical[LLogical].TextVal[1], FParamBufs[I][0],
-                SizeUInt(LLen));
-            FParamLens[I] := QWord(LLen);
-            WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_STRING,
-              @FParamBufs[I][0], QWord(LLen), nil, nil,
-              @FParamLens[I], False);
-          end;
-        mbkBlob:
-          begin
-            LLen := Length(FLogical[LLogical].BlobVal);
-            if LLen = 0 then
-              SetLength(FParamBufs[I], 1)
-            else
-              SetLength(FParamBufs[I], LLen);
-            if LLen > 0 then
-              Move(FLogical[LLogical].BlobVal[0], FParamBufs[I][0],
-                SizeUInt(LLen));
-            FParamLens[I] := QWord(LLen);
-            WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_STRING,
-              @FParamBufs[I][0], QWord(LLen), nil, nil,
-              @FParamLens[I], False);
-          end;
-        mbkNull:
-          begin
-            FParamNulls[I] := True;
-            WriteBindSlot(FParamNative, I, FNativeSize, MY_PT_NULL,
-              nil, 0, @FParamNulls[I], nil, @FParamLens[I], False);
-          end;
+          if my_stmtBindParam(FStmt, FParamNative) then
+            RaiseMyStmt(FStmt);
+        except
+          FreeMem(FParamLens);
+          FParamLens := nil;
+          SetLength(FParamBufs, 0);
+          raise;
+        end;
+      except
+        FreeMem(FParamNulls);
+        FParamNulls := nil;
+        raise;
       end;
+    except
+      FreeMem(FParamNative);
+      FParamNative := nil;
+      raise;
     end;
-    if my_stmtBindParam(FStmt, FParamNative) then
-      RaiseMyStmt(FStmt);
   end;
-  if my_stmtExecute(FStmt) <> 0 then
-    RaiseMyStmt(FStmt);
-  FExecuted := True;
+  try
+    if my_stmtExecute(FStmt) <> 0 then
+      RaiseMyStmt(FStmt);
+    FExecuted := True;
+  except
+    { 执行失败：参数绑定块已建但执行未成功，保留至 FreeExecutionState
+      统一释放；不过若执行抛异常而后续不再重试，内存仍由析构兜底。
+      此处不额外释放，仅透传异常，保持与 pg 路径一致的错误语义。 }
+    raise;
+  end;
 end;
 
 procedure TDbMyQuery.SetupResultBinds;
@@ -658,53 +858,106 @@ begin
     SetLength(FColMeta, FFieldCount);
     GetMem(FResultNative, FFieldCount * FNativeSize);
     FillChar(FResultNative^, SizeUInt(FFieldCount * FNativeSize), 0);
-    GetMem(FResNulls, SizeUInt(FFieldCount));
-    FillChar(FResNulls^, SizeUInt(FFieldCount), 0);
-    GetMem(FResLens, SizeUInt(FFieldCount) * SizeOf(QWord));
-    FillChar(FResLens^, SizeUInt(FFieldCount) * SizeOf(QWord), 0);
-    GetMem(FResErrs, SizeUInt(FFieldCount));
-    FillChar(FResErrs^, SizeUInt(FFieldCount), 0);
-    SetLength(FResBufs, FFieldCount);
-    SetLength(FResCap, FFieldCount);
-    for I := 0 to FFieldCount - 1 do
-    begin
-      FResBufs[I] := nil;
-      LF := my_fetchFieldDirect(LMetaRes, Cardinal(I));
-      FColMeta[I].Name := AnsiPtrToStr(LF^.Name);
-      FColMeta[I].Typ := LF^.Typ;
-      FColMeta[I].CharsetNr := LF^.CharsetNr;
-      case LF^.Typ of
-        MYSQL_TYPE_TINY:
-          begin FColMeta[I].BindType := MYSQL_TYPE_TINY; FResCap[I] := 1; end;
-        MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
-          begin FColMeta[I].BindType := MYSQL_TYPE_SHORT; FResCap[I] := 2; end;
-        MYSQL_TYPE_LONG, MYSQL_TYPE_INT24:
-          begin FColMeta[I].BindType := MYSQL_TYPE_LONG; FResCap[I] := 4; end;
-        MYSQL_TYPE_LONGLONG:
-          begin FColMeta[I].BindType := MY_PT_LONGLONG; FResCap[I] := 8; end;
-        MYSQL_TYPE_FLOAT:
-          begin FColMeta[I].BindType := MYSQL_TYPE_FLOAT; FResCap[I] := 4; end;
-        MYSQL_TYPE_DOUBLE:
-          begin FColMeta[I].BindType := MY_PT_DOUBLE; FResCap[I] := 8; end;
-        MYSQL_TYPE_DECIMAL, MYSQL_TYPE_NEWDECIMAL:
-          begin FColMeta[I].BindType := MY_PT_STRING; FResCap[I] := MY_BUF_INITIAL; end;
-      else
-        begin FColMeta[I].BindType := MY_PT_STRING; FResCap[I] := MY_BUF_INITIAL; end;
+    try
+      GetMem(FResNulls, SizeUInt(FFieldCount));
+      FillChar(FResNulls^, SizeUInt(FFieldCount), 0);
+      try
+        GetMem(FResLens, SizeUInt(FFieldCount) * SizeOf(QWord));
+        FillChar(FResLens^, SizeUInt(FFieldCount) * SizeOf(QWord), 0);
+        try
+          GetMem(FResErrs, SizeUInt(FFieldCount));
+          FillChar(FResErrs^, SizeUInt(FFieldCount), 0);
+          try
+            SetLength(FResBufs, FFieldCount);
+            SetLength(FResCap, FFieldCount);
+            for I := 0 to FFieldCount - 1 do
+            begin
+              FResBufs[I] := nil;
+              LF := my_fetchFieldDirect(LMetaRes, Cardinal(I));
+              FColMeta[I].Name := AnsiPtrToStr(LF^.Name);
+              FColMeta[I].Typ := LF^.Typ;
+              FColMeta[I].CharsetNr := LF^.CharsetNr;
+              case LF^.Typ of
+                MYSQL_TYPE_TINY:
+                  begin FColMeta[I].BindType := MYSQL_TYPE_TINY; FResCap[I] := 1; end;
+                MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
+                  begin FColMeta[I].BindType := MYSQL_TYPE_SHORT; FResCap[I] := 2; end;
+                MYSQL_TYPE_LONG, MYSQL_TYPE_INT24:
+                  begin FColMeta[I].BindType := MYSQL_TYPE_LONG; FResCap[I] := 4; end;
+                MYSQL_TYPE_LONGLONG:
+                  begin FColMeta[I].BindType := MY_PT_LONGLONG; FResCap[I] := 8; end;
+                MYSQL_TYPE_FLOAT:
+                  begin FColMeta[I].BindType := MYSQL_TYPE_FLOAT; FResCap[I] := 4; end;
+                MYSQL_TYPE_DOUBLE:
+                  begin FColMeta[I].BindType := MY_PT_DOUBLE; FResCap[I] := 8; end;
+                MYSQL_TYPE_DECIMAL, MYSQL_TYPE_NEWDECIMAL:
+                  begin FColMeta[I].BindType := MY_PT_STRING; FResCap[I] := MY_BUF_INITIAL; end;
+              else
+                begin FColMeta[I].BindType := MY_PT_STRING; FResCap[I] := MY_BUF_INITIAL; end;
+              end;
+              GetMem(FResBufs[I], SizeUInt(FResCap[I]));
+              try
+                WriteBindSlot(FResultNative, I, FNativeSize, FColMeta[I].BindType,
+                  FResBufs[I], QWord(FResCap[I]), @FResNulls[I], @FResErrs[I],
+                  @FResLens[I], False);
+              except
+                FreeMem(FResBufs[I]);
+                FResBufs[I] := nil;
+                raise;
+              end;
+            end;
+            try
+              if my_stmtBindResult(FStmt, FResultNative) then
+                RaiseMyStmt(FStmt);
+              if my_stmtStoreResult(FStmt) <> 0 then
+                RaiseMyStmt(FStmt);
+              FStored := True;
+              FSetupDone := True;
+            except
+              { 绑定/存储失败：已分配的结果缓冲泄漏由本层兜底，留给调用方纯异常语义 }
+              for I := 0 to FFieldCount - 1 do
+                if FResBufs[I] <> nil then
+                begin
+                  FreeMem(FResBufs[I]);
+                  FResBufs[I] := nil;
+                end;
+              SetLength(FResBufs, 0);
+              SetLength(FResCap, 0);
+              raise;
+            end;
+          except
+            FreeMem(FResErrs);
+            FResErrs := nil;
+            for I := 0 to FFieldCount - 1 do
+              if (I < Length(FResBufs)) and (FResBufs[I] <> nil) then
+              begin
+                FreeMem(FResBufs[I]);
+                FResBufs[I] := nil;
+              end;
+            SetLength(FResBufs, 0);
+            SetLength(FResCap, 0);
+            raise;
+          end;
+        except
+          FreeMem(FResLens);
+          FResLens := nil;
+          raise;
+        end;
+      except
+        FreeMem(FResNulls);
+        FResNulls := nil;
+        raise;
       end;
-      GetMem(FResBufs[I], SizeUInt(FResCap[I]));
-      WriteBindSlot(FResultNative, I, FNativeSize, FColMeta[I].BindType,
-        FResBufs[I], QWord(FResCap[I]), @FResNulls[I], @FResErrs[I],
-        @FResLens[I], False);
+    except
+      FreeMem(FResultNative);
+      FResultNative := nil;
+      SetLength(FColMeta, 0);
+      FFieldCount := 0;
+      raise;
     end;
   finally
     my_freeResult(LMetaRes);   { 元数据复制完即释放 }
   end;
-  if my_stmtBindResult(FStmt, FResultNative) then
-    RaiseMyStmt(FStmt);
-  if my_stmtStoreResult(FStmt) <> 0 then
-    RaiseMyStmt(FStmt);
-  FStored := True;
-  FSetupDone := True;
 end;
 
 procedure TDbMyQuery.RefetchTruncated;
@@ -959,7 +1212,8 @@ end;
 { ---- TDbMyConnection ---- }
 
 constructor TDbMyConnection.Create(AConnH: TMysql;
-  const AFlavor: TMysqlFlavor);
+  const AFlavor: TMysqlFlavor;
+  const AStmtCacheCapacity: Integer);
 begin
   inherited Create;
   FConnH := AConnH;
@@ -971,6 +1225,9 @@ begin
     未接入（路线图缺口账本）。 }
   FSupportsStmtTimeout :=
     (AFlavor = mfMysql) and (my_getServerVersion(AConnH) >= 80000);
+  if AStmtCacheCapacity > 0 then
+    FCache := specialize TLruCache<string, IMysqlStmtHolder>.Create(
+      SizeUInt(AStmtCacheCapacity));
   FTrace := TDbTraceHub.Create;
   { OnAcquire 由 SetListener 挂载时补发（§2.12），ctor 不预发 }
 end;
@@ -988,10 +1245,52 @@ begin
   Result := FTrace.Active;
 end;
 
+{ ---- IDbStmtCacheControl ---- }
+
+procedure TDbMyConnection.Clear;
+begin
+  if FCache <> nil then
+    FCache.Clear;
+end;
+
+function TDbMyConnection.Size: Integer;
+begin
+  if FCache <> nil then
+    Result := Integer(FCache.GetSize)
+  else
+    Result := 0;
+end;
+
+function TDbMyConnection.HitRate: Double;
+begin
+  if FCache <> nil then
+    Result := FCache.GetHitRate
+  else
+    Result := 0.0;
+end;
+
+procedure TDbMyConnection.ReturnStmt(const ASql: string; AStmt: TMysqlStmt;
+  const ASlots: TIntArray; AParamCount: Integer; const ARewritten: string);
+begin
+  if AStmt = nil then Exit;
+  if FCache <> nil then
+  begin
+    if my_stmtReset(AStmt) then
+    begin
+      my_stmtClose(AStmt);
+      Exit;
+    end;
+    FCache.Put(ASql, TMyStmtHolder.Create(AStmt, ASlots, AParamCount, ARewritten));
+  end
+  else
+    my_stmtClose(AStmt);
+end;
+
 destructor TDbMyConnection.Destroy;
 begin
   FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
   FreeAndNil(FTrace);
+  FCache := nil;
   if FConnH <> nil then
   begin
     my_close(FConnH);
@@ -1030,6 +1329,11 @@ end;
 function TDbMyConnection.Kind: TDbKind;
 begin
   Result := dbkMysql;
+end;
+
+procedure TDbMyConnection.BulkExec(const ASql: string);
+begin
+  Exec(ASql);
 end;
 
 procedure TDbMyConnection.Exec(const ASql: string);
@@ -1117,7 +1421,13 @@ begin
   finally
     try
       MyExecRaw('SET SESSION max_execution_time=' + IntToStr(LPrev));
+      FLastError := '';
     except
+      on E: Exception do
+      begin
+        FLastError := E.Message;
+        try WriteLn(StdErr, '[mysql] max_execution_time restore failed: ', E.Message); except end;
+      end;
     end;
   end;
 end;
@@ -1128,7 +1438,20 @@ var
   LSlots: TIntArray;
   S: TMysqlStmt;
   LServerParams: QWord;
+  Holder: IMysqlStmtHolder;
 begin
+  if (FCache <> nil) and FCache.Get(ASql, Holder) then
+  begin
+    FCache.Remove(ASql);
+    S := Holder.Detach;
+    LSlots := Holder.Slots;
+    LRewritten := Holder.Rewritten;
+    LServerParams := QWord(Holder.ParamCount);
+    Holder := nil;
+    Result := TDbMyQuery.Create(FConnH, S, FFlavor, LSlots,
+      Integer(LServerParams), ASql, FTrace, Self as IMysqlStmtHome, LRewritten);
+    Exit;
+  end;
   TranslatePlaceholdersMy(ASql, LRewritten, LSlots);
   S := my_stmtInit(FConnH);
   if S = nil then
@@ -1138,16 +1461,69 @@ begin
     RaiseMyStmtClose(S);   { 读错误 + 关句柄 + 抛 }
   LServerParams := my_stmtParamCount(S);
   Result := TDbMyQuery.Create(FConnH, S, FFlavor, LSlots,
-    Integer(LServerParams), ASql, FTrace);
+    Integer(LServerParams), ASql, FTrace, Self as IMysqlStmtHome, LRewritten);
 end;
 
 function TDbMyConnection.Query(const ASql: string;
   const AOptions: TDbExecOptions): IDbQuery;
+var
+  LPrev: Int64;
+  LSet: Boolean;
+  LRewritten: string;
+  LSlots: TIntArray;
+  S: TMysqlStmt;
+  LServerParams: QWord;
+  LQry: TDbMyQuery;
+  Holder: IMysqlStmtHolder;
 begin
-  { TimeoutMs v1 忽略：执行惰性（首个 Step）且 mysql 无语句级属性，
-    会话级变量无法安全限定到查询对象存活期——升级路径登记路线图
-    （MariaDB SET STATEMENT .. FOR 前缀 / 客户端 cancel watchdog）。}
-  Result := Query(ASql);
+  { advisory：仅 Oracle 库且 server ≥8.0 经 max_execution_time 生效；
+    MariaDB/旧服务端静默忽略（与 pg 的 statement_timeout advisory 及
+    sqlite 无机制忽略一致，跨后端可移植）。生效时窗口 = 查询对象存活期，
+    析构恢复原值（与 pg Query(opts) 同契约）；SET 失败则回滚会话值后上抛。 }
+  if (AOptions.TimeoutMs <= 0) or (not FSupportsStmtTimeout) then
+    Exit(Query(ASql));
+  LPrev := MySessionMaxExecMs;
+  LSet := False;
+  try
+    MyExecRaw('SET SESSION max_execution_time=' +
+      IntToStr(AOptions.TimeoutMs));
+    LSet := True;
+    if (FCache <> nil) and FCache.Get(ASql, Holder) then
+    begin
+      FCache.Remove(ASql);
+      S := Holder.Detach;
+      LSlots := Holder.Slots;
+      LRewritten := Holder.Rewritten;
+      LServerParams := QWord(Holder.ParamCount);
+      LQry := TDbMyQuery.Create(FConnH, S, FFlavor, LSlots,
+        Integer(LServerParams), ASql, FTrace, Self as IMysqlStmtHome, LRewritten);
+      Holder := nil;
+    end
+    else
+    begin
+      TranslatePlaceholdersMy(ASql, LRewritten, LSlots);
+      S := my_stmtInit(FConnH);
+      if S = nil then
+        raise EDbError.CreateSimple(dbkMysql, 'mysql_stmt_init failed');
+      if my_stmtPrepare(S, PAnsiChar(AnsiString(LRewritten)),
+        QWord(Length(LRewritten))) <> 0 then
+        RaiseMyStmtClose(S);
+      LServerParams := my_stmtParamCount(S);
+      LQry := TDbMyQuery.Create(FConnH, S, FFlavor, LSlots,
+        Integer(LServerParams), ASql, FTrace, Self as IMysqlStmtHome, LRewritten);
+    end;
+    LQry.FRestoreNeeded := True;
+    LQry.FRestoreMs := LPrev;
+    Result := LQry;
+    LSet := False;
+  except
+    if LSet then
+      try
+        MyExecRaw('SET SESSION max_execution_time=' + IntToStr(LPrev));
+      except
+      end;
+    raise;
+  end;
 end;
 
 function TDbMyConnection.Changes: Int64;
@@ -1309,7 +1685,7 @@ end;
 
 function TDbMyConnection.SupportsStmtCacheControl: Boolean;
 begin
-  Result := False;  { A2 未接服务端 prepared 缓存（C 线排期） }
+  Result := True;
 end;
 
 function TDbMyConnection.SupportsLargeObjects: Boolean;
@@ -1347,15 +1723,79 @@ begin
   Result := 65535;  { COM_STMT_PREPARE 参数计数为 uint16 }
 end;
 
+
+function TDbMyConnection.ServerVersion: Integer;
+begin
+  if FServerVersionProbed then Exit(FServerVersion);
+  FServerVersionProbed := True;
+  FServerVersion := ParseServerVersion(ProductVersion);
+  Result := FServerVersion;
+end;
+
+function TDbMyConnection.SupportsNativeVector: Boolean;
+begin
+  // MySQL VECTOR introduced 8.0.17 (80017)
+  Result := ServerVersion >= 80017;
+end;
+
+function TDbMyConnection.SupportsJsonPath: Boolean;
+begin
+  Result := ProbeJsonPath(ServerVersion);
+end;
+
+function TDbMyConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := ProbeRangeTypes(ServerVersion);
+end;
+
+function TDbMyConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := ProbeSupportsBulkCopy(dbkMysql, ServerVersion);
+end;
+
+procedure TDbMyConnection.BeginCopy(const ATable: string; const AColumns: array of string);
+begin
+  FBulk.BeginCopy(dbkMysql, ATable, AColumns);
+end;
+
+procedure TDbMyConnection.WriteRow(const AValues: array of string);
+begin
+  FBulk.WriteRow(dbkMysql, AValues);
+end;
+
+procedure TDbMyConnection.EndCopy;
+begin
+  if not FBulk.IsActive then Exit;
+  try
+    if FBulk.RowCount = 0 then Exit;
+    DbBulkFlushBuffer(FBulk, MaxPlaceholders, InTransaction,
+      @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
+  finally
+    FBulk.Clear;
+  end;
+end;
+
+procedure TDbMyConnection.AbortCopy;
+begin
+  FBulk.Clear;
+end;
+
 { ---- 工厂 ---- }
 
 function ConnectMysql(const ADsn: string): IDbConnection;
 begin
-  Result := ConnectMysql(ADsn, TDbConnectOptions.Default);
+  Result := ConnectMysql(ADsn, TDbConnectOptions.Default, DEFAULT_MYSQL_STMT_CACHE_CAPACITY);
 end;
 
 function ConnectMysql(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection;
+begin
+  Result := ConnectMysql(ADsn, AOptions, DEFAULT_MYSQL_STMT_CACHE_CAPACITY);
+end;
+
+function ConnectMysql(const ADsn: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
 var
   D: TDbMysqlDsnParts;
   H: TMysql;
@@ -1393,7 +1833,7 @@ begin
         PAnsiChar(AnsiString(D.Database)), Cardinal(D.Port), nil, LFlags);
     if R = nil then
       RaiseMyConn(H);
-    Conn := TDbMyConnection.Create(H, MySqlFlavor);
+    Conn := TDbMyConnection.Create(H, MySqlFlavor, AStmtCacheCapacity);
   except
     my_close(H);   { 仅覆盖建连窗口；Conn 成立后句柄归其所有 }
     raise;

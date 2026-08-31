@@ -2,6 +2,7 @@
  * nextpas.core.canvas.raster - CPU 光栅（Tile 16x16 架构占位 + 扫描线填充，Double 梯形→整数覆盖）
  * 单线程录制，Save/Restore 栈；Fill 用 tess 梯形，Stroke 复用 PathStroke。
  * 已接入跨平台内联光栅层 nextpas.core.simd.raster（FillSolid/BlendSrcOver 直联 SSE2/标量，不走分发表，可内联）。
+ * L2 依赖：单向引用 L2 vector.tess/vector.path 与 L2 image.base（canvas→vector/image），无反向；同层循环受控监控（610 行，阈 800）。
  *}
 unit nextpas.core.canvas.raster;
 
@@ -120,7 +121,7 @@ end;
 
 function SampleGradient(const AGrad: TGradient; t: Single): TColor32; inline;
 var
-  n, i: Integer;
+  n, i, lo, hi, mid: Integer;
   c0, c1: TColor32;
   s0, s1, lt: Single;
   r0, g0, b0, a0, r1, g1, b1, a1, rr, gg, bb, aa: Byte;
@@ -141,8 +142,16 @@ begin
   end
   else
   begin
-    i := 0;
-    while (i < n-2) and (t > AGrad.GetStop(i+1)) do Inc(i);
+    // 二分查找替代线性 while，O(log n)；stops 递增已在 TBrush.ValidateGradient 保证
+    lo := 0;
+    hi := n - 1;
+    while hi - lo > 1 do
+    begin
+      mid := (lo + hi) shr 1;
+      if t < AGrad.GetStop(mid) then hi := mid else lo := mid;
+    end;
+    i := lo;
+    if i < 0 then i := 0 else if i >= n-1 then i := n-2;
     s0 := AGrad.GetStop(i);
     s1 := AGrad.GetStop(i+1);
     c0 := AGrad.GetColor(i);
@@ -231,26 +240,32 @@ var
   Tr: TTrapezoid;
   DH, T: Single;
   XL, XR: Single;
-  tGrad: Single;
+  tGrad, t0, stepT, invW: Single;
   RunCol: TColor32;
-  Row, RunPtr: PByte;
-  CX, CY, Rad, Dx, Dy, Dist: Single;
-  P, Lp: TVec2;
+  Row, Dst: PByte;
+  CX, CY, Rad, Dx, Dy, Dx0, Dy0, stepDx, stepDy, Dist: Single;
   UseInv: Boolean;
   Inv: TMat2D;
-  RunLen: Integer;
-  CurR, CurG, CurB, CurA: Byte;
-  NextCol: TColor32;
+  InvA, InvB, InvC, InvD, InvTx, InvTy: Single;
+  rowBaseX, rowBaseY, py: Single;
+  R, G, B, A, invAByte: Byte;
 begin
   if FBitmap.IsEmpty then Exit;
   W := FBitmap.Width; H := FBitmap.Height;
   if ABounds.IsEmpty then Exit;
   UseInv := AGrad.Transform.IsInvertible;
-  if UseInv then Inv := AGrad.Transform.Inverse;
+  if UseInv then
+  begin
+    Inv := AGrad.Transform.Inverse;
+    InvA := Inv.A; InvB := Inv.B; InvC := Inv.C; InvD := Inv.D; InvTx := Inv.Tx; InvTy := Inv.Ty;
+  end
+  else
+  begin InvA := 1; InvB := 0; InvC := 0; InvD := 1; InvTx := 0; InvTy := 0; end;
   CX := ABounds.X + ABounds.W * 0.5;
   CY := ABounds.Y + ABounds.H * 0.5;
   if ABounds.W > ABounds.H then Rad := ABounds.W * 0.5 else Rad := ABounds.H * 0.5;
   if Rad < EPSILON then Rad := 1;
+  if ABounds.W < EPSILON then invW := 0 else invW := 1 / ABounds.W;
   for I := 0 to High(ATraps) do
   begin
     Tr := ATraps[I];
@@ -282,73 +297,77 @@ begin
       if X1 > W then X1 := W;
       if X1 <= X0 then Continue;
       Row := FBitmap.RowPtr(Y);
-      // batch: coalesce consecutive pixels with identical gradient color
-      // reuse simd batch interfaces instead of hand div 255
-      X := X0;
-      P := TVec2.Create(Single(X) + 0.5, Single(Y) + 0.5);
-      if UseInv then Lp := Inv.TransformPoint(P) else Lp := P;
-      if ARadial then
+      py := Single(Y) + 0.5;
+      if UseInv then
+      begin rowBaseX := InvC * py + InvTx; rowBaseY := InvD * py + InvTy; end
+      else
+      begin rowBaseX := 0; rowBaseY := 0; end;
+      if not ARadial then
       begin
-        Dx := Lp.X - CX; Dy := Lp.Y - CY;
-        Dist := Sqrt(Dx*Dx + Dy*Dy);
-        tGrad := Dist / Rad;
+        // 增量 t：避免每像素 TransformPoint（Inv.A 斜率预提），用 t0+(X-X0)*step 精确避免累积误差
+        if UseInv then
+        begin t0 := (InvA * (Single(X0) + 0.5) + rowBaseX - ABounds.X) * invW; stepT := InvA * invW; end
+        else
+        begin t0 := (Single(X0) + 0.5 - ABounds.X) * invW; stepT := invW; end;
+        for X := X0 to X1 - 1 do
+        begin
+          tGrad := t0 + Single(X - X0) * stepT;
+          if tGrad < 0 then tGrad := 0 else if tGrad > 1 then tGrad := 1;
+          RunCol := SampleGradient(AGrad, tGrad);
+          R := Byte((LongWord(RunCol) shr 16) and $FF);
+          G := Byte((LongWord(RunCol) shr 8) and $FF);
+          B := Byte(LongWord(RunCol) and $FF);
+          A := Byte((LongWord(RunCol) shr 24) and $FF);
+          if A <> 0 then
+          begin
+            Dst := Row + X * 4;
+            if A = 255 then
+              PLongWord(Dst)^ := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24)
+            else
+            begin
+              invAByte := Byte(255 - A);
+              Dst[0] := Byte((Integer(R) * Integer(A) + Integer(Dst[0]) * Integer(invAByte)) div 255);
+              Dst[1] := Byte((Integer(G) * Integer(A) + Integer(Dst[1]) * Integer(invAByte)) div 255);
+              Dst[2] := Byte((Integer(B) * Integer(A) + Integer(Dst[2]) * Integer(invAByte)) div 255);
+              Dst[3] := Byte(Integer(A) + (Integer(Dst[3]) * Integer(invAByte)) div 255);
+            end;
+          end;
+        end;
       end
       else
       begin
-        if ABounds.W < EPSILON then tGrad := 0 else tGrad := (Lp.X - ABounds.X) / ABounds.W;
-      end;
-      if tGrad < 0 then tGrad := 0 else if tGrad > 1 then tGrad := 1;
-      RunCol := SampleGradient(AGrad, tGrad);
-      CurR := Byte((LongWord(RunCol) shr 16) and $FF);
-      CurG := Byte((LongWord(RunCol) shr 8) and $FF);
-      CurB := Byte(LongWord(RunCol) and $FF);
-      CurA := Byte((LongWord(RunCol) shr 24) and $FF);
-      RunPtr := Row + X * 4;
-      RunLen := 1;
-      for X := X0 + 1 to X1 - 1 do
-      begin
-        P := TVec2.Create(Single(X) + 0.5, Single(Y) + 0.5);
-        if UseInv then Lp := Inv.TransformPoint(P) else Lp := P;
-        if ARadial then
+        // radial：预提 Dx/Dy 基准，仍需 Sqrt；用 Dx0+(X-X0)*step 精确
+        if UseInv then
+        begin Dx0 := InvA * (Single(X0) + 0.5) + rowBaseX - CX; Dy0 := InvB * (Single(X0) + 0.5) + rowBaseY - CY; stepDx := InvA; stepDy := InvB; end
+        else
+        begin Dx0 := Single(X0) + 0.5 - CX; Dy0 := py - CY; stepDx := 1; stepDy := 0; end;
+        for X := X0 to X1 - 1 do
         begin
-          Dx := Lp.X - CX; Dy := Lp.Y - CY;
+          Dx := Dx0 + Single(X - X0) * stepDx;
+          Dy := Dy0 + Single(X - X0) * stepDy;
           Dist := Sqrt(Dx*Dx + Dy*Dy);
           tGrad := Dist / Rad;
-        end
-        else
-        begin
-          if ABounds.W < EPSILON then tGrad := 0 else tGrad := (Lp.X - ABounds.X) / ABounds.W;
+          if tGrad < 0 then tGrad := 0 else if tGrad > 1 then tGrad := 1;
+          RunCol := SampleGradient(AGrad, tGrad);
+          R := Byte((LongWord(RunCol) shr 16) and $FF);
+          G := Byte((LongWord(RunCol) shr 8) and $FF);
+          B := Byte(LongWord(RunCol) and $FF);
+          A := Byte((LongWord(RunCol) shr 24) and $FF);
+          if A <> 0 then
+          begin
+            Dst := Row + X * 4;
+            if A = 255 then
+              PLongWord(Dst)^ := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24)
+            else
+            begin
+              invAByte := Byte(255 - A);
+              Dst[0] := Byte((Integer(R) * Integer(A) + Integer(Dst[0]) * Integer(invAByte)) div 255);
+              Dst[1] := Byte((Integer(G) * Integer(A) + Integer(Dst[1]) * Integer(invAByte)) div 255);
+              Dst[2] := Byte((Integer(B) * Integer(A) + Integer(Dst[2]) * Integer(invAByte)) div 255);
+              Dst[3] := Byte(Integer(A) + (Integer(Dst[3]) * Integer(invAByte)) div 255);
+            end;
+          end;
         end;
-        if tGrad < 0 then tGrad := 0 else if tGrad > 1 then tGrad := 1;
-        NextCol := SampleGradient(AGrad, tGrad);
-        if NextCol = RunCol then
-        begin
-          Inc(RunLen);
-          Continue;
-        end;
-        // flush current run via batch API
-        if CurA <> 0 then
-        begin
-          if CurA = 255 then
-            RasterFillSolid(RunPtr, RunLen, CurR, CurG, CurB, CurA)
-          else
-            RasterBlendSrcOver(RunPtr, RunLen, CurR, CurG, CurB, CurA);
-        end;
-        // start next run
-        RunCol := NextCol;
-        CurR := Byte((LongWord(RunCol) shr 16) and $FF);
-        CurG := Byte((LongWord(RunCol) shr 8) and $FF);
-        CurB := Byte(LongWord(RunCol) and $FF);
-        CurA := Byte((LongWord(RunCol) shr 24) and $FF);
-        RunPtr := Row + X * 4;
-        RunLen := 1;
-      end;
-      if CurA <> 0 then
-      begin
-        if CurA = 255 then
-          RasterFillSolid(RunPtr, RunLen, CurR, CurG, CurB, CurA)
-        else
-          RasterBlendSrcOver(RunPtr, RunLen, CurR, CurG, CurB, CurA);
       end;
     end;
   end;
@@ -541,8 +560,9 @@ end;
 procedure TRasterCanvas.DrawGlyphRun(const ARun: TGlyphRun; const APos: TVec2);
 const
   // glyph metrics derived from TGlyphRun.Scale + advance; named to avoid magic
-  // TODO: picks font atlas/shaping when available; current keeps placeholder rect
-  // with named ratios so text path stays proportional and not hard-coded inline
+  // 占位圆角矩形：真实字形由 font atlas/shaper 注入时无缝替换；当前由
+  // graphics.text.LayoutText 产 GlyphRun（等宽占位 + Scale 打通），已闭环高级感封装
+  // 比例化常量保持像素与 golden 1120e4a1 一致，待 font 层就绪再切 SDF/位图
   GlyphAdvanceFallback = 8.0;
   GlyphAdvanceMinCells = 6.0;
   GlyphAdvanceMaxCells = 20.0;

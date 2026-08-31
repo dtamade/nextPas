@@ -18,6 +18,7 @@ BENCHES := \
 	bench_db_adapter_overhead \
 	bench_db_translate_complexity \
 	bench_db_batch_insert \
+	bench_db_bulk_copy \
 	bench_db_stmt_cache \
 	bench_db_blob_stream \
 	bench_db_pool_stress \
