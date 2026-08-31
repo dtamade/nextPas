@@ -18,7 +18,7 @@ begin
   EmitErrorAtSpan(
     ACode,
     APhase,
-    BuildCoreSourceSpan(AFileId, AByteOffset, 0),
+    BuildCoreSourceSpan(AFileId, AByteOffset, ResolveByteCount(AFileId, AByteOffset)),
     AMessageText
   );
 end;
@@ -43,7 +43,7 @@ begin
   Event.PrimarySpan := BuildCoreSourceSpan(
     AFileId,
     AByteOffset,
-    0
+    ResolveByteCount(AFileId, AByteOffset)
   );
   Event.MessageText := AMessageText;
 

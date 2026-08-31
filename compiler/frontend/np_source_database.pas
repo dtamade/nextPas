@@ -65,6 +65,7 @@ type
     ): TLineCol;
     { Get display path for a file (for debug info filename). }
     function DisplayPathForFileId(const AFileId: TSourceFileId): string;
+    function ResolveDiagnosticByteCount(const AFileId: TCoreId; const AByteOffset: LongInt): LongInt;
   end;
 
 implementation
@@ -309,6 +310,121 @@ begin
     if FFiles[SizeUInt(Index)].FileId = AFileId then
       Exit(FFiles[SizeUInt(Index)].DisplayPath);
   Result := '';
+end;
+
+function TSourceDatabase.ResolveDiagnosticByteCount(const AFileId: TCoreId; const AByteOffset: LongInt): LongInt;
+var
+  Src: string;
+  Len, I: LongInt;
+  Ch, NextCh: Char;
+  Start: LongInt;
+begin
+  Result := 1;
+  Src := SourceTextForFileId(AFileId);
+  Len := Length(Src);
+  if (AByteOffset < 0) or (AByteOffset >= Len) then
+    Exit(1);
+  Ch := Src[AByteOffset + 1];
+  if AByteOffset + 1 < Len then
+    NextCh := Src[AByteOffset + 2]
+  else
+    NextCh := #0;
+  if (Ch = ':') and (NextCh = '=') then Exit(2);
+  if (Ch = '<') and ((NextCh = '=') or (NextCh = '>')) then Exit(2);
+  if (Ch = '>') and (NextCh = '=') then Exit(2);
+  if (Ch = '.') and (NextCh = '.') then Exit(2);
+  if (Ch = '+') and (NextCh = '=') then Exit(2);
+  if (Ch = '-') and (NextCh = '=') then Exit(2);
+  if (Ch = '*') and (NextCh = '=') then Exit(2);
+  if (Ch = '/') and (NextCh = '=') then Exit(2);
+  if Ch = '''' then
+  begin
+    I := AByteOffset + 1;
+    while I < Len do
+    begin
+      Inc(I);
+      if Src[I] = '''' then
+      begin
+        if (I < Len) and (Src[I+1] = '''') then Inc(I) else Break;
+      end else if (Src[I] = #10) or (Src[I] = #13) then Break;
+    end;
+    Result := I - AByteOffset;
+    if Result < 1 then Result := 1;
+    Exit;
+  end;
+  if Ch = '#' then
+  begin
+    I := AByteOffset + 1;
+    if (I < Len) and (Src[I+1] = '$') then Inc(I);
+    while (I < Len) and (Src[I+1] in ['0'..'9','a'..'f','A'..'F']) do Inc(I);
+    while (I < Len) and (Src[I+1] = '''') do
+    begin
+      Inc(I);
+      while (I < Len) and (Src[I+1] <> '''') and (Src[I+1] <> #10) and (Src[I+1] <> #13) do Inc(I);
+      if (I < Len) and (Src[I+1] = '''') then Inc(I);
+    end;
+    Result := I - AByteOffset;
+    if Result < 1 then Result := 1;
+    Exit;
+  end;
+  if Ch = '$' then
+  begin
+    I := AByteOffset + 1;
+    while (I < Len) and (Src[I+1] in ['0'..'9','a'..'f','A'..'F','_']) do Inc(I);
+    Result := I - AByteOffset;
+    Exit;
+  end;
+  if Ch = '&' then
+  begin
+    I := AByteOffset + 1;
+    while (I < Len) and (Src[I+1] in ['0'..'7','_']) do Inc(I);
+    Result := I - AByteOffset;
+    Exit;
+  end;
+  if Ch = '%' then
+  begin
+    I := AByteOffset + 1;
+    while (I < Len) and (Src[I+1] in ['0','1','_']) do Inc(I);
+    Result := I - AByteOffset;
+    Exit;
+  end;
+  if Ch in ['A'..'Z','a'..'z','_'] then
+  begin
+    I := AByteOffset + 1;
+    while (I < Len) and (Src[I+1] in ['A'..'Z','a'..'z','0'..'9','_']) do Inc(I);
+    Result := I - AByteOffset;
+    Exit;
+  end;
+  if Ch in ['0'..'9'] then
+  begin
+    I := AByteOffset + 1;
+    while (I < Len) and (Src[I+1] in ['0'..'9','A'..'F','a'..'f','_']) do Inc(I);
+    if (I < Len) and (Src[I+1] = '.') then
+    begin
+      Inc(I);
+      while (I < Len) and (Src[I+1] in ['0'..'9']) do Inc(I);
+    end;
+    if (I < Len) and (Src[I+1] in ['e','E']) then
+    begin
+      Inc(I);
+      if (I < Len) and (Src[I+1] in ['+','-']) then Inc(I);
+      while (I < Len) and (Src[I+1] in ['0'..'9']) do Inc(I);
+    end;
+    Result := I - AByteOffset;
+    Exit;
+  end;
+  if Ch in [';',',',':','=','<','>','+','-','*','/','(',')','[',']','@','^','.','#','$'] then Exit(1);
+  if Ch in [#9,#10,#13,' '] then
+  begin
+    Start := AByteOffset;
+    BuildLineIndexForFile(AFileId - 1);
+    I := Start;
+    while (I < Len) and (Src[I+1] <> #10) and (Src[I+1] <> #13) do Inc(I);
+    Result := I - Start;
+    if (Result > 80) or (Result <= 0) then Result := 1;
+    Exit;
+  end;
+  Result := 1;
 end;
 
 end.
