@@ -14,9 +14,9 @@ unit nextpas.core.ssh.buffer;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.text.utf8,
   nextpas.core.ssh.base,
