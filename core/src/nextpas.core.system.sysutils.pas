@@ -60,6 +60,8 @@ function StringOf(const ABytes: TBytes): string;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; overload;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; overload;
+function HexStr(const AValue: UInt64; const ADigits: Integer = 0): string; overload;
+function HexStr(const AAddr: Pointer): string; overload;
 
 { String manipulation }
 function Trim(const AStr: string): string;
@@ -138,6 +140,7 @@ implementation
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.base.utils,
@@ -319,6 +322,16 @@ function Supports(const AInstance: IInterface; const AIID: TGuid;
   out AIntf): Boolean;
 begin
   Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
+end;
+
+function HexStr(const AValue: UInt64; const ADigits: Integer): string;
+begin
+  Result := nextpas.core.base.HexStr(AValue, ADigits);
+end;
+
+function HexStr(const AAddr: Pointer): string;
+begin
+  Result := nextpas.core.base.HexStr(PtrUInt(AAddr), 0);
 end;
 
 { String manipulation }
