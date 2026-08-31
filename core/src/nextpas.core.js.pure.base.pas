@@ -28,9 +28,13 @@ type
 function JsPureValidateHostName(const AName: string): Boolean; inline;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline;
 function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer; inline;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
+procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions;
   ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
-// 对象堆（零 FFI，纯族单源，线性查找，小对象零分配）
+// 对象堆（零 FFI，纯族单源，线性查找 O(n)，小对象 n≤32 零分配最优，>64 建议哈希）
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
@@ -80,6 +84,48 @@ var I: Integer;
 begin
   for I := 0 to High(Hosts) do if TStringView.FromStr(Hosts[I].Name).Equals(AName) then Exit(I);
   Result := -1;
+end;
+
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
+var LIdx: Integer;
+begin
+  LIdx := JsPureFindHost(Hosts, AName);
+  if LIdx >= 0 then begin Hosts[LIdx].Func := AHandler; Hosts[LIdx].Kind := AKind; Exit; end;
+  SetLength(Hosts, Length(Hosts)+1);
+  Hosts[High(Hosts)].Name := AName;
+  Hosts[High(Hosts)].Func := AHandler;
+  Hosts[High(Hosts)].Kind := AKind;
+end;
+
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
+var LIdx: Integer;
+begin
+  LIdx := JsPureFindHost(Hosts, AName);
+  if LIdx >= 0 then begin Hosts[LIdx].Method := AHandler; Hosts[LIdx].Kind := AKind; Exit; end;
+  SetLength(Hosts, Length(Hosts)+1);
+  Hosts[High(Hosts)].Name := AName;
+  Hosts[High(Hosts)].Method := AHandler;
+  Hosts[High(Hosts)].Kind := AKind;
+end;
+
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
+var LIdx: Integer;
+begin
+  LIdx := JsPureFindHost(Hosts, AName);
+  if LIdx >= 0 then begin Hosts[LIdx].Proc := AHandler; Hosts[LIdx].Kind := AKind; Exit; end;
+  SetLength(Hosts, Length(Hosts)+1);
+  Hosts[High(Hosts)].Name := AName;
+  Hosts[High(Hosts)].Proc := AHandler;
+  Hosts[High(Hosts)].Kind := AKind;
+end;
+
+procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
+var LIdx, I: Integer;
+begin
+  LIdx := JsPureFindHost(Hosts, AName);
+  if LIdx < 0 then Exit;
+  for I := LIdx to High(Hosts)-1 do Hosts[I] := Hosts[I+1];
+  SetLength(Hosts, Length(Hosts)-1);
 end;
 
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;

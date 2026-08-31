@@ -127,6 +127,7 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 - **基准框架**：`nextpas.core.bench`（`design-conventions §12`），禁自定义计时。`bench_eval` 覆盖 `Eval('1+2')`、`HostFunction` 往返、`NewJson/ToJson` 互转，输出 `ns/op` 与 `MB/s`（若涉二进制）。
 - **测试框架**：`nextpas.core.test`（`TTestSuite + TSuiteRunner`），`fake` 契约测试全量走 `fake` 后端，`quickjs_runtime` 仅在探测到库时跑。
 - **Heaptrc**：所有 `focused` 套件 `heaptrc 0 leaks` 为门禁（`mem` 契约）。
+- **对象堆阈值**：`pure.base` 对象堆线性查找 O(n)，小对象 n≤32 零分配最优，>64 建议哈希迁移（实测 n>64 或 `bench_value` 回归>10% 触发，纯族 352 行阈值550内，18 份对齐）。
 
 ## 8.1 复用与反哺纪律（基本要求）
 

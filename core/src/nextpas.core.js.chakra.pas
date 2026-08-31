@@ -92,13 +92,13 @@ procedure TJsChakraContext.SetProp(const AObj: TJsValue; const AName: string; co
 function TJsChakraContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=Bind(JsPureCall(Self, FHostFuncs, AFunc, AThis, AArgs, jsbkChakra)); end;
 procedure TJsChakraContext.DoSetHost(const AName: string); begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create('Invalid host function name: '+AName,jecSyntax,'SyntaxError','',jsbkChakra); end;
 procedure TJsChakraContext.SetHostFunction(const AName: string; AHandler: TJsHostFunction);
-var LIdx: Integer; begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkChakra); LIdx:=FindHost(AName); if LIdx>=0 then begin FHostFuncs[LIdx].Func:=AHandler; FHostFuncs[LIdx].Kind:=0; Exit; end; SetLength(FHostFuncs,Length(FHostFuncs)+1); FHostFuncs[High(FHostFuncs)].Name:=AName; FHostFuncs[High(FHostFuncs)].Func:=AHandler; FHostFuncs[High(FHostFuncs)].Kind:=0; end;
+begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkChakra); JsPureHostSet(FHostFuncs, AName, AHandler, 0); end;
 procedure TJsChakraContext.SetHostFunction(const AName: string; AHandler: TJsHostMethod);
-var LIdx: Integer; begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkChakra); LIdx:=FindHost(AName); if LIdx>=0 then begin FHostFuncs[LIdx].Method:=AHandler; FHostFuncs[LIdx].Kind:=1; Exit; end; SetLength(FHostFuncs,Length(FHostFuncs)+1); FHostFuncs[High(FHostFuncs)].Name:=AName; FHostFuncs[High(FHostFuncs)].Method:=AHandler; FHostFuncs[High(FHostFuncs)].Kind:=1; end;
+begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkChakra); JsPureHostSet(FHostFuncs, AName, AHandler, 1); end;
 procedure TJsChakraContext.SetHostFunction(const AName: string; AHandler: TJsHostProc);
-var LIdx: Integer; begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkChakra); LIdx:=FindHost(AName); if LIdx>=0 then begin FHostFuncs[LIdx].Proc:=AHandler; FHostFuncs[LIdx].Kind:=2; Exit; end; SetLength(FHostFuncs,Length(FHostFuncs)+1); FHostFuncs[High(FHostFuncs)].Name:=AName; FHostFuncs[High(FHostFuncs)].Proc:=AHandler; FHostFuncs[High(FHostFuncs)].Kind:=2; end;
+begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkChakra); JsPureHostSet(FHostFuncs, AName, AHandler, 2); end;
 procedure TJsChakraContext.RemoveHostFunction(const AName: string);
-var LIdx,I: Integer; begin EnsureNotClosed; LIdx:=FindHost(AName); if LIdx<0 then Exit; for I:=LIdx to High(FHostFuncs)-1 do FHostFuncs[I]:=FHostFuncs[I+1]; SetLength(FHostFuncs,Length(FHostFuncs)-1); end;
+begin EnsureNotClosed; JsPureHostRemove(FHostFuncs, AName); end;
 procedure TJsChakraContext.Tick; begin EnsureNotClosed; end;
 procedure TJsChakraContext.CollectGarbage; begin EnsureNotClosed; end;
 procedure TJsChakraContext.Close;

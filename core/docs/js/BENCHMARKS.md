@@ -17,6 +17,8 @@
 | 内存 | `B/op`（Bytes per op）必采，`TJsValue.AsString` 快路径断言 `B/op=0` |
 | 调用 | 单次调用模式（`TBenchStatsAnalyzer.Create.Mean`），禁止内循环放大 |
 
+> **对象堆阈值**：`JsPureHeapFind` 线性查找 O(n)，小对象 n≤32 零分配最优，>64 建议哈希迁移（阈值 >64 实测或回归>10% 时迁移至哈希，纯族 352 行阈值550内，18 份对齐）。
+
 ---
 
 ## 2. 套件
