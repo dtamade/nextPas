@@ -29,7 +29,9 @@ uses
   nextpas.core.vfs,
   nextpas.core.webview.base,
   nextpas.core.webview,
-  nextpas.core.webview.vfs;
+  nextpas.core.webview.vfs,
+  nextpas.core.window.base,
+  nextpas.core.window.factory;
 
 {$I assets_respack.inc}  { DEMO_ASSETS / DEMO_ASSETS_SIZE —— 构建期生成 }
 
@@ -156,13 +158,14 @@ begin
     begin
       WriteLn('[nav failed] ', AEvent.Url, ' code=', AEvent.ErrorCode, ' ', AEvent.ErrorMessage);
     end);
-  LWin.OnWindowClosed(
-    procedure
+  LWin.Window.OnEvent(
+    procedure(const AEvent: TWindowEvent)
     begin
-      WebviewExitLoop;
+      if AEvent.Kind = weClosed then
+        WindowExitLoop;
     end);
 
-  LWin.Show;
+  LWin.Window.Show;
 
   { 构造期 InitialUrl 已触发首帧导航；dev-server 模式同样已指向 http。
     无需额外 Navigate，直接进主循环即可——若需编程导航，Build 后
@@ -173,6 +176,6 @@ begin
     WriteLn('serving npres://app/index.html via VFS adapter (',
       LVfs.CaseSensitive, ' case-sensitive)');
 
-  WebviewRunLoop;
+  WindowRunLoop;
   LWin := nil;
 end.

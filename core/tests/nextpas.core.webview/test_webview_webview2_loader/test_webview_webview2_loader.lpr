@@ -62,12 +62,12 @@ begin
   end
   else
   begin
-    { loader 可用（wine + DLL）：桩窗口应可创建且本地几何回显 }
+    { loader 可用（wine + DLL）：桩窗口应可创建且本地几何回显 — 标题壳已收敛至 Window }
     LWin := CreateWebviewOf(wvWebview2, DefaultWebviewOptions);
     Check(LWin <> nil, 'stub window created when loader available');
-    CheckEqual(DefaultWebviewOptions.Title, LWin.GetTitle, 'stub title default');
-    LWin.SetTitle('w2');
-    CheckEqual('w2', LWin.GetTitle, 'stub title echo');
+    CheckEqual(DefaultWebviewOptions.Title, LWin.Window.GetTitle, 'stub title default');
+    LWin.Window.SetTitle('w2');
+    CheckEqual('w2', LWin.Window.GetTitle, 'stub title echo');
     Check(not LWin.IsClosed, 'not closed initially');
     LWin.Close;
     Check(LWin.IsClosed, 'closed after Close');

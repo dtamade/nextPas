@@ -15,13 +15,14 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
-  nextpas.core.webview.factory;
+  nextpas.core.webview.factory,
+  nextpas.core.window.intf;
 
 type
-  { 跨线程 Post 测试载体：worker 只投递，主线程泵 }
+  { 跨线程 Post 测试载体：worker 只投递，主线程泵 — 已复用 IWindowDispatcher 单队列 }
   TPostWorker = class(TThread)
   public
-    Disp: IWebviewDispatcher;
+    Disp: IWindowDispatcher;
     procedure Execute; override;
   end;
 
@@ -300,7 +301,7 @@ begin
   try
     Worker := TPostWorker.Create(True);
     try
-      Worker.Disp := W.Dispatcher;
+      Worker.Disp := W.Window.Dispatcher;
       Worker.Start;
       Worker.WaitFor;
     finally
