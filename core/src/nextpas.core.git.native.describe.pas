@@ -44,7 +44,7 @@ begin
   Result := Copy(GitOidToHex(AOid), 1, 7);
 end;
 
-function EffectiveTagOid(const AEntry: TGitTagEntry): TGitOid;
+function EffectiveTagOid(const AEntry: TGitTagEntry): TGitOid; inline;
 begin
   if AEntry.IsAnnotated then
     Result := AEntry.PeeledOid
@@ -52,13 +52,105 @@ begin
     Result := AEntry.Oid;
 end;
 
-function FindTagForOid(const AOid: TGitOid; const ATags: TGitTagArray): string;
-var I: Integer; E: TGitOid;
+{ ── O(1) tag lookup: hash map oid -> name ────────────────────────────────
+  Reuses single-source FNV hash over raw oid bytes (same as TGitOidSet),
+  open-addressing power-of-two, linear probe, inline + zero-copy. No
+  extra bytes.ops/wildmatch duplication; map built once per Describe. }
+
+type
+  TTagMap = record
+    Keys: array of TGitOid;
+    Values: array of string;
+    Used: array of Boolean;
+    CapMask: Integer;
+    Count: Integer;
+  end;
+
+function TagMapHash(const AOid: TGitOid): SizeUInt; inline;
+var I: Integer; H: LongWord;
 begin
-  for I := 0 to High(ATags) do
+  // zero-copy FNV-1a over 20 raw bytes, no string allocation
+  H := LongWord($811C9DC5);
+  for I := 0 to GitOidRawLen - 1 do
   begin
-    E := EffectiveTagOid(ATags[I]);
-    if GitOidSame(E, AOid) then Exit(ATags[I].Name);
+    {$PUSH}{$Q-}{$R-}
+    H := (H xor LongWord(AOid.Bytes[I])) * LongWord($01000193);
+    {$POP}
+  end;
+  Result := SizeUInt(H);
+end;
+
+procedure TagMapInit(var AMap: TTagMap; ACap: Integer); inline;
+var Cap, I: Integer;
+begin
+  // power-of-two capacity for mask probe, at least 16
+  Cap := 16;
+  while Cap < ACap do Cap := Cap shl 1;
+  SetLength(AMap.Keys, Cap);
+  SetLength(AMap.Values, Cap);
+  SetLength(AMap.Used, Cap);
+  for I := 0 to Cap - 1 do AMap.Used[I] := False;
+  AMap.CapMask := Cap - 1;
+  AMap.Count := 0;
+end;
+
+procedure TagMapGrow(var AMap: TTagMap);
+var OldKeys: array of TGitOid; OldVals: array of string; OldUsed: array of Boolean;
+    OldCap, NewCap, I, Idx: Integer; H: SizeUInt;
+begin
+  OldCap := Length(AMap.Keys);
+  NewCap := OldCap shl 1;
+  if NewCap < 16 then NewCap := 16;
+  OldKeys := AMap.Keys;
+  OldVals := AMap.Values;
+  OldUsed := AMap.Used;
+  SetLength(AMap.Keys, NewCap);
+  SetLength(AMap.Values, NewCap);
+  SetLength(AMap.Used, NewCap);
+  for I := 0 to NewCap - 1 do AMap.Used[I] := False;
+  AMap.CapMask := NewCap - 1;
+  AMap.Count := 0;
+  for I := 0 to OldCap - 1 do
+    if OldUsed[I] then
+    begin
+      H := TagMapHash(OldKeys[I]);
+      Idx := Integer(H and SizeUInt(AMap.CapMask));
+      while AMap.Used[Idx] do Idx := (Idx + 1) and AMap.CapMask;
+      AMap.Keys[Idx] := OldKeys[I];
+      AMap.Values[Idx] := OldVals[I];
+      AMap.Used[Idx] := True;
+      Inc(AMap.Count);
+    end;
+end;
+
+procedure TagMapAdd(var AMap: TTagMap; const AOid: TGitOid; const AName: string); inline;
+var Idx: Integer; H: SizeUInt;
+begin
+  if Length(AMap.Keys) = 0 then TagMapInit(AMap, 16);
+  if AMap.Count * 4 >= Length(AMap.Keys) * 3 then TagMapGrow(AMap);
+  H := TagMapHash(AOid);
+  Idx := Integer(H and SizeUInt(AMap.CapMask));
+  while AMap.Used[Idx] do
+  begin
+    if GitOidSame(AMap.Keys[Idx], AOid) then Exit; // keep first tag name
+    Idx := (Idx + 1) and AMap.CapMask;
+  end;
+  AMap.Keys[Idx] := AOid;
+  AMap.Values[Idx] := AName;
+  AMap.Used[Idx] := True;
+  Inc(AMap.Count);
+end;
+
+function TagMapFind(const AMap: TTagMap; const AOid: TGitOid): string; inline;
+var Idx: Integer; H: SizeUInt;
+begin
+  if Length(AMap.Keys) = 0 then Exit('');
+  H := TagMapHash(AOid);
+  Idx := Integer(H and SizeUInt(AMap.CapMask));
+  while AMap.Used[Idx] do
+  begin
+    if GitOidSame(AMap.Keys[Idx], AOid) then Exit(AMap.Values[Idx]);
+    Idx := (Idx + 1) and AMap.CapMask;
   end;
   Result := '';
 end;
@@ -114,10 +206,11 @@ var
   Repo: TNativeRepository;
   StartOid, Peeled: TGitOid;
   Tags, Filtered: TGitTagArray;
-  I: Integer;
+  I, FilteredCount, FilteredIdx: Integer;
   Queue: array of TQueueEntry;
-  Head: Integer;
+  Head, QueueLen: Integer;
   Visited: TGitOidSet;
+  TagMap: TTagMap;
   Cur: TQueueEntry;
   TagName: string;
   Kind: TGitObjectKind;
@@ -128,34 +221,49 @@ var
 begin
   if AGitDir = '' then raise EGitError.Create('describe: gitdir empty');
   Tags := GitTagList(AGitDir);
-  // filter
+  // filter annotated-only: pre-count once, single allocation O(n)
   if not AIncludeLightweight then
   begin
-    SetLength(Filtered, 0);
+    FilteredCount := 0;
     for I := 0 to High(Tags) do
-      if Tags[I].IsAnnotated then
-      begin
-        SetLength(Filtered, Length(Filtered)+1);
-        Filtered[High(Filtered)] := Tags[I];
-      end;
-    Tags := Filtered;
+      if Tags[I].IsAnnotated then Inc(FilteredCount);
+    if FilteredCount = 0 then
+      Tags := nil
+    else
+    begin
+      SetLength(Filtered, FilteredCount);
+      FilteredIdx := 0;
+      for I := 0 to High(Tags) do
+        if Tags[I].IsAnnotated then
+        begin
+          Filtered[FilteredIdx] := Tags[I];
+          Inc(FilteredIdx);
+        end;
+      Tags := Filtered;
+    end;
   end;
   if Length(Tags) = 0 then
     raise EGitError.Create('no tag found');
+  // build O(1) hash map oid->name: amortized O(tags), inline hash
+  TagMapInit(TagMap, Length(Tags) * 2);
+  for I := 0 to High(Tags) do
+    TagMapAdd(TagMap, EffectiveTagOid(Tags[I]), Tags[I].Name);
   Repo := TNativeRepository.Create(AGitDir);
   Visited := TGitOidSet.Create;
   try
     StartOid := ResolveStartOid(AGitDir, ARef);
     Peeled := PeelToCommit(Repo, StartOid);
-    // distance 0 check
-    TagName := FindTagForOid(Peeled, Tags);
+    // distance 0 check: O(1) hash lookup inline
+    TagName := TagMapFind(TagMap, Peeled);
     if TagName <> '' then Exit(TagName);
-    SetLength(Queue, 1);
+    // BFS queue with geometric growth: amortized O(1) per enqueue, avoids O(n²) realloc
+    QueueLen := 1;
+    SetLength(Queue, 64);
     Queue[0].Oid := Peeled;
     Queue[0].Dist := 0;
     Head := 0;
     Visited.Add(Peeled);
-    while Head < Length(Queue) do
+    while Head < QueueLen do
     begin
       Cur := Queue[Head];
       Inc(Head);
@@ -172,18 +280,21 @@ begin
         ParentOid := Info.Parents[P];
         if Visited.Contains(ParentOid) then Continue;
         Visited.Add(ParentOid);
-        TagName := FindTagForOid(ParentOid, Tags);
+        TagName := TagMapFind(TagMap, ParentOid); // inline O(1)
         if TagName <> '' then
         begin
           // distance is Cur.Dist + 1
           Result := TagName + '-' + IntToStr(Cur.Dist + 1) + '-g' + ShortHex(Peeled);
           Exit;
         end;
-        SetLength(Queue, Length(Queue)+1);
-        Queue[High(Queue)].Oid := ParentOid;
-        Queue[High(Queue)].Dist := Cur.Dist + 1;
+        // amortized doubling: zero per-parent SetLength(...+1)
+        if QueueLen >= Length(Queue) then
+          SetLength(Queue, Length(Queue) * 2);
+        Queue[QueueLen].Oid := ParentOid;
+        Queue[QueueLen].Dist := Cur.Dist + 1;
+        Inc(QueueLen);
         // guard large histories
-        if Length(Queue) > 100000 then
+        if QueueLen > 100000 then
           raise EGitError.Create('describe: history too large');
       end;
     end;

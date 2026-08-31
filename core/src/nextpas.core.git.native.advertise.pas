@@ -8,7 +8,8 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.git.native.base,
-  nextpas.core.git.native.pktline;
+  nextpas.core.git.native.pktline,
+  nextpas.core.git.native.util;
 
 { Advertise refs parser (transport/smart_protocol.c, protocol-common.txt).
 

@@ -72,6 +72,9 @@ function GitCollectStatus(const AGitDir, AWorkTree: string;
 
 implementation
 
+uses
+  nextpas.core.git.native.util;
+
 type
   TPathOid = record
     Path: string;

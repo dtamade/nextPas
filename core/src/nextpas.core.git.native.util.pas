@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.base;
 
 { Shared string/path helpers for the native git subfamily.
@@ -13,7 +14,7 @@ uses
   WorktreeDir — avoids 3+ copies (trailer/attributes/mailmap etc).
   Inline where hot (StripCR/Trim/EndsWith/IsZero) to keep call site
   zero-copy when no allocation is needed. Reuses bytes.ops single
-  source indirectly via GitBytesToString / GitStringToBytes (no adler32
+  source directly via GitBytesToString / GitStringToBytes (no adler32
   duplication here). }
 
 function GitStripCR(const S: string): string; inline;
@@ -22,6 +23,8 @@ function GitLocalEndsWith(const S, Suffix: string): Boolean; inline;
 function GitSplitLines(const S: string): TStringArray; inline;
 function GitWorktreeDir(const AGitDir: string): string; inline;
 function GitIsZeroOidInline(const AOid: TGitOid): Boolean; inline;
+function GitBytesToString(const ABytes: TBytes): string; inline;
+function GitStringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
@@ -86,6 +89,18 @@ begin Result:=nextpas.core.git.native.base.GitWorktreeDir(AGitDir); end;
 function GitIsZeroOidInline(const AOid: TGitOid): Boolean; inline;
 begin
   Result := GitOidIsZero(AOid);
+end;
+
+function GitBytesToString(const ABytes: TBytes): string; inline;
+begin
+  // single-source: bytes.ops.BytesToString = one Move, inline keeps call site zero-copy
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
+end;
+
+function GitStringToBytes(const AText: string): TBytes; inline;
+begin
+  // single-source: bytes.ops.StringToBytes = one Move, inline keeps call site zero-copy
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
 end.

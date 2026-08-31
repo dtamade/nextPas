@@ -25,8 +25,8 @@ const
 
 function GitOidFromHex(const AHex: string): TGitOid;
 function GitOidToHex(const AOid: TGitOid): string;
-function GitOidIsValidHex(const AHex: string): Boolean;
-function GitOidSame(const AA, AB: TGitOid): Boolean;
+function GitOidIsValidHex(const AHex: string): Boolean; inline;
+function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
@@ -39,7 +39,7 @@ function GitWorktreeDir(const AGitDir: string): string; inline;
 
 implementation
 
-function HexVal(ACh: Char): Integer;
+function HexVal(ACh: Char): Integer; inline;
 begin
   case ACh of
     '0'..'9': Result := Ord(ACh) - Ord('0');
@@ -50,7 +50,7 @@ begin
   end;
 end;
 
-function GitOidIsValidHex(const AHex: string): Boolean;
+function GitOidIsValidHex(const AHex: string): Boolean; inline;
 var
   I: Integer;
 begin
@@ -87,7 +87,7 @@ begin
   end;
 end;
 
-function GitOidSame(const AA, AB: TGitOid): Boolean;
+function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 var
   I: Integer;
 begin

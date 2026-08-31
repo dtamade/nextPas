@@ -6,32 +6,31 @@ interface
 
 uses
   nextpas.core.git.intf,
-  nextpas.core.git.libgit2.backend;
+  nextpas.core.git.native.base,
+  nextpas.core.git.native.manager,
+  nextpas.core.git.libgit2;
 
 type
-  EGitError = nextpas.core.git.libgit2.backend.EGitError;
+  EGitError = nextpas.core.git.native.base.EGitError;
   TGitBackend = (gbNative, gbLibGit2, gbAuto);
 
 function NewGitManager(ABackend: TGitBackend = gbAuto): IGitManager; inline;
 
 implementation
 
-uses
-  nextpas.core.git.libgit2;
-
 function NewGitManager(ABackend: TGitBackend): IGitManager; inline;
 begin
-  // gbAuto策略：首版恒等于gbLibGit2（见PURE-BACKEND.md §3），零拷贝枚举分发
+  // gbAuto策略：首版恒等于gbLibGit2（见PURE-BACKEND.md §3），值类型枚举零拷贝inline分发
   if ABackend = gbAuto then
     ABackend := gbLibGit2;
   case ABackend of
     gbNative:
-      // native backend尚未闭合，显式抛EGitError而非静默回退，资源零泄漏
-      raise EGitError.Create(-3, 'native git backend not implemented');
+      // PURE-BACKEND唯一跨轨汇聚：gbNative→TNativeGitManager零libgit2，接口引用计数零泄漏，异常以EGitError不丢
+      Result := TNativeGitManager.Create;
     gbLibGit2:
       Result := nextpas.core.git.libgit2.NewGitManager;
   else
-    raise EGitError.Create(-12, 'unknown git backend');
+    raise EGitError.Create('unknown git backend');
   end;
 end;
 

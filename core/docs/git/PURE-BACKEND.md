@@ -2,7 +2,7 @@
 
 **模块**：`nextpas.core.git.*`
 **层级**：L2
-**北极星**：`NewGitManager(gbNative)` 或 `uses nextpas.core.git.native.manager` 时，编译期与运行期彻底不依赖 `libgit2`（无 `dlopen`、无 `-lgit2`、无 `libgit2.so`、产物体积不含 libgit2 声明）。
+**北极星**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` 时编译期与运行期彻底不依赖 `libgit2`（无 `dlopen`、无 `-lgit2`、无 `libgit2.so`、产物体积不含 libgit2 声明）；`factory.NewGitManager(gbNative)` 运行时零 `libgit2`（无 `dlopen`、`TNativeGitManager` 纯路径），编译图仍含 `libgit2`（`factory` 为唯一跨轨汇聚点，直连 `native.manager` 方为全维度零依赖）。
 **状态**：Phase 0 契约冻结（gbAuto 首版 = gbLibGit2，见 §3 迁移公告）
 **关联**：`CONTRACT.md` §1.1 / `native-reference-map.md` / `scripts/git-contract-check.sh` C4
 
@@ -33,8 +33,9 @@ native.*              libgit2.ffi / binding / backend / bindings
 
 ### 1.2 路径说明
 
-- **纯路径**：`factory(gbNative)` → `native.manager` → `native.*` → 零 `libgit2`。
-  仅 `uses intf + native.base/repo/refs/status/objmodel/...`，禁止出现 `nextpas.core.git.libgit2`。
+- **纯路径（运行时零 `libgit2`）**：`factory(gbNative)` → `native.manager` → `native.*` → 运行时零 `libgit2`（`TNativeGitManager.Create`，`EGitError` 来自 `native.base`，`inline` 值类型枚举零拷贝分发，接口引用计数零泄漏）；编译图仍含 `libgit2`（`factory` 跨轨）。
+  仅 `native.manager` 直连时 `uses intf + native.base/repo/refs/status/objmodel/...` 全维度零 `libgit2`，禁止出现 `nextpas.core.git.libgit2`。
+- **全维度零 `libgit2` 路径**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` → `native.*` → 编译期/运行时/产物三零（`fpc -va Loading` 与 `nm -D` 双零）。
 - **兼容路径**：`factory(gbAuto)` 首版 → `libgit2.manager` → 现有行为不变；
   存量 `uses nextpas.core.git; NewGitManager;` 零改动，仍走 `dlopen`。
 - **归一原则**：依赖隔离在单元级（`uses` 图），FPC 通过编译图决定链接，不用 `{$IFDEF}` 分叉。
@@ -59,7 +60,7 @@ native.*              libgit2.ffi / binding / backend / bindings
 | uses 场景 | 后端参数 | 实际后端 | 是否含 libgit2（编译图 / 运行时 dlopen / 产物符号） |
 |-----------|----------|----------|------------------------------------------------------|
 | `uses nextpas.core.git; NewGitManager;` | `gbAuto`（默认） | `gbLibGit2`（首版） | 是 / 是（`dlopen libgit2.so`）/ 是（`git_*` 符号） |
-| `uses nextpas.core.git.factory; NewGitManager(gbNative);` | `gbNative` | `gbNative` | 否 / 否 / 否 |
+| `uses nextpas.core.git.factory; NewGitManager(gbNative);` | `gbNative` | `gbNative` | 是（`factory` 为唯一跨轨汇聚点，编译图仍含 `libgit2` 声明） / 否 / 是（产物含 `libgit2` 存根，运行时无 `dlopen`；全维度零依赖需直连 `native.manager`） |
 | `uses nextpas.core.git.factory; NewGitManager(gbLibGit2);` | `gbLibGit2` | `gbLibGit2` | 是 / 是 / 是 |
 | `uses nextpas.core.git.factory; NewGitManager(gbAuto);` | `gbAuto` | `gbLibGit2`（首版）→ 下版本 `gbNative` | 首版是 / 首版是 / 首版是；下版本否 |
 | `uses nextpas.core.git.native.manager; TNativeGitManager.Create;` | —（直连） | `gbNative` | 否 / 否 / 否 |
@@ -99,7 +100,7 @@ function NewGitManager(ABackend: TGitBackend = gbAuto): IGitManager;
 
 | 枚举 | 语义 | 错误模型 |
 |------|------|----------|
-| `gbNative` | 创建 `TNativeGitManager`，仅依赖 `native.*`，零 libgit2。未实现方法（首版仅闭合 `OpenRepository/IsGitRepository/InitRepository + Status/Head/LookupCommit/Close`）抛 `EGitError('not implemented for native backend: <Method>')` | `EGitError` 来自 `git.native.base` |
+| `gbNative` | `factory` 分发创建 `TNativeGitManager`（`Result := TNativeGitManager.Create`，`inline` 值类型枚举零拷贝，接口引用计数拥有，无 `try` 泄漏；`factory` 自身为唯一跨轨单元故编译图仍含 `libgit2`，运行时零 `dlopen`）；`TNativeGitManager` 仅依赖 `native.*`，零 `libgit2`，未实现方法（首版仅闭合 `OpenRepository/IsGitRepository/InitRepository + Status/Head/LookupCommit/Close`）抛 `EGitError('not implemented for native backend: <Method>')` | `EGitError` 来自 `git.native.base`（`factory.EGitError = native.base.EGitError`，不经 `libgit2.backend`，异常不丢） |
 | `gbLibGit2` | 创建 `TLibGit2Manager`，经 `platform.dl` 的 `dlopen/dlsym` 运行时加载 `libgit2`，缺库时抛 `EGitError` | `EGitError`（历史在 `libgit2.backend`，收敛至 `native.base`） |
 | `gbAuto` | 策略别名：首版 = `gbLibGit2`，下版本 = `gbNative` | 同所指后端 |
 
@@ -121,12 +122,12 @@ end;
 
 ## 5. 门禁
 
-- `scripts/git-contract-check.sh` C4：
+- `scripts/git-contract-check.sh` C4（已闭环，`CONTRACT.md` §6 与本节双重声明）：
   - `grep -R "nextpas.core.git.libgit2" core/src/nextpas.core.git.native.manager.pas core/src/nextpas.core.git.native.repository.pas` 必须零命中；
   - 全量 `native.*` 闭包 `grep -R "libgit2" core/src/nextpas.core.git.native.*` 零命中；
-  - `fpc -va` 编译 `test_git_pure_manager.lpr` 的 `Loading.*libgit2` 零命中（Phase 0 grep 版先行，产物版 TODO，见脚本内注释）；
-  - `nm -D build/bin/test_git_pure_manager | grep git_` 零命中（验收门禁，非 Phase 0 脚本内强制）。
-- `make hygiene` 与 `git diff --check` 为 Phase 0 唯一门禁，不跑全量 `make verify`。
+  - `fpc -va` 编译 `test_git_pure_manager.lpr` 的 `Loading.*libgit2` 零命中（`fpc -va` 实检，见脚本 C4.3a；`grep` 版为辅助，编译图以 `fpc -va Loading` 为准）；
+  - `nm -D <pure_bin> | grep " git_"` 零命中（产物实检，见脚本 C4.3b；`<pure_bin>` 优先 `core/build/projects/nextpas.core.git/test_git_pure_manager/test_git_pure_manager`，无产物时现场编译后检查）。
+- `make hygiene` 与 `git diff --check` 为必要门禁；`make focused FOCUS=core/tests/nextpas.core.git/test_git_pure_manager` 为纯后端门禁（`build/verify_local.sh` 聚合 `git-contract-check`）。
 
 ---
 

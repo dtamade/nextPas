@@ -71,6 +71,7 @@ function GitWriteCommitGraphAll(const AGitDir: string): string;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.refs,
@@ -594,32 +595,77 @@ type
   end;
   TRawCommitArray = array of TRawCommit;
 
-function CompareRawOid(const AA, AB: TRawCommit): Integer;
-var I: Integer;
+function CompareRawOid(const AA, AB: TRawCommit): Integer; inline;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-  begin
-    if AA.Oid.Bytes[I] < AB.Oid.Bytes[I] then Exit(-1);
-    if AA.Oid.Bytes[I] > AB.Oid.Bytes[I] then Exit(1);
-  end;
-  Result := 0;
+  // single-source zero-copy via base.utils.CompareBytesOrdered (bytes.ops single-source underlying): PByte+Len inline, no temp copy
+  Result := CompareBytesOrdered(@AA.Oid.Bytes[0], @AB.Oid.Bytes[0], GitOidRawLen, GitOidRawLen);
 end;
 
-procedure SortRawByOid(var A: TRawCommitArray);
+procedure SortRawByOidInsertion(var A: TRawCommitArray; L, R: Integer); inline;
 var I, J: Integer; T: TRawCommit;
 begin
-  for I := 1 to High(A) do
+  for I := L + 1 to R do
   begin
+    T := A[I];
     J := I;
-    while (J > 0) and (CompareRawOid(A[J-1], A[J]) > 0) do
+    while (J > L) and (CompareRawOid(A[J - 1], T) > 0) do
     begin
-      T := A[J-1]; A[J-1] := A[J]; A[J] := T;
+      A[J] := A[J - 1];
       Dec(J);
+    end;
+    A[J] := T;
+  end;
+end;
+
+procedure SortRawByOidQuick(var A: TRawCommitArray; L, R: Integer);
+var I, J: Integer; Pivot: TGitOid; T: TRawCommit;
+begin
+  // hybrid quicksort: median-of-three + insertion cutoff 16, O(n log n) vs insertion O(n²), tail recursion elimination
+  while L < R do
+  begin
+    if R - L < 16 then
+    begin
+      SortRawByOidInsertion(A, L, R);
+      Exit;
+    end;
+    I := L;
+    J := R;
+    if CompareRawOid(A[L], A[(L + R) shr 1]) > 0 then
+    begin T := A[L]; A[L] := A[(L + R) shr 1]; A[(L + R) shr 1] := T; end;
+    if CompareRawOid(A[(L + R) shr 1], A[R]) > 0 then
+    begin T := A[(L + R) shr 1]; A[(L + R) shr 1] := A[R]; A[R] := T; end;
+    if CompareRawOid(A[L], A[(L + R) shr 1]) > 0 then
+    begin T := A[L]; A[L] := A[(L + R) shr 1]; A[(L + R) shr 1] := T; end;
+    Pivot := A[(L + R) shr 1].Oid; // pivot by value (20B), zero-copy via stack
+    repeat
+      while CompareBytesOrdered(@A[I].Oid.Bytes[0], @Pivot.Bytes[0], GitOidRawLen, GitOidRawLen) < 0 do Inc(I);
+      while CompareBytesOrdered(@A[J].Oid.Bytes[0], @Pivot.Bytes[0], GitOidRawLen, GitOidRawLen) > 0 do Dec(J);
+      if I <= J then
+      begin
+        T := A[I]; A[I] := A[J]; A[J] := T; // ref-counted swap, exception-safe (EGitError preserved)
+        Inc(I); Dec(J);
+      end;
+    until I > J;
+    if (J - L) < (R - I) then
+    begin
+      if L < J then SortRawByOidQuick(A, L, J);
+      L := I;
+    end
+    else
+    begin
+      if I < R then SortRawByOidQuick(A, I, R);
+      R := J;
     end;
   end;
 end;
 
-function FindOidIndex(const ASorted: TRawCommitArray; const AOid: TGitOid): Integer;
+procedure SortRawByOid(var A: TRawCommitArray); inline;
+begin
+  if Length(A) < 2 then Exit;
+  SortRawByOidQuick(A, 0, High(A));
+end;
+
+function FindOidIndex(const ASorted: TRawCommitArray; const AOid: TGitOid): Integer; inline;
 var Lo, Hi, Mid, Cmp, I: Integer;
 begin
   Lo := 0; Hi := High(ASorted);
@@ -660,6 +706,11 @@ var N, NumExtra, I, J, K, PIdx, ParentIdx: Integer;
     TmpHash: TBytes;
     H: IHasher;
     TmpIdx: Integer;
+    ParentCache: array of array of Integer;
+    GenState: array of Byte;
+    Stack: array of Integer;
+    CurIdx, PMax, CntP: Integer;
+    HasPending: Boolean;
 begin
   Result := nil;
   N := Length(ARaw);
@@ -680,7 +731,9 @@ begin
     if Length(RawSorted[I].Parents) > 2 then
       Inc(NumExtra, Length(RawSorted[I].Parents) - 1); // need extra entries for parents 1..N-1 except first? Actually need N-1 entries after first? For octopus with k parents, need k-1 extra entries (all except first)
   end;
-  // compute generations if not set: use topo order to derive parent-max+1
+  // compute generations O(n log n) via memo DFS + parent-index cache (replaces N*4 fixpoint O(n²))
+  // zero-copy: FindOidIndex is inline binary search on OID bytes (no OID copy); DP uses indices only
+  // inline/state-array + explicit stack: O(n) after sort, stable, EGitError propagates (no swallow)
   for I := 0 to N-1 do
     if RawSorted[I].Generation = 0 then
     begin
@@ -689,24 +742,77 @@ begin
       else
         RawSorted[I].Generation := 0; // placeholder, computed below
     end;
-  // iterative fixpoint for generations (parents may be after children in oid order)
-  for J := 0 to N*4 do
+  // parent index cache: O(n log n) total instead of O(n² log n)
+  // managed dynamic arrays: auto released on exception, no leak
+  if N > 0 then
   begin
+    SetLength(ParentCache, N);
+    SetLength(GenState, N);
     for I := 0 to N-1 do
-      if (Length(RawSorted[I].Parents) > 0) and (RawSorted[I].Generation <= 1) then
+    begin
+      CntP := Length(RawSorted[I].Parents);
+      SetLength(ParentCache[I], CntP);
+      for K := 0 to CntP - 1 do
+        ParentCache[I][K] := FindOidIndex(RawSorted, RawSorted[I].Parents[K]);
+      if RawSorted[I].Generation <> 0 then
+        GenState[I] := 2
+      else
+        GenState[I] := 0;
+    end;
+    SetLength(Stack, 0);
+    for I := 0 to N-1 do
+    begin
+      if GenState[I] = 2 then Continue;
+      // push root of DFS
+      SetLength(Stack, Length(Stack) + 1);
+      Stack[High(Stack)] := I;
+      while Length(Stack) > 0 do
       begin
-        PIdx := 0;
-        for K := 0 to High(RawSorted[I].Parents) do
+        CurIdx := Stack[High(Stack)];
+        if GenState[CurIdx] = 2 then
         begin
-          ParentIdx := FindOidIndex(RawSorted, RawSorted[I].Parents[K]);
-          if (ParentIdx >= 0) and (RawSorted[ParentIdx].Generation > Cardinal(PIdx)) then
-            PIdx := Integer(RawSorted[ParentIdx].Generation);
+          SetLength(Stack, Length(Stack) - 1);
+          Continue;
         end;
-        if PIdx > 0 then
-          RawSorted[I].Generation := Cardinal(PIdx + 1)
+        if GenState[CurIdx] = 0 then
+        begin
+          GenState[CurIdx] := 1;
+          HasPending := False;
+          for K := 0 to High(ParentCache[CurIdx]) do
+          begin
+            ParentIdx := ParentCache[CurIdx][K];
+            if (ParentIdx >= 0) and (GenState[ParentIdx] = 0) then
+            begin
+              SetLength(Stack, Length(Stack) + 1);
+              Stack[High(Stack)] := ParentIdx;
+              HasPending := True;
+            end
+            else if (ParentIdx >= 0) and (GenState[ParentIdx] = 1) then
+            begin
+              // cycle: break by treating parent as generation 0 (will fallback to 2)
+            end;
+          end;
+          if HasPending then Continue; // parents will be resolved first
+        end;
+        // all parents resolved or missing: compute max
+        PMax := 0;
+        for K := 0 to High(ParentCache[CurIdx]) do
+        begin
+          ParentIdx := ParentCache[CurIdx][K];
+          if (ParentIdx >= 0) and (RawSorted[ParentIdx].Generation > Cardinal(PMax)) then
+            PMax := Integer(RawSorted[ParentIdx].Generation);
+        end;
+        if PMax > 0 then
+          RawSorted[CurIdx].Generation := Cardinal(PMax + 1)
+        else if Length(RawSorted[CurIdx].Parents) = 0 then
+          RawSorted[CurIdx].Generation := 1
         else
-          RawSorted[I].Generation := 2;
+          RawSorted[CurIdx].Generation := 2;
+        GenState[CurIdx] := 2;
+        SetLength(Stack, Length(Stack) - 1);
       end;
+    end;
+    // ParentCache/GenState/Stack are managed types, freed on exit even if EGitError
   end;
   for I := 0 to N-1 do
     if RawSorted[I].Generation = 0 then

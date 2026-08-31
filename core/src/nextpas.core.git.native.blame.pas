@@ -36,7 +36,8 @@ uses
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.revwalk,
-  nextpas.core.git.native.revparse;
+  nextpas.core.git.native.revparse,
+  nextpas.core.git.native.util;
 
 function LocalTrim(const S: string): string;
 var I, J: Integer;
@@ -60,33 +61,22 @@ begin
   Result := True;
 end;
 
-function SplitLines(const S: string): TStringArray;
-var I, Start, L: Integer; Line: string;
+function SplitLines(const S: string): TStringArray; inline;
+var
+  Tmp: TStringArray;
+  I: Integer;
 begin
-  Result := nil;
-  L := Length(S);
-  Start := 1;
-  for I := 1 to L + 1 do
-  begin
-    if (I > L) or (S[I] = #10) then
-    begin
-      Line := Copy(S, Start, I - Start);
-      // strip trailing CR
-      if (Length(Line) > 0) and (Line[Length(Line)] = #13) then
-        SetLength(Line, Length(Line) - 1);
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Line;
-      Start := I + 1;
-    end;
-  end;
-  // git blame: if file ends with newline, last split is empty after final LF.
-  // Our loop adds one entry for final LF; if file ends with LF, last entry is ''.
-  // Remove trailing empty that came from final newline to match git's line count
-  // (git blame counts lines without extra). But keep empty file as 0.
-  if (Length(Result) > 0) and (Result[High(Result)] = '') and (L > 0) and (S[L] = #10) then
-    SetLength(Result, Length(Result) - 1);
-  if (Length(Result) = 1) and (Result[0] = '') and (L = 0) then
-    SetLength(Result, 0);
+  // single source: delegate split to util.GitSplitLines (single-alloc, inline hot)
+  // then blame-specific normalization: strip CR (GitStripCR zero-copy) + trim
+  // trailing LF artefact. Keeps L0-L3 layering, no duplicate loop.
+  if Length(S) = 0 then
+    Exit(nil);
+  Tmp := GitSplitLines(S);
+  for I := 0 to High(Tmp) do
+    Tmp[I] := GitStripCR(Tmp[I]); // inline, zero-copy when no CR
+  if (Length(Tmp) > 0) and (Tmp[High(Tmp)] = '') and (S[Length(S)] = #10) then
+    SetLength(Tmp, Length(Tmp) - 1);
+  Result := Tmp;
 end;
 
 function FindBlobOid(ARepo: TNativeRepository; const ARootTree: TGitOid; const APath: string): TGitOid;

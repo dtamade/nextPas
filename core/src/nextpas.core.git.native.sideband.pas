@@ -8,7 +8,8 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.git.native.base,
-  nextpas.core.git.native.pktline;
+  nextpas.core.git.native.pktline,
+  nextpas.core.git.native.util;
 
 { Sideband multiplex demux (transports/smart_pkt.c + pack-protocol.txt).
 

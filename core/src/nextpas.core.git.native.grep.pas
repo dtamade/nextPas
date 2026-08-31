@@ -28,10 +28,12 @@ implementation
 uses
   nextpas.core.fs,
   nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
-  nextpas.core.git.native.common;
+  nextpas.core.git.native.common,
+  nextpas.core.git.native.util;
 
 function IsZeroOid(const AOid: TGitOid): Boolean;
 var I: Integer;
@@ -40,26 +42,27 @@ begin
   Result := True;
 end;
 
-function LocalCompareStr(const A, B: string): Integer;
-var I, L: Integer;
+function LocalCompareStr(const A, B: string): Integer; inline;
+var
+  PA, PB: Pointer;
 begin
-  L := Length(A);
-  if Length(B) < L then L := Length(B);
-  for I := 1 to L do
-    if A[I] <> B[I] then Exit(Ord(A[I]) - Ord(B[I]));
-  Result := Length(A) - Length(B);
+  // single source: base.utils CompareBytesOrdered (PByte+Len zero-copy, inline) — same source as bytes.ops SpanCompare
+  if Length(A) = 0 then PA := nil else PA := @A[1];
+  if Length(B) = 0 then PB := nil else PB := @B[1];
+  Result := nextpas.core.base.utils.CompareBytesOrdered(PA, PB, SizeUInt(Length(A)), SizeUInt(Length(B)));
 end;
 
-procedure SortHits(var A: TGitGrepHitArray);
-var I, J: Integer; T: TGitGrepHit;
+procedure SortHits(var A: TGitGrepHitArray); inline;
+var I, J, Cmp: Integer; T: TGitGrepHit;
 begin
   for I := 1 to High(A) do
   begin
     J := I;
     while J > 0 do
     begin
-      if LocalCompareStr(A[J-1].Path, A[J].Path) < 0 then Break;
-      if (LocalCompareStr(A[J-1].Path, A[J].Path) = 0) and (A[J-1].LineNo <= A[J].LineNo) then Break;
+      Cmp := LocalCompareStr(A[J-1].Path, A[J].Path); // inline zero-copy single-source, cached
+      if Cmp < 0 then Break;
+      if (Cmp = 0) and (A[J-1].LineNo <= A[J].LineNo) then Break;
       T := A[J-1]; A[J-1] := A[J]; A[J] := T;
       Dec(J);
     end;
@@ -117,36 +120,18 @@ begin
     Result := Pos(APat, ALine) > 0;
 end;
 
-function SplitLines(const S: string): TStringArray;
-var I, Start, Cnt: Integer;
-    Line: string;
+function SplitLines(const S: string): TStringArray; inline;
+var
+  Tmp: TStringArray;
+  I: Integer;
 begin
-  Result := nil;
-  Start := 1; Cnt := 0;
-  for I := 1 to Length(S) do
-    if S[I] = #10 then
-    begin
-      Line := Copy(S, Start, I - Start);
-      if (Length(Line) > 0) and (Line[Length(Line)] = #13) then
-        SetLength(Line, Length(Line)-1);
-      SetLength(Result, Cnt+1);
-      Result[Cnt] := Line;
-      Inc(Cnt);
-      Start := I + 1;
-    end;
-  Line := Copy(S, Start, MaxInt);
-  if (Length(Line) > 0) and (Line[Length(Line)] = #13) then
-    SetLength(Line, Length(Line)-1);
-  // include last line even if empty? git grep ignores final empty? keep if not empty or if file ends with newline we would have trailing empty; skip empty trailing?
-  if (Line <> '') or (Length(Result) = 0) then
-  begin
-    // avoid duplicate empty when S ends with #10 (then last copy is '')
-    if not ((Line = '') and (Length(S) > 0) and (S[Length(S)] = #10)) then
-    begin
-      SetLength(Result, Cnt+1);
-      Result[Cnt] := Line;
-    end;
-  end;
+  // single source: git.native.util GitSplitLines (single-alloc, zero-copy per line via Copy) + GitStripCR (inline zero-copy)
+  Tmp := nextpas.core.git.native.util.GitSplitLines(S);
+  if (Length(Tmp) > 0) and (Tmp[High(Tmp)] = '') and (Length(S) > 0) and (S[Length(S)] = #10) then
+    SetLength(Tmp, Length(Tmp) - 1);
+  for I := 0 to High(Tmp) do
+    Tmp[I] := nextpas.core.git.native.util.GitStripCR(Tmp[I]);
+  Result := Tmp;
 end;
 
 // PeelToTree reused from nextpas.core.git.native.common (single source)
