@@ -45,7 +45,7 @@ Conn := ConnectPostgres('host=127.0.0.1 port=55432 dbname=postgres ' +
 - **真机**：`opengauss/opengauss:5.0.0` x86（2.05GB）`docker run -e GS_PASSWORD -p 55432:5432`，为兼容香草 libpq 需 `password_encryption_type=0`（md5）+ `pg_hba md5` + `gs_ctl reload`（默认 `sha256` 会报 `none of the server's SASL mechanisms are supported`，方案已固化到 §4.5 脚本）。初建用户 `opengauss` 禁止远程，须另建 `testuser` 远程可达。
 - **门禁**（`NEXTPAS_PG_TEST_CONN='host=127.0.0.1 port=55432 dbname=postgres user=testuser …'`）：
   - `test_db_pg 13 passed heaptrc 0` / `test_db_conformance 2 passed` / `test_db_trace 5 passed`（含 pg 段 `postgres trace live 117ms`）
-  - `test_db_array_bind`  **16 passed, 3 failed** — `unnest(int[],text[])` 多列重载与 `WITH ORDINALITY` 在 openGauss 缺失（`function unnest(integer[], text[]) does not exist` / `syntax error at "WITH ORDINALITY"`），**方言鸿沟诚实记录**：array_bind 在此库应降级为 `IDbBatchExecutor` 批路径（能力矩阵 SupportsArrayBinding 仍 True，但消费方应探能力后按库容退化）。
+  - `test_db_array_bind`  **16 passed, 3 failed** — `unnest(int[],text[])` 多列重载与 `WITH ORDINALITY` 在 openGauss 缺失（`function unnest(integer[], text[]) does not exist` / `syntax error at "WITH ORDINALITY"`），**方言鸿沟诚实记录**：array_bind 在此库应降级为 `IDbBatchExecutor` 批路径（能力矩阵 SupportsArrayBinding 仍 True，但消费方应探能力后按库容退化）。能力位诚实注记：PgOpenListener 等走统一能力探测 DbCapabilities(Conn).SupportsArrayBinding 时，openGauss 该能力在运行时仍报 True（契约按 pg 协议系静态声明），消费方对 array 场景应先探能力再构建方言 SQL，或以 try..except 回退到 batch 路径（见 CONTRACT §2.16 使用前置）。
 - 预期差异：错误消息措辞与社区 PG 不同，但 **SqlState 保留**——统一层归一只消费 SqlState（§2.2），类目归一已验证不受影响；约束/事务/savepoint 全量通过。
 
 ### 2.2 KingbaseES（pg 协议）
@@ -76,15 +76,15 @@ Conn := ConnectMysql('host=127.0.0.1 port=4000 user=root ' +
 - 多语句 Exec 需 `CLIENT_MULTI_STATEMENTS`，工厂默认携带。
 - OceanBase 的 `SELECT ... FOR UPDATE` 等方言细节不在统一层契约内。
 
-### 2.4 达梦 DM8（ODBC）— P1 ODBC 网关（ADR 0002）
+### 2.4 达梦 DM8（双路径：ODBC 网关 P1 + DPI 原生 P2）
 
 ```pascal
-{ DSN-less（推荐）：驱动名以达梦安装的 odbcinst 为准 }
-Conn := ConnectOdbc('Driver=DM8 ODBC DRIVER;Server=127.0.0.1;' +
+{ DSN-less（推荐）：驱动名以达梦安装的 odbcinst 为准，花括号为 ODBC 规范 }
+Conn := ConnectOdbc('Driver={DM8 ODBC DRIVER};Server=127.0.0.1;' +
   'Port=5236;Database=SYSDBA;UID=SYSDBA;PWD=secret');
 { 池化（Go sql.DB 语义） }
 Pool := DbOpenPool('odbc',
-  'Driver=DM8 ODBC DRIVER;Server=127.0.0.1;Port=5236;Database=SYSDBA;UID=SYSDBA;PWD=secret');
+  'Driver={DM8 ODBC DRIVER};Server=127.0.0.1;Port=5236;Database=SYSDBA;UID=SYSDBA;PWD=secret');
 ```
 
 - 默认端口 5236；驱动管理器 unixODBC（本仓 ODBC 门禁的同款环境）。
@@ -98,9 +98,7 @@ Pool := DbOpenPool('odbc',
   `NativeError` 仅透传）。
 - 事务面 = AUTOCOMMIT OFF + SQLEndTran；`AImmediate` 参数接受为 no-op
  （Oracle 系 `BEGIN IMMEDIATE` 无对应，契约差异登记）。
-- **分阶段**：P1 ODBC 网关零新增代码即 Tier-1 支持（本节）；P2 专用
-  `libdmdpi` 适配器（`dpi_*` 25 符号、`ClassifyDm`、`dbkDm`）仅当触发条件
-  满足时再议（见 ADR 0002：≥2 消费方欠归一阻塞或需 LOB/interval/数组绑定）。
+- **双路径**：P1 ODBC 网关（`Driver=DM8 ODBC DRIVER`，§2.11 honest downgrade，`Savepoints=false`）；**P2 DPI 原生**（`ConnectDm('Server=127.0.0.1;Port=5236;Database=SYSDBA;UID=SYSDBA;PWD=...')` / `DbOpen('dm', dsn)`，`libdmdpi.so` dlopen，三候选，`ClassifyDm` 真归一，`Savepoints=True` 真原生，见 §4.5 与 `core/src/nextpas.core.db.dm.*`）。选型：需精确错误细分或 savepoint 嵌套时用 DPI，否则 ODBC 亦可（Manager 一跳 ~10%）。
 
 ### 2.5 PolarDB / GoldenDB / TDSQL（双协议形态，选型见 §1）
 
@@ -127,16 +125,16 @@ SQLDriverConnect，本层不解析不改写。个别驱动拒绝 `SQL_ATTR_QUERY
 统一能力自述一律运行时探测：`DbCapabilities(Conn)` 返回
 `IDbCapabilities`，**不要按库名分支**。快速预期：
 
-| 能力 | pg 协议系 | mysql 协议系 | ODBC 网关* |
-|---|---|---|---|
-| savepoints | ✅ 预期 | ✅ 预期 | ❌（§2.11 降级） |
-| 批执行 IDbBatchExecutor | ✅ 单次往返 | ✅ | ✅ 逐条+单事务 |
-| 原生 bool | ✅ OID16 | ❌ TINYINT(1) 约定 | ❌ 异构欠归一 |
-| 语句超时 | ✅ 会话级 | 探测定格（多半忽略） | ✅ 秒粒度逐语句 |
-| 大对象流 | ✅ lo_*（待逐库验证） | ❌ | ❌ |
-| 占位符上限 | 65535 | 65535 | 999 保守下界 |
+| 能力 | pg 协议系 | mysql 协议系 | ODBC 网关 | dm DPI 原生 |
+|---|---|---|---|---|
+| savepoints | ✅ 预期 | ✅ 预期 | ❌（§2.11 降级） | ✅ 原生 |
+| 批执行 IDbBatchExecutor | ✅ 单次往返 | ✅ | ✅ 逐条+单事务 | ✅ 逐条+单事务 |
+| 原生 bool | ✅ OID16 | ❌ TINYINT(1) 约定 | ❌ 异构欠归一 | ❌ 约定 |
+| 语句超时 | ✅ 会话级 | 探测定格（多半忽略） | ✅ 秒粒度逐语句 | — advisory 忽略 |
+| 大对象流 | ✅ lo_*（待逐库验证） | ❌ | ❌ | — v1 无 |
+| 占位符上限 | 65535 | 65535 | 999 保守下界 | 999 保守下界 |
 
-\* ODBC 网关含达梦 DM8：P1 阶段 `savepoints=false`、`NativeBool=false` 为契约性降级，非缺陷；P2 `libdmdpi` 可使 savepoints/arrayBinding 升格（ADR 0002）。
+\* ODBC 网关含非 dm 原生的通用路径；dm 原生列为本版本 V3-DM 增量（`Savepoints=True` 真原生，归一按 `ClassifyDm` 負码位表）。
 
 错误归一现状（原 D 线账本缺口已收口）：MySQL 协议系驱动经 ODBC
 把约束违约报 `HY000+1062` 时，由 ClassifyOdbcEx 按 NativeError
@@ -192,7 +190,7 @@ NEXTPAS_PG_TEST_CONN='host=127.0.0.1 port=55432 dbname=postgres user=testuser pa
 
 陷阱：初建用户 `opengauss` 禁止远程（`FATAL: Forbid remote connection with initial user`）；`gs_ctl restart` 会杀容器主进程（`--rm` 容器自删），故用 `reload`；`--rm` 容器重启即丢数据，演示用 `--name` 持久化。
 
-## 5. 离线预研结论（2026-08-28，openGauss 已真机，余下理论）
+## 5. 离线预研结论（2026-08-30，DM DPI 原生增量）
 
 - **预研覆盖**：openGauss / KingbaseES / OceanBase MySQL 租户 / TiDB /
   PolarDB（PG+X）/ GoldenDB / TDSQL（PG+MySQL）/ 达梦 DM8 / GBase 8s/8a /
@@ -200,9 +198,9 @@ NEXTPAS_PG_TEST_CONN='host=127.0.0.1 port=55432 dbname=postgres user=testuser pa
 - **已真机（2026-08-28，Docker）**：
   - **openGauss 5.0.0 x86**（`opengauss/opengauss:5.0.0`，§4.5 三步兼容后 `NEXTPAS_PG_TEST_CONN` 指向 55432）：`test_db_pg 13 passed / conformance 2 passed / trace 5 passed`，方言鸿沟 3 例已诚实记录（`unnest` 多列 / `WITH ORDINALITY` 缺失，array 场景降级为 batch）。
   - **MySQL 协议系**：`mariadb:11.8`（`53306`）与 `mysql:8.0.46`（`53307`）双引擎经 **MariaDB Connector/C 3.3（libmariadb.so.3, 112B 绑定）** 直连验证——`test_db_mysql_adapter 7/7 passed`（roundtrip/四分类/savepoint/caps）`heaptrc 0`，`mysql:8` 需 `mysql_native_password`（`caching_sha2` 需 libmysqlclient 8，MariaDB 客户端以 `mysql_native_password` 兼容，生产建议显式创建该类用户）。此双引擎已覆盖 TiDB/OceanBase/PolarDB-X/GoldenDB/TDSQL-MySQL 的线协议兼容面（同属 MySQL 协议系，差异仅方言与事务语义，见 §2.3）。
-- **仍理论**：KingbaseES 仍为理论预期（无真机），上生产前按 §4 自验；**达梦 DM8 已完成 P1 ODBC 网关路径决策（ADR 0002，零新增代码，honest downgrade）**，P2 `libdmdpi` 按需触发。
-- **已收口**：ODBC MySQL 系 `HY000+1062` 欠归一由 D5 `ClassifyOdbcEx` 单调提精收口（仅 MySQL 词元驱动生效，达梦等仍欠归一诚实保留，见 ADR 0002）。
-- **下一步**：KingbaseES 待 Docker 真机；TiDB/OceanBase 以 MySQL 8/MariaDB 双引擎为代理已具备发布条件，独立 TiDB 集群编排（PD+TiKV+TiDB）可作为独立进阶验证。
+- **DM8 DPI 原生**：V3-DM（2026-08-30）`dbkDm` + `nextpas.core.db.dm.{base,ffi,loader,adapter}` 四单元（`libdmdpi.so` 三候选 dlopen、`ClassifyDm` 负码位表、`Savepoints=True` 原生），工厂 `DbOpen('dm', dsn)` / `ConnectDm(dsn[, opts])` 已透出；离线归一与 DSN 离线可跑，真机经 `NEXTPAS_DM_TEST_CONN` 门控（同 pg/mysql/odbc 惯例，缺席 Skip）。ODBC 网关仍保留为备选路径。
+- **已收口**：ODBC MySQL 系 `HY000+1062` 欠归一由 D5 `ClassifyOdbcEx` 单调提精收口（仅 MySQL 词元驱动生效，达梦等仍欠归一诚实保留，见 ADR 0002）；DM DPI 侧按 `ClassifyDm` 真归一补齐。
+- **下一步**：KingbaseES 待 Docker 真机（复用 pg 协议系）；TiDB/OceanBase 以 MySQL 8/MariaDB 双引擎为代理已具备发布条件，独立 TiDB 集群编排（PD+TiKV+TiDB）可作为独立进阶验证。
 
 ## 6. 反馈回路
 

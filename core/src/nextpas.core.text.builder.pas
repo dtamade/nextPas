@@ -26,6 +26,8 @@ type
     function Cap: SizeUInt;
     procedure Clear;
     procedure Reserve(const AAdditional: SizeUInt);
+    function Tail: PAnsiChar;
+    procedure AdvanceLen(const ACount: SizeUInt);
   end;
 
   TBufStringBuilder = record
@@ -97,6 +99,8 @@ type
     function Cap: SizeUInt;
     procedure Clear;
     procedure Reserve(const AAdditional: SizeUInt);
+    function Tail: PAnsiChar;
+    procedure AdvanceLen(const ACount: SizeUInt);
   end;
 
 function MakeStringBuilder(const AInitialCap: SizeUInt): IStringBuilder;
@@ -184,6 +188,16 @@ end;
 procedure TStringBuilderImpl.Reserve(const AAdditional: SizeUInt);
 begin
   FBuilder.Reserve(AAdditional);
+end;
+
+function TStringBuilderImpl.Tail: PAnsiChar;
+begin
+  Result := FBuilder.Tail;
+end;
+
+procedure TStringBuilderImpl.AdvanceLen(const ACount: SizeUInt);
+begin
+  FBuilder.AdvanceLen(ACount);
 end;
 
 procedure TBufStringBuilder.Grow(const ANeeded: SizeUInt);

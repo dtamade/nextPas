@@ -23,10 +23,14 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.db.base,
+  nextpas.core.db.intf,
   nextpas.core.db,
   nextpas.core.db.err,
   nextpas.core.db.tx,
-  nextpas.core.db.migrate;
+  nextpas.core.db.migrate,
+  nextpas.core.db.mysql.adapter,
+  nextpas.core.db.odbc.adapter,
+  nextpas.core.db.dm.adapter;
 
 var
   T: TTestSuite;
@@ -585,6 +589,7 @@ var
   LSp: IDbSavepointControl;
   LArrQ: IDbQuery;
   LArr: IDbArrayBinding;
+  LBulk: IDbBulkCopy;
   LHas: Boolean;
 begin
   Cap := DbCapabilities(AConn);
@@ -618,6 +623,9 @@ begin
   Check((LArr <> nil) = Cap.SupportsArrayBinding,
     P + '/caps: array-binding flag ⇔ query probe presence');
   LArrQ := nil;
+  LHas := Supports(AConn, IDbBulkCopy, LBulk);
+  Check(LHas = Cap.SupportsBulkCopy,
+    P + '/caps: bulk-copy flag ⇔ interface presence');
 
   { 行为验证：声明支持 savepoints ⇒ 探针保存点真实可用 }
   if Cap.SupportsSavepoints then
@@ -819,9 +827,92 @@ begin
   Q := nil;
 end;
 
+procedure TestMysqlBackend;
+var
+  Conn: IDbConnection;
+  Cap: IDbCapabilities;
+begin
+  if GetEnvironmentVariable('NEXTPAS_MYSQL_TEST_CONN') = '' then
+  begin
+    WriteLn('mysql section skipped (NEXTPAS_MYSQL_TEST_CONN not set)');
+    Exit;
+  end;
+  Conn := ConnectMysql(GetEnvironmentVariable('NEXTPAS_MYSQL_TEST_CONN'));
+  RunConformance(Conn, 't_conf_my');
+  Cap := DbCapabilities(Conn);
+  Check(Cap <> nil, 'mysql/caps: present');
+  if Cap <> nil then
+  begin
+    Check(Cap.SupportsSavepoints and Cap.SupportsBatchExecutor,
+      'mysql/caps: savepoints+batch true');
+    Check(Cap.SupportsStmtCacheControl, 'mysql/caps: stmt-cache true');
+    Check(not Cap.SupportsLargeObjects, 'mysql/caps: no lo');
+    Check(not Cap.SupportsArrayBinding, 'mysql/caps: no array binding');
+    Check(not Cap.SupportsNativeBool, 'mysql/caps: no native bool');
+    Check(Cap.SupportsMultiStatementExec, 'mysql/caps: multi-stmt true');
+    CheckEqual(Int64(65535), Int64(Cap.MaxPlaceholders),
+      'mysql/caps: placeholder limit');
+  end;
+end;
+
+procedure TestOdbcBackend;
+var
+  Conn: IDbConnection;
+  Cap: IDbCapabilities;
+begin
+  if GetEnvironmentVariable('NEXTPAS_ODBC_TEST_CONN') = '' then
+  begin
+    WriteLn('odbc section skipped (NEXTPAS_ODBC_TEST_CONN not set)');
+    Exit;
+  end;
+  Conn := ConnectOdbc(GetEnvironmentVariable('NEXTPAS_ODBC_TEST_CONN'));
+  RunConformance(Conn, 't_conf_od');
+  Cap := DbCapabilities(Conn);
+  Check(Cap <> nil, 'odbc/caps: present');
+  if Cap <> nil then
+  begin
+    Check(not Cap.SupportsSavepoints, 'odbc/caps: savepoints false honest');
+    Check(Cap.SupportsBatchExecutor, 'odbc/caps: batch true');
+    Check(Cap.SupportsStmtCacheControl, 'odbc/caps: stmt-cache true');
+    Check(Cap.SupportsStatementTimeout, 'odbc/caps: statement timeout true');
+    CheckEqual(Int64(999), Int64(Cap.MaxPlaceholders),
+      'odbc/caps: conservative placeholder floor');
+  end;
+end;
+
+procedure TestDmBackend;
+var
+  Conn: IDbConnection;
+  Cap: IDbCapabilities;
+begin
+  if GetEnvironmentVariable('NEXTPAS_DM_TEST_CONN') = '' then
+  begin
+    WriteLn('dm section skipped (NEXTPAS_DM_TEST_CONN not set)');
+    Exit;
+  end;
+  Conn := ConnectDm(GetEnvironmentVariable('NEXTPAS_DM_TEST_CONN'));
+  RunConformance(Conn, 't_conf_dm');
+  Cap := DbCapabilities(Conn);
+  Check(Cap <> nil, 'dm/caps: present');
+  if Cap <> nil then
+  begin
+    CheckEqual('DM', Cap.ProductName, 'dm/caps: product name');
+    Check(Cap.SupportsSavepoints, 'dm/caps: savepoints true (native)');
+    Check(Cap.SupportsBatchExecutor, 'dm/caps: batch true');
+    Check(Cap.SupportsStmtCacheControl, 'dm/caps: stmt-cache true');
+    Check(not Cap.SupportsLargeObjects, 'dm/caps: no lo v1');
+    Check(not Cap.SupportsArrayBinding, 'dm/caps: no array binding v1');
+    CheckEqual(Int64(999), Int64(Cap.MaxPlaceholders),
+      'dm/caps: conservative placeholder floor');
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.db.conformance');
   T.Test('sqlite backend', @TestSqliteBackend);
   T.Test('postgres backend', @TestPgBackend);
+  T.Test('mysql backend', @TestMysqlBackend);
+  T.Test('odbc backend', @TestOdbcBackend);
+  T.Test('dm backend', @TestDmBackend);
   if not T.Run then Halt(1);
 end.
