@@ -29,6 +29,10 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
+{ perf: BytesAppend does SetLength+Move per call (O(n) realloc). For high-frequency
+  or looped appends prefer IBytesBuilder (preallocated Grow) or BytesConcatMany/
+  SpanConcatMany (single allocation) to avoid O(n²) churn. Keep inline for single-use
+  convenience only. }
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
@@ -562,17 +566,18 @@ begin
 end;
 
 function IsZeroBytes(const AData: TBytes): Boolean; inline;
-var I: Integer;
 begin
-  for I := 0 to High(AData) do if AData[I] <> 0 then Exit(False);
-  Result := True;
+  // perf: single-source zero check via StripLeadingZeroView (O(n) scan with early exit,
+  // reuses existing view; empty => Len=0 => zero). Avoids duplicate byte loops and
+  // keeps crypto/tls callers on one implementation; SIMD MemEqual could be used for
+  // bulk zero compares but view already short-circuits on first non-zero.
+  Result := StripLeadingZeroView(AData).Len = 0;
 end;
 
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline;
-var I: SizeUInt;
 begin
-  for I := 0 to ASpan.Len - 1 do if ASpan.Data[I] <> 0 then Exit(False);
-  Result := True;
+  // perf: same single source as TBytes overload via StripLeadingZeroSpan.
+  Result := StripLeadingZeroSpan(ASpan).Len = 0;
 end;
 
 function BytesIsZero(const AData: TBytes): Boolean; inline;

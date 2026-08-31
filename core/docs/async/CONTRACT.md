@@ -185,6 +185,29 @@ end;
 - `CancelTimer` does not run OnDiscard.
 - Dependents must release before `Loop.Free` (or ensure they never touch a closed loop).
 
+### Heaptrc / 0-leak evidence & gaps (2026-09-01, 稳定性维度)
+- Prior "0 leak" assumed Close discard branches were covered. Focused heaptrc for
+  `Post` MPSC discard, `Retry` ScheduleEx discard, and `WhenAll` token-owner
+  discard was missing/incomplete — this was the documented gap.
+- Fixes in this landing: `TaskGroup.Destroy` now `RemoveOnCancel`; `NetCancelFromAsync`
+  via bridge owns ExactlyOnce and `RemoveOnCancel` on destroy (no `LCtx` leak on
+  never-cancel); `DiscardWrappedContext` now `WhenAllReleaseTokenOwner` on last
+  discard; `TimeoutTokenNotify` handles `Post` after `Close` race via
+  `try/except TimeoutCtxRelease`; `Retry` adds `Done` atomic exactly-once
+  between normal completion and `DiscardRetryState`/close; `CancellationToken.Cancel`
+  snapshots callbacks/children outside lock (deadlock-free) and frees snapshot;
+  `SlabConcurrent` documents per-thread TLS flush limitation (no global iteration).
+- Required evidence: binaries built with `-gh` (heaptrc) for
+  `core/tests/nextpas.core.async` / `combinators` / `retry` / `cancellation` /
+  `net` must report `0 unfreed blocks` on both normal and "Close immediately
+  after Post/Schedule" discard paths. Until dedicated discard-leak focused gates
+  land in CI, this contract marks those three Close discard paths as
+  "patched, awaiting focused gate proof" rather than "proven 0 leak".
+- `TSlabPoolConcurrent`: only the calling thread's TLS is flushed on `Destroy`/
+  `Reset` (`threadvar` cannot be iterated). Cross-thread cache reclamation needs
+  quiescence (join workers / per-thread flush) — heaptrc cannot prove global
+  0-leak without it; documented as limitation, not hidden.
+
 ### Channel backpressure (B1)
 | API | Full channel behavior |
 |-----|------------------------|

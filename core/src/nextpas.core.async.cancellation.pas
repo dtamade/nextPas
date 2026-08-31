@@ -100,7 +100,7 @@ type
     FCond: TPlatformCondVar;
     FCondReady: Boolean;
 
-    procedure FireCallbacks(AHead: PCancelCallbackEntry); inline;
+    procedure FireCallbacks;
     procedure CancelChildren;
     procedure RemoveFromParent;
     procedure AddChild(AChild: TAsyncCancellationTokenImpl);
@@ -181,22 +181,20 @@ begin
   inherited Destroy;
 end;
 
-procedure TAsyncCancellationTokenImpl.FireCallbacks(AHead: PCancelCallbackEntry);
+procedure TAsyncCancellationTokenImpl.FireCallbacks;
 var
-  LEntry, LNext: PCancelCallbackEntry;
+  LEntry: PCancelCallbackEntry;
 begin
-  LEntry := AHead;
+  LEntry := FCallbacks;
   while LEntry <> nil do
   begin
-    LNext := LEntry^.Next;
     try
       if Assigned(LEntry^.Callback) then
         LEntry^.Callback(LEntry^.Context);
     except
       { 吞掉回调异常，不影响取消传播 }
     end;
-    Dispose(LEntry);
-    LEntry := LNext;
+    LEntry := LEntry^.Next;
   end;
 end;
 
@@ -285,49 +283,58 @@ end;
 procedure TAsyncCancellationTokenImpl.Cancel;
 var
   LOldState: Int32;
-  LHead: PCancelCallbackEntry;
-  LChild: PChildEntry;
-  LChildren: array of IAsyncCancellationToken;
-  LCount, I: Integer;
+  LCallbacks: PCancelCallbackEntry;
+  LChildren: PChildEntry;
+  LEntry, LNextEntry: PCancelCallbackEntry;
+  LChild, LNextChild: PChildEntry;
 begin
   { 原子状态转换：ACTIVE -> CANCELLED }
   LOldState := atomic_exchange(FState, CANCEL_STATE_CANCELLED, mo_acq_rel);
   if LOldState = CANCEL_STATE_CANCELLED then
     Exit;  { 已经取消，避免重复触发 }
 
-  { 快照回调与子令牌引用后解锁——回调在锁外同步执行，避免
-    ERRORCHECK 互斥量重入死锁（回调内 RemoveOnCancel/Cancel 会再次加锁）。
-    回调链表为零拷贝指针搬移 O(1)，FireCallbacks 标记 inline。 }
   platform_mutex_lock(FLock);
   try
     FCondReady := True;
     platform_condvar_broadcast(FCond);
-    LHead := FCallbacks;
+    LCallbacks := FCallbacks;
     FCallbacks := nil;
     FCallbackTail := nil;
-    LCount := 0;
-    LChild := FChildren;
-    while LChild <> nil do
-    begin
-      Inc(LCount);
-      LChild := LChild^.Next;
-    end;
-    SetLength(LChildren, LCount);
-    LChild := FChildren;
-    I := 0;
-    while LChild <> nil do
-    begin
-      LChildren[I] := LChild^.Ref; { 持引用，解锁后仍有效 }
-      Inc(I);
-      LChild := LChild^.Next;
-    end;
+    LChildren := FChildren;
+    FChildren := nil;
+    FChildrenTail := nil;
   finally
     platform_mutex_unlock(FLock);
   end;
-  FireCallbacks(LHead);
-  for I := 0 to High(LChildren) do
-    if LChildren[I] <> nil then
-      LChildren[I].Cancel;
+  LEntry := LCallbacks;
+  while LEntry <> nil do
+  begin
+    LNextEntry := LEntry^.Next;
+    try
+      if Assigned(LEntry^.Callback) then
+        LEntry^.Callback(LEntry^.Context);
+    except
+    end;
+    Dispose(LEntry);
+    LEntry := LNextEntry;
+  end;
+  LChild := LChildren;
+  while LChild <> nil do
+  begin
+    LNextChild := LChild^.Next;
+    if LChild^.Child <> nil then
+    begin
+      try
+        TAsyncCancellationTokenImpl(LChild^.Child).Cancel;
+      except
+      end;
+      TAsyncCancellationTokenImpl(LChild^.Child).FParent := nil;
+    end;
+    LChild^.Child := nil;
+    LChild^.Ref := nil;
+    Dispose(LChild);
+    LChild := LNextChild;
+  end;
 end;
 
 function TAsyncCancellationTokenImpl.IsCancelled: Boolean;
@@ -339,37 +346,33 @@ procedure TAsyncCancellationTokenImpl.OnCancel(ACallback: TCancelCallback;
   AContext: Pointer);
 var
   LEntry: PCancelCallbackEntry;
-  LDoImmediate: Boolean;
 begin
-  LDoImmediate := False;
   platform_mutex_lock(FLock);
   try
-    { 如果已取消，标记后在锁外立即调用，避免持锁回调重入死锁 }
+    { 如果已取消，立即调用 }
     if FState = CANCEL_STATE_CANCELLED then
-      LDoImmediate := True
-    else
     begin
-      { 加入回调链表 }
-      New(LEntry);
-      LEntry^.Callback := ACallback;
-      LEntry^.Context := AContext;
-      LEntry^.Next := nil;
-      if FCallbackTail <> nil then
-        FCallbackTail^.Next := LEntry
-      else
-        FCallbacks := LEntry;
-      FCallbackTail := LEntry;
+      try
+        if Assigned(ACallback) then
+          ACallback(AContext);
+      except
+        { 吞掉回调异常 }
+      end;
+      Exit;
     end;
+    { 否则加入回调链表 }
+    New(LEntry);
+    LEntry^.Callback := ACallback;
+    LEntry^.Context := AContext;
+    LEntry^.Next := nil;
+    if FCallbackTail <> nil then
+      FCallbackTail^.Next := LEntry
+    else
+      FCallbacks := LEntry;
+    FCallbackTail := LEntry;
   finally
     platform_mutex_unlock(FLock);
   end;
-  if LDoImmediate then
-    try
-      if Assigned(ACallback) then
-        ACallback(AContext);
-    except
-      { 吞掉回调异常 }
-    end;
 end;
 
 procedure TAsyncCancellationTokenImpl.RemoveOnCancel(

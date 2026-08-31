@@ -126,39 +126,39 @@ type
   TGrowRefFunc = nextpas.core.collections.base.TGrowRefFunc;
   TGrowProxyMethod = nextpas.core.collections.base.TGrowProxyMethod;
 
-  // 算法公共回调类型
-  generic TPredicateFunc<T> = function(const aElement: T; aData: Pointer): Boolean;
-  generic TPredicateMethod<T> = function(const aElement: T; aData: Pointer): Boolean of object;
+  // 算法公共回调类型 — re-export from owner base units，门面不自有定义
+  generic TPredicateFunc<T> = specialize nextpas.core.collections.base.TPredicateFunc<T>;
+  generic TPredicateMethod<T> = specialize nextpas.core.collections.base.TPredicateMethod<T>;
   {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-  generic TPredicateRefFunc<T> = reference to function(const aElement: T): Boolean;
+  generic TPredicateRefFunc<T> = specialize nextpas.core.collections.base.TPredicateRefFunc<T>;
   {$ENDIF}
-  generic TMapperFunc<T,U> = function(const aElement: T; aData: Pointer): U;
-  generic TMapperMethod<T,U> = function(const aElement: T; aData: Pointer): U of object;
+  generic TMapperFunc<T,U> = specialize nextpas.core.collections.base.TMapperFunc<T,U>;
+  generic TMapperMethod<T,U> = specialize nextpas.core.collections.base.TMapperMethod<T,U>;
   {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-  generic TMapperRefFunc<T,U> = reference to function(const aElement: T): U;
+  generic TMapperRefFunc<T,U> = specialize nextpas.core.collections.base.TMapperRefFunc<T,U>;
   {$ENDIF}
-  generic TCompareFunc<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt;
-  generic TCompareMethod<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt of object;
+  generic TCompareFunc<T> = specialize nextpas.core.collections.base.TCompareFunc<T>;
+  generic TCompareMethod<T> = specialize nextpas.core.collections.base.TCompareMethod<T>;
   {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-  generic TCompareRefFunc<T> = reference to function(const aLeft, aRight: T): SizeInt;
+  generic TCompareRefFunc<T> = specialize nextpas.core.collections.base.TCompareRefFunc<T>;
   {$ENDIF}
-  generic TEqualsFunc<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean;
-  generic TEqualsMethod<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean of object;
+  generic TEqualsFunc<T> = specialize nextpas.core.collections.base.TEqualsFunc<T>;
+  generic TEqualsMethod<T> = specialize nextpas.core.collections.base.TEqualsMethod<T>;
   {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-  generic TEqualsRefFunc<T> = reference to function(const aLeft, aRight: T): Boolean;
+  generic TEqualsRefFunc<T> = specialize nextpas.core.collections.base.TEqualsRefFunc<T>;
   {$ENDIF}
 
-  // HashMap / TreeMap / LRU public callback types
-  generic TKeyHashFunc<K> = function(const AKey: K): UInt32;
-  generic TKeyEqualsFunc<K> = function(const L, R: K): Boolean;
-  generic TSkipListCompareFunc<K> = function(const A, B: K): SizeInt;
-  generic TValueSupplierFunc<V> = function: V;
-  generic TValueModifierProc<V> = procedure(var Value: V);
-  generic TKeyValueCallback<K,V> = procedure(const aEntry: specialize TMapEntry<K,V>; aData: Pointer);
-  generic TTreeValueSupplierFunc<V> = function: V;
-  generic TTreeValueModifierProc<V> = procedure(var Value: V);
-  generic THashFunc<T> = function(const aValue: T; aData: Pointer): UInt64;
-  generic TBTreeCompareFunc<T> = function(const A, B: T; aData: Pointer): SizeInt;
+  // HashMap / TreeMap / LRU public callback types — re-export from owner base units
+  generic TKeyHashFunc<K> = specialize nextpas.core.collections.hashmap.base.TKeyHashFunc<K>;
+  generic TKeyEqualsFunc<K> = specialize nextpas.core.collections.hashmap.base.TKeyEqualsFunc<K>;
+  generic TSkipListCompareFunc<K> = specialize nextpas.core.collections.skiplist.base.TSkipListCompareFunc<K>;
+  generic TValueSupplierFunc<V> = specialize nextpas.core.collections.hashmap.base.TValueSupplierFunc<V>;
+  generic TValueModifierProc<V> = specialize nextpas.core.collections.hashmap.base.TValueModifierProc<V>;
+  generic TKeyValueCallback<K,V> = specialize nextpas.core.collections.treemap.base.TKeyValueCallback<K,V>;
+  generic TTreeValueSupplierFunc<V> = specialize nextpas.core.collections.treemap.base.TTreeValueSupplierFunc<V>;
+  generic TTreeValueModifierProc<V> = specialize nextpas.core.collections.treemap.base.TTreeValueModifierProc<V>;
+  generic THashFunc<T> = specialize nextpas.core.collections.lrucache.base.THashFunc<T>;
+  generic TBTreeCompareFunc<T> = specialize nextpas.core.collections.base.TBTreeCompareFunc<T>;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;

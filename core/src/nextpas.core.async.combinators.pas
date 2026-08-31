@@ -166,11 +166,14 @@ type
     Token: IAsyncCancellationToken;
   end;
 
+procedure WhenAllReleaseTokenOwner(var AState: PWhenAllState); forward;
+
 procedure DiscardWrappedContext(AContext: Pointer);
 var
   LWrapped: PWrappedContext;
   LAll: PWhenAllState;
   LAny: PWhenAnyState;
+  LTmp: PWhenAllState;
 begin
   LWrapped := PWrappedContext(AContext);
   if LWrapped = nil then
@@ -184,8 +187,13 @@ begin
     Dec(LAll^.Remaining);
     if LAll^.Remaining <= 0 then
     begin
-      { Do not CancelTimer here: Close is already tearing down the loop.
-        Timer OnDiscard drops the timer ownership ref safely. }
+      { Close discard: release TokenOwner if held, then base ref.
+        Timer ownership is dropped separately by DiscardWhenAllTimeoutState. }
+      LTmp := LAll;
+      WhenAllReleaseTokenOwner(LTmp);
+      LAll := LTmp;
+      if LAll = nil then
+        Exit;
       if atomic_fetch_sub(LAll^.RefCount, 1, mo_acq_rel) = 1 then
         Dispose(LAll);
     end;

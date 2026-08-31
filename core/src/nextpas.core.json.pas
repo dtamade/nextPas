@@ -105,6 +105,11 @@ end;
 constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
 begin
   inherited Create;
+  // perf/lifecycle: TStringView is non-owning; zero-copy (FInputCopy := view) would
+  // avoid SetString copy but requires caller to keep view.Data alive for document
+  // lifetime. To preserve ownership and keep DOM valid after caller buffer is freed,
+  // we copy into FInputCopy. If caller can guarantee lifetime, replace with direct
+  // view assignment and skip this allocation.
   SetString(FInputCopy, AInput.Data, AInput.Len);
   FDoc.Init(AAllocator);
   FDoc.Parse(TStringView.FromStr(FInputCopy));

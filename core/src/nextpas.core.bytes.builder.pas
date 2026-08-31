@@ -28,8 +28,10 @@ type
     procedure AppendUInt64BE(const AValue: UInt64);
     procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
 
-    function WrittenSpan: TByteSpan;
-    function ToBytes: TBytes;
+    { perf: WrittenSpan is zero-copy view into builder buffer (no allocation);
+      ToBytes copies with one allocation for ownership transfer. }
+    function WrittenSpan: TByteSpan; inline;
+    function ToBytes: TBytes; inline;
 
     procedure Clear;
     procedure Reserve(const AAdditional: SizeUInt);
@@ -248,13 +250,15 @@ begin
   Inc(FLen, ACount);
 end;
 
-function TBytesBuilderImpl.WrittenSpan: TByteSpan;
+function TBytesBuilderImpl.WrittenSpan: TByteSpan; inline;
 begin
+  // zero-copy: returns view into internal buffer; caller must not use after builder free/mutation
   Result := TByteSpan.Create(FPtr, FLen);
 end;
 
-function TBytesBuilderImpl.ToBytes: TBytes;
+function TBytesBuilderImpl.ToBytes: TBytes; inline;
 begin
+  // perf: single allocation copy for ownership; for zero-copy hot path use WrittenSpan
   Result := nil;
   SetLength(Result, FLen);
   if FLen > 0 then

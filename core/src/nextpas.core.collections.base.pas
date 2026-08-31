@@ -199,6 +199,9 @@ type
   generic TEqualsRefFunc<T> = reference to function (const aLeft, aRight: T): Boolean;
   {$ENDIF}
 
+  { BTree 比较回调（供 btree 门面复用） }
+  generic TBTreeCompareFunc<T> = function(const A, B: T; aData: Pointer): SizeInt;
+
   { 公共随机数回调类型由 collections.base 统一对外暴露 }
   TRandomGeneratorFunc = function (aRange: Int64; aData: Pointer): Int64;
   TRandomGeneratorMethod = function (aRange: Int64; aData: Pointer): Int64 of Object;

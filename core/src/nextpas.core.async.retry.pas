@@ -127,6 +127,7 @@ procedure RetryWithFixedDelay(
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.time.base;
 
 type
@@ -145,14 +146,31 @@ type
     CurrentRetry: Integer;
     CurrentDelayMs: UInt32;
     Failed: Boolean;
+    Done: Int32;
   end;
 
 { ==================== 重试逻辑 ==================== }
 
 procedure DiscardRetryState(AContext: Pointer);
+var
+  LState: PRetryState;
+  LExpected: Int32;
 begin
-  if AContext <> nil then
-    Dispose(PRetryState(AContext));
+  if AContext = nil then
+    Exit;
+  LState := PRetryState(AContext);
+  LExpected := 0;
+  if not atomic_compare_exchange_strong(LState^.Done, LExpected, 1, mo_acq_rel, mo_acquire) then
+    Exit;
+  Dispose(LState);
+end;
+
+function RetryStateClaimDone(AState: PRetryState): Boolean;
+var
+  LExpected: Int32;
+begin
+  LExpected := 0;
+  Result := atomic_compare_exchange_strong(AState^.Done, LExpected, 1, mo_acq_rel, mo_acquire);
 end;
 
 { 统一的重试执行步骤（首次和后续重试共用） }
@@ -161,6 +179,10 @@ var
   LState: PRetryState;
 begin
   LState := PRetryState(AContext);
+  if LState = nil then
+    Exit;
+  if LState^.Done <> 0 then
+    Exit;
   { 执行回调 }
   LState^.Callback(LState^.Context);
   { 检查是否失败 }
@@ -174,19 +196,28 @@ begin
       if (LState^.Options.MaxRetries > 0) and
          (LState^.CurrentRetry >= LState^.Options.MaxRetries) then
       begin
-        if Assigned(LState^.OnComplete) then
-          LState^.OnComplete(LState^.OnCompleteCtx);
-        Dispose(LState);
+        if RetryStateClaimDone(LState) then
+        begin
+          if Assigned(LState^.OnComplete) then
+            LState^.OnComplete(LState^.OnCompleteCtx);
+          Dispose(LState);
+        end;
         Exit;
       end;
       { 用当前延迟调度下一次重试 }
       Inc(LState^.CurrentRetry);
-      LState^.Loop.ScheduleEx(
-        TDuration.FromMilliseconds(LState^.CurrentDelayMs),
-        @RetryExecuteStep,
-        LState,
-        @DiscardRetryState
-      );
+      try
+        LState^.Loop.ScheduleEx(
+          TDuration.FromMilliseconds(LState^.CurrentDelayMs),
+          @RetryExecuteStep,
+          LState,
+          @DiscardRetryState
+        );
+      except
+        if RetryStateClaimDone(LState) then
+          Dispose(LState);
+        Exit;
+      end;
       { 更新延迟供下次使用（在 schedule 之后，不影响本次调度） }
       LState^.CurrentDelayMs := LState^.CurrentDelayMs * LState^.Options.BackoffFactor;
       if LState^.CurrentDelayMs > LState^.Options.MaxDelayMs then
@@ -194,16 +225,22 @@ begin
     end
     else
     begin
-      if Assigned(LState^.OnComplete) then
-        LState^.OnComplete(LState^.OnCompleteCtx);
-      Dispose(LState);
+      if RetryStateClaimDone(LState) then
+      begin
+        if Assigned(LState^.OnComplete) then
+          LState^.OnComplete(LState^.OnCompleteCtx);
+        Dispose(LState);
+      end;
     end;
   end
   else
   begin
-    if Assigned(LState^.OnComplete) then
-      LState^.OnComplete(LState^.OnCompleteCtx);
-    Dispose(LState);
+    if RetryStateClaimDone(LState) then
+    begin
+      if Assigned(LState^.OnComplete) then
+        LState^.OnComplete(LState^.OnCompleteCtx);
+      Dispose(LState);
+    end;
   end;
 end;
 
@@ -237,6 +274,7 @@ begin
   LState^.CurrentRetry := 0;
   LState^.CurrentDelayMs := AOptions.BaseDelayMs;
   LState^.Failed := False;
+  LState^.Done := 0;
 
   // 立即执行第一次尝试
   LLoop.PostEx(@RetryExecuteStep, LState, @DiscardRetryState);

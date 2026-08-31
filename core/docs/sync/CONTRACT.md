@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.sync*.pas`
 **层级**：L1
 **Owner**：sync lane（`.worktrees/sync`）
-**最后更新**：2026-07-21
-**版本**：1.6.1
+**最后更新**：2026-08-31
+**版本**：1.6.2
 **权威性**：本文件为 sync 模块契约 SSOT。仓库索引 `docs/contracts/sync.md` 仅作入口，不得维护第二套 API 描述。
 
 ---
@@ -386,3 +386,4 @@ make -C core/tests/nextpas.core.sync test
 | 2026-07-20 | 1.5 | `RecursiveMutex`；`ILatch`/`INotify`/`IChannel`；Scoped 组合器；`TSyncPool` 门面 advanced re-export；`Do_` 仍冻结 |
 | 2026-07-21 | 1.6 | Channel `csrTimeout`/`crrTimeout`；CondVar WaitTimeout 区分 TIMEDOUT/raise；NotifyAll 清 permit；`DoOnce(TSyncProc)`；Pool 强制 `TPoolItem` |
 | 2026-07-21 | 1.6.1 | 文档决议：Send/Recv 保持 Boolean；通道选型表；N1 竞态/异常回归测试 |
+| 2026-08-31 | 1.6.2 | 文档时效刷新 | Claude |

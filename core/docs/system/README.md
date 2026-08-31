@@ -95,7 +95,7 @@ constants from their canonical owners (`nextpas.core.exception`, `nextpas.core.b
 `nextpas.core.errors`). `nextpas.core.system.typinfo`
 has a live unit covering PTypeInfo, TTypeKind, PTypeData, TTypeData, GetPropInfo,
 GetEnumName, GetEnumValue. `nextpas.core.system.sysutils` has a live unit with 40+ functions
-delegating to owner modules (text.conv, path, fs, platform). Classes remain deferred.
+delegating to owner modules (text.conv, path, fs, platform). `nextpas.core.system.classes` is live as a minimal stream shim (TStream/TFileStream/TStringList etc.); broader Classes surface remains deferred.
 
 The system focused gate also includes a collections consumer proof for
 `TElementManager<string>` so TypInfo managed-array helpers stay tied to a real

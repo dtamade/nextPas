@@ -26,6 +26,12 @@ function TryMulSizeUInt(const ALeft, ARight: SizeUInt; var AProduct: SizeUInt): 
 function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
 procedure CheckSizeRange(const AOffset, ALength, ASize: SizeUInt);
 
+{** 字节序转换（host/network）— 单源实现，供 system 门面 re-export *}
+function HTonN(AValue: Word): Word; overload; inline;
+function HTonN(AValue: LongWord): LongWord; overload; inline;
+function NToHs(AValue: Word): Word; overload; inline;
+function NToHs(AValue: LongWord): LongWord; overload; inline;
+
 {** 接口查询 *}
 procedure ClearOutInterface(out AIntf);
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
@@ -158,6 +164,10 @@ var
   P: PByte;
   H: UInt32;
 begin
+  // perf: scalar xor*prime with LowerTable; hot for short keys, kept inline for
+  // inlining into maps/dicts. Future SIMD: 16/32-byte vector LowerTable lookup
+  // via PSHUFB/AVX2 gather + parallel FNV reduction; not applied for portability
+  // and because typical ALen < 32 makes scalar competitive.
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('HashFNV1aLower: A is nil');
   H := 2166136261;
@@ -243,6 +253,42 @@ begin
   Result := AInstance.QueryInterface(AIID, AIntf) = S_OK;
   if not Result then
     ClearOutInterface(AIntf);
+end;
+
+function HTonN(AValue: Word): Word;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function HTonN(AValue: LongWord): LongWord;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function NToHs(AValue: Word): Word;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function NToHs(AValue: LongWord): LongWord;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
 end;
 
 end.
