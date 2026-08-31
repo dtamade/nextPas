@@ -18,6 +18,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
+  nextpas.core.text,
   nextpas.core.text.builder,
   nextpas.core.text.conv,
   nextpas.core.agent.base,
@@ -114,13 +115,13 @@ begin
   end;
   if ALine[1] = ':' then
     Exit;                            { 注释/keep-alive 行 }
-  LColon := System.Pos(':', ALine);
-  if LColon = 0 then
+  LColon := nextpas.core.text.TextIndexOf(ALine, ':');
+  if LColon < 0 then
     Exit;                            { 无冒号行按 SSE 规范忽略 }
-  LField := System.Copy(ALine, 1, LColon - 1);
-  LValue := System.Copy(ALine, LColon + 1, MaxInt);
+  LField := nextpas.core.text.TextSlice(ALine, 0, SizeUInt(LColon));
+  LValue := nextpas.core.text.TextSlice(ALine, SizeUInt(LColon) + 1, MaxInt);
   if (LValue <> '') and (LValue[1] = ' ') then
-    Delete(LValue, 1, 1);            { 规范：冒号后单个空格剥离 }
+    LValue := nextpas.core.text.TextSlice(LValue, 1, MaxInt);   { 规范：冒号后单个空格剥离 }
   if LField = 'data' then
   begin
     if FHasData then
