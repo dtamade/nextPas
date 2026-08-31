@@ -130,7 +130,7 @@ begin
       or (RootClean[Length(RootClean)] = '\')) do
     Delete(RootClean, Length(RootClean), 1);
   if (not Exists(RootClean)) or (not IsDir(RootClean)) then
-    raise EResPackDirSourceFailed.Create('respack.dirsource: not a directory "'
+    raise EResPackDirSourceFailed.CreateCtx('opendir', ARoot, 'respack.dirsource: not a directory "'
       + ARoot + '"');
 
   Ctx.RootPrefixLen := Length(RootClean);
@@ -142,7 +142,7 @@ begin
   Ctx.FailMsg := '';
   WalkEx(RootClean, @WalkProc, @Ctx);
   if Ctx.Failed then
-    raise EResPackDirSourceFailed.Create('respack.dirsource: ' + Ctx.FailMsg);
+    raise EResPackDirSourceFailed.CreateCtx('walk', ARoot, 'respack.dirsource: ' + Ctx.FailMsg);
   Result.Entries := Ctx.Entries;
   Result.Contents := Ctx.Bytes;   { 锚点随 bundle 逃逸，生命期与 Entries 绑定 }
 end;
@@ -157,7 +157,7 @@ var
   Content: TBytes;
 begin
   if ABlob.Data = nil then
-    raise EResPackCorrupted.CreateStep(1, 'extract: blob is nil');
+    raise EResPackCorrupted.CreateStep(1, 'extract', '', 'blob is nil');
   RP := TResPack.Open(ABlob.Data, ABlob.Size);
   try
     MkdirAll(ADestDir);

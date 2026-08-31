@@ -44,6 +44,9 @@ function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
 
 implementation
 
+uses
+  nextpas.core.collections.algorithms;
+
 type
   TMemVfs = class(TInterfacedObject, IVfs)
   private
@@ -86,50 +89,9 @@ type
 
 { ── 局部工具 ── }
 
-{ 排序下标一律 Int64：Hoare 分区边界在无符号类型上会回绕（见 respack.writer 同款注释）。
-  与 writer 排序结构重复，属有意保守：抽公共 sort 进 collections 是后续反哺项。 }
-procedure QuickSortEntries(var AItems: array of TVfsMemEntry;
-  ALow, AHigh: Int64);
-var
-  L, R: Int64;
-  P, Tmp: TVfsMemEntry;
+function CompareMemEntry(const A, B: TVfsMemEntry; Data: Pointer): SizeInt;
 begin
-  while ALow < AHigh do
-  begin
-    if AHigh - ALow = 1 then
-    begin
-      if VfsNameCompare(AItems[ALow].Name, AItems[AHigh].Name) > 0 then
-      begin
-        P := AItems[ALow]; AItems[ALow] := AItems[AHigh]; AItems[AHigh] := P;
-      end;
-      Exit;
-    end;
-    P := AItems[(ALow + AHigh) shr 1];
-    L := ALow; R := AHigh;
-    while L <= R do
-    begin
-      while VfsNameCompare(AItems[L].Name, P.Name) < 0 do Inc(L);
-      while VfsNameCompare(AItems[R].Name, P.Name) > 0 do Dec(R);
-      if L <= R then
-      begin
-        if L < R then
-        begin
-          Tmp := AItems[L]; AItems[L] := AItems[R]; AItems[R] := Tmp;
-        end;
-        Inc(L); Dec(R);
-      end;
-    end;
-    if R - ALow < AHigh - L then
-    begin
-      if ALow < R then QuickSortEntries(AItems, ALow, R);
-      ALow := L;
-    end
-    else
-    begin
-      if L < AHigh then QuickSortEntries(AItems, L, AHigh);
-      AHigh := R;
-    end;
-  end;
+  Result := VfsNameCompare(A.Name, B.Name);
 end;
 
 { ── TVfsTreeBuilder ── }
@@ -169,7 +131,7 @@ begin
   CheckMutable;
   if SizeUInt(Length(FItems)) > 1 then
   begin
-    QuickSortEntries(FItems, 0, Int64(Length(FItems)) - 1);
+    specialize Sort<TVfsMemEntry>(FItems, @CompareMemEntry, nil);
     { 查重/重叠检查：Length-1 在 SizeUInt 上回绕 ⇒ 仅在 >1 时执行 }
     for I := 1 to SizeUInt(Length(FItems)) - 1 do
     begin
