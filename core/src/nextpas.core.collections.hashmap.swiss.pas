@@ -145,6 +145,7 @@ type
     function GetKeys: TKeyArray;
     function GetCtrlByte(AIndex: SizeUInt): Byte; inline;
     function GetSlotKey(AIndex: SizeUInt): K; inline;
+    function GetSlotValue(AIndex: SizeUInt): V; inline;
     function GetEnumerator: TEnumerator;
     function GetPtrEnumerator: TPtrEnumerator;
     function Slots: PSlot; inline;
@@ -1029,6 +1030,11 @@ end;
 function TSwissTable.GetSlotKey(AIndex: SizeUInt): K;
 begin
   Result := FSlots[AIndex].Key;
+end;
+
+function TSwissTable.GetSlotValue(AIndex: SizeUInt): V;
+begin
+  Result := FSlots[AIndex].Value;
 end;
 
 function TSwissTable.TEnumerator.MoveNext: Boolean;
