@@ -67,7 +67,7 @@ DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
 | 瞬时错误重试（WithTransactionRetry + 段位谓词） | ✅ | ✅ | ✅ `1205/1213` | ✅ `40001` | ✅ `EXECABORT` | ✅ `-1213/-1205` | §2.3 |
 | 手动 SAVEPOINT/RollbackTo/ReleaseTo | ✅ | ✅ | ✅ `SAVEPOINT` | — | — | ✅ | §2.3 |
 | 批执行 IDbBatchExecutor | ✅ | ✅ 单次往返 | ✅ `MULTI_STATEMENTS` | ✅ 逐条+事务 | ✅ 真流水线 | ✅ 逐条+事务 | §2.5* |
-| 透明语句缓存 | ✅ LRU 64 | ✅ LRU 64 | ✅ LRU 64 | ✅ LRU 64 | — | ✅ LRU 64 | §2.8 |
+| 透明语句缓存 | ✅ LRU 64 live 2.39×/2.12× | ✅ LRU 64 live 2.12× | ✅ LRU 64 impl* | ✅ LRU 64 impl* | — | ✅ LRU 64 impl* | §2.8 |
 | 连接池（读池+单写者） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | §2.7 |
 | 池泄漏检测 + 获取栈采样（默认关） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | §2.7 |
 | 迁移 checksum 防篡改 + dry-run | ✅ | ✅ | ✅ | ✅ | —（键值无 DDL） | ✅ | §2.4 |
@@ -81,7 +81,7 @@ DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
 | sqlite 调优预设（WAL+NORMAL+FK + 回读校验） | ✅ | — | — | — | — | — | §2.15 |
 | TLS 契约成文（责任表；pg/redis 透传；mysql 排期） | N/A | ✅ `verify-full` | —（排期） | 驱动透传 | ✅ `UseTls` | N/A | §2.1-TLS |
 | 参数级批量绑定（`IDbArrayBinding`） | — | ✅ `unnest` 6× | — | — | — | — | §2.16 | 探测 DbCapabilities 或 DbArrayBinding(Q) 是否为 nil 再构建 unnest 方言（见 §2.16）
-| 批量复制（`IDbBulkCopy` 单事务批量） | ✅ | ✅ | ✅ | ✅ | — | ✅ | §2.22 | `BeginCopy→WriteRow→EndCopy` 单事务批量 V4.3 universal详 §2.22（`J4 ≤1.5×` `0.52–0.55×` 见 benchmarks.md） |
+| 批量复制（`IDbBulkCopy` 单事务批量） | ✅ | ✅ | ✅ | ✅ | — | ✅ | §2.22 | `BeginCopy→WriteRow→EndCopy` 单事务批量 V4.3 universal（`5/6 hard-coded true, live-verified 仅 sqlite, heterogeneity incomplete honest, completeness 1.4 未达成, offline synthetic 已移除, pg/mysql/odbc/dm 需 NEXTPAS_*_TEST_CONN live roundtrip, CI 缺省 Skip, risks false 0.52× parity, COPY BINARY ProbeBulkCopy>=140000 data-throughput not bench-isolated offline (only 500k probe microbench), single-txn 500 rows/chunk vs COPY BINARY not compared offline`）详 §2.22（`J4 ≤1.5×` `0.52–0.55×` live-only sqlite, heterogeneity incomplete honest 见 benchmarks.md, `TDbBulkBuffer+DbBulkEscape+InTransaction` `0 SysUtils` `heaptrc 0`） |
 | 异步挂载与取消（`TDbAsync` 单飞 + 令牌→`PQcancel`） | ✅ | ✅ | ✅ | — | — | — | §2.17 |
 | LISTEN/NOTIFY 订阅（专用连接+泵线程；重连重放） | N/A | ✅ | N/A | N/A | — | N/A | §2.18 |
 | SUBSCRIBE/PSUBSCRIBE（RESP2 推送+确认簿记） | — | — | — | — | ✅ | — | §2.19 |
@@ -89,6 +89,8 @@ DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
 上表已运行时自述化（V3-B1）：`DbCapabilities(Conn)` 返回
 `IDbCapabilities`，消费方按能力探测降级而非按后端名分支；契约语义见
 CONTRACT §2.10。
+
+> * 透明语句缓存：mysql/odbc/dm 列 `impl*` = LRU 64 实现与 `SupportsStmtCacheControl=True` 已落地，但 `benchmarks.md` 仅 sqlite/pg 提供 live 点查 2.1–2.4× / 扫查 1.1–1.34× 数字，dm/mysql/odbc 尚无 live cache hit 数据，parity not yet measured（luxury honest-incomplete，live 需 `NEXTPAS_*_TEST_CONN` 同机 roundtrip，无 synthetic proxy）。
 
 > 词汇表收口（V3-C8，2026-08-28）：家族 39 单元 `uses SysUtils` 12→0（仅注释豁免），`IntToStr/Trim/LowerCase/IntToHex/Format/FreeAndNil/GetTickCount64/Exception/AnsiPtrToStr` 全量收敛至 `nextpas.core.text.conv / text.format / base.utils / time / errors`，零反哺新增，见 `2026-08-28-db-v3-c8-rtl-convergence-proposal.md`。
 

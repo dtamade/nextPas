@@ -199,6 +199,57 @@ begin
   Check(Q.GetInt64(0) = 0, 'rollback empty 0 rows');
 end;
 
+procedure TestBulkRollbackOnErrorInsideTxn;
+var
+  Conn: IDbConnection;
+  Bulk: IDbBulkCopy;
+  Ctl: IDbTxControl;
+  Q: IDbQuery;
+  Raised: Boolean;
+begin
+  Conn := ConnectSqlite(':memory:');
+  Conn.Exec('CREATE TABLE t (id TEXT PRIMARY KEY, v TEXT)');
+  Supports(Conn, IDbBulkCopy, Bulk);
+  Supports(Conn, IDbTxControl, Ctl);
+  Check(Ctl <> nil, 'tx control');
+  Ctl.BeginTxn;
+  try
+    Conn.Exec('INSERT INTO t (id, v) VALUES (''pre'', ''a'')');
+    Bulk.BeginCopy('t', ['id', 'v']);
+    Bulk.WriteRow(['1', 'x']);
+    Bulk.WriteRow(['1', 'y']);
+    Bulk.WriteRow(['2', 'z']);
+    Raised := False;
+    try
+      Bulk.EndCopy;
+    except
+      on E: EDbError do Raised := True;
+    end;
+    Check(Raised, 'inside txn duplicate PK raised');
+    Check(Ctl.InTransaction, 'inside txn still in txn after bulk error (savepoint rollback only)');
+    Q := Conn.Query('SELECT COUNT(*) FROM t');
+    Check(Q.Step, 'inside txn after savepoint step');
+    Check(Q.GetInt64(0) = 1, 'savepoint rollback keeps outer pre only');
+    Q := nil;
+    Q := Conn.Query('SELECT id FROM t');
+    Check(Q.Step, 'pre row present');
+    Check(Q.GetText(0) = 'pre', 'pre intact');
+    Q := nil;
+    Conn.Exec('INSERT INTO t (id, v) VALUES (''post'', ''b'')');
+    Ctl.CommitTxn;
+  except
+    try Ctl.RollbackTxn; except end;
+    raise;
+  end;
+  Q := Conn.Query('SELECT COUNT(*) FROM t');
+  Check(Q.Step, 'committed after savepoint step');
+  Check(Q.GetInt64(0) = 2, 'committed 2 pre+post');
+  Q := nil;
+  Q := Conn.Query('SELECT COUNT(*) FROM t WHERE id IN (''1'',''2'')');
+  Check(Q.Step, 'bulk rows absent step');
+  Check(Q.GetInt64(0) = 0, 'bulk rows absent 0');
+end;
+
 procedure TestBulkBufferDirect;
 var
   Buf: TDbBulkBuffer;
@@ -437,6 +488,7 @@ begin
   T.Test('conformance caps bulk', @TestConformanceCapsBulk);
   T.Test('bulk inside txn', @TestBulkInsideTxn);
   T.Test('rollback on error', @TestBulkRollbackOnError);
+  T.Test('rollback on error inside txn (savepoint)', @TestBulkRollbackOnErrorInsideTxn);
   T.Test('bulk buffer direct (DbBulkEscape/TDbBulkBuffer reuse)', @TestBulkBufferDirect);
   T.Test('bulk live pg (env-gated)', @TestBulkLivePg);
   T.Test('bulk live mysql (env-gated)', @TestBulkLiveMysql);

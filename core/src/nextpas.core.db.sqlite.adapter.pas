@@ -894,29 +894,23 @@ end;
 
 procedure TDbSqliteConnection.BeginCopy(const ATable: string; const AColumns: array of string);
 begin
-  FBulk.BeginCopy(dbkSqlite, ATable, AColumns);
+  DbBulkBeginCopy(FBulk, dbkSqlite, ATable, AColumns);
 end;
 
 procedure TDbSqliteConnection.WriteRow(const AValues: array of string);
 begin
-  FBulk.WriteRow(dbkSqlite, AValues);
+  DbBulkWriteRow(FBulk, dbkSqlite, AValues);
 end;
 
 procedure TDbSqliteConnection.EndCopy;
 begin
-  if not FBulk.IsActive then Exit;
-  try
-    if FBulk.RowCount = 0 then Exit;
-    DbBulkFlushBuffer(FBulk, MaxPlaceholders, InTransaction,
-      @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
-  finally
-    AbortCopy;
-  end;
+  DbBulkEndCopy(FBulk, MaxPlaceholders, InTransaction, SupportsSavepoints,
+    @BulkExec, @BeginTxn, @CommitTxn, @RollbackTxn);
 end;
 
 procedure TDbSqliteConnection.AbortCopy;
 begin
-  FBulk.Clear;
+  DbBulkAbortCopy(FBulk);
 end;
 
 { ---- IDbRowBlobControl ---- }

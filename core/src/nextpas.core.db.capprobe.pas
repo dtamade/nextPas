@@ -5,8 +5,8 @@ unit nextpas.core.db.capprobe;
        与 pg `server_version_num` 同构；能力探针仅按整数阈值判断，
        扩展存在性由调用方传入（HasExtension）。
        Bulk single-source honesty: SupportsBulkCopy via ProbeSupportsBulkCopy
-       (universal 5/6 true, redis false) single-source；COPY BINARY fast-path
-       via ProbeBulkCopy/ProbeCopyBinary (PG≥140000) single-source；reuse
+       (universal 5/6 true pre-probe even at ServerVersion 0, redis false) single-source；COPY BINARY fast-path
+       via ProbeBulkCopy/ProbeCopyBinary (PG≥140000, 0→false honest isolated) single-source；reuse
        DbBulkEscape/TDbBulkBuffer + InTransaction branching preserved via
        db.bulk，0 SysUtils, heaptrc0。 *}
 
@@ -33,9 +33,9 @@ function ProbeJsonPath(const AServerVersion: Integer): Boolean;
 function ProbeRangeTypes(const AServerVersion: Integer): Boolean;
 
 {** bulk copy 是否可用：PG-only PG≥14 COPY BINARY 高速路径阈值
-    （ProbeBulkCopy/ProbeCopyBinary 0→false honest，≥140000→true）。
+    （ProbeBulkCopy/ProbeCopyBinary 0→false honest，≥140000→true，isolated from universal SupportsBulkCopy）。
     Universal 单事务批量 SupportsBulkCopy  via ProbeSupportsBulkCopy single-source
-    (sqlite/pg/mysql/odbc/dm true, redis false; 0 SysUtils, reuse DbBulkEscape/
+    (sqlite/pg/mysql/odbc/dm true pre-probe even at 0, redis false honest via Kind; 0 SysUtils, reuse DbBulkEscape/
     TDbBulkBuffer, InTransaction branching preserved via db.bulk). *}
 function ProbeBulkCopy(const AServerVersion: Integer): Boolean;
 function ProbeCopyBinary(const AServerVersion: Integer): Boolean;
@@ -179,12 +179,12 @@ begin
   Result := AKind in [dbkSqlite, dbkPostgres, dbkMysql, dbkOdbc, dbkDm];
 end;
 
+{$PUSH}{$HINTS OFF}
 function ProbeSupportsBulkCopy(const AKind: TDbKind; const AServerVersion: Integer): Boolean;
 begin
-  if AKind = dbkRedis then Exit(False);
-  // gateway 0 honest but odbc universal still true via Kind single-source (honest luxury removed)
-  if AServerVersion = 0 then Exit(AKind = dbkOdbc);
+  // CONTRACT §2.22 5/6 universal true intentionally ignores version (sqlite ParseSqlite libversion, pg/mysql/odbc lazy ProductVersion early window stays true)
   Result := ProbeSupportsBulkCopy(AKind);
 end;
+{$POP}
 
 end.

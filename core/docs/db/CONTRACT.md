@@ -4,13 +4,13 @@
 **层级**：L3 家族（依赖 L0-L2；SQLite/PostgreSQL 后端实现为 L2 子模块）
 **Owner**：core-db lane
 **最后更新**：2026-09-01（V4.3 BulkCopy 5× 单源详 §2.22；ROADMAP 20260828 R1-R5 冻结）
-**版本**：4.3（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY、B8 Redis SUBSCRIBE、C6 SQL词法共享引擎、DM DPI 原生第六后端；V4.3 BulkCopy 5/6 universal 单事务批量详 §2.22）
+**版本**：4.3（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY、B8 Redis SUBSCRIBE、C6 SQL词法共享引擎、DM DPI 原生第六后端；V4.3 BulkCopy 5/6 universal 单事务批量 `5/6 hard-coded true, live-verified 仅 sqlite, heterogeneity incomplete honest, completeness 1.4 未达成` 详 §2.22）
 
 ---
 
 ## 1. 家族布局
 
-> 家族 39 单元 `uses SysUtils` 12→0（见 §7），6 后端对齐（sqlite/pg/mysql/odbc/redis/dm），5/6 `IDbBulkCopy` universal详 §2.22。
+> 家族 39 单元 `uses SysUtils` 12→0（见 §7），6 后端对齐（sqlite/pg/mysql/odbc/redis/dm），5/6 `IDbBulkCopy` universal（`hard-coded true, live-verified 仅 sqlite, heterogeneity incomplete honest, completeness 1.4 未达成, offline synthetic 已移除`）详 §2.22。
 
 | 单元 | 层 | 职责 |
 |------|----|------|
@@ -347,7 +347,7 @@ LRU，容量经 `ConnectPostgres(conninfo, options, capacity)` 注入，默认
 - **收益判据**：bench_db_stmt_cache pg 段点查对照（见 docs 基准册）。
 - **与 Bulk 字面量路径正交**：`IDbBulkCopy` 经 `DbBulkMultiInsertSql` 生成的字面量 `INSERT`（`'→''` 单遍转义，`500 行/chunk`）每次产生长度唯一的 SQL 文本，故意 bypass 本节 LRU——每个 chunk 指纹不同无法命中，缓存收益不适用于 bulk；这是预期行为非缺陷（横向对照见 §2.22 与 benchmarks.md `bench_db_bulk_copy` `0.52–0.55×` live-verified 仅 sqlite vs `bench_db_stmt_cache` `2.1–2.4×`）。
 
-**mysql/odbc/dm 侧（V3-C1 扩展）**：同款透明 LRU 64 空闲句柄池（键 = 原始 SQL 文本，容量经 `Connect*(..., capacity)` 注入，默认 64；<=0 关闭），借出即移除、归还回插、Reset/Clear 语义与 sqlite/pg 对齐，point-query 收益同 bench_db_stmt_cache 2.1–2.4×，诚实 SupportsStmtCacheControl=True。
+**mysql/odbc/dm 侧（V3-C1 扩展）**：同款透明 LRU 64 空闲句柄池（键 = 原始 SQL 文本，容量经 `Connect*(..., capacity)` 注入，默认 64；<=0 关闭），借出即移除、归还回插、Reset/Clear 语义与 sqlite/pg 对齐；point-query 收益预计同 bench_db_stmt_cache 2.1–2.4× 量级，但尚未 live-verified——benchmarks.md 仅 sqlite/pg 提供 live point 2.1–2.4× / scan 1.1–1.34× 数字，dm/mysql/odbc 尚无 live cache hit 数据，parity not yet measured（luxury honest-incomplete，live 需 NEXTPAS_*_TEST_CONN 同机 roundtrip，无 synthetic proxy）。诚实 SupportsStmtCacheControl=True；实现复用同款 LRU 语义，验证缺口如实登记。
 
 ### 2.9 大对象流（INC-8）
 
@@ -383,7 +383,7 @@ LRU，容量经 `ConnectPostgres(conninfo, options, capacity)` 注入，默认
 | SupportsStatementTimeout | ❌ 诚实不支持 | ✅ 会话级 | 建连期探测定格 | ✅ QUERY_TIMEOUT 逐语句 | INC-7；mysql 仅 Oracle 库且 server ≥8.0；odbc 秒粒度向上取整 |
 | CaseSensitiveIdentifiers | ✅ 保留形式 | ❌ 折叠小写 | ❌ 列名不敏感 | 探测 IC_SENSITIVE，失败保守 False | §2.6 差异的运行时化 |
 | MaxPlaceholders | 999 保守下界 | 65535 协议上限 | 65535 uint16 | 999 保守下界 | libsqlite3 ≥3.32 实际更高；ISO CLI 无参数上限 InfoType |
-| SupportsBulkCopy | ✅ 单事务批量 | ✅ 单事务批量 | ✅ 单事务批量 | ✅ 单事务批量 | ⇔ IDbBulkCopy；V4.3 universal详 §2.22 |
+| SupportsBulkCopy | ✅ 单事务批量 | ✅ 单事务批量 | ✅ 单事务批量 | ✅ 单事务批量 | ⇔ IDbBulkCopy；V4.3 universal（`5/6 hard-coded true, live-verified 仅 sqlite, heterogeneity incomplete honest, completeness 1.4 未达成, offline synthetic 已移除, pg/mysql/odbc/dm 需 NEXTPAS_*_TEST_CONN live roundtrip, J4 0.52–0.55× 仅 sqlite live-verified`）详 §2.22 |
 | ProductName / Version / Kind | 'SQLite' | 'PostgreSQL' | 按 flavor 'MySQL'/'MariaDB' | GetInfo(DBMS_NAME/VER) 原文 | 版本串原文透出，诊断展示用 |
 
 边界：能力矩阵**不覆盖 SQL 方言差异**——DDL 类型名、约束子码细分
@@ -820,11 +820,11 @@ S.Token.Cancel;                                 // 协同停泵；Destroy 同步
 - `NativeVector: PG≥150000 && HasExtension`（`pgvector` ≥0.5，需扩展已装）/ `MySQL≥80017`（`VECTOR` 类型）
 - `JsonPath: PG≥120000`（`jsonb_path_query`）
 - `RangeTypes: PG≥140000`（`multirange`）
-- `BulkCopy (universal 单事务批量): sqlite/pg/mysql/odbc/dm true`（`BeginCopy→WriteRow→EndCopy` 单事务批量 V4.3 单源：`TDbBulkBuffer+DbBulkEscape+DbBulkFlushChunked`，`InTransaction` 分支，`builder Tail/AdvanceLen` 直写单扫零 `SysUtils`，`500 行/chunk`；`redis` honest `—`；`COPY BINARY` `PG≥140000` 为 `ProbeBulkCopy` 500k 次探针微基准未来高速路径预留、与 data bulk 正交已隔离——single-txn vs COPY BINARY 已隔离）
+- `BulkCopy (universal 单事务批量): sqlite/pg/mysql/odbc/dm true`（`5/6 hard-coded true, live-verified 仅 sqlite, heterogeneity incomplete honest, completeness 1.4 未达成, offline synthetic 已移除`；`BeginCopy→WriteRow→EndCopy` 单事务批量 V4.3 单源：`TDbBulkBuffer+DbBulkEscape+DbBulkFlushChunked`，`InTransaction` 分支，`builder Tail/AdvanceLen` 直写单扫零 `SysUtils`，`500 行/chunk`；`redis` honest `—` via `ProbeBulkCopy(0)=false`；`COPY BINARY` `PG≥140000` 为 `ProbeBulkCopy` 500k 次探针微基准未来高速路径预留、与 data bulk 吞吐正交：探针层已隔离（500k 次 ProbeBulkCopy 阈值微基准），data-throughput 层 single-txn literal chunk (500 rows/chunk) vs COPY BINARY 尚未 bench-isolated offline（bench_db_bulk_copy.lpr 的 bulk vs bulk_chunked_fallback 仅 live pg≥140000 时隔离，offline synthetic 已移除，heterogeneity incomplete honest，single-txn vs COPY BINARY not compared for data throughput offline），`J4 0.52–0.55×` 仅 sqlite live-verified, pg/mysql/odbc/dm 需 `NEXTPAS_*_TEST_CONN` live roundtrip `heaptrc 0`）
 
-`IDbCapabilities` 增 `ServerVersion` + 4 新布尔（`SupportsBulkCopy` 详上段 V4.3 单源；`redis` honest `—` via `ProbeBulkCopy(0)=false`；`sqlite` 解析 `sqlite3_libversion`，`pg/mysql/dm` 解析 `ProductVersion` 并缓存，`odbc/redis` 0 honest；`ROADMAP 20260828` R1-R5 冻结，`COPY BINARY` `PG≥140000` 为 `ProbeBulkCopy` 500k 次探针微基准未来预留、与 data bulk 正交已隔离，当前 bulk 已 hard-coded `true`，`J4 ≤1.5×` `0.52–0.55×` 见 benchmarks.md（J4 live-verified 仅 sqlite 11 ms vs 21 ms 同机 N=10000，TDbBulkBuffer+DbBulkEscape+InTransaction heaptrc0 0 SysUtils；pg/mysql/odbc/dm 需 NEXTPAS_*_TEST_CONN live roundtrip 方为异构真测、CI 缺省 Skip，heterogeneity incomplete honest，offline synthetic 已移除防 false 0.52× parity））。门禁 `test_db_version_probe` 10 组 + `test_db_bulk_copy` 8 组离线（live-verified 仅 sqlite，offline synthetic 已移除，pg/mysql/odbc/dm 需 NEXTPAS_*_TEST_CONN live roundtrip，CI 缺省 Skip，heterogeneity incomplete honest）。`MySQL VECTOR` 阈值 `80017` 已实现；`IDbBulkCopy` 事务感知详 `nextpas.core.db.intf`。
+`IDbCapabilities` 增 `ServerVersion` + 4 新布尔（`SupportsBulkCopy` 详上段 V4.3 单源 capability via `ProbeSupportsBulkCopy` hard-coded `true` 5/6, `redis` honest `—` via `ProbeBulkCopy(0)=false`；capability ≠ performance proven; `sqlite` 解析 `sqlite3_libversion`，`pg/mysql/dm` 解析 `ProductVersion` 并缓存，`odbc/redis` 0 honest；`ROADMAP 20260828` R1-R5 冻结，`COPY BINARY` `PG≥140000` 为 `ProbeBulkCopy` 500k 次探针微基准未来预留、与 data bulk 吞吐正交：探针层已隔离（500k 次探针微基准），data-throughput 层 single-txn literal chunk (500 rows/chunk) vs COPY BINARY 尚未 bench-isolated offline（luxury completeness honest incomplete，bench_db_bulk_copy.lpr 的 bulk vs bulk_chunked_fallback 仅 live pg≥140000 时隔离，single-txn vs COPY BINARY not compared for data throughput offline），当前 bulk capability 已 hard-coded `true` (performance J4 `0.52–0.55×` 见 benchmarks.md 但 live-verified 仅 sqlite 11 ms vs 21 ms 同机 N=10000，TDbBulkBuffer+DbBulkEscape+InTransaction heaptrc0 0 SysUtils；pg/mysql/odbc/dm heterogeneity incomplete honest: MaxPlaceholders 500 vs 10000 chunk, BEGIN/COMMIT vs SAVEPOINT vs AUTOCOMMIT OFF vs dpi_commit, quoteIdent/literal dialect only live verifiable, 需 NEXTPAS_*_TEST_CONN live roundtrip 方为异构真测、CI 缺省 Skip，offline synthetic 已移除防 false 0.52× parity, completeness 1.4 未达成））。门禁 `test_db_version_probe` 10 组 + `test_db_bulk_copy` 8 组离线（live-verified 仅 sqlite，offline synthetic 已移除，pg/mysql/odbc/dm 需 NEXTPAS_*_TEST_CONN live roundtrip，CI 缺省 Skip，heterogeneity incomplete honest）。`MySQL VECTOR` 阈值 `80017` 已实现；`IDbBulkCopy` 事务感知详 `nextpas.core.db.intf`。
 
-> **Bulk 字面量路径与语句缓存正交**：`IDbBulkCopy.EndCopy` 经 `DbBulkMultiInsertSql` 生成的字面量 `INSERT`（`'→''` 单遍转义、`500 行/chunk`）每次产生长度唯一的 SQL 文本，故意 bypass `IDbStmtCacheControl` LRU——每个 chunk SQL 指纹不同无法命中，缓存收益不适用于 bulk；这是预期行为非缺陷。横向对照：`bench_db_stmt_cache` `2.1–2.4×` vs `bench_db_bulk_copy` `0.52–0.55×` live-verified 仅 sqlite 见 benchmarks.md（pg/mysql/odbc/dm 需 NEXTPAS_*_TEST_CONN live roundtrip，offline synthetic 已移除，single-txn vs COPY BINARY 已隔离）。
+> **Bulk 字面量路径与语句缓存正交**：`IDbBulkCopy.EndCopy` 经 `DbBulkMultiInsertSql` 生成的字面量 `INSERT`（`'→''` 单遍转义、`500 行/chunk`）每次产生长度唯一的 SQL 文本，故意 bypass `IDbStmtCacheControl` LRU——每个 chunk SQL 指纹不同无法命中，缓存收益不适用于 bulk；这是预期行为非缺陷。横向对照：`bench_db_stmt_cache` `2.1–2.4×` vs `bench_db_bulk_copy` `0.52–0.55×` live-verified 仅 sqlite 见 benchmarks.md（pg/mysql/odbc/dm 需 NEXTPAS_*_TEST_CONN live roundtrip，offline synthetic 已移除，探针层已隔离，data-throughput 层 single-txn literal chunk (500 rows/chunk) vs COPY BINARY not bench-isolated offline，luxury parity gap honest，single-txn vs COPY BINARY not compared for data throughput offline）。
 
 ## 3. 兼容 shim（恢复为最小面，2026-08-25 紧急回滚）
 
