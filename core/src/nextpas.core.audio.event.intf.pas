@@ -1,4 +1,3 @@
-// P12: TAudioSpatialParams canonical in base (spatial.intf alias kept for compatibility)
 unit nextpas.core.audio.event.intf;
 
 {$I nextpas.core.settings.inc}

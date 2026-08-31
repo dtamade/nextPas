@@ -63,11 +63,14 @@ var
   GPcmScratch: TBytes;
 
 procedure EnsurePcmScratch(ANeeded: Integer); inline;
-var LCap: Integer;
+var
+  Cap: Integer;
 begin
-  LCap := Length(GPcmScratch);
-  AudioEnsureCapacity(LCap, ANeeded, 256);
-  if Length(GPcmScratch) <> LCap then SetLength(GPcmScratch, LCap);
+  if Length(GPcmScratch) >= ANeeded then Exit;
+  Cap := Length(GPcmScratch);
+  if Cap < 256 then Cap := 256;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(GPcmScratch, Cap);
 end;
 
 function PcmClampF32(AValue: Single): Single;

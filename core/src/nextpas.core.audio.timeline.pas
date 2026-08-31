@@ -5,7 +5,7 @@ unit nextpas.core.audio.timeline;
 interface
 
 uses
-  SysUtils, Math,
+  SysUtils, Classes, Math,
   nextpas.core.base,
   nextpas.core.audio.mix,
   nextpas.core.sync.mutex,
@@ -126,28 +126,31 @@ begin
 end;
 
 procedure TTimelineImpl.EnsureSnapshotCapacity(ANeeded: Integer);
-var LCap: Integer;
+var NewCap: Integer;
 begin
-  LCap := Length(FSnapshotTracks);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSnapshotTracks) <> LCap then SetLength(FSnapshotTracks, LCap);
+  if Length(FSnapshotTracks) >= ANeeded then Exit;
+  if Length(FSnapshotTracks) = 0 then NewCap := 4 else NewCap := Length(FSnapshotTracks) * 2;
+  while NewCap < ANeeded do NewCap := NewCap * 2;
+  SetLength(FSnapshotTracks, NewCap);
 end;
 
 procedure TTimelineImpl.EnsureSnapshotClipCapacity(ATrack: Integer; ANeeded: Integer);
-var LCap: Integer;
+var NewCap: Integer;
 begin
   if (ATrack < 0) or (ATrack >= Length(FSnapshotTracks)) then Exit;
-  LCap := Length(FSnapshotTracks[ATrack].Clips);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSnapshotTracks[ATrack].Clips) <> LCap then SetLength(FSnapshotTracks[ATrack].Clips, LCap);
+  if Length(FSnapshotTracks[ATrack].Clips) >= ANeeded then Exit;
+  if Length(FSnapshotTracks[ATrack].Clips) = 0 then NewCap := 4 else NewCap := Length(FSnapshotTracks[ATrack].Clips) * 2;
+  while NewCap < ANeeded do NewCap := NewCap * 2;
+  SetLength(FSnapshotTracks[ATrack].Clips, NewCap);
 end;
 
 procedure TTimelineImpl.EnsureSnapshotClipNeedsCapacity(ANeeded: Integer);
-var LCap: Integer;
+var NewCap: Integer;
 begin
-  LCap := Length(FSnapshotClipNeeds);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSnapshotClipNeeds) <> LCap then SetLength(FSnapshotClipNeeds, LCap);
+  if Length(FSnapshotClipNeeds) >= ANeeded then Exit;
+  if Length(FSnapshotClipNeeds) = 0 then NewCap := 4 else NewCap := Length(FSnapshotClipNeeds) * 2;
+  while NewCap < ANeeded do NewCap := NewCap * 2;
+  SetLength(FSnapshotClipNeeds, NewCap);
 end;
 
 function TTimelineImpl.CalcDuration: UInt64;
@@ -410,7 +413,12 @@ begin
         if avail < Length(FSnapshotTracks) then
         begin
           LNeed:=Length(FTracks[i].Clips);
-          // debt: ensured by EnsureSnapshotClipCapacity outside lock — no alloc here
+          if Length(FSnapshotTracks[avail].Clips) < LNeed then
+          begin
+            if Length(FSnapshotTracks[avail].Clips)=0 then NewCap:=4 else NewCap:=Length(FSnapshotTracks[avail].Clips)*2;
+            while NewCap < LNeed do NewCap:=NewCap*2;
+            SetLength(FSnapshotTracks[avail].Clips, NewCap);
+          end;
           // deep copy clip array to isolate snapshot from concurrent Add/RemoveClip
           for k:=0 to LNeed-1 do
             FSnapshotTracks[avail].Clips[k]:=FTracks[i].Clips[k];

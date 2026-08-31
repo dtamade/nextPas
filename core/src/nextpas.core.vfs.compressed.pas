@@ -45,7 +45,7 @@ end;
 
 function IsGzipPred(const AData: TBytes): Boolean; inline;
 begin
-  Result := (Length(AData) >= 2) and (AData[0] = GZIP_MAGIC_1) and (AData[1] = GZIP_MAGIC_2);
+  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
 end;
 
 type
@@ -73,7 +73,7 @@ begin
 end;
 
 function TAutoDecompressingVfs.IsGzipHeader(const APath: string): Boolean;
-var LStream: IStream; LBuf: array[0..COMPRESSED_HEADER_PEEK-1] of Byte; LRead: SizeUInt; LHeader: TBytes;
+var LStream: IStream; LBuf: array[0..COMPRESSED_HEADER_PEEK-1] of Byte; LRead: SizeUInt;
 begin
   Result := False;
   try
@@ -83,9 +83,7 @@ begin
   end;
   try
     LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
-    SetLength(LHeader, LRead);
-    if LRead > 0 then Move(LBuf[0], LHeader[0], LRead);
-    Result := IsGzipPred(LHeader);
+    Result := (LRead >= 2) and (LBuf[0] = $1F) and (LBuf[1] = $8B);
   finally
     LStream.Close;
   end;
@@ -101,7 +99,6 @@ var LInfo: TStatInfo;
 begin
   LInfo := FInner.Stat(APath);
   if LInfo.Info.IsDir then Exit(LInfo);
-  // 4K Peek 为非 gzip 避免全量 VfsReadAllBytes（大文件 Stat 零解压），gzip 路径额外 4K Peek 为有界开销（4K vs 全量），trade-off 已固化于 bench_transform
   if not IsGzipHeader(APath) then Exit(LInfo);
   Result := FTransformVfs.Stat(APath);
 end;

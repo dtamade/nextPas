@@ -1,9 +1,9 @@
 # nextpas.core.audio
 
-L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / SFX / 时间线**七域+扩展（`SFX` 为 canonical，`game` 仅作 deprecated 薄转发；`spatial/event/bank/resource` 为 P5 扩展，当前 36 files，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收），纯 Pascal 可替换，实时路径零分配。
+L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / SFX / 时间线**七域+扩展（`SFX` 为 canonical，`game` 仅作 deprecated 薄转发；`spatial/event/bank/resource` 为 P5 扩展，当前 38 files，理想态 45），纯 Pascal 可替换，实时路径零分配。
 
 > 设计权威：[`DESIGN.md`](./DESIGN.md)（Draft v3.2 — SFX canonical + spatial/event/bank/resource 七域+扩展）—— 分层、双平面线程模型、域级 `intf` 冻结、PR Plan 与线程纪律见该文档。
-> 运行时契约：`core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 为 gate 真值源（当前 36 files，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）。
+> 运行时契约：`core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 为 gate 真值源（当前 38 files，理想态 45）。
 
 ## 模块定位与分层
 
@@ -120,14 +120,14 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-16 门合计 **218 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`bank/resource` 为 P5 扩展）：
+16 门合计 **223 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`bank/resource` 为 P5 扩展）：
 
 ```bash
 for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
          test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline test_event test_bank test_resource; do
   make -C core/tests/nextpas.core.audio/$g clean test
 done
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 36 文件无 ffi/vendor（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收） + 17 GUID (unique; 15 realtime domain) + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 38 文件无 ffi/vendor（当前 38，理想态 45） + 15 GUID + 实时纪律
 make hygiene && git diff --check
 ```
 
@@ -157,7 +157,7 @@ make hygiene && git diff --check
 make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s -O2, HEAPTRC 关
 ```
 
-`bench_pcm_wav` 10 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs / Bank/1K 15µs / Resource/TryGet 8µs`（`GWrite*` 预分配，`Graph/Timeline/Bank/Resource` 零分配快照）。
+`bench_pcm_wav` 8 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs`（`GWrite*` 预分配，`Graph/Timeline` 零分配快照）。
 
 ## 演进与复用
 

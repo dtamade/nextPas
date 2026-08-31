@@ -1,8 +1,6 @@
 unit nextpas.core.vfs.util;
 
-{** @desc 基于 IVfs 的组合辅助：包级 Stat/List/ReadAll/Walk（Go io/fs 包函数同构）。
-  四件套归位：helpers 层（base ← intf ← helpers(util) ← 门面），门面完整 re-export；
-  不持有状态，仅组合 IVfs 原语，保持零拷贝与性能语义不变。 }
+{** @desc 基于 IVfs 的组合辅助：包级 Stat/List/ReadAll/Walk（Go io/fs 包函数同构）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -44,15 +42,20 @@ function VfsReadAllBytes(const AFs: IVfs; const APath: string): TBytes;
 var
   S: IStream;
   Total, Got: SizeUInt;
+  LSize: Int64;
 begin
   Result := nil;
   S := AFs.OpenRead(APath);
   try
-    SetLength(Result, S.Size);
+    LSize := S.Size;
+    if (LSize < 0) or (UInt64(LSize) > UInt64(High(SizeInt))) then
+      raise EVfsError.CreateCtx('read', APath, 'declared size out of range');
+    SetLength(Result, LSize);
     Total := 0;
-    while Total < SizeUInt(S.Size) do
+    while Total < SizeUInt(LSize) do
     begin
-      if Total >= SizeUInt(Length(Result)) then Break;
+      if Total >= SizeUInt(Length(Result)) then
+        raise EVfsError.CreateCtx('read', APath, 'truncated: size exceeds addressable length');
       Got := S.Read(Result[Total], SizeUInt(Length(Result)) - Total);
       if Got = 0 then
         raise EVfsError.CreateCtx('read', APath,

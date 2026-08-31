@@ -1,4 +1,3 @@
-// debt: pure funcs in intf (to be moved to spatial.calc/base, keep for P5 compatibility)
 unit nextpas.core.audio.spatial.intf;
 
 {$I nextpas.core.settings.inc}
@@ -69,7 +68,7 @@ procedure AudioSpatialize(const AListener: TAudioListener; const ASource: TAudio
 
 implementation
 
-uses nextpas.core.math.trig;
+uses Math;
 
 function AudioVec3Create(AX, AY, AZ: Single): TAudioVec3; inline;
 begin

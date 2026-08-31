@@ -6,6 +6,7 @@ interface
 
 uses
   SysUtils,
+  Classes,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -198,7 +199,6 @@ function TNullAudioDevice.Drive(AFrames: Integer): Integer;
 var
   LBuf: TAudioBuffer;
   LNeeded: Integer;
-  LCap: Integer;
   LRet: Integer;
 begin
   if AFrames <= 0 then Exit(0);
@@ -213,13 +213,9 @@ begin
   if LNeeded < 0 then LNeeded := 0;
   if Int64(LNeeded) > 16*1024*1024 then
     raise EAudioDeviceError.CreateFmt('Drive: %d bytes exceeds 16MiB limit', [LNeeded]);
-  if Length(FScratch) < LNeeded then
-  begin
-    LCap := Length(FScratch);
-    AudioEnsureCapacity(LCap, LNeeded, 256);
-    if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
-  end;
-  // FScratch geometric reuse — zero alloc steady state: alias via refcount, no Copy alloc
+  if Length(FScratch) <> LNeeded then
+    SetLength(FScratch, LNeeded);
+  // FScratch reuse — zero alloc steady state: LBuf.Data shares backing, no Copy/Move
   LBuf.Data := FScratch;
   LBuf.Format := FFormat;
   LBuf.FrameCount := AFrames;
