@@ -1167,19 +1167,15 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
         end;
         Inc(LAcc, LK);
       end;
-      { 警告: 并行 TBytes 引用计数竞态（H-09 关联）— 零过滤器分支中
-        LRawChunk := AFolder.RawSolid 会非原子递增引用计数，主/子线程并发
-        触及同一 TBytes 将竞态。修复：线程创建前对 RawSolid 深拷贝，使各
-        folder 持有唯一引用；文档化备选为仅在串行路径零拷贝。 }
-      for LFolderIdx := 0 to High(LFolders) do
-        LFolders[LFolderIdx].RawSolid :=
-          Copy(LFolders[LFolderIdx].RawSolid, 0, Length(LFolders[LFolderIdx].RawSolid));
       { 逐 folder 执行过滤链与压缩，产出 Packed 与 Specs
-          零过滤器时零拷贝直连 RawSolid，避免 Solid 整体二次搬运。
-          多 folder 时分批并行（每批 ≤ C_MAX_PARALLEL_THREADS），
+          串行零拷贝直连 RawSolid（LRawChunk:=RawSolid），并行才深拷贝 RawSolid
+          以避免 TBytes 引用计数竞态；多 folder 时分批并行（每批 ≤ C_MAX_PARALLEL_THREADS），
           IsMultiThread 为 false 时自动回落串行，加密段统一串行以避免 CSPRNG 竞争 }
       if (Length(LFolders) >= 2) and System.IsMultiThread then
       begin
+        for LFolderIdx := 0 to High(LFolders) do
+          LFolders[LFolderIdx].RawSolid :=
+            Copy(LFolders[LFolderIdx].RawSolid, 0, Length(LFolders[LFolderIdx].RawSolid));
         LBatchStart := 0;
         while LBatchStart < Length(LFolders) do
         begin

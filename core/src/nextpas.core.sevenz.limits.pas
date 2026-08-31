@@ -28,6 +28,7 @@ const
   SEVENZ_MAX_UNPACK_SIZE  = nextpas.core.sevenz.base.SEVENZ_MAX_UNPACK_SIZE;
   SEVENZ_MAX_CRC_COUNT    = nextpas.core.sevenz.base.SEVENZ_MAX_CRC_COUNT;
   SEVENZ_CACHE_MAX_BYTES = nextpas.core.sevenz.base.SEVENZ_CACHE_MAX_BYTES;
+  SEVENZ_AES_MAX_CYCLES_POWER = nextpas.core.sevenz.base.SEVENZ_AES_MAX_CYCLES_POWER;
 
 implementation
 
