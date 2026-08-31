@@ -5,7 +5,10 @@ unit nextpas.core.git.native.base;
 interface
 
 uses
-  nextpas.core.exception;
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.exception,
+  nextpas.core.git.base;
 
 type
   { Object kinds as encoded in loose headers and pack entry type bits }
@@ -16,18 +19,8 @@ type
     Bytes: array[0..19] of Byte;
   end;
 
-  { Family-level error for the git family (single source; backend re-exports) }
-  EGitError = class(Exception)
-  private
-    FErrorCode: Integer;
-    FErrorClass: Integer;
-  public
-    constructor Create(const AMsg: string); overload;
-    constructor Create(AErrorCode: Integer; const AOperation: string = ''); overload;
-    constructor Create(AErrorCode: Integer; AErrorClass: Integer; const AMessage: string); overload;
-    property ErrorCode: Integer read FErrorCode;
-    property ErrorClass: Integer read FErrorClass;
-  end;
+  { Family-level error re-exported from git.base (canonical owner) }
+  EGitError = nextpas.core.git.base.EGitError;
 
 const
   GitOidHexLen = 40;
@@ -37,41 +30,14 @@ function GitOidFromHex(const AHex: string): TGitOid;
 function GitOidToHex(const AOid: TGitOid): string;
 function GitOidIsValidHex(const AHex: string): Boolean; inline;
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
-function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
+function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
-{ Shared helpers single-sourced for git native subfamily: suffix test and
-  worktree-dir derivation. Zero-copy scan, inline. }
-function GitEndsWith(const S, Suffix: string): Boolean; inline;
-function GitWorktreeDir(const AGitDir: string): string; inline;
+function GitBytesToString(const ABytes: TBytes): string; inline;
+function GitStringToBytes(const AText: string): TBytes; inline;
 
 implementation
-
-constructor EGitError.Create(const AMsg: string);
-begin
-  inherited Create(AMsg);
-  FErrorCode := 0;
-  FErrorClass := 0;
-end;
-
-constructor EGitError.Create(AErrorCode: Integer; const AOperation: string);
-begin
-  if AOperation <> '' then
-    inherited CreateFmt('%s (git error %d)', [AOperation, AErrorCode])
-  else
-    inherited CreateFmt('git error %d', [AErrorCode]);
-  FErrorCode := AErrorCode;
-  FErrorClass := 0;
-end;
-
-constructor EGitError.Create(AErrorCode: Integer; AErrorClass: Integer; const AMessage: string);
-begin
-  inherited Create(AMessage);
-  FErrorCode := AErrorCode;
-  FErrorClass := AErrorClass;
-end;
 
 function HexVal(ACh: Char): Integer; inline;
 begin
@@ -122,23 +88,10 @@ begin
 end;
 
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
-var
-  I: Integer;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-    if AA.Bytes[I] <> AB.Bytes[I] then
-      Exit(False);
-  Result := True;
-end;
-
-function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
-var
-  I: Integer;
-begin
-  for I := 0 to GitOidRawLen - 1 do
-    if AOid.Bytes[I] <> 0 then
-      Exit(False);
-  Result := True;
+  Result := SpanEqual(
+    TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AB.Bytes[0], GitOidRawLen));
 end;
 
 function GitKindToString(AKind: TGitObjectKind): string;
@@ -177,27 +130,14 @@ begin
   Result := gokBlob;
 end;
 
-function GitEndsWith(const S, Suffix: string): Boolean; inline;
-var LS, LSu, I: Integer;
+function GitBytesToString(const ABytes: TBytes): string; inline;
 begin
-  LS:=Length(S); LSu:=Length(Suffix);
-  if LSu=0 then Exit(True);
-  if LS<LSu then Exit(False);
-  // zero-copy: compare suffix in place, no Copy allocation
-  for I:=1 to LSu do if S[LS-LSu+I]<>Suffix[I] then Exit(False);
-  Result:=True;
+  Result := BytesToString(ABytes);
 end;
 
-function GitWorktreeDir(const AGitDir: string): string; inline;
-var P: Integer;
+function GitStringToBytes(const AText: string): TBytes; inline;
 begin
-  if GitEndsWith(AGitDir,'/.git') then Result:=Copy(AGitDir,1,Length(AGitDir)-5)
-  else if GitEndsWith(AGitDir,'.git') then
-  begin
-    P:=Length(AGitDir);
-    while (P>0) and (AGitDir[P]<>'/') do Dec(P);
-    if P>0 then Result:=Copy(AGitDir,1,P-1) else Result:='.';
-  end else Result:=AGitDir;
+  Result := StringToBytes(AText);
 end;
 
 end.

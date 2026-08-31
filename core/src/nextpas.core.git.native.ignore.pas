@@ -5,8 +5,7 @@ unit nextpas.core.git.native.ignore;
 interface
 
 uses
-  nextpas.core.base,
-  nextpas.core.git.native.wildmatch;
+  nextpas.core.base;
 
 { Gitignore pattern engine (pure logic, no filesystem access).
   Callers own discovery and lifetime: push one source per governing file
@@ -29,9 +28,7 @@ uses
   ignored, pruning the subtree is what makes "!x/y" under an ignored
   "x/" ineffective, exactly like git's traversal. Tracked files are
   exempt because the caller only consults the engine for untracked
-  candidates. Matching is byte-sensitive (core.ignorecase=false).
-  Wildmatch is single-sourced via git.native.wildmatch (GitWildSegment /
-  GitSegmentsMatch, inline hot path, zero-copy) — no duplicated loops. }
+  candidates. Matching is byte-sensitive (core.ignorecase=false). }
 
 type
   TGitIgnoreMatcher = class
@@ -50,6 +47,8 @@ type
     FSources: array of TSource;
     class procedure CompileLine(const ALine: string;
       out APattern: TPattern); static;
+    class function WildSegment(const APattern, AName: string): Boolean; static; inline;
+    class function SegmentsMatch(const APattern, APath: string): Boolean; static; inline;
   public
     { AText holds raw .gitignore-style lines; ABaseDir anchors embedded-
       slash patterns and scopes the whole source }
@@ -64,8 +63,11 @@ type
 
 implementation
 
+uses
+  nextpas.core.git.native.wildmatch;
+
 function CountTrailingBackslashesBefore(const AValue: string;
-  APos: Integer): Integer;
+  APos: Integer): Integer; inline;
 begin
   Result := 0;
   while (APos >= 1) and (AValue[APos] = '\') do
@@ -75,11 +77,13 @@ begin
   end;
 end;
 
-function HasUnescapedChar(const AValue: string; AChar: Char): Boolean;
+function HasUnescapedChar(const AValue: string; AChar: Char): Boolean; inline;
 var
   I: Integer;
 begin
   Result := False;
+  if AChar = '/' then
+    Exit(GitHasUnescapedSlash(AValue));
   I := 1;
   while I <= Length(AValue) do
   begin
@@ -94,24 +98,37 @@ begin
   end;
 end;
 
-function BasenameOf(const APath: string): string;
+function BasenameStart(const APath: string): Integer; inline;
 var
   I: Integer;
 begin
   for I := Length(APath) downto 1 do
     if APath[I] = '/' then
-      Exit(Copy(APath, I + 1, MaxInt));
-  Result := APath;
+      Exit(I + 1);
+  Result := 1;
 end;
 
 { strips trailing unescaped spaces, gitignore(5) style }
-function TrimTrailingSpaces(const AValue: string): string;
+function TrimTrailingSpaces(const AValue: string): string; inline;
 begin
   Result := AValue;
   while (Length(Result) > 0) and (Result[Length(Result)] = ' ')
     and (CountTrailingBackslashesBefore(
       Result, Length(Result) - 1) mod 2 = 0) do
     Delete(Result, Length(Result), 1);
+end;
+
+{ single-source delegation: all fnmatch lives in wildmatch }
+class function TGitIgnoreMatcher.WildSegment(
+  const APattern, AName: string): Boolean;
+begin
+  Result := GitWildSegment(APattern, AName);
+end;
+
+class function TGitIgnoreMatcher.SegmentsMatch(
+  const APattern, APath: string): Boolean;
+begin
+  Result := GitSegmentsMatch(APattern, APath);
 end;
 
 class procedure TGitIgnoreMatcher.CompileLine(const ALine: string;
@@ -194,6 +211,7 @@ var
   G, P: Integer;
   ScopeLen: Integer;
   Sub: string;
+  BStart: Integer;
 begin
   Result := False;
   // deepest source first; within a source the last pattern wins
@@ -216,12 +234,17 @@ begin
         Continue;
       if FSources[G].Patterns[P].Anchored then
       begin
-        if GitSegmentsMatch(FSources[G].Patterns[P].Text, Sub) then
+        if SegmentsMatch(FSources[G].Patterns[P].Text, Sub) then
           Exit(not FSources[G].Patterns[P].Negated);
       end
-      else if GitWildSegment(FSources[G].Patterns[P].Text,
-        BasenameOf(Sub)) then
-        Exit(not FSources[G].Patterns[P].Negated);
+      else
+      begin
+        BStart := BasenameStart(Sub);
+        if GitWildSegmentRange(FSources[G].Patterns[P].Text, 1,
+          Length(FSources[G].Patterns[P].Text), Sub, BStart,
+          Length(Sub) - BStart + 1) then
+          Exit(not FSources[G].Patterns[P].Negated);
+      end;
     end;
   end;
 end;

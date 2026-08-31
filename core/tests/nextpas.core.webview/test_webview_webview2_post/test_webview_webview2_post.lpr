@@ -58,7 +58,7 @@ begin
   W := CreateWebviewOf(wvWebview2, DefaultWebviewOptions);
   try
     LFlag := 0;
-    W.GetDispatcher.Post(@Work);
+    W.Window.Dispatcher.Post(@Work);
     // Post 为异步（Windows 隐藏窗口）或同步（Linux 桩回退）；给 200ms 窗口
     Sleep(200);
     // Windows 下需泵一次以派发隐藏窗口消息；Linux 桩已同步，无需

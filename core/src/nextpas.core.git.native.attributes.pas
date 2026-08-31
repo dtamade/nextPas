@@ -48,48 +48,39 @@ function GitHasAttribute(const AEntries: TGitAttrEntries; const APath, AName: st
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.fs,
+  nextpas.core.git.native.wildmatch,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
-  nextpas.core.git.native.common,
-  nextpas.core.git.native.util,
-  nextpas.core.git.native.wildmatch;
+  nextpas.core.git.native.util;
 
-function TrimSpaces(const S: string): string; inline;
-begin
-  Result := GitTrimSpaces(S);
-end;
-
-function StripCR(const S: string): string; inline;
-begin if (Length(S)>0) and (S[Length(S)]=#13) then Result:=Copy(S,1,Length(S)-1) else Result:=S; end;
-
-// FindBlobInTree / PeelToTree reused from nextpas.core.git.native.common (single source)
-// WildSegment/SegmentsMatch reused from nextpas.core.git.native.wildmatch (single source, inline, zero-copy)
-
-// ---- pattern matching (single source via wildmatch) ----
-
-function BasenameOfAttr(const APath: string): string; inline;
-var I: Integer;
-begin
-  for I:=Length(APath) downto 1 do if APath[I]='/' then Exit(Copy(APath,I+1,MaxInt));
-  Result:=APath;
-end;
-
+{ single-source pattern matching: delegates to wildmatch, zero-copy basename }
 function AttrPatternMatches(const APattern, APath: string): Boolean; inline;
+var
+  Pat: string;
+  HasSlash: Boolean;
+  BStart: Integer;
 begin
   if APattern='' then Exit(False);
-  // no '/' -> basename-only via GitWildSegment (wildmatch single source, inline, zero-copy via const)
-  if Pos('/',APattern)=0 then
-    Exit(GitWildSegment(APattern, BasenameOfAttr(APath)));
-  // anchored: strip leading '/' ("/foo" -> "foo") then delegate to GitSegmentsMatch (wildmatch, '**' per segment)
-  if (Length(APattern)>0) and (APattern[1]='/') then
-    Exit(GitSegmentsMatch(Copy(APattern,2,MaxInt), APath));
-  Result:=GitSegmentsMatch(APattern, APath);
+  HasSlash:= GitHasUnescapedSlash(APattern);
+  Pat:= APattern;
+  if (Length(Pat)>0) and (Pat[1]='/') then
+    Delete(Pat,1,1);
+  if not HasSlash then
+  begin
+    BStart:= Length(APath);
+    while (BStart>0) and (APath[BStart]<>'/') do Dec(BStart);
+    Inc(BStart);
+    Result:= GitWildSegmentRange(Pat,1,Length(Pat), APath,BStart,Length(APath)-BStart+1);
+  end
+  else
+    Result:= GitSegmentsMatch(Pat, APath);
 end;
 
-function SplitWs(const S: string): TStringArray;
+function SplitWs(const S: string): TStringArray; inline;
 var I,Start: Integer; InW: Boolean;
 begin
   Result:=nil; Start:=1; InW:=False;
@@ -113,7 +104,7 @@ begin
   begin
     Name:=Copy(Tok,2,MaxInt);
     if Name='' then Exit(False);
-    AAttr.Name:=LowerCase(Name);
+    AAttr.Name:= nextpas.core.text.conv.LowerCase(Name);
     AAttr.Value:='';
     AAttr.Kind:=akUnset;
     Exit(True);
@@ -122,7 +113,7 @@ begin
   begin
     Name:=Copy(Tok,2,MaxInt);
     if Name='' then Exit(False);
-    AAttr.Name:=LowerCase(Name);
+    AAttr.Name:= nextpas.core.text.conv.LowerCase(Name);
     AAttr.Value:='';
     AAttr.Kind:=akUnset;
     Exit(True);
@@ -133,12 +124,12 @@ begin
     Name:=Copy(Tok,1,Eq-1);
     Val:=Copy(Tok,Eq+1,MaxInt);
     if Name='' then Exit(False);
-    AAttr.Name:=LowerCase(Name);
+    AAttr.Name:= nextpas.core.text.conv.LowerCase(Name);
     AAttr.Value:=Val;
     AAttr.Kind:=akValue;
     Exit(True);
   end;
-  AAttr.Name:=LowerCase(Tok);
+  AAttr.Name:= nextpas.core.text.conv.LowerCase(Tok);
   AAttr.Value:='';
   AAttr.Kind:=akSet;
   Result:=True;
@@ -151,13 +142,12 @@ begin
   Lines:=GitSplitLines(AText);
   for I:=0 to High(Lines) do
   begin
-    L:=TrimSpaces(StripCR(Lines[I]));
+    L:=GitTrimSpaces(GitStripCR(Lines[I]));
     if L='' then Continue;
     if (L[1]='#') or (L[1]=';') then Continue;
     Tokens:=SplitWs(L);
     if Length(Tokens)=0 then Continue;
     Pat:=Tokens[0];
-    // pattern may be quoted? gitattributes supports quoted pattern with spaces? ignore for now
     Entry.Pattern:=Pat;
     Entry.Attrs:=nil;
     for J:=1 to High(Tokens) do
@@ -229,7 +219,7 @@ function GitAttributeGet(const AEntries: TGitAttrEntries; const APath, AName: st
 var Arr: TGitAttrArray; I: Integer;
 begin
   Arr:=MergeAttrs(AEntries, APath);
-  for I:=0 to High(Arr) do if Arr[I].Name=LowerCase(AName) then
+  for I:=0 to High(Arr) do if Arr[I].Name= nextpas.core.text.conv.LowerCase(AName) then
   begin
     case Arr[I].Kind of
       akSet: Exit('set');

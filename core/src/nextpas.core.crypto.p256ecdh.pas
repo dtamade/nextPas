@@ -48,7 +48,9 @@ end;
 
 function CompareBigEndian(const A, B: TBytes): Integer; inline;
 begin
-  Result := nextpas.core.bytes.ops.CompareUnsigned(A, B);
+  Result := nextpas.core.bytes.ops.CompareUnsignedSpan(
+    nextpas.core.bytes.ops.StripLeadingZeroView(A),
+    nextpas.core.bytes.ops.StripLeadingZeroView(B));
 end;
 
 function IsValidPrivateScalar(const A: TBytes): Boolean;
@@ -149,8 +151,6 @@ var
   LPeerPoint: TECPoint;
   LSharedPoint: TECPoint;
   LSharedX: TBytes;
-  I: Integer;
-  LZero: Boolean;
 begin
   Result := False;
   SetLength(ASharedSecret, 0);
@@ -176,14 +176,7 @@ begin
     Exit;
   end;
   if not TryToFixedLength32(LSharedPoint.X, LSharedX, AError) then Exit;
-  LZero := True;
-  for I := 0 to High(LSharedX) do
-    if LSharedX[I] <> 0 then
-    begin
-      LZero := False;
-      Break;
-    end;
-  if LZero then
+  if IsZeroBytes(LSharedX) then
   begin
     SecureZeroBytes(LSharedX);
     AError := 'P-256 ECDH shared secret is all-zero';

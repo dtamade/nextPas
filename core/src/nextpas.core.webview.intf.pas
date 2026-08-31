@@ -17,7 +17,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.webview.base;
+  nextpas.core.webview.base,
+  nextpas.core.window.intf;
 
 type
   {** invoke 异步完成面。Ok/Fail 恰好其一至多一次；可从任意线程调用
@@ -124,49 +125,19 @@ type
     procedure MountDirectory(const APrefix, ARootDir: string);
   end;
 
-  {** 窗口 + 内容统一面（单窗单 webview；多窗经 Builder.Build 多次创建，
-      共享同一 UI 主循环）。生命周期：Close 幂等；Close 后除
-      IsClosed/NativeHandle 外一切方法抛 EWebviewClosed。 *}
+  {** 窗口 + 内容组合面（has-a）。IWebviewWindow 不继承 IWindow，
+      而是通过 Window 属性组合 IWindow。生命周期：Close 仅毁引擎，
+      不连带 Window.Close（FOwnsWindow 区分）。 *}
   IWebviewWindow = interface
     ['{7C1E4A20-83B5-4E97-9D42-A6B1C2D3E006}']
 
+    { 组合入口：平台无关的 IWindow（L2），webview 仅持有不拥有创口 }
+    function GetWindow: IWindow;
+    property Window: IWindow read GetWindow;
+
     { 生命周期 }
-    procedure Close;                       // 幂等；跨线程安全（内部 marshal）
+    procedure Close;
     function IsClosed: Boolean;
-
-    { 窗口壳 —— 可见性与焦点 }
-    procedure Show;
-    procedure Hide;
-    function IsVisible: Boolean;
-    procedure Focus;
-
-    { 窗口壳 —— 标题与几何 }
-    procedure SetTitle(const ATitle: string);
-    function GetTitle: string;
-    procedure SetBounds(AWidth, AHeight: Integer);
-    function GetWidth: Integer;
-    function GetHeight: Integer;
-    procedure SetResizable(AResizable: Boolean);
-
-    { 窗口壳 —— 状态（tao 对齐最小集） }
-    procedure Maximize;
-    procedure Unmaximize;
-    function IsMaximized: Boolean;
-    procedure Minimize;
-    procedure Restore;
-    function IsMinimized: Boolean;
-
-    { 内容缩放与 UA }
-    procedure SetZoom(AFactor: Double);    // 1.0 = 100%
-    function GetZoom: Double;
-    procedure SetUserAgent(const AUserAgent: string);
-    function GetUserAgent: string;
-
-    { DPI 只读最小集（GTK 整数诚实升格为浮点） }
-    function GetScaleFactor: Double;
-    procedure OnScaleChanged(AHandler: TWebviewScaleHandler); overload;
-    procedure OnScaleChanged(AHandler: TWebviewScaleMethod); overload;
-    procedure OnScaleChanged(AHandler: TWebviewScaleProc); overload;
 
     { 导航 }
     procedure Navigate(const AUrl: string);
@@ -188,13 +159,6 @@ type
     { IPC：native → js 事件；页面未就绪时静默丢弃 }
     procedure Emit(const AEvent, APayloadJson: string);
 
-    { 主线程投递 }
-    function GetDispatcher: IWebviewDispatcher;
-    property Dispatcher: IWebviewDispatcher read GetDispatcher;
-
-    { 平台原生句柄（X11=XID / Wayland=nil；语义见 BACKENDS §8） }
-    function NativeHandle: TWebviewNativeHandle;
-
     { 事件注册：匿名形如下；method/proc 三重载形态从略（签名同形） }
     procedure OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventMethod); overload;
@@ -205,9 +169,7 @@ type
     procedure OnNavigationFailed(AHandler: TWebviewNavFailedHandler); overload;
     procedure OnNavigationFailed(AHandler: TWebviewNavFailedMethod); overload;
     procedure OnNavigationFailed(AHandler: TWebviewNavFailedProc); overload;
-    procedure OnWindowClosed(AHandler: TWebviewNotifyHandler); overload;
-    procedure OnWindowClosed(AHandler: TWebviewNotifyMethod); overload;
-    procedure OnWindowClosed(AHandler: TWebviewNotifyProc); overload;    procedure OnReady(AHandler: TWebviewNotifyHandler); overload;
+    procedure OnReady(AHandler: TWebviewNotifyHandler); overload;
     procedure OnReady(AHandler: TWebviewNotifyMethod); overload;
     procedure OnReady(AHandler: TWebviewNotifyProc); overload;
 
@@ -216,6 +178,12 @@ type
     property Invokes: IWebviewInvokeRegistry read GetInvokes;
     function GetAssets: IWebviewAssets;
     property Assets: IWebviewAssets read GetAssets;
+
+    { 内容缩放与 UA（webview 专有，非 Window 壳） }
+    procedure SetZoom(AFactor: Double);
+    function GetZoom: Double;
+    procedure SetUserAgent(const AUserAgent: string);
+    function GetUserAgent: string;
   end;
 
 implementation

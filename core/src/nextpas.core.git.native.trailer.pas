@@ -5,8 +5,7 @@ unit nextpas.core.git.native.trailer;
 interface
 
 uses
-  nextpas.core.base,
-  nextpas.core.git.native.util;
+  nextpas.core.base;
 
 { Trailer subfamily: `git interpret-trailers` Key: Value at message tail.
 
@@ -31,11 +30,8 @@ function GitAppendTrailer(const AMessage, AKey, AValue: string): string;
 
 implementation
 
-function TrimSpaces(const S: string): string; inline;
-begin Result:=GitTrimSpaces(S); end;
-
-function StripCR(const S: string): string; inline;
-begin Result:=GitStripCR(S); end;
+uses
+  nextpas.core.git.native.util;
 
 function IsTrailerLine(const ALine: string; out AKey, AValue: string): Boolean;
 var P: Integer; K,V: string;
@@ -44,8 +40,8 @@ begin
   // trailer line: Key ':' Value, Key non-empty after trim, may contain [A-Za-z0-9-]
   P:=Pos(':', ALine);
   if P=0 then Exit(False);
-  K:=TrimSpaces(Copy(ALine,1,P-1));
-  V:=TrimSpaces(Copy(ALine,P+1,MaxInt));
+  K:=GitTrimSpaces(Copy(ALine,1,P-1));
+  V:=GitTrimSpaces(Copy(ALine,P+1,MaxInt));
   if K='' then Exit(False);
   // reject if key contains line break or empty value with no key? value may be empty (allowed)
   AKey:=K; AValue:=V;
@@ -60,7 +56,7 @@ begin
   Lines:=GitSplitLines(AMessage);
   // Strip trailing empty lines at end (message may end with newline)
   N:=Length(Lines);
-  while (N>0) and (TrimSpaces(StripCR(Lines[N-1]))='') do Dec(N);
+  while (N>0) and (GitTrimSpaces(GitStripCR(Lines[N-1]))='') do Dec(N);
   SetLength(Lines, N);
   if N=0 then Exit;
   // Find trailer block: contiguous trailer lines at end.
@@ -70,11 +66,11 @@ begin
   Tmp:=nil;
   for I:=N-1 downto 0 do
   begin
-    if TrimSpaces(StripCR(Lines[I]))='' then
+    if GitTrimSpaces(GitStripCR(Lines[I]))='' then
     begin
       Break;
     end;
-    if IsTrailerLine(StripCR(Lines[I]), K, V) then
+    if IsTrailerLine(GitStripCR(Lines[I]), K, V) then
     begin SetLength(Tmp, Length(Tmp)+1); Tmp[High(Tmp)].Key:=K; Tmp[High(Tmp)].Value:=V; end
     else Break;
   end;
@@ -100,7 +96,7 @@ end;
 
 function GitFormatTrailer(const AKey, AValue: string): string;
 begin
-  Result:=TrimSpaces(AKey)+': '+TrimSpaces(AValue);
+  Result:=GitTrimSpaces(AKey)+': '+GitTrimSpaces(AValue);
 end;
 
 function GitFormatTrailers(const ATrailers: TGitTrailerArray): string;

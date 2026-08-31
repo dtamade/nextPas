@@ -42,17 +42,6 @@ const
   CModeSymlink = $A000;
   CModeGitlink = $E000;
 
-function BytesToString(const B: TBytes): string;
-begin
-  SetLength(Result, Length(B));
-  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
-end;
-
-function TrimSpacesLocal(const S: string): string; inline;
-begin
-  Result := GitTrimSpaces(S);
-end;
-
 function EffectiveGitDir(const AGitDir: string): string;
 var C: string;
 begin
@@ -60,7 +49,7 @@ begin
   C:=PathJoin2(AGitDir,'commondir');
   if FileExists(C) then
   begin
-    Result:=TrimSpacesLocal(ReadFileText(C));
+    Result:=GitTrimSpaces(ReadFileText(C));
     if not PathIsAbsolute(Result) then Result:=PathClean(PathJoin2(AGitDir, Result))
     else Result:=PathClean(Result);
     Exit(Result);
@@ -171,7 +160,7 @@ begin
       BlobData := ARepo.ReadObject(TreeEnts[I].Oid, BlobKind);
       if TreeEnts[I].Mode = CModeSymlink then
       begin
-        Target := BytesToString(BlobData);
+        Target := GitBytesToString(BlobData);
         if FileExists(FilePath) or IsSymlink(FilePath) or DirectoryExists(FilePath) then
           RemoveAll(FilePath);
         Symlink(Target, FilePath);

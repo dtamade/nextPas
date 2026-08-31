@@ -17,7 +17,8 @@ uses
   nextpas.core.webview.fake,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.webview2.loader,
-  nextpas.core.webview.factory;
+  nextpas.core.webview.factory,
+  nextpas.core.window.base;
 
 type
   { 总命中 provider：用于验开发模式惰性覆盖——正常模式会命中，
@@ -138,9 +139,9 @@ begin
     .AddInitScript('window.__booted = true;')
     .Build;
   try
-    CheckEqual(1200, W.GetWidth);
-    CheckEqual(800, W.GetHeight);
-    CheckEqual('Factory', W.GetTitle, 'builder applies title');
+    CheckEqual(1200, W.Window.GetWidth);
+    CheckEqual(800, W.Window.GetHeight);
+    CheckEqual('Factory', W.Window.GetTitle, 'builder applies title');
     Check(not W.IsClosed, 'built window is open');
   finally
     if (W <> nil) and not W.IsClosed then
@@ -376,14 +377,14 @@ procedure TestRunLoopExitPaths;
 var
   W: IWebviewWindow;
 begin
-  { 无窗口时立即返回 }
+  { 无窗口时立即返回 — 单泵已归 window.factory，WebviewRunLoop 为 deprecated shim 透传 WindowRunLoop }
   WebviewRunLoop;
 
-  { ExitLoop 打断泵循环 }
+  { ExitLoop 打断泵循环 — Dispatcher 已复用 IWindow.Dispatcher 单队列 }
   W := CreateFakeWebview(DefaultWebviewOptions);
   try
-    W.Show;
-    W.Dispatcher.Post(procedure
+    W.Window.Show;
+    W.Window.Dispatcher.Post(procedure
       begin
         WebviewExitLoop;
       end);
@@ -394,12 +395,12 @@ begin
     W := nil;
   end;
 
-  { 全部窗口关闭后自然退出 }
+  { 全部窗口关闭后自然退出 — 窗口事件已收敛至 Window.OnEvent(weClosed) }
   W := CreateFakeWebview(DefaultWebviewOptions);
   try
-    W.Show;
-    W.OnWindowClosed(procedure begin end);
-    W.Dispatcher.Post(procedure
+    W.Window.Show;
+    W.Window.OnEvent(procedure(const AEvent: TWindowEvent) begin end);
+    W.Window.Dispatcher.Post(procedure
       begin
         { 模拟用户关窗动作发生在泵内 }
       end);

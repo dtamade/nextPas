@@ -10,7 +10,6 @@ uses
   nextpas.core.git.factory;
 
 type
-  TGitBackend = nextpas.core.git.factory.TGitBackend;
   TGitBranchKind = nextpas.core.git.base.TGitBranchKind;
   TGitPullFastForwardResult = nextpas.core.git.base.TGitPullFastForwardResult;
   TGitStatusFlag = nextpas.core.git.base.TGitStatusFlag;
@@ -41,13 +40,9 @@ type
   IGitWorktree = nextpas.core.git.intf.IGitWorktree;
   IGitWorktreeExt = nextpas.core.git.intf.IGitWorktreeExt;
   IGitManager = nextpas.core.git.intf.IGitManager;
-  EGitError = nextpas.core.git.factory.EGitError;
+  EGitError = nextpas.core.git.base.EGitError;
 
 const
-  gbAuto = nextpas.core.git.factory.gbAuto;
-  gbLibGit2 = nextpas.core.git.factory.gbLibGit2;
-  gbNative = nextpas.core.git.factory.gbNative;
-
   gbLocal = nextpas.core.git.base.gbLocal;
   gbRemote = nextpas.core.git.base.gbRemote;
   gbAll = nextpas.core.git.base.gbAll;
@@ -73,18 +68,17 @@ const
   gsIgnored = nextpas.core.git.base.gsIgnored;
   gsConflicted = nextpas.core.git.base.gsConflicted;
 
-function NewGitManager(ABackend: TGitBackend = gbAuto): IGitManager; inline;
+function NewGitManager: IGitManager; inline;
 function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
 
-function NewGitManager(ABackend: TGitBackend): IGitManager; inline;
+function NewGitManager: IGitManager; inline;
 begin
-  // TGitBackend is value type (enum) — passed by value zero-copy, inlined dispatch
-  Result := nextpas.core.git.factory.NewGitManager(ABackend);
+  Result := nextpas.core.git.factory.NewGitManager(gbAuto);
 end;
 
-function DefaultGitDiffOptions: TGitDiffOptions;
+function DefaultGitDiffOptions: TGitDiffOptions; inline;
 begin
   Result := nextpas.core.git.base.DefaultGitDiffOptions;
 end;
