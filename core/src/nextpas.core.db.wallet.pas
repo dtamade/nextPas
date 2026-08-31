@@ -55,7 +55,8 @@ implementation
 uses
   nextpas.core.id.uuid,
   nextpas.core.time,
-  nextpas.core.system.sysutils,
+  nextpas.core.text.utils,
+  nextpas.core.text.conv,
   nextpas.core.db.migrate;
 
 function WalletMakeMigrations: TDbMigrations;
