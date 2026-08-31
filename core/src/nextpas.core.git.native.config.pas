@@ -42,6 +42,9 @@ function GitConfigGetBool(const AConfig: TGitConfig; const AKey: string; out AVa
 
 implementation
 
+uses
+  nextpas.core.git.native.util;
+
 function GitConfigPath(const AGitDir: string): string;
 begin
   Result := PathJoin2(AGitDir, 'config');
@@ -62,16 +65,9 @@ begin
       Result[I] := Chr(Ord(Result[I]) + 32);
 end;
 
-function TrimSpaces(const S: string): string;
-var
-  L, R: Integer;
+function TrimSpaces(const S: string): string; inline;
 begin
-  L := 1;
-  R := Length(S);
-  while (L <= R) and (S[L] <= ' ') do Inc(L);
-  while (R >= L) and (S[R] <= ' ') do Dec(R);
-  if R < L then Exit('');
-  Result := Copy(S, L, R - L + 1);
+  Result := GitTrimSpaces(S);
 end;
 
 function StripInlineComment(const S: string): string;

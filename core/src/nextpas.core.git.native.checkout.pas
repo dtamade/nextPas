@@ -33,7 +33,8 @@ uses
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.index;
+  nextpas.core.git.native.index,
+  nextpas.core.git.native.util;
 
 const
   CModeTree    = $4000;
@@ -41,14 +42,15 @@ const
   CModeSymlink = $A000;
   CModeGitlink = $E000;
 
-function TrimSpacesLocal(const S: string): string;
-var L,R: Integer;
+function BytesToString(const B: TBytes): string;
 begin
-  L:=1; R:=Length(S);
-  while (L<=R) and (S[L] <= ' ') do Inc(L);
-  while (R>=L) and (S[R] <= ' ') do Dec(R);
-  if R<L then Exit('');
-  Result:=Copy(S,L,R-L+1);
+  SetLength(Result, Length(B));
+  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
+end;
+
+function TrimSpacesLocal(const S: string): string; inline;
+begin
+  Result := GitTrimSpaces(S);
 end;
 
 function EffectiveGitDir(const AGitDir: string): string;
@@ -169,7 +171,7 @@ begin
       BlobData := ARepo.ReadObject(TreeEnts[I].Oid, BlobKind);
       if TreeEnts[I].Mode = CModeSymlink then
       begin
-        Target := GitBytesToString(BlobData);
+        Target := BytesToString(BlobData);
         if FileExists(FilePath) or IsSymlink(FilePath) or DirectoryExists(FilePath) then
           RemoveAll(FilePath);
         Symlink(Target, FilePath);

@@ -1218,6 +1218,27 @@ begin
   Result := TSemanticAnalyzer(Ctx).EmitStrCompareOperand(ANode, AAllowOwned, ABlob);
 end;
 
+function SemaBridge_TypeMetaIsInterface(const Ctx: Pointer;
+  const ATypeName: string): Boolean;
+begin
+  Result := np_sema_type_check.TypeMetaIsInterface(
+    TSemanticAnalyzer(Ctx).FModel, ATypeName);
+end;
+
+function SemaBridge_TypeMetaInterfaces(const Ctx: Pointer;
+  const ATypeName: string): string;
+begin
+  Result := np_sema_type_check.TypeMetaInterfaces(
+    TSemanticAnalyzer(Ctx).FModel, ATypeName);
+end;
+
+function SemaBridge_TypeMetaFieldIndex(const Ctx: Pointer;
+  const ATypeName, AFieldName: string): Int64;
+begin
+  Result := np_sema_type_check.TypeMetaFieldIndex(
+    TSemanticAnalyzer(Ctx).FModel, ATypeName, AFieldName);
+end;
+
 function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
   out AExprId: LongInt): Boolean;
 var
@@ -1258,6 +1279,9 @@ begin
   Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
   Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
   Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
+  Ctx.TypeMetaIsInterface := @SemaBridge_TypeMetaIsInterface;
+  Ctx.TypeMetaInterfaces := @SemaBridge_TypeMetaInterfaces;
+  Ctx.TypeMetaFieldIndex := @SemaBridge_TypeMetaFieldIndex;
   { Delegate }
   Result := np_hir_lowering.BuildRuntimeScalarHirExpr(Ctx, ANode, AExprId);
   { Sync mutable state back }
@@ -1321,6 +1345,9 @@ begin
   Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
   Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
   Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
+  Ctx.TypeMetaIsInterface := @SemaBridge_TypeMetaIsInterface;
+  Ctx.TypeMetaInterfaces := @SemaBridge_TypeMetaInterfaces;
+  Ctx.TypeMetaFieldIndex := @SemaBridge_TypeMetaFieldIndex;
   Result := np_hir_lowering.EncodeRuntimeBoolExprFold(Ctx, ANode, ABlob,
     AAllowOwnedStringCompare);
 end;

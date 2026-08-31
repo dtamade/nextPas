@@ -45,18 +45,21 @@ var
 begin
   Result := nil;
   S := AFs.OpenRead(APath);
-  SetLength(Result, S.Size);
-  Total := 0;
-  while Total < SizeUInt(S.Size) do
-  begin
-    if Total >= SizeUInt(Length(Result)) then Break;
-    Got := S.Read(Result[Total], SizeUInt(Length(Result)) - Total);
-    if Got = 0 then
-      raise EVfsError.CreateCtx('read', APath,
-        'stream ended before declared size');
-    Total := Total + Got;
+  try
+    SetLength(Result, S.Size);
+    Total := 0;
+    while Total < SizeUInt(S.Size) do
+    begin
+      if Total >= SizeUInt(Length(Result)) then Break;
+      Got := S.Read(Result[Total], SizeUInt(Length(Result)) - Total);
+      if Got = 0 then
+        raise EVfsError.CreateCtx('read', APath,
+          'stream ended before declared size');
+      Total := Total + Got;
+    end;
+  finally
+    S.Close;
   end;
-  S.Close;
 end;
 
 function VfsReadAllText(const AFs: IVfs; const APath: string): string;

@@ -41,9 +41,10 @@ type
   private
     FFile: IFile;
     FOpen: Boolean;
+    FPath: string;
     procedure CheckOpen;
   public
-    constructor Create(AFile: IFile);
+    constructor Create(AFile: IFile; const APath: string);
     destructor Destroy; override;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -79,11 +80,12 @@ end;
 
 { ── TOsStream ── }
 
-constructor TOsStream.Create(AFile: IFile);
+constructor TOsStream.Create(AFile: IFile; const APath: string);
 begin
   inherited Create;
   FFile := AFile;
   FOpen := True;
+  FPath := APath;
 end;
 
 destructor TOsStream.Destroy;
@@ -95,7 +97,7 @@ end;
 procedure TOsStream.CheckOpen;
 begin
   if not FOpen then
-    raise EVfsClosed.CreateCtx('read', '', 'stream already closed');
+    raise EVfsClosed.CreateCtx('read', FPath, 'stream already closed');
 end;
 
 function TOsStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -107,7 +109,7 @@ end;
 function TOsStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;  { 只读流：写入一律抛错，返回值仅为满足签名 }
-  raise EVfsError.CreateCtx('write', '', 'stream is read-only');
+  raise EVfsError.CreateCtx('write', FPath, 'stream is read-only');
 end;
 
 function TOsStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -138,9 +140,17 @@ begin
 end;
 
 procedure TOsStream.SetPosition(const AValue: Int64);
+var
+  Clamped: Int64;
 begin
   CheckOpen;
-  FFile.Position := AValue;
+  if AValue < 0 then
+    Clamped := 0
+  else if AValue > FFile.Size then
+    Clamped := FFile.Size
+  else
+    Clamped := AValue;
+  FFile.Position := Clamped;
 end;
 
 function TOsStream.ReadAt(var ABuf; const ACount: SizeUInt;
@@ -166,7 +176,7 @@ begin
   end;
   if not FI.IsDir then
     raise EVfsNotADirectory.CreateCtx('mount', ARoot, 'os root is not a directory');
-  FRoot := ARoot;
+  FRoot := nextpas.core.fs.PathTrimSep(ARoot);
 end;
 
 function TOsVfs.FullPath(const APath: string): string;
@@ -207,9 +217,11 @@ begin
   try
     FI := nextpas.core.fs.Stat(FullPath(APath));
   except
+    on E: ENotFoundError do
+      raise EVfsNotFound.CreateCtx('stat', APath, 'not found: ' + E.Message);
+    on E: EVfsError do raise;
     on E: Exception do
-      raise EVfsNotFound.CreateCtx('stat', APath,
-        'not found: ' + E.Message);
+      raise EVfsError.CreateCtx('stat', APath, E.Message);
   end;
   Result.Info := MapInfo(APath, FI);
   Result.ContentHash := 0;   { os 后端不提供内容哈希 }
@@ -229,8 +241,11 @@ begin
   try
     FI := nextpas.core.fs.Stat(FullPath(ADirPath));
   except
-    on E: Exception do
+    on E: ENotFoundError do
       raise EVfsNotFound.CreateCtx('list', ADirPath, 'not found: ' + E.Message);
+    on E: EVfsError do raise;
+    on E: Exception do
+      raise EVfsError.CreateCtx('list', ADirPath, E.Message);
   end;
   if not FI.IsDir then
     raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is not a directory');
@@ -251,8 +266,14 @@ begin
     { symlink 跳过：与 dirsource/memtree 模型一致——视图里没有链接条目 }
     if Entries[I].FileType = ftSymlink then
       Continue;
-    Result[OutN] := MapInfo(FullVirtualName(ADirPath, Entries[I].Name),
-      nextpas.core.fs.Stat(FullPath(ADirPath) + '/' + Entries[I].Name));
+    try
+      FI := nextpas.core.fs.Stat(FullPath(ADirPath) + '/' + Entries[I].Name);
+    except
+      on E: Exception do
+        raise EVfsError.CreateCtx('list', ADirPath,
+          'stat failed for child ' + Entries[I].Name + ': ' + E.Message);
+    end;
+    Result[OutN] := MapInfo(FullVirtualName(ADirPath, Entries[I].Name), FI);
     Inc(OutN);
   end;
   SetLength(Result, OutN);
@@ -276,7 +297,7 @@ begin
     on E: Exception do
       raise EVfsError.CreateCtx('open', APath, 'open failed: ' + E.Message);
   end;
-  Result := TOsStream.Create(LFile);
+  Result := TOsStream.Create(LFile, APath);
 end;
 
 function TOsVfs.CaseSensitive: Boolean;

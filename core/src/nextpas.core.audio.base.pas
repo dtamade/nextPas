@@ -267,11 +267,11 @@ end;
 
 function TAudioFormat.Equals(const AOther: TAudioFormat): Boolean;
 begin
-  // ChannelLayout 由 ChannelMask 推导，不参与相等性；真值源为 ChannelMask
   Result := (SampleRate = AOther.SampleRate) and
     (Channels = AOther.Channels) and
     (SampleFormat = AOther.SampleFormat) and
-    (ChannelMask = AOther.ChannelMask);
+    (ChannelMask = AOther.ChannelMask) and
+    (ChannelLayout = AOther.ChannelLayout);
 end;
 
 { TAudioBuffer }

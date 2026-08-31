@@ -149,11 +149,14 @@ var
   I, Total, Off: Integer;
   Enc: TBytes;
 begin
+  // single-encode: first pass sums frame sizes (4 header + 1 channel + payload)
+  // without allocating Enc; second pass encodes once and zero-copies via Move
   Total := 0;
   for I := 0 to High(AEntries) do
   begin
-    Enc := GitSidebandEncode(AEntries[I].Kind, AEntries[I].Data);
-    Inc(Total, Length(Enc));
+    if (Ord(AEntries[I].Kind) < 1) or (Ord(AEntries[I].Kind) > 3) then
+      raise EGitError.CreateFmt('sideband invalid channel %d', [Ord(AEntries[I].Kind)]);
+    Inc(Total, 5 + Length(AEntries[I].Data));
   end;
   SetLength(Result, Total);
   Off := 0;

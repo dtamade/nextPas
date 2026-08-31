@@ -45,6 +45,17 @@ type
     function CaseSensitive: Boolean;
   end;
 
+function StripTrailingSlash(const S: string): string; inline;
+var
+  L: Integer;
+begin
+  Result := S;
+  if VfsIsRoot(Result) then Exit;
+  L := Length(Result);
+  while (L > 0) and (Result[L] = '/') do Dec(L);
+  if L <> Length(Result) then SetLength(Result, L);
+end;
+
 function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs;
 begin
   Result := TSubVfs.Create(ABase, ASubRoot);
@@ -65,8 +76,8 @@ begin
   if not SI.Info.IsDir then
     raise EVfsNotADirectory.CreateCtx('mount', ASubRoot, 'sub root is a file');
   FBase := ABase;
-  FSubRoot := ASubRoot;
-  FIdentity := VfsIsRoot(ASubRoot);
+  FSubRoot := StripTrailingSlash(ASubRoot);
+  FIdentity := VfsIsRoot(FSubRoot);
 end;
 
 function TSubVfs.ToBase(const APath: string): string;
