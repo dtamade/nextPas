@@ -29,6 +29,7 @@ type
       AContext: Pointer): Boolean;
     TForEachFunc = procedure(const AKey: K; const AValue: V);
     TForEachCtxFunc = procedure(const AKey: K; const AValue: V; AContext: Pointer);
+    TForEachCtxExFunc = function(const AKey: K; const AValue: V; AContext: Pointer): Boolean;
     TKeyArray = array of K;
   private type
     TSegmentTable = specialize TSwissTable<K, V>;
@@ -56,6 +57,8 @@ type
     procedure ForEach(AFunc: TForEachFunc);
     {** @desc 遍历所有元素（带上下文指针，回调可捕获外部状态） }
     procedure ForEachCtx(AFunc: TForEachCtxFunc; AContext: Pointer);
+    {** @desc 遍历所有元素并支持早停：回调返回 False 即停止遍历（采样/限量场景） }
+    procedure ForEachCtxEx(AFunc: TForEachCtxExFunc; AContext: Pointer);
     // Deprecated: Keys() does not provide a consistent snapshot under concurrent
     // modification. Use ForEach() instead for safe iteration.
     function Keys: TKeyArray;
@@ -323,6 +326,33 @@ begin
     FSegmentLocks[i].AcquireRead;
     try
       FSegments[i].ForEachCtx(TSegmentTable.TVisitCtxFunc(AFunc), AContext);
+    finally
+      FSegmentLocks[i].ReleaseRead;
+    end;
+  end;
+end;
+
+procedure TConcurrentHashMap.ForEachCtxEx(AFunc: TForEachCtxExFunc; AContext: Pointer);
+var
+  i: Integer;
+  LSeg: TSegmentTable;
+  j: SizeUInt;
+  LContinue: Boolean;
+begin
+  for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
+  begin
+    FSegmentLocks[i].AcquireRead;
+    try
+      LSeg := FSegments[i];
+      if LSeg.Capacity = 0 then
+        Continue;
+      for j := 0 to LSeg.Capacity - 1 do
+        if LSeg.GetCtrlByte(j) < $80 then
+        begin
+          LContinue := AFunc(LSeg.GetSlotKey(j), LSeg.GetSlotValue(j), AContext);
+          if not LContinue then
+            Exit;
+        end;
     finally
       FSegmentLocks[i].ReleaseRead;
     end;
