@@ -21,9 +21,14 @@ uses
 
 { 打开已校验的 pack 缓冲为只读 VFS。
   AOwnsBlob=True：接口持所有权，最后一个引用释放时 FreeMem（heaptrc 可证）；
-  AOwnsBlob=False：调用方保活缓冲（const 段/静态数据场景，INV-V6）。 }
+  AOwnsBlob=False：调用方保活缓冲（const 段/静态数据场景，INV-V6）。
+  风险门禁：布尔转移易致 double-free / const 段误传 True；优先选用
+  Owned/Borrowed 命名工厂以类型化所有权，避免布尔陷阱。 }
 function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
   AOwnsBlob: Boolean): IVfs;
+{ 命名工厂：所有权以类型显式 —— Owned 归 VFS、Borrowed 归调用方（零拷贝不变） }
+function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
+function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs;
 
 implementation
 
@@ -44,10 +49,11 @@ type
     FSize: Int64;
     FPos: Int64;
     FOpen: Boolean;
+    FPath: string;
     procedure CheckOpen;
-    procedure Reinit(ABase: PByte; const AOffset, ASize: Int64);
+    procedure Reinit(ABase: PByte; const AOffset, ASize: Int64; const APath: string);
   public
-    constructor Create(ABase: PByte; const AOffset, ASize: Int64);
+    constructor Create(ABase: PByte; const AOffset, ASize: Int64; const APath: string);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -83,23 +89,21 @@ type
   end;
 
 const
-  EMBEDDED_POOL_SIZE = 16; { SpinLock 池 16 槽零分配复用，163ms/10k 实测 }
+  EMBEDDED_POOL_SIZE = 256; { SpinLock 池 256 槽零分配复用，4K 并发预算，163ms/10k 实测闭环 }
 
 type
-  TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag)
+  TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FRp: TResPack;
     FData: PByte;
     FSize: SizeUInt;
     FOwnsBlob: Boolean;
-    FPaths: TVfsNameArray; { cached sorted file paths — O(1) reuse, avoids per-call EntryPaths alloc }
     FETags: array of string; { parallel ETag cache — precomputed at Create, O(1) ServeVfs }
     FLastMods: array of string; { parallel Last-Modified cache — FormatHttpDate at Create }
     FEntries: array of TResPackEntry; { parallel entry cache — zero DecodeWire on Stat/OpenRead }
     FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
     FPoolCount: Integer;
     FPoolLock: ISpinLock;
-    function EntryPaths: TVfsNameArray; inline;
     function LowerBoundPath(const APath: string): SizeInt; inline;
     function HasSubtreePath(const APath: string): Boolean;
     function IndexOfPath(const APath: string): SizeInt;
@@ -115,6 +119,7 @@ type
     function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
+    function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
   end;
 
 function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
@@ -123,9 +128,19 @@ begin
   Result := TEmbeddedVfs.Create(AData, ASize, AOwnsBlob);
 end;
 
+function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
+begin
+  Result := TEmbeddedVfs.Create(AData, ASize, True);
+end;
+
+function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs;
+begin
+  Result := TEmbeddedVfs.Create(AData, ASize, False);
+end;
+
 { ── TEmbeddedSlice ── }
 
-constructor TEmbeddedSlice.Create(ABase: PByte; const AOffset, ASize: Int64);
+constructor TEmbeddedSlice.Create(ABase: PByte; const AOffset, ASize: Int64; const APath: string);
 begin
   inherited Create;
   FBase := ABase;
@@ -133,21 +148,23 @@ begin
   FSize := ASize;
   FPos := 0;
   FOpen := True;
+  FPath := APath;
 end;
 
-procedure TEmbeddedSlice.Reinit(ABase: PByte; const AOffset, ASize: Int64);
+procedure TEmbeddedSlice.Reinit(ABase: PByte; const AOffset, ASize: Int64; const APath: string);
 begin
   FBase := ABase;
   FOffset := AOffset;
   FSize := ASize;
   FPos := 0;
   FOpen := True;
+  FPath := APath;
 end;
 
 procedure TEmbeddedSlice.CheckOpen;
 begin
   if not FOpen then
-    raise EVfsClosed.CreateCtx('read', '', 'stream already closed');
+    raise EVfsClosed.CreateCtx('read', FPath, 'stream already closed');
 end;
 
 function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -169,7 +186,7 @@ end;
 function TEmbeddedSlice.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
-  raise EVfsError.CreateCtx('write', '', 'stream is read-only');
+  raise EVfsError.CreateCtx('write', FPath, 'stream is read-only');
 end;
 
 function TEmbeddedSlice.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -207,7 +224,12 @@ end;
 procedure TEmbeddedSlice.SetPosition(const AValue: Int64);
 begin
   CheckOpen;
-  FPos := AValue;
+  if AValue < 0 then
+    FPos := 0
+  else if AValue > FSize then
+    FPos := FSize
+  else
+    FPos := AValue;
 end;
 
 function TEmbeddedSlice.ReadAt(var ABuf; const ACount: SizeUInt;
@@ -243,6 +265,7 @@ var
   LKeep: IVfs;
 begin
   LKeep := FKeep;
+  if LKeep = nil then ;
   LOwner := FOwner;
   LSlice := FSlice;
   FSlice := nil;
@@ -315,17 +338,16 @@ begin
   FOwnsBlob := AOwnsBlob;
   FPoolLock := SpinLock;
   FPoolCount := 0;
-  { Materialize sorted path index + parallel caches once — O(n) upfront, O(1) per ServeVfs/Stat/OpenRead.
-    FEntries avoids per-request DecodeWire + respack binary search. }
-  SetLength(FPaths, FRp.Count);
-  SetLength(FETags, FRp.Count);
-  SetLength(FLastMods, FRp.Count);
-  SetLength(FEntries, FRp.Count);
+  { Materialize parallel caches once — FEntries 零 DecodeWire，ETag/LastMod O(1) ServeVfs。
+    路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节），
+    Create 442ms→<180ms 预期。 }
+  SetLength(FETags, SizeInt(FRp.Count));
+  SetLength(FLastMods, SizeInt(FRp.Count));
+  SetLength(FEntries, SizeInt(FRp.Count));
   if FRp.Count > 0 then
     for I := 0 to FRp.Count - 1 do
     begin
       E := FRp.EntryAt(I);
-      FPaths[I] := FRp.PathOf(E);
       FEntries[I] := E;
       if (E.Flags and RESPACK_EFLAG_HASHED) <> 0 then
         FETags[I] := VfsETagFNV(E.Hash)
@@ -352,7 +374,6 @@ begin
   SetLength(FEntries, 0);
   SetLength(FLastMods, 0);
   SetLength(FETags, 0);
-  SetLength(FPaths, 0);
   if FOwnsBlob and (FData <> nil) then
     FreeMem(FData);
   FData := nil;
@@ -395,11 +416,6 @@ begin
   end;
 end;
 
-function TEmbeddedVfs.EntryPaths: TVfsNameArray;
-begin
-  Result := FPaths; { zero-alloc reuse — caller must not mutate }
-end;
-
 function TEmbeddedVfs.Exists(const APath: string): Boolean;
 begin
   if not VfsValidPath(APath, True) then
@@ -412,64 +428,40 @@ begin
 end;
 
 function TEmbeddedVfs.LowerBoundPath(const APath: string): SizeInt; inline;
-var
-  Lo, Hi, Mid: SizeInt;
-  C: Integer;
-  LPtr: Pointer;
-  LLen: SizeUInt;
 begin
-  LLen := SizeUInt(Length(APath));
-  if LLen > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
-  Lo := 0;
-  Hi := Length(FPaths);
-  while Lo < Hi do
-  begin
-    Mid := (Lo + Hi) shr 1;
-    C := CompareBytesOrdered(Pointer(@FPaths[Mid][1]), LPtr,
-      SizeUInt(Length(FPaths[Mid])), LLen);
-    if C < 0 then
-      Lo := Mid + 1
-    else
-      Hi := Mid;
-  end;
-  Result := Lo;
+  Result := SizeInt(FRp.LowerBound(APath));
 end;
 
 function TEmbeddedVfs.HasSubtreePath(const APath: string): Boolean;
 var
-  Lo: SizeInt;
+  Lo: SizeUInt;
   QLen: Integer;
+  P: PByte;
+  L: SizeUInt;
 begin
-  { 子目录存在性：零分配——以 LowerBound 直达首个 ≥ APath 项，再判 '/' 前缀
-    复用统一 LowerBoundPath，消除与 IndexOfPath 的二分重复 }
+  { 零分配：FRp.LowerBound 直达首个 ≥ APath 项（不落地 string），再判 '/' 前缀 }
   Result := False;
-  if Length(FPaths) = 0 then
+  if FRp.Count = 0 then
     Exit;
   QLen := Length(APath);
-  Lo := LowerBoundPath(APath);
-  if Lo >= Length(FPaths) then Exit;
-  if Length(FPaths[Lo]) <= QLen then Exit;
-  if FPaths[Lo][QLen + 1] <> '/' then Exit;
+  Lo := FRp.LowerBound(APath);
+  if Lo >= FRp.Count then Exit;
+  L := FRp.StoredPathRange(Lo, P);
+  if L <= SizeUInt(QLen) then Exit;
+  if P[QLen] <> Ord('/') then Exit;
   if QLen > 0 then
-    if not CompareMem(@FPaths[Lo][1], @APath[1], SizeUInt(QLen)) then Exit;
+    if not CompareMem(P, @APath[1], SizeUInt(QLen)) then Exit;
   Result := True;
 end;
 
 function TEmbeddedVfs.IndexOfPath(const APath: string): SizeInt;
 var
-  Lo: SizeInt;
-  LPtr: Pointer;
-  LLen: SizeUInt;
+  Lo: SizeUInt;
 begin
-  Lo := LowerBoundPath(APath);
-  if Lo < Length(FPaths) then
-  begin
-    LLen := SizeUInt(Length(APath));
-    if LLen > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
-    if CompareBytesOrdered(Pointer(@FPaths[Lo][1]), LPtr,
-      SizeUInt(Length(FPaths[Lo])), LLen) = 0 then
-      Exit(Lo);
-  end;
+  Lo := FRp.LowerBound(APath);
+  if Lo < FRp.Count then
+    if FRp.ComparePathAt(Lo, APath) = 0 then
+      Exit(SizeInt(Lo));
   Result := -1;
 end;
 
@@ -497,6 +489,23 @@ begin
     ALastModified := FLastMods[Idx];
     Exit(True);
   end;
+  ALastModified := '';
+  Result := False;
+end;
+
+function TEmbeddedVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+var
+  Idx: SizeInt;
+begin
+  // 单次二分同时取双值，ServeVfs 三连击 3×→1×
+  Idx := IndexOfPath(APath);
+  if Idx >= 0 then
+  begin
+    AETag := FETags[Idx];
+    ALastModified := FLastMods[Idx];
+    Exit(True);
+  end;
+  AETag := '';
   ALastModified := '';
   Result := False;
 end;
@@ -536,17 +545,24 @@ end;
 function TEmbeddedVfs.List(const ADirPath: string): TEntryArray;
 var
   Prefix: string;
+  PrefixLen: SizeInt;
   Seen: TVfsNameArray;
   SI: TStatInfo;
   Idx: SizeInt;
   E: TResPackEntry;
-  I: SizeUInt;
+  I: SizeInt;
+  OutN: SizeInt;
+  SegPos: SizeInt;
+  P: PByte;
+  L: SizeUInt;
+  Child: string;
+  ChildOff: SizeInt;
+  ChildLen: SizeInt;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
   if not VfsIsRoot(ADirPath) then
   begin
-    { 目录存在性：是文件则 NotADirectory，两者皆非则 NotFound }
     SI := Stat(ADirPath);
     if not SI.Info.IsDir then
       raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is a file');
@@ -555,16 +571,45 @@ begin
     Prefix := ''
   else
     Prefix := ADirPath + '/';
+  PrefixLen := Length(Prefix);
 
-  Seen := VfsDeriveChildNames(EntryPaths, Prefix);
+  // 零拷贝推导：直接扫描 FRp 索引存储字节，仅分配直接子项去重后 Child 字符串（≤ 扇出）
+  SetLength(Seen, SizeInt(FRp.Count));
+  OutN := 0;
+  for I := 0 to SizeInt(FRp.Count) - 1 do
+  begin
+    L := FRp.StoredPathRange(I, P);
+    if SizeInt(L) <= PrefixLen then Continue;
+    if PrefixLen > 0 then
+      if not CompareMem(P, @Prefix[1], SizeUInt(PrefixLen)) then Continue;
+    // '/' 扫描：零基偏移，避免 QWord 常量 -1 越界（SizeInt 带符号，-1 合法）
+    SegPos := 0;
+    for ChildOff := PrefixLen to SizeInt(L) - 1 do
+      if (P + SizeUInt(ChildOff))^ = Ord('/') then
+      begin
+        SegPos := ChildOff + 1;
+        Break;
+      end;
+    if SegPos > 0 then
+      ChildLen := SegPos - 1
+    else
+      ChildLen := SizeInt(L);
+    SetLength(Child, ChildLen);
+    if ChildLen > 0 then
+      Move(P^, Child[1], SizeUInt(ChildLen));
+    if (OutN = 0) or (Seen[OutN - 1] <> Child) then
+    begin
+      Seen[OutN] := Child;
+      Inc(OutN);
+    end;
+  end;
+  SetLength(Seen, OutN);
 
   Result := nil;
-  SetLength(Result, SizeUInt(Length(Seen)));
-  if SizeUInt(Length(Seen)) > 0 then
-    for I := 0 to SizeUInt(Length(Seen)) - 1 do
+  SetLength(Result, OutN);
+  if OutN > 0 then
+    for I := 0 to OutN - 1 do
     begin
-      { 零 Stat 直填：Seen 已是规范名，省 ValidPath + Stat 二次封装
-        以 IndexOfPath 直命中 FEntries；未命中即为虚拟目录 }
       Idx := IndexOfPath(Seen[I]);
       if Idx >= 0 then
       begin
@@ -603,9 +648,9 @@ begin
   end;
   E := FEntries[Idx];
   if TryPopPool(Slice) then
-    Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size))
+    Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size), APath)
   else
-    Slice := TEmbeddedSlice.Create(FData, Int64(E.DataOffset), Int64(E.Size));
+    Slice := TEmbeddedSlice.Create(FData, Int64(E.DataOffset), Int64(E.Size), APath);
   Keep := Self as IVfs;
   Result := TEmbeddedSliceStream.Create(Slice, Self, Keep);
 end;

@@ -19,10 +19,14 @@ const
   RESPACK_DATA_ALIGN           = 16;
   RESPACK_DIGEST_SIZE          = 32;
 
-  { header flags；bit0/bit1 已定义，bit2 起保留（reader 拒绝置位） }
+  { header flags；bit0/bit1 已定义，bit2-4 digest 算法 ID（FORMAT.md） }
   RESPACK_FLAG_HASHED   = $00000001;  { 全部条目 hash 有效（汇总提示） }
   RESPACK_FLAG_DIGESTED = $00000002;  { digest 区存在 }
-  RESPACK_FLAG_KNOWN    = RESPACK_FLAG_HASHED or RESPACK_FLAG_DIGESTED;
+  RESPACK_FLAG_ALGO_MASK  = $0000001C;  { bit2-4 digest 算法 ID 掩码 }
+  RESPACK_FLAG_ALGO_SHIFT = 2;
+  RESPACK_DIGEST_ALGO_SHA256 = 0;       { 0 = SHA-256（v1 唯一合法值） }
+  RESPACK_FLAG_KNOWN    = RESPACK_FLAG_HASHED or RESPACK_FLAG_DIGESTED
+    or RESPACK_FLAG_ALGO_MASK;
 
   { entry flags }
   RESPACK_EFLAG_HASHED = $0001;      { 本条目 hash 有效（权威判定） }
@@ -74,6 +78,7 @@ type
   TResPackBuildOptions = record
     Deduplicate: Boolean;         { fnv 候选 + 字节回验后复用槽位 }
     Hashes: Boolean;              { 计算并写入条目 FNV-1a }
+    CodecId: Byte;                { 编解码；默认 STORE=0 }
     DigestFunc: TResPackDigestFunc; { nil = 无 digest 区 }
     MaxTotalInputBytes: SizeUInt; { 输入总量上限；超限 EResPackTooLarge }
   end;
@@ -85,11 +90,28 @@ type
     Owned: Boolean;
   end;
 
-  { 错误层级：全部挂在 exception 根上，不触碰 SysUtils }
-  EResPackError = class(Exception);
-  EResPackCorrupted = class(EResPackError)
+  { 错误层级：全部挂在 exception 根上，不触碰 SysUtils。
+    对齐 vfs EVfsError(Op/Path) 范式：Op/Path 结构化定位，message 保留
+    详情后缀 (op=…, path=…) 质感；CreateStep 补充 Op/Path 重载。 }
+  EResPackError = class(Exception)
+  private
+    FOp: string;
+    FPath: string;
   public
-    constructor CreateStep(const AStep: Integer; const ADetail: string);
+    constructor Create(const AMsg: string); overload;
+    constructor CreateCtx(const AOp, APath, AMsg: string); overload;
+    property Op: string read FOp;
+    property Path: string read FPath;
+  end;
+  EResPackCorrupted = class(EResPackError)
+  private
+    FStep: Integer;
+  public
+    constructor Create(const AMsg: string); overload;
+    constructor CreateStep(const AStep: Integer; const ADetail: string); overload;
+    constructor CreateStep(const AStep: Integer; const AOp, APath, ADetail: string); overload;
+    constructor CreateCtx(const AOp, APath, AMsg: string); overload;
+    property Step: Integer read FStep;
   end;
   EResPackDuplicatePath = class(EResPackError);
   EResPackInvalidPath = class(EResPackError);
@@ -187,6 +209,7 @@ function ResPackDefaultOptions: TResPackBuildOptions;
 begin
   Result.Deduplicate := False;
   Result.Hashes := True;
+  Result.CodecId := RESPACK_CODEC_STORE;
   Result.DigestFunc := nil;
   Result.MaxTotalInputBytes := RESPACK_MAX_INPUT_BYTES;
 end;
@@ -206,6 +229,7 @@ var
   Tmp: array[0..15] of AnsiChar;
   I, J: Integer;
 begin
+  FillChar(Tmp, SizeOf(Tmp), 0);
   if AValue = 0 then
     Exit('0');
   I := High(Tmp);
@@ -220,10 +244,44 @@ begin
     Result[J] := Char(Tmp[I + J]);
 end;
 
+constructor EResPackError.Create(const AMsg: string);
+begin
+  inherited Create(AMsg);
+  FOp := '';
+  FPath := '';
+end;
+
+constructor EResPackError.CreateCtx(const AOp, APath, AMsg: string);
+begin
+  inherited Create(AMsg + ' (op=' + AOp + ', path=' + APath + ')');
+  FOp := AOp;
+  FPath := APath;
+end;
+
+constructor EResPackCorrupted.Create(const AMsg: string);
+begin
+  inherited Create(AMsg);
+  FStep := 0;
+end;
+
 constructor EResPackCorrupted.CreateStep(const AStep: Integer; const ADetail: string);
 begin
-  inherited Create('respack: validation step '
+  CreateStep(AStep, 'open', '', ADetail);
+end;
+
+constructor EResPackCorrupted.CreateStep(const AStep: Integer; const AOp,
+  APath, ADetail: string);
+begin
+  FStep := AStep;
+  inherited CreateCtx(AOp, APath, 'respack: validation step '
     + ResPackUIntToStr(UInt32(AStep)) + ' failed: ' + ADetail);
+  FStep := AStep;
+end;
+
+constructor EResPackCorrupted.CreateCtx(const AOp, APath, AMsg: string);
+begin
+  FStep := 0;
+  inherited CreateCtx(AOp, APath, AMsg);
 end;
 
 end.

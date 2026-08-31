@@ -45,7 +45,7 @@ end;
 
 function IsGzipPred(const AData: TBytes): Boolean; inline;
 begin
-  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
+  Result := (Length(AData) >= 2) and (AData[0] = GZIP_MAGIC_1) and (AData[1] = GZIP_MAGIC_2);
 end;
 
 type
@@ -97,6 +97,7 @@ var LInfo: TStatInfo;
 begin
   LInfo := FInner.Stat(APath);
   if LInfo.Info.IsDir then Exit(LInfo);
+  // 4K Peek 为非 gzip 避免全量 VfsReadAllBytes（大文件 Stat 零解压），gzip 路径额外 4K Peek 为有界开销（4K vs 全量），trade-off 已固化于 bench_transform
   if not IsGzipHeader(APath) then Exit(LInfo);
   Result := FTransformVfs.Stat(APath);
 end;

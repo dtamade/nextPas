@@ -87,7 +87,7 @@ end;
 
 procedure TestVfsSourcesNoFpcRtl;
 const
-  FILES: array[0..10] of string = (
+  FILES: array[0..12] of string = (
     'src/nextpas.core.vfs.pas',
     'src/nextpas.core.vfs.base.pas',
     'src/nextpas.core.vfs.intf.pas',
@@ -97,6 +97,8 @@ const
     'src/nextpas.core.vfs.os.pas',
     'src/nextpas.core.vfs.embedded.pas',
     'src/nextpas.core.vfs.sub.pas',
+    'src/nextpas.core.vfs.mount.pas',
+    'src/nextpas.core.vfs.overlay.pas',
     'src/nextpas.core.vfs.transform.pas',
     'src/nextpas.core.vfs.compressed.pas');
 var
@@ -122,7 +124,7 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..13] of string = (
+  NO_SEAM: array[0..15] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
@@ -135,6 +137,8 @@ const
     'src/nextpas.core.vfs.util.pas',
     'src/nextpas.core.vfs.embedded.pas',
     'src/nextpas.core.vfs.sub.pas',
+    'src/nextpas.core.vfs.mount.pas',
+    'src/nextpas.core.vfs.overlay.pas',
     'src/nextpas.core.vfs.transform.pas',
     'src/nextpas.core.vfs.compressed.pas');
 var
