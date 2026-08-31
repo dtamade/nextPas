@@ -91,6 +91,7 @@ type
     { Best-effort CancelIoEx for pending ops matching AContext.
       Does not free OVERLAPPED; completion still arrives via GQCS. }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    function CancelByFd(AFd: PtrInt): Boolean;
   end;
 
 implementation
@@ -971,6 +972,37 @@ begin
     end;
     LOp := LOp^.Next;
   end;
+end;
+
+function TIocpReactor.CancelByFd(AFd: PtrInt): Boolean;
+var
+  LOp: PIocpPendingOp;
+  LHandle: HANDLE;
+  LContexts: array of Pointer;
+  LCount, LI: UInt32;
+begin
+  Result := False;
+  if (AFd = 0) or (not IsValid) then
+    Exit;
+  LHandle := IocpHandleFromFd(AFd);
+  if FPendingHead = nil then
+    Exit;
+  // collect contexts for matching fd first
+  SetLength(LContexts, 0);
+  LOp := PIocpPendingOp(FPendingHead);
+  while LOp <> nil do
+  begin
+    if LOp^.Handle = LHandle then
+    begin
+      SetLength(LContexts, Length(LContexts)+1);
+      LContexts[High(LContexts)] := LOp^.Context;
+    end;
+    LOp := LOp^.Next;
+  end;
+  LCount := Length(LContexts);
+  for LI := 0 to LCount - 1 do
+    if TryCancelByContext(LContexts[LI]) then
+      Result := True;
 end;
 
 function TIocpReactor.PollOne: Boolean;

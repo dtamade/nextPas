@@ -147,6 +147,7 @@ type
     procedure Stop;
     { True if the I/O poller still has in-flight ops (after timeout cancel drain). }
     function HasPendingIo: Boolean; inline;
+    function CancelByFd(AFd: PtrInt): Boolean;
   end;
 
 implementation
@@ -952,6 +953,13 @@ end;
 function TAsyncLoop.HasPendingIo: Boolean;
 begin
   Result := FPoller.HasPending;
+end;
+
+function TAsyncLoop.CancelByFd(AFd: PtrInt): Boolean;
+begin
+  if not IsValid then
+    Exit(False);
+  Result := FPoller.CancelByFd(AFd);
 end;
 
 function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;

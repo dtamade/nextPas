@@ -116,6 +116,7 @@ type
     function HasPending: Boolean;
     { Drop one pending op with matching Context and deliver -ECANCELED. }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    function CancelByFd(AFd: Int32): Boolean;
   end;
 
 implementation
@@ -866,6 +867,30 @@ begin
   if Assigned(LCallback) then
     LCallback(LUserData, -ESysECANCELED, LContext);
   Result := True;
+end;
+
+function TKqueueReactor.CancelByFd(AFd: Int32): Boolean;
+var
+  LI: UInt32;
+  LContexts: array of Pointer;
+  LCount, LJ: UInt32;
+begin
+  Result := False;
+  if (AFd < 0) or (not IsValid) then
+    Exit;
+  if FOpCount = 0 then
+    Exit;
+  SetLength(LContexts, FOpCount);
+  LCount := 0;
+  for LI := 0 to FOpCount - 1 do
+    if FOps[LI].Active and (FOps[LI].Fd = AFd) then
+    begin
+      LContexts[LCount] := FOps[LI].Context;
+      Inc(LCount);
+    end;
+  for LJ := 0 to LCount - 1 do
+    if TryCancelByContext(LContexts[LJ]) then
+      Result := True;
 end;
 
 function TKqueueReactor.PollWait(const ATimeoutMs: Int64): Int32;
