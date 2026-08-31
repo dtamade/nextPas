@@ -45,19 +45,8 @@ procedure AppendJsonBooleanField(
 implementation
 
 function JsonEscape(const Value: string): string;
-var
-  View: TStringView;
-  Builder: TBufStringBuilder;
 begin
-  if Value = '' then Exit('');
-  View := TStringView.Create(PAnsiChar(@Value[1]), SizeUInt(Length(Value)));
-  Builder.Init(SizeUInt(Length(Value) + 16));
-  try
-    JsonEscapeToBuilder(View, Builder);
-    Result := Builder.ToString;
-  finally
-    Builder.Done;
-  end;
+  Result := nextpas.core.text.conv.JsonEscape(Value);
 end;
 
 function JsonString(const Value: string): string;

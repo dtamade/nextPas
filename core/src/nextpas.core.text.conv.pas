@@ -43,6 +43,9 @@ function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
 function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
 function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 
+function JsonEscape(const AValue: string): string;
+function EscapeLlvmStr(const AValue: string): string;
+
 {== Encoding — byte<->string conversions ==}
 function UTF8BytesToString(const AData: TBytes): string; inline;
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
@@ -69,10 +72,13 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.errors,
   { ASCII SameText only — do not pull text.compare (unicode.casefold/normalize). }
+  nextpas.core.text.builder,
   nextpas.core.text.char,
+  nextpas.core.text.escape,
   nextpas.core.text.format,
   nextpas.core.text.number,
-  nextpas.core.text.utils;
+  nextpas.core.text.utils,
+  nextpas.core.text.view;
 
 {== Integer/String conversion — uses System.Str/Val ==}
 
@@ -360,6 +366,55 @@ var LCode: Integer;
 begin
   Val(AStr, AValue, LCode);
   Result := LCode = 0;
+end;
+
+function JsonEscape(const AValue: string): string;
+var
+  LBuilder: TStringBuilder;
+  LView: TStringView;
+begin
+  Result := '';
+  if AValue = '' then
+    Exit;
+  LView := TStringView.Create(PAnsiChar(AValue), Length(AValue));
+  LBuilder.Init(Length(AValue));
+  try
+    nextpas.core.text.escape.JsonEscapeToBuilder(LView, LBuilder);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
+end;
+
+function EscapeLlvmStr(const AValue: string): string;
+var
+  LBuilder: TStringBuilder;
+  I: SizeInt;
+  C: Byte;
+const
+  Hex: array[0..15] of AnsiChar = '0123456789abcdef';
+begin
+  Result := '';
+  if AValue = '' then
+    Exit;
+  LBuilder.Init(Length(AValue) * 3);
+  try
+    for I := 1 to Length(AValue) do
+    begin
+      C := Byte(AValue[I]);
+      if (C < 32) or (C > 126) or (C = 34) or (C = 92) then
+      begin
+        LBuilder.AppendChar('\');
+        LBuilder.AppendChar(Hex[C shr 4]);
+        LBuilder.AppendChar(Hex[C and $F]);
+      end
+      else
+        LBuilder.AppendChar(AnsiChar(C));
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 {== Encoding — byte<->string conversions ==}

@@ -13,19 +13,8 @@ begin
 end;
 
 function THIRLlvmEmitter.EscapeLlvmStr(const AValue: string): string;
-var
-  I: LongInt;
-  C: Char;
 begin
-  Result := '';
-  for I := 1 to Length(AValue) do
-  begin
-    C := AValue[I];
-    if (Ord(C) < 32) or (Ord(C) > 126) or (C = '"') or (C = '\') then
-      Result := Result + '\' + LowerCase(IntToHex(Ord(C), 2))
-    else
-      Result := Result + C;
-  end;
+  Result := nextpas.core.text.conv.EscapeLlvmStr(AValue);
 end;
 
 function THIRLlvmEmitter.LlvmGlobalName(const AName: string): string;
