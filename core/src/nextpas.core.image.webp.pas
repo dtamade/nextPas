@@ -22,7 +22,9 @@ uses
   nextpas.core.errors,
   nextpas.core.graphics.errors,
   nextpas.core.image.webp.loader,
-  nextpas.core.mem.base;
+  nextpas.core.mem.base,
+  nextpas.core.image.base,
+  nextpas.core.image.dispatch;
 
 function WebPIsAvailable: Boolean;
 begin
@@ -70,5 +72,15 @@ begin
   raise ENotImplementedError.Create('webp: decode wiring pending (S2 FFI)');
   Result := nil;
 end;
+
+function WebPProbe(const AData: TBytes): Boolean;
+begin
+  Result := (Length(AData) >= 12) and (AData[0] = Ord('R')) and (AData[1] = Ord('I'))
+    and (AData[2] = Ord('F')) and (AData[3] = Ord('F')) and (AData[8] = Ord('W'))
+    and (AData[9] = Ord('E')) and (AData[10] = Ord('B')) and (AData[11] = Ord('P'));
+end;
+
+initialization
+  ImageRegisterCodec(ifWebP, @WebPProbe, @WebPDecodeRgba, True);
 
 end.

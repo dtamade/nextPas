@@ -235,24 +235,57 @@ begin
 end;
 
 procedure TRasterCanvas.FillTrapezoidsGradient(const ATraps: array of TTrapezoid; const AGrad: TGradient; const ABounds: TRect; ARadial: Boolean);
+const
+  LUT_N = 256;
+  CHUNK_SIZE = 64;
 var
-  I, X, Y, YStart, YEnd, W, H, X0, X1: Integer;
+  I, Y, YStart, YEnd, W, H, X0, X1: Integer;
   Tr: TTrapezoid;
   DH, T: Single;
   XL, XR: Single;
-  tGrad, t0, stepT, invW: Single;
-  RunCol: TColor32;
-  Row, Dst: PByte;
-  CX, CY, Rad, Dx, Dy, Dx0, Dy0, stepDx, stepDy, Dist: Single;
+  t0, stepT, invW: Single;
+  Row, P: PByte;
+  CX, CY, Rad, Dx0, Dy0, stepDx, stepDy, Dist: Single;
   UseInv: Boolean;
   Inv: TMat2D;
   InvA, InvB, InvC, InvD, InvTx, InvTy: Single;
   rowBaseX, rowBaseY, py: Single;
-  R, G, B, A, invAByte: Byte;
+  n, c, k: Integer;
+  LocalColors: TColor32Array;
+  LocalStops: TSingleArray;
+  Lut: array[0..255] of LongWord;
+  Chunk: array[0..63] of LongWord;
+  hasStops: Boolean;
+  cnt, off, rem, j, idx: Integer;
+  tt: Single;
+  Dx, Dy: Single;
+  col: LongWord;
+  R, G, B, A: Byte;
+  invAlpha: Integer;
+  Tv: Integer;
+  allOpaque: Boolean;
 begin
   if FBitmap.IsEmpty then Exit;
   W := FBitmap.Width; H := FBitmap.Height;
   if ABounds.IsEmpty then Exit;
+  n := AGrad.ColorCount;
+  if n = 0 then Exit;
+  SetLength(LocalColors, n);
+  for c := 0 to n - 1 do LocalColors[c] := AGrad.GetColor(c);
+  hasStops := AGrad.StopCount > 0;
+  if hasStops then
+  begin
+    SetLength(LocalStops, n);
+    for c := 0 to n - 1 do LocalStops[c] := AGrad.GetStop(c);
+  end
+  else
+    SetLength(LocalStops, 0);
+  // build LUT O(n*256) once, per-pixel O(1) lookup, avoids per-pixel binary search+GetColor
+  for c := 0 to LUT_N - 1 do
+  begin
+    tt := c / (LUT_N - 1);
+    Lut[c] := LongWord(SampleGradient(AGrad, tt));
+  end;
   UseInv := AGrad.Transform.IsInvertible;
   if UseInv then
   begin
@@ -304,69 +337,103 @@ begin
       begin rowBaseX := 0; rowBaseY := 0; end;
       if not ARadial then
       begin
-        // 增量 t：避免每像素 TransformPoint（Inv.A 斜率预提），用 t0+(X-X0)*step 精确避免累积误差
         if UseInv then
         begin t0 := (InvA * (Single(X0) + 0.5) + rowBaseX - ABounds.X) * invW; stepT := InvA * invW; end
         else
         begin t0 := (Single(X0) + 0.5 - ABounds.X) * invW; stepT := invW; end;
-        for X := X0 to X1 - 1 do
+        off := 0; rem := X1 - X0;
+        while rem > 0 do
         begin
-          tGrad := t0 + Single(X - X0) * stepT;
-          if tGrad < 0 then tGrad := 0 else if tGrad > 1 then tGrad := 1;
-          RunCol := SampleGradient(AGrad, tGrad);
-          R := Byte((LongWord(RunCol) shr 16) and $FF);
-          G := Byte((LongWord(RunCol) shr 8) and $FF);
-          B := Byte(LongWord(RunCol) and $FF);
-          A := Byte((LongWord(RunCol) shr 24) and $FF);
-          if A <> 0 then
+          cnt := rem; if cnt > CHUNK_SIZE then cnt := CHUNK_SIZE;
+          for j := 0 to cnt - 1 do
           begin
-            Dst := Row + X * 4;
-            if A = 255 then
-              PLongWord(Dst)^ := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24)
-            else
+            tt := t0 + Single(off + j) * stepT;
+            if tt < 0 then tt := 0 else if tt > 1 then tt := 1;
+            idx := Trunc(tt * 255);
+            if idx < 0 then idx := 0 else if idx > 255 then idx := 255;
+            Chunk[j] := Lut[idx];
+          end;
+          P := Row + (X0 + off) * 4;
+          allOpaque := True;
+          for j := 0 to cnt - 1 do
+            if Byte((Chunk[j] shr 24) and $FF) <> 255 then begin allOpaque := False; Break; end;
+          if allOpaque then
+            SimdMemCopy(@Chunk[0], P, NativeUInt(cnt * 4))
+          else
+          begin
+            for j := 0 to cnt - 1 do
             begin
-              invAByte := Byte(255 - A);
-              Dst[0] := Byte((Integer(R) * Integer(A) + Integer(Dst[0]) * Integer(invAByte)) div 255);
-              Dst[1] := Byte((Integer(G) * Integer(A) + Integer(Dst[1]) * Integer(invAByte)) div 255);
-              Dst[2] := Byte((Integer(B) * Integer(A) + Integer(Dst[2]) * Integer(invAByte)) div 255);
-              Dst[3] := Byte(Integer(A) + (Integer(Dst[3]) * Integer(invAByte)) div 255);
+              col := Chunk[j];
+              R := Byte((col shr 16) and $FF);
+              G := Byte((col shr 8) and $FF);
+              B := Byte(col and $FF);
+              A := Byte((col shr 24) and $FF);
+              if A = 0 then Continue;
+              if A = 255 then
+                PLongWord(P + j * 4)^ := col
+              else
+              begin
+                invAlpha := 255 - A;
+                Tv := Integer(R) * Integer(A) + Integer(P[j*4]) * invAlpha; P[j*4] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(G) * Integer(A) + Integer(P[j*4+1]) * invAlpha; P[j*4+1] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(B) * Integer(A) + Integer(P[j*4+2]) * invAlpha; P[j*4+2] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(P[j*4+3]) * invAlpha; P[j*4+3] := Byte(Integer(A) + (Tv + 1 + (Tv shr 8)) shr 8);
+              end;
             end;
           end;
+          off := off + cnt; rem := rem - cnt;
         end;
       end
       else
       begin
-        // radial：预提 Dx/Dy 基准，仍需 Sqrt；用 Dx0+(X-X0)*step 精确
         if UseInv then
         begin Dx0 := InvA * (Single(X0) + 0.5) + rowBaseX - CX; Dy0 := InvB * (Single(X0) + 0.5) + rowBaseY - CY; stepDx := InvA; stepDy := InvB; end
         else
         begin Dx0 := Single(X0) + 0.5 - CX; Dy0 := py - CY; stepDx := 1; stepDy := 0; end;
-        for X := X0 to X1 - 1 do
+        off := 0; rem := X1 - X0;
+        while rem > 0 do
         begin
-          Dx := Dx0 + Single(X - X0) * stepDx;
-          Dy := Dy0 + Single(X - X0) * stepDy;
-          Dist := Sqrt(Dx*Dx + Dy*Dy);
-          tGrad := Dist / Rad;
-          if tGrad < 0 then tGrad := 0 else if tGrad > 1 then tGrad := 1;
-          RunCol := SampleGradient(AGrad, tGrad);
-          R := Byte((LongWord(RunCol) shr 16) and $FF);
-          G := Byte((LongWord(RunCol) shr 8) and $FF);
-          B := Byte(LongWord(RunCol) and $FF);
-          A := Byte((LongWord(RunCol) shr 24) and $FF);
-          if A <> 0 then
+          cnt := rem; if cnt > CHUNK_SIZE then cnt := CHUNK_SIZE;
+          for j := 0 to cnt - 1 do
           begin
-            Dst := Row + X * 4;
-            if A = 255 then
-              PLongWord(Dst)^ := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24)
-            else
+            Dx := Dx0 + Single(off + j) * stepDx;
+            Dy := Dy0 + Single(off + j) * stepDy;
+            Dist := Sqrt(Dx*Dx + Dy*Dy);
+            tt := Dist / Rad;
+            if tt < 0 then tt := 0 else if tt > 1 then tt := 1;
+            idx := Trunc(tt * 255);
+            if idx < 0 then idx := 0 else if idx > 255 then idx := 255;
+            Chunk[j] := Lut[idx];
+          end;
+          P := Row + (X0 + off) * 4;
+          allOpaque := True;
+          for j := 0 to cnt - 1 do
+            if Byte((Chunk[j] shr 24) and $FF) <> 255 then begin allOpaque := False; Break; end;
+          if allOpaque then
+            SimdMemCopy(@Chunk[0], P, NativeUInt(cnt * 4))
+          else
+          begin
+            for j := 0 to cnt - 1 do
             begin
-              invAByte := Byte(255 - A);
-              Dst[0] := Byte((Integer(R) * Integer(A) + Integer(Dst[0]) * Integer(invAByte)) div 255);
-              Dst[1] := Byte((Integer(G) * Integer(A) + Integer(Dst[1]) * Integer(invAByte)) div 255);
-              Dst[2] := Byte((Integer(B) * Integer(A) + Integer(Dst[2]) * Integer(invAByte)) div 255);
-              Dst[3] := Byte(Integer(A) + (Integer(Dst[3]) * Integer(invAByte)) div 255);
+              col := Chunk[j];
+              R := Byte((col shr 16) and $FF);
+              G := Byte((col shr 8) and $FF);
+              B := Byte(col and $FF);
+              A := Byte((col shr 24) and $FF);
+              if A = 0 then Continue;
+              if A = 255 then
+                PLongWord(P + j * 4)^ := col
+              else
+              begin
+                invAlpha := 255 - A;
+                Tv := Integer(R) * Integer(A) + Integer(P[j*4]) * invAlpha; P[j*4] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(G) * Integer(A) + Integer(P[j*4+1]) * invAlpha; P[j*4+1] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(B) * Integer(A) + Integer(P[j*4+2]) * invAlpha; P[j*4+2] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(P[j*4+3]) * invAlpha; P[j*4+3] := Byte(Integer(A) + (Tv + 1 + (Tv shr 8)) shr 8);
+              end;
             end;
           end;
+          off := off + cnt; rem := rem - cnt;
         end;
       end;
     end;
@@ -425,6 +492,8 @@ var
   W00, W10, W01, W11: Single;
   C00, C10, C01, C11: LongWord;
   R, G, B, A: Byte;
+  c4, wyI, wxI: Integer;
+  w00i, w10i, w01i, w11i: Integer;
 begin
   if ABitmap.IsEmpty or ADst.IsEmpty or ASrc.IsEmpty then Exit;
   if FBitmap.IsEmpty or ABitmap.IsEmpty then Exit;
@@ -514,7 +583,6 @@ begin
           if ABitmap.Height = 1 then begin IY0 := 0; FY1 := 0; end;
           IY1 := IY0 + 1;
           if IY1 >= ABitmap.Height then IY1 := IY0;
-          // hoist row pointers out of inner X loop (was 4 RowPtr per pixel)
           SrcRow0 := ABitmap.RowPtr(IY0);
           SrcRow1 := ABitmap.RowPtr(IY1);
           DstRow := FBitmap.RowPtr(DstY);
@@ -523,8 +591,41 @@ begin
           if DX < 0 then ClipX0 := -DX;
           if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
           if ClipX1 <= ClipX0 then Continue;
-          WY := FY1;
-          for X := ClipX0 to ClipX1 - 1 do
+          // fixed-point WY 0..256, hoisted per row, integer blend with bytes.binary loads
+          wyI := Round(FY1 * 256);
+          if wyI < 0 then wyI := 0 else if wyI > 256 then wyI := 256;
+          X := ClipX0;
+          while X + 3 < ClipX1 do
+          begin
+            // 4-pixel batch unroll, each still bilinear but weight calc batched and uses integer fixed-point + bytes.binary batch
+            for c4 := 0 to 3 do
+            begin
+              FX := SX0f + (X + c4 + 0.5) * ScaleX - 0.5;
+              IX0 := Trunc(FX);
+              FX1 := FX - IX0;
+              if FX1 < 0 then begin IX0 := IX0 - 1; FX1 := FX1 + 1; end;
+              if IX0 < 0 then begin IX0 := 0; FX1 := 0; end;
+              if IX0 >= ABitmap.Width - 1 then begin IX0 := ABitmap.Width - 2; FX1 := 1; end;
+              if ABitmap.Width = 1 then begin IX0 := 0; FX1 := 0; end;
+              IX1 := IX0 + 1; if IX1 >= ABitmap.Width then IX1 := IX0;
+              wxI := Round(FX1 * 256); if wxI < 0 then wxI := 0 else if wxI > 256 then wxI := 256;
+              w00i := (256 - wxI) * (256 - wyI);
+              w10i := wxI * (256 - wyI);
+              w01i := (256 - wxI) * wyI;
+              w11i := wxI * wyI;
+              C00 := ReadUInt32LE(SrcRow0 + IX0 * 4);
+              C10 := ReadUInt32LE(SrcRow0 + IX1 * 4);
+              C01 := ReadUInt32LE(SrcRow1 + IX0 * 4);
+              C11 := ReadUInt32LE(SrcRow1 + IX1 * 4);
+              R := Byte((Byte(C00) * w00i + Byte(C10) * w10i + Byte(C01) * w01i + Byte(C11) * w11i + 32768) shr 16);
+              G := Byte((Byte(C00 shr 8) * w00i + Byte(C10 shr 8) * w10i + Byte(C01 shr 8) * w01i + Byte(C11 shr 8) * w11i + 32768) shr 16);
+              B := Byte((Byte(C00 shr 16) * w00i + Byte(C10 shr 16) * w10i + Byte(C01 shr 16) * w01i + Byte(C11 shr 16) * w11i + 32768) shr 16);
+              A := Byte((Byte(C00 shr 24) * w00i + Byte(C10 shr 24) * w10i + Byte(C01 shr 24) * w01i + Byte(C11 shr 24) * w11i + 32768) shr 16);
+              WriteUInt32LE(DstRow + (DX + X + c4) * 4, LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24));
+            end;
+            X := X + 4;
+          end;
+          while X < ClipX1 do
           begin
             FX := SX0f + (X + 0.5) * ScaleX - 0.5;
             IX0 := Trunc(FX);
@@ -533,24 +634,22 @@ begin
             if IX0 < 0 then begin IX0 := 0; FX1 := 0; end;
             if IX0 >= ABitmap.Width - 1 then begin IX0 := ABitmap.Width - 2; FX1 := 1; end;
             if ABitmap.Width = 1 then begin IX0 := 0; FX1 := 0; end;
-            IX1 := IX0 + 1;
-            if IX1 >= ABitmap.Width then IX1 := IX0;
-            WX := FX1;
-            // precompute bilinear weights once per pixel
-            W00 := (1 - WX) * (1 - WY);
-            W10 := WX * (1 - WY);
-            W01 := (1 - WX) * WY;
-            W11 := WX * WY;
-            // direct 32-bit loads via hoisted rows
-            C00 := PLongWord(SrcRow0)[IX0];
-            C10 := PLongWord(SrcRow0)[IX1];
-            C01 := PLongWord(SrcRow1)[IX0];
-            C11 := PLongWord(SrcRow1)[IX1];
-            R := Byte(Round(W00 * Byte(C00) + W10 * Byte(C10) + W01 * Byte(C01) + W11 * Byte(C11)));
-            G := Byte(Round(W00 * Byte(C00 shr 8) + W10 * Byte(C10 shr 8) + W01 * Byte(C01 shr 8) + W11 * Byte(C11 shr 8)));
-            B := Byte(Round(W00 * Byte(C00 shr 16) + W10 * Byte(C10 shr 16) + W01 * Byte(C01 shr 16) + W11 * Byte(C11 shr 16)));
-            A := Byte(Round(W00 * Byte(C00 shr 24) + W10 * Byte(C10 shr 24) + W01 * Byte(C01 shr 24) + W11 * Byte(C11 shr 24)));
-            PLongWord(DstRow)[DX + X] := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24);
+            IX1 := IX0 + 1; if IX1 >= ABitmap.Width then IX1 := IX0;
+            wxI := Round(FX1 * 256); if wxI < 0 then wxI := 0 else if wxI > 256 then wxI := 256;
+            w00i := (256 - wxI) * (256 - wyI);
+            w10i := wxI * (256 - wyI);
+            w01i := (256 - wxI) * wyI;
+            w11i := wxI * wyI;
+            C00 := ReadUInt32LE(SrcRow0 + IX0 * 4);
+            C10 := ReadUInt32LE(SrcRow0 + IX1 * 4);
+            C01 := ReadUInt32LE(SrcRow1 + IX0 * 4);
+            C11 := ReadUInt32LE(SrcRow1 + IX1 * 4);
+            R := Byte((Byte(C00) * w00i + Byte(C10) * w10i + Byte(C01) * w01i + Byte(C11) * w11i + 32768) shr 16);
+            G := Byte((Byte(C00 shr 8) * w00i + Byte(C10 shr 8) * w10i + Byte(C01 shr 8) * w01i + Byte(C11 shr 8) * w11i + 32768) shr 16);
+            B := Byte((Byte(C00 shr 16) * w00i + Byte(C10 shr 16) * w10i + Byte(C01 shr 16) * w01i + Byte(C11 shr 16) * w11i + 32768) shr 16);
+            A := Byte((Byte(C00 shr 24) * w00i + Byte(C10 shr 24) * w10i + Byte(C01 shr 24) * w01i + Byte(C11 shr 24) * w11i + 32768) shr 16);
+            WriteUInt32LE(DstRow + (DX + X) * 4, LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24));
+            Inc(X);
           end;
         end;
       end;

@@ -44,7 +44,9 @@ uses
   nextpas.core.graphics.errors,
   nextpas.core.compress,
   nextpas.core.checksum.crc32,
-  nextpas.core.bytes.binary;
+  nextpas.core.bytes.binary,
+  nextpas.core.image.base,
+  nextpas.core.image.dispatch;
 
 const
   PNG_SIGNATURE: array[0..7] of Byte = (
@@ -352,5 +354,14 @@ begin
     Move(LRow[0], LPrev[0], RowLen);
   end;
 end;
+
+function PngProbe(const AData: TBytes): Boolean;
+begin
+  Result := (Length(AData) >= 8) and (AData[0] = $89) and (AData[1] = $50)
+    and (AData[2] = $4E) and (AData[3] = $47);
+end;
+
+initialization
+  ImageRegisterCodec(ifPng, @PngProbe, @PngDecodeRgba, True);
 
 end.
