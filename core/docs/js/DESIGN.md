@@ -2,7 +2,7 @@
 
 **状态**：S0 冻结，随源码落地微调（六维 P0 清零）
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）、`REVIEW.md`（差距）、`AI_GUIDE.md`（AI 规范）、`SIXDIM_REVIEW.md`（六维）
-**版本**：1.0（11 单元 pure.base 单源 481 行 + Close 幂等 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
+**版本**：1.0（11 单元 pure.base 单源 481 行 + Close 幂等 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
 
 ## 0. 分层总览（`SIXDIM L-1`）
 
@@ -222,3 +222,4 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（CONTRACT/ROADMAP/BENCHMARKS 三份对齐） |
 | 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.4 同步本次实测均值（Eval/small ~660ns / Eval/host ~1.5µs 加权 / B/op 18/176 / Value 零分配）+ pure.base 481 行阈值 550 内统一，18 份对齐 |
 | 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.4 保持，其余引用同步 1.0，18份对齐 |
+| 2026-08-31 | 1.0 | r10 文档收敛：ROADMAP/SIXDIM/GOAL_TREE 头部 1.4→1.5 + 684ns 基线同步，18份对齐 |

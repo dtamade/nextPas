@@ -1,5 +1,10 @@
 # nextpas.core.js 变更日志
 
+## [1.0.2] - 2026-08-31 — r10 宿主单源+文档收敛（18份对齐）
+
+- 复用度：新增 `JsPureCheckHostName/JsPureHostSetFunc/Method/Proc` 4 helper inline 单源（`Validate+nil+JsPureHostSet`），`fake/js888/v8/chakra/quickjs` 各 `SetHostFunction 3形态×5` 15 处克隆委托，纯族零 FFI/零 dl，`pure.base 481→516 行`阈值550内（+35 行，Close+Host 合计）
+- 文档收敛：`ROADMAP/GOAL_TREE/SIXDIM_REVIEW/PARITY/WEBVIEW_LINK/DESIGN` 头部 `BENCHMARKS 1.4→1.5` + `r9 均值 684ns` 同步，`SIXDIM 结论 0.10→1.0 r9`，`CONTRACT 纯族 481+122×3` 刷新，`42×4+12+SKIP` 5 gate 全绿，`hygiene pass`
+
 ## [1.0.1] - 2026-08-31 — r9 快路径+Close单源+基准回落（18份对齐）
 
 - 性能回落：`JsPureToJsonString` 快路径（先扫 `"` `\` `<32` 无转义则 `'"'+S+'"'` 零 builder，微测 `hello 95ns` vs 转义 `184ns`），`Eval/small 716→684ns -4.5%` 回归收敛，`Value/ops 154ns B/op0` 保持

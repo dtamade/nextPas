@@ -90,13 +90,13 @@ function TJsV8Context.NewFunction(const AName: string; AHandler: TJsHostProc): T
 function TJsV8Context.GetProp(const AObj: TJsValue; const AName: string): TJsValue; begin EnsureNotClosed; Result:=Bind(JsPureHeapGetProp(FHeap, AObj, AName)); end;
 procedure TJsV8Context.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue); begin EnsureNotClosed; JsPureHeapSetProp(FHeap, AObj, AName, AVal); end;
 function TJsV8Context.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=Bind(JsPureCall(Self, FHostFuncs, AFunc, AThis, AArgs, jsbkV8)); end;
-procedure TJsV8Context.DoSetHost(const AName: string); begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create('Invalid host function name: '+AName,jecSyntax,'SyntaxError','',jsbkV8); end;
+procedure TJsV8Context.DoSetHost(const AName: string); begin EnsureNotClosed; JsPureCheckHostName(AName, jsbkV8); end;
 procedure TJsV8Context.SetHostFunction(const AName: string; AHandler: TJsHostFunction);
-begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkV8); JsPureHostSet(FHostFuncs, AName, AHandler, 0); end;
+begin EnsureNotClosed; JsPureHostSetFunc(FHostFuncs, AName, AHandler, jsbkV8); end;
 procedure TJsV8Context.SetHostFunction(const AName: string; AHandler: TJsHostMethod);
-begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkV8); JsPureHostSet(FHostFuncs, AName, AHandler, 1); end;
+begin EnsureNotClosed; JsPureHostSetMethod(FHostFuncs, AName, AHandler, jsbkV8); end;
 procedure TJsV8Context.SetHostFunction(const AName: string; AHandler: TJsHostProc);
-begin DoSetHost(AName); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkV8); JsPureHostSet(FHostFuncs, AName, AHandler, 2); end;
+begin EnsureNotClosed; JsPureHostSetProc(FHostFuncs, AName, AHandler, jsbkV8); end;
 procedure TJsV8Context.RemoveHostFunction(const AName: string);
 begin if FClosed then Exit; EnsureThreadAffinity; JsPureHostRemove(FHostFuncs, AName); end;
 procedure TJsV8Context.Tick; begin if FClosed then Exit; EnsureThreadAffinity; end;

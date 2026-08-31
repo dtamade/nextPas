@@ -31,6 +31,10 @@ function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringV
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
+function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
+procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
+procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
+procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions;
   ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
@@ -128,6 +132,37 @@ begin
   Hosts[High(Hosts)].Name := AName;
   Hosts[High(Hosts)].Proc := AHandler;
   Hosts[High(Hosts)].Kind := AKind;
+end;
+
+function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
+begin
+  if not JsPureValidateHostName(AName) then
+    raise EJsError.Create('Invalid host function name: ' + AName, jecSyntax, 'SyntaxError', '', ABackend);
+  Result := True;
+end;
+
+procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
+begin
+  JsPureCheckHostName(AName, ABackend);
+  if not Assigned(AHandler) then
+    raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
+  JsPureHostSet(Hosts, AName, AHandler, 0);
+end;
+
+procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
+begin
+  JsPureCheckHostName(AName, ABackend);
+  if not Assigned(AHandler) then
+    raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
+  JsPureHostSet(Hosts, AName, AHandler, 1);
+end;
+
+procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
+begin
+  JsPureCheckHostName(AName, ABackend);
+  if not Assigned(AHandler) then
+    raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
+  JsPureHostSet(Hosts, AName, AHandler, 2);
 end;
 
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;

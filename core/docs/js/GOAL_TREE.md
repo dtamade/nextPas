@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js`
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）
-**版本**：1.0（11 单元 pure.base 单源 481行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
+**版本**：1.0（11 单元 pure.base 单源 481行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---
@@ -83,7 +83,7 @@ core/examples/nextpas.core.js/demo_js/
 | `source-contract` | 四件套门面纯聚合 + L2 只依赖 L0-L1：`base/intf` 不含后端符号（含纯后端预留不暴露 `JSValue`），`ffi` 零逻辑仅 `cdecl`，`loader` 唯一 `platform.dl`（禁 `DynLibs`），纯族 `pure.base` 单源 481行阈值550内 + `js.js888/v8/chakra` 零FFI/零dl恒可用 | `check_source_contracts.py` pass + `wc -l` 阈值550 + `grep platform.dl` 0 |
 | `focused-runtime` | `test_js_fake` + `test_js_base` 全绿 + `heaptrc 0`（性能 inline/零拷贝：`AsString` 快路径 `B/op=0`） | `make focused` 全绿 |
 | `S1-runtime` | `test_js_quickjs_runtime`（有库）全绿；`S3` 后 `test_js_js888_runtime`/`v8`/`chakra` 恒绿（零 so） | 本地 + Linux CI |
-| `Production Ready` | `S2` 联动全绿 + `bench_eval` 5后端基线落库（含纯/QuickJS 双基线，BENCHMARKS 1.4 均值 ~660ns） + `hygiene/source-contract` 双 pass + 稳定性资源可释放 `Close` 幂等 + 文档 18份对齐 | 13+3 门 + bench |
+| `Production Ready` | `S2` 联动全绿 + `bench_eval` 5后端基线落库（含纯/QuickJS 双基线，BENCHMARKS 1.5 均值 ~684ns） + `hygiene/source-contract` 双 pass + 稳定性资源可释放 `Close` 幂等 + 文档 18份对齐 | 13+3 门 + bench |
 
 ---
 
@@ -107,3 +107,4 @@ core/examples/nextpas.core.js/demo_js/
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS 5 后端 179/633/1089/962/SKIP + Value/ops 零分配 + 纯族 338 行对齐 |
 | 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.4 同步实测均值 ~660ns（645/660/631/660）/ host ~1.5µs 加权 / B/op 18/176 + pure.base 481 行阈值550内统一，18 份对齐 |
 | 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.4 保持，其余引用同步 1.0，18份对齐 |
+| 2026-08-31 | 1.0 | r10 文档收敛：ROADMAP/SIXDIM/GOAL_TREE 头部 1.4→1.5 + 684ns 基线同步，18份对齐 |

@@ -309,32 +309,25 @@ end;
 procedure TJsFakeContext.DoSetHost(const AName: string);
 begin
   EnsureNotClosed;
-  if not ValidateHostName(AName) then
-    raise EJsError.Create('Invalid host function name: ' + AName, jecSyntax, 'SyntaxError', '', jsbkFake);
+  JsPureCheckHostName(AName, jsbkFake);
 end;
 
 procedure TJsFakeContext.SetHostFunction(const AName: string; AHandler: TJsHostFunction);
 begin
-  DoSetHost(AName);
-  if not Assigned(AHandler) then
-    raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', jsbkFake);
-  JsPureHostSet(FHostFuncs, AName, AHandler, 0);
+  EnsureNotClosed;
+  JsPureHostSetFunc(FHostFuncs, AName, AHandler, jsbkFake);
 end;
 
 procedure TJsFakeContext.SetHostFunction(const AName: string; AHandler: TJsHostMethod);
 begin
-  DoSetHost(AName);
-  if not Assigned(AHandler) then
-    raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', jsbkFake);
-  JsPureHostSet(FHostFuncs, AName, AHandler, 1);
+  EnsureNotClosed;
+  JsPureHostSetMethod(FHostFuncs, AName, AHandler, jsbkFake);
 end;
 
 procedure TJsFakeContext.SetHostFunction(const AName: string; AHandler: TJsHostProc);
 begin
-  DoSetHost(AName);
-  if not Assigned(AHandler) then
-    raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', jsbkFake);
-  JsPureHostSet(FHostFuncs, AName, AHandler, 2);
+  EnsureNotClosed;
+  JsPureHostSetProc(FHostFuncs, AName, AHandler, jsbkFake);
 end;
 
 procedure TJsFakeContext.RemoveHostFunction(const AName: string);

@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js` lane
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ACCEPTANCE.md`（验收）、`GOAL_TREE.md`（目标树）、`REVIEW.md`（差距）
-**版本**：1.0（S0 定版，随实现滚动，M3b 均值与纯族 481 行阈值550内体量同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
+**版本**：1.0（S0 定版，随实现滚动，M3b 均值与纯族 481 行阈值550内体量同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---
@@ -48,10 +48,10 @@
 
 | 项 | 内容 |
 |----|------|
-| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 fs/thread 集成）、`js.pas` 门面（≤80 行）；纯族 `pure.base` 481 行阈值550内 + `js.js888/v8/chakra` 各 ~119 行（单单元 <550，阈值内，M3b 均值实测 660ns） |
+| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 fs/thread 集成）、`js.pas` 门面（≤80 行）；纯族 `pure.base` 481 行阈值550内 + `js.js888/v8/chakra` 各 ~119 行（单单元 <550，阈值内，M3b/r9 均值 684ns） |
 | 测试 | `test_js_base`（选项/枚举/错误族）、`test_js_fake`（契约全量 40+ 用例，见 TESTING §3） |
 | 示例 | `demo_js`（`1+2`/`echo`/`JSON` 三段） |
-| 基准 | `bench_eval` 骨架（可编译，未落基线，M3b 均值已刷新 5 后端矩阵 645/660/631/660/SKIP） |
+| 基准 | `bench_eval` 骨架（可编译，未落基线，M3b/r9 均值已刷新 684/684/684/684/SKIP 快路径） |
 | 风险 | `TJsValue` 借用语义误用 → 缓解：`IsValid` + `TryAs*` + `TESTING` 悬垂矩阵 |
 
 ### M2 — S1 QuickJS 真链路
@@ -134,4 +134,5 @@ M0 (文档)
 | 2026-08-31 | 1.2 | 0.9 对齐：CONTRACT 0.8→0.9/PARITY 0.7→0.9/WEBVIEW 0.7→0.9/SIXDIM 0.6→0.9 四份联动，pure.base 复用 `JsPureFindHost/ValidateHostName` 消 QuickJS 克隆，18 份闭环 |
 | 2026-08-31 | 1.3 | 0.10 文档完整性修复：BENCHMARKS 1.4 同步实测均值 ~660ns（645/660/631/660）/ host ~1.5µs 加权 / B/op 18/176 + pure.base 481 行阈值550内统一，18 份对齐 |
 | 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.4 保持，其余引用同步 1.0，18份对齐 |
+| 2026-08-31 | 1.0 | r10 文档收敛：ROADMAP/SIXDIM/GOAL_TREE 头部 1.4→1.5 + 684ns 基线同步，18份对齐 |
 

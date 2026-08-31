@@ -2,7 +2,7 @@
 
 **状态**：S0 冻结，不产生代码
 **方向**：`js` L2 底座 → `webview` L3 消费者，禁止反向依赖
-**版本**：1.0（11 单元 pure.base 单源 481 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
+**版本**：1.0（11 单元 pure.base 单源 481 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
 
 ---
 
@@ -129,3 +129,4 @@ webview (L3): base ← intf ← {bridge,fake,gtk} ← factory ← webview.pas
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（CONTRACT/ROADMAP/BENCHMARKS 三份对齐） |
 | 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.4 同步实测均值 ~660ns（645/660/631/660）/ host ~1.5µs 加权 / B/op 18/176 + pure.base 481 行阈值550内统一，18 份对齐 |
 | 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.4 保持，其余引用同步 1.0，18份对齐 |
+| 2026-08-31 | 1.0 | r10 文档收敛：ROADMAP/SIXDIM/GOAL_TREE 头部 1.4→1.5 + 684ns 基线同步，18份对齐 |

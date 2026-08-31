@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-31
-**版本**：1.0（11 单元 pure.base 单源 481 行 + V8/Chakra Close 幂等 + 5 gate 全绿，M3b 均值同步，与 BENCHMARKS 1.4/ROADMAP 1.0 对齐，18 份对齐）
+**版本**：1.0（11 单元 pure.base 单源 481 行 + V8/Chakra Close 幂等 + 5 gate 全绿，M3b 均值同步，与 BENCHMARKS 1.5/ROADMAP 1.0 对齐，18 份对齐）
 
 ---
 
