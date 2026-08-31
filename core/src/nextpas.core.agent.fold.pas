@@ -14,6 +14,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.text.builder,
+  nextpas.core.agent.base.types,
   nextpas.core.agent.base,
   nextpas.core.agent.errors;
 
@@ -272,7 +273,7 @@ begin
   Result := Default(TMessage);
   Result.Id := FMessageId;
   Result.Role := mrAssistant;
-  Result.Parts := Copy(FParts, 0, Length(FParts));
+  Result.Parts := specialize CloneArray<TPart>(FParts);
   Result.Model := FModel;
   Result.FinishReason := FFinishReason;
   Result.Usage := FUsage;

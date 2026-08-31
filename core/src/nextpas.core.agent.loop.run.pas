@@ -12,6 +12,7 @@ unit nextpas.core.agent.loop.run;
 interface
 
 uses
+  nextpas.core.agent.base.types,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
@@ -75,7 +76,7 @@ end;
 
 function TLoopRun.Transcript: TMessageArray;
 begin
-  Result := Copy(FTranscript, 0, Length(FTranscript));
+  Result := specialize CloneArray<TMessage>(FTranscript);
 end;
 
 function TLoopRun.Outcome: TLoopOutcome;

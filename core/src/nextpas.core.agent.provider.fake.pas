@@ -24,6 +24,7 @@ uses
   nextpas.core.base,
   nextpas.core.async.cancellation,
   nextpas.core.json,
+  nextpas.core.agent.base.types,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
@@ -257,7 +258,7 @@ begin
   if FNext >= Length(FScripts) then
     raise EAgentError.CreateLocal(aecProtocol,
       'fake provider: script exhausted');
-  ADeltas := System.Copy(FScripts[FNext], 0, Length(FScripts[FNext]));
+  ADeltas := specialize CloneArray<TStreamDelta>(FScripts[FNext]);
   Inc(FNext);
 end;
 
@@ -300,7 +301,7 @@ end;
 constructor TFakeCompletion.Create(const ADeltas: TStreamDeltaArray);
 begin
   inherited Create;
-  FDeltas := System.Copy(ADeltas, 0, Length(ADeltas));
+  FDeltas := specialize CloneArray<TStreamDelta>(ADeltas);
 end;
 
 function TFakeCompletion.NextDelta(out ADelta: TStreamDelta): Boolean;

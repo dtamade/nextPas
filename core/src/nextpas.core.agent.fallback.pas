@@ -19,6 +19,7 @@ interface
 
 uses
   nextpas.core.async.cancellation,
+  nextpas.core.agent.base.types,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,

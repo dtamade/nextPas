@@ -23,6 +23,7 @@ uses
   nextpas.core.thread.pool,
   nextpas.core.json,
   nextpas.core.json.builder,
+  nextpas.core.agent.base.types,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
@@ -386,7 +387,7 @@ var
     SetLength(Transcript, N2 + 1);
     Transcript[N2] := G;
     Req2 := LOpt.RequestBase;
-    Req2.Messages := System.Copy(Transcript, 0, Length(Transcript));
+    Req2.Messages := specialize CloneArray<TMessage>(Transcript);
     Req2.Tools := nil;
     if not CompleteRound(Req2, M2) then
       Exit(False);
@@ -425,7 +426,7 @@ begin
     LClock := LOpt.Clock
   else
     LClock := NewSystemClock;
-  Transcript := System.Copy(AMessages, 0, Length(AMessages));
+  Transcript := specialize CloneArray<TMessage>(AMessages);
   RunStartMs := LClock.NowMs;
   RoundsDone := 0;
   OutUsed := 0;
@@ -444,7 +445,7 @@ begin
       Break;
     end;
     Req := LOpt.RequestBase;
-    Req.Messages := System.Copy(Transcript, 0, Length(Transcript));
+    Req.Messages := specialize CloneArray<TMessage>(Transcript);
     Req.Tools := FSpecs;
     Fire(levRoundStart, Round, '', '', Elapsed);
     try
