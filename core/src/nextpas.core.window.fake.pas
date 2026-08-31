@@ -35,7 +35,7 @@ type
     function FakeSelf: TObject;
   end;
 
-  TFakeWindow = class(TInterfacedObject, IWindow, IFakeSelfAccess, IWindowHost)
+  TFakeWindow = class(TInterfacedObject, IWindow, IFakeSelfAccess, IWindowHost, IWindowPrivateHandle)
   private
     FClosed: Boolean;
     FVisible: Boolean;
@@ -84,6 +84,8 @@ type
     procedure HostResized(AWidth, AHeight: Integer);
     procedure HostScaleChanged(ANewScale: Double);
     procedure HostCloseRequested;
+    { IWindowPrivateHandle }
+    function GetHandle: Pointer;
   public
     class function FromWindow(const AWindow: IWindow): TFakeWindow; static;
     function FakeSelf: TObject;
@@ -578,6 +580,11 @@ end;
 function TFakeWindow.GetDispatcher: IWindowDispatcher; inline;
 begin
   Result := FDispatcher;
+end;
+
+function TFakeWindow.GetHandle: Pointer;
+begin
+  Result := Pointer(FNativeHandle);
 end;
 
 procedure TFakeWindow.OnEvent(AHandler: TWindowEventHandler);

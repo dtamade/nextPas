@@ -31,7 +31,10 @@ uses
   nextpas.core.sync.mutex,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
-  nextpas.core.webview.bridge;
+  nextpas.core.webview.bridge,
+  nextpas.core.window.base,
+  nextpas.core.window.intf,
+  nextpas.core.window.fake;
 
 type
   {** invoke 结果记录（断言用）。 *}
@@ -76,19 +79,12 @@ type
   private
     FLck: ILock;
     FClosed: Boolean;
-    FVisible: Boolean;
-    FResizable: Boolean;
-    FMaximized: Boolean;
-    FMinimized: Boolean;
-    FTitle: string;
-    FWidth: Integer;
-    FHeight: Integer;
+    FWindow: IWindow;
+    FOwnsWindow: Boolean;
     FZoom: Double;
     FUserAgent: string;
-    FScale: Double;
     FBridgeReady: Boolean;
     FDebugTools: Boolean;
-    FDispatcher: IWebviewDispatcher;
     FInvokesIntf: IWebviewInvokeRegistry;   // 拥有（引用计数）
     FAssetsIntf: IWebviewAssets;            // 拥有
     FInvokes: TObject;             // 非拥有别名：同类私有访问用
@@ -123,12 +119,8 @@ type
     FOnNavFinishedCount: Integer;
     FOnNavFailed: array of TWebviewNavFailedHandler;
     FOnNavFailedCount: Integer;
-    FOnWindowClosed: array of TWebviewNotifyHandler;
-    FOnWindowClosedCount: Integer;
     FOnReady: array of TWebviewNotifyHandler;
     FOnReadyCount: Integer;
-    FOnScaleChanged: array of TWebviewScaleHandler;
-    FOnScaleChangedCount: Integer;
     procedure RequireOpen;
     procedure GrowPendingEvals; inline;
     procedure GrowOutcomes; inline;
@@ -138,13 +130,9 @@ type
     procedure GrowOnNavStarted; inline;
     procedure GrowOnNavFinished; inline;
     procedure GrowOnNavFailed; inline;
-    procedure GrowOnWindowClosed; inline;
     procedure GrowOnReady; inline;
-    procedure GrowOnScaleChanged; inline;
     procedure GrowQueue; inline;
     procedure GrowHistory; inline;
-    procedure EnsureOutcomesCapacity(ACount: Integer); inline;
-    procedure ReserveEvalScripts(ACount: Integer); inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -164,32 +152,13 @@ type
       AOnError: TWebviewEvalErrorCallback);
   protected
     { IWebviewWindow }
+    function GetWindow: IWindow;
     procedure Close; virtual;
     function IsClosed: Boolean; inline;
-    procedure Show; virtual;
-    procedure Hide; virtual;
-    function IsVisible: Boolean;
-    procedure Focus; virtual;
-    procedure SetTitle(const ATitle: string); virtual;
-    function GetTitle: string; virtual;
-    procedure SetBounds(AWidth, AHeight: Integer); virtual;
-    function GetWidth: Integer;
-    function GetHeight: Integer;
-    procedure SetResizable(AResizable: Boolean); virtual;
-    procedure Maximize; virtual;
-    procedure Unmaximize; virtual;
-    function IsMaximized: Boolean;
-    procedure Minimize; virtual;
-    procedure Restore; virtual;
-    function IsMinimized: Boolean;
     procedure SetZoom(AFactor: Double); virtual;
     function GetZoom: Double;
     procedure SetUserAgent(const AUserAgent: string); virtual;
     function GetUserAgent: string;
-    function GetScaleFactor: Double;
-    procedure OnScaleChanged(AHandler: TWebviewScaleHandler); overload; virtual;
-    procedure OnScaleChanged(AHandler: TWebviewScaleMethod); overload; virtual;
-    procedure OnScaleChanged(AHandler: TWebviewScaleProc); overload; virtual;
     procedure Navigate(const AUrl: string); virtual;
     procedure NavigateToString(const AHtml: string); virtual;
     procedure Reload; virtual;
@@ -202,8 +171,6 @@ type
       ACallback: TWebviewEvalCallback;
       AOnError: TWebviewEvalErrorCallback); virtual;
     procedure Emit(const AEvent, APayloadJson: string); virtual;
-    function GetDispatcher: IWebviewDispatcher; inline;
-    function NativeHandle: TWebviewNativeHandle;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload; virtual;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventMethod); overload; virtual;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventProc); overload; virtual;
@@ -213,9 +180,6 @@ type
     procedure OnNavigationFailed(AHandler: TWebviewNavFailedHandler); overload; virtual;
     procedure OnNavigationFailed(AHandler: TWebviewNavFailedMethod); overload; virtual;
     procedure OnNavigationFailed(AHandler: TWebviewNavFailedProc); overload; virtual;
-    procedure OnWindowClosed(AHandler: TWebviewNotifyHandler); overload; virtual;
-    procedure OnWindowClosed(AHandler: TWebviewNotifyMethod); overload; virtual;
-    procedure OnWindowClosed(AHandler: TWebviewNotifyProc); overload; virtual;
     procedure OnReady(AHandler: TWebviewNotifyHandler); overload; virtual;
     procedure OnReady(AHandler: TWebviewNotifyMethod); overload; virtual;
     procedure OnReady(AHandler: TWebviewNotifyProc); overload; virtual;
@@ -226,6 +190,7 @@ type
     class function FromWindow(const AW: IWebviewWindow): TFakeWebview; static;
     function FakeSelf: TObject;
     constructor Create(const AOptions: TWebviewOptions); virtual;
+    constructor CreateOn(const AParent: IWindow; const AOptions: TWebviewOptions); virtual;
     destructor Destroy; override;
 
     { ---- 测试驱动面 ---- }
@@ -246,9 +211,6 @@ type
       ACode: Integer; const AMessage: string);
     procedure FireReady;
     procedure SimulateBridgeReady;
-
-    { DPI 驱动：改 scale 并触发 OnScaleChanged }
-    procedure SetScale(ANewScale: Double);
 
     { 模拟一帧 invoke 到达：查注册表→执行 handler→记录 outcome。
       同步 handler 内联执行；异步 handler 的 completion 经 dispatcher
@@ -379,7 +341,7 @@ type
   TFakeDispatcher = class(TInterfacedObject, IWebviewDispatcher)
   private
     FLck: ILock;
-    FRing: array of TWebviewProcRef; { SPSC 环：Slab 预分配 + 复用，无每 Post 堆分配 }
+    FRing: array of TWebviewProcRef;
     FHead: Integer;
     FCount: Integer;
     FOwnerThread: UInt64;
@@ -393,10 +355,10 @@ type
     procedure PumpAll;
     function PendingCount: Integer;
     procedure DropAll;
-    { IWebviewDispatcher — inline 薄转发保留接口 }
-    procedure Post(AProc: TWebviewProcRef); overload; inline;
-    procedure Post(AProc: TWebviewProcMethod); overload; inline;
-    procedure Post(AProc: TWebviewProc); overload; inline;
+    { IWebviewDispatcher }
+    procedure Post(AProc: TWebviewProcRef); overload;
+    procedure Post(AProc: TWebviewProcMethod); overload;
+    procedure Post(AProc: TWebviewProc); overload;
   end;
 
 constructor TFakeDispatcher.Create;
@@ -404,7 +366,6 @@ begin
   inherited Create;
   FLck := TMutex.Create as ILock;
   FOwnerThread := platform_thread_id;
-  SetLength(FRing, 16); { SPSC Slab 预分配：首池 16，避免热路径 Grow 分配 }
 end;
 
 destructor TFakeDispatcher.Destroy;
@@ -419,6 +380,8 @@ var
   LNew: array of TWebviewProcRef;
 begin
   LNewCap := WebviewGrowCapacity(Length(FRing));
+  if (Length(FRing) = 0) and (LNewCap < 16) then
+    LNewCap := 16;
   SetLength(LNew, LNewCap);
   for I := 0 to FCount - 1 do
     LNew[I] := FRing[(FHead + I) mod Length(FRing)];
@@ -427,16 +390,12 @@ begin
 end;
 
 procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef);
-var
-  LSlot: Integer;
 begin
   FLck.Acquire;
   try
     if FCount = Length(FRing) then
       Grow;
-    LSlot := (FHead + FCount) mod Length(FRing);
-    FRing[LSlot] := AProc;
-    { FLck 仅保护 FHead/FCount CAS，槽位写入已在锁内完成，解锁后即可见 }
+    FRing[(FHead + FCount) mod Length(FRing)] := AProc;
     FCount := FCount + 1;
   finally
     FLck.Release;
@@ -498,17 +457,17 @@ begin
   end;
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProcRef); inline;
+procedure TFakeDispatcher.Post(AProc: TWebviewProcRef);
 begin
   PostRef(AProc);
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProcMethod); inline;
+procedure TFakeDispatcher.Post(AProc: TWebviewProcMethod);
 begin
   PostRef(NotifyMethodToRef(AProc));
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProc); inline;
+procedure TFakeDispatcher.Post(AProc: TWebviewProc);
 begin
   PostRef(NotifyProcToRef(AProc));
 end;
@@ -558,12 +517,10 @@ var
   LCmd: string;
   LFrameId: Int64;
 begin
-  { 闭包在 completion 释放后才由主线程泵执行，因此只捕获局部值拷贝
-    （字符串随闭包帧存活），不捕获 Self 字段——对象指针不受引用计数保护 }
   LCmd := FCmd;
   LFrameId := FFrameId;
   LWin := FWin as TFakeWebview;
-  LWin.GetDispatcher.Post(
+  LWin.GetWindow.Dispatcher.Post(
     procedure
     begin
       LWin.RecordOutcome(LCmd, AIsError, AResultJson, ACode, AMessage);
@@ -642,27 +599,37 @@ begin
   Result := Self;
 end;
 
+function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
+begin
+  Result := DefaultWindowOptions;
+  Result.Title := AOptions.Title;
+  Result.Width := AOptions.Width;
+  Result.Height := AOptions.Height;
+  Result.MinWidth := AOptions.MinWidth;
+  Result.MinHeight := AOptions.MinHeight;
+  Result.MaxWidth := AOptions.MaxWidth;
+  Result.MaxHeight := AOptions.MaxHeight;
+  Result.Resizable := AOptions.Resizable;
+  Result.Maximized := AOptions.Maximized;
+  Result.ParentHandle := nil;
+end;
+
 constructor TFakeWebview.Create(const AOptions: TWebviewOptions);
 var
   LReg: TFakeInvokeRegistry;
   LAssets: TFakeAssets;
+  LWinOpts: TWindowOptions;
 begin
   inherited Create;
   FLck := TMutex.Create as ILock;
   FClosed := False;
-  FVisible := False;
-  FResizable := AOptions.Resizable;
-  FMaximized := False;
-  FMinimized := False;
-  FTitle := AOptions.Title;
-  FWidth := AOptions.Width;
-  FHeight := AOptions.Height;
   FZoom := 1.0;
   FUserAgent := '';
-  FScale := 1.0;
   FBridgeReady := False;
   FDebugTools := AOptions.DebugTools;
-  FDispatcher := TFakeDispatcher.Create;
+  LWinOpts := WindowOptionsOf(AOptions);
+  FWindow := TFakeWindow.Create(LWinOpts);
+  FOwnsWindow := True;
   LReg := TFakeInvokeRegistry.Create;
   LAssets := TFakeAssets.Create(AOptions.DevServerUrl <> '');
   FInvokesIntf := LReg;    { 拥有（引用计数） }
@@ -680,6 +647,41 @@ begin
   { Initial* 启动加载：构造即导航。优先级 InitialUrl > InitialHtml
     （CONTRACT §2.2），资产/桥请求都在主循环泵里才发生，Build 返回后的
     挂载先于任何请求，无时序竞态（§3.4） }
+  if AOptions.InitialUrl <> '' then
+    Navigate(AOptions.InitialUrl)
+  else if AOptions.InitialHtml <> '' then
+    NavigateToString(AOptions.InitialHtml);
+end;
+
+constructor TFakeWebview.CreateOn(const AParent: IWindow; const AOptions: TWebviewOptions);
+var
+  LReg: TFakeInvokeRegistry;
+  LAssets: TFakeAssets;
+begin
+  inherited Create;
+  if AParent = nil then
+    raise EWebviewInvalidState.Create('Parent window must not be nil for CreateOn');
+  FLck := TMutex.Create as ILock;
+  FClosed := False;
+  FZoom := 1.0;
+  FUserAgent := '';
+  FBridgeReady := False;
+  FDebugTools := AOptions.DebugTools;
+  FWindow := AParent;
+  FOwnsWindow := False;
+  LReg := TFakeInvokeRegistry.Create;
+  LAssets := TFakeAssets.Create(AOptions.DevServerUrl <> '');
+  FInvokesIntf := LReg;
+  FAssetsIntf := LAssets;
+  FInvokes := LReg;
+  FAssets := LAssets;
+  FDroppedEmits := 0;
+  FNavigateCount := 0;
+  FHistoryCount := 0;
+  FHistIdx := -1;
+  GrowLiveWindows;
+  GLiveWindows[GLiveWindowsCount] := Self;
+  Inc(GLiveWindowsCount);
   if AOptions.InitialUrl <> '' then
     Navigate(AOptions.InitialUrl)
   else if AOptions.InitialHtml <> '' then
@@ -755,22 +757,10 @@ begin
     SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
 end;
 
-procedure TFakeWebview.GrowOnWindowClosed; inline;
-begin
-  if FOnWindowClosedCount = Length(FOnWindowClosed) then
-    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
-end;
-
 procedure TFakeWebview.GrowOnReady; inline;
 begin
   if FOnReadyCount = Length(FOnReady) then
     SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
-end;
-
-procedure TFakeWebview.GrowOnScaleChanged; inline;
-begin
-  if FOnScaleChangedCount = Length(FOnScaleChanged) then
-    SetLength(FOnScaleChanged, WebviewGrowCapacity(Length(FOnScaleChanged)));
 end;
 
 procedure TFakeWebview.GrowQueue; inline;
@@ -786,18 +776,6 @@ procedure TFakeWebview.GrowHistory; inline;
 begin
   if FHistoryCount = Length(FHistory) then
     SetLength(FHistory, WebviewGrowCapacity(Length(FHistory)));
-end;
-
-procedure TFakeWebview.EnsureOutcomesCapacity(ACount: Integer); inline;
-begin
-  if Length(FOutcomes) < ACount then
-    SetLength(FOutcomes, WebviewGrowCapacity(ACount - 1));
-end;
-
-procedure TFakeWebview.ReserveEvalScripts(ACount: Integer); inline;
-begin
-  if FEvalScriptsCount + ACount > Length(FEvalScripts) then
-    SetLength(FEvalScripts, WebviewGrowCapacity(Length(FEvalScripts) + ACount));
 end;
 
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
@@ -838,11 +816,7 @@ var
   I: Integer;
 begin
   for I := 0 to FOnReadyCount - 1 do
-    if Assigned(FOnReady[I]) then
-      try
-        FOnReady[I]();
-      except
-      end;
+    FOnReady[I]();
 end;
 
 procedure TFakeWebview.AppendEvalScript(const AScript: string);
@@ -853,19 +827,22 @@ begin
   Inc(FEvalScriptsCount);
 end;
 
+function TFakeWebview.GetWindow: IWindow;
+begin
+  Result := FWindow;
+end;
+
 procedure TFakeWebview.Close;
 var
   I: Integer;
   LErrObj: EWebviewEvalFailed;
   LErrors: array of TWebviewEvalErrorCallback;
-  LClosed: array of TWebviewNotifyHandler;
 begin
   FLck.Acquire;
   try
     if FClosed then
       Exit;
     FClosed := True;
-    { 在途 Eval 统一失败收尾（CONTRACT §3.2 / INV-7 恰好一次） }
     SetLength(LErrors, FPendingCount);
     for I := 0 to FPendingCount - 1 do
     begin
@@ -877,139 +854,22 @@ begin
   finally
     FLck.Release;
   end;
-  { 解锁后触发回调：错误收尾 + 关闭通知（回调内再入 Close 是幂等安全）；
-    异常实例同上：框架创建并释放，Assigned+try-except 隔离，try-finally 释放 }
   for I := 0 to High(LErrors) do
   begin
     LErrObj := EWebviewEvalFailed.Create('window closed');
     try
-      if Assigned(LErrors[I]) then
-        try
-          LErrors[I](LErrObj);
-        except
-        end;
+      LErrors[I](LErrObj);
     finally
       LErrObj.Free;
     end;
   end;
-  SetLength(LClosed, FOnWindowClosedCount);
-  for I := 0 to FOnWindowClosedCount - 1 do
-    LClosed[I] := FOnWindowClosed[I];
-  { 关闭后投递静默丢弃（契约 §3.1） }
-  (FDispatcher as TFakeDispatcher).DropAll;
-  for I := 0 to High(LClosed) do
-    if Assigned(LClosed[I]) then
-      try
-        LClosed[I]();
-      except
-      end;
+  if FOwnsWindow and (FWindow <> nil) and not FWindow.IsClosed then
+    FWindow.Close;
 end;
 
 function TFakeWebview.IsClosed: Boolean; inline;
 begin
   Result := FClosed;
-end;
-
-procedure TFakeWebview.Show;
-begin
-  RequireOpen;
-  FVisible := True;
-end;
-
-procedure TFakeWebview.Hide;
-begin
-  RequireOpen;
-  FVisible := False;
-end;
-
-function TFakeWebview.IsVisible: Boolean;
-begin
-  RequireOpen;
-  Result := FVisible;
-end;
-
-procedure TFakeWebview.Focus;
-begin
-  RequireOpen;
-end;
-
-procedure TFakeWebview.SetTitle(const ATitle: string);
-begin
-  RequireOpen;
-  FTitle := ATitle;
-end;
-
-function TFakeWebview.GetTitle: string;
-begin
-  RequireOpen;
-  Result := FTitle;
-end;
-
-procedure TFakeWebview.SetBounds(AWidth, AHeight: Integer);
-begin
-  RequireOpen;
-  if AWidth < 0 then
-    AWidth := 0;
-  if AHeight < 0 then
-    AHeight := 0;
-  FWidth := AWidth;
-  FHeight := AHeight;
-end;
-
-function TFakeWebview.GetWidth: Integer;
-begin
-  RequireOpen;
-  Result := FWidth;
-end;
-
-function TFakeWebview.GetHeight: Integer;
-begin
-  RequireOpen;
-  Result := FHeight;
-end;
-
-procedure TFakeWebview.SetResizable(AResizable: Boolean);
-begin
-  RequireOpen;
-  FResizable := AResizable;
-end;
-
-procedure TFakeWebview.Maximize;
-begin
-  RequireOpen;
-  FMaximized := True;
-  FMinimized := False;
-end;
-
-procedure TFakeWebview.Unmaximize;
-begin
-  RequireOpen;
-  FMaximized := False;
-end;
-
-function TFakeWebview.IsMaximized: Boolean;
-begin
-  RequireOpen;
-  Result := FMaximized;
-end;
-
-procedure TFakeWebview.Minimize;
-begin
-  RequireOpen;
-  FMinimized := True;
-end;
-
-procedure TFakeWebview.Restore;
-begin
-  RequireOpen;
-  FMinimized := False;
-  FMaximized := False;
-end;
-
-function TFakeWebview.IsMinimized: Boolean;
-begin
-  RequireOpen;
-  Result := FMinimized;
 end;
 
 procedure TFakeWebview.SetZoom(AFactor: Double);
@@ -1038,30 +898,6 @@ begin
   Result := FUserAgent;
 end;
 
-function TFakeWebview.GetScaleFactor: Double;
-begin
-  RequireOpen;
-  Result := FScale;
-end;
-
-procedure TFakeWebview.OnScaleChanged(AHandler: TWebviewScaleHandler);
-begin
-  RequireOpen;
-  GrowOnScaleChanged;
-  FOnScaleChanged[FOnScaleChangedCount] := AHandler;
-  Inc(FOnScaleChangedCount);
-end;
-
-procedure TFakeWebview.OnScaleChanged(AHandler: TWebviewScaleMethod);
-begin
-  OnScaleChanged(ScaleMethodToRef(AHandler));
-end;
-
-procedure TFakeWebview.OnScaleChanged(AHandler: TWebviewScaleProc);
-begin
-  OnScaleChanged(ScaleProcToRef(AHandler));
-end;
-
 procedure TFakeWebview.Navigate(const AUrl: string);
 var
   LEvent: TWebviewNavigationEvent;
@@ -1076,11 +912,7 @@ begin
   LEvent.ErrorCode := 0;
   LEvent.ErrorMessage := '';
   for I := 0 to FOnNavStartedCount - 1 do
-    if Assigned(FOnNavStarted[I]) then
-      try
-        FOnNavStarted[I](LEvent);
-      except
-      end;
+    FOnNavStarted[I](LEvent);
   FireReadyHandlers;
 end;
 
@@ -1206,14 +1038,10 @@ begin
   begin
     FEvalScripts[AIdx].ErrorMessage := AValue;
     { 异常实例所有权：框架创建、回调期内有效、回调返回后框架释放。
-      回调只读信息，不得持有引用（CONTRACT §3.2），Assigned+try-except 隔离，try-finally 释放 }
+      回调只读信息，不得持有引用（CONTRACT §3.2）。 }
     LErr := EWebviewEvalFailed.Create(AValue);
     try
-      if Assigned(AOnError) then
-        try
-          AOnError(LErr);
-        except
-        end;
+      AOnError(LErr);
     finally
       LErr.Free;
     end;
@@ -1221,11 +1049,7 @@ begin
   else
   begin
     FEvalScripts[AIdx].ResultJson := AValue;
-    if Assigned(ACallback) then
-      try
-        ACallback(AValue);
-      except
-      end;
+    ACallback(AValue);
   end;
 end;
 
@@ -1244,15 +1068,7 @@ begin
   Inc(FEmitsCount);
 end;
 
-function TFakeWebview.GetDispatcher: IWebviewDispatcher; inline;
-begin
-  Result := FDispatcher;
-end;
 
-function TFakeWebview.NativeHandle: TWebviewNativeHandle;
-begin
-  Result := nil;
-end;
 
 procedure TFakeWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
@@ -1308,23 +1124,6 @@ begin
   OnNavigationFailed(NavFailedProcToRef(AHandler));
 end;
 
-procedure TFakeWebview.OnWindowClosed(AHandler: TWebviewNotifyHandler);
-begin
-  GrowOnWindowClosed;
-  FOnWindowClosed[FOnWindowClosedCount] := AHandler;
-  Inc(FOnWindowClosedCount);
-end;
-
-procedure TFakeWebview.OnWindowClosed(AHandler: TWebviewNotifyMethod);
-begin
-  OnWindowClosed(NotifyMethodToRef(AHandler));
-end;
-
-procedure TFakeWebview.OnWindowClosed(AHandler: TWebviewNotifyProc);
-begin
-  OnWindowClosed(NotifyProcToRef(AHandler));
-end;
-
 procedure TFakeWebview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
   RequireOpen;
@@ -1357,17 +1156,32 @@ end;
 
 function TFakeWebview.PumpOnce: Boolean;
 begin
-  Result := (FDispatcher as TFakeDispatcher).PumpOnce;
+  if FWindow = nil then Exit(False);
+  // Delegate to underlying fake window's dispatcher pump
+  try
+    Result := TFakeWindow.FromWindow(FWindow).PumpOnce;
+  except
+    Result := False;
+  end;
 end;
 
 procedure TFakeWebview.PumpAll;
 begin
-  (FDispatcher as TFakeDispatcher).PumpAll;
+  if FWindow = nil then Exit;
+  try
+    TFakeWindow.FromWindow(FWindow).PumpAll;
+  except
+  end;
 end;
 
 function TFakeWebview.PendingPosts: Integer;
 begin
-  Result := (FDispatcher as TFakeDispatcher).PendingCount;
+  if FWindow = nil then Exit(0);
+  try
+    Result := TFakeWindow.FromWindow(FWindow).PendingPosts;
+  except
+    Result := 0;
+  end;
 end;
 
 procedure TFakeWebview.QueueEvalResult(const AResultJson: string);
@@ -1447,11 +1261,7 @@ begin
   RequireOpen;
   LEvent.Url := AUrl;
   for I := 0 to FOnNavStartedCount - 1 do
-    if Assigned(FOnNavStarted[I]) then
-      try
-        FOnNavStarted[I](LEvent);
-      except
-      end;
+    FOnNavStarted[I](LEvent);
 end;
 
 procedure TFakeWebview.FireNavigationFinished(const AUrl: string);
@@ -1462,11 +1272,7 @@ begin
   RequireOpen;
   LEvent.Url := AUrl;
   for I := 0 to FOnNavFinishedCount - 1 do
-    if Assigned(FOnNavFinished[I]) then
-      try
-        FOnNavFinished[I](LEvent);
-      except
-      end;
+    FOnNavFinished[I](LEvent);
 end;
 
 procedure TFakeWebview.FireNavigationFailed(const AUrl: string;
@@ -1481,11 +1287,7 @@ begin
   LEvent.ErrorCode := ACode;
   LEvent.ErrorMessage := AMessage;
   for I := 0 to FOnNavFailedCount - 1 do
-    if Assigned(FOnNavFailed[I]) then
-      try
-        FOnNavFailed[I](LEvent);
-      except
-      end;
+    FOnNavFailed[I](LEvent);
 end;
 
 procedure TFakeWebview.FireReady;
@@ -1501,21 +1303,7 @@ begin
   FBridgeReady := True;
 end;
 
-procedure TFakeWebview.SetScale(ANewScale: Double);
-var
-  I: Integer;
-begin
-  RequireOpen;
-  if ANewScale <= 0 then
-    raise EWebviewInvalidState.Create('scale factor must be > 0');
-  FScale := ANewScale;
-  for I := 0 to FOnScaleChangedCount - 1 do
-    if Assigned(FOnScaleChanged[I]) then
-      try
-        FOnScaleChanged[I](ANewScale);
-      except
-      end;
-end;
+
 
 procedure TFakeWebview.EnqueueReceipt(AFrameId: Int64; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);

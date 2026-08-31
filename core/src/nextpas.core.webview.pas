@@ -19,7 +19,8 @@ uses
   nextpas.core.webview.mime,
   nextpas.core.webview.fake,
   nextpas.core.webview.factory,
-  nextpas.core.webview.vfs;
+  nextpas.core.webview.vfs,
+  nextpas.core.window.intf;
 
 { ---- 常量 ---- }
 
@@ -103,8 +104,10 @@ procedure CheckInvokeCmd(const ACmd: string); inline;
 function DefaultWebviewKind: TWebviewKind; inline;
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
 function CreateFakeWebview(const AOptions: TWebviewOptions): IWebviewWindow; inline;
+function CreateFakeWebviewOn(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow; inline;
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow; inline;
+function CreateWebviewOn(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow; inline;
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider; inline;
 function GuessWebviewMime(const APath: string): string; inline;
 
@@ -143,10 +146,20 @@ begin
   Result := nextpas.core.webview.factory.CreateFakeWebview(AOptions);
 end;
 
+function CreateFakeWebviewOn(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow;
+begin
+  Result := nextpas.core.webview.factory.CreateFakeWebviewOn(AParent, AOptions);
+end;
+
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
 begin
   Result := nextpas.core.webview.factory.CreateWebviewOf(AKind, AOptions);
+end;
+
+function CreateWebviewOn(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow;
+begin
+  Result := nextpas.core.webview.factory.CreateWebviewOn(AParent, AOptions);
 end;
 
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider;
