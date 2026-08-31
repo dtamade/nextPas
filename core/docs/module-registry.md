@@ -34,6 +34,7 @@ completion claim.
 | `coroutine` | L3 | coroutine framework | `nextpas.core.coroutine` | L0-L2 | focused-runtime |
 | `crypto` | L2 | crypto primitives | `nextpas.core.crypto` | L0-L1, audited provider seams | focused-runtime — `test_crypto` 35/35 + `test_aesgcm/chacha20/ed25519/p256` gates `heaptrc 0`, `bytes.ops` 常量时间 `CompareBytes` 单源, inline 热路径, 零拷贝 |
 | `csv` | L2 | CSV format | `nextpas.core.csv` | L0-L1 | focused-runtime |
+| `db` | L3 | unified database family (IDbConnection over sqlite/pg/mysql/odbc/redis, backends at db.sqlite/db.pg) | `nextpas.core.db` | L0-L2 | focused-runtime |
 | `encoding` | L1 | encoding primitives | `nextpas.core.encoding` | L0, documented bytes/text seam | focused-runtime |
 | `errors` | L0 | error taxonomy | `nextpas.core.errors` | RTL exception bridge, base/exception | focused-runtime |
 | `event` | L3 | event bus | `nextpas.core.event` | L0-L2 | focused-runtime |

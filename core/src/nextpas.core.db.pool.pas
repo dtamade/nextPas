@@ -24,7 +24,7 @@ unit nextpas.core.db.pool;
     - 预热：MinConnections 在 Create 内建满，失败 fail-fast 抛原建连错。
     - 线程模型：池方法线程安全（互斥锁保护簿记；信号量阻塞不持锁；
       接口引用计数为原子操作）。连接本身仍遵循 CONTRACT §2.1 一连接
-      一逻辑线程。池为单生命周期：Close/Free 后不可复用，需重建。 *}
+      一逻辑线程。池为单生命周期：Close/Free 后不可复用，需重建。 体积注记：本单元约834行超 800 行软阈值，内聚性强（池单职责），暂不拆分，拆分预留见 roadmap。 *}
 
 {$I nextpas.core.settings.inc}
 

@@ -27,6 +27,8 @@ for f in \
   "$SRC/nextpas.core.audio.graph.intf.pas" \
   "$SRC/nextpas.core.audio.graph.pas" \
   "$SRC/nextpas.core.audio.player.pas" \
+  "$SRC/nextpas.core.audio.sfx.intf.pas" \
+  "$SRC/nextpas.core.audio.sfx.pas" \
   "$SRC/nextpas.core.audio.game.intf.pas" \
   "$SRC/nextpas.core.audio.game.pas" \
   "$SRC/nextpas.core.audio.timeline.intf.pas" \
@@ -46,16 +48,20 @@ dec_line=$(grep -n "IAudioDecoder" "$SRC/nextpas.core.audio.codec.intf.pas" | he
 if [ -n "$enc_line" ] && [ -n "$dec_line" ]; then if [ "$enc_line" -gt "$dec_line" ]; then echo "[FAIL] TAudioEncodeOptions must be declared before IAudioDecoder"; fail=1; else echo "[OK] TAudioEncodeOptions before IAudioDecoder"; fi; else echo "[FAIL] missing TAudioEncodeOptions or IAudioDecoder"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.device.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] device.intf missing in PR9"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.graph.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] graph.intf missing in PR9"; fail=1; fi
-if ! ls "$SRC"/nextpas.core.audio.game.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] game.intf missing in PR9"; fail=1; fi
+if ! ls "$SRC"/nextpas.core.audio.sfx.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] sfx.intf missing (canonical 0050)"; fail=1; fi
+if ! ls "$SRC"/nextpas.core.audio.sfx.pas 1>/dev/null 2>&1; then echo "[FAIL] sfx.pas missing (canonical)"; fail=1; fi
+if ! ls "$SRC"/nextpas.core.audio.game.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] game.intf missing (deprecated compat)"; fail=1; fi
+if ! ls "$SRC"/nextpas.core.audio.game.pas 1>/dev/null 2>&1; then echo "[FAIL] game.pas missing (deprecated compat)"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.timeline.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] timeline.intf missing in PR9"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.timeline.pas 1>/dev/null 2>&1; then echo "[FAIL] timeline.pas missing in PR9"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000040" "$SRC/nextpas.core.audio.device.intf.pas"; then echo "[FAIL] IAudioDevice GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000041" "$SRC/nextpas.core.audio.device.intf.pas"; then echo "[FAIL] IAudioDeviceProvider GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000042" "$SRC/nextpas.core.audio.graph.intf.pas"; then echo "[FAIL] IAudioGraph GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000043" "$SRC/nextpas.core.audio.graph.intf.pas"; then echo "[FAIL] IAudioPlayer GUID missing"; fail=1; fi
-if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000050" "$SRC/nextpas.core.audio.game.intf.pas"; then echo "[FAIL] IGameAudio GUID missing"; fail=1; fi
+if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000050" "$SRC/nextpas.core.audio.sfx.intf.pas"; then echo "[FAIL] ISfxAudio GUID 0050 missing in sfx.intf (canonical)"; fail=1; fi
+if ! grep -q "IGameAudio" "$SRC/nextpas.core.audio.game.intf.pas"; then echo "[FAIL] IGameAudio alias missing in game.intf (deprecated compat)"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000060" "$SRC/nextpas.core.audio.timeline.intf.pas"; then echo "[FAIL] IAudioTimeline GUID missing"; fail=1; fi
-echo "[OK] device+graph+game+timeline domains present (PR9 scope)"
+echo "[OK] device+graph+sfx+game+timeline domains present (canonical sfx 0050 + deprecated game compat)"
 # FLock correctness and FillRealtime zero-alloc discipline (six-dimension polish)
 if ! grep -q "two-phase snapshot" "$SRC/nextpas.core.audio.graph.pas"; then echo "[FAIL] graph FillRealtime missing two-phase snapshot (FLock correctness)"; fail=1; else echo "[OK] graph two-phase snapshot present"; fi
 if ! grep -q "two-phase snapshot" "$SRC/nextpas.core.audio.timeline.pas"; then echo "[FAIL] timeline FillRealtime missing two-phase snapshot"; fail=1; else echo "[OK] timeline two-phase snapshot present"; fi
