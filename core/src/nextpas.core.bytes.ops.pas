@@ -55,6 +55,7 @@ function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function BytesIsZero(const AData: TBytes): Boolean; inline;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
+function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 
 implementation
@@ -394,6 +395,11 @@ begin
   SetLength(Result, Length(ABytes));
   if Length(ABytes) > 0 then
     Move(ABytes[0], Result[1], Length(ABytes));
+end;
+
+function BytesToUTF8(const ABytes: TBytes): string; inline;
+begin
+  Result := BytesToString(ABytes);
 end;
 
 function StringToBytes(const AText: string): TBytes; inline;
