@@ -5,7 +5,7 @@ unit nextpas.core.audio.resource;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
