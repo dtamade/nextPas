@@ -361,29 +361,6 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
-function IsZeroBytes(const AData: TBytes): Boolean;
-var
-  I: SizeInt;
-begin
-  for I := 0 to High(AData) do
-    if AData[I] <> 0 then Exit(False);
-  Result := True;
-end;
-
-function IsZeroBytes(const ASpan: TByteSpan): Boolean;
-var
-  I: SizeUInt;
-begin
-  for I := 0 to ASpan.Len - 1 do
-    if ASpan.Data[I] <> 0 then Exit(False);
-  Result := True;
-end;
-
-function IsAllZero(const AData: TBytes): Boolean;
-begin
-  Result := IsZeroBytes(AData);
-end;
-
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
 var
   L, LOff: SizeUInt;
