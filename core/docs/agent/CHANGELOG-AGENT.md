@@ -2,6 +2,21 @@
 
 > 仅收录 `nextpas.core.agent` family 的面向 registry 的落地版本；通用 `core/CHANGELOG.md` 保留跨模块治理记录。
 
+## agent-sse-perf-2026-08-31 — sse Feed SIMD 跳扫 (1 commit)
+
+**Scope**: sse 解析热路径性能优化——逐字节扫描 → simd 跳扫。
+
+### Commits (1, 本 lane)
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `b4e827a13` | perf | sse Feed 主循环 SpanIndexOf SIMD 跳扫找 LF（bytes.ops → simd MemFindByte 分派），无 LF 大段直接跳过；循环外复用 TByteSpan view。同负载 A/B：sse-feed **98.13ms → 67.71ms（-31%，约 236 MB/s）**，超越冻结基线 92.3ms |
+
+### Gates
+
+- `test_sse` 13/13 全绿（HEAPTRC 门）；`test_loop` 19 / `test_provider_common` 11 / `test_codecs` 37 全绿。
+- 注：`test_transport_stream` / `test_compile_skeleton` 受 worktree 外部脏文件 `compress.deflate`（未完成 zlib 重构）阻塞，agent 域零 compress 引用，待外部收敛后复跑。
+
 ## agent-feedback-2026-08-31 — 反哺收口 + 模块化拆分 (4 commits)
 
 **Scope**: 字符串语义全收口 nextpas.core 门面、UTF-8 截断/字节切片反哺 text/bytes 单源、helpers 模块化拆分、两处基线缺陷修复。
