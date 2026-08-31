@@ -148,7 +148,7 @@ begin
     on E: EAudioDecodeError do
       Result := False;
     else
-      Result := False;
+      raise;
   end;
 end;
 
@@ -192,7 +192,7 @@ begin
       Exit;
     except
       on E: EAudioDecodeError do Continue;
-      else Continue;
+      else raise;
     end;
   end;
 end;
@@ -211,10 +211,10 @@ begin
   try
     LStream := nextpas.core.fs.Open(APath, [fmRead]);
   except
-    on E: EAudioError do
+    on E: EAudioDecodeError do
       raise EAudioDecodeError.CreateFmt('AudioOpenFileStreaming: cannot open %s: %s', [APath, E.Message]);
     else
-      raise EAudioDecodeError.CreateFmt('AudioOpenFileStreaming: cannot open %s', [APath]);
+      raise;
   end;
   if LStream = nil then
     raise EAudioDecodeError.CreateFmt('AudioOpenFileStreaming: nil stream for %s', [APath]);
@@ -237,7 +237,7 @@ begin
       if Assigned(Result) then Exit;
     except
       on E: EAudioDecodeError do Continue;
-      else Continue;
+      else raise;
     end;
   end;
   raise EAudioDecodeError.CreateFmt('AudioOpenFileStreaming: no decoder succeeded for %s', [APath]);
