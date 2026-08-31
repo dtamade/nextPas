@@ -60,10 +60,16 @@ function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 { Unsigned helpers (single source via bytes.ops) }
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
 function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
+function BytesIsZero(const AData: TBytes): Boolean; inline;
+function IsAllZero(const AData: TBytes): Boolean; inline;
 
 { Binary: swap }
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
@@ -242,6 +248,16 @@ begin
   Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
 end;
 
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+begin
+  Result := nextpas.core.bytes.ops.StripLeadingZeroSpan(ASpan);
+end;
+
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+begin
+  Result := nextpas.core.bytes.ops.StripLeadingZeroView(AData);
+end;
+
 function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 begin
   Result := nextpas.core.bytes.ops.CompareUnsigned(ALeft, ARight);
@@ -260,6 +276,26 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
+end;
+
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
+end;
+
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.IsZeroBytes(ASpan);
+end;
+
+function BytesIsZero(const AData: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.BytesIsZero(AData);
+end;
+
+function IsAllZero(const AData: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.IsAllZero(AData);
 end;
 
 { Binary: swap }
