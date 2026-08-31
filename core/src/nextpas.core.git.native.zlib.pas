@@ -32,15 +32,28 @@ implementation
 
 function GitZlibAdler32(const AData: TBytes): UInt32;
 var
-  I: SizeInt;
+  I, LRem, LBlock, J: SizeInt;
   A, B: UInt32;
 begin
   A := 1;
   B := 0;
-  for I := 0 to Length(AData) - 1 do
+  LRem := Length(AData);
+  I := 0;
+  while LRem > 0 do
   begin
-    A := (A + AData[I]) mod 65521;
-    B := (B + A) mod 65521;
+    if LRem > 5552 then
+      LBlock := 5552
+    else
+      LBlock := LRem;
+    for J := 0 to LBlock - 1 do
+    begin
+      A := A + AData[I + J];
+      B := B + A;
+    end;
+    Inc(I, LBlock);
+    Dec(LRem, LBlock);
+    A := A mod 65521;
+    B := B mod 65521;
   end;
   Result := (B shl 16) or A;
 end;
@@ -50,6 +63,26 @@ begin
   Result := DeflateCompress(AData);
 end;
 
+function MapDeflateError(const E: Exception): EGitError;
+begin
+  if Pos('truncated stream', E.Message) > 0 then
+    Result := EGitError.Create('truncated zlib stream')
+  else if Pos('invalid zlib header', E.Message) > 0 then
+    Result := EGitError.Create('zlib stream is not deflate')
+  else if Pos('invalid window bits', E.Message) > 0 then
+    Result := EGitError.Create('corrupt zlib header')
+  else if Pos('corrupt zlib header', E.Message) > 0 then
+    Result := EGitError.Create('corrupt zlib header')
+  else if Pos('preset dictionary', E.Message) > 0 then
+    Result := EGitError.Create('zlib preset dictionary unsupported')
+  else if Pos('zlib stream too large', E.Message) > 0 then
+    Result := EGitError.Create('zlib stream too large')
+  else if Pos('corrupt stream', E.Message) > 0 then
+    Result := EGitError.Create('corrupt zlib payload: data error')
+  else
+    Result := EGitError.Create('corrupt zlib payload: ' + E.Message);
+end;
+
 function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes;
 begin
@@ -57,24 +90,7 @@ begin
     Result := DeflateDecompressPtrWithEndPos(AData, ACount, AStart, AEndPos);
   except
     on E: EIOError do
-    begin
-      if Pos('truncated stream', E.Message) > 0 then
-        raise EGitError.Create('truncated zlib stream')
-      else if Pos('invalid zlib header', E.Message) > 0 then
-        raise EGitError.Create('zlib stream is not deflate')
-      else if Pos('invalid window bits', E.Message) > 0 then
-        raise EGitError.Create('corrupt zlib header')
-      else if Pos('corrupt zlib header', E.Message) > 0 then
-        raise EGitError.Create('corrupt zlib header')
-      else if Pos('preset dictionary', E.Message) > 0 then
-        raise EGitError.Create('zlib preset dictionary unsupported')
-      else if Pos('zlib stream too large', E.Message) > 0 then
-        raise EGitError.Create('zlib stream too large')
-      else if Pos('corrupt stream', E.Message) > 0 then
-        raise EGitError.Create('corrupt zlib payload: data error')
-      else
-        raise EGitError.Create('corrupt zlib payload: ' + E.Message);
-    end;
+      raise MapDeflateError(E);
     on E: Exception do
       raise EGitError.Create('corrupt zlib payload: ' + E.Message);
   end;
@@ -90,24 +106,7 @@ begin
   except
     on E: EGitError do raise;
     on E: EIOError do
-    begin
-      if Pos('truncated stream', E.Message) > 0 then
-        raise EGitError.Create('truncated zlib stream')
-      else if Pos('invalid zlib header', E.Message) > 0 then
-        raise EGitError.Create('zlib stream is not deflate')
-      else if Pos('invalid window bits', E.Message) > 0 then
-        raise EGitError.Create('corrupt zlib header')
-      else if Pos('corrupt zlib header', E.Message) > 0 then
-        raise EGitError.Create('corrupt zlib header')
-      else if Pos('preset dictionary', E.Message) > 0 then
-        raise EGitError.Create('zlib preset dictionary unsupported')
-      else if Pos('zlib stream too large', E.Message) > 0 then
-        raise EGitError.Create('zlib stream too large')
-      else if Pos('corrupt stream', E.Message) > 0 then
-        raise EGitError.Create('corrupt zlib payload: data error')
-      else
-        raise EGitError.Create('corrupt zlib payload: ' + E.Message);
-    end;
+      raise MapDeflateError(E);
     on E: Exception do
       raise EGitError.Create(E.Message);
   end;

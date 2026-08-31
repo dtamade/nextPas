@@ -42,10 +42,17 @@ function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 { Unsigned big-endian helpers (canonical single source for crypto/tls) }
 function StripLeadingZero(const AData: TBytes): TBytes;
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer;
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
+function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 
@@ -283,6 +290,29 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
+function IsZeroBytes(const AData: TBytes): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(AData) do
+    if AData[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+function IsZeroBytes(const ASpan: TByteSpan): Boolean;
+var
+  I: SizeUInt;
+begin
+  for I := 0 to ASpan.Len - 1 do
+    if ASpan.Data[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+function IsAllZero(const AData: TBytes): Boolean;
+begin
+  Result := IsZeroBytes(AData);
+end;
+
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
 var
   I, LLen: Integer;
@@ -307,19 +337,39 @@ begin
   Result := StripLeadingZero(AData);
 end;
 
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
-var
-  LLeft, LRight: TBytes;
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
 begin
-  LLeft := StripLeadingZero(ALeft);
-  LRight := StripLeadingZero(ARight);
-  if Length(LLeft) < Length(LRight) then
+  Result := ASpan;
+  while (Result.Len > 0) and (Result.Data^ = 0) do
+  begin
+    Inc(Result.Data);
+    Dec(Result.Len);
+  end;
+end;
+
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+begin
+  Result := StripLeadingZeroSpan(TByteSpan.FromBytes(AData));
+end;
+
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
+var
+  LLeft, LRight: TByteSpan;
+begin
+  LLeft := StripLeadingZeroSpan(ALeft);
+  LRight := StripLeadingZeroSpan(ARight);
+  if LLeft.Len < LRight.Len then
     Exit(-1);
-  if Length(LLeft) > Length(LRight) then
+  if LLeft.Len > LRight.Len then
     Exit(1);
-  if Length(LLeft) = 0 then
+  if LLeft.Len = 0 then
     Exit(0);
-  Result := CompareBytesOrdered(@LLeft[0], @LRight[0], Length(LLeft), Length(LRight));
+  Result := CompareBytesOrdered(LLeft.Data, LRight.Data, LLeft.Len, LRight.Len);
+end;
+
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+begin
+  Result := CompareUnsignedSpan(StripLeadingZeroView(ALeft), StripLeadingZeroView(ARight));
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
@@ -335,6 +385,11 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := UnsignedEqual(ALeft, ARight);
+end;
+
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+begin
+  Result := CompareUnsignedSpan(ALeft, ARight) = 0;
 end;
 
 function BytesToString(const ABytes: TBytes): string; inline;

@@ -140,12 +140,9 @@ begin
   Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
 end;
 
-function IsZeroBytes(const AData: TBytes): Boolean;
-var
-  LNorm: TBytes;
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
 begin
-  LNorm := StripLeadingZeroBytes(AData);
-  Result := (Length(LNorm) = 1) and (LNorm[0] = 0);
+  Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
