@@ -11,7 +11,7 @@ interface
 uses
   nextpas.compiler.syntax.green_tree.base,
   nextpas.compiler.syntax.green_tree.core,
-  np_diagnostics_sink, np_lexer, np_source_database,
+  np_diagnostics_sink, nextpas.compiler.syntax.lexer, np_source_database,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 
