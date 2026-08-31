@@ -2,7 +2,7 @@
 
 **状态**：S0 冻结，随源码落地微调（六维 P0 清零）
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）、`REVIEW.md`（差距）、`AI_GUIDE.md`（AI 规范）、`SIXDIM_REVIEW.md`（六维）
-**版本**：1.0（11 单元 pure.base 单源 464 行 + Close 幂等 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
+**版本**：1.0（11 单元 pure.base 单源 481 行 + Close 幂等 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
 
 ## 0. 分层总览（`SIXDIM L-1`）
 
@@ -127,7 +127,7 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 - **基准框架**：`nextpas.core.bench`（`design-conventions §12`），禁自定义计时。`bench_eval` 覆盖 `Eval('1+2')`、`HostFunction` 往返、`NewJson/ToJson` 互转，输出 `ns/op` 与 `MB/s`（若涉二进制）。
 - **测试框架**：`nextpas.core.test`（`TTestSuite + TSuiteRunner`），`fake` 契约测试全量走 `fake` 后端，`quickjs_runtime` 仅在探测到库时跑。
 - **Heaptrc**：所有 `focused` 套件 `heaptrc 0 leaks` 为门禁（`mem` 契约）。
-- **对象堆阈值**：`pure.base` 对象堆线性查找 O(n)，小对象 n≤32 零分配最优，>64 建议哈希迁移（实测 n>64 或 `bench_value` 回归>10% 触发，纯族 464 行阈值550内，18 份对齐）。
+- **对象堆阈值**：`pure.base` 对象堆线性查找 O(n)，小对象 n≤32 零分配最优，>64 建议哈希迁移（实测 n>64 或 `bench_value` 回归>10% 触发，纯族 481 行阈值550内，18 份对齐）。
 
 ## 8.1 复用与反哺纪律（基本要求）
 
@@ -220,5 +220,5 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 | 2026-08-30 | 0.5 | 增补：game888 借鉴（静链/动探、批处理、模块加载器、多桥组合） |
 | 2026-08-31 | 0.8 | 11 单元 pure.base 单源 338 行 + 5 gate 全绿，M3b 基准同步，18 份对齐 |
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（CONTRACT/ROADMAP/BENCHMARKS 三份对齐） |
-| 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.4 同步本次实测均值（Eval/small ~660ns / Eval/host ~1.5µs 加权 / B/op 18/176 / Value 零分配）+ pure.base 464 行阈值 550 内统一，18 份对齐 |
+| 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.4 同步本次实测均值（Eval/small ~660ns / Eval/host ~1.5µs 加权 / B/op 18/176 / Value 零分配）+ pure.base 481 行阈值 550 内统一，18 份对齐 |
 | 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.4 保持，其余引用同步 1.0，18份对齐 |

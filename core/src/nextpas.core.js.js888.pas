@@ -102,21 +102,10 @@ begin if FClosed then Exit; EnsureThreadAffinity; JsPureHostRemove(FHostFuncs, A
 procedure TJsJs888Context.Tick; begin if FClosed then Exit; EnsureThreadAffinity; end;
 procedure TJsJs888Context.CollectGarbage; begin if FClosed then Exit; EnsureThreadAffinity; end;
 procedure TJsJs888Context.Close;
-var I: Integer;
 begin
   if FClosed then Exit;
   FClosed := True;
-  JsContextClose(FContextId);
-  for I := 0 to High(FHostFuncs) do
-  begin
-    FHostFuncs[I].Name := '';
-    FHostFuncs[I].Func := nil;
-    FHostFuncs[I].Method := nil;
-    FHostFuncs[I].Proc := nil;
-  end;
-  SetLength(FHostFuncs, 0);
-  JsPureHeapClear(FHeap);
-  FGlobal := JsUndefinedValue;
+  JsPureClose(FHostFuncs, FHeap, FGlobal, FContextId);
 end;
 function TJsJs888Context.IsClosed: Boolean; begin Result:=FClosed; end;
 end.

@@ -6,7 +6,7 @@
 **Owner**：`codex/core-js` lane（`js` 家族）
 **状态**：S0 六维冻结 P0 清零（18 份生产级，待 M1 源码）→ S1 目标 `source-contract + focused-runtime(fake)`
 **最后更新**：2026-08-31
-**版本**：1.0（11 单元 pure.base 单源 464 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
+**版本**：1.0（11 单元 pure.base 单源 481 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
 
 ## 1. 模块定位
 
@@ -38,7 +38,7 @@
 | `nextpas.core.js.pas` | 门面 re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 纯聚合，不含逻辑 |
 
 ```
-base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure.base←{js888,v8,chakra}(零FFI/零dl 352+119×3 阈值550内)} ← 门面
+base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure.base←{js888,v8,chakra}(零FFI/零dl 481+122×3 阈值550内)} ← 门面
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为零 FFI/零 dl、恒可用，与 `fake` 同约束；尾部追加只在枚举末尾加，`js.base/js.intf` 零改动。
@@ -245,4 +245,4 @@ make -C core/benchmarks/nextpas.core.js/bench_eval run
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS 5 后端矩阵 179/633/1089/962/SKIP + Value/ops 零分配 + 纯族 338 行体量阈值内 |
 | 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.3 同步实测均值 ~660ns（645/660/631/660）/ host ~1.5µs 加权 / B/op 18/176 + pure.base 352 行阈值 550 内统一，18 份对齐 |
 | 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.3 保持，其余引用同步 1.0，18份对齐 |
-| 2026-08-31 | 1.0 | r8 工厂单源+转义：pure.base 352→464 行阈值550内 + JsPureNew* 工厂委托消16克隆 + TJsonWriter真转义 + 5 gate 全绿 + bench 716/852/1.89µs |
+| 2026-08-31 | 1.0 | r8 工厂单源+转义：pure.base 352→481 行阈值550内 + JsPureNew* 工厂委托消16克隆 + TJsonWriter真转义 + 5 gate 全绿 + bench 716/852/1.89µs |

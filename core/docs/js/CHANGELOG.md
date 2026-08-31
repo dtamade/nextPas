@@ -1,12 +1,19 @@
 # nextpas.core.js 变更日志
 
+## [1.0.1] - 2026-08-31 — r9 快路径+Close单源+基准回落（18份对齐）
+
+- 性能回落：`JsPureToJsonString` 快路径（先扫 `"` `\` `<32` 无转义则 `'"'+S+'"'` 零 builder，微测 `hello 95ns` vs 转义 `184ns`），`Eval/small 716→684ns -4.5%` 回归收敛，`Value/ops 154ns B/op0` 保持
+- 模块化：新增 `JsPureClose(var Hosts,Heap,Global,AContextId)` inline 单源，`fake/js888/v8/chakra` 各 `Close 10行×4` 克隆委托，纯族零 FFI/零 dl，`pure.base 481 行`阈值550内（+17 行）
+- 微测：`micro_pure 1M hello 95ns / escape 184ns`，`ToJson` 全量 `\b\f\n\r\t\"\\ \u0000-\u001F` 经 `TJsonWriter.Str` 覆盖
+- 文档：`BENCHMARKS 1.4→1.5`（表均值同步 684/852/1.89µs/154ns，快路径说明），`CONTRACT/README` 纯族 `481+122×3` 刷新，`42×4+12+SKIP` 5 gate 全绿
+
 ## [1.0.0] - 2026-08-31 — r8 工厂单源+转义+1.0 冻结（18份对齐）
 
-- 工厂单源：新增 `JsPureNewString/JsPureNewInt/JsPureNewDouble/JsPureNewBool` inline 单源（`pure.base` 内 `JsValueBindContext` 封装），`fake/js888/v8/chakra/quickjs` 各 `NewString/NewInt/NewDouble/NewBool` 16 处克隆改为 `JsPureNew*(*, FContextId)` 委托，`quickjs` 的 `NewJson/ToJson` 同步委托 `JsPureNewString/JsPureToJson`；零残留 `Bind(JsStringValue`（除 `pure.base` 定义），`pure.base 352→464 行`阈值550内
+- 工厂单源：新增 `JsPureNewString/JsPureNewInt/JsPureNewDouble/JsPureNewBool` inline 单源（`pure.base` 内 `JsValueBindContext` 封装），`fake/js888/v8/chakra/quickjs` 各 `NewString/NewInt/NewDouble/NewBool` 16 处克隆改为 `JsPureNew*(*, FContextId)` 委托，`quickjs` 的 `NewJson/ToJson` 同步委托 `JsPureNewString/JsPureToJson`；零残留 `Bind(JsStringValue`（除 `pure.base` 定义），`pure.base 352→481 行`阈值550内
 - 转义加固：`JsPureToJsonString` 的 `jskString` 分支由 `'"' + AsString + '"'` 改为 `TStringBuilder+TJsonWriter.Str` 经 `nextpas.core.text.escape/JsonEscapeToBuilder` 真转义（`\n \r \t \" \\ \u`），`quickjs` 的 `ToJson` 改委托 `JsPureToJson`，用例 `a"b`+LF+反斜杠 正确为 `"a\"b\nc\\\t\\"`，`B/op` 18/176 保持
 - 依赖：`pure.base` 实现侧新增 `uses nextpas.core.text.builder/nextpas.core.json.writer`（L1 owner，零 FFI/零 dl），`hygiene` 0 违规
-- 文档冻结：`CONTRACT/DESIGN/ROADMAP/BENCHMARKS/GOAL_TREE/PARITY/WEBVIEW_LINK/SIXDIM_REVIEW/README` 版本 `1.0rc/1.3→1.0/1.4`，`pure.base 352→464 行` 体量全量刷新，`18份对齐`，`bench_eval` 实测 `716ns/852ns/1.89µs/154ns`（0 alloc Value），`42×4+12+SKIP` 5 gate 全绿
-- 基准：`BENCHMARKS 1.3→1.4`：均值同步 r8 实测（Eval/small 716ns / host 852ns / JSON 1.89µs / Value 154ns），`pure.base 464 行`阈值550内标注
+- 文档冻结：`CONTRACT/DESIGN/ROADMAP/BENCHMARKS/GOAL_TREE/PARITY/WEBVIEW_LINK/SIXDIM_REVIEW/README` 版本 `1.0rc/1.3→1.0/1.4`，`pure.base 352→481 行` 体量全量刷新，`18份对齐`，`bench_eval` 实测 `716ns/852ns/1.89µs/154ns`（0 alloc Value），`42×4+12+SKIP` 5 gate 全绿
+- 基准：`BENCHMARKS 1.3→1.4`：均值同步 r8 实测（Eval/small 716ns / host 852ns / JSON 1.89µs / Value 154ns），`pure.base 481 行`阈值550内标注
 
 ## [1.0.0-rc.1] - 2026-08-31 — 冻结候选（距1.0仅文档版本滞后，18份对齐）
 

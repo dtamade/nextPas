@@ -54,6 +54,7 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
+procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); inline;
 
 implementation
 uses
@@ -292,15 +293,20 @@ begin
 end;
 
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
-var LDouble: Double; B: TStringBuilder; W: TJsonWriter;
+var LDouble: Double; B: TStringBuilder; W: TJsonWriter; S: string; I: Integer; Needs: Boolean;
 begin
   case AValue.Kind of
     jskString:
       begin
-        B.Init(32);
+        S := AValue.AsString;
+        Needs := False;
+        for I := 1 to Length(S) do
+          if (S[I] = '"') or (S[I] = '\') or (Byte(S[I]) < 32) then begin Needs := True; Break; end;
+        if not Needs then Exit('"' + S + '"');
+        B.Init(SizeUInt(Length(S)) + 16);
         try
           W.Init(B);
-          W.Str(AValue.AsString);
+          W.Str(S);
           Result := B.ToString;
         finally B.Done; end;
       end;
@@ -321,6 +327,17 @@ end;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
 begin
   Result := JsonParse(JsPureToJsonString(AValue));
+end;
+
+procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); inline;
+var I: Integer;
+begin
+  JsContextClose(AContextId);
+  for I := 0 to High(Hosts) do
+  begin Hosts[I].Name := ''; Hosts[I].Func := nil; Hosts[I].Method := nil; Hosts[I].Proc := nil; end;
+  SetLength(Hosts, 0);
+  JsPureHeapClear(Heap);
+  Global := JsUndefinedValue;
 end;
 
 function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean; inline;
