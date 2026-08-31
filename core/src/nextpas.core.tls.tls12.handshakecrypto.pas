@@ -138,6 +138,7 @@ begin
 
   LOffset := 0;
 
+  Result := Default(TTLS12KeyBlock);
   SetLength(Result.ClientWriteMACKey, AMACKeyLen);
   if AMACKeyLen > 0 then
     Move(LKeyMaterial[LOffset], Result.ClientWriteMACKey[0], AMACKeyLen);

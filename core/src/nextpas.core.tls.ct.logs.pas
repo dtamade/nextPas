@@ -54,6 +54,7 @@ var
 
 function CopyBytes(const AData: TBytes): TBytes;
 begin
+  Result := nil;
   SetLength(Result, Length(AData));
   if Length(AData) > 0 then
     Move(AData[0], Result[0], Length(AData));
@@ -119,6 +120,7 @@ end;
 
 function ExtractVerifierPublicKey(const ASPKI: TBytes; const AKeyType: string): TBytes;
 begin
+  Result := nil;
   SetLength(Result, 0);
 
   if SameText(AKeyType, 'ECDSA') then

@@ -212,6 +212,7 @@ var
   RV: CK_RV;
   ResultList: specialize TVec<TPKCS11TokenInfo>;
 begin
+  Result := nil;
   SetLength(Result, 0);
   ResultList := specialize TVec<TPKCS11TokenInfo>.Create;
   try
@@ -318,6 +319,7 @@ var
   KeyLabelLen: CK_ULONG;
   PINAnsi: AnsiString;
 begin
+  Result := nil;
   SetLength(Result, 0);
   ResultList := specialize TVec<TPKCS11KeyInfo>.Create;
   try
