@@ -46,11 +46,12 @@ function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 function JsonEscape(const AValue: string): string;
 function EscapeLlvmStr(const AValue: string): string;
 
-{== Encoding — byte<->string conversions ==}
+{== Encoding — byte<->string conversions == single source is bytes.ops (zero-copy Move) ==}
+{ UTF8 pair is the encoding-intent facade; ASCII pair is subset alias — deprecated. }
 function UTF8BytesToString(const AData: TBytes): string; inline;
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
-function ASCIIBytesToString(const AData: TBytes): string; inline;
-function StringToASCIIBytes(const AStr: string): TBytes; inline;
+function ASCIIBytesToString(const AData: TBytes): string; inline; deprecated 'Use UTF8BytesToString — ASCII is UTF8 subset, single source bytes.ops.BytesToString';
+function StringToASCIIBytes(const AStr: string): TBytes; inline; deprecated 'Use StringToUTF8Bytes — ASCII is UTF8 subset, single source bytes.ops.StringToBytes';
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
 function SameText(const A, B: string): Boolean; inline;
@@ -431,12 +432,12 @@ end;
 
 function ASCIIBytesToString(const AData: TBytes): string; inline;
 begin
-  Result := nextpas.core.bytes.ops.BytesToString(AData);
+  Result := UTF8BytesToString(AData);
 end;
 
 function StringToASCIIBytes(const AStr: string): TBytes; inline;
 begin
-  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
+  Result := StringToUTF8Bytes(AStr);
 end;
 
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
