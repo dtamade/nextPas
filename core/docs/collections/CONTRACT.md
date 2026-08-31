@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.collections*.pas`（约 84 个单元）
 **层级**：L1（依赖 L0：`base`、`mem`、`errors`/`exception`）
 **Owner**：collections lane（本 worktree）
-**最后更新**：2026-07-20
-**版本**：1.1
+**最后更新**：2026-08-31
+**版本**：1.2
 
 权威状态见同目录 [`STATUS.md`](STATUS.md)。活动进度以本文与 STATUS 为准；根目录 `task_plan.collections.md` / `findings.collections.md` / `progress.collections.md` **不作为**当前契约源。
 
@@ -285,3 +285,4 @@ make -C core/tests/nextpas.core.collections/test_vec clean test
 | 2026-07-20 | 1.5 | Phase E：LinkedHashMap 双表 Swiss；插入序仍由链表维护 |
 | 2026-07-20 | 1.6 | 可用性 Wave：测试 RTL 隔离 + source-contract；MakeTreeSet(compare)；HashMix→base；TMemAllocator 统一；ERRORS.md；bench Makefile |
 | 2026-07-21 | 1.7 | Ensure vs EnsureCapacity 对照表；有序 map 选型 §5.1；CORE-API 导读；空容器 EEmptyCollection；可编译 examples |
+| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

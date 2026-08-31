@@ -67,6 +67,8 @@ type
     procedure ThrowIfCanceled;
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
+    procedure ApplyDeadlineTimeout(const ADeadline: TDeadline; var ALastMs: UInt32;
+      const ASockOpt: Int32; const AOpName: string);
     function CancelWakeHandle: PtrUInt;
     function DeadlineTimeoutMs(const ADeadline: TDeadline): Int32;
     { 0=timeout/retry, 1=ready, raises on cancel/deadline/error. }
@@ -553,80 +555,53 @@ begin
   Result := platform_socket_peer_alive(FSocket);
 end;
 
-procedure TTcpStream.ApplyReadTimeout;
+procedure TTcpStream.ApplyDeadlineTimeout(const ADeadline: TDeadline;
+  var ALastMs: UInt32; const ASockOpt: Int32; const AOpName: string);
 var
   LMs: UInt32;
   LRemaining: TDuration;
 begin
-  if FReadDeadline.IsInfinite then
+  if ADeadline.IsInfinite then
   begin
     if FCancelToken <> nil then
     begin
       LMs := NET_IO_CANCEL_SLICE_MS;
-      if LMs <> FLastReadTimeoutMs then
+      if LMs <> ALastMs then
       begin
-        platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
-        FLastReadTimeoutMs := LMs;
+        platform_socket_set_timeout(FSocket, ASockOpt, LMs);
+        ALastMs := LMs;
       end;
       Exit;
     end;
-    if FLastReadTimeoutMs <> 0 then
+    if ALastMs <> 0 then
     begin
-      platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, 0);
-      FLastReadTimeoutMs := 0;
+      platform_socket_set_timeout(FSocket, ASockOpt, 0);
+      ALastMs := 0;
     end;
     Exit;
   end;
-  if FReadDeadline.IsExpired then
-    raise ETimeoutError.Create('read deadline exceeded');
-  LRemaining := FReadDeadline.Remaining;
+  if ADeadline.IsExpired then
+    raise ETimeoutError.Create(AOpName + ' deadline exceeded');
+  LRemaining := ADeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
   if (FCancelToken <> nil) and (LMs > NET_IO_CANCEL_SLICE_MS) then
     LMs := NET_IO_CANCEL_SLICE_MS;
-  if LMs <> FLastReadTimeoutMs then
+  if LMs <> ALastMs then
   begin
-    platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
-    FLastReadTimeoutMs := LMs;
+    platform_socket_set_timeout(FSocket, ASockOpt, LMs);
+    ALastMs := LMs;
   end;
 end;
 
-procedure TTcpStream.ApplyWriteTimeout;
-var
-  LMs: UInt32;
-  LRemaining: TDuration;
+procedure TTcpStream.ApplyReadTimeout;
 begin
-  if FWriteDeadline.IsInfinite then
-  begin
-    if FCancelToken <> nil then
-    begin
-      LMs := NET_IO_CANCEL_SLICE_MS;
-      if LMs <> FLastWriteTimeoutMs then
-      begin
-        platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
-        FLastWriteTimeoutMs := LMs;
-      end;
-      Exit;
-    end;
-    if FLastWriteTimeoutMs <> 0 then
-    begin
-      platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, 0);
-      FLastWriteTimeoutMs := 0;
-    end;
-    Exit;
-  end;
-  if FWriteDeadline.IsExpired then
-    raise ETimeoutError.Create('write deadline exceeded');
-  LRemaining := FWriteDeadline.Remaining;
-  LMs := UInt32(LRemaining.AsMilliseconds);
-  if LMs = 0 then LMs := 1;
-  if (FCancelToken <> nil) and (LMs > NET_IO_CANCEL_SLICE_MS) then
-    LMs := NET_IO_CANCEL_SLICE_MS;
-  if LMs <> FLastWriteTimeoutMs then
-  begin
-    platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
-    FLastWriteTimeoutMs := LMs;
-  end;
+  ApplyDeadlineTimeout(FReadDeadline, FLastReadTimeoutMs, PLATFORM_SO_RCVTIMEO, 'read');
+end;
+
+procedure TTcpStream.ApplyWriteTimeout;
+begin
+  ApplyDeadlineTimeout(FWriteDeadline, FLastWriteTimeoutMs, PLATFORM_SO_SNDTIMEO, 'write');
 end;
 
 { TTcpListener }

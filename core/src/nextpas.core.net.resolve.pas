@@ -20,11 +20,12 @@ function NetResolveIPv4(const AIP: string): UInt32;
 
 { 剥 IPv6 方括号：'[::1]' → '::1'；其余原样。 }
 function StripHostBrackets(const AHost: string): string;
-{ 点分四段 0..255；拒绝前导零（'01'）；不剥括号。 }
+{ 点分四段 0..255；拒绝前导零（'01'）；不剥括号。单源：IPv6 内嵌尾复用此解析。 }
 function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; overload;
 { 同上，产出 4 字节网络序（首 octet = 高位地址段）。 }
 function TryParseIPv4(const AIP: string; out AOctets: TBytes): Boolean; overload;
-{ RFC 4291 §2.2：:: 至多一次、内嵌 IPv4 尾、剥括号；拒 %zone / 空组 / 超 4 位。 }
+{ RFC 4291 §2.2：:: 至多一次、内嵌 IPv4 尾（复用 TryParseIPv4）、剥括号；拒 %zone/空组/超 4 位。
+  双轨收敛：IPv4 为单源，IPv6 尾段委托而非重写；文档化于此。 }
 function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean; overload;
 { 写入调用方 16 字节缓冲（AAddr 不可空）；失败不保证缓冲内容。 }
 function TryParseIPv6(const AIP: string; AAddr: PByte): Boolean; overload;
@@ -445,7 +446,7 @@ begin
     Exit;
   if not TryStrToInt(LPortText, LVal) then
     Exit;
-  if (LVal < 1) or (LVal > 65535) then
+  if not IsValidPort(LVal) then
     Exit;
   APort := UInt16(LVal);
   Result := True;

@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.db*.pas`
 **层级**：L3 家族（依赖 L0-L2；SQLite/PostgreSQL 后端实现为 L2 子模块）
 **Owner**：core-db lane
-**最后更新**：2026-08-28（MySQL BIND 偏移常量化 + DSN 零分配/端口校验自证）
-**版本**：1.1（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY）
+**最后更新**：2026-08-31（MySQL BIND 偏移常量化 + DSN 零分配/端口校验自证）
+**版本**：1.2（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY）
 
 ---
 

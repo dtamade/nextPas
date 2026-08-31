@@ -1,6 +1,6 @@
 # nextpas.core.simd Intrinsics 层详解
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-08-31
 
 ## 概述
 

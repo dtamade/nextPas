@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.xml*.pas`（5 个源文件）
 **层级**：L2（`design-conventions` 将 xml 放在 L2 系统能力；非 L1）
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
-**最后更新**：2026-07-20
-**版本**：2.0（对齐真实 class API + IXmlDocument；废止 1.0 record Reader 描述）
+**最后更新**：2026-08-31
+**版本**：2.1（对齐真实 class API + IXmlDocument；废止 1.0 record Reader 描述）
 
 ---
 
@@ -131,3 +131,4 @@ make focused FOCUS=core/tests/nextpas.core.xml/test_xml_roundtrip
 | 2026-07-01 | 1.0 | 初始（record Reader/L1 描述错误，已废止） | — |
 | 2026-07-20 | 2.0 | 对齐 class API、IXmlDocument、L2 | config-formats lane |
 | 2026-07-26 | 2.1 | INV-4 DOM 深度上限 512（修复深树 `Text` 递归 SIGSEGV） | config-formats lane |
+| 2026-08-31 | 2.1 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

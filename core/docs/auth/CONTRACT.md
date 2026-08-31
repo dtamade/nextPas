@@ -3,8 +3,8 @@
 **模块路径**:`core/src/nextpas.core.auth.*.pas` + `core/src/nextpas.core.jwt.pas`
 **层级**:L3(只依赖 L0-L2)
 **Owner**:auth / mailServer888 lane
-**最后更新**:2026-08-22
-**版本**:1.0
+**最后更新**:2026-08-31
+**版本**:1.1
 
 ---
 

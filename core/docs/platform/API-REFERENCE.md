@@ -1,8 +1,8 @@
 # Platform API 参考手册
 
 **日期**: 2026-07-06
-**更新**: 2026-07-17 (wave-4: return/error cross-links; catalog names must match live sources)
-**版本**: v1.3
+**更新**: 2026-08-31 (同步 CONTRACT v2.4；wave-4 + 时效校正)
+**版本**: v1.4
 **模块数**: 24
 **API数**: ~1067
 
@@ -418,5 +418,5 @@ as separate PLATFORM_ERR identifiers.
 
 ---
 
-**文档维护**: 随 platform 模块演进更新
-**最后更新**: 2026-07-17
+**文档维护**: 随 platform 模块演进更新（同步 CONTRACT v2.4）
+**最后更新**: 2026-08-31

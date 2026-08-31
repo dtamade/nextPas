@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.io*.pas`（23 个源文件）
 **层级**：L1（依赖 L0: base, bytes, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-30
-**版本**：1.1
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 

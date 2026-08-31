@@ -161,6 +161,12 @@ function IsNaN(const AValue: Single): Boolean; overload;
 function IsInfinite(const AValue: Double): Boolean; overload; inline;
 function IsInfinite(const AValue: Single): Boolean; overload;
 
+{** * Requires AValue to be finite (not NaN and not infinite).
+ * @raises EArgumentError if AValue is NaN or infinite
+ *}
+procedure RequireFinite(const AValue: Single; const AMessage: string); overload; inline;
+procedure RequireFinite(const AValue: Double; const AMessage: string); overload; inline;
+
 {** * IEEE special values with FPC Math-compatible names (Double payloads).
  * Built from bit patterns — no exception-raising division.
  *}
@@ -1512,6 +1518,18 @@ end;
 function IsInfinite(const AValue: Double): Boolean;
 begin
   Result := DoubleIsInfinite(AValue);
+end;
+
+procedure RequireFinite(const AValue: Single; const AMessage: string);
+begin
+  if IsNaN(AValue) or IsInfinite(AValue) then
+    raise EArgumentError.Create(AMessage);
+end;
+
+procedure RequireFinite(const AValue: Double; const AMessage: string);
+begin
+  if IsNaN(AValue) or IsInfinite(AValue) then
+    raise EArgumentError.Create(AMessage);
 end;
 
 function NaN: Double;

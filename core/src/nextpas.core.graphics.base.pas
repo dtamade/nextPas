@@ -10,7 +10,9 @@ unit nextpas.core.graphics.base;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.math.vec,
+  nextpas.core.math.mat.base;
 
 type
   { TColor32 - $AARRGGBB sRGB }
@@ -64,6 +66,12 @@ type
 const
   EPSILON = 1e-6;
 
+{ Bridge to math.vec / math.mat — single source for geometry types. }
+function Vec2ToMath(const A: TVec2): TVec2f; inline;
+function Vec2FromMath(const A: TVec2f): TVec2; inline;
+function Mat2DToMat3f(const A: TMat2D): TMat3f; inline;
+function Mat3fToMat2D(const A: TMat3f): TMat2D; inline;
+
 function Color32(R, G, B: Byte; A: Byte = 255): TColor32; inline;
 function Color32ToRgba(C: TColor32): TRgba; inline;
 function RgbaToColor32(const C: TRgba): TColor32; inline;
@@ -78,7 +86,8 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.math;
+  nextpas.core.math,
+  nextpas.core.math.scalar;
 
 class function TVec2.Create(AX, AY: Single): TVec2;
 begin
@@ -88,9 +97,10 @@ end;
 
 class function TRect.From(AX, AY, AW, AH: Single): TRect;
 begin
-  if IsNaN(AX) or IsInfinite(AX) or IsNaN(AY) or IsInfinite(AY) or
-     IsNaN(AW) or IsInfinite(AW) or IsNaN(AH) or IsInfinite(AH) then
-    raise EArgumentError.Create('nextpas.core.graphics.base.pas: TRect.From: AX/AY/AW/AH must be finite');
+  RequireFinite(AX, 'nextpas.core.graphics.base.pas: TRect.From: AX must be finite');
+  RequireFinite(AY, 'nextpas.core.graphics.base.pas: TRect.From: AY must be finite');
+  RequireFinite(AW, 'nextpas.core.graphics.base.pas: TRect.From: AW must be finite');
+  RequireFinite(AH, 'nextpas.core.graphics.base.pas: TRect.From: AH must be finite');
   if (AW < 0) or (AH < 0) then
     raise EArgumentError.Create('nextpas.core.graphics.base.pas: TRect.From: W/H must be >= 0');
   Result.X := AX;
@@ -117,16 +127,16 @@ end;
 
 class function TMat2D.Translate(DX, DY: Single): TMat2D;
 begin
-  if IsNaN(DX) or IsInfinite(DX) or IsNaN(DY) or IsInfinite(DY) then
-    raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D.Translate: DX/DY must be finite');
+  RequireFinite(DX, 'nextpas.core.graphics.base.pas: TMat2D.Translate: DX must be finite');
+  RequireFinite(DY, 'nextpas.core.graphics.base.pas: TMat2D.Translate: DY must be finite');
   Result := Identity;
   Result.Tx := DX; Result.Ty := DY;
 end;
 
 class function TMat2D.Scale(SX, SY: Single): TMat2D;
 begin
-  if IsNaN(SX) or IsInfinite(SX) or IsNaN(SY) or IsInfinite(SY) then
-    raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D.Scale: SX/SY must be finite');
+  RequireFinite(SX, 'nextpas.core.graphics.base.pas: TMat2D.Scale: SX must be finite');
+  RequireFinite(SY, 'nextpas.core.graphics.base.pas: TMat2D.Scale: SY must be finite');
   Result := Identity;
   Result.A := SX; Result.D := SY;
 end;
@@ -135,8 +145,7 @@ class function TMat2D.Rotate(Rad: Single): TMat2D;
 var
   S, Cc: Single;
 begin
-  if IsNaN(Rad) or IsInfinite(Rad) then
-    raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D.Rotate: Rad must be finite');
+  RequireFinite(Rad, 'nextpas.core.graphics.base.pas: TMat2D.Rotate: Rad must be finite');
   S := Sin(Rad);
   Cc := Cos(Rad);
   Result.A := Cc; Result.B := S; Result.C := -S; Result.D := Cc;
@@ -145,13 +154,18 @@ end;
 
 function TMat2D.Concat(const M: TMat2D): TMat2D;
 begin
-  if IsNaN(A) or IsInfinite(A) or IsNaN(B) or IsInfinite(B) or
-     IsNaN(C) or IsInfinite(C) or IsNaN(D) or IsInfinite(D) or
-     IsNaN(Tx) or IsInfinite(Tx) or IsNaN(Ty) or IsInfinite(Ty) or
-     IsNaN(M.A) or IsInfinite(M.A) or IsNaN(M.B) or IsInfinite(M.B) or
-     IsNaN(M.C) or IsInfinite(M.C) or IsNaN(M.D) or IsInfinite(M.D) or
-     IsNaN(M.Tx) or IsInfinite(M.Tx) or IsNaN(M.Ty) or IsInfinite(M.Ty) then
-    raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(A, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(B, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(C, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(D, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(Tx, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(Ty, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(M.A, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(M.B, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(M.C, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(M.D, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(M.Tx, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
+  RequireFinite(M.Ty, 'nextpas.core.graphics.base.pas: TMat2D.Concat: matrix contains NaN/Inf');
   Result.A := A * M.A + C * M.B;
   Result.B := B * M.A + D * M.B;
   Result.C := A * M.C + C * M.D;
@@ -178,10 +192,12 @@ function TMat2D.Inverse: TMat2D;
 var
   Det, InvDet: Single;
 begin
-  if IsNaN(A) or IsInfinite(A) or IsNaN(B) or IsInfinite(B) or
-     IsNaN(C) or IsInfinite(C) or IsNaN(D) or IsInfinite(D) or
-     IsNaN(Tx) or IsInfinite(Tx) or IsNaN(Ty) or IsInfinite(Ty) then
-    raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D.Inverse: matrix contains NaN/Inf');
+  RequireFinite(A, 'nextpas.core.graphics.base.pas: TMat2D.Inverse: matrix contains NaN/Inf');
+  RequireFinite(B, 'nextpas.core.graphics.base.pas: TMat2D.Inverse: matrix contains NaN/Inf');
+  RequireFinite(C, 'nextpas.core.graphics.base.pas: TMat2D.Inverse: matrix contains NaN/Inf');
+  RequireFinite(D, 'nextpas.core.graphics.base.pas: TMat2D.Inverse: matrix contains NaN/Inf');
+  RequireFinite(Tx, 'nextpas.core.graphics.base.pas: TMat2D.Inverse: matrix contains NaN/Inf');
+  RequireFinite(Ty, 'nextpas.core.graphics.base.pas: TMat2D.Inverse: matrix contains NaN/Inf');
   Det := A * D - B * C;
   if IsNaN(Det) or IsInfinite(Det) or (Abs(Det) < EPSILON) then
     raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D not invertible');
@@ -196,11 +212,14 @@ end;
 
 function TMat2D.TransformPoint(const P: TVec2): TVec2;
 begin
-  if IsNaN(A) or IsInfinite(A) or IsNaN(B) or IsInfinite(B) or
-     IsNaN(C) or IsInfinite(C) or IsNaN(D) or IsInfinite(D) or
-     IsNaN(Tx) or IsInfinite(Tx) or IsNaN(Ty) or IsInfinite(Ty) or
-     IsNaN(P.X) or IsInfinite(P.X) or IsNaN(P.Y) or IsInfinite(P.Y) then
-    raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
+  RequireFinite(A, 'nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
+  RequireFinite(B, 'nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
+  RequireFinite(C, 'nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
+  RequireFinite(D, 'nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
+  RequireFinite(Tx, 'nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
+  RequireFinite(Ty, 'nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
+  RequireFinite(P.X, 'nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
+  RequireFinite(P.Y, 'nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
   Result.X := A * P.X + C * P.Y + Tx;
   Result.Y := B * P.X + D * P.Y + Ty;
 end;
@@ -208,6 +227,31 @@ end;
 function TGlyphRun.IsEmpty: Boolean;
 begin
   Result := Length(Glyphs) = 0;
+end;
+
+function Vec2ToMath(const A: TVec2): TVec2f;
+begin
+  Result := TVec2f.Create(A.X, A.Y);
+end;
+
+function Vec2FromMath(const A: TVec2f): TVec2;
+begin
+  Result := TVec2.Create(A.X, A.Y);
+end;
+
+function Mat2DToMat3f(const A: TMat2D): TMat3f;
+begin
+  Result := TMat3f.Create(A.A, A.C, A.Tx, A.B, A.D, A.Ty, 0, 0, 1);
+end;
+
+function Mat3fToMat2D(const A: TMat3f): TMat2D;
+begin
+  Result.A := A.Data[0, 0];
+  Result.B := A.Data[1, 0];
+  Result.C := A.Data[0, 1];
+  Result.D := A.Data[1, 1];
+  Result.Tx := A.Data[0, 2];
+  Result.Ty := A.Data[1, 2];
 end;
 
 function Color32(R, G, B: Byte; A: Byte): TColor32;

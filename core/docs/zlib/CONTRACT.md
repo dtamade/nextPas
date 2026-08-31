@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.zlib*.pas`（5 个源文件：base/intf/zlib888/ffi/pas，pure 为薄兼容）
 **层级**：L2（依赖 L0-L1: base, exception, platform.dl, compress.base 语义复用）
 **Owner**：AI（core-zlib lane）
-**最后更新**：2026-08-30
-**版本**：1.0（S1-S5 收敛）
+**最后更新**：2026-08-31
+**版本**：1.1（S1-S5 收敛）
 
 ---
 
