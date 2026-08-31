@@ -32,7 +32,8 @@ function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
 implementation
 
 uses
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.exception;
 
 type
   TMountedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -129,6 +130,18 @@ begin
       FRootFs := FMounts[I].Fs;
       Break;
     end;
+  // 掛載點 IsDir 校驗：防止把文件 Fs 當目錄掛載而 List/Stat 視口不一致（MEDIUM）
+  for I := 0 to High(FMounts) do
+  begin
+    if VfsIsRoot(FMounts[I].Prefix) then Continue;
+    try
+      if not FMounts[I].Fs.Stat('.').Info.IsDir then
+        raise EVfsNotADirectory.CreateCtx('mount', FMounts[I].Prefix, 'mount fs root must be a directory');
+    except
+      on E: EVfsError do raise;
+      on E: Exception do raise EVfsError.CreateCtx('mount', FMounts[I].Prefix, E.Message);
+    end;
+  end;
 end;
 
 function TMountedVfs.IsMountPoint(const APath: string): Boolean;
