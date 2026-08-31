@@ -40,6 +40,12 @@ function UTF8EncodeToStr(const ACodePoint: UInt32): string;
 { 删除末尾完整 UTF-8 序列（编辑缓冲 Backspace/光标移动用） }
 function UTF8TrimLastChar(const AValue: string): string;
 
+{ UTF-8 安全截断（agent.textutil 反哺，单一真源，字节预算语义）：
+  CutLen 零分配返回 ≤AMaxBytes 的最大合法边界；Truncate 派生自 CutLen，
+  未超预算时引用复用零拷贝。 }
+function UTF8SafeCutLen(const AValue: string; AMaxBytes: Integer): Integer;
+function UTF8SafeTruncate(const AValue: string; AMaxBytes: Integer): string;
+
 { string <-> TBytes 无损转换（协议报文/落盘/加密输入常用）：
   FPC $H+ 下 string 即 UTF-8 字节序列，逐字节复制，往返保真。 }
 function UTF8ToBytes(const AValue: string): TBytes;
@@ -310,6 +316,39 @@ begin
   while (LI > 1) and (Byte(AValue[LI]) and $C0 = $80) do
     Dec(LI);
   Result := Copy(AValue, 1, LI - 1);
+end;
+
+{ UTF-8 安全截断长度：返回 ≤AMaxBytes 的最大合法边界，不切断多字节序列
+  （含 >4 字节过载编码的 fail-closed）。AMaxBytes <= 0 → 0。零分配。 }
+function UTF8SafeCutLen(const AValue: string; AMaxBytes: Integer): Integer;
+var
+  LCut: Integer;
+begin
+  if AMaxBytes <= 0 then
+    Exit(0);
+  if Length(AValue) <= AMaxBytes then
+    Exit(Length(AValue));
+  LCut := AMaxBytes;
+  while (LCut > 0) and ((Byte(AValue[LCut]) and $C0) = $80) do
+    Dec(LCut);
+  if LCut <= 0 then
+    Exit(0);
+  if LCut + UTF8ByteLength(Byte(AValue[LCut])) - 1 > AMaxBytes then
+    Exit(LCut - 1)
+  else
+    Exit(AMaxBytes);
+end;
+
+{ UTF-8 安全字节截断：语义同 UTF8SafeCutLen，返回截断结果串；
+  未超预算时引用复用，零拷贝。 }
+function UTF8SafeTruncate(const AValue: string; AMaxBytes: Integer): string;
+var
+  LLen: Integer;
+begin
+  LLen := UTF8SafeCutLen(AValue, AMaxBytes);
+  if LLen = Length(AValue) then
+    Exit(AValue);
+  Result := Copy(AValue, 1, LLen);
 end;
 
 function UTF8ToBytes(const AValue: string): TBytes;

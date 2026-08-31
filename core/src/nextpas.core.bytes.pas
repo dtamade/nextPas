@@ -70,6 +70,11 @@ function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function BytesIsZero(const AData: TBytes): Boolean; inline;
 function IsAllZero(const AData: TBytes): Boolean; inline;
+{ String <-> bytes (single source via bytes.ops) }
+function BytesToString(const ABytes: TBytes): string; inline;
+function StringToBytes(const AText: string): TBytes; inline;
+function BytesSliceToString(const ABytes: TBytes; const AOffset,
+  ALength: SizeUInt): string; inline;
 
 { Binary: swap }
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
@@ -296,6 +301,22 @@ end;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 begin
   Result := nextpas.core.bytes.ops.IsAllZero(AData);
+end;
+
+function BytesToString(const ABytes: TBytes): string;
+begin
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
+end;
+
+function StringToBytes(const AText: string): TBytes;
+begin
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
+end;
+
+function BytesSliceToString(const ABytes: TBytes; const AOffset,
+  ALength: SizeUInt): string;
+begin
+  Result := nextpas.core.bytes.ops.BytesSliceToString(ABytes, AOffset, ALength);
 end;
 
 { Binary: swap }

@@ -297,14 +297,14 @@ end;
 procedure TGitManagerImpl.SetCredentialAcquireHandler({%H-} AHandler: TCredentialAcquireEvent);
 begin
   if Assigned(AHandler) then
-    raise EGitError.Create(GIT_EUSER,
+    raise EGitError.Create(GIT_EUSER, 0,
       'Credential callback handlers are not supported by nextpas.core.git.libgit2 yet');
 end;
 
 procedure TGitManagerImpl.SetCertificateCheckHandler({%H-} AHandler: TCertificateCheckEvent);
 begin
   if Assigned(AHandler) then
-    raise EGitError.Create(GIT_EUSER,
+    raise EGitError.Create(GIT_EUSER, 0,
       'Certificate callback handlers are not supported by nextpas.core.git.libgit2 yet');
 end;
 

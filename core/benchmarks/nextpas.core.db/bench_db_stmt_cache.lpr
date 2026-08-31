@@ -17,7 +17,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.db,
-  nextpas.core.db.base,
+  nextpas.core.db.bulk,
   nextpas.core.db.intf;
 
 const

@@ -31,7 +31,7 @@ uses
 const
   CTOOLS_TRUNCATED_KEY = 'truncated';   { 截断信封键（API.md §6 normative）}
   CTOOLS_CONTENT_KEY = 'content';
-  CTOOLS_MAX_ARGS_BYTES = 262144;       { 参数预检上限 256 KiB（SECURITY §3）}
+  CTOOLS_MAX_ARGS_BYTES = nextpas.core.agent.base.CAgentMaxToolArgsBytes; { alias 单一真源 256 KiB（SECURITY §3）}
   CTOOLS_MAX_DEPTH = 8;                 { 参数嵌套深度上限 }
 
 { 注册期快速失败：名称 1..64 字符限 [A-Za-z0-9_-]；ParametersJson 非空时
@@ -52,6 +52,9 @@ function EnvelopeTruncation(const AResult: TToolResult;
 
 function NewToolContext(const AToken: IAsyncCancellationToken;
   ACallIndex: Integer): IToolContext;
+
+{ 工具→规约第二形态（F-M13）：array of IAgentTool → TToolSpecArray 便捷提取 }
+function WithTools(const ATools: array of IAgentTool): TToolSpecArray;
 
 type
   { 单个待执行调用：loop 装配，池线程消费。DoneFlag 由池任务原子置位；
@@ -95,8 +98,8 @@ uses
   nextpas.core.exception;
 
 const
-  CSWEEP_SLICE_NS = 200000;              { 单次 WaitAllTimeout 切片 200µs }
-  CSWEEP_SLEEP_MS = 2;                   { 全部到齐前的轮询间歇 }
+  CSWEEP_SLICE_NS = 200000;              { 单次 WaitAllTimeout 切片 200µs（F-M05 上界）}
+  CSWEEP_SLEEP_MS = 0;                   { 轮询间歇归零：纯靠 WaitAllTimeout 驱动，切片 200µs 粒度不被 2ms Sleep 放大（F-M05）}
 
 procedure MakeErrInto(var ARes: TToolResult; const AMsg: string);
 var
@@ -199,7 +202,7 @@ begin
   if not DepthWithin(Doc.Root, CTOOLS_MAX_DEPTH) then
   begin
     MakeErrInto(Result, 'arguments nesting exceeds depth ' +
-      IntToStr(CTOOLS_MAX_DEPTH));
+      nextpas.core.text.conv.IntToStr(CTOOLS_MAX_DEPTH));
     Exit;
   end;
 
@@ -251,67 +254,23 @@ begin
   end;
 end;
 
-{ UTF-8 安全截断（provider.common 有同源孪生；合并候选进 inbox）：
-  最多回退到序列引导字节边界，绝不切出半字符 }
+{ 旧名单点：保留供外部调用，内部统一走 AgentUtf8SafeTruncate }
 function SafeTruncateUtf8(const S: string; AMaxBytes: Integer): string;
-var
-  LCut: Integer;
 begin
-  if Length(S) <= AMaxBytes then
-    Exit(S);
-  LCut := AMaxBytes;
-  while (LCut > 0) and ((Byte(S[LCut]) and $C0) = $80) do
-    Dec(LCut);
-  if LCut > 0 then
-    Dec(LCut);                           { 引导字节一并让位 }
-  if LCut < 0 then
-    LCut := 0;
-  Result := Copy(S, 1, LCut);
+  Result := AgentUtf8SafeTruncate(S, AMaxBytes);
 end;
 
 function EnvelopeTruncation(const AResult: TToolResult;
   AMaxLines, AMaxBytes: Integer): TToolResult;
 var
-  LText, LCut: string;
-  LLines, LPos, LCount: Integer;
+  LCut: string;
   LB: IJsonBuilder;
   LOver: Boolean;
 begin
   Result := AResult;
-  LText := AResult.ContentJson;
-  LOver := False;
-  LCut := LText;
-
-  if AMaxLines > 0 then
-  begin
-    LLines := 1;
-    for LPos := 1 to Length(LText) do
-      if LText[LPos] = #10 then
-        Inc(LLines);
-    if LLines > AMaxLines then
-    begin
-      LCount := 1;
-      LPos := 1;
-      while (LPos <= Length(LText)) and (LCount <= AMaxLines) do
-      begin
-        if LText[LPos] = #10 then
-          Inc(LCount);
-        Inc(LPos);
-      end;
-      LCut := Copy(LText, 1, LPos - 2);   { 去掉越界的最后一段与其换行 }
-      LOver := True;
-    end;
-  end;
-
-  if (AMaxBytes > 0) and (Length(LCut) > AMaxBytes) then
-  begin
-    LCut := SafeTruncateUtf8(LCut, AMaxBytes);
-    LOver := True;
-  end;
-
+  LCut := AgentTruncateEnvelope(AResult.ContentJson, AMaxLines, AMaxBytes, LOver);
   if not LOver then
     Exit;
-
   LB := JsonBuilder;
   LB.BeginObject;
   LB.Key(CTOOLS_TRUNCATED_KEY);
@@ -357,6 +316,18 @@ function NewToolContext(const AToken: IAsyncCancellationToken;
   ACallIndex: Integer): IToolContext;
 begin
   Result := TToolCtx.Create(AToken, ACallIndex);
+end;
+
+function WithTools(const ATools: array of IAgentTool): TToolSpecArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(ATools));
+  for I := 0 to High(ATools) do
+    if ATools[I] <> nil then
+      Result[I] := ATools[I].Spec
+    else
+      Result[I] := Default(TToolSpec);
 end;
 
 { ---- 执行 ---- }
@@ -447,30 +418,36 @@ begin
       Break;                                       { 本批全部真实完成 }
     LNow := AClock.NowMs;
     { 逐项到期判定：当场合成 timeout、Cancel 子令牌（协作信号）、
-      worker 弃置；其迟到结果经 LTimedOut 屏蔽不回读 }
+      worker 弃置；其迟到结果经 LTimedOut 屏蔽不回读
+      内存序：读 DoneFlag 前栅栏，保证 worker 的 Res/ErrMsg 可见（F-H06）}
+    atomic_seq_cst_fence;
     for I := 0 to High(AJobs) do
       if (not LTimedOut[I]) and (AJobs[I].TimeoutMs > 0) and
         (AJobs[I].DoneFlag = 0) and
         (LNow - LStart >= AJobs[I].TimeoutMs) then
       begin
         SynthIfOpen(AJobs[I],
-          'tool timed out after ' + IntToStr(AJobs[I].TimeoutMs) + 'ms');
+          'tool timed out after ' + nextpas.core.text.conv.IntToStr(AJobs[I].TimeoutMs) + 'ms');
         AJobs[I].TimeoutMs := 0;
         LTimedOut[I] := True;
         if AJobs[I].ChildCancel <> nil then
           AJobs[I].ChildCancel.Cancel;
       end;
     LPending := 0;
+    atomic_seq_cst_fence;
     for I := 0 to High(AJobs) do
       if AJobs[I].DoneFlag = 0 then
         Inc(LPending);
     if LPending = 0 then
       Break;
+    { F-M05：零 SleepMs，纯靠 WaitAllTimeout(200µs) 驱动；取消感知经循环头 IsCancelled，零额外等待 }
     AClock.SleepMs(CSWEEP_SLEEP_MS, AToken);
   until False;
 
   { 收尾归因：工具异常 → aecToolFailed；取消 → 未完成项合成 cancelled。
-    超时已合成项不被覆盖（弃置语义：迟到结果不回读）}
+    超时已合成项不被覆盖（弃置语义：迟到结果不回读）
+    F-H06：读 ErrMsg/DoneFlag 前栅栏，保证 worker 写入可见 }
+  atomic_seq_cst_fence;
   for I := 0 to High(AJobs) do
   begin
     if LTimedOut[I] then
@@ -489,6 +466,38 @@ begin
         AJobs[I].ChildCancel.Cancel;
     end;
   end;
+
+  { 排水：合成取消/超时后 worker 仍可能在跑（协作取消需短暂响应）。
+    在返回前等待全部 DoneFlag 置位，否则调用方 FreeJobs 对尚在执行
+    的 worker 形成 UAF/泄漏（test_tools 间歇 HEAPTRC 根因）。 }
+  repeat
+    LPending := 0;
+    atomic_seq_cst_fence;
+    for I := 0 to High(AJobs) do
+      if AJobs[I].DoneFlag = 0 then
+        Inc(LPending);
+    if LPending = 0 then
+      Break;
+    APool.WaitAllTimeout(2000000);
+  until False;
+
+  { 取消确定性：若已检测到取消但 worker 抢先写入成功载荷
+    （WriteGuard 已夺、SynthIfOpen 败阵），此时会留下非错误
+    的 "woke" 结果导致用例失败。等待完成后强制覆盖以保证
+    取消语义优先，消除 40ms 竞态的间歇失败。超时项已合成的不覆盖。
+    另：循环可能经 WaitAll 提前退出而未置 LCancelled，故此处以
+    令牌实时状态兜底，避免漏检。 }
+  if LCancelled or (Assigned(AToken) and AToken.IsCancelled) then
+    for I := 0 to High(AJobs) do
+      if (not LTimedOut[I]) and (not AJobs[I].Res.IsError) then
+        MakeErrInto(AJobs[I].Res, 'cancelled before completion');
+
+
+  { 摘链：子令牌由父持引用保活（V3-B6），本批任务已终结，显式摘链
+    以释放父侧条目，避免长命父令牌下的滞留。 }
+  for I := 0 to High(AJobs) do
+    if AJobs[I].ChildCancel <> nil then
+      AJobs[I].ChildCancel.DetachFromParent;
 end;
 
 end.

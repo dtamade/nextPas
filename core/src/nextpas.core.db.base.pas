@@ -15,14 +15,6 @@ interface
 uses
   nextpas.core.exception;
 
-const
-  { sqlite 透明语句缓存的默认空闲容量（LRU，键 = 原始 SQL 文本）；
-    0 = 关闭缓存。词汇归 base：门面与适配器共同引用。 }
-  DEFAULT_SQLITE_STMT_CACHE_CAPACITY = 64;
-  { pg 透明语句缓存的默认容量（服务端 prepared statement 名注册表，
-    键 = bytea cast 后的规范形 SQL 文本）；0 = 关闭缓存。 }
-  DEFAULT_PG_STMT_CACHE_CAPACITY = 64;
-
 type  { 数据库后端种类 }
   TDbKind = (
     dbkUnknown,     { 统一层自身的错误（无后端归属，如 nil 连接误用） }
@@ -31,8 +23,9 @@ type  { 数据库后端种类 }
     dbkMysql,       { V3-A2：尾部追加，枚举序号稳定契约 }
     dbkOdbc,        { V3-A4：尾部追加，枚举序号稳定契约（ODBC 网关，
                       覆盖达梦等提供 ODBC 驱动的国产库——路线图 D4） }
-    dbkRedis        { V3-A5：尾部追加，枚举序号稳定契约（RESP 协议
+    dbkRedis,       { V3-A5：尾部追加，枚举序号稳定契约（RESP 协议
                       原生客户端，键值面映射统一层） }
+    dbkDm           { V3-DM：达梦 DM8 DPI 原生后端，尾部追加序号钉死 }
   );
 
   { 统一列类型（对齐两后端原生分类的公共最小集） }
@@ -55,6 +48,18 @@ type  { 数据库后端种类 }
   { 批执行步骤列表（完整独立 SQL 语句，非片段） }
   TDbSqlSteps = array of string;
 
+const
+  { 透明语句缓存默认容量（LRU，键 = 原始 SQL 文本）；0 = 关闭缓存。
+    单源于 L3 根 nextpas.core.db.base（接口默认值需在 interface 可见，
+    bulk 仅复用不重定义，避免 interface/implementation 分离导致的可见性断层）。 }
+  DbBulkFallbackChunkRows = 500;
+  DEFAULT_SQLITE_STMT_CACHE_CAPACITY = 64;
+  DEFAULT_PG_STMT_CACHE_CAPACITY = 64;
+  DEFAULT_MYSQL_STMT_CACHE_CAPACITY = 64;
+  DEFAULT_ODBC_STMT_CACHE_CAPACITY = 64;
+  DEFAULT_DM_STMT_CACHE_CAPACITY = 64;
+
+type
   { V3-C2 参数级批量绑定（数组 DML）载体：一列一个数组，一次执行
     服务端展开 N 行。TDbBoolArray 双职——布尔列值 / NULL 掩码
     （掩码 True = 该行 NULL，值被忽略）。 }
@@ -178,6 +183,16 @@ type  { 数据库后端种类 }
     constructor CreateFullRedis(const AErrType, AMessage: string;
       const ACategory: TDbErrorCategory;
       const AConstraint: TDbConstraintKind); overload;
+
+    { V3-DM：DM DPI 全量构造（db.err ClassifyDm 归一后的标准
+      入口）。BackendCode = DM 原生负整数码位；SqlState 为 DM
+      SQLSTATE 或空串。 }
+    constructor CreateFullDm(const ACode: Integer; const ASqlState,
+      AMessage: string; const ACategory: TDbErrorCategory;
+      const AConstraint: TDbConstraintKind); overload;
+    constructor CreateWithCategory(const ABackend: TDbKind;
+      const ACategory: TDbErrorCategory; const AConstraint: TDbConstraintKind;
+      const AMessage: string); overload;
 
     property Backend: TDbKind read FBackend;
     { sqlite 结果码；非 sqlite 引发时为 0 }
@@ -309,6 +324,28 @@ begin
   FBackend := dbkRedis;
   FBackendCode := 0;      { RESP 错误无数字码位 }
   FSqlState := AErrType;
+  FCategory := ACategory;
+  FConstraint := AConstraint;
+end;
+
+constructor EDbError.CreateFullDm(const ACode: Integer; const ASqlState,
+  AMessage: string; const ACategory: TDbErrorCategory;
+  const AConstraint: TDbConstraintKind);
+begin
+  inherited Create(AMessage);
+  FBackend := dbkDm;
+  FBackendCode := ACode;
+  FSqlState := ASqlState;
+  FCategory := ACategory;
+  FConstraint := AConstraint;
+end;
+
+constructor EDbError.CreateWithCategory(const ABackend: TDbKind;
+  const ACategory: TDbErrorCategory; const AConstraint: TDbConstraintKind;
+  const AMessage: string);
+begin
+  inherited Create(AMessage);
+  FBackend := ABackend;
   FCategory := ACategory;
   FConstraint := AConstraint;
 end;

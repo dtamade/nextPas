@@ -129,21 +129,48 @@ begin
 end;
 
 function ProcNoise(Size: Integer; Base: TColor32; Variation: Integer): TBitmap;
-var X, Y, N, R, G, B: Integer; Row: PByte; BR, BG, BB, BA: Byte;
+var X, Y, N, R, G, B: Integer; Row, Dst: PByte; BR, BG, BB, BA: Byte;
 begin
   Result := TBitmap.Create(Size, Size);
   Color32Decompose(Base, BR, BG, BB, BA);
   for Y := 0 to Size - 1 do
   begin
     Row := Result.RowPtr(Y);
-    // 单遍行批：直接按 Base+variation 打包写入，复用 bytes.binary，避免先 Fill 再逐字节改
-    for X := 0 to Size - 1 do
+    Dst := Row;
+    X := 0;
+    // tile 4 批化：4 像素展开，减循环/指针开销，仍复用 bytes.binary
+    while X + 3 < Size do
     begin
       N := (SimpleHash(X, Y) mod (Variation * 2 + 1)) - Variation;
       R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
       G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
       B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
-      WriteUInt32LE(Row + X * 4, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA));
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      N := (SimpleHash(X + 1, Y) mod (Variation * 2 + 1)) - Variation;
+      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
+      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
+      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      N := (SimpleHash(X + 2, Y) mod (Variation * 2 + 1)) - Variation;
+      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
+      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
+      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      N := (SimpleHash(X + 3, Y) mod (Variation * 2 + 1)) - Variation;
+      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
+      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
+      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      Inc(X, 4);
+    end;
+    while X < Size do
+    begin
+      N := (SimpleHash(X, Y) mod (Variation * 2 + 1)) - Variation;
+      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
+      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
+      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      Inc(X);
     end;
   end;
 end;
@@ -163,21 +190,48 @@ begin
 end;
 
 function ProcMetal(Size: Integer; Base: TColor32; ScratchCount: Integer): TBitmap;
-var X, Y, I, SX, SY, SLen, SD, N, R, G, B: Integer; Row: PByte; P: PByte; BR, BG, BB, BA: Byte;
+var X, Y, I, SX, SY, SLen, SD, N, R, G, B: Integer; Row, Dst: PByte; P: PByte; BR, BG, BB, BA: Byte;
 begin
   Result := TBitmap.Create(Size, Size);
   Color32Decompose(Base, BR, BG, BB, BA);
   for Y := 0 to Size - 1 do
   begin
     Row := Result.RowPtr(Y);
-    // 单遍行批：base+grain 一次打包，复用 bytes.binary，避免 Fill+改
-    for X := 0 to Size - 1 do
+    Dst := Row;
+    X := 0;
+    // tile 4 批化：base+grain 一次打包，4 像素展开，复用 bytes.binary
+    while X + 3 < Size do
     begin
       N := (SimpleHash(X, Y * 7) mod 16) - 8;
       R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
       G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
       B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
-      WriteUInt32LE(Row + X * 4, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255));
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
+      N := (SimpleHash(X + 1, Y * 7) mod 16) - 8;
+      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
+      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
+      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
+      N := (SimpleHash(X + 2, Y * 7) mod 16) - 8;
+      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
+      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
+      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
+      N := (SimpleHash(X + 3, Y * 7) mod 16) - 8;
+      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
+      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
+      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
+      Inc(X, 4);
+    end;
+    while X < Size do
+    begin
+      N := (SimpleHash(X, Y * 7) mod 16) - 8;
+      R := nextpas.core.math.scalar.ClampByte(Integer(BR) + N);
+      G := nextpas.core.math.scalar.ClampByte(Integer(BG) + N);
+      B := nextpas.core.math.scalar.ClampByte(Integer(BB) + N);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), 255)); Inc(Dst, 4);
+      Inc(X);
     end;
   end;
   for I := 0 to ScratchCount - 1 do
@@ -235,35 +289,75 @@ begin
 end;
 
 function ProcWood(Size: Integer; Base, Ring: TColor32): TBitmap;
-var X, Y, N: Integer; CX, CY, DY, DX, Dist, Rf, T: Single; Row: PByte; R, G, B, A: Byte;
-  BR, BG, BB, BA, RR, RG, RB, RA: Byte; TR: Single; RowBuf: array of LongWord; Inv12: Single;
+var X, Y, N: Integer; CX, CY, DY, Dist, Rf, T: Single; Row, Dst: PByte; R, G, B, A: Byte;
+  BR, BG, BB, BA, RR, RG, RB, RA: Byte; TR: Single; Inv12: Single;
+  DX2: array of Single; DY2: Single;
 begin
   Result := TBitmap.Create(Size, Size);
   CX := Size / 2; CY := Size / 2;
   Color32Decompose(Base, BR, BG, BB, BA);
   Color32Decompose(Ring, RR, RG, RB, RA);
   Inv12 := 1.0 / 12.0;
-  SetLength(RowBuf, Size);
+  SetLength(DX2, Size);
+  for X := 0 to Size - 1 do
+  begin
+    T := X - CX; DX2[X] := T * T;
+  end;
   for Y := 0 to Size - 1 do
   begin
     Row := Result.RowPtr(Y);
-    DY := Y - CY;
-    for X := 0 to Size - 1 do
+    Dst := Row;
+    DY := Y - CY; DY2 := DY * DY;
+    X := 0;
+    // tile 4 批化：DX2 预计算消 DX*DX 乘法，单 Sqrt/行复用 DY2，直接写 Row 无 RowBuf/Move
+    while X + 3 < Size do
     begin
-      DX := X - CX;
-      Dist := Sqrt(DX * DX + DY * DY);
-      N := (SimpleHash(X, Y) mod 6) - 3; Dist := Dist + N;
-      Rf := Frac(Dist * Inv12);
-      if Rf < 0 then Rf := Rf + 1.0;
-      if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2;
-      TR := T * 0.6;
+      Dist := System.Sqrt(DX2[X] + DY2); N := (SimpleHash(X, Y) mod 6) - 3; Dist := Dist + N;
+      Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
+      if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
       R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
       G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
       B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
       A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
-      RowBuf[X] := RgbaToPixelLE(R, G, B, A);
+      WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
+      Dist := System.Sqrt(DX2[X + 1] + DY2); N := (SimpleHash(X + 1, Y) mod 6) - 3; Dist := Dist + N;
+      Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
+      if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
+      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
+      Dist := System.Sqrt(DX2[X + 2] + DY2); N := (SimpleHash(X + 2, Y) mod 6) - 3; Dist := Dist + N;
+      Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
+      if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
+      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
+      Dist := System.Sqrt(DX2[X + 3] + DY2); N := (SimpleHash(X + 3, Y) mod 6) - 3; Dist := Dist + N;
+      Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
+      if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
+      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
+      Inc(X, 4);
     end;
-    if Size > 0 then Move(RowBuf[0], Row^, Size * 4);
+    while X < Size do
+    begin
+      Dist := System.Sqrt(DX2[X] + DY2); N := (SimpleHash(X, Y) mod 6) - 3; Dist := Dist + N;
+      Rf := Frac(Dist * Inv12); if Rf < 0 then Rf := Rf + 1.0;
+      if Rf < 0.5 then T := Rf * 2 else T := (1.0 - Rf) * 2; TR := T * 0.6;
+      R := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BR) + (Integer(RR) - Integer(BR)) * TR)));
+      G := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BG) + (Integer(RG) - Integer(BG)) * TR)));
+      B := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BB) + (Integer(RB) - Integer(BB)) * TR)));
+      A := nextpas.core.math.scalar.ClampByte(Integer(Round(Integer(BA) + (Integer(RA) - Integer(BA)) * TR)));
+      WriteUInt32LE(Dst, RgbaToPixelLE(R, G, B, A)); Inc(Dst, 4);
+      Inc(X);
+    end;
   end;
 end;
 

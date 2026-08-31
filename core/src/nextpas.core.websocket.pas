@@ -334,7 +334,7 @@ var
 begin
   SetLength(LPayload, Length(AText));
   if Length(AText) > 0 then
-    Move(AText[1], LPayload[0], Length(AText));
+    Move(PAnsiChar(AText)^, LPayload[0], Length(AText));
   Result := BuildFrame(WS_OPCODE_TEXT, LPayload, ARole);
 end;
 

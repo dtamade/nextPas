@@ -14,10 +14,18 @@ uses
   nextpas.core.base;
 
 const
-  { Result codes (sqlite3.h) }
+  { Result codes (sqlite3.h) — 单源词汇（err 侧别名引用本表，不自持副本） }
   SQLITE_OK          = 0;
   SQLITE_ERROR       = 1;
   SQLITE_BUSY        = 5;
+  SQLITE_LOCKED      = 6;
+  SQLITE_NOMEM       = 7;
+  SQLITE_INTERRUPT   = 9;
+  SQLITE_IOERR       = 10;
+  SQLITE_CORRUPT     = 11;
+  SQLITE_FULL        = 13;
+  SQLITE_CANTOPEN    = 14;
+  SQLITE_AUTH        = 23;
   SQLITE_ROW         = 100;
   SQLITE_DONE        = 101;
 

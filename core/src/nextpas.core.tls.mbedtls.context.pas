@@ -201,7 +201,7 @@ begin
   L := Length(AText);
   Result := GetMem(L + 1);
   if L > 0 then
-    Move(AText[1], Result^, L);
+    Move(PAnsiChar(AText)^, Result^, L);
   Result[L] := #0;
 end;
 

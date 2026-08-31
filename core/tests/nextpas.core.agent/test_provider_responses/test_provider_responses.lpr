@@ -15,7 +15,13 @@ uses
 
 { OpenAI Responses 适配器语义（WIRE-MAPPINGS §3；TESTING §3）：
   请求映射/非流式 output 三类项/SSE 事件全集/截断 fail-closed(Q-R5)/
-  错误归因。全程 scripted transport 离线 }
+  错误归因。全程 scripted transport 离线
+  边界/Cancel/超时/并发：
+  - Cancel 边界：Token 预取消即抛 aecCancelled，未编码请求；流中 Cancel 经 WireBackedCompletion 传播。
+  - 超时边界：解密前 lookahead 超时由 transport aecTimeout 承载；Q-R5 截断流 wmkError 与 Finalize 竞争已在 common 层收口（F-H18）。
+  - 并发边界：WireDecoder 单线程，重入经 Finalize 保护；incomplete 截断不与并发合并。
+  悬挂指针：Responses Decoder 持有 FBuf/槽位均为托管字符串/动态数组，无裸指针；Message 托管。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；output_text/function_call 增量在 EOF 前释放，无跨用例泄漏。 }
 
 const
   CRespOKBody =

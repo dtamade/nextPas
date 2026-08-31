@@ -12,6 +12,13 @@ uses
   nextpas.core.graphics.base;
 
 type
+  TGlyphRun = record
+    Glyphs: array of LongWord;
+    Positions: array of TVec2;
+    Scale: Single;
+    function IsEmpty: Boolean; inline;
+  end;
+
   TTextLayout = record
     Text: AnsiString;
     FontSize: Single;
@@ -25,6 +32,11 @@ function LayoutText(const AText: AnsiString; AFontSize, AScale: Single): TTextLa
 function LayoutTextWrapped(const AText: AnsiString; AFontSize, AScale, AMaxWidth: Single): TTextLayout;
 
 implementation
+
+function TGlyphRun.IsEmpty: Boolean;
+begin
+  Result := Length(Glyphs) = 0;
+end;
 
 function LayoutText(const AText: AnsiString; AFontSize, AScale: Single): TTextLayout;
 var

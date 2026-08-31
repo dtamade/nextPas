@@ -51,7 +51,10 @@
 | 单元 | 层 | 职责 | 允许依赖 |
 |------|---|------|---------|
 | `nextpas.core.agent` | 门面 | 纯 re-export 公共词表与入口函数 | 全部子单元 |
-| `nextpas.core.agent.base.pas` | 词表 | TMessage/TPart/TStreamDelta/TTokenUsage/TCompletionRequest/TToolSpec/TAgentErrorCode、枚举、sentinel 常量、TTriState、TJsonText、TWire* wire 词表（纯词表零 IO，只依赖底座）| core.base |
+| `nextpas.core.agent.textutil.pas` | 复用 | UTF-8 安全截断转发薄壳（单一真源在 `nextpas.core.text.utf8`，`AgentUtf8SafeCutLen/Truncate` 为公共 API 冻结名转发；`AgentEstimateTokens` 估算）| nextpas.core.text |
+| `nextpas.core.agent.base.slotmap.pas` | 词表 | 槽位注册表 `TAgentSlotRegistry`/`TAgentSlotMap`/`AgentSlotMapEnsureSize`（O(1) 直映+稀疏回退，fold/provider 共享单一真源，2026-08-31 自 helpers 拆出）| agent.base.constants |
+| `nextpas.core.agent.base.deltabuilder.pas` | 词表 | 增量构建器 `TAgentDeltaBuilder`/`PStreamDelta`（Count/Cap 几何增长，三路解码器高频路径共享，2026-08-31 自 helpers 拆出）| agent.base.types |
+| `nextpas.core.agent.base.pas` | 词表 | TMessage/TPart/TStreamDelta/TTokenUsage/TCompletionRequest/TToolSpec/TAgentErrorCode、枚举、sentinel 常量、TTriState、TJsonText、TWire* wire 词表（纯词表零 IO，只依赖底座；`Utf8Cut` 透传 textutil）| core.base, agent.textutil |
 | `nextpas.core.agent.errors.pas` | 错误 | EAgentError/EAgentCancelled 异常类、HTTP status→错误码分类器（枚举在 base）| agent.base, core.base |
 | `nextpas.core.agent.intf.pas` | 接缝 | IAgentProvider/IAgentCompletion/IAgentTransport/IAgentWireStream/IAgentWireDecoder/IAgentTool/IToolExecutor/IAgentClock/IAgentTranscriptStore | base, errors, async.cancellation |
 | `nextpas.core.agent.fold.pas` | 协议 | TAssistantBuild 增量累积器 + FoldDelta/FoldDeltas 纯折叠（唯一实现，禁止重写） | base, errors |
@@ -63,17 +66,31 @@
 | `nextpas.core.agent.hedge.pas` | 策略 | `NewHedgedProvider(inner, clock, policy)` 对冲装饰器（DelayMs 无响应即并发第二路取先达、输路取消令牌合并必 Cancel、流式首 delta 先达者胜投递不重复、双倍 token 成本工厂级 opt-in；OnHedged 观测） | intf, base, errors, async.cancellation, sync.event, clock |
 | `nextpas.core.agent.resilience.pas` | 韧性 | 消费方侧纯函数三件（自 code888 韧弧 K69-K75 提炼反哺）：`StreamHasError` 断流指纹判定、`WaitCancelMs` 取消感知毫秒退避（ms→ns 溢出守卫+nil 吸收）、`ClampHintMs` 重试提示同帽钳制（负哨兵透传） | base, thread, agent.base |
 | `nextpas.core.agent.transport.http.pas` | 传输 | 生产 IAgentTransport：http client 发请求；非流式读全响应体；流式经 IReader 逐块喂 agent.sse | intf, http.client, sse, errors |
-| `nextpas.core.agent.provider.common.pas` | 适配支撑 | 适配器共享 helper：wire JSON 组装/读取、SSE data 帧→delta 的公共骨架、Extra 无损捕获、帧序 FSM 骨架 | base, errors, json, intf |
-| `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-O1..O7 全部落码+gate | base, errors, intf, common, transport, fold, json, json.builder, text.builder, os.env |
-| `nextpas.core.agent.provider.openai.responses.pas` | 适配 | OpenAI Responses 适配器（W9 第三协议支柱）；同款公开编解码器三件（映射权威=WIRE-MAPPINGS §3，Q-R1..R7 落码+gate） | base, errors, intf, common, transport, fold, json, json.builder, text.builder, os.env |
-| `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-A1..A8 全部落码+gate（含 Q-A8 截断 fail-closed 与流中途 error→sdkError） | base, errors, intf, common, transport, fold, json, json.builder, text.builder, text.conv, os.env |
-| `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold, json |
-| `nextpas.core.agent.tools.pas` | 工具 | 名称/schema 注册校验（aecConfig）、§1.5 参数校验失败→error result、结果截断信封（UTF-8 安全切）、RunToolBatch 批执行器（时钟感知超时/取消合成/异常兜底 aecToolFailed/WriteGuard 迟到写仲裁） | base, intf, clock, errors, atomic, json, text, cancellation |
-| `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转/引导收尾；全部工具经 IThreadPool（LIFECYCLE §5，D14/C9） | base, intf, clock, errors, tools, thread(pool), json, log, cancellation |
-| （无独立单元）| 会话 | **接口先行**：`IAgentTranscriptStore` 位于 `nextpas.core.agent.intf` 词表（Append/Load/Delete）；无内存实现、无门面构造入口；JSONL store 与独立单元随 W5 session 立项 | — |
+| `nextpas.core.agent.provider.common.pas` | 适配支撑（薄壳 291 行） | 适配器门面，inline 转发至三子域；**T1.5** `AgentWireApplyIdempotency` 单一真源透传 `Idempotency-Key` | common.wire/extra/slots, base, errors, intf |
+| `nextpas.core.agent.provider.common.wire.pas` | 适配支撑子域 | wire JSON 组装/读取、SSE data 帧→delta 公共骨架、帧序 FSM 骨架（565 行） | base, errors, json, intf |
+| `nextpas.core.agent.provider.common.extra.pas` | 适配支撑子域 | Extra 无损捕获与 64 键上限（109 行） | base, json |
+| `nextpas.core.agent.provider.common.slots.pas` | 适配支撑子域 | `TWireToolSlotPool` 直映表 + `CAgentMaxSlotMap` 256 上限（519 行） | base, errors |
+| `nextpas.core.agent.provider.openai.pas` | 适配（薄壳 326 行） | OpenAI Chat Completions 门面，inline 转发至三子域；公开编解码器三件（D13）；Q-O1..O7 全部落码+gate | openai.encode/decode/decoder, base, errors, intf, common, transport, fold |
+| `nextpas.core.agent.provider.openai.encode.pas` | 适配子域 | Chat 编码子域（348 行纯函数） | base, intf, errors, common, json, json.builder, text.builder |
+| `nextpas.core.agent.provider.openai.decode.pas` | 适配子域 | Chat 解码子域（232 行纯函数） | base, intf, errors, common, json |
+| `nextpas.core.agent.provider.openai.decoder.pas` | 适配子域 | Chat WireDecoder 状态机（359 行，Q-O 流式） | base, intf, errors, common, json, log |
+| `nextpas.core.agent.provider.openai.responses.pas` | 适配（薄壳 256 行） | Responses 门面，inline 转发至三子域；同款公开编解码器三件（WIRE-MAPPINGS §3，Q-R1..R7） | responses.encode/decode/decoder, base, errors, intf, common, transport, fold |
+| `nextpas.core.agent.provider.openai.responses.encode.pas` | 适配子域 | Responses 编码子域（307 行纯函数，input/instructions/tool_choice/text.format） | base, intf, errors, common, json, json.builder, text.builder |
+| `nextpas.core.agent.provider.openai.responses.decode.pas` | 适配子域 | Responses 解码子域（245 行纯函数，output 项+usage details） | base, intf, errors, common, json |
+| `nextpas.core.agent.provider.openai.responses.decoder.pas` | 适配子域 | Responses WireDecoder 状态机（441 行，`response.*` 事件全集） | base, intf, errors, common, json, log |
+| `nextpas.core.agent.provider.anthropic.pas` | 适配（薄壳 397 行） | Anthropic 适配器门面（inline 转发至子域，调用方零改动） | anthropic.encode/decode/decoder, base, errors, intf, common, transport, fold |
+| `nextpas.core.agent.provider.anthropic.encode.pas` | 适配子域 | Anthropic 编码子域（449 行纯函数，Messages/count_tokens 同构） | base, intf, errors, common, json, json.builder, text.builder |
+| `nextpas.core.agent.provider.anthropic.decode.pas` | 适配子域 | Anthropic 解码子域（196 行纯函数，非流式 §2.2） | base, intf, errors, common, json |
+| `nextpas.core.agent.provider.anthropic.decoder.pas` | 适配子域 | Anthropic 状态机子域（332 行，WireDecoder Q-A1/A2/A6/A8） | base, intf, errors, common, json, log |
+| `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径；`NewFakeProvider`/`NewEchoProvider` 经门面 re-export（W7，386 行） | intf, fold, json |
+| `nextpas.core.agent.tools.pas` | 工具 | 名称/schema 注册校验（aecConfig）、§1.5 参数校验失败→error result、结果截断信封（UTF-8 安全切）、RunToolBatch 批执行器（时钟感知超时/取消合成/异常兜底 aecToolFailed/WriteGuard 迟到写仲裁）；`WithTools(array of IAgentTool)` 自由函数（G6 补齐 F-M13） | base, intf, clock, errors, atomic, json, text, cancellation |
+| `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转/引导收尾；**T1.4** 每轮 `AccumulateUsage` 后经 `pricing.EstimateCost` + `AgentEstimateTokens` 估 cost 透传 `IAgentUsageSink.RecordUsage`（nil 退化/吞异常不 raise）；全部工具经 IThreadPool（LIFECYCLE §5，D14/C9） | base, intf, clock, errors, tools, thread(pool), json, log, cancellation, pricing |
+| `nextpas.core.agent.session.pas` | 会话 | **已落地（W5 2026-08-25）**：`TJsonlTranscriptStore` JSONL 实现 `IAgentTranscriptStore`（Append/Load/Delete/Fork），经门面 `NewJsonlTranscriptStore` 暴露；Fork 需经接口可达（F-H10 已修） | intf, fs, json, text.builder, base |
+| `nextpas.core.agent.quota.pas` | 配额 | **Phase1 T1.2（2026-08-30）**：平台配额标量滚动窗口纯函数（`TPlatformQuotaWindowKind=pqDay/pqWeek/pqMonth` + `PlatformQuotaWindowSeconds` 86400/604800/2592000 + `PlatformQuotaWindowExpired`/`PlatformQuotaExpired`/`PlatformQuotaUsage`/`PlatformQuotaExceeded`/`SerializePlatformQuotaItem`），复刻 `token888::PlatformQuota*`（无 TConcurrentHashMap，O(1) 纯标量零IO） | json.builder |
+| `nextpas.core.agent.pricing.pas` | 策略 | **Phase1 T1.1（2026-08-30）**：纯策略计费：`TModelPricing`/`EstimateCost`（`(prompt*per1k+500) div 1000 + (completion*per1k*rate+5000) div 10000` 整数μUSD，四舍五入同源 `tk888.billing.pas:22,212`）+ `TPassthroughPricing`/`ImageTierOf`（max-edge ≤1024→1000 ≤2048→2000 else 4000，含 `2048x2048→2000` 特判 `billing:470`）零IO纯函数，无堆分配 | agent.base |
 
-体积指引：单文件 >800 行必须拆分（provider.openai 与 anthropic 预期各 ~500-700 行，
-含 wire 映射注释；超出即拆 `provider.<name>.<aspect>` 子模块）。
+体积指引：单文件 >800 行必须拆分（provider.* 各子域预期 ~500-700 行，含 wire 映射注释；超出即拆 `provider.<name>.<aspect>` 子模块）。
+现状（2026-08-31 反哺收口）：`provider.common` 291+565+109+519（common/wire/extra/slots 薄壳+三子域）/ `provider.openai` 326/348/232/359（门面/encode/decode/decoder）/ `provider.openai.responses` 256/307/245/441（门面/encode/decode/decoder）/ `provider.anthropic` 397+449+196+332（门面/encode/decode/decoder）—— provider 域 14/14 <800 全达标（含 fake 386）；`base` 248+36+586+414 + `slotmap` 145 + `deltabuilder` 128（门面/constants/types/helpers 纯函数 + 槽位注册表/增量构建器独立单元，均 <800）/ `loop` 57+97+120+183+744（门面/types/budget/exec/impl，impl 744 为循环稳定聚合点暂不拆）/ `transport.http` 701 / `hedge` 465 / `session` 551（700 上下为受控聚合点，行数监控不回落即零增量承诺，详表见上）。
 
 ## 3. 数据流
 
@@ -174,9 +191,21 @@ TAgentLoop.Run(userText)
 
 ## 7. 门面 re-export 政策
 
-门面只 re-export：全部公共 record/enum/常量、`IAgentProvider/IAgentCompletion/
-IAgentTool/IAgentClock`、构造函数（`NewOpenAIProvider/NewAnthropicProvider/
-NewFakeProvider/NewEchoProvider/NewXxxProviderFromEnv/NewSystemClock`）、
-`TFakeClock`、`WithRetry`、`TAgentLoop`、便利函数（`MessageText` 等）。
-wire 层类型（TWireRequest/TWireSSEEvent）与 `agent.sse` 不进门面——自定义
-transport 的消费方显式引 `nextpas.core.agent.intf`。
+> 单一消费点：`nextpas.core.agent` 是唯一对外门面，纯 re-export；新增条目需同步本文档与 `API.md §3`，禁止私下扩展（F-H09 审计后冻结）。
+
+门面按域白名单分组（G6 2026-08-29 完整清单，F-H09/F-H19 合规）：
+
+| 域 | 白名单（全部经门面 `inline` 转发） | 说明 |
+|---|---|---|
+| **词表与常量** | 公共 record/enum/常量：`TMessage/TPart/TStreamDelta/TTokenUsage/TCompletionRequest/TToolSpec/TAgentErrorCode/...`；DoS 单一真源常量 `CAgentMaxSlotMap/CAgentMaxWireHeaderValueBytes/CAgentMaxWireTotalHeaderBytes/CAgentMaxSuccessBodyBytes/CAgentMaxRawBodySnippetBytes/CAgentMaxExtraKeys/CAgentMaxToolArgsBytes` 等；helpers `MessageText/WireHeaderValue/MergeExtraJson/AgentUtf8SafeTruncate/AgentValidateWireHeaders/AgentInitUsageUnknown/AgentTruncateEnvelope/AgentJoinWireUrl/AgentBuildSystemText/AgentBuildBatchSignature` | 来自 `base`，权威表 `API.md §10` |
+| **Provider 工厂与编解码器（D13 公开表面）** | `NewOpenAIProvider/NewOpenAIProviderFromEnv/EncodeOpenAIRequest/DecodeOpenAIResponse/NewOpenAIWireDecoder/BuildOpenAIUrl`；`NewGrokProvider/NewGrokProviderFromEnv/BuildGrokUrl`；`NewAnthropicProvider/NewAnthropicProviderFromEnv/EncodeAnthropicRequest/DecodeAnthropicResponse/NewAnthropicWireDecoder/BuildAnthropicUrl/EncodeAnthropicCountTokensRequest/BuildAnthropicCountTokensUrl`；`NewOpenAIResponsesProvider/NewOpenAIResponsesProviderFromEnv/EncodeResponsesRequest/DecodeResponsesResponse/NewResponsesWireDecoder/BuildResponsesUrl`；测试设施 `NewFakeProvider/NewEchoProvider` | 网关型客户直接复用编解码器（CONSUMERS §2） |
+| **时钟** | `NewSystemClock/TFakeClock/IAgentClock` | `clock` 域 |
+| **工具** | `ValidateToolSpec/ValidateToolArguments/EnvelopeTruncation/NewToolContext`；自由函数 `WithTools(array of IAgentTool): TToolSpecArray`（`tools` 单元，门面转发，F-M13） | `API.md §1.5/§6` |
+| **循环** | `TAgentLoop/TAgentLoopOptions/TLoopEvent/TLoopOutcome` + `SetEventHook/SetPreToolCall/SetPostToolResult` 三形态；`WithRetry/TRetryPolicy` | `loop/retry` 域 |
+| **会话（W5 已落地）** | `NewJsonlTranscriptStore/TJsonlTranscriptStore/ETranscriptCorrupt/IAgentTranscriptStore`（含 `Fork`） | `session` 域，`SESSION.md` |
+| **韧性与可靠性装饰器（W8-W11）** | `WithRetry`；`NewFallbackProvider/TFallbackPolicy/TFallbackSwitchHook`；`NewThrottledProvider/NewTokenBucketGate/IAgentRateGate/TThrottlePolicy`；`NewHedgedProvider/THedgePolicy/THedgeFireHook`；纯函数 `StreamHasError/WaitCancelMs/ClampHintMs`；追踪 `NewTracedTransport/IAgentTraceSink`；能力 `IAgentTokenCounter` | 策略域与 `resilience` 提炼 |
+| **配额标量滚动（Phase1 T1.2）** | `TPlatformQuotaWindowKind/TPlatformQuotaItem/TPlatformQuotaArray`；`PlatformQuotaWindowSeconds/PlatformQuotaWindowExpired/PlatformQuotaExpired/PlatformQuotaUsage/PlatformQuotaExceeded/SerializePlatformQuotaItem/PlatformQuotaSerialize` 纯标量滚动（86400/604800/2592000，无 TConcurrentHashMap，O(1) 可单测） | `quota` 域，零IO纯函数 |
+| **定价（Phase1 T1.1）** | `TModelPricing/TPassthroughPricing/EstimateCost/ImageTierOf` 纯策略（`EstimateCost` 整数μUSD `(prompt*per1k+500) div 1000 + (completion*per1k*rate+5000) div 10000` 四舍五入同源 `billing:22,212`；`ImageTierOf` max-edge ≤1024→1000 ≤2048→2000 else 4000 含 `2048x2048→2000` 特判） | `pricing` 域，零IO纯函数 |
+| **不进门面** | `TWireRequest/TWireResponse/TWireSSEEvent/IAgentTransport/IAgentWireStream/TSSEParser` 等 wire/传输细节 | 自定义 transport 需显式 `uses nextpas.core.agent.intf`，保持门面最小化 |
+
+体积与分层校验：`make hygiene` 拦截未登记导出；`test_compile_skeleton` 断言白名单与实现一致。

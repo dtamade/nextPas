@@ -17,25 +17,32 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes,
+  nextpas.core.bytes.ops,
+  nextpas.core.text,
   nextpas.core.text.builder,
+  nextpas.core.text.conv,
   nextpas.core.agent.base,
   nextpas.core.agent.errors;
 
 const
   { SECURITY §3：防御恶意"兼容网关"的流式上限 }
   CSSEMaxLineBytes     = 1 * 1024 * 1024;   { 单行 1 MiB，超出抛 aecProtocol }
-  CSSEMaxEventDataByte = 8 * 1024 * 1024;   { 单事件 data 总量 8 MiB，同上 }
+  CSSEMaxEventDataByte = nextpas.core.agent.base.CAgentMaxSuccessBodyBytes; { alias：单事件 data 8 MiB 单一真源 }
+  CSSEDataBufInitialCap = 256;             { data 累积 builder 初始容量：典型单行 <256B，首帧零扩容 }
 
 type
   { Feed 式解析：Feed 原始字节 → PopEvent 取已完成帧 → Finish 收口 }
   TSSEParser = class
   private
-    FBuf: AnsiString;                { 原始字节缓冲；未完成行恒起于队首 }
+    FBuf: TBytes;                    { 原始字节缓冲；未完成行恒起于队首，复用 bytes.ops 单源 }
     FLineStart: SizeInt;             { 未完成行的起始偏移（0-based）}
     FBOMCheck: Boolean;              { 首部 UTF-8 BOM 待判定 }
     FFinished: Boolean;
+    FDead: Boolean;
     FEvents: array of TWireSSEEvent;
     FEventHead: SizeInt;             { 已消费事件数 }
+    FEventCount: SizeInt;            { 已入队事件总数（tail）；容量=Length(FEvents) 几何增长 Cap 8→*2 }
     FEventName: string;
     FDataBuf: IStringBuilder;        { 多行 data 以 #10 连接累积（摊还 O(1) 追加）}
     FHasData: Boolean;
@@ -53,12 +60,12 @@ type
 
 implementation
 
-{ S 是否为 UTF-8 BOM 的前缀（长度可不足 3）}
-function IsBOMPrefix(const S: AnsiString): Boolean;
+{ TBytes 版 BOM 前缀判定，inline 单源（复用 bytes.ops 视图语义）}
+function IsBOMPrefixBytes(const ABuf: TBytes): Boolean; inline;
 begin
-  Result := (Length(S) >= 1) and (S[1] = #$EF)
-    and ((Length(S) < 2) or (S[2] = #$BB))
-    and ((Length(S) < 3) or (S[3] = #$BF));
+  Result := (Length(ABuf) >= 1) and (ABuf[0] = $EF)
+    and ((Length(ABuf) < 2) or (ABuf[1] = $BB))
+    and ((Length(ABuf) < 3) or (ABuf[2] = $BF));
 end;
 
 constructor TSSEParser.Create;
@@ -69,6 +76,14 @@ end;
 
 procedure TSSEParser.ProtocolError(const AMsg: string);
 begin
+  FBuf := nil;
+  FLineStart := 0;
+  FDead := True;
+  FFinished := True;
+  if FDataBuf <> nil then
+    FDataBuf.Clear;
+  FHasData := False;
+  FEventName := '';
   raise EAgentError.CreateLocal(aecProtocol, AMsg);
 end;
 
@@ -79,7 +94,7 @@ var
 begin
   if Length(ALine) > CSSEMaxLineBytes then
     ProtocolError('sse line exceeds '
-      + IntToStr(CSSEMaxLineBytes) + ' bytes limit');
+      + nextpas.core.text.conv.IntToStr(CSSEMaxLineBytes) + ' bytes limit');
   if ALine = '' then
   begin
     DispatchFrame;
@@ -87,20 +102,20 @@ begin
   end;
   if ALine[1] = ':' then
     Exit;                            { 注释/keep-alive 行 }
-  LColon := Pos(':', ALine);
-  if LColon = 0 then
+  LColon := nextpas.core.text.TextIndexOf(ALine, ':');
+  if LColon < 0 then
     Exit;                            { 无冒号行按 SSE 规范忽略 }
-  LField := Copy(ALine, 1, LColon - 1);
-  LValue := Copy(ALine, LColon + 1, MaxInt);
+  LField := nextpas.core.text.TextSlice(ALine, 0, SizeUInt(LColon));
+  LValue := nextpas.core.text.TextSlice(ALine, SizeUInt(LColon) + 1, MaxInt);
   if (LValue <> '') and (LValue[1] = ' ') then
-    Delete(LValue, 1, 1);            { 规范：冒号后单个空格剥离 }
+    LValue := nextpas.core.text.TextSlice(LValue, 1, MaxInt);   { 规范：冒号后单个空格剥离 }
   if LField = 'data' then
   begin
     if FHasData then
     begin
       if FDataBuf.Len + SizeUInt(Length(LValue)) + 1 > CSSEMaxEventDataByte then
         ProtocolError('sse event data exceeds '
-          + IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
+          + nextpas.core.text.conv.IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
       FDataBuf.AppendStr(#10);
       FDataBuf.AppendStr(LValue);
     end
@@ -108,8 +123,11 @@ begin
     begin
       if Length(LValue) > CSSEMaxEventDataByte then
         ProtocolError('sse event data exceeds '
-          + IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
-      FDataBuf := MakeStringBuilder;
+          + nextpas.core.text.conv.IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
+      if FDataBuf = nil then
+        FDataBuf := MakeStringBuilder(CSSEDataBufInitialCap)
+      else
+        FDataBuf.Clear;
       FDataBuf.AppendStr(LValue);
       FHasData := True;
     end;
@@ -122,17 +140,27 @@ end;
 
 procedure TSSEParser.DispatchFrame;
 var
-  LN: SizeInt;
+  LCap, LNeed: SizeInt;
 begin
   if FHasData then
   begin
-    LN := Length(FEvents);
-    SetLength(FEvents, LN + 1);
-    FEvents[LN].Event := FEventName;
-    FEvents[LN].Data := FDataBuf.ToString;
+    LCap := Length(FEvents);
+    LNeed := FEventCount + 1;
+    if LNeed > LCap then
+    begin
+      if LCap = 0 then
+        LCap := 8
+      else
+        while LCap < LNeed do
+          LCap := LCap * 2;
+      SetLength(FEvents, LCap);
+    end;
+    FEvents[FEventCount].Event := FEventName;
+    FEvents[FEventCount].Data := FDataBuf.ToString;
+    Inc(FEventCount);
+    FDataBuf.Clear; // 复用 builder，避免每事件分配
   end;
   FEventName := '';
-  FDataBuf := nil;
   FHasData := False;
 end;
 
@@ -141,55 +169,50 @@ var
   I: SizeInt;
   LLineEnd: SizeInt;
   LTmp: string;
+  LFull: TByteSpan;
 begin
   if FFinished then
     raise EAgentMisuse.Create('Feed after Finish');
   if ASpan.Len = 0 then
     Exit;
 
+  { 单源追加：手工 SetLength+Move（BytesAppend inline 跨单元展开在 -O2 下长度错乱） }
   SetLength(FBuf, Length(FBuf) + SizeInt(ASpan.Len));
-  Move(ASpan.Data^, FBuf[Length(FBuf) - SizeInt(ASpan.Len) + 1], ASpan.Len);
+  if ASpan.Len > 0 then
+    Move(ASpan.Data^, FBuf[Length(FBuf) - SizeInt(ASpan.Len)], ASpan.Len);
 
-  { 首部 UTF-8 BOM 跳过；不足 3 字节且是 BOM 前缀时留待下一 Feed 判定 }
+  { 首部 UTF-8 BOM 跳过；不足 3 字节且是 BOM 前缀时留待下一 Feed 判定（零拷贝探测） }
   if FBOMCheck then
   begin
     if Length(FBuf) >= 3 then
     begin
-      if (FBuf[1] = #$EF) and (FBuf[2] = #$BB) and (FBuf[3] = #$BF) then
-        Delete(FBuf, 1, 3);
+      if (FBuf[0] = $EF) and (FBuf[1] = $BB) and (FBuf[2] = $BF) then
+        { 单源切片：复用 SpanCopySlice 去 BOM，零手工 Delete }
+        FBuf := SpanCopySlice(TByteSpan.FromBytes(FBuf), 3, SizeUInt(Length(FBuf) - 3));
       FBOMCheck := False;
     end
-    else if IsBOMPrefix(FBuf) then
+    else if IsBOMPrefixBytes(FBuf) then
       Exit
     else
       FBOMCheck := False;
   end;
 
-  I := FLineStart;
-  while I < Length(FBuf) do
+  { 主循环：SpanIndexOf SIMD 跳扫找 LF（0x0A），替代逐字节扫描；
+    行终止只可能是 LF 或 CRLF（纯 CR 不终止），故 LF 即行边界 }
+  LFull := TByteSpan.FromBytes(FBuf);
+  while FLineStart < Length(FBuf) do
   begin
-    if FBuf[I + 1] = #10 then
-    begin
-      { LF 终止；去尾部 CR（CRLF 形态）}
-      LLineEnd := I;
-      if (LLineEnd > FLineStart) and (FBuf[LLineEnd] = #13) then
-        Dec(LLineEnd);
-      LTmp := Copy(FBuf, FLineStart + 1, LLineEnd - FLineStart);
-      FLineStart := I + 1;
-      ProcessLine(LTmp);
-      Inc(I);
-    end
-    else if (FBuf[I + 1] = #13) and (I + 1 < Length(FBuf))
-      and (FBuf[I + 2] = #10) then
-    begin
-      { CRLF 终止 }
-      LTmp := Copy(FBuf, FLineStart + 1, I - FLineStart);
-      FLineStart := I + 2;
-      ProcessLine(LTmp);
-      Inc(I, 2);
-    end
-    else
-      Inc(I);
+      I := nextpas.core.bytes.ops.SpanIndexOf(
+      LFull.Slice(SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart)), 10);
+      if I < 0 then
+      Break;
+    Inc(I, FLineStart);
+    LLineEnd := I;
+    if (LLineEnd > FLineStart) and (FBuf[LLineEnd - 1] = 13) then
+      Dec(LLineEnd);            { CRLF 形态：行尾回退 CR }
+    LTmp := nextpas.core.bytes.BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(LLineEnd - FLineStart));
+    FLineStart := I + 1;
+    ProcessLine(LTmp);
   end;
 
   { 未完成行限长检查（SECURITY §3）：缓冲内已无终止符，剩余即单行 }
@@ -197,29 +220,32 @@ begin
   begin
     FLineStart := Length(FBuf);
     ProtocolError('sse line exceeds '
-      + IntToStr(CSSEMaxLineBytes) + ' bytes limit');
+      + nextpas.core.text.conv.IntToStr(CSSEMaxLineBytes) + ' bytes limit');
   end;
 
-  { 已消费前缀压实，防长流内存无界增长 }
+  { 已消费前缀压实，防长流内存无界增长：单源 SpanCopySlice 复用 bytes.ops }
   if FLineStart > 0 then
   begin
     if FLineStart < Length(FBuf) then
-      Move(FBuf[FLineStart + 1], FBuf[1], Length(FBuf) - FLineStart);
-    SetLength(FBuf, Length(FBuf) - FLineStart);
+      FBuf := SpanCopySlice(TByteSpan.FromBytes(FBuf), SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart))
+    else
+      FBuf := nil;
     FLineStart := 0;
   end;
 end;
 
 function TSSEParser.PopEvent(out AEvent: TWireSSEEvent): Boolean;
 begin
-  if FEventHead < Length(FEvents) then
+  if FEventHead < FEventCount then
   begin
     AEvent := FEvents[FEventHead];
+    FEvents[FEventHead] := Default(TWireSSEEvent); // 释放已消费槽位，避免滞留
     Inc(FEventHead);
-    if FEventHead = Length(FEvents) then
+    if FEventHead = FEventCount then
     begin
-      FEvents := nil;
+      // 全部消费完毕，复位 head/count 保留容量零分配复用（几何预留）
       FEventHead := 0;
+      FEventCount := 0;
     end;
     Result := True;
   end
@@ -237,11 +263,11 @@ begin
   { 挂起的未终止行按最后一行处理（Q-O4 宽容收口）}
   if FLineStart < Length(FBuf) then
   begin
-    LTmp := Copy(FBuf, FLineStart + 1, MaxInt);
+    LTmp := nextpas.core.bytes.BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart));
     FLineStart := Length(FBuf);
     ProcessLine(LTmp);
   end;
-  FBuf := '';
+  FBuf := nil;
   DispatchFrame;
 end;
 

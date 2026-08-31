@@ -197,7 +197,7 @@ function AsciiBytes(const AText: string): TBytes;
 begin
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
-    Move(AText[1], Result[0], Length(AText));
+    Move(PAnsiChar(AText)^, Result[0], Length(AText));
 end;
 
 function AppendPart(const ABuf: TBytes; const APart: TBytes): TBytes;

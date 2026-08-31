@@ -366,6 +366,13 @@ begin
   end;
   if LConflict then
   begin
+    if LOp^.Child <> nil then
+    begin
+      LOp^.Child.DetachFromParent;
+      LOp^.Child := nil;
+    end;
+    if LCtrl <> nil then
+      LCtrl.DisarmCancel;
     Dispose(LOp);                       { 托管字段引用一并释放 }
     raise EDbError.CreateSimple(dbkUnknown,
       'db async: 上一调用仍在途（单飞模型，禁止并发提交）');
@@ -390,6 +397,8 @@ begin
       LOp^.Child.DetachFromParent;
       LOp^.Child := nil;
     end;
+    if LCtrl <> nil then
+      LCtrl.DisarmCancel;
     Dispose(LOp);                       { 托管字段引用一并释放 }
     raise;                              { 锁外重抛，生命周期照常管理 }
   end;

@@ -1,5 +1,5 @@
-(**
- * nextpas.core.agent.provider.fake - scripted/fake provider。
+{**
+ * nextpas.core.agent.provider.fake — scripted / fake provider（离线回放）。
  *
  * 契约权威：core/docs/agent/API.md §7。脚本格式（JSON 数组，每项一个虚拟响应）：
  *   [ { "deltas": [
@@ -9,10 +9,10 @@
  *         {"kind":"tool_call_end","index":0},
  *         {"kind":"finish","reason":"tool_calls"},
  *         {"kind":"usage","in":12,"out":34} ] } ]
- * 多项脚本 = 多轮响应按序回放；耗尽后再调用抛 aecProtocol（测试立即暴露）。
+ * 多项脚本按序回放；耗尽后再调用抛 aecProtocol — 测试立即显形。
  * 折叠一律走 nextpas.core.agent.fold 唯一实现（DESIGN D1），不重写折叠逻辑。
- * 非线程安全——测试替身，单线程场景专用。
- **)
+ * 非线程安全 — 测试替身，单线程场景专用。
+ *}
 
 unit nextpas.core.agent.provider.fake;
 
@@ -257,7 +257,7 @@ begin
   if FNext >= Length(FScripts) then
     raise EAgentError.CreateLocal(aecProtocol,
       'fake provider: script exhausted');
-  ADeltas := Copy(FScripts[FNext], 0, Length(FScripts[FNext]));
+  ADeltas := System.Copy(FScripts[FNext], 0, Length(FScripts[FNext]));
   Inc(FNext);
 end;
 
@@ -300,7 +300,7 @@ end;
 constructor TFakeCompletion.Create(const ADeltas: TStreamDeltaArray);
 begin
   inherited Create;
-  FDeltas := Copy(ADeltas, 0, Length(ADeltas));
+  FDeltas := System.Copy(ADeltas, 0, Length(ADeltas));
 end;
 
 function TFakeCompletion.NextDelta(out ADelta: TStreamDelta): Boolean;
@@ -334,14 +334,16 @@ end;
 function TFakeCompletion.GetMessage: TMessage;
 begin
   if not FDone then
-    raise EAgentMisuse.Create('GetMessage before EOF');
+    raise EAgentError.CreateLocal(aecProtocol,
+      'completion not drained — drain NextDelta until False before GetMessage');
   Result := FMsg;
 end;
 
 function TFakeCompletion.GetUsage: TTokenUsage;
 begin
   if not FDone then
-    raise EAgentMisuse.Create('GetUsage before EOF');
+    raise EAgentError.CreateLocal(aecProtocol,
+      'completion not drained — drain NextDelta until False before GetUsage');
   Result := FMsg.Usage;
 end;
 

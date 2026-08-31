@@ -274,9 +274,9 @@ begin
   LHour := Integer(ADosTime shr 11);
   LMin := Integer((ADosTime shr 5) and $3F);
   LSec := Integer((ADosTime and $1F) shl 1);
-  { 越界钳制：非法年/月/日回落到 DOS 纪元下限，避免 TDate raise }
+  { 越界钳制：非法年/月/日回落到 DOS 纪元下限，避免 TDate raise（零 Create 验证） }
   if not TDate.TryCreate(LYear, LMonth, LDay, LD) then
-    LD := TDate.Create(C_DOS_MIN_YEAR, 1, 1);
+    LD := TDate.FromUnixDays(Integer(C_DOS_MIN_UNIX div 86400));
   Result := Int64(LD.ToUnixDays) * 86400 + LHour * 3600 + LMin * 60 + LSec;
 end;
 

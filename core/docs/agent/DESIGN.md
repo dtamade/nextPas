@@ -86,8 +86,7 @@
 ### D10 会话持久化接口先行、实现后置
 - **决定**：IAgentTranscriptStore 进 intf 冻结讨论；内存实现随 W4；JSONL event-sourced
   实现（code888 形态）列独立后续 wave。
-  （2026-08-25 审计注：内存实现未随 W4 落地，现状为接口先行、零实现——
-  见 ARCHITECTURE 单元表与 ROADMAP Inbox 审计记录。）
+  （2026-08-25 审计注：内存实现未随 W4 落地；W5 已以 JSONL event-sourced 实现落地 `nextpas.core.agent.session`（SESSION.md 设计权威，`test_session` 门已绿，内存形态按 SESSION §1 不立项）——见 ARCHITECTURE §1 注与单元表、ROADMAP W5 记录。）
 - **理由**：持久化语义（fork/crash 恢复/fsync 节奏）体量大且应用相关性强；
   先冻结最小接口避免上层返工，实现按需求追加。
 

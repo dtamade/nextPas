@@ -153,6 +153,11 @@ begin
 end;
 
 procedure TestFacadeForwarding;
+var
+  H: TWireHeaderArray;
+  U: TTokenUsage;
+  LTrunc: Boolean;
+  S: string;
 begin
   Check(nextpas.core.agent.ErrorCodeForStatus(429)
     = nextpas.core.agent.errors.ErrorCodeForStatus(429), 'facade status fwd');
@@ -160,6 +165,32 @@ begin
     = nextpas.core.agent.errors.IsRetryable(aecTransport), 'facade retry fwd');
   Check(nextpas.core.agent.AgentErrorCodeName(aecContextOverflow)
     = 'context_overflow', 'facade name fwd');
+  { W16.1 新增透出一站式（base/provider.common 真源，编译即通过，不触网） }
+  Check(nextpas.core.agent.CAgentMaxRawBodySnippetBytes = 8*1024, 'facade const raw snippet 8KiB');
+  Check(nextpas.core.agent.CAgentMaxWireHeaderValueBytes = 8*1024, 'facade const wire header 8KiB');
+  Check(nextpas.core.agent.CAgentMaxWireTotalHeaderBytes = 64*1024, 'facade const wire total 64KiB');
+  Check(nextpas.core.agent.CAgentMaxExtraKeys = 64, 'facade const extra 64');
+  Check(nextpas.core.agent.CAgentMaxSlotMap = 256, 'facade const slot map 256');
+  Check(nextpas.core.agent.CAgentMaxSuccessBodyBytes = 8*1024*1024, 'facade const success body 8MiB');
+  SetLength(H, 1);
+  H[0].Name := 'x-test';
+  H[0].Value := 'v1';
+  Check(nextpas.core.agent.WireHeaderValue(H, 'x-test') = 'v1', 'facade WireHeaderValue fwd');
+  Check(nextpas.core.agent.MergeExtraJson(['{"a":1}', '{"a":2}']) = '{"a":2}', 'facade MergeExtraJson latter wins');
+  Check(nextpas.core.agent.AgentUtf8SafeTruncate('hello', 4) = 'hell', 'facade Utf8SafeTruncate fwd');
+  Check(nextpas.core.agent.AgentTruncateLines('a'#10'b'#10'c', 2) = 'a'#10'b', 'facade TruncateLines fwd');
+  S := nextpas.core.agent.AgentTruncateEnvelope('a'#10'b', 10, 1, LTrunc);
+  Check((S = 'a') and LTrunc, 'facade TruncateEnvelope fwd');
+  nextpas.core.agent.AgentInitUsageUnknown(U);
+  Check(U.InputTokens = CUsageUnknown, 'facade InitUsageUnknown fwd');
+  Check(nextpas.core.agent.AgentJoinWireUrl('https://api.example.com/', 'https://fallback', '/chat') = 'https://api.example.com/v1/chat', 'facade JoinWireUrl fwd');
+  Check(nextpas.core.agent.AgentJoinWireUrl('https://api.example.com/v1', 'https://fallback', '/chat') = 'https://api.example.com/v1/chat', 'facade JoinWireUrl keeps existing /v1');
+  Check(nextpas.core.agent.AgentBuildSystemText('sys', nil) = 'sys', 'facade BuildSystemText fwd');
+  SetLength(H, 1);
+  H[0].Name := 'Authorization';
+  H[0].Value := 'Bearer tok';
+  nextpas.core.agent.AgentValidateWireHeaders(H);
+  Check(True, 'facade ValidateWireHeaders fwd');
 end;
 
 var

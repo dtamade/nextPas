@@ -309,7 +309,7 @@ begin
   LLen := Length(AText);
   SetLength(Result, LLen);
   if LLen > 0 then
-    Move(AText[1], Result[0], LLen);
+    Move(PAnsiChar(AText)^, Result[0], LLen);
 end;
 
 function Open(const APath: string; const AMode: TFileMode): IFile;

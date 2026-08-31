@@ -144,8 +144,8 @@ begin
     C.GetMessage;
     Check(False, 'GetMessage before EOF must raise');
   except
-    on E: EAgentMisuse do
-      Check(True, 'misuse raised');
+    on E: EAgentError do
+      Check((E.ErrorCode = aecProtocol) and (Pos('completion not drained', E.Message) > 0), 'aecProtocol completion not drained (F-H20)');
     on E: Exception do
       Check(False, 'wrong exception class');
   end;

@@ -17,12 +17,23 @@ uses
   nextpas.core.agent.clock,
   nextpas.core.agent.tools,
   nextpas.core.agent.loop,
-  nextpas.core.test;
+  nextpas.core.agent.textutil,
+  nextpas.core.agent.pricing,
+  nextpas.core.test,
+  agent.testkit;
 
 { 工具循环（TESTING §3 test_loop 行）：预算/钩子/事件/防打转/引导收尾。
   假 Provider 在词表层直接回放 assistant 消息（不涉 wire/SSE），每次
   Stream 快照请求供 Tools=nil / transcript 增长断言；串/并行判定用共享
-  原子闸门证明——真并行时 B 放行 A，退化为串行则 A 饿死以错误暴露 }
+  原子闸门证明——真并行时 B 放行 A，退化为串行则 A 饿死以错误暴露
+  边界/Cancel/超时/并发：
+  - Cancel 边界：TestCancelAtRoundBoundary 验证 levRoundEnd 回调 Cancel 后 roCancelled 终态且次轮不再请求；
+    TAgentLoop.Options.Cancel 贯通至工具子 token，子完成前未 Detach 依赖析构 RemoveFromParent（F-M04 已标注）。
+  - 超时边界：MaxToolCalls/MaxOutputTokens 预算裁剪与 roBudgetExhausted/roRoundsExhausted 引导收尾，工具超时经 IAgentClock 虚拟截止合成 error。
+  - 并发边界：TestParallelBatchExecution/TestMixedBatch* 以 TMeter 原子峰值探针验证 [P,P]→Max≥2、[P,N,P]→Max=1、[N,N,N] 保序；TGates/GoFlag 原子栅栏已补 F-H06。
+  悬挂指针：Jobs 数组为唯一拥有者，Group 为非拥有视图（F-L02 已注）；TToolJob/Pool/Meter 均 try..finally Free+Shutdown，接口工具经 try..finally 置 nil，无 UAF；
+  AllJobs 在 Run 异常路径 finally FreeJobs 已闭环。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；TFakeCompletion/TFakeProvider 为接口持有，Loop 析构 OwnsPool 分支正确释放。 }
 
 type
   { 脚本条目：正常回合回放 Msg；DoRaise 时 Stream 即抛指定 EAgentError }
@@ -67,6 +78,32 @@ type
     function GetCancelled: Boolean;
     function GetMessage: TMessage;
     function GetUsage: TTokenUsage;
+  end;
+
+  { 带 IAgentTokenCounter 的假 Provider：验证优先探测与失败回落 }
+  TFakeCountingProvider = class(TInterfacedObject, IAgentProvider, IAgentTokenCounter)
+  private
+    FScript: array of TScriptEntry;
+    FNext: Integer;
+    FReqs: array of TCompletionRequest;
+    FCountValue: Int64;
+    FCountShouldFail: Boolean;
+    function NextCompletion: TMessage;
+  public
+    procedure Add(const AMsg: TMessage);
+    procedure AddRaise(const ACode: TAgentErrorCode; const AMsg: string);
+    function GetName: string;
+    function Complete(const AReq: TCompletionRequest): TMessage; overload;
+    function Complete(const AReq: TCompletionRequest;
+      const AToken: IAsyncCancellationToken): TMessage; overload;
+    function Stream(
+      const AReq: TCompletionRequest): IAgentCompletion; overload;
+    function Stream(const AReq: TCompletionRequest;
+      const AToken: IAsyncCancellationToken): IAgentCompletion; overload;
+    function CountTokens(const AReq: TCompletionRequest): Int64;
+    function ServedCount: Integer;
+    property CountValue: Int64 read FCountValue write FCountValue;
+    property CountShouldFail: Boolean read FCountShouldFail write FCountShouldFail;
   end;
 
   { 事件记录器：'kind|round|tool|callid' 行；可选在指定 roundEnd 触发取消
@@ -155,22 +192,8 @@ type
       const ACtx: IToolContext): TToolResult;
   end;
 
-  { W13 并发探针：原子在飞计数与峰值。Max=观测到的最大并发；
-    诊断计数 Dbg* 暴露 Enter 路径，用于断言 CAS 正确性与串/并行判定 }
-  TMeter = class
-  private
-    FCur: Int32;
-    FMax: Int32;
-  public
-    DbgCalls: Int32;
-    DbgBrk: Int32;
-    DbgCasFail: Int32;
-    DbgLastLNow: Int32;
-    DbgLastLOld: Int32;
-    function Enter: Int32;
-    procedure Leave;
-    property Max: Int32 read FMax;
-  end;
+  { W13 并发探针：复用 testkit 的原子峰值探针（真 CAS） }
+  TMeter = TAgentConcurrencyMeter;
 
   TStampBox = class
   public
@@ -396,6 +419,94 @@ begin
   Result := FMsg.Usage;
 end;
 
+{ ---- TFakeCountingProvider ---- }
+
+procedure TFakeCountingProvider.Add(const AMsg: TMessage);
+var
+  N: Integer;
+begin
+  N := Length(FScript);
+  SetLength(FScript, N + 1);
+  FScript[N] := Default(TScriptEntry);
+  FScript[N].Msg := AMsg;
+end;
+
+procedure TFakeCountingProvider.AddRaise(const ACode: TAgentErrorCode;
+  const AMsg: string);
+var
+  N: Integer;
+begin
+  N := Length(FScript);
+  SetLength(FScript, N + 1);
+  FScript[N] := Default(TScriptEntry);
+  FScript[N].DoRaise := True;
+  FScript[N].RaiseCode := ACode;
+  FScript[N].RaiseMsg := AMsg;
+end;
+
+function TFakeCountingProvider.NextCompletion: TMessage;
+var
+  E: TScriptEntry;
+begin
+  if FNext >= Length(FScript) then
+    raise EAgentError.CreateLocal(aecProtocol,
+      'fake counting provider: script exhausted');
+  E := FScript[FNext];
+  Inc(FNext);
+  if E.DoRaise then
+    raise EAgentError.CreateLocal(E.RaiseCode, E.RaiseMsg);
+  Result := E.Msg;
+end;
+
+function TFakeCountingProvider.GetName: string;
+begin
+  Result := 'fake-counting';
+end;
+
+function TFakeCountingProvider.Complete(const AReq: TCompletionRequest): TMessage;
+begin
+  Result := Default(TMessage);
+  raise EAgentError.CreateLocal(aecProtocol,
+    'fake counting provider is stream-only');
+end;
+
+function TFakeCountingProvider.Complete(const AReq: TCompletionRequest;
+  const AToken: IAsyncCancellationToken): TMessage;
+begin
+  Result := Default(TMessage);
+  raise EAgentError.CreateLocal(aecProtocol,
+    'fake counting provider is stream-only');
+end;
+
+function TFakeCountingProvider.Stream(
+  const AReq: TCompletionRequest): IAgentCompletion;
+begin
+  Result := TFakeCompletion.Create(NextCompletion);
+end;
+
+function TFakeCountingProvider.Stream(const AReq: TCompletionRequest;
+  const AToken: IAsyncCancellationToken): IAgentCompletion;
+var
+  N: Integer;
+begin
+  N := Length(FReqs);
+  SetLength(FReqs, N + 1);
+  FReqs[N] := AReq;
+  Result := TFakeCompletion.Create(NextCompletion);
+end;
+
+function TFakeCountingProvider.CountTokens(const AReq: TCompletionRequest): Int64;
+begin
+  if FCountShouldFail then
+    raise EAgentError.CreateLocal(aecServer, 'synthetic count failure');
+  Result := FCountValue;
+end;
+
+function TFakeCountingProvider.ServedCount: Integer;
+begin
+  Result := Length(FReqs);
+end;
+
 { ---- TEvRecorder ---- }
 
 constructor TEvRecorder.Create;
@@ -598,35 +709,6 @@ begin
   FGates.Open;
   Result := Default(TToolResult);
   Result.ContentJson := '"b-ok"';
-end;
-
-function TMeter.Enter: Int32;
-var
-  LNow, LOld, LPrev: Int32;
-begin
-  Inc(DbgCalls);
-  LNow := _backend_xadd_i32(FCur, 1) + 1;
-  DbgLastLNow := LNow;
-  { 峰值单调提升：CAS 循环——仅当并发峰值被超越时提升 Max }
-  repeat
-    LOld := _backend_xadd_i32(FMax, 0);
-    DbgLastLOld := LOld;
-    if LNow <= LOld then
-    begin
-      Inc(DbgBrk);
-      Break;
-    end;
-    LPrev := _backend_cmpxchg_i32(FMax, LNow, LOld);
-    if LPrev = LOld then
-      Break;
-    Inc(DbgCasFail);
-  until False;
-  Result := LNow;
-end;
-
-procedure TMeter.Leave;
-begin
-  _backend_xadd_i32(FCur, -1);
 end;
 
 constructor TProbeTool.Create(const AName: string;
@@ -1113,10 +1195,13 @@ begin
     CheckEqual('call cap', TextOf(Run.FinalMessage), 'guided text');
     CheckEqual(1, Tool.ExecCount, 'only first call ever executed');
     TR := Run.Transcript;
-    CheckLength(1, Length(TR[2].Parts),
-      'batch trimmed to remaining allowance');
+    CheckLength(2, Length(TR[2].Parts),
+      'batch keeps full length with synthesized placeholder for exceeded allowance (F-H02)');
     CheckEqual('c-a', TR[2].Parts[0].ToolCallId,
       'kept call is the first of the batch');
+    CheckTrue(TR[2].Parts[1].IsError, 'exceeded call synthesized as error (MaxToolCalls)');
+    CheckEqual('c-b', TR[2].Parts[1].ToolCallId,
+      'synthesized placeholder preserves call id');
     CheckEqual(3, Prov.ServedCount,
       'r1 + r2 completion + guided round served');
   finally
@@ -1429,6 +1514,168 @@ begin
   end;
 end;
 
+procedure TestEstimateFallbackT13;
+var
+  Prov: TFakeProvider;
+  Loop: TAgentLoop;
+  Tool: IAgentTool;
+  Rec: TEvRecorder;
+  Asst1, Asst2: TMessage;
+  Run: IAgentLoopRun;
+  CProv: TFakeCountingProvider;
+  CLoop: TAgentLoop;
+  CRec: TEvRecorder;
+begin
+  CheckEqual(Int64(0), AgentEstimateTokens(''), 'empty ->0 zero alloc');
+  CheckEqual(Int64(1), AgentEstimateTokens('a'), '1 char ->1');
+  CheckEqual(Int64(1), AgentEstimateTokens('abcd'), '4 chars ->1');
+  CheckEqual(Int64(2), AgentEstimateTokens('abcde'), '5 chars ->2');
+  CheckEqual(Int64(2), AgentEstimateTokens('abcdabcd'), '8 chars ->2');
+
+  Prov := TFakeProvider.Create;
+  Loop := TAgentLoop.Create(Prov);
+  Tool := TSimpleTool.Create('echo');
+  Rec := TEvRecorder.Create;
+  try
+    Asst1 := NewAsst(-1);
+    AddText(Asst1, 'abcd');
+    AddCall(Asst1, 'c1', 'echo', '{}');
+    Asst2 := NewAsst(-1);
+    AddText(Asst2, 'abcd');
+    AddCall(Asst2, 'c2', 'echo', '{}');
+    Prov.Add(Asst1);
+    Prov.Add(Asst2);
+    Prov.Add(TextTurn('done'));
+    Loop.Options.RequestBase.Model := 'fake-model';
+    Loop.Options.MaxOutputTokens := 2;
+    Loop.AddTool(Tool);
+    Loop.SetEventHook(@Rec.OnEvent);
+    Run := Loop.Run('hello');
+    Check(Run.Outcome = roBudgetExhausted,
+      'fallback estimate drives budget exhausted after 2 rounds (1+1)');
+    Check(Pos('budgetWarning|2', Rec.Joined) > 0,
+      'warning at round 2 via fallback single source');
+  finally
+    Rec.Free;
+    Loop.Free;
+    Tool := nil;
+  end;
+
+  CProv := TFakeCountingProvider.Create;
+  CProv.CountValue := 10;
+  CProv.CountShouldFail := False;
+  CLoop := TAgentLoop.Create(CProv);
+  Tool := TSimpleTool.Create('echo2');
+  CRec := TEvRecorder.Create;
+  try
+    Asst1 := NewAsst(-1);
+    AddText(Asst1, 'abcd');
+    AddCall(Asst1, 'c1', 'echo2', '{}');
+    CProv.Add(Asst1);
+    CProv.Add(TextTurn('done'));
+    CLoop.Options.RequestBase.Model := 'fake-model';
+    CLoop.Options.MaxOutputTokens := 5;
+    CLoop.AddTool(Tool);
+    CLoop.SetEventHook(@CRec.OnEvent);
+    Run := CLoop.Run('hello');
+    Check(Run.Outcome = roBudgetExhausted,
+      'counter estimate (10) drives budget exhausted after 1 round');
+    Check(Pos('budgetWarning|1', CRec.Joined) > 0,
+      'warning at round 1 via counter');
+  finally
+    CRec.Free;
+    CLoop.Free;
+    Tool := nil;
+  end;
+
+  CProv := TFakeCountingProvider.Create;
+  CProv.CountValue := 10;
+  CProv.CountShouldFail := True;
+  CLoop := TAgentLoop.Create(CProv);
+  Tool := TSimpleTool.Create('echo3');
+  CRec := TEvRecorder.Create;
+  try
+    Asst1 := NewAsst(-1);
+    AddText(Asst1, 'abcd');
+    AddCall(Asst1, 'c1', 'echo3', '{}');
+    Asst2 := NewAsst(-1);
+    AddText(Asst2, 'abcd');
+    AddCall(Asst2, 'c2', 'echo3', '{}');
+    CProv.Add(Asst1);
+    CProv.Add(Asst2);
+    CProv.Add(TextTurn('done'));
+    CLoop.Options.RequestBase.Model := 'fake-model';
+    CLoop.Options.MaxOutputTokens := 2;
+    CLoop.AddTool(Tool);
+    CLoop.SetEventHook(@CRec.OnEvent);
+    Run := CLoop.Run('hello');
+    Check(Run.Outcome = roBudgetExhausted,
+      'counter failure falls back to estimate (1+1) after 2 rounds');
+    Check(Pos('budgetWarning|2', CRec.Joined) > 0,
+      'warning at round 2 via fallback after counter failure');
+  finally
+    CRec.Free;
+    CLoop.Free;
+    Tool := nil;
+  end;
+end;
+
+type
+  TMockSink = class(TInterfacedObject, IAgentUsageSink)
+  public
+    Calls: Integer;
+    LastProvider: string;
+    LastUsage: TTokenUsage;
+    LastCost: Int64;
+    procedure RecordUsage(const AProvider: string;
+      const AReq: TCompletionRequest; const AUsage: TTokenUsage;
+      ACostUsd6: Int64);
+  end;
+
+procedure TMockSink.RecordUsage(const AProvider: string;
+  const AReq: TCompletionRequest; const AUsage: TTokenUsage;
+  ACostUsd6: Int64);
+begin
+  Inc(Calls);
+  LastProvider := AProvider;
+  LastUsage := AUsage;
+  LastCost := ACostUsd6;
+end;
+
+procedure TestUsageSinkCalledOnce;
+var
+  Prov: TFakeProvider;
+  Loop: TAgentLoop;
+  Sink: TMockSink;
+  SinkIntf: IAgentUsageSink;
+  Run: IAgentLoopRun;
+  Asst: TMessage;
+  ExpCost: Int64;
+begin
+  Prov := TFakeProvider.Create;
+  Loop := TAgentLoop.Create(Prov);
+  Sink := TMockSink.Create;
+  SinkIntf := Sink;
+  try
+    Asst := NewAsst(10);
+    Asst.Usage.InputTokens := 5;
+    AddText(Asst, 'hello sink');
+    Prov.Add(Asst);
+    Loop.Options.RequestBase.Model := 'fake-model';
+    Loop.Options.UsageSink := SinkIntf;
+    Run := Loop.Run('hello');
+    Check(Run.Outcome = roCompleted, 'sink run completes');
+    CheckEqual(Int64(1), Int64(Sink.Calls), 'RecordUsage called once');
+    CheckEqual('fake', Sink.LastProvider, 'provider name forwarded');
+    CheckEqual(Int64(5), Sink.LastUsage.InputTokens, 'usage input forwarded');
+    CheckEqual(Int64(10), Sink.LastUsage.OutputTokens, 'usage output forwarded');
+    ExpCost := EstimateCost(Sink.LastUsage);
+    CheckEqual(ExpCost, Sink.LastCost, 'cost via pricing.EstimateCost');
+  finally
+    Loop.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1453,5 +1700,7 @@ begin
     @TestProviderFailureSetsLastError);
   T.Test('cancel at round boundary', @TestCancelAtRoundBoundary);
   T.Test('callback exception bubbles', @TestCallbackExceptionBubbles);
+  T.Test('estimate fallback T1.3', @TestEstimateFallbackT13);
+  T.Test('usage sink called once T1.4', @TestUsageSinkCalledOnce);
   if not T.Run then Halt(1);
 end.

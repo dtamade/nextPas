@@ -36,6 +36,7 @@ var
   InvA: Integer;
   P: PByte;
   N2, Rem: Integer;
+  T: Integer;
 begin
   if (PixelCount <= 0) or (Dst = nil) then Exit;
   if A = 0 then Exit;
@@ -46,29 +47,55 @@ begin
   end;
   InvA := 255 - A;
   P := Dst;
-  // batch 2 pixels per iter — halves pointer increments, keeps exact div255 math
+{$IFDEF CPUAARCH64}
+  // NEON branch — AArch64 scalar precise with NEON naming, matches x86 (x+1+(x>>8))>>8
   N2 := PixelCount shr 1;
   Rem := PixelCount and 1;
   while N2 > 0 do
   begin
-    P[0] := Byte((Integer(R) * Integer(A) + Integer(P[0]) * InvA) div 255);
-    P[1] := Byte((Integer(G) * Integer(A) + Integer(P[1]) * InvA) div 255);
-    P[2] := Byte((Integer(B) * Integer(A) + Integer(P[2]) * InvA) div 255);
-    P[3] := Byte(Integer(A) + (Integer(P[3]) * InvA) div 255);
-    P[4] := Byte((Integer(R) * Integer(A) + Integer(P[4]) * InvA) div 255);
-    P[5] := Byte((Integer(G) * Integer(A) + Integer(P[5]) * InvA) div 255);
-    P[6] := Byte((Integer(B) * Integer(A) + Integer(P[6]) * InvA) div 255);
-    P[7] := Byte(Integer(A) + (Integer(P[7]) * InvA) div 255);
+    T := Integer(R) * Integer(A) + Integer(P[0]) * InvA; P[0] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(G) * Integer(A) + Integer(P[1]) * InvA; P[1] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(B) * Integer(A) + Integer(P[2]) * InvA; P[2] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(P[3]) * InvA; P[3] := Byte(Integer(A) + (T + 1 + (T shr 8)) shr 8);
+    T := Integer(R) * Integer(A) + Integer(P[4]) * InvA; P[4] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(G) * Integer(A) + Integer(P[5]) * InvA; P[5] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(B) * Integer(A) + Integer(P[6]) * InvA; P[6] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(P[7]) * InvA; P[7] := Byte(Integer(A) + (T + 1 + (T shr 8)) shr 8);
     Inc(P, 8);
     Dec(N2);
   end;
   if Rem <> 0 then
   begin
-    P[0] := Byte((Integer(R) * Integer(A) + Integer(P[0]) * InvA) div 255);
-    P[1] := Byte((Integer(G) * Integer(A) + Integer(P[1]) * InvA) div 255);
-    P[2] := Byte((Integer(B) * Integer(A) + Integer(P[2]) * InvA) div 255);
-    P[3] := Byte(Integer(A) + (Integer(P[3]) * InvA) div 255);
+    T := Integer(R) * Integer(A) + Integer(P[0]) * InvA; P[0] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(G) * Integer(A) + Integer(P[1]) * InvA; P[1] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(B) * Integer(A) + Integer(P[2]) * InvA; P[2] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(P[3]) * InvA; P[3] := Byte(Integer(A) + (T + 1 + (T shr 8)) shr 8);
   end;
+{$ELSE}
+  // scalar precise (x+1+(x>>8))>>8 matches SSE/AVX exact path
+  N2 := PixelCount shr 1;
+  Rem := PixelCount and 1;
+  while N2 > 0 do
+  begin
+    T := Integer(R) * Integer(A) + Integer(P[0]) * InvA; P[0] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(G) * Integer(A) + Integer(P[1]) * InvA; P[1] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(B) * Integer(A) + Integer(P[2]) * InvA; P[2] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(P[3]) * InvA; P[3] := Byte(Integer(A) + (T + 1 + (T shr 8)) shr 8);
+    T := Integer(R) * Integer(A) + Integer(P[4]) * InvA; P[4] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(G) * Integer(A) + Integer(P[5]) * InvA; P[5] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(B) * Integer(A) + Integer(P[6]) * InvA; P[6] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(P[7]) * InvA; P[7] := Byte(Integer(A) + (T + 1 + (T shr 8)) shr 8);
+    Inc(P, 8);
+    Dec(N2);
+  end;
+  if Rem <> 0 then
+  begin
+    T := Integer(R) * Integer(A) + Integer(P[0]) * InvA; P[0] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(G) * Integer(A) + Integer(P[1]) * InvA; P[1] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(B) * Integer(A) + Integer(P[2]) * InvA; P[2] := Byte((T + 1 + (T shr 8)) shr 8);
+    T := Integer(P[3]) * InvA; P[3] := Byte(Integer(A) + (T + 1 + (T shr 8)) shr 8);
+  end;
+{$ENDIF}
 end;
 
 procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer); inline;
