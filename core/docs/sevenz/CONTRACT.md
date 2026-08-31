@@ -10,11 +10,12 @@
 - [INV-7Z2] 炸弹门限：`header>64MiB / pack>64MiB / total>8GiB / unpack>8GiB / name>64KiB / file>1M` 抛 `ESevenZLimitError(ecResourceExhausted)`，其余损坏抛 `ESevenZError(ecParse)`
 - [INV-7Z3] LZMA 字典：`CheckWindow Pos-DictStart` 越界即 `EngineError`，`CopyMatch` 校验 `Pos+Len<=OutSize`
 - [INV-7Z4] AES：CBC 无填充，`mod16<>0` 抛错，19 轮 SHA256 KDF，IV 16B 随机，错口令由 CRC/解码暴露为 `ecParse`
-- [INV-7Z5] 过滤链：`C_MAX_FILTERS=16`，`MethodId/Props/Convert` 表驱动，Delta 零分配 in-place
+- [INV-7Z5] 过滤链：`C_MAX_FILTERS=16`，`MethodId/Props/Convert` 表驱动，Delta 零分配 out-of-place 首级融合，BCJ 单次 Move
 
 ## 线程与资源
-- reader `2-entry LRU 64MiB` 缓存，writer `Copy(RawSolid)` 隔离引用计数，并行 `IsMultiThread` 门控
+- reader `2-entry LRU 64MiB` 缓存 + `EntrySlice` 单文件零拷（`BytesIsUnique` 直连），writer 零拷 `BytesIsUnique` + BCJ 单次 Move；并行 `IsMultiThread` 门控
+- encoder `Level→Nice/Chain` 分级：Fastest 32/32、Default 128/128、Best 273/256
 
 ## 契约测试
 - `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test` 166 用例：UTF/FILETIME/LZMA2往返/BCJ全家/Delta/Deflate-BZip2黄金档/过滤链/AES/炸弹/截断等
-- `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run` 6/17/42/200/80 MB/s 锚点
+- `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run` 6/17/42/200/80 MB/s 锚点（B5 单文件 0 拷回归）

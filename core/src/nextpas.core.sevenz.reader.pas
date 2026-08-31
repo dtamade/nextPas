@@ -866,6 +866,12 @@ begin
   end;
 end;
 
+function BytesIsUniqueLocal(const A: TBytes): Boolean; inline;
+begin
+  if Pointer(A) = nil then Exit(True);
+  Result := PSizeInt(Pointer(A) - 2 * SizeOf(Pointer))^ = 1;
+end;
+
 function TSevenZReaderImpl.EntrySlice(AIndex: Integer): TBytes;
 var
   LFolderIdx: Integer;
@@ -892,9 +898,23 @@ begin
     raise ESevenZError.Create('substream window overflow');
   if LOff + LLen > UInt64(Length(LData)) then
     raise ESevenZError.Create('substream window exceeds folder output');
-  SetLength(Result, SizeInt(LLen));
-  if LLen > 0 then
-    Move(LData[SizeInt(LOff)], Result[0], SizeInt(LLen));
+  // perf: 单文件 folder 常见路径零拷贝 — LOff=0 且 LLen=Length(LData) 时复用解码缓存引用
+  if (LOff = 0) and (LLen = UInt64(Length(LData))) then
+  begin
+    if BytesIsUniqueLocal(LData) then
+      Result := LData
+    else
+    begin
+      SetLength(Result, SizeInt(LLen));
+      if LLen > 0 then Move(LData[0], Result[0], SizeInt(LLen));
+    end;
+  end
+  else
+  begin
+    SetLength(Result, SizeInt(LLen));
+    if LLen > 0 then
+      Move(LData[SizeInt(LOff)], Result[0], SizeInt(LLen));
+  end;
   if FStreams.Substreams[LGsub].HasCrc and
      (Crc32OfBytes(Result) <> LongWord(FStreams.Substreams[LGsub].Crc)) then
     raise ESevenZError.CreateFmt('entry %d CRC mismatch', [AIndex]);
