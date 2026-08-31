@@ -8,6 +8,7 @@ unit nextpas.core.respack.base;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.exception;
 
 const
@@ -225,25 +226,10 @@ begin
   ABlob.Owned := False;
 end;
 
-{ 十进制整数转字符串（局部实现，避免引入 SysUtils/text 依赖） }
-function ResPackUIntToStr(AValue: UInt32): string;
-var
-  Tmp: array[0..15] of AnsiChar;
-  I, J: Integer;
+{ 十进制整数转字符串 — 复用 L0 base.IntToStr 单源（inline 转发，避免重复实现；不引 L1 text.conv 以保 L0 分层） }
+function ResPackUIntToStr(AValue: UInt32): string; inline;
 begin
-  FillChar(Tmp, SizeOf(Tmp), 0);
-  if AValue = 0 then
-    Exit('0');
-  I := High(Tmp);
-  while AValue > 0 do
-  begin
-    Tmp[I] := AnsiChar(Ord('0') + (AValue mod 10));
-    Dec(I);
-    AValue := AValue div 10;
-  end;
-  SetLength(Result, High(Tmp) - I);
-  for J := 1 to High(Tmp) - I do
-    Result[J] := Char(Tmp[I + J]);
+  Result := nextpas.core.base.IntToStr(UInt64(AValue));
 end;
 
 constructor EResPackError.Create(const AMsg: string);

@@ -5,8 +5,8 @@ unit nextpas.core.audio.event;
 interface
 
 uses
-  SysUtils, Math,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,

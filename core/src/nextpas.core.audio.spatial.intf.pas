@@ -69,7 +69,7 @@ procedure AudioSpatialize(const AListener: TAudioListener; const ASource: TAudio
 
 implementation
 
-uses Math;
+uses nextpas.core.math.trig;
 
 function AudioVec3Create(AX, AY, AZ: Single): TAudioVec3; inline;
 begin

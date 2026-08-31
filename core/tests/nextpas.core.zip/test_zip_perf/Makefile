@@ -1,5 +1,4 @@
 PROGRAM := test_zip_perf
-# perf allocs counted without heaptrc bookkeeping interference; baseline from BASELINE.json
-HEAPTRC_GATE = 0
-BASE_FPC_FLAGS = -MObjFPC -Sh -Sg -O2 -gl
+# perf allocs via CountingMemoryManager wrapping heaptrc delegate; HEAPTRC_GATE=1 keeps zero-leak hygiene, budget from BASELINE.json (inline/zero-copy: extra 64B stack, Reserve/DrainStaged zero-copy)
+HEAPTRC_GATE = 1
 include ../../common.mk
