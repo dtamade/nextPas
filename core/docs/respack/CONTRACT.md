@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1；`dirsource`/`embed` 例外依赖 `fs`/`fs.glob`，`embed` 复用 `bytes.ops`/`fs.glob` 现有单源无重复）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-08-31
-**版本**：1.5（S1-S5 落地校准；FORMAT v1 恒 40/LE 位移/digest 4 对齐/算法位预留；S4 embed 已补录；S6 mount/overlay + polish2 稳定性补齐；polish17 池化256+可读性+文档收口）
+**版本**：1.4（S1-S5 落地校准；FORMAT v1 恒 40/LE 位移/digest 4 对齐/算法位预留；S4 embed 已补录；S6 mount/overlay + polish2 稳定性补齐）
 
 ---
 
@@ -111,7 +111,7 @@ respack.pas       ← 门面 re-export
 | test_respack_embed | ≥ 4 | glob/prefix/inc golden/roundtrip |
 | source-contract | — | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc` 机制） |
 
-合计 5 门（respack 侧）；vfs 侧 8 门，合计 **13 门**闭环（+ bench_transform 1 基准）。heaptrc 0 leak 为所有 gate 门禁。
+合计 6 门（respack 侧）；vfs 侧 6 门，合计 **12 门**闭环。heaptrc 0 leak 为所有 gate 门禁。
 
 ---
 
@@ -125,7 +125,7 @@ respack.pas       ← 门面 re-export
 | S4 | 工具链（respack.embed + rp_pack CLI + demo_asset_embed，一键链路） | 已收官 | test_respack_embed 全绿；`make -C core/tools/respack build` + `make -C core/examples/nextpas.core.vfs/demo_asset_embed gen run` 自检绿 |
 | S5 | http.static 接入（`ServeVfs(IVfs)` 直通 embedded，ETag 取 fnv32、条件请求/Range/MIME 与 fs 版同语义） | 已收官 | test_http_static + http_static_vfs_demo 304/206/404 自检绿 |
 
-> S1-S5 已收官，**13 门全绿**（respack 5 + vfs 8，`heaptrc 0`；+ bench_transform 1 基准，全量无漂移）。
+> S1-S5 已收官，**9+5 门全绿**（以 S1-S5 口径：respack 4 门 + dirsource/embed 2 门 + vfs 4 门核心 + source-contract 1 门 = 9 门核心；S4 工具链 embed + S5 http.static 2 门 + 基准/示例 3 门 = 5 门扩展；合计 14 门全绿；按 S6 含装饰器口径为 12 门闭环 + bench_transform 1 基准，全量无漂移）。
 
 ---
 
@@ -137,4 +137,3 @@ respack.pas       ← 门面 re-export
 | 2026-08-28 | 1.0 | 校准：indexOffset 恒 40/CONST 40；LE 位移与宿主无关；digest 4 对齐；header flags bit2-4 算法位预留；签名 CodecId/DigestFunc；门数 12 闭环 | AI |
 | 2026-08-30 | 1.0 | P0-4 收官：补 S1-S5 校准表（S1 格式层/S2 契约/S3 后端/S4 工具链/S5 http.static 已收官，9+5 门全绿；registry 与 FORMAT 已正确无需改） | AI |
 | 2026-08-31 | 1.4 | P2叠加落地同步 + polish3 零分配与稳定性（CompareMem/IsGzipHeader/VfsReadAllBytes 时效对齐 vfs 1.4） | AI |
-| 2026-08-31 | 1.5 | polish17 收口：EMBEDDED_POOL_SIZE 16→256 全量对齐、mount 可读性（局部 TmpFs）、transform 全量读约束、排序单源与 base 错误同处文档化 | AI |

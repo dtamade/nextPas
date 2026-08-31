@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖；`transform/compressed` L3装饰器例外依赖 compress.base GZIP_MAX单源）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-08-31
-**版本**：1.5（P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型 + mount/overlay 双视图，13门闭环；polish17 池化256+可读性+文档收口）
+**版本**：1.4（P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型 + mount/overlay 双视图，13门闭环）
 
 ---
 
@@ -43,8 +43,7 @@ vfs.pas       ← 门面 re-export + 便利函数 + ETag/Decompress/Mount/Overla
 | 遍历 | `VfsWalk(AFs: IVfs; const ARoot: string; ACallback): Boolean` | 字典序全树遍历（Go WalkDir 对等物）；回调可置 AStop 中止 |
 | 便利 | `VfsStat(AFs; APath): TStatInfo` / `VfsList(AFs; ADir): TEntryArray` | 门面包函数，与 Go 包级辅助同构 |
 | 便利 | `VfsReadAllBytes(AFs; APath): TBytes` / `VfsReadAllText(...): string` | 门面函数，非接口方法 |
-| ETag | `IVfsETag.TryGetETag` + `VfsETagStrong/VfsETagFNV` + `VFS_DECOMPRESS_MAX_BYTES` | 门面重导出：embedded 预计算 ETag 零分配命中，压缩装饰器 ETag 禁用；`VfsETagStrong/FNV` 单源消 `embedded/http` 字面量重复 |
-| 路径 | `VfsPathHasPrefix/VfsIsParentPath` + `VfsNameCompare/VfsSortEntries` | 门面重导出：前缀/父子判定与字节序比较单源 `base.utils CompareBytesOrdered`，`mount/overlay` 共用 |
+| ETag | `IVfsETag.TryGetETag` + `VfsETagStrong/VfsETagFNV` + `VFS_DECOMPRESS_MAX_BYTES` | 门面重导出：embedded 预计算 ETag 零分配命中，压缩装饰器 ETag 禁用 |
 
 ```pascal
 IVfs = interface
@@ -127,7 +126,7 @@ end;
 | 操作 | 目标 | 证据 |
 |------|------|------|
 | Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire |
-| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；256槽SpinLock池化10k 163ms 4.9×预算，heaptrc0 |
+| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；16槽SpinLock池化10k 163ms 4.9×预算，heaptrc0 |
 | List（embedded） | 有序区间扫描，一次数组分配 | FEntries直填零Stat，VfsDeriveChildNames单次分配 |
 | OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
 | Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |
@@ -143,7 +142,7 @@ end;
 | 测试目录 | 用例数 | 说明 |
 |----------|--------|------|
 | test_vfs_memtree | 16 | Builder/Freeze/错误语义/`.` 根/IReaderAt（Int64防回绕/防御拷贝/两段式/零双驻留，S6后新增2例） |
-| test_vfs_embedded | 8 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口（池化256槽SpinLock零分配，S6后新增2例） |
+| test_vfs_embedded | 8 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口（池化16槽SpinLock零分配，S6后新增2例） |
 | test_vfs_conformance | 7 | 属性电池 P1–P8+INV-V12 × {3 后端} × {整树, Sub}（一个用例跑满矩阵） |
 | test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 + Decompress/ETag 重导出签名 |
 | test_vfs_mount | 10 | 挂载+叠加双视图：basic/longest/duplicate/etag/case/notfound/nested + overlay priority/list dedup/etag priority（P2+游戏热更完整性，最长匹配+优先级叠加双模型） |
@@ -169,4 +168,3 @@ end;
 | 2026-08-30 | 1.2 | S6装饰器落地：vfs.transform通用模板 + vfs.compressed薄门面（GZIP_MAX单源/4K HeaderPred/单次读取复用/池化复用度/OpPath高级感）；12门补齐（respack5+vfs5+2）+ bench_transform阈值；性能契约添HeaderPred/零二次IO证据 | AI |
 | 2026-08-30 | 1.3 | P2挂载复合落地：vfs.mount 前缀最长匹配复合+ETag/ServeMeta透传+CaseSensitive一致性，mount门禁6例，13门闭环 | AI |
 | 2026-08-31 | 1.4 | P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型，overlay 3例（priority/list dedup/etag），13门闭环 | AI |
-| 2026-08-31 | 1.5 | polish17 收口：EMBEDDED_POOL_SIZE 256 对齐、mount 局部 TmpFs 可读性 + FindMount/List dedup 常数化注释、transform 全量读约束、排序单源单源注释 | AI |

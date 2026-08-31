@@ -26,7 +26,7 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.exception;
+  nextpas.core.bytes.ops;
 
 type
   TSlotInfo = record
@@ -139,8 +139,8 @@ end;
 
 function BytesEqual(const AA, AB: PByte; const ALen: SizeUInt): Boolean; inline;
 begin
-  // 为什么改：直通 base.utils.CompareMem 单源，消 bytes.ops.TByteSpan 包装分支，保持与 reader CompareBytesOrdered 同单源
-  Result := nextpas.core.base.utils.CompareMem(AA, AB, ALen);
+  Result := nextpas.core.bytes.ops.SpanEqual(
+    TByteSpan.Create(AA, ALen), TByteSpan.Create(AB, ALen));
 end;
 
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
@@ -182,16 +182,16 @@ begin
     for I := 0 to N - 1 do
     begin
       if not ResPackValidPath(AEntries[I].Path, True) then
-        raise EResPackInvalidPath.CreateCtx('build', AEntries[I].Path, 'invalid pack path');
+        raise EResPackInvalidPath.Create('respack: invalid pack path "'
+          + AEntries[I].Path + '"');
       if Length(AEntries[I].Path) > High(Word) then
-        raise EResPackInvalidPath.CreateCtx('build', AEntries[I].Path, 'path too long');
+        raise EResPackInvalidPath.Create('respack: path too long "'
+          + AEntries[I].Path + '"');
       PathLens[I] := Word(Length(AEntries[I].Path));
-      // 为什么改：32位 SizeUInt 回绕会绕过 MaxTotalInputBytes 限额，用 TryAddSizeUInt 溢出即判 TooLarge（S-2）
-      if not TryAddSizeUInt(TotalInput, SizeUInt(AEntries[I].DataSize), TotalInput) then
-        raise EResPackTooLarge.CreateCtx('build', AEntries[I].Path, 'total input exceeds limit');
+      TotalInput := TotalInput + SizeUInt(AEntries[I].DataSize);
     end;
   if TotalInput > AOpts.MaxTotalInputBytes then
-    raise EResPackTooLarge.CreateCtx('build', '', 'total input exceeds limit');
+    raise EResPackTooLarge.Create('respack: total input exceeds limit');
   if AOpts.CodecId <> RESPACK_CODEC_STORE then
     raise EResPackError.Create('respack: unsupported CodecId, v1 only store(0)');
 
@@ -312,12 +312,7 @@ begin
   if AOpts.DigestFunc <> nil then
   begin
     DigOff := AlignUp(EndData, 4);
-    // 为什么改：DigOff + N*32 在 N 极大时可能 UInt64 回绕，对齐 reader 的 step8 溢出守卫（S-3）
-    if N > High(UInt64) div RESPACK_DIGEST_SIZE then
-      raise EResPackTooLarge.CreateCtx('build', '', 'digest area overflow');
     Total := DigOff + UInt64(N) * RESPACK_DIGEST_SIZE;
-    if Total < DigOff then
-      raise EResPackTooLarge.CreateCtx('build', '', 'digest area overflow');
   end
   else
   begin
@@ -331,8 +326,6 @@ begin
   Result.Data := Buf;
   Result.Size := SizeUInt(Total);
   Result.Owned := True;
-  // 为什么改：DigestFunc 回调可能抛异常，需保证 Buf 在异常路径释放，避免泄漏（S-1）
-  try
   if Total < 64 * 1024 * 1024 then
   begin
     // <64MB 全量清零成本可忽略，确定性最高
@@ -429,16 +422,6 @@ begin
     for I := 0 to N - 1 do
       AOpts.DigestFunc(AEntries[I].Data, AEntries[I].DataSize,
         Buf + DigOff + I * RESPACK_DIGEST_SIZE);
-  except
-    on E: Exception do
-    begin
-      FreeMem(Buf);
-      Result.Data := nil;
-      Result.Size := 0;
-      Result.Owned := False;
-      raise;
-    end;
-  end;
 end;
 
 end.

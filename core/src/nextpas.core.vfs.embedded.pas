@@ -112,7 +112,6 @@ type
   public
     constructor Create(AData: PByte; ASize: SizeUInt; AOwnsBlob: Boolean);
     destructor Destroy; override;
-    procedure InvalidatePool; { 调用方在底层 blob 地址变更（如 TMemoryMap.Resize）后必须调用，清空池化切片防 UAF }
     function Exists(const APath: string): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
@@ -417,20 +416,6 @@ begin
   end;
 end;
 
-procedure TEmbeddedVfs.InvalidatePool;
-var I: Integer;
-begin
-  if FPoolLock = nil then Exit;
-  FPoolLock.Acquire;
-  try
-    for I := 0 to FPoolCount - 1 do
-      FPool[I].Free;
-    FPoolCount := 0;
-  finally
-    FPoolLock.Release;
-  end;
-end;
-
 function TEmbeddedVfs.Exists(const APath: string): Boolean;
 begin
   if not VfsValidPath(APath, True) then
@@ -459,7 +444,7 @@ begin
   if FRp.Count = 0 then
     Exit;
   QLen := Length(APath);
-  Lo := SizeUInt(LowerBoundPath(APath));
+  Lo := FRp.LowerBound(APath);
   if Lo >= FRp.Count then Exit;
   L := FRp.StoredPathRange(Lo, P);
   if L <= SizeUInt(QLen) then Exit;
@@ -473,8 +458,7 @@ function TEmbeddedVfs.IndexOfPath(const APath: string): SizeInt;
 var
   Lo: SizeUInt;
 begin
-  // 为什么改：复用 LowerBoundPath inline 单源，消与 HasSubtree 的二分重复（D03）
-  Lo := SizeUInt(LowerBoundPath(APath));
+  Lo := FRp.LowerBound(APath);
   if Lo < FRp.Count then
     if FRp.ComparePathAt(Lo, APath) = 0 then
       Exit(SizeInt(Lo));
