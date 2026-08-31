@@ -42,6 +42,7 @@ function SshLoadPrivateKey(const AContent: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.encoding.base64,
   nextpas.core.crypto.bcrypt_pbkdf,
   nextpas.core.crypto.bigint,
@@ -101,31 +102,6 @@ begin
     Result := Result + Trim(LLines[I]);
 end;
 
-function StringToBytesPass(const AText: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(PByte(PChar(AText))^, Result[0], SizeUInt(Length(AText)));
-end;
-
-function BytesEqualTrim(const A, B: TBytes): Boolean;
-var
-  I, LA, LB, SA, SB: Integer;
-begin
-  LA := Length(A); SA := 0;
-  while (SA < LA) and (A[SA] = 0) do Inc(SA);
-  LB := Length(B); SB := 0;
-  while (SB < LB) and (B[SB] = 0) do Inc(SB);
-  LA := LA - SA;
-  LB := LB - SB;
-  if LA <> LB then Exit(False);
-  if LA = 0 then Exit(True);
-  for I := 0 to LA - 1 do
-    if A[SA + I] <> B[SB + I] then Exit(False);
-  Result := True;
-end;
-
 function IsCrtValid(const AN, AP, AQ, AIqmp: TBytes): Boolean;
 var
   LProd, LCheck: TBytes;
@@ -138,7 +114,7 @@ begin
     Exit;
   if not TryBigIntMulFromUnsignedBytes(AP, AQ, LProd, LErr) then
     Exit;
-  if not BytesEqualTrim(LProd, AN) then
+  if not UnsignedEqual(LProd, AN) then
     Exit;
   if not TryBigIntModMulFromUnsignedBytes(AQ, AIqmp, AP, LCheck, LErr) then
     Exit;
@@ -215,7 +191,7 @@ begin
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: bcrypt salt empty');
     if LRounds < 1 then
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: bcrypt rounds must be >= 1');
-    LPassBytes := StringToBytesPass(APassphrase);
+    LPassBytes := StringToBytes(APassphrase);
     if Length(LPassBytes) = 0 then
       raise ESSHError.Create(sekKeyFormat, 'ssh keys: passphrase required for encrypted key');
     if not TryBcryptPbkdf(LPassBytes, LSalt, 48, LRounds, LDerived, LErr) then

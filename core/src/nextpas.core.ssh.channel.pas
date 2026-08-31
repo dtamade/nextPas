@@ -181,6 +181,7 @@ end;
 
 const
   WINDOW_LOW_WATER_DIVISOR = 2;  { 消费过半即回补 }
+  SSH_CHANNEL_INBOX_MAX = 1024;  { 信箱上限：防对端洪泛 DATA 导致无界内存 }
 
 var
   { 本地通道号进程级单调递增（RFC 4254 §5：号按方向独立命名）。
@@ -698,6 +699,8 @@ procedure TSshChannel.InboxPush(const AChunk: TBytes; AExtended: Boolean);
 var
   LN: Integer;
 begin
+  if Length(FInbox) >= SSH_CHANNEL_INBOX_MAX then
+    raise ESSHError.Create(sekProtocol, 'ssh channel: inbox overflow');
   LN := Length(FInbox);
   SetLength(FInbox, LN + 1);
   FInbox[LN].Data := AChunk;

@@ -66,6 +66,7 @@ uses
   nextpas.core.crypto.random,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.bigint,
+  nextpas.core.bytes.ops,
   nextpas.core.mem.secure;
 
 function SshDHGroup14Prime: TBytes;
@@ -124,16 +125,6 @@ begin
   end;
 end;
 
-function IsAllZero(const ABuf: TBytes): Boolean;
-var
-  I: Integer;
-begin
-  for I := 0 to High(ABuf) do
-    if ABuf[I] <> 0 then
-      Exit(False);
-  Result := True;
-end;
-
 function CompareUnsigned(const A, B: TBytes): Integer;
 var
   I, LA, LB, SA, SB: Integer;
@@ -170,11 +161,15 @@ begin
   FPrime := SshDHGroup14Prime;
   FGenerator := SshDHGroup14Generator;
   FPriv := GenerateSecureRandomBytes(32);
-  if (Length(FPriv) = 0) or IsAllZero(FPriv) then
+  if (Length(FPriv) <> 32) or IsZeroBytes(FPriv) then
   begin
-    FPriv[0] := $7F;
-    FPriv[High(FPriv)] := $01;
+    // 熵源异常（空串/长度异常/全零）→ 重试一次，仍失败抛 sekCrypto 而非越界写 FPriv[0]
+    FPriv := GenerateSecureRandomBytes(32);
+    if (Length(FPriv) <> 32) or IsZeroBytes(FPriv) then
+      raise ESSHError.Create(sekCrypto, 'ssh kex dh group14: entropy failed');
   end;
+  FPriv[0] := $7F;
+  FPriv[High(FPriv)] := $01;
   if not TryBigIntModExpFromUnsignedBytes(FGenerator, FPriv, FPrime, LPub, LErr) then
     raise ESSHError.Create(sekCrypto, 'ssh kex dh group14: pub compute failed: ' + LErr);
   FPub := LPub;
@@ -238,12 +233,12 @@ begin
   if (CompareUnsigned(LServerF, SshDHGroup14Generator) <= 0)
     or (CompareUnsigned(LServerF, SshDHGroup14Prime) >= 0) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f out of range');
-  if IsAllZero(LServerF) then
+  if IsZeroBytes(LServerF) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f all zero');
 
   if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, SshDHGroup14Prime, LShared, LErr) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
-  if IsAllZero(LShared) then
+  if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
   if CompareUnsigned(LShared, SshDHGroup14Prime) >= 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: shared secret out of range');

@@ -9,6 +9,7 @@ program test_ssh_kex;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.bytes.ops,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -58,25 +59,6 @@ begin
     Move(APrefix[0], Result[0], Length(APrefix));
   if Length(ATail) > 0 then
     Move(ATail[0], Result[Length(APrefix)], Length(ATail));
-end;
-
-function ConcatAll(const AParts: array of TBytes): TBytes;
-var
-  I: Integer;
-  LTot, LPos: SizeUInt;
-begin
-  Result := nil;
-  LTot := 0;
-  for I := 0 to High(AParts) do
-    Inc(LTot, SizeUInt(Length(AParts[I])));
-  SetLength(Result, LTot);
-  LPos := 0;
-  for I := 0 to High(AParts) do
-    if Length(AParts[I]) > 0 then
-    begin
-      Move(AParts[I][0], Result[LPos], SizeUInt(Length(AParts[I])));
-      Inc(LPos, SizeUInt(Length(AParts[I])));
-    end;
 end;
 
 { 独立构造 KEXINIT 载荷（不经 SshBuildKexInitPayload），用于解析器测试 }
@@ -326,21 +308,21 @@ begin
 
     { 单块（32 字节内）}
     LGot := SshKdfSha256(LKmpint, LH, Ord('A'), LSid, 32);
-    LExpect := SHA256(ConcatAll([LKmpint, LH, HexToBytes('41'), LSid]));
+    LExpect := SHA256(BytesConcatMany([LKmpint, LH, HexToBytes('41'), LSid]));
     CheckEqual(BytesToHex(LExpect), BytesToHex(LGot), 'single block');
 
     { 扩展链：>32 字节时接 HASH(K||H||prev) }
     LGot := SshKdfSha256(LKmpint, LH, Ord('B'), LSid, 64);
-    LBlockA := SHA256(ConcatAll([LKmpint, LH, HexToBytes('42'), LSid]));
-    LBlockB := SHA256(ConcatAll([LKmpint, LH, LBlockA]));
-    CheckEqual(BytesToHex(ConcatAll([LBlockA, LBlockB])), BytesToHex(LGot), 'two blocks');
+    LBlockA := SHA256(BytesConcatMany([LKmpint, LH, HexToBytes('42'), LSid]));
+    LBlockB := SHA256(BytesConcatMany([LKmpint, LH, LBlockA]));
+    CheckEqual(BytesToHex(BytesConcatMany([LBlockA, LBlockB])), BytesToHex(LGot), 'two blocks');
 
     { 非对齐截断 }
     LGot := SshKdfSha256(LKmpint, LH, Ord('C'), LSid, 40);
-    LBlockA := SHA256(ConcatAll([LKmpint, LH, HexToBytes('43'), LSid]));
-    LBlockB := SHA256(ConcatAll([LKmpint, LH, LBlockA]));
+    LBlockA := SHA256(BytesConcatMany([LKmpint, LH, HexToBytes('43'), LSid]));
+    LBlockB := SHA256(BytesConcatMany([LKmpint, LH, LBlockA]));
     CheckEqual(40, Length(LGot));
-    CheckEqual(BytesToHex(Copy(ConcatAll([LBlockA, LBlockB]), 0, 40)), BytesToHex(LGot),
+    CheckEqual(BytesToHex(Copy(BytesConcatMany([LBlockA, LBlockB]), 0, 40)), BytesToHex(LGot),
       'truncated chain');
 
     { ALen<=0 返回空 }

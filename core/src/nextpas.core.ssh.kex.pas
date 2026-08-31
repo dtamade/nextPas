@@ -84,6 +84,7 @@ function SshKdfSha256(const AKMpint, AH: TBytes; AX: Byte;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hash,
   nextpas.core.ssh.cipher;
 
@@ -220,28 +221,6 @@ var
       Result := B;
   end;
 
-  function ConcatAll(const AParts: array of TBytes): TBytes;
-  var
-    I: Integer;
-    LTot: SizeUInt;
-    LPos: SizeUInt;
-  begin
-    Result := nil;
-    LTot := 0;
-    for I := 0 to High(AParts) do
-      Inc(LTot, SizeUInt(Length(AParts[I])));
-    SetLength(Result, LTot);
-    LPos := 0;
-    for I := 0 to High(AParts) do
-    begin
-      if Length(AParts[I]) > 0 then
-      begin
-        Move(AParts[I][0], Result[LPos], SizeUInt(Length(AParts[I])));
-        Inc(LPos, SizeUInt(Length(AParts[I])));
-      end;
-    end;
-  end;
-
 begin
   Result := nil;
   if ALen <= 0 then
@@ -251,12 +230,12 @@ begin
   end;
   SetLength(LInput, 1);
   LInput[0] := AX;
-  LPrev := SHA256(ConcatAll([AKMpint, AH, LInput, ASessionId]));
+  LPrev := SHA256(BytesConcatMany([AKMpint, AH, LInput, ASessionId]));
   Result := Copy(LPrev, 0, Min64(ALen, Length(LPrev)));
   while Length(Result) < ALen do
   begin
-    LBlock := SHA256(ConcatAll([AKMpint, AH, LPrev]));
-    Result := ConcatAll([Result, LBlock]);
+    LBlock := SHA256(BytesConcatMany([AKMpint, AH, LPrev]));
+    Result := BytesConcatMany([Result, LBlock]);
     LPrev := LBlock;
   end;
   if Length(Result) > ALen then

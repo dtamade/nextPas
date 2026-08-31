@@ -16,6 +16,7 @@ interface
 uses
   nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.strings,
   nextpas.core.text.utf8,
   nextpas.core.ssh.base,
@@ -182,33 +183,29 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh buffer: PutStringText requires UTF-8');
   PutUInt32(UInt32(Length(AText)));
   if Length(AText) > 0 then
-    PutRaw(PByte(Pointer(AText)), SizeUInt(Length(AText)));
+    PutRaw(PByte(PChar(AText)), SizeUInt(Length(AText)));
 end;
 
 procedure TsshWriter.PutMPInt(const AMagnitude: TBytes);
 var
-  LStart: SizeUInt;
-  LMagLen: SizeUInt;
+  LView: TByteSpan;
 begin
-  LStart := 0;
-  while (LStart < SizeUInt(Length(AMagnitude))) and (AMagnitude[LStart] = 0) do
-    Inc(LStart);
-  LMagLen := SizeUInt(Length(AMagnitude)) - LStart;
-  if LMagLen = 0 then
+  LView := StripLeadingZeroView(AMagnitude);
+  if IsZeroBytes(AMagnitude) then
   begin
     PutUInt32(0);
     Exit;
   end;
-  if (AMagnitude[LStart] and $80) <> 0 then
+  if (LView.Data^ and $80) <> 0 then
   begin
-    PutUInt32(UInt32(LMagLen + 1));
+    PutUInt32(UInt32(LView.Len + 1));
     PutByte(0);
-    PutRaw(@AMagnitude[LStart], LMagLen);
+    PutRaw(LView.Data, LView.Len);
   end
   else
   begin
-    PutUInt32(UInt32(LMagLen));
-    PutRaw(@AMagnitude[LStart], LMagLen);
+    PutUInt32(UInt32(LView.Len));
+    PutRaw(LView.Data, LView.Len);
   end;
 end;
 
@@ -229,7 +226,7 @@ end;
 
 procedure TsshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
 begin
-  if ALen = 0 then
+  if (ALen = 0) or (APtr = nil) then
     Exit;
   Ensure(ALen);
   Move(APtr^, FBuf[FLen], ALen);
@@ -340,18 +337,16 @@ end;
 function TsshReader.ReadMPInt: TBytes;
 var
   LBlob: TBytes;
-  LO: SizeUInt;
+  LView: TByteSpan;
 begin
   LBlob := ReadStringBytes;
   if (Length(LBlob) > 0) and ((LBlob[0] and $80) <> 0) then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: mpint negative');
+  LView := StripLeadingZeroView(LBlob);
   Result := nil;
-  LO := 0;
-  while (LO < SizeUInt(Length(LBlob))) and (LBlob[LO] = 0) do
-    Inc(LO);
-  SetLength(Result, SizeUInt(Length(LBlob)) - LO);
-  if SizeUInt(Length(LBlob)) > LO then
-    Move(LBlob[LO], Result[0], SizeUInt(Length(LBlob)) - LO);
+  SetLength(Result, LView.Len);
+  if LView.Len > 0 then
+    Move(LView.Data^, Result[0], LView.Len);
 end;
 
 function TsshReader.ReadNameList: TStringArray;

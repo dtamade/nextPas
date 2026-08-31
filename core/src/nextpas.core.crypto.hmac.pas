@@ -82,6 +82,9 @@ begin
   if FBlockSize > SizeOf(LKeyBlock) then
     raise EArgumentError.Create('NewHMAC: block size exceeds 128');
   FillChar(LKeyBlock[0], SizeOf(LKeyBlock), 0);
+  // 显式契约：AKeyLen=0 时不解引用 AKey。空 key 允许传任意地址（如 TBytes 变量本身）
+  // 作为 untyped const，仅当 AKeyLen>0 才 Move/Write；底层 IHasher.Write(…,0) 亦保证不解引用
+  // （HashRequireBuffer 仅在 ACount>0 时校验 @ABuf，与 Deflate 同理），故 NewHMAC(…,AKey,0) 安全。
   if AKeyLen > FBlockSize then
   begin
     LTmpHash := MakeInner;
@@ -91,7 +94,7 @@ begin
     FillChar(LDigest[0], SizeOf(LDigest), 0);
   end
   else if AKeyLen > 0 then
-    Move(AKey, LKeyBlock[0], AKeyLen);
+    Move(AKey, LKeyBlock[0], AKeyLen); // AKeyLen=0 分支不触碰 AKey
   for I := 0 to FBlockSize - 1 do
   begin
     LIPad[I] := LKeyBlock[I] xor $36;
@@ -209,10 +212,12 @@ end;
 function HmacSHA256(const AKey, AData: TBytes): TSHA256Digest;
 var LH: IHasher;
 begin
+  // 空 key 显式契约：AKeyLen=0 时不解引用 AKey。else 分支传 AKey 变量本身作 untyped const
+  // 仅为满足语法（空 TBytes 无 AKey[0]），因长度为 0，InitKey/底层 Write 均不读内存故安全。
   if Length(AKey) > 0 then
     LH := NewHMAC(haSHA256, AKey[0], Length(AKey))
   else
-    LH := NewHMAC(haSHA256, AKey, 0);
+    LH := NewHMAC(haSHA256, AKey, 0); // AKeyLen=0 => 不解引用，显式标注隐式契约
   if Length(AData) > 0 then
     LH.Write(AData[0], Length(AData));
   LH.Sum(Result, SHA256_DIGEST_SIZE);
@@ -221,10 +226,11 @@ end;
 function HmacSHA384(const AKey, AData: TBytes): TSHA384Digest;
 var LH: IHasher;
 begin
+  // 空 key 显式契约同 HmacSHA256：AKeyLen=0 时不解引用，else 传 AKey 本身安全。
   if Length(AKey) > 0 then
     LH := NewHMAC(haSHA384, AKey[0], Length(AKey))
   else
-    LH := NewHMAC(haSHA384, AKey, 0);
+    LH := NewHMAC(haSHA384, AKey, 0); // AKeyLen=0 => 不解引用，显式标注隐式契约
   if Length(AData) > 0 then
     LH.Write(AData[0], Length(AData));
   LH.Sum(Result, SHA384_DIGEST_SIZE);
@@ -233,10 +239,11 @@ end;
 function HmacSHA512(const AKey, AData: TBytes): TSHA512Digest;
 var LH: IHasher;
 begin
+  // 空 key 显式契约同 HmacSHA256：AKeyLen=0 时不解引用，else 传 AKey 本身安全。
   if Length(AKey) > 0 then
     LH := NewHMAC(haSHA512, AKey[0], Length(AKey))
   else
-    LH := NewHMAC(haSHA512, AKey, 0);
+    LH := NewHMAC(haSHA512, AKey, 0); // AKeyLen=0 => 不解引用，显式标注隐式契约
   if Length(AData) > 0 then
     LH.Write(AData[0], Length(AData));
   LH.Sum(Result, SHA512_DIGEST_SIZE);
@@ -263,10 +270,11 @@ end;
 function HMAC_SHA1(const AKey, AData: TBytes): TBytes;
 var LH: IHasher;
 begin
+  // 空 key 显式契约同 HmacSHA256：AKeyLen=0 时不解引用，else 传 AKey 本身安全。
   if Length(AKey) > 0 then
     LH := NewHMAC(haSHA1, AKey[0], Length(AKey))
   else
-    LH := NewHMAC(haSHA1, AKey, 0);
+    LH := NewHMAC(haSHA1, AKey, 0); // AKeyLen=0 => 不解引用，显式标注隐式契约
   if Length(AData) > 0 then
     LH.Write(AData[0], Length(AData));
   Result := nil;

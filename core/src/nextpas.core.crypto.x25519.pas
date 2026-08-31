@@ -33,6 +33,7 @@ uses
   nextpas.core.crypto.random,
   nextpas.core.crypto.field25519,
   nextpas.core.crypto.errors,
+  nextpas.core.bytes.ops,
   nextpas.core.mem.secure;
 
 procedure EnsureKeyLength(const AValue: TBytes; const AParamName: string);
@@ -41,17 +42,6 @@ begin
     RaiseCryptoErrorFmt(cecInvalidArgument,
       'Invalid parameter "%s": value is nil, empty, or out of valid range',
       [AParamName]);
-end;
-
-function IsAllZero(const AData: TBytes): Boolean;
-var
-  I: Integer;
-  LOr: Byte;
-begin
-  LOr := 0;
-  for I := 0 to High(AData) do
-    LOr := LOr or AData[I];
-  Result := LOr = 0;
 end;
 
 function ClampX25519Scalar(const AScalar: TBytes): TBytes;
@@ -164,7 +154,7 @@ begin
   EnsureKeyLength(APrivateKey, 'X25519PrivateKey');
   EnsureKeyLength(APeerPublicKey, 'X25519PeerPublicKey');
   Result := X25519ScalarMult(APrivateKey, APeerPublicKey);
-  if IsAllZero(Result) then
+  if IsZeroBytes(Result) then
     RaiseCryptoError(cecKeyDerivation,
       'Key derivation failed: X25519 shared secret is all-zero');
 end;
@@ -203,7 +193,7 @@ begin
   end;
   try
     ASharedSecret := X25519ScalarMult(APrivateKey, APeerPublicKey);
-    if IsAllZero(ASharedSecret) then
+    if IsZeroBytes(ASharedSecret) then
     begin
       AError := 'X25519: shared secret is all-zero (invalid peer key)';
       SetLength(ASharedSecret, 0);
