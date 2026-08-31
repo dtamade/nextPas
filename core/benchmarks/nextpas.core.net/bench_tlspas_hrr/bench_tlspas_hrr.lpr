@@ -16,6 +16,15 @@ uses
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.posthandshake,
   nextpas.core.net.async.tlspas,
+  nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.http.headers,
+  nextpas.core.http.message,
+  nextpas.core.http.middleware,
+  nextpas.core.http.earlydata,
+  nextpas.core.http.middleware.earlydata,
+  nextpas.core.http.middleware.earlydata.adaptive,
+  nextpas.core.http.client_earlydata,
   nextpas.core.platform.time,
   nextpas.core.time.base;
 
@@ -252,6 +261,7 @@ var
   GAdaptiveConfig: TTlsPasAdaptiveLimitConfig;
   GAdaptiveServerStats: TTlsPasServerStats;
   GAdaptiveReplayStats: TAsyncTlsPasReplayStats;
+  GAdaptiveObserver: TAsyncTlsPasAdaptiveObserver;
 
 procedure BenchAdaptiveLimit(aIters: Int64);
 var I: Int64; L: Cardinal;
@@ -260,11 +270,231 @@ begin
     L := TlsPasComputeAdaptiveMaxEarlyData(GAdaptiveServerStats, GAdaptiveReplayStats, GAdaptiveConfig);
 end;
 
+procedure BenchAdaptiveObserverDecide(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision;
+begin
+  for I := 1 to aIters do
+    D := GAdaptiveObserver.Decide(GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
+procedure BenchAdaptiveObserverMax(aIters: Int64);
+var I: Int64; L: Cardinal;
+begin
+  for I := 1 to aIters do
+    L := GAdaptiveObserver.GetAdaptiveMaxEarlyData;
+end;
+
 procedure BenchHeaderValue(aIters: Int64);
 var I: Int64; H: string;
 begin
   for I := 1 to aIters do
     H := TlsPasEarlyDataDecisionToHeaderValue(edAccept);
+end;
+
+procedure BenchHttpEarlyDataHeader(aIters: Int64);
+var I: Int64; H: string;
+begin
+  for I := 1 to aIters do
+    H := HttpEarlyDataHeaderValueFromDecision(edAccept);
+end;
+
+procedure BenchHttpEarlyDataStream(aIters: Int64);
+var I: Int64; H: string;
+begin
+  for I := 1 to aIters do
+    H := HttpEarlyDataHeaderValueFromStream(nil);
+end;
+
+type
+  TCaptureWriterBenchHack = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    class var FInst: IHttpResponseWriter;
+    FHeaders: IHttpHeaders;
+  public
+    constructor Create;
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+    class function Get: IHttpResponseWriter; static;
+  end;
+
+var
+  GHttpReqEarly, GHttpReqNormal, GHttpReqEarlyLarge: IHttpRequest;
+  GHttpMw: IHttpMiddleware;
+  GHttpMwHandler: IHttpHandler;
+  GAdaptiveMw: IHttpMiddleware;
+  GAdaptiveMwHandler: IHttpHandler;
+
+constructor TCaptureWriterBenchHack.Create;
+begin inherited Create; FHeaders := NewHttpHeaders; end;
+procedure TCaptureWriterBenchHack.WriteHeader(const AStatus: THttpStatus); begin end;
+function TCaptureWriterBenchHack.GetStatus: THttpStatus; begin Result := HTTP_STATUS_OK; end;
+function TCaptureWriterBenchHack.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
+function TCaptureWriterBenchHack.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
+procedure TCaptureWriterBenchHack.Flush; begin end;
+class function TCaptureWriterBenchHack.Get: IHttpResponseWriter;
+begin
+  if FInst = nil then FInst := TCaptureWriterBenchHack.Create;
+  Result := FInst;
+  (Result as TCaptureWriterBenchHack).FHeaders.Clear;
+end;
+
+procedure BenchHttpRequestFlag(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do
+    L := HttpEarlyDataWasEarlyData(GHttpReqEarly);
+end;
+
+procedure BenchHttpMiddlewareEarlyData(aIters: Int64);
+var I: Int64;
+begin
+  for I := 1 to aIters do
+    GHttpMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
+end;
+
+procedure BenchAdaptiveIsThrottled(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do
+    L := HttpAdaptiveEarlyDataIsThrottled(GHttpReqEarly, GAdaptiveObserver);
+end;
+
+procedure BenchAdaptiveMiddleware(aIters: Int64);
+var I: Int64;
+begin
+  for I := 1 to aIters do
+    GAdaptiveMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
+end;
+
+procedure BenchAdaptiveMetricsFormat(aIters: Int64);
+var I: Int64; M: TTlsPasAdaptiveMetrics; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    M := GAdaptiveObserver.GetAdaptiveMetrics;
+    F := TlsPasFormatAdaptiveMetrics(M);
+  end;
+end;
+
+procedure BenchAdaptiveLogLine(aIters: Int64);
+var I: Int64; F: string;
+begin
+  for I := 1 to aIters do
+    F := HttpAdaptiveEarlyDataLogLine(GHttpReqEarly, GAdaptiveObserver);
+end;
+
+procedure BenchAdaptivePressure(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision; LId, LEarly: TBytes;
+begin
+  SetLength(LId, 4); FillChar(LId[0], 4, $AB);
+  SetLength(LEarly, 20); FillChar(LEarly[0], 20, $CD);
+  for I := 1 to aIters do
+  begin
+    LEarly[0] := Byte(I and $FF);
+    D := GAdaptiveObserver.Decide(LId, LEarly, GPolicySess, True);
+  end;
+end;
+
+procedure BenchAdaptivePrometheus(aIters: Int64);
+var I: Int64; M: TTlsPasAdaptiveMetrics; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    M := GAdaptiveObserver.GetAdaptiveMetrics;
+    F := TlsPasFormatPrometheusMetrics(M);
+  end;
+end;
+
+var
+  GPromRegistry: TAsyncTlsPasPrometheusRegistry;
+
+procedure BenchPrometheusRegistry(aIters: Int64);
+var I: Int64; F: string;
+begin
+  for I := 1 to aIters do
+    F := GPromRegistry.FormatAllMetrics;
+end;
+
+procedure BenchAdaptiveConfigLoad(aIters: Int64);
+var I: Int64; C: TTlsPasAdaptiveLimitConfig; LOk: Boolean;
+begin
+  for I := 1 to aIters do
+  begin
+    LOk := TlsPasTryLoadAdaptiveConfigFromEnv(C);
+    if not LOk then C := DefaultTlsPasAdaptiveLimitConfig;
+  end;
+end;
+
+procedure BenchAdaptiveHealth(aIters: Int64);
+var I: Int64; H: TTlsPasAdaptiveHealth;
+begin
+  for I := 1 to aIters do
+    H := GAdaptiveObserver.GetAdaptiveHealth;
+end;
+
+procedure BenchHealthPrometheus(aIters: Int64);
+var I: Int64; H: TTlsPasAdaptiveHealth; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    H := GAdaptiveObserver.GetAdaptiveHealth;
+    F := TlsPasAdaptiveHealthToPrometheus(H, 'nextpas_tlspas');
+  end;
+end;
+
+var
+  GClientEarlyReq: IHttpRequest;
+  GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
+
+procedure BenchClientEarlyIsIdempotent(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do L := HttpEarlyDataIsIdempotentRequest(GClientEarlyReq);
+end;
+
+procedure BenchClientEarlyIsEarly(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do L := HttpEarlyDataIsEarlyRequest(GClientEarlyReq);
+end;
+
+procedure BenchClientEarlyShouldRetry(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do L := HttpEarlyDataShouldRetry(GClientEarlyReq, GClientEarlyResp425);
+end;
+
+procedure BenchClientEarlyClone(aIters: Int64);
+var I: Int64; L: IHttpRequest;
+begin
+  for I := 1 to aIters do L := HttpEarlyDataCloneWithoutEarlyData(GClientEarlyReq);
+end;
+
+var
+  GClientEarlyReqNotMarked: IHttpRequest;
+
+procedure BenchClientEarlyAutoMark(aIters: Int64);
+var I: Int64; LReq: IHttpRequest; L: Boolean;
+begin
+  for I := 1 to aIters do
+  begin
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+    L := HttpEarlyDataAutoMarkIfIdempotent(LReq);
+  end;
+end;
+
+procedure BenchClientEarlyAutoRetryPath(aIters: Int64);
+var I: Int64; LReq: IHttpRequest; LResp: IHttpResponse; L: Boolean;
+begin
+  for I := 1 to aIters do
+  begin
+    LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+    HttpEarlyDataAutoMarkIfIdempotent(LReq);
+    L := HttpEarlyDataShouldRetry(LReq, GClientEarlyResp425);
+  end;
 end;
 
 procedure InitFixtures;
@@ -305,6 +535,26 @@ begin
   GAdaptiveConfig := DefaultTlsPasAdaptiveLimitConfig;
   GAdaptiveServerStats := Default(TTlsPasServerStats);
   GAdaptiveReplayStats := Default(TAsyncTlsPasReplayStats);
+  GAdaptiveObserver := TAsyncTlsPasAdaptiveObserver.Create(GReplayStore, GAdaptiveConfig);
+  GPromRegistry := TAsyncTlsPasPrometheusRegistry.Create;
+  GPromRegistry.Register('api', GAdaptiveObserver);
+  GPromRegistry.Register('internal', GAdaptiveObserver);
+  // HTTP middleware fixtures
+  GHttpReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  (GHttpReqEarly as IHttpRequestWithEarlyData).SetWasEarlyData(True);
+  GHttpReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  GHttpMw := EarlyDataMiddleware;
+  GHttpMwHandler := GHttpMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
+  GAdaptiveMw := AdaptiveEarlyDataMiddleware(GAdaptiveObserver);
+  GAdaptiveMwHandler := GAdaptiveMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
+  GHttpReqEarlyLarge := GHttpReqEarly; // alias for throttled path (ContentLength 0 -> not throttled, header path exercised via Logic)
+  // Client early-data fixtures
+  GClientEarlyReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  HttpEarlyDataMarkRequest(GClientEarlyReq);
+  GClientEarlyReqNotMarked := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
+  GClientEarlyResp425 := NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil);
+  GClientEarlyRespOkEarly0 := NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil);
+  GClientEarlyRespOkEarly0.Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
 end;
 
 var
@@ -342,7 +592,29 @@ begin
     .AddLoop('ObserverDecide (wrap+count)', @BenchObserverDecide)
     .AddLoop('FormatReplayStats', @BenchFormatReplayStats)
     .AddLoop('AdaptiveMaxEarlyData', @BenchAdaptiveLimit)
+    .AddLoop('AdaptiveObserver Decide', @BenchAdaptiveObserverDecide)
+    .AddLoop('AdaptiveObserver GetMax', @BenchAdaptiveObserverMax)
     .AddLoop('HeaderValue (X-Early-Data)', @BenchHeaderValue)
+    .AddLoop('HttpEarlyData header (decision)', @BenchHttpEarlyDataHeader)
+    .AddLoop('HttpEarlyData from stream nil', @BenchHttpEarlyDataStream)
+    .AddLoop('HttpRequest early flag (Supports)', @BenchHttpRequestFlag)
+    .AddLoop('HttpMiddleware early-data', @BenchHttpMiddlewareEarlyData)
+    .AddLoop('Adaptive IsThrottled', @BenchAdaptiveIsThrottled)
+    .AddLoop('AdaptiveMiddleware', @BenchAdaptiveMiddleware)
+    .AddLoop('AdaptiveMetricsFormat', @BenchAdaptiveMetricsFormat)
+    .AddLoop('AdaptiveLogLine', @BenchAdaptiveLogLine)
+    .AddLoop('AdaptivePressure', @BenchAdaptivePressure)
+    .AddLoop('AdaptivePrometheus', @BenchAdaptivePrometheus)
+    .AddLoop('PrometheusRegistry 2 observers', @BenchPrometheusRegistry)
+    .AddLoop('AdaptiveConfig FromEnv', @BenchAdaptiveConfigLoad)
+    .AddLoop('AdaptiveHealth', @BenchAdaptiveHealth)
+    .AddLoop('HealthPrometheus', @BenchHealthPrometheus)
+    .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
+    .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
+    .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)
+    .AddLoop('ClientEarly CloneWithoutEarly', @BenchClientEarlyClone)
+    .AddLoop('ClientEarly AutoMark', @BenchClientEarlyAutoMark)
+    .AddLoop('ClientEarly AutoRetryPath', @BenchClientEarlyAutoRetryPath)
     .Run;
   WriteLn(GResults.PrintToConsole);
   WriteLn;

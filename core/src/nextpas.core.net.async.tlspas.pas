@@ -311,6 +311,78 @@ function TlsPasComputeAdaptiveMaxEarlyData(const AServerStats: TTlsPasServerStat
 function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecision): string;
 
 type
+  TTlsPasAdaptiveMetrics = record
+    AdaptiveMax: Cardinal;
+    Server: TTlsPasServerStats;
+    Replay: TAsyncTlsPasReplayStats;
+  end;
+
+function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string; overload;
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string; overload;
+function TlsPasFormatPrometheusMetricsWithLabels(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): string;
+type TTlsPasAdaptiveHealth = record Healthy: Boolean; Reason: string; RejectRate: Double; Current: Integer; AdaptiveMax: Cardinal; end;
+function TlsPasComputeAdaptiveHealth(const AMetrics: TTlsPasAdaptiveMetrics; const AConfig: TTlsPasAdaptiveLimitConfig): TTlsPasAdaptiveHealth;
+function TlsPasFormatAdaptiveHealth(const AHealth: TTlsPasAdaptiveHealth): string;
+function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): string; overload;
+function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix, ALabels: string): string; overload;
+
+type
+  { S20 自适应服务端观察器：基于 Observer 统计动态计算自适应限额并在超限时熔断(RejectPolicy)，
+    零额外锁(复用 Observer 锁)，供服务端在 Decide 前自动限流(RejectRate>阈值或 Current>50 限半) }
+  TAsyncTlsPasAdaptiveObserver = class
+  private
+    FInner: TAsyncTlsPasServerObserver;
+    FConfig: TTlsPasAdaptiveLimitConfig;
+    FConfigMutex: TPlatformMutex;
+    function GetStore: ITlsPasReplayStore;
+  public
+    constructor Create(const AStore: ITlsPasReplayStore); overload;
+    constructor Create(const AStore: ITlsPasReplayStore; const AConfig: TTlsPasAdaptiveLimitConfig); overload;
+    destructor Destroy; override;
+    function Decide(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+    function ShouldAccept(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+    function GetAdaptiveMaxEarlyData: Cardinal;
+    function GetServerStats: TTlsPasServerStats;
+    function GetReplayStats: TAsyncTlsPasReplayStats;
+    function GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
+    function GetAdaptiveHealth: TTlsPasAdaptiveHealth;
+    procedure Clear;
+    procedure UpdateConfig(const AConfig: TTlsPasAdaptiveLimitConfig);
+    property Config: TTlsPasAdaptiveLimitConfig read FConfig;
+    property Store: ITlsPasReplayStore read GetStore;
+    property Inner: TAsyncTlsPasServerObserver read FInner;
+  end;
+
+function TlsPasAdaptiveDecideEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+function TlsPasAdaptiveShouldAcceptEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+
+{ S26: Prometheus Registry 多实例聚集 + 配置驱动 }
+type
+  TAsyncTlsPasPrometheusRegistry = class
+  private
+    FMutex: TPlatformMutex;
+    FNames: array of string;
+    FObservers: array of TAsyncTlsPasAdaptiveObserver;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Register(const AName: string; AObserver: TAsyncTlsPasAdaptiveObserver);
+    procedure Unregister(const AName: string);
+    function FormatAllMetrics: string; overload;
+    function FormatAllMetrics(const APrefix: string): string; overload;
+    function FormatAllMetricsWithLabels(const APrefix: string): string;
+    function Count: Integer;
+    procedure Clear;
+  end;
+
+function TlsPasTryLoadAdaptiveConfigFromEnv(out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
+function TlsPasTryLoadAdaptiveConfigFromFile(const APath: string; out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
+function TlsPasAdaptiveConfigFromEnvOrDefault: TTlsPasAdaptiveLimitConfig;
+
+type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
   TAsyncTlsPasClientOptions = record
@@ -401,6 +473,7 @@ uses
   nextpas.core.errors,
   nextpas.core.system.sysutils,
   nextpas.core.encoding.base64,
+  nextpas.core.os.env,
   nextpas.core.atomic,
   nextpas.core.bytes,
   nextpas.core.mem,
@@ -1047,8 +1120,6 @@ begin
     edRejectPolicy: Result := 'reject_policy';
     edRejectReplay: Result := 'reject_replay';
     edAccept: Result := 'accept';
-  else
-    Result := 'unknown';
   end;
 end;
 
@@ -1174,9 +1245,478 @@ begin
   case ADecision of
     edAccept: Result := '1';
     edRejectPolicy, edRejectReplay: Result := '0';
-  else
-    Result := '0';
   end;
+end;
+
+function TlsPasAdaptiveDecideEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+var LMax: Cardinal; LEmptyServer: TTlsPasServerStats; LEmptyReplay: TAsyncTlsPasReplayStats;
+begin
+  if AObserver = nil then
+  begin
+    LEmptyServer := Default(TTlsPasServerStats);
+    LEmptyReplay := Default(TAsyncTlsPasReplayStats);
+    LMax := TlsPasComputeAdaptiveMaxEarlyData(LEmptyServer, LEmptyReplay, AConfig);
+    if Cardinal(Length(AEarlyData)) > LMax then
+      Exit(edRejectPolicy);
+    Exit(TlsPasServerDecideEarlyData(nil, ATicketIdentity, AEarlyData, ASession, AAllowEarlyData));
+  end;
+  LMax := TlsPasComputeAdaptiveMaxEarlyData(AObserver.GetServerStats, AObserver.GetReplayStats, AConfig);
+  if Cardinal(Length(AEarlyData)) > LMax then
+    Exit(edRejectPolicy);
+  Result := AObserver.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+end;
+
+function TlsPasAdaptiveShouldAcceptEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+begin
+  Result := TlsPasAdaptiveDecideEarlyData(AObserver, AConfig, ATicketIdentity, AEarlyData, ASession, AAllowEarlyData) = edAccept;
+end;
+
+constructor TAsyncTlsPasAdaptiveObserver.Create(const AStore: ITlsPasReplayStore);
+begin
+  Create(AStore, DefaultTlsPasAdaptiveLimitConfig);
+end;
+
+constructor TAsyncTlsPasAdaptiveObserver.Create(const AStore: ITlsPasReplayStore; const AConfig: TTlsPasAdaptiveLimitConfig);
+begin
+  inherited Create;
+  FInner := TAsyncTlsPasServerObserver.Create(AStore);
+  FConfig := AConfig;
+  if platform_mutex_init(FConfigMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: adaptive observer mutex init');
+end;
+
+destructor TAsyncTlsPasAdaptiveObserver.Destroy;
+begin
+  platform_mutex_destroy(FConfigMutex);
+  FreeAndNil(FInner);
+  inherited Destroy;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetStore: ITlsPasReplayStore;
+begin
+  Result := FInner.Store;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetAdaptiveMaxEarlyData: Cardinal;
+var LServer: TTlsPasServerStats; LReplay: TAsyncTlsPasReplayStats; LCfg: TTlsPasAdaptiveLimitConfig;
+begin
+  platform_mutex_lock(FConfigMutex);
+  LCfg := FConfig;
+  platform_mutex_unlock(FConfigMutex);
+  LServer := FInner.GetServerStats;
+  LReplay := FInner.GetReplayStats;
+  Result := TlsPasComputeAdaptiveMaxEarlyData(LServer, LReplay, LCfg);
+end;
+
+function TAsyncTlsPasAdaptiveObserver.Decide(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+var LMax: Cardinal;
+begin
+  LMax := GetAdaptiveMaxEarlyData;
+  if Cardinal(Length(AEarlyData)) > LMax then
+    Exit(edRejectPolicy);
+  Result := FInner.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+end;
+
+function TAsyncTlsPasAdaptiveObserver.ShouldAccept(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+begin
+  Result := Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData) = edAccept;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetServerStats: TTlsPasServerStats;
+begin
+  Result := FInner.GetServerStats;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetReplayStats: TAsyncTlsPasReplayStats;
+begin
+  Result := FInner.GetReplayStats;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
+begin
+  Result.AdaptiveMax := GetAdaptiveMaxEarlyData;
+  Result.Server := GetServerStats;
+  Result.Replay := GetReplayStats;
+end;
+
+function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+begin
+  Result := Format('adaptive max=%d %s %s', [
+    Integer(AMetrics.AdaptiveMax),
+    TlsPasFormatServerStats(AMetrics.Server),
+    TlsPasFormatReplayStats(AMetrics.Replay)
+  ]);
+end;
+
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+begin
+  Result := TlsPasFormatPrometheusMetrics(AMetrics, 'nextpas_tlspas');
+end;
+
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string;
+var P: string;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  Result :=
+    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+           '# TYPE %s_adaptive_max gauge'#10 +
+           '%s_adaptive_max %d'#10 +
+           '# HELP %s_server_accepts Total accepted early_data'#10 +
+           '# TYPE %s_server_accepts counter'#10 +
+           '%s_server_accepts %d'#10 +
+           '# HELP %s_server_reject_policy Total rejected by policy'#10 +
+           '# TYPE %s_server_reject_policy counter'#10 +
+           '%s_server_reject_policy %d'#10 +
+           '# HELP %s_server_reject_replay Total rejected by replay'#10 +
+           '# TYPE %s_server_reject_replay counter'#10 +
+           '%s_server_reject_replay %d'#10 +
+           '# HELP %s_replay_hits Replay cache hits'#10 +
+           '# TYPE %s_replay_hits counter'#10 +
+           '%s_replay_hits %d'#10 +
+           '# HELP %s_replay_misses Replay cache misses'#10 +
+           '# TYPE %s_replay_misses counter'#10 +
+           '%s_replay_misses %d'#10 +
+           '# HELP %s_replay_evictions Replay cache evictions'#10 +
+           '# TYPE %s_replay_evictions counter'#10 +
+           '%s_replay_evictions %d'#10 +
+           '# HELP %s_replay_expiries Replay cache expiries'#10 +
+           '# TYPE %s_replay_expiries counter'#10 +
+           '%s_replay_expiries %d'#10 +
+           '# HELP %s_replay_current Current replay window size'#10 +
+           '# TYPE %s_replay_current gauge'#10 +
+           '%s_replay_current %d'#10,
+    [P,P,P,Integer(AMetrics.AdaptiveMax),
+     P,P,P,AMetrics.Server.Accepts,
+     P,P,P,AMetrics.Server.RejectPolicy,
+     P,P,P,AMetrics.Server.RejectReplay,
+     P,P,P,AMetrics.Replay.Hits,
+     P,P,P,AMetrics.Replay.Misses,
+     P,P,P,AMetrics.Replay.Evictions,
+     P,P,P,AMetrics.Replay.Expiries,
+     P,P,P,AMetrics.Replay.Current]);
+end;
+
+function TlsPasFormatPrometheusMetricsWithLabels(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): string;
+var P, L: string;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  if ALabels = '' then
+    Exit(TlsPasFormatPrometheusMetrics(AMetrics, P));
+  L := ALabels;
+  Result :=
+    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+           '# TYPE %s_adaptive_max gauge'#10 +
+           '%s_adaptive_max{%s} %d'#10 +
+           '# HELP %s_server_accepts Total accepted early_data'#10 +
+           '# TYPE %s_server_accepts counter'#10 +
+           '%s_server_accepts{%s} %d'#10 +
+           '# HELP %s_server_reject_policy Total rejected by policy'#10 +
+           '# TYPE %s_server_reject_policy counter'#10 +
+           '%s_server_reject_policy{%s} %d'#10 +
+           '# HELP %s_server_reject_replay Total rejected by replay'#10 +
+           '# TYPE %s_server_reject_replay counter'#10 +
+           '%s_server_reject_replay{%s} %d'#10 +
+           '# HELP %s_replay_hits Replay cache hits'#10 +
+           '# TYPE %s_replay_hits counter'#10 +
+           '%s_replay_hits{%s} %d'#10 +
+           '# HELP %s_replay_misses Replay cache misses'#10 +
+           '# TYPE %s_replay_misses counter'#10 +
+           '%s_replay_misses{%s} %d'#10 +
+           '# HELP %s_replay_evictions Replay cache evictions'#10 +
+           '# TYPE %s_replay_evictions counter'#10 +
+           '%s_replay_evictions{%s} %d'#10 +
+           '# HELP %s_replay_expiries Replay cache expiries'#10 +
+           '# TYPE %s_replay_expiries counter'#10 +
+           '%s_replay_expiries{%s} %d'#10 +
+           '# HELP %s_replay_current Current replay window size'#10 +
+           '# TYPE %s_replay_current gauge'#10 +
+           '%s_replay_current{%s} %d'#10,
+    [P,P,P,L,Integer(AMetrics.AdaptiveMax),
+     P,P,P,L,AMetrics.Server.Accepts,
+     P,P,P,L,AMetrics.Server.RejectPolicy,
+     P,P,P,L,AMetrics.Server.RejectReplay,
+     P,P,P,L,AMetrics.Replay.Hits,
+     P,P,P,L,AMetrics.Replay.Misses,
+     P,P,P,L,AMetrics.Replay.Evictions,
+     P,P,P,L,AMetrics.Replay.Expiries,
+     P,P,P,L,AMetrics.Replay.Current]);
+end;
+
+function TlsPasComputeAdaptiveHealth(const AMetrics: TTlsPasAdaptiveMetrics; const AConfig: TTlsPasAdaptiveLimitConfig): TTlsPasAdaptiveHealth;
+var Total, Rejects: Int64; Rate: Double;
+begin
+  Result.AdaptiveMax := AMetrics.AdaptiveMax;
+  Result.Current := AMetrics.Replay.Current;
+  Total := AMetrics.Server.Accepts + AMetrics.Server.RejectPolicy + AMetrics.Server.RejectReplay;
+  Rejects := AMetrics.Server.RejectPolicy + AMetrics.Server.RejectReplay;
+  if Total > 0 then Rate := Rejects / Total else Rate := 0;
+  Result.RejectRate := Rate;
+  if (Rate > AConfig.RejectRateThreshold) and (Total >= 10) then
+  begin
+    Result.Healthy := False;
+    Result.Reason := Format('reject_rate %.2f > %.2f', [Rate, AConfig.RejectRateThreshold]);
+  end
+  else if AMetrics.Replay.Current > 80 then
+  begin
+    Result.Healthy := False;
+    Result.Reason := Format('current %d > 80', [AMetrics.Replay.Current]);
+  end
+  else if AMetrics.AdaptiveMax <= AConfig.MinLimit then
+  begin
+    Result.Healthy := False;
+    Result.Reason := Format('adaptive_max %d at min %d', [Integer(AMetrics.AdaptiveMax), Integer(AConfig.MinLimit)]);
+  end
+  else
+  begin
+    Result.Healthy := True;
+    Result.Reason := 'ok';
+  end;
+end;
+
+function TlsPasFormatAdaptiveHealth(const AHealth: TTlsPasAdaptiveHealth): string;
+begin
+  if AHealth.Healthy then
+    Result := Format('healthy reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)])
+  else
+    Result := Format('degraded reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)]);
+end;
+
+function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): string;
+begin
+  Result := TlsPasAdaptiveHealthToPrometheus(AHealth, APrefix, '');
+end;
+
+function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix, ALabels: string): string;
+var P, L: string; V: Integer;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  V := Ord(AHealth.Healthy);
+  if ALabels = '' then
+    Result := Format('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
+                     '# TYPE %s_health_status gauge'#10 +
+                     '%s_health_status %d'#10, [P,P,P,V])
+  else
+    Result := Format('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
+                     '# TYPE %s_health_status gauge'#10 +
+                     '%s_health_status{%s} %d'#10, [P,P,P,ALabels,V]);
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetAdaptiveHealth: TTlsPasAdaptiveHealth;
+var M: TTlsPasAdaptiveMetrics; C: TTlsPasAdaptiveLimitConfig;
+begin
+  M := GetAdaptiveMetrics;
+  platform_mutex_lock(FConfigMutex);
+  try C := FConfig; finally platform_mutex_unlock(FConfigMutex); end;
+  Result := TlsPasComputeAdaptiveHealth(M, C);
+end;
+
+procedure TAsyncTlsPasAdaptiveObserver.Clear;
+begin
+  FInner.Clear;
+end;
+
+procedure TAsyncTlsPasAdaptiveObserver.UpdateConfig(const AConfig: TTlsPasAdaptiveLimitConfig);
+begin
+  platform_mutex_lock(FConfigMutex);
+  FConfig := AConfig;
+  platform_mutex_unlock(FConfigMutex);
+end;
+
+{ ===== S26 Prometheus Registry + Config ===== }
+
+constructor TAsyncTlsPasPrometheusRegistry.Create;
+begin
+  inherited Create;
+  if platform_mutex_init(FMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: prometheus registry mutex');
+end;
+
+destructor TAsyncTlsPasPrometheusRegistry.Destroy;
+begin
+  platform_mutex_destroy(FMutex);
+  inherited Destroy;
+end;
+
+procedure TAsyncTlsPasPrometheusRegistry.Register(const AName: string; AObserver: TAsyncTlsPasAdaptiveObserver);
+var I: Integer;
+begin
+  if (AName = '') or (AObserver = nil) then Exit;
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FNames) do
+      if FNames[I] = AName then
+      begin
+        FObservers[I] := AObserver;
+        Exit;
+      end;
+    SetLength(FNames, Length(FNames)+1);
+    SetLength(FObservers, Length(FObservers)+1);
+    FNames[High(FNames)] := AName;
+    FObservers[High(FObservers)] := AObserver;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasPrometheusRegistry.Unregister(const AName: string);
+var I, J: Integer;
+begin
+  if AName = '' then Exit;
+  platform_mutex_lock(FMutex);
+  try
+    for I := 0 to High(FNames) do
+      if FNames[I] = AName then
+      begin
+        for J := I to High(FNames)-1 do
+        begin
+          FNames[J] := FNames[J+1];
+          FObservers[J] := FObservers[J+1];
+        end;
+        SetLength(FNames, Length(FNames)-1);
+        SetLength(FObservers, Length(FObservers)-1);
+        Exit;
+      end;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasPrometheusRegistry.Count: Integer;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    Result := Length(FNames);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+procedure TAsyncTlsPasPrometheusRegistry.Clear;
+begin
+  platform_mutex_lock(FMutex);
+  try
+    SetLength(FNames, 0);
+    SetLength(FObservers, 0);
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+end;
+
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetrics: string;
+begin
+  Result := FormatAllMetrics('nextpas_tlspas');
+end;
+
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetrics(const APrefix: string): string;
+begin
+  Result := FormatAllMetricsWithLabels(APrefix);
+end;
+
+function TAsyncTlsPasPrometheusRegistry.FormatAllMetricsWithLabels(const APrefix: string): string;
+var I: Integer; LNames: array of string; LObs: array of TAsyncTlsPasAdaptiveObserver; L: string; P: string;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  platform_mutex_lock(FMutex);
+  try
+    LNames := System.Copy(FNames, 0, Length(FNames));
+    LObs := System.Copy(FObservers, 0, Length(FObservers));
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
+  Result := '';
+  for I := 0 to High(LNames) do
+  begin
+    if LObs[I] = nil then Continue;
+    L := Format('observer="%s"', [LNames[I]]);
+    Result := Result + TlsPasFormatPrometheusMetricsWithLabels(LObs[I].GetAdaptiveMetrics, P, L) + #10;
+  end;
+end;
+
+function TlsPasAdaptiveConfigFromEnvOrDefault: TTlsPasAdaptiveLimitConfig;
+begin
+  if not TlsPasTryLoadAdaptiveConfigFromEnv(Result) then
+    Result := DefaultTlsPasAdaptiveLimitConfig;
+end;
+
+function TlsPasTryLoadAdaptiveConfigFromEnv(out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
+var S: string; V: Integer; D: Double; Has: Boolean;
+begin
+  AConfig := DefaultTlsPasAdaptiveLimitConfig;
+  Has := False;
+  if TryGetEnv('NEXTPAS_TLSPAS_BASE_LIMIT', S) and (S <> '') then
+  begin
+    V := StrToIntDef(S, -1);
+    if V > 0 then begin AConfig.BaseLimit := Cardinal(V); Has := True; end;
+  end;
+  if TryGetEnv('NEXTPAS_TLSPAS_MIN_LIMIT', S) and (S <> '') then
+  begin
+    V := StrToIntDef(S, -1);
+    if V > 0 then begin AConfig.MinLimit := Cardinal(V); Has := True; end;
+  end;
+  if TryGetEnv('NEXTPAS_TLSPAS_MAX_LIMIT', S) and (S <> '') then
+  begin
+    V := StrToIntDef(S, -1);
+    if V > 0 then begin AConfig.MaxLimit := Cardinal(V); Has := True; end;
+  end;
+  if TryGetEnv('NEXTPAS_TLSPAS_REJECT_RATE', S) and (S <> '') then
+  begin
+    // invariant '.' parser to avoid locale comma issue
+    S := StringReplace(S, ',', '.', [rfReplaceAll]);
+    D := StrToFloatDef(S, -1);
+    if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end;
+  end;
+  if Has then
+  begin
+    if AConfig.MinLimit > AConfig.MaxLimit then AConfig.MinLimit := AConfig.MaxLimit;
+    if AConfig.BaseLimit < AConfig.MinLimit then AConfig.BaseLimit := AConfig.MinLimit;
+    if AConfig.BaseLimit > AConfig.MaxLimit then AConfig.BaseLimit := AConfig.MaxLimit;
+  end;
+  Result := Has;
+end;
+
+function TlsPasTryLoadAdaptiveConfigFromFile(const APath: string; out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
+var F: TextFile; Line, Key, Val: string; P: Integer; Has: Boolean; V: Integer; D: Double;
+begin
+  AConfig := DefaultTlsPasAdaptiveLimitConfig;
+  Result := False;
+  Has := False;
+  if (APath = '') or not FileExists(APath) then Exit;
+  AssignFile(F, APath);
+  try
+    Reset(F);
+    while not Eof(F) do
+    begin
+      ReadLn(F, Line);
+      Line := Trim(Line);
+      if (Line = '') or (Line[1] = '#') then Continue;
+      P := Pos('=', Line);
+      if P = 0 then Continue;
+      Key := Trim(System.Copy(Line, 1, P-1));
+      Val := Trim(System.Copy(Line, P+1, MaxInt));
+      if Key = '' then Continue;
+      if (Key = 'base') or (Key = 'BaseLimit') or (Key = 'NEXTPAS_TLSPAS_BASE_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.BaseLimit := Cardinal(V); Has := True; end; end
+      else if (Key = 'min') or (Key = 'MinLimit') or (Key = 'NEXTPAS_TLSPAS_MIN_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MinLimit := Cardinal(V); Has := True; end; end
+      else if (Key = 'max') or (Key = 'MaxLimit') or (Key = 'NEXTPAS_TLSPAS_MAX_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MaxLimit := Cardinal(V); Has := True; end; end
+      else if (Key = 'threshold') or (Key = 'RejectRateThreshold') or (Key = 'NEXTPAS_TLSPAS_REJECT_RATE') then
+      begin Val := StringReplace(Val, ',', '.', [rfReplaceAll]); D := StrToFloatDef(Val, -1); if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end; end;
+    end;
+    CloseFile(F);
+  except
+    try CloseFile(F); except end;
+    Exit(False);
+  end;
+  if Has then
+  begin
+    if AConfig.MinLimit > AConfig.MaxLimit then AConfig.MinLimit := AConfig.MaxLimit;
+    if AConfig.BaseLimit < AConfig.MinLimit then AConfig.BaseLimit := AConfig.MinLimit;
+    if AConfig.BaseLimit > AConfig.MaxLimit then AConfig.BaseLimit := AConfig.MaxLimit;
+  end;
+  Result := Has;
 end;
 
 constructor TAsyncTlsPasReplayCache.Create;
@@ -1911,9 +2451,8 @@ var
   LPos, LExtStart, LExtLen, LExtType, LExtListLen: Integer;
   LSessionIdLen, LCipherLen, LCompLen: Integer;
   LPskeExtPos, LPskeExtLen: Integer;
-  LIdentitiesLen, LIdLen, LBinderLenPos, LOldBinderLen: Integer;
+  LIdentitiesLen, LOldBinderLen: Integer;
   LBeforeBinder, LAfterBinder: TBytes;
-  LNewExtLen: Integer;
 begin
   Result := Copy(AOriginalCH);
   if Length(AOriginalCH) < 44 then Exit;
@@ -1952,8 +2491,6 @@ begin
   LIdentitiesLen := (Integer(AOriginalCH[LPos]) shl 8) or Integer(AOriginalCH[LPos+1]);
   Inc(LPos, 2 + LIdentitiesLen);
   if LPos + 2 > Length(AOriginalCH) then Exit;
-  // binders_len
-  LBinderLenPos := LPos;
   // old binder len byte at LPos+2
   if LPos + 2 + 1 > Length(AOriginalCH) then Exit;
   LOldBinderLen := AOriginalCH[LPos+2];
