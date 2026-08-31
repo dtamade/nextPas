@@ -1,505 +1,202 @@
 unit np_lexer;
 
 {$mode objfpc}{$H+}
-{$UNITPATH ../diagnostics}
-{$UNITPATH ../../rtl/core/base}
-{$UNITPATH ../../core/src}
 
 interface
 
 uses
   nextpas.core.mem.intf,
-  nextpas.core.text.conv,
-  nextpas.core.collections.vec,
-  np_base_types,
-  np_diagnostics_sink;
+  nextpas.compiler.syntax.lexer;
 
 type
-  TTokenKind = (
-    tkUnknown,
-    tkError,
-    tkProgramKeyword,
-    tkUnitKeyword,
-    tkLibraryKeyword,
-    tkPackageKeyword,
-    tkUsesKeyword,
-    tkInterfaceKeyword,
-    tkImplementationKeyword,
-    tkProcedureKeyword,
-    tkExternalKeyword,
-    tkNameKeyword,
-    tkCdeclKeyword,
-    tkBeginKeyword,
-    tkEndKeyword,
-    tkIfKeyword,
-    tkThenKeyword,
-    tkElseKeyword,
-    tkWhileKeyword,
-    tkDoKeyword,
-    tkForKeyword,
-    tkToKeyword,
-    tkDownToKeyword,
-    tkRepeatKeyword,
-    tkUntilKeyword,
-    tkWithKeyword,
-    tkCaseKeyword,
-    tkOfKeyword,
-    tkGotoKeyword,
-    tkBreakKeyword,
-    tkContinueKeyword,
-    tkExitKeyword,
-    tkVarKeyword,
-    tkConstKeyword,
-    tkConstRefKeyword,
-    tkTypeKeyword,
-    tkFunctionKeyword,
-    tkArrayKeyword,
-    tkSetKeyword,
-    tkRecordKeyword,
-    tkStringKeyword,
-    tkClassKeyword,
-    tkObjectKeyword,
-    tkConstructorKeyword,
-    tkDestructorKeyword,
-    tkPropertyKeyword,
-    tkInitializationKeyword,
-    tkFinalizationKeyword,
-    tkExportsKeyword,
-    tkLabelKeyword,
-    tkThreadVarKeyword,
-    tkPublishedKeyword,
-    tkPublicKeyword,
-    tkPrivateKeyword,
-    tkProtectedKeyword,
-    tkVirtualKeyword,
-    tkOverrideKeyword,
-    tkAbstractKeyword,
-    tkReintroduceKeyword,
-    tkOverloadKeyword,
-    tkDynamicKeyword,
-    tkMessageKeyword,
-    tkStaticKeyword,
-    tkInlineKeyword,
-    tkForwardKeyword,
-    tkDeprecatedKeyword,
-    tkPlatformKeyword,
-    tkExperimentalKeyword,
-    tkStdCallKeyword,
-    tkSafeCallKeyword,
-    tkRegisterKeyword,
-    tkPascalKeyword,
-    tkFarKeyword,
-    tkNearKeyword,
-    tkCppDeclKeyword,
-    tkVarArgsKeyword,
-    tkOutKeyword,
-    tkAbsoluteKeyword,
-    tkAsmKeyword,
-    tkAndKeyword,
-    tkOrKeyword,
-    tkNotKeyword,
-    tkXorKeyword,
-    tkShlKeyword,
-    tkShrKeyword,
-    tkDivKeyword,
-    tkModKeyword,
-    tkInKeyword,
-    tkIsKeyword,
-    tkAsKeyword,
-    tkNilKeyword,
-    tkRaiseKeyword,
-    tkTryKeyword,
-    tkExceptKeyword,
-    tkFinallyKeyword,
-    tkOnKeyword,
-    tkInheritedKeyword,
-    tkSelfKeyword,
-    tkFileKeyword,
-    tkResourceStringKeyword,
-    tkStrictKeyword,
-    tkOperatorKeyword,
-    tkGenericKeyword,
-    tkSpecializeKeyword,
-    tkReferenceKeyword,
-    tkPackedKeyword,
-    tkContainsKeyword,
-    tkRequiresKeyword,
-    tkIdentifier,
-    tkStringLiteral,
-    tkIntegerLiteral,
-    tkRealLiteral,
-    tkCharLiteral,
-    tkCompilerDirective,
-    tkSemicolon,
-    tkDot,
-    tkDotDot,
-    tkComma,
-    tkColon,
-    tkAssign,
-    tkPlusAssign,
-    tkMinusAssign,
-    tkStarAssign,
-    tkSlashAssign,
-    tkLParen,
-    tkRParen,
-    tkLBracket,
-    tkRBracket,
-    tkPlus,
-    tkMinus,
-    tkStar,
-    tkSlash,
-    tkEquals,
-    tkNotEquals,
-    tkLessThan,
-    tkGreaterThan,
-    tkLessEqual,
-    tkGreaterEqual,
-    tkAt,
-    tkCaret,
-    tkEOF
-  );
+  TTokenKind = nextpas.compiler.syntax.lexer.TTokenKind;
+  TTriviaKind = nextpas.compiler.syntax.lexer.TTriviaKind;
+  TTriviaPiece = nextpas.compiler.syntax.lexer.TTriviaPiece;
+  TTriviaPieceVec = nextpas.compiler.syntax.lexer.TTriviaPieceVec;
+  TToken = nextpas.compiler.syntax.lexer.TToken;
+  TTokenVec = nextpas.compiler.syntax.lexer.TTokenVec;
+  TLexerResult = nextpas.compiler.syntax.lexer.TLexerResult;
+  PToken = nextpas.compiler.syntax.lexer.PToken;
 
-  TTriviaKind = (
-    tvkWhitespace,
-    tvkLineTerminator,
-    tvkLineComment,
-    tvkBraceComment,
-    tvkParenStarComment
-  );
+const
+  tkUnknown = nextpas.compiler.syntax.lexer.tkUnknown;
+  tkError = nextpas.compiler.syntax.lexer.tkError;
+  tkProgramKeyword = nextpas.compiler.syntax.lexer.tkProgramKeyword;
+  tkUnitKeyword = nextpas.compiler.syntax.lexer.tkUnitKeyword;
+  tkLibraryKeyword = nextpas.compiler.syntax.lexer.tkLibraryKeyword;
+  tkPackageKeyword = nextpas.compiler.syntax.lexer.tkPackageKeyword;
+  tkUsesKeyword = nextpas.compiler.syntax.lexer.tkUsesKeyword;
+  tkInterfaceKeyword = nextpas.compiler.syntax.lexer.tkInterfaceKeyword;
+  tkImplementationKeyword = nextpas.compiler.syntax.lexer.tkImplementationKeyword;
+  tkProcedureKeyword = nextpas.compiler.syntax.lexer.tkProcedureKeyword;
+  tkExternalKeyword = nextpas.compiler.syntax.lexer.tkExternalKeyword;
+  tkNameKeyword = nextpas.compiler.syntax.lexer.tkNameKeyword;
+  tkCdeclKeyword = nextpas.compiler.syntax.lexer.tkCdeclKeyword;
+  tkBeginKeyword = nextpas.compiler.syntax.lexer.tkBeginKeyword;
+  tkEndKeyword = nextpas.compiler.syntax.lexer.tkEndKeyword;
+  tkIfKeyword = nextpas.compiler.syntax.lexer.tkIfKeyword;
+  tkThenKeyword = nextpas.compiler.syntax.lexer.tkThenKeyword;
+  tkElseKeyword = nextpas.compiler.syntax.lexer.tkElseKeyword;
+  tkWhileKeyword = nextpas.compiler.syntax.lexer.tkWhileKeyword;
+  tkDoKeyword = nextpas.compiler.syntax.lexer.tkDoKeyword;
+  tkForKeyword = nextpas.compiler.syntax.lexer.tkForKeyword;
+  tkToKeyword = nextpas.compiler.syntax.lexer.tkToKeyword;
+  tkDownToKeyword = nextpas.compiler.syntax.lexer.tkDownToKeyword;
+  tkRepeatKeyword = nextpas.compiler.syntax.lexer.tkRepeatKeyword;
+  tkUntilKeyword = nextpas.compiler.syntax.lexer.tkUntilKeyword;
+  tkWithKeyword = nextpas.compiler.syntax.lexer.tkWithKeyword;
+  tkCaseKeyword = nextpas.compiler.syntax.lexer.tkCaseKeyword;
+  tkOfKeyword = nextpas.compiler.syntax.lexer.tkOfKeyword;
+  tkGotoKeyword = nextpas.compiler.syntax.lexer.tkGotoKeyword;
+  tkBreakKeyword = nextpas.compiler.syntax.lexer.tkBreakKeyword;
+  tkContinueKeyword = nextpas.compiler.syntax.lexer.tkContinueKeyword;
+  tkExitKeyword = nextpas.compiler.syntax.lexer.tkExitKeyword;
+  tkVarKeyword = nextpas.compiler.syntax.lexer.tkVarKeyword;
+  tkConstKeyword = nextpas.compiler.syntax.lexer.tkConstKeyword;
+  tkConstRefKeyword = nextpas.compiler.syntax.lexer.tkConstRefKeyword;
+  tkTypeKeyword = nextpas.compiler.syntax.lexer.tkTypeKeyword;
+  tkFunctionKeyword = nextpas.compiler.syntax.lexer.tkFunctionKeyword;
+  tkArrayKeyword = nextpas.compiler.syntax.lexer.tkArrayKeyword;
+  tkSetKeyword = nextpas.compiler.syntax.lexer.tkSetKeyword;
+  tkRecordKeyword = nextpas.compiler.syntax.lexer.tkRecordKeyword;
+  tkStringKeyword = nextpas.compiler.syntax.lexer.tkStringKeyword;
+  tkClassKeyword = nextpas.compiler.syntax.lexer.tkClassKeyword;
+  tkObjectKeyword = nextpas.compiler.syntax.lexer.tkObjectKeyword;
+  tkConstructorKeyword = nextpas.compiler.syntax.lexer.tkConstructorKeyword;
+  tkDestructorKeyword = nextpas.compiler.syntax.lexer.tkDestructorKeyword;
+  tkPropertyKeyword = nextpas.compiler.syntax.lexer.tkPropertyKeyword;
+  tkInitializationKeyword = nextpas.compiler.syntax.lexer.tkInitializationKeyword;
+  tkFinalizationKeyword = nextpas.compiler.syntax.lexer.tkFinalizationKeyword;
+  tkExportsKeyword = nextpas.compiler.syntax.lexer.tkExportsKeyword;
+  tkLabelKeyword = nextpas.compiler.syntax.lexer.tkLabelKeyword;
+  tkThreadVarKeyword = nextpas.compiler.syntax.lexer.tkThreadVarKeyword;
+  tkPublishedKeyword = nextpas.compiler.syntax.lexer.tkPublishedKeyword;
+  tkPublicKeyword = nextpas.compiler.syntax.lexer.tkPublicKeyword;
+  tkPrivateKeyword = nextpas.compiler.syntax.lexer.tkPrivateKeyword;
+  tkProtectedKeyword = nextpas.compiler.syntax.lexer.tkProtectedKeyword;
+  tkVirtualKeyword = nextpas.compiler.syntax.lexer.tkVirtualKeyword;
+  tkOverrideKeyword = nextpas.compiler.syntax.lexer.tkOverrideKeyword;
+  tkAbstractKeyword = nextpas.compiler.syntax.lexer.tkAbstractKeyword;
+  tkReintroduceKeyword = nextpas.compiler.syntax.lexer.tkReintroduceKeyword;
+  tkOverloadKeyword = nextpas.compiler.syntax.lexer.tkOverloadKeyword;
+  tkDynamicKeyword = nextpas.compiler.syntax.lexer.tkDynamicKeyword;
+  tkMessageKeyword = nextpas.compiler.syntax.lexer.tkMessageKeyword;
+  tkStaticKeyword = nextpas.compiler.syntax.lexer.tkStaticKeyword;
+  tkInlineKeyword = nextpas.compiler.syntax.lexer.tkInlineKeyword;
+  tkForwardKeyword = nextpas.compiler.syntax.lexer.tkForwardKeyword;
+  tkDeprecatedKeyword = nextpas.compiler.syntax.lexer.tkDeprecatedKeyword;
+  tkPlatformKeyword = nextpas.compiler.syntax.lexer.tkPlatformKeyword;
+  tkExperimentalKeyword = nextpas.compiler.syntax.lexer.tkExperimentalKeyword;
+  tkStdCallKeyword = nextpas.compiler.syntax.lexer.tkStdCallKeyword;
+  tkSafeCallKeyword = nextpas.compiler.syntax.lexer.tkSafeCallKeyword;
+  tkRegisterKeyword = nextpas.compiler.syntax.lexer.tkRegisterKeyword;
+  tkPascalKeyword = nextpas.compiler.syntax.lexer.tkPascalKeyword;
+  tkFarKeyword = nextpas.compiler.syntax.lexer.tkFarKeyword;
+  tkNearKeyword = nextpas.compiler.syntax.lexer.tkNearKeyword;
+  tkCppDeclKeyword = nextpas.compiler.syntax.lexer.tkCppDeclKeyword;
+  tkVarArgsKeyword = nextpas.compiler.syntax.lexer.tkVarArgsKeyword;
+  tkOutKeyword = nextpas.compiler.syntax.lexer.tkOutKeyword;
+  tkAbsoluteKeyword = nextpas.compiler.syntax.lexer.tkAbsoluteKeyword;
+  tkAsmKeyword = nextpas.compiler.syntax.lexer.tkAsmKeyword;
+  tkAndKeyword = nextpas.compiler.syntax.lexer.tkAndKeyword;
+  tkOrKeyword = nextpas.compiler.syntax.lexer.tkOrKeyword;
+  tkNotKeyword = nextpas.compiler.syntax.lexer.tkNotKeyword;
+  tkXorKeyword = nextpas.compiler.syntax.lexer.tkXorKeyword;
+  tkShlKeyword = nextpas.compiler.syntax.lexer.tkShlKeyword;
+  tkShrKeyword = nextpas.compiler.syntax.lexer.tkShrKeyword;
+  tkDivKeyword = nextpas.compiler.syntax.lexer.tkDivKeyword;
+  tkModKeyword = nextpas.compiler.syntax.lexer.tkModKeyword;
+  tkInKeyword = nextpas.compiler.syntax.lexer.tkInKeyword;
+  tkIsKeyword = nextpas.compiler.syntax.lexer.tkIsKeyword;
+  tkAsKeyword = nextpas.compiler.syntax.lexer.tkAsKeyword;
+  tkNilKeyword = nextpas.compiler.syntax.lexer.tkNilKeyword;
+  tkRaiseKeyword = nextpas.compiler.syntax.lexer.tkRaiseKeyword;
+  tkTryKeyword = nextpas.compiler.syntax.lexer.tkTryKeyword;
+  tkExceptKeyword = nextpas.compiler.syntax.lexer.tkExceptKeyword;
+  tkFinallyKeyword = nextpas.compiler.syntax.lexer.tkFinallyKeyword;
+  tkOnKeyword = nextpas.compiler.syntax.lexer.tkOnKeyword;
+  tkInheritedKeyword = nextpas.compiler.syntax.lexer.tkInheritedKeyword;
+  tkSelfKeyword = nextpas.compiler.syntax.lexer.tkSelfKeyword;
+  tkFileKeyword = nextpas.compiler.syntax.lexer.tkFileKeyword;
+  tkResourceStringKeyword = nextpas.compiler.syntax.lexer.tkResourceStringKeyword;
+  tkStrictKeyword = nextpas.compiler.syntax.lexer.tkStrictKeyword;
+  tkOperatorKeyword = nextpas.compiler.syntax.lexer.tkOperatorKeyword;
+  tkGenericKeyword = nextpas.compiler.syntax.lexer.tkGenericKeyword;
+  tkSpecializeKeyword = nextpas.compiler.syntax.lexer.tkSpecializeKeyword;
+  tkReferenceKeyword = nextpas.compiler.syntax.lexer.tkReferenceKeyword;
+  tkPackedKeyword = nextpas.compiler.syntax.lexer.tkPackedKeyword;
+  tkContainsKeyword = nextpas.compiler.syntax.lexer.tkContainsKeyword;
+  tkRequiresKeyword = nextpas.compiler.syntax.lexer.tkRequiresKeyword;
+  tkIdentifier = nextpas.compiler.syntax.lexer.tkIdentifier;
+  tkStringLiteral = nextpas.compiler.syntax.lexer.tkStringLiteral;
+  tkIntegerLiteral = nextpas.compiler.syntax.lexer.tkIntegerLiteral;
+  tkRealLiteral = nextpas.compiler.syntax.lexer.tkRealLiteral;
+  tkCharLiteral = nextpas.compiler.syntax.lexer.tkCharLiteral;
+  tkCompilerDirective = nextpas.compiler.syntax.lexer.tkCompilerDirective;
+  tkSemicolon = nextpas.compiler.syntax.lexer.tkSemicolon;
+  tkDot = nextpas.compiler.syntax.lexer.tkDot;
+  tkDotDot = nextpas.compiler.syntax.lexer.tkDotDot;
+  tkComma = nextpas.compiler.syntax.lexer.tkComma;
+  tkColon = nextpas.compiler.syntax.lexer.tkColon;
+  tkAssign = nextpas.compiler.syntax.lexer.tkAssign;
+  tkPlusAssign = nextpas.compiler.syntax.lexer.tkPlusAssign;
+  tkMinusAssign = nextpas.compiler.syntax.lexer.tkMinusAssign;
+  tkStarAssign = nextpas.compiler.syntax.lexer.tkStarAssign;
+  tkSlashAssign = nextpas.compiler.syntax.lexer.tkSlashAssign;
+  tkLParen = nextpas.compiler.syntax.lexer.tkLParen;
+  tkRParen = nextpas.compiler.syntax.lexer.tkRParen;
+  tkLBracket = nextpas.compiler.syntax.lexer.tkLBracket;
+  tkRBracket = nextpas.compiler.syntax.lexer.tkRBracket;
+  tkPlus = nextpas.compiler.syntax.lexer.tkPlus;
+  tkMinus = nextpas.compiler.syntax.lexer.tkMinus;
+  tkStar = nextpas.compiler.syntax.lexer.tkStar;
+  tkSlash = nextpas.compiler.syntax.lexer.tkSlash;
+  tkEquals = nextpas.compiler.syntax.lexer.tkEquals;
+  tkNotEquals = nextpas.compiler.syntax.lexer.tkNotEquals;
+  tkLessThan = nextpas.compiler.syntax.lexer.tkLessThan;
+  tkGreaterThan = nextpas.compiler.syntax.lexer.tkGreaterThan;
+  tkLessEqual = nextpas.compiler.syntax.lexer.tkLessEqual;
+  tkGreaterEqual = nextpas.compiler.syntax.lexer.tkGreaterEqual;
+  tkAt = nextpas.compiler.syntax.lexer.tkAt;
+  tkCaret = nextpas.compiler.syntax.lexer.tkCaret;
+  tkEOF = nextpas.compiler.syntax.lexer.tkEOF;
+  tvkWhitespace = nextpas.compiler.syntax.lexer.tvkWhitespace;
+  tvkLineTerminator = nextpas.compiler.syntax.lexer.tvkLineTerminator;
+  tvkLineComment = nextpas.compiler.syntax.lexer.tvkLineComment;
+  tvkBraceComment = nextpas.compiler.syntax.lexer.tvkBraceComment;
+  tvkParenStarComment = nextpas.compiler.syntax.lexer.tvkParenStarComment;
 
-  TTriviaPiece = record
-    Kind: TTriviaKind;
-    ByteOffset: LongInt;
-    Length: LongInt;
-  end;
-
-  { Nested product table owned by token entry (default heap / optional alloc). }
-  TTriviaPieceVec = specialize TVec<TTriviaPiece>;
-
-  TToken = record
-    Kind: TTokenKind;
-    Lexeme: string;
-    FileId: TCoreId;
-    ByteOffset: LongInt;
-    Line: LongInt;
-    Column: LongInt;
-    LeadingTrivia: TTriviaPieceVec;
-    TrailingTrivia: TTriviaPieceVec;
-  end;
-  PToken = ^TToken;
-  TTokenVec = specialize TVec<TToken>;
-
-  TLexerResult = class
-  private
-    FTokens: TTokenVec;
-    FCurrentLine: LongInt;
-    FLineStartByte: LongInt;
-    FDiagnostics: TDiagnosticsSink;
-    FFileId: TCoreId;
-    FPendingTrivia: TTriviaPieceVec;
-    procedure ReportError(
-      const ACode: string;
-      const AByteOffset: LongInt;
-      const AMessageText: string
-    );
-    procedure CapturePendingTrivia(
-      const AKind: TTriviaKind;
-      const AByteOffset: LongInt;
-      const ALength: LongInt
-    );
-    procedure FlushPendingTriviaToToken(const ATokenIndex: SizeInt);
-    procedure AdvanceNewline(
-      const ASourceText: string;
-      var AIndex: SizeInt
-    );
-    function CurrentColumn(const AIndex: SizeInt): LongInt;
-    procedure SkipBraceCommentTracking(
-      const ASourceText: string;
-      var AIndex: SizeInt;
-      out AClosed: Boolean
-    );
-    procedure SkipParenStarCommentTracking(
-      const ASourceText: string;
-      var AIndex: SizeInt;
-      out AClosed: Boolean
-    );
-    function TryReadCompilerDirectiveTracking(
-      const ASourceText: string;
-      var AIndex: SizeInt;
-      out ALexeme: string;
-      out AClosed: Boolean
-    ): Boolean;
-    function TryReadParenStarDirectiveTracking(
-      const ASourceText: string;
-      var AIndex: SizeInt;
-      out ALexeme: string;
-      out AClosed: Boolean
-    ): Boolean;
-    procedure AddToken(
-      const AKind: TTokenKind;
-      const ALexeme: string;
-      const AByteOffset: LongInt;
-      const ALine: LongInt;
-      const AColumn: LongInt
-    );
-    procedure AddTokenAt(
-      const AKind: TTokenKind;
-      const ALexeme: string;
-      const AStartIndex: SizeInt;
-      const ALine: LongInt
-    );
-    procedure AddTokenAtPos(
-      const AKind: TTokenKind;
-      const ALexeme: string;
-      const AStartIndex: SizeInt;
-      const ALine: LongInt;
-      const AColumn: LongInt
-    );
-    procedure LexSource(const ASourceText: string);
-  public
-    constructor Create(const ASourceText: string); overload;
-    constructor Create(
-      const ASourceText: string;
-      const ADiagnostics: TDiagnosticsSink;
-      const AFileId: TCoreId
-    ); overload;
-    constructor CreateFromTokens(const ATokens: array of TToken;
-      const ACount: LongInt);
-    destructor Destroy; override;
-    function TokenCount: LongInt;
-    function TokenAt(const AIndex: LongInt): TToken;
-  end;
-
-{ Deep-copy trivia for token value copies (EmitToken / CreateFromTokens). }
-function CloneTriviaPieceVec(
-  const ASrc: TTriviaPieceVec;
-  AAllocator: IAllocator = nil
-): TTriviaPieceVec;
-function CloneTokenWithTrivia(
-  const ASrc: TToken;
-  AAllocator: IAllocator = nil
-): TToken;
+function CloneTriviaPieceVec(const ATrivia: TTriviaPieceVec; AAllocator: IAllocator = nil): TTriviaPieceVec;
+function CloneTokenWithTrivia(const ASrc: TToken; AAllocator: IAllocator = nil): TToken;
 procedure FreeTokenNestedTrivia(var AToken: TToken);
 procedure FreeTokenVecNestedTrivia(const ATokens: TTokenVec);
-
 function TokenKindName(const AKind: TTokenKind): string;
 
 implementation
 
-{$I np_lexer_helpers.inc}
-{$I np_lexer_lex_source.inc}
-
-function CloneTriviaPieceVec(
-  const ASrc: TTriviaPieceVec;
-  AAllocator: IAllocator
-): TTriviaPieceVec;
-var
-  I: SizeInt;
+function CloneTriviaPieceVec(const ATrivia: TTriviaPieceVec; AAllocator: IAllocator): TTriviaPieceVec;
 begin
-  if ASrc = nil then
-    Exit(nil);
-  if AAllocator <> nil then
-    Result := TTriviaPieceVec.Create(ASrc.Count, AAllocator)
-  else
-    Result := TTriviaPieceVec.Create(ASrc.Count);
-  for I := 0 to SizeInt(ASrc.Count) - 1 do
-    Result.Push(ASrc[SizeUInt(I)]);
+  Result := nextpas.compiler.syntax.lexer.CloneTriviaPieceVec(ATrivia, AAllocator);
 end;
 
-function CloneTokenWithTrivia(
-  const ASrc: TToken;
-  AAllocator: IAllocator
-): TToken;
+function CloneTokenWithTrivia(const ASrc: TToken; AAllocator: IAllocator): TToken;
 begin
-  Result := ASrc;
-  Result.LeadingTrivia := CloneTriviaPieceVec(ASrc.LeadingTrivia, AAllocator);
-  Result.TrailingTrivia := CloneTriviaPieceVec(ASrc.TrailingTrivia, AAllocator);
+  Result := nextpas.compiler.syntax.lexer.CloneTokenWithTrivia(ASrc, AAllocator);
 end;
 
 procedure FreeTokenNestedTrivia(var AToken: TToken);
 begin
-  AToken.LeadingTrivia.Free;
-  AToken.LeadingTrivia := nil;
-  AToken.TrailingTrivia.Free;
-  AToken.TrailingTrivia := nil;
+  nextpas.compiler.syntax.lexer.FreeTokenNestedTrivia(AToken);
 end;
 
 procedure FreeTokenVecNestedTrivia(const ATokens: TTokenVec);
-var
-  I: SizeInt;
 begin
-  if ATokens = nil then
-    Exit;
-  for I := 0 to SizeInt(ATokens.Count) - 1 do
-    FreeTokenNestedTrivia(ATokens.GetPtr(SizeUInt(I))^);
-end;
-
-function TLexerResult.TokenCount: LongInt;
-begin
-  if FTokens = nil then
-    Exit(0);
-  Result := LongInt(FTokens.Count);
-end;
-
-function TLexerResult.TokenAt(const AIndex: LongInt): TToken;
-begin
-  if (FTokens = nil) or (AIndex < 0) or (AIndex >= LongInt(FTokens.Count)) then
-  begin
-    Result := Default(TToken);
-    Result.Kind := tkEOF;
-    Exit;
-  end;
-
-  { Shallow copy of entry; nested trivia remain owned by FTokens. }
-  Result := FTokens[SizeUInt(AIndex)];
+  nextpas.compiler.syntax.lexer.FreeTokenVecNestedTrivia(ATokens);
 end;
 
 function TokenKindName(const AKind: TTokenKind): string;
 begin
-  case AKind of
-    tkProgramKeyword: Result := 'program';
-    tkUnitKeyword: Result := 'unit';
-    tkLibraryKeyword: Result := 'library';
-    tkPackageKeyword: Result := 'package';
-    tkUsesKeyword: Result := 'uses';
-    tkInterfaceKeyword: Result := 'interface';
-    tkImplementationKeyword: Result := 'implementation';
-    tkProcedureKeyword: Result := 'procedure';
-    tkFunctionKeyword: Result := 'function';
-    tkExternalKeyword: Result := 'external';
-    tkNameKeyword: Result := 'name';
-    tkCdeclKeyword: Result := 'cdecl';
-    tkBeginKeyword: Result := 'begin';
-    tkEndKeyword: Result := 'end';
-    tkIfKeyword: Result := 'if';
-    tkThenKeyword: Result := 'then';
-    tkElseKeyword: Result := 'else';
-    tkWhileKeyword: Result := 'while';
-    tkDoKeyword: Result := 'do';
-    tkForKeyword: Result := 'for';
-    tkToKeyword: Result := 'to';
-    tkDownToKeyword: Result := 'downto';
-    tkRepeatKeyword: Result := 'repeat';
-    tkUntilKeyword: Result := 'until';
-    tkWithKeyword: Result := 'with';
-    tkCaseKeyword: Result := 'case';
-    tkOfKeyword: Result := 'of';
-    tkGotoKeyword: Result := 'goto';
-    tkBreakKeyword: Result := 'break';
-    tkContinueKeyword: Result := 'continue';
-    tkExitKeyword: Result := 'exit';
-    tkVarKeyword: Result := 'var';
-    tkConstKeyword: Result := 'const';
-    tkConstRefKeyword: Result := 'constref';
-    tkTypeKeyword: Result := 'type';
-    tkArrayKeyword: Result := 'array';
-    tkSetKeyword: Result := 'set';
-    tkRecordKeyword: Result := 'record';
-    tkStringKeyword: Result := 'string';
-    tkClassKeyword: Result := 'class';
-    tkObjectKeyword: Result := 'object';
-    tkConstructorKeyword: Result := 'constructor';
-    tkDestructorKeyword: Result := 'destructor';
-    tkPropertyKeyword: Result := 'property';
-    tkInitializationKeyword: Result := 'initialization';
-    tkFinalizationKeyword: Result := 'finalization';
-    tkExportsKeyword: Result := 'exports';
-    tkLabelKeyword: Result := 'label';
-    tkThreadVarKeyword: Result := 'threadvar';
-    tkPublishedKeyword: Result := 'published';
-    tkPublicKeyword: Result := 'public';
-    tkPrivateKeyword: Result := 'private';
-    tkProtectedKeyword: Result := 'protected';
-    tkVirtualKeyword: Result := 'virtual';
-    tkOverrideKeyword: Result := 'override';
-    tkAbstractKeyword: Result := 'abstract';
-    tkReintroduceKeyword: Result := 'reintroduce';
-    tkOverloadKeyword: Result := 'overload';
-    tkDynamicKeyword: Result := 'dynamic';
-    tkMessageKeyword: Result := 'message';
-    tkStaticKeyword: Result := 'static';
-    tkInlineKeyword: Result := 'inline';
-    tkForwardKeyword: Result := 'forward';
-    tkDeprecatedKeyword: Result := 'deprecated';
-    tkPlatformKeyword: Result := 'platform';
-    tkExperimentalKeyword: Result := 'experimental';
-    tkStdCallKeyword: Result := 'stdcall';
-    tkSafeCallKeyword: Result := 'safecall';
-    tkRegisterKeyword: Result := 'register';
-    tkPascalKeyword: Result := 'pascal';
-    tkFarKeyword: Result := 'far';
-    tkNearKeyword: Result := 'near';
-    tkCppDeclKeyword: Result := 'cppdecl';
-    tkVarArgsKeyword: Result := 'varargs';
-    tkOutKeyword: Result := 'out';
-    tkAbsoluteKeyword: Result := 'absolute';
-    tkAsmKeyword: Result := 'asm';
-    tkAndKeyword: Result := 'and';
-    tkOrKeyword: Result := 'or';
-    tkNotKeyword: Result := 'not';
-    tkXorKeyword: Result := 'xor';
-    tkShlKeyword: Result := 'shl';
-    tkShrKeyword: Result := 'shr';
-    tkDivKeyword: Result := 'div';
-    tkModKeyword: Result := 'mod';
-    tkInKeyword: Result := 'in';
-    tkIsKeyword: Result := 'is';
-    tkAsKeyword: Result := 'as';
-    tkNilKeyword: Result := 'nil';
-    tkRaiseKeyword: Result := 'raise';
-    tkTryKeyword: Result := 'try';
-    tkExceptKeyword: Result := 'except';
-    tkFinallyKeyword: Result := 'finally';
-    tkOnKeyword: Result := 'on';
-    tkInheritedKeyword: Result := 'inherited';
-    tkSelfKeyword: Result := 'self';
-    tkFileKeyword: Result := 'file';
-    tkResourceStringKeyword: Result := 'resourcestring';
-    tkStrictKeyword: Result := 'strict';
-    tkOperatorKeyword: Result := 'operator';
-    tkGenericKeyword: Result := 'generic';
-    tkSpecializeKeyword: Result := 'specialize';
-    tkReferenceKeyword: Result := 'reference';
-    tkPackedKeyword: Result := 'packed';
-    tkContainsKeyword: Result := 'contains';
-    tkRequiresKeyword: Result := 'requires';
-    tkIdentifier: Result := 'identifier';
-    tkStringLiteral: Result := 'string-literal';
-    tkIntegerLiteral: Result := 'integer-literal';
-    tkRealLiteral: Result := 'real-literal';
-    tkCharLiteral: Result := 'char-literal';
-    tkCompilerDirective: Result := 'compiler-directive';
-    tkSemicolon: Result := ';';
-    tkDot: Result := '.';
-    tkDotDot: Result := '..';
-    tkComma: Result := ',';
-    tkColon: Result := ':';
-    tkAssign: Result := ':=';
-    tkPlusAssign: Result := '+=';
-    tkMinusAssign: Result := '-=';
-    tkStarAssign: Result := '*=';
-    tkSlashAssign: Result := '/=';
-    tkLParen: Result := '(';
-    tkRParen: Result := ')';
-    tkLBracket: Result := '[';
-    tkRBracket: Result := ']';
-    tkPlus: Result := '+';
-    tkMinus: Result := '-';
-    tkStar: Result := '*';
-    tkSlash: Result := '/';
-    tkEquals: Result := '=';
-    tkNotEquals: Result := '<>';
-    tkLessThan: Result := '<';
-    tkGreaterThan: Result := '>';
-    tkLessEqual: Result := '<=';
-    tkGreaterEqual: Result := '>=';
-    tkAt: Result := '@';
-    tkCaret: Result := '^';
-    tkEOF: Result := 'end-of-file';
-    tkError: Result := 'error';
-  else
-    Result := 'unknown';
-  end;
+  Result := nextpas.compiler.syntax.lexer.TokenKindName(AKind);
 end;
 
 end.

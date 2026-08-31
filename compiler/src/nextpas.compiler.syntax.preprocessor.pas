@@ -1,0 +1,899 @@
+unit nextpas.compiler.syntax.preprocessor;
+
+{$mode objfpc}{$H+}
+{$modeswitch advancedrecords}
+{$UNITPATH .}
+{$UNITPATH ../../core/src}
+
+interface
+
+uses
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec,
+  np_base_types,
+  nextpas.compiler.syntax.lexer;
+
+type
+  IIncludeResolver = interface
+    function ResolveInclude(const AName: string;
+      const AFromFileId: TCoreId;
+      out APath: string; out AContent: string): Boolean;
+  end;
+
+  TIncludePathVec = specialize TVec<string>;
+
+  TFileIncludeResolver = class(TInterfacedObject, IIncludeResolver)
+  private
+    FAllocator: IAllocator;
+    FSearchPaths: TIncludePathVec;
+    FBaseDir: string;
+  public
+    { Optional AAllocator: session/phase scratch for include search-path TVec. }
+    constructor Create(const ABaseDir: string; AAllocator: IAllocator = nil);
+    destructor Destroy; override;
+    procedure AddSearchPath(const APath: string);
+    function ResolveInclude(const AName: string;
+      const AFromFileId: TCoreId;
+      out APath: string; out AContent: string): Boolean;
+  end;
+
+  TDefineEntry = record
+    Name: string;
+    Value: string;
+    HasValue: Boolean;
+  end;
+
+  TDefineEntryVec = specialize TVec<TDefineEntry>;
+
+  TDefineTable = class
+  private
+    FAllocator: IAllocator;
+    FEntries: TDefineEntryVec;
+    function IndexOf(const AName: string): LongInt;
+  public
+    { Optional AAllocator: session/phase scratch for define entries TVec. }
+    constructor Create(AAllocator: IAllocator = nil);
+    destructor Destroy; override;
+    procedure Define(const AName: string);
+    procedure DefineValue(const AName, AValue: string);
+    procedure Undef(const AName: string);
+    function IsDefined(const AName: string): Boolean;
+    function TryGetValue(const AName: string; out AValue: string): Boolean;
+    function ValueOf(const AName: string): string;
+    procedure Clear;
+    function Count: LongInt;
+    procedure SeedFPCDefines;
+  end;
+
+  TConditionalFrame = record
+    ParentActive: Boolean;
+    AnyBranchTaken: Boolean;
+    CurrentActive: Boolean;
+    SeenElse: Boolean;
+  end;
+
+  TConditionalFrameVec = specialize TVec<TConditionalFrame>;
+  TTokenVec = specialize TVec<TToken>;
+
+  TPreprocessor = class
+  private
+    FDefines: TDefineTable;
+    FOwnsDefines: Boolean;
+    FIncludeResolver: IIncludeResolver;
+    FAllocator: IAllocator;
+    FStack: TConditionalFrameVec;
+    FOutputTokens: TTokenVec;
+    FCurrentFileId: TCoreId;
+    FNextFileId: TCoreId;
+    FEvalExpr: string;
+    FEvalPos: LongInt;
+    function IsActive: Boolean;
+    procedure PushFrame(ACondition: Boolean);
+    procedure HandleElse;
+    procedure HandleElseIf(ACondition: Boolean);
+    procedure HandleEndIf;
+    procedure EmitToken(const AToken: TToken);
+    function ParseDirectiveName(const ALexeme: string;
+      out ADirective, AArg: string): Boolean;
+    function EvalSimpleCondition(const AArg: string): Boolean;
+    function EvalIfExpr(const AExpr: string): Boolean;
+    procedure EvalSkipWS;
+    function EvalPeekChar: Char;
+    function EvalMatchStr(const S: string): Boolean;
+    function EvalParseInt: Int64;
+    function EvalParseIdent: string;
+    function EvalAtom: Int64;
+    function EvalMul: Int64;
+    function EvalAdd: Int64;
+    function EvalCmp: Int64;
+    function EvalAnd: Int64;
+    function EvalOr: Int64;
+    procedure ProcessInclude(const AArg: string);
+  public
+    { Optional AAllocator: session/phase scratch for stack + output token TVecs. }
+    constructor Create(ADefines: TDefineTable; AOwnsDefines: Boolean;
+      AIncludeResolver: IIncludeResolver; AAllocator: IAllocator = nil);
+    destructor Destroy; override;
+    procedure Process(const ALexer: TLexerResult);
+    function ToLexerResult: TLexerResult;
+    function OutputTokenCount: LongInt;
+    function OutputTokenAt(const AIndex: LongInt): TToken;
+  end;
+
+implementation
+
+uses
+  nextpas.core.text.conv, nextpas.core.fs.util;
+
+
+{--- inlined np_preprocessor_tables.inc ---}
+function IsConsumedDirective(const ADir: string): Boolean;
+begin
+  Result := (ADir = 'macro') or (ADir = 'mode') or (ADir = 'modeswitch') or
+    (ADir = 'h') or (ADir = 'r') or (ADir = 'j') or (ADir = 'z') or
+    (ADir = 'rangechecks') or (ADir = 'overflowchecks') or
+    (ADir = 'iochecks') or (ADir = 'objectchecks') or
+    (ADir = 'assertions') or (ADir = 'hints') or (ADir = 'warnings') or
+    (ADir = 'notes') or (ADir = 'align') or (ADir = 'packrecords') or
+    (ADir = 'optimization') or (ADir = 'inline') or (ADir = 'interfaces') or
+    (ADir = 'codepage') or (ADir = 'push') or (ADir = 'pop') or
+    (ADir = 'warn') or (ADir = 'scopedenums') or (ADir = 'writeableconst') or
+    (ADir = 'typedaddress') or (ADir = 'implicitexceptions') or
+    (ADir = 'pointermath') or (ADir = 'goto') or (ADir = 'extendedcompat') or
+    (ADir = 'bitpacking') or (ADir = 'calling') or (ADir = 'varpropsetter') or
+    (ADir = 'coperators') or (ADir = 'fputype') or (ADir = 'safefpuexceptions') or
+    (ADir = 'excessprecision') or (ADir = 'longstrings') or
+    (ADir = 'openstrings') or (ADir = 'varstringchecks') or
+    (ADir = 'typeinfo') or (ADir = 'minenumsize') or (ADir = 'packenum') or
+    (ADir = 'packset') or (ADir = 'codealign') or (ADir = 'maxfpuregisters') or
+    (ADir = 'memory') or (ADir = 'setc') or (ADir = 'apptype') or
+    (ADir = 'pic') or (ADir = 'asmmode');
+end;
+
+constructor TDefineTable.Create(AAllocator: IAllocator);
+begin
+  inherited Create;
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+    FEntries := TDefineEntryVec.Create(0, FAllocator)
+  else
+    FEntries := TDefineEntryVec.Create;
+end;
+
+destructor TDefineTable.Destroy;
+begin
+  FEntries.Free;
+  inherited Destroy;
+end;
+
+function TDefineTable.IndexOf(const AName: string): LongInt;
+var
+  I: LongInt;
+  Norm: string;
+begin
+  Norm := UpperCase(AName);
+  for I := 0 to LongInt(FEntries.Count) - 1 do
+    if FEntries[I].Name = Norm then
+      Exit(I);
+  Result := -1;
+end;
+
+procedure TDefineTable.Define(const AName: string);
+var
+  Idx: LongInt;
+  Entry: TDefineEntry;
+begin
+  if AName = '' then Exit;
+  Idx := IndexOf(AName);
+  if Idx >= 0 then
+  begin
+    Entry := FEntries[Idx];
+    Entry.Value := '';
+    Entry.HasValue := False;
+    FEntries[Idx] := Entry;
+    Exit;
+  end;
+  Entry.Name := UpperCase(AName);
+  Entry.Value := '';
+  Entry.HasValue := False;
+  FEntries.Push(Entry);
+end;
+
+procedure TDefineTable.DefineValue(const AName, AValue: string);
+var
+  Idx: LongInt;
+  Entry: TDefineEntry;
+begin
+  if AName = '' then Exit;
+  Idx := IndexOf(AName);
+  if Idx >= 0 then
+  begin
+    Entry := FEntries[Idx];
+    Entry.Value := AValue;
+    Entry.HasValue := True;
+    FEntries[Idx] := Entry;
+    Exit;
+  end;
+  Entry.Name := UpperCase(AName);
+  Entry.Value := AValue;
+  Entry.HasValue := True;
+  FEntries.Push(Entry);
+end;
+
+procedure TDefineTable.Undef(const AName: string);
+var
+  Idx: LongInt;
+begin
+  Idx := IndexOf(AName);
+  if Idx < 0 then Exit;
+  FEntries.Delete(SizeUInt(Idx));
+end;
+
+function TDefineTable.IsDefined(const AName: string): Boolean;
+begin
+  Result := IndexOf(AName) >= 0;
+end;
+
+function TDefineTable.TryGetValue(const AName: string; out AValue: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  AValue := '';
+  Idx := IndexOf(AName);
+  if (Idx < 0) or (not FEntries[Idx].HasValue) then
+    Exit(False);
+  AValue := FEntries[Idx].Value;
+  Result := True;
+end;
+
+function TDefineTable.ValueOf(const AName: string): string;
+var
+  Idx: LongInt;
+begin
+  Idx := IndexOf(AName);
+  if (Idx >= 0) and FEntries[Idx].HasValue then
+    Result := FEntries[Idx].Value
+  else
+    Result := '';
+end;
+
+procedure TDefineTable.Clear;
+begin
+  FEntries.Clear;
+end;
+
+function TDefineTable.Count: LongInt;
+begin
+  Result := LongInt(FEntries.Count);
+end;
+
+procedure TDefineTable.SeedFPCDefines;
+begin
+  Define('FPC');
+  DefineValue('FPC_VERSION', '3');
+  DefineValue('FPC_RELEASE', '3');
+  DefineValue('FPC_PATCH', '1');
+  DefineValue('FPC_FULLVERSION', '30301');
+  Define('VER3');
+  Define('VER3_3');
+  Define('VER3_3_1');
+  {$ifdef CPUX86_64}
+  Define('CPUX86_64');
+  Define('CPU64');
+  Define('CPUAMD64');
+  {$endif}
+  {$ifdef CPUAARCH64}
+  Define('CPUAARCH64');
+  Define('CPU64');
+  {$endif}
+  {$ifdef LINUX}
+  Define('LINUX');
+  Define('UNIX');
+  {$endif}
+  {$ifdef DARWIN}
+  Define('DARWIN');
+  Define('UNIX');
+  {$endif}
+  {$ifdef MSWINDOWS}
+  Define('MSWINDOWS');
+  Define('WINDOWS');
+  {$endif}
+  {$ifdef ENDIAN_LITTLE}
+  Define('ENDIAN_LITTLE');
+  {$endif}
+  {$ifdef ENDIAN_BIG}
+  Define('ENDIAN_BIG');
+  {$endif}
+  Define('FPC_HAS_TYPE_EXTENDED');
+  Define('FPC_HAS_FEATURE_CLASSES');
+  Define('FPC_HAS_FEATURE_EXCEPTIONS');
+  Define('FPC_HAS_FEATURE_DYNARRAYS');
+  Define('FPC_HAS_FEATURE_ANSISTRINGS');
+  Define('FPC_HAS_FEATURE_WIDESTRINGS');
+  Define('FPC_HAS_FEATURE_VARIANTS');
+  Define('FPC_HAS_FEATURE_RTTI');
+end;
+
+{ TFileIncludeResolver }
+
+constructor TFileIncludeResolver.Create(const ABaseDir: string;
+  AAllocator: IAllocator);
+begin
+  inherited Create;
+  FBaseDir := ABaseDir;
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+    FSearchPaths := TIncludePathVec.Create(0, FAllocator)
+  else
+    FSearchPaths := TIncludePathVec.Create;
+end;
+
+destructor TFileIncludeResolver.Destroy;
+begin
+  FSearchPaths.Free;
+  inherited Destroy;
+end;
+
+procedure TFileIncludeResolver.AddSearchPath(const APath: string);
+begin
+  FSearchPaths.Push(APath);
+end;
+
+function TFileIncludeResolver.ResolveInclude(const AName: string;
+  const AFromFileId: TCoreId;
+  out APath: string; out AContent: string): Boolean;
+var
+  I: LongInt;
+  Candidate: string;
+  F: Text;
+  Line: string;
+begin
+  APath := '';
+  AContent := '';
+  Candidate := FBaseDir + DirectorySeparator + AName;
+  if FsExists(Candidate) then
+  begin
+    APath := Candidate;
+    Assign(F, APath);
+    {$I-} Reset(F); {$I+}
+    if IOResult <> 0 then Exit(False);
+    while not System.EOF(F) do
+    begin
+      ReadLn(F, Line);
+      AContent := AContent + Line + #10;
+    end;
+    Close(F);
+    Exit(True);
+  end;
+  for I := 0 to LongInt(FSearchPaths.Count) - 1 do
+  begin
+    Candidate := FSearchPaths[I] + DirectorySeparator + AName;
+    if FsExists(Candidate) then
+    begin
+      APath := Candidate;
+      Assign(F, APath);
+      {$I-} Reset(F); {$I+}
+      if IOResult <> 0 then Exit(False);
+      while not System.EOF(F) do
+      begin
+        ReadLn(F, Line);
+        AContent := AContent + Line + #10;
+      end;
+      Close(F);
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
+{ TPreprocessor }
+
+constructor TPreprocessor.Create(ADefines: TDefineTable; AOwnsDefines: Boolean;
+  AIncludeResolver: IIncludeResolver; AAllocator: IAllocator);
+begin
+  inherited Create;
+  FDefines := ADefines;
+  FOwnsDefines := AOwnsDefines;
+  FIncludeResolver := AIncludeResolver;
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+  begin
+    FStack := TConditionalFrameVec.Create(0, FAllocator);
+    FOutputTokens := TTokenVec.Create(0, FAllocator);
+  end
+  else
+  begin
+    FStack := TConditionalFrameVec.Create;
+    FOutputTokens := TTokenVec.Create;
+  end;
+  FCurrentFileId := 0;
+  FNextFileId := 1000;
+end;
+
+destructor TPreprocessor.Destroy;
+begin
+  FreeTokenVecNestedTrivia(FOutputTokens);
+  FOutputTokens.Free;
+  FStack.Free;
+  if FOwnsDefines then
+    FDefines.Free;
+  inherited Destroy;
+end;
+
+
+{--- end np_preprocessor_tables.inc ---}
+
+function TPreprocessor.IsActive: Boolean;
+begin
+  if FStack.Count = 0 then
+    Exit(True);
+  Result := FStack[FStack.Count - 1].CurrentActive;
+end;
+
+procedure TPreprocessor.PushFrame(ACondition: Boolean);
+var
+  Frame: TConditionalFrame;
+begin
+  Frame.ParentActive := IsActive;
+  Frame.AnyBranchTaken := Frame.ParentActive and ACondition;
+  Frame.CurrentActive := Frame.ParentActive and ACondition;
+  Frame.SeenElse := False;
+  FStack.Push(Frame);
+end;
+
+procedure TPreprocessor.HandleElse;
+var
+  Frame: TConditionalFrame;
+  Idx: SizeUInt;
+begin
+  if FStack.Count = 0 then Exit;
+  Idx := FStack.Count - 1;
+  Frame := FStack[Idx];
+  if Frame.SeenElse then Exit;
+  Frame.SeenElse := True;
+  Frame.CurrentActive := Frame.ParentActive and (not Frame.AnyBranchTaken);
+  FStack[Idx] := Frame;
+end;
+
+procedure TPreprocessor.HandleElseIf(ACondition: Boolean);
+var
+  Frame: TConditionalFrame;
+  Idx: SizeUInt;
+begin
+  if FStack.Count = 0 then Exit;
+  Idx := FStack.Count - 1;
+  Frame := FStack[Idx];
+  if Frame.SeenElse then Exit;
+  if Frame.ParentActive and ACondition and (not Frame.AnyBranchTaken) then
+  begin
+    Frame.CurrentActive := True;
+    Frame.AnyBranchTaken := True;
+  end
+  else
+    Frame.CurrentActive := False;
+  FStack[Idx] := Frame;
+end;
+
+procedure TPreprocessor.HandleEndIf;
+begin
+  if FStack.Count > 0 then
+    FStack.Resize(FStack.Count - 1);
+end;
+
+procedure TPreprocessor.EmitToken(const AToken: TToken);
+begin
+  { Deep-copy nested trivia; source lexer retains its entry-owned vecs. }
+  FOutputTokens.Push(CloneTokenWithTrivia(AToken, FAllocator));
+end;
+
+function TPreprocessor.ParseDirectiveName(const ALexeme: string;
+  out ADirective, AArg: string): Boolean;
+var
+  Content: string;
+  SpacePos: LongInt;
+begin
+  Result := False;
+  ADirective := '';
+  AArg := '';
+  if Length(ALexeme) < 3 then Exit;
+  if (ALexeme[1] = '{') and (ALexeme[2] = '$') then
+  begin
+    Content := Copy(ALexeme, 3, Length(ALexeme) - 3);
+    if (Content <> '') and (Content[Length(Content)] = '}') then
+      SetLength(Content, Length(Content) - 1);
+  end
+  else if (Length(ALexeme) >= 4) and (ALexeme[1] = '(') and
+    (ALexeme[2] = '*') and (ALexeme[3] = '$') then
+    Content := Copy(ALexeme, 4, Length(ALexeme) - 5)
+  else
+    Exit;
+  Content := Trim(Content);
+  if Content = '' then Exit;
+  SpacePos := Pos(' ', Content);
+  if SpacePos > 0 then
+  begin
+    ADirective := LowerCase(Copy(Content, 1, SpacePos - 1));
+    AArg := Trim(Copy(Content, SpacePos + 1, Length(Content)));
+  end
+  else
+    ADirective := LowerCase(Content);
+  Result := True;
+end;
+
+
+{--- inlined np_preprocessor_eval.inc ---}
+function TPreprocessor.EvalSimpleCondition(const AArg: string): Boolean;
+begin
+  Result := EvalIfExpr(AArg);
+end;
+
+procedure TPreprocessor.EvalSkipWS;
+begin
+  while (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] in [' ', #9]) do
+    Inc(FEvalPos);
+end;
+
+function TPreprocessor.EvalPeekChar: Char;
+begin
+  EvalSkipWS;
+  if FEvalPos <= Length(FEvalExpr) then Result := FEvalExpr[FEvalPos]
+  else Result := #0;
+end;
+
+function TPreprocessor.EvalMatchStr(const S: string): Boolean;
+var
+  I: LongInt;
+begin
+  EvalSkipWS;
+  if FEvalPos + Length(S) - 1 > Length(FEvalExpr) then Exit(False);
+  for I := 1 to Length(S) do
+    if UpCase(FEvalExpr[FEvalPos + I - 1]) <> UpCase(S[I]) then Exit(False);
+  if (FEvalPos + Length(S) <= Length(FEvalExpr)) and
+    (FEvalExpr[FEvalPos + Length(S)] in ['A'..'Z','a'..'z','0'..'9','_']) then
+    Exit(False);
+  Inc(FEvalPos, Length(S));
+  Result := True;
+end;
+
+function TPreprocessor.EvalParseInt: Int64;
+var
+  Start: LongInt;
+  Neg: Boolean;
+begin
+  EvalSkipWS;
+  Neg := False;
+  if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '-') then
+  begin Neg := True; Inc(FEvalPos); EvalSkipWS; end;
+  if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '$') then
+  begin
+    Inc(FEvalPos); Start := FEvalPos;
+    while (FEvalPos <= Length(FEvalExpr)) and
+      (FEvalExpr[FEvalPos] in ['0'..'9','A'..'F','a'..'f']) do Inc(FEvalPos);
+    Result := StrToInt64Def('$' + Copy(FEvalExpr, Start, FEvalPos - Start), 0);
+  end
+  else
+  begin
+    Start := FEvalPos;
+    while (FEvalPos <= Length(FEvalExpr)) and
+      (FEvalExpr[FEvalPos] in ['0'..'9']) do Inc(FEvalPos);
+    Result := StrToInt64Def(Copy(FEvalExpr, Start, FEvalPos - Start), 0);
+  end;
+  if Neg then Result := -Result;
+end;
+
+function TPreprocessor.EvalParseIdent: string;
+var
+  Start: LongInt;
+begin
+  EvalSkipWS;
+  Start := FEvalPos;
+  while (FEvalPos <= Length(FEvalExpr)) and
+    (FEvalExpr[FEvalPos] in ['A'..'Z','a'..'z','0'..'9','_']) do Inc(FEvalPos);
+  Result := Copy(FEvalExpr, Start, FEvalPos - Start);
+end;
+
+function TPreprocessor.EvalAtom: Int64;
+var
+  Id, Inner: string;
+begin
+  EvalSkipWS;
+  if EvalPeekChar = '(' then
+  begin Inc(FEvalPos); Result := EvalOr; EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
+    Exit;
+  end;
+  if EvalMatchStr('not') then Exit(Ord(EvalAtom = 0));
+  if EvalMatchStr('true') then Exit(1);
+  if EvalMatchStr('false') then Exit(0);
+  if (EvalPeekChar in ['0'..'9','$']) or
+    ((EvalPeekChar = '-') and (FEvalPos < Length(FEvalExpr)) and
+     (FEvalExpr[FEvalPos+1] in ['0'..'9','$'])) then
+    Exit(EvalParseInt);
+  Id := EvalParseIdent;
+  if Id = '' then Exit(0);
+  if LowerCase(Id) = 'defined' then
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '(') then Inc(FEvalPos);
+    Inner := EvalParseIdent;
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
+    if FDefines.IsDefined(Inner) then Result := 1 else Result := 0;
+  end
+  else if LowerCase(Id) = 'sizeof' then
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '(') then Inc(FEvalPos);
+    Inner := LowerCase(EvalParseIdent);
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
+    if (Inner = 'pointer') or (Inner = 'ptrint') or (Inner = 'ptruint') or
+      (Inner = 'nativeint') or (Inner = 'nativeuint') then
+      Result := {$ifdef CPU64}8{$else}4{$endif}
+    else if (Inner = 'byte') or (Inner = 'shortint') or (Inner = 'boolean') or
+      (Inner = 'ansichar') or (Inner = 'char') then
+      Result := 1
+    else if (Inner = 'word') or (Inner = 'smallint') or (Inner = 'widechar') then
+      Result := 2
+    else if (Inner = 'dword') or (Inner = 'longint') or (Inner = 'cardinal') or
+      (Inner = 'longword') or (Inner = 'single') then
+      Result := 4
+    else if (Inner = 'qword') or (Inner = 'int64') or (Inner = 'double') or
+      (Inner = 'comp') or (Inner = 'currency') then
+      Result := 8
+    else if (Inner = 'extended') then
+      Result := 10
+    else
+      Result := 0;
+  end
+  else if LowerCase(Id) = 'declared' then
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '(') then Inc(FEvalPos);
+    EvalParseIdent;
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
+    Result := 0;
+  end
+  else
+  begin
+    if FDefines.TryGetValue(Id, Inner) then
+      Result := StrToInt64Def(Inner, Ord(FDefines.IsDefined(Id)))
+    else if FDefines.IsDefined(Id) then
+      Result := 1
+    else
+      Result := 0;
+  end;
+end;
+
+function TPreprocessor.EvalMul: Int64;
+var
+  R: Int64;
+begin
+  Result := EvalAtom;
+  while True do
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '*') then
+    begin Inc(FEvalPos); Result := Result * EvalAtom; end
+    else if EvalMatchStr('div') then
+    begin R := EvalAtom; if R <> 0 then Result := Result div R; end
+    else if EvalMatchStr('mod') then
+    begin R := EvalAtom; if R <> 0 then Result := Result mod R; end
+    else Break;
+  end;
+end;
+
+function TPreprocessor.EvalAdd: Int64;
+begin
+  Result := EvalMul;
+  while True do
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '+') then
+    begin Inc(FEvalPos); Result := Result + EvalMul; end
+    else if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '-') then
+    begin Inc(FEvalPos); Result := Result - EvalMul; end
+    else Break;
+  end;
+end;
+
+function TPreprocessor.EvalCmp: Int64;
+var
+  R: Int64;
+begin
+  Result := EvalAdd;
+  EvalSkipWS;
+  if (FEvalPos < Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '<') and
+    (FEvalExpr[FEvalPos+1] = '>') then
+  begin Inc(FEvalPos, 2); R := EvalAdd; Result := Ord(Result <> R); end
+  else if (FEvalPos < Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '>') and
+    (FEvalExpr[FEvalPos+1] = '=') then
+  begin Inc(FEvalPos, 2); R := EvalAdd; Result := Ord(Result >= R); end
+  else if (FEvalPos < Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '<') and
+    (FEvalExpr[FEvalPos+1] = '=') then
+  begin Inc(FEvalPos, 2); R := EvalAdd; Result := Ord(Result <= R); end
+  else if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '=') then
+  begin Inc(FEvalPos); R := EvalAdd; Result := Ord(Result = R); end
+  else if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '>') then
+  begin Inc(FEvalPos); R := EvalAdd; Result := Ord(Result > R); end
+  else if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '<') then
+  begin Inc(FEvalPos); R := EvalAdd; Result := Ord(Result < R); end;
+end;
+
+function TPreprocessor.EvalAnd: Int64;
+begin
+  Result := EvalCmp;
+  while EvalMatchStr('and') do
+    Result := Ord((Result <> 0) and (EvalCmp <> 0));
+end;
+
+function TPreprocessor.EvalOr: Int64;
+begin
+  Result := EvalAnd;
+  while EvalMatchStr('or') do
+    Result := Ord((Result <> 0) or (EvalAnd <> 0));
+end;
+
+function TPreprocessor.EvalIfExpr(const AExpr: string): Boolean;
+begin
+  FEvalExpr := AExpr;
+  FEvalPos := 1;
+  Result := EvalOr <> 0;
+end;
+
+{--- end np_preprocessor_eval.inc ---}
+
+
+procedure TPreprocessor.ProcessInclude(const AArg: string);
+var
+  IncName, Path, Content: string;
+  IncLexer: TLexerResult;
+  IncFileId: TCoreId;
+  I: LongInt;
+  Tok: TToken;
+  Dir, DirArg: string;
+begin
+  IncName := Trim(AArg);
+  if (Length(IncName) >= 2) and (IncName[1] = '''') and
+    (IncName[Length(IncName)] = '''') then
+    IncName := Copy(IncName, 2, Length(IncName) - 2);
+  if IncName = '' then Exit;
+  if FIncludeResolver = nil then Exit;
+  if not FIncludeResolver.ResolveInclude(IncName, FCurrentFileId, Path, Content) then
+    Exit;
+  Inc(FNextFileId);
+  IncFileId := FNextFileId;
+  IncLexer := TLexerResult.Create(Content, nil, IncFileId);
+  for I := 0 to IncLexer.TokenCount - 1 do
+  begin
+    Tok := IncLexer.TokenAt(I);
+    if Tok.Kind = tkEOF then
+      Continue;
+    if Tok.Kind = tkCompilerDirective then
+    begin
+      if not ParseDirectiveName(Tok.Lexeme, Dir, DirArg) then
+      begin
+        if IsActive then EmitToken(Tok);
+        Continue;
+      end;
+      if Dir = 'ifdef' then PushFrame(EvalSimpleCondition(DirArg))
+      else if Dir = 'ifndef' then PushFrame(not EvalSimpleCondition(DirArg))
+      else if Dir = 'if' then PushFrame(EvalIfExpr(DirArg))
+      else if Dir = 'else' then HandleElse
+      else if Dir = 'elseif' then HandleElseIf(EvalIfExpr(DirArg))
+      else if (Dir = 'endif') or (Dir = 'ifend') then HandleEndIf
+      else if Dir = 'define' then begin if IsActive then FDefines.Define(DirArg); end
+      else if Dir = 'undef' then begin if IsActive then FDefines.Undef(DirArg); end
+      else if (Dir = 'i') or (Dir = 'include') then begin if IsActive then ProcessInclude(DirArg); end
+      else if not IsConsumedDirective(Dir) then
+      begin if IsActive then EmitToken(Tok); end;
+    end
+    else
+    begin
+      if IsActive then
+        EmitToken(Tok);
+    end;
+  end;
+  IncLexer.Free;
+end;
+
+procedure TPreprocessor.Process(const ALexer: TLexerResult);
+var
+  I: LongInt;
+  Tok: TToken;
+  Dir, Arg: string;
+begin
+  FOutputTokens.Clear;
+  FStack.Clear;
+  if ALexer.TokenCount > 0 then
+  begin
+    { Pre-size capacity only. Ensure() raises Count and inserts empty tokens. }
+    FOutputTokens.EnsureCapacity(SizeUInt(ALexer.TokenCount));
+    FCurrentFileId := ALexer.TokenAt(0).FileId;
+  end;
+  for I := 0 to ALexer.TokenCount - 1 do
+  begin
+    Tok := ALexer.TokenAt(I);
+    if Tok.Kind = tkCompilerDirective then
+    begin
+      if not ParseDirectiveName(Tok.Lexeme, Dir, Arg) then
+      begin
+        if IsActive then
+          EmitToken(Tok);
+        Continue;
+      end;
+      if Dir = 'ifdef' then
+        PushFrame(EvalSimpleCondition(Arg))
+      else if Dir = 'ifndef' then
+        PushFrame(not EvalSimpleCondition(Arg))
+      else if Dir = 'if' then
+        PushFrame(EvalIfExpr(Arg))
+      else if Dir = 'else' then
+        HandleElse
+      else if Dir = 'elseif' then
+        HandleElseIf(EvalIfExpr(Arg))
+      else if (Dir = 'endif') or (Dir = 'ifend') then
+        HandleEndIf
+      else if Dir = 'define' then
+      begin
+        if IsActive then
+          FDefines.Define(Arg);
+      end
+      else if Dir = 'undef' then
+      begin
+        if IsActive then
+          FDefines.Undef(Arg);
+      end
+      else if (Dir = 'i') or (Dir = 'include') then
+      begin
+        if IsActive then
+          ProcessInclude(Arg);
+      end
+      else if IsConsumedDirective(Dir) then
+      begin
+      end
+      else
+      begin
+        if IsActive then
+          EmitToken(Tok);
+      end;
+    end
+    else
+    begin
+      if IsActive then
+        EmitToken(Tok);
+    end;
+  end;
+end;
+
+function TPreprocessor.ToLexerResult: TLexerResult;
+var
+  TokenArr: array of TToken;
+  I: LongInt;
+  N: LongInt;
+begin
+  N := LongInt(FOutputTokens.Count);
+  SetLength(TokenArr, N);
+  for I := 0 to N - 1 do
+    TokenArr[I] := FOutputTokens[I];
+  Result := TLexerResult.CreateFromTokens(TokenArr, N);
+end;
+
+function TPreprocessor.OutputTokenCount: LongInt;
+begin
+  Result := LongInt(FOutputTokens.Count);
+end;
+
+function TPreprocessor.OutputTokenAt(const AIndex: LongInt): TToken;
+begin
+  if (AIndex >= 0) and (AIndex < LongInt(FOutputTokens.Count)) then
+    Result := FOutputTokens[SizeUInt(AIndex)]
+  else
+  begin
+    FillChar(Result, SizeOf(Result), 0);
+    Result.Kind := tkEOF;
+  end;
+end;
+
+end.

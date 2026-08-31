@@ -67,6 +67,9 @@ type
   TEmitStrCompareOperandFn = function(const Ctx: Pointer;
     const ANode: TGreenNode; AAllowOwned: Boolean;
     out ABlob: string): Boolean;
+  TTypeMetaIsInterfaceFn = function(const Ctx: Pointer; const ATypeName: string): Boolean;
+  TTypeMetaInterfacesFn = function(const Ctx: Pointer; const ATypeName: string): string;
+  TTypeMetaFieldIndexFn = function(const Ctx: Pointer; const ATypeName, AFieldName: string): Int64;
 
   { HIR 降级上下文 }
   TSemaHirLoweringContext = record
@@ -106,6 +109,9 @@ type
     EncodeRuntimeIntExprFold: TEncodeRuntimeIntExprFoldFn;
     CanEmitStrCompareOperand: TCanEmitStrCompareOperandFn;
     EmitStrCompareOperand: TEmitStrCompareOperandFn;
+    TypeMetaIsInterface: TTypeMetaIsInterfaceFn;
+    TypeMetaInterfaces: TTypeMetaInterfacesFn;
+    TypeMetaFieldIndex: TTypeMetaFieldIndexFn;
   end;
 
 { 标签发射 }
