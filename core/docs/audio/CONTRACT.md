@@ -326,7 +326,7 @@ make hygiene && git diff --check
 ## 8. 门禁与晋升
 
 - `source-contract`：`check_source_contract.sh` 36 文件 `无ffi/vendor`（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收） + `17 GUID frozen (unique; 15 realtime domain)` + `TAudioEncodeOptions before IAudioDecoder` + `实时纪律 + two-phase/EnsureScratch/snapshot mixing - lock free/PanLawGains` + 9 域文件存在性（含 sfx canonical + spatial/event/bank/resource）
-- `focused-runtime`：`16门 223 tests` 全绿（含 deprecated test_game 兼容门） + `HEAPTRC` 零泄漏 + `hygiene` 绿（当前 truth level，`bench 8项 -O2`）
+- `focused-runtime`：`16门 223 tests` 全绿（含 deprecated test_game 兼容门） + `HEAPTRC` 零泄漏 + `hygiene` 绿（当前 truth level，`bench 10项 -O2`）
 - 禁止以 `focused-runtime` 冒充 `ci-matrix`；跨 host 未证明前不晋升。
 
 ---

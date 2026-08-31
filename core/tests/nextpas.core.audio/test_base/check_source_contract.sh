@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# audio source-contract gate — current 36 files (see loop below), ideal 45 (flac/mp3/vorbis + studio/playlist etc by music888 absorption). Keep loop in sync with DESIGN.md §10 and README gate comment.
+# audio source-contract gate — current 38 files (see loop below), ideal 45 (flac/mp3/vorbis + studio/playlist etc by music888 absorption). Keep loop in sync with DESIGN.md §10 and README gate comment.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SRC="$ROOT/core/src"
@@ -43,7 +43,7 @@ for f in \
   "$SRC/nextpas.core.audio.resource.intf.pas" \
   "$SRC/nextpas.core.audio.resource.pas" \
   "$SRC/nextpas.core.audio.pas"; do if [ ! -f "$f" ]; then echo "[FAIL] missing $f"; fail=1; continue; fi; check_no_ffi "$f"; echo "[OK] no ffi/vendor in $(basename "$f")"; done
-# loop: 36 files now (26 base + sfx/spatial/event/bank/resource), ideal 45 — delta reserved for flac/mp3/vorbis/studio/playlist (9 files 预留)
+# loop: 38 files now (26 base + sfx/spatial/event/bank/resource), ideal 45 — delta reserved for flac/mp3/vorbis/studio/playlist
 if ! grep -q "实时路径仅调 FillRealtime" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] missing realtime comment"; fail=1; else echo "[OK] realtime discipline comment present"; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000010" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IAudioSource GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000011" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IRealtimeAudioSource GUID missing"; fail=1; fi
@@ -77,7 +77,7 @@ if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000051" "$SRC/nextpas.core.audio.spa
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000052" "$SRC/nextpas.core.audio.event.intf.pas"; then echo "[FAIL] IAudioEventSystem GUID 0052 missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000053" "$SRC/nextpas.core.audio.bank.intf.pas"; then echo "[FAIL] IAudioBank GUID 0053 missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000054" "$SRC/nextpas.core.audio.resource.intf.pas"; then echo "[FAIL] IAudioResourceManager GUID 0054 missing"; fail=1; fi
-echo "[OK] device+graph+sfx+game+timeline+spatial+event+bank+resource domains present (canonical sfx 0050 + spatial 0051 + event 0052 + bank 0053 + resource 0054) — 17 GUID frozen (unique; 15 realtime domain)"
+echo "[OK] device+graph+sfx+game+timeline+spatial+event+bank+resource domains present (canonical sfx 0050 + spatial 0051 + event 0052 + bank 0053 + resource 0054) — 15 GUID frozen"
 if ! ls "$SRC"/nextpas.core.audio.bank.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] bank.intf missing (bank 0053)"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.bank.pas 1>/dev/null 2>&1; then echo "[FAIL] bank.pas missing (bank)"; fail=1; fi
 if ! ls "$SRC"/nextpas.core.audio.resource.intf.pas 1>/dev/null 2>&1; then echo "[FAIL] resource.intf missing (resource 0054)"; fail=1; fi

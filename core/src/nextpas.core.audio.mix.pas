@@ -34,13 +34,11 @@ var
   GMixScratch: TBytes;
 
 procedure EnsureScratch(ANeeded: Integer); inline;
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(GMixScratch) >= ANeeded then Exit;
-  Cap := Length(GMixScratch);
-  if Cap < 256 then Cap := 256;
-  while Cap < ANeeded do Cap := Cap * 2;
-  SetLength(GMixScratch, Cap);
+  LCap := Length(GMixScratch);
+  AudioEnsureCapacity(LCap, ANeeded, 256);
+  if Length(GMixScratch) <> LCap then SetLength(GMixScratch, LCap);
 end;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);

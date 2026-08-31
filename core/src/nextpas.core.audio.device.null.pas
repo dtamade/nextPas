@@ -6,7 +6,6 @@ interface
 
 uses
   SysUtils,
-  Classes,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -217,11 +216,8 @@ begin
   if Length(FScratch) < LNeeded then
   begin
     LCap := Length(FScratch);
-    if LCap < 256 then
-      LCap := 256;
-    while LCap < LNeeded do
-      LCap := LCap * 2;
-    SetLength(FScratch, LCap);
+    AudioEnsureCapacity(LCap, LNeeded, 256);
+    if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
   end;
   // FScratch geometric reuse — zero alloc steady state: slice LNeeded via Copy semantics but backing reused
   LBuf.Data := Copy(FScratch, 0, LNeeded);

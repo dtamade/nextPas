@@ -197,17 +197,19 @@ begin
 end;
 
 procedure TAudioEventSystemImpl.EnsureEventCapacity(ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FEvents) >= ANeeded then Exit;
-  Cap := Length(FEvents); if Cap<4 then Cap:=4; while Cap<ANeeded do Cap:=Cap*2; SetLength(FEvents, Cap);
+  LCap := Length(FEvents);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FEvents) <> LCap then SetLength(FEvents, LCap);
 end;
 
 procedure TAudioEventSystemImpl.EnsureInstanceCapacity(ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FInstances) >= ANeeded then Exit;
-  Cap := Length(FInstances); if Cap<8 then Cap:=8; while Cap<ANeeded do Cap:=Cap*2; SetLength(FInstances, Cap);
+  LCap := Length(FInstances);
+  AudioEnsureCapacity(LCap, ANeeded, 8);
+  if Length(FInstances) <> LCap then SetLength(FInstances, LCap);
 end;
 
 function TAudioEventSystemImpl.FindEvent(AId: TAudioEventId): Integer;
@@ -233,18 +235,11 @@ begin
 end;
 
 procedure TAudioEventSystemImpl.EnsureScratch(ANeeded: Integer);
-var
-  LCap: Integer;
+var LCap: Integer;
 begin
-  if Length(FScratch) < ANeeded then
-  begin
-    LCap := Length(FScratch);
-    if LCap < 256 then
-      LCap := 256;
-    while LCap < ANeeded do
-      LCap := LCap * 2;
-    SetLength(FScratch, LCap);
-  end;
+  LCap := Length(FScratch);
+  AudioEnsureCapacity(LCap, ANeeded, 256);
+  if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
 end;
 
 function TAudioEventSystemImpl.GetFormat: TAudioFormat; begin Result := FFormat; end;

@@ -5,7 +5,7 @@ unit nextpas.core.audio.sfx;
 interface
 
 uses
-  SysUtils, Classes, Math,
+  SysUtils, Math,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -265,23 +265,19 @@ begin
 end;
 
 procedure TSfxAudio.EnsureSfxCapacity(ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FSfx) >= ANeeded then Exit;
-  Cap := Length(FSfx);
-  if Cap < 4 then Cap := 4;
-  while Cap < ANeeded do Cap := Cap * 2;
-  SetLength(FSfx, Cap);
+  LCap := Length(FSfx);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSfx) <> LCap then SetLength(FSfx, LCap);
 end;
 
 procedure TSfxAudio.EnsureVoiceCapacity(ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FVoices) >= ANeeded then Exit;
-  Cap := Length(FVoices);
-  if Cap < 8 then Cap := 8;
-  while Cap < ANeeded do Cap := Cap * 2;
-  SetLength(FVoices, Cap);
+  LCap := Length(FVoices);
+  AudioEnsureCapacity(LCap, ANeeded, 8);
+  if Length(FVoices) <> LCap then SetLength(FVoices, LCap);
 end;
 
 function TSfxAudio.Load(const ABuffer: TAudioBuffer): TSfxId;

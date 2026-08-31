@@ -211,14 +211,11 @@ begin
 end;
 
 procedure TAudioResourceManagerImpl.EnsureCapacityLocked(ANeeded: Integer);
-var
-  Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FItems) >= ANeeded then Exit;
-  Cap := Length(FItems);
-  if Cap < 4 then Cap := 4;
-  while Cap < ANeeded do Cap := Cap * 2;
-  SetLength(FItems, Cap);
+  LCap := Length(FItems);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FItems) <> LCap then SetLength(FItems, LCap);
 end;
 
 procedure TAudioResourceManagerImpl.SetState(AIndex: Integer; AState: TAudioResourceState; const ABuffer: TAudioBuffer; const ATags: TAudioTags);
@@ -273,8 +270,11 @@ var
   Idx, FreeIdx: Integer;
   I: Integer;
   LThread: TResourceLoadThread;
+  LOldThread: TThread;
   LCapNeeded: Integer;
 begin
+  LOldThread := nil;
+  LThread := nil;
   if APath = '' then
     raise EInvalidArgument.Create('AsyncLoad: empty path'); // EInvalidArgument is intentional for programming error, not EAudioError category
   // Deduplication: Bank协同 — 同路径复用已加载或加载中资源
@@ -286,25 +286,23 @@ begin
       // If previously failed, allow retry by releasing and reloading
       if FItems[Idx].State = arsFailed then
       begin
-        // reset to loading for retry
+        // reset to loading for retry — collect old thread outside lock to avoid WaitFor deadlock
         FItems[Idx].State := arsLoading;
         FItems[Idx].Buffer := Default(TAudioBuffer);
         FItems[Idx].Tags := Default(TAudioTags);
-        // restart thread
-        if Assigned(FItems[Idx].Thread) then
-        begin
-          try FItems[Idx].Thread.WaitFor; FItems[Idx].Thread.Free; except end;
-          FItems[Idx].Thread := nil;
-        end;
+        LOldThread := FItems[Idx].Thread;
+        FItems[Idx].Thread := nil;
         LThread := TResourceLoadThread.Create(Self, FItems[Idx].Id, APath);
         FItems[Idx].Thread := LThread;
         Result := FItems[Idx].Id;
-        LThread.Start;
+        // Start and WaitFor deferred until after lock (see below)
+      end else
+      begin
+        Result := FItems[Idx].Id;
         Exit;
       end;
-      Result := FItems[Idx].Id;
-      Exit;
-    end;
+    end else
+    begin
     // Allocate slot (geometric growth, no alloc inside critical section beyond SetLength)
     FreeIdx := -1;
     for I := 0 to High(FItems) do
@@ -331,10 +329,14 @@ begin
     FItems[FreeIdx].Thread := nil;
     LThread := TResourceLoadThread.Create(Self, Result, APath);
     FItems[FreeIdx].Thread := LThread;
+    end;
   finally
     FLock.Release;
   end;
-  LThread.Start;
+  if Assigned(LOldThread) then
+    try LOldThread.WaitFor; LOldThread.Free; except end;
+  if Assigned(LThread) then
+    LThread.Start;
 end;
 
 function TAudioResourceManagerImpl.TryGetBuffer(AId: TAudioResourceId; out ABuffer: TAudioBuffer): Boolean;
