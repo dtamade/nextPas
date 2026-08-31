@@ -3,6 +3,7 @@
 **参考源码**：`~/projects/libgit2`（浅克隆，仅作只读参考）
 **用途**：为 `nextpas.core.git.native.*` 的后续切片提供格式与算法对照。
 **最后更新**：2026-08-29
+**版本**: 2.0（与 `CONTRACT.md` 版本体系对齐）
 
 ## 借鉴纪律
 
@@ -13,15 +14,15 @@
 
 ## 已完成切片 ↔ 参考位置
 
-| git.native 单元 | libgit2 对照 | 备注 |
+| native 子模块 | libgit2 参考位置 | 备注 |
 |---|---|---|
 | native.pack（idx v2 解析） | `src/libgit2/pack.c`（`pack_index_find` 等） | 大偏移表/CRC 表布局对照 |
-| native.pack（delta 应用） | `src/libgit2/delta.c:540 git_delta_apply` | copy/insert 指令边界条件可逐条核对 |
+| native.pack（delta 应用） | `src/libgit2/delta.c`（`git_delta_apply`） | copy/insert 指令边界条件可逐条核对 |
 | native.refs（packed-refs） | `src/libgit2/refs/packed_backend.c` | peeled 行、排序假设 |
 | native.objmodel（commit/tree） | `src/libgit2/commit.c` / `tree.c` 的 parse_raw 系列 | 头部续行（gpgsig）处理 |
-| native.write（tree 排序） | `tree.c:64 entry_sort_cmp` + `util/fs_path.c:907` | tie point 目录视作 `name+'/'` |
-| native.write（mode 渲染） | `tree.c` write_tree 的 `%o` 输出 | 无前导零：目录是 `40000` 不是 `040000` |
-| native.write（签名行） | `signature.c:425 git_signature__writebuf` | `%u ±HHMM`，负偏移取绝对值加符号位 |
+| native.write（tree 排序） | `tree.c`（`entry_sort_cmp`）+ `util/fs_path.c` | tie point 目录视作 `name+'/'` |
+| native.write（mode 渲染） | `tree.c`（`write_tree`, `%o` 格式化） | 无前导零：目录是 `40000` 不是 `040000` |
+| native.write（签名行） | `signature.c`（`git_signature__writebuf`） | `%u ±HHMM`，负偏移取绝对值加符号位 |
 | native.write（blob 写入） | `object_api`/odb 写侧（`git_hash_object` 语义） | `"<kind> <size>\0"` 头 + SHA-1；空内容与含 NUL 二进制都要对 `git hash-object` 黄金对照 |
 | objmodel/write（tag 解析+构造） | `src/libgit2/tag.c: parse_tag_buffer` / `mktag` fsck 语义 | object/type/tag 三头必需且顺序固定，tagger 可缺省；嵌套 tag（type tag）合法；消息体含内嵌 PGP 签名无需特殊头处理；对象末字节必须是 LF——builder 拒绝非规范消息 |
 | native.index（DIRC 解析+序列化） | `read-cache.c: create_from_disk` / `expand_name_field` / `ce_write_entry` | v2/v3 定长头+padding 公式 `(fixed+len+8)&~7`（至少 1 个 NUL）；v4 前缀压缩用 pack OFS 同款偏移 varint 且无 padding、但保留 v3 扩展 flags 字——漏读会整段错位；namelen 字段 ≥4095 时钳制为 \$FFF（掩码会静默截断）；小写强制扩展（link/sdir）必须拒绝而非跳过；序列化不生成任何扩展区（git 会按需重建缓存） |

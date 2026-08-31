@@ -765,7 +765,7 @@ begin
   EmitInstr(Instr);
 end;
 
-procedure THIRBuilder.Build;
+function THIRBuilder.Build: Boolean;
 var
   I: LongInt;
   Node: TTypedHirNode;
@@ -775,6 +775,7 @@ var
   FwdColon, FwdColon2: LongInt;
   LOrder: array of string;
 begin
+  Result := True;
   FFwdFuncNames.Clear;
   FFwdFuncRetTypes.Clear;
   for I := 0 to FSemaModel.TypedHirNodeCount - 1 do
@@ -838,12 +839,26 @@ begin
     try
       ProcessNode(Node);
     except
-      WriteLn(StdErr, '[hir] AV/exception at node=', IntToStr(I),
-        ' kind=', Node.Kind,
-        ' name=', Node.DisplayName,
-        ' op=', Copy(Node.Operand, 1, 100));
-      Flush(StdErr);
-      raise;
+      on E: Exception do
+      begin
+        WriteLn(StdErr, '[hir] AV/exception at node=', IntToStr(I),
+          ' kind=', Node.Kind,
+          ' name=', Node.DisplayName,
+          ' op=', Copy(Node.Operand, 1, 100),
+          ' msg=', E.Message);
+        Flush(StdErr);
+        if FDiagnosticsSink <> nil then
+          FDiagnosticsSink.EmitError('hir.build-av', 'hir',
+            FCurrentSourceFileId, 0,
+            'HIR builder internal error at node ' + IntToStr(I) +
+            ' kind=' + Node.Kind + ' name=' + Node.DisplayName +
+            ' op=' + Copy(Node.Operand, 1, 100) + ': ' + E.Message)
+        else
+          EmitHirDiagnostic('hir.build-av',
+            'AV at node ' + IntToStr(I) + ' kind=' + Node.Kind + ': ' + E.Message);
+        Result := False;
+        Exit;
+      end;
     end;
   end;
   WriteLn(StdErr, '[hir] Build process nodes done');

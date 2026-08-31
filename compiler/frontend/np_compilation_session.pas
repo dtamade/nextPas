@@ -2,15 +2,13 @@ unit np_compilation_session;
 
 {$mode objfpc}{$H+}
 {$UNITPATH .}
-{$UNITPATH ../backend}
 {$UNITPATH ../diagnostics}
-{$UNITPATH ../ir}
-{$UNITPATH ../lower}
-{$UNITPATH ../sema}
 {$UNITPATH ../syntax}
 {$UNITPATH ../toolchain}
 {$UNITPATH ../targets}
 {$UNITPATH ../../core/src}
+{ frontend layer: no direct sema/ir/lower/backend UNITPATH — pipeline phases
+  via frontend intf (np_lower_query / np_backend_view_intf) }
 
 interface
 

@@ -16,8 +16,10 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.text.strings,
   nextpas.core.collections.vec,
+  nextpas.core.collections.hashmap,
   np_lower_query;
 
 type
@@ -28,9 +30,12 @@ type
   PQueryEntry = ^TQueryEntry;
   TQueryEntryVec = specialize TVec<TQueryEntry>;
 
+  TQueryIndexMap = specialize THashMap<string, SizeUInt>;
+
   TQueryDatabase = class
   private
     FEntries: TQueryEntryVec;
+    FIndex: TQueryIndexMap;
   public
     constructor Create;
     destructor Destroy; override;
@@ -56,6 +61,7 @@ constructor TQueryDatabase.Create;
 begin
   inherited Create;
   FEntries := TQueryEntryVec.Create;
+  FIndex := TQueryIndexMap.Create;
 end;
 
 destructor TQueryDatabase.Destroy;
@@ -75,42 +81,48 @@ begin
   end;
   FEntries.Free;
   FEntries := nil;
+  if FIndex <> nil then
+  begin
+    FIndex.Free;
+    FIndex := nil;
+  end;
   inherited Destroy;
 end;
 
 function TQueryDatabase.Get(const AKey: string; ADefault: TObject): TObject;
 var
-  I: LongInt;
+  LIdx: SizeUInt;
 begin
   if FEntries = nil then
     Exit(ADefault);
-  for I := 0 to LongInt(FEntries.Count) - 1 do
-    if FEntries[SizeUInt(I)].Key = AKey then
-      Exit(FEntries[SizeUInt(I)].Value);
+  if (FIndex <> nil) and FIndex.TryGetValue(AKey, LIdx) and (LIdx < FEntries.Count) then
+    Exit(FEntries[LIdx].Value);
   Result := ADefault;
 end;
 
 procedure TQueryDatabase.Store(const AKey: string; AValue: TObject);
 var
-  I: LongInt;
+  LIdx: SizeUInt;
   Entry: TQueryEntry;
   EntryPtr: PQueryEntry;
 begin
   if FEntries = nil then
     FEntries := TQueryEntryVec.Create;
-  for I := 0 to LongInt(FEntries.Count) - 1 do
-    if FEntries[SizeUInt(I)].Key = AKey then
-    begin
-      EntryPtr := FEntries.GetPtr(SizeUInt(I));
-      if (EntryPtr^.Value <> nil) and (EntryPtr^.Value <> AValue) then
-        EntryPtr^.Value.Free;
-      EntryPtr^.Value := AValue;
-      Exit;
-    end;
+  if FIndex = nil then
+    FIndex := TQueryIndexMap.Create;
+  if FIndex.TryGetValue(AKey, LIdx) and (LIdx < FEntries.Count) then
+  begin
+    EntryPtr := FEntries.GetPtr(LIdx);
+    if (EntryPtr^.Value <> nil) and (EntryPtr^.Value <> AValue) then
+      EntryPtr^.Value.Free;
+    EntryPtr^.Value := AValue;
+    Exit;
+  end;
   Entry := Default(TQueryEntry);
   Entry.Key := AKey;
   Entry.Value := AValue;
   FEntries.Push(Entry);
+  FIndex.Put(AKey, FEntries.Count - 1);
 end;
 
 procedure TQueryDatabase.InvalidatePrefix(const APrefix: string);

@@ -84,7 +84,6 @@ completion claim.
 | `xml` | L2 | XML format | `nextpas.core.xml` | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML format | `nextpas.core.yaml` | L0-L1 | focused-runtime |
 | `zlib` | L2 | zlib wrapper (RFC1950) + raw deflate (RFC1951) | `nextpas.core.zlib` | L0-L1, platform.dl, compress.base 单源复用 | focused-runtime — base/intf + zlib888 Inflate/Deflate (fixed Huffman + Stored 单块大块 Move, 32K 窗, hash-chain, `GFixedReady LongInt+GFixedLock`/`GOnceDone LongInt+GOnceLock` 双检锁, 302+ P6 的 111/634) + pure 薄兼容（`unit nextpas.core.zlib.pure; uses zlib888` re-export） + ffi (libz.so lazy `InterlockedCompareExchange` + `TRTLCriticalSection`) + facade ZlibAuto (zlib888↔ffi 降级) + Try* 豪华 (`TryEncode/WithError/WithLevel*4` + `TryDecode/WithError/WithLimit*4` 于 intf/zlib888/ffi/门面三处一致), `ZLIB_MAX_DECOMPRESS_BYTES=32MiB` 单源（`compress.base GZIP_MAX_DECOMPRESS_BYTES` 别名）, `ZlibAdlerUpdate` NMAX 分块, `TZlibLevel` 委派 `compress.base LevelToZlib` 单源（零表拷贝）, `TTestSuite` 30 用例 adler/empty/store/bomb raw/wrapped level 0-3 32MiB limit FFI vs zlib888 cross, `bench_zlib` 1MiB MB/s (none 865+ via Stored 单次 Move 超 C) |
-| `sevenz` | L2 | 7z container (aes/bcj/lzma/fs) | `nextpas.core.sevenz` | L0-L1 plus io/fs/compress/checksum/crypto/hash (L2→L2 exempt via platform lstat, like zip/audio) | focused-runtime — writer/reader 166 用例，limits 单源 13 阈值，LZMA 纯 Pascal + ffi (liblzma.so.5) 双后端，BCJ 全家 8 + Delta 零拷 |
 
 ## Next Architecture Routes
 

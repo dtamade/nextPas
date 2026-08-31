@@ -36,6 +36,12 @@ type
     FChangedFiles: TChangedFileVec;
     function FindSnapshotIndex(const APath: string): LongInt;
     function GetFileSnapshot(const APath: string): TFileSnapshot;
+    function MatchesExtension(const AFileName: string;
+      const AExtensions: TStringArray): Boolean;
+    procedure HandleScannedFile(const AFilePath: string;
+      AInitialSnapshotCount: LongInt);
+    procedure ScanDirectoryRecursive(const ADir: string;
+      const AExtensions: TStringArray; AInitialSnapshotCount: LongInt);
   public
     constructor Create;
     destructor Destroy; override;
@@ -122,61 +128,93 @@ begin
       FSnapshots.DeleteSwap(SizeUInt(I));
 end;
 
-procedure TFileChangeDetector.TakeSnapshot(const ARootPath: string; const AExtensions: TStringArray);
+function TFileChangeDetector.MatchesExtension(const AFileName: string;
+  const AExtensions: TStringArray): Boolean;
 var
-  SR: TSearchRec;
   Ext: string;
-  FilePath: string;
-  Snapshot: TFileSnapshot;
-  Idx: LongInt;
-  IsMatch: Boolean;
   I: LongInt;
 begin
-  FChangedFiles.Clear;
+  if Length(AExtensions) = 0 then
+    Exit(True);
+  Ext := ExtractFileExt(AFileName);
+  for I := 0 to High(AExtensions) do
+    if SameText(Ext, AExtensions[I]) then
+      Exit(True);
+  Result := False;
+end;
 
-  { Scan directory for matching files }
-  if FindFirst(ARootPath + '/*', faAnyFile, SR) = 0 then
+procedure TFileChangeDetector.HandleScannedFile(const AFilePath: string;
+  AInitialSnapshotCount: LongInt);
+var
+  Snapshot: TFileSnapshot;
+  Idx: LongInt;
+begin
+  Snapshot := GetFileSnapshot(AFilePath);
+  Idx := FindSnapshotIndex(AFilePath);
+  if Idx >= 0 then
   begin
+    if (FSnapshots[Idx].ModifiedTime <> Snapshot.ModifiedTime) or
+       (FSnapshots[Idx].FileSize <> Snapshot.FileSize) then
+    begin
+      FChangedFiles.Push(AFilePath);
+      FSnapshots[Idx] := Snapshot;
+    end;
+  end
+  else
+  begin
+    if AInitialSnapshotCount > 0 then
+      FChangedFiles.Push(AFilePath);
+    FSnapshots.Push(Snapshot);
+  end;
+end;
+
+procedure TFileChangeDetector.ScanDirectoryRecursive(const ADir: string;
+  const AExtensions: TStringArray; AInitialSnapshotCount: LongInt);
+var
+  SR: TSearchRec;
+  FullPath: string;
+begin
+  if FindFirst(ADir + '/*', faAnyFile, SR) <> 0 then
+    Exit;
+  try
     repeat
       if (SR.Name = '.') or (SR.Name = '..') then
         Continue;
-
-      FilePath := ARootPath + '/' + SR.Name;
-
-      { Check extension match }
-      if Length(AExtensions) > 0 then
-      begin
-        Ext := ExtractFileExt(SR.Name);
-        IsMatch := False;
-        for I := 0 to High(AExtensions) do
-          if SameText(Ext, AExtensions[I]) then
-          begin
-            IsMatch := True;
-            Break;
-          end;
-        if not IsMatch then
-          Continue;
-      end;
-
-      { Get current file info }
-      Snapshot := GetFileSnapshot(FilePath);
-
-      { Check if file was previously tracked }
-      Idx := FindSnapshotIndex(FilePath);
-      if Idx >= 0 then
-      begin
-        { Compare mtime and size }
-        if (FSnapshots[Idx].ModifiedTime <> Snapshot.ModifiedTime) or
-           (FSnapshots[Idx].FileSize <> Snapshot.FileSize) then
-        begin
-          FChangedFiles.Push(FilePath);
-          FSnapshots[Idx] := Snapshot;
-        end;
-      end
+      FullPath := ADir + '/' + SR.Name;
+      if (SR.Attr and faDirectory) <> 0 then
+        ScanDirectoryRecursive(FullPath, AExtensions, AInitialSnapshotCount)
       else
-        FSnapshots.Push(Snapshot);
+      begin
+        if not MatchesExtension(SR.Name, AExtensions) then
+          Continue;
+        HandleScannedFile(FullPath, AInitialSnapshotCount);
+      end;
     until FindNext(SR) <> 0;
+  finally
     FindClose(SR);
+  end;
+end;
+
+procedure TFileChangeDetector.TakeSnapshot(const ARootPath: string;
+  const AExtensions: TStringArray);
+var
+  InitialCount: LongInt;
+  I: LongInt;
+  Probe: TFileSnapshot;
+begin
+  FChangedFiles.Clear;
+  InitialCount := LongInt(FSnapshots.Count);
+  ScanDirectoryRecursive(ARootPath, AExtensions, InitialCount);
+  for I := LongInt(FSnapshots.Count) - 1 downto 0 do
+  begin
+    if Pos(ARootPath, FSnapshots[I].Path) <> 1 then
+      Continue;
+    Probe := GetFileSnapshot(FSnapshots[I].Path);
+    if Probe.FileSize = -1 then
+    begin
+      FChangedFiles.Push(FSnapshots[I].Path);
+      FSnapshots.DeleteSwap(SizeUInt(I));
+    end;
   end;
 end;
 
@@ -200,8 +238,7 @@ var
 begin
   Idx := FindSnapshotIndex(APath);
   if Idx < 0 then
-    Exit(True);  { Not tracked = considered changed }
-
+    Exit(True);
   Current := GetFileSnapshot(APath);
   Result := (FSnapshots[Idx].ModifiedTime <> Current.ModifiedTime) or
             (FSnapshots[Idx].FileSize <> Current.FileSize);

@@ -36,26 +36,16 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.fs,
+  nextpas.core.git.native.util,
+  nextpas.core.git.native.common,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse;
 
-function IsZeroOid(const AOid: TGitOid): Boolean;
-var I: Integer;
+function TrimSpaces(const S: string): string; inline;
 begin
-  for I:=0 to GitOidRawLen-1 do if AOid.Bytes[I]<>0 then Exit(False);
-  Result:=True;
-end;
-
-function TrimSpaces(const S: string): string;
-var A,B: Integer;
-begin
-  A:=1; B:=Length(S);
-  while (A<=B) and (S[A] in [' ',#9,#10,#13]) do Inc(A);
-  while (B>=A) and (S[B] in [' ',#9,#10,#13]) do Dec(B);
-  if B<A then Exit('');
-  Result:=Copy(S,A,B-A+1);
+  Result := GitTrimSpaces(S);
 end;
 
 function UnquoteValue(const S: string): string;
@@ -122,17 +112,6 @@ end;
 function LowerKey(const S: string): string;
 begin Result:=LowerCase(TrimSpaces(S)); end;
 
-function LocalEndsWith(const S, Suffix: string): Boolean;
-begin Result:=(Length(S)>=Length(Suffix)) and (Copy(S, Length(S)-Length(Suffix)+1, Length(Suffix))=Suffix); end;
-
-function LocalSplitLines(const S: string): TStringArray;
-var P,Start: Integer; Line: string;
-begin
-  Result:=nil; Start:=1;
-  for P:=1 to Length(S)+1 do if (P>Length(S)) or (S[P]=#10) then
-  begin Line:=Copy(S, Start, P-Start); SetLength(Result, Length(Result)+1); Result[High(Result)]:=Line; Start:=P+1; end;
-end;
-
 function GitParseGitModules(const AText: string): TGitSubmoduleArray;
 var Lines: TStringArray; I: Integer; Line, Key, Val, CurName: string; EqPos: Integer; Cur: TGitSubmodule; HasCur: Boolean;
   procedure FlushCur;
@@ -147,7 +126,7 @@ var Lines: TStringArray; I: Integer; Line, Key, Val, CurName: string; EqPos: Int
   end;
 begin
   Result:=nil;
-  Lines:=LocalSplitLines(AText);
+  Lines:=GitSplitLines(AText);
   CurName:=''; HasCur:=False;
   Cur.Name:=''; Cur.Path:=''; Cur.Url:=''; Cur.Branch:='';
   for I:=0 to High(Lines) do
@@ -190,24 +169,11 @@ begin
   Result:=GitParseGitModules(S);
 end;
 
-function WorktreeDir(const AGitDir: string): string;
-var P: Integer;
-begin
-  if LocalEndsWith(AGitDir, '/.git') then Result:=Copy(AGitDir,1,Length(AGitDir)-5)
-  else if LocalEndsWith(AGitDir, '.git') then
-  begin
-    // bare? use parent heuristic: strip last component
-    P:=Length(AGitDir);
-    while (P>0) and (AGitDir[P]<>'/') do Dec(P);
-    if P>0 then Result:=Copy(AGitDir,1,P-1) else Result:='.';
-  end else Result:=AGitDir;
-end;
-
 function GitListSubmodules(const AGitDir: string): TGitSubmoduleArray;
 var WDir, F: string; Data: TBytes;
 begin
   // prefer worktree .gitmodules, fallback to HEAD tree
-  WDir:=WorktreeDir(AGitDir);
+  WDir:=GitWorktreeDir(AGitDir);
   F:=PathJoin2(WDir, '.gitmodules');
   if FileExists(F) then
   begin
@@ -219,40 +185,13 @@ begin
   except Result:=nil; end;
 end;
 
-function FindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
-var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer;
-begin
-  Result:=False;
-  if IsZeroOid(ATreeOid) then Exit;
-  Data:=ARepo.ReadObject(ATreeOid, Kind);
-  if Kind<>gokTree then Exit;
-  Entries:=GitParseTree(Data);
-  for I:=0 to High(Entries) do if Entries[I].Name=AName then
-  begin AOid:=Entries[I].Oid; Result:=True; Exit; end;
-end;
-
-function PeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var Kind: TGitObjectKind; Data: TBytes; CInfo: TGitCommitInfo; TInfo: TGitTagInfo; Depth: Integer;
-begin
-  Result:=AOid; Depth:=0;
-  while Depth<16 do
-  begin
-    Data:=ARepo.ReadObject(Result, Kind);
-    case Kind of
-      gokCommit: begin CInfo:=GitParseCommit(Data); Result:=CInfo.Tree; Exit; end;
-      gokTree: Exit;
-      gokTag: begin TInfo:=GitParseTag(Data); Result:=TInfo.Target; Inc(Depth); end;
-    else raise EGitError.CreateFmt('submodule: object %s is not a tree/commit/tag', [GitOidToHex(AOid)]);
-    end;
-  end;
-  raise EGitError.Create('submodule: tag peel too deep');
-end;
+// FindBlobInTree / PeelToTree reused from nextpas.core.git.native.common (single source)
 
 function GitListSubmodulesAtTree(const AGitDir: string; const ATreeOid: TGitOid): TGitSubmoduleArray;
 var Repo: TNativeRepository; TreeOid, BlobOid: TGitOid; Kind: TGitObjectKind; Data: TBytes;
 begin
   Result:=nil;
-  if IsZeroOid(ATreeOid) then Exit;
+  if GitOidIsZero(ATreeOid) then Exit;
   Repo:=TNativeRepository.Create(AGitDir);
   try
     TreeOid:=ATreeOid;
@@ -261,16 +200,16 @@ begin
       Data:=Repo.ReadObject(TreeOid, Kind);
       if Kind=gokCommit then
       begin
-        TreeOid:=PeelToTree(Repo, TreeOid);
+        TreeOid:=GitPeelToTree(Repo, TreeOid);
       end else if Kind=gokTag then
       begin
-        TreeOid:=PeelToTree(Repo, TreeOid);
+        TreeOid:=GitPeelToTree(Repo, TreeOid);
       end;
     except
       // not found -> empty
       Exit;
     end;
-    if not FindBlobInTree(Repo, TreeOid, '.gitmodules', BlobOid) then Exit;
+    if not GitFindBlobInTree(Repo, TreeOid, '.gitmodules', BlobOid) then Exit;
     Data:=Repo.ReadObject(BlobOid, Kind);
     if Kind<>gokBlob then Exit;
     Result:=GitParseGitModules(Data);
@@ -284,7 +223,7 @@ begin
   try Oid:=GitRevParse(AGitDir, ARef);
   except Oid:=GitResolveRef(AGitDir, ARef); end;
   Repo:=TNativeRepository.Create(AGitDir);
-  try TreeOid:=PeelToTree(Repo, Oid);
+  try TreeOid:=GitPeelToTree(Repo, Oid);
   finally Repo.Free; end;
   Result:=GitListSubmodulesAtTree(AGitDir, TreeOid);
 end;
