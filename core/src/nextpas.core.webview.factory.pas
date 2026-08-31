@@ -20,7 +20,6 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.platform.thread,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
@@ -87,12 +86,9 @@ function CreateWebviewOf(AKind: TWebviewKind;
 function CreateWebviewOn(const AParent: IWindow;
   const AOptions: TWebviewOptions): IWebviewWindow;
 
-{ 阻塞直到所有窗口关闭或 WebviewExitLoop；gtk 活跃窗口存在时进入
-  GTK 主循环（最后窗口 destroy 触发 quit 返回），否则 fake 泵循环 }
-procedure WebviewRunLoop;
-
-{ 从任意线程请求退出 RunLoop（幂等）}
-procedure WebviewExitLoop;
+{ M6 单泵统一：WebviewRunLoop/WebviewExitLoop 为 WindowRunLoop/WindowExitLoop 的 deprecated shim（inline 转发），单泵归 window.factory }
+procedure WebviewRunLoop; inline; deprecated 'Use WindowRunLoop';
+procedure WebviewExitLoop; inline; deprecated 'Use WindowExitLoop';
 
 implementation
 
@@ -103,15 +99,10 @@ uses
   nextpas.core.window.fake,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
-  nextpas.core.webview.gtk.win,
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.webview2,
-  nextpas.core.webview.webview2.win,
   nextpas.core.webview.wk.loader,
   nextpas.core.webview.wk;
-
-var
-  GExitRequested: Boolean = False;
 
 function DefaultWebviewKind: TWebviewKind;
 begin
@@ -200,39 +191,14 @@ begin
 end;
 {$POP}
 
-procedure WebviewRunLoop;
+procedure WebviewRunLoop; inline;
 begin
-  GExitRequested := False;
-  while not GExitRequested do
-  begin
-    if GtkLiveWindowCount > 0 then
-      WinShellRunMainLoop   { 阻塞至 gtk 侧全部关闭/退出请求 }
-    else if WebView2LiveWindowCount > 0 then
-      Win32ShellRunMainLoop { Win32 消息泵（wine 真窗口可交互）}
-    else if WkLiveWindowCount > 0 then
-      begin
-        // Wk 桩：无 NSRunLoop 阻塞，短睡让出 CPU 等待 Close（Darwin 真实现接 NSApplication run）
-        platform_thread_sleep_ms(10);
-      end
-    else if FakeLiveWindowCount > 0 then
-      FakePumpAll
-    else
-      Break;
-    if (GtkLiveWindowCount = 0) and (WebView2LiveWindowCount = 0) and (WkLiveWindowCount = 0) and (FakeLiveWindowCount = 0) then
-      Break;
-    platform_thread_yield;
-  end;
+  WindowRunLoop;
 end;
 
-procedure WebviewExitLoop;
+procedure WebviewExitLoop; inline;
 begin
-  GExitRequested := True;
-  { 阻塞式主循环期间标志位不可轮询——同步触发 quit }
-  if GtkLiveWindowCount > 0 then
-    WinShellQuitMainLoop;
-  if WebView2LiveWindowCount > 0 then
-    Win32ShellQuitMainLoop;
-  // Wk 桩无需显式 quit（Darwin 真实现为 NSApplication stop），仅置标志位即可
+  WindowExitLoop;
 end;
 
 { ---- Builder ---- }
@@ -513,7 +479,7 @@ var
 begin
   LWin := Build;
   LWin.Navigate(AUrl);
-  WebviewRunLoop;
+  WindowRunLoop;
 end;
 
 procedure TBuilderImpl.RunHtml(const AHtml: string);
@@ -522,7 +488,7 @@ var
 begin
   LWin := Build;
   LWin.NavigateToString(AHtml);
-  WebviewRunLoop;
+  WindowRunLoop;
 end;
 
 initialization
