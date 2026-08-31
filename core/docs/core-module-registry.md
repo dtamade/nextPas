@@ -39,6 +39,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `csv` | L2 | CSV parser/writer | yes | L0-L1 | focused-runtime |
 | `db` | L3 | unified database access family: IDbConnection/IDbQuery over sqlite+pg backends (`nextpas.core.db.*`; `nextpas.core.db.sqlite.*` and `nextpas.core.db.pg.*` are the L2 backend implementations) | yes | L0-L2 (sqlite/pg owners are in-family) | focused-runtime |
 | `deliverability` | L2 | SPF/DKIM/DMARC email authentication | yes | L0-L1 plus crypto/hash/dns owner | focused-runtime |
+| `diff` | L1 | text diff algorithms (Myers O(ND)) + unified patch codec (`nextpas.core.diff.*`; golden-tested against system `git diff --no-index`) | yes | L0 | focused-runtime |
 | `dns` | L2 | DNS record codec + UDP resolver | yes | L0-L1 plus net owner | focused-runtime |
 | `encoding` | L1 | codecs | yes | L0 plus bytes/text seam | focused-runtime |
 | `errors` | L0 | error facade | yes | `exception`, `base` | focused-runtime |
