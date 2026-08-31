@@ -537,7 +537,7 @@ var
     LTextLen := Length(AText);
     if LTextLen = 0 then
       Exit;
-    Move(AText[1], Result[LPos], LTextLen);
+    Move(PAnsiChar(AText)^, Result[LPos], LTextLen);
     Inc(LPos, LTextLen);
   end;
 

@@ -347,7 +347,7 @@ var
 begin
   SetLength(LBytes, Length(AText));
   if Length(AText) > 0 then
-    Move(AText[1], LBytes[0], SizeUInt(Length(AText)));
+    Move(PAnsiChar(AText)^, LBytes[0], SizeUInt(Length(AText)));
   SendFrame(Byte(WS_OPCODE_TEXT), LBytes);
 end;
 

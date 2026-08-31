@@ -63,7 +63,7 @@ function BytesIsZero(const AData: TBytes): Boolean; inline;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
-function StringToBytes(const AText: string): TBytes; inline;
+function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 
@@ -608,7 +608,7 @@ function StringToBytes(const AText: string): TBytes; inline;
 begin
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
-    Move(AText[1], Result[0], Length(AText));
+    Move(PAnsiChar(AText)^, Result[0], Length(AText));
 end;
 
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
