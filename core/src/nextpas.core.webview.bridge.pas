@@ -49,14 +49,14 @@ type
   生产路径由 transport 静默忽略；fake 驱动面据此抛 EWebviewBadFrame。
   payload 经 json owner 规范化重序列化（值语义不变，文本可能换格式）。 }
 function TryDecodeFrame(const AFrameJson: string;
-  out AFrame: TWebviewFrame): Boolean;
+  out AFrame: TWebviewFrame): Boolean; inline;
 
 { 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 必须是
   合法 JSON 文本（空串按 'null'）；ACode/AMessage/AEvent 为普通文本，
   内部经 json owner 转义为 JS 字符串字面量。 }
-function BuildResolveScript(AId: Int64; const AResultJson: string): string;
-function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
-function BuildEmitScript(const AEvent, APayloadJson: string): string;
+function BuildResolveScript(AId: Int64; const AResultJson: string): string; inline;
+function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string; inline;
+function BuildEmitScript(const AEvent, APayloadJson: string): string; inline;
 
 { handler 错误码归一化：EWebviewInvokeError 空 Code 补默认 npw.bad_request，
   非空（含 app.* 自定义码）原样透传（§5 规则）。 }
@@ -195,7 +195,7 @@ begin
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
-  out AFrame: TWebviewFrame): Boolean;
+  out AFrame: TWebviewFrame): Boolean; inline;
 var
   LDocPtr: ^TJsonDocument;
   LRoot, LField: TJsonValue;
@@ -310,7 +310,7 @@ begin
   Result := True;
 end;
 
-function BuildResolveScript(AId: Int64; const AResultJson: string): string;
+function BuildResolveScript(AId: Int64; const AResultJson: string): string; inline;
 var
   LJson: string;
 begin
@@ -321,7 +321,7 @@ begin
     JsStringLit(LJson) + ')';
 end;
 
-function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
+function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string; inline;
 var
   LB: TStringBuilder;
   W: TJsonWriter;
@@ -344,7 +344,7 @@ begin
     JsStringLit(LJson) + ')';
 end;
 
-function BuildEmitScript(const AEvent, APayloadJson: string): string;
+function BuildEmitScript(const AEvent, APayloadJson: string): string; inline;
 var
   LJson: string;
 begin

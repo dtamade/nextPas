@@ -4,7 +4,7 @@
 S4 后端打磨、S5 多窗口隔离与事件驱动门禁、S6 GetTitle 与会话三形态
 live 覆盖、S7 DataDirectory 修复、S8 可运行 demo 与 idle 清理修正、
 S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 respack
-资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环、S15 MIME 65 项与骨架屏收口、S16 生产就绪收口、S17 respack 高级感对齐与 bench 刷新、S18 W2 桩+loader via wine 交叉验证、S19 W2 Win32 真窗口壳、S20 满态壳（DPI 分数/最小化/WM_DPICHANGED）、S21 真 controller（Env→Controller/Eval/桥/WMS bounds）均已进主线；S22 导航真事件、S23 调度与稳定、S24 门禁与 bench 收口、S25 W3 WKWebView 桩（13 门全绿）、S26 终极封版（hints 洁净/Closed 守卫）、S27 bench 基线刷新、S28 警告洁净/双跑自检、S29 主循环 4 后端完整、S30 静态审计、S31 类型设计冻结、S32 注册表 focused-runtime、S33 零负载一致性抛光、S34 零开销与复用抛光（Builder 去重 + VFS 零 Delete）、S35 契约与稳定性收口（__npw 早筛）、S36 热点 inline 与早期互斥（13 链路 inline + Fail Fast）、S37 容量与 Fail-Fast（IsValidWebviewSchemeToken 复用 + 倍增预分配 + Scheme/几何早筛）、S38 InitScripts 容量与完整性（倍增预分配 + CONTRACT 1.32）、S39 几何校验复用收口（CheckWebviewSize/Min/Max 抽取 + builder/Options 同源复用 + CONTRACT 1.33）、S40 会话与脚本守卫复用（CheckWebviewSession/CheckWebviewInitScript 抽取 + inline 化 + CONTRACT 1.34）、S41 容量同构收口（GrowCapacity 4→2× 三同构收敛 + CONTRACT 1.35）、S42 静态审计冻结（零 TODO/hint/warning + CONTRACT 1.36）、S43 全校验 inline（IsValidToken/CheckInvokeCmd 补 inline + CONTRACT 1.37）、S44 Builder 全 inline（AddInitScript/Grow* 补 inline + CONTRACT 1.38）、S45 窗口壳薄转发全 inline（WinShell* 10 + MIME 2 全 inline + CONTRACT 1.39）、S46 桥协议薄转发全 inline（NormalizeInvokeCode/Count/MountCount 3 路径 inline + CONTRACT 1.40）、S47 调度与状态薄转发全 inline（IsOnMainThread/IsClosed/GetDispatcher 5 路径 inline + CONTRACT 1.41）、S48 Win32 窗口壳薄转发全 inline（Win32Shell* 15 薄转发 inline + CONTRACT 1.42）、S49 装载探针快照薄转发全 inline（GtkLoadInfo/WebView2LoadInfo/WkLoadInfo 3 路径 inline + CONTRACT 1.43）、S50 终局冻结（全链 159 inline 闭环 + CONTRACT 1.44）· S51-S86 容量同构与挂载收口（WebviewGrowCapacity 0→4→2× 全家族 inline + 资产 Trie/哈希）· S87-S93 最强稳定性收口（GSchemeLock/HandleNativeDestroy/vfs 单源/wk 单例）· S94-A 性能极致化（哈希/零拷/池化）· S95 完整性冻结（DevServerUrl 三形态/MAX_ID 单源 + CONTRACT 1.88）· S96 跨平台缝与稳定性（CKindOrder 表驱动 + GLive 全程锁 + SettlePendingOnClose 单源 + CONTRACT 1.89）· S97 跨平台文档冻结（loader 纪律 + 1.90）· S98 六维深化（阈值 16 + 框架 bench 校准 + 1.91） — CONTRACT 1.91，wine 可交互，W3 wk 桩已冻结，Darwin 真实现待编译器 ObjC 探通）
+资产集成示例、S11 VFS 适配器抽离与 bench 基线、S12 高级感/性能/稳定性打磨、S13 复用/稳定性/可访问性收口、S14 bench_bridge 与文档闭环、S15 MIME 65 项与骨架屏收口、S16 生产就绪收口、S17 respack 高级感对齐与 bench 刷新、S18 W2 桩+loader via wine 交叉验证、S19 W2 Win32 真窗口壳、S20 满态壳（DPI 分数/最小化/WM_DPICHANGED）、S21 真 controller（Env→Controller/Eval/桥/WMS bounds）均已进主线；S22 导航真事件、S23 调度与稳定、S24 门禁与 bench 收口、S25 W3 WKWebView 桩（13 门全绿）、S26 终极封版（hints 洁净/Closed 守卫）、S27 bench 基线刷新、S28 警告洁净/双跑自检、S29 主循环 4 后端完整、S30 静态审计、S31 类型设计冻结、S32 注册表 focused-runtime、S33 零负载一致性抛光、S34 零开销与复用抛光（Builder 去重 + VFS 零 Delete）、S35 契约与稳定性收口（__npw 早筛）、S36 热点 inline 与早期互斥（13 链路 inline + Fail Fast）、S37 容量与 Fail-Fast（IsValidWebviewSchemeToken 复用 + 倍增预分配 + Scheme/几何早筛）、S38 InitScripts 容量与完整性（倍增预分配 + CONTRACT 1.32）、S39 几何校验复用收口（CheckWebviewSize/Min/Max 抽取 + builder/Options 同源复用 + CONTRACT 1.33）、S40 会话与脚本守卫复用（CheckWebviewSession/CheckWebviewInitScript 抽取 + inline 化 + CONTRACT 1.34）、S41 容量同构收口（GrowCapacity 4→2× 三同构收敛 + CONTRACT 1.35）、S42 静态审计冻结（零 TODO/hint/warning + CONTRACT 1.36）、S43 全校验 inline（IsValidToken/CheckInvokeCmd 补 inline + CONTRACT 1.37）、S44 Builder 全 inline（AddInitScript/Grow* 补 inline + CONTRACT 1.38）、S45 窗口壳薄转发全 inline（WinShell* 10 + MIME 2 全 inline + CONTRACT 1.39）、S46 桥协议薄转发全 inline（NormalizeInvokeCode/Count/MountCount 3 路径 inline + CONTRACT 1.40）、S47 调度与状态薄转发全 inline（IsOnMainThread/IsClosed/GetDispatcher 5 路径 inline + CONTRACT 1.41）、S48 Win32 窗口壳薄转发全 inline（Win32Shell* 15 薄转发 inline + CONTRACT 1.42）、S49 装载探针快照薄转发全 inline（GtkLoadInfo/WebView2LoadInfo/WkLoadInfo 3 路径 inline + CONTRACT 1.43）、S50 终局冻结（全链 159 inline 闭环 + CONTRACT 1.44）、S51 exactly-once 完整性 + S52-S53 资产归一 NormalizeWebviewAssetPath 单源复用与 GTK 快路径 + S54 前缀归一 + S55 单根快路径 + S56 事件名 CheckWebviewEventName 单源 + S57 在途容量同构 WebviewGrowCapacity + S58-S77 全家族 Count 精确语义与 WebviewGrowCapacity(0→4→2×) 单源 inline 闭环（复用 bytes.ops/CheckWebviewOptions/Normalize 单源、性能 163→165 inline/零拷贝 span、稳定性 Assigned/try-except/释放；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0；四件套与 L0-L3 保持）— CONTRACT 1.97，wine 可交互，W3 wk 桩已冻结，Darwin 真实现待编译器 ObjC 探通）
 **层级**: L3 家族（依赖 L0-L2）
 **目标形态**: Tauri / Wails 式桌面应用外壳——系统自带浏览器引擎 + 原生窗口壳 + 统一 IPC 桥，
 接口抽象在前、后端实现在后。
@@ -155,23 +155,23 @@ LProvider := CreateVfsAssetProvider(LVfs); // 前缀容错双试 + MIME 共享�
 LWin.Assets.MountEmbedded('', LProvider);
 ```
 
-性能基线（`core/benchmarks/nextpas.core.webview/bench_vfs`，`nextpas.core.bench` 框架，`taskset -c 2` 过滤均值 1.22 GB/s，S27 → S98 校准，哈希阈值 16）：
+性能基线（`core/benchmarks/nextpas.core.webview/bench_vfs`，`nextpas.core.bench` 框架，过滤均值 1.22 GB/s 级，S27 实测）：
 
 | 场景 | ns/op (过滤均值) | ops/s | 吞吐 |
 |------|-------|-------|------|
-| SmallHit/index.html | 636 ns | 1.57M | 182 MB/s |
-| Fallback/app/index.html | 850 ns | 1.17M | 203 MB/s |
-| Miss404 | 242 ns | 4.01M | 110 MB/s |
-| LargeHit/1M | 785 µs | 1.27k | 1.22 GB/s |
+| SmallHit/index.html | 681 ns | 1.47M | 199 MB/s |
+| Fallback/app/index.html | 894 ns | 1.12M | 213 MB/s |
+| Miss404 | 217 ns | 4.60M | 123 MB/s |
+| LargeHit/1M | 800 µs | 1.25k | 1.22 GB/s |
 
-桥协议基线（`core/benchmarks/nextpas.core.webview/bench_bridge`，过滤均值，`taskset -c 2`，S27 4.18µs → S98 3.26µs -22%）：
+桥协议基线（`core/benchmarks/nextpas.core.webview/bench_bridge`，过滤均值，S27 实测）：
 
 | 场景 | ns/op | ops/s | 备注 |
 |------|-------|-------|------|
-| TryDecodeFrame | 3.26 µs | 304k | JSON 解析 + 校验 + 规范化（阈值 16） |
-| BuildResolveScript | 455 ns | 2.13M | JsStringLit + 拼接 |
-| BuildRejectScript | 886 ns | 1.07M | 错误码归一 + 对象构造 |
-| BuildEmitScript | 531 ns | 1.81M | 事件名校验 + 双 Json |
+| TryDecodeFrame | 4.18 µs | 239k | JSON 解析 + 校验 + 规范化 |
+| BuildResolveScript | 622 ns | 1.61M | JsStringLit + 拼接 |
+| BuildRejectScript | 2.37 µs | 422k | 错误码归一 + 对象构造 |
+| BuildEmitScript | 1.06 µs | 943k | 事件名校验 + 双 Json |
 
 前端侧（协议细节见 BRIDGE_PROTOCOL.md）：
 
