@@ -2,31 +2,39 @@ function ParseAnonymousRoutineExpression(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
   const ADiagnostics: TDiagnosticsSink;
-  const ARootFileId: TSourceFileId
-): TGreenNode;
+  const ARootFileId: TSourceFileId;
+  const ATree: TGreenTree
+): TGreenNode; overload;
 var
   Node: TGreenNode;
   RoutineKind: TTokenKind;
   TypeNode: TGreenNode;
+  function NewNode(const AKind: TGreenNodeKind; const AOff: LongInt; const ALen: LongInt; const ATxt: string): TGreenNode; inline;
+  begin
+    if ATree <> nil then
+      NewNode := TGreenNode.Create(ATree, AKind, AOff, ALen, ATxt)
+    else
+      NewNode := TGreenNode.Create(AKind, AOff, ALen, ATxt);
+  end;
 begin
   Result := nil;
-  if ActiveExpressionTree = nil then
+  if ATree = nil then
     Exit;
 
   RoutineKind := CurrentToken(ALexer, ACursor).Kind;
   case RoutineKind of
     tkFunctionKeyword:
-      Node := TGreenNode.Create(gnkFunctionDecl,
+      Node := NewNode(gnkFunctionDecl,
         CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
     tkProcedureKeyword:
-      Node := TGreenNode.Create(gnkProcedureDecl,
+      Node := NewNode(gnkProcedureDecl,
         CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
   else
     Exit;
   end;
 
   Inc(ACursor);
-  ParseParameterList(ALexer, ACursor, Node, ActiveExpressionTree,
+  ParseParameterList(ALexer, ACursor, Node, ATree,
     ADiagnostics, ARootFileId);
 
   if RoutineKind = tkFunctionKeyword then
@@ -39,11 +47,11 @@ begin
       Exit(nil);
     end;
 
-    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ActiveExpressionTree);
+    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
     if TypeNode <> nil then
     begin
       Node.AppendChild(TypeNode);
-      Inc(ActiveExpressionTree.FNodeCount);
+      Inc(ATree.FNodeCount);
     end;
   end;
 
@@ -54,7 +62,7 @@ begin
     Inc(ACursor);
 
   { Parse optional var/const/type declarations before begin }
-  ParseBlockDeclarations(ALexer, ACursor, Node, ActiveExpressionTree,
+  ParseBlockDeclarations(ALexer, ACursor, Node, ATree,
     ADiagnostics, ARootFileId);
 
   if not MatchTokenSilent(ALexer, ACursor, tkBeginKeyword) then
@@ -65,7 +73,7 @@ begin
     Exit(nil);
   end;
 
-  if not ParseBeginBlock(ALexer, ACursor, Node, ActiveExpressionTree,
+  if not ParseBeginBlock(ALexer, ACursor, Node, ATree,
     ADiagnostics, ARootFileId) then
   begin
     { Node.Free } // owned by tree FFacades
@@ -73,6 +81,16 @@ begin
   end;
 
   Result := Node;
+end;
+
+function ParseAnonymousRoutineExpression(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): TGreenNode; overload;
+begin
+  Result := ParseAnonymousRoutineExpression(ALexer, ACursor, ADiagnostics, ARootFileId, ActiveExpressionTree);
 end;
 
 function ParseParameterList(
