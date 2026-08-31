@@ -116,6 +116,13 @@ begin
   Result := GPascalEncoder;
 end;
 
+function BytesIsUnique(const A: TBytes): Boolean; inline;
+begin
+  if Pointer(A) = nil then
+    Exit(True);
+  Result := PSizeInt(Pointer(A) - 2 * SizeOf(Pointer))^ = 1;
+end;
+
 function CopyOfBytes(const ASrc: TBytes): TBytes;
 begin
   Result := nil;
@@ -250,7 +257,10 @@ begin
   begin
     if Length(AInputs) <> 1 then
       raise EParseError.Create('filter coder expects one input');
-    AOut := CopyOfBytes(AInputs[0]);
+    if BytesIsUnique(AInputs[0]) then
+      AOut := AInputs[0]
+    else
+      AOut := CopyOfBytes(AInputs[0]);
     SevenZFilterConvert(AOut, LFilter, ACoder.Props, False);
   end
   else
@@ -259,7 +269,10 @@ begin
       begin
         if Length(AInputs) <> 1 then
           raise EParseError.Create('copy coder expects one input');
-        AOut := CopyOfBytes(AInputs[0]);
+        if BytesIsUnique(AInputs[0]) then
+          AOut := AInputs[0]
+        else
+          AOut := CopyOfBytes(AInputs[0]);
       end;
     SEVENZ_METHOD_LZMA2:
       begin

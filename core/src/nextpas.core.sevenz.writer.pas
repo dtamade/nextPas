@@ -186,9 +186,6 @@ var
   LEnc: TSevenZLzmaEncoded;
   LEncoder: ISevenZLzmaEncoder;
   LI: SizeInt;
-  LOfs: SizeInt;
-  LRem: SizeInt;
-  LTake: SizeInt;
 begin
   LRawChunk := AFolder.RawSolid;
   if Length(AFilters) = 0 then
@@ -201,7 +198,7 @@ begin
     // perf: 避免过滤器链触发时额外全量 LRawChunk->LStage 拷贝稀释 Move+CRC 单遍收益。
     // 策略：复用 SEVENZ_WRITER_CHUNK 单源阈值（limits），首级过滤器与拷贝融合。
     // Delta 首级采用 SevenZDeltaEncode 零分配 out-of-place 路径，直接由 LRawChunk 产出 LStage，无单独 Move；
-    // BCJ 首级仍需在位变换，采用分块搬运（同 MoveWithCrc 粒度）后原地转换，保持缓存友好。
+    // BCJ 首级仍需在位变换，采用单次 Move（复用 Delta 路径的单次 Move 风格）后原地转换，保持缓存友好。
     // 后续各级过滤器仍在 LStage 上原地变换。bench 可观测：bench_sevenz 的 container create / bcj/delta 吞吐为回归锚点。
     SetLength(AFolder.Specs, Length(AFilters) + 1);
     for LI := 0 to High(AFilters) do
@@ -530,6 +527,12 @@ var
 begin
   CheckOpen;
   ValidateEntryName(AName);
+  if Length(FEntries) >= SEVENZ_MAX_FILE_COUNT then
+    raise ESevenZError.Create('file count exceeds limit');
+  if Length(AName) > SEVENZ_MAX_NAME_BYTES then
+    raise ESevenZError.Create('name length exceeds limit');
+  if UInt64(Length(AData)) > SEVENZ_MAX_UNPACK_SIZE then
+    raise ESevenZError.Create('entry size exceeds limit');
   LE := Default(TEntryRec);
   LE.Name := AName;
   LE.IsDir := False;
@@ -560,6 +563,12 @@ begin
   ValidateEntryName(AName);
   if AReader = nil then
     raise EArgumentError.Create('AddFileFromReader: AReader is nil');
+  if Length(FEntries) >= SEVENZ_MAX_FILE_COUNT then
+    raise ESevenZError.Create('file count exceeds limit');
+  if Length(AName) > SEVENZ_MAX_NAME_BYTES then
+    raise ESevenZError.Create('name length exceeds limit');
+  if ASize > SEVENZ_MAX_UNPACK_SIZE then
+    raise ESevenZError.Create('entry size exceeds limit');
   // H-08: 仅记录声明，不在此刻物化；大 ASize 提前限额提示：
   // 调用方可对照 SEVENZ_MAX_UNPACK_SIZE / SEVENZ_DEFAULT_MAX_OUTPUT
   // 做早期拒绝，避免 Finish 时才暴露的 OOM/炸弹风险，最终校验在 Finish
