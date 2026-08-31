@@ -237,7 +237,6 @@ begin
   Result := nextpas.core.bytes.ops.BytesEndsWith(AData, ASuffix);
 end;
 
-<<<<<<< HEAD
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.bytes.ops.StripLeadingZero(AData);
@@ -276,7 +275,6 @@ end;
 function StringToBytes(const AText: string): TBytes;
 begin
   Result := nextpas.core.bytes.ops.StringToBytes(AText);
-end;
 end;
 
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
