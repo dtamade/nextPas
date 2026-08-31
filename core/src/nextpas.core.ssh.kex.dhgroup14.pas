@@ -67,7 +67,8 @@ uses
   nextpas.core.crypto.random,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.bigint,
-  nextpas.core.mem.secure;
+  nextpas.core.mem.secure,
+  nextpas.core.bytes.ops;
 
 function SshDHGroup14Prime: TBytes;
 const
