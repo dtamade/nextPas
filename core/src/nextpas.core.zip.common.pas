@@ -22,10 +22,10 @@ function LE64At(const AData: TBytes; AOff: SizeUInt): UInt64; inline;
 function IsKnownZipSig(AValue: LongWord): Boolean; inline;
 
 { 时间转换（base 纯记录层外的时间逻辑下沉至 common） }
-procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
+procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word); inline;
 function DosMinUnixSec: Int64; inline;
 function DosMaxUnixSec: Int64; inline;
-function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
+function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 
@@ -71,7 +71,7 @@ begin
     (AValue = C_ZIP64_EOCD_LOC_SIG) or (AValue = C_ZIP_DESCRIPTOR_SIG);
 end;
 
-procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
+procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word); inline;
 begin
   nextpas.core.zip.base.DosDateTimeFromUnix(AUnixSec, ADosDate, ADosTime);
 end;
@@ -86,7 +86,7 @@ begin
   Result := nextpas.core.zip.base.DosMaxUnixSec;
 end;
 
-function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
+function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 begin
   Result := nextpas.core.zip.base.UnixFromDosDateTime(ADosDate, ADosTime);
 end;
