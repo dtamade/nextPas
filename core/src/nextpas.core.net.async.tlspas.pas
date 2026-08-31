@@ -469,10 +469,13 @@ procedure TlsPasClearEarlyDataSecrets(var ASecrets: TTlsPasEarlyDataSecrets);
 implementation
 
 uses
-  SysUtils, Classes,
   nextpas.core.errors,
-  nextpas.core.system.sysutils,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.encoding.base64,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.text.utils,
   nextpas.core.os.env,
   nextpas.core.atomic,
   nextpas.core.bytes,
@@ -1125,13 +1128,13 @@ end;
 
 function TlsPasFormatReplayStats(const AStats: TAsyncTlsPasReplayStats): string;
 begin
-  Result := Format('hits=%d misses=%d evictions=%d expiries=%d current=%d',
+  Result := TextFormat('hits=%d misses=%d evictions=%d expiries=%d current=%d',
     [AStats.Hits, AStats.Misses, AStats.Evictions, AStats.Expiries, AStats.Current]);
 end;
 
 function TlsPasFormatServerStats(const AStats: TTlsPasServerStats): string;
 begin
-  Result := Format('accepts=%d reject_policy=%d reject_replay=%d',
+  Result := TextFormat('accepts=%d reject_policy=%d reject_replay=%d',
     [AStats.Accepts, AStats.RejectPolicy, AStats.RejectReplay]);
 end;
 
@@ -1290,7 +1293,7 @@ end;
 destructor TAsyncTlsPasAdaptiveObserver.Destroy;
 begin
   platform_mutex_destroy(FConfigMutex);
-  FreeAndNil(FInner);
+  nextpas.core.base.utils.FreeAndNil(FInner);
   inherited Destroy;
 end;
 
@@ -1343,7 +1346,7 @@ end;
 
 function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
 begin
-  Result := Format('adaptive max=%d %s %s', [
+  Result := TextFormat('adaptive max=%d %s %s', [
     Integer(AMetrics.AdaptiveMax),
     TlsPasFormatServerStats(AMetrics.Server),
     TlsPasFormatReplayStats(AMetrics.Replay)
@@ -1360,7 +1363,7 @@ var P: string;
 begin
   if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
   Result :=
-    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+    TextFormat('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
            '# TYPE %s_adaptive_max gauge'#10 +
            '%s_adaptive_max %d'#10 +
            '# HELP %s_server_accepts Total accepted early_data'#10 +
@@ -1406,7 +1409,7 @@ begin
     Exit(TlsPasFormatPrometheusMetrics(AMetrics, P));
   L := ALabels;
   Result :=
-    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+    TextFormat('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
            '# TYPE %s_adaptive_max gauge'#10 +
            '%s_adaptive_max{%s} %d'#10 +
            '# HELP %s_server_accepts Total accepted early_data'#10 +
@@ -1456,17 +1459,17 @@ begin
   if (Rate > AConfig.RejectRateThreshold) and (Total >= 10) then
   begin
     Result.Healthy := False;
-    Result.Reason := Format('reject_rate %.2f > %.2f', [Rate, AConfig.RejectRateThreshold]);
+    Result.Reason := TextFormat('reject_rate %.2f > %.2f', [Rate, AConfig.RejectRateThreshold]);
   end
   else if AMetrics.Replay.Current > 80 then
   begin
     Result.Healthy := False;
-    Result.Reason := Format('current %d > 80', [AMetrics.Replay.Current]);
+    Result.Reason := TextFormat('current %d > 80', [AMetrics.Replay.Current]);
   end
   else if AMetrics.AdaptiveMax <= AConfig.MinLimit then
   begin
     Result.Healthy := False;
-    Result.Reason := Format('adaptive_max %d at min %d', [Integer(AMetrics.AdaptiveMax), Integer(AConfig.MinLimit)]);
+    Result.Reason := TextFormat('adaptive_max %d at min %d', [Integer(AMetrics.AdaptiveMax), Integer(AConfig.MinLimit)]);
   end
   else
   begin
@@ -1478,9 +1481,9 @@ end;
 function TlsPasFormatAdaptiveHealth(const AHealth: TTlsPasAdaptiveHealth): string;
 begin
   if AHealth.Healthy then
-    Result := Format('healthy reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)])
+    Result := TextFormat('healthy reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)])
   else
-    Result := Format('degraded reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)]);
+    Result := TextFormat('degraded reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)]);
 end;
 
 function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): string;
@@ -1494,11 +1497,11 @@ begin
   if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
   V := Ord(AHealth.Healthy);
   if ALabels = '' then
-    Result := Format('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
+    Result := TextFormat('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
                      '# TYPE %s_health_status gauge'#10 +
                      '%s_health_status %d'#10, [P,P,P,V])
   else
-    Result := Format('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
+    Result := TextFormat('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
                      '# TYPE %s_health_status gauge'#10 +
                      '%s_health_status{%s} %d'#10, [P,P,P,ALabels,V]);
 end;
@@ -1620,8 +1623,8 @@ begin
   if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
   platform_mutex_lock(FMutex);
   try
-    LNames := System.Copy(FNames, 0, Length(FNames));
-    LObs := System.Copy(FObservers, 0, Length(FObservers));
+    LNames := Copy(FNames, 0, Length(FNames));
+    LObs := Copy(FObservers, 0, Length(FObservers));
   finally
     platform_mutex_unlock(FMutex);
   end;
@@ -1629,7 +1632,7 @@ begin
   for I := 0 to High(LNames) do
   begin
     if LObs[I] = nil then Continue;
-    L := Format('observer="%s"', [LNames[I]]);
+    L := TextFormat('observer="%s"', [LNames[I]]);
     Result := Result + TlsPasFormatPrometheusMetricsWithLabels(LObs[I].GetAdaptiveMetrics, P, L) + #10;
   end;
 end;
@@ -1663,7 +1666,7 @@ begin
   if TryGetEnv('NEXTPAS_TLSPAS_REJECT_RATE', S) and (S <> '') then
   begin
     // invariant '.' parser to avoid locale comma issue
-    S := StringReplace(S, ',', '.', [rfReplaceAll]);
+    S := StringReplace(S, ',', '.', True);
     D := StrToFloatDef(S, -1);
     if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end;
   end;
@@ -1677,38 +1680,35 @@ begin
 end;
 
 function TlsPasTryLoadAdaptiveConfigFromFile(const APath: string; out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
-var F: TextFile; Line, Key, Val: string; P: Integer; Has: Boolean; V: Integer; D: Double;
+var Content: string; Lines: TStringArray; Line, Key, Val: string; P, I: Integer; Has: Boolean; V: Integer; D: Double;
 begin
   AConfig := DefaultTlsPasAdaptiveLimitConfig;
   Result := False;
   Has := False;
-  if (APath = '') or not FileExists(APath) then Exit;
-  AssignFile(F, APath);
+  if (APath = '') or not IsFile(APath) then Exit;
   try
-    Reset(F);
-    while not Eof(F) do
-    begin
-      ReadLn(F, Line);
-      Line := Trim(Line);
-      if (Line = '') or (Line[1] = '#') then Continue;
-      P := Pos('=', Line);
-      if P = 0 then Continue;
-      Key := Trim(System.Copy(Line, 1, P-1));
-      Val := Trim(System.Copy(Line, P+1, MaxInt));
-      if Key = '' then Continue;
-      if (Key = 'base') or (Key = 'BaseLimit') or (Key = 'NEXTPAS_TLSPAS_BASE_LIMIT') then
-      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.BaseLimit := Cardinal(V); Has := True; end; end
-      else if (Key = 'min') or (Key = 'MinLimit') or (Key = 'NEXTPAS_TLSPAS_MIN_LIMIT') then
-      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MinLimit := Cardinal(V); Has := True; end; end
-      else if (Key = 'max') or (Key = 'MaxLimit') or (Key = 'NEXTPAS_TLSPAS_MAX_LIMIT') then
-      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MaxLimit := Cardinal(V); Has := True; end; end
-      else if (Key = 'threshold') or (Key = 'RejectRateThreshold') or (Key = 'NEXTPAS_TLSPAS_REJECT_RATE') then
-      begin Val := StringReplace(Val, ',', '.', [rfReplaceAll]); D := StrToFloatDef(Val, -1); if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end; end;
-    end;
-    CloseFile(F);
+    Content := ReadFileText(APath);
   except
-    try CloseFile(F); except end;
     Exit(False);
+  end;
+  Lines := SplitString(Content, #10);
+  for I := 0 to High(Lines) do
+  begin
+    Line := Trim(Lines[I]);
+    if (Line = '') or (Line[1] = '#') then Continue;
+    P := Pos('=', Line);
+    if P = 0 then Continue;
+    Key := Trim(Copy(Line, 1, P-1));
+    Val := Trim(Copy(Line, P+1, MaxInt));
+    if Key = '' then Continue;
+    if (Key = 'base') or (Key = 'BaseLimit') or (Key = 'NEXTPAS_TLSPAS_BASE_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.BaseLimit := Cardinal(V); Has := True; end; end
+    else if (Key = 'min') or (Key = 'MinLimit') or (Key = 'NEXTPAS_TLSPAS_MIN_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MinLimit := Cardinal(V); Has := True; end; end
+    else if (Key = 'max') or (Key = 'MaxLimit') or (Key = 'NEXTPAS_TLSPAS_MAX_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MaxLimit := Cardinal(V); Has := True; end; end
+    else if (Key = 'threshold') or (Key = 'RejectRateThreshold') or (Key = 'NEXTPAS_TLSPAS_REJECT_RATE') then
+      begin Val := nextpas.core.text.utils.StringReplace(Val, ',', '.', True); D := StrToFloatDef(Val, -1); if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end; end;
   end;
   if Has then
   begin
@@ -1777,7 +1777,7 @@ begin
         Inc(I);
     end;
     for I := 0 to High(FHashes) do
-      if (Length(FHashes[I]) = 32) and CompareMem(@FHashes[I][0], @AFingerprint[0], 32) then
+      if (Length(FHashes[I]) = 32) and BytesEqual(FHashes[I], AFingerprint) then
       begin
         IsReplay := True;
         Inc(FHits);
@@ -1883,81 +1883,72 @@ end;
 
 procedure TAsyncTlsPasReplayFileStore.LoadFromFile;
 var
-  FS: TFileStream;
+  LData: TBytes;
   LSize: Int64;
   LCount, I: Integer;
   LHash: TBytes;
   LTime: Int64;
   LNow: Int64;
-  LBuf: TBytes;
   LIsReplay: Boolean;
 begin
   if FPath = '' then Exit;
-  if not FileExists(FPath) then Exit;
+  if not IsFile(FPath) then Exit;
   try
-    FS := TFileStream.Create(FPath, fmOpenRead or fmShareDenyWrite);
-    try
-      LSize := FS.Size;
-      if (LSize = 0) or (LSize mod 40 <> 0) then Exit; // corruption -> ignore
-      LCount := Integer(LSize div 40);
-      SetLength(LBuf, 40);
-      LNow := TlsPasMonoMs;
-      for I := 0 to LCount - 1 do
+    LData := ReadFile(FPath);
+    LSize := Length(LData);
+    if (LSize = 0) or (LSize mod 40 <> 0) then Exit;
+    LCount := Integer(LSize div 40);
+    LNow := TlsPasMonoMs;
+    for I := 0 to LCount - 1 do
+    begin
+      SetLength(LHash, 32);
+      Move(LData[I*40], LHash[0], 32);
+      Move(LData[I*40+32], LTime, 8);
+      if LTime + FInner.FWindowMs <= LNow then
       begin
-        FS.ReadBuffer(LBuf[0], 40);
-        SetLength(LHash, 32);
-        Move(LBuf[0], LHash[0], 32);
-        Move(LBuf[32], LTime, 8);
-        if LTime + FInner.FWindowMs <= LNow then
-        begin
-          SecureZeroBytes(LHash);
-          Continue;
-        end;
-        FInner.CheckAndAdd(LHash, LIsReplay);
         SecureZeroBytes(LHash);
+        Continue;
       end;
-    finally
-      FS.Free;
+      FInner.CheckAndAdd(LHash, LIsReplay);
+      SecureZeroBytes(LHash);
     end;
   except
-    // 腐败或 IO 错：忽略，视为空存储
   end;
 end;
 
 procedure TAsyncTlsPasReplayFileStore.SaveToFile;
 var
-  FS: TFileStream;
   I: Integer;
   LTmp: string;
   LHash: TBytes;
   LTime: Int64;
+  LOut: TBytes;
+  LPos: Integer;
 begin
   if FPath = '' then Exit;
   LTmp := FPath + '.tmp';
   try
-    FS := TFileStream.Create(LTmp, fmCreate);
+    platform_mutex_lock(FInner.FMutex);
     try
-      platform_mutex_lock(FInner.FMutex);
-      try
-        for I := 0 to High(FInner.FHashes) do
-        begin
-          LHash := FInner.FHashes[I];
-          LTime := FInner.FTimes[I];
-          if Length(LHash) <> 32 then Continue;
-          FS.WriteBuffer(LHash[0], 32);
-          FS.WriteBuffer(LTime, 8);
-        end;
-      finally
-        platform_mutex_unlock(FInner.FMutex);
+      SetLength(LOut, 0);
+      for I := 0 to High(FInner.FHashes) do
+      begin
+        LHash := FInner.FHashes[I];
+        LTime := FInner.FTimes[I];
+        if Length(LHash) <> 32 then Continue;
+        LPos := Length(LOut);
+        SetLength(LOut, LPos + 40);
+        Move(LHash[0], LOut[LPos], 32);
+        Move(LTime, LOut[LPos+32], 8);
       end;
     finally
-      FS.Free;
+      platform_mutex_unlock(FInner.FMutex);
     end;
-    if FileExists(FPath) then DeleteFile(FPath);
-    RenameFile(LTmp, FPath);
+    WriteFile(LTmp, LOut);
+    if IsFile(FPath) then DeleteFile(FPath);
+    Rename(LTmp, FPath);
   except
-    // 落盘失败不影响内存去重
-    try if FileExists(LTmp) then DeleteFile(LTmp); except end;
+    try if IsFile(LTmp) then DeleteFile(LTmp); except end;
   end;
 end;
 
