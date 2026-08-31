@@ -16,9 +16,11 @@ uses
   nextpas.core.audio.codec.aiff,
   nextpas.core.audio.codec.meta,
   nextpas.core.audio.codec.registry,
-  nextpas.core.audio.codec.flac.decoder,
-  nextpas.core.audio.codec.mp3.decoder,
-  nextpas.core.audio.codec.vorbis.decoder,
+  nextpas.core.audio.codec.flac,
+  nextpas.core.audio.codec.mp3,
+  nextpas.core.audio.codec.vorbis,
+  nextpas.core.audio.pcm.simd,
+  nextpas.core.audio.simd,
   nextpas.core.audio.resample,
   nextpas.core.audio.resample.sinc,
   nextpas.core.audio.mix,
@@ -30,12 +32,18 @@ uses
   nextpas.core.audio.timeline.intf,
   nextpas.core.audio.game.intf,
   nextpas.core.audio.graph.intf,
+  nextpas.core.audio.studio.intf,
   nextpas.core.audio.timeline,
   nextpas.core.audio.game,
   nextpas.core.audio.graph,
   nextpas.core.audio.player,
-  nextpas.core.audio.pcm_wav,
-  nextpas.core.audio.simd;
+  nextpas.core.audio.playlist,
+  nextpas.core.audio.spatial,
+  nextpas.core.audio.bus,
+  nextpas.core.audio.bank,
+  nextpas.core.audio.studio.project,
+  nextpas.core.audio.studio.sequencer,
+  nextpas.core.audio.studio.automation;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -79,8 +87,6 @@ type
   IAudioDevice = nextpas.core.audio.device.intf.IAudioDevice;
   IAudioDeviceProvider = nextpas.core.audio.device.intf.IAudioDeviceProvider;
 
-  TPcmWavData = nextpas.core.audio.pcm_wav.TPcmWavData;
-
   TGameSfxId = nextpas.core.audio.game.intf.TGameSfxId;
   TGameVoiceId = nextpas.core.audio.game.intf.TGameVoiceId;
   TGamePlayParams = nextpas.core.audio.game.intf.TGamePlayParams;
@@ -89,6 +95,16 @@ type
   TGraphState = nextpas.core.audio.graph.intf.TGraphState;
   IAudioGraph = nextpas.core.audio.graph.intf.IAudioGraph;
   IAudioPlayer = nextpas.core.audio.graph.intf.IAudioPlayer;
+  IAudioPlaylist = nextpas.core.audio.playlist.IAudioPlaylist;
+  IAudioBus = nextpas.core.audio.bus.IAudioBus;
+  IAudioBusMixer = nextpas.core.audio.bus.IAudioBusMixer;
+  TAudioBank = nextpas.core.audio.bank.TAudioBank;
+  IStudioProject = nextpas.core.audio.studio.intf.IStudioProject;
+  IAudioSequencer = nextpas.core.audio.studio.sequencer.IAudioSequencer;
+  TAutomationCurve = nextpas.core.audio.studio.automation.TAutomationCurve;
+  TMidiNote = nextpas.core.audio.studio.sequencer.TMidiNote;
+  TAudioVector3 = nextpas.core.audio.spatial.TAudioVector3;
+  TSimdCaps = nextpas.core.audio.simd.TSimdCaps;
 
 { ---- base forwarding ---- }
 
@@ -97,8 +113,23 @@ function AudioFormatCreate(ASampleRate, AChannels: Integer;
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioChannelMaskForLayout(ALayout: TAudioChannelLayout): UInt32; inline;
 function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioChannelLayout; inline;
-function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer; inline;
-function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer; inline;
+function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64; inline;
+function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean = False): Boolean; inline;
+function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer; inline;
+procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean = False); inline;
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer; inline;
+
+{ ---- simd forwarding (realtime-grade, 4-wide) ---- }
+
+function AudioSimdCaps: TSimdCaps; inline;
+procedure SimdAddF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single); inline;
+procedure SimdMulF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single); inline;
+function SimdPeakF32(const AData: PSingle; ACount: Integer): Single; inline;
+function SimdSumSquaresF32(const AData: PSingle; ACount: Integer): Double; inline;
+procedure SimdClampF32(AData: PSingle; ACount: Integer; ALo, AHi: Single); inline;
 
 { ---- pcm forwarding ---- }
 
@@ -111,6 +142,14 @@ function PcmS24ToF32(AValue: Integer): Single; inline;
 function PcmF32ToS24(AValue: Single): Integer; inline;
 function PcmS32ToF32(AValue: LongInt): Single; inline;
 function PcmF32ToS32(AValue: Single): LongInt; inline;
+function PcmReadS16LE(const ABytes: TBytes; AOffset: Integer): SmallInt; inline;
+procedure PcmWriteS16LE(AValue: SmallInt; var ABytes: TBytes; AOffset: Integer); inline;
+function PcmReadS32LE(const ABytes: TBytes; AOffset: Integer): LongInt; inline;
+procedure PcmWriteS32LE(AValue: LongInt; var ABytes: TBytes; AOffset: Integer); inline;
+function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer; inline;
+procedure PcmWriteS24LE(AValue: Integer; var ABytes: TBytes; AOffset: Integer); inline;
+procedure AudioPanLawGains(APan: Single; out AL, AR: Single); inline;
+function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF; inline;
 
 { ---- wav codec forwarding (decode-first 便利) ---- }
 
@@ -123,13 +162,6 @@ function CreateWavEncoder: IAudioEncoder; inline;
 
 function AiffProbe(const APrefix: TBytes): TAudioProbeResult; inline;
 function CreateAiffDecoder: IAudioDecoder; inline;
-
-function FlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
-function CreateFlacDecoder: IAudioDecoder; inline;
-function Mp3Probe(const APrefix: TBytes): TAudioProbeResult; inline;
-function CreateMp3Decoder: IAudioDecoder; inline;
-function VorbisProbe(const APrefix: TBytes): TAudioProbeResult; inline;
-function CreateVorbisDecoder: IAudioDecoder; inline;
 
 function TryParseID3v2(const APrefix: TBytes; out ATags: TAudioTags; out ASkipped: Integer): Boolean; inline;
 function TryParseVorbisComment(const AData: TBytes; out ATags: TAudioTags): Boolean; inline;
@@ -167,12 +199,21 @@ function CreateAudioPlayerForFormat(const AProvider: IAudioDeviceProvider; const
 function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline;
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline; inline;
-
-function TryParsePcmWav(const AStream: IStream; out AData: TPcmWavData): Boolean; inline;
-function TryLoadPcmWav(const AFilePath: string; out AData: TPcmWavData): Boolean; inline;
-function AudioUseNeon: Boolean; inline;
-function AudioUseAVX2: Boolean; inline;
-function AudioSimdBackendName: string; inline;
+function CreateFlacDecoder: IAudioDecoder; inline;
+function CreateMp3Decoder: IAudioDecoder; inline;
+function CreateVorbisDecoder: IAudioDecoder; inline;
+function FlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function Mp3Probe(const APrefix: TBytes): TAudioProbeResult; inline;
+function VorbisProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function AlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function WavPackProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function OpusProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function AacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function CreateAudioPlaylist(const AFormat: TAudioFormat): IAudioPlaylist; inline;
+function CreateAudioBusMixer: IAudioBusMixer; inline;
+function CreateAudioBank: TAudioBank; inline;
+function CreateStudioProject(const AName: string; ABpm: Double; const AFormat: TAudioFormat): IStudioProject; inline;
+function CreateAudioSequencer(const AFormat: TAudioFormat; ABpm: Double): IAudioSequencer; inline;
 
 { ---- registry placeholders (零逻辑，占位；真实实现在 codec.registry) ---- }
 
@@ -202,15 +243,43 @@ begin
   Result := nextpas.core.audio.base.AudioChannelLayoutForMask(AMask, AChannels);
 end;
 
-function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
-begin
-  Result := nextpas.core.audio.base.AudioBufferCreateSilence(AFormat, AFrames);
-end;
+function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;
+begin Result := nextpas.core.audio.base.AudioBytesForFrames(AFormat, AFrames); end;
 
-function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer;
-begin
-  Result := nextpas.core.audio.base.AudioBufferClone(ABuf);
-end;
+function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean): Boolean;
+begin Result := nextpas.core.audio.base.AudioIsValidBuffer(ABuffer, ARequireF32); end;
+
+function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer;
+begin Result := nextpas.core.audio.base.AudioBufferDataBytes(ABuffer); end;
+
+procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean);
+begin nextpas.core.audio.base.AudioValidateBuffer(ABuffer, AContext, ARequireF32); end;
+
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
+begin Result := nextpas.core.audio.base.AudioFillMemoryRealtime(ASrc, APos, ABuffer, AFrames); end;
+
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer;
+begin Result := nextpas.core.audio.base.AudioSilentFill(ABuffer, AFormat, AFrames); end;
+
+function AudioSimdCaps: TSimdCaps;
+begin Result := nextpas.core.audio.simd.AudioSimdCaps; end;
+
+procedure SimdAddF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single);
+begin nextpas.core.audio.simd.SimdAddF32(ASrc, ADst, ACount, AGain); end;
+
+procedure SimdMulF32(const ASrc: PSingle; ADst: PSingle; ACount: Integer; AGain: Single);
+begin nextpas.core.audio.simd.SimdMulF32(ASrc, ADst, ACount, AGain); end;
+
+function SimdPeakF32(const AData: PSingle; ACount: Integer): Single;
+begin Result := nextpas.core.audio.simd.SimdPeakF32(AData, ACount); end;
+
+function SimdSumSquaresF32(const AData: PSingle; ACount: Integer): Double;
+begin Result := nextpas.core.audio.simd.SimdSumSquaresF32(AData, ACount); end;
+
+procedure SimdClampF32(AData: PSingle; ACount: Integer; ALo, AHi: Single);
+begin nextpas.core.audio.simd.SimdClampF32(AData, ACount, ALo, AHi); end;
 
 function PcmClampF32(AValue: Single): Single;
 begin
@@ -257,6 +326,30 @@ begin
   Result := nextpas.core.audio.pcm.PcmF32ToS32(AValue);
 end;
 
+function PcmReadS16LE(const ABytes: TBytes; AOffset: Integer): SmallInt;
+begin Result := nextpas.core.audio.pcm.PcmReadS16LE(ABytes, AOffset); end;
+
+procedure PcmWriteS16LE(AValue: SmallInt; var ABytes: TBytes; AOffset: Integer);
+begin nextpas.core.audio.pcm.PcmWriteS16LE(AValue, ABytes, AOffset); end;
+
+function PcmReadS32LE(const ABytes: TBytes; AOffset: Integer): LongInt;
+begin Result := nextpas.core.audio.pcm.PcmReadS32LE(ABytes, AOffset); end;
+
+procedure PcmWriteS32LE(AValue: LongInt; var ABytes: TBytes; AOffset: Integer);
+begin nextpas.core.audio.pcm.PcmWriteS32LE(AValue, ABytes, AOffset); end;
+
+function PcmReadS24LE(const ABytes: TBytes; AOffset: Integer): Integer;
+begin Result := nextpas.core.audio.pcm.PcmReadS24LE(ABytes, AOffset); end;
+
+procedure PcmWriteS24LE(AValue: Integer; var ABytes: TBytes; AOffset: Integer);
+begin nextpas.core.audio.pcm.PcmWriteS24LE(AValue, ABytes, AOffset); end;
+
+procedure AudioPanLawGains(APan: Single; out AL, AR: Single);
+begin nextpas.core.audio.base.AudioPanLawGains(APan, AL, AR); end;
+
+function PanLawGains(APan: Single; ALawDB: Single): TPointF;
+begin Result := nextpas.core.audio.mix.PanLawGains(APan, ALawDB); end;
+
 function WavProbe(const APrefix: TBytes): TAudioProbeResult;
 begin
   Result := nextpas.core.audio.codec.wav.WavProbe(APrefix);
@@ -270,36 +363,6 @@ end;
 function CreateAiffDecoder: IAudioDecoder;
 begin
   Result := nextpas.core.audio.codec.aiff.CreateAiffDecoder;
-end;
-
-function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
-begin
-  Result := nextpas.core.audio.codec.flac.decoder.FlacProbe(APrefix);
-end;
-
-function CreateFlacDecoder: IAudioDecoder;
-begin
-  Result := nextpas.core.audio.codec.flac.decoder.CreateFlacDecoder;
-end;
-
-function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
-begin
-  Result := nextpas.core.audio.codec.mp3.decoder.Mp3Probe(APrefix);
-end;
-
-function CreateMp3Decoder: IAudioDecoder;
-begin
-  Result := nextpas.core.audio.codec.mp3.decoder.CreateMp3Decoder;
-end;
-
-function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
-begin
-  Result := nextpas.core.audio.codec.vorbis.decoder.VorbisProbe(APrefix);
-end;
-
-function CreateVorbisDecoder: IAudioDecoder;
-begin
-  Result := nextpas.core.audio.codec.vorbis.decoder.CreateVorbisDecoder;
 end;
 
 function TryParseID3v2(const APrefix: TBytes; out ATags: TAudioTags; out ASkipped: Integer): Boolean;
@@ -434,20 +497,50 @@ begin Result := nextpas.core.audio.game.CreateGameAudioForFormat(AProvider, AFor
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
 
-function TryParsePcmWav(const AStream: IStream; out AData: TPcmWavData): Boolean;
-begin Result := nextpas.core.audio.pcm_wav.TryParsePcmWav(AStream, AData); end;
+function CreateFlacDecoder: IAudioDecoder;
+begin Result := nextpas.core.audio.codec.flac.CreateFlacDecoder; end;
 
-function TryLoadPcmWav(const AFilePath: string; out AData: TPcmWavData): Boolean;
-begin Result := nextpas.core.audio.pcm_wav.TryLoadPcmWav(AFilePath, AData); end;
+function CreateMp3Decoder: IAudioDecoder;
+begin Result := nextpas.core.audio.codec.mp3.CreateMp3Decoder; end;
 
-function AudioUseNeon: Boolean;
-begin Result := nextpas.core.audio.simd.AudioUseNeon; end;
+function CreateVorbisDecoder: IAudioDecoder;
+begin Result := nextpas.core.audio.codec.vorbis.CreateVorbisDecoder; end;
 
-function AudioUseAVX2: Boolean;
-begin Result := nextpas.core.audio.simd.AudioUseAVX2; end;
+function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := nextpas.core.audio.codec.flac.FlacProbe(APrefix); end;
 
-function AudioSimdBackendName: string;
-begin Result := nextpas.core.audio.simd.AudioSimdBackendName; end;
+function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := nextpas.core.audio.codec.mp3.Mp3Probe(APrefix); end;
+
+function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := nextpas.core.audio.codec.vorbis.VorbisProbe(APrefix); end;
+
+function AlacProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := prUnknown; end;
+
+function WavPackProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := prUnknown; end;
+
+function OpusProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := prUnknown; end;
+
+function AacProbe(const APrefix: TBytes): TAudioProbeResult;
+begin Result := prUnknown; end;
+
+function CreateAudioPlaylist(const AFormat: TAudioFormat): IAudioPlaylist;
+begin Result := nextpas.core.audio.playlist.CreateAudioPlaylist(AFormat); end;
+
+function CreateAudioBusMixer: IAudioBusMixer;
+begin Result := nextpas.core.audio.bus.CreateAudioBusMixer; end;
+
+function CreateAudioBank: TAudioBank;
+begin Result := nextpas.core.audio.bank.CreateAudioBank; end;
+
+function CreateStudioProject(const AName: string; ABpm: Double; const AFormat: TAudioFormat): IStudioProject;
+begin Result := nextpas.core.audio.studio.project.CreateStudioProject(AName, ABpm, AFormat); end;
+
+function CreateAudioSequencer(const AFormat: TAudioFormat; ABpm: Double): IAudioSequencer;
+begin Result := nextpas.core.audio.studio.sequencer.CreateAudioSequencer(AFormat, ABpm); end;
 
 procedure AudioRegisterDecoderPlaceholder;
 begin

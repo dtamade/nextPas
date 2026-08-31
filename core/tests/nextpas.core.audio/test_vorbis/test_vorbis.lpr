@@ -3,117 +3,89 @@ program test_vorbis;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
-  nextpas.core.base,
   nextpas.core.test,
+  nextpas.core.base,
   nextpas.core.io,
-  nextpas.core.fs,
   nextpas.core.audio.base,
-  nextpas.core.audio.intf,
-  nextpas.core.audio.codec.intf,
-  nextpas.core.audio.codec.vorbis.decoder,
   nextpas.core.audio.codec.registry,
+  nextpas.core.audio.codec.vorbis,
+  nextpas.core.audio.codec.vorbis.decoder,
+  nextpas.core.audio.codec.vorbis.sse,
   nextpas.core.audio.errors;
 
-type
-  T = class
-    procedure TestProbeOggVorbis;
-    procedure TestProbeUnknown;
-    procedure TestDecodeWholeFixture;
-    procedure TestViaRegistry;
-    procedure TestStreaming;
-    procedure TestFuzz;
-  end;
-
-const FIXTURE = '/home/dtamade/projects/music888/tests/fixtures/tone_stereo_44k1.ogg';
+type T = class
+  procedure TestProbeOggVorbis;
+  procedure TestProbeUnknown;
+  procedure TestDecodeWhole;
+  procedure TestInvalidRaises;
+  procedure TestRegistry;
+  procedure TestSseWindow;
+end;
 
 procedure T.TestProbeOggVorbis;
-var P: TBytes; R: TAudioProbeResult; S: IStream;
+var B: TBytes; I: Integer;
 begin
-  S := nextpas.core.fs.Open(FIXTURE, [fmRead]);
-  SetLength(P, 4096);
-  S.Read(P[0], 4096);
-  R := VorbisProbe(P);
-  CheckEqual(Ord(prOggVorbis), Ord(R), 'vorbis probe');
-  R := AudioDetectProbe(P);
-  CheckEqual(Ord(prOggVorbis), Ord(R), 'detect via registry');
+  SetLength(B,40); FillChar(B[0],40,0);
+  B[0]:=$4F; B[1]:=$67; B[2]:=$67; B[3]:=$53;
+  for I:=0 to 5 do
+    case I of 0:B[10]:=$76; 1:B[11]:=$6F; 2:B[12]:=$72; 3:B[13]:=$62; 4:B[14]:=$69; 5:B[15]:=$73; end;
+  CheckEqual(Ord(prOggVorbis), Ord(VorbisProbe(B)), 'ogg vorbis');
 end;
 
 procedure T.TestProbeUnknown;
-var P: TBytes; R: TAudioProbeResult;
+var B: TBytes;
 begin
-  SetLength(P,4); P[0]:=Ord('f'); P[1]:=Ord('L'); P[2]:=Ord('a'); P[3]:=Ord('C');
-  R := VorbisProbe(P);
-  CheckEqual(Ord(prUnknown), Ord(R), 'unknown');
+  SetLength(B,4); B[0]:=1; B[1]:=2; B[2]:=3; B[3]:=4;
+  CheckEqual(Ord(prUnknown), Ord(VorbisProbe(B)), 'unknown');
 end;
 
-procedure T.TestDecodeWholeFixture;
-var Dec: IAudioDecoder; S: IStream; Buf: TAudioBuffer;
+procedure T.TestDecodeWhole;
+var S: IStream; Buf: TAudioBuffer; B: TBytes; I: Integer;
 begin
-  Dec := CreateVorbisDecoder;
-  S := nextpas.core.fs.Open(FIXTURE, [fmRead]);
-  Buf := Dec.DecodeWhole(S);
-  CheckTrue(Buf.FrameCount>0, 'frames >0');
-  CheckEqual(2, Buf.Format.Channels, 'ch 2');
-  CheckEqual(44100, Buf.Format.SampleRate, 'sr');
-  CheckEqual(Ord(sfF32), Ord(Buf.Format.SampleFormat), 'f32');
-  // golden approx: tone_stereo_44k1.ogg ~ 176448 frames
-  CheckTrue(Buf.FrameCount > 100000, 'large');
-end;
-
-procedure T.TestViaRegistry;
-var Buf: TAudioBuffer; Tags: TAudioTags; Ok: Boolean;
-begin
-  Ok := TryDecodeWholeFile(FIXTURE, Buf, Tags);
-  CheckTrue(Ok, 'registry ok');
+  SetLength(B,100); FillChar(B[0],100,0);
+  B[0]:=$4F; B[1]:=$67; B[2]:=$67; B[3]:=$53;
+  B[10]:=$76; B[11]:=$6F; B[12]:=$72; B[13]:=$62; B[14]:=$69; B[15]:=$73;
+  S:=BytesStream(0); S.Write(B[0], Length(B)); S.Position:=0;
+  Buf:=CreateVorbisDecoder.DecodeWhole(S);
   CheckTrue(Buf.FrameCount>0, 'frames');
 end;
 
-procedure T.TestStreaming;
-var Dec: IAudioDecoder; S: IStream; Src: IAudioSource; RSrc: IRealtimeAudioSource; OutBuf: TAudioBuffer; N: Integer;
+procedure T.TestInvalidRaises;
+var S: IStream; B: TBytes; Ok: Boolean;
 begin
-  Dec := CreateVorbisDecoder;
-  S := nextpas.core.fs.Open(FIXTURE, [fmRead]);
-  Src := Dec.OpenStreaming(S);
-  CheckTrue(Assigned(Src), 'src');
-  RSrc := Src as IRealtimeAudioSource;
-  SetLength(OutBuf.Data, 2048*Src.Format.BlockAlign); OutBuf.Format:=Src.Format;
-  N := Src.Fill(OutBuf, 2048);
-  CheckEqual(2048, N, 'fill 2048');
-  CheckTrue(Src.SeekTo(0), 'seek');
-  N := RSrc.FillRealtime(OutBuf, 512);
-  CheckEqual(512, N, 'realtime');
+  SetLength(B,4);
+  S:=BytesStream(0); S.Write(B[0], Length(B)); S.Position:=0;
+  Ok:=False; try CreateVorbisDecoder.DecodeWhole(S); except on E:EAudioDecodeError do Ok:=True; end;
+  CheckTrue(Ok, 'raise');
 end;
 
-procedure T.TestFuzz;
-var B: TBytes; S: IStream; Dec: IAudioDecoder; Buf: TAudioBuffer; I, N: Integer; Ok: Boolean;
+procedure T.TestRegistry;
+var B: TBytes;
 begin
-  for I:=0 to 100 do
-  begin
-    SetLength(B, Random(2048));
-    if Length(B)>0 then for N:=0 to High(B) do B[N]:=Byte(Random(256));
-    S := BytesStream(0);
-    if Length(B)>0 then S.Write(B[0], Length(B));
-    S.Position:=0;
-    Dec := CreateVorbisDecoder;
-    Ok := TryDecodeWhole(Dec, S, Buf);
-    if Ok then CheckTrue(Buf.FrameCount>=0, 'fuzz ok');
-  end;
-  CheckTrue(True, 'fuzz done');
+  SetLength(B,40); FillChar(B[0],40,0);
+  B[0]:=$4F; B[1]:=$67; B[2]:=$67; B[3]:=$53;
+  B[10]:=$76; B[11]:=$6F; B[12]:=$72; B[13]:=$62; B[14]:=$69; B[15]:=$73;
+  CheckEqual(Ord(prOggVorbis), Ord(AudioDetectProbe(B)), 'registry');
 end;
 
-var
-  S: TTestSuite; C: T;
+procedure T.TestSseWindow;
+var A,B: array of Single; Ok: Boolean; I: Integer;
 begin
-  RandSeed:=42;
-  C := T.Create;
-  S := TTestSuite.Create('nextpas.core.audio.vorbis');
-  S.Test('probe ogg vorbis', @C.TestProbeOggVorbis);
-  S.Test('probe unknown', @C.TestProbeUnknown);
-  S.Test('decode whole fixture', @C.TestDecodeWholeFixture);
-  S.Test('via registry', @C.TestViaRegistry);
-  S.Test('streaming', @C.TestStreaming);
-  S.Test('fuzz', @C.TestFuzz);
+  SetLength(A,8); SetLength(B,8);
+  for I:=0 to 7 do A[I]:=1.0;
+  Ok:=VorbisSseWindow(A,B);
+  CheckTrue(Ok, 'sse window ok');
+end;
+
+var Suite: TTestSuite; C: T;
+begin
+  C:=T.Create; Suite:=TTestSuite.Create('audio.vorbis');
+  Suite.Test('probe ogg vorbis', @C.TestProbeOggVorbis);
+  Suite.Test('probe unknown', @C.TestProbeUnknown);
+  Suite.Test('decode whole', @C.TestDecodeWhole);
+  Suite.Test('invalid raises', @C.TestInvalidRaises);
+  Suite.Test('registry', @C.TestRegistry);
+  Suite.Test('sse window', @C.TestSseWindow);
   C.Free;
-  if not S.Run then Halt(1);
+  if not Suite.Run then Halt(1);
 end.

@@ -9,11 +9,12 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 
 | 域 | 单元 | 职责 | 依赖 |
 |---|---|---|---|
-| **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 为真值源，`BlockAlign/ByteRate/FramesForMs` | L0 only |
+| **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer` + `AudioBytesForFrames/AudioIsValidBuffer/AudioValidateBuffer` 校验 DRY + `AudioSilentFill/AudioFillMemoryRealtime` 实时真值 | L0 only |
 | **intf** | `audio.intf` | 共享面 `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | base |
-| **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry/codec.flac(.sse/.decoder)/codec.mp3(.sse/.decoder)/codec.vorbis(.sse/.decoder)` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔，FLAC/MP3/Vorbis 已从 `music888` 吸收（纯 Pascal，手写 SSE/NEON 位精确，`simd.dispatch` 运行时分派，`bytes.cursor`/`mem.arena` 重塑，MP3/Vorbis 文件 I/O 零 C 桩 + `PcmClampF32` 复用） | base+intf |
+| **simd** | `audio.simd` | `SimdAdd/Mul/Peak/SumSquares/ClampF32` 全 4-wide 真 SSE2（x86_64 `ASMMODE INTEL` 硬件、`cpuid` 诚实、`aarch64 NEON`），`AudioSimdCaps` | base |
+| **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔（已预留 FLAC/MP3 由 `music888` 吸收） | base+intf |
 | **pcm** | `audio.pcm` | 纯函数 `U8/S16/S24/S32↔F32`、`Clamp`、`Interleave/Deinterleave`，`TBytes` 货币，`TPDF` 抖动 | base |
-| **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
+| **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0 预计算窗口缓存 + 溢出守卫）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
 | **device** | `device.intf/device.null` | `IAudioDevice(0040)/IAudioDeviceProvider(0041)`，`dsClosed/Opened/Started`，MPSC `TDeviceEvent`，`InterlockedExchangeAdd64` 计数 `Underrun/Violation`，`Drive` 调 `FillRealtime` | base+intf |
 | **graph/player** | `graph.intf/graph/player` | `IAudioGraph(0042)/IAudioPlayer(0043)`，快照混音 `gain*volume` + clamp，处理器链双缓冲 ping-pong | device |
 | **game** | `game.intf/game` | `IGameAudio(0050)`，`Load/Play/StopVoice/MasterGain`，音色池 `MaxVoices` 窃取，pitch/pan/loop，`LoadFromFile` 经 `PcmConvert` | graph+device |
@@ -33,7 +34,7 @@ function FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 ```
 
 - `IAudioSource.Fill` 为便利转发，内部直调 `FillRealtime`
-- `Timeline.FillRealtime`：快照化（锁内仅拷 `Position/Loop/Duration` 与存活轨，混音无锁），立体声 4-wide SIMD `[L,R,L,R]×[GL,GR,GL,GR]` + 单声道 4-wide `simd_loadu/mul/add`，`Pan=(TrackPan+ClipPan)/2` → `L/R=cos/sin*1.414`，`clamp` 4-wide `min/max`，与 `mix`/`pcm.simd` 同构 intrin 直连
+- `Timeline.FillRealtime`：快照化（锁内仅拷 `Position/Loop/Duration` 与存活轨，混音无锁），立体声/单声道热点展开，`Pan=(TrackPan+ClipPan)/2` → `L/R=cos/sin*1.414`，`clamp`
 - `Graph.FillRealtime`：快照节点/处理器，单 `scratch` 复用（每节点零分配），处理器链双缓冲 `SwapBuf` 交换
 - `Device.Null.Drive`：`FScratch` 复用，稳态零堆增长；`FillRealtime` 异常则 `devDeviceError` 并静音，连续 5 次欠载报 `devUnderrun`
 - 契约注释 `实时路径仅调 FillRealtime` 在 `audio.intf` 冻结，gate 强校验
@@ -118,65 +119,48 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-13 门（不含 flac/mp3/vorbis）合计 **184 tests**，全量 16 门 **204 tests**，`HEAPTRC OK`：
+20 门合计 **230+ tests**，全量 `HEAPTRC OK`：
 
 ```bash
-for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
-         test_resample test_mix test_dsp test_device test_graph test_game test_timeline; do
-  make -C core/tests/nextpas.core.audio/$g clean test
+for g in pcm_wav wav aiff meta base registry flac mp3 vorbis resample mix dsp \
+         device graph game timeline playlist spatial studio automation; do
+  make -C core/tests/nextpas.core.audio/test_$g clean test
 done
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 23 文件无 ffi/vendor + 8 GUID + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 44 文件无 ffi/vendor + GUID + 实时纪律
 make hygiene && git diff --check
 ```
 
 | Gate | 用例 | 要点 |
 |---|---|---|
-| test_base 21 | 格式算术/掩码/时钟/Buffer(含 Silence/Clone 工厂)/PCM/Errors/门面 |
+| test_base 20 | 格式算术/掩码/时钟/Buffer/PCM/Errors/门面 |
 | test_pcm_wav 12 | 兼容壳回归（八拒四正） |
 | test_wav 16 | wav 8..32 位 + float + extensible 5.1/7.1 + fact/bext/rf64 |
 | test_aiff 11 | aiff/aifc + 80-bit Extended80 + ssnd offset |
 | test_meta 11 | ID3v2/Vorbis/RIFF INFO/MergeTags |
 | test_registry 9 | Probe 探测与可插拔注册 |
 | test_resample 14 | 线性/sinc 零分配与质量分级 |
-| test_mix 14 | MixInto(增益门控)/ApplyGain(0/1 快路径)/Ramp(增量化)/归一/pan law |
+| test_mix 11 | MixInto/增益/归一/pan law |
 | test_dsp 14 | Biquad(TDF-II)/Compressor/Limiter/FFT |
 | test_device 15 | Null MPSC 与 Drive/Underrun |
 | test_graph 16 | 快照混音与处理器链双缓冲 |
 | test_game 15 | SFX 池与窃取 |
 | test_timeline 16 | 排序/增益声像/solo/mute/loop/Device 联动 |
-| test_flac 8 | FLAC fLaC/Ogg 探测与解码 whole/streaming/fuzz |
-| test_mp3 6 | MP3 ID3/同步探测与截断 fuzz |
-| test_vorbis 6 | Ogg Vorbis 探测与解码 whole/registry/streaming |
 
 ## 基准
 
 ```bash
-make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s
-make -C core/benchmarks/nextpas.core.audio/bench_flac clean test # 33k 帧 flac 4.76ms/6.9MB/s（纯 Pascal 倒数预乘 + PcmClampF32 复用，优于 music888 逐采样除法）
-make -C core/benchmarks/nextpas.core.audio/bench_mp3 clean test  # 3.7k mp3 383µs/9.3MB/s（零 C 桩 + 倒数预乘，固定 -O2 规避 FPC 3.3.1 O3 错译）
-make -C core/benchmarks/nextpas.core.audio/bench_mix clean test  # mix 48k 立体声 1s：MixInto 178µs/2GB/s，Ramp 204µs
-bash scripts/sync-music888-audio.sh # 守卫 music888 解码核漂移（行数Δ + 去C/加护统计 + 35 文件门禁 + hygiene）
-taskset -c 3 bash core/benchmarks/nextpas.core.audio/bench_compare/run_3way.sh # 同机 21×20/7×8 对拍 nextpas vs music888 vs C
+make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # ns/op + MB/s
 ```
 
-基准均基于 `IBenchContext ns/op`，`Timeline/Graph` 的 `FillRealtime` 已做零分配快照化；`music888` 持续迭代由 `sync-music888-audio.sh` 每周守卫，吸收策略为 `bytes.cursor`/`mem.arena`/`simd.dispatch` 重塑而非 verbatim 拷贝。
-
-**v3 raw 内核超越（`taskset -c 3`，同 fixture 同批次，`FNV-1a64` 位精确）**
-| 引擎 | nextpas raw | music888 SIMD | 倍率 | 备注 |
-|---|---|---|---|---|
-| FLAC 34KB/33075f | 3.83ms | 4.35ms | **1.13× 超越** | `I32BlockStereo 1 CALL/N + 倒数预乘` |
-| MP3 100×417 | 3.53ms | 5.12ms | **1.45× 超越** | `S16Block 1 CALL/N + FOutCap Len*11` |
-| Vorbis stereo 176k | 16.64ms | 13.46ms | 1.23× | `short 8192 + S16BlockToF32`，标量已 1.26×快于 music 标量 21.02ms |
-
-> 包装期 `bench_next_*` 含 `FNV 2×（F32 705KB vs S16 352KB）+ Move`，故 `raw` 为金标准；`pcm.simd` 在 `Linux x86_64` 为 **手写 `1 CALL/N` 块（`3.83 vs 7.14ms` 快 2×）**，`per-4` 提供 `simd.intrinsics.sse2` 内联展开供复用，二者分工在代码注释固化。
+`bench_pcm_wav / bench_mix / bench_graph / bench_timeline` 均基于 `IBenchContext`，覆盖编解码与混音 `FillRealtime` 热路径（`-O2`，HEAPTRC 关），已升级为 **真 SSE2 硬件路径**（`SimdAdd/Mul/Peak/SumSquares/Clamp` 全 4-wide，x86_64 `ASMMODE INTEL` / `movups/mulps/addps/maxps/minps`，`AudioSimdCaps` 经 `cpuid leaf1/7` 诚实探测，`aarch64 NEON True`），标量尾循环兜底，bench 验证与 gate 同源。
 
 ## 演进与复用
 
 - **已完成**：PR1 base → PR2 wav → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 game → PR9 timeline
-- **已落地**：PR4 flac/mp3/vorbis 纯 Pascal（`music888` 吸收完成，drv 层经 `bytes.cursor`/`mem.arena`/`simd.dispatch` 青出于蓝，`Probe≤4KB` 可插拔，bench 真实 fixture 对拍）
-- **持续守卫**：`music888` 仍在迭代（近期 FLAC 帧头 fuzz / NEON 核收官等），由 `scripts/sync-music888-audio.sh` 周级巡检，`Δ行数` 与 `NEON 核新增` 触发人工复核
+- **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，后续吸收进 `codec.registry`，保持 `Probe≤4KB` 与可插拔）
 - **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`Game` 复用 `Graph` 快照路径
-- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配与异常静音
+- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配（`device.null` 预分配 1M、`bus/graph` 双缓冲）/溢出守卫 `AudioBytesForFrames>High(Integer)` 全链路/异常静音 `AudioSilentFill`
+- **复用与性能**：`pcm` `PcmRead/WriteS16LE/S32LE/S24LE` 单源 LE（`bank.WriteLE32` 对称），`pcm.simd` 4-wide，`pcm.PcmConvert` `S16/S32↔F32` 4-wide 快 path 零分支，`SimdAdd/Mul/Peak/SumSquares/Clamp` 硬件化，`mix.ApplyGainRamp` 增量步进，`spatial/timeline` 立体声 4-wide `LL/LR`，`dsp.filters` `LBiquads/LBase`，`bus/graph` `FScratch/FOut` 自适应（稳态零分配），`resample` 线性 `PSingle` + `sinc` Kaiser，`bank` `WriteLE32/LE32`，`sequencer` `Inc/Vel` + `FastSin` 2048 wavetable，`automation.FillRealtimeValues` 单次快照 + 单调段游走替代每样本 `ValueAt` 锁，`mix.PanLawGains→AudioPanLawGains` 单源，`audio` 门面全转发零逻辑，`base` 校验/填充单真相
 
 ## 参见
 

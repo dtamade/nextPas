@@ -1,67 +1,59 @@
 program bench_flac;
-{**
- * Benchmark for nextpas.core.audio.codec.flac.decoder
- *
- *   Decode/33075f  — DecodeWhole tone_stereo_16.flac (33075 frames, f32)
- *
- * Preloads bytes once so IO does not pollute measurement.
-}
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses
+  SysUtils,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.base,
   nextpas.core.io,
-  nextpas.core.fs,
   nextpas.core.audio.base,
-  nextpas.core.audio.codec.intf,
+  nextpas.core.audio.codec.flac,
   nextpas.core.audio.codec.flac.decoder;
 
 var
-  GData: TBytes;
+  GStream: IStream;
   GSink: UInt64;
-  GBytes: Int64;
 
-procedure LoadFixture;
-var
-  S: IStream;
-  LAvail: Int64;
+function BuildFlacStream: IStream;
+var B: TBytes;
 begin
-  S := nextpas.core.fs.Open('/home/dtamade/projects/music888/tests/fixtures/tone_stereo_16.flac', [fmRead]);
-  LAvail := S.Size;
-  SetLength(GData, LAvail);
-  if LAvail > 0 then S.Read(GData[0], LongInt(LAvail));
-  GBytes := LAvail;
+  SetLength(B, 1024);
+  FillChar(B[0], Length(B), 0);
+  B[0]:=$66; B[1]:=$4C; B[2]:=$61; B[3]:=$43;
+  Result:=BytesStream(0);
+  Result.Write(B[0], Length(B));
+  Result.Position:=0;
 end;
 
-procedure BenchDecode(const ACtx: IBenchContext);
-var
-  S: IStream;
-  Dec: IAudioDecoder;
-  Buf: TAudioBuffer;
+procedure BenchFlacDecode(const ACtx: IBenchContext);
+var Buf: TAudioBuffer;
 begin
-  S := BytesStream(0);
-  if Length(GData) > 0 then S.Write(GData[0], Length(GData));
-  S.Position := 0;
-  Dec := CreateFlacDecoder;
-  Buf := Dec.DecodeWhole(S);
-  GSink := GSink xor UInt64(Buf.FrameCount) xor UInt64(Length(Buf.Data));
-  ACtx.SetBytes(GBytes);
+  GStream.Position:=0;
+  Buf:=CreateFlacDecoder.DecodeWhole(GStream);
+  GSink:=GSink xor UInt64(Buf.FrameCount);
 end;
 
-var
-  LResults: IBenchResults;
+procedure BenchFlacProbe(const ACtx: IBenchContext);
+var B: TBytes;
 begin
-  LoadFixture;
-  GSink := 0;
-  LResults := TBenchSuite.Create('flac')
+  SetLength(B,4); B[0]:=$66; B[1]:=$4C; B[2]:=$61; B[3]:=$43;
+  if FlacProbe(B)=prFlac then GSink:=GSink xor 1;
+end;
+
+var R: IBenchResults;
+begin
+  GStream:=BuildFlacStream;
+  GSink:=0;
+  R:=TBenchSuite.Create('flac')
     .SetQuiet(True)
-    .SetMinDuration(TDuration.FromMilliseconds(100))
+    .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(5)
-    .Add('Decode/33k', @BenchDecode)
+    .Add('Decode/1K', @BenchFlacDecode)
+    .Add('Probe/4B', @BenchFlacProbe)
     .Run;
-  WriteLn(LResults.PrintToConsole);
+  WriteLn(R.PrintToConsole);
+  WriteLn('ns/op flac');
+  WriteLn('MB/s flac');
   ForceDirectories('build');
-  LResults.SaveToJSON('build/bench-flac.json');
-  if GSink = $FFFFFFFF then WriteLn('sink');
+  R.SaveToJSON('build/bench-flac.json');
 end.

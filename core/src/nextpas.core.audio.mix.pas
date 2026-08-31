@@ -21,27 +21,13 @@ function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
 
 implementation
 
-uses Math
-{$IFDEF CPUX86_64}
-  , nextpas.core.simd.intrinsics.sse2
-  , nextpas.core.simd.intrinsics.base
-{$ENDIF}
-  ;
+uses nextpas.core.audio.simd;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);
-var LNew: TBytes; LExpected: Integer;
+var LNew: TBytes;
 begin
-  if not ABuf.Format.IsValid then raise EInvalidArgument.Create('audio.mix: invalid format');
-  if ABuf.Format.SampleFormat = sfF32 then
-  begin
-    if ABuf.FrameCount < 0 then raise EInvalidArgument.Create('audio.mix: negative FrameCount');
-    LExpected := ABuf.FrameCount * ABuf.Format.BlockAlign;
-    if Length(ABuf.Data) < LExpected then raise EInvalidArgument.Create('audio.mix: data too small');
-    Exit;
-  end;
-  if ABuf.FrameCount < 0 then raise EInvalidArgument.Create('audio.mix: negative FrameCount');
-  LExpected := ABuf.FrameCount * ABuf.Format.BlockAlign;
-  if Length(ABuf.Data) < LExpected then raise EInvalidArgument.Create('audio.mix: data too small for source format');
+  AudioValidateBuffer(ABuf, 'audio.mix');
+  if ABuf.Format.SampleFormat = sfF32 then Exit;
   if ABuf.FrameCount = 0 then begin ABuf.Format.SampleFormat := sfF32; SetLength(ABuf.Data, 0); Exit; end;
   LNew := PcmConvert(ABuf.Data, ABuf.Format.SampleFormat, sfF32, ABuf.FrameCount, ABuf.Format.Channels, False);
   ABuf.Data := LNew; ABuf.Format.SampleFormat := sfF32;
@@ -53,103 +39,27 @@ var
   LDstPtr, LSrcPtr: PSingle;
   LSamples, LDstOffset, LI: Integer;
 begin
-  if not ADst.Format.IsValid then raise EInvalidArgument.Create('MixInto: dst invalid format');
-  if ADst.Format.SampleFormat <> sfF32 then raise EInvalidArgument.Create('MixInto: dst must be sfF32');
-  if ADst.FrameCount < 0 then raise EInvalidArgument.Create('MixInto: dst negative FrameCount');
-  if Length(ADst.Data) < ADst.FrameCount * ADst.Format.BlockAlign then raise EInvalidArgument.Create('MixInto: dst data too small');
-  if not ASrc.Format.IsValid then raise EInvalidArgument.Create('MixInto: src invalid format');
+  AudioValidateBuffer(ADst, 'MixInto: dst', True);
+  AudioValidateBuffer(ASrc, 'MixInto: src');
   if (ASrc.Format.SampleRate <> ADst.Format.SampleRate) or (ASrc.Format.Channels <> ADst.Format.Channels) then
     raise EInvalidArgument.Create('MixInto: rate/channels mismatch');
   if AOffset < 0 then raise EInvalidArgument.Create('MixInto: negative offset');
-  if ASrc.FrameCount < 0 then raise EInvalidArgument.Create('MixInto: src negative FrameCount');
   if AOffset + ASrc.FrameCount > ADst.FrameCount then raise EInvalidArgument.Create('MixInto: dst too small for offset+src');
   if ASrc.FrameCount = 0 then Exit;
   if ASrc.Format.SampleFormat <> sfF32 then
   begin
-    if Length(ASrc.Data) < ASrc.FrameCount * ASrc.Format.BlockAlign then raise EInvalidArgument.Create('MixInto: src data too small');
     LSrcF32 := PcmConvert(ASrc.Data, ASrc.Format.SampleFormat, sfF32, ASrc.FrameCount, ASrc.Format.Channels, False);
     LSrcData := LSrcF32;
   end
   else
-  begin
-    if Length(ASrc.Data) < ASrc.FrameCount * ASrc.Format.BlockAlign then raise EInvalidArgument.Create('MixInto: src data too small');
     LSrcData := ASrc.Data;
-  end;
   LSamples := ASrc.FrameCount * ASrc.Format.Channels;
   LDstOffset := AOffset * ADst.Format.Channels;
   if LSamples = 0 then Exit;
   if Length(LSrcData) < LSamples * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: src F32 data too small');
   if Length(ADst.Data) < (LDstOffset + LSamples) * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: dst F32 data too small');
-  // 性能：增益门控 + 快路径（gain≈0 跳过，gain≈1 省乘法），稳态热路径内联 + SSE2 4-wide
-  if Abs(AGain) < 1e-6 then Exit;
   LDstPtr := PSingle(@ADst.Data[0]); LSrcPtr := PSingle(@LSrcData[0]);
-{$IFDEF CPUX86_64}
-  if Abs(AGain - 1.0) < 1e-6 then
-  begin
-    LI := 0;
-    while LI + 3 < LSamples do
-    begin
-      simd_storeu_ps(Pointer(PtrUInt(LDstPtr) + (LDstOffset + LI) * SizeOf(Single))^,
-        simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(LDstPtr) + (LDstOffset + LI) * SizeOf(Single))),
-                    simd_loadu_ps(Pointer(PtrUInt(LSrcPtr) + LI * SizeOf(Single)))));
-      Inc(LI, 4);
-    end;
-    for LI := LI to LSamples - 1 do
-      LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI];
-  end
-  else
-  begin
-    LI := 0;
-    while LI + 3 < LSamples do
-    begin
-      simd_storeu_ps(Pointer(PtrUInt(LDstPtr) + (LDstOffset + LI) * SizeOf(Single))^,
-        simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(LDstPtr) + (LDstOffset + LI) * SizeOf(Single))),
-                    simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(LSrcPtr) + LI * SizeOf(Single))),
-                                simd_set1_ps(AGain))));
-      Inc(LI, 4);
-    end;
-    for LI := LI to LSamples - 1 do
-      LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI] * AGain;
-  end;
-{$ELSE}
-  if Abs(AGain - 1.0) < 1e-6 then
-  begin
-    for LI := 0 to LSamples - 1 do
-      LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI];
-  end
-  else
-  begin
-    for LI := 0 to LSamples - 1 do
-      LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI] * AGain;
-  end;
-{$ENDIF}
-end;
-
-procedure ApplyGainPtr(P: PSingle; NSamples: Integer; AGain: Single); inline;
-var LI: Integer;
-{$IFDEF CPUX86_64}
-var VGain: TM128;
-{$ENDIF}
-begin
-  if Abs(AGain - 1.0) < 1e-6 then Exit;
-  if Abs(AGain) < 1e-6 then
-  begin
-    FillChar(P^, NSamples * SizeOf(Single), 0);
-    Exit;
-  end;
-{$IFDEF CPUX86_64}
-  VGain := simd_set1_ps(AGain);
-  LI := 0;
-  while LI + 3 < NSamples do
-  begin
-    simd_storeu_ps(Pointer(PtrUInt(P) + LI * SizeOf(Single))^,
-      simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(P) + LI * SizeOf(Single))), VGain));
-    Inc(LI, 4);
-  end;
-  for LI := LI to NSamples - 1 do P[LI] := P[LI] * AGain;
-{$ELSE}
-  for LI := 0 to NSamples - 1 do P[LI] := P[LI] * AGain;
-{$ENDIF}
+  SimdAddF32(LSrcPtr, @LDstPtr[LDstOffset], LSamples, AGain);
 end;
 
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
@@ -159,81 +69,53 @@ begin
   if NSamples <= 0 then Exit;
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGain: data too small');
   P := PSingle(@ABuf.Data[0]);
-  ApplyGainPtr(P, NSamples, AGain);
+  SimdMulF32(P, P, NSamples, AGain);
 end;
 
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
 var NSamples, LI: Integer; P: PSingle; LDelta, LStep, LGain: Single;
-{$IFDEF CPUX86_64}
-var VStep, VInc, VGain4: TM128;
-const CInc: array[0..3] of Single = (0, 1, 2, 3);
-{$ENDIF}
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit;
-  if Abs(AStartGain - AEndGain) < 1e-6 then begin ApplyGain(ABuf, AStartGain); Exit; end;
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGainRamp: data too small');
   P := PSingle(@ABuf.Data[0]);
   if NSamples = 1 then begin P[0] := P[0] * AStartGain; Exit; end;
-  LDelta := AEndGain - AStartGain;
-  LStep := LDelta / (NSamples - 1);
-{$IFDEF CPUX86_64}
-  VStep := simd_set1_ps(LStep);
-  VInc := simd_loadu_ps(@CInc[0]);
-  VInc := simd_mul_ps(VInc, VStep);
-  LGain := AStartGain;
-  LI := 0;
-  while LI + 3 < NSamples do
-  begin
-    VGain4 := simd_add_ps(simd_set1_ps(LGain), VInc);
-    simd_storeu_ps(Pointer(PtrUInt(P) + LI * SizeOf(Single))^,
-      simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(P) + LI * SizeOf(Single))), VGain4));
-    LGain := LGain + LStep * 4;
-    Inc(LI, 4);
-  end;
-  for LI := LI to NSamples - 1 do begin P[LI] := P[LI] * LGain; LGain := LGain + LStep; end;
-{$ELSE}
-  LGain := AStartGain;
+  LDelta := AEndGain - AStartGain; LStep := LDelta / (NSamples - 1); LGain := AStartGain;
   for LI := 0 to NSamples - 1 do begin P[LI] := P[LI] * LGain; LGain := LGain + LStep; end;
-{$ENDIF}
-  // 末帧钳制避免累积误差
-  // P[NSamples-1] 已由循环写入 AEndGain，无需二次修正（增量法位精确于标量除法）
 end;
 
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
-var NSamples, LI: Integer; P: PSingle; LPeak, LAbs, LGain: Single;
+var NSamples: Integer; P: PSingle; LPeak, LGain: Single;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit(0);
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('NormalizePeak: data too small');
-  P := PSingle(@ABuf.Data[0]); LPeak := 0;
-  for LI := 0 to NSamples - 1 do begin LAbs := P[LI]; if LAbs < 0 then LAbs := -LAbs; if LAbs > LPeak then LPeak := LAbs; end;
+  P := PSingle(@ABuf.Data[0]); LPeak := SimdPeakF32(P, NSamples);
   Result := LPeak;
-  if LPeak = 0 then Exit(0);
-  LGain := ATarget / LPeak;
-  ApplyGainPtr(P, NSamples, LGain);
+  if LPeak = 0 then LGain := 1 else LGain := ATarget / LPeak;
+  ApplyGain(ABuf, LGain);
 end;
 
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
-var NSamples, LI: Integer; P: PSingle; LSum: Double; LRms, LGain: Single;
+var NSamples: Integer; P: PSingle; LSum: Double; LRms, LGain: Single;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit(0);
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('NormalizeRMS: data too small');
-  P := PSingle(@ABuf.Data[0]); LSum := 0;
-  for LI := 0 to NSamples - 1 do LSum := LSum + P[LI] * P[LI];
+  P := PSingle(@ABuf.Data[0]); LSum := SimdSumSquaresF32(P, NSamples);
   LRms := Single(Sqrt(LSum / NSamples)); Result := LRms;
-  if LRms = 0 then Exit(0);
-  LGain := ATarget / LRms;
-  ApplyGainPtr(P, NSamples, LGain);
+  if LRms = 0 then LGain := 1 else LGain := ATarget / LRms;
+  ApplyGain(ABuf, LGain);
 end;
 
 function PanLawGains(APan: Single; ALawDB: Single = -3.0): TPointF;
-var LPan, LAngle: Single;
+var LPan: Single; L, R: Single;
 begin
   LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1;
-  if Abs(ALawDB + 6.0) < 0.001 then begin Result.X := (1 - LPan) * 0.5; Result.Y := (1 + LPan) * 0.5; end
-  else begin LAngle := (LPan + 1) * Pi / 4.0; Result.X := Cos(LAngle); Result.Y := Sin(LAngle); end;
+  if Abs(ALawDB + 6.0) < 0.001 then begin Result.X := (1 - LPan) * 0.5; Result.Y := (1 + LPan) * 0.5; Exit; end;
+  AudioPanLawGains(LPan, L, R);
+  Result.X := L / CAudioPanLawUnity;
+  Result.Y := R / CAudioPanLawUnity;
 end;
 
 end.

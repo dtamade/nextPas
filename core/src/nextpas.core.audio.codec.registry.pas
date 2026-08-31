@@ -26,31 +26,25 @@ function AudioOpenFileStreaming(const APath: string): IAudioSource;
 
 implementation
 
-// L2 explicit allow: codec.registry is the sole audio unit that touches L2 fs.
-// L1 io provides IStream seam; fs.Open is the container-I/O entry point.
-// Same-layer L2->L2 is exempt here and registered in DESIGN.md s2 and
-// core/docs/core-module-registry.md (audio: L0-L1 plus io/fs). No ffi.
 uses
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.aiff,
-  nextpas.core.audio.codec.flac.decoder,
-  nextpas.core.audio.codec.mp3.decoder,
-  nextpas.core.audio.codec.vorbis.decoder,
+  nextpas.core.audio.codec.flac,
+  nextpas.core.audio.codec.mp3,
+  nextpas.core.audio.codec.vorbis,
   nextpas.core.audio.errors,
   nextpas.core.exception,
-  nextpas.core.fs,
-  nextpas.core.sync.mutex;
+  nextpas.core.fs;
 
 var
   GFactories: array of TDecoderFactory;
-  GLock: TRecursiveMutex;
+  GLock: TRTLCriticalSection;
   GInited: Boolean;
 
 procedure EnsureInited;
 begin
   if GInited then Exit;
-  if not Assigned(GLock) then
-    GLock := TRecursiveMutex.Create;
+  InitCriticalSection(GLock);
   GInited := True;
   AudioRegisterDecoder(@CreateWavDecoder);
   AudioRegisterDecoder(@CreateAiffDecoder);
@@ -66,7 +60,7 @@ begin
   if not Assigned(AFactory) then
     raise EInvalidArgument.Create('AudioRegisterDecoder: factory is nil');
   EnsureInited;
-  GLock.Acquire;
+  EnterCriticalSection(GLock);
   try
     L := Length(GFactories);
     SetLength(GFactories, L + 1);
@@ -74,18 +68,18 @@ begin
       Move(GFactories[0], GFactories[1], L * SizeOf(TDecoderFactory));
     GFactories[0] := AFactory;
   finally
-    GLock.Release;
+    LeaveCriticalSection(GLock);
   end;
 end;
 
 function SnapshotFactories: TDecoderFactoryArray;
 begin
   EnsureInited;
-  GLock.Acquire;
+  EnterCriticalSection(GLock);
   try
     Result := Copy(GFactories);
   finally
-    GLock.Release;
+    LeaveCriticalSection(GLock);
   end;
 end;
 
@@ -95,29 +89,9 @@ var
   LDec: IAudioDecoder;
   LRes: TAudioProbeResult;
   I: Integer;
-  LCapped: TBytes;
 begin
   Result := prUnknown;
   if Length(APrefix) = 0 then Exit;
-  // Probe capped <=4KB via bytes.cursor semantics: never inspect beyond 4096 prefix
-  if Length(APrefix) > 4096 then
-  begin
-    SetLength(LCapped, 4096);
-    Move(APrefix[0], LCapped[0], 4096);
-    LFactories := SnapshotFactories;
-    for I := 0 to High(LFactories) do
-    begin
-      try
-        LDec := LFactories[I]();
-        if not Assigned(LDec) then Continue;
-        LRes := LDec.Probe(LCapped);
-        if LRes <> prUnknown then Exit(LRes);
-      except
-        Continue;
-      end;
-    end;
-    Exit;
-  end;
   LFactories := SnapshotFactories;
   for I := 0 to High(LFactories) do
   begin
@@ -273,7 +247,7 @@ initialization
   GInited := False;
 
 finalization
-  if Assigned(GLock) then
-    GLock.Free;
+  if GInited then
+    DoneCriticalSection(GLock);
 
 end.

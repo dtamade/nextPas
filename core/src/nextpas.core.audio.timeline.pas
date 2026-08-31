@@ -10,6 +10,7 @@ uses
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.timeline.intf,
+  nextpas.core.audio.simd,
   nextpas.core.audio.errors;
 
 type
@@ -23,8 +24,6 @@ type
     FLoop: Boolean;
     FLock: TCriticalSection;
     FViolations: Int64;
-    FScratch: array of TTimelineTrack;
-    FScratchMix: TAudioBuffer;
     function FindTrack(ATrack: TTimelineTrackId): Integer;
     function FindClip(var ATrack: TTimelineTrack; AClip: TTimelineClipId): Integer;
     function CalcDuration: UInt64;
@@ -55,10 +54,6 @@ type
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 
 implementation
-
-{$IFDEF CPUX86_64}
-uses nextpas.core.simd.intrinsics.sse2, nextpas.core.simd.intrinsics.base;
-{$ENDIF}
 
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := TTimelineImpl.Create(AFormat); end;
@@ -136,8 +131,8 @@ begin FLock.Enter; try idx:=FindTrack(ATrack); if idx<0 then Exit(False); FTrack
 function TTimelineImpl.AddClip(ATrack: TTimelineTrackId; const ABuffer: TAudioBuffer; AStartFrame: UInt64; AGain: Single; APan: Single): TTimelineClipId;
 var tidx, cidx: Integer; tmp: TTimelineClip; i: Integer;
 begin
-  if not ABuffer.Format.IsValid then raise EAudioTimelineError.Create('AddClip: invalid buffer');
-  if ABuffer.Format.SampleFormat<>sfF32 then raise EAudioTimelineError.Create('AddClip: must be sfF32');
+  if not AudioIsValidBuffer(ABuffer, True) then
+    raise EAudioTimelineError.Create('AddClip: invalid buffer (F32 required)');
   if (ABuffer.Format.SampleRate<>FFormat.SampleRate) or (ABuffer.Format.Channels<>FFormat.Channels) then raise EAudioTimelineError.Create('AddClip: format mismatch');
   if AGain<0 then AGain:=0 else if AGain>4 then AGain:=4;
   if APan<-1 then APan:=-1 else if APan>1 then APan:=1;
@@ -179,52 +174,41 @@ function TTimelineImpl.SeekTo(AFrame: UInt64): Boolean; begin FLock.Enter; try F
 
 function TTimelineImpl.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  Needed, i, j, ch, srcOff, dstOff, copyFrames, SnapCount: Integer;
+  Needed, i, j, ch, srcOff, dstOff, copyFrames: Integer;
   MixPtr: PSingle;
   HasSolo: Boolean;
   TrackGain, ClipGain, Gain: Single;
   TrackPan, ClipPan, Pan: Single;
-  Lgain, Rgain: Single;
+  Lgain, Rgain, LG, RG: Single;
   Clip: TTimelineClip;
   SrcPtr: PSingle;
   SnapPos: UInt64;
   SnapLoop: Boolean;
   SnapDur: UInt64;
-{$IFDEF CPUX86_64}
-  VGainLR: TM128;
-  CGainLR: array[0..3] of Single;
-  NSamples: Integer;
-{$ENDIF}
+  N4: Integer;
 begin
   if AFrames<=0 then Exit(0);
+  if (AFrames>0) and (AudioBytesForFrames(FFormat, AFrames)>High(Integer)) then Exit(0);
   Needed:=AFrames*FFormat.BlockAlign;
   if Length(ABuffer.Data)<Needed then
   begin InterlockedExchangeAdd64(FViolations,1); AFrames:=Length(ABuffer.Data) div FFormat.BlockAlign; if AFrames<=0 then Exit(0); Needed:=AFrames*FFormat.BlockAlign; end;
-  FillChar(ABuffer.Data[0], Needed, 0);
+  AudioSilentFill(ABuffer, FFormat, AFrames);
   MixPtr:=PSingle(@ABuffer.Data[0]);
-  FLock.Enter;
-  try
-    SnapPos:=FPosition;
-    SnapLoop:=FLoop;
-    SnapDur:=CalcDuration;
-    HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
-    if Length(FScratch) < Length(FTracks) then SetLength(FScratch, Length(FTracks));
-    SnapCount:=0;
-    for i:=0 to High(FTracks) do if FTracks[i].Alive then
-    begin
-      if FTracks[i].Muted then Continue;
-      if HasSolo and not FTracks[i].Solo then Continue;
-      FScratch[SnapCount] := FTracks[i];
-      Inc(SnapCount);
-    end;
-  finally FLock.Leave; end;
-  for i:=0 to SnapCount-1 do
+  // realtime: lock-free snapshot (control plane uses lock)
+  SnapPos:=FPosition;
+  SnapLoop:=FLoop;
+  SnapDur:=CalcDuration;
+  HasSolo:=False; for i:=0 to High(FTracks) do if FTracks[i].Alive and FTracks[i].Solo then HasSolo:=True;
+  for i:=0 to High(FTracks) do
   begin
-    TrackGain:=FScratch[i].Gain;
-    TrackPan:=FScratch[i].Pan;
-    for j:=0 to High(FScratch[i].Clips) do
+    if not FTracks[i].Alive then Continue;
+    if FTracks[i].Muted then Continue;
+    if HasSolo and not FTracks[i].Solo then Continue;
+    TrackGain:=FTracks[i].Gain;
+    TrackPan:=FTracks[i].Pan;
+    for j:=0 to High(FTracks[i].Clips) do
     begin
-      Clip:=FScratch[i].Clips[j];
+      Clip:=FTracks[i].Clips[j];
       if not Clip.Alive then Continue;
       if (Clip.StartFrame + UInt64(Clip.Buffer.FrameCount) <= SnapPos) then Continue;
       if (Clip.StartFrame >= SnapPos + UInt64(AFrames)) then Continue;
@@ -234,68 +218,29 @@ begin
       if copyFrames<=0 then Continue;
       ClipGain:=Clip.Gain; Pan:=(TrackPan+ClipPan)/2;
       Gain:=TrackGain*ClipGain;
-      if FFormat.Channels=2 then begin Lgain:=Cos((Pan+1)*Pi/4)*1.414213562; Rgain:=Sin((Pan+1)*Pi/4)*1.414213562; end else begin Lgain:=1; Rgain:=1; end;
+      if FFormat.Channels=2 then AudioPanLawGains(Pan, Lgain, Rgain) else begin Lgain:=1; Rgain:=1; end;
+      LG:=Gain*Lgain; RG:=Gain*Rgain;
       SrcPtr:=PSingle(@Clip.Buffer.Data[0]);
-{$IFDEF CPUX86_64}
       if FFormat.Channels=2 then
       begin
-        if (Gain<>1.0) or (Lgain<>1.0) or (Rgain<>1.0) then
+        N4:=copyFrames and not 3; ch:=0;
+        while ch < N4 do
         begin
-          // 4-wide SIMD：交错立体声 [L0,R0,L1,R1] * [GL,GR,GL,GR]，复用 mix.pas 同款 intrin
-          NSamples := copyFrames * 2;
-          CGainLR[0] := Gain * Lgain; CGainLR[1] := Gain * Rgain; CGainLR[2] := CGainLR[0]; CGainLR[3] := CGainLR[1];
-          VGainLR := simd_loadu_ps(@CGainLR[0]);
-          ch := 0;
-          while ch + 3 < NSamples do
-          begin
-            simd_storeu_ps(Pointer(PtrUInt(MixPtr) + (dstOff*2 + ch)*SizeOf(Single))^,
-              simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(MixPtr) + (dstOff*2 + ch)*SizeOf(Single))),
-                simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(SrcPtr) + (srcOff*2 + ch)*SizeOf(Single))), VGainLR)));
-            Inc(ch, 4);
-          end;
-          for ch := ch to NSamples - 1 do
-            MixPtr[dstOff*2 + ch] := MixPtr[dstOff*2 + ch] + SrcPtr[srcOff*2 + ch] * CGainLR[ch and 3];
-        end else
-        begin
-          NSamples := copyFrames * 2;
-          ch := 0;
-          while ch + 3 < NSamples do
-          begin
-            simd_storeu_ps(Pointer(PtrUInt(MixPtr) + (dstOff*2 + ch)*SizeOf(Single))^,
-              simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(MixPtr) + (dstOff*2 + ch)*SizeOf(Single))),
-                          simd_loadu_ps(Pointer(PtrUInt(SrcPtr) + (srcOff*2 + ch)*SizeOf(Single)))));
-            Inc(ch, 4);
-          end;
-          for ch := ch to NSamples - 1 do
-            MixPtr[dstOff*2 + ch] := MixPtr[dstOff*2 + ch] + SrcPtr[srcOff*2 + ch];
+          MixPtr[(dstOff+ch)*2]     := MixPtr[(dstOff+ch)*2]     + SrcPtr[(srcOff+ch)*2]*LG;
+          MixPtr[(dstOff+ch)*2+1]   := MixPtr[(dstOff+ch)*2+1]   + SrcPtr[(srcOff+ch)*2+1]*RG;
+          MixPtr[(dstOff+ch+1)*2]   := MixPtr[(dstOff+ch+1)*2]   + SrcPtr[(srcOff+ch+1)*2]*LG;
+          MixPtr[(dstOff+ch+1)*2+1] := MixPtr[(dstOff+ch+1)*2+1] + SrcPtr[(srcOff+ch+1)*2+1]*RG;
+          MixPtr[(dstOff+ch+2)*2]   := MixPtr[(dstOff+ch+2)*2]   + SrcPtr[(srcOff+ch+2)*2]*LG;
+          MixPtr[(dstOff+ch+2)*2+1] := MixPtr[(dstOff+ch+2)*2+1] + SrcPtr[(srcOff+ch+2)*2+1]*RG;
+          MixPtr[(dstOff+ch+3)*2]   := MixPtr[(dstOff+ch+3)*2]   + SrcPtr[(srcOff+ch+3)*2]*LG;
+          MixPtr[(dstOff+ch+3)*2+1] := MixPtr[(dstOff+ch+3)*2+1] + SrcPtr[(srcOff+ch+3)*2+1]*RG;
+          Inc(ch,4);
         end;
-      end else if FFormat.Channels=1 then
-      begin
-        ch := 0;
-        // 4-wide for mono: 单增益直乘
-        while ch + 3 < copyFrames do
+        while ch < copyFrames do
         begin
-          simd_storeu_ps(Pointer(PtrUInt(MixPtr) + (dstOff+ch)*SizeOf(Single))^,
-            simd_add_ps(simd_loadu_ps(Pointer(PtrUInt(MixPtr) + (dstOff+ch)*SizeOf(Single))),
-                        simd_mul_ps(simd_loadu_ps(Pointer(PtrUInt(SrcPtr) + (srcOff+ch)*SizeOf(Single))),
-                                    simd_set1_ps(Gain))));
-          Inc(ch, 4);
-        end;
-        for ch:=ch to copyFrames-1 do
-          MixPtr[dstOff+ch] := MixPtr[dstOff+ch] + SrcPtr[srcOff+ch]*Gain;
-      end else
-      begin
-        for ch:=0 to copyFrames-1 do
-          for Needed:=0 to FFormat.Channels-1 do
-            MixPtr[(dstOff+ch)*FFormat.Channels + Needed] := MixPtr[(dstOff+ch)*FFormat.Channels + Needed] + SrcPtr[(srcOff+ch)*FFormat.Channels + Needed]*Gain;
-      end;
-{$ELSE}
-      if FFormat.Channels=2 then
-      begin
-        for ch:=0 to copyFrames-1 do
-        begin
-          MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*Gain*Lgain;
-          MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*Gain*Rgain;
+          MixPtr[(dstOff+ch)*2] := MixPtr[(dstOff+ch)*2] + SrcPtr[(srcOff+ch)*2]*LG;
+          MixPtr[(dstOff+ch)*2+1] := MixPtr[(dstOff+ch)*2+1] + SrcPtr[(srcOff+ch)*2+1]*RG;
+          Inc(ch);
         end;
       end else if FFormat.Channels=1 then
       begin
@@ -307,29 +252,11 @@ begin
           for Needed:=0 to FFormat.Channels-1 do
             MixPtr[(dstOff+ch)*FFormat.Channels + Needed] := MixPtr[(dstOff+ch)*FFormat.Channels + Needed] + SrcPtr[(srcOff+ch)*FFormat.Channels + Needed]*Gain;
       end;
-{$ENDIF}
     end;
   end;
-{$IFDEF CPUX86_64}
-  // clamp 4-wide: min/max 消除分支，复用 pcm.simd 同款向量语言
-  i := 0;
-  while i + 3 < AFrames*FFormat.Channels do
-  begin
-    simd_storeu_ps(Pointer(PtrUInt(MixPtr) + i*SizeOf(Single))^,
-      simd_max_ps(simd_min_ps(simd_loadu_ps(Pointer(PtrUInt(MixPtr) + i*SizeOf(Single))), simd_set1_ps(1.0)), simd_set1_ps(-1.0)));
-    Inc(i, 4);
-  end;
-  for i:=i to AFrames*FFormat.Channels-1 do
-  begin if MixPtr[i]>1.0 then MixPtr[i]:=1.0 else if MixPtr[i]<-1.0 then MixPtr[i]:=-1.0; end;
-{$ELSE}
-  for i:=0 to AFrames*FFormat.Channels-1 do
-  begin if MixPtr[i]>1.0 then MixPtr[i]:=1.0 else if MixPtr[i]<-1.0 then MixPtr[i]:=-1.0; end;
-{$ENDIF}
-  FLock.Enter;
-  try
-    FPosition:=SnapPos+UInt64(AFrames);
-    if SnapLoop and (SnapDur>0) and (FPosition >= SnapDur) then FPosition:=FPosition mod SnapDur;
-  finally FLock.Leave; end;
+  SimdClampF32(MixPtr, AFrames*FFormat.Channels, -1.0, 1.0);
+  FPosition:=SnapPos+UInt64(AFrames);
+  if SnapLoop and (SnapDur>0) and (FPosition >= SnapDur) then FPosition:=FPosition mod SnapDur;
   ABuffer.FrameCount:=AFrames;
   ABuffer.Format:=FFormat;
   Result:=AFrames;

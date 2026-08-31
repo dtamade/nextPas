@@ -3,22 +3,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SRC="$ROOT/core/src"
 fail=0
-check_no_ffi() {
-  local file="$1"; local base="$(basename "$file")"
-  if grep -qiE "uses.*\.ffi|vendor|miniaudio|mpg123|opusfile" "$file"; then
-    if grep -E "^\s*uses" "$file" | grep -qiE "\.ffi|vendor"; then echo "[FAIL] $file contains forbidden ffi/vendor in uses"; fail=1; fi
-  fi
-  if grep -E "uses" "$file" | grep -q "\.ffi"; then echo "[FAIL] $file uses .ffi"; fail=1; fi
-  if grep -q "\.ffi" "$file"; then echo "[FAIL] $file contains '.ffi' token"; grep -n "\.ffi" "$file" || true; fail=1; fi
-  # codec 引擎中的 vendor 仅为 VorbisComment/FLAC 元数据字段及溯源注释，非外部 vendor 路径
-  if echo "$base" | grep -qiE "codec\.(flac|vorbis|mp3)"; then
-    if grep -E "^\s*uses" "$file" | grep -qi "vendor"; then echo "[FAIL] $file uses vendor in uses"; fail=1; fi
-  else
-    if grep -qi "vendor" "$file"; then echo "[FAIL] $file contains 'vendor' token"; grep -n -i "vendor" "$file" || true; fail=1; fi
-  fi
-}
+check_no_ffi() { local file="$1"; if grep -qiE "uses.*\.ffi|vendor|miniaudio|mpg123|opusfile" "$file"; then if grep -E "^\s*uses" "$file" | grep -qiE "\.ffi|vendor"; then echo "[FAIL] $file contains forbidden ffi/vendor in uses"; fail=1; fi; fi; if grep -E "uses" "$file" | grep -q "\.ffi"; then echo "[FAIL] $file uses .ffi"; fail=1; fi; if grep -q "\.ffi" "$file"; then echo "[FAIL] $file contains '.ffi' token"; grep -n "\.ffi" "$file" || true; fail=1; fi; if grep -qi "vendor" "$file"; then echo "[FAIL] $file contains 'vendor' token"; grep -n -i "vendor" "$file" || true; fail=1; fi; }
 echo "== audio source-contract gate =="
-for f in "$SRC/nextpas.core.audio.base.pas" "$SRC/nextpas.core.audio.intf.pas" "$SRC/nextpas.core.audio.codec.intf.pas" "$SRC/nextpas.core.audio.errors.pas" "$SRC/nextpas.core.audio.pcm.pas" "$SRC/nextpas.core.audio.pcm_wav.pas" "$SRC/nextpas.core.audio.codec.wav.pas" "$SRC/nextpas.core.audio.codec.aiff.pas" "$SRC/nextpas.core.audio.codec.meta.pas" "$SRC/nextpas.core.audio.codec.registry.pas" "$SRC/nextpas.core.audio.resample.pas" "$SRC/nextpas.core.audio.resample.sinc.pas" "$SRC/nextpas.core.audio.mix.pas" "$SRC/nextpas.core.audio.dsp.filters.pas" "$SRC/nextpas.core.audio.dsp.dynamics.pas" "$SRC/nextpas.core.audio.dsp.fft.pas" "$SRC/nextpas.core.audio.device.intf.pas" "$SRC/nextpas.core.audio.device.null.pas" "$SRC/nextpas.core.audio.graph.intf.pas" "$SRC/nextpas.core.audio.graph.pas" "$SRC/nextpas.core.audio.player.pas" "$SRC/nextpas.core.audio.game.intf.pas" "$SRC/nextpas.core.audio.game.pas" "$SRC/nextpas.core.audio.timeline.intf.pas" "$SRC/nextpas.core.audio.timeline.pas" "$SRC/nextpas.core.audio.simd.pas" "$SRC/nextpas.core.audio.codec.flac.pas" "$SRC/nextpas.core.audio.codec.flac.sse.pas" "$SRC/nextpas.core.audio.codec.flac.decoder.pas" "$SRC/nextpas.core.audio.codec.mp3.pas" "$SRC/nextpas.core.audio.codec.mp3.sse.pas" "$SRC/nextpas.core.audio.codec.mp3.decoder.pas" "$SRC/nextpas.core.audio.codec.vorbis.pas" "$SRC/nextpas.core.audio.codec.vorbis.sse.pas" "$SRC/nextpas.core.audio.codec.vorbis.decoder.pas"; do if [ ! -f "$f" ]; then echo "[FAIL] missing $f"; fail=1; continue; fi; check_no_ffi "$f"; echo "[OK] no ffi/vendor in $(basename "$f")"; done
+for f in "$SRC/nextpas.core.audio.base.pas" "$SRC/nextpas.core.audio.intf.pas" "$SRC/nextpas.core.audio.codec.intf.pas" "$SRC/nextpas.core.audio.errors.pas" "$SRC/nextpas.core.audio.pcm.pas" "$SRC/nextpas.core.audio.pcm.simd.pas" "$SRC/nextpas.core.audio.simd.pas" "$SRC/nextpas.core.audio.codec.aiff.pas" "$SRC/nextpas.core.audio.codec.meta.pas" "$SRC/nextpas.core.audio.codec.registry.pas" "$SRC/nextpas.core.audio.codec.wav.pas" "$SRC/nextpas.core.audio.codec.flac.pas" "$SRC/nextpas.core.audio.codec.flac.sse.pas" "$SRC/nextpas.core.audio.codec.flac.decoder.pas" "$SRC/nextpas.core.audio.codec.mp3.pas" "$SRC/nextpas.core.audio.codec.mp3.sse.pas" "$SRC/nextpas.core.audio.codec.mp3.decoder.pas" "$SRC/nextpas.core.audio.codec.vorbis.pas" "$SRC/nextpas.core.audio.codec.vorbis.sse.pas" "$SRC/nextpas.core.audio.codec.vorbis.decoder.pas" "$SRC/nextpas.core.audio.resample.pas" "$SRC/nextpas.core.audio.resample.sinc.pas" "$SRC/nextpas.core.audio.mix.pas" "$SRC/nextpas.core.audio.dsp.filters.pas" "$SRC/nextpas.core.audio.dsp.dynamics.pas" "$SRC/nextpas.core.audio.dsp.fft.pas" "$SRC/nextpas.core.audio.device.intf.pas" "$SRC/nextpas.core.audio.device.null.pas" "$SRC/nextpas.core.audio.graph.intf.pas" "$SRC/nextpas.core.audio.graph.pas" "$SRC/nextpas.core.audio.player.pas" "$SRC/nextpas.core.audio.game.intf.pas" "$SRC/nextpas.core.audio.game.pas" "$SRC/nextpas.core.audio.timeline.intf.pas" "$SRC/nextpas.core.audio.timeline.pas" "$SRC/nextpas.core.audio.playlist.pas" "$SRC/nextpas.core.audio.spatial.pas" "$SRC/nextpas.core.audio.bus.pas" "$SRC/nextpas.core.audio.bank.pas" "$SRC/nextpas.core.audio.studio.intf.pas" "$SRC/nextpas.core.audio.studio.project.pas" "$SRC/nextpas.core.audio.studio.sequencer.pas" "$SRC/nextpas.core.audio.studio.automation.pas" "$SRC/nextpas.core.audio.pas"; do if [ ! -f "$f" ]; then echo "[FAIL] missing $f"; fail=1; continue; fi; check_no_ffi "$f"; echo "[OK] no ffi/vendor in $(basename "$f")"; done
 if ! grep -q "实时路径仅调 FillRealtime" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] missing realtime comment"; fail=1; else echo "[OK] realtime discipline comment present"; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000010" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IAudioSource GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000011" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IRealtimeAudioSource GUID missing"; fail=1; fi
@@ -39,6 +26,8 @@ if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000042" "$SRC/nextpas.core.audio.gra
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000043" "$SRC/nextpas.core.audio.graph.intf.pas"; then echo "[FAIL] IAudioPlayer GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000050" "$SRC/nextpas.core.audio.game.intf.pas"; then echo "[FAIL] IGameAudio GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000060" "$SRC/nextpas.core.audio.timeline.intf.pas"; then echo "[FAIL] IAudioTimeline GUID missing"; fail=1; fi
-echo "[OK] device+graph+game+timeline domains present (PR9 scope)"
+if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000070" "$SRC/nextpas.core.audio.studio.intf.pas"; then echo "[FAIL] IAudioStudio GUID 0070 missing"; fail=1; else echo "[OK] IAudioStudio GUID 0070 present"; fi
+if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000080" "$SRC/nextpas.core.audio.playlist.pas"; then echo "[FAIL] IAudioPlaylist GUID 0080 missing"; fail=1; else echo "[OK] IAudioPlaylist GUID 0080 present"; fi
+echo "[OK] device+graph+game+timeline+studio+playlist domains present (studio scope)"
 if [ "$fail" -ne 0 ]; then echo "source-contract gate FAILED"; exit 1; fi
 echo "source-contract gate PASSED"

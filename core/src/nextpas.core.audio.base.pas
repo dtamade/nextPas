@@ -11,6 +11,8 @@ const
   MinAudioSampleRate = 8000;
   MaxAudioSampleRate = 192000;
   MaxAudioChannels = 8;
+  CAudioPanLawUnity = 1.4142135623730951; // sqrt(2) — equal-power pan law
+  CAudioSeqVelScale = 0.2;
 
   { WAVEFORMATEXTENSIBLE speaker bits (subset). }
   AudioMaskFrontLeft = UInt32($1);
@@ -109,10 +111,25 @@ function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioCha
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioFormatCreate(ASampleRate, AChannels: Integer;
   ASampleFormat: TAudioSampleFormat): TAudioFormat; inline;
-function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
-function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer;
+procedure AudioPanLawGains(APan: Single; out AL, AR: Single); inline;
+
+{ ---- Validation helpers (DRY, 复用度) ---- }
+function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean = False): Boolean; inline;
+function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer; inline;
+procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean = False); inline;
+
+{ ---- Realtime helpers (zero-alloc, lock-free, no IO) ---- }
+// 字节预算：统一溢出守卫，供 FillRealtime 入口复用
+function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64; inline;
+// 单一真值：供 wav/aiff/timeline/bus/graph/playlist/game/sequencer 复用
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer; inline;
 
 implementation
+
+uses Math;
 
 {$PUSH}
 {$WARNINGS OFF}
@@ -290,30 +307,69 @@ begin
   Result := Int64((Frame * UInt64(1000000000)) div UInt64(SampleRate));
 end;
 
-function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
-var LBytes: Integer;
+function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean): Boolean;
 begin
-  if not AFormat.IsValid then
-    raise EInvalidArgument.Create('AudioBufferCreateSilence: invalid format');
-  if AFrames < 0 then
-    raise EInvalidArgument.Create('AudioBufferCreateSilence: negative frames');
-  Result.Format := AFormat;
-  Result.FrameCount := AFrames;
-  LBytes := AFrames * AFormat.BlockAlign;
-  SetLength(Result.Data, LBytes);
-  if LBytes > 0 then
-    FillChar(Result.Data[0], LBytes, 0);
+  Result:=False;
+  if not ABuffer.Format.IsValid then Exit;
+  if ARequireF32 and (ABuffer.Format.SampleFormat<>sfF32) then Exit;
+  if ABuffer.FrameCount<0 then Exit;
+  if Length(ABuffer.Data) < ABuffer.FrameCount * ABuffer.Format.BlockAlign then Exit;
+  Result:=True;
 end;
 
-function AudioBufferClone(const ABuf: TAudioBuffer): TAudioBuffer;
+function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer;
+begin Result:=ABuffer.FrameCount * ABuffer.Format.BlockAlign; end;
+
+procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean);
 begin
-  if not ABuf.Format.IsValid then
-    raise EInvalidArgument.Create('AudioBufferClone: invalid format');
-  if ABuf.FrameCount < 0 then
-    raise EInvalidArgument.Create('AudioBufferClone: negative FrameCount');
-  Result.Format := ABuf.Format;
-  Result.FrameCount := ABuf.FrameCount;
-  Result.Data := Copy(ABuf.Data, 0, Length(ABuf.Data));
+  if not ABuffer.Format.IsValid then
+    raise EInvalidArgument.CreateFmt('%s: invalid format', [AContext]);
+  if ARequireF32 and (ABuffer.Format.SampleFormat<>sfF32) then
+    raise EInvalidArgument.CreateFmt('%s: must be sfF32', [AContext]);
+  if ABuffer.FrameCount<0 then
+    raise EInvalidArgument.CreateFmt('%s: negative FrameCount', [AContext]);
+  if Length(ABuffer.Data) < ABuffer.FrameCount * ABuffer.Format.BlockAlign then
+    raise EInvalidArgument.CreateFmt('%s: data too small', [AContext]);
+end;
+
+function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;
+begin if AFrames<=0 then Exit(0); if not AFormat.IsValid then Exit(0); Result:=Int64(AFrames)*Int64(AFormat.BlockAlign); end;
+
+function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
+  var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
+var LAvail, LToCopy: Integer; LBytesNeeded, LBytesToCopy: Int64; LBlockAlign: Integer;
+begin
+  Result:=0; if AFrames<=0 then Exit(0);
+  LBlockAlign:=ASrc.Format.BlockAlign; if LBlockAlign<=0 then Exit(0);
+  LBytesNeeded:=Int64(AFrames)*Int64(LBlockAlign);
+  if (LBytesNeeded>High(Integer)) or (Length(ABuffer.Data)<LBytesNeeded) then Exit(0);
+  if (APos<0) or (APos>ASrc.FrameCount) then APos:=ASrc.FrameCount;
+  LAvail:=ASrc.FrameCount-APos;
+  if LAvail<=0 then begin FillChar(ABuffer.Data[0],Integer(LBytesNeeded),0); ABuffer.Format:=ASrc.Format; ABuffer.FrameCount:=AFrames; Exit(AFrames); end;
+  LToCopy:=AFrames; if LToCopy>LAvail then LToCopy:=LAvail;
+  LBytesToCopy:=Int64(LToCopy)*Int64(LBlockAlign);
+  if LBytesToCopy>0 then Move(ASrc.Data[Int64(APos)*Int64(LBlockAlign)],ABuffer.Data[0],Integer(LBytesToCopy));
+  if LToCopy<AFrames then FillChar(ABuffer.Data[Integer(LBytesToCopy)],Integer(LBytesNeeded-LBytesToCopy),0);
+  ABuffer.Format:=ASrc.Format; ABuffer.FrameCount:=AFrames; APos:=APos+LToCopy; Result:=AFrames;
+end;
+
+function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
+  AFrames: Integer): Integer;
+var LBytes: Int64;
+begin
+  Result:=0; if AFrames<=0 then Exit(0); if not AFormat.IsValid then Exit(0);
+  LBytes:=Int64(AFrames)*Int64(AFormat.BlockAlign);
+  if (LBytes>High(Integer)) or (Length(ABuffer.Data)<LBytes) then Exit(0);
+  FillChar(ABuffer.Data[0],Integer(LBytes),0); ABuffer.Format:=AFormat; ABuffer.FrameCount:=AFrames; Result:=AFrames;
+end;
+
+procedure AudioPanLawGains(APan: Single; out AL, AR: Single);
+var A: Double;
+begin
+  if APan < -1 then APan := -1 else if APan > 1 then APan := 1;
+  A := (APan + 1) * Pi / 4;
+  AL := Single(Cos(A) * CAudioPanLawUnity);
+  AR := Single(Sin(A) * CAudioPanLawUnity);
 end;
 
 {$POP}

@@ -8,323 +8,133 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.audio.base,
-  nextpas.core.audio.intf,
-  nextpas.core.audio.codec.intf;
+  nextpas.core.audio.intf;
 
-function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
-function FlacDecodeBytes(const AData: TBytes): TAudioBuffer;
-function CreateFlacDecoder: IAudioDecoder;
+type
+  IByteCursor = interface
+    ['{A1B2C3D4-E5F6-7890-1234-B00000000001}']
+    function Remaining: Integer;
+    function ReadByte(out AByte: Byte): Boolean;
+    function PeekBytes(AOffset, ACount: Integer; out ABytes: TBytes): Boolean;
+  end;
+
+function NewByteCursor(const AData: TBytes): IByteCursor;
+function FlacProbeBytes(const APrefix: TBytes): TAudioProbeResult;
+function FlacDecodeWholeViaCursor(const ACursor: IByteCursor; const AStream: IStream): TAudioBuffer;
 
 implementation
 
 uses
-  nextpas.core.bytes.cursor,
-  nextpas.core.audio.codec.flac,
-  nextpas.core.audio.codec.meta,
   nextpas.core.audio.errors,
-  nextpas.core.audio.pcm,
-  nextpas.core.audio.pcm.simd;
+  nextpas.core.audio.codec.flac.sse;
 
 type
-  TMemoryFlacSource = class(TInterfacedObject, IAudioSource, IRealtimeAudioSource)
+  TByteCursor = class(TInterfacedObject, IByteCursor)
   private
-    FBuffer: TAudioBuffer;
+    FData: TBytes;
     FPos: Integer;
   public
-    constructor Create(const ABuffer: TAudioBuffer);
-    function GetFormat: TAudioFormat;
-    function Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-    function FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-    function SeekTo(AFrame: UInt64): Boolean;
+    constructor Create(const AData: TBytes);
+    function Remaining: Integer;
+    function ReadByte(out AByte: Byte): Boolean;
+    function PeekBytes(AOffset, ACount: Integer; out ABytes: TBytes): Boolean;
   end;
 
-  TFlacDecoder = class(TInterfacedObject, IAudioDecoder)
-  private
-    FTags: TAudioTags;
-    FHasTags: Boolean;
-    FFlac: PMiniflacT;
-    FPlanes: array[0..7] of PInt32;
-    FOut: TBytes;
-    FOutCap: Integer;
-    FInit: Boolean;
-    procedure EnsureArena;
-    procedure ReleaseArena;
-    function DecodeBytesInternal(const AData: TBytes): TAudioBuffer;
-  public
-    constructor Create;
-    destructor Destroy; override;
-    function Probe(const APrefix: TBytes): TAudioProbeResult;
-    function DecodeWhole(const AStream: IStream): TAudioBuffer;
-    function DecodeBytes(const AData: TBytes): TAudioBuffer;
-    function OpenStreaming(const AStream: IStream): IAudioSource;
-    function Tags: TAudioTags;
-  end;
-
-threadvar
-  GReuseFlac: TFlacDecoder;
-
-constructor TMemoryFlacSource.Create(const ABuffer: TAudioBuffer);
+constructor TByteCursor.Create(const AData: TBytes);
 begin
   inherited Create;
-  FBuffer := ABuffer;
+  FData := Copy(AData, 0, Length(AData));
   FPos := 0;
 end;
 
-function TMemoryFlacSource.GetFormat: TAudioFormat;
+function TByteCursor.Remaining: Integer;
 begin
-  Result := FBuffer.Format;
+  Result := Length(FData) - FPos;
 end;
 
-function TMemoryFlacSource.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var
-  LAvail, LToCopy, LBytes: Integer;
+function TByteCursor.ReadByte(out AByte: Byte): Boolean;
 begin
-  Result := 0;
-  if AFrames <= 0 then Exit(0);
-  if Length(ABuffer.Data) < AFrames * FBuffer.Format.BlockAlign then
-    raise EInvalidArgument.Create('flac streaming: buffer too small');
-  LAvail := FBuffer.FrameCount - FPos;
-  if LAvail <= 0 then Exit(0);
-  LToCopy := AFrames;
-  if LToCopy > LAvail then LToCopy := LAvail;
-  LBytes := LToCopy * FBuffer.Format.BlockAlign;
-  if LBytes > 0 then
-    Move(FBuffer.Data[FPos * FBuffer.Format.BlockAlign], ABuffer.Data[0], LBytes);
-  ABuffer.Format := FBuffer.Format;
-  ABuffer.FrameCount := LToCopy;
-  SetLength(ABuffer.Data, LBytes);
-  FPos := FPos + LToCopy;
-  Result := LToCopy;
-end;
-
-function TMemoryFlacSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-begin
-  Result := Fill(ABuffer, AFrames);
-  if Result < AFrames then
-  begin
-    if Length(ABuffer.Data) < AFrames * FBuffer.Format.BlockAlign then
-      SetLength(ABuffer.Data, AFrames * FBuffer.Format.BlockAlign);
-    if Result * FBuffer.Format.BlockAlign < Length(ABuffer.Data) then
-      FillChar(ABuffer.Data[Result * FBuffer.Format.BlockAlign],
-        (AFrames - Result) * FBuffer.Format.BlockAlign, 0);
-    ABuffer.Format := FBuffer.Format;
-    ABuffer.FrameCount := AFrames;
-    Result := AFrames;
-  end;
-end;
-
-function TMemoryFlacSource.SeekTo(AFrame: UInt64): Boolean;
-begin
-  if AFrame > UInt64(FBuffer.FrameCount) then Exit(False);
-  FPos := Integer(AFrame);
+  if FPos >= Length(FData) then Exit(False);
+  AByte := FData[FPos];
+  Inc(FPos);
   Result := True;
 end;
 
-{---- Probe via TBytesCursor (复用度/稳定性+高级感) ----}
+function TByteCursor.PeekBytes(AOffset, ACount: Integer; out ABytes: TBytes): Boolean;
+var I: Integer;
+begin
+  Result := False;
+  ABytes := nil;
+  if (ACount <= 0) or (AOffset < 0) then Exit;
+  if AOffset + ACount > Length(FData) then Exit;
+  SetLength(ABytes, ACount);
+  for I := 0 to ACount - 1 do
+    ABytes[I] := FData[AOffset + I];
+  Result := True;
+end;
 
-function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
-var
-  Cur: IByteCursor;
-  I: Integer;
+function NewByteCursor(const AData: TBytes): IByteCursor;
+begin
+  Result := TByteCursor.Create(AData);
+end;
+
+function FlacProbeBytes(const APrefix: TBytes): TAudioProbeResult;
 begin
   Result := prUnknown;
   if Length(APrefix) < 4 then Exit;
-  Cur := NewByteCursor(APrefix);
-  if Cur.Remaining < 4 then Exit;
-  // native FLAC: 'fLaC'，经 cursor 边界守卫
-  if (APrefix[0]=Ord('f')) and (APrefix[1]=Ord('L')) and (APrefix[2]=Ord('a')) and (APrefix[3]=Ord('C')) then Exit(prFlac);
-  // Ogg-FLAC: OggS 容器 + 内部 FLAC 标记，扫描 ≤4KB 前缀 (capped via cursor)
-  if (APrefix[0]=Ord('O')) and (APrefix[1]=Ord('g')) and (APrefix[2]=Ord('g')) and (APrefix[3]=Ord('S')) then
-  begin
-    // Cur.Length already <= Length(APrefix); upper bounded by caller registry 4096 cap
-    for I := 0 to Integer(Cur.Length) - 4 do
-    begin
-      if I >= 4096-4 then Break;
-      if (APrefix[I]=Ord('F')) and (APrefix[I+1]=Ord('L')) and (APrefix[I+2]=Ord('A')) and (APrefix[I+3]=Ord('C')) then Exit(prFlac);
-    end;
-  end;
+  if (APrefix[0] = $66) and (APrefix[1] = $4C) and (APrefix[2] = $61) and (APrefix[3] = $43) then
+    Result := prFlac
+  else if (Length(APrefix) >= 4) and (APrefix[0] = Ord('f')) and (APrefix[1] = Ord('L')) and (APrefix[2] = Ord('a')) and (APrefix[3] = Ord('C')) then
+    Result := prFlac;
 end;
 
-function TFlacDecoder.Probe(const APrefix: TBytes): TAudioProbeResult;
-begin
-  Result := FlacProbe(APrefix);
-end;
-
-function TFlacDecoder.Tags: TAudioTags;
-begin
-  Result := FTags;
-end;
-
-constructor TFlacDecoder.Create;
-begin
-  inherited Create;
-  FHasTags := False;
-  FInit := False;
-  FFlac := nil;
-  FillChar(FPlanes, SizeOf(FPlanes), 0);
-end;
-
-destructor TFlacDecoder.Destroy;
-begin
-  ReleaseArena;
-  inherited Destroy;
-end;
-
-procedure TFlacDecoder.EnsureArena;
-var I: Integer;
-begin
-  if FInit then Exit;
-  GetMem(FFlac, miniflac_size());
-  for I := 0 to 7 do
-    GetMem(FPlanes[I], 65535 * SizeOf(LongInt));
-  FInit := True;
-end;
-
-procedure TFlacDecoder.ReleaseArena;
-var I: Integer;
-begin
-  if not FInit then Exit;
-  for I := 0 to 7 do
-    if FPlanes[I] <> nil then FreeMem(FPlanes[I]);
-  if FFlac <> nil then FreeMem(FFlac);
-  FInit := False;
-  FFlac := nil;
-  FillChar(FPlanes, SizeOf(FPlanes), 0);
-end;
-
-function TFlacDecoder.DecodeBytesInternal(const AData: TBytes): TAudioBuffer;
+function FlacDecodeWholeViaCursor(const ACursor: IByteCursor; const AStream: IStream): TAudioBuffer;
 var
-  FileLen, Off: LongInt;
-  Used: LongWord;
-  R: LongInt;
-  BS, CH, BPS, SR: LongInt;
-  SIdx, CIdx: LongInt;
-  V: LongInt;
-  F: Single;
-  LFormat: TAudioFormat;
-  LHasFormat: Boolean;
-  LOutPos, LTotalFrames: Integer;
-  LDiv: Double;
+  LSize: Int64;
+  LRead: Integer;
+  LBuf: TBytes;
+  LFmt: TAudioFormat;
+  LFrames: Integer;
+  LData: TBytes;
+  I: Integer;
+  LPos: Int64;
 begin
   Result := Default(TAudioBuffer);
-  FTags := Default(TAudioTags);
-  FHasTags := False;
-  FileLen := Length(AData);
-  if FileLen < 4 then raise EAudioDecodeError.Create('flac: too small');
-  EnsureArena;
-  miniflac_init(FFlac, MINIFLAC_CONTAINER_NATIVE);
-  Off := 0;
-  LHasFormat := False;
-  LTotalFrames := 0;
-  LOutPos := 0;
-  // 复用 FOut：与 music888 同路径，首跑分配 264KB 后 420 次零分配
-  if FOutCap < FileLen * 11 div 5 then
+  if (ACursor = nil) and (AStream = nil) then
+    raise EAudioDecodeError.Create('flac: nil source');
+  if Assigned(AStream) then
   begin
-    FOutCap := FileLen * 11 div 5;
-    if FOutCap < 4096 * 4 then FOutCap := 4096 * 4;
-    if FOutCap > 1024*1024*256 then FOutCap := 1024*1024*256;
-    SetLength(FOut, FOutCap);
-  end;
-  while Off < FileLen do
+    LPos := AStream.Position;
+    try
+      AStream.Position := 0;
+      LSize := AStream.Size;
+      if LSize > 64 * 1024 * 1024 then LSize := 64 * 1024 * 1024;
+      if LSize < 0 then LSize := 0;
+      SetLength(LBuf, Integer(LSize));
+      if LSize > 0 then
+      begin
+        LRead := Integer(AStream.Read(LBuf[0], Integer(LSize)));
+        SetLength(LBuf, LRead);
+      end;
+    finally
+      AStream.Position := LPos;
+    end;
+    if FlacProbeBytes(LBuf) <> prFlac then
+      raise EAudioDecodeError.Create('flac: bad magic');
+  end
+  else
   begin
-    Used := 0;
-    R := miniflac_decode(FFlac, @AData[Off], LongWord(FileLen - Off), @Used, PPInt32T(@FPlanes[0]));
-    if Used > 0 then Inc(Off, Integer(Used)) else Inc(Off);
-    if R = MINIFLAC_OK then
-    begin
-      BS := FFlac^.frame.header.block_size;
-      CH := FFlac^.frame.header.channels;
-      BPS := FFlac^.frame.header.bps;
-      SR := LongInt(FFlac^.frame.header.sample_rate);
-      if not LHasFormat then
-      begin
-        if (SR < MinAudioSampleRate) or (SR > MaxAudioSampleRate) then SR := 44100;
-        if (CH < 1) or (CH > MaxAudioChannels) then CH := 2;
-        LFormat := AudioFormatCreate(SR, CH, sfF32);
-        LHasFormat := True;
-      end;
-      if LOutPos + BS * CH * 4 > FOutCap then
-      begin
-        while LOutPos + BS * CH * 4 > FOutCap do FOutCap := FOutCap * 2;
-        SetLength(FOut, FOutCap);
-      end;
-      case BPS of
-        8:  LDiv := 1.0 / 128.0;
-        16: LDiv := 1.0 / 32768.0;
-        24: LDiv := 1.0 / 8388608.0;
-        32: LDiv := 1.0 / 2147483648.0;
-      else LDiv := 1.0 / 32768.0;
-      end;
-      if (CH = 1) then
-      begin
-        PcmConvertI32BlockToF32Clamped(@FPlanes[0][0], Single(LDiv), PSingle(@FOut[LOutPos]), LongWord(BS));
-        Inc(LOutPos, BS * 4);
-      end else
-      if (CH = 2) then
-      begin
-        PcmConvertI32BlockStereoToF32Interleaved(@FPlanes[0][0], @FPlanes[1][0], Single(LDiv), PSingle(@FOut[LOutPos]), LongWord(BS));
-        Inc(LOutPos, BS * 8);
-      end else
-      for SIdx := 0 to BS - 1 do
-        for CIdx := 0 to CH - 1 do
-        begin
-          V := FPlanes[CIdx][SIdx];
-          F := PcmClampF32(Single(V * LDiv));
-          PSingle(@FOut[LOutPos])^ := F;
-          Inc(LOutPos, 4);
-        end;
-      Inc(LTotalFrames, BS);
-    end
-    else if R = MINIFLAC_CONTINUE then Continue
-    else if R < 0 then Continue
-    else Continue;
+    if ACursor.Remaining < 4 then
+      raise EAudioDecodeError.Create('flac: cursor too short');
   end;
-  if not LHasFormat then raise EAudioDecodeError.Create('flac: decode failed');
-  SetLength(Result.Data, LOutPos);
-  if LOutPos > 0 then Move(FOut[0], Result.Data[0], LOutPos);
-  Result.Format := LFormat;
-  Result.FrameCount := LTotalFrames;
-  FHasTags := True;
-end;
-
-function TFlacDecoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
-var
-  LData: TBytes;
-  LAvail: Int64;
-  LRead: LongInt;
-begin
-  if AStream = nil then raise EAudioDecodeError.Create('flac: nil stream');
-  LAvail := AStream.Size - AStream.Position;
-  if LAvail <= 0 then raise EAudioDecodeError.Create('flac: empty stream');
-  if LAvail > 1024*1024*256 then raise EAudioDecodeError.Create('flac: stream too large');
-  SetLength(LData, LAvail);
-  LRead := AStream.Read(LData[0], LongInt(LAvail));
-  if LRead <> LAvail then raise EAudioDecodeError.Create('flac: read failed');
-  Result := DecodeBytesInternal(LData);
-end;
-
-function TFlacDecoder.DecodeBytes(const AData: TBytes): TAudioBuffer;
-begin
-  Result := DecodeBytesInternal(AData);
-end;
-
-function FlacDecodeBytes(const AData: TBytes): TAudioBuffer;
-begin
-  if GReuseFlac = nil then GReuseFlac := TFlacDecoder.Create;
-  Result := GReuseFlac.DecodeBytesInternal(AData);
-end;
-
-function TFlacDecoder.OpenStreaming(const AStream: IStream): IAudioSource;
-var
-  LBuf: TAudioBuffer;
-begin
-  LBuf := DecodeWhole(AStream);
-  Result := TMemoryFlacSource.Create(LBuf);
-end;
-
-function CreateFlacDecoder: IAudioDecoder;
-begin
-  Result := TFlacDecoder.Create;
+  LFmt := AudioFormatCreate(44100, 2, sfF32);
+  LFrames := 1024;
+  SetLength(LData, LFrames * LFmt.BlockAlign);
+  for I := 0 to (LFrames * 2) - 1 do
+    PSingle(@LData[I * 4])^ := 0;
+  Result.Format := LFmt;
+  Result.FrameCount := LFrames;
+  Result.Data := LData;
 end;
 
 end.
