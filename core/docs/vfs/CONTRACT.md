@@ -17,7 +17,7 @@ vfs.base      ← TEntryInfo/TStatInfo、ValidPath 工具、常量（ValidPath�
 vfs.intf      ← IVfs/IVfsETag/IVfsServeMeta 契约
 vfs.errors    ← EVfsError(Op/Path) 及子类（Op∈{'stat','open','list','read','wrap'}）
 vfs.memtree   ← 内存不可变树 + Builder（Int64下标防回绕、防御拷贝防悬垂、两段式Freeze）
-vfs.embedded  ← respack blob → IVfs（零拷贝切片，EMBEDDED_POOL_SIZE=16 SpinLock池化）
+vfs.embedded  ← respack blob → IVfs（零拷贝切片，EMBEDDED_POOL_SIZE=256 SpinLock池化）
 vfs.os        ← nextpas.core.fs → IVfs 适配
 vfs.sub       ← 重定根视图包装（Go fs.Sub 对等物）
 vfs.mount     ← 挂载复合视图：多IVfs前缀最长匹配聚合（P2完整性，ETag/ServeMeta透传，CaseSensitive一致性）

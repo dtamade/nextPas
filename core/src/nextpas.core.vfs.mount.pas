@@ -107,7 +107,8 @@ begin
       FRootFs := AMounts[I].Fs;
     end;
   end;
-  // 最长匹配优先：按长度降序
+  // 最长匹配优先：按长度降序（冒泡 n≤16，前缀数极小，常数开销可忽略；
+  // FindMount 线性 O(n) 同理，trie 收益不足复杂度代价）
   for I := 0 to High(FMounts) - 1 do
     for J := I + 1 to High(FMounts) do
       if Length(FMounts[J].Prefix) > Length(FMounts[I].Prefix) then
@@ -115,10 +116,13 @@ begin
         P := FMounts[I].Prefix;
         FMounts[I].Prefix := FMounts[J].Prefix;
         FMounts[J].Prefix := P;
-        // swap Fs: 用临时 FRootFs 承载
-        FRootFs := FMounts[I].Fs;
-        FMounts[I].Fs := FMounts[J].Fs;
-        FMounts[J].Fs := FRootFs;
+        // swap Fs: 局部临时承载，避免复用 FRootFs 字段造成可读性/重入歧义
+        begin
+          var TmpFs: IVfs;
+          TmpFs := FMounts[I].Fs;
+          FMounts[I].Fs := FMounts[J].Fs;
+          FMounts[J].Fs := TmpFs;
+        end;
       end;
   // re-evaluate root after sort
   FHasRoot := False;
@@ -271,7 +275,7 @@ begin
         SL := Pos('/', FMounts[I].Prefix);
         if SL > 0 then Child := Copy(FMounts[I].Prefix, 1, SL - 1)
         else Child := FMounts[I].Prefix;
-        // 去重
+        // 去重 O(n²) m≤16 扇出，常数可忽略；热路径为 embedded 单层 List，前缀聚合为冷路径
         Already := False;
         for J := 0 to OutN - 1 do
           if Result[J].Name = Child then begin Already := True; Break; end;
@@ -282,7 +286,7 @@ begin
         Result[OutN].IsDir := True;
         Inc(OutN);
       end;
-    // 若有根挂载，合并其根 List 去重 — 预分配消逐条 +1 重分配抖动
+    // 若有根挂载，合并其根 List 去重 — 预分配消逐条 +1 重分配抖动（同上 m≤16 O(n²) 常数）
     if FHasRoot then
     begin
       BaseList := FRootFs.List('.');

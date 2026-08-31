@@ -49,7 +49,9 @@ function VfsNameCompare(const AA, AB: string): Integer; inline;
 function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
 function VfsETagFNV(const AHash: UInt32): string; inline;
 
-{ 就地按 Name 字节序升序（INV-V8）；quick(Int64 下标)+小区间插入混合排序 }
+{ 就地按 Name 字节序升序（INV-V8）；quick(Int64 下标)+小区间插入混合排序。
+  单源：字节序以 base.utils.CompareBytesOrdered 为唯一原语，经 VfsNameCompare
+  透传；writer CmpPath / overlay SortTemp 复用同一原语，阈值 16 与 Hoare 策略一致。 }
 procedure VfsSortEntries(var AItems: TEntryArray);
 
 { 从字节序有序的完整路径清单推导某目录的直接子项完整路径（有序、去重）。

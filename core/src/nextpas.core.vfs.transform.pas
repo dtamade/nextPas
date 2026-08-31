@@ -81,6 +81,8 @@ end;
 function TTransformingVfs.Stat(const APath: string): TStatInfo;
 var LInfo: TStatInfo; LData: TBytes; LOut: TBytes;
 begin
+  // 全量读：transform 需完整输入决定输出（压缩/加密均非流式可截断）；
+  // 大文件场景调用方应避免对 transform 视图做 Stat，或选用 HeaderPred 优化的 compressed 薄门面。
   LInfo := FInner.Stat(APath);
   if LInfo.Info.IsDir then Exit(LInfo);
   try LData := VfsReadAllBytes(FInner, APath); except on E: Exception do raise EVfsError.CreateCtx('stat', APath, E.Message); end;
@@ -98,6 +100,7 @@ end;
 function TTransformingVfs.OpenRead(const APath: string): IStream;
 var LData: TBytes; LOut: TBytes;
 begin
+  // 全量读同 Stat：transform 按完整字节变换，非流式；大文件建议直接用内层 Fs 或 compressed 的 HeaderPred 路径。
   try LData := VfsReadAllBytes(FInner, APath); except on E: Exception do raise EVfsError.CreateCtx('open', APath, E.Message); end;
   // Should 假或 Pointer 未变时复用已读 LData，省二次 FInner.OpenRead 磁盘 IO；单次 VfsReadAllBytes 已付 1 次拷贝，二次 IO 仅增系统调用无零拷贝收益
   if not Should(LData) then begin Result := CreateBytesStreamFrom(LData); Exit; end;
