@@ -6,9 +6,9 @@ unit np_compilation_session;
 {$UNITPATH ../syntax}
 {$UNITPATH ../toolchain}
 {$UNITPATH ../targets}
+{$UNITPATH ../lower}
 {$UNITPATH ../../core/src}
-{ frontend layer: no direct sema/ir/lower/backend UNITPATH — pipeline phases
-  via frontend intf (np_lower_query / np_backend_view_intf) }
+{ frontend layer: pipeline phases via lower intf (np_lower_query) — no direct sema/ir in session }
 
 interface
 
@@ -369,10 +369,8 @@ implementation
 uses
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
   nextpas.core.time, nextpas.core.base.utils,
-  np_preprocessor, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_printer, np_hir_llvm_emitter, np_toolchain_profiles,
-  np_semantic_analyzer, np_hir_to_mir, np_mir_optimize,
-  np_mir_to_llvm, nextpas_json_helpers;
+  np_preprocessor, np_toolchain_profiles,
+  np_lower_query, nextpas_json_helpers;
 
 {$I np_compilation_session_helpers.inc}
 
