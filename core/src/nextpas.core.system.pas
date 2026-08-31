@@ -163,24 +163,24 @@ begin
   Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
 end;
 
-function HTonN(AValue: Word): Word;
+function HTonN(AValue: Word): Word; inline;
 begin
-  Result := nextpas.core.base.utils.HTonN(AValue);
+  Result := Swap(AValue);
 end;
 
-function HTonN(AValue: LongWord): LongWord;
+function HTonN(AValue: LongWord): LongWord; inline;
 begin
-  Result := nextpas.core.base.utils.HTonN(AValue);
+  Result := SwapEndian(AValue);
 end;
 
-function NToHs(AValue: Word): Word;
+function NToHs(AValue: Word): Word; inline;
 begin
-  Result := nextpas.core.base.utils.NToHs(AValue);
+  Result := Swap(AValue);
 end;
 
-function NToHs(AValue: LongWord): LongWord;
+function NToHs(AValue: LongWord): LongWord; inline;
 begin
-  Result := nextpas.core.base.utils.NToHs(AValue);
+  Result := SwapEndian(AValue);
 end;
 
 function VarType(const V: Variant): TVarType;

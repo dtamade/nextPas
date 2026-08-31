@@ -58,7 +58,7 @@ function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
-function IsZeroBytes(const AData: TBytes): Boolean; inline;
+function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
@@ -398,8 +398,25 @@ end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 begin
-  // single source alias, inline keeps crypto callers on bytes.ops owner
   Result := StripLeadingZero(AData);
+end;
+
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+var LOff: SizeUInt;
+begin
+  Result := ASpan;
+  LOff := 0;
+  while (LOff < Result.Len) and (Result.Data[LOff] = 0) do Inc(LOff);
+  if LOff > 0 then
+  begin
+    Inc(Result.Data, LOff);
+    Dec(Result.Len, LOff);
+  end;
+end;
+
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+begin
+  Result := StripLeadingZeroSpan(TByteSpan.FromBytes(AData));
 end;
 
 function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
@@ -442,7 +459,7 @@ begin
   Result := CompareUnsignedSpan(ALeft, ARight) = 0;
 end;
 
-function IsZeroBytes(const AData: TBytes): Boolean; inline;
+function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 begin
   // perf: single-source zero check via StripLeadingZeroView (O(n) scan with early exit,
   // reuses existing view; empty => Len=0 => zero). Avoids duplicate byte loops and
@@ -451,7 +468,7 @@ begin
   Result := StripLeadingZeroView(AData).Len = 0;
 end;
 
-function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline;
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 begin
   // perf: same single source as TBytes overload via StripLeadingZeroSpan.
   Result := StripLeadingZeroSpan(ASpan).Len = 0;
