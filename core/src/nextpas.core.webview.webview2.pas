@@ -86,6 +86,7 @@ type
     procedure SendReceipt(AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
     procedure FireReadyOnce;
     procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
+    procedure SettlePendingOnClose; inline;
     procedure HandleNativeDestroy;
     procedure TryCreateEnvironment;
     procedure GrowPendingEvals; inline;
@@ -705,6 +706,34 @@ begin
       AList[I]();
 end;
 
+procedure TWebView2Webview.SettlePendingOnClose; inline;
+var
+  I: Integer;
+  LRec: PEvalRec;
+  LErr: EWebviewEvalFailed;
+begin
+  for I := 0 to FPendingCount - 1 do
+  begin
+    LRec := FPendingEvals[I];
+    if not LRec^.Done then
+    begin
+      LRec^.Done := True;
+      if Assigned(LRec^.OnError) then
+      begin
+        LErr := EWebviewEvalFailed.Create('webview window is closed');
+        try
+          try
+            LRec^.OnError(LErr);
+          except
+          end;
+        finally
+          LErr.Free;
+        end;
+      end;
+    end;
+  end;
+end;
+
 procedure TWebView2Webview.FireReadyOnce;
 var I: Integer;
 begin
@@ -976,6 +1005,7 @@ procedure TWebView2Webview.HandleNativeDestroy;
 begin
   if FClosed then Exit;
   FClosed := True;
+  SettlePendingOnClose;
   FireNotifyHandlers(FOnWindowClosed);
   FSelfKeepAlive := nil;
 end;
@@ -1013,31 +1043,10 @@ begin
 end;
 
 procedure TWebView2Webview.Close;
-var
-  I: Integer;
-  LRec: PEvalRec;
-  LErr: EWebviewEvalFailed;
 begin
   if FClosed then Exit;
   FClosed := True;
-  for I := 0 to FPendingCount - 1 do
-  begin
-    LRec := FPendingEvals[I];
-    if not LRec^.Done then
-    begin
-      LRec^.Done := True;
-      if Assigned(LRec^.OnError) then
-      begin
-        LErr := EWebviewEvalFailed.Create('webview window is closed');
-        try
-          LRec^.OnError(LErr);
-        finally
-          LErr.Free;
-        end;
-      end;
-      // keep record alive for ExecuteScript handler to Dispose and RemovePending (exactly-once, no double free)
-    end;
-  end;
+  SettlePendingOnClose;
   // array kept for handler cleanup; Close does not clear to avoid dangling handler pointer
   FireNotifyHandlers(FOnWindowClosed);
   Dec(GLive);
