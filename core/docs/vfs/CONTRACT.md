@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖；`transform/compressed` L3装饰器例外依赖 compress.base GZIP_MAX单源）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-08-31
-**版本**：1.4（P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型 + mount/overlay 双视图，13门闭环）
+**版本**：1.5（P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型 + mount/overlay 双视图，13门闭环；polish17 池化256+可读性+文档收口）
 
 ---
 
@@ -168,3 +168,4 @@ end;
 | 2026-08-30 | 1.2 | S6装饰器落地：vfs.transform通用模板 + vfs.compressed薄门面（GZIP_MAX单源/4K HeaderPred/单次读取复用/池化复用度/OpPath高级感）；12门补齐（respack5+vfs5+2）+ bench_transform阈值；性能契约添HeaderPred/零二次IO证据 | AI |
 | 2026-08-30 | 1.3 | P2挂载复合落地：vfs.mount 前缀最长匹配复合+ETag/ServeMeta透传+CaseSensitive一致性，mount门禁6例，13门闭环 | AI |
 | 2026-08-31 | 1.4 | P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型，overlay 3例（priority/list dedup/etag），13门闭环 | AI |
+| 2026-08-31 | 1.5 | polish17 收口：EMBEDDED_POOL_SIZE 256 对齐、mount 局部 TmpFs 可读性 + FindMount/List dedup 常数化注释、transform 全量读约束、排序单源单源注释 | AI |

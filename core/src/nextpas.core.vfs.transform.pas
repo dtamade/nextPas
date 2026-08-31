@@ -29,7 +29,7 @@ uses
   nextpas.core.vfs.util;
 
 type
-  TTransformingVfs = class(TInterfacedObject, IVfs, IVfsETag)
+  TTransformingVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FInner: IVfs;
     FTransform: TVfsTransformFunc;
@@ -45,6 +45,7 @@ type
     function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
+    function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
   end;
 
 function CreateTransformingVfs(const AInner: IVfs; const ATransform: TVfsTransformFunc; const AShouldTransform: TVfsShouldTransformFunc): IVfs;
@@ -124,6 +125,14 @@ var LInnerETag: IVfsETag;
 begin
   if FInner.QueryInterface(IVfsETag, LInnerETag) = 0 then Exit(LInnerETag.TryGetLastModified(APath, ALastModified));
   ALastModified := ''; Result := False;
+end;
+
+function TTransformingVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+begin
+  // ETag 禁用：变换后内容与源不一致，旧指纹不可复用；LastModified 仍可经 TryGetLastModified 透传
+  AETag := '';
+  ALastModified := '';
+  Result := False;
 end;
 
 end.

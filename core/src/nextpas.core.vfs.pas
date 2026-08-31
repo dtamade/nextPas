@@ -59,7 +59,11 @@ function CreateOverlayVfs(const AList: array of IVfs): IVfs; inline;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 function VfsIsRoot(const APath: string): Boolean; inline;
+function VfsPathHasPrefix(const APath, APrefix: string): Boolean; inline;
+function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
 function VfsNameCompare(const AA, AB: string): Integer; inline;
+function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
+function VfsETagFNV(const AHash: UInt32): string; inline;
 procedure VfsSortEntries(var AItems: TEntryArray); inline;
 
 function VfsStat(const AFs: IVfs; const APath: string): TStatInfo; inline;
@@ -129,9 +133,29 @@ begin
   Result := nextpas.core.vfs.base.VfsIsRoot(APath);
 end;
 
+function VfsPathHasPrefix(const APath, APrefix: string): Boolean;
+begin
+  Result := nextpas.core.vfs.base.VfsPathHasPrefix(APath, APrefix);
+end;
+
+function VfsIsParentPath(const AParent, AChild: string): Boolean;
+begin
+  Result := nextpas.core.vfs.base.VfsIsParentPath(AParent, AChild);
+end;
+
 function VfsNameCompare(const AA, AB: string): Integer;
 begin
   Result := nextpas.core.vfs.base.VfsNameCompare(AA, AB);
+end;
+
+function VfsETagStrong(const ASize, AModTime: Int64): string;
+begin
+  Result := nextpas.core.vfs.base.VfsETagStrong(ASize, AModTime);
+end;
+
+function VfsETagFNV(const AHash: UInt32): string;
+begin
+  Result := nextpas.core.vfs.base.VfsETagFNV(AHash);
 end;
 
 procedure VfsSortEntries(var AItems: TEntryArray);
