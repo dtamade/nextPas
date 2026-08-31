@@ -80,6 +80,7 @@ begin
       dec r8
       jnz @RFS_AVX_TAIL_LOOP
     @RFS_AVX_DONE:
+      vzeroupper
     end;
     Exit;
   end;
@@ -118,6 +119,7 @@ begin
     dec r8
     jnz @RFS_TAIL_LOOP
   @RFS_DONE:
+      vzeroupper
   end;
 end;
 
@@ -230,6 +232,7 @@ begin
       dec r8
       jnz @RB_AVX_LOOP8
     @RB_AVX_TAIL:
+      vzeroupper
     end;
     if (PixelCount and 7) <> 0 then
     begin
@@ -291,6 +294,7 @@ begin
     dec r8
     jnz @RB_LOOP4
   @RB_DONE:
+      vzeroupper
   end;
   if (PixelCount and 3) <> 0 then
   begin
@@ -349,6 +353,7 @@ begin
         dec r8
         jnz @RTR_AVX_LOOP4
       @RTR_AVX_TAIL:
+        vzeroupper
       end;
       Tail := PixelCount and 3;
       if Tail <> 0 then
@@ -380,6 +385,7 @@ begin
       dec r8
       jnz @RTR_LOOP4
     @RTR_TAIL:
+      vzeroupper
     end;
     Tail := PixelCount and 3;
     if Tail <> 0 then

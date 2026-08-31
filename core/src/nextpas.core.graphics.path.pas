@@ -1,6 +1,9 @@
 {**
  * nextpas.core.graphics.path - TPath 不可变链（值类型 COW，array of TVec2/Byte，零 TBytes/bytes）
  * 指数扩容 + AlignUp 复用 mem.base，TGradient 私有化不可变。
+ * TPath 链式 MoveTo/LineTo 为不可变值类型：每次 COW 全量拷贝共享数组；
+ * 未 Reserve 时 N 次链式总拷贝 O(N²)；大路径请用 TPathBuilder+Reserve，
+ * Reserve 已分 Verbs/Points 双容量正确处理。
  *}
 unit nextpas.core.graphics.path;
 
@@ -19,6 +22,8 @@ type
   TColor32Array = array of TColor32;
   TSingleArray = array of Single;
 
+  { TPath 不可变链：每次 MoveTo/LineTo 通过 COW 全量拷贝；未 Reserve 时 N 次链式 O(N²)，
+    大路径请用 TPathBuilder+Reserve；Reserve 分 Verbs/Points 双容量正确分配 }
   TPath = record
   private
     FVerbs: array of TPathVerb;
@@ -568,7 +573,33 @@ end;
 { TGradient }
 
 class function TGradient.Create(AKind: TGradientKind; const AColors: TColor32Array; const AStops: TSingleArray; const ATransform: TMat2D): TGradient;
+var
+  I: Integer;
+  S, Prev: Single;
 begin
+  if Length(AColors) < 2 then
+    raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.Create: gradient needs >=2 colors');
+  if (Length(AStops) <> 0) and (Length(AStops) <> Length(AColors)) then
+    raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.Create: stops/colors length mismatch');
+  if IsNaN(ATransform.A) or IsInfinite(ATransform.A) or IsNaN(ATransform.B) or IsInfinite(ATransform.B) or
+     IsNaN(ATransform.C) or IsInfinite(ATransform.C) or IsNaN(ATransform.D) or IsInfinite(ATransform.D) or
+     IsNaN(ATransform.Tx) or IsInfinite(ATransform.Tx) or IsNaN(ATransform.Ty) or IsInfinite(ATransform.Ty) then
+    raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.Create: transform must be finite');
+  if Length(AStops) > 0 then
+  begin
+    Prev := -1;
+    for I := 0 to High(AStops) do
+    begin
+      S := AStops[I];
+      if IsNaN(S) or IsInfinite(S) then
+        raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.Create: stop must be finite');
+      if (S < -1e-6) or (S > 1 + 1e-6) then
+        raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.Create: stop out of [0,1]');
+      if S < Prev - 1e-6 then
+        raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.Create: stops must be monotonic');
+      Prev := S;
+    end;
+  end;
   Result.FKind := AKind;
   if Length(AColors) > 0 then
     Result.FColors := Copy(AColors, 0, Length(AColors))
@@ -662,6 +693,10 @@ end;
 
 function TGradient.WithTransform(const M: TMat2D): TGradient; inline;
 begin
+  if IsNaN(M.A) or IsInfinite(M.A) or IsNaN(M.B) or IsInfinite(M.B) or
+     IsNaN(M.C) or IsInfinite(M.C) or IsNaN(M.D) or IsInfinite(M.D) or
+     IsNaN(M.Tx) or IsInfinite(M.Tx) or IsNaN(M.Ty) or IsInfinite(M.Ty) then
+    raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.WithTransform: matrix must be finite');
   Result := Clone;
   Result.FTransform := FTransform.Concat(M);
 end;
@@ -671,6 +706,11 @@ var
   I: Integer;
   Rgba: TRgba;
 begin
+  if IsNaN(A) or IsInfinite(A) then
+    raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.WithOpacity: opacity must be finite');
+  if (A < -1e-6) or (A > 1 + 1e-6) then
+    raise EArgumentError.Create('nextpas.core.graphics.path.pas: TGradient.WithOpacity: opacity out of [0,1]');
+  if A < 0 then A := 0 else if A > 1 then A := 1;
   Result := Clone;
   if Length(Result.FColors) = 0 then Exit;
   for I := 0 to High(Result.FColors) do
