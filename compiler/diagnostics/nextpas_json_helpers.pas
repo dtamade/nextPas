@@ -42,25 +42,8 @@ procedure AppendJsonBooleanField(
 implementation
 
 function JsonEscape(const Value: string): string;
-var
-  Index: SizeInt;
 begin
-  Result := '';
-  for Index := 1 to Length(Value) do
-    case Value[Index] of
-      '\':
-        Result := Result + '\\';
-      '"':
-        Result := Result + '\"';
-      #10:
-        Result := Result + '\n';
-      #13:
-        Result := Result + '\r';
-      #9:
-        Result := Result + '\t';
-    else
-      Result := Result + Value[Index];
-    end;
+  Result := nextpas.core.text.conv.JsonEscape(Value);
 end;
 
 function JsonString(const Value: string): string;
