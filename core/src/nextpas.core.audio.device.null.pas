@@ -6,7 +6,6 @@ interface
 
 uses
   SysUtils,
-  Classes,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,

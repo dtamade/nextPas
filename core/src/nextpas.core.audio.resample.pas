@@ -46,9 +46,8 @@ begin
   begin
     if Length(APlanes[I]) >= LNeed then Continue;
     LCap := Length(APlanes[I]);
-    if LCap < 256 then LCap := 256;
-    while LCap < LNeed do LCap := LCap * 2;
-    SetLength(APlanes[I], LCap);
+    AudioEnsureCapacity(LCap, LNeed, 256);
+    if Length(APlanes[I]) <> LCap then SetLength(APlanes[I], LCap);
   end;
 end;
 
@@ -63,9 +62,8 @@ begin
   begin
     if Length(APlanes[I]) >= LNeed then Continue;
     LCap := Length(APlanes[I]);
-    if LCap < 256 then LCap := 256;
-    while LCap < LNeed do LCap := LCap * 2;
-    SetLength(APlanes[I], LCap);
+    AudioEnsureCapacity(LCap, LNeed, 256);
+    if Length(APlanes[I]) <> LCap then SetLength(APlanes[I], LCap);
   end;
 end;
 

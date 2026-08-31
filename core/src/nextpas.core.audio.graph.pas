@@ -6,7 +6,6 @@ interface
 
 uses
   SysUtils,
-  Classes,
   Math,
   nextpas.core.sync.mutex,
   nextpas.core.base,
