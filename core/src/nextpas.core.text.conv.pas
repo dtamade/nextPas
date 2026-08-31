@@ -44,10 +44,11 @@ function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
 function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 
 {== Encoding — byte<->string conversions ==}
-function UTF8BytesToString(const AData: TBytes): string;
-function StringToUTF8Bytes(const AStr: string): TBytes;
-function ASCIIBytesToString(const AData: TBytes): string;
-function StringToASCIIBytes(const AStr: string): TBytes;
+{ single-source via bytes.ops: BytesToString/StringToBytes (SetLength+Move inline zero-copy) }
+function UTF8BytesToString(const AData: TBytes): string; inline;
+function StringToUTF8Bytes(const AStr: string): TBytes; inline;
+function ASCIIBytesToString(const AData: TBytes): string; inline;
+function StringToASCIIBytes(const AStr: string): TBytes; inline;
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
 function SameText(const A, B: string): Boolean; inline;
@@ -67,6 +68,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.bytes.ops,
   { ASCII SameText only — do not pull text.compare (unicode.casefold/normalize). }
   nextpas.core.text.char,
   nextpas.core.text.format,
@@ -87,37 +89,20 @@ end;
 
 {== Float/String conversion ==}
 
-function FloatToStr(const AValue: Double): string;
-var LI, LDot: Integer;
-  C: Char;
+function FloatToStr(const AValue: Double): string; inline;
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
-  Str(AValue:0:15, Result);
-  { Find the decimal separator (could be '.' or ',' depending on locale) }
-  LDot := 0;
-  for LI := 1 to Length(Result) do
-    if Result[LI] in ['.', ','] then
-    begin
-      LDot := LI;
-      Break;
-    end;
-  if LDot > 0 then
-  begin
-    C := Result[LDot];
-    LI := Length(Result);
-    while (LI > LDot) and (Result[LI] = '0') do
-      Dec(LI);
-    if LI = LDot then
-      SetLength(Result, LDot - 1)
-    else
-      SetLength(Result, LI);
-    { Normalize to '.' for locale-independent output }
-    if C <> '.' then
-    begin
-      LDot := Pos(C, Result);
-      if LDot > 0 then
-        Result[LDot] := '.';
-    end;
-  end;
+  // perf: Ryu/Schubfach fast-path via text.number.FloatToBuffer — single-pass
+  // shortest round-trip, no Str() (locale-aware FormatSettings) + trailing-zero
+  // scan + second locale-normalize loop. inline: wrapper is `inline` so caller
+  // can elide frame; zero-copy: stack buf → single Move into Result heap.
+  // stability: no heap/tmp alloc, no exception path, Move is noexcept.
+  LLen := FloatToBuffer(AValue, @LBuf[0]);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LBuf[0], Result[1], SizeUInt(LLen));
 end;
 
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
@@ -362,57 +347,40 @@ begin
 end;
 
 {== Encoding — byte<->string conversions ==}
+{ perf: inline zero-copy forward to bytes.ops single source (SetLength+Move);
+  no duplicate Move logic; exception-safe (no alloc beyond callee). }
 
-function UTF8BytesToString(const AData: TBytes): string;
-var
-  LLen: SizeInt;
+function UTF8BytesToString(const AData: TBytes): string; inline;
 begin
-  Result := '';
-  LLen := Length(AData);
-  if LLen = 0 then
-    Exit;
-  SetLength(Result, LLen);
-  Move(AData[0], Result[1], LLen);
-  SetCodePage(RawByteString(Result), CP_UTF8, False);
+  Result := nextpas.core.bytes.ops.BytesToString(AData);
+  if Result <> '' then
+    SetCodePage(RawByteString(Result), CP_UTF8, False);
 end;
 
-function StringToUTF8Bytes(const AStr: string): TBytes;
+function StringToUTF8Bytes(const AStr: string): TBytes; inline;
 var
   LUTF8: UTF8String;
-  LLen: SizeInt;
 begin
   Result := nil;
   if Length(AStr) = 0 then
     Exit;
   if StringCodePage(AStr) = CP_UTF8 then
   begin
-    LLen := Length(AStr);
-    SetLength(Result, LLen);
-    if LLen > 0 then
-      Move(AStr[1], Result[0], LLen);
+    Result := nextpas.core.bytes.ops.StringToBytes(AStr);
     Exit;
   end;
   LUTF8 := UTF8String(AStr);
-  LLen := Length(LUTF8);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(LUTF8[1], Result[0], LLen);
+  Result := nextpas.core.bytes.ops.StringToBytes(string(LUTF8));
 end;
 
-function ASCIIBytesToString(const AData: TBytes): string;
+function ASCIIBytesToString(const AData: TBytes): string; inline;
 begin
-  Result := '';
-  SetLength(Result, Length(AData));
-  if Length(AData) > 0 then
-    Move(AData[0], Result[1], Length(AData));
+  Result := nextpas.core.bytes.ops.BytesToString(AData);
 end;
 
-function StringToASCIIBytes(const AStr: string): TBytes;
+function StringToASCIIBytes(const AStr: string): TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(AStr));
-  if Length(AStr) > 0 then
-    Move(AStr[1], Result[0], Length(AStr));
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;

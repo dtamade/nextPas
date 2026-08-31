@@ -64,18 +64,12 @@ function JsonBoolField(const AValue: TJsonValue; const AKey: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.mem.default,
   nextpas.core.errors,
   nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.text.escape;
-
-function JsonBytesToString(const ABytes: TBytes): string;
-begin
-  if Length(ABytes) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
-end;
 
 type
   TJsonDocumentImpl = class(TInterfacedObject, IJsonDocument)
@@ -359,7 +353,7 @@ begin
     raise EArgumentError.Create('JsonParse: reader must not be nil');
   LBytes := IoReadAll(AReader);
   RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'JsonParse');
-  Result := JsonParse(JsonBytesToString(LBytes));
+  Result := JsonParse(BytesToString(LBytes));
 end;
 
 function TryJsonParse(const AReader: IReader; out ADoc: IJsonDocument): Boolean;

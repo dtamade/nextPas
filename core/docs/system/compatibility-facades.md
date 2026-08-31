@@ -72,9 +72,15 @@ The pressure clusters into a few narrow capability families:
 
 ### Current S4 stance
 
-- A minimal live `nextpas.core.system.sysutils` unit exists.
-- The live unit exposes 40+ functions including `Format`, `SameText`, `IntToStr`, `Trim`,
-  `StrToInt`, `FloatToStr`, `FileExists`, `ExtractFilePath`, `Now`, `Sleep`, etc.
+- A minimal live `nextpas.core.system.sysutils` unit exists — S4 minimal (text/conv only).
+- The live unit exposes only owner-delegated text/bytes helpers: `Format`, `SameText`,
+  `IntToStr`/`Int64ToStr`/`IntToHex`, `StrToInt`/`StrToInt64`/`TryStrToInt`/`StrToFloat`,
+  `FloatToStr`/`CurrToStr`/`BoolToStr`, `BytesOf`/`StringOf` (zero-copy via `bytes.ops`),
+  `CompareMem`/`Supports`/`HexStr`, `Trim`/`TrimLeft`/`TrimRight`/`UpperCase`/`LowerCase`,
+  `Pos` (via `text.view` zero-copy), and `ExceptAddr`/`ExceptFrame*` (via `exception`);
+  filesystem, path, time, environment, process, and platform-error ownership stays with
+  `fs`/`path`/`time`/`os.env`/`platform` owners — no `FileExists`, `ExtractFilePath`,
+  `Now`, `Sleep`, `GetEnvironmentVariable`, `SysErrorMessage` in the facade.
 - Do not create a mirror of FPC `SysUtils`.
 - Do not move filesystem, environment, time, or text ownership into `system`.
 - Any further `system.sysutils` shape must stay tiny and consumer-proven; do not
@@ -82,24 +88,15 @@ The pressure clusters into a few narrow capability families:
 
 ### Current live minimum
 
-The live contract includes 40+ functions:
+The live contract is the S4 minimal text/conv facade (no fs/path/time):
 
-- `Format`, `SameText`, `IntToStr`, `Trim`
-- `StrToInt`, `StrToInt64`, `StrToFloat` (numeric parsing)
-- `FloatToStr`, `CurrToStr` (numeric formatting)
-- `DateTimeToStr`, `DateToStr`, `TimeToStr` (date/time formatting)
-- `Now`, `Date`, `Time` (date/time access)
-- `FileExists`, `DirectoryExists` (filesystem checks)
-- `CreateDir`, `RemoveDir`, `ForceDirectories` (directory ops)
-- `DeleteFile`, `RenameFile`, `CopyFile` (file ops)
-- `ExtractFilePath`, `ExtractFileName`, `ExtractFileExt` (path ops)
-- `ChangeFileExt`, `IncludeTrailingPathDelimiter` (path manipulation)
-- `GetCurrentDir`, `SetCurrentDir` (working directory)
-- `ParamCount`, `ParamStr` (command line)
-- `GetEnvironmentVariable` (environment)
-- `Sleep` (timing)
-- `SysErrorMessage`, `GetLastOSError` (error handling)
-- `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`
+- `Format` (→ `text.format.TextFormat`), `SameText`/`CompareStr` (→ `text.conv`/`text.compare`)
+- `IntToStr`, `Int64ToStr`, `IntToHex`, `StrToInt`/`StrToInt64`/`TryStrToInt`/`TryStrToInt64`/`StrToIntDef`/`StrToInt64Def`/`StrToFloat`/`FloatToStr`/`CurrToStr`/`BoolToStr` (→ `text.conv`/`text.utils`)
+- `BytesOf`/`StringOf` (→ `bytes.ops` single-source zero-copy), `CompareMem`/`Supports`/`HexStr` (→ `base`/`base.utils`)
+- `Trim`/`TrimLeft`/`TrimRight`/`UpperCase`/`LowerCase` (→ `text.conv`)
+- `Pos` (→ `text.view.IndexOfStr` zero-copy view, inline)
+- `ExceptAddr`/`ExceptFrameCount`/`ExceptFrameAt` (→ `exception`, inline single-source)
+- `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`, `TBytes`, `TStringArray` (type aliases)
 
 Anything larger should trigger `Needs Review`, including:
 
@@ -162,7 +159,14 @@ This is the strongest real S4 pressure, but it is also the highest-risk area:
 - The live surface is a narrow runtime-truth facade, not string-based
   reflection sugar.
 - The unit exposes `PTypeInfo`, `TTypeKind`, the kind constants used by live
-  consumers, and the managed-array helper wrappers.
+  consumers, and the managed-array helper wrappers. Implemented symbols are
+  owner-isolated: string params/results via `nextpas.core.text.conv` (Trim,
+  canonical spelling), error taxonomy via `nextpas.core.exception`
+  (EArgumentNil/EConvertError), and zero-copy bytes handling single-sourced
+  through `nextpas.core.bytes.ops` (no duplicate Move loops). Direct
+  `System.InitializeArray/FinalizeArray/CopyArray` truth is still lowered to
+  FPC System runtime, but validated through exception owner with inline
+  zero-copy forwarding (perf: inline + early exit, no payload alloc).
 - `TypeInfo` and `GetTypeKind` remain compiler/System compile-truth symbols;
   consumers use them unqualified after importing the facade, not as ordinary
   `nextpas.core.system.typinfo.TypeInfo(...)` wrapper functions.

@@ -94,18 +94,12 @@ function XmlEncodeAttr(const AStr: string): string; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.mem.default,
   nextpas.core.mem;
-
-function XmlBytesToString(const ABytes: TBytes): string;
-begin
-  if Length(ABytes) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
-end;
 
 type
   { TXmlDocumentImpl — IXmlDocument implementation wrapping TXmlDocument record }
@@ -237,7 +231,7 @@ begin
     raise EArgumentError.Create('XmlParse: reader must not be nil');
   LBytes := IoReadAll(AReader);
   RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'XmlParse');
-  Result := XmlParse(XmlBytesToString(LBytes));
+  Result := XmlParse(BytesToString(LBytes));
 end;
 
 function XmlParseWith(const AInput: string; const AAllocator: TMemAllocator): TXmlDocument;
@@ -281,7 +275,7 @@ begin
     raise EArgumentError.Create('XmlParseDoc: reader must not be nil');
   LBytes := IoReadAll(AReader);
   RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'XmlParseDoc');
-  Result := XmlParseDoc(XmlBytesToString(LBytes));
+  Result := XmlParseDoc(BytesToString(LBytes));
 end;
 
 function XmlParseDocWith(const AInput: string; const AAllocator: TMemAllocator): IXmlDocument;

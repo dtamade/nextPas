@@ -62,8 +62,8 @@ const
   CURRENT_CPU: TCPUArch = cpuUnknown;
   {$ENDIF}
 
-  {** @desc 当前字节序（编译时确定） *}
-  {$IF DEFINED(FPC_BIG_ENDIAN)}
+  {** @desc 当前字节序（编译时确定, target-aware via NEXTPAS_BIG_ENDIAN） *}
+  {$IF DEFINED(NEXTPAS_BIG_ENDIAN)}
   CURRENT_ENDIAN: TEndianness = endBig;
   {$ELSE}
   CURRENT_ENDIAN: TEndianness = endLittle;

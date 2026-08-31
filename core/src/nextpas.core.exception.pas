@@ -219,6 +219,12 @@ type
 
 function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 
+{ Backtrace single-source — owner abstraction for raise-frame chain.
+  SysUtils facade delegates here; inline for zero-cost forwarding. }
+function ExceptAddr: Pointer; inline;
+function ExceptFrameCount: LongInt; inline;
+function ExceptFrames(const AIndex: LongInt): Pointer; inline;
+
 implementation
 
 { Internal format helper — used by ENextPasError constructors under both compilers.
@@ -326,6 +332,35 @@ begin
     ecParse: Result := 'parse';
     ecInternal: Result := 'internal';
   end;
+end;
+
+{ Backtrace single-source — inline forwarders; FPC host uses SysUtils/System,
+  nextPas native returns nil/0 without SysUtils dependency. }
+function ExceptAddr: Pointer; inline;
+begin
+{$IFDEF FPC}
+  Result := SysUtils.ExceptAddr;
+{$ELSE}
+  Result := nil;
+{$ENDIF}
+end;
+
+function ExceptFrameCount: LongInt; inline;
+begin
+{$IFDEF FPC}
+  Result := SysUtils.ExceptFrameCount;
+{$ELSE}
+  Result := 0;
+{$ENDIF}
+end;
+
+function ExceptFrames(const AIndex: LongInt): Pointer; inline;
+begin
+{$IFDEF FPC}
+  Result := SysUtils.ExceptFrames[AIndex];
+{$ELSE}
+  Result := nil;
+{$ENDIF}
 end;
 
 { ENextPasError }

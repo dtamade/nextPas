@@ -48,17 +48,11 @@ function YamlParseWith(const AInput: TStringView; const AAllocator: TMemAllocato
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.mem.default;
-
-function YamlBytesToString(const ABytes: TBytes): string;
-begin
-  if Length(ABytes) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
-end;
 
 type
   TYamlDocumentImpl = class(TInterfacedObject, IYamlDocument)
@@ -165,7 +159,7 @@ begin
     raise EArgumentError.Create('YamlParse: reader must not be nil');
   LBytes := IoReadAll(AReader);
   RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'YamlParse');
-  Result := YamlParse(YamlBytesToString(LBytes));
+  Result := YamlParse(BytesToString(LBytes));
 end;
 
 function TryYamlParse(const AReader: IReader; out ADoc: IYamlDocument): Boolean;

@@ -177,7 +177,8 @@ make -C core/benchmarks/nextpas.core.collections bench-set   # 编译到 core/bu
 ## 源码布局
 
 ```
-core/src/nextpas.core.collections.pas          # 门面：工厂 + re-export
+core/src/nextpas.core.collections.pas          # 门面：工厂转发（inline 零拷贝，<800 行）
+core/src/nextpas.core.collections.factories.pas # 工厂实现层：真实 Make* 创建逻辑
 core/src/nextpas.core.collections.<name>.pas   # 实现
 core/src/nextpas.core.collections.<name>.intf  # 接口
 core/src/nextpas.core.collections.<name>.base  # 常量/载体（按需）

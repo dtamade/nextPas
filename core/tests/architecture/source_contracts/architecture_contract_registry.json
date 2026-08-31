@@ -157,18 +157,13 @@
     },
     {
       "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.path",
-      "reason": "temporary system SysUtils facade path helper debt"
+      "unit": "nextpas.core.text.view",
+      "reason": "temporary system compatibility facade text dependency (Pos delegation via IndexOfStr)"
     },
     {
       "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.fs",
-      "reason": "temporary system SysUtils facade filesystem helper debt"
-    },
-    {
-      "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.time",
-      "reason": "temporary system SysUtils facade date/time dependency (Now/Date/Time/DateTimeToStr/EncodeDate delegation)"
+      "unit": "nextpas.core.bytes.ops",
+      "reason": "temporary system compatibility facade bytes helper debt (BytesOf/StringOf zero-copy single-source)"
     }
   ],
   "raw_ffi_tokens": [

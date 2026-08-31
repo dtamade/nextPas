@@ -4,7 +4,7 @@ unit nextpas.core.tls.dane.pure;
 
 interface
 
-uses nextpas.core.base, nextpas.core.crypto.hash, nextpas.core.tls.x509, sysutils;
+uses nextpas.core.base, nextpas.core.bytes.ops, nextpas.core.crypto.hash, nextpas.core.tls.x509;
 
 type
   TDANECertUsage = (cuCAConstraint = 0, cuServiceCert = 1, cuTrustAnchor = 2, cuDomainEE = 3);
@@ -89,8 +89,7 @@ begin
     if Length(LHashed) = 0 then
       Continue;
 
-    if (Length(LHashed) = Length(ATLSARecords[I].CertificateAssociationData)) and
-       CompareMem(@LHashed[0], @ATLSARecords[I].CertificateAssociationData[0], Length(LHashed)) then
+    if BytesEqual(LHashed, ATLSARecords[I].CertificateAssociationData) then { inline zero-copy via bytes.ops SpanEqual→MemEqual, no alloc }
     begin
       Result := True;
       Exit;

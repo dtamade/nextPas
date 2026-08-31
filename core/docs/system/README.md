@@ -72,7 +72,7 @@ runtime completeness, self-hosting, or production readiness.
 | `FillByte`, `IndexChar`, `CompareChar`, `MemPos`, `StackTop` | `nextpas.core.system` (kernel) | Bulk fill/search/compare intrinsics. |
 | `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData` | `nextpas.core.system.typinfo` | RTTI type aliases for compiler/runtime. |
 | `GetPropInfo`, `GetEnumName`, `GetEnumValue` | `nextpas.core.system.typinfo` | RTTI access functions. |
-| `Format`, `SameText`, `IntToStr`, `Trim` + 40+ SysUtils-named functions | **owner: `nextpas.core.text.conv`** (and path/fs/platform for non-text slices); surface: `nextpas.core.system.sysutils` | SysUtils **compatibility facade only** — re-exports / forwards to owner modules; never the implementation owner of text APIs. |
+| `Format`, `SameText`, `IntToStr`, `Trim` + text/bytes helpers (`IntToHex`, `StrToInt`, `FloatToStr`, `BytesOf`/`StringOf`, `TrimLeft`/`UpperCase`, `Pos`, `ExceptAddr` etc.) | **owner: `nextpas.core.text.conv`/`text.format`/`bytes.ops`/`base.utils`** (no fs/path/time/platform slices); surface: `nextpas.core.system.sysutils` | SysUtils **S4 minimal thin facade only** — re-exports / forwards to owner modules; fs/path/time/env belong to `fs`/`path`/`time`/`os.env` owners, never system. |
 
 S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
 compiler/runtime handshake names, not public ABI and not current facade functions.
@@ -180,7 +180,7 @@ Historical S4 boundary note:
 - `system.errors` is live as an exception taxonomy facade, re-exporting all 38
   exception type aliases and 18 error-category constants from canonical owners
 - `system.classes` is live as a stream-only bootstrap shim (TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin). TThread, TList, TInterfacedObject remain outside system scope and belong to their respective owner modules (thread, collections, base).
-- `system.sysutils` is a **live thin facade** (not implementation owner) with 40+ SysUtils-named functions: text (Format, SameText, IntToStr, Trim → **owner `text.conv`**), numeric parsing (→ text.conv), date/time (→ time/platform owners), filesystem (→ fs), path (→ path), environment (→ platform), timing, error helpers. Do not document sysutils as owner of these domains.
+- `system.sysutils` is a **live S4 minimal thin facade** (not implementation owner) with text/bytes helpers only: `Format`/`SameText`/`CompareStr` (→ `text.*`), numeric `IntToStr`/`StrToInt`/`FloatToStr`/`BoolToStr` (→ `text.conv`/`text.utils`), `BytesOf`/`StringOf` (→ `bytes.ops` zero-copy), `CompareMem`/`Supports`/`HexStr` (→ `base.utils`), `Trim`/`UpperCase`/`Pos` (→ `text.conv`/`text.view`), `ExceptAddr`/`ExceptFrame*` (→ `exception`). No fs/path/time/env/process/error slices — those belong to `fs`/`path`/`time`/`os.env`/`platform` owners. Do not document sysutils as owner of those domains.
 - `system.typinfo` is live for `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData`, `GetPropInfo`, `GetEnumName`, `GetEnumValue`
 - `TypeInfo` and `GetTypeKind` are compiler/System compile-truth imports made
   available to consumers after the facade is in `uses`; they are not unit-owned wrapper functions in `nextpas.core.system.typinfo`

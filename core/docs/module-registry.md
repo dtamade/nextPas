@@ -49,7 +49,7 @@ completion claim.
 | `log` | L3 | logging framework | `nextpas.core.log` | L0-L2, `log.intf` low-level seam | focused-runtime |
 | `mail` | L3 | mail domain: message model / RFC5322 address / MIME bridge (depends on mime) / SMTP client + evented SMTP server | `nextpas.core.mail` | L0-L2 plus mime, net.server seams | focused-runtime |
 | `math` | L0 | scalar math | `nextpas.core.math` | RTL, base/errors, explicit platform math seams | focused-runtime |
-| `mem` | L0 | allocation/pools | `nextpas.core.mem` | L0 only, allowlisted fs/text/os/path debt | focused-runtime, source-contract |
+| `mem` | L0 | allocation/pools | `nextpas.core.mem` | L0 only (RTL + base/errors/platform/mem; bytes.ops/crypto single-source via owner, zero-copy/inline) | focused-runtime, source-contract |
 | `mime` | L2 | MIME format (RFC 2045/2046/2047/2231) | `nextpas.core.mime` | L0-L1 plus text/encoding/time; sibling of multipart (mail superset) | focused-runtime |
 | `multipart` | L2 | multipart format | `nextpas.core.multipart` | L0-L1, HTTP grammar only | source-contract |
 | `net` | L2 | network facade | `nextpas.core.net` | L0-L1, platform net/io | focused-runtime, source-contract |
@@ -88,6 +88,6 @@ completion claim.
    constant-time requirements.
 2. System final facade: TypInfo/SysUtils/Classes decisions tied to real compiler
    and core consumers.
-3. Mem L0 debt zero: remove or re-home the allowlisted L0 dependency debt.
+3. Mem L0 debt zero: converged — L0 only (no fs/text/os/path debt; bytes.ops/crypto single-source via owner, inline/zero-copy, heaptrc 0).
 4. Platform runtime truth matrix: real host runtime evidence stays separate from
    source-contract and forced-compile truth.

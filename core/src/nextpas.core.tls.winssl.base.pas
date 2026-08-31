@@ -18,34 +18,38 @@ unit nextpas.core.tls.winssl.base;
 interface
 
 uses
-  {$IFDEF WINDOWS} Windows, {$ENDIF}
+  nextpas.core.platform.windows.base,
   nextpas.core.tls.base;
 
 {$IFNDEF WINDOWS}
 type
-  DWORD = LongWord;
-  LONG = LongInt;
-  ULONG = LongWord;
-  BOOL = LongBool;
+  // L0 host ABI fallback: re-export single owner platform.windows.base types
+  DWORD = nextpas.core.platform.windows.base.DWORD;
+  LONG = nextpas.core.platform.windows.base.LONG;
+  ULONG = nextpas.core.platform.windows.base.ULONG;
+  BOOL = nextpas.core.platform.windows.base.BOOL;
+  LPCSTR = nextpas.core.platform.windows.base.LPCSTR;
+  LPCWSTR = nextpas.core.platform.windows.base.LPCWSTR;
   THandle = System.THandle;
-  PByte = System.PByte;
-  PWideChar = System.PWideChar;
-  LPCSTR = PAnsiChar;
-  LPCWSTR = PWideChar;
-  TFileTime = record
-    dwLowDateTime: DWORD;
-    dwHighDateTime: DWORD;
-  end;
-  TSystemTime = record
-    wYear: Word;
-    wMonth: Word;
-    wDayOfWeek: Word;
-    wDay: Word;
-    wHour: Word;
-    wMinute: Word;
-    wSecond: Word;
-    wMilliseconds: Word;
-  end;
+  TFileTime = FILETIME;
+  TSystemTime = SYSTEMTIME;
+  PULONG = ^ULONG;
+  PDWORD = ^DWORD;
+{$ELSE}
+type
+  // L0 host ABI seam: re-export and map legacy T-prefixed names to platform.windows.base.
+  DWORD = nextpas.core.platform.windows.base.DWORD;
+  LONG = nextpas.core.platform.windows.base.LONG;
+  ULONG = nextpas.core.platform.windows.base.ULONG;
+  BOOL = nextpas.core.platform.windows.base.BOOL;
+  LPCSTR = nextpas.core.platform.windows.base.LPCSTR;
+  LPCWSTR = nextpas.core.platform.windows.base.LPCWSTR;
+  THandle = HANDLE;
+  TFileTime = FILETIME;
+  TSystemTime = SYSTEMTIME;
+  // Pointer aliases missing from platform.windows.base but required by Schannel API.
+  PULONG = ^ULONG;
+  PDWORD = ^DWORD;
 {$ENDIF}
 
 type

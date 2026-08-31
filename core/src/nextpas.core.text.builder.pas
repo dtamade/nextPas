@@ -44,24 +44,29 @@ type
 
     procedure AppendByte(const AByte: Byte); inline;
     procedure AppendChar(const ACh: AnsiChar); inline;
-    procedure AppendChars(const ACh: AnsiChar; const ACount: SizeUInt);
-    procedure AppendView(const AView: TStringView);
-    procedure AppendStr(const AStr: string);
-    procedure AppendBytes(const AData: PAnsiChar; const ALen: SizeUInt);
-    procedure AppendInt(const AValue: Int64);
-    procedure AppendUInt(const AValue: UInt64);
-    procedure AppendHex(const AValue: UInt64; const AMinDigits: Int32 = 1);
-    procedure AppendBool(const AValue: Boolean);
-    procedure AppendFloat(const AValue: Double);
+    // perf: inline fast-path — FLen+Len <= FCap 时无 Grow 调用与分支溢出，仅 Move/Fill；
+    // 批量小块追加前调用 Reserve(预估总量) 可批量储备、消除逐次 Grow 分支与拷贝。
+    // 零拷贝路径：Tail 直接获写指针 + AdvanceLen 提交，避免中间 Move。
+    procedure AppendChars(const ACh: AnsiChar; const ACount: SizeUInt); inline;
+    procedure AppendView(const AView: TStringView); inline;
+    procedure AppendStr(const AStr: string); inline;
+    procedure AppendBytes(const AData: PAnsiChar; const ALen: SizeUInt); inline;
+    procedure AppendInt(const AValue: Int64); inline;
+    procedure AppendUInt(const AValue: UInt64); inline;
+    procedure AppendHex(const AValue: UInt64; const AMinDigits: Int32 = 1); inline;
+    procedure AppendBool(const AValue: Boolean); inline;
+    procedure AppendFloat(const AValue: Double); inline;
 
     function AsView: TStringView; inline;
     function ToString: string;
     function Len: SizeUInt; inline;
     function Cap: SizeUInt; inline;
+    // perf: Tail/AdvanceLen 零拷贝直写（获取尾指针后外部填充，再 AdvanceLen 提交）
     function Tail: PAnsiChar; inline;
     procedure AdvanceLen(const ACount: SizeUInt); inline;
     procedure Clear; inline;
-    procedure Reserve(const AAdditional: SizeUInt);
+    // perf: 批量储备 — 调用方估算总量后 Reserve 一次，后续小块 Append 均走 inline 快路径无分支
+    procedure Reserve(const AAdditional: SizeUInt); inline;
   end;
 
   { Compatibility alias for internal callers that still use TStringBuilder
@@ -286,8 +291,9 @@ begin
   Inc(FLen);
 end;
 
-procedure TBufStringBuilder.AppendChars(const ACh: AnsiChar; const ACount: SizeUInt);
+procedure TBufStringBuilder.AppendChars(const ACh: AnsiChar; const ACount: SizeUInt); inline;
 begin
+  // inline fast-path: capacity sufficient → no Grow branch; FillChar bulk
   if ACount = 0 then Exit;
   if FLen + ACount > FCap then
     Grow(ACount);
@@ -295,8 +301,9 @@ begin
   Inc(FLen, ACount);
 end;
 
-procedure TBufStringBuilder.AppendView(const AView: TStringView);
+procedure TBufStringBuilder.AppendView(const AView: TStringView); inline;
 begin
+  // inline + Reserve 批量：预留后此分支恒 false，单次 Grow 后多次 Move 无额外分支/拷贝
   if AView.Len = 0 then Exit;
   if AView.Data = nil then
     raise EInvalidArgument.Create('string builder view data is nil');
@@ -306,10 +313,11 @@ begin
   Inc(FLen, AView.Len);
 end;
 
-procedure TBufStringBuilder.AppendStr(const AStr: string);
+procedure TBufStringBuilder.AppendStr(const AStr: string); inline;
 var
   L: SizeUInt;
 begin
+  // inline fast-path, Move 一次拷贝；小块循环前 Reserve(LTotal) 可消除逐次 Grow
   L := SizeUInt(Length(AStr));
   if L = 0 then Exit;
   if FLen + L > FCap then
@@ -318,8 +326,9 @@ begin
   Inc(FLen, L);
 end;
 
-procedure TBufStringBuilder.AppendBytes(const AData: PAnsiChar; const ALen: SizeUInt);
+procedure TBufStringBuilder.AppendBytes(const AData: PAnsiChar; const ALen: SizeUInt); inline;
 begin
+  // inline 单次 Move；与 bytes.ops 同源语义（零重复实现，L1 横向不依赖，仅语义一致）
   if ALen = 0 then Exit;
   if AData = nil then
     raise EInvalidArgument.Create('string builder byte source is nil');
@@ -329,48 +338,53 @@ begin
   Inc(FLen, ALen);
 end;
 
-procedure TBufStringBuilder.AppendInt(const AValue: Int64);
+procedure TBufStringBuilder.AppendInt(const AValue: Int64); inline;
 var
   LWritten: Int32;
 begin
+  // inline: 预留 21 字节快路径，IntToBuffer 零分配直写
   if FLen + 21 > FCap then
     Grow(21);
   LWritten := IntToBuffer(AValue, FBuf + FLen);
   Inc(FLen, SizeUInt(LWritten));
 end;
 
-procedure TBufStringBuilder.AppendUInt(const AValue: UInt64);
+procedure TBufStringBuilder.AppendUInt(const AValue: UInt64); inline;
 var
   LWritten: Int32;
 begin
+  // inline: 21 字节上界，UIntToBuffer 直写尾部
   if FLen + 21 > FCap then
     Grow(21);
   LWritten := UIntToBuffer(AValue, FBuf + FLen);
   Inc(FLen, SizeUInt(LWritten));
 end;
 
-procedure TBufStringBuilder.AppendHex(const AValue: UInt64; const AMinDigits: Int32);
+procedure TBufStringBuilder.AppendHex(const AValue: UInt64; const AMinDigits: Int32); inline;
 var
   LWritten: Int32;
 begin
+  // inline: 16 字节上界
   if FLen + 16 > FCap then
     Grow(16);
   LWritten := IntToHexBuffer(AValue, FBuf + FLen, AMinDigits);
   Inc(FLen, SizeUInt(LWritten));
 end;
 
-procedure TBufStringBuilder.AppendBool(const AValue: Boolean);
+procedure TBufStringBuilder.AppendBool(const AValue: Boolean); inline;
 begin
+  // inline 委托 AppendBytes 单次 Move（已 inline）
   if AValue then
     AppendBytes('true', 4)
   else
     AppendBytes('false', 5);
 end;
 
-procedure TBufStringBuilder.AppendFloat(const AValue: Double);
+procedure TBufStringBuilder.AppendFloat(const AValue: Double); inline;
 var
   LWritten: Int32;
 begin
+  // inline: 25 字节上界（Ryu），FloatToBuffer 直写
   if FLen + 25 > FCap then
     Grow(25);
   LWritten := FloatToBuffer(AValue, FBuf + FLen);
@@ -420,8 +434,9 @@ begin
   FLen := 0;
 end;
 
-procedure TBufStringBuilder.Reserve(const AAdditional: SizeUInt);
+procedure TBufStringBuilder.Reserve(const AAdditional: SizeUInt); inline;
 begin
+  // 批量储备入口：循环前 Reserve(总量) 后续 Append* 均命中 inline 快路径
   if FLen + AAdditional > FCap then
     Grow(AAdditional);
 end;

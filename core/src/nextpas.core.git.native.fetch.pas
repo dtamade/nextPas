@@ -43,26 +43,22 @@ uses
   nextpas.core.git.native.negotiate,
   nextpas.core.git.native.sideband;
 
-function BytesOfString(const S: string): TBytes;
-var
-  L: Integer;
+function BytesOfString(const S: string): TBytes; inline;
 begin
-  L := Length(S);
-  SetLength(Result, L);
-  if L > 0 then Move(S[1], Result[0], L);
+  // single-source zero-copy via bytes.ops (inline single Move, no duplicate logic)
+  Result := StringToBytes(S);
 end;
 
-function StringOfBytes(const B: TBytes): string;
+function StringOfBytes(const B: TBytes): string; inline;
 begin
-  SetLength(Result, Length(B));
-  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
+  // single-source zero-copy via bytes.ops (inline single Move, no duplicate logic)
+  Result := BytesToString(B);
 end;
 
-function ConcatBytes(const A, B: TBytes): TBytes;
+function ConcatBytes(const A, B: TBytes): TBytes; inline;
 begin
-  SetLength(Result, Length(A) + Length(B));
-  if Length(A) > 0 then Move(A[0], Result[0], Length(A));
-  if Length(B) > 0 then Move(B[0], Result[Length(A)], Length(B));
+  // single-source via bytes.ops (single alloc, avoids duplicated Move)
+  Result := BytesConcat(A, B);
 end;
 
 function GitFetchPack(const ARemoteGitDir: string; const AWants: array of TGitOid; const AHaves: array of TGitOid): TBytes;

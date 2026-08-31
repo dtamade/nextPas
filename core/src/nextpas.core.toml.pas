@@ -58,17 +58,11 @@ function TomlEnumerate(const AValue: TTomlValue): TTomlValueEnumerator; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.mem.default;
-
-function TomlBytesToString(const ABytes: TBytes): string;
-begin
-  if Length(ABytes) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
-end;
 
 const
   TOML_STRINGIFY_MAX_PATH_SEGMENTS = 128;
@@ -381,7 +375,7 @@ begin
     raise EArgumentError.Create('TomlParse: reader must not be nil');
   LBytes := IoReadAll(AReader);
   RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'TomlParse');
-  Result := TomlParse(TomlBytesToString(LBytes));
+  Result := TomlParse(BytesToString(LBytes));
 end;
 
 function TryTomlParse(const AReader: IReader; out ADoc: ITomlDocument): Boolean;
