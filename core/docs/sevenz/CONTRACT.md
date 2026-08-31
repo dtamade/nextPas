@@ -1,6 +1,6 @@
 # nextpas.core.sevenz 契约
 
-**模块**：`nextpas.core.sevenz.*` 25 单元（base/intf/header/coders/filters/levels/limits/aes/bcj.*×8/bcj2/lzma.rc/decoder/encoder/ffi/reader/writer/fs + 门面）
+**模块**：`nextpas.core.sevenz.*` 26 单元（base/intf/header/coders/filters/levels/limits/aes/bcj.*×8/bcj2/lzma.rc/decoder/encoder/ffi/reader/stream/writer/fs + 门面）
 **层级**：L2，`Allowed L0-L1 plus io/fs/compress/checksum/crypto/hash (L2→L2 exempt via platform lstat)`
 **门面**：`nextpas.core.sevenz.pas` re-export `TSevenZEntryKind/Info/ESevenZError/ESevenZLimitError/TSevenZLzmaBackend/CompressionLevel/Filter/LzmaEncoded/Extracted/Enumerator/ISevenZReader/ISevenZWriter` 等
 **真相**：`focused-runtime` 166 用例 + `bench_sevenz`
