@@ -73,18 +73,11 @@ begin
 end;
 
 procedure TAudioSpatialSource.EnsureScratch(ANeeded: Integer);
-var
-  LCap: Integer;
+var LCap: Integer;
 begin
-  if Length(FScratch) < ANeeded then
-  begin
-    LCap := Length(FScratch);
-    if LCap < 256 then
-      LCap := 256;
-    while LCap < ANeeded do
-      LCap := LCap * 2;
-    SetLength(FScratch, LCap);
-  end;
+  LCap := Length(FScratch);
+  AudioEnsureCapacity(LCap, ANeeded, 256);
+  if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
 end;
 
 function TAudioSpatialSource.GetFormat: TAudioFormat;

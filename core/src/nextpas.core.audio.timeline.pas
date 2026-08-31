@@ -126,31 +126,28 @@ begin
 end;
 
 procedure TTimelineImpl.EnsureSnapshotCapacity(ANeeded: Integer);
-var NewCap: Integer;
+var LCap: Integer;
 begin
-  if Length(FSnapshotTracks) >= ANeeded then Exit;
-  if Length(FSnapshotTracks) = 0 then NewCap := 4 else NewCap := Length(FSnapshotTracks) * 2;
-  while NewCap < ANeeded do NewCap := NewCap * 2;
-  SetLength(FSnapshotTracks, NewCap);
+  LCap := Length(FSnapshotTracks);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotTracks) <> LCap then SetLength(FSnapshotTracks, LCap);
 end;
 
 procedure TTimelineImpl.EnsureSnapshotClipCapacity(ATrack: Integer; ANeeded: Integer);
-var NewCap: Integer;
+var LCap: Integer;
 begin
   if (ATrack < 0) or (ATrack >= Length(FSnapshotTracks)) then Exit;
-  if Length(FSnapshotTracks[ATrack].Clips) >= ANeeded then Exit;
-  if Length(FSnapshotTracks[ATrack].Clips) = 0 then NewCap := 4 else NewCap := Length(FSnapshotTracks[ATrack].Clips) * 2;
-  while NewCap < ANeeded do NewCap := NewCap * 2;
-  SetLength(FSnapshotTracks[ATrack].Clips, NewCap);
+  LCap := Length(FSnapshotTracks[ATrack].Clips);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotTracks[ATrack].Clips) <> LCap then SetLength(FSnapshotTracks[ATrack].Clips, LCap);
 end;
 
 procedure TTimelineImpl.EnsureSnapshotClipNeedsCapacity(ANeeded: Integer);
-var NewCap: Integer;
+var LCap: Integer;
 begin
-  if Length(FSnapshotClipNeeds) >= ANeeded then Exit;
-  if Length(FSnapshotClipNeeds) = 0 then NewCap := 4 else NewCap := Length(FSnapshotClipNeeds) * 2;
-  while NewCap < ANeeded do NewCap := NewCap * 2;
-  SetLength(FSnapshotClipNeeds, NewCap);
+  LCap := Length(FSnapshotClipNeeds);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotClipNeeds) <> LCap then SetLength(FSnapshotClipNeeds, LCap);
 end;
 
 function TTimelineImpl.CalcDuration: UInt64;

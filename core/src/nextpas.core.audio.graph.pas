@@ -152,33 +152,27 @@ begin
 end;
 
 procedure TAudioGraph.EnsureScratch(var AScratch: TBytes; ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(AScratch) >= ANeeded then Exit;
-  Cap := Length(AScratch);
-  if Cap < 256 then Cap := 256;
-  while Cap < ANeeded do Cap := Cap * 2;
-  SetLength(AScratch, Cap);
+  LCap := Length(AScratch);
+  AudioEnsureCapacity(LCap, ANeeded, 256);
+  if Length(AScratch) <> LCap then SetLength(AScratch, LCap);
 end;
 
 procedure TAudioGraph.EnsureSnapshotNodes(ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FSnapshotNodes) >= ANeeded then Exit;
-  Cap := Length(FSnapshotNodes);
-  if Cap < 4 then Cap := 4;
-  while Cap < ANeeded do Cap := Cap * 2;
-  SetLength(FSnapshotNodes, Cap);
+  LCap := Length(FSnapshotNodes);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotNodes) <> LCap then SetLength(FSnapshotNodes, LCap);
 end;
 
 procedure TAudioGraph.EnsureSnapshotProcs(ANeeded: Integer);
-var Cap: Integer;
+var LCap: Integer;
 begin
-  if Length(FSnapshotProcs) >= ANeeded then Exit;
-  Cap := Length(FSnapshotProcs);
-  if Cap < 4 then Cap := 4;
-  while Cap < ANeeded do Cap := Cap * 2;
-  SetLength(FSnapshotProcs, Cap);
+  LCap := Length(FSnapshotProcs);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotProcs) <> LCap then SetLength(FSnapshotProcs, LCap);
 end;
 
 procedure TAudioGraph.MaybeCompactNodes;
