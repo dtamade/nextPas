@@ -38,6 +38,7 @@
 | S54 | 验证平台期：三门全绿 `27/32/30` 验证，无新增债务，完美 plateau 证据 |
 | S55 | 对称补齐：`DosMaxUnixSec` 对称暴露，`base/common` 双 `inline` 单源 |
 | S56 | 回归修复：`C_DOS_MIN/MAX` 常量化还原 + `DosDateTimeFromUnix` 零构造 |
+| S57 | 尾隙收敛：`UnixFromDosDateTime` 去 `Create` 验证，`FromUnixDays` 单源回退 |
 
 **当前门**：12门全绿 `[HEAPTRC] OK`（`test_zip 27`/`reader 27`/`sequential 22`/`fs 7`/`contract 5`/`extra 6`/`builder 9`/`fuzz 3`/`aes 13`/`go_parity 7`/`perf 5`/`stress 4`）+ `bench 16项` `allocs+2` 硬门 + `zip_roundtrip all demos ok` + `hygiene/diff --check` 通过 + `linux-x86_64/win64` 交叉编译通过。
 
@@ -94,6 +95,9 @@
 
 ### S56 — 回归修复与常量化再收敛（1.0.1 巡检）· 性能/模块化 — 已落地
 - 主线合入导致 `C_DOS_MIN/MAX_UNIX` 常量化回退，`DosDateTimeFromUnix` 重回 `TDate.Create` 构造；本期在隔离 worktree 中零 TDate 构造还原，`DosMin/MaxUnixSec` 双 `inline` 常量返回，`common` 委托 `inline` 对称，三门全绿回归
+
+### S57 — 尾隙零验证收敛（1.0.1 巡检）· 性能/稳定性 — 已落地
+- `UnixFromDosDateTime` 失效回退 `TDate.Create` 去验证，改 `FromUnixDays(C_DOS_MIN_UNIX div 86400)` 单源零构造，与 `DosDateTimeFromUnix` 常量化对偶，`base` 全链路零 `Create`，三门全绿
 
 ## 4. 度量与硬门（1.0.0 冻结）
 
