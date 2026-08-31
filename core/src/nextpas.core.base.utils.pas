@@ -7,7 +7,7 @@ interface
 uses nextpas.core.base;
 
 {** 对象生命周期工具 *}
-procedure FreeAndNil(var AObj); inline;
+procedure FreeAndNil(var AObj);
 procedure SafeFree(var AObj); inline;
 
 {** 内存操作（System 内建的包装，确保接口一致） *}
@@ -33,7 +33,7 @@ function NToHs(AValue: Word): Word; overload; inline;
 function NToHs(AValue: LongWord): LongWord; overload; inline;
 
 {** 接口查询 *}
-procedure ClearOutInterface(out AIntf); inline;
+procedure ClearOutInterface(out AIntf);
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 
@@ -113,6 +113,10 @@ var
   N: SizeUInt;
   C: SizeInt;
 begin
+  // inline zero-copy: PByte+Len view, no alloc/copy, single source reused by
+  // bytes.ops/ vfs/ respack/ git.commitgraph (SpanCompare etc.); hot path inlined
+  // perf: System.CompareByte is FPC RTL optimized (rep cmpsb/SSE on x86_64), zero-copy via direct Pointer
+  // competitive for typical small N (<64) without SIMD dispatch overhead; L0 stays RTL-only for portability
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('CompareBytesOrdered: A is nil');
   if (BLen > 0) and (B = nil) then
@@ -160,22 +164,25 @@ end;
 
 function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
 var
-  I: SizeUInt;
   P: PByte;
   H: UInt32;
 begin
-  // perf: scalar xor*prime with LowerTable; hot for short keys, kept inline for
-  // inlining into maps/dicts. Future SIMD: 16/32-byte vector LowerTable lookup
-  // via PSHUFB/AVX2 gather + parallel FNV reduction; not applied for portability
-  // and because typical ALen < 32 makes scalar competitive.
+  // perf inline zero-copy: PByte+Len view, no alloc/copy, LowerTable branchless casefold,
+  // FNV-1a xor*prime kept inline for maps/dicts (http.mime etc.) single source via base.utils
+  // hot for short keys (typical ALen <32) — scalar 1-byte loop competitive; 16/32-byte SIMD
+  // LowerTable gather + parallel reduction not portability-justified on L0 (RTL-only), dispatch overhead > gain
+  // stability: nil guard + while ALen>0 avoids for-loop underflow when ALen=0; {$Q-}{$R-} wrap via caller prime mul
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('HashFNV1aLower: A is nil');
   H := 2166136261;
   P := PByte(A);
-  for I := 0 to ALen - 1 do
+  while ALen > 0 do
   begin
-    H := H xor UInt32(LowerTable[P[I]]);
-    H := H * 16777619;
+    {$PUSH}{$Q-}{$R-}
+    H := (H xor UInt32(LowerTable[P^])) * 16777619;
+    {$POP}
+    Inc(P);
+    Dec(ALen);
   end;
   Result := H;
 end;

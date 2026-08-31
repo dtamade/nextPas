@@ -23,8 +23,6 @@ function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
 function PanLawGains(APan: Single): TAudioPanGains; overload;
 function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
 function PanLawGains0dB(APan: Single): TAudioPanGains; inline; // 0dB center (1.0) — timeline/game reuse, PanLaw -3dB * sqrt2
-function AudioClampGain(AGain: Double): Double; inline; // 0..4 clamp, reuse PcmClampF32 semantics — timeline/bank/sfx reuse point
-function AudioClampPan(APan: Double): Double; inline; // -1..1 clamp, reuse PcmClampF32 semantics — timeline/bank/sfx reuse point
 
 implementation
 
@@ -34,11 +32,13 @@ var
   GMixScratch: TBytes;
 
 procedure EnsureScratch(ANeeded: Integer); inline;
-var LCap: Integer;
+var Cap: Integer;
 begin
-  LCap := Length(GMixScratch);
-  AudioEnsureCapacity(LCap, ANeeded, 256);
-  if Length(GMixScratch) <> LCap then SetLength(GMixScratch, LCap);
+  if Length(GMixScratch) >= ANeeded then Exit;
+  Cap := Length(GMixScratch);
+  if Cap < 256 then Cap := 256;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(GMixScratch, Cap);
 end;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);
@@ -242,22 +242,6 @@ begin
   Result := PanLawGains(APan);
   Result.X := Result.X * CAudioSqrt2;
   Result.Y := Result.Y * CAudioSqrt2;
-end;
-
-function AudioClampGain(AGain: Double): Double; inline;
-begin
-  // reuse PcmClampF32 semantics for gain range 0..4 — timeline/bank/sfx reuse point
-  if AGain < 0 then Exit(0);
-  if AGain > 4 then Exit(4);
-  Result := AGain;
-end;
-
-function AudioClampPan(APan: Double): Double; inline;
-begin
-  // reuse PcmClampF32 semantics for pan range -1..1 — timeline/bank/sfx reuse point
-  if APan < -1 then Exit(-1);
-  if APan > 1 then Exit(1);
-  Result := APan;
 end;
 
 end.

@@ -98,6 +98,7 @@ const
   SEVENZ_MAX_CRC_COUNT    = SEVENZ_MAX_FILE_COUNT;
   { folder 解码缓存字节上限：2-entry MRU 总量受限，极端 solid 2×大 folder 防翻倍；单 folder 超阈值不入缓存 }
   SEVENZ_CACHE_MAX_BYTES = UInt64(64) * 1024 * 1024;
+  SEVENZ_AES_MAX_CYCLES_POWER = 20;
 
 type
   {** @desc 归档内条目类别 *}

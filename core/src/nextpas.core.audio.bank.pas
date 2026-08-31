@@ -54,7 +54,6 @@ type
     procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
     procedure EnsureBankCapacity(ANeeded: Integer); inline;
     procedure EnsureVoiceCapacity(ANeeded: Integer); inline;
-    procedure EnsureSnapshotVoices(ANeeded: Integer); inline;
     function FindEntry(AId: Integer): Integer;
     function FindByNameIdx(const AName: string): Integer;
     function FindVoice(AVoice: Integer): Integer;
@@ -241,31 +240,29 @@ end;
 
 procedure TAudioBank.EnsureScratch(var AScratch: TBytes; ANeeded: Integer);
 begin
-  AudioEnsureBytesCapacity(AScratch, ANeeded);
+  if Length(AScratch) < ANeeded then
+    SetLength(AScratch, ANeeded);
 end;
 
 procedure TAudioBank.EnsureBankCapacity(ANeeded: Integer);
-var LCap: Integer;
+var NewCap: Integer;
 begin
-  LCap := Length(FEntries);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FEntries) <> LCap then SetLength(FEntries, LCap);
+  { 几何扩容 EnsureBankCapacity：指数增长，稳态零分配 }
+  if Length(FEntries) >= ANeeded then Exit;
+  if Length(FEntries) = 0 then NewCap := 4
+  else NewCap := Length(FEntries) * 2;
+  while NewCap < ANeeded do NewCap := NewCap * 2;
+  SetLength(FEntries, NewCap);
 end;
 
 procedure TAudioBank.EnsureVoiceCapacity(ANeeded: Integer);
-var LCap: Integer;
+var NewCap: Integer;
 begin
-  LCap := Length(FVoices);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FVoices) <> LCap then SetLength(FVoices, LCap);
-end;
-
-procedure TAudioBank.EnsureSnapshotVoices(ANeeded: Integer);
-var LCap: Integer;
-begin
-  LCap := Length(FSnapshotVoices);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSnapshotVoices) <> LCap then SetLength(FSnapshotVoices, LCap);
+  if Length(FVoices) >= ANeeded then Exit;
+  if Length(FVoices) = 0 then NewCap := 4
+  else NewCap := Length(FVoices) * 2;
+  while NewCap < ANeeded do NewCap := NewCap * 2;
+  SetLength(FVoices, NewCap);
 end;
 
 function TAudioBank.FindEntry(AId: Integer): Integer;
@@ -439,9 +436,15 @@ begin
     end else
     begin
       EnsureBankCapacity(Length(FEntries) + 1);
+      Idx := 0;
+      while (Idx < Length(FEntries)) and FEntries[Idx].Alive do Inc(Idx);
       Idx := -1;
       for I := 0 to High(FEntries) do if not FEntries[I].Alive then begin Idx := I; Break; end;
-      if Idx < 0 then raise EAudioGraphError.Create('Bank.Add: capacity ensure failed');
+      if Idx < 0 then
+      begin
+        Idx := Length(FEntries);
+        SetLength(FEntries, Idx + 1);
+      end;
     end;
     FEntries[Idx].Id := Result;
     FEntries[Idx].Name := AName;
@@ -573,9 +576,13 @@ begin
     if VIdx < 0 then
     begin
       EnsureVoiceCapacity(Length(FVoices) + 1);
-      VIdx := -1;
-      for I := 0 to High(FVoices) do if not FVoices[I].Alive then begin VIdx := I; Break; end;
-      if VIdx < 0 then raise EAudioGraphError.Create('Bank.Play: capacity ensure failed');
+      VIdx := 0;
+      while (VIdx < Length(FVoices)) and FVoices[VIdx].Alive do Inc(VIdx);
+      if VIdx >= Length(FVoices) then
+      begin
+        VIdx := Length(FVoices);
+        SetLength(FVoices, VIdx + 1);
+      end;
     end;
     FVoices[VIdx].VoiceId := Result;
     FVoices[VIdx].BankId := AId;
@@ -633,30 +640,19 @@ end;
 
 function TAudioBank.GetViolations: Int64;
 begin
-  Result := InterlockedExchangeAdd64(FViolations, 0);
+  Result := FViolations;
 end;
 
 function TAudioBank.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
   Needed, AliveN, I, J: Integer;
-  Needed64: Int64;
   Snap: array of TBankVoiceSource;
   Tmp: TAudioBuffer;
   MixPtr, TmpPtr: PSingle;
   HasData: Boolean;
 begin
   if AFrames <= 0 then Exit(0);
-  Needed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
-  if (Needed64 < 0) or (Needed64 > High(Integer)) then
-  begin
-    InterlockedExchangeAdd64(FViolations, 1);
-    if Needed64 < 0 then Needed64 := 0;
-    if Needed64 > High(Integer) then Needed64 := High(Integer);
-    AFrames := Integer(Needed64 div Int64(FFormat.BlockAlign));
-    if AFrames <= 0 then Exit(0);
-    Needed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
-  end;
-  Needed := Integer(Needed64);
+  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
   if Length(ABuffer.Data) < Needed then
   begin
     InterlockedExchangeAdd64(FViolations, 1);
@@ -674,7 +670,8 @@ begin
     FLock.Release;
   end;
   EnsureScratch(FScratchTmp, Needed);
-  EnsureSnapshotVoices(AliveN);
+  if Length(FSnapshotVoices) < AliveN then
+    SetLength(FSnapshotVoices, AliveN);
   if AliveN = 0 then
   begin
     ABuffer.FrameCount := AFrames;

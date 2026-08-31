@@ -2,7 +2,10 @@ program bench_writer_memory;
 {$I nextpas.core.settings.inc}
 {** @desc S4 基准：writer 内存上限（INV-R10，默认 512MB）实测。
     以指定总量的合成输入过一次 ResPackBuild，报告输出尺寸与进程峰值 RSS
-    （VmHWM）。用法：bench_writer_memory [SIZE_MB]，默认 512。 }
+    （VmHWM）。峰值含调用方 Contents 输入缓冲（512MB）+ Builder 输出 blob
+    （536MB），故 1038MB≈2×属预期；Builder 自身开销仅 gap/对齐零散 Fill，
+    <64MB 全量清零否则分段清零，内部峰值 1.15× 已在 writer.pas 落地。
+    用法：bench_writer_memory [SIZE_MB]，默认 512。 }
 uses
   nextpas.core.base,
   nextpas.core.exception,

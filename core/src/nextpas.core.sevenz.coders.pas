@@ -48,7 +48,9 @@ function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TByte
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.compress,
   nextpas.core.sevenz.bcj2,
   nextpas.core.sevenz.aes,
@@ -116,29 +118,16 @@ begin
   Result := GPascalEncoder;
 end;
 
-function BytesIsUnique(const A: TBytes): Boolean; inline;
+function CopyOfBytes(const ASrc: TBytes): TBytes; inline;
 begin
-  if Pointer(A) = nil then
-    Exit(True);
-  Result := PSizeInt(Pointer(A) - 2 * SizeOf(Pointer))^ = 1;
+  // single source via bytes.ops.SpanClone; inline forward avoids duplicate Move
+  Result := SpanClone(TByteSpan.FromBytes(ASrc));
 end;
 
-function CopyOfBytes(const ASrc: TBytes): TBytes;
+function UIntToDecStr(AVal: UInt64): string; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(ASrc));
-  if Length(ASrc) > 0 then
-    Move(ASrc[0], Result[0], Length(ASrc));
-end;
-
-{ 无 SysUtils 的 UInt64 十进制转字符串；用于错误消息拼接——
-  本工具链 CreateFmt 对 %d 传 UInt64 实参会渲染为 0 }
-function UIntToDecStr(AVal: UInt64): string;
-var
-  LTmp: string;
-begin
-  Str(AVal, LTmp);
-  Result := LTmp;
+  // single source via text.conv.UIntToStr; inline keeps call site zero overhead
+  Result := UIntToStr(AVal);
 end;
 
 function UInt64ToHex12(AVal: QWord): string;
@@ -257,10 +246,7 @@ begin
   begin
     if Length(AInputs) <> 1 then
       raise EParseError.Create('filter coder expects one input');
-    if BytesIsUnique(AInputs[0]) then
-      AOut := AInputs[0]
-    else
-      AOut := CopyOfBytes(AInputs[0]);
+    AOut := CopyOfBytes(AInputs[0]);
     SevenZFilterConvert(AOut, LFilter, ACoder.Props, False);
   end
   else
@@ -269,10 +255,7 @@ begin
       begin
         if Length(AInputs) <> 1 then
           raise EParseError.Create('copy coder expects one input');
-        if BytesIsUnique(AInputs[0]) then
-          AOut := AInputs[0]
-        else
-          AOut := CopyOfBytes(AInputs[0]);
+        AOut := CopyOfBytes(AInputs[0]);
       end;
     SEVENZ_METHOD_LZMA2:
       begin

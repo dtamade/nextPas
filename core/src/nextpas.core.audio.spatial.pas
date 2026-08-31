@@ -46,7 +46,7 @@ function CreateSpatialSource(const ASource: IRealtimeAudioSource; const AListene
 
 implementation
 
-uses nextpas.core.base.utils, nextpas.core.audio.mix;
+uses Math, SysUtils, nextpas.core.audio.mix;
 
 function CreateSpatialSource(const ASource: IRealtimeAudioSource; const AListener: TAudioListener; const AParams: TAudioSpatialParams): IAudioSpatialSource;
 begin
@@ -60,7 +60,7 @@ begin
   FSource := ASource;
   FFormat := ASource.GetFormat;
   if not FFormat.IsValid then raise EInvalidArgument.Create('spatial: invalid source format');
-  // v1: spatial panning requires mono or stereo sfF32 for zero-alloc; other formats via PcmConvert in FillRealtime is allowed but keep F32 — offline path preallocated, realtime path already F32 via EnsureF32
+  // v1: spatial panning requires mono or stereo sfF32 for zero-alloc; other formats via PcmConvert in FillRealtime is allowed but keep F32 canonical
   FListener := AListener;
   FParams := AParams;
   FLock := TRecursiveMutex.Create;
@@ -73,11 +73,8 @@ begin
 end;
 
 procedure TAudioSpatialSource.EnsureScratch(ANeeded: Integer);
-var LCap: Integer;
 begin
-  LCap := Length(FScratch);
-  AudioEnsureCapacity(LCap, ANeeded, 256);
-  if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
+  if Length(FScratch) < ANeeded then SetLength(FScratch, ANeeded);
 end;
 
 function TAudioSpatialSource.GetFormat: TAudioFormat;
@@ -155,9 +152,7 @@ begin
   // Doppler: v1 expose via GetSpatialParams, not resampled here (would need resampler)
   // Fill source into scratch then pan
   if (AFrames <= 0) then Exit(0);
-  LNeed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
-  if LNeed < 0 then
-    LNeed := 0;
+  LNeed := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < LNeed then
   begin
     // realtime violation: clamp

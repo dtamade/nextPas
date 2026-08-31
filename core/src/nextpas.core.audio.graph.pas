@@ -6,6 +6,7 @@ interface
 
 uses
   SysUtils,
+  Classes,
   Math,
   nextpas.core.sync.mutex,
   nextpas.core.base,
@@ -151,27 +152,33 @@ begin
 end;
 
 procedure TAudioGraph.EnsureScratch(var AScratch: TBytes; ANeeded: Integer);
-var LCap: Integer;
+var Cap: Integer;
 begin
-  LCap := Length(AScratch);
-  AudioEnsureCapacity(LCap, ANeeded, 256);
-  if Length(AScratch) <> LCap then SetLength(AScratch, LCap);
+  if Length(AScratch) >= ANeeded then Exit;
+  Cap := Length(AScratch);
+  if Cap < 256 then Cap := 256;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(AScratch, Cap);
 end;
 
 procedure TAudioGraph.EnsureSnapshotNodes(ANeeded: Integer);
-var LCap: Integer;
+var Cap: Integer;
 begin
-  LCap := Length(FSnapshotNodes);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSnapshotNodes) <> LCap then SetLength(FSnapshotNodes, LCap);
+  if Length(FSnapshotNodes) >= ANeeded then Exit;
+  Cap := Length(FSnapshotNodes);
+  if Cap < 4 then Cap := 4;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(FSnapshotNodes, Cap);
 end;
 
 procedure TAudioGraph.EnsureSnapshotProcs(ANeeded: Integer);
-var LCap: Integer;
+var Cap: Integer;
 begin
-  LCap := Length(FSnapshotProcs);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSnapshotProcs) <> LCap then SetLength(FSnapshotProcs, LCap);
+  if Length(FSnapshotProcs) >= ANeeded then Exit;
+  Cap := Length(FSnapshotProcs);
+  if Cap < 4 then Cap := 4;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(FSnapshotProcs, Cap);
 end;
 
 procedure TAudioGraph.MaybeCompactNodes;
@@ -424,7 +431,6 @@ begin
   Tmp.Data := FScratchTmp;
   Tmp.Format := FFormat;
   Tmp.FrameCount := AFrames;
-  // snapshot mixing - lock free
   for I := 0 to AliveN - 1 do
   begin
     // mismatch not tear

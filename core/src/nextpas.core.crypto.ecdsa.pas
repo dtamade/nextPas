@@ -145,24 +145,22 @@ end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 begin
-  Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
+  Result := nextpas.core.bytes.ops.StripLeadingZero(AData);
 end;
 
 function IsZeroBytes(const AData: TBytes): Boolean; inline;
 begin
-  // perf/single-source: delegate to bytes.ops.IsZeroBytes which uses
-  // StripLeadingZeroView.Len=0 (no local scan loop).
   Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 begin
-  Result := nextpas.core.bytes.ops.CompareUnsignedBytes(ALeft, ARight);
+  Result := nextpas.core.bytes.ops.CompareUnsigned(ALeft, ARight);
 end;
 
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
-  Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
+  Result := nextpas.core.bytes.ops.UnsignedEqual(ALeft, ARight);
 end;
 
 {** 恒定时间无符号字节数组相等比较（纵深防御：签名验证路径） }
@@ -170,8 +168,8 @@ function ConstantTimeUnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; i
 var
   LLeft, LRight: TByteSpan;
 begin
-  LLeft := nextpas.core.bytes.ops.StripLeadingZeroView(ALeft);
-  LRight := nextpas.core.bytes.ops.StripLeadingZeroView(ARight);
+  LLeft := StripLeadingZeroView(ALeft);
+  LRight := StripLeadingZeroView(ARight);
   if LLeft.Len <> LRight.Len then
     Exit(False);
   if LLeft.Len = 0 then

@@ -5,7 +5,7 @@ unit nextpas.core.audio.sfx;
 interface
 
 uses
-  SysUtils, Math,
+  SysUtils, Classes, Math,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -118,16 +118,12 @@ var
   LG: TAudioPanGains;
   Needed: Integer;
 begin
-  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
-  if Needed < 0 then
-    Needed := 0;
+  Needed := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < Needed then
   begin
     AFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
     if AFrames <= 0 then Exit(0);
-    Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
-    if Needed < 0 then
-      Needed := 0;
+    Needed := AFrames * FFormat.BlockAlign;
   end;
   if FEof and not FLoop then
   begin
@@ -265,19 +261,23 @@ begin
 end;
 
 procedure TSfxAudio.EnsureSfxCapacity(ANeeded: Integer);
-var LCap: Integer;
+var Cap: Integer;
 begin
-  LCap := Length(FSfx);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSfx) <> LCap then SetLength(FSfx, LCap);
+  if Length(FSfx) >= ANeeded then Exit;
+  Cap := Length(FSfx);
+  if Cap < 4 then Cap := 4;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(FSfx, Cap);
 end;
 
 procedure TSfxAudio.EnsureVoiceCapacity(ANeeded: Integer);
-var LCap: Integer;
+var Cap: Integer;
 begin
-  LCap := Length(FVoices);
-  AudioEnsureCapacity(LCap, ANeeded, 8);
-  if Length(FVoices) <> LCap then SetLength(FVoices, LCap);
+  if Length(FVoices) >= ANeeded then Exit;
+  Cap := Length(FVoices);
+  if Cap < 8 then Cap := 8;
+  while Cap < ANeeded do Cap := Cap * 2;
+  SetLength(FVoices, Cap);
 end;
 
 function TSfxAudio.Load(const ABuffer: TAudioBuffer): TSfxId;
