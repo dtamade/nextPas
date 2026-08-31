@@ -71,40 +71,19 @@ begin
     (AValue = C_ZIP64_EOCD_LOC_SIG) or (AValue = C_ZIP_DESCRIPTOR_SIG);
 end;
 
-procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
-var
-  LMinSec, LMaxSec, LRem: Int64;
-  LD: TDate;
+procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word); inline;
 begin
-  LMinSec := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
-  LMaxSec := Int64(TDate.Create(C_DOS_MAX_YEAR, 12, 31).ToUnixDays) * 86400 + 86399;
-  if AUnixSec < LMinSec then AUnixSec := LMinSec
-  else if AUnixSec > LMaxSec then AUnixSec := LMaxSec;
-  LD := TDate.FromUnixDays(Integer(AUnixSec div 86400));
-  LRem := AUnixSec mod 86400;
-  ADosDate := Word(((LD.GetYear - C_DOS_MIN_YEAR) shl 9) or (LD.GetMonth shl 5) or LD.GetDay);
-  ADosTime := Word(((LRem div 3600) shl 11) or (((LRem mod 3600) div 60) shl 5) or ((LRem mod 60) div 2));
+  nextpas.core.zip.base.DosDateTimeFromUnix(AUnixSec, ADosDate, ADosTime);
 end;
 
-function DosMinUnixSec: Int64;
+function DosMinUnixSec: Int64; inline;
 begin
-  Result := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
+  Result := nextpas.core.zip.base.DosMinUnixSec;
 end;
 
-function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
-var
-  LYear, LMonth, LDay, LHour, LMin, LSec: Integer;
-  LD: TDate;
+function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 begin
-  LYear := C_DOS_MIN_YEAR + Integer(ADosDate shr 9);
-  LMonth := Integer((ADosDate shr 5) and $0F);
-  LDay := Integer(ADosDate and $1F);
-  LHour := Integer(ADosTime shr 11);
-  LMin := Integer((ADosTime shr 5) and $3F);
-  LSec := Integer((ADosTime and $1F) shl 1);
-  if not TDate.TryCreate(LYear, LMonth, LDay, LD) then
-    LD := TDate.Create(C_DOS_MIN_YEAR, 1, 1);
-  Result := Int64(LD.ToUnixDays) * 86400 + LHour * 3600 + LMin * 60 + LSec;
+  Result := nextpas.core.zip.base.UnixFromDosDateTime(ADosDate, ADosTime);
 end;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
