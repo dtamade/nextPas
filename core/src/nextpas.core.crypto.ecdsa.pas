@@ -150,6 +150,8 @@ end;
 
 function IsZeroBytes(const AData: TBytes): Boolean; inline;
 begin
+  // perf/single-source: delegate to bytes.ops.IsZeroBytes which uses
+  // StripLeadingZeroView.Len=0 (no local scan loop).
   Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
 end;
 

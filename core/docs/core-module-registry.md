@@ -108,7 +108,7 @@ and `nextpas.core.db.pg.*`. The legacy `nextpas.core.sqlite.*` /
 ## Gate policy
 
 - L0 boundary gate currently hardens `base`, `errors`, `platform`, `mem`,
-  `system`, `atomic`, `math`, and `simd`.
+  `log.intf`, `system`, `atomic`, `math`, and `simd`.
 - Raw host units (`Windows`, `BaseUnix`, `Unix`, `DynLibs`, `ctypes`) must appear
   only in owner paths or explicit allowlist entries.
 - Any new allowlist entry is a design debt. The landing report must name the

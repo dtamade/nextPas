@@ -407,7 +407,11 @@ begin
   if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
     Exit;
   atomic_fetch_add(LCtx^.RefCount, 1, mo_acq_rel);
-  LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+  try
+    LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+  except
+    TimeoutCtxRelease(LCtx);
+  end;
 end;
 
 function TimeoutCtxCreate(ALoop: TAsyncLoop; const ADeadline: TDeadline;

@@ -111,10 +111,10 @@ function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; inline;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; inline;
 
-function HTonN(AValue: Word): Word; overload;
-function HTonN(AValue: LongWord): LongWord; overload;
-function NToHs(AValue: Word): Word; overload;
-function NToHs(AValue: LongWord): LongWord; overload;
+function HTonN(AValue: Word): Word; overload; inline;
+function HTonN(AValue: LongWord): LongWord; overload; inline;
+function NToHs(AValue: Word): Word; overload; inline;
+function NToHs(AValue: LongWord): LongWord; overload; inline;
 
 function VarType(const V: Variant): TVarType;
 function VarIsNull(const V: Variant): Boolean;
@@ -165,38 +165,22 @@ end;
 
 function HTonN(AValue: Word): Word;
 begin
-  {$IFDEF ENDIAN_LITTLE}
-  Result := Swap(AValue);
-  {$ELSE}
-  Result := AValue;
-  {$ENDIF}
+  Result := nextpas.core.base.utils.HTonN(AValue);
 end;
 
 function HTonN(AValue: LongWord): LongWord;
 begin
-  {$IFDEF ENDIAN_LITTLE}
-  Result := Swap(AValue);
-  {$ELSE}
-  Result := AValue;
-  {$ENDIF}
+  Result := nextpas.core.base.utils.HTonN(AValue);
 end;
 
 function NToHs(AValue: Word): Word;
 begin
-  {$IFDEF ENDIAN_LITTLE}
-  Result := Swap(AValue);
-  {$ELSE}
-  Result := AValue;
-  {$ENDIF}
+  Result := nextpas.core.base.utils.NToHs(AValue);
 end;
 
 function NToHs(AValue: LongWord): LongWord;
 begin
-  {$IFDEF ENDIAN_LITTLE}
-  Result := Swap(AValue);
-  {$ELSE}
-  Result := AValue;
-  {$ENDIF}
+  Result := nextpas.core.base.utils.NToHs(AValue);
 end;
 
 function VarType(const V: Variant): TVarType;

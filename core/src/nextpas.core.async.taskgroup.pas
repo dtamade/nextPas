@@ -200,7 +200,17 @@ begin
 end;
 
 destructor TAsyncTaskGroup.Destroy;
+var
+  LToken: IAsyncCancellationToken;
 begin
+  LToken := FToken;
+  if LToken <> nil then
+  begin
+    try
+      LToken.RemoveOnCancel(@TaskGroupTokenNotify, Self);
+    except
+    end;
+  end;
   FToken := nil;
   platform_mutex_destroy(FLock);
   inherited Destroy;

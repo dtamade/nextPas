@@ -283,6 +283,10 @@ end;
 procedure TAsyncCancellationTokenImpl.Cancel;
 var
   LOldState: Int32;
+  LCallbacks: PCancelCallbackEntry;
+  LChildren: PChildEntry;
+  LEntry, LNextEntry: PCancelCallbackEntry;
+  LChild, LNextChild: PChildEntry;
 begin
   { 原子状态转换：ACTIVE -> CANCELLED }
   LOldState := atomic_exchange(FState, CANCEL_STATE_CANCELLED, mo_acq_rel);
@@ -293,10 +297,43 @@ begin
   try
     FCondReady := True;
     platform_condvar_broadcast(FCond);
-    FireCallbacks;
-    CancelChildren;
+    LCallbacks := FCallbacks;
+    FCallbacks := nil;
+    FCallbackTail := nil;
+    LChildren := FChildren;
+    FChildren := nil;
+    FChildrenTail := nil;
   finally
     platform_mutex_unlock(FLock);
+  end;
+  LEntry := LCallbacks;
+  while LEntry <> nil do
+  begin
+    LNextEntry := LEntry^.Next;
+    try
+      if Assigned(LEntry^.Callback) then
+        LEntry^.Callback(LEntry^.Context);
+    except
+    end;
+    Dispose(LEntry);
+    LEntry := LNextEntry;
+  end;
+  LChild := LChildren;
+  while LChild <> nil do
+  begin
+    LNextChild := LChild^.Next;
+    if LChild^.Child <> nil then
+    begin
+      try
+        TAsyncCancellationTokenImpl(LChild^.Child).Cancel;
+      except
+      end;
+      TAsyncCancellationTokenImpl(LChild^.Child).FParent := nil;
+    end;
+    LChild^.Child := nil;
+    LChild^.Ref := nil;
+    Dispose(LChild);
+    LChild := LNextChild;
   end;
 end;
 

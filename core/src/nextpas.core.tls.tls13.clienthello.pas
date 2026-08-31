@@ -115,7 +115,8 @@ uses
   nextpas.core.tls.random,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder;
 
 type
   TALPNProtocolArray = array of AnsiString;
@@ -472,6 +473,8 @@ var
   LExtensions: TBytes;
   LExt: TBytes;
   LBodyLen: Integer;
+  LExtBuilder: IBytesBuilder;
+  LBodyBuilder: IBytesBuilder;
 begin
   LRandom := GenerateSecureRandomBytes(32);
   LSessionId := GenerateSecureRandomBytes(32);
@@ -483,63 +486,67 @@ begin
   AppendByte(LCompressionMethods, 1);
   AppendByte(LCompressionMethods, 0);
 
-  SetLength(LExtensions, 0);
+  // perf: use IBytesBuilder to avoid O(n²) BytesAppend realloc in extension loop;
+  // single Grow preallocation and one ToBytes copy. See BytesBuilder.Grow/ToBytes.
+  LExtBuilder := CreateBytesBuilder(512);
 
   // Extension order matches common browser fingerprints for CDN compatibility
   LExt := BuildExtensionServerName(AServerName);
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   // extended_master_secret (RFC 7627)
-  AppendUInt16(LExtensions, TLS_EXTENSION_EXTENDED_MASTER_SECRET);
-  AppendUInt16(LExtensions, 0);
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_EXTENDED_MASTER_SECRET);
+  LExtBuilder.AppendUInt16BE(0);
 
   // renegotiation_info: empty (RFC 5746)
-  AppendUInt16(LExtensions, TLS_EXTENSION_RENEGOTIATION_INFO);
-  AppendUInt16(LExtensions, 1);
-  AppendByte(LExtensions, 0);
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_RENEGOTIATION_INFO);
+  LExtBuilder.AppendUInt16BE(1);
+  LExtBuilder.AppendByte(0);
 
   LExt := BuildExtensionSupportedGroups;
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   // ec_point_formats: uncompressed only
-  AppendUInt16(LExtensions, TLS_EXTENSION_EC_POINT_FORMATS);
-  AppendUInt16(LExtensions, 2);
-  AppendByte(LExtensions, 1);
-  AppendByte(LExtensions, 0);
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_EC_POINT_FORMATS);
+  LExtBuilder.AppendUInt16BE(2);
+  LExtBuilder.AppendByte(1);
+  LExtBuilder.AppendByte(0);
 
   // session_ticket (empty = willing to receive)
   LExt := BuildExtensionSessionTicket;
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionALPN(AALPNProtocols);
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   if AIncludeStatusRequest then
   begin
     LExt := BuildExtensionStatusRequest;
-    BytesAppend(LExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
 
   if AIncludeSignedCertificateTimestamp then
   begin
     LExt := BuildExtensionSignedCertificateTimestamp;
-    BytesAppend(LExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
 
   LExt := BuildExtensionSignatureAlgorithms;
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionRecordSizeLimit(TLS13_RECORD_SIZE_LIMIT_DEFAULT);
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionSupportedVersions;
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionPSKKeyExchangeModes;
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionKeyShare(AKeyShare);
-  BytesAppend(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
+
+  LExtensions := LExtBuilder.ToBytes;
 
   // Calculate total ClientHello size to determine padding need
   // header(4) + version(2) + random(32) + session_id_len(1) + session_id(32) +
@@ -548,19 +555,26 @@ begin
   if LBodyLen + 4 < 512 then
   begin
     LExt := BuildExtensionPadding(512, LBodyLen + 4);
-    BytesAppend(LExtensions, LExt);
+    if Length(LExt) > 0 then
+    begin
+      // re-append padding via builder to keep single allocation path
+      LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
+      LExtensions := LExtBuilder.ToBytes;
+    end;
   end;
 
-  Result := nil;
-  AppendUInt16(Result, TLS_LEGACY_VERSION);
-  BytesAppend(Result, LRandom);
-  AppendByte(Result, Byte(Length(LSessionId)));
-  BytesAppend(Result, LSessionId);
-  AppendUInt16(Result, Word(Length(LCipherSuites)));
-  BytesAppend(Result, LCipherSuites);
-  BytesAppend(Result, LCompressionMethods);
-  AppendUInt16(Result, Word(Length(LExtensions)));
-  BytesAppend(Result, LExtensions);
+  // perf: final body also via builder (preallocated) instead of repeated BytesAppend O(n²)
+  LBodyBuilder := CreateBytesBuilder(LBodyLen + 32);
+  LBodyBuilder.AppendUInt16BE(TLS_LEGACY_VERSION);
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LRandom));
+  LBodyBuilder.AppendByte(Byte(Length(LSessionId)));
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LSessionId));
+  LBodyBuilder.AppendUInt16BE(Word(Length(LCipherSuites)));
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LCipherSuites));
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LCompressionMethods));
+  LBodyBuilder.AppendUInt16BE(Word(Length(LExtensions)));
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LExtensions));
+  Result := LBodyBuilder.ToBytes;
 end;
 
 function BuildTLS13ClientHelloBodyWithPSKCore(

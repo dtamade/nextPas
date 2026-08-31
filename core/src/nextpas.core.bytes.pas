@@ -245,7 +245,7 @@ end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 begin
-  Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
+  Result := nextpas.core.bytes.ops.StripLeadingZero(AData);
 end;
 
 function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;

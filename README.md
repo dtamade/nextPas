@@ -1,6 +1,6 @@
 # nextPas
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](core/VERSION) [![FPC](https://img.shields.io/badge/FPC-3.3.1-orange)](https://www.freepascal.org/) [![License](https://img.shields.io/badge/license-MIT-green)](core/LICENSE)
+[![Maturity](https://img.shields.io/badge/maturity-AL1%20Skeleton-yellow)](docs/architecture/architecture-maturity-levels.md) [![FPC](https://img.shields.io/badge/FPC-3.3.1-orange)](https://www.freepascal.org/) [![License](https://img.shields.io/badge/license-MIT-green)](core/LICENSE)
 
 nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是一整套下一代 Pascal
 开发环境，而不只是一个 compiler binary。第一阶段先冻结文档、范围和验证基线，

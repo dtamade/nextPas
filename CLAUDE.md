@@ -115,7 +115,7 @@ nextpas.core.<module>.<impl>.pas   ← 实现子模块
 - ❌ 不要绕过 owner 边界调用 `Windows`, `BaseUnix`, `Unix`
 - ❌ 不要在 `core/src/` 创建裸露的 `System.pas`（与 FPC magic unit 冲突）
 - ❌ 不要暴露未测试的兼容性 API
-- ❌ 不要创建 `nextpas.core.system.classes` 单元（已推迟）
+- ✅ `nextpas.core.system.classes` 允许最小 live shim（TStream/TFileStream/TStringList/TSeekOrigin + file mode 等流式子集，详见 `core/docs/system/compatibility-facades.md`）；更广的 Classes 面（TComponent/TPersistent/streaming）仍推迟
 
 ### 运行时契约名称
 
@@ -132,9 +132,9 @@ nextpas.core.<module>.<impl>.pas   ← 实现子模块
 ### 当前阶段 (S4-S5)
 
 - **已完成**: S0-S3 (文档/门面/契约)
-- **已完成**: S4 TypInfo 最小门面、SysUtils 最小门面
+- **已完成**: S4 TypInfo 最小门面、SysUtils 最小门面、Classes 最小流式 shim（live）
 - **进行中**: S5 编译器/运行时集成准备
-- **已推迟**: Classes 门面、更广泛的 SysUtils 门面
+- **已推迟**: 更广的 Classes 面（TComponent/TPersistent）、更广泛的 SysUtils 门面
 
 ### 源文件位置
 

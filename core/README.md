@@ -33,12 +33,12 @@ make clean       # 清理构建产物
 `Makefile`，可以进入项目目录单独构建或运行。顶层 Makefile 只做聚合，
 不要把大型框架的失败边界藏在一个总脚本里。
 
-普通模块开发优先跑 focused gate，例如：
+普通模块开发优先跑 focused gate，例如（新范式）：
 
 ```bash
-make -C tests/nextpas.core.http/test_http_client clean test
-make -C tests/nextpas.core.math clean test
-make -C tests/nextpas.core.simd cpuinfo-focused
+make focused FOCUS=core/tests/nextpas.core.http/test_http_client
+make focused FOCUS=core/tests/nextpas.core.math/test_math
+make focused FOCUS=core/tests/nextpas.core.simd/test_simd
 ```
 
 提交前还要从仓库根目录运行：
@@ -68,9 +68,8 @@ build/      构建产物（git ignored）
 ## 最小示例
 
 ```bash
-# 聚合验证
-make -C core build
-make -C core/tests/nextpas.core.collections/quickstart clean test
+# 聚合验证（新范式）
+make focused FOCUS=core/tests/nextpas.core.collections/quickstart
 ```
 
 ```pascal
