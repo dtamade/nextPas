@@ -86,6 +86,8 @@ function TryChaCha20Poly1305DecryptCombinedBufDirect(
  *       分节与长度块。OpenSSH chachapoly（tag 直接覆盖 encLen||ct）等非标准
  *       AEAD 组装方使用。AKey 为一次性 32B poly key *}
 function Poly1305Raw(const AKey, AMacData: TBytes): TBytes;
+{** @desc 裸 Poly1305 跨段版本：对 ASpans 连续拼接计算 tag，零拷贝避免 encLen||ct 临时堆分配 *}
+function Poly1305RawSpans(const AKey: TBytes; const ASpans: array of TByteSpan): TBytes;
 
 implementation
 
@@ -1067,6 +1069,53 @@ begin
       Poly1305Update(LCtx, @LBlock[0], 0);
     end;
     Inc(LOffset, LChunk);
+  end;
+  Poly1305Finish(LCtx, @Result[0]);
+end;
+
+function Poly1305RawSpans(const AKey: TBytes; const ASpans: array of TByteSpan): TBytes;
+var
+  LCtx: TPoly1305Ctx;
+  LBlock: array[0..15] of Byte;
+  LBufLen: Integer;
+  I: Integer;
+  P: PByte;
+  LRem: SizeUInt;
+  LCopy: SizeUInt;
+begin
+  if Length(AKey) <> POLY1305_KEY_SIZE then
+    raise ECryptoError.Create(cecInvalidArgument,
+      'chacha20poly1305: poly key must be 32 bytes');
+  SetLength(Result, POLY1305_TAG_SIZE);
+  Poly1305Init(LCtx, @AKey[0]);
+  FillChar(LBlock, SizeOf(LBlock), 0);
+  LBufLen := 0;
+  for I := 0 to High(ASpans) do
+  begin
+    P := ASpans[I].Data;
+    LRem := ASpans[I].Len;
+    while LRem > 0 do
+    begin
+      LCopy := 16 - SizeUInt(LBufLen);
+      if LCopy > LRem then
+        LCopy := LRem;
+      if LCopy > 0 then
+        Move(P^, LBlock[LBufLen], LCopy);
+      Inc(LBufLen, Integer(LCopy));
+      Inc(P, LCopy);
+      Dec(LRem, LCopy);
+      if LBufLen = 16 then
+      begin
+        Poly1305Update(LCtx, @LBlock[0], UInt64(1) shl 40);
+        FillChar(LBlock, SizeOf(LBlock), 0);
+        LBufLen := 0;
+      end;
+    end;
+  end;
+  if LBufLen > 0 then
+  begin
+    LBlock[LBufLen] := $01;
+    Poly1305Update(LCtx, @LBlock[0], 0);
   end;
   Poly1305Finish(LCtx, @Result[0]);
 end;

@@ -1944,5 +1944,6 @@ begin
   GRunner.Add(GSuite);
   GRunner.RunAll;
   GRunner.Summary;
+  ClearBigIntCache;
   if not GRunner.AllPassed then Halt(1);
 end.
