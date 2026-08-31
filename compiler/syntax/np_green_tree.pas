@@ -131,6 +131,14 @@ type
       const AByteLength: LongInt;
       const AText: string
     );
+    { Explicit tree — 单一真源，零全局依赖，推荐新代码使用 }
+    constructor Create(
+      const ATree: TGreenTree;
+      const ANodeKind: TGreenNodeKind;
+      const AByteOffset: LongInt;
+      const AByteLength: LongInt;
+      const AText: string
+    );
     constructor CreateFacade(AOwner: TGreenTree; AIndex: LongInt);
     function NodeKindName: string;
     function ChildCount: LongInt;
