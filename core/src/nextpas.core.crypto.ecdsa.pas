@@ -136,38 +136,13 @@ begin
     Move(ARight[0], Result[LLeftLen], LRightLen);
 end;
 
-function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
-begin
-  Result := nextpas.core.bytes.ops.StripLeadingZeroView(AData);
-end;
-
-function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-begin
-  Result := nextpas.core.bytes.ops.StripLeadingZero(AData);
-end;
-
-function IsZeroBytes(const AData: TBytes): Boolean; inline;
-begin
-  Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
-end;
-
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
-begin
-  Result := nextpas.core.bytes.ops.CompareUnsigned(ALeft, ARight);
-end;
-
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
-begin
-  Result := nextpas.core.bytes.ops.UnsignedEqual(ALeft, ARight);
-end;
-
 {** 恒定时间无符号字节数组相等比较（纵深防御：签名验证路径） }
 function ConstantTimeUnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 var
   LLeft, LRight: TByteSpan;
 begin
-  LLeft := StripLeadingZeroView(ALeft);
-  LRight := StripLeadingZeroView(ARight);
+  LLeft := nextpas.core.bytes.ops.StripLeadingZeroView(ALeft);
+  LRight := nextpas.core.bytes.ops.StripLeadingZeroView(ARight);
   if LLeft.Len <> LRight.Len then
     Exit(False);
   if LLeft.Len = 0 then
@@ -206,7 +181,7 @@ begin
   if LBorrow <> 0 then
     Exit;
 
-  AResult := StripLeadingZeroBytes(AResult);
+  AResult := nextpas.core.bytes.ops.StripLeadingZero(AResult);
   Result := True;
 end;
 
@@ -225,11 +200,11 @@ begin
   Result := False;
   SetLength(AResult, 0);
 
-  if CompareUnsignedBytes(ALeft, ARight) < 0 then
+  if nextpas.core.bytes.ops.CompareUnsigned(ALeft, ARight) < 0 then
     Exit;
 
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
+  LLeft := nextpas.core.bytes.ops.StripLeadingZero(ALeft);
+  LRight := nextpas.core.bytes.ops.StripLeadingZero(ARight);
 
   if Length(LLeft) = 0 then
   begin
@@ -269,7 +244,7 @@ begin
   if LBorrow <> 0 then
     Exit(False);
 
-  AResult := StripLeadingZeroBytes(AResult);
+  AResult := nextpas.core.bytes.ops.StripLeadingZero(AResult);
   Result := True;
 end;
 
@@ -310,7 +285,7 @@ begin
   AError := '';
   Result := False;
 
-  if not TryUnsignedSubtractSmall(StripLeadingZeroBytes(APrimeModulus), 2, LExponent) then
+  if not TryUnsignedSubtractSmall(nextpas.core.bytes.ops.StripLeadingZero(APrimeModulus), 2, LExponent) then
   begin
     AError := 'Invalid modulus for modular inverse';
     Exit;
@@ -365,7 +340,7 @@ begin
     Exit(True);
   end;
 
-  if IsZeroBytes(AP.Y) then
+  if nextpas.core.bytes.ops.IsZeroBytes(AP.Y) then
   begin
     AResult := P256InfinityPoint;
     Exit(True);
@@ -414,8 +389,8 @@ begin
     Exit;
   LY3 := LTmp;
 
-  AResult.X := StripLeadingZeroBytes(LX3);
-  AResult.Y := StripLeadingZeroBytes(LY3);
+  AResult.X := nextpas.core.bytes.ops.StripLeadingZero(LX3);
+  AResult.Y := nextpas.core.bytes.ops.StripLeadingZero(LY3);
   AResult.IsInfinity := False;
   Result := True;
 end;
@@ -452,15 +427,15 @@ begin
 
   LP := ConstToBytes(P256_FIELD_P);
 
-  if UnsignedBytesEqual(AP.X, AQ.X) then
+  if nextpas.core.bytes.ops.UnsignedEqual(AP.X, AQ.X) then
   begin
-    if UnsignedBytesEqual(AP.Y, AQ.Y) then
+    if nextpas.core.bytes.ops.UnsignedEqual(AP.Y, AQ.Y) then
       Exit(TryP256PointDouble(AP, AResult, AError));
 
     if not TryModAdd(AP.Y, AQ.Y, LP, LSumY, AError) then
       Exit;
 
-    if IsZeroBytes(LSumY) then
+    if nextpas.core.bytes.ops.IsZeroBytes(LSumY) then
     begin
       AResult := P256InfinityPoint;
       Exit(True);
@@ -502,8 +477,8 @@ begin
     Exit;
   LY3 := LTmp;
 
-  AResult.X := StripLeadingZeroBytes(LX3);
-  AResult.Y := StripLeadingZeroBytes(LY3);
+  AResult.X := nextpas.core.bytes.ops.StripLeadingZero(LX3);
+  AResult.Y := nextpas.core.bytes.ops.StripLeadingZero(LY3);
   AResult.IsInfinity := False;
   Result := True;
 end;
@@ -542,8 +517,8 @@ begin
   P256PointToAffine(LJacOut, LAffX, LAffY);
   P256FeToBytes(LAffX, LXBytes);
   P256FeToBytes(LAffY, LYBytes);
-  AResult.X := StripLeadingZeroBytes(LXBytes);
-  AResult.Y := StripLeadingZeroBytes(LYBytes);
+  AResult.X := nextpas.core.bytes.ops.StripLeadingZero(LXBytes);
+  AResult.Y := nextpas.core.bytes.ops.StripLeadingZero(LYBytes);
   AResult.IsInfinity := False;
   Result := True;
 end;
@@ -569,8 +544,8 @@ begin
   P256PointToAffine(LJac, LAffX, LAffY);
   P256FeToBytes(LAffX, LXBytes);
   P256FeToBytes(LAffY, LYBytes);
-  AResult.X := StripLeadingZeroBytes(LXBytes);
-  AResult.Y := StripLeadingZeroBytes(LYBytes);
+  AResult.X := nextpas.core.bytes.ops.StripLeadingZero(LXBytes);
+  AResult.Y := nextpas.core.bytes.ops.StripLeadingZero(LYBytes);
   AResult.IsInfinity := False;
   Result := True;
 end;
@@ -600,8 +575,8 @@ begin
   LA := ConstToBytes(P256_A);
   LB := ConstToBytes(P256_B);
 
-  if (CompareUnsignedBytes(APoint.X, LP) >= 0) or
-    (CompareUnsignedBytes(APoint.Y, LP) >= 0) then
+  if (nextpas.core.bytes.ops.CompareUnsigned(APoint.X, LP) >= 0) or
+    (nextpas.core.bytes.ops.CompareUnsigned(APoint.Y, LP) >= 0) then
   begin
     AError := 'ECDSA public point coordinates are out of range';
     Exit;
@@ -621,7 +596,7 @@ begin
     Exit;
   LRhs := LTmp;
 
-  if not UnsignedBytesEqual(LY2, LRhs) then
+  if not nextpas.core.bytes.ops.UnsignedEqual(LY2, LRhs) then
   begin
     AError := 'ECDSA public point is not on secp256r1';
     Exit;
@@ -652,8 +627,8 @@ begin
     Exit;
   end;
 
-  APoint.X := StripLeadingZeroBytes(Copy(APublicPoint, 1, 32));
-  APoint.Y := StripLeadingZeroBytes(Copy(APublicPoint, 33, 32));
+  APoint.X := nextpas.core.bytes.ops.StripLeadingZero(Copy(APublicPoint, 1, 32));
+  APoint.Y := nextpas.core.bytes.ops.StripLeadingZero(Copy(APublicPoint, 33, 32));
   APoint.IsInfinity := False;
 
   Result := TryValidateP256Point(APoint, AError);
@@ -669,10 +644,10 @@ begin
   if Length(Result) > 32 then
     SetLength(Result, 32);
 
-  if CompareUnsignedBytes(Result, LN) >= 0 then
+  if nextpas.core.bytes.ops.CompareUnsigned(Result, LN) >= 0 then
     TryUnsignedSubtractAssumingGE(Result, LN, Result);
 
-  Result := StripLeadingZeroBytes(Result);
+  Result := nextpas.core.bytes.ops.StripLeadingZero(Result);
 end;
 
 function Int2OctetsP256(const AInput: TBytes): TBytes;
@@ -719,8 +694,8 @@ begin
     AV := HMAC_SHA256(AK, AV);
     LT := CopyBytes(AV);
 
-    AKCandidate := StripLeadingZeroBytes(LT);
-    if (not IsZeroBytes(AKCandidate)) and (CompareUnsignedBytes(AKCandidate, AOrder) < 0) then
+    AKCandidate := nextpas.core.bytes.ops.StripLeadingZero(LT);
+    if (not nextpas.core.bytes.ops.IsZeroBytes(AKCandidate)) and (nextpas.core.bytes.ops.CompareUnsigned(AKCandidate, AOrder) < 0) then
       Exit(True);
 
     SetLength(LZeroTag, 1);
@@ -741,8 +716,8 @@ begin
   LWriter := TASN1Writer.Create;
   try
     LWriter.BeginSequence;
-    LWriter.WriteBigInteger(StripLeadingZeroBytes(AR));
-    LWriter.WriteBigInteger(StripLeadingZeroBytes(ASValue));
+    LWriter.WriteBigInteger(nextpas.core.bytes.ops.StripLeadingZero(AR));
+    LWriter.WriteBigInteger(nextpas.core.bytes.ops.StripLeadingZero(ASValue));
     LWriter.EndSequence;
     ASignature := LWriter.GetData;
     Result := True;
@@ -797,8 +772,8 @@ begin
         Exit;
       end;
 
-      AR := StripLeadingZeroBytes(LRoot.GetChild(0).AsBigInteger);
-      ASValue := StripLeadingZeroBytes(LRoot.GetChild(1).AsBigInteger);
+      AR := nextpas.core.bytes.ops.StripLeadingZero(LRoot.GetChild(0).AsBigInteger);
+      ASValue := nextpas.core.bytes.ops.StripLeadingZero(LRoot.GetChild(1).AsBigInteger);
     finally
       LRoot.Free;
     end;
@@ -806,15 +781,15 @@ begin
     LReader.Free;
   end;
 
-  if IsZeroBytes(AR) or IsZeroBytes(ASValue) then
+  if nextpas.core.bytes.ops.IsZeroBytes(AR) or nextpas.core.bytes.ops.IsZeroBytes(ASValue) then
   begin
     AError := 'ECDSA signature DER r/s must be non-zero';
     Exit;
   end;
 
   LOrder := ConstToBytes(P256_ORDER_N);
-  if (CompareUnsignedBytes(AR, LOrder) >= 0) or
-    (CompareUnsignedBytes(ASValue, LOrder) >= 0) then
+  if (nextpas.core.bytes.ops.CompareUnsigned(AR, LOrder) >= 0) or
+    (nextpas.core.bytes.ops.CompareUnsigned(ASValue, LOrder) >= 0) then
   begin
     AError := 'ECDSA signature DER r/s must be less than curve order';
     Exit;
@@ -929,13 +904,13 @@ begin
 
   LN := ConstToBytes(P256_ORDER_N);
 
-  if not TryMod(StripLeadingZeroBytes(APrivateScalar), LN, LD, AError) then
+  if not TryMod(nextpas.core.bytes.ops.StripLeadingZero(APrivateScalar), LN, LD, AError) then
   begin
     SecureZeroBytes(LD);
     Exit;
   end;
 
-  if IsZeroBytes(LD) then
+  if nextpas.core.bytes.ops.IsZeroBytes(LD) then
   begin
     AError := 'ECDSA private scalar is zero';
     SecureZeroBytes(LD);
@@ -971,7 +946,7 @@ begin
     if not TryMod(LRPoint.X, LN, LR, AError) then
       Exit;
 
-    if IsZeroBytes(LR) then
+    if nextpas.core.bytes.ops.IsZeroBytes(LR) then
       Continue;
 
     if not TryModMul(LR, LD, LN, LRD, AError) then
@@ -986,10 +961,10 @@ begin
     if not TryModMul(LKInv, LSum, LN, LS, AError) then
       Exit;
 
-    if IsZeroBytes(LS) then
+    if nextpas.core.bytes.ops.IsZeroBytes(LS) then
       Continue;
 
-    if CompareUnsignedBytes(LS, ConstToBytes(P256_HALF_N)) > 0 then
+    if nextpas.core.bytes.ops.CompareUnsigned(LS, ConstToBytes(P256_HALF_N)) > 0 then
     begin
       if not TryUnsignedSubtractAssumingGE(LN, LS, LTmp) then
       begin
