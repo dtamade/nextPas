@@ -23,6 +23,7 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.http.earlydata,
   nextpas.core.http.middleware.earlydata,
+  nextpas.core.http.middleware.earlydata.adaptive,
   nextpas.core.http.client_earlydata,
   nextpas.core.platform.time,
   nextpas.core.time.base;
@@ -260,12 +261,27 @@ var
   GAdaptiveConfig: TTlsPasAdaptiveLimitConfig;
   GAdaptiveServerStats: TTlsPasServerStats;
   GAdaptiveReplayStats: TAsyncTlsPasReplayStats;
+  GAdaptiveObserver: TAsyncTlsPasAdaptiveObserver;
 
 procedure BenchAdaptiveLimit(aIters: Int64);
 var I: Int64; L: Cardinal;
 begin
   for I := 1 to aIters do
     L := TlsPasComputeAdaptiveMaxEarlyData(GAdaptiveServerStats, GAdaptiveReplayStats, GAdaptiveConfig);
+end;
+
+procedure BenchAdaptiveObserverDecide(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision;
+begin
+  for I := 1 to aIters do
+    D := GAdaptiveObserver.Decide(GPolicySess.TicketIdentity, GCH1, GPolicySess, True);
+end;
+
+procedure BenchAdaptiveObserverMax(aIters: Int64);
+var I: Int64; L: Cardinal;
+begin
+  for I := 1 to aIters do
+    L := GAdaptiveObserver.GetAdaptiveMaxEarlyData;
 end;
 
 procedure BenchHeaderValue(aIters: Int64);
@@ -305,9 +321,11 @@ type
   end;
 
 var
-  GHttpReqEarly, GHttpReqNormal: IHttpRequest;
+  GHttpReqEarly, GHttpReqNormal, GHttpReqEarlyLarge: IHttpRequest;
   GHttpMw: IHttpMiddleware;
   GHttpMwHandler: IHttpHandler;
+  GAdaptiveMw: IHttpMiddleware;
+  GAdaptiveMwHandler: IHttpHandler;
 
 constructor TCaptureWriterBenchHack.Create;
 begin inherited Create; FHeaders := NewHttpHeaders; end;
@@ -335,6 +353,59 @@ var I: Int64;
 begin
   for I := 1 to aIters do
     GHttpMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
+end;
+
+procedure BenchAdaptiveIsThrottled(aIters: Int64);
+var I: Int64; L: Boolean;
+begin
+  for I := 1 to aIters do
+    L := HttpAdaptiveEarlyDataIsThrottled(GHttpReqEarly, GAdaptiveObserver);
+end;
+
+procedure BenchAdaptiveMiddleware(aIters: Int64);
+var I: Int64;
+begin
+  for I := 1 to aIters do
+    GAdaptiveMwHandler.ServeHTTP(GHttpReqEarly, TCaptureWriterBenchHack.Get);
+end;
+
+procedure BenchAdaptiveMetricsFormat(aIters: Int64);
+var I: Int64; M: TTlsPasAdaptiveMetrics; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    M := GAdaptiveObserver.GetAdaptiveMetrics;
+    F := TlsPasFormatAdaptiveMetrics(M);
+  end;
+end;
+
+procedure BenchAdaptiveLogLine(aIters: Int64);
+var I: Int64; F: string;
+begin
+  for I := 1 to aIters do
+    F := HttpAdaptiveEarlyDataLogLine(GHttpReqEarly, GAdaptiveObserver);
+end;
+
+procedure BenchAdaptivePressure(aIters: Int64);
+var I: Int64; D: TTlsPasEarlyDataDecision; LId, LEarly: TBytes;
+begin
+  SetLength(LId, 4); FillChar(LId[0], 4, $AB);
+  SetLength(LEarly, 20); FillChar(LEarly[0], 20, $CD);
+  for I := 1 to aIters do
+  begin
+    LEarly[0] := Byte(I and $FF);
+    D := GAdaptiveObserver.Decide(LId, LEarly, GPolicySess, True);
+  end;
+end;
+
+procedure BenchAdaptivePrometheus(aIters: Int64);
+var I: Int64; M: TTlsPasAdaptiveMetrics; F: string;
+begin
+  for I := 1 to aIters do
+  begin
+    M := GAdaptiveObserver.GetAdaptiveMetrics;
+    F := TlsPasFormatPrometheusMetrics(M);
+  end;
 end;
 
 var
@@ -427,12 +498,16 @@ begin
   GAdaptiveConfig := DefaultTlsPasAdaptiveLimitConfig;
   GAdaptiveServerStats := Default(TTlsPasServerStats);
   GAdaptiveReplayStats := Default(TAsyncTlsPasReplayStats);
+  GAdaptiveObserver := TAsyncTlsPasAdaptiveObserver.Create(GReplayStore, GAdaptiveConfig);
   // HTTP middleware fixtures
   GHttpReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   (GHttpReqEarly as IHttpRequestWithEarlyData).SetWasEarlyData(True);
   GHttpReqNormal := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   GHttpMw := EarlyDataMiddleware;
   GHttpMwHandler := GHttpMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
+  GAdaptiveMw := AdaptiveEarlyDataMiddleware(GAdaptiveObserver);
+  GAdaptiveMwHandler := GAdaptiveMw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
+  GHttpReqEarlyLarge := GHttpReqEarly; // alias for throttled path (ContentLength 0 -> not throttled, header path exercised via Logic)
   // Client early-data fixtures
   GClientEarlyReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   HttpEarlyDataMarkRequest(GClientEarlyReq);
@@ -477,11 +552,19 @@ begin
     .AddLoop('ObserverDecide (wrap+count)', @BenchObserverDecide)
     .AddLoop('FormatReplayStats', @BenchFormatReplayStats)
     .AddLoop('AdaptiveMaxEarlyData', @BenchAdaptiveLimit)
+    .AddLoop('AdaptiveObserver Decide', @BenchAdaptiveObserverDecide)
+    .AddLoop('AdaptiveObserver GetMax', @BenchAdaptiveObserverMax)
     .AddLoop('HeaderValue (X-Early-Data)', @BenchHeaderValue)
     .AddLoop('HttpEarlyData header (decision)', @BenchHttpEarlyDataHeader)
     .AddLoop('HttpEarlyData from stream nil', @BenchHttpEarlyDataStream)
     .AddLoop('HttpRequest early flag (Supports)', @BenchHttpRequestFlag)
     .AddLoop('HttpMiddleware early-data', @BenchHttpMiddlewareEarlyData)
+    .AddLoop('Adaptive IsThrottled', @BenchAdaptiveIsThrottled)
+    .AddLoop('AdaptiveMiddleware', @BenchAdaptiveMiddleware)
+    .AddLoop('AdaptiveMetricsFormat', @BenchAdaptiveMetricsFormat)
+    .AddLoop('AdaptiveLogLine', @BenchAdaptiveLogLine)
+    .AddLoop('AdaptivePressure', @BenchAdaptivePressure)
+    .AddLoop('AdaptivePrometheus', @BenchAdaptivePrometheus)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

@@ -311,6 +311,48 @@ function TlsPasComputeAdaptiveMaxEarlyData(const AServerStats: TTlsPasServerStat
 function TlsPasEarlyDataDecisionToHeaderValue(ADecision: TTlsPasEarlyDataDecision): string;
 
 type
+  TTlsPasAdaptiveMetrics = record
+    AdaptiveMax: Cardinal;
+    Server: TTlsPasServerStats;
+    Replay: TAsyncTlsPasReplayStats;
+  end;
+
+function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string; overload;
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string; overload;
+
+type
+  { S20 自适应服务端观察器：基于 Observer 统计动态计算自适应限额并在超限时熔断(RejectPolicy)，
+    零额外锁(复用 Observer 锁)，供服务端在 Decide 前自动限流(RejectRate>阈值或 Current>50 限半) }
+  TAsyncTlsPasAdaptiveObserver = class
+  private
+    FInner: TAsyncTlsPasServerObserver;
+    FConfig: TTlsPasAdaptiveLimitConfig;
+    FConfigMutex: TPlatformMutex;
+    function GetStore: ITlsPasReplayStore;
+  public
+    constructor Create(const AStore: ITlsPasReplayStore); overload;
+    constructor Create(const AStore: ITlsPasReplayStore; const AConfig: TTlsPasAdaptiveLimitConfig); overload;
+    destructor Destroy; override;
+    function Decide(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+    function ShouldAccept(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+    function GetAdaptiveMaxEarlyData: Cardinal;
+    function GetServerStats: TTlsPasServerStats;
+    function GetReplayStats: TAsyncTlsPasReplayStats;
+    function GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
+    procedure Clear;
+    procedure UpdateConfig(const AConfig: TTlsPasAdaptiveLimitConfig);
+    property Config: TTlsPasAdaptiveLimitConfig read FConfig;
+    property Store: ITlsPasReplayStore read GetStore;
+    property Inner: TAsyncTlsPasServerObserver read FInner;
+  end;
+
+function TlsPasAdaptiveDecideEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+function TlsPasAdaptiveShouldAcceptEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+
+type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
     全链验证 + CV 签名校验；TrustBundlePath 空 = 发现系统 CA bundle }
   TAsyncTlsPasClientOptions = record
@@ -1173,6 +1215,168 @@ begin
     edAccept: Result := '1';
     edRejectPolicy, edRejectReplay: Result := '0';
   end;
+end;
+
+function TlsPasAdaptiveDecideEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+var LMax: Cardinal; LEmptyServer: TTlsPasServerStats; LEmptyReplay: TAsyncTlsPasReplayStats;
+begin
+  if AObserver = nil then
+  begin
+    LEmptyServer := Default(TTlsPasServerStats);
+    LEmptyReplay := Default(TAsyncTlsPasReplayStats);
+    LMax := TlsPasComputeAdaptiveMaxEarlyData(LEmptyServer, LEmptyReplay, AConfig);
+    if Cardinal(Length(AEarlyData)) > LMax then
+      Exit(edRejectPolicy);
+    Exit(TlsPasServerDecideEarlyData(nil, ATicketIdentity, AEarlyData, ASession, AAllowEarlyData));
+  end;
+  LMax := TlsPasComputeAdaptiveMaxEarlyData(AObserver.GetServerStats, AObserver.GetReplayStats, AConfig);
+  if Cardinal(Length(AEarlyData)) > LMax then
+    Exit(edRejectPolicy);
+  Result := AObserver.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+end;
+
+function TlsPasAdaptiveShouldAcceptEarlyData(const AObserver: TAsyncTlsPasServerObserver; const AConfig: TTlsPasAdaptiveLimitConfig;
+  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+begin
+  Result := TlsPasAdaptiveDecideEarlyData(AObserver, AConfig, ATicketIdentity, AEarlyData, ASession, AAllowEarlyData) = edAccept;
+end;
+
+constructor TAsyncTlsPasAdaptiveObserver.Create(const AStore: ITlsPasReplayStore);
+begin
+  Create(AStore, DefaultTlsPasAdaptiveLimitConfig);
+end;
+
+constructor TAsyncTlsPasAdaptiveObserver.Create(const AStore: ITlsPasReplayStore; const AConfig: TTlsPasAdaptiveLimitConfig);
+begin
+  inherited Create;
+  FInner := TAsyncTlsPasServerObserver.Create(AStore);
+  FConfig := AConfig;
+  if platform_mutex_init(FConfigMutex) <> 0 then
+    raise EInvalidOperationError.Create('tlspas: adaptive observer mutex init');
+end;
+
+destructor TAsyncTlsPasAdaptiveObserver.Destroy;
+begin
+  platform_mutex_destroy(FConfigMutex);
+  FreeAndNil(FInner);
+  inherited Destroy;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetStore: ITlsPasReplayStore;
+begin
+  Result := FInner.Store;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetAdaptiveMaxEarlyData: Cardinal;
+var LServer: TTlsPasServerStats; LReplay: TAsyncTlsPasReplayStats; LCfg: TTlsPasAdaptiveLimitConfig;
+begin
+  platform_mutex_lock(FConfigMutex);
+  LCfg := FConfig;
+  platform_mutex_unlock(FConfigMutex);
+  LServer := FInner.GetServerStats;
+  LReplay := FInner.GetReplayStats;
+  Result := TlsPasComputeAdaptiveMaxEarlyData(LServer, LReplay, LCfg);
+end;
+
+function TAsyncTlsPasAdaptiveObserver.Decide(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
+var LMax: Cardinal;
+begin
+  LMax := GetAdaptiveMaxEarlyData;
+  if Cardinal(Length(AEarlyData)) > LMax then
+    Exit(edRejectPolicy);
+  Result := FInner.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
+end;
+
+function TAsyncTlsPasAdaptiveObserver.ShouldAccept(const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): Boolean;
+begin
+  Result := Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData) = edAccept;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetServerStats: TTlsPasServerStats;
+begin
+  Result := FInner.GetServerStats;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetReplayStats: TAsyncTlsPasReplayStats;
+begin
+  Result := FInner.GetReplayStats;
+end;
+
+function TAsyncTlsPasAdaptiveObserver.GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
+begin
+  Result.AdaptiveMax := GetAdaptiveMaxEarlyData;
+  Result.Server := GetServerStats;
+  Result.Replay := GetReplayStats;
+end;
+
+function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+begin
+  Result := Format('adaptive max=%d %s %s', [
+    Integer(AMetrics.AdaptiveMax),
+    TlsPasFormatServerStats(AMetrics.Server),
+    TlsPasFormatReplayStats(AMetrics.Replay)
+  ]);
+end;
+
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
+begin
+  Result := TlsPasFormatPrometheusMetrics(AMetrics, 'nextpas_tlspas');
+end;
+
+function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string;
+var P: string;
+begin
+  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
+  Result :=
+    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+           '# TYPE %s_adaptive_max gauge'#10 +
+           '%s_adaptive_max %d'#10 +
+           '# HELP %s_server_accepts Total accepted early_data'#10 +
+           '# TYPE %s_server_accepts counter'#10 +
+           '%s_server_accepts %d'#10 +
+           '# HELP %s_server_reject_policy Total rejected by policy'#10 +
+           '# TYPE %s_server_reject_policy counter'#10 +
+           '%s_server_reject_policy %d'#10 +
+           '# HELP %s_server_reject_replay Total rejected by replay'#10 +
+           '# TYPE %s_server_reject_replay counter'#10 +
+           '%s_server_reject_replay %d'#10 +
+           '# HELP %s_replay_hits Replay cache hits'#10 +
+           '# TYPE %s_replay_hits counter'#10 +
+           '%s_replay_hits %d'#10 +
+           '# HELP %s_replay_misses Replay cache misses'#10 +
+           '# TYPE %s_replay_misses counter'#10 +
+           '%s_replay_misses %d'#10 +
+           '# HELP %s_replay_evictions Replay cache evictions'#10 +
+           '# TYPE %s_replay_evictions counter'#10 +
+           '%s_replay_evictions %d'#10 +
+           '# HELP %s_replay_expiries Replay cache expiries'#10 +
+           '# TYPE %s_replay_expiries counter'#10 +
+           '%s_replay_expiries %d'#10 +
+           '# HELP %s_replay_current Current replay window size'#10 +
+           '# TYPE %s_replay_current gauge'#10 +
+           '%s_replay_current %d'#10,
+    [P,P,P,Integer(AMetrics.AdaptiveMax),
+     P,P,P,AMetrics.Server.Accepts,
+     P,P,P,AMetrics.Server.RejectPolicy,
+     P,P,P,AMetrics.Server.RejectReplay,
+     P,P,P,AMetrics.Replay.Hits,
+     P,P,P,AMetrics.Replay.Misses,
+     P,P,P,AMetrics.Replay.Evictions,
+     P,P,P,AMetrics.Replay.Expiries,
+     P,P,P,AMetrics.Replay.Current]);
+end;
+
+procedure TAsyncTlsPasAdaptiveObserver.Clear;
+begin
+  FInner.Clear;
+end;
+
+procedure TAsyncTlsPasAdaptiveObserver.UpdateConfig(const AConfig: TTlsPasAdaptiveLimitConfig);
+begin
+  platform_mutex_lock(FConfigMutex);
+  FConfig := AConfig;
+  platform_mutex_unlock(FConfigMutex);
 end;
 
 constructor TAsyncTlsPasReplayCache.Create;
