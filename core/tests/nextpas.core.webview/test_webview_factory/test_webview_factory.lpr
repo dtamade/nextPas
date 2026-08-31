@@ -357,7 +357,7 @@ begin
 
   LRaised := False;
   try
-    TWebviewBuilder.New.Kind(wvFake).RegisterInvoke('ok.cmd', nil).Build;
+    TWebviewBuilder.New.Kind(wvFake).RegisterInvoke('ok.cmd', TWebviewInvokeSyncHandler(nil)).Build;
   except
     on E: EWebviewInvalidState do LRaised := True;
   end;
@@ -365,7 +365,7 @@ begin
 
   LRaised := False;
   try
-    TWebviewBuilder.New.Kind(wvFake).OnReady(nil).Build;
+    TWebviewBuilder.New.Kind(wvFake).OnReady(TWebviewNotifyHandler(nil)).Build;
   except
     on E: EWebviewInvalidState do LRaised := True;
   end;

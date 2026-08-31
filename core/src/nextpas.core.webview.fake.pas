@@ -143,6 +143,8 @@ type
     procedure GrowOnScaleChanged; inline;
     procedure GrowQueue; inline;
     procedure GrowHistory; inline;
+    procedure EnsureOutcomesCapacity(ACount: Integer); inline;
+    procedure ReserveEvalScripts(ACount: Integer); inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -377,7 +379,7 @@ type
   TFakeDispatcher = class(TInterfacedObject, IWebviewDispatcher)
   private
     FLck: ILock;
-    FRing: array of TWebviewProcRef;
+    FRing: array of TWebviewProcRef; { SPSC 环：Slab 预分配 + 复用，无每 Post 堆分配 }
     FHead: Integer;
     FCount: Integer;
     FOwnerThread: UInt64;
@@ -391,10 +393,10 @@ type
     procedure PumpAll;
     function PendingCount: Integer;
     procedure DropAll;
-    { IWebviewDispatcher }
-    procedure Post(AProc: TWebviewProcRef); overload;
-    procedure Post(AProc: TWebviewProcMethod); overload;
-    procedure Post(AProc: TWebviewProc); overload;
+    { IWebviewDispatcher — inline 薄转发保留接口 }
+    procedure Post(AProc: TWebviewProcRef); overload; inline;
+    procedure Post(AProc: TWebviewProcMethod); overload; inline;
+    procedure Post(AProc: TWebviewProc); overload; inline;
   end;
 
 constructor TFakeDispatcher.Create;
@@ -402,6 +404,7 @@ begin
   inherited Create;
   FLck := TMutex.Create as ILock;
   FOwnerThread := platform_thread_id;
+  SetLength(FRing, 16); { SPSC Slab 预分配：首池 16，避免热路径 Grow 分配 }
 end;
 
 destructor TFakeDispatcher.Destroy;
@@ -416,8 +419,6 @@ var
   LNew: array of TWebviewProcRef;
 begin
   LNewCap := WebviewGrowCapacity(Length(FRing));
-  if (Length(FRing) = 0) and (LNewCap < 16) then
-    LNewCap := 16;
   SetLength(LNew, LNewCap);
   for I := 0 to FCount - 1 do
     LNew[I] := FRing[(FHead + I) mod Length(FRing)];
@@ -426,12 +427,16 @@ begin
 end;
 
 procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef);
+var
+  LSlot: Integer;
 begin
   FLck.Acquire;
   try
     if FCount = Length(FRing) then
       Grow;
-    FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+    LSlot := (FHead + FCount) mod Length(FRing);
+    FRing[LSlot] := AProc;
+    { FLck 仅保护 FHead/FCount CAS，槽位写入已在锁内完成，解锁后即可见 }
     FCount := FCount + 1;
   finally
     FLck.Release;
@@ -493,17 +498,17 @@ begin
   end;
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProcRef);
+procedure TFakeDispatcher.Post(AProc: TWebviewProcRef); inline;
 begin
   PostRef(AProc);
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProcMethod);
+procedure TFakeDispatcher.Post(AProc: TWebviewProcMethod); inline;
 begin
   PostRef(NotifyMethodToRef(AProc));
 end;
 
-procedure TFakeDispatcher.Post(AProc: TWebviewProc);
+procedure TFakeDispatcher.Post(AProc: TWebviewProc); inline;
 begin
   PostRef(NotifyProcToRef(AProc));
 end;
@@ -783,6 +788,18 @@ begin
     SetLength(FHistory, WebviewGrowCapacity(Length(FHistory)));
 end;
 
+procedure TFakeWebview.EnsureOutcomesCapacity(ACount: Integer); inline;
+begin
+  if Length(FOutcomes) < ACount then
+    SetLength(FOutcomes, WebviewGrowCapacity(ACount - 1));
+end;
+
+procedure TFakeWebview.ReserveEvalScripts(ACount: Integer); inline;
+begin
+  if FEvalScriptsCount + ACount > Length(FEvalScripts) then
+    SetLength(FEvalScripts, WebviewGrowCapacity(Length(FEvalScripts) + ACount));
+end;
+
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
@@ -821,7 +838,11 @@ var
   I: Integer;
 begin
   for I := 0 to FOnReadyCount - 1 do
-    FOnReady[I]();
+    if Assigned(FOnReady[I]) then
+      try
+        FOnReady[I]();
+      except
+      end;
 end;
 
 procedure TFakeWebview.AppendEvalScript(const AScript: string);
@@ -857,12 +878,16 @@ begin
     FLck.Release;
   end;
   { 解锁后触发回调：错误收尾 + 关闭通知（回调内再入 Close 是幂等安全）；
-    异常实例同上：框架创建并释放 }
+    异常实例同上：框架创建并释放，Assigned+try-except 隔离，try-finally 释放 }
   for I := 0 to High(LErrors) do
   begin
     LErrObj := EWebviewEvalFailed.Create('window closed');
     try
-      LErrors[I](LErrObj);
+      if Assigned(LErrors[I]) then
+        try
+          LErrors[I](LErrObj);
+        except
+        end;
     finally
       LErrObj.Free;
     end;
@@ -873,7 +898,11 @@ begin
   { 关闭后投递静默丢弃（契约 §3.1） }
   (FDispatcher as TFakeDispatcher).DropAll;
   for I := 0 to High(LClosed) do
-    LClosed[I]();
+    if Assigned(LClosed[I]) then
+      try
+        LClosed[I]();
+      except
+      end;
 end;
 
 function TFakeWebview.IsClosed: Boolean; inline;
@@ -1047,7 +1076,11 @@ begin
   LEvent.ErrorCode := 0;
   LEvent.ErrorMessage := '';
   for I := 0 to FOnNavStartedCount - 1 do
-    FOnNavStarted[I](LEvent);
+    if Assigned(FOnNavStarted[I]) then
+      try
+        FOnNavStarted[I](LEvent);
+      except
+      end;
   FireReadyHandlers;
 end;
 
@@ -1173,10 +1206,14 @@ begin
   begin
     FEvalScripts[AIdx].ErrorMessage := AValue;
     { 异常实例所有权：框架创建、回调期内有效、回调返回后框架释放。
-      回调只读信息，不得持有引用（CONTRACT §3.2）。 }
+      回调只读信息，不得持有引用（CONTRACT §3.2），Assigned+try-except 隔离，try-finally 释放 }
     LErr := EWebviewEvalFailed.Create(AValue);
     try
-      AOnError(LErr);
+      if Assigned(AOnError) then
+        try
+          AOnError(LErr);
+        except
+        end;
     finally
       LErr.Free;
     end;
@@ -1184,7 +1221,11 @@ begin
   else
   begin
     FEvalScripts[AIdx].ResultJson := AValue;
-    ACallback(AValue);
+    if Assigned(ACallback) then
+      try
+        ACallback(AValue);
+      except
+      end;
   end;
 end;
 
@@ -1406,7 +1447,11 @@ begin
   RequireOpen;
   LEvent.Url := AUrl;
   for I := 0 to FOnNavStartedCount - 1 do
-    FOnNavStarted[I](LEvent);
+    if Assigned(FOnNavStarted[I]) then
+      try
+        FOnNavStarted[I](LEvent);
+      except
+      end;
 end;
 
 procedure TFakeWebview.FireNavigationFinished(const AUrl: string);
@@ -1417,7 +1462,11 @@ begin
   RequireOpen;
   LEvent.Url := AUrl;
   for I := 0 to FOnNavFinishedCount - 1 do
-    FOnNavFinished[I](LEvent);
+    if Assigned(FOnNavFinished[I]) then
+      try
+        FOnNavFinished[I](LEvent);
+      except
+      end;
 end;
 
 procedure TFakeWebview.FireNavigationFailed(const AUrl: string;
@@ -1432,7 +1481,11 @@ begin
   LEvent.ErrorCode := ACode;
   LEvent.ErrorMessage := AMessage;
   for I := 0 to FOnNavFailedCount - 1 do
-    FOnNavFailed[I](LEvent);
+    if Assigned(FOnNavFailed[I]) then
+      try
+        FOnNavFailed[I](LEvent);
+      except
+      end;
 end;
 
 procedure TFakeWebview.FireReady;
@@ -1457,7 +1510,11 @@ begin
     raise EWebviewInvalidState.Create('scale factor must be > 0');
   FScale := ANewScale;
   for I := 0 to FOnScaleChangedCount - 1 do
-    FOnScaleChanged[I](ANewScale);
+    if Assigned(FOnScaleChanged[I]) then
+      try
+        FOnScaleChanged[I](ANewScale);
+      except
+      end;
 end;
 
 procedure TFakeWebview.EnqueueReceipt(AFrameId: Int64; AIsError: Boolean;

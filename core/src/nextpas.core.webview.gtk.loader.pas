@@ -123,6 +123,11 @@ var
       BindReq(@G_signal_connect_data, 'g_signal_connect_data') and
       BindReq(@G_memory_input_stream_new_from_data,
         'g_memory_input_stream_new_from_data') and
+      BindReq(@G_memory_input_stream_new_from_bytes,
+        'g_memory_input_stream_new_from_bytes') and
+      BindReq(@G_bytes_new_with_free_func,
+        'g_bytes_new_with_free_func') and
+      BindReq(@G_bytes_unref, 'g_bytes_unref') and
       BindReq(@G_malloc, 'g_malloc') and
       BindReq(@G_free, 'g_free') and
       BindReq(@G_quark_from_static_string, 'g_quark_from_static_string') and

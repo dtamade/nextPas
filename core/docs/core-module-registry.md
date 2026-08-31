@@ -23,7 +23,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `async` | L1 | event loop/runtime | yes | L0 plus approved L1 | source-contract + focused-runtime |
 | `auth` | L3 | JWT/session/authentication token primitives (`nextpas.core.auth.*`, `nextpas.core.jwt`) | yes | L0-L2 plus crypto/hash/encoding owners | focused-runtime |
 | `atomic` | L0 | atomic primitives | yes | L0 only | focused-runtime |
-| `audio` | L2 | container codec / pcm / dsp / device / graph+player / sfx(game-compat) / timeline / spatial / event / bank / resource 七域+扩展（`nextpas.core.audio.*` pure Pascal, realtime zero-alloc; current 36 files, ideal 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收） | yes | L0-L1 plus io/fs (L2 explicit allow; container I/O seam via IStream, registry+resource, wav file helper) `debt: SyncObjs 8 files (device.null/graph/sfx/timeline/spatial/event/bank/resource, game 薄转发 → nextpas.core.sync)` | focused-runtime |
+| `audio` | L2 | PCM WAV container codec | yes | L0-L2 (io/fs owner) | focused-runtime |
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
