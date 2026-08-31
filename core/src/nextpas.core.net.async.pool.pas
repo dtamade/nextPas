@@ -64,6 +64,8 @@ const
   ECONNREFUSED_LINUX = 111;
 
 type
+  TConnectionPool = class; { forward for ctx records }
+
   PIdleConnection = ^TIdleConnection;
   TIdleConnection = record
     Stream: ITcpStream;
@@ -75,6 +77,8 @@ type
 
   PIdleDeliverCtx = ^TIdleDeliverCtx;
   TIdleDeliverCtx = record
+    PoolObj: TConnectionPool;
+    PoolRef: IConnectionPool;
     Cb: TAcquireAsyncCallback;
     Ctx: Pointer;
     Stream: ITcpStream;
@@ -82,7 +86,8 @@ type
 
   PAcquireAsyncCtx = ^TAcquireAsyncCtx;
   TAcquireAsyncCtx = record
-    Pool: Pointer; { TConnectionPool }
+    PoolObj: TConnectionPool;
+    PoolRef: IConnectionPool;
     UserCb: TAcquireAsyncCallback;
     UserCtx: Pointer;
     Host: string;
@@ -120,6 +125,7 @@ type
   end;
 
 procedure PoolIdlePostCb(AContext: Pointer); forward;
+procedure PoolIdlePostDiscard(AContext: Pointer); forward;
 procedure PoolDialDone(AStream: IAsyncTcpStream; AError: Int32;
   AContext: Pointer); forward;
 
@@ -289,34 +295,80 @@ begin
   LCtx := L^.Ctx;
   LStream := L^.Stream;
   L^.Stream := nil;
+  L^.PoolRef := nil;
   Dispose(L);
   if Assigned(LCb) then
     LCb(LStream, 0, LCtx);
 end;
 
+procedure PoolIdlePostDiscard(AContext: Pointer);
+var
+  L: PIdleDeliverCtx;
+  LPoolObj: TConnectionPool;
+  LPoolRef: IConnectionPool;
+  LCb: TAcquireAsyncCallback;
+  LCtx: Pointer;
+begin
+  L := PIdleDeliverCtx(AContext);
+  if L = nil then
+    Exit;
+  LCb := L^.Cb;
+  LCtx := L^.Ctx;
+  LPoolObj := L^.PoolObj;
+  LPoolRef := L^.PoolRef; { keep alive during dispatch }
+  if LPoolObj <> nil then
+  begin
+    platform_mutex_lock(LPoolObj.FLock);
+    try
+      if LPoolObj.FActiveCount > 0 then
+        Dec(LPoolObj.FActiveCount);
+    finally
+      platform_mutex_unlock(LPoolObj.FLock);
+    end;
+  end;
+  if L^.Stream <> nil then
+  begin
+    try
+      L^.Stream.Close;
+    except
+    end;
+    L^.Stream := nil;
+  end;
+  L^.PoolRef := nil;
+  Dispose(L);
+  if Assigned(LCb) then
+    LCb(nil, -ECONNREFUSED_LINUX, LCtx);
+end;
+
 procedure PoolDialDone(AStream: IAsyncTcpStream; AError: Int32; AContext: Pointer);
 var
   LCtx: PAcquireAsyncCtx;
-  LPool: TConnectionPool;
+  LPoolObj: TConnectionPool;
+  LPoolRef: IConnectionPool;
   LCb: TAcquireAsyncCallback;
   LUser: Pointer;
 begin
   LCtx := PAcquireAsyncCtx(AContext);
   if LCtx = nil then
     Exit;
-  LPool := TConnectionPool(LCtx^.Pool);
+  LPoolObj := LCtx^.PoolObj;
+  LPoolRef := LCtx^.PoolRef;
   LCb := LCtx^.UserCb;
   LUser := LCtx^.UserCtx;
+  LCtx^.PoolRef := nil;
   Dispose(LCtx);
 
   if (AError <> 0) or (AStream = nil) then
   begin
-    if LPool <> nil then
+    if LPoolObj <> nil then
     begin
-      platform_mutex_lock(LPool.FLock);
-      if LPool.FActiveCount > 0 then
-        Dec(LPool.FActiveCount);
-      platform_mutex_unlock(LPool.FLock);
+      platform_mutex_lock(LPoolObj.FLock);
+      try
+        if LPoolObj.FActiveCount > 0 then
+          Dec(LPoolObj.FActiveCount);
+      finally
+        platform_mutex_unlock(LPoolObj.FLock);
+      end;
     end;
     if Assigned(LCb) then
       LCb(nil, AError, LUser);
@@ -388,10 +440,26 @@ begin
     if FLoop <> nil then
     begin
       New(LDeliver);
+      LDeliver^.PoolObj := Self;
+      LDeliver^.PoolRef := Self as IConnectionPool;
       LDeliver^.Cb := ACallback;
       LDeliver^.Ctx := AContext;
       LDeliver^.Stream := LIdle;
-      FLoop.Post(@PoolIdlePostCb, LDeliver);
+      try
+        FLoop.PostEx(@PoolIdlePostCb, LDeliver, @PoolIdlePostDiscard);
+      except
+        LDeliver^.Stream := nil;
+        LDeliver^.PoolRef := nil;
+        Dispose(LDeliver);
+        platform_mutex_lock(FLock);
+        try
+          if FActiveCount > 0 then
+            Dec(FActiveCount);
+        finally
+          platform_mutex_unlock(FLock);
+        end;
+        raise;
+      end;
     end
     else
       ACallback(LIdle, 0, AContext);
@@ -408,7 +476,8 @@ begin
   end;
 
   New(LDialCtx);
-  LDialCtx^.Pool := Self;
+  LDialCtx^.PoolObj := Self;
+  LDialCtx^.PoolRef := Self as IConnectionPool;
   LDialCtx^.UserCb := ACallback;
   LDialCtx^.UserCtx := AContext;
   LDialCtx^.Host := AHost;
@@ -422,11 +491,15 @@ begin
 
   if not AsyncTcpDial(FLoop, AHost, APort, LOpts, @PoolDialDone, LDialCtx) then
   begin
+    LDialCtx^.PoolRef := nil;
     Dispose(LDialCtx);
     platform_mutex_lock(FLock);
-    if FActiveCount > 0 then
-      Dec(FActiveCount);
-    platform_mutex_unlock(FLock);
+    try
+      if FActiveCount > 0 then
+        Dec(FActiveCount);
+    finally
+      platform_mutex_unlock(FLock);
+    end;
     Exit(False);
   end;
   Result := True;

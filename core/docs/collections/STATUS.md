@@ -1,9 +1,9 @@
 # nextpas.core.collections — 状态
 
-**更新日期**：2026-07-20
+**更新日期**：2026-08-31
 **阶段**：**Landed / 维护 idle**（可用性 Waves 0–6 已进 main）
-**分支 / worktree**：`collections` / `.worktrees/collections`
-**Landing SHA**：`452bd0678`
+**分支 / worktree**：`landing/perfection-16` / `.worktrees/landing-perfection-16`
+**Landing SHA**：`9023f0765`
 
 ## 已完成（历史目标树）
 
@@ -43,7 +43,7 @@
 | 3 | `TMemAllocator` 统一；`MakeTreeSet(compare)`；HashMix→base；FIterIdx 删除 | 完成 |
 | 4 | `ERRORS.md` + 异常文案/类型对齐 | 完成 |
 | 5 | `benchmarks/.../Makefile` | 完成 |
-| 6 | 全 suite + hygiene + landing | **Landed** `452bd0678` |
+| 6 | 全 suite + hygiene + landing | **Landed** `9023f0765` |
 
 ## 明确不做
 

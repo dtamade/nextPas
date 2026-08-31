@@ -107,7 +107,9 @@ end;
 | 测试目录 | 说明 |
 |----------|------|
 | test_bytes | Span 操作 + 字节序 + Builder |
-| **合计** | **1 个测试目录** |
+| test_cursor | IByteCursor 边界受查只读游标 |
+| test_stream | TByteStreamBuf 可增长缓冲流 |
+| **合计** | **3 个测试目录** |
 
 ---
 

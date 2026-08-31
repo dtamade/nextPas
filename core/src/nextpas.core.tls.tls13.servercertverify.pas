@@ -164,24 +164,6 @@ begin
   Result := Pos('-----BEGIN', string(LText)) > 0;
 end;
 
-function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-var
-  I: Integer;
-begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-
-  if I >= Length(AData) then
-  begin
-    SetLength(Result, 1);
-    Result[0] := 0;
-    Exit;
-  end;
-
-  Result := nextpas.core.bytes.ops.SpanClone(TByteSpan.FromBytes(AData).Slice(I, SizeUInt(Length(AData) - I)));
-end;
-
 function UnsignedBitLength(const AData: TBytes): Integer;
 var
   LTrimmed: TBytes;
@@ -201,37 +183,6 @@ begin
     Inc(Result);
     LFirst := LFirst shr 1;
   end;
-end;
-
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
-var
-  LLeft: TBytes;
-  LRight: TBytes;
-begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-  Result := nextpas.core.bytes.ops.SpanCompare(TByteSpan.FromBytes(LLeft), TByteSpan.FromBytes(LRight));
-end;
-
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
-var
-  LLeft: TBytes;
-  LRight: TBytes;
-  I: Integer;
-begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-
-  if Length(LLeft) <> Length(LRight) then
-    Exit(False);
-
-  for I := 0 to Length(LLeft) - 1 do
-  begin
-    if LLeft[I] <> LRight[I] then
-      Exit(False);
-  end;
-
-  Result := True;
 end;
 
 function UnsignedIsZero(const AData: TBytes): Boolean;

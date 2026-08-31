@@ -375,7 +375,7 @@ end;
 function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer; inline;
 var
   P: PAnsiChar;
-  N, I: Integer;
+  N: Integer;
 begin
   P := @ABuf;
   if ABufLen > 0 then
@@ -384,8 +384,7 @@ begin
   N := Result;
   if N >= ABufLen then N := ABufLen - 1;
   if N > 0 then
-    for I := 1 to N do
-      P[I-1] := S[I];
+    Move(S[1], P^, N);
 end;
 
 function CStrToStr(const AP: PAnsiChar): string; inline;

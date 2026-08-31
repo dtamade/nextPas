@@ -209,9 +209,13 @@ end;
 procedure TAsyncTaskGroup.TaskDone;
 begin
   platform_mutex_lock(FLock);
-  Dec(FActiveCount);
-  Inc(FCompletedCount);
-  platform_mutex_unlock(FLock);
+  try
+    if FActiveCount > 0 then
+      Dec(FActiveCount);
+    Inc(FCompletedCount);
+  finally
+    platform_mutex_unlock(FLock);
+  end;
   CheckCompletion;
 end;
 

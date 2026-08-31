@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.bytes.base;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer; inline;
@@ -34,6 +35,8 @@ procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -61,6 +64,126 @@ implementation
 
 uses
   nextpas.core.simd;
+
+{ --- amortized O(1) append capacity (TBytes dynamic array slack) --- }
+const
+  CAP_MAP_SIZE = 32;
+
+type
+  TCapEntry = record
+    Ptr: Pointer;
+    Cap: SizeUInt;
+    Used: Boolean;
+  end;
+
+var
+  GCapMap: array[0..CAP_MAP_SIZE - 1] of TCapEntry;
+
+function DynGetRefCnt(const A: TBytes): SizeInt; inline;
+begin
+  if Pointer(A) = nil then
+    Exit(0);
+  Result := PSizeInt(Pointer(A))[-2];
+end;
+
+procedure DynSetLen(var A: TBytes; const ANewLen: SizeUInt); inline;
+begin
+  if Pointer(A) = nil then
+    Exit;
+  PSizeInt(Pointer(A))[-1] := SizeInt(ANewLen);
+end;
+
+function CapGet(const APtr: Pointer; const AFallback: SizeUInt): SizeUInt; inline;
+var
+  I, Idx: SizeUInt;
+begin
+  if APtr = nil then
+    Exit(0);
+  Idx := (PtrUInt(APtr) shr 3) mod CAP_MAP_SIZE;
+  for I := 0 to CAP_MAP_SIZE - 1 do
+  begin
+    if GCapMap[(Idx + I) mod CAP_MAP_SIZE].Used and (GCapMap[(Idx + I) mod CAP_MAP_SIZE].Ptr = APtr) then
+      Exit(GCapMap[(Idx + I) mod CAP_MAP_SIZE].Cap);
+  end;
+  Result := AFallback;
+end;
+
+procedure CapSet(const AOldPtr, ANewPtr: Pointer; const ACap: SizeUInt); inline;
+var
+  I, Idx: SizeUInt;
+begin
+  if (AOldPtr <> nil) and (AOldPtr <> ANewPtr) then
+  begin
+    Idx := (PtrUInt(AOldPtr) shr 3) mod CAP_MAP_SIZE;
+    for I := 0 to CAP_MAP_SIZE - 1 do
+      if GCapMap[(Idx + I) mod CAP_MAP_SIZE].Used and (GCapMap[(Idx + I) mod CAP_MAP_SIZE].Ptr = AOldPtr) then
+      begin
+        GCapMap[(Idx + I) mod CAP_MAP_SIZE].Used := False;
+        Break;
+      end;
+  end;
+  if ANewPtr = nil then
+    Exit;
+  Idx := (PtrUInt(ANewPtr) shr 3) mod CAP_MAP_SIZE;
+  for I := 0 to CAP_MAP_SIZE - 1 do
+  begin
+    if not GCapMap[(Idx + I) mod CAP_MAP_SIZE].Used then
+    begin
+      GCapMap[(Idx + I) mod CAP_MAP_SIZE].Ptr := ANewPtr;
+      GCapMap[(Idx + I) mod CAP_MAP_SIZE].Cap := ACap;
+      GCapMap[(Idx + I) mod CAP_MAP_SIZE].Used := True;
+      Exit;
+    end;
+    if GCapMap[(Idx + I) mod CAP_MAP_SIZE].Ptr = ANewPtr then
+    begin
+      GCapMap[(Idx + I) mod CAP_MAP_SIZE].Cap := ACap;
+      Exit;
+    end;
+  end;
+  { map full: drop oldest slot (Idx) }
+  GCapMap[Idx].Ptr := ANewPtr;
+  GCapMap[Idx].Cap := ACap;
+  GCapMap[Idx].Used := True;
+end;
+
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+var
+  LOldLen, LNewCap, LCurCap: SizeUInt;
+  LOldPtr, LNewPtr: Pointer;
+begin
+  LOldLen := Length(ADest);
+  if ARequired <= LOldLen then
+    Exit;
+  LCurCap := CapGet(Pointer(ADest), LOldLen);
+  if ARequired <= LCurCap then
+    Exit;
+  if LCurCap < BYTES_BUILDER_MIN_GROW then
+    LCurCap := BYTES_BUILDER_MIN_GROW;
+  LNewCap := LCurCap;
+  while LNewCap < ARequired do
+  begin
+    if LNewCap <= High(SizeUInt) div 2 then
+      LNewCap := LNewCap * 2
+    else
+    begin
+      LNewCap := ARequired;
+      Break;
+    end;
+  end;
+  LOldPtr := Pointer(ADest);
+  { single allocation, zero-copy via Move later; preserve logical len via header poke }
+  SetLength(ADest, LNewCap);
+  LNewPtr := Pointer(ADest);
+  DynSetLen(ADest, LOldLen);
+  CapSet(LOldPtr, LNewPtr, LNewCap);
+end;
+
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+begin
+  if AAdditional = 0 then
+    Exit;
+  BytesEnsureCapacity(ADest, Length(ADest) + AAdditional);
+end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean;
 begin
@@ -221,64 +344,136 @@ end;
 
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LAdd, LNewLen, LCap: SizeUInt;
 begin
-  if Length(ASrc) = 0 then Exit;
+  LAdd := Length(ASrc);
+  if LAdd = 0 then
+    Exit;
   LOldLen := Length(ADest);
-  SetLength(ADest, LOldLen + Length(ASrc));
-  Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+  LNewLen := LOldLen + LAdd;
+  LCap := CapGet(Pointer(ADest), LOldLen);
+  if (Pointer(ADest) <> nil) and (LCap >= LNewLen) and (DynGetRefCnt(ADest) = 1) then
+  begin
+    Move(ASrc[0], PByte(Pointer(ADest))[LOldLen], LAdd);
+    DynSetLen(ADest, LNewLen);
+    Exit;
+  end;
+  BytesEnsureCapacity(ADest, LNewLen);
+  Move(ASrc[0], PByte(Pointer(ADest))[LOldLen], LAdd);
+  DynSetLen(ADest, LNewLen);
 end;
 
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNewLen, LCap: SizeUInt;
 begin
-  if (ASrc = nil) or (ASrcLen = 0) then Exit;
+  if (ASrc = nil) or (ASrcLen = 0) then
+    Exit;
   LOldLen := Length(ADest);
-  SetLength(ADest, LOldLen + ASrcLen);
-  Move(ASrc^, ADest[LOldLen], ASrcLen);
+  LNewLen := LOldLen + ASrcLen;
+  LCap := CapGet(Pointer(ADest), LOldLen);
+  if (Pointer(ADest) <> nil) and (LCap >= LNewLen) and (DynGetRefCnt(ADest) = 1) then
+  begin
+    Move(ASrc^, PByte(Pointer(ADest))[LOldLen], ASrcLen);
+    DynSetLen(ADest, LNewLen);
+    Exit;
+  end;
+  BytesEnsureCapacity(ADest, LNewLen);
+  Move(ASrc^, PByte(Pointer(ADest))[LOldLen], ASrcLen);
+  DynSetLen(ADest, LNewLen);
 end;
 
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 var
-  LLen: SizeUInt;
+  LOldLen, LNewLen, LCap: SizeUInt;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 1);
-  ADest[LLen] := AValue;
+  LOldLen := Length(ADest);
+  LNewLen := LOldLen + 1;
+  LCap := CapGet(Pointer(ADest), LOldLen);
+  if (Pointer(ADest) <> nil) and (LCap >= LNewLen) and (DynGetRefCnt(ADest) = 1) then
+  begin
+    PByte(Pointer(ADest))[LOldLen] := AValue;
+    DynSetLen(ADest, LNewLen);
+    Exit;
+  end;
+  BytesEnsureCapacity(ADest, LNewLen);
+  PByte(Pointer(ADest))[LOldLen] := AValue;
+  DynSetLen(ADest, LNewLen);
 end;
 
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 var
-  LLen: SizeUInt;
+  LOldLen, LNewLen, LCap: SizeUInt;
+  P: PByte;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 2);
-  ADest[LLen] := Byte(AValue shr 8);
-  ADest[LLen + 1] := Byte(AValue);
+  LOldLen := Length(ADest);
+  LNewLen := LOldLen + 2;
+  LCap := CapGet(Pointer(ADest), LOldLen);
+  if (Pointer(ADest) <> nil) and (LCap >= LNewLen) and (DynGetRefCnt(ADest) = 1) then
+  begin
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 8);
+    P[1] := Byte(AValue);
+    DynSetLen(ADest, LNewLen);
+    Exit;
+  end;
+  BytesEnsureCapacity(ADest, LNewLen);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue shr 8);
+  P[1] := Byte(AValue);
+  DynSetLen(ADest, LNewLen);
 end;
 
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LLen: SizeUInt;
+  LOldLen, LNewLen, LCap: SizeUInt;
+  P: PByte;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 3);
-  ADest[LLen] := Byte(AValue shr 16);
-  ADest[LLen + 1] := Byte(AValue shr 8);
-  ADest[LLen + 2] := Byte(AValue);
+  LOldLen := Length(ADest);
+  LNewLen := LOldLen + 3;
+  LCap := CapGet(Pointer(ADest), LOldLen);
+  if (Pointer(ADest) <> nil) and (LCap >= LNewLen) and (DynGetRefCnt(ADest) = 1) then
+  begin
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 16);
+    P[1] := Byte(AValue shr 8);
+    P[2] := Byte(AValue);
+    DynSetLen(ADest, LNewLen);
+    Exit;
+  end;
+  BytesEnsureCapacity(ADest, LNewLen);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue shr 16);
+  P[1] := Byte(AValue shr 8);
+  P[2] := Byte(AValue);
+  DynSetLen(ADest, LNewLen);
 end;
 
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LLen: SizeUInt;
+  LOldLen, LNewLen, LCap: SizeUInt;
+  P: PByte;
 begin
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + 4);
-  ADest[LLen] := Byte(AValue shr 24);
-  ADest[LLen + 1] := Byte(AValue shr 16);
-  ADest[LLen + 2] := Byte(AValue shr 8);
-  ADest[LLen + 3] := Byte(AValue);
+  LOldLen := Length(ADest);
+  LNewLen := LOldLen + 4;
+  LCap := CapGet(Pointer(ADest), LOldLen);
+  if (Pointer(ADest) <> nil) and (LCap >= LNewLen) and (DynGetRefCnt(ADest) = 1) then
+  begin
+    P := PByte(Pointer(ADest)) + LOldLen;
+    P[0] := Byte(AValue shr 24);
+    P[1] := Byte(AValue shr 16);
+    P[2] := Byte(AValue shr 8);
+    P[3] := Byte(AValue);
+    DynSetLen(ADest, LNewLen);
+    Exit;
+  end;
+  BytesEnsureCapacity(ADest, LNewLen);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue shr 24);
+  P[1] := Byte(AValue shr 16);
+  P[2] := Byte(AValue shr 8);
+  P[3] := Byte(AValue);
+  DynSetLen(ADest, LNewLen);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
