@@ -11,7 +11,6 @@ uses
   nextpas.core.exception,
   nextpas.core.db.base,
   nextpas.core.db.intf,
-  nextpas.core.db.capprobe,
   nextpas.core.db.pg.base,
   nextpas.core.db.pg.conn;
 
@@ -35,9 +34,8 @@ uses
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.text.kv,
-  nextpas.core.db.sqlscan,
-  nextpas.core.db.bulk,
   nextpas.core.db.err,
+  nextpas.core.db.sqlscan,
   nextpas.core.db.trace,
   nextpas.core.db.pg.ffi,
   nextpas.core.db.tx,
@@ -87,25 +85,6 @@ begin
   else
     Result := dbcText;
   end;
-end;
-
-{ ---- BulkCopy 标识符引用（V4.3 completeness）----
-  单源复用：双引号逻辑收口至 nextpas.core.db.bulk.DbBulkQuoteIdent /
-  DbBulkQuoteQualifiedIdent / DbBulkColList（L3 家族复用件单源，零 text.sql 直引），
-  pg 适配器仅作薄包装，无重复实现，零 SysUtils。 }
-function PgQuoteIdent(const S: string): string; inline;
-begin
-  Result := DbBulkQuoteIdent(S);
-end;
-
-function PgQuoteQualifiedIdent(const S: string): string; inline;
-begin
-  Result := DbBulkQuoteQualifiedIdent(S);
-end;
-
-function PgQuotedColList(const ACols: TDbStringArray): string; inline;
-begin
-  Result := DbBulkColList(ACols);
 end;
 
 { ---- V3-C2 数组字面量编码（pg 文本格式数组输入）----
@@ -230,17 +209,14 @@ begin
 end;
 
 type
-  TDbPgConnection = class; { forward for query restore owner }
-
   TDbPgQuery = class(TInterfacedObject, IDbQuery, IDbArrayBinding)
   private
     FQuery: TPgQuery;
     { 查询级超时恢复钩（V3-B2）：pg 仅有会话级 statement_timeout 且
       执行惰性（首个 Step），故 Query(opts) 建对象时 SET 新值并记住
       原值，生效窗口 = 本查询对象存活期，析构时恢复原值。析构内只
-      做直线 SQL 调用、失败记 LastError（吞错修复，不抛） }
+      做直线 SQL 调用、失败吞掉（不涉闭包回调——C3 硬边界）。 }
     FRestoreConn: TPgConn;     { nil = 无恢复义务 }
-    FRestoreOwner: TDbPgConnection; { 恢复失败记 LastError 的宿主 }
     FRestoreSql: string;
     { 观测钩子（V3-B3）：nil = 无枢纽；FEmitted = 本执行周期已发
       OnQuery（首 Step 计时，同周期后续 Step 不再发）}
@@ -266,7 +242,7 @@ type
       ATrace: TDbTraceHub); overload;
     constructor Create(AQuery: TPgQuery; ARestoreConn: TPgConn;
       const ARestoreSql: string; const ASql: string;
-      ATrace: TDbTraceHub; ARestoreOwner: TDbPgConnection = nil); overload;
+      ATrace: TDbTraceHub); overload;
     destructor Destroy; override;
 
     procedure BindText(AIndex: Integer; const AValue: string);
@@ -311,14 +287,11 @@ type
       结束时失效——后续调用返回错误码，统一抛 EDbError。 *}
   TDbPgBlobStream = class(TInterfacedObject, IDbBlobStream)
   private
-    FOwner: IDbConnection; { strong ref: keep PGconn alive, prevent dangling裸指针 }
-    FConnObj: TPgConn;     { not owned (lifetime via FOwner) }
     FConnH: PGconn;
     FFd: Integer;          { <0 = 已关闭 }
-    procedure EnsureTxnAlive;
   public
-    constructor Create(const AOwner: IDbConnection; AConn: TPgConn;
-      const AOid: Int64; const AReadWrite: Boolean);
+    constructor Create(AConnHandle: PGconn; const AOid: Int64;
+      const AReadWrite: Boolean);
     destructor Destroy; override;
     function Read(ABuf: PByte; ACount: SizeUInt): SizeUInt;
     procedure Write(ABuf: PByte; ACount: SizeUInt);
@@ -329,7 +302,7 @@ type
   TDbPgConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
     IDbSavepointControl, IDbBatchExecutor, IDbLargeObjectControl,
     IDbStmtCacheControl, IDbCapabilities, IDbTraceControl,
-    IDbCancelControl, IDbBulkCopy)
+    IDbCancelControl)
   private
     FConn: TPgConn;
     FLock: INativeMutex;
@@ -339,15 +312,6 @@ type
     FPGCancel: PGcancel;
     { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
     FTrace: TDbTraceHub;
-    { B2 超时恢复失败记录（吞错修复）：restore 失败不抛而记 LastError }
-    FLastError: string;
-    { V3-C2 openGauss 分支：array 能力需探测 unnest 多列重载是否存在 }
-    FArrayProbed: Boolean;
-    FArrayOK: Boolean;
-    { V3-E 版本缓存：0=未探测 }
-    FServerVersion: Integer;
-    FServerVersionProbed: Boolean;
-    FBulk: TDbBulkBuffer;
     procedure PgExec(const ASql: string);
     { SHOW 会话变量原文（EPgError → EDbError 归一）；B2 超时恢复用 }
     function PgShowVar(const AName: string): string;
@@ -356,7 +320,6 @@ type
   public
     constructor Create(AConn: TPgConn);          { 取得所有权 }
     destructor Destroy; override;
-    property LastError: string read FLastError;
 
     { IDbTraceControl }
     procedure SetListener(const AListener: IDbTraceListener);
@@ -412,17 +375,6 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
-    function ServerVersion: Integer;
-    function SupportsNativeVector: Boolean;
-    function SupportsJsonPath: Boolean;
-    function SupportsRangeTypes: Boolean;
-    function SupportsBulkCopy: Boolean;
-
-    { IDbBulkCopy V4.2: 单事务批量行复制 }
-    procedure BeginCopy(const ATable: string; const AColumns: array of string);
-    procedure WriteRow(const AValues: array of string);
-    procedure EndCopy;
-    procedure AbortCopy;
 
     { IDbCancelControl（V3-B6）：Arm/Disarm 为无操作（PQcancel 无需
       武装），RequestCancel 经 PQcancel 尽力中断 }
@@ -452,13 +404,11 @@ begin
 end;
 
 constructor TDbPgQuery.Create(AQuery: TPgQuery; ARestoreConn: TPgConn;
-  const ARestoreSql: string; const ASql: string; ATrace: TDbTraceHub;
-  ARestoreOwner: TDbPgConnection);
+  const ARestoreSql: string; const ASql: string; ATrace: TDbTraceHub);
 begin
   inherited Create;
   FQuery := AQuery;
   FRestoreConn := ARestoreConn;
-  FRestoreOwner := ARestoreOwner;
   FRestoreSql := ARestoreSql;
   FSql := ASql;
   FTrace := ATrace;
@@ -485,19 +435,10 @@ begin
   if FRestoreConn <> nil then
   begin
     try
-      FRestoreConn.Exec(FRestoreSql);
-      if FRestoreOwner <> nil then
-        FRestoreOwner.FLastError := '';
+      FRestoreConn.Exec(FRestoreSql);   { 恢复会话超时原值；失败吞掉 }
     except
-      on E: Exception do
-      begin
-        if FRestoreOwner <> nil then
-          FRestoreOwner.FLastError := E.Message;
-        try WriteLn(StdErr, '[pg] statement_timeout restore failed (query dtor): ', E.Message); except end;
-      end;
     end;
     FRestoreConn := nil;
-    FRestoreOwner := nil;
   end;
   FQuery.Free;
   inherited Destroy;
@@ -800,8 +741,6 @@ begin
   FConn := AConn;
   FLock := nextpas.core.sync.Mutex;
   FDepth := 0;
-  FArrayProbed := False;
-  FArrayOK := True; { default optimistic; probe on first SupportsArrayBinding }
   { V3-B6：取消句柄建连期取一次（PQgetCancel 失败 = 不支持取消，
     RequestCancel 退化为无害 no-op，诚实降级不报错） }
   if pq_getcancel <> nil then
@@ -876,28 +815,7 @@ end;
 
 function TDbPgConnection.SupportsArrayBinding: Boolean;
 begin
-  { openGauss 分支：探测 unnest 多列重载是否存在（openGauss 5.0 缺失
-    unnest(int[],text[]) 且不支持 WITH ORDINALITY，见 national-db-guide
-    §2.1）。首次调用时单次 Exec 探针，42883=undefined_function 视为
-    不支持，其余错误保持乐观 True（不误降级）。单连接单线程契约下
-    无需加锁，探针结果缓存于 FArrayOK。 }
-  if not FArrayProbed then
-  begin
-    try
-      FConn.Exec('SELECT * FROM unnest(ARRAY[1]::int[], ARRAY[''a'']::text[])');
-      FArrayOK := True;
-    except
-      on E: EPgError do
-        if E.SqlState = '42883' then
-          FArrayOK := False
-        else
-          FArrayOK := True;
-      on E: Exception do
-        FArrayOK := True;
-    end;
-    FArrayProbed := True;
-  end;
-  Result := FArrayOK;
+  Result := True;   { unnest 数组展开路径，V3-C2 } // 静态按 pg 协议系声明，openGauss 等衍生库运行时方言缺口由消费方探测后降级（见 national-db-guide §2.1）
 end;
 
 { ---- IDbCancelControl（V3-B6）---- }
@@ -946,55 +864,6 @@ end;
 function TDbPgConnection.MaxPlaceholders: Integer;
 begin
   Result := 65535;  { 扩展协议参数上限 }
-end;
-
-function TDbPgConnection.ServerVersion: Integer;
-begin
-  if FServerVersionProbed then Exit(FServerVersion);
-  FServerVersionProbed := True;
-  FServerVersion := FConn.ServerVersion;
-  Result := FServerVersion;
-end;
-
-function TDbPgConnection.SupportsNativeVector: Boolean;
-begin
-  Result := ProbeNativeVector(ServerVersion, False); // 扩展探测预留，需 pgvector 已装
-end;
-
-function TDbPgConnection.SupportsJsonPath: Boolean;
-begin
-  Result := ProbeJsonPath(ServerVersion);
-end;
-
-function TDbPgConnection.SupportsRangeTypes: Boolean;
-begin
-  Result := ProbeRangeTypes(ServerVersion);
-end;
-
-function TDbPgConnection.SupportsBulkCopy: Boolean;
-begin
-  Result := ProbeSupportsBulkCopy(dbkPostgres, ServerVersion);
-end;
-
-procedure TDbPgConnection.BeginCopy(const ATable: string; const AColumns: array of string);
-begin
-  DbBulkBeginCopy(FBulk, dbkPostgres, ATable, AColumns);
-end;
-
-procedure TDbPgConnection.WriteRow(const AValues: array of string);
-begin
-  DbBulkWriteRow(FBulk, dbkPostgres, AValues);
-end;
-
-procedure TDbPgConnection.EndCopy;
-begin
-  DbBulkEndCopy(FBulk, MaxPlaceholders, InTransaction, SupportsSavepoints,
-    @PgExec, @BeginTxn, @CommitTxn, @RollbackTxn);
-end;
-
-procedure TDbPgConnection.AbortCopy;
-begin
-  DbBulkAbortCopy(FBulk);
 end;
 
 destructor TDbPgConnection.Destroy;
@@ -1081,13 +950,7 @@ begin
   finally
     try
       PgExec('SET statement_timeout = ' + LPrev);
-      FLastError := '';
     except
-      on E: Exception do
-      begin
-        FLastError := E.Message;
-        try WriteLn(StdErr, '[pg] statement_timeout restore failed (Exec): ', E.Message); except end;
-      end;
     end;
   end;
 end;
@@ -1139,19 +1002,13 @@ begin
       if LSet then
         try
           PgExec('SET statement_timeout = ' + LPrev);
-          FLastError := '';
         except
-          on E2: Exception do
-          begin
-            FLastError := E2.Message;
-            try WriteLn(StdErr, '[pg] statement_timeout restore failed (Query setup): ', E2.Message); except end;
-          end;
         end;
       RaisePgAsDb(E);
     end;
   end;
   Result := TDbPgQuery.Create(Q, FConn,
-    'SET statement_timeout = ' + LPrev, ASql, FTrace, Self);
+    'SET statement_timeout = ' + LPrev, ASql, FTrace);
 end;
 
 function TDbPgConnection.Changes: Int64;
@@ -1172,9 +1029,10 @@ begin
   try
     if FDepth = 0 then
     begin
-      { PG 不支持 BEGIN IMMEDIATE（SQLite 专属写锁语义）；此处为 no-op，
-        统一按 BEGIN 处理，AImmediate 仅在 sqlite 侧生效。 }
-      PgExec('BEGIN');
+      if AImmediate then
+        PgExec('BEGIN IMMEDIATE')
+      else
+        PgExec('BEGIN');
       FDepth := 1;
     end
     else
@@ -1299,7 +1157,7 @@ function ConnectPostgres(const AConnInfo: string;
   const AOptions: TDbConnectOptions;
   const AStmtCacheCapacity: Integer): IDbConnection;
 var
-  LConn: TPgConn;
+  Conn: TPgConn;
   LConnInfo: string;
   LErr: string;
 begin
@@ -1310,56 +1168,27 @@ begin
   if AOptions.BusyTimeoutMs > 0 then
     LConnInfo := LConnInfo + ' connect_timeout=' +
       IntToStr(AOptions.BusyTimeoutMs);
-  LConn := nil;
   try
-    LConn := TPgConn.Create(LConnInfo, AStmtCacheCapacity);
+    Conn := TPgConn.Create(LConnInfo, AStmtCacheCapacity);
     { 会话级语句超时（INC-7）：触发时 SQLSTATE 57014 → decTimeout。
       SET 本身无参数，不进语句缓存路径。 }
     if AOptions.StatementTimeoutMs > 0 then
-      LConn.Exec('SET statement_timeout = ' + IntToStr(AOptions.StatementTimeoutMs));
-    Result := TDbPgConnection.Create(LConn);
-    LConn := nil; { ownership transferred }
+      Conn.Exec('SET statement_timeout = ' + IntToStr(AOptions.StatementTimeoutMs));
   except
-    on E: EPgError do
-    begin
-      LConn.Free;
-      RaisePgAsDb(E);
-    end;
-    on E: Exception do
-    begin
-      LConn.Free;
-      raise;
-    end;
+    on E: EPgError do RaisePgAsDb(E);
   end;
+  Result := TDbPgConnection.Create(Conn);
 end;
 
 { ---- TDbPgBlobStream ---- }
 
-procedure TDbPgBlobStream.EnsureTxnAlive;
-var
-  LCtl: IDbTxControl;
-begin
-  if FFd < 0 then
-    raise EDbError.CreateSimple(dbkPostgres, 'lo stream: already closed');
-  if FOwner = nil then
-    Exit;
-  if Supports(FOwner, IDbTxControl, LCtl) then
-    if not LCtl.InTransaction then
-      raise EDbError.CreateSimple(dbkPostgres,
-        'lo stream: transaction no longer active (descriptor invalid after COMMIT/ROLLBACK)');
-end;
-
-constructor TDbPgBlobStream.Create(const AOwner: IDbConnection; AConn: TPgConn;
-  const AOid: Int64; const AReadWrite: Boolean);
+constructor TDbPgBlobStream.Create(AConnHandle: PGconn; const AOid: Int64;
+  const AReadWrite: Boolean);
 var
   LMode: Integer;
 begin
   inherited Create;
-  if (AOwner = nil) or (AConn = nil) then
-    raise EDbError.CreateSimple(dbkPostgres, 'lo_open: nil connection');
-  FOwner := AOwner;   { strong ref: prevent PGconn dangling while stream alive }
-  FConnObj := AConn;  { not owned, lifetime via FOwner }
-  FConnH := AConn.Handle;
+  FConnH := AConnHandle;
   LMode := INV_READ;
   if AReadWrite then
     Inc(LMode, INV_WRITE);
@@ -1376,8 +1205,6 @@ begin
     lo_close(FConnH, FFd);             { 接口释放即关闭；析构内不抛 }
     FFd := -1;
   end;
-  FConnObj := nil;
-  FOwner := nil;
   inherited Destroy;
 end;
 
@@ -1385,7 +1212,6 @@ function TDbPgBlobStream.Read(ABuf: PByte; ACount: SizeUInt): SizeUInt;
 var
   N: SizeInt;
 begin
-  EnsureTxnAlive;
   N := lo_read(FConnH, FFd, PAnsiChar(ABuf), SizeInt(ACount));
   if N < 0 then
     raise EDbError.CreateSimple(dbkPostgres,
@@ -1397,7 +1223,6 @@ procedure TDbPgBlobStream.Write(ABuf: PByte; ACount: SizeUInt);
 var
   N: SizeInt;
 begin
-  EnsureTxnAlive;
   if ACount > SizeUInt(High(SizeInt)) then
     raise EDbError.CreateSimple(dbkPostgres, 'lo_write chunk too large');
   N := lo_write(FConnH, FFd, PAnsiChar(ABuf), SizeInt(ACount));
@@ -1411,7 +1236,6 @@ var
   R: Int64;
   LWhence: Integer;
 begin
-  EnsureTxnAlive;
   case AOrigin of
     dsoBegin:   LWhence := PG_SEEK_SET;
     dsoCurrent: LWhence := PG_SEEK_CUR;
@@ -1430,7 +1254,6 @@ function TDbPgBlobStream.Size: Int64;
 var
   LCur, LEnd: Int64;
 begin
-  EnsureTxnAlive;
   LCur := lo_tell64(FConnH, FFd);
   if LCur < 0 then
     raise EDbError.CreateSimple(dbkPostgres, 'lo_tell64 failed');
@@ -1468,7 +1291,7 @@ function TDbPgConnection.OpenLO(const AOid: Int64;
   const AReadWrite: Boolean): IDbBlobStream;
 begin
   RequireActiveTxn;
-  Result := TDbPgBlobStream.Create(Self as IDbConnection, FConn, AOid, AReadWrite);
+  Result := TDbPgBlobStream.Create(FConn.Handle, AOid, AReadWrite);
 end;
 
 procedure TDbPgConnection.UnlinkLO(const AOid: Int64);

@@ -86,6 +86,9 @@ var
   GStreamListener: ITcpListener;
   { Raw listener replying a non-2xx status with a JSON body. }
   GStatusErrorListener: ITcpListener;
+  { Raw listener replying headers + Content-Length: 0 (zero-body streaming
+    response; status-split must complete at the header block). }
+  GZeroBodyListener: ITcpListener;
 
 type
   TTrackedRequestBody = class;
@@ -683,6 +686,45 @@ begin
              'Content-Type: application/json'#13#10 +
              'Content-Length: 24'#13#10#13#10 +
              '{"error":"rate limited"}';
+    LConn.Write(LHead[1], SizeUInt(Length(LHead)));
+  except
+  end;
+  LConn.Close;
+end;
+
+{ Raw listener replying with headers + Content-Length: 0 — zero body bytes at
+  all. Status-split streaming must complete the message at the header block
+  instead of pausing forever waiting for a body chunk that never arrives. }
+function ZeroBodyStreamThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LHead: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  try
+    LConn := GZeroBodyListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+  try
+    LAccum := '';
+    repeat
+      LN := LConn.Read(LBuf[0], 4096);
+      if LN = 0 then
+        Break;
+      SetLength(LAccum, Length(LAccum) + Int32(LN));
+      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+      LP := Pos(#13#10#13#10, LAccum);
+    until LP > 0;
+    LHead := 'HTTP/1.1 200 OK'#13#10 +
+             'Content-Type: text/event-stream'#13#10 +
+             'Content-Length: 0'#13#10#13#10;
     LConn.Write(LHead[1], SizeUInt(Length(LHead)));
   except
   end;
@@ -4407,6 +4449,63 @@ begin
     GStreamListener.Close;
     platform_thread_join(LHandle, LRet);
     GStreamListener := nil;
+    LSink.Free;
+  end;
+end;
+
+{ Zero-body streaming response: status-split must complete at the headers
+  (Content-Length: 0). Regression for the pause-at-headers hang that left the
+  read loop blocked until the request deadline. }
+procedure TestClientZeroBodyStreamCompletesAtHeaders;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LSink: TClientStreamSink;
+  LRaised: Boolean;
+begin
+  GZeroBodyListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GZeroBodyListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @ZeroBodyStreamThread, nil);
+  LSink := TClientStreamSink.Create;
+  try
+    LClient := NewHttpClient;
+    LReq := THttpRequestBuilder.Create(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/empty')
+      .ResponseStatus(@LSink.OnResponseStatus)
+      .ResponseBodyChunk(@LSink.OnBodyChunk)
+      .SkipBodyBuffer
+      .Timeout(2000)
+      .Build;
+    LRaised := False;
+    try
+      LResp := LClient.Send(LReq);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(not LRaised,
+      'zero-body stream completes without read-deadline raise');
+    if not LRaised then
+    begin
+      CheckEqual(Int64(200), Int64(LResp.StatusCode),
+        'zero-body stream status');
+      CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
+        'status callback fires exactly once');
+      CheckEqual(Int64(200), Int64(LSink.FStatusValue),
+        'status callback reports 200');
+      CheckEqual(Int64(0), Int64(LSink.FChunks),
+        'no body chunks for Content-Length: 0');
+      Check(LResp.Body = nil,
+        'skip-buffer mode does not retain body');
+    end;
+  finally
+    GZeroBodyListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GZeroBodyListener := nil;
     LSink.Free;
   end;
 end;
@@ -9247,5 +9346,7 @@ begin
     @TestClientResponseStatusReportsErrorStatus);
   T.Test('Client SkipBodyBuffer streams without retaining body',
     @TestClientSkipBodyBufferStreamsWithoutRetaining);
+  T.Test('Client zero-body stream completes at headers (status-split)',
+    @TestClientZeroBodyStreamCompletesAtHeaders);
   if not T.Run then Halt(1);
 end.

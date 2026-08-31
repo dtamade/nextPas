@@ -6,9 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.ops,
-  nextpas.core.exception,
-  nextpas.core.git.base;
+  nextpas.core.exception;
 
 type
   { Object kinds as encoded in loose headers and pack entry type bits }
@@ -19,8 +17,8 @@ type
     Bytes: array[0..19] of Byte;
   end;
 
-  { Family-level error re-exported from git.base (canonical owner) }
-  EGitError = nextpas.core.git.base.EGitError;
+  { Family-level error for the native git subfamily }
+  EGitError = class(Exception);
 
 const
   GitOidHexLen = 40;
@@ -88,10 +86,13 @@ begin
 end;
 
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
+var
+  I: Integer;
 begin
-  Result := SpanEqual(
-    TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
-    TByteSpan.Create(@AB.Bytes[0], GitOidRawLen));
+  for I := 0 to GitOidRawLen - 1 do
+    if AA.Bytes[I] <> AB.Bytes[I] then
+      Exit(False);
+  Result := True;
 end;
 
 function GitKindToString(AKind: TGitObjectKind): string;
@@ -132,12 +133,16 @@ end;
 
 function GitBytesToString(const ABytes: TBytes): string; inline;
 begin
-  Result := BytesToString(ABytes);
+  SetLength(Result, Length(ABytes));
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
 end;
 
 function GitStringToBytes(const AText: string): TBytes; inline;
 begin
-  Result := StringToBytes(AText);
+  SetLength(Result, Length(AText));
+  if Length(AText) > 0 then
+    Move(PAnsiChar(AText)^, Result[0], Length(AText));
 end;
 
 end.

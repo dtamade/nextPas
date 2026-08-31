@@ -11,13 +11,7 @@ uses
 
 { agent.sse 增量解析矩阵（TESTING §3 test_sse 行；WIRE-MAPPINGS §0）：
   帧跨 chunk 断裂、多行 data、CRLF/LF、BOM、event+data、半帧保持状态、
-  UTF-8 多字节跨 Feed 断裂、EOF 收口、恶意超长行上限
-  边界/Cancel/超时/并发：SSE 为同步状态机，无 Cancel/超时分支；并发不适用（单线程 Feed/Pop）；
-  超时边界由 transport 层 ReadIdle 保障，此门仅验解析正确性。
-  悬挂指针：TSSEParser 持 FBuf: string（托管），Finish 后禁 Feed 抛 EAgentMisuse；
-  所有用例 try..finally Free，无裸指针，无跨用例复用已释放实例。
-  泄漏标注：common.mk -gh -dHEAPTRC_ACTIVE 全量覆盖，0 unfreed blocks（F-M17 豁免不适用）；
-  单行 1MiB/单事件 8MiB 超限分支先清 FBuf 再 raise，杜绝 poisoned 常驻。 }
+  UTF-8 多字节跨 Feed 断裂、EOF 收口、恶意超长行上限 }
 
 procedure FeedStr(AP: TSSEParser; const S: string);
 var
@@ -318,6 +312,7 @@ begin
     P.Free;
   end;
 end;
+
 
 procedure TestSpaceStripAndEmptyData;
 var

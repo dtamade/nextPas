@@ -39,7 +39,6 @@ NEXTPAS_PG_TEST_CONN='host=/var/run/postgresql dbname=nextpas_pg_test user='"$US
 | J1 | 裸驱动开销比：统一层 vs 直调 conn 层 insert+select 耗时比 | **≤1.15×** | ✅（见下，本次噪声内持平） |
 | J2 | 池读路径建连数不变式：8 线程锤满 3000 轮，工厂建连数 == MaxReadConnections | 恰好相等 | ✅ opens=4/4 |
 | J3 | 大对象流式内存界：128MB blob 流式读写 RSS 峰值增量 | ≤ 数 MB（chunk 级） | ✅ +0.2MB |
-| J4 | bulk 单事务批量：`sqlite bulk/txloop`、`pg bulk/batch` 比值（`bench_db_bulk_copy` 5/6 capability `true` via `ProbeSupportsBulkCopy` hard-coded, `redis` honest `—` via `ProbeBulkCopy(0)=false`；`PG COPY BINARY` `ProbeBulkCopy: PG≥140000` 为探针函数延迟微基准、与 data bulk 吞吐正交已隔离; performance heterogeneity incomplete honest） | **≤1.5× (sqlite-only)** | ⚠️ partial 0.52–0.55× sqlite live-only（bulk 11 ms vs txloop 21 ms，同机 N=10000，TDbBulkBuffer+DbBulkEscape+builder Tail 直写单扫 + InTransaction 分支，J4 live-verified 仅 sqlite，heterogeneity incomplete honest）；pg/mysql/odbc/dm offline Skip（无 synthetic proxy，已移除 sqlite proxy 合成以防 false 0.52× parity 掩盖 dialect/transaction/MaxPlaceholders 异构，live 需 NEXTPAS_*_TEST_CONN 同机 roundtrip，CI 缺省 Skip，completeness 1.4 未达成），ProbeBulkCopy 500k 次探针微基准与 data bulk 正交已隔离，字面量 `500 行/chunk` bypass `IDbStmtCacheControl` LRU 为预期见 §bench_db_bulk_copy |
 
 ## 逐 bench 口径与本次数字
 
@@ -93,21 +92,6 @@ autocommit **~750×**），稳态 ≈345K 行/s——batch 合并往返但仍解
 42ms，稳态两轮 29/29；历史 C4 采集中 batch 曾录得 190ms，均在登记
 噪声带口径内。）
 
-### bench_db_bulk_copy —— 单事务批量（V4.3 universal）
-
-口径：N=10000 行、两列 `BulkCopy` 单事务批量（`BeginCopy→WriteRow→EndCopy` 单 `BEGIN/COMMIT`），`TDbBulkBuffer + DbBulkEscape` 复用，`'→''` 单遍转义计入；`InTransaction` 分支：已在 `WithTransaction` 内则复用外层事务不另起 `BEGIN/COMMIT`。`redis` honest `—` via `ProbeBulkCopy(0)=false`（`5/6` hard-coded `true`）。本 bench 计量当前单事务批量路径（`J4 ≤1.5×`：`sqlite bulk/txloop` 同机门限 0.52–0.55× 为唯一 live 实测（`TDbBulkBuffer+DbBulkEscape+InTransaction`，`heaptrc 0`，`0 SysUtils`），其余 `pg/mysql/odbc/dm` 无 env 时 offline Skip（无 synthetic proxy，已移除 sqlite proxy 合成，heterogeneity incomplete honest，risks false 0.52× parity，live 需 `NEXTPAS_*_TEST_CONN` 同机 roundtrip 方为异构真测，CI 缺省 Skip，completeness 1.4 未达成）；`PG COPY BINARY` `ProbeBulkCopy: PG≥140000` 为探针函数 500k 次延迟微基准、与 data bulk 吞吐正交已隔离见下表独立行）。
-
-| backend | bulk | 对照 txloop/batch | 备注 |
-|---|---|---|---|
-| sqlite | 11 ms live | txloop 21 ms / 0.52–0.55× | 同机 N=10000 复采（2026-08-31，Xeon E5-2696 v4，FPC 3.3.1 -O2，bulk/txloop 0.52×/0.55×），TDbBulkBuffer+DbBulkEscape+builder Tail 直写单扫，InTransaction 分支，`0 SysUtils`，`heaptrc 0`，J4 ≤1.5× ✅（live-verified 仅 sqlite） |
-| postgres | — offline Skip / live env-gated | — offline Skip（无 synthetic proxy；live 需 `NEXTPAS_PG_TEST_CONN` 同机 roundtrip，risks false 0.52× parity）; batch 174 ms live | offline Skip（已移除 sqlite proxy 合成以防 dialect/transaction/MaxPlaceholders 异构掩盖，heterogeneity incomplete honest）；live `NEXTPAS_PG_TEST_CONN` 时同机复采；`COPY BINARY` `ProbeBulkCopy: PG≥140000` 探针微基准见独立行（500k 次，0 false / 140000 true） |
-| mysql | — offline Skip / live env-gated | — offline Skip（无 synthetic proxy） | offline Skip（已移除 `START TRANSACTION` synthetic 合成，heterogeneity incomplete honest），live `NEXTPAS_MYSQL_TEST_CONN` 时同机 roundtrip 复采 |
-| odbc/dm | — offline Skip / live env-gated | — offline Skip（无 synthetic proxy） | offline Skip（已移除 `AUTOCOMMIT OFF / dpi` synthetic 合成，heterogeneity incomplete honest），live `NEXTPAS_ODBC/DM_TEST_CONN` 时同机 roundtrip 复采 |
-
-> **Heterogeneity only live-verifiable (bench_db_bulk_copy.lpr 2026-08-31 honest, no synthetic proxy):** dialect quoteIdent/literal/placeholder and transaction `BEGIN/COMMIT` vs `SAVEPOINT` vs `AUTOCOMMIT OFF` vs `dpi_commit` differ; MaxPlaceholders `sqlite=999 odbc=999 dm=999` vs `pg/mysql=65535` → `DbBulkChunkRows 500 vs 10000 rows/chunk` (`N=10000 cols=2`, `DbBulkChunkRows(999,2,10000)=500` vs `DbBulkChunkRows(65535,2,10000)=10000`); `TDbBulkBuffer+DbBulkEscape+InTransaction` 分支、`0 SysUtils`、`heaptrc0`; offline 无 proxy 合成，heterogeneity incomplete honest，`completeness 1.4 未达成`，`J4 live-verified 仅 sqlite` 其余 4 家族 `not live-proven` `risks false 0.52× parity`，live 需 `NEXTPAS_*_TEST_CONN` 同机 roundtrip。
-
-*源码 `bench_db_bulk_copy.lpr` 已于 2026-08-31 复采 sqlite live 11 vs 21–22 ms 0.52–0.55× 同机验证（FPC 3.3.1 -O2，`TDbBulkBuffer+DbBulkEscape+InTransaction` 分支，`0 SysUtils`，`heaptrc 0`，J4 live-verified 仅 sqlite），**已移除** pg/mysql/odbc/dm offline synthetic via sqlite proxy 合成（fixes masks dialect/transaction/MaxPlaceholders heterogeneity, risks false 0.52× parity；heterogeneity incomplete honest，completeness 1.4 未达成，luxury completeness not validated offline）；data bulk 微基准 `bulk-escape / bulk-buffer`（N=10000 单遍 `'`→`''` Tail/AdvanceLen，`0 SysUtils`）与探针微基准 `probe-bulk`（NProbe=500k，ProbeBulkCopy 0 false / 140000 true 阈值）正交已隔离附表，live 段 `NEXTPAS_*_TEST_CONN` 时同机复采同口径。横向对照：bulk 字面量 `500 行/chunk` 经 `DbBulkMultiInsertSql` 拼装，每个 chunk 产生长度唯一的 SQL 文本，故意 bypass `IDbStmtCacheControl` LRU——语句缓存命中率不计入 bulk，缓存收益见 `bench_db_stmt_cache` `2.1–2.4×` point（§bench_db_stmt_cache），bulk `0.52–0.55×` 已含字面量拼装成本，两者正交为预期非缺陷；J4 live 仅 sqlite 已实测，其余 `pg/mysql/odbc/dm` heterogeneity incomplete offline（live env-gated roundtrips remain optional），CONTRACT `§2.22` / README parity 以本文 honest 为准。*
-
 ### bench_db_stmt_cache —— 透明语句缓存（INC-3/C1）
 
 口径：point=主键等值查 N_POINT=50,000 次（KEYS=512 键空间）；
@@ -120,10 +104,6 @@ scan=范围扫 N_SCAN=2,000 次；cached 模式预热一轮进稳态后计量，
 | scan | sqlite | 12,903 ops/s | 14,184 ops/s | 1.10× | — |
 | point | pg | 9,904 ops/s | 20,973 ops/s | **2.12×** | — |
 | scan | pg | 2,275 ops/s | 3,053 ops/s | 1.34× | — |
-
-> **与 bulk 字面量路径正交**：本表 `2.1–2.4×` 为参数化 point 查询经 `IDbStmtCacheControl` LRU（键 = 原始 SQL 文本，`pg` 规范形含 `::bytea` cast 分键）的命中收益；`bench_db_bulk_copy` 的 `500 行/chunk` 字面量 `INSERT` 每次产生唯一长度 SQL 文本，故意 bypass LRU——每个 chunk 指纹不同无法命中，缓存收益不适用于 bulk，为预期非缺陷（详 CONTRACT §2.8/§2.22 横向对照）。
-
-> **dm/mysql/odbc honest-incomplete（luxury parity gap）**：本册 `bench_db_stmt_cache` 仅 sqlite/pg 提供 live point 2.1–2.4× / scan 1.1–1.34× 数字；dm/mysql/odbc 的同款 LRU 64（`SupportsStmtCacheControl=True`）已落地但尚无 live cache hit 数据，parity not yet measured，luxury verification gap 如实登记——`bench_db_stmt_cache.lpr` 已支持 `NEXTPAS_MYSQL/ODBC/DM_TEST_CONN` live 段，同机 roundtrip 方为异构真测，无 synthetic proxy；CONTRACT §2.8 / README 矩阵 `impl*` 以本文 honest 为准。
 
 ### bench_db_blob_stream —— 大对象流式内存界（J3）
 
@@ -200,7 +180,7 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 
 > 在册数字：2026-08-28 19:30 复采（400对 super=43048B，shared box）；后续新增 DSN 复用方（DM/ODBC）以此为线性度基线。
 
-> BENCHES已聚合9项（含 `bench_db_bulk_copy`），text_kv在 core/benchmarks/nextpas.core.text/bench_kv。回归以 benchmarks.md 四档表为单源，db bench 不含 text_kv。
+> BENCHES仅聚合前8项，text_kv在 core/benchmarks/nextpas.core.text/bench_kv。回归以 benchmarks.md 四档表为单源，db bench 不含 text_kv。
 
 | workload | bytes | median | mean | p95 | thr(median) | allocs |
 |---|---|---|---|---|---|---|
@@ -290,8 +270,8 @@ translate_complexity（线性度成立）、batch_insert pg 四路（autocommit
 - 数字漂移 ±15% 内视为环境噪声（共享机器）；跨过阈值先查环境再谈回归。
 - 新增 bench 必须同步扩充本文口径表，缺口径的 bench 视为不存在。
 
-## 验证锚点 2026-08-29 — 同步至 main 6c0dd4222（text Copy/CStr inline loop + StrToIntDef 双 inline + git.fetch BytesConcatMany O(n²)→O(n)）
+## 验证锚点 2026-08-29 — 同步至 main 3a23647bd（perf(time) Digits/TimeBucketKey O(n) + perf(bytes) Bytes↔String 单源化 + window 3.8 + tlspas P-384）
 
-- 聚焦门：`test_text 33` / `test_bytes 35` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` / `test_git_native 114` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`6c0dd` 复跑 33/35/12/21/7/114 绿，含 CopyStrToBuf 字面量回退锁 + git Bytes/Hex 单源 + fetch 单次直连）
+- 聚焦门：`test_text 33` / `test_bytes 35` / `test_db_redis_base 12` / `test_db_pool_v2 21` / `test_db_mysql_adapter 7` / `test_git_native 114` / `test_time_bucket 7` / `test_multipart 13` 均 `heaptrc 0`（见 `{SCRATCH}/test_*.log`，`3a23647` 复跑 33/35/12/21/7/114/7/13 绿，含 time.bucket 单分配 + bytes 单源 + window 3.8）
 - 基准：`bench_kv 10`（`validate 0 allocs/bytes 0`，在册 `129/277/1102 ns` 静稳中位，当前 `123/354/1130 ns` 紧贴在册，`0 allocs` 不变量稳，`build/bench-kv.json` 10 executed，见 `{SCRATCH}/bench-kv.json`）
-- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行 text.utils 单源` + `git.native Hex/Bytes/fetch 单源`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）
+- 卫生：`make hygiene pass` / `git diff --check 0` / `db.* Trim( 2 行 text.utils 单源` + `git.native Hex/Bytes/fetch + bytes.ops 单源`（见 `{SCRATCH}/hygiene.log` / `grep_*.log`）
