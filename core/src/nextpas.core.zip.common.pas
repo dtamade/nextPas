@@ -81,11 +81,6 @@ begin
   Result := nextpas.core.zip.base.DosMinUnixSec;
 end;
 
-function DosMaxUnixSec: Int64; inline;
-begin
-  Result := nextpas.core.zip.base.DosMaxUnixSec;
-end;
-
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 begin
   Result := nextpas.core.zip.base.UnixFromDosDateTime(ADosDate, ADosTime);
