@@ -42,7 +42,8 @@ type
 
 implementation
 
-uses Math;
+uses
+  nextpas.core.math.trig;
 
 class function TCompressor.Create(AThresholdDB, ARatio, AAttackMs, AReleaseMs, AMakeupDB: Single; ASampleRate: Integer): TCompressor;
 var

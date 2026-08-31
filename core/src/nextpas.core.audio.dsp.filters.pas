@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
-  Math;
+  nextpas.core.math.base,
+  nextpas.core.math.trig;
 
 type
   TBiquadType = (bqLowPass, bqHighPass, bqBandPass, bqNotch, bqPeak, bqLowShelf, bqHighShelf);
@@ -59,7 +60,7 @@ begin
   LFreq := AFreq; if LFreq < 1 then LFreq := 1;
   if LFreq > LFs * 0.499 then LFreq := LFs * 0.499;
   LQ := AQ; if LQ < 0.1 then LQ := 0.1;
-  Lw0 := 2 * Pi * LFreq / LFs;
+  Lw0 := 2 * PI_VALUE * LFreq / LFs;
   Lcosw0 := Cos(Lw0); Lsinw0 := Sin(Lw0);
   Lalpha := Lsinw0 / (2 * LQ);
   LA := 1; LsqrtA := 1; LS := 1;

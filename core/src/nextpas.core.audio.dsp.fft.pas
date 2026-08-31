@@ -4,7 +4,7 @@ unit nextpas.core.audio.dsp.fft;
 
 interface
 
-uses nextpas.core.base, Math;
+uses nextpas.core.base, nextpas.core.math.base, nextpas.core.math.trig;
 
 type
   TSingleArray = array of Single;
@@ -61,7 +61,7 @@ begin
       if (I = 0) or (I = N - 1) then GHannCache[Slot].Data[I] := 0
       else
       begin
-        LAng := 2.0 * Pi * I / (N - 1);
+        LAng := 2.0 * PI_VALUE * I / (N - 1);
         GHannCache[Slot].Data[I] := Single(0.5 * (1.0 - Cos(LAng)));
       end;
     end;
@@ -90,7 +90,7 @@ begin
     P := GetHannTable(N);
     if P <> nil then Exit(P[I]);
   end;
-  LAng := 2.0 * Pi * I / (N - 1);
+  LAng := 2.0 * PI_VALUE * I / (N - 1);
   Result := Single(0.5 * (1.0 - Cos(LAng)));
 end;
 
@@ -111,7 +111,7 @@ begin
   end;
   for I := 0 to N - 1 do
   begin
-    LAng := 2.0 * Pi * I / (N - 1);
+    LAng := 2.0 * PI_VALUE * I / (N - 1);
     ADst[I] := Single(0.5 * (1.0 - Cos(LAng)));
   end;
 end;
@@ -155,7 +155,7 @@ begin
   Len := 2;
   while Len <= N do
   begin
-    Ang := 2.0 * Pi / Len;
+    Ang := 2.0 * PI_VALUE / Len;
     WLenRe := Cos(Ang); WLenIm := Sin(Ang);
     Half := Len shr 1;
     I := 0;

@@ -31,7 +31,9 @@ function AiffProbe(const APrefix: TBytes): TAudioProbeResult;
 implementation
 
 uses
-  Math,
+  nextpas.core.math.base,
+  nextpas.core.math.scalar,
+  nextpas.core.math.trig,
   nextpas.core.audio.pcm;
 
 const
