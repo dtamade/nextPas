@@ -21,9 +21,10 @@ uses
   nextpas.core.collections.hashmap.swiss.str;
 
 type
-  TSevenZIndexArray = array of Integer;
+  TSevenZIndexArray = nextpas.core.sevenz.index.TSevenZIndexArray;
 
-  {** @desc ISevenZReader 默认实现 *}
+  {** @desc ISevenZReader 默认实现
+      职责拆分：解析/装配/解码归 reader，名称索引归 sevenz.index，LRU 缓存归 sevenz.cache *}
   TSevenZReaderImpl = class(TInterfacedObject, ISevenZReader)
   private
     FArchive: TBytes;
@@ -36,18 +37,10 @@ type
     FEntryOffInFolder: array of Int64;     { 非空文件 -> 子流在 folder 输出内偏移 (UInt64 宽度, -1 sentinel) }
     FPackStartOfFolder: array of Integer;  { folder -> 首 pack 流序号 }
     FPackOffsetOfFolder: array of UInt64;  { folder -> 首 pack 流绝对载荷偏移 }
-    FCacheIdx: array[0..1] of Integer;     { 2-entry MRU 缓存：0 为 MRU，字节阈值见 DecodeFolder/ C_CACHE_MAX_BYTES }
-    FCacheData: array[0..1] of TBytes;
+    FIndex: TSevenZNameIndex;              { 名称索引：哈希 + 双排序前缀/后缀 + IgnoreCase }
+    FCache: TSevenZCache;                  { 2-entry MRU folder 解码缓存 }
     FPassword: string;
-    FNameMap: specialize TSwissTableStr<Integer>;        { exact → first index }
-    FNameMapIgnoreCase: specialize TSwissTableStr<Integer>; { lower → first index }
-    FSortedIdx: array of Integer;                           { lexicographic order for prefix }
-    FSortedIdxRev: array of Integer;                        { reversed order for suffix }
-    FLowerNames: array of string;                           { lowercased names for ignore-case indexes }
-    FSortedIdxIgnoreCase: array of Integer;
-    FSortedIdxRevIgnoreCase: array of Integer;
-    FIgnoreCaseBuilt: Boolean;
-    procedure BuildNameMaps;
+    procedure BuildNameMaps; deprecated 'use FIndex.Rebuild';
     { 单核排序：AUseLower 选 FLowerNames/Name，ARev 选 CompareReversed，去重 4 份 QuickSort }
     procedure BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
     procedure BuildSortedIdx;
