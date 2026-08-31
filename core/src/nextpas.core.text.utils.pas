@@ -168,7 +168,7 @@ begin
   SetLength(Result, AWidth);
   FillChar(Result[1], LPadLen, Byte(APadChar));
   if Length(S) > 0 then
-    Move(S[1], Result[LPadLen + 1], Length(S));
+    Move(PAnsiChar(S)^, Result[LPadLen + 1], Length(S));
 end;
 
 function PadRight(const S: string; AWidth: Integer; APadChar: Char): string; inline;
@@ -180,7 +180,7 @@ begin
     Exit(S);
   SetLength(Result, AWidth);
   if Length(S) > 0 then
-    Move(S[1], Result[1], Length(S));
+    Move(PAnsiChar(S)^, Result[1], Length(S));
   FillChar(Result[Length(S) + 1], LPadLen, Byte(APadChar));
 end;
 
@@ -384,7 +384,7 @@ begin
   N := Result;
   if N >= ABufLen then N := ABufLen - 1;
   if N > 0 then
-    Move(S[1], P^, N);
+    Move(PAnsiChar(S)^, P^, N);
 end;
 
 function CStrToStr(const AP: PAnsiChar): string; inline;

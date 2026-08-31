@@ -157,10 +157,11 @@ begin
   for I := Low(PHRASES) to High(PHRASES) do
   begin
     LLen := Length(PHRASES[I]);
+    { IndexOfStr 为 0 基语义：-1 未找到，0 为串首 }
     P := nextpas.core.text.view.IndexOfStr(LLower, PHRASES[I]);
-    while P > 0 do
+    while P >= 0 do
     begin
-      LStart := P;
+      LStart := P + 1;
       if ((LStart = 1) or (not IsWordChar(LLower[LStart - 1]))) and
          ((LStart + LLen - 1 = Length(LLower)) or (not IsWordChar(LLower[LStart + LLen]))) then
         Exit(True);
