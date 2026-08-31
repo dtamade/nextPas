@@ -18,8 +18,8 @@ unit nextpas.core.ssh.agent;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.errors;
