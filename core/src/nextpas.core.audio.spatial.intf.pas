@@ -1,4 +1,4 @@
-// P12: pure funcs remain in intf (to be moved to spatial.calc), types canonical in base (alias kept)
+// debt: pure funcs in intf (to be moved to spatial.calc/base, keep for P5 compatibility)
 unit nextpas.core.audio.spatial.intf;
 
 {$I nextpas.core.settings.inc}
@@ -10,11 +10,32 @@ uses
   nextpas.core.audio.intf;
 
 type
-  // canonical in base (P12 promotion) — aliases kept for compatibility
-  TAudioVec3 = nextpas.core.audio.base.TAudioVec3;
-  TAudioDistanceModel = nextpas.core.audio.base.TAudioDistanceModel;
-  TAudioListener = nextpas.core.audio.base.TAudioListener;
-  TAudioSpatialParams = nextpas.core.audio.base.TAudioSpatialParams;
+  TAudioVec3 = record
+    X, Y, Z: Single;
+  end;
+
+  TAudioDistanceModel = (dmInverse, dmLinear, dmExponent);
+
+  TAudioListener = record
+    Position: TAudioVec3;
+    Velocity: TAudioVec3;
+    Forward: TAudioVec3; // normalized, default (0,0,-1)
+    Up: TAudioVec3;      // normalized, default (0,1,0)
+    Gain: Single;        // master listener gain, default 1.0
+  end;
+
+  TAudioSpatialParams = record
+    Position: TAudioVec3;
+    Velocity: TAudioVec3;
+    MinDistance: Single; // default 1.0
+    MaxDistance: Single; // default 100.0
+    Rolloff: Single;     // default 1.0
+    DistanceModel: TAudioDistanceModel;
+    DopplerFactor: Single; // default 1.0, 0 = disable
+    ConeInnerAngle: Single; // degrees, not used v1
+    ConeOuterAngle: Single;
+    ConeOuterGain: Single;
+  end;
 
   // Spatialized source — 3D panner wrapping a mono/stereo source (pure 3D, zero-alloc FillRealtime)
   IAudioSpatialSource = interface(IRealtimeAudioSource)
@@ -48,7 +69,7 @@ procedure AudioSpatialize(const AListener: TAudioListener; const ASource: TAudio
 
 implementation
 
-uses nextpas.core.math.scalar, nextpas.core.math.trig;
+uses nextpas.core.math.trig;
 
 function AudioVec3Create(AX, AY, AZ: Single): TAudioVec3; inline;
 begin

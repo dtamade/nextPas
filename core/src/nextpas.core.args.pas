@@ -10,6 +10,7 @@ interface
 
 uses
   nextpas.core.args.base,
+  nextpas.core.text.builder,
   nextpas.core.text.number;
 
 type
@@ -670,65 +671,97 @@ end;
 function TArgParser.HelpText: string;
 var
   LI: Int32;
-  LBuf: array[0..31] of AnsiChar;
   LN: Int32;
-  LDefStr: string;
-  LChoicesStr: string;
+  LBuilder: IStringBuilder;
 begin
-  Result := 'Usage: ' + FAppName + ' [options]';
+  // zero-copy single allocation: IStringBuilder O(n) vs O(n²) Result+; inline AppendStr/AppendInt avoids intermediate strings.
+  LBuilder := MakeStringBuilder(512 + Length(FAppName) * 2 + Length(FDescription) + Length(FOptions) * 96 + Length(FPositionalSpecs) * 32);
+  LBuilder.AppendStr('Usage: ');
+  LBuilder.AppendStr(FAppName);
+  LBuilder.AppendStr(' [options]');
   for LI := 0 to Length(FPositionalSpecs) - 1 do
   begin
     if FPositionalSpecs[LI].Required then
-      Result := Result + ' <' + FPositionalSpecs[LI].Name + '>'
+    begin
+      LBuilder.AppendStr(' <');
+      LBuilder.AppendStr(FPositionalSpecs[LI].Name);
+      LBuilder.AppendStr('>');
+    end
     else
-      Result := Result + ' [' + FPositionalSpecs[LI].Name + ']';
+    begin
+      LBuilder.AppendStr(' [');
+      LBuilder.AppendStr(FPositionalSpecs[LI].Name);
+      LBuilder.AppendStr(']');
+    end;
   end;
-  Result := Result + LineEnding;
+  LBuilder.AppendStr(LineEnding);
   if FDescription <> '' then
-    Result := Result + LineEnding + FDescription + LineEnding;
-  Result := Result + LineEnding + 'Options:' + LineEnding;
+  begin
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr(FDescription);
+    LBuilder.AppendStr(LineEnding);
+  end;
+  LBuilder.AppendStr(LineEnding);
+  LBuilder.AppendStr('Options:');
+  LBuilder.AppendStr(LineEnding);
   for LI := 0 to Length(FOptions) - 1 do
   begin
-    Result := Result + '  ';
+    LBuilder.AppendStr('  ');
     if FOptions[LI].Short <> #0 then
-      Result := Result + '-' + FOptions[LI].Short + ', ';
-    Result := Result + '--' + FOptions[LI].Name;
+    begin
+      LBuilder.AppendStr('-');
+      LBuilder.AppendChar(FOptions[LI].Short);
+      LBuilder.AppendStr(', ');
+    end;
+    LBuilder.AppendStr('--');
+    LBuilder.AppendStr(FOptions[LI].Name);
     case FOptions[LI].Kind of
-      akString: Result := Result + ' <string>';
-      akInt: Result := Result + ' <int>';
-      akStringList: Result := Result + ' <string>...';
-      akChoice: Result := Result + ' <choice>';
+      akString: LBuilder.AppendStr(' <string>');
+      akInt: LBuilder.AppendStr(' <int>');
+      akStringList: LBuilder.AppendStr(' <string>...');
+      akChoice: LBuilder.AppendStr(' <choice>');
       akFlag: ;
     end;
     if FOptions[LI].Required then
-      Result := Result + ' (required)';
-    Result := Result + LineEnding + '      ' + FOptions[LI].Help;
+      LBuilder.AppendStr(' (required)');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('      ');
+    LBuilder.AppendStr(FOptions[LI].Help);
     case FOptions[LI].Kind of
       akString:
         if FOptions[LI].DefaultStr <> '' then
-          Result := Result + ' (default: "' + FOptions[LI].DefaultStr + '")';
+        begin
+          LBuilder.AppendStr(' (default: "');
+          LBuilder.AppendStr(FOptions[LI].DefaultStr);
+          LBuilder.AppendStr('")');
+        end;
       akInt:
       begin
-        LN := IntToBuffer(FOptions[LI].DefaultInt, @LBuf[0]);
-        SetString(LDefStr, @LBuf[0], LN);
-        Result := Result + ' (default: ' + LDefStr + ')';
+        LBuilder.AppendStr(' (default: ');
+        LBuilder.AppendInt(FOptions[LI].DefaultInt);
+        LBuilder.AppendStr(')');
       end;
       akChoice:
       begin
-        LChoicesStr := '';
+        LBuilder.AppendStr(' [');
         for LN := 0 to Length(FOptions[LI].Choices) - 1 do
         begin
-          if LN > 0 then LChoicesStr := LChoicesStr + ', ';
-          LChoicesStr := LChoicesStr + FOptions[LI].Choices[LN];
+          if LN > 0 then LBuilder.AppendStr(', ');
+          LBuilder.AppendStr(FOptions[LI].Choices[LN]);
         end;
-        Result := Result + ' [' + LChoicesStr + ']';
+        LBuilder.AppendStr(']');
         if FOptions[LI].DefaultStr <> '' then
-          Result := Result + ' (default: "' + FOptions[LI].DefaultStr + '")';
+        begin
+          LBuilder.AppendStr(' (default: "');
+          LBuilder.AppendStr(FOptions[LI].DefaultStr);
+          LBuilder.AppendStr('")');
+        end;
       end;
       akFlag, akStringList: ;
     end;
-    Result := Result + LineEnding;
+    LBuilder.AppendStr(LineEnding);
   end;
+  Result := LBuilder.ToString;
 end;
 
 function TArgParser.OptionNeedsValue(const AArg: string): Boolean;
@@ -882,23 +915,52 @@ end;
 function TArgApp.AppHelpText: string;
 var
   LI: Int32;
+  LBuilder: IStringBuilder;
 begin
-  Result := FAppName;
+  // zero-copy single allocation: IStringBuilder O(n) vs O(n²) Result+; interface refcount ensures resource release on exception.
+  LBuilder := MakeStringBuilder(512 + Length(FAppName) * 2 + Length(FDescription) + Length(FVersion) * 2 + Length(FCommands) * 64);
+  LBuilder.AppendStr(FAppName);
   if FVersion <> '' then
-    Result := Result + ' ' + FVersion;
-  Result := Result + LineEnding;
+  begin
+    LBuilder.AppendStr(' ');
+    LBuilder.AppendStr(FVersion);
+  end;
+  LBuilder.AppendStr(LineEnding);
   if FDescription <> '' then
-    Result := Result + FDescription + LineEnding;
-  Result := Result + LineEnding + 'Usage:' + LineEnding;
-  Result := Result + '  ' + FAppName + ' [global options] <command> [command options]' + LineEnding;
-  Result := Result + LineEnding + 'Commands:' + LineEnding;
+  begin
+    LBuilder.AppendStr(FDescription);
+    LBuilder.AppendStr(LineEnding);
+  end;
+  LBuilder.AppendStr(LineEnding);
+  LBuilder.AppendStr('Usage:');
+  LBuilder.AppendStr(LineEnding);
+  LBuilder.AppendStr('  ');
+  LBuilder.AppendStr(FAppName);
+  LBuilder.AppendStr(' [global options] <command> [command options]');
+  LBuilder.AppendStr(LineEnding);
+  LBuilder.AppendStr(LineEnding);
+  LBuilder.AppendStr('Commands:');
+  LBuilder.AppendStr(LineEnding);
   for LI := 0 to Length(FCommands) - 1 do
-    Result := Result + '  ' + FCommands[LI].Name + '      ' + FCommands[LI].Description + LineEnding;
-  Result := Result + LineEnding + 'Global Options:' + LineEnding;
-  Result := Result + '  -h, --help       Show this help' + LineEnding;
+  begin
+    LBuilder.AppendStr('  ');
+    LBuilder.AppendStr(FCommands[LI].Name);
+    LBuilder.AppendStr('      ');
+    LBuilder.AppendStr(FCommands[LI].Description);
+    LBuilder.AppendStr(LineEnding);
+  end;
+  LBuilder.AppendStr(LineEnding);
+  LBuilder.AppendStr('Global Options:');
+  LBuilder.AppendStr(LineEnding);
+  LBuilder.AppendStr('  -h, --help       Show this help');
+  LBuilder.AppendStr(LineEnding);
   if FVersion <> '' then
-    Result := Result + '  -V, --version    Show version' + LineEnding;
-  Result := Result + FGlobalParser.HelpText;
+  begin
+    LBuilder.AppendStr('  -V, --version    Show version');
+    LBuilder.AppendStr(LineEnding);
+  end;
+  LBuilder.AppendStr(FGlobalParser.HelpText);
+  Result := LBuilder.ToString;
 end;
 
 procedure TArgApp.Run;

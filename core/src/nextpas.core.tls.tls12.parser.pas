@@ -168,7 +168,8 @@ begin
             LProtoLen := AData[LPos];
             Inc(LPos);
             if LPos + LProtoLen <= AOffset + Integer(LExtDataLen) then
-              AServerHello.ALPNProtocol := BytesSliceToString(AData, SizeUInt(LPos), SizeUInt(LProtoLen));
+              // single-source: bytes.ops.BytesToString(slice) = one Move, inline zero-copy
+              AServerHello.ALPNProtocol := nextpas.core.bytes.ops.BytesToString(AData, LPos, LProtoLen);
           end;
         end;
     end;

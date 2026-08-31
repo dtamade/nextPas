@@ -444,7 +444,7 @@ begin
   if FRp.Count = 0 then
     Exit;
   QLen := Length(APath);
-  Lo := FRp.LowerBound(APath);
+  Lo := SizeUInt(LowerBoundPath(APath));
   if Lo >= FRp.Count then Exit;
   L := FRp.StoredPathRange(Lo, P);
   if L <= SizeUInt(QLen) then Exit;
@@ -458,7 +458,8 @@ function TEmbeddedVfs.IndexOfPath(const APath: string): SizeInt;
 var
   Lo: SizeUInt;
 begin
-  Lo := FRp.LowerBound(APath);
+  // 为什么改：复用 LowerBoundPath inline 单源，消与 HasSubtree 的二分重复（D03）
+  Lo := SizeUInt(LowerBoundPath(APath));
   if Lo < FRp.Count then
     if FRp.ComparePathAt(Lo, APath) = 0 then
       Exit(SizeInt(Lo));

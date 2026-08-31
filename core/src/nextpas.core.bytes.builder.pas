@@ -17,16 +17,16 @@ type
     function GetCapacity: SizeUInt;
     function GetData: PByte;
 
-    procedure AppendByte(const AValue: Byte);
-    procedure AppendBytes(const AData: PByte; const ACount: SizeUInt);
-    procedure AppendSpan(const ASpan: TByteSpan);
-    procedure AppendUInt16LE(const AValue: UInt16);
-    procedure AppendUInt16BE(const AValue: UInt16);
-    procedure AppendUInt32LE(const AValue: UInt32);
-    procedure AppendUInt32BE(const AValue: UInt32);
-    procedure AppendUInt64LE(const AValue: UInt64);
-    procedure AppendUInt64BE(const AValue: UInt64);
-    procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
+    procedure AppendByte(const AValue: Byte); inline;
+    procedure AppendBytes(const AData: PByte; const ACount: SizeUInt); inline;
+    procedure AppendSpan(const ASpan: TByteSpan); inline;
+    procedure AppendUInt16LE(const AValue: UInt16); inline;
+    procedure AppendUInt16BE(const AValue: UInt16); inline;
+    procedure AppendUInt32LE(const AValue: UInt32); inline;
+    procedure AppendUInt32BE(const AValue: UInt32); inline;
+    procedure AppendUInt64LE(const AValue: UInt64); inline;
+    procedure AppendUInt64BE(const AValue: UInt64); inline;
+    procedure AppendFill(const AValue: Byte; const ACount: SizeUInt); inline;
 
     { perf: WrittenSpan is zero-copy view into builder buffer (no allocation);
       ToBytes copies with one allocation for ownership transfer. }
@@ -57,7 +57,7 @@ type
     FLen: SizeUInt;
     FCap: SizeUInt;
     FAllocator: TMemAllocator;
-    procedure Grow(const ANeeded: SizeUInt);
+    procedure Grow(const ANeeded: SizeUInt); inline;
   public
     constructor Create(const AAllocator: TMemAllocator; const AInitialCapacity: SizeUInt);
     destructor Destroy; override;
@@ -66,19 +66,19 @@ type
     function GetCapacity: SizeUInt;
     function GetData: PByte;
 
-    procedure AppendByte(const AValue: Byte);
-    procedure AppendBytes(const AData: PByte; const ACount: SizeUInt);
-    procedure AppendSpan(const ASpan: TByteSpan);
-    procedure AppendUInt16LE(const AValue: UInt16);
-    procedure AppendUInt16BE(const AValue: UInt16);
-    procedure AppendUInt32LE(const AValue: UInt32);
-    procedure AppendUInt32BE(const AValue: UInt32);
-    procedure AppendUInt64LE(const AValue: UInt64);
-    procedure AppendUInt64BE(const AValue: UInt64);
-    procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
+    procedure AppendByte(const AValue: Byte); inline;
+    procedure AppendBytes(const AData: PByte; const ACount: SizeUInt); inline;
+    procedure AppendSpan(const ASpan: TByteSpan); inline;
+    procedure AppendUInt16LE(const AValue: UInt16); inline;
+    procedure AppendUInt16BE(const AValue: UInt16); inline;
+    procedure AppendUInt32LE(const AValue: UInt32); inline;
+    procedure AppendUInt32BE(const AValue: UInt32); inline;
+    procedure AppendUInt64LE(const AValue: UInt64); inline;
+    procedure AppendUInt64BE(const AValue: UInt64); inline;
+    procedure AppendFill(const AValue: Byte; const ACount: SizeUInt); inline;
 
-    function WrittenSpan: TByteSpan;
-    function ToBytes: TBytes;
+    function WrittenSpan: TByteSpan; inline;
+    function ToBytes: TBytes; inline;
 
     procedure Clear;
     procedure Reserve(const AAdditional: SizeUInt);
@@ -120,10 +120,11 @@ begin
   inherited;
 end;
 
-procedure TBytesBuilderImpl.Grow(const ANeeded: SizeUInt);
+procedure TBytesBuilderImpl.Grow(const ANeeded: SizeUInt); inline;
 var
   LNewCap: SizeUInt;
 begin
+  // perf: inline hot path — enables Append* to inline Grow+Move/FillChar without call overhead; single ReallocMemOf
   if FLen + ANeeded <= FCap then
     Exit;
   LNewCap := FCap;
@@ -158,14 +159,14 @@ begin
   Result := FPtr;
 end;
 
-procedure TBytesBuilderImpl.AppendByte(const AValue: Byte);
+procedure TBytesBuilderImpl.AppendByte(const AValue: Byte); inline;
 begin
   Grow(1);
   FPtr[FLen] := AValue;
   Inc(FLen);
 end;
 
-procedure TBytesBuilderImpl.AppendBytes(const AData: PByte; const ACount: SizeUInt);
+procedure TBytesBuilderImpl.AppendBytes(const AData: PByte; const ACount: SizeUInt); inline;
 begin
   if ACount = 0 then Exit;
   Grow(ACount);
@@ -173,12 +174,12 @@ begin
   Inc(FLen, ACount);
 end;
 
-procedure TBytesBuilderImpl.AppendSpan(const ASpan: TByteSpan);
+procedure TBytesBuilderImpl.AppendSpan(const ASpan: TByteSpan); inline;
 begin
   AppendBytes(ASpan.Data, ASpan.Len);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt16LE(const AValue: UInt16);
+procedure TBytesBuilderImpl.AppendUInt16LE(const AValue: UInt16); inline;
 begin
   Grow(2);
   FPtr[FLen]     := Byte(AValue);
@@ -186,7 +187,7 @@ begin
   Inc(FLen, 2);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt16BE(const AValue: UInt16);
+procedure TBytesBuilderImpl.AppendUInt16BE(const AValue: UInt16); inline;
 begin
   Grow(2);
   FPtr[FLen]     := Byte(AValue shr 8);
@@ -194,7 +195,7 @@ begin
   Inc(FLen, 2);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt32LE(const AValue: UInt32);
+procedure TBytesBuilderImpl.AppendUInt32LE(const AValue: UInt32); inline;
 begin
   Grow(4);
   FPtr[FLen]     := Byte(AValue);
@@ -204,7 +205,7 @@ begin
   Inc(FLen, 4);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt32BE(const AValue: UInt32);
+procedure TBytesBuilderImpl.AppendUInt32BE(const AValue: UInt32); inline;
 begin
   Grow(4);
   FPtr[FLen]     := Byte(AValue shr 24);
@@ -214,7 +215,7 @@ begin
   Inc(FLen, 4);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt64LE(const AValue: UInt64);
+procedure TBytesBuilderImpl.AppendUInt64LE(const AValue: UInt64); inline;
 begin
   Grow(8);
   FPtr[FLen]     := Byte(AValue);
@@ -228,7 +229,7 @@ begin
   Inc(FLen, 8);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt64BE(const AValue: UInt64);
+procedure TBytesBuilderImpl.AppendUInt64BE(const AValue: UInt64); inline;
 begin
   Grow(8);
   FPtr[FLen]     := Byte(AValue shr 56);
@@ -242,7 +243,7 @@ begin
   Inc(FLen, 8);
 end;
 
-procedure TBytesBuilderImpl.AppendFill(const AValue: Byte; const ACount: SizeUInt);
+procedure TBytesBuilderImpl.AppendFill(const AValue: Byte; const ACount: SizeUInt); inline;
 begin
   if ACount = 0 then Exit;
   Grow(ACount);

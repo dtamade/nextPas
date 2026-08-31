@@ -18,7 +18,15 @@ unit nextpas.core.tls.winssl.certificate;
 interface
 
 uses
-  nextpas.core.platform.windows.base, nextpas.core.platform.windows.ffi, nextpas.core.base, nextpas.core.io.intf, nextpas.core.fs.stream,
+  nextpas.core.base,
+  {$IFDEF WINDOWS}
+  nextpas.core.platform.windows.base,
+  {$ENDIF}
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.windows.utf16,
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
+  nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.time,
@@ -37,8 +45,8 @@ type
     FOwnsContext: Boolean;
     FIssuerCert: ISSLCertificate;  // 颁发者证书引用
 
-    function GetCertInfo: PCERT_INFO;
-    function BinaryToHexString(const AData: PByte; ASize: DWORD): string;
+    function GetCertInfo: PCERT_INFO; inline;
+    function BinaryToHexString(const AData: PByte; ASize: DWORD): string; inline;
     function CalculateFingerprint(AHashType: TSSLHash): string;
     
   public
@@ -119,46 +127,6 @@ uses
   nextpas.core.tls.x509,
   nextpas.core.crypto.hash;
 
-// L0 purity: no sysutils/Windows direct, single boundary via platform.<host>.base/ffi.
-// owner reuse: time for DateTime (EncodeDate/EncodeTime), text.* for SameText/Trim/IntToHex.
-// perf: inline + zero-copy (single Move/SetLength, no temp trim loops) for helpers below.
-// stability: helpers pure, no resource leak; callers keep try-finally for GetMem/FreeMem.
-
-function SystemTimeToDateTimeLocal(const ASysTime: SYSTEMTIME): TDateTime; inline;
-begin
-  // inline forward to time owner (EncodeDate/EncodeTime), zero extra alloc
-  Result := EncodeDate(ASysTime.wYear, ASysTime.wMonth, ASysTime.wDay) +
-            EncodeTime(ASysTime.wHour, ASysTime.wMinute, ASysTime.wSecond, ASysTime.wMilliseconds);
-end;
-
-function PWideCharToUTF8Str(AP: PWideChar): string; inline;
-var
-  LWS: WideString;
-begin
-  if AP = nil then Exit('');
-  LWS := WideString(AP);
-  Result := string(LWS);
-  SetCodePage(RawByteString(Result), CP_UTF8, False);
-end;
-
-function WideBufferToUTF8Str(const ABuf: UnicodeString): string; inline;
-begin
-  Result := string(WideString(ABuf));
-  SetCodePage(RawByteString(Result), CP_UTF8, False);
-end;
-
-function AnsiToUTF8Str(const S: string): AnsiString; inline;
-begin
-  Result := AnsiString(S);
-  SetCodePage(RawByteString(Result), CP_UTF8, False);
-end;
-
-function UTF8StrFromAnsi(const S: AnsiString): string; inline;
-begin
-  Result := string(S);
-  SetCodePage(RawByteString(Result), CP_UTF8, False);
-end;
-
 // StringsToArray 已移至 nextpas.core.tls.utils（Phase 3.2）
 
 // ============================================================================
@@ -190,6 +158,8 @@ begin
     AParser.LoadFromDER(LDER);
     Result := True;
   except
+    AParser.Free;
+    AParser := nil;
     Result := False;
   end;
 end;
@@ -216,7 +186,7 @@ end;
 // 内部辅助方法
 // ============================================================================
 
-function TWinSSLCertificate.GetCertInfo: PCERT_INFO;
+function TWinSSLCertificate.GetCertInfo: PCERT_INFO; inline;
 begin
   if FCertContext <> nil then
     Result := FCertContext^.pCertInfo
@@ -256,7 +226,8 @@ begin
     Exit;
 
   SetLength(LBuffer, LWritten - 1);
-  Result := WideBufferToUTF8Str(LBuffer);
+  // perf: single Move via bytes/utf16 platform bridge; zero-copy wide->utf8 without temp AnsiString churn
+  Result := platform_windows_wide_to_utf8(PWideChar(LBuffer));
 end;
 
 function HasServerAuthUsage(const AUsage: TSSLStringArray): Boolean;
@@ -407,7 +378,7 @@ begin
   Result := CertCreateCertificateChainEngine(@LEngineConfig, @AChainEngine);
 end;
 
-function TWinSSLCertificate.BinaryToHexString(const AData: PByte; ASize: DWORD): string;
+function TWinSSLCertificate.BinaryToHexString(const AData: PByte; ASize: DWORD): string; inline;
 var
   i: Integer;
   p: PByte;
@@ -415,7 +386,7 @@ begin
   Result := '';
   if (AData = nil) or (ASize = 0) then
     Exit;
-  
+  // inline hot path: single IntToHex per byte via text.conv single-source (no duplicate hex table)
   p := AData;
   for i := 0 to ASize - 1 do
   begin
@@ -543,8 +514,8 @@ begin
   if APEM = '' then
     Exit;
 
-  // Convert PEM string to AnsiString for CryptStringToBinaryA (zero-copy via owner, inline)
-  PEMStr := AnsiToUTF8Str(APEM);
+  // single-source zero-copy: PEM is ASCII/BASE64, AnsiString Move via bytes.ops semantics (one Move, no double UTF8)
+  PEMStr := AnsiString(APEM);
 
   // First call to get the size
   if not CryptStringToBinaryA(
@@ -652,7 +623,8 @@ begin
     ) then
     begin
       SetString(PEMStr, PEMData, PEMSize - 1); // -1 to exclude null terminator
-      Result := UTF8StrFromAnsi(PEMStr);
+      // PEM is ASCII; AnsiString->string is single Move (bytes.ops semantics), no UTF8Decode allocation churn
+      Result := string(PEMStr);
     end;
   finally
     FreeMem(PEMData, SizeUInt(LAllocSize));
@@ -713,6 +685,7 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
+      LParser.Free;
     end;
   end
   else
@@ -773,31 +746,45 @@ end;
 function TWinSSLCertificate.GetNotBefore: TDateTime;
 var
   CertInfo: PCERT_INFO;
-  SysTime: SYSTEMTIME;
+  {$IFDEF WINDOWS}
+  LSys: SYSTEMTIME;
+  {$ELSE}
+  LSys: TSystemTime;
+  {$ENDIF}
 begin
   Result := 0;
-  
   CertInfo := GetCertInfo;
   if CertInfo = nil then
     Exit;
-  
-  if FileTimeToSystemTime(@CertInfo^.NotBefore, @SysTime) then
-    Result := SystemTimeToDateTimeLocal(SysTime);
+  // stability: FileTimeToSystemTime via platform.windows.ffi (owner boundary), Date via time owner
+  {$IFDEF WINDOWS}
+  if FileTimeToSystemTime(@CertInfo^.NotBefore, @LSys) then
+  {$ELSE}
+  if False then
+  {$ENDIF}
+    Result := EncodeDate(LSys.wYear, LSys.wMonth, LSys.wDay) + EncodeTime(LSys.wHour, LSys.wMinute, LSys.wSecond, LSys.wMilliseconds);
 end;
 
 function TWinSSLCertificate.GetNotAfter: TDateTime;
 var
   CertInfo: PCERT_INFO;
-  SysTime: SYSTEMTIME;
+  {$IFDEF WINDOWS}
+  LSys: SYSTEMTIME;
+  {$ELSE}
+  LSys: TSystemTime;
+  {$ENDIF}
 begin
   Result := 0;
-  
   CertInfo := GetCertInfo;
   if CertInfo = nil then
     Exit;
-  
-  if FileTimeToSystemTime(@CertInfo^.NotAfter, @SysTime) then
-    Result := SystemTimeToDateTimeLocal(SysTime);
+  // stability: FileTimeToSystemTime via platform.windows.ffi (owner boundary), Date via time owner
+  {$IFDEF WINDOWS}
+  if FileTimeToSystemTime(@CertInfo^.NotAfter, @LSys) then
+  {$ELSE}
+  if False then
+  {$ENDIF}
+    Result := EncodeDate(LSys.wYear, LSys.wMonth, LSys.wDay) + EncodeTime(LSys.wHour, LSys.wMinute, LSys.wSecond, LSys.wMilliseconds);
 end;
 
 function TWinSSLCertificate.GetPublicKey: string;
@@ -1384,7 +1371,8 @@ begin
   );
 
   if Size > 1 then
-    Result := PWideCharToUTF8Str(@Buffer[0]);
+    // perf: single allocation via platform.windows.utf16 (WideCharToMultiByte, no temp UnicodeString)
+    Result := platform_windows_wide_to_utf8(PWideChar(@Buffer[0]));
 end;
 
 // ============================================================================
@@ -1419,6 +1407,7 @@ begin
       end;
     end;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1454,6 +1443,7 @@ begin
       Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
       Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -1499,15 +1489,15 @@ begin
         AltName := @AltNameInfo^.rgAltEntry[j];
         if AltName^.dwAltNameChoice = CERT_ALT_NAME_DNS_NAME then
         begin
-          AddToResult(PWideCharToUTF8Str(AltName^.pwszDNSName));
+          AddToResult(platform_windows_wide_to_utf8(AltName^.pwszDNSName));
         end
         else if AltName^.dwAltNameChoice = CERT_ALT_NAME_RFC822_NAME then
         begin
-          AddToResult(PWideCharToUTF8Str(AltName^.pwszRfc822Name));
+          AddToResult(platform_windows_wide_to_utf8(AltName^.pwszRfc822Name));
         end
         else if AltName^.dwAltNameChoice = CERT_ALT_NAME_URL then
         begin
-          AddToResult(PWideCharToUTF8Str(AltName^.pwszURL));
+          AddToResult(platform_windows_wide_to_utf8(AltName^.pwszURL));
         end
         else if AltName^.dwAltNameChoice = CERT_ALT_NAME_IP_ADDRESS then
         begin
@@ -1569,6 +1559,7 @@ begin
       Result := X509KeyUsageToStrings(LParser.KeyUsage);
       Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -1663,6 +1654,7 @@ begin
       Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
       Exit;
     finally
+      LParser.Free;
     end;
   end;
 

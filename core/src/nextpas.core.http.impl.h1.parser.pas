@@ -80,6 +80,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.http.impl.h1.llhttp,
   nextpas.core.http.headers,
@@ -458,13 +459,6 @@ begin
     end;
     LStart := LPos + 1;
   end;
-end;
-
-function BytesToString(const AData: TBytes; const ASize: SizeUInt): string;
-begin
-  SetLength(Result, SizeInt(ASize));
-  if ASize > 0 then
-    Move(AData[0], Result[1], ASize);
 end;
 
 { TSharedBytesReader }
@@ -1006,7 +1000,8 @@ begin
     Exit('');
   if FSkipBodyBuffer then
     Exit('');
-  Result := BytesToString(FBody, FBodySize);
+  // single-source zero-copy: bytes.ops.BytesToString(slice) = one SetLength + one Move, inline, no temp TBytes copy
+  Result := nextpas.core.bytes.ops.BytesToString(FBody, 0, FBodySize);
 end;
 
 function TH1Parser.GetBodySize: Int64;

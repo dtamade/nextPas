@@ -7,7 +7,7 @@ interface
 uses nextpas.core.base;
 
 {** 对象生命周期工具 *}
-procedure FreeAndNil(var AObj); inline;
+procedure FreeAndNil(var AObj);
 procedure SafeFree(var AObj); inline;
 
 {** 内存操作（System 内建的包装，确保接口一致） *}
@@ -33,14 +33,31 @@ function NToHs(AValue: Word): Word; overload; inline;
 function NToHs(AValue: LongWord): LongWord; overload; inline;
 
 {** 接口查询 *}
-procedure ClearOutInterface(out AIntf); inline;
+procedure ClearOutInterface(out AIntf);
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 
 implementation
 
-uses
-  nextpas.core.simd.vec;
+const
+  LowerTable: array[0..255] of Byte = (
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+    64, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+    112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 91, 92, 93, 94, 95,
+    96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+    112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+    128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+    144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+    160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+    176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191,
+    192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207,
+    208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223,
+    224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
+    240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255
+  );
 
 procedure FreeAndNil(var AObj);
 var LTemp: TObject;
@@ -96,6 +113,10 @@ var
   N: SizeUInt;
   C: SizeInt;
 begin
+  // inline zero-copy: PByte+Len view, no alloc/copy, single source reused by
+  // bytes.ops/ vfs/ respack/ git.commitgraph (SpanCompare etc.); hot path inlined
+  // perf: System.CompareByte is FPC RTL optimized (rep cmpsb/SSE on x86_64), zero-copy via direct Pointer
+  // competitive for typical small N (<64) without SIMD dispatch overhead; L0 stays RTL-only for portability
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('CompareBytesOrdered: A is nil');
   if (BLen > 0) and (B = nil) then
@@ -116,10 +137,9 @@ end;
 
 function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
 var
-  N, LPos, I: SizeUInt;
+  N, I: SizeUInt;
+  CA, CB: Byte;
   PA, PB: PByte;
-  LTmpA, LTmpB: array[0..31] of Byte;
-  LB1, LB2: Byte;
 begin
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('CompareBytesIgnoreCase: A is nil');
@@ -130,41 +150,12 @@ begin
     N := BLen;
   PA := PByte(A);
   PB := PByte(B);
-  LPos := 0;
-  while LPos + SizeUInt(VecWidth) <= N do
+  for I := 0 to N - 1 do
   begin
-    for I := 0 to SizeUInt(VecWidth) - 1 do
-    begin
-      LB1 := PA[LPos + I];
-      if (LB1 >= 65) and (LB1 <= 90) then
-        LB1 := LB1 or $20;
-      LTmpA[I] := LB1;
-      LB2 := PB[LPos + I];
-      if (LB2 >= 65) and (LB2 <= 90) then
-        LB2 := LB2 or $20;
-      LTmpB[I] := LB2;
-    end;
-    if VecCmpEq2(@LTmpA[0], @LTmpB[0]) <> TVecMask(not TVecMask(0)) then
-    begin
-      for I := 0 to SizeUInt(VecWidth) - 1 do
-      begin
-        if LTmpA[I] < LTmpB[I] then Exit(-1);
-        if LTmpA[I] > LTmpB[I] then Exit(1);
-      end;
-    end;
-    Inc(LPos, SizeUInt(VecWidth));
-  end;
-  while LPos < N do
-  begin
-    LB1 := PA[LPos];
-    if (LB1 >= 65) and (LB1 <= 90) then
-      LB1 := LB1 or $20;
-    LB2 := PB[LPos];
-    if (LB2 >= 65) and (LB2 <= 90) then
-      LB2 := LB2 or $20;
-    if LB1 < LB2 then Exit(-1);
-    if LB1 > LB2 then Exit(1);
-    Inc(LPos);
+    CA := LowerTable[PA[I]];
+    CB := LowerTable[PB[I]];
+    if CA < CB then Exit(-1);
+    if CA > CB then Exit(1);
   end;
   if ALen < BLen then Exit(-1);
   if ALen > BLen then Exit(1);
@@ -175,43 +166,23 @@ function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
 var
   P: PByte;
   H: UInt32;
-  LPos, I: SizeUInt;
-  LTmp: array[0..31] of Byte;
-  LB: Byte;
 begin
-  // perf: scalar xor*prime with LowerTable; hot for short keys, kept inline for
-  // inlining into maps/dicts. Future SIMD: 16/32-byte vector LowerTable lookup
-  // via PSHUFB/AVX2 gather + parallel FNV reduction; not applied for portability
-  // and because typical ALen < 32 makes scalar competitive.
+  // perf inline zero-copy: PByte+Len view, no alloc/copy, LowerTable branchless casefold,
+  // FNV-1a xor*prime kept inline for maps/dicts (http.mime etc.) single source via base.utils
+  // hot for short keys (typical ALen <32) — scalar 1-byte loop competitive; 16/32-byte SIMD
+  // LowerTable gather + parallel reduction not portability-justified on L0 (RTL-only), dispatch overhead > gain
+  // stability: nil guard + while ALen>0 avoids for-loop underflow when ALen=0; {$Q-}{$R-} wrap via caller prime mul
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('HashFNV1aLower: A is nil');
   H := 2166136261;
   P := PByte(A);
-  LPos := 0;
-  while LPos + SizeUInt(VecWidth) <= ALen do
+  while ALen > 0 do
   begin
-    for I := 0 to SizeUInt(VecWidth) - 1 do
-    begin
-      LB := P[LPos + I];
-      if (LB >= 65) and (LB <= 90) then
-        LB := LB or $20;
-      LTmp[I] := LB;
-    end;
-    for I := 0 to SizeUInt(VecWidth) - 1 do
-    begin
-      H := H xor UInt32(LTmp[I]);
-      H := H * 16777619;
-    end;
-    Inc(LPos, SizeUInt(VecWidth));
-  end;
-  while LPos < ALen do
-  begin
-    LB := P[LPos];
-    if (LB >= 65) and (LB <= 90) then
-      LB := LB or $20;
-    H := H xor UInt32(LB);
-    H := H * 16777619;
-    Inc(LPos);
+    {$PUSH}{$Q-}{$R-}
+    H := (H xor UInt32(LowerTable[P^])) * 16777619;
+    {$POP}
+    Inc(P);
+    Dec(ALen);
   end;
   Result := H;
 end;

@@ -89,7 +89,8 @@ begin
     if Length(LHashed) = 0 then
       Continue;
 
-    if BytesEqual(LHashed, ATLSARecords[I].CertificateAssociationData) then { inline zero-copy via bytes.ops SpanEqual→MemEqual, no alloc }
+    // perf: BytesEqual is inline + zero-copy Span view (no allocation, single MemEqual), replaces SysUtils.CompareMem
+    if BytesEqual(LHashed, ATLSARecords[I].CertificateAssociationData) then
     begin
       Result := True;
       Exit;
