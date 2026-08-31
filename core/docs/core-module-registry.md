@@ -51,16 +51,11 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `git` | L2 | git object layer: libgit2 backend plus pure-Pascal native subfamily (`nextpas.core.git.native.*`: loose/pack/refs/objmodel, no external binary); dual-track libgit2 declarations — runtime dlopen track (ffi/binding/backend) plus full auto-generated static unit `nextpas.core.git.libgit2.bindings` (c2pas888, golden-tested vs gcc probe) | yes | L0-L1 plus libgit2 FFI owner, compress/hash/io owners (native) | draft |
 | `graph` | L3 | Microsoft Graph REST mail client (`nextpas.core.graph.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
-| `graphics` | L1 | graphics base types (Color/Rect/Mat2D/Path/Gradient, subunits `graphics.base`, `graphics.color`, `graphics.path` via `nextpas.core.graphics.*`) | yes | L0 only (`base`, `math`, `errors`) | draft |
-| `graphics.effect` | L2 | filter graph (Blur/Shadow/Hue/LUT) + procedural textures (`nextpas.core.graphics.effect.*`) | yes | L0-L1 plus `image`/`thread` owners | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |
 | `html` | L2 | HTML text extraction/entity decode | yes | L0-L1 | focused-runtime |
 | `http` | L3 | HTTP framework | yes | L0-L2 | focused-runtime |
 | `id` | L1 | ID generators | yes | L0-L1 | focused-runtime |
-| `image` | L2 | image encoding (subunits `image.base` (`TBitmap` Stride 64B COW, `TImageInfo`), `image.intf`, `image.png/bmp/jpeg/webp` via `nextpas.core.image.*`) | yes | L0-L1 (`base`, `errors`, `mem`, `bytes`, `compress`, `checksum`) plus `graphics` L1 owner | draft |
-| `canvas` | L2 | 2D canvas (`ICanvas` + CPU raster `canvas.intf`/`canvas.raster` via `nextpas.core.canvas.*`, tiled 16x16 + `simd.raster`) | yes | L0-L2 (`graphics` L1 + `image`/`vector` L2, `simd` L0) | draft |
-| `vector` | L2 | vector kernel (Path boolean/Stroke/Dash + tess scanline, subunits `vector.path`/`vector.tess` via `nextpas.core.vector.*`) | yes | L0-L1 (`graphics` owners, `math`) | draft |
-| `gpu.canvas` | L3 | bitmap→Texture/Atlas bridge (`TAtlas`/`TAtlasRegion`/`ScaleFactor` via `nextpas.core.gpu.canvas`) | yes | L0-L2 (`graphics` L1) plus `gpu` owner | draft |
+| `image` | L2 | image encoding | yes | L0-L2 | focused-runtime |
 | `ini` | L2 | INI format | yes | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller abstractions | yes | L0 plus approved L1 | focused-runtime |
 | `json` | L2 | JSON parser/writer | yes | L0-L1 | focused-runtime |

@@ -118,12 +118,13 @@ type
       const AResultJson, ACode, AMessage: string);
     procedure PostIdle(AProc: TWebviewProcRef);
     procedure DropIdlePendings;
+    procedure SettlePendingOnClose; inline;
     procedure HandleNativeDestroy;
   protected
-    { IWebviewDispatcher —— Self 双身份实现 }
-    procedure Post(AProc: TWebviewProcRef); overload;
-    procedure Post(AProc: TWebviewProcMethod); overload;
-    procedure Post(AProc: TWebviewProc); overload;
+    { IWebviewDispatcher —— Self 双身份实现 inline 薄转发 }
+    procedure Post(AProc: TWebviewProcRef); overload; inline;
+    procedure Post(AProc: TWebviewProcMethod); overload; inline;
+    procedure Post(AProc: TWebviewProc); overload; inline;
     function IsOnMainThread: Boolean; inline;
 
     { IWebviewWindow }
@@ -194,17 +195,41 @@ function GtkLiveWindowCount: Integer;
 
 implementation
 uses
-  nextpas.core.webview.gtk.win;
+  nextpas.core.webview.gtk.win,
+  nextpas.core.sync.mutex,
+  nextpas.core.webview.mime;
+
+const
+  WEBVIEW_SCHEME_LARGE_THRESHOLD = 8192;
+
+type
+  PAssetHolder = ^TAssetHolder;
+  TAssetHolder = record
+    Bytes: TBytes;
+  end;
+
+procedure AssetBufFree(AData: Pointer); cdecl;
+begin
+  if AData <> nil then
+    Dispose(PAssetHolder(AData));
+end;
 
 var
   GLiveWindows: array of TGtkWebview;
   GLiveWindowsCount: Integer = 0;
+  GLiveCount: Integer = 0;
   { scheme 按 context 去重：默认 context 是进程级单例，多窗口重复注册
     会被 GLib CRITICAL 拒绝，且后到处理器无法接管——必须首注册独占 }
   GRegisteredSchemeCtxs: array of Pointer;
   GRegisteredSchemeCtxsCount: Integer = 0;
   GGtkDebugChecked: Boolean = False;
   GGtkDebugEnabled: Boolean = False;
+  GSchemeLock: TMutex = nil;
+  { Dispatcher 池化：Slab 复用 PIdleRec / PCompletionMarshal，零每 Post 堆分配 }
+  GIdlePool: array of PIdleRec;
+  GIdlePoolCount: Integer = 0;
+  GCompletionPool: array of PCompletionMarshal;
+  GCompletionPoolCount: Integer = 0;
 
 procedure GrowLiveWindows; inline;
 begin
@@ -216,6 +241,77 @@ procedure GrowSchemeCtxs; inline;
 begin
   if GRegisteredSchemeCtxsCount = Length(GRegisteredSchemeCtxs) then
     SetLength(GRegisteredSchemeCtxs, WebviewGrowCapacity(Length(GRegisteredSchemeCtxs)));
+end;
+
+{ ---- Dispatcher 池化：Slab 复用 ---- }
+function AcquireIdleRec: PIdleRec; inline;
+begin
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GIdlePoolCount > 0 then
+    begin
+      Dec(GIdlePoolCount);
+      Result := GIdlePool[GIdlePoolCount];
+      GIdlePool[GIdlePoolCount] := nil;
+    end
+    else
+      New(Result);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
+end;
+
+procedure ReleaseIdleRec(A: PIdleRec); inline;
+begin
+  if A = nil then Exit;
+  A^.Proc := nil;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GIdlePoolCount = Length(GIdlePool) then
+      SetLength(GIdlePool, WebviewGrowCapacity(Length(GIdlePool)));
+    GIdlePool[GIdlePoolCount] := A;
+    Inc(GIdlePoolCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
+end;
+
+function AcquireCompletionRec: PCompletionMarshal; inline;
+begin
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GCompletionPoolCount > 0 then
+    begin
+      Dec(GCompletionPoolCount);
+      Result := GCompletionPool[GCompletionPoolCount];
+      GCompletionPool[GCompletionPoolCount] := nil;
+    end
+    else
+      New(Result);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
+end;
+
+procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
+begin
+  if A = nil then Exit;
+  A^.Win := nil;
+  A^.FrameId := 0;
+  A^.Cmd := '';
+  A^.IsError := False;
+  A^.ResultJson := '';
+  A^.Code := '';
+  A^.MsgText := '';
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GCompletionPoolCount = Length(GCompletionPool) then
+      SetLength(GCompletionPool, WebviewGrowCapacity(Length(GCompletionPool)));
+    GCompletionPool[GCompletionPoolCount] := A;
+    Inc(GCompletionPoolCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 { 环境门控诊断轨迹（NPW_GTK_DEBUG=1 时写 stderr），默认零开销：
@@ -235,67 +331,92 @@ function SchemeContextRegistered(ACtx: Pointer): Boolean;
 var
   I: Integer;
 begin
-  for I := 0 to GRegisteredSchemeCtxsCount - 1 do
-    if GRegisteredSchemeCtxs[I] = ACtx then
-      Exit(True);
-  Result := False;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    for I := 0 to GRegisteredSchemeCtxsCount - 1 do
+      if GRegisteredSchemeCtxs[I] = ACtx then
+        Exit(True);
+    Result := False;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 procedure RememberSchemeContext(ACtx: Pointer);
 begin
-  GrowSchemeCtxs;
-  GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := ACtx;
-  Inc(GRegisteredSchemeCtxsCount);
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    GrowSchemeCtxs;
+    GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := ACtx;
+    Inc(GRegisteredSchemeCtxsCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 procedure ForgetSchemeContext(ACtx: Pointer);
 var
   I, J: Integer;
 begin
-  for I := 0 to GRegisteredSchemeCtxsCount - 1 do
-    if GRegisteredSchemeCtxs[I] = ACtx then
-    begin
-      for J := I to GRegisteredSchemeCtxsCount - 2 do
-        GRegisteredSchemeCtxs[J] := GRegisteredSchemeCtxs[J + 1];
-      Dec(GRegisteredSchemeCtxsCount);
-      if GRegisteredSchemeCtxsCount < Length(GRegisteredSchemeCtxs) then
-        GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := nil;
-      Exit;
-    end;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    for I := 0 to GRegisteredSchemeCtxsCount - 1 do
+      if GRegisteredSchemeCtxs[I] = ACtx then
+      begin
+        for J := I to GRegisteredSchemeCtxsCount - 2 do
+          GRegisteredSchemeCtxs[J] := GRegisteredSchemeCtxs[J + 1];
+        Dec(GRegisteredSchemeCtxsCount);
+        if GRegisteredSchemeCtxsCount < Length(GRegisteredSchemeCtxs) then
+          GRegisteredSchemeCtxs[GRegisteredSchemeCtxsCount] := nil;
+        Exit;
+      end;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
-function GtkLiveWindowCount: Integer;
-var
-  I, LCnt: Integer;
+function GtkLiveWindowCount: Integer; inline;
 begin
-  LCnt := 0;
-  for I := 0 to GLiveWindowsCount - 1 do
-    if not GLiveWindows[I].FClosed then
-      Inc(LCnt);
-  Result := LCnt;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    Result := GLiveCount;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 procedure RegisterLive(AWin: TGtkWebview);
 begin
-  GrowLiveWindows;
-  GLiveWindows[GLiveWindowsCount] := AWin;
-  Inc(GLiveWindowsCount);
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    GrowLiveWindows;
+    GLiveWindows[GLiveWindowsCount] := AWin;
+    Inc(GLiveWindowsCount);
+    Inc(GLiveCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 procedure UnregisterLive(AWin: TGtkWebview);
 var
   I, J: Integer;
 begin
-  for I := 0 to GLiveWindowsCount - 1 do
-    if GLiveWindows[I] = AWin then
-    begin
-      for J := I to GLiveWindowsCount - 2 do
-        GLiveWindows[J] := GLiveWindows[J + 1];
-      Dec(GLiveWindowsCount);
-      if GLiveWindowsCount < Length(GLiveWindows) then
-        GLiveWindows[GLiveWindowsCount] := nil;
-      Exit;
-    end;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    for I := 0 to GLiveWindowsCount - 1 do
+      if GLiveWindows[I] = AWin then
+      begin
+        for J := I to GLiveWindowsCount - 2 do
+          GLiveWindows[J] := GLiveWindows[J + 1];
+        Dec(GLiveWindowsCount);
+        if GLiveWindowsCount < Length(GLiveWindows) then
+          GLiveWindows[GLiveWindowsCount] := nil;
+        Exit;
+      end;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 { ---- cdecl trampolines ---- }
@@ -316,7 +437,7 @@ end;
 
 procedure IdleDestroy(AUserData: Pointer); cdecl;
 begin
-  Dispose(PIdleRec(AUserData));
+  ReleaseIdleRec(PIdleRec(AUserData));
 end;
 
 procedure DestroyCb(AWidget: Pointer; AUserData: Pointer); cdecl;
@@ -365,7 +486,11 @@ begin
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
         for I := 0 to LSelf.FOnNavStartedCount - 1 do
-          LSelf.FOnNavStarted[I](LEv);
+          if Assigned(LSelf.FOnNavStarted[I]) then
+            try
+              LSelf.FOnNavStarted[I](LEv);
+            except
+            end;
       end;
     WEBKIT_LOAD_FINISHED:
       begin
@@ -373,7 +498,11 @@ begin
         LEv := Default(TWebviewNavigationEvent);
         LEv.Url := LSelf.CurrentUri;
         for I := 0 to LSelf.FOnNavFinishedCount - 1 do
-          LSelf.FOnNavFinished[I](LEv);
+          if Assigned(LSelf.FOnNavFinished[I]) then
+            try
+              LSelf.FOnNavFinished[I](LEv);
+            except
+            end;
         LSelf.FireReadyOnce;
       end;
     WEBKIT_LOAD_FAILED:
@@ -383,7 +512,11 @@ begin
         LEv.Url := LSelf.CurrentUri;
         LEv.IsError := True;
         for I := 0 to LSelf.FOnNavFailedCount - 1 do
-          LSelf.FOnNavFailed[I](LEv);
+          if Assigned(LSelf.FOnNavFailed[I]) then
+            try
+              LSelf.FOnNavFailed[I](LEv);
+            except
+            end;
       end;
   end;
 end;
@@ -408,7 +541,11 @@ begin
       LEv.ErrorMessage := StrPas(PGError(AErr)^.Message);
   end;
   for I := 0 to LSelf.FOnNavFailedCount - 1 do
-    LSelf.FOnNavFailed[I](LEv);
+    if Assigned(LSelf.FOnNavFailed[I]) then
+      try
+        LSelf.FOnNavFailed[I](LEv);
+      except
+      end;
 end;
 
 procedure ScaleNotifyCb(AObj, APspec, AUserData: Pointer); cdecl;
@@ -424,7 +561,11 @@ begin
   begin
     LSelf.FScale := LNew;
     for I := 0 to LSelf.FOnScaleChangedCount - 1 do
-      LSelf.FOnScaleChanged[I](LNew);
+      if Assigned(LSelf.FOnScaleChanged[I]) then
+        try
+          LSelf.FOnScaleChanged[I](LNew);
+        except
+        end;
   end;
 end;
 
@@ -439,37 +580,53 @@ function LiveWindowForView(AView: Pointer): TGtkWebview; inline;
 var
   I: Integer;
 begin
-  if AView <> nil then
-  begin
+  Result := nil;
+  if AView = nil then
+    Exit(nil);
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GLiveCount = 0 then
+      Exit(nil);
     { 单窗快路径：95% 场景 single-window 零扫描，牺牲 2 次比较换线性遍历 }
     if GLiveWindowsCount = 1 then
     begin
       if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = AView) then
-        Exit(GLiveWindows[0]);
-      Exit(nil);
+        Result := GLiveWindows[0];
+      Exit;
     end;
     for I := 0 to GLiveWindowsCount - 1 do
       if (not GLiveWindows[I].FClosed) and
          (GLiveWindows[I].FView = AView) then
-        Exit(GLiveWindows[I]);
+      begin
+        Result := GLiveWindows[I];
+        Exit;
+      end;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
   end;
-  Result := nil;
 end;
 
 function LatestLiveWebview: TGtkWebview; inline;
 var
   I: Integer;
 begin
-  for I := GLiveWindowsCount - 1 downto 0 do
-    if not GLiveWindows[I].FClosed then
-      Exit(GLiveWindows[I]);
-  Result := nil;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    for I := GLiveWindowsCount - 1 downto 0 do
+      if not GLiveWindows[I].FClosed then
+        Exit(GLiveWindows[I]);
+    Result := nil;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
 end;
 
 { finish_error 的 GError 所有权移交 WebKit（源码 adoptGRef 模式），
   调用方不 free；误判会在 live 门禁以 double-free 可见地暴露 }
 procedure SchemeFinishNotFound(ARequest: Pointer); inline;
 begin
+  if ARequest = nil then
+    Exit;
   if GSchemeErrQuark = 0 then
     GSchemeErrQuark := G_quark_from_static_string('nextpas-webview');
   WEBKIT_uri_scheme_request_finish_error(ARequest,
@@ -479,14 +636,47 @@ end;
 procedure SchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
 var
   LSelf: TGtkWebview;
+  LKeep: IInterface;
   LPath, LMime: string;
   LBytes: TBytes;
-  LBuf, LStream: Pointer;
+  LBuf, LStream, LBytesObj: Pointer;
+  LHolder: PAssetHolder;
+  LView: Pointer;
+  I: Integer;
 begin
-  LSelf := LiveWindowForView(
-    WEBKIT_uri_scheme_request_get_web_view(ARequest));
-  if LSelf = nil then
-    LSelf := LatestLiveWebview;   { 无视图请求（service worker）回退 }
+  if not Assigned(ARequest) then
+    Exit;
+  try
+  { 拷贝指针副本提升引用计数后释放再 TryResolve，避免持有锁时阻塞 VFS }
+  if Assigned(WEBKIT_uri_scheme_request_get_web_view) then
+    LView := WEBKIT_uri_scheme_request_get_web_view(ARequest)
+  else
+    LView := nil;
+  LSelf := nil;
+  LKeep := nil;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if LView <> nil then
+    begin
+      if GLiveWindowsCount = 1 then
+      begin
+        if (not GLiveWindows[0].FClosed) and (GLiveWindows[0].FView = LView) then
+          LSelf := GLiveWindows[0];
+      end
+      else
+        for I := 0 to GLiveWindowsCount - 1 do
+          if (not GLiveWindows[I].FClosed) and (GLiveWindows[I].FView = LView) then
+          begin LSelf := GLiveWindows[I]; Break; end;
+    end;
+    if LSelf = nil then
+      for I := GLiveWindowsCount - 1 downto 0 do
+        if not GLiveWindows[I].FClosed then
+        begin LSelf := GLiveWindows[I]; Break; end;
+    if LSelf <> nil then
+      LKeep := LSelf as IInterface;
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
   if LSelf = nil then
   begin
     GtkTrace('scheme request, no live window: ' +
@@ -494,26 +684,129 @@ begin
     SchemeFinishNotFound(ARequest);
     Exit;
   end;
-  LPath := NormalizeWebviewAssetPath(StrPas(WEBKIT_uri_scheme_request_get_path(ARequest)));
-  if LSelf.FAssetsIntf.TryResolve(LPath, LBytes, LMime) then
+  if not Assigned(WEBKIT_uri_scheme_request_get_path) then
   begin
-    GtkTrace('scheme hit ' + LPath + ' (' + IntToStr(Length(LBytes)) + 'B)');
-    if LMime = '' then
-      LMime := 'application/octet-stream';
-    { GLib 侧分配（g_malloc）配对 G_free 销毁器——字节所有权随流移交
-      WebKit；禁止 GetMem：FPC 堆指针经 C free 释放属跨分配器未定义行为 }
-    LBuf := G_malloc(Length(LBytes) + 1);
-    if Length(LBytes) > 0 then
-      Move(LBytes[0], LBuf^, Length(LBytes));
-    LStream := G_memory_input_stream_new_from_data(
-      LBuf, Length(LBytes), TGDestroyNotify(@G_free));
-    WEBKIT_uri_scheme_request_finish(ARequest, LStream,
-      Length(LBytes), PAnsiChar(LMime));
+    SchemeFinishNotFound(ARequest);
+    Exit;
+  end;
+  if WEBKIT_uri_scheme_request_get_path(ARequest) = nil then
+  begin
+    SchemeFinishNotFound(ARequest);
+    Exit;
+  end;
+  LPath := NormalizeWebviewAssetPath(StrPas(WEBKIT_uri_scheme_request_get_path(ARequest))); { 单源复用 base.NormalizeWebviewAssetPath inline }
+  if not Assigned(LSelf.FAssetsIntf) then
+  begin
+    SchemeFinishNotFound(ARequest);
+    Exit;
+  end;
+  try
+    if not LSelf.FAssetsIntf.TryResolve(LPath, LBytes, LMime) then
+    begin
+      GtkTrace('scheme miss ' + LPath + ' -> 404');
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+  except
+    on E: Exception do
+    begin
+      GtkTrace('scheme resolve ex ' + LPath + ': ' + E.Message + ' -> 404');
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+  end;
+  GtkTrace('scheme hit ' + LPath + ' (' + IntToStr(Length(LBytes)) + 'B)');
+  if LMime = '' then
+    LMime := GuessWebviewMime(LPath); { 单源：webview.mime inline→http.mime，已含默认回退，零拷贝 }
+  LStream := nil;
+  LBytesObj := nil;
+  LBuf := nil;
+  if Length(LBytes) >= WEBVIEW_SCHEME_LARGE_THRESHOLD then
+  begin
+    { 分级零拷贝：>=8192B 经 GBytes 直供 holder（AssetBufFree 随 GBytes 释放），零中间拷贝 }
+    if not Assigned(G_bytes_new_with_free_func) or not Assigned(G_memory_input_stream_new_from_bytes) or not Assigned(WEBKIT_uri_scheme_request_finish) then
+    begin
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+    New(LHolder);
+    LHolder^.Bytes := LBytes;
+    try
+      if Length(LHolder^.Bytes) > 0 then
+        LBytesObj := G_bytes_new_with_free_func(@LHolder^.Bytes[0], Length(LHolder^.Bytes), @AssetBufFree, LHolder)
+      else
+        LBytesObj := G_bytes_new_with_free_func(nil, 0, @AssetBufFree, LHolder);
+    except
+      Dispose(LHolder);
+      raise;
+    end;
+    if Assigned(LBytesObj) and Assigned(G_memory_input_stream_new_from_bytes) then
+      try
+        LStream := G_memory_input_stream_new_from_bytes(LBytesObj);
+      except
+        LStream := nil;
+      end;
+    if Assigned(LBytesObj) and Assigned(G_bytes_unref) then
+      try
+        G_bytes_unref(LBytesObj);
+      except
+      end;
+    if not Assigned(LStream) then
+    begin
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
   end
   else
   begin
-    GtkTrace('scheme miss ' + LPath + ' -> 404');
-    SchemeFinishNotFound(ARequest);
+    { 小资源回落单次 Move：GLib 侧分配配对 G_free，字节所有权随流移交 WebKit；
+      禁止 GetMem：FPC 堆指针经 C free 释放属跨分配器未定义行为 }
+    if not Assigned(G_malloc) or not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then
+    begin
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+    LBuf := G_malloc(Length(LBytes) + 1);
+    if (LBuf = nil) and (Length(LBytes) > 0) then
+    begin
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+    if Length(LBytes) > 0 then
+      Move(LBytes[0], LBuf^, Length(LBytes));
+    try
+      LStream := G_memory_input_stream_new_from_data(
+        LBuf, Length(LBytes), TGDestroyNotify(@G_free));
+    except
+      if (LBuf <> nil) and Assigned(G_free) then
+        G_free(LBuf);
+      raise;
+    end;
+    if not Assigned(LStream) then
+    begin
+      if (LBuf <> nil) and Assigned(G_free) then
+        G_free(LBuf);
+      SchemeFinishNotFound(ARequest);
+      Exit;
+    end;
+  end;
+  { 所有权随流移交 WebKit，LBuf/GBytes 不再自释放 }
+  try
+    WEBKIT_uri_scheme_request_finish(ARequest, LStream,
+      Length(LBytes), PAnsiChar(LMime));
+  except
+    try
+      SchemeFinishNotFound(ARequest);
+    except
+    end;
+  end;
+  except
+    on E: Exception do
+      try
+        if Assigned(ARequest) then
+          SchemeFinishNotFound(ARequest);
+      except
+      end;
   end;
 end;
 
@@ -531,7 +824,7 @@ end;
 
 procedure CompletionMarshalDestroy(AUserData: Pointer); cdecl;
 begin
-  Dispose(PCompletionMarshal(AUserData));
+  ReleaseCompletionRec(PCompletionMarshal(AUserData));
 end;
 
 { ---- 单元级 eval 结算助手（不依赖 Self，迟到回执安全）---- }
@@ -678,8 +971,8 @@ var
   LRec: PCompletionMarshal;
 begin
   { 只捕获局部值拷贝进 marshal 记录；completion 自身可先于泵释放，
-    窗口存活由 keep-alive 保证 }
-  New(LRec);
+    窗口存活由 keep-alive 保证 — Slab 池化零每 Post 堆分配，G_idle_add_full 保留 }
+  LRec := AcquireCompletionRec;
   LRec^.Win := FWin;
   LRec^.FrameId := FFrameId;
   LRec^.Cmd := FCmd;
@@ -848,7 +1141,12 @@ var
   I: Integer;
 begin
   for I := 0 to High(AList) do
-    AList[I]();
+    if Assigned(AList[I]) then
+      try
+        AList[I]();
+      except
+        { 单处理器异常隔离：不中断后续，保持与 FireReadyOnce 一致 }
+      end;
 end;
 
 procedure TGtkWebview.SetupSessionContext;
@@ -976,7 +1274,12 @@ begin
     Exit;
   FReadyFired := True;
   for I := 0 to FOnReadyCount - 1 do
-    FOnReady[I]();
+    if Assigned(FOnReady[I]) then
+      try
+        FOnReady[I]();
+      except
+        { 单处理器异常隔离：不中断后续、不外抛 }
+      end;
 end;
 
 class function TGtkWebview.MapInvokeCodeSafe(E: Exception): string;
@@ -1053,7 +1356,7 @@ var
   LRec: PIdleRec;
   LTag: guint;
 begin
-  New(LRec);
+  LRec := AcquireIdleRec;
   LRec^.Proc := AProc;
   LTag := G_idle_add_full(G_PRIORITY_DEFAULT, @IdleTrampoline, LRec,
     @IdleDestroy);
@@ -1082,32 +1385,12 @@ begin
   FIdleCount := 0;
 end;
 
-procedure TGtkWebview.HandleNativeDestroy;
-begin
-  if FClosed then
-    Exit;
-  FClosed := True;
-  DropIdlePendings;
-  FireNotifyHandlers(FOnWindowClosed);
-  if GtkLiveWindowCount = 0 then
-    WinShellQuitMainLoop;
-  FSelfKeepAlive := nil;   { 引用计数归零 → Destroy → UnregisterLive }
-end;
-
-procedure TGtkWebview.Close;
+procedure TGtkWebview.SettlePendingOnClose; inline;
 var
   I: Integer;
   LRec: PEvalRec;
   LErr: EWebviewEvalFailed;
 begin
-  { 幂等（CONTRACT §3 intf 承诺，与 fake 一致）；二次 Close 直接返回，
-    避免对已销毁 widget 重复 destroy }
-  if FClosed then
-    Exit;
-  FClosed := True;
-  { 在途 eval 立即以 onerr 收尾（exactly-one）。记录不在此处释放：
-    所有权单点在引擎必然到达的完成回调——迟到回执读 Done 后仅释放。
-    异常实例由框架创建/触发/释放（§3.2 所有权语义）。 }
   for I := 0 to FPendingCount - 1 do
   begin
     LRec := FPendingEvals[I];
@@ -1116,15 +1399,13 @@ begin
       LRec^.Done := True;
       if Assigned(LRec^.OnError) then
       begin
-        LErr := EWebviewEvalFailed.Create('webview window is closed');
+        LErr := EWebviewEvalFailed.Create('window closed');
         try
           LRec^.OnError(LErr);
         finally
           LErr.Free;
         end;
       end;
-      { 取消使引擎侧完成回执必达——记录按单点所有权在其内释放，
-        进程生命周期内无悬挂分配（heaptrc 0 兑现） }
       if LRec^.Cancel <> nil then
       begin
         G_cancellable_cancel(LRec^.Cancel);
@@ -1133,7 +1414,44 @@ begin
     end;
   end;
   FPendingCount := 0;
-  // 容量保留，待下次 Eval 复用，避免重复分配
+end;
+
+procedure TGtkWebview.HandleNativeDestroy;
+begin
+  if FClosed then
+    Exit;
+  FClosed := True;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GLiveCount > 0 then Dec(GLiveCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
+  SettlePendingOnClose;
+  DropIdlePendings;
+  FireNotifyHandlers(FOnWindowClosed);
+  if GtkLiveWindowCount = 0 then
+    WinShellQuitMainLoop;
+  FSelfKeepAlive := nil;   { 引用计数归零 → Destroy → UnregisterLive }
+end;
+
+procedure TGtkWebview.Close;
+begin
+  { 幂等（CONTRACT §3 intf 承诺，与 fake 一致）；二次 Close 直接返回，
+    避免对已销毁 widget 重复 destroy }
+  if FClosed then
+    Exit;
+  FClosed := True;
+  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  try
+    if GLiveCount > 0 then Dec(GLiveCount);
+  finally
+    if GSchemeLock <> nil then GSchemeLock.Release;
+  end;
+  { 在途 eval 立即以 onerr 收尾（exactly-one）。记录不在此处释放：
+    所有权单点在引擎必然到达的完成回调——迟到回执读 Done 后仅释放。
+    异常实例由框架创建/触发/释放（§3.2 所有权语义）。 }
+  SettlePendingOnClose;
   DropIdlePendings;
   FireNotifyHandlers(FOnWindowClosed);
   GTK_widget_destroy(FWin);
@@ -1142,14 +1460,14 @@ begin
   FSelfKeepAlive := nil;
 end;
 
-{ ---- dispatcher 身份 ---- }
+{ ---- dispatcher 身份 — inline 薄转发保留接口 ---- }
 
-procedure TGtkWebview.Post(AProc: TWebviewProcRef);
+procedure TGtkWebview.Post(AProc: TWebviewProcRef); inline;
 begin
   PostIdle(AProc);
 end;
 
-procedure TGtkWebview.Post(AProc: TWebviewProcMethod);
+procedure TGtkWebview.Post(AProc: TWebviewProcMethod); inline;
 begin
   PostIdle(
     procedure
@@ -1158,7 +1476,7 @@ begin
     end);
 end;
 
-procedure TGtkWebview.Post(AProc: TWebviewProc);
+procedure TGtkWebview.Post(AProc: TWebviewProc); inline;
 begin
   PostIdle(
     procedure
@@ -1389,11 +1707,13 @@ end;
 
 function TGtkWebview.GetInvokes: IWebviewInvokeRegistry;
 begin
+  RequireOpen;
   Result := FInvokesIntf;
 end;
 
 function TGtkWebview.GetAssets: IWebviewAssets;
 begin
+  RequireOpen;
   Result := FAssetsIntf;
 end;
 
@@ -1579,5 +1899,23 @@ begin
       AHandler();
     end);
 end;
+
+initialization
+  GSchemeLock := TMutex.Create;
+
+finalization
+  while GIdlePoolCount > 0 do
+  begin
+    Dec(GIdlePoolCount);
+    Dispose(GIdlePool[GIdlePoolCount]);
+  end;
+  SetLength(GIdlePool, 0);
+  while GCompletionPoolCount > 0 do
+  begin
+    Dec(GCompletionPoolCount);
+    Dispose(GCompletionPool[GCompletionPoolCount]);
+  end;
+  SetLength(GCompletionPool, 0);
+  FreeAndNil(GSchemeLock);
 
 end.
