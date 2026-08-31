@@ -1,28 +1,28 @@
 # nextpas.core.audio
 
-L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / SFX / 时间线**七域+扩展（`SFX` 为 canonical，`game` 仅作 deprecated 薄转发；`spatial/event/bank/resource` 为 P5 扩展，当前 38 files，理想态 45），纯 Pascal 可替换，实时路径零分配。
+L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / 游戏 / 时间线**七域，纯 Pascal 可替换，实时路径零分配。
 
-> 设计权威：[`DESIGN.md`](./DESIGN.md)（Draft v3.2 — SFX canonical + spatial/event/bank/resource 七域+扩展）—— 分层、双平面线程模型、域级 `intf` 冻结、PR Plan 与线程纪律见该文档。
-> 运行时契约：`core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 为 gate 真值源（当前 38 files，理想态 45）。
+> 设计权威：[`DESIGN.md`](./DESIGN.md)（Draft v3）—— 分层、双平面线程模型、域级 `intf` 冻结、PR Plan 与线程纪律见该文档。
+> 运行时契约：`core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 为 gate 真值源。
 
 ## 模块定位与分层
 
 | 域 | 单元 | 职责 | 依赖 |
 |---|---|---|---|
-| **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 为真值源，`BlockAlign/ByteRate/FramesForMs` | L0 only |
+| **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer` + `AudioBytesForFrames/AudioIsValidBuffer/AudioValidateBuffer` 校验 DRY + `AudioSilentFill/AudioFillMemoryRealtime` 实时真值 | L0 only |
 | **intf** | `audio.intf` | 共享面 `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | base |
+| **simd** | `audio.simd` | `SimdAdd/Mul/Peak/SumSquares/ClampF32` 全 4-wide 真 SSE2（x86_64 `ASMMODE INTEL` 硬件、`cpuid` 诚实、`aarch64 NEON`），`AudioSimdCaps` | base |
 | **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔（已预留 FLAC/MP3 由 `music888` 吸收） | base+intf |
 | **pcm** | `audio.pcm` | 纯函数 `U8/S16/S24/S32↔F32`、`Clamp`、`Interleave/Deinterleave`，`TBytes` 货币，`TPDF` 抖动 | base |
-| **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
+| **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0 预计算窗口缓存 + 溢出守卫）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
 | **device** | `device.intf/device.null` | `IAudioDevice(0040)/IAudioDeviceProvider(0041)`，`dsClosed/Opened/Started`，MPSC `TDeviceEvent`，`InterlockedExchangeAdd64` 计数 `Underrun/Violation`，`Drive` 调 `FillRealtime` | base+intf |
 | **graph/player** | `graph.intf/graph/player` | `IAudioGraph(0042)/IAudioPlayer(0043)`，快照混音 `gain*volume` + clamp，处理器链双缓冲 ping-pong | device |
-| **sfx** | `sfx.intf/sfx` | `ISfxAudio(0050)` canonical，`Load/Play/StopVoice/MasterGain`，音色池 `MaxVoices` 窃取，pitch/pan/loop，`LoadFromFile` 经 `PcmConvert` | graph+device |
-| **game** | `game.intf/game` | `IGameAudio(0050)` deprecated 薄转发（`TGameSfxId=TSfxId` 等）→ `sfx` | sfx wrapper |
+| **game** | `game.intf/game` | `IGameAudio(0050)`，`Load/Play/StopVoice/MasterGain`，音色池 `MaxVoices` 窃取，pitch/pan/loop，`LoadFromFile` 经 `PcmConvert` | graph+device |
 | **timeline** | `timeline.intf/timeline` | `IAudioTimeline(0060)`，`Track/Clip` 排序混音，`solo/mute/loop`，快照化 `FillRealtime` | base+intf |
 | **errors** | `audio.errors` | `EAudioError(EIOError)→Decode/Encode/Device/Graph/Timeline` | errors |
 | **门面** | `audio.pas` | 仅 `type` 别名 + `inline` 转发，零逻辑 | 聚合以上 |
 
-> L2 约束：只依赖 `L0-L1` plus `io/fs`（`L2` 显式允许；container I/O seam via `IStream`，仅 `codec.registry` 使用，已在 `core/docs/core-module-registry.md` 与 `DESIGN.md §2` 登记），禁止 `ffi/vendor/miniaudio`（由 source-contract 冻结）。
+> L2 约束：只依赖 `L0-L1`，禁止 `ffi/vendor/miniaudio`（由 source-contract 冻结）。
 
 ## 实时纪律（双平面线程模型）
 
@@ -105,11 +105,10 @@ Graph := CreateAudioGraph(AudioFormatCreate(48000, 2, sfF32));
 Graph.AddSource(Src, 1.0); Graph.AddProcessor(MyFX);
 Player := CreateAudioPlayer(Dev, Graph); Player.Play; Player.Volume := 0.5;
 
-// 7. SFX 音频（音色池，pitch/pan/loop，窃取策略；game 为 deprecated 薄转发）
-var SfxMgr: ISfxAudio; Sfx: TSfxId; Voice: TVoiceId;
-SfxMgr := CreateSfxAudioForFormat(Prov, AudioFormatCreate(48000,2,sfF32), 32);
-Sfx := SfxMgr.Load(Buf); Voice := SfxMgr.Play(Sfx, 1.0, 0, 1.0, False);
-// deprecated 兼容：IGameAudio/CreateGameAudio* 仍可用，但请迁移至 ISfxAudio/CreateSfxAudio*
+// 7. 游戏音频（SFX 池，pitch/pan/loop，窃取策略）
+var Game: IGameAudio; Sfx: TGameSfxId; Voice: TGameVoiceId;
+Game := CreateGameAudioForFormat(Prov, AudioFormatCreate(48000,2,sfF32), 32);
+Sfx := Game.Load(Buf); Voice := Game.Play(Sfx, 1.0, 0, 1.0, False);
 
 // 8. 时间线（排序混音，solo/mute/loop，Device 联动）
 var TL: IAudioTimeline; Tr: TTimelineTrackId;
@@ -120,14 +119,14 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-16 门合计 **223 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`bank/resource` 为 P5 扩展）：
+20 门合计 **230+ tests**，全量 `HEAPTRC OK`：
 
 ```bash
-for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
-         test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline test_event test_bank test_resource; do
-  make -C core/tests/nextpas.core.audio/$g clean test
+for g in pcm_wav wav aiff meta base registry flac mp3 vorbis resample mix dsp \
+         device graph game timeline playlist spatial studio automation; do
+  make -C core/tests/nextpas.core.audio/test_$g clean test
 done
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 38 文件无 ffi/vendor（当前 38，理想态 45） + 15 GUID + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 44 文件无 ffi/vendor + GUID + 实时纪律
 make hygiene && git diff --check
 ```
 
@@ -144,27 +143,24 @@ make hygiene && git diff --check
 | test_dsp 14 | Biquad(TDF-II)/Compressor/Limiter/FFT |
 | test_device 15 | Null MPSC 与 Drive/Underrun |
 | test_graph 16 | 快照混音与处理器链双缓冲 |
-| test_sfx 15 | SFX 池与窃取（canonical 0050） |
-| test_game 15 | SFX 池与窃取（deprecated 兼容，薄转发） |
+| test_game 15 | SFX 池与窃取 |
 | test_timeline 16 | 排序/增益声像/solo/mute/loop/Device 联动 |
-| test_event 10 | 事件注册/空间衰减/参数/窃取 |
-| test_bank 15 | Bank 预加载/引用计数/混音/pan/pitch/loop |
-| test_resource 13 | Resource 异步加载/去重/Probe/Release |
 
 ## 基准
 
 ```bash
-make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s -O2, HEAPTRC 关
+make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # ns/op + MB/s
 ```
 
-`bench_pcm_wav` 8 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs`（`GWrite*` 预分配，`Graph/Timeline` 零分配快照）。
+`bench_pcm_wav / bench_mix / bench_graph / bench_timeline` 均基于 `IBenchContext`，覆盖编解码与混音 `FillRealtime` 热路径（`-O2`，HEAPTRC 关），已升级为 **真 SSE2 硬件路径**（`SimdAdd/Mul/Peak/SumSquares/Clamp` 全 4-wide，x86_64 `ASMMODE INTEL` / `movups/mulps/addps/maxps/minps`，`AudioSimdCaps` 经 `cpuid leaf1/7` 诚实探测，`aarch64 NEON True`），标量尾循环兜底，bench 验证与 gate 同源。
 
 ## 演进与复用
 
-- **已完成**：PR1 base → PR2 wav → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 sfx（`game` 保留为 deprecated 薄转发）→ PR9 timeline
+- **已完成**：PR1 base → PR2 wav → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 game → PR9 timeline
 - **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，后续吸收进 `codec.registry`，保持 `Probe≤4KB` 与可插拔）
-- **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`SFX` 复用 `Graph` 快照路径（`PanLawGains`/`CAudioSqrt2` 共用）
-- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配与异常静音
+- **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`Game` 复用 `Graph` 快照路径
+- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配（`device.null` 预分配 1M、`bus/graph` 双缓冲）/溢出守卫 `AudioBytesForFrames>High(Integer)` 全链路/异常静音 `AudioSilentFill`
+- **复用与性能**：`pcm` `PcmRead/WriteS16LE/S32LE/S24LE` 单源 LE（`bank.WriteLE32` 对称），`pcm.simd` 4-wide，`pcm.PcmConvert` `S16/S32↔F32` 4-wide 快 path 零分支，`SimdAdd/Mul/Peak/SumSquares/Clamp` 硬件化，`mix.ApplyGainRamp` 增量步进，`spatial/timeline` 立体声 4-wide `LL/LR`，`dsp.filters` `LBiquads/LBase`，`bus/graph` `FScratch/FOut` 自适应（稳态零分配），`resample` 线性 `PSingle` + `sinc` Kaiser，`bank` `WriteLE32/LE32`，`sequencer` `Inc/Vel` + `FastSin` 2048 wavetable，`automation.FillRealtimeValues` 单次快照 + 单调段游走替代每样本 `ValueAt` 锁，`mix.PanLawGains→AudioPanLawGains` 单源，`audio` 门面全转发零逻辑，`base` 校验/填充单真相
 
 ## 参见
 

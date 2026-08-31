@@ -17,8 +17,11 @@ type
     FQuality: TResampleQuality;
     FTaps: Integer;
     FBeta: Double;
+    FKaiser: array of Double;
+    FKaiserDenom: Double;
+    procedure BuildKaiser;
     function BesselI0(AX: Double): Double;
-    function KaiserWindow(AIdx: Integer): Double;
+    function KaiserWindow(AIdx: Integer): Double; inline;
     function Sinc(AX: Double): Double; inline;
   public
     constructor Create(AQuality: TResampleQuality = rsGood);
@@ -45,6 +48,27 @@ begin
     rsBest:  begin FTaps := 128; FBeta := 10.0; end;
   end;
   if (FTaps and 1) <> 0 then Inc(FTaps);
+  BuildKaiser;
+end;
+
+procedure TSincResampler.BuildKaiser;
+var I: Integer; R, Arg, Num: Double;
+begin
+  FKaiserDenom := BesselI0(FBeta);
+  if FKaiserDenom = 0 then FKaiserDenom := 1;
+  SetLength(FKaiser, FTaps);
+  if FTaps <= 1 then
+  begin if FTaps=1 then FKaiser[0]:=1; Exit; end;
+  for I := 0 to FTaps - 1 do
+  begin
+    R := (2.0 * I / (FTaps - 1) - 1.0);
+    R := 1.0 - R * R;
+    if R < 0 then R := 0;
+    R := Sqrt(R);
+    Arg := FBeta * R;
+    Num := BesselI0(Arg);
+    FKaiser[I] := Num / FKaiserDenom;
+  end;
 end;
 
 function TSincResampler.LatencyFrames: Integer;
@@ -72,20 +96,9 @@ begin
 end;
 
 function TSincResampler.KaiserWindow(AIdx: Integer): Double;
-var
-  R, Arg, Num, Den: Double;
 begin
-  // w[n] = I0(beta * sqrt(1 - (2n/(N-1)-1)^2)) / I0(beta)
-  if FTaps <= 1 then Exit(1.0);
-  R := (2.0 * AIdx / (FTaps - 1) - 1.0);
-  R := 1.0 - R * R;
-  if R < 0 then R := 0;
-  R := Sqrt(R);
-  Arg := FBeta * R;
-  Num := BesselI0(Arg);
-  Den := BesselI0(FBeta);
-  if Den = 0 then Exit(0);
-  Result := Num / Den;
+  if (AIdx < 0) or (AIdx >= Length(FKaiser)) then Exit(0);
+  Result := FKaiser[AIdx];
 end;
 
 function TSincResampler.Sinc(AX: Double): Double;
@@ -118,9 +131,13 @@ begin
     Exit;
   end;
   LRatio := AInput.Format.SampleRate / ANewRate;
+  if Int64(AInput.FrameCount) * Int64(ANewRate) > Int64(High(Integer)) * Int64(AInput.Format.SampleRate) then
+    raise EAudioDecodeError.Create('SincResample: output frames overflow');
   LOutFrames := Integer(Round(AInput.FrameCount * ANewRate / AInput.Format.SampleRate));
   if LOutFrames < 0 then LOutFrames := 0;
   Result.Format := AudioFormatCreate(ANewRate, AInput.Format.Channels, sfF32);
+  if AudioBytesForFrames(Result.Format, LOutFrames) > High(Integer) then
+    raise EAudioDecodeError.Create('SincResample: output bytes overflow');
   Result.Format.ChannelMask := AInput.Format.ChannelMask;
   Result.Format.ChannelLayout := AInput.Format.ChannelLayout;
   Result.FrameCount := LOutFrames;

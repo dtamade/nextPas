@@ -13,7 +13,6 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.tls.errors,
   nextpas.core.text.format;
@@ -112,9 +111,6 @@ function TLS13CipherSuiteToString(ACipherSuite: Word): string;
 function TLS13SignatureSchemeToString(ASignatureScheme: Word): string;
 
 implementation
-
-uses
-  nextpas.core.bytes.ops;
 
 procedure AppendByte(var ADest: TBytes; AValue: Byte); inline;
 begin
