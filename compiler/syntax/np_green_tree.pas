@@ -9,6 +9,7 @@ unit np_green_tree;
 interface
 
 uses
+  np_green_tree_base,
   np_diagnostics_sink, np_lexer, np_source_database,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
@@ -17,89 +18,93 @@ type
   { Forward declarations for rowan-style internal storage }
   TGreenTree = class;
 
-  TForeignProcedureDecl = record
-    ProcedureName: string;
-    CallingConvention: string;
-    LibraryId: string;
-    ExternalSymbolName: string;
-    HasExplicitSymbolName: Boolean;
-    ByteOffset: LongInt;
-  end;
+  { Base types — single source in np_green_tree_base (four-piece base) }
+  TForeignProcedureDecl = np_green_tree_base.TForeignProcedureDecl;
+  TGreenNodeKind = np_green_tree_base.TGreenNodeKind;
+  TGreenRootKind = np_green_tree_base.TGreenRootKind;
+  TGreenNodeData = np_green_tree_base.TGreenNodeData;
+  TGreenTreeData = np_green_tree_base.TGreenTreeData;
 
-  TGreenNodeKind = (
-    gnkUnknown,
-    gnkProgram, gnkUnit, gnkLibrary, gnkPackage,
-    gnkUsesClause, gnkUseEntry,
-    gnkInterfaceSection, gnkImplementationSection,
-    gnkInitializationSection, gnkFinalizationSection,
-    gnkForeignProcedureDecl,
-    gnkBeginBlock, gnkAsmBlock, gnkEndBlock,
-    gnkStatementList,
-    gnkIfStatement, gnkWhileStatement, gnkForStatement,
-    gnkForInStatement,
-    gnkRepeatStatement, gnkWithStatement, gnkCaseStatement,
-    gnkCaseSelector, gnkCaseLabel,
-    gnkAssignmentStatement, gnkProcedureCallStatement,
-    gnkGotoStatement, gnkBreakStatement, gnkContinueStatement,
-    gnkExitStatement,
-    gnkTryExceptStatement, gnkTryFinallyStatement,
-    gnkExceptionHandler, gnkRaiseStatement,
-    gnkVarSection, gnkThreadVarSection, gnkConstSection, gnkTypeSection,
-    gnkLabelSection,
-    gnkVarDecl, gnkConstDecl, gnkTypeDecl,
-    gnkProcedureDecl, gnkFunctionDecl,
-    gnkRecordType, gnkArrayType, gnkClassType, gnkEnumType,
-    gnkClassField, gnkClassMethod, gnkClassProperty,
-    gnkVisibilityLabel,
-    gnkTypeParamList,
-    gnkIdentifier, gnkStringLiteral, gnkIntegerLiteral,
-    gnkRealLiteral, gnkCharLiteral,
-    gnkBinaryExpression, gnkUnaryExpression,
-    gnkDotAccess, gnkArrayAccess, gnkFunctionCall,
-    gnkDereference, gnkAddressOf,
-    gnkSetConstructor, gnkRangeExpression,
-    gnkParameterList, gnkParameterDecl,
-    gnkFieldList,
-    gnkError
-  );
+const
+  gnkUnknown = np_green_tree_base.gnkUnknown;
+  gnkProgram = np_green_tree_base.gnkProgram;
+  gnkUnit = np_green_tree_base.gnkUnit;
+  gnkLibrary = np_green_tree_base.gnkLibrary;
+  gnkPackage = np_green_tree_base.gnkPackage;
+  gnkUsesClause = np_green_tree_base.gnkUsesClause;
+  gnkUseEntry = np_green_tree_base.gnkUseEntry;
+  gnkInterfaceSection = np_green_tree_base.gnkInterfaceSection;
+  gnkImplementationSection = np_green_tree_base.gnkImplementationSection;
+  gnkInitializationSection = np_green_tree_base.gnkInitializationSection;
+  gnkFinalizationSection = np_green_tree_base.gnkFinalizationSection;
+  gnkForeignProcedureDecl = np_green_tree_base.gnkForeignProcedureDecl;
+  gnkBeginBlock = np_green_tree_base.gnkBeginBlock;
+  gnkAsmBlock = np_green_tree_base.gnkAsmBlock;
+  gnkEndBlock = np_green_tree_base.gnkEndBlock;
+  gnkStatementList = np_green_tree_base.gnkStatementList;
+  gnkIfStatement = np_green_tree_base.gnkIfStatement;
+  gnkWhileStatement = np_green_tree_base.gnkWhileStatement;
+  gnkForStatement = np_green_tree_base.gnkForStatement;
+  gnkForInStatement = np_green_tree_base.gnkForInStatement;
+  gnkRepeatStatement = np_green_tree_base.gnkRepeatStatement;
+  gnkWithStatement = np_green_tree_base.gnkWithStatement;
+  gnkCaseStatement = np_green_tree_base.gnkCaseStatement;
+  gnkCaseSelector = np_green_tree_base.gnkCaseSelector;
+  gnkCaseLabel = np_green_tree_base.gnkCaseLabel;
+  gnkAssignmentStatement = np_green_tree_base.gnkAssignmentStatement;
+  gnkProcedureCallStatement = np_green_tree_base.gnkProcedureCallStatement;
+  gnkGotoStatement = np_green_tree_base.gnkGotoStatement;
+  gnkBreakStatement = np_green_tree_base.gnkBreakStatement;
+  gnkContinueStatement = np_green_tree_base.gnkContinueStatement;
+  gnkExitStatement = np_green_tree_base.gnkExitStatement;
+  gnkTryExceptStatement = np_green_tree_base.gnkTryExceptStatement;
+  gnkTryFinallyStatement = np_green_tree_base.gnkTryFinallyStatement;
+  gnkExceptionHandler = np_green_tree_base.gnkExceptionHandler;
+  gnkRaiseStatement = np_green_tree_base.gnkRaiseStatement;
+  gnkVarSection = np_green_tree_base.gnkVarSection;
+  gnkThreadVarSection = np_green_tree_base.gnkThreadVarSection;
+  gnkConstSection = np_green_tree_base.gnkConstSection;
+  gnkTypeSection = np_green_tree_base.gnkTypeSection;
+  gnkLabelSection = np_green_tree_base.gnkLabelSection;
+  gnkVarDecl = np_green_tree_base.gnkVarDecl;
+  gnkConstDecl = np_green_tree_base.gnkConstDecl;
+  gnkTypeDecl = np_green_tree_base.gnkTypeDecl;
+  gnkProcedureDecl = np_green_tree_base.gnkProcedureDecl;
+  gnkFunctionDecl = np_green_tree_base.gnkFunctionDecl;
+  gnkRecordType = np_green_tree_base.gnkRecordType;
+  gnkArrayType = np_green_tree_base.gnkArrayType;
+  gnkClassType = np_green_tree_base.gnkClassType;
+  gnkEnumType = np_green_tree_base.gnkEnumType;
+  gnkClassField = np_green_tree_base.gnkClassField;
+  gnkClassMethod = np_green_tree_base.gnkClassMethod;
+  gnkClassProperty = np_green_tree_base.gnkClassProperty;
+  gnkVisibilityLabel = np_green_tree_base.gnkVisibilityLabel;
+  gnkTypeParamList = np_green_tree_base.gnkTypeParamList;
+  gnkIdentifier = np_green_tree_base.gnkIdentifier;
+  gnkStringLiteral = np_green_tree_base.gnkStringLiteral;
+  gnkIntegerLiteral = np_green_tree_base.gnkIntegerLiteral;
+  gnkRealLiteral = np_green_tree_base.gnkRealLiteral;
+  gnkCharLiteral = np_green_tree_base.gnkCharLiteral;
+  gnkBinaryExpression = np_green_tree_base.gnkBinaryExpression;
+  gnkUnaryExpression = np_green_tree_base.gnkUnaryExpression;
+  gnkDotAccess = np_green_tree_base.gnkDotAccess;
+  gnkArrayAccess = np_green_tree_base.gnkArrayAccess;
+  gnkFunctionCall = np_green_tree_base.gnkFunctionCall;
+  gnkDereference = np_green_tree_base.gnkDereference;
+  gnkAddressOf = np_green_tree_base.gnkAddressOf;
+  gnkSetConstructor = np_green_tree_base.gnkSetConstructor;
+  gnkRangeExpression = np_green_tree_base.gnkRangeExpression;
+  gnkParameterList = np_green_tree_base.gnkParameterList;
+  gnkParameterDecl = np_green_tree_base.gnkParameterDecl;
+  gnkFieldList = np_green_tree_base.gnkFieldList;
+  gnkError = np_green_tree_base.gnkError;
+  grkUnknown = np_green_tree_base.grkUnknown;
+  grkProgram = np_green_tree_base.grkProgram;
+  grkUnit = np_green_tree_base.grkUnit;
+  grkLibrary = np_green_tree_base.grkLibrary;
+  grkPackage = np_green_tree_base.grkPackage;
 
-  TGreenRootKind = (
-    grkUnknown,
-    grkProgram,
-    grkUnit,
-    grkLibrary,
-    grkPackage
-  );
-
-  {**
-   * TGreenNodeData — Compact rowan-style node storage
-   *
-   * 32 bytes per node, stored contiguously in TVec.
-   * Text is centralized in TGreenTreeData.Text.
-   * Children referenced by a range in TGreenTree.FChildIndices.
-   *}
-  TGreenNodeData = packed record
-    Kind: TGreenNodeKind;
-    ByteOffset: LongInt;
-    ByteLength: LongInt;
-    TextStart: LongInt;
-    TextLen: LongInt;
-    ChildStart: LongInt;
-    ChildCount: LongInt;
-    ChildCapacity: LongInt;
-  end;
-
-  {**
-   * TGreenTreeData — Centralized tree storage
-   *
-   * FNodes[i] and FFacades[i] are strictly 1:1 corresponding.
-   *}
-  TGreenTreeData = record
-    Nodes: specialize TVec<TGreenNodeData>;
-    Text: string;
-    RootIndex: LongInt;
-  end;
-
+type
   {**
    * TGreenNode - rowan-style value type
    *
