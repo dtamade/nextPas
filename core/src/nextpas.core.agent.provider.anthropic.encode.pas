@@ -29,8 +29,10 @@ implementation
 uses
   nextpas.core.json,
   nextpas.core.json.builder,
+  nextpas.core.text,
   nextpas.core.text.builder,
   nextpas.core.text.conv,
+  nextpas.core.text.view,
   nextpas.core.agent.errors,
   nextpas.core.agent.provider.common;
 
@@ -59,18 +61,18 @@ begin
   Result := False;
   AMime := '';
   APayload := '';
-  if (System.Copy(AUri, 1, Length(CPREFIX)) <> CPREFIX) or (Length(AUri) < 6) then
+  if not nextpas.core.text.TextStartsWith(AUri, CPREFIX) or (Length(AUri) < 6) then
     Exit;
-  LRest := System.Copy(AUri, Length(CPREFIX) + 1, MaxInt);
-  LSemi := System.Pos(';', LRest);
-  if LSemi < 2 then
+  LRest := nextpas.core.text.TextSlice(AUri, Length(CPREFIX), MaxInt);
+  LSemi := nextpas.core.text.view.IndexOfStr(LRest, ';');
+  if LSemi < 1 then
     Exit;
-  LMeta := System.Copy(LRest, 1, LSemi - 1);
-  APayload := System.Copy(LRest, LSemi + 1, MaxInt);
-  if System.Copy(APayload, 1, 7) <> 'base64,' then
+  LMeta := nextpas.core.text.TextSlice(LRest, 0, SizeUInt(LSemi));
+  APayload := nextpas.core.text.TextSlice(LRest, SizeUInt(LSemi) + 1, MaxInt);
+  if not nextpas.core.text.TextStartsWith(APayload, 'base64,') then
     Exit;
-  APayload := System.Copy(APayload, 8, MaxInt);
-  if System.Copy(LMeta, 1, 6) <> 'image/' then
+  APayload := nextpas.core.text.TextSlice(APayload, 7, MaxInt);
+  if not nextpas.core.text.TextStartsWith(LMeta, 'image/') then
     Exit;
   AMime := LMeta;
   Result := (APayload <> '') and MimeAllowed(AMime);
@@ -81,7 +83,7 @@ var
 begin
   ABld.Key('source');
   ABld.BeginObject;
-  if System.Copy(AImageUrl, 1, 5) = 'data:' then
+  if nextpas.core.text.TextStartsWith(AImageUrl, 'data:') then
   begin
     if not ParseDataUri(AImageUrl, LMime, LPayload) then
       raise EAgentError.CreateLocal(aecConfig,
@@ -94,8 +96,8 @@ begin
     ABld.Key('data');
     ABld.Str(LPayload);
   end
-  else if (System.Copy(AImageUrl, 1, 7) = 'http://') or
-    (System.Copy(AImageUrl, 1, 8) = 'https://') then
+  else if nextpas.core.text.TextStartsWith(AImageUrl, 'http://') or
+    nextpas.core.text.TextStartsWith(AImageUrl, 'https://') then
   begin
     ABld.Key('type');
     ABld.Str('url');
