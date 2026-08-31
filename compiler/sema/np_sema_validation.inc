@@ -51,66 +51,166 @@ var
   Name: string;
   CandidateNames: specialize TVec<string>;
   CandidateArr: array of string;
+  DistArr: array of LongInt;
   Sym: TSemanticSymbol;
+  Scp: TSemanticScope;
   Suggestion: string;
+  IsVisible: Boolean;
+  TmpStr: string;
+  TmpDist: LongInt;
+  CurScope: LongInt;
+  Found: Boolean;
+  CalleeChild: TGreenNode;
+  procedure DoCheck(const AName: string; AOffset: LongInt);
+  var
+    K, L, M: LongInt;
+  begin
+    if (AName = '') or (AName = 'Result') then Exit;
+    SymId := FModel.LookupSymbol(AName, FCurrentScopeId);
+    if (SymId <> 0) or (FModel.FindTypeByName(AName) <> 0) or
+      IsBuiltinProcedure(AName) or IsRuntimeVar(AName) then Exit;
+    if FAllocator <> nil then
+      CandidateNames := specialize TVec<string>.Create(0, FAllocator)
+    else
+      CandidateNames := specialize TVec<string>.Create;
+    try
+      for K := 0 to FModel.SymbolCount - 1 do
+      begin
+        Sym := FModel.SymbolAt(K);
+        if Sym.Name = '' then Continue;
+        if SameText(Sym.Name, AName) then Continue;
+        IsVisible := False;
+        if Sym.ScopeId = 0 then
+          IsVisible := True
+        else
+        begin
+          CurScope := FCurrentScopeId;
+          while CurScope <> 0 do
+          begin
+            if Sym.ScopeId = CurScope then
+            begin IsVisible := True; Break; end;
+            if (CurScope <= FModel.ScopeCount) and (CurScope > 0) then
+              CurScope := FModel.ScopeAt(CurScope - 1).ParentScopeId
+            else
+              Break;
+          end;
+          if not IsVisible then
+            for L := 0 to FModel.ScopeCount - 1 do
+            begin
+              Scp := FModel.ScopeAt(L);
+              if (Scp.Kind = skUnit) and (Scp.ParentScopeId = 1) and (Sym.ScopeId = Scp.ScopeId) then
+              begin IsVisible := True; Break; end;
+            end;
+        end;
+        if not IsVisible then Continue;
+        Found := False;
+        for L := 0 to LongInt(CandidateNames.Count)-1 do
+          if SameText(CandidateNames[L], Sym.Name) then
+          begin Found := True; Break; end;
+        if not Found then
+          CandidateNames.Push(Sym.Name);
+      end;
+      SetLength(CandidateArr, LongInt(CandidateNames.Count));
+      SetLength(DistArr, LongInt(CandidateNames.Count));
+      for K := 0 to LongInt(CandidateNames.Count) - 1 do
+      begin
+        CandidateArr[K] := CandidateNames[K];
+        DistArr[K] := ComputeEditDistance(AName, CandidateArr[K]);
+      end;
+      for K := 1 to High(CandidateArr) do
+      begin
+        M := K;
+        TmpStr := CandidateArr[K];
+        TmpDist := DistArr[K];
+        while (M > 0) and (DistArr[M-1] > TmpDist) do
+        begin
+          CandidateArr[M] := CandidateArr[M-1];
+          DistArr[M] := DistArr[M-1];
+          Dec(M);
+        end;
+        CandidateArr[M] := TmpStr;
+        DistArr[M] := TmpDist;
+      end;
+      if Length(CandidateArr) > 3 then
+        SetLength(CandidateArr, 3);
+      Suggestion := SuggestDidYouMean(AName, CandidateArr, 3);
+    finally
+      CandidateNames.Free;
+    end;
+    if Suggestion <> '' then
+      EmitSemaError('sema.undeclared-identifier', 'identifier not found "' + AName + '". ' + Suggestion, AOffset)
+    else
+      EmitSemaError('sema.undeclared-identifier', 'identifier not found "' + AName + '"', AOffset);
+  end;
 begin
-  if ANode = nil then
-    Exit;
+  if ANode = nil then Exit;
   case ANode.NodeKind of
+    gnkIdentifier:
+      begin
+        DoCheck(ANode.Text, ANode.ByteOffset);
+      end;
     gnkAssignmentStatement:
       begin
         Name := ANode.Text;
-        if (Name <> '') and (Name <> 'Result') then
-        begin
-          SymId := FModel.LookupSymbol(Name, FCurrentScopeId);
-          if (SymId = 0) and (FModel.FindTypeByName(Name) = 0) and
-            not IsBuiltinProcedure(Name) and
-            not IsRuntimeVar(Name) then
-          begin
-            { Build candidate list for "Did you mean?" suggestion }
-            if FAllocator <> nil then
-              CandidateNames := specialize TVec<string>.Create(0, FAllocator)
-            else
-              CandidateNames := specialize TVec<string>.Create;
-            try
-              for I := 0 to FModel.SymbolCount - 1 do
-              begin
-                Sym := FModel.SymbolAt(I);
-                if (Sym.ScopeId = FCurrentScopeId) and (Sym.Name <> '') then
-                  CandidateNames.Push(Sym.Name);
-              end;
-              SetLength(CandidateArr, LongInt(CandidateNames.Count));
-              for I := 0 to LongInt(CandidateNames.Count) - 1 do
-                CandidateArr[I] := CandidateNames[I];
-              Suggestion := SuggestDidYouMean(Name, CandidateArr, 3);
-            finally
-              CandidateNames.Free;
-            end;
-            if Suggestion <> '' then
-              EmitSemaError(
-                'sema.undeclared-identifier',
-                'identifier not found "' + Name + '". ' + Suggestion,
-                ANode.ByteOffset
-              )
-            else
-              EmitSemaError(
-                'sema.undeclared-identifier',
-                'identifier not found "' + Name + '"',
-                ANode.ByteOffset
-              );
-          end;
-        end;
-      end;
-    gnkStatementList, gnkBeginBlock, gnkIfStatement,
-    gnkWhileStatement, gnkForStatement, gnkForInStatement,
-    gnkRepeatStatement, gnkCaseStatement, gnkCaseSelector,
-    gnkTryExceptStatement, gnkTryFinallyStatement:
-      begin
+        DoCheck(Name, ANode.ByteOffset);
         for I := 0 to ANode.ChildCount - 1 do
         begin
           Child := ANode.ChildAt(I);
-          if Child <> nil then
-            CheckIdentifiersInNode(Child);
+          if Child <> nil then CheckIdentifiersInNode(Child);
+        end;
+        Exit;
+      end;
+    gnkProcedureCallStatement:
+      begin
+        Name := ANode.Text;
+        DoCheck(Name, ANode.ByteOffset);
+        for I := 0 to ANode.ChildCount - 1 do
+        begin
+          Child := ANode.ChildAt(I);
+          if (I = 0) and (Child <> nil) and (Child.NodeKind = gnkIdentifier) and SameText(Child.Text, Name) then Continue;
+          if Child <> nil then CheckIdentifiersInNode(Child);
+        end;
+        Exit;
+      end;
+    gnkFunctionCall:
+      begin
+        if ANode.ChildCount > 0 then
+        begin
+          CalleeChild := ANode.ChildAt(0);
+          if (CalleeChild <> nil) and (CalleeChild.NodeKind = gnkIdentifier) then
+            DoCheck(CalleeChild.Text, CalleeChild.ByteOffset);
+        end;
+        for I := 0 to ANode.ChildCount - 1 do
+        begin
+          Child := ANode.ChildAt(I);
+          if (I = 0) and (Child <> nil) and (Child.NodeKind = gnkIdentifier) then Continue;
+          if Child <> nil then CheckIdentifiersInNode(Child);
+        end;
+        Exit;
+      end;
+    gnkBinaryExpression, gnkUnaryExpression, gnkDotAccess, gnkArrayAccess,
+    gnkDereference, gnkAddressOf, gnkSetConstructor, gnkRangeExpression:
+      begin
+        if ANode.Text <> '' then
+          DoCheck(ANode.Text, ANode.ByteOffset);
+        for I := 0 to ANode.ChildCount - 1 do
+        begin
+          Child := ANode.ChildAt(I);
+          if Child <> nil then CheckIdentifiersInNode(Child);
+        end;
+        Exit;
+      end;
+    else
+      begin
+        if (ANode.Text <> '') and (ANode.ChildCount = 0) then
+        begin
+          if ANode.Text[1] in ['A'..'Z','a'..'z','_'] then
+            DoCheck(ANode.Text, ANode.ByteOffset);
+        end;
+        for I := 0 to ANode.ChildCount - 1 do
+        begin
+          Child := ANode.ChildAt(I);
+          if Child <> nil then CheckIdentifiersInNode(Child);
         end;
       end;
   end;

@@ -89,13 +89,17 @@ type
 
   TDiagnosticRecordVec = specialize TVec<TDiagnosticRecord>;
 
+  TDiagnosticByteCountResolver = function(const AFileId: TCoreId; const AByteOffset: LongInt): LongInt of object;
+
   TDiagnosticsSink = class
   private
     FPolicy: TDiagnosticsPolicy;
     FErrorCount: LongInt;
     FWarningCount: LongInt;
     FDiagnostics: TDiagnosticRecordVec;
+    FByteCountResolver: TDiagnosticByteCountResolver;
   public
+    function ResolveByteCount(const AFileId: TCoreId; const AByteOffset: LongInt): LongInt;
     { Prefer CreateDefault; Create redirects so callers of bare Create do not AV. }
     constructor Create;
     constructor CreateDefault;
@@ -165,6 +169,7 @@ type
     function Summary: string;
     { Adopts AFixes into the last diagnostic (takes ownership). }
     procedure AdoptSuggestedFixesOnLast(AFixes: TSuggestedFixVec);
+    procedure BindByteCountResolver(const AResolver: TDiagnosticByteCountResolver);
   end;
 
 { Copy analyzer dynarray into entry-owned TVec (nil if empty). }
@@ -250,6 +255,25 @@ begin
   P := FDiagnostics.GetPtr(FDiagnostics.Count - 1);
   P^.SuggestedFixes.Free;
   P^.SuggestedFixes := AFixes;
+end;
+
+procedure TDiagnosticsSink.BindByteCountResolver(const AResolver: TDiagnosticByteCountResolver);
+begin
+  FByteCountResolver := AResolver;
+end;
+
+function TDiagnosticsSink.ResolveByteCount(const AFileId: TCoreId; const AByteOffset: LongInt): LongInt;
+begin
+  if AFileId <= 0 then
+    Exit(1);
+  if Assigned(FByteCountResolver) then
+  begin
+    Result := FByteCountResolver(AFileId, AByteOffset);
+    if Result < 1 then
+      Result := 1;
+    Exit;
+  end;
+  Result := 1;
 end;
 
 {$I np_diagnostics_sink_accessors.inc}

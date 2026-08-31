@@ -91,6 +91,9 @@ type
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.bytes.builder,
+  nextpas.core.bytes.cursor,
   nextpas.core.hash;
 
 { --- 二进制写入辅助 --- }
@@ -98,9 +101,7 @@ uses
 type
   TBinaryWriter = class
   private
-    FBuf: TBytes;
-    FPos: LongInt;
-    procedure Grow(ABytes: LongInt);
+    FBuilder: IBytesBuilder;
   public
     constructor Create;
     destructor Destroy; override;
@@ -118,46 +119,33 @@ type
 constructor TBinaryWriter.Create;
 begin
   inherited Create;
-  SetLength(FBuf, 256);
-  FPos := 0;
+  FBuilder := CreateBytesBuilder(256);
 end;
 
 destructor TBinaryWriter.Destroy;
 begin
-  SetLength(FBuf, 0);
+  FBuilder := nil;
   inherited Destroy;
-end;
-
-procedure TBinaryWriter.Grow(ABytes: LongInt);
-begin
-  if FPos + ABytes > Length(FBuf) then
-    SetLength(FBuf, (FPos + ABytes + 255) and not 255);
 end;
 
 procedure TBinaryWriter.WriteByte(AVal: Byte);
 begin
-  Grow(1);
-  FBuf[FPos] := AVal;
-  Inc(FPos);
+  FBuilder.AppendByte(AVal);
 end;
 
 procedure TBinaryWriter.WriteInt32(AVal: LongInt);
 begin
-  Grow(4);
-  Move(AVal, FBuf[FPos], 4);
-  Inc(FPos, 4);
+  FBuilder.AppendUInt32LE(UInt32(AVal));
 end;
 
 procedure TBinaryWriter.WriteInt64(AVal: Int64);
 begin
-  Grow(8);
-  Move(AVal, FBuf[FPos], 8);
-  Inc(FPos, 8);
+  FBuilder.AppendUInt64LE(UInt64(AVal));
 end;
 
 procedure TBinaryWriter.WriteBool(AVal: Boolean);
 begin
-  if AVal then WriteByte(1) else WriteByte(0);
+  if AVal then FBuilder.AppendByte(1) else FBuilder.AppendByte(0);
 end;
 
 procedure TBinaryWriter.WriteStr(const AVal: string);
@@ -168,9 +156,8 @@ begin
   WriteInt32(Len);
   if Len > 0 then
   begin
-    Grow(Len);
-    Move(AVal[1], FBuf[FPos], Len);
-    Inc(FPos, Len);
+    FBuilder.Reserve(SizeUInt(Len));
+    FBuilder.AppendBytes(PByte(@AVal[1]), SizeUInt(Len));
   end;
 end;
 
@@ -182,28 +169,26 @@ begin
   WriteInt32(Len);
   if Len > 0 then
   begin
-    Grow(Len);
-    Move(AVal[0], FBuf[FPos], Len);
-    Inc(FPos, Len);
+    FBuilder.Reserve(SizeUInt(Len));
+    FBuilder.AppendBytes(PByte(@AVal[0]), SizeUInt(Len));
   end;
 end;
 
 procedure TBinaryWriter.WriteRaw(const AData; ASize: LongInt);
 begin
-  Grow(ASize);
-  Move(AData, FBuf[FPos], ASize);
-  Inc(FPos, ASize);
+  if ASize <= 0 then Exit;
+  FBuilder.Reserve(SizeUInt(ASize));
+  FBuilder.AppendBytes(PByte(@AData), SizeUInt(ASize));
 end;
 
 function TBinaryWriter.Data: TBytes;
 begin
-  SetLength(Result, FPos);
-  Move(FBuf[0], Result[0], FPos);
+  Result := FBuilder.ToBytes;
 end;
 
 function TBinaryWriter.Size: LongInt;
 begin
-  Result := FPos;
+  Result := LongInt(FBuilder.Length);
 end;
 
 { --- 二进制读取辅助 --- }
@@ -211,10 +196,12 @@ end;
 type
   TBinaryReader = class
   private
-    FBuf: TBytes;
-    FSize: LongInt;
+    FCursor: IByteCursor;
+    function GetFPos: LongInt;
+    procedure SetFPos(AVal: LongInt);
+    procedure CheckRange(ANeed: SizeUInt);
   public
-    FPos: LongInt;
+    property FPos: LongInt read GetFPos write SetFPos;
     constructor Create(const AData: TBytes);
     destructor Destroy; override;
     function ReadByte: Byte;
@@ -230,38 +217,47 @@ type
 constructor TBinaryReader.Create(const AData: TBytes);
 begin
   inherited Create;
-  FBuf := AData;
-  FPos := 0;
-  FSize := Length(AData);
+  FCursor := NewByteCursor(AData);
 end;
 
 destructor TBinaryReader.Destroy;
 begin
+  FCursor := nil;
   inherited Destroy;
 end;
 
-function TBinaryReader.ReadByte: Byte;
+function TBinaryReader.GetFPos: LongInt;
 begin
-  if FPos >= FSize then
+  Result := LongInt(FCursor.Position);
+end;
+
+procedure TBinaryReader.SetFPos(AVal: LongInt);
+begin
+  FCursor.Seek(SizeUInt(AVal));
+end;
+
+procedure TBinaryReader.CheckRange(ANeed: SizeUInt);
+begin
+  if ANeed > FCursor.Remaining then
     raise Exception.Create('TBinaryReader: unexpected EOF');
-  Result := FBuf[FPos];
-  Inc(FPos);
+end;
+
+function TBinaryReader.ReadByte: Byte;
+var
+  P: PByte;
+begin
+  P := FCursor.ReadSpan(1);
+  Result := P^;
 end;
 
 function TBinaryReader.ReadInt32: LongInt;
 begin
-  if FPos + 4 > FSize then
-    raise Exception.Create('TBinaryReader: unexpected EOF reading Int32');
-  Move(FBuf[FPos], Result, 4);
-  Inc(FPos, 4);
+  Result := LongInt(FCursor.ReadU32LE);
 end;
 
 function TBinaryReader.ReadInt64: Int64;
 begin
-  if FPos + 8 > FSize then
-    raise Exception.Create('TBinaryReader: unexpected EOF reading Int64');
-  Move(FBuf[FPos], Result, 8);
-  Inc(FPos, 8);
+  Result := Int64(FCursor.ReadU64LE);
 end;
 
 function TBinaryReader.ReadBool: Boolean;
@@ -272,6 +268,7 @@ end;
 function TBinaryReader.ReadStr: string;
 var
   Len: LongInt;
+  P: PByte;
 begin
   Len := ReadInt32;
   if Len < 0 then
@@ -280,16 +277,16 @@ begin
     raise Exception.Create('TBinaryReader: string exceeds max size');
   if Len = 0 then
     Exit('');
-  if FPos + Len > FSize then
-    raise Exception.Create('TBinaryReader: unexpected EOF reading string');
+  CheckRange(SizeUInt(Len));
+  P := FCursor.ReadSpan(SizeUInt(Len));
   SetLength(Result, Len);
-  Move(FBuf[FPos], Result[1], Len);
-  Inc(FPos, Len);
+  Move(P^, Result[1], Len);
 end;
 
 function TBinaryReader.ReadBytes: TBytes;
 var
   Len: LongInt;
+  P: PByte;
 begin
   Len := ReadInt32;
   if Len < 0 then
@@ -298,24 +295,24 @@ begin
     raise Exception.Create('TBinaryReader: bytes exceed max size');
   if Len = 0 then
     Exit(nil);
-  if FPos + Len > FSize then
-    raise Exception.Create('TBinaryReader: unexpected EOF reading bytes');
+  CheckRange(SizeUInt(Len));
+  P := FCursor.ReadSpan(SizeUInt(Len));
   SetLength(Result, Len);
-  Move(FBuf[FPos], Result[0], Len);
-  Inc(FPos, Len);
+  Move(P^, Result[0], Len);
 end;
 
 procedure TBinaryReader.ReadRaw(out AData; ASize: LongInt);
+var
+  P: PByte;
 begin
-  if FPos + ASize > FSize then
-    raise Exception.Create('TBinaryReader: unexpected EOF reading raw');
-  Move(FBuf[FPos], AData, ASize);
-  Inc(FPos, ASize);
+  CheckRange(SizeUInt(ASize));
+  P := FCursor.ReadSpan(SizeUInt(ASize));
+  Move(P^, AData, ASize);
 end;
 
 function TBinaryReader.EOF: Boolean;
 begin
-  Result := FPos >= FSize;
+  Result := FCursor.Position >= FCursor.Length;
 end;
 
 { --- 指纹计算 --- }
