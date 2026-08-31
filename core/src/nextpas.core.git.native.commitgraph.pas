@@ -74,8 +74,7 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.refs,
-  nextpas.core.git.native.revwalk,
-  nextpas.core.bytes.ops;
+  nextpas.core.git.native.revwalk;
 
 const
   CGPH_MAGIC = $43475048;
@@ -108,10 +107,9 @@ var
     MTime: Int64;
     Size: Int64;
     Data: TBytes;
-    Hash: TBytes;
   end;
 
-function FindGraphCache(const ADir: string): Integer; inline;
+function FindGraphCache(const ADir: string): Integer;
 var I: Integer;
 begin
   for I := 0 to High(GGraphCache) do
@@ -531,15 +529,13 @@ var
   Idx: Integer;
   Info: TFileInfo;
   UseCache: Boolean;
-  LDisk: TBytes;
-  LDiskHash: TBytes;
 begin
   Result := False;
   AGraph := nil;
   Path := GitCommitGraphPath(AGitDir);
   if not FileExists(Path) then
     Exit;
-  // fast path: mtime+size hit still verifies SHA-1 (mtime 1s collision guard)
+  // fast path: cached bytes when mtime+size unchanged
   Idx := FindGraphCache(AGitDir);
   UseCache := False;
   if Idx >= 0 then
@@ -547,27 +543,8 @@ begin
       Info := Stat(Path);
       if (GGraphCache[Idx].Path = Path) and (GGraphCache[Idx].MTime = Info.ModTime) and (GGraphCache[Idx].Size = Info.Size) then
       begin
-        LDisk := ReadFile(Path);
-        if Length(GGraphCache[Idx].Hash) <> 20 then
-          GGraphCache[Idx].Hash := Sha1OfBytes(GGraphCache[Idx].Data);
-        LDiskHash := Sha1OfBytes(LDisk);
-        if BytesEqual(LDiskHash, GGraphCache[Idx].Hash) then
-        begin
-          Data := GGraphCache[Idx].Data; // zero-copy ref, no Copy
-          UseCache := True;
-        end
-        else
-        begin
-          Data := LDisk; // zero-copy move
-          GGraphCache[Idx].Path := Path;
-          GGraphCache[Idx].MTime := Info.ModTime;
-          GGraphCache[Idx].Size := Info.Size;
-          GGraphCache[Idx].Data := Copy(Data);
-          GGraphCache[Idx].Hash := LDiskHash;
-          UseCache := True;
-          LDisk := nil;
-          LDiskHash := nil;
-        end;
+        Data := GGraphCache[Idx].Data;
+        UseCache := True;
       end;
     except
       UseCache := False;
@@ -591,7 +568,6 @@ begin
     GGraphCache[Idx].MTime := Info.ModTime;
     GGraphCache[Idx].Size := Info.Size;
     GGraphCache[Idx].Data := Copy(Data);
-    GGraphCache[Idx].Hash := Sha1OfBytes(Data);
   end;
   AGraph := TCommitGraph.Create(Data);
   Result := True;
