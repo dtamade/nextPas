@@ -12,6 +12,7 @@ type
   TIoReactorEntry = record
     Callback: TIoCompletion;
     Context: Pointer;
+    Fd: Int32;
     NextFree: Int32;
     Active: Boolean;
   end;
@@ -25,7 +26,7 @@ type
     FPendingCount: UInt32;
     FFreeHead: Int32;
     FRunning: Int32;
-    function AllocEntry(ACallback: TIoCompletion; AContext: Pointer): UInt64;
+    function AllocEntry(ACallback: TIoCompletion; AContext: Pointer; AFd: Int32 = -1): UInt64;
     procedure FreeEntry(AId: UInt64);
     procedure ReleasePendingEntries(AResult: Int32);
     procedure DispatchCqe(ACqe: PIoUringCqe);
@@ -66,6 +67,9 @@ type
     { Best-effort cancel of one Active entry with matching Context.
       io_uring: IORING_OP_ASYNC_CANCEL (target CQE still arrives). }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    { Cancel all pending ops on AFd (e.g. listen accept) via TryCancelByContext.
+      Prevents io_uring CLOSE fd-reuse race (C-03). }
+    function CancelByFd(AFd: Int32): Boolean;
   end;
 
 implementation
@@ -114,7 +118,7 @@ begin
   Result := FRing.IsValid;
 end;
 
-function TIoReactor.AllocEntry(ACallback: TIoCompletion; AContext: Pointer): UInt64;
+function TIoReactor.AllocEntry(ACallback: TIoCompletion; AContext: Pointer; AFd: Int32): UInt64;
 var
   LIdx: UInt32;
 begin
@@ -135,6 +139,7 @@ begin
   end;
   FEntries[LIdx].Callback := ACallback;
   FEntries[LIdx].Context := AContext;
+  FEntries[LIdx].Fd := AFd;
   FEntries[LIdx].NextFree := -1;
   FEntries[LIdx].Active := True;
   Inc(FPendingCount);
@@ -150,6 +155,7 @@ begin
     Dec(FPendingCount);
   FEntries[AId].Callback := nil;
   FEntries[AId].Context := nil;
+  FEntries[AId].Fd := -1;
   FEntries[AId].Active := False;
   FEntries[AId].NextFree := FFreeHead;
   FFreeHead := Int32(AId);
@@ -180,6 +186,7 @@ begin
     end;
     FEntries[LI].Callback := nil;
     FEntries[LI].Context := nil;
+    FEntries[LI].Fd := -1;
     FEntries[LI].Active := False;
     FEntries[LI].NextFree := -1;
   end;
@@ -264,10 +271,34 @@ begin
   if LSqe = nil then
     Exit;
   { Cancel CQE uses its own entry so DispatchCqe does not free the target early. }
-  LCancelId := AllocEntry(nil, nil);
+  LCancelId := AllocEntry(nil, nil, -1);
   IoUringPrepCancel(LSqe, LTargetId, 0);
   IoUringSqeSetData(LSqe, LCancelId);
   Result := True;
+end;
+
+function TIoReactor.CancelByFd(AFd: Int32): Boolean;
+var
+  LI: UInt32;
+  LContexts: array of Pointer;
+  LCount, LJ: UInt32;
+begin
+  Result := False;
+  if (AFd < 0) or (not IsValid) then
+    Exit;
+  if FEntryCount = 0 then
+    Exit;
+  SetLength(LContexts, FEntryCount);
+  LCount := 0;
+  for LI := 0 to FEntryCount - 1 do
+    if FEntries[LI].Active and (FEntries[LI].Fd = AFd) then
+    begin
+      LContexts[LCount] := FEntries[LI].Context;
+      Inc(LCount);
+    end;
+  for LJ := 0 to LCount - 1 do
+    if TryCancelByContext(LContexts[LJ]) then
+      Result := True;
 end;
 
 function TIoReactor.AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
@@ -278,7 +309,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepRead(LSqe, AFd, ABuf, ALen, AOffset);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -292,7 +323,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepWrite(LSqe, AFd, ABuf, ALen, AOffset);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -306,7 +337,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepAccept(LSqe, AFd, AAddr, AAddrLen, AFlags);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -320,7 +351,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepConnect(LSqe, AFd, AAddr, AAddrLen);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -334,7 +365,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepSend(LSqe, AFd, ABuf, ALen, AFlags);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -348,7 +379,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepRecv(LSqe, AFd, ABuf, ALen, AFlags);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -356,13 +387,61 @@ end;
 
 function TIoReactor.AsyncClose(AFd: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
+const
+  IOSQE_IO_LINK = 4;
 var
   LSqe: PIoUringSqe;
   LId: UInt64;
+  LCancels: Integer;
+  LCaptured: array of Pointer;
+  LI: UInt32;
+  LCount: UInt32;
+  LLastCancelSqe: PIoUringSqe;
+  LTargetId: UInt64;
+  LFound: Boolean;
+  LJ: UInt32;
 begin
+  if not IsValid then begin Result := False; Exit; end;
+  { Cancel pending ops on same fd first to avoid fd-reuse misclose and
+    lingering accept holding kernel file reference (C-03). Use LINK so
+    CLOSE runs only after cancel. }
+  LCancels := 0;
+  LLastCancelSqe := nil;
+  if FEntryCount > 0 then
+  begin
+    SetLength(LCaptured, FEntryCount);
+    LCount := 0;
+    for LI := 0 to FEntryCount - 1 do
+      if FEntries[LI].Active and (FEntries[LI].Fd = AFd) then
+      begin
+        LCaptured[LCount] := FEntries[LI].Context;
+        Inc(LCount);
+      end;
+    for LJ := 0 to LCount - 1 do
+    begin
+      LFound := False;
+      for LI := 0 to FEntryCount - 1 do
+        if FEntries[LI].Active and (FEntries[LI].Context = LCaptured[LJ]) then
+        begin
+          LTargetId := LI;
+          LFound := True;
+          Break;
+        end;
+      if not LFound then Continue;
+      LSqe := FRing.GetSqe;
+      if LSqe = nil then Break;
+      LId := AllocEntry(nil, nil, -1);
+      IoUringPrepCancel(LSqe, LTargetId, 0);
+      IoUringSqeSetData(LSqe, LId);
+      LLastCancelSqe := LSqe;
+      Inc(LCancels);
+    end;
+    if (LCancels > 0) and (LLastCancelSqe <> nil) then
+      LLastCancelSqe^.flags := LLastCancelSqe^.flags or IOSQE_IO_LINK;
+  end;
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepClose(LSqe, AFd);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -375,7 +454,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, -1);
   IoUringPrepNop(LSqe);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -389,7 +468,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepReadv(LSqe, AFd, AIovecs, ANrVecs, AOffset);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -403,7 +482,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepWritev(LSqe, AFd, AIovecs, ANrVecs, AOffset);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
