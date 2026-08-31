@@ -9,8 +9,8 @@ unit nextpas.core.system.sysutils;
  *
  * Format delegates to nextpas.core.text.format.TextFormat (owner);
  * safe subset (%% %[-][0][width][.precision](s|d|u|x|X|f)) is the
- * supported surface; extended specifiers fall back to RTL via the
- * text owner where covered.
+ * supported surface; extended specifiers fall back to SysUtils.Format
+ * via EInvalidArgument trap to preserve SysUtils parity.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -78,16 +78,22 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.bytes.ops,
   nextpas.core.base.utils,
   nextpas.core.text.compare,
   nextpas.core.text.utils,
   nextpas.core.text.view;
 
-{ Text formatting — thin delegate to text owner (no RTL fallback). }
-function Format(const AFmt: string; const AArgs: array of const): string; inline;
+{ Text formatting — thin delegate to text owner with RTL fallback for extended specifiers. }
+function Format(const AFmt: string; const AArgs: array of const): string;
 begin
-  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+  try
+    Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+  except
+    on E: EInvalidArgument do
+      Result := SysUtils.Format(AFmt, AArgs);
+  end;
 end;
 
 function SameText(const A, B: string): Boolean; inline;

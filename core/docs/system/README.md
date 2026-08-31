@@ -187,6 +187,7 @@ Historical S4 boundary note:
 - `TTypeKind` aliases cover live collections kind consumers, but do not expose
   property metadata or reflection layout
 - deferred means “documented and guarded by source-contract”, not “silently available”
+- Classes remain deferred beyond the stream shim; broader Classes surface is not a current phase gate
 - any broader compatibility facade must arrive with real consumer pressure and focused API tests
 
 ## Contract Names
