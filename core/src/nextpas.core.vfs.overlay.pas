@@ -139,21 +139,9 @@ var
   LStat: TStatInfo;
   Temp: array of TOverlayTemp;
   procedure EnsureTemp(const Need: Integer);
-  var NewCap: Integer;
   begin
-    if Length(Temp) < Need then
-    begin
-      NewCap := Length(Temp) * 2;
-      if NewCap < Need then NewCap := Need;
-      if NewCap < 16 then NewCap := 16;
-      SetLength(Temp, NewCap);
-    end;
+    if Length(Temp) < Need then SetLength(Temp, Need);
   end;
-  { SortTemp：按 (Name, Prio) 二键排序；比较原语单源复用 VfsNameCompare（与
-    vfs.base.VfsQuickSortEntries / respack.writer.CmpPath 同源 CompareBytesOrdered），
-    阈值与分区与 vfs.base 同款 Hoare+Int64 防回绕；collections.algorithms.Sort<T>
-    为通用单源，overlay 因 Prio 次键保留特化以消额外分配，未来若泛化则委托
-    specialize Sort<TOverlayTemp>。 }
   procedure SortTemp(var A: array of TOverlayTemp; L, R: Integer);
   var
     Ii, Jj: Integer;

@@ -126,7 +126,7 @@ end;
 
 const
   CACHE_REVALIDATE = 'public, max-age=0, must-revalidate';
-  STATIC_COPY_BUF_SIZE = 8192; { Range/全量拷贝块大小，8192 为 4K 页2×最优 }
+  STATIC_COPY_BUF_SIZE = 4096; { Range 拷贝块大小，4K 页基准几何；嵌入 VFS 零拷贝切片（TEmbeddedSlice/Move 直达 blob）已付零拷贝收益，额外缓冲仅增一次 CopyRange 重复拷贝，4K 对齐单次页系统调用最优 }
 
 { ===== Helpers ===== }
 
@@ -766,6 +766,7 @@ var
   LMime, LETag, LLastModified: string;
   LModTimeUnix: Int64;
   LCache: IVfsETag;
+  LServeMeta: IVfsServeMeta;
 begin
   if AFs = nil then
   begin
@@ -795,7 +796,22 @@ begin
     LModTimeUnix := LInfo.Info.ModTime;
     if LModTimeUnix < 0 then
       LModTimeUnix := 0;
-    if (AFs is IVfsETag) then
+    if Supports(AFs, IVfsServeMeta, LServeMeta) then
+    begin
+      if not LServeMeta.TryGetServeMeta(AVfsPath, LETag, LLastModified) then
+      begin
+        // 极少失败路径（Stat 已成功但 meta miss）回退到 hash/size
+        if LInfo.ContentHash <> 0 then
+          LETag := HttpMakeFnvETag(LInfo.ContentHash)
+        else
+          LETag := HttpMakeStrongETag(LInfo.Info.Size, LModTimeUnix);
+        if LModTimeUnix > 0 then
+          LLastModified := FormatHttpDate(LModTimeUnix)
+        else
+          LLastModified := '';
+      end;
+    end
+    else if (AFs is IVfsETag) then
     begin
       LCache := AFs as IVfsETag;
       if LCache.TryGetETag(AVfsPath, LETag) then

@@ -165,11 +165,47 @@ registry vfs 行更新为已落地形态。
 - **embed 不经 Include 回调过滤**：全枚举 + 单趟过滤映射，规避跨帧闭包捕获的不确定性
 - **源契约门禁扩展**：respack 单元清单纳入 embed；seam 断言新增"仅允许 fs.glob"变体
 
-### S5 — http.static 接入 IVfs（跨模块 slice）
+### S5 — http.static 接入 IVfs（跨模块 slice，已完成 2026-08-26）
 
 按 AGENTS.md 跨模块纪律单独立项说明：理由、影响面（`http.static` 内容源抽象）、
 风险、额外验证（http focused gate + vfs gate）。ETag 取 `ContentHash`，
-If-Modified-Since 取 `ModTime`。
+If-Modified-Since 取 `ModTime`。详见 `docs/plans/2026-08-26-http-static-vfs-s5-plan.md`。
+
+### S6 — L3装饰器 transform/compressed（G6闭环，2026-08-30）
+
+动机：ADR 0003 约定 vfs 内核保持 STORE 零拷贝，压缩/加密由 L3 装饰器承载；S6 将 `S6-B/C` 落地为可验证门禁，消除"12门宣称10门实存"漂移（transform/compressed两门缺失）。
+
+任务（plan §2 G6规格）：
+1. `nextpas.core.vfs.transform.pas` — L3通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc` 注入，Stat 单源 Size/ContentHash 校正，OpenRead 单次 VfsReadAllBytes 复用 Pointer 判等零二次IO，ETag禁用，Op/Path 完整（'wrap'/'stat'/'open' + 'transform failed' 包装），CaseSensitive/List透传
+2. `nextpas.core.vfs.compressed.pas` — L3解压薄门面：经 transform 承载 gzip，策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源32MiB防bomb + `daAuto/daGzip`语义 + `IsGzipPred`2字节 + `COMPRESSED_HEADER_PEEK`4096头预判HeaderPred（Stat免全量读），模板复用度消除120+行样板
+3. 门面 `nextpas.core.vfs.pas` 重导出 `CreateTransformingVfs/CreateDecompressingVfs` + `TVfsTransformFunc` 类型
+4. 测试：`test_vfs_transform`（6用例：upper/谓词/透传/错误包装/ETag/CaseSensitive）+ `test_vfs_compressed`（7用例：daAuto/daGzip/空包/大文件头窥/ETag/透传/错误）+ `source-contract` 白名单扩展（transform/compressed seam）
+5. 基准：`core/benchmarks/nextpas.core.vfs/bench_transform` 4场景阈值（Stat large非gzip header-peek / Stat gz / Open large非gzip passthrough / Open gz）
+
+约束复用（最小改动）：
+- 四件套与L0-L3分层守恒：base←intf←实现←门面，仅向下依赖；L3装饰器单向依赖L2，无L2→L2闭环
+- 单源不新增重复：ValidPath 单源 `base.pathvalid`，GZIP_MAX 单源 `compress.base`，VFS侧仅薄别名/薄门面
+- 性能：HeaderPred 4K + 单次读取复用（零二次IO）证据见 CONTRACT §6 + bench
+- 稳定性：回绕Int64下标/悬垂防御拷贝/两段式Freeze/池资源SpinLock16槽闭环（见 vfs.base/memtree/embedded/util/CONTRACT §5）
+- 高级感：Op/Path 完整 + 门面重导出（vfs.pas）
+
+验证门：
+```bash
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_roundtrip
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_embed
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_transform
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_compressed
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract
+make -C core/benchmarks/nextpas.core.vfs/bench_transform clean bench
+```
+出口条件：12门全绿（respack5+vfs5+新增2，source-contract共享1）+ bench_transform 4场景阈值绿 + heaptrc 0 leak + `git diff --check` 0 + `make hygiene` 0；G6 PENDING闭环。
 
 ## 落地纪律
 
@@ -207,4 +243,5 @@ If-Modified-Since 取 `ModTime`。
   `docs/plans/2026-08-26-http-static-vfs-s5-plan.md`；test_http_static 39 门 +
   vfs 五门 + http contract/smoke 全绿；端到端示例 http_static_vfs_demo 与
   bench_servevfs 基准（embedded ≈7.0 µs/op vs os ≈16.3 µs/op，≈2.3×）落库。
-  **本计划全部切片收官。**
+- S6 完成（2026-08-30）：L3装饰器 transform通用模板 + compressed薄门面落地；新增 `test_vfs_transform` 6用例 + `test_vfs_compressed` 7用例 + `bench_transform` 4场景阈值，12门全绿（respack5+vfs5+2）+ heaptrc0 + GZIP_MAX/HeaderPred/单次复用单源证据闭环；G6 PENDING闭环，完美基线不回退。
+  **本计划全部切片收官（S0-S6）。**
