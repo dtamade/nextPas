@@ -35,6 +35,7 @@ type
     FCtx: Pointer;
     FClosed: Boolean;
     FThreadId: UInt64;
+    FContextId: UInt64;
     FHostFuncs: array of record
       Name: string;
       Func: TJsHostFunction;
@@ -45,7 +46,7 @@ type
     FDeadlineMs: Int64;
     function FindHost(const AName: string): Integer;
     function IsOnCreationThread: Boolean;
-    procedure EnsureNotClosed; procedure EnsureThreadAffinity;
+    procedure EnsureNotClosed; function Bind(const V: TJsValue): TJsValue; inline; procedure EnsureThreadAffinity;
     function ValidateHostName(const AName: string): Boolean;
     function QjsToString(const V: TJSQjsValue; Ctx: Pointer): string;
     function QjsIsException(const V: TJSQjsValue): Boolean;
@@ -140,6 +141,7 @@ begin
   FOptions := AOptions;
   FClosed := False;
   FThreadId := UInt64(platform_thread_self);
+  FContextId := JsContextRegister;
   FDeadlineMs := 0;
   if not JsQuickJsLoad then
     raise EJsBackendUnavailable.Create('QuickJS not loaded', jecUnknown, 'Error', '', jsbkQuickJs);
@@ -166,6 +168,7 @@ end;
 function TJsQuickJsContext.FindHost(const AName: string): Integer; inline; var I: Integer; begin for I:=0 to High(FHostFuncs) do if FHostFuncs[I].Name=AName then Exit(I); Result:=-1; end;
 function TJsQuickJsContext.IsOnCreationThread: Boolean; inline; begin Result := UInt64(platform_thread_self) = FThreadId; end;
 procedure TJsQuickJsContext.EnsureNotClosed; inline; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkQuickJs); end;
+function TJsQuickJsContext.Bind(const V: TJsValue): TJsValue; inline; begin Result := JsValueBindContext(V, FContextId); end;
 procedure TJsQuickJsContext.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkQuickJs); end;
 function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; var I: Integer; C: Char;
 begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if AName[1]='.' then Exit; if AName[Length(AName)]='.' then Exit;
@@ -242,42 +245,42 @@ begin
     S := QjsToString(V, FCtx);
   finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); end;
   // heuristic mapping for test: "3" -> number, "{" -> string json, else string
-  if S='3' then Result := JsIntValue(3)
-  else if Pos('{"x":1}', S)>0 then Result := JsStringValue('{"x":1}')
-  else if S='null' then Result := JsNullValue
-  else if S='true' then Result := JsBoolValue(True)
-  else if S='false' then Result := JsBoolValue(False)
-  else if S='undefined' then Result := JsUndefinedValue
-  else Result := JsStringValue(S);
+  if S='3' then Result := Bind(JsIntValue(3))
+  else if Pos('{"x":1}', S)>0 then Result := Bind(JsStringValue('{"x":1}'))
+  else if S='null' then Result := Bind(JsNullValue)
+  else if S='true' then Result := Bind(JsBoolValue(True))
+  else if S='false' then Result := Bind(JsBoolValue(False))
+  else if S='undefined' then Result := Bind(JsUndefinedValue)
+  else Result := Bind(JsStringValue(S));
 end;
 
 function TJsQuickJsContext.TryEval(const ACode: string; out AValue: TJsValue): Boolean;
-begin try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
+begin EnsureNotClosed; try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
 
 function TJsQuickJsContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
+var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not TryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end;
 
-function TJsQuickJsContext.Global: TJsValue; begin EnsureNotClosed; Result:=JsObjectValue; end;
-function TJsQuickJsContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsStringValue(AStr); end;
-function TJsQuickJsContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsIntValue(AValue); end;
-function TJsQuickJsContext.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=JsDoubleValue(AValue); end;
-function TJsQuickJsContext.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=JsBoolValue(AValue); end;
-function TJsQuickJsContext.NewObject: TJsValue; begin EnsureNotClosed; Result:=JsObjectValue; end;
-function TJsQuickJsContext.NewArray: TJsValue; begin EnsureNotClosed; Result:=JsArrayValue; end;
+function TJsQuickJsContext.Global: TJsValue; begin EnsureNotClosed; Result:=Bind(JsObjectValue); end;
+function TJsQuickJsContext.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=Bind(JsStringValue(AStr)); end;
+function TJsQuickJsContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=Bind(JsIntValue(AValue)); end;
+function TJsQuickJsContext.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=Bind(JsDoubleValue(AValue)); end;
+function TJsQuickJsContext.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=Bind(JsBoolValue(AValue)); end;
+function TJsQuickJsContext.NewObject: TJsValue; begin EnsureNotClosed; Result:=Bind(JsObjectValue); end;
+function TJsQuickJsContext.NewArray: TJsValue; begin EnsureNotClosed; Result:=Bind(JsArrayValue); end;
 function TJsQuickJsContext.NewJson(const AJson: TJsonValue): TJsValue;
-begin EnsureNotClosed; if AJson.IsStr then Result:=JsStringValue(AJson.AsStr.ToString) else if AJson.IsInt then Result:=JsIntValue(AJson.AsInt) else if AJson.IsBool then Result:=JsBoolValue(AJson.AsBool) else if AJson.IsNull then Result:=JsNullValue else if AJson.IsArray then Result:=NewArray else if AJson.IsObject then Result:=NewObject else Result:=JsUndefinedValue; end;
+begin EnsureNotClosed; if AJson.IsStr then Result:=Bind(JsStringValue(AJson.AsStr.ToString)) else if AJson.IsInt then Result:=Bind(JsIntValue(AJson.AsInt)) else if AJson.IsBool then Result:=Bind(JsBoolValue(AJson.AsBool)) else if AJson.IsNull then Result:=Bind(JsNullValue) else if AJson.IsArray then Result:=NewArray else if AJson.IsObject then Result:=NewObject else Result:=Bind(JsUndefinedValue); end;
 function TJsQuickJsContext.ToJson(const AValue: TJsValue): IJsonDocument; var LJson: string;
 begin EnsureNotClosed; case AValue.Kind of jskString: LJson:='"'+AValue.AsString+'"'; jskNumber: LJson:=nextpas.core.text.IntToStr(AValue.AsInt); jskBoolean: if AValue.AsBool then LJson:='true' else LJson:='false'; jskNull: LJson:='null'; else LJson:='null'; end; Result:=JsonParse(LJson); end;
 function TJsQuickJsContext.HasProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result:=False; end;
 function TJsQuickJsContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result:=False; end;
 function TJsQuickJsContext.GetKeys(const AObj: TJsValue): TJsStringArray; begin EnsureNotClosed; Result:=nil; end;
-function TJsQuickJsContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result:=JsErrorValue(AMessage); end;
-function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=JsFunctionValue(AName); end;
-function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=JsFunctionValue(AName); end;
-function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=JsFunctionValue(AName); end;
-function TJsQuickJsContext.GetProp(const AObj: TJsValue; const AName: string): TJsValue; begin EnsureNotClosed; Result:=JsUndefinedValue; end;
+function TJsQuickJsContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result:=Bind(JsErrorValue(AMessage)); end;
+function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
+function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
+function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
+function TJsQuickJsContext.GetProp(const AObj: TJsValue; const AName: string): TJsValue; begin EnsureNotClosed; Result:=Bind(JsUndefinedValue); end;
 procedure TJsQuickJsContext.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue); begin EnsureNotClosed; end;
-function TJsQuickJsContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=JsUndefinedValue; end;
+function TJsQuickJsContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=Bind(JsUndefinedValue); end;
 procedure TJsQuickJsContext.SetHostFunction(const AName: string; AHandler: TJsHostFunction); var LIdx: Integer;
 begin EnsureNotClosed; if not ValidateHostName(AName) then raise EJsError.Create('Invalid host function name: '+AName,jecSyntax,'SyntaxError','',jsbkQuickJs); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil',jecUnknown,'Error','',jsbkQuickJs); LIdx:=FindHost(AName); if LIdx>=0 then begin FHostFuncs[LIdx].Func:=AHandler; FHostFuncs[LIdx].Kind:=0; Exit; end; SetLength(FHostFuncs,Length(FHostFuncs)+1); FHostFuncs[High(FHostFuncs)].Name:=AName; FHostFuncs[High(FHostFuncs)].Func:=AHandler; FHostFuncs[High(FHostFuncs)].Kind:=0; end;
 procedure TJsQuickJsContext.SetHostFunction(const AName: string; AHandler: TJsHostMethod); var LIdx: Integer;
@@ -290,12 +293,15 @@ procedure TJsQuickJsContext.CollectGarbage; begin EnsureNotClosed; if Assigned(J
 procedure TJsQuickJsContext.Close;
 begin
   if FClosed then Exit;
+  FClosed:=True;
+  JsContextClose(FContextId);
+  if (FRT <> nil) and Assigned(JS_SetInterruptHandlerPtr) then
+    JS_SetInterruptHandlerPtr(FRT, nil, nil);
   if Assigned(JS_FreeContextPtr) and (FCtx <> nil) then JS_FreeContextPtr(FCtx);
   FCtx:=nil;
   if Assigned(JS_FreeRuntimePtr) and (FRT <> nil) then JS_FreeRuntimePtr(FRT);
   FRT:=nil;
   SetLength(FHostFuncs, 0);
-  FClosed:=True;
 end;
 function TJsQuickJsContext.IsClosed: Boolean; begin Result:=FClosed; end;
 

@@ -59,8 +59,37 @@ function JsHeapArrayValue(AId: Int64): TJsValue; inline;
 function JsObjectId(const V: TJsValue): Int64; inline;
 function JsSymbolValue(const ADesc: string): TJsValue; inline; function JsBigIntValue(AValue: Int64): TJsValue; inline;
 function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsFunctionName(const V: TJsValue): string; inline; function JsPromiseValue: TJsValue; inline;
+// Context 寿命注册（INV-7 硬阻断）：值绑定的 ContextId 在 Close 时标记失效，IsValid 联动 FClosed
+function JsContextRegister: UInt64;
+procedure JsContextClose(AId: UInt64);
+function JsContextIsClosed(AId: UInt64): Boolean; inline;
+function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
 uses nextpas.core.base, nextpas.core.text;
+var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1;
+function JsContextRegister: UInt64;
+begin
+  Result := GJsNextId;
+  Inc(GJsNextId);
+  if Result >= UInt64(Length(GJsClosed)) then
+    SetLength(GJsClosed, Integer(Result + 32));
+  GJsClosed[Result] := False;
+end;
+procedure JsContextClose(AId: UInt64);
+begin
+  if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
+    GJsClosed[AId] := True;
+end;
+function JsContextIsClosed(AId: UInt64): Boolean;
+begin
+  if (AId = 0) or (AId >= UInt64(Length(GJsClosed))) then Exit(False);
+  Result := GJsClosed[AId];
+end;
+function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue;
+begin
+  Result := AValue;
+  Result.FContextId := AContextId;
+end;
 function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; end;
 function JsNullValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNull; end;
 function JsBoolValue(AValue: Boolean): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskBoolean; Result.FBoolVal:=AValue; end;
@@ -78,8 +107,9 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-function TJsValue.Kind: TJsValueKind; begin if not FValid then Result:=jskUndefined else Result:=FKind; end;
-function TJsValue.IsValid: Boolean; begin Result:=FValid; end;
+// 硬阻断：IsValid 联动所属 Context.FClosed（INV-7），Kind 亦以 IsValid 为准返回 Undefined
+function TJsValue.Kind: TJsValueKind; begin if not IsValid then Result:=jskUndefined else Result:=FKind; end;
+function TJsValue.IsValid: Boolean; begin Result:=FValid and ((FContextId=0) or not JsContextIsClosed(FContextId)); end;
 function TJsValue.IsUndefined: Boolean; begin Result:=Kind=jskUndefined; end;
 function TJsValue.IsNull: Boolean; begin Result:=Kind=jskNull; end;
 function TJsValue.IsBool: Boolean; begin Result:=Kind=jskBoolean; end;

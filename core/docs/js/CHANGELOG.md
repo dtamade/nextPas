@@ -2,7 +2,7 @@
 
 ## [0.8.0] - 2026-08-31 — 11 单元 pure.base 单源 + Close 幂等 + V8/Chakra 独立门禁
 
-- 新增 `nextpas.core.js.pure.base.pas` 168 行共享基座（`JsPureValidateHostName/JsPureFindHost/JsPureDoEval` 零分配 `TStringView`，零 FFI/零 dl），`js.js888/v8/chakra` 各 104 行复用消 300 行克隆；`TryEvalFile` 统一 `TryReadFileText` 64MiB 限流 + `FORMAT_BULK_PARSE_MAX_BYTES` owner
+- 新增 `nextpas.core.js.pure.base.pas` 338 行共享基座（`JsPureValidateHostName/JsPureFindHost/JsPureDoEval` 零分配 `TStringView`，零 FFI/零 dl），`js.js888/v8/chakra` 各 104 行复用消 300 行克隆；`TryEvalFile` 统一 `TryReadFileText` 64MiB 限流 + `FORMAT_BULK_PARSE_MAX_BYTES` owner
 - `Close` 幂等清零：`js888/v8/chakra` 对齐 `fake` 清空 `FHostFuncs` 宿主闭包，heaptrc 零泄漏；`CONTRACT` 补 `pure.base` 第11单元入表、依赖图 `pure.base←{js888,v8,chakra}`，版本 0.7→0.8
 - 测试：`test_js_v8_runtime` / `test_js_chakra_runtime` 新增各 42 用例独立门禁（与 js888 同矩阵），`test_js_base` 12 + `fake/js888/v8/chakra` 42×4 + `quickjs` SKIP 5 gate 全绿，bench 5 后端全绿
 - 文档：CONTRACT/DESIGN/README 0.8 同步，纯族依赖与体积指引更新

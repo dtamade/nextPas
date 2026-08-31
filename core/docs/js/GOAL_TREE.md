@@ -3,7 +3,8 @@
 **Owner**：`codex/core-js`
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）
-**版本**：0.7（M1 落地：10 单元 + bench 全绿）
+**版本**：0.8（11 单元 pure.base 单源 338行 + 5 gate 全绿，M3b 基准同步）
+**最后更新**：2026-08-31
 
 ---
 
@@ -79,10 +80,10 @@ core/examples/nextpas.core.js/demo_js/
 
 | 级别 | 条件 | 证据 |
 |------|------|------|
-| `source-contract` | `base/intf` 不含后端符号（含纯后端预留，不暴露 `JSValue`），`ffi` 无逻辑，`loader` 唯一 `platform.dl`，`js.js888` 禁 `platform.dl` | `check_source_contracts.py` pass |
-| `focused-runtime` | `test_js_fake` + `test_js_base` 全绿 + `heaptrc 0` | `make focused` 全绿 |
-| `S1-runtime` | `test_js_quickjs_runtime`（有库）全绿；`S3` 后 `test_js_js888_runtime` 恒绿（零 so） | 本地 + Linux CI |
-| `Production Ready` | `S2` 联动全绿 + `bench_eval` 基线落库（含纯/QuickJS 双基线） + `hygiene/source-contract` 双 pass | 13+3 门 + bench |
+| `source-contract` | 四件套门面纯聚合 + L2 只依赖 L0-L1：`base/intf` 不含后端符号（含纯后端预留不暴露 `JSValue`），`ffi` 零逻辑仅 `cdecl`，`loader` 唯一 `platform.dl`（禁 `DynLibs`），纯族 `pure.base` 单源 338行 + `js.js888/v8/chakra` 零FFI/零dl恒可用 | `check_source_contracts.py` pass + `wc -l` 阈值 + `grep platform.dl` 0 |
+| `focused-runtime` | `test_js_fake` + `test_js_base` 全绿 + `heaptrc 0`（性能 inline/零拷贝：`AsString` 快路径 `B/op=0`） | `make focused` 全绿 |
+| `S1-runtime` | `test_js_quickjs_runtime`（有库）全绿；`S3` 后 `test_js_js888_runtime`/`v8`/`chakra` 恒绿（零 so） | 本地 + Linux CI |
+| `Production Ready` | `S2` 联动全绿 + `bench_eval` 5后端基线落库（含纯/QuickJS 双基线，BENCHMARKS 1.2） + `hygiene/source-contract` 双 pass + 稳定性资源可释放 `Close` 幂等 + 文档 18份对齐 | 13+3 门 + bench |
 
 ---
 
@@ -102,3 +103,4 @@ core/examples/nextpas.core.js/demo_js/
 | 2026-08-30 | 0.3 | 生产级：门禁证据/测试布局/晋升证据显式化 |
 | 2026-08-30 | 0.4 | 冻结：12 份完整化，S0 产出与门禁对齐 ACCEPTANCE G-M0 |
 | 2026-08-30 | 0.7 | M1 落地：10 单元 + js888/v8/chakra 纯族 + bench 5 后端全绿 + Close 生命周期 |
+| 2026-08-31 | 0.8 | 对齐 CONTRACT 0.8 / ROADMAP 0.8 / BENCHMARKS 1.2：版本滞后修复 + 晋升门禁四件套/L0-L3/pure.base 338行/零FFI零dl/inline零拷贝/资源可释放/文档对齐显式化 + `pure.base` 单源 + 5 gate 全绿 |

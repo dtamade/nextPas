@@ -49,7 +49,7 @@
 | 后端 | Eval/small ns/op | Eval/host ns/op (B/op) | JSON/interop ns/op (B/op) | Value/ops ns/op (B/op) | 备注 |
 |------|------------------|------------------------|---------------------------|------------------------|------|
 | fake | 179 | 493 (18/1) | 1685 (176/1) | 72 (0/0) | 纯桩基线 |
-| js888 | 633 | 606 (18/1) | 1612 (176/1) | 94 (0/0) | 纯 Pascal 单源（pure.base 321 行共享） |
+| js888 | 633 | 606 (18/1) | 1612 (176/1) | 94 (0/0) | 纯 Pascal 单源（pure.base 338 行共享） |
 | v8 | 1089 | 933 (18/1) | 1878 (176/1) | 77 (0/0) | 纯桩占位（pure.base 复用） |
 | chakra | 962 | 561 (18/1) | 1879 (176/1) | 50 (0/0) | 纯桩占位（pure.base 复用） |
 | quickjs | SKIP | SKIP | SKIP | SKIP | 无 `libquickjs.so`（探针 8 名完整，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 fail-closed） |
@@ -74,5 +74,5 @@
 |------|------|------|
 | 2026-08-30 | 1.0 | 首版：方法 + 套件 + 目标 + 回归阈值 |
 | 2026-08-31 | 1.1 | 落盘 5 后端对照基线（fake/js888/v8/chakra 实测 + quickjs SKIP）+ B/op 断言 |
-| 2026-08-31 | 1.2 | M3b 刷新：Eval/small 5 后端矩阵按最新 bench 同步（fake 179 / js888 633 / v8 1089 / chakra 962 / quickjs SKIPPED）+ Value/ops 零分配同步 + 纯族 321 行体量标注 |
+| 2026-08-31 | 1.2 | M3b 刷新：Eval/small 5 后端矩阵按最新 bench 同步（fake 179 / js888 633 / v8 1089 / chakra 962 / quickjs SKIPPED）+ Value/ops 零分配同步 + 纯族 338 行体量标注 |
 

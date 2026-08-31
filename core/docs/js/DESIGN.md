@@ -2,7 +2,7 @@
 
 **状态**：S0 冻结，随源码落地微调（六维 P0 清零）
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）、`REVIEW.md`（差距）、`AI_GUIDE.md`（AI 规范）、`SIXDIM_REVIEW.md`（六维）
-**版本**：0.8（11 单元 pure.base 单源 168 行 + Close 幂等 + 5 gate 全绿）
+**版本**：0.8（11 单元 pure.base 单源 338 行 + Close 幂等 + 5 gate 全绿）
 
 ## 0. 分层总览（`SIXDIM L-1`）
 
