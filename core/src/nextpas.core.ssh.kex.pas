@@ -235,7 +235,7 @@ begin
   while Length(Result) < ALen do
   begin
     LBlock := SHA256(BytesConcatMany([AKMpint, AH, LPrev]));
-    Result := BytesConcatMany([Result, LBlock]);
+    BytesAppend(Result, LBlock);
     LPrev := LBlock;
   end;
   if Length(Result) > ALen then

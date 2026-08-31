@@ -83,15 +83,10 @@ function SshBuildCurve25519HashInput(const AVc, AVs: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.hash,
-  nextpas.core.bytes.ops,
   nextpas.core.mem.secure;
-
-function ConcatAll(const AParts: array of TBytes): TBytes; inline;
-begin
-  Result := BytesConcatMany(AParts);
-end;
 
 constructor TSshKexCurve25519.Create;
 begin
