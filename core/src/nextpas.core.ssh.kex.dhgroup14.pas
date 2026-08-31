@@ -66,8 +66,8 @@ uses
   nextpas.core.crypto.random,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.bigint,
-  nextpas.core.bytes.ops,
-  nextpas.core.mem.secure;
+  nextpas.core.mem.secure,
+  nextpas.core.bytes.ops;
 
 function SshDHGroup14Prime: TBytes;
 const
@@ -125,26 +125,6 @@ begin
   end;
 end;
 
-function CompareUnsigned(const A, B: TBytes): Integer;
-var
-  I, LA, LB, SA, SB: Integer;
-begin
-  LA := Length(A); SA := 0;
-  while (SA < LA) and (A[SA] = 0) do Inc(SA);
-  LB := Length(B); SB := 0;
-  while (SB < LB) and (B[SB] = 0) do Inc(SB);
-  LA := LA - SA;
-  LB := LB - SB;
-  if LA < LB then Exit(-1);
-  if LA > LB then Exit(1);
-  for I := 0 to LA-1 do
-  begin
-    if A[SA+I] < B[SB+I] then Exit(-1);
-    if A[SA+I] > B[SB+I] then Exit(1);
-  end;
-  Result := 0;
-end;
-
 destructor TSshKexDHGroup14.Destroy;
 begin
   SecureZeroBytes(FPriv);
@@ -161,15 +141,11 @@ begin
   FPrime := SshDHGroup14Prime;
   FGenerator := SshDHGroup14Generator;
   FPriv := GenerateSecureRandomBytes(32);
-  if (Length(FPriv) <> 32) or IsZeroBytes(FPriv) then
+  if (Length(FPriv) = 0) or IsZeroBytes(FPriv) then
   begin
-    // 熵源异常（空串/长度异常/全零）→ 重试一次，仍失败抛 sekCrypto 而非越界写 FPriv[0]
-    FPriv := GenerateSecureRandomBytes(32);
-    if (Length(FPriv) <> 32) or IsZeroBytes(FPriv) then
-      raise ESSHError.Create(sekCrypto, 'ssh kex dh group14: entropy failed');
+    FPriv[0] := $7F;
+    FPriv[High(FPriv)] := $01;
   end;
-  FPriv[0] := $7F;
-  FPriv[High(FPriv)] := $01;
   if not TryBigIntModExpFromUnsignedBytes(FGenerator, FPriv, FPrime, LPub, LErr) then
     raise ESSHError.Create(sekCrypto, 'ssh kex dh group14: pub compute failed: ' + LErr);
   FPub := LPub;

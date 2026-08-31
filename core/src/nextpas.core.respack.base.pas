@@ -8,7 +8,6 @@ unit nextpas.core.respack.base;
 interface
 
 uses
-  nextpas.core.base,
   nextpas.core.exception;
 
 const
@@ -128,14 +127,14 @@ procedure WrU16LE(AData: PByte; const AValue: Word); inline;
 procedure WrU32LE(AData: PByte; const AValue: UInt32); inline;
 procedure WrU64LE(AData: PByte; const AValue: UInt64); inline;
 
-{ FNV-1a 32 — respack 内联 6 行以保持 L0 零依赖（不引 L1 checksum），checksum.fnv32 为他处单源；README 已记录设计决策，属有意双源 }
+{ FNV-1a 32（内联实现决策见 README 设计决策记录） }
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32;
 
 { Go io/fs.ValidPath 语义（FORMAT.md 路径规范）：UTF-8、unrooted、'/'
   分隔、段非空非'.'非'..'、反斜杠为普通字符；特例 '.' 表根。
   文件条目场景 AFileEntry=True 时拒绝根。 }
 function ResPackValidPath(const APath: string;
-  const AFileEntry: Boolean): Boolean; inline;
+  const AFileEntry: Boolean): Boolean;
 
 { 默认构建选项 }
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
@@ -201,7 +200,7 @@ begin
 end;
 
 function ResPackValidPath(const APath: string;
-  const AFileEntry: Boolean): Boolean; inline;
+  const AFileEntry: Boolean): Boolean;
 begin
   Result := BaseValidPath(APath, not AFileEntry);
 end;
@@ -224,10 +223,25 @@ begin
   ABlob.Owned := False;
 end;
 
-{ 十进制整数转字符串 — 复用 L0 base.IntToStr 单源（inline 转发，避免重复实现；不引 L1 text.conv 以保 L0 分层） }
-function ResPackUIntToStr(AValue: UInt32): string; inline;
+{ 十进制整数转字符串（局部实现，避免引入 SysUtils/text 依赖） }
+function ResPackUIntToStr(AValue: UInt32): string;
+var
+  Tmp: array[0..15] of AnsiChar;
+  I, J: Integer;
 begin
-  Result := nextpas.core.base.IntToStr(UInt64(AValue));
+  FillChar(Tmp, SizeOf(Tmp), 0);
+  if AValue = 0 then
+    Exit('0');
+  I := High(Tmp);
+  while AValue > 0 do
+  begin
+    Tmp[I] := AnsiChar(Ord('0') + (AValue mod 10));
+    Dec(I);
+    AValue := AValue div 10;
+  end;
+  SetLength(Result, High(Tmp) - I);
+  for J := 1 to High(Tmp) - I do
+    Result[J] := Char(Tmp[I + J]);
 end;
 
 constructor EResPackError.Create(const AMsg: string);
