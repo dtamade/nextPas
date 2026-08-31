@@ -126,8 +126,8 @@ end;
 
 | 操作 | 目标 | 证据 |
 |------|------|------|
-| Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire |
-| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；16槽SpinLock池化10k 163ms 4.9×预算，heaptrc0 |
+| Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FEntries/FETags/FLastMods三平行缓存+FRp零拷贝存储，零DecodeWire |
+| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；256槽SpinLock池化10k 163ms 4.9×预算，heaptrc0 |
 | List（embedded） | 有序区间扫描，一次数组分配 | FEntries直填零Stat，VfsDeriveChildNames单次分配 |
 | OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
 | Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |

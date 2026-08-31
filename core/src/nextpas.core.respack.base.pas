@@ -137,7 +137,7 @@ function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32;
   分隔、段非空非'.'非'..'、反斜杠为普通字符；特例 '.' 表根。
   文件条目场景 AFileEntry=True 时拒绝根。 }
 function ResPackValidPath(const APath: string;
-  const AFileEntry: Boolean): Boolean;
+  const AFileEntry: Boolean): Boolean; inline;
 
 { 默认构建选项 }
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
@@ -203,7 +203,7 @@ begin
 end;
 
 function ResPackValidPath(const APath: string;
-  const AFileEntry: Boolean): Boolean;
+  const AFileEntry: Boolean): Boolean; inline;
 begin
   Result := BaseValidPath(APath, not AFileEntry);
 end;

@@ -301,17 +301,6 @@ uses
   nextpas.core.errors,
   nextpas.core.platform.args;
 
-function Utf8TextToBytes(const AText: string): TBytes;
-var
-  LLen: SizeInt;
-begin
-  Result := nil;
-  LLen := Length(AText);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AText[1], Result[0], LLen);
-end;
-
 function Open(const APath: string; const AMode: TFileMode): IFile;
 begin
   Result := FsOpen(APath, AMode);
@@ -362,7 +351,8 @@ end;
 procedure WriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission);
 begin
-  nextpas.core.fs.util.FsWriteFile(APath, Utf8TextToBytes(AText), APerm);
+  // 为什么改：门面纯转发至 fs.util.FsWriteFileText 单源，消除私有 Utf8TextToBytes 重复与双写路径分叉，对齐 ReadFileText/FsWriteFileLines 的对称单源链（审计 D1/D2）
+  nextpas.core.fs.util.FsWriteFileText(APath, AText, APerm);
 end;
 
 procedure WriteFileLines(const APath: string; const ALines: TStringArray;
