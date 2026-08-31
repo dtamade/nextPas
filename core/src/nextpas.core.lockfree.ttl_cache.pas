@@ -86,7 +86,6 @@ type
       ADefaultTTLMs: Int64 = TTL_DEFAULT_TTL_MS);
     destructor Destroy; override;
 
-  {** @concurrency Thread-safe (see source for details). }
     {** @desc 存入键值对（使用默认 TTL） }
     function Put(const AKey, AValue: AnsiString): TTTLCacheResult;
     {** @desc 存入键值对（指定 TTL 毫秒） }

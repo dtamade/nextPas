@@ -50,6 +50,7 @@ function TryToFixedLength32(const AValue: TBytes; out AResult: TBytes; out AErro
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.constant_time,
@@ -137,72 +138,45 @@ begin
     Move(ARight[0], Result[LLeftLen], LRightLen);
 end;
 
-function StripLeadingZeroBytes(const AData: TBytes): TBytes;
-var
-  I: Integer;
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
 begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-
-  if I >= Length(AData) then
-  begin
-    SetLength(Result, 1);
-    Result[0] := 0;
-    Exit;
-  end;
-
-  Result := Copy(AData, I, Length(AData) - I);
+  Result := nextpas.core.bytes.ops.StripLeadingZeroView(AData);
 end;
 
-function IsZeroBytes(const AData: TBytes): Boolean;
-var
-  LNorm: TBytes;
+function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 begin
-  LNorm := StripLeadingZeroBytes(AData);
-  Result := (Length(LNorm) = 1) and (LNorm[0] = 0);
+  Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
 end;
 
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer;
-var
-  LLeft: TBytes;
-  LRight: TBytes;
-  I: Integer;
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
 begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-
-  if Length(LLeft) < Length(LRight) then
-    Exit(-1);
-  if Length(LLeft) > Length(LRight) then
-    Exit(1);
-
-  for I := 0 to Length(LLeft) - 1 do
-  begin
-    if LLeft[I] < LRight[I] then
-      Exit(-1);
-    if LLeft[I] > LRight[I] then
-      Exit(1);
-  end;
-
-  Result := 0;
+  // perf/single-source: delegate to bytes.ops.IsZeroBytes which uses
+  // StripLeadingZeroView.Len=0 (no local scan loop).
+  Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
 end;
 
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
+function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
 begin
-  Result := CompareUnsignedBytes(ALeft, ARight) = 0;
+  Result := nextpas.core.bytes.ops.CompareUnsignedBytes(ALeft, ARight);
+end;
+
+function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
 end;
 
 {** 恒定时间无符号字节数组相等比较（纵深防御：签名验证路径） }
-function ConstantTimeUnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
+function ConstantTimeUnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 var
-  LLeft, LRight: TBytes;
+  LLeft, LRight: TByteSpan;
 begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-  if Length(LLeft) <> Length(LRight) then
+  LLeft := nextpas.core.bytes.ops.StripLeadingZeroView(ALeft);
+  LRight := nextpas.core.bytes.ops.StripLeadingZeroView(ARight);
+  if LLeft.Len <> LRight.Len then
     Exit(False);
-  Result := TConstantTime.CompareBytes(LLeft, LRight) = 1;
+  if LLeft.Len = 0 then
+    Exit(True);
+  Result := TConstantTime.CompareBuffer(LLeft.Data, LRight.Data, LLeft.Len) = 1;
 end;
 
 function TryUnsignedSubtractSmall(const AValue: TBytes; ASub: Byte; out AResult: TBytes): Boolean;
@@ -722,9 +696,9 @@ var
 begin
   SetLength(LTagArr, 1);
   LTagArr[0] := ATag;
-  Result := ConcatBytes(AV, LTagArr);
-  Result := ConcatBytes(Result, AX);
-  Result := ConcatBytes(Result, AH1);
+  Result := BytesConcat(AV, LTagArr);
+  Result := BytesConcat(Result, AX);
+  Result := BytesConcat(Result, AH1);
 end;
 
 function TryRFC6979NextK(
@@ -753,7 +727,7 @@ begin
 
     SetLength(LZeroTag, 1);
     LZeroTag[0] := 0;
-    AK := HMAC_SHA256(AK, ConcatBytes(AV, LZeroTag));
+    AK := HMAC_SHA256(AK, BytesConcat(AV, LZeroTag));
     AV := HMAC_SHA256(AK, AV);
   end;
 end;
@@ -1041,7 +1015,7 @@ begin
 
   SetLength(LTagArr, 1);
   LTagArr[0] := 0;
-  LK := HMAC_SHA256(LK, ConcatBytes(LV, LTagArr));
+  LK := HMAC_SHA256(LK, BytesConcat(LV, LTagArr));
   LV := HMAC_SHA256(LK, LV);
 
   AError := 'ECDSA signing failed after repeated nonce attempts';

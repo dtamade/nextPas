@@ -13,8 +13,8 @@ Sampling allocator — 采样分配器（1/N 采样记录）。
 
 适用场景: 生产环境性能分析、分配热点识别。
 
-Author:    fafafaStudio
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Author:    nextpas.core
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.allocator.sampling;

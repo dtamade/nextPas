@@ -51,7 +51,6 @@ type
     FActive: Boolean;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
   TWRRImpl = class
   private
     FBackends: array of TWRRBackend;

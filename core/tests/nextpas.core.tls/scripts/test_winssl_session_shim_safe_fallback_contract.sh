@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,7 +38,7 @@ require_absent() {
   fi
 }
 
-session_file="src/nextpas.core.tls.winssl.session.pas"
+session_file="core/src/nextpas.core.tls.winssl.session.pas"
 
 printf '[TEST] WinSSL session shim safe fallback contract\n'
 
@@ -51,7 +51,7 @@ require_absent "$session_file" \
   'WinSSL compatibility shim no longer references the risky session-info attribute directly'
 
 require_match "$session_file" \
-  'LSessionID := Format\('"'winssl-session-%p'"', \[Pointer\(AContext\)\]\);' \
+  'LSessionID := nextpas\.core\.text\.format\.TextFormat\('"'"'winssl-session-0x%x'"'"', \[PtrUInt\(AContext\)\]\);' \
   'WinSSL compatibility shim now falls back to the conservative pointer-based session id'
 
 require_match "$session_file" \

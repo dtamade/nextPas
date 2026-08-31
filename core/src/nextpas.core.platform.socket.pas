@@ -71,7 +71,12 @@ const
   PLATFORM_SHUT_RD     = 0;
   PLATFORM_SHUT_WR     = 1;
   PLATFORM_SHUT_RDWR   = 2;
+  { Winsock 无 MSG_NOSIGNAL/MSG_DONTWAIT：占位 0（Windows 非阻塞发送
+    需 ioctlsocket(FIONBIO) socket 模式，net.tcp poll 路径维持旧行为）。
+    MSG_PEEK 为 Winsock 真值。 }
   PLATFORM_MSG_NOSIGNAL = 0;
+  PLATFORM_MSG_DONTWAIT = 0;
+  PLATFORM_MSG_PEEK = 2;
 {$ELSE}
   PLATFORM_AF_INET     = AF_INET;
   PLATFORM_AF_INET6    = AF_INET6;
@@ -109,10 +114,16 @@ const
   PLATFORM_SHUT_RDWR   = SHUT_RDWR;
 {$IFDEF NEXTPAS_MACOS}
   PLATFORM_MSG_NOSIGNAL = $20000;
+  PLATFORM_MSG_DONTWAIT = $80;
+  PLATFORM_MSG_PEEK = 1;
 {$ELSEIF defined(NEXTPAS_FREEBSD)}
   PLATFORM_MSG_NOSIGNAL = $20000;
+  PLATFORM_MSG_DONTWAIT = $80;
+  PLATFORM_MSG_PEEK = 2;
 {$ELSE}
   PLATFORM_MSG_NOSIGNAL = $00004000;
+  PLATFORM_MSG_DONTWAIT = $00000040;
+  PLATFORM_MSG_PEEK = 2;
 {$ENDIF}
 {$ENDIF}
 
@@ -193,6 +204,14 @@ function platform_socket_send(const ASocket: TPlatformSocket;
     @return 0 成功，否则返回错误码 *}
 function platform_socket_recv(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32;
+
+{** @desc 非破坏性对端存活探测（server 侧长前置工作的客户端断连识别）
+    POSIX：一字节 recv(MSG_PEEK|MSG_DONTWAIT)——0 字节=对端 FIN→False，
+    EAGAIN/EWOULDBLOCK=存活无数据→True，EINTR=无法判定（保守 True），
+    其余错误（RESET/NOTCONN/BADF 等）=连接已坏→False。
+    Windows：无 MSG_DONTWAIT 等价物，阻塞 socket 上窥探可能挂死
+    worker 线程——恒返回 True（无法判定，保守）。永不消费数据。 }
+function platform_socket_peer_alive(const ASocket: TPlatformSocket): Boolean;
 
 {** @desc 关闭套接字的读/写/读写端
     @param ASocket 套接字句柄
@@ -319,6 +338,16 @@ function platform_socket_error_timed_out(const AError: Int32): Boolean;
     @param AError 错误码
     @return True 表示 connect 仍在进行 *}
 function platform_socket_error_in_progress(const AError: Int32): Boolean;
+
+{** @desc 判断错误是否为信号打断（EINTR / WSAEINTR / PLATFORM_ERR_INTR）
+    @param AError 错误码
+    @return True 表示应重试同一系统调用（poll/deadline 语义保持） *}
+function platform_socket_error_interrupted(const AError: Int32): Boolean;
+
+{** @desc 判断错误是否为瞬时连接中止（ECONNABORTED / WSAECONNABORTED）
+    @param AError 错误码
+    @return True 表示应重试（accept 循环语义：握手完成到取走之间对端 reset） *}
+function platform_socket_error_aborted(const AError: Int32): Boolean;
 
 const
   { poll event bits for platform_socket_poll }
@@ -643,6 +672,24 @@ begin
   Result := PosixCheck(nextpas.core.platform.posix.ffi.shutdown(ASocket.Value, AHow));
 end;
 
+function platform_socket_peer_alive(const ASocket: TPlatformSocket): Boolean;
+var
+  LBuf: Byte;
+  LN: Int32;
+  LRc: Int32;
+begin
+  { 一字节窥探：不消费数据、不阻塞（MSG_DONTWAIT）。 }
+  LRc := platform_socket_recv(ASocket, @LBuf, 1,
+    PLATFORM_MSG_PEEK or PLATFORM_MSG_DONTWAIT, LN);
+  if LRc = 0 then
+    Exit(LN > 0);            { 0 字节 = 对端已 FIN → False；有数据 → True }
+  if platform_socket_error_would_block(LRc) or
+     platform_socket_error_timed_out(LRc) or
+     platform_socket_error_interrupted(LRc) then
+    Exit(True);              { 无数据 / 被中断：存活或无法判定，保守 True }
+  Exit(False);               { RESET/NOTCONN/BADF 等：连接已坏 }
+end;
+
 function platform_socket_setsockopt(const ASocket: TPlatformSocket;
   ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32;
 begin
@@ -839,6 +886,16 @@ begin
     platform_socket_error_would_block(AError);
 end;
 
+function platform_socket_error_interrupted(const AError: Int32): Boolean;
+begin
+  Result := (AError = ESysEINTR) or (AError = PLATFORM_ERR_INTR);
+end;
+
+function platform_socket_error_aborted(const AError: Int32): Boolean;
+begin
+  Result := AError = ESysECONNABORTED;
+end;
+
 function platform_socket_poll(const ASocket: TPlatformSocket;
   const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
 var
@@ -858,7 +915,7 @@ begin
       ARevents := Int32(LPfd.revents);
       Exit(1);
     end;
-    if platform_get_errno = ESysEINTR then
+    if platform_socket_error_interrupted(platform_get_errno) then
       Continue;
     Exit(-platform_get_errno);
   until False;
@@ -895,7 +952,7 @@ begin
       end;
       Exit(0);
     end;
-    if platform_get_errno = ESysEINTR then
+    if platform_socket_error_interrupted(platform_get_errno) then
       Continue;
     Exit(-platform_get_errno);
   until False;
@@ -1409,6 +1466,12 @@ begin
   end;
 end;
 
+function platform_socket_peer_alive(const ASocket: TPlatformSocket): Boolean;
+begin
+  { 无 MSG_DONTWAIT 等价物：阻塞 socket 上窥探可能挂死 worker——保守 True。 }
+  Result := True;
+end;
+
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
 type
   { FPC's winsock bindings in this toolchain do not expose addrinfo/getaddrinfo.
@@ -1599,19 +1662,36 @@ begin
     (AError = WSAEINPROGRESS) or (AError = WSAEWOULDBLOCK);
 end;
 
+function platform_socket_error_interrupted(const AError: Int32): Boolean;
+begin
+  Result := (AError = PLATFORM_ERR_INTR) or (AError = WSAEINTR);
+end;
+
+function platform_socket_error_aborted(const AError: Int32): Boolean;
+begin
+  { WSAECONNABORTED: peer reset between handshake completion and accept. }
+  Result := AError = WSAECONNABORTED;
+end;
+
 function platform_socket_poll(const ASocket: TPlatformSocket;
   const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
 var
   LPfd: TWSAPollFd;
   LNready: LongInt;
+  LErr: Int32;
 begin
   ARevents := 0;
   FillChar(LPfd, SizeOf(LPfd), 0);
   LPfd.fd := TSocket(ASocket.Value);
   LPfd.events := SmallInt(AEvents);
-  LNready := WSAPoll(@LPfd, 1, ATimeoutMs);
-  if LNready < 0 then
-    Exit(-platform_get_last_error);
+  repeat
+    LNready := WSAPoll(@LPfd, 1, ATimeoutMs);
+    if LNready >= 0 then
+      Break;
+    LErr := platform_get_last_error;
+    if not platform_socket_error_interrupted(LErr) then
+      Exit(-LErr);
+  until False;
   if LNready = 0 then
     Exit(0);
   ARevents := Int32(LPfd.revents);
@@ -1624,6 +1704,7 @@ function platform_socket_poll_or_wake(const ASocket: TPlatformSocket;
 var
   LPfds: array[0..1] of TWSAPollFd;
   LNready: LongInt;
+  LErr: Int32;
 begin
   ARevents := 0;
   FillChar(LPfds[0], SizeOf(LPfds), 0);
@@ -1631,9 +1712,14 @@ begin
   LPfds[0].events := SmallInt(AEvents);
   LPfds[1].fd := TSocket(AWake.Value);
   LPfds[1].events := SmallInt(PLATFORM_POLL_IN);
-  LNready := WSAPoll(@LPfds[0], 2, ATimeoutMs);
-  if LNready < 0 then
-    Exit(-platform_get_last_error);
+  repeat
+    LNready := WSAPoll(@LPfds[0], 2, ATimeoutMs);
+    if LNready >= 0 then
+      Break;
+    LErr := platform_get_last_error;
+    if not platform_socket_error_interrupted(LErr) then
+      Exit(-LErr);
+  until False;
   if LNready = 0 then
     Exit(0);
   if (LPfds[1].revents and SmallInt(PLATFORM_POLL_IN or PLATFORM_POLL_HUP or
@@ -2021,6 +2107,7 @@ function platform_socket_accept(const ASocket: TPlatformSocket; AAddr: Pointer; 
 function platform_socket_connect(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_send(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ASent: Int32): Int32; begin ASent := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_recv(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32; begin ARecvd := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_peer_alive(const ASocket: TPlatformSocket): Boolean; begin Result := True; end;
 function platform_socket_shutdown(const ASocket: TPlatformSocket; AHow: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_setsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
@@ -2034,6 +2121,7 @@ function platform_socket_error_would_block(const AError: Int32): Boolean; begin 
 function platform_socket_error_resource_limit(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_in_progress(const AError: Int32): Boolean; begin Result := False; end;
+function platform_socket_error_interrupted(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_poll(const ASocket: TPlatformSocket; const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_poll_or_wake(const ASocket: TPlatformSocket; const AEvents: Int32; const AWake: TPlatformSocket; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_pair(ADomain, AType, AProtocol: Int32; out ASocket1, ASocket2: TPlatformSocket): Int32; begin ASocket1.Value := -1; ASocket2.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;

@@ -27,7 +27,6 @@ type
 
   {** @desc 漏桶限流器
     @details 恒定速率漏水，请求加水。桶满则拒绝。
-  {** @concurrency Thread-safe (see source for details). }
       与 TokenBucket 互补：TokenBucket 允许突发，LeakyBucket 强制平滑输出。 }
   TLeakyBucket = class
   private

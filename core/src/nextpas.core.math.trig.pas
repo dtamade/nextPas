@@ -60,8 +60,8 @@ function ArcTan(const AX: Single): Single; overload; inline;
  * @param AX The X coordinate
  * @return arctan2(AY, AX) in radians
  *}
-function ArcTan2(const AY, AX: Double): Double; overload; inline;
-function ArcTan2(const AY, AX: Single): Single; overload; inline;
+function ArcTan2(const AY, AX: Double): Double; overload;
+function ArcTan2(const AY, AX: Single): Single; overload;
 
 {** * Computes the exponential function e^AX.
  * @param AX The exponent
@@ -104,7 +104,7 @@ function Power(const ABase, AExponent: Single): Single; overload; inline;
  * @return sqrt(AX), or NaN if AX is negative
  *}
 function Sqrt(const AX: Double): Double; overload; inline;
-function Sqrt(const AX: Single): Single; overload; inline;
+function Sqrt(const AX: Single): Single; overload;
 
 implementation
 

@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.engine;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 ENGINE Backend (OpenSSL 1.1.1)                        }
+{  nextpas.core.tls - PKCS#11 ENGINE Backend (OpenSSL 1.1.1)                        }
 {                                                                              }
 {  Purpose: Load PKCS#11 keys using OpenSSL 1.1.1 ENGINE API                  }
 {                                                                              }

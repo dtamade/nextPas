@@ -145,7 +145,7 @@ var
   DialogArea, Inner, BodyArea, ButtonArea: TRect;
   Blk: IBlock;
   BodyPara: IParagraph;
-  I, BtnX, BtnW, TotalBtnW, Spacing: Integer;
+  I, BtnX, BtnW, TotalBtnW, Spacing, LBodyH: Integer;
   BtnText: AnsiString;
   Sty: TStyle;
 begin
@@ -169,7 +169,11 @@ begin
 
   if Length(FButtons) > 0 then
   begin
-    BodyArea := TRect.Make(Inner.X, Inner.Y, Inner.Width, Inner.Height - 2);
+    { BodyArea 高经 Integer 中间量 clamp≥0 再入 Word 字段：Inner.Height=1 时
+      1-2=-1 → Word 65535 绕过下方 IsEmpty（PH29，与 linechart 同源下溢）}
+    LBodyH := Integer(Inner.Height) - 2;
+    if LBodyH < 0 then LBodyH := 0;
+    BodyArea := TRect.Make(Inner.X, Inner.Y, Inner.Width, LBodyH);
     ButtonArea := TRect.Make(Inner.X, Inner.Y + Inner.Height - 1, Inner.Width, 1);
   end
   else

@@ -2,6 +2,8 @@ unit nextpas.core.net.tcp;
 {**
  * @desc TCP 实现：TTcpStream（带 deadline 超时）+ TTcpListener。
  *       SO_REUSEADDR 默认启用，支持 SetNoDelay/SetKeepAlive。
+ *       Read/Write/Accept 对 EINTR（信号打断）重试，沿用 poll/deadline
+ *       语义，不把瞬时中断误报为硬失败。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -39,6 +41,7 @@ uses
   nextpas.core.errors,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.atomic,
   nextpas.core.platform.socket.base,
   nextpas.core.platform.error,
   nextpas.core.net.resolve,
@@ -47,7 +50,8 @@ uses
 type
   TTcpStream = class(TInterfacedObject, IReader, IWriter, IReadWriteCloser, ITcpStream,
     ITcpSocketRuntime,
-    ITcpStreamRuntime)
+    ITcpStreamRuntime,
+    ITcpPeerProbe)
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
@@ -63,6 +67,8 @@ type
     procedure ThrowIfCanceled;
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
+    procedure ApplyDeadlineTimeout(const ADeadline: TDeadline; var ALastMs: UInt32;
+      const ASockOpt: Int32; const AOpName: string);
     function CancelWakeHandle: PtrUInt;
     function DeadlineTimeoutMs(const ADeadline: TDeadline): Int32;
     { 0=timeout/retry, 1=ready, raises on cancel/deadline/error. }
@@ -89,6 +95,8 @@ type
       out ARead: SizeUInt): TTcpStreamIOResult;
     function TryWrite(const ABuf; const ACount: SizeUInt;
       out AWritten: SizeUInt): TTcpStreamIOResult;
+    { ITcpPeerProbe：非破坏性对端存活探测（平台层 peek 封装）。 }
+    function PeerAlive: Boolean;
   end;
 
   TTcpListener = class(TInterfacedObject, ITcpListener, ITcpSocketRuntime,
@@ -96,7 +104,10 @@ type
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
-    FClosed: Boolean;
+    { R9: 关闭态与在飞 accept 计数均为原子量——Close 可从任意线程调用，
+      必须唤醒他线程正阻塞的 Accept 且不产生 fd 号复用竞态。 }
+    FClosedFlag: Int32;
+    FAcceptDepth: Int32;
     procedure EnsureOpen(const AOperation: string);
   public
     constructor Create(const ASocket: TPlatformSocket; const ALocal: TNetAddress);
@@ -180,6 +191,11 @@ end;
 const
   { Fallback slice when cancel token is probe-only (no WakeHandle). }
   NET_IO_CANCEL_SLICE_MS = 10;
+  { poll 路径单次 send() 上限（256KB）：poll 拥有阻塞与 deadline，send 用
+    MSG_DONTWAIT 非阻塞发送——若一次 send 整个剩余块（如 16MB 大帧），
+    阻塞式 send 会在内核里等整个消息入队，SO_SNDTIMEO 已被 poll 路径清除、
+    deadline 无法打断（G3 反哺：写超时对慢客户端失效）。 }
+  NET_TCP_WRITE_CHUNK = 262144;
 
 procedure TTcpStream.EnsureOpen(const AOperation: string);
 begin
@@ -302,6 +318,15 @@ begin
     LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
     if LResult = 0 then
       Exit(SizeUInt(LRecvd));
+    { EINTR：瞬时，必须重试 WaitIO+recv。不能并入 would_block/timed_out
+      分支——该分支在无 cancel token 时即使 deadline 未到期也会抬超时。 }
+    if platform_socket_error_interrupted(LResult) then
+    begin
+      ThrowIfCanceled;
+      if (not FReadDeadline.IsInfinite) and FReadDeadline.IsExpired then
+        raise ETimeoutError.Create('read deadline exceeded');
+      Continue;
+    end;
     if platform_socket_error_would_block(LResult) or
        platform_socket_error_timed_out(LResult) then
     begin
@@ -329,21 +354,41 @@ var
   LPtr: PByte;
   LRemaining: SizeUInt;
   LWait: Int32;
+  LFlags: Int32;
+  LChunk: Int32;
 begin
   EnsureOpen('write');
   if ACount = 0 then Exit(0);
   LPtr := @ABuf;
   LRemaining := ACount;
   Result := 0;
+  { poll 路径（有 waitable cancel token）：send 用 MSG_DONTWAIT，阻塞与
+    deadline 全部由 poll 拥有——否则单次巨型阻塞 send() 会在内核里停住
+    越过写 deadline（G3：慢客户端填满发送缓冲时写超时不生效）。
+    非 poll 路径维持阻塞 send + SO_SNDTIMEO 切片语义。
+    Windows（无 MSG_DONTWAIT）维持旧行为：阻塞 send 受块大小切片约束。 }
+  LFlags := PLATFORM_MSG_NOSIGNAL;
+  if CancelWakeHandle <> 0 then
+    LFlags := LFlags or PLATFORM_MSG_DONTWAIT;
   while LRemaining > 0 do
   begin
     ThrowIfCanceled;
     LWait := WaitIO(PLATFORM_POLL_OUT, FWriteDeadline, 'write');
     if LWait = 0 then
       Continue;
-    LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), PLATFORM_MSG_NOSIGNAL, LSent);
+    LChunk := Int32(LRemaining);
+    if LChunk > NET_TCP_WRITE_CHUNK then
+      LChunk := NET_TCP_WRITE_CHUNK;
+    LResult := platform_socket_send(FSocket, LPtr, LChunk, LFlags, LSent);
     if LResult <> 0 then
     begin
+      if platform_socket_error_interrupted(LResult) then
+      begin
+        ThrowIfCanceled;
+        if (not FWriteDeadline.IsInfinite) and FWriteDeadline.IsExpired then
+          raise ETimeoutError.Create('write deadline exceeded');
+        Continue;
+      end;
       if platform_socket_error_would_block(LResult) or
          platform_socket_error_timed_out(LResult) then
       begin
@@ -467,7 +512,8 @@ begin
       Exit(tsiorClosed);
     Exit(tsiorOk);
   end;
-  if platform_socket_error_would_block(LResult) then
+  if platform_socket_error_would_block(LResult) or
+     platform_socket_error_interrupted(LResult) then
     Exit(tsiorWouldBlock);
   raise ENetworkError.Create('tcp read failed (' + IntToStr(LResult) + ')');
 end;
@@ -486,7 +532,9 @@ begin
   if FWriteDeadline.IsExpired then
     Exit(tsiorTimeout);
 
-  LResult := platform_socket_send(FSocket, @ABuf, Int32(ACount), 0, LSent);
+  { MSG_NOSIGNAL：对端断连（RST）时 send 返回 EPIPE 而非 SIGPIPE 杀进程
+    （F-7：WS 广播写已断开连接曾致进程 141 死亡）。 }
+  LResult := platform_socket_send(FSocket, @ABuf, Int32(ACount), PLATFORM_MSG_NOSIGNAL, LSent);
   if LResult = 0 then
   begin
     AWritten := SizeUInt(LSent);
@@ -494,85 +542,66 @@ begin
       Exit(tsiorClosed);
     Exit(tsiorOk);
   end;
-  if platform_socket_error_would_block(LResult) then
+  if platform_socket_error_would_block(LResult) or
+     platform_socket_error_interrupted(LResult) then
     Exit(tsiorWouldBlock);
   raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
 end;
 
-procedure TTcpStream.ApplyReadTimeout;
+function TTcpStream.PeerAlive: Boolean;
+begin
+  if FClosed then
+    Exit(False);
+  Result := platform_socket_peer_alive(FSocket);
+end;
+
+procedure TTcpStream.ApplyDeadlineTimeout(const ADeadline: TDeadline;
+  var ALastMs: UInt32; const ASockOpt: Int32; const AOpName: string);
 var
   LMs: UInt32;
   LRemaining: TDuration;
 begin
-  if FReadDeadline.IsInfinite then
+  if ADeadline.IsInfinite then
   begin
     if FCancelToken <> nil then
     begin
       LMs := NET_IO_CANCEL_SLICE_MS;
-      if LMs <> FLastReadTimeoutMs then
+      if LMs <> ALastMs then
       begin
-        platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
-        FLastReadTimeoutMs := LMs;
+        platform_socket_set_timeout(FSocket, ASockOpt, LMs);
+        ALastMs := LMs;
       end;
       Exit;
     end;
-    if FLastReadTimeoutMs <> 0 then
+    if ALastMs <> 0 then
     begin
-      platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, 0);
-      FLastReadTimeoutMs := 0;
+      platform_socket_set_timeout(FSocket, ASockOpt, 0);
+      ALastMs := 0;
     end;
     Exit;
   end;
-  if FReadDeadline.IsExpired then
-    raise ETimeoutError.Create('read deadline exceeded');
-  LRemaining := FReadDeadline.Remaining;
+  if ADeadline.IsExpired then
+    raise ETimeoutError.Create(AOpName + ' deadline exceeded');
+  LRemaining := ADeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
   if (FCancelToken <> nil) and (LMs > NET_IO_CANCEL_SLICE_MS) then
     LMs := NET_IO_CANCEL_SLICE_MS;
-  if LMs <> FLastReadTimeoutMs then
+  if LMs <> ALastMs then
   begin
-    platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
-    FLastReadTimeoutMs := LMs;
+    platform_socket_set_timeout(FSocket, ASockOpt, LMs);
+    ALastMs := LMs;
   end;
 end;
 
-procedure TTcpStream.ApplyWriteTimeout;
-var
-  LMs: UInt32;
-  LRemaining: TDuration;
+procedure TTcpStream.ApplyReadTimeout;
 begin
-  if FWriteDeadline.IsInfinite then
-  begin
-    if FCancelToken <> nil then
-    begin
-      LMs := NET_IO_CANCEL_SLICE_MS;
-      if LMs <> FLastWriteTimeoutMs then
-      begin
-        platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
-        FLastWriteTimeoutMs := LMs;
-      end;
-      Exit;
-    end;
-    if FLastWriteTimeoutMs <> 0 then
-    begin
-      platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, 0);
-      FLastWriteTimeoutMs := 0;
-    end;
-    Exit;
-  end;
-  if FWriteDeadline.IsExpired then
-    raise ETimeoutError.Create('write deadline exceeded');
-  LRemaining := FWriteDeadline.Remaining;
-  LMs := UInt32(LRemaining.AsMilliseconds);
-  if LMs = 0 then LMs := 1;
-  if (FCancelToken <> nil) and (LMs > NET_IO_CANCEL_SLICE_MS) then
-    LMs := NET_IO_CANCEL_SLICE_MS;
-  if LMs <> FLastWriteTimeoutMs then
-  begin
-    platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
-    FLastWriteTimeoutMs := LMs;
-  end;
+  ApplyDeadlineTimeout(FReadDeadline, FLastReadTimeoutMs, PLATFORM_SO_RCVTIMEO, 'read');
+end;
+
+procedure TTcpStream.ApplyWriteTimeout;
+begin
+  ApplyDeadlineTimeout(FWriteDeadline, FLastWriteTimeoutMs, PLATFORM_SO_SNDTIMEO, 'write');
 end;
 
 { TTcpListener }
@@ -582,19 +611,22 @@ begin
   inherited Create;
   FSocket := ASocket;
   FLocal := ALocal;
-  FClosed := False;
+  AtomicStore32(FClosedFlag, 0);
+  AtomicStore32(FAcceptDepth, 0);
 end;
 
 destructor TTcpListener.Destroy;
 begin
-  if not FClosed then
+  { R9: exchange 兜底首次关闭（Close 从未调用时）；已 Close 的路径下
+    fd 归属已由 Close/在飞 Accept 收尾，此处不再触碰。 }
+  if AtomicExchange32(FClosedFlag, 1) = 0 then
     platform_socket_close(FSocket);
   inherited;
 end;
 
 procedure TTcpListener.EnsureOpen(const AOperation: string);
 begin
-  if FClosed then
+  if AtomicLoad32(FClosedFlag) <> 0 then
     raise ENetworkError.Create('tcp listener ' + AOperation + ' after close');
 end;
 
@@ -606,23 +638,52 @@ var
   LResult: Int32;
   LLocal: TNetAddress;
 begin
-  EnsureOpen('accept');
-  LAddr.Clear;
-  LAddrLen := SizeOf(LAddr.Storage);
-  LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
-  if LResult <> 0 then
-    raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
-  LAddr.Len := UInt32(LAddrLen);
-  LLocalAddr.Clear;
-  LAddrLen := SizeOf(LLocalAddr.Storage);
-  if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
-  begin
-    LLocalAddr.Len := UInt32(LAddrLen);
-    LLocal := AddrFromSockAddr(LLocalAddr);
-  end
-  else
-    LLocal := FLocal;
-  Result := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
+  { R9: 先登记在飞再触碰 fd——并发 Close 由此确定 fd 归属（见 Close）。
+    登记后复检关闭态，封死「Close 见深度 0 已关 fd、本调用随后才登记」
+    的窗口。 }
+  AtomicFetchAdd32(FAcceptDepth, 1);
+  try
+    if AtomicLoad32(FClosedFlag) <> 0 then
+      raise ENetworkError.Create('tcp listener accept after close');
+    while True do
+    begin
+      LAddr.Clear;
+      LAddrLen := SizeOf(LAddr.Storage);
+      LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
+      if LResult = 0 then
+        Break;
+      if platform_socket_error_interrupted(LResult) then
+        Continue;
+      { R9: 握手完成后、accept 取走前被对端 reset 的连接（ECONNABORTED）
+        是瞬时噪音，与 EINTR 同列重试，不撕毁 accept 循环（对齐 Go）。 }
+      if platform_socket_error_aborted(LResult) then
+        Continue;
+      { Close 的 shutdown 唤醒落在这里：给出结构化关闭错误而非裸 errno。 }
+      if AtomicLoad32(FClosedFlag) <> 0 then
+        raise ENetworkError.Create('tcp listener accept after close');
+      raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
+    end;
+    LAddr.Len := UInt32(LAddrLen);
+    LLocalAddr.Clear;
+    LAddrLen := SizeOf(LLocalAddr.Storage);
+    if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
+    begin
+      LLocalAddr.Len := UInt32(LAddrLen);
+      LLocal := AddrFromSockAddr(LLocalAddr);
+    end
+    else
+      LLocal := FLocal;
+    Result := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
+  finally
+    { R9: 最后一个离场者在已关闭态下收尾延迟的 fd 关闭（所有权移交）。 }
+    if AtomicFetchSub32(FAcceptDepth, 1) = 1 then
+      if (AtomicLoad32(FClosedFlag) <> 0) and
+         (FSocket.Value <> PLATFORM_INVALID_SOCKET.Value) then
+      begin
+        platform_socket_close(FSocket);
+        FSocket := PLATFORM_INVALID_SOCKET;
+      end;
+  end;
 end;
 
 function TTcpListener.LocalAddr: TNetAddress;
@@ -632,9 +693,18 @@ end;
 
 procedure TTcpListener.Close;
 begin
-  if not FClosed then
+  { R9: 首个关闭者负责唤醒与 fd 收尾（幂等）。
+    ① shutdown 先于 fd 号释放：POSIX close 不唤醒他线程阻塞中的 accept，
+    且释放的 fd 号可被复用——阻塞中的 accept 会认错 socket（ABA）；
+    shutdown(RDWR) 使内核立即以 EINVAL 放行所有阻塞 accept，无此竞态。
+    ② 有在飞 accept 时推迟真实 close：返回路径的最后离场者关闭
+    （所有权移交）——否则 close 与在飞 syscall 竞态，Linux 上已进入
+    内核的 accept 不因 close 返回，将永久悬挂。 }
+  if AtomicExchange32(FClosedFlag, 1) <> 0 then
+    Exit;
+  platform_socket_shutdown(FSocket, PLATFORM_SHUT_RDWR);
+  if AtomicLoad32(FAcceptDepth) = 0 then
   begin
-    FClosed := True;
     platform_socket_close(FSocket);
     FSocket := PLATFORM_INVALID_SOCKET;
   end;
@@ -662,33 +732,53 @@ var
   LLocal: TNetAddress;
 begin
   AConn := nil;
-  EnsureOpen('try accept');
-  LAddr.Clear;
-  LAddrLen := SizeOf(LAddr.Storage);
-  LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
-  if LResult = 0 then
-  begin
-    LAddr.Len := UInt32(LAddrLen);
-    LLocalAddr.Clear;
-    LAddrLen := SizeOf(LLocalAddr.Storage);
-    if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
+  { R9: 与 Accept 同一登记/复检/离场收尾协议（非阻塞调用窗口极小，
+    但协议统一才无可推敲的例外）。 }
+  AtomicFetchAdd32(FAcceptDepth, 1);
+  try
+    if AtomicLoad32(FClosedFlag) <> 0 then
+      raise ENetworkError.Create('tcp listener try accept after close');
+    LAddr.Clear;
+    LAddrLen := SizeOf(LAddr.Storage);
+    LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
+    if LResult = 0 then
     begin
-      LLocalAddr.Len := UInt32(LAddrLen);
-      LLocal := AddrFromSockAddr(LLocalAddr);
-    end
-    else
-      LLocal := FLocal;
-    AConn := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
-    Exit(tarAccepted);
+      LAddr.Len := UInt32(LAddrLen);
+      LLocalAddr.Clear;
+      LAddrLen := SizeOf(LLocalAddr.Storage);
+      if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
+      begin
+        LLocalAddr.Len := UInt32(LAddrLen);
+        LLocal := AddrFromSockAddr(LLocalAddr);
+      end
+      else
+        LLocal := FLocal;
+      AConn := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
+      Exit(tarAccepted);
+    end;
+    if platform_socket_error_would_block(LResult) or
+       platform_socket_error_interrupted(LResult) then
+      Exit(tarWouldBlock);
+    { EMFILE/ENFILE: process or system fd table full. Treat as temporary
+      backpressure (same as would-block for readiness loops) so one bad accept
+      does not tear down the epoll server. Threaded Accept still raises. }
+    if platform_socket_error_resource_limit(LResult) then
+      Exit(tarWouldBlock);
+    { R9: 瞬时握手中止与 shutdown 唤醒同 Accept 语义。 }
+    if platform_socket_error_aborted(LResult) then
+      Exit(tarWouldBlock);
+    if AtomicLoad32(FClosedFlag) <> 0 then
+      raise ENetworkError.Create('tcp listener try accept after close');
+    raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
+  finally
+    if AtomicFetchSub32(FAcceptDepth, 1) = 1 then
+      if (AtomicLoad32(FClosedFlag) <> 0) and
+         (FSocket.Value <> PLATFORM_INVALID_SOCKET.Value) then
+      begin
+        platform_socket_close(FSocket);
+        FSocket := PLATFORM_INVALID_SOCKET;
+      end;
   end;
-  if platform_socket_error_would_block(LResult) then
-    Exit(tarWouldBlock);
-  { EMFILE/ENFILE: process or system fd table full. Treat as temporary
-    backpressure (same as would-block for readiness loops) so one bad accept
-    does not tear down the epoll server. Threaded Accept still raises. }
-  if platform_socket_error_resource_limit(LResult) then
-    Exit(tarWouldBlock);
-  raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
 end;
 
 { Factory functions }
@@ -766,47 +856,6 @@ begin
   Result := NetTcpConnect(AAddr, APort, 0);
 end;
 
-{ Parse FormatIPv6Addr-style "xxxx:xxxx:..." (8 groups of 4 hex) into 16 bytes. }
-function ParseIPv6HexGroups(const AIP: string; ABytes: PByte): Boolean;
-var
-  LGroup, LNibble, LPos, LVal: Integer;
-  LC: Char;
-begin
-  Result := False;
-  if ABytes = nil then
-    Exit;
-  FillChar(ABytes^, 16, 0);
-  LPos := 1;
-  for LGroup := 0 to 7 do
-  begin
-    if LGroup > 0 then
-    begin
-      if (LPos > Length(AIP)) or (AIP[LPos] <> ':') then
-        Exit;
-      Inc(LPos);
-    end;
-    LVal := 0;
-    for LNibble := 0 to 3 do
-    begin
-      if LPos > Length(AIP) then
-        Exit;
-      LC := AIP[LPos];
-      Inc(LPos);
-      if LC in ['0'..'9'] then
-        LVal := (LVal shl 4) or (Ord(LC) - Ord('0'))
-      else if LC in ['a'..'f'] then
-        LVal := (LVal shl 4) or (Ord(LC) - Ord('a') + 10)
-      else if LC in ['A'..'F'] then
-        LVal := (LVal shl 4) or (Ord(LC) - Ord('A') + 10)
-      else
-        Exit;
-    end;
-    ABytes[LGroup * 2] := Byte((LVal shr 8) and $FF);
-    ABytes[LGroup * 2 + 1] := Byte(LVal and $FF);
-  end;
-  Result := LPos > Length(AIP);
-end;
-
 function BuildConnectSockAddr(const ARemote: TNetAddress;
   out ASa: TPlatformSockAddr): Boolean;
 var
@@ -817,7 +866,8 @@ begin
   FillChar(ASa, SizeOf(ASa), 0);
   if ARemote.IsIPv6 then
   begin
-    if not ParseIPv6HexGroups(ARemote.IP, @LBytes[0]) then
+    { RFC 4291 压缩形态（::1 / 2001:db8::1），不再只认 8 组 4 位 hex。 }
+    if not TryParseIPv6(ARemote.IP, @LBytes[0]) then
       Exit;
     Result := platform_sockaddr_ipv6(ARemote.Port, @LBytes[0], 0, ASa) = 0;
   end

@@ -4,7 +4,8 @@ program test_hir_class_alloc_contract;
 
 uses
   SysUtils, np_semantic_model, np_hir_types, np_hir_model,
-  np_hir_builder, np_hir_llvm_emitter, np_hir_verifier;
+  np_hir_builder, np_hir_llvm_emitter, np_hir_verifier,
+  np_system_contracts;
 
 var
   SemaModel: TSemanticModel;
@@ -53,8 +54,10 @@ begin
           for InstrIndex := 0 to LongInt(Func.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
         begin
           Instr := Func.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
+          { 生产约定为 typed sckObjectAlloc（语义名 np.system.object_alloc）；
+            裸 'class_alloc' IntrinsicName 是 emitter 的 legacy 兼容路径 }
           if (Instr.Kind = hikIntrinsic) and
-            SameText(Instr.IntrinsicName, 'class_alloc') then
+            IsSystemContract(Instr, sckObjectAlloc) then
           begin
             if FoundClassAlloc then
               Fail('duplicate-hir-class-alloc');

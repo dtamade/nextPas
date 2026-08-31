@@ -21,11 +21,15 @@ program benchmark_tls_handshake;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   benchmark_framework,
-  fafafa.ssl,
+  nextpas.core.text.conv,
+  nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
-  fafafa.examples.tcp;
+  nextpas.core.tls.tls,
+  tls_test_sockets;
 
 const
   { Test server configuration }
@@ -52,12 +56,13 @@ function ConnectAndHandshake(const AHost: string; APort: Word;
 var
   Sock: TSocketHandle;
   Connector: TSSLConnector;
-  TLS: TSSLStream;
+  LConnAccess: ISSLStreamConnectionAccess;
+  TLSI: IStream;
   NetErr: string;
 begin
   Result := False;
   Sock := INVALID_SOCKET;
-  TLS := nil;
+  TLSI := nil;
 
   try
     // Initialize network if needed
@@ -74,8 +79,10 @@ begin
       .WithTimeout(HANDSHAKE_TIMEOUT_MS);
 
     try
-      TLS := Connector.ConnectSocket(THandle(Sock), AHost);
-      Result := (TLS <> nil) and (TLS.Connection <> nil);
+      TLSI := Connector.ConnectSocket(THandle(Sock), AHost);
+      // 接口指针与对象基址不保证相同，禁止硬转型回具体类
+      Result := Supports(TLSI, ISSLStreamConnectionAccess, LConnAccess) and
+        (LConnAccess.GetConnection <> nil);
     except
       on E: Exception do
       begin
@@ -85,8 +92,7 @@ begin
       end;
     end;
   finally
-    if TLS <> nil then
-      TLS.Free;
+    TLSI := nil;
     if Sock <> INVALID_SOCKET then
       CloseSocket(Sock);
   end;
@@ -210,7 +216,8 @@ begin
   WriteLn;
 
   // Parse command line arguments
-  GIterations := 100;  // Lower default for handshakes (they're slower)
+  // 默认迭代数取小值,保证 CI 全量(120s 预算)内可完成;完整基准用参数指定
+  GIterations := 5;
   if ParamCount > 0 then
   begin
     if (ParamStr(1) = '-h') or (ParamStr(1) = '--help') then
@@ -238,12 +245,20 @@ begin
   // Create benchmark instance
   GBenchmark := TBenchmark.Create;
   try
-    GBenchmark.WarmupIterations := 10;  // Fewer warmup iterations for handshakes
+    GBenchmark.WarmupIterations := 3;  // Fewer warmup iterations for handshakes
     GBenchmark.RegressionThreshold := 0.20; // 20% threshold (network variance)
 
     // Register all tests
     RegisterAllTests;
     WriteLn;
+
+    // 预检:站点不可达(离线/被墙)时跳过整个基准,而不是逐个挂起
+    if not ConnectAndHandshake(TEST_HOST, TEST_PORT, GTLSContext) then
+    begin
+      WriteLn('SKIPPED: cannot reach ', TEST_HOST, ':', TEST_PORT,
+        ' (offline or blocked); TLS handshake benchmark requires network access');
+      Exit;
+    end;
 
     // Run all tests
     WriteLn('Running TLS handshake benchmarks...');

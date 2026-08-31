@@ -3,10 +3,10 @@ program test_x509_name_comparison;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.factory,
-  fafafa.ssl;
+  nextpas.core.tls.factory;
 
 var
   GPassed, GFailed: Integer;

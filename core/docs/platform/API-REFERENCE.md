@@ -1,8 +1,8 @@
 # Platform API 参考手册
 
 **日期**: 2026-07-06
-**更新**: 2026-07-17 (wave-4: return/error cross-links; catalog names must match live sources)
-**版本**: v1.3
+**更新**: 2026-08-31 (同步 CONTRACT v2.4；wave-4 + 时效校正)
+**版本**: v1.4
 **模块数**: 24
 **API数**: ~1067
 
@@ -296,6 +296,7 @@
 | `platform_socket_get_error(ASocket, out AError): Int32` | 获取 SO_ERROR 待处理错误 |
 | `platform_socket_error_would_block(AError): Boolean` | 是否为阻塞错误 |
 | `platform_socket_error_timed_out(AError): Boolean` | 是否为超时错误 |
+| `platform_socket_error_interrupted(AError): Boolean` | 是否为信号打断（EINTR / WSAEINTR，调用方应重试） |
 | `platform_sockaddr_ipv4(APort, AAddr): TPlatformSockAddr` | 构造 IPv4 地址 |
 
 ## 21. sync — 同步原语
@@ -417,5 +418,5 @@ as separate PLATFORM_ERR identifiers.
 
 ---
 
-**文档维护**: 随 platform 模块演进更新
-**最后更新**: 2026-07-17
+**文档维护**: 随 platform 模块演进更新（同步 CONTRACT v2.4）
+**最后更新**: 2026-08-31

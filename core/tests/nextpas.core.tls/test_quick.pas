@@ -4,11 +4,11 @@ program test_quick;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,  // Ensure all linked backends are registered
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.quick,
-  nextpas.core.tls.cert.builder;
+  nextpas.core.tls.cert.builder,
+  nextpas.core.tls.openssl.backed;
 
 procedure TestContextBuilder;
 var
@@ -73,10 +73,10 @@ end;
 
 procedure TestQuickConnect;
 begin
-  if GetEnvironmentVariable('FAFAFA_RUN_NETWORK_TESTS') = '1' then
+  if GetEnvironmentVariable('NEXTPAS_RUN_NETWORK_TESTS') = '1' then
     WriteLn('PASS: Quick network connect API intentionally removed; use TSSLConnector + socket transport')
   else
-    WriteLn('PASS: Network connect smoke disabled by default (set FAFAFA_RUN_NETWORK_TESTS=1 to opt-in)');
+    WriteLn('PASS: Network connect smoke disabled by default (set NEXTPAS_RUN_NETWORK_TESTS=1 to opt-in)');
 end;
 
 begin

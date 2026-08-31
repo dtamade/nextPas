@@ -448,6 +448,7 @@ end;
 
 procedure TAsyncChannel.Close;
 var
+  LWaiter: PReceiveWaiter;
   LSender: PSendWaiter;
 begin
   platform_mutex_lock(FLock);
@@ -456,11 +457,13 @@ begin
     { 唤醒所有接收等待者 }
     while FWaiterHead <> nil do
     begin
-      if Assigned(FWaiterHead^.Callback) then
-        FLoop.Post(FWaiterHead^.Callback, FWaiterHead^.Context)
-      else if Assigned(FWaiterHead^.Ref) then
-        FLoop.PostRef(FWaiterHead^.Ref, FWaiterHead^.Context);
-      FWaiterHead := FWaiterHead^.Next;
+      LWaiter := FWaiterHead;
+      FWaiterHead := LWaiter^.Next;
+      if Assigned(LWaiter^.Callback) then
+        FLoop.Post(LWaiter^.Callback, LWaiter^.Context)
+      else if Assigned(LWaiter^.Ref) then
+        FLoop.PostRef(LWaiter^.Ref, LWaiter^.Context);
+      Dispose(LWaiter);
     end;
     FWaiterTail := nil;
     { 唤醒所有发送等待者 }

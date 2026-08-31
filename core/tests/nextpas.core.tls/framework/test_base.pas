@@ -24,7 +24,7 @@ type
     procedure AssertBytesEqualLen(const Expected, Actual: PByte; Len: Integer; const Msg: string = '');
 
     // 辅助方法：断言异常
-    procedure AssertException(AExceptionClass: ExceptClass; AMethod: TRunMethod; const Msg: string = '');
+    procedure AssertException(AExceptionClass: ExceptClass; AMethod: TTestProc; const Msg: string = '');
 
     // 辅助方法：将字节数组转为十六进制字符串
     function BytesToHex(const Bytes: array of Byte): string; overload;
@@ -104,7 +104,7 @@ begin
   end;
 end;
 
-procedure TTestBase.AssertException(AExceptionClass: ExceptClass; AMethod: TRunMethod; const Msg: string);
+procedure TTestBase.AssertException(AExceptionClass: ExceptClass; AMethod: TTestProc; const Msg: string);
 var
   ErrorMsg: string;
 begin

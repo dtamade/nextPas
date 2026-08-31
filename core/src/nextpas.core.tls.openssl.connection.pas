@@ -5,7 +5,7 @@
  * 继承 TBaseSSLConnection 基类，实现 OpenSSL 后端的连接功能。
  * 支持 Socket 和 Stream 两种传输模式，包含完整的证书验证。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.0.0
  * @since 2025-11-02
  * @updated 2026-02-04 - 重构为使用 TBaseSSLConnection 基类
@@ -2100,7 +2100,7 @@ begin
           OCSPTimeoutSec := 1;
       end;
 
-      // Perform OCSP check (HTTP transport via hooks; fafafa.ssl does not do networking).
+      // Perform OCSP check (HTTP transport via hooks; nextpas.core.tls does not do networking).
       LHTTPHooks := TSSLHTTPHooks.Empty;
       if Supports(FContext, ISSLHttpHooksAccess, LHttpHooksAccess) then
         LHTTPHooks := TSSLHTTPHooks.Create(

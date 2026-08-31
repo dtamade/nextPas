@@ -77,6 +77,28 @@ begin
     'SHA256 448-bit');
 end;
 
+function SHA224Hex(const ABuf; ASize: SizeUInt): string;
+var
+  LDigest: TSHA224Digest;
+begin
+  LDigest := SHA224Of(ABuf, ASize);
+  Result := DigestToHex(LDigest[0], SizeOf(LDigest));
+end;
+
+procedure TestSHA224Vectors;
+const
+  ABC: array[0..2] of Byte = (Ord('a'), Ord('b'), Ord('c'));
+begin
+  CheckEqual(
+    'd14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f',
+    SHA224Hex(GNilByte^, 0),
+    'SHA224 empty');
+  CheckEqual(
+    '23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7',
+    SHA224Hex(ABC[0], SizeOf(ABC)),
+    'SHA224 abc');
+end;
+
 procedure TestMD5AndSHA1Vectors;
 const
   ABC: array[0..2] of Byte = (Ord('a'), Ord('b'), Ord('c'));
@@ -90,6 +112,47 @@ begin
     MD5Hex(MESSAGE[0], SizeOf(MESSAGE)), 'MD5 message digest');
   CheckEqual('a9993e364706816aba3e25717850c26c9cd0d89d',
     SHA1Hex(ABC[0], SizeOf(ABC)), 'SHA1 abc');
+end;
+
+function BLAKE2b256Hex(const ABuf; ASize: SizeUInt): string;
+var
+  LDigest: TBLAKE2b256Digest;
+begin
+  LDigest := BLAKE2b256Of(ABuf, ASize);
+  Result := DigestToHex(LDigest[0], SizeOf(LDigest));
+end;
+
+procedure TestBLAKE2b256Vectors;
+const
+  ABC: array[0..2] of Byte = (Ord('a'), Ord('b'), Ord('c'));
+  LONG_MSG = 'abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq';
+var
+  LLong: TBytes;
+  LH: IHasher;
+  LDigest: TBLAKE2b256Digest;
+begin
+  CheckEqual(
+    '0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8',
+    BLAKE2b256Hex(GNilByte^, 0),
+    'BLAKE2b-256 empty');
+  CheckEqual(
+    'bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319',
+    BLAKE2b256Hex(ABC[0], SizeOf(ABC)),
+    'BLAKE2b-256 abc');
+  LLong := BytesOf(LONG_MSG);
+  CheckEqual(
+    '5f7a93da9c5621583f22e49e8e91a40cbba37536622235a380f434b9f68e49c4',
+    BLAKE2b256Hex(LLong[0], Length(LLong)),
+    'BLAKE2b-256 448-bit');
+  LH := NewBLAKE2b256;
+  LH.Write(ABC[0], 1);
+  LH.Write(ABC[1], 1);
+  LH.Write(ABC[2], 1);
+  LH.Sum(LDigest[0], SizeOf(LDigest));
+  CheckEqual(
+    'bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319',
+    DigestToHex(LDigest[0], SizeOf(LDigest)),
+    'BLAKE2b-256 streaming abc');
 end;
 
 procedure TestStreamingHasher;
@@ -122,6 +185,19 @@ end;
 procedure CallSHA256OfNilPositive;
 begin
   SHA256Of(GNilByte^, 1);
+end;
+
+procedure CallBLAKE2b256OfNilPositive;
+begin
+  BLAKE2b256Of(GNilByte^, 1);
+end;
+
+procedure CallBLAKE2b256WriteNilPositive;
+var
+  LH: IHasher;
+begin
+  LH := NewBLAKE2b256;
+  LH.Write(GNilByte^, 1);
 end;
 
 procedure CallMD5WriteNilPositive;
@@ -216,6 +292,10 @@ begin
     'DigestToHex nil+positive');
   CheckRaisesArgumentError(@CallSHA256OfNilPositive,
     'SHA256Of nil+positive');
+  CheckRaisesArgumentError(@CallBLAKE2b256OfNilPositive,
+    'BLAKE2b256Of nil+positive');
+  CheckRaisesArgumentError(@CallBLAKE2b256WriteNilPositive,
+    'BLAKE2b256 Write nil+positive');
   CheckRaisesArgumentError(@CallMD5WriteNilPositive,
     'MD5 Write nil+positive');
   CheckRaisesArgumentError(@CallSHA1WriteNilPositive,
@@ -236,11 +316,46 @@ begin
     'SHA384 Sum nil+positive');
 end;
 
+procedure TestSHAKE128Vectors;
+var
+  LOut: TBytes;
+  LS: TSHAKE128;
+  ABC: array[0..2] of Byte;
+begin
+  ABC[0] := Ord('a'); ABC[1] := Ord('b'); ABC[2] := Ord('c');
+  LOut := SHAKE128Of(GNilByte^, 0, 32);
+  CheckEqual(
+    '7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26',
+    DigestToHex(LOut[0], 32),
+    'SHAKE128 empty 32');
+  LOut := SHAKE128Of(ABC[0], 3, 32);
+  CheckEqual(
+    '5881092dd818bf5cf8a3ddb793fbcba74097d5c526a6d35f97b83351940f2cc8',
+    DigestToHex(LOut[0], 32),
+    'SHAKE128 abc 32');
+  LS := TSHAKE128.Create;
+  try
+    LS.Write(ABC[0], 3);
+    SetLength(LOut, 32);
+    LS.Read(LOut[0], 16);
+    LS.Read(LOut[16], 16);
+    CheckEqual(
+      '5881092dd818bf5cf8a3ddb793fbcba74097d5c526a6d35f97b83351940f2cc8',
+      DigestToHex(LOut[0], 32),
+      'SHAKE128 streaming two reads');
+  finally
+    LS.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.hash');
   T.Test('SHA256 vectors', @TestSHA256Vectors);
+  T.Test('SHA224 vectors', @TestSHA224Vectors);
+  T.Test('BLAKE2b-256 vectors', @TestBLAKE2b256Vectors);
   T.Test('MD5 and SHA1 vectors', @TestMD5AndSHA1Vectors);
   T.Test('streaming hasher', @TestStreamingHasher);
   T.Test('nil buffer contract', @TestNilBufferContract);
+  T.Test('SHAKE128 vectors', @TestSHAKE128Vectors);
   if not T.Run then Halt(1);
 end.

@@ -26,6 +26,9 @@ type
     function WithStyle(const S: TStyle): ILineChart;
     function WithAxisStyle(const S: TStyle): ILineChart;
     function WithBlock(ABlock: IBlock): ILineChart;
+    { PH33 P3，additive：数据更新面 }
+    procedure SetSeries(const ASeries: array of TDataSeries);
+    function WithSeries(const ASeries: array of TDataSeries): ILineChart;
   end;
 
   TLineChart = class(TInterfacedObject, IWidget, ILineChart)
@@ -46,6 +49,10 @@ type
     function WithStyle(const S: TStyle): ILineChart;
     function WithAxisStyle(const S: TStyle): ILineChart;
     function WithBlock(ABlock: IBlock): ILineChart;
+
+    { PH33 P3，additive：数据更新面 }
+    procedure SetSeries(const ASeries: array of TDataSeries);
+    function WithSeries(const ASeries: array of TDataSeries): ILineChart;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -101,6 +108,17 @@ begin FAxisStyle := S; Result := Self; end;
 function TLineChart.WithBlock(ABlock: IBlock): ILineChart;
 begin FBlock := ABlock; Result := Self; end;
 
+{ PH33 P3：数据更新面——整体替换系列集，record 值拷贝 }
+procedure TLineChart.SetSeries(const ASeries: array of TDataSeries);
+var I: Integer;
+begin
+  SetLength(FSeries, Length(ASeries));
+  for I := 0 to High(ASeries) do FSeries[I] := ASeries[I];
+end;
+
+function TLineChart.WithSeries(const ASeries: array of TDataSeries): ILineChart;
+begin SetSeries(ASeries); Result := Self; end;
+
 procedure TLineChart.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   Inner, ChartArea: TRect;
@@ -110,6 +128,7 @@ var
   CellW, CellH: Integer;
   PrevX, PrevY, CurX, CurY: Integer;
   YAxisWidth, XAxisHeight, LegendHeight: Integer;
+  LCAWidth, LCAHeight: Integer;
   MaxLabelStr, MinLabelStr: AnsiString;
   LegendX: Integer;
 begin
@@ -150,8 +169,15 @@ begin
 
   ChartArea.X := Inner.X + YAxisWidth;
   ChartArea.Y := Inner.Y + LegendHeight;
-  ChartArea.Width := Inner.Width - YAxisWidth;
-  ChartArea.Height := Inner.Height - LegendHeight - XAxisHeight;
+  { 画布区宽/高以 Integer 中间量计算并 clamp≥0 再入 Word 字段：无符号减法
+    下溢（如 24÷13=1 行高段：1-1-1=-1→65535）会绕过下方 >0 检查，令
+    TCanvas.Render 在 65535 高巨区全量循环（曾致 h=1 折线图渲染 200+ms） }
+  LCAWidth := Integer(Inner.Width) - YAxisWidth;
+  if LCAWidth < 0 then LCAWidth := 0;
+  LCAHeight := Integer(Inner.Height) - LegendHeight - XAxisHeight;
+  if LCAHeight < 0 then LCAHeight := 0;
+  ChartArea.Width := LCAWidth;
+  ChartArea.Height := LCAHeight;
   if (ChartArea.Width <= 0) or (ChartArea.Height <= 0) then Exit;
 
   CellW := ChartArea.Width; CellH := ChartArea.Height;

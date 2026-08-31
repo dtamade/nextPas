@@ -1,0 +1,192 @@
+unit nextpas.core.vfs;
+
+{** @desc 门面：纯 re-export + inline 转发，不含逻辑（design-conventions §2）。 }
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.base,
+  nextpas.core.io.intf,
+  nextpas.core.vfs.base,
+  nextpas.core.vfs.errors,
+  nextpas.core.vfs.intf,
+  nextpas.core.vfs.memtree,
+  nextpas.core.vfs.os,
+  nextpas.core.vfs.embedded,
+  nextpas.core.vfs.sub,
+  nextpas.core.vfs.mount,
+  nextpas.core.vfs.overlay,
+  nextpas.core.vfs.transform,
+  nextpas.core.vfs.compressed,
+  nextpas.core.vfs.util;
+
+type
+  TEntryInfo = nextpas.core.vfs.base.TEntryInfo;
+  TEntryArray = nextpas.core.vfs.base.TEntryArray;
+  TStatInfo = nextpas.core.vfs.base.TStatInfo;
+  IVfs = nextpas.core.vfs.intf.IVfs;
+  IVfsETag = nextpas.core.vfs.intf.IVfsETag;
+  IVfsServeMeta = nextpas.core.vfs.intf.IVfsServeMeta;
+  TVfsMemEntry = nextpas.core.vfs.memtree.TVfsMemEntry;
+  TVfsTreeBuilder = nextpas.core.vfs.memtree.TVfsTreeBuilder;
+  TVfsVisitProc = nextpas.core.vfs.util.TVfsVisitProc;
+
+  EVfsError = nextpas.core.vfs.errors.EVfsError;
+  EVfsNotFound = nextpas.core.vfs.errors.EVfsNotFound;
+  EVfsNotADirectory = nextpas.core.vfs.errors.EVfsNotADirectory;
+  EVfsIsADirectory = nextpas.core.vfs.errors.EVfsIsADirectory;
+  EVfsInvalidPath = nextpas.core.vfs.errors.EVfsInvalidPath;
+  EVfsClosed = nextpas.core.vfs.errors.EVfsClosed;
+
+  TVfsTransformFunc = nextpas.core.vfs.transform.TVfsTransformFunc;
+  TVfsShouldTransformFunc = nextpas.core.vfs.transform.TVfsShouldTransformFunc;
+  TVfsMountEntry = nextpas.core.vfs.mount.TVfsMountEntry;
+
+function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs; inline;
+function CreateOsVfs(const ARoot: string): IVfs; inline;
+function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
+  AOwnsBlob: Boolean): IVfs; inline;
+function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs; inline;
+function CreateTransformingVfs(const AInner: IVfs;
+  const ATransform: TVfsTransformFunc;
+  const AShould: TVfsShouldTransformFunc = nil): IVfs; inline;
+function CreateDecompressingVfs(const AInner: IVfs): IVfs; inline;
+function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry; inline;
+function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs; inline;
+function CreateOverlayVfs(const AList: array of IVfs): IVfs; inline;
+
+function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
+function VfsIsRoot(const APath: string): Boolean; inline;
+function VfsPathHasPrefix(const APath, APrefix: string): Boolean; inline;
+function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
+function VfsNameCompare(const AA, AB: string): Integer; inline;
+function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
+function VfsETagFNV(const AHash: UInt32): string; inline;
+procedure VfsSortEntries(var AItems: TEntryArray); inline;
+
+function VfsStat(const AFs: IVfs; const APath: string): TStatInfo; inline;
+function VfsList(const AFs: IVfs; const ADirPath: string): TEntryArray; inline;
+function VfsReadAllBytes(const AFs: IVfs; const APath: string): TBytes; inline;
+function VfsReadAllText(const AFs: IVfs; const APath: string): string; inline;
+procedure VfsWalk(const AFs: IVfs; const ARoot: string;
+  const AVisit: TVfsVisitProc); inline;
+
+implementation
+
+function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
+begin
+  Result := nextpas.core.vfs.memtree.CreateMemTreeVfs(AItems);
+end;
+
+function CreateOsVfs(const ARoot: string): IVfs;
+begin
+  Result := nextpas.core.vfs.os.CreateOsVfs(ARoot);
+end;
+
+function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
+  AOwnsBlob: Boolean): IVfs;
+begin
+  Result := nextpas.core.vfs.embedded.CreateEmbeddedVfs(AData, ASize, AOwnsBlob);
+end;
+
+function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs;
+begin
+  Result := nextpas.core.vfs.sub.CreateSubVfs(ABase, ASubRoot);
+end;
+
+function CreateTransformingVfs(const AInner: IVfs;
+  const ATransform: TVfsTransformFunc;
+  const AShould: TVfsShouldTransformFunc): IVfs;
+begin
+  Result := nextpas.core.vfs.transform.CreateTransformingVfs(AInner, ATransform, AShould);
+end;
+
+function CreateDecompressingVfs(const AInner: IVfs): IVfs;
+begin
+  Result := nextpas.core.vfs.compressed.CreateDecompressingVfs(AInner);
+end;
+
+function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry;
+begin
+  Result := nextpas.core.vfs.mount.VfsMountEntry(APrefix, AFs);
+end;
+
+function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
+begin
+  Result := nextpas.core.vfs.mount.CreateMountedVfs(AMounts);
+end;
+
+function CreateOverlayVfs(const AList: array of IVfs): IVfs;
+begin
+  Result := nextpas.core.vfs.overlay.CreateOverlayVfs(AList);
+end;
+
+function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
+begin
+  Result := nextpas.core.vfs.base.VfsValidPath(APath, AAllowRoot);
+end;
+
+function VfsIsRoot(const APath: string): Boolean;
+begin
+  Result := nextpas.core.vfs.base.VfsIsRoot(APath);
+end;
+
+function VfsPathHasPrefix(const APath, APrefix: string): Boolean;
+begin
+  Result := nextpas.core.vfs.base.VfsPathHasPrefix(APath, APrefix);
+end;
+
+function VfsIsParentPath(const AParent, AChild: string): Boolean;
+begin
+  Result := nextpas.core.vfs.base.VfsIsParentPath(AParent, AChild);
+end;
+
+function VfsNameCompare(const AA, AB: string): Integer;
+begin
+  Result := nextpas.core.vfs.base.VfsNameCompare(AA, AB);
+end;
+
+function VfsETagStrong(const ASize, AModTime: Int64): string;
+begin
+  Result := nextpas.core.vfs.base.VfsETagStrong(ASize, AModTime);
+end;
+
+function VfsETagFNV(const AHash: UInt32): string;
+begin
+  Result := nextpas.core.vfs.base.VfsETagFNV(AHash);
+end;
+
+procedure VfsSortEntries(var AItems: TEntryArray);
+begin
+  nextpas.core.vfs.base.VfsSortEntries(AItems);
+end;
+
+function VfsStat(const AFs: IVfs; const APath: string): TStatInfo;
+begin
+  Result := nextpas.core.vfs.util.VfsStat(AFs, APath);
+end;
+
+function VfsList(const AFs: IVfs; const ADirPath: string): TEntryArray;
+begin
+  Result := nextpas.core.vfs.util.VfsList(AFs, ADirPath);
+end;
+
+function VfsReadAllBytes(const AFs: IVfs; const APath: string): TBytes;
+begin
+  Result := nextpas.core.vfs.util.VfsReadAllBytes(AFs, APath);
+end;
+
+function VfsReadAllText(const AFs: IVfs; const APath: string): string;
+begin
+  Result := nextpas.core.vfs.util.VfsReadAllText(AFs, APath);
+end;
+
+procedure VfsWalk(const AFs: IVfs; const ARoot: string;
+  const AVisit: TVfsVisitProc);
+begin
+  nextpas.core.vfs.util.VfsWalk(AFs, ARoot, AVisit);
+end;
+
+end.

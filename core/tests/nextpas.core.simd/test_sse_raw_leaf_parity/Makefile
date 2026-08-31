@@ -1,6 +1,7 @@
 # test_sse_raw_leaf_parity — compile-only test
 FPC := fpc
-FPC_FLAGS := -MObjFPC -Sh -O2 -gl
+CORE_ROOT := ../../..
+FPC_FLAGS := -MObjFPC -Sh -O2 -gl -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/src
 
 .PHONY: test clean
 

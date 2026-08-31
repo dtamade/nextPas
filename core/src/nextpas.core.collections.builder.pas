@@ -16,7 +16,7 @@ unit nextpas.core.collections.builder;
  *   var Map := specialize THashMapBuilder<String, Integer>
  *       .WithEntry('key', 100).Build;
  *
- * @author fafafaStudio
+ * @author nextpas.core
  *}
 
 {$I nextpas.core.settings.inc}

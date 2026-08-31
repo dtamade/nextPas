@@ -359,6 +359,28 @@ begin
   CheckEqual('http://example.com:8080/path?q=1#top', LStr, 'round-trip');
 end;
 
+procedure TestUrlRedacted;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse(
+    'https://user:s3cret@sub.example.com:8443/clash?token=abcd1234#frag');
+  CheckEqual('https://sub.example.com:8443', LUrl.Redacted,
+    'strips userinfo path query fragment');
+  Check(Pos('s3cret', LUrl.Redacted) = 0, 'secret not in redacted');
+  Check(Pos('token=', LUrl.Redacted) = 0, 'query not in redacted');
+  CheckEqual(
+    'https://user:s3cret@sub.example.com:8443/clash?token=abcd1234#frag',
+    LUrl.ToString, 'ToString still complete');
+
+  LUrl := TUrl.Parse('http://example.com/path?q=1');
+  CheckEqual('http://example.com', LUrl.Redacted, 'default port omitted');
+
+  LUrl := TUrl.Parse('https://user:pw@[2001:db8::1]:8443/ss?token=x#f');
+  CheckEqual('https://[2001:db8::1]:8443', LUrl.Redacted,
+    'ipv6 keeps brackets and port');
+end;
+
 procedure TestUrlHostPort;
 var
   LUrl: TUrl;
@@ -685,6 +707,7 @@ begin
   T.Test('TUrl.Parse invalid port raises', @TestUrlParseInvalidPortRaises);
   T.Test('TUrl.Parse empty raises', @TestUrlParseEmptyRaises);
   T.Test('TUrl.ToString round-trip', @TestUrlToString);
+  T.Test('TUrl.Redacted strips credentials', @TestUrlRedacted);
   T.Test('TUrl.HostPort', @TestUrlHostPort);
   T.Test('TUrl.Parse IPv6', @TestUrlParseIPv6);
   T.Test('TUrl.ParseRequestTarget origin-form', @TestUrlParseRequestTargetOriginForm);

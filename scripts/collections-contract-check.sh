@@ -99,7 +99,9 @@ done
 
 printf "\n${BOLD}C5: IAllocator 集成${NC}\n"
 
-if grep -rl "IAllocator\|ResolveAllocator\|FAllocator" "$SRC_DIR"/nextpas.core.collections*.pas 2>/dev/null | head -3 | grep -q .; then
+# grep -ql 单命令存在性判定；grep|head|grep -q 在多匹配时 head 早退会
+# SIGPIPE 上游 grep(141)，pipefail 下污染管道状态
+if grep -ql "IAllocator\|ResolveAllocator\|FAllocator" "$SRC_DIR"/nextpas.core.collections*.pas 2>/dev/null; then
   ALLOC_HITS=$(grep -rl "IAllocator\|ResolveAllocator\|FAllocator" "$SRC_DIR"/nextpas.core.collections*.pas 2>/dev/null | wc -l)
   ok "IAllocator 集成（$ALLOC_HITS 个文件）"
 else

@@ -130,6 +130,7 @@ type
     FOptions: TTerminalOptions;
     FActiveOptions: TTerminalOptions;
     FAllocator: IAllocator;
+    FLinkOverlay: TTuiLinkOverlay;   { 刀 21：本帧 OSC 8 链接 overlay }
     FKittyKeyboardPushed: Boolean;
     FFocusReportingEnabled: Boolean;
     FBracketedPasteEnabled: Boolean;
@@ -178,6 +179,10 @@ type
 
     function BeginFrame: TFrame;
     procedure EndFrame(const AFrame: TFrame);
+
+    { 刀 21：设置本帧 OSC 8 链接 overlay（渲染方真实重渲后调用；空 =
+      无链接）。EndFrame 时传给后端做输出包裹；overlay 只影响本帧输出。 }
+    procedure SetLinkOverlay(const ALinks: array of TTuiLinkSpan);
 
     function PollEvent(ATimeoutMs: Integer): TEvent;
 
@@ -648,6 +653,15 @@ begin
   Result := FFrame;
 end;
 
+procedure TTerminal.SetLinkOverlay(const ALinks: array of TTuiLinkSpan);
+var
+  LI: Integer;
+begin
+  System.SetLength(FLinkOverlay, System.Length(ALinks));
+  for LI := 0 to System.Length(ALinks) - 1 do
+    FLinkOverlay[LI] := ALinks[LI];
+end;
+
 procedure TTerminal.EndFrame(const AFrame: TFrame);
 var
   LPatchCount: Integer;
@@ -664,6 +678,10 @@ begin
     FMerged.Reset;
   FOverlay.MergeInto(FCurr, FMerged);
   LPatchCount := FPrev.DiffInto(FMerged, FPatches);
+  { 刀 21：本帧链接 overlay → 后端（绘制命中 cell 时包裹 OSC 8）。
+    链接样式已画进 cell（渲染层），glyph/样式差异驱动 diff——此处只需
+    在输出层套链接属性，与 diff 机制解耦。 }
+  FBackend.SetLinkOverlay(FLinkOverlay);
   if FActiveOptions.SynchronizedUpdate then
     FBackend.BeginSynchronizedUpdate;
   FBackend.DrawPatchesN(FPatches, LPatchCount);

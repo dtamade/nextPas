@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -27,12 +27,12 @@ require_match() {
   fi
 }
 
-openssl_context="src/nextpas.core.tls.openssl.context.pas"
-openssl_lib="src/nextpas.core.tls.openssl.backed.pas"
-openssl_connection="src/nextpas.core.tls.openssl.connection.pas"
-wolfssl_context="src/nextpas.core.tls.wolfssl.context.pas"
-wolfssl_lib="src/nextpas.core.tls.wolfssl.lib.pas"
-wolfssl_connection="src/nextpas.core.tls.wolfssl.connection.pas"
+openssl_context="core/src/nextpas.core.tls.openssl.context.pas"
+openssl_lib="core/src/nextpas.core.tls.openssl.backed.pas"
+openssl_connection="core/src/nextpas.core.tls.openssl.connection.pas"
+wolfssl_context="core/src/nextpas.core.tls.wolfssl.context.pas"
+wolfssl_lib="core/src/nextpas.core.tls.wolfssl.lib.pas"
+wolfssl_connection="core/src/nextpas.core.tls.wolfssl.connection.pas"
 
 printf '[TEST] optional interface capability alignment contract\n'
 
@@ -53,7 +53,7 @@ require_match "$openssl_lib" \
   'OpenSSL library create-context path selects the optional-interface subclass that matches current capability truth'
 
 require_match "$openssl_connection" \
-  'TOpenSSLConnection = class\(TBaseSSLConnection, ISSLClientConnection,\s*ISSLNativeHandleAccess\)' \
+  'TOpenSSLConnection = class\(TBaseSSLConnection, ISSLClientConnection,\s*ISSLClientALPNConnection,\s*ISSLNativeHandleAccess\)' \
   'OpenSSL base connection no longer implements optional OCSP or early-data connection interfaces unconditionally'
 require_match "$openssl_connection" \
   'TOpenSSLOCSPConnection = class\(TOpenSSLConnection, ISSLOCSPStapling\)' \
@@ -68,7 +68,7 @@ require_match "$openssl_context" \
   'function TOpenSSLContext\.CreateConnection\(ASocket: THandle\): ISSLConnection;.*?LExposeEarlyData := Supports\(Self, ISSLEarlyDataContext, LEarlyDataContext\);.*?LExposeOCSP := HasClientOCSPCapability;.*?TOpenSSLAdvancedConnection\.Create\(Self, ASocket\).*?TOpenSSLEarlyDataConnection\.Create\(Self, ASocket\).*?TOpenSSLOCSPConnection\.Create\(Self, ASocket\).*?TOpenSSLConnection\.Create\(Self, ASocket\)' \
   'OpenSSL socket connection path selects the OCSP/early-data subclass matrix that matches current capability truth'
 require_match "$openssl_context" \
-  'function TOpenSSLContext\.CreateConnection\(AStream: TStream\): ISSLConnection;.*?LExposeEarlyData := Supports\(Self, ISSLEarlyDataContext, LEarlyDataContext\);.*?LExposeOCSP := HasClientOCSPCapability;.*?TOpenSSLAdvancedConnection\.Create\(Self, AStream\).*?TOpenSSLEarlyDataConnection\.Create\(Self, AStream\).*?TOpenSSLOCSPConnection\.Create\(Self, AStream\).*?TOpenSSLConnection\.Create\(Self, AStream\)' \
+  'function TOpenSSLContext\.CreateConnection\(AStream: IStream\): ISSLConnection;.*?LExposeEarlyData := Supports\(Self, ISSLEarlyDataContext, LEarlyDataContext\);.*?LExposeOCSP := HasClientOCSPCapability;.*?TOpenSSLAdvancedConnection\.Create\(Self, LTransport\).*?TOpenSSLEarlyDataConnection\.Create\(Self, LTransport\).*?TOpenSSLOCSPConnection\.Create\(Self, LTransport\).*?TOpenSSLConnection\.Create\(Self, LTransport\)' \
   'OpenSSL stream connection path selects the OCSP/early-data subclass matrix that matches current capability truth'
 
 require_match "$wolfssl_context" \
@@ -99,7 +99,7 @@ require_match "$wolfssl_context" \
   'function TWolfSSLContext\.CreateConnection\(ASocket: THandle\): ISSLConnection;.*?LExposeEarlyData := HasEarlyDataCapability;.*?LExposeOCSP := HasClientOCSPCapability;.*?TWolfSSLAdvancedConnection\.Create\(Self, ASocket\).*?TWolfSSLEarlyDataConnection\.Create\(Self, ASocket\).*?TWolfSSLOCSPConnection\.Create\(Self, ASocket\).*?TWolfSSLConnection\.Create\(Self, ASocket\)' \
   'WolfSSL socket connection path selects the OCSP/early-data subclass matrix that matches current capability truth'
 require_match "$wolfssl_context" \
-  'function TWolfSSLContext\.CreateConnection\(AStream: TStream\): ISSLConnection;.*?LExposeEarlyData := HasEarlyDataCapability;.*?LExposeOCSP := HasClientOCSPCapability;.*?TWolfSSLAdvancedConnection\.Create\(Self, AStream\).*?TWolfSSLEarlyDataConnection\.Create\(Self, AStream\).*?TWolfSSLOCSPConnection\.Create\(Self, AStream\).*?TWolfSSLConnection\.Create\(Self, AStream\)' \
+  'function TWolfSSLContext\.CreateConnection\(AStream: IStream\): ISSLConnection;.*?LExposeEarlyData := HasEarlyDataCapability;.*?LExposeOCSP := HasClientOCSPCapability;.*?TWolfSSLAdvancedConnection\.Create\(Self, LTransport\).*?TWolfSSLEarlyDataConnection\.Create\(Self, LTransport\).*?TWolfSSLOCSPConnection\.Create\(Self, LTransport\).*?TWolfSSLConnection\.Create\(Self, LTransport\)' \
   'WolfSSL stream connection path selects the OCSP/early-data subclass matrix that matches current capability truth'
 
 printf '[PASS] optional interface capability alignment contract passed\n'

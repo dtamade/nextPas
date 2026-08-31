@@ -132,6 +132,19 @@ begin
   Check(Hit = shNone, 'hit outside is none');
 end;
 
+procedure TestScrollbarHitNoHitWhenNotOverflow;
+var LS: IScrollbar; Hit: TScrollbarHit;
+begin
+  { 未溢出(TotalItems <= VisibleItems)= 无滚动条可点,整列 shNone:
+    退化态 ThumbSize 铺满整轨,不拦会把沟槽点击误判成 shThumb }
+  LS := TScrollbar.New.WithTotal(3).WithVisible(10).WithOffset(0);
+  Hit := LS.HitAt(TRect.Make(0, 0, 1, 10), 5);
+  Check(Hit = shNone, 'no hit when total < visible');
+  LS := TScrollbar.New.WithTotal(10).WithVisible(10).WithOffset(0);
+  Hit := LS.HitAt(TRect.Make(0, 0, 1, 10), 0);
+  Check(Hit = shNone, 'no hit when total = visible');
+end;
+
 { === Page navigation === }
 
 procedure TestScrollbarPageUp;
@@ -174,6 +187,21 @@ begin
   Check(LS.OffsetFromDragY(TRect.Make(0, 0, 1, 20), 19) >= 0, 'drag at bottom gives valid offset');
 end;
 
+procedure TestScrollbarDragThumbTop;
+var LS: IScrollbar;
+begin
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10);
+  { ThumbSize(20) = 10*20/100 = 2；轨道 [5, 25)，拇指顶可动区 [5, 23] }
+  Check(LS.DragThumbTop(TRect.Make(0, 5, 1, 20), 10, 8, 6) = 8,
+    'grab baseline offset preserved');
+  Check(LS.DragThumbTop(TRect.Make(0, 5, 1, 20), 3, 8, 6) = 5,
+    'clamped to track top');
+  Check(LS.DragThumbTop(TRect.Make(0, 5, 1, 20), 40, 8, 6) = 23,
+    'clamped to track bottom minus thumb');
+  Check(LS.DragThumbTop(TRect.Make(0, 5, 1, 20), 10, 10, 10) = 10,
+    'grab at thumb top follows pointer');
+end;
+
 { === Render === }
 
 procedure TestScrollbarRender;
@@ -184,6 +212,76 @@ begin
   try
     (LS as IWidget).Render(TRect.Make(0, 0, 1, 20), LBuf);
     Check(True, 'scrollbar renders');
+  finally LBuf.Free; end;
+end;
+
+{ === 多字节符号:块字符 █/│ 经 Render 直出,消费方不再绕开手绘 === }
+
+procedure TestScrollbarMultibyteGlyphs;
+var LS: IScrollbar; LBuf: TBuffer;
+begin
+  { 100/10 溢出:track 高 8 → ThumbSize = 8*10 div 100 = 0 钳 1,
+    offset 0 → 行 0 是 thumb,其余是 track }
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0)
+    .WithTrackChar('│').WithThumbChar('█');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 8));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 8), LBuf);
+    Check(CellGlyphAsString(LBuf.CellAt(0, 0)^) = '█',
+      'multibyte thumb glyph rendered');
+    Check(CellGlyphAsString(LBuf.CellAt(0, 5)^) = '│',
+      'multibyte track glyph rendered');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarAsciiCompat;
+var LS: IScrollbar; LBuf: TBuffer;
+begin
+  { 单字符入参走拓宽后的同一通路,行为与 AnsiChar 时代一致 }
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0)
+    .WithTrackChar('.').WithThumbChar('#');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 8));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 8), LBuf);
+    Check(CellGlyphAsString(LBuf.CellAt(0, 0)^) = '#',
+      'ascii thumb glyph unchanged');
+    Check(CellGlyphAsString(LBuf.CellAt(0, 7)^) = '.',
+      'ascii track glyph unchanged');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarSymbolStyles;
+var
+  LS: IScrollbar; LBuf: TBuffer;
+  LP: PCell;
+begin
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0)
+    .WithTrackChar('│').WithThumbChar('█')
+    .WithTrackStyle(TStyle.Default.WithFg(IndexedColor(240)))
+    .WithThumbStyle(TStyle.Default.WithFg(IndexedColor(196)));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 8));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 8), LBuf);
+    LP := LBuf.CellAt(0, 0);
+    Check((LP <> nil) and ColorIsSet(LP^.Fg),
+      'thumb cell carries style');
+    LP := LBuf.CellAt(0, 6);
+    Check((LP <> nil) and ColorIsSet(LP^.Fg),
+      'track cell carries style');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarEmptySymbol;
+var LS: IScrollbar; LBuf: TBuffer;
+begin
+  { 空符号留空格底,不崩溃不写垃圾字节 }
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0)
+    .WithTrackChar('').WithThumbChar('');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 8));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 8), LBuf);
+    Check(CellGlyphAsString(LBuf.CellAt(0, 3)^) = ' ',
+      'empty symbol leaves blank cell');
   finally LBuf.Free; end;
 end;
 
@@ -216,6 +314,8 @@ begin
     { Hit test }
     T.Test('Scrollbar HitAbove', @TestScrollbarHitAbove);
     T.Test('Scrollbar HitBelow', @TestScrollbarHitBelow);
+    T.Test('Scrollbar HitNoHitWhenNotOverflow',
+      @TestScrollbarHitNoHitWhenNotOverflow);
 
     { Page navigation }
     T.Test('Scrollbar PageUp', @TestScrollbarPageUp);
@@ -228,8 +328,15 @@ begin
     { OffsetFromDragY }
     T.Test('Scrollbar OffsetFromDragY', @TestScrollbarOffsetFromDragY);
 
+    { DragThumbTop }
+    T.Test('Scrollbar DragThumbTop', @TestScrollbarDragThumbTop);
+
     { Render }
     T.Test('Scrollbar render', @TestScrollbarRender);
+    T.Test('Scrollbar multibyte glyphs', @TestScrollbarMultibyteGlyphs);
+    T.Test('Scrollbar ascii compat', @TestScrollbarAsciiCompat);
+    T.Test('Scrollbar symbol styles', @TestScrollbarSymbolStyles);
+    T.Test('Scrollbar empty symbol', @TestScrollbarEmptySymbol);
     T.Test('Scrollbar as IWidget', @TestScrollbarAsIWidget);
 
     WriteLn;

@@ -6,8 +6,7 @@ interface
 
 uses
   nextpas.core.exception,
-  nextpas.core.base,
-  nextpas.core.system.sysutils;
+  nextpas.core.base;
 
 // No FPC RTL dependencies - using pure nextPas framework
 
@@ -36,6 +35,7 @@ procedure ClearAdditionalCTLogs;
 implementation
 
 uses
+  nextpas.core.text.conv,   { SameText:密钥类型比对 }
   nextpas.core.tls.base64,
   nextpas.core.crypto.hash;
 

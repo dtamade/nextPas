@@ -29,7 +29,6 @@ type
 
   {** @desc 滑动窗口计数器限流器
     @details 结合当前窗口和上一个窗口的加权计数。
-  {** @concurrency Thread-safe (see source for details). }
       比固定窗口更准确，比滑动窗口日志更高效。 }
   TSlidingWindowLimiter = class
   private

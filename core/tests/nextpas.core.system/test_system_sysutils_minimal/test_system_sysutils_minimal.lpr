@@ -5,7 +5,19 @@ program test_system_sysutils_minimal;
 uses
   nextpas.core.test,
   nextpas.core.system.sysutils,
-  nextpas.core.exception;
+  nextpas.core.exception,
+  SysUtils;  { RTL reference only: proves fallback parity for extended specifiers }
+
+type
+  IProbe = interface
+    ['{A0B1C2D3-0001-4E5F-8A9B-0C0D0E0F0001}']
+  end;
+
+  IOther = interface
+    ['{A0B1C2D3-0002-4E5F-8A9B-0C0D0E0F0002}']
+  end;
+
+  TProbe = class(TInterfacedObject, IProbe);
 
 var
   T: TTestSuite;
@@ -15,6 +27,38 @@ begin
   CheckEqual('value=42 text=nextpas',
     nextpas.core.system.sysutils.Format('value=%d text=%s', [42, 'nextpas']),
     'Format should cover compiler CreateFmt pressure');
+end;
+
+procedure TestFormatSafeSetStaysOnTextFormat;
+begin
+  CheckEqual('100% done',
+    nextpas.core.system.sysutils.Format('100%% done', []),
+    '%% escape should stay on TextFormat');
+  CheckEqual('x=3.14',
+    nextpas.core.system.sysutils.Format('x=%.2f', [3.14159]),
+    '%.2f with explicit precision should stay on TextFormat');
+  CheckEqual('0x0F',
+    nextpas.core.system.sysutils.Format('%s0x%02X', ['', 15]),
+    'width/precision flags should stay on TextFormat');
+end;
+
+procedure TestFormatExtendedSpecifiersFallbackToRtl;
+begin
+  CheckEqual(SysUtils.Format('%g', [3.14159]),
+    nextpas.core.system.sysutils.Format('%g', [3.14159]),
+    '%g should fall back to RTL SysUtils formatting');
+  CheckEqual(SysUtils.Format('%.3g', [3.14159]),
+    nextpas.core.system.sysutils.Format('%.3g', [3.14159]),
+    '%.3g should honor precision through RTL fallback');
+  CheckEqual(SysUtils.Format('%.2e', [12345.678]),
+    nextpas.core.system.sysutils.Format('%.2e', [12345.678]),
+    '%.2e should fall back to RTL SysUtils formatting');
+  CheckEqual(SysUtils.Format('%c', ['A']),
+    nextpas.core.system.sysutils.Format('%c', ['A']),
+    '%c should fall back to RTL SysUtils formatting');
+  CheckEqual(SysUtils.Format('v=%g tag=%s', [0.5, 'x']),
+    nextpas.core.system.sysutils.Format('v=%g tag=%s', [0.5, 'x']),
+    'mixed %g/%s should fall back to RTL via one scan');
 end;
 
 procedure TestExceptionFormattingAliasesCanonicalRoot;
@@ -83,13 +127,143 @@ begin
     'Trim should collapse all-whitespace input to empty text');
 end;
 
+procedure TestTryStrToIntDelegatesToTextConvOwner;
+var
+  VI: Integer;
+  V64: Int64;
+begin
+  Check(nextpas.core.system.sysutils.TryStrToInt('42', VI)
+    and (VI = 42), 'TryStrToInt should parse positive decimal');
+  Check(nextpas.core.system.sysutils.TryStrToInt('-7', VI)
+    and (VI = -7), 'TryStrToInt should parse negative decimal');
+  Check(not nextpas.core.system.sysutils.TryStrToInt('abc', VI),
+    'TryStrToInt should reject non-numeric input');
+  Check(not nextpas.core.system.sysutils.TryStrToInt('', VI),
+    'TryStrToInt should reject empty input');
+  Check(nextpas.core.system.sysutils.TryStrToInt('123', VI)
+    and (VI = 123), 'TryStrToInt should keep working after failures');
+  Check(nextpas.core.system.sysutils.TryStrToInt64('9007199254740993', V64)
+    and (V64 = 9007199254740993), 'TryStrToInt64 should span Int64 range');
+  Check(not nextpas.core.system.sysutils.TryStrToInt64('not-a-number', V64),
+    'TryStrToInt64 should reject non-numeric input');
+  Check(not nextpas.core.system.sysutils.TryStrToInt64('99999999999999999999999', V64),
+    'TryStrToInt64 should reject out-of-range input');
+end;
+
+procedure TestBoolToStrSysUtilsSemantics;
+begin
+  CheckEqual('True', nextpas.core.system.sysutils.BoolToStr(True, True),
+    'BoolToStr with UseBoolStrs=True should emit True for true');
+  CheckEqual('False', nextpas.core.system.sysutils.BoolToStr(False, True),
+    'BoolToStr with UseBoolStrs=True should emit False for false');
+  CheckEqual('1', nextpas.core.system.sysutils.BoolToStr(True),
+    'BoolToStr default should emit 1 for true');
+  CheckEqual('0', nextpas.core.system.sysutils.BoolToStr(False),
+    'BoolToStr default should emit 0 for false');
+end;
+
+procedure TestCompareStrCaseSensitive;
+begin
+  Check(nextpas.core.system.sysutils.CompareStr('abc', 'abc') = 0,
+    'CompareStr should return 0 for identical strings');
+  Check(nextpas.core.system.sysutils.CompareStr('abc', 'abd') < 0,
+    'CompareStr should order by byte value');
+  Check(nextpas.core.system.sysutils.CompareStr('B', 'a') < 0,
+    'CompareStr should be case-sensitive (uppercase before lowercase)');
+  Check(nextpas.core.system.sysutils.CompareStr('z', 'a') > 0,
+    'CompareStr should report greater for later characters');
+  Check(nextpas.core.system.sysutils.CompareStr('ab', 'abc') < 0,
+    'CompareStr should treat prefix as smaller');
+end;
+
+procedure TestTStringArrayAliasUsable;
+var
+  A: nextpas.core.system.sysutils.TStringArray;
+begin
+  SetLength(A, 2);
+  A[0] := 'a';
+  A[1] := 'b';
+  Check((Length(A) = 2) and (A[1] = 'b'),
+    'TStringArray should alias core dynamic string array');
+end;
+
+procedure TestSupportsInterfaceQuery;
+var
+  Probe: IProbe;
+  Other: IProbe;
+  NotImpl: IOther;
+begin
+  Probe := TProbe.Create;
+  Check(nextpas.core.system.sysutils.Supports(Probe, IProbe, Other),
+    'Supports should resolve implemented interface');
+  Check(not nextpas.core.system.sysutils.Supports(Probe, IOther, NotImpl),
+    'Supports should reject interface the object does not implement');
+end;
+
+procedure TestEncodeDateMatchesRtlEpoch;
+begin
+  Check(nextpas.core.system.sysutils.EncodeDate(1899, 12, 30) = 0,
+    'EncodeDate should pin the RTL epoch 1899-12-30 to 0.0');
+  Check(nextpas.core.system.sysutils.EncodeDate(1900, 1, 1) = 2,
+    'EncodeDate should count days from epoch');
+  Check(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) = 46251,
+    'EncodeDate should match RTL value for modern ISO dates');
+  Check(nextpas.core.system.sysutils.EncodeDate(2024, 2, 29) = 45351,
+    'EncodeDate should handle leap days');
+  Check(nextpas.core.system.sysutils.EncodeDate(9999, 12, 31) = 2958465,
+    'EncodeDate should cover the full Word year range');
+end;
+
+procedure TestEncodeDateInvalidRaises;
+begin
+  try
+    nextpas.core.system.sysutils.EncodeDate(2026, 2, 30);
+    Check(False, 'EncodeDate should reject 2026-02-30');
+  except
+    on E: nextpas.core.exception.EConvertError do Check(True, 'EncodeDate raises EConvertError for bad day');
+  end;
+  try
+    nextpas.core.system.sysutils.EncodeDate(2026, 13, 1);
+    Check(False, 'EncodeDate should reject month 13');
+  except
+    on E: nextpas.core.exception.EConvertError do Check(True, 'EncodeDate raises EConvertError for bad month');
+  end;
+end;
+
+procedure TestEncodeDateWholeDayDifference;
+begin
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 17)) = 0,
+    'whole-day difference should be 0 for same date');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 16)) = 1,
+    'whole-day difference should span yesterday');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 18)) = -1,
+    'whole-day difference should be negative for tomorrow');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2024, 3, 1) -
+              nextpas.core.system.sysutils.EncodeDate(2024, 2, 28)) = 2,
+    'whole-day difference should span leap years');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
+  T.Test('Format safe set stays on TextFormat', @TestFormatSafeSetStaysOnTextFormat);
+  T.Test('Format extended specifiers fall back to RTL', @TestFormatExtendedSpecifiersFallbackToRtl);
   T.Test('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
   T.Test('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
   T.Test('SameText delegates to text conversion owner', @TestSameTextDelegatesToTextConvOwner);
   T.Test('IntToStr delegates to text conversion owner', @TestIntToStrDelegatesToTextConvOwner);
   T.Test('Trim delegates to text conversion owner', @TestTrimDelegatesToTextConvOwner);
+  T.Test('TryStrToInt/TryStrToInt64 delegate to conversion owner',
+    @TestTryStrToIntDelegatesToTextConvOwner);
+  T.Test('BoolToStr follows SysUtils semantics', @TestBoolToStrSysUtilsSemantics);
+  T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
+  T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
+  T.Test('Supports queries interfaces', @TestSupportsInterfaceQuery);
+  T.Test('EncodeDate matches RTL epoch values', @TestEncodeDateMatchesRtlEpoch);
+  T.Test('EncodeDate rejects invalid dates', @TestEncodeDateInvalidRaises);
+  T.Test('EncodeDate spans whole days', @TestEncodeDateWholeDayDifference);
   if not T.Run then Halt(1);
 end.

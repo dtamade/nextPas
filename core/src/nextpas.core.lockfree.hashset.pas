@@ -4,7 +4,6 @@ unit nextpas.core.lockfree.hashset;
  *
  * @note This is a thin wrapper around TShardedHashMap that uses
  *       a fixed value (True) for all entries, providing set semantics.
- * @concurrency Thread-safe (see source for details).
  *}
 
 {$I nextpas.core.settings.inc}

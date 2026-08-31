@@ -4,7 +4,6 @@ program test_early_data_context_scope_clarification;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
@@ -90,7 +89,7 @@ begin
 
   if not TCertificateUtils.TryGenerateSelfSignedSimple(
     'builder-earlydata-scope.local',
-    'fafafa.ssl',
+    'nextpas.core.tls',
     30,
     LCertPEM,
     LKeyPEM
@@ -168,7 +167,7 @@ var
 begin
   TestHeader('Factory one-shot config applies only context-relevant early-data subset');
 
-  ClientConfig := CreateDefaultConfig(sslCtxClient);
+  ClientConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   ClientConfig.LibraryType := sslFreePascal;
   ClientConfig.ContextType := sslCtxClient;
   ClientConfig.ClientEarlyDataEnabled := True;
@@ -184,7 +183,7 @@ begin
     'One-shot client context'
   );
 
-  ServerConfig := CreateDefaultConfig(sslCtxServer);
+  ServerConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxServer));
   ServerConfig.LibraryType := sslFreePascal;
   ServerConfig.ContextType := sslCtxServer;
   ServerConfig.ClientEarlyDataEnabled := True;

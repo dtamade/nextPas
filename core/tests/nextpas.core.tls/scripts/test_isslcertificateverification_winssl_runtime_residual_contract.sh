@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -23,19 +23,19 @@ compare_file_list() {
 }
 
 expected_hits="$(cat <<'EOF'
-tests/winssl/test_winssl_error_mapping_online.pas
-tests/winssl/test_winssl_hostname_mismatch_online.pas
-tests/winssl/test_winssl_revocation_online.pas
+core/tests/nextpas.core.tls/winssl/test_winssl_error_mapping_online.pas
+core/tests/nextpas.core.tls/winssl/test_winssl_hostname_mismatch_online.pas
+core/tests/nextpas.core.tls/winssl/test_winssl_revocation_online.pas
 EOF
 )"
 
-actual_hits="$(rg -lP '\b(?:Conn|LConn|LConnection)\.GetVerifyResult(?:String)?\b' tests/winssl | sort || true)"
+actual_hits="$(rg -lP '\b(?:Conn|LConn|LConnection)\.GetVerifyResult(?:String)?\b' core/tests/nextpas.core.tls/winssl | sort || true)"
 compare_file_list "WinSSL runtime direct-core verify-result file set" "$actual_hits" "$expected_hits"
 
 declare -a residual_files=(
-  "tests/winssl/test_winssl_error_mapping_online.pas"
-  "tests/winssl/test_winssl_hostname_mismatch_online.pas"
-  "tests/winssl/test_winssl_revocation_online.pas"
+  "core/tests/nextpas.core.tls/winssl/test_winssl_error_mapping_online.pas"
+  "core/tests/nextpas.core.tls/winssl/test_winssl_hostname_mismatch_online.pas"
+  "core/tests/nextpas.core.tls/winssl/test_winssl_revocation_online.pas"
 )
 
 declare -a required_comment_patterns=(

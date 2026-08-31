@@ -270,11 +270,11 @@ type
     function LookupSinglePosXAdvance(AGlyphId: UInt16): Int16;
     {** 是否包含 GPOS MarkToBase 数据 }
     function HasMarkToBase: Boolean;
-    {** 查找 MarkToBase 锚点。不匹配返回 {0,0}。 }
+    {** 查找 MarkToBase 锚点。不匹配返回 (0,0)。 }
     function LookupMarkToBase(AMarkGlyph, ABaseGlyph: UInt16): TFontAnchor;
     {** 是否包含 GPOS MarkToMark 数据 }
     function HasMarkToMark: Boolean;
-    {** 查找 MarkToMark 锚点。不匹配返回 {0,0}。 }
+    {** 查找 MarkToMark 锚点。不匹配返回 (0,0)。 }
     function LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
     {** 是否包含 GPOS CursivePos 数据 }
     function HasCursivePos: Boolean;
@@ -2447,6 +2447,7 @@ var
   LBasePointCount: Int32;
   LScaleX, LScaleY, LOffX, LOffY: Single;
 begin
+  Result := Default(TFontGlyphOutline);
   FontGlyphOutlineClear(Result);
 
   for LI := 0 to High(AComponents) do
@@ -2522,6 +2523,7 @@ var
   LContours: Int16;
   LCompoundBuf: TFontCompoundComponentArray;
 begin
+  Result := Default(TFontGlyphOutline);
   FontGlyphOutlineClear(Result);
 
   { CFF2 outlines }
@@ -3109,6 +3111,7 @@ function TTFontFace.LookupMultipleSubst(AGlyphId: UInt16): TFontGlyphIdArray;
 var
   LI, LCovIdx, LSeqOff, LGlyphCount, LJ: Int32;
 begin
+  Result := nil;
   SetLength(Result, 0);
   for LI := 0 to High(FMultipleSubstSubtables) do
   begin
@@ -3144,6 +3147,7 @@ function TTFontFace.LookupAlternateSubst(AGlyphId: UInt16): TFontGlyphIdArray;
 var
   LI, LCovIdx, LSetOff, LAltCount, LJ: Int32;
 begin
+  Result := nil;
   SetLength(Result, 0);
   for LI := 0 to High(FAlternateSubstSubtables) do
   begin
@@ -3261,6 +3265,7 @@ var
   LClassId, LClassSetOff: Int32;
   LGlyphCount: Int32;
 begin
+  Result := nil;
   SetLength(Result, 0);
   if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
     Exit;
@@ -3373,6 +3378,7 @@ var
   LMatch: Boolean;
   LGlyphArr: array of UInt16;
 begin
+  Result := nil;
   SetLength(Result, 0);
   if (AIndex < 0) or (AIndex >= Length(FContextSubstSubtables)) then
     Exit;
@@ -3620,6 +3626,7 @@ var
   LSeqOff, LSeqCount, LJ: Int32;
   LNewGid: UInt16;
 begin
+  Result := nil;
   SetLength(Result, 1);
   Result[0] := AGlyphId;
   if (ALookupIndex < 0) or (ALookupIndex >= Length(FLookupEntries)) then
@@ -4022,6 +4029,7 @@ function TTFontFace.GetColorLayers(AGlyphId: UInt16): TFontColorLayerArray;
 var
   LI: Int32;
 begin
+  Result := nil;
   SetLength(Result, 0);
   for LI := 0 to High(FColorLayerRecords) do
   begin
@@ -5738,6 +5746,7 @@ var
 var
   LI: Int32;
 begin
+  Result := Default(TFontGlyphOutline);
   FontGlyphOutlineClear(Result);
   if (not FCffParsed) or (AGlyphIndex >= UInt32(FCffGlyphCount)) then
     Exit;
@@ -6728,6 +6737,7 @@ var
 var
   LI: Int32;
 begin
+  Result := Default(TFontGlyphOutline);
   FontGlyphOutlineClear(Result);
   if (not FCff2Parsed) or (AGlyphIndex >= UInt32(FCff2GlyphCount)) then Exit;
 

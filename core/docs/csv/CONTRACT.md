@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.csv.pas`（1 个源文件）
 **层级**：表格格式工具（依赖 L0 `errors`/`mem` + L1 `io.intf`/`io.util`）；**不**进入 `TConfigFormat`
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
-**最后更新**：2026-07-20
-**版本**：2.2（`IReader` 分块 refill 真流式）
+**最后更新**：2026-08-31
+**版本**：2.3（`IReader` 分块 refill 真流式）
 
 ---
 
@@ -121,3 +121,4 @@ make focused FOCUS=core/tests/nextpas.core.csv/test_csv_roundtrip
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始 | — |
 | 2026-07-20 | 2.0 | 补全 Create/Init、CsvParse、错误与 ReadAll 语义 | config-formats lane |
+| 2026-08-31 | 2.3 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

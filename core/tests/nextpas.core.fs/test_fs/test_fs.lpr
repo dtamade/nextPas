@@ -529,9 +529,15 @@ end;
   相对目标拼接父目录 }
 procedure TestRealPath;
 var
-  LDir, LReal, LLink, LMidDir, LMidLink, LFile, LRes, LRaw: string;
+  LBase, LDir, LReal, LLink, LMidDir, LMidLink, LFile, LRes: string;
   LRaised: Boolean;
 begin
+  { 基准 canonical 前缀（GTmpDir 自身无符号链接段；断言用字面期望后缀，
+    杜绝「两个 FsRealPath 调用互比」的自我参照——曾掩盖返回根 '/' 的 bug） }
+  LBase := FsRealPath(GTmpDir);
+  CheckTrue(LBase <> '', 'base canonical non-empty');
+  CheckTrue(LBase <> '/', 'base canonical is not root');
+
   LDir := GTmpDir + '/realpath-dir';
   MkdirAll(LDir, PermDirDefault);
   LReal := LDir + '/real-sub';
@@ -539,16 +545,18 @@ begin
   LFile := LReal + '/f.txt';
   FsWriteFile(LFile, TBytes.Create(Ord('x')));
 
-  { 普通既有路径 → canonical 化（与真实解析一致，前缀为 GTmpDir 的 canonical） }
+  { 普通既有路径 → canonical 化（字面期望：基准 + 相对后缀） }
   LRes := FsRealPath(LFile);
-  CheckTrue(LRes <> '', 'realpath non-empty');
+  CheckEqual(LBase + '/realpath-dir/real-sub/f.txt', LRes,
+    'plain path canonicalized');
   CheckTrue(FsExists(LRes), 'realpath resolves to existing path');
 
   { 末端 symlink：link → real-sub；link/f.txt 解析到 real-sub/f.txt }
   LLink := LDir + '/end-link';
   FsSymlink('real-sub', LLink);
   LRes := FsRealPath(LLink + '/f.txt');
-  CheckEqual(FsRealPath(LReal + '/f.txt'), LRes, 'end symlink resolved');
+  CheckEqual(LBase + '/realpath-dir/real-sub/f.txt', LRes,
+    'end symlink resolved');
 
   { 中间段 symlink：link → real-sub；link 下再套一层真实目录 }
   LMidDir := LReal + '/mid';
@@ -557,16 +565,17 @@ begin
   LMidLink := LDir + '/mid-link';
   FsSymlink('real-sub', LMidLink);
   LRes := FsRealPath(LMidLink + '/mid/m.txt');
-  CheckEqual(FsRealPath(LMidDir + '/m.txt'), LRes, 'mid symlink resolved');
+  CheckEqual(LBase + '/realpath-dir/real-sub/mid/m.txt', LRes,
+    'mid symlink resolved');
 
   { 绝对目标 symlink：abs-link → 绝对路径 }
   LMidDir := LDir + '/linker';
   MkdirAll(LMidDir, PermDirDefault);
   FsWriteFile(LMidDir + '/t.txt', TBytes.Create(Ord('z')));
-  LRaw := FsRealPath(LMidDir + '/t.txt');
-  FsSymlink(LRaw, LMidDir + '/abs-link');
+  FsSymlink(LBase + '/realpath-dir/linker/t.txt', LMidDir + '/abs-link');
   LRes := FsRealPath(LMidDir + '/abs-link');
-  CheckEqual(LRaw, LRes, 'absolute target link resolved');
+  CheckEqual(LBase + '/realpath-dir/linker/t.txt', LRes,
+    'absolute target link resolved');
 
   { 不存在 → ENotFoundError }
   LRaised := False;

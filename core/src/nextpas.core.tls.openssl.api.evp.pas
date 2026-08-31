@@ -1,8 +1,8 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - OpenSSL EVP Module                                           }
+{  nextpas.core.tls - OpenSSL EVP Module                                           }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {******************************************************************************}
 

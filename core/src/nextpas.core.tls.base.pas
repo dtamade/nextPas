@@ -2,12 +2,12 @@
   nextpas.core.tls.base - SSL/TLS 基础定义（类型+接口）
   
   版本: 2.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-11-05
   
   描述:
-    定义 fafafa.ssl 库的所有基础类型、常量、枚举、异常类和接口。
-    按照 fafafa.模块名.base.pas 命名规范，此文件包含：
+    定义 nextpas.core.tls 库的所有基础类型、常量、枚举、异常类和接口。
+    按 base 单元职责划分，此文件包含：
     - 所有类型定义（从 abstract.types 迁移）
     - 所有接口定义（从 abstract.intf 迁移）
     
@@ -635,10 +635,10 @@ type
                               const ASize: Integer;
                               const AIsOutgoing: Boolean) of object;
 
-  { HTTP GET 回调（由上层网络库实现，fafafa.ssl 不实现网络传输） }
+  { HTTP GET 回调（由上层网络库实现，nextpas.core.tls 不实现网络传输） }
   TSSLHTTPGetCallback = function(const AURL: string; ATimeoutMs: Integer): TSSLDataResult of object;
 
-  { HTTP POST 回调（由上层网络库实现，fafafa.ssl 不实现网络传输） }
+  { HTTP POST 回调（由上层网络库实现，nextpas.core.tls 不实现网络传输） }
   TSSLHTTPPostCallback = function(const AURL, AContentType: string;
     const ABody: TBytes; ATimeoutMs: Integer): TSSLDataResult of object;
 
@@ -767,9 +767,28 @@ type
   end;
 
   {**
+   * ISSLStreamConnectionAccess - 流内连接访问接口（可选）
+   *
+   * TSSLStream 将 ISSLConnection 封装为 IStream。调用方只持有 IStream 时，
+   * 通过此可选接口取回底层连接，进行会话恢复、early-data 等连接级操作。
+   * 不要把接口指针硬转型回具体类：接口指针与对象基址不保证相同。
+   *
+   * 使用方法：
+   *   if Supports(AStream, ISSLStreamConnectionAccess, Access) then
+   *     Conn := Access.GetConnection;
+   *}
+  ISSLStreamConnectionAccess = interface
+    ['{E7A9C1D3-4F5B-6C7D-8E9F-0A1B2C3D4E5F}']
+
+    {** 获取流封装的底层连接
+        @returns 底层 ISSLConnection（TSSLStream 生命周期内非空） *}
+    function GetConnection: ISSLConnection;
+  end;
+
+  {**
    * ISSLHttpHooksAccess - HTTP 传输 hooks 访问接口（可选）
    *
-   * fafafa.ssl 不实现网络通信。任何依赖 HTTP 的功能（例如 OCSP 在线检查、CT log list 下载）
+   * nextpas.core.tls 不实现网络通信。任何依赖 HTTP 的功能（例如 OCSP 在线检查、CT log list 下载）
    * 必须通过上层注入的回调完成。
    *
    * 注入优先级由调用方决定；推荐：
@@ -809,7 +828,7 @@ type
    * ISSLLibrary - SSL库管理接口
    *
    * 提供 SSL/TLS 库的初始化、版本查询、功能检测和工厂方法。
-   * 这是使用 fafafa.ssl 的入口点接口。
+   * 这是使用 nextpas.core.tls 的入口点接口。
    *
    * @stable 1.0
    * @locked 2025-12-24
@@ -2036,24 +2055,24 @@ const
   // ============================================================================
 
   {** 库主版本号 - 不兼容的 API 变更时递增 *}
-  FAFAFA_SSL_VERSION_MAJOR = 1;
+  SSL_VERSION_MAJOR = 1;
 
   {** 库次版本号 - 向后兼容的功能添加时递增 *}
-  FAFAFA_SSL_VERSION_MINOR = 6;
+  SSL_VERSION_MINOR = 6;
 
   {** 库修订版本号 - 向后兼容的 bug 修复时递增 *}
-  FAFAFA_SSL_VERSION_PATCH = 0;
+  SSL_VERSION_PATCH = 0;
 
   {** 库版本字符串 *}
-  FAFAFA_SSL_VERSION_STRING = '1.6.0';
+  SSL_VERSION_STRING = '1.6.0';
 
   {** 接口版本号 - 用于检测接口兼容性
       格式: (Major * 10000) + (Minor * 100) + Patch
       例如: 1.0.0 = 10000, 1.5.0 = 10500 *}
-  FAFAFA_SSL_INTERFACE_VERSION = 10600;
+  SSL_INTERFACE_VERSION = 10600;
 
   {** 接口锁定日期 - 接口稳定后不再修改 *}
-  FAFAFA_SSL_INTERFACE_LOCKED_DATE = '2025-12-24';
+  SSL_INTERFACE_LOCKED_DATE = '2025-12-24';
 
   // TSSLContextType 别名（兼容性）
   sslContextClient = sslCtxClient;
@@ -2206,10 +2225,10 @@ function ContextConfigFromSSLConfig(const AConfig: TSSLConfig): TSSLContextConfi
 function SSLConfigFromContextConfig(const AConfig: TSSLContextConfig): TSSLConfig;
 
 {** 获取库版本字符串 *}
-function GetFafafaSSLVersion: string;
+function GetSSLVersion: string;
 
 {** 获取接口版本号 *}
-function GetFafafaSSLInterfaceVersion: Integer;
+function GetSSLInterfaceVersion: Integer;
 
 {** 检查接口版本兼容性
     @param ARequiredVersion 要求的最低接口版本
@@ -2800,19 +2819,19 @@ end;
 // 版本函数实现 (P2: 接口版本控制)
 // ============================================================================
 
-function GetFafafaSSLVersion: string;
+function GetSSLVersion: string;
 begin
-  Result := FAFAFA_SSL_VERSION_STRING;
+  Result := SSL_VERSION_STRING;
 end;
 
-function GetFafafaSSLInterfaceVersion: Integer;
+function GetSSLInterfaceVersion: Integer;
 begin
-  Result := FAFAFA_SSL_INTERFACE_VERSION;
+  Result := SSL_INTERFACE_VERSION;
 end;
 
 function CheckInterfaceVersion(ARequiredVersion: Integer): Boolean;
 begin
-  Result := FAFAFA_SSL_INTERFACE_VERSION >= ARequiredVersion;
+  Result := SSL_INTERFACE_VERSION >= ARequiredVersion;
 end;
 
 // ============================================================================

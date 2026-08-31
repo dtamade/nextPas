@@ -34,6 +34,7 @@ uses
   nextpas.core.tls.errors,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.tls13.wire,
+  nextpas.core.bytes.ops,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.tls.tls13.posthandshake,
@@ -740,7 +741,7 @@ begin
   Result := nil;
   AppendUInt16(Result, AType);
   AppendUInt16(Result, Word(Length(AData)));
-  AppendBytes(Result, AData);
+  BytesAppend(Result, AData);
 end;
 
 function StringToAnsiBytes(const AValue: string): TBytes;
@@ -784,7 +785,7 @@ begin
       if Length(LProtocolBytes) > 255 then
         RaiseInvalidParameter('ALPNProtocolLength');
       AppendByte(Result, Byte(Length(LProtocolBytes)));
-      AppendBytes(Result, LProtocolBytes);
+      BytesAppend(Result, LProtocolBytes);
     end;
 
     LStart := I + 1;
@@ -863,19 +864,28 @@ begin
 
     SetLength(LALPNData, 0);
     AppendUInt16(LALPNData, Word(Length(LALPNList)));
-    AppendBytes(LALPNData, LALPNList);
+    BytesAppend(LALPNData, LALPNList);
     LALPNData := BuildExtensionHeader(TLS_EXTENSION_ALPN, LALPNData);
-    AppendBytes(LExtensions, LALPNData);
+    BytesAppend(LExtensions, LALPNData);
   end;
 
   SetLength(LBody, 0);
   AppendUInt16(LBody, Word(Length(LExtensions)));
-  AppendBytes(LBody, LExtensions);
+  BytesAppend(LBody, LExtensions);
 
   SetLength(Result, 0);
   AppendByte(Result, TLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
+end;
+
+function FreePascalHandleToSocket(AHandle: THandle): TPlatformSocket; inline;
+begin
+  {$IFDEF WINDOWS}
+  Result.Value := PtrUInt(AHandle);
+  {$ELSE}
+  Result.Value := Int32(AHandle);
+  {$ENDIF}
 end;
 
 constructor TFreePascalConnection.Create(AContext: ISSLContext; ASocket: THandle);
@@ -883,6 +893,10 @@ begin
   inherited Create(AContext);
   FSocket := ASocket;
   FStream := nil;
+  // 同步握手模型要求阻塞语义：调用方（如 FPC TInetSocket）可能交入非阻塞
+  // 句柄，非阻塞 recv 在对端响应未到达时立即 EAGAIN，握手会误判 IO 失败。
+  if FSocket >= 0 then
+    platform_socket_set_nonblocking(FreePascalHandleToSocket(FSocket), False);
   InitializeState(AContext);
 end;
 
@@ -974,16 +988,11 @@ begin
   SecureZeroBytes(FTLS12State.ClientWriteMACKey);
   SecureZeroBytes(FTLS12State.ServerWriteMACKey);
   SecureZeroBytes(FTLS12State.MasterSecret);
+  { 对端证书对象仅在握手成功路径被释放（见 TLS12 恢复/完成分支）——
+    验证失败等路径滞留的 PeerCertificate 在此统一兜底，防止整证书
+    （FRawCertificate/TBS 副本及解析字段）随连接对象泄漏 }
+  FreeAndNil(FTLS12State.PeerCertificate);
   inherited Destroy;
-end;
-
-function FreePascalHandleToSocket(AHandle: THandle): TPlatformSocket; inline;
-begin
-  {$IFDEF WINDOWS}
-  Result.Value := PtrUInt(AHandle);
-  {$ELSE}
-  Result.Value := Int32(AHandle);
-  {$ENDIF}
 end;
 
 function TFreePascalConnection.SendData(const ABuffer; ASize: Integer): Integer;
@@ -1021,8 +1030,9 @@ begin
   LSock := FreePascalHandleToSocket(FSocket);
   if FReadTimeoutMs > 0 then
   begin
+    // platform_socket_poll 约定：1=就绪，0=超时，负值=错误
     LErr := platform_socket_poll(LSock, PLATFORM_POLL_IN, FReadTimeoutMs, LRevents);
-    if LErr <> 0 then
+    if LErr <= 0 then
       Exit(-1);
   end;
 
@@ -3251,6 +3261,10 @@ begin
         ) then
         begin
           SetHandshakeError(sslErrHandshake, 'TLS 1.2 fallback handshake failed: ' + LError);
+          { 失败路径同样回收局部握手状态中的对端证书——Certificate 消息
+            解析阶段即已创建（成功路径下方 FreeAndNil 同款）；否则每次
+            「收到证书后握手失败」都孤儿化一整张证书及其解析字段 }
+          FreeAndNil(LState.PeerCertificate);
           Exit;
         end;
 

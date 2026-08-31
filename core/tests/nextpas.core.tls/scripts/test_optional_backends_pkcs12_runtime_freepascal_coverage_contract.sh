@@ -3,11 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-test_file="tests/test_optional_backends_pkcs12_capability_truth_contract.pas"
+test_file="core/tests/nextpas.core.tls/test_optional_backends_pkcs12_capability_truth_contract.pas"
 
 fail() {
   echo "[FAIL] $1" >&2

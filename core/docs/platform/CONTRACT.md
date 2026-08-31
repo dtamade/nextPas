@@ -5,16 +5,16 @@
 **FPC RTL**：生产/测试/示例 **禁止** `uses SysUtils` / `BaseUnix` / `Windows` / `Classes` 等 FPC RTL。
 仅 `nextpas.core.system` 允许直接引用 FPC RTL（仓库级编译器无关性原则）。
 **Owner**：platform lane（`.worktrees/platform`）
-**最后更新**：2026-07-26
-**版本**：2.3
+**最后更新**：2026-08-31
+**版本**：2.4
 
-### 0.1 审计闭环不变量（2026-07-26）
+### 0.1 审计闭环不变量（2026-08-31）
 
 - **console read/write**：value/sentinel；失败 `-1`；禁止正 `PLATFORM_ERR_*` 冒充字节数。
 - **L0 堆**：platform 可用 System `GetMem`/`FreeMem`；**不得** `uses nextpas.core.mem`。
 - **dual-IO**：`platform_io_*` 符号仅 `platform.process` 拥有；无新 call site。
 - **freetype/x11**：optional host binding，非 OS 契约核心；迁出需独立 lane。
-- **process/socket/sync 巨型单元**：本轮不物理拆分；拆包为后续 ROADMAP batch。
+- **process/socket/sync 巨型单元**：本轮不物理拆分；拆包为后续 ROADMAP D5 / F-004 延期 batch，按需拆分（无消费者痛点不展开，见 `ROADMAP.md §5/D5`）。
 
 ---
 

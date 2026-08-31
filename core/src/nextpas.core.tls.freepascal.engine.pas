@@ -98,6 +98,7 @@ end;
 function TFreePascalEngine.ProcessHandshake: TSSLEngineAction;
 var
   LSuccess: Boolean;
+  LVerif: ISSLCertificateVerification;
 begin
   if FHandshakeComplete then
     Exit(eaHandshakeComplete);
@@ -132,7 +133,9 @@ begin
     Exit(eaHandshakeComplete);
   end;
 
-  FLastError := FConnection.GetVerifyResultString;
+  FLastError := '';
+  if Supports(FConnection, ISSLCertificateVerification, LVerif) then
+    FLastError := LVerif.GetVerifyResultString;
   FLastErrorCode := sslErrHandshake;
   Result := eaError;
 end;
@@ -240,9 +243,11 @@ begin
 end;
 
 function TFreePascalEngine.GetSelectedALPNProtocol: string;
+var
+  LInfo: ISSLConnectionInfo;
 begin
-  if FConnection <> nil then
-    Result := FConnection.GetSelectedALPNProtocol
+  if (FConnection <> nil) and Supports(FConnection, ISSLConnectionInfo, LInfo) then
+    Result := LInfo.GetSelectedALPNProtocol
   else
     Result := '';
 end;

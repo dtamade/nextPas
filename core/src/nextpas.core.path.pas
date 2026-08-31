@@ -219,8 +219,10 @@ begin
 end;
 
 function PathFromSlash(const APath: string): string;
+{$IFDEF NEXTPAS_WINDOWS}
 var
   I: Integer;
+{$ENDIF}
 begin
   Result := APath;
   {$IFDEF NEXTPAS_WINDOWS}
@@ -237,6 +239,7 @@ var
   I, LStart, LCount, LLen: Integer;
   C: Char;
 begin
+  Result := nil;
   LLen := Length(AList);
   if LLen = 0 then
   begin

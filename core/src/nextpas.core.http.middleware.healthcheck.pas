@@ -14,7 +14,7 @@ uses
   nextpas.core.http.intf;
 
 {** @desc Create middleware that responds to GET /healthz with 200 OK.
-   Returns {"status":"ok"} with application/json content-type. }
+   Returns an application/json body reporting ok status. }
 function HealthCheckMiddleware: IHttpMiddleware;
 
 {** @desc Create middleware that responds to GET APath with 200 OK.

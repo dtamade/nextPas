@@ -13,7 +13,9 @@ uses
  * @param AB Second operand
  * @return True if AA + AB would overflow
  *}
+{$IF DEFINED(CPU64)}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
+{$ENDIF}
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
 
 {** * Checks whether multiplying two values would overflow.
@@ -21,7 +23,9 @@ function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
  * @param AB Second operand
  * @return True if AA * AB would overflow
  *}
+{$IF DEFINED(CPU64)}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
+{$ENDIF}
 function IsMulOverflow(AA, AB: UInt32): Boolean; overload; inline;
 
 {** * Returns the lesser of two values.
@@ -39,10 +43,16 @@ function Min(AA, AB: SizeUInt): SizeUInt; overload; inline;
 function Max(AA, AB: SizeUInt): SizeUInt; overload; inline;
 
 function Min(AA, AB: SizeInt): SizeInt; overload; inline;
-function Max(AA, AB: SizeInt): SizeInt; overload; inline;
+function Max(AA, AB: SizeInt): SizeInt; overload;
+{ Int32 overloads: SizeInt is 64-bit on x86_64, so plain Integer arguments
+  would otherwise widen to SizeInt and lose the exact-type match. }
+{$IF DEFINED(CPU64)}
+function Min(AA, AB: Int32): Int32; overload; inline;
+function Max(AA, AB: Int32): Int32; overload;
+{$ENDIF}
 function Min(AA, AB: Double): Double; overload; inline;
 function Max(AA, AB: Double): Double; overload; inline;
-function Min(AA, AB: Single): Single; overload; inline;
+function Min(AA, AB: Single): Single; overload;
 function Max(AA, AB: Single): Single; overload;
 
 {** * Constrains a value to lie within a given range.
@@ -52,8 +62,10 @@ function Max(AA, AB: Single): Single; overload;
  * @return AValue clamped to [AMin, AMax]
  *}
 function Clamp(const AValue, AMin, AMax: Double): Double; overload; inline;
-function Clamp(const AValue, AMin, AMax: Single): Single; overload; inline;
+function Clamp(const AValue, AMin, AMax: Single): Single; overload;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; overload; inline;
+function ClampByte(const AValue: Int32): Byte; overload; inline;
+function ClampByte(const AValue: Single): Byte; overload; inline;
 function Lerp(const AA, AB, AT: Double): Double; overload;
 function Lerp(const AA, AB, AT: Single): Single; overload;
 function InverseLerp(const AA, AB, AValue: Double): Double; overload;
@@ -103,7 +115,7 @@ function Frac(const AValue: Single): Single; overload;
  * @return |AValue|
  *}
 function Abs(const AValue: Double): Double; overload; inline;
-function Abs(const AValue: Single): Single; overload; inline;
+function Abs(const AValue: Single): Single; overload;
 function Abs(const AValue: Int32): Int32; overload; inline;
 function Abs(const AValue: Int64): Int64; overload; inline;
 
@@ -112,7 +124,7 @@ function Abs(const AValue: Int64): Int64; overload; inline;
  * @return sqrt(AValue)
  *}
 function Sqrt(const AValue: Double): Double; overload; inline;
-function Sqrt(const AValue: Single): Single; overload; inline;
+function Sqrt(const AValue: Single): Single; overload;
 
 {** * Returns e raised to the power of AValue.
  * @param AValue The exponent
@@ -140,14 +152,20 @@ function Sign(const AValue: Int64): Int64; overload; inline;
  * @return True if AValue is NaN
  *}
 function IsNaN(const AValue: Double): Boolean; overload; inline;
-function IsNaN(const AValue: Single): Boolean; overload; inline;
+function IsNaN(const AValue: Single): Boolean; overload;
 
 {** * Tests whether AValue is positive or negative infinity.
  * @param AValue The value to test
  * @return True if AValue is infinite
  *}
 function IsInfinite(const AValue: Double): Boolean; overload; inline;
-function IsInfinite(const AValue: Single): Boolean; overload; inline;
+function IsInfinite(const AValue: Single): Boolean; overload;
+
+{** * Requires AValue to be finite (not NaN and not infinite).
+ * @raises EArgumentError if AValue is NaN or infinite
+ *}
+procedure RequireFinite(const AValue: Single; const AMessage: string); overload; inline;
+procedure RequireFinite(const AValue: Double; const AMessage: string); overload; inline;
 
 {** * IEEE special values with FPC Math-compatible names (Double payloads).
  * Built from bit patterns — no exception-raising division.
@@ -172,6 +190,28 @@ function FloatEquals(const AA, AB: Single; const AEpsilon: Single): Boolean; ove
  *}
 function FloatIsZero(const AValue: Double; const AEpsilon: Double): Boolean; overload; inline;
 function FloatIsZero(const AValue: Single; const AEpsilon: Single): Boolean; overload; inline;
+
+{** * Tests approximate equality (RTL-Math-compatible name).
+ * AEpsilon <= 0 derives a magnitude-relative default tolerance
+ * (8 * machine-epsilon * max(|AA|, |AB|)), matching the RTL contract of a
+ * magnitude-based default. NaN never compares equal; equal infinities do.
+ * @param AA First value
+ * @param AB Second value
+ * @param AEpsilon Tolerance; 0 or negative selects the derived default
+ * @return True if the values are approximately equal
+ *}
+function SameValue(const AA, AB: Double; AEpsilon: Double = 0): Boolean; overload; inline;
+function SameValue(const AA, AB: Single; AEpsilon: Single = 0): Boolean; overload; inline;
+
+{** * Tests whether a floating-point value is approximately zero
+ * (RTL-Math-compatible name). AEpsilon <= 0 derives an absolute default
+ * tolerance of 8 * machine epsilon.
+ * @param AValue The value to test
+ * @param AEpsilon Tolerance; 0 or negative selects the derived default
+ * @return True if |AValue| <= AEpsilon
+ *}
+function IsZero(const AValue: Double; AEpsilon: Double = 0): Boolean; overload; inline;
+function IsZero(const AValue: Single; AEpsilon: Single = 0): Boolean; overload; inline;
 
 {** * Converts degrees to radians.
  * @param ADegrees Angle in degrees
@@ -299,6 +339,14 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.math.impl.scalar;
+
+const
+  { Largest finite value representable by each floating-point type
+    (replaces RTL Math MaxDouble / MaxSingle). Implementation-private:
+    public surface here would demand a root-facade re-export that the
+    closed root const set forbids (api-surface contract). }
+  MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
+  MAX_SINGLE_VALUE: Single = 3.40282346638528859812e38;
 
 { RoundTo - rounds AValue to ADecimals decimal places }
 function RoundTo(const AValue: Double; const ADecimals: Integer): Double;
@@ -591,10 +639,6 @@ end;
 {$ELSE}
   {$FATAL Unsupported Extended floating-point layout}
 {$ENDIF}
-
-const
-  MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
-  MAX_SINGLE_VALUE: Single = 3.40282346638528859812e38;
 
 function UInt64AbsInt64(const AValue: Int64): UInt64; inline;
 begin
@@ -975,22 +1019,26 @@ begin
     (AEpsilon >= 0.0);
 end;
 
+{$IF DEFINED(CPU64)}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
 begin
   Result := AA > High(SizeUInt) - AB;
 end;
+{$ENDIF}
 
 function IsAddOverflow(AA, AB: UInt32): Boolean;
 begin
   Result := AA > High(UInt32) - AB;
 end;
 
+{$IF DEFINED(CPU64)}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean;
 begin
   if AA = 0 then
     Exit(False);
   Result := AB > High(SizeUInt) div AA;
 end;
+{$ENDIF}
 
 function IsMulOverflow(AA, AB: UInt32): Boolean;
 begin
@@ -1018,6 +1066,18 @@ function Max(AA, AB: SizeInt): SizeInt;
 begin
   if AA > AB then Result := AA else Result := AB;
 end;
+
+{$IF DEFINED(CPU64)}
+function Min(AA, AB: Int32): Int32;
+begin
+  if AA < AB then Result := AA else Result := AB;
+end;
+
+function Max(AA, AB: Int32): Int32;
+begin
+  if AA > AB then Result := AA else Result := AB;
+end;
+{$ENDIF}
 
 function Min(AA, AB: Single): Single;
 begin
@@ -1145,6 +1205,16 @@ begin
     Result := AMax
   else
     Result := AValue;
+end;
+
+function ClampByte(const AValue: Int32): Byte;
+begin
+  Result := Byte(Clamp(AValue, Int32(0), Int32(255)));
+end;
+
+function ClampByte(const AValue: Single): Byte;
+begin
+  Result := Byte(Clamp(Int32(System.Round(AValue)), Int32(0), Int32(255)));
 end;
 
 function Lerp(const AA, AB, AT: Single): Single;
@@ -1450,6 +1520,18 @@ begin
   Result := DoubleIsInfinite(AValue);
 end;
 
+procedure RequireFinite(const AValue: Single; const AMessage: string);
+begin
+  if IsNaN(AValue) or IsInfinite(AValue) then
+    raise EArgumentError.Create(AMessage);
+end;
+
+procedure RequireFinite(const AValue: Double; const AMessage: string);
+begin
+  if IsNaN(AValue) or IsInfinite(AValue) then
+    raise EArgumentError.Create(AMessage);
+end;
+
 function NaN: Double;
 begin
   Result := DoubleQuietNaN;
@@ -1509,6 +1591,62 @@ begin
   if (not ValidComparisonEpsilon(AEpsilon)) or IsNaN(AValue) or IsInfinite(AValue) then
     Exit(False);
   Result := Abs(AValue) <= AEpsilon;
+end;
+
+const
+  SINGLE_MACHINE_EPSILON: Single = 1.1920928955078125e-7;
+  DOUBLE_MACHINE_EPSILON: Double = 2.2204460492503131e-16;
+
+function SameValue(const AA, AB: Double; AEpsilon: Double): Boolean;
+begin
+  { Non-finite inputs short-circuit before epsilon derivation so NaN never
+    reaches the tolerance arithmetic. }
+  if IsNaN(AA) or IsNaN(AB) then
+    Exit(False);
+  if IsInfinite(AA) or IsInfinite(AB) then
+    Exit(AA = AB);
+  if AEpsilon <= 0 then
+  begin
+    if Abs(AA) > Abs(AB) then
+      AEpsilon := Abs(AA) * (DOUBLE_MACHINE_EPSILON * 8)
+    else
+      AEpsilon := Abs(AB) * (DOUBLE_MACHINE_EPSILON * 8);
+  end;
+  Result := FloatEquals(AA, AB, AEpsilon);
+end;
+
+function SameValue(const AA, AB: Single; AEpsilon: Single): Boolean;
+begin
+  if SingleIsNaN(AA) or SingleIsNaN(AB) then
+    Exit(False);
+  if SingleIsInfinite(AA) or SingleIsInfinite(AB) then
+    Exit(AA = AB);
+  if AEpsilon <= 0 then
+  begin
+    if Abs(AA) > Abs(AB) then
+      AEpsilon := Abs(AA) * (SINGLE_MACHINE_EPSILON * 8)
+    else
+      AEpsilon := Abs(AB) * (SINGLE_MACHINE_EPSILON * 8);
+  end;
+  Result := FloatEquals(AA, AB, AEpsilon);
+end;
+
+function IsZero(const AValue: Double; AEpsilon: Double): Boolean;
+begin
+  if IsNaN(AValue) or IsInfinite(AValue) then
+    Exit(False);
+  if AEpsilon <= 0 then
+    AEpsilon := DOUBLE_MACHINE_EPSILON * 8;
+  Result := FloatIsZero(AValue, AEpsilon);
+end;
+
+function IsZero(const AValue: Single; AEpsilon: Single): Boolean;
+begin
+  if SingleIsNaN(AValue) or SingleIsInfinite(AValue) then
+    Exit(False);
+  if AEpsilon <= 0 then
+    AEpsilon := SINGLE_MACHINE_EPSILON * 8;
+  Result := FloatIsZero(AValue, AEpsilon);
 end;
 
 function DegToRad(const ADegrees: Single): Single;

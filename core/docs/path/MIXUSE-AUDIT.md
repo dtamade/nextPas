@@ -1,8 +1,8 @@
 # Path mix-use audit
 
-**Generated**: 2026-08-10T23:17Z  
-**Script**: `scripts/path-mixuse-audit.sh`  
-**Scope**: `core/src/**/*.pas`, `compiler/**/*.pas`  
+**Generated**: 2026-08-23T22:01Z
+**Script**: `scripts/path-mixuse-audit.sh`
+**Scope**: `core/src/**/*.pas`, `compiler/**/*.pas`
 **Semantics**: unchanged (PathDir facade vs FsPathDir Go).
 
 ## Dual-track anchors (fail-closed)
@@ -14,26 +14,28 @@
 
 Status: **PASS** (anchors present).
 
-## A. FsPathDir sites (6)
+## A. FsPathDir sites (8)
 
 ```
 core/src/nextpas.core.fs.path.pas:16:function FsPathDir(const APath: string): string;
 core/src/nextpas.core.fs.path.pas:92:function FsPathDir(const APath: string): string;
 core/src/nextpas.core.fs.path.pas:104:  ADir := FsPathDir(APath);
 core/src/nextpas.core.path.pas:123:  Result := FsPathDir(APath);
-core/src/nextpas.core.path.pas:318:  LDir := FsPathDir(AFileName);
-core/src/nextpas.core.fs.pas:629:  Result := nextpas.core.fs.path.FsPathDir(APath);
+core/src/nextpas.core.path.pas:321:  LDir := FsPathDir(AFileName);
+core/src/nextpas.core.fs.pas:638:  Result := nextpas.core.fs.path.FsPathDir(APath);
+core/src/nextpas.core.fs.util.pas:613:        Target := FsPathJoin([FsPathDir(P), Target]);
+core/src/nextpas.core.fs.util.pas:622:    Parent := FsPathDir(P);
 ```
 
 ## B. PathDir call sites (6)
 
 ```
-core/src/nextpas.core.tls.logging.pas:364:  LDir := nextpas.core.fs.PathDir(AFileName);
+core/src/nextpas.core.tls.logging.pas:365:  LDir := nextpas.core.fs.PathDir(AFileName);
 core/src/nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas:333:  LDir := nextpas.core.fs.PathDir(LLockFileName);
-core/src/nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas:562:  LParentDirectory := nextpas.core.fs.PathDir(FDirectoryName);
+core/src/nextpas.core.tls.freepascal.earlydatareplay.dirstore.pas:565:  LParentDirectory := nextpas.core.fs.PathDir(FDirectoryName);
 core/src/nextpas.core.tls.freepascal.earlydatareplay.fileprovider.pas:242:  LDir := PathDir(LLockFileName);
 core/src/nextpas.core.http.client.helpers.pas:228:    LDestDir := nextpas.core.fs.PathDir(ADestPath);
-core/src/nextpas.core.git.libgit2.pas:240:    p := PathDir(p);
+core/src/nextpas.core.git.libgit2.pas:254:    p := PathDir(p);
 ```
 
 ## C. Co-use nextpas.core.path + nextpas.core.fs (19) — warn
@@ -63,7 +65,7 @@ core/src/nextpas.core.git.libgit2.pas:240:    p := PathDir(p);
 | Form | Approx count |
 |------|--------------|
 | PathJoin2( | 2 |
-| FsPathJoin( | 14 |
+| FsPathJoin( | 18 |
 | PathJoin([ | 3 |
 | PathJoin(a,b) style | 2 |
 

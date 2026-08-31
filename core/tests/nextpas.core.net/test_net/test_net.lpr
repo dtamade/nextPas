@@ -15,6 +15,7 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.net.tcp,
+  nextpas.core.platform.socket,
   nextpas.core.net.udp,
   nextpas.core.net.resolve,
   nextpas.core.net,
@@ -72,6 +73,30 @@ begin
     'blocking Write keeps an explicit zero-progress guard');
   CheckSourceContains(LBody, 'tcp write failed (zero progress)',
     'blocking Write raises a dedicated zero-progress error');
+end;
+
+procedure TestTcpStreamEintrRetrySourceContract;
+var
+  LSource: string;
+  LRead: string;
+  LWrite: string;
+  LAccept: string;
+begin
+  LSource := ReadTextFile('../../../src/nextpas.core.net.tcp.pas');
+  LRead := ExtractSourceRange(LSource, 'function ttcpstream.read',
+    'function ttcpstream.write', 'TTcpStream.Read implementation');
+  LWrite := ExtractSourceRange(LSource, 'function ttcpstream.write',
+    'procedure ttcpstream.close', 'TTcpStream.Write implementation');
+  LAccept := ExtractSourceRange(LSource, 'function ttcplistener.accept',
+    'function ttcplistener.localaddr', 'TTcpListener.Accept implementation');
+  CheckSourceContains(LRead, 'platform_socket_error_interrupted',
+    'Read retries EINTR instead of raising tcp read failed');
+  CheckSourceContains(LWrite, 'platform_socket_error_interrupted',
+    'Write retries EINTR instead of raising tcp write failed');
+  CheckSourceContains(LAccept, 'platform_socket_error_interrupted',
+    'Accept retries EINTR instead of raising tcp accept failed');
+  Check(Pos('tcp read failed', LRead) > 0,
+    'Read still raises hard errors after interrupt retry');
 end;
 
 { TCP echo test — uses port 0 (OS assigns) }
@@ -252,6 +277,134 @@ begin
   LA := TNetAddress.IPv6('::1', 443);
   CheckEqual('[::1]:443', LA.ToString, 'ipv6 toString');
   Check(LA.IsIPv6, 'is ipv6');
+  LA := TNetAddress.IPv4('10.0.0.1', 0).WithPort(443);
+  CheckEqual(Int64(443), Int64(LA.Port), 'WithPort keeps IP');
+  CheckEqual('10.0.0.1', LA.IP, 'WithPort IP unchanged');
+end;
+
+procedure TestHostIsIpLiteral;
+var
+  LNet: UInt32;
+begin
+  CheckEqual('::1', StripHostBrackets('[::1]'), 'strip v6 brackets');
+  CheckEqual('127.0.0.1', StripHostBrackets('127.0.0.1'), 'strip v4 unchanged');
+  Check(IsIPv4Literal('127.0.0.1'), 'v4 literal');
+  Check(IsIPv4Literal('255.255.255.255'), 'v4 max octet');
+  Check(not IsIPv4Literal('1.2.3'), 'incomplete v4');
+  Check(not IsIPv4Literal('1.2.3.4.5'), 'extra v4 octet');
+  Check(not IsIPv4Literal('256.1.1.1'), 'v4 octet overflow');
+  Check(not IsIPv4Literal('1..2.3'), 'empty v4 octet');
+  Check(not IsIPv4Literal('1.2.3.04'), 'v4 leading zero');
+  Check(IsIPv4Literal('0.0.0.0'), 'v4 zero octet');
+  Check(not IsIPv4Literal('localhost'), 'localhost is not v4');
+  Check(IsIPv6Literal('::1'), 'v6 literal');
+  Check(IsIPv6Literal('[2001:db8::1]'), 'bracket v6');
+  Check(not IsIPv6Literal('127.0.0.1'), 'v4 is not v6');
+  Check(HostIsIpLiteral('127.0.0.1'), 'host v4');
+  Check(HostIsIpLiteral('::1'), 'host v6');
+  Check(HostIsIpLiteral('[::1]'), 'host bracket v6');
+  Check(not HostIsIpLiteral('localhost'), 'localhost is name');
+  Check(not HostIsIpLiteral('hy.example.com'), 'domain is name');
+  Check(TryParseIPv4('8.8.8.8', LNet), 'TryParseIPv4 ok');
+  Check(not TryParseIPv4('8.8.8', LNet), 'TryParseIPv4 incomplete');
+  Check(not IsIPv6Literal('not-a-host:443'), 'colon hostname is not v6');
+end;
+
+procedure TestTryParseIPv6;
+var
+  B: TBytes;
+  LRaw: array[0..15] of Byte;
+
+  function Hex16(const A: TBytes): string;
+  var
+    I: Integer;
+  begin
+    Result := '';
+    for I := 0 to High(A) do
+      Result := Result + IntToHex(A[I], 2);
+  end;
+
+begin
+  Check(TryParseIPv6('::1', B), '::1');
+  CheckEqual('00000000000000000000000000000001', Hex16(B), '::1 bytes');
+  Check(TryParseIPv6('[::1]', B), 'bracket ::1');
+  CheckEqual('00000000000000000000000000000001', Hex16(B), 'bracket bytes');
+  Check(TryParseIPv6('::', B), 'all zeros');
+  CheckEqual('00000000000000000000000000000000', Hex16(B), ':: bytes');
+  Check(TryParseIPv6('1::', B), 'headonly');
+  CheckEqual('00010000000000000000000000000000', Hex16(B), '1:: bytes');
+  Check(TryParseIPv6('1::2', B), 'zip');
+  CheckEqual('00010000000000000000000000000002', Hex16(B), '1::2 bytes');
+  Check(TryParseIPv6('fe80::1', B), 'fe80');
+  CheckEqual('FE800000000000000000000000000001', Hex16(B), 'fe80 bytes');
+  Check(TryParseIPv6('FE80::1', B) and TryParseIPv6('fe80::1', B), 'case');
+  Check(TryParseIPv6('1:2:3:4:5:6:7:8', B), 'fullform');
+  CheckEqual('00010002000300040005000600070008', Hex16(B), 'fullform bytes');
+  Check(TryParseIPv6('2001:db8::1', B), 'doc');
+  CheckEqual('20010DB8000000000000000000000001', Hex16(B), 'doc bytes');
+  Check(TryParseIPv6('::ffff:192.168.1.1', B), 'v4mapped');
+  CheckEqual('00000000000000000000FFFFC0A80101', Hex16(B), 'v4mapped bytes');
+  Check(TryParseIPv6('1:2:3:4:5:6:1.2.3.4', B), 'v4mix');
+  CheckEqual('00010002000300040005000601020304', Hex16(B), 'v4mix bytes');
+  Check(not TryParseIPv6('fe80::1%eth0', B), 'zone rejected');
+  Check(not TryParseIPv6('1:2:3:4:5:6:7:8:9', B), '9 groups');
+  Check(not TryParseIPv6('1::2::3', B), 'double zip');
+  Check(not TryParseIPv6('1:::2', B), 'triple colon');
+  Check(not TryParseIPv6(':1::2', B), 'leading single colon');
+  Check(not TryParseIPv6('1::2:', B), 'trailing single colon');
+  Check(not TryParseIPv6('12345::1', B), '5 hex digits');
+  Check(not TryParseIPv6('g::1', B), 'bad digit');
+  Check(not TryParseIPv6('127.0.0.1', B), 'v4 is not v6');
+  Check(not TryParseIPv6('', B), 'empty');
+  FillChar(LRaw[0], 16, $FF);
+  Check(TryParseIPv6('::1', @LRaw[0]), 'PByte ::1');
+  CheckEqual(Int64(1), Int64(LRaw[15]), 'PByte ::1 last octet');
+  CheckEqual(Int64(0), Int64(LRaw[0]), 'PByte ::1 first octet');
+end;
+
+procedure TestSplitHostPort;
+var
+  LHost: string;
+  LPort: UInt16;
+begin
+  Check(SplitHostPort('[2001:db8::2]:9443', 0, LHost, LPort), 'bracket v6');
+  CheckEqual('2001:db8::2', LHost, 'bracket v6 host');
+  CheckEqual(Int64(9443), Int64(LPort), 'bracket v6 port');
+  Check(SplitHostPort('[::1]', 1080, LHost, LPort), 'v6 default port');
+  CheckEqual('::1', LHost, 'v6 default host');
+  CheckEqual(Int64(1080), Int64(LPort), 'v6 default port value');
+  Check(SplitHostPort('example.org', 443, LHost, LPort), 'host default');
+  CheckEqual('example.org', LHost, 'host default name');
+  CheckEqual(Int64(443), Int64(LPort), 'host default port');
+  Check(SplitHostPort('example.org', 0, LHost, LPort), 'missing port probe');
+  CheckEqual(Int64(0), Int64(LPort), 'missing port is 0');
+  Check(not SplitHostPort('example.org', LHost, LPort), 'required port rejects missing');
+  Check(SplitHostPort('example.org:8080', 443, LHost, LPort), 'explicit overrides default');
+  CheckEqual(Int64(8080), Int64(LPort), 'explicit port');
+  Check(not SplitHostPort('::1:80', 0, LHost, LPort), 'bare v6 rejected');
+  Check(not SplitHostPort('example.org:0', 0, LHost, LPort), 'port 0 rejected');
+  Check(not SplitHostPort('example.org:65536', 0, LHost, LPort), 'port overflow');
+  Check(not SplitHostPort('example.org:abc', 0, LHost, LPort), 'port junk');
+  Check(not SplitHostPort(':80', 80, LHost, LPort), 'empty host');
+  Check(not SplitHostPort('', 80, LHost, LPort), 'empty text');
+  CheckEqual('[::1]:443', JoinHostPort('::1', 443), 'join v6');
+  CheckEqual('[::1]:443', JoinHostPort('[::1]', 443), 'join already bracketed');
+  CheckEqual('example.org:443', JoinHostPort('example.org', 443), 'join domain');
+end;
+
+procedure TestBuildConnectSockAddrCompressedIPv6;
+var
+  LSa: TPlatformSockAddr;
+  LA: TNetAddress;
+begin
+  LA := TNetAddress.IPv6('::1', 443);
+  Check(NetBuildConnectSockAddr(LA, LSa), 'compressed ::1 sockaddr');
+  LA := TNetAddress.IPv6('2001:db8::1', 80);
+  Check(NetBuildConnectSockAddr(LA, LSa), 'compressed db8 sockaddr');
+  LA := TNetAddress.IPv6('fe80::1', 22);
+  Check(NetBuildConnectSockAddr(LA, LSa), 'link-local sockaddr');
+  LA := TNetAddress.IPv6('not-an-ip', 80);
+  Check(not NetBuildConnectSockAddr(LA, LSa), 'invalid v6 rejected');
 end;
 
 { 非法 host 不能静默绑 0.0.0.0：platform_ipv4_parse 解析失败返回 0（与合法
@@ -968,8 +1121,144 @@ begin
   LListener.Close;
 end;
 
+{ ---- R9: Close 唤醒阻塞 Accept（shutdown 先行 + fd 所有权移交）---- }
+
+var
+  GCloseWakeListener: ITcpListener = nil;
+  GCloseWakeHandle: TPlatformThreadHandle = nil;
+  GCloseWakeFinished: Int32 = 0;
+  GCloseWakeGotError: Int32 = 0;
+  GCloseWakeMsg: string = '';
+
+function AcceptBlockedWorker(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  try
+    { 关闭竞态下连接恰在 shutdown 前入队：Accept 成功返回也算被唤醒收场。 }
+    GCloseWakeListener.Accept;
+  except
+    on E: ENetworkError do
+    begin
+      GCloseWakeGotError := 1;
+      GCloseWakeMsg := E.Message;
+    end;
+  end;
+  InterlockedExchange(GCloseWakeFinished, 1);
+end;
+
+procedure WaitForCloseWakeWorker(const ALabel: string);
+var
+  LWaits: Integer;
+  LRetVal: Pointer;
+const
+  CJoiTimeoutLoops = 5000;   { 5s @1ms }
+begin
+  LWaits := 0;
+  while (InterlockedCompareExchange(GCloseWakeFinished, 0, 0) = 0) and
+        (LWaits < CJoiTimeoutLoops) do
+  begin
+    platform_thread_sleep_ns(1000000);
+    Inc(LWaits);
+  end;
+  Check(InterlockedCompareExchange(GCloseWakeFinished, 0, 0) = 1,
+    ALabel + ': blocked accept woke within join watchdog (no hang)');
+  if InterlockedCompareExchange(GCloseWakeFinished, 0, 0) = 1 then
+    platform_thread_join(GCloseWakeHandle, LRetVal);
+end;
+
+procedure TestTcpListenerCloseWakesBlockedAccept;
+begin
+  GCloseWakeFinished := 0;
+  GCloseWakeGotError := 0;
+  GCloseWakeMsg := '';
+  GCloseWakeListener := TcpListen('127.0.0.1', 0);
+  { 不 detach：收场需 join（join 已分离线程是 UB，正是要防的悬挂形态） }
+  platform_thread_create(GCloseWakeHandle, @AcceptBlockedWorker, nil);
+  { 让 worker 深入阻塞 accept }
+  platform_thread_sleep_ns(150000000);
+  GCloseWakeListener.Close;
+  WaitForCloseWakeWorker('close wakes blocked accept');
+  CheckEqual(Int64(1), Int64(InterlockedCompareExchange(GCloseWakeGotError, 0, 0)),
+    'close wakes blocked accept with a structured error');
+  Check(Pos('after close', GCloseWakeMsg) > 0,
+    'woken accept reports listener-closed error, got: ' + GCloseWakeMsg);
+  { Close 后 fd 已由在飞路径收尾：再 Accept 立即干净报错，不悬挂不崩溃。 }
+  try
+    GCloseWakeListener.Accept;
+    Check(False, 'accept after woken-close still raises');
+  except
+    on ENetworkError do
+      Check(True, 'accept after woken-close still raises');
+  end;
+  GCloseWakeListener := nil;
+end;
+
+procedure TestTcpListenerCloseAcceptRaceStress;
+var
+  LI: Integer;
+  LClean: Integer;
+begin
+  LClean := 0;
+  for LI := 1 to 30 do
+  begin
+    GCloseWakeFinished := 0;
+    GCloseWakeGotError := 0;
+    GCloseWakeMsg := '';
+    GCloseWakeListener := TcpListen('127.0.0.1', 0);
+    platform_thread_create(GCloseWakeHandle, @AcceptBlockedWorker, nil);
+    { 随机化关闭时点：覆盖 未登记/已登记未入内核/已入内核 三种交错 }
+    platform_thread_sleep_ns(Int64((LI mod 4) * 800000));
+    GCloseWakeListener.Close;
+    WaitForCloseWakeWorker('race stress iter');
+    if (InterlockedCompareExchange(GCloseWakeGotError, 0, 0) = 1) and
+       (Pos('after close', GCloseWakeMsg) > 0) then
+      Inc(LClean);
+    GCloseWakeListener := nil;
+  end;
+  CheckEqual(Int64(30), Int64(LClean),
+    'all raced accepts ended with the structured closed error');
+end;
+
+procedure TestTcpListenerDoubleCloseIdempotent;
+var
+  LListener: ITcpListener;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LListener.Close;
+  LListener.Close;
+  Check(length(LListener.LocalAddr.IP) >= 0,
+    'double close stays safe and LocalAddr remains readable');
+  LListener := nil;
+end;
+
 { Unix socket echo：UnixListen → UnixConnect → 写 → Shutdown → 读回
   （AF_UNIX 域，Linux/macOS/FreeBSD；Windows 上 expect unsupported 跳过） }
+
+procedure TestTcpListenerCloseWakeSourceContract;
+{ R9 形态锁：Accept 保 EINTR/ECONNABORTED 重试与在飞登记；
+  Close 必须 shutdown 先行（唤醒先于 fd 号释放）；threaded 服务器
+  Shutdown 的自连唤醒 hack 必须不存在。 }
+var
+  LSrc, LServerSrc: string;
+  LAccept, LClose: string;
+begin
+  LSrc := ReadTextFile('../../../src/nextpas.core.net.tcp.pas');
+  LAccept := ExtractSourceRange(LSrc, 'function ttcplistener.accept',
+    'function ttcplistener.localaddr', 'TTcpListener.Accept implementation');
+  LClose := ExtractSourceRange(LSrc, 'procedure ttcplistener.close',
+    'function ttcplistener.nativesockethandle', 'TTcpListener.Close implementation');
+  CheckSourceContains(LAccept, 'platform_socket_error_interrupted',
+    'accept keeps the EINTR retry contract');
+  CheckSourceContains(LAccept, 'platform_socket_error_aborted',
+    'accept retries transient handshake aborts (R9)');
+  CheckSourceContains(LAccept, 'facceptdepth',
+    'accept registers in-flight depth for fd ownership handover (R9)');
+  CheckSourceContains(LClose, 'platform_socket_shutdown',
+    'close wakes blocked accept via shutdown before fd release (R9)');
+  LServerSrc := ReadTextFile('../../../src/nextpas.core.net.server.threaded.pas');
+  Check(Pos('nettcpconnect', LServerSrc) = 0,
+    'threaded server shutdown must not self-connect-wake anymore (R9)');
+end;
 function UnixEchoServer(AArg: Pointer): Pointer; cdecl;
 var
   LListener: ITcpListener;
@@ -1048,6 +1337,8 @@ begin
   T := TTestSuite.Create('nextpas.core.net');
   T.Test('TCP stream write zero-progress source contract',
     @TestTcpStreamWriteZeroProgressSourceContract);
+  T.Test('TCP stream EINTR retry source contract',
+    @TestTcpStreamEintrRetrySourceContract);
   T.Test('TCP echo', @TestTcpEcho);
   T.Test('TCP large data', @TestTcpLargeData);
   T.Test('UDP send/recv', @TestUdpSendRecv);
@@ -1055,6 +1346,11 @@ begin
   T.Test('Resolve', @TestResolve);
   T.Test('Resolve DNS', @TestResolveDNS);
   T.Test('NetAddress', @TestNetAddress);
+  T.Test('Host IP literal helpers', @TestHostIsIpLiteral);
+  T.Test('TryParseIPv6 RFC 4291', @TestTryParseIPv6);
+  T.Test('SplitHostPort / JoinHostPort', @TestSplitHostPort);
+  T.Test('Connect sockaddr accepts compressed IPv6',
+    @TestBuildConnectSockAddrCompressedIPv6);
   T.Test('TCP listen invalid host', @TestTcpListenInvalidHost);
   T.Test('TCP listen bind error message', @TestTcpListenBindErrorMessage);
   T.Test('Connect refused', @TestConnectRefused);
@@ -1079,6 +1375,14 @@ begin
     @TestTcpStreamPostCloseRuntimeGuards);
   T.Test('TCP listener post-close runtime guards',
     @TestTcpListenerPostCloseRuntimeGuards);
+  T.Test('TCP listener close wakes blocked accept (R9)',
+    @TestTcpListenerCloseWakesBlockedAccept);
+  T.Test('TCP listener close/accept race stress 30x (R9)',
+    @TestTcpListenerCloseAcceptRaceStress);
+  T.Test('TCP listener double close idempotent (R9)',
+    @TestTcpListenerDoubleCloseIdempotent);
+  T.Test('TCP listener close-wake source contract (R9)',
+    @TestTcpListenerCloseWakeSourceContract);
   T.Test('Unix socket echo', @TestUnixSocketEcho);
   T.Test('Unix socket path reuse after close', @TestUnixListenReusePath);
   if not T.Run then Halt(1);

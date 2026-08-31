@@ -4,7 +4,6 @@ program test_freepascal_server_session_resumption;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -13,14 +12,16 @@ uses
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.tls.tls13.posthandshake,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.freepascal.session;
-
+  nextpas.core.crypto.hash,
+  nextpas.core.tls.freepascal.session,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 type
   TOfflineClientMode = (ocmInitial, ocmResumed, ocmResumedBadBinder);
 
@@ -622,12 +623,12 @@ begin
   LCtx.SetSessionCacheMode(True);
   LCtx.SetSessionTimeout(7200);
   LCtx.SetSessionCacheSize(8);
-  LCtx.LoadCertificate('tests/certificate/test_certs/signer_cert.pem');
-  LCtx.LoadPrivateKey('tests/certificate/test_certs/signer_key.pem');
+  LCtx.LoadCertificate('certificate/test_certs/signer_cert.pem');
+  LCtx.LoadPrivateKey('certificate/test_certs/signer_key.pem');
 
   LStream1 := TOfflineTLS13ClientStream.CreateInitial;
   try
-    LConn1 := LCtx.CreateConnection(LStream1);
+    LConn1 := LCtx.CreateConnection(TStreamWrapper.Create(LStream1, False));
     AssertTrue(LConn1 <> nil, 'Initial server connection should be created');
     AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
       'Initial server connection should expose ISSLSessionResumption');
@@ -643,7 +644,7 @@ begin
 
   LStream2 := TOfflineTLS13ClientStream.CreateResumed(LSession);
   try
-    LConn2 := LCtx.CreateConnection(LStream2);
+    LConn2 := LCtx.CreateConnection(TStreamWrapper.Create(LStream2, False));
     AssertTrue(LConn2 <> nil, 'Resumed server connection should be created');
     AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
       'Resumed server connection should expose ISSLSessionResumption');
@@ -673,12 +674,12 @@ begin
   LCtx.SetSessionCacheMode(True);
   LCtx.SetSessionTimeout(7200);
   LCtx.SetSessionCacheSize(8);
-  LCtx.LoadCertificate('tests/certificate/test_certs/signer_cert.pem');
-  LCtx.LoadPrivateKey('tests/certificate/test_certs/signer_key.pem');
+  LCtx.LoadCertificate('certificate/test_certs/signer_cert.pem');
+  LCtx.LoadPrivateKey('certificate/test_certs/signer_key.pem');
 
   LStream1 := TOfflineTLS13ClientStream.CreateInitial;
   try
-    LConn1 := LCtx.CreateConnection(LStream1);
+    LConn1 := LCtx.CreateConnection(TStreamWrapper.Create(LStream1, False));
     AssertTrue(LConn1 <> nil, 'Initial server connection should be created');
     AssertTrue(Supports(LConn1, ISSLSessionResumption, LResumption1),
       'Initial server connection should expose ISSLSessionResumption');
@@ -691,7 +692,7 @@ begin
 
   LStream2 := TOfflineTLS13ClientStream.CreateResumedWithBadBinder(LSession);
   try
-    LConn2 := LCtx.CreateConnection(LStream2);
+    LConn2 := LCtx.CreateConnection(TStreamWrapper.Create(LStream2, False));
     AssertTrue(LConn2 <> nil, 'Tampered-binder server connection should be created');
     AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
       'Tampered-binder server connection should expose ISSLSessionResumption');

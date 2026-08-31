@@ -152,6 +152,66 @@ begin
   Check(LDiffView <> nil, 'WithRemovedStyle should return diffview');
 end;
 
+procedure TestDiffViewHeaderStyleApplied;
+var
+  LDiffView: IDiffView;
+  LBuffer: TBuffer;
+  LArea: TRect;
+  LLine: TDiffLine;
+  LCell: PCell;
+  LState: TDiffViewState;
+begin
+  { WithHeaderStyle 渲染级断言：dlHeader 行文本格 Fg 落自定义色 }
+  LLine.Kind := dlHeader;
+  LLine.Text := '## head';
+  LLine.OldNum := 0;
+  LLine.NewNum := 0;
+  LDiffView := TDiffView.New([LLine])
+    .WithHeaderStyle(TStyle.Default.WithFg(TUI_RED));
+  LArea := TRect.Make(0, 0, 20, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LState := TDiffViewState.Empty;
+    LDiffView.RenderStateful(LArea, LBuffer, LState);
+    LCell := LBuffer.CellAt(5, 0);   { TextX = Inner.X + GutterW(5) }
+    Check(LCell <> nil, 'header text cell exists');
+    if LCell <> nil then
+      Check(ColorEquals(TUI_RED, LCell^.Fg), 'header style fg applied');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestDiffViewLineNumStyleApplied;
+var
+  LDiffView: IDiffView;
+  LBuffer: TBuffer;
+  LArea: TRect;
+  LLine: TDiffLine;
+  LCell: PCell;
+  LState: TDiffViewState;
+begin
+  { WithLineNumStyle 渲染级断言：行号 gutter 格 Fg 落自定义色 }
+  LLine.Kind := dlContext;
+  LLine.Text := ' code';
+  LLine.OldNum := 0;
+  LLine.NewNum := 1;
+  LDiffView := TDiffView.New([LLine])
+    .WithLineNumStyle(TStyle.Default.WithFg(TUI_CYAN));
+  LArea := TRect.Make(0, 0, 20, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LState := TDiffViewState.Empty;
+    LDiffView.RenderStateful(LArea, LBuffer, LState);
+    LCell := LBuffer.CellAt(3, 0);   { NumBuf '   1' 末位（右对齐 4 宽）}
+    Check(LCell <> nil, 'line num cell exists');
+    if LCell <> nil then
+      Check(ColorEquals(TUI_CYAN, LCell^.Fg), 'line num style fg applied');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 procedure TestDiffViewWithBlock;
 var
   LDiffView: IDiffView;
@@ -325,6 +385,8 @@ begin
   T.Test('TDiffView.WithStyle', @TestDiffViewWithStyle);
   T.Test('TDiffView.WithAddedStyle', @TestDiffViewWithAddedStyle);
   T.Test('TDiffView.WithRemovedStyle', @TestDiffViewWithRemovedStyle);
+  T.Test('TDiffView.WithHeaderStyle applied', @TestDiffViewHeaderStyleApplied);
+  T.Test('TDiffView.WithLineNumStyle applied', @TestDiffViewLineNumStyleApplied);
   T.Test('TDiffView.WithBlock', @TestDiffViewWithBlock);
   T.Test('TDiffView.Render', @TestDiffViewRender);
   T.Test('TDiffView.RenderStateful', @TestDiffViewRenderStateful);

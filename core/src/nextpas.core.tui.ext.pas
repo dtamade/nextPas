@@ -24,7 +24,31 @@ uses
   nextpas.core.tui.widget.modal,
   nextpas.core.tui.widget.dialog,
   nextpas.core.tui.widget.split_pane,
-  nextpas.core.tui.widget.select;
+  nextpas.core.tui.widget.select,
+  nextpas.core.tui.widget.statusbar,
+  nextpas.core.tui.widget.progress_group,
+  nextpas.core.tui.widget.breadcrumb,
+  nextpas.core.tui.widget.timeline,
+  nextpas.core.tui.widget.kanban,
+  nextpas.core.tui.widget.markdown,
+  nextpas.core.tui.widget.tooltip,
+  nextpas.core.tui.widget.toast,
+  nextpas.core.tui.widget.barchart,
+  nextpas.core.tui.widget.linechart,
+  nextpas.core.tui.widget.calendar,
+  nextpas.core.tui.widget.tree,
+  nextpas.core.tui.widget.file_tree,
+  nextpas.core.tui.widget.diffview,
+  nextpas.core.tui.widget.input_editor,
+  nextpas.core.tui.widget.command_palette,
+  nextpas.core.tui.widget.notification_center,
+  nextpas.core.tui.widget.popover,
+  nextpas.core.tui.widget.menu,
+  { PH33 P4：解禁扩面（tui888 PH33 计划 §1.4 审计 A−；full facade 同名别名
+    在册先例）——数据可视化三件套 }
+  nextpas.core.tui.widget.gauge,
+  nextpas.core.tui.widget.sparkline,
+  nextpas.core.tui.widget.canvas;
 
 type
   ETui = nextpas.core.tui.error.ETui;
@@ -87,6 +111,87 @@ type
   ISelect = nextpas.core.tui.widget.select.ISelect;
   TSelectState = nextpas.core.tui.widget.select.TSelectState;
   TSelect = nextpas.core.tui.widget.select.TSelect;
+  IStatusBar = nextpas.core.tui.widget.statusbar.IStatusBar;
+  TStatusSegment = nextpas.core.tui.widget.statusbar.TStatusSegment;
+  TStatusBar = nextpas.core.tui.widget.statusbar.TStatusBar;
+  IProgressGroup = nextpas.core.tui.widget.progress_group.IProgressGroup;
+  TProgressItem = nextpas.core.tui.widget.progress_group.TProgressItem;
+  TProgressGroup = nextpas.core.tui.widget.progress_group.TProgressGroup;
+  IBreadcrumb = nextpas.core.tui.widget.breadcrumb.IBreadcrumb;
+  TBreadcrumb = nextpas.core.tui.widget.breadcrumb.TBreadcrumb;
+  TTimelineEvent = nextpas.core.tui.widget.timeline.TTimelineEvent;
+  ITimeline = nextpas.core.tui.widget.timeline.ITimeline;
+  TTimeline = nextpas.core.tui.widget.timeline.TTimeline;
+  TKanbanCard = nextpas.core.tui.widget.kanban.TKanbanCard;
+  TKanbanColumn = nextpas.core.tui.widget.kanban.TKanbanColumn;
+  TKanbanState = nextpas.core.tui.widget.kanban.TKanbanState;
+  IKanban = nextpas.core.tui.widget.kanban.IKanban;
+  TKanban = nextpas.core.tui.widget.kanban.TKanban;
+  TMdLineKind = nextpas.core.tui.widget.markdown.TMdLineKind;
+  TMdLine = nextpas.core.tui.widget.markdown.TMdLine;
+  TMdLineArray = nextpas.core.tui.widget.markdown.TMdLineArray;
+  TMdTheme = nextpas.core.tui.widget.markdown.TMdTheme;
+  IMarkdown = nextpas.core.tui.widget.markdown.IMarkdown;
+  TMarkdown = nextpas.core.tui.widget.markdown.TMarkdown;
+  TTooltipPosition = nextpas.core.tui.widget.tooltip.TTooltipPosition;
+  ITooltip = nextpas.core.tui.widget.tooltip.ITooltip;
+  TTooltip = nextpas.core.tui.widget.tooltip.TTooltip;
+  TToastPosition = nextpas.core.tui.widget.toast.TToastPosition;
+  TToastLevel = nextpas.core.tui.widget.toast.TToastLevel;
+  TToastItem = nextpas.core.tui.widget.toast.TToastItem;
+  IToastManager = nextpas.core.tui.widget.toast.IToastManager;
+  TToastManager = nextpas.core.tui.widget.toast.TToastManager;
+  IBarChart = nextpas.core.tui.widget.barchart.IBarChart;
+  TBarData = nextpas.core.tui.widget.barchart.TBarData;
+  TBarChart = nextpas.core.tui.widget.barchart.TBarChart;
+  ILineChart = nextpas.core.tui.widget.linechart.ILineChart;
+  TDataSeries = nextpas.core.tui.widget.linechart.TDataSeries;
+  TLineChart = nextpas.core.tui.widget.linechart.TLineChart;
+  ICalendar = nextpas.core.tui.widget.calendar.ICalendar;
+  TCalendarState = nextpas.core.tui.widget.calendar.TCalendarState;
+  TCalendar = nextpas.core.tui.widget.calendar.TCalendar;
+  ITree = nextpas.core.tui.widget.tree.ITree;
+  TTreeNode = nextpas.core.tui.widget.tree.TTreeNode;
+  PTreeNode = nextpas.core.tui.widget.tree.PTreeNode;
+  TTreeState = nextpas.core.tui.widget.tree.TTreeState;
+  TTree = nextpas.core.tui.widget.tree.TTree;
+  IFileTree = nextpas.core.tui.widget.file_tree.IFileTree;
+  TFileNode = nextpas.core.tui.widget.file_tree.TFileNode;
+  TFileTreeState = nextpas.core.tui.widget.file_tree.TFileTreeState;
+  TFileTree = nextpas.core.tui.widget.file_tree.TFileTree;
+  IDiffView = nextpas.core.tui.widget.diffview.IDiffView;
+  TDiffLineKind = nextpas.core.tui.widget.diffview.TDiffLineKind;
+  TDiffLine = nextpas.core.tui.widget.diffview.TDiffLine;
+  TDiffViewState = nextpas.core.tui.widget.diffview.TDiffViewState;
+  TDiffView = nextpas.core.tui.widget.diffview.TDiffView;
+  IInputEditor = nextpas.core.tui.widget.input_editor.IInputEditor;
+  TInputEditor = nextpas.core.tui.widget.input_editor.TInputEditor;
+  ICommandPalette = nextpas.core.tui.widget.command_palette.ICommandPalette;
+  TCommandItem = nextpas.core.tui.widget.command_palette.TCommandItem;
+  TCommandPaletteState = nextpas.core.tui.widget.command_palette.TCommandPaletteState;
+  TCommandPalette = nextpas.core.tui.widget.command_palette.TCommandPalette;
+  INotificationCenter = nextpas.core.tui.widget.notification_center.INotificationCenter;
+  TNotifLevel = nextpas.core.tui.widget.notification_center.TNotifLevel;
+  TNotification = nextpas.core.tui.widget.notification_center.TNotification;
+  TNotificationCenterState = nextpas.core.tui.widget.notification_center.TNotificationCenterState;
+  TNotificationCenter = nextpas.core.tui.widget.notification_center.TNotificationCenter;
+  IPopover = nextpas.core.tui.widget.popover.IPopover;
+  TPopoverAnchor = nextpas.core.tui.widget.popover.TPopoverAnchor;
+  TPopoverState = nextpas.core.tui.widget.popover.TPopoverState;
+  TPopover = nextpas.core.tui.widget.popover.TPopover;
+  IMenu = nextpas.core.tui.widget.menu.IMenu;
+  TMenuItemKind = nextpas.core.tui.widget.menu.TMenuItemKind;
+  TMenuItem = nextpas.core.tui.widget.menu.TMenuItem;
+  TMenuState = nextpas.core.tui.widget.menu.TMenuState;
+  TMenu = nextpas.core.tui.widget.menu.TMenu;
+  { PH33 P4：解禁扩面（gauge/canvas/sparkline）——ext rejects 探针同批删除，
+    正测 test_tui_ext_facade 增构造+渲染断言守门 }
+  IGauge = nextpas.core.tui.widget.gauge.IGauge;
+  TGauge = nextpas.core.tui.widget.gauge.TGauge;
+  ISparkline = nextpas.core.tui.widget.sparkline.ISparkline;
+  TSparkline = nextpas.core.tui.widget.sparkline.TSparkline;
+  ICanvas = nextpas.core.tui.widget.canvas.ICanvas;
+  TCanvas = nextpas.core.tui.widget.canvas.TCanvas;
 
 const
   peTop = nextpas.core.tui.widget.panel.peTop;
@@ -113,6 +218,11 @@ const
   PanelEdgesInner: TPanelEdges = [peInnerH, peInnerV];
   PanelEdgesNone: TPanelEdges = [];
 
+  tlInfo = nextpas.core.tui.widget.toast.tlInfo;
+  tlSuccess = nextpas.core.tui.widget.toast.tlSuccess;
+  tlWarning = nextpas.core.tui.widget.toast.tlWarning;
+  tlError = nextpas.core.tui.widget.toast.tlError;
+
 function ColorIsSet(const AColor: nextpas.core.tui.TColor): Boolean; inline;
 function IsQuit(const AEv: TEvent): Boolean; inline;
 function StyleDefault: TStyle; inline;
@@ -124,6 +234,7 @@ function PanelCell(const AGrid: TPanelGrid; ACol, ARow: Integer): nextpas.core.t
 function PanelCellSpan(const AGrid: TPanelGrid; ACol, ARow, AColSpan,
   ARowSpan: Integer): nextpas.core.tui.TRect; inline;
 function PanelHitTestSep(const AGrid: TPanelGrid; AX, AY: Integer): TSepHit; inline;
+function MakeColumn(const ATitle: AnsiString; const ACards: array of TKanbanCard): TKanbanColumn; inline;
 
 implementation
 
@@ -173,6 +284,11 @@ end;
 function PanelHitTestSep(const AGrid: TPanelGrid; AX, AY: Integer): TSepHit;
 begin
   Result := nextpas.core.tui.widget.panel.PanelHitTestSep(AGrid, AX, AY);
+end;
+
+function MakeColumn(const ATitle: AnsiString; const ACards: array of TKanbanCard): TKanbanColumn;
+begin
+  Result := nextpas.core.tui.widget.kanban.MakeColumn(ATitle, ACards);
 end;
 
 end.

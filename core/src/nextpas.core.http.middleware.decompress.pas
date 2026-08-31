@@ -109,8 +109,12 @@ begin
       LBodyBytes := HttpRequestReadBody(LBody, High(Int64), 4096);
       { Decompress }
       try
+        { SizeUInt 与 SizeInt 同宽的 64 位平台上该上限恒可承载；
+          仅 32 位及以下平台需要防御 SizeUInt 截断。 }
+        {$IFNDEF CPU64}
         if (AMaxSize > 0) and (UInt64(AMaxSize) > UInt64(High(SizeUInt))) then
           raise EHttpError.Create(hekArgument, 'decompression max size exceeds platform capacity');
+        {$ENDIF}
         if (LEncoding = 'gzip') and (AMaxSize > 0) then
           LDecompressed := GzipDecompressWithMaxOutputSize(
             LBodyBytes, SizeUInt(AMaxSize))

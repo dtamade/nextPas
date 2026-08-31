@@ -32,8 +32,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 配置
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BENCHMARKS_DIR="$PROJECT_ROOT/tests/benchmarks"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+BENCHMARKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="$BENCHMARKS_DIR/bin"
 BASELINE_DIR="$BENCHMARKS_DIR/baselines"
 OUTPUT_DIR="$BENCHMARKS_DIR/results"
@@ -164,7 +164,7 @@ done
 resolve_path() {
   local path="$1"
   if [[ "$path" != /* ]]; then
-    path="$PROJECT_ROOT/$path"
+    path="$PWD/$path"
   fi
   echo "$path"
 }
@@ -204,11 +204,10 @@ compile_benchmark() {
 
   # 编译
   if fpc -Mobjfpc -Sh -O2 \
-    -Fu"$PROJECT_ROOT/src" \
-    -Fu"$PROJECT_ROOT/src/openssl" \
+    -Fu"$PROJECT_ROOT/core/src" \
+    -Fu"$PROJECT_ROOT/core/tests/nextpas.core.tls" \
     -Fu"$BENCHMARKS_DIR" \
-    -Fu"$PROJECT_ROOT/examples" \
-    -Fi"$PROJECT_ROOT/src" \
+    -Fi"$PROJECT_ROOT/core/src" \
     -FE"$BIN_DIR" \
     $platform_flags \
     "$benchmark_file" > "$BIN_DIR/${benchmark_name}_compile.log" 2>&1; then
@@ -241,7 +240,7 @@ run_benchmark() {
   TOTAL_BENCHMARKS=$((TOTAL_BENCHMARKS + 1))
 
   # 运行基准测试
-  if (cd "$OUTPUT_DIR" && FAFAFA_PROJECT_ROOT="$PROJECT_ROOT" "$benchmark_bin" "$iterations") > "$OUTPUT_DIR/${benchmark_name}_${TIMESTAMP}.log" 2>&1; then
+  if (cd "$OUTPUT_DIR" && NEXTPAS_PROJECT_ROOT="$PROJECT_ROOT" "$benchmark_bin" "$iterations") > "$OUTPUT_DIR/${benchmark_name}_${TIMESTAMP}.log" 2>&1; then
     log_success "$benchmark_name: 运行成功"
     PASSED_BENCHMARKS=$((PASSED_BENCHMARKS + 1))
 
@@ -303,7 +302,7 @@ EOF
 
 # 主程序
 echo "================================================================"
-echo "fafafa.ssl 性能基准测试套件"
+echo "nextpas.ssl 性能基准测试套件"
 echo "================================================================"
 echo ""
 

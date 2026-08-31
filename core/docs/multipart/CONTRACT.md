@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.multipart*.pas`（2 个源文件）
 **层级**：L2（依赖 L0: base, text, bytes）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 

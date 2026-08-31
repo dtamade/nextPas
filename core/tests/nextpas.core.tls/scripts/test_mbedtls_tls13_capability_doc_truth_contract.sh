@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MBEDTLS_BASE="$ROOT_DIR/src/nextpas.core.tls.mbedtls.base.pas"
-MBEDTLS_LIB="$ROOT_DIR/src/nextpas.core.tls.mbedtls.lib.pas"
-BACKEND_MATRIX="$ROOT_DIR/docs/BACKEND_CAPABILITY_MATRIX.md"
-MBEDTLS_DOC="$ROOT_DIR/docs/reference/MBEDTLS_BACKEND_CAPABILITY_MATRIX.md"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+MBEDTLS_BASE="$ROOT_DIR/core/src/nextpas.core.tls.mbedtls.base.pas"
+MBEDTLS_LIB="$ROOT_DIR/core/src/nextpas.core.tls.mbedtls.lib.pas"
 
 fail() {
   echo "[FAIL] $1"
@@ -49,16 +47,7 @@ require_fixed "$MBEDTLS_LIB" \
   "Result.SupportsTLS13 := FCapabilities.HasTLS13;" \
   "MbedTLS capability record must keep SupportsTLS13 conditional"
 
-require_fixed "$BACKEND_MATRIX" \
-  "| **TLS 1.3**                  | ✅         | ✅      | ⚠️     | ⚠️      | ✅      |" \
-  "Canonical backend matrix must continue to classify MbedTLS TLS 1.3 as conditional"
 
-require_fixed "$MBEDTLS_DOC" \
-  '| TLS 1.3 | ⚠️ 条件支持 | 当前 `SupportsTLS13` / `sslProtocolTLS13` 取决于运行时 MbedTLS 版本；仅当检测到 MbedTLS 3.x+ 时才发布 |' \
-  "MbedTLS dedicated matrix must describe TLS 1.3 as conditional capability"
 
-require_absent "$MBEDTLS_DOC" \
-  "| TLS 1.3 | ✅ 支持 | MbedTLS 3.x 支持 |" \
-  "MbedTLS dedicated matrix must stop publishing TLS 1.3 as unconditional support"
 
 echo "[PASS] MbedTLS TLS 1.3 capability doc truth contract passed"

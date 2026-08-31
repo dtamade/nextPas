@@ -74,6 +74,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
   end;
 
@@ -295,6 +296,7 @@ var
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
   LReqOpts: IHttpRequestWithOptions;
+  LNewReqOpts: IHttpRequestWithOptions;
   LFollowRedirects: Boolean;
 begin
   LUrl := AReq.Url;
@@ -303,7 +305,7 @@ begin
   LResp := FTransport.RoundTrip(AReq);
   if LResp = nil then
     raise EHttpError.CreateOp(hekConnect, 'round_trip',
-      FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+      FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
         'HTTP transport returned no response'));
 
   // Determine redirect behavior: per-request override or client default
@@ -325,7 +327,7 @@ begin
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.CreateOp(hekRedirect, 'redirect',
-        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
           'too many redirects'));
     end;
 
@@ -334,7 +336,7 @@ begin
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.CreateOp(hekRedirect, 'redirect',
-        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
           'redirect with no response headers'));
     end;
 
@@ -343,7 +345,7 @@ begin
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.CreateOp(hekRedirect, 'redirect',
-        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
           'redirect with duplicate Location headers'));
     end;
 
@@ -355,7 +357,7 @@ begin
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
       raise EHttpError.CreateOp(hekRedirect, 'redirect',
-        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
           'redirect with no Location header'));
     end;
 
@@ -367,7 +369,7 @@ begin
         ReleaseResponseBodyIgnoringErrors(LResp);
         if E.Kind = hekRedirect then
           raise EHttpError.CreateOp(hekRedirect, 'redirect',
-            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
               E.Message))
         else
           raise;
@@ -398,7 +400,7 @@ begin
       except
         on E: EHttpError do
           raise EHttpError.CreateOp(E.Kind, 'redirect',
-            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl,
               E.Message));
         else
           raise;
@@ -407,6 +409,12 @@ begin
       LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11,
         LNewHeaders, AReq.Body, AReq.ContentLength);
     end;
+    { Redirects create a fresh request object. Preserve per-request options so
+      streaming sinks, cancellation, timeout, and redirect policy remain
+      attached to every hop. }
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) and
+       Supports(LNewReq, IHttpRequestWithOptions, LNewReqOpts) then
+      LNewReqOpts.SetRequestOptions(LReqOpts.RequestOptions);
 
     Result := DoRequest(LNewReq, ARedirectsLeft - 1, ARequestBodyCloseAttempted);
   end
@@ -704,6 +712,11 @@ end;
 function THttpClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
 begin
   Result := NewHttpClient(FOptions.WithProxyUrl(AProxyUrl));
+end;
+
+function THttpClient.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
+begin
+  Result := NewHttpClient(FOptions.WithDialFunc(ADial));
 end;
 
 function THttpClient.WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;

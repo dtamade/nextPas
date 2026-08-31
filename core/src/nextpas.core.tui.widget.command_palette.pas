@@ -46,6 +46,8 @@ type
     function WithSelectedStyle(const AStyle: TStyle): ICommandPalette;
     function WithWidth(AWidth: Integer): ICommandPalette;
     function WithMaxVisible(AMax: Integer): ICommandPalette;
+    { 布局配置面（PH33 P2b，additive）：块包装 }
+    function WithBlock(ABlock: IBlock): ICommandPalette;
     procedure UpdateFilter(var AState: TCommandPaletteState);
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TCommandPaletteState);
     function SelectedItem(const AState: TCommandPaletteState): Integer;
@@ -59,6 +61,7 @@ type
     FInputStyle: TStyle;
     FWidth: Integer;
     FMaxVisible: Integer;
+    FBlock: IBlock;
   public
     class function New(const AItems: array of TCommandItem): ICommandPalette; static;
 
@@ -67,6 +70,7 @@ type
     function WithSelectedStyle(const AStyle: TStyle): ICommandPalette;
     function WithWidth(AWidth: Integer): ICommandPalette;
     function WithMaxVisible(AMax: Integer): ICommandPalette;
+    function WithBlock(ABlock: IBlock): ICommandPalette;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -212,9 +216,13 @@ begin FWidth := AWidth; Result := Self; end;
 function TCommandPalette.WithMaxVisible(AMax: Integer): ICommandPalette;
 begin FMaxVisible := AMax; Result := Self; end;
 
+{ PH33 P2b：布局配置面——块包装（additive，nil 时行为不变） }
+function TCommandPalette.WithBlock(ABlock: IBlock): ICommandPalette;
+begin FBlock := ABlock; Result := Self; end;
+
 procedure TCommandPalette.UpdateFilter(var AState: TCommandPaletteState);
 var
-  I, Count: Integer;
+  I, J, Count, LScore, LSwap: Integer;
   Query: AnsiString;
 begin
   Query := AState.Input.Text;
@@ -229,6 +237,23 @@ begin
       Inc(Count);
     end;
   end;
+
+  { PH33 P1：按 FuzzyScore 降序排名（此前 Score 只算不用）；插入排序稳定，
+    同分保持原序；空查询全 1000 分 = 原序不变 }
+  if Count > 1 then
+    for I := 1 to Count - 1 do
+    begin
+      LScore := FuzzyScore(Query, FItems[AState.FilteredIndices[I]].Name);
+      J := I - 1;
+      while (J >= 0) and
+            (FuzzyScore(Query, FItems[AState.FilteredIndices[J]].Name) < LScore) do
+      begin
+        LSwap := AState.FilteredIndices[J + 1];
+        AState.FilteredIndices[J + 1] := AState.FilteredIndices[J];
+        AState.FilteredIndices[J] := LSwap;
+        Dec(J);
+      end;
+    end;
 
   SetLength(AState.FilteredIndices, Count);
   if AState.Selected >= Count then
@@ -260,9 +285,19 @@ var
   Inp: IInput;
   LineSty: TStyle;
   DisplayStr: AnsiString;
+  LArea: TRect;
 begin
   if not AState.Visible then Exit;
   if AArea.IsEmpty then Exit;
+
+  { PH33 P2b：块包装——先画块，浮层在块内容区内定位 }
+  LArea := AArea;
+  if FBlock <> nil then
+  begin
+    FBlock.Render(AArea, ABuffer);
+    LArea := FBlock.Inner(AArea);
+    if LArea.IsEmpty then Exit;
+  end;
 
   UpdateFilter(AState);
 
@@ -270,14 +305,16 @@ begin
   if VisCount > FMaxVisible then VisCount := FMaxVisible;
 
   PalW := FWidth;
-  if PalW > AArea.Width - 4 then PalW := AArea.Width - 4;
+  { 区宽-4 经 Integer 运算：Word-Word 在窄区（宽<4）下溢 65533 会
+    绕过下方 <=0 检查（PH29，与 linechart 同源下溢）}
+  if PalW > Integer(LArea.Width) - 4 then PalW := Integer(LArea.Width) - 4;
   if PalW <= 0 then Exit;
   PalH := VisCount + 3; // border top + input + items + border bottom
-  if PalH > AArea.Height - 2 then PalH := AArea.Height - 2;
+  if PalH > Integer(LArea.Height) - 2 then PalH := Integer(LArea.Height) - 2;
   if PalH <= 0 then Exit;
 
-  PalX := AArea.X + (AArea.Width - PalW) div 2;
-  PalY := AArea.Y + 2;
+  PalX := LArea.X + (LArea.Width - PalW) div 2;
+  PalY := LArea.Y + 2;
 
   PalArea := TRect.Make(PalX, PalY, PalW, PalH);
 

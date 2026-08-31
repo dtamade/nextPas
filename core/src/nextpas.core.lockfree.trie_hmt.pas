@@ -67,7 +67,6 @@ type
     Size: Int32;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
   THashMappedTrie = class
   private
     FRoot: PHmtNode;
@@ -110,26 +109,17 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.checksum;
 
 { ---------- FNV-1a ---------- }
 
 function Fnv1aHash(const AData: Pointer; ALength: Int32): UInt32;
-const
-  FNV_OFFSET = 2166136261;
-  FNV_PRIME  = 16777619;
-var
-  I: Int32;
-  LByte: PByte;
 begin
-  Result := FNV_OFFSET;
-  LByte := PByte(AData);
-  for I := 0 to ALength - 1 do
-  begin
-    Result := Result xor LByte^;
-    Result := Result * FNV_PRIME;
-    Inc(LByte);
-  end;
+  if ALength <= 0 then
+    Result := FNV1A32_OFFSET
+  else
+    Result := Fnv1a32Update(FNV1A32_OFFSET, AData, SizeUInt(ALength));
 end;
 
 { ---------- THashMappedTrie ---------- }
@@ -352,6 +342,10 @@ begin
       if ANode^.LeafKey = AKey then
       begin
         ANew := nil;
+        { 被移除的叶节点自此脱离树结构，就地释放（Dispose 终结
+          LeafKey/LeafValue），与 Insert 替换路径的 FreeNode 对称；
+          父臂此后对 LChild 仅做 nil 比较、不再解引用 }
+        FreeNode(ANode);
         Exit(hmtOk);
       end;
       ANew := ANode;
@@ -475,6 +469,9 @@ begin
           Exit(True);
         end;
     end;
+  else
+    { 防御：Kind 损坏时按未命中处理，不放大破坏。 }
+    ;
   end;
 end;
 
@@ -507,6 +504,8 @@ begin
         FreeNode(ANode^.Children[I]);
     hnkCollision:
       SetLength(ANode^.Collision, 0);
+  else
+    ; { 叶子无子节点，仅走统一 Dispose；未知 Kind 同样只 Dispose 自身 }
   end;
   Dispose(ANode);
 end;

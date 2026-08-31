@@ -136,6 +136,13 @@ procedure FlushToCentral(AIndex: Int32; ACount: Word; ABlocks: PPointer); forwar
 { Thread-local cache: one per thread, zero initialization on thread start. }
 threadvar
   GThreadCache: TThreadCache;
+  { Cached native thread id of the current thread, lazy-initialized.
+    platform_thread_id is a gettid() syscall on Linux — resolving it on the
+    FreeMem hot path doubles small-alloc cost. The span owner compare only
+    needs a stable per-thread discriminator, so cache it in the threadvar
+    block next to GThreadCache (same TLS page, near-free access). }
+  GSelfThreadId: QWord;
+  GSelfThreadIdValid: Boolean;
 
 { Global registry: maps thread ID → TLS cache pointer.
   Allows cross-thread free to push directly to owner's inbox. }
@@ -233,6 +240,20 @@ begin
   Result := atomic_load(GThreadRegistry[LSlot].FCache, mo_acquire);
   if (Result <> nil) and (not GThreadRegistry[LSlot].FActive) then
     Result := nil;
+end;
+
+{ Native thread id of the current thread, cached in threadvars.
+  Lazily resolved on first use (platform_thread_id may be a syscall);
+  threadvar semantics guarantee a fresh zeroed copy per thread, so no
+  cross-thread reuse of a stale id is possible. }
+function SelfNativeThreadId: QWord; inline;
+begin
+  if not GSelfThreadIdValid then
+  begin
+    GSelfThreadId := platform_thread_id;
+    GSelfThreadIdValid := True;
+  end;
+  Result := GSelfThreadId;
 end;
 
 { --- Thread-exit cleanup ---
@@ -468,7 +489,7 @@ begin
       NpSystemFreeMem(APtr);
     Exit;
   end;
-  if LOwnerThreadId <> QWord(PtrUInt(GetCurrentThreadId)) then
+  if LOwnerThreadId <> SelfNativeThreadId then
   begin
     CentralPoolFree(FCentrals[LIndex], 1, @APtr);
     Exit;

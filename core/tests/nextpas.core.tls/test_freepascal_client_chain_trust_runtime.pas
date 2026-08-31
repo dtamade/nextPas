@@ -4,7 +4,6 @@ program test_freepascal_client_chain_trust_runtime;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -15,12 +14,14 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash,
+  Classes,
+  nextpas.core.io.stream_adapter;
 
 type
   TServerMaterial = record
@@ -161,12 +162,12 @@ var
   LCombinedPEM: AnsiString;
   I: Integer;
 begin
-  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_cert.pem')));
-  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_key.pem')));
+  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_cert.pem')));
+  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_key.pem')));
 
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.CommonName := ACommonName;
-  LOptions.Organization := 'fafafa.ssl-tests';
+  LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
   LOptions.NotBefore := Now - 1;
   LOptions.NotAfter := Now + 30;
@@ -203,7 +204,7 @@ var
 begin
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.CommonName := ACommonName;
-  LOptions.Organization := 'fafafa.ssl-tests';
+  LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
   LOptions.NotBefore := Now - 1;
   LOptions.NotAfter := Now + 30;
@@ -240,7 +241,7 @@ begin
   ForceDirectories(Result);
   WriteBytesToFile(
     IncludeTrailingPathDelimiter(Result) + 'ca_cert.pem',
-    ReadFileBytes('tests/certificate/test_certs/ca_cert.pem')
+    ReadFileBytes('certificate/test_certs/ca_cert.pem')
   );
 end;
 
@@ -552,7 +553,7 @@ begin
 
   case AKind of
     tcCAFile:
-      AConfig.CAFile := 'tests/certificate/test_certs/ca_cert.pem';
+      AConfig.CAFile := 'certificate/test_certs/ca_cert.pem';
     tcCAPath:
       AConfig.CAPath := ACAPath;
   else
@@ -567,7 +568,7 @@ function CreateFactoryOneShotTrustContext(
 var
   LConfig: TSSLConfig;
 begin
-  LConfig := CreateDefaultConfig(sslCtxClient);
+  LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   ConfigureClientTrustConfig(LConfig, AKind, ACAPath);
   Result := TSSLFactory.CreateContext(LConfig);
   AssertTrue(Result <> nil, 'Factory one-shot trust context should be created');
@@ -606,7 +607,7 @@ begin
     tcNone:
       Exit;
     tcCAFile:
-      ALCtx.LoadCAFile('tests/certificate/test_certs/ca_cert.pem');
+      ALCtx.LoadCAFile('certificate/test_certs/ca_cert.pem');
     tcCAPath:
       ALCtx.LoadCAPath(ACAPath);
     tcStore:
@@ -614,7 +615,7 @@ begin
         LStore := TSSLFactory.CreateCertificateStore(sslFreePascal);
         AssertTrue(LStore <> nil, 'FreePascal certificate store should be created');
         AssertTrue(
-          LStore.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'),
+          LStore.LoadFromFile('certificate/test_certs/ca_cert.pem'),
           'Certificate store should load CA file for trust runtime test'
         );
         ALCtx.SetCertificateStore(LStore);
@@ -634,7 +635,7 @@ begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := ALCtx.CreateConnection(LStream);
+    LConn := ALCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, ALabel + ' should create a connection');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -660,7 +661,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TMemoryStream.Create;
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Fresh FreePascal connection should be created');
     AssertEqualsInt(-1, GetCertificateVerifyResult(LConn),
       'Fresh connection must not report verify success before handshake');
@@ -684,7 +685,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Untrusted CA-signed connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -714,7 +715,7 @@ begin
   ApplyTrustConfig(LCtx, tcCAFile, '');
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'CA-file connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -743,7 +744,7 @@ begin
   ApplyTrustConfig(LCtx, tcCAPath, ACAPath);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'CA-path connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -766,7 +767,7 @@ begin
   ApplyTrustConfig(LCtx, tcStore, '');
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Certificate-store connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -865,7 +866,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Self-signed connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -894,7 +895,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyAllowSelfSigned]);
   LStream := TScriptedChainTrustServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Allow-self-signed connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 

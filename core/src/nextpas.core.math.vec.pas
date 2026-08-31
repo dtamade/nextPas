@@ -889,7 +889,7 @@ begin
     raise EArgumentError.Create(AFunctionName + ': divisor vector must be finite and non-zero');
 end;
 
-function StableVec4Length(const AX, AY, AZ, AW: Single): Single; inline;
+function StableVec4Length(const AX, AY, AZ, AW: Single): Single;
 var
   LX: Single;
   LY: Single;
@@ -924,7 +924,7 @@ begin
     LScaledZ * LScaledZ + LScaledW * LScaledW));
 end;
 
-function StableVec4Length(const AX, AY, AZ, AW: Double): Double; inline;
+function StableVec4Length(const AX, AY, AZ, AW: Double): Double;
 var
   LX: Double;
   LY: Double;

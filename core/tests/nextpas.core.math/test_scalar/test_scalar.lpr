@@ -359,6 +359,10 @@ begin
   CheckNear(2.5, nextpas.core.math.scalar.Max(Single(1.5), Single(2.5)), 0.0, 'Max Single');
   CheckEqual(Int64(1), Int64(nextpas.core.math.scalar.Min(Int64(1), Int64(2))), 'Min Int64');
   CheckEqual(Int64(2), Int64(nextpas.core.math.scalar.Max(Int64(1), Int64(2))), 'Max Int64');
+  CheckEqual(Int64(-2147483648), Int64(nextpas.core.math.scalar.Min(Int32(-2147483648), Int32(5))), 'Min Int32 Low bound');
+  CheckEqual(Int64(2147483647), Int64(nextpas.core.math.scalar.Max(Int32(5), Int32(2147483647))), 'Max Int32 High bound');
+  CheckEqual(Int64(-9223372036854775808), Int64(nextpas.core.math.scalar.Min(Int64(-9223372036854775808), Int64(5))), 'Min Int64 Low bound');
+  CheckEqual(Int64(5), Int64(nextpas.core.math.scalar.Max(Int32(-7), Int32(5))), 'Max Int32 negative vs positive');
   CheckNear(-1.5, nextpas.core.math.scalar.Min(-1.5, 2.0), 0.0, 'Min Double');
   CheckNear(2.0, nextpas.core.math.scalar.Max(-1.5, 2.0), 0.0, 'Max Double');
   Check(IsNaN(nextpas.core.math.scalar.Min(MakeNaN, 1.0)), 'Min Double propagates NaN first');
@@ -1779,6 +1783,55 @@ begin
   Check(not IsMulOverflow(SizeUInt(10), SizeUInt(20)), 'IsMulOverflow false');
 end;
 
+procedure TestSameValueIsZero;
+begin
+  try
+  { SameValue: exact equality, near equality beyond default epsilon, NaN }
+  WriteLn('M1');
+  Check(SameValue(1.0, 1.0), 'SameValue Double equal');
+  WriteLn('M2');
+  Check(SameValue(1.0, 1.0 + 1e-16), 'SameValue Double within default eps');
+  WriteLn('M3');
+  Check(not SameValue(1.0, 1.01), 'SameValue Double differs');
+  WriteLn('M4');
+  Check(not SameValue(MakeNaN, MakeNaN), 'SameValue Double NaN unequal');
+  WriteLn('M5');
+  Check(SameValue(Single(0.5), Single(0.5)), 'SameValue Single equal');
+  WriteLn('M6');
+  Check(not SameValue(Single(0.5), Single(0.6)), 'SameValue Single differs');
+
+  { explicit epsilon path }
+  WriteLn('M7');
+  Check(SameValue(1.0, 1.5, 0.6), 'SameValue Double custom eps accepts');
+  WriteLn('M8');
+  Check(not SameValue(1.0, 1.5, 0.4), 'SameValue Double custom eps rejects');
+
+  { IsZero: zero and noise vs real magnitudes }
+  WriteLn('M9');
+  Check(IsZero(0.0), 'IsZero Double zero');
+  WriteLn('M10');
+  Check(IsZero(1e-300), 'IsZero Double subnormal-scale treated as zero');
+  WriteLn('M11');
+  Check(not IsZero(1.0), 'IsZero Double one is not zero');
+  WriteLn('M12');
+  Check(not IsZero(MakeNaN), 'IsZero Double NaN is not zero');
+  WriteLn('M13');
+  Check(IsZero(Single(0.0)), 'IsZero Single zero');
+  WriteLn('M14');
+  Check(not IsZero(Single(1.0)), 'IsZero Single one is not zero');
+
+  { infinite inputs compare equal to themselves via SameValue contract }
+  WriteLn('M15');
+  Check(SameValue(MakePositiveInfinity, MakePositiveInfinity),
+    'SameValue Double +Inf equals itself');
+  except
+    on E: Exception do begin
+      WriteLn('MARKER raised: ', E.ClassName, ': ', E.Message);
+      raise;
+    end;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.scalar');
   T.Test('constants', @TestConstants);
@@ -1806,5 +1859,6 @@ begin
   T.Test('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
   T.Test('single-precision boundary messages', @TestSinglePrecisionBoundaryMessages);
   T.Test('overflow helpers', @TestOverflowHelpers);
+  T.Test('SameValue IsZero default-epsilon contracts', @TestSameValueIsZero);
   if not T.Run then Halt(1);
 end.

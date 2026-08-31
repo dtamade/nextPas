@@ -288,6 +288,81 @@ begin
   end;
 end;
 
+procedure TestFillH;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 1));
+  try
+    LWritten := LBuf.FillH(0, 0, '-', 5, StyleDefault);
+    CheckEqual(Int64(5), Int64(LWritten), 'fillH ascii writes full width');
+    AssertRows(LBuf, ['-----'], 'fillH ascii');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestFillHRepeat;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 1));
+  try
+    LWritten := LBuf.FillH(0, 0, 'ab', 5, StyleDefault);
+    CheckEqual(Int64(5), Int64(LWritten), 'fillH repeats multi-glyph string');
+    AssertRows(LBuf, ['ababa'], 'fillH repeat');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestFillHClipRight;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  try
+    LWritten := LBuf.FillH(0, 0, '-', 5, StyleDefault);
+    CheckEqual(Int64(3), Int64(LWritten), 'fillH clips at right edge');
+    AssertRows(LBuf, ['---'], 'fillH right clip');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestFillHCJKClip;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  try
+    LWritten := LBuf.FillH(0, 0, #$E4#$B8#$AD, 5, StyleDefault);
+    CheckEqual(Int64(2), Int64(LWritten), 'fillH wide glyph truncated to fit width');
+    AssertRows(LBuf, [#$E4#$B8#$AD + ' '], 'fillH wide glyph');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestFillHOffset;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 1));
+  try
+    LWritten := LBuf.FillH(2, 0, '-', 2, StyleDefault);
+    CheckEqual(Int64(2), Int64(LWritten), 'fillH offset writes width');
+    AssertRows(LBuf, ['  -- '], 'fillH offset');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 procedure TestCellAt;
 var
   LBuf: TBuffer;
@@ -820,6 +895,11 @@ begin
     @TestSetStringNLeftClipPartialWideTailConsumesMaxWidth);
   T.Test('set stringP left clip consumes hidden columns',
     @TestSetStringPLeftClipConsumesHiddenColumns);
+  T.Test('fillH ascii', @TestFillH);
+  T.Test('fillH repeat', @TestFillHRepeat);
+  T.Test('fillH clip right edge', @TestFillHClipRight);
+  T.Test('fillH cjk clip', @TestFillHCJKClip);
+  T.Test('fillH offset', @TestFillHOffset);
   T.Test('cell at bounds', @TestCellAt);
   T.Test('cjk width', @TestCJKWidth);
   T.Test('fill rect', @TestFillRect);

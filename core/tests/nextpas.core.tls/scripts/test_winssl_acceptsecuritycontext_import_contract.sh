@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-API_FILE="$ROOT_DIR/src/nextpas.core.tls.winssl.api.pas"
-CONNECTION_FILE="$ROOT_DIR/src/nextpas.core.tls.winssl.connection.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+API_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.winssl.api.pas"
+CONNECTION_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.winssl.connection.pas"
 
 fail() {
   echo "[FAIL] $1"
@@ -12,8 +12,8 @@ fail() {
 
 echo "[TEST] winssl AcceptSecurityContext import contract"
 
-[[ -f "$API_FILE" ]] || fail "missing file: src/nextpas.core.tls.winssl.api.pas"
-[[ -f "$CONNECTION_FILE" ]] || fail "missing file: src/nextpas.core.tls.winssl.connection.pas"
+[[ -f "$API_FILE" ]] || fail "missing file: core/src/nextpas.core.tls.winssl.api.pas"
+[[ -f "$CONNECTION_FILE" ]] || fail "missing file: core/src/nextpas.core.tls.winssl.connection.pas"
 
 if ! rg -F --quiet -- "function AcceptSecurityContext(" "$API_FILE"; then
   fail "winssl api should declare the unsuffixed AcceptSecurityContext import"

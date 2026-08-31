@@ -5,7 +5,7 @@ unit nextpas.core.tls.winssl.errors;
 
 interface
 
-uses nextpas.core.text.conv, {$IFDEF WINDOWS} Windows, {$ENDIF} nextpas.core.tls.base, nextpas.core.time,
+uses nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.tls.winssl.base, {$IFDEF WINDOWS} Windows, {$ENDIF} nextpas.core.tls.base, nextpas.core.time,
   nextpas.core.fs, nextpas.core.exception;
 
 type
@@ -397,7 +397,7 @@ begin
       Result := '数据解密失败';
 
   else
-    Result := nextpas.core.text.conv.Format('未知错误 (0x%x)', [AErrorCode]);
+    Result := nextpas.core.text.format.TextFormat('未知错误 (0x%x)', [AErrorCode]);
   end;
 end;
 
@@ -515,7 +515,7 @@ begin
       Result := 'Data decryption failed';
 
   else
-    Result := nextpas.core.text.conv.Format('Unknown error (0x%x)', [AErrorCode]);
+    Result := nextpas.core.text.format.TextFormat('Unknown error (0x%x)', [AErrorCode]);
   end;
 end;
 
@@ -594,7 +594,7 @@ begin
     Result := Trim(Result);
   end
   else
-    Result := nextpas.core.text.conv.Format('Error code: 0x%x', [AErrorCode]);
+    Result := nextpas.core.text.format.TextFormat('Error code: 0x%x', [AErrorCode]);
 end;
 
 function FormatErrorInfo(const AErrorInfo: TSSLErrorInfo): string;
@@ -603,7 +603,7 @@ const
     'DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL'
   );
 begin
-  Result := nextpas.core.text.conv.Format('[%s] %s | %s | Code: 0x%x | %s',
+  Result := nextpas.core.text.format.TextFormat('[%s] %s | %s | Code: 0x%x | %s',
     [nextpas.core.time.FormatDateTime('yyyy-mm-dd hh:nn:ss', AErrorInfo.Timestamp),
     LEVEL_STR[AErrorInfo.Level],
     AErrorInfo.Context,

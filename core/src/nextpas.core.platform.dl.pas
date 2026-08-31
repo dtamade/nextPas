@@ -80,6 +80,33 @@ function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
     @return 整数标志值 *}
 function platform_dl_flags_to_int(AFlags: TPlatformDlFlags): Int32;
 
+const
+  {** 空库句柄常量：用于句柄变量的初始化与"未加载"判断 *}
+{$IFDEF NEXTPAS_WINDOWS}
+  PLATFORM_DL_NIL_LIBRARY: TPlatformLibrary = (Handle: 0);
+{$ELSE}
+  PLATFORM_DL_NIL_LIBRARY: TPlatformLibrary = (Handle: nil);
+{$ENDIF}
+
+{** @desc 加载动态库（AnsiString 路径便捷面，失败时 ALib 清零）
+    @param APath 库文件路径
+    @param AFlags 打开标志集合（dlfLazy/dlfNow/dlfGlobal）
+    @param ALib 输出参数，返回库句柄
+    @return True 成功 *}
+function platform_dl_load(const APath: AnsiString; AFlags: TPlatformDlFlags;
+  out ALib: TPlatformLibrary): Boolean;
+
+{** @desc 按名解析符号（缺失时返回 nil 的便捷面）
+    @param ALib 库句柄
+    @param AName 符号名称
+    @return 符号地址；符号不存在或库无效时为 nil *}
+function platform_dl_symbol(const ALib: TPlatformLibrary;
+  const AName: AnsiString): Pointer;
+
+{** @desc 释放库并把句柄清零（对空句柄幂等）
+    @param ALib 库句柄（调用后置为空句柄形态） *}
+procedure platform_dl_release(var ALib: TPlatformLibrary);
+
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
@@ -374,5 +401,31 @@ begin if ABuf <> nil then ABuf[0] := #0; Result := PLATFORM_ERR_UNSUPPORTED; end
 function platform_dl_flags_to_int(AFlags: TPlatformDlFlags): Int32;
 begin Result := 0; end;
 {$ENDIF}
+
+function platform_dl_load(const APath: AnsiString; AFlags: TPlatformDlFlags;
+  out ALib: TPlatformLibrary): Boolean;
+begin
+  if platform_dl_open(PAnsiChar(APath), platform_dl_flags_to_int(AFlags),
+    ALib) = 0 then
+    Exit(True);
+  FillChar(ALib, SizeOf(ALib), 0);
+  Result := False;
+end;
+
+function platform_dl_symbol(const ALib: TPlatformLibrary;
+  const AName: AnsiString): Pointer;
+var
+  Addr: Pointer;
+begin
+  if platform_dl_sym(ALib, PAnsiChar(AName), Addr) = 0 then
+    Exit(Addr);
+  Result := nil;
+end;
+
+procedure platform_dl_release(var ALib: TPlatformLibrary);
+begin
+  platform_dl_close(ALib);
+  FillChar(ALib, SizeOf(ALib), 0);
+end;
 
 end.

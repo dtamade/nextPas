@@ -10,7 +10,7 @@
  *
  * Thread Safety: 所有类方法线程安全
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2025-09-28
  *
@@ -94,7 +94,7 @@ type
   TSSLFactory = class
   private
     class var
-      // P0: 使用 Map 接口替代动态数组，方便后续替换为 fafafa.core 的 HashMap
+      // P0: 使用 Map 接口替代动态数组，方便后续替换为 nextpas.core.collections 的 HashMap
       FRegistrationMap: specialize IIntegerMap<TSSLLibraryRegistration>;
       FLibraries: array[TSSLLibraryType] of ISSLLibrary;
       FDefaultLibraryType: TSSLLibraryType;
@@ -877,7 +877,7 @@ begin
       InitCriticalSection(GFactoryLock);
       GFactoryLockInitialized := True;
     end;
-    // P0: 创建 Map 实例（后续可替换为 fafafa.core 的 HashMap）
+    // P0: 创建 Map 实例（后续可替换为 nextpas.core.collections 的 HashMap）
     FRegistrationMap := TMapFactory.specialize CreateIntegerMap<TSSLLibraryRegistration>;
     FDefaultLibraryType := sslAutoDetect;
     FAutoInitialize := True;
@@ -1515,7 +1515,7 @@ var
   LType: TSSLLibraryType;
   LLib: ISSLLibrary;
 begin
-  Result := 'fafafa.ssl v' + FAFAFA_SSL_VERSION_STRING + LineEnding;
+  Result := 'nextpas.core.tls v' + SSL_VERSION_STRING + LineEnding;
   Result := Result + '可用的SSL库:' + LineEnding;
   
   for LType := Low(TSSLLibraryType) to High(TSSLLibraryType) do

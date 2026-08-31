@@ -3,17 +3,18 @@ program test_openssl_connection_stream_constructor_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  SysUtils,
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
-  nextpas.core.tls.openssl.api.ssl;
-
+  nextpas.core.tls.openssl.api.ssl,
+  nextpas.core.tls.openssl.backed;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;
@@ -52,7 +53,7 @@ var
 begin
   LStream := TMemoryStream.Create;
   try
-    LConn := AContext.CreateConnection(LStream);
+    LConn := AContext.CreateConnection(TStreamWrapper.Create(LStream));
     if LConn = nil then
       raise Exception.Create('stream CreateConnection warmup returned nil');
   finally
@@ -82,7 +83,7 @@ begin
   LMentionsAccessViolation := False;
   LDetail := '';
   try
-    LConn := AContext.CreateConnection(LStream);
+    LConn := AContext.CreateConnection(TStreamWrapper.Create(LStream));
   except
     on E: Exception do
     begin

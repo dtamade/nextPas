@@ -47,7 +47,6 @@ type
       - 节点池自动扩容
       - 生命周期: Close → join producers/consumers → Free
       - Destroy 会 Close；Free 前必须 quiescent（无并发出入队）
- * @concurrency Thread-safe (see source for details).
   }
   generic TLockFreeMsQueueImpl<T> = class
   private
@@ -67,22 +66,16 @@ type
       padded off the hot RMW lines below (F-032 rule). }
     FNodes: array of TNode;
     FCapacity: Int32;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
-    FPadHeader: TCacheLinePad;
-    {$POP}
+    FPadHeader: TCacheLinePad;   // padding for cache-line isolation
     // Producer line: tail pointer + enqueued counter, both RMW'd by every
     // successful enqueue (same writer population, F-033 rule).
     FTail: Int64;        // packed: (index:32 | aba:32)
     FEnqueued: Int64;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
-    FPadTail: TCacheLinePad;
-    {$POP}
+    FPadTail: TCacheLinePad;   // padding for cache-line isolation
     // Consumer line (mirror): head pointer + dequeued counter.
     FHead: Int64;        // packed: (index:32 | aba:32)
     FDequeued: Int64;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
-    FPadHead: TCacheLinePad;
-    {$POP}
+    FPadHead: TCacheLinePad;   // padding for cache-line isolation
     // Free list striped by the SAME thread-id hash as the op guard (the
     // caller passes its already-computed op stripe): alloc on enqueue and
     // recycle on dequeue from differently-hashed threads land on separate
@@ -323,6 +316,12 @@ begin
   if ACapacity > MaxInt div SizeOf(TNode) then
     raise EArgumentError.Create('TLockFreeMsQueue: capacity exceeds allocation limit');
   inherited Create;
+  { 填充字段写零:5029 Note 归各消费单元的特化点发射,任何生产侧
+    指令都盖不全;真实引用一次即根因消除。仅构造期三次定长写,
+    不在热路径 }
+  FPadHeader := Default(TCacheLinePad);
+  FPadTail := Default(TCacheLinePad);
+  FPadHead := Default(TCacheLinePad);
   SetLength(FNodes, ACapacity);
   for I := 0 to ACapacity - 1 do
     if I + MSQUEUE_OP_STRIPES < ACapacity then

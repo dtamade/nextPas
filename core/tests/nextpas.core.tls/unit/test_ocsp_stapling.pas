@@ -13,7 +13,7 @@ unit test_ocsp_stapling;
   - Stapling 服务端功能
   - Stapling 配置管理
 
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 1.0.0
 }
 

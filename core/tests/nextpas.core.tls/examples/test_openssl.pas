@@ -4,9 +4,11 @@ program test_openssl;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
-  fafafa.examples.tcp;
+  nextpas.core.tls.base,
+  nextpas.core.tls.factory,
+  tls_test_sockets;
 
 const
   BUFFER_SIZE = 4096;

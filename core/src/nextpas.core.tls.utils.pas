@@ -2,7 +2,7 @@
   nextpas.core.tls.utils - SSL/TLS 辅助工具单元
 
   版本: 2.0 (Phase 2.3.4 重构)
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-09-28
   更新: 2025-01-18
 

@@ -4,6 +4,7 @@ program test_direct_cache;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.time.cpu,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.wolfssl.lib,
@@ -11,7 +12,7 @@ uses
 
 procedure TestCache(Lib: ISSLLibrary; const Name: string);
 var
-  Caps1, Caps2: TSSLBackendCapabilities;
+  Caps1, Caps2, Caps3: TSSLBackendCapabilities;
   i: Integer;
   StartTime: QWord;
   CachedTime: QWord;
@@ -37,11 +38,14 @@ begin
   WriteLn('  TLS 1.3: ', Caps1.SupportsTLS13);
 
   // 测试缓存性能
+  // 循环内丢弃返回值(编译器会清理临时 record),避免 Caps2 反复覆盖
   WriteLn('测试缓存（10000次）...');
   StartTime := GetTickCount64;
   for i := 1 to 10000 do
-    Caps2 := Lib.GetCapabilities;
+    Lib.GetCapabilities;
   CachedTime := GetTickCount64 - StartTime;
+  // 取一次结果用于一致性验证
+  Caps2 := Lib.GetCapabilities;
 
   WriteLn('  耗时: ', CachedTime, ' ms');
   if CachedTime > 0 then
@@ -61,8 +65,9 @@ begin
   Lib.Finalize;
   if Lib.Initialize then
   begin
-    Caps2 := Lib.GetCapabilities;
-    if Caps2.BackendType = Caps1.BackendType then
+    // 独立变量:避免同一局部 record 二次赋值丢失旧 string 引用
+    Caps3 := Lib.GetCapabilities;
+    if Caps3.BackendType = Caps1.BackendType then
       WriteLn('  ✓ 缓存已重建')
     else
       WriteLn('  ✗ 缓存重建失败');
@@ -79,7 +84,7 @@ var
   MbedTLSLib: ISSLLibrary;
 begin
   WriteLn;
-  WriteLn('fafafa.ssl - 直接后端缓存测试');
+  WriteLn('nextpas.core.tls - 直接后端缓存测试');
   WriteLn('==============================================');
   WriteLn;
 

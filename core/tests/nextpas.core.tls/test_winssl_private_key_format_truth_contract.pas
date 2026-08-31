@@ -5,6 +5,7 @@ program test_winssl_private_key_format_truth_contract;
 uses
   nextpas.core.system.sysutils,
   nextpas.core.system.classes,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions
@@ -65,7 +66,7 @@ procedure CheckNonPFXFailsClosed;
 var
   LLib: ISSLLibrary;
   LCtx: ISSLContext;
-  LStream: TStringStream;
+  LStream: TMemoryStream;
   LTempDir: string;
   LTempFile: string;
   LRejected: Boolean;
@@ -83,11 +84,13 @@ begin
   LCtx := LLib.CreateContext(sslCtxServer);
   Require(LCtx <> nil, 'WinSSL context should be creatable');
 
-  LStream := TStringStream.Create(DUMMY_PRIVATE_KEY_PEM);
+  LStream := TMemoryStream.Create;
+  LStream.Write(DUMMY_PRIVATE_KEY_PEM[1], Length(DUMMY_PRIVATE_KEY_PEM));
+  LStream.Position := 0;
   try
     LRejected := False;
     try
-      LCtx.LoadPrivateKey(LStream, TEST_PASSWORD);
+      LCtx.LoadPrivateKey(TStreamWrapper.Create(LStream, False), TEST_PASSWORD);
     except
       on E: ESSLException do
       begin

@@ -24,7 +24,7 @@ type
   );
 
   THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions,
-    IHttpRequestWithContext, IHttpRequestWithArena)
+    IHttpRequestWithContext, IHttpRequestWithArena, IHttpRequestWithEarlyData)
   private
     type
       TPathParam = record
@@ -51,6 +51,7 @@ type
       FRequestOptions: THttpRequestOptions;
       FContext: IHttpContext;
       FArena: IArena;
+      FEarlyData: Boolean;
     procedure EnsureUrlParsed;
     procedure EnsureRequestTargetParts;
   public
@@ -75,6 +76,7 @@ type
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
     procedure SetRequestOptions(const AOptions: THttpRequestOptions);
@@ -83,6 +85,8 @@ type
     procedure SetContext(const ACtx: IHttpContext);
     function GetArena: IArena;
     procedure SetArena(const AArena: IArena);
+    function GetWasEarlyData: Boolean;
+    procedure SetWasEarlyData(const AValue: Boolean);
   end;
 
   THttpResponse = class(TInterfacedObject, IHttpResponse)
@@ -702,6 +706,35 @@ begin
   Result := FRemoteAddr;
 end;
 
+{ Peer IP without the port. From the socket we have the structured
+  TNetAddress (IP field is already bracket-free); for a caller-provided
+  RemoteAddr string we strip the port the way the family does (token888
+  ExtractClientIp): bracketed '[ipv6]:port' keeps the bracket content,
+  'ip:port' keeps everything before the last ':'. }
+function THttpRequest.GetRemoteIp: string;
+var
+  LLast, I: SizeInt;
+begin
+  if FRemoteAddrFromNet then
+    Exit(FRemoteNetAddr.IP);
+  Result := FRemoteAddr;
+  if Result = '' then
+    Exit;
+  if Result[1] = '[' then
+  begin
+    I := Pos(']', Result);
+    if I > 2 then
+      Result := Copy(Result, 2, I - 2);
+    Exit;
+  end;
+  LLast := 0;
+  for I := 1 to Length(Result) do
+    if Result[I] = ':' then
+      LLast := I;
+  if LLast > 1 then
+    Result := Copy(Result, 1, LLast - 1);
+end;
+
 procedure THttpRequest.SetRemoteAddr(const AAddr: string);
 begin
   FRemoteAddr := AAddr;
@@ -754,6 +787,16 @@ end;
 procedure THttpRequest.SetArena(const AArena: IArena);
 begin
   FArena := AArena;
+end;
+
+function THttpRequest.GetWasEarlyData: Boolean;
+begin
+  Result := FEarlyData;
+end;
+
+procedure THttpRequest.SetWasEarlyData(const AValue: Boolean);
+begin
+  FEarlyData := AValue;
 end;
 
 { THttpResponse }

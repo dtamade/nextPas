@@ -6,7 +6,7 @@ unit nextpas.core.lockfree.selector.impl;
  *   - AddRecv: register channel for receiving
  *   - AddSend: register channel for sending
  *   - Select: blocking wait for any case
- *   - TrySelect: non-blocking full scan — Go `select { default: }` equivalent
+ *   - TrySelect: non-blocking full scan — Go select-with-default 等价物
  *   - SelectTimeout: blocking with timeout
  *   - Clear: reset for reuse
  *
@@ -50,8 +50,8 @@ type
       **与 Go select 的对应关系**:
       - `case v := <-ch:` → `LSelector.AddRecv(LChannel, LOutVar)`
       - `case ch <- v:` → `LSelector.AddSend(LChannel, LValue)`
-      - `select { ... }` → `LResult := LSelector.Select`
-      - `select { ... default: }` → `LResult := LSelector.TrySelect`（Completed=False 即走 default）
+      - select 块 → LResult := LSelector.Select
+      - select 块含 default → LResult := LSelector.TrySelect（Completed=False 即走 default）
 
       **设计约束**:
       - 所有 channel 必须是相同类型 T 的 TLockFreeChannelImpl<T>

@@ -500,7 +500,7 @@ begin
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.KeyType := ktEd25519;
   LOptions.CommonName := 'winssl-ed25519-algorithm-truth.local';
-  LOptions.Organization := 'fafafa.ssl';
+  LOptions.Organization := 'nextpas.core.tls';
 
   try
     Test('GenerateSelfSigned(Ed25519)', TCertificateUtils.GenerateSelfSigned(

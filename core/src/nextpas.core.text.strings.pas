@@ -227,6 +227,7 @@ end;
 function StringsFilter(const AArr: TStringArray; APredicate: TStringPredicate): TStringArray;
 var i, LCount: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   LCount := 0;
   for i := 0 to High(AArr) do
@@ -241,6 +242,7 @@ end;
 function StringsMap(const AArr: TStringArray; AMapper: TStringMapper): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
     Result[i] := AMapper(AArr[i]);
@@ -280,23 +282,39 @@ begin
   AArr[L] := AValue;
 end;
 
-procedure StringsDelete(var AArr: TStringArray; AIndex: SizeUInt);
-var i: SizeUInt;
-begin
-  if AIndex > High(AArr) then Exit;
-  for i := AIndex to High(AArr) - 1 do
-    AArr[i] := AArr[i + 1];
-  SetLength(AArr, Length(AArr) - 1);
-end;
-
-procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string);
-var i, L: SizeUInt;
+procedure StringsDelete(var AArr: TStringArray; AIndex: SizeUInt); inline;
+var
+  L: SizeInt;
+  LMoveCount: SizeUInt;
 begin
   L := Length(AArr);
+  if (L = 0) or (AIndex >= SizeUInt(L)) then Exit;
+  { 零拷贝: 先释放被删元素, 单次 System.Move 搬移指针块, 尾槽 Pointer:=nil 避免重复 Finalize }
+  AArr[AIndex] := '';
+  if AIndex < SizeUInt(L) - 1 then
+  begin
+    LMoveCount := SizeUInt(L) - AIndex - 1;
+    System.Move(AArr[AIndex + 1], AArr[AIndex], LMoveCount * SizeOf(string));
+    Pointer(AArr[L - 1]) := nil;
+  end;
+  SetLength(AArr, L - 1);
+end;
+
+procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string); inline;
+var
+  L: SizeUInt;
+  LMoveCount: SizeUInt;
+begin
+  L := SizeUInt(Length(AArr));
   if AIndex > L then AIndex := L;
   SetLength(AArr, L + 1);
-  for i := L downto AIndex + 1 do
-    AArr[i] := AArr[i - 1];
+  if AIndex < L then
+  begin
+    { 零拷贝: 单次 System.Move 右移指针块(handling overlap), 原槽 Pointer:=nil 转移所有权, 避免 O(n) 引用计数 }
+    LMoveCount := L - AIndex;
+    System.Move(AArr[AIndex], AArr[AIndex + 1], LMoveCount * SizeOf(string));
+    Pointer(AArr[AIndex]) := nil;
+  end;
   AArr[AIndex] := AValue;
 end;
 
@@ -356,6 +374,7 @@ var
   LLine: string;
 begin
   LLines := StringsParseLines(AText);
+  Result := nil;
   SetLength(Result, Length(LLines));
   LCount := 0;
   for i := 0 to High(LLines) do
@@ -393,6 +412,7 @@ end;
 function StringPairsKeys(const APairs: TStringPairArray): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(APairs));
   for i := 0 to High(APairs) do
     Result[i] := APairs[i].Key;
@@ -403,6 +423,7 @@ end;
 function StringsTrimAll(const AArr: TStringArray): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
     Result[i] := nextpas.core.text.utils.Trim(AArr[i]);
@@ -411,6 +432,7 @@ end;
 function StringsToUpper(const AArr: TStringArray): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
     Result[i] := nextpas.core.text.utils.UpperCase(AArr[i]);
@@ -419,6 +441,7 @@ end;
 function StringsToLower(const AArr: TStringArray): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
     Result[i] := nextpas.core.text.utils.LowerCase(AArr[i]);
@@ -427,6 +450,7 @@ end;
 function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
 var i, LCount: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   LCount := 0;
   for i := 0 to High(AArr) do
@@ -477,6 +501,7 @@ end;
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
 var i, LCount: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   LCount := 0;
   for i := 0 to High(AArr) do
@@ -588,6 +613,7 @@ end;
 function StringsRepeat(const AValue: string; ACount: SizeUInt): TStringArray;
 var I: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, ACount);
   for I := 0 to ACount - 1 do
     Result[I] := AValue;
@@ -666,37 +692,48 @@ end;
 
 function StringsSplitEscaped(const AStr: string; ASep: Char): TStringArray;
 var
-  LItem: string;
-  LI: Integer;
-  LUsed: Integer;
+  LBuf: string;
+  LBufLen, LUsed, LCap, LI: Integer;
 begin
   Result := nil;
   if AStr = '' then Exit;
-  LItem := '';
+  { 单分配缓冲 O(n)：避免 LItem := LItem + C 的 O(n²) 重分配；LBuf 预分配 Length(AStr) }
+  SetLength(LBuf, Length(AStr));
+  LBufLen := 0;
   LUsed := 0;
+  LCap := 8;
+  SetLength(Result, LCap);
   LI := 1;
   while LI <= Length(AStr) do
   begin
     if AStr[LI] = '\' then
     begin
-      Inc(LI);
-      if LI <= Length(AStr) then
-        LItem := LItem + AStr[LI];
+      if LI < Length(AStr) then
+      begin
+        Inc(LI);
+        Inc(LBufLen); LBuf[LBufLen] := AStr[LI];
+      end else
+      begin
+        { 尾部 одино 反斜杠保留为字面量，与测试期望 'a\'→'a\' 一致 }
+        Inc(LBufLen); LBuf[LBufLen] := '\';
+      end;
     end
     else if AStr[LI] = ASep then
     begin
+      if LUsed >= LCap then begin LCap := LCap * 2; SetLength(Result, LCap); end;
+      SetString(Result[LUsed], PChar(@LBuf[1]), LBufLen);
       Inc(LUsed);
-      if LUsed >= Length(Result) then SetLength(Result, LUsed * 2);
-      Result[LUsed - 1] := LItem;
-      LItem := '';
+      LBufLen := 0;
     end
     else
-      LItem := LItem + AStr[LI];
+    begin
+      Inc(LBufLen); LBuf[LBufLen] := AStr[LI];
+    end;
     Inc(LI);
   end;
+  if LUsed >= LCap then begin LCap := LCap * 2; SetLength(Result, LCap); end;
+  SetString(Result[LUsed], PChar(@LBuf[1]), LBufLen);
   Inc(LUsed);
-  if LUsed >= Length(Result) then SetLength(Result, LUsed * 2);
-  Result[LUsed - 1] := LItem;
   SetLength(Result, LUsed);
 end;
 

@@ -31,10 +31,12 @@ asm
   jl .Lload_w
 
   // 展开 W[16..63]: W[i] = sigma1(W[i-2]) + W[i-7] + sigma0(W[i-15]) + W[i-16]
+  // r13 = W 窗口基址副本；负偏移走通用寄存器，避免 FPC 对 -offset(%rsp) 的告警。
+  movq %rsp, %r13
   movl $16, %ecx
 .Lexpand_w:
   // sigma1(W[i-2]) = RR17(x) ^ RR19(x) ^ SHR10(x)
-  movl -8(%rsp, %rcx, 4), %eax
+  movl -8(%r13, %rcx, 4), %eax
   movl %eax, %edx
   rorl $17, %edx
   movl %eax, %ebx
@@ -44,10 +46,10 @@ asm
   xorl %eax, %edx
 
   // + W[i-7]
-  addl -28(%rsp, %rcx, 4), %edx
+  addl -28(%r13, %rcx, 4), %edx
 
   // sigma0(W[i-15]) = RR7(x) ^ RR18(x) ^ SHR3(x)
-  movl -60(%rsp, %rcx, 4), %eax
+  movl -60(%r13, %rcx, 4), %eax
   movl %eax, %ebx
   rorl $7, %ebx
   movl %eax, %ebp
@@ -58,7 +60,7 @@ asm
   addl %ebx, %edx
 
   // + W[i-16]
-  addl -64(%rsp, %rcx, 4), %edx
+  addl -64(%r13, %rcx, 4), %edx
 
   movl %edx, (%rsp, %rcx, 4)
   incl %ecx

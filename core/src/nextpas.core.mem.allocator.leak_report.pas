@@ -13,8 +13,8 @@
 
 适用场景: 测试/诊断环境，定位泄漏源。
 
-Author:    fafafaStudio
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Author:    nextpas.core
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.allocator.leak_report;

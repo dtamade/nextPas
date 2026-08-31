@@ -18,6 +18,7 @@ type
     class function IPv6(const AIP: string; APort: UInt16): TNetAddress; static;
     class function Loopback(APort: UInt16): TNetAddress; static;
     class function Any(APort: UInt16): TNetAddress; static;
+    function WithPort(APort: UInt16): TNetAddress;
   end;
 
 const
@@ -66,6 +67,12 @@ begin
   Result.IP := '0.0.0.0';
   Result.Port := APort;
   Result.IsIPv6 := False;
+end;
+
+function TNetAddress.WithPort(APort: UInt16): TNetAddress;
+begin
+  Result := Self;
+  Result.Port := APort;
 end;
 
 function TNetAddress.ToString: string;

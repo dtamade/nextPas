@@ -21,7 +21,6 @@ type
       - TestAndSet/TestAndClear 原子操作
       - 自动扩容
       - 适用场景：布隆过滤器、位图、标志位管理
- * @concurrency Thread-safe (see source for details).
   }
   TConcurrentBitSet = class
   private

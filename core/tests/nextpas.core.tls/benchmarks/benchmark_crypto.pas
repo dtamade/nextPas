@@ -3,14 +3,16 @@ program benchmark_crypto;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   benchmark_utils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.secure,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding,  // Phase 2.3.6: Base64 functions moved here
-  fafafa.ssl;
+  nextpas.core.time;
 
 const
   ITERATIONS = 10000;

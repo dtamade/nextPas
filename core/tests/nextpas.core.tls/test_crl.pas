@@ -4,6 +4,7 @@ program test_crl;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
+  nextpas.core.process,   { ExecuteProcess:openssl 夹具生成 }
   nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.tls.crl;
 
 var

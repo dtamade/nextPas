@@ -2,7 +2,7 @@
 {                                                                              }
 {  nextpas.core.tls.openssl.api.dso - OpenSSL DSO Module Pascal Binding                 }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {******************************************************************************}
 unit nextpas.core.tls.openssl.api.dso;

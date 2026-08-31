@@ -205,7 +205,10 @@ begin
     if Result <> '' then
       Exit;
   end;
-  Result := AReq.GetRemoteAddr;
+  { Fallback to the peer address without the port: RemoteAddr renders
+    'ip:port', which would make every connection's ephemeral port a
+    distinct key and the limiter never trigger. }
+  Result := AReq.GetRemoteIp;
 end;
 
 { Returns True if request is allowed, False if rate-limited (429 already written). }

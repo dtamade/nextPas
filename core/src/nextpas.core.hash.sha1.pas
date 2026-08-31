@@ -204,6 +204,7 @@ end;
 
 function TSHA1Hasher.SumBytes: TBytes;
 begin
+  Result := nil;
   SetLength(Result, SHA1_DIGEST_SIZE);
   Sum(Result[0], SHA1_DIGEST_SIZE);
 end;

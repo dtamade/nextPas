@@ -12,7 +12,7 @@ unit nextpas.core.tls.crl;
 
   CRL 用于发布已吊销证书的列表。
 
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 1.0.0
 }
 
@@ -620,6 +620,7 @@ var
   URLList: nextpas.core.text.base.TStringArray;
 begin
   SetLength(Result, 0);
+  URLList := nil;
   try
     // 查找 CRL Distribution Points 扩展
     for I := 0 to High(ACert.Extensions) do

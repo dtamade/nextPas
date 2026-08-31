@@ -2,8 +2,9 @@ unit nextpas.core.hash.sha256;
 
 {$mode objfpc}{$H+}
 
-{ nextpas.core.hash.sha256 — SHA-256 实现 (FIPS 180-4)
+{ nextpas.core.hash.sha256 — SHA-256 / SHA-224 实现 (FIPS 180-4)
 
+  SHA-224 共享压缩引擎，仅 IV 与 28 字节截断不同。
   性能设计：
   - Write 使用 Move 块拷贝，完整块直接从输入 buffer 处理（零拷贝）
   - Sum 不改变状态（复制 state 后 finalize）
@@ -26,9 +27,10 @@ type
     FBuf: array[0..63] of Byte;
     FBufLen: SizeUInt;
     FTotalLen: UInt64;
+    FIs224: Boolean;
     procedure ProcessBlock(ABlock: PByte);
   public
-    constructor Create;
+    constructor Create(AIs224: Boolean = False);
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Sum(out ADst; const ASize: SizeUInt);
     function SumBytes: TBytes;
@@ -39,6 +41,7 @@ type
   end;
 
 function NewSHA256: IHasher;
+function NewSHA224: IHasher;
 
 implementation
 
@@ -103,18 +106,29 @@ end;
 
 { TSHA256Hasher }
 
-constructor TSHA256Hasher.Create;
+constructor TSHA256Hasher.Create(AIs224: Boolean);
 begin
   inherited Create;
+  FIs224 := AIs224;
   Reset;
 end;
 
 procedure TSHA256Hasher.Reset;
 begin
-  FH[0] := $6a09e667; FH[1] := $bb67ae85;
-  FH[2] := $3c6ef372; FH[3] := $a54ff53a;
-  FH[4] := $510e527f; FH[5] := $9b05688c;
-  FH[6] := $1f83d9ab; FH[7] := $5be0cd19;
+  if FIs224 then
+  begin
+    FH[0] := $c1059ed8; FH[1] := $367cd507;
+    FH[2] := $3070dd17; FH[3] := $f70e5939;
+    FH[4] := $ffc00b31; FH[5] := $68581511;
+    FH[6] := $64f98fa7; FH[7] := $befa4fa4;
+  end
+  else
+  begin
+    FH[0] := $6a09e667; FH[1] := $bb67ae85;
+    FH[2] := $3c6ef372; FH[3] := $a54ff53a;
+    FH[4] := $510e527f; FH[5] := $9b05688c;
+    FH[6] := $1f83d9ab; FH[7] := $5be0cd19;
+  end;
   FBufLen := 0;
   FTotalLen := 0;
 end;
@@ -254,7 +268,7 @@ var
   LOutSize: SizeUInt;
 begin
   FillChar(ADst, 0, 0);
-  LOutSize := DigestOutputSize(SHA256_DIGEST_SIZE, ASize);
+  LOutSize := DigestOutputSize(DigestSize, ASize);
   if LOutSize = 0 then Exit;
   HashRequireBuffer(ADst, LOutSize, 'SHA256.Sum');
 
@@ -324,13 +338,17 @@ end;
 
 function TSHA256Hasher.SumBytes: TBytes;
 begin
-  SetLength(Result, SHA256_DIGEST_SIZE);
-  Sum(Result[0], SHA256_DIGEST_SIZE);
+  Result := nil;
+  SetLength(Result, DigestSize);
+  Sum(Result[0], DigestSize);
 end;
 
 function TSHA256Hasher.DigestSize: SizeUInt;
 begin
-  Result := SHA256_DIGEST_SIZE;
+  if FIs224 then
+    Result := SHA224_DIGEST_SIZE
+  else
+    Result := SHA256_DIGEST_SIZE;
 end;
 
 function TSHA256Hasher.BlockSize: SizeUInt;
@@ -342,7 +360,7 @@ function TSHA256Hasher.Clone: IHasher;
 var
   LClone: TSHA256Hasher;
 begin
-  LClone := TSHA256Hasher.Create;
+  LClone := TSHA256Hasher.Create(FIs224);
   Move(FH[0], LClone.FH[0], SizeOf(FH));
   Move(FBuf[0], LClone.FBuf[0], SizeOf(FBuf));
   LClone.FBufLen := FBufLen;
@@ -352,7 +370,12 @@ end;
 
 function NewSHA256: IHasher;
 begin
-  Result := TSHA256Hasher.Create;
+  Result := TSHA256Hasher.Create(False);
+end;
+
+function NewSHA224: IHasher;
+begin
+  Result := TSHA256Hasher.Create(True);
 end;
 
 {$IFDEF HASH_X64_ASM}

@@ -713,7 +713,6 @@ var
   LValueStr: AnsiString;
   LStatusSeen: Boolean;
   LRegularSeen: Boolean;
-  LNameLower: AnsiString;
   LJ: SizeInt;
 begin
   if AResponse.HeadersDecoded then
@@ -1493,27 +1492,42 @@ var
   LRawConn: ITcpStream;
   LSelectedALPN: string;
   LHostKey: string;
+  LWrapped: Exception;
 begin
+  LWrapped := nil;
   LHostKey := CanonicalPoolHostKey(AHost);
   Result := TH2ClientConnection(FPool.Get(LHostKey, APort, ASecure));
   APooled := Result <> nil;
   if APooled then
     Exit;
-  LRawConn := H2ClientDial(AHost, APort, FOptions.ConnectTimeout,
-    FOptions.Timeout);
-  if ASecure then
-  begin
-    H2ApplyPostDialDeadline(LRawConn, FOptions);
-    LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, AHost,
-      HTTP2_ALPN_PROTOCOL);
-    LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
-    if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
-      raise EHttpError.Create(hekProtocol,
-        'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
-    H2ApplyPostDialDeadline(LRawConn, FOptions);
-  end
-  else
-    H2ApplyPostDialDeadline(LRawConn, FOptions);
+  { 拨号阶段（DNS/connect/TLS/ALPN）与写读阶段同一传输异常契约：
+    ENetworkError/ETimeoutError 经 HttpWrapTransportException 包装为
+    EHttpError，裸网络异常不穿透 AcquireConnection。 }
+  try
+    LRawConn := H2ClientDial(AHost, APort, FOptions.ConnectTimeout,
+      FOptions.Timeout);
+    if ASecure then
+    begin
+      H2ApplyPostDialDeadline(LRawConn, FOptions);
+      LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, AHost,
+        HTTP2_ALPN_PROTOCOL);
+      LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
+      if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
+        raise EHttpError.Create(hekProtocol,
+          'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
+      H2ApplyPostDialDeadline(LRawConn, FOptions);
+    end
+    else
+      H2ApplyPostDialDeadline(LRawConn, FOptions);
+  except
+    on E: Exception do
+    begin
+      LWrapped := HttpWrapTransportException(E);
+      if LWrapped <> nil then
+        raise LWrapped;
+      raise;
+    end;
+  end;
   Result := TH2ClientConnection.Create(LRawConn, FOptions);
 end;
 
@@ -1540,7 +1554,6 @@ function TH2ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LUrl: TUrl;
   LHost: string;
-  LHostKey: string;
   LPort: UInt16;
   LSecure: Boolean;
   LRawConn: ITcpStream;
@@ -1571,7 +1584,6 @@ begin
     else
       LPort := 80;
   end;
-  LHostKey := CanonicalPoolHostKey(LHost);
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LCancel := H2RequestCancelToken(AReq);
   HttpThrowIfCanceled(LCancel);

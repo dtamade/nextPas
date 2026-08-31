@@ -61,13 +61,13 @@ begin
   Check('平台', False, 'Windows only'); Exit;
   {$ENDIF}
 
-  Host := Env('FAFAFA_WINSSL_MTLS_SERVER', '127.0.0.1');
-  Port := StrToIntDef(Env('FAFAFA_WINSSL_MTLS_PORT', '44330'), 44330);
-  Pfx := Env('FAFAFA_WINSSL_PFX', '');
-  PfxPass := Env('FAFAFA_WINSSL_PFX_PASSWORD', '');
-  CaFile := Env('FAFAFA_TLS_CA', '');
+  Host := Env('NEXTPAS_WINSSL_MTLS_SERVER', '127.0.0.1');
+  Port := StrToIntDef(Env('NEXTPAS_WINSSL_MTLS_PORT', '44330'), 44330);
+  Pfx := Env('NEXTPAS_WINSSL_PFX', '');
+  PfxPass := Env('NEXTPAS_WINSSL_PFX_PASSWORD', '');
+  CaFile := Env('NEXTPAS_TLS_CA', '');
 
-  if (Pfx = '') then begin Check('环境变量', False, '缺少 FAFAFA_WINSSL_PFX'); Exit; end;
+  if (Pfx = '') then begin Check('环境变量', False, '缺少 NEXTPAS_WINSSL_PFX'); Exit; end;
 
   if not InitWinsock then begin Check('初始化 Winsock', False); Exit; end;
   try

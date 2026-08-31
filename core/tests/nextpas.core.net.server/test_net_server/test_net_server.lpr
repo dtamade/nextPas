@@ -2780,7 +2780,7 @@ begin
     'lruntimecontextready := false;',
     'normal serve-loop ownership should disarm the pre-loop cleanup guard');
   CheckSourceOrder(LListen, 'lruntimecontextready := false;',
-    'while frunning do',
+    'while frunning or fshutdowndraining do',
     'serve loop cleanup should own runtime context before the poll loop starts');
 
   LPreLoopGuard := ExtractSourceRange(LListen,

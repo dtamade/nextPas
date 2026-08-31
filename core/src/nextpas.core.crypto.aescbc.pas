@@ -124,6 +124,7 @@ begin
     RaiseCryptoError(cecInvalidArgument, 'Invalid AES key length');
 
   Blocks := Length(APlaintext) div 16;
+  Result := nil;
   SetLength(Result, Length(APlaintext));
 
   Move(AIV[0], Prev[0], 16);
@@ -154,6 +155,7 @@ begin
     RaiseCryptoError(cecInvalidArgument, 'Invalid AES key length');
 
   Blocks := Length(ACiphertext) div 16;
+  Result := nil;
   SetLength(Result, Length(ACiphertext));
 
   Move(AIV[0], Prev[0], 16);

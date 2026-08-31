@@ -151,7 +151,16 @@ begin
   FToolchainPlan.Free;
   FBackendPlan.Free;
   FMirModule.Free;
-  FSemanticModel.Free;
+  if FSemanticModel <> nil then
+  begin
+    if (FQueryDB <> nil) and FQueryDB.ContainsValue(FSemanticModel) then
+    begin
+      FQueryDB.ForgetValue(FSemanticModel);
+      FreeAndNil(FSemanticModel);
+    end
+    else
+      FreeAndNil(FSemanticModel);
+  end;
   FUnitGraph.Free;
   FSearchPathSet.Free;
   FAstFacade.Free;

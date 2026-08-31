@@ -5,7 +5,7 @@ unit nextpas.core.tls.exceptions;
 {**
  * SSL/TLS异常类定义
  * 
- * 提供统一的异常层次结构，用于fafafa.ssl库的错误处理
+ * 提供统一的异常层次结构，用于nextpas.core.tls库的错误处理
  * 
  * Version: 2.0
  * 改进: 添加调用上下文支持、TSSLErrorCode集成、细粒度异常类型
@@ -23,7 +23,7 @@ type
   {**
    * SSL/TLS异常基类（增强版）
    * 
-   * 所有fafafa.ssl相关异常都继承自此类
+   * 所有nextpas.core.tls相关异常都继承自此类
    * 提供错误码、调用上下文、原生错误等详细信息
    *}
   ESSLException = class(Exception)
@@ -49,7 +49,7 @@ type
       ALibraryType: TSSLLibraryType = sslAutoDetect
     );
     
-    { 标准化错误码（fafafa.ssl 定义） }
+    { 标准化错误码（nextpas.core.tls 定义） }
     property ErrorCode: TSSLErrorCode read FErrorCode;
     
     { 原生库错误码（OpenSSL ERR_get_error()、WinSSL GetLastError() 等） }

@@ -24,6 +24,9 @@ type
     Text: AnsiString;
     Cursor: Integer;
     ScrollX: Integer;
+    { 选区(0-based 字节偏移;-1 = 无):Anchor 固定端,Head 随拖拽/Shift 移动 }
+    SelAnchor: Integer;
+    SelHead: Integer;
 
     class function Empty: TInputState; static;
     class function WithText(const S: AnsiString): TInputState; static;
@@ -43,6 +46,26 @@ type
     function HandleKey(const K: TKeyEvent): Boolean;
     function CursorCol: Integer;
     function TextWidth: Integer;
+
+    { ---- 选区(鼠标拖选/Shift 扩展/双击词/三击全选)---- }
+    procedure BeginSelect(APos: Integer);     { 锚=头=APos(按下落点) }
+    procedure UpdateSelect(APos: Integer);    { 头=APos(拖动/Shift 扩展) }
+    procedure ClearSelection;
+    function HasSelection: Boolean;
+    function SelFrom: Integer;                { min(Anchor,Head) }
+    function SelTo: Integer;                  { max(Anchor,Head),不含端点 }
+    function SelectedText: AnsiString;        { 仅拷贝动作时分配 }
+    function DeleteSelection: Boolean;        { True=有选区已删,光标落 From }
+    function SelectWordAt(APos: Integer): Boolean; { 双击选词;点空白 False }
+    procedure SelectAll;
+    function ColToBytePos(ACol: Integer): Integer; { 点击列→字节偏移(图素感知夹紧) }
+    { Shift 扩展移动:无选区先以当前光标为锚,再移动头 }
+    procedure MoveLeftExtend;
+    procedure MoveRightExtend;
+    procedure MoveHomeExtend;
+    procedure MoveEndExtend;
+    procedure MoveWordLeftExtend;
+    procedure MoveWordRightExtend;
   end;
 
   IInput = interface(IWidget)
@@ -52,6 +75,7 @@ type
     function WithStyle(const S: TStyle): IInput;
     function WithPlaceholderStyle(const S: TStyle): IInput;
     function WithCursorStyle(const S: TStyle): IInput;
+    function WithSelectionStyle(const S: TStyle): IInput;
     function WithBlock(ABlock: IBlock): IInput;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TInputState);
@@ -66,6 +90,7 @@ type
     FStyle: TStyle;
     FPlaceholderStyle: TStyle;
     FCursorStyle: TStyle;
+    FSelStyle: TStyle;
     FBlock: IBlock;
   public
     class function New: IInput; static;
@@ -75,6 +100,7 @@ type
     function WithStyle(const S: TStyle): IInput;
     function WithPlaceholderStyle(const S: TStyle): IInput;
     function WithCursorStyle(const S: TStyle): IInput;
+    function WithSelectionStyle(const S: TStyle): IInput;
     function WithBlock(ABlock: IBlock): IInput;
 
     { IWidget }
@@ -85,6 +111,28 @@ type
     procedure RenderInline(ABuffer: TBuffer; X, Y, MaxWidth: Integer;
       var AState: TInputState);
   end;
+
+{ ---- 选区几何纯函数(宿主自定义多行/分段输入复用;零分配)----
+  自 agentman888 Chat 输入框反哺:窗口化的列↔字节映射与高亮列段,
+  与 TInputState 的排他端点约定(SelTo 不含端点)一致 }
+
+{ 字节偏移前的显示列宽(图素感知):横向滚动基列换算用 }
+function InputColOfBytes(const S: AnsiString; ABytes: Integer): Integer;
+
+{ 可见窗 [AWinFrom, AWinFrom+AWinLen)(0-based 字节)内的点击列 →
+  排他选区头字节:落点在某图素列内夹其起始字节,末字形之后返回窗末。
+  负列返回窗首;空窗返回 AWinFrom }
+function InputHeadAtCol(const S: AnsiString; AWinFrom, AWinLen,
+  ACol: Integer): Integer;
+
+{ 选区 [ASelFrom, ASelTo)(排他端点)∩ 可见窗 的显示列段(相对窗首):
+  AColsFrom=首选中字形列、AColsWidth=选中字形总宽。无可见交集或宽为 0
+  返回 False。单遍扫描零分配,渲染热路径安全 }
+function InputSelColsInWindow(const S: AnsiString; AWinFrom, AWinLen,
+  ASelFrom, ASelTo: Integer; out AColsFrom, AColsWidth: Integer): Boolean;
+
+{ 向左回退到图素起始字节(continuation 前跳);Pos 为 0-based 字节偏移 }
+function PrevGraphemeByte(const S: AnsiString; Pos: Integer): Integer;
 
 implementation
 
@@ -141,6 +189,69 @@ begin
   Result := P;
 end;
 
+function InputColOfBytes(const S: AnsiString; ABytes: Integer): Integer;
+var P, N, W: Integer; Adv: TInputAdv;
+begin
+  Result := 0;
+  N := Length(S);
+  P := 0;
+  W := 0;
+  while (P < N) and (P < ABytes) do
+  begin
+    Adv := InputGraphemeAt(S[1], N, P);
+    Inc(W, Adv.Width);
+    Inc(P, Adv.ByteLen);
+  end;
+  Result := W;
+end;
+
+function InputHeadAtCol(const S: AnsiString; AWinFrom, AWinLen,
+  ACol: Integer): Integer;
+var P, WEnd: Integer; GR: TGraphemeResult;
+begin
+  Result := AWinFrom;
+  if AWinLen <= 0 then Exit;
+  P := AWinFrom;
+  WEnd := AWinFrom + AWinLen;
+  while P < WEnd do
+  begin
+    GR := GraphemeNext(@S[P + 1], WEnd - P);
+    if GR.ByteLen <= 0 then Break;
+    if ACol < GR.Width then Exit(P);
+    Dec(ACol, GR.Width);
+    Inc(P, GR.ByteLen);
+  end;
+  Result := WEnd;   { 点在末字形之后:排他头 = 窗末 }
+end;
+
+function InputSelColsInWindow(const S: AnsiString; AWinFrom, AWinLen,
+  ASelFrom, ASelTo: Integer; out AColsFrom, AColsWidth: Integer): Boolean;
+var P, WEnd, CF, W: Integer; GR: TGraphemeResult;
+begin
+  Result := False;
+  AColsFrom := 0;
+  AColsWidth := 0;
+  if (AWinLen <= 0) or (ASelTo <= ASelFrom) then Exit;
+  P := AWinFrom;
+  WEnd := AWinFrom + AWinLen;
+  if (ASelFrom >= WEnd) or (ASelTo <= P) then Exit;
+  CF := -1;
+  W := 0;
+  while P < WEnd do
+  begin
+    if P >= ASelTo then Break;
+    if (CF < 0) and (P >= ASelFrom) then CF := W;
+    GR := GraphemeNext(@S[P + 1], WEnd - P);
+    if GR.ByteLen <= 0 then Break;
+    Inc(W, GR.Width);
+    Inc(P, GR.ByteLen);
+  end;
+  if CF < 0 then Exit;
+  AColsFrom := CF;
+  AColsWidth := W - CF;
+  Result := AColsWidth > 0;
+end;
+
 function GraphemeCount(const S: AnsiString): Integer;
 var P: Integer; Adv: TInputAdv;
 begin
@@ -184,17 +295,20 @@ end;
 class function TInputState.Empty: TInputState;
 begin
   Result.Text := ''; Result.Cursor := 0; Result.ScrollX := 0;
+  Result.SelAnchor := -1; Result.SelHead := -1;
 end;
 
 class function TInputState.WithText(const S: AnsiString): TInputState;
 begin
   Result.Text := S; Result.Cursor := Length(S); Result.ScrollX := 0;
+  Result.SelAnchor := -1; Result.SelHead := -1;
 end;
 
 procedure TInputState.InsertChar(Cp: LongWord);
 var S: AnsiString;
 begin
   if (Cp < 32) or (Cp > $10FFFF) then Exit;
+  DeleteSelection;   { 有选区先删:输入替换选区(标准编辑器语义) }
   S := Ucs4ToUtf8(Cp);
   Insert(S, Text, Cursor + 1);
   Inc(Cursor, Length(S));
@@ -209,6 +323,7 @@ begin
     begin Inc(Len); Clean[Len] := S[I]; end;
   SetLength(Clean, Len);
   if Len = 0 then Exit;
+  DeleteSelection;   { 粘贴替换选区 }
   Insert(Clean, Text, Cursor + 1);
   Inc(Cursor, Len);
 end;
@@ -319,26 +434,47 @@ begin
 end;
 
 function TInputState.HandleKey(const K: TKeyEvent): Boolean;
+var LExt: Boolean;
 begin
   Result := True;
+  { Shift+导航 = 扩展选区;普通导航 = 收拢选区后纯移动 }
+  LExt := kmShift in K.Modifiers;
   case K.Code of
     kcChar:
       if not (kmCtrl in K.Modifiers) then InsertChar(K.Ch)
       else Result := False;
     kcBackspace:
       if kmCtrl in K.Modifiers then DeleteWordLeft
-      else DeleteBack;
+      else if not DeleteSelection then DeleteBack;
     kcDelete:
       if kmCtrl in K.Modifiers then DeleteWordRight
-      else DeleteForward;
+      else if not DeleteSelection then DeleteForward;
     kcLeft:
-      if kmCtrl in K.Modifiers then MoveWordLeft
-      else MoveLeft;
+      if LExt then
+      begin
+        if kmCtrl in K.Modifiers then MoveWordLeftExtend else MoveLeftExtend;
+      end
+      else
+      begin
+        ClearSelection;
+        if kmCtrl in K.Modifiers then MoveWordLeft else MoveLeft;
+      end;
     kcRight:
-      if kmCtrl in K.Modifiers then MoveWordRight
-      else MoveRight;
-    kcHome:      MoveHome;
-    kcEnd:       MoveEnd;
+      if LExt then
+      begin
+        if kmCtrl in K.Modifiers then MoveWordRightExtend else MoveRightExtend;
+      end
+      else
+      begin
+        ClearSelection;
+        if kmCtrl in K.Modifiers then MoveWordRight else MoveRight;
+      end;
+    kcHome:
+      if LExt then MoveHomeExtend
+      else begin ClearSelection; MoveHome; end;
+    kcEnd:
+      if LExt then MoveEndExtend
+      else begin ClearSelection; MoveEnd; end;
   else Result := False;
   end;
 end;
@@ -348,6 +484,143 @@ begin Result := ColWidthUpTo(Text, Cursor); end;
 
 function TInputState.TextWidth: Integer;
 begin Result := Integer(StringDisplayWidth(Text)); end;
+
+{ ---- 选区 ---- }
+
+procedure TInputState.BeginSelect(APos: Integer);
+begin
+  SelAnchor := APos; SelHead := APos;
+end;
+
+procedure TInputState.UpdateSelect(APos: Integer);
+begin
+  SelHead := APos;
+end;
+
+procedure TInputState.ClearSelection;
+begin
+  SelAnchor := -1; SelHead := -1;
+end;
+
+function TInputState.HasSelection: Boolean;
+begin
+  Result := (SelAnchor >= 0) and (SelHead >= 0) and (SelAnchor <> SelHead);
+end;
+
+function TInputState.SelFrom: Integer;
+begin
+  if SelAnchor <= SelHead then Result := SelAnchor else Result := SelHead;
+end;
+
+function TInputState.SelTo: Integer;
+begin
+  if SelAnchor <= SelHead then Result := SelHead else Result := SelAnchor;
+end;
+
+function TInputState.SelectedText: AnsiString;
+begin
+  if HasSelection then
+    Result := Copy(Text, SelFrom + 1, SelTo - SelFrom)
+  else
+    Result := '';
+end;
+
+function TInputState.DeleteSelection: Boolean;
+var LHad: Boolean;
+begin
+  LHad := HasSelection;
+  if LHad then
+  begin
+    Delete(Text, SelFrom + 1, SelTo - SelFrom);
+    Cursor := SelFrom;
+    ClearSelection;
+  end;
+  Result := LHad;
+end;
+
+function TInputState.SelectWordAt(APos: Integer): Boolean;
+var S, E: Integer; Adv: TInputAdv;
+begin
+  Result := False;
+  if Length(Text) = 0 then Exit;
+  { 点在末图素之后:回退到最后一个图素再试(grok 双击行尾同语义) }
+  if APos >= Length(Text) then APos := PrevGraphemeByte(Text, Length(Text));
+  if Byte(Text[APos + 1]) = 32 then Exit;   { 点空白不选中 }
+  S := APos;
+  while (S > 0) and (Byte(Text[S]) <> 32) do
+    S := PrevGraphemeByte(Text, S);
+  E := APos;
+  while E < Length(Text) do
+  begin
+    Adv := InputGraphemeAt(Text[1], Length(Text), E);
+    Inc(E, Adv.ByteLen);
+    if E >= Length(Text) then Break;
+    if Byte(Text[E + 1]) = 32 then Break;
+  end;
+  SelAnchor := S; SelHead := E;
+  Cursor := E;   { neovim 风格:双击后光标落词尾 }
+  Result := True;
+end;
+
+procedure TInputState.SelectAll;
+begin
+  if Length(Text) = 0 then Exit;
+  SelAnchor := 0; SelHead := Length(Text);
+end;
+
+function TInputState.ColToBytePos(ACol: Integer): Integer;
+var P, W: Integer; Adv: TInputAdv;
+begin
+  { 点击显示列→字节偏移;宽字符落点夹到其起始字节 }
+  Result := 0;
+  if Length(Text) = 0 then Exit;
+  P := 0; W := 0;
+  while P < Length(Text) do
+  begin
+    Adv := InputGraphemeAt(Text[1], Length(Text), P);
+    if W + Adv.Width > ACol then Exit(P);
+    Inc(W, Adv.Width); Inc(P, Adv.ByteLen);
+  end;
+  Result := P;
+end;
+
+{ Shift 扩展移动:无选区先以当前光标为锚,再移动头 }
+
+procedure TInputState.MoveLeftExtend;
+begin
+  if not HasSelection then BeginSelect(Cursor);
+  MoveLeft; UpdateSelect(Cursor);
+end;
+
+procedure TInputState.MoveRightExtend;
+begin
+  if not HasSelection then BeginSelect(Cursor);
+  MoveRight; UpdateSelect(Cursor);
+end;
+
+procedure TInputState.MoveHomeExtend;
+begin
+  if not HasSelection then BeginSelect(Cursor);
+  MoveHome; UpdateSelect(Cursor);
+end;
+
+procedure TInputState.MoveEndExtend;
+begin
+  if not HasSelection then BeginSelect(Cursor);
+  MoveEnd; UpdateSelect(Cursor);
+end;
+
+procedure TInputState.MoveWordLeftExtend;
+begin
+  if not HasSelection then BeginSelect(Cursor);
+  MoveWordLeft; UpdateSelect(Cursor);
+end;
+
+procedure TInputState.MoveWordRightExtend;
+begin
+  if not HasSelection then BeginSelect(Cursor);
+  MoveWordRight; UpdateSelect(Cursor);
+end;
 
 { TInput }
 
@@ -360,6 +633,7 @@ begin
   LSelf.FStyle := TStyle.Default;
   LSelf.FPlaceholderStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
   LSelf.FCursorStyle := TStyle.Default.WithModifier([mbReversed]);
+  LSelf.FSelStyle := TStyle.Default.WithModifier([mbReversed]);
   LSelf.FBlock := nil;
   Result := LSelf;
 end;
@@ -379,6 +653,9 @@ begin FPlaceholderStyle := S; Result := Self; end;
 function TInput.WithCursorStyle(const S: TStyle): IInput;
 begin FCursorStyle := S; Result := Self; end;
 
+function TInput.WithSelectionStyle(const S: TStyle): IInput;
+begin FSelStyle := S; Result := Self; end;
+
 function TInput.WithBlock(ABlock: IBlock): IInput;
 begin FBlock := ABlock; Result := Self; end;
 
@@ -395,6 +672,7 @@ var
   DisplayText: AnsiString;
   VisibleW, CurCol, ScrollCol: Integer;
   P, Col: Integer;
+  HF, HT: Integer;
   Adv: TInputAdv;
 begin
   if AArea.IsEmpty then Exit;
@@ -460,6 +738,26 @@ begin
       ABuffer.SetStringN(Inner.X, Inner.Y,
         Copy(DisplayText, AState.ScrollX + 1, Length(DisplayText) - AState.ScrollX),
         VisibleW, FStyle);
+  end;
+
+  { 选区高亮:选区显示列与可见窗求交(遮罩态按图素计数),零分配 }
+  if AState.HasSelection() then
+  begin
+    if FMaskChar <> #0 then
+    begin
+      HF := GraphemeCountUpTo(AState.Text, AState.SelFrom()) - ScrollCol;
+      HT := GraphemeCountUpTo(AState.Text, AState.SelTo()) - ScrollCol;
+    end
+    else
+    begin
+      HF := ColWidthUpTo(DisplayText, AState.SelFrom()) - ScrollCol;
+      HT := ColWidthUpTo(DisplayText, AState.SelTo()) - ScrollCol;
+    end;
+    if HF < 0 then HF := 0;
+    if HT > VisibleW then HT := VisibleW;
+    if HT > HF then
+      ABuffer.SetStyle(TRect.Make(Inner.X + HF, Inner.Y, Word(HT - HF), 1),
+        FSelStyle);
   end;
 
   Col := CurCol - ScrollCol;

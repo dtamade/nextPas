@@ -7,7 +7,6 @@ program test_factory_server_name_scope_clarification;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -119,7 +118,7 @@ var
 begin
   TestHeader('Client one-shot ServerName is ignored on FreePascal');
 
-  LConfig := CreateDefaultConfig(sslCtxClient);
+  LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   LConfig.LibraryType := sslFreePascal;
   LConfig.ContextType := sslCtxClient;
   LConfig.ServerName := 'client-oneshot.example.com';
@@ -138,7 +137,7 @@ var
 begin
   TestHeader('Server one-shot ServerName is rejected');
 
-  LConfig := CreateDefaultConfig(sslCtxServer);
+  LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxServer));
   LConfig.LibraryType := sslFreePascal;
   LConfig.ContextType := sslCtxServer;
   LConfig.ServerName := 'server-oneshot.example.com';

@@ -3,10 +3,10 @@ program test_openssl_connection_peer_certificate_surface;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -16,8 +16,8 @@ uses
   nextpas.core.tls.openssl.api.stack,
   nextpas.core.tls.openssl.native_handle,
   nextpas.core.tls.openssl.x509.chain,
-  nextpas.core.tls.openssl.connection;
-
+  nextpas.core.tls.openssl.connection,
+  nextpas.core.tls.openssl.backed;
 var
   GLib: ISSLLibrary = nil;
   GLeafFixture: ISSLCertificate = nil;
@@ -101,14 +101,14 @@ begin
   GLeafFixture := TSSLFactory.CreateCertificate(sslOpenSSL);
   AssertTrue(GLeafFixture <> nil, 'OpenSSL leaf fixture certificate should be created');
   AssertTrue(
-    GLeafFixture.LoadFromFile('tests/certificate/test_certs/signer_cert.pem'),
+    GLeafFixture.LoadFromFile('certificate/test_certs/signer_cert.pem'),
     'OpenSSL leaf fixture certificate should load'
   );
 
   GIssuerFixture := TSSLFactory.CreateCertificate(sslOpenSSL);
   AssertTrue(GIssuerFixture <> nil, 'OpenSSL issuer fixture certificate should be created');
   AssertTrue(
-    GIssuerFixture.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'),
+    GIssuerFixture.LoadFromFile('certificate/test_certs/ca_cert.pem'),
     'OpenSSL issuer fixture certificate should load'
   );
 
@@ -189,7 +189,7 @@ begin
   LStream := TMemoryStream.Create;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(AContext, LStream);
+    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
@@ -227,7 +227,7 @@ begin
   LConn := nil;
   OverridePeerCertificateAPIs;
   try
-    LConn := TOpenSSLConnection.Create(LContext, LStream);
+    LConn := TOpenSSLConnection.Create(LContext, TStreamWrapper.Create(LStream));
 
     LPeerCert := LConn.GetPeerCertificate;
     AssertTrue(LPeerCert <> nil,

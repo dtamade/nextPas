@@ -17,6 +17,7 @@ type
   EConvertError = SysUtils.EConvertError;
   EAssertionFailed = SysUtils.EAssertionFailed;
   EAbort = SysUtils.EAbort;
+  EArgumentException = SysUtils.EArgumentException;
 {$ELSE}
 type
   { Base Exception class — nextPas native implementation.
@@ -37,6 +38,7 @@ type
   EConvertError = class(Exception);
   EAssertionFailed = class(Exception);
   EAbort = class(Exception);
+  EArgumentException = class(Exception);
 {$ENDIF}
 
   TErrorCategory = (
@@ -216,6 +218,12 @@ type
   EOutOfMemory = class(EOutOfMemoryError);
 
 function ErrorCategoryToString(const ACategory: TErrorCategory): string;
+
+{ Exception backtrace — centralized here so L0 facades don't use SysUtils directly.
+  Single-source over FPC RTL raiseframe chain; inline zero-copy forward. }
+function ExceptAddr: Pointer; inline;
+function ExceptFrameCount: LongInt; inline;
+function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 
 implementation
 
@@ -608,5 +616,41 @@ constructor EOutOfMemoryError.Create(const AMessage: string);
 begin
   inherited Create(AMessage);
 end;
+
+{ Exception backtrace — inline single-source delegation to FPC RTL }
+{$IFDEF FPC}
+function ExceptAddr: Pointer; inline;
+begin
+  Result := SysUtils.ExceptAddr;
+end;
+
+function ExceptFrameCount: LongInt; inline;
+begin
+  Result := SysUtils.ExceptFrameCount;
+end;
+
+function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
+begin
+  if (AIndex < 0) or (AIndex >= SysUtils.ExceptFrameCount) then
+    Result := nil
+  else
+    Result := SysUtils.ExceptFrames[AIndex];
+end;
+{$ELSE}
+function ExceptAddr: Pointer; inline;
+begin
+  Result := nil;
+end;
+
+function ExceptFrameCount: LongInt; inline;
+begin
+  Result := 0;
+end;
+
+function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
+begin
+  Result := nil;
+end;
+{$ENDIF}
 
 end.

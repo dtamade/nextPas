@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-api_file="$ROOT_DIR/src/nextpas.core.tls.wolfssl.api.pas"
-conn_file="$ROOT_DIR/src/nextpas.core.tls.wolfssl.connection.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+api_file="$ROOT_DIR/core/src/nextpas.core.tls.wolfssl.api.pas"
+conn_file="$ROOT_DIR/core/src/nextpas.core.tls.wolfssl.connection.pas"
 
 if ! grep -F -q -- "TwolfSSL_GetHmacSize = function(ssl: PWOLFSSL): Integer; cdecl;" "$api_file"; then
   echo "[FAIL] WolfSSL API is missing wolfSSL_GetHmacSize type binding"

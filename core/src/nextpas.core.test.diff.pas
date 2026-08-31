@@ -41,6 +41,7 @@ begin
   case LCfg.AnsiMode of
     amOn:  Exit(True);
     amOff: Exit(False);
+    amAuto: ; { 落穿到下方 env 探测 }
   end;
   { amAuto: env only (L0 isolation — no isatty) }
   if string(platform_env_get_str('NO_COLOR')) <> '' then

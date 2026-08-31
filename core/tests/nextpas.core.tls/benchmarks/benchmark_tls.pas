@@ -3,7 +3,9 @@ program benchmark_tls;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   benchmark_utils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
@@ -12,7 +14,8 @@ uses
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.core,
-  fafafa.ssl;
+  nextpas.core.tls.openssl.base,
+  SysUtils;
 
 const
   PORT = '8443'; // BIO uses string port
@@ -59,7 +62,8 @@ begin
   LAcceptBio := BIO_new_accept(PAnsiChar(PORT));
   if LAcceptBio = nil then RaiseLastOSError;
 
-  if BIO_do_accept(LAcceptBio) <= 0 then RaiseLastOSError;
+  // BIO_do_accept is an OpenSSL macro (BIO_ctrl(b, BIO_C_DO_STATE_MACHINE, 0, nil))
+  if BIO_ctrl(LAcceptBio, 101, 0, nil) <= 0 then RaiseLastOSError;
 
   LBench := TBenchmark.Create('TLS 1.3 Handshake (Loopback)');
   LBench.SetIterations(ITERATIONS);
@@ -76,7 +80,7 @@ begin
     end;
 
     // Accept connection
-    if BIO_do_accept(LAcceptBio) <= 0 then
+    if BIO_ctrl(LAcceptBio, 101, 0, nil) <= 0 then
     begin
       BIO_free(LClientBio);
       Continue;
@@ -85,8 +89,8 @@ begin
     LServerBio := BIO_pop(LAcceptBio);
 
     // Get socket handles
-    BIO_get_fd(LClientBio, @LClientSock);
-    BIO_get_fd(LServerBio, @LServerSock);
+    BIO_ctrl(LClientBio, 105, 0, @LClientSock);
+    BIO_ctrl(LServerBio, 105, 0, @LServerSock);
 
     // Perform TLS handshake setup
     LServer := LServerCtx.CreateConnection(THandle(LServerSock));

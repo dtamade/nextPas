@@ -3,12 +3,13 @@ program test_connection_basic;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.factory,
-
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.api.core,
-  fafafa.ssl;
+  nextpas.core.io.stream_adapter;
 
 var
   LContext: ISSLContext;
@@ -59,7 +60,9 @@ begin
   try
     // TSSLFactory is a class - no instance initialization needed
 
-    LConfig := CreateDefaultConfig(sslCtxClient);
+    LConfig := Default(TSSLConfig);
+    LConfig.LogLevel := sslLogError; // Library-scoped default; factory request paths reject overrides
+    LConfig.ContextType := sslCtxClient;
     LConfig.LibraryType := sslOpenSSL;
     LConfig.ProtocolVersions := [sslProtocolTLS12, sslProtocolTLS13];
     LConfig.VerifyMode := [sslVerifyNone]; // No verification for basic test
@@ -107,7 +110,7 @@ begin
     // Create a memory stream for the connection
     LStream := TMemoryStream.Create;
     try
-      LConnection := LContext.CreateConnection(LStream);
+      LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, True));
       if LConnection <> nil then
         TestPassed('Connection creation')
       else

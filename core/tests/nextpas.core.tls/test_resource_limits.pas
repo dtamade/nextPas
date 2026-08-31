@@ -12,12 +12,12 @@ program test_resource_limits;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.factory,
   nextpas.core.system.sysutils, nextpas.core.system.classes, StrUtils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,
-  nextpas.core.tls.cert;
-
+  nextpas.core.tls.cert,
+  nextpas.core.tls.openssl.backed;
 type
   TTestResult = record
     TestName: string;
@@ -125,7 +125,7 @@ end;
 { Test 2: Certificate chain depth limit }
 procedure TestCertificateChainDepthLimit;
 const
-  CHAIN_FIXTURE = 'tests/certificate/test_certs/deep-chain-over10.pem';
+  CHAIN_FIXTURE = 'certificate/test_certs/deep-chain-over10.pem';
 var
   Cert: ISSLCertificate;
 begin

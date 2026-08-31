@@ -6,7 +6,6 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.cert,
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.cert.advanced,
@@ -17,8 +16,8 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.pem,
-  nextpas.core.tls.openssl.api.pkcs12;
-
+  nextpas.core.tls.openssl.api.pkcs12,
+  nextpas.core.tls.openssl.backed;
 const
   PKCS12_PASSWORD = 'test123';
 

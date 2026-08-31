@@ -41,6 +41,9 @@ function FsGlob(const ADir, APattern: string): TStringArray; overload;
  *}
 function FsGlob(const APattern: string): TStringArray; overload;
 
+{** @desc 非递归列出目录中匹配模式的文件名（门面 Glob 单源实现） *}
+function Glob(const ADir, APattern: string): TStringArray;
+
 implementation
 
 uses
@@ -342,6 +345,37 @@ end;
 function FsGlob(const APattern: string): TStringArray;
 begin
   Result := FsGlob('.', APattern);
+end;
+
+function Glob(const ADir, APattern: string): TStringArray;
+var
+  LEntries: TDirEntryArray;
+  LCount, I: Integer;
+begin
+  Result := nil;
+  try
+    LEntries := FsReadDir(ADir);
+  except
+    on E: ENotFoundError do
+      Exit;
+  end;
+  LCount := 0;
+  for I := 0 to High(LEntries) do
+  begin
+    if FsPathMatch(APattern, LEntries[I].Name) then
+    begin
+      if LCount >= Length(Result) then
+      begin
+        if Length(Result) = 0 then
+          SetLength(Result, 16)
+        else
+          SetLength(Result, Length(Result) * 2);
+      end;
+      Result[LCount] := FsPathJoin([ADir, LEntries[I].Name]);
+      Inc(LCount);
+    end;
+  end;
+  SetLength(Result, LCount);
 end;
 
 end.

@@ -20,6 +20,7 @@ uses
   nextpas.core.time.ticker,
   nextpas.core.time.period,
   nextpas.core.time.format,
+  nextpas.core.time.bucket,
   nextpas.core.time.cpu;
 
 type
@@ -54,8 +55,14 @@ function TryParseISO8601DateTime(const AStr: string; out ADT: nextpas.core.time.
 function FormatDateTime(const APattern: string; const ADT: TDateTime): string; inline;
 function DateTimeToStr(const ADT: TDateTime): string; inline;
 function GetTickCount64: UInt64; inline;
+procedure MsSleep(const AMilliseconds: UInt64); inline;
 function DateToStr(const ADT: TDateTime): string; inline;
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
+{ UTC 时间桶键：epoch 秒 → 定宽补零字符串（字典序=时间序）。 }
+function TimeBucketKey(const AUnixSeconds: Int64;
+  const ABucketSeconds: Int64 = 3600; const AWidth: Integer = 12): string; inline;
+{ RFC3339 UTC 序列化：epoch 秒 → 'YYYY-MM-DDTHH:MM:SSZ'（iso8601 Format 方向）。 }
+function FormatISO8601UTC(const AUnixSeconds: Int64): string; inline;
 function EncodeTime(const AHour, AMinute, ASecond, AMSec: Word): TDateTime;
 procedure DecodeDate(const AValue: TDateTime; out AYear, AMonth, ADay: Word);
 procedure DecodeTime(const AValue: TDateTime; out AHour, AMinute, ASecond, AMSec: Word);
@@ -178,6 +185,23 @@ end;
 function GetTickCount64: UInt64;
 begin
   Result := nextpas.core.time.cpu.GetTickCount64;
+end;
+
+procedure MsSleep(const AMilliseconds: UInt64);
+begin
+  nextpas.core.time.sleep.MsSleep(AMilliseconds);
+end;
+
+function TimeBucketKey(const AUnixSeconds: Int64;
+  const ABucketSeconds: Int64; const AWidth: Integer): string;
+begin
+  Result := nextpas.core.time.bucket.TimeBucketKey(
+    AUnixSeconds, ABucketSeconds, AWidth);
+end;
+
+function FormatISO8601UTC(const AUnixSeconds: Int64): string;
+begin
+  Result := nextpas.core.time.iso8601.FormatISO8601UTC(AUnixSeconds);
 end;
 
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;

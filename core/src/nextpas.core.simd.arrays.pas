@@ -24,9 +24,9 @@ x86_64 可在 Scalar/SSE2/AVX2/AVX-512 等可派发候选中选择；AArch64 def
 
 ## Declaration
 
-Author:    fafafaStudio
+Author:    nextpas.core
 Contact:   dtamade@gmail.com | QQ Group: 685403987 | QQ:179033731
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.simd.arrays;

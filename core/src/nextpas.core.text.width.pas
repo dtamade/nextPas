@@ -51,6 +51,18 @@ function StringDisplayWidth(const AData: PByte; const ALen: SizeUInt): SizeUInt;
  *}
 function StringDisplayWidth(const AStr: AnsiString): SizeUInt; overload; inline;
 
+{**
+ * @desc 按显示列宽截取 AStr 前缀，截断点落在完整 grapheme cluster 边界。
+ * 自首簇起累计显示宽度，本簇放不下（LCols+Width > AMaxCols）则该簇整体
+ * 丢弃并停止——绝不劈开多字节字符/emoji 组合簇，也不追加省略号。
+ * @params
+ *   AStr      UTF-8 源文本
+ *   AMaxCols  最大显示列宽
+ * @return 截取前缀（空串/AMaxCols=0 时返回 ''）
+ * @note 两遍法：先定位截断字节位，再一次性分配拷贝（无逐簇拼接）。
+ *}
+function TruncateToWidth(const AStr: AnsiString; AMaxCols: SizeUInt): AnsiString;
+
 implementation
 
 uses
@@ -192,6 +204,36 @@ begin
   if Length(AStr) = 0 then
     Exit(0);
   Result := StringDisplayWidth(@AStr[1], Length(AStr));
+end;
+
+function TruncateToWidth(const AStr: AnsiString; AMaxCols: SizeUInt): AnsiString;
+var
+  LLen, LPos, LCols, LCut: SizeUInt;
+  LGR: TGraphemeResult;
+begin
+  LLen := Length(AStr);
+  if (AMaxCols = 0) or (LLen = 0) then
+    Exit('');
+
+  { 第一遍：逐簇累计宽度，定位截断字节位（完整簇边界） }
+  LPos := 0;
+  LCols := 0;
+  while LPos < LLen do
+  begin
+    LGR := GraphemeNext(@AStr[LPos + 1], LLen - LPos);
+    if (LGR.ByteLen <= 0) or (LCols + LGR.Width > AMaxCols) then
+      Break;                 { 防御坏簇 / 本簇放不下整簇丢弃 }
+    Inc(LCols, LGR.Width);
+    Inc(LPos, LGR.ByteLen);
+  end;
+
+  { 第二遍：一次分配 + 整体拷贝 }
+  LCut := LPos;
+  if LCut = 0 then
+    Exit('');
+  Result := '';
+  SetLength(Result, LCut);
+  Move(AStr[1], Result[1], LCut);
 end;
 
 {$ifdef CPUX86_64}

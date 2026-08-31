@@ -1,5 +1,8 @@
 unit nextpas.core.io.reactor.kqueue;
 
+{** @desc kqueue 反应器。写路径不拷贝：ABuf 须保持有效直到回调。
+       短写回调 AResult=本次实际送达，不自动续发；一 op 一回调。 *}
+
 {$I nextpas.core.settings.inc}
 
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
@@ -71,6 +74,7 @@ type
     procedure FreeOp(AIdx: Int32);
     function SetNonBlocking(AFd: Int32): Boolean;
     function RegisterFilter(AFd: Int32; AFilter: Int16; AData: UInt64): Boolean;
+    procedure RemoveFilter(AFd: Int32; AFilter: Int16);
     procedure RemoveFd(AFd: Int32);
     procedure ReleasePendingOps(AResult: Int32);
     procedure DispatchEvent(const AEv: TKEvent);
@@ -112,6 +116,7 @@ type
     function HasPending: Boolean;
     { Drop one pending op with matching Context and deliver -ECANCELED. }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    function CancelByFd(AFd: Int32): Boolean;
   end;
 
 implementation
@@ -263,6 +268,19 @@ begin
   Result := kevent(FKqFd, @LChange, 1, nil, 0, nil) >= 0;
 end;
 
+procedure TKqueueReactor.RemoveFilter(AFd: Int32; AFilter: Int16);
+var
+  LChange: TKEvent;
+begin
+  if FKqFd < 0 then
+    Exit;
+  FillChar(LChange, SizeOf(LChange), 0);
+  LChange.Ident := PtrUInt(AFd);
+  LChange.Filter := AFilter;
+  LChange.Flags := EV_DELETE;
+  kevent(FKqFd, @LChange, 1, nil, 0, nil);
+end;
+
 procedure TKqueueReactor.RemoveFd(AFd: Int32);
 var
   LChanges: array[0..1] of TKEvent;
@@ -357,7 +375,7 @@ begin
     begin
       LRes := read(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_READ);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -367,7 +385,7 @@ begin
     begin
       LRes := write(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_WRITE);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -383,7 +401,7 @@ begin
       end
       else
         LRes32 := KqueueResultFromSyscall(-1);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_READ);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -400,7 +418,7 @@ begin
         LRes32 := 0
       else
         LRes32 := -LOptVal;
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_WRITE);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -410,7 +428,7 @@ begin
     begin
       LRes := send(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_WRITE);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -420,7 +438,7 @@ begin
     begin
       LRes := recv(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_READ);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -431,7 +449,8 @@ begin
       LRes := sendto(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
         FOps[AIdx].Flags, FOps[AIdx].Addr, socklen_t(FOps[AIdx].AddrLenVal));
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      { 只摘 WRITE：同一 UDP fd 上 EVFILT_READ 的 RecvFrom 必须留下 }
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_WRITE);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -442,7 +461,7 @@ begin
       LRes := recvfrom(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
         FOps[AIdx].Flags, FOps[AIdx].Addr, FOps[AIdx].AddrLen);
       LRes32 := KqueueResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
+      RemoveFilter(FOps[AIdx].Fd, EVFILT_READ);
       FreeOp(AIdx);
       if Assigned(LCallback) then
         LCallback(UInt64(AIdx), LRes32, LContext);
@@ -506,6 +525,8 @@ function TKqueueReactor.AsyncWrite(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   AOffset: Int64; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then
   begin
@@ -520,6 +541,15 @@ begin
   if not SetNonBlocking(AFd) then
   begin
     Result := False;
+    Exit;
+  end;
+  LRes := write(AFd, ABuf, ALen);
+  LRes32 := KqueueResultFromSyscall(LRes);
+  if (LRes32 <> -ESysEAGAIN) and (LRes32 <> -EINTR_LOCAL) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
     Exit;
   end;
   LIdx := AllocOp(opWrite, AFd, ABuf, ALen, AOffset, 0, nil, nil, 0,
@@ -596,6 +626,8 @@ function TKqueueReactor.AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   AFlags: Int32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then
   begin
@@ -605,6 +637,15 @@ begin
   if not SetNonBlocking(AFd) then
   begin
     Result := False;
+    Exit;
+  end;
+  LRes := send(AFd, ABuf, ALen, AFlags);
+  LRes32 := KqueueResultFromSyscall(LRes);
+  if (LRes32 <> -ESysEAGAIN) and (LRes32 <> -EINTR_LOCAL) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
     Exit;
   end;
   LIdx := AllocOp(opSend, AFd, ABuf, ALen, -1, AFlags, nil, nil, 0,
@@ -641,6 +682,8 @@ function TKqueueReactor.AsyncSendTo(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then
   begin
@@ -655,6 +698,17 @@ begin
   if not SetNonBlocking(AFd) then
   begin
     Result := False;
+    Exit;
+  end;
+  { 与 epoll 同：先 sendto，成功不动 kqueue，避免 EVFILT_WRITE 完成时
+    RemoveFd 把 EVFILT_READ 一并删掉。 }
+  LRes := sendto(AFd, ABuf, ALen, AFlags, AAddr, socklen_t(AAddrLen));
+  LRes32 := KqueueResultFromSyscall(LRes);
+  if (LRes32 <> -ESysEAGAIN) and (LRes32 <> -EINTR_LOCAL) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
     Exit;
   end;
   LIdx := AllocOp(opSendTo, AFd, ABuf, ALen, -1, AFlags, AAddr, nil, AAddrLen,
@@ -813,6 +867,30 @@ begin
   if Assigned(LCallback) then
     LCallback(LUserData, -ESysECANCELED, LContext);
   Result := True;
+end;
+
+function TKqueueReactor.CancelByFd(AFd: Int32): Boolean;
+var
+  LI: UInt32;
+  LContexts: array of Pointer;
+  LCount, LJ: UInt32;
+begin
+  Result := False;
+  if (AFd < 0) or (not IsValid) then
+    Exit;
+  if FOpCount = 0 then
+    Exit;
+  SetLength(LContexts, FOpCount);
+  LCount := 0;
+  for LI := 0 to FOpCount - 1 do
+    if FOps[LI].Active and (FOps[LI].Fd = AFd) then
+    begin
+      LContexts[LCount] := FOps[LI].Context;
+      Inc(LCount);
+    end;
+  for LJ := 0 to LCount - 1 do
+    if TryCancelByContext(LContexts[LJ]) then
+      Result := True;
 end;
 
 function TKqueueReactor.PollWait(const ATimeoutMs: Int64): Int32;

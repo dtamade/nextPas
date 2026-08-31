@@ -81,7 +81,7 @@ Examples:
 # Generate test certificate and key
 openssl genrsa -out /tmp/test_key.pem 2048
 openssl req -new -x509 -key /tmp/test_key.pem -out /tmp/test_cert.pem -days 365 \
-  -subj "/CN=Test Certificate/O=fafafa.ssl/C=CN"
+  -subj "/CN=Test Certificate/O=nextpas.ssl/C=CN"
 
 # PKCS12 (no password)
 openssl pkcs12 -export -out pkcs12_valid_nopass_v1.p12 \

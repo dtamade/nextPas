@@ -3,11 +3,11 @@ program test_freepascal_tls13_early_data;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, Process,
+  nextpas.core.system.sysutils, SysUtils, nextpas.core.system.classes, nextpas.core.time, Process,
   {$IFDEF UNIX}BaseUnix, Unix,{$ENDIF}
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
+  nextpas.core.tls.tls,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -17,18 +17,20 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.tls.tls13.posthandshake,
-  nextpas.core.tls.crypto.hash,
+  nextpas.core.crypto.hash,
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.freepascal.earlydatareplay,
   nextpas.core.tls.freepascal.earlydatareplay.dirstore,
   nextpas.core.tls.freepascal.earlydatareplay.fileprovider,
-  nextpas.core.tls.freepascal.session;
-
+  nextpas.core.tls.freepascal.session,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 type
   TScriptedServerMode = (ssmInitial, ssmResumedAccept, ssmResumedReject);
   TScriptedClientMode = (scmInitial, scmResumedAccept, scmResumedReject);
@@ -1334,7 +1336,7 @@ type
   private
     FTempFileName: string;
   protected
-    function OpenWriteFileStream(const AFileName: string): TFileStream; override;
+    function OpenWriteFileStream(const AFileName: string): IStream; override;
   public
     constructor Create(const AFileName: string);
   end;
@@ -1591,7 +1593,7 @@ end;
 
 function TScriptedTempWriteOpenDeniedReplayStore.OpenWriteFileStream(
   const AFileName: string
-): TFileStream;
+): IStream;
 begin
   if AFileName = FTempFileName then
     raise Exception.Create('Scripted replay-store temp write open denied');
@@ -2171,7 +2173,7 @@ begin
 
   LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('CRASH'), True);
   try
-    LConn := LCtx.CreateConnection(LAcceptStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Runtime crash-accept helper connection should expose early-data interface');
     AssertTrue(LConn.Accept,
@@ -2406,7 +2408,7 @@ begin
   begin
     LReplayStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('PONG'), False);
     try
-      LConn := LCtx.CreateConnection(LReplayStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LReplayStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Runtime replay probe helper connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -2435,7 +2437,7 @@ begin
   begin
     LReplayStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('PONG'), True);
     try
-      LConn := LCtx.CreateConnection(LReplayStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LReplayStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Runtime replay probe helper accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -2457,7 +2459,7 @@ begin
     LResumptionCache.StoreResumptionSession(LReplaySession);
     LReplayRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('REPL'), False);
     try
-      LConn := LCtx.CreateConnection(LReplayRejectStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LReplayRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Runtime replay probe helper rejected connection should expose early-data interface after the child boundary is materialized');
       AssertTrue(LConn.Accept,
@@ -2484,7 +2486,7 @@ begin
 
   LFreshAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LFreshSession, BytesOf('FRESH'), True);
   try
-    LConn := LCtx.CreateConnection(LFreshAcceptStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LFreshAcceptStream, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Runtime replay probe helper fresh connection should expose early-data interface');
     AssertTrue(LConn.Accept,
@@ -2872,8 +2874,8 @@ begin
   ACtx.SetSessionCacheMode(True);
   ACtx.SetSessionTimeout(7200);
   ACtx.SetSessionCacheSize(8);
-  ACtx.LoadCertificate('tests/certificate/test_certs/signer_cert.pem');
-  ACtx.LoadPrivateKey('tests/certificate/test_certs/signer_key.pem');
+  ACtx.LoadCertificate('certificate/test_certs/signer_cert.pem');
+  ACtx.LoadPrivateKey('certificate/test_certs/signer_key.pem');
 end;
 
 function CaptureServerIssuedSession(ACtx: ISSLContext): ISSLSession;
@@ -2883,7 +2885,7 @@ var
 begin
   LStream := TScriptedEarlyDataClientStream.CreateInitial;
   try
-    LConn := ACtx.CreateConnection(LStream);
+    LConn := ACtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn.Accept, 'Initial server accept should succeed before ticket capture');
     Result := LStream.CapturedSession;
     AssertTrue(Result <> nil, 'Initial server accept should capture a resumable session');
@@ -2965,7 +2967,7 @@ begin
 
   LStream := TScriptedEarlyDataClientStream.CreateResumed(ASession, AEarlyData, True);
   try
-    LConn := ACtx.CreateConnection(LStream);
+    LConn := ACtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       ALabel + ' connection should expose early-data interface');
     AssertTrue(LConn.Accept,
@@ -2999,7 +3001,7 @@ begin
 
   LStream := TScriptedEarlyDataClientStream.CreateResumed(ASession, AEarlyData, False);
   try
-    LConn := ACtx.CreateConnection(LStream);
+    LConn := ACtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       ALabel + ' connection should expose early-data interface');
     AssertTrue(LConn.Accept,
@@ -3047,7 +3049,7 @@ begin
   LInitialCtx.SetVerifyMode([]);
   LInitialStream := TScriptedEarlyDataServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
   try
-    LConn := LInitialCtx.CreateConnection(LInitialStream);
+    LConn := LInitialCtx.CreateConnection(TStreamWrapper.Create(LInitialStream, False));
     (LConn as ISSLClientConnection).SetServerName('example.com');
     AssertTrue(LConn.Connect, 'Initial handshake should succeed for early-data capture');
     LSession := RequireSessionResumption(
@@ -3069,7 +3071,7 @@ begin
 
   LAcceptStream := TScriptedEarlyDataServerStream.CreateResumed(LSession, True);
   try
-    LConn := LResumedCtx.CreateConnection(LAcceptStream);
+    LConn := LResumedCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Resumed client connection should expose early-data connection interface');
     RequireSessionResumption(
@@ -3098,7 +3100,7 @@ begin
 
   LRejectStream := TScriptedEarlyDataServerStream.CreateResumed(LSession, False);
   try
-    LConn := LResumedCtx.CreateConnection(LRejectStream);
+    LConn := LResumedCtx.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Rejected-path client connection should expose early-data connection interface');
     RequireSessionResumption(
@@ -3135,7 +3137,11 @@ var
   LRejectStream: TScriptedEarlyDataServerStream;
   LSession: ISSLSession;
   LConnector: TSSLConnector;
-  LTLSStream: TSSLStream;
+  LConnAccess: ISSLStreamConnectionAccess;
+  LConn: ISSLConnection;
+  // Hold the IStream interface so the underlying TSSLStream stays alive:
+  // casting to the raw class would drop the only reference and free it immediately.
+  LTLSStream: IStream;
 begin
   LInitialCtx := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   AssertTrue(LInitialCtx <> nil, 'Initial connector client context should be created');
@@ -3143,16 +3149,19 @@ begin
   LInitialCtx.SetVerifyMode([]);
   LInitialStream := TScriptedEarlyDataServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
   try
-    LTLSStream := TSSLConnector.FromContext(LInitialCtx)
-      .ConnectStream(LInitialStream, 'example.com');
+    LConnector := TSSLConnector.FromContext(LInitialCtx);
+    LTLSStream := LConnector.ConnectStream(
+      TStreamWrapper.Create(LInitialStream, False), 'example.com');
     try
+      AssertTrue(Supports(LTLSStream, ISSLStreamConnectionAccess, LConnAccess),
+        'Initial connector stream should expose connection access interface');
       LSession := RequireSessionResumption(
-        LTLSStream.Connection,
+        LConnAccess.GetConnection,
         'Initial connector handshake connection should expose session-resumption owner path'
       ).GetSession;
       AssertTrue(LSession <> nil, 'Initial connector handshake should capture resumable session');
     finally
-      LTLSStream.Free;
+      LTLSStream := nil;
     end;
   finally
     LInitialStream.Free;
@@ -3172,11 +3181,14 @@ begin
     LConnector := TSSLConnector.FromContext(LResumedCtx)
       .WithSession(LSession)
       .WithEarlyData(BytesOf('PING'));
-    LTLSStream := LConnector.ConnectStream(LAcceptStream, 'example.com');
+    LTLSStream := LConnector.ConnectStream(TStreamWrapper.Create(LAcceptStream, False), 'example.com');
     AssertTrue(LTLSStream <> nil, 'Connector accepted early-data handshake should succeed');
-    AssertTrue(Supports(LTLSStream.Connection, ISSLEarlyDataConnection, LEarlyConn),
+    AssertTrue(Supports(LTLSStream, ISSLStreamConnectionAccess, LConnAccess),
+      'Connector accepted-path stream should expose connection access interface');
+    LConn := LConnAccess.GetConnection;
+    AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Connector accepted-path connection should expose early-data connection interface');
-    if Supports(LTLSStream.Connection, ISSLEarlyDataConnection, LEarlyConn) then
+    if Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
       AssertTrue(LEarlyConn.GetEarlyDataStatus = sslEarlyDataAccepted,
         'Connector accepted-path client should report accepted early-data status');
     AssertTrue(BytesEqual(BytesOf('PING'), LAcceptStream.CapturedEarlyData),
@@ -3184,7 +3196,7 @@ begin
     AssertTrue(LAcceptStream.ObservedEndOfEarlyData,
       'Connector accepted-path should still send EndOfEarlyData before Finished');
   finally
-    LTLSStream.Free;
+    LTLSStream := nil;
     LAcceptStream.Free;
   end;
 
@@ -3194,11 +3206,14 @@ begin
     LConnector := TSSLConnector.FromContext(LResumedCtx)
       .WithSession(LSession)
       .WithEarlyData(BytesOf('NOPE'));
-    LTLSStream := LConnector.ConnectStream(LRejectStream, 'example.com');
+    LTLSStream := LConnector.ConnectStream(TStreamWrapper.Create(LRejectStream, False), 'example.com');
     AssertTrue(LTLSStream <> nil, 'Connector rejected early-data handshake should still succeed');
-    AssertTrue(Supports(LTLSStream.Connection, ISSLEarlyDataConnection, LEarlyConn),
+    AssertTrue(Supports(LTLSStream, ISSLStreamConnectionAccess, LConnAccess),
+      'Connector rejected-path stream should expose connection access interface');
+    LConn := LConnAccess.GetConnection;
+    AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Connector rejected-path connection should expose early-data connection interface');
-    if Supports(LTLSStream.Connection, ISSLEarlyDataConnection, LEarlyConn) then
+    if Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
       AssertTrue(LEarlyConn.GetEarlyDataStatus = sslEarlyDataRejected,
         'Connector rejected-path client should report rejected early-data status');
     AssertTrue(Length(LRejectStream.CapturedEarlyData) = 0,
@@ -3206,7 +3221,7 @@ begin
     AssertTrue(not LRejectStream.ObservedEndOfEarlyData,
       'Connector reject path should not send EndOfEarlyData');
   finally
-    LTLSStream.Free;
+    LTLSStream := nil;
     LRejectStream.Free;
   end;
 end;
@@ -3226,7 +3241,7 @@ begin
   LCtx.SetPreferredVersion(sslProtocolTLS13);
   LTransport := TMemoryStream.Create;
   try
-    LConn := LCtx.CreateConnection(LTransport);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LTransport, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Client connection should expose early-data connection interface for precondition checks');
     if Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
@@ -3246,7 +3261,7 @@ begin
   LTransport := TMemoryStream.Create;
   LSession := BuildManualSession('zero-limit', 0);
   try
-    LConn := LCtx.CreateConnection(LTransport);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LTransport, False));
     RequireSessionResumption(
       LConn,
       'Enabled client connection should expose session-resumption owner path'
@@ -3289,7 +3304,7 @@ begin
 
   LStream1 := TScriptedEarlyDataClientStream.CreateInitial;
   try
-    LConn := LCtx.CreateConnection(LStream1);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream1, False));
     AssertTrue(LConn.Accept, 'Initial server accept should succeed before early-data resumption tests');
     LSession := LStream1.CapturedSession;
     AssertTrue(LSession <> nil, 'Initial server accept should yield resumable session with early-data limit');
@@ -3301,7 +3316,7 @@ begin
 
   LStream2 := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
   try
-    LConn := LCtx.CreateConnection(LStream2);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream2, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Accepted server connection should expose early-data connection interface');
     AssertTrue(LConn.Accept, 'Accepted early-data server handshake should succeed');
@@ -3320,7 +3335,7 @@ begin
 
   LStream3 := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
   try
-    LConn := LCtx.CreateConnection(LStream3);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream3, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Replay-rejected server connection should expose early-data connection interface');
     AssertTrue(LConn.Accept, 'Replay-rejected early-data server handshake should still resume successfully');
@@ -3398,7 +3413,7 @@ begin
 
   LStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), False);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Issue-only resumed server connection should expose early-data interface');
     AssertTrue(LConn.Accept, 'Issue-only resumed handshake should still succeed');
@@ -3450,7 +3465,7 @@ begin
 
   LTransport := TMemoryStream.Create;
   try
-    LConn := LClientCtx.CreateConnection(LTransport);
+    LConn := LClientCtx.CreateConnection(TStreamWrapper.Create(LTransport, False));
     RequireSessionResumption(
       LConn,
       'Configured-limit client connection should expose session-resumption owner path'
@@ -3629,7 +3644,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx.CreateConnection(LAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Default durable runtime restart accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -3673,7 +3688,7 @@ begin
       True
     );
     try
-      LConn := LCtx.CreateConnection(LFreshAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LFreshAcceptStream, False));
       AssertTrue(LConn.Accept,
         'Default durable replay-store should still accept a fresh resumed session after restart replay rejection');
     finally
@@ -3719,7 +3734,7 @@ begin
 
   LInitialStream := TScriptedEarlyDataClientStream.CreateInitial;
   try
-    LConn := LCtx.CreateConnection(LInitialStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LInitialStream, False));
     AssertTrue(LConn.Accept, 'Initial server accept should succeed before custom replay-ledger resumed test');
     LSession := LInitialStream.CapturedSession;
     AssertTrue(LSession <> nil, 'Initial server accept should yield resumable session for custom replay-ledger test');
@@ -3729,7 +3744,7 @@ begin
 
   LReplayStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), False);
   try
-    LConn := LCtx.CreateConnection(LReplayStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LReplayStream, False));
     AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
       'Replaceable replay-ledger connection should expose early-data interface');
     AssertTrue(LConn.Accept, 'Custom replay-ledger rejected early-data server handshake should still succeed');
@@ -3857,7 +3872,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Provider-backed accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -3873,7 +3888,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Provider-backed replay-rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -4151,7 +4166,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Store-backed helper accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -4167,7 +4182,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Store-backed helper rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -4232,7 +4247,7 @@ begin
     LSession := CaptureServerIssuedSession(LCtx);
     LReplayStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('BANG'), False);
     try
-      LConn := LCtx.CreateConnection(LReplayStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LReplayStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Store-backed helper fail-closed runtime connection should expose early-data interface');
 
@@ -5581,7 +5596,7 @@ begin
 
         LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('LOCK'), False);
         try
-          LConn := LCtx.CreateConnection(LRejectStream);
+          LConn := LCtx.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
           AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
             'Runtime directory lock-contention rejected connection should expose early-data interface');
           AssertTrue(LConn.Accept,
@@ -5610,7 +5625,7 @@ begin
         LFreshSession := CaptureServerIssuedSession(LCtx);
         LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LFreshSession, BytesOf('OPEN'), True);
         try
-          LConn := LCtx.CreateConnection(LAcceptStream);
+          LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
           AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
             'Runtime directory lock-contention fresh connection should expose early-data interface');
           AssertTrue(LConn.Accept,
@@ -7327,7 +7342,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'File-backed accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -7343,7 +7358,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'File-backed replay-rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -8483,7 +8498,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx.CreateConnection(LAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Restart durability accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -8574,7 +8589,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx.CreateConnection(LAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer-parent/builder-child accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -8673,7 +8688,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx.CreateConnection(LAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer-parent/factory-child accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -8776,7 +8791,7 @@ begin
         BytesOf('PING' + IntToStr(LRound)),
         True);
       try
-        LConn := LCtx.CreateConnection(LAcceptStream);
+        LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
         AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
           'Tiny restart loop accepted connection should expose early-data interface');
         AssertTrue(LConn.Accept,
@@ -8987,7 +9002,7 @@ begin
 
       LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('LOCK'), False);
       try
-        LConn := LCtx.CreateConnection(LRejectStream);
+        LConn := LCtx.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
         AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
           'Runtime lock-contention rejected connection should expose early-data interface');
         AssertTrue(LConn.Accept,
@@ -9016,7 +9031,7 @@ begin
       LFreshSession := CaptureServerIssuedSession(LCtx);
       LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LFreshSession, BytesOf('OPEN'), True);
       try
-        LConn := LCtx.CreateConnection(LAcceptStream);
+        LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
         AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
           'Runtime lock-contention fresh connection should expose early-data interface');
         AssertTrue(LConn.Accept,
@@ -9230,7 +9245,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer-backed accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -9246,7 +9261,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer-backed replay-rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -9346,7 +9361,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer runtime parity accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -9366,7 +9381,7 @@ begin
     LManagedLedger2.SetEnabled(False);
     LDisabledStream := TScriptedEarlyDataClientStream.CreateResumed(LDisabledGateSession, BytesOf('LOCK'), False);
     try
-      LConn := LCtx2.CreateConnection(LDisabledStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LDisabledStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer runtime parity disabled-gate connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -9388,7 +9403,7 @@ begin
     LManagedLedger2.SetEnabled(True);
     LReplayRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LReplayRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LReplayRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer runtime parity replay-rejected connection after re-enable should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -9413,7 +9428,7 @@ begin
     LManagedLedger2.SetCapacity(0);
     LZeroCapacityStream := TScriptedEarlyDataClientStream.CreateResumed(LZeroCapacitySession, BytesOf('ZERO'), False);
     try
-      LConn := LCtx2.CreateConnection(LZeroCapacityStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LZeroCapacityStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer runtime parity zero-capacity connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -9435,7 +9450,7 @@ begin
     LManagedLedger2.SetCapacity(8);
     LReplayRejectAfterRestoreStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('KEEP'), False);
     try
-      LConn := LCtx2.CreateConnection(LReplayRejectAfterRestoreStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LReplayRejectAfterRestoreStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer runtime parity replay-rejected connection after capacity restore should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -9458,7 +9473,7 @@ begin
     LResumptionCache2.StoreResumptionSession(LRestoredFreshSession);
     LRestoredAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LRestoredFreshSession, BytesOf('FRESH'), True);
     try
-      LConn := LCtx2.CreateConnection(LRestoredAcceptStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRestoredAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Installer runtime parity restored fresh connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11194,7 +11209,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Custom provider installer accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11210,7 +11225,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Custom provider installer rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11299,7 +11314,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11315,7 +11330,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11408,7 +11423,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper runtime parity accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11428,7 +11443,7 @@ begin
     LManagedLedger2.SetEnabled(False);
     LDisabledStream := TScriptedEarlyDataClientStream.CreateResumed(LDisabledGateSession, BytesOf('LOCK'), False);
     try
-      LConn := LCtx2.CreateConnection(LDisabledStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LDisabledStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper runtime parity disabled-gate connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11450,7 +11465,7 @@ begin
     LManagedLedger2.SetEnabled(True);
     LReplayRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LReplayRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LReplayRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper runtime parity replay-rejected connection after re-enable should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11475,7 +11490,7 @@ begin
     LManagedLedger2.SetCapacity(0);
     LZeroCapacityStream := TScriptedEarlyDataClientStream.CreateResumed(LZeroCapacitySession, BytesOf('ZERO'), False);
     try
-      LConn := LCtx2.CreateConnection(LZeroCapacityStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LZeroCapacityStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper runtime parity zero-capacity connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11497,7 +11512,7 @@ begin
     LManagedLedger2.SetCapacity(8);
     LReplayRejectAfterRestoreStream := TScriptedEarlyDataClientStream.CreateResumed(LReplaySession, BytesOf('KEEP'), False);
     try
-      LConn := LCtx2.CreateConnection(LReplayRejectAfterRestoreStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LReplayRejectAfterRestoreStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper runtime parity replay-rejected connection after capacity restore should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11520,7 +11535,7 @@ begin
     LResumptionCache2.StoreResumptionSession(LRestoredFreshSession);
     LRestoredAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LRestoredFreshSession, BytesOf('FRESH'), True);
     try
-      LConn := LCtx2.CreateConnection(LRestoredAcceptStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRestoredAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper runtime parity restored fresh connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11580,7 +11595,7 @@ begin
     LSession := CaptureServerIssuedSession(LCtx);
     LReplayStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('BANG'), False);
     try
-      LConn := LCtx.CreateConnection(LReplayStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LReplayStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Callback helper fail-closed runtime connection should expose early-data interface');
 
@@ -11623,8 +11638,8 @@ begin
     .WithBackend(sslFreePascal)
     .WithTLS13
     .WithVerifyNone
-    .WithCertificate('tests/certificate/test_certs/signer_cert.pem')
-    .WithPrivateKey('tests/certificate/test_certs/signer_key.pem')
+    .WithCertificate('certificate/test_certs/signer_cert.pem')
+    .WithPrivateKey('certificate/test_certs/signer_key.pem')
     .WithSessionCache(True)
     .WithSessionTimeout(7200)
     .WithServerEarlyDataPolicy(sslEarlyDataServerAccept)
@@ -11637,14 +11652,14 @@ function BuildFactoryFileBackedReplayStoreServerContext(const AFileName: string)
 var
   LConfig: TSSLConfig;
 begin
-  LConfig := CreateDefaultConfig(sslCtxServer);
+  LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxServer));
   LConfig.LibraryType := sslFreePascal;
   LConfig.ContextType := sslCtxServer;
   LConfig.PreferredVersion := sslProtocolTLS13;
   LConfig.ProtocolVersions := [sslProtocolTLS13];
   LConfig.VerifyMode := [];
-  LConfig.CertificateFile := 'tests/certificate/test_certs/signer_cert.pem';
-  LConfig.PrivateKeyFile := 'tests/certificate/test_certs/signer_key.pem';
+  LConfig.CertificateFile := 'certificate/test_certs/signer_cert.pem';
+  LConfig.PrivateKeyFile := 'certificate/test_certs/signer_key.pem';
   LConfig.SessionCacheSize := 8;
   LConfig.SessionTimeout := 7200;
   Include(LConfig.Options, ssoEnableSessionCache);
@@ -11660,8 +11675,8 @@ begin
     .WithBackend(sslFreePascal)
     .WithTLS13
     .WithVerifyNone
-    .WithCertificate('tests/certificate/test_certs/signer_cert.pem')
-    .WithPrivateKey('tests/certificate/test_certs/signer_key.pem')
+    .WithCertificate('certificate/test_certs/signer_cert.pem')
+    .WithPrivateKey('certificate/test_certs/signer_key.pem')
     .WithSessionCache(True)
     .WithSessionTimeout(7200)
     .WithServerEarlyDataPolicy(sslEarlyDataServerAccept)
@@ -11674,14 +11689,14 @@ function BuildFactoryDirectoryReplayStoreServerContext(const ADirectoryName: str
 var
   LConfig: TSSLConfig;
 begin
-  LConfig := CreateDefaultConfig(sslCtxServer);
+  LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxServer));
   LConfig.LibraryType := sslFreePascal;
   LConfig.ContextType := sslCtxServer;
   LConfig.PreferredVersion := sslProtocolTLS13;
   LConfig.ProtocolVersions := [sslProtocolTLS13];
   LConfig.VerifyMode := [];
-  LConfig.CertificateFile := 'tests/certificate/test_certs/signer_cert.pem';
-  LConfig.PrivateKeyFile := 'tests/certificate/test_certs/signer_key.pem';
+  LConfig.CertificateFile := 'certificate/test_certs/signer_cert.pem';
+  LConfig.PrivateKeyFile := 'certificate/test_certs/signer_key.pem';
   LConfig.SessionCacheSize := 8;
   LConfig.SessionTimeout := 7200;
   Include(LConfig.Options, ssoEnableSessionCache);
@@ -11727,7 +11742,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Mixed builder/factory accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11743,7 +11758,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Mixed builder/factory rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11806,7 +11821,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Mixed factory/builder accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11822,7 +11837,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Mixed factory/builder rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11885,7 +11900,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('DPNG'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Builder-built directory accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11903,7 +11918,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('DRPL'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Factory-built directory rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11966,7 +11981,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('DFA1'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Factory-built directory accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -11984,7 +11999,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('DFR2'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Builder-built directory rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -12088,7 +12103,7 @@ var
 begin
   if not TCertificateUtils.TryGenerateSelfSignedSimple(
     'builder-early-data.local',
-    'fafafa.ssl',
+    'nextpas.core.tls',
     30,
     LCertPEM,
     LKeyPEM
@@ -12137,7 +12152,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx1.CreateConnection(LAcceptStream);
+      LConn := LCtx1.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Builder replay-store accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -12153,7 +12168,7 @@ begin
 
     LRejectStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PONG'), False);
     try
-      LConn := LCtx2.CreateConnection(LRejectStream);
+      LConn := LCtx2.CreateConnection(TStreamWrapper.Create(LRejectStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Builder replay-store rejected connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -12201,8 +12216,8 @@ begin
       .WithBackend(sslFreePascal)
       .WithTLS13
       .WithVerifyNone
-      .WithCertificate('tests/certificate/test_certs/signer_cert.pem')
-      .WithPrivateKey('tests/certificate/test_certs/signer_key.pem')
+      .WithCertificate('certificate/test_certs/signer_cert.pem')
+      .WithPrivateKey('certificate/test_certs/signer_key.pem')
       .WithSessionCache(True)
       .WithSessionTimeout(7200)
       .WithServerEarlyDataPolicy(sslEarlyDataServerAccept)
@@ -12223,7 +12238,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx.CreateConnection(LAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Builder runtime durability accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -12283,14 +12298,14 @@ begin
   LSessionFileName := BuildReplayProviderMarkerFilePath(LFileName, 'session.bin');
   CleanupReplayProviderStoreFiles(LFileName);
   try
-    LConfig := CreateDefaultConfig(sslCtxServer);
+    LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxServer));
     LConfig.LibraryType := sslFreePascal;
     LConfig.ContextType := sslCtxServer;
     LConfig.PreferredVersion := sslProtocolTLS13;
     LConfig.ProtocolVersions := [sslProtocolTLS13];
     LConfig.VerifyMode := [];
-    LConfig.CertificateFile := 'tests/certificate/test_certs/signer_cert.pem';
-    LConfig.PrivateKeyFile := 'tests/certificate/test_certs/signer_key.pem';
+    LConfig.CertificateFile := 'certificate/test_certs/signer_cert.pem';
+    LConfig.PrivateKeyFile := 'certificate/test_certs/signer_key.pem';
     LConfig.SessionCacheSize := 8;
     LConfig.SessionTimeout := 7200;
     Include(LConfig.Options, ssoEnableSessionCache);
@@ -12313,7 +12328,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx.CreateConnection(LAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Factory one-shot runtime durability accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -12389,7 +12404,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx.CreateConnection(LAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Mixed builder-parent/factory-child accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,
@@ -12469,7 +12484,7 @@ begin
 
     LAcceptStream := TScriptedEarlyDataClientStream.CreateResumed(LSession, BytesOf('PING'), True);
     try
-      LConn := LCtx.CreateConnection(LAcceptStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LAcceptStream, False));
       AssertTrue(Supports(LConn, ISSLEarlyDataConnection, LEarlyConn),
         'Mixed factory-parent/builder-child accepted connection should expose early-data interface');
       AssertTrue(LConn.Accept,

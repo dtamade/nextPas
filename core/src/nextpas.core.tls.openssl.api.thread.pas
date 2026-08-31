@@ -2,7 +2,7 @@
 {                                                                              }
 {  nextpas.core.tls.openssl.api.thread - OpenSSL Thread Module Pascal Binding           }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {******************************************************************************}
 unit nextpas.core.tls.openssl.api.thread;

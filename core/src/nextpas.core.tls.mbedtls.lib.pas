@@ -13,7 +13,7 @@
  * - 需要管理全局熵源和随机数生成器
  * - 这些资源在 Initialize 时创建，供所有上下文共享
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-09
  *}
@@ -27,6 +27,7 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.api;
@@ -273,7 +274,7 @@ begin
       mbedtls_entropy_func, FEntropyContext, nil, 0);
     if LRet <> 0 then
     begin
-      SetError(LRet, Format('mbedtls_ctr_drbg_seed failed: 0x%04X', [-LRet]));
+      SetError(LRet, nextpas.core.text.format.TextFormat('mbedtls_ctr_drbg_seed failed: 0x%04X', [-LRet]));
       FinalizeRNG;
       Exit(False);
     end;
@@ -339,7 +340,7 @@ begin
   end;
 
   FInitialized := True;
-  InternalLog(sslLogInfo, Format('MbedTLS initialized: %s', [FCapabilities.VersionString]));
+  InternalLog(sslLogInfo, nextpas.core.text.format.TextFormat('MbedTLS initialized: %s', [FCapabilities.VersionString]));
   Result := True;
 end;
 

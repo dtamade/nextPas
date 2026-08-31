@@ -21,6 +21,8 @@ type
     procedure Init(ACipherSuite: Word; const AKey, AIV: TBytes);
     function Seal(const AFragment: TBytes; AContentType: Byte;
       out ARecord: TBytes; out AError: string): Boolean;
+    function SealToBuf(AFragment: PByte; AFragLen: Integer; AContentType: Byte;
+      ADest: PByte; ADestCap: Integer; out ARecordLen: Integer; out AError: string): Boolean;
     procedure UpdateKey(const ANewKey, ANewIV: TBytes);
     procedure Clear;
     function IsExhausted: Boolean;
@@ -36,6 +38,14 @@ type
     procedure Init(ACipherSuite: Word; const AKey, AIV: TBytes);
     function Open(const AEncryptedPayload: TBytes;
       out AFragment: TBytes; out AContentType: Byte;
+      out AError: string): Boolean;
+    function OpenTo(const AEncryptedPayload: TBytes;
+      ADest: PByte; ADestCap: Integer;
+      out AFragLen: Integer; out AContentType: Byte;
+      out AError: string): Boolean;
+    function OpenToBuf(AEncrypted: PByte; AEncryptedLen: Integer;
+      ADest: PByte; ADestCap: Integer;
+      out AFragLen: Integer; out AContentType: Byte;
       out AError: string): Boolean;
     procedure UpdateKey(const ANewKey, ANewIV: TBytes);
     procedure Clear;
@@ -119,6 +129,74 @@ begin
   Result := True;
 end;
 
+function TTLS13RecordSealer.SealToBuf(AFragment: PByte; AFragLen: Integer; AContentType: Byte;
+  ADest: PByte; ADestCap: Integer; out ARecordLen: Integer; out AError: string): Boolean;
+var
+  LNonceBytes: array[0..11] of Byte;
+  LAADBytes: array[0..4] of Byte;
+  LEncLen: Integer;
+  LInnerLen: Integer;
+begin
+  ARecordLen := 0;
+  AError := '';
+  Result := False;
+  if FState = tssExhausted then
+  begin
+    AError := 'TLS 1.3 record sealer: sequence number exhausted';
+    Exit;
+  end;
+  if Length(FKey) = 0 then
+  begin
+    AError := 'TLS 1.3 record sealer: not initialized (no key)';
+    Exit;
+  end;
+  if Length(FIV) <> 12 then
+  begin
+    AError := 'TLS 1.3 record sealer: IV must be 12 bytes (got ' + IntToStr(Length(FIV)) + ')';
+    Exit;
+  end;
+  if (AFragLen < 0) or (AFragLen > 16384) then
+  begin
+    AError := 'TLS 1.3 record sealer: fragment exceeds max size (16384 bytes)';
+    Exit;
+  end;
+  if (ADest = nil) and (ADestCap > 0) then
+  begin
+    AError := 'TLS 1.3 record sealer SealToBuf: dest nil';
+    Exit;
+  end;
+  LInnerLen := AFragLen + 1;
+  if ADestCap < 5 + LInnerLen + 16 then
+  begin
+    AError := 'TLS 1.3 record sealer SealToBuf: dest too small';
+    Exit;
+  end;
+  if AFragLen > 0 then
+  begin
+    if AFragment = nil then
+    begin
+      AError := 'TLS 1.3 record sealer SealToBuf: fragment nil';
+      Exit;
+    end;
+    Move(AFragment^, (ADest + 5)^, AFragLen);
+  end;
+  (ADest + 5 + AFragLen)^ := AContentType;
+  BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
+  LEncLen := 0;
+  BuildTLS13RecordAADTo(Word(LInnerLen + 16), @LAADBytes[0]);
+  if not TryTLS13AEADEncryptDirect(FCipherSuite, FKey, @LNonceBytes[0], 12, @LAADBytes[0], 5, ADest + 5, LInnerLen, ADest + 5, ADestCap - 5, LEncLen, AError) then
+    Exit;
+  ADest[0] := TLS_CONTENT_TYPE_APPLICATION_DATA;
+  ADest[1] := Byte(TLS_LEGACY_VERSION shr 8);
+  ADest[2] := Byte(TLS_LEGACY_VERSION and $FF);
+  ADest[3] := Byte(LEncLen shr 8);
+  ADest[4] := Byte(LEncLen and $FF);
+  ARecordLen := 5 + LEncLen;
+  if not IncrementTLS13Sequence(FSequence) then
+    FState := tssExhausted;
+  Result := True;
+end;
+
 procedure TTLS13RecordSealer.UpdateKey(const ANewKey, ANewIV: TBytes);
 begin
   if Length(FKey) > 0 then
@@ -199,6 +277,93 @@ begin
   if not IncrementTLS13Sequence(FSequence) then
     FState := tssExhausted;
 
+  Result := True;
+end;
+
+function TTLS13RecordOpener.OpenTo(const AEncryptedPayload: TBytes;
+  ADest: PByte; ADestCap: Integer;
+  out AFragLen: Integer; out AContentType: Byte;
+  out AError: string): Boolean;
+var
+  LNonceBytes: array[0..11] of Byte;
+  LAADBytes: array[0..4] of Byte;
+begin
+  AFragLen := 0;
+  AContentType := 0;
+  AError := '';
+  Result := False;
+  if (ADest = nil) and (ADestCap > 0) and (Length(AEncryptedPayload) > 0) then
+  begin
+    AError := 'TLS 1.3 record opener OpenTo: dest nil';
+    Exit;
+  end;
+  if FState = tssExhausted then
+  begin
+    AError := 'TLS 1.3 record opener: sequence number exhausted';
+    Exit;
+  end;
+  if Length(FIV) <> 12 then
+  begin
+    AError := 'TLS 1.3 record opener: IV must be 12 bytes';
+    Exit;
+  end;
+  BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
+  BuildTLS13RecordAADTo(Word(Length(AEncryptedPayload)), @LAADBytes[0]);
+  if Length(AEncryptedPayload) > 0 then
+  begin
+    if not TryTLS13AEADDecryptDirect(FCipherSuite, FKey, @LNonceBytes[0], 12, @LAADBytes[0], 5,
+      @AEncryptedPayload[0], Length(AEncryptedPayload), ADest, ADestCap, AFragLen, AContentType, AError) then
+      Exit;
+  end
+  else
+  begin
+    if not TryTLS13AEADDecryptDirect(FCipherSuite, FKey, @LNonceBytes[0], 12, @LAADBytes[0], 5,
+      nil, 0, ADest, ADestCap, AFragLen, AContentType, AError) then
+      Exit;
+  end;
+  if not IncrementTLS13Sequence(FSequence) then
+    FState := tssExhausted;
+  Result := True;
+end;
+
+function TTLS13RecordOpener.OpenToBuf(AEncrypted: PByte;
+  AEncryptedLen: Integer; ADest: PByte; ADestCap: Integer;
+  out AFragLen: Integer; out AContentType: Byte; out AError: string): Boolean;
+var
+  LNonceBytes: array[0..11] of Byte;
+  LAADBytes: array[0..4] of Byte;
+begin
+  AFragLen := 0;
+  AContentType := 0;
+  AError := '';
+  Result := False;
+  if (ADest = nil) and (ADestCap > 0) and (AEncryptedLen > 0) then
+  begin
+    AError := 'TLS 1.3 record opener OpenToBuf: dest nil';
+    Exit;
+  end;
+  if (AEncrypted = nil) and (AEncryptedLen > 0) then
+  begin
+    AError := 'TLS 1.3 record opener OpenToBuf: encrypted nil';
+    Exit;
+  end;
+  if FState = tssExhausted then
+  begin
+    AError := 'TLS 1.3 record opener: sequence number exhausted';
+    Exit;
+  end;
+  if Length(FIV) <> 12 then
+  begin
+    AError := 'TLS 1.3 record opener: IV must be 12 bytes';
+    Exit;
+  end;
+  BuildTLS13RecordNonceTo(FIV, FSequence, @LNonceBytes[0]);
+  BuildTLS13RecordAADTo(Word(AEncryptedLen), @LAADBytes[0]);
+  if not TryTLS13AEADDecryptDirect(FCipherSuite, FKey, @LNonceBytes[0], 12, @LAADBytes[0], 5,
+    AEncrypted, AEncryptedLen, ADest, ADestCap, AFragLen, AContentType, AError) then
+    Exit;
+  if not IncrementTLS13Sequence(FSequence) then
+    FState := tssExhausted;
   Result := True;
 end;
 

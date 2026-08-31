@@ -1,5 +1,9 @@
 unit nextpas.core.atomic;
 {$WARN 6058 off}
+{ 全文件汇编为 Intel 风格；x86 系之外无此读入器，按架构钉扎 }
+{$IF DEFINED(CPU386) OR DEFINED(CPUX86_64)}
+{$asmmode intel}
+{$ENDIF}
 
 {
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -281,7 +285,7 @@ function atomic_exchange(var aObj: PtrInt; aDesired: PtrInt): PtrInt; overload; 
 function atomic_exchange(var aObj: PtrUInt; aDesired: PtrUInt; aOrder: memory_order_t): PtrUInt; overload; inline;
 function atomic_exchange(var aObj: PtrUInt; aDesired: PtrUInt): PtrUInt; overload; inline;
 {$ENDIF}
-{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86) OR DEFINED(CPUARM)}
 function atomic_exchange_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t): Int64; overload;
 function atomic_exchange_64(var aObj: Int64; aDesired: Int64): Int64; overload;
 function atomic_exchange_64(var aObj: UInt64; aDesired: UInt64; aOrder: memory_order_t): UInt64; overload;
@@ -655,8 +659,10 @@ function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_ord
 function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
 {$ENDIF}
 
-{ Pointer-sized fetch_max/fetch_min/wait/notify — routes through 32/64-bit }
-{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+{ Pointer-sized fetch_max/fetch_min/wait/notify — routes through 32/64-bit
+  仅 64 位：i386 上 PtrInt≡Int32，与上方 Int32 overload 撞签名，
+  调用自动落到等宽版本 }
+{$IF DEFINED(CPU64)}
 function atomic_fetch_max(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t = mo_seq_cst): PtrInt; overload; inline;
 function atomic_fetch_max(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t = mo_seq_cst): PtrUInt; overload; inline;
 function atomic_fetch_min(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t = mo_seq_cst): PtrInt; overload; inline;
@@ -1701,7 +1707,7 @@ begin
 end;
 {$ENDIF}
 
-{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86) OR DEFINED(CPUARM)}
 function atomic_exchange_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t): Int64;
 begin
   AtomicValidateRmwOrder(aOrder);
@@ -3813,7 +3819,7 @@ end;
 {$ENDIF}
 
 { Pointer-sized fetch_max/fetch_min/fetch_nand }
-{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+{$IF DEFINED(CPU64)}
 function atomic_fetch_max(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt;
 begin
   Result := PtrInt(atomic_fetch_max_64(PInt64(@aObj)^, PInt64(@aArg)^, aOrder));

@@ -3,10 +3,11 @@ program test_cert_info_extraction;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.factory,
-  fafafa.ssl;
+  nextpas.core.tls.factory;
 
 var
   GPassed, GFailed: Integer;
@@ -37,6 +38,8 @@ begin
   LOptions.Organization := 'Test Org';
   LOptions.IsCA := False;
   LOptions.ValidDays := 365;
+  SetLength(LOptions.SubjectAltNames, 1);
+  LOptions.SubjectAltNames[0] := 'DNS:test.example.com';
 
   if not TCertificateUtils.GenerateSelfSigned(LOptions, GTestCert, GTestKey) then
   begin
@@ -81,8 +84,8 @@ begin
 
   LInfo := TCertificateUtils.GetInfo(GTestCert);
 
-  // 当前证书可能没有SAN，所以只检查对象存在
-  AssertTrue(Assigned(LInfo.SubjectAltNames), 'SubjectAltNames list should be created');
+  // 生成的证书带 SAN，应能被完整提取
+  AssertTrue(Length(LInfo.SubjectAltNames) > 0, 'SubjectAltNames list should be created');
 
   WriteLn('  SAN Count: ', Length(LInfo.SubjectAltNames));
   if Length(LInfo.SubjectAltNames) > 0 then

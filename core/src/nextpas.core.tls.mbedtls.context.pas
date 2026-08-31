@@ -5,7 +5,7 @@
  * 实现 ISSLContext 接口的 MbedTLS 后端。
  * 负责 SSL 配置管理和连接创建。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-10
  *}
@@ -20,6 +20,7 @@ uses
   nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.encoding.base64,
   nextpas.core.io.intf,
   nextpas.core.io.util,
@@ -826,7 +827,7 @@ procedure TMbedTLSContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current MbedTLS backend runtime. ' +
+    nextpas.core.text.format.TextFormat('%s is not published by the current MbedTLS backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCallbacks before installing a non-nil callback.',
       [AFeature]),
     sslErrUnsupported,
@@ -852,7 +853,7 @@ procedure TMbedTLSContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current MbedTLS backend runtime. ' +
+    nextpas.core.text.format.TextFormat('%s is not published by the current MbedTLS backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -969,6 +970,9 @@ begin
   // 解析逗号分隔的协议列表
   try
 
+    { LProtos 此前从未赋值即被 Length() 读取，恒为 0 → 恒 Exit，
+      ALPN 协议配置静默失效；按逗号分割恢复语义（removeEmpty，条目已有 Trim） }
+    LProtos := nextpas.core.text.strings.StringsSplit(AProtocols, ',', True);
     if Length(LProtos) = 0 then Exit;
 
     // 构建 NULL-terminated 数组 (需要额外一个 nil 结尾)
@@ -1051,7 +1055,7 @@ begin
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(
-      nextpas.core.text.conv.Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
+      nextpas.core.text.format.TextFormat('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
       sslErrInvalidParam,
       'TMbedTLSContext.AddCertificatePinBase64'
     );

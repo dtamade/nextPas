@@ -341,6 +341,8 @@ begin
   LCount := FNodes[ATableIdx].Container.Count;
   LCap := LCount * 2;
   if LCap < 64 then LCap := 64;
+  { 不变式：FHashCap 恒等于 FHashBuckets 的物理分配容量。复用旧桶时不得缩容，
+    否则 sized-free 字节数小于实际分配量，GrowingAllocator 会误判 size class。 }
   if (FHashBuckets <> nil) and (FHashCap < LCap) then
   begin
     FreeMemOf(FAllocator, FHashBuckets, SizeUInt(FHashCap) * SizeOf(UInt32));
@@ -354,8 +356,10 @@ begin
     if LHashBuckets = nil then
       Exit;
     FHashBuckets := LHashBuckets;
-  end;
-  FHashCap := LCap;
+    FHashCap := LCap;
+  end
+  else
+    LCap := FHashCap; { 复用：逻辑容量对齐物理容量，mod 与全量清填均按真实桶数 }
   FillChar(FHashBuckets^, FHashCap * SizeOf(UInt32), $FF);
   FHashOwner := ATableIdx;
   LCur := FNodes[ATableIdx].Container.FirstChild;

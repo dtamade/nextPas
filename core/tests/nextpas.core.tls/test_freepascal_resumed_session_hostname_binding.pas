@@ -10,7 +10,6 @@ program test_freepascal_resumed_session_hostname_binding;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -19,13 +18,15 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.appschedule,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.freepascal.session;
-
+  nextpas.core.crypto.hash,
+  nextpas.core.tls.freepascal.session,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 var
   GPassCount: Integer = 0;
   GFailCount: Integer = 0;
@@ -491,7 +492,7 @@ begin
 
   LStream := TOfflineTLS13ServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     (LConn as ISSLClientConnection).SetServerName(AServerName);
     if not LConn.Connect then
       raise Exception.Create('Initial handshake failed for ' + AServerName);
@@ -525,7 +526,7 @@ begin
 
   LStream := TOfflineTLS13ServerStream.CreateResumed(LSession);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     Supports(LConn, ISSLSessionResumption, LResumption);
     LResumption.SetSession(LSession);
     (LConn as ISSLClientConnection).SetServerName('example.com');
@@ -558,7 +559,7 @@ begin
 
   LStream := TOfflineTLS13ServerStream.CreateResumed(LSession);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     Supports(LConn, ISSLSessionResumption, LResumption);
     LResumption.SetSession(LSession);
     { Attack scenario: use ticket from legit.example.com to connect to evil.example.com }
@@ -591,7 +592,7 @@ begin
 
   LStream := TOfflineTLS13ServerStream.CreateResumed(LSession);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     Supports(LConn, ISSLSessionResumption, LResumption);
     LResumption.SetSession(LSession);
     (LConn as ISSLClientConnection).SetServerName('server-b.example.com');
@@ -622,7 +623,7 @@ begin
 
   LStream := TOfflineTLS13ServerStream.CreateResumed(LSession);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     Supports(LConn, ISSLSessionResumption, LResumption);
     LResumption.SetSession(LSession);
     (LConn as ISSLClientConnection).SetServerName('example.com');

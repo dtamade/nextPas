@@ -6,8 +6,10 @@ unit nextpas.core.tls.winssl.enterprise;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, {$IFDEF WINDOWS} Windows, {$ENDIF} Registry,
+  nextpas.core.base,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, {$IFDEF WINDOWS} Windows, {$ENDIF} Registry,
   nextpas.core.tls.logging,
+  nextpas.core.tls.collections,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api;
 
@@ -18,7 +20,7 @@ type
     FFIPSEnabled: Boolean;
     FPolicyLoaded: Boolean;
     FTrustedRoots: TStringArray;
-    FGroupPolicies: TStringArray;
+    FGroupPolicies: specialize IStringMap<string>;
     
     function DetectFIPSMode: Boolean;
     function LoadGroupPolicies: Boolean;
@@ -86,10 +88,12 @@ begin
   inherited Create;
   FFIPSEnabled := False;
   FPolicyLoaded := False;
+  FGroupPolicies := TMapFactory.specialize CreateStringMap<string>;
 end;
 
 destructor TSSLEnterpriseConfig.Destroy;
 begin
+  FGroupPolicies := nil;
   inherited Destroy;
 end;
 
@@ -116,6 +120,7 @@ begin
       end;
     end;
   finally
+    LReg.Free;
   end;
   
   FFIPSEnabled := Result;
@@ -124,40 +129,52 @@ end;
 function TSSLEnterpriseConfig.LoadGroupPolicies: Boolean;
 var
   LReg: TRegistry;
-  LKeys: TStringArray;
-  i: Integer;
+  LValueName: array[0..1023] of WideChar;
+  LName: string;
   LValue: string;
+  LNameLen: DWORD;
+  LIndex: DWORD;
+  LStatus: LRESULT;
 begin
   Result := False;
   FGroupPolicies.Clear;
-  
+
   LReg := TRegistry.Create(KEY_READ);
   try
     LReg.RootKey := HKEY_LOCAL_MACHINE;
-    
-    // 读取加密相关的组策略
+
+    // 读取加密相关的组策略（用 RegEnumValueW 枚举值名，避免 TStrings 依赖）
     if LReg.OpenKeyReadOnly(GP_CRYPTO_PATH) then
     begin
       try
-        LReg.GetValueNames(LKeys);
-        for i := 0 to Length(LKeys) - 1 do
-        begin
-          try
-            LValue := LReg.ReadString(LKeys[i]);
-            FGroupPolicies.Values[LKeys[i]] := LValue;
-          except
-            on E: Exception do
-              TSecurityLog.Debug('Enterprise', Format('Failed to read group policy value %s: %s', [LKeys[i], E.Message]));
+        LIndex := 0;
+        repeat
+          LNameLen := Length(LValueName);
+          LStatus := RegEnumValueW(LReg.CurrentKey, LIndex, @LValueName[0], LNameLen,
+            nil, nil, nil, nil);
+          if LStatus = ERROR_SUCCESS then
+          begin
+            Inc(LIndex);
+            SetString(LName, PWideChar(@LValueName[0]), LNameLen);
+            try
+              LValue := LReg.ReadString(LName);
+              FGroupPolicies.Put(LName, LValue);
+            except
+              on E: Exception do
+                TSecurityLog.Debug('Enterprise',
+                  nextpas.core.text.format.TextFormat('Failed to read group policy value %s: %s', [LName, E.Message]));
+            end;
           end;
-        end;
+        until LStatus <> ERROR_SUCCESS;
         Result := True;
       finally
         LReg.CloseKey;
       end;
     end;
-    
+
     FPolicyLoaded := Result;
   finally
+    LReg.Free;
   end;
 end;
 
@@ -252,7 +269,7 @@ end;
 
 function TSSLEnterpriseConfig.ReadGroupPolicy(const APolicyName: string): string;
 begin
-  Result := FGroupPolicies.Values[APolicyName];
+  Result := FGroupPolicies.Get(APolicyName, '');
 end;
 
 function TSSLEnterpriseConfig.IsEnterpriseCATrusted: Boolean;
@@ -279,12 +296,19 @@ begin
     else
       Result := True; // 如果没有策略，默认信任
   finally
+    LReg.Free;
   end;
 end;
 
 function TSSLEnterpriseConfig.GetAllPolicies: TStringArray;
+var
+  LKeys: TStringArray;
+  i: Integer;
 begin
-  Result.Assign(FGroupPolicies);
+  LKeys := FGroupPolicies.Keys;
+  SetLength(Result, Length(LKeys));
+  for i := 0 to Length(LKeys) - 1 do
+    Result[i] := LKeys[i] + '=' + FGroupPolicies.Get(LKeys[i], '');
 end;
 
 procedure TSSLEnterpriseConfig.Reload;
@@ -313,6 +337,7 @@ begin
       end;
     end;
   finally
+    LReg.Free;
   end;
 end;
 
@@ -339,6 +364,7 @@ begin
       end;
     end;
   finally
+    LReg.Free;
   end;
 end;
 

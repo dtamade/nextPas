@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.text*.pas`
 **层级**：L1（依赖 L0: base, exception 等）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20
-**版本**：1.3
+**最后更新**：2026-08-31
+**版本**：1.5
 
 ---
 
@@ -157,3 +157,4 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 | 2026-07-20 | 1.2 | LineBreak UAX#14 官方全绿；硬/软 Line 双语义 |
 | 2026-07-19 | 1.1 | Conformance + grapheme 真源 + GB9c；测试表与子模块清单对齐 live |
 | 2026-07-01 | 1.0 | 初始版本 |
+| 2026-08-31 | 1.5 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

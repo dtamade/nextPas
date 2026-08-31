@@ -44,7 +44,6 @@ type
   {** @desc Robin Hood 哈希表
     @details 开放寻址 + 后向位移，减少探测序列方差。
       最坏情况查找 O(n)，期望平均 O(1)。
-  {** @concurrency Thread-safe (see source for details). }
       线程安全：CAS 自旋锁。 }
   TRobinHoodMap = class
   private

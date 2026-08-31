@@ -22,7 +22,6 @@ type
       Wait(AMutex) 原子释放锁并自旋等待，被唤醒后重新获取锁。
       Signal 唤醒一个等待者，Broadcast 唤醒所有等待者。
       适用于：生产者-消费者、条件同步。
- * @concurrency Thread-safe (see source for details).
   }
   TConditionVariable = class
   private

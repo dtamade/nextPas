@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -33,7 +33,7 @@ echo "x" > "$SANDBOX_ROOT/test-reports/fast_local.log"
 echo "x" > "$SANDBOX_ROOT/keep_me/keep.txt"
 
 set +e
-output="$(bash scripts/cleanup_fast_local_outputs.sh --tmp-root "$SANDBOX_ROOT" --all 2>&1)"
+output="$(bash scripts/tls/cleanup_fast_local_outputs.sh --tmp-root "$SANDBOX_ROOT" --all 2>&1)"
 exit_code=$?
 set -e
 
@@ -55,7 +55,7 @@ if [[ ! -d "$SANDBOX_ROOT/keep_me" ]]; then
 fi
 
 set +e
-output_apply="$(bash scripts/cleanup_fast_local_outputs.sh --tmp-root "$SANDBOX_ROOT" --all --apply 2>&1)"
+output_apply="$(bash scripts/tls/cleanup_fast_local_outputs.sh --tmp-root "$SANDBOX_ROOT" --all --apply 2>&1)"
 exit_code_apply=$?
 set -e
 

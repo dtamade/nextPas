@@ -96,6 +96,7 @@ function UnpackTertiary(const AWeight: UInt32): Byte;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.text.unicode.normalize,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.props,
@@ -124,14 +125,9 @@ const
   IMPLICIT_BASE_OTHER_HAN = $FB80;
   IMPLICIT_BASE_UNASSIGNED = $FBC0;
 
-function BytesEqual(const A: PByte; const B: PByte; const ALen: SizeInt): Boolean;
-var
-  I: SizeInt;
+function BytesEqual(const A: PByte; const B: PByte; const ALen: SizeInt): Boolean; inline;
 begin
-  for I := 0 to ALen - 1 do
-    if A[I] <> B[I] then
-      Exit(False);
-  Result := True;
+  Result := CompareMem(A, B, SizeUInt(ALen));
 end;
 
 function GetCaseLevel(const ACp: TUnicodeCodepoint): Byte;
@@ -857,8 +853,12 @@ function TUnicodeCollator.CollectElements(const ANormalized: string): TCollation
 var
   LCount: SizeInt;
 begin
+  { CollectElementsInto 向 AElements 填充前 LCount 个有效元素（容量可能
+    超配）；此前实现先取计数再抹空重设，返回全零数据——真 bug。 }
+  Result := nil;
   LCount := CollectElementsInto(ANormalized, Result);
-  SetLength(Result, LCount);
+  if Length(Result) <> LCount then
+    SetLength(Result, LCount);
 end;
 
 procedure AppendU16BE(var AKey: TCollationKey; var APos: SizeInt; const AValue: UInt16);
@@ -1136,6 +1136,7 @@ var
 begin
   if AText = '' then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;

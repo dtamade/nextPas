@@ -19,7 +19,7 @@ end;
 
 begin
   WriteLn('========================================');
-  WriteLn('fafafa.ssl 性能基准测试');
+  WriteLn('nextpas.core.tls 性能基准测试');
   WriteLn('========================================');
   WriteLn;
 

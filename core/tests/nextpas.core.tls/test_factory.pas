@@ -7,8 +7,8 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
-  fafafa.ssl;
-
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.tls.wolfssl.lib;
 var
   TestsPassed: Integer = 0;
   TestsFailed: Integer = 0;
@@ -584,7 +584,7 @@ end;
 
 begin
   WriteLn('========================================');
-  WriteLn('  fafafa.ssl Factory 单元测试');
+  WriteLn('  nextpas.core.tls Factory 单元测试');
   WriteLn('========================================');
   WriteLn('');
 

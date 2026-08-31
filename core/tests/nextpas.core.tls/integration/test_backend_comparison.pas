@@ -9,18 +9,24 @@ program test_backend_comparison;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  {$IFDEF WINDOWS}Windows, WinSock2,{$ENDIF}
-  {$IFNDEF WINDOWS}BaseUnix,{$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes, StrUtils,
-
+  nextpas.core.tls.openssl.backed,
+  {$IFDEF WINDOWS}Windows,
+  WinSock2,
+  {$ENDIF}
+  {$IFNDEF WINDOWS}BaseUnix,
+  {$ENDIF}
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  StrUtils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
-  fafafa.ssl,
-  {$IFDEF WINDOWS}nextpas.core.tls.winssl.lib,{$ENDIF}
+  {$IFDEF WINDOWS}nextpas.core.tls.winssl.lib,
+  {$ENDIF}
   test_openssl_base;
 
 var
@@ -706,7 +712,8 @@ begin
     {$ENDIF}
 
     Runner.PrintSummary;
-    Halt(Runner.FailCount);
+    // 自然结束而非 Halt:让程序级全局接口变量正常终结,heaptrc 保持 0 unfreed
+    ExitCode := Runner.FailCount;
   finally
     Runner.Free;
   end;

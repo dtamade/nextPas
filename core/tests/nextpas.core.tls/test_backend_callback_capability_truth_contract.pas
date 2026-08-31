@@ -118,7 +118,7 @@ begin
 
   CheckOpenSSLBackendCapability;
   CheckBackendCapability(sslWinSSL, True);
-  CheckBackendCapability(sslFreePascal, False);
+  CheckBackendCapability(sslFreePascal, True);
   CheckBackendCapability(sslWolfSSL, False);
   CheckBackendCapability(sslMbedTLS, False);
   CheckOpenSSLCallbackRuntimeGateContract;

@@ -225,7 +225,8 @@ begin
   LErr := platform_socket_recv(LSock, @ABuf, Int32(ACount), 0, LRecvd);
   if LErr <> 0 then
   begin
-    if platform_socket_error_would_block(LErr) then
+    if platform_socket_error_would_block(LErr) or
+       platform_socket_error_interrupted(LErr) then
       FLastIOResult := ioWantRead
     else
       FLastIOResult := ioError;
@@ -252,7 +253,8 @@ begin
   LErr := platform_socket_send(LSock, @ABuf, Int32(ACount), PLATFORM_MSG_NOSIGNAL, LSent);
   if LErr <> 0 then
   begin
-    if platform_socket_error_would_block(LErr) then
+    if platform_socket_error_would_block(LErr) or
+       platform_socket_error_interrupted(LErr) then
       FLastIOResult := ioWantWrite
     else
       FLastIOResult := ioError;

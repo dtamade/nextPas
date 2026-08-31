@@ -33,6 +33,30 @@ type
   { Parsed SSE event stream (client side) }
   TSSEventArray = array of TSSEvent;
 
+  { Incremental client-side SSE decoder (K61 feed-style).
+    Feed arbitrary text chunks; a frame is emitted as soon as its blank
+    line is seen. Finish flushes an EOF trailing frame (same deviation
+    as ParseSSE). Line terminators: LF / CRLF / lone CR; a CR at a chunk
+    edge stays pending until the next byte decides CRLF vs lone CR.
+    ParseSSE delegates here, so both surfaces share one engine. }
+  TSSEFeeder = class
+  private
+    FLine: string;         { 当前未终止行的跨块累积 }
+    FHoldCR: Boolean;      { chunk 尾悬挂 CR：待下一字节判定 CRLF / lone CR }
+    FEv: TSSEvent;         { 构筑中的帧 }
+    FOut: TSSEventArray;   { 自上次取走后完成的帧 }
+    FLastLineBlank: Boolean;
+    procedure HandleLine(const ALine: string);
+    procedure EmitFrame;
+    procedure Drain(out AEvents: TSSEventArray);
+  public
+    constructor Create;
+    { Feed one text chunk; AEvents carries frames completed by this chunk. }
+    procedure Feed(const AChunk: string; out AEvents: TSSEventArray);
+    { Signal EOF: flushes a trailing unterminated frame. Idempotent. }
+    procedure Finish(out AEvents: TSSEventArray);
+  end;
+
   { Writer for Server-Sent Events }
   ISSEEventWriter = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000010}']
@@ -315,103 +339,181 @@ end;
 
 { ── 客户端解析（client side）─────────────────────────────────────────── }
 
-function ParseSSE(const ABody: string): TSSEventArray;
-var
-  N, I, Start, J: Integer;
-  Line, Field, Value: string;
-  Ev: TSSEvent;
-  Retry: Int64;
-  Flush: Boolean;
-
-  procedure EmitFrame;
-  begin
-    if Ev.Data <> '' then
-    begin
-      if Ev.Event = '' then
-        Ev.Event := 'message';
-      SetLength(Result, N + 1);
-      Result[N] := Ev;
-      Inc(N);
-    end;
-    Ev.Event := '';
-    Ev.Data := '';
-    Ev.Id := '';
-    Ev.Retry := 0;
-  end;
-
+constructor TSSEFeeder.Create;
 begin
-  Result := nil;
-  N := 0;
-  Ev.Event := '';
-  Ev.Data := '';
-  Ev.Id := '';
-  Ev.Retry := 0;
-  Start := 1;
-  I := 1;
-  while I <= Length(ABody) + 1 do
+  inherited Create;
+  FLine := '';
+  FHoldCR := False;
+  FEv.Event := '';
+  FEv.Data := '';
+  FEv.Id := '';
+  FEv.Retry := 0;
+  FLastLineBlank := True;
+end;
+
+procedure TSSEFeeder.EmitFrame;
+begin
+  if FEv.Data <> '' then
   begin
-    Flush := I > Length(ABody);
-    if not Flush then
+    if FEv.Event = '' then
+      FEv.Event := 'message';
+    SetLength(FOut, Length(FOut) + 1);
+    FOut[High(FOut)] := FEv;
+  end;
+  FEv.Event := '';
+  FEv.Data := '';
+  FEv.Id := '';
+  FEv.Retry := 0;
+end;
+
+procedure TSSEFeeder.HandleLine(const ALine: string);
+var
+  J: SizeInt;
+  Field, Value: string;
+  Retry: Int64;
+begin
+  if ALine = '' then
+  begin
+    EmitFrame;
+    FLastLineBlank := True;
+    Exit;
+  end;
+  FLastLineBlank := False;
+  { 字段解析：data:/event:/id:/retry:；: comment 与未知字段忽略（同 ParseSSE） }
+  J := 1;
+  while (J <= Length(ALine)) and (ALine[J] <> ':') do
+    Inc(J);
+  Field := Copy(ALine, 1, J - 1);
+  if (J <= Length(ALine)) and (ALine[J] = ':') then
+  begin
+    Value := Copy(ALine, J + 1, Length(ALine) - J);
+    { 规范：值去除一个前导空格 }
+    if (Length(Value) > 0) and (Value[1] = ' ') then
+      Value := Copy(Value, 2, Length(Value) - 1);
+  end
+  else
+    Value := '';
+  if Field = 'data' then
+  begin
+    if FEv.Data <> '' then
+      FEv.Data := FEv.Data + #10;
+    FEv.Data := FEv.Data + Value;
+  end
+  else if Field = 'event' then
+    FEv.Event := Value
+  else if Field = 'id' then
+    FEv.Id := Value
+  else if Field = 'retry' then
+    if TryStrToInt64(Value, Retry) then
+      FEv.Retry := Retry;
+end;
+
+procedure TSSEFeeder.Drain(out AEvents: TSSEventArray);
+begin
+  AEvents := FOut;
+  FOut := nil;
+end;
+
+procedure TSSEFeeder.Feed(const AChunk: string; out AEvents: TSSEventArray);
+var
+  I, N, R: SizeInt;
+begin
+  N := Length(AChunk);
+  I := 1;
+  while I <= N do
+  begin
+    if FHoldCR then
     begin
-      if (ABody[I] <> #10) and (ABody[I] <> #13) then
+      { 悬挂 CR 判定：LF → CRLF 合并终止；否则 CR 单独终止，当前字节重走 }
+      FHoldCR := False;
+      if AChunk[I] = #10 then
       begin
+        Inc(I);
+        HandleLine(FLine);
+        FLine := '';
+        Continue;
+      end;
+      HandleLine(FLine);
+      FLine := '';
+    end;
+    if (AChunk[I] = #10) or (AChunk[I] = #13) then
+    begin
+      if AChunk[I] = #10 then
+      begin
+        Inc(I);
+      end
+      else if I < N then
+      begin
+        Inc(I);
+        if AChunk[I] = #10 then
+          Inc(I);
+      end
+      else
+      begin
+        { 悬挂 CR：行未决，不在此处理——留待下一字节判定 CRLF / lone CR }
+        FHoldCR := True;
         Inc(I);
         Continue;
       end;
-      Line := Copy(ABody, Start, I - Start);
-      { \r\n 视为一个行分隔 }
-      if (ABody[I] = #13) and (I + 1 <= Length(ABody)) and (ABody[I + 1] = #10) then
-        Inc(I);
-      Inc(I);
+      HandleLine(FLine);
+      FLine := '';
     end
     else
-      Line := Copy(ABody, Start, I - Start);
-    { 行尾 \r 剥离 }
-    if (Length(Line) > 0) and (Line[Length(Line)] = #13) then
-      SetLength(Line, Length(Line) - 1);
-
-    if Line = '' then
-      EmitFrame
-    else
     begin
-      { 字段解析：data:/event:/id:/retry:；: comment 与未知字段忽略 }
-      J := 1;
-      while (J <= Length(Line)) and (Line[J] <> ':') do
-        Inc(J);
-      Field := Copy(Line, 1, J - 1);
-      if (J <= Length(Line)) and (Line[J] = ':') then
-      begin
-        Value := Copy(Line, J + 1, Length(Line) - J);
-        { 规范：值去除一个前导空格 }
-        if (Length(Value) > 0) and (Value[1] = ' ') then
-          Value := Copy(Value, 2, Length(Value) - 1);
-      end
-      else
-        Value := '';
-      if Field = 'data' then
-      begin
-        if Ev.Data <> '' then
-          Ev.Data := Ev.Data + #10;
-        Ev.Data := Ev.Data + Value;
-      end
-      else if Field = 'event' then
-        Ev.Event := Value
-      else if Field = 'id' then
-        Ev.Id := Value
-      else if Field = 'retry' then
-        if TryStrToInt64(Value, Retry) then
-          Ev.Retry := Retry;
-    end;
-
-    Start := I;
-    if Flush then
-    begin
-      { EOF 残余帧：已是字段行（空行已在上方发射）→ 再发射一次 }
-      if (Line <> '') and (Ev.Data <> '') then
-        EmitFrame;
-      Break;
+      { 连续普通字符成段拷贝，避免逐字符拼接 }
+      R := I;
+      while (R <= N) and (AChunk[R] <> #10) and (AChunk[R] <> #13) do
+        Inc(R);
+      FLine := FLine + Copy(AChunk, I, R - I);
+      I := R;
     end;
   end;
+  Drain(AEvents);
 end;
 
+procedure TSSEFeeder.Finish(out AEvents: TSSEventArray);
+begin
+  if FHoldCR then
+  begin
+    FHoldCR := False;
+    HandleLine(FLine);
+    FLine := '';
+  end
+  else if FLine <> '' then
+  begin
+    HandleLine(FLine);
+    FLine := '';
+  end;
+  { EOF 残余帧：最后一行非空字段行且帧有 data → 发射（镜像 ParseSSE） }
+  if (not FLastLineBlank) and (FEv.Data <> '') then
+    EmitFrame;
+  Drain(AEvents);
+end;
+
+function ParseSSE(const ABody: string): TSSEventArray;
+var
+  LFeed: TSSEFeeder;
+  LPart: TSSEventArray;
+  I: Integer;
+begin
+  { K61：委托增量引擎——单一解码实现，两个入口构造性等价 }
+  Result := nil;
+  LFeed := TSSEFeeder.Create;
+  try
+    LFeed.Feed(ABody, LPart);
+    for I := 0 to High(LPart) do
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := LPart[I];
+    end;
+    LFeed.Finish(LPart);
+    for I := 0 to High(LPart) do
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := LPart[I];
+    end;
+  finally
+    LFeed.Free;
+  end;
+end;
 end.

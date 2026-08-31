@@ -4,7 +4,7 @@
  *
  * 实现 ISSLCertificate 和 ISSLCertificateStore 接口的 WolfSSL 后端。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-10
  *}
@@ -36,6 +36,7 @@ type
   TWolfSSLCertificate = class(TInterfacedObject, ISSLCertificate, ISSLNativeHandleAccess)
   private
     FX509: PWOLFSSL_X509;
+    FOwnsX509: Boolean;
     FInfo: TSSLCertificateInfo;
     FPEMData: string;
     FDERData: TBytes;
@@ -49,6 +50,7 @@ type
   public
     constructor Create; overload;
     constructor Create(AX509: PWOLFSSL_X509); overload;
+    constructor Create(AX509: PWOLFSSL_X509; AOwnsX509: Boolean); overload;
     destructor Destroy; override;
 
     { ISSLCertificate - 加载和保存 }
@@ -231,6 +233,8 @@ begin
     on E: Exception do
     begin
       AError := 'Failed to parse certificate DER: ' + E.Message;
+      AParser.Free;
+      AParser := nil;
       Result := False;
     end;
   end;
@@ -334,16 +338,37 @@ begin
       ) then
         Exit;
 
-      Result := TryVerifyTLS13CertificateVerifySignature(
-        LScheme,
-        LIssuerParser.PublicKeyInfo,
-        LCertParser.RawTBSCertificate,
-        LCertParser.Signature,
-        AError
-      );
+      case LScheme of
+        TLS13_SIG_RSA_PKCS1_SHA256:
+          Result := TryVerifyRSAPKCS1v15SignatureSHA256(
+            LCertParser.RawTBSCertificate,
+            LCertParser.Signature,
+            LIssuerParser.PublicKeyInfo.RSAModulus,
+            LIssuerParser.PublicKeyInfo.RSAExponent,
+            AError
+          );
+        TLS13_SIG_RSA_PKCS1_SHA384:
+          Result := TryVerifyRSAPKCS1v15SignatureSHA384(
+            LCertParser.RawTBSCertificate,
+            LCertParser.Signature,
+            LIssuerParser.PublicKeyInfo.RSAModulus,
+            LIssuerParser.PublicKeyInfo.RSAExponent,
+            AError
+          );
+      else
+        Result := TryVerifyTLS13CertificateVerifySignature(
+          LScheme,
+          LIssuerParser.PublicKeyInfo,
+          LCertParser.RawTBSCertificate,
+          LCertParser.Signature,
+          AError
+        );
+      end;
     finally
+      LIssuerParser.Free;
     end;
   finally
+    LCertParser.Free;
   end;
 end;
 
@@ -452,6 +477,7 @@ constructor TWolfSSLCertificate.Create;
 begin
   inherited Create;
   FX509 := nil;
+  FOwnsX509 := True;
   FPEMData := '';
   SetLength(FDERData, 0);
   FIssuerCert := nil;
@@ -466,9 +492,16 @@ begin
   FX509 := AX509;
 end;
 
+constructor TWolfSSLCertificate.Create(AX509: PWOLFSSL_X509; AOwnsX509: Boolean);
+begin
+  Create;
+  FX509 := AX509;
+  FOwnsX509 := AOwnsX509;
+end;
+
 destructor TWolfSSLCertificate.Destroy;
 begin
-  if FX509 <> nil then
+  if FOwnsX509 and (FX509 <> nil) then
   begin
     if Assigned(wolfSSL_X509_free) then
       wolfSSL_X509_free(FX509);
@@ -488,7 +521,7 @@ begin
   FInfo.PathLenConstraint := -1;
   FInfo.PathLength := -1;
 
-  if FX509 <> nil then
+  if FOwnsX509 and (FX509 <> nil) then
   begin
     if Assigned(wolfSSL_X509_free) then
       wolfSSL_X509_free(FX509);
@@ -499,6 +532,7 @@ end;
 function TWolfSSLCertificate.TryLoadX509Parser(
   out AParser: TX509Certificate): Boolean;
 var
+  LParser: TX509Certificate;
   LDER: TBytes;
 begin
   AParser := nil;
@@ -507,22 +541,24 @@ begin
   if FX509 = nil then
     Exit;
 
-  AParser := TX509Certificate.Create;
+  LParser := TX509Certificate.Create;
   try
     if Length(FDERData) > 0 then
-      AParser.LoadFromDER(FDERData)
+      LParser.LoadFromDER(FDERData)
     else if FPEMData <> '' then
-      AParser.LoadFromPEM(FPEMData)
+      LParser.LoadFromPEM(FPEMData)
     else
     begin
       LDER := SaveToDER;
       if Length(LDER) = 0 then
         Exit;
-      AParser.LoadFromDER(LDER);
+      LParser.LoadFromDER(LDER);
     end;
+    AParser := LParser;
     Result := True;
-  except
-    Result := False;
+  finally
+    if not Result then
+      LParser.Free;
   end;
 end;
 
@@ -549,6 +585,7 @@ begin
 
     Result := (APublicKeyAlgorithm <> '') or (ASignatureAlgorithm <> '');
   finally
+    LParser.Free;
   end;
 end;
 
@@ -569,6 +606,7 @@ begin
       Exit;
     end;
   finally
+    LParser.Free;
   end;
 
   if not Assigned(wolfSSL_X509_d2i) then
@@ -814,6 +852,7 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
+      LParser.Free;
     end;
   end
   else
@@ -839,6 +878,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -873,6 +913,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -905,6 +946,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -929,6 +971,7 @@ begin
       Result := 0;
     end;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -949,6 +992,7 @@ begin
       Result := 0;
     end;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1163,6 +1207,8 @@ var
     if (Pos('*.', APattern) = 1) then
     begin
       try
+        PatternParts := StringsSplit(APattern, '.');
+        HostParts := StringsSplit(AHostname, '.');
 
         // Same label count
         if Length(PatternParts) = Length(HostParts) then
@@ -1291,6 +1337,7 @@ begin
   try
     Result := LParser.IsCA;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1354,6 +1401,7 @@ begin
       end;
     end;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1368,6 +1416,7 @@ begin
   try
     Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1382,6 +1431,7 @@ begin
   try
     Result := X509KeyUsageToStrings(LParser.KeyUsage);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1396,6 +1446,7 @@ begin
   try
     Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1499,6 +1550,7 @@ begin
     Result := LClone;
     LClone := nil;
   finally
+    LClone.Free;
   end;
 end;
 
@@ -1517,6 +1569,7 @@ end;
 destructor TWolfSSLCertificateStore.Destroy;
 begin
   Clear;
+  FCertificates.Free;
   if FX509Store <> nil then
   begin
     if Assigned(wolfSSL_X509_STORE_free) then

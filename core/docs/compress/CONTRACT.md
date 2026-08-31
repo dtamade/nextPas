@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.compress*.pas`（8 个源文件）
 **层级**：L2（依赖 L0-L1: base, io）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 
@@ -47,6 +47,9 @@ end;
 | `GzipReaderWithMaxOutputSize(ASrc, AMax)` | 带大小限制的 Gzip 解压 |
 | `DeflateCompress(AData): TBytes` | 一次性压缩 |
 | `DeflateDecompress(AData): TBytes` | 一次性解压 |
+| `RawDeflateCompress(AData, ALevel): TBytes` | RAW DEFLATE (RFC 1951) 一次性压缩；完整终结块，ZIP method=8 载荷用 |
+| `RawDeflateDecompress(AData): TBytes` | RAW DEFLATE 一次性解压（默认 256 MB 上限） |
+| `RawDeflateDecompressWithMaxOutputSize(AData, AMax): TBytes` | 带大小限制的 RAW DEFLATE 解压 |
 | `GzipCompress(AData): TBytes` | 一次性 Gzip 压缩 |
 | `GzipDecompress(AData): TBytes` | 一次性 Gzip 解压 |
 | `Lz4Compress(AData): TBytes` | LZ4 压缩 |
@@ -107,3 +110,5 @@ end;
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |
+| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

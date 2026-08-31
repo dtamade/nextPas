@@ -101,6 +101,12 @@ function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
     @return 0 成功，否则返回错误码 *}
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
 
+{** @desc 同步目录到磁盘（POSIX：open 目录 + fsync，保证 rename 后目录项
+    持久化——断电不丢 rename；Windows 无此语义，no-op 返回 0）
+    @param APath 目录路径
+    @return 0 成功，否则返回错误码 *}
+function platform_file_sync_dir(const APath: PAnsiChar): Int32;
+
 {** @desc 截断文件到指定大小（通过句柄）
     @param AHandle 文件句柄
     @param ASize 目标大小
@@ -404,6 +410,22 @@ end;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
 begin
   Result := PosixCheck(fsync(AHandle.Value));
+end;
+
+function platform_file_sync_dir(const APath: PAnsiChar): Int32;
+var
+  LH: TPlatformFileHandle;
+  LClose: Int32;
+begin
+  { POSIX 允许以 O_RDONLY 打开目录并对其 fsync；失败返回错误码，
+    调用方决定是否致命（原子写路径忽略——rename 已原子完成）。 }
+  Result := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
+  if Result <> 0 then
+    Exit;
+  Result := PosixCheck(fsync(LH.Value));
+  LClose := platform_file_close(LH);
+  if (Result = 0) and (LClose <> 0) then
+    Result := LClose;
 end;
 
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
@@ -987,6 +1009,18 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
+{** @desc Windows FILETIME（1601 起 100ns tick）→ Unix 纳秒 epoch。
+    零值（无时间）映射为 0，与 POSIX 侧 stat 失败置零语义一致。 *}
+function WindowsFileTimeToUnixNs(const ATime: FILETIME): Int64; inline;
+var
+  LTicks: UInt64;
+begin
+  LTicks := (UInt64(ATime.dwHighDateTime) shl 32) or UInt64(ATime.dwLowDateTime);
+  if LTicks = 0 then
+    Exit(0);
+  Result := Int64(LTicks - WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS) * 100;
+end;
+
 {** @desc 将 Windows 文件属性映射为平台文件类型
     @param AAttrs dwFileAttributes 值
     @return TPlatformFileType 枚举值 *}
@@ -1024,7 +1058,10 @@ begin
     fomReadWrite: LAccess := GENERIC_READ or GENERIC_WRITE;
   end;
   if AAppend then
-    LAccess := LAccess or FILE_APPEND_DATA;
+    // FILE_APPEND_DATA 仅在未授予 FILE_WRITE_DATA（GENERIC_WRITE 隐含）时
+    // 才把写入钉在文件末尾；否则 WriteFile 按文件指针（新句柄=0）覆写
+    // 已有内容，append 退化为覆盖。追加句柄只授 FILE_APPEND_DATA。
+    LAccess := (LAccess and not GENERIC_WRITE) or FILE_APPEND_DATA;
   case ACreate of
     fcmOpenExisting:     LDisposition := OPEN_EXISTING;
     fcmCreateAlways:     LDisposition := CREATE_ALWAYS;
@@ -1170,6 +1207,14 @@ begin
     Result := platform_get_last_error;
 end;
 
+function platform_file_sync_dir(const APath: PAnsiChar): Int32;
+begin
+  { Windows 无 POSIX 目录 fsync 语义（FlushFileBuffers 对目录句柄
+    需 FILE_FLAG_BACKUP_SEMANTICS，代价高收益微）；no-op 对齐
+    Go os.Open(dir).Sync 在 Windows 失败即忽略的路径。 }
+  Result := 0;
+end;
+
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
 var
   LNewPos: Int64;
@@ -1204,6 +1249,9 @@ begin
   AStat.Size := Int64(LSize);
   AStat.Mode := LData.dwFileAttributes;
   AStat.FileType := WindowsFileAttrsToFileType(LData.dwFileAttributes);
+  AStat.ModTime := WindowsFileTimeToUnixNs(LData.ftLastWriteTime);
+  AStat.AccessTime := WindowsFileTimeToUnixNs(LData.ftLastAccessTime);
+  AStat.CreateTime := WindowsFileTimeToUnixNs(LData.ftCreationTime);
   Result := 0;
 end;
 
@@ -1227,6 +1275,9 @@ begin
   AStat.Mode := LInfo.dwFileAttributes;
   AStat.NLink := LInfo.nNumberOfLinks;
   AStat.FileType := WindowsFileAttrsToFileType(LInfo.dwFileAttributes);
+  AStat.ModTime := WindowsFileTimeToUnixNs(LInfo.ftLastWriteTime);
+  AStat.AccessTime := WindowsFileTimeToUnixNs(LInfo.ftLastAccessTime);
+  AStat.CreateTime := WindowsFileTimeToUnixNs(LInfo.ftCreationTime);
   Result := 0;
 end;
 
@@ -1308,7 +1359,8 @@ begin
     Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(ANewPath, LNewPath) then
     Exit(PLATFORM_ERR_INVALID);
-  if MoveFileW(PWideChar(LOldPath), PWideChar(LNewPath)) then
+  if MoveFileExW(PWideChar(LOldPath), PWideChar(LNewPath),
+    DWORD($1)) then  { MOVEFILE_REPLACE_EXISTING = 1 }
     Result := 0
   else
     Result := platform_get_last_error;
@@ -1618,6 +1670,7 @@ function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer; 
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64; AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32; begin ANewPos := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_sync_dir(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;

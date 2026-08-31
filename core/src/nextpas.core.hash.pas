@@ -4,27 +4,23 @@ unit nextpas.core.hash;
 
 { nextpas.core.hash — 哈希模块门面
 
-  L2 系统能力模块。提供 SHA-256/384/512 和 MD5 哈希原语。
-  IHasher 继承 IWriter，可直接与 io 层集成。
-
-  用法：
-    uses nextpas.core.hash;
-    var H: IHasher;
-    H := NewSHA256;
-    if Length(Data) > 0 then
-      H.Write(Data[0], Length(Data));
-    H.Sum(Digest, SHA256_DIGEST_SIZE);
+  L2 系统能力模块。提供 SHA-224/256/384/512、MD5、BLAKE2b/s-256
+  与 SHAKE128 XOF。IHasher 继承 IWriter，可直接与 io 层集成。
 }
 
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash.md5,
   nextpas.core.hash.sha1,
   nextpas.core.hash.sha256,
   nextpas.core.hash.sha512,
+  nextpas.core.hash.blake2b,
+  nextpas.core.hash.blake2s,
+  nextpas.core.hash.shake128,
   nextpas.core.hash.util,
   nextpas.core.hash.files,
   nextpas.core.hash.wyhash;
@@ -34,9 +30,13 @@ type
   IHasher = nextpas.core.hash.intf.IHasher;
   TMD5Digest = nextpas.core.hash.base.TMD5Digest;
   TSHA1Digest = nextpas.core.hash.base.TSHA1Digest;
+  TSHA224Digest = nextpas.core.hash.base.TSHA224Digest;
   TSHA256Digest = nextpas.core.hash.base.TSHA256Digest;
   TSHA384Digest = nextpas.core.hash.base.TSHA384Digest;
   TSHA512Digest = nextpas.core.hash.base.TSHA512Digest;
+  TBLAKE2b256Digest = nextpas.core.hash.blake2b.TBLAKE2b256Digest;
+  TBLAKE2s256Digest = nextpas.core.hash.blake2s.TBLAKE2s256Digest;
+  TSHAKE128 = nextpas.core.hash.shake128.TSHAKE128;
 
 const
   haMD5 = nextpas.core.hash.base.haMD5;
@@ -44,29 +44,46 @@ const
   haSHA256 = nextpas.core.hash.base.haSHA256;
   haSHA384 = nextpas.core.hash.base.haSHA384;
   haSHA512 = nextpas.core.hash.base.haSHA512;
+  haBLAKE2b256 = nextpas.core.hash.base.haBLAKE2b256;
+  haBLAKE2s256 = nextpas.core.hash.base.haBLAKE2s256;
+  haSHA224 = nextpas.core.hash.base.haSHA224;
 
   MD5_DIGEST_SIZE = nextpas.core.hash.base.MD5_DIGEST_SIZE;
   SHA1_DIGEST_SIZE = nextpas.core.hash.base.SHA1_DIGEST_SIZE;
+  SHA224_DIGEST_SIZE = nextpas.core.hash.base.SHA224_DIGEST_SIZE;
   SHA256_DIGEST_SIZE = nextpas.core.hash.base.SHA256_DIGEST_SIZE;
   SHA384_DIGEST_SIZE = nextpas.core.hash.base.SHA384_DIGEST_SIZE;
   SHA512_DIGEST_SIZE = nextpas.core.hash.base.SHA512_DIGEST_SIZE;
 
   MD5_BLOCK_SIZE = nextpas.core.hash.base.MD5_BLOCK_SIZE;
   SHA1_BLOCK_SIZE = nextpas.core.hash.base.SHA1_BLOCK_SIZE;
+  SHA224_BLOCK_SIZE = nextpas.core.hash.base.SHA224_BLOCK_SIZE;
   SHA256_BLOCK_SIZE = nextpas.core.hash.base.SHA256_BLOCK_SIZE;
   SHA384_BLOCK_SIZE = nextpas.core.hash.base.SHA384_BLOCK_SIZE;
   SHA512_BLOCK_SIZE = nextpas.core.hash.base.SHA512_BLOCK_SIZE;
+  BLAKE2B256_DIGEST_SIZE = nextpas.core.hash.blake2b.BLAKE2B256_DIGEST_SIZE;
+  BLAKE2S256_DIGEST_SIZE = nextpas.core.hash.blake2s.BLAKE2S256_DIGEST_SIZE;
+  BLAKE2B256_BLOCK_SIZE = nextpas.core.hash.base.BLAKE2B256_BLOCK_SIZE;
+  BLAKE2S256_BLOCK_SIZE = nextpas.core.hash.base.BLAKE2S256_BLOCK_SIZE;
 
 function NewMD5: IHasher; inline;
 function NewSHA1: IHasher; inline;
 function NewSHA256: IHasher; inline;
+function NewSHA224: IHasher; inline;
 function NewSHA384: IHasher; inline;
 function NewSHA512: IHasher; inline;
+function NewBLAKE2b256: IHasher; inline;
+function BLAKE2b256Of(const ABuf; ALen: SizeUInt): TBLAKE2b256Digest;
+function NewBLAKE2s256: IHasher; inline;
+function BLAKE2s256Of(const ABuf; ALen: SizeUInt): TBLAKE2s256Digest;
+function NewSHAKE128: TSHAKE128; inline;
+function SHAKE128Of(const ABuf; ALen: SizeUInt; AOutLen: SizeUInt): TBytes;
 function NewHasher(AAlgo: THashAlgorithm): IHasher;
 function GetDigestSize(AAlgo: THashAlgorithm): SizeUInt; inline;
 function GetBlockSize(AAlgo: THashAlgorithm): SizeUInt; inline;
 
 function SHA256Of(const ABuf; ALen: SizeUInt): TSHA256Digest;
+function SHA224Of(const ABuf; ALen: SizeUInt): TSHA224Digest;
 function SHA1Of(const ABuf; ALen: SizeUInt): TSHA1Digest;
 function SHA384Of(const ABuf; ALen: SizeUInt): TSHA384Digest;
 function SHA512Of(const ABuf; ALen: SizeUInt): TSHA512Digest;
@@ -101,6 +118,11 @@ begin
   Result := nextpas.core.hash.sha256.NewSHA256;
 end;
 
+function NewSHA224: IHasher;
+begin
+  Result := nextpas.core.hash.sha256.NewSHA224;
+end;
+
 function NewSHA384: IHasher;
 begin
   Result := nextpas.core.hash.sha512.NewSHA384;
@@ -109,6 +131,36 @@ end;
 function NewSHA512: IHasher;
 begin
   Result := nextpas.core.hash.sha512.NewSHA512;
+end;
+
+function NewBLAKE2b256: IHasher;
+begin
+  Result := nextpas.core.hash.blake2b.NewBLAKE2b256;
+end;
+
+function BLAKE2b256Of(const ABuf; ALen: SizeUInt): TBLAKE2b256Digest;
+begin
+  Result := nextpas.core.hash.blake2b.BLAKE2b256Of(ABuf, ALen);
+end;
+
+function NewBLAKE2s256: IHasher;
+begin
+  Result := nextpas.core.hash.blake2s.NewBLAKE2s256;
+end;
+
+function BLAKE2s256Of(const ABuf; ALen: SizeUInt): TBLAKE2s256Digest;
+begin
+  Result := nextpas.core.hash.blake2s.BLAKE2s256Of(ABuf, ALen);
+end;
+
+function NewSHAKE128: TSHAKE128;
+begin
+  Result := nextpas.core.hash.shake128.NewSHAKE128;
+end;
+
+function SHAKE128Of(const ABuf; ALen: SizeUInt; AOutLen: SizeUInt): TBytes;
+begin
+  Result := nextpas.core.hash.shake128.SHAKE128Of(ABuf, ALen, AOutLen);
 end;
 
 function GetDigestSize(AAlgo: THashAlgorithm): SizeUInt;
@@ -127,6 +179,14 @@ begin
   LH := nextpas.core.hash.sha256.NewSHA256;
   if ALen > 0 then LH.Write(ABuf, ALen);
   LH.Sum(Result, SHA256_DIGEST_SIZE);
+end;
+
+function SHA224Of(const ABuf; ALen: SizeUInt): TSHA224Digest;
+var LH: IHasher;
+begin
+  LH := nextpas.core.hash.sha256.NewSHA224;
+  if ALen > 0 then LH.Write(ABuf, ALen);
+  LH.Sum(Result, SHA224_DIGEST_SIZE);
 end;
 
 function SHA1Of(const ABuf; ALen: SizeUInt): TSHA1Digest;
@@ -209,6 +269,9 @@ begin
     Ord(haSHA256): Result := nextpas.core.hash.sha256.NewSHA256;
     Ord(haSHA384): Result := nextpas.core.hash.sha512.NewSHA384;
     Ord(haSHA512): Result := nextpas.core.hash.sha512.NewSHA512;
+    Ord(haBLAKE2b256): Result := nextpas.core.hash.blake2b.NewBLAKE2b256;
+    Ord(haBLAKE2s256): Result := nextpas.core.hash.blake2s.NewBLAKE2s256;
+    Ord(haSHA224): Result := nextpas.core.hash.sha256.NewSHA224;
   else
     raise EArgumentError.Create('NewHasher: invalid hash algorithm');
   end;

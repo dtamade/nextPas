@@ -177,6 +177,7 @@ begin
   { P2 #13 fix: domain check — if length out of [FMinLen, FMaxLen], shrink toward range }
   if (LLen < FMinLen) or (LLen > FMaxLen) then
   begin
+    Result := nil;
     SetLength(Result, 1);
     if LLen < FMinLen then
       Result[0] := StringOfChar('a', FMinLen)
@@ -322,6 +323,7 @@ begin
   { P2 #13 fix: domain check — if AValue is out of [FMin, FMax], shrink toward range }
   if (AValue < FMin) or (AValue > FMax) then
   begin
+    Result := nil;
     SetLength(Result, 1);
     if AValue < FMin then
       Result[0] := FMin
@@ -432,6 +434,7 @@ end;
 
 function TBoolGenerator.Shrink(const AValue: Boolean): specialize TArray<Boolean>;
 begin
+  Result := nil;
   SetLength(Result, 1);
   { Shrink toward False }
   Result[0] := False;
@@ -483,6 +486,7 @@ var
   LLen, I: Integer;
 begin
   LLen := FMinLen + FRng.NextIntRange(0, FMaxLen - FMinLen);
+  Result := nil;
   SetLength(Result, LLen);
   for I := 0 to LLen - 1 do
     Result[I] := Byte(FRng.NextIntRange(0, 255));
@@ -497,6 +501,7 @@ begin
   { P2 #13 fix: domain check — if length out of [FMinLen, FMaxLen], shrink toward range }
   if (LLen < FMinLen) or (LLen > FMaxLen) then
   begin
+    Result := nil;
     SetLength(Result, 1);
     if LLen < FMinLen then
     begin
@@ -627,6 +632,7 @@ begin
   Val(AValue, LParsed, LCode);
   if LCode <> 0 then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;
@@ -697,6 +703,7 @@ var
 begin
   LShrunk := FSource.Shrink(AValue);
   N := 0;
+  Result := nil;
   SetLength(Result, Length(LShrunk));
   for I := 0 to High(LShrunk) do
   begin
@@ -764,6 +771,7 @@ var
 begin
   LShrunk := FSource.Shrink(AValue);
   N := 0;
+  Result := nil;
   SetLength(Result, Length(LShrunk));
   for I := 0 to High(LShrunk) do
   begin
@@ -831,6 +839,7 @@ var
 begin
   LShrunk := FSource.Shrink(AValue);
   N := 0;
+  Result := nil;
   SetLength(Result, Length(LShrunk));
   for I := 0 to High(LShrunk) do
   begin
@@ -897,6 +906,7 @@ var
 begin
   { Try values that are "simpler" (earlier in the array) }
   N := 0;
+  Result := nil;
   SetLength(Result, Length(FValues));
   for I := 0 to High(FValues) do
   begin
@@ -963,6 +973,7 @@ var
 begin
   { Try shorter strings first }
   N := 0;
+  Result := nil;
   SetLength(Result, Length(FValues));
   for I := 0 to High(FValues) do
   begin
@@ -1026,6 +1037,7 @@ end;
 
 function TChoiceBoolGenerator.Shrink(const AValue: Boolean): specialize TArray<Boolean>;
 begin
+  Result := nil;
   SetLength(Result, 1);
   Result[0] := False;
 end;
@@ -1222,6 +1234,7 @@ var
   LLen, I: Integer;
 begin
   LLen := FMinLen + FRng.NextIntRange(0, FMaxLen - FMinLen);
+  Result := nil;
   SetLength(Result, LLen);
   for I := 0 to LLen - 1 do
     Result[I] := FGen.Generate;
@@ -1234,6 +1247,7 @@ begin
   LLen := Length(AValue);
   if LLen = 0 then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;
@@ -1344,6 +1358,7 @@ end;
 
 function TBindIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
 begin
+  Result := nil;
   { Bind generators don't shrink directly — shrink the inner generator }
   SetLength(Result, 3);
   Result[0] := 0;

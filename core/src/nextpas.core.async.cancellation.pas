@@ -37,8 +37,19 @@ type
     { 注册取消回调（取消时立即调用，若已取消则立即调用） }
     procedure OnCancel(ACallback: TCancelCallback; AContext: Pointer = nil);
 
-    { 创建子令牌（父取消时子自动取消） }
+    { 注销回调（V3-B7 反哺新增）：移除全部 Callback+Context 精确匹配
+      的注册项；无匹配为无害 no-op（含已取消后本就未存储的情形）。
+      生命周期用途——注册方析构前摘除以裸指针作上下文的回调，防
+      "令牌比注册方长寿"时的悬垂 UAF。 }
+    procedure RemoveOnCancel(ACallback: TCancelCallback;
+      AContext: Pointer = nil);
+
+    { 创建子令牌（父取消时子自动取消）。父持子引用保活（V3-B6）：
+      子任务结束时须调用 DetachFromParent 摘链，否则子滞留至父亡。 }
     function CreateChildToken: IAsyncCancellationToken;
+
+    { 从父令牌摘链并释放父侧引用；幂等。子任务收尾的标准动作。 }
+    procedure DetachFromParent;
 
     { 等待取消（返回 True 表示已取消，False 表示超时） }
     function WaitForCancel(ATimeoutMs: UInt32 = 0): Boolean;
@@ -69,6 +80,11 @@ type
   PChildEntry = ^TChildEntry;
   TChildEntry = record
     Child: Pointer;  { TAsyncCancellationTokenImpl, 使用指针避免前向引用 }
+    { V3-B6 修复：父持子令牌接口引用。此前列表只存裸指针且子析构不
+      摘链——"子先亡、父后取消"时 CancelChildren 解引用已释放内存
+      （UAF 窗口）。持引用后子至少存活到摘链；配套 DetachFromParent
+      供消费方在子任务结束时显式摘链，防长命父令牌下的滞留累积。 }
+    Ref: IAsyncCancellationToken;
     Next: PChildEntry;
   end;
 
@@ -97,7 +113,10 @@ type
     procedure Cancel;
     function IsCancelled: Boolean;
     procedure OnCancel(ACallback: TCancelCallback; AContext: Pointer = nil);
+    procedure RemoveOnCancel(ACallback: TCancelCallback;
+      AContext: Pointer = nil);
     function CreateChildToken: IAsyncCancellationToken;
+    procedure DetachFromParent;
     function WaitForCancel(ATimeoutMs: UInt32 = 0): Boolean;
   end;
 
@@ -128,10 +147,12 @@ end;
 destructor TAsyncCancellationTokenImpl.Destroy;
 var
   LEntry, LNextEntry: PCancelCallbackEntry;
-  LChild, LNextChild: PChildEntry;
+  LChild: PChildEntry;
 begin
-  { 从父令牌注销（仅清除引用，不修改父的子列表） }
-  FParent := nil;
+  { 从父令牌摘链（V3-B6：正常路径下父持本对象引用期间析构不可达；
+    此处兜底父亡重入路径——父析构释放条目引用时可能触发本析构，
+    摘链须在父的 FLock 仍存活时完成，故置于成员清理最前） }
+  RemoveFromParent;
   { 释放回调链表 }
   LEntry := FCallbacks;
   while LEntry <> nil do
@@ -140,15 +161,21 @@ begin
     Dispose(LEntry);
     LEntry := LNextEntry;
   end;
-  { 释放子令牌引用 }
-  LChild := FChildren;
-  while LChild <> nil do
+  { 释放子令牌条目。逐条先摘链再 Dispose：释放接口引用可能重入
+    触发子析构（父亡路径下父持的常是末位引用），子析构内 RemoveChild
+    必须找不到已摘链条目，否则双重 Dispose（V3-B6）。
+    同时清空存活子的 FParent 反向指针——否则子后续 DetachFromParent
+    会解引用已亡父对象。顺序：先断反向指针、再摘链、最后释放引用。 }
+  while FChildren <> nil do
   begin
-    LNextChild := LChild^.Next;
-    LChild^.Child := nil;  { 不拥有子令牌，只清空引用 }
+    LChild := FChildren;
+    FChildren := LChild^.Next;
+    if LChild^.Child <> nil then
+      TAsyncCancellationTokenImpl(LChild^.Child).FParent := nil;
+    LChild^.Child := nil;
     Dispose(LChild);
-    LChild := LNextChild;
   end;
+  FChildrenTail := nil;
   platform_condvar_destroy(FCond);
   platform_mutex_destroy(FLock);
   inherited Destroy;
@@ -185,11 +212,16 @@ begin
 end;
 
 procedure TAsyncCancellationTokenImpl.RemoveFromParent;
+var
+  LParent: TAsyncCancellationTokenImpl;
 begin
-  if FParent <> nil then
+  { 先断字段再摘链：Dispose 释放条目引用可能重入触发本对象析构，
+    析构内再次进入本过程时 FParent 已 nil，幂等返回（防双重清理） }
+  LParent := FParent;
+  if LParent <> nil then
   begin
-    FParent.RemoveChild(Self);
     FParent := nil;
+    LParent.RemoveChild(Self);
   end;
 end;
 
@@ -207,6 +239,7 @@ begin
     end;
     New(LEntry);
     LEntry^.Child := Pointer(AChild);
+    LEntry^.Ref := AChild;   { V3-B6：父持引用，子至少存活到摘链 }
     LEntry^.Next := nil;
     if FChildrenTail <> nil then
       FChildrenTail^.Next := LEntry
@@ -250,6 +283,10 @@ end;
 procedure TAsyncCancellationTokenImpl.Cancel;
 var
   LOldState: Int32;
+  LCallbacks: PCancelCallbackEntry;
+  LChildren: PChildEntry;
+  LEntry, LNextEntry: PCancelCallbackEntry;
+  LChild, LNextChild: PChildEntry;
 begin
   { 原子状态转换：ACTIVE -> CANCELLED }
   LOldState := atomic_exchange(FState, CANCEL_STATE_CANCELLED, mo_acq_rel);
@@ -260,10 +297,43 @@ begin
   try
     FCondReady := True;
     platform_condvar_broadcast(FCond);
-    FireCallbacks;
-    CancelChildren;
+    LCallbacks := FCallbacks;
+    FCallbacks := nil;
+    FCallbackTail := nil;
+    LChildren := FChildren;
+    FChildren := nil;
+    FChildrenTail := nil;
   finally
     platform_mutex_unlock(FLock);
+  end;
+  LEntry := LCallbacks;
+  while LEntry <> nil do
+  begin
+    LNextEntry := LEntry^.Next;
+    try
+      if Assigned(LEntry^.Callback) then
+        LEntry^.Callback(LEntry^.Context);
+    except
+    end;
+    Dispose(LEntry);
+    LEntry := LNextEntry;
+  end;
+  LChild := LChildren;
+  while LChild <> nil do
+  begin
+    LNextChild := LChild^.Next;
+    if LChild^.Child <> nil then
+    begin
+      try
+        TAsyncCancellationTokenImpl(LChild^.Child).Cancel;
+      except
+      end;
+      TAsyncCancellationTokenImpl(LChild^.Child).FParent := nil;
+    end;
+    LChild^.Child := nil;
+    LChild^.Ref := nil;
+    Dispose(LChild);
+    LChild := LNextChild;
   end;
 end;
 
@@ -305,9 +375,49 @@ begin
   end;
 end;
 
+procedure TAsyncCancellationTokenImpl.RemoveOnCancel(
+  ACallback: TCancelCallback; AContext: Pointer);
+var
+  LP, LPrev, LDone: PCancelCallbackEntry;
+begin
+  platform_mutex_lock(FLock);
+  try
+    LP := FCallbacks;
+    LPrev := nil;
+    while LP <> nil do
+    begin
+      if (LP^.Callback = ACallback) and (LP^.Context = AContext) then
+      begin
+        { 摘除匹配节点（LPrev 保持指向最后一个保留节点，可安全处理
+          连续匹配）；头尾指针同步维护 }
+        if LPrev <> nil then
+          LPrev^.Next := LP^.Next
+        else
+          FCallbacks := LP^.Next;
+        if FCallbackTail = LP then
+          FCallbackTail := LPrev;
+        LDone := LP;
+        LP := LP^.Next;
+        Dispose(LDone);
+        { 继续扫描：同名多注册一次清空 }
+        Continue;
+      end;
+      LPrev := LP;
+      LP := LP^.Next;
+    end;
+  finally
+    platform_mutex_unlock(FLock);
+  end;
+end;
+
 function TAsyncCancellationTokenImpl.CreateChildToken: IAsyncCancellationToken;
 begin
   Result := TAsyncCancellationTokenImpl.Create(Self);
+end;
+
+procedure TAsyncCancellationTokenImpl.DetachFromParent;
+begin
+  RemoveFromParent;
 end;
 
 function TAsyncCancellationTokenImpl.WaitForCancel(ATimeoutMs: UInt32): Boolean;

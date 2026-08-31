@@ -10,6 +10,7 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.event,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.syntax,
   nextpas.core.tui.widget.input_editor,
@@ -697,6 +698,237 @@ begin
   Check(LEditor.CursorRow = 29, 'Cursor row 29 after MoveDown');
 end;
 
+{ --- MoveTo:字节定位(越界 clamp),不进撤销栈 --- }
+
+procedure TestEditorMoveTo;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('hello'#10'world'#10, 0);
+  { world 行 'r' 前:hello(0-4) LF(5) w(6) o(7) r(8) }
+  LEditor.MoveTo(8);
+  LEditor.InsertChar(Ord('!'));
+  Check(LEditor.Content = 'hello'#10'wo!rld'#10, 'MoveTo positions caret');
+  { 越界高位 clamp 到末尾 }
+  LEditor.MoveTo(999);
+  LEditor.InsertChar(Ord('X'));
+  Check(LEditor.Content = 'hello'#10'wo!rld'#10'X', 'MoveTo clamps high');
+  { 越界低位 clamp 到 0 }
+  LEditor.MoveTo(-5);
+  LEditor.InsertChar(Ord('Y'));
+  Check(LEditor.Content = 'Yhello'#10'wo!rld'#10'X', 'MoveTo clamps low');
+  { 定位不污染撤销栈:Undo 仍回到定位前全文 }
+end;
+
+{ --- ByteOffsetAt:屏幕坐标 → 字节偏移(行/列 clamp) --- }
+
+procedure TestEditorByteOffsetAt;
+var
+  LEditor: IInputEditor;
+  A: TRect;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('abc'#10'def'#10, 0);
+  A := TRect.Make(0, 0, 10, 10);
+  Check(LEditor.ByteOffsetAt(A, 0, 0) = 0, 'col0 row0');
+  Check(LEditor.ByteOffsetAt(A, 2, 0) = 2, 'col2 row0');
+  Check(LEditor.ByteOffsetAt(A, 99, 0) = 3, 'col clamp row0');
+  Check(LEditor.ByteOffsetAt(A, 0, 1) = 4, 'row1 start');
+  Check(LEditor.ByteOffsetAt(A, 1, 1) = 5, 'row1 col1');
+  { 视口底部外 clamp 到末行(尾换行产生的空行)行首 }
+  Check(LEditor.ByteOffsetAt(A, 0, 99) = 8, 'row clamp to last');
+end;
+
+{ --- SetFindHits:渲染命中高亮(当前/非当前样式),清除 --- }
+
+procedure TestEditorFindHits;
+var
+  LEditor: IInputEditor;
+  B: TBuffer;
+  H: array of TFindHit;
+  St, CurSt: TStyle;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('foo bar foo'#10, 0);
+  B := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 5), nil);
+  try
+    St.Fg := IndexedColor(1);
+    St.Bg := IndexedColor(7);
+    CurSt.Fg := IndexedColor(2);
+    CurSt.Bg := IndexedColor(8);
+    SetLength(H, 2);
+    H[0].Start := 0; H[0].Len := 3;   { 行首 foo }
+    H[1].Start := 8; H[1].Len := 3;   { 行尾 foo }
+    LEditor.SetFindHits(H, 0, St, CurSt);
+    LEditor.Render(TRect.Make(0, 0, 30, 5), B);
+    Check(B.CellAt(0, 0)^.Bg.Index = 8, 'cur hit style bg');
+    Check(B.CellAt(8, 0)^.Bg.Index = 7, 'non-cur hit style bg');
+    Check(B.CellAt(4, 0)^.Bg.Index <> 7, 'gap not highlighted');
+    { 空数组清除高亮:新帧(TBuffer 每帧新建,样式合并语义下不可复用旧缓冲) }
+    LEditor.SetFindHits([], -1, St, CurSt);
+    B.Free;
+    B := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 5), nil);
+    LEditor.Render(TRect.Make(0, 0, 30, 5), B);
+    Check(B.CellAt(0, 0)^.Bg.Index <> 8, 'clear hits');
+  finally
+    B.Free;
+  end;
+end;
+
+{ 选区读取 API:无选区 HasSelection=False/SelectedText='';
+  移动+Shift 选择后有选区,SelectedText=选中字节;光标在选区内时
+  选区文本不随光标移动变化(Anchor/Cur 反转由内部处理) }
+procedure TestEditorSelectionAPI;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('abcd'#10'ef', 0);
+  Check(not LEditor.HasSelection, 'no selection initially');
+  Check(LEditor.SelectedText = '', 'empty text without selection');
+  LEditor.MoveRight;          { 光标到 1 }
+  LEditor.MoveRight;          { 光标到 2 }
+  LEditor.MoveRight;          { 光标到 3:Anchor=-1 纯移动,无选区 }
+  Check(not LEditor.HasSelection, 'plain moves keep no selection');
+  LEditor.MoveLeft;           { 光标 2 }
+  { 用 Shift 扩展:HandleKey 的 kcRight+kmShift 走 MoveRightInternal(Selecting) }
+  LEditor.HandleKey(KeyCodeEvent(kcRight, [kmShift]).Key);  { 光标 3,选区 [2,3) }
+  Check(LEditor.HasSelection, 'shift moves select');
+  Check(LEditor.SelectedText = 'c', 'selected text span');
+  { Anchor 在 2:再右移扩展 }
+  LEditor.HandleKey(KeyCodeEvent(kcRight, [kmShift]).Key);  { 光标 4,选区 [2,4) }
+  Check(LEditor.SelectedText = 'cd', 'selection grows right');
+  { 反向移动(Anchor 3,光标回到 2):选区 [2,3) }
+  LEditor.HandleKey(KeyCodeEvent(kcLeft, [kmShift]).Key);
+  Check(LEditor.SelectedText = 'c', 'selection shrinks');
+end;
+
+{ 删除选区:DeleteSelected 入撤销栈,一次 Undo 恢复 }
+procedure TestEditorDeleteSelectedUndo;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('hello world', 0);
+  LEditor.HandleKey(KeyCodeEvent(kcRight, [kmShift]).Key);  { 选 'h' }
+  LEditor.HandleKey(KeyCodeEvent(kcRight, [kmShift]).Key);  { 选 'he' }
+  LEditor.DeleteSelected;
+  Check(LEditor.Content = 'llo world', 'delete selected removes span');
+  Check(not LEditor.HasSelection, 'selection cleared after delete');
+  Check(LEditor.CursorRow = 0, 'cursor stays at deletion point');
+  LEditor.Undo;
+  Check(LEditor.Content = 'hello world', 'undo restores span');
+  { 无选区时无操作(Undo 恢复含 Anchor 的快照,先 MoveTo 清选区) }
+  LEditor.MoveTo(0);
+  LEditor.DeleteSelected;
+  Check(LEditor.Content = 'hello world', 'no-op without selection');
+end;
+
+{ PH33 P2b：布局配置面——WithBlock 块包装（边框在区边缘、占位文本仍在内容区） }
+procedure TestEditorWithBlock;
+var LE: IInputEditor; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LE := TInputEditor.New
+    .WithPlaceholder('ph-mark')
+    .WithBlock(TBlock.Bordered('T'));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 4));
+  try
+    LE.Render(TRect.Make(0, 0, 30, 4), LBuf);
+    LAll := '';
+    for I := 0 to 3 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos(#$E2#$94#$8C, LBuf.RowAsString(0)) > 0, 'block border drawn');
+    Check(Pos('ph-mark', LAll) > 0, 'placeholder visible inside block');
+  finally LBuf.Free; end;
+end;
+
+procedure TestEditorWithBlockChaining;
+var LE: IInputEditor;
+begin
+  LE := TInputEditor.New.WithBlock(TBlock.Bordered('x'));
+  Check(LE <> nil, 'WithBlock chains and returns interface');
+end;
+
+{ PH33 P5a：行号 gutter 默认关=内容区与 AArea 重合（既有渲染逐字节不变） }
+procedure TestEditorGutterOff;
+var LE: IInputEditor; LBuf: TBuffer; LCell: PCell; I: Integer;
+begin
+  LE := TInputEditor.New;
+  LE.ReplaceContent('abc', 3);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 2));
+  try
+    LE.Render(TRect.Make(0, 0, 20, 2), LBuf);
+    for I := 0 to 2 do
+    begin
+      LCell := LBuf.CellAt(I, 0);
+      Check(LCell <> nil, 'cell exists');
+      Check(Chr(LCell^.Glyph.Bytes[0]) = Chr(Ord('a') + I),
+        'gutter off: content starts at AArea.X unchanged');
+    end;
+  finally LBuf.Free; end;
+end;
+
+{ PH33 P5a：gutter 开——行号右对齐+1 隔列，宽=max位数+1 钳≥3，内容区左移同宽 }
+procedure TestEditorGutterOn;
+var LE: IInputEditor; LBuf: TBuffer;
+
+  function CellCh(AX, AY: Integer): AnsiChar;
+  var LC: PCell;
+  begin
+    LC := LBuf.CellAt(AX, AY);
+    if (LC = nil) or (LC^.Glyph.Len = 0) then Result := ' '
+    else Result := Chr(LC^.Glyph.Bytes[0]);
+  end;
+
+begin
+  LE := TInputEditor.New.WithLineNumbers(True);
+  LE.ReplaceContent('ab'#10'c', 4);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 2));
+  try
+    LE.Render(TRect.Make(0, 0, 20, 2), LBuf);
+    { LineCount=2 → GutW=max(1+1,3)=3：行号在 x=1，隔列 x=2，内容 x=3 起 }
+    Check(CellCh(0, 0) = ' ', 'gutter pad left of number');
+    Check(CellCh(1, 0) = '1', 'line number right-aligned');
+    Check(CellCh(2, 0) = ' ', 'separator column');
+    Check(CellCh(3, 0) = 'a', 'content shifted by gutter width');
+    Check(CellCh(4, 0) = 'b', 'content second char');
+    Check(CellCh(1, 1) = '2', 'second line number');
+    Check(CellCh(3, 1) = 'c', 'second line content at same X');
+  finally LBuf.Free; end;
+  { 视口高于行数：越过末行的空行不画号 }
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 3));
+  try
+    LE.Render(TRect.Make(0, 0, 20, 3), LBuf);
+    Check(CellCh(1, 2) = ' ', 'no number past last line');
+  finally LBuf.Free; end;
+end;
+
+{ PH33 P5a：syntax token CJK——token 落显示列（旧 bug 字节偏移直当列，
+  ':=' 错落字节列 7），且高位字节按完整图素成 token（格内完整字形非乱码） }
+procedure TestEditorSyntaxCJKColumn;
+var LE: IInputEditor; LBuf: TBuffer; LCell: PCell;
+begin
+  LE := TInputEditor.New;
+  LE.SetHighlighter(TPascalHighlighter.Create, TSyntaxTheme.Default);
+  LE.ReplaceContent('中文 := 1', 11);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LE.Render(TRect.Make(0, 0, 20, 1), LBuf);
+    LCell := LBuf.CellAt(0, 0);
+    Check((LCell <> nil) and (LCell^.Glyph.Len = 3) and (LCell^.Glyph.Bytes[0] = $E4),
+      'CJK ident drawn as whole grapheme, not lone bytes');
+    Check(LCell^.Width = 2, 'CJK cell display width 2');
+    LCell := LBuf.CellAt(2, 0);
+    Check((LCell <> nil) and (LCell^.Glyph.Bytes[0] = $E6), 'second grapheme at display col 2');
+    LCell := LBuf.CellAt(5, 0);
+    Check((LCell <> nil) and (LCell^.Glyph.Bytes[0] = Ord(':')),
+      'operator at display col 5 (byte-offset bug put it at 7)');
+    Check(LBuf.CellAt(6, 0)^.Glyph.Bytes[0] = Ord('='), '= follows :');
+    Check(LBuf.CellAt(7, 0)^.Glyph.Bytes[0] = 32, 'untokenized gap stays space');
+    Check(LBuf.CellAt(8, 0)^.Glyph.Bytes[0] = Ord('1'), 'number at display col 8');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.input_editor');
   T.Test('TEditorSnapshot record', @TestEditorSnapshotRecord);
@@ -741,5 +973,15 @@ begin
   T.Test('Content empty', @TestEditorContentEmpty);
   T.Test('CursorScreenPos', @TestEditorCursorScreenPos);
   T.Test('CursorRow', @TestEditorCursorRow);
+  T.Test('MoveTo', @TestEditorMoveTo);
+  T.Test('ByteOffsetAt', @TestEditorByteOffsetAt);
+  T.Test('FindHits', @TestEditorFindHits);
+  T.Test('SelectionAPI', @TestEditorSelectionAPI);
+  T.Test('DeleteSelected undo', @TestEditorDeleteSelectedUndo);
+  T.Test('WithBlock render (PH33 P2b)', @TestEditorWithBlock);
+  T.Test('WithBlock chaining (PH33 P2b)', @TestEditorWithBlockChaining);
+  T.Test('Gutter off default (PH33 P5a)', @TestEditorGutterOff);
+  T.Test('Gutter on (PH33 P5a)', @TestEditorGutterOn);
+  T.Test('Syntax CJK column (PH33 P5a)', @TestEditorSyntaxCJKColumn);
   if not T.Run then Halt(1);
 end.

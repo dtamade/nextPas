@@ -1,8 +1,8 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - A unified SSL/TLS library for FreePascal                      }
+{  nextpas.core.tls - A unified SSL/TLS library for FreePascal                      }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {  证书链验证模块 - 提供完整的证书链验证功能                                 }
 {                                                                              }
@@ -341,6 +341,10 @@ begin
   // 通配符匹配
   if (Pos('*.', ACertName) = 1) then
   begin
+    // 按 '.' 拆分后逐级比较；缺失拆分时两个空数组恒等长，
+    // 会退化为「任意 *.<x> 模式匹配任意主机名」的校验失效
+    CertParts := nextpas.core.text.strings.StringsSplit(ACertName, '.');
+    HostParts := nextpas.core.text.strings.StringsSplit(AHostname, '.');
     try
 
       // 域名级数必须相同
@@ -737,6 +741,7 @@ begin
 
     Result := True;
   finally
+    ChainList.Free;
   end;
 end;
 

@@ -6,6 +6,7 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
+  nextpas.core.hash,
   nextpas.core.crypto.hmac,
   nextpas.core.test;
 
@@ -126,6 +127,22 @@ begin
     LH.Write(LData[5], Length(LData) - 5);
     LH.Sum(LD2, 32);
     CheckTrue(CompareMem(@LD1[0], @LD2[0], 32));
+  end);
+
+  LSuite.Test('factory HMAC matches algo HMAC', procedure
+  var LKey, LData: TBytes; H1, H2: IHasher; D1, D2: TSHA256Digest;
+      F: THasherFactory;
+  begin
+    LKey := BytesOf('Jefe');
+    LData := BytesOf('what do ya want for nothing?');
+    F := function: IHasher begin Result := NewSHA256; end;
+    H1 := NewHMAC(F, LKey[0], Length(LKey));
+    H1.Write(LData[0], Length(LData));
+    H1.Sum(D1, 32);
+    H2 := NewHMAC(haSHA256, LKey[0], Length(LKey));
+    H2.Write(LData[0], Length(LData));
+    H2.Sum(D2, 32);
+    CheckTrue(CompareMem(@D1[0], @D2[0], 32));
   end);
 
   LRunner := TSuiteRunner.Create('nextpas.core.hash.hmac');

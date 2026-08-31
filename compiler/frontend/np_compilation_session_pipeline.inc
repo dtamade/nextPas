@@ -23,7 +23,16 @@ end;
 procedure TCompilationSession.ResetSemanticState;
 begin
   ResetIrState;
-  FreeAndNil(FSemanticModel);
+  if FSemanticModel <> nil then
+  begin
+    if (FQueryDB <> nil) and FQueryDB.ContainsValue(FSemanticModel) then
+    begin
+      FQueryDB.ForgetValue(FSemanticModel);
+      FreeAndNil(FSemanticModel);
+    end
+    else
+      FreeAndNil(FSemanticModel);
+  end;
   FSemanticStatus := 'deferred';
 end;
 
@@ -346,6 +355,26 @@ begin
     FQueryDB.InvalidatePrefix('semantic:' + Changed[I]);
   end;
 
+  { Store 泄漏补漏：DB 已 Free 被失效的 Value，Session 悬垂指针需清零 }
+  if (FSemanticModel <> nil) and (FQueryDB <> nil) and
+     (not FQueryDB.ContainsValue(FSemanticModel)) then
+  begin
+    FSemanticModel := nil;
+    FSemanticStatus := 'deferred';
+  end
+  else if FSemanticModel <> nil then
+  begin
+    for I := 0 to Length(Changed) - 1 do
+      if Changed[I] = RootPath then
+      begin
+        if FQueryDB.ContainsValue(FSemanticModel) then
+          FQueryDB.ForgetValue(FSemanticModel);
+        FSemanticModel := nil;
+        FSemanticStatus := 'deferred';
+        Break;
+      end;
+  end;
+
   { Reset state for recompilation }
   Result := True;
 end;
@@ -495,6 +524,12 @@ begin
   CachedModel := FQueryDB.Get(CacheKey, nil);
   if (CachedModel <> nil) and (CachedModel is TSemanticModel) then
   begin
+    if FSemanticModel <> TSemanticModel(CachedModel) then
+    begin
+      if (FSemanticModel <> nil) and (FQueryDB <> nil) and FQueryDB.ContainsValue(FSemanticModel) then
+        FQueryDB.ForgetValue(FSemanticModel);
+      FreeAndNil(FSemanticModel);
+    end;
     FSemanticModel := TSemanticModel(CachedModel);
     FSemanticStatus := FSemanticModel.Status;
     { Do NOT call ResetSemanticState — it would free the cached model }
@@ -513,6 +548,12 @@ begin
       [],
       DiskModel) then
     begin
+      if FSemanticModel <> DiskModel then
+      begin
+        if (FSemanticModel <> nil) and (FQueryDB <> nil) and FQueryDB.ContainsValue(FSemanticModel) then
+          FQueryDB.ForgetValue(FSemanticModel);
+        FreeAndNil(FSemanticModel);
+      end;
       FSemanticModel := DiskModel;
       FSemanticStatus := FSemanticModel.Status;
       { Store in-memory cache too }
@@ -546,14 +587,7 @@ begin
     );
     try
       Analyzer.Analyze;
-      WriteLn(StdErr, '[pipe] after Analyze');
-      Flush(StdErr);
       FSemanticModel := Analyzer.DetachModel;
-      if FSemanticModel = nil then
-        WriteLn(StdErr, '[pipe] after DetachModel status=nil')
-      else
-        WriteLn(StdErr, '[pipe] after DetachModel status=', FSemanticModel.Status);
-      Flush(StdErr);
       if FSemanticModel = nil then
         FSemanticStatus := 'deferred'
       else
@@ -562,43 +596,22 @@ begin
         { Cache for incremental compilation — query DB owns the reference }
         if FSemanticStatus = 'ready' then
         begin
-          WriteLn(StdErr, '[pipe] before QueryDB.Store');
-          Flush(StdErr);
           FQueryDB.Store(CacheKey, FSemanticModel);
-          WriteLn(StdErr, '[pipe] after QueryDB.Store before IncrementalCache.Save');
-          Flush(StdErr);
           { Save to persistent disk cache }
           FIncrementalCache.Save(
             FSourceDatabase.RootSourceCanonicalPath,
             FSourceDatabase.RootSourceText,
             [],
             FSemanticModel);
-          WriteLn(StdErr, '[pipe] after IncrementalCache.Save');
-          Flush(StdErr);
         end;
       end;
     finally
-      WriteLn(StdErr, '[pipe] before Analyzer.Free');
-      Flush(StdErr);
       Analyzer.Free;
-      WriteLn(StdErr, '[pipe] after Analyzer.Free before ResetScratch');
-      Flush(StdErr);
       ResetScratchAllocator;
-      WriteLn(StdErr, '[pipe] after ResetScratch');
-      Flush(StdErr);
     end;
-    WriteLn(StdErr, '[pipe] after Analyzer try model=',
-      PtrUInt(Pointer(FSemanticModel)), ' status=', FSemanticStatus);
-    Flush(StdErr);
   finally
-    WriteLn(StdErr, '[pipe] before UnitEnd');
-    Flush(StdErr);
     FMemScope.UnitEnd;
-    WriteLn(StdErr, '[pipe] after UnitEnd');
-    Flush(StdErr);
   end;
-  WriteLn(StdErr, '[pipe] AnalyzeSemantics return');
-  Flush(StdErr);
 end;
 
 procedure TCompilationSession.LowerToMir;
@@ -611,8 +624,6 @@ var
   LlvmOutput: string;
   PhaseScratch: Pointer;
 begin
-  WriteLn(StdErr, '[pipe] LowerToMir begin');
-  Flush(StdErr);
   FMemScope.UnitBegin;
   try
     ResetIrState;
@@ -662,9 +673,13 @@ begin
     else if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
     begin
       HirBuilder := THIRBuilder.Create(
-        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator);
+        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator, FDiagnosticsSink);
       try
-        HirBuilder.Build;
+        if not HirBuilder.Build then
+        begin
+          FMirStatus := 'failure';
+          Exit;
+        end;
         HirPath := ChangeFileExt(FOptions.BuildContext.ResolvedSourcePath, '.hir');
         { HIR dump lines on FScratchAllocator TVec }
         HirPrinter := THIRPrinter.Create(HirBuilder.Module, FScratchAllocator);
@@ -682,22 +697,16 @@ begin
   finally
     FMemScope.UnitEnd;
   end;
-  WriteLn(StdErr, '[pipe] LowerToMir end status=', FMirStatus);
-  Flush(StdErr);
 end;
 
 procedure TCompilationSession.PlanBackend;
 var
   Planner: TBackendPlanner;
 begin
-  WriteLn(StdErr, '[pipe] PlanBackend begin');
-  Flush(StdErr);
   ResetBackendState;
   if (FSemanticModel = nil) or (FMirStatus <> 'ready') then
   begin
     FBackendStatus := 'failure';
-    WriteLn(StdErr, '[pipe] PlanBackend skip failure');
-    Flush(StdErr);
     Exit;
   end;
 
@@ -712,11 +721,7 @@ begin
     FOptions.OptLevel
   );
   try
-    WriteLn(StdErr, '[pipe] PlanBackend Planner.Plan...');
-    Flush(StdErr);
     Planner.Plan;
-    WriteLn(StdErr, '[pipe] PlanBackend Planner.Plan done');
-    Flush(StdErr);
     FBackendPlan := Planner.DetachPlan;
     if FBackendPlan = nil then
       FBackendStatus := 'deferred'
@@ -728,7 +733,4 @@ begin
 
   if FBackendStatus = 'ready' then
     PropagateSemanticLibraryRequestsToBackendPlan;
-  WriteLn(StdErr, '[pipe] PlanBackend end status=', FBackendStatus);
-  Flush(StdErr);
 end;
-

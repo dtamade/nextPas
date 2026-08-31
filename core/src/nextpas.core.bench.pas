@@ -1270,6 +1270,7 @@ begin
   for I := 0 to FResultCount - 1 do
     if FResults[I].Skipped then
       Inc(LCount);
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1290,6 +1291,7 @@ begin
   for I := 0 to FResultCount - 1 do
     if FResults[I].Executed and (not FResults[I].Skipped) then
       Inc(LCount);
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1313,6 +1315,7 @@ begin
   if Length(LExecuted) = 0 then
     Exit;
 
+  LNPerOps := nil;
   SetLength(LNPerOps, Length(LExecuted));
   for I := 0 to High(LExecuted) do
     LNPerOps[I] := LExecuted[I].NsPerOp;
@@ -1329,6 +1332,7 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) and
        (Copy(FResults[I].Name, 1, Length(APrefix)) = APrefix) then
       Inc(LCount);
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1358,6 +1362,7 @@ begin
         Inc(LCount);
     end;
   end;
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1386,6 +1391,7 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) and
        (Pos(ASubstring, FResults[I].Name) > 0) then
       Inc(LCount);
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1529,6 +1535,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LCount := 0;
   for I := 0 to FResultCount - 1 do
@@ -1569,6 +1576,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LCount := 0;
   for I := 0 to FResultCount - 1 do
@@ -1607,6 +1615,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LCount := 0;
   for I := 0 to FResultCount - 1 do
@@ -1645,6 +1654,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1712,6 +1722,7 @@ begin
     Result.MeanNsPerOp := LTotalNs / LExecutedCount;
 
     { 计算中位数需要排序 — 只在有结果时执行 }
+    LNPerOps := nil;
     SetLength(LNPerOps, LExecutedCount);
     LExecutedCount := 0;
     for I := 0 to FResultCount - 1 do
@@ -1786,6 +1797,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1831,6 +1843,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1864,6 +1877,7 @@ begin
   if LCount = 0 then
     Exit;
 
+  LNPerOps := nil;
   SetLength(LNPerOps, LCount);
   LCount := 0;
   for I := 0 to FResultCount - 1 do
@@ -1890,6 +1904,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1959,8 +1974,11 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
+  LHasMetric := nil;
   SetLength(LHasMetric, LCount);
+  LValues := nil;
   SetLength(LValues, LCount);
 
   LIdx := 0;
@@ -2052,6 +2070,7 @@ begin
     end;
   end;
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2090,6 +2109,7 @@ begin
     Exit;
   end;
 
+  LValues := nil;
   SetLength(LValues, LCount);
   LCount := 0;
   for I := 0 to FResultCount - 1 do
@@ -2113,6 +2133,7 @@ begin
        (FResults[I].Outliers > 0) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2136,6 +2157,7 @@ begin
        (FResults[I].Outliers = 0) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2159,6 +2181,7 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2216,6 +2239,7 @@ begin
     end;
   end;
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2242,6 +2266,7 @@ var
   LGroups: array of string;
 begin
   { 收集所有唯一的分组名称 }
+  LGroups := nil;
   SetLength(LGroups, 0);
   LCount := 0;
 
@@ -2270,6 +2295,7 @@ begin
     end;
   end;
 
+  Result := nil;
   SetLength(Result, LCount);
   for I := 0 to LCount - 1 do
     Result[I] := LGroups[I];
@@ -2549,6 +2575,7 @@ begin
 
   { 两两比较：C(N,2) = N*(N-1)/2 }
   LPairCount := LN * (LN - 1) div 2;
+  LComparisons := nil;
   SetLength(LComparisons, LPairCount);
   LIdx := 0;
   for I := 0 to LN - 1 do
@@ -2735,6 +2762,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LTotal);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2856,6 +2884,7 @@ begin
        (ExtractGroupName(FResults[I].Name) = AGroupName) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2875,6 +2904,7 @@ var
   I: Integer;
 begin
   LResults := CollectGroupResults(AGroupName);
+  Result := nil;
   SetLength(Result, Length(LResults));
   for I := 0 to High(LResults) do
     Result[I] := LResults[I].NsPerOp;
@@ -3031,7 +3061,9 @@ begin
     Result.BaselineNames[I] := ABaselines[I].Name;
 
   { 为每个基线列初始化比率收集器 }
+  LRatios := nil;
   SetLength(LRatios, LNCols);
+  LRatioCounts := nil;
   SetLength(LRatioCounts, LNCols);
   for J := 0 to LNCols - 1 do
   begin

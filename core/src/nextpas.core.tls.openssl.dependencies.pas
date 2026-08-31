@@ -2,7 +2,7 @@
   nextpas.core.tls.openssl.dependencies - 模块依赖图接口
 
   版本: 1.1
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-12-25
 
   描述:

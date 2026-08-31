@@ -19,12 +19,12 @@ type
     constructor Create(ANotBefore, ANotAfter: TDateTime);
 
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
     function GetInfo: TSSLCertificateInfo;
@@ -155,7 +155,7 @@ begin
   Result := False;
 end;
 
-function TMockCertificate.LoadFromStream(AStream: TStream): Boolean;
+function TMockCertificate.LoadFromStream(AStream: IStream): Boolean;
 begin
   Result := False;
 end;
@@ -180,7 +180,7 @@ begin
   Result := False;
 end;
 
-function TMockCertificate.SaveToStream(AStream: TStream): Boolean;
+function TMockCertificate.SaveToStream(AStream: IStream): Boolean;
 begin
   Result := False;
 end;

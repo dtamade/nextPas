@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-APPSCHEDULE_FILE="$ROOT_DIR/src/nextpas.core.tls.tls13.appschedule.pas"
-SERVERHELLO_FILE="$ROOT_DIR/src/nextpas.core.tls.tls13.serverhello.pas"
-RESUMPTION_TEST_FILE="$ROOT_DIR/tests/test_tls13_resumption.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+APPSCHEDULE_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.tls13.appschedule.pas"
+SERVERHELLO_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.tls13.serverhello.pas"
+RESUMPTION_TEST_FILE="${ROOT_DIR}/core/tests/nextpas.core.tls/test_tls13_resumption.pas"
 
 echo "[TEST] managed result init safety wave5 contract"
 

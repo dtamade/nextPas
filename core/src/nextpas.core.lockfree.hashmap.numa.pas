@@ -45,7 +45,6 @@ type
     function GetHashMapForNode(ANode: Integer): THashMap;
   public
     {** @desc 创建 NUMA 感知 HashMap
-  {** @concurrency Thread-safe (see source for details). }
       @param AInitialCapacityPerNode 每个 NUMA 节点内部 HashMap 的初始容量 }
     constructor Create(const AInitialCapacityPerNode: PtrUInt = HASHMAP_NUMA_DEFAULT_INITIAL_CAPACITY_PER_NODE);
     destructor Destroy; override;

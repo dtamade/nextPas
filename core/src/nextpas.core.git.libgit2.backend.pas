@@ -18,10 +18,11 @@ uses
   nextpas.core.exception, nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
   nextpas.core.git.base,
+  nextpas.core.git.native.base,
   nextpas.core.text.format;
 
 type
-  EGitError = class(Exception)
+  EGitError = class(nextpas.core.git.native.base.EGitError)
   private
     FErrorCode: Integer;
     FErrorClass: Integer;
@@ -125,6 +126,13 @@ type
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;
     // M5+ (2026-08-15): blame a file (libgit2 native, no CLI spawn)
     function Blame(const APath: string): TGitBlame;
+    // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
+    function ConfigEntries: TGitConfigEntryArray;
+    // k97/k101: patch/checkout helpers via git CLI golden对照
+    procedure ApplyPatch(const APatchText: string);
+    procedure CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
+    function WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
+      AShowBinary: Boolean): string;
 
     // Backward compatibility with old naming
     function HasUncommit: Boolean;
@@ -244,7 +252,8 @@ function GitTimeToString(const ATime: TGitTime): string;
 implementation
 
 uses
-  nextpas.core.base.utils, nextpas.core.text.strings;
+  nextpas.core.base.utils, nextpas.core.text.strings,
+  nextpas.core.process, nextpas.core.os.env;
 
 { Local helpers replacing SysUtils functions to avoid TBytes/TStringArray conflicts }
 
@@ -703,6 +712,7 @@ var
   rc: cint;
 begin
   Result := nil;
+  List := nil;
   try
     CheckGitResult(git_branch_iterator_new(Iterator, FHandle, AType), 'New branch iterator');
     try
@@ -1650,6 +1660,139 @@ begin
   finally
     git_blame_free(LBlame);
   end;
+end;
+
+function TGitRepository.ConfigEntries: TGitConfigEntryArray;
+var
+  Cfg: git_config;
+  Iter: git_config_iterator;
+  LEntry: Pgit_config_entry;
+  rc: cint;
+  N: Integer;
+begin
+  Result := nil;
+  CheckGitResult(git_repository_config(Cfg, FHandle), 'Open repository config');
+  try
+    CheckGitResult(git_config_iterator_new(Iter, Cfg), 'New config iterator');
+    try
+      N := 0;
+      while True do
+      begin
+        rc := git_config_next(LEntry, Iter);
+        if rc = GIT_ITEROVER then
+          Break;
+        if rc <> GIT_OK then
+          raise EGitError.Create(rc, 'Iterate config entries');
+        if LEntry <> nil then
+        begin
+          SetLength(Result, N + 1);
+          if LEntry^.name <> nil then
+            Result[N].Name := string(LEntry^.name);
+          if LEntry^.value <> nil then
+            Result[N].Value := string(LEntry^.value);
+          Inc(N);
+        end;
+      end;
+    finally
+      git_config_iterator_free(Iter);
+    end;
+  finally
+    git_config_free(Cfg);
+  end;
+end;
+
+procedure TGitRepository.ApplyPatch(const APatchText: string);
+var
+  LWorkDir, LTmpPatch: string;
+  LOut: TProcessOutput;
+begin
+  if APatchText = '' then
+    Exit;
+  LWorkDir := GetWorkDir;
+  if LWorkDir = '' then
+    raise EGitError.Create(GIT_EINVALID, 'ApplyPatch: bare repository has no workdir');
+  LTmpPatch := PathJoin([GetTempDir, 'nextpas_patch_apply.patch']);
+  WriteFileText(LTmpPatch, APatchText);
+  try
+    LOut := RunIn('/usr/bin/git', ['apply', '--whitespace=nowarn', LTmpPatch], LWorkDir);
+    if LOut.ExitCode <> 0 then
+      raise EGitError.Create(GIT_EAPPLYFAIL, 'ApplyPatch: ' + Trim(LOut.StdErr + sLineBreak + LOut.StdOut));
+  finally
+    try
+      if FileExists(LTmpPatch) then
+        DeleteFile(LTmpPatch);
+    except
+    end;
+  end;
+end;
+
+procedure TGitRepository.CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
+var
+  LWorkDir: string;
+  LArgs: TStringArray;
+  LOut: TProcessOutput;
+  I: Integer;
+begin
+  if Trim(ARevspec) = '' then
+    raise EGitError.Create(GIT_EINVALIDSPEC, 'CheckoutPaths: revspec required');
+  if Length(APaths) = 0 then
+    Exit;
+  LWorkDir := GetWorkDir;
+  if LWorkDir = '' then
+    raise EGitError.Create(GIT_EINVALID, 'CheckoutPaths: bare repository has no workdir');
+  SetLength(LArgs, 2 + 1 + Length(APaths));
+  LArgs[0] := 'checkout';
+  LArgs[1] := ARevspec;
+  LArgs[2] := '--';
+  for I := 0 to High(APaths) do
+    LArgs[3 + I] := APaths[I];
+  LOut := RunIn('/usr/bin/git', LArgs, LWorkDir);
+  if LOut.ExitCode <> 0 then
+    raise EGitError.Create(GIT_EINVALIDSPEC, 'CheckoutPaths: ' + Trim(LOut.StdErr + sLineBreak + LOut.StdOut));
+end;
+
+function TGitRepository.WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
+  AShowBinary: Boolean): string;
+var
+  LWorkDir: string;
+  LArgs: TStringArray;
+  LOut: TProcessOutput;
+  I, N, LPos: Integer;
+begin
+  Result := '';
+  LWorkDir := GetWorkDir;
+  if LWorkDir = '' then
+    raise EGitError.Create(GIT_EINVALID, 'WorkdirPatchText: bare repository has no workdir');
+  N := 1;
+  if AShowBinary then Inc(N);
+  if Trim(ARevspec) <> '' then Inc(N);
+  if Length(APaths) > 0 then Inc(N, 1 + Length(APaths));
+  SetLength(LArgs, N);
+  LArgs[0] := 'diff';
+  LPos := 1;
+  if AShowBinary then
+  begin
+    LArgs[LPos] := '--binary';
+    Inc(LPos);
+  end;
+  if Trim(ARevspec) <> '' then
+  begin
+    LArgs[LPos] := ARevspec;
+    Inc(LPos);
+  end;
+  if Length(APaths) > 0 then
+  begin
+    LArgs[LPos] := '--';
+    Inc(LPos);
+    for I := 0 to High(APaths) do
+      LArgs[LPos + I] := APaths[I];
+  end;
+  LOut := RunIn('/usr/bin/git', LArgs, LWorkDir);
+  if LOut.ExitCode <> 0 then
+    raise EGitError.Create(GIT_EINVALIDSPEC, 'WorkdirPatchText: ' + Trim(LOut.StdErr));
+  Result := LOut.StdOut;
+  if Trim(Result) = '' then
+    Result := '';
 end;
 
 function TGitRepository.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;

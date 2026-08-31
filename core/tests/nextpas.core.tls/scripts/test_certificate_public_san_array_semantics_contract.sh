@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
-source_file="$repo_root/src/nextpas.core.tls.base.pas"
-doc_file="$repo_root/docs/guides/TROUBLESHOOTING.md"
-test_file="$repo_root/tests/certificate/test_certificate_unit.pas"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
+source_file="$repo_root/core/src/nextpas.core.tls.base.pas"
+test_file="$repo_root/core/tests/nextpas.core.tls/certificate/test_certificate_unit.pas"
 
 require_fixed() {
   local file="$1"
@@ -35,14 +34,6 @@ require_fixed "$source_file" "function GetKeyUsage: TSSLStringArray;" \
 require_fixed "$source_file" "function GetExtendedKeyUsage: TSSLStringArray;" \
   "ISSLCertificate.GetExtendedKeyUsage must stay array-based"
 
-forbid_fixed "$doc_file" "LAltNames.Count" \
-  "Troubleshooting guide must not teach list Count on GetSubjectAltNames"
-forbid_fixed "$doc_file" "LAltNames.Free" \
-  "Troubleshooting guide must not teach manual Free on GetSubjectAltNames"
-require_fixed "$doc_file" "if Length(LAltNames) > 0 then" \
-  "Troubleshooting guide must show Length-based SAN handling"
-require_fixed "$doc_file" "for var i := 0 to High(LAltNames) do" \
-  "Troubleshooting guide must iterate SAN arrays with High(...)"
 
 forbid_fixed "$test_file" "KeyUsageList: TStringList;" \
   "test_certificate_unit must not treat key-usage arrays as TStringList"

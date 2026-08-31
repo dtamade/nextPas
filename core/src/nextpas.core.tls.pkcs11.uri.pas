@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.uri;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 URI Parser (RFC 7512)                                 }
+{  nextpas.core.tls - PKCS#11 URI Parser (RFC 7512)                                 }
 {                                                                              }
 {  Purpose: Parse and generate PKCS#11 URIs according to RFC 7512             }
 {                                                                              }
@@ -239,7 +239,7 @@ begin
     // Parse path attributes (separated by ';')
     if PathPart <> '' then
     begin
-      
+      Attributes := StringsSplit(PathPart, ';');
       for I := 0 to Length(Attributes) - 1 do
       begin
         SepPos := Pos('=', Attributes[I]);
@@ -255,8 +255,7 @@ begin
     // Parse query attributes (separated by '&')
     if QueryPart <> '' then
     begin
-      Attributes.Clear;
-      
+      Attributes := StringsSplit(QueryPart, '&');
       for I := 0 to Length(Attributes) - 1 do
       begin
         SepPos := Pos('=', Attributes[I]);
@@ -277,6 +276,8 @@ var
   PathParts, QueryParts: TStringArray;
   I: Integer;
 begin
+  PathParts := nil;
+  QueryParts := nil;
   try
     // Build path attributes
     if AURI.Token <> '' then

@@ -496,7 +496,8 @@ function pipe(pipefd: PInt32): cint; cdecl; external 'c' name 'pipe';
 function pipe2(pipefd: PInt32; flags: cint): cint; cdecl; external 'c' name 'pipe2';
 
 var
-  {** 环境变量数组 *}
+  {** 环境变量数组 — shared POSIX raw inventory for Linux/Android/FreeBSD/generic Unix;
+       Darwin uses NSGetEnviron in darwin.ffi (no linkable environ) *}
   environ: PPAnsiChar; external name 'environ';
 {$ENDIF}
 

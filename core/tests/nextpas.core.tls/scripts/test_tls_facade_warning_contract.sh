@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -16,7 +16,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 set +e
 output="$(
   fpc -B \
-    -Fu./src \
+    -Fu"$PWD/core/src" \
     -FU"$TMP_DIR/units" \
     -Mobjfpc \
     -Scgi \
@@ -24,7 +24,7 @@ output="$(
     -g \
     -gl \
     -vewnhi \
-    src/nextpas.core.tls.tls.pas 2>&1
+    core/src/nextpas.core.tls.tls.pas 2>&1
 )"
 exit_code=$?
 set -e
@@ -35,9 +35,9 @@ if [[ "$exit_code" -ne 0 ]]; then
   exit 1
 fi
 
-if printf '%s\n' "$output" | rg -n --quiet 'fafafa\.ssl\.tls\.pas\([^)]*\) Warning:'; then
+if printf '%s\n' "$output" | rg -n --quiet 'nextpas\.core\.tls\.tls\.pas\([^)]*\) Warning:'; then
   echo "[FAIL] nextpas.core.tls.tls should compile without file-local warnings"
-  printf '%s\n' "$output" | rg -n 'fafafa\.ssl\.tls\.pas\([^)]*\) Warning:' || true
+  printf '%s\n' "$output" | rg -n 'nextpas\.core\.tls\.tls\.pas\([^)]*\) Warning:' || true
   exit 1
 fi
 

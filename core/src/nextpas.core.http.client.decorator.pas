@@ -69,6 +69,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient; virtual;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient; virtual;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient; virtual;
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient; virtual;
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient; virtual;
   end;
 
@@ -124,6 +125,18 @@ type
     constructor Create(const AInner: IHttpClient; const AMaxRetries: Int32);
     function Send(const AReq: IHttpRequest): IHttpResponse; override;
   end;
+
+{ K86 导出面（原 implementation 私有提升）：HTTP 重试语义纯函数——
+  decorator 自用 + code888 provider 双消费者（刀 82 双消费者判据）。
+  三家锚：grok-build RetryPolicy::server / codex retry_delay /
+  opencode session/retry.ts 解析链 }
+
+{ 可重试状态判定：429 Too Many Requests + 整个 5xx 类；其余 4xx 终结 }
+function HttpStatusIsRetryable(const AStatus: THttpStatus): Boolean;
+
+{ IMF-fix HTTP-date（RFC 7231 首选格式）→ unix 秒；失败 False。
+  纯函数无时钟依赖（时钟语义在 TryHttpParseRetryAfterMs 组合层） }
+function TryParseHttpDateUnix(const ADate: string; out AUnix: Int64): Boolean;
 
 implementation
 
@@ -476,6 +489,11 @@ end;
 function THttpClientForwarder.WithProxyUrl(const AProxyUrl: string): IHttpClient;
 begin
   Result := RebindInner(FInner.WithProxyUrl(AProxyUrl));
+end;
+
+function THttpClientForwarder.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
+begin
+  Result := RebindInner(FInner.WithDialFunc(ADial));
 end;
 
 function THttpClientForwarder.WithTLSContext(

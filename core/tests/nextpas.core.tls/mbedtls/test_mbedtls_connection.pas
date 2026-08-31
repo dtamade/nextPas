@@ -12,12 +12,15 @@ program test_mbedtls_connection;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Math,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  Math,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.context,
   nextpas.core.tls.mbedtls.connection,
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 const
   TEST_HOST = 'www.google.com';

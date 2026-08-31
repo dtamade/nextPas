@@ -4,6 +4,7 @@ program test_backend_cache_all;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.time.cpu,
   nextpas.core.tls.base,
   nextpas.core.tls.factory;
 
@@ -125,7 +126,7 @@ var
 
 begin
   WriteLn;
-  WriteLn('fafafa.ssl - 多后端缓存测试');
+  WriteLn('nextpas.core.tls - 多后端缓存测试');
   WriteLn('==============================================');
   WriteLn('测试 OpenSSL, WolfSSL, MbedTLS, WinSSL 后端');
   WriteLn('==============================================');

@@ -63,6 +63,7 @@
 - `c-interop-specification.md`：nextPas C 互操作与链接规范
 - `directory-structure-specification.md`：nextPas 目录结构规范
 - `rtl-specification.md`：nextPas RTL 规范
+- `resource-embedding-specification.md`：nextPas 资源嵌入规范（respack/vfs/ServeVfs 栈）
 - `crt-specification.md`：nextPas CRT 规范
 - `distribution-layout-specification.md`：nextPas 发行布局规范
 - `test-harness-specification.md`：nextPas 测试 `harness` 规范

@@ -22,6 +22,7 @@ uses
   SysUtils,
   nextpas.core.text.strings,
   nextpas.core.collections.vec,
+  nextpas.core.collections.hashmap,
   np_unit_graph;
 
 type
@@ -42,6 +43,7 @@ type
 
   TCompileTaskVec = specialize TVec<TCompileTask>;
   TCompileOrderVec = specialize TVec<string>;
+  TTaskIndexMap = specialize THashMap<string, LongInt>;
 
   {** 并行编译调度器 }
   TParallelScheduler = class
@@ -49,8 +51,13 @@ type
     FTasks: TCompileTaskVec;
     FCompileOrder: TCompileOrderVec;
     FMaxParallel: LongInt;
+    FIndex: TTaskIndexMap;
+    FGraph: TUnitGraph;
+    function NormalizeKey(const AUnitId: string): string; inline;
     function FindTaskIndex(const AUnitId: string): LongInt;
+    function AreDependenciesSatisfied(const AUnitId: string): Boolean;
     function GetTaskCount: LongInt;
+    procedure RebuildIndex;
   public
     constructor Create;
     destructor Destroy; override;
@@ -87,11 +94,16 @@ begin
   FTasks.EnsureCapacity(64);
   FCompileOrder := TCompileOrderVec.Create;
   FCompileOrder.EnsureCapacity(64);
+  FIndex := TTaskIndexMap.Create;
+  FGraph := nil;
   FMaxParallel := 4;  { 默认 4 并行 }
 end;
 
 destructor TParallelScheduler.Destroy;
 begin
+  FIndex.Free;
+  FIndex := nil;
+  FGraph := nil;
   FTasks.Free;
   FTasks := nil;
   FCompileOrder.Free;
@@ -106,16 +118,65 @@ begin
   Result := LongInt(FTasks.Count);
 end;
 
+function TParallelScheduler.NormalizeKey(const AUnitId: string): string;
+begin
+  Result := LowerCase(AUnitId);
+end;
+
+procedure TParallelScheduler.RebuildIndex;
+var
+  I: LongInt;
+begin
+  if FIndex = nil then
+    FIndex := TTaskIndexMap.Create;
+  FIndex.Clear;
+  if FTasks = nil then Exit;
+  if FTasks.Count > 0 then
+    FIndex.Reserve(SizeUInt(FTasks.Count * 2));
+  for I := 0 to LongInt(FTasks.Count) - 1 do
+    FIndex.Put(NormalizeKey(FTasks[SizeUInt(I)].UnitId), I);
+end;
+
 function TParallelScheduler.FindTaskIndex(const AUnitId: string): LongInt;
 var
+  V: LongInt;
   I: LongInt;
 begin
   if FTasks = nil then
     Exit(-1);
+  if (FIndex <> nil) and (FIndex.Count > 0) then
+  begin
+    if FIndex.TryGetValue(NormalizeKey(AUnitId), V) then
+      Exit(V);
+  end;
   for I := 0 to LongInt(FTasks.Count) - 1 do
     if SameText(FTasks[SizeUInt(I)].UnitId, AUnitId) then
       Exit(I);
   Result := -1;
+end;
+
+function TParallelScheduler.AreDependenciesSatisfied(const AUnitId: string): Boolean;
+var
+  EIdx: LongInt;
+  Edge: TUnitGraphEdge;
+  DepIdx: LongInt;
+begin
+  Result := True;
+  if FGraph = nil then
+    Exit(True);
+  for EIdx := 0 to FGraph.EdgeCount - 1 do
+  begin
+    Edge := FGraph.EdgeAt(EIdx);
+    if (Edge.Kind <> ugeInterfaceUse) and (Edge.Kind <> ugeImplementationUse) then
+      Continue;
+    if not SameText(Edge.SourceUnitId, AUnitId) then
+      Continue;
+    DepIdx := FindTaskIndex(Edge.TargetUnitId);
+    if DepIdx < 0 then
+      Continue;
+    if FTasks[SizeUInt(DepIdx)].Status <> tsSuccess then
+      Exit(False);
+  end;
 end;
 
 procedure TParallelScheduler.BuildSchedule(const AGraph: TUnitGraph);
@@ -131,8 +192,8 @@ begin
   if FCompileOrder = nil then
     FCompileOrder := TCompileOrderVec.Create;
   FCompileOrder.Clear;
+  FGraph := AGraph;
 
-  { 为每个已解析的单元创建任务 }
   for I := 0 to AGraph.ResolvedUnitCount - 1 do
   begin
     Unit_ := AGraph.ResolvedUnitAt(I);
@@ -143,7 +204,8 @@ begin
     FTasks.Push(Task);
   end;
 
-  { 获取拓扑排序（图 API 仍返回 dynarray；session 表落 TVec 默认堆） }
+  RebuildIndex;
+
   Order := AGraph.TopologicalInitOrder;
   for I := 0 to Length(Order) - 1 do
     FCompileOrder.Push(Order[I]);
@@ -154,7 +216,9 @@ var
   I, BatchCount: LongInt;
   Idx: LongInt;
   Task: TCompileTask;
+  CandidateId: string;
 begin
+  Result := nil;
   SetLength(Result, FMaxParallel);
   BatchCount := 0;
 
@@ -164,15 +228,17 @@ begin
     Exit;
   end;
 
-  { 按拓扑序获取 pending 任务 }
   for I := 0 to LongInt(FCompileOrder.Count) - 1 do
   begin
     if BatchCount >= FMaxParallel then
       Break;
 
-    Idx := FindTaskIndex(FCompileOrder[SizeUInt(I)]);
+    CandidateId := FCompileOrder[SizeUInt(I)];
+    Idx := FindTaskIndex(CandidateId);
     if (Idx >= 0) and (FTasks[SizeUInt(Idx)].Status = tsPending) then
     begin
+      if not AreDependenciesSatisfied(FTasks[SizeUInt(Idx)].UnitId) then
+        Continue;
       Task := FTasks[SizeUInt(Idx)];
       Task.Status := tsRunning;
       FTasks[SizeUInt(Idx)] := Task;

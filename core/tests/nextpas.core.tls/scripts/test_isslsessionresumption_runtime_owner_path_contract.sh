@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -26,13 +26,13 @@ check_no_core_path() {
   fi
 }
 
-builder_file="tests/test_connection_builder_hostname_precedence.pas"
-fp_cert_file="tests/test_freepascal_client_certificate_flight_requirements.pas"
-fp_client_file="tests/test_freepascal_client_session_resumption.pas"
-fp_server_file="tests/test_freepascal_server_session_resumption.pas"
-earlydata_file="tests/test_openssl_wolfssl_early_data_connection_contract.pas"
-builder_src="src/nextpas.core.tls.connection.builder.pas"
-tls_src="src/nextpas.core.tls.tls.pas"
+builder_file="core/tests/nextpas.core.tls/test_connection_builder_hostname_precedence.pas"
+fp_cert_file="core/tests/nextpas.core.tls/test_freepascal_client_certificate_flight_requirements.pas"
+fp_client_file="core/tests/nextpas.core.tls/test_freepascal_client_session_resumption.pas"
+fp_server_file="core/tests/nextpas.core.tls/test_freepascal_server_session_resumption.pas"
+earlydata_file="core/tests/nextpas.core.tls/test_openssl_wolfssl_early_data_connection_contract.pas"
+builder_src="core/src/nextpas.core.tls.connection.builder.pas"
+tls_src="core/src/nextpas.core.tls.tls.pas"
 
 for file in \
   "$builder_file" \

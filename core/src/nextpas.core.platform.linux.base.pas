@@ -291,6 +291,9 @@ const
 {$IFDEF NEXTPAS_X86_64}
 {$I nextpas.core.platform.linux.base.syscall.x86_64.inc}
 {$ENDIF}
+{$IFDEF NEXTPAS_I386}
+{$I nextpas.core.platform.linux.base.syscall.i386.inc}
+{$ENDIF}
 {$IFDEF NEXTPAS_AARCH64}
 {$I nextpas.core.platform.linux.base.syscall.generic.inc}
 {$ENDIF}

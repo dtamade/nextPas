@@ -15,6 +15,7 @@ var
   Instr: THIRInstr;
   OperandType: THIRTypeRec;
   WorkerMeta: TTypeMetadata;
+  FieldMeta: TFieldMeta;
   LlvmText: string;
   FoundContract: Boolean;
   FoundOwnedDestroy: Boolean;
@@ -114,6 +115,8 @@ var
   BlockId: THIRBlockId;
   VoidType, PointerType, IntType: THIRTypeId;
   Term: THIRTerminator;
+  UnknownContractInstr: THIRInstr;
+  UnknownContractOrdinal: LongInt;
   Missing: string;
   EmitterRejected, NonIntrinsicEmitterRejected,
   StandaloneEmitterRejected: Boolean;
@@ -145,6 +148,23 @@ begin
     AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
       sckObjectFreeDestroy, hikIntrinsic, PointerType, 1,
       'TObject.Destroy', False);
+
+    { Unsupported contract kind must be rejected; AssignSystemContract raises
+      on unknown kinds, so craft the instruction manually to reach the
+      verifier's kind-unsupported path. }
+    FillChar(UnknownContractInstr, SizeOf(UnknownContractInstr), 0);
+    UnknownContractInstr.ResultId := ContractModule.NewValue;
+    UnknownContractInstr.Kind := hikIntrinsic;
+    UnknownContractInstr.TypeId := VoidType;
+    UnknownContractInstr.HasSystemContract := True;
+    UnknownContractOrdinal := 28; { one past the last declared kind }
+    UnknownContractInstr.SystemContractKind :=
+      TSystemContractKind(UnknownContractOrdinal);
+    UnknownContractInstr.IntrinsicName := 'unknown-system-contract';
+    SetLength(UnknownContractInstr.Operands, 1);
+    UnknownContractInstr.Operands[0] := MakeTypedOperand(
+      UnknownContractInstr.ResultId, PointerType);
+    ContractModule.AddInstr(FuncId, BlockId, UnknownContractInstr);
 
     FillChar(Term, SizeOf(Term), 0);
     Term.Kind := htkReturn;
@@ -340,13 +360,19 @@ begin
   try
     WorkerTypeId := SemaModel.AddType('Worker', 'class');
     WorkerMeta := Default(TTypeMetadata);
-    SetLength(WorkerMeta.Fields, 2);
-    WorkerMeta.Fields[0].Name := 'Name';
-    WorkerMeta.Fields[0].Index := 0;
-    WorkerMeta.Fields[0].IsString := True;
-    WorkerMeta.Fields[1].Name := 'Items';
-    WorkerMeta.Fields[1].Index := 4;
-    WorkerMeta.Fields[1].IsDynArray := True;
+    { Fields is a TVec class handle; SetTypeMeta adopts unowned vectors, so
+      create it here and let the model own it from SetTypeMeta on. }
+    WorkerMeta.Fields := TSemanticFieldMetaVec.Create;
+    FieldMeta := Default(TFieldMeta);
+    FieldMeta.Name := 'Name';
+    FieldMeta.Index := 0;
+    FieldMeta.IsString := True;
+    WorkerMeta.Fields.Push(FieldMeta);
+    FieldMeta := Default(TFieldMeta);
+    FieldMeta.Name := 'Items';
+    FieldMeta.Index := 4;
+    FieldMeta.IsDynArray := True;
+    WorkerMeta.Fields.Push(FieldMeta);
     SemaModel.SetTypeMeta(WorkerTypeId, WorkerMeta);
     SemaModel.AddConstValue('Worker.Items$arr_elem_size', 8);
     SemaModel.AddTypedHirNode('var-decl-ptr-runtime', 'Worker', 0, 0, 'Worker');

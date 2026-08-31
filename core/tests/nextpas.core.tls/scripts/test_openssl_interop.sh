@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-CERT_DIR="/tmp/fafafa_interop_certs_$$"
+CERT_DIR="/tmp/nextpas_interop_certs_$$"
 mkdir -p "$CERT_DIR"
 BIN_DIR="tests/bin"
 PORT=44330
@@ -21,7 +21,7 @@ echo "=== Generating test certificates ==="
 
 # RSA CA + leaf (standard TLS 1.3)
 openssl req -x509 -newkey rsa:2048 -keyout "$CERT_DIR/rsa-ca.key" -out "$CERT_DIR/rsa-ca.pem" \
-  -days 365 -nodes -subj "/CN=fafafa-interop-rsa-ca" 2>/dev/null
+  -days 365 -nodes -subj "/CN=nextpas-interop-rsa-ca" 2>/dev/null
 openssl req -newkey rsa:2048 -keyout "$CERT_DIR/rsa-leaf.key" -out "$CERT_DIR/rsa-leaf.csr" \
   -nodes -subj "/CN=localhost" 2>/dev/null
 openssl x509 -req -in "$CERT_DIR/rsa-leaf.csr" -CA "$CERT_DIR/rsa-ca.pem" -CAkey "$CERT_DIR/rsa-ca.key" \
@@ -31,7 +31,7 @@ openssl x509 -req -in "$CERT_DIR/rsa-leaf.csr" -CA "$CERT_DIR/rsa-ca.pem" -CAkey
 # P-384 ECDSA CA + leaf
 openssl ecparam -name secp384r1 -genkey -noout -out "$CERT_DIR/p384-ca.key" 2>/dev/null
 openssl req -x509 -new -key "$CERT_DIR/p384-ca.key" -out "$CERT_DIR/p384-ca.pem" \
-  -days 365 -subj "/CN=fafafa-interop-p384-ca" -sha384 2>/dev/null
+  -days 365 -subj "/CN=nextpas-interop-p384-ca" -sha384 2>/dev/null
 openssl ecparam -name secp384r1 -genkey -noout -out "$CERT_DIR/p384-leaf.key" 2>/dev/null
 openssl req -new -key "$CERT_DIR/p384-leaf.key" -out "$CERT_DIR/p384-leaf.csr" \
   -subj "/CN=localhost" 2>/dev/null

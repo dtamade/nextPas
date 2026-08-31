@@ -323,11 +323,15 @@ end;
 function HashBytes(const AData: TBytes): TBytes;
 var
   Digest: TSHA256Digest;
+  Dummy: Byte;
 begin
   if Length(AData) > 0 then
     Digest := SHA256Of(AData[0], Length(AData))
   else
-    Digest := SHA256Of(Nil^, 0);
+  begin
+    Dummy := 0;
+    Digest := SHA256Of(Dummy, 0);
+  end;
   SetLength(Result, 32);
   Move(Digest[0], Result[0], 32);
 end;
@@ -640,11 +644,21 @@ var
   Fpb: TSemanticForeignProcedureBinding;
   Lr: TSemanticLibraryRequest;
   StatusStr: string;
+  SymIdMap: array of LongInt;
+  NewId: LongInt;
+  function MapSymId(AOld: LongInt): LongInt; inline;
+  begin
+    if (AOld > 0) and (AOld < Length(SymIdMap)) and (SymIdMap[AOld] <> 0) then
+      Result := SymIdMap[AOld]
+    else
+      Result := AOld;
+  end;
 begin
   Result := TSemanticModel.Create;
 
   { Symbols }
   C := R.ReadInt32;
+  SetLength(SymIdMap, C + 1024);
   for I := 0 to C - 1 do
   begin
     Sym.SymbolId := R.ReadInt32;
@@ -659,7 +673,17 @@ begin
     Sym.Visibility := R.ReadStr;
     Sym.ByteOffset := R.ReadInt32;
     Sym.ReturnTypeId := R.ReadInt32;
-    Result.AddSymbol(Sym.Name, Sym.Kind, Sym.OwnerUnitId, Sym.TypeId, Sym.ByteOffset);
+    NewId := Result.AddSymbol(Sym.Name, Sym.Kind, Sym.OwnerUnitId, Sym.TypeId, Sym.ByteOffset);
+    if Sym.SymbolId >= Length(SymIdMap) then
+      SetLength(SymIdMap, Sym.SymbolId + 1024);
+    SymIdMap[Sym.SymbolId] := NewId;
+    Result.SetSymbolScope(NewId, Sym.ScopeId);
+    Result.SetSymbolTypeId(NewId, Sym.TypeId);
+    Result.SetSymbolParamCount(NewId, Sym.ParamCount);
+    Result.SetSymbolMinParamCount(NewId, Sym.MinParamCount);
+    Result.SetSymbolParamSignature(NewId, Sym.ParamSignature);
+    Result.SetSymbolVisibility(NewId, Sym.Visibility);
+    Result.SetSymbolReturnTypeId(NewId, Sym.ReturnTypeId);
   end;
 
   { Types }
@@ -702,7 +726,7 @@ begin
     Bnd.Name := R.ReadStr;
     Bnd.OwnerUnitId := R.ReadStr;
     Bnd.ByteOffset := R.ReadInt32;
-    Bnd.TargetSymbolId := R.ReadInt32;
+    Bnd.TargetSymbolId := MapSymId(R.ReadInt32);
     Result.AddBinding(Bnd.Kind, Bnd.Name, Bnd.OwnerUnitId, Bnd.ByteOffset, Bnd.TargetSymbolId);
   end;
 
@@ -713,7 +737,7 @@ begin
     Hir.HirNodeId := R.ReadInt32;
     Hir.Kind := R.ReadStr;
     Hir.DisplayName := R.ReadStr;
-    Hir.SymbolId := R.ReadInt32;
+    Hir.SymbolId := MapSymId(R.ReadInt32);
     Hir.TypeId := R.ReadInt32;
     Hir.Operand := R.ReadStr;
     Hir.ExprId := R.ReadInt32;
@@ -729,7 +753,7 @@ begin
     Expr.ExprId := R.ReadInt32;
     Expr.Kind := TSemanticHirExprKind(R.ReadByte);
     Expr.TypeId := R.ReadInt32;
-    Expr.SymbolId := R.ReadInt32;
+    Expr.SymbolId := MapSymId(R.ReadInt32);
     CC := R.ReadInt32;
     SetLength(ChildIds, CC);
     for J := 0 to CC - 1 do
@@ -763,7 +787,7 @@ begin
     Fpb.CallingConvention := R.ReadStr;
     Fpb.LibraryId := R.ReadStr;
     Fpb.ExternalSymbolName := R.ReadStr;
-    Fpb.SymbolId := R.ReadInt32;
+    Fpb.SymbolId := MapSymId(R.ReadInt32);
     Result.AddForeignProcedureBinding(Fpb.PascalName, Fpb.CallingConvention,
       Fpb.LibraryId, Fpb.ExternalSymbolName, Fpb.SymbolId);
   end;

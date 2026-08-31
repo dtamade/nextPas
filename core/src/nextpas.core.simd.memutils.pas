@@ -381,10 +381,15 @@ begin
   if ptr = nil then
     Exit;
   LPtr := ptr;
-  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  {$IF Defined(CPUX86_64)}
   asm
     mov rax, LPtr
     prefetcht0 [rax]
+  end;
+  {$ELSEIF Defined(CPUX86)}
+  asm
+    mov eax, LPtr
+    prefetcht0 [eax]
   end;
   {$ENDIF}
 end;
@@ -397,17 +402,24 @@ begin
   if ptr = nil then
     Exit;
   LPtr := ptr;
-  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  {$IF Defined(CPUX86_64)}
   asm
     mov rax, LPtr
     prefetchnta [rax]
+  end;
+  {$ELSEIF Defined(CPUX86)}
+  asm
+    mov eax, LPtr
+    prefetchnta [eax]
   end;
   {$ENDIF}
 end;
 
 // === SIMD-optimized Memory Operations ===
 
-{$IF Defined(CPUX86) or Defined(CPUX86_64)}
+{ 手工 SSE2 快路径仅 64 位：i386 上指针寄存器为 32 位，且该路径非 32 位性能面；
+  32 位统一走 SimdMemCopy/Fill/Compare 的标量回退 }
+{$IF Defined(CPUX86_64)}
 procedure SimdMemCopy_SSE2(src, dst: Pointer; size: NativeUInt);
 var
   pS, pD: PByte;
@@ -622,7 +634,7 @@ begin
   if (src = nil) or (dst = nil) or (size = 0) then
     Exit;
 
-  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  {$IF Defined(CPUX86_64)}
   SimdMemCopy_SSE2(src, dst, size);
   {$ELSE}
   Move(src^, dst^, size);
@@ -634,7 +646,7 @@ begin
   if (dst = nil) or (size = 0) then
     Exit;
 
-  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  {$IF Defined(CPUX86_64)}
   SimdMemFill_SSE2(dst, size, value);
   {$ELSE}
   FillChar(dst^, size, value);
@@ -656,7 +668,7 @@ begin
   if size = 0 then
     Exit(0);
 
-  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  {$IF Defined(CPUX86_64)}
   Result := SimdMemCompare_SSE2(p1, p2, size);
   {$ELSE}
   Result := CompareByte(p1^, p2^, size);

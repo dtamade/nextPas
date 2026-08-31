@@ -4,7 +4,6 @@ program test_freepascal_client_online_ocsp_runtime;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,
@@ -15,12 +14,12 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash,
+  nextpas.core.crypto.hash,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -28,8 +27,10 @@ uses
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.ocsp,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.stack;
-
+  nextpas.core.tls.openssl.api.stack,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 type
   TServerMaterial = record
     CertificateBlob: TBytes;
@@ -231,12 +232,12 @@ var
   LCombinedPEM: AnsiString;
   I: Integer;
 begin
-  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_cert.pem')));
-  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_key.pem')));
+  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_cert.pem')));
+  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_key.pem')));
 
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.CommonName := ACommonName;
-  LOptions.Organization := 'fafafa.ssl-tests';
+  LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
   LOptions.NotBefore := Now - 1;
   LOptions.NotAfter := Now + 30;
@@ -754,7 +755,7 @@ begin
     .WithBackend(sslFreePascal)
     .WithTLS13
     .WithVerifyPeer
-    .WithCAFile('tests/certificate/test_certs/ca_cert.pem')
+    .WithCAFile('certificate/test_certs/ca_cert.pem')
     .WithHTTPHooks(nil, AHTTPPost)
     .BuildClient;
   AssertTrue(Result <> nil, 'FreePascal client context should be created');
@@ -788,7 +789,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(LStream);
+    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Online-OCSP connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -826,7 +827,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(LStream);
+    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Leaf-only online-OCSP connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -864,7 +865,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(LStream);
+    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Online-OCSP revoked-status connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -911,7 +912,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(LStream);
+    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Online-OCSP signature-failure connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -958,7 +959,7 @@ begin
     LMaterial.PrivateKeyBlob
   );
   try
-    LConn := LContext.CreateConnection(LStream);
+    LConn := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Online-OCSP responder-failure connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 

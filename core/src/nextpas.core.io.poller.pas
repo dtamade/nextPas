@@ -46,6 +46,7 @@ type
 
     function AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    { 写路径不拷贝：ABuf 须保持有效直到回调。短写不自动续发。 }
     function AsyncWrite(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncAccept(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
@@ -77,6 +78,7 @@ type
     function HasPending: Boolean;
     { Best-effort cancel of a pending op keyed by Context (timeout path). }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    function CancelByFd(AFd: PtrInt): Boolean;
   end;
 
 function PollerDetectBackend: TPollerBackend;
@@ -649,6 +651,29 @@ begin
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: Result := FIocp.TryCancelByContext(AContext);
+    {$ENDIF}
+  else
+    Result := False;
+  end;
+end;
+
+function TPoller.CancelByFd(AFd: PtrInt): Boolean;
+begin
+  case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring:
+      begin
+        Result := FUring.CancelByFd(Int32(AFd));
+        if FEpoll.IsValid then
+          Result := FEpoll.CancelByFd(Int32(AFd)) or Result;
+      end;
+    pbEpoll:   Result := FEpoll.CancelByFd(Int32(AFd));
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: Result := FKqueue.CancelByFd(Int32(AFd));
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: Result := FIocp.CancelByFd(AFd);
     {$ENDIF}
   else
     Result := False;

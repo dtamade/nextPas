@@ -17,13 +17,25 @@ unit nextpas.core.mail.smtp.server;
  *
  * 命令集（RFC 5321 务实子集）：HELO/EHLO（能力列表）、MAIL/RCPT/DATA
  * （点转义、大小上限）、RSET/NOOP/QUIT/HELP/VRFY，未知命令 500，
- * STARTTLS 探测位（501/454 拒，握手属后续 TLS 批次），AUTH PLAIN/LOGIN
- * （注册回调校验；未启用则 503）。
+ * STARTTLS（RFC 3207：220 就绪后握手升级，接线经 ISmtpTlsUpgrade）、
+ * AUTH PLAIN/LOGIN（ISmtpAuthHook 校验；未启用或未完成 TLS 时 503）。
  *
  * 业务集成：应用实现 ISmtpServerSink，服务器在 reactor 线程回调
  * OnServerEvent(msseMessage, Envelope) 交付一封收信（MAIL/RCPT/DATA 收集
- * 完毕后的信封）。业务侧回调内不执行阻塞 I/O；向会话内送数据须经
+ * 完毕后的信封；Envelope.ClientIP 为对端 IP，同 reactor 线程读取）；
+ * msseClosed 事件信封亦携带 ClientIP（对端 IP 与 msseMessage 同源），
+ * 供消费方按 IP 归账连接生命周期（如 per-IP 并发连接计数递减）；
+ * msseAuthed 通知认证成功（Envelope.AuthedUserId 携带归一化 userId）。
+ * 业务侧回调内不执行阻塞 I/O；向会话内送数据须经
  * context.WorkerHandoff 在 reactor 线程交付。
+ *
+ * MAIL/RCPT 阶段同步策略：配置 MailPolicy（ISmtpMailPolicyHook）后，会话在
+ * MAIL FROM 解析成功、信封 From 定值前回调 EvaluateMailFrom，在 RCPT TO
+ * 解析成功、收件人入列前回调 EvaluateRcptTo（reactor 线程，须短非阻塞：
+ * 令牌桶/计数/内存状态表判定，不得做 DNS/DB 等阻塞操作）；返回 '' 放行，
+ * 非空为完整拒绝回复行。MAIL 拒绝后信封未定值，客户端可重发 MAIL 或 RSET；
+ * RCPT 拒绝后该收件人未入列，可重发该 RCPT 或整体重试。典型消费：限流
+ * （MAIL 阶段）、greylisting（RCPT 阶段三元组判定）、来源域策略。
  *
  * 线程约束：SendXxx/Cancel 由推进方（reactor 线程，即 Advance）调用。
  *}
@@ -56,20 +68,72 @@ type
     msseMessage,     { 一封信收集完毕，Envelope 有效 }
     msseTimeout,     { 读空闲超时；会话随即关闭 }
     msseOverflow,    { 出站回复队列溢出（背压失败）；会话随即断开 }
-    msseClosed       { 传输终止（EOF/取消/QUIT 完成）；不再有后续事件 }
+    msseClosed,      { 传输终止（EOF/取消/QUIT 完成）；不再有后续事件 }
+    msseAuthed       { 认证成功；Envelope.AuthedUserId 有效 }
   );
 
-  { 一封信的信封：MAIL FROM + RCPT TO 列表 + DATA 原始字节 }
+  { 一封信的信封：MAIL FROM + RCPT TO 列表 + DATA 原始字节 + 对端 IP。
+    ClientIP 在 DATA 完成时从连接 RemoteAddr 读取（reactor 线程），供
+    消费方做收信时刻的源身份判定（SPF、日志、限流）。
+    AuthedUserId 仅在 msseAuthed/msseMessage 事件中按需填充（认证用户）。 }
   TMailSmtpEnvelope = record
     From: TMailAddress;
     Recipients: array of TMailAddress;
     Data: TBytes;                    { DATA 收集后原始字节（含 CRLF，去点转义） }
+    ClientIP: string;                { 对端 IP（点分/字面量，不解析为地址类型） }
+    AuthedUserId: string;            { 认证用户（msseAuthed/msseMessage 时有效） }
   end;
 
   ISmtpServerSink = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000020}']
     procedure OnServerEvent(const AEvent: TMailSmtpServerEvent;
       const AEnvelope: TMailSmtpEnvelope);
+  end;
+
+  { MAIL/RCPT 阶段同步策略钩子：应用在信封 From 定值前（MAIL）或收件人
+    入列前（RCPT）裁决是否接受本封发件人/收件人。reactor 线程调用，
+    须短非阻塞（μs 级，如令牌桶/计数/内存状态表判定），不得做
+    DNS/DB/网络等可能阻塞的操作（D9：阻塞操作须卸载到 worker）。
+    典型消费：连接/消息限流、greylisting（三元组判定在 RCPT 阶段）、
+    来源域策略。
+    返回 '' = 放行；非空 = 完整拒绝回复行（状态码 + 增强码 + 文案 +
+    CRLF，如 '452 4.7.1 Too many messages' + #13#10）。MAIL 拒绝后
+    信封未定值；RCPT 拒绝后该收件人未入列，客户端可重发该 RCPT 或
+    RSET 后整体重试。 }
+  ISmtpMailPolicyHook = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000021}']
+    function EvaluateMailFrom(const AFrom: TMailAddress;
+      const AClientIP: string): string;
+    { RCPT 阶段：AFrom 为当前信封 MAIL FROM（可为空），ARcpt 为待定收件人。
+      实现不关心的阶段返回 ''（放行），实现须同时覆盖两阶段。 }
+    function EvaluateRcptTo(const AFrom: TMailAddress; const ARcpt: TMailAddress;
+      const AClientIP: string): string;
+  end;
+
+  { 凭证校验缝：应用接认证引擎；nil = AUTH 一律 503（AuthEnabled 已关场景走
+    同一分支）。reactor 线程同步调用，实现须短、非阻塞（SQLite 直查可接受，
+    复杂校验须卸载到 worker，此处仅做门控失败即拒）。 }
+  ISmtpAuthHook = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000022}']
+    function Authenticate(const AUsername, APassword: string;
+      out AUserId: string): Boolean;
+  end;
+
+  { TLS 升级缝：STARTTLS 220 后调用，完成握手并返回已就绪的 ITcpStream
+    （含 ITcpStreamRuntime）。异常即视为失败（FlushOutbound 捕获后回 454）。
+    实现由装配层注入（消费 nextpas.core.tls.* 如 NewTlsServerTcpStream），
+    mail 单元零 http.impl 依赖。 }
+  ISmtpTlsUpgrade = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000023}']
+    function Upgrade(const AConn: ITcpStream): ITcpStream;
+  end;
+
+  { 认证后 MAIL 门控（吊销/归属联动）：已认证会话的 MAIL FROM 定值前调用，
+    非空 = 完整拒绝行（如 '553 5.7.1 Sender address rejected' 或
+    '530 5.7.0 Authentication required' 的吊销分支）。nil = 关闭。 }
+  ISmtpAuthedMailGate = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000024}']
+    function Check(const AUserId: string; const AFrom: TMailAddress): string;
   end;
 
   TMailSmtpServerConfig = record
@@ -80,7 +144,10 @@ type
     OutboundQueueLimit: SizeUInt;    { 回复队列上限；0 → 64KiB }
     RequireAuth: Boolean;            { 已 AUTH 才接受 MAIL（Submission 语义） }
     AuthEnabled: Boolean;            { 是否广播 AUTH 并接受 AUTH 命令 }
-    AuthCallback: TMethod;           { 预留：凭证校验回调；本批缺省拒（见 plans §6） }
+    MailPolicy: ISmtpMailPolicyHook; { MAIL 阶段同步策略钩子；nil = 关闭 }
+    AuthHook: ISmtpAuthHook;         { 凭证校验；nil = AUTH 503 }
+    TlsUpgrade: ISmtpTlsUpgrade;     { STARTTLS 握手；nil = 454 }
+    AuthedMailGate: ISmtpAuthedMailGate; { 认证后 MAIL 门控；nil = 关闭 }
     class function Default: TMailSmtpServerConfig; static;
   end;
 
@@ -93,7 +160,14 @@ type
         stClosed,
         stCommand,     { 读命令行；FResumeState 记录冲刷后回到哪 }
         stData,        { 收 DATA 正文 }
+        stStartTls,    { STARTTLS 220 已冲刷，等待握手升级 }
         stFlushing     { 冲刷出站回复队列 }
+      );
+      TAuthPending = (
+        apNone,
+        apPlain,       { AUTH PLAIN 挑战态：待一行 base64 }
+        apLoginUser,   { AUTH LOGIN 等用户名 }
+        apLoginPass    { AUTH LOGIN 等密码 }
       );
       TEnvelopeBuild = record
         FromSet: Boolean;
@@ -109,54 +183,63 @@ type
       FState: TSessState;
       FResumeState: TSessState;
       FDeadline: TDeadline;
-      FLineBuf: TBytes;              { 行累积（命令模式）或协议头累积 }
+      FLineBuf: TBytes;
       FLineLen: SizeUInt;
       FLineOver: Boolean;
-      { outbound reply queue }
       FOutbound: array of TBytes;
       FOutCount: SizeUInt;
       FOutBytes: SizeUInt;
       FHeadPos: SizeUInt;
       FReadBuf: array[0..4095] of Byte;
-      FReadPos: SizeUInt;            { 已处理读缓冲位置(Flushing 中断续存) }
-      FReadAvail: SizeUInt;          { 本批 TryRead 读入字节数 }
+      FReadPos: SizeUInt;
+      FReadAvail: SizeUInt;
       FEnvelope: TEnvelopeBuild;
       FHeloState: (hsNone, hsHelo, hsEhlo);
       FAuthed: Boolean;
+      FAuthedUserId: string;
+      FTlsActive: Boolean;
+      FAuthHook: ISmtpAuthHook;
+      FTlsUpgrade: ISmtpTlsUpgrade;
+      FAuthedMailGate: ISmtpAuthedMailGate;
+      FAuthPending: TAuthPending;
+      FAuthLoginUser: string;
+      FMailPolicy: ISmtpMailPolicyHook;
       FClosedNotified: Boolean;
       FDataBytes: SizeUInt;
-      FDataBuf: TBytes;              { DATA 明文累积（去点转义、含行界） }
+      FDataBuf: TBytes;
       FDataLen: SizeUInt;
-      { 帮助生成闭合需要}
       function BuildLine: string;
       procedure RefreshIdleDeadline;
       procedure NotifyClosed;
+      procedure NotifyAuthed(const AUserId: string);
       procedure AbortSession;
       procedure EnqueueStr(const AValue: string);
       procedure BeginFlush(const AResume: TSessState);
       procedure ProcessCommandLine(const ALine: string);
       procedure HandleDataLine(const ALine: string);
+      procedure HandleAuthLine(const ALine: string);
       procedure DrainReadable;
       procedure FlushOutbound;
       procedure ResetEnvelope;
+      function AuthShouldAdvertise: Boolean;
+      function TryDecodePlain(const AEncoded: string; out AUser, APass: string): Boolean;
+      procedure DoAuthenticate(const AUser, APass: string);
   public
     constructor Create(const AConn: ITcpStream; const ASink: ISmtpServerSink;
       const AConfig: TMailSmtpServerConfig);
     destructor Destroy; override;
-    { ITcpServerSession }
     function Run: TTcpServerConnOwnership;
-    { ITcpServerPollDrivenSession }
     function PollEvents: TPlatformPollEvents;
     function Advance(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
-    { ITcpServerPollDrivenSessionWithDeadline }
     function WakeDeadline: TDeadline;
   end;
 
 implementation
 
 uses
+  nextpas.core.encoding.base64,
   nextpas.core.text.conv;
 
 class function TMailSmtpServerConfig.Default: TMailSmtpServerConfig;
@@ -168,11 +251,12 @@ begin
   Result.OutboundQueueLimit := MAIL_SMTP_OUTBOUND_DEFAULT_LIMIT;
   Result.RequireAuth := False;
   Result.AuthEnabled := False;
-  Result.AuthCallback.Code := nil;
-  Result.AuthCallback.Data := nil;
+  Result.MailPolicy := nil;
+  Result.AuthHook := nil;
+  Result.TlsUpgrade := nil;
+  Result.AuthedMailGate := nil;
 end;
 
-{ 从累积行缓冲构造 string（去 CRLF）}
 function TMailSmtpServerSession.BuildLine: string;
 begin
   SetLength(Result, FLineLen);
@@ -182,7 +266,6 @@ end;
 
 procedure TMailSmtpServerSession.RefreshIdleDeadline;
 begin
-  { abort 已置到期 deadline 供 reactor 回收；此处不覆盖 stClosed }
   if FState = stClosed then
     Exit;
   if FConfig.IdleTimeout.AsNanoseconds > 0 then
@@ -192,12 +275,30 @@ begin
 end;
 
 procedure TMailSmtpServerSession.NotifyClosed;
+var
+  LEnv: TMailSmtpEnvelope;
 begin
   if FClosedNotified then
     Exit;
   FClosedNotified := True;
   if FSink <> nil then
-    FSink.OnServerEvent(msseClosed, Default(TMailSmtpEnvelope));
+  begin
+    LEnv := Default(TMailSmtpEnvelope);
+    LEnv.ClientIP := FConn.RemoteAddr.IP;
+    FSink.OnServerEvent(msseClosed, LEnv);
+  end;
+end;
+
+procedure TMailSmtpServerSession.NotifyAuthed(const AUserId: string);
+var
+  LEnv: TMailSmtpEnvelope;
+begin
+  if FSink = nil then
+    Exit;
+  LEnv := Default(TMailSmtpEnvelope);
+  LEnv.ClientIP := FConn.RemoteAddr.IP;
+  LEnv.AuthedUserId := AUserId;
+  FSink.OnServerEvent(msseAuthed, LEnv);
 end;
 
 procedure TMailSmtpServerSession.AbortSession;
@@ -209,8 +310,6 @@ begin
   FOutCount := 0;
   FOutBytes := 0;
   FHeadPos := 0;
-  { 置过期 deadline：reactor 经超时唤醒路径驱动 Advance → tsprDone，
-    使 abort 早于首次 Advance 的会话（如构造期队列溢出）也能被回收 }
   FDeadline := TDeadline.After(TDuration.FromMilliseconds(0));
   NotifyClosed;
 end;
@@ -226,6 +325,15 @@ begin
     raise EArgumentError.Create('smtp server session requires stream runtime seam');
   FSink := ASink;
   FConfig := AConfig;
+  FMailPolicy := FConfig.MailPolicy;
+  FAuthHook := FConfig.AuthHook;
+  FTlsUpgrade := FConfig.TlsUpgrade;
+  FAuthedMailGate := FConfig.AuthedMailGate;
+  FTlsActive := False;
+  FAuthPending := apNone;
+  FAuthLoginUser := '';
+  FAuthed := False;
+  FAuthedUserId := '';
   if FConfig.Domain = '' then
     FConfig.Domain := 'localhost';
   if FConfig.MaxMessageSize <= 0 then
@@ -239,7 +347,6 @@ begin
   FReadPos := 0;
   FReadAvail := 0;
   ResetEnvelope;
-  { 欢迎横幅进入出站队列并冲刷 }
   EnqueueStr('220 ' + FConfig.Domain + ' ESMTP' + #13#10);
   BeginFlush(stCommand);
   RefreshIdleDeadline;
@@ -293,7 +400,176 @@ begin
   FState := stFlushing;
 end;
 
-{ 按空白切第一个 token（返回值大写动词）；余下原样给 AArgs }
+function TMailSmtpServerSession.AuthShouldAdvertise: Boolean;
+begin
+  if not FConfig.AuthEnabled then
+    Exit(False);
+  if FTlsActive then
+    Exit(True);
+  if FTlsUpgrade = nil then
+    Exit(True);
+  Result := False;
+end;
+
+function TMailSmtpServerSession.TryDecodePlain(const AEncoded: string; out AUser, APass: string): Boolean;
+var
+  LDecoded: TBytes;
+  I, LNul1, LNul2: Integer;
+begin
+  Result := False;
+  AUser := '';
+  APass := '';
+  try
+    LDecoded := Base64Decode(AEncoded);
+  except
+    Exit(False);
+  end;
+  LNul1 := -1;
+  LNul2 := -1;
+  for I := 0 to Length(LDecoded) - 1 do
+    if LDecoded[I] = 0 then
+    begin
+      if LNul1 < 0 then
+        LNul1 := I
+      else if LNul2 < 0 then
+      begin
+        LNul2 := I;
+        Break;
+      end;
+    end;
+  if (LNul1 < 0) or (LNul2 < 0) then
+    Exit(False);
+  { LNul2 - LNul1 -1 may be 0? need at least 1 char username }
+  if LNul2 <= LNul1 + 1 then
+    Exit(False);
+  SetLength(AUser, LNul2 - LNul1 - 1);
+  if Length(AUser) > 0 then
+    Move(LDecoded[LNul1 + 1], AUser[1], Length(AUser));
+  SetLength(APass, Length(LDecoded) - LNul2 - 1);
+  if Length(APass) > 0 then
+    Move(LDecoded[LNul2 + 1], APass[1], Length(APass));
+  Result := True;
+end;
+
+procedure TMailSmtpServerSession.DoAuthenticate(const AUser, APass: string);
+var
+  LUid: string;
+  LOk: Boolean;
+begin
+  if FAuthHook = nil then
+  begin
+    EnqueueStr('535 5.7.8 Authentication credentials invalid' + #13#10);
+    BeginFlush(stCommand);
+    Exit;
+  end;
+  try
+    LOk := FAuthHook.Authenticate(AUser, APass, LUid);
+  except
+    EnqueueStr('535 5.7.8 Authentication credentials invalid' + #13#10);
+    BeginFlush(stCommand);
+    Exit;
+  end;
+  if LOk then
+  begin
+    FAuthed := True;
+    if LUid <> '' then
+      FAuthedUserId := LUid
+    else
+      FAuthedUserId := AUser;
+    EnqueueStr('235 2.7.0 Authentication successful' + #13#10);
+    NotifyAuthed(FAuthedUserId);
+    BeginFlush(stCommand);
+  end
+  else
+  begin
+    EnqueueStr('535 5.7.8 Authentication credentials invalid' + #13#10);
+    BeginFlush(stCommand);
+  end;
+end;
+
+procedure TMailSmtpServerSession.HandleAuthLine(const ALine: string);
+var
+  LUser, LPass: string;
+  LDecoded: TBytes;
+  LB64: string;
+begin
+  case FAuthPending of
+    apPlain:
+      begin
+        FAuthPending := apNone;
+        LB64 := Trim(ALine);
+        if LB64 = '*' then
+        begin
+          EnqueueStr('501 5.7.0 Authentication cancelled' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        if not TryDecodePlain(LB64, LUser, LPass) then
+        begin
+          EnqueueStr('535 5.7.8 Authentication credentials invalid' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        DoAuthenticate(LUser, LPass);
+      end;
+    apLoginUser:
+      begin
+        LB64 := Trim(ALine);
+        if LB64 = '*' then
+        begin
+          FAuthPending := apNone;
+          EnqueueStr('501 5.7.0 Authentication cancelled' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        try
+          LDecoded := Base64Decode(LB64);
+          FAuthLoginUser := UTF8BytesToString(LDecoded);
+        except
+          FAuthPending := apNone;
+          EnqueueStr('535 5.7.8 Authentication credentials invalid' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        if FAuthLoginUser = '' then
+        begin
+          FAuthPending := apNone;
+          EnqueueStr('535 5.7.8 Authentication credentials invalid' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        FAuthPending := apLoginPass;
+        EnqueueStr('334 UGFzc3dvcmQ6' + #13#10);
+        BeginFlush(stCommand);
+      end;
+    apLoginPass:
+      begin
+        FAuthPending := apNone;
+        LB64 := Trim(ALine);
+        if LB64 = '*' then
+        begin
+          EnqueueStr('501 5.7.0 Authentication cancelled' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        try
+          LDecoded := Base64Decode(LB64);
+          LPass := UTF8BytesToString(LDecoded);
+        except
+          EnqueueStr('535 5.7.8 Authentication credentials invalid' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        DoAuthenticate(FAuthLoginUser, LPass);
+        FAuthLoginUser := '';
+      end;
+  else
+    FAuthPending := apNone;
+    EnqueueStr('503 5.5.1 Bad sequence of commands' + #13#10);
+    BeginFlush(stCommand);
+  end;
+end;
+
 function SplitVerb(const ALine: string; out AVerb: string; out AArgs: string): Boolean;
 var
   I: Integer;
@@ -309,8 +585,6 @@ begin
   Result := AVerb <> '';
 end;
 
-{ 解析 "FROM:<addr>" 或 "TO:<addr>"；LTrim 处理参数前空格。
-  前缀大小写不敏感（RFC 5321 命令参数）。 }
 function ExtractPath(const AArg: string; const APrefix: string;
   out AAddr: TMailAddress): Boolean;
 var
@@ -325,7 +599,6 @@ begin
   if UpperCase(Copy(S, 1, Length(APrefix))) <> UpperCase(APrefix) then
     Exit;
   LVal := Copy(S, Length(APrefix) + 1, Length(S) - Length(APrefix));
-  { 形如 "<addr>" 或 "<addr> SIZE=n"；取到 '>' 为界 }
   I := Pos('>', LVal);
   if I > 0 then
     LVal := Copy(LVal, 1, I);
@@ -333,7 +606,6 @@ begin
     LVal := Copy(LVal, 2, Length(LVal) - 2);
   if LVal = '' then
   begin
-    { 空路径 <>/<>：弹回，合法空地址 }
     AAddr := Default(TMailAddress);
     Result := True;
     Exit;
@@ -342,7 +614,6 @@ begin
     Result := True;
 end;
 
-{ 提取 SIZE=<n> 参数；失败返回 -1 }
 function ExtractSize(const AArg: string): Int64;
 var
   I: Integer;
@@ -362,13 +633,16 @@ begin
   Result := StrToInt64Def(LNum, -1);
 end;
 
-{ 处理一条完整命令行（不含 CRLF）}
 procedure TMailSmtpServerSession.ProcessCommandLine(const ALine: string);
 var
   LVerb, LArgs: string;
   LAddr: TMailAddress;
   LSize: Int64;
   LOk: Boolean;
+  LPolicyReply: string;
+  LMech, LInitial, LRest: string;
+  LUser, LPass: string;
+  I: Integer;
 begin
   if not SplitVerb(ALine, LVerb, LArgs) then
   begin
@@ -390,8 +664,10 @@ begin
           EnqueueStr('250-8BITMIME' + #13#10);
           EnqueueStr('250-PIPELINING' + #13#10);
           EnqueueStr('250-SIZE ' + IntToStr(FConfig.MaxMessageSize) + #13#10);
-          if FConfig.AuthEnabled then
+          if AuthShouldAdvertise then
             EnqueueStr('250-AUTH PLAIN LOGIN' + #13#10);
+          if (FTlsUpgrade <> nil) and (not FTlsActive) then
+            EnqueueStr('250-STARTTLS' + #13#10);
           EnqueueStr('250 ENHANCEDSTATUSCODES' + #13#10);
         end
         else
@@ -433,6 +709,27 @@ begin
           BeginFlush(stCommand);
           Exit;
         end;
+        if FAuthed and (FAuthedMailGate <> nil) then
+        begin
+          LPolicyReply := FAuthedMailGate.Check(FAuthedUserId, LAddr);
+          if LPolicyReply <> '' then
+          begin
+            EnqueueStr(LPolicyReply);
+            BeginFlush(stCommand);
+            Exit;
+          end;
+        end;
+        if FMailPolicy <> nil then
+        begin
+          LPolicyReply := FMailPolicy.EvaluateMailFrom(LAddr,
+            FConn.RemoteAddr.IP);
+          if LPolicyReply <> '' then
+          begin
+            EnqueueStr(LPolicyReply);
+            BeginFlush(stCommand);
+            Exit;
+          end;
+        end;
         FEnvelope.From := LAddr;
         FEnvelope.FromSet := True;
         EnqueueStr('250 2.1.0 Ok' + #13#10);
@@ -463,6 +760,17 @@ begin
           EnqueueStr('501 5.1.3 Bad recipient address syntax' + #13#10);
           BeginFlush(stCommand);
           Exit;
+        end;
+        if FMailPolicy <> nil then
+        begin
+          LPolicyReply := FMailPolicy.EvaluateRcptTo(FEnvelope.From, LAddr,
+            FConn.RemoteAddr.IP);
+          if LPolicyReply <> '' then
+          begin
+            EnqueueStr(LPolicyReply);
+            BeginFlush(stCommand);
+            Exit;
+          end;
         end;
         SetLength(FEnvelope.Recipients, Length(FEnvelope.Recipients) + 1);
         FEnvelope.Recipients[High(FEnvelope.Recipients)] := LAddr;
@@ -502,7 +810,6 @@ begin
     'QUIT':
       begin
         EnqueueStr('221 2.0.0 Bye' + #13#10);
-        { 冲刷该回复后关闭 }
         FResumeState := stClosed;
         FState := stFlushing;
       end;
@@ -511,21 +818,91 @@ begin
     'VRFY', 'EXPN':
       EnqueueStr('252 2.5.2 Cannot VRFY user, but will accept message' + #13#10);
     'STARTTLS':
-      EnqueueStr('454 4.7.0 TLS not available' + #13#10);
+      begin
+        if FTlsActive then
+        begin
+          EnqueueStr('503 5.5.1 TLS already active' + #13#10);
+          BeginFlush(stCommand);
+        end
+        else if FTlsUpgrade = nil then
+        begin
+          EnqueueStr('454 4.7.0 TLS not available' + #13#10);
+          BeginFlush(stCommand);
+        end
+        else
+        begin
+          EnqueueStr('220 2.0.0 Ready to start TLS' + #13#10);
+          BeginFlush(stStartTls);
+        end;
+      end;
     'AUTH':
-      if FConfig.AuthEnabled then
-        EnqueueStr('503 5.5.1 Authentication not implemented yet' + #13#10)
-      else
-        EnqueueStr('503 5.5.1 Authentication not available' + #13#10);
+      begin
+        if not FConfig.AuthEnabled then
+        begin
+          EnqueueStr('503 5.5.1 Authentication not available' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        if FAuthPending <> apNone then
+        begin
+          EnqueueStr('503 5.5.1 Bad sequence of commands' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        { parse mechanism }
+        LRest := Trim(LArgs);
+        I := 1;
+        while (I <= Length(LRest)) and (LRest[I] <> ' ') do
+          Inc(I);
+        LMech := UpperCase(Copy(LRest, 1, I - 1));
+        if I <= Length(LRest) then
+          LInitial := Trim(Copy(LRest, I + 1, Length(LRest) - I))
+        else
+          LInitial := '';
+        if LMech = 'PLAIN' then
+        begin
+          if LInitial <> '' then
+          begin
+            if not TryDecodePlain(LInitial, LUser, LPass) then
+            begin
+              EnqueueStr('535 5.7.8 Authentication credentials invalid' + #13#10);
+              BeginFlush(stCommand);
+              Exit;
+            end;
+            DoAuthenticate(LUser, LPass);
+          end
+          else
+          begin
+            FAuthPending := apPlain;
+            EnqueueStr('334 ' + #13#10);
+            BeginFlush(stCommand);
+          end;
+        end
+        else if LMech = 'LOGIN' then
+        begin
+          if LInitial <> '' then
+          begin
+            EnqueueStr('501 5.5.2 Syntax error in parameters' + #13#10);
+            BeginFlush(stCommand);
+            Exit;
+          end;
+          FAuthPending := apLoginUser;
+          EnqueueStr('334 VXNlcm5hbWU6' + #13#10);
+          BeginFlush(stCommand);
+        end
+        else
+        begin
+          EnqueueStr('504 5.5.4 Unrecognized authentication type' + #13#10);
+          BeginFlush(stCommand);
+        end;
+      end;
   else
     EnqueueStr('500 5.5.2 Error: command not recognized' + #13#10);
   end;
-  { 除 DATA/QUIT 已显式切到 Flushing 外，其余命令回复也需冲刷 }
-  if (LVerb <> 'DATA') and (LVerb <> 'QUIT') and (FState = stCommand) then
+  if (LVerb <> 'DATA') and (LVerb <> 'QUIT') and (LVerb <> 'STARTTLS') and (LVerb <> 'AUTH') and (FState = stCommand) then
     BeginFlush(stCommand);
 end;
 
-{ DATA 模式一行（去 CRLF）：处理点转义、大小上限、终止点 }
 procedure TMailSmtpServerSession.HandleDataLine(const ALine: string);
 var
   LLen: SizeUInt;
@@ -534,13 +911,13 @@ var
 begin
   if FState <> stData then
     Exit;
-  { 终止点：'.\r\n'（ALine = '.'） }
   if ALine = '.' then
   begin
-    { 集合完毕：交给信封一份独立所有权的副本（FDataBuf 随即被 Reset 释放） }
     LDeliver.From := FEnvelope.From;
     LDeliver.Recipients := FEnvelope.Recipients;
     FEnvelope.Recipients := nil;
+    LDeliver.ClientIP := FConn.RemoteAddr.IP;
+    LDeliver.AuthedUserId := FAuthedUserId;
     SetLength(LDeliver.Data, FDataLen);
     if FDataLen > 0 then
       Move(FDataBuf[0], LDeliver.Data[0], FDataLen);
@@ -552,13 +929,11 @@ begin
     BeginFlush(stCommand);
     Exit;
   end;
-  { 大小上限：含 CRLF 计入 }
   if FConfig.MaxMessageSize > 0 then
   begin
     if FDataBytes + SizeUInt(Length(ALine)) + 2 > SizeUInt(FConfig.MaxMessageSize) then
     begin
       EnqueueStr('552 5.3.4 Message size exceeds fixed limit' + #13#10);
-      { 丢弃该 DATA，回命令态 }
       ResetEnvelope;
       FState := stCommand;
       BeginFlush(stCommand);
@@ -566,7 +941,6 @@ begin
     end;
     Inc(FDataBytes, SizeUInt(Length(ALine)) + 2);
   end;
-  { 点转义：行首 '.' 剥除（终止点已判） }
   LContent := ALine;
   if (Length(LContent) > 0) and (LContent[1] = '.') then
     LContent := Copy(LContent, 2, Length(LContent) - 1);
@@ -594,9 +968,6 @@ begin
     Exit;
   while (FState = stCommand) or (FState = stData) do
   begin
-    { 先消费因 Flushing 中断而保留的未处理字节(FReadPos..FReadAvail-1):
-      处理行导致切 Flushing 时 FReadPos 已停在断点, 剩余命令不丢
-      (pipeling/多行同批读入场景, 见 ProcessCommandLine 后 Exit) }
     while (FReadPos < FReadAvail) and
           ((FState = stCommand) or (FState = stData)) do
     begin
@@ -604,12 +975,10 @@ begin
       Inc(FReadPos);
       if B = 10 then
       begin
-        { 行结束（去 CR）}
         if (FLineLen > 0) and (FLineBuf[FLineLen - 1] = 13) then
           Dec(FLineLen);
         if FLineOver then
         begin
-          { 超长行：RFC 5321 §4.5.3.1 行长度上限，整行丢弃并报 500 }
           FLineLen := 0;
           FLineOver := False;
           EnqueueStr('500 5.5.2 Error: line too long' + #13#10);
@@ -621,11 +990,18 @@ begin
         FLineOver := False;
         if FState = stCommand then
         begin
-          ProcessCommandLine(LLine);
-          { 若进入 Flushing（有回复待写）则本 drain 停止，等可写事件；
-            未处理字节保留下次续读 }
-          if FState = stFlushing then
-            Exit;
+          if FAuthPending <> apNone then
+          begin
+            HandleAuthLine(LLine);
+            if FState = stFlushing then
+              Exit;
+          end
+          else
+          begin
+            ProcessCommandLine(LLine);
+            if FState = stFlushing then
+              Exit;
+          end;
         end
         else if FState = stData then
         begin
@@ -636,7 +1012,6 @@ begin
       end
       else if B = 13 then
       begin
-        { 忽略 CR（以 LF 为定界；行首 CR 属于 SMTP 折叠/裸换行场景，保守忽略）}
       end
       else
       begin
@@ -651,7 +1026,6 @@ begin
         end;
       end;
     end;
-    { 缓冲消费完：重置断点, 读新字节 }
     FReadPos := 0;
     FReadAvail := 0;
     if (FState <> stCommand) and (FState <> stData) then
@@ -686,6 +1060,8 @@ var
   LWritten: SizeUInt;
   LRes: TTcpStreamIOResult;
   LI: SizeUInt;
+  LNewConn: ITcpStream;
+  LNewRuntime: ITcpStreamRuntime;
 begin
   if FConnRuntime = nil then
     Exit;
@@ -728,23 +1104,75 @@ begin
   begin
     if FState = stFlushing then
     begin
-      FState := FResumeState;
-      RefreshIdleDeadline;
-      if FState = stClosed then
-        NotifyClosed
-      else if FReadAvail > FReadPos then
+      if FResumeState = stStartTls then
       begin
-        { 冲刷完成回到命令/数据态, 缓冲里还有未消费的命令行
-          (pipelining: 一次 TryRead 读入多行, 首行处理即切 Flushing):
-          立即续处理, 不等可读事件(内核已无新数据, 事件不会再来) }
-        DrainReadable;
+        { 220 已冲刷完成：执行握手升级 }
+        try
+          if FTlsUpgrade = nil then
+            raise ENextPasError.Create('TLS upgrade not available');
+          LNewConn := FTlsUpgrade.Upgrade(FConn);
+          if LNewConn = nil then
+            raise ENextPasError.Create('TLS upgrade returned nil');
+          if not Supports(LNewConn, ITcpStreamRuntime, LNewRuntime) then
+            raise ENextPasError.Create('TLS stream missing runtime');
+          FConn := LNewConn;
+          FConnRuntime := LNewRuntime;
+          FTlsActive := True;
+          { RFC 3207：TLS 后必须重发 EHLO，Helo 状态与缓冲重置 }
+          FHeloState := hsNone;
+          FLineBuf := nil;
+          FLineLen := 0;
+          FLineOver := False;
+          FReadPos := 0;
+          FReadAvail := 0;
+          FAuthPending := apNone;
+          FAuthLoginUser := '';
+          { 保留 FAuthed/FAuthedUserId 或重置——此处保留（若此前无 TLS 前认证则本就为空）}
+          ResetEnvelope;
+          FDataBytes := 0;
+          FDataBuf := nil;
+          FDataLen := 0;
+          FState := stCommand;
+          FResumeState := stCommand;
+          RefreshIdleDeadline;
+          DrainReadable;
+          Exit;
+        except
+          on E: Exception do
+          begin
+            EnqueueStr('454 4.7.0 TLS not available due to temporary reason' + #13#10);
+            FState := stCommand;
+            FResumeState := stCommand;
+            BeginFlush(stCommand);
+            { FlushOutbound 将在下次可写事件继续冲刷 454 }
+            Exit;
+          end;
+        end;
+      end
+      else if FResumeState in [stCommand, stData, stClosed] then
+      begin
+        FState := FResumeState;
+        RefreshIdleDeadline;
+        if FState = stClosed then
+          NotifyClosed
+        else if FReadAvail > FReadPos then
+        begin
+          DrainReadable;
+        end;
+      end
+      else
+      begin
+        FState := FResumeState;
+        RefreshIdleDeadline;
+        if FState = stClosed then
+          NotifyClosed
+        else if FReadAvail > FReadPos then
+          DrainReadable;
       end;
     end;
   end;
 end;
 
-{ 会话 I/O 事件推进入口。初始兴趣依状态：
-  flushing 期（banner/回复待写）订阅可写，其余订阅可读。 }
 function TMailSmtpServerSession.PollEvents: TPlatformPollEvents;
 begin
   case FState of
@@ -772,7 +1200,6 @@ begin
       FlushOutbound;
   end;
 
-  { 读空闲超时：reactor 以空事件集唤醒超时目标 }
   if (FState in [stCommand, stData]) and (AEvents = []) and
      FDeadline.IsExpired then
   begin
@@ -792,7 +1219,6 @@ begin
         Exit(tsprWait);
       end;
   else
-    { stCommand / stData }
     RefreshIdleDeadline;
     ANextEvents := [peReadable];
     Exit(tsprWait);
@@ -806,7 +1232,6 @@ end;
 
 function TMailSmtpServerSession.Run: TTcpServerConnOwnership;
 begin
-  { 事件驱动会话不提供阻塞降级路径：threaded 后端接入属误用，显式 501。 }
   Result := tscoServer;
   raise ENotSupportedError.Create(
     'smtp server session requires an evented tcp server backend');

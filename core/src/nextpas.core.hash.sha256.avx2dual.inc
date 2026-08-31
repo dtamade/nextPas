@@ -35,7 +35,6 @@ asm
   vmovdqu (%rax), %ymm13
   leaq DUAL_DC00(%rip), %rax
   vmovdqu (%rax), %ymm14
-  leaq K(%rip), %rbp
 
   vmovdqu (%r14), %ymm0
   vmovdqu 32(%r14), %ymm1
@@ -51,19 +50,19 @@ asm
   vperm2i128 $0x31, %ymm3, %ymm1, %ymm7
 
   // Store W[0..15]+K
-  vbroadcasti128 (%rbp), %ymm9
+  vbroadcasti128 K(%rip), %ymm9
   vpaddd %ymm9, %ymm4, %ymm0
   vmovdqu %xmm0, (%rsp)
   vextracti128 $1, %ymm0, 256(%rsp)
-  vbroadcasti128 16(%rbp), %ymm9
+  vbroadcasti128 K+16(%rip), %ymm9
   vpaddd %ymm9, %ymm5, %ymm0
   vmovdqu %xmm0, 16(%rsp)
   vextracti128 $1, %ymm0, 272(%rsp)
-  vbroadcasti128 32(%rbp), %ymm9
+  vbroadcasti128 K+32(%rip), %ymm9
   vpaddd %ymm9, %ymm6, %ymm0
   vmovdqu %xmm0, 32(%rsp)
   vextracti128 $1, %ymm0, 288(%rsp)
-  vbroadcasti128 48(%rbp), %ymm9
+  vbroadcasti128 K+48(%rip), %ymm9
   vpaddd %ymm9, %ymm7, %ymm0
   vmovdqu %xmm0, 48(%rsp)
   vextracti128 $1, %ymm0, 304(%rsp)

@@ -48,7 +48,6 @@ type
    *   - 使用 spin lock 保证线程安全
    *   - 不是 lock-free，但性能良好
    *}
-  {** @concurrency Thread-safe (see source for details). }
   TConcurrentLRUCache = class
   private
     FBuckets: array[0..LRU_HASH_BUCKETS - 1] of PLruNode;

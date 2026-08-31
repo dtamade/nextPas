@@ -5,7 +5,7 @@
  * 实现 ISSLSession 接口的 MbedTLS 后端。
  * 支持 TLS 会话恢复和会话票据。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-10
  *}
@@ -25,8 +25,7 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,
-  nextpas.core.tls.mbedtls.api,
-  sysutils;
+  nextpas.core.tls.mbedtls.api;
 
 type
   { TMbedTLSSession - MbedTLS 会话类 }
@@ -89,12 +88,13 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.mem,
   nextpas.core.text.strings,
   nextpas.core.tls.mbedtls.certificate;
 
 const
-  MBEDTLS_SSL_SESSION_SIZE = 512;  // 估算大小
+  MBEDTLS_SSL_SESSION_SIZE = 2048; // 估算大小（按 SizeOf(TMbedTLSSessionNativeView) 校验，覆盖 2.x/3.x 版本差异）
   MBEDTLS_ERR_SSL_BUFFER_TOO_SMALL_LOCAL = -$6A00;
   MBEDTLS_SESSION_SERIALIZATION_MAGIC = 'fafafa-mbedtls-session-v1';
   HEX_DIGITS: array[0..15] of Char = '0123456789ABCDEF';
@@ -114,6 +114,14 @@ type
   end;
   {$POP}
   PMbedTLSSessionNativeView = ^TMbedTLSSessionNativeView;
+
+function MbedTLSSessionAllocSize: SizeUInt; inline;
+begin
+  // 单源尺寸：以 NativeView 为下界，预留版本扩展，避免 512 固定估值堆越界/截断
+  Result := MBEDTLS_SSL_SESSION_SIZE;
+  if Result < SizeOf(TMbedTLSSessionNativeView) then
+    Result := SizeOf(TMbedTLSSessionNativeView);
+end;
 
 function ParseMbedTLSVersionString(const AVersion: string): TSSLProtocolVersion;
 begin
@@ -356,26 +364,39 @@ begin
 end;
 
 procedure TMbedTLSSession.AllocateSession;
+var
+  LSize: SizeUInt;
 begin
   if FSession <> nil then
     FreeSession;
-
-  FSession := GetMem(MBEDTLS_SSL_SESSION_SIZE);
-  FillChar(FSession^, MBEDTLS_SSL_SESSION_SIZE, 0);
-
-  if Assigned(mbedtls_ssl_session_init) then
-    mbedtls_ssl_session_init(FSession);
-
+  LSize := MbedTLSSessionAllocSize;
+  // owner 边界复用 nextpas.core.mem，零拷贝 Move/零填充经 base.utils
+  FSession := GetMem(LSize);
+  if FSession = nil then
+    raise EOutOfMemory.Create('TMbedTLSSession.AllocateSession: GetMem failed');
+  FillChar(FSession^, LSize, 0);
+  try
+    if Assigned(mbedtls_ssl_session_init) then
+      mbedtls_ssl_session_init(FSession);
+  except
+    FreeMem(FSession, LSize);
+    FSession := nil;
+    raise;
+  end;
   FOwnsSession := True;
 end;
 
 procedure TMbedTLSSession.FreeSession;
+var
+  LSize: SizeUInt;
 begin
-  if FSession <> nil then
-  begin
+  if FSession = nil then Exit;
+  LSize := MbedTLSSessionAllocSize;
+  try
     if Assigned(mbedtls_ssl_session_free) then
       mbedtls_ssl_session_free(FSession);
-    FreeMem(FSession, MBEDTLS_SSL_SESSION_SIZE);
+  finally
+    FreeMem(FSession, LSize);
     FSession := nil;
   end;
 end;
@@ -393,14 +414,14 @@ begin
     else
       LCreatedUnix := 0;
 
-    Result := BytesOf(UTF8String(
-      'magic=' + MBEDTLS_SESSION_SERIALIZATION_MAGIC + sLineBreak +
-      'id=' + FSessionID + sLineBreak +
-      'created_unix=' + IntToStr(LCreatedUnix) + sLineBreak +
-      'timeout=' + IntToStr(FTimeout) + sLineBreak +
-      'protocol=' + IntToStr(Ord(FProtocolVersion)) + sLineBreak +
-      'cipher=' + FCipherName + sLineBreak +
-      'native_hex=' + BytesToHexString(ANativeData) + sLineBreak
+    Result := nextpas.core.bytes.ops.StringToBytes(UTF8String(
+      'magic=' + MBEDTLS_SESSION_SERIALIZATION_MAGIC + #10 +
+      'id=' + FSessionID + #10 +
+      'created_unix=' + nextpas.core.text.conv.IntToStr(LCreatedUnix) + #10 +
+      'timeout=' + nextpas.core.text.conv.IntToStr(FTimeout) + #10 +
+      'protocol=' + nextpas.core.text.conv.IntToStr(Ord(FProtocolVersion)) + #10 +
+      'cipher=' + FCipherName + #10 +
+      'native_hex=' + BytesToHexString(ANativeData) + #10
     ));
   end;
 
@@ -629,17 +650,25 @@ begin
   end;
 
   LSession := nil;
-  LSession := GetMem(MBEDTLS_SSL_SESSION_SIZE);
-  FillChar(LSession^, MBEDTLS_SSL_SESSION_SIZE, 0);
-
-  if Assigned(mbedtls_ssl_session_init) then
-    mbedtls_ssl_session_init(LSession);
+  LSession := GetMem(MbedTLSSessionAllocSize);
+  if LSession = nil then Exit;
+  FillChar(LSession^, MbedTLSSessionAllocSize, 0);
+  try
+    if Assigned(mbedtls_ssl_session_init) then
+      mbedtls_ssl_session_init(LSession);
+  except
+    FreeMem(LSession, MbedTLSSessionAllocSize);
+    raise;
+  end;
 
   if mbedtls_ssl_session_load(LSession, @LNativeData[0], Length(LNativeData)) <> 0 then
   begin
-    if Assigned(mbedtls_ssl_session_free) then
-      mbedtls_ssl_session_free(LSession);
-    FreeMem(LSession, MBEDTLS_SSL_SESSION_SIZE);
+    try
+      if Assigned(mbedtls_ssl_session_free) then
+        mbedtls_ssl_session_free(LSession);
+    finally
+      FreeMem(LSession, MbedTLSSessionAllocSize);
+    end;
     Exit;
   end;
 
@@ -740,43 +769,44 @@ begin
   if not Assigned(mbedtls_ssl_get_session) then Exit;
 
   LSession := TMbedTLSSession.Create;
-  LSession.AllocateSession;
-
-  if mbedtls_ssl_get_session(ASSLCtx, LSession.FSession) = 0 then
-  begin
-    LSession.ExtractSessionInfo;
-
-    if Assigned(mbedtls_ssl_get_version) then
+  try
+    LSession.AllocateSession;
+    if mbedtls_ssl_get_session(ASSLCtx, LSession.FSession) = 0 then
     begin
-      LVersion := mbedtls_ssl_get_version(ASSLCtx);
-      if LVersion <> nil then
+      LSession.ExtractSessionInfo;
+
+      if Assigned(mbedtls_ssl_get_version) then
       begin
-        LParsedVersion := ParseMbedTLSVersionString(string(LVersion));
-        if LParsedVersion <> sslProtocolUnknown then
-          LSession.FProtocolVersion := LParsedVersion;
+        LVersion := mbedtls_ssl_get_version(ASSLCtx);
+        if LVersion <> nil then
+        begin
+          LParsedVersion := ParseMbedTLSVersionString(string(LVersion));
+          if LParsedVersion <> sslProtocolUnknown then
+            LSession.FProtocolVersion := LParsedVersion;
+        end;
       end;
-    end;
 
-    if Assigned(mbedtls_ssl_get_ciphersuite) then
-    begin
-      LCipherName := mbedtls_ssl_get_ciphersuite(ASSLCtx);
-      if LCipherName <> nil then
-        LSession.FCipherName := string(LCipherName);
-    end;
+      if Assigned(mbedtls_ssl_get_ciphersuite) then
+      begin
+        LCipherName := mbedtls_ssl_get_ciphersuite(ASSLCtx);
+        if LCipherName <> nil then
+          LSession.FCipherName := string(LCipherName);
+      end;
 
-    if Assigned(mbedtls_ssl_get_peer_cert) then
-    begin
-      LPeerCert := mbedtls_ssl_get_peer_cert(ASSLCtx);
-      if LPeerCert <> nil then
-        LSession.FPeerCertificate := MaterializeMbedTLSPeerCertificate(LPeerCert);
-    end;
+      if Assigned(mbedtls_ssl_get_peer_cert) then
+      begin
+        LPeerCert := mbedtls_ssl_get_peer_cert(ASSLCtx);
+        if LPeerCert <> nil then
+          LSession.FPeerCertificate := MaterializeMbedTLSPeerCertificate(LPeerCert);
+      end;
 
-    Result := LSession;
-  end
-  else
-  begin
+      Result := LSession;
+      LSession := nil;
+    end
+    else
+      Result := nil;
+  finally
     LSession.Free;
-    Result := nil;
   end;
 end;
 

@@ -137,6 +137,107 @@ begin
     CheckTrue(not LOk);
   end);
 
+  LSuite.Test('multi-block >=256B KAT (AVX2 4block regression)', procedure
+  var LKey, LNonce, LAAD, LPlain, LCipher, LTag: TBytes; LOk: Boolean; I: Integer;
+  begin
+    // 权威实现(python cryptography)对拍向量；明文公式 i*7+13 mod 256。
+    // 历史 AVX2 4-block 路径对 >=256 字节输入从第 16 字节起错乱，
+    // 旧 114 字节 RFC 向量覆盖不到该路径，此组用例防止回归。
+    LKey := HexToBytes('808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f');
+    LNonce := HexToBytes('070000000000000000000000');
+    LAAD := HexToBytes('0102030405');
+
+    // N=300
+    SetLength(LPlain, 300);
+    for I := 0 to 299 do LPlain[I] := Byte((I * 7 + 13) mod 256);
+    LOk := TryChaCha20Poly1305Encrypt(LKey, LNonce, LAAD, LPlain, LCipher, LTag);
+    CheckTrue(LOk);
+    CheckEqual(
+      '121e57c70764edb8350c469d32972fa816e7cedd733ee66786616b4021f82dc0' +
+      'd1bd459b306097f3cab57c0cee60ca2c84ce0307b1663a1f12dba4d94e885b53' +
+      '91b3fcc7c1450862c74cd1eee6a5fd47c71c2f91af2439a2e976e39a80b3c004' +
+      'eb88660f753ecf8ae34b4c12e20e157b3ed0735645177b375a06732813a4e67f' +
+      'a748f8a53bd1c54326614b420c4bd06b3889966bbd01d1eda0b68bc978dda5a9' +
+      'c57e807dfe78638a240ba343e82723053874a5da41a6fa5a5290a2ec9a7e43cf' +
+      '54c391c8ea3ac14ae6e1d241780af9148c3f2dd8de407120d171b23f7e00789b' +
+      'b79b72e503f82b25fdb0b9d92d9180fbb74c6c532610518b8b0d47598901ae0c' +
+      'f41f0f053934c21ce5b2115d790160eb860486100dc4912c2c278af1f1a8ff65' +
+      'c0944ab3230f57a4039844df'
+      , BytesToHex(LCipher));
+    CheckEqual('cdfcd6f20704e4c9fa1ea285f0b48281', BytesToHex(LTag));
+    LOk := TryChaCha20Poly1305Decrypt(LKey, LNonce, LAAD, LCipher, LTag, LPlain);
+    CheckTrue(LOk);
+
+    // N=600
+    SetLength(LPlain, 600);
+    for I := 0 to 599 do LPlain[I] := Byte((I * 7 + 13) mod 256);
+    LOk := TryChaCha20Poly1305Encrypt(LKey, LNonce, LAAD, LPlain, LCipher, LTag);
+    CheckTrue(LOk);
+    CheckEqual(
+      '121e57c70764edb8350c469d32972fa816e7cedd733ee66786616b4021f82dc0' +
+      'd1bd459b306097f3cab57c0cee60ca2c84ce0307b1663a1f12dba4d94e885b53' +
+      '91b3fcc7c1450862c74cd1eee6a5fd47c71c2f91af2439a2e976e39a80b3c004' +
+      'eb88660f753ecf8ae34b4c12e20e157b3ed0735645177b375a06732813a4e67f' +
+      'a748f8a53bd1c54326614b420c4bd06b3889966bbd01d1eda0b68bc978dda5a9' +
+      'c57e807dfe78638a240ba343e82723053874a5da41a6fa5a5290a2ec9a7e43cf' +
+      '54c391c8ea3ac14ae6e1d241780af9148c3f2dd8de407120d171b23f7e00789b' +
+      'b79b72e503f82b25fdb0b9d92d9180fbb74c6c532610518b8b0d47598901ae0c' +
+      'f41f0f053934c21ce5b2115d790160eb860486100dc4912c2c278af1f1a8ff65' +
+      'c0944ab3230f57a4039844df1f005fd24ecef75294a6eee765a46bc6ebb58c16' +
+      '0273408a253221bdfc72b02ab2455ec21314e6fc5b0d6567cf5d9eb73b626103' +
+      '18a5673760c221dbca8e894d5e136d80a518d6d021a90828b8e0d3aee34cd65e' +
+      'e226e51c7d2c6e7453d1332fa8cef2c866595a0e90204fcaa9d00893a05d99bd' +
+      '1bae11aad7d6c4ab7abcb9e6df90226ef8c50d5b88ab24da6ef439ece2a3a350' +
+      '7346343fd3539a41e8f01e3151d532acb75d3e1ef57da3d2b653bc1155d90fe8' +
+      'd19b5a8dce4dbbb15bcbb62cbfcad7e3449fa22eb84214106375985d1db4d3f5' +
+      '21e78909182be0fde6dfc8a0a0e9be9e67c5e640c34bee325b5108d44038c9fb' +
+      '20a69401c6cb89c0fea83758f72d86a13f37de8c0eb39d8aa04b6c6a15b1bd4c' +
+      '16225aacb0f4f8aefcbd5e9f188c09a7cf502904e6932bb9'
+      , BytesToHex(LCipher));
+    CheckEqual('ace6c124cca36b791af4e814646bac26', BytesToHex(LTag));
+    LOk := TryChaCha20Poly1305Decrypt(LKey, LNonce, LAAD, LCipher, LTag, LPlain);
+    CheckTrue(LOk);
+
+  end);
+
+  { 回归：OpenSSH chachapoly 的裸 Poly1305（无 pad16/长度块）。
+    部分尾块必须把 0x01 放在数据之后（位随长度变化），不能套用满块的 2^128。}
+  LSuite.Test('Poly1305Raw RFC 8439 2.5.2 (34B partial end)', procedure
+  var LKey, LMsg, LTag: TBytes;
+  begin
+    LKey := HexToBytes('85d6be7857556d337f4452fe42d506a8' +
+      '0103808afb0db2fd4abff6af4149f51b');
+    LMsg := BytesOf('Cryptographic Forum Research Group');
+    LTag := Poly1305Raw(LKey, LMsg);
+    CheckEqual('a8061dc1305136c6c22b8baf0c0127a9', BytesToHex(LTag));
+  end);
+
+  LSuite.Test('Poly1305Raw RFC 8439 A.3 #4 (127B multi-block)', procedure
+  var LKey, LMsg, LTag: TBytes;
+  begin
+    LKey := HexToBytes('1c9240a5eb55d38af333888604f6b5f0' +
+      '473917c1402b80099dca5cbc207075c0');
+    LMsg := HexToBytes(
+      '2754776173206272696c6c69672c20616e642074686520736c6974687920746f' +
+      '7665730a446964206779726520616e642067696d626c6520696e207468652077' +
+      '6162653a0a416c6c206d696d737920776572652074686520626f726f676f7665' +
+      '732c0a416e6420746865206d6f6d65207261746873206f757467726162652e');
+    LTag := Poly1305Raw(LKey, LMsg);
+    CheckEqual('4541669a7eaaee61e708dc7cbcc5eb62', BytesToHex(LTag));
+  end);
+
+  LSuite.Test('Poly1305Raw OpenSSH macdata shape (28B = full + partial)', procedure
+  var LKey, LMacData, LTag: TBytes;
+  begin
+    { 模拟 chachapoly 首帧：encLen(4) || ct(24) = 28B，1 个满块 + 12B 尾块 }
+    LKey := HexToBytes('261f64b4831ab2509467f571a7de3b86' +
+      'ae79b7267c3507e9a3a2ccafab867805');
+    LMacData := HexToBytes('00000018000102030405060708090a' +
+      '0b0c0d0e0f1011121314151617');
+    LTag := Poly1305Raw(LKey, LMacData);
+    CheckEqual('5e638d70a7b68cdac0fd7f53122496ea', BytesToHex(LTag));
+  end);
+
   LRunner := TSuiteRunner.Create('nextpas.core.crypto.chacha20poly1305');
   LRunner.Add(LSuite);
   LRunner.RunAll;

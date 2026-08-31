@@ -56,6 +56,13 @@ function SameText(const A, B: string): Boolean; inline;
     Returns 0 if none of the characters are found. }
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;
 
+{== Pointer-based conversion ==}
+{** NUL-terminated PAnsiChar → string；nil 安全（返回空串）。
+    C ABI 字符串读回的统一入口：本工具链上 string(AnsiString(ptr))
+    强转在返回托管记录数组的函数内会损坏临时管理（db 家族实证的
+    工具链硬边界），消费方一律经本函数而非直接强转。 }
+function AnsiPtrToStr(const AStr: PAnsiChar): string;
+
 implementation
 
 uses
@@ -222,7 +229,10 @@ function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
 var LVal: Int64; LCode: Integer;
 begin
   Val(AStr, LVal, LCode);
-  Result := (LCode = 0);
+  { Int64 解析成功还不够: 超出 Int32 值域必须报失败,
+    否则截断回绕把 "4294967297" 静默变 1, 下游范围校验被穿透 }
+  Result := (LCode = 0)
+    and (LVal >= Low(Integer)) and (LVal <= High(Integer));
   if Result then AValue := Integer(LVal);
 end;
 
@@ -355,15 +365,15 @@ end;
 
 function UTF8BytesToString(const AData: TBytes): string;
 var
-  LUTF8: RawByteString;
+  LLen: SizeInt;
 begin
   Result := '';
-  if Length(AData) = 0 then
+  LLen := Length(AData);
+  if LLen = 0 then
     Exit;
-  SetLength(LUTF8, Length(AData));
-  Move(AData[0], LUTF8[1], Length(AData));
-  SetCodePage(LUTF8, CP_UTF8, False);
-  Result := string(UTF8String(LUTF8));
+  SetLength(Result, LLen);
+  Move(AData[0], Result[1], LLen);
+  SetCodePage(RawByteString(Result), CP_UTF8, False);
 end;
 
 function StringToUTF8Bytes(const AStr: string): TBytes;
@@ -372,6 +382,16 @@ var
   LLen: SizeInt;
 begin
   Result := nil;
+  if Length(AStr) = 0 then
+    Exit;
+  if StringCodePage(AStr) = CP_UTF8 then
+  begin
+    LLen := Length(AStr);
+    SetLength(Result, LLen);
+    if LLen > 0 then
+      Move(AStr[1], Result[0], LLen);
+    Exit;
+  end;
   LUTF8 := UTF8String(AStr);
   LLen := Length(LUTF8);
   SetLength(Result, LLen);
@@ -434,6 +454,24 @@ begin
     for J := 1 to Length(ADelimiters) do
       if S[I] = ADelimiters[J] then
         Exit(I);
+end;
+
+function AnsiPtrToStr(const AStr: PAnsiChar): string;
+var
+  LP: PAnsiChar;
+  LLen: Integer;
+begin
+  Result := '';
+  if AStr = nil then
+    Exit;
+  LP := AStr;
+  while LP^ <> #0 do
+    Inc(LP);
+  LLen := Integer(LP - AStr);
+  if LLen = 0 then
+    Exit;
+  SetLength(Result, LLen);
+  Move(AStr^, Result[1], SizeUInt(LLen));
 end;
 
 end.

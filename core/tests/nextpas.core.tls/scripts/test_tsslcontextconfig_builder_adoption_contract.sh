@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 fail() {
@@ -18,13 +18,13 @@ require_fixed() {
   fi
 }
 
-builder_file="src/nextpas.core.tls.context.builder.pas"
-contract_src="tests/config/test_context_builder_try.pas"
+builder_file="core/src/nextpas.core.tls.context.builder.pas"
+contract_src="core/tests/nextpas.core.tls/config/test_context_builder_try.pas"
 build_root="tmp/test_tsslcontextconfig_builder_adoption"
 units_dir="$build_root/units"
 bin_dir="$build_root/bin"
 binary="$bin_dir/test_context_builder_try"
-fpc_exe="${FAFAFA_FPC_EXE:-fpc}"
+fpc_exe="${NEXTPAS_FPC_EXE:-fpc}"
 
 printf '[TEST] TSSLContextConfig builder adoption contract\n'
 
@@ -39,7 +39,7 @@ require_fixed "$builder_file" \
   "context builder must consume the additive TSSLContextConfig factory overload"
 
 mkdir -p "$units_dir" "$bin_dir"
-"$fpc_exe" -B -Fu./src -Fu./tests -Fu./tests/framework -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
+"$fpc_exe" -B -Fu"$PWD/core/src" -Fu"$PWD/core/tests/nextpas.core.tls/framework" -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
 if [[ ! -x "$binary" ]]; then
   fail "context builder runtime adoption probe must compile"
 fi

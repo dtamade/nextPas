@@ -3,16 +3,16 @@ program test_freepascal_server_accept_skeleton;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils,
   nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.clienthello,
-  nextpas.core.tls.crypto.x25519;
-
+  nextpas.core.crypto.x25519,
+  nextpas.core.tls.freepascal.lib;
 procedure Fail(const AMessage: string);
 begin
   WriteLn('❌ ', AMessage);
@@ -127,8 +127,8 @@ begin
   AssertTrue(LCtx <> nil, 'FreePascal server context should be created');
   LCtx.SetPreferredVersion(sslProtocolTLS13);
   LCtx.SetALPNProtocols('h2,http/1.1');
-  LCtx.LoadCertificate('tests/certificate/test_certs/signer_cert.pem');
-  LCtx.LoadPrivateKey('tests/certificate/test_certs/signer_key.pem');
+  LCtx.LoadCertificate('certificate/test_certs/signer_cert.pem');
+  LCtx.LoadPrivateKey('certificate/test_certs/signer_key.pem');
 
   GenerateX25519KeyPair(LClientPrivate, LClientPublic);
   LClientHelloRecord := BuildClientHelloRecordWithSingleCipher(
@@ -144,7 +144,7 @@ begin
       LIOStream.WriteBuffer(LClientHelloRecord[0], Length(LClientHelloRecord));
     LIOStream.Position := 0;
 
-    LConn := LCtx.CreateConnection(LIOStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LIOStream));
     AssertTrue(LConn <> nil, 'Server connection should be created');
 
     LAcceptResult := LConn.Accept;

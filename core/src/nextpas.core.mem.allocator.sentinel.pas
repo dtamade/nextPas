@@ -18,8 +18,8 @@
 
 适用场景: 测试/诊断环境，检测堆安全问题。
 
-Author:    fafafaStudio
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Author:    nextpas.core
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.allocator.sentinel;

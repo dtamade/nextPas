@@ -8,8 +8,7 @@ uses
   nextpas.core.tls.quick,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.builder,
-  fafafa.ssl;
-
+  nextpas.core.tls.openssl.backed;
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
@@ -46,7 +45,7 @@ begin
   Cert := KP.GetCertificate;
   Check(Cert <> nil, 'Certificate exists');
   // Check strict match is fragile due to defaults. Check CN presence.
-  // Actual: C=US, ST=California, L=San Francisco, O=fafafa.ssl, OU=Development, CN=quick.local
+  // Actual: C=US, ST=California, L=San Francisco, O=nextpas.ssl, OU=Development, CN=quick.local
   Check(Pos('CN=quick.local', Cert.GetSubject) > 0, 'Subject contains CN=quick.local');
   Check(not Cert.IsExpired, 'Certificate valid (not expired)');
   Check(Cert.GetIssuer = Cert.GetSubject, 'Issuer is Subject (Self-signed)');

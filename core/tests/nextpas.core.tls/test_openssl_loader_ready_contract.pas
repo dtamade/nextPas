@@ -4,6 +4,7 @@ program test_openssl_loader_ready_contract;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.platform.dl,
   Dynlibs,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.aes,
@@ -69,7 +70,7 @@ end;
 
 procedure TestLoadFunctionsFailClosedForMissingRequiredSymbol;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
   LLoadedCount: Integer;
   LPresent: Pointer = nil;
   LMissing: Pointer = nil;
@@ -80,13 +81,13 @@ begin
   ResetLoaderState;
 
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-  if LHandle = NilHandle then
+  if LHandle.IsInvalid then
   begin
     Fail('Unable to load libcrypto for loader contract test');
     Exit;
   end;
 
-  LMissingSymbol := 'fafafa_required_symbol_that_must_not_exist';
+  LMissingSymbol := 'nextpas_required_symbol_that_must_not_exist';
 
   LBindings[0].Name := 'AES_encrypt';
   LBindings[0].FuncPtr := @LPresent;

@@ -58,6 +58,7 @@ type
     function GetContentLength: Int64;
     function GetTrailers: IHttpHeaders;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
     function GetContext: IHttpContext;
@@ -82,6 +83,7 @@ type
     function GetContentLength: Int64;
     function GetTrailers: IHttpHeaders;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
   end;
@@ -193,6 +195,11 @@ begin
   Result := nil;
 end;
 
+function TMockRequest.GetRemoteIp: string;
+begin
+  Result := GetRemoteAddr;
+end;
+
 function TMockRequest.GetRemoteAddr: string;
 begin
   Result := '127.0.0.1';
@@ -272,6 +279,11 @@ end;
 function TBasicRequest.GetTrailers: IHttpHeaders;
 begin
   Result := nil;
+end;
+
+function TBasicRequest.GetRemoteIp: string;
+begin
+  Result := GetRemoteAddr;
 end;
 
 function TBasicRequest.GetRemoteAddr: string;
@@ -492,6 +504,83 @@ begin
   LResult.ServeHTTP(LReq, LW);
   CheckEqual(Int64(HTTP_STATUS_UNAUTHORIZED), Int64(LWObj.Status),
     'missing X-API-Key → 401');
+end;
+
+{ 额外 API key 头（F-9）：配置 ExtraApiKeyHeaders 后，除默认 x-api-key 外再
+  接受这些头提供 api-key 通道凭证；默认头优先；未配置时不被接受。 }
+procedure TestExtraApiKeyHeaders;
+var
+  LOpts: TAuthOptions;
+  LReq: IHttpRequest;
+  LReqObj: TMockRequest;
+  LW: IHttpResponseWriter;
+  LWObj: TMockResponseWriter;
+  LResult: IHttpHandler;
+begin
+  LOpts := Default(TAuthOptions);
+  LOpts.Validator := RecordingValidator('admin-9');
+  SetLength(LOpts.ExtraApiKeyHeaders, 1);
+  LOpts.ExtraApiKeyHeaders[0] := 'x-admin-api-key';
+
+  ResetCapture;
+  LReqObj := TMockRequest.Create(hmGet, '/data');
+  LReqObj.SetHeader('X-Admin-API-Key', 'k-admin');
+  LReq := LReqObj;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LResult := Chain(NewCaptureHandler(),
+    [IHttpMiddleware(AuthMiddleware(LOpts))]);
+  LResult.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(HTTP_STATUS_OK), Int64(LWObj.Status),
+    'X-Admin-API-Key via extra header → 200');
+  CheckTrue(GHandlerCalled, 'handler called');
+  CheckEqual('admin-9', GCapturedSubject,
+    'extra-header subject propagated');
+  CheckEqual('kind=' + IntToStr(Ord(ackApiKey)) + ':k-admin', GValidatorSeen,
+    'extra header presented through api-key channel');
+
+  { 默认 X-API-Key 优先：两者同时存在时取默认头。 }
+  ResetCapture;
+  LReqObj := TMockRequest.Create(hmGet, '/data');
+  LReqObj.SetHeader('X-API-Key', 'k-default');
+  LReqObj.SetHeader('X-Admin-API-Key', 'k-admin');
+  LReq := LReqObj;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LResult := Chain(NewCaptureHandler(),
+    [IHttpMiddleware(AuthMiddleware(LOpts))]);
+  LResult.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(HTTP_STATUS_OK), Int64(LWObj.Status),
+    'default header wins → 200');
+  CheckEqual('kind=' + IntToStr(Ord(ackApiKey)) + ':k-default',
+    GValidatorSeen, 'default x-api-key preferred over extra header');
+
+  { 额外头缺失（无任何凭证）→ 401。 }
+  ResetCapture;
+  LReqObj := TMockRequest.Create(hmGet, '/data');
+  LReq := LReqObj;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LResult := Chain(NewCaptureHandler(),
+    [IHttpMiddleware(AuthMiddleware(LOpts))]);
+  LResult.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(HTTP_STATUS_UNAUTHORIZED), Int64(LWObj.Status),
+    'no credentials → 401');
+
+  { 未配置额外头时 X-Admin-API-Key 不被接受（默认行为不变）。 }
+  LOpts := Default(TAuthOptions);
+  LOpts.Validator := RecordingValidator('plain-9');
+  ResetCapture;
+  LReqObj := TMockRequest.Create(hmGet, '/data');
+  LReqObj.SetHeader('X-Admin-API-Key', 'k-admin');
+  LReq := LReqObj;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LResult := Chain(NewCaptureHandler(),
+    [IHttpMiddleware(AuthMiddleware(LOpts))]);
+  LResult.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(HTTP_STATUS_UNAUTHORIZED), Int64(LWObj.Status),
+    'unconfigured extra header not accepted → 401');
 end;
 
 procedure TestStaticBearerConstantTimeCompare;
@@ -880,6 +969,7 @@ begin
   T.Test('Bearer accepted, subject into context', @TestBearerAcceptedIntoContext);
   T.Test('Validator rejection → 403', @TestValidatorRejection403);
   T.Test('X-API-Key channel', @TestApiKeyChannel);
+  T.Test('Extra API key headers (F-9)', @TestExtraApiKeyHeaders);
   T.Test('Static bearer constant-time compare', @TestStaticBearerConstantTimeCompare);
   T.Test('Static API key', @TestStaticApiKey);
   T.Test('Unconfigured channel rejected', @TestUnconfiguredChannelRejected);

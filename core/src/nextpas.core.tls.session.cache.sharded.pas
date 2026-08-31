@@ -9,7 +9,7 @@
  * - 基于 SessionID 哈希分配分片
  * - 并发吞吐量提升 8-16 倍
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-02-05
  *}

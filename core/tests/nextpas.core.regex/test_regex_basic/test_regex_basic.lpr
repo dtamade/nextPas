@@ -3211,6 +3211,57 @@ begin
   Check(True, '500 error compiles no crash');
 end;
 
+{ --- OWN: ownership / value-semantics tests (refcounted DFA cache) --- }
+procedure TestOwnershipCopySurvivesFree;
+var R1, R2: TRegex;
+begin
+  // Old raw-pointer field: R1.Free left R2 with a dangling cache pointer
+  // (use-after-free on next match). Refcounted handle: copy shares the
+  // cache and keeps it alive.
+  R1 := TRegex.Compile('a+b');
+  Check(R1.IsMatch('aaab'), 'R1 matches before copy');
+  R2 := R1;
+  Check(R2.IsMatch('ab'), 'R2 matches via shared cache');
+  R1.Free;
+  Check(R2.IsMatch('aaab'), 'copy still matches after original Free');
+  R2.Free;
+end;
+
+procedure TestOwnershipDoubleFree;
+var R: TRegex;
+begin
+  R := TRegex.Compile('(x|y)+z');
+  Check(R.IsMatch('xyz'), 'matches before frees');
+  R.Free;
+  R.Free; { second Free must be a safe no-op }
+  Check(True, 'double free no crash');
+end;
+
+procedure TestOwnershipFreeThenReuse;
+var R: TRegex;
+begin
+  R := TRegex.Compile('[0-9]{2,4}');
+  Check(R.IsMatch('12345'), 'match allocates cache');
+  R.Free;
+  Check(not R.IsMatch('abc'), 'reuse after Free lazily re-acquires');
+  Check(R.IsMatch('123'), 're-acquired cache still matches');
+  R.Free;
+end;
+
+procedure TestOwnershipNoFreeLoop;
+var R: TRegex; i: Integer;
+begin
+  // The P5f leak repro shape: compile + match + never Free. Each iteration
+  // allocates a ~0.8MB TDfaCache block — without the refcounted owner this
+  // loop leaks 100 blocks; heaptrc gate proves zero unfreed now.
+  for i := 1 to 100 do
+  begin
+    R := TRegex.Compile('a[0-9]+b' + IntToStr(i mod 10));
+    Check(R.IsMatch('a42b' + IntToStr(i mod 10)), 'loop match ' + IntToStr(i));
+    Check(not R.IsMatch('xyz'), 'loop miss ' + IntToStr(i));
+  end;
+end;
+
 { ===== ENCODING CORRECTNESS TESTS ===== }
 
 { --- ENC 1. TestUTF8Bytes --- }
@@ -4436,6 +4487,11 @@ begin
   T.Test('ADV: Case insensitive with captures', @TestCaseInsensitiveWithCaptures);
   T.Test('ADV: QuoteMeta round trip', @TestQuoteMetaRoundTrip);
   T.Test('ADV: Memory leak on error', @TestMemoryLeakOnError);
+  { --- OWN: ownership / value-semantics tests --- }
+  T.Test('OWN: copy survives Free', @TestOwnershipCopySurvivesFree);
+  T.Test('OWN: double free', @TestOwnershipDoubleFree);
+  T.Test('OWN: Free then reuse', @TestOwnershipFreeThenReuse);
+  T.Test('OWN: no-Free loop stays clean', @TestOwnershipNoFreeLoop);
   { --- 13 encoding correctness tests --- }
   T.Test('ENC: UTF-8 bytes', @TestUTF8Bytes);
   T.Test('ENC: Latin-1 bytes', @TestLatin1Bytes);

@@ -57,6 +57,26 @@ Addr := Resolve('example.com');
 // Addr.IP, Addr.Port, Addr.IsIPv6
 ```
 
+### Host classification and pick
+
+UDP/QUIC 等「字面量直发 / 域名走 DNS」分路用这些 helper，不要在业务里自写一套。
+
+```pascal
+if HostIsIpLiteral(Host) then
+  Addr := TNetAddress.Create(StripHostBrackets(Host), Port)
+else
+  { AsyncResolve callback: }
+  Addr := DnsResult.PreferredAddress(True).WithPort(Port); { IPv4 first }
+```
+
+- `StripHostBrackets('[::1]')` → `'::1'`
+- `IsIPv4Literal` / `TryParseIPv4`：四段 0..255，拒绝 `1.2.3` / `256.1.1.1`
+- `IsIPv6Literal`：剥括号后含冒号
+- `TDnsResult.PreferredAddress(True)`：先 A，无 A 再退第一条
+- `TNetAddress.WithPort`：拷贝后改端口，不改 IP/族
+- `SplitHostPort(text, defaultPort, host, port)`：`host:port` / `[v6]:port`，裸 IPv6 拒绝
+- `JoinHostPort(host, port)`：v6 自动加括号
+
 ## Interfaces
 
 - `ITcpStream` — extends IStream with LocalAddr, RemoteAddr, Shutdown, SetNoDelay, SetKeepAlive, SetReadDeadline, SetWriteDeadline, SetCancelToken
@@ -163,6 +183,15 @@ of the blocking `http.websocket` `IWebSocket`:
   Pong automatically. `SendXxx` must be called from the session's reactor-thread
   context (Advance or its callbacks); worker-side pushes should use worker
   handoff, whose completions are drained on the reactor thread.
+  Server shutdown: the session implements `ITcpServerSessionShutdown`
+  (`BeginShutdownClose` = close frame 1001 going away through the same
+  guarded path as idle timeout / protocol error). The epoll readiness server
+  calls it on every registered hook-capable target during its shutdown drain
+  phase, keeps polling writable events until those sessions finish flushing
+  (bounded by `TTcpServerOptions.ShutdownTimeoutNs`; `<= 0` waits without a
+  deadline, matching the blocking path's `WaitFinished(0)` semantics), then
+  force-closes any stragglers. Sessions that already completed the close
+  handshake are not sent a second frame (`FCloseSent` guard).
 
 ```pascal
 uses nextpas.core.net.server,

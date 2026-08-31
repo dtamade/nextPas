@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MBEDTLS_FILE="$ROOT_DIR/src/nextpas.core.tls.mbedtls.lib.pas"
-WOLFSSL_FILE="$ROOT_DIR/src/nextpas.core.tls.wolfssl.lib.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+MBEDTLS_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.mbedtls.lib.pas"
+WOLFSSL_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.wolfssl.lib.pas"
 
 echo "[TEST] optional backend session-cache capability contract"
 

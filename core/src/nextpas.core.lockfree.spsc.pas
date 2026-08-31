@@ -13,7 +13,7 @@ unit nextpas.core.lockfree.spsc;
  *   - Enqueue: only producer thread can call
  *   - Dequeue: only consumer thread can call
  *   - Close: safe to call from any thread
- *   - {$IFDEF LOCKFREE_DEBUG}: claim/check producer and consumer thread ids (audit F-005)
+ *   - $IFDEF LOCKFREE_DEBUG: claim/check producer and consumer thread ids (audit F-005)
  *
  * @see Dmitry Vyukov SPSC queue — lock-free bounded queue
  * @see crossbeam (Rust) — similar SPSC implementation

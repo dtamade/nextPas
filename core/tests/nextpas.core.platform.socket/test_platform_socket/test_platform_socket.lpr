@@ -547,6 +547,16 @@ begin
   Check(not platform_socket_error_timed_out(0), 'errno 0 is not timed_out');
 end;
 
+procedure TestErrorInterrupted;
+begin
+  Check(platform_socket_error_interrupted(ESysEINTR), 'ESysEINTR is interrupted');
+  Check(platform_socket_error_interrupted(PLATFORM_ERR_INTR),
+    'PLATFORM_ERR_INTR is interrupted');
+  Check(not platform_socket_error_interrupted(0), 'errno 0 is not interrupted');
+  Check(not platform_socket_error_interrupted(ESysEAGAIN),
+    'EAGAIN is not interrupted');
+end;
+
 procedure TestSocketPair;
 var
   S1, S2: TPlatformSocket;
@@ -965,6 +975,7 @@ begin
   { API coverage }
   T.Test('getpeername on connected pair', @TestGetPeerName);
   T.Test('error_timed_out classification', @TestErrorTimedOut);
+  T.Test('error_interrupted classification', @TestErrorInterrupted);
 
   { Convenience functions }
   T.Test('socketpair', @TestSocketPair);

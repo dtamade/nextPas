@@ -1,6 +1,6 @@
 # OpenSSL Pascal Bindings - Integration Tests
 
-这是 `fafafa.ssl` OpenSSL Pascal 绑定库的集成测试套件。
+这是 `nextpas.ssl` OpenSSL Pascal 绑定库的集成测试套件。
 
 ## 测试模块
 
@@ -100,15 +100,15 @@ fpc -Mobjfpc -Sh -Fu"..\..\src" -Fi"..\..\src" -FU"lib" -FE"bin" test_asn1_modul
 
 ## 测试覆盖的模块
 
-- ✅ `fafafa.ssl.openssl.asn1` - ASN.1 数据结构
-- ✅ `fafafa.ssl.openssl.bio` - 基本 I/O
-- ✅ `fafafa.ssl.openssl.hmac` - HMAC 消息认证
-- ✅ `fafafa.ssl.openssl.bn` - 大数运算
-- ✅ `fafafa.ssl.openssl.rsa` - RSA 加密
-- ✅ `fafafa.ssl.openssl.dsa` - DSA 签名
-- ✅ `fafafa.ssl.openssl.ecdsa` - ECDSA 签名
-- ✅ `fafafa.ssl.openssl.ec` - 椭圆曲线
-- ✅ `fafafa.ssl.openssl.x509` - X.509 证书
+- ✅ `nextpas.ssl.openssl.asn1` - ASN.1 数据结构
+- ✅ `nextpas.ssl.openssl.bio` - 基本 I/O
+- ✅ `nextpas.ssl.openssl.hmac` - HMAC 消息认证
+- ✅ `nextpas.ssl.openssl.bn` - 大数运算
+- ✅ `nextpas.ssl.openssl.rsa` - RSA 加密
+- ✅ `nextpas.ssl.openssl.dsa` - DSA 签名
+- ✅ `nextpas.ssl.openssl.ecdsa` - ECDSA 签名
+- ✅ `nextpas.ssl.openssl.ec` - 椭圆曲线
+- ✅ `nextpas.ssl.openssl.x509` - X.509 证书
 
 ## 添加新测试
 

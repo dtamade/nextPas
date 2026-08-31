@@ -6,7 +6,7 @@ unit nextpas.core.tls.pkcs11.types;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 Type Definitions                                      }
+{  nextpas.core.tls - PKCS#11 Type Definitions                                      }
 {                                                                              }
 {  Purpose: High-level type definitions for PKCS#11 integration               }
 {                                                                              }

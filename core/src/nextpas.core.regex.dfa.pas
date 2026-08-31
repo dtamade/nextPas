@@ -43,6 +43,19 @@ type
   end;
   PDfaCache = ^TDfaCache;
 
+type
+  { Refcounted owner of one lazily-initialized TDfaCache block. TRegex holds
+    this as an interface field, so the record keeps value semantics: copies
+    share the cache and the block is released when the last copy dies —
+    no manual Free required for correctness. }
+  IDfaCacheHandle = interface
+    ['{E7A1C3D9-5B24-4F68-9C0D-83A2F1B4E6C8}']
+    function Acquire(ACodeLen: UInt32): PDfaCache;
+  end;
+
+{ NewDfaCacheHandle — fresh refcounted owner of one lazily-initialized cache }
+function NewDfaCacheHandle: IDfaCacheHandle;
+
 function DfaIsMatch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
 
@@ -73,6 +86,44 @@ procedure DfaCacheInit(var C: TDfaCache; ACodeLen: UInt32);
 implementation
 
 uses nextpas.core.text.scan, nextpas.core.regex.nfa;
+
+type
+  TDfaCacheHandle = class(TInterfacedObject, IDfaCacheHandle)
+  private
+    FCache: Pointer; { PDfaCache, allocated on first Acquire }
+  public
+    destructor Destroy; override;
+    function Acquire(ACodeLen: UInt32): PDfaCache;
+  end;
+
+destructor TDfaCacheHandle.Destroy;
+begin
+  if FCache <> nil then
+  begin
+    { Finalize managed types inside the block before freeing it:
+      TDfaCache contains dynamic arrays (Seen, CloseList, NextPCs, Stack)
+      and per-state PCs that must be released. }
+    Finalize(PDfaCache(FCache)^);
+    FreeMem(FCache, SizeOf(TDfaCache));
+    FCache := nil;
+  end;
+  inherited Destroy;
+end;
+
+function TDfaCacheHandle.Acquire(ACodeLen: UInt32): PDfaCache;
+begin
+  if FCache = nil then
+  begin
+    FCache := AllocMem(SizeOf(TDfaCache));
+    DfaCacheInit(PDfaCache(FCache)^, ACodeLen);
+  end;
+  Result := PDfaCache(FCache);
+end;
+
+function NewDfaCacheHandle: IDfaCacheHandle;
+begin
+  Result := TDfaCacheHandle.Create;
+end;
 
 { --- Utility --- }
 

@@ -3,7 +3,7 @@ program benchmark_ssl;
 {$mode objfpc}{$H+}
 
 {**
- * Performance Baseline for fafafa.ssl
+ * Performance Baseline for nextpas.core.tls
  *
  * Benchmarks security-critical operations:
  * - Base64 encoding/decoding
@@ -310,7 +310,7 @@ var
 
 begin
   WriteLn('================================================================');
-  WriteLn('         fafafa.ssl Performance Baseline Suite                  ');
+  WriteLn('         nextpas.core.tls Performance Baseline Suite                  ');
   WriteLn('================================================================');
   WriteLn;
 

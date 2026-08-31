@@ -20,6 +20,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf;
 
 type
@@ -32,6 +33,11 @@ type
     function WithActiveStyle(const AStyle: TStyle): ITabsWidget;
     function WithInactiveStyle(const AStyle: TStyle): ITabsWidget;
     function WithSeparator(const ASep: AnsiString): ITabsWidget;
+    { 数据更新面（PH33 P3，additive）：原地替换页签 }
+    procedure SetTitles(const ATitles: array of AnsiString);
+    function WithTitles(const ATitles: array of AnsiString): ITabsWidget;
+    { 布局配置面（PH33 P2b，additive）：块包装——先画块再以块内容区渲染 }
+    function WithBlock(ABlock: IBlock): ITabsWidget;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTabsState);
   end;
@@ -42,13 +48,17 @@ type
     FActiveStyle: TStyle;
     FInactiveStyle: TStyle;
     FSeparator: AnsiString;
+    FBlock: IBlock;
   public
     class function New(const ATitles: array of AnsiString): ITabsWidget; static;
 
     function WithActiveStyle(const AStyle: TStyle): ITabsWidget;
     function WithInactiveStyle(const AStyle: TStyle): ITabsWidget;
     function WithSeparator(const ASep: AnsiString): ITabsWidget;
-
+    { 数据更新面（PH33 P3，additive）：原地替换页签 }
+    procedure SetTitles(const ATitles: array of AnsiString);
+    function WithTitles(const ATitles: array of AnsiString): ITabsWidget;
+    function WithBlock(ABlock: IBlock): ITabsWidget;
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTabsState);
@@ -85,6 +95,29 @@ begin FInactiveStyle := AStyle; Result := Self; end;
 function TTabsWidget.WithSeparator(const ASep: AnsiString): ITabsWidget;
 begin FSeparator := ASep; Result := Self; end;
 
+{ PH33 P3：数据更新面——原地替换页签 }
+procedure TTabsWidget.SetTitles(const ATitles: array of AnsiString);
+var
+  LI: Integer;
+begin
+  SetLength(FTitles, System.Length(ATitles));
+  for LI := 0 to System.High(ATitles) do
+    FTitles[LI] := ATitles[LI];
+end;
+
+function TTabsWidget.WithTitles(const ATitles: array of AnsiString): ITabsWidget;
+begin
+  SetTitles(ATitles);
+  Result := Self;
+end;
+
+{ PH33 P2b：布局配置面——块包装（additive，nil 时行为不变） }
+function TTabsWidget.WithBlock(ABlock: IBlock): ITabsWidget;
+begin
+  FBlock := ABlock;
+  Result := Self;
+end;
+
 procedure TTabsWidget.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   LState: TTabsState;
@@ -99,14 +132,23 @@ var
   LN, LI, LCursor, LMaxX, LTitleW, LSepW, LWritten: Integer;
   LY: Integer;
   LSty: TStyle;
+  LArea: TRect;
 begin
   if AArea.IsEmpty then Exit;
   LN := System.Length(FTitles);
   if LN = 0 then Exit;
 
-  LY := AArea.Y;
-  LMaxX := AArea.X + AArea.Width;
-  LCursor := AArea.X;
+  { PH33 P2b：块包装——先画块，再以块内容区为渲染区 }
+  LArea := AArea;
+  if FBlock <> nil then
+  begin
+    FBlock.Render(AArea, ABuffer);
+    LArea := FBlock.Inner(AArea);
+  end;
+
+  LY := LArea.Y;
+  LMaxX := LArea.X + LArea.Width;
+  LCursor := LArea.X;
   LSepW := Integer(StringDisplayWidth(FSeparator));
 
   for LI := 0 to LN - 1 do

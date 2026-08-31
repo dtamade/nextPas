@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.pin;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 PIN Management                                        }
+{  nextpas.core.tls - PKCS#11 PIN Management                                        }
 {                                                                              }
 {  Purpose: Secure PIN acquisition and management for PKCS#11 tokens          }
 {                                                                              }

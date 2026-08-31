@@ -21,6 +21,7 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,
+  nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.backed;  // 确保 OpenSSL 后端注册
 
 var
@@ -535,17 +536,28 @@ end;
 procedure Test_Override_UnknownField;
 var
   LBuilder: ISSLContextBuilder;
+  LFailedClosed: Boolean;
+  LFieldNamed: Boolean;
 begin
   TestHeader('Test 16: Override Unknown Field');
 
+  LFailedClosed := False;
+  LFieldNamed := False;
   try
     LBuilder := TSSLContextBuilder.Create
       .Override('unknown_field', 'some_value');
-
-    Assert(True, 'Override ignores unknown field gracefully');
   except
-    Assert(False, 'Override crashed with unknown field');
+    on E: ESSLConfigurationException do
+    begin
+      LFailedClosed := True;
+      LFieldNamed := Pos('unknown_field', E.Message) > 0;
+    end;
   end;
+
+  Assert(LFailedClosed,
+    'Override rejects unknown field with ESSLConfigurationException (fail-closed)');
+  Assert(LFieldNamed,
+    'Rejection message names the unknown field');
 end;
 
 { Test 17: Override case insensitive }

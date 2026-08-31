@@ -452,6 +452,14 @@ function MoveFileA(lpExistingFileName: LPCSTR; lpNewFileName: LPCSTR): BOOL; std
     @return TRUE 成功 *}
 function MoveFileW(lpExistingFileName: LPCWSTR; lpNewFileName: LPCWSTR): BOOL; stdcall; external 'kernel32' name 'MoveFileW';
 
+{** @desc 移动文件（Unicode，可覆盖已存在目标）
+    @param lpExistingFileName 现有路径
+    @param lpNewFileName 新路径
+    @param dwFlags MOVEFILE_* 标志（如 MOVEFILE_REPLACE_EXISTING）
+    @return TRUE 成功 *}
+function MoveFileExW(lpExistingFileName: LPCWSTR; lpNewFileName: LPCWSTR;
+  dwFlags: DWORD): BOOL; stdcall; external 'kernel32' name 'MoveFileExW';
+
 { Working directory }
 
 {** @desc 获取当前目录（ANSI）
@@ -1106,6 +1114,55 @@ function UpdateProcThreadAttribute(lpAttributeList: Pointer; dwFlags: DWORD; Att
 {** @desc 删除进程线程属性列表
     @param lpAttributeList 属性列表 *}
 procedure DeleteProcThreadAttributeList(lpAttributeList: Pointer); stdcall; external 'kernel32' name 'DeleteProcThreadAttributeList';
+
+{ Global memory (kernel32) —— 剪贴板 CF_UNICODETEXT 传输用 }
+
+{** @desc 分配全局内存块
+    @param uFlags GMEM_MOVEABLE 等标志
+    @param dwBytes 字节数
+    @return 内存句柄，nil 失败 *}
+function GlobalAlloc(uFlags: DWORD; dwBytes: PtrUInt): HANDLE; stdcall; external 'kernel32' name 'GlobalAlloc';
+
+{** @desc 锁定全局内存块,返回可读写指针
+    @param hMem 内存句柄
+    @return 内存指针,nil 失败 *}
+function GlobalLock(hMem: HANDLE): LPVOID; stdcall; external 'kernel32' name 'GlobalLock';
+
+{** @desc 解锁全局内存块(须与 GlobalLock 配对)
+    @param hMem 内存句柄
+    @return TRUE 成功 *}
+function GlobalUnlock(hMem: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'GlobalUnlock';
+
+{** @desc 释放全局内存块(仅未被系统接管时)
+    @param hMem 内存句柄
+    @return nil 成功 *}
+function GlobalFree(hMem: HANDLE): HANDLE; stdcall; external 'kernel32' name 'GlobalFree';
+
+{ Clipboard (user32) —— 系统剪贴板原生访问 }
+
+{** @desc 打开剪贴板
+    @param hWndNewOwner 窗口所有者(nil = 与当前任务关联)
+    @return TRUE 成功 *}
+function OpenClipboard(hWndNewOwner: Pointer): WINBOOL; stdcall; external 'user32' name 'OpenClipboard';
+
+{** @desc 关闭剪贴板(须与 OpenClipboard 配对)
+    @return TRUE 成功 *}
+function CloseClipboard: WINBOOL; stdcall; external 'user32' name 'CloseClipboard';
+
+{** @desc 清空剪贴板
+    @return TRUE 成功 *}
+function EmptyClipboard: WINBOOL; stdcall; external 'user32' name 'EmptyClipboard';
+
+{** @desc 以指定格式放置剪贴板数据(成功后所有权归系统)
+    @param uFormat CF_* 格式
+    @param hMem GlobalAlloc 句柄
+    @return 句柄,nil 失败 *}
+function SetClipboardData(uFormat: UINT; hMem: HANDLE): HANDLE; stdcall; external 'user32' name 'SetClipboardData';
+
+{** @desc 以指定格式取剪贴板数据(只读,勿释放)
+    @param uFormat CF_* 格式
+    @return 内存句柄,nil 无此格式 *}
+function GetClipboardData(uFormat: UINT): HANDLE; stdcall; external 'user32' name 'GetClipboardData';
 
 implementation
 

@@ -1,8 +1,8 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - OpenSSL BLAKE2 Module                                        }
+{  nextpas.core.tls - OpenSSL BLAKE2 Module                                        }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {******************************************************************************}
 

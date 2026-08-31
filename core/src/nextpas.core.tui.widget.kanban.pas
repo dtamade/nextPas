@@ -39,6 +39,9 @@ type
     function WithCardStyle(const AStyle: TStyle): IKanban;
     function WithActiveCardStyle(const AStyle: TStyle): IKanban;
     function WithBlock(ABlock: IBlock): IKanban;
+    { 数据更新面（PH33 P3，additive）：向指定列追加卡片（列越界忽略，
+      对齐 MarkRead 惯例）}
+    procedure AddCard(const AColIdx: Integer; const ACard: TKanbanCard);
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TKanbanState);
   end;
 
@@ -58,6 +61,7 @@ type
     function WithHeaderStyle(const AStyle: TStyle): IKanban;
     function WithCardStyle(const AStyle: TStyle): IKanban;
     function WithActiveCardStyle(const AStyle: TStyle): IKanban;
+    procedure AddCard(const AColIdx: Integer; const ACard: TKanbanCard);
     function WithBlock(ABlock: IBlock): IKanban;
 
     { IWidget }
@@ -154,6 +158,18 @@ begin FActiveCardStyle := AStyle; Result := Self; end;
 
 function TKanban.WithBlock(ABlock: IBlock): IKanban;
 begin FBlock := ABlock; Result := Self; end;
+
+{ PH33 P3：数据更新面——向指定列追加卡片；列越界静默忽略（对齐
+  notification_center MarkRead 惯例），卡片 record 值拷贝 }
+procedure TKanban.AddCard(const AColIdx: Integer; const ACard: TKanbanCard);
+var
+  LN: Integer;
+begin
+  if (AColIdx < 0) or (AColIdx > High(FColumns)) then Exit;
+  LN := Length(FColumns[AColIdx].Cards);
+  SetLength(FColumns[AColIdx].Cards, LN + 1);
+  FColumns[AColIdx].Cards[LN] := ACard;
+end;
 
 procedure TKanban.Render(const AArea: TRect; ABuffer: TBuffer);
 var

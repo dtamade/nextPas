@@ -3,13 +3,18 @@ program test_wolfssl_server_ocsp_stapling_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes, DynLibs,
-  fafafa.ssl,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  Classes,
+  ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.factory,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,
+  nextpas.core.platform.dl,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.wolfssl.lib,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
@@ -17,16 +22,16 @@ uses
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.tls13.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 const
-  OCSP_FIXTURE_FILE = 'tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
-  CERT_FILE = 'tests/certificate/test_certs/signer_cert.pem';
-  KEY_FILE = 'tests/certificate/test_certs/signer_key.pem';
+  OCSP_FIXTURE_FILE = 'fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
+  CERT_FILE = 'certificate/test_certs/signer_cert.pem';
+  KEY_FILE = 'certificate/test_certs/signer_key.pem';
   MIN_WOLFSSL_TLS13_OCSP_EMISSION_MAJOR = 5;
   MIN_WOLFSSL_TLS13_OCSP_EMISSION_MINOR = 9;
   MIN_WOLFSSL_TLS13_OCSP_EMISSION_PATCH = 1;
@@ -325,15 +330,18 @@ type
 var
   LNativeAccess: ISSLNativeHandleAccess;
   LGetter: TwolfSSL_get_tlsext_status_type_local;
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
+  LAddr: Pointer;
 begin
   Result := -1;
 
   LHandle := GetWolfSSLLibraryHandle;
-  if LHandle = NilHandle then
+  if LHandle.IsInvalid then
     Exit;
 
-  Pointer(LGetter) := GetProcAddress(LHandle, 'wolfSSL_get_tlsext_status_type');
+  if LHandle.Sym('wolfSSL_get_tlsext_status_type', LAddr) <> 0 then
+    Exit;
+  Pointer(LGetter) := LAddr;
   if not Assigned(LGetter) then
     Exit;
 
@@ -765,7 +773,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
     if not LConn.Accept then
       Fail(Format(
@@ -820,7 +828,7 @@ begin
   LCtx := NewServerContext;
   LStream := TOfflineStaplingObserveClientStream.Create(False);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'WolfSSL server connection without OCSP should be created');
     if not LConn.Accept then
       Fail(Format(
@@ -863,7 +871,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(False);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
     if not LConn.Accept then
       Fail(Format(
@@ -900,7 +908,7 @@ begin
   LCtx := NewServerContext;
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'WolfSSL server connection should be created');
     if not LConn.Accept then
       Fail(Format(
@@ -938,7 +946,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Builder-built WolfSSL server connection without stapled file should be created');
     if not LConn.Accept then
       Fail(Format(
@@ -998,7 +1006,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Builder-built WolfSSL server connection should be created');
     if not LConn.Accept then
       Fail(Format(

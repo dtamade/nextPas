@@ -460,25 +460,34 @@ begin
 
   CheckContains(LDeflateLower, 'compress2(',
     'one-shot Deflate source uses zlib wrapper API');
-  CheckContains(LDeflateLower, 'inflateinit(lstream',
+  CheckContains(LDeflateLower, 'inflateinit2(lstream',
     'one-shot Deflate source uses zlib wrapper API for decode');
   CheckContains(LDeflateLower, 'lstream.avail_in <> 0',
     'one-shot Deflate decode rejects trailing input');
-  CheckContains(LDeflateLower, 'deflateinit(fstream',
-    'streaming Deflate writer uses zlib-wrapped init');
-  CheckContains(LDeflateLower, 'inflateinit(fstream',
-    'streaming Deflate reader uses zlib-wrapped init');
+  { 包装版与裸流的分野收敛到 windowBits 参数：Create/CreateRaw 共享
+    InitStream（deflateInit2/inflateInit2），15=zlib 包装、-15=raw；
+    裸流 API 必须显式携带 Raw 命名，禁止静默切换格式 }
+  CheckContains(LDeflateLower, 'deflateinit2(fstream',
+    'streaming Deflate writer init goes through deflateInit2');
+  CheckContains(LDeflateLower, 'inflateinit2(fstream',
+    'streaming Deflate reader init goes through inflateInit2');
+  CheckContains(LDeflateLower, 'constructor tdeflatewriter.createraw',
+    'raw streaming Deflate writer keeps explicit Raw naming');
+  CheckContains(LDeflateLower, 'constructor tdeflatereader.createraw',
+    'raw streaming Deflate reader keeps explicit Raw naming');
   CheckAbsent(LDeflateLower, 'deflateinit2(fstream, alevel, z_deflated, -15',
     'streaming Deflate must not silently switch to raw mode');
 
-  CheckAbsent(LReadmeLower, 'raw deflate',
-    'docs must not claim raw Deflate output');
-  CheckAbsent(LReadmeLower, 'rfc 1951',
-    'docs must not cite raw Deflate as current output format');
+  { Deflate* 保持 zlib 包装输出；RawDeflate* 是显式命名的裸流 API（ZIP 等
+    容器格式的 method=8 载荷用）。文档必须把两者区分开，不得混称。 }
   CheckContains(LReadme, 'zlib-wrapped Deflate stream',
     'docs describe current Deflate format');
   CheckContains(LReadme, 'RFC 1950',
     'docs cite the zlib wrapper format standard');
+  CheckContains(LReadme, 'RawDeflate',
+    'docs list the explicit raw Deflate API');
+  CheckContains(LReadme, 'RFC 1951',
+    'docs cite the raw standard only for the explicit RawDeflate API');
 
   CheckContains(LGoBench, '"compress/zlib"',
     'Go Deflate comparator uses zlib wrapper package');

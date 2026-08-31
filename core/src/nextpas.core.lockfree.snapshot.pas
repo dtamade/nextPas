@@ -24,7 +24,6 @@ type
       读操作不阻塞写操作，写操作不阻塞读操作。
       写-写冲突检测：两个事务同时修改同一 key 时，后提交者被 abort。
       适用场景：数据库事务、并发状态管理。
- * @concurrency Thread-safe (see source for details).
   }
   TSnapshotIsolationImpl = class
   private type

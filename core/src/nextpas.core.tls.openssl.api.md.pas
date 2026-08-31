@@ -1,8 +1,8 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - OpenSSL MD (Message Digest) Module                           }
+{  nextpas.core.tls - OpenSSL MD (Message Digest) Module                           }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {******************************************************************************}
 

@@ -3,9 +3,10 @@ program test_tsslcontextconfig_surface;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.base,
+  nextpas.core.tls.factory,
   nextpas.core.system.sysutils,
-  fafafa.ssl;
-
+  nextpas.core.tls.freepascal.lib;
 procedure AssertTrue(const AName: string; AValue: Boolean);
 begin
   if AValue then
@@ -53,7 +54,7 @@ var
   LContextConfig: TSSLContextConfig;
   LProjectedConfig: TSSLConfig;
 begin
-  LLegacyConfig := CreateDefaultConfig(sslCtxClient);
+  LLegacyConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   LLegacyConfig.LibraryType := sslFreePascal;
   LLegacyConfig.BufferSize := 12345;
   LLegacyConfig.HandshakeTimeout := 42;
@@ -137,7 +138,7 @@ end;
 
 begin
   WriteLn('========================================');
-  WriteLn('  fafafa.ssl TSSLContextConfig 测试');
+  WriteLn('  nextpas.core.tls TSSLContextConfig 测试');
   WriteLn('========================================');
 
   Test_DefaultBaseline;

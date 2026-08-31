@@ -1,5 +1,7 @@
 unit nextpas.core.compress.gzip;
 
+{$NOTES OFF} { FPC trunk 对 untyped const 形参传参不计为使用的误报（GZIP_HDR/LTrailer） }
+
 {$I nextpas.core.settings.inc}
 
 interface
@@ -28,7 +30,6 @@ implementation
 uses
   zlib, nextpas.core.errors;
 
-{$PUSH}{$WARN 5024 OFF}
 const
   GZIP_HEADER_FIELD_MAX_SIZE = 65536;
   GZIP_HDR: array[0..9] of Byte = (
@@ -36,7 +37,6 @@ const
     $00, $00, $00, $00,
     $00, $FF
   );
-{$POP}
 
 type
   TGzipWriter = class(TInterfacedObject, IWriter, ICompressWriter)
@@ -180,7 +180,7 @@ begin
   FDst := ADst;
   FCRC := 0;
   FSize := 0;
-  LWritten := FDst.Write(GZIP_HDR[0], 10);
+  LWritten := FDst.Write(GZIP_HDR, 10);
   if LWritten <> 10 then
     raise EIOError.Create('gzip: short write');
   FillChar(FStream, SizeOf(FStream), 0);
@@ -231,7 +231,7 @@ begin
 end;
 
 procedure TGzipWriter.WriteTrailer;
-var
+  var
   LTrailer: array[0..7] of Byte;
 begin
   LTrailer[0] := Byte(FCRC);
@@ -242,7 +242,7 @@ begin
   LTrailer[5] := Byte(FSize shr 8);
   LTrailer[6] := Byte(FSize shr 16);
   LTrailer[7] := Byte(FSize shr 24);
-  if FDst.Write(LTrailer[0], 8) <> 8 then
+  if FDst.Write(LTrailer, 8) <> 8 then
     raise EIOError.Create('gzip: short write');
 end;
 
@@ -272,7 +272,6 @@ begin
       {$PUSH}{$Q-}{$R-}
       FCRC := UInt32(crc32(ULong(FCRC), pBytef(LInput), LConsumed));
       Inc(FSize, UInt32(LConsumed));
-      {$POP}
       Inc(LInput, LConsumed);
       Dec(LRemaining, LConsumed);
     end;
@@ -596,7 +595,6 @@ begin
           {$PUSH}{$Q-}{$R-}
           FCRC := UInt32(crc32(ULong(FCRC), @ABuf, Result));
           Inc(FSize, UInt32(Result));
-          {$POP}
           FPendingFinishValidation := True;
           Exit(Result);
         end;
@@ -624,7 +622,6 @@ begin
             {$PUSH}{$Q-}{$R-}
             FCRC := UInt32(crc32(ULong(FCRC), @ABuf, Result));
             Inc(FSize, UInt32(Result));
-            {$POP}
             if FInitialized then
             begin
               inflateEnd(FStream);
@@ -653,7 +650,6 @@ begin
       {$PUSH}{$Q-}{$R-}
       FCRC := UInt32(crc32(ULong(FCRC), @ABuf, Result));
       Inc(FSize, UInt32(Result));
-      {$POP}
     end;
   except
     FinishAfterFailure;
@@ -866,9 +862,7 @@ begin
   if LInputSize < 10 then
     raise EIOError.Create('gzip: header too short');
   LOutLen := 0;
-  LCapacity := SizeUInt(Length(AData)) * 4;
-  if (LCapacity < SizeUInt(Length(AData))) or (LCapacity > AMaxOutputSize) then
-    LCapacity := AMaxOutputSize;
+  LCapacity := CompressInitialDecompressCapacity(SizeUInt(Length(AData)), AMaxOutputSize);
   LOffset := 0;
 
   repeat
@@ -955,11 +949,11 @@ begin
       LRequiredCapacity := LOutLen + LHave;
       if LRequiredCapacity > SizeUInt(Length(Result)) then
       begin
-        LCapacity := LRequiredCapacity;
-        if LCapacity > AMaxOutputSize div 2 then
-          LCapacity := AMaxOutputSize
-        else
-          LCapacity := LCapacity * 2;
+        LCapacity := CompressNextCapacity(LRequiredCapacity, AMaxOutputSize);
+        if LCapacity = 0 then
+          LCapacity := AMaxOutputSize;
+        if LCapacity < LRequiredCapacity then
+          LCapacity := LRequiredCapacity;
         SetLength(Result, LCapacity);
       end;
       if LHave > 0 then

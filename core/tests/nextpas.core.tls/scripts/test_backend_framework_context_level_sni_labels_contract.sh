@@ -3,12 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
 declare -a files=(
-  "tests/test_wolfssl_framework.pas"
+  "core/tests/nextpas.core.tls/test_wolfssl_framework.pas"
 )
 
 pattern='(Context|Ctx|LCtx|LContext)[0-9]*\.SetServerName\('

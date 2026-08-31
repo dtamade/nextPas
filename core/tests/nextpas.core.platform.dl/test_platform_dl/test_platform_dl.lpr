@@ -231,6 +231,40 @@ begin
   platform_dl_close(Lib2);
 end;
 
+procedure TestHighLevelLoadAndSymbol;
+var
+  Lib: TPlatformLibrary;
+  Addr: Pointer;
+begin
+  Check(Lib.Handle = nil, 'unassigned record starts zeroed');
+  Check(platform_dl_load(LIBC_PATH, [dlfLazy], Lib), 'load via helper');
+  Check(Lib.IsValid, 'helper-loaded lib valid');
+  Addr := platform_dl_symbol(Lib, 'strlen');
+  Check(Addr <> nil, 'symbol via helper');
+  platform_dl_release(Lib);
+  Check(Lib.IsInvalid, 'release zeroes handle');
+end;
+
+procedure TestHighLevelLoadFailure;
+var
+  Lib: TPlatformLibrary;
+begin
+  Check(not platform_dl_load('/nonexistent_lib_xyz.so', [dlfLazy], Lib),
+    'load failure returns False');
+  Check(Lib.IsInvalid, 'failed load leaves nil handle');
+  Check(platform_dl_symbol(Lib, 'x') = nil, 'symbol on nil lib is nil');
+  platform_dl_release(Lib);
+  Check(Lib.IsInvalid, 'release on nil is idempotent');
+end;
+
+procedure TestNilLibraryConstant;
+var
+  Lib: TPlatformLibrary;
+begin
+  Lib := PLATFORM_DL_NIL_LIBRARY;
+  Check(Lib.IsInvalid, 'nil constant is invalid');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.dl');
   T.Test('load libc', @TestLoadLibc);
@@ -252,5 +286,8 @@ begin
   T.Test('error clears after success', @TestErrorClearAfterSuccess);
   T.Test('load with RTLD_NOW', @TestLoadWithRTLD_NOW);
   T.Test('load multiple libs', @TestLoadMultipleLibs);
+  T.Test('high-level load + symbol', @TestHighLevelLoadAndSymbol);
+  T.Test('high-level load failure', @TestHighLevelLoadFailure);
+  T.Test('nil library constant', @TestNilLibraryConstant);
   if not T.Run then Halt(1);
 end.

@@ -1590,7 +1590,7 @@ begin
   Result.SessionCacheSupport := sslSupportExperimental;
   Result.ZeroRTTSupport := sslSupportExperimental;
   Result.EarlyDataSupport := sslSupportExperimental;
-  Result.RenegotiationSupport := sslSupportDeprecated;
+  Result.RenegotiationSupport := sslSupportNone;  // runtime 无 renegotiation 实现(KnownIssues: will not be implemented),发布 None 与 IsFeatureSupported 运行时真值对齐
   Result.PostHandshakeAuthSupport := sslSupportNone;
 
   Result.SupportedCiphers := [sslCipherAES128GCM, sslCipherAES256GCM, sslCipherCHACHA20_POLY1305];

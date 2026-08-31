@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.connection - WinSSL 连接实现
 
   版本: 1.1 - 重构为使用 TBaseSSLConnection 基类
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-06
   修改: 2026-02-04
 
@@ -20,17 +20,19 @@ unit nextpas.core.tls.winssl.connection;
 interface
 
 uses
+  nextpas.core.base, nextpas.core.system.classes,
   nextpas.core.base.utils,
   {$IFDEF WINDOWS}
   Windows, winsock2,
   {$ELSE}
   Sockets,
   {$ENDIF}
-  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.sync, nextpas.core.time,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.sync, nextpas.core.time,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
+  nextpas.core.tls.collections,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
@@ -97,7 +99,7 @@ type
   { TWinSSLSessionManager - 会话缓存管理器 }
   TWinSSLSessionManager = class
   private
-    FSessions: TStringArray;
+    FSessions: specialize IStringMap<ISSLSession>;
     FLock: IMutex;
     FMaxSessions: Integer;
   public
@@ -239,8 +241,8 @@ uses
 function NormalizeWinSSLCertificateLinkText(const AValue: string): string;
 begin
   Result := Trim(UpperCase(AValue));
-  Result := StringReplace(Result, ',', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ',', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function FindWinSSLIssuerCertificate(const ALeaf: ISSLCertificate;
@@ -311,31 +313,35 @@ const
   WINSSL_SESSION_SERIALIZATION_MAGIC = 'fafafa-winssl-session-v1';
 var
   LData: TStringArray;
+  LText: string;
+  LResumed: string;
 begin
   SetLength(Result, 0);
   if FID = '' then
     Exit;
-  try
-    StringPairsGet(LPairs, 'magic') := WINSSL_SESSION_SERIALIZATION_MAGIC;
-    StringPairsGet(LPairs, 'id') := FID;
-    StringPairsGet(LPairs, 'created_unix') := IntToStr(DateTimeToUnix(FCreationTime));
-    StringPairsGet(LPairs, 'timeout') := IntToStr(FTimeout);
-    StringPairsGet(LPairs, 'protocol') := IntToStr(Ord(FProtocolVersion));
-    StringPairsGet(LPairs, 'cipher') := FCipherName;
-    if FIsResumed then
-      StringPairsGet(LPairs, 'resumed') := '1'
-    else
-      StringPairsGet(LPairs, 'resumed') := '0';
-    Result := BytesOf(UTF8String(LData.Text));
-  finally
-  end;
+  if FIsResumed then
+    LResumed := '1'
+  else
+    LResumed := '0';
+  SetLength(LData, 7);
+  LData[0] := 'magic=' + WINSSL_SESSION_SERIALIZATION_MAGIC;
+  LData[1] := 'id=' + FID;
+  LData[2] := 'created_unix=' + IntToStr(DateTimeToUnix(FCreationTime));
+  LData[3] := 'timeout=' + IntToStr(FTimeout);
+  LData[4] := 'protocol=' + IntToStr(Ord(FProtocolVersion));
+  LData[5] := 'cipher=' + FCipherName;
+  LData[6] := 'resumed=' + LResumed;
+  LText := StringsJoin(LData, #10);
+  SetLength(Result, Length(LText));
+  if LText <> '' then
+    Move(LText[1], Result[0], Length(LText));
 end;
 
 function TWinSSLSession.TryLoadSerializedSessionData(const AData: TBytes): Boolean;
 const
   WINSSL_SESSION_SERIALIZATION_MAGIC = 'fafafa-winssl-session-v1';
 var
-  LData: TStringArray;
+  LPairs: TStringPairArray;
   LText: RawByteString;
   LID: string;
   LCipher: string;
@@ -350,7 +356,7 @@ begin
 
   SetString(LText, PAnsiChar(@AData[0]), Length(AData));
   try
-    LData.Text := string(UTF8String(LText));
+    LPairs := StringsParseKeyValues(string(UTF8String(LText)));
     if StringPairsGet(LPairs, 'magic') <> WINSSL_SESSION_SERIALIZATION_MAGIC then
       Exit;
 
@@ -494,49 +500,34 @@ end;
 constructor TWinSSLSessionManager.Create;
 begin
   inherited Create;
-  FSessions.Duplicates := dupIgnore;
-  FSessions.Sorted := False;
+  FSessions := TMapFactory.specialize CreateStringMap<ISSLSession>;
   FLock := Mutex;
   FMaxSessions := 100;
 end;
 
 destructor TWinSSLSessionManager.Destroy;
-var
-  i: Integer;
 begin
-  for i := 0 to Length(FSessions) - 1 do
-  begin
-    if FSessions.Objects[i] <> nil then
-      ISSLSession(Pointer(FSessions.Objects[i]))._Release;
-  end;
+  FSessions := nil;
   FLock := nil;
   inherited Destroy;
 end;
 
 procedure TWinSSLSessionManager.AddSession(const AID: string; ASession: ISSLSession);
 var
-  LIndex: Integer;
+  LKeys: TStringArray;
 begin
+  if ASession = nil then
+    Exit;
   FLock.Acquire;
   try
-    LIndex := FSessions.IndexOf(AID);
-    if LIndex >= 0 then
+    FSessions.Put(AID, ASession);
+    { 缓存超限时驱逐最早插入的会话（TSimpleStringMap 槽位序近似插入序）。 }
+    while FSessions.Count > FMaxSessions do
     begin
-      if FSessions.Objects[LIndex] <> nil then
-        ISSLSession(Pointer(FSessions.Objects[LIndex]))._Release;
-      FSessions.Delete(LIndex);
-    end;
-
-    if ASession <> nil then
-      ASession._AddRef;
-
-    FSessions.AddObject(AID, TObject(Pointer(ASession)));
-
-    while Length(FSessions) > FMaxSessions do
-    begin
-      if FSessions.Objects[0] <> nil then
-        ISSLSession(Pointer(FSessions.Objects[0]))._Release;
-      FSessions.Delete(0);
+      LKeys := FSessions.Keys;
+      if Length(LKeys) = 0 then
+        Break;
+      FSessions.Remove(LKeys[0]);
     end;
   finally
     FLock.Release;
@@ -545,42 +536,28 @@ end;
 
 function TWinSSLSessionManager.GetSession(const AID: string): ISSLSession;
 var
-  LIndex: Integer;
+  LSession: ISSLSession;
 begin
+  Result := nil;
   FLock.Acquire;
   try
-    LIndex := FSessions.IndexOf(AID);
-    if LIndex >= 0 then
+    if FSessions.TryGet(AID, LSession) then
     begin
-      Result := ISSLSession(Pointer(FSessions.Objects[LIndex]));
-      if not Result.IsValid then
-      begin
-        if FSessions.Objects[LIndex] <> nil then
-          ISSLSession(Pointer(FSessions.Objects[LIndex]))._Release;
-        FSessions.Delete(LIndex);
-        Result := nil;
-      end;
-    end
-    else
-      Result := nil;
+      if (LSession <> nil) and LSession.IsValid then
+        Result := LSession
+      else
+        FSessions.Remove(AID);
+    end;
   finally
     FLock.Release;
   end;
 end;
 
 procedure TWinSSLSessionManager.RemoveSession(const AID: string);
-var
-  LIndex: Integer;
 begin
   FLock.Acquire;
   try
-    LIndex := FSessions.IndexOf(AID);
-    if LIndex >= 0 then
-    begin
-      if FSessions.Objects[LIndex] <> nil then
-        ISSLSession(Pointer(FSessions.Objects[LIndex]))._Release;
-      FSessions.Delete(LIndex);
-    end;
+    FSessions.Remove(AID);
   finally
     FLock.Release;
   end;
@@ -588,19 +565,17 @@ end;
 
 procedure TWinSSLSessionManager.CleanupExpired;
 var
+  LKeys: TStringArray;
   i: Integer;
+  LSession: ISSLSession;
 begin
   FLock.Acquire;
   try
-    for i := Length(FSessions) - 1 downto 0 do
-    begin
-      if not ISSLSession(Pointer(FSessions.Objects[i])).IsValid then
-      begin
-        if FSessions.Objects[i] <> nil then
-          ISSLSession(Pointer(FSessions.Objects[i]))._Release;
-        FSessions.Delete(i);
-      end;
-    end;
+    LKeys := FSessions.Keys;
+    for i := 0 to Length(LKeys) - 1 do
+      if FSessions.TryGet(LKeys[i], LSession) and
+        ((LSession = nil) or (not LSession.IsValid)) then
+        FSessions.Remove(LKeys[i]);
   finally
     FLock.Release;
   end;
@@ -970,7 +945,7 @@ var
 begin
   UpdateSessionReuseTruthFromContext(LSessionID);
   if LSessionID = '' then
-    LSessionID := Format('winssl-session-%p', [Pointer(@FCtxtHandle)]);
+    LSessionID := nextpas.core.text.format.TextFormat('winssl-session-0x%x', [PtrUInt(@FCtxtHandle)]);
 
   LProtocol := DoGetProtocolVersion;
   LCipher := DoGetCipherName;
@@ -1772,7 +1747,7 @@ begin
     CALG_DES:     CipherName := 'DES';
     CALG_RC4:     CipherName := 'RC4';
   else
-    CipherName := Format('0x%x', [ConnInfo.aiCipher]);
+    CipherName := nextpas.core.text.format.TextFormat('0x%x', [ConnInfo.aiCipher]);
   end;
 
   case ConnInfo.aiHash of
@@ -1786,9 +1761,9 @@ begin
   end;
 
   if HashName <> '' then
-    Result := Format('%s_%s (%d bits)', [CipherName, HashName, ConnInfo.dwCipherStrength])
+    Result := nextpas.core.text.format.TextFormat('%s_%s (%d bits)', [CipherName, HashName, ConnInfo.dwCipherStrength])
   else
-    Result := Format('%s (%d bits)', [CipherName, ConnInfo.dwCipherStrength]);
+    Result := nextpas.core.text.format.TextFormat('%s (%d bits)', [CipherName, ConnInfo.dwCipherStrength]);
 end;
 
 function TWinSSLConnection.DoGetPeerCertificate: ISSLCertificate;
@@ -1931,7 +1906,7 @@ begin
     CERT_E_INVALID_NAME: Result := 'Invalid name';
     TRUST_E_CERT_SIGNATURE: Result := 'Invalid signature';
   else
-    Result := Format('Verification error: 0x%x', [VerifyResult]);
+    Result := nextpas.core.text.format.TextFormat('Verification error: 0x%x', [VerifyResult]);
   end;
 end;
 
@@ -2174,7 +2149,7 @@ begin
     begin
       FLastError := MapSchannelError(Status);
       NotifyInfoCallback(2, Integer(Status),
-        Format('Client handshake initialization failed: %s (0x%x)',
+        nextpas.core.text.format.TextFormat('Client handshake initialization failed: %s (0x%x)',
           [GetSchannelErrorMessageEN(Status), Status]));
 
       case Status of
@@ -2188,7 +2163,7 @@ begin
           );
       else
         raise ESSLHandshakeException.CreateWithContext(
-          Format('Client handshake initialization failed: %s', [GetSchannelErrorMessageEN(Status)]),
+          nextpas.core.text.format.TextFormat('Client handshake initialization failed: %s', [GetSchannelErrorMessageEN(Status)]),
           sslErrHandshake,
           'TWinSSLConnection.ClientHandshake',
           Status,
@@ -2240,7 +2215,7 @@ begin
       begin
         FLastError := MapSchannelError(Status);
         NotifyInfoCallback(2, Integer(Status),
-          Format('Client handshake failed: %s (0x%x)',
+          nextpas.core.text.format.TextFormat('Client handshake failed: %s (0x%x)',
             [GetSchannelErrorMessageEN(Status), Status]));
 
         case Status of
@@ -2284,7 +2259,7 @@ begin
 
         else
           raise ESSLHandshakeException.CreateWithContext(
-            Format('Client handshake failed: %s', [GetSchannelErrorMessageEN(Status)]),
+            nextpas.core.text.format.TextFormat('Client handshake failed: %s', [GetSchannelErrorMessageEN(Status)]),
             sslErrHandshake,
             'TWinSSLConnection.ClientHandshake',
             Status,
@@ -2410,7 +2385,7 @@ begin
       FLastError := MapSchannelError(Status);
 
       NotifyInfoCallback(2, Integer(Status),
-        Format('Server handshake failed: %s (0x%x)',
+        nextpas.core.text.format.TextFormat('Server handshake failed: %s (0x%x)',
           [GetSchannelErrorMessageEN(Status), Status]));
 
       if IsValidSecHandle(FCtxtHandle) then
@@ -2482,7 +2457,7 @@ begin
 
       else
         raise ESSLHandshakeException.CreateWithContext(
-          Format('Server handshake failed: %s', [GetSchannelErrorMessageEN(Status)]),
+          nextpas.core.text.format.TextFormat('Server handshake failed: %s', [GetSchannelErrorMessageEN(Status)]),
           sslErrHandshake,
           'TWinSSLConnection.ServerHandshake',
           Status,

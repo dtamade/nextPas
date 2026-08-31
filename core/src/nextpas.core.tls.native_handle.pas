@@ -2,7 +2,7 @@
   nextpas.core.tls.native_handle - 统一的原生句柄访问辅助单元
 
   版本: 1.1.1
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2026-02-05
 
   描述:

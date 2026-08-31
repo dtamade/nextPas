@@ -431,6 +431,169 @@ begin
   CheckGitOk(LMainDir, ['worktree', 'prune'], 'git worktree prune');
 end;
 
+{ k97: apply unified patch text to workdir — happy path }
+procedure TestApplyPatchToWorkdir;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepositoryExt;
+  LPatch: string;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'k97-apply']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'manager init');
+  LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'T'], 'cfg name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 't@t.invalid'], 'cfg mail');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'seed.txt']),
+    BytesOfString('line1' + sLineBreak + 'line2' + sLineBreak + 'line3' + sLineBreak));
+  CheckGitOk(LRepoDir, ['add', 'seed.txt'], 'add');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'seed'], 'commit');
+
+  Check(Supports(LMgr.OpenRepository(LRepoDir), IGitRepositoryExt, LRepo),
+    'supports ext');
+  LPatch := 'diff --git a/seed.txt b/seed.txt' + sLineBreak +
+    '--- a/seed.txt' + sLineBreak +
+    '+++ b/seed.txt' + sLineBreak +
+    '@@ -1,3 +1,4 @@' + sLineBreak +
+    ' line1' + sLineBreak +
+    '-line2' + sLineBreak +
+    '+line2-changed' + sLineBreak +
+    '+line2-added' + sLineBreak +
+    ' line3' + sLineBreak;
+  LRepo.ApplyPatch(LPatch);
+  Check(Pos('line2-changed', ReadFileText(
+    nextpas.core.fs.PathJoin([LRepoDir, 'seed.txt']))) > 0,
+    'applied content lands in workdir');
+end;
+
+{ k97: context mismatch must raise (conflict surface is explicit) }
+procedure TestApplyPatchConflictRaises;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepositoryExt;
+  LPatch: string;
+  LRaised: Boolean;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'k97-conflict']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'manager init');
+  LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'T'], 'cfg name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 't@t.invalid'], 'cfg mail');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'seed.txt']),
+    BytesOfString('line1' + sLineBreak + 'CHANGED' + sLineBreak + 'line3' + sLineBreak));
+  CheckGitOk(LRepoDir, ['add', 'seed.txt'], 'add');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'seed'], 'commit');
+
+  Check(Supports(LMgr.OpenRepository(LRepoDir), IGitRepositoryExt, LRepo),
+    'supports ext');
+  LPatch := 'diff --git a/seed.txt b/seed.txt' + sLineBreak +
+    '--- a/seed.txt' + sLineBreak +
+    '+++ b/seed.txt' + sLineBreak +
+    '@@ -1,3 +1,4 @@' + sLineBreak +
+    ' line1' + sLineBreak +
+    '-line2' + sLineBreak +
+    '+line2-changed' + sLineBreak +
+    ' line3' + sLineBreak;
+  LRaised := False;
+  try
+    LRepo.ApplyPatch(LPatch);
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'context mismatch raises EGitError');
+end;
+
+{ k97: R1 atomicity probe — multi-file patch with a failing second delta.
+  Pins libgit2 behavior so the code888 compensation layer rests on facts. }
+procedure TestApplyPatchPartialFailureProbe;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepositoryExt;
+  LPatch: string;
+  LAfter: string;
+  LRaised: Boolean;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'k97-probe']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'manager init');
+  LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'T'], 'cfg name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 't@t.invalid'], 'cfg mail');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'a.txt']),
+    BytesOfString('aaa' + sLineBreak));
+  CheckGitOk(LRepoDir, ['add', 'a.txt'], 'add a');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'seed'], 'commit');
+
+  Check(Supports(LMgr.OpenRepository(LRepoDir), IGitRepositoryExt, LRepo),
+    'supports ext');
+  { first delta applies cleanly to a.txt; second targets missing b.txt }
+  LPatch := 'diff --git a/a.txt b/a.txt' + sLineBreak +
+    '--- a/a.txt' + sLineBreak +
+    '+++ b/a.txt' + sLineBreak +
+    '@@ -1 +1,2 @@' + sLineBreak +
+    ' aaa' + sLineBreak +
+    '+bbb' + sLineBreak +
+    'diff --git a/b.txt b/b.txt' + sLineBreak +
+    '--- a/b.txt' + sLineBreak +
+    '+++ b/b.txt' + sLineBreak +
+    '@@ -1 +1 @@' + sLineBreak +
+    '-old' + sLineBreak +
+    '+new' + sLineBreak;
+  LRaised := False;
+  try
+    LRepo.ApplyPatch(LPatch);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'missing-target delta raises');
+  LAfter := ReadFileText(nextpas.core.fs.PathJoin([LRepoDir, 'a.txt']));
+  { pinned fact: whether a.txt kept its pre-apply content after failure }
+  Check(Pos('bbb', LAfter) = 0,
+    'failed apply leaves earlier deltas unwritten (atomic)');
+end;
+
+{ k97: CheckoutPaths force-restores listed paths from a revspec }
+procedure TestCheckoutPathsRestores;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepositoryExt;
+  LBack: string;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'k97-checkout']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'manager init');
+  LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'T'], 'cfg name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 't@t.invalid'], 'cfg mail');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'seed.txt']),
+    BytesOfString('original' + sLineBreak));
+  CheckGitOk(LRepoDir, ['add', 'seed.txt'], 'add');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'seed'], 'commit');
+
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'seed.txt']),
+    BytesOfString('dirty' + sLineBreak));
+  Check(Supports(LMgr.OpenRepository(LRepoDir), IGitRepositoryExt, LRepo),
+    'supports ext');
+  LRepo.CheckoutPaths('HEAD', TStringArray.Create('seed.txt'));
+  LBack := ReadFileText(nextpas.core.fs.PathJoin([LRepoDir, 'seed.txt']));
+  Check(Pos('original', LBack) > 0, 'checkout paths restores HEAD content');
+  Check(Pos('dirty', LBack) = 0, 'restored content has no dirty text');
+end;
+
 procedure TestCommitOnHeadCreatesCommit;
 var
   LMgr: IGitManager;
@@ -673,6 +836,220 @@ begin
   CheckEqual(1, Length(LCommits), 'RevWalk from older start should list remaining commits');
 end;
 
+procedure TestConfigEntriesReadsRepoConfig;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LEntries: TGitConfigEntryArray;
+  I: Integer;
+  LHasFsmonitor, LHasDiffTextconv, LHasAliasStatus, LHasUserName: Boolean;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'config']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for config test');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+  Check(LRepo <> nil, 'InitRepository should return repository');
+  LExt := LRepo as IGitRepositoryExt;
+
+  { 写入本地配置：exec-risk 相关键 + 常规键 }
+  CheckGitOk(LRepoDir, ['config', 'core.fsmonitor', '/tmp/pwn'], 'write core.fsmonitor');
+  CheckGitOk(LRepoDir, ['config', 'diff.evil.textconv', '/tmp/pwn'], 'write diff.*.textconv');
+  CheckGitOk(LRepoDir, ['config', 'alias.status', '!whoami'], 'write alias.status');
+  CheckGitOk(LRepoDir, ['config', 'user.name', 't'], 'write user.name');
+
+  LEntries := LExt.ConfigEntries;
+  Check(Length(LEntries) >= 4, 'ConfigEntries should enumerate entries');
+  LHasFsmonitor := False;
+  LHasDiffTextconv := False;
+  LHasAliasStatus := False;
+  LHasUserName := False;
+  for I := 0 to High(LEntries) do
+  begin
+    if LEntries[I].Name = 'core.fsmonitor' then
+      LHasFsmonitor := LEntries[I].Value = '/tmp/pwn';
+    if LEntries[I].Name = 'diff.evil.textconv' then
+      LHasDiffTextconv := LEntries[I].Value = '/tmp/pwn';
+    if LEntries[I].Name = 'alias.status' then
+      LHasAliasStatus := LEntries[I].Value = '!whoami';
+    if LEntries[I].Name = 'user.name' then
+      LHasUserName := LEntries[I].Value = 't';
+  end;
+  Check(LHasFsmonitor, 'ConfigEntries should see core.fsmonitor value');
+  Check(LHasDiffTextconv, 'ConfigEntries should see diff.*.textconv value');
+  Check(LHasAliasStatus, 'ConfigEntries should see alias.status=!cmd value');
+  Check(LHasUserName, 'ConfigEntries should see plain user.name value');
+end;
+
+procedure TestConfigEntriesResolvesInclude;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LEntries: TGitConfigEntryArray;
+  I: Integer;
+  LSeen: Boolean;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'config-include']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for include test');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+  Check(LRepo <> nil, 'InitRepository should return repository');
+  LExt := LRepo as IGitRepositoryExt;
+
+  { include.path → 附加配置里的键应被 libgit2 解析进快照 }
+  CheckGitOk(LRepoDir, ['config', 'include.path', 'extra'], 'write include.path');
+  nextpas.core.fs.WriteFile(
+    nextpas.core.fs.PathJoin([LRepoDir, '.git', 'extra']),
+    BytesOfString('[core]'#10'fsmonitor = /tmp/pwn-inc'#10)
+  );
+
+  LEntries := LExt.ConfigEntries;
+  LSeen := False;
+  for I := 0 to High(LEntries) do
+    if (LEntries[I].Name = 'core.fsmonitor') and
+      (LEntries[I].Value = '/tmp/pwn-inc') then
+      LSeen := True;
+  Check(LSeen, 'ConfigEntries should resolve include.path content');
+end;
+
+{ k101: WorkdirPatchText binary round trip — modify → produce patch text
+  (SHOW_BINARY) → restore HEAD → apply text back → byte-exact equal }
+procedure TestWorkdirPatchTextBinaryRoundTrip;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepositoryExt;
+  LPatch: string;
+  LModified, LRound: TBytes;
+  I: Integer;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'k101-bin-rt']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'manager init');
+  LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'T'], 'cfg name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 't@t.invalid'], 'cfg mail');
+  { 确定性二进制载荷：全值块 ×4（含 NUL 与高位字节）+ PNG 魔数头 }
+  SetLength(LModified, 1024);
+  for I := 0 to High(LModified) do
+    LModified[I] := Byte(I mod 256);
+  LModified[0] := $89; LModified[1] := $50; LModified[2] := $4E; LModified[3] := $47;
+  { 先提交一段不同的原始字节，再把工作区改写成目标载荷 }
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'blob.bin']),
+    BytesOfString('ORIGINAL-BINARY-SEED'));
+  CheckGitOk(LRepoDir, ['add', 'blob.bin'], 'add');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'seed bin'], 'commit');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'blob.bin']),
+    LModified);
+
+  Check(Supports(LMgr.OpenRepository(LRepoDir), IGitRepositoryExt, LRepo),
+    'supports ext');
+  LPatch := LRepo.WorkdirPatchText('HEAD', nil, True);
+  Check(Pos('GIT binary patch', LPatch) > 0,
+    'patch text carries binary section');
+  Check(Pos('literal', LPatch) > 0, 'binary section is literal form');
+
+  { 还原 HEAD 后把 patch 文本打回去 → 字节精确往返 }
+  LRepo.CheckoutPaths('HEAD', TStringArray.Create('blob.bin'));
+  LRound := nextpas.core.fs.ReadFile(
+    nextpas.core.fs.PathJoin([LRepoDir, 'blob.bin']));
+  Check(System.Length(LRound) <> System.Length(LModified),
+    'restore really reverted before apply');
+  LRepo.ApplyPatch(LPatch);
+  LRound := nextpas.core.fs.ReadFile(
+    nextpas.core.fs.PathJoin([LRepoDir, 'blob.bin']));
+  CheckEqual(System.Length(LModified), System.Length(LRound),
+    'round trip length equal');
+  for I := 0 to High(LModified) do
+    if (I < System.Length(LRound)) and (LModified[I] <> LRound[I]) then
+    begin
+      Check(False, 'byte mismatch at ' + IntToStr(I));
+      Break;
+    end;
+end;
+
+{ k101: 文本路径回归 + 关旗守卫 — SHOW_BINARY=False 时二进制 delta 不出段 }
+procedure TestWorkdirPatchTextTextAndFlagGuard;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepositoryExt;
+  LPatch: string;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'k101-txt']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'manager init');
+  LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'T'], 'cfg name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 't@t.invalid'], 'cfg mail');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 't.txt']),
+    BytesOfString('one' + sLineBreak + 'two' + sLineBreak));
+  CheckGitOk(LRepoDir, ['add', 't.txt'], 'add');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'seed'], 'commit');
+
+  Check(Supports(LMgr.OpenRepository(LRepoDir), IGitRepositoryExt, LRepo),
+    'supports ext');
+
+  { 文本改动：往返照旧（unified patch 可 apply） }
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 't.txt']),
+    BytesOfString('one' + sLineBreak + 'TWO' + sLineBreak));
+  LPatch := LRepo.WorkdirPatchText('HEAD', nil, True);
+  Check(Pos('+TWO', LPatch) > 0, 'text hunk present');
+  LRepo.CheckoutPaths('HEAD', TStringArray.Create('t.txt'));
+  LRepo.ApplyPatch(LPatch);
+  Check(Pos('TWO', ReadFileText(
+    nextpas.core.fs.PathJoin([LRepoDir, 't.txt']))) > 0,
+    'text patch applies');
+
+  { 二进制改动 + ShowBinary=False：不出二进制段（调用方可显式关） }
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'b.bin']),
+    BytesOfString(#$00#$01#$02));
+  CheckGitOk(LRepoDir, ['add', 'b.bin'], 'add bin');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'bin seed'], 'commit bin');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 'b.bin']),
+    BytesOfString(#$FF#$FE#$FD));
+  LPatch := LRepo.WorkdirPatchText('HEAD', nil, False);
+  Check(Pos('GIT binary patch', LPatch) = 0,
+    'flag off keeps binary section out');
+end;
+
+{ k101 hotfix: clean tree → empty patch text（零差下溢守卫回归） }
+procedure TestWorkdirPatchTextCleanTreeEmpty;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepositoryExt;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'k101-clean']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'manager init');
+  LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'T'], 'cfg name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 't@t.invalid'], 'cfg mail');
+  nextpas.core.fs.WriteFile(nextpas.core.fs.PathJoin([LRepoDir, 's.txt']),
+    BytesOfString('seed' + sLineBreak));
+  CheckGitOk(LRepoDir, ['add', 's.txt'], 'add');
+  CheckGitOk(LRepoDir, ['-c', 'user.name=T', '-c', 'user.email=t@t.invalid',
+    'commit', '-m', 'seed'], 'commit');
+  Check(Supports(LMgr.OpenRepository(LRepoDir), IGitRepositoryExt, LRepo),
+    'supports ext');
+  CheckEqual('', LRepo.WorkdirPatchText('HEAD', nil, True),
+    'clean tree yields empty patch');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -695,6 +1072,15 @@ begin
     T.Test('DiffEx honors pathspec and unified', @TestDiffExOptions);
     T.Test('Blame file', @TestBlameFile);
     T.Test('RevWalk and parent OIDs', @TestRevWalkAndParents);
+    T.Test('ConfigEntries reads repo config (k42)', @TestConfigEntriesReadsRepoConfig);
+    T.Test('ConfigEntries resolves include (k42)', @TestConfigEntriesResolvesInclude);
+    T.Test('ApplyPatch lands in workdir (k97)', @TestApplyPatchToWorkdir);
+    T.Test('ApplyPatch conflict raises (k97)', @TestApplyPatchConflictRaises);
+    T.Test('ApplyPatch partial-failure probe (k97)', @TestApplyPatchPartialFailureProbe);
+    T.Test('CheckoutPaths restores (k97)', @TestCheckoutPathsRestores);
+    T.Test('WorkdirPatchText binary round trip (k101)', @TestWorkdirPatchTextBinaryRoundTrip);
+    T.Test('WorkdirPatchText clean tree empty (k101 hotfix)', @TestWorkdirPatchTextCleanTreeEmpty);
+    T.Test('WorkdirPatchText text regression + flag guard (k101)', @TestWorkdirPatchTextTextAndFlagGuard);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;

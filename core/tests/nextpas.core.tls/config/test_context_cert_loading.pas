@@ -3,8 +3,9 @@ program test_context_cert_loading;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils,
-  fafafa.ssl,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.classes,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.native_handle;
@@ -188,9 +189,7 @@ begin
     end;
   end;
 
-  // Return appropriate exit code
+  // Return appropriate exit code (fall through so program-scope globals are finalized)
   if Failed > 0 then
-    Halt(1)
-  else
-    Halt(0);
+    ExitCode := 1;
 end.

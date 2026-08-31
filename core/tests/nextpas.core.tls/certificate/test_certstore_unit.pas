@@ -208,8 +208,8 @@ begin
 
   // 生成一个自签名 CA
   CAOptions := TCertificateUtils.DefaultGenOptions;
-  CAOptions.CommonName := 'fafafa.ssl Test Root CA';
-  CAOptions.Organization := 'fafafa.ssl';
+  CAOptions.CommonName := 'nextpas.core.tls Test Root CA';
+  CAOptions.Organization := 'nextpas.core.tls';
   CAOptions.IsCA := True;
   CAOptions.ValidDays := 30;
 
@@ -219,7 +219,7 @@ begin
   // 生成一个由该 CA 签名的叶证书
   LeafOptions := TCertificateUtils.DefaultGenOptions;
   LeafOptions.CommonName := 'leaf.test';
-  LeafOptions.Organization := 'fafafa.ssl';
+  LeafOptions.Organization := 'nextpas.core.tls';
   LeafOptions.IsCA := False;
   LeafOptions.ValidDays := 30;
 
@@ -239,7 +239,7 @@ begin
   AssertTrue('Verify fails without CA loaded', not Verified);
 
   TempCAFile := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    Format('fafafa_ssl_test_ca_%d.pem', [Random(1000000)]);
+    Format('nextpas_ssl_test_ca_%d.pem', [Random(1000000)]);
 
   AssertTrue('Write CA PEM to temp file', TCertificateUtils.SaveToFile(TempCAFile, CACertPEM));
   try

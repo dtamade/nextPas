@@ -249,6 +249,34 @@ begin
   Check(LState.Visible, 'Should be visible again');
 end;
 
+{ PH33 P3：数据更新面——SetItems 原地替换弹层项（显示态绘制） }
+procedure TestPopoverSetItems;
+var LP: IPopover; LBuf: TBuffer; LArea, LAnchor: TRect;
+    LState: TPopoverState; LAll: AnsiString; I: Integer;
+begin
+  LP := TPopover.New(['alpha', 'beta']);
+  LArea := TRect.Make(0, 0, 30, 15);
+  LAnchor := TRect.Make(2, 2, 8, 1);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LP.SetItems(['delta', 'gamma']);
+    LState := TPopoverState.Hidden;
+    LState.Show;
+    LP.RenderStateful(LAnchor, LArea, LBuf, LState);
+    LAll := '';
+    for I := 0 to 14 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos('gamma', LAll) > 0, 'new item gamma visible');
+    Check(Pos('alpha', LAll) = 0, 'old alpha gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestPopoverWithItemsChaining;
+var LP: IPopover;
+begin
+  LP := TPopover.New(['a']).WithItems(['x', 'y', 'z']);
+  Check(LP <> nil, 'WithItems chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.popover');
   T.Test('TPopoverAnchor enum', @TestPopoverAnchorEnum);
@@ -270,5 +298,7 @@ begin
   T.Test('TPopover render empty', @TestPopoverRenderEmpty);
   T.Test('TPopover render small area', @TestPopoverRenderSmallArea);
   T.Test('TPopoverState show hide multiple', @TestPopoverStateShowHideMultiple);
+  T.Test('SetItems in-place update (PH33 P3)', @TestPopoverSetItems);
+  T.Test('WithItems chaining (PH33 P3)', @TestPopoverWithItemsChaining);
   if not T.Run then Halt(1);
 end.

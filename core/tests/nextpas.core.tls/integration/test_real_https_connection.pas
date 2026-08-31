@@ -189,7 +189,7 @@ begin
 
     Request := 'GET / HTTP/1.1' + #13#10 +
                'Host: ' + AHostname + #13#10 +
-               'User-Agent: fafafa.ssl-test/1.0' + #13#10 +
+               'User-Agent: nextpas.core.tls-test/1.0' + #13#10 +
                'Connection: close' + #13#10 +
                #13#10;
 
@@ -530,8 +530,8 @@ begin
 
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
 
-    if GetEnvironmentVariable('FAFAFA_RUN_NETWORK_TESTS') <> '1' then
-      Runner.Skip('Real HTTPS network suite', '[environment] network tests disabled (FAFAFA_RUN_NETWORK_TESTS!=1)')
+    if GetEnvironmentVariable('NEXTPAS_RUN_NETWORK_TESTS') <> '1' then
+      Runner.Skip('Real HTTPS network suite', '[environment] network tests disabled (NEXTPAS_RUN_NETWORK_TESTS!=1)')
     else
     begin
       TestKnownWebsites;

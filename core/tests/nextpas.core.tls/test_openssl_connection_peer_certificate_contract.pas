@@ -3,17 +3,17 @@ program test_openssl_connection_peer_certificate_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.connection;
-
+  nextpas.core.tls.openssl.connection,
+  nextpas.core.tls.openssl.backed;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;
@@ -53,7 +53,7 @@ begin
   LStream := TMemoryStream.Create;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(AContext, LStream);
+    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
@@ -96,7 +96,7 @@ begin
   LConn := nil;
   LOriginalSSLGetPeerCertificate := SSL_get_peer_certificate;
   try
-    LConn := TOpenSSLConnection.Create(LContext, LStream);
+    LConn := TOpenSSLConnection.Create(LContext, TStreamWrapper.Create(LStream));
 
     LRaised := False;
     LCert := nil;

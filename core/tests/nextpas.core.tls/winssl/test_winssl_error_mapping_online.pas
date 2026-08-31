@@ -56,9 +56,9 @@ var
 begin
   BeginSection('证书错误映射（在线）');
 
-  runNet := GetEnvironmentVariable('FAFAFA_RUN_NETWORK_TESTS') = '1';
+  runNet := GetEnvironmentVariable('NEXTPAS_RUN_NETWORK_TESTS') = '1';
   if not runNet then begin
-    Check('跳过网络测试 (FAFAFA_RUN_NETWORK_TESTS!=1)', True);
+    Check('跳过网络测试 (NEXTPAS_RUN_NETWORK_TESTS!=1)', True);
     Exit;
   end;
 

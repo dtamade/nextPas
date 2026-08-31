@@ -1,5 +1,7 @@
 # nextpas.core
 
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](VERSION) [![Maturity](https://img.shields.io/badge/maturity-AL1%20Skeleton-yellow)](../docs/architecture/architecture-maturity-levels.md) [![FPC](https://img.shields.io/badge/FPC-3.3.1-orange)](https://www.freepascal.org/) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 nextPas 的基座框架。这里承载 `nextpas.core.*` 源码、测试、示例、benchmark 和模块文档。
 
 这份 README 只做 core 子项目导航；设计规范以 `docs/design-conventions.md` 为准。
@@ -31,12 +33,12 @@ make clean       # 清理构建产物
 `Makefile`，可以进入项目目录单独构建或运行。顶层 Makefile 只做聚合，
 不要把大型框架的失败边界藏在一个总脚本里。
 
-普通模块开发优先跑 focused gate，例如：
+普通模块开发优先跑 focused gate，例如（新范式）：
 
 ```bash
-make -C tests/nextpas.core.http/test_http_client clean test
-make -C tests/nextpas.core.math clean test
-make -C tests/nextpas.core.simd cpuinfo-focused
+make focused FOCUS=core/tests/nextpas.core.http/test_http_client
+make focused FOCUS=core/tests/nextpas.core.math/test_math
+make focused FOCUS=core/tests/nextpas.core.simd/test_simd
 ```
 
 提交前还要从仓库根目录运行：
@@ -62,6 +64,27 @@ docs/       设计文档
 scripts/    构建脚本
 build/      构建产物（git ignored）
 ```
+
+## 最小示例
+
+```bash
+# 聚合验证（新范式）
+make focused FOCUS=core/tests/nextpas.core.collections/quickstart
+```
+
+```pascal
+program quickstart;
+{$mode objfpc}{$H+}
+uses nextpas.core.collections, nextpas.core.collections.vec.intf;
+var V: specialize IVec<Integer>;
+begin
+  V := specialize MakeVec<Integer>;
+  V.Push(42);
+  WriteLn(V.Pop);
+end.
+```
+
+> 版本以 `VERSION` 为准（当前 `1.0.0`，对齐仓库 AL1 Skeleton），完整示例见 `examples/`。
 
 ## 设计规范
 

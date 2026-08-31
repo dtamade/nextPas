@@ -37,7 +37,7 @@ type
 
   { Getter-time placeholder policy. Cycles always raise. }
   TConfigInterpolationMode = (
-    cimDefault,   { optional: leave ${x}; Required: fail unresolved }
+    cimDefault,   (* optional: leave ${x}; Required: fail unresolved *)
     cimStrict,    { all resolving getters fail on unresolved }
     cimDisabled   { no expansion; GetString acts like raw for values }
   );

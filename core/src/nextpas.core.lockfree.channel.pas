@@ -121,7 +121,7 @@ type
       @raises EInvalidOperationError 如果 channel 已关闭（与 Go 的 panic 语义对齐） }
     procedure Send(const AValue: T);
     {** @desc 非阻塞发送，无空间或已关闭时立即返回 False
-      @note 关闭时返回 False 而非抛异常——与 Go 的 `ch <- v` (panic) vs `select { case ch <- v: }` (ok=false) 语义对齐 }
+      @note 关闭时返回 False 而非抛异常——对齐 Go 语义：阻塞发送 panic、非阻塞发送返回 ok=false }
     function TrySend(const AValue: T): Boolean;
     {** @desc 非阻塞发送并返回失败原因（full vs closed）；成功 AError=lfteNone }
     function TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;

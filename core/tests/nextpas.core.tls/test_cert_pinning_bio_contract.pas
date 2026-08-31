@@ -3,10 +3,10 @@ program test_cert_pinning_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.tls.cert.builder,
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.cert,
   nextpas.core.tls.openssl.cert.builder,
   nextpas.core.tls.cert.pinning,
@@ -17,8 +17,8 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.evp,
-  nextpas.core.tls.openssl.api.pem;
-
+  nextpas.core.tls.openssl.api.pem,
+  nextpas.core.tls.openssl.backed;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;

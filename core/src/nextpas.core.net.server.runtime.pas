@@ -11,6 +11,21 @@ type
   ITcpServerPollTargetTicket = interface;
   TTcpServerPollSessionTargetArray = array of TTcpServerPollSessionTarget;
 
+  { worker→reactor 帧推送类型（IWebSocketFrameWorkerPush） }
+  TTcpServerFramePushKind = (
+    fpSendText,
+    fpSendBinary,
+    fpSendClose
+  );
+
+  { readiness 服务器实现：在 reactor 线程执行 hijack 连接迁移
+    （ITcpServerSessionContext.HandoffHijackedConn 语义）。 }
+  ITcpServerHijackMigration = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000019}']
+    procedure ExecuteMigration(const ATicket: ITcpServerPollTargetTicket;
+      const AConn: ITcpStream; const ANewSession: ITcpServerSession);
+  end;
+
   TTcpServerPollCompletionEnqueueProc = procedure(
     const ATicket: ITcpServerPollTargetTicket;
     const ACompletion: ITcpServerWorkCompletion;
@@ -32,6 +47,8 @@ type
     procedure DetachTarget;
   end;
 
+  TTcpServerPollSessionContext = class;
+
   TTcpServerPollSessionTarget = class
   private
     FConn: ITcpStream;
@@ -42,6 +59,13 @@ type
     FEvents: TPlatformPollEvents;
     FWakeDeadline: TDeadline;
     FTicket: ITcpServerPollTargetTicket;
+    { 服务器 shutdown drain 标记：reactor 线程已对本 target 发起过
+      BeginShutdownClose（防 drain 阶段逐轮重扫时重复发起）。 }
+    FShutdownClose: Boolean;
+    { 连接级上下文（worker handoff / hijack 迁移载体）。迁移（hijack）时
+      复用同一 context 并重绑新 target 的 ticket，保证 worker 推送通道
+      跨会话迁移保持有效。强引用不成环：ticket 对 target 是弱引用。 }
+    FContext: ITcpServerSessionContext;
     procedure RefreshWakeDeadline;
   public
     constructor Create(const AConn: ITcpStream;
@@ -56,12 +80,18 @@ type
     procedure SetCurrentEvents(const AEvents: TPlatformPollEvents);
     function WakeDeadline: TDeadline;
     function Connection: ITcpStream;
+    function PollSession: ITcpServerSession;
     function TargetTicket: ITcpServerPollTargetTicket;
     procedure DetachTicket;
     procedure RestoreBlocking;
     function HandleEvents(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+    procedure SetContext(const AContext: ITcpServerSessionContext);
+    function Context: TTcpServerPollSessionContext;
+    { shutdown drain 标记（见 FShutdownClose）：drain 发启与收尾判定共用 }
+    procedure MarkShutdownClose;
+    function IsShutdownClose: Boolean;
   end;
 
   TTcpServerPollWorkerHandoff = class(TInterfacedObject,
@@ -76,22 +106,92 @@ type
       const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
       const AWake: TTcpServerPollWakeProc);
     procedure BindTarget(const ATarget: TTcpServerPollSessionTarget);
+    function TargetTicket: ITcpServerPollTargetTicket;
     function Submit(const AWork: ITcpServerWork;
       const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
     procedure Shutdown;
   end;
 
   TTcpServerPollSessionContext = class(TInterfacedObject,
-    ITcpServerSessionContext)
+    ITcpServerSessionContext, IWebSocketFrameWorkerPush)
   private
     FWorkerHandoffRef: ITcpServerWorkerHandoff;
     FWorkerHandoff: TTcpServerPollWorkerHandoff;
+    FEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+    FWake: TTcpServerPollWakeProc;
+    FMigration: ITcpServerHijackMigration;
+    { hijack 迁移登记（HandoffHijackedConn 可 worker 线程调）：登记后由
+      reactor 线程（poll 让位完成时）经 SubmitHijackMigration 提交执行。
+      FMigrationArmed 用 InterlockedExchange 保证跨线程可见性。 }
+    FMigrationArmed: LongInt;
+    FPendingConn: ITcpStream;
+    FPendingSession: ITcpServerSession;
+    procedure SubmitFramePush(const AKind: TTcpServerFramePushKind;
+      const AText: string; const APayload: array of Byte;
+      const ACode: UInt16; const AReason: string);
   public
     constructor Create(const ABaseHandoff: ITcpServerWorkerHandoff;
       const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
-      const AWake: TTcpServerPollWakeProc);
+      const AWake: TTcpServerPollWakeProc;
+      const AMigration: ITcpServerHijackMigration);
     procedure BindTarget(const ATarget: TTcpServerPollSessionTarget);
     function WorkerHandoff: ITcpServerWorkerHandoff;
+    function HandoffHijackedConn(const AConn: ITcpStream;
+      const ANewSession: ITcpServerSession): Boolean;
+    function SubmitHijackMigration: Boolean;
+    procedure SubmitSendText(const AText: string);
+    procedure SubmitSendTexts(const ATexts: array of string);
+    procedure SubmitSendBinary(const APayload: array of Byte);
+    procedure SubmitSendClose(const ACode: UInt16; const AReason: string);
+  end;
+
+  { hijack 连接迁移 completion：reactor 线程执行（见 ITcpServerSessionContext.
+    HandoffHijackedConn / ITcpServerHijackMigration 语义）。 }
+  TTcpServerHijackMigrationCompletion = class(TInterfacedObject,
+    ITcpServerWorkCompletion)
+  private
+    FTargetTicket: ITcpServerPollTargetTicket;
+    FConn: ITcpStream;
+    FNewSession: ITcpServerSession;
+    FMigration: ITcpServerHijackMigration;
+  public
+    constructor Create(const ATicket: ITcpServerPollTargetTicket;
+      const AConn: ITcpStream; const ANewSession: ITcpServerSession;
+      const AMigration: ITcpServerHijackMigration);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
+  end;
+
+  { worker→reactor 帧推送 completion：reactor 线程经 ticket 解析目标会话发送。 }
+  TTcpServerFramePushCompletion = class(TInterfacedObject,
+    ITcpServerWorkCompletion)
+  private
+    FTargetTicket: ITcpServerPollTargetTicket;
+    FKind: TTcpServerFramePushKind;
+    FText: string;
+    FPayload: array of Byte;
+    FCode: UInt16;
+    FReason: string;
+  public
+    constructor Create(const ATicket: ITcpServerPollTargetTicket;
+      const AKind: TTcpServerFramePushKind; const AText: string;
+      const APayload: array of Byte; const ACode: UInt16; const AReason: string);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
+  end;
+
+  { 批量发文本帧 completion：一次入队+唤醒承载 N 帧，reactor 循环逐帧
+    SendText（省控制面：completion 分配/MPSC 入队/FWake 各 N-1 次）。 }
+  TTcpServerFramePushBatchCompletion = class(TInterfacedObject,
+    ITcpServerWorkCompletion)
+  private
+    FTargetTicket: ITcpServerPollTargetTicket;
+    FTexts: array of string;
+  public
+    constructor Create(const ATicket: ITcpServerPollTargetTicket;
+      const ATexts: array of string);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
   end;
 
   { H5-1: T1 MPSC of Pointer → heap PCompletionNode (managed interfaces on node).
@@ -138,6 +238,13 @@ type
     function ContainsTarget(const ATarget: TTcpServerPollSessionTarget): Boolean;
     function ComputePollTimeoutMs: Int32;
     function CollectExpiredTargets: TTcpServerPollSessionTargetArray;
+    { 快照全部已注册 target（副本；调用方不得持引用跨轮使用）：
+      shutdown drain 发启时逐轮扫描。 }
+    function Snapshot: TTcpServerPollSessionTargetArray;
+    { 是否存在已标记 shutdown-close 的 target：drain 收尾判定（全部
+      drain 完成 = 无标记 target 残留）。O(n) 扫描，仅 shutdown drain
+      路径调用。 }
+    function AnyShutdownClose: Boolean;
     function Drain: TTcpServerPollSessionTargetArray;
     procedure Clear;
   end;
@@ -161,7 +268,7 @@ procedure CloseServerOwnedTcpConn(const AConn: ITcpStream);
 
 implementation
 
-uses nextpas.core.base.utils, nextpas.core.errors, nextpas.core.sync.mutex, nextpas.core.thread, nextpas.core.time.base;
+uses nextpas.core.base.utils, nextpas.core.errors, nextpas.core.sync.mutex, nextpas.core.thread, nextpas.core.time.base, nextpas.core.net.server.ws.session;
 
 { registry O(1) 索引辅助: hash/equals 只操作指针值(不 deref),
   deadline 先后比较用剩余时长(同一时钟基准) }
@@ -217,12 +324,23 @@ type
   end;
 
   TTcpServerDefaultSessionContext = class(TInterfacedObject,
-    ITcpServerSessionContext)
+    ITcpServerSessionContext, IWsServerShutdownRegistry)
   private
     FWorkerHandoff: ITcpServerWorkerHandoff;
+    FWsLock: IMutex;
+    FWsNotifiers: array of IWsServerShutdownNotifier;
   public
     constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
+    destructor Destroy; override;
     function WorkerHandoff: ITcpServerWorkerHandoff;
+    function HandoffHijackedConn(const AConn: ITcpStream;
+      const ANewSession: ITcpServerSession): Boolean;
+    function SubmitHijackMigration: Boolean;
+    procedure RegisterShutdownNotifier(
+      const ANotifier: IWsServerShutdownNotifier);
+    procedure UnregisterShutdownNotifier(
+      const ANotifier: IWsServerShutdownNotifier);
+    procedure ShutdownAll(const ATimeoutNs: Int64);
   end;
 
   TTcpServerPollQueuedCompletion = class(TInterfacedObject,
@@ -310,6 +428,7 @@ begin
   FSession := nil;
   FSocketRuntime := nil;
   FConn := nil;
+  FContext := nil;
   inherited;
 end;
 
@@ -347,6 +466,11 @@ begin
   Result := FConn;
 end;
 
+function TTcpServerPollSessionTarget.PollSession: ITcpServerSession;
+begin
+  Result := FSession;
+end;
+
 function TTcpServerPollSessionTarget.TargetTicket: ITcpServerPollTargetTicket;
 begin
   Result := FTicket;
@@ -356,6 +480,17 @@ procedure TTcpServerPollSessionTarget.DetachTicket;
 begin
   if FTicket <> nil then
     FTicket.DetachTarget;
+end;
+
+procedure TTcpServerPollSessionTarget.SetContext(
+  const AContext: ITcpServerSessionContext);
+begin
+  FContext := AContext;
+end;
+
+function TTcpServerPollSessionTarget.Context: TTcpServerPollSessionContext;
+begin
+  Result := FContext as TTcpServerPollSessionContext;
 end;
 
 procedure TTcpServerPollSessionTarget.RestoreBlocking;
@@ -369,6 +504,16 @@ function TTcpServerPollSessionTarget.HandleEvents(
 begin
   Result := FPollSession.Advance(AEvents, ANextEvents, AOwnership);
   RefreshWakeDeadline;
+end;
+
+procedure TTcpServerPollSessionTarget.MarkShutdownClose;
+begin
+  FShutdownClose := True;
+end;
+
+function TTcpServerPollSessionTarget.IsShutdownClose: Boolean;
+begin
+  Result := FShutdownClose;
 end;
 
 constructor TTcpServerPollQueuedCompletion.Create(
@@ -400,6 +545,114 @@ begin
   FTargetTicket := nil;
 end;
 
+{ TTcpServerHijackMigrationCompletion }
+
+constructor TTcpServerHijackMigrationCompletion.Create(
+  const ATicket: ITcpServerPollTargetTicket;
+  const AConn: ITcpStream; const ANewSession: ITcpServerSession;
+  const AMigration: ITcpServerHijackMigration);
+begin
+  inherited Create;
+  FTargetTicket := ATicket;
+  FConn := AConn;
+  FNewSession := ANewSession;
+  FMigration := AMigration;
+end;
+
+procedure TTcpServerHijackMigrationCompletion.Complete(
+  const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+begin
+  if FMigration <> nil then
+    FMigration.ExecuteMigration(FTargetTicket, FConn, FNewSession);
+  FMigration := nil;
+  FNewSession := nil;
+  FConn := nil;
+  FTargetTicket := nil;
+end;
+
+{ TTcpServerFramePushCompletion }
+
+constructor TTcpServerFramePushCompletion.Create(
+  const ATicket: ITcpServerPollTargetTicket;
+  const AKind: TTcpServerFramePushKind; const AText: string;
+  const APayload: array of Byte; const ACode: UInt16; const AReason: string);
+begin
+  inherited Create;
+  FTargetTicket := ATicket;
+  FKind := AKind;
+  FText := AText;
+  SetLength(FPayload, Length(APayload));
+  if Length(APayload) > 0 then
+    Move(APayload[0], FPayload[0], Length(APayload));
+  FCode := ACode;
+  FReason := AReason;
+end;
+
+procedure TTcpServerFramePushCompletion.Complete(
+  const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+var
+  LTarget: TTcpServerPollSessionTarget;
+  LSession: IWebSocketFrameSession;
+begin
+  LTarget := nil;
+  LSession := nil;
+  if (FTargetTicket <> nil) and FTargetTicket.ResolveTarget(LTarget) and
+    (LTarget <> nil) then
+  begin
+    if Supports(LTarget.PollSession, IWebSocketFrameSession, LSession) then
+    begin
+      case FKind of
+        fpSendText:  LSession.SendText(FText);
+        fpSendBinary: LSession.SendBinary(FPayload);
+        fpSendClose: LSession.SendClose(FCode, FReason);
+      end;
+    end;
+  end;
+  LSession := nil;
+  LTarget := nil;
+  FTargetTicket := nil;
+end;
+
+{ TTcpServerFramePushBatchCompletion }
+
+constructor TTcpServerFramePushBatchCompletion.Create(
+  const ATicket: ITcpServerPollTargetTicket;
+  const ATexts: array of string);
+var
+  LI: Integer;
+begin
+  inherited Create;
+  FTargetTicket := ATicket;
+  SetLength(FTexts, Length(ATexts));
+  for LI := 0 to High(ATexts) do
+    FTexts[LI] := ATexts[LI];
+end;
+
+procedure TTcpServerFramePushBatchCompletion.Complete(
+  const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+var
+  LTarget: TTcpServerPollSessionTarget;
+  LSession: IWebSocketFrameSession;
+begin
+  LTarget := nil;
+  LSession := nil;
+  if (FTargetTicket <> nil) and FTargetTicket.ResolveTarget(LTarget) and
+    (LTarget <> nil) then
+  begin
+    if Supports(LTarget.PollSession, IWebSocketFrameSession, LSession) then
+      { 批量写：一次 EnqueueWire 拼接 + 单次 FlushOutbound 冲刷（省 N-1
+        次冲刷调用/syscall——写侧批量化，B18）。 }
+      LSession.SendTexts(FTexts);
+  end;
+  LSession := nil;
+  LTarget := nil;
+  FTargetTicket := nil;
+  FTexts := nil;
+end;
+
 constructor TTcpServerPollWorkerHandoff.Create(
   const ABaseHandoff: ITcpServerWorkerHandoff;
   const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
@@ -419,6 +672,11 @@ begin
     FTargetTicket := ATarget.TargetTicket
   else
     FTargetTicket := nil;
+end;
+
+function TTcpServerPollWorkerHandoff.TargetTicket: ITcpServerPollTargetTicket;
+begin
+  Result := FTargetTicket;
 end;
 
 function TTcpServerPollWorkerHandoff.Submit(const AWork: ITcpServerWork;
@@ -442,23 +700,121 @@ end;
 constructor TTcpServerPollSessionContext.Create(
   const ABaseHandoff: ITcpServerWorkerHandoff;
   const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
-  const AWake: TTcpServerPollWakeProc);
+  const AWake: TTcpServerPollWakeProc;
+  const AMigration: ITcpServerHijackMigration);
 begin
   inherited Create;
   FWorkerHandoff := TTcpServerPollWorkerHandoff.Create(ABaseHandoff,
     AEnqueueCompletion, AWake);
   FWorkerHandoffRef := FWorkerHandoff;
+  FEnqueueCompletion := AEnqueueCompletion;
+  FWake := AWake;
+  FMigration := AMigration;
 end;
 
 procedure TTcpServerPollSessionContext.BindTarget(
   const ATarget: TTcpServerPollSessionTarget);
 begin
   FWorkerHandoff.BindTarget(ATarget);
+  if ATarget <> nil then
+    ATarget.SetContext(Self);
 end;
 
 function TTcpServerPollSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
 begin
   Result := FWorkerHandoffRef;
+end;
+
+function TTcpServerPollSessionContext.HandoffHijackedConn(
+  const AConn: ITcpStream;
+  const ANewSession: ITcpServerSession): Boolean;
+begin
+  Result := False;
+  if (FWorkerHandoff = nil) or (FMigration = nil) then
+    Exit;
+  if (FWorkerHandoff.TargetTicket = nil) or (AConn = nil) or
+    (ANewSession = nil) then
+    Exit;
+  if not Assigned(FEnqueueCompletion) then
+    Exit;
+  if InterlockedExchange(FMigrationArmed, 1) <> 0 then
+    Exit;
+  { 登记迁移：http 让位完成后经 SubmitHijackMigration（reactor 线程）提交，确保
+    迁移 completion 排在让位 completion 之后、旧会话完成回调前执行。 }
+  FPendingConn := AConn;
+  FPendingSession := ANewSession;
+  Result := True;
+end;
+
+function TTcpServerPollSessionContext.SubmitHijackMigration: Boolean;
+begin
+  Result := False;
+  if InterlockedExchange(FMigrationArmed, 0) = 0 then
+    Exit;
+  { reactor 线程执行（提交在让位 completion 之后）：摘旧会话 poll 注册 →
+    新会话重挂。 }
+  FEnqueueCompletion(FWorkerHandoff.TargetTicket,
+    TTcpServerHijackMigrationCompletion.Create(
+      FWorkerHandoff.TargetTicket, FPendingConn, FPendingSession, FMigration),
+    tswoCompleted, tscoHandler);
+  FPendingConn := nil;
+  FPendingSession := nil;
+  if Assigned(FWake) then
+    FWake();
+  Result := True;
+end;
+
+procedure TTcpServerPollSessionContext.SubmitFramePush(
+  const AKind: TTcpServerFramePushKind; const AText: string;
+  const APayload: array of Byte; const ACode: UInt16; const AReason: string);
+begin
+  if (FWorkerHandoff = nil) or (FWorkerHandoff.TargetTicket = nil) then
+    Exit;
+  if not Assigned(FEnqueueCompletion) then
+    Exit;
+  { 发帧 completion 在 reactor 线程执行，经 ticket 解析目标会话发送。 }
+  FEnqueueCompletion(FWorkerHandoff.TargetTicket,
+    TTcpServerFramePushCompletion.Create(FWorkerHandoff.TargetTicket,
+      AKind, AText, APayload, ACode, AReason),
+    tswoCompleted, tscoHandler);
+  if Assigned(FWake) then
+    FWake();
+end;
+
+procedure TTcpServerPollSessionContext.SubmitSendText(const AText: string);
+begin
+  SubmitFramePush(fpSendText, AText, [], 0, '');
+end;
+
+procedure TTcpServerPollSessionContext.SubmitSendTexts(
+  const ATexts: array of string);
+begin
+  if (FWorkerHandoff = nil) or (FWorkerHandoff.TargetTicket = nil) then
+    Exit;
+  if not Assigned(FEnqueueCompletion) then
+    Exit;
+  if Length(ATexts) = 0 then
+    Exit;
+  { 整批一个 completion + 一次唤醒（与单帧 SubmitFramePush 同一入队/唤醒
+    通道，控制面成本与帧数无关）。 }
+  FEnqueueCompletion(FWorkerHandoff.TargetTicket,
+    TTcpServerFramePushBatchCompletion.Create(FWorkerHandoff.TargetTicket,
+      ATexts),
+    tswoCompleted, tscoHandler);
+  if Assigned(FWake) then
+    FWake();
+end;
+
+procedure TTcpServerPollSessionContext.SubmitSendBinary(
+  const APayload: array of Byte);
+begin
+  SubmitFramePush(fpSendBinary, '', APayload, 0, '');
+end;
+
+procedure TTcpServerPollSessionContext.SubmitSendClose(
+  const ACode: UInt16; const AReason: string);
+begin
+  SubmitFramePush(fpSendClose, '', [], ACode, AReason);
 end;
 
 constructor TTcpServerPollCompletionQueue.Create;
@@ -687,6 +1043,31 @@ begin
   SetLength(Result, LCount);
 end;
 
+function TTcpServerPollTargetRegistry.Snapshot: TTcpServerPollSessionTargetArray;
+var
+  LI: SizeUInt;
+begin
+  Result := nil;
+  if FCount = 0 then
+    Exit;
+  SetLength(Result, FCount);
+  for LI := 0 to FCount - 1 do
+    Result[LI] := FItems[LI];
+end;
+
+function TTcpServerPollTargetRegistry.AnyShutdownClose: Boolean;
+var
+  LI: SizeUInt;
+begin
+  { FCount 为无符号：0 时直接返回，避免 FCount-1 下溢扫越界 }
+  Result := False;
+  if FCount = 0 then
+    Exit;
+  for LI := 0 to FCount - 1 do
+    if (FItems[LI] <> nil) and FItems[LI].IsShutdownClose then
+      Exit(True);
+end;
+
 function TTcpServerPollTargetRegistry.Drain: TTcpServerPollSessionTargetArray;
 var
   LI: SizeUInt;
@@ -829,11 +1210,114 @@ constructor TTcpServerDefaultSessionContext.Create(
 begin
   inherited Create;
   FWorkerHandoff := AWorkerHandoff;
+  FWsLock := nextpas.core.sync.mutex.TMutex.Create;
+end;
+
+destructor TTcpServerDefaultSessionContext.Destroy;
+begin
+  { 释放前清空登记：会话收尾路径应已逐个 Unregister，这里兜底防悬挂。 }
+  FWsNotifiers := nil;
+  FWsLock := nil;
+  inherited Destroy;
 end;
 
 function TTcpServerDefaultSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
 begin
   Result := FWorkerHandoff;
+end;
+
+function TTcpServerDefaultSessionContext.HandoffHijackedConn(
+  const AConn: ITcpStream;
+  const ANewSession: ITcpServerSession): Boolean;
+begin
+  { 非 poll 容器（threaded 后端）无 poll target 可迁移，显式拒绝。 }
+  Result := False;
+end;
+
+function TTcpServerDefaultSessionContext.SubmitHijackMigration: Boolean;
+begin
+  Result := False;
+end;
+
+procedure TTcpServerDefaultSessionContext.RegisterShutdownNotifier(
+  const ANotifier: IWsServerShutdownNotifier);
+var
+  N: SizeInt;
+begin
+  if ANotifier = nil then
+    Exit;
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    SetLength(FWsNotifiers, N + 1);
+    FWsNotifiers[N] := ANotifier;
+  finally
+    FWsLock.Release;
+  end;
+end;
+
+procedure TTcpServerDefaultSessionContext.UnregisterShutdownNotifier(
+  const ANotifier: IWsServerShutdownNotifier);
+var
+  I, N: SizeInt;
+begin
+  if ANotifier = nil then
+    Exit;
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    for I := 0 to N - 1 do
+      if FWsNotifiers[I] = ANotifier then
+      begin
+        FWsNotifiers[I] := FWsNotifiers[N - 1];
+        SetLength(FWsNotifiers, N - 1);
+        Break;
+      end;
+  finally
+    FWsLock.Release;
+  end;
+end;
+
+procedure TTcpServerDefaultSessionContext.ShutdownAll(
+  const ATimeoutNs: Int64);
+var
+  LSnapshot: array of IWsServerShutdownNotifier;
+  LDeadline: TDeadline;
+  LRemaining: TDuration;
+  I, N: SizeInt;
+begin
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    LSnapshot := nil;
+    SetLength(LSnapshot, N);
+    for I := 0 to N - 1 do
+      LSnapshot[I] := FWsNotifiers[I];
+  finally
+    FWsLock.Release;
+  end;
+  if N = 0 then
+    Exit;
+  { 先全部唤醒（连接线程被 waitable cancel 唤醒 → ReadMessage 退出，
+    close frame 1001 由会话收尾路径补发），再逐个等待收尾；剩余时间
+    递减，超时强关。0 = 无限等待（与 HTTP ShutdownTimeout=0 语义一致）。 }
+  for I := 0 to N - 1 do
+    LSnapshot[I].NotifyShutdown;
+  if ATimeoutNs <= 0 then
+  begin
+    for I := 0 to N - 1 do
+      LSnapshot[I].WaitFinished(0);
+    Exit;
+  end;
+  LDeadline := TDeadline.After(TDuration.FromNanoseconds(ATimeoutNs));
+  for I := 0 to N - 1 do
+  begin
+    LRemaining := LDeadline.Remaining;
+    if LRemaining.AsNanoseconds <= 0 then
+      LSnapshot[I].ForceClose
+    else if not LSnapshot[I].WaitFinished(LRemaining.AsNanoseconds) then
+      LSnapshot[I].ForceClose;
+  end;
 end;
 
 procedure CreateTcpServerRuntimeContext(

@@ -1122,9 +1122,9 @@ require_executable "$STAGE0_BINARY"
 printf 'stage0-build=pass\n'
 
 printf 'hir-late-alloca-hoist=running\n'
-printf 'hir-late-alloca-hoist-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_late_alloca_hoist.pas\n' "$HIR_LATE_ALLOCA_BUILD_DIR" "$HIR_LATE_ALLOCA_BUILD_DIR"
-if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas
+printf 'hir-late-alloca-hoist-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_late_alloca_hoist.pas\n' "$HIR_LATE_ALLOCA_BUILD_DIR" "$HIR_LATE_ALLOCA_BUILD_DIR"
+if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas
   fail 'hir-late-alloca-hoist-build-failed'
 fi
 if [ ! -x "$HIR_LATE_ALLOCA_BINARY" ]; then
@@ -1159,9 +1159,9 @@ grep -Eq '^  br i1 %v[0-9]+, label %bb[0-9]+, label %bb[0-9]+$' "$HIR_LATE_ALLOC
 printf 'hir-late-alloca-hoist=pass\n'
 
 printf 'hir-class-alloc-contract=running\n'
-printf 'hir-class-alloc-contract-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_class_alloc_contract.pas\n' "$HIR_CLASS_ALLOC_BUILD_DIR" "$HIR_CLASS_ALLOC_BUILD_DIR"
-if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas
+printf 'hir-class-alloc-contract-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_class_alloc_contract.pas\n' "$HIR_CLASS_ALLOC_BUILD_DIR" "$HIR_CLASS_ALLOC_BUILD_DIR"
+if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas
   fail 'hir-class-alloc-contract-build-failed'
 fi
 if [ ! -x "$HIR_CLASS_ALLOC_BINARY" ]; then
@@ -1177,9 +1177,9 @@ require_output_pattern '^hir-class-alloc-contract-status=pass$' "$HIR_CLASS_ALLO
 printf 'hir-class-alloc-contract=pass\n'
 
 printf 'hir-object-free-contract=running\n'
-printf 'hir-object-free-contract-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_object_free_contract.pas\n' "$HIR_OBJECT_FREE_BUILD_DIR" "$HIR_OBJECT_FREE_BUILD_DIR"
-if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_OBJECT_FREE_BUILD_DIR" -FU"$HIR_OBJECT_FREE_BUILD_DIR" tests/hir/test_hir_object_free_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_OBJECT_FREE_BUILD_DIR" -FU"$HIR_OBJECT_FREE_BUILD_DIR" tests/hir/test_hir_object_free_contract.pas
+printf 'hir-object-free-contract-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_object_free_contract.pas\n' "$HIR_OBJECT_FREE_BUILD_DIR" "$HIR_OBJECT_FREE_BUILD_DIR"
+if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_OBJECT_FREE_BUILD_DIR" -FU"$HIR_OBJECT_FREE_BUILD_DIR" tests/hir/test_hir_object_free_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Fucompiler/lower -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_OBJECT_FREE_BUILD_DIR" -FU"$HIR_OBJECT_FREE_BUILD_DIR" tests/hir/test_hir_object_free_contract.pas
   fail 'hir-object-free-contract-build-failed'
 fi
 if [ ! -x "$HIR_OBJECT_FREE_BINARY" ]; then
@@ -1213,9 +1213,9 @@ require_output_pattern '^hir-node-kind-status=pass$' "$HIR_NODE_KIND_OUTPUT" 'mi
 printf 'hir-node-kind=pass\n'
 
 printf 'hir-string-ownership-contract=running\n'
-printf 'hir-string-ownership-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_ownership_contract.pas\n' "$HIR_STRING_OWNERSHIP_BUILD_DIR" "$HIR_STRING_OWNERSHIP_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_ownership_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_ownership_contract.pas
+printf 'hir-string-ownership-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_ownership_contract.pas\n' "$HIR_STRING_OWNERSHIP_BUILD_DIR" "$HIR_STRING_OWNERSHIP_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_ownership_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_ownership_contract.pas
   fail 'hir-string-ownership-contract-build-failed'
 fi
 if [ ! -x "$HIR_STRING_OWNERSHIP_BINARY" ]; then
@@ -1231,9 +1231,9 @@ require_output_pattern '^hir-string-ownership-contract-status=pass$' "$HIR_STRIN
 printf 'hir-string-ownership-contract=pass\n'
 
 printf 'hir-string-ownership-runtime-smoke=running\n'
-printf 'hir-string-ownership-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_ownership_runtime_smoke.pas\n' "$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" "$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_ownership_runtime_smoke.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_ownership_runtime_smoke.pas
+printf 'hir-string-ownership-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_ownership_runtime_smoke.pas\n' "$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" "$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_ownership_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_ownership_runtime_smoke.pas
   fail 'hir-string-ownership-runtime-smoke-build-failed'
 fi
 if [ ! -x "$HIR_STRING_OWNERSHIP_RUNTIME_BINARY" ]; then
@@ -1252,9 +1252,9 @@ require_output_pattern '^hir-string-ownership-runtime-smoke-status=pass$' "$HIR_
 printf 'hir-string-ownership-runtime-smoke=pass\n'
 
 printf 'hir-string-call-argument-ownership-contract=running\n'
-printf 'hir-string-call-argument-ownership-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_call_argument_ownership_contract.pas\n' "$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" "$HIR_STRING_CALL_ARGUMENT_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" -FU"$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" tests/hir/test_hir_string_call_argument_ownership_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" -FU"$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" tests/hir/test_hir_string_call_argument_ownership_contract.pas
+printf 'hir-string-call-argument-ownership-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_call_argument_ownership_contract.pas\n' "$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" "$HIR_STRING_CALL_ARGUMENT_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" -FU"$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" tests/hir/test_hir_string_call_argument_ownership_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" -FU"$HIR_STRING_CALL_ARGUMENT_BUILD_DIR" tests/hir/test_hir_string_call_argument_ownership_contract.pas
   fail 'hir-string-call-argument-ownership-contract-build-failed'
 fi
 if [ ! -x "$HIR_STRING_CALL_ARGUMENT_BINARY" ]; then
@@ -1270,9 +1270,9 @@ require_output_pattern '^hir-string-call-argument-ownership-contract-status=pass
 printf 'hir-string-call-argument-ownership-contract=pass\n'
 
 printf 'hir-string-call-argument-ownership-runtime-smoke=running\n'
-printf 'hir-string-call-argument-ownership-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_call_argument_ownership_runtime_smoke.pas\n' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" "$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_call_argument_ownership_runtime_smoke.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_call_argument_ownership_runtime_smoke.pas
+printf 'hir-string-call-argument-ownership-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_call_argument_ownership_runtime_smoke.pas\n' "$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" "$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_call_argument_ownership_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_CALL_ARGUMENT_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_call_argument_ownership_runtime_smoke.pas
   fail 'hir-string-call-argument-ownership-runtime-smoke-build-failed'
 fi
 if [ ! -x "$HIR_STRING_CALL_ARGUMENT_RUNTIME_BINARY" ]; then
@@ -1305,9 +1305,9 @@ require_output_pattern '^hir-string-call-argument-ownership-runtime-smoke-status
 printf 'hir-string-call-argument-ownership-runtime-smoke=pass\n'
 
 printf 'hir-string-return-ownership-contract=running\n'
-printf 'hir-string-return-ownership-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_return_ownership_contract.pas\n' "$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" "$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_return_ownership_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_return_ownership_contract.pas
+printf 'hir-string-return-ownership-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_return_ownership_contract.pas\n' "$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" "$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_return_ownership_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_BUILD_DIR" tests/hir/test_hir_string_return_ownership_contract.pas
   fail 'hir-string-return-ownership-contract-build-failed'
 fi
 if [ ! -x "$HIR_STRING_RETURN_OWNERSHIP_BINARY" ]; then
@@ -1323,9 +1323,9 @@ require_output_pattern '^hir-string-return-ownership-contract-status=pass$' "$HI
 printf 'hir-string-return-ownership-contract=pass\n'
 
 printf 'hir-string-return-ownership-runtime-smoke=running\n'
-printf 'hir-string-return-ownership-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_return_ownership_runtime_smoke.pas\n' "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_return_ownership_runtime_smoke.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_return_ownership_runtime_smoke.pas
+printf 'hir-string-return-ownership-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_string_return_ownership_runtime_smoke.pas\n' "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_return_ownership_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" -FU"$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BUILD_DIR" tests/hir/test_hir_string_return_ownership_runtime_smoke.pas
   fail 'hir-string-return-ownership-runtime-smoke-build-failed'
 fi
 if [ ! -x "$HIR_STRING_RETURN_OWNERSHIP_RUNTIME_BINARY" ]; then
@@ -1342,9 +1342,9 @@ require_output_pattern '^hir-string-return-ownership-runtime-smoke-status=pass$'
 printf 'hir-string-return-ownership-runtime-smoke=pass\n'
 
 printf 'hir-dynarray-release-contract=running\n'
-printf 'hir-dynarray-release-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_dynarray_release_contract.pas\n' "$HIR_DYNARRAY_RELEASE_BUILD_DIR" "$HIR_DYNARRAY_RELEASE_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_DYNARRAY_RELEASE_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_BUILD_DIR" tests/hir/test_hir_dynarray_release_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_DYNARRAY_RELEASE_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_BUILD_DIR" tests/hir/test_hir_dynarray_release_contract.pas
+printf 'hir-dynarray-release-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_dynarray_release_contract.pas\n' "$HIR_DYNARRAY_RELEASE_BUILD_DIR" "$HIR_DYNARRAY_RELEASE_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_DYNARRAY_RELEASE_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_BUILD_DIR" tests/hir/test_hir_dynarray_release_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_DYNARRAY_RELEASE_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_BUILD_DIR" tests/hir/test_hir_dynarray_release_contract.pas
   fail 'hir-dynarray-release-contract-build-failed'
 fi
 if [ ! -x "$HIR_DYNARRAY_RELEASE_BINARY" ]; then
@@ -1360,9 +1360,9 @@ require_output_pattern '^hir-dynarray-release-contract-status=pass$' "$HIR_DYNAR
 printf 'hir-dynarray-release-contract=pass\n'
 
 printf 'hir-dynarray-release-runtime-smoke=running\n'
-printf 'hir-dynarray-release-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_dynarray_release_runtime_smoke.pas\n' "$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" "$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" tests/hir/test_hir_dynarray_release_runtime_smoke.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" tests/hir/test_hir_dynarray_release_runtime_smoke.pas
+printf 'hir-dynarray-release-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_dynarray_release_runtime_smoke.pas\n' "$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" "$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" tests/hir/test_hir_dynarray_release_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" -FU"$HIR_DYNARRAY_RELEASE_RUNTIME_BUILD_DIR" tests/hir/test_hir_dynarray_release_runtime_smoke.pas
   fail 'hir-dynarray-release-runtime-smoke-build-failed'
 fi
 if [ ! -x "$HIR_DYNARRAY_RELEASE_RUNTIME_BINARY" ]; then
@@ -1382,9 +1382,9 @@ require_output_pattern '^hir-dynarray-release-runtime-smoke-status=pass$' "$HIR_
 printf 'hir-dynarray-release-runtime-smoke=pass\n'
 
 printf 'hir-field-dynarray-contract=running\n'
-printf 'hir-field-dynarray-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_field_dynarray_contract.pas\n' "$HIR_FIELD_DYNARRAY_BUILD_DIR" "$HIR_FIELD_DYNARRAY_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_FIELD_DYNARRAY_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_BUILD_DIR" tests/hir/test_hir_field_dynarray_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_FIELD_DYNARRAY_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_BUILD_DIR" tests/hir/test_hir_field_dynarray_contract.pas
+printf 'hir-field-dynarray-contract-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_field_dynarray_contract.pas\n' "$HIR_FIELD_DYNARRAY_BUILD_DIR" "$HIR_FIELD_DYNARRAY_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_FIELD_DYNARRAY_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_BUILD_DIR" tests/hir/test_hir_field_dynarray_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_FIELD_DYNARRAY_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_BUILD_DIR" tests/hir/test_hir_field_dynarray_contract.pas
   fail 'hir-field-dynarray-contract-build-failed'
 fi
 if [ ! -x "$HIR_FIELD_DYNARRAY_BINARY" ]; then
@@ -1400,9 +1400,9 @@ require_output_pattern '^hir-field-dynarray-contract-status=pass$' "$HIR_FIELD_D
 printf 'hir-field-dynarray-contract=pass\n'
 
 printf 'hir-field-dynarray-release-runtime-smoke=running\n'
-printf 'hir-field-dynarray-release-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas\n' "$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" "$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
+printf 'hir-field-dynarray-release-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas\n' "$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" "$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" -FU"$HIR_FIELD_DYNARRAY_RUNTIME_BUILD_DIR" tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
   fail 'hir-field-dynarray-release-runtime-smoke-build-failed'
 fi
 if [ ! -x "$HIR_FIELD_DYNARRAY_RUNTIME_BINARY" ]; then
@@ -1421,9 +1421,9 @@ require_output_pattern '^hir-field-dynarray-release-runtime-smoke-status=pass$' 
 printf 'hir-field-dynarray-release-runtime-smoke=pass\n'
 
 printf 'hir-large-alloc-runtime-smoke=running\n'
-printf 'hir-large-alloc-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_large_alloc_runtime_smoke.pas\n' "$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" "$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR"
-if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" -FU"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" tests/hir/test_hir_large_alloc_runtime_smoke.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" -FU"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" tests/hir/test_hir_large_alloc_runtime_smoke.pas
+printf 'hir-large-alloc-runtime-smoke-command=fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/hir/test_hir_large_alloc_runtime_smoke.pas\n' "$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" "$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR"
+if ! fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" -FU"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" tests/hir/test_hir_large_alloc_runtime_smoke.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" -FU"$HIR_LARGE_ALLOC_RUNTIME_BUILD_DIR" tests/hir/test_hir_large_alloc_runtime_smoke.pas
   fail 'hir-large-alloc-runtime-smoke-build-failed'
 fi
 if [ ! -x "$HIR_LARGE_ALLOC_RUNTIME_BINARY" ]; then
@@ -1564,9 +1564,9 @@ require_output_pattern '^sema-bench-timing-source=process-cpu$' "$SEMA_BENCH_OUT
 printf 'sema-bench=pass\n'
 
 printf 'semantic-call-bindings-check=running\n'
-printf 'semantic-call-bindings-command=fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/semantic/test_semantic_call_bindings.pas\n' "$SEMANTIC_CALL_BINDINGS_BUILD_DIR" "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
-if ! fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" -FU"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" tests/semantic/test_semantic_call_bindings.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" -FU"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" tests/semantic/test_semantic_call_bindings.pas
+printf 'semantic-call-bindings-command=fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE%s -FU%s tests/semantic/test_semantic_call_bindings.pas\n' "$SEMANTIC_CALL_BINDINGS_BUILD_DIR" "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
+if ! fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" -FU"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" tests/semantic/test_semantic_call_bindings.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -FE"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" -FU"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" tests/semantic/test_semantic_call_bindings.pas
   fail 'semantic-call-bindings-build-failed'
 fi
 if [ ! -x "$SEMANTIC_CALL_BINDINGS_BINARY" ]; then

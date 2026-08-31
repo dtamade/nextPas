@@ -5,7 +5,8 @@ unit benchmark_utils;
 interface
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Math;
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Math,
+  nextpas.core.time;
 
 type
   { Benchmark timing and statistics }

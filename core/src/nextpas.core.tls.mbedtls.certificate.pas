@@ -4,7 +4,7 @@
  *
  * 实现 ISSLCertificate 和 ISSLCertificateStore 接口的 MbedTLS 后端。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-10
  *}
@@ -162,6 +162,7 @@ uses
   nextpas.core.mem,
   nextpas.core.exception,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.text.strings,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash;
@@ -415,6 +416,7 @@ end;
 function TMbedTLSCertificate.TryLoadX509Parser(
   out AParser: TX509Certificate): Boolean;
 var
+  LParser: TX509Certificate;
   LDER: TBytes;
 begin
   AParser := nil;
@@ -423,22 +425,24 @@ begin
   if FX509Crt = nil then
     Exit;
 
-  AParser := TX509Certificate.Create;
+  LParser := TX509Certificate.Create;
   try
     if Length(FDERData) > 0 then
-      AParser.LoadFromDER(FDERData)
+      LParser.LoadFromDER(FDERData)
     else if FPEMData <> '' then
-      AParser.LoadFromPEM(FPEMData)
+      LParser.LoadFromPEM(FPEMData)
     else
     begin
       LDER := SaveToDER;
       if Length(LDER) = 0 then
         Exit;
-      AParser.LoadFromDER(LDER);
+      LParser.LoadFromDER(LDER);
     end;
+    AParser := LParser;
     Result := True;
-  except
-    Result := False;
+  finally
+    if not Result then
+      LParser.Free;
   end;
 end;
 
@@ -465,6 +469,7 @@ begin
 
     Result := (APublicKeyAlgorithm <> '') or (ASignatureAlgorithm <> '');
   finally
+    LParser.Free;
   end;
 end;
 
@@ -699,6 +704,7 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
+      LParser.Free;
     end;
   end
   else
@@ -724,6 +730,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -758,6 +765,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -794,6 +802,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -889,6 +898,7 @@ begin
       if Result > 0 then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -939,6 +949,7 @@ begin
       if Result > 0 then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -1010,6 +1021,7 @@ begin
       Result := Ord(LParser.Version) + 1;
       Exit;
     finally
+      LParser.Free;
     end;
   end;
 end;
@@ -1144,7 +1156,7 @@ begin
 
     AResult.Success := True;
     if LIgnoredFlags <> 0 then
-      AResult.DetailedInfo := nextpas.core.text.conv.Format(
+      AResult.DetailedInfo := nextpas.core.text.format.TextFormat(
         'MbedTLS certificate verification passed after applying VerifyEx flag exceptions (native flags=%u, ignored=%u)',
         [LFlags, LIgnoredFlags])
     else
@@ -1168,11 +1180,11 @@ begin
       LErrorMessage := Trim(LErrorMessage + ' (not trusted)');
     AResult.ErrorMessage := LErrorMessage;
     if LIgnoredFlags <> 0 then
-      AResult.DetailedInfo := nextpas.core.text.conv.Format(
+      AResult.DetailedInfo := nextpas.core.text.format.TextFormat(
         'MbedTLS verification flags: native=%u effective=%u ignored=%u',
         [LFlags, LEffectiveFlags, LIgnoredFlags])
     else
-      AResult.DetailedInfo := nextpas.core.text.conv.Format('MbedTLS verification flags: %u', [LEffectiveFlags]);
+      AResult.DetailedInfo := nextpas.core.text.format.TextFormat('MbedTLS verification flags: %u', [LEffectiveFlags]);
   end;
 end;
 
@@ -1202,6 +1214,8 @@ var
     if (Pos('*.', APattern) = 1) then
     begin
       try
+        PatternParts := StringsSplit(APattern, '.');
+        HostParts := StringsSplit(AHostname, '.');
 
         // Same label count
         if Length(PatternParts) = Length(HostParts) then
@@ -1330,6 +1344,7 @@ begin
   try
     Result := LParser.IsCA;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1393,6 +1408,7 @@ begin
       end;
     end;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1407,6 +1423,7 @@ begin
   try
     Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1421,6 +1438,7 @@ begin
   try
     Result := X509KeyUsageToStrings(LParser.KeyUsage);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1435,6 +1453,7 @@ begin
   try
     Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1586,6 +1605,7 @@ begin
     Result := LClone;
     LClone := nil;
   finally
+    LClone.Free;
   end;
 end;
 
@@ -1602,6 +1622,7 @@ end;
 destructor TMbedTLSCertificateStore.Destroy;
 begin
   Clear;
+  FCertificates.Free;
   FreeStore;
   inherited Destroy;
 end;

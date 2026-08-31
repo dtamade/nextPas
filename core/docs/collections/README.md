@@ -1,5 +1,8 @@
 # nextpas.core.collections
 
+**最后更新**：2026-08-30
+**版本**：1.8
+
 L1 容器库：动态数组、双端队列、哈希/有序映射与集合、链表、堆、缓存、并发 map 等。
 
 ## 读哪里
@@ -76,6 +79,7 @@ end;
   优先队列 → MakePriorityQueue
   位集 → MakeBitSet
   环形缓冲 → MakeCircularBuffer
+  元素自持下标的稀疏槽登记簿 → 直构 TSlotRegistry（uses collections.slotregistry）
 ```
 
 ### Hash 默认叙事
@@ -186,3 +190,11 @@ core/benchmarks/nextpas.core.collections/      # 跨语言/微基准
 - 软冻结公共语义：bugfix 与实现优化随时可做；补工厂需文档同步。
 - 禁止为门面 re-export 制造第二套 generic interface 身份。
 - 性能改动必须有 before/after bench 数据。
+
+## 变更记录
+
+| 日期 | 版本 | 变更描述 | 作者 |
+|------|------|----------|------|
+| 2026-07-20 | 1.0 | 初版（导航、5 分钟路径、决策树、工厂一览） | collections lane |
+| 2026-07-21 | 1.7 | 对齐 CONTRACT 1.7：Ensure 语义、CORE-API、有序选型 | collections lane |
+| 2026-08-30 | 1.8 | 文档时效性修复：补齐最后更新/版本与变更记录，对齐周边契约 | Grok |

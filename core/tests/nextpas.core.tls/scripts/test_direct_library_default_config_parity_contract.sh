@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -77,9 +77,9 @@ check_file() {
   fi
 }
 
-check_file "src/nextpas.core.tls.freepascal.lib.pas" "TFreePascalSSLLibrary"
-check_file "src/nextpas.core.tls.winssl.lib.pas" "TWinSSLLibrary"
-check_file "src/nextpas.core.tls.mbedtls.lib.pas" "TMbedTLSLibrary"
-check_file "src/nextpas.core.tls.wolfssl.lib.pas" "TWolfSSLLibrary"
+check_file "core/src/nextpas.core.tls.freepascal.lib.pas" "TFreePascalSSLLibrary"
+check_file "core/src/nextpas.core.tls.winssl.lib.pas" "TWinSSLLibrary"
+check_file "core/src/nextpas.core.tls.mbedtls.lib.pas" "TMbedTLSLibrary"
+check_file "core/src/nextpas.core.tls.wolfssl.lib.pas" "TWolfSSLLibrary"
 
 echo "[PASS] direct-library default-config parity remains aligned across backend library paths"

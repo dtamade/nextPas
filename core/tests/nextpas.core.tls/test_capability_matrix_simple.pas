@@ -168,7 +168,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl - Capability Matrix v1.2.0 Simple Test');
+  WriteLn('nextpas.core.tls - Capability Matrix v1.2.0 Simple Test');
   WriteLn('==================================================');
   WriteLn;
 

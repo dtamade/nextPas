@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 **82** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-26（M-4 security 停滞用例 ReadTimeout 语义对齐）
-**版本**：3.51
+**最后更新**：2026-08-31（M-4 security 停滞用例 ReadTimeout 语义对齐）
+**版本**：3.52
 
 ---
 
@@ -27,6 +27,7 @@ http.middleware          ← 链原语（HandlerFunc / MiddlewareFunc / Chain）
 http.middleware.*        ← 内建产品 middleware（cors/recovery/logger/…）
 http.client / server     ← facade 编排（server 委托 net.server）
 http.static / websocket  ← helper 级公开面
+http.websocket.room      ← 房间语义（Join/Leave/Broadcast + 有界管理器，IWebSocketRoom）
 http.form / cookie / sse ← 表单、Cookie、SSE 辅助
 http.impl.registry       ← 版本 → transport factory
 http.impl.cancel.adapter ← 共享 IHttpCancelToken → INetCancelToken 桥（h1/h2/websocket）
@@ -755,14 +756,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
 
 - 默认 `IHttpClient.Send` / `IHttpTransport.RoundTrip` 仍为串行一流。同连接多路走 **`IHttpTransportMultiplex.RoundTripMany`**（`Supports` 探测；H2 实现，H1 无此接口）。
 - `RoundTripMany`：同 authority（scheme/host/port）；响应按请求下标排序；受 peer `MaxConcurrentStreams` 约束；流 ID 客户端奇数递增；GOAWAY 期间未完成且 stream id > last-stream-id → `hekProtocol`；cancel 与单次 RoundTrip 同源（首请求 token）。
-- OpenSSL backend heaptrc（**Wave X4 + R2 dig + R4 fix**）：
-  - X4 修 `FPinValidator` 未释放（每 `CreateContext` ~32B → FreeAndNil）。
-  - R2 曾诚实 Park **1×41B**（heaptrc size 41、无帧；process-lifetime）。
-  - **R4**：根因 = `TOpenSSLLibrary.InvalidateCapabilitiesCache` 对含
-    `BackendVersion: string` 的 `TSSLBackendCapabilities` 使用 `FillChar`，
-    在 library `Finalize` 时 orphan 版本串（内容 `OpenSSL x.y.z …`）。
-    修为 `FCapabilitiesCache := Default(TSSLBackendCapabilities)`（及同模式
-    其它 backend）。`test_http_client` HTTPS 全量路径 **0 unfreed**。
+- OpenSSL backend heaptrc：能力缓存值语义重置，test_http_client heaptrc 0 unfreed。
 - **Q3-3 / RH-1 / C-A H1 HTTPS**：
   - **Client H1 direct HTTPS**（`TLSContext` + `https://`）：生产路径；smoke
     见 `test_http_https_smoke`（吞吐 + p50/p99；heaptrc **0 unfreed**）。
@@ -903,3 +897,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |
 | 2026-07-20 | 3.22 | RH-1：TLS stream `ITcpStreamRuntime` → HTTPS pool keep-alive reuse |
+| 2026-08-31 | 3.52 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

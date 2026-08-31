@@ -65,3 +65,50 @@ jobs:
 
       - name: Run Linux local verification mirror
         run: make verify
+
+  freepascal-tls13-completeness:
+    name: FreePascal TLS 1.3 completeness gate
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Distro fpc is only the ppcx64 bootstrap for the trunk build (see the
+      # note in verify-linux-x86_64). libwolfssl-dev / libmbedtls-dev back the
+      # WolfSSL/MbedTLS-backed runtime coverage groups of the completeness gate.
+      - name: Install Free Pascal and OpenSSL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fpc ripgrep libgit2-dev openssl libwolfssl-dev libmbedtls-dev
+
+      - name: Cache FPC trunk
+        id: cache-fpc
+        uses: actions/cache@v4
+        with:
+          path: ~/fpc-trunk
+          key: fpc-trunk-linux-x86_64-v4
+
+      - name: Build FPC trunk from source
+        if: steps.cache-fpc.outputs.cache-hit != 'true'
+        working-directory: /tmp
+        run: |
+          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git fpc-src
+          cd fpc-src
+          make all FPCDIR=$(pwd) PP=$(which ppcx64) OPT="-O2"
+          mkdir -p ~/fpc-trunk/bin ~/fpc-trunk/lib
+          make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppcx64 PREFIX=~/fpc-trunk
+
+      - name: Setup FPC config and PATH
+        run: |
+          $HOME/fpc-trunk/bin/fpcmkcfg -d "basepath=$HOME/fpc-trunk/lib/fpc/\$fpcversion" -o $HOME/fpc-trunk/bin/fpc.cfg
+          cp $HOME/fpc-trunk/bin/fpc.cfg $HOME/fpc-trunk/lib/fpc/3.3.1/fpc.cfg
+          sudo cp $HOME/fpc-trunk/bin/fpc.cfg /etc/fpc.cfg
+          echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
+          echo "$HOME/fpc-trunk/lib/fpc/3.3.1" >> $GITHUB_PATH
+
+      - name: Verify FPC
+        run: fpc -iV
+
+      - name: Run FreePascal TLS 1.3 completeness gate
+        run: bash scripts/tls/run_freepascal_tls13_completeness_gate.sh --fast-local

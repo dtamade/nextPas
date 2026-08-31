@@ -42,6 +42,7 @@ type
   git_tag = Pointer;
   git_index = Pointer;
   git_config = Pointer;
+  git_config_iterator = Pointer;
   git_signature = Pointer;
   git_diff = Pointer;
   git_status_list = Pointer;
@@ -91,6 +92,18 @@ type
     klass: cint;
   end;
   Pgit_error_t = ^git_error_t;
+
+  // Configuration entry (as returned by the config iterator).
+  // Level/include_depth mirror the libgit2 layout for future use; the
+  // iteration wrapper reads name/value only.
+  git_config_entry = record
+    name: PChar;
+    value: PChar;
+    level: cint;
+    include_depth: cint;
+  end;
+  Pgit_config_entry = ^git_config_entry;
+  PPgit_config_entry = ^Pgit_config_entry;
 
   // Callback function types
   git_progress_cb = function(const str: PChar; len: csize_t; payload: Pointer): cint; cdecl;

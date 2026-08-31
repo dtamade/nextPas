@@ -3,24 +3,14 @@ program test_pem_der_conversion;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.cert.utils,
-  nextpas.core.tls.factory,
-  fafafa.ssl;
-
-const
-  // 测试用自签名证书PEM
-  TEST_CERT_PEM =
-    '-----BEGIN CERTIFICATE-----' + #10 +
-    'MIIDazCCAlOgAwIBAgIUEJ8VJiJKKxJb8Tsa9vTwH3FqyhMwDQYJKoZIhvcNAQEL' + #10 +
-    'BQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM' + #10 +
-    'GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0yMzExMjYwMDAwMDBaFw0yNDEx' + #10 +
-    'MjUwMDAwMDBaMEUxQybGVzdCBDQTESMBAGA1UECAwJVGVzdCBTdGF0ZTESMBAGA1UE' + #10 +
-    'BwwJVGVzdCBDaXR5MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz0Nf' + #10 +
-    '-----END CERTIFICATE-----';
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.tls.cert.utils;
 
 var
   GPassed, GFailed: Integer;
+  GTestCert: string;
+  GTestKey: string;
 
 procedure AssertTrue(ACondition: Boolean; const AMessage: string);
 begin
@@ -36,6 +26,29 @@ begin
   end;
 end;
 
+procedure GenerateTestCertificate;
+var
+  LOptions: TCertGenOptions;
+begin
+  WriteLn('=== Generating Test Certificate ===');
+
+  LOptions := TCertificateUtils.DefaultGenOptions;
+  LOptions.CommonName := 'test.example.com';
+  LOptions.Organization := 'Test Org';
+  LOptions.IsCA := False;
+  LOptions.ValidDays := 365;
+
+  if not TCertificateUtils.GenerateSelfSigned(LOptions, GTestCert, GTestKey) then
+  begin
+    WriteLn('[FATAL] Failed to generate test certificate');
+    Halt(1);
+  end;
+
+  WriteLn('[OK] Test certificate generated');
+  WriteLn('  PEM Length: ', Length(GTestCert));
+  WriteLn;
+end;
+
 procedure TestPEMToDER;
 var
   LPEM: string;
@@ -44,11 +57,12 @@ begin
   WriteLn('=== Test: PEM to DER Conversion ===');
 
   // Test 1: 有效PEM转换
-  LPEM := TEST_CERT_PEM;
+  LPEM := GTestCert;
   LDER := TCertificateUtils.PEMToDER(LPEM);
 
   AssertTrue(Length(LDER) > 0, 'PEM to DER should return non-empty bytes');
-  AssertTrue(LDER[0] = $30, 'DER should start with SEQUENCE tag (0x30)');
+  if Length(LDER) > 0 then
+    AssertTrue(LDER[0] = $30, 'DER should start with SEQUENCE tag (0x30)');
 
   // Test 2: 空PEM
   LPEM := '';
@@ -66,7 +80,7 @@ begin
   WriteLn('=== Test: DER to PEM Conversion ===');
 
   // Test 1: 往返转换
-  LPEM := TEST_CERT_PEM;
+  LPEM := GTestCert;
   LDER := TCertificateUtils.PEMToDER(LPEM);
   LPEM2 := TCertificateUtils.DERToPEM(LDER);
 
@@ -91,7 +105,7 @@ begin
   WriteLn('=== Test: ConvertFormat ===');
 
   // Test 1: PEM输入转DER
-  LInputStr := TEST_CERT_PEM;
+  LInputStr := GTestCert;
   SetLength(LInput, Length(LInputStr));
   if Length(LInputStr) > 0 then
     Move(LInputStr[1], LInput[0], Length(LInputStr));
@@ -99,7 +113,8 @@ begin
   LOutput := TCertificateUtils.ConvertFormat(LInput, cfPEM, cfDER);
 
   AssertTrue(Length(LOutput) > 0, 'ConvertFormat PEM->DER should work');
-  AssertTrue(LOutput[0] = $30, 'Converted DER should be valid');
+  if Length(LOutput) > 0 then
+    AssertTrue(LOutput[0] = $30, 'Converted DER should be valid');
 
   WriteLn;
 end;
@@ -114,6 +129,7 @@ begin
   WriteLn;
 
   try
+    GenerateTestCertificate;
     TestPEMToDER;
     TestDERToPEM;
     TestConvertFormat;

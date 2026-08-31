@@ -82,7 +82,11 @@ function BuildTLS13ClientHelloHandshakeWithCiphers(
   const AKeyShare: TBytes;
   const ACipherSuites: TTLS13CipherSuiteList;
   AIncludeStatusRequest: Boolean = False;
-  AIncludeSignedCertificateTimestamp: Boolean = False
+  AIncludeSignedCertificateTimestamp: Boolean = False;
+    { QUIC-TLS（RFC 9001 §4.2）：QUIC 模式禁报 <TLS1.3 版本——Go 栈
+      （crypto/tls quic.go）见 supported_versions 含旧版即发
+      protocol_version alert 关连；经典 TLS 路径保持双版本缺省 }
+  AQuic13Only: Boolean = False
 ): TBytes;
 
 function BuildTLS13ClientHelloHandshakeWithComputedPSKBinderAndCiphers(
@@ -110,7 +114,9 @@ uses
   nextpas.core.tls.errors,
   nextpas.core.tls.random,
   nextpas.core.tls.tls13.keyschedule,
-  nextpas.core.tls.tls13.wire;
+  nextpas.core.tls.tls13.wire,
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder;
 
 type
   TALPNProtocolArray = array of AnsiString;
@@ -197,7 +203,7 @@ begin
   Result := nil;
   AppendUInt16(Result, AType);
   AppendUInt16(Result, Word(Length(AData)));
-  AppendBytes(Result, AData);
+  BytesAppend(Result, AData);
 end;
 
 function BuildExtensionServerName(const AServerName: string): TBytes;
@@ -215,11 +221,11 @@ begin
   SetLength(LListData, 0);
   AppendByte(LListData, 0); // host_name
   AppendUInt16(LListData, Word(Length(LHostBytes)));
-  AppendBytes(LListData, LHostBytes);
+  BytesAppend(LListData, LHostBytes);
 
   Result := nil;
   AppendUInt16(Result, Word(Length(LListData)));
-  AppendBytes(Result, LListData);
+  BytesAppend(Result, LListData);
 
   Result := BuildExtensionHeader(TLS_EXTENSION_SERVER_NAME, Result);
 end;
@@ -245,12 +251,12 @@ begin
       RaiseInvalidParameter('ALPNProtocolLength');
 
     AppendByte(LListData, Byte(Length(LProtoBytes)));
-    AppendBytes(LListData, LProtoBytes);
+    BytesAppend(LListData, LProtoBytes);
   end;
 
   Result := nil;
   AppendUInt16(Result, Word(Length(LListData)));
-  AppendBytes(Result, LListData);
+  BytesAppend(Result, LListData);
 
   Result := BuildExtensionHeader(TLS_EXTENSION_ALPN, Result);
 end;
@@ -263,6 +269,18 @@ begin
   AppendByte(LData, 4); // 长度 = 4 (2 versions)
   AppendUInt16(LData, TLS13_VERSION);    // TLS 1.3
   AppendUInt16(LData, TLS_LEGACY_VERSION); // TLS 1.2
+  Result := BuildExtensionHeader(TLS_EXTENSION_SUPPORTED_VERSIONS, LData);
+end;
+
+{ QUIC 模式：只报 TLS1.3（RFC 9001 §4.2——QUIC 握手报旧版本即违约，
+  Go 栈实测见旧版直接 protocol_version alert 关连） }
+function BuildExtensionSupportedVersionsQuic: TBytes;
+var
+  LData: TBytes;
+begin
+  SetLength(LData, 0);
+  AppendByte(LData, 2); // 长度 = 2 (1 version)
+  AppendUInt16(LData, TLS13_VERSION);    // TLS 1.3
   Result := BuildExtensionHeader(TLS_EXTENSION_SUPPORTED_VERSIONS, LData);
 end;
 
@@ -361,11 +379,11 @@ begin
   SetLength(LEntry, 0);
   AppendUInt16(LEntry, LGroup);
   AppendUInt16(LEntry, Word(Length(AKeyShare)));
-  AppendBytes(LEntry, AKeyShare);
+  BytesAppend(LEntry, AKeyShare);
 
   SetLength(LData, 0);
   AppendUInt16(LData, Word(Length(LEntry)));
-  AppendBytes(LData, LEntry);
+  BytesAppend(LData, LEntry);
 
   Result := BuildExtensionHeader(TLS_EXTENSION_KEY_SHARE, LData);
 end;
@@ -419,24 +437,24 @@ begin
 
   SetLength(LIdentityEntry, 0);
   AppendUInt16(LIdentityEntry, Word(Length(APSKOffer.Identity)));
-  AppendBytes(LIdentityEntry, APSKOffer.Identity);
+  BytesAppend(LIdentityEntry, APSKOffer.Identity);
   AppendUInt32(LIdentityEntry, APSKOffer.ObfuscatedTicketAge);
 
   SetLength(LIdentities, 0);
   AppendUInt16(LIdentities, Word(Length(LIdentityEntry)));
-  AppendBytes(LIdentities, LIdentityEntry);
+  BytesAppend(LIdentities, LIdentityEntry);
 
   SetLength(LBinders, 0);
   AppendByte(LBinders, Byte(Length(ABinder)));
-  AppendBytes(LBinders, ABinder);
+  BytesAppend(LBinders, ABinder);
   LData := nil;
   SetLength(LData, 0);
   AppendUInt16(LData, Word(Length(LBinders)));
-  AppendBytes(LData, LBinders);
+  BytesAppend(LData, LBinders);
 
   Result := nil;
-  AppendBytes(Result, LIdentities);
-  AppendBytes(Result, LData);
+  BytesAppend(Result, LIdentities);
+  BytesAppend(Result, LData);
 
   Result := BuildExtensionHeader(TLS_EXTENSION_PRE_SHARED_KEY, Result);
 end;
@@ -455,6 +473,8 @@ var
   LExtensions: TBytes;
   LExt: TBytes;
   LBodyLen: Integer;
+  LExtBuilder: IBytesBuilder;
+  LBodyBuilder: IBytesBuilder;
 begin
   LRandom := GenerateSecureRandomBytes(32);
   LSessionId := GenerateSecureRandomBytes(32);
@@ -466,63 +486,67 @@ begin
   AppendByte(LCompressionMethods, 1);
   AppendByte(LCompressionMethods, 0);
 
-  SetLength(LExtensions, 0);
+  // perf: use IBytesBuilder to avoid O(n²) BytesAppend realloc in extension loop;
+  // single Grow preallocation and one ToBytes copy. See BytesBuilder.Grow/ToBytes.
+  LExtBuilder := CreateBytesBuilder(512);
 
   // Extension order matches common browser fingerprints for CDN compatibility
   LExt := BuildExtensionServerName(AServerName);
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   // extended_master_secret (RFC 7627)
-  AppendUInt16(LExtensions, TLS_EXTENSION_EXTENDED_MASTER_SECRET);
-  AppendUInt16(LExtensions, 0);
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_EXTENDED_MASTER_SECRET);
+  LExtBuilder.AppendUInt16BE(0);
 
   // renegotiation_info: empty (RFC 5746)
-  AppendUInt16(LExtensions, TLS_EXTENSION_RENEGOTIATION_INFO);
-  AppendUInt16(LExtensions, 1);
-  AppendByte(LExtensions, 0);
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_RENEGOTIATION_INFO);
+  LExtBuilder.AppendUInt16BE(1);
+  LExtBuilder.AppendByte(0);
 
   LExt := BuildExtensionSupportedGroups;
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   // ec_point_formats: uncompressed only
-  AppendUInt16(LExtensions, TLS_EXTENSION_EC_POINT_FORMATS);
-  AppendUInt16(LExtensions, 2);
-  AppendByte(LExtensions, 1);
-  AppendByte(LExtensions, 0);
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_EC_POINT_FORMATS);
+  LExtBuilder.AppendUInt16BE(2);
+  LExtBuilder.AppendByte(1);
+  LExtBuilder.AppendByte(0);
 
   // session_ticket (empty = willing to receive)
   LExt := BuildExtensionSessionTicket;
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionALPN(AALPNProtocols);
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   if AIncludeStatusRequest then
   begin
     LExt := BuildExtensionStatusRequest;
-    AppendBytes(LExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
 
   if AIncludeSignedCertificateTimestamp then
   begin
     LExt := BuildExtensionSignedCertificateTimestamp;
-    AppendBytes(LExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
 
   LExt := BuildExtensionSignatureAlgorithms;
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionRecordSizeLimit(TLS13_RECORD_SIZE_LIMIT_DEFAULT);
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionSupportedVersions;
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionPSKKeyExchangeModes;
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
 
   LExt := BuildExtensionKeyShare(AKeyShare);
-  AppendBytes(LExtensions, LExt);
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
+
+  LExtensions := LExtBuilder.ToBytes;
 
   // Calculate total ClientHello size to determine padding need
   // header(4) + version(2) + random(32) + session_id_len(1) + session_id(32) +
@@ -531,19 +555,26 @@ begin
   if LBodyLen + 4 < 512 then
   begin
     LExt := BuildExtensionPadding(512, LBodyLen + 4);
-    AppendBytes(LExtensions, LExt);
+    if Length(LExt) > 0 then
+    begin
+      // re-append padding via builder to keep single allocation path
+      LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
+      LExtensions := LExtBuilder.ToBytes;
+    end;
   end;
 
-  Result := nil;
-  AppendUInt16(Result, TLS_LEGACY_VERSION);
-  AppendBytes(Result, LRandom);
-  AppendByte(Result, Byte(Length(LSessionId)));
-  AppendBytes(Result, LSessionId);
-  AppendUInt16(Result, Word(Length(LCipherSuites)));
-  AppendBytes(Result, LCipherSuites);
-  AppendBytes(Result, LCompressionMethods);
-  AppendUInt16(Result, Word(Length(LExtensions)));
-  AppendBytes(Result, LExtensions);
+  // perf: final body also via builder (preallocated) instead of repeated BytesAppend O(n²)
+  LBodyBuilder := CreateBytesBuilder(LBodyLen + 32);
+  LBodyBuilder.AppendUInt16BE(TLS_LEGACY_VERSION);
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LRandom));
+  LBodyBuilder.AppendByte(Byte(Length(LSessionId)));
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LSessionId));
+  LBodyBuilder.AppendUInt16BE(Word(Length(LCipherSuites)));
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LCipherSuites));
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LCompressionMethods));
+  LBodyBuilder.AppendUInt16BE(Word(Length(LExtensions)));
+  LBodyBuilder.AppendSpan(TByteSpan.FromBytes(LExtensions));
+  Result := LBodyBuilder.ToBytes;
 end;
 
 function BuildTLS13ClientHelloBodyWithPSKCore(
@@ -565,6 +596,9 @@ var
   LZeroBinder: TBytes;
   LPartialPSKExtension: TBytes;
   LFinalPSKExtension: TBytes;
+  LExtBuilder: IBytesBuilder;
+  LPartialBuilder: IBytesBuilder;
+  LFinalBuilder: IBytesBuilder;
 begin
   SetLength(LCipherSuites, 0);
   AppendDefaultTLS13CipherSuites(LCipherSuites);
@@ -573,78 +607,59 @@ begin
   AppendByte(LCompressionMethods, 1);
   AppendByte(LCompressionMethods, 0);
 
-  SetLength(LBaseExtensions, 0);
-
+  // perf: use IBytesBuilder to avoid O(n²) BytesAppend realloc in extension loop;
+  // single Grow preallocation and one ToBytes copy. See BytesBuilder.Grow/ToBytes.
+  LExtBuilder := CreateBytesBuilder(512);
   LExt := BuildExtensionServerName(AServerName);
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   // extended_master_secret (RFC 7627)
-  AppendUInt16(LBaseExtensions, TLS_EXTENSION_EXTENDED_MASTER_SECRET);
-  AppendUInt16(LBaseExtensions, 0);
-
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_EXTENDED_MASTER_SECRET);
+  LExtBuilder.AppendUInt16BE(0);
   // renegotiation_info: empty (RFC 5746)
-  AppendUInt16(LBaseExtensions, TLS_EXTENSION_RENEGOTIATION_INFO);
-  AppendUInt16(LBaseExtensions, 1);
-  AppendByte(LBaseExtensions, 0);
-
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_RENEGOTIATION_INFO);
+  LExtBuilder.AppendUInt16BE(1);
+  LExtBuilder.AppendByte(0);
   LExt := BuildExtensionSupportedGroups;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   // ec_point_formats: uncompressed only
-  AppendUInt16(LBaseExtensions, TLS_EXTENSION_EC_POINT_FORMATS);
-  AppendUInt16(LBaseExtensions, 2);
-  AppendByte(LBaseExtensions, 1);
-  AppendByte(LBaseExtensions, 0);
-
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_EC_POINT_FORMATS);
+  LExtBuilder.AppendUInt16BE(2);
+  LExtBuilder.AppendByte(1);
+  LExtBuilder.AppendByte(0);
   // session_ticket
   LExt := BuildExtensionSessionTicket;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionALPN(AALPNProtocols);
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   if AIncludeStatusRequest then
   begin
     LExt := BuildExtensionStatusRequest;
-    AppendBytes(LBaseExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
-
   if AIncludeSignedCertificateTimestamp then
   begin
     LExt := BuildExtensionSignedCertificateTimestamp;
-    AppendBytes(LBaseExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
-
   LExt := BuildExtensionSignatureAlgorithms;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionRecordSizeLimit(TLS13_RECORD_SIZE_LIMIT_DEFAULT);
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionSupportedVersions;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionPSKKeyExchangeModes;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionKeyShare(AKeyShare);
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   if APSKOffer.Valid and APSKOffer.AllowEarlyData then
   begin
     LExt := BuildExtensionEarlyData;
-    AppendBytes(LBaseExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
+  LBaseExtensions := LExtBuilder.ToBytes;
 
-  SetLength(APartialBody, 0);
-  AppendUInt16(APartialBody, TLS_LEGACY_VERSION);
-  AppendBytes(APartialBody, ARandom);
-  AppendByte(APartialBody, Byte(Length(ASessionId)));
-  AppendBytes(APartialBody, ASessionId);
-  AppendUInt16(APartialBody, Word(Length(LCipherSuites)));
-  AppendBytes(APartialBody, LCipherSuites);
-  AppendBytes(APartialBody, LCompressionMethods);
-
+  // perf: partial/final body also via builder (preallocated) instead of repeated BytesAppend O(n²);
+  // zero-copy WrittenSpan via ToBytes single allocation. IBytesBuilder is refcounted interface, no manual free needed.
   if APSKOffer.Valid then
   begin
     SetLength(LZeroBinder, Length(APSKOffer.Binder));
@@ -653,26 +668,45 @@ begin
     LPartialPSKExtension := BuildExtensionPreSharedKey(APSKOffer, LZeroBinder);
     LFinalPSKExtension := BuildExtensionPreSharedKey(APSKOffer, APSKOffer.Binder);
 
-    AppendUInt16(APartialBody, Word(Length(LBaseExtensions) + Length(LPartialPSKExtension)));
-    AppendBytes(APartialBody, LBaseExtensions);
-    AppendBytes(APartialBody, LPartialPSKExtension);
+    LPartialBuilder := CreateBytesBuilder(2 + Length(ARandom) + 1 + Length(ASessionId) + 2 + Length(LCipherSuites) + Length(LCompressionMethods) + 2 + Length(LBaseExtensions) + Length(LPartialPSKExtension));
+    LPartialBuilder.AppendUInt16BE(TLS_LEGACY_VERSION);
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(ARandom));
+    LPartialBuilder.AppendByte(Byte(Length(ASessionId)));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(ASessionId));
+    LPartialBuilder.AppendUInt16BE(Word(Length(LCipherSuites)));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LCipherSuites));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LCompressionMethods));
+    LPartialBuilder.AppendUInt16BE(Word(Length(LBaseExtensions) + Length(LPartialPSKExtension)));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LBaseExtensions));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LPartialPSKExtension));
+    APartialBody := LPartialBuilder.ToBytes;
 
-    Result := nil;
-    AppendUInt16(Result, TLS_LEGACY_VERSION);
-    AppendBytes(Result, ARandom);
-    AppendByte(Result, Byte(Length(ASessionId)));
-    AppendBytes(Result, ASessionId);
-    AppendUInt16(Result, Word(Length(LCipherSuites)));
-    AppendBytes(Result, LCipherSuites);
-    AppendBytes(Result, LCompressionMethods);
-    AppendUInt16(Result, Word(Length(LBaseExtensions) + Length(LFinalPSKExtension)));
-    AppendBytes(Result, LBaseExtensions);
-    AppendBytes(Result, LFinalPSKExtension);
+    LFinalBuilder := CreateBytesBuilder(LPartialBuilder.Length + (Length(LFinalPSKExtension) - Length(LPartialPSKExtension)) + 8);
+    LFinalBuilder.AppendUInt16BE(TLS_LEGACY_VERSION);
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(ARandom));
+    LFinalBuilder.AppendByte(Byte(Length(ASessionId)));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(ASessionId));
+    LFinalBuilder.AppendUInt16BE(Word(Length(LCipherSuites)));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(LCipherSuites));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(LCompressionMethods));
+    LFinalBuilder.AppendUInt16BE(Word(Length(LBaseExtensions) + Length(LFinalPSKExtension)));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(LBaseExtensions));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(LFinalPSKExtension));
+    Result := LFinalBuilder.ToBytes;
     Exit;
   end;
 
-  AppendUInt16(APartialBody, Word(Length(LBaseExtensions)));
-  AppendBytes(APartialBody, LBaseExtensions);
+  LPartialBuilder := CreateBytesBuilder(2 + Length(ARandom) + 1 + Length(ASessionId) + 2 + Length(LCipherSuites) + Length(LCompressionMethods) + 2 + Length(LBaseExtensions));
+  LPartialBuilder.AppendUInt16BE(TLS_LEGACY_VERSION);
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(ARandom));
+  LPartialBuilder.AppendByte(Byte(Length(ASessionId)));
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(ASessionId));
+  LPartialBuilder.AppendUInt16BE(Word(Length(LCipherSuites)));
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LCipherSuites));
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LCompressionMethods));
+  LPartialBuilder.AppendUInt16BE(Word(Length(LBaseExtensions)));
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LBaseExtensions));
+  APartialBody := LPartialBuilder.ToBytes;
   Result := Copy(APartialBody);
 end;
 
@@ -725,7 +759,7 @@ begin
   Result := nil;
   AppendByte(Result, TLS_HANDSHAKE_TYPE_CLIENT_HELLO);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13ClientHelloRecord(
@@ -774,7 +808,7 @@ begin
   SetLength(APartialHandshake, 0);
   AppendByte(APartialHandshake, TLS_HANDSHAKE_TYPE_CLIENT_HELLO);
   AppendUInt24(APartialHandshake, Length(LPartialBody));
-  AppendBytes(APartialHandshake, LPartialBody);
+  BytesAppend(APartialHandshake, LPartialBody);
 
   { RFC 8446 Section 4.2.11.2: truncate partial handshake to exclude binders
     (binders_length field + binder entries). OpenSSL hashes up to but NOT
@@ -785,7 +819,7 @@ begin
   Result := nil;
   AppendByte(Result, TLS_HANDSHAKE_TYPE_CLIENT_HELLO);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13ClientHelloHandshakeWithComputedPSKBinder(
@@ -834,7 +868,7 @@ begin
   SetLength(APartialHandshake, 0);
   AppendByte(APartialHandshake, TLS_HANDSHAKE_TYPE_CLIENT_HELLO);
   AppendUInt24(APartialHandshake, Length(LPartialBody));
-  AppendBytes(APartialHandshake, LPartialBody);
+  BytesAppend(APartialHandshake, LPartialBody);
 
 
   { RFC 8446 Section 4.2.11.2: truncate partial handshake to exclude binders
@@ -861,7 +895,7 @@ begin
   Result := nil;
   AppendByte(Result, TLS_HANDSHAKE_TYPE_CLIENT_HELLO);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13ClientHelloRecordWithPSK(
@@ -895,7 +929,8 @@ function BuildTLS13ClientHelloBodyWithCiphers(
   const AKeyShare: TBytes;
   const ACipherSuites: TTLS13CipherSuiteList;
   AIncludeStatusRequest: Boolean;
-  AIncludeSignedCertificateTimestamp: Boolean
+  AIncludeSignedCertificateTimestamp: Boolean;
+  AQuic13Only: Boolean
 ): TBytes;
 var
   LRandom, LSessionId: TBytes;
@@ -921,7 +956,7 @@ begin
   SetLength(LExtensions, 0);
 
   LExt := BuildExtensionServerName(AServerName);
-  AppendBytes(LExtensions, LExt);
+  BytesAppend(LExtensions, LExt);
 
   // extended_master_secret (RFC 7627)
   AppendUInt16(LExtensions, TLS_EXTENSION_EXTENDED_MASTER_SECRET);
@@ -933,7 +968,7 @@ begin
   AppendByte(LExtensions, 0);
 
   LExt := BuildExtensionSupportedGroups;
-  AppendBytes(LExtensions, LExt);
+  BytesAppend(LExtensions, LExt);
 
   // ec_point_formats: uncompressed only
   AppendUInt16(LExtensions, TLS_EXTENSION_EC_POINT_FORMATS);
@@ -943,55 +978,58 @@ begin
 
   // session_ticket (empty = willing to receive)
   LExt := BuildExtensionSessionTicket;
-  AppendBytes(LExtensions, LExt);
+  BytesAppend(LExtensions, LExt);
 
   LExt := BuildExtensionALPN(AALPNProtocols);
-  AppendBytes(LExtensions, LExt);
+  BytesAppend(LExtensions, LExt);
 
   if AIncludeStatusRequest then
   begin
     LExt := BuildExtensionStatusRequest;
-    AppendBytes(LExtensions, LExt);
+    BytesAppend(LExtensions, LExt);
   end;
 
   if AIncludeSignedCertificateTimestamp then
   begin
     LExt := BuildExtensionSignedCertificateTimestamp;
-    AppendBytes(LExtensions, LExt);
+    BytesAppend(LExtensions, LExt);
   end;
 
   LExt := BuildExtensionSignatureAlgorithms;
-  AppendBytes(LExtensions, LExt);
+  BytesAppend(LExtensions, LExt);
 
   LExt := BuildExtensionRecordSizeLimit(TLS13_RECORD_SIZE_LIMIT_DEFAULT);
-  AppendBytes(LExtensions, LExt);
+  BytesAppend(LExtensions, LExt);
 
-  LExt := BuildExtensionSupportedVersions;
-  AppendBytes(LExtensions, LExt);
+  if AQuic13Only then
+    LExt := BuildExtensionSupportedVersionsQuic
+  else
+    LExt := BuildExtensionSupportedVersions;
+  BytesAppend(LExtensions, LExt);
 
   LExt := BuildExtensionPSKKeyExchangeModes;
-  AppendBytes(LExtensions, LExt);
+  BytesAppend(LExtensions, LExt);
 
   LExt := BuildExtensionKeyShare(AKeyShare);
-  AppendBytes(LExtensions, LExt);
+  BytesAppend(LExtensions, LExt);
 
   LBodyLen := 2 + 32 + 1 + 32 + 2 + Length(LCipherSuites) + Length(LCompressionMethods) + 2 + Length(LExtensions);
   if LBodyLen + 4 < 512 then
   begin
     LExt := BuildExtensionPadding(512, LBodyLen + 4);
-    AppendBytes(LExtensions, LExt);
+    BytesAppend(LExtensions, LExt);
   end;
 
   Result := nil;
   AppendUInt16(Result, TLS_LEGACY_VERSION);
-  AppendBytes(Result, LRandom);
+  BytesAppend(Result, LRandom);
   AppendByte(Result, Byte(Length(LSessionId)));
-  AppendBytes(Result, LSessionId);
+  BytesAppend(Result, LSessionId);
   AppendUInt16(Result, Word(Length(LCipherSuites)));
-  AppendBytes(Result, LCipherSuites);
-  AppendBytes(Result, LCompressionMethods);
+  BytesAppend(Result, LCipherSuites);
+  BytesAppend(Result, LCompressionMethods);
   AppendUInt16(Result, Word(Length(LExtensions)));
-  AppendBytes(Result, LExtensions);
+  BytesAppend(Result, LExtensions);
 end;
 
 function BuildTLS13ClientHelloHandshakeWithCiphers(
@@ -1000,7 +1038,8 @@ function BuildTLS13ClientHelloHandshakeWithCiphers(
   const AKeyShare: TBytes;
   const ACipherSuites: TTLS13CipherSuiteList;
   AIncludeStatusRequest: Boolean;
-  AIncludeSignedCertificateTimestamp: Boolean
+  AIncludeSignedCertificateTimestamp: Boolean;
+  AQuic13Only: Boolean
 ): TBytes;
 var
   LBody: TBytes;
@@ -1011,13 +1050,14 @@ begin
     AKeyShare,
     ACipherSuites,
     AIncludeStatusRequest,
-    AIncludeSignedCertificateTimestamp
+    AIncludeSignedCertificateTimestamp,
+    AQuic13Only
   );
 
   Result := nil;
   AppendByte(Result, TLS_HANDSHAKE_TYPE_CLIENT_HELLO);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13ClientHelloBodyWithPSKCoreAndCiphers(
@@ -1040,6 +1080,9 @@ var
   LZeroBinder: TBytes;
   LPartialPSKExtension: TBytes;
   LFinalPSKExtension: TBytes;
+  LExtBuilder: IBytesBuilder;
+  LPartialBuilder: IBytesBuilder;
+  LFinalBuilder: IBytesBuilder;
 begin
   SetLength(LCipherSuites, 0);
   if Length(ACipherSuites) > 0 then
@@ -1051,78 +1094,55 @@ begin
   AppendByte(LCompressionMethods, 1);
   AppendByte(LCompressionMethods, 0);
 
-  SetLength(LBaseExtensions, 0);
-
+  // perf: use IBytesBuilder to avoid O(n²) BytesAppend realloc in extension loop;
+  // single Grow preallocation and one ToBytes copy. See BytesBuilder.Grow/ToBytes.
+  LExtBuilder := CreateBytesBuilder(512);
   LExt := BuildExtensionServerName(AServerName);
-  AppendBytes(LBaseExtensions, LExt);
-
-  // extended_master_secret (RFC 7627)
-  AppendUInt16(LBaseExtensions, TLS_EXTENSION_EXTENDED_MASTER_SECRET);
-  AppendUInt16(LBaseExtensions, 0);
-
-  // renegotiation_info: empty (RFC 5746)
-  AppendUInt16(LBaseExtensions, TLS_EXTENSION_RENEGOTIATION_INFO);
-  AppendUInt16(LBaseExtensions, 1);
-  AppendByte(LBaseExtensions, 0);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_EXTENDED_MASTER_SECRET);
+  LExtBuilder.AppendUInt16BE(0);
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_RENEGOTIATION_INFO);
+  LExtBuilder.AppendUInt16BE(1);
+  LExtBuilder.AppendByte(0);
   LExt := BuildExtensionSupportedGroups;
-  AppendBytes(LBaseExtensions, LExt);
-
-  // ec_point_formats: uncompressed only
-  AppendUInt16(LBaseExtensions, TLS_EXTENSION_EC_POINT_FORMATS);
-  AppendUInt16(LBaseExtensions, 2);
-  AppendByte(LBaseExtensions, 1);
-  AppendByte(LBaseExtensions, 0);
-
-  // session_ticket
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
+  LExtBuilder.AppendUInt16BE(TLS_EXTENSION_EC_POINT_FORMATS);
+  LExtBuilder.AppendUInt16BE(2);
+  LExtBuilder.AppendByte(1);
+  LExtBuilder.AppendByte(0);
   LExt := BuildExtensionSessionTicket;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionALPN(AALPNProtocols);
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   if AIncludeStatusRequest then
   begin
     LExt := BuildExtensionStatusRequest;
-    AppendBytes(LBaseExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
-
   if AIncludeSignedCertificateTimestamp then
   begin
     LExt := BuildExtensionSignedCertificateTimestamp;
-    AppendBytes(LBaseExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
-
   LExt := BuildExtensionSignatureAlgorithms;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionRecordSizeLimit(TLS13_RECORD_SIZE_LIMIT_DEFAULT);
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionSupportedVersions;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionPSKKeyExchangeModes;
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   LExt := BuildExtensionKeyShare(AKeyShare);
-  AppendBytes(LBaseExtensions, LExt);
-
+  if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   if APSKOffer.Valid and APSKOffer.AllowEarlyData then
   begin
     LExt := BuildExtensionEarlyData;
-    AppendBytes(LBaseExtensions, LExt);
+    if Length(LExt) > 0 then LExtBuilder.AppendSpan(TByteSpan.FromBytes(LExt));
   end;
+  LBaseExtensions := LExtBuilder.ToBytes;
 
-  SetLength(APartialBody, 0);
-  AppendUInt16(APartialBody, TLS_LEGACY_VERSION);
-  AppendBytes(APartialBody, ARandom);
-  AppendByte(APartialBody, Byte(Length(ASessionId)));
-  AppendBytes(APartialBody, ASessionId);
-  AppendUInt16(APartialBody, Word(Length(LCipherSuites)));
-  AppendBytes(APartialBody, LCipherSuites);
-  AppendBytes(APartialBody, LCompressionMethods);
-
+  // perf: partial/final body also via builder (preallocated) instead of repeated BytesAppend O(n²);
+  // zero-copy WrittenSpan via ToBytes single allocation. IBytesBuilder is refcounted, no manual free.
   if APSKOffer.Valid then
   begin
     SetLength(LZeroBinder, Length(APSKOffer.Binder));
@@ -1131,26 +1151,45 @@ begin
     LPartialPSKExtension := BuildExtensionPreSharedKey(APSKOffer, LZeroBinder);
     LFinalPSKExtension := BuildExtensionPreSharedKey(APSKOffer, APSKOffer.Binder);
 
-    AppendUInt16(APartialBody, Word(Length(LBaseExtensions) + Length(LPartialPSKExtension)));
-    AppendBytes(APartialBody, LBaseExtensions);
-    AppendBytes(APartialBody, LPartialPSKExtension);
+    LPartialBuilder := CreateBytesBuilder(2 + Length(ARandom) + 1 + Length(ASessionId) + 2 + Length(LCipherSuites) + Length(LCompressionMethods) + 2 + Length(LBaseExtensions) + Length(LPartialPSKExtension));
+    LPartialBuilder.AppendUInt16BE(TLS_LEGACY_VERSION);
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(ARandom));
+    LPartialBuilder.AppendByte(Byte(Length(ASessionId)));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(ASessionId));
+    LPartialBuilder.AppendUInt16BE(Word(Length(LCipherSuites)));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LCipherSuites));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LCompressionMethods));
+    LPartialBuilder.AppendUInt16BE(Word(Length(LBaseExtensions) + Length(LPartialPSKExtension)));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LBaseExtensions));
+    LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LPartialPSKExtension));
+    APartialBody := LPartialBuilder.ToBytes;
 
-    Result := nil;
-    AppendUInt16(Result, TLS_LEGACY_VERSION);
-    AppendBytes(Result, ARandom);
-    AppendByte(Result, Byte(Length(ASessionId)));
-    AppendBytes(Result, ASessionId);
-    AppendUInt16(Result, Word(Length(LCipherSuites)));
-    AppendBytes(Result, LCipherSuites);
-    AppendBytes(Result, LCompressionMethods);
-    AppendUInt16(Result, Word(Length(LBaseExtensions) + Length(LFinalPSKExtension)));
-    AppendBytes(Result, LBaseExtensions);
-    AppendBytes(Result, LFinalPSKExtension);
+    LFinalBuilder := CreateBytesBuilder(LPartialBuilder.Length + (Length(LFinalPSKExtension) - Length(LPartialPSKExtension)) + 8);
+    LFinalBuilder.AppendUInt16BE(TLS_LEGACY_VERSION);
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(ARandom));
+    LFinalBuilder.AppendByte(Byte(Length(ASessionId)));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(ASessionId));
+    LFinalBuilder.AppendUInt16BE(Word(Length(LCipherSuites)));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(LCipherSuites));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(LCompressionMethods));
+    LFinalBuilder.AppendUInt16BE(Word(Length(LBaseExtensions) + Length(LFinalPSKExtension)));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(LBaseExtensions));
+    LFinalBuilder.AppendSpan(TByteSpan.FromBytes(LFinalPSKExtension));
+    Result := LFinalBuilder.ToBytes;
     Exit;
   end;
 
-  AppendUInt16(APartialBody, Word(Length(LBaseExtensions)));
-  AppendBytes(APartialBody, LBaseExtensions);
+  LPartialBuilder := CreateBytesBuilder(2 + Length(ARandom) + 1 + Length(ASessionId) + 2 + Length(LCipherSuites) + Length(LCompressionMethods) + 2 + Length(LBaseExtensions));
+  LPartialBuilder.AppendUInt16BE(TLS_LEGACY_VERSION);
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(ARandom));
+  LPartialBuilder.AppendByte(Byte(Length(ASessionId)));
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(ASessionId));
+  LPartialBuilder.AppendUInt16BE(Word(Length(LCipherSuites)));
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LCipherSuites));
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LCompressionMethods));
+  LPartialBuilder.AppendUInt16BE(Word(Length(LBaseExtensions)));
+  LPartialBuilder.AppendSpan(TByteSpan.FromBytes(LBaseExtensions));
+  APartialBody := LPartialBuilder.ToBytes;
   Result := Copy(APartialBody);
 end;
 
@@ -1202,7 +1241,7 @@ begin
   SetLength(APartialHandshake, 0);
   AppendByte(APartialHandshake, TLS_HANDSHAKE_TYPE_CLIENT_HELLO);
   AppendUInt24(APartialHandshake, Length(LPartialBody));
-  AppendBytes(APartialHandshake, LPartialBody);
+  BytesAppend(APartialHandshake, LPartialBody);
 
   { RFC 8446 Section 4.2.11.2: truncate partial handshake to exclude binders
     (binders_length field + binder entries). OpenSSL hashes up to but NOT
@@ -1230,7 +1269,7 @@ begin
   Result := nil;
   AppendByte(Result, TLS_HANDSHAKE_TYPE_CLIENT_HELLO);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function ParseTLS13CipherSuiteString(const ACipherSuiteStr: string): TTLS13CipherSuiteList;
@@ -1328,14 +1367,14 @@ begin
       SetLength(LNewExtEntry, 0);
       AppendUInt16(LNewExtEntry, ANewGroup);
       AppendUInt16(LNewExtEntry, Word(Length(ANewKeyShare)));
-      AppendBytes(LNewExtEntry, ANewKeyShare);
+      BytesAppend(LNewExtEntry, ANewKeyShare);
 
       // Full extension: type(2) + length(2) + client_shares_length(2) + entry
       SetLength(LNewExt, 0);
       AppendUInt16(LNewExt, $0033);
       AppendUInt16(LNewExt, Word(Length(LNewExtEntry) + 2));
       AppendUInt16(LNewExt, Word(Length(LNewExtEntry)));
-      AppendBytes(LNewExt, LNewExtEntry);
+      BytesAppend(LNewExt, LNewExtEntry);
 
       // Splice: before + new_ext + after
       LBefore := Copy(AOriginalCH, 0, LPos);

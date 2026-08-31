@@ -3,14 +3,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
 declare -a files=(
-  "tests/winssl/test_winssl_context_comprehensive.pas"
-  "tests/winssl/test_winssl_unit_comprehensive.pas"
-  "tests/unit/test_winssl_comprehensive.pas"
+  "core/tests/nextpas.core.tls/winssl/test_winssl_context_comprehensive.pas"
+  "core/tests/nextpas.core.tls/winssl/test_winssl_unit_comprehensive.pas"
+  "core/tests/nextpas.core.tls/unit/test_winssl_comprehensive.pas"
 )
 
 pattern='(Context|Ctx|LCtx|LContext)[0-9]*\.SetServerName\('

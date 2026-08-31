@@ -18,7 +18,6 @@ type
       支持 Add/Contains/Clear/Count。
       适用于快速成员检查、去重等场景。
       注意：可能存在假阳性；仅执行 Add/Contains 且不并发 Clear 时不会有假阴性。
- * @concurrency Thread-safe (see source for details).
   }
   generic TConcurrentBloomFilterImpl<T> = class
   private

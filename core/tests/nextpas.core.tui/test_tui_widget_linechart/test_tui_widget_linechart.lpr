@@ -261,6 +261,33 @@ begin
   Check(Length(LSeries.Data) = 0, 'Data length should be 0');
 end;
 
+{ PH33 P3：数据更新面——SetSeries 原地替换系列集（图例名变化可观测） }
+procedure TestLineChartSetSeries;
+var LC: ILineChart; LBuf: TBuffer; LArea: TRect; LAll: AnsiString; I: Integer;
+begin
+  LArea := TRect.Make(0, 0, 40, 10);
+  LC := TLineChart.New([TDataSeries.Create('old-name', [1.0, 2.0])]);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LC.SetSeries([TDataSeries.Create('fresh-series', [2.0, 1.0]),
+      TDataSeries.Create('second-one', [1.5, 2.5])]);
+    LC.Render(LArea, LBuf);
+    LAll := '';
+    for I := 0 to 9 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos('fresh-series', LAll) > 0, 'legend shows new series name');
+    Check(Pos('second-one', LAll) > 0, 'legend shows second series');
+    Check(Pos('old-name', LAll) = 0, 'old series gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestLineChartWithSeriesChaining;
+var LC: ILineChart;
+begin
+  LC := TLineChart.New([TDataSeries.Create('a', [1.0])])
+    .WithSeries([TDataSeries.Create('x', [2.0]), TDataSeries.Create('y', [3.0])]);
+  Check(LC <> nil, 'WithSeries chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.linechart');
   T.Test('TDataSeries.Create', @TestDataSeriesCreate);
@@ -282,5 +309,7 @@ begin
   T.Test('render small area', @TestLineChartRenderSmallArea);
   T.Test('multiple series', @TestLineChartMultipleSeries);
   T.Test('TDataSeries empty', @TestDataSeriesEmpty);
+  T.Test('SetSeries in-place update (PH33 P3)', @TestLineChartSetSeries);
+  T.Test('WithSeries chaining (PH33 P3)', @TestLineChartWithSeriesChaining);
   if not T.Run then Halt(1);
 end.

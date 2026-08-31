@@ -1,11 +1,13 @@
 unit nextpas.core.crypto.hmac;
 
 {$mode objfpc}{$H+}
+{$modeswitch functionreferences}
 
 { nextpas.core.crypto.hmac — HMAC 实现 (RFC 2104)
 
   基于 nextpas.core.hash.IHasher 接口。
   Sum 语义：不改变内部状态（可多次调用，继续 Write 后再 Sum 得到不同结果）。
+  NewHMAC(工厂, key) 允许嵌套 HMAC（底层 IHasher 可以是另一个 HMAC）。
 }
 
 interface
@@ -16,7 +18,11 @@ uses
   nextpas.core.hash.intf,
   nextpas.core.hash;
 
-function NewHMAC(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt): IHasher;
+type
+  THasherFactory = reference to function: IHasher;
+
+function NewHMAC(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt): IHasher; overload;
+function NewHMAC(AFactory: THasherFactory; const AKey; AKeyLen: SizeUInt): IHasher; overload;
 
 function HmacSHA256(const AKey, AData: TBytes): TSHA256Digest;
 function HmacSHA384(const AKey, AData: TBytes): TSHA384Digest;
@@ -29,16 +35,23 @@ function HMAC_SHA1(const AKey, AData: TBytes): TBytes;
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 type
   THMACHasher = class(TInterfacedObject, IHasher)
   private
     FAlgo: THashAlgorithm;
+    FFactory: THasherFactory;
     FInner: IHasher;
     FBlockSize: SizeUInt;
     FDigestSize: SizeUInt;
     FOPad: array[0..127] of Byte;
+    function MakeInner: IHasher;
+    procedure InitKey(const AKey; AKeyLen: SizeUInt);
   public
-    constructor Create(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt);
+    constructor Create(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt); overload;
+    constructor Create(AFactory: THasherFactory; const AKey; AKeyLen: SizeUInt); overload;
     destructor Destroy; override;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Sum(out ADst; const ASize: SizeUInt);
@@ -49,7 +62,15 @@ type
     function Clone: IHasher;
   end;
 
-constructor THMACHasher.Create(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt);
+function THMACHasher.MakeInner: IHasher;
+begin
+  if Assigned(FFactory) then
+    Result := FFactory()
+  else
+    Result := nextpas.core.hash.NewHasher(FAlgo);
+end;
+
+procedure THMACHasher.InitKey(const AKey; AKeyLen: SizeUInt);
 var
   LKeyBlock: array[0..127] of Byte;
   LIPad: array[0..127] of Byte;
@@ -58,16 +79,12 @@ var
   I: SizeUInt;
 begin
   inherited Create;
-  FAlgo := AAlgo;
-  FBlockSize := GetBlockSize(AAlgo);
-  FDigestSize := GetDigestSize(AAlgo);
-  FInner := nextpas.core.hash.NewHasher(AAlgo);
-
+  if FBlockSize > SizeOf(LKeyBlock) then
+    raise EArgumentError.Create('NewHMAC: block size exceeds 128');
   FillChar(LKeyBlock[0], SizeOf(LKeyBlock), 0);
-
   if AKeyLen > FBlockSize then
   begin
-    LTmpHash := nextpas.core.hash.NewHasher(AAlgo);
+    LTmpHash := MakeInner;
     LTmpHash.Write(AKey, AKeyLen);
     LTmpHash.Sum(LDigest[0], FDigestSize);
     Move(LDigest[0], LKeyBlock[0], FDigestSize);
@@ -75,18 +92,36 @@ begin
   end
   else if AKeyLen > 0 then
     Move(AKey, LKeyBlock[0], AKeyLen);
-
   for I := 0 to FBlockSize - 1 do
   begin
     LIPad[I] := LKeyBlock[I] xor $36;
     FOPad[I] := LKeyBlock[I] xor $5C;
   end;
-
-  FInner.Reset;
+  FInner := MakeInner;
   FInner.Write(LIPad[0], FBlockSize);
-
   FillChar(LKeyBlock[0], SizeOf(LKeyBlock), 0);
   FillChar(LIPad[0], SizeOf(LIPad), 0);
+end;
+
+constructor THMACHasher.Create(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt);
+begin
+  FAlgo := AAlgo;
+  FFactory := nil;
+  FBlockSize := GetBlockSize(AAlgo);
+  FDigestSize := GetDigestSize(AAlgo);
+  InitKey(AKey, AKeyLen);
+end;
+
+constructor THMACHasher.Create(AFactory: THasherFactory; const AKey; AKeyLen: SizeUInt);
+var
+  LProbe: IHasher;
+begin
+  FAlgo := haSHA256;
+  FFactory := AFactory;
+  LProbe := AFactory();
+  FBlockSize := LProbe.BlockSize;
+  FDigestSize := LProbe.DigestSize;
+  InitKey(AKey, AKeyLen);
 end;
 
 destructor THMACHasher.Destroy;
@@ -100,10 +135,14 @@ function THMACHasher.Clone: IHasher;
 var
   LClone: THMACHasher;
 begin
-  LClone := THMACHasher.Create(FAlgo, FOPad[0], 0);
+  if Assigned(FFactory) then
+    LClone := THMACHasher.Create(FFactory, FOPad[0], 0)
+  else
+    LClone := THMACHasher.Create(FAlgo, FOPad[0], 0);
   Move(FOPad[0], LClone.FOPad[0], SizeOf(FOPad));
   LClone.FBlockSize := FBlockSize;
   LClone.FDigestSize := FDigestSize;
+  LClone.FFactory := FFactory;
   LClone.FInner := FInner.Clone;
   Result := LClone;
 end;
@@ -120,7 +159,7 @@ var
 begin
   FInner.Sum(LInnerDigest[0], FDigestSize);
 
-  LOuter := nextpas.core.hash.NewHasher(FAlgo);
+  LOuter := MakeInner;
   LOuter.Write(FOPad[0], FBlockSize);
   LOuter.Write(LInnerDigest[0], FDigestSize);
   LOuter.Sum(ADst, ASize);
@@ -130,6 +169,7 @@ end;
 
 function THMACHasher.SumBytes: TBytes;
 begin
+  Result := nil;
   SetLength(Result, FDigestSize);
   Sum(Result[0], FDigestSize);
 end;
@@ -159,6 +199,11 @@ end;
 function NewHMAC(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt): IHasher;
 begin
   Result := THMACHasher.Create(AAlgo, AKey, AKeyLen);
+end;
+
+function NewHMAC(AFactory: THasherFactory; const AKey; AKeyLen: SizeUInt): IHasher;
+begin
+  Result := THMACHasher.Create(AFactory, AKey, AKeyLen);
 end;
 
 function HmacSHA256(const AKey, AData: TBytes): TSHA256Digest;
@@ -201,6 +246,7 @@ function HMAC_SHA256(const AKey, AData: TBytes): TBytes;
 var LD: TSHA256Digest;
 begin
   LD := HmacSHA256(AKey, AData);
+  Result := nil;
   SetLength(Result, SHA256_DIGEST_SIZE);
   Move(LD[0], Result[0], SHA256_DIGEST_SIZE);
 end;
@@ -209,6 +255,7 @@ function HMAC_SHA384(const AKey, AData: TBytes): TBytes;
 var LD: TSHA384Digest;
 begin
   LD := HmacSHA384(AKey, AData);
+  Result := nil;
   SetLength(Result, SHA384_DIGEST_SIZE);
   Move(LD[0], Result[0], SHA384_DIGEST_SIZE);
 end;
@@ -222,6 +269,7 @@ begin
     LH := NewHMAC(haSHA1, AKey, 0);
   if Length(AData) > 0 then
     LH.Write(AData[0], Length(AData));
+  Result := nil;
   SetLength(Result, SHA1_DIGEST_SIZE);
   LH.Sum(Result[0], SHA1_DIGEST_SIZE);
 end;

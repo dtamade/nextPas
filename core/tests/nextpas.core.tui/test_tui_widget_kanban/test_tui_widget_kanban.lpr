@@ -246,6 +246,34 @@ begin
   Check(LKanban <> nil, 'Should chain builder calls');
 end;
 
+{ PH33 P3：数据更新面——AddCard 向指定列追加卡片；列越界静默忽略 }
+procedure TestKanbanAddCard;
+var
+  LKanban: IKanban;
+  LState: TKanbanState;
+  LBuf: TBuffer;
+  LAll: AnsiString;
+  I: Integer;
+begin
+  LKanban := TKanban.New([MakeColumn('Todo', []), MakeColumn('Done', [])]);
+  LKanban.AddCard(0, TKanbanCard.Make('fresh-card'));
+  { 越界/负索引静默忽略（对齐 MarkRead 惯例），不得崩溃也不得入列 }
+  LKanban.AddCard(99, TKanbanCard.Make('dropped-x'));
+  LKanban.AddCard(-1, TKanbanCard.Make('dropped-y'));
+  LState := TKanbanState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 60, 10));
+  try
+    LKanban.RenderStateful(TRect.Make(0, 0, 60, 10), LBuf, LState);
+    LAll := '';
+    for I := 0 to 9 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos('fresh-card', LAll) > 0, 'added card visible');
+    Check(Pos('dropped-x', LAll) = 0, 'out-of-range col ignored');
+    Check(Pos('dropped-y', LAll) = 0, 'negative col ignored');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('tui_widget_kanban');
   T.Test('TKanbanCard.Make', @TestKanbanCardMake);
@@ -267,5 +295,6 @@ begin
   T.Test('TKanban render small area', @TestKanbanRenderSmallArea);
   T.Test('TKanbanState.MoveDown boundary', @TestKanbanStateMoveDownBoundary);
   T.Test('TKanbanState.MoveUp boundary', @TestKanbanStateMoveUpBoundary);
+  T.Test('AddCard append + out-of-range ignore (PH33 P3)', @TestKanbanAddCard);
   if not T.Run then Halt(1);
 end.

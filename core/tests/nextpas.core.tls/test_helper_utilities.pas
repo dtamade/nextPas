@@ -8,8 +8,8 @@ uses
   nextpas.core.tls.factory,
 
   nextpas.core.tls.base,
-  fafafa.ssl;
 
+  nextpas.core.tls.openssl.backed;
 type
   TSkipCategory = (
     scDependency,

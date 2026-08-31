@@ -661,6 +661,7 @@ function TASN1Node.AsBitString: TBytes;
 begin
   if Length(FRawData) < 1 then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;
@@ -883,6 +884,7 @@ begin
   if FPosition + ACount > FDataLength then
     raise EASN1ParseException.Create('Unexpected end of data');
 
+  Result := nil;
   SetLength(Result, ACount);
   if ACount > 0 then
   begin
@@ -1063,8 +1065,9 @@ begin
       Inc(NumBytes);
     end;
 
-    LenBytes[0] := $80 or NumBytes;
-    FStream.Write(LenBytes[0], SizeOf(Byte));
+    // 标记字节存放在载荷字节之后，避免覆写最低有效长度字节
+    LenBytes[NumBytes] := Byte($80 or NumBytes);
+    FStream.Write(LenBytes[NumBytes], SizeOf(Byte));
     for I := NumBytes - 1 downto 0 do
       FStream.Write(LenBytes[I], SizeOf(Byte));
   end;
@@ -1436,6 +1439,7 @@ end;
 
 function TASN1Writer.GetData: TBytes;
 begin
+  Result := nil;
   SetLength(Result, FStream.Size);
   if FStream.Size > 0 then
   begin
@@ -1548,6 +1552,7 @@ begin
 
   if Length(Parts) < 2 then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;

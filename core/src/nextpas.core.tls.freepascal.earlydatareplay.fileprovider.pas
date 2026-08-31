@@ -330,26 +330,33 @@ begin
   try
     LStream := OpenReadFileStream(LReadableFileName);
     try
-      LStream.Read(LVersion, SizeOf(Integer));
+      // IStream.Read 在 EOF 短读返回而不抛异常：返回字节数必须逐一校验，
+      // 否则被截断的存储会带着垃圾字段通过 Position=Size 检查
+      if LStream.Read(LVersion, SizeOf(Integer)) <> SizeOf(Integer) then
+        Exit;
       if LVersion <> FREEPASCAL_FILE_REPLAY_PROVIDER_VERSION then
         Exit;
 
-      LStream.Read(LCount, SizeOf(Integer));
+      if LStream.Read(LCount, SizeOf(Integer)) <> SizeOf(Integer) then
+        Exit;
       if (LCount < 0) or (LCount > MAX_REPLAY_PROVIDER_ENTRY_COUNT) then
         Exit;
 
       SetLength(AEntries, LCount);
       for I := 0 to LCount - 1 do
       begin
-        LStream.Read(LKeyLength, SizeOf(Integer));
+        if LStream.Read(LKeyLength, SizeOf(Integer)) <> SizeOf(Integer) then
+          Exit;
         if (LKeyLength < 0) or (LKeyLength > MAX_REPLAY_PROVIDER_KEY_LENGTH) then
           Exit;
 
         SetLength(AEntries[I].Key, LKeyLength);
         if LKeyLength > 0 then
-          LStream.Read(AEntries[I].Key[1], LKeyLength);
+          if LStream.Read(AEntries[I].Key[1], LKeyLength) <> SizeUInt(LKeyLength) then
+            Exit;
 
-        LStream.Read(AEntries[I].ExpiresAt, SizeOf(TDateTime));
+        if LStream.Read(AEntries[I].ExpiresAt, SizeOf(TDateTime)) <> SizeOf(TDateTime) then
+          Exit;
       end;
 
       if LStream.Position <> LStream.Size then

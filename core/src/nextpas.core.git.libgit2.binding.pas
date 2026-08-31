@@ -176,6 +176,11 @@ function git_config_open_default(out cfg: git_config): cint; cdecl;
 function git_config_get_string(out out_value: PChar; cfg: git_config; const name: PChar): cint; cdecl;
 function git_config_set_string(cfg: git_config; const name: PChar; const value: PChar): cint; cdecl;
 procedure git_config_free(cfg: git_config); cdecl;
+// Config iteration (k42: repo config entry enumeration; include-resolved merged view)
+function git_config_iterator_new(out iter: git_config_iterator; cfg: git_config): cint; cdecl;
+function git_config_next(out entry: Pgit_config_entry; iter: git_config_iterator): cint; cdecl;
+procedure git_config_entry_free(entry: Pgit_config_entry); cdecl;
+procedure git_config_iterator_free(iter: git_config_iterator); cdecl;
 
 // Option initialization functions (use Pointer to avoid cross-unit type coupling)
 function git_remote_init_callbacks(opts: Pointer; version: cuint): cint; cdecl;
@@ -221,11 +226,17 @@ procedure git_worktree_free(wt: git_worktree); cdecl;
 
 implementation
 
-uses nextpas.core.platform.dl;
+uses
+  nextpas.core.platform.dl,
+  nextpas.core.os.env;
 
 function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
 begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := ALib.Handle <> 0;
+  {$ELSE}
   Result := ALib.Handle <> nil;
+  {$ENDIF}
 end;
 
 function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
@@ -348,6 +359,10 @@ type
   TLibGit2_git_config_get_string = function(out out_value: PChar; cfg: git_config; const name: PChar): cint; cdecl;
   TLibGit2_git_config_set_string = function(cfg: git_config; const name: PChar; const value: PChar): cint; cdecl;
   TLibGit2_git_config_free = procedure(cfg: git_config); cdecl;
+  TLibGit2_git_config_iterator_new = function(out iter: git_config_iterator; cfg: git_config): cint; cdecl;
+  TLibGit2_git_config_next = function(out entry: Pgit_config_entry; iter: git_config_iterator): cint; cdecl;
+  TLibGit2_git_config_entry_free = procedure(entry: Pgit_config_entry); cdecl;
+  TLibGit2_git_config_iterator_free = procedure(iter: git_config_iterator); cdecl;
   TLibGit2_git_remote_init_callbacks = function(opts: Pointer; version: cuint): cint; cdecl;
   TLibGit2_git_fetch_options_init = function(opts: Pointer; version: cuint): cint; cdecl;
   TLibGit2_git_push_options_init = function(opts: Pointer; version: cuint): cint; cdecl;
@@ -493,6 +508,10 @@ function static_git_config_open_default(out cfg: git_config): cint; cdecl; exter
 function static_git_config_get_string(out out_value: PChar; cfg: git_config; const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_config_get_string';
 function static_git_config_set_string(cfg: git_config; const name: PChar; const value: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_config_set_string';
 procedure static_git_config_free(cfg: git_config); cdecl; external LIBGIT2_LIB name 'git_config_free';
+function static_git_config_iterator_new(out iter: git_config_iterator; cfg: git_config): cint; cdecl; external LIBGIT2_LIB name 'git_config_iterator_new';
+function static_git_config_next(out entry: Pgit_config_entry; iter: git_config_iterator): cint; cdecl; external LIBGIT2_LIB name 'git_config_next';
+procedure static_git_config_entry_free(entry: Pgit_config_entry); cdecl; external LIBGIT2_LIB name 'git_config_entry_free';
+procedure static_git_config_iterator_free(iter: git_config_iterator); cdecl; external LIBGIT2_LIB name 'git_config_iterator_free';
 function static_git_remote_init_callbacks(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_remote_init_callbacks';
 function static_git_fetch_options_init(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_fetch_options_init';
 function static_git_push_options_init(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_push_options_init';
@@ -1076,6 +1095,26 @@ begin
   static_git_config_free(cfg);
 end;
 
+function git_config_iterator_new(out iter: git_config_iterator; cfg: git_config): cint; cdecl;
+begin
+  Result := static_git_config_iterator_new(iter, cfg);
+end;
+
+function git_config_next(out entry: Pgit_config_entry; iter: git_config_iterator): cint; cdecl;
+begin
+  Result := static_git_config_next(entry, iter);
+end;
+
+procedure git_config_entry_free(entry: Pgit_config_entry); cdecl;
+begin
+  static_git_config_entry_free(entry);
+end;
+
+procedure git_config_iterator_free(iter: git_config_iterator); cdecl;
+begin
+  static_git_config_iterator_free(iter);
+end;
+
 function git_remote_init_callbacks(opts: Pointer; version: cuint): cint; cdecl;
 begin
   Result := static_git_remote_init_callbacks(opts, version);
@@ -1320,6 +1359,10 @@ var
   dyn_git_config_get_string: TLibGit2_git_config_get_string = nil;
   dyn_git_config_set_string: TLibGit2_git_config_set_string = nil;
   dyn_git_config_free: TLibGit2_git_config_free = nil;
+  dyn_git_config_iterator_new: TLibGit2_git_config_iterator_new = nil;
+  dyn_git_config_next: TLibGit2_git_config_next = nil;
+  dyn_git_config_entry_free: TLibGit2_git_config_entry_free = nil;
+  dyn_git_config_iterator_free: TLibGit2_git_config_iterator_free = nil;
   dyn_git_remote_init_callbacks: TLibGit2_git_remote_init_callbacks = nil;
   dyn_git_fetch_options_init: TLibGit2_git_fetch_options_init = nil;
   dyn_git_push_options_init: TLibGit2_git_push_options_init = nil;
@@ -1365,7 +1408,7 @@ begin
   else
     Result := '';
   {$ELSE}
-  Result := GetEnvironmentVariable(LName);
+  Result := nextpas.core.os.env.GetEnvironmentVariable(LName);
   {$ENDIF}
 end;
 
@@ -1477,6 +1520,10 @@ begin
   dyn_git_config_get_string := nil;
   dyn_git_config_set_string := nil;
   dyn_git_config_free := nil;
+  dyn_git_config_iterator_new := nil;
+  dyn_git_config_next := nil;
+  dyn_git_config_entry_free := nil;
+  dyn_git_config_iterator_free := nil;
   dyn_git_remote_init_callbacks := nil;
   dyn_git_fetch_options_init := nil;
   dyn_git_push_options_init := nil;
@@ -2366,6 +2413,34 @@ begin
   if not Assigned(dyn_git_config_free) then
     Pointer(dyn_git_config_free) := ResolveLibGit2Symbol('git_config_free');
   dyn_git_config_free(cfg);
+end;
+
+function git_config_iterator_new(out iter: git_config_iterator; cfg: git_config): cint; cdecl;
+begin
+  if not Assigned(dyn_git_config_iterator_new) then
+    Pointer(dyn_git_config_iterator_new) := ResolveLibGit2Symbol('git_config_iterator_new');
+  Result := dyn_git_config_iterator_new(iter, cfg);
+end;
+
+function git_config_next(out entry: Pgit_config_entry; iter: git_config_iterator): cint; cdecl;
+begin
+  if not Assigned(dyn_git_config_next) then
+    Pointer(dyn_git_config_next) := ResolveLibGit2Symbol('git_config_next');
+  Result := dyn_git_config_next(entry, iter);
+end;
+
+procedure git_config_entry_free(entry: Pgit_config_entry); cdecl;
+begin
+  if not Assigned(dyn_git_config_entry_free) then
+    Pointer(dyn_git_config_entry_free) := ResolveLibGit2Symbol('git_config_entry_free');
+  dyn_git_config_entry_free(entry);
+end;
+
+procedure git_config_iterator_free(iter: git_config_iterator); cdecl;
+begin
+  if not Assigned(dyn_git_config_iterator_free) then
+    Pointer(dyn_git_config_iterator_free) := ResolveLibGit2Symbol('git_config_iterator_free');
+  dyn_git_config_iterator_free(iter);
 end;
 
 function git_remote_init_callbacks(opts: Pointer; version: cuint): cint; cdecl;

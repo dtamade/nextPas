@@ -272,6 +272,39 @@ begin
   finally LBuffer.Free; end;
 end;
 
+{ PH33 P1：数据更新面——SetData 原地替换序列（旧 API 动态刷新须重建对象）；
+  序列反转后同区渲染输出应变化 }
+procedure TestSparklineSetData;
+var
+  LSparkline: ISparkline;
+  LBuf1, LBuf2: TBuffer;
+  LArea: TRect;
+begin
+  LArea := TRect.Make(0, 0, 12, 1);
+  LSparkline := TSparkline.New([1.0, 9.0]);
+  LBuf1 := TBuffer.CreateEmpty(LArea);
+  try
+    LSparkline.Render(LArea, LBuf1);
+    LSparkline.SetData([9.0, 1.0]);
+    LBuf2 := TBuffer.CreateEmpty(LArea);
+    try
+      LSparkline.Render(LArea, LBuf2);
+      Check(LBuf1.RowAsString(0) <> LBuf2.RowAsString(0),
+        'SetData replaces series in place (render output changes)');
+    finally LBuf2.Free; end;
+  finally LBuf1.Free; end;
+end;
+
+procedure TestSparklineWithDataChaining;
+var
+  LSparkline: ISparkline;
+begin
+  LSparkline := TSparkline.New([1.0])
+    .WithData([4.0, 5.0, 6.0])
+    .WithMax(10.0);
+  Check(LSparkline <> nil, 'WithData chains and returns interface');
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.sparkline');
@@ -292,5 +325,7 @@ begin
   T.Test('all zero data', @TestSparklineAllZeroData);
   T.Test('WithMax zero uses data', @TestSparklineWithMaxZeroUsesData);
   T.Test('width larger than data', @TestSparklineWidthLargerThanData);
+  T.Test('SetData in-place update (PH33 P1)', @TestSparklineSetData);
+  T.Test('WithData chaining (PH33 P1)', @TestSparklineWithDataChaining);
 if not T.Run then Halt(1);
 end.

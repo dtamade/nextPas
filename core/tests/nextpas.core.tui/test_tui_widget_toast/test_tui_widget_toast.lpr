@@ -212,6 +212,32 @@ begin
   end;
 end;
 
+{ PH33 P2：WithMaxVisible 配置生效 }
+procedure TestToastManagerWithMaxVisible;
+var
+  LManager: IToastManager;
+  I: Integer;
+begin
+  LManager := TToastManager.New.WithMaxVisible(3);
+  for I := 1 to 5 do
+    LManager.Push('Msg', tlInfo);
+  Check(LManager.Count = 5, 'Count = 5 pushes');
+  Check(LManager.Visible = 3, 'Visible capped at configured 3');
+end;
+
+{ PH33 P2：WithDuration 配置生效——1000ms 生命周期 }
+procedure TestToastManagerWithDuration;
+var
+  LManager: IToastManager;
+begin
+  LManager := TToastManager.New.WithDuration(1000);
+  LManager.Push('Short', tlInfo);
+  LManager.Tick(999);
+  Check(LManager.Count = 1, 'still alive at 999ms of configured 1000');
+  LManager.Tick(1);
+  Check(LManager.Count = 0, 'expired at configured 1000ms');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.toast');
   T.Test('TToastPosition enum', @TestToastPositionEnum);
@@ -229,6 +255,8 @@ begin
   T.Test('TToastManager.Tick exact boundary', @TestToastManagerTickExactBoundary);
   T.Test('TToastManager.Tick multiple partial', @TestToastManagerTickMultiplePartial);
   T.Test('TToastManager.Visible max cap', @TestToastManagerVisibleMax);
+  T.Test('TToastManager.WithMaxVisible (PH33 P2)', @TestToastManagerWithMaxVisible);
+  T.Test('TToastManager.WithDuration (PH33 P2)', @TestToastManagerWithDuration);
   T.Test('TToastManager.Render multiple', @TestToastManagerRenderMultiple);
   if not T.Run then Halt(1);
 end.

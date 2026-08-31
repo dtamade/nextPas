@@ -85,6 +85,11 @@ var
 type
   TTrackedRequestBody = class;
 
+  TChunkCallbackProbe = class
+  public
+    procedure Consume(const AData: PByte; ASize: SizeUInt);
+  end;
+
   PServerCtx = ^TServerCtx;
   TServerCtx = record
     Server: THttpServer;
@@ -115,6 +120,10 @@ type
     FSeenWwwAuthenticateHeader: string;
     FSeenCookieHeader: string;
     FSeenCookie2Header: string;
+    FSecondHasOptions: Boolean;
+    FSecondHasChunkCallback: Boolean;
+    FSecondSkipBodyBuffer: Boolean;
+    FSecondHasCancelToken: Boolean;
   public
     constructor Create; overload;
     constructor Create(const ATrackedBody: TTrackedRequestBody); overload;
@@ -141,6 +150,10 @@ type
     property SeenWwwAuthenticateHeader: string read FSeenWwwAuthenticateHeader;
     property SeenCookieHeader: string read FSeenCookieHeader;
     property SeenCookie2Header: string read FSeenCookie2Header;
+    property SecondHasOptions: Boolean read FSecondHasOptions;
+    property SecondHasChunkCallback: Boolean read FSecondHasChunkCallback;
+    property SecondSkipBodyBuffer: Boolean read FSecondSkipBodyBuffer;
+    property SecondHasCancelToken: Boolean read FSecondHasCancelToken;
   end;
 
   TNilResponseTransport = class(TInterfacedObject, IHttpTransport)
@@ -168,6 +181,7 @@ type
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
   end;
@@ -463,6 +477,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
@@ -1486,6 +1501,10 @@ begin
   inherited Create;
 end;
 
+procedure TChunkCallbackProbe.Consume(const AData: PByte; ASize: SizeUInt);
+begin
+end;
+
 constructor TRedirectCaptureTransport.Create(const ATrackedBody: TTrackedRequestBody);
 begin
   Create;
@@ -1499,6 +1518,7 @@ var
   LStatus: THttpStatus;
   LUrl: TUrl;
   LBody: string;
+  LReqOpts: IHttpRequestWithOptions;
 begin
   Inc(FCalls);
   LBody := ReadReaderStr(AReq.Body);
@@ -1520,6 +1540,15 @@ begin
   FOriginalBodyClosedBeforeFollowup := (FTrackedBody <> nil) and
     FTrackedBody.Closed;
   FSecondBody := LBody;
+  FSecondHasOptions := Supports(AReq, IHttpRequestWithOptions, LReqOpts);
+  if FSecondHasOptions then
+  begin
+    FSecondHasChunkCallback :=
+      Assigned(LReqOpts.RequestOptions.ResponseBodyChunk);
+    FSecondSkipBodyBuffer := LReqOpts.RequestOptions.SkipBodyBuffer;
+    FSecondHasCancelToken :=
+      LReqOpts.RequestOptions.EffectiveCancelToken <> nil;
+  end;
   LUrl := AReq.Url;
   FSeenMethod := AReq.Method;
   FSeenScheme := LUrl.Scheme;
@@ -1599,6 +1628,11 @@ end;
 function TNilHeadersRequest.GetContentLength: Int64;
 begin
   Result := 0;
+end;
+
+function TNilHeadersRequest.GetRemoteIp: string;
+begin
+  Result := GetRemoteAddr;
 end;
 
 function TNilHeadersRequest.GetRemoteAddr: string;
@@ -2371,6 +2405,11 @@ begin
 end;
 
 function TDownloadClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
 begin
   Result := Self;
 end;
@@ -4110,6 +4149,39 @@ begin
     'WithMaxRedirects(0) raises too many redirects');
 end;
 
+procedure TestRedirectErrorRedactsCredentials;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LMsg: string;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  LMsg := '';
+  try
+    LClient.WithMaxRedirects(0).Get(
+      'https://user:s3cret@sub.example.com:8443/clash?token=abcd1234#frag');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check(LCaught, 'too many redirects raises');
+  Check(Pos('too many redirects', LMsg) > 0, 'detail present');
+  Check(Pos('s3cret', LMsg) = 0, 'userinfo secret not in error');
+  Check(Pos('user:', LMsg) = 0, 'userinfo not in error');
+  Check(Pos('token=', LMsg) = 0, 'query not in error');
+  Check(Pos('#frag', LMsg) = 0, 'fragment not in error');
+  Check(Pos('/clash', LMsg) = 0, 'path not in error');
+  Check(Pos('https://sub.example.com:8443', LMsg) > 0, 'origin remains');
+end;
+
 procedure TestWithFollowRedirectsChain;
 var
   LTransport: TRedirectCaptureTransport;
@@ -4264,6 +4336,43 @@ begin
     'HttpEnsureSuccess non-2xx uses CreateOp with Op=ensure');
 end;
 
+procedure TestClientRedirectPreservesStreamingOptions;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LProbe: TChunkCallbackProbe;
+  LToken: IHttpCancelToken;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+  LProbe := TChunkCallbackProbe.Create;
+  LToken := NewHttpCancelToken;
+  try
+    LReq := THttpRequestBuilder.Create(hmGet, 'http://redirect.test/old')
+      .ResponseBodyChunk(@LProbe.Consume)
+      .SkipBodyBuffer
+      .CancelToken(LToken)
+      .Build;
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'streaming redirect reaches final response');
+    Check(LTransportObj.SecondHasOptions,
+      'redirect follow-up keeps request options interface');
+    Check(LTransportObj.SecondHasChunkCallback,
+      'redirect follow-up preserves response chunk callback');
+    Check(LTransportObj.SecondSkipBodyBuffer,
+      'redirect follow-up preserves SkipBodyBuffer');
+    Check(LTransportObj.SecondHasCancelToken,
+      'redirect follow-up preserves cancel token');
+  finally
+    LProbe.Free;
+  end;
+end;
+
 { HttpPostString/PutString/PatchString/DeleteString tests }
 
 { Main }
@@ -4346,6 +4455,8 @@ begin
     @TestWithFollowRedirectsFalse);
   T.Test('WithMaxRedirects(0) raises too many redirects',
     @TestWithMaxRedirectsZero);
+  T.Test('Redirect error redacts userinfo/query',
+    @TestRedirectErrorRedactsCredentials);
   T.Test('WithFollowRedirects chains with WithHeader',
     @TestWithFollowRedirectsChain);
   T.Test('WithFollowRedirects(false) overrides client default',
@@ -4354,5 +4465,7 @@ begin
     @TestStreamingBodyOwnershipOnRedirect);
   T.Test('Client redirect CreateOp source contract',
     @TestClientRedirectCreateOpSourceContract);
+  T.Test('Client redirect preserves streaming request options',
+    @TestClientRedirectPreservesStreamingOptions);
   if not T.Run then Halt(1);
 end.

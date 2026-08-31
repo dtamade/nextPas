@@ -126,9 +126,9 @@ ok "PathJoin2( calls≈$N_JOIN2  FsPathJoin(≈$N_FSPJOIN  PathJoin([≈$N_JOIN_
 {
   echo "# Path mix-use audit"
   echo
-  echo "**Generated**: $(date -u +%Y-%m-%dT%H:%MZ)  "
-  echo "**Script**: \`scripts/path-mixuse-audit.sh\`  "
-  echo "**Scope**: \`core/src/**/*.pas\`, \`compiler/**/*.pas\`  "
+  echo "**Generated**: $(date -u +%Y-%m-%dT%H:%MZ)"
+  echo "**Script**: \`scripts/path-mixuse-audit.sh\`"
+  echo "**Scope**: \`core/src/**/*.pas\`, \`compiler/**/*.pas\`"
   echo "**Semantics**: unchanged (PathDir facade vs FsPathDir Go)."
   echo
   echo "## Dual-track anchors (fail-closed)"

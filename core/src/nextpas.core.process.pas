@@ -59,6 +59,18 @@ function Command(const APath: string): ICommand; inline;
  *}
 function Run(const APath: string; const AArgs: array of string): TProcessOutput;
 {**
+ * @desc 以单条参数字符串执行外部程序并返回退出码
+ *       (SysUtils.ExecuteProcess 兼容;参数按空白拆分,双引号分组视为
+ *        一个参数,引号本身不进入参数值)
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AParams  空格分隔的命令行参数(可含 "..." 分组)
+ *
+ * @return 子进程退出码(启动失败返回平台错误码;详情看 TProcessOutput)
+ *}
+function ExecuteProcess(const APath, AParams: string): Integer;
+{**
  * @desc 在指定工作目录中同步执行子进程
  *
  * @params
@@ -308,6 +320,7 @@ function IsProcessAlive(APid: Int32): Boolean;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.os.env,
   nextpas.core.platform.args,
   nextpas.core.platform.process,
@@ -358,6 +371,50 @@ function Run(const APath: string; const AArgs: array of string): TProcessOutput;
 begin
   Result := TCommand.New(APath).Args(AArgs)
     .MaxOutput(cProcessDefaultMaxOutput).Output;
+end;
+
+{ 空白拆分 + 双引号分组(SysUtils.ExecuteProcess 参数串语义);引号不进参数值 }
+function SplitCommandLine(const S: string): TStringArray;
+var
+  I, J, Start, N: Integer;
+  InQ: Boolean;
+begin
+  Result := nil;
+  SetLength(Result, 0);
+  N := 0;
+  I := 1;
+  while I <= Length(S) do
+  begin
+    while (I <= Length(S)) and (S[I] in [' ', #9]) do
+      Inc(I);
+    if I > Length(S) then
+      Break;
+    Start := I;
+    InQ := False;
+    while I <= Length(S) do
+    begin
+      if S[I] = '"' then
+        InQ := not InQ
+      else if (not InQ) and (S[I] in [' ', #9]) then
+        Break;
+      Inc(I);
+    end;
+    Inc(N);
+    SetLength(Result, N);
+    Result[N - 1] := '';
+    for J := Start to I - 1 do
+      if S[J] <> '"' then
+        Result[N - 1] := Result[N - 1] + S[J];
+  end;
+end;
+
+function ExecuteProcess(const APath, AParams: string): Integer;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New(APath).Args(SplitCommandLine(AParams))
+    .MaxOutput(cProcessDefaultMaxOutput).Output;
+  Result := LOut.ExitCode;
 end;
 
 function RunIn(const APath: string; const AArgs: array of string;
@@ -504,29 +561,24 @@ begin
   LChild := TCommand.New(APath).Args(AArgs).Stdin(stPiped)
     .Stdout(stPiped).Stderr(stPiped)
     .MaxOutput(cProcessDefaultMaxOutput).Spawn;
-  LStdin := LChild.TakeStdin;
-  if (LStdin <> nil) and (Length(AStdin) > 0) then
-    LStdin.Write(AStdin[0], Length(AStdin));
-  LStdin := nil;
-  Result := LChild.WaitWithOutput;
+  try
+    LStdin := LChild.TakeStdin;
+    try
+      if (LStdin <> nil) and (Length(AStdin) > 0) then
+        LStdin.Write(AStdin[0], Length(AStdin));
+    finally
+      LStdin := nil;
+    end;
+    Result := LChild.WaitWithOutput;
+  finally
+    LChild := nil;
+  end;
 end;
 
 function CaptureWithInput(const APath: string; const AArgs: array of string;
   const AStdin: TBytes): string;
 begin
   Result := RunWithInput(APath, AArgs, AStdin).StdOut;
-end;
-
-function StringToBytes(const AStr: string): TBytes;
-var
-  LLen: Integer;
-begin
-  { SizeOf(Char) is 1 in {$H+} mode (AnsiString), but 2 in Delphi Unicode mode.
-    This defensive multiplication ensures correctness if the compiler mode changes. }
-  LLen := Length(AStr) * SizeOf(Char);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AStr[1], Result[0], LLen);
 end;
 
 function RunWithInputString(const APath: string; const AArgs: array of string;
@@ -562,11 +614,18 @@ begin
   LChild := TCommand.New(APath).Args(AArgs).Dir(ADir).Stdin(stPiped)
     .Stdout(stPiped).Stderr(stPiped)
     .MaxOutput(cProcessDefaultMaxOutput).Spawn;
-  LStdin := LChild.TakeStdin;
-  if (LStdin <> nil) and (Length(AStdin) > 0) then
-    LStdin.Write(AStdin[0], Length(AStdin));
-  LStdin := nil;
-  Result := LChild.WaitWithOutput;
+  try
+    LStdin := LChild.TakeStdin;
+    try
+      if (LStdin <> nil) and (Length(AStdin) > 0) then
+        LStdin.Write(AStdin[0], Length(AStdin));
+    finally
+      LStdin := nil;
+    end;
+    Result := LChild.WaitWithOutput;
+  finally
+    LChild := nil;
+  end;
 end;
 
 function RunInWithInputString(const APath: string; const AArgs: array of string;

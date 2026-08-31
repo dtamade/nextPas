@@ -13,10 +13,10 @@ type
   TGitManagerImpl = class(TInterfacedObject, IGitManager)
   private
     FMgr: TGitManager;
-    FActiveHandles: Integer;
+    FActiveHandles: LongInt;
     FFinalizeRequested: Boolean;
-    procedure AcquireHandle;
-    procedure ReleaseHandle;
+    procedure AcquireHandle; inline;
+    procedure ReleaseHandle; inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -87,6 +87,13 @@ type
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
     // M5+ (2026-08-15): blame a file (libgit2 native)
     function Blame(const APath: string): TGitBlame;
+    // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
+    function ConfigEntries: TGitConfigEntryArray;
+    // k97/k101: patch/checkout helpers
+    procedure ApplyPatch(const APatchText: string);
+    procedure CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
+    function WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
+      AShowBinary: Boolean): string;
 
     // Worktree operations (IGitWorktreeExt)
     function AddWorktree(const AName, APath, ARef: string;
@@ -184,16 +191,24 @@ begin
   inherited Destroy;
 end;
 
-procedure TGitManagerImpl.AcquireHandle;
+procedure TGitManagerImpl.AcquireHandle; inline;
 begin
-  Inc(FActiveHandles);
+  InterlockedIncrement(FActiveHandles);
 end;
 
-procedure TGitManagerImpl.ReleaseHandle;
+procedure TGitManagerImpl.ReleaseHandle; inline;
+var
+  LNew: LongInt;
 begin
-  if FActiveHandles > 0 then
-    Dec(FActiveHandles);
-  if (FActiveHandles = 0) and FFinalizeRequested then
+  if InterlockedExchangeAdd(FActiveHandles, 0) <= 0 then
+    Exit;
+  LNew := InterlockedDecrement(FActiveHandles);
+  if LNew < 0 then
+  begin
+    InterlockedIncrement(FActiveHandles);
+    Exit;
+  end;
+  if (LNew = 0) and FFinalizeRequested then
     Finalize;
 end;
 
@@ -206,7 +221,7 @@ end;
 
 procedure TGitManagerImpl.Finalize;
 begin
-  if FActiveHandles > 0 then
+  if InterlockedExchangeAdd(FActiveHandles, 0) > 0 then
   begin
     FFinalizeRequested := True;
     Exit;
@@ -448,6 +463,27 @@ begin
   Result := FRepo.Blame(APath);
 end;
 
+function TGitRepositoryImpl.ConfigEntries: TGitConfigEntryArray;
+begin
+  Result := FRepo.ConfigEntries;
+end;
+
+procedure TGitRepositoryImpl.ApplyPatch(const APatchText: string);
+begin
+  FRepo.ApplyPatch(APatchText);
+end;
+
+procedure TGitRepositoryImpl.CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
+begin
+  FRepo.CheckoutPaths(ARevspec, APaths);
+end;
+
+function TGitRepositoryImpl.WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
+  AShowBinary: Boolean): string;
+begin
+  Result := FRepo.WorkdirPatchText(ARevspec, APaths, AShowBinary);
+end;
+
 function TGitRepositoryImpl.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
 var
   LCommits: TGitCommitList;
@@ -632,12 +668,8 @@ end;
 
 destructor TGitWorktreeImpl.Destroy;
 begin
-  { Note: git_worktree_free is intentionally NOT called.
-    libgit2 1.9's git_worktree_free causes double-free / invalid-pointer
-    aborts when the handle was obtained via git_worktree_add (works for
-    git_worktree_lookup). Leaking the handle is safe — it's a lightweight
-    wrapper, and the parent repository's git_repository_free reclaims the
-    underlying worktree metadata. }
+  if FHandle <> nil then
+    git_worktree_free(FHandle);
   FHandle := nil;
   inherited Destroy;
 end;

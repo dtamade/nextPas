@@ -49,6 +49,9 @@ type
     procedure LeaveAlternate; inline;
     procedure MoveTo(AX, AY: Word); inline;
 
+    { 刀 21：内存后端无输出字节，OSC 8 包裹为 no-op（同形接口占位）。 }
+    procedure SetLinkOverlay(const ALinks: array of TTuiLinkSpan);
+
     { No-op：无需 flush。返回 True 使调用方无需特判。 }
     function Flush: Boolean; inline;
 
@@ -107,6 +110,11 @@ procedure TTestBackend.MoveTo(AX, AY: Word);
 begin
   FCursorX := AX;
   FCursorY := AY;
+end;
+
+procedure TTestBackend.SetLinkOverlay(const ALinks: array of TTuiLinkSpan);
+begin
+  { no-op：内存后端不产出字节流，OSC 8 包裹无从体现 }
 end;
 
 procedure TTestBackend.ClearScreen;

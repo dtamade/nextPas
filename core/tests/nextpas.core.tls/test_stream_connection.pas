@@ -4,7 +4,7 @@
  *
  * 验证 CreateConnection(TStream) 方法在各后端的实现状态。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-02-04
  *}
@@ -16,7 +16,7 @@ program test_stream_connection;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.base,
+  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.backed,
@@ -150,7 +150,7 @@ begin
     LStream := TMemoryStream.Create;
     try
       try
-        LConnection := LContext.CreateConnection(LStream);
+        LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
         if LConnection <> nil then
           LogPass('OpenSSL CreateConnection(TStream) returns valid connection')
         else
@@ -216,7 +216,7 @@ begin
     LStream := TMemoryStream.Create;
     try
       try
-        LConnection := LContext.CreateConnection(LStream);
+        LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
         if LConnection <> nil then
           LogPass('WinSSL CreateConnection(TStream) returns valid connection')
         else
@@ -277,7 +277,7 @@ begin
     LStream := TMemoryStream.Create;
     try
       try
-        LConnection := LContext.CreateConnection(LStream);
+        LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
         if LConnection <> nil then
           LogPass('WolfSSL CreateConnection(TStream) returns valid connection')
         else
@@ -338,7 +338,7 @@ begin
     LStream := TMemoryStream.Create;
     try
       try
-        LConnection := LContext.CreateConnection(LStream);
+        LConnection := LContext.CreateConnection(TStreamWrapper.Create(LStream, False));
         if LConnection <> nil then
           LogPass('MbedTLS CreateConnection(TStream) returns valid connection')
         else

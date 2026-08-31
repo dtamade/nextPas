@@ -37,14 +37,14 @@ var
 
 function ResolveBenchmarkHost: string;
 begin
-  Result := Trim(GetEnvironmentVariable('FAFAFA_WINSSL_SESSION_HOST'));
+  Result := Trim(GetEnvironmentVariable('NEXTPAS_WINSSL_SESSION_HOST'));
   if Result = '' then
     Result := 'www.cloudflare.com';
 end;
 
 function ResolveIterationCount: Integer;
 begin
-  Result := StrToIntDef(Trim(GetEnvironmentVariable('FAFAFA_WINSSL_BENCH_ITERATIONS')), 50);
+  Result := StrToIntDef(Trim(GetEnvironmentVariable('NEXTPAS_WINSSL_BENCH_ITERATIONS')), 50);
   if Result < 1 then
     Result := 1;
 end;

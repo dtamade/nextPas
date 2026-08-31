@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$root_dir"
 
 fail() {
@@ -36,23 +36,23 @@ require_match() {
   fi
 }
 
-base_file="src/nextpas.core.tls.base.pas"
-openssl_ssl_api="src/nextpas.core.tls.openssl.api.ssl.pas"
-openssl_lib="src/nextpas.core.tls.openssl.backed.pas"
-openssl_ctx="src/nextpas.core.tls.openssl.context.pas"
-winssl_lib="src/nextpas.core.tls.winssl.lib.pas"
-winssl_ctx="src/nextpas.core.tls.winssl.context.pas"
-winssl_conn="src/nextpas.core.tls.winssl.connection.pas"
-freepascal_lib="src/nextpas.core.tls.freepascal.lib.pas"
-freepascal_ctx="src/nextpas.core.tls.freepascal.context.pas"
-freepascal_conn="src/nextpas.core.tls.freepascal.connection.pas"
-freepascal_validation="src/nextpas.core.tls.freepascal.connection.validation.inc"
-wolfssl_lib="src/nextpas.core.tls.wolfssl.lib.pas"
-wolfssl_ctx="src/nextpas.core.tls.wolfssl.context.pas"
-wolfssl_conn="src/nextpas.core.tls.wolfssl.connection.pas"
-mbedtls_lib="src/nextpas.core.tls.mbedtls.lib.pas"
-mbedtls_ctx="src/nextpas.core.tls.mbedtls.context.pas"
-mbedtls_conn="src/nextpas.core.tls.mbedtls.connection.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
+openssl_ssl_api="core/src/nextpas.core.tls.openssl.api.ssl.pas"
+openssl_lib="core/src/nextpas.core.tls.openssl.backed.pas"
+openssl_ctx="core/src/nextpas.core.tls.openssl.context.pas"
+winssl_lib="core/src/nextpas.core.tls.winssl.lib.pas"
+winssl_ctx="core/src/nextpas.core.tls.winssl.context.pas"
+winssl_conn="core/src/nextpas.core.tls.winssl.connection.pas"
+freepascal_lib="core/src/nextpas.core.tls.freepascal.lib.pas"
+freepascal_ctx="core/src/nextpas.core.tls.freepascal.context.pas"
+freepascal_conn="core/src/nextpas.core.tls.freepascal.connection.pas"
+freepascal_validation="core/src/nextpas.core.tls.freepascal.connection.validation.inc"
+wolfssl_lib="core/src/nextpas.core.tls.wolfssl.lib.pas"
+wolfssl_ctx="core/src/nextpas.core.tls.wolfssl.context.pas"
+wolfssl_conn="core/src/nextpas.core.tls.wolfssl.connection.pas"
+mbedtls_lib="core/src/nextpas.core.tls.mbedtls.lib.pas"
+mbedtls_ctx="core/src/nextpas.core.tls.mbedtls.context.pas"
+mbedtls_conn="core/src/nextpas.core.tls.mbedtls.connection.pas"
 
 echo "[TEST] callback capability truth contract"
 

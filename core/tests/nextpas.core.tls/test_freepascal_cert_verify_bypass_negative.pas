@@ -15,7 +15,6 @@ program test_freepascal_cert_verify_bypass_negative;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -43,7 +42,7 @@ end;
 // keeps this test free of OpenSSL global-init leaks, matching the convention
 // of the other zero-leak unit tests.
 const
-  FIXTURE_DIR = 'tests/certs/bypass/';
+  FIXTURE_DIR = 'certs/bypass/';
 
 var
   GRealRootCertPEM: string;

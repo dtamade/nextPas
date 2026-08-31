@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.context - WinSSL 上下文实现
   
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-06
   
   描述:
@@ -19,10 +19,12 @@ interface
 
 uses
   {$IFDEF WINDOWS} Windows, {$ENDIF}
+  nextpas.core.base,
   nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.tls.base,
@@ -280,7 +282,7 @@ begin
     );
   if Length(Result) > AMaxSize then
     raise ESSLInvalidArgument.CreateWithContext(
-      nextpas.core.text.conv.Format('%s exceeds maximum allowed size (%d > %d bytes)',
+      nextpas.core.text.format.TextFormat('%s exceeds maximum allowed size (%d > %d bytes)',
         [ASubject, Length(Result), AMaxSize]),
       sslErrInvalidParam,
       AMethodName
@@ -423,7 +425,7 @@ begin
 
   if not IsSuccess(Status) then
     raise ESSLInitializationException.CreateWithContext(
-      nextpas.core.text.conv.Format('Failed to acquire credentials handle: 0x%x (%s mode)',
+      nextpas.core.text.format.TextFormat('Failed to acquire credentials handle: 0x%x (%s mode)',
         [Status, IfThenStr(FContextType = sslCtxServer, 'server', 'client')]),
       sslErrNotInitialized,
       'TWinSSLContext.EnsureCredentialsAcquired',
@@ -589,7 +591,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('Certificate file not found: %s', [AFileName]),
+      nextpas.core.text.format.TextFormat('Certificate file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TWinSSLContext.LoadCertificate'
     );
@@ -622,7 +624,7 @@ begin
   CleanupCertificate;
 
   LCertData := ReadLimitedStreamBytes(
-    WrapTStream(AStream, False),
+    AStream,
     MAX_CERTIFICATE_SIZE,
     'Certificate stream',
     'TWinSSLContext.LoadCertificate'
@@ -735,7 +737,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('Private key file not found: %s', [AFileName]),
+      nextpas.core.text.format.TextFormat('Private key file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TWinSSLContext.LoadPrivateKey'
     );
@@ -774,7 +776,7 @@ begin
     );
   
   LCertData := ReadLimitedStreamBytes(
-    WrapTStream(AStream, False),
+    AStream,
     MAX_PRIVATE_KEY_SIZE,
     'Private key stream',
     'TWinSSLContext.LoadPrivateKey'
@@ -925,7 +927,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('CA file not found: %s', [AFileName]),
+      nextpas.core.text.format.TextFormat('CA file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TWinSSLContext.LoadCAFile'
     );
@@ -1215,7 +1217,7 @@ procedure TWinSSLContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current WinSSL backend runtime. ' +
+    nextpas.core.text.format.TextFormat('%s is not published by the current WinSSL backend runtime. ' +
       'The current WinSSL callback surface only publishes verify/info paths.',
       [AFeature]),
     sslErrUnsupported,
@@ -1241,7 +1243,7 @@ procedure TWinSSLContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current WinSSL backend runtime. ' +
+    nextpas.core.text.format.TextFormat('%s is not published by the current WinSSL backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -1322,7 +1324,7 @@ begin
     FPinValidator.RequireValidPin := AEnabled;
   
   TSecurityLog.Info('WinSSL', 
-    nextpas.core.text.conv.Format('Certificate pinning %s', [IfThenStr(AEnabled, 'enabled', 'disabled')]));
+    nextpas.core.text.format.TextFormat('Certificate pinning %s', [IfThenStr(AEnabled, 'enabled', 'disabled')]));
 end;
 
 function TWinSSLContext.GetCertificatePinningEnabled: Boolean;
@@ -1367,7 +1369,7 @@ begin
   EnsureCredentialsAcquired;
 
   // Let exceptions propagate - caller must handle errors explicitly
-  LTransport := WrapTStream(AStream, False);
+  LTransport := AStream;
   Result := TWinSSLConnection.Create(Self, LTransport);
 end;
 

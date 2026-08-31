@@ -16,7 +16,7 @@ unit nextpas.core.tls.ocsp.stapling;
   RFC 6066 (TLS Extensions) - OCSP Status Request
   RFC 6961 (TLS Multiple Certificate Status Request)
   
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 1.0.0
 }
 
@@ -625,13 +625,12 @@ begin
       on E: Exception do
       begin
         // 记录错误,继续重试
-        Inc(Retry);
         if Retry >= FConfig.MaxRetries then
           raise;
         platform_thread_sleep_ns(UInt64(1000 * Retry) * 1000000);  // 指数退避
       end;
     end;
-    
+
     Inc(Retry);
   end;
 end;

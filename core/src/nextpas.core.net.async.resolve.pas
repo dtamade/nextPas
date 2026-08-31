@@ -26,6 +26,8 @@ type
     Error: Int32;
     function Success: Boolean; inline;
     function FirstAddress: TNetAddress;
+    { 双栈选址：True=先 A 再退第一条；False=先 AAAA 再退第一条。 }
+    function PreferredAddress(APreferIPv4: Boolean = True): TNetAddress;
   end;
 
   { DNS 解析回调 }
@@ -73,6 +75,7 @@ uses
   nextpas.core.atomic,
   nextpas.core.errors,
   nextpas.core.text.conv,
+  nextpas.core.net.resolve,
   nextpas.core.platform.socket,
   nextpas.core.platform.sync,
   nextpas.core.platform.thread;
@@ -144,6 +147,27 @@ begin
     Result := Default(TNetAddress);
 end;
 
+function TDnsResult.PreferredAddress(APreferIPv4: Boolean): TNetAddress;
+var
+  LI: Integer;
+begin
+  Result := Default(TNetAddress);
+  if APreferIPv4 then
+  begin
+    for LI := 0 to High(Addresses) do
+      if not Addresses[LI].IsIPv6 then
+        Exit(Addresses[LI]);
+  end
+  else
+  begin
+    for LI := 0 to High(Addresses) do
+      if Addresses[LI].IsIPv6 then
+        Exit(Addresses[LI]);
+  end;
+  if Length(Addresses) > 0 then
+    Result := Addresses[0];
+end;
+
 function DefaultDnsResolveOptions: TDnsResolveOptions;
 begin
   FillChar(Result, SizeOf(Result), 0);
@@ -197,50 +221,20 @@ begin
   end;
 end;
 
-function FormatIPv6Addr(AAddr: PByte): string;
-const
-  HexChars: array[0..15] of Char = '0123456789abcdef';
+function TryFillIpLiteral(const AHost: AnsiString; var AResult: TDnsResult): Boolean;
 var
-  I: Integer;
-  LGroup: UInt16;
-  LBuf: array[0..39] of Char;
-  LPos: Integer;
-begin
-  LPos := 0;
-  for I := 0 to 7 do
-  begin
-    LGroup := (UInt16(AAddr[I * 2]) shl 8) or UInt16(AAddr[I * 2 + 1]);
-    if I > 0 then
-    begin
-      LBuf[LPos] := ':';
-      Inc(LPos);
-    end;
-    LBuf[LPos] := HexChars[(LGroup shr 12) and $F]; Inc(LPos);
-    LBuf[LPos] := HexChars[(LGroup shr 8) and $F]; Inc(LPos);
-    LBuf[LPos] := HexChars[(LGroup shr 4) and $F]; Inc(LPos);
-    LBuf[LPos] := HexChars[LGroup and $F]; Inc(LPos);
-  end;
-  SetString(Result, @LBuf[0], LPos);
-end;
-
-function IPv4NetToString(ANet: UInt32): string;
-begin
-  Result := IntToStr(ANet and $FF) + '.' +
-    IntToStr((ANet shr 8) and $FF) + '.' +
-    IntToStr((ANet shr 16) and $FF) + '.' +
-    IntToStr((ANet shr 24) and $FF);
-end;
-
-function IsIPv4Literal(const AHost: AnsiString): Boolean;
-var
-  LI: Integer;
+  H: string;
 begin
   Result := False;
-  if (Length(AHost) = 0) or (Pos(':', AHost) > 0) then
+  H := StripHostBrackets(string(AHost));
+  if not HostIsIpLiteral(H) then
     Exit;
-  for LI := 1 to Length(AHost) do
-    if not (AHost[LI] in ['0'..'9', '.']) then
-      Exit;
+  AResult.Error := 0;
+  SetLength(AResult.Addresses, 1);
+  if IsIPv6Literal(H) then
+    AResult.Addresses[0] := TNetAddress.IPv6(H, 0)
+  else
+    AResult.Addresses[0] := TNetAddress.IPv4(H, 0);
   Result := True;
 end;
 
@@ -258,12 +252,12 @@ begin
   begin
     if AIsIPv6 then
     begin
-      AResult.Addresses[LDst].IP := FormatIPv6Addr(@ARaw[LI].IPv6[0]);
+      AResult.Addresses[LDst].IP := FormatIPv6(@ARaw[LI].IPv6[0]);
       AResult.Addresses[LDst].IsIPv6 := True;
     end
     else
     begin
-      AResult.Addresses[LDst].IP := IPv4NetToString(ARaw[LI].IPv4);
+      AResult.Addresses[LDst].IP := FormatIPv4(ARaw[LI].IPv4);
       AResult.Addresses[LDst].IsIPv6 := False;
     end;
     AResult.Addresses[LDst].Port := 0;
@@ -283,7 +277,7 @@ begin
     for LI := 0 to ACount - 1 do
       if not ARaw[LI].IsIPv6 then
       begin
-        AResult.Addresses[LJdx].IP := IPv4NetToString(ARaw[LI].IPv4);
+        AResult.Addresses[LJdx].IP := FormatIPv4(ARaw[LI].IPv4);
         AResult.Addresses[LJdx].Port := 0;
         AResult.Addresses[LJdx].IsIPv6 := False;
         Inc(LJdx);
@@ -291,7 +285,7 @@ begin
     for LI := 0 to ACount - 1 do
       if ARaw[LI].IsIPv6 then
       begin
-        AResult.Addresses[LJdx].IP := FormatIPv6Addr(@ARaw[LI].IPv6[0]);
+        AResult.Addresses[LJdx].IP := FormatIPv6(@ARaw[LI].IPv6[0]);
         AResult.Addresses[LJdx].Port := 0;
         AResult.Addresses[LJdx].IsIPv6 := True;
         Inc(LJdx);
@@ -302,7 +296,7 @@ begin
     for LI := 0 to ACount - 1 do
       if ARaw[LI].IsIPv6 then
       begin
-        AResult.Addresses[LJdx].IP := FormatIPv6Addr(@ARaw[LI].IPv6[0]);
+        AResult.Addresses[LJdx].IP := FormatIPv6(@ARaw[LI].IPv6[0]);
         AResult.Addresses[LJdx].Port := 0;
         AResult.Addresses[LJdx].IsIPv6 := True;
         Inc(LJdx);
@@ -310,7 +304,7 @@ begin
     for LI := 0 to ACount - 1 do
       if not ARaw[LI].IsIPv6 then
       begin
-        AResult.Addresses[LJdx].IP := IPv4NetToString(ARaw[LI].IPv4);
+        AResult.Addresses[LJdx].IP := FormatIPv4(ARaw[LI].IPv4);
         AResult.Addresses[LJdx].Port := 0;
         AResult.Addresses[LJdx].IsIPv6 := False;
         Inc(LJdx);
@@ -359,13 +353,8 @@ begin
   try
     LResult := Default(TDnsResult);
     SetLength(LResult.Addresses, 0);
-    if IsIPv4Literal(LCtx^.Host) then
+    if TryFillIpLiteral(LCtx^.Host, LResult) then
     begin
-      LResult.Error := 0;
-      SetLength(LResult.Addresses, 1);
-      LResult.Addresses[0].IP := string(LCtx^.Host);
-      LResult.Addresses[0].Port := 0;
-      LResult.Addresses[0].IsIPv6 := False;
       PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context, LResult);
       Exit;
     end;
@@ -529,7 +518,7 @@ begin
       SetLength(Result.Addresses, LCount);
       for LI := 0 to LCount - 1 do
       begin
-        Result.Addresses[LI].IP := FormatIPv6Addr(@LCtx^.V6Raw[LI].IPv6[0]);
+        Result.Addresses[LI].IP := FormatIPv6(@LCtx^.V6Raw[LI].IPv6[0]);
         Result.Addresses[LI].Port := 0;
         Result.Addresses[LI].IsIPv6 := True;
       end;
@@ -549,7 +538,7 @@ begin
       SetLength(Result.Addresses, LCount);
       for LI := 0 to LCount - 1 do
       begin
-        Result.Addresses[LI].IP := IPv4NetToString(LCtx^.V4Raw[LI].IPv4);
+        Result.Addresses[LI].IP := FormatIPv4(LCtx^.V4Raw[LI].IPv4);
         Result.Addresses[LI].Port := 0;
         Result.Addresses[LI].IsIPv6 := False;
       end;
@@ -574,27 +563,19 @@ begin
     LResult := Default(TDnsResult);
     SetLength(LResult.Addresses, 0);
 
-    if IsIPv4Literal(LCtx^.Host) then
+    if TryFillIpLiteral(LCtx^.Host, LResult) then
     begin
       if LCtx^.Streaming then
       begin
         LEvent := Default(TDnsStreamEvent);
         LEvent.Error := 0;
-        LEvent.IsIPv6 := False;
+        LEvent.IsIPv6 := LResult.Addresses[0].IsIPv6;
         LEvent.AllDone := True;
-        SetLength(LEvent.Addresses, 1);
-        LEvent.Addresses[0].IP := string(LCtx^.Host);
-        LEvent.Addresses[0].Port := 0;
-        LEvent.Addresses[0].IsIPv6 := False;
+        LEvent.Addresses := LResult.Addresses;
         PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
       end
       else
       begin
-        LResult.Error := 0;
-        SetLength(LResult.Addresses, 1);
-        LResult.Addresses[0].IP := string(LCtx^.Host);
-        LResult.Addresses[0].Port := 0;
-        LResult.Addresses[0].IsIPv6 := False;
         PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context,
           LResult);
       end;

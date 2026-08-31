@@ -4,7 +4,6 @@ program test_early_data_replay_store_client_scope_clarification;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.exceptions,
@@ -176,7 +175,7 @@ var
 begin
   TestHeader('Factory one-shot client path rejects server replay-store directory');
 
-  LConfig := CreateDefaultConfig(sslCtxClient);
+  LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   LConfig.LibraryType := sslFreePascal;
   LConfig.ContextType := sslCtxClient;
   LConfig.ServerEarlyDataReplayStoreDirectory := 'tmp/one-shot-client-replay-dir';

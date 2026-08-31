@@ -14,7 +14,6 @@ type
     @details 基于原子操作的互斥锁实现。
       支持 Lock/Unlock/TryLock/LockTimeout。
       适用于需要互斥访问的场景。
- * @concurrency Thread-safe (see source for details).
   }
   TConcurrentMutex = class
   private

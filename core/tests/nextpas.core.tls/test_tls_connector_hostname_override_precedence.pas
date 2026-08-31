@@ -4,7 +4,7 @@ program test_tls_connector_hostname_override_precedence;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.base,
+  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.tls;
 
@@ -58,11 +58,11 @@ type
     function GetPreferredVersion: TSSLProtocolVersion;
 
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
 
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
 
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
@@ -114,7 +114,7 @@ type
     procedure ClearCertificatePins;
 
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
     function IsValid: Boolean;
   end;
 
@@ -305,7 +305,7 @@ procedure TMockContext.LoadCertificate(const AFileName: string);
 begin
 end;
 
-procedure TMockContext.LoadCertificate(AStream: TStream);
+procedure TMockContext.LoadCertificate(AStream: IStream);
 begin
 end;
 
@@ -317,7 +317,7 @@ procedure TMockContext.LoadPrivateKey(const AFileName: string; const APassword: 
 begin
 end;
 
-procedure TMockContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+procedure TMockContext.LoadPrivateKey(AStream: IStream; const APassword: string);
 begin
 end;
 
@@ -485,7 +485,7 @@ begin
   Result := Conn;
 end;
 
-function TMockContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TMockContext.CreateConnection(AStream: IStream): ISSLConnection;
 begin
   Result := CreateConnection(THandle(1));
 end;
@@ -500,23 +500,22 @@ var
   Ctx: ISSLContext;
   Connector: TSSLConnector;
   Transport: TMemoryStream;
-  TLSStream: TSSLStream;
+  LS: IStream;
   ClientConn: ISSLClientConnection;
 begin
   WriteLn('=== ', ACaseName, ' ===');
   Ctx := TMockContext.Create(sslCtxClient);
   Connector := TSSLConnector.FromContext(Ctx);
   Transport := TMemoryStream.Create;
-  TLSStream := nil;
   try
-    TLSStream := Connector.ConnectStream(Transport, AInputHost);
-    Check(TLSStream <> nil, 'ConnectStream should succeed');
-    Check(Supports(TLSStream.Connection, ISSLClientConnection, ClientConn),
+    LS := Connector.ConnectStream(TStreamWrapper.Create(Transport, False), AInputHost);
+    Check(LS <> nil, 'ConnectStream should succeed');
+    Check(Supports((LS as TSSLStream).Connection, ISSLClientConnection, ClientConn),
       'Connection supports ISSLClientConnection');
     CheckEqualsStr('Connection server name matches precedence',
       AExpectedServerName, ClientConn.GetServerName);
   finally
-    TLSStream.Free;
+    LS := nil;
     Transport.Free;
   end;
 end;

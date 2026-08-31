@@ -142,6 +142,21 @@
     },
     {
       "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.text.compare",
+      "reason": "temporary system compatibility facade text dependency (CompareStr delegation)"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.text.utils",
+      "reason": "temporary system compatibility facade text dependency (BoolToStr delegation)"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.text.format",
+      "reason": "temporary system compatibility facade text dependency (TextFormat forward; mirrors conv allowlist entry)"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
       "unit": "nextpas.core.path",
       "reason": "temporary system SysUtils facade path helper debt"
     },
@@ -149,6 +164,11 @@
       "path": "src/nextpas.core.system.sysutils.pas",
       "unit": "nextpas.core.fs",
       "reason": "temporary system SysUtils facade filesystem helper debt"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.time",
+      "reason": "temporary system SysUtils facade date/time dependency (Now/Date/Time/DateTimeToStr/EncodeDate delegation)"
     }
   ],
   "raw_ffi_tokens": [
@@ -253,6 +273,16 @@
         "DynLibs"
       ],
       "reason": "PKCS#11 backend owns current dynamic loader surface"
+    },
+    {
+      "owner": "platform-ctypes-alias-surface",
+      "path_globs": [
+        "src/nextpas.core.platform.ctypes*.pas"
+      ],
+      "tokens": [
+        "ctypes"
+      ],
+      "reason": "platform ctypes alias facade re-exports the platform-owned C type surface"
     }
   ],
   "raw_ffi_explicit_allowlist": [

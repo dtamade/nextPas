@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.math*.pas`（约 20 个源文件）
 **层级**：L0（注册表权威；与 `base`/`simd`/`atomic` 同属 L0 治理集。batch/impl 可消费公开 `nextpas.core.simd` 门面）
 **Owner**：math-simd lane
-**最后更新**：2026-07-26
-**版本**：1.5.1
+**最后更新**：2026-08-31
+**版本**：1.5.2
 
 ---
 
@@ -26,7 +26,7 @@
 **FPU mask 契约**：`Get/SetExceptionMask` 在 x86_64 上同时写 MXCSR 与 x87 CW，并清 sticky 状态；
 FPC host 下同步 `softfloat_exception_mask`。仅写 MXCSR 不足以覆盖 SIMD batch 的 `fsin`/`fcos`/`fyl2x` scalar tail。
 
-**测试树 residual（2026-07-26；详见 [`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)）**：
+**测试树 residual（2026-08-31；详见 [`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)）**：
 - `core/tests/nextpas.core.math/**`：无 FPC `Math`/`SysUtils`/`Classes`/OS 单元。
 - `core/tests/nextpas.core.simd/**`（含 concurrent/direct/cpuinfo.lazy）：无 FPC `Math`/`Classes`/`TThread`。
 - **已关闭**：
@@ -238,7 +238,7 @@ end;
 ## 2. 不变量
 
 - **[INV-1]** 所有 vec/mat/quat 为 `packed record`，值语义，无堆分配
-- **[INV-2]** `Normalize` 对零向量行为未定义；`TryNormalize` 对零向量返回零向量
+- **[INV-2]** `Normalize` 对零向量行为未定义（fail-fast：`EArgumentError`）；`TryNormalize` 对零向量返回零向量；`vec.batch.BatchNormalize` 对零向量元素按 `TryNormalize` 安全路径返回零（不抛、不产 NaN），与单点 `Normalize` 的 fail-fast 区分
 - **[INV-3]** `TMat4f * TVec4f` 为列向量右乘（V 在 M 右侧）
 - **[INV-4]** `TQuatf * TQuatf` 为 Hamilton 积
 - **[INV-5]** `Slerp` 在两个反向四元数时取较短路径
@@ -254,7 +254,7 @@ end;
 
 | 场景 | 策略 |
 |------|------|
-| Normalize 零向量 | 未定义行为（TryNormalize 安全返回零） |
+| Normalize 零向量 | 未定义行为（`Normalize` fail-fast `EArgumentError`；`TryNormalize` 安全返回零；`vec.batch.BatchNormalize` 按 `TryNormalize` 路径不产 NaN） |
 | Matrix Inverse 奇异矩阵 | 结果可能为 Inf/NaN |
 | Perspective AFar ≤ ANear | 结果未定义 |
 | Random NextIntRange Min > Max | 结果未定义 |
@@ -294,7 +294,7 @@ end;
 | Random / Noise | `test_random`, `test_noise` | 确定性随机与噪声 |
 | Batch | `test_batch_scalar`, `test_batch_simd`, `test_vec_batch` | 批量 API 与 SIMD seam |
 | Impl / Compat | `test_impl_simd`, `test_vec_compat` | 内部 seam 与 deprecated 别名 |
-| **合计** | **17 个 PROJECTS** | **2026-07-17: ~273 tests, 0 fail, heaptrc 0** |
+| **合计** | **17 个 PROJECTS** | **2026-08-31: ~273 tests, 0 fail, heaptrc 0（同步 API.md 证据链刷新）** |
 
 入口：`make -C core/tests/nextpas.core.math clean test`
 
@@ -307,3 +307,4 @@ end;
 | 2026-07-17 | 1.2 | 层级纠正为 L0；补 batch 单元；测试表与当前 gate 对齐 | math-simd lane |
 | 2026-07-10 | 1.1 | 固化 `math.base` canonical 常量及 trig/根门面编译期 alias 契约 | Codex |
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |
+| 2026-08-31 | 1.5.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

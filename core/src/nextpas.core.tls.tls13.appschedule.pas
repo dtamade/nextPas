@@ -86,6 +86,27 @@ function TryUpdateTLS13ClientApplicationReadKeys(
   out AError: string
 ): Boolean;
 
+function TLS13ComputeExporterMasterSecret(
+  ACipherSuite: Word;
+  const AMasterSecret, ATranscriptHash: TBytes
+): TBytes;
+
+function TLS13Exporter(
+  ACipherSuite: Word;
+  const AExporterMasterSecret: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+
+function TLS13ExportKeyingMaterial(
+  ACipherSuite: Word;
+  const AMasterSecret, ATranscriptHash: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+
 implementation
 
 uses
@@ -551,6 +572,104 @@ begin
     ASecrets.ClientApplicationIV,
     AError
   );
+end;
+
+function HKDFExpandLabelBytesForSuite(
+  ACipherSuite: Word;
+  const ASecret: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+begin
+  Result := nil;
+  if TLS13CipherSuiteIsSHA256(ACipherSuite) then
+    Exit(TLS13_HKDF_Expand_Label_SHA256_Bytes(ASecret, ALabel, AContext, ALength));
+  if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+    Exit(TLS13_HKDF_Expand_Label_SHA384_Bytes(ASecret, ALabel, AContext, ALength));
+end;
+
+function TLS13ComputeExporterMasterSecret(
+  ACipherSuite: Word;
+  const AMasterSecret, ATranscriptHash: TBytes
+): TBytes;
+var
+  LHashSize: Integer;
+begin
+  Result := nil;
+  LHashSize := TLS13CipherSuiteHashSize(ACipherSuite);
+  if (LHashSize <= 0) or (Length(AMasterSecret) <> LHashSize) or
+    (Length(ATranscriptHash) <> LHashSize) then
+    Exit;
+  Result := HKDFExpandLabelForSuite(
+    ACipherSuite,
+    AMasterSecret,
+    'exp master',
+    ATranscriptHash,
+    LHashSize
+  );
+end;
+
+function TLS13Exporter(
+  ACipherSuite: Word;
+  const AExporterMasterSecret: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+var
+  LHashSize: Integer;
+  LEmptyHash, LCtxHash, LSecret: TBytes;
+begin
+  Result := nil;
+  LHashSize := TLS13CipherSuiteHashSize(ACipherSuite);
+  if (LHashSize <= 0) or (Length(AExporterMasterSecret) <> LHashSize) then
+    Exit;
+  // Step 1: Derive-Secret(expMaster, label, "") -> Hash("") as context
+  if TLS13CipherSuiteIsSHA256(ACipherSuite) then
+    LEmptyHash := SHA256(TBytes(nil))
+  else if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+    LEmptyHash := SHA384(TBytes(nil))
+  else
+    Exit;
+  LSecret := HKDFExpandLabelBytesForSuite(ACipherSuite, AExporterMasterSecret, ALabel, LEmptyHash, LHashSize);
+  if Length(LSecret) <> LHashSize then Exit;
+  // Step 2: Expand-Label(secret, "exporter", Hash(context), length)
+  if Length(AContext) > 0 then
+  begin
+    if TLS13CipherSuiteIsSHA256(ACipherSuite) then
+      LCtxHash := SHA256(AContext)
+    else if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+      LCtxHash := SHA384(AContext)
+    else
+      Exit;
+  end
+  else
+  begin
+    if TLS13CipherSuiteIsSHA256(ACipherSuite) then
+      LCtxHash := SHA256(TBytes(nil))
+    else if TLS13CipherSuiteIsSHA384(ACipherSuite) then
+      LCtxHash := SHA384(TBytes(nil))
+    else
+      Exit;
+  end;
+  Result := HKDFExpandLabelForSuite(ACipherSuite, LSecret, 'exporter', LCtxHash, ALength);
+end;
+
+function TLS13ExportKeyingMaterial(
+  ACipherSuite: Word;
+  const AMasterSecret, ATranscriptHash: TBytes;
+  const ALabel: TBytes;
+  const AContext: TBytes;
+  ALength: Integer
+): TBytes;
+var
+  LExporterMaster: TBytes;
+begin
+  Result := nil;
+  LExporterMaster := TLS13ComputeExporterMasterSecret(ACipherSuite, AMasterSecret, ATranscriptHash);
+  if Length(LExporterMaster) = 0 then Exit;
+  Result := TLS13Exporter(ACipherSuite, LExporterMaster, ALabel, AContext, ALength);
 end;
 
 end.

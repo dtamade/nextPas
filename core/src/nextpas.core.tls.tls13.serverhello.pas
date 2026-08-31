@@ -13,7 +13,10 @@ unit nextpas.core.tls.tls13.serverhello;
 
 interface
 
-uses nextpas.core.base, nextpas.core.tls.tls13.wire;
+uses
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.tls.tls13.wire;
 
 function BuildTLS13ServerHelloHandshake(
   const ALegacySessionID: TBytes;
@@ -54,7 +57,7 @@ begin
   Result := nil;
   AppendUInt16(Result, AType);
   AppendUInt16(Result, Word(Length(AData)));
-  AppendBytes(Result, AData);
+  BytesAppend(Result, AData);
 end;
 
 function BuildExtensionSupportedVersions: TBytes;
@@ -76,7 +79,7 @@ begin
   SetLength(LData, 0);
   AppendUInt16(LData, AKeyShareGroup);
   AppendUInt16(LData, Word(Length(AServerKeyShare)));
-  AppendBytes(LData, AServerKeyShare);
+  BytesAppend(LData, AServerKeyShare);
 
   Result := BuildExtensionHeader(TLS_EXTENSION_KEY_SHARE, LData);
 end;
@@ -121,26 +124,29 @@ begin
 
   SetLength(LExtensions, 0);
   LExtension := BuildExtensionSupportedVersions;
-  AppendBytes(LExtensions, LExtension);
+  BytesAppend(LExtensions, LExtension);
 
   LExtension := BuildExtensionKeyShare(AKeyShareGroup, AServerKeyShare);
-  AppendBytes(LExtensions, LExtension);
+  BytesAppend(LExtensions, LExtension);
 
   if AIncludeSelectedPSK then
   begin
     LExtension := BuildExtensionPreSharedKeySelection(ASelectedIdentity);
-    AppendBytes(LExtensions, LExtension);
+    BytesAppend(LExtensions, LExtension);
   end;
 
   Result := nil;
   AppendUInt16(Result, TLS_LEGACY_VERSION);
-  AppendBytes(Result, LRandom);
+  BytesAppend(Result, LRandom);
   AppendByte(Result, Byte(Length(ALegacySessionID)));
-  AppendBytes(Result, ALegacySessionID);
+  BytesAppend(Result, ALegacySessionID);
   AppendUInt16(Result, ACipherSuite);
+  { legacy_compression_method：单字节恒 0。向量式 legacy_compression_methods
+    只存在于 ClientHello（RFC 8446 §4.1.2）；ServerHello 无长度前缀
+    （§4.1.3），多写一字节会使对端按 ext_len=0 解析而报 bad length。 }
   AppendByte(Result, 0);
   AppendUInt16(Result, Word(Length(LExtensions)));
-  AppendBytes(Result, LExtensions);
+  BytesAppend(Result, LExtensions);
 end;
 
 function BuildTLS13ServerHelloHandshake(
@@ -165,7 +171,7 @@ begin
   Result := nil;
   AppendByte(Result, TLS_HANDSHAKE_TYPE_SERVER_HELLO);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13ServerHelloHandshakeWithSelectedPSK(
@@ -191,7 +197,7 @@ begin
   Result := nil;
   AppendByte(Result, TLS_HANDSHAKE_TYPE_SERVER_HELLO);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13ServerHelloRecord(

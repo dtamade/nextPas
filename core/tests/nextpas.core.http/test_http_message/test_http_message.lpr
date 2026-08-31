@@ -796,6 +796,47 @@ begin
   CheckEqual('127.0.0.1:65000', LReq.RemoteAddr, 'remote addr is rendered from net addr');
 end;
 
+procedure TestRemoteIpStripsPort;
+var
+  LReq: IHttpRequest;
+  LObj: THttpRequest;
+begin
+  LReq := NewGetRequest('/remote');
+  LObj := THttpRequest(LReq as TObject);
+  LObj.SetRemoteAddr('127.0.0.1:54321');
+  CheckEqual('127.0.0.1', LReq.RemoteIp, 'ipv4 port stripped');
+  LObj.SetRemoteAddr('192.168.1.10');
+  CheckEqual('192.168.1.10', LReq.RemoteIp, 'bare ipv4 kept as-is');
+  LObj.SetRemoteAddr('');
+  CheckEqual('', LReq.RemoteIp, 'empty addr yields empty ip');
+end;
+
+procedure TestRemoteIpIpv6Bracketed;
+var
+  LReq: IHttpRequest;
+  LObj: THttpRequest;
+begin
+  LReq := NewGetRequest('/remote');
+  LObj := THttpRequest(LReq as TObject);
+  LObj.SetRemoteAddr('[::1]:8080');
+  CheckEqual('::1', LReq.RemoteIp, 'bracketed ipv6 keeps address');
+  LObj.SetRemoteAddr('[2001:db8::1]:443');
+  CheckEqual('2001:db8::1', LReq.RemoteIp, 'bracketed ipv6 keeps address');
+end;
+
+procedure TestRemoteIpFromNetAddress;
+var
+  LReq: IHttpRequest;
+  LObj: THttpRequest;
+begin
+  LReq := NewGetRequest('/remote');
+  LObj := THttpRequest(LReq as TObject);
+  LObj.SetRemoteNetAddr(TNetAddress.IPv6('::1', 65000));
+  CheckEqual('::1', LReq.RemoteIp, 'ipv6 net addr exposes bare address');
+  LObj.SetRemoteNetAddr(TNetAddress.Loopback(65000));
+  CheckEqual('127.0.0.1', LReq.RemoteIp, 'ipv4 net addr exposes bare address');
+end;
+
 procedure TestNewGetRequestConvenience;
 var
   LReq: IHttpRequest;
@@ -2176,6 +2217,9 @@ begin
   T.Test('PathParam not found returns empty', @TestPathParamNotFoundReturnsEmpty);
   T.Test('RemoteAddr default and set', @TestRemoteAddrDefaultAndSet);
   T.Test('RemoteAddr from TNetAddress', @TestRemoteAddrFromNetAddress);
+  T.Test('RemoteIp strips port', @TestRemoteIpStripsPort);
+  T.Test('RemoteIp ipv6 bracketed', @TestRemoteIpIpv6Bracketed);
+  T.Test('RemoteIp from TNetAddress', @TestRemoteIpFromNetAddress);
   T.Test('NewGetRequest convenience', @TestNewGetRequestConvenience);
   T.Test('NewResponse creates with status', @TestNewResponseCreatesWithStatus);
   T.Test('NewResponse metadata defaults', @TestNewResponseMetadataDefaults);

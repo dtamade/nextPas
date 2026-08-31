@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.utils - Windows Schannel 辅助工具函数
   
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-06
   
   描述:
@@ -22,7 +22,7 @@ interface
 
 uses
   nextpas.core.mem,
-  Windows, nextpas.core.text.conv,
+  Windows, nextpas.core.text.conv, nextpas.core.text.format,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base;
 
@@ -271,11 +271,11 @@ begin
       Result := 'Security package not found';
       
   else
-    Result := Format('Unknown error (0x%x)', [DWORD(dwError)]);
+    Result := nextpas.core.text.format.TextFormat('Unknown error (0x%x)', [DWORD(dwError)]);
   end;
   
   // 添加错误码的十六进制表示
-  Result := Result + Format(' [0x%x]', [DWORD(dwError)]);
+  Result := Result + nextpas.core.text.format.TextFormat(' [0x%x]', [DWORD(dwError)]);
 end;
 
 function GetSystemErrorMessage(dwError: DWORD): string;
@@ -299,7 +299,7 @@ begin
     Result := Trim(Result); // 去除尾部的换行符
   end
   else
-    Result := Format('System error %d (0x%x)', [dwError, dwError]);
+    Result := nextpas.core.text.format.TextFormat('System error %d (0x%x)', [dwError, dwError]);
 end;
 
 function IsHandshakeContinue(dwError: SECURITY_STATUS): Boolean;

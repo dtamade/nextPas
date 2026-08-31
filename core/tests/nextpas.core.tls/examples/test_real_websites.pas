@@ -15,10 +15,14 @@ program test_real_websites;
 }
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
+  nextpas.core.system.classes,
+  nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
-  fafafa.examples.tcp;
+  nextpas.core.tls.tls,
+  nextpas.core.tls.safety,
+  tls_test_sockets;
 
 type
   TWebsiteTest = record
@@ -50,7 +54,9 @@ var
 procedure TestWebsite(const ATest: TWebsiteTest; const AConnector: TSSLConnector);
 var
   Sock: TSocketHandle;
-  TLS: TSSLStream;
+  LConnAccess: ISSLStreamConnectionAccess;
+  LConn: ISSLConnection;
+  TLSI: IStream;
   LVerifyResult: Integer;
   LVerifyResultString: string;
 begin
@@ -59,7 +65,6 @@ begin
     [GTotalTests, Length(TEST_SITES), ATest.Description, ATest.Host, ATest.Port]));
 
   Sock := INVALID_SOCKET;
-  TLS := nil;
   try
     try
       try
@@ -73,12 +78,16 @@ begin
         end;
       end;
 
-      TLS := AConnector.ConnectSocket(THandle(Sock), ATest.Host);
-      GetCertificateVerificationInfo(TLS.Connection, LVerifyResult, LVerifyResultString);
+      TLSI := AConnector.ConnectSocket(THandle(Sock), ATest.Host);
+      // 接口指针与对象基址不保证相同，禁止硬转型回具体类
+      if not Supports(TLSI, ISSLStreamConnectionAccess, LConnAccess) then
+        raise Exception.Create('TLS stream does not expose ISSLStreamConnectionAccess');
+      LConn := LConnAccess.GetConnection;
+      GetCertificateVerificationInfo(LConn, LVerifyResult, LVerifyResultString);
 
       WriteLn('✓ ',
-        ProtocolVersionToString(TLS.Connection.GetProtocolVersion), ' / ',
-        TLS.Connection.GetCipherName, ' | ',
+        ProtocolVersionToString(LConn.GetProtocolVersion), ' / ',
+        LConn.GetCipherName, ' | ',
         LVerifyResultString);
 
       Inc(GPassedTests);
@@ -90,8 +99,7 @@ begin
       end;
     end;
   finally
-    if TLS <> nil then
-      TLS.Free;
+    TLSI := nil;
     CloseSocket(Sock);
   end;
 end;
@@ -104,7 +112,7 @@ var
   EffectiveTotal: Integer;
 begin
   WriteLn('====================================================');
-  WriteLn('fafafa.ssl - 真实网站连接测试（简版）');
+  WriteLn('nextpas.core.tls - 真实网站连接测试（简版）');
   WriteLn('====================================================');
   WriteLn;
 

@@ -72,6 +72,7 @@ type
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
     property Method: THttpMethod read GetMethod;
@@ -84,6 +85,10 @@ type
     property Body: IReader read GetBody;
     property ContentLength: Int64 read GetContentLength;
     property RemoteAddr: string read GetRemoteAddr;
+    { Peer address without the port: '1.2.3.4' or raw IPv6 like '::1'.
+      RemoteAddr renders 'ip:port' ('[ip]:port' for IPv6); RemoteIp is the
+      bare address (what rate limiting / login throttling keys need). }
+    property RemoteIp: string read GetRemoteIp;
   end;
 
   { Per-request options that override client defaults when present on a request }
@@ -109,6 +114,16 @@ type
     function GetArena: IArena;
     procedure SetArena(const AArena: IArena);
     property Arena: IArena read GetArena;
+  end;
+
+  {** Per-request 0-RTT early-data flag — set by H1/H2 server conn state
+     when the underlying TLS stream reports ITlsPasEarlyDataInfo.
+     Middleware (EarlyDataMiddleware) reads this to emit X-Early-Data. }
+  IHttpRequestWithEarlyData = interface
+    ['{B7E1A3C2-9F4D-4E8A-8B0C-1D2E3F4A5B6D}']
+    function GetWasEarlyData: Boolean;
+    procedure SetWasEarlyData(const AValue: Boolean);
+    property WasEarlyData: Boolean read GetWasEarlyData write SetWasEarlyData;
   end;
 
   IHttpResponse = interface
@@ -157,6 +172,23 @@ type
   IHttpHijacker = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-40000000000C}']
     function Hijack: ITcpStream;
+  end;
+
+  { Server 侧对端存活探测（长前置工作期间客户端断连识别）。
+    由持有客户端连接的 response writer 实现，委托传输层
+    ITcpPeerProbe（net 面）；不支持时恒 True（保守）。可选能力：
+    handler 经 Supports/QueryInterface 探测。 }
+  IHttpPeerProbe = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000001E}']
+    function PeerAlive: Boolean;
+  end;
+
+  { 连接级 HTTP 升级上下文：由 H1 响应 writer 实现，非阻塞 WS 升级
+    （nextpas.core.http.websocket.UpgradeWebSocketHandoff）经它取得
+    承载本连接 poll 注册的 session 上下文，把连接迁移到事件驱动 WS 会话。 }
+  IHttpConnContext = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000001D}']
+    function HostSessionContext: ITcpServerSessionContext;
   end;
 
   { Optional commit probe for response writers.
@@ -290,6 +322,12 @@ type
     {** Rebuild transport with plain HTTP forward proxy (http://host:port).
        Decorators re-stack around the new base client. }
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    {** Rebuild transport with a custom dial function used instead of the
+       built-in TCP connect. The callback must return an established,
+       framed stream to AHost:APort or raise EHttpError. DialFunc wins over
+       the built-in dial only; WithProxyUrl (if set) still takes precedence
+       over both. Connections are pooled per target authority. }
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
     {** Rebuild transport with client TLS context (direct https / CONNECT).
        Nil clears to transport default (SecureClient). }
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;

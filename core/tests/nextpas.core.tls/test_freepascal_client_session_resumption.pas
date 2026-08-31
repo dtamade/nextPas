@@ -4,7 +4,6 @@ program test_freepascal_client_session_resumption;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -13,13 +12,15 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.appschedule,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.freepascal.session;
-
+  nextpas.core.crypto.hash,
+  nextpas.core.tls.freepascal.session,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 type
   TOfflineHandshakeMode = (ohmInitial, ohmResumed);
 
@@ -640,7 +641,7 @@ begin
 
   LStream1 := TOfflineTLS13ServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
   try
-    LConn1 := LCtx1.CreateConnection(LStream1);
+    LConn1 := LCtx1.CreateConnection(TStreamWrapper.Create(LStream1, False));
     AssertTrue(LConn1 <> nil, 'Initial connection should be created');
     (LConn1 as ISSLClientConnection).SetServerName('example.com');
 
@@ -690,7 +691,7 @@ begin
 
   LStream2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
   try
-    LConn2 := LCtx2.CreateConnection(LStream2);
+    LConn2 := LCtx2.CreateConnection(TStreamWrapper.Create(LStream2, False));
     AssertTrue(LConn2 <> nil, 'Resumed connection should be created');
     AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
       'Resumed connection should expose ISSLSessionResumption');
@@ -738,7 +739,7 @@ begin
 
   LStream1 := TOfflineTLS13ServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
   try
-    LConn1 := LCtx1.CreateConnection(LStream1);
+    LConn1 := LCtx1.CreateConnection(TStreamWrapper.Create(LStream1, False));
     AssertTrue(LConn1 <> nil, 'Initial CT-boundary connection should be created');
     (LConn1 as ISSLClientConnection).SetServerName('example.com');
 
@@ -761,7 +762,7 @@ begin
 
   LStream2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
   try
-    LConn2 := LCtx2.CreateConnection(LStream2);
+    LConn2 := LCtx2.CreateConnection(TStreamWrapper.Create(LStream2, False));
     AssertTrue(LConn2 <> nil, 'Resumed CT-boundary connection should be created');
     AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
       'Resumed CT-boundary connection should expose ISSLSessionResumption');
@@ -802,7 +803,7 @@ begin
 
   LStream1 := TOfflineTLS13ServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
   try
-    LConn1 := LCtx1.CreateConnection(LStream1);
+    LConn1 := LCtx1.CreateConnection(TStreamWrapper.Create(LStream1, False));
     AssertTrue(LConn1 <> nil, 'Initial OCSP-boundary connection should be created');
     (LConn1 as ISSLClientConnection).SetServerName('example.com');
 
@@ -825,7 +826,7 @@ begin
 
   LStream2 := TOfflineTLS13ServerStream.CreateResumed(LSession);
   try
-    LConn2 := LCtx2.CreateConnection(LStream2);
+    LConn2 := LCtx2.CreateConnection(TStreamWrapper.Create(LStream2, False));
     AssertTrue(LConn2 <> nil, 'Resumed OCSP-boundary connection should be created');
     AssertTrue(Supports(LConn2, ISSLSessionResumption, LResumption2),
       'Resumed OCSP-boundary connection should expose ISSLSessionResumption');
@@ -867,7 +868,7 @@ begin
     'http/1.1'
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'ALPN client connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -894,7 +895,7 @@ begin
     ''
   );
   try
-    LConnNoOverlap := LCtxNoOverlap.CreateConnection(LStreamNoOverlap);
+    LConnNoOverlap := LCtxNoOverlap.CreateConnection(TStreamWrapper.Create(LStreamNoOverlap, False));
     AssertTrue(LConnNoOverlap <> nil, 'ALPN no-overlap connection should be created');
     (LConnNoOverlap as ISSLClientConnection).SetServerName('example.com');
 

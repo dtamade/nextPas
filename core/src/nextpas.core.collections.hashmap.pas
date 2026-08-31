@@ -544,7 +544,7 @@ begin
   if FCapacity = 0 then Exit;
 
   // Initialize a default zero value properly
-  FillChar(defaultValue, SizeOf(V), 0);
+  defaultValue := Default(V);
 
   for i := 0 to FCapacity-1 do
   begin

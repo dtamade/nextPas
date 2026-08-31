@@ -34,6 +34,10 @@ type
     function WithLineStyle(const S: TStyle): ITimeline;
     function WithNodeChar(const C: AnsiString): ITimeline;
     function WithBlock(ABlock: IBlock): ITimeline;
+    { 数据更新面（PH33 P3，additive）：原地替换 / 追加事件 }
+    procedure SetEvents(const AEvents: array of TTimelineEvent);
+    procedure AddEvent(const AEvent: TTimelineEvent);
+    function WithEvents(const AEvents: array of TTimelineEvent): ITimeline;
   end;
 
   TTimeline = class(TInterfacedObject, IWidget, ITimeline)
@@ -50,6 +54,9 @@ type
     function WithLineStyle(const S: TStyle): ITimeline;
     function WithNodeChar(const C: AnsiString): ITimeline;
     function WithBlock(ABlock: IBlock): ITimeline;
+    procedure SetEvents(const AEvents: array of TTimelineEvent);
+    procedure AddEvent(const AEvent: TTimelineEvent);
+    function WithEvents(const AEvents: array of TTimelineEvent): ITimeline;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -98,6 +105,31 @@ begin FNodeChar := C; Result := Self; end;
 
 function TTimeline.WithBlock(ABlock: IBlock): ITimeline;
 begin FBlock := ABlock; Result := Self; end;
+
+{ PH33 P3：数据更新面——原地替换 / 追加事件 }
+procedure TTimeline.SetEvents(const AEvents: array of TTimelineEvent);
+var
+  LI: Integer;
+begin
+  SetLength(FEvents, System.Length(AEvents));
+  for LI := 0 to System.High(AEvents) do
+    FEvents[LI] := AEvents[LI];
+end;
+
+procedure TTimeline.AddEvent(const AEvent: TTimelineEvent);
+var
+  LN: Integer;
+begin
+  LN := System.Length(FEvents);
+  SetLength(FEvents, LN + 1);
+  FEvents[LN] := AEvent;
+end;
+
+function TTimeline.WithEvents(const AEvents: array of TTimelineEvent): ITimeline;
+begin
+  SetEvents(AEvents);
+  Result := Self;
+end;
 
 procedure TTimeline.Render(const AArea: TRect; ABuffer: TBuffer);
 var

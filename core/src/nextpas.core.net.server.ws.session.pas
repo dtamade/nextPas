@@ -43,6 +43,11 @@ uses
 
 const
   NET_WS_OUTBOUND_DEFAULT_LIMIT = 65536;
+  { 批量写分段冲刷阈值（上限一半）：SendTexts 拼缓冲累计到阈值即冲刷一次，
+    防整批未写出缓冲触顶 64KiB 溢出（那会把快消费者也判成溢出断连）；
+    阈值下快消费者 ~32KiB/次冲刷，慢消费者 WouldBlock 停在阈值处、余帧
+    入队自然超限断连（与逐帧 SendText 溢出语义一致）。 }
+  NET_WS_BATCH_FLUSH_THRESHOLD = 32 * 1024;
 
 type
   TNetWsSessionEvent = (
@@ -61,6 +66,10 @@ type
   IWebSocketFrameSession = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000017}']
     procedure SendText(const AText: string);
+    { 批量发文本帧（reactor/会话推进方）：循环 BuildFrame+EnqueueWire 只拼
+      缓冲，尾次统一 FlushOutbound 一次冲刷——省 N-1 次冲刷调用/syscall
+      （与 SendText 相同的溢出/非法帧/WouldBlock 语义，仅合并冲刷时机）。 }
+    procedure SendTexts(const ATexts: array of string);
     procedure SendBinary(const APayload: TBytes);
     { 发送数据帧（text/binary/raw opcode 0-2）。控帧/close 请用专门入口。 }
     procedure SendFrame(const AOpcode: Byte; const APayload: TBytes);
@@ -68,6 +77,14 @@ type
     procedure SendClose(const ACode: UInt16; const AReason: string);
     { 立即中止（不发 close 帧，不冲刷出站） }
     procedure Cancel;
+    { worker 线程可用的异步发送（经 SetFrameWorkerPush 注入的推送通道，
+      在 reactor 线程交付；未注入通道时为空操作）。 }
+    procedure SendTextFromWorker(const AText: string);
+    { 批量发文本帧（worker 线程）：内部一次 SubmitSendTexts（1 completion +
+      1 唤醒），reactor 循环投递——大批量推送路径省控制面。 }
+    procedure SendTextsFromWorker(const ATexts: array of string);
+    procedure SendBinaryFromWorker(const APayload: TBytes);
+    procedure SendCloseFromWorker(const ACode: UInt16; const AReason: string);
   end;
 
   TNetWsFrameSessionOptions = record
@@ -86,7 +103,7 @@ type
   { 事件驱动的 WS 帧服务器会话（见单元头注释）。 }
   TNetWsFrameSession = class(TInterfacedObject, ITcpServerSession,
     ITcpServerPollDrivenSession, ITcpServerPollDrivenSessionWithDeadline,
-    IWebSocketFrameSession)
+    ITcpServerSessionShutdown, IWebSocketFrameSession)
   private
     type
       TSessState = (
@@ -111,6 +128,7 @@ type
       FOutBytes: SizeUInt;
       FHeadPos: SizeUInt;
       FReadBuf: array[0..4095] of Byte;
+      FWorkerPush: IWebSocketFrameWorkerPush;
       procedure RefreshIdleDeadline;
       procedure NotifyClosed;
       procedure AbortSession;
@@ -126,10 +144,19 @@ type
     destructor Destroy; override;
     { IWebSocketFrameSession }
     procedure SendText(const AText: string);
+    procedure SendTexts(const ATexts: array of string);
     procedure SendBinary(const APayload: TBytes);
     procedure SendFrame(const AOpcode: Byte; const APayload: TBytes);
     procedure SendClose(const ACode: UInt16; const AReason: string);
     procedure Cancel;
+    procedure SendTextFromWorker(const AText: string);
+    procedure SendTextsFromWorker(const ATexts: array of string);
+    procedure SendBinaryFromWorker(const APayload: TBytes);
+    procedure SendCloseFromWorker(const ACode: UInt16; const AReason: string);
+    { 注入 worker→reactor 推送通道（升级函数在握手时设置；nil 则 FromWorker 为空操作） }
+    procedure SetFrameWorkerPush(const APush: IWebSocketFrameWorkerPush);
+    { ITcpServerSessionShutdown }
+    procedure BeginShutdownClose;
     { ITcpServerSession }
     function Run: TTcpServerConnOwnership;
     { ITcpServerPollDrivenSession }
@@ -213,7 +240,13 @@ begin
     Exit;
   FClosedNotified := True;
   if FSink <> nil then
+  begin
     FSink.OnSessionEvent(nwsEventClosed, Default(TNetWsFrame));
+    { 断开对 sink 的引用，打破 sink↔session 引用环（sink 常持有
+      IWebSocketFrameSession 以在回调中推送）：Closed 事件后会话不再
+      回调 sink，引用应让渡给 sink 侧。 }
+    FSink := nil;
+  end;
 end;
 
 procedure TNetWsFrameSession.AbortSession;
@@ -271,6 +304,18 @@ begin
   { 冲刷中同样判为进入关帧（关帧排在出站队尾，TCP 保序） }
   if FState in [stReading, stFlushing] then
     FState := stClosing;
+  FlushOutbound;
+end;
+
+{ 服务器 shutdown 钩子（readiness reactor drain 阶段调用，reactor 线程）：
+  补发 close frame 1001 going away 并冲刷——与 idle timeout/protocol error
+  同一 BeginServerClose 通道（stClosed 幂等、FCloseSent 防重、已互发 close
+  不重复补发）；drain 由 reactor 可写事件驱动 Advance/FlushOutbound 完成，
+  超 ShutdownTimeout 期限未完成的会话由 server 强关（等价阻塞路径
+  ForceClose）。 }
+procedure TNetWsFrameSession.BeginShutdownClose;
+begin
+  BeginServerClose(WS_CLOSE_GOING_AWAY, 'going away');
 end;
 
 { WebSocket 会话专用：控帧 >125 由编码器拒绝（SendFrame 静默丢弃非法帧）。 }
@@ -289,6 +334,11 @@ begin
   EnqueueWire(LSeg);
   if FState = stReading then
     FState := stFlushing;
+  { SendText 等由 reactor 线程（completion / handler 内）调用，入队后立即
+    冲刷：写成功回 stReading；WouldBlock 保持 stFlushing，等下一次可写
+    事件（Advance 尾部按 ANextEvents 同步 poller 事件集）。不能只靠状
+    态转换等待——事件集更新要一次 Advance 推进，这里直接完成冲刷。 }
+  FlushOutbound;
 end;
 
 procedure TNetWsFrameSession.SendText(const AText: string);
@@ -299,6 +349,42 @@ begin
   if Length(AText) > 0 then
     Move(AText[1], LBytes[0], SizeUInt(Length(AText)));
   SendFrame(Byte(WS_OPCODE_TEXT), LBytes);
+end;
+
+procedure TNetWsFrameSession.SendTexts(const ATexts: array of string);
+var
+  LI: Integer;
+  LBytes: TBytes;
+  LSeg: TBytes;
+  LCode: TNetWsEncodeCode;
+begin
+  if (FState = stClosed) or (FState = stClosing) then
+    Exit;
+  { 逐帧拼缓冲（EnqueueWire 每帧检查出站上限，溢出中止与 SendText 同义），
+    累计达阈值分段冲刷、尾次统一收尾——一次冲刷承载 ≥1 帧（省冲 syscall
+    调用；WouldBlock 语义不变——缓冲保留待可写事件续写）。 }
+  for LI := 0 to High(ATexts) do
+  begin
+    SetLength(LBytes, Length(ATexts[LI]));
+    if Length(ATexts[LI]) > 0 then
+      Move(ATexts[LI][1], LBytes[0], SizeUInt(Length(ATexts[LI])));
+    LCode := TNetWsFrameEncoder.BuildFrame(Byte(WS_OPCODE_TEXT), True,
+      LBytes, nwsServer, LSeg);
+    if LCode <> nwsEncodeOk then
+      Continue;   { 与 SendFrame 相同：非法帧静默丢弃 }
+    EnqueueWire(LSeg);
+    if FState = stClosed then
+      Break;      { 溢出中止：后续帧不再投递（与逐帧 SendText 语义一致） }
+    if FOutBytes >= NET_WS_BATCH_FLUSH_THRESHOLD then
+    begin
+      if FState = stReading then
+        FState := stFlushing;
+      FlushOutbound;
+    end;
+  end;
+  if FState = stReading then
+    FState := stFlushing;
+  FlushOutbound;
 end;
 
 procedure TNetWsFrameSession.SendBinary(const APayload: TBytes);
@@ -314,6 +400,7 @@ begin
   EnqueueClose(ACode, AReason);
   if FState in [stReading, stFlushing] then
     FState := stClosing;
+  FlushOutbound;
 end;
 
 procedure TNetWsFrameSession.Cancel;
@@ -326,6 +413,38 @@ begin
   FOutBytes := 0;
   FHeadPos := 0;
   NotifyClosed;
+end;
+
+procedure TNetWsFrameSession.SetFrameWorkerPush(
+  const APush: IWebSocketFrameWorkerPush);
+begin
+  FWorkerPush := APush;
+end;
+
+procedure TNetWsFrameSession.SendTextFromWorker(const AText: string);
+begin
+  if FWorkerPush <> nil then
+    FWorkerPush.SubmitSendText(AText);
+end;
+
+procedure TNetWsFrameSession.SendTextsFromWorker(
+  const ATexts: array of string);
+begin
+  if FWorkerPush <> nil then
+    FWorkerPush.SubmitSendTexts(ATexts);
+end;
+
+procedure TNetWsFrameSession.SendBinaryFromWorker(const APayload: TBytes);
+begin
+  if FWorkerPush <> nil then
+    FWorkerPush.SubmitSendBinary(APayload);
+end;
+
+procedure TNetWsFrameSession.SendCloseFromWorker(const ACode: UInt16;
+  const AReason: string);
+begin
+  if FWorkerPush <> nil then
+    FWorkerPush.SubmitSendClose(ACode, AReason);
 end;
 
 function TNetWsFrameSession.Run: TTcpServerConnOwnership;
@@ -388,6 +507,43 @@ var
   LError: TNetWsDecodeCode;
   LDone: Boolean;
   LI: Int32;
+  { 一次读入可能含多帧：先全部解码入本地队列。处理过程会迁移状态
+    （echo→Flushing、close→Closing），若边解码边处理会中断剩余
+    缓冲帧，而内核已无可读事件——它们将永久滞留。 }
+  procedure FeedAndDecode;
+  begin
+    FDecoder.Feed(PByte(@FReadBuf[0]), LRead);
+    LDone := False;
+    while not LDone do
+    begin
+      LDecodeCode := FDecoder.TryDecode(LFrame);
+      case LDecodeCode of
+        nwsDecodeFrame:
+          begin
+            SetLength(LDeferred, LDeferredCount + 1);
+            LDeferred[LDeferredCount] := LFrame;
+            Inc(LDeferredCount);
+          end;
+        nwsDecodeClosed:
+          begin
+            LError := nwsDecodeClosed;
+            LDone := True;
+          end;
+        nwsDecodeProtocolError:
+          begin
+            LError := nwsDecodeProtocolError;
+            LDone := True;
+          end;
+        nwsDecodeTooLarge:
+          begin
+            LError := nwsDecodeTooLarge;
+            LDone := True;
+          end;
+        nwsDecodeNeedMore:
+          LDone := True;
+      end;
+    end;
+  end;
 begin
   if FConnRuntime = nil then
     Exit;
@@ -406,44 +562,14 @@ begin
             NotifyClosed;
             Exit;
           end;
-          FDecoder.Feed(PByte(@FReadBuf[0]), LRead);
-          { 一次读入可能含多帧：先全部解码入本地队列。处理过程会迁移状态
-            （echo→Flushing、close→Closing），若边解码边处理会中断剩余
-            缓冲帧，而内核已无可读事件——它们将永久滞留。 }
-          LDone := False;
-          while not LDone do
-          begin
-            LDecodeCode := FDecoder.TryDecode(LFrame);
-            case LDecodeCode of
-              nwsDecodeFrame:
-                begin
-                  SetLength(LDeferred, LDeferredCount + 1);
-                  LDeferred[LDeferredCount] := LFrame;
-                  Inc(LDeferredCount);
-                end;
-              nwsDecodeClosed:
-                begin
-                  LError := nwsDecodeClosed;
-                  LDone := True;
-                end;
-              nwsDecodeProtocolError:
-                begin
-                  LError := nwsDecodeProtocolError;
-                  LDone := True;
-                end;
-              nwsDecodeTooLarge:
-                begin
-                  LError := nwsDecodeTooLarge;
-                  LDone := True;
-                end;
-              nwsDecodeNeedMore:
-                LDone := True;
-            end;
-          end;
+          FeedAndDecode;
         end;
       tsiorWouldBlock:
         begin
-          { 本批已读尽：停止读循环，仍继续处理已解码帧 }
+          { 兼容部分交付语义（如 prepend 前缀读完、内层 WouldBlock）：
+            LRead > 0 时先交付已读字节再停。 }
+          if LRead > 0 then
+            FeedAndDecode;
           Break;
         end;
       tsiorClosed, tsiorTimeout:

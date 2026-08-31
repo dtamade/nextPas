@@ -10,6 +10,7 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.input,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.command_palette,
   nextpas.core.test;
 
@@ -194,6 +195,31 @@ begin
   end;
 end;
 
+{ PH29：极小区 sweep——1..6×1..6 全组合渲染不抛异常（修复前
+  PalW := AArea.Width - 4 在窄区 Word 下溢 65533 绕过 <=0 检查） }
+procedure TestCommandPaletteRenderTinyAreas;
+var
+  CP: ICommandPalette;
+  Buf: TBuffer;
+  State: TCommandPaletteState;
+  LW, LH: Integer;
+begin
+  CP := TCommandPalette.New([TCommandItem.Make('open', 'Open a file')]);
+  for LW := 1 to 6 do
+    for LH := 1 to 6 do
+    begin
+      State := TCommandPaletteState.Empty;
+      State.Open;
+      Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, LW, LH));
+      try
+        CP.RenderStateful(TRect.Make(0, 0, LW, LH), Buf, State);
+        Check(True, 'render in tiny area');
+      finally
+        Buf.Free;
+      end;
+    end;
+end;
+
 procedure TestCommandPaletteUpdateFilter;
 var
   CP: ICommandPalette;
@@ -209,6 +235,38 @@ begin
   State.Input.Text := 'sa';
   CP.UpdateFilter(State);
   Check(Length(State.FilteredIndices) > 0, 'filter produces results');
+end;
+
+{ PH33 P1：过滤结果按 FuzzyScore 降序排名（此前 Score 只算不用）。
+  query='sa' 手算：'sa'=前缀50+连续(10+20)=80 > 'sta'=60+10=70 >
+  'xsa'=10+20=30（'as' 非 'sa' 子序列不入集）；空查询全 1000 同分 →
+  插入排序稳定保持原序 }
+procedure TestCommandPaletteFilterRanking;
+var
+  CP: ICommandPalette;
+  State: TCommandPaletteState;
+begin
+  CP := TCommandPalette.New([
+    TCommandItem.Make('xsa', 'C'),
+    TCommandItem.Make('sa', 'A'),
+    TCommandItem.Make('sta', 'B')
+  ]);
+  State := TCommandPaletteState.Empty;
+  State.Open;
+  State.Input.Text := 'sa';
+  CP.UpdateFilter(State);
+  Check(Length(State.FilteredIndices) = 3, 'all three match as subsequence');
+  Check((State.FilteredIndices[0] = 1) and
+        (State.FilteredIndices[1] = 2) and
+        (State.FilteredIndices[2] = 0),
+        'filter results ranked by FuzzyScore descending');
+
+  State.Input.Text := '';
+  CP.UpdateFilter(State);
+  Check((State.FilteredIndices[0] = 0) and
+        (State.FilteredIndices[1] = 1) and
+        (State.FilteredIndices[2] = 2),
+        'empty query keeps original order (stable sort)');
 end;
 
 procedure TestCommandPaletteSelectedItem;
@@ -258,6 +316,34 @@ begin
   end;
 end;
 
+{ PH33 P2b：布局配置面——WithBlock 块包装（浮层在块内容区内定位，项仍可见） }
+procedure TestPaletteWithBlock;
+var CP: ICommandPalette; Buf: TBuffer; State: TCommandPaletteState;
+    LAll: AnsiString; I: Integer;
+begin
+  CP := TCommandPalette.New([TCommandItem.Make('open-file', 'Open')])
+    .WithBlock(TBlock.Bordered('T'));
+  State := TCommandPaletteState.Empty;
+  State.Open;
+  Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, 60, 20));
+  try
+    CP.RenderStateful(TRect.Make(0, 0, 60, 20), Buf, State);
+    LAll := '';
+    for I := 0 to 19 do LAll := LAll + Buf.RowAsString(I);
+    Check(Pos(#$E2#$94#$8C, Buf.RowAsString(0)) > 0, 'block border drawn');
+    Check(Pos('open-file', LAll) > 0, 'item visible inside block');
+  finally
+    Buf.Free;
+  end;
+end;
+
+procedure TestPaletteWithBlockChaining;
+var CP: ICommandPalette;
+begin
+  CP := TCommandPalette.New([]).WithBlock(TBlock.Bordered('x'));
+  Check(CP <> nil, 'WithBlock chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.command_palette');
 
@@ -288,10 +374,14 @@ begin
   { CommandPalette widget tests }
   T.Test('render empty', @TestCommandPaletteRenderEmpty);
   T.Test('render with items', @TestCommandPaletteRenderWithItems);
+  T.Test('render tiny areas', @TestCommandPaletteRenderTinyAreas);
   T.Test('update filter', @TestCommandPaletteUpdateFilter);
+  T.Test('filter ranking by score (PH33 P1)', @TestCommandPaletteFilterRanking);
   T.Test('selected item', @TestCommandPaletteSelectedItem);
   T.Test('builder chaining', @TestCommandPaletteBuilderChaining);
   T.Test('hidden palette', @TestCommandPaletteHidden);
+  T.Test('WithBlock render (PH33 P2b)', @TestPaletteWithBlock);
+  T.Test('WithBlock chaining (PH33 P2b)', @TestPaletteWithBlockChaining);
 
   if not T.Run then Halt(1);
 end.

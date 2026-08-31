@@ -15,8 +15,8 @@ uses
   nextpas.core.tls.cert.builder.impl;
 
 const
-  CERT_FIXTURE_PATH = 'tests/certificate/test_certs/signer_cert.pem';
-  KEY_FIXTURE_PATH = 'tests/certificate/test_certs/signer_key.pem';
+  CERT_FIXTURE_PATH = 'certificate/test_certs/signer_cert.pem';
+  KEY_FIXTURE_PATH = 'certificate/test_certs/signer_key.pem';
 
 var
   TotalTests: Integer = 0;

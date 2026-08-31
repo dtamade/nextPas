@@ -6,7 +6,7 @@ program test_winssl_certstore;
   test_winssl_certstore - WinSSL 证书存储测试
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2026-01-18
 
   描述:
@@ -135,14 +135,14 @@ var
 begin
   LRootOptions := TCertificateUtils.DefaultGenOptions;
   LRootOptions.CommonName := 'winssl-chain-root.local';
-  LRootOptions.Organization := 'fafafa.ssl';
+  LRootOptions.Organization := 'nextpas.core.tls';
   LRootOptions.IsCA := True;
   if not TCertificateUtils.GenerateSelfSigned(LRootOptions, ARootCertPEM, ARootKeyPEM) then
     raise Exception.Create('GenerateSelfSigned(root) failed');
 
   LInterOptions := TCertificateUtils.DefaultGenOptions;
   LInterOptions.CommonName := 'winssl-chain-intermediate.local';
-  LInterOptions.Organization := 'fafafa.ssl';
+  LInterOptions.Organization := 'nextpas.core.tls';
   LInterOptions.IsCA := True;
   if not TCertificateUtils.GenerateSigned(
     LInterOptions,
@@ -155,7 +155,7 @@ begin
 
   LLeafOptions := TCertificateUtils.DefaultGenOptions;
   LLeafOptions.CommonName := 'winssl-chain-leaf.local';
-  LLeafOptions.Organization := 'fafafa.ssl';
+  LLeafOptions.Organization := 'nextpas.core.tls';
   LLeafOptions.IsCA := False;
   if not TCertificateUtils.GenerateSigned(
     LLeafOptions,

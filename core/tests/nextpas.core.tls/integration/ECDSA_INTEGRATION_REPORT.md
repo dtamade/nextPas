@@ -1,17 +1,17 @@
 # ECDSA Integration Test Report
 
-**Date:** 2025-01-28  
-**Modules:** `fafafa.ssl.openssl.ecdsa` + `fafafa.ssl.openssl.ec`  
-**Test File:** `test_ecdsa_simple.pas`  
+**Date:** 2025-01-28
+**Modules:** `nextpas.ssl.openssl.ecdsa` + `nextpas.ssl.openssl.ec`
+**Test File:** `test_ecdsa_simple.pas`
 **Status:** ✅ **ALL TESTS PASSED**
 
 ---
 
 ## Test Results Summary
 
-**Total Tests:** 16  
-**Passed:** 16 ✅  
-**Failed:** 0  
+**Total Tests:** 16
+**Passed:** 16 ✅
+**Failed:** 0
 **Success Rate:** 100%
 
 ---
@@ -47,11 +47,11 @@
 ## Technical Details
 
 ### Dependencies
-- `fafafa.ssl.openssl.core` - Core library loading
-- `fafafa.ssl.openssl.ec` - Elliptic curve operations
-- `fafafa.ssl.openssl.ecdsa` - ECDSA signature functions
-- `fafafa.ssl.openssl.bn` - Big number operations
-- `fafafa.ssl.openssl.consts` - NID constants
+- `nextpas.ssl.openssl.core` - Core library loading
+- `nextpas.ssl.openssl.ec` - Elliptic curve operations
+- `nextpas.ssl.openssl.ecdsa` - ECDSA signature functions
+- `nextpas.ssl.openssl.bn` - Big number operations
+- `nextpas.ssl.openssl.consts` - NID constants
 
 ### OpenSSL Version
 - **Loaded:** OpenSSL 3.x

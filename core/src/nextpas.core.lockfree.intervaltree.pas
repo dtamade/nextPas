@@ -48,7 +48,6 @@ type
 
   TIntervalArray = array of TInterval;
 
-  {** @concurrency Thread-safe (see source for details). }
   TIntervalTree = class
   private
     FRoot: PIntervalNode;
@@ -371,12 +370,14 @@ end;
 
 function TIntervalTree.FindOverlapping(APoint: Int64): TIntervalArray;
 begin
+  Result := nil;
   SetLength(Result, 0);
   DoFindOverlapping(FRoot, APoint, Result);
 end;
 
 function TIntervalTree.FindRange(const ALo, AHi: Int64): TIntervalArray;
 begin
+  Result := nil;
   SetLength(Result, 0);
   DoFindRange(FRoot, ALo, AHi, Result);
 end;

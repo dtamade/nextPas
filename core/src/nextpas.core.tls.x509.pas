@@ -30,7 +30,7 @@ unit nextpas.core.tls.x509;
     extensions      [3]  EXPLICIT Extensions OPTIONAL
   ]
 
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 1.0.0
 }
 

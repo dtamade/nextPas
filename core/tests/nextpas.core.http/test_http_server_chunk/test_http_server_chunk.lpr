@@ -345,6 +345,9 @@ property Output: string read FOutput;
   public
     constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
     function WorkerHandoff: ITcpServerWorkerHandoff;
+    function HandoffHijackedConn(const AConn: ITcpStream;
+      const ANewSession: ITcpServerSession): Boolean;
+    function SubmitHijackMigration: Boolean;
   end;
 
 procedure CheckRaisesHekArgument(const ALabel: string; const AProbe: TProc);
@@ -1213,6 +1216,19 @@ end;
 function TMockSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
 begin
   Result := FWorkerHandoff;
+end;
+
+function TMockSessionContext.HandoffHijackedConn(const AConn: ITcpStream;
+  const ANewSession: ITcpServerSession): Boolean;
+begin
+  { mock 不模拟 hijack 迁移：报告不可迁移。 }
+  Result := False;
+end;
+
+function TMockSessionContext.SubmitHijackMigration: Boolean;
+begin
+  { mock 无在途迁移可提交。 }
+  Result := False;
 end;
 
 function DefaultH1ServerTransportOptions(

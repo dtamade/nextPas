@@ -35,6 +35,10 @@ type
       on CONNECT and on absolute-form when the request lacks that header.
       Wave I freeze: Basic only — no Digest/NTLM/Negotiate challenge retry. }
     ProxyUrl: string;
+    { Custom transport dial (see THttpClientOptions.DialFunc). When assigned,
+      every fresh connection is established through it instead of the built-in
+      TcpConnect; ProxyUrl takes precedence when both are set. }
+    DialFunc: THttpDialFunc;
     { Optional client TLS context for direct H1 https and https-over-CONNECT.
       Nil uses TSSLQuick.SecureClient. }
     TLSContext: ISSLContext;
@@ -47,7 +51,8 @@ implementation
 
 uses
   nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors,
-  nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
+  nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.io.memory,
+  nextpas.core.net,
   nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.time,
   nextpas.core.text.conv,
   nextpas.core.encoding,
@@ -556,6 +561,13 @@ begin
     (LParser.GetStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS);
 
   LBodyReader := LParser.NewBodyReader;
+  { F8（pascn backfeed）：无体响应（204/304/HEAD/Content-Length:0）的 Body
+    语义是「空」而非「无」——补空读取器，IHttpResponse.Body 恒非 nil，
+    消费方 ReadAll(Body) 无需 nil 防御。流式 sink 模式（ASkipBodyBuffer）
+    体已分派、Body=nil 契约不变；错误/未完成路径交上层异常处理，不补。 }
+  if (LBodyReader = nil) and (not ASkipBodyBuffer) and
+     LParser.IsComplete and (not LParser.HasError) and (LParser.GetBodySize = 0) then
+    LBodyReader := CreateBytesStreamFrom(nil) as IReader;
   if LBodyReader <> nil then
   begin
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders,
@@ -616,9 +628,16 @@ var
 
   procedure PrepareFreshConnection;
   begin
-    { ConnectTimeout (or Timeout when ConnectTimeout=0) bounds OS dial. }
-    LConn := H1ClientDial(LConnectHost, LConnectPort, FOptions.ConnectTimeout,
-      LTimeoutMs);
+    { ConnectTimeout (or Timeout when ConnectTimeout=0) bounds OS dial.
+      Custom dial func (SOCKS5 tunnels etc.) replaces the built-in TcpConnect;
+      it receives the same deadline budget and must raise on failure. WithProxyUrl
+      strictly takes precedence: a proxied request always dials the proxy host. }
+    if (FOptions.ProxyUrl = '') and Assigned(FOptions.DialFunc) then
+      LConn := FOptions.DialFunc(LConnectHost, LConnectPort,
+        FOptions.ConnectTimeout, LTimeoutMs)
+    else
+      LConn := H1ClientDial(LConnectHost, LConnectPort, FOptions.ConnectTimeout,
+        LTimeoutMs);
     { New dial: ConnectTimeout also bounds post-dial first write / CONNECT. }
     if FOptions.ConnectTimeout > 0 then
       ApplyClientDeadline(LConn, ClientRequestDeadline(FOptions.ConnectTimeout))
@@ -715,7 +734,22 @@ begin
   LConn := FPool.Get(LPoolHostKey, LConnectPort);
   LPooled := LConn <> nil;
   if not LPooled then
-    PrepareFreshConnection
+  begin
+    { 拨号阶段（DNS/connect/TLS/CONNECT 隧道）与写读阶段同一传输异常契约：
+      ENetworkError/ETimeoutError 经 HttpWrapTransportException 包装为
+      EHttpError，裸网络异常不穿透 RoundTrip。 }
+    try
+      PrepareFreshConnection;
+    except
+      on E: Exception do
+      begin
+        LWrapped := HttpWrapTransportException(E);
+        if LWrapped <> nil then
+          raise LWrapped;
+        raise;
+      end;
+    end;
+  end
   else
   begin
     ApplyClientDeadline(LConn, LRequestDeadline);

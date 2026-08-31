@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.base - Windows Schannel API 类型定义
   
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-04
   
   描述:

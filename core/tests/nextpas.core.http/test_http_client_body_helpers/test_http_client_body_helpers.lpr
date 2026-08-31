@@ -168,6 +168,7 @@ type
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
   end;
@@ -463,6 +464,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
@@ -1601,6 +1603,11 @@ begin
   Result := 0;
 end;
 
+function TNilHeadersRequest.GetRemoteIp: string;
+begin
+  Result := GetRemoteAddr;
+end;
+
 function TNilHeadersRequest.GetRemoteAddr: string;
 begin
   Result := '';
@@ -2371,6 +2378,11 @@ begin
 end;
 
 function TDownloadClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
 begin
   Result := Self;
 end;

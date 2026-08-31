@@ -322,15 +322,66 @@ begin
 end;
 
 function UInt64DecimalDigits(const AValue: UInt64): Int32; inline;
-var
-  LValue: UInt64;
 begin
-  Result := 1;
-  LValue := AValue;
-  while LValue >= 10 do
+  // perf: table-driven binary search over powers of 10 (compare-only, no div).
+  // Replaces div-10 loop (up to 19 divisions) with ~5 compares on average.
+  if AValue < 10000000000 then
   begin
-    LValue := LValue div 10;
-    Inc(Result);
+    if AValue < 100000 then
+    begin
+      if AValue < 1000 then
+      begin
+        if AValue < 10 then Exit(1)
+        else if AValue < 100 then Exit(2)
+        else Exit(3);
+      end
+      else
+      begin
+        if AValue < 10000 then Exit(4) else Exit(5);
+      end;
+    end
+    else
+    begin
+      if AValue < 100000000 then
+      begin
+        if AValue < 1000000 then Exit(6)
+        else if AValue < 10000000 then Exit(7)
+        else Exit(8);
+      end
+      else
+      begin
+        if AValue < 1000000000 then Exit(9) else Exit(10);
+      end;
+    end;
+  end
+  else
+  begin
+    if AValue < 1000000000000000 then
+    begin
+      if AValue < 1000000000000 then
+      begin
+        if AValue < 100000000000 then Exit(11) else Exit(12);
+      end
+      else
+      begin
+        if AValue < 10000000000000 then Exit(13)
+        else if AValue < 100000000000000 then Exit(14)
+        else Exit(15);
+      end;
+    end
+    else
+    begin
+      if AValue < 1000000000000000000 then
+      begin
+        if AValue < 10000000000000000 then Exit(16)
+        else if AValue < 100000000000000000 then Exit(17)
+        else Exit(18);
+      end
+      else
+      begin
+        if AValue < 10000000000000000000 then Exit(19) else Exit(20);
+      end;
+    end;
   end;
 end;
 

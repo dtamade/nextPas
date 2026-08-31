@@ -34,6 +34,9 @@ type
       handler execution for short-request scale (S1-1). Tests that assert handoff
       must set True. }
     PreferPollWorkerHandoff: Boolean;
+    { R11: read-abort observation sink (may be nil). Fired when a request
+      read deadline expires mid-request; never for idle keep-alive waits. }
+    ReadAbortSink: IHttpServerReadAbortSink;
   end;
 
 
@@ -107,6 +110,8 @@ type
       const ACloseAfterDrain: Boolean);
     procedure ArmPollWriteDeadline;
     procedure ArmDirectWriteDeadline;
+    { R11: fire the read-abort sink (best-effort, never raises). }
+    procedure NotifyReadAbort;
     function UsePollOwnedResponseDrain: Boolean;
     function ExecuteCurrentRequest: TTcpServerConnOwnership;
     function ExecuteCurrentPollRequest(out AOutbound: IH1OutboundBuffer;
@@ -138,6 +143,7 @@ function IsRequestReadFailure(const E: Exception): Boolean;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.base, nextpas.core.base.utils,
   nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
   nextpas.core.time.base, nextpas.core.time,
@@ -151,7 +157,8 @@ uses
   nextpas.core.http.mem,
   nextpas.core.http.middleware.requestarena,
   nextpas.core.http.impl.h1.serve,
-  nextpas.core.http.impl.h1.poll;
+  nextpas.core.http.impl.h1.poll,
+  nextpas.core.net.async.tlspas;
 
 function ShouldKeepAlive(const AParser: IH1Parser): Boolean; inline;
 var
@@ -179,7 +186,7 @@ end;
 function RequestMetadata(const AParser: IH1Parser): TH1RequestMetadata; inline;
 begin
   if AParser = nil then
-    Exit(Default(TH1RequestMetadata));
+    Exit(EmptyH1RequestMetadata);
   Result := AParser.GetRequestMetadata;
 end;
 
@@ -580,6 +587,17 @@ begin
       TDuration.FromMilliseconds(FOptions.WriteTimeout)));
 end;
 
+procedure TH1ServerConnectionState.NotifyReadAbort;
+begin
+  { Observation must never break the close path: sink faults are swallowed. }
+  if FOptions.ReadAbortSink = nil then
+    Exit;
+  try
+    FOptions.ReadAbortSink.OnReadAbort(FConn.RemoteAddr.ToString);
+  except
+  end;
+end;
+
 function TH1ServerConnectionState.UsePollOwnedResponseDrain: Boolean;
 begin
   Result := FStreamRuntime <> nil;
@@ -596,6 +614,8 @@ var
   LResponseWriter: IWriter;
   LDrainStarted: Boolean;
   LKeepAlive: Boolean;
+  LEarly: ITlsPasEarlyDataInfo;
+  LEarlyReq: IHttpRequestWithEarlyData;
 begin
   Result := tscoServer;
   LW := nil;
@@ -639,6 +659,10 @@ begin
     end;
 
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
+    // 0-RTT: propagate TLS early-data flag to request for EarlyDataMiddleware
+    if Supports(FConn, ITlsPasEarlyDataInfo, LEarly) then
+      if Supports(LReq, IHttpRequestWithEarlyData, LEarlyReq) then
+        LEarlyReq.SetWasEarlyData(LEarly.GetWasEarlyDataAccepted);
 
     if FPending <> '' then
       LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
@@ -648,6 +672,7 @@ begin
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead, FOptions.WriteTimeout);
+    (LW as TH1ResponseWriter).AttachSessionContext(FSessionContext);
     { RFC 7231 §7.1.1.2: responses SHOULD carry a Date header. Inject before
       the handler runs; a handler-set date wins (SetHeader replaces). }
     HttpEnsureDateHeader(LW.GetHeaders);
@@ -712,6 +737,8 @@ var
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
   LKeepAlive: Boolean;
+  LEarly: ITlsPasEarlyDataInfo;
+  LEarlyReq: IHttpRequestWithEarlyData;
 begin
   Result := tscoServer;
   AOutbound := nil;
@@ -758,6 +785,10 @@ begin
     end;
 
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
+    // 0-RTT: propagate TLS early-data flag to request for EarlyDataMiddleware
+    if Supports(FConn, ITlsPasEarlyDataInfo, LEarly) then
+      if Supports(LReq, IHttpRequestWithEarlyData, LEarlyReq) then
+        LEarlyReq.SetWasEarlyData(LEarly.GetWasEarlyDataAccepted);
 
     if FPending <> '' then
       LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
@@ -767,6 +798,7 @@ begin
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead, FOptions.WriteTimeout);
+    (LW as TH1ResponseWriter).AttachSessionContext(FSessionContext);
     { RFC 7231 §7.1.1.2: responses SHOULD carry a Date header. Inject before
       the handler runs; a handler-set date wins (SetHeader replaces). }
     HttpEnsureDateHeader(LW.GetHeaders);

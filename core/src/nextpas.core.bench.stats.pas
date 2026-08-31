@@ -137,6 +137,7 @@ var
   LLen, LValidCount, I: Integer;
 begin
   LLen := Length(AData);
+  Result := nil;
   SetLength(Result, LLen);
   LValidCount := 0;
   for I := 0 to High(AData) do

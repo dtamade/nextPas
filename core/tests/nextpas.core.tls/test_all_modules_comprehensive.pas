@@ -3,7 +3,8 @@ program test_all_modules_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes;
+  nextpas.core.system.sysutils,
+  nextpas.core.text.conv, nextpas.core.system.classes;
 
 type
   TModuleStatus = (msNotTested, msCompileOK, msCompileFail, msLoadOK, msLoadFail);

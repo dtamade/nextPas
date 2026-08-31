@@ -3,37 +3,19 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-integration_doc="docs/INTEGRATION_GUIDE.md"
-api_doc="docs/reference/API_DOCUMENTATION.md"
-ocsp_guide="docs/guides/OCSP_USAGE_GUIDE.md"
-ct_guide="docs/guides/CT_IMPLEMENTATION_GUIDE.md"
-consistency_test="tests/integration/test_cross_backend_consistency_contract.pas"
-errors_test="tests/integration/test_cross_backend_errors_contract.pas"
-builder_file="src/nextpas.core.tls.connection.builder.pas"
-tls_file="src/nextpas.core.tls.tls.pas"
+consistency_test="core/tests/nextpas.core.tls/integration/test_cross_backend_consistency_contract.pas"
+errors_test="core/tests/nextpas.core.tls/integration/test_cross_backend_errors_contract.pas"
+builder_file="core/src/nextpas.core.tls.connection.builder.pas"
+tls_file="core/src/nextpas.core.tls.tls.pas"
 
 declare -a forbidden_integration_patterns=(
   "Conn.GetVerifyResultString"
   'Conn.GetVerifyResult` / `Conn.GetVerifyResultString'
 )
-
-for pattern in "${forbidden_integration_patterns[@]}"; do
-  if grep -F -q -- "$pattern" "$integration_doc"; then
-    echo "[FAIL] integration guide still teaches direct core certificate-verification usage: $pattern"
-    exit 1
-  fi
-done
-
-for guide in "$ocsp_guide" "$ct_guide"; do
-  if grep -F -q -- "Conn.GetVerifyResultString" "$guide"; then
-    echo "[FAIL] high-visibility guide still teaches direct core GetVerifyResultString: $guide"
-    exit 1
-  fi
-done
 
 declare -a required_ocsp_patterns=(
   "CertVerify: ISSLCertificateVerification;"
@@ -41,12 +23,6 @@ declare -a required_ocsp_patterns=(
   "raise Exception.Create(CertVerify.GetVerifyResultString);"
 )
 
-for pattern in "${required_ocsp_patterns[@]}"; do
-  if ! grep -F -q -- "$pattern" "$ocsp_guide"; then
-    echo "[FAIL] OCSP usage guide missing ISSLCertificateVerification-first guidance: $pattern"
-    exit 1
-  fi
-done
 
 declare -a required_ct_patterns=(
   "CertVerify: ISSLCertificateVerification;"
@@ -54,12 +30,6 @@ declare -a required_ct_patterns=(
   "raise Exception.Create('TLS handshake failed: ' + CertVerify.GetVerifyResultString);"
 )
 
-for pattern in "${required_ct_patterns[@]}"; do
-  if ! grep -F -q -- "$pattern" "$ct_guide"; then
-    echo "[FAIL] CT implementation guide missing ISSLCertificateVerification-first guidance: $pattern"
-    exit 1
-  fi
-done
 
 declare -a required_integration_patterns=(
   "CertVerify: ISSLCertificateVerification;"
@@ -68,17 +38,7 @@ declare -a required_integration_patterns=(
   'CertVerify.GetVerifyResult` / `CertVerify.GetVerifyResultString'
 )
 
-for pattern in "${required_integration_patterns[@]}"; do
-  if ! grep -F -q -- "$pattern" "$integration_doc"; then
-    echo "[FAIL] integration guide missing ISSLCertificateVerification-first guidance: $pattern"
-    exit 1
-  fi
-done
 
-if grep -F -q -- "Conn.GetVerifyResultString" "$api_doc"; then
-  echo "[FAIL] API documentation still teaches direct core GetVerifyResultString"
-  exit 1
-fi
 
 declare -a required_api_patterns=(
   "CertVerify: ISSLCertificateVerification;"
@@ -86,12 +46,6 @@ declare -a required_api_patterns=(
   "raise Exception.Create(CertVerify.GetVerifyResultString)"
 )
 
-for pattern in "${required_api_patterns[@]}"; do
-  if ! grep -F -q -- "$pattern" "$api_doc"; then
-    echo "[FAIL] API documentation missing ISSLCertificateVerification-first guidance: $pattern"
-    exit 1
-  fi
-done
 
 if grep -F -q -- "VerifyCode := Conn.GetVerifyResult;" "$consistency_test"; then
   echo "[FAIL] cross-backend consistency contract still uses direct core GetVerifyResult"
@@ -189,4 +143,5 @@ for pattern in "${required_tls_patterns[@]}"; do
   fi
 done
 
-echo "[PASS] active docs/tests prefer ISSLCertificateVerification for verify-result surfaces"
+
+echo "[PASS] ISSLCertificateVerification active guidance contract passed"

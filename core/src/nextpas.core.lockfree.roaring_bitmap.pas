@@ -64,7 +64,6 @@ type
    *   - 最大支持 2^32 个位 (UInt32)
    *   - 单线程写，多线程读安全（不可变容器引用）
    *}
-  {** @concurrency Thread-safe (see source for details). }
   TRoaringBitmap = class
   private
     FContainers: array[0..RB_MAX_CONTAINERS - 1] of PRBContainer;

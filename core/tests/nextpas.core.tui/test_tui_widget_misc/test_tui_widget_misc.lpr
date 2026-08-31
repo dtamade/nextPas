@@ -175,7 +175,9 @@ var LS: IScrollbar;
 begin
   LS := TScrollbar.New.WithTotal(1).WithVisible(1).WithOffset(0);
   CheckEqual(Int64(0), Int64(LS.ThumbStart(5)), 'single item thumb at 0');
-  Check(LS.HitAt(TRect.Make(0, 0, 1, 5), 0) = shThumb, 'single item hit thumb');
+  { 未溢出(total = visible)= 无滚动条可点,HitAt 恒 shNone(语义修正:
+    旧断言编码了退化态 ThumbSize 铺满整轨、整列误报 shThumb 的错误行为) }
+  Check(LS.HitAt(TRect.Make(0, 0, 1, 5), 0) = shNone, 'single item no hit');
 end;
 
 procedure TestScrollbarOffsetFromDragY;

@@ -189,7 +189,8 @@ var
   LErr: Int32;
   LSent: Int32;
 begin
-  LErr := platform_socket_send(FSocket, @ABuffer, ACount, 0, LSent);
+  { MSG_NOSIGNAL：对端断连时返回 EPIPE 而非 SIGPIPE 杀进程（F-7）。 }
+  LErr := platform_socket_send(FSocket, @ABuffer, ACount, PLATFORM_MSG_NOSIGNAL, LSent);
   if LErr <> 0 then
   begin
     if FNonBlocking and platform_socket_error_would_block(LErr) then

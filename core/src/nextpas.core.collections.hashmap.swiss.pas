@@ -145,6 +145,7 @@ type
     function GetKeys: TKeyArray;
     function GetCtrlByte(AIndex: SizeUInt): Byte; inline;
     function GetSlotKey(AIndex: SizeUInt): K; inline;
+    function GetSlotValue(AIndex: SizeUInt): V; inline;
     function GetEnumerator: TEnumerator;
     function GetPtrEnumerator: TPtrEnumerator;
     function Slots: PSlot; inline;
@@ -644,10 +645,14 @@ var
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
+  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
+    不可达（FPC 6018）——按设计保留，作用域内关警 }
+  {$PUSH}{$WARN 6018 OFF}
   if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
+  {$POP}
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -683,10 +688,14 @@ var
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
+  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
+    不可达（FPC 6018）——按设计保留，作用域内关警 }
+  {$PUSH}{$WARN 6018 OFF}
   if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
+  {$POP}
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -722,10 +731,14 @@ begin
   if FCapacity = 0 then
     GrowAndRehash;
 
+  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
+    不可达（FPC 6018）——按设计保留，作用域内关警 }
+  {$PUSH}{$WARN 6018 OFF}
   if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
+  {$POP}
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -793,10 +806,14 @@ var
   LIdx, LGroupBase: SizeUInt;
 begin
   if FCapacity = 0 then Exit(False);
+  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
+    不可达（FPC 6018）——按设计保留，作用域内关警 }
+  {$PUSH}{$WARN 6018 OFF}
   if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
+  {$POP}
   if not FindIndex(AKey, Lh, LIdx) then Exit(False);
 
   ClearSlot(LIdx);
@@ -827,10 +844,14 @@ var
 begin
   if FCapacity = 0 then
     GrowAndRehash;
+  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
+    不可达（FPC 6018）——按设计保留，作用域内关警 }
+  {$PUSH}{$WARN 6018 OFF}
   if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
+  {$POP}
   LIdx := FindInsertSlot(Lh, LWasEmpty);
   if LWasEmpty and (FGrowthLeft = 0) then
   begin
@@ -1009,6 +1030,11 @@ end;
 function TSwissTable.GetSlotKey(AIndex: SizeUInt): K;
 begin
   Result := FSlots[AIndex].Key;
+end;
+
+function TSwissTable.GetSlotValue(AIndex: SizeUInt): V;
+begin
+  Result := FSlots[AIndex].Value;
 end;
 
 function TSwissTable.TEnumerator.MoveNext: Boolean;

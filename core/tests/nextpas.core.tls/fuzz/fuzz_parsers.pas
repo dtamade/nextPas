@@ -3,7 +3,7 @@ program fuzz_parsers;
 {$mode objfpc}{$H+}
 
 {**
- * Fuzz Testing for fafafa.ssl Parsers
+ * Fuzz Testing for nextpas.core.tls Parsers
  *
  * Targets security-critical parsing functions:
  * - Certificate PEM/DER parsing
@@ -198,7 +198,7 @@ var
 
 begin
   WriteLn('================================================================');
-  WriteLn('       fafafa.ssl Parser Fuzz Testing Suite                     ');
+  WriteLn('       nextpas.core.tls Parser Fuzz Testing Suite                     ');
   WriteLn('================================================================');
   WriteLn;
 

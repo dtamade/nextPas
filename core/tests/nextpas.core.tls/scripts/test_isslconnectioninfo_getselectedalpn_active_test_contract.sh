@@ -3,12 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-integration_test="tests/integration/test_real_https_connection.pas"
-cross_backend_test="tests/integration/test_cross_backend_consistency_contract.pas"
+integration_test="core/tests/nextpas.core.tls/integration/test_real_https_connection.pas"
+cross_backend_test="core/tests/nextpas.core.tls/integration/test_cross_backend_consistency_contract.pas"
 
 declare -a forbidden_integration_patterns=(
   "Conn.GetSelectedALPNProtocol"

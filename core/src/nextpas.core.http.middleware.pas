@@ -38,6 +38,7 @@ type
     function GetBody: IReader; virtual;
     function GetContentLength: Int64; virtual;
     function GetRemoteAddr: string; virtual;
+    function GetRemoteIp: string; virtual;
     function PathParam(const AName: string): string; virtual;
     function QueryParam(const AName: string): string; virtual;
     function GetRequestOptions: THttpRequestOptions; virtual;
@@ -175,6 +176,11 @@ end;
 function THttpRequestWrapper.GetRemoteAddr: string;
 begin
   Result := FInner.GetRemoteAddr;
+end;
+
+function THttpRequestWrapper.GetRemoteIp: string;
+begin
+  Result := FInner.GetRemoteIp;
 end;
 
 function THttpRequestWrapper.PathParam(const AName: string): string;

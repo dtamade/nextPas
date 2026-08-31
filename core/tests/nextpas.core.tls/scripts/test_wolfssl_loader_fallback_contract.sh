@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-API_FILE="$ROOT_DIR/src/nextpas.core.tls.wolfssl.api.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+API_FILE="$ROOT_DIR/core/src/nextpas.core.tls.wolfssl.api.pas"
 
 fail() {
   echo "[FAIL] $1"
@@ -11,10 +11,10 @@ fail() {
 }
 
 if [[ ! -f "$API_FILE" ]]; then
-  fail "missing source file: src/nextpas.core.tls.wolfssl.api.pas"
+  fail "missing source file: core/src/nextpas.core.tls.wolfssl.api.pas"
 fi
 
-if ! rg -n --fixed-strings -- "LoadLibrary(WOLFSSL_LIB_NAME)" "$API_FILE" >/dev/null; then
+if ! rg -n --fixed-strings -- "PathEnsureSep(CANDIDATE_DIRS[I]) + WOLFSSL_LIB_NAME" "$API_FILE" >/dev/null; then
   fail "wolfssl api loader must still attempt the canonical library name first"
 fi
 

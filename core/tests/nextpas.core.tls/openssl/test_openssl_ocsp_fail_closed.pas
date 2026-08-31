@@ -3,12 +3,12 @@ program test_openssl_ocsp_fail_closed;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.openssl.api.consts,
-  fafafa.ssl;
+  nextpas.core.tls.openssl.api.consts;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin

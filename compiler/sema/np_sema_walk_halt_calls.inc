@@ -4,7 +4,7 @@ var
   Child, Arg, RhsNode, BranchNode, DeclNode: TGreenNode;
   Operand: string;
   Value, CondValue, Folded: Int64;
-  Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
+  Decoded, StringValue, FuncName, ArgName, DestroyFuncName, LowerAtomic: string;
   OwnerClassName: string;
   ReceiverName: string;
   ParamSnaps: TParamSnapshots;
@@ -2486,6 +2486,37 @@ begin
             Decoded + #9 + 'int -1' + #10);
         end;
         Continue;
+      end;
+      if FNoFold and (Pos('atomic_', LowerCase(Child.Text)) = 1) then
+      begin
+        LowerAtomic := LowerCase(Child.Text);
+        if Pos('atomic_load', LowerAtomic) = 1 then
+        begin
+          Arg := Child; ArgIndex := 0;
+          if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and (Child.ChildAt(0).NodeKind = gnkFunctionCall) then begin Arg := Child.ChildAt(0); ArgIndex := 1; end;
+          if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 1) then begin Decoded := Arg.ChildAt(ArgIndex).Text; FModel.AddTypedHirNode('interlocked-fetch-add-runtime', Decoded, 0, 0, Decoded + #9 + 'int 0' + #10); end; Continue;
+        end else if Pos('atomic_store', LowerAtomic) = 1 then
+        begin
+          Arg := Child; ArgIndex := 0;
+          if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and (Child.ChildAt(0).NodeKind = gnkFunctionCall) then begin Arg := Child.ChildAt(0); ArgIndex := 1; end;
+          if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then begin Decoded := Arg.ChildAt(ArgIndex).Text + #9 + Arg.ChildAt(ArgIndex + 1).Text; FModel.AddTypedHirNode('interlocked-xchg-runtime', Decoded, 0, 0, Decoded); end; Continue;
+        end else if Pos('atomic_compare_exchange', LowerAtomic) = 1 then
+        begin
+          Arg := Child; ArgIndex := 0;
+          if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and (Child.ChildAt(0).NodeKind = gnkFunctionCall) then begin Arg := Child.ChildAt(0); ArgIndex := 1; end;
+          if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 3) then begin Decoded := Arg.ChildAt(ArgIndex).Text + #9 + Arg.ChildAt(ArgIndex + 1).Text + #9 + Arg.ChildAt(ArgIndex + 2).Text; if Pos('_64', LowerAtomic) > 0 then FModel.AddTypedHirNode('interlocked-cas64-runtime', Decoded, 0, 0, Decoded) else FModel.AddTypedHirNode('interlocked-cas-runtime', Decoded, 0, 0, Decoded); end; Continue;
+        end else if Pos('atomic_fetch_', LowerAtomic) = 1 then
+        begin
+          Arg := Child; ArgIndex := 0;
+          if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and (Child.ChildAt(0).NodeKind = gnkFunctionCall) then begin Arg := Child.ChildAt(0); ArgIndex := 1; end;
+          if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then begin Decoded := Arg.ChildAt(ArgIndex).Text + #9 + Arg.ChildAt(ArgIndex + 1).Text; if Pos('_64', LowerAtomic) > 0 then FModel.AddTypedHirNode('interlocked-fetch-add64-runtime', Decoded, 0, 0, Decoded) else FModel.AddTypedHirNode('interlocked-fetch-add-runtime', Decoded, 0, 0, Decoded); end; Continue;
+        end else if (Pos('atomic_exchange', LowerAtomic) = 1) or (Pos('atomic_increment', LowerAtomic) = 1) or (Pos('atomic_decrement', LowerAtomic) = 1) then
+        begin
+          Arg := Child; ArgIndex := 0;
+          if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and (Child.ChildAt(0).NodeKind = gnkFunctionCall) then begin Arg := Child.ChildAt(0); ArgIndex := 1; end;
+          if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 1) then begin Decoded := Arg.ChildAt(ArgIndex).Text; if Pos('increment', LowerAtomic) > 0 then FModel.AddTypedHirNode('interlocked-fetch-add-runtime', Decoded, 0, 0, Decoded + #9 + 'int 1' + #10) else if Pos('decrement', LowerAtomic) > 0 then FModel.AddTypedHirNode('interlocked-fetch-add-runtime', Decoded, 0, 0, Decoded + #9 + 'int -1' + #10) else FModel.AddTypedHirNode('interlocked-xchg-runtime', Decoded, 0, 0, Decoded); end; Continue;
+        end;
+        FModel.AddTypedHirNode('hir.unsupported-atomic', Child.Text, 0, 0, Child.Text); Continue;
       end;
       if FNoFold and (FCurrentMethodClass <> '') and
         (Pos('inherited ', Child.Text) = 1) then

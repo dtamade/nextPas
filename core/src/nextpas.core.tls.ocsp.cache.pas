@@ -13,7 +13,7 @@ unit nextpas.core.tls.ocsp.cache;
   - 可选的持久化存储
   - 分片锁机制提升并发性能
   
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 2.0.0 (分片锁优化)
 }
 

@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-FPC="${FAFAFA_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
+FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
 PORT=44360
 TMPDIR=$(mktemp -d)
 
@@ -37,7 +37,9 @@ if ! kill -0 "$SERVER_PID" 2>/dev/null; then
 fi
 
 # Try connecting with openssl s_client first to verify server works
-if echo "Q" | openssl s_client -connect 127.0.0.1:$PORT -tls1_3 2>&1 | grep -q "TLSv1.3"; then
+# s_client 可能因自签校验非零退出，pipefail 下会污染管道判定；先落盘再 grep
+echo "Q" | timeout 8 openssl s_client -connect 127.0.0.1:$PORT -tls1_3 > "$TMPDIR/sclient_probe.log" 2>&1 || true
+if grep -q "TLSv1.3" "$TMPDIR/sclient_probe.log"; then
   echo "[INFO] OpenSSL s_server TLS 1.3 confirmed working"
 else
   echo "[SKIP] OpenSSL s_server does not support TLS 1.3"

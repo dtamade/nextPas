@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.crypto*.pas`
 **层级**：L2（依赖 L0–L1 与 hash；**禁止**依赖 tls）
 **Owner**：hash / crypto / tls lane
-**最后更新**：2026-07-20
-**版本**：1.1
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 
@@ -26,7 +26,7 @@ crypto.x25519 / ed25519    Curve25519
 crypto.ecdsa / p256 / p384 ECC
 crypto.rsa / rsa.ct        RSA
 crypto.asn1                ASN.1/DER（owner；tls.asn1 为 shim）
-crypto.random              CSPRNG（via platform.random）
+crypto.random              CSPRNG（via platform.random；0 长度合法，负值抛 EArgumentError，见 INV-5）
 crypto.constant_time       常量时间原语
 crypto.pkcs8 / argon2 / …  密钥与口令派生
 ```
@@ -60,6 +60,10 @@ crypto.pkcs8 / argon2 / …  密钥与口令派生
 - **[INV-2]** 密钥材料路径使用 constant-time / secure zero 约定
 - **[INV-3]** 随机数只走 `crypto.random` / platform CSPRNG
 - **[INV-4]** 与 hash 的边界：摘要算法不在 crypto 内重新实现
+- **[INV-5]** `crypto.random` 长度语义：0 长度合法（`GenerateSecureRandomBytes(0)`
+  返回空数组 / `SecureRandomBytes` 无操作成功）；负值为编程错误抛
+  `EArgumentError`；仅底层 CSPRNG 故障抛 `ECryptoRandomError`（与参数无关，
+  调用方据此区分环境故障与参数错误）
 
 ---
 
@@ -73,6 +77,7 @@ make focused FOCUS=core/tests/nextpas.core.crypto/test_aesgcm
 make focused FOCUS=core/tests/nextpas.core.crypto/test_x25519
 make focused FOCUS=core/tests/nextpas.core.crypto/test_ed25519
 make focused FOCUS=core/tests/nextpas.core.crypto/test_argon2
+make focused FOCUS=core/tests/nextpas.core.crypto/test_crypto_random
 ```
 
 ---
@@ -81,6 +86,8 @@ make focused FOCUS=core/tests/nextpas.core.crypto/test_argon2
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-08-17 | 1.3 | crypto.random 长度语义收口：0 长度合法（空数组/无操作成功）、负值抛 EArgumentError（此前一律 ECryptoRandomError）；补 test_crypto_random 边界契约测试 |
 | 2026-08-11 | 1.2 | argon2 补 PHC `Argon2HashStr` + `Argon2Verify`（去 EXPERIMENTAL）；rand/encoding/constant-time 归一 |
 | 2026-07-20 | 1.1 | ChaCha/ASN.1/random 归属 crypto；禁止 crypto→tls |
 | 2026-07-01 | 1.0 | 初始版本 |
+| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

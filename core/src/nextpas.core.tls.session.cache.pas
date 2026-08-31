@@ -18,7 +18,7 @@ unit nextpas.core.tls.session.cache;
   - 会话复用率: > 90%
   - 内存效率: < 2KB/session
   
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 2.0.0 (哈希表优化)
 }
 
@@ -35,8 +35,7 @@ uses
   nextpas.core.tls.random,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.constant_time,
-  nextpas.core.mem.secure
-  {$IFDEF UNIX}, baseunix {$ENDIF};
+  nextpas.core.mem.secure;
 
 const
   DEFAULT_SESSION_TIMEOUT = 300;  // 5 分钟
@@ -486,7 +485,7 @@ begin
     try
       Stream := FsCreate(AFileName);
       {$IFDEF UNIX}
-      FpChmod(AFileName, &600);
+      nextpas.core.fs.Chmod(AFileName, TFilePermission($180));  { 0600 }
       {$ENDIF}
       try
         // 写入版本号 (v2 = HMAC protected)

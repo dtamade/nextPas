@@ -73,6 +73,7 @@ begin
   LH1Options.MaxPoolSize := AOptions.MaxPoolSize;
   LH1Options.IdleTTL := AOptions.IdleTTL;
   LH1Options.ProxyUrl := AOptions.ProxyUrl;
+  LH1Options.DialFunc := AOptions.DialFunc;
   LH1Options.TLSContext := AOptions.TLSContext;
   Result := NewH1ClientTransport(LH1Options);
 end;
@@ -110,6 +111,7 @@ begin
     AOptions.PreferPollWorkerHandoff (streaming then runs on the worker pool
     so one slow upstream does not stall the readiness reactor). }
   LH1Options.PreferPollWorkerHandoff := AOptions.PreferPollWorkerHandoff;
+  LH1Options.ReadAbortSink := AOptions.ReadAbortSink;
   LInnerTransport := NewH1ServerTransport(LH1Options);
   { Product H1 HTTPS: same TLS wrap pattern as H2 (ALPN http/1.1). }
   if AOptions.TLSContext <> nil then

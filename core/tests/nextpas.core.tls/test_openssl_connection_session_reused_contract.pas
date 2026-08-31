@@ -3,17 +3,17 @@ program test_openssl_connection_session_reused_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.connection;
-
+  nextpas.core.tls.openssl.connection,
+  nextpas.core.tls.openssl.backed;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;
@@ -53,7 +53,7 @@ begin
   LStream := TMemoryStream.Create;
   LConn := nil;
   try
-    LConn := TOpenSSLConnection.Create(AContext, LStream);
+    LConn := TOpenSSLConnection.Create(AContext, TStreamWrapper.Create(LStream));
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
@@ -96,7 +96,7 @@ begin
   LStream := TMemoryStream.Create;
   LOriginalSSLSessionReused := SSL_session_reused;
   try
-    LConn := TOpenSSLConnection.Create(LContext, LStream) as ISSLConnection;
+    LConn := TOpenSSLConnection.Create(LContext, TStreamWrapper.Create(LStream)) as ISSLConnection;
     AssertTrue('connection exposes ISSLSessionResumption owner path',
       Supports(LConn, ISSLSessionResumption, LResumption));
 

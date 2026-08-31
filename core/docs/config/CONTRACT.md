@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.config*.pas` + `config.*.inc` 实现分片
 **层级**：L3（依赖 L0–L2：`ini`、`json`、`yaml`、`toml`、`os.env`、`platform.watch`、`sync`、`errors`、`text.conv`）
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
-**最后更新**：2026-07-20
-**版本**：2.0（对齐真实单元与 API；废止 1.0 中 config.cli / config.loader / 虚构 base 描述）
+**最后更新**：2026-08-31
+**版本**：2.4（对齐真实单元与 API；废止 1.0 中 config.cli / config.loader / 虚构 base 描述）
 
 ---
 

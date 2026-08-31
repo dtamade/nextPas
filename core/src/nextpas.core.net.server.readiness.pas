@@ -31,12 +31,22 @@ type
     procedure Run;
   end;
 
-  TTcpReadinessServer = class(TInterfacedObject, ITcpServer)
+  TTcpReadinessServer = class(TInterfacedObject, ITcpServer,
+    ITcpServerHijackMigration)
   private
     const WAKE_USERDATA = Pointer(PtrUInt(1));
   private
     FOptions: TTcpServerOptions;
     FRunning: Boolean;
+    { shutdown drain：Shutdown 请求后 reactor 主循环不立即退出，先对全部
+      已注册 poll target 中实现 ITcpServerSessionShutdown 的会话补发 close
+      frame 1001 并驱动 drain（复用会话 Advance/FlushOutbound 状态机与
+      HandlePollTarget 常规推进）；期限 = FOptions.ShutdownTimeoutNs
+      （<=0 无限等待，与阻塞路径 IWsServerShutdownNotifier.WaitFinished(0)
+      语义一致），超时或全部完成后退出循环，残余 target 由
+      ReleaseRegisteredPollTargets 强关兜底（等价阻塞路径 ForceClose）。 }
+    FShutdownDraining: Boolean;
+    FShutdownDeadline: TDeadline;
     FListener: ITcpListener;
     FListenerRuntime: ITcpListenerRuntime;
     FListenerSocketRuntime: ITcpSocketRuntime;
@@ -52,6 +62,8 @@ type
     procedure RegisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
     procedure UnregisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
     function ComputePollTimeoutMs: Int32;
+    function ComputeShutdownAwareTimeoutMs: Int32;
+    procedure InitiateShutdownCloses;
     procedure HandleExpiredPollTargets;
     procedure DispatchAcceptedSession(const AConn: ITcpStream;
       const ASession: ITcpServerSession);
@@ -71,6 +83,8 @@ type
     procedure HandlePollTarget(const ATarget: TTcpServerPollSessionTarget;
       const AEvents: TPlatformPollEvents);
     procedure HandleListenerReady(const AHandler: ITcpServerHandler);
+    procedure ExecuteMigration(const ATicket: ITcpServerPollTargetTicket;
+      const AConn: ITcpStream; const ANewSession: ITcpServerSession);
   public
     constructor Create(const AOptions: TTcpServerOptions);
     destructor Destroy; override;
@@ -176,7 +190,7 @@ end;
 function TTcpReadinessServer.CreateSessionContext: TTcpServerPollSessionContext;
 begin
   Result := TTcpServerPollSessionContext.Create(FWorkerHandoff,
-    @EnqueueCompletion, @WakeReactor);
+    @EnqueueCompletion, @WakeReactor, Self);
 end;
 
 procedure TTcpReadinessServer.RegisterPollTarget(
@@ -194,6 +208,33 @@ end;
 function TTcpReadinessServer.ComputePollTimeoutMs: Int32;
 begin
   Result := FTargetRegistry.ComputePollTimeoutMs;
+end;
+
+{ 常规轮询超时叠加 shutdown drain 期限：drain 中 poll 最长等 shutdown
+  剩余时间（无事件、全部会话 WouldBlock 卡住时也能到点退出强关）；
+  未 drain 或期限无限时维持会话 deadline 语义不变。 }
+function TTcpReadinessServer.ComputeShutdownAwareTimeoutMs: Int32;
+var
+  LMs: Int32;
+  LRemaining: TDuration;
+  LRemMs: Int64;
+begin
+  LMs := ComputePollTimeoutMs;
+  if not FShutdownDraining then
+    Exit(LMs);
+  if FShutdownDeadline.IsInfinite then
+    Exit(LMs);
+  LRemaining := FShutdownDeadline.Remaining;
+  if LRemaining.AsNanoseconds <= 0 then
+    Exit(0);
+  LRemMs := LRemaining.AsMilliseconds;
+  if (LRemMs <= 0) and (LRemaining.AsNanoseconds > 0) then
+    LRemMs := 1;
+  if LRemMs > High(Int32) then
+    LRemMs := High(Int32);
+  if (LMs < 0) or (LRemMs < Int64(LMs)) then
+    LMs := Int32(LRemMs);
+  Result := LMs;
 end;
 
 procedure TTcpReadinessServer.HandleExpiredPollTargets;
@@ -509,6 +550,34 @@ begin
   end;
 end;
 
+{ shutdown drain 发启：对全部已注册 target 中实现 ITcpServerSessionShutdown
+  的会话补发 close frame 1001（标记防重、幂等），并以可写事件推进一次完成
+  首个冲刷尝试 + poller 事件集同步（同 HandlePollTarget 常规路径）。逐轮在
+  drain 阶段循环顶部调用：drain 期间新登记/迁移完成的 WS 会话也被覆盖。 }
+procedure TTcpReadinessServer.InitiateShutdownCloses;
+var
+  LTargets: TTcpServerPollSessionTargetArray;
+  LI: SizeUInt;
+  LShutdown: ITcpServerSessionShutdown;
+begin
+  LTargets := FTargetRegistry.Snapshot;
+  if Length(LTargets) = 0 then
+    Exit;
+  for LI := 0 to SizeUInt(Length(LTargets)) - 1 do
+  begin
+    if LTargets[LI] = nil then
+      Continue;
+    if LTargets[LI].IsShutdownClose then
+      Continue;
+    if not Supports(LTargets[LI].PollSession, ITcpServerSessionShutdown,
+      LShutdown) then
+      Continue;
+    LTargets[LI].MarkShutdownClose;
+    LShutdown.BeginShutdownClose;
+    HandlePollTarget(LTargets[LI], [peWritable]);
+  end;
+end;
+
 procedure TTcpReadinessServer.HandleListenerReady(
   const AHandler: ITcpServerHandler);
 var
@@ -532,6 +601,79 @@ begin
       Continue;
     end;
     Break;
+  end;
+end;
+
+procedure TTcpReadinessServer.ExecuteMigration(
+  const ATicket: ITcpServerPollTargetTicket;
+  const AConn: ITcpStream; const ANewSession: ITcpServerSession);
+var
+  LOldTarget: TTcpServerPollSessionTarget;
+  LNewTarget: TTcpServerPollSessionTarget;
+  LContext: TTcpServerPollSessionContext;
+  LErr: Int32;
+begin
+  { reactor 线程执行（经 completion 队列）：把自己 poll 注册摘除、以新会话重挂。
+    摘旧：不 RestoreBlocking、不关连接——连接与新会话一体；旧 ticket 随后
+    detach，http 完成回调 ResolveTarget 失败即静默让位，不会 RestoreBlocking
+    破坏新会话的非阻塞 socket。
+    连接级上下文跨迁移复用：新 target 重绑同一 context（worker 推送通道
+    经 context 的 handoff ticket 解析，迁移后仍指向新会话）。 }
+  LOldTarget := nil;
+  if (ATicket = nil) or (not ATicket.ResolveTarget(LOldTarget)) or
+    (LOldTarget = nil) or (not IsTargetRegistered(LOldTarget)) then
+    Exit;
+  LNewTarget := nil;
+  LContext := nil;
+  try
+    if LOldTarget.CurrentEvents <> [] then
+    begin
+      LErr := platform_poller_remove(FPoller, LOldTarget.SocketHandle);
+      if LErr <> 0 then
+        raise ENetworkError.Create('tcp readiness poller remove (hijack migrate) failed (' +
+          IntToStr(LErr) + ')');
+      LOldTarget.SetCurrentEvents([]);
+    end;
+    LContext := LOldTarget.Context;
+    UnregisterPollTarget(LOldTarget);
+    LOldTarget.DetachTicket;
+    LOldTarget.Free;
+    LOldTarget := nil;
+
+    if not TryCreateTcpServerPollSessionTarget(AConn, ANewSession, LNewTarget) then
+    begin
+      CloseServerOwnedTcpConn(AConn);
+      Exit;
+    end;
+    if LContext = nil then
+      LContext := CreateSessionContext;
+    LContext.BindTarget(LNewTarget);
+    RegisterPollTarget(LNewTarget);
+    if LNewTarget.CurrentEvents <> [] then
+    begin
+      LErr := platform_poller_add(FPoller, LNewTarget.SocketHandle,
+        LNewTarget.CurrentEvents, LNewTarget);
+      if LErr <> 0 then
+        raise ENetworkError.Create('tcp readiness poller add (hijack migrate) failed (' +
+          IntToStr(LErr) + ')');
+    end;
+    { 迁移启动脉冲：hijack 连接可能有 http 解析残留的字节（prepend 前缀，
+      socket 上无新数据，epoll 不会事件化），立即调度一次可读推进让其
+      进入会话。无残留时 Advance 返回 WouldBlock，幂等地回到等待。 }
+    HandlePollTarget(LNewTarget, [peReadable]);
+    LNewTarget := nil;
+  except
+    on E: Exception do
+    begin
+      { 迁移失败：摘除新 target、关闭连接，避免残留半挂状态。 }
+      if LNewTarget <> nil then
+      begin
+        UnregisterPollTarget(LNewTarget);
+        LNewTarget.Free;
+      end;
+      CloseServerOwnedTcpConn(AConn);
+      raise;
+    end;
   end;
 end;
 
@@ -592,16 +734,35 @@ begin
     end;
 
     FRunning := True;
+    FShutdownDraining := False;
+    FShutdownDeadline := TDeadline.Infinite;
     try
       LRuntimeContextReady := False;
-      while FRunning do
+      while FRunning or FShutdownDraining do
       begin
-        LTimeoutMs := ComputePollTimeoutMs;
+        { shutdown drain 阶段：每轮先补发启（容忍 drain 期间新登记/迁移
+          完成的 WS 会话也进入优雅收尾），再判定收尾——无待收尾会话或
+          超 ShutdownTimeout 期限即退出（残余由 finally 强关兜底）。 }
+        if FShutdownDraining then
+        begin
+          InitiateShutdownCloses;
+          if (not FTargetRegistry.AnyShutdownClose) or
+             FShutdownDeadline.IsExpired then
+          begin
+            FShutdownDraining := False;
+            Break;
+          end;
+        end;
+        LTimeoutMs := ComputeShutdownAwareTimeoutMs;
         LErr := platform_poller_wait(FPoller, @LEntries[0], Length(LEntries),
           LTimeoutMs,
           LCount);
         if LErr <> 0 then
         begin
+          { EINTR：信号中断属常态（调试器/探针/SIGCHLD），重试本轮；
+            截止会话由 HandleExpiredPollTargets 兜底，不因信号丢拍 }
+          if LErr = 4 then  { ESysEINTR，与 io.reactor.epoll 同款局部常量 }
+            Continue;
           if not FRunning then
             Break;
           raise ENetworkError.Create('tcp readiness poller wait failed (' +
@@ -658,6 +819,14 @@ var
   LWoken: Boolean;
 begin
   FRunning := False;
+  FShutdownDraining := True;
+  { 优雅收尾期限：>0 时以 ShutdownTimeoutNs 为 drain 上限（超时强关）；
+    <=0 无限等待（与阻塞路径 WaitFinished(0) 语义一致）。 }
+  if FOptions.ShutdownTimeoutNs > 0 then
+    FShutdownDeadline := TDeadline.After(
+      TDuration.FromNanoseconds(FOptions.ShutdownTimeoutNs))
+  else
+    FShutdownDeadline := TDeadline.Infinite;
   LWoken := False;
   if FPollerReady then
     LWoken := platform_poller_wake(FPoller) = 0;

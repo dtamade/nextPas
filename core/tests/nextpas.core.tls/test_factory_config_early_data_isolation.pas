@@ -3,8 +3,8 @@ program test_factory_config_early_data_isolation;
 {$mode objfpc}{$H+}
 
 uses
+  SysUtils,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
@@ -39,13 +39,13 @@ end;
 function BuildReplayStoreFilePath(const ALabel: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'fafafa_ssl_' + ALabel + '_replay_store.bin';
+    'nextpas_ssl_' + ALabel + '_replay_store.bin';
 end;
 
 function BuildReplayStoreDirectoryPath(const ALabel: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'fafafa_ssl_' + ALabel + '_replay_store_dir';
+    'nextpas_ssl_' + ALabel + '_replay_store_dir';
 end;
 
 procedure CleanupReplayStoreFiles(const AFileName: string);
@@ -309,7 +309,7 @@ begin
     BaselineConfig.ServerEarlyDataReplayStoreFile := '';
     Lib.SetDefaultConfig(BaselineConfig);
 
-    OneShotConfig := CreateDefaultConfig(sslCtxServer);
+    OneShotConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxServer));
     OneShotConfig.LibraryType := sslFreePascal;
     OneShotConfig.ContextType := sslCtxServer;
     OneShotConfig.ClientEarlyDataEnabled := True;
@@ -437,7 +437,7 @@ begin
     BaselineConfig.ServerEarlyDataReplayStoreDirectory := '';
     Lib.SetDefaultConfig(BaselineConfig);
 
-    OneShotConfig := CreateDefaultConfig(sslCtxServer);
+    OneShotConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxServer));
     OneShotConfig.LibraryType := sslFreePascal;
     OneShotConfig.ContextType := sslCtxServer;
     OneShotConfig.ServerEarlyDataPolicy := sslEarlyDataServerIssueOnly;
@@ -497,7 +497,7 @@ var
 begin
   TestHeader('One-shot factory rejects conflicting replay-store file and directory config');
 
-  LConfig := CreateDefaultConfig(sslCtxServer);
+  LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxServer));
   LConfig.LibraryType := sslFreePascal;
   LConfig.ContextType := sslCtxServer;
   LConfig.ServerEarlyDataReplayStoreFile := BuildReplayStoreFilePath('factory_conflict_file');

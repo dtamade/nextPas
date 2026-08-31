@@ -84,6 +84,10 @@ type
     { Static API keys accepted via X-API-Key, compared in constant time.
       Ignored when Validator is assigned. }
     ApiKeys: TStringArray;
+    { 额外 API key 头名（小写）：除默认 x-api-key 外再接受这些头提供
+      api-key 通道凭证（如 x-admin-api-key，原版管理面契约）。默认头优先，
+      额外头按数组序取首个非空；空 = 仅默认头。 }
+    ExtraApiKeyHeaders: TStringArray;
   end;
 
 {** @desc Auth middleware with explicit options. Rejects options without
@@ -124,6 +128,7 @@ type
     FRealm: string;
     FBearerTokens: TStringArray;
     FApiKeys: TStringArray;
+    FExtraApiKeyHeaders: TStringArray;
     function IsSkippedPath(const APath: string): Boolean;
     function ApiKeyChannelEnabled: Boolean;
     function MatchStatic(const ACredential: string;
@@ -153,11 +158,13 @@ begin
 end;
 
 function ParseCredential(const AReq: IHttpRequest;
+  const AExtraApiKeyHeaders: TStringArray;
   out AKind: TAuthCredentialKind; out ACredential: string): TCredentialParse;
 var
   LAuth: string;
   LPos: SizeInt;
   LToken: string;
+  LI: SizeInt;
 begin
   Result := cpNone;
   LAuth := Trim(AReq.GetHeaders.Get('authorization'));
@@ -174,8 +181,16 @@ begin
     Exit(cpOk);
   end;
 
-  { No Authorization header: fall back to X-API-Key channel. }
+  { No Authorization header: fall back to X-API-Key channel, then any
+    configured extra api-key headers (default header wins). }
   LToken := Trim(AReq.GetHeaders.Get('x-api-key'));
+  if LToken = '' then
+    for LI := 0 to High(AExtraApiKeyHeaders) do
+    begin
+      LToken := Trim(AReq.GetHeaders.Get(AExtraApiKeyHeaders[LI]));
+      if LToken <> '' then
+        Break;
+    end;
   if LToken = '' then
     Exit(cpNone);
   AKind := ackApiKey;
@@ -212,6 +227,7 @@ begin
   SetLength(FSkipPrefixes, LCount);
   FBearerTokens := AOptions.BearerTokens;
   FApiKeys := AOptions.ApiKeys;
+  FExtraApiKeyHeaders := AOptions.ExtraApiKeyHeaders;
   if (not Assigned(FValidator)) and (Length(FBearerTokens) = 0) and
     (Length(FApiKeys) = 0) then
     raise EHttpError.Create(hekArgument,
@@ -224,6 +240,7 @@ begin
   FSkipPrefixes := nil;
   FBearerTokens := nil;
   FApiKeys := nil;
+  FExtraApiKeyHeaders := nil;
   inherited Destroy;
 end;
 
@@ -271,7 +288,7 @@ var
   LCredential: string;
   LParse: TCredentialParse;
 begin
-  LParse := ParseCredential(AReq, LKind, LCredential);
+  LParse := ParseCredential(AReq, FExtraApiKeyHeaders, LKind, LCredential);
   if LParse = cpNone then
     Exit(adMissing);
   if LParse = cpMalformed then

@@ -15,8 +15,7 @@ program test_concurrent_stress;
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.factory,
-  nextpas.core.tls.base,
-  fafafa.ssl;
+  nextpas.core.tls.base;
 
 const
   TEST_LEVELS: array[1..3] of Integer = (100, 500, 1000);

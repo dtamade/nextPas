@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-FILE="$ROOT_DIR/tests/integration/test_backend_comparison.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+FILE="${ROOT_DIR}/core/tests/nextpas.core.tls/integration/test_backend_comparison.pas"
 
 fail() {
   echo "[FAIL] $1"
@@ -11,7 +11,7 @@ fail() {
 
 echo "[TEST] backend comparison factory registration contract"
 
-[[ -f "$FILE" ]] || fail "missing file: tests/integration/test_backend_comparison.pas"
+[[ -f "$FILE" ]] || fail "missing file: core/tests/nextpas.core.tls/integration/test_backend_comparison.pas"
 
 if ! rg -F --quiet -- 'nextpas.core.tls.winssl.lib' "$FILE"; then
   fail "test_backend_comparison.pas should import nextpas.core.tls.winssl.lib so Windows factory tests can register WinSSL"

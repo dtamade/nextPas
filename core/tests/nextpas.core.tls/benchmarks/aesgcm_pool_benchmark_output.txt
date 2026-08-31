@@ -61,5 +61,5 @@ True free heap : 130800
 Should be : 130838
 Call trace for block $00007F9163273660 size 42
   $00000000004CEC22
-  $00000000004D3A35  TryLoadOpenSSLLibraries,  line 703 of ../../src/fafafa.ssl.openssl.api.core.pas
-  $000000000047ABE2  InitializeOpenSSL,  line 57 of ../../src/fafafa.ssl.init.pas
+  $00000000004D3A35  TryLoadOpenSSLLibraries,  line 703 of ../../src/nextpas.ssl.openssl.api.core.pas
+  $000000000047ABE2  InitializeOpenSSL,  line 57 of ../../src/nextpas.ssl.init.pas

@@ -197,15 +197,21 @@ var
   H: TPlatformFileHandle;
   LBuf: array[0..31] of AnsiChar;
   LRead: PtrUInt;
+  LStat: TPlatformFileStat;
 const
   DATA = 'atomic write test';
   PATH = '/tmp/nextpas_atomic_test.dat';
 begin
   platform_file_unlink(PATH);
-  Check(platform_fs_write_atomic(PATH, PAnsiChar(DATA), 17) = 0, 'write_atomic ok');
+  { APerm 在临时文件创建时即生效：文件从出生就是 0600，不存在
+    「0666&umask 落盘 → rename → 事后 chmod」的组/其他可读窗口。 }
+  Check(platform_fs_write_atomic(PATH, PAnsiChar(DATA), 17, $180) = 0,
+    'write_atomic ok');
   Check(platform_fs_is_file(PATH), 'file exists');
   Check(platform_fs_file_size(PATH, Size) = 0, 'stat');
   Check(Size = 17, 'size = 17');
+  Check(platform_file_stat(PATH, LStat) = 0, 'stat perms');
+  Check(LStat.Mode and $1FF = $180, 'mode = 0600 from birth');
   platform_file_open(PATH, fomReadOnly, fcmOpenExisting, H);
   platform_file_read(H, @LBuf[0], 17, LRead);
   platform_file_close(H);

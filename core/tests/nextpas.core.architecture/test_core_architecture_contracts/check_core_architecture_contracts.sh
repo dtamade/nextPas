@@ -144,8 +144,12 @@ KNOWN_L0_DEPENDENCY_DEBT=(
   "src/nextpas.core.simd.cpuinfo.lazy.pas|nextpas.core.os.env"
   "src/nextpas.core.simd.linalg.gemm.parallel.pas|nextpas.core.thread.init"
   "src/nextpas.core.system.classes.pas|nextpas.core.io.intf"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.text.compare"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.conv"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.text.format"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.text.utils"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.path"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.time"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.fs"
 )
 

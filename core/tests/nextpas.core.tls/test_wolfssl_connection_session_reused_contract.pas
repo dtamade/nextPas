@@ -5,6 +5,7 @@ program test_wolfssl_connection_session_reused_contract;
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,
@@ -74,12 +75,12 @@ begin
   Result := @STUB_WOLFSSL_NATIVE_SESSION_ID[0];
 end;
 
-function StubWolfSSLSessionGetTime(const session: PWOLFSSL_SESSION): clong; cdecl;
+function StubWolfSSLSessionGetTime(const session: PWOLFSSL_SESSION): LongInt; cdecl;
 begin
   Result := 1700000000;
 end;
 
-function StubWolfSSLSessionGetTimeout(const session: PWOLFSSL_SESSION): clong; cdecl;
+function StubWolfSSLSessionGetTimeout(const session: PWOLFSSL_SESSION): LongInt; cdecl;
 begin
   Result := STUB_WOLFSSL_NATIVE_SESSION_TIMEOUT;
 end;
@@ -162,7 +163,7 @@ begin
   LOriginalSetSession := wolfSSL_set_session;
   LOriginalSessionReused := wolfSSL_session_reused;
   try
-    LConn := TWolfSSLConnection.Create(LCtx, LStream);
+    LConn := TWolfSSLConnection.Create(LCtx, TStreamWrapper.Create(LStream, False));
     AssertTrue('WolfSSL connection exposes ISSLSessionResumption owner path',
       Supports(LConn, ISSLSessionResumption, LResumption));
     AssertTrue('WolfSSL connection exposes ISSLConnectionInfo owner path',
@@ -203,8 +204,8 @@ begin
 
     AssertTrue('owner SetSession injects the deserialized WolfSSL native session handle',
       (GSetSessionCalls = 1) and (Pointer(GLastConfiguredSession) = LNativeHandle),
-      Format('calls=%d configured=%p expected=%p',
-        [GSetSessionCalls, Pointer(GLastConfiguredSession), LNativeHandle]));
+      Format('calls=%d configured=%x expected=%x',
+        [GSetSessionCalls, PtrUInt(Pointer(GLastConfiguredSession)), PtrUInt(LNativeHandle)]));
     AssertTrue('configured deserialized session is not immediately reported as observed reuse',
       not LResumption.IsSessionReused);
 

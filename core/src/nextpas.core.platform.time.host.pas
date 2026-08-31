@@ -118,7 +118,7 @@ end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_UNIX}
-function platform_time_posix_clock_ns_u64(const AClockId: Int32): UInt64; inline;
+function platform_time_posix_clock_ns_u64(const AClockId: Int32): UInt64;
 var
   LTime: timespec;
 begin

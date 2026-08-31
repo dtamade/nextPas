@@ -75,6 +75,19 @@ type
     // M5+（2026-08-15）：blame 一个文件（经 libgit2 git_blame_file，不 spawn CLI）。
     // 返回逐 hunk 归属（commit id / 起止行 / 路径）；文件无提交历史 → 空 hunks。
     function Blame(const APath: string): TGitBlame;
+    // k42（2026-08-20）：repo 本地配置条目快照（libgit2 git_repository_config +
+    // 迭代器——include/includeIf/worktree config 由 libgit2 解析）。
+    // 合并视图：local + worktree + global + system（同 git config --list 语义）。
+    // 读取失败 → EGitError。
+    function ConfigEntries: TGitConfigEntryArray;
+    // k97/k101（2026-08-26）：patch/checkout 工作区补丁辅助，三者经 git 黄金对照。
+    // ApplyPatch 将统一补丁文本原子地应用到工作区（失败则全回滚，抛 EGitError）。
+    // CheckoutPaths 从给定 revspec 强制恢复指定路径到工作区与 index。
+    // WorkdirPatchText 生成工作区相对 ARevspec 的补丁文本，AShowBinary 控制二进制段。
+    procedure ApplyPatch(const APatchText: string);
+    procedure CheckoutPaths(const ARevspec: string; const APaths: TStringArray);
+    function WorkdirPatchText(const ARevspec: string; const APaths: TStringArray;
+      AShowBinary: Boolean): string;
   end;
 
   IGitCommit = interface

@@ -3,8 +3,9 @@ program test_early_data_public_api_contract;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.factory,
+  nextpas.core.tls.base,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.freepascal.lib;
 
 var
@@ -45,11 +46,11 @@ begin
 
   LStatus := sslEarlyDataNone;
   Assert(LStatus = sslEarlyDataNone,
-    'fafafa.ssl re-exports TSSLEarlyDataStatus and enum values');
+    'nextpas.core.tls re-exports TSSLEarlyDataStatus and enum values');
 
   LPolicy := sslEarlyDataServerReject;
   Assert(LPolicy = sslEarlyDataServerReject,
-    'fafafa.ssl re-exports TSSLEarlyDataServerPolicy and enum values');
+    'nextpas.core.tls re-exports TSSLEarlyDataServerPolicy and enum values');
 
   LClientCtx := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   Assert(TSSLHelper.SupportsEarlyDataContext(LClientCtx),
@@ -57,7 +58,7 @@ begin
   Assert(TSSLHelper.TryGetEarlyDataContext(LClientCtx, LEarlyCtx),
     'TSSLHelper returns ISSLEarlyDataContext without direct Supports(...)');
   Assert(not LEarlyCtx.GetClientEarlyDataEnabled,
-    'client early-data defaults remain observable from fafafa.ssl only');
+    'client early-data defaults remain observable from nextpas.core.tls only');
   Assert(TSSLHelper.ConfigureClientEarlyData(LClientCtx, True),
     'TSSLHelper can enable client early-data');
   Assert(LEarlyCtx.GetClientEarlyDataEnabled,

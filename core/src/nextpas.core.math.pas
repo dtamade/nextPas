@@ -215,15 +215,27 @@ function BatchScaleOffsetF64(const AInput: array of Double;
                              const AScale, AOffset: Double;
                              var AOutput: array of Double): SizeInt;
 
+{ 32 位目标 SizeUInt≡UInt32（LongWord），SizeUInt 重载与 UInt32 版撞签名，
+  仅 64 位声明；调用方传 SizeUInt 时自动落到 UInt32 重载 }
+{$IF DEFINED(CPU64)}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
+{$ENDIF}
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
+{$IF DEFINED(CPU64)}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
+{$ENDIF}
 function IsMulOverflow(AA, AB: UInt32): Boolean; overload; inline;
 
 function Min(AA, AB: SizeUInt): SizeUInt; overload; inline;
 function Max(AA, AB: SizeUInt): SizeUInt; overload; inline;
 function Min(AA, AB: SizeInt): SizeInt; overload; inline;
 function Max(AA, AB: SizeInt): SizeInt; overload; inline;
+{ Int32 overloads: SizeInt is 64-bit on x86_64, so plain Integer arguments
+  would otherwise widen to SizeInt and lose the exact-type match. }
+{$IF DEFINED(CPU64)}
+function Min(AA, AB: Int32): Int32; overload; inline;
+function Max(AA, AB: Int32): Int32; overload; inline;
+{$ENDIF}
 function Min(AA, AB: Double): Double; overload; inline;
 function Max(AA, AB: Double): Double; overload; inline;
 function Min(AA, AB: Single): Single; overload; inline;
@@ -231,6 +243,8 @@ function Max(AA, AB: Single): Single; overload; inline;
 function Clamp(const AValue, AMin, AMax: Double): Double; overload; inline;
 function Clamp(const AValue, AMin, AMax: Single): Single; overload; inline;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; overload; inline;
+function ClampByte(const AValue: Int32): Byte; overload; inline;
+function ClampByte(const AValue: Single): Byte; overload; inline;
 function Lerp(const AA, AB, AT: Double): Double; overload; inline;
 function Lerp(const AA, AB, AT: Single): Single; overload; inline;
 function InverseLerp(const AA, AB, AValue: Double): Double; overload; inline;
@@ -329,7 +343,7 @@ function Log10(const AX: Single): Single; overload; inline;
 function Power(const ABase, AExponent: Double): Double; overload; inline;
 function Power(const ABase, AExponent: Single): Single; overload; inline;
 function Sqrt(const AX: Double): Double; overload; inline;
-function Sqrt(const AX: Single): Single; overload; inline;
+function Sqrt(const AX: Single): Single; overload;
 
 function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Single): TMat4f; overload; inline;
 function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Double): TMat4d; overload; inline;
@@ -803,20 +817,24 @@ begin
   Result := nextpas.core.math.batch.BatchScaleOffsetF64(AInput, AScale, AOffset, AOutput);
 end;
 
+{$IF DEFINED(CPU64)}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
 begin
   Result := nextpas.core.math.scalar.IsAddOverflow(AA, AB);
 end;
+{$ENDIF}
 
 function IsAddOverflow(AA, AB: UInt32): Boolean;
 begin
   Result := nextpas.core.math.scalar.IsAddOverflow(AA, AB);
 end;
 
+{$IF DEFINED(CPU64)}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean;
 begin
   Result := nextpas.core.math.scalar.IsMulOverflow(AA, AB);
 end;
+{$ENDIF}
 
 function IsMulOverflow(AA, AB: UInt32): Boolean;
 begin
@@ -842,6 +860,18 @@ function Max(AA, AB: SizeInt): SizeInt;
 begin
   Result := nextpas.core.math.scalar.Max(AA, AB);
 end;
+
+{$IF DEFINED(CPU64)}
+function Min(AA, AB: Int32): Int32;
+begin
+  Result := nextpas.core.math.scalar.Min(AA, AB);
+end;
+
+function Max(AA, AB: Int32): Int32;
+begin
+  Result := nextpas.core.math.scalar.Max(AA, AB);
+end;
+{$ENDIF}
 
 function Min(AA, AB: Single): Single;
 begin
@@ -876,6 +906,16 @@ end;
 function Clamp(const AValue, AMin, AMax: Int32): Int32;
 begin
   Result := nextpas.core.math.scalar.Clamp(AValue, AMin, AMax);
+end;
+
+function ClampByte(const AValue: Int32): Byte;
+begin
+  Result := nextpas.core.math.scalar.ClampByte(AValue);
+end;
+
+function ClampByte(const AValue: Single): Byte;
+begin
+  Result := nextpas.core.math.scalar.ClampByte(AValue);
 end;
 
 function Lerp(const AA, AB, AT: Single): Single;

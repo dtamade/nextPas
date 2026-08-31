@@ -14,7 +14,8 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.router,
   nextpas.core.http.router.group,
-  nextpas.core.http.middleware;
+  nextpas.core.http.middleware,
+  nextpas.core.http.middleware.cors;
 
 var
   T: TTestSuite;
@@ -153,6 +154,144 @@ begin
     Check(Length(LParams) = 1, 'one param');
     CheckEqual('id', LParams[0].Name, 'param name');
     CheckEqual('42', LParams[0].Value, 'param value');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure TestPathParamDecode;
+var
+  LRouter: THttpRouter;
+  LParams: TRouteParams;
+  LHandler: THttpHandlerFunc;
+begin
+  ResetState;
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/mailboxes/:address/messages',
+      procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        GHandlerCalled := 'mailbox-messages';
+      end);
+
+    LHandler := LRouter.FindRoute(hmGet,
+      '/mailboxes/matrix%40mock.example.com/messages', LParams);
+    Check(LHandler <> nil, 'handler found');
+    LHandler(nil, nil);
+    CheckEqual('mailbox-messages', GHandlerCalled, 'correct handler');
+    Check(Length(LParams) = 1, 'one param');
+    CheckEqual('address', LParams[0].Name, 'param name');
+    CheckEqual('matrix@mock.example.com', LParams[0].Value,
+      'percent-decoded param value');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure TestPathParamPlusLiteral;
+var
+  LRouter: THttpRouter;
+  LParams: TRouteParams;
+  LHandler: THttpHandlerFunc;
+begin
+  ResetState;
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/users/:id',
+      procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        GHandlerCalled := 'user-by-id';
+      end);
+
+    { RFC 3986：path 段中 '+' 是字面加号（Gmail 别名邮箱常见），
+      区别于 form/query 的空格语义 }
+    LHandler := LRouter.FindRoute(hmGet, '/users/a+b', LParams);
+    Check(LHandler <> nil, 'handler found');
+    LHandler(nil, nil);
+    CheckEqual('user-by-id', GHandlerCalled, 'correct handler');
+    CheckEqual('a+b', LParams[0].Value, 'plus preserved in path param');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure TestPathParamEncodedSlash;
+var
+  LRouter: THttpRouter;
+  LParams: TRouteParams;
+  LHandler: THttpHandlerFunc;
+begin
+  ResetState;
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/files/:path',
+      procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        GHandlerCalled := 'file';
+      end);
+
+    { %2F 段内解码为 '/'：先按字面 '/' 拆段，解码发生在段内，
+      不触发新的段匹配 }
+    LHandler := LRouter.FindRoute(hmGet, '/files/a%2Fb', LParams);
+    Check(LHandler <> nil, 'handler found');
+    LHandler(nil, nil);
+    CheckEqual('file', GHandlerCalled, 'correct handler');
+    CheckEqual('a/b', LParams[0].Value, 'encoded slash decoded in segment');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure TestPathParamLenientPercent;
+var
+  LRouter: THttpRouter;
+  LParams: TRouteParams;
+  LHandler: THttpHandlerFunc;
+begin
+  ResetState;
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/users/:id',
+      procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        GHandlerCalled := 'user-by-id';
+      end);
+
+    { 截断/非法 '%' 序列宽容透传：畸形 URL 匹配字面，不抛异常 }
+    LHandler := LRouter.FindRoute(hmGet, '/users/100%', LParams);
+    Check(LHandler <> nil, 'handler found (truncated percent)');
+    CheckEqual('100%', LParams[0].Value, 'truncated percent passthrough');
+
+    LHandler := LRouter.FindRoute(hmGet, '/users/%zz', LParams);
+    Check(LHandler <> nil, 'handler found (invalid hex)');
+    CheckEqual('%zz', LParams[0].Value, 'invalid hex passthrough');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure TestWildcardDecode;
+var
+  LRouter: THttpRouter;
+  LParams: TRouteParams;
+  LHandler: THttpHandlerFunc;
+begin
+  ResetState;
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/static/*filepath',
+      procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        GHandlerCalled := 'static';
+      end);
+
+    LHandler := LRouter.FindRoute(hmGet, '/static/a%20b/c%40d.txt', LParams);
+    Check(LHandler <> nil, 'handler found');
+    LHandler(nil, nil);
+    CheckEqual('static', GHandlerCalled, 'correct handler');
+    Check(Length(LParams) = 1, 'one param');
+    CheckEqual('filepath', LParams[0].Name, 'param name');
+    CheckEqual('a b/c@d.txt', LParams[0].Value, 'wildcard percent-decoded');
   finally
     LRouter.Free;
   end;
@@ -864,6 +1003,168 @@ begin
   end;
 end;
 
+{ Middleware runs on unmatched routes (global request chain): 404/405
+  responses get the same middleware treatment as matched routes, while
+  status, Allow header and problem body are preserved. }
+
+procedure TestMiddlewareRunsOnNotFound;
+var
+  LRouter: THttpRouter;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LWriter: IHttpResponseWriter;
+  LMock: TMockResponseWriter;
+begin
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/exists', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+    end);
+    LRouter.Use(MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+    begin
+      Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        AW.Headers.SetHeader('x-mw', 'ran');
+        ANext.ServeHTTP(AReq, AW);
+      end);
+    end));
+    LUrl := TUrl.Parse('/not-exists');
+    LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+    LMock := TMockResponseWriter.Create;
+    LWriter := LMock;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual(Int64(404), Int64(LWriter.GetStatus), '404 status through middleware');
+    CheckEqual('ran', LWriter.GetHeaders.Get('x-mw'),
+      'middleware ran on not-found response');
+    Check(Pos('"title":"not_found"', LMock.Body) > 0,
+      '404 problem body preserved through middleware');
+  finally
+    LWriter := nil;
+    LReq := nil;
+    LRouter.Free;
+  end;
+end;
+
+procedure TestMiddlewareRunsOnMethodNotAllowed;
+var
+  LRouter: THttpRouter;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LWriter: IHttpResponseWriter;
+  LMock: TMockResponseWriter;
+begin
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+    end);
+    LRouter.Use(MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+    begin
+      Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        AW.Headers.SetHeader('x-mw', 'ran');
+        ANext.ServeHTTP(AReq, AW);
+      end);
+    end));
+    LUrl := TUrl.Parse('/resource');
+    LReq := THttpRequest.Create(hmPost, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+    LMock := TMockResponseWriter.Create;
+    LWriter := LMock;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual(Int64(405), Int64(LWriter.GetStatus), '405 status through middleware');
+    CheckEqual('ran', LWriter.GetHeaders.Get('x-mw'),
+      'middleware ran on method-not-allowed response');
+    Check(Pos('GET', LWriter.GetHeaders.Get('allow')) > 0,
+      'Allow header preserved through middleware');
+    Check(Pos('"title":"method_not_allowed"', LMock.Body) > 0,
+      '405 problem body preserved through middleware');
+  finally
+    LWriter := nil;
+    LReq := nil;
+    LRouter.Free;
+  end;
+end;
+
+{ CORS preflight to a route with no OPTIONS handler: the router would answer
+  405, but the CORS middleware short-circuits the preflight first (OPTIONS +
+  Origin + Access-Control-Request-Method) so the browser sees a 204. }
+procedure TestCorsPreflightInterceptsUnmatchedOptions;
+var
+  LRouter: THttpRouter;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LWriter: IHttpResponseWriter;
+  LOpts: TCorsOptions;
+begin
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+    end);
+    LOpts := TCorsOptions.Default;
+    LRouter.Use(CorsMiddleware(LOpts));
+    LUrl := TUrl.Parse('/resource');
+    LReq := THttpRequest.Create(hmOptions, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+    LReq.Headers.SetHeader('Origin', 'https://example.test');
+    LReq.Headers.SetHeader('Access-Control-Request-Method', 'GET');
+    LWriter := TMockResponseWriter.Create;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual(Int64(204), Int64(LWriter.GetStatus),
+      'preflight to GET-only route gets 204 from CORS middleware');
+    CheckEqual('*', LWriter.GetHeaders.Get('Access-Control-Allow-Origin'),
+      'CORS headers present on unmatched-route preflight');
+  finally
+    LWriter := nil;
+    LReq := nil;
+    LRouter.Free;
+  end;
+end;
+
+{ Chain order on unmatched routes matches matched routes: the first
+  registered middleware is outermost. Sequence: a1 b1 [404 responder]
+  b2 a2. }
+procedure TestMiddlewareOrderingOnUnmatched;
+var
+  LRouter: THttpRouter;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LWriter: IHttpResponseWriter;
+  LSeq: string;
+begin
+  LSeq := '';
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Use(MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+    begin
+      Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        LSeq := LSeq + 'a1';
+        ANext.ServeHTTP(AReq, AW);
+        LSeq := LSeq + 'a2';
+      end);
+    end));
+    LRouter.Use(MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+    begin
+      Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        LSeq := LSeq + 'b1';
+        ANext.ServeHTTP(AReq, AW);
+        LSeq := LSeq + 'b2';
+      end);
+    end));
+    LUrl := TUrl.Parse('/missing');
+    LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+    LWriter := TMockResponseWriter.Create;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual(Int64(404), Int64(LWriter.GetStatus), '404 status');
+    CheckEqual('a1b1b2a2', LSeq, 'middleware order preserved on not-found');
+  finally
+    LWriter := nil;
+    LReq := nil;
+    LRouter.Free;
+  end;
+end;
+
 { RouterGroup tests }
 
 procedure TestRouterGroupPrefix;
@@ -1059,8 +1360,13 @@ begin
   T.Test('Static route match', @TestStaticRouteMatch);
   T.Test('Static route no match', @TestStaticRouteNoMatch);
   T.Test('Path param single', @TestPathParamSingle);
+  T.Test('Path param percent-decode', @TestPathParamDecode);
+  T.Test('Path param plus literal', @TestPathParamPlusLiteral);
+  T.Test('Path param encoded slash', @TestPathParamEncodedSlash);
+  T.Test('Path param lenient percent', @TestPathParamLenientPercent);
   T.Test('Multiple params', @TestMultipleParams);
   T.Test('Wildcard', @TestWildcard);
+  T.Test('Wildcard percent-decode', @TestWildcardDecode);
   T.Test('Method dispatch', @TestMethodDispatch);
   T.Test('Convenience methods', @TestConvenienceMethods);
   T.Test('Static wins over param', @TestStaticWinsOverParam);
@@ -1083,6 +1389,10 @@ begin
     @TestExplicitHeadRouteWinsOverGetFallback);
   T.Test('405 lists all methods', @Test405ListsAllMethods);
   T.Test('404 returns JSON error', @Test404ReturnsJsonError);
+  T.Test('middleware runs on not-found', @TestMiddlewareRunsOnNotFound);
+  T.Test('middleware runs on method-not-allowed', @TestMiddlewareRunsOnMethodNotAllowed);
+  T.Test('CORS preflight intercepts unmatched OPTIONS', @TestCorsPreflightInterceptsUnmatchedOptions);
+  T.Test('middleware order preserved on not-found', @TestMiddlewareOrderingOnUnmatched);
   { RouterGroup }
   T.Test('Group: prefix applied', @TestRouterGroupPrefix);
   T.Test('Group: middleware applied', @TestRouterGroupWithMiddleware);

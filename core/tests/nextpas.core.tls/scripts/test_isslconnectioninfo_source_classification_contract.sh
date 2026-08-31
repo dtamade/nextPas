@@ -3,12 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-base_file="src/nextpas.core.tls.base.pas"
-conn_base_file="src/nextpas.core.tls.connection.base.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
+conn_base_file="core/src/nextpas.core.tls.connection.base.pas"
 
 declare -a required_base_patterns=(
   "@compatibility-note v1.x compatibility-core mirror; not recommended as the primary entry for new code; Stage-A demotion target is ISSLConnectionInfo"

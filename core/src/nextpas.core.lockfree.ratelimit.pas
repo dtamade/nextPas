@@ -14,7 +14,6 @@ type
     @details 以恒定速率生成令牌，请求消耗令牌。
       令牌桶容量 = burst，每秒生成 rate 个令牌。
       适用于：API 限流、请求整形。
- * @concurrency Thread-safe (see source for details).
   }
   TTokenBucketLimiter = class
   private

@@ -1,8 +1,8 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - OpenSSL SHA3 EVP Module (OpenSSL 3.x Compatible)             }
+{  nextpas.core.tls - OpenSSL SHA3 EVP Module (OpenSSL 3.x Compatible)             }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {  This module provides SHA3 functionality using the EVP API, which is       }
 {  compatible with both OpenSSL 1.1.1 and 3.x.                               }

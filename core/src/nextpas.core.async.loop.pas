@@ -73,7 +73,9 @@ type
       AContext: Pointer = nil): TAsyncTimerHandle;
     function CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
 
-    { I/O delegates }
+    { I/O delegates。写路径不拷贝调用方缓冲：提交成功到写回调返回前
+      ABuf 必须保持有效。短写回调 AResult=本次实际送达（可能 < ALen），
+      不自动续发；一 op 一回调。 }
     function AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncWrite(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
@@ -145,6 +147,7 @@ type
     procedure Stop;
     { True if the I/O poller still has in-flight ops (after timeout cancel drain). }
     function HasPendingIo: Boolean; inline;
+    function CancelByFd(AFd: PtrInt): Boolean;
   end;
 
 implementation
@@ -262,12 +265,19 @@ begin
   end;
 end;
 
+procedure TimeoutTokenNotify(AContext: Pointer); forward;
+
 procedure TimeoutCtxDropTokenOwner(ACtx: PTimeoutCtx);
+var
+  LToken: IAsyncCancellationToken;
 begin
   if ACtx = nil then
     Exit;
   if atomic_exchange(ACtx^.TokenOwner, 0, mo_acq_rel) = 1 then
   begin
+    LToken := ACtx^.Token;
+    if LToken <> nil then
+      LToken.RemoveOnCancel(@TimeoutTokenNotify, ACtx);
     ACtx^.Token := nil;
     TimeoutCtxRelease(ACtx);
   end;
@@ -398,7 +408,11 @@ begin
   if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
     Exit;
   atomic_fetch_add(LCtx^.RefCount, 1, mo_acq_rel);
-  LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+  try
+    LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+  except
+    TimeoutCtxRelease(LCtx);
+  end;
 end;
 
 function TimeoutCtxCreate(ALoop: TAsyncLoop; const ADeadline: TDeadline;
@@ -624,10 +638,14 @@ begin
     Exit;
   while FPending.TryDequeue(LItem) do
   begin
-    if Assigned(LItem.Callback) then
-      LItem.Callback(LItem.Context)
-    else if Assigned(LItem.Method) then
-      LItem.Method(LItem.Context);
+    try
+      if Assigned(LItem.Callback) then
+        LItem.Callback(LItem.Context)
+      else if Assigned(LItem.Method) then
+        LItem.Method(LItem.Context);
+    except
+      { Isolate per-item failure: keep draining so remaining Posts are not stranded. }
+    end;
     Inc(Result);
   end;
 end;
@@ -638,6 +656,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleEx(const ADelay: TDuration; ACallback: TAsyncCallback;
@@ -646,6 +665,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfterEx(ADelay, ACallback, AContext, AOnDiscard);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
@@ -654,6 +674,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfterRef(ADelay, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
@@ -662,6 +683,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfterMethod(ADelay, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.ScheduleAt(const ADeadline: TDeadline; ACallback: TAsyncCallback;
@@ -670,6 +692,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.Schedule(ADeadline, ACallback, AContext);
+  Wake;
 end;
 
 function TAsyncLoop.CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
@@ -677,6 +700,7 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.Cancel(AHandle);
+  if Result then Wake;
 end;
 
 function TAsyncLoop.AsyncRead(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
@@ -929,6 +953,13 @@ end;
 function TAsyncLoop.HasPendingIo: Boolean;
 begin
   Result := FPoller.HasPending;
+end;
+
+function TAsyncLoop.CancelByFd(AFd: PtrInt): Boolean;
+begin
+  if not IsValid then
+    Exit(False);
+  Result := FPoller.CancelByFd(AFd);
 end;
 
 function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;

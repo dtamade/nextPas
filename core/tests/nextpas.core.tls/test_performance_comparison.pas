@@ -41,6 +41,40 @@ type
     Throughput: Double; // MB/s
   end;
 
+
+// FPC 自举编译器环境不支持 TStringHelper 方法调用(Illegal qualifier),
+// 所以本地实现左/右填充。
+function RepeatChar(AC: Char; ACount: Integer): string;
+var
+  i: Integer;
+begin
+  SetLength(Result, ACount);
+  for i := 1 to ACount do
+    Result[i] := AC;
+end;
+
+function PadL(AText: string; AWidth: Integer): string;
+var
+  LPad: Integer;
+begin
+  LPad := AWidth - Length(AText);
+  if LPad <= 0 then
+    Result := AText
+  else
+    Result := RepeatChar(' ', LPad) + AText;
+end;
+
+function PadR(AText: string; AWidth: Integer; AFill: Char = ' '): string;
+var
+  LPad: Integer;
+begin
+  LPad := AWidth - Length(AText);
+  if LPad <= 0 then
+    Result := AText
+  else
+    Result := AText + RepeatChar(AFill, LPad);
+end;
+
 var
   TestData: array[0..DATA_SIZE-1] of Byte;
   Results_11x: array of TTestResult;
@@ -261,21 +295,24 @@ end;
 procedure PrintResults(const Version: string; const Results: array of TTestResult);
 var
   i: Integer;
+  HName, HMin, HMax, HAvg, HMBs, HRuler: string;
 begin
   WriteLn;
   WriteLn('=== ', Version, ' Results ===');
   WriteLn;
-  WriteLn('Test'.PadRight(20), 'Min(ms)'.PadLeft(10), 'Max(ms)'.PadLeft(10),
-          'Avg(ms)'.PadLeft(10), 'MB/s'.PadLeft(12));
-  WriteLn(''.PadRight(62, '-'));
+  HName := 'Test'; HMin := 'Min(ms)'; HMax := 'Max(ms)';
+  HAvg := 'Avg(ms)'; HMBs := 'MB/s'; HRuler := '';
+  WriteLn(PadR(HName, 20), PadL(HMin, 10), PadL(HMax, 10),
+          PadL(HAvg, 10), PadL(HMBs, 12));
+  WriteLn(PadR(HRuler, 62, '-'));
 
   for i := 0 to High(Results) do
   begin
-    WriteLn(Results[i].TestName.PadRight(20),
-            Format('%8.2f', [Results[i].MinTime]).PadLeft(10),
-            Format('%8.2f', [Results[i].MaxTime]).PadLeft(10),
-            Format('%8.2f', [Results[i].AvgTime]).PadLeft(10),
-            Format('%10.2f', [Results[i].Throughput]).PadLeft(12));
+    WriteLn(PadR(Results[i].TestName, 20),
+            PadL(Format('%8.2f', [Results[i].MinTime]), 10),
+            PadL(Format('%8.2f', [Results[i].MaxTime]), 10),
+            PadL(Format('%8.2f', [Results[i].AvgTime]), 10),
+            PadL(Format('%10.2f', [Results[i].Throughput]), 12));
   end;
 end;
 
@@ -283,13 +320,16 @@ procedure PrintComparison;
 var
   i: Integer;
   improvement: Double;
+  HName, H11x, H3x, HDiff, HRuler: string;
 begin
   WriteLn;
   WriteLn('=== Performance Comparison ===');
   WriteLn;
-  WriteLn('Test'.PadRight(20), '1.1.x(ms)'.PadLeft(12), '3.x(ms)'.PadLeft(12),
-          'Difference'.PadLeft(12));
-  WriteLn(''.PadRight(56, '-'));
+  HName := 'Test'; H11x := '1.1.x(ms)'; H3x := '3.x(ms)';
+  HDiff := 'Difference'; HRuler := '';
+  WriteLn(PadR(HName, 20), PadL(H11x, 12), PadL(H3x, 12),
+          PadL(HDiff, 12));
+  WriteLn(PadR(HRuler, 56, '-'));
 
   for i := 0 to High(Results_11x) do
   begin
@@ -298,10 +338,10 @@ begin
     else
       improvement := 0;
 
-    WriteLn(Results_11x[i].TestName.PadRight(20),
-            Format('%10.2f', [Results_11x[i].AvgTime]).PadLeft(12),
-            Format('%10.2f', [Results_3x[i].AvgTime]).PadLeft(12),
-            Format('%+10.1f%%', [improvement]).PadLeft(12));
+    WriteLn(PadR(Results_11x[i].TestName, 20),
+            PadL(Format('%10.2f', [Results_11x[i].AvgTime]), 12),
+            PadL(Format('%10.2f', [Results_3x[i].AvgTime]), 12),
+            PadL(Format('%10.1f%%', [improvement]), 12));
   end;
 
   WriteLn;

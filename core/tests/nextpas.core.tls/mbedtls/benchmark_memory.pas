@@ -10,13 +10,14 @@ program benchmark_memory;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.mbedtls.lib,
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 const
   TEST_HOST = 'www.google.com';

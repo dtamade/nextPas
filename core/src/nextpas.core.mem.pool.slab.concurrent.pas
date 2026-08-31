@@ -38,6 +38,15 @@ type
    * @note
    *   - Reset 会使之前分配的指针失效；调用端需要自行保证语义正确
    *   - 选择指南：通用场景 → TSlabPoolConcurrent；极端分片需求 → TSlabPoolSharded
+   *   - TLS cache is per-thread (threadvar GTlsSlabCache). Destroy/Reset only
+   *     flush the calling thread's TLS cache (TlsCacheFlushPoolEntries). Pure
+   *     threadvar cannot be iterated from another thread; other threads'
+   *     cached entries for this pool remain until each thread next touches the
+   *     pool (GetMem/FreeMem flushes on overflow) or terminates. Caller must
+   *     ensure quiescence before destroying/resetting a shared pool — e.g.,
+   *     join workers or invoke Flush/Reset from each worker — otherwise cached
+   *     pointers become dangling until lazily flushed. Ownership check via
+   *     Pool pointer prevents cross-pool misuse but does not reclaim memory.
    *}
   TSlabPoolConcurrent = class(TInterfacedObject, IMemoryPool, IAllocator)
   private
@@ -182,7 +191,9 @@ end;
 
 destructor TSlabPoolConcurrent.Destroy;
 begin
-  { 先将当前线程 TLS 缓存中属于此池的条目归还，再销毁全局池 }
+  { Only the calling thread's TLS can be flushed (threadvar). Other threads'
+    caches for this pool, if any, remain until each thread flushes. Caller
+    must ensure quiescence before destroy; see class @note. }
   TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), FInner);
   FLock.Acquire;
   try
@@ -244,6 +255,7 @@ end;
 
 procedure TSlabPoolConcurrent.Reset;
 begin
+  { Only calling thread's TLS is flushed; other threads need per-thread flush. }
   TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), FInner);
   FLock.Acquire;
   try

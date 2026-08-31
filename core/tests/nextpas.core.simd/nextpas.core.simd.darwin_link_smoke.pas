@@ -1,4 +1,4 @@
-program fafafa_core_simd_darwin_link_smoke;
+program nextpas_core_simd_darwin_link_smoke;
 
 {$I nextpas.core.settings.inc}
 

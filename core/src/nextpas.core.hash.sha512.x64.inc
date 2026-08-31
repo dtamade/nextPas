@@ -91,10 +91,13 @@ asm
   // sigma0(x) = ROR(x,1) ^ ROR(x,8) ^ (x >> 7)
   // sigma1(x) = ROR(x,19) ^ ROR(x,61) ^ (x >> 6)
   // W[i] = sigma1(W[i-2]) + W[i-7] + sigma0(W[i-15]) + W[i-16]
+  // r13 = W 窗口基址副本；负偏移走通用寄存器，避免 FPC 对 -offset(%rsp) 的告警。
+  // 循环内的相对访问仍全部落在已分配的 640 字节窗口内。
+  movq %rsp, %r13
   movl $16, %ecx
 .Lexpand_w512:
   // sigma1(W[i-2])
-  movq -16(%rsp, %rcx, 8), %rax
+  movq -16(%r13, %rcx, 8), %rax
   movq %rax, %rdx
   rorq $19, %rdx
   movq %rax, %rbx
@@ -104,10 +107,10 @@ asm
   xorq %rax, %rdx
 
   // + W[i-7]
-  addq -56(%rsp, %rcx, 8), %rdx
+  addq -56(%r13, %rcx, 8), %rdx
 
   // sigma0(W[i-15])
-  movq -120(%rsp, %rcx, 8), %rax
+  movq -120(%r13, %rcx, 8), %rax
   movq %rax, %rbx
   rorq $1, %rbx
   movq %rax, %rbp
@@ -118,7 +121,7 @@ asm
   addq %rbx, %rdx
 
   // + W[i-16]
-  addq -128(%rsp, %rcx, 8), %rdx
+  addq -128(%r13, %rcx, 8), %rdx
 
   movq %rdx, (%rsp, %rcx, 8)
   incl %ecx

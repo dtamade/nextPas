@@ -6,7 +6,6 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.openssl.loader,
@@ -18,8 +17,8 @@ uses
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.bn,
-  nextpas.core.tls.openssl.api.rsa;
-
+  nextpas.core.tls.openssl.api.rsa,
+  nextpas.core.tls.openssl.backed;
 type
   TSymbolEntry = record
     Name: string;
@@ -61,7 +60,7 @@ function BuildOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'selfsigned-symbol-contract.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.ValidDays := 30;
   Result.KeyType := ktRSA;
 end;

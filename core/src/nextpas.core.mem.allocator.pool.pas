@@ -15,8 +15,8 @@
 
 适用场景: 高频同尺寸对象分配（如网络包、事件对象、AST 节点）。
 
-Author:    fafafaStudio
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Author:    nextpas.core
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.allocator.pool;

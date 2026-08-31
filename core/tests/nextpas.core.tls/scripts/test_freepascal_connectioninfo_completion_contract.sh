@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-conn_file="$ROOT_DIR/src/nextpas.core.tls.freepascal.connection.pas"
-session_file="$ROOT_DIR/src/nextpas.core.tls.freepascal.session.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+conn_file="${ROOT_DIR}/core/src/nextpas.core.tls.freepascal.connection.pas"
+session_file="${ROOT_DIR}/core/src/nextpas.core.tls.freepascal.session.pas"
 
 if rg -n --fixed-strings "function TFreePascalConnection.GetConnectionInfo" "$conn_file" >/dev/null; then
   echo "[FAIL] FreePascal backend unexpectedly grew a dedicated GetConnectionInfo override"
@@ -12,7 +12,7 @@ fi
 
 for pattern in \
   "FCipherName := TLS13CipherSuiteToString(LServerHello.SelectedCipherSuite);" \
-  "FCipherName := TLS13CipherSuiteToString(LSelectedCipherSuite);" \
+  "FCipherName := TextFormat('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);" \
   "TLS13CipherSuiteToString(FApplicationSecrets.CipherSuite)" \
   "function GetCipherSuite: Word;" \
   "FCipherSuite: Word;"

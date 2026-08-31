@@ -11,20 +11,22 @@ program test_mbedtls_server_accept_simple;
 
 uses
   {$IFDEF UNIX}
-  CThreads,
+  CThreads, // Must be first: threading is used before other units' initialization
   {$ENDIF}
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.connection,
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 var
   GLib: ISSLLibrary;
 
 const
-  TEST_CERT_PATH = 'tests/certs/server-cert.pem';
-  TEST_KEY_PATH = 'tests/certs/server-key.pem';
+  TEST_CERT_PATH = 'certs/server-cert.pem';
+  TEST_KEY_PATH = 'certs/server-key.pem';
   TEST_PORT = 18443;
 
 { 服务端线程 }

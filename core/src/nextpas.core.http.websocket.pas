@@ -12,13 +12,22 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.http.base,
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.net.server.intf,
+  nextpas.core.net.server.ws.session;
 
 type
   { Callback to validate WebSocket Origin header during upgrade.
     Return True to accept, False to reject with 403.
     AOrigin is the raw Origin header value (empty if absent). }
   TWebSocketOriginCheck = function(const AOrigin: string): Boolean;
+
+  { Extra header to send in the client upgrade request (e.g. Cookie for
+    session auth). Name/Value must not contain CR/LF. }
+  TWebSocketHeader = record
+    Name: string;
+    Value: string;
+  end;
 
   TWebSocketOptions = record
     MaxFrameSize: Int64;
@@ -33,6 +42,10 @@ type
       deadline for upgrade request/response; 0 = unbounded handshake I/O.
       Default Production discipline: 30000. }
     Timeout: Int64;
+    { 服务端阻塞写超时（ms）：>0 时每次写前设写 deadline、写后清除——
+      单次写独立超时；慢客户端填满 OS 发送缓冲时写抛超时错（调用方可按
+      死连接剔除）。0 = 不超时（默认，向后兼容）。 }
+    WriteTimeoutMs: Int64;
     { Optional cooperative cancel for dial/handshake and mid-frame I/O.
       When HasCancelToken, stream SetCancelToken enables waitable cancel wake
       (same residual as HTTP client). Default: unset. }
@@ -42,12 +55,19 @@ type
       accept extension with client_no_context_takeover and
       server_no_context_takeover (no shared LZ77 context across messages). }
     EnablePermessageDeflate: Boolean;
+    { Extra headers to send in the client upgrade request (order preserved).
+      Default: none. }
+    Headers: array of TWebSocketHeader;
     class function Default: TWebSocketOptions; static;
     function WithConnectTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
     function WithTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
+    function WithWriteTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
     function WithCancelToken(const AToken: IHttpCancelToken): TWebSocketOptions;
     function WithEnablePermessageDeflate(
       const AEnable: Boolean): TWebSocketOptions;
+    { Append an extra header to the upgrade request (e.g. Cookie for auth).
+      CR/LF in name or value are rejected by ValidateWebSocketOptions. }
+    function WithHeader(const AName, AValue: string): TWebSocketOptions;
     function EffectiveCancelToken: IHttpCancelToken;
   end;
 
@@ -95,6 +115,28 @@ function UpgradeWebSocket(const AReq: IHttpRequest;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket; overload;
 
+{ 非阻塞 WebSocket 升级（B8 第二片）：完成 HTTP 握手（校验头、发 101），
+  把连接交给事件驱动的 TNetWsFrameSession 并接入 net/server 的 poll reactor
+  （经 IHttpConnContext.HostSessionContext → HandoffHijackedConn 迁移；
+  调用线程可为 worker 或 reactor，迁移在 reactor 线程执行）。
+  与阻塞路径的差异（有意为之）：
+  - 101 响应不带 permessage-deflate 扩展头：非阻塞路径暂不协商 deflate，
+    客户端使用 RSV1 即按协议错误 1002 处理（扩展未被确认不得使用）；
+  - 返回 IWebSocketFrameSession（事件驱动）而非阻塞 IWebSocket。
+  要求：AW 支持 IHttpHijacker + IHttpConnContext 且服务器为事件驱动
+  （prefer-poll）后端，否则 EHttpError。 }
+function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
+  const AOptions: TNetWsFrameSessionOptions): IWebSocketFrameSession;
+
+{ 同上（F-10）：ACheckOrigin 非空时升级握手按回调裁决 Origin（拒绝抛
+  EHttpError），替代缺省「必须存在且非 null」检查——服务端 Origin 白名单
+  等部署面策略由此在 core 握手层执行；nil 等价四参版本。 }
+function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
+  const AOptions: TNetWsFrameSessionOptions;
+  const ACheckOrigin: TWebSocketOriginCheck): IWebSocketFrameSession; overload;
+
 { Connect to a WebSocket server.
   Establishes TCP connection, performs client handshake, returns IWebSocket.
   Supports ws:// and wss:// schemes.
@@ -111,8 +153,10 @@ function ConnectWebSocket(const AClient: IHttpClient;
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.base.utils,
   nextpas.core.bytes,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.hash.base,
@@ -124,6 +168,7 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.io.util,
+  nextpas.core.sync,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.http.url,
@@ -135,7 +180,42 @@ uses
   nextpas.core.tls.random,
   nextpas.core.compress.deflate;
 
+{ 公共握手：校验头 → hijack → 101。供 UpgradeWebSocket 与
+  UpgradeWebSocketHandoff（非阻塞）共用；见下实现。
+  AInstallShutdownNotifier：服务端阻塞路径为 True——在 101 写出前创建并
+  登记 shutdown 通知器（注册 happens-before 客户端观察到 101，B7 G1 竞态）；
+  非阻塞 handoff 路径为 False（事件驱动会话无人 Detach，不登记）。
+  ANotifier 输出已登记的通知器（AInstallShutdownNotifier=False 时为 nil）。 }
+procedure PerformUpgradeHandshake(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AOptions: TWebSocketOptions;
+  const AOfferDeflate: Boolean; const AInstallShutdownNotifier: Boolean;
+  out AConn: ITcpStream; out ADeflate: Boolean;
+  out ANotifier: IWsServerShutdownNotifier); forward;
+
 type
+  { 服务端阻塞 WS 会话的 shutdown 通知器（每会话一个，TWebSocketImpl 持有）。
+    注册表持强引用；Detach 后摘除登记、释放流引用并唤醒 WaitFinished 等待者。
+    NotifyShutdown 用 waitable cancel token 唤醒连接线程（mid-poll 设置读
+    deadline 无效——poll 在旧的无限超时上继续阻塞）；close frame 1001 由
+    会话 Destroy 收尾路径补发（单写者，无跨线程写竞态）。 }
+  TWsServerShutdownNotifier = class(TInterfacedObject,
+    IWsServerShutdownNotifier)
+  private
+    FRegistry: IWsServerShutdownRegistry;
+    FStream: ITcpStream;
+    FDone: IEvent;
+    FCancel: INetCancelController;
+    FDetached: LongInt;
+  public
+    constructor Create(const ARegistry: IWsServerShutdownRegistry;
+      const AStream: ITcpStream; const AInstallWake: Boolean);
+    destructor Destroy; override;
+    procedure Detach;
+    procedure NotifyShutdown;
+    function WaitFinished(const ATimeoutNs: Int64): Boolean;
+    procedure ForceClose;
+  end;
+
   TWebSocketImpl = class(TInterfacedObject, IWebSocket)
   private
     FReader: IReader;
@@ -152,10 +232,12 @@ type
     FOptions: TWebSocketOptions;
     FIsClient: Boolean;
     FDeflateEnabled: Boolean;
+    FShutdownNotifier: IWsServerShutdownNotifier;
     procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes;
       const ARsv1: Boolean = False);
     procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: TBytes;
       const ARsv1: Boolean = False);
+    procedure WriteAll(const ABuf; ACount: SizeUInt);
     procedure WriteDataMessage(AOpcode: TWebSocketOpcode; const APayload: TBytes);
     function MaybeDecompressPayload(const ACompressed: Boolean;
       const APayload: TBytes): TBytes;
@@ -166,7 +248,8 @@ type
     constructor Create(const AReader: IReader; const AWriter: IWriter;
       const AOptions: TWebSocketOptions; AIsClient: Boolean = False;
       const AStream: ITcpStream = nil;
-      const ADeflateEnabled: Boolean = False);
+      const ADeflateEnabled: Boolean = False;
+      const AShutdownNotifier: IWsServerShutdownNotifier = nil);
     destructor Destroy; override;
     function ReadFrame: TWebSocketFrame;
     function ReadMessage: TWebSocketFrame;
@@ -180,25 +263,7 @@ type
 
 { Helpers }
 
-function StringToBytes(const AValue: string): TBytes;
-var
-  LLen: SizeInt;
-begin
-  LLen := Length(AValue);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AValue[1], Result[0], LLen);
-end;
 
-function BytesToString(const AValue: TBytes): string;
-var
-  LLen: SizeInt;
-begin
-  LLen := Length(AValue);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AValue[0], Result[1], LLen);
-end;
 
 class function TWebSocketOptions.Default: TWebSocketOptions;
 begin
@@ -208,6 +273,7 @@ begin
   { Match HTTP client production discipline: bounded dial + handshake. }
   Result.ConnectTimeout := 30000;
   Result.Timeout := 30000;
+  Result.WriteTimeoutMs := 0;
   Result.CancelToken := nil;
   Result.HasCancelToken := False;
   Result.EnablePermessageDeflate := False;
@@ -226,6 +292,13 @@ begin
   Result.Timeout := ATimeoutMs;
 end;
 
+function TWebSocketOptions.WithWriteTimeout(
+  const ATimeoutMs: Int64): TWebSocketOptions;
+begin
+  Result := Self;
+  Result.WriteTimeoutMs := ATimeoutMs;
+end;
+
 function TWebSocketOptions.WithCancelToken(
   const AToken: IHttpCancelToken): TWebSocketOptions;
 begin
@@ -241,6 +314,17 @@ begin
   Result.EnablePermessageDeflate := AEnable;
 end;
 
+function TWebSocketOptions.WithHeader(const AName, AValue: string): TWebSocketOptions;
+var
+  N: Integer;
+begin
+  Result := Self;
+  N := Length(Result.Headers);
+  SetLength(Result.Headers, N + 1);
+  Result.Headers[N].Name := AName;
+  Result.Headers[N].Value := AValue;
+end;
+
 function TWebSocketOptions.EffectiveCancelToken: IHttpCancelToken;
 begin
   if HasCancelToken then
@@ -250,6 +334,8 @@ begin
 end;
 
 procedure ValidateWebSocketOptions(const AOptions: TWebSocketOptions);
+var
+  I: Integer;
 begin
   if AOptions.MaxFrameSize < 0 then
     raise EHttpError.Create(hekArgument, 'WebSocket max frame size must not be negative');
@@ -261,6 +347,22 @@ begin
   if AOptions.Timeout < 0 then
     raise EHttpError.Create(hekArgument,
       'WebSocket Timeout must not be negative');
+  if AOptions.WriteTimeoutMs < 0 then
+    raise EHttpError.Create(hekArgument,
+      'WebSocket WriteTimeoutMs must not be negative');
+  { 额外请求头不得含 CR/LF（防注入升级请求行/头区）。 }
+  for I := 0 to High(AOptions.Headers) do
+  begin
+    if (Pos(#13, AOptions.Headers[I].Name) > 0) or
+       (Pos(#10, AOptions.Headers[I].Name) > 0) or
+       (Pos(#13, AOptions.Headers[I].Value) > 0) or
+       (Pos(#10, AOptions.Headers[I].Value) > 0) then
+      raise EHttpError.Create(hekArgument,
+        'WebSocket extra header must not contain CR/LF');
+    if AOptions.Headers[I].Name = '' then
+      raise EHttpError.Create(hekArgument,
+        'WebSocket extra header name must not be empty');
+  end;
 end;
 
 { ConnectTimeout>0 wins for OS dial; else Timeout; 0 = unbounded. }
@@ -428,17 +530,23 @@ begin
       Exit(True);
 end;
 
+function Sha1DigestToBytes(const ADigest: TSHA1Digest): TBytes;
+var
+  I: SizeInt;
+begin
+  Result := nil;
+  SetLength(Result, Length(ADigest));
+  for I := 0 to High(ADigest) do
+    Result[I] := ADigest[I];
+end;
+
 function ComputeAcceptKey(const AKey: string): string;
 var
   LConcat: string;
-  LDigest: TSHA1Digest;
-  LBytes: TBytes;
 begin
   LConcat := AKey + WS_GUID;
-  LDigest := SHA1Of(LConcat[1], SizeUInt(Length(LConcat)));
-  SetLength(LBytes, SHA1_DIGEST_SIZE);
-  Move(LDigest[0], LBytes[0], SHA1_DIGEST_SIZE);
-  Result := Base64Encode(LBytes);
+  Result := Base64Encode(Sha1DigestToBytes(
+    SHA1Of(LConcat[1], SizeUInt(Length(LConcat)))));
 end;
 
 procedure ValidateHandshakeKey(const AKey: string);
@@ -536,14 +644,47 @@ end;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket;
 var
+  LConn: ITcpStream;
+  LDeflate: Boolean;
+  LNotifier: IWsServerShutdownNotifier;
+begin
+  LConn := nil;
+  LDeflate := False;
+  LNotifier := nil;
+  { shutdown 通知器在握手路径登记（先于 101 写出，B7 G1 竞态修复）；
+    找不到注册表则静默降级（自定义 transport / 非 threaded 后端——
+    收尾 close frame 语义仍在 G2，shutdown 唤醒缺失但连接仍会关闭）。 }
+  PerformUpgradeHandshake(AReq, AW, AOptions, AOptions.EnablePermessageDeflate,
+    True, LConn, LDeflate, LNotifier);
+  Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions,
+    False, LConn, LDeflate, LNotifier);
+end;
+
+{ 公共握手：校验头 → hijack → 101（AOfferDeflate 决定是否回扩展头）。
+  AInstallShutdownNotifier=True 时在 101 写出前登记 shutdown 通知器（注册
+  happens-before 客户端观察到 101：客户端看到 101 即可触发 Shutdown，登记
+  若在其后完成 ShutdownAll 会看到空注册表——B7 G1 竞态）。
+  所有权：成功返回后 AConn 由调用方持有（阻塞路径 → TWebSocketImpl；
+  非阻塞路径 → TNetWsFrameSession + poll target）。失败抛 EHttpError。 }
+procedure PerformUpgradeHandshake(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AOptions: TWebSocketOptions;
+  const AOfferDeflate: Boolean; const AInstallShutdownNotifier: Boolean;
+  out AConn: ITcpStream; out ADeflate: Boolean;
+  out ANotifier: IWsServerShutdownNotifier);
+var
   LUpgrade, LKey, LVersion, LOrigin: string;
   LConnectionValues, LKeyValues, LExtValues: TStringArray;
   LAccept: string;
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
-  LDeflate: Boolean;
+  LConnCtx: IHttpConnContext;
+  LSessionCtx: ITcpServerSessionContext;
+  LReg: IWsServerShutdownRegistry;
 begin
+  ADeflate := False;
+  AConn := nil;
+  ANotifier := nil;
   if AReq = nil then
     raise EHttpError.Create(hekArgument, 'WebSocket upgrade request is nil');
   if AW = nil then
@@ -592,11 +733,10 @@ begin
       raise EHttpError.Create(hekUpgrade, 'WebSocket: Origin must be present and non-null');
   end;
 
-  LDeflate := False;
-  if AOptions.EnablePermessageDeflate then
+  if AOfferDeflate and AOptions.EnablePermessageDeflate then
   begin
     LExtValues := AReq.Headers.GetAll('sec-websocket-extensions');
-    LDeflate := HeadersOfferPermessageDeflate(LExtValues);
+    ADeflate := HeadersOfferPermessageDeflate(LExtValues);
   end;
 
   { Hijack the connection }
@@ -604,13 +744,33 @@ begin
     raise EHttpError.Create(hekUpgrade, 'Response writer does not support connection hijack');
   LConn := LHijacker.Hijack;
 
+  ApplyWebSocketCancelToken(LConn, AOptions.EffectiveCancelToken);
+  { B7 G1：服务端阻塞路径先登记 shutdown 通知器再写 101——注册 happens-before
+    客户端观察到 101（客户端看到 101 即可触发 Shutdown，登记若在其后完成，
+    ShutdownAll 会看到空注册表）。非阻塞 handoff 不登记：事件驱动会话的收尾
+    不经过 TWebSocketImpl.Destroy，无人 Detach，注册表会悬挂引用。 }
+  if AInstallShutdownNotifier then
+  begin
+    if Supports(AW, IHttpConnContext, LConnCtx) then
+    begin
+      LSessionCtx := LConnCtx.HostSessionContext;
+      if LSessionCtx <> nil then
+        if Supports(LSessionCtx, IWsServerShutdownRegistry, LReg) then
+        begin
+          ANotifier := TWsServerShutdownNotifier.Create(LReg, LConn,
+            AOptions.EffectiveCancelToken = nil);
+          LReg.RegisterShutdownNotifier(ANotifier);
+        end;
+    end;
+  end;
+
   LAccept := ComputeAcceptKey(LKey);
 
   LResp := 'HTTP/1.1 101 Switching Protocols'#13#10 +
            'Upgrade: websocket'#13#10 +
            'Connection: Upgrade'#13#10 +
            'Sec-WebSocket-Accept: ' + LAccept + #13#10;
-  if LDeflate then
+  if ADeflate then
     LResp := LResp + 'Sec-WebSocket-Extensions: ' + WS_PMD_EXTENSION_VALUE + #13#10;
   LResp := LResp + #13#10;
   try
@@ -620,16 +780,169 @@ begin
     raise;
   end;
 
-  ApplyWebSocketCancelToken(LConn, AOptions.EffectiveCancelToken);
-  Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions,
-    False, LConn, LDeflate);
+  { F-7：101 已写出即协议切换完成，I/O 时序归 WS 层所有。h1 在读请求前
+    装配的每请求读死线（ReadTimeout，默认 30s 绝对期限）若不清除会原封
+    传给升级后的连接——长驻 WS 恰好在握手 30s 后被掐断，心跳无效。
+    清读写两向；WS 写路径自带每写 WriteTimeoutMs（B7），读侧存活由应用层
+    ping/pong 负责。阻塞与非阻塞 handoff 共用本路径，一处修复两端受益。 }
+  ClearWebSocketStreamDeadline(LConn);
+
+  AConn := LConn;
+end;
+
+{ 非阻塞升级（B8 第二片）：见 interface 注释。
+  F-10：五参重载为真身——ACheckOrigin 经局部 TWebSocketOptions 注入握手
+  （此前硬编码 Default 使回调不可达）；四参版本薄委托传 nil。 }
+function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
+  const AOptions: TNetWsFrameSessionOptions;
+  const ACheckOrigin: TWebSocketOriginCheck): IWebSocketFrameSession;
+var
+  LConn: ITcpStream;
+  LDeflate: Boolean;
+  LConnCtx: IHttpConnContext;
+  LSessionCtx: ITcpServerSessionContext;
+  LPush: IWebSocketFrameWorkerPush;
+  LSession: TNetWsFrameSession;
+  LNotifier: IWsServerShutdownNotifier;
+  LHandshakeOpts: TWebSocketOptions;
+begin
+  LConn := nil;
+  LNotifier := nil;
+  { 非阻塞路径不登记 shutdown 通知器：事件驱动会话收尾不经 TWebSocketImpl.
+    Destroy，无人 Detach，注册表会悬挂引用。 }
+  LHandshakeOpts := TWebSocketOptions.Default;
+  LHandshakeOpts.OnCheckOrigin := ACheckOrigin;
+  PerformUpgradeHandshake(AReq, AW, LHandshakeOpts, False, False,
+    LConn, LDeflate, LNotifier);
+  if not Supports(AW, IHttpConnContext, LConnCtx) then
+  begin
+    LConn.Close;
+    raise EHttpError.Create(hekUpgrade,
+      'WebSocket upgrade requires an evented tcp server backend');
+  end;
+  LSessionCtx := LConnCtx.HostSessionContext;
+  if LSessionCtx = nil then
+  begin
+    LConn.Close;
+    raise EHttpError.Create(hekUpgrade,
+      'WebSocket upgrade requires an evented tcp server backend');
+  end;
+  LSession := TNetWsFrameSession.Create(LConn, ASink, AOptions);
+  if Supports(LSessionCtx, IWebSocketFrameWorkerPush, LPush) then
+    LSession.SetFrameWorkerPush(LPush);
+  if not LSessionCtx.HandoffHijackedConn(LConn, LSession) then
+  begin
+    LSession.Cancel;
+    LConn.Close;
+    raise EHttpError.Create(hekUpgrade, 'WebSocket upgrade handoff failed');
+  end;
+  Result := LSession;
+end;
+
+function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
+  const AOptions: TNetWsFrameSessionOptions): IWebSocketFrameSession;
+begin
+  Result := UpgradeWebSocketHandoff(AReq, AW, ASink, AOptions,
+    TWebSocketOriginCheck(nil));
+end;
+
+{ TWsServerShutdownNotifier }
+
+constructor TWsServerShutdownNotifier.Create(
+  const ARegistry: IWsServerShutdownRegistry; const AStream: ITcpStream;
+  const AInstallWake: Boolean);
+begin
+  inherited Create;
+  FRegistry := ARegistry;
+  FStream := AStream;
+  FDone := Event(True);
+  FDetached := 0;
+  FCancel := nil;
+  if AInstallWake then
+  begin
+    { waitable cancel：NotifyShutdown 时 Cancel 会经 poll 的 wake socket
+      立即唤醒阻塞中的读/写（mid-poll 设置读 deadline 无效——poll 在
+      旧的无限超时上继续阻塞）。应用自带 cancel token 时不覆盖。 }
+    FCancel := NewNetCancelToken;
+    FStream.SetCancelToken(FCancel);
+  end;
+end;
+
+destructor TWsServerShutdownNotifier.Destroy;
+begin
+  { 异常路径兜底：未 Detach 即销毁（仅发生在注册表自身析构释放引用时）
+    只唤醒 WaitFinished 等待者，不再回调摘除——注册表正在析构，
+    Unregister 会重入正在释放的数组/锁。注册表析构整体释放登记，
+    无悬挂引用。 }
+  if atomic_exchange(FDetached, 1, mo_acq_rel) = 0 then
+    FDone.SetEvent;
+  inherited Destroy;
+end;
+
+procedure TWsServerShutdownNotifier.Detach;
+begin
+  if atomic_exchange(FDetached, 1, mo_acq_rel) <> 0 then
+    Exit;
+  if FRegistry <> nil then
+  begin
+    FRegistry.UnregisterShutdownNotifier(Self);
+    FRegistry := nil;
+  end;
+  FStream := nil;
+  FCancel := nil;
+  FDone.SetEvent;
+end;
+
+procedure TWsServerShutdownNotifier.NotifyShutdown;
+begin
+  if atomic_load(FDetached, mo_acquire) <> 0 then
+    Exit;
+  { 唤醒连接线程：阻塞中的 poll 因 waitable cancel 立即返回并抛错，
+    handler 读循环退出 → Destroy 收尾路径补发 close frame 1001（单写者，
+    无跨线程写竞态）。drain 总时长仍由服务器 ShutdownTimeout 约束。 }
+  if FCancel <> nil then
+    FCancel.Cancel;
+end;
+
+function TWsServerShutdownNotifier.WaitFinished(
+  const ATimeoutNs: Int64): Boolean;
+begin
+  if atomic_load(FDetached, mo_acquire) <> 0 then
+    Exit(True);
+  if ATimeoutNs <= 0 then
+  begin
+    { 0 = 无限等待（与 HTTP ShutdownTimeout=0 语义一致）。 }
+    FDone.Wait;
+    Exit(True);
+  end;
+  Result := FDone.WaitTimeout(ATimeoutNs);
+end;
+
+procedure TWsServerShutdownNotifier.ForceClose;
+begin
+  { 先唤醒再强关：close 不会唤醒阻塞中的 poll（Linux 语义），连接线程会
+    悬挂在已关闭的 socket 上；Cancel 幂等（NotifyShutdown 已调用则无操作）。
+    应用自带 cancel token 的会话（FCancel=nil）无法强制唤醒——调用方
+    超时语义下连接线程悬挂属已知降级（应用拥有取消权）。 }
+  if FCancel <> nil then
+    FCancel.Cancel;
+  if FStream <> nil then
+  begin
+    try
+      FStream.Close;
+    except
+    end;
+  end;
 end;
 
 { TWebSocketImpl }
 
 constructor TWebSocketImpl.Create(const AReader: IReader; const AWriter: IWriter;
   const AOptions: TWebSocketOptions; AIsClient: Boolean;
-  const AStream: ITcpStream; const ADeflateEnabled: Boolean);
+  const AStream: ITcpStream; const ADeflateEnabled: Boolean;
+  const AShutdownNotifier: IWsServerShutdownNotifier);
 begin
   inherited Create;
   FReader := AReader;
@@ -646,13 +959,41 @@ begin
   FFragmentPayloadSize := 0;
   FFragmentBinaryPayload := nil;
   FFragmentCompressed := False;
-  if FStream <> nil then
+  { 服务端阻塞路径：shutdown 通知器已在握手路径（PerformUpgradeHandshake）
+    登记（先于 101 写出，注册 happens-before 客户端观察到 101），流 cancel
+    token 也已处理，构造函数不再覆盖。其余路径（客户端）在此应用自带
+    cancel token。 }
+  if (not FIsClient) and (AShutdownNotifier <> nil) then
+    FShutdownNotifier := AShutdownNotifier
+  else if FStream <> nil then
     ApplyWebSocketCancelToken(FStream, AOptions.EffectiveCancelToken);
 end;
 
 destructor TWebSocketImpl.Destroy;
 begin
+  { 先解除流 cancel（shutdown 唤醒可能已触发）：使收尾 close frame 的
+    写入不被已取消的流拒绝；再补发 close frame（G2）；最后摘除 shutdown
+    登记并释放连接引用。 }
   ClearStreamCancel;
+  { 收尾补发 close frame（G2）：既未收到对端 close 也未发送 close 时，
+    best-effort 补发——已收到对端 close → 回 1000；未收到 → 1001 going
+    away（服务器 shutdown / handler 异常退出场景）。写失败吞掉（对端
+    可能已断）；随后连接随 FStream 引用释放关闭。 }
+  if FOpen and (not FCloseSent) then
+  begin
+    try
+      if FCloseReceived then
+        Close(1000, '')
+      else
+        Close(1001, 'going away');
+    except
+    end;
+  end;
+  if FShutdownNotifier <> nil then
+  begin
+    FShutdownNotifier.Detach;
+    FShutdownNotifier := nil;
+  end;
   inherited Destroy;
 end;
 
@@ -932,6 +1273,10 @@ begin
 
       wsOpContinuation:
         raise EHttpError.Create(hekProtocol, 'WebSocket: unexpected continuation frame');
+    else
+      { RFC 6455 §5.1: unknown opcode MUST fail the connection. ReadFrame
+        already rejects reserved opcodes; this guards future call sites. }
+      raise EHttpError.Create(hekProtocol, 'WebSocket: unsupported opcode');
     end;
   end;
 end;
@@ -1013,7 +1358,7 @@ begin
         LBuf[I + J] := APayload[J] xor LMaskKey[J mod 4];
     end;
     try
-      IoWriteAll(FWriter, LBuf[0], LBufLen);
+      WriteAll(LBuf[0], LBufLen);
     except
       on E: EHttpError do
         raise;
@@ -1056,13 +1401,36 @@ begin
     if LPayloadLen > 0 then
       Move(APayload[0], LBuf[LHdrLen], LPayloadLen);
     try
-      IoWriteAll(FWriter, LBuf[0], LBufLen);
+      WriteAll(LBuf[0], LBufLen);
     except
       on E: EHttpError do
         raise;
       on E: Exception do
         RaiseWebSocketTransport(E);
     end;
+  end;
+end;
+
+procedure TWebSocketImpl.WriteAll(const ABuf; ACount: SizeUInt);
+var
+  LArmed: Boolean;
+begin
+  { G3：单次写独立超时——写前设写 deadline、写后清除（WriteTimeoutMs>0 时）。
+    慢客户端填满 OS 发送缓冲时写抛超时错，调用方按死连接剔除。
+    并发写路径（room 广播等既有模型）下 set/clear 竞争只影响超时有效性，
+    不引入额外安全风险。 }
+  LArmed := False;
+  if (FOptions.WriteTimeoutMs > 0) and (FStream <> nil) then
+  begin
+    FStream.SetWriteDeadline(
+      TDeadline.After(TDuration.FromMilliseconds(FOptions.WriteTimeoutMs)));
+    LArmed := True;
+  end;
+  try
+    IoWriteAll(FWriter, ABuf, ACount);
+  finally
+    if LArmed then
+      FStream.SetWriteDeadline(TDeadline.Infinite);
   end;
 end;
 
@@ -1195,16 +1563,10 @@ end;
 function ValidateAcceptKey(const AKey, AAccept: string): Boolean;
 var
   LConcat: string;
-  LDigest: TSHA1Digest;
-  LBytes: TBytes;
-  LExpected: string;
 begin
   LConcat := AKey + WS_GUID;
-  LDigest := SHA1Of(LConcat[1], SizeUInt(Length(LConcat)));
-  SetLength(LBytes, SHA1_DIGEST_SIZE);
-  Move(LDigest[0], LBytes[0], SHA1_DIGEST_SIZE);
-  LExpected := Base64Encode(LBytes);
-  Result := AAccept = LExpected;
+  Result := AAccept = Base64Encode(Sha1DigestToBytes(
+    SHA1Of(LConcat[1], SizeUInt(Length(LConcat)))));
 end;
 
 procedure ReadHttpResponse(const AReader: IReader;
@@ -1343,7 +1705,7 @@ function ConnectWebSocket(const AClient: IHttpClient;
   const AOptions: TWebSocketOptions): IWebSocket;
 var
   LParsedUrl: TUrl;
-  LScheme, LHost, LPath, LKey, LAccept: string;
+  LScheme, LHost, LPath, LKey: string;
   LPort: UInt16;
   LConn, LTlsConn, LActive: ITcpStream;
   LReader: IReader;
@@ -1355,6 +1717,7 @@ var
   LDialMs: Int64;
   LHandshakeMs: Int64;
   LDeflate: Boolean;
+  LI: Integer;
 begin
   if AClient = nil then
     raise EHttpError.Create(hekArgument, 'WebSocket client is nil');
@@ -1462,6 +1825,9 @@ begin
     if AOptions.EnablePermessageDeflate then
       LRequest := LRequest + 'Sec-WebSocket-Extensions: ' +
         WS_PMD_EXTENSION_VALUE + #13#10;
+    for LI := 0 to High(AOptions.Headers) do
+      LRequest := LRequest + AOptions.Headers[LI].Name + ': ' +
+        AOptions.Headers[LI].Value + #13#10;
     LRequest := LRequest + #13#10;
 
     { Send upgrade request + read response under handshake deadline }

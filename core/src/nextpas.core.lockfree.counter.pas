@@ -12,7 +12,6 @@ type
     @details 基于原子操作的高性能计数器。
       支持 Increment/Decrement/Add/Sub/Load/Store/Reset。
       适用于统计、计数等场景。
- * @concurrency Thread-safe (see source for details).
   }
   TConcurrentCounter = class
   private

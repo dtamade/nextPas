@@ -2,7 +2,7 @@
   test_client_cert_validation - 客户端证书验证测试
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-01-18
 
   描述:

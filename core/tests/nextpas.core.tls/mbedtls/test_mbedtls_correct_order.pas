@@ -19,11 +19,13 @@ program test_mbedtls_correct_order;
 }
 
 uses
-  nextpas.core.system.sysutils, TypInfo,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.context,
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 const
   TEST_HOST = 'www.google.com';

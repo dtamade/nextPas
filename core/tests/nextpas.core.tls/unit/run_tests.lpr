@@ -14,7 +14,7 @@ uses
 var
   LRunner: TSuiteRunner;
 begin
-  LRunner := TSuiteRunner.Create('fafafa.ssl Tests');
+  LRunner := TSuiteRunner.Create('nextpas.ssl Tests');
   LRunner.Add(DiscoverTests(TTestOpenSSLCore.Create, 'OpenSSLCore'));
   LRunner.RunAll;
   LRunner.Summary;

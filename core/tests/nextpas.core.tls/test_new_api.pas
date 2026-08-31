@@ -1,5 +1,5 @@
 {
-  test_new_api - 测试 fafafa.ssl v2.0 新增 API
+  test_new_api - 测试 nextpas.core.tls v2.0 新增 API
 
   测试内容：
   1. Result 类型（TSSLDataResult, TSSLOperationResult）
@@ -17,8 +17,7 @@ uses
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.factory,
   nextpas.core.tls.connection.builder,
-  fafafa.ssl;
-
+  nextpas.core.tls.openssl.backed;
 var
   TestsPassed: Integer = 0;
   TestsFailed: Integer = 0;
@@ -214,7 +213,7 @@ end;
 
 begin
   WriteLn('╔═══════════════════════════════════════════╗');
-  WriteLn('║  fafafa.ssl v2.0 - New API Unit Tests     ║');
+  WriteLn('║  nextpas.core.tls v2.0 - New API Unit Tests     ║');
   WriteLn('╚═══════════════════════════════════════════╝');
 
   try

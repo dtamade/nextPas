@@ -204,7 +204,3 @@ begin nextpas.core.test.fuzz.FuzzStructured(AName, ATest, AGen, ACorpus, AMaxIte
 procedure FuzzMultiStrategy(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer; AIterationsPerWorker: Integer);
 begin nextpas.core.test.fuzz.FuzzMultiStrategy(AName, ATest, ACorpus, AWorkers, AIterationsPerWorker); end;
-
-procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
-  const ACorpus: array of TBytes; AWorkers: Integer; AIterationsPerWorker: Integer);
-begin nextpas.core.test.fuzz.FuzzParallel(AName, ATest, ACorpus, AWorkers, AIterationsPerWorker); end;

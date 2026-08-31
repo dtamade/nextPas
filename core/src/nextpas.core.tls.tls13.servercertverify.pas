@@ -18,7 +18,6 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.system.sysutils,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.tls.tls13.wire,
@@ -113,6 +112,7 @@ function IsECDSAPrivateKey(const APrivateKeyBlob: TBytes): Boolean;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.tls.errors,
   nextpas.core.tls.asn1,
   nextpas.core.tls.pem,
@@ -127,6 +127,7 @@ uses
   nextpas.core.crypto.rsa.ct;
 
 const
+  { RFC 8446 §4.4.3 原文定案：上下文串含「1.3」句点（2026-08-23 复核） }
   TLS13_SERVER_CERTVERIFY_CONTEXT = 'TLS 1.3, server CertificateVerify';
   TLS13_CLIENT_CERTVERIFY_CONTEXT = 'TLS 1.3, client CertificateVerify';
   OID_RSA_ENCRYPTION = '1.2.840.113549.1.1.1';
@@ -155,38 +156,12 @@ begin
     Move(AData[0], Result[1], Length(AData));
 end;
 
-function StringToBytes(const AValue: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(AValue));
-  if Length(AValue) > 0 then
-    Move(AValue[1], Result[0], Length(AValue));
-end;
-
 function BlobLooksLikePEM(const ABlob: TBytes): Boolean;
 var
   LText: AnsiString;
 begin
   LText := BytesToAnsiString(ABlob);
   Result := Pos('-----BEGIN', string(LText)) > 0;
-end;
-
-function StripLeadingZeroBytes(const AData: TBytes): TBytes;
-var
-  I: Integer;
-begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-
-  if I >= Length(AData) then
-  begin
-    SetLength(Result, 1);
-    Result[0] := 0;
-    Exit;
-  end;
-
-  Result := Copy(AData, I, Length(AData) - I);
 end;
 
 function UnsignedBitLength(const AData: TBytes): Integer;
@@ -208,52 +183,6 @@ begin
     Inc(Result);
     LFirst := LFirst shr 1;
   end;
-end;
-
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer;
-var
-  LLeft: TBytes;
-  LRight: TBytes;
-  I: Integer;
-begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-
-  if Length(LLeft) < Length(LRight) then
-    Exit(-1);
-  if Length(LLeft) > Length(LRight) then
-    Exit(1);
-
-  for I := 0 to Length(LLeft) - 1 do
-  begin
-    if LLeft[I] < LRight[I] then
-      Exit(-1);
-    if LLeft[I] > LRight[I] then
-      Exit(1);
-  end;
-
-  Result := 0;
-end;
-
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean;
-var
-  LLeft: TBytes;
-  LRight: TBytes;
-  I: Integer;
-begin
-  LLeft := StripLeadingZeroBytes(ALeft);
-  LRight := StripLeadingZeroBytes(ARight);
-
-  if Length(LLeft) <> Length(LRight) then
-    Exit(False);
-
-  for I := 0 to Length(LLeft) - 1 do
-  begin
-    if LLeft[I] <> LRight[I] then
-      Exit(False);
-  end;
-
-  Result := True;
 end;
 
 function UnsignedIsZero(const AData: TBytes): Boolean;
@@ -1802,7 +1731,9 @@ begin
     Exit;
   end;
 
-  if TConstantTime.CompareBytes(LRecovered, LExpected) <> 0 then
+  { TConstantTime.CompareBytes returns 1 when equal, 0 when different;
+    a recovered message that differs from the expected encoding must fail. }
+  if TConstantTime.CompareBytes(LRecovered, LExpected) = 0 then
   begin
     AError := 'RSA PKCS#1 v1.5 signature does not match transcript';
     Exit;
@@ -1834,7 +1765,8 @@ begin
     Exit;
   end;
 
-  if TConstantTime.CompareBytes(LRecovered, LExpected) <> 0 then
+  { CompareBytes: 1 = equal, 0 = different; different must fail. }
+  if TConstantTime.CompareBytes(LRecovered, LExpected) = 0 then
   begin
     AError := 'RSA PKCS#1 v1.5 signature does not match transcript';
     Exit;
@@ -1946,7 +1878,8 @@ begin
   Move(LSalt[0], LMPrime[8 + HASH_SIZE], SALT_SIZE);
   LExpectedH := SHA256(LMPrime);
 
-  if TConstantTime.CompareBytes(LH, LExpectedH) <> 0 then
+  { CompareBytes: 1 = equal, 0 = different; different must fail. }
+  if TConstantTime.CompareBytes(LH, LExpectedH) = 0 then
   begin
     AError := 'RSA-PSS signature hash does not match transcript';
     Exit;
@@ -2058,7 +1991,8 @@ begin
   Move(LSalt[0], LMPrime[8 + HASH_SIZE], SALT_SIZE);
   LExpectedH := SHA384(LMPrime);
 
-  if TConstantTime.CompareBytes(LH, LExpectedH) <> 0 then
+  { CompareBytes: 1 = equal, 0 = different; different must fail. }
+  if TConstantTime.CompareBytes(LH, LExpectedH) = 0 then
   begin
     AError := 'RSA-PSS signature hash does not match transcript';
     Exit;
@@ -2154,7 +2088,7 @@ begin
     TLS13_SIG_RSA_PSS_RSAE_SHA384,
     TLS13_SIG_RSA_PSS_PSS_SHA384:
       begin
-        if not nextpas.core.system.sysutils.SameText(APublicKeyInfo.KeyType, 'RSA') then
+        if not nextpas.core.text.conv.SameText(APublicKeyInfo.KeyType, 'RSA') then
         begin
           AError := 'Unsupported CertificateVerify key type for RSA signature scheme';
           Exit;
@@ -2187,14 +2121,14 @@ begin
 
     TLS13_SIG_ECDSA_SECP256R1_SHA256:
       begin
-        if not nextpas.core.system.sysutils.SameText(APublicKeyInfo.KeyType, 'ECDSA') then
+        if not nextpas.core.text.conv.SameText(APublicKeyInfo.KeyType, 'ECDSA') then
         begin
           AError := 'Unsupported CertificateVerify key type for ECDSA signature scheme';
           Exit;
         end;
 
-        if (not nextpas.core.system.sysutils.SameText(APublicKeyInfo.ECCurve, 'prime256v1')) and
-          (not nextpas.core.system.sysutils.SameText(APublicKeyInfo.ECCurve, 'secp256r1')) then
+        if (not nextpas.core.text.conv.SameText(APublicKeyInfo.ECCurve, 'prime256v1')) and
+          (not nextpas.core.text.conv.SameText(APublicKeyInfo.ECCurve, 'secp256r1')) then
         begin
           AError := 'Unsupported ECDSA curve for CertificateVerify';
           Exit;
@@ -2212,14 +2146,14 @@ begin
 
     TLS13_SIG_ECDSA_SECP384R1_SHA384:
       begin
-        if not nextpas.core.system.sysutils.SameText(APublicKeyInfo.KeyType, 'ECDSA') then
+        if not nextpas.core.text.conv.SameText(APublicKeyInfo.KeyType, 'ECDSA') then
         begin
           AError := 'Unsupported CertificateVerify key type for ECDSA-P384 signature scheme';
           Exit;
         end;
 
-        if (not nextpas.core.system.sysutils.SameText(APublicKeyInfo.ECCurve, 'secp384r1')) and
-          (not nextpas.core.system.sysutils.SameText(APublicKeyInfo.ECCurve, 'prime384v1')) then
+        if (not nextpas.core.text.conv.SameText(APublicKeyInfo.ECCurve, 'secp384r1')) and
+          (not nextpas.core.text.conv.SameText(APublicKeyInfo.ECCurve, 'prime384v1')) then
         begin
           AError := 'Unsupported ECDSA curve for P-384 CertificateVerify';
           Exit;
@@ -2240,7 +2174,7 @@ begin
 
     TLS13_SIG_ED25519:
       begin
-        if not nextpas.core.system.sysutils.SameText(APublicKeyInfo.KeyType, 'Ed25519') then
+        if not nextpas.core.text.conv.SameText(APublicKeyInfo.KeyType, 'Ed25519') then
         begin
           AError := 'Unsupported CertificateVerify key type for Ed25519 signature scheme';
           Exit;
@@ -2576,12 +2510,12 @@ begin
   SetLength(LBody, 0);
   AppendUInt16(LBody, ASignatureScheme);
   AppendUInt16(LBody, Length(ASignature));
-  AppendBytes(LBody, ASignature);
+  BytesAppend(LBody, ASignature);
 
   SetLength(Result, 0);
   AppendByte(Result, TLS_HANDSHAKE_TYPE_CERTIFICATE_VERIFY);
   AppendUInt24(Result, Length(LBody));
-  AppendBytes(Result, LBody);
+  BytesAppend(Result, LBody);
 end;
 
 function BuildTLS13PlaceholderSignatureFromTranscriptHash(
@@ -2716,13 +2650,13 @@ begin
     Exit;
   end;
 
+  // rsa_pkcs1 在 TLS 1.3 CertificateVerify 中被禁止（RFC 8446 §4.4.3），
+  // 但 TLS 1.2 ServerKeyExchange 必须使用它（RFC 5246 §7.4.3）。
+  // 本函数是共享签名基础设施，场景合法性由调用方保证；
+  // 验证侧 TryVerifyTLS13CertificateVerifySignature 仍按 RFC 拒绝 pkcs1。
   case ASignatureScheme of
     TLS13_SIG_RSA_PKCS1_SHA256,
-    TLS13_SIG_RSA_PKCS1_SHA384:
-      begin
-        AError := 'rsa_pkcs1 signature schemes are not permitted in TLS 1.3 CertificateVerify (RFC 8446 §4.4.3)';
-        Exit;
-      end;
+    TLS13_SIG_RSA_PKCS1_SHA384,
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     TLS13_SIG_RSA_PSS_PSS_SHA256,
     TLS13_SIG_RSA_PSS_RSAE_SHA384,
@@ -2768,6 +2702,18 @@ begin
   end;
 
   case ASignatureScheme of
+    TLS13_SIG_RSA_PKCS1_SHA256:
+      begin
+        if not TryBuildRSAPKCS1v15EncodedMessageSHA256(ACertificateVerifyInput, Length(LModulus), LEM, AError) then
+          Exit;
+      end;
+
+    TLS13_SIG_RSA_PKCS1_SHA384:
+      begin
+        if not TryBuildRSAPKCS1v15EncodedMessageSHA384(ACertificateVerifyInput, Length(LModulus), LEM, AError) then
+          Exit;
+      end;
+
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     TLS13_SIG_RSA_PSS_PSS_SHA256:
       begin

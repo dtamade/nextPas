@@ -260,6 +260,7 @@ function CollectParamArgs: specialize TArray<string>;
 var
   K: Integer;
 begin
+  Result := nil;
   SetLength(Result, ParamCount);
   for K := 1 to ParamCount do
     Result[K - 1] := ParamStr(K);

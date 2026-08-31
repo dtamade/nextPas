@@ -93,7 +93,7 @@ begin
   end;
 
   LOriginalI2DPKCS12Bio := i2d_PKCS12_bio;
-  LOutputFile := GetTempDir(False) + 'fafafa_pkcs12_i2d_symbol_contract.p12';
+  LOutputFile := GetTempDir(False) + 'nextpas_pkcs12_i2d_symbol_contract.p12';
   if FileExists(LOutputFile) then
     DeleteFile(LOutputFile);
 

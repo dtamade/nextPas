@@ -3,10 +3,10 @@ program test_openssl_context_der_private_key_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.pem,
@@ -19,8 +19,8 @@ uses
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.pkcs,
   nextpas.core.tls.openssl.api.pkcs12,
-  nextpas.core.tls.openssl.api.rsa;
-
+  nextpas.core.tls.openssl.api.rsa,
+  nextpas.core.tls.openssl.backed;
 type
   TPKCSD2IPKCS8PrivKeyInfo = nextpas.core.tls.openssl.api.pkcs.Td2i_PKCS8_PRIV_KEY_INFO;
   TPKCSD2IX509Sig = nextpas.core.tls.openssl.api.pkcs.Td2i_X509_SIG;
@@ -29,8 +29,8 @@ type
   TRSAD2IPrivateKey = nextpas.core.tls.openssl.api.rsa.Td2i_RSAPrivateKey;
 
 const
-  KEY_FIXTURE_PATH = 'tests/certificate/test_certs/signer_key.pem';
-  EC_KEY_FIXTURE_PATH = 'tests/certificate/test_certs/signer_ecdsa_key.pem';
+  KEY_FIXTURE_PATH = 'certificate/test_certs/signer_key.pem';
+  EC_KEY_FIXTURE_PATH = 'certificate/test_certs/signer_ecdsa_key.pem';
   ENCRYPTED_DER_PASSWORD = 'wave9-der-private-key';
 
 var
@@ -414,7 +414,7 @@ begin
   if Pos('BEGIN PRIVATE KEY', LKeyPEM) = 0 then
     Exit;
 
-  AFileName := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_ed25519.pem';
+  AFileName := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_ed25519.pem';
   Result := WriteTempTextFile(AFileName, LKeyPEM);
 end;
 
@@ -450,14 +450,14 @@ begin
   if not BuildEncryptedPKCS8DERFromPEM(GEd25519PEMFile, ENCRYPTED_DER_PASSWORD, GEncryptedEd25519PKCS8DER) then
     raise Exception.Create('failed to generate encrypted Ed25519 PKCS#8 DER fixture');
 
-  GPKCS8DERFile := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_pkcs8.der';
-  GPKCS1DERFile := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_pkcs1.der';
-  GEncryptedPKCS8DERFile := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_encrypted_pkcs8.der';
-  GECSEC1DERFile := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_ec_sec1.der';
-  GECPKCS8DERFile := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_ec_pkcs8.der';
-  GEncryptedECPKCS8DERFile := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_encrypted_ec_pkcs8.der';
-  GEd25519PKCS8DERFile := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_ed25519_pkcs8.der';
-  GEncryptedEd25519PKCS8DERFile := GetTempDir(False) + 'fafafa_openssl_context_der_private_key_encrypted_ed25519_pkcs8.der';
+  GPKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_pkcs8.der';
+  GPKCS1DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_pkcs1.der';
+  GEncryptedPKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_encrypted_pkcs8.der';
+  GECSEC1DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_ec_sec1.der';
+  GECPKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_ec_pkcs8.der';
+  GEncryptedECPKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_encrypted_ec_pkcs8.der';
+  GEd25519PKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_ed25519_pkcs8.der';
+  GEncryptedEd25519PKCS8DERFile := GetTempDir(False) + 'nextpas_openssl_context_der_private_key_encrypted_ed25519_pkcs8.der';
 
   if not WriteTempBytesFile(GPKCS8DERFile, GPKCS8DER) then
     raise Exception.Create('failed to create PKCS#8 DER temp file');
@@ -539,7 +539,7 @@ begin
     LRaised := False;
     LDetail := '';
     try
-      LCtx.LoadPrivateKey(LStream, APassword);
+      LCtx.LoadPrivateKey(TStreamWrapper.Create(LStream), APassword);
     except
       on E: Exception do
       begin
@@ -606,7 +606,7 @@ begin
     LControlled := False;
     LDetail := '';
     try
-      LCtx.LoadPrivateKey(LStream, APassword);
+      LCtx.LoadPrivateKey(TStreamWrapper.Create(LStream), APassword);
     except
       on E: Exception do
       begin

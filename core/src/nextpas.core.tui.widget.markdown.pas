@@ -46,6 +46,9 @@ type
     ['{F1A2B3C4-D5E6-7890-ABCD-EF1234567890}']
     function WithTheme(const ATheme: TMdTheme): IMarkdown;
     function WithBlock(ABlock: IBlock): IMarkdown;
+    { 数据更新面（PH33 P3，additive）：替换源文本（Render 时重解析）}
+    procedure SetSource(const ASource: AnsiString);
+    function WithSource(const ASource: AnsiString): IMarkdown;
   end;
 
   TMarkdown = class(TInterfacedObject, IWidget, IMarkdown)
@@ -59,6 +62,8 @@ type
     { IMarkdown builder }
     function WithTheme(const ATheme: TMdTheme): IMarkdown;
     function WithBlock(ABlock: IBlock): IMarkdown;
+    procedure SetSource(const ASource: AnsiString);
+    function WithSource(const ASource: AnsiString): IMarkdown;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -179,6 +184,19 @@ end;
 function TMarkdown.WithTheme(const ATheme: TMdTheme): IMarkdown;
 begin
   FTheme := ATheme;
+  Result := Self;
+end;
+
+{ PH33 P3：数据更新面——替换源文本；解析发生在 Render（ParseMarkdownLines），
+  此处仅换源 }
+procedure TMarkdown.SetSource(const ASource: AnsiString);
+begin
+  FSource := ASource;
+end;
+
+function TMarkdown.WithSource(const ASource: AnsiString): IMarkdown;
+begin
+  SetSource(ASource);
   Result := Self;
 end;
 

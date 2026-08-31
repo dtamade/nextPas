@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,7 +38,7 @@ require_absent() {
   fi
 }
 
-proof_file="tests/winssl/test_winssl_integration_multi.pas"
+proof_file="core/tests/nextpas.core.tls/winssl/test_winssl_integration_multi.pas"
 
 printf '[TEST] WinSSL integration-multi HTTP status contract\n'
 

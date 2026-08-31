@@ -670,8 +670,8 @@ begin
 
   LDoc := YamlParse('"ok \n escape"');
   Check(not LDoc.HasError, 'valid double-quoted escape accepted');
-  Check(LDoc.Root.AsStr.ToString = 'ok \n escape',
-    'valid double-quoted escape remains raw text');
+  Check(LDoc.Root.AsStr.ToString = 'ok ' + #10 + ' escape',
+    'valid double-quoted escape decodes to newline');
 end;
 
 procedure TestTryYamlParseRejectsInvalidDoubleQuotedEscape;

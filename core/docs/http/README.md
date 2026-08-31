@@ -73,7 +73,7 @@ as the default client/server version.
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
 | Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
 | WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` + `TWebSocketOptions.ConnectTimeout`/`Timeout` (Default 30s) + optional `WithCancelToken` for mid-frame cancel |
-| Static files | `ServeFile` / `ServeDir` |
+| Static files | fs: `ServeFile` / `ServeDir`; virtual filesystem (IVfs): `ServeVfs` — ETag from backend ContentHash (`fnv-<8hex>`) with size+mtime fallback, unknown ModTime skips Last-Modified/IMS, dirs and invalid paths → 404; `HttpServeStaticStream` unified pipeline: conditional 304 (If-None-Match/If-Modified-Since), single Range 206/416 with `Accept-Ranges: bytes`, `If-Range` (ETag strong / HTTP-date) fallback to 200, `HEAD` header-only without opening stream, error paths HEAD-aware |
 | Form parse | `ParseUrlEncodedForm` / `ParseMultipartFormData` |
 
 ## Quick Start
@@ -227,6 +227,13 @@ make -C core/examples/nextpas.core.http/http_websocket_echo_demo run
   preemptive `Proxy-Authorization: Basic` only (no Digest/NTLM/407 challenge
   retry). Optional `TLSContext` / `WithTLSContext` for verify-none / custom trust;
   H1 direct https is supported without proxy.
+- `WithDialFunc(Dial)` / `THttpClientOptions.DialFunc` — custom transport dial
+  replacing the built-in TCP connect. `Dial` receives target host, port, and the
+  effective connect/request timeouts; must return an established `ITcpStream` or
+  raise `EHttpError`. Use case: SOCKS5/other tunnel transports where only the
+  dial differs from direct (TLS and HTTP framing stay built-in). Connections are
+  pooled per target authority. Precedence: `WithProxyUrl` > `DialFunc` >
+  built-in dial. For raw SOCKS5 dialing see `nextpas.core.net.socks5.Socks5Dial`.
 - `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
 - `IHttpClient.GetJson` and free `HttpGetJson` / `HttpReadResponseJson`
   (ensure 2xx + JSON document; invalid body → `hekProtocol` Op=`json`).

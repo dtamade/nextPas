@@ -47,6 +47,9 @@ type
     function WithStyle(const AStyle: TStyle): ITree;
     function WithHighlightStyle(const AStyle: TStyle): ITree;
     function WithIndent(N: Integer): ITree;
+    { 数据更新面（PH33 P3，additive）：原地替换节点树 }
+    procedure SetNodes(const ANodes: array of TTreeNode);
+    function WithNodes(const ANodes: array of TTreeNode): ITree;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTreeState);
   end;
@@ -65,6 +68,8 @@ type
     function WithStyle(const AStyle: TStyle): ITree;
     function WithHighlightStyle(const AStyle: TStyle): ITree;
     function WithIndent(N: Integer): ITree;
+    procedure SetNodes(const ANodes: array of TTreeNode);
+    function WithNodes(const ANodes: array of TTreeNode): ITree;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -172,6 +177,23 @@ end;
 function TTree.WithIndent(N: Integer): ITree;
 begin
   FIndentSize := N;
+  Result := Self;
+end;
+
+{ PH33 P3：数据更新面——原地替换节点树（record 值语义，含 WithChildren
+  子树整体拷贝）}
+procedure TTree.SetNodes(const ANodes: array of TTreeNode);
+var
+  LI: Integer;
+begin
+  SetLength(FNodes, System.Length(ANodes));
+  for LI := 0 to System.High(ANodes) do
+    FNodes[LI] := ANodes[LI];
+end;
+
+function TTree.WithNodes(const ANodes: array of TTreeNode): ITree;
+begin
+  SetNodes(ANodes);
   Result := Self;
 end;
 

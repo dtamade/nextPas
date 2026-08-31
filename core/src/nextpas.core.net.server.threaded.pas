@@ -16,7 +16,7 @@ function NewTcpThreadedServer(
 
 implementation
 
-uses nextpas.core.atomic, nextpas.core.errors, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.platform.thread;
+uses nextpas.core.atomic, nextpas.core.base.utils, nextpas.core.errors, nextpas.core.net.tcp, nextpas.core.net.server.runtime, nextpas.core.platform.thread;
 
 type
   PConnContext = ^TConnContext;
@@ -126,7 +126,13 @@ begin
         LCtx^.Handler := AHandler;
         LCtx^.SessionContext := FSessionContext;
         if platform_thread_create(LHandle, @ConnThreadFunc, LCtx) = 0 then
-          platform_thread_detach(LHandle)
+        begin
+          platform_thread_detach(LHandle);
+          { 连接已交由 conn 线程独占持有：释放 accept-loop 对它的引用，
+            否则最后一条被接受的连接会一直悬挂到下次 accept/shutdown
+            （socket 无法及时关闭）。 }
+          LConn := nil;
+        end
         else
         begin
           LOwnership := tscoServer;
@@ -138,6 +144,7 @@ begin
               CloseServerOwnedTcpConn(LConn);
             Dispose(LCtx);
           end;
+          LConn := nil;
         end;
       end;
     finally
@@ -155,20 +162,21 @@ end;
 
 procedure TTcpThreadedServer.Shutdown;
 var
-  LAddr: TNetAddress;
-  LWake: ITcpStream;
+  LWsReg: IWsServerShutdownRegistry;
 begin
   atomic_store(FRunning, 0, mo_release);
+  { 阻塞 WS 会话优雅收尾：waitable cancel 唤醒连接线程 → 会话收尾路径
+    补发 close frame 1001 → 等待 drain（复用 ShutdownTimeoutNs）；超时
+    强关。已顺走连接的线程在收尾后自行退出并关闭 socket。 }
+  LWsReg := nil;
+  if FSessionContext <> nil then
+    if Supports(FSessionContext, IWsServerShutdownRegistry, LWsReg) then
+      LWsReg.ShutdownAll(FOptions.ShutdownTimeoutNs);
+  { R9：listener.Close 先 shutdown 唤醒 accept 循环线程的阻塞 Accept，
+    再按在飞归属收尾 fd——自连唤醒 hack 删除（backlog 打满时自连会
+    失效排队，shutdown 永远可靠）。accept 循环经 except Break 收场。 }
   if FListener <> nil then
-  begin
-    LAddr := FListener.LocalAddr;
-    try
-      LWake := NetTcpConnect(LAddr.IP, LAddr.Port);
-      LWake.Close;
-    except
-    end;
     FListener.Close;
-  end;
   if FWorkerHandoff <> nil then
     FWorkerHandoff.Shutdown;
 end;

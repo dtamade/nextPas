@@ -1,5 +1,10 @@
 unit nextpas.core.io.reactor.epoll;
 
+{** @desc Linux epoll 反应器。
+       缓冲契约：AsyncWrite/AsyncSend/AsyncSendTo 不拷贝调用方缓冲，
+       提交成功到写回调返回前 ABuf 必须保持有效。短写回调 AResult=本次
+       实际送达字节（可能 < ALen），不自动续发；一 op 一回调。 *}
+
 {$I nextpas.core.settings.inc}
 
 interface
@@ -38,12 +43,20 @@ type
     Active: Boolean;
   end;
 
+  { 同一 fd 可同时挂一读一写。epoll data 存 fd，不再存单一 op 下标。 }
+  TEpollFdWatch = record
+    InIdx: Int32;
+    OutIdx: Int32;
+    Live: Boolean;
+  end;
+
   TEpollReactor = record
   private
     FEpfd: Int32;
     FMaxEvents: UInt32;
     FEvents: array of epoll_event;
     FOps: array of TEpollPendingOp;
+    FWatch: array of TEpollFdWatch;
     FOpCount: UInt32;
     FOpCap: UInt32;
     FPendingCount: UInt32;
@@ -58,10 +71,16 @@ type
     function RegisterFd(AFd: Int32; AEvents: UInt32; AData: UInt64): Boolean;
     function ModifyFd(AFd: Int32; AEvents: UInt32; AData: UInt64): Boolean;
     procedure RemoveFd(AFd: Int32);
+    procedure EnsureWatch(AFd: Int32);
+    function OpIsInput(AKind: TEpollOpKind): Boolean; inline;
+    function ArmWatch(AFd: Int32): Boolean;
+    procedure ProbeWatch(AFd: Int32);
+    function BindAndArm(AIdx: Int32): Boolean;
+    procedure UnbindWatch(AIdx: Int32);
     procedure ReleasePendingOps(AResult: Int32);
     procedure DispatchEvent(const AEv: epoll_event);
     procedure ExecuteOp(AIdx: Int32);
-    { 完成一个 op：从 epoll 移除 + 释放 + 回调一次（ExecuteOp 与立即补检共用） }
+    { 完成一个 op：解绑本方向 + 重武装对端 + 回调 + 补检（ExecuteOp 与立即补检共用） }
     procedure CompleteOp(AIdx: Int32; AResult: Int32);
     { EPOLLET 注册后立即补检：注册前已就绪的读写/已完成连接不会产生新
       事件，需此刻做一次非阻塞 syscall（含 SO_ERROR 探测）。返回 True
@@ -103,6 +122,8 @@ type
     { Drop one pending op with matching Context and deliver -ECANCELED
       so TimeoutCtx I/O ref is released. Not a kernel syscall cancel. }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    { Cancel all pending ops on AFd (accept etc.) via TryCancelByContext. }
+    function CancelByFd(AFd: Int32): Boolean;
   end;
 
 implementation
@@ -156,6 +177,7 @@ begin
     end;
     SetLength(FEvents, 0);
     SetLength(FOps, 0);
+    SetLength(FWatch, 0);
     FOpCount := 0;
     FOpCap := 0;
     FPendingCount := 0;
@@ -259,6 +281,127 @@ begin
   epoll_ctl(FEpfd, EPOLL_CTL_DEL, AFd, @LEv);
 end;
 
+procedure TEpollReactor.EnsureWatch(AFd: Int32);
+var
+  LOld, LNew, LI: Int32;
+begin
+  if AFd < 0 then
+    Exit;
+  LOld := Length(FWatch);
+  if AFd < LOld then
+    Exit;
+  LNew := AFd + 1;
+  if (LOld > 0) and (LNew < LOld * 2) then
+    LNew := LOld * 2;
+  if LNew < 64 then
+    LNew := 64;
+  SetLength(FWatch, LNew);
+  for LI := LOld to LNew - 1 do
+  begin
+    FWatch[LI].InIdx := -1;
+    FWatch[LI].OutIdx := -1;
+    FWatch[LI].Live := False;
+  end;
+end;
+
+function TEpollReactor.OpIsInput(AKind: TEpollOpKind): Boolean;
+begin
+  Result := AKind in [opRead, opAccept, opRecv, opRecvFrom];
+end;
+
+function TEpollReactor.ArmWatch(AFd: Int32): Boolean;
+var
+  LEvents: UInt32;
+begin
+  Result := True;
+  if (AFd < 0) or (AFd >= Length(FWatch)) then
+    Exit;
+  LEvents := 0;
+  if FWatch[AFd].InIdx >= 0 then
+    LEvents := LEvents or EPOLLIN;
+  if FWatch[AFd].OutIdx >= 0 then
+    LEvents := LEvents or EPOLLOUT;
+  if LEvents = 0 then
+  begin
+    if FWatch[AFd].Live then
+    begin
+      RemoveFd(AFd);
+      FWatch[AFd].Live := False;
+    end;
+    Exit;
+  end;
+  LEvents := LEvents or EPOLLET or EPOLLONESHOT;
+  if FWatch[AFd].Live then
+    Result := ModifyFd(AFd, LEvents, UInt64(UInt32(AFd)))
+  else
+  begin
+    Result := RegisterFd(AFd, LEvents, UInt64(UInt32(AFd)));
+    FWatch[AFd].Live := Result;
+  end;
+end;
+
+procedure TEpollReactor.ProbeWatch(AFd: Int32);
+var
+  LIn, LOut: Int32;
+begin
+  if (AFd < 0) or (AFd >= Length(FWatch)) then
+    Exit;
+  LIn := FWatch[AFd].InIdx;
+  LOut := FWatch[AFd].OutIdx;
+  if LIn >= 0 then
+    TryOpImmediately(LIn);
+  if (LOut >= 0) and (LOut <> LIn) and FOps[LOut].Active then
+    TryOpImmediately(LOut);
+end;
+
+function TEpollReactor.BindAndArm(AIdx: Int32): Boolean;
+var
+  LFd: Int32;
+begin
+  Result := False;
+  if (AIdx < 0) or (UInt32(AIdx) >= FOpCount) or (not FOps[AIdx].Active) then
+    Exit;
+  LFd := FOps[AIdx].Fd;
+  if LFd < 0 then
+    Exit;
+  EnsureWatch(LFd);
+  if OpIsInput(FOps[AIdx].Kind) then
+  begin
+    if FWatch[LFd].InIdx >= 0 then
+      Exit;
+    FWatch[LFd].InIdx := AIdx;
+  end
+  else
+  begin
+    if FWatch[LFd].OutIdx >= 0 then
+      Exit;
+    FWatch[LFd].OutIdx := AIdx;
+  end;
+  Result := ArmWatch(LFd);
+  if not Result then
+  begin
+    if FWatch[LFd].InIdx = AIdx then
+      FWatch[LFd].InIdx := -1;
+    if FWatch[LFd].OutIdx = AIdx then
+      FWatch[LFd].OutIdx := -1;
+  end;
+end;
+
+procedure TEpollReactor.UnbindWatch(AIdx: Int32);
+var
+  LFd: Int32;
+begin
+  if (AIdx < 0) or (UInt32(AIdx) >= FOpCount) then
+    Exit;
+  LFd := FOps[AIdx].Fd;
+  if (LFd < 0) or (LFd >= Length(FWatch)) then
+    Exit;
+  if FWatch[LFd].InIdx = AIdx then
+    FWatch[LFd].InIdx := -1;
+  if FWatch[LFd].OutIdx = AIdx then
+    FWatch[LFd].OutIdx := -1;
+end;
+
 procedure TEpollReactor.ReleasePendingOps(AResult: Int32);
 var
   LI: UInt32;
@@ -269,7 +412,28 @@ var
 begin
   if FPendingCount = 0 then
     Exit;
-  SetLength(LReleases, FOpCount);
+  // Count callbacks first to avoid allocating LReleases when all are nil (cancel ops).
+  LReleaseCount := 0;
+  for LI := 0 to FOpCount - 1 do
+    if FOps[LI].Active and Assigned(FOps[LI].Callback) then
+      Inc(LReleaseCount);
+  if LReleaseCount = 0 then
+  begin
+    for LI := 0 to FOpCount - 1 do
+    begin
+      if not FOps[LI].Active then Continue;
+      RemoveFd(FOps[LI].Fd);
+      FOps[LI].Callback := nil;
+      FOps[LI].Context := nil;
+      FOps[LI].Active := False;
+      FOps[LI].NextFree := -1;
+    end;
+    FOpCount := 0;
+    FPendingCount := 0;
+    FFreeHead := -1;
+    Exit;
+  end;
+  SetLength(LReleases, LReleaseCount);
   LReleaseCount := 0;
   for LI := 0 to FOpCount - 1 do
   begin
@@ -291,8 +455,6 @@ begin
   FOpCount := 0;
   FPendingCount := 0;
   FFreeHead := -1;
-  if LReleaseCount = 0 then
-    Exit;
   LHasException := False;
   LExceptionMessage := '';
   if FEpfd >= 0 then
@@ -316,6 +478,7 @@ begin
       end;
     end;
   end;
+  SetLength(LReleases, 0);
   if LHasException then
     raise Exception.Create(LExceptionMessage);
 end;
@@ -326,11 +489,7 @@ var
   LRes32: Int32;
   LOptVal: Int32;
   LOptLen: UInt32;
-  LCallback: TIoCompletion;
-  LContext: Pointer;
 begin
-  LCallback := FOps[AIdx].Callback;
-  LContext := FOps[AIdx].Context;
   case FOps[AIdx].Kind of
     opRead:
     begin
@@ -339,10 +498,7 @@ begin
       else
         LRes := read(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len);
       LRes32 := EpollResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
 
     opWrite:
@@ -352,10 +508,7 @@ begin
       else
         LRes := write(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len);
       LRes32 := EpollResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
 
     opAccept:
@@ -363,10 +516,7 @@ begin
       LRes := accept4(FOps[AIdx].Fd, FOps[AIdx].Addr,
         FOps[AIdx].AddrLen, FOps[AIdx].Flags);
       LRes32 := EpollResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
 
     opConnect:
@@ -383,30 +533,21 @@ begin
         else
           LRes32 := -LOptVal;
       end;
-      RemoveFd(FOps[AIdx].Fd);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
 
     opSend:
     begin
       LRes := send(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
       LRes32 := EpollResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
 
     opRecv:
     begin
       LRes := recv(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
       LRes32 := EpollResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
 
     opSendTo:
@@ -414,10 +555,7 @@ begin
       LRes := sendto(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
         FOps[AIdx].Flags, FOps[AIdx].Addr, socklen_t(FOps[AIdx].AddrLenVal));
       LRes32 := EpollResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
 
     opRecvFrom:
@@ -425,19 +563,14 @@ begin
       LRes := recvfrom(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
         FOps[AIdx].Flags, FOps[AIdx].Addr, FOps[AIdx].AddrLen);
       LRes32 := EpollResultFromSyscall(LRes);
-      RemoveFd(FOps[AIdx].Fd);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
 
     opClose:
     begin
       LRes := nextpas.core.platform.posix.ffi.close(FOps[AIdx].Fd);
       LRes32 := EpollResultFromSyscall(LRes);
-      FreeOp(AIdx);
-      if Assigned(LCallback) then
-        LCallback(UInt64(AIdx), LRes32, LContext);
+      CompleteOp(AIdx, LRes32);
     end;
   end;
 end;
@@ -446,13 +579,17 @@ procedure TEpollReactor.CompleteOp(AIdx: Int32; AResult: Int32);
 var
   LCallback: TIoCompletion;
   LContext: Pointer;
+  LFd: Int32;
 begin
   LCallback := FOps[AIdx].Callback;
   LContext := FOps[AIdx].Context;
-  RemoveFd(FOps[AIdx].Fd);
+  LFd := FOps[AIdx].Fd;
+  UnbindWatch(AIdx);
   FreeOp(AIdx);
+  ArmWatch(LFd);
   if Assigned(LCallback) then
     LCallback(UInt64(AIdx), AResult, LContext);
+  ProbeWatch(LFd);
 end;
 
 function TEpollReactor.TryOpImmediately(AIdx: Int32): Boolean;
@@ -537,12 +674,20 @@ end;
 
 procedure TEpollReactor.DispatchEvent(const AEv: epoll_event);
 var
-  LIdx: Int32;
+  LFd: Int32;
+  LIn, LOut: Int32;
 begin
-  LIdx := Int32(AEv.data.u64);
-  if (LIdx < 0) or (UInt32(LIdx) >= FOpCount) then Exit;
-  if not FOps[LIdx].Active then Exit;
-  ExecuteOp(LIdx);
+  LFd := Int32(AEv.data.u64);
+  if (LFd < 0) or (LFd >= Length(FWatch)) then
+    Exit;
+  LIn := FWatch[LFd].InIdx;
+  LOut := FWatch[LFd].OutIdx;
+  if ((AEv.events and (EPOLLIN or EPOLLERR or EPOLLHUP)) <> 0) and
+     (LIn >= 0) and (UInt32(LIn) < FOpCount) and FOps[LIn].Active then
+    ExecuteOp(LIn);
+  if ((AEv.events and (EPOLLOUT or EPOLLERR or EPOLLHUP)) <> 0) and
+     (LOut >= 0) and (UInt32(LOut) < FOpCount) and FOps[LOut].Active then
+    ExecuteOp(LOut);
 end;
 
 function TEpollReactor.AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32;
@@ -555,7 +700,7 @@ begin
   if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
   LIdx := AllocOp(opRead, AFd, ABuf, ALen, AOffset, 0, nil, nil, 0,
     ACallback, AContext);
-  Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  Result := BindAndArm(LIdx);
   if Result then
     TryOpImmediately(LIdx)
   else
@@ -566,13 +711,24 @@ function TEpollReactor.AsyncWrite(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   AOffset: Int64; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then begin Result := False; Exit; end;
   if AOffset >= 0 then begin Result := False; Exit; end;
   if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
+  LRes := write(AFd, ABuf, ALen);
+  LRes32 := EpollResultFromSyscall(LRes);
+  if (LRes32 <> -EAGAIN) and (LRes32 <> -EINTR) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
+    Exit;
+  end;
   LIdx := AllocOp(opWrite, AFd, ABuf, ALen, AOffset, 0, nil, nil, 0,
     ACallback, AContext);
-  Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  Result := BindAndArm(LIdx);
   if Result then
     TryOpImmediately(LIdx)
   else
@@ -589,7 +745,7 @@ begin
   if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
   LIdx := AllocOp(opAccept, AFd, nil, 0, -1, AFlags, AAddr, AAddrLen, 0,
     ACallback, AContext);
-  Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  Result := BindAndArm(LIdx);
   if Result then
     TryOpImmediately(LIdx)
   else
@@ -623,7 +779,7 @@ begin
   end;
   LIdx := AllocOp(opConnect, AFd, nil, 0, -1, 0, AAddr, nil, AAddrLen,
     ACallback, AContext);
-  Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  Result := BindAndArm(LIdx);
   if Result then
     TryOpImmediately(LIdx)
   else
@@ -634,12 +790,23 @@ function TEpollReactor.AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   AFlags: Int32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then begin Result := False; Exit; end;
   if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
+  LRes := send(AFd, ABuf, ALen, AFlags);
+  LRes32 := EpollResultFromSyscall(LRes);
+  if (LRes32 <> -EAGAIN) and (LRes32 <> -EINTR) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
+    Exit;
+  end;
   LIdx := AllocOp(opSend, AFd, ABuf, ALen, -1, AFlags, nil, nil, 0,
     ACallback, AContext);
-  Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  Result := BindAndArm(LIdx);
   if Result then
     TryOpImmediately(LIdx)
   else
@@ -658,7 +825,7 @@ begin
   { Store buf in the Buf field for recv }
   FOps[LIdx].Buf := ABuf;
   FOps[LIdx].Len := ALen;
-  Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  Result := BindAndArm(LIdx);
   if Result then
     TryOpImmediately(LIdx)
   else
@@ -670,16 +837,26 @@ function TEpollReactor.AsyncSendTo(AFd: Int32; ABuf: Pointer; ALen: UInt32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LIdx: Int32;
+  LRes: SizeInt;
+  LRes32: Int32;
 begin
   if not IsValid then begin Result := False; Exit; end;
   if (AAddr = nil) or (AAddrLen = 0) then begin Result := False; Exit; end;
   if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
+  { 先 sendto：成功不动 epoll。EAGAIN 时 BindAndArm 与已挂的 RecvFrom 共存。 }
+  LRes := sendto(AFd, ABuf, ALen, AFlags, AAddr, socklen_t(AAddrLen));
+  LRes32 := EpollResultFromSyscall(LRes);
+  if (LRes32 <> -EAGAIN) and (LRes32 <> -EINTR) then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, LRes32, AContext);
+    Result := True;
+    Exit;
+  end;
   LIdx := AllocOp(opSendTo, AFd, ABuf, ALen, -1, AFlags, AAddr, nil, AAddrLen,
     ACallback, AContext);
-  Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if Result then
-    TryOpImmediately(LIdx)
-  else
+  Result := BindAndArm(LIdx);
+  if not Result then
     FreeOp(LIdx);
 end;
 
@@ -696,7 +873,7 @@ begin
     ACallback, AContext);
   FOps[LIdx].Buf := ABuf;
   FOps[LIdx].Len := ALen;
-  Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  Result := BindAndArm(LIdx);
   if Result then
     TryOpImmediately(LIdx)
   else
@@ -716,6 +893,12 @@ begin
   if not IsValid then begin Result := False; Exit; end;
   { Close is synchronous - epoll cannot watch for close readiness }
   RemoveFd(AFd);
+  if (AFd >= 0) and (AFd < Length(FWatch)) then
+  begin
+    FWatch[AFd].InIdx := -1;
+    FWatch[AFd].OutIdx := -1;
+    FWatch[AFd].Live := False;
+  end;
   SetLength(LReleases, FOpCount);
   LReleaseCount := 0;
   if FOpCount > 0 then
@@ -791,10 +974,6 @@ function TEpollReactor.TryCancelByContext(AContext: Pointer): Boolean;
 var
   LI: UInt32;
   LIdx: Int32;
-  LCallback: TIoCompletion;
-  LContext: Pointer;
-  LFd: Int32;
-  LUserData: UInt64;
 begin
   Result := False;
   if (AContext = nil) or (not IsValid) then
@@ -813,16 +992,32 @@ begin
   end;
   if LIdx < 0 then
     Exit;
-  LCallback := FOps[LIdx].Callback;
-  LContext := FOps[LIdx].Context;
-  LFd := FOps[LIdx].Fd;
-  LUserData := UInt64(LIdx);
-  FreeOp(LIdx);
-  RemoveFd(LFd);
-  { Deliver internal completion so TimeoutCtx I/O ref is released via CAS-fail path. }
-  if Assigned(LCallback) then
-    LCallback(LUserData, -ESysECANCELED, LContext);
+  CompleteOp(LIdx, -ESysECANCELED);
   Result := True;
+end;
+
+function TEpollReactor.CancelByFd(AFd: Int32): Boolean;
+var
+  LI: UInt32;
+  LContexts: array of Pointer;
+  LCount, LJ: UInt32;
+begin
+  Result := False;
+  if (AFd < 0) or (not IsValid) then
+    Exit;
+  if FOpCount = 0 then
+    Exit;
+  SetLength(LContexts, FOpCount);
+  LCount := 0;
+  for LI := 0 to FOpCount - 1 do
+    if FOps[LI].Active and (FOps[LI].Fd = AFd) then
+    begin
+      LContexts[LCount] := FOps[LI].Context;
+      Inc(LCount);
+    end;
+  for LJ := 0 to LCount - 1 do
+    if TryCancelByContext(LContexts[LJ]) then
+      Result := True;
 end;
 
 function TEpollReactor.PollOne: Boolean;

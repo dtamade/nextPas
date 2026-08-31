@@ -117,7 +117,7 @@ var
 
 begin
   WriteLn('================================================================');
-  WriteLn('       fafafa.ssl OpenSSL Fuzz Testing Suite                    ');
+  WriteLn('       nextpas.core.tls OpenSSL Fuzz Testing Suite                    ');
   WriteLn('================================================================');
   WriteLn;
 

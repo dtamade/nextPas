@@ -101,6 +101,19 @@ begin
   ExpectTrue('Run ls bad — non-zero exit', LOut.ExitCode <> 0);
 end;
 
+{ ExecuteProcess:单条参数串按空白/双引号拆分执行,返回退出码 }
+procedure TestExecuteProcess;
+begin
+  ExpectTrue('ExecuteProcess true — 0', ExecuteProcess('/bin/true', '') = 0);
+  ExpectTrue('ExecuteProcess false — 1', ExecuteProcess('/bin/false', '') = 1);
+  { 双引号分组:sh -c 整串必须单参数,拆开则语法错 }
+  ExpectTrue('ExecuteProcess quoted arg — 7',
+    ExecuteProcess('/bin/sh', '-c "exit 7"') = 7);
+  { 多空白容忍 + 空串参数 }
+  ExpectTrue('ExecuteProcess spaces — 0',
+    ExecuteProcess('/bin/sh', '-c   "exit 0"') = 0);
+end;
+
 procedure TestCapture;
 var LStr: string;
 begin
@@ -2321,6 +2334,7 @@ begin
   T.Test('RunEcho', @TestRunEcho);
   T.Test('RunFalse', @TestRunFalse);
   T.Test('RunStderr', @TestRunStderr);
+  T.Test('ExecuteProcess', @TestExecuteProcess);
   T.Test('Capture', @TestCapture);
   T.Test('RunIn', @TestRunIn);
   T.Test('CommandBuilder', @TestCommandBuilder);

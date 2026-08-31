@@ -199,7 +199,7 @@ end;
 procedure PrintHeader;
 begin
   WriteLn('========================================');
-  WriteLn('fafafa.ssl 性能基准测试');
+  WriteLn('nextpas.core.tls 性能基准测试');
   WriteLn('========================================');
   WriteLn;
   WriteLn('OpenSSL版本: ', GetOpenSSLVersionString);
@@ -216,11 +216,16 @@ begin
 end;
 
 begin
-  // 加载OpenSSL
-  if not LoadOpenSSLCore then
-  begin
-    WriteLn('错误: 无法加载OpenSSL库');
-    Halt(1);
+  // 加载OpenSSL并绑定EVP函数指针
+  try
+    LoadOpenSSLCore;
+    LoadEVP(GetCryptoLibHandle);
+  except
+    on E: Exception do
+    begin
+      WriteLn('错误: 无法加载OpenSSL库: ', E.Message);
+      Halt(1);
+    end;
   end;
 
   InitTestData;

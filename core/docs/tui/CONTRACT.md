@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.tui*.pas`（81 个源文件）
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-21
-**版本**：1.30
+**最后更新**：2026-08-31
+**版本**：1.31
 
 ---
 
@@ -22,7 +22,7 @@ L3 终端 UI：双缓冲 + immediate-mode widget + 分层 facade（core / ext / 
 | Facade | 稳定控件 |
 |--------|----------|
 | core | Block/Paragraph/List/Table/Tabs/Scrollbar/Clear/Input |
-| ext | Panel + ScrollView + Modal + Dialog + SplitPane + **Select** + app/runtime |
+| ext | Panel + ScrollView + Modal + Dialog + SplitPane + **Select** + Gauge/Sparkline/Canvas（PH33 P4 解禁扩面，2026-08-23）+ app/runtime |
 | full | 其余 advanced catalog（migration） |
 
 ---
@@ -242,6 +242,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-08-23 | 1.31 | PH33 P4 ext facade 扩面：gauge/canvas/sparkline 解禁进 ext（六别名照 full 命名；ext rejects 探针 canvas/gauge/sparkline 删除翻转、正测 data widgets surface 就位守门）；core facade 窄门面与 C8 名单不变 | Grok |
 | 2026-07-21 | 1.30 | Idle-Seal：文档主线封板（无 API/行为变更） | Claude |
 | 2026-07-20 | 1.29 | Phase U2：去双别名 + HandleKey Boolean + Enter enable_ansi | Claude |
 | 2026-07-20 | 1.28 | Phase U1：Enter 诊断 + Stateful 约定 + C10 facade 纪律 | Claude |
@@ -273,3 +274,4 @@ end;
 | 2026-07-19 | 1.2 | 测试计数 1567→1630；测试 SysUtils 清零；docs/contracts 改指针 | Claude |
 | 2026-07-11 | 1.1 | 全面重写：对齐实际实现，修正接口签名、控件列表、不变量 | Claude |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-08-31 | 1.31 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

@@ -159,6 +159,66 @@ begin
   Check(not LCh.Receive(LVal), 'should return false after close + empty');
 end;
 
+{ 多生产者 + 单消费者压力：4 线程 × 25000 条(小容量 64 迫使 senders 阻塞等
+  空位——验证「等待计数驱动 signal」下多 sender 唤醒正确性),全部 join 后
+  Close → 消费者 drain 退出;总和守恒证明无丢唤醒/死锁/丢数据。
+  (2026-08-17 回归:曾 40% 概率三方互等挂死,见 channel.pas 教训注释。) }
+const
+  cMPProducers = 4;
+  cMPPerProducer = 25000;
+  cMPChannelCapacity = 64;
+
+var
+  GMPChannel: IIntChannel = nil;
+  GMPConsumerSum: Int64 = 0;
+
+function MPProducer(AArg: Pointer): Pointer; cdecl;
+var
+  I: Integer;
+  LBias: Int64;
+begin
+  Result := nil;
+  LBias := Int64(PtrUInt(AArg)) * 1000000;   { 线程 id → 值域隔离 }
+  for I := 1 to cMPPerProducer do
+    GMPChannel.Send(LBias + I);              { 阻塞 Send: 满时等待空位 }
+end;
+
+function MPConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LVal: Integer;
+begin
+  Result := nil;
+  while GMPChannel.Receive(LVal) do
+    Inc(GMPConsumerSum, LVal);
+end;
+
+procedure TestChannelMultiProducerSum;
+var
+  LProdHandles: array[0..cMPProducers - 1] of TPlatformThreadHandle;
+  LConsHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  I: Integer;
+  LExpect: Int64;
+begin
+  GMPChannel := TIntChannel.Create(cMPChannelCapacity);
+  GMPConsumerSum := 0;
+  LExpect := 0;
+  for I := 0 to cMPProducers - 1 do
+    LExpect := LExpect +
+      Int64(1000000 * I) * cMPPerProducer +
+      Int64(cMPPerProducer) * (cMPPerProducer + 1) div 2;
+
+  platform_thread_create(LConsHandle, @MPConsumer, nil);
+  for I := 0 to cMPProducers - 1 do
+    platform_thread_create(LProdHandles[I], @MPProducer, Pointer(PtrUInt(I)));
+  for I := 0 to cMPProducers - 1 do
+    platform_thread_join(LProdHandles[I], LRet);
+  GMPChannel.Close;                          { 生产完毕: drain 后消费者退出 }
+  platform_thread_join(LConsHandle, LRet);
+  CheckEqual(LExpect, GMPConsumerSum, 'multi-producer sum conserved');
+  GMPChannel := nil;
+end;
+
 { Channel TrySend/TryReceive }
 
 procedure TestChannelTrySendReceive;
@@ -347,16 +407,76 @@ begin
   Check(LAll.IsDone, 'all done');
 end;
 
+{ 惰性扩容专项（容量与预创建解耦回归） }
+
+procedure TestPoolLazyIdleZeroThreads;
 var
-  GAllPassed: Boolean = False;
+  LPool: IThreadPool;
+begin
+  { 空闲池零线程：构造后静置 50ms，任何假预创建都会在此暴露 }
+  LPool := ThreadPool(8);
+  platform_thread_sleep_ns(50 * 1000 * 1000);
+  CheckEqual(Int64(0), Int64(LPool.StartedWorkerCount),
+    'idle pool must not start workers');
+  LPool.Shutdown;
+end;
+
+procedure TestPoolLazyScaleToCapacity;
+var
+  LPool: IThreadPool;
+  LI, LSpins: Integer;
+begin
+  GCounter := 0;
+  LPool := ThreadPool(8);
+  { 16 × 30ms 突发 > 容量 8：积压逃生口应把池扩到满编 }
+  for LI := 1 to 16 do
+    LPool.Submit(procedure
+    begin
+      InterlockedIncrement(GCounter);
+      platform_thread_sleep_ns(30 * 1000 * 1000);
+    end);
+
+  { 负载窗口内轮询至满编（上限 2s 防挂） }
+  LSpins := 0;
+  while (LPool.StartedWorkerCount < 8) and (LSpins < 2000) do
+  begin
+    platform_thread_sleep_ns(1000 * 1000);
+    Inc(LSpins);
+  end;
+  CheckEqual(Int64(8), Int64(LPool.StartedWorkerCount),
+    'burst backlog must scale pool to capacity');
+  LPool.WaitAll;
+  CheckEqual(Int64(16), Int64(InterlockedCompareExchange(GCounter, 0, 0)),
+    'all burst tasks ran');
+  LPool.Shutdown;
+end;
+
+procedure TestPoolLazySingleWorkerCap;
+var
+  LPool: IThreadPool;
+  LI: Integer;
+begin
+  GCounter := 0;
+  LPool := ThreadPool(1);
+  for LI := 1 to 5 do
+    LPool.Submit(procedure
+    begin
+      InterlockedIncrement(GCounter);
+    end);
+  LPool.WaitAll;
+  CheckEqual(Int64(5), Int64(InterlockedCompareExchange(GCounter, 0, 0)),
+    'all tasks ran on single worker');
+  CheckEqual(Int64(1), Int64(LPool.StartedWorkerCount),
+    'capacity cap respected under burst');
+  LPool.Shutdown;
+end;
 
 {$IFDEF UNIX}
 procedure SigAbrtHandler(ASig: cint); cdecl;
 begin
-  if GAllPassed then
-    do_syscall(syscall_nr_exit_group, 0)
-  else
-    do_syscall(syscall_nr_exit_group, 1);
+  { Watchdog path only: a hang that got SIGABRT'd is a failure regardless
+    of any earlier suite result (PH33 P5f). }
+  do_syscall(syscall_nr_exit_group, 1);
 end;
 {$ENDIF}
 
@@ -369,8 +489,12 @@ begin
   T.Test('Pool shutdown rejects new', @TestPoolShutdownRejectsNew);
   T.Test('Pool worker count', @TestPoolWorkerCount);
   T.Test('Pool H4 SegQueue source-contract', @TestPoolH4SegQueueSourceContract);
+  T.Test('Pool lazy idle zero threads', @TestPoolLazyIdleZeroThreads);
+  T.Test('Pool lazy scale to capacity', @TestPoolLazyScaleToCapacity);
+  T.Test('Pool lazy single worker cap', @TestPoolLazySingleWorkerCap);
   T.Test('Channel single producer/consumer', @TestChannelSingleProducerConsumer);
   T.Test('Channel with thread', @TestChannelWithThread);
+  T.Test('Channel multi-producer sum', @TestChannelMultiProducerSum);
   T.Test('Channel close then receive', @TestChannelCloseReceiveFalse);
   T.Test('Channel TrySend/TryReceive', @TestChannelTrySendReceive);
   T.Test('Future complete', @TestFutureComplete);
@@ -384,9 +508,9 @@ begin
   T.Test('Channel receive timeout', @TestChannelReceiveTimeout);
   T.Test('FutureVoid basic', @TestFutureVoid);
   T.Test('WhenAll', @TestWhenAll);
-  GAllPassed := T.Run;
+  { Single Run, then leave via normal RTL shutdown — the raw
+    exit_group call here used to bypass heaptrc's exit dump and made the
+    leak gate fail-closed on this suite; it also ran the suite twice
+    (PH33 P5f). }
   if not T.Run then Halt(1);
-  {$IFDEF UNIX}
-  do_syscall(syscall_nr_exit_group, 0);
-  {$ENDIF}
 end.

@@ -19,10 +19,13 @@ uses
   nextpas.core.tls.tls13.wire;
 
 function BuildTLS13RecordAAD(AEncryptedLength: Word): TBytes;
+procedure BuildTLS13RecordAADTo(AEncryptedLength: Word; ADest: PByte);
 function BuildTLS13RecordNonce(const AStaticIV: TBytes; ASequenceNumber: QWord): TBytes;
+procedure BuildTLS13RecordNonceTo(const AStaticIV: TBytes; ASequenceNumber: QWord; ADest: PByte);
 
 function BuildTLS13InnerPlaintext(const AFragment: TBytes; AContentType: Byte): TBytes;
 function TryParseTLS13InnerPlaintext(const APlaintext: TBytes; out AFragment: TBytes; out AContentType: Byte): Boolean;
+function TryParseTLS13InnerPlaintextTo(APlain: PByte; APlainLen: Integer; out AFragLen: Integer; out AContentType: Byte): Boolean;
 
 function IncrementTLS13Sequence(var ASequenceNumber: QWord): Boolean;
 
@@ -44,6 +47,17 @@ begin
   Result[4] := Byte(AEncryptedLength and $FF);
 end;
 
+procedure BuildTLS13RecordAADTo(AEncryptedLength: Word; ADest: PByte);
+begin
+  if ADest = nil then
+    RaiseInvalidParameter('TLS13AADDestNil');
+  ADest^ := TLS_CONTENT_TYPE_APPLICATION_DATA;
+  (ADest + 1)^ := Byte(TLS_LEGACY_VERSION shr 8);
+  (ADest + 2)^ := Byte(TLS_LEGACY_VERSION and $FF);
+  (ADest + 3)^ := Byte((AEncryptedLength shr 8) and $FF);
+  (ADest + 4)^ := Byte(AEncryptedLength and $FF);
+end;
+
 function BuildTLS13RecordNonce(const AStaticIV: TBytes; ASequenceNumber: QWord): TBytes;
 var
   LSeqBytes: array[0..7] of Byte;
@@ -61,6 +75,19 @@ begin
 
   for I := 0 to 7 do
     Result[Length(Result) - 8 + I] := Result[Length(Result) - 8 + I] xor LSeqBytes[I];
+end;
+
+procedure BuildTLS13RecordNonceTo(const AStaticIV: TBytes; ASequenceNumber: QWord; ADest: PByte);
+var
+  I: Integer;
+begin
+  if Length(AStaticIV) <> TLS13_IV_SIZE then
+    RaiseInvalidParameter('TLS13StaticIV');
+  if ADest = nil then
+    RaiseInvalidParameter('TLS13NonceDestNil');
+  Move(AStaticIV[0], ADest^, TLS13_IV_SIZE);
+  for I := 0 to 7 do
+    (PByte(ADest) + TLS13_IV_SIZE - 8 + I)^ := (PByte(ADest) + TLS13_IV_SIZE - 8 + I)^ xor Byte((ASequenceNumber shr ((7 - I) * 8)) and $FF);
 end;
 
 function BuildTLS13InnerPlaintext(const AFragment: TBytes; AContentType: Byte): TBytes;
@@ -98,6 +125,24 @@ begin
   if I > 0 then
     Move(APlaintext[0], AFragment[0], I);
 
+  Result := True;
+end;
+
+function TryParseTLS13InnerPlaintextTo(APlain: PByte; APlainLen: Integer; out AFragLen: Integer; out AContentType: Byte): Boolean;
+var
+  I: Integer;
+begin
+  AFragLen := 0;
+  AContentType := 0;
+  Result := False;
+  if (APlain = nil) and (APlainLen > 0) then Exit;
+  if APlainLen <= 0 then Exit;
+  I := APlainLen - 1;
+  while (I >= 0) and ((PByte(APlain) + I)^ = 0) do
+    Dec(I);
+  if I < 0 then Exit;
+  AContentType := (PByte(APlain) + I)^;
+  AFragLen := I;
   Result := True;
 end;
 

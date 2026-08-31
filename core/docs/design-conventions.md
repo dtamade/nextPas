@@ -170,7 +170,7 @@ L0: 内核 (base, errors, platform, mem, log.intf; current governance set also l
 L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, time, id, testing)
      ↑ 只依赖 L0
 
-L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, xml, regex, sqlite, pg, process, args, validation)
+L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
      ↑ 只依赖 L0-L1
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
@@ -854,6 +854,7 @@ build/
 | `net`        | TCP/UDP Socket、地址解析           |
 | `tls`        | TLS/SSL                            |
 | `dns`        | DNS 解析                           |
+| `deliverability` | SPF/DKIM/DMARC 邮件认证        |
 | `crypto`     | 哈希、加密、签名                   |
 | `compress`   | gzip/zlib/zstd                     |
 | `json`       | JSON                               |

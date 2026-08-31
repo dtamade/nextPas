@@ -2,7 +2,7 @@
   nextpas.core.tls.errors - SSL Error Handling Helpers
   
   Purpose:
-    Provides helper functions for consistent error raising across the fafafa.ssl library.
+    Provides helper functions for consistent error raising across the nextpas.core.tls library.
     Centralizes error message formatting and error code selection.
     
   VersionStep: Phase 4 - Professional Error Handling Refactor

@@ -58,6 +58,8 @@ function TeeReader(const AInner: IReader; const AWriter: IWriter): IReader; inli
 function MultiReader(const AReaders: array of IReader): IReader;
 function MultiWriter(const AWriters: array of IWriter): IWriter;
 function NopCloser(const AInner: IReader): IReadCloser; inline;
+{ 标准输入读一行（fd 0；见 IoFdReadLine 语义）。启动确认/交互行输入统一入口 }
+function StdInReadLine(const AMaxLen: SizeUInt = 4096): string; inline;
 function Discard: IWriter; inline;
 function NullReader: IReader; inline;
 function CopyBuffer(const ADst: IWriter; const ASrc: IReader; var ABuf; const ABufSize: SizeUInt): Int64; inline;
@@ -144,6 +146,11 @@ end;
 function NopCloser(const AInner: IReader): IReadCloser;
 begin
   Result := nextpas.core.io.util.IoNopCloser(AInner);
+end;
+
+function StdInReadLine(const AMaxLen: SizeUInt): string;
+begin
+  Result := nextpas.core.io.util.IoFdReadLine(0, AMaxLen);
 end;
 
 function Discard: IWriter;

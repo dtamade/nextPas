@@ -396,6 +396,7 @@ procedure TConfig.SetValueUnlocked(const AKey, AValue: string);
 var
   LIdx: Integer;
   LLowerKey: string;
+  LCap: Integer;
 begin
   InvalidateReadCachesLocked;
   LLowerKey := LowerCase(AKey);
@@ -409,9 +410,14 @@ begin
   begin
     if FCount >= Length(FEntries) then
     begin
-      SetLength(FEntries, FCount + 16);
-      SetLength(FLowerKeys, FCount + 16);
-      SetLength(FEntryHasPlaceholder, FCount + 16);
+      LCap := Length(FEntries);
+      if LCap < 16 then
+        LCap := 16
+      else
+        LCap := LCap * 2;
+      SetLength(FEntries, LCap);
+      SetLength(FLowerKeys, LCap);
+      SetLength(FEntryHasPlaceholder, LCap);
     end;
     FEntries[FCount].Key := AKey;
     FEntries[FCount].Value := AValue;

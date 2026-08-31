@@ -36,6 +36,9 @@ type
     function WithStyle(const AStyle: TStyle): IBlock;
     function WithBorderStyle(const AStyle: TStyle): IBlock;
     function WithTitleStyle(const AStyle: TStyle): IBlock;
+    { PH33 P2b，additive：内容区四边内缩（Inner 计算纳入；负值钳 0，
+      超缩→空区，语义对齐 tui888 geometry margin） }
+    function WithPadding(N: Integer): IBlock;
   end;
 
   TBlock = class(TInterfacedObject, IWidget, IBlock)
@@ -47,6 +50,7 @@ type
     FStyle: TStyle;
     FBorderStyle: TStyle;
     FTitleStyle: TStyle;
+    FPadding: Integer;
   public
     class function New: IBlock; static;
     { 快捷：全边框 + 标题（最常用模式） }
@@ -61,6 +65,8 @@ type
     function WithStyle(const AStyle: TStyle): IBlock;
     function WithBorderStyle(const AStyle: TStyle): IBlock;
     function WithTitleStyle(const AStyle: TStyle): IBlock;
+    { PH33 P2b，additive：内容区四边内缩 }
+    function WithPadding(N: Integer): IBlock;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -99,6 +105,7 @@ begin
   LBlock.FStyle := TStyle.Default;
   LBlock.FBorderStyle := TStyle.Default;
   LBlock.FTitleStyle := TStyle.Default;
+  LBlock.FPadding := 0;
   Result := LBlock;
 end;
 
@@ -146,6 +153,15 @@ end;
 function TBlock.WithTitleStyle(const AStyle: TStyle): IBlock;
 begin
   FTitleStyle := AStyle;
+  Result := Self;
+end;
+
+{ PH33 P2b：布局属性——内容区四边统一内缩 N 格；负值钳 0。
+  Inner 计算在边框收缩后追加内缩，超缩由 Inner 既有 ≥0 钳制收口为空区 }
+function TBlock.WithPadding(N: Integer): IBlock;
+begin
+  if N < 0 then N := 0;
+  FPadding := N;
   Result := Self;
 end;
 
@@ -228,6 +244,15 @@ begin
 
   Inc(LY, LTopShrink);
   Dec(LH, LTopShrink + LBottomShrink);
+
+  { PH33 P2b：内容区内缩（边框收缩之后应用） }
+  if FPadding > 0 then
+  begin
+    Inc(LX, FPadding);
+    Inc(LY, FPadding);
+    Dec(LW, FPadding * 2);
+    Dec(LH, FPadding * 2);
+  end;
 
   if LW < 0 then LW := 0;
   if LH < 0 then LH := 0;

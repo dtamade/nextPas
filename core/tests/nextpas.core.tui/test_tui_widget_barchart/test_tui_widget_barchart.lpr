@@ -259,6 +259,32 @@ begin
   Check(LData.Value = 0.0, 'Value should be 0.0');
 end;
 
+{ PH33 P3：数据更新面——SetBars 原地替换 + AddBar 追加（标签默认显示） }
+procedure TestBarChartSetAddBars;
+var LB: IBarChart; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LB := TBarChart.New([TBarData.Make('zz-old', 9.0)]);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 10));
+  try
+    LB.SetBars([TBarData.Make('aa', 5.0), TBarData.Make('bb', 3.0)]);
+    LB.AddBar(TBarData.Make('cc', 1.0));
+    LB.Render(TRect.Make(0, 0, 40, 10), LBuf);
+    LAll := '';
+    for I := 0 to 9 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos('aa', LAll) > 0, 'replaced bar label visible');
+    Check(Pos('cc', LAll) > 0, 'appended bar label visible');
+    Check(Pos('zz-old', LAll) = 0, 'old bar gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBarChartWithBarsChaining;
+var LB: IBarChart;
+begin
+  LB := TBarChart.New([TBarData.Make('a', 1.0)])
+    .WithBars([TBarData.Make('x', 2.0), TBarData.Make('y', 4.0)]);
+  Check(LB <> nil, 'WithBars chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.barchart');
   T.Test('TBarData.Make', @TestBarDataMake);
@@ -280,5 +306,7 @@ begin
   T.Test('render small area', @TestBarChartRenderSmallArea);
   T.Test('render multiple bars', @TestBarChartRenderMultipleBars);
   T.Test('TBarData make zero value', @TestBarDataMakeZeroValue);
+  T.Test('SetBars/AddBar update (PH33 P3)', @TestBarChartSetAddBars);
+  T.Test('WithBars chaining (PH33 P3)', @TestBarChartWithBarsChaining);
   if not T.Run then Halt(1);
 end.

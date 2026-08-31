@@ -3,10 +3,10 @@ program test_pem_der_simple;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
   nextpas.core.tls.cert.utils,
-  nextpas.core.tls.factory,
-  fafafa.ssl;
+  nextpas.core.tls.factory;
 
 var
   LRootCert, LRootKey: string;

@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.api;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 (Cryptoki) API Bindings                               }
+{  nextpas.core.tls - PKCS#11 (Cryptoki) API Bindings                               }
 {                                                                              }
 {  Purpose: PKCS#11 v2.40 API bindings for hardware security modules (HSM),   }
 {           smart cards, and cryptographic tokens                              }

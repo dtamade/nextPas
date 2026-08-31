@@ -35,6 +35,7 @@ uses
  *     ERROR_ACCESS_DENIED  → PLATFORM_ERR_PERM
  *     ERROR_DISK_FULL      → PLATFORM_ERR_NOSPC
  *     ERROR_TIMEOUT        → PLATFORM_ERR_TIMEDOUT
+ *     WSAEINTR             → PLATFORM_ERR_INTR
  *     WSAETIMEDOUT         → PLATFORM_ERR_TIMEDOUT
  *     unmapped ERROR_*/WSAE* → PLATFORM_ERR_UNKNOWN (never raw passthrough)
  *
@@ -167,6 +168,7 @@ begin
     ERROR_NOT_FOUND:                            Result := PLATFORM_ERR_NOENT;
     ERROR_MOD_NOT_FOUND, ERROR_PROC_NOT_FOUND:  Result := PLATFORM_ERR_NOENT;
     ERROR_IO_PENDING:                           Result := PLATFORM_ERR_AGAIN;
+    WSAEINTR:                                   Result := PLATFORM_ERR_INTR;
     WSAETIMEDOUT:                               Result := PLATFORM_ERR_TIMEDOUT;
     WSAECONNRESET:                              Result := PLATFORM_ERR_CONNRESET;
     WSAECONNREFUSED:                            Result := PLATFORM_ERR_CONNREFUSED;
@@ -482,7 +484,8 @@ begin
     WSAECONNRESET,
     WSAECONNREFUSED:
       Result := ecIO;
-    ERROR_OPERATION_ABORTED:
+    ERROR_OPERATION_ABORTED,
+    WSAEINTR:
       Result := ecInterrupted;
     {$ENDIF}
   else

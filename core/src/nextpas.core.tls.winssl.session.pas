@@ -19,7 +19,9 @@ uses
   {$IFDEF WINDOWS}
   Windows,
   {$ENDIF}
+  nextpas.core.base,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.connection;
@@ -53,7 +55,7 @@ begin
 
   // Keep the compatibility shim aligned with the current canonical conservative truth:
   // no direct risky Schannel session-info probe here; callers only get a fallback session id.
-  LSessionID := Format('winssl-session-%p', [Pointer(AContext)]);
+  LSessionID := nextpas.core.text.format.TextFormat('winssl-session-0x%x', [PtrUInt(AContext)]);
   SetSessionMetadata(LSessionID, AProtocol, ACipher, False);
 end;
 

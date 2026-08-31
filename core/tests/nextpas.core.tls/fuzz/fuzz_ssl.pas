@@ -3,7 +3,7 @@ program fuzz_ssl;
 {$mode objfpc}{$H+}
 
 {**
- * Fuzz Testing for fafafa.ssl Security-Critical Functions
+ * Fuzz Testing for nextpas.core.tls Security-Critical Functions
  *
  * Targets:
  * - Base64 decoding (pure Pascal)
@@ -203,7 +203,7 @@ var
 
 begin
   WriteLn('================================================================');
-  WriteLn('          fafafa.ssl Fuzz Testing Suite                         ');
+  WriteLn('          nextpas.core.tls Fuzz Testing Suite                         ');
   WriteLn('================================================================');
   WriteLn;
 

@@ -68,6 +68,7 @@ var
   LMask: Byte;
 begin
   LLen := Length(AIfTrue);
+  Result := nil;
   SetLength(Result, LLen);
   LMask := Byte(0) - Byte(Ord(ACondition));
   for I := 0 to LLen - 1 do

@@ -5,16 +5,39 @@ unit nextpas.core.http.static;
 interface
 
 uses
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.vfs.intf;
 
 { Serve a single file. Returns handler that reads file and writes it as response.
   Supports range requests (RFC 7233), ETag, Last-Modified, Cache-Control. }
-function ServeFile(const APath: string): THttpHandlerFunc;
+function ServeFile(const APath: string): THttpHandlerFunc; overload;
+
+{ Same as above with an explicit Cache-Control policy value (e.g.
+  'public, max-age=31536000, immutable' for content-addressed assets).
+  The single-argument overload keeps the conservative revalidate default. }
+function ServeFile(const APath, ACacheControl: string): THttpHandlerFunc; overload;
 
 { Serve files from a directory. Path param 'filepath' or URL path used as relative file path.
   Example: router.Get('/static/*filepath', ServeDir('/var/www'))
   Supports range requests (RFC 7233), ETag, Last-Modified, Cache-Control. }
-function ServeDir(const ARoot: string): THttpHandlerFunc;
+function ServeDir(const ARoot: string): THttpHandlerFunc; overload;
+
+{ Same as above with an explicit Cache-Control policy value applied to every
+  served entry (the single-argument overload keeps the revalidate default). }
+function ServeDir(const ARoot, ACacheControl: string): THttpHandlerFunc; overload;
+
+{ Serve files from a read-only virtual filesystem (nextpas.core.vfs IVfs).
+  Path param 'filepath' or URL path used as relative VFS path.
+  Example: router.Get('/assets/*filepath', ServeVfs(AFs))
+  Supports range requests (RFC 7233), ETag, Last-Modified, Cache-Control.
+  ETag prefers backend ContentHash ("fnv-hex8"); without a hash falls back to
+  size+mtime strong ETag. Entries with unknown ModTime (0) skip Last-Modified
+  and If-Modified-Since negotiation. Directories and invalid paths return 404
+  (no index serving). }
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc; overload;
+{ Same as above with an explicit Cache-Control policy value applied to every
+  served entry (the single-argument overload keeps the revalidate default). }
+function ServeVfs(const AFs: IVfs; const ACacheControl: string): THttpHandlerFunc; overload;
 
 { Serve a single file with Content-Disposition: attachment for download.
   Supports range requests, ETag, Last-Modified, Cache-Control. }
@@ -22,7 +45,7 @@ function ServeFileDownload(const APath: string): THttpHandlerFunc; overload;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload;
 
 {** @desc Strong ETag from size + mtime: quoted "hexsize-hexmtime". }
-function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string; inline;
 {** @desc If-None-Match match: `*`, exact quoted ETag, or comma-separated list. }
 function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
 {** @desc True when If-Modified-Since parses and resource mtime <= that instant. }
@@ -37,14 +60,26 @@ function HttpTryWriteNotModified(const AReq: IHttpRequest;
 {** @desc Format Unix timestamp as HTTP date (RFC 7231 §7.1.1.1).
    Example: "Sun, 06 Nov 1994 08:49:37 GMT". }
 function FormatHttpDate(const AUnixTimestamp: Int64): string;
+{** @desc Parse HTTP-date (RFC 7231 §7.1.1.1) to Unix timestamp seconds.
+   Accepts IMF-fixdate ("Sun, 06 Nov 1994 08:49:37 GMT"), RFC 850
+   ("Sunday, 06-Nov-94 08:49:37 GMT") and ANSIC ("Sun Nov  6 08:49:37 1994")
+   — the same set as Go's http.ParseTime. Returns False on parse failure. }
+function TryParseHttpDate(const ADate: string; out AUnix: Int64): Boolean;
 {** @desc Ensure headers carry a Date header (RFC 7231 §7.1.1.2 SHOULD).
    Injects current UTC time only when the headers do not already have one. }
 procedure HttpEnsureDateHeader(const AHeaders: IHttpHeaders);
+
+{** @desc 零分配判定 Range 头是否以 "bytes=" 开头（避免 System.Copy 临时串）。 }
+function HttpRangeHasBytesPrefix(const ARange: string): Boolean; inline;
+
+{** @desc 弱 ETag 比较（RFC7232 §3.3）：剥离可选 W/ 前缀后字节级精确匹配，零分配。 }
+function HttpWeakETagEquals(const A, B: string): Boolean; inline;
 
 implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.fs.base,
   nextpas.core.fs.path,
   nextpas.core.text.conv,
@@ -59,9 +94,13 @@ uses
   nextpas.core.fs,
   nextpas.core.io,
   nextpas.core.io.intf,
+  nextpas.core.vfs.base,
+  nextpas.core.vfs.errors,
   nextpas.core.http.base,
   nextpas.core.http.url,
-  nextpas.core.http.message;
+  nextpas.core.http.message,
+  nextpas.core.http.mime,
+  nextpas.core.time.httpdate;
 
 type
   TResponseWriterAdapter = class(TInterfacedObject, IWriter)
@@ -85,183 +124,107 @@ begin
   Result := FWriter.Write(ABuf, ACount);
 end;
 
+const
+  CACHE_REVALIDATE = 'public, max-age=0, must-revalidate';
+  STATIC_COPY_BUF_SIZE = 8192; { Range/全量拷贝块大小，8192 为 4K 页2×最优 }
+
 { ===== Helpers ===== }
 
-const
-  DAY_NAMES: array[1..7] of string = (
-    'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'
-  );
-  MONTH_NAMES: array[1..12] of string = (
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  );
-
-function Pad2(AVal: Integer): string; inline;
-begin
-  if AVal < 10 then
-    Result := '0' + Chr(Ord('0') + AVal)
-  else
-    Result := Chr(Ord('0') + AVal div 10) + Chr(Ord('0') + AVal mod 10);
-end;
-
-function ExtractExt(const APath: string): string;
+function EscapeDispositionFilename(const S: string): string; inline;
 var
-  LI: SizeInt;
+  I, Extra, J: Integer;
 begin
-  for LI := Length(APath) downto 1 do
+  Extra := 0;
+  for I := 1 to Length(S) do
+    if (S[I] = '\') or (S[I] = '"') then
+      Inc(Extra);
+  if Extra = 0 then
+    Exit(S);
+  SetLength(Result, Length(S) + Extra);
+  J := 1;
+  for I := 1 to Length(S) do
   begin
-    if APath[LI] = '.' then
-      Exit(System.Copy(APath, LI, Length(APath) - LI + 1));
-    if APath[LI] = '/' then
-      Exit('');
-  end;
-  Result := '';
-end;
-
-function MimeTypeFromExt(const AExt: string): string;
-var
-  LExt: string;
-begin
-  LExt := LowerCase(AExt);
-  { Text / markup }
-  if LExt = '.html' then Result := 'text/html; charset=utf-8'
-  else if LExt = '.htm' then Result := 'text/html; charset=utf-8'
-  else if LExt = '.css' then Result := 'text/css; charset=utf-8'
-  else if LExt = '.txt' then Result := 'text/plain; charset=utf-8'
-  else if LExt = '.csv' then Result := 'text/csv; charset=utf-8'
-  else if LExt = '.md' then Result := 'text/markdown; charset=utf-8'
-  else if LExt = '.xml' then Result := 'application/xml'
-  else if LExt = '.svg' then Result := 'image/svg+xml'
-  { JavaScript / JSON / WebAssembly }
-  else if LExt = '.js' then Result := 'application/javascript; charset=utf-8'
-  else if LExt = '.mjs' then Result := 'application/javascript; charset=utf-8'
-  else if LExt = '.json' then Result := 'application/json; charset=utf-8'
-  else if LExt = '.jsonld' then Result := 'application/ld+json'
-  else if LExt = '.wasm' then Result := 'application/wasm'
-  { Images }
-  else if LExt = '.png' then Result := 'image/png'
-  else if LExt = '.jpg' then Result := 'image/jpeg'
-  else if LExt = '.jpeg' then Result := 'image/jpeg'
-  else if LExt = '.gif' then Result := 'image/gif'
-  else if LExt = '.webp' then Result := 'image/webp'
-  else if LExt = '.avif' then Result := 'image/avif'
-  else if LExt = '.ico' then Result := 'image/x-icon'
-  else if LExt = '.bmp' then Result := 'image/bmp'
-  else if LExt = '.tiff' then Result := 'image/tiff'
-  else if LExt = '.tif' then Result := 'image/tiff'
-  else if LExt = '.heic' then Result := 'image/heic'
-  else if LExt = '.heif' then Result := 'image/heif'
-  else if LExt = '.apng' then Result := 'image/apng'
-  { Fonts }
-  else if LExt = '.woff' then Result := 'font/woff'
-  else if LExt = '.woff2' then Result := 'font/woff2'
-  else if LExt = '.ttf' then Result := 'font/ttf'
-  else if LExt = '.otf' then Result := 'font/otf'
-  else if LExt = '.eot' then Result := 'application/vnd.ms-fontobject'
-  { Audio / Video }
-  else if LExt = '.mp3' then Result := 'audio/mpeg'
-  else if LExt = '.ogg' then Result := 'audio/ogg'
-  else if LExt = '.opus' then Result := 'audio/opus'
-  else if LExt = '.wav' then Result := 'audio/wav'
-  else if LExt = '.flac' then Result := 'audio/flac'
-  else if LExt = '.aac' then Result := 'audio/aac'
-  else if LExt = '.mp4' then Result := 'video/mp4'
-  else if LExt = '.webm' then Result := 'video/webm'
-  else if LExt = '.ogv' then Result := 'video/ogg'
-  else if LExt = '.avi' then Result := 'video/x-msvideo'
-  else if LExt = '.mov' then Result := 'video/quicktime'
-  else if LExt = '.mkv' then Result := 'video/x-matroska'
-  { Documents }
-  else if LExt = '.pdf' then Result := 'application/pdf'
-  else if LExt = '.doc' then Result := 'application/msword'
-  else if LExt = '.docx' then Result := 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  else if LExt = '.xls' then Result := 'application/vnd.ms-excel'
-  else if LExt = '.xlsx' then Result := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  else if LExt = '.ppt' then Result := 'application/vnd.ms-powerpoint'
-  else if LExt = '.pptx' then Result := 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  { Archives }
-  else if LExt = '.zip' then Result := 'application/zip'
-  else if LExt = '.gz' then Result := 'application/gzip'
-  else if LExt = '.tar' then Result := 'application/x-tar'
-  else if LExt = '.bz2' then Result := 'application/x-bzip2'
-  else if LExt = '.7z' then Result := 'application/x-7z-compressed'
-  else if LExt = '.rar' then Result := 'application/vnd.rar'
-  { Streaming / manifest }
-  else if LExt = '.m3u8' then Result := 'application/vnd.apple.mpegurl'
-  else if LExt = '.mpd' then Result := 'application/dash+xml'
-  else if LExt = '.ts' then Result := 'video/mp2t'
-  { Data interchange }
-  else if LExt = '.yaml' then Result := 'application/yaml'
-  else if LExt = '.yml' then Result := 'application/yaml'
-  else if LExt = '.toml' then Result := 'application/toml'
-  else if LExt = '.geojson' then Result := 'application/geo+json'
-  { Web manifests }
-  else if LExt = '.webmanifest' then Result := 'application/manifest+json'
-  else if LExt = '.webapp' then Result := 'application/x-web-app-manifest+json'
-  { Fallback }
-  else Result := 'application/octet-stream';
-end;
-
-{ Returns True if the relative path is safe (no traversal). }
-function IsSafePath(const ARelative: string): Boolean;
-var
-  LI, LLen: SizeInt;
-begin
-  LLen := Length(ARelative);
-  if LLen = 0 then Exit(False);
-  { Reject absolute paths }
-  if ARelative[1] = '/' then Exit(False);
-  { Reject Windows path separators before file lookup. }
-  for LI := 1 to LLen do
-  begin
-    if ARelative[LI] = '\' then
-      Exit(False);
-    { Reject percent-encoded characters after URL decode — prevents double encoding attacks }
-    if ARelative[LI] = '%' then
-      Exit(False);
-  end;
-  { Reject any '..' component }
-  LI := 1;
-  while LI <= LLen do
-  begin
-    if (ARelative[LI] = '.') and (LI + 1 <= LLen) and (ARelative[LI + 1] = '.') then
+    if S[I] = '\' then
     begin
-      { Check it's a full component: at start or after '/', and at end or before '/' }
-      if ((LI = 1) or (ARelative[LI - 1] = '/')) and
-         ((LI + 2 > LLen) or (ARelative[LI + 2] = '/')) then
-        Exit(False);
+      Result[J] := '\';
+      Result[J + 1] := '\';
+      Inc(J, 2);
+    end
+    else if S[I] = '"' then
+    begin
+      Result[J] := '\';
+      Result[J + 1] := '"';
+      Inc(J, 2);
+    end
+    else
+    begin
+      Result[J] := S[I];
+      Inc(J);
     end;
-    Inc(LI);
   end;
-  Result := True;
+end;
+
+function IsHeadReq(const AReq: IHttpRequest): Boolean; inline;
+begin
+  Result := (AReq <> nil) and (AReq.Method = hmHead);
+end;
+
+procedure WriteErrorHeadAware(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AStatus: THttpStatus;
+  const ACode, AMsg: string);
+begin
+  if IsHeadReq(AReq) then
+  begin
+    { HEAD MUST NOT include body — same status/headers, content-length 0. }
+    AW.GetHeaders.SetHeader('content-type', 'application/problem+json');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(AStatus);
+  end
+  else
+    HttpWriteErrorResponse(AW, AStatus, ACode, AMsg);
+end;
+
+{ Returns True if the relative path is safe (no traversal).
+  Semantics: VFS canonical ValidPath + HTTP double-encoding guard.
+  Reuses VfsValidPath as single source of truth, then rejects '%' and '\'
+  which Go ValidPath would accept as normal chars but must be blocked after
+  UrlDecode to prevent encoded traversal. Single-pass scan replaces double Pos. }
+function IsSafePath(const ARelative: string): Boolean; inline;
+var
+  I: Integer;
+begin
+  if ARelative = '' then
+    Exit(False);
+  { Single-pass: any '%' (double-encoding) or '\' (Windows sep) is unsafe }
+  for I := 1 to Length(ARelative) do
+    if (ARelative[I] = '%') or (ARelative[I] = '\') then
+      Exit(False);
+  Result := VfsValidPath(ARelative, False);
+end;
+
+{ Extract relative path from request: tries wildcard param 'filepath', falls
+  back to URL path with leading slash stripped. Returns False only when
+  UrlDecode raises (malformed percent-encoding) — caller should reply 400. }
+function TryExtractRequestPath(const AReq: IHttpRequest; out ARelative: string): Boolean; inline;
+begin
+  ARelative := AReq.PathParam('filepath');
+  if ARelative = '' then
+  begin
+    ARelative := AReq.Path;
+    if (Length(ARelative) > 0) and (ARelative[1] = '/') then
+      System.Delete(ARelative, 1, 1);
+  end;
+  try
+    ARelative := nextpas.core.http.url.UrlDecode(ARelative);
+    Result := True;
+  except
+    Result := False;
+  end;
 end;
 
 function FormatHttpDate(const AUnixTimestamp: Int64): string;
-var
-  LDT: TOffsetDateTime;
-  LYear, LMonth, LDay, LHour, LMinute, LSecond: Integer;
-  LDayOfWeek: Integer;
 begin
-  LDT := TOffsetDateTime.FromUnixSeconds(AUnixTimestamp);
-  LDT := LDT.ToUtc;
-  LYear := LDT.GetYear;
-  LMonth := LDT.GetMonth;
-  LDay := LDT.GetDay;
-  LHour := LDT.GetHour;
-  LMinute := LDT.GetMinute;
-  LSecond := LDT.GetSecond;
-  { Zeller's congruence for day of week }
-  LDayOfWeek := (LDay + (13 * ((LMonth + 12 * ((14 - LMonth) div 12)) mod 12 + 1)) div 5
-    + ((LYear - ((14 - LMonth) div 12)) mod 100)
-    + ((LYear - ((14 - LMonth) div 12)) mod 100) div 4
-    + ((LYear - ((14 - LMonth) div 12)) div 100) * 5
-    + 5) mod 7;
-  { Zeller: 0=Sat, 1=Sun, ..., 6=Fri → map to 1=Sun, ..., 7=Sat }
-  LDayOfWeek := ((LDayOfWeek + 6) mod 7) + 1;
-  Result := DAY_NAMES[LDayOfWeek] + ', '
-    + Pad2(LDay) + ' ' + MONTH_NAMES[LMonth] + ' ' + IntToStr(LYear)
-    + ' ' + Pad2(LHour) + ':' + Pad2(LMinute) + ':' + Pad2(LSecond)
-    + ' GMT';
+  Result := nextpas.core.time.httpdate.FormatHttpDate(AUnixTimestamp);
 end;
 
 procedure HttpEnsureDateHeader(const AHeaders: IHttpHeaders);
@@ -277,68 +240,18 @@ begin
     FormatHttpDate(DateTimeToUnix(DateTimeUtcNow)));
 end;
 
-{ Parse HTTP date string (RFC 7231 §7.1.1.1) to Unix timestamp.
-  Accepts: "Sun, 06 Nov 1994 08:49:37 GMT" (preferred)
-  Returns 0 on parse failure. }
-function ParseHttpDate(const ADate: string): Int64;
-var
-  LLen, LPos, LMonth, LI: Integer;
-  LDay, LYear, LHour, LMinute, LSecond: Integer;
-  LMonthStr: string;
-  LDT: TOffsetDateTime;
+function TryParseHttpDate(const ADate: string; out AUnix: Int64): Boolean;
 begin
-  Result := 0;
-  LLen := Length(ADate);
-  { Preferred form: "Sun, 06 Nov 1994 08:49:37 GMT" = 29 chars (1-based). }
-  if LLen < 29 then Exit;
-
-  { Day name + ", " occupies indices 1..5; day digits start at 6. }
-  LPos := 6;
-  if LPos + 1 > LLen then Exit;
-  if (ADate[LPos] < '0') or (ADate[LPos] > '9') or
-    (ADate[LPos + 1] < '0') or (ADate[LPos + 1] > '9') then
-    Exit;
-  LDay := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
-  Inc(LPos, 3); { day + space → month }
-
-  if LPos + 2 > LLen then Exit;
-  LMonthStr := System.Copy(ADate, LPos, 3);
-  LMonth := 0;
-  for LI := 1 to 12 do
-    if LMonthStr = MONTH_NAMES[LI] then
-    begin
-      LMonth := LI;
-      Break;
-    end;
-  if LMonth = 0 then Exit;
-  Inc(LPos, 4); { month + space → year }
-
-  if LPos + 3 > LLen then Exit;
-  if (ADate[LPos] < '0') or (ADate[LPos] > '9') then Exit;
-  LYear := (Ord(ADate[LPos]) - Ord('0')) * 1000
-         + (Ord(ADate[LPos + 1]) - Ord('0')) * 100
-         + (Ord(ADate[LPos + 2]) - Ord('0')) * 10
-         + (Ord(ADate[LPos + 3]) - Ord('0'));
-  Inc(LPos, 5); { year + space → time }
-
-  if LPos + 7 > LLen then Exit;
-  LHour := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
-  LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 + (Ord(ADate[LPos + 4]) - Ord('0'));
-  LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 + (Ord(ADate[LPos + 7]) - Ord('0'));
-
-  try
-    LDT := TOffsetDateTime.Create(
-      TNaiveDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond),
-      TUtcOffset.UTC);
-    Result := LDT.ToUnixSeconds;
-  except
-    Result := 0;
-  end;
+  Result := nextpas.core.time.httpdate.TryParseHttpDate(ADate, AUnix);
+end;
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string; inline;
+begin
+  Result := VfsETagStrong(ASize, AModTime);
 end;
 
-function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+function HttpMakeFnvETag(const AHash: UInt32): string; inline;
 begin
-  Result := '"' + IntToHex(ASize, 16) + '-' + IntToHex(AModTime, 16) + '"';
+  Result := VfsETagFNV(AHash);
 end;
 
 { TFileInfo.ModTime is platform nanoseconds since Unix epoch. }
@@ -349,39 +262,68 @@ begin
   Result := AModTimeNs div 1000000000;
 end;
 
-{ Generate ETag from file size and modification time.
-  Format: "size-mtime" hex pair for strong ETag. }
-function GenerateETag(ASize: Int64; AModTime: Int64): string;
+function StripWeakETag(const S: string): string; inline;
 begin
-  Result := HttpMakeStrongETag(ASize, AModTime);
+  if (Length(S) >= 2) and (S[1] = 'W') and (S[2] = '/') then
+    Result := System.Copy(S, 3, Length(S) - 2)
+  else
+    Result := S;
 end;
 
 function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
 var
-  LRest, LToken: string;
-  LComma: SizeInt;
+  S: string;
+  Server: string;
+  SStart, SLen: SizeInt;
+  ServerStart, ServerLen: SizeInt;
+  RestStart, RestLen: SizeInt;
+  CommaPos: SizeInt;
+  TokenStart, TokenLen: SizeInt;
+  TStart, TLen: SizeInt;
+  VStart, VLen: SizeInt;
+  I: SizeInt;
 begin
   Result := False;
   if (AIfNoneMatch = '') or (AServerETag = '') then
     Exit;
-  LRest := Trim(AIfNoneMatch);
-  if LRest = '*' then
-    Exit(True);
-  while LRest <> '' do
+  S := AIfNoneMatch;
+  SStart := 1; SLen := Length(S);
+  while (SLen > 0) and (S[SStart] <= ' ') do begin Inc(SStart); Dec(SLen); end;
+  while (SLen > 0) and (S[SStart + SLen - 1] <= ' ') do Dec(SLen);
+  if SLen = 0 then Exit;
+  if (SLen = 1) and (S[SStart] = '*') then Exit(True);
+  RestStart := SStart; RestLen := SLen;
+  Server := AServerETag;
+  ServerStart := 1; ServerLen := Length(Server);
+  while (ServerLen > 0) and (Server[ServerStart] <= ' ') do begin Inc(ServerStart); Dec(ServerLen); end;
+  while (ServerLen > 0) and (Server[ServerStart + ServerLen - 1] <= ' ') do Dec(ServerLen);
+  while RestLen > 0 do
   begin
-    LComma := Pos(',', LRest);
-    if LComma > 0 then
-    begin
-      LToken := Trim(System.Copy(LRest, 1, LComma - 1));
-      LRest := Trim(System.Copy(LRest, LComma + 1, Length(LRest) - LComma));
-    end
+    CommaPos := 0;
+    for I := 1 to RestLen do
+      if S[RestStart + I - 1] = ',' then begin CommaPos := I; Break; end;
+    if CommaPos > 0 then
+      TokenLen := CommaPos - 1
     else
+      TokenLen := RestLen;
+    TokenStart := RestStart;
+    while (TokenLen > 0) and (S[TokenStart] <= ' ') do begin Inc(TokenStart); Dec(TokenLen); end;
+    while (TokenLen > 0) and (S[TokenStart + TokenLen - 1] <= ' ') do Dec(TokenLen);
+    if TokenLen > 0 then
     begin
-      LToken := Trim(LRest);
-      LRest := '';
+      TStart := TokenStart; TLen := TokenLen;
+      VStart := ServerStart; VLen := ServerLen;
+      if (TLen >= 2) and (S[TStart] = 'W') and (S[TStart + 1] = '/') then begin Inc(TStart, 2); Dec(TLen, 2); end;
+      if (VLen >= 2) and (Server[VStart] = 'W') and (Server[VStart + 1] = '/') then begin Inc(VStart, 2); Dec(VLen, 2); end;
+      if TLen = VLen then
+      begin
+        if TLen = 0 then Exit(True);
+        if CompareMem(@S[TStart], @Server[VStart], SizeUInt(TLen)) then Exit(True);
+      end;
     end;
-    if LToken = AServerETag then
-      Exit(True);
+    if CommaPos = 0 then Break;
+    RestStart := RestStart + CommaPos;
+    RestLen := RestLen - CommaPos;
   end;
 end;
 
@@ -393,8 +335,7 @@ begin
   Result := False;
   if AIfModifiedSince = '' then
     Exit;
-  LSince := ParseHttpDate(AIfModifiedSince);
-  if LSince = 0 then
+  if not TryParseHttpDate(AIfModifiedSince, LSince) then
     Exit;
   Result := AModTimeUnix <= LSince;
 end;
@@ -439,36 +380,95 @@ begin
   end;
 end;
 
+function HttpRangeHasBytesPrefix(const ARange: string): Boolean;
+const
+  BYTES_PREFIX = 'bytes=';
+  BYTES_PREFIX_LEN = 6;
+begin
+  if Length(ARange) < BYTES_PREFIX_LEN then Exit(False);
+  Result := CompareMem(@ARange[1], @BYTES_PREFIX[1], BYTES_PREFIX_LEN);
+end;
+
+function HttpWeakETagEquals(const A, B: string): Boolean;
+var
+  AO, BO: SizeInt;
+  AL, BL: SizeInt;
+begin
+  AO := 1; AL := Length(A);
+  if (AL >= 2) and (A[1] = 'W') and (A[2] = '/') then begin Inc(AO,2); Dec(AL,2); end;
+  BO := 1; BL := Length(B);
+  if (BL >= 2) and (B[1] = 'W') and (B[2] = '/') then begin Inc(BO,2); Dec(BL,2); end;
+  if AL <> BL then Exit(False);
+  if AL = 0 then Exit(True);
+  Result := CompareMem(@A[AO], @B[BO], SizeUInt(AL));
+end;
+
 { Parse Range header value. Returns True if valid single range.
   Format: "bytes=start-end" or "bytes=start-" or "bytes=-suffix" }
 function ParseRangeHeader(const ARange: string; AFileSize: Int64;
   out AStart, AEnd: Int64): Boolean;
+const
+  BYTES_PREFIX = 'bytes=';
+  BYTES_PREFIX_LEN = 6;
+
+  function TryParseSlice(const S: string; APos, ALen: Integer; out V: Int64): Boolean; inline;
+  var
+    I, E: Integer;
+    C: Char;
+    Neg: Boolean;
+    U: UInt64;
+  begin
+    Result := False; V := 0;
+    if ALen <= 0 then Exit;
+    I := APos; E := APos + ALen;
+    Neg := False;
+    if S[I] = '-' then begin Neg := True; Inc(I); if I >= E then Exit; end
+    else if S[I] = '+' then begin Inc(I); if I >= E then Exit; end;
+    U := 0;
+    while I < E do
+    begin
+      C := S[I];
+      if (C < '0') or (C > '9') then Exit;
+      if U > High(UInt64) div 10 then Exit;
+      U := U * 10 + UInt64(Ord(C) - 48);
+      Inc(I);
+    end;
+    if Neg then
+    begin
+      if U > UInt64(High(Int64)) + 1 then Exit;
+      V := -Int64(U);
+    end else
+    begin
+      if U > UInt64(High(Int64)) then Exit;
+      V := Int64(U);
+    end;
+    Result := True;
+  end;
+
 var
-  LPrefix: string;
   LDashPos: SizeInt;
-  LStartStr, LEndStr: string;
   LStart, LEnd: Int64;
+  LStartLen, LEndLen: Integer;
 begin
   Result := False;
   AStart := 0;
   AEnd := 0;
-  LPrefix := 'bytes=';
-  if Length(ARange) < Length(LPrefix) + 1 then
+  if Length(ARange) < BYTES_PREFIX_LEN + 1 then
     Exit;
-  if System.Copy(ARange, 1, Length(LPrefix)) <> LPrefix then
+  if not HttpRangeHasBytesPrefix(ARange) then
     Exit;
 
   LDashPos := Pos('-', ARange);
   if LDashPos = 0 then
     Exit;
 
-  LStartStr := System.Copy(ARange, Length(LPrefix) + 1, LDashPos - Length(LPrefix) - 1);
-  LEndStr := System.Copy(ARange, LDashPos + 1, Length(ARange) - LDashPos);
+  LStartLen := LDashPos - BYTES_PREFIX_LEN - 1;
+  LEndLen := Length(ARange) - LDashPos;
 
-  if LStartStr = '' then
+  if LStartLen = 0 then
   begin
     { Suffix range: "bytes=-500" means last 500 bytes }
-    if not TryStrToInt64(LEndStr, LEnd) then
+    if not TryParseSlice(ARange, LDashPos + 1, LEndLen, LEnd) then
       Exit;
     if LEnd <= 0 then
       Exit;
@@ -479,21 +479,21 @@ begin
   end
   else
   begin
-    if not TryStrToInt64(LStartStr, LStart) then
+    if not TryParseSlice(ARange, BYTES_PREFIX_LEN + 1, LStartLen, LStart) then
       Exit;
     if LStart < 0 then
       Exit;
     if LStart >= AFileSize then
       Exit;
     AStart := LStart;
-    if LEndStr = '' then
+    if LEndLen = 0 then
     begin
       { Open-ended: "bytes=500-" means from 500 to end }
       AEnd := AFileSize - 1;
     end
     else
     begin
-      if not TryStrToInt64(LEndStr, LEnd) then
+      if not TryParseSlice(ARange, LDashPos + 1, LEndLen, LEnd) then
         Exit;
       if LEnd < LStart then
         Exit;
@@ -514,17 +514,18 @@ begin
     'range_not_satisfiable', 'Range not satisfiable');
 end;
 
-{ Copy file range to writer }
-procedure CopyFileRange(const AFile: IFile; const AWriter: IWriter;
+{ Copy ACount bytes from AInput starting at AStart to writer.
+  Accepts any IStream (fs IFile and IVfs.OpenRead streams both qualify). }
+procedure CopyRange(const AInput: IStream; const AWriter: IWriter;
   AStart, ACount: Int64);
 var
-  LBuf: array[0..8191] of Byte;
+  LBuf: array[0..STATIC_COPY_BUF_SIZE - 1] of Byte;
   LRemaining: Int64;
   LToRead: SizeUInt;
   LN: SizeUInt;
 begin
   { Seek to start position }
-  AFile.Seek(AStart, soBeginning);
+  AInput.Seek(AStart, soBeginning);
   LRemaining := ACount;
   while LRemaining > 0 do
   begin
@@ -532,7 +533,7 @@ begin
       LToRead := SizeOf(LBuf)
     else
       LToRead := SizeUInt(LRemaining);
-    LN := AFile.Read(LBuf[0], LToRead);
+    LN := AInput.Read(LBuf[0], LToRead);
     if LN = 0 then
       Break;
     AWriter.Write(LBuf[0], LN);
@@ -540,98 +541,148 @@ begin
   end;
 end;
 
-{ Serve file content with optional range support, ETag, Last-Modified, Cache-Control.
-  ADownloadName: if non-empty, set Content-Disposition: attachment with given filename. }
-procedure ServeFileContentEx(const AFilePath: string;
+{ Unified static content serving: handles conditional GET (304), common headers,
+  and single-range (206/416) vs full (200) streaming. AFactory is invoked
+  lazily after Range parsing so we never open the underlying stream for 304/416. }
+type
+  TStaticStreamFactory = reference to function: IStream;
+
+procedure HttpServeStaticStream(
   const AReq: IHttpRequest; const AW: IHttpResponseWriter;
-  const ADownloadName: string);
+  const ASize: Int64; const AETag, ALastModified, AMime, ACacheControl: string;
+  const AModTimeUnix: Int64; const AFactory: TStaticStreamFactory;
+  const ADownloadName: string = '');
 var
-  LFile: IFile;
-  LInfo: TFileInfo;
-  LWriter: IWriter;
-  LExt: string;
-  LMime: string;
-  LETag: string;
-  LLastModified: string;
   LRangeHeader: string;
   LStart, LEnd: Int64;
-  LFileSize: Int64;
+  LStream: IStream;
+  LWriter: IWriter;
   LEscapedName: string;
+  LIfNoneMatch: string;
+  LIsHead: Boolean;
+  LIfRangeHeader: string;
+  LIfRangeDate: Int64;
+begin
+  if AReq <> nil then
+    LIfNoneMatch := AReq.GetHeaders.Get('if-none-match')
+  else
+    LIfNoneMatch := '';
+  if (AModTimeUnix > 0) or (LIfNoneMatch <> '') then
+    if HttpTryWriteNotModified(AReq, AW, AETag, ALastModified, AModTimeUnix) then
+      Exit;
+  AW.GetHeaders.SetHeader('content-type', AMime);
+  AW.GetHeaders.SetHeader('etag', AETag);
+  if ALastModified <> '' then
+    AW.GetHeaders.SetHeader('last-modified', ALastModified);
+  AW.GetHeaders.SetHeader('cache-control', ACacheControl);
+  AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
+  AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
+  if ADownloadName <> '' then
+  begin
+    LEscapedName := EscapeDispositionFilename(ADownloadName);
+    AW.GetHeaders.SetHeader('content-disposition',
+      'attachment; filename="' + LEscapedName + '"');
+  end;
+  LIsHead := IsHeadReq(AReq);
+  if AReq <> nil then
+    LRangeHeader := AReq.GetHeaders.Get('range')
+  else
+    LRangeHeader := '';
+  { RFC 7233 §3.2 If-Range: when present, Range is honored only if the
+    validator matches the current representation; otherwise fall back to
+    full 200. ETag form is strong exact match (quoted), date form uses
+    TryParseHttpDate over the three HTTP-date grammars. }
+  if (LRangeHeader <> '') and (AReq <> nil) then
+  begin
+    LIfRangeHeader := Trim(AReq.GetHeaders.Get('if-range'));
+    if LIfRangeHeader <> '' then
+    begin
+      if TryParseHttpDate(LIfRangeHeader, LIfRangeDate) then
+      begin
+        { Date validator: stale when resource mtime is unknown or newer. }
+        if (AModTimeUnix = 0) or (AModTimeUnix > LIfRangeDate) then
+          LRangeHeader := '';
+      end
+      else
+      begin
+        { ETag validator: strong comparison. Weak "W/" never matches. }
+        if LIfRangeHeader <> AETag then
+          LRangeHeader := '';
+      end;
+    end;
+  end;
+  if LRangeHeader <> '' then
+  begin
+    if not ParseRangeHeader(LRangeHeader, ASize, LStart, LEnd) then
+    begin
+      if IsHeadReq(AReq) then
+      begin
+        AW.GetHeaders.SetHeader('content-range', 'bytes */' + IntToStr(ASize));
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.GetHeaders.SetHeader('content-type', 'application/problem+json');
+        AW.WriteHeader(HTTP_STATUS_RANGE_NOT_SATISFIABLE);
+        Exit;
+      end;
+      SendRangeNotSatisfiable(ASize, AW);
+      Exit;
+    end;
+    AW.GetHeaders.SetHeader('content-range',
+      'bytes ' + IntToStr(LStart) + '-' + IntToStr(LEnd) + '/' + IntToStr(ASize));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
+    AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
+    if LIsHead then
+      Exit;
+    LStream := AFactory();
+    LWriter := TResponseWriterAdapter.Create(AW);
+    CopyRange(LStream, LWriter, LStart, LEnd - LStart + 1);
+  end
+  else
+  begin
+    AW.GetHeaders.SetHeader('content-length', IntToStr(ASize));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    if LIsHead then
+      Exit;
+    LStream := AFactory();
+    LWriter := TResponseWriterAdapter.Create(AW);
+    nextpas.core.io.Copy(LWriter, LStream);
+  end;
+end;
+
+{ Serve file content with optional range support, ETag, Last-Modified, Cache-Control.
+  ADownloadName: if non-empty, set Content-Disposition: attachment with given filename.
+  ACacheControl: verbatim Cache-Control policy header value. }
+procedure ServeFileContentEx(const AFilePath: string;
+  const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const ADownloadName, ACacheControl: string);
+var
+  LInfo: TFileInfo;
+  LMime, LETag, LLastModified: string;
+  LFileSize: Int64;
 begin
   try
     if not nextpas.core.fs.Exists(AFilePath) then
     begin
-      HttpWriteErrorNotFound(AW, 'File not found');
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
       Exit;
     end;
     LInfo := nextpas.core.fs.Stat(AFilePath);
     if LInfo.FileType <> ftRegular then
     begin
-      HttpWriteErrorNotFound(AW, 'File not found');
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
       Exit;
     end;
-
     LFileSize := LInfo.Size;
-    LExt := ExtractExt(AFilePath);
-    LMime := MimeTypeFromExt(LExt);
-    LETag := GenerateETag(LFileSize, LInfo.ModTime);
-    { HTTP-date / If-Modified-Since use second resolution; ETag keeps full ns. }
+    LMime := HttpMimeFromPath(AFilePath);
+    LETag := HttpMakeStrongETag(LFileSize, LInfo.ModTime);
     LLastModified := FormatHttpDate(FileModTimeToUnixSeconds(LInfo.ModTime));
-
-    if HttpTryWriteNotModified(AReq, AW, LETag, LLastModified,
-      FileModTimeToUnixSeconds(LInfo.ModTime)) then
-      Exit;
-
-    { Set common headers }
-    AW.GetHeaders.SetHeader('content-type', LMime);
-    AW.GetHeaders.SetHeader('etag', LETag);
-    AW.GetHeaders.SetHeader('last-modified', LLastModified);
-    AW.GetHeaders.SetHeader('cache-control', 'public, max-age=0, must-revalidate');
-    AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
-    AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
-    if ADownloadName <> '' then
-    begin
-      { RFC 6266: Content-Disposition filename needs quoted-string escaping.
-        Escape backslashes and double quotes to prevent header injection. }
-      LEscapedName := ADownloadName;
-      LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '\', '\\', True);
-      LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '"', '\"', True);
-      AW.GetHeaders.SetHeader('content-disposition',
-        'attachment; filename="' + LEscapedName + '"');
-    end;
-
-    { Range request support (single byte range only; multi-range → 416).
-      Body path always streams via IFile + io.Copy / CopyFileRange — never ReadAll. }
-    if AReq <> nil then
-      LRangeHeader := AReq.GetHeaders.Get('range')
-    else
-      LRangeHeader := '';
-
-    if LRangeHeader <> '' then
-    begin
-      if not ParseRangeHeader(LRangeHeader, LFileSize, LStart, LEnd) then
+    HttpServeStaticStream(AReq, AW, LFileSize, LETag, LLastModified, LMime, ACacheControl,
+      FileModTimeToUnixSeconds(LInfo.ModTime),
+      function: IStream
       begin
-        SendRangeNotSatisfiable(LFileSize, AW);
-        Exit;
-      end;
-      LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
-      AW.GetHeaders.SetHeader('content-range',
-        'bytes ' + IntToStr(LStart) + '-' + IntToStr(LEnd) + '/' + IntToStr(LFileSize));
-      AW.GetHeaders.SetHeader('content-length', IntToStr(LEnd - LStart + 1));
-      AW.WriteHeader(HTTP_STATUS_PARTIAL_CONTENT);
-      LWriter := TResponseWriterAdapter.Create(AW);
-      CopyFileRange(LFile, LWriter, LStart, LEnd - LStart + 1);
-    end
-    else
-    begin
-      LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
-      AW.GetHeaders.SetHeader('content-length', IntToStr(LFileSize));
-      AW.WriteHeader(HTTP_STATUS_OK);
-      LWriter := TResponseWriterAdapter.Create(AW);
-      nextpas.core.io.Copy(LWriter, LFile);
-    end;
+        Result := nextpas.core.fs.Open(AFilePath, [fmRead]);
+      end, ADownloadName);
   except
-    HttpWriteErrorInternal(AW, 'Internal Server Error');
+    WriteErrorHeadAware(AReq, AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', 'Internal Server Error');
   end;
 end;
 
@@ -639,13 +690,23 @@ end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
 begin
+  Result := ServeFile(APath, CACHE_REVALIDATE);
+end;
+
+function ServeFile(const APath, ACacheControl: string): THttpHandlerFunc;
+begin
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    ServeFileContentEx(APath, AReq, AW, '');
+    ServeFileContentEx(APath, AReq, AW, '', ACacheControl);
   end;
 end;
 
 function ServeDir(const ARoot: string): THttpHandlerFunc;
+begin
+  Result := ServeDir(ARoot, CACHE_REVALIDATE);
+end;
+
+function ServeDir(const ARoot, ACacheControl: string): THttpHandlerFunc;
 begin
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var
@@ -654,21 +715,12 @@ begin
     LNormalizedRoot: string;
     LNormalizedFull: string;
   begin
-    { Try wildcard param first, fall back to URL path }
-    LRelative := AReq.PathParam('filepath');
-    if LRelative = '' then
+    if not TryExtractRequestPath(AReq, LRelative) then
     begin
-      LRelative := AReq.Path;
-      { Strip leading slash }
-      if (Length(LRelative) > 0) and (LRelative[1] = '/') then
-        LRelative := System.Copy(LRelative, 2, Length(LRelative) - 1);
-    end;
-    try
-      LRelative := nextpas.core.http.url.UrlDecode(LRelative);
-    except
       AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
-      AW.Write(PAnsiChar('Bad Request')^, 11);
+      if not IsHeadReq(AReq) then
+        AW.Write(PAnsiChar('Bad Request')^, 11);
       Exit;
     end;
     { Security: reject traversal attempts }
@@ -676,7 +728,8 @@ begin
     begin
       AW.GetHeaders.SetHeader('content-length', '11');
       AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
-      AW.Write(PAnsiChar('Bad Request')^, 11);
+      if not IsHeadReq(AReq) then
+        AW.Write(PAnsiChar('Bad Request')^, 11);
       Exit;
     end;
     { Build full path }
@@ -693,31 +746,152 @@ begin
     begin
       AW.GetHeaders.SetHeader('content-length', '9');
       AW.WriteHeader(HTTP_STATUS_FORBIDDEN);
-      AW.Write(PAnsiChar('Forbidden')^, 9);
+      if not IsHeadReq(AReq) then
+        AW.Write(PAnsiChar('Forbidden')^, 9);
       Exit;
     end;
-    ServeFileContentEx(LFullPath, AReq, AW, '');
+    ServeFileContentEx(LFullPath, AReq, AW, '', ACacheControl);
   end;
+end;
+
+{ Serve one VFS entry with the same response semantics as ServeFileContentEx.
+  Exists/IsDir gate up front; an EVfsNotFound escaping the late gates maps to
+  404, any other failure maps to 500. ContentHash-backed ETag keeps identity
+  stable for embedded trees whose entries carry no wall-clock mtime. }
+procedure ServeVfsContentEx(const AFs: IVfs; const AVfsPath: string;
+  const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const ACacheControl: string);
+var
+  LInfo: TStatInfo;
+  LMime, LETag, LLastModified: string;
+  LModTimeUnix: Int64;
+  LCache: IVfsETag;
+begin
+  if AFs = nil then
+  begin
+    WriteErrorHeadAware(AReq, AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', 'Internal Server Error');
+    Exit;
+  end;
+  try
+    try
+      LInfo := AFs.Stat(AVfsPath);
+    except
+      on EVfsNotFound do
+      begin
+        WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
+        Exit;
+      end;
+      on EVfsInvalidPath do
+      begin
+        WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
+        Exit;
+      end;
+    end;
+    if LInfo.Info.IsDir then
+    begin
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
+      Exit;
+    end;
+    LModTimeUnix := LInfo.Info.ModTime;
+    if LModTimeUnix < 0 then
+      LModTimeUnix := 0;
+    if (AFs is IVfsETag) then
+    begin
+      LCache := AFs as IVfsETag;
+      if LCache.TryGetETag(AVfsPath, LETag) then
+      begin
+        { hot path: embedded precomputed ETag — zero per-request hex alloc }
+      end
+      else if LInfo.ContentHash <> 0 then
+        LETag := HttpMakeFnvETag(LInfo.ContentHash)
+      else
+        LETag := HttpMakeStrongETag(LInfo.Info.Size, LModTimeUnix);
+      if not LCache.TryGetLastModified(AVfsPath, LLastModified) then
+      begin
+        if LModTimeUnix > 0 then
+          LLastModified := FormatHttpDate(LModTimeUnix)
+        else
+          LLastModified := '';
+      end;
+    end
+    else
+    begin
+      if LInfo.ContentHash <> 0 then
+        LETag := HttpMakeFnvETag(LInfo.ContentHash)
+      else
+        LETag := HttpMakeStrongETag(LInfo.Info.Size, LModTimeUnix);
+      if LModTimeUnix > 0 then
+        LLastModified := FormatHttpDate(LModTimeUnix)
+      else
+        LLastModified := '';
+    end;
+    LMime := HttpMimeFromPath(AVfsPath);
+    HttpServeStaticStream(AReq, AW, LInfo.Info.Size, LETag, LLastModified, LMime, ACacheControl, LModTimeUnix,
+      function: IStream
+      begin
+        Result := AFs.OpenRead(AVfsPath);
+      end);
+  except
+    on EVfsNotFound do
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
+    else
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', 'Internal Server Error');
+  end;
+end;
+
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
+begin
+  Result := ServeVfs(AFs, CACHE_REVALIDATE);
+end;
+
+function ServeVfs(const AFs: IVfs; const ACacheControl: string): THttpHandlerFunc;
+begin
+  Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LRelative: string;
+  begin
+    if AFs = nil then
+    begin
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', 'Internal Server Error');
+      Exit;
+    end;
+    if not TryExtractRequestPath(AReq, LRelative) then
+    begin
+      AW.GetHeaders.SetHeader('content-length', '11');
+      AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      if not IsHeadReq(AReq) then
+        AW.Write(PAnsiChar('Bad Request')^, 11);
+      Exit;
+    end;
+    { The VFS namespace is canonical: empty/rooted/traversal forms are plain
+      misses (404), indistinguishable from nonexistent entries. }
+    if (LRelative = '') or not VfsValidPath(LRelative, False) then
+    begin
+      WriteErrorHeadAware(AReq, AW, HTTP_STATUS_NOT_FOUND, 'not_found', 'File not found');
+      Exit;
+    end;
+    ServeVfsContentEx(AFs, LRelative, AReq, AW, ACacheControl);
+  end;
+end;
+
+function ExtractFileNameInline(const APath: string): string; inline;
+var
+  I: SizeInt;
+begin
+  for I := Length(APath) downto 1 do
+    if APath[I] = '/' then
+      Exit(System.Copy(APath, I + 1, Length(APath) - I));
+  Result := APath;
 end;
 
 function ServeFileDownload(const APath: string): THttpHandlerFunc;
 var
   LFileName: string;
-  LSlashPos: SizeInt;
 begin
-  { Extract filename from path }
-  LFileName := '';
-  for LSlashPos := Length(APath) downto 1 do
-    if APath[LSlashPos] = '/' then
-    begin
-      LFileName := System.Copy(APath, LSlashPos + 1, Length(APath) - LSlashPos);
-      Break;
-    end;
-  if LFileName = '' then
-    LFileName := APath;
+  LFileName := ExtractFileNameInline(APath);
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    ServeFileContentEx(APath, AReq, AW, LFileName);
+    ServeFileContentEx(APath, AReq, AW, LFileName, CACHE_REVALIDATE);
   end;
 end;
 
@@ -725,7 +899,7 @@ function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc
 begin
   Result := procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    ServeFileContentEx(APath, AReq, AW, ADownloadName);
+    ServeFileContentEx(APath, AReq, AW, ADownloadName, CACHE_REVALIDATE);
   end;
 end;
 

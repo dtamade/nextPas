@@ -3,9 +3,9 @@ program test_wolfssl_ocsp_stapling_contract;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.factory,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  fafafa.ssl,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.wolfssl.lib;
 
@@ -15,9 +15,9 @@ uses
 // ISSLOCSPStapling owner-path guidance is frozen elsewhere.
 
 const
-  OCSP_FIXTURE_FILE = 'tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
-  CERT_FILE = 'tests/certificate/test_certs/signer_cert.pem';
-  KEY_FILE = 'tests/certificate/test_certs/signer_key.pem';
+  OCSP_FIXTURE_FILE = 'fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
+  CERT_FILE = 'certificate/test_certs/signer_cert.pem';
+  KEY_FILE = 'certificate/test_certs/signer_key.pem';
 
 var
   GTotal: Integer = 0;

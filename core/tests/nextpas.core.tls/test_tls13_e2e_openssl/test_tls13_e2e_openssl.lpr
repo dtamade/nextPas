@@ -45,6 +45,7 @@ const
 
 var
   LStream: ITcpStream;
+  LSkipMsg: string;
   LPrivKey, LPubKey: TBytes;
   LClientHello: TBytes;
   LBuf: array[0..16383] of Byte;
@@ -69,12 +70,17 @@ begin
     LStream := NetTcpConnect('127.0.0.1', SERVER_PORT);
     Check('TCP connect ok', LStream <> nil);
   except
-    on E: Exception do
-    begin
-      WriteLn('  SKIP: ', E.Message);
-      WriteLn('  (Start server: make test wires openssl s_server, or run_e2e.sh)');
-      Halt(0);
-    end;
+    { 不在 on-E 处理器内 Halt：异常对象要到处理器末尾才释放，中途 Halt
+      会把它连同消息串留在堆上（fail-closed 门禁下即残留）。先记消息，
+      出处理器后再统一收场 }
+    on E: Exception do LSkipMsg := E.Message;
+  end;
+  if LSkipMsg <> '' then
+  begin
+    WriteLn('  SKIP: ', LSkipMsg);
+    WriteLn('  (Start server: make test wires openssl s_server, or run_e2e.sh)');
+    LStream := nil;
+    Halt(0);
   end;
 
   // Build ClientHello
@@ -143,6 +149,8 @@ begin
   end;
 
   LStream.Close;
+  { 接口引用随作用域存活到进程退出——显式释放，heaptrc 门禁下零残留 }
+  LStream := nil;
 
   WriteLn;
   WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));

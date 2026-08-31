@@ -192,7 +192,7 @@ const
   DATA = 'atomic write test';
 begin
   platform_file_unlink(PAnsiChar(AtomicPath));
-  Check(platform_fs_write_atomic(PAnsiChar(AtomicPath), PAnsiChar(DATA), 17) = 0, 'write_atomic ok');
+  Check(platform_fs_write_atomic(PAnsiChar(AtomicPath), PAnsiChar(DATA), 17, $1A4) = 0, 'write_atomic ok');
   Check(platform_fs_is_file(PAnsiChar(AtomicPath)), 'file exists');
   Check(platform_fs_file_size(PAnsiChar(AtomicPath), Size) = 0, 'stat');
   Check(Size = 17, 'size = 17');

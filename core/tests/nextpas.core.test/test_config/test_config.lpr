@@ -312,7 +312,11 @@ begin
   LSink.WriteLn('world');
   { WriteLn closes the line; GetOutput joins with LineEnding }
   CheckEqual('hello' + LineEnding + 'world', LSink.GetOutput);
-  { Don't free — managed by interface reference counting }
+  { FIX-C: no interface reference is ever taken on a plain object var, so
+    refcounting never frees it — free explicitly. (Do NOT hold it in an
+    IOutputSink var and class-cast back: this FPC trunk keeps interface
+    pointers at obj+0x30 and hard casts don't adjust, reading garbage.) }
+  LSink.Free;
 end;
 
 procedure TestBufferSinkWrite;
@@ -324,6 +328,7 @@ begin
   LSink.Write(' ');
   LSink.Write('world');
   CheckEqual('hello world', LSink.GetOutput);
+  LSink.Free;
 end;
 
 procedure TestBufferSinkClear;
@@ -334,6 +339,7 @@ begin
   LSink.WriteLn('data');
   LSink.Clear;
   CheckEqual('', LSink.GetOutput);
+  LSink.Free;
 end;
 
 procedure TestBufferSinkEmpty;
@@ -342,6 +348,7 @@ var
 begin
   LSink := TBufferSink.Create;
   CheckEqual('', LSink.GetOutput);
+  LSink.Free;
 end;
 
 { ── MakeBufferConfig tests ─────────────────────────────────────────────────── }

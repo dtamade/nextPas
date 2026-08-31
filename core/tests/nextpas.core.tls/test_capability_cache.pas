@@ -4,13 +4,12 @@ program test_capability_cache;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.time,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.mbedtls.lib,
-  nextpas.core.tls.wolfssl.lib;
-
+  nextpas.core.tls.wolfssl.lib,
+  nextpas.core.tls.freepascal.lib;
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
@@ -331,7 +330,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl - 能力矩阵缓存测试');
+  WriteLn('nextpas.core.tls - 能力矩阵缓存测试');
   WriteLn('==============================================');
   WriteLn;
 

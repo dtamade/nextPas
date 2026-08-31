@@ -71,10 +71,16 @@ function NewH1ResponseParser(const ASkipBody: Boolean): IH1Parser; overload;
    nil and PARSER_BODY_MAX_CAPACITY does not apply. }
 function NewH1ResponseParser(const ASkipBody, ASkipBodyBuffer: Boolean): IH1Parser; overload;
 
+{ 空请求元数据：nil 解析器回退值。托管记录的 Default 零值必须在属主
+  单元内构造——消费方单元生成跨单元归属的 $_zero_ 初始化数据会触发
+  FPC ppu 符号归属冲突（app 消费图下必现，core 内部图侥幸不触发） }
+function EmptyH1RequestMetadata: TH1RequestMetadata;
+
 implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.http.impl.h1.llhttp,
   nextpas.core.http.headers,
@@ -187,6 +193,11 @@ const
     The BodyLimit middleware is the primary size control; this prevents
     unbounded allocation if the middleware is not configured. }
   PARSER_BODY_MAX_CAPACITY: SizeUInt = 32 * 1024 * 1024;
+
+function EmptyH1RequestMetadata: TH1RequestMetadata;
+begin
+  Result := Default(TH1RequestMetadata);
+end;
 
 function LowerTrim(const AValue: string): string; inline;
 begin
@@ -450,13 +461,6 @@ begin
   end;
 end;
 
-function BytesToString(const AData: TBytes; const ASize: SizeUInt): string;
-begin
-  SetLength(Result, SizeInt(ASize));
-  if ASize > 0 then
-    Move(AData[0], Result[1], ASize);
-end;
-
 { TSharedBytesReader }
 
 constructor TSharedBytesReader.Create(const AData: TBytes);
@@ -646,10 +650,20 @@ begin
        transport can signal the status (Pascal context) before any body chunk
        is dispatched. Regular informational (1xx, except 101) responses carry
        no body and are not the final status, so they must NOT pause — llhttp
-       flows straight on to the next message within the same Execute. }
+       flows straight on to the next message within the same Execute.
+       Zero-body final responses (HEAD skip, 204/304, explicit
+       Content-Length: 0) also must NOT pause: the message completes at the
+       header block, and pausing would leave the transport read loop waiting
+       for body bytes that can never arrive (observed: hangs until the read
+       deadline, e.g. an SSE upstream answering with an empty body). }
     if LSelf.FStatusSplit and
        (not (HttpStatusIsInformational(LSelf.FStatusCode) and
-             (LSelf.FStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS))) then
+             (LSelf.FStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS))) and
+       (not (((p0^.flags and F_SKIPBODY) <> 0) or
+             (LSelf.FStatusCode = HTTP_STATUS_NO_CONTENT) or
+             (LSelf.FStatusCode = HTTP_STATUS_NOT_MODIFIED) or
+             (((p0^.flags and F_CONTENT_LENGTH) <> 0) and
+              (p0^.content_length = 0)))) then
       Exit(HPE_PAUSED);
   end;
   Result := 0;
@@ -986,7 +1000,8 @@ begin
     Exit('');
   if FSkipBodyBuffer then
     Exit('');
-  Result := BytesToString(FBody, FBodySize);
+  // single-source zero-copy: bytes.ops.BytesToString(slice) = one SetLength + one Move, inline, no temp TBytes copy
+  Result := nextpas.core.bytes.ops.BytesToString(FBody, 0, FBodySize);
 end;
 
 function TH1Parser.GetBodySize: Int64;

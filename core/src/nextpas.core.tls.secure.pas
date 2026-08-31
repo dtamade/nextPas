@@ -500,6 +500,7 @@ type
     FLocked: Boolean;
     FMasterPassword: TSecureString;
 
+    procedure EnsureCryptoModules;
     function EncryptKey(const AKey: TSecureBytes; const APassword: string): TBytes;
     function DecryptKey(const AEncrypted: TBytes; const APassword: string): TSecureBytes;
   public
@@ -536,15 +537,24 @@ end;
 constructor TSecureKeyStoreImpl.Create;
 begin
   inherited;
+  FKeys := TStringList.Create;
   FKeys.OwnsObjects := True; // Automatically free wrapper objects
   FLocked := False;
 end;
 
 destructor TSecureKeyStoreImpl.Destroy;
 begin
-  // Objects are automatically freed due to OwnsObjects
+  // FKeys.OwnsObjects frees wrapper objects; their destructors secure-zero the data
+  FKeys.Free;
   FMasterPassword.Clear;
   inherited;
+end;
+
+procedure TSecureKeyStoreImpl.EnsureCryptoModules;
+begin
+  // Lazy-load OpenSSL EVP/KDF so the store works without explicit backend init
+  LoadEVP(GetCryptoLibHandle);
+  LoadKDFFunctions;
 end;
 
 function TSecureKeyStoreImpl.EncryptKey(const AKey: TSecureBytes; 
@@ -555,6 +565,8 @@ var
   LCipher: PEVP_CIPHER;
   LLen, LCipherLen: Integer;
 begin
+  EnsureCryptoModules;
+
   // Use AES-256-GCM for authenticated encryption
   if not Assigned(EVP_aes_256_gcm) then
     RaiseFunctionNotAvailable('EVP_aes_256_gcm');
@@ -650,6 +662,8 @@ var
   LCipher: PEVP_CIPHER;
   LLen, LPlainLen: Integer;
 begin
+  EnsureCryptoModules;
+
   // Verify minimum size: salt(16) + IV(12) + tag(16) = 44 bytes minimum
   if Length(AEncrypted) < 44 then
     RaiseInvalidData('encrypted data (minimum 44 bytes required)');

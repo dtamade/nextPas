@@ -4,6 +4,7 @@ program test_openssl_ssl_padding_contract;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.platform.dl,
   Dynlibs,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.ssl;
@@ -38,7 +39,7 @@ begin
   TOpenSSLLoader.ResetModuleStates;
 end;
 
-procedure CheckExportedHelperIsBound(AHandle: TLibHandle; const ASymbol: string;
+procedure CheckExportedHelperIsBound(AHandle: TPlatformLibrary; const ASymbol: string;
   AAssigned: Boolean; const ALabel: string);
 begin
   if TOpenSSLLoader.IsFunctionAvailable(AHandle, ASymbol) then
@@ -49,12 +50,12 @@ end;
 
 procedure TestLoadPublishesExportedKeylogAndPaddingHelpers;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
   ResetLoaderState;
 
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-  if LHandle = NilHandle then
+  if LHandle.IsInvalid then
   begin
     Fail('Unable to load libssl for SSL keylog/padding contract test');
     Exit;

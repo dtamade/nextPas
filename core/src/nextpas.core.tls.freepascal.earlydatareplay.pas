@@ -218,7 +218,7 @@ uses
 
 const
   FREEPASCAL_DEFAULT_EARLY_DATA_REPLAY_STORE_ENV =
-    'FAFAFA_SSL_FREEPASCAL_EARLY_DATA_REPLAY_STORE_DIR';
+    'NEXTPAS_SSL_EARLY_DATA_REPLAY_STORE_DIR';
 
 var
   GDefaultReplayStoreDirectoryOverride: string = '';
@@ -320,7 +320,7 @@ begin
   LBaseDirectory := NormalizeReplayStoreDirectory(LBaseDirectory);
   Result := nextpas.core.fs.PathJoin([
     LBaseDirectory,
-    'fafafa.ssl',
+    'nextpas.core.tls',
     'freepascal',
     'early-data-replay'
   ]);

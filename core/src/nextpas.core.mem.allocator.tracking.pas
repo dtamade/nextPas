@@ -64,6 +64,11 @@ type
     function HasLeaks: Boolean;
     {** 生成泄漏报告（包含每个未释放块的地址、大小和标签） }
     function ReportLeaks: string;
+    {** 将所有仍存活的被追踪块归还底层分配器并清空账本——供作用域级
+        追踪器（如 RunTestWithLeakCheck）在收尾时以干净堆退出；验证类
+        API（HasLeaks/ReportLeaks）应在本调用之前取数。显式方法而非
+        Destroy 自动释放：共享/可重建链场景下自动释放有双重释放风险 }
+    procedure ReleaseTracked;
     {** 内部分配器 }
     property Inner: IAllocator read FInner;
 
@@ -347,6 +352,7 @@ var
   LOldSize: SizeUInt;
   LOldAllocId: QWord;
   LOldTag: string;
+  LHasOld: Boolean;
 begin
   if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then Exit(GetMem(ASize));
@@ -355,16 +361,21 @@ begin
   try
     if Result <> nil then
     begin
-      if APtr <> nil then
-      begin
-        { Update: delete old, insert new }
-        MapDelete(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
-        MapInsert(PtrUInt(Result), ASize, LOldAllocId, LOldTag);
-      end
-      else
+      LHasOld := MapLookup(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
+      if not LHasOld then
       begin
         MapInsert(PtrUInt(Result), ASize, FNextAllocId, FCurrentTag);
         Inc(FNextAllocId);
+      end
+      else
+      begin
+        MapDelete(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
+        try
+          MapInsert(PtrUInt(Result), ASize, LOldAllocId, LOldTag);
+        except
+          MapInsert(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
+          raise;
+        end;
       end;
     end;
   finally
@@ -471,6 +482,23 @@ end;
 procedure TTrackingAllocator.SetTag(const ATag: string);
 begin
   FCurrentTag := ATag;
+end;
+
+procedure TTrackingAllocator.ReleaseTracked;
+var
+  LIdx: SizeUInt;
+begin
+  FLock.Acquire;
+  try
+    for LIdx := 0 to FMask do
+    begin
+      if (FKeys[LIdx] <> 0) and (FKeys[LIdx] <> TRACK_TOMBSTONE) then
+        FInner.FreeMem(Pointer(FKeys[LIdx]));
+    end;
+    MapClear;
+  finally
+    FLock.Release;
+  end;
 end;
 
 function TTrackingAllocator.Traits: TAllocatorTraits; inline;

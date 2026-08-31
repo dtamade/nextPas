@@ -56,8 +56,8 @@ begin
   WriteLn;
   WriteLn('=== PEM key save symbol guard ===');
 
-  LTempPrivateOut := GetTempDir(False) + 'fafafa_pem_key_save_symbol_contract_private.pem';
-  LTempPublicOut := GetTempDir(False) + 'fafafa_pem_key_save_symbol_contract_public.pem';
+  LTempPrivateOut := GetTempDir(False) + 'nextpas_pem_key_save_symbol_contract_private.pem';
+  LTempPublicOut := GetTempDir(False) + 'nextpas_pem_key_save_symbol_contract_public.pem';
 
   LOriginalPEMWriteBioPrivateKey := PEM_write_bio_PrivateKey;
   LOriginalPEMWriteBioPUBKEY := PEM_write_bio_PUBKEY;

@@ -35,7 +35,7 @@
 - ✅ ASN1_OCTET_STRING 操作
 - ✅ ASN1_TIME 操作
 
-**覆盖的模块:** `fafafa.ssl.openssl.asn1`
+**覆盖的模块:** `nextpas.ssl.openssl.asn1`
 
 ---
 
@@ -53,7 +53,7 @@
 - ✅ 空 BIO 操作
 - ✅ BIO 链操作 (Push/Pop)
 
-**覆盖的模块:** `fafafa.ssl.openssl.bio`
+**覆盖的模块:** `nextpas.ssl.openssl.bio`
 
 ---
 
@@ -71,7 +71,7 @@
 - ✅ HMAC 上下文复制
 - ✅ HMAC 大小查询
 
-**覆盖的模块:** `fafafa.ssl.openssl.hmac`, `fafafa.ssl.openssl.evp`
+**覆盖的模块:** `nextpas.ssl.openssl.hmac`, `nextpas.ssl.openssl.evp`
 
 **验证的哈希算法:**
 - SHA1 (20 字节)
@@ -85,7 +85,7 @@
 **状态:** PASS  
 **耗时:** 0.04 秒
 
-**覆盖的模块:** `fafafa.ssl.openssl.bn`
+**覆盖的模块:** `nextpas.ssl.openssl.bn`
 
 **主要功能:**
 - 大数创建和初始化
@@ -101,7 +101,7 @@
 **状态:** PASS  
 **耗时:** 0.64 秒
 
-**覆盖的模块:** `fafafa.ssl.openssl.rsa`
+**覆盖的模块:** `nextpas.ssl.openssl.rsa`
 
 **主要功能:**
 - RSA 密钥生成 (2048 位)
@@ -118,7 +118,7 @@
 **状态:** PASS  
 **耗时:** 1.86 秒
 
-**覆盖的模块:** `fafafa.ssl.openssl.dsa`
+**覆盖的模块:** `nextpas.ssl.openssl.dsa`
 
 **主要功能:**
 - DSA 参数生成
@@ -135,7 +135,7 @@
 **状态:** PASS  
 **耗时:** 0.08 秒
 
-**覆盖的模块:** `fafafa.ssl.openssl.ecdsa`, `fafafa.ssl.openssl.ec`
+**覆盖的模块:** `nextpas.ssl.openssl.ecdsa`, `nextpas.ssl.openssl.ec`
 
 **主要功能:**
 - ECDSA 密钥生成 (secp256k1 曲线)
@@ -233,7 +233,7 @@
 
 ## ✅ 结论
 
-所有集成测试成功通过! 这证明了 `fafafa.ssl` OpenSSL Pascal 绑定库的:
+所有集成测试成功通过! 这证明了 `nextpas.ssl` OpenSSL Pascal 绑定库的:
 
 1. **功能完整性** - 所有核心 OpenSSL 功能都正确绑定
 2. **API 稳定性** - 所有公共 API 按预期工作

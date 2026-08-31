@@ -35,11 +35,11 @@ begin Check(TSplitPane.Horizontal.WithDividerChar('|') <> nil, 'divchar'); end;
 
 procedure TestRenderHorizontal;
 var B: TBuffer; A: TRect;
-begin A := TRect.Make(0, 0, 40, 10); B := TBuffer.CreateEmpty(A); TSplitPane.Horizontal.Render(A, B); Check(True, 'horiz'); end;
+begin A := TRect.Make(0, 0, 40, 10); B := TBuffer.CreateEmpty(A); TSplitPane.Horizontal.Render(A, B); B.Free; Check(True, 'horiz'); end;
 
 procedure TestRenderVertical;
 var B: TBuffer; A: TRect;
-begin A := TRect.Make(0, 0, 40, 20); B := TBuffer.CreateEmpty(A); TSplitPane.Vertical.Render(A, B); Check(True, 'vert'); end;
+begin A := TRect.Make(0, 0, 40, 20); B := TBuffer.CreateEmpty(A); TSplitPane.Vertical.Render(A, B); B.Free; Check(True, 'vert'); end;
 
 procedure TestBuilderChaining;
 var S: TStyle;

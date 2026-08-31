@@ -148,7 +148,7 @@ var
 begin
   for i := 0 to 1 do
     if a.m128i_i64[i] > b.m128i_i64[i] then
-      Result.m128i_u64[i] := $FFFFFFFFFFFFFFFF
+      Result.m128i_u64[i] := High(UInt64)
     else
       Result.m128i_u64[i] := $0000000000000000;
 end;

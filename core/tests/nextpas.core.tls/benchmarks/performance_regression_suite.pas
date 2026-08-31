@@ -10,10 +10,13 @@ program performance_regression_suite;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
-  fafafa.ssl;
+  nextpas.core.text.conv,
+  nextpas.core.time;
 
 type
   TBenchmarkResult = record
@@ -79,6 +82,7 @@ var
   I, Idx: Integer;
   Degradation: Double;
   Parts: TStringArray;
+  LSL: TStringList;
 begin
   Result := True;
 
@@ -100,7 +104,16 @@ begin
     while not EOF(F) do
     begin
       ReadLn(F, Line);
-      Parts := Line.Split(',');
+      Parts := nil;
+      LSL := TStringList.Create;
+      try
+        LSL.Delimiter := ',';
+        LSL.StrictDelimiter := True;
+        LSL.DelimitedText := Line;
+        Parts := LSL.ToStringArray;
+      finally
+        LSL.Free;
+      end;
       if Length(Parts) < 2 then Continue;
 
       BName := Parts[0];
@@ -279,7 +292,7 @@ begin
   GSuite := TBenchmarkSuite.Create;
   try
     WriteLn('================================================================');
-    WriteLn('fafafa.ssl Performance Regression Test Suite');
+    WriteLn('nextpas.core.tls Performance Regression Test Suite');
     WriteLn('================================================================');
     WriteLn;
 

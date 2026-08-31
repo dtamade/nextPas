@@ -3,14 +3,14 @@ program test_freepascal_revocation_fast_contracts;
 {$mode ObjFPC}{$H+}
 
 uses
+  SysUtils,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.certchain,
-  nextpas.core.tls.crl;
-
+  nextpas.core.tls.crl,
+  nextpas.core.tls.freepascal.lib;
 const
   REVOKED_SERIAL = 1001;
   NON_REVOKED_SERIAL = 1002;
@@ -70,7 +70,7 @@ begin
   Result := LLib.CreateCertificateStore;
   AssertTrue(Result <> nil, 'FreePascal certificate store should be created');
   AssertTrue(
-    Result.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'),
+    Result.LoadFromFile('certificate/test_certs/ca_cert.pem'),
     'Trusted store should load the CA certificate fixture'
   );
 end;
@@ -83,12 +83,12 @@ var
   LLeafCertPEM: string;
   LLeafKeyPEM: string;
 begin
-  LCACertPEM := ReadTextFile('tests/certificate/test_certs/ca_cert.pem');
-  LCAKeyPEM := ReadTextFile('tests/certificate/test_certs/ca_key.pem');
+  LCACertPEM := ReadTextFile('certificate/test_certs/ca_cert.pem');
+  LCAKeyPEM := ReadTextFile('certificate/test_certs/ca_key.pem');
 
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.CommonName := 'example.com';
-  LOptions.Organization := 'fafafa.ssl-tests';
+  LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
   LOptions.NotBefore := Now - 2;
   LOptions.NotAfter := Now + 30;
@@ -121,7 +121,7 @@ var
   LVerifier: ISSLCertificateChainVerifier;
   LTrustedStore: ISSLCertificateStore;
   LIssuerCert: ISSLCertificate;
-  LCRLs: TStringList;
+  LCRLs: TStringArray;
   LChain: TSSLCertificateArray;
   I: Integer;
 begin
@@ -136,15 +136,14 @@ begin
   LTrustedStore := CreateTrustedStore;
   LVerifier.SetTrustedStore(LTrustedStore);
 
-  LCRLs := TStringList.Create;
-  try
-    for I := Low(ACRLFiles) to High(ACRLFiles) do
-      LCRLs.Add(ReadTextFile(ACRLFiles[I]));
-    LVerifier.SetCRLStore(LCRLs);
+  SetLength(LCRLs, Length(ACRLFiles));
+  for I := Low(ACRLFiles) to High(ACRLFiles) do
+    LCRLs[I] := ReadTextFile(ACRLFiles[I]);
+  LVerifier.SetCRLStore(LCRLs);
 
     LIssuerCert := CreateFreePascalCertificate;
     AssertTrue(
-      LIssuerCert.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'),
+      LIssuerCert.LoadFromFile('certificate/test_certs/ca_cert.pem'),
       'Issuer certificate fixture should load'
     );
 
@@ -152,16 +151,12 @@ begin
     LChain[0] := ALeafCert;
     LChain[1] := LIssuerCert;
     Result := LVerifier.VerifyChain(LChain);
-  finally
-    LCRLs.Free;
-  end;
 end;
 
 procedure FreeVerifyResult(var AResult: TChainVerifyResult);
 begin
   if AResult.Warnings <> nil then
   begin
-    AResult.Warnings.Free;
     AResult.Warnings := nil;
   end;
 end;
@@ -174,7 +169,7 @@ begin
   WriteLn('Testing CRL issuer formatting...');
   LCRL := TX509CRL.Create;
   try
-    LCRL.LoadFromFile('tests/certificate/test_certs/revocation_revoked_crl.pem');
+    LCRL.LoadFromFile('certificate/test_certs/revocation_revoked_crl.pem');
     LIssuer := LCRL.Issuer.ToString;
     AssertTrue(Pos('CN=Test CA', LIssuer) > 0,
       'CRL issuer string should keep CN short name: ' + LIssuer);
@@ -194,7 +189,7 @@ begin
   LLeafCert := CreateSignedLeafCertificate(NON_REVOKED_SERIAL);
   LResult := VerifyChainWithCRLFiles(
     LLeafCert,
-    ['tests/certificate/test_certs/revocation_revoked_crl.pem']
+    ['certificate/test_certs/revocation_revoked_crl.pem']
   );
   try
     AssertTrue(LResult.IsValid,
@@ -215,7 +210,7 @@ begin
   LLeafCert := CreateSignedLeafCertificate(REVOKED_SERIAL);
   LResult := VerifyChainWithCRLFiles(
     LLeafCert,
-    ['tests/certificate/test_certs/revocation_revoked_crl.pem']
+    ['certificate/test_certs/revocation_revoked_crl.pem']
   );
   try
     AssertTrue(not LResult.IsValid,

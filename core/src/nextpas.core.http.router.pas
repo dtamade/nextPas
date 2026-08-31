@@ -83,6 +83,7 @@ function MatchPathPattern(const APattern, APath: string): Boolean;
 implementation
 
 uses
+  nextpas.core.encoding,
   nextpas.core.http.message,
   nextpas.core.http.middleware;
 
@@ -477,7 +478,10 @@ const
         begin
           SetLength(AParams, Length(AParams) + 1);
           AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
-          AParams[High(AParams)].Value := LSeg;
+          { 路径参数按 RFC 3986 percent-decode（%xx → 原字符；如邮箱地址
+            客户端 encodeURIComponent 后 %40）。段内解码不改 '/' 拆分语义，
+            '+' 保持字面（PercentDecode 为 path 语义，非 form 语义）。 }
+          AParams[High(AParams)].Value := PercentDecode(LSeg);
           LRest := Copy(APath, LEnd, Length(APath) - LEnd + 1);
           LResult := DoMatch(ANode^.Children[LI], LRest, ADepth + 1);
           if LResult <> nil then
@@ -495,7 +499,8 @@ const
       begin
         SetLength(AParams, Length(AParams) + 1);
         AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
-        AParams[High(AParams)].Value := Copy(APath, 2, Length(APath) - 1);
+        AParams[High(AParams)].Value := PercentDecode(
+          Copy(APath, 2, Length(APath) - 1));
         if ANode^.Children[LI]^.HasHandler then
           Exit(ANode^.Children[LI]^.Handler);
         SetLength(AParams, Length(AParams) - 1);
@@ -556,6 +561,7 @@ var
   LM: THttpMethod;
   LFound: Boolean;
   LAllow: string;
+  LTerminal: THttpHandlerFunc;
 
   procedure InvokeHandler(const AHandler: THttpHandlerFunc;
     const AParams: TRouteParams);
@@ -663,13 +669,26 @@ begin
 
   if LFound then
   begin
-    AW.Headers.SetHeader('allow', LAllow);
-    HttpWriteErrorResponse(AW, HTTP_STATUS_METHOD_NOT_ALLOWED,
-      'method_not_allowed', 'Method not allowed');
-    Exit;
-  end;
-
-  HttpWriteErrorNotFound(AW, 'Route not found');
+    { Not-found and method-not-allowed responses are terminal handlers that
+      run through the same middleware chain as matched routes: middleware is
+      a global request chain (recovery/metrics/headers/CORS-preflight apply
+      to every response, including 404/405). Status, Allow and problem body
+      are untouched. }
+    LTerminal := procedure(const AR: IHttpRequest;
+      const RW: IHttpResponseWriter)
+      begin
+        RW.Headers.SetHeader('allow', LAllow);
+        HttpWriteErrorResponse(RW, HTTP_STATUS_METHOD_NOT_ALLOWED,
+          'method_not_allowed', 'Method not allowed');
+      end;
+  end
+  else
+    LTerminal := procedure(const AR: IHttpRequest;
+      const RW: IHttpResponseWriter)
+      begin
+        HttpWriteErrorNotFound(RW, 'Route not found');
+      end;
+  InvokeHandler(LTerminal, nil);
 end;
 
 procedure THttpRouter.Get(const APattern: string; const AHandler: THttpHandlerFunc);

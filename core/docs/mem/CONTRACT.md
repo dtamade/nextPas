@@ -1,9 +1,9 @@
 # nextpas.core.mem 代码契约
 
-**模块路径**：`core/src/nextpas.core.mem*.pas`（约 79 源文件；以 `core/src/nextpas.core.mem*.pas` glob 为准）
+**模块路径**：`core/src/nextpas.core.mem*.pas`（77 个源文件；以 `core/src/nextpas.core.mem*.pas` glob 为准）
 **层级**：仓库 L0；mem 内部分层见 ARCHITECTURE（M0–M3）
-**最后更新**：2026-07-26
-**版本**：1.8
+**最后更新**：2026-08-31
+**版本**：1.10
 **堆后端**：`System.*` 堆原语仅允许在 `nextpas.core.system.heap`；mem 使用 `NpSystem*`（见 [HEAP-BACKEND-OWNER.md](HEAP-BACKEND-OWNER.md)）
 
 **关联冻结策略**：[ERROR-POLICY.md](ERROR-POLICY.md)（nil vs raise）
@@ -290,7 +290,10 @@ IArena 实现：
 
 ### 5.3 Leak-free 保证
 
-- **heaptrc 测试**：所有测试套件启用 `-gh`（heaptrc），报告未释放内存
+- **heaptrc 测试**：测试套件经 `tests/common.mk` 默认以 `-gh`（heaptrc）
+  fail-closed 门禁运行，报告未释放内存；唯一文档化例外
+  `test_boundary_cases`（其 RTL 尺寸边界探测与 heaptrc 的块簿记在
+  SizeUInt 上回绕冲突，见该套件 Makefile 注释）
 - **异常路径**：构造函数中的异常不会泄漏已分配资源（try/except/finally）
 - **Destroy 完整性**：所有 `Destroy` 释放 `Create` 分配的所有资源
 - **内联 fallback 保证**：`FAllocator` 永远非 nil，避免 nil 解引用泄漏
@@ -301,7 +304,8 @@ IArena 实现：
 
 ### 6.1 测试清单
 
-共 111 个测试目录（含 3 个 compile-gate；2026-07-26 P-c prune 后刷新）。完整列表：
+共 113 个测试目录（含 3 个 compile-gate；2026-08-23 同步补登 test_cross_thread_free /
+test_mt_fuzz）。完整列表：
 
 ```
 test_aligned test_aligned_allocator test_alignment_guarantee test_allocator_crt
@@ -310,7 +314,8 @@ test_arena_class test_arena_compiler test_arena_prop test_arena_stress test_base
 test_batch test_batch_allocator test_blockpool test_boundary_cases test_bounded
 test_bounded_allocator test_budget test_callback test_callback_allocator
 test_central test_composition test_concurrent test_concurrent_wrappers
-test_contract_matrix test_contracts test_counting test_crt test_crt_allocator
+test_contract_matrix test_contracts test_counting test_cross_thread_free
+test_crt test_crt_allocator
 test_debug test_debug_alloc test_debug_allocator test_debug_wrap
 test_default_allocator test_double_free test_error test_fail test_fail_allocator
 test_fallback test_fallback_allocator test_fixed_slab test_foundation
@@ -321,7 +326,7 @@ test_leak_check_allocator test_leak_report test_logging test_mapped_slab_pool
 test_mem test_mem_cross_os_compile_gate test_memory_map_allocator
 test_memory_map_compile_gate test_mem_secure
 test_mem_secure_windows_compile_gate test_mem_stats test_mem_utils test_mimalloc
-test_mmap_allocator test_mutex test_oom test_oom_edge test_platform_virtual
+test_mmap_allocator test_mt_fuzz test_mutex test_oom test_oom_edge test_platform_virtual
 test_pool test_pool_allocator test_pool_edge test_realloc_edge test_ring_buffer
 test_rtl test_rwlock test_sampling test_sampling_allocator test_scavenger
 test_scoped test_scoped_allocator test_sentinel test_sentinel_allocator
@@ -377,3 +382,5 @@ test_zeroed_allocator
 | 2026-07-06 | 1.4 | 测试矩阵同步：44 suites / 639 tests，反映实际测试状态 | Claude |
 | 2026-07-08 | 1.5 | 演化路线图完成：106 源文件 / 58 测试目录 / 688 测试，新增 IBatchAllocator 接口 | Claude |
 | 2026-07-12 | 1.6 | 契约门禁修复：IAllocator 精简为 5 方法、IArena 移除 RemainingSize、测试清单同步 143 目录、源文件数 105 | Claude |
+| 2026-08-23 | 1.9 | 门禁对账同步：源文件精确计数 77（glob 口径）、测试目录 113（补声明 test_cross_thread_free ← 2e5b63742 / test_mt_fuzz ← 08bda5710）；mem-contract-check C2/C6 警告清零 | Grok |
+| 2026-08-31 | 1.10 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

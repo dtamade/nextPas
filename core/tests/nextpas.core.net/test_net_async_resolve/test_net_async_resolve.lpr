@@ -133,6 +133,42 @@ begin
   end;
 end;
 
+procedure TestAsyncResolveIPv6Literal;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDnsDone := False;
+    GDnsResult := Default(TDnsResult);
+    AsyncResolve(GLoop, '[::1]', @DnsCallback, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(500), @StopCallback, nil);
+    GLoop.Run;
+    Check(GDnsDone, 'v6 literal complete');
+    Check(GDnsResult.Success, 'v6 literal success');
+    Check(GDnsResult.FirstAddress.IsIPv6, 'bracket v6 is IPv6');
+    CheckEqual('::1', GDnsResult.FirstAddress.IP, 'bracket stripped');
+  finally
+    GLoop.Close;
+    GLoop.Free;
+  end;
+end;
+
+procedure TestPreferredAddress;
+var
+  R: TDnsResult;
+begin
+  SetLength(R.Addresses, 2);
+  R.Error := 0;
+  R.Addresses[0] := TNetAddress.IPv6('::1', 0);
+  R.Addresses[1] := TNetAddress.IPv4('127.0.0.1', 0);
+  CheckEqual('127.0.0.1', R.PreferredAddress(True).IP, 'prefer v4');
+  CheckEqual('::1', R.PreferredAddress(False).IP, 'prefer v6');
+  CheckEqual(Int64(443), Int64(R.PreferredAddress(True).WithPort(443).Port),
+    'WithPort after pick');
+  SetLength(R.Addresses, 1);
+  R.Addresses[0] := TNetAddress.IPv6('2001:db8::1', 0);
+  CheckEqual('2001:db8::1', R.PreferredAddress(True).IP, 'v4-prefer falls back to v6');
+end;
+
 procedure TestAsyncResolveCallbackFires;
 begin
   GLoop := TAsyncLoop.Create(32);
@@ -253,6 +289,8 @@ begin
   T.Test('AsyncResolveLocalhost', @TestAsyncResolveLocalhost);
   T.Test('AsyncResolveDualStackList', @TestAsyncResolveDualStackList);
   T.Test('AsyncResolveIPLiteral', @TestAsyncResolveIPLiteral);
+  T.Test('AsyncResolveIPv6Literal', @TestAsyncResolveIPv6Literal);
+  T.Test('PreferredAddress', @TestPreferredAddress);
   T.Test('AsyncResolveCallbackFires', @TestAsyncResolveCallbackFires);
   T.Test('AsyncResolveRefCallback', @TestAsyncResolveRefCallback);
   T.Test('AsyncResolveExParallelLocalhost', @TestAsyncResolveExParallelLocalhost);

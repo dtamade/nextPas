@@ -8,9 +8,14 @@ program benchmark_memory_isolated;
   分别测试每个后端,避免相互影响
 }
 
+{$IFNDEF TEST_MBEDTLS}
+  {$DEFINE TEST_OPENSSL} // Default variant: OpenSSL; build with -dTEST_MBEDTLS for the other
+{$ENDIF}
+
 uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
+  nextpas.core.text.conv,
   {$IFDEF TEST_OPENSSL}
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.api.core,
@@ -20,7 +25,7 @@ uses
   {$IFDEF TEST_MBEDTLS}
   nextpas.core.tls.mbedtls.lib,
   {$ENDIF}
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 const
   TEST_HOST = 'www.google.com';

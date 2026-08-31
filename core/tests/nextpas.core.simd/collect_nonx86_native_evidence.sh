@@ -155,7 +155,9 @@ FPC_VERSION="$(fpc -iV 2>/dev/null || true)"
 LAZBUILD_PATH="$(command -v lazbuild || true)"
 LAZBUILD_HAS_OPT="0"
 if [[ -n "${LAZBUILD_PATH}" ]]; then
-  if "${LAZBUILD_PATH}" --help 2>&1 | grep -q -- '--opt'; then
+  # 命令替换内豁免退出码：pipefail 下 lazbuild 非零退出会污染判定
+  LAZBUILD_HELP="$("${LAZBUILD_PATH}" --help 2>&1 || true)"
+  if grep -q -- '--opt' <<< "$LAZBUILD_HELP"; then
     LAZBUILD_HAS_OPT="1"
   fi
 fi

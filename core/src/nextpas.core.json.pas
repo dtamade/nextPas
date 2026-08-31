@@ -50,6 +50,17 @@ function JsonParseWith(const AInput: TStringView; const AAllocator: TMemAllocato
 { Serialize a TJsonValue subtree to compact JSON string. }
 function JsonStringify(const AValue: TJsonValue): string;
 
+{ Object field readers with defaults. Missing keys and type mismatches
+  return ADefault; non-object inputs return ADefault as well. No exceptions. }
+function JsonIntField(const AValue: TJsonValue; const AKey: string;
+  ADefault: Int64 = 0): Int64;
+function JsonFloatField(const AValue: TJsonValue; const AKey: string;
+  ADefault: Double = 0.0): Double;
+function JsonStrField(const AValue: TJsonValue; const AKey: string;
+  const ADefault: string = ''): string;
+function JsonBoolField(const AValue: TJsonValue; const AKey: string;
+  ADefault: Boolean = False): Boolean;
+
 implementation
 
 uses
@@ -94,6 +105,11 @@ end;
 constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
 begin
   inherited Create;
+  // perf/lifecycle: TStringView is non-owning; zero-copy (FInputCopy := view) would
+  // avoid SetString copy but requires caller to keep view.Data alive for document
+  // lifetime. To preserve ownership and keep DOM valid after caller buffer is freed,
+  // we copy into FInputCopy. If caller can guarantee lifetime, replace with direct
+  // view assignment and skip this allocation.
   SetString(FInputCopy, AInput.Data, AInput.Len);
   FDoc.Init(AAllocator);
   FDoc.Parse(TStringView.FromStr(FInputCopy));
@@ -387,6 +403,58 @@ begin
   finally
     LBuilder.Done;
   end;
+end;
+
+function JsonIntField(const AValue: TJsonValue; const AKey: string;
+  ADefault: Int64): Int64;
+var
+  LField: TJsonValue;
+begin
+  Result := ADefault;
+  if not AValue.IsObject then
+    Exit;
+  LField := AValue.Get(AKey);
+  if LField.IsInt or LField.IsReal then
+    Result := LField.AsInt;
+end;
+
+function JsonFloatField(const AValue: TJsonValue; const AKey: string;
+  ADefault: Double): Double;
+var
+  LField: TJsonValue;
+begin
+  Result := ADefault;
+  if not AValue.IsObject then
+    Exit;
+  LField := AValue.Get(AKey);
+  if LField.IsInt or LField.IsReal then
+    Result := LField.AsFloat;
+end;
+
+function JsonStrField(const AValue: TJsonValue; const AKey: string;
+  const ADefault: string): string;
+var
+  LField: TJsonValue;
+begin
+  Result := ADefault;
+  if not AValue.IsObject then
+    Exit;
+  LField := AValue.Get(AKey);
+  if LField.IsStr then
+    Result := LField.AsStr.ToString;
+end;
+
+function JsonBoolField(const AValue: TJsonValue; const AKey: string;
+  ADefault: Boolean): Boolean;
+var
+  LField: TJsonValue;
+begin
+  Result := ADefault;
+  if not AValue.IsObject then
+    Exit;
+  LField := AValue.Get(AKey);
+  if LField.IsBool then
+    Result := LField.AsBool;
 end;
 
 end.

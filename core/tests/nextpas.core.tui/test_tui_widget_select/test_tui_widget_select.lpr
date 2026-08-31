@@ -151,6 +151,30 @@ begin
   Check(TSelect.New(['X', 'Y']).WithPlaceholder('Pick').WithWidth(25).WithMaxDropHeight(5).WithStyle(S1).WithHighlightStyle(S2) <> nil, 'chain');
 end;
 
+{ PH33 P3：数据更新面——SetItems 原地替换选项（闭合态首行显示选中项） }
+procedure TestSelectSetItems;
+var LS: ISelect; LBuf: TBuffer; LState: TSelectState; LRow: AnsiString;
+begin
+  LS := TSelect.New(['alpha', 'beta']);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 5));
+  try
+    LS.SetItems(['delta', 'gamma']);
+    LState := TSelectState.Empty;
+    LState.Selected := 0;  { 闭合态首行显示选中项 }
+    LS.RenderStateful(TRect.Make(0, 0, 20, 5), LBuf, LState);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('delta', LRow) > 0, 'closed state shows new selected delta');
+    Check(Pos('alpha', LRow) = 0, 'old alpha gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestSelectWithItemsChaining;
+var LS: ISelect;
+begin
+  LS := TSelect.New(['a']).WithItems(['x', 'y', 'z']);
+  Check(LS <> nil, 'WithItems chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('tui_widget_select');
   T.Test('StateEmpty', @TestStateEmpty);
@@ -172,5 +196,7 @@ begin
   T.Test('Render small area', @TestRenderSmallArea);
   T.Test('StateMoveDown boundary', @TestStateMoveDownBoundary);
   T.Test('StateConfirm without open', @TestStateConfirmWithoutOpen);
+  T.Test('SetItems in-place update (PH33 P3)', @TestSelectSetItems);
+  T.Test('WithItems chaining (PH33 P3)', @TestSelectWithItemsChaining);
   if not T.Run then Halt(1);
 end.

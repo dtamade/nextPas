@@ -17,6 +17,7 @@ uses
   nextpas.core.text.width, nextpas.core.text.utf8,
   nextpas.core.tui.event,
   nextpas.core.tui.widget.syntax,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf;
 
 type
@@ -25,6 +26,12 @@ type
     CurByte: Integer;
     Anchor: Integer;
   end;
+
+  { 查找命中区间(字节偏移,含长度);SetFindHits 渲染高亮用 }
+  TFindHit = record
+    Start, Len: Integer;
+  end;
+  TFindHits = array of TFindHit;
 
   IInputEditor = interface(IWidget)
     ['{D4E5F6A7-B8C9-4D0E-1F2A-3B4C5D6E7F80}']
@@ -48,6 +55,11 @@ type
     procedure CutSelection;
     procedure Paste;
     procedure PasteText(const AText: AnsiString);
+    { 选区读写(宿主剪贴板集成用:系统剪贴板复制/剪切选区;
+      DeleteSelected 入撤销栈,一次 Undo 恢复) }
+    function HasSelection: Boolean;
+    function SelectedText: AnsiString;
+    procedure DeleteSelected;
     procedure DeleteLine;
     procedure Undo;
     procedure Redo;
@@ -60,11 +72,24 @@ type
     function LineCount: Integer;
     function CursorRow: Integer;  { 光标所在绝对行（0-based，与滚动无关） }
     function CursorScreenPos(const AArea: TRect): TPosition;
+    { 定位到字节偏移:仅移动光标(清选区/目标列),不进撤销栈(查找跳转等) }
+    procedure MoveTo(const ABufOffset: Integer);
+    { 屏幕坐标 → 文本字节偏移(含滚动行换算;越界 clamp 到最近位置)。
+      供鼠标点击定位光标:先 ByteOffsetAt 再 MoveTo }
+    function ByteOffsetAt(const AArea: TRect; AX, AY: Integer): Integer;
+    { 查找命中高亮:全部命中用 AStyle、当前命中(ACur 下标)用 ACurStyle,
+      独立于选区样式;Render 内叠加绘制 }
+    procedure SetFindHits(const AHits: array of TFindHit; ACur: Integer;
+      const AStyle, ACurStyle: TStyle);
     function WithTextStyle(const S: TStyle): IInputEditor;
     function WithPlaceholderStyle(const S: TStyle): IInputEditor;
     function WithSelectionStyle(const S: TStyle): IInputEditor;
     function WithPlaceholder(const P: AnsiString): IInputEditor;
     function WithMaxLines(N: Integer): IInputEditor;
+    { 布局配置面（PH33 P2b，additive）：块包装 }
+    function WithBlock(ABlock: IBlock): IInputEditor;
+    { 行号 gutter 开关（PH33 P5a，additive）：默认关=既有行为逐字节不变 }
+    function WithLineNumbers(AOn: Boolean): IInputEditor;
     procedure SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
   end;
 
@@ -74,6 +99,7 @@ type
     FCurByte: Integer;
     FTargetCol: Integer;
     FMaxLines: Integer;
+    FLineNumbers: Boolean;
     FScrollRow: Integer;
     FAnchor: Integer;
     FUndoStack: array of TEditorSnapshot;
@@ -88,7 +114,13 @@ type
     FPlaceholderStyle: TStyle;
     FSelectionStyle: TStyle;
     FPlaceholder: AnsiString;
+    FFindHits: TFindHits;      { 查找命中缓存(SetFindHits 刷新;Render 只读) }
+    FFindCur: Integer;         { 当前命中下标(-1 无) }
+    FFindStyle: TStyle;        { 非当前命中高亮 }
+    FFindCurStyle: TStyle;     { 当前命中高亮(可加粗区分) }
+    FBlock: IBlock;            { PH33 P2b：块包装(nil=无块) }
 
+    procedure RenderContent(const AArea: TRect; ABuffer: TBuffer);
     function LineCount_: Integer;
     procedure CursorToRowCol(out Row, Col: Integer);
     function RowColToByte(Row, Col: Integer): Integer;
@@ -99,12 +131,10 @@ type
     function PrevGraphemeByte: Integer;
     function NextGraphemeByte: Integer;
 
-    function HasSelection: Boolean; inline;
     procedure ClearSelection; inline;
     procedure SelectionRange(out SelStart, SelEnd: Integer);
     procedure CollapseSelectionToStart;
     procedure CollapseSelectionToEnd;
-    function SelectedText: AnsiString;
     procedure DeleteSelection;
 
     procedure PushUndo;
@@ -147,6 +177,9 @@ type
     procedure CutSelection;
     procedure Paste;
     procedure PasteText(const AText: AnsiString);
+    function HasSelection: Boolean; inline;
+    function SelectedText: AnsiString;
+    procedure DeleteSelected;
     procedure DoPaste(const AText: AnsiString);
     procedure DeleteLine;
     procedure Undo;
@@ -163,22 +196,37 @@ type
     function IsEmpty: Boolean; inline;
     function LineCount: Integer; inline;
     function CursorRow: Integer;
+    procedure MoveTo(const ABufOffset: Integer);
+    function ByteOffsetAt(const AArea: TRect; AX, AY: Integer): Integer;
+    procedure SetFindHits(const AHits: array of TFindHit; ACur: Integer;
+      const AStyle, ACurStyle: TStyle);
 
     function WithTextStyle(const S: TStyle): IInputEditor;
     function WithPlaceholderStyle(const S: TStyle): IInputEditor;
     function WithSelectionStyle(const S: TStyle): IInputEditor;
     function WithPlaceholder(const P: AnsiString): IInputEditor;
     function WithMaxLines(N: Integer): IInputEditor;
+    function WithBlock(ABlock: IBlock): IInputEditor;
+    function WithLineNumbers(AOn: Boolean): IInputEditor;
     procedure SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
   end;
 
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.grapheme;
 
 type
   TEditorAdv = record ByteLen, Width: Integer; Codepoint: UInt32; end;
+
+{ PH33 P5a：gutter 宽=max(最大行号位数+1,3)——RenderContent 绘制与
+  CursorScreenPos 光标换算共用，两处口径必须一致 }
+function EditorGutW(ALineCount: Integer): Integer; inline;
+begin
+  Result := Length(IntToStr(ALineCount)) + 1;
+  if Result < 3 then Result := 3;
+end;
 
 function EditorGraphemeAt(const ABuf; ALen, AOffset: Integer): TEditorAdv; inline;
 var LGR: TGraphemeResult; LDec: TUTF8DecodeResult;
@@ -223,6 +271,7 @@ begin
   LSelf.FPlaceholderStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
   LSelf.FSelectionStyle := TStyle.Default.WithModifier([mbReversed]);
   LSelf.FPlaceholder := '';
+  LSelf.FFindCur := -1;
   Result := LSelf;
 end;
 
@@ -245,6 +294,7 @@ begin
   LSelf.FPlaceholderStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
   LSelf.FSelectionStyle := TStyle.Default.WithModifier([mbReversed]);
   LSelf.FPlaceholder := '';
+  LSelf.FFindCur := -1;
   Result := LSelf;
 end;
 
@@ -311,6 +361,66 @@ begin
   FTargetCol := -1;
   FScrollRow := 0;
   NotifySyntaxEdit;
+end;
+
+{ 定位到字节偏移:仅移动光标/清选区,不进撤销栈(查找跳转、鼠标点击等) }
+procedure TInputEditor.MoveTo(const ABufOffset: Integer);
+begin
+  if ABufOffset <= 0 then
+    FCurByte := 0
+  else if ABufOffset >= Length(FText) then
+    FCurByte := Length(FText)
+  else
+    FCurByte := ABufOffset;
+  FAnchor := -1;
+  FTargetCol := -1;
+end;
+
+{ 屏幕坐标 → 文本字节偏移:滚动首行换算 + 行内 grapheme 列累计;越界 clamp }
+function TInputEditor.ByteOffsetAt(const AArea: TRect; AX, AY: Integer): Integer;
+var
+  DY, Row, StartB, EndB, P, C, CW: Integer;
+  Adv: TEditorAdv;
+begin
+  if IsEmpty then Exit(0);
+  DY := AY - AArea.Y;
+  if DY < 0 then DY := 0;
+  Row := FScrollRow + DY;
+  if Row > LineCount_ - 1 then Row := LineCount_ - 1;
+  if Row < 0 then Row := 0;
+  StartB := LineStartByte(Row);
+  EndB := LineEndByte(Row);
+  C := AX - AArea.X;
+  if C <= 0 then Exit(StartB);
+  { 光标列 C = 前方已有 C 列宽内容;grapheme 消费到宽度和 >= C,
+    超列(半字符)落点停在字符前 }
+  P := StartB;
+  while P < EndB do
+  begin
+    if FText[P + 1] = #10 then Break;
+    Adv := EditorGraphemeAt(FText[1], Length(FText), P);
+    if C <= 0 then Break;            { 已消费满 C 列 }
+    if Adv.Width > C then Break;     { 超列(半字符):光标停字符前 }
+    Dec(C, Adv.Width);
+    Inc(P, Adv.ByteLen);
+  end;
+  Result := P;
+end;
+
+{ 查找命中高亮:缓存命中与样式(独立于选区),Render 内叠加;空数组清除 }
+procedure TInputEditor.SetFindHits(const AHits: array of TFindHit; ACur: Integer;
+  const AStyle, ACurStyle: TStyle);
+var
+  I: Integer;
+begin
+  SetLength(FFindHits, Length(AHits));
+  for I := 0 to High(AHits) do
+    FFindHits[I] := AHits[I];
+  FFindCur := ACur;
+  FFindStyle := AStyle;
+  FFindCurStyle := ACurStyle;
+  if (FFindCur < -1) or (FFindCur >= Length(FFindHits)) then
+    FFindCur := -1;
 end;
 
 function TInputEditor.LineStartByte(Row: Integer): Integer;
@@ -802,6 +912,15 @@ begin
   FTargetCol := -1;
 end;
 
+{ 删除选区(宿主剪贴板剪切用,入撤销栈;一次 Undo 恢复) }
+procedure TInputEditor.DeleteSelected;
+begin
+  if not HasSelection then Exit;
+  PushUndo;
+  DeleteSelection;
+  FTargetCol := -1;
+end;
+
 procedure TInputEditor.Paste;
 begin
   DoPaste(FClipboard);
@@ -936,7 +1055,30 @@ begin FPlaceholder := P; Result := Self; end;
 function TInputEditor.WithMaxLines(N: Integer): IInputEditor;
 begin FMaxLines := N; Result := Self; end;
 
+{ PH33 P2b：布局配置面——块包装（additive，nil 时行为不变） }
+function TInputEditor.WithBlock(ABlock: IBlock): IInputEditor;
+begin FBlock := ABlock; Result := Self; end;
+
+{ PH33 P5a：行号 gutter 开关（additive，默认关=既有行为逐字节不变） }
+function TInputEditor.WithLineNumbers(AOn: Boolean): IInputEditor;
+begin FLineNumbers := AOn; Result := Self; end;
+
 procedure TInputEditor.Render(const AArea: TRect; ABuffer: TBuffer);
+var
+  LArea: TRect;
+begin
+  { PH33 P2b：块包装——先画块，再以块内容区为内容渲染区 }
+  LArea := AArea;
+  if FBlock <> nil then
+  begin
+    FBlock.Render(AArea, ABuffer);
+    LArea := FBlock.Inner(AArea);
+    if LArea.IsEmpty then Exit;
+  end;
+  RenderContent(LArea, ABuffer);
+end;
+
+procedure TInputEditor.RenderContent(const AArea: TRect; ABuffer: TBuffer);
 var
   VisH, Row, I, StartB, EndB, DrawRow, LineLen: Integer;
   SelStart, SelEnd: Integer;
@@ -947,14 +1089,38 @@ var
   SelRect: TRect;
   TokPtr: PToken;
   TokCount, T: Integer;
+  H, HS, HE, HSCol, HECol: Integer;
+  HRect: TRect;
+  LGutW, LI2: Integer;
+  LNumStr: string;
+  LContent: TRect;
+  BndCol: array of Integer;
 begin
   VisH := AArea.Height;
   if VisH <= 0 then Exit;
   EnsureCursorVisible(VisH);
 
+  { PH33 P5a：行号 gutter——行号右对齐 + 1 隔列，内容区左移同宽；
+    默认关时 LContent=AArea 零变化。宽式见 EditorGutW }
+  LContent := AArea;
+  if FLineNumbers then
+  begin
+    LGutW := EditorGutW(LineCount_);
+    for LI2 := 0 to VisH - 1 do
+    begin
+      if FScrollRow + LI2 >= LineCount_ then Break;  { 越过末行不画号 }
+      LNumStr := IntToStr(FScrollRow + LI2 + 1);
+      ABuffer.SetStringN(AArea.X + LGutW - 1 - Length(LNumStr),
+        AArea.Y + LI2, LNumStr, Length(LNumStr),
+        TStyle.Default.WithFg(TUI_DARK_GRAY));
+    end;
+    LContent.X := AArea.X + LGutW;
+    LContent.Width := AArea.Width - LGutW;
+  end;
+
   if IsEmpty then
   begin
-    ABuffer.SetStringN(AArea.X, AArea.Y, FPlaceholder, AArea.Width, FPlaceholderStyle);
+    ABuffer.SetStringN(LContent.X, LContent.Y, FPlaceholder, LContent.Width, FPlaceholderStyle);
     Exit;
   end;
 
@@ -985,18 +1151,35 @@ begin
     if (FSyntaxDoc <> nil) and (LineLen > 0) then
     begin
       FSyntaxDoc.GetTokens(FScrollRow + DrawRow, TokPtr, TokCount);
-      for T := 0 to TokCount - 1 do
+      { PH33 P5a：token 字节偏移→显示列换算（与选区/查找命中同 EditorGraphemeAt
+        口径）——此前字节偏移直当屏幕列，CJK 多字节行高亮错位。token 起始
+        字节严格递增，单趟图素游走收集各边界列 }
+      if TokCount > 0 then
       begin
-        if TokPtr[T].Start - 1 < AArea.Width then
-          ABuffer.SetStringP(AArea.X + TokPtr[T].Start - 1, AArea.Y + DrawRow,
-            @FText[StartB + TokPtr[T].Start], TokPtr[T].Len,
-            AArea.Width - TokPtr[T].Start + 1,
-            FSyntaxTheme.StyleFor(TokPtr[T].Kind));
+        SetLength(BndCol, TokCount);
+        P := StartB;
+        Col := 0;
+        for T := 0 to TokCount - 1 do
+        begin
+          while P < StartB + TokPtr[T].Start - 1 do
+          begin
+            Adv := EditorGraphemeAt(FText[1], Length(FText), P);
+            Inc(Col, Adv.Width);
+            Inc(P, Adv.ByteLen);
+          end;
+          BndCol[T] := Col;
+        end;
+        for T := 0 to TokCount - 1 do
+          if BndCol[T] < LContent.Width then
+            ABuffer.SetStringP(LContent.X + BndCol[T], LContent.Y + DrawRow,
+              @FText[StartB + TokPtr[T].Start], TokPtr[T].Len,
+              LContent.Width - BndCol[T],
+              FSyntaxTheme.StyleFor(TokPtr[T].Kind));
       end;
     end
     else
-      ABuffer.SetStringP(AArea.X, AArea.Y + DrawRow,
-        @FText[StartB + 1], LineLen, AArea.Width, FTextStyle);
+      ABuffer.SetStringP(LContent.X, LContent.Y + DrawRow,
+        @FText[StartB + 1], LineLen, LContent.Width, FTextStyle);
 
     if SelActive and (SelStart < EndB) and (SelEnd > StartB) then
     begin
@@ -1020,9 +1203,46 @@ begin
       if SelColEnd > SelColStart then
       begin
         C := SelColEnd - SelColStart;
-        if C > AArea.Width - SelColStart then C := AArea.Width - SelColStart;
-        SelRect := TRect.Make(AArea.X + SelColStart, AArea.Y + DrawRow, C, 1);
+        if C > LContent.Width - SelColStart then C := LContent.Width - SelColStart;
+        SelRect := TRect.Make(LContent.X + SelColStart, LContent.Y + DrawRow, C, 1);
         ABuffer.SetStyle(SelRect, FSelectionStyle);
+      end;
+    end;
+
+    { 查找命中高亮(独立于选区/语法):逐命中求行内列区间后叠底 }
+    if Length(FFindHits) > 0 then
+    begin
+      for H := 0 to High(FFindHits) do
+      begin
+        HS := FFindHits[H].Start;
+        HE := HS + FFindHits[H].Len;
+        if (HE <= StartB) or (HS >= EndB) then Continue;
+        P := StartB;
+        Col := 0;
+        HSCol := 0;
+        HECol := 0;
+        while P < EndB do
+        begin
+          if P = HS then HSCol := Col
+          else if P < HS then HSCol := Col + 1;
+          if FText[P + 1] = #10 then Break;
+          Adv := EditorGraphemeAt(FText[1], Length(FText), P);
+          Inc(Col, Adv.Width);
+          Inc(P, Adv.ByteLen);
+          if P <= HE then HECol := Col;
+        end;
+        if HS <= StartB then HSCol := 0;
+        if HE >= EndB then HECol := Col;
+        if HECol > HSCol then
+        begin
+          C := HECol - HSCol;
+          if C > LContent.Width - HSCol then C := LContent.Width - HSCol;
+          HRect := TRect.Make(LContent.X + HSCol, LContent.Y + DrawRow, C, 1);
+          if H = FFindCur then
+            ABuffer.SetStyle(HRect, FFindCurStyle)
+          else
+            ABuffer.SetStyle(HRect, FFindStyle);
+        end;
       end;
     end;
 
@@ -1035,10 +1255,13 @@ begin
 end;
 
 function TInputEditor.CursorScreenPos(const AArea: TRect): TPosition;
-var Row, Col: Integer;
+var Row, Col, G: Integer;
 begin
   CursorToRowCol(Row, Col);
-  Result.X := AArea.X + Col;
+  { PH33 P5a：gutter 开时与 RenderContent 内容区同宽偏移（EditorGutW） }
+  G := 0;
+  if FLineNumbers then G := EditorGutW(LineCount_);
+  Result.X := AArea.X + Col + G;
   Result.Y := AArea.Y + (Row - FScrollRow);
 end;
 

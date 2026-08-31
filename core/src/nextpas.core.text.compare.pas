@@ -7,7 +7,7 @@ interface
 function TextCompare(const A, B: string): Integer;
 function TextCompareI(const A, B: string): Integer;
 function TextEqual(const A, B: string): Boolean; inline;
-function TextEqualI(const A, B: string): Boolean; inline;
+function TextEqualI(const A, B: string): Boolean;
 function TextEqualCanonical(const A, B: string): Boolean;
 function TextEqualCaseFold(const A, B: string): Boolean;
 function TextStartsWith(const AStr, APrefix: string): Boolean;

@@ -13,6 +13,7 @@ uses
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.thread.intf,
+  nextpas.core.vfs.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -43,10 +44,11 @@ uses
   nextpas.core.http.middleware.hsts,
   nextpas.core.http.message,
   nextpas.core.json,
-  nextpas.core.log,
+  nextpas.core.log.intf,
   nextpas.core.http.static,
   nextpas.core.http.form,
   nextpas.core.http.websocket,
+  nextpas.core.http.websocket.room,
   nextpas.core.http.server,
   nextpas.core.http.client,
   nextpas.core.http.stream,
@@ -124,6 +126,8 @@ type
   TWebSocketOriginCheck = nextpas.core.http.websocket.TWebSocketOriginCheck;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
+  IWebSocketRoom = nextpas.core.http.websocket.room.IWebSocketRoom;
+  TWebSocketRoomManager = nextpas.core.http.websocket.room.TWebSocketRoomManager;
 
   { Re-export HSTS types }
   THstsOptions = nextpas.core.http.middleware.hsts.THstsOptions;
@@ -143,14 +147,17 @@ type
   THttpServerOptions = nextpas.core.http.base.THttpServerOptions;
   THttpClient = nextpas.core.http.client.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
+  THttpDialFunc = nextpas.core.http.base.THttpDialFunc;
   THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
   THttpRouterGroup = nextpas.core.http.router.group.THttpRouterGroup;
 
   { Re-export JSON types }
   IJsonDocument = nextpas.core.json.IJsonDocument;
 
-  { Re-export log types }
-  TLogger = nextpas.core.log.TLogger;
+  { Re-export log types (L0 seam) }
+  ILogger = nextpas.core.log.intf.ILogger;
+  TLogger = nextpas.core.log.intf.ILogger;
+  TLogLevel = nextpas.core.log.intf.TLogLevel;
 
   { Re-export URL types }
   TQueryParam = nextpas.core.http.url.TQueryParam;
@@ -224,6 +231,7 @@ const
   wsOpPong = nextpas.core.http.websocket.wsOpPong;
   WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
   WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
+  WEBSOCKET_ROOM_DEFAULT_MAX = nextpas.core.http.websocket.room.WEBSOCKET_ROOM_DEFAULT_MAX;
 
   { TCP server backends }
   TCP_SERVER_BACKEND_THREADED = nextpas.core.http.base.TCP_SERVER_BACKEND_THREADED;
@@ -363,9 +371,9 @@ function WhenMiddleware(
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 {** @desc Async middleware — dispatches handler execution to a thread pool. }
 function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware; inline;
-{** @desc Health check middleware at /healthz — returns 200 OK with {"status":"ok"}. }
+{** @desc Health check middleware at /healthz — responds 200 OK with JSON ok-status body. }
 function HealthCheckMiddleware: IHttpMiddleware; inline;
-{** @desc Health check middleware at custom path — returns 200 OK with {"status":"ok"}. }
+{** @desc Health check middleware at custom path — responds 200 OK with JSON ok-status body. }
 function HealthCheckMiddlewareAt(const APath: string): IHttpMiddleware; inline;
 {** @desc Create a new thread-safe metrics collector. }
 function NewHttpMetricsCollector: IHttpMetricsCollector; inline;
@@ -571,6 +579,10 @@ function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
+{** @desc Static file serving from a read-only virtual filesystem (IVfs).
+   ETag prefers backend ContentHash ("fnv-hex8"); unknown ModTime (0) skips
+   Last-Modified / If-Modified-Since negotiation. Directories → 404. }
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc; inline;
 function ServeFileDownload(const APath: string): THttpHandlerFunc; overload; inline;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload; inline;
 {** @desc Strong ETag from size+mtime. }
@@ -943,7 +955,7 @@ end;
 
 function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWith(ALogger);
+  Result := nextpas.core.http.middleware.logger.LoggerMiddleware;
 end;
 
 function LoggerMiddlewareWithExtras(
@@ -955,8 +967,7 @@ end;
 function LoggerMiddlewareWithExtrasAndLogger(
   const AExtras: TLogExtrasProvider; const ALogger: TLogger): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWithExtrasAndLogger(
-    AExtras, ALogger);
+  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWithExtras(AExtras);
 end;
 
 function RequestIdMiddleware: IHttpMiddleware;
@@ -1457,6 +1468,11 @@ end;
 function ServeDir(const ARoot: string): THttpHandlerFunc;
 begin
   Result := nextpas.core.http.static.ServeDir(ARoot);
+end;
+
+function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
+begin
+  Result := nextpas.core.http.static.ServeVfs(AFs);
 end;
 
 function ServeFileDownload(const APath: string): THttpHandlerFunc;

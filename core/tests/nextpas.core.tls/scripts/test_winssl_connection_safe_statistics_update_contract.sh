@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-FILE="$ROOT_DIR/src/nextpas.core.tls.winssl.connection.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+FILE="${ROOT_DIR}/core/src/nextpas.core.tls.winssl.connection.pas"
 
 fail() {
   echo "[FAIL] $1"
@@ -11,7 +11,7 @@ fail() {
 
 echo "[TEST] winssl connection safe statistics update contract"
 
-[[ -f "$FILE" ]] || fail "missing file: src/nextpas.core.tls.winssl.connection.pas"
+[[ -f "$FILE" ]] || fail "missing file: core/src/nextpas.core.tls.winssl.connection.pas"
 
 if ! rg -F --quiet -- 'procedure TryUpdateLibraryStatistics' "$FILE"; then
   fail "WinSSL connection should centralize library statistics updates behind a safety guard"

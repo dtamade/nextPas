@@ -3,9 +3,10 @@ program test_openssl_verify_ex_strict_chain_contract;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base,
+  nextpas.core.tls.factory;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
@@ -40,12 +41,12 @@ begin
 
   LLeafCert := TSSLFactory.CreateCertificate(sslOpenSSL);
   Check(LLeafCert <> nil, 'Leaf certificate object should be created');
-  Check(LLeafCert.LoadFromFile('tests/certificate/test_certs/signer_cert.pem'),
+  Check(LLeafCert.LoadFromFile('certificate/test_certs/signer_cert.pem'),
     'Leaf verification fixture should load');
 
   LCACert := TSSLFactory.CreateCertificate(sslOpenSSL);
   Check(LCACert <> nil, 'CA certificate object should be created');
-  Check(LCACert.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'),
+  Check(LCACert.LoadFromFile('certificate/test_certs/ca_cert.pem'),
     'CA verification fixture should load');
 
   LStore := TSSLFactory.CreateCertificateStore(sslOpenSSL);

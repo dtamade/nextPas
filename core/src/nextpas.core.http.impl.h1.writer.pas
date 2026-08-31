@@ -12,12 +12,14 @@ interface
 uses
   nextpas.core.io.intf,
   nextpas.core.net.intf,
+  nextpas.core.net.server.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
 type
   TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker,
-    IHttpResponseBodyBytes, IHttpResponseWriterCommitState)
+    IHttpResponseBodyBytes, IHttpResponseWriterCommitState, IHttpConnContext,
+    IHttpPeerProbe)
   private
     FWriter: IWriter;
     FHeaders: IHttpHeaders;
@@ -25,6 +27,7 @@ type
     FStatus: THttpStatus;
     FChunkedWriter: IWriter;
     FConn: ITcpStream;
+    FSessionContext: ITcpServerSessionContext;
     FHijacked: Boolean;
     FFinalized: Boolean;
     FNoBodyAllowed: Boolean;
@@ -53,6 +56,9 @@ type
       const ASuppressBody: Boolean); overload;
     constructor Create(const AWriter: IWriter; const AConn: ITcpStream;
       const ASuppressBody: Boolean; const AWriteTimeoutMs: Int64); overload;
+    { 绑定承载本连接的 poll session 上下文（IHttpConnContext 支持，非阻塞升级用） }
+    procedure AttachSessionContext(const AContext: ITcpServerSessionContext);
+    function HostSessionContext: ITcpServerSessionContext;
     procedure WriteHeader(const AStatus: THttpStatus);
     function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
@@ -68,6 +74,9 @@ type
     function HasCommitted: Boolean;
     function HeadersCommitted: Boolean;
     function IsHijacked: Boolean;
+    { IHttpPeerProbe：委托底层连接的 ITcpPeerProbe；连接不支持（如
+      包装流）或无连接时恒 True（保守，绝不误报断连）。 }
+    function PeerAlive: Boolean;
     function GetBodyBytesWritten: Int64;
     property Headers: IHttpHeaders read GetHeaders;
   end;
@@ -569,6 +578,17 @@ begin
   Result := FConn;
 end;
 
+procedure TH1ResponseWriter.AttachSessionContext(
+  const AContext: ITcpServerSessionContext);
+begin
+  FSessionContext := AContext;
+end;
+
+function TH1ResponseWriter.HostSessionContext: ITcpServerSessionContext;
+begin
+  Result := FSessionContext;
+end;
+
 function TH1ResponseWriter.HasCommitted: Boolean;
 begin
   Result := FHeadersSent;
@@ -582,6 +602,18 @@ end;
 function TH1ResponseWriter.IsHijacked: Boolean;
 begin
   Result := FHijacked;
+end;
+
+function TH1ResponseWriter.PeerAlive: Boolean;
+var
+  LProbe: ITcpPeerProbe;
+begin
+  Result := True;
+  if (FConn = nil) or FHijacked then
+    Exit;
+  if FConn.QueryInterface(ITcpPeerProbe, LProbe) <> 0 then
+    Exit;                        { 包装流不支持探测：保守 True }
+  Result := LProbe.PeerAlive;
 end;
 
 function TH1ResponseWriter.GetBodyBytesWritten: Int64;

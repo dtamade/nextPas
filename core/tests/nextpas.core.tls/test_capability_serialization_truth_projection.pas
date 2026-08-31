@@ -61,7 +61,7 @@ begin
 
   XMLText := CapabilitiesToXML(Caps, False);
 
-  RequireContains(XMLText, '<supportsALPN>True</supportsALPN>', 'xml.alpnProjection');
+  RequireContains(XMLText, '<supportsALPN>true</supportsALPN>', 'xml.alpnProjection');
   RequireContains(XMLText, '<alpnSupport>stable</alpnSupport>', 'xml.alpnSupport');
 end;
 
@@ -77,7 +77,7 @@ begin
 
   XMLText := CapabilitiesToXML(Caps, False);
 
-  RequireContains(XMLText, '<supportsSessionTickets>False</supportsSessionTickets>', 'xml.noneProjection');
+  RequireContains(XMLText, '<supportsSessionTickets>false</supportsSessionTickets>', 'xml.noneProjection');
   RequireContains(XMLText, '<sessionTicketsSupport>none</sessionTicketsSupport>', 'xml.noneSupport');
 end;
 

@@ -2,11 +2,11 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 WORK_REL="tmp/test_fp_tls13_gate_run_id_injection_$(date +%s)"
 WORK_DIR="$ROOT_DIR/$WORK_REL"
 FAKE_ROOT="$WORK_DIR/fake_project"
-FAKE_SCRIPTS="$FAKE_ROOT/scripts"
+FAKE_SCRIPTS="$FAKE_ROOT/scripts/tls"
 FAKE_REPORTS_REL="tmp/test-reports"
 FAKE_REPORTS_DIR="$FAKE_ROOT/$FAKE_REPORTS_REL"
 MARKER="$FAKE_ROOT/freepascal_tls13_gate_injected.marker"
@@ -28,13 +28,13 @@ fail() {
   exit 1
 }
 
-cp "$ROOT_DIR/scripts/run_freepascal_tls13_completeness_gate.sh" "$FAKE_SCRIPTS/"
+cp "$ROOT_DIR/scripts/tls/run_freepascal_tls13_completeness_gate.sh" "$FAKE_SCRIPTS/"
 
 cat > "$FAKE_ROOT/fpc" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-log_file="${FAFAFA_FAKE_FPC_LOG:?}"
+log_file="${NEXTPAS_FAKE_FPC_LOG:?}"
 printf '__RUN__\n' >> "$log_file"
 printf '%s\n' "$@" >> "$log_file"
 
@@ -66,8 +66,8 @@ set +e
 (
   cd "$FAKE_ROOT"
   PATH="$FAKE_ROOT:$PATH" \
-  FAFAFA_FAKE_FPC_LOG="$FAKE_FPC_LOG" \
-  bash scripts/run_freepascal_tls13_completeness_gate.sh \
+  NEXTPAS_FAKE_FPC_LOG="$FAKE_FPC_LOG" \
+  bash scripts/tls/run_freepascal_tls13_completeness_gate.sh \
     --fast-local \
     --run-id "$MALICIOUS_RUN_ID" >"$STDOUT_LOG" 2>"$STDERR_LOG"
 )

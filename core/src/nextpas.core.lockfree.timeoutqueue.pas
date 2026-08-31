@@ -17,7 +17,6 @@ type
       入队时记录时间戳，出队时检查是否过期。
       过期元素自动跳过，返回下一个有效元素。
       适用场景：请求超时、缓存过期、任务调度。
- * @concurrency Thread-safe (see source for details).
   }
   generic TTimeoutQueueImpl<T> = class
   private type

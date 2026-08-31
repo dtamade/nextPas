@@ -6,6 +6,7 @@ uses
   nextpas.core.base, nextpas.core.base.utils,
   nextpas.core.tui.base, nextpas.core.tui.color, nextpas.core.tui.modifier,
   nextpas.core.tui.style, nextpas.core.tui.cell, nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.statusbar, nextpas.core.test;
 
 var T: TTestSuite;
@@ -164,6 +165,30 @@ begin
   finally B.Free; end;
 end;
 
+{ PH33 P2b：布局配置面——WithBlock 块包装（边框在区边缘、内容仍在） }
+procedure TestStatusBarWithBlock;
+var LS: IStatusBar; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LS := TStatusBar.New
+    .WithLeft([TStatusSegment.Make('READY')])
+    .WithBlock(TBlock.Bordered('T'));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 4));
+  try
+    LS.Render(TRect.Make(0, 0, 30, 4), LBuf);
+    LAll := '';
+    for I := 0 to 3 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos(#$E2#$94#$8C, LBuf.RowAsString(0)) > 0, 'block border drawn');
+    Check(Pos('READY', LAll) > 0, 'segment text visible inside block');
+  finally LBuf.Free; end;
+end;
+
+procedure TestStatusBarWithBlockChaining;
+var LS: IStatusBar;
+begin
+  LS := TStatusBar.New.WithBlock(TBlock.Bordered('x'));
+  Check(LS <> nil, 'WithBlock chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('tui_widget_statusbar');
   T.Test('SegmentMake', @TestSegmentMake);
@@ -183,5 +208,7 @@ begin
   T.Test('Wide content clips', @TestWideContentClips);
   T.Test('Empty area', @TestEmptyArea);
   T.Test('Segment style applied', @TestSegmentStyleApplied);
+  T.Test('WithBlock render (PH33 P2b)', @TestStatusBarWithBlock);
+  T.Test('WithBlock chaining (PH33 P2b)', @TestStatusBarWithBlockChaining);
   if not T.Run then Halt(1);
 end.

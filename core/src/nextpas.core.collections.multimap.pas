@@ -311,6 +311,8 @@ var
   Vec: TValueVec;
   i: SizeUInt;
 begin
+  { out 语义：调用方传入内容不作输入，显式置空保持定义性。 }
+  aValues := nil;
   Result := FMap.TryGetValue(aKey, Vec);
 
   if Result then

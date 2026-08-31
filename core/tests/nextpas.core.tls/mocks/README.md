@@ -1,10 +1,10 @@
 # OpenSSL Mock Testing Infrastructure
 
-**fafafa.ssl Mock测试基础设施完整文档**
+**nextpas.ssl Mock测试基础设施完整文档**
 
 ## 概述
 
-这个目录包含了fafafa.ssl项目的完整Mock测试基础设施。所有Mock实现都遵循接口驱动设计，提供快速、独立、可重现的单元测试环境，无需实际的OpenSSL库。
+这个目录包含了nextpas.ssl项目的完整Mock测试基础设施。所有Mock实现都遵循接口驱动设计，提供快速、独立、可重现的单元测试环境，无需实际的OpenSSL库。
 
 ## 🎯 里程碑
 
@@ -423,7 +423,7 @@ tests/
 
 ## 📄 许可证
 
-与fafafa.ssl主项目相同。
+与nextpas.ssl主项目相同。
 
 ---
 

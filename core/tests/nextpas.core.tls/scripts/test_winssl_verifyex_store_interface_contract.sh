@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
-source_file="tests/winssl/test_winssl_cert_verify_ex.pas"
+source_file="core/tests/nextpas.core.tls/winssl/test_winssl_cert_verify_ex.pas"
 
 pass() {
   printf '[PASS] %s\n' "$1"

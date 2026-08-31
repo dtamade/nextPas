@@ -44,6 +44,7 @@ type
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.platform.sync;
 
 type
@@ -60,6 +61,7 @@ type
     FOnCompleteRef: TAsyncCallbackRef;
     FCompleteContext: Pointer;
     FLock: TPlatformMutex;
+    FTimerArmed: Boolean;
   public
     constructor Create(const ALoop: TAsyncLoop; AMs: UInt32;
       AOnComplete: TAsyncCallback; AOnCompleteRef: TAsyncCallbackRef;
@@ -72,6 +74,21 @@ type
     procedure HandleTimeout;
     procedure HandleComplete;
   end;
+
+{ 定时器丢弃：Loop Close 丢弃未触发的定时器时释放句柄持有的引用 }
+procedure TimeoutDiscard(AContext: Pointer);
+var
+  LHandle: TAsyncTimeoutHandle;
+begin
+  LHandle := TAsyncTimeoutHandle(AContext);
+  platform_mutex_lock(LHandle.FLock);
+  try
+    LHandle.FTimerArmed := False;
+  finally
+    platform_mutex_unlock(LHandle.FLock);
+  end;
+  LHandle._Release;
+end;
 
 { 定时器回调：通过 AContext 恢复实例引用，无需全局变量 }
 procedure TimeoutCallback(AContext: Pointer);
@@ -90,11 +107,30 @@ var
 begin
   LHandle := TAsyncTimeoutHandle.Create(ALoop, AMs, AOnComplete, nil, ACompleteContext);
   Result := LHandle;
-  { 启动超时定时器，通过 AContext 传递实例指针 }
-  LHandle.FTimerHandle := ALoop.Schedule(TDuration.FromMilliseconds(AMs),
-    @TimeoutCallback, Pointer(LHandle));
-  { 执行操作 }
-  AOperation(AOpContext);
+  { 启动超时定时器，通过 AContext 传递实例指针；裸指针需手动 AddRef
+    配 ScheduleEx+TimeoutDiscard，保证接口释放后定时器仍持有效引用 }
+  platform_mutex_lock(LHandle.FLock);
+  LHandle.FTimerArmed := True;
+  platform_mutex_unlock(LHandle.FLock);
+  LHandle._AddRef;
+  try
+    LHandle.FTimerHandle := ALoop.ScheduleEx(TDuration.FromMilliseconds(AMs),
+      @TimeoutCallback, Pointer(LHandle), @TimeoutDiscard);
+  except
+    platform_mutex_lock(LHandle.FLock);
+    LHandle.FTimerArmed := False;
+    platform_mutex_unlock(LHandle.FLock);
+    LHandle._Release;
+    raise;
+  end;
+  { 执行操作，完成后取消定时器避免 HandleComplete 常驻 }
+  try
+    AOperation(AOpContext);
+    LHandle.HandleComplete;
+  except
+    LHandle.Cancel;
+    raise;
+  end;
 end;
 
 function AsyncRunWithTimeoutRef(const ALoop: TAsyncLoop; AMs: UInt32;
@@ -105,11 +141,30 @@ var
 begin
   LHandle := TAsyncTimeoutHandle.Create(ALoop, AMs, nil, AOnComplete, ACompleteContext);
   Result := LHandle;
-  { 启动超时定时器，通过 AContext 传递实例指针 }
-  LHandle.FTimerHandle := ALoop.Schedule(TDuration.FromMilliseconds(AMs),
-    @TimeoutCallback, Pointer(LHandle));
-  { 执行操作 }
-  AOperation(AOpContext);
+  { 启动超时定时器，通过 AContext 传递实例指针；裸指针需手动 AddRef
+    配 ScheduleEx+TimeoutDiscard，保证接口释放后定时器仍持有效引用 }
+  platform_mutex_lock(LHandle.FLock);
+  LHandle.FTimerArmed := True;
+  platform_mutex_unlock(LHandle.FLock);
+  LHandle._AddRef;
+  try
+    LHandle.FTimerHandle := ALoop.ScheduleEx(TDuration.FromMilliseconds(AMs),
+      @TimeoutCallback, Pointer(LHandle), @TimeoutDiscard);
+  except
+    platform_mutex_lock(LHandle.FLock);
+    LHandle.FTimerArmed := False;
+    platform_mutex_unlock(LHandle.FLock);
+    LHandle._Release;
+    raise;
+  end;
+  { 执行操作，完成后取消定时器避免 HandleComplete 常驻 }
+  try
+    AOperation(AOpContext);
+    LHandle.HandleComplete;
+  except
+    LHandle.Cancel;
+    raise;
+  end;
 end;
 
 { TAsyncTimeoutHandle }
@@ -128,7 +183,9 @@ begin
   FOnComplete := AOnComplete;
   FOnCompleteRef := AOnCompleteRef;
   FCompleteContext := ACompleteContext;
-  platform_mutex_init(FLock, PLATFORM_MUTEX_NORMAL);
+  FTimerArmed := False;
+  if platform_mutex_init(FLock, PLATFORM_MUTEX_NORMAL) <> 0 then
+    raise EInvalidOperationError.Create('async timeout: mutex init failed');
 end;
 
 destructor TAsyncTimeoutHandle.Destroy;
@@ -142,7 +199,9 @@ var
   LCallback: TAsyncCallback;
   LCallbackRef: TAsyncCallbackRef;
   LCtx: Pointer;
+  LNeedRelease: Boolean;
 begin
+  LNeedRelease := False;
   platform_mutex_lock(FLock);
   try
     if FDone then
@@ -152,6 +211,11 @@ begin
     LCallback := FOnComplete;
     LCallbackRef := FOnCompleteRef;
     LCtx := FCompleteContext;
+    if FTimerArmed then
+    begin
+      FTimerArmed := False;
+      LNeedRelease := True;
+    end;
   finally
     platform_mutex_unlock(FLock);
   end;
@@ -159,6 +223,8 @@ begin
     LCallback(LCtx)
   else if Assigned(LCallbackRef) then
     LCallbackRef(LCtx);
+  if LNeedRelease then
+    _Release;
 end;
 
 procedure TAsyncTimeoutHandle.HandleComplete;
@@ -166,14 +232,20 @@ var
   LCallback: TAsyncCallback;
   LCallbackRef: TAsyncCallbackRef;
   LCtx: Pointer;
+  LNeedRelease: Boolean;
 begin
+  LNeedRelease := False;
   platform_mutex_lock(FLock);
   try
     if FDone then
       Exit;
     FDone := True;
     FTimeoutResult := atrCompleted;
-    FLoop.CancelTimer(FTimerHandle);
+    if FTimerArmed and FLoop.CancelTimer(FTimerHandle) then
+    begin
+      FTimerArmed := False;
+      LNeedRelease := True;
+    end;
     LCallback := FOnComplete;
     LCallbackRef := FOnCompleteRef;
     LCtx := FCompleteContext;
@@ -184,20 +256,31 @@ begin
     LCallback(LCtx)
   else if Assigned(LCallbackRef) then
     LCallbackRef(LCtx);
+  if LNeedRelease then
+    _Release;
 end;
 
 procedure TAsyncTimeoutHandle.Cancel;
+var
+  LNeedRelease: Boolean;
 begin
+  LNeedRelease := False;
   platform_mutex_lock(FLock);
   try
     if FDone then
       Exit;
     FDone := True;
     FTimeoutResult := atrCancelled;
-    FLoop.CancelTimer(FTimerHandle);
+    if FTimerArmed and FLoop.CancelTimer(FTimerHandle) then
+    begin
+      FTimerArmed := False;
+      LNeedRelease := True;
+    end;
   finally
     platform_mutex_unlock(FLock);
   end;
+  if LNeedRelease then
+    _Release;
 end;
 
 function TAsyncTimeoutHandle.RemainingMs: UInt32;

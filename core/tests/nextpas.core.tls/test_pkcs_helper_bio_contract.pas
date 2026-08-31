@@ -83,7 +83,7 @@ begin
   WriteLn;
   WriteLn('=== PKCS helper BIO guard ===');
 
-  LTempFile := GetTempDir(False) + 'fafafa_pkcs_helper_bio_contract.p12';
+  LTempFile := GetTempDir(False) + 'nextpas_pkcs_helper_bio_contract.p12';
   if not WriteTempTextFile(LTempFile, 'not-a-real-pkcs12') then
   begin
     MarkSkip('PKCS helper BIO guard', 'failed to create temp file');

@@ -290,6 +290,22 @@ begin
   end;
 end;
 
+{ PH33 P4：基础样式旋钮——filled/empty 两区一次着色（builder 顺序语义：
+  后续 Filled/Empty/Threshold 调用覆盖各自面） }
+procedure TestGaugeWithStyle;
+var
+  LGauge: IGauge;
+  LStyle, LOver: TStyle;
+begin
+  LGauge := TGauge.New;
+  LStyle := StyleDefault;
+  LStyle.Fg := IndexedColor(2);
+  LOver := StyleDefault;
+  LOver.Fg := IndexedColor(1);
+  LGauge := LGauge.WithStyle(LStyle).WithFilledStyle(LOver);
+  Check(LGauge <> nil, 'WithStyle should chain');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.gauge');
   T.Test('TGauge.New', @TestGaugeNew);
@@ -311,5 +327,6 @@ begin
   T.Test('render small area', @TestGaugeRenderSmallArea);
   T.Test('render with label', @TestGaugeRenderWithLabel);
   T.Test('percent boundary', @TestGaugePercentBoundary);
+  T.Test('with style zones', @TestGaugeWithStyle);
   if not T.Run then Halt(1);
 end.

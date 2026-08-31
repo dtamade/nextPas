@@ -2,12 +2,13 @@
 # TLS 1.3 PSK Session Resumption Interop Test
 # FreePascal client vs OpenSSL s_server
 set -euo pipefail
+SPID=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-FPC="${FAFAFA_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
+FPC="${NEXTPAS_FPC_EXE:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
 TMPDIR=$(mktemp -d)
 PORT=${PSK_TEST_PORT:-44560}
 
@@ -24,8 +25,8 @@ openssl req -x509 -newkey rsa:2048 -keyout "$TMPDIR/key.pem" \
 
 # Compile PSK test binary
 mkdir -p tmp/psk_gate_units tmp/psk_gate_bin
-"$FPC" -B -Fu./src -FUtmp/psk_gate_units -FEtmp/psk_gate_bin \
-  tests/crypto/test_tls13_psk_openssl.pas 2>&1 | tail -1
+"$FPC" -B -Fu"$PWD/core/src" -FUtmp/psk_gate_units -FEtmp/psk_gate_bin \
+  core/tests/nextpas.core.tls/crypto/test_tls13_psk_openssl.pas 2>&1 | tail -1
 
 BIN=tmp/psk_gate_bin/test_tls13_psk_openssl
 if [[ ! -f "$BIN" ]]; then
@@ -47,10 +48,17 @@ fi
 
 echo "=== TLS 1.3 PSK Session Resumption Interop ==="
 
-if "$BIN" "$PORT" 2>&1 | tee "$TMPDIR/output.log" | grep -q "FAIL"; then
+# 落盘后判定：grep -q 早退会 SIGPIPE 截断测试二进制输出；pipefail 下二进制
+# 非零退出也会污染管道状态——崩溃无 FAIL 串时会被误判为通过
+set +e
+"$BIN" "$PORT" > "$TMPDIR/output.log" 2>&1
+BIN_RC=$?
+set -e
+
+if [[ $BIN_RC -ne 0 ]] || grep -q "FAIL" "$TMPDIR/output.log"; then
   echo ""
-  echo "[FAIL] PSK resumption interop failed"
-  grep "FAIL" "$TMPDIR/output.log"
+  echo "[FAIL] PSK resumption interop failed (exit=$BIN_RC)"
+  grep "FAIL" "$TMPDIR/output.log" || true
   exit 1
 fi
 

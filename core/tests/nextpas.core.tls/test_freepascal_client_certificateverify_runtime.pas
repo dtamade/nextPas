@@ -4,7 +4,6 @@ program test_freepascal_client_certificateverify_runtime;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -13,13 +12,15 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash;
-
+  nextpas.core.crypto.hash,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 const
   TEST_TLS13_SIG_RSA_PSS_RSAE_SHA384 = $0805;
 
@@ -112,8 +113,8 @@ var
   LIssuerPEM: TBytes;
   LCombined: AnsiString;
 begin
-  LLeafPEM := ReadFileBytes('tests/certificate/test_certs/signer_cert.pem');
-  LIssuerPEM := ReadFileBytes('tests/certificate/test_certs/ca_cert.pem');
+  LLeafPEM := ReadFileBytes('certificate/test_certs/signer_cert.pem');
+  LIssuerPEM := ReadFileBytes('certificate/test_certs/ca_cert.pem');
   LCombined := BytesToString(LLeafPEM) + LineEnding + BytesToString(LIssuerPEM);
   Result := nil;
   SetLength(Result, Length(LCombined));
@@ -177,7 +178,7 @@ begin
   SetLength(FTranscriptData, 0);
   InitTLS13HandshakeSecrets(FHandshakeSecrets);
   FCertificateBlob := BuildCertificateBlob;
-  FPrivateKeyBlob := ReadFileBytes('tests/certificate/test_certs/signer_key.pem');
+  FPrivateKeyBlob := ReadFileBytes('certificate/test_certs/signer_key.pem');
   FMode := AMode;
   FForcedSignatureScheme := AForcedSignatureScheme;
   FExpectedSelectedSignatureScheme := AExpectedSelectedSignatureScheme;
@@ -465,7 +466,7 @@ begin
   LCtx.SetPreferredVersion(sslProtocolTLS13);
   LCtx.SetVerifyMode([sslVerifyPeer]);
   LCtx.SetCertVerifyFlags([sslCertVerifyIgnoreHostname]);
-  LCtx.LoadCAFile('tests/certificate/test_certs/ca_cert.pem');
+  LCtx.LoadCAFile('certificate/test_certs/ca_cert.pem');
 
   LStream := TScriptedCertificateVerifyServerStream.Create(
     AMode,
@@ -474,7 +475,7 @@ begin
     AExpectedSelectedSignatureScheme
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, ALabel + ': connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 

@@ -21,7 +21,6 @@ type
       - 写操作：复制数组 → 修改副本 → CAS 替换指针
       - 线程安全的快照语义
       - 支持索引访问、追加、替换、删除
- * @concurrency Thread-safe (see source for details).
   }
   generic TCopyOnWriteArrayImpl<T> = class
   private type
@@ -297,6 +296,7 @@ var
   I: Int32;
 begin
   LData := PData(atomic_load(PPointer(@FData)^, mo_acquire));
+  Result := nil;
   SetLength(Result, LData^.FCount);
   for I := 0 to LData^.FCount - 1 do
     Result[I] := LData^.FItems[I];

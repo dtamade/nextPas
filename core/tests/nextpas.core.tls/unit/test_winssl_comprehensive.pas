@@ -5,8 +5,9 @@ program test_winssl_comprehensive;
 
 {$IFDEF WINDOWS}
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.winssl.lib;

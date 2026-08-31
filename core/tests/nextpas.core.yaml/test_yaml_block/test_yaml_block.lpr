@@ -269,6 +269,61 @@ begin
   Check(LRoot.MapGet('c').IsNull, 'c is null');
 end;
 
+procedure TestSeqOfMapsWithNestedSeq;
+var
+  LDoc: IYamlDocument;
+  LRoot, LItem0, LItem1, LItems, LChild: TYamlValue;
+  LInput: string;
+  LWalk: Integer;
+begin
+  { Nested seq-of-maps whose items themselves contain a seq. The second
+    outer '-' is indented; a scanner that clears line-start on indent
+    spaces would roll it into the first item's nested seq. }
+  LInput :=
+    'weights:' + #10 +
+    '  - task: latency' + #10 +
+    '    items:' + #10 +
+    '      - domain: example.com' + #10 +
+    '        weight: 2' + #10 +
+    '      - domain: foo.com' + #10 +
+    '        weight: 1' + #10 +
+    '  - task: dns' + #10 +
+    '    items:' + #10 +
+    '      - domain: bar.com' + #10 +
+    '        weight: 3' + #10;
+  LDoc := YamlParse(LInput);
+  Check(not LDoc.HasError, 'no error: ' + LDoc.Error.Message.ToString);
+  LRoot := LDoc.Root;
+  Check(LRoot.IsMap, 'root map');
+  CheckEqual(Int64(2), Int64(LRoot.MapGet('weights').SeqLen), 'outer seq len=2');
+  LItem0 := LRoot.MapGet('weights').SeqGet(0);
+  LItem1 := LRoot.MapGet('weights').SeqGet(1);
+  Check(LItem0.IsMap, '[0] is map');
+  Check(LItem1.IsMap, '[1] is map');
+  CheckEqual('latency', LItem0.MapGet('task').AsStr.ToString, '[0].task');
+  CheckEqual('dns', LItem1.MapGet('task').AsStr.ToString, '[1].task');
+  CheckEqual(Int64(2), Int64(LItem0.MapGet('items').SeqLen), '[0].items len=2');
+  CheckEqual(Int64(1), Int64(LItem1.MapGet('items').SeqLen), '[1].items len=1');
+  CheckEqual('example.com',
+    LItem0.MapGet('items').SeqGet(0).MapGet('domain').AsStr.ToString, '[0].items[0]');
+  CheckEqual('foo.com',
+    LItem0.MapGet('items').SeqGet(1).MapGet('domain').AsStr.ToString, '[0].items[1]');
+  CheckEqual('bar.com',
+    LItem1.MapGet('items').SeqGet(0).MapGet('domain').AsStr.ToString, '[1].items[0]');
+  CheckEqual(Int64(3), LItem1.MapGet('items').SeqGet(0).MapGet('weight').AsInt,
+    '[1].items[0].weight');
+
+  LItems := LRoot.MapGet('weights');
+  LChild := LItems.FirstChild;
+  LWalk := 0;
+  while LChild.IsValid do
+  begin
+    Inc(LWalk);
+    LChild := LChild.NextSibling;
+  end;
+  CheckEqual(Int64(2), Int64(LWalk), 'FirstChild/NextSibling walk matches SeqLen');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.yaml.block');
   T.Test('Block mapping', @TestBlockMapping);
@@ -288,5 +343,6 @@ begin
   T.Test('Multi-level indent', @TestMultiLevelIndent);
   T.Test('Boolean values', @TestBooleanValues);
   T.Test('Null values', @TestNullValues);
+  T.Test('Seq of maps with nested seq', @TestSeqOfMapsWithNestedSeq);
   if not T.Run then Halt(1);
 end.

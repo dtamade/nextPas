@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 2026-08-23 布局修复：契约以仓库根相对路径取文件
+cd "$(dirname "$0")/../../../.."
+
 check_backend() {
   local file="$1"
 
@@ -20,10 +23,10 @@ check_backend() {
   fi
 }
 
-check_backend "src/nextpas.core.tls.openssl.backed.pas"
-check_backend "src/nextpas.core.tls.freepascal.lib.pas"
-check_backend "src/nextpas.core.tls.winssl.lib.pas"
-check_backend "src/nextpas.core.tls.mbedtls.lib.pas"
-check_backend "src/nextpas.core.tls.wolfssl.lib.pas"
+check_backend "core/src/nextpas.core.tls.openssl.backed.pas"
+check_backend "core/src/nextpas.core.tls.freepascal.lib.pas"
+check_backend "core/src/nextpas.core.tls.winssl.lib.pas"
+check_backend "core/src/nextpas.core.tls.mbedtls.lib.pas"
+check_backend "core/src/nextpas.core.tls.wolfssl.lib.pas"
 
 echo "[PASS] library-default log callback detachment remains aligned across backend library paths"

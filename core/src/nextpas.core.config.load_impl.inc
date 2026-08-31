@@ -262,8 +262,8 @@ end;
 function TConfig.LoadFromEnv(const APrefix: string): TStringArray;
 var
   LPtr: PPAnsiChar;
-  LEnvBase: PAnsiChar;
-  LEnvCursor: PAnsiChar;
+  LEnvVars: TStringArray;
+  LEnvIndex: Integer;
   LEntry, LName, LValue, LKey: string;
   LEqPos: Integer;
   LKeys: TStringArray;
@@ -297,27 +297,23 @@ begin
   end;
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
-  LEnvBase := GetEnvironmentStringsA;
-  if LEnvBase <> nil then
+  LEnvVars := EnvironmentVariables;
+  for LEnvIndex := 0 to Length(LEnvVars) - 1 do
   begin
-    LEnvCursor := LEnvBase;
-    while NextConfigWindowsEnvBlockEntry(LEnvCursor, LEntry) do
+    LEntry := LEnvVars[LEnvIndex];
+    LEqPos := Pos('=', LEntry);
+    if LEqPos > 0 then
     begin
-      LEqPos := Pos('=', LEntry);
-      if LEqPos > 0 then
+      LName := Copy(LEntry, 1, LEqPos - 1);
+      LValue := Copy(LEntry, LEqPos + 1, Length(LEntry) - LEqPos);
+      if TryConfigEnvNameToKey(LName, APrefix, LKey) then
       begin
-        LName := Copy(LEntry, 1, LEqPos - 1);
-        LValue := Copy(LEntry, LEqPos + 1, Length(LEntry) - LEqPos);
-        if TryConfigEnvNameToKey(LName, APrefix, LKey) then
-        begin
-          SetValueUnlocked(LKey, LValue);
-          SetLength(LKeys, LK + 1);
-          LKeys[LK] := LKey;
-          Inc(LK);
-        end;
+        SetValueUnlocked(LKey, LValue);
+        SetLength(LKeys, LK + 1);
+        LKeys[LK] := LKey;
+        Inc(LK);
       end;
     end;
-    FreeEnvironmentStringsA(LEnvBase);
   end;
   {$ENDIF}
   finally

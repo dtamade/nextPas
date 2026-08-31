@@ -89,7 +89,7 @@ begin
   WriteLn;
   WriteLn('=== PKCS12 parse symbol guard ===');
 
-  LTempFile := GetTempDir(False) + 'fafafa_pkcs12_parse_symbol_contract.p12';
+  LTempFile := GetTempDir(False) + 'nextpas_pkcs12_parse_symbol_contract.p12';
   LFixtureKey := nil;
   LFixtureCert := nil;
   if not PrepareValidPKCS12File(LTempFile, LFixtureKey, LFixtureCert) then

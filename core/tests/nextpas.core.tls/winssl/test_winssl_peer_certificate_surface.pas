@@ -21,7 +21,7 @@ var
 
 function ResolvePeerCertHost: string;
 begin
-  Result := Trim(GetEnvironmentVariable('FAFAFA_WINSSL_PEER_CERT_HOST'));
+  Result := Trim(GetEnvironmentVariable('NEXTPAS_WINSSL_PEER_CERT_HOST'));
   if Result = '' then
     Result := 'api.github.com';
 end;
@@ -172,9 +172,9 @@ var
 begin
   BeginSection('WinSSL peer certificate surface');
 
-  if not EnvEnabled('FAFAFA_RUN_NETWORK_TESTS') then
+  if not EnvEnabled('NEXTPAS_RUN_NETWORK_TESTS') then
   begin
-    Check('skip network test (FAFAFA_RUN_NETWORK_TESTS!=1)', True);
+    Check('skip network test (NEXTPAS_RUN_NETWORK_TESTS!=1)', True);
     Exit;
   end;
 

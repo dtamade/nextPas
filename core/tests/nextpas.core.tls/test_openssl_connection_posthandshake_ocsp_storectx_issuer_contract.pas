@@ -6,7 +6,6 @@ uses
   nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.ocsp,
   nextpas.core.tls.x509,
   nextpas.core.tls.cert.utils,
@@ -24,8 +23,8 @@ uses
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.obj,
   nextpas.core.tls.openssl.certificate,
-  nextpas.core.tls.openssl.connection;
-
+  nextpas.core.tls.openssl.connection,
+  nextpas.core.tls.openssl.backed;
 type
   TOpenSSLConnectionPostHandshakeAccess = class(TOpenSSLConnection)
   private
@@ -286,7 +285,7 @@ function BuildCAOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'posthandshake-ocsp-root.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.ValidDays := 30;
   Result.IsCA := True;
 end;
@@ -295,7 +294,7 @@ function BuildLeafOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'posthandshake-ocsp-leaf.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.ValidDays := 30;
   Result.IsCA := False;
   Result.OCSPResponderURL := 'http://ocsp.posthandshake.contract.test';

@@ -3,15 +3,16 @@ program test_openssl_chain_issuer_selection;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.cert.builder,
+  nextpas.core.tls.cert.builder,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.stack,
-  nextpas.core.tls.openssl.x509.chain,
-  fafafa.ssl;
+  nextpas.core.tls.openssl.x509.chain;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin

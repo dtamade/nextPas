@@ -1,5 +1,5 @@
 {
-  test_memutils.pas - Unit tests for nextpas.core.tls.memutils
+  test_memutils.pas - Unit tests for nextpas.core.mem.secure
 
   Tests secure memory operations:
   - SecureZeroMemory
@@ -9,14 +9,14 @@
 
 unit test_memutils;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$M+}
 {$UNITPATH framework}
 
 interface
 
 uses
   nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
-  test_base, nextpas.core.tls.memutils;
+  test_base, nextpas.core.mem.secure;
 
 type
   { TTestMemUtils - Tests for secure memory operations }

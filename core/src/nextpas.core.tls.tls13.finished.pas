@@ -11,6 +11,7 @@ interface
 
 uses
   nextpas.core.base;
+function TLS13FinishedKeySHA256(const ATrafficSecret: TBytes): TBytes;
 function TLS13FinishedKeySHA384(const ATrafficSecret: TBytes): TBytes;
 function TLS13ComputeFinishedVerifyDataSHA256(const AFinishedKey, ATranscriptHash: TBytes): TBytes;
 function TLS13ComputeFinishedVerifyDataSHA384(const AFinishedKey, ATranscriptHash: TBytes): TBytes;

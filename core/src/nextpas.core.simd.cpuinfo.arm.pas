@@ -127,7 +127,7 @@ function TryReadLinuxAuxvHWCAP(out aHWCAP, aHWCAP2: QWord): Boolean;
 var
   LHandle: TPlatformFileHandle;
   LEntry: TLinuxAuxvEntry;
-  LReadBytes: QWord;
+  LReadBytes: PtrUInt;
 begin
   Result := False;
   aHWCAP := 0;
@@ -559,7 +559,7 @@ var
   LStat: TPlatformFileStat;
   LRaw: RawByteString;
   LIndex: Integer;
-  LRead: QWord;
+  LRead: PtrUInt;
 begin
   Result := False;
   aText := '';

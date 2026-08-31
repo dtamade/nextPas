@@ -1,10 +1,10 @@
 # nextpas.core.os 代码契约
 
-**模块路径**：`core/src/nextpas.core.os.env.pas`（1 个源文件）
+**模块路径**：`core/src/nextpas.core.os.env.pas`、`core/src/nextpas.core.os.procinfo.pas`
 **层级**：L2（依赖 L0: base, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 
@@ -71,3 +71,28 @@ procedure ValidateEnvName(const AName: string);
 ## 6. 测试覆盖
 
 - `test_os_env`: 10 测试，覆盖 Get/Set/Unset/Expand/Validate
+
+---
+
+## 7. 进程信息 API（nextpas.core.os.procinfo）
+
+```pascal
+const cProcessMemUnknown = Int64(-1);
+function ProcessRssBytes: Int64;
+function ProcessPeakRssBytes: Int64;
+```
+
+| 函数 | 前置条件 | 后置条件 | 异常 |
+|------|----------|----------|------|
+| `ProcessRssBytes` | 无 | 当前进程常驻集（字节）；不可用返回 `cProcessMemUnknown` | 不抛异常 |
+| `ProcessPeakRssBytes` | 无 | 常驻集峰值（字节，Linux VmHWM）；不可用返回哨兵 | 不抛异常 |
+
+**平台支持面**：Linux 读 `/proc/self/status`（`VmRSS` / `VmHWM`，内核稳定 ABI，
+kB→字节换算）；其他平台返回哨兵值（Windows GetProcessMemoryInfo /
+macOS mach_task_basic_info 为规划后端位）。哨兵语义 = 调用方降级跳过预算断言，
+不把诊断查询变成故障点。
+
+**测试覆盖**：`test_os_procinfo`: 5 测试（源码 RTL 扫描 ×2、RSS 可读、峰值≥当前、
+触碰 8MB 后 RSS 增长口径验证）。
+
+---

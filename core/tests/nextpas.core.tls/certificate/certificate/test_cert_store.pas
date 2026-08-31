@@ -3,9 +3,9 @@ program test_cert_store;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.classes, nextpas.core.system.sysutils,
-  fafafa.ssl,
-
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.classes,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory;
 
@@ -15,6 +15,7 @@ var
   Cert: ISSLCertificate;
   Count: Integer;
   Passed, Failed: Integer;
+  NativeAccess: ISSLNativeHandleAccess;
 
 procedure WriteTestResult(const TestName: string; Success: Boolean);
 begin
@@ -64,7 +65,8 @@ begin
 
     // Test 3: Get native handle
     WriteLn('Test 3: Get native handle');
-    WriteTestResult('Native handle is not nil', Store.GetNativeHandle <> nil);
+    WriteTestResult('Native handle is not nil',
+      Supports(Store, ISSLNativeHandleAccess, NativeAccess) and (NativeAccess.GetNativeHandle <> nil));
 
     // Test 4: Clear empty store (should not crash)
     WriteLn('Test 4: Clear empty store');
@@ -172,9 +174,7 @@ begin
     end;
   end;
 
-  // Return appropriate exit code
+  // Return appropriate exit code (fall through so program-scope globals are finalized)
   if Failed > 0 then
-    Halt(1)
-  else
-    Halt(0);
+    ExitCode := 1;
 end.

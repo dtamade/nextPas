@@ -44,6 +44,8 @@ type
     FDoneCondVar: ICondVar;
     FQueue: TPointerSegQueue;
     FWorkerCount: Integer;
+    FStartedWorkers: Integer;
+    FActiveWorkers: Integer;
     FWorkers: array of TPlatformThreadHandle;
     FShutdown: Boolean;
     FPendingTasks: Integer;
@@ -53,6 +55,12 @@ type
     procedure FreeNode(ANode: PTaskNode);
     procedure RunNode(ANode: PTaskNode);
     function TryPublishNode(ANode: PTaskNode): Boolean;
+    { 惰性起线程：容量（FWorkerCount）与预创建解耦——首任务、已启动
+      worker 全忙、或积压未被认领 ≥2 时补一条，直至容量。调用方持 FMutex。 }
+    procedure StartWorkerLocked;
+    { 出栈成功后置忙标记；任务完成时与 FPendingTasks 同锁递减并广播 Done }
+    procedure BeginNode;
+    procedure FinishNode(ANode: PTaskNode);
   public
     constructor Create(const AWorkerCount: Integer);
     destructor Destroy; override;
@@ -64,13 +72,13 @@ type
     procedure WaitAll;
     function WaitAllTimeout(const ATimeoutNs: Int64): Boolean;
     function GetWorkerCount: Integer;
+    function GetStartedWorkerCount: Integer;
   end;
 
 function WorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   LPool: TThreadPool;
   LNodePtr: Pointer;
-  LNode: PTaskNode;
 begin
   Result := nil;
   LPool := TThreadPool(AArg);
@@ -80,25 +88,19 @@ begin
     LNodePtr := nil;
     if LPool.FQueue.TryDequeue(LNodePtr) then
     begin
+      LPool.BeginNode;
       LPool.RunNode(PTaskNode(LNodePtr));
-      LPool.FMutex.Acquire;
-      Dec(LPool.FPendingTasks);
-      if LPool.FPendingTasks = 0 then
-        LPool.FDoneCondVar.Broadcast;
-      LPool.FMutex.Release;
+      LPool.FinishNode(PTaskNode(LNodePtr));
       Continue;
     end;
 
     LPool.FMutex.Acquire;
     if LPool.FQueue.TryDequeue(LNodePtr) then
     begin
+      Inc(LPool.FActiveWorkers);
       LPool.FMutex.Release;
       LPool.RunNode(PTaskNode(LNodePtr));
-      LPool.FMutex.Acquire;
-      Dec(LPool.FPendingTasks);
-      if LPool.FPendingTasks = 0 then
-        LPool.FDoneCondVar.Broadcast;
-      LPool.FMutex.Release;
+      LPool.FinishNode(PTaskNode(LNodePtr));
       Continue;
     end;
 
@@ -111,6 +113,23 @@ begin
     LPool.FCondVar.Wait(LPool.FMutex);
     LPool.FMutex.Release;
   end;
+end;
+
+procedure TThreadPool.BeginNode;
+begin
+  FMutex.Acquire;
+  Inc(FActiveWorkers);
+  FMutex.Release;
+end;
+
+procedure TThreadPool.FinishNode(ANode: PTaskNode);
+begin
+  FMutex.Acquire;
+  Dec(FPendingTasks);
+  Dec(FActiveWorkers);
+  if FPendingTasks = 0 then
+    FDoneCondVar.Broadcast;
+  FMutex.Release;
 end;
 
 procedure TThreadPool.RunNode(ANode: PTaskNode);
@@ -163,7 +182,7 @@ end;
 procedure TThreadPool.FreeNode(ANode: PTaskNode);
 begin
   if (PtrUInt(ANode) < PtrUInt(@FNodePool[0])) or
-     (PtrUInt(ANode) >= PtrUInt(@FNodePool[128])) then
+     (PtrUInt(ANode) >= PtrUInt(@FNodePool) + SizeOf(FNodePool)) then
     Dispose(ANode);
 end;
 
@@ -181,6 +200,19 @@ begin
     Exit(False);
   end;
   Inc(FPendingTasks);
+  { 惰性扩容（容量上界 FWorkerCount 不变），三触发全在锁内取一致快照：
+    ① 首任务必起第一条——「零流量零线程」的起端；
+    ② 已启动 worker 全部在执行中（BeginNode..FinishNode 窗口内）再补一条；
+    ③ 积压逃生口：未被认领任务 ≥2——发布快于认领的突发提交里 worker
+    还没来得及 BeginNode（快速路径计数锁外自增、短暂低估），仅靠 ②
+    会永远停在 1 条；③ 保证突发按积压深度扩得出去。
+    低估只影响扩容时机不影响正确性：队列中的任务由已启动或随后新起的
+    worker 消费。 }
+  if (FStartedWorkers < FWorkerCount) and
+     ((FStartedWorkers = 0) or
+      (FActiveWorkers >= FStartedWorkers) or
+      (FPendingTasks - FActiveWorkers >= 2)) then
+    StartWorkerLocked;
   FMutex.Release;
 
   if not FQueue.TryEnqueue(Pointer(ANode)) then
@@ -205,7 +237,6 @@ end;
 
 constructor TThreadPool.Create(const AWorkerCount: Integer);
 var
-  LI: Integer;
   LCount: Integer;
 begin
   inherited Create;
@@ -223,11 +254,21 @@ begin
   else
     LCount := platform_cpu_count;
 
+  { 容量语义保留：FWorkerCount = 上界（GetWorkerCount 契约不变）。
+    线程按需启动（StartWorkerLocked）——空闲容量不再预创建 44×N 条
+    futex 睡眠线程（pp888 双服务器实测 88 条闲置，见 proxy888
+    wiki/feedback-core.md C-22）。}
   FWorkerCount := LCount;
-  SetLength(FWorkers, LCount);
+end;
 
-  for LI := 0 to LCount - 1 do
-    platform_thread_create(FWorkers[LI], @WorkerProc, Self);
+procedure TThreadPool.StartWorkerLocked;
+var
+  LIndex: Integer;
+begin
+  LIndex := FStartedWorkers;
+  SetLength(FWorkers, LIndex + 1);
+  platform_thread_create(FWorkers[LIndex], @WorkerProc, Self);
+  Inc(FStartedWorkers);
 end;
 
 destructor TThreadPool.Destroy;
@@ -341,7 +382,8 @@ begin
 
   FCondVar.Broadcast;
 
-  for LI := 0 to FWorkerCount - 1 do
+  { 仅 join 实际启动过的 worker（惰性扩容：Length(FWorkers)=已启动数） }
+  for LI := 0 to Length(FWorkers) - 1 do
     platform_thread_join(FWorkers[LI], LRetVal);
 
   if FQueue <> nil then
@@ -387,6 +429,13 @@ end;
 function TThreadPool.GetWorkerCount: Integer;
 begin
   Result := FWorkerCount;
+end;
+
+function TThreadPool.GetStartedWorkerCount: Integer;
+begin
+  FMutex.Acquire;
+  Result := FStartedWorkers;
+  FMutex.Release;
 end;
 
 function CreateThreadPool(const AWorkerCount: Integer): IThreadPool;

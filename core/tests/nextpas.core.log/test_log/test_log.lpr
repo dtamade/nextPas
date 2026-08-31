@@ -7,6 +7,7 @@ uses
   nextpas.core.thread.init,
   nextpas.core.thread.base,
   nextpas.core.platform.thread,
+  nextpas.core.platform.env,
   nextpas.core.test,
   nextpas.core.log.intf,
   nextpas.core.log;
@@ -205,6 +206,28 @@ begin
   Check(True, 'console no crash');
 end;
 
+{ F6：控制台着色决策契约。NO_COLOR（no-color.org 约定）存在且非空必禁色；
+  测试进程 stderr 恒为重定向（套件输出被捕获）→ 非终端 → 亦禁色。
+  交互终端下的着色路径无法在自动化中构造，由人工/冒烟面覆盖。 }
+procedure TestConsoleColorsNoColorEnvWins;
+begin
+  platform_env_set('NO_COLOR', '1');
+  try
+    Check(not LogConsoleColorsEnabled, 'NO_COLOR non-empty disables colors');
+    platform_env_set('NO_COLOR', '');
+    Check(not LogConsoleColorsEnabled,
+      'empty NO_COLOR falls through to tty detection');
+  finally
+    platform_env_unset('NO_COLOR');
+  end;
+end;
+
+procedure TestConsoleColorsRedirectedStderrDisables;
+begin
+  Check(not LogConsoleColorsEnabled,
+    'redirected stderr (test harness) must disable colors');
+end;
+
 procedure TestJsonHandler;
 var
   LL: TLogger;
@@ -212,6 +235,44 @@ begin
   LL := TLogger.New(NewJsonHandler(llInfo), llInfo);
   LL.Info^.Str('key', 'val')^.Int('n', 42)^.Msg('json test');
   Check(True, 'json no crash');
+end;
+
+{ json 文件 handler 反哺测试（K35）：NewJsonFileHandler 落盘结构化行与
+  NewJsonHandler 同渲染（stdout/文件采集格式一致），且带大小轮转。 }
+procedure TestJsonFileHandler;
+var
+  LL: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+  LI: Int32;
+begin
+  LPath := '/tmp/test_log_jsonfile_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewJsonFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Str('key', 'val')^.Int('n', 42)^.Msg('file json test');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal); // release handler
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  CloseFile(LF);
+  Check(Pos('"level":"INF"', LLine) > 0, 'json file: level');
+  Check(Pos('"msg":"file json test"', LLine) > 0, 'json file: msg');
+  Check(Pos('"key":"val"', LLine) > 0, 'json file: attr key');
+  Check(Pos('"n":42', LLine) > 0, 'json file: attr int');
+  Check(Pos('"ts":', LLine) > 0, 'json file: ts');
+  DeleteFile(LPath);
+
+  { 轮转仍工作：小 AMaxBytes 触发 .1 }
+  LPath := '/tmp/test_log_jsonfile_rot_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewJsonFileHandler(LPath, llInfo, 100, 3), llInfo);
+  for LI := 1 to 8 do
+    LL.Info^.Str('payload', 'a rather long json attribute payload value')^.Msg('rotation json line');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  Check(FileExists(LPath + '.1'), 'json file: rotation created .1');
+  Check(FileExists(LPath) or FileExists(LPath + '.1'), 'json file: main file exists');
+  DeleteFile(LPath);
+  DeleteFile(LPath + '.1');
+  DeleteFile(LPath + '.2');
+  DeleteFile(LPath + '.3');
 end;
 
 procedure TestGlobalLogger;
@@ -309,6 +370,148 @@ begin
     .Str('e','5')^.Str('f','6')^.Str('g','7')^.Str('h','8')^
     .Str('i','9')^.Str('j','10')^.Msg('many');
   CheckEqual(Int64(10), Int64(GCaptured[0].AttrCount), '10 attrs');
+end;
+
+{ ===== K37 异步文件落盘（core 反哺 NewAsyncFileHandler/NewAsyncJsonFileHandler）===== }
+
+{ 统计文件行数（供批量/兜底丢行断言） }
+function CountLines(const APath: string): Int32;
+var
+  LF: TextFile;
+  LLine: string;
+begin
+  Result := 0;
+  AssignFile(LF, APath);
+  Reset(LF);
+  while not Eof(LF) do
+  begin
+    ReadLn(LF, LLine);
+    Inc(Result);
+  end;
+  CloseFile(LF);
+end;
+
+procedure TestAsyncFileHandler;
+var
+  LL: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+begin
+  LPath := '/tmp/test_log_async_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Str('key', 'val')^.Msg('async file test');
+  LL.Warn^.Int('code', 42)^.Msg('async warning');
+  { Flush = 阻塞等排空 ack：此刻之前全部落盘（确定性，不依赖 sleep） }
+  LL.Flush;
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  Check(Pos('INF', LLine) > 0, 'async file: INF');
+  Check(Pos('async file test', LLine) > 0, 'async file: msg');
+  ReadLn(LF, LLine);
+  Check(Pos('WRN', LLine) > 0, 'async file: WRN');
+  Check(Pos('code=42', LLine) > 0, 'async file: attr');
+  CloseFile(LF);
+  { 释放 handler → sink Close + join 排空（停机 drain 语义） }
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncJsonFileHandler;
+var
+  LL: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+begin
+  LPath := '/tmp/test_log_async_json_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncJsonFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Str('key', 'val')^.Msg('async json test');
+  LL.Flush;
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  CloseFile(LF);
+  Check(Pos('"level":"INF"', LLine) > 0, 'async json: level');
+  Check(Pos('"msg":"async json test"', LLine) > 0, 'async json: msg');
+  Check(Pos('"key":"val"', LLine) > 0, 'async json: attr');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncChildPrefix;
+var
+  LL, LChild: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+begin
+  LPath := '/tmp/test_log_async_child_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
+  LChild := LL.With_('req', 'abc123').WithGroup('http');
+  LChild.Info^.Str('status', '200')^.Msg('child log');
+  LL.Flush;
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  CloseFile(LF);
+  Check(Pos('req=abc123', LLine) > 0, 'async child: prefix attrs');
+  Check(Pos('http.status=200', LLine) > 0, 'async child: group prefix');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncBatchDrain;
+var
+  LL: TLogger;
+  LPath: string;
+  LI: Int32;
+begin
+  { 大批量（超 worker 攒批阈值，触发批量 Flush）+
+    释放 handler → drain：文件行数必须完整（不丢） }
+  LPath := '/tmp/test_log_async_batch_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
+  for LI := 1 to 1000 do
+    LL.Info^.Int('i', LI)^.Msg('batch line');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);   { drain }
+  CheckEqual(Int64(1000), Int64(CountLines(LPath)),
+    'async batch: all lines on disk after release');
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncFallback;
+var
+  LL: TLogger;
+  LPath: string;
+  LI: Int32;
+begin
+  { 队列满（容量 1）→ 同步直写兜底：混合路径也不丢日志 }
+  LPath := '/tmp/test_log_async_fb_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo, 100 * 1024 * 1024, 5, 1), llInfo);
+  for LI := 1 to 2000 do
+    LL.Info^.Int('i', LI)^.Msg('fallback line payload');
+  LL.Flush;
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  CheckEqual(Int64(2000), Int64(CountLines(LPath)),
+    'async fallback: queue-full no loss');
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncRotation;
+var
+  LL: TLogger;
+  LPath: string;
+  LI: Int32;
+begin
+  { 异步路径轮转：小 AMaxBytes 由 worker 写侧触发 }
+  LPath := '/tmp/test_log_async_rot_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo, 100, 3), llInfo);
+  for LI := 1 to 10 do
+    LL.Info^.Int('i', LI)^.Msg('rotation async line that is long enough');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  Check(FileExists(LPath + '.1'), 'async rotation: .1 created');
+  DeleteFile(LPath);
+  DeleteFile(LPath + '.1');
+  DeleteFile(LPath + '.2');
+  DeleteFile(LPath + '.3');
 end;
 
 procedure TestWithInt;
@@ -1625,13 +1828,22 @@ begin
   T.Test('Err helper', @TestErrHelper);
   T.Test('Send (no msg)', @TestSend);
   T.Test('Console handler', @TestConsoleHandler);
+  T.Test('Console colors: NO_COLOR wins', @TestConsoleColorsNoColorEnvWins);
+  T.Test('Console colors: redirected stderr disables', @TestConsoleColorsRedirectedStderrDisables);
   T.Test('JSON handler', @TestJsonHandler);
+  T.Test('JSON file handler', @TestJsonFileHandler);
   T.Test('Global logger', @TestGlobalLogger);
   T.Test('Disabled no alloc', @TestDisabledNoAlloc);
   T.Test('Null logger', @TestNullLogger);
   T.Test('File handler', @TestFileHandler);
   T.Test('Multi handler', @TestMultiHandler);
   T.Test('File rotation', @TestFileRotation);
+  T.Test('Async file handler', @TestAsyncFileHandler);
+  T.Test('Async JSON file handler', @TestAsyncJsonFileHandler);
+  T.Test('Async child prefix', @TestAsyncChildPrefix);
+  T.Test('Async batch drain', @TestAsyncBatchDrain);
+  T.Test('Async queue-full fallback', @TestAsyncFallback);
+  T.Test('Async rotation', @TestAsyncRotation);
   T.Test('Many attrs', @TestManyAttrs);
   T.Test('WithInt', @TestWithInt);
   T.Test('WithGroup', @TestWithGroup);

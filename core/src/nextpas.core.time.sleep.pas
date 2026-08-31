@@ -15,10 +15,20 @@ type
     class procedure Until_(const ADeadline: TDeadline); static;
   end;
 
+{ 应用层阻塞休眠（封装 platform_thread_sleep_ms）。0 = 立即返回。 }
+procedure MsSleep(const AMilliseconds: UInt64);
+
 implementation
 
 uses
   nextpas.core.platform.thread;
+
+procedure MsSleep(const AMilliseconds: UInt64);
+begin
+  if AMilliseconds = 0 then
+    Exit;
+  platform_thread_sleep_ms(AMilliseconds);
+end;
 
 { TSleep }
 

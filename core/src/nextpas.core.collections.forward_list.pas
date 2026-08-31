@@ -754,6 +754,7 @@ begin
     if LBufCap > LCount then LBufCap := LCount;
   end;
 
+  LBuf := nil;
   SetLength(LBuf, LBufCap);
 
   // 逐节点收集到缓冲区，满批则提交到 aDst
@@ -2874,6 +2875,7 @@ begin
     Inc(LCount);
     LCur := PSingleNode(LCur^.GetNext);
   end;
+  LTempArray := nil;
   SetLength(LTempArray, LCount);
   LCur := LStart;
   i := 0;

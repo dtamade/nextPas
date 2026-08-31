@@ -11,7 +11,7 @@
  *
  * Note: Full functionality tests require WolfSSL library to be installed.
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.0.0
  * @since 2026-01-09
  * @updated 2026-01-10
@@ -22,7 +22,8 @@ program test_wolfssl_framework;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, nextpas.core.text.conv,
+  nextpas.core.io.stream_adapter, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -128,14 +129,14 @@ begin
   Result := @STUB_WOLFSSL_NATIVE_SESSION_ID[0];
 end;
 
-function StubWolfSSLSessionGetTime(const session: PWOLFSSL_SESSION): clong; cdecl;
+function StubWolfSSLSessionGetTime(const session: PWOLFSSL_SESSION): LongInt; cdecl;
 begin
   if GStubWolfSSLSessionUnixTime = 0 then
     GStubWolfSSLSessionUnixTime := DateTimeToUnix(Now);
   Result := GStubWolfSSLSessionUnixTime;
 end;
 
-function StubWolfSSLSessionGetTimeout(const session: PWOLFSSL_SESSION): clong; cdecl;
+function StubWolfSSLSessionGetTimeout(const session: PWOLFSSL_SESSION): LongInt; cdecl;
 begin
   Result := STUB_WOLFSSL_NATIVE_SESSION_TIMEOUT;
 end;
@@ -195,8 +196,8 @@ end;
 
 function NormalizeHexish(const AValue: string): string;
 begin
-  Result := UpperCase(StringReplace(StringReplace(Trim(AValue), ':', '', [rfReplaceAll]),
-    ' ', '', [rfReplaceAll]));
+  Result := UpperCase(StringReplace(StringReplace(Trim(AValue), ':', '', True),
+    ' ', '', True));
 end;
 
 procedure TestWolfSSLConstants;
@@ -268,9 +269,9 @@ begin
   Test('Library type is sslWolfSSL', LLib.GetLibraryType = sslWolfSSL);
   Test('Library not initialized by default', not LLib.IsInitialized);
 
-  // Note: Initialize will fail if WolfSSL library is not installed
-  // This is expected behavior - we're testing the framework, not the library
-  WriteLn('  (Note: Initialize test skipped - requires WolfSSL library)');
+  Test('Initialize succeeds with system library', LLib.Initialize);
+  Test('Version string reports real version',
+    LLib.IsInitialized and (LLib.GetVersionString <> ''));
 end;
 
 procedure TestWolfSSLCapabilities;
@@ -403,7 +404,7 @@ begin
 
   LCert := TWolfSSLCertificate.Create;
   try
-    if not LCert.LoadFromFile('tests/certificate/test_certs/signer_ecdsa_cert.pem') then
+    if not LCert.LoadFromFile('certificate/test_certs/signer_ecdsa_cert.pem') then
     begin
       WriteLn('  (Skipped - ECDSA fixture certificate unavailable)');
       Test('Certificate algorithm metadata contract skipped', True);
@@ -454,7 +455,7 @@ begin
 
   LCert := TWolfSSLCertificate.Create;
   try
-    if not LCert.LoadFromFile('tests/certificate/test_certs/signer_ecdsa_cert.pem') then
+    if not LCert.LoadFromFile('certificate/test_certs/signer_ecdsa_cert.pem') then
     begin
       Test('Load ECDSA identity fixture', False);
       Exit;
@@ -504,7 +505,7 @@ begin
 
   LCert := TWolfSSLCertificate.Create;
   try
-    if not LCert.LoadFromFile('tests/certs/version1-cert.pem') then
+    if not LCert.LoadFromFile('certs/version1-cert.pem') then
     begin
       Test('Load version1 certificate fixture', False);
       Exit;
@@ -550,7 +551,7 @@ begin
   LCert := TWolfSSLCertificate.Create;
   LDERCert := TWolfSSLCertificate.Create;
   try
-    if not LCert.LoadFromFile('tests/certs/server-cert.pem') then
+    if not LCert.LoadFromFile('certs/server-cert.pem') then
     begin
       Test('Load server certificate time fixture', False);
       Exit;
@@ -626,11 +627,11 @@ begin
   LImposterStore := TWolfSSLCertificateStore.Create;
   try
     Test('Load verification leaf fixture',
-      LLeafCert.LoadFromFile('tests/certificate/test_certs/signer_cert.pem'));
+      LLeafCert.LoadFromFile('certificate/test_certs/signer_cert.pem'));
     Test('Load verification CA fixture',
-      LRealCACert.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'));
+      LRealCACert.LoadFromFile('certificate/test_certs/ca_cert.pem'));
     Test('Load subject-imposter CA fixture',
-      LImposterCACert.LoadFromFile('tests/certs/ca-subject-imposter.pem'));
+      LImposterCACert.LoadFromFile('certs/ca-subject-imposter.pem'));
 
     Test('Add verification CA fixture to store',
       LStore.AddCertificate(LRealCACert));
@@ -709,7 +710,7 @@ begin
   LStreamCert := TWolfSSLCertificate.Create;
   LStream := TMemoryStream.Create;
   try
-    if not LCert.LoadFromFile('tests/certs/server-cert.pem') then
+    if not LCert.LoadFromFile('certs/server-cert.pem') then
     begin
       Test('Load certificate stream/memory fixture', False);
       Exit;
@@ -732,13 +733,13 @@ begin
       SameText(LMemoryCert.GetFingerprintSHA256, LExpectedFingerprint));
 
     Test('SaveToStream writes PEM stream',
-      LCert.SaveToStream(LStream) and (LStream.Size > 0));
+      LCert.SaveToStream(TStreamWrapper.Create(LStream)) and (LStream.Size > 0));
     if LStream.Size = 0 then
       Exit;
 
     LStream.Position := 0;
     Test('LoadFromStream accepts PEM stream roundtrip',
-      LStreamCert.LoadFromStream(LStream));
+      LStreamCert.LoadFromStream(TStreamWrapper.Create(LStream)));
     Test('LoadFromStream roundtrip preserves fingerprint truth',
       SameText(LStreamCert.GetFingerprintSHA256, LExpectedFingerprint));
   finally
@@ -779,9 +780,9 @@ begin
   LEmptyStore := TWolfSSLCertificateStore.Create;
   try
     Test('Load expired verification fixture',
-      LExpiredLeaf.LoadFromFile('tests/certs/expired-signer.pem'));
+      LExpiredLeaf.LoadFromFile('certs/expired-signer.pem'));
     Test('Load issuer fixture for expired verification',
-      LIssuerCert.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'));
+      LIssuerCert.LoadFromFile('certificate/test_certs/ca_cert.pem'));
     Test('Add issuer fixture to store for expired verification',
       LStore.AddCertificate(LIssuerCert));
 
@@ -797,7 +798,7 @@ begin
       LVerified and LVerifyResult.Success);
 
     Test('Load self-signed verification fixture',
-      LSelfSignedLeaf.LoadFromFile('tests/certs/version1-cert.pem'));
+      LSelfSignedLeaf.LoadFromFile('certs/version1-cert.pem'));
 
     LVerified := LSelfSignedLeaf.VerifyEx(LEmptyStore, [], LVerifyResult);
     Test('Self-signed leaf without AllowSelfSigned fails',
@@ -839,7 +840,7 @@ begin
 
   LCert := TWolfSSLCertificate.Create;
   try
-    if not LCert.LoadFromFile('tests/certificate/test_certs/signer_ecdsa_cert.pem') then
+    if not LCert.LoadFromFile('certificate/test_certs/signer_ecdsa_cert.pem') then
     begin
       Test('Load ECDSA CA fixture', False);
       Exit;
@@ -856,7 +857,7 @@ begin
     Test('ECDSA CA fixture exposes Subject Key Identifier extension',
       LCert.GetExtension('2.5.29.14') <> '');
 
-    if not LCert.LoadFromFile('tests/certs/san-test.pem') then
+    if not LCert.LoadFromFile('certs/san-test.pem') then
     begin
       Test('Load SAN fixture', False);
       Exit;
@@ -891,7 +892,7 @@ begin
     Test('SAN fixture VerifyHostname rejects unrelated hostname',
       not LCert.VerifyHostname('wrong.test'));
 
-    if not LCert.LoadFromFile('tests/certificate/test_certs/san_cn_conflict_cert.pem') then
+    if not LCert.LoadFromFile('certificate/test_certs/san_cn_conflict_cert.pem') then
     begin
       Test('Load SAN-vs-CN conflict fixture', False);
       Exit;
@@ -902,7 +903,7 @@ begin
     Test('SAN-vs-CN fixture still matches SAN DNS entry',
       LCert.VerifyHostname('alt.example.com'));
 
-    if not LCert.LoadFromFile('tests/certificate/test_certs/san_wildcard_cert.pem') then
+    if not LCert.LoadFromFile('certificate/test_certs/san_wildcard_cert.pem') then
     begin
       Test('Load wildcard SAN fixture', False);
       Exit;
@@ -913,7 +914,7 @@ begin
     Test('Wildcard SAN fixture rejects multi-label subdomain',
       not LCert.VerifyHostname('deep.api.example.com'));
 
-    if not LCert.LoadFromFile('tests/certificate/test_certs/keyusage_cert.pem') then
+    if not LCert.LoadFromFile('certificate/test_certs/keyusage_cert.pem') then
     begin
       Test('Load KeyUsage fixture', False);
       Exit;
@@ -966,7 +967,7 @@ begin
 
   LCert := TWolfSSLCertificate.Create;
   try
-    if not LCert.LoadFromFile('tests/certificate/test_certs/signer_cert.pem') then
+    if not LCert.LoadFromFile('certificate/test_certs/signer_cert.pem') then
     begin
       WriteLn('  (Skipped - fixture certificate unavailable)');
       Test('Certificate clone materialization skipped', True);
@@ -1046,7 +1047,7 @@ begin
     begin
       LCert := TWolfSSLCertificate.Create;
       Test('Load fixture cert for certstore fingerprint semantics',
-        LCert.LoadFromFile('tests/certs/server-cert.pem'));
+        LCert.LoadFromFile('certs/server-cert.pem'));
       Test('Add loaded cert returns true', LStore.AddCertificate(LCert));
       LStoreClone := LCert.Clone;
       Test('Contains clone should be true by fingerprint', LStore.Contains(LStoreClone));
@@ -1068,8 +1069,8 @@ begin
       Test('FindByFingerprint supports normalized query variant',
         LStore.FindByFingerprint(LFingerprintVariant) <> nil);
 
-      LSubjectVariant := UpperCase(StringReplace(StringReplace(LCert.GetSubject, ',', ' , ', [rfReplaceAll]),
-        '=', ' = ', [rfReplaceAll]));
+      LSubjectVariant := UpperCase(StringReplace(StringReplace(LCert.GetSubject, ',', ' , ', True),
+        '=', ' = ', True));
       Test('FindBySubject supports normalized query variant', LStore.FindBySubject(LSubjectVariant) <> nil);
       Test('FindBySubject empty query returns nil', LStore.FindBySubject('') = nil);
       LSerialCompact := NormalizeHexish(LCert.GetSerialNumber);
@@ -1088,10 +1089,10 @@ begin
 
       LCert := TWolfSSLCertificate.Create;
       Test('Load distinct-issuer fixture for issuer query semantics',
-        LCert.LoadFromFile('tests/certificate/test_certs/signer_cert.pem'));
+        LCert.LoadFromFile('certificate/test_certs/signer_cert.pem'));
       Test('Add distinct-issuer fixture returns true', LStore.AddCertificate(LCert));
-      LIssuerVariant := UpperCase(StringReplace(StringReplace(LCert.GetIssuer, ',', ' , ', [rfReplaceAll]),
-        '=', ' = ', [rfReplaceAll]));
+      LIssuerVariant := UpperCase(StringReplace(StringReplace(LCert.GetIssuer, ',', ' , ', True),
+        '=', ' = ', True));
       Test('FindByIssuer supports normalized query variant', LStore.FindByIssuer(LIssuerVariant) <> nil);
       Test('FindByIssuer empty query returns nil', LStore.FindByIssuer('') = nil);
       Test('Remove distinct-issuer fixture succeeds', LStore.RemoveCertificate(LCert));
@@ -1099,10 +1100,10 @@ begin
 
       LCert := TWolfSSLCertificate.Create;
       Test('Load chain leaf fixture for explicit issuer-link semantics',
-        LCert.LoadFromFile('tests/certificate/test_certs/signer_cert.pem'));
+        LCert.LoadFromFile('certificate/test_certs/signer_cert.pem'));
       LChainIssuer := TWolfSSLCertificate.Create;
       Test('Load chain issuer fixture for explicit issuer-link semantics',
-        LChainIssuer.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'));
+        LChainIssuer.LoadFromFile('certificate/test_certs/ca_cert.pem'));
       LCert.SetIssuerCertificate(LChainIssuer);
       LChain := LStore.BuildCertificateChain(LCert);
       Test('BuildCertificateChain follows explicit issuer-link when store lacks issuer',
@@ -1272,7 +1273,7 @@ begin
     LCtx := LLib.CreateContext(sslCtxClient);
     LStream := TMemoryStream.Create;
     try
-      LConn := LCtx.CreateConnection(LStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
       Test('Fresh WolfSSL connection does not report verify success before handshake',
         LConn.GetVerifyResult = -1);
       Test('Fresh WolfSSL connection reports not-verified diagnostic before handshake',
@@ -1458,6 +1459,12 @@ begin
         (LClone <> nil) and Supports(LClone, ISSLNativeHandleAccess, LCloneNative) and
         (LCloneNative.GetNativeHandle <> nil));
     finally
+      // stub 存活期内释放全部 stub 分配的对象,否则真实 C free 释放 GetMem 内存
+      LCloneNative := nil;
+      LRoundTrip := nil;
+      LClone := nil;
+      LSession.Free;
+      LSession := nil;
       wolfSSL_d2i_SSL_SESSION := LOriginalD2I;
       wolfSSL_i2d_SSL_SESSION := LOriginalI2D;
       wolfSSL_SESSION_free := LOriginalFree;
@@ -1519,6 +1526,7 @@ begin
       Test('Duplicated session keeps native handle', LNativeHandle <> nil);
       Test('Duplicated session no longer aliases source handle',
         LNativeHandle <> GStubWolfSSLBorrowedSession);
+      LNativeAccess := nil;
       LSession := nil;
     finally
       wolfSSL_get_session := LOriginalGetSession;
@@ -1594,7 +1602,7 @@ begin
 
   LFixtureCert := TWolfSSLCertificate.Create;
   try
-    if not LFixtureCert.LoadFromFile('tests/certificate/test_certs/signer_cert.pem') then
+    if not LFixtureCert.LoadFromFile('certificate/test_certs/signer_cert.pem') then
     begin
       WriteLn('  (Skipped - fixture certificate unavailable)');
       Test('Session metadata completeness skipped', True);
@@ -1701,6 +1709,10 @@ begin
         LRoundTripSession.Free;
       end;
     finally
+      LSession := nil;
+      LPeerCert := nil;
+      LClone := nil;
+      LRoundTripClone := nil;
       wolfSSL_get_session := LOriginalGetSession;
       wolfSSL_SESSION_dup := LOriginalSessionDup;
       wolfSSL_d2i_SSL_SESSION := LOriginalD2ISession;
@@ -1744,6 +1756,8 @@ begin
       Test('FromConnection fails closed when peer certificate cannot be materialized',
         LPeerCert = nil);
     finally
+      LSession := nil;
+      LPeerCert := nil;
       wolfSSL_get_session := LOriginalGetSession;
       wolfSSL_SESSION_dup := LOriginalSessionDup;
       wolfSSL_d2i_SSL_SESSION := LOriginalD2ISession;

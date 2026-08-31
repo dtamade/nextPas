@@ -39,6 +39,9 @@ begin
     H := NewHasher(haSHA256); CheckEqual(32, H.DigestSize); CheckEqual(64, H.BlockSize);
     H := NewHasher(haSHA384); CheckEqual(48, H.DigestSize); CheckEqual(128, H.BlockSize);
     H := NewHasher(haSHA512); CheckEqual(64, H.DigestSize); CheckEqual(128, H.BlockSize);
+    H := NewHasher(haBLAKE2b256); CheckEqual(32, H.DigestSize); CheckEqual(128, H.BlockSize);
+    H := NewHasher(haSHA224); CheckEqual(28, H.DigestSize); CheckEqual(64, H.BlockSize);
+    H := NewBLAKE2b256; CheckEqual(32, H.DigestSize); CheckEqual(128, H.BlockSize);
   end);
 
   LSuite.Test('invalid algorithm rejected', procedure
@@ -58,6 +61,7 @@ begin
   LSuite.Test('one-shot functions', procedure
   const ABC: array[0..2] of Byte = (Ord('a'), Ord('b'), Ord('c'));
   var D256: TSHA256Digest; D1: TSHA1Digest; D5: TMD5Digest; D384: TSHA384Digest; D512: TSHA512Digest;
+      DB2: TBLAKE2b256Digest;
   begin
     D256 := SHA256Of(ABC[0], 3);
     CheckEqual('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad', HexStr(D256, 32));
@@ -73,6 +77,9 @@ begin
     CheckEqual('e3b0c442', Copy(HexStr(D256, 32), 1, 8));
     D5 := MD5Of(D5, 0);
     CheckEqual('d41d8cd9', Copy(HexStr(D5, 16), 1, 8));
+    DB2 := BLAKE2b256Of(ABC[0], 3);
+    CheckEqual('bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319',
+      HexStr(DB2, 32));
   end);
 
   LSuite.Test('DigestToHex', procedure

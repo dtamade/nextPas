@@ -21,6 +21,11 @@ var
   GLastCloseResult: Int32;
   GRaisingCallbackCount: Int32;
   GRaisingAbortCount: Int32;
+  GUdpSendCount: Int32;
+  GUdpRecvA: Int32;
+  GUdpRecvB: Int32;
+  GDuplexSend: Int32;
+  GDuplexRecv: Int32;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
@@ -77,6 +82,33 @@ begin
     Inc(GRaisingAbortCount);
   if GRaisingCallbackCount = 1 then
     raise Exception.Create('epoll reactor close callback failure');
+end;
+
+procedure OnUdpSend(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  Inc(GUdpSendCount);
+  GLastResult := AResult;
+end;
+
+procedure OnUdpRecvA(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GUdpRecvA := AResult;
+end;
+
+procedure OnUdpRecvB(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GUdpRecvB := AResult;
+end;
+
+procedure OnDuplexSend(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  Inc(GDuplexSend);
+  GLastResult := AResult;
+end;
+
+procedure OnDuplexRecv(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GDuplexRecv := AResult;
 end;
 
 procedure OnCompleteReenterClose(AUserData: UInt64; AResult: Int32; AContext: Pointer);
@@ -505,6 +537,82 @@ begin
   end;
 end;
 
+procedure TestEpollWriteBufferContractSourceContract;
+var
+  LSource: string;
+  LTcp: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.io.reactor.epoll.pas');
+  LTcp := LoadSourceText('src/nextpas.core.net.async.tcp.pas');
+  CheckSourceContains(LSource, 'fops[lidx].buf := abuf',
+    'pending write op stores caller buffer pointer (no copy)');
+  CheckSourceContains(LSource, 'lres := send(fops[aidx].fd, fops[aidx].buf',
+    'deferred send uses the stored caller pointer');
+  CheckSourceContains(LSource, '不拷贝调用方缓冲',
+    'epoll unit documents zero-copy hold contract');
+  CheckSourceContains(LSource, '不自动续发',
+    'epoll unit documents one-op one-callback short-write');
+  CheckSourceContains(LTcp, '须保持有效直到回调',
+    'IAsyncTcpStream.AsyncWrite documents hold-until-callback');
+end;
+
+procedure TestAsyncSendShortWriteOneShot;
+const
+  kSend = 262144;
+  kSolSocket = 1;
+  kSoSndBuf = 7;
+var
+  LR: TEpollReactor;
+  LPair: array[0..1] of Int32;
+  LTx: array[0..kSend - 1] of Byte;
+  LBufBytes: Int32;
+  LFlags, LCount: Int32;
+  LReady: Boolean;
+begin
+  { 钳制发送缓冲后一次 AsyncSend 大块：send() 短写应立即回调实际送达数，
+    反应器不得循环写满（事件循环不能阻塞）。 }
+  GCallbackCount := 0;
+  GLastResult := 0;
+  LReady := False;
+  LPair[0] := -1;
+  LPair[1] := -1;
+  LBufBytes := 4096;
+  LR := TEpollReactor.Create(16);
+  Check(LR.IsValid, 'valid');
+  try
+    Check(socketpair(AF_UNIX, SOCK_STREAM, 0, @LPair[0]) = 0, 'socketpair');
+    LReady := True;
+    Check(setsockopt(LPair[0], kSolSocket, kSoSndBuf, @LBufBytes,
+      SizeOf(LBufBytes)) = 0, 'SO_SNDBUF');
+    LFlags := fcntl(LPair[0], F_GETFL, 0);
+    Check(fcntl(LPair[0], F_SETFL, LFlags or O_NONBLOCK) >= 0, 'A nonblock');
+    LFlags := fcntl(LPair[1], F_GETFL, 0);
+    Check(fcntl(LPair[1], F_SETFL, LFlags or O_NONBLOCK) >= 0, 'B nonblock');
+    FillChar(LTx, SizeOf(LTx), $CD);
+    Check(LR.AsyncSend(LPair[0], @LTx[0], UInt32(SizeOf(LTx)), 0,
+      @OnComplete, nil), 'AsyncSend large payload');
+    CheckEqual(Int64(1), Int64(GCallbackCount), 'exactly one send callback');
+    Check(GLastResult > 0, 'short-write reports bytes sent');
+    Check(GLastResult < SizeOf(LTx),
+      'did not auto-complete the full payload in one op');
+    LCount := 0;
+    while LCount < 8 do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    CheckEqual(Int64(1), Int64(GCallbackCount),
+      'reactor does not auto-retry remaining bytes');
+  finally
+    if LReady then
+    begin
+      nextpas.core.platform.posix.ffi.close(LPair[0]);
+      nextpas.core.platform.posix.ffi.close(LPair[1]);
+    end;
+    LR.Close;
+  end;
+end;
+
 procedure TestEpollSyscallErrorModelSourceContract;
 var
   LSource: string;
@@ -634,6 +742,194 @@ begin
   end;
 end;
 
+procedure BindLoopbackUdp(out AFd: Int32; out AAddr: sockaddr_in);
+var
+  LLen: socklen_t;
+begin
+  AFd := nextpas.core.platform.posix.ffi.socket(AF_INET, SOCK_DGRAM, 0);
+  Check(AFd >= 0, 'udp socket');
+  FillChar(AAddr, SizeOf(AAddr), 0);
+  AAddr.sin_family := AF_INET;
+  AAddr.sin_port := 0;
+  AAddr.sin_addr.s_bytes[1] := 127;
+  AAddr.sin_addr.s_bytes[2] := 0;
+  AAddr.sin_addr.s_bytes[3] := 0;
+  AAddr.sin_addr.s_bytes[4] := 1;
+  Check(nextpas.core.platform.posix.ffi.bind(AFd, @AAddr, SizeOf(AAddr)) = 0,
+    'udp bind');
+  LLen := SizeOf(AAddr);
+  Check(nextpas.core.platform.posix.ffi.getsockname(AFd, @AAddr, @LLen) = 0,
+    'udp getsockname');
+end;
+
+procedure TestSendToWhileRecvFromArmed;
+{ QUIC/hysteria2：同一 UDP fd 先挂 RecvFrom，再 AsyncSendTo。
+  旧实现 EPOLL_CTL_ADD(EPOLLOUT) 撞 EEXIST，数据报未发出。 }
+var
+  LR: TEpollReactor;
+  LFdA, LFdB: Int32;
+  LAddrA, LAddrB, LFrom: sockaddr_in;
+  LFromLen: socklen_t;
+  LMsg: array[0..6] of AnsiChar;
+  LRxA, LRxB: array[0..31] of AnsiChar;
+  LCount: Int32;
+  LReady: Boolean;
+begin
+  LReady := False;
+  LFdA := -1;
+  LFdB := -1;
+  GUdpSendCount := 0;
+  GUdpRecvA := 0;
+  GUdpRecvB := 0;
+  GLastResult := 0;
+  LR := TEpollReactor.Create(16);
+  Check(LR.IsValid, 'valid');
+  try
+    BindLoopbackUdp(LFdA, LAddrA);
+    BindLoopbackUdp(LFdB, LAddrB);
+    LReady := True;
+    LMsg[0] := 'h'; LMsg[1] := 'y'; LMsg[2] := '2'; LMsg[3] := '-';
+    LMsg[4] := 'g'; LMsg[5] := 'e'; LMsg[6] := 't';
+    FillChar(LRxA, SizeOf(LRxA), 0);
+    FillChar(LRxB, SizeOf(LRxB), 0);
+    FillChar(LFrom, SizeOf(LFrom), 0);
+    LFromLen := SizeOf(LFrom);
+
+    Check(LR.AsyncRecvFrom(LFdA, @LRxA[0], SizeOf(LRxA), 0, @LFrom, @LFromLen,
+      @OnUdpRecvA, nil), 'A recv armed first');
+    Check(LR.HasPending, 'recv is pending');
+
+    Check(LR.AsyncSendTo(LFdA, @LMsg[0], 7, 0, @LAddrB, SizeOf(LAddrB),
+      @OnUdpSend, nil), 'A send while recv armed');
+    CheckEqual(Int64(1), Int64(GUdpSendCount), 'send completed (not EEXIST)');
+    CheckEqual(Int64(7), Int64(GLastResult), 'sent 7 bytes');
+    Check(LR.HasPending, 'recv still pending after send');
+    CheckEqual(Int64(0), Int64(GUdpRecvA), 'A recv must not fire on send');
+
+    Check(LR.AsyncRecvFrom(LFdB, @LRxB[0], SizeOf(LRxB), 0, @LFrom, @LFromLen,
+      @OnUdpRecvB, nil), 'B recv');
+
+    LCount := 0;
+    while (GUdpRecvB = 0) and (LCount < 100) do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    CheckEqual(Int64(7), Int64(GUdpRecvB), 'B got datagram');
+    Check((LRxB[0] = 'h') and (LRxB[1] = 'y') and (LRxB[2] = '2'),
+      'B payload');
+
+    { 回包：证明 A 的 RecvFrom 没被 send 的 RemoveFd 拆掉 }
+    Check(LR.AsyncSendTo(LFdB, @LMsg[0], 7, 0, @LAddrA, SizeOf(LAddrA),
+      @OnUdpSend, nil), 'B reply');
+
+    LCount := 0;
+    while (GUdpRecvA = 0) and (LCount < 100) do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    CheckEqual(Int64(7), Int64(GUdpRecvA), 'A recv survived send');
+    Check((LRxA[0] = 'h') and (LRxA[6] = 't'), 'A payload');
+  finally
+    if LReady then
+    begin
+      nextpas.core.platform.posix.ffi.close(LFdA);
+      nextpas.core.platform.posix.ffi.close(LFdB);
+    end;
+    LR.Close;
+  end;
+end;
+
+procedure TestSendWhileRecvArmedEagain;
+{ 塞满 socketpair 发送缓冲迫使 send EAGAIN，同时 Recv 已挂。
+  旧实现 ADD EPOLLOUT 撞 EEXIST 或 CompleteOp RemoveFd 拆掉 recv。 }
+var
+  LR: TEpollReactor;
+  LPair: array[0..1] of Int32;
+  LBuf: array[0..4095] of Byte;
+  LRx: array[0..15] of Byte;
+  LTx: array[0..15] of Byte;
+  LFlags, LFill, LCount, LNread: Int32;
+  LReady: Boolean;
+begin
+  LReady := False;
+  LPair[0] := -1;
+  LPair[1] := -1;
+  GDuplexSend := 0;
+  GDuplexRecv := 0;
+  GLastResult := 0;
+  LR := TEpollReactor.Create(16);
+  Check(LR.IsValid, 'valid');
+  try
+    Check(socketpair(AF_UNIX, SOCK_STREAM, 0, @LPair[0]) = 0, 'socketpair');
+    LReady := True;
+    LFlags := fcntl(LPair[0], F_GETFL, 0);
+    Check(fcntl(LPair[0], F_SETFL, LFlags or O_NONBLOCK) >= 0, 'A nonblock');
+    LFlags := fcntl(LPair[1], F_GETFL, 0);
+    Check(fcntl(LPair[1], F_SETFL, LFlags or O_NONBLOCK) >= 0, 'B nonblock');
+    FillChar(LBuf, SizeOf(LBuf), $AB);
+    LFill := 0;
+    while True do
+    begin
+      LNread := Int32(nextpas.core.platform.posix.ffi.write(LPair[0],
+        @LBuf[0], SizeOf(LBuf)));
+      if LNread < 0 then
+        Break;
+      LFill := LFill + LNread;
+      if LFill > 8 * 1024 * 1024 then
+        Break;
+    end;
+    Check(LFill > 0, 'filled send buffer');
+
+    FillChar(LRx, SizeOf(LRx), 0);
+    FillChar(LTx, SizeOf(LTx), $CD);
+    Check(LR.AsyncRecv(LPair[0], @LRx[0], SizeOf(LRx), 0, @OnDuplexRecv, nil),
+      'recv armed first');
+    Check(LR.HasPending, 'recv pending');
+    Check(LR.AsyncSend(LPair[0], @LTx[0], SizeOf(LTx), 0, @OnDuplexSend, nil),
+      'send while recv armed and buffer full');
+    CheckEqual(Int64(0), Int64(GDuplexSend), 'send waits for EPOLLOUT');
+    Check(LR.HasPending, 'both directions pending');
+    CheckEqual(Int64(0), Int64(GDuplexRecv), 'recv must not fire on send submit');
+
+    repeat
+      LNread := Int32(nextpas.core.platform.posix.ffi.read(LPair[1],
+        @LBuf[0], SizeOf(LBuf)));
+    until LNread <= 0;
+
+    LCount := 0;
+    while (GDuplexSend = 0) and (LCount < 200) do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    Check(GDuplexSend >= 1, 'send completed after drain');
+    Check(GLastResult > 0, 'sent some bytes');
+    CheckEqual(Int64(0), Int64(GDuplexRecv), 'recv not stolen by send complete');
+    Check(LR.HasPending, 'recv still pending after send');
+
+    LBuf[0] := $42;
+    Check(nextpas.core.platform.posix.ffi.write(LPair[1], @LBuf[0], 1) = 1,
+      'peer writes for recv');
+    LCount := 0;
+    while (GDuplexRecv = 0) and (LCount < 200) do
+    begin
+      LR.PollOne;
+      Inc(LCount);
+    end;
+    Check(GDuplexRecv > 0, 'recv survived send');
+    CheckEqual(Int64($42), Int64(LRx[0]), 'recv payload');
+  finally
+    if LReady then
+    begin
+      nextpas.core.platform.posix.ffi.close(LPair[0]);
+      nextpas.core.platform.posix.ffi.close(LPair[1]);
+    end;
+    LR.Close;
+  end;
+end;
+
 procedure TestPostCloseSubmissionsAreRejected;
 var
   LR: TEpollReactor;
@@ -703,11 +999,19 @@ begin
     @TestAsyncCloseInvalidFdReturnsErrno);
   T.Test('epoll syscall error model source contract',
     @TestEpollSyscallErrorModelSourceContract);
+  T.Test('write buffer hold + no-copy source contract',
+    @TestEpollWriteBufferContractSourceContract);
+  T.Test('AsyncSend short-write is one-shot (no auto-retry)',
+    @TestAsyncSendShortWriteOneShot);
   T.Test('Close dispatches all aborts when callback raises',
     @TestCloseDispatchesAllAbortsWhenCallbackRaises);
   T.Test('Completion re-enter Close does not abort again',
     @TestCompletionReenterCloseDoesNotAbortAgain);
   T.Test('Post-close submissions are rejected',
     @TestPostCloseSubmissionsAreRejected);
+  T.Test('SendTo while RecvFrom armed (UDP full-duplex)',
+    @TestSendToWhileRecvFromArmed);
+  T.Test('Send while Recv armed (EAGAIN full-duplex)',
+    @TestSendWhileRecvArmedEagain);
   if not T.Run then Halt(1);
 end.

@@ -563,6 +563,9 @@ var
   BodyMatchCount: LongInt;
   BestDist: LongInt;
   BestSymbolId: LongInt;
+  DeclCandidateCount: LongInt;
+  DeclCandidateId: LongInt;
+  DeclSymbolId: LongInt;
   Dist: LongInt;
   HasArgTypeIds: Boolean;
   Index: LongInt;

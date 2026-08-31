@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.thread*.pas`（8 个源文件）
 **层级**：L1（依赖 L0: base, sync）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 
@@ -47,7 +47,11 @@ end;
 
 ```pascal
 function ThreadPool(AWorkerCount: Integer = 0): IThreadPool;
-// AWorkerCount=0 → CPU 核心数
+// AWorkerCount=0 → CPU 核心数。使用建议（实测证据，2026-08-18）：
+// 短请求/高频 handler 场景显式给小池（如 4-8）——44 逻辑核机上
+// 0(=44) 池竞争劣化（只读 handler QPS 1508 vs 显式 4 的 2128，
+// 2-16 区间持平，QPS 采样 100 并发/万请求）；重 IO/阻塞 handler
+// 场景按需调大（池线程驻留阻塞 handler）。
 
 function CancellationSource: ICancellationSource;
 ```
@@ -107,3 +111,5 @@ function CancellationSource: ICancellationSource;
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |
+| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

@@ -1,4 +1,4 @@
-program fafafa_core_simd_array_f32_ieee754;
+program nextpas_core_simd_array_f32_ieee754;
 
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}

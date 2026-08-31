@@ -19,7 +19,7 @@ unit nextpas.core.tls.crypto.utils;
  *   - OpenSSL 1.1.1+ or 3.0+
  *   - nextpas.core.tls.exceptions
  * 
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.0.0
  * @since 2025-11-26
  * 
@@ -80,6 +80,8 @@ const
   HASH_SHA256 = nextpas.core.hash.base.haSHA256;
   HASH_SHA384 = nextpas.core.hash.base.haSHA384;
   HASH_SHA512 = nextpas.core.hash.base.haSHA512;
+  HASH_BLAKE2B256 = nextpas.core.hash.base.haBLAKE2b256;
+  HASH_SHA224 = nextpas.core.hash.base.haSHA224;
 
 type
   {**
@@ -778,12 +780,17 @@ end;
 
 class function TCryptoUtils.GetEVPDigest(AAlgorithm: THashAlgorithm): PEVP_MD;
 begin
+  { OpenSSL 暴露 blake2b512 / blake2s256，没有 BLAKE2b-256（nn=32）
+    独立 EVP；该算法走 nextpas.core.hash.NewBLAKE2b256。 }
+  Result := nil;
   case AAlgorithm of
     HASH_SHA256: Result := EVP_sha256();
     HASH_SHA512: Result := EVP_sha512();
     HASH_SHA384: Result := EVP_sha384();
     HASH_SHA1: Result := EVP_sha1();
     HASH_MD5: Result := EVP_md5();
+    HASH_BLAKE2B256: Result := nil;
+    HASH_SHA224: Result := EVP_sha224();
   end;
 end;
 
@@ -2058,6 +2065,8 @@ end;
 { TStreamingHasher }
 
 constructor TStreamingHasher.Create(AAlgorithm: THashAlgorithm);
+var
+  LMD: PEVP_MD;
 begin
   inherited Create;
   TCryptoUtils.EnsureInitialized;
@@ -2072,6 +2081,8 @@ begin
     HASH_SHA512: FHashSize := 64;
     HASH_SHA1: FHashSize := 20;
     HASH_MD5: FHashSize := 16;
+    HASH_BLAKE2B256: FHashSize := 32;
+    HASH_SHA224: FHashSize := 28;
   end;
 
   FCtx := EVP_MD_CTX_new();
@@ -2079,7 +2090,11 @@ begin
     raise ESSLCryptoError.Create('Failed to create digest context');
 
   try
-    if EVP_DigestInit_ex(FCtx, TCryptoUtils.GetEVPDigest(AAlgorithm), nil) <> 1 then
+    LMD := TCryptoUtils.GetEVPDigest(AAlgorithm);
+    if LMD = nil then
+      raise ESSLCryptoError.CreateFmt('%s is not available via OpenSSL EVP',
+        [HashAlgorithmToString(AAlgorithm)]);
+    if EVP_DigestInit_ex(FCtx, LMD, nil) <> 1 then
       raise ESSLCryptoError.CreateFmt('Failed to initialize %s digest', [HashAlgorithmToString(AAlgorithm)]);
   except
     EVP_MD_CTX_free(FCtx);
@@ -2425,12 +2440,15 @@ end;
 
 function HashAlgorithmToString(AAlgorithm: THashAlgorithm): string;
 begin
+  Result := '';
   case AAlgorithm of
     HASH_SHA256: Result := 'SHA-256';
     HASH_SHA384: Result := 'SHA-384';
     HASH_SHA512: Result := 'SHA-512';
     HASH_SHA1: Result := 'SHA-1';
     HASH_MD5: Result := 'MD5';
+    HASH_BLAKE2B256: Result := 'BLAKE2b-256';
+    HASH_SHA224: Result := 'SHA-224';
   end;
 end;
 
@@ -2449,6 +2467,11 @@ begin
     Result := HASH_SHA1
   else if LName = 'MD5' then
     Result := HASH_MD5
+  else if (LName = 'BLAKE2B256') or (LName = 'BLAKE2B-256') or
+    (LName = 'BLAKE2B_256') then
+    Result := HASH_BLAKE2B256
+  else if (LName = 'SHA224') or (LName = 'SHA-224') then
+    Result := HASH_SHA224
   else
     RaiseInvalidParameter('hash algorithm name');
 end;

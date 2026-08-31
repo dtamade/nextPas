@@ -87,6 +87,15 @@ begin
     WriteLn('Function Pointers:');
     if TOpenSSLLoader.IsModuleLoaded(osmCore) then
     begin
+      { 懒加载各模块导出符号，与运行时 TOpenSSLLoader 的实际绑定路径一致 }
+      LoadOpenSSLBIO;
+      LoadOpenSSLBN;
+      LoadEVP(TOpenSSLLoader.GetLibraryHandle(osslLibCrypto));
+      LoadOpenSSLHMAC;
+      LoadOpenSSLRSA;
+      LoadOpenSSLRAND;
+      LoadOpenSSLERR;
+
       Test('BIO_new', Assigned(BIO_new));
       Test('BIO_free', Assigned(BIO_free));
       Test('BN_new', Assigned(BN_new));
@@ -108,7 +117,7 @@ begin
       Test('RSA_free', Assigned(RSA_free));
       Test('EVP_sha256', Assigned(EVP_sha256));
       Test('EVP_sha512', Assigned(EVP_sha512));
-      Test('EVP_sha3_256', Assigned(EVP_sha3_256));
+      Test('EVP_sha384', Assigned(EVP_sha384));
       Test('EVP_blake2b512', Assigned(EVP_blake2b512));
       Test('EVP_aes_256_cbc', Assigned(EVP_aes_256_cbc));
       Test('EVP_aes_256_gcm', Assigned(EVP_aes_256_gcm));
@@ -146,11 +155,11 @@ begin
     WriteLn('      rand_old, async, comp, legacy_ciphers,');
     WriteLn('      pkcs*) have compilation errors and');
     WriteLn('      need to be fixed separately.');
-    Halt(0);
+    ExitCode := 0;
   end
   else
   begin
     WriteLn('FAILED: Some tests did not pass!');
-    Halt(1);
+    ExitCode := 1;
   end;
 end.

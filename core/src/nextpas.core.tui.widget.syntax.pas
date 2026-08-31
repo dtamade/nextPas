@@ -45,6 +45,31 @@ type
     function LangId: AnsiString;
   end;
 
+  { PH33 P5c：JSON/TOML 高亮器（第二/第三语言，零 RTL）——语义自
+    tui888.hl PH21 实战实现移植：JSON 键串后跟 ':' → tkKeyword 与值串
+    区分；TOML '#' 注释、行首 [..]/[[..]] 表头 → tkDirective、词后跟
+    '=' → 键；两语言共享数字（sign/int/frac/exp）与转义串扫描；无跨行
+    结构（StateIn 恒等）；越界 MaxTokens 只计数不写入末尾 clamp }
+  TJsonHighlighter = class(TInterfacedObject, IHighlighter)
+  public
+    function TokenizeLine(P: PAnsiChar; Len: Integer;
+      const StateIn: TLineState; out StateOut: TLineState;
+      Dst: PToken; MaxTokens: Integer): Integer;
+    function LangId: AnsiString;
+  end;
+
+  TTomlHighlighter = class(TInterfacedObject, IHighlighter)
+  public
+    function TokenizeLine(P: PAnsiChar; Len: Integer;
+      const StateIn: TLineState; out StateOut: TLineState;
+      Dst: PToken; MaxTokens: Integer): Integer;
+    function LangId: AnsiString;
+  end;
+
+  { Lazy tokenized document. GetTokens(LineIndex) tokenizes on demand up to
+    LineIndex; lines are computed only when requested — a partial or
+    out-of-order scan never marks uncomputed lines clean (PH33 P5d).
+    The get-line callback and highlighter are required and checked in Create. }
   TSyntaxDoc = class
   private
     FHighlighter: IHighlighter;
@@ -87,6 +112,9 @@ function IsPascalKeyword(const W: AnsiString): Boolean;
 function IsPascalKeywordP(P: PAnsiChar; Len: Integer): Boolean;
 
 implementation
+
+uses
+  nextpas.core.errors, nextpas.core.text.grapheme;
 
 
 { Zero-allocation keyword hash table.
@@ -433,6 +461,10 @@ constructor TSyntaxDoc.Create(AHighlighter: IHighlighter; ALineCount: Integer;
   AGetLine: TGetLineFunc);
 var Cap: Integer;
 begin
+  if AHighlighter = nil then
+    raise EArgumentError.Create('TSyntaxDoc.Create: highlighter must not be nil');
+  if not Assigned(AGetLine) then
+    raise EArgumentError.Create('TSyntaxDoc.Create: get-line callback must not be nil');
   inherited Create;
   FHighlighter := AHighlighter;
   FGetLine := AGetLine;
@@ -568,14 +600,20 @@ begin
     TokenizeLineInto(FDirtyFrom, P, Len);
     Inc(FDirtyFrom);
     Inc(Processed);
+    { State-stable shortcut: only valid when the next line already has
+      cached tokens — otherwise lines past ToLine were never computed and
+      must not be marked clean (PH33 P5d). }
     if (FDirtyFrom > ToLine) and (FDirtyFrom <= FLineCount) and
+       (FLineTokenLen[FDirtyFrom] > 0) and
        (CompareByte(FLineStates[FDirtyFrom], OldState, SizeOf(TLineState)) = 0) then
     begin
       FDirtyFrom := High(Integer);
       Exit;
     end;
   end;
-  if FDirtyFrom > ToLine then
+  { Mark the whole doc clean only after the last line was actually scanned;
+    stopping at ToLine leaves the tail dirty for later requests (PH33 P5d). }
+  if FDirtyFrom >= FLineCount then
     FDirtyFrom := High(Integer);
 end;
 
@@ -593,6 +631,7 @@ function TokenizePascalStateful(const Line: AnsiString;
 var
   Tokens: array of TToken;
   Count, I, Start, Len: Integer;
+  LGR: TGraphemeResult;
 
   procedure AddToken(AStart, ALen: Integer; AKind: TTokenKind);
   begin
@@ -709,8 +748,19 @@ begin
       Continue;
     end;
 
-    AddToken(I, 1, tkNormal);
-    Inc(I);
+    { 高位字节按完整 UTF-8 图素发一个 token（逐字节拆 token 会让 CJK
+      渲染成单字节乱码格——PH33 P5a）；ASCII 兜底仍逐字符 }
+    if Ord(Line[I]) >= $80 then
+    begin
+      LGR := GraphemeNext(PByte(@Line[I]), SizeUInt(Len - I + 1));
+      AddToken(I, LGR.ByteLen, tkNormal);
+      Inc(I, LGR.ByteLen);
+    end
+    else
+    begin
+      AddToken(I, 1, tkNormal);
+      Inc(I);
+    end;
   end;
 
   SetLength(Tokens, Count);
@@ -724,6 +774,7 @@ function TPascalHighlighter.TokenizeLine(P: PAnsiChar; Len: Integer;
   Dst: PToken; MaxTokens: Integer): Integer;
 var
   Count, I, Start: Integer;
+  LGR: TGraphemeResult;
 
   procedure Emit(AStart, ALen: Integer; AKind: TTokenKind); inline;
   begin
@@ -843,8 +894,18 @@ begin
       Continue;
     end;
 
-    Emit(I, 1, tkNormal);
-    Inc(I);
+    { 同 TokenizePascalStateful：高位字节按完整图素发 token（PH33 P5a） }
+    if Ord(Ch(I)) >= $80 then
+    begin
+      LGR := GraphemeNext(PByte(P) + (I - 1), SizeUInt(Len - I + 1));
+      Emit(I, LGR.ByteLen, tkNormal);
+      Inc(I, LGR.ByteLen);
+    end
+    else
+    begin
+      Emit(I, 1, tkNormal);
+      Inc(I);
+    end;
   end;
 
   if Count > MaxTokens then Count := MaxTokens;
@@ -854,6 +915,238 @@ end;
 function TPascalHighlighter.LangId: AnsiString;
 begin
   Result := 'pascal';
+end;
+
+{ ===== PH33 P5c：JSON/TOML 高亮器（语义自 tui888.hl PH21 移植，零 RTL）===== }
+
+type
+  TCfgDialect = (cdJson, cdToml);
+
+procedure CfgEmit(Dst: PToken; Max: Integer; var Count: Integer;
+  AStart, ALen: Integer; AKind: TTokenKind);
+begin
+  if Count < Max then
+  begin
+    Dst[Count].Start := AStart;
+    Dst[Count].Len := ALen;
+    Dst[Count].Kind := AKind;
+  end;
+  Inc(Count);
+end;
+
+{ 扫描 quoted string：Idx 指向开引号（1-based）。返回闭引号位置；未闭合
+  返回 0。`\` 与其后一字符整体跳过，行尾 `\` 视为未闭合 }
+function CfgScanString(P: PAnsiChar; Len, Idx: Integer): Integer;
+var LI: Integer; LC: AnsiChar;
+begin
+  LI := Idx + 1;
+  while LI <= Len do
+  begin
+    LC := P[LI - 1];
+    if LC = '"' then Exit(LI);
+    if LC = '\' then
+    begin
+      Inc(LI, 2);
+      if LI > Len then Exit(0);
+    end
+    else
+      Inc(LI);
+  end;
+  Result := 0;
+end;
+
+{ 数字段（sign/int/frac/exp）：返回段后 one-past 下标 }
+function CfgScanNumber(P: PAnsiChar; Len, Idx: Integer): Integer;
+var LI: Integer;
+begin
+  LI := Idx;
+  if (LI <= Len) and (P[LI - 1] in ['-', '+']) then Inc(LI);
+  while (LI <= Len) and (P[LI - 1] in ['0'..'9']) do Inc(LI);
+  if (LI <= Len) and (P[LI - 1] = '.') then
+  begin
+    Inc(LI);
+    while (LI <= Len) and (P[LI - 1] in ['0'..'9']) do Inc(LI);
+  end;
+  if (LI <= Len) and (P[LI - 1] in ['e', 'E']) then
+  begin
+    Inc(LI);
+    if (LI <= Len) and (P[LI - 1] in ['-', '+']) then Inc(LI);
+    while (LI <= Len) and (P[LI - 1] in ['0'..'9']) do Inc(LI);
+  end;
+  Result := LI;
+end;
+
+{ 词字节：字母数字下划线 + UTF-8 高字节（CJK 键名成词） }
+function CfgIsWordByte(B: Byte): Boolean;
+begin
+  Result := (B in [Ord('a')..Ord('z'), Ord('A')..Ord('Z'), Ord('0')..Ord('9')])
+    or (B = Ord('_')) or (B >= 128);
+end;
+
+{ 自 AFrom 起跳过空白后的字符（越界返 #0） }
+function CfgPeekNonSpace(P: PAnsiChar; Len, AFrom: Integer): AnsiChar;
+var LI: Integer;
+begin
+  LI := AFrom;
+  while (LI <= Len) and (P[LI - 1] in [' ', #9]) do Inc(LI);
+  if LI > Len then Result := #0 else Result := P[LI - 1];
+end;
+
+function CfgWordIs(const P: PAnsiChar; AStart, AEnd_: Integer;
+  const AW: AnsiString): Boolean;
+var I, LLen: Integer;
+begin
+  LLen := AEnd_ - AStart;
+  Result := LLen = Length(AW);
+  if not Result then Exit;
+  for I := 0 to LLen - 1 do
+    if P[AStart - 1 + I] <> AW[I + 1] then Exit(False);
+end;
+
+{ 整词字面量 true/false/null }
+function CfgIsLiteralWord(P: PAnsiChar; AStart, AEnd_: Integer): Boolean;
+begin
+  Result := CfgWordIs(P, AStart, AEnd_, 'true') or
+    CfgWordIs(P, AStart, AEnd_, 'false') or
+    CfgWordIs(P, AStart, AEnd_, 'null');
+end;
+
+{ 主扫描：无跨行结构 → StateIn 恒等；返回实际写入数，越界只计数末尾 clamp }
+function CfgTokenizeLine(ADialect: TCfgDialect; P: PAnsiChar; Len: Integer;
+  const StateIn: TLineState; out StateOut: TLineState;
+  Dst: PToken; MaxTokens: Integer): Integer;
+var
+  LCount, LI, LStart, LEndI: Integer;
+  LC, LNext: AnsiChar;
+  LKind: TTokenKind;
+  LAtLineHead: Boolean;
+begin
+  StateOut := StateIn;
+  LCount := 0;
+  LI := 1;
+  LAtLineHead := True;
+  while LI <= Len do
+  begin
+    LC := P[LI - 1];
+
+    if (LC = ' ') or (LC = #9) then begin Inc(LI); Continue; end;
+
+    { TOML '#' 注释到行尾；JSON 无注释 }
+    if (ADialect = cdToml) and (LC = '#') then
+    begin
+      CfgEmit(Dst, MaxTokens, LCount, LI, Len - LI + 1, tkComment);
+      Break;
+    end;
+
+    { 字符串（转义 `\` 跳）；JSON 键串后跟 ':' → tkKeyword 与值串区分 }
+    if LC = '"' then
+    begin
+      LEndI := CfgScanString(P, Len, LI);
+      if LEndI = 0 then LEndI := Len + 1
+      else Inc(LEndI);
+      LKind := tkString;
+      if (ADialect = cdJson) and (CfgPeekNonSpace(P, Len, LEndI) = ':') then
+        LKind := tkKeyword;
+      CfgEmit(Dst, MaxTokens, LCount, LI, LEndI - LI, LKind);
+      LI := LEndI;
+      LAtLineHead := False;
+      Continue;
+    end;
+
+    { 数字：int/float/exp，含前导 +/- 紧贴数字的判定 }
+    if (LC in ['0'..'9']) or
+      ((LC in ['-', '+']) and (LI < Len) and (P[LI] in ['0'..'9'])) then
+    begin
+      LStart := LI;
+      LI := CfgScanNumber(P, Len, LI);
+      CfgEmit(Dst, MaxTokens, LCount, LStart, LI - LStart, tkNumber);
+      LAtLineHead := False;
+      Continue;
+    end;
+
+    { TOML 表头：行首 [ 起（含 [[ 数组表），扫到闭 ]（双闭并入）→ tkDirective }
+    if (ADialect = cdToml) and LAtLineHead and (LC = '[') then
+    begin
+      LStart := LI;
+      while (LI <= Len) and (P[LI - 1] <> ']') do Inc(LI);
+      if LI <= Len then Inc(LI);
+      if (LI <= Len) and (P[LI - 1] = ']') then Inc(LI);
+      CfgEmit(Dst, MaxTokens, LCount, LStart, LI - LStart, tkDirective);
+      LAtLineHead := False;
+      Continue;
+    end;
+
+    { 符号 }
+    case ADialect of
+      cdJson:
+        if LC in ['{', '}', '[', ']', ':', ','] then
+        begin
+          CfgEmit(Dst, MaxTokens, LCount, LI, 1, tkSymbol);
+          Inc(LI); LAtLineHead := False; Continue;
+        end;
+      cdToml:
+        if LC in ['[', ']', '=', ','] then
+        begin
+          CfgEmit(Dst, MaxTokens, LCount, LI, 1, tkSymbol);
+          Inc(LI); LAtLineHead := False; Continue;
+        end;
+    end;
+
+    { 词：字面量 → tkKeyword；TOML 词后跟 '=' → 键 tkKeyword }
+    if CfgIsWordByte(Byte(LC)) then
+    begin
+      LStart := LI;
+      while (LI <= Len) and CfgIsWordByte(Byte(P[LI - 1])) do Inc(LI);
+      LKind := tkNormal;
+      if CfgIsLiteralWord(P, LStart, LI) then LKind := tkKeyword
+      else if ADialect = cdToml then
+      begin
+        LNext := CfgPeekNonSpace(P, Len, LI);
+        if LNext = '=' then LKind := tkKeyword;
+      end;
+      CfgEmit(Dst, MaxTokens, LCount, LStart, LI - LStart, LKind);
+      LAtLineHead := False;
+      Continue;
+    end;
+
+    { 其余可见字符合并连续 run → tkNormal }
+    LStart := LI;
+    Inc(LI);
+    while (LI <= Len) and not CfgIsWordByte(Byte(P[LI - 1]))
+      and not (P[LI - 1] in ['"', '#', ':', '=', ',', '[', ']', '{', '}'])
+      and not (P[LI - 1] in ['0'..'9']) and (P[LI - 1] <> ' ')
+      and (P[LI - 1] <> #9) do
+      Inc(LI);
+    CfgEmit(Dst, MaxTokens, LCount, LStart, LI - LStart, tkNormal);
+    LAtLineHead := False;
+  end;
+
+  if LCount > MaxTokens then LCount := MaxTokens;
+  Result := LCount;
+end;
+
+function TJsonHighlighter.TokenizeLine(P: PAnsiChar; Len: Integer;
+  const StateIn: TLineState; out StateOut: TLineState;
+  Dst: PToken; MaxTokens: Integer): Integer;
+begin
+  Result := CfgTokenizeLine(cdJson, P, Len, StateIn, StateOut, Dst, MaxTokens);
+end;
+
+function TJsonHighlighter.LangId: AnsiString;
+begin
+  Result := 'json';
+end;
+
+function TTomlHighlighter.TokenizeLine(P: PAnsiChar; Len: Integer;
+  const StateIn: TLineState; out StateOut: TLineState;
+  Dst: PToken; MaxTokens: Integer): Integer;
+begin
+  Result := CfgTokenizeLine(cdToml, P, Len, StateIn, StateOut, Dst, MaxTokens);
+end;
+
+function TTomlHighlighter.LangId: AnsiString;
+begin
+  Result := 'toml';
 end;
 
 end.

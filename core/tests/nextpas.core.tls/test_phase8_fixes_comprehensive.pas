@@ -3,7 +3,7 @@ program test_phase8_fixes_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time, DynLibs,
+  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.platform.dl,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.crypto.utils,
@@ -11,7 +11,7 @@ uses
 
 var
   LTestsPassed, LTestsFailed: Integer;
-  LLibHandle: THandle;
+  LLibHandle: TPlatformLibrary;
 
 procedure RunTest(const ATestName: string; ACondition: Boolean; const ADetails: string = '');
 begin
@@ -44,17 +44,15 @@ begin
 
   // Load OpenSSL
   {$IFDEF MSWINDOWS}
-  LLibHandle := LoadLibrary('libcrypto-3.dll');
-  if LLibHandle = 0 then
-    LLibHandle := LoadLibrary('libcrypto-1_1.dll');
+  if platform_dl_open(PAnsiChar('libcrypto-3.dll'), PLATFORM_DL_LAZY, LLibHandle) <> 0 then
+    platform_dl_open(PAnsiChar('libcrypto-1_1.dll'), PLATFORM_DL_LAZY, LLibHandle);
   {$ELSE}
-  LLibHandle := LoadLibrary('libcrypto.so.3');
-  if LLibHandle = 0 then
-    LLibHandle := LoadLibrary('libcrypto.so.1.1');
+  if platform_dl_open(PAnsiChar('libcrypto.so.3'), PLATFORM_DL_LAZY, LLibHandle) <> 0 then
+    platform_dl_open(PAnsiChar('libcrypto.so.1.1'), PLATFORM_DL_LAZY, LLibHandle);
   {$ENDIF}
 
-  RunTest('OpenSSL library loaded', LLibHandle <> 0);
-  if LLibHandle = 0 then
+  RunTest('OpenSSL library loaded', LLibHandle.IsValid);
+  if LLibHandle.IsInvalid then
   begin
     WriteLn('  ERROR: Cannot continue without OpenSSL');
     Exit;
@@ -215,6 +213,6 @@ begin
   PrintSummary;
 
   // Cleanup
-  if LLibHandle <> 0 then
-    FreeLibrary(LLibHandle);
+  if LLibHandle.IsValid then
+    platform_dl_close(LLibHandle);
 end.

@@ -51,7 +51,6 @@ var
   LHeaders: IHttpHeaders;
   LMethod: THttpMethod;
   LPath: string;
-  LScheme: string;
   LAuthority: string;
   LRequest: THttpRequest;
   LBody: IH2BodyReader;
@@ -61,7 +60,6 @@ begin
     raise EHttpError.Create(hekProtocol, 'h2 stream missing headers');
   LMethod := HttpMethodFromPseudo(H2ExtractPseudoHeader(LOriginalHeaders, ':method'));
   LPath := H2ExtractPseudoHeader(LOriginalHeaders, ':path');
-  LScheme := H2ExtractPseudoHeader(LOriginalHeaders, ':scheme');
   LAuthority := H2ExtractPseudoHeader(LOriginalHeaders, ':authority');
   if LPath = '' then
     LPath := '/';

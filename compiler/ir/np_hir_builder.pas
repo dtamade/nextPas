@@ -3,11 +3,13 @@ unit np_hir_builder;
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
 {$UNITPATH ../../core/src}
+{$UNITPATH ../diagnostics}
 
 interface
 
 uses
   np_semantic_model, np_hir_types, np_hir_model, np_source_database,
+  np_diagnostics_sink,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 
@@ -52,6 +54,7 @@ type
   private
     FSemaModel: TSemanticModel;
     FModule: THIRModule;
+    FDiagnosticsSink: TDiagnosticsSink;
     { Optional phase scratch for working TVecs (cleanup/blocks/allocas/globals). }
     FAllocator: IAllocator;
     FCurrentFuncId: THIRFuncId;
@@ -243,6 +246,12 @@ type
       const ASourceTypeId, ATargetTypeId: THIRTypeId): THIRValueId;
     function NormalizeInt64RuntimeValue(const AValueId: THIRValueId;
       const ATypeId: THIRTypeId): THIRValueId;
+    procedure EmitHirDiagnostic(const ACode, AMessage: string);
+    function TryNormalizeScalarValueToType(const AValueId: THIRValueId;
+      const ASourceTypeId, ATargetTypeId: THIRTypeId;
+      out AResult: THIRValueId): Boolean;
+    function GetDynArrayElemSizeValue(const AArrayName: string;
+      out ATypeId: THIRTypeId): THIRValueId;
     procedure ProcessIntfAdjust(const ANode: TTypedHirNode);
     procedure ProcessIntfAddRef(const ANode: TTypedHirNode);
     procedure ProcessIntfRelease(const ANode: TTypedHirNode);
@@ -324,18 +333,19 @@ type
     constructor Create(ASemaModel: TSemanticModel;
       ASourceDatabase: TSourceDatabase = nil;
       ASourceFileId: TSourceFileId = 0;
-      const AAllocator: IAllocator = nil);
+      const AAllocator: IAllocator = nil;
+      const ADiagnostics: TDiagnosticsSink = nil);
     destructor Destroy; override;
     function LowerExpr(const AExprId: LongInt;
       out AResult: THIRExprResult): Boolean;
-    procedure Build;
+    function Build: Boolean;
     function Module: THIRModule;
   end;
 
 implementation
 
 uses
-  nextpas.core.text.conv, np_system_contracts;
+  SysUtils, nextpas.core.text.conv, np_system_contracts;
 
 procedure TExprStack.Init(AAllocator: IAllocator);
 begin
@@ -433,7 +443,7 @@ end;
 
 constructor THIRBuilder.Create(ASemaModel: TSemanticModel;
   ASourceDatabase: TSourceDatabase; ASourceFileId: TSourceFileId;
-  const AAllocator: IAllocator);
+  const AAllocator: IAllocator; const ADiagnostics: TDiagnosticsSink);
 var
   I, J: LongInt;
 begin
@@ -442,6 +452,7 @@ begin
   FSourceDatabase := ASourceDatabase;
   FCurrentSourceFileId := ASourceFileId;
   FAllocator := AAllocator;
+  FDiagnosticsSink := ADiagnostics;
   FCurrentSourceLine := 0;
   FCurrentSourceCol := 0;
   FModule := THIRModule.Create('main');

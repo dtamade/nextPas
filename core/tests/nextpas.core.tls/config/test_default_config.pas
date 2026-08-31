@@ -3,11 +3,11 @@ program test_default_config;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.freepascal.lib,
-  fafafa.ssl;
+  nextpas.core.tls.freepascal.lib;
 
 type
   TLogCallbackProbe = class
@@ -33,9 +33,9 @@ end;
 
 procedure TestDefaultConfigSecurityBaseline;
 var
-  Cfg: TSSLConfig;
+  Cfg: TSSLContextConfig;
 begin
-  Cfg := CreateDefaultConfig(sslCtxClient);
+  Cfg := CreateDefaultContextConfig(sslCtxClient);
 
   AssertTrue('CreateDefaultConfig returns correct context type', Cfg.ContextType = sslCtxClient);
   AssertTrue('Default options contains ssoDisableCompression', ssoDisableCompression in Cfg.Options);
@@ -64,7 +64,7 @@ var
   Lib: ISSLLibrary;
   OriginalConfig: TSSLConfig;
   LoggingConfig: TSSLConfig;
-  Cfg: TSSLConfig;
+  Cfg: TSSLContextConfig;
   Probe: TLogCallbackProbe;
   OriginalDefaultLibrary: TSSLLibraryType;
 begin
@@ -79,12 +79,15 @@ begin
     Lib.SetDefaultConfig(LoggingConfig);
     TSSLFactory.SetDefaultLibrary(sslFreePascal);
 
-    Cfg := CreateDefaultConfig(sslCtxClient);
+    Cfg := CreateDefaultContextConfig(sslCtxClient);
 
-    AssertTrue('CreateDefaultConfig keeps request-safe LogLevel',
-      Cfg.LogLevel = sslLogError);
-    AssertTrue('CreateDefaultConfig clears library-scoped LogCallback',
-      not Assigned(Cfg.LogCallback));
+    // Request-scoped defaults are a plain baseline: logging stays
+    // library-scoped, so the request config carries no log customization.
+    AssertTrue('CreateDefaultConfig returns correct context type', Cfg.ContextType = sslCtxClient);
+    AssertTrue('CreateDefaultConfig keeps baseline Options intact',
+      ssoDisableCompression in Cfg.Options);
+    AssertTrue('CreateDefaultConfig keeps request-safe VerifyMode',
+      sslVerifyPeer in Cfg.VerifyMode);
   finally
     TSSLFactory.SetDefaultLibrary(OriginalDefaultLibrary);
     Lib.SetDefaultConfig(OriginalConfig);
@@ -94,7 +97,7 @@ end;
 
 begin
   WriteLn('========================================');
-  WriteLn('  fafafa.ssl DefaultConfig 单元测试');
+  WriteLn('  nextpas.core.tls DefaultConfig 单元测试');
   WriteLn('========================================');
 
   TestDefaultConfigSecurityBaseline;

@@ -19,8 +19,27 @@ list_unit_facade_surface() {
       gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
       return s
     }
-    function strip_pascal_line(s) {
-      gsub(/\{[^}]*\}/, "", s)
+    function strip_pascal_line(s,   i, j) {
+      # Drop block comments ({...}) that span multiple lines: the previous
+      # parser only removed single-line pairs, so the middle lines of a
+      # multi-line comment were misread as interface declarations.
+      if (in_block_comment) {
+        i = index(s, "}")
+        if (i == 0) {
+          return ""
+        }
+        in_block_comment = 0
+        s = substr(s, i + 1)
+      }
+      while ((i = index(s, "{")) > 0) {
+        j = index(s, "}")
+        if (j == 0) {
+          in_block_comment = 1
+          s = substr(s, 1, i - 1)
+          break
+        }
+        s = substr(s, 1, i - 1) substr(s, j + 1)
+      }
       sub(/\/\/.*/, "", s)
       return trim(s)
     }
@@ -30,6 +49,8 @@ list_unit_facade_surface() {
     }
     BEGIN {
       in_interface = 0
+      in_block_comment = 0
+      pending_decl = 0
       section = ""
       type_depth = 0
       unknown = 0
@@ -55,6 +76,14 @@ list_unit_facade_surface() {
         next
       }
       lower_line = tolower(line)
+      if (pending_decl) {
+        # Continuation of a multi-line function/procedure signature (the
+        # parameter list did not close on the declaring line).
+        if (line ~ /\)/) {
+          pending_decl = 0
+        }
+        next
+      }
       if (lower_line ~ /^uses([ \t]|$)/) {
         section = "uses"
         if (line ~ /;/) {
@@ -100,21 +129,33 @@ list_unit_facade_surface() {
       if (match(line, /^generic[ \t]+procedure[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
         section = ""
         print "procedure " parts[1]
+        if ((line ~ /\(/) && (line !~ /\)/)) {
+          pending_decl = 1
+        }
         next
       }
       if (match(line, /^generic[ \t]+function[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
         section = ""
         print "function " parts[1]
+        if ((line ~ /\(/) && (line !~ /\)/)) {
+          pending_decl = 1
+        }
         next
       }
       if (match(line, /^procedure[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
         section = ""
         print "procedure " parts[1]
+        if ((line ~ /\(/) && (line !~ /\)/)) {
+          pending_decl = 1
+        }
         next
       }
       if (match(line, /^function[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
         section = ""
         print "function " parts[1]
+        if ((line ~ /\(/) && (line !~ /\)/)) {
+          pending_decl = 1
+        }
         next
       }
       if (match(line, /^operator[ \t]*([^ \t(]+)/, parts)) {
@@ -368,19 +409,28 @@ type ExceptClass
 type EConvertError
 type EAssertionFailed
 type TBytes
+type TStringArray
 function Format
+function CompareStr
 function SameText
 function IntToStr
 function Int64ToStr
 function IntToHex
 function StrToInt
 function StrToInt64
+function TryStrToInt
+function TryStrToInt64
+function StrToIntDef
+function StrToInt64Def
 function StrToFloat
 function FloatToStr
 function CurrToStr
+function BoolToStr
 function BytesOf
 function StringOf
 function CompareMem
+function Supports
+function Supports
 function Trim
 function TrimLeft
 function TrimRight
@@ -394,6 +444,7 @@ function DateTimeToStr
 function DateToStr
 function TimeToStr
 function FormatDateTime
+function EncodeDate
 function FileExists
 function DirectoryExists
 function CreateDir
@@ -420,10 +471,12 @@ function ParamCount
 function ParamStr
 function GetEnvironmentVariable
 function GetProcessID
-function ExecuteProcess
 procedure Sleep
 function SysErrorMessage
 function GetLastOSError
+function ExceptAddr
+function ExceptFrameCount
+function ExceptFrameAt
 EOF
 )"
   require_facade_surface_allowlist "sysutils facade" "$actual" "$expected"
@@ -1230,7 +1283,7 @@ require_system_unit_filename_allowlist() {
   while IFS= read -r file_path; do
     filename="$(basename "$file_path")"
     case "$filename" in
-      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.memmanager.pas|nextpas.core.system.errors.pas)
+      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.memmanager.pas|nextpas.core.system.errors.pas|nextpas.core.system.heap.pas)
         ;;
       nextpas.core.system*.pas)
         fail "unreviewed system unit filename: src/$filename"
@@ -1591,7 +1644,7 @@ require_token "src/nextpas.core.system.sysutils.pas" "ExceptClass = nextpas.core
 require_token "src/nextpas.core.system.sysutils.pas" "EConvertError = nextpas.core.exception.EConvertError;"
 require_token "src/nextpas.core.system.sysutils.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
 require_token "src/nextpas.core.system.sysutils.pas" "function Format"
-require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
+require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.format.TextFormat"
 require_sysutils_facade_surface_allowlist
 
 require_file "src/nextpas.core.system.errors.pas"

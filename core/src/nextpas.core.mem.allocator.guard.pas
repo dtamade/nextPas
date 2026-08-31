@@ -13,8 +13,8 @@ Guard page allocator — 每次分配用未映射页包围，越界写入立即 
 
 适用场景: 调试/安全敏感环境，检测堆缓冲区溢出/下溢。
 
-Author:    fafafaStudio
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Author:    nextpas.core
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.allocator.guard;

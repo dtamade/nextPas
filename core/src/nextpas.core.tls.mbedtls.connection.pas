@@ -5,7 +5,7 @@
  * 继承 TBaseSSLConnection 基类，实现 MbedTLS 后端的连接功能。
  * 负责 TLS 握手、数据传输和连接管理。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.0.0
  * @since 2026-01-10
  * @updated 2026-02-04 - 重构为使用 TBaseSSLConnection 基类
@@ -115,7 +115,8 @@ uses
   nextpas.core.mem,
   nextpas.core.tls.mbedtls.certificate,
   nextpas.core.tls.mbedtls.session
-  {$IFDEF UNIX}, sockets {$ENDIF};
+  {$IFDEF UNIX}, sockets {$ENDIF}
+  {$IFDEF WINDOWS}, winsock2 {$ENDIF};
 
 const
   MBEDTLS_SSL_CONTEXT_SIZE = 4096;  // Increased for safety
@@ -192,6 +193,7 @@ begin
 end;
 
 { Socket BIO callbacks for MbedTLS }
+{$IFDEF UNIX}
 function MbedTLSSocketSend(ctx: Pointer; const buf: PByte; len: QWord): Integer; cdecl;
 var
   LSocket: TSocket;
@@ -213,6 +215,29 @@ begin
   else if Result = 0 then
     Result := MBEDTLS_ERR_SSL_CONN_EOF;
 end;
+{$ELSE}
+function MbedTLSSocketSend(ctx: Pointer; const buf: PByte; len: QWord): Integer; cdecl;
+var
+  LSocket: Tsocket;
+begin
+  LSocket := Tsocket(PtrUInt(ctx));
+  Result := send(LSocket, buf, len, 0);
+  if Result = SOCKET_ERROR then
+    Result := MBEDTLS_ERR_SSL_WANT_WRITE;
+end;
+
+function MbedTLSSocketRecv(ctx: Pointer; buf: PByte; len: QWord): Integer; cdecl;
+var
+  LSocket: Tsocket;
+begin
+  LSocket := Tsocket(PtrUInt(ctx));
+  Result := recv(LSocket, buf, len, 0);
+  if Result = SOCKET_ERROR then
+    Result := MBEDTLS_ERR_SSL_WANT_READ
+  else if Result = 0 then
+    Result := MBEDTLS_ERR_SSL_CONN_EOF;
+end;
+{$ENDIF}
 
 { Stream BIO callbacks for MbedTLS }
 function MbedTLSStreamSend(ctx: Pointer; const buf: PByte; len: QWord): Integer; cdecl;

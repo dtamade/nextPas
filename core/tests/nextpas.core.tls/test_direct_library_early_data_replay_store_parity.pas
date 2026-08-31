@@ -3,8 +3,10 @@ program test_direct_library_early_data_replay_store_parity;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.system,
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
+  SysUtils,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.freepascal.lib,
   nextpas.core.tls.freepascal.session,
@@ -47,13 +49,13 @@ end;
 function BuildReplayStoreFilePath(const ALabel: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'fafafa_ssl_' + ALabel + '_direct_library_replay_store.bin';
+    'nextpas_ssl_' + ALabel + '_direct_library_replay_store.bin';
 end;
 
 function BuildReplayStoreDirectoryPath(const ALabel: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'fafafa_ssl_' + ALabel + '_direct_library_replay_store_dir';
+    'nextpas_ssl_' + ALabel + '_direct_library_replay_store_dir';
 end;
 
 procedure CleanupReplayStoreFiles(const AFileName: string);

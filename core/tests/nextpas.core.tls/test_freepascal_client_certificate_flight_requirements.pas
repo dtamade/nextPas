@@ -4,7 +4,6 @@ program test_freepascal_client_certificate_flight_requirements;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -13,12 +12,15 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.freepascal.session;
-
+  nextpas.core.tls.encoding,
+  nextpas.core.crypto.hash,
+  nextpas.core.tls.freepascal.session,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 type
   TScriptedHandshakeMode = (shmFullWithoutCertificate, shmResumedWithoutCertificate);
 
@@ -203,6 +205,7 @@ var
   LEncrypted: TBytes;
   LRecord: TBytes;
   LSharedSecret: TBytes;
+  LDecrypted: TBytes;
   LError: string;
 begin
   if not TryExtractHandshakePayloadFromRecord(AData, LHandshake) then
@@ -296,6 +299,21 @@ begin
   LRecord := BuildTLSPlaintext(TLS_CONTENT_TYPE_APPLICATION_DATA, LEncrypted);
   Enqueue(LRecord);
   AppendBytes(FTranscriptData, LServerFinished);
+
+  // DEBUG: self-check server flight encryption round-trip
+  if TryTLS13AEADDecrypt(
+    FCipherSuite,
+    FHandshakeSecrets.ServerHandshakeKey,
+    BuildTLS13RecordNonce(FHandshakeSecrets.ServerHandshakeIV, 0),
+    BuildTLS13RecordAAD(Word(Length(LInnerPlaintext) + TLS13AEADTagLength(FCipherSuite))),
+    LEncrypted,
+    LDecrypted,
+    LError
+  ) then
+    WriteLn('DEBUG self-check: server flight decrypts OK')
+  else
+    WriteLn('DEBUG self-check FAIL: ', LError);
+
   FWriteStage := 1;
 end;
 
@@ -326,7 +344,14 @@ begin
     LPlaintext,
     LError
   ) then
+  begin
+    WriteLn('DEBUG Client Finished record: type=', LHeader.ContentType, ' len=', LHeader.Length);
+    WriteLn('DEBUG payload hex: ', TEncodingUtils.BytesToHex(LPayload));
+    WriteLn('DEBUG key hex: ', TEncodingUtils.BytesToHex(FHandshakeSecrets.ClientHandshakeKey));
+    WriteLn('DEBUG iv hex: ', TEncodingUtils.BytesToHex(FHandshakeSecrets.ClientHandshakeIV));
+    WriteLn('DEBUG transcript len: ', Length(FTranscriptData), ' hex: ', TEncodingUtils.BytesToHex(FTranscriptData));
     raise Exception.Create('Failed to decrypt client Finished: ' + LError);
+  end;
 
   if not TryParseTLS13InnerPlaintext(LPlaintext, LInnerFragment, LInnerContentType) then
     raise Exception.Create('Invalid TLSInnerPlaintext for client Finished');
@@ -353,6 +378,7 @@ function TScriptedServerFlightStream.Read(var Buffer; Count: Longint): Longint;
 var
   LAvailable: Int64;
 begin
+  WriteLn('DEBUG Read called: count=', Count, ' pos=', FReadPosition, ' buflen=', Length(FReadBuffer));
   if Count <= 0 then
     Exit(0);
 
@@ -373,6 +399,7 @@ function TScriptedServerFlightStream.Write(const Buffer; Count: Longint): Longin
 var
   LData: TBytes;
 begin
+  WriteLn('DEBUG Write called: count=', Count, ' stage=', FWriteStage);
   SetLength(LData, Count);
   if Count > 0 then
     Move(Buffer, LData[0], Count);
@@ -387,6 +414,7 @@ end;
 
 function TScriptedServerFlightStream.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
 begin
+  WriteLn('DEBUG Seek called: offset=', Offset, ' origin=', Ord(Origin));
   case Origin of
     soBeginning: FReadPosition := Offset;
     soCurrent: Inc(FReadPosition, Offset);
@@ -409,7 +437,7 @@ begin
 
   LStream := TScriptedServerFlightStream.CreateFullHandshake;
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Full-handshake connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -443,7 +471,7 @@ begin
 
   LStream := TScriptedServerFlightStream.CreateResumed(LSession);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Resumed connection should be created');
     AssertTrue(Supports(LConn, ISSLSessionResumption, LResumption),
       'Resumed connection should expose ISSLSessionResumption');

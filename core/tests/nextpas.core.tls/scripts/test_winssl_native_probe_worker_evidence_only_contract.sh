@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -27,12 +27,12 @@ require_match() {
   fi
 }
 
-proof_file="tests/winssl/test_winssl_session_resumption.pas"
+proof_file="core/tests/nextpas.core.tls/winssl/test_winssl_session_resumption.pas"
 
 printf '[TEST] WinSSL native-probe worker evidence-only contract\n'
 
 require_match "$proof_file" \
-  'LRequireNativeReuse := EnvEnabled\(\x27FAFAFA_WINSSL_REQUIRE_NATIVE_REUSE\x27\);' \
+  'LRequireNativeReuse := EnvEnabled\(\x27NEXTPAS_WINSSL_REQUIRE_NATIVE_REUSE\x27\);' \
   'WinSSL proof still exposes an explicit strict native-reuse env gate'
 
 require_match "$proof_file" \

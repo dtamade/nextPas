@@ -1,10 +1,10 @@
 # nextpas.core.async 代码契约
 
-**模块路径**：`core/src/nextpas.core.async*.pas`（15 个源文件）
+**模块路径**：`core/src/nextpas.core.async*.pas`（17 个源文件）
 **层级**：L1（依赖 L0: base, sync）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：3.2
+**最后更新**：2026-08-31
+**版本**：3.3
 
 ---
 
@@ -29,6 +29,7 @@
 | async.semaphore | IAsyncSemaphore (异步信号量) |
 | async.channel | IAsyncChannel (异步通道) |
 | async.condvar | IAsyncCondVar (异步条件变量) |
+| async.cancellation | IAsyncCancellationToken (取消令牌/父子传播) |
 | async.pas | 门面 (re-exports) |
 
 ### 1.2 核心类型
@@ -176,6 +177,7 @@ end;
 | 2026-07-11 | 3.0 | 添加 Combinators/Retry/SyncPrimitives | Claude |
 | 2026-07-11 | 2.0 | 添加 TaskGroup/Shutdown/Timeout 高级模式 | Claude |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-08-31 | 3.3 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
 
 
 ### Close discard contract
@@ -183,6 +185,29 @@ end;
 - Abandoned timers: Close/Recycle runs `OnDiscard` then clears entry.
 - `CancelTimer` does not run OnDiscard.
 - Dependents must release before `Loop.Free` (or ensure they never touch a closed loop).
+
+### Heaptrc / 0-leak evidence & gaps (2026-09-01, 稳定性维度)
+- Prior "0 leak" assumed Close discard branches were covered. Focused heaptrc for
+  `Post` MPSC discard, `Retry` ScheduleEx discard, and `WhenAll` token-owner
+  discard was missing/incomplete — this was the documented gap.
+- Fixes in this landing: `TaskGroup.Destroy` now `RemoveOnCancel`; `NetCancelFromAsync`
+  via bridge owns ExactlyOnce and `RemoveOnCancel` on destroy (no `LCtx` leak on
+  never-cancel); `DiscardWrappedContext` now `WhenAllReleaseTokenOwner` on last
+  discard; `TimeoutTokenNotify` handles `Post` after `Close` race via
+  `try/except TimeoutCtxRelease`; `Retry` adds `Done` atomic exactly-once
+  between normal completion and `DiscardRetryState`/close; `CancellationToken.Cancel`
+  snapshots callbacks/children outside lock (deadlock-free) and frees snapshot;
+  `SlabConcurrent` documents per-thread TLS flush limitation (no global iteration).
+- Required evidence: binaries built with `-gh` (heaptrc) for
+  `core/tests/nextpas.core.async` / `combinators` / `retry` / `cancellation` /
+  `net` must report `0 unfreed blocks` on both normal and "Close immediately
+  after Post/Schedule" discard paths. Until dedicated discard-leak focused gates
+  land in CI, this contract marks those three Close discard paths as
+  "patched, awaiting focused gate proof" rather than "proven 0 leak".
+- `TSlabPoolConcurrent`: only the calling thread's TLS is flushed on `Destroy`/
+  `Reset` (`threadvar` cannot be iterated). Cross-thread cache reclamation needs
+  quiescence (join workers / per-thread flush) — heaptrc cannot prove global
+  0-leak without it; documented as limitation, not hidden.
 
 ### Channel backpressure (B1)
 | API | Full channel behavior |

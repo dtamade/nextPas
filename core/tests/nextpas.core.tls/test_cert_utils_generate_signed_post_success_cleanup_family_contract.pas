@@ -6,7 +6,6 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
@@ -15,8 +14,8 @@ uses
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.x509v3,
   nextpas.core.tls.openssl.api.pem,
-  nextpas.core.tls.openssl.api.evp;
-
+  nextpas.core.tls.openssl.api.evp,
+  nextpas.core.tls.openssl.backed;
 type
   TBIOReadStubMode = (
     brmNone,
@@ -79,7 +78,7 @@ function BuildCAOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'signed-post-success-root.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.IsCA := True;
   Result.ValidDays := 30;
 end;
@@ -88,7 +87,7 @@ function BuildLeafOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'signed-post-success-leaf.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.IsCA := False;
   Result.ValidDays := 30;
 end;

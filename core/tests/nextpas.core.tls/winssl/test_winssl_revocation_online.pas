@@ -47,15 +47,15 @@ var Lib: ISSLLibrary; Ctx: ISSLContext; Conn: ISSLConnection; ClientConn: ISSLCl
 begin
   WriteLn('=== 吊销检查（revoked.badssl.com）===');
 
-  if GetEnvironmentVariable('FAFAFA_RUN_NETWORK_TESTS') <> '1' then
+  if GetEnvironmentVariable('NEXTPAS_RUN_NETWORK_TESTS') <> '1' then
   begin
-    Check('跳过网络测试 (FAFAFA_RUN_NETWORK_TESTS!=1)', True);
+    Check('跳过网络测试 (NEXTPAS_RUN_NETWORK_TESTS!=1)', True);
     Exit;
   end;
 
-  if GetEnvironmentVariable('FAFAFA_WINSSL_REVOCATION_TEST') <> '1' then
+  if GetEnvironmentVariable('NEXTPAS_WINSSL_REVOCATION_TEST') <> '1' then
   begin
-    Check('跳过（未开启 FAFAFA_WINSSL_REVOCATION_TEST）', True);
+    Check('跳过（未开启 NEXTPAS_WINSSL_REVOCATION_TEST）', True);
     Exit;
   end;
 

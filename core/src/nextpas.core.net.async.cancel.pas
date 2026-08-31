@@ -3,6 +3,8 @@ unit nextpas.core.net.async.cancel;
  * Bridge IAsyncCancellationToken → INetCancelToken for blocking TCP wake.
  * Recommended user entry: async token (dial/combinators). Net token is plumbing
  * for poll+socketpair cancel on blocking Read/Write.
+ * Lifetime: returned bridge owns the waitable Net token and removes the
+ * OnCancel registration on destruction to avoid UAF/leak when never cancelled.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -26,49 +28,105 @@ procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.net.cancel;
 
 type
-  PAsyncNetCancelCtx = ^TAsyncNetCancelCtx;
-  TAsyncNetCancelCtx = record
-    Net: INetCancelController;
+  TAsyncNetCancelBridge = class(TInterfacedObject, INetCancelToken, INetCancelController, INetCancelWaitable)
+  private
+    FInner: INetCancelController;
+    FWaitable: INetCancelWaitable;
+    FAsync: IAsyncCancellationToken;
+  public
+    constructor Create(AInner: INetCancelController; AAsync: IAsyncCancellationToken);
+    destructor Destroy; override;
+    function IsCanceled: Boolean;
+    procedure Cancel;
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
   end;
+
+procedure AsyncNetCancelBridgeFire(AContext: Pointer); forward;
+
+{ TAsyncNetCancelBridge }
+
+constructor TAsyncNetCancelBridge.Create(AInner: INetCancelController;
+  AAsync: IAsyncCancellationToken);
+begin
+  inherited Create;
+  FInner := AInner;
+  FAsync := AAsync;
+  FWaitable := nil;
+  if (FInner <> nil) and (FInner.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
+    FWaitable := nil;
+end;
+
+destructor TAsyncNetCancelBridge.Destroy;
+begin
+  if FAsync <> nil then
+  begin
+    try
+      FAsync.RemoveOnCancel(@AsyncNetCancelBridgeFire, Pointer(Self));
+    except
+    end;
+  end;
+  FWaitable := nil;
+  FInner := nil;
+  FAsync := nil;
+  inherited Destroy;
+end;
+
+function TAsyncNetCancelBridge.IsCanceled: Boolean;
+begin
+  Result := (FInner <> nil) and FInner.IsCanceled;
+end;
+
+procedure TAsyncNetCancelBridge.Cancel;
+begin
+  if FInner <> nil then
+    FInner.Cancel;
+end;
+
+function TAsyncNetCancelBridge.WakeHandle: PtrUInt;
+begin
+  if FWaitable <> nil then
+    Result := FWaitable.WakeHandle
+  else
+    Result := 0;
+end;
+
+procedure TAsyncNetCancelBridge.DrainWake;
+begin
+  if FWaitable <> nil then
+    FWaitable.DrainWake;
+end;
 
 procedure AsyncNetCancelBridgeFire(AContext: Pointer);
 var
-  LCtx: PAsyncNetCancelCtx;
+  LBridge: TAsyncNetCancelBridge;
 begin
-  LCtx := PAsyncNetCancelCtx(AContext);
-  if LCtx = nil then
+  LBridge := TAsyncNetCancelBridge(AContext);
+  if LBridge = nil then
     Exit;
-  if LCtx^.Net <> nil then
-  begin
-    LCtx^.Net.Cancel;
-    LCtx^.Net := nil;
-  end;
-  Dispose(LCtx);
+  if LBridge.FInner <> nil then
+    LBridge.FInner.Cancel;
 end;
 
 function NetCancelFromAsync(
   const AAsync: IAsyncCancellationToken): INetCancelController;
 var
-  LCtx: PAsyncNetCancelCtx;
+  LInner: INetCancelController;
+  LBridge: TAsyncNetCancelBridge;
 begin
   Result := nil;
   if AAsync = nil then
     Exit;
-
-  Result := NewNetCancelToken;
-  New(LCtx);
-  LCtx^ := Default(TAsyncNetCancelCtx);
-  LCtx^.Net := Result;
-
-  { OnCancel fires immediately if already cancelled (and does not retain ctx).
-    Otherwise retains ctx until Cancel; Fire disposes ctx. }
-  AAsync.OnCancel(@AsyncNetCancelBridgeFire, LCtx);
-
-  if AAsync.IsCancelled and (Result <> nil) then
-    Result.Cancel;
+  LInner := NewNetCancelToken;
+  LBridge := TAsyncNetCancelBridge.Create(LInner, AAsync);
+  Result := LBridge;
+  AAsync.OnCancel(@AsyncNetCancelBridgeFire, Pointer(LBridge));
+  if AAsync.IsCancelled then
+    LInner.Cancel;
 end;
 
 procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;

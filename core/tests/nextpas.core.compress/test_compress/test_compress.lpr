@@ -49,6 +49,68 @@ begin
   Check(Length(LC) > 0, 'clBest');
 end;
 
+procedure TestRawDeflateRoundTrip;
+var
+  LSrc, LCompressed, LDecompressed: TBytes;
+  LI: Integer;
+begin
+  SetLength(LSrc, 1000);
+  for LI := 0 to 999 do LSrc[LI] := Byte((LI * 31 + (LI shr 5)));
+  LCompressed := RawDeflateCompress(LSrc);
+  Check(Length(LCompressed) > 0, 'raw compressed not empty');
+  Check(Length(LCompressed) < Length(LSrc), 'raw compressed smaller');
+  { RFC 1951 裸流：不得携带 zlib 包装头（CMF=0x78） }
+  Check(LCompressed[0] <> $78, 'no zlib wrapper byte');
+  LDecompressed := RawDeflateDecompress(LCompressed);
+  CheckEqual(Int64(Length(LSrc)), Int64(Length(LDecompressed)), 'same length');
+  for LI := 0 to 999 do
+    if LSrc[LI] <> LDecompressed[LI] then
+    begin
+      Check(False, 'data mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'data matches');
+end;
+
+procedure TestRawDeflateEmpty;
+var
+  LCompressed, LDecompressed: TBytes;
+begin
+  { 空输入的完整 raw 流是固定两字节终结块 }
+  LCompressed := RawDeflateCompress(nil);
+  CheckEqual(Int64(2), Int64(Length(LCompressed)), 'empty raw deflate is 2 bytes');
+  Check((LCompressed[0] = $03) and (LCompressed[1] = $00), 'final fixed block $03 $00');
+  LDecompressed := RawDeflateDecompress(LCompressed);
+  CheckEqual(Int64(0), Int64(Length(LDecompressed)), 'round-trips to empty');
+end;
+
+procedure TestRawDeflateCorruptAndLimit;
+var
+  LSrc, LCompressed: TBytes;
+  LI: Integer;
+begin
+  SetLength(LSrc, 4096);
+  for LI := 0 to High(LSrc) do LSrc[LI] := Byte(LI mod 7);  { 高可压 }
+  LCompressed := RawDeflateCompress(LSrc);
+  LCompressed[High(LCompressed) div 2] := LCompressed[High(LCompressed) div 2] xor $FF;
+  try
+    RawDeflateDecompress(LCompressed);
+    Check(False, 'corrupt raw stream must raise');
+  except
+    on E: Exception do
+      Check(Pos('EIOError', E.ClassName) > 0, 'corrupt raises EIOError');
+  end;
+
+  LCompressed := RawDeflateCompress(LSrc);
+  try
+    RawDeflateDecompressWithMaxOutputSize(LCompressed, 16);
+    Check(False, 'over-limit raw stream must raise');
+  except
+    on E: Exception do
+      Check(Pos('EIOError', E.ClassName) > 0, 'over limit raises EIOError');
+  end;
+end;
+
 procedure TestDeflateEmpty;
 var
   LR: TBytes;
@@ -608,12 +670,104 @@ begin
   Check(True, 'gzip reader double-close safe');
 end;
 
+{ RAW DEFLATE 流式变体：推式压缩 + 拉式解压 roundtrip（zip 流式条目的底座） }
+procedure TestRawDeflateStreamRoundtrip;
+var
+  LOut: IStream;
+  LW: ICompressWriter;
+  LR: IDecompressReader;
+  LData: TBytes;
+  LBuf: array[0..1023] of Byte;
+  LN, LTotal, LOffset: SizeUInt;
+  LI: Integer;
+begin
+  SetLength(LData, 100000);
+  for LI := 0 to High(LData) do
+    LData[LI] := Byte((LI * 31 + (LI shr 3)) mod 253);
+
+  LOut := CreateBytesStream;
+  LW := RawDeflateWriter(LOut as IWriter);
+  Check(LW.Write(LData[0], 40000) = 40000, 'raw stream chunk1 written');
+  Check(LW.Write(LData[40000], 60000) = 60000, 'raw stream chunk2 written');
+  LW.Close;
+
+  LOut.Position := 0;
+  LR := RawDeflateReader(LOut as IReader);
+  LTotal := 0;
+  repeat
+    LN := LR.Read(LBuf[0], SizeUInt(Length(LBuf)));
+    for LI := 0 to Integer(LN) - 1 do
+      if LBuf[LI] <> LData[LTotal + System.UInt64(LI)] then
+      begin
+        Check(False, 'raw stream roundtrip byte mismatch at ' +
+          IntToStr(LTotal + UInt64(LI)));
+        Exit;
+      end;
+    Inc(LTotal, LN);
+  until LN = 0;
+  Check(LTotal = Length(LData), 'raw stream roundtrip size');
+end;
+
+procedure TestCompressCapacityHelpers;
+begin
+  CheckEqual(Int64(200), Int64(CompressNextCapacity(100, 1000)), 'next 100->200');
+  CheckEqual(Int64(1000), Int64(CompressNextCapacity(600, 1000)), 'next 600->1000 capped');
+  CheckEqual(Int64(0), Int64(CompressNextCapacity(1000, 1000)), 'next at max->0');
+  CheckEqual(Int64(0), Int64(CompressNextCapacity(1001, 1000)), 'next over max->0');
+  CheckEqual(Int64(400), Int64(CompressInitialDecompressCapacity(100, 1000)), 'init decomp 100->400');
+  CheckEqual(Int64(1000), Int64(CompressInitialDecompressCapacity(300, 1000)), 'init decomp 300*4=1200 capped to 1000');
+  CheckEqual(Int64(0), Int64(CompressInitialDecompressCapacity(0, 500)), 'init decomp 0->0');
+  CheckEqual(Int64(4000), Int64(CompressInitialInflateCapacity(1000, 10000)), 'init inflate 1000*4=4000');
+  CheckEqual(Int64(8000), Int64(CompressInitialInflateCapacity(1000, 10000, 8000)), 'init inflate hint 8000 overrides');
+  CheckEqual(Int64(64), Int64(CompressInitialInflateCapacity(10, 10000)), 'init inflate floor 64');
+  CheckEqual(Int64(10000), Int64(CompressInitialInflateCapacity(5000, 10000)), 'init inflate 5000*4=20000 capped to 10000');
+end;
+
+{ RAW DEFLATE 有界读端：超上限在读过程中即 raise，不等 EOF }
+procedure TestRawDeflateStreamBounded;
+var
+  LOut: IStream;
+  LW: ICompressWriter;
+  LR: IDecompressReader;
+  LData: TBytes;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LI: Integer;
+  LGot: Boolean;
+begin
+  SetLength(LData, 100000);
+  for LI := 0 to High(LData) do
+    LData[LI] := Byte((LI * 7) mod 251);
+
+  LOut := CreateBytesStream;
+  LW := RawDeflateWriter(LOut as IWriter);
+  LW.Write(LData[0], Length(LData));
+  LW.Close;
+
+  LOut.Position := 0;
+  LR := RawDeflateReaderWithMaxOutputSize(LOut as IReader, 1000);
+  LGot := False;
+  try
+    repeat
+      LN := LR.Read(LBuf[0], SizeUInt(Length(LBuf)));
+    until LN = 0;
+  except
+    on E: Exception do
+      LGot := Pos('EIOError', E.ClassName) > 0;
+  end;
+  Check(LGot, 'bounded raw inflate raises past cap');
+  LR.Close;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.compress');
   T.Test('Deflate round-trip', @TestDeflateRoundTrip);
   T.Test('Deflate levels', @TestDeflateLevels);
   T.Test('Deflate empty', @TestDeflateEmpty);
   T.Test('Deflate 1MB', @TestDeflateLarge);
+  T.Test('RawDeflate round-trip', @TestRawDeflateRoundTrip);
+  T.Test('RawDeflate empty vector', @TestRawDeflateEmpty);
+  T.Test('RawDeflate corrupt and limit', @TestRawDeflateCorruptAndLimit);
   T.Test('Gzip round-trip', @TestGzipRoundTrip);
   T.Test('Gzip interop', @TestGzipInterop);
   T.Test('LZ4 round-trip', @TestLz4RoundTrip);
@@ -636,5 +790,8 @@ begin
   T.Test('Write after close', @TestWriteAfterClose);
   T.Test('Read after close', @TestReadAfterClose);
   T.Test('Double close', @TestDoubleClose);
+  T.Test('Raw deflate stream roundtrip', @TestRawDeflateStreamRoundtrip);
+  T.Test('Raw deflate stream bounded', @TestRawDeflateStreamBounded);
+  T.Test('Compress capacity helpers', @TestCompressCapacityHelpers);
   if not T.Run then Halt(1);
 end.

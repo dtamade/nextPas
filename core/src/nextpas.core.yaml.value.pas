@@ -36,6 +36,12 @@ type
     function TryAsStr(out AValue: TStringView): Boolean;
     function SeqLen: UInt32;
     function SeqGet(AIndex: UInt32): TYamlValue;
+    { O(1) sibling walk for linear iteration. Seq: FirstChild is the first
+      element. Map: FirstChild is the first key; NextSibling of a key is its
+      value, NextSibling of a value is the next key. NextSibling uses this
+      node's own link (not the alias-resolved target). }
+    function FirstChild: TYamlValue;
+    function NextSibling: TYamlValue;
     function MapGet(const AKey: TStringView): TYamlValue; overload;
     function MapGet(const AKey: string): TYamlValue; overload;
     { Get is a TOML-style alias for MapGet (same lookup semantics). }
@@ -208,6 +214,50 @@ begin
     Result := LN^.Container.Count
   else
     Result := 0;
+end;
+
+function TYamlValue.FirstChild: TYamlValue;
+var
+  LN: PYamlNode;
+  LIdx: UInt32;
+begin
+  LN := GetNode;
+  if (LN = nil) or ((LN^.Kind <> ynkSequence) and (LN^.Kind <> ynkMapping)) then
+  begin
+    Result.FDoc := FDoc;
+    Result.FIdx := YAML_NODE_NONE;
+    Exit;
+  end;
+  LIdx := LN^.Container.FirstChild;
+  if (LIdx = YAML_NODE_NONE) or (FDoc = nil) or (LIdx >= FDoc^.NodeCount()) then
+  begin
+    Result.FDoc := FDoc;
+    Result.FIdx := YAML_NODE_NONE;
+    Exit;
+  end;
+  Result := TYamlValue.Create(FDoc^, LIdx);
+end;
+
+function TYamlValue.NextSibling: TYamlValue;
+var
+  LN: PYamlNode;
+  LIdx: UInt32;
+begin
+  if (FDoc = nil) or (FIdx >= FDoc^.NodeCount()) then
+  begin
+    Result.FDoc := FDoc;
+    Result.FIdx := YAML_NODE_NONE;
+    Exit;
+  end;
+  LN := FDoc^.Node(FIdx);
+  LIdx := LN^.Next;
+  if (LIdx = YAML_NODE_NONE) or (LIdx >= FDoc^.NodeCount()) then
+  begin
+    Result.FDoc := FDoc;
+    Result.FIdx := YAML_NODE_NONE;
+    Exit;
+  end;
+  Result := TYamlValue.Create(FDoc^, LIdx);
 end;
 
 function TYamlValue.SeqGet(AIndex: UInt32): TYamlValue;

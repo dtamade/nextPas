@@ -54,6 +54,9 @@ type
     function WithStyle(const AStyle: TStyle): IListWidget;
     function WithHighlightStyle(const AStyle: TStyle): IListWidget;
     function WithHighlightSymbol(const ASym: AnsiString): IListWidget;
+    { 数据更新面（PH33 P3，additive）：原地替换条目 }
+    procedure SetItems(const AItems: array of TListItem);
+    function WithItems(const AItems: array of TListItem): IListWidget;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TListState);
   end;
@@ -74,6 +77,8 @@ type
     function WithStyle(const AStyle: TStyle): IListWidget;
     function WithHighlightStyle(const AStyle: TStyle): IListWidget;
     function WithHighlightSymbol(const ASym: AnsiString): IListWidget;
+    procedure SetItems(const AItems: array of TListItem);
+    function WithItems(const AItems: array of TListItem): IListWidget;
 
     { IWidget — 无状态渲染（无高亮） }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -190,6 +195,22 @@ function TListWidget.WithHighlightSymbol(const ASym: AnsiString): IListWidget;
 begin
   FHighlightSymbol := ASym;
   FHasHighlightSymbol := System.Length(ASym) > 0;
+  Result := Self;
+end;
+
+{ PH33 P3：数据更新面——原地替换条目（此前仅构造注入）}
+procedure TListWidget.SetItems(const AItems: array of TListItem);
+var
+  LI: Integer;
+begin
+  SetLength(FItems, System.Length(AItems));
+  for LI := 0 to High(AItems) do
+    FItems[LI] := AItems[LI];
+end;
+
+function TListWidget.WithItems(const AItems: array of TListItem): IListWidget;
+begin
+  SetItems(AItems);
   Result := Self;
 end;
 

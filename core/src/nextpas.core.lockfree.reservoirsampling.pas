@@ -33,7 +33,6 @@ type
 
   {** @desc 蓄水池采样器
     @details 固定内存处理无限流，等概率采样。
-  {** @concurrency Thread-safe (see source for details). }
       每个元素被选中的概率 = k/n（k=池大小，n=已见元素数）。 }
   generic TReservoirSamplerImpl<T> = class
   private

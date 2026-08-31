@@ -3,12 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-source_file="src/nextpas.core.tls.winssl.certificate.pas"
-runtime_test="tests/winssl/test_winssl_unit_comprehensive.pas"
+source_file="core/src/nextpas.core.tls.winssl.certificate.pas"
+runtime_test="core/tests/nextpas.core.tls/winssl/test_winssl_unit_comprehensive.pas"
 
 if ! rg -n --quiet 'function TWinSSLCertificate.GetPublicKey: string;' "$source_file"; then
   echo "[FAIL] WinSSL certificate source is missing GetPublicKey declaration"

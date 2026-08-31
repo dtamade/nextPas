@@ -6,7 +6,7 @@ program test_base_interface_contract;
   test_base_interface_contract - 基础接口契约测试
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2026-01-18
 
   描述:
@@ -45,6 +45,32 @@ begin
   end;
 end;
 
+// core.sysutils 不导出 StringToGUID/IsEqualGUID,这里按 {XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
+// 格式自行解析,仅取十六进制字符。
+function ParseGUID(const S: string): TGUID;
+var
+  LHex: string;
+  i: Integer;
+begin
+  LHex := '';
+  for i := 1 to Length(S) do
+    if S[i] in ['0'..'9', 'A'..'F', 'a'..'f'] then
+      LHex := LHex + S[i];
+  Result.D1 := LongWord(StrToInt64('$' + Copy(LHex, 1, 8)));
+  Result.D2 := Word(StrToInt('$' + Copy(LHex, 9, 4)));
+  Result.D3 := Word(StrToInt('$' + Copy(LHex, 13, 4)));
+  for i := 0 to 7 do
+    Result.D4[i] := Byte(StrToInt('$' + Copy(LHex, 17 + i * 2, 2)));
+end;
+
+function GUIDsEqual(const A, B: TGUID): Boolean;
+begin
+  Result := (A.D1 = B.D1) and (A.D2 = B.D2) and (A.D3 = B.D3) and
+    (A.D4[0] = B.D4[0]) and (A.D4[1] = B.D4[1]) and (A.D4[2] = B.D4[2]) and
+    (A.D4[3] = B.D4[3]) and (A.D4[4] = B.D4[4]) and (A.D4[5] = B.D4[5]) and
+    (A.D4[6] = B.D4[6]) and (A.D4[7] = B.D4[7]);
+end;
+
 procedure TestInterfaceGUIDs;
 var
   LLibGUID, LContextGUID, LConnectionGUID: TGUID;
@@ -55,21 +81,21 @@ begin
 
   // 验证接口 GUID 已定义且唯一
   // ISSLLibrary: {A0E8F4B1-7C3A-4D2E-9F5B-8C6D7E9A0B1C}
-  LLibGUID := StringToGUID('{A0E8F4B1-7C3A-4D2E-9F5B-8C6D7E9A0B1C}');
+  LLibGUID := ParseGUID('{A0E8F4B1-7C3A-4D2E-9F5B-8C6D7E9A0B1C}');
   Assert(True, 'ISSLLibrary GUID 已定义');
 
   // ISSLContext: {B1F9E5C2-8D4B-5E3F-A06C-9D8E0F1A2B3D}
-  LContextGUID := StringToGUID('{B1F9E5C2-8D4B-5E3F-A06C-9D8E0F1A2B3D}');
+  LContextGUID := ParseGUID('{B1F9E5C2-8D4B-5E3F-A06C-9D8E0F1A2B3D}');
   Assert(True, 'ISSLContext GUID 已定义');
 
   // ISSLConnection: {C2A9F6D3-9E5C-6F40-B17D-AE9F102B4C5E}
-  LConnectionGUID := StringToGUID('{C2A9F6D3-9E5C-6F40-B17D-AE9F102B4C5E}');
+  LConnectionGUID := ParseGUID('{C2A9F6D3-9E5C-6F40-B17D-AE9F102B4C5E}');
   Assert(True, 'ISSLConnection GUID 已定义');
 
   // 验证 GUID 唯一性
-  Assert(not IsEqualGUID(LLibGUID, LContextGUID), 'ISSLLibrary 和 ISSLContext GUID 不同');
-  Assert(not IsEqualGUID(LLibGUID, LConnectionGUID), 'ISSLLibrary 和 ISSLConnection GUID 不同');
-  Assert(not IsEqualGUID(LContextGUID, LConnectionGUID), 'ISSLContext 和 ISSLConnection GUID 不同');
+  Assert(not GUIDsEqual(LLibGUID, LContextGUID), 'ISSLLibrary 和 ISSLContext GUID 不同');
+  Assert(not GUIDsEqual(LLibGUID, LConnectionGUID), 'ISSLLibrary 和 ISSLConnection GUID 不同');
+  Assert(not GUIDsEqual(LContextGUID, LConnectionGUID), 'ISSLContext 和 ISSLConnection GUID 不同');
 
   WriteLn;
 end;

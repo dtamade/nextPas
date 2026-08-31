@@ -218,6 +218,10 @@ should not create `platform.time.ffi`, `platform.sync.ffi`, or
   `GetEnvironmentStringsA`, `GetEnvironmentStringsW`,
   `FreeEnvironmentStringsA`, `FreeEnvironmentStringsW`,
   `ExpandEnvironmentStringsA`, and `ExpandEnvironmentStringsW`.
+  `environ` ownership: shared POSIX `nextpas.core.platform.posix.ffi` owns
+  `var environ: PPAnsiChar; external name 'environ'` for Linux/Android/FreeBSD/generic Unix
+  (`{$IFNDEF NEXTPAS_MACOS}` guard); Darwin does not link `environ` and instead
+  owns `NSGetEnviron: PPPAnsiChar` in `nextpas.core.platform.darwin.ffi`.
 - Platform Host ABI Completeness Wave 4 covers the directory/path ABI raw inventory for
   host `base/ffi` owners. POSIX hosts now carry `F_OK`, `X_OK`,
   `W_OK`, `R_OK` access tokens plus raw `mkdir`, `rmdir`, `unlink`, `rename`,

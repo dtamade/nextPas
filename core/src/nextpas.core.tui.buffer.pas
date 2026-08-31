@@ -37,6 +37,21 @@ type
   end;
   TDiffEntries = array of TDiffEntry;
 
+  { OSC 8 超链接 span（刀 21）：输出层 overlay——渲染方在真实重渲时扫描
+    buffer 收集链接区间，设到 TTerminal；TAnsiBackend 绘制命中 cell 时
+    包裹 `ESC]8;;url BEL` 开 / `ESC]8;;BEL` 关。Id <> 0 时开序列带
+    `id=Id`（同 URL 多段共享 id 实现 hover 连续，grok osc8.rs）。
+    不参与 TCell（40 字节 QWord 比较约束），靠「链接样式（下划线/色）
+    画进 cell」让 diff 输出自然携带链接重写。 }
+  TTuiLinkSpan = record
+    Y: Word;
+    ColStart: Word;   { 起始列（含）}
+    ColEnd: Word;     { 结束列（不含）}
+    Id: Cardinal;
+    Url: AnsiString;
+  end;
+  TTuiLinkOverlay = array of TTuiLinkSpan;
+
   TImagePlacement = record
     Hash: QWord;
     Area: TRect;
@@ -44,6 +59,16 @@ type
     DataLen: Integer;
     PixelWidth: Integer;
     PixelHeight: Integer;
+    { True = 原始编码图流（kitty f=100，终端自解码，不做 RGBA 缩放）；
+      False = 调用方已解码的 RGBA 像素（f=32）。 }
+    Encoded: Boolean;
+    { 刀 60 source-crop：kitty 源矩形裁剪（像素坐标）。SrcW/SrcH > 0
+      时放置命令发射 x/y/w/h 键——部分可见块只显示可见带；
+      全 0 = 整图放置（既有行为零回归）。 }
+    SrcX: Integer;
+    SrcY: Integer;
+    SrcW: Integer;
+    SrcH: Integer;
   end;
 
   TScaledPixelBuf = array of Byte;
@@ -94,6 +119,11 @@ type
     function SetStringP(AX, AY: Integer; AStr: PAnsiChar; ALen, AMaxWidth: Integer;
       const AStyle: TStyle): Integer;
 
+    { 从 (AX,AY) 起把 AStr 重复填充 AWidth 列(按字素推进,超宽安全截断;
+      与 SetStringN 的「写一次截断」互补,画横线/分隔线热路径零堆分配)。 }
+    function FillH(AX, AY: Integer; const AStr: AnsiString; AWidth: Integer;
+      const AStyle: TStyle): Integer;
+
     { 对 A 与 Area 交集内每个 cell 应用样式。 }
     procedure SetStyle(const A: TRect; const AStyle: TStyle);
 
@@ -129,6 +159,13 @@ type
       （调用方拥有数据）。 }
     procedure PlaceImage(AHash: QWord; const AImgArea: TRect;
       ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer);
+    { 原始编码图流（如 PNG 字节）：终端按占位矩形拉伸显示，传输用
+      kitty f=100 直传（终端自解码）。仅 ipKitty 协议输出；
+      sixel/half-block 无终端解码能力，调用方应自行降级。 }
+    procedure PlaceImageEncoded(AHash: QWord; const AImgArea: TRect;
+      ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer;
+      ASrcX: Integer = 0; ASrcY: Integer = 0; ASrcW: Integer = 0;
+      ASrcH: Integer = 0);
     function ImagePlacementCount: Integer; inline;
     function ImagePlacementAt(AIndex: Integer): TImagePlacement; inline;
   end;
@@ -409,6 +446,9 @@ var
   LByte: Byte;
   LAdv: TGraphemeAdvance;
   LAscii: Boolean;
+  LUniform: Boolean;
+  LFirst: Byte;
+  LCount: Integer;
 begin
   Result := 0;
   LLeft := Integer(FArea.X);
@@ -431,12 +471,66 @@ begin
   if LRemaining > AMaxWidth then LRemaining := AMaxWidth;
   if LRemaining <= 0 then Exit;
 
+  { K112: single-cell fast path — bench_tui SetString.single-cell is 'x' single ascii }
+  if (LHidden = 0) and (ALen = 1) and (LRemaining > 0) then
+  begin
+    LByte := Byte(AStr[0]);
+    if (LByte >= 32) and (LByte < $80) then
+    begin
+      PrepareWriteSpan(LCursor, AY, 1);
+      LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
+      CellSetSymbolAscii(LCP^, AnsiChar(LByte));
+      CellApplyStyle(LCP^, AStyle);
+      Result := 1;
+      Exit;
+    end;
+  end;
+
   LAscii := True;
   for LI := 0 to ALen - 1 do
     if Byte(AStr[LI]) >= $80 then begin LAscii := False; Break; end;
 
   if LAscii then
   begin
+    { K110: uniform ascii bulk fast path — bench_tui SetString.full is StringOfChar('a',100) uniform }
+    if (LHidden = 0) and (ALen > 0) then
+    begin
+      LUniform := True;
+      LFirst := Byte(AStr[0]);
+      if LFirst < 32 then LUniform := False
+      else
+        for LI := 1 to ALen - 1 do
+          if Byte(AStr[LI]) <> LFirst then begin LUniform := False; Break; end;
+      if LUniform then
+      begin
+        LCount := ALen;
+        if LCount > LRemaining then LCount := LRemaining;
+        if LCount > 0 then
+        begin
+          for LX := 0 to LCount - 1 do
+            PrepareWriteSpan(LCursor + LX, AY, 1);
+          LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
+          CellSetSymbolAscii(LCP^, AnsiChar(LFirst));
+          CellApplyStyle(LCP^, AStyle);
+          LI := 1;
+          while LI < LCount do
+          begin
+            if LI * 2 <= LCount then
+            begin
+              Move(LCP^, (LCP + LI)^, LI * SizeOf(TCell));
+              Inc(LI, LI);
+            end
+            else
+            begin
+              Move(LCP^, (LCP + LI)^, (LCount - LI) * SizeOf(TCell));
+              Break;
+            end;
+          end;
+          Result := LCount;
+          Exit;
+        end;
+      end;
+    end;
     for LI := 0 to ALen - 1 do
     begin
       LByte := Byte(AStr[LI]);
@@ -491,6 +585,78 @@ begin
 
     if LRemaining = 0 then Break;
     if LAdv.Width > LRemaining then Break;
+    PrepareWriteSpan(LCursor, AY, LAdv.Width);
+    LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
+    CellSetSymbolBytes(LCP^, PByte(AStr)[LI], LAdv.ByteLen, LAdv.Width);
+    CellApplyStyle(LCP^, AStyle);
+    if LAdv.Width = 2 then
+    begin
+      LCP := (ContentBase + (IndexOfPos(LCursor + 1, AY)));
+      CellReset(LCP^);
+      LCP^.Width := 0;
+      LCP^.Skip := True;
+    end;
+    Inc(LCursor, LAdv.Width);
+    Inc(Result, LAdv.Width);
+    Dec(LRemaining, LAdv.Width);
+    Inc(LI, LAdv.ByteLen);
+  end;
+end;
+
+{ 把 AStr 重复填充 AWidth 列(按字素推进,越界/超宽安全截断)。
+  与 SetStringN「写一次截断」互补:画横线/分隔线等重复段,
+  热路径零堆分配(常量串复用,逐格直写) }
+function TBuffer.FillH(AX, AY: Integer; const AStr: AnsiString; AWidth: Integer;
+  const AStyle: TStyle): Integer;
+var
+  LLeft, LRight, LRemaining, LHidden, LI, LCursor: Integer;
+  LCP: PCell;
+  LAdv: TGraphemeAdvance;
+  LData: PAnsiChar;
+begin
+  Result := 0;
+  LLeft := Integer(FArea.X);
+  LRight := LLeft + Integer(FArea.Width);
+  if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
+  if AX >= LRight then Exit;
+  if (Length(AStr) = 0) or (AWidth <= 0) then Exit;
+
+  LData := PAnsiChar(AStr);
+  LCursor := AX;
+  LHidden := 0;
+  if LCursor < LLeft then
+  begin
+    LHidden := LLeft - LCursor;
+    LCursor := LLeft;
+  end;
+
+  MarkRowDirty(AY - FArea.Y);
+  LRemaining := LRight - LCursor;
+  if LRemaining > AWidth then LRemaining := AWidth;
+  if LRemaining <= 0 then Exit;
+
+  LI := 0;
+  while LRemaining > 0 do
+  begin
+    if LI >= Length(AStr) then LI := 0;   { 串尾回绕重复填充 }
+    LAdv := GraphemeAt(LData^, Length(AStr), LI);
+    if LAdv.Width = 0 then
+    begin
+      Inc(LI, LAdv.ByteLen);
+      Continue;
+    end;
+    if LHidden > 0 then
+    begin
+      if LAdv.Width <= LHidden then
+      begin
+        Dec(LHidden, LAdv.Width);
+        Inc(LI, LAdv.ByteLen);
+        Continue;
+      end;
+      { 字素横跨左裁剪边:丢弃头残段,整字素从可见起点完整写出 }
+      LHidden := 0;
+    end;
+    if LAdv.Width > LRemaining then Break;   { 放不下:整体停止 }
     PrepareWriteSpan(LCursor, AY, LAdv.Width);
     LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
     CellSetSymbolBytes(LCP^, PByte(AStr)[LI], LAdv.ByteLen, LAdv.Width);
@@ -930,7 +1096,26 @@ begin
   FImagePlacements[FImagePlacementCount].DataLen := ADataLen;
   FImagePlacements[FImagePlacementCount].PixelWidth := APixelWidth;
   FImagePlacements[FImagePlacementCount].PixelHeight := APixelHeight;
+  FImagePlacements[FImagePlacementCount].SrcX := 0;
+  FImagePlacements[FImagePlacementCount].SrcY := 0;
+  FImagePlacements[FImagePlacementCount].SrcW := 0;
+  FImagePlacements[FImagePlacementCount].SrcH := 0;
   Inc(FImagePlacementCount);
+end;
+
+procedure TBuffer.PlaceImageEncoded(AHash: QWord; const AImgArea: TRect;
+  ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer;
+  ASrcX, ASrcY, ASrcW, ASrcH: Integer);
+begin
+  PlaceImage(AHash, AImgArea, ADataPtr, ADataLen, APixelWidth, APixelHeight);
+  with FImagePlacements[FImagePlacementCount - 1] do
+  begin
+    Encoded := True;
+    SrcX := ASrcX;
+    SrcY := ASrcY;
+    SrcW := ASrcW;
+    SrcH := ASrcH;
+  end;
 end;
 
 function TBuffer.ImagePlacementCount: Integer;

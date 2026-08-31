@@ -3,13 +3,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
 declare -A expected_files=(
-  ["tests/winssl/test_winssl_connection_info.pas"]="INTENTIONAL_CORE_SURFACE"
-  ["tests/winssl/test_winssl_connection_edge_cases.pas"]="INTENTIONAL_CORE_SURFACE"
+  ["core/tests/nextpas.core.tls/winssl/test_winssl_connection_info.pas"]="INTENTIONAL_CORE_SURFACE"
+  ["core/tests/nextpas.core.tls/winssl/test_winssl_connection_edge_cases.pas"]="INTENTIONAL_CORE_SURFACE"
 )
 
 pattern='\b(?:Conn|LConn|LConnection)\.GetConnectionInfo\b'

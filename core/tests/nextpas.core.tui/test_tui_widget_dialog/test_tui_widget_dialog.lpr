@@ -154,6 +154,28 @@ begin
   end;
 end;
 
+{ PH29：极小区 sweep——1..6×1..6 全组合渲染不抛异常（修复前 Inner.Height=1
+  时 BodyArea 高度 Word 下溢 65535 绕过 IsEmpty 检查，画到缓冲区外） }
+procedure TestDialogRenderTinyAreas;
+var
+  LDialog: IDialog;
+  LBuf: TBuffer;
+  LW, LH: Integer;
+begin
+  LDialog := TDialog.New('T', 'body').WithButtons(['OK']);
+  for LW := 1 to 6 do
+    for LH := 1 to 6 do
+    begin
+      LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, LW, LH));
+      try
+        LDialog.Render(TRect.Make(0, 0, LW, LH), LBuf);
+        Check(True, 'render in ' + IntToStr(LW) + 'x' + IntToStr(LH));
+      finally
+        LBuf.Free;
+      end;
+    end;
+end;
+
 procedure TestDialogSelectedBoundary;
 var
   LDialog: IDialog;
@@ -215,6 +237,7 @@ begin
   T.Test('TDialog.Render', @TestDialogRender);
   T.Test('TDialog.Render no buttons', @TestDialogRenderNoButtons);
   T.Test('TDialog.Render small area', @TestDialogRenderSmallArea);
+  T.Test('TDialog.Render tiny areas', @TestDialogRenderTinyAreas);
   T.Test('TDialog selected boundary', @TestDialogSelectedBoundary);
   T.Test('TDialog empty title', @TestDialogEmptyTitle);
   T.Test('TDialog empty body', @TestDialogEmptyBody);

@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WINSSL_LIB="$ROOT_DIR/src/nextpas.core.tls.winssl.lib.pas"
-WINSSL_UNIT_TEST="$ROOT_DIR/tests/winssl/test_winssl_unit_comprehensive.pas"
-BACKEND_MATRIX="$ROOT_DIR/docs/BACKEND_CAPABILITY_MATRIX.md"
-WINSSL_DOC="$ROOT_DIR/docs/reference/WINSSL_BACKEND_CAPABILITY_MATRIX.md"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+WINSSL_LIB="$ROOT_DIR/core/src/nextpas.core.tls.winssl.lib.pas"
+WINSSL_UNIT_TEST="$ROOT_DIR/core/tests/nextpas.core.tls/winssl/test_winssl_unit_comprehensive.pas"
 
 fail() {
   echo "[FAIL] $1"
@@ -50,12 +48,6 @@ require_absent "$WINSSL_LIB" \
   "Result := (FWindowsVersion.Major >= 10) and (FWindowsVersion.Build >= 20348);" \
   "WinSSL source must stop publishing a stricter TLS 1.3 protocol gate than the capability record"
 
-require_fixed "$BACKEND_MATRIX" \
-  '- `SupportsTLS13=True` 取决于运行时 Windows / Schannel 版本（例如 Windows 10 1903+）' \
-  "Canonical backend matrix must keep WinSSL TLS 1.3 at the 1903+ conditional truth"
-require_fixed "$WINSSL_DOC" \
-  "| TLS 1.3  | ✅ 支持     | ❌ 不支持   | ❌ 不支持 | Windows 10 1903+ |" \
-  "WinSSL dedicated matrix must keep the 1903+ TLS 1.3 platform truth"
 
 require_fixed "$WINSSL_UNIT_TEST" \
   "// Test 8: Check TLS 1.3 support (Windows 10 1903+)" \

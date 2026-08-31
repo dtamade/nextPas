@@ -4,7 +4,6 @@ program test_freepascal_client_peer_certificate_surface;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.tls13.wire,
@@ -13,13 +12,15 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash;
-
+  nextpas.core.crypto.hash,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 // INTENTIONAL_CORE_SURFACE: this backend proof file intentionally keeps direct
 // core GetPeerCertificateChain coverage as runtime proof. Generic
 // ISSLCertificateVerification owner-path guidance is frozen elsewhere.
@@ -126,8 +127,8 @@ var
   LIssuerPEM: TBytes;
   LCombined: AnsiString;
 begin
-  LLeafPEM := ReadFileBytes('tests/certificate/test_certs/signer_cert.pem');
-  LIssuerPEM := ReadFileBytes('tests/certificate/test_certs/ca_cert.pem');
+  LLeafPEM := ReadFileBytes('certificate/test_certs/signer_cert.pem');
+  LIssuerPEM := ReadFileBytes('certificate/test_certs/ca_cert.pem');
   LCombined := BytesToString(LLeafPEM) + LineEnding + BytesToString(LIssuerPEM);
   SetLength(Result, Length(LCombined));
   if Length(LCombined) > 0 then
@@ -169,7 +170,7 @@ begin
   SetLength(FTranscriptData, 0);
   InitTLS13HandshakeSecrets(FHandshakeSecrets);
   FCertificateBlob := BuildCertificateBlob;
-  FPrivateKeyBlob := ReadFileBytes('tests/certificate/test_certs/signer_key.pem');
+  FPrivateKeyBlob := ReadFileBytes('certificate/test_certs/signer_key.pem');
 end;
 
 procedure TScriptedPeerCertificateServerStream.Enqueue(const AData: TBytes);
@@ -408,14 +409,14 @@ begin
   LExpectedLeaf := TSSLFactory.CreateCertificate(sslFreePascal);
   AssertTrue(LExpectedLeaf <> nil, 'Expected leaf fixture certificate should be created');
   AssertTrue(
-    LExpectedLeaf.LoadFromFile('tests/certificate/test_certs/signer_cert.pem'),
+    LExpectedLeaf.LoadFromFile('certificate/test_certs/signer_cert.pem'),
     'Expected leaf fixture certificate should load'
   );
 
   LExpectedIssuer := TSSLFactory.CreateCertificate(sslFreePascal);
   AssertTrue(LExpectedIssuer <> nil, 'Expected issuer fixture certificate should be created');
   AssertTrue(
-    LExpectedIssuer.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'),
+    LExpectedIssuer.LoadFromFile('certificate/test_certs/ca_cert.pem'),
     'Expected issuer fixture certificate should load'
   );
 
@@ -426,7 +427,7 @@ begin
 
   LStream := TScriptedPeerCertificateServerStream.Create;
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Peer-certificate connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 

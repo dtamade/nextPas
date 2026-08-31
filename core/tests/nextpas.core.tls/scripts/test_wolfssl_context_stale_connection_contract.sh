@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,7 +38,7 @@ require_absent() {
   fi
 }
 
-context_file="src/nextpas.core.tls.wolfssl.context.pas"
+context_file="core/src/nextpas.core.tls.wolfssl.context.pas"
 
 require_absent "$context_file" \
   'TWolfSSLConnection = class\(TInterfacedObject,\s*ISSLConnection,\s*ISSLNativeHandleAccess\)' \
@@ -53,8 +53,8 @@ require_absent "$context_file" \
   'destructor TWolfSSLConnection\.Destroy;' \
   'legacy destructor is removed from wolfssl.context'
 require_match "$context_file" \
-  'Result := fafafa\.ssl\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*ASocket\);' \
+  'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*ASocket\);' \
   'socket factory path still uses modern wolfssl.connection unit'
 require_match "$context_file" \
-  'Result := fafafa\.ssl\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*AStream\);' \
+  'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*LTransport\);' \
   'stream factory path still uses modern wolfssl.connection unit'

@@ -53,7 +53,6 @@ type
     FCount: Integer;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
   TSpaceSavingImpl = class
   private
     FEntries: array of TSpaceSavingEntry;

@@ -198,7 +198,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl - 能力矩阵序列化测试');
+  WriteLn('nextpas.core.tls - 能力矩阵序列化测试');
   WriteLn('==============================================');
   WriteLn;
 

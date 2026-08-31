@@ -3,13 +3,13 @@ program test_ocsp;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert,
   nextpas.core.tls.cert.advanced,
-  nextpas.core.tls.cert.builder,
-  fafafa.ssl;
+  nextpas.core.tls.cert.builder;
 
 var
   LOCSP: IOCSPClient;
