@@ -24,7 +24,7 @@ type
   Exception = nextpas.core.exception.Exception;
   ExceptClass = nextpas.core.exception.ExceptClass;
   EConvertError = nextpas.core.exception.EConvertError;
-  ERangeError = nextpas.core.exception.ERangeError;
+  ERangeError = nextpas.core.exception.EIndexOutOfRangeError;
   EAssertionFailed = nextpas.core.exception.EAssertionFailed;
   TBytes = nextpas.core.base.TBytes;
   TStringArray = nextpas.core.base.TStringArray;
