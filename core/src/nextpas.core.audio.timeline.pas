@@ -5,7 +5,7 @@ unit nextpas.core.audio.timeline;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, Math,
+  Classes, SyncObjs, Math,
   nextpas.core.base,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
