@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# audio source-contract gate — current 38 files (see loop below), ideal 45 (flac/mp3/vorbis + studio/playlist etc by music888 absorption). Keep loop in sync with DESIGN.md §10 and README gate comment.
+# audio source-contract gate — current 36 files (see loop below), ideal 45 (flac/mp3/vorbis + studio/playlist etc by music888 absorption). Keep loop in sync with DESIGN.md §10 and README gate comment.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SRC="$ROOT/core/src"
@@ -43,7 +43,7 @@ for f in \
   "$SRC/nextpas.core.audio.resource.intf.pas" \
   "$SRC/nextpas.core.audio.resource.pas" \
   "$SRC/nextpas.core.audio.pas"; do if [ ! -f "$f" ]; then echo "[FAIL] missing $f"; fail=1; continue; fi; check_no_ffi "$f"; echo "[OK] no ffi/vendor in $(basename "$f")"; done
-# loop: 38 files now (26 base + sfx/spatial/event/bank/resource), ideal 45 — delta reserved for flac/mp3/vorbis/studio/playlist
+# loop: 36 files now (26 base + sfx/spatial/event/bank/resource), ideal 45 — delta reserved for flac/mp3/vorbis/studio/playlist
 if ! grep -q "实时路径仅调 FillRealtime" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] missing realtime comment"; fail=1; else echo "[OK] realtime discipline comment present"; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000010" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IAudioSource GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000011" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IRealtimeAudioSource GUID missing"; fail=1; fi

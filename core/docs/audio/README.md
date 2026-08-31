@@ -120,7 +120,7 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-16 门合计 **223 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`bank/resource` 为 P5 扩展）：
+16 门合计 **218 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`bank/resource` 为 P5 扩展）：
 
 ```bash
 for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \

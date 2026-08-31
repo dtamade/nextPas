@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`io`/`fs` 为 L2 显式允许依赖，`registry+resource` 与 `wav file helper (codec.wav)` 已在 `core/docs/core-module-registry.md` 登记为 `L0-L1 plus io/fs registry+resource, wav file helper`）
 **Owner**：audio lane
 **最后更新**：2026-08-31
-**版本**：1.1（同步 36 files/16门 223 tests；`test_game` 为 deprecated 兼容门；ideal 45 9 files 预留与 DESIGN §9 同词）
+**版本**：1.1（同步 36 files/16门 218 tests；`test_game` 为 deprecated 兼容门；ideal 45 9 files 预留与 DESIGN §9 同词）
 
 ---
 
@@ -308,7 +308,7 @@ make hygiene && git diff --check
 | test_bank 15 | Bank 预加载/引用计数/混音/pan/pitch/loop，`snapshot mixing - lock free` |
 | test_resource 13 | Resource 异步加载/去重/Probe/Release，`Bank协同` |
 
-全量 `223 tests` (16门，含 deprecated test_game 兼容门) 且 `HEAPTRC OK` 为晋升 `focused-runtime` 必要条件（当前 36 files，理想态 45 — 9 files 预留）。
+全量 `218 tests` (16门，含 deprecated test_game 兼容门) 且 `HEAPTRC OK` 为晋升 `focused-runtime` 必要条件（当前 36 files，理想态 45 — 9 files 预留）。
 
 ---
 
@@ -326,7 +326,7 @@ make hygiene && git diff --check
 ## 8. 门禁与晋升
 
 - `source-contract`：`check_source_contract.sh` 36 文件 `无ffi/vendor`（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收） + `17 GUID frozen (unique; 15 realtime domain)` + `TAudioEncodeOptions before IAudioDecoder` + `实时纪律 + two-phase/EnsureScratch/snapshot mixing - lock free/PanLawGains` + 9 域文件存在性（含 sfx canonical + spatial/event/bank/resource）
-- `focused-runtime`：`16门 223 tests` 全绿（含 deprecated test_game 兼容门） + `HEAPTRC` 零泄漏 + `hygiene` 绿（当前 truth level，`bench 10项 -O2`）
+- `focused-runtime`：`16门 218 tests` 全绿（含 deprecated test_game 兼容门） + `HEAPTRC` 零泄漏 + `hygiene` 绿（当前 truth level，`bench 10项 -O2`）
 - 禁止以 `focused-runtime` 冒充 `ci-matrix`；跨 host 未证明前不晋升。
 
 ---
@@ -336,4 +336,4 @@ make hygiene && git diff --check
 | 日期 | 版本 | 变更 |
 |------|------|------|
 | 2026-08-30 | 1.0 | 首次冻结：对齐 26 单元 + 11 GUID + 双平面纪律 + Probe≤4KB + 180 用例门禁 |
-| 2026-08-31 | 1.1 | 同步 36 files/16门 223 tests；test_game 为 deprecated 兼容门；ideal 45 9 files 预留与 DESIGN §9 同词（flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）；17 GUID (unique; 15 realtime domain) |
+| 2026-08-31 | 1.1 | 同步 36 files/16门 218 tests；test_game 为 deprecated 兼容门；ideal 45 9 files 预留与 DESIGN §9 同词（flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）；17 GUID (unique; 15 realtime domain) |

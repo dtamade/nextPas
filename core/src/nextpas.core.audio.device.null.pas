@@ -219,8 +219,8 @@ begin
     AudioEnsureCapacity(LCap, LNeeded, 256);
     if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
   end;
-  // FScratch geometric reuse — zero alloc steady state: slice LNeeded via Copy semantics but backing reused
-  LBuf.Data := Copy(FScratch, 0, LNeeded);
+  // FScratch geometric reuse — zero alloc steady state: alias via refcount, no Copy alloc
+  LBuf.Data := FScratch;
   LBuf.Format := FFormat;
   LBuf.FrameCount := AFrames;
   try
