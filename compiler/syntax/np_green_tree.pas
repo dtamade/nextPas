@@ -433,7 +433,15 @@ function ParseAnonymousRoutineExpression(
   var ACursor: LongInt;
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
-): TGreenNode; forward;
+): TGreenNode; overload; forward;
+
+function ParseAnonymousRoutineExpression(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId;
+  const ATree: TGreenTree
+): TGreenNode; overload; forward;
 
 {$I np_green_tree_parser_impl.inc}
 

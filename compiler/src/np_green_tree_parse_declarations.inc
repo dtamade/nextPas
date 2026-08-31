@@ -47,7 +47,7 @@ begin
       Exit(nil);
     end;
 
-    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ActiveExpressionTree);
+    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId, ATree);
     if TypeNode <> nil then
     begin
       Node.AppendChild(TypeNode);
