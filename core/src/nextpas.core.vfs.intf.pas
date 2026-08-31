@@ -28,6 +28,12 @@ type
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
   end;
 
+  { 扩展：单次查找同时取 ETag+LastModified（ServeVfs 三连击→单次二分），embedded 零分配命中 }
+  IVfsServeMeta = interface(IInterface)
+    ['{A3F1B2C4-8E9D-4F6A-9B2C-1D4E5F607890}']
+    function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+  end;
+
 implementation
 
 end.
