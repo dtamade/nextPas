@@ -1,16 +1,16 @@
 # nextpas.core.audio 代码契约
 
-**模块路径**：`core/src/nextpas.core.audio*.pas`（36 个源文件，当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）
-**层级**：L2（只依赖 L0–L1；`io`/`fs` 为 L2 显式允许依赖，`registry+resource` 与 `wav file helper (codec.wav)` 已在 `core/docs/core-module-registry.md` 登记为 `L0-L1 plus io/fs registry+resource, wav file helper`）
+**模块路径**：`core/src/nextpas.core.audio*.pas`（26 个源文件）
+**层级**：L2（只依赖 L0–L1；`io`/`fs` 为 L2 显式允许依赖）
 **Owner**：audio lane
-**最后更新**：2026-08-31
-**版本**：1.1（同步 36 files/16门 223 tests；`test_game` 为 deprecated 兼容门；ideal 45 9 files 预留与 DESIGN §9 同词）
+**最后更新**：2026-08-30
+**版本**：1.0（首次冻结；对齐 PR1–PR9 已实现真值源）
 
 ---
 
 ## 概要
 
-L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / SFX / 时间线**七域+扩展（`SFX` 为 canonical，`game` 仅作 deprecated 薄转发；`spatial/event/bank/resource` 为 P5 扩展，当前 36 files，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收），纯 Pascal 可替换，实时路径零分配。门面 `nextpas.core.audio` 仅做 `type` 别名与 `inline` 转发，零逻辑。
+L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / 游戏 / 时间线**七域，纯 Pascal 可替换，实时路径零分配。门面 `nextpas.core.audio` 仅做 `type` 别名与 `inline` 转发，零逻辑。
 
 ---
 
@@ -36,22 +36,12 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer`/`TBytes` �
 | `audio.device.intf` | `IAudioDevice(0040)/IAudioDeviceProvider(0041)`，`TDeviceState/TDeviceEvent` | intf |
 | `audio.device.null` | Null 后端：`FScratch` 复用 + `InterlockedExchangeAdd64` + MPSC `TDeviceEvent` + `Drive→FillRealtime` | impl |
 | `audio.graph.intf` | `IAudioGraph(0042)/IAudioPlayer(0043)` | intf |
-| `audio.graph` | 快照混音 `gain*volume+clamp`，单 scratch 双缓冲 `SwapBuf`，`snapshot mixing - lock free` | impl |
+| `audio.graph` | 快照混音 `gain*volume+clamp`，单 scratch 双缓冲 `SwapBuf` | impl |
 | `audio.player` | `IAudioPlayer` 控制面（`Play/Pause/Stop/Seek/Volume`） | impl |
-| `audio.sfx.intf` | `ISfxAudio(0050)` canonical | intf |
-| `audio.sfx` | SFX 池 `MaxVoices` 窃取 + `pitch/pan/loop` + `LoadFromFile→PcmConvert`，`EnsureSfxCapacity/EnsureVoiceCapacity` 几何扩容，`SFX lock -> Graph lock` 锁序，`PanLawGains0dB` 复用 | impl |
-| `audio.game.intf` | `IGameAudio(0050)` deprecated 薄转发（`TGame* = TSfx*`） | intf |
-| `audio.game` | SFX 池同 `sfx` 行为，薄转发 deprecated 兼容（test_game 15 为 deprecated 兼容门） | impl |
+| `audio.game.intf` | `IGameAudio(0050)` | intf |
+| `audio.game` | SFX 池 `MaxVoices` 窃取 + `pitch/pan/loop` + `LoadFromFile→PcmConvert` | impl |
 | `audio.timeline.intf` | `IAudioTimeline(0060)` | intf |
-| `audio.timeline` | `Track/Clip` 排序混音 `solo/mute/loop`，快照化 `FillRealtime`，热点立体声展开，`two-phase snapshot + deep copy clip array + snapshot mixing - lock free` | impl |
-| `audio.spatial.intf` | `IAudioSpatialSource(0051)`，纯函数 `AudioSpatialize/AudioCompute*` 驻留 intf 债务（to be moved to spatial.calc/base, keep for P5 compatibility） | intf |
-| `audio.spatial` | 3D panning：`two-phase snapshot + EnsureScratch + snapshot mixing - lock free`，`PcmConvert in FillRealtime is allowed but keep F32 — offline path preallocated, realtime path already F32 via EnsureF32` | impl |
-| `audio.event.intf` | `IAudioEventSystem(0052)`，`event.intf uses spatial.intf for TAudioSpatialParams` 债务（to be promoted to audio.base） | intf |
-| `audio.event` | Event system：`two-phase snapshot + EnsureScratch/EnsureEventCapacity/EnsureInstanceCapacity + snapshot mixing - lock free` | impl |
-| `audio.bank.intf` | `IAudioBank(0053)` | intf |
-| `audio.bank` | SoundBank：`two-phase snapshot + EnsureScratch/EnsureBankCapacity + PanLawGains0dB + TRecursiveMutex + deep copy + snapshot mixing - lock free` | impl |
-| `audio.resource.intf` | `IAudioResourceManager(0054)`，`AsyncLoad/ProbeFile` | intf |
-| `audio.resource` | Resource manager：`AsyncLoad dedup+ProbeFile + TRecursiveMutex + EnsureCapacityLocked + ReleaseAll + Bank协同`，`fs` 为 `registry+resource, wav file helper` 豁免 | impl |
+| `audio.timeline` | `Track/Clip` 排序混音 `solo/mute/loop`，快照化 `FillRealtime`，热点立体声展开 | impl |
 | `audio.errors` | `EAudioError(EIOError)→Decode/Encode/Device/Graph/Timeline` | base |
 | `audio.pas` | 门面：别名 + inline 转发，零逻辑 | facade |
 
@@ -200,16 +190,12 @@ end;
 - `Graph` 格式必为 `sfF32` 且 `IsValid`，否则 `EAudioGraphError`；`AddSource` 校验采样率/声道一致，`NaN/Inf` gain 归一为 `1.0`。
 - `FillRealtime` 锁内仅拷贝存活节点/处理器快照（固定容量思想），混音无锁；单 `FScratch` 复用每节点零分配，处理器链双缓冲 `SwapBuf` 交换；`SeekTo` 广播至存活源。
 
-### 2.7 SFX / 游戏（deprecated 兼容）与时间线 / 空间 / 事件 / Bank / Resource
+### 2.7 游戏与时间线
 
 ```pascal
-ISfxAudio = interface ['{F1A2B3C4-D5E6-7890-ABCD-A00000000050}'] // canonical 0050
-  function Load(const ABuffer: TAudioBuffer): TSfxId;
-  function Play(ASfx: TSfxId; ...): TVoiceId; // gain/pan/pitch/loop
-end;
-IGameAudio = interface ['{F1A2B3C4-D5E6-7890-ABCD-A00000000050}'] // deprecated 薄转发，TGame* = TSfx*
+IGameAudio = interface ['{F1A2B3C4-D5E6-7890-ABCD-A00000000050}']
   function Load(const ABuffer: TAudioBuffer): TGameSfxId;
-  function Play(ASfx: TGameSfxId; ...): TGameVoiceId;
+  function Play(ASfx: TGameSfxId; ...): TGameVoiceId; // gain/pan/pitch/loop
 end;
 IAudioTimeline = interface(IRealtimeAudioSource) ['{F1A2B3C4-D5E6-7890-ABCD-A00000000060}']
   function AddTrack(AGain: Single): TTimelineTrackId;
@@ -218,23 +204,15 @@ IAudioTimeline = interface(IRealtimeAudioSource) ['{F1A2B3C4-D5E6-7890-ABCD-A000
   property Loop: Boolean; property Position/Duration: UInt64;
 end;
 TTimelineClip = record Id: TTimelineClipId; Buffer: TAudioBuffer; StartFrame: UInt64; Gain, Pan: Single; Alive: Boolean; end;
-TTimelineTrack = record Id: TTimelineTrackId; Clips: array of TTimelineTrack; Gain, Pan: Single; Muted, Solo: Boolean; Alive: Boolean; end;
-IAudioSpatialSource = interface(IRealtimeAudioSource) ['{F1A2B3C4-D5E6-7890-ABCD-A00000000051}'] // 3D panning
-IAudioEventSystem = interface(IRealtimeAudioSource) ['{F1A2B3C4-D5E6-7890-ABCD-A00000000052}'] // event → spatial → bank
-IAudioBank = interface(IRealtimeAudioSource) ['{F1A2B3C4-D5E6-7890-ABCD-A00000000053}'] // SoundBank preload+refcount
-IAudioResourceManager = interface ['{F1A2B3C4-D5E6-7890-ABCD-A00000000054}'] // AsyncLoad dedup+ProbeFile, Bank协同
+TTimelineTrack = record Id: TTimelineTrackId; Clips: array of TTimelineClip; Gain, Pan: Single; Muted, Solo: Boolean; Alive: Boolean; end;
 ```
 
-- `Sfx` 音色池 `MaxVoices` 窃取，`Load/Play/StopVoice/MasterGain`，`LoadFromFile` 经 `PcmConvert`，`SFX lock -> Graph lock` 锁序，`PanLawGains0dB` 共用；`Game` 为 deprecated 薄转发（`test_game` 15 为 deprecated 兼容门，统一按 `ISfxAudio` 0050 校验）。
-- `Timeline` 即 `IRealtimeAudioSource` 可直连 `Device/Graph`；`FillRealtime` 快照化（拷 `Position/Loop/Duration` + 存活轨），排序混音，`solo` 覆盖 `mute`，`Pan` 热点展开同 `Mix`，`snapshot mixing - lock free`，`deep copy clip array`。
-- `Spatial` 3D panning：`AudioSpatialize/AudioCompute*` 纯函数驻留 `spatial.intf` 债务（to be moved to spatial.calc/base, keep for P5 compatibility），`spatial.pas` 实时路径 `PcmConvert in FillRealtime is allowed but keep F32 — offline path preallocated, realtime path already F32 via EnsureF32`。
-- `Event` 依赖 `spatial.intf for TAudioSpatialParams` 债务（to be promoted to audio.base），`two-phase snapshot + EnsureScratch/EnsureEventCapacity/EnsureInstanceCapacity + snapshot mixing - lock free`。
-- `Bank/Resource`：`Bank` 复用 `PanLawGains0dB`、`TRecursiveMutex`、`EnsureBankCapacity` 几何扩容、深拷贝隔离、`snapshot mixing - lock free`；`Resource` 为 `AsyncLoad dedup+ProbeFile`、`TRecursiveMutex`、`EnsureCapacityLocked` 几何扩容、`ReleaseAll`、`Bank协同`，`fs` 豁免登记为 `registry+resource, wav file helper`。
-- 理想态 45 — 9 files 预留 `flac/mp3/vorbis/studio/playlist` 等由 `music888` 以 `Probe≤4KB` 可插拔吸收（与 DESIGN §9 同词）。
+- `Game` 音色池 `MaxVoices` 窃取，`Load/Play/StopVoice/MasterGain`，`LoadFromFile` 经 `PcmConvert`。
+- `Timeline` 即 `IRealtimeAudioSource` 可直连 `Device/Graph`；`FillRealtime` 快照化（拷 `Position/Loop/Duration` + 存活轨），排序混音，`solo` 覆盖 `mute`，`Pan` 热点展开同 `Mix`。
 
 ### 2.8 门面
 
-`nextpas.core.audio` 仅 `type` 别名 + `inline` 转发，零逻辑，聚合以上 36 单元（当前 36，理想态 45 — 9 files 预留）；消费方多数场景只 `uses nextpas.core.audio`。
+`nextpas.core.audio` 仅 `type` 别名 + `inline` 转发，零逻辑，聚合以上 26 单元；消费方多数场景只 `uses nextpas.core.audio`。
 
 ---
 
@@ -269,21 +247,20 @@ IAudioResourceManager = interface ['{F1A2B3C4-D5E6-7890-ABCD-A00000000054}'] // 
 
 ## 5. 依赖边界
 
-- 允许：`base/exception/errors`（L0），`bytes/text/encoding/collections/sync/platform/mem/io/fs` 等 L0-L1；`io/fs` 为 L2 容器 IO 必要依赖（显式允许，`registry+resource` 与 `wav file helper (codec.wav)` 已登记为 `L0-L1 plus io/fs registry+resource, wav file helper`）。
-- 禁止：任何 `*.ffi/vendor/miniaudio/mpg123/opusfile`（gate `grep -qi "\.ffi|vendor"` 强校验）；`SyncObjs/Classes/SysUtils` 的直接宿主依赖为债务 8 文件（`device.null/graph/sfx/timeline/spatial/event/bank/resource`，`game` 为薄转发），目标迁移至 `nextpas.core.sync/platform`（`FINDINGS F-17`）。
-- 同层 `L2→L2` 仅允许 `io/fs/compress` 等已登记豁免（`registry+resource, wav file helper` 显式登记），不引入 `crypto/compress` 越层。
+- 允许：`base/exception/errors`（L0），`bytes/text/encoding/collections/sync/platform/mem/io/fs` 等 L0-L1；`io/fs` 为 L2 容器 IO 必要依赖（显式允许）。
+- 禁止：任何 `*.ffi/vendor/miniaudio/mpg123/opusfile`（gate `grep -qi "\.ffi|vendor"` 强校验）；`SyncObjs/Classes/SysUtils` 的直接宿主依赖为债务，目标迁移至 `nextpas.core.sync/platform`（`FINDINGS F-17`）。
+- 同层 `L2→L2` 仅允许 `io/fs/compress` 等已登记豁免，不引入 `crypto/compress` 越层。
 
 ---
 
 ## 6. 测试入口
 
 ```bash
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 36 文件无 ffi/vendor（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收） + 17 GUID (unique; 15 realtime domain) + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh
 for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
-         test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline test_event test_bank test_resource; do
+         test_resample test_mix test_dsp test_device test_graph test_game test_timeline; do
   make -C core/tests/nextpas.core.audio/$g clean test
 done
-# 注：test_game 15 为 deprecated 兼容门（IGameAudio → ISfxAudio 薄转发），16门统计含 deprecated，理想态 45 Gate 同步。
 make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench  # -O2, 输出 ns/op + MB/s
 make hygiene && git diff --check
 ```
@@ -300,15 +277,11 @@ make hygiene && git diff --check
 | test_mix 11 | MixInto/增益/归一/pan law |
 | test_dsp 14 | Biquad/Compressor/Limiter/FFT |
 | test_device 15 | Null MPSC 与 Drive/Underrun |
-| test_graph 16 | 快照混音与双缓冲，`snapshot mixing - lock free` |
-| test_sfx 15 | SFX 池与窃取（canonical 0050） |
-| test_game 15 | SFX 池与窃取（deprecated 兼容，薄转发 `IGameAudio` 0050） |
-| test_timeline 16 | 排序/声像/solo/mute/loop/Device 联动，`snapshot mixing - lock free` |
-| test_event 10 | 事件注册/空间衰减/参数/窃取，`snapshot mixing - lock free` |
-| test_bank 15 | Bank 预加载/引用计数/混音/pan/pitch/loop，`snapshot mixing - lock free` |
-| test_resource 13 | Resource 异步加载/去重/Probe/Release，`Bank协同` |
+| test_graph 16 | 快照混音与双缓冲 |
+| test_game 15 | SFX 池与窃取 |
+| test_timeline 16 | 排序/声像/solo/mute/loop/Device 联动 |
 
-全量 `223 tests` (16门，含 deprecated test_game 兼容门) 且 `HEAPTRC OK` 为晋升 `focused-runtime` 必要条件（当前 36 files，理想态 45 — 9 files 预留）。
+全量 `180 tests` 且 `HEAPTRC OK` 为晋升 `focused-runtime` 必要条件。
 
 ---
 
@@ -325,8 +298,8 @@ make hygiene && git diff --check
 
 ## 8. 门禁与晋升
 
-- `source-contract`：`check_source_contract.sh` 36 文件 `无ffi/vendor`（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收） + `17 GUID frozen (unique; 15 realtime domain)` + `TAudioEncodeOptions before IAudioDecoder` + `实时纪律 + two-phase/EnsureScratch/snapshot mixing - lock free/PanLawGains` + 9 域文件存在性（含 sfx canonical + spatial/event/bank/resource）
-- `focused-runtime`：`16门 223 tests` 全绿（含 deprecated test_game 兼容门） + `HEAPTRC` 零泄漏 + `hygiene` 绿（当前 truth level，`bench 10项 -O2`）
+- `source-contract`：`check_source_contract.sh` 26 文件 `无ffi/vendor` + `8+3 GUID` + `TAudioEncodeOptions before IAudioDecoder` + `实时纪律` + 5 域文件存在性
+- `focused-runtime`：`13门` 全绿 + `HEAPTRC` 零泄漏 + `hygiene` 绿（当前 truth level）
 - 禁止以 `focused-runtime` 冒充 `ci-matrix`；跨 host 未证明前不晋升。
 
 ---
@@ -336,4 +309,3 @@ make hygiene && git diff --check
 | 日期 | 版本 | 变更 |
 |------|------|------|
 | 2026-08-30 | 1.0 | 首次冻结：对齐 26 单元 + 11 GUID + 双平面纪律 + Probe≤4KB + 180 用例门禁 |
-| 2026-08-31 | 1.1 | 同步 36 files/16门 223 tests；test_game 为 deprecated 兼容门；ideal 45 9 files 预留与 DESIGN §9 同词（flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）；17 GUID (unique; 15 realtime domain) |

@@ -7,8 +7,8 @@ interface
 uses
   SysUtils,
   Classes,
+  SyncObjs,
   nextpas.core.base,
-  nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.device.intf,
@@ -21,7 +21,7 @@ type
     FFormat: TAudioFormat;
     FState: TDeviceState;
     FSource: IRealtimeAudioSource;
-    FLock: TRecursiveMutex;
+    FLock: TCriticalSection;
     FPosition: UInt64;
     FUnderruns: Int64;
     FViolations: Int64;
@@ -73,7 +73,7 @@ begin
   FInfo := AInfo;
   FFormat := AFormat;
   FState := dsOpened;
-  FLock := TRecursiveMutex.Create;
+  FLock := TCriticalSection.Create;
   FPosition := 0;
   FUnderruns := 0;
   FViolations := 0;
@@ -90,7 +90,7 @@ end;
 procedure TNullAudioDevice.PushEvent(AKind: TDeviceEventKind; const AMsg: string);
 var L: Integer;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     L := Length(FEvents);
     SetLength(FEvents, L + 1);
@@ -100,7 +100,7 @@ begin
     FEvents[L].Position.Frame := FPosition;
     FEvents[L].Position.SampleRate := FFormat.SampleRate;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
 end;
 
@@ -112,18 +112,18 @@ begin Result := FFormat; end;
 
 function TNullAudioDevice.GetState: TDeviceState;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try Result := FState;
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TNullAudioDevice.GetPosition: TAudioClock;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     Result.Frame := FPosition;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
   Result.SampleRate := FFormat.SampleRate;
 end;
@@ -137,7 +137,7 @@ begin Result := UInt64(FViolations); end;
 function TNullAudioDevice.PollEvent(out AEvent: TDeviceEvent): Boolean;
 var I: Integer;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     if Length(FEvents) = 0 then Exit(False);
     AEvent := FEvents[0];
@@ -146,25 +146,25 @@ begin
     SetLength(FEvents, Length(FEvents) - 1);
     Result := True;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
 end;
 
 procedure TNullAudioDevice.SetSource(const ASource: IRealtimeAudioSource);
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     if FState = dsStarted then
       raise EAudioDeviceError.Create('SetSource: cannot change while started');
     FSource := ASource;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
 end;
 
 function TNullAudioDevice.Start: Boolean;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     if FState = dsStarted then Exit(True);
     if FState = dsClosed then
@@ -176,7 +176,7 @@ begin
       raise EAudioDeviceError.Create('Start: source format mismatch rate/ch');
     FState := dsStarted;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
   PushEvent(devStarted, 'started');
   Result := True;
@@ -184,13 +184,13 @@ end;
 
 function TNullAudioDevice.Stop: Boolean;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     if FState <> dsStarted then Exit(True);
     FState := dsOpened;
     Result := True;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
   PushEvent(devStopped, 'stopped');
 end;
@@ -199,29 +199,21 @@ function TNullAudioDevice.Drive(AFrames: Integer): Integer;
 var
   LBuf: TAudioBuffer;
   LNeeded: Integer;
-  LCap: Integer;
   LRet: Integer;
 begin
   if AFrames <= 0 then Exit(0);
-  FLock.Acquire;
+  FLock.Enter;
   try
     if FState <> dsStarted then Exit(0);
     if not Assigned(FSource) then Exit(0);
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
-  LNeeded := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
-  if LNeeded < 0 then LNeeded := 0;
-  if Int64(LNeeded) > 16*1024*1024 then
-    raise EAudioDeviceError.CreateFmt('Drive: %d bytes exceeds 16MiB limit', [LNeeded]);
-  if Length(FScratch) < LNeeded then
-  begin
-    LCap := Length(FScratch);
-    AudioEnsureCapacity(LCap, LNeeded, 256);
-    if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
-  end;
-  // FScratch geometric reuse — zero alloc steady state: slice LNeeded via Copy semantics but backing reused
-  LBuf.Data := Copy(FScratch, 0, LNeeded);
+  LNeeded := AFrames * FFormat.BlockAlign;
+  if Length(FScratch) <> LNeeded then
+    SetLength(FScratch, LNeeded);
+  // FScratch reuse — zero alloc steady state: LBuf.Data shares backing, no Copy/Move
+  LBuf.Data := FScratch;
   LBuf.Format := FFormat;
   LBuf.FrameCount := AFrames;
   try
@@ -232,11 +224,11 @@ begin
       FillChar(LBuf.Data[0], Length(LBuf.Data), 0);
     LRet := AFrames;
     PushEvent(devDeviceError, 'FillRealtime raised exception — muted');
-    FLock.Acquire;
+    FLock.Enter;
     try
       FPosition := FPosition + UInt64(AFrames);
     finally
-      FLock.Release;
+      FLock.Leave;
     end;
     Exit(AFrames);
   end;
@@ -249,16 +241,16 @@ begin
   begin
     FConsecutiveUnderruns := 0;
     PushEvent(devStopped, 'eof');
-    FLock.Acquire;
-    try FState := dsOpened; finally FLock.Release; end;
+    FLock.Enter;
+    try FState := dsOpened; finally FLock.Leave; end;
     Result := 0;
     Exit;
   end;
-  FLock.Acquire;
+  FLock.Enter;
   try
     FPosition := FPosition + UInt64(AFrames);
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
   if LRet < AFrames then
   begin
