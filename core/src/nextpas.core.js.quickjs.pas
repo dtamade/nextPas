@@ -11,6 +11,7 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.json,
+  nextpas.core.js.pure.base,
   nextpas.core.js.quickjs.ffi;
 
 type
@@ -36,18 +37,12 @@ type
     FClosed: Boolean;
     FThreadId: UInt64;
     FContextId: UInt64;
-    FHostFuncs: array of record
-      Name: string;
-      Func: TJsHostFunction;
-      Method: TJsHostMethod;
-      Proc: TJsHostProc;
-      Kind: Integer;
-    end;
+    FHostFuncs: TJsPureHostArray;
     FDeadlineMs: Int64;
-    function FindHost(const AName: string): Integer;
+    function FindHost(const AName: string): Integer; inline;
     function IsOnCreationThread: Boolean;
     procedure EnsureNotClosed; function Bind(const V: TJsValue): TJsValue; inline; procedure EnsureThreadAffinity;
-    function ValidateHostName(const AName: string): Boolean;
+    function ValidateHostName(const AName: string): Boolean; inline;
     function QjsToString(const V: TJSQjsValue; Ctx: Pointer): string;
     function QjsIsException(const V: TJSQjsValue): Boolean;
     function QjsGetExceptionStr(Ctx: Pointer): string;
@@ -165,17 +160,12 @@ begin
   inherited;
 end;
 
-function TJsQuickJsContext.FindHost(const AName: string): Integer; inline; var I: Integer; begin for I:=0 to High(FHostFuncs) do if FHostFuncs[I].Name=AName then Exit(I); Result:=-1; end;
+function TJsQuickJsContext.FindHost(const AName: string): Integer; inline; begin Result := JsPureFindHost(FHostFuncs, AName); end;
 function TJsQuickJsContext.IsOnCreationThread: Boolean; inline; begin Result := UInt64(platform_thread_self) = FThreadId; end;
 procedure TJsQuickJsContext.EnsureNotClosed; inline; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkQuickJs); end;
 function TJsQuickJsContext.Bind(const V: TJsValue): TJsValue; inline; begin Result := JsValueBindContext(V, FContextId); end;
 procedure TJsQuickJsContext.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkQuickJs); end;
-function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; var I: Integer; C: Char;
-begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if AName[1]='.' then Exit; if AName[Length(AName)]='.' then Exit;
-  for I:=1 to Length(AName) do begin C:=AName[I]; if C='.' then Continue;
-    if not (C in ['A'..'Z','a'..'z','_','$','0'..'9']) then Exit;
-    if (I>1) and (AName[I-1]<>'.') then Continue;
-    if (C in ['0'..'9']) and ((I=1) or (AName[I-1]='.')) then Exit; end; Result:=True; end;
+function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; inline; begin Result := JsPureValidateHostName(AName); end;
 
 function TJsQuickJsContext.QjsToString(const V: TJSQjsValue; Ctx: Pointer): string; inline;
 var P: PAnsiChar;

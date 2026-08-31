@@ -2,7 +2,7 @@
 
 **状态**：S0 冻结，随源码落地微调（六维 P0 清零）
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）、`REVIEW.md`（差距）、`AI_GUIDE.md`（AI 规范）、`SIXDIM_REVIEW.md`（六维）
-**版本**：0.8（11 单元 pure.base 单源 338 行 + Close 幂等 + 5 gate 全绿）
+**版本**：0.9（11 单元 pure.base 单源 338 行 + Close 幂等 + 5 gate 全绿，M3b 基准同步，与 CONTRACT 0.9/BENCHMARKS 1.2 对齐，18 份对齐）
 
 ## 0. 分层总览（`SIXDIM L-1`）
 
@@ -217,3 +217,5 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 | 2026-08-30 | 0.3 | 生产级：备选方案/消费者审计/基准设计/风险扩展 |
 | 2026-08-30 | 0.4 | 冻结：关联 ROADMAP/ACCEPTANCE/AI_GUIDE，12 份闭环 |
 | 2026-08-30 | 0.5 | 增补：game888 借鉴（静链/动探、批处理、模块加载器、多桥组合） |
+| 2026-08-31 | 0.8 | 11 单元 pure.base 单源 338 行 + 5 gate 全绿，M3b 基准同步，18 份对齐 |
+| 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（CONTRACT/ROADMAP/BENCHMARKS 三份对齐） |

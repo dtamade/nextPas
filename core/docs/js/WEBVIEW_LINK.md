@@ -2,7 +2,7 @@
 
 **状态**：S0 冻结，不产生代码
 **方向**：`js` L2 底座 → `webview` L3 消费者，禁止反向依赖
-**版本**：0.7（M1 落地：js 纯族恒可用，webview S2 注入就绪）
+**版本**：0.9（11 单元 pure.base 单源 338 行 + 5 gate 全绿，M3b 基准同步，与 CONTRACT/ROADMAP 0.9/BENCHMARKS 1.2 对齐，18 份对齐）
 
 ---
 
@@ -125,3 +125,5 @@ webview (L3): base ← intf ← {bridge,fake,gtk} ← factory ← webview.pas
 | 2026-08-30 | 0.3 | 生产级：错误映射表/时序图/依赖图/工厂说明显式化 |
 | 2026-08-30 | 0.4 | 冻结：12 份闭环，版本对齐 |
 | 2026-08-30 | 0.7 | M1 落地：js888/v8/chakra 恒可用，webview.fake 可选注入 IJsContext 就绪 |
+| 2026-08-31 | 0.8 | 11 单元 pure.base 单源 338 行 + V8/Chakra Close 幂等 + 5 gate 全绿，18 份对齐 |
+| 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（CONTRACT/ROADMAP/BENCHMARKS 三份对齐） |

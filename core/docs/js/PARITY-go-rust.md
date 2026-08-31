@@ -2,7 +2,7 @@
 
 **范围**：`nextpas.core.js`（S1 目标：QuickJS FFI + fake）
 **标杆**：Go `dop251/goja` / `rogchap/v8go`；Rust `rquickjs` / `boa_engine`
-**版本**：0.7（M1 落地：实测 bench 对标）
+**版本**：0.9（11 单元 pure.base 单源 338 行 + 5 gate 全绿，M3b 基准同步，与 CONTRACT/ROADMAP 0.9/BENCHMARKS 1.2 对齐，18 份对齐）
 
 ---
 
@@ -75,3 +75,5 @@ make -C core/benchmarks/nextpas.core.js/bench_eval run
 | 2026-08-30 | 0.3 | 生产级：评分五维/基准对照/残差显式化 |
 | 2026-08-30 | 0.4 | 冻结：版本对齐 12 份完整 |
 | 2026-08-30 | 0.7 | 实测：bench_eval 5 后端（fake 164ns / js888 194ns / v8 170ns / chakra 200ns）全绿，目标 ≤10µs 达成 |
+| 2026-08-31 | 0.8 | 11 单元 pure.base 单源 338 行 + V8/Chakra Close 幂等 + 5 gate 全绿，18 份对齐 |
+| 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（18 份对齐） |

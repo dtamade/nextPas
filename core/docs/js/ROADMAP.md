@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js` lane
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ACCEPTANCE.md`（验收）、`GOAL_TREE.md`（目标树）、`REVIEW.md`（差距）
-**版本**：0.8（S0 定版，随实现滚动，M3b 基准与纯族 338 行体量同步）
+**版本**：0.9（S0 定版，随实现滚动，M3b 基准与纯族 338 行体量同步，与 CONTRACT 0.9/BENCHMARKS 1.2 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---
@@ -130,4 +130,5 @@ M0 (文档)
 |------|------|------|
 | 2026-08-30 | 1.0 | 首版：M0–M5 里程碑 + 依赖 + 风险 |
 | 2026-08-31 | 1.1 | M3b 同步：BENCHMARKS 5 后端矩阵刷新（179/633/1089/962/SKIP）+ Value/ops 同步 + 纯族 338 行体量阈值内（CONTRACT/BENCHMARKS 对齐） |
+| 2026-08-31 | 1.2 | 0.9 对齐：CONTRACT 0.8→0.9/PARITY 0.7→0.9/WEBVIEW 0.7→0.9/SIXDIM 0.6→0.9 四份联动，pure.base 复用 `JsPureFindHost/ValidateHostName` 消 QuickJS 克隆，18 份闭环 |
 
