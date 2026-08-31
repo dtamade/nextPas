@@ -97,6 +97,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
 | `zip` | L2 | ZIP archive (writer/reader/sequential/fs/aes/extra/common) | yes | L0-L1 plus fs/compress/checksum/crypto owners (implementation-only fs sandbox, L2→L2 exempt via platform lstat + IsSafeSymlinkTarget) | focused-runtime |
+| `sevenz` | L2 | 7z container (aes/bcj/lzma/fs) | yes | L0-L1 plus io/fs/compress/checksum/crypto/hash owners (L2→L2 exempt via platform lstat, like zip/audio) | focused-runtime |
 
 Database family: `sqlite` and `pg` are L2 backend implementations inside the
 `db` (L3) family; their units physically live under `nextpas.core.db.sqlite.*`

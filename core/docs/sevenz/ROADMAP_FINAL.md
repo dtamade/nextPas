@@ -1,10 +1,10 @@
-# nextpas.core.sevenz 终局路线图 — 163 封版
+# nextpas.core.sevenz 终局路线图 — 166 封版
 
 > L2 标杆的“完美”定义：性能·高级感·复用度·稳定性·完整性 五维同封。
 
 ## 当前封版快照（2026-08-28）
 
-- **163 tests** `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test` `heaptrc OK` `warnings 0`
+- **166 tests** `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test` `heaptrc OK` `warnings 0`
 - **hygiene** `scripts/build-hygiene-check.sh = pass` `git diff --check = 0`
 - **落地** `main aefae745f` `codex/core-sevenz → origin/main`
 
@@ -25,7 +25,7 @@
 3. `bench_sevenz` 增 `IgnoreCase` 10k 条目压测基线并固化红线。
 4. `interop` 增 `BZip2 + IgnoreCase` 混合档的 `7z x` 回放。
 
-以上均为“锦上添花”，当前 163 已满足 L2 封版的全部硬门槛。
+以上均为“锦上添花”，当前 166 已满足 L2 封版的全部硬门槛。
 
 ## 推广
 
