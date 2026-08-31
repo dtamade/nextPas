@@ -12,7 +12,6 @@ unit nextpas.core.ssh.rsa;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.errors;
 
