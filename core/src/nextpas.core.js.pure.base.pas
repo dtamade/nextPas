@@ -46,6 +46,10 @@ procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Na
 procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
+// Json 工厂克隆收敛：fake/js888/v8/chakra 四 pure 后端同分支，仅纯计算零 FFI/零 dl
+function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
+function JsPureToJsonString(const AValue: TJsValue): string; inline;
+function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
 
 implementation
 uses
@@ -255,6 +259,33 @@ begin
     1: try Result := Hosts[LIdx].Method(ACtx, AThis, AArgs); except on E: EJsError do raise; on E: ENextPasError do raise EJsError.Create(E.Message, JsCategoryFromErrorCategory(E.Category), E.ClassName, '', ABackend); on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, E.ClassName, '', ABackend); end;
     2: try Result := Hosts[LIdx].Proc(ACtx, AThis, AArgs); except on E: EJsError do raise; on E: ENextPasError do raise EJsError.Create(E.Message, JsCategoryFromErrorCategory(E.Category), E.ClassName, '', ABackend); on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, E.ClassName, '', ABackend); end;
   end;
+end;
+
+function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
+begin
+  if AJson.IsStr then Result := JsValueBindContext(JsStringValue(AJson.AsStr.ToString), AContextId)
+  else if AJson.IsInt then Result := JsValueBindContext(JsIntValue(AJson.AsInt), AContextId)
+  else if AJson.IsBool then Result := JsValueBindContext(JsBoolValue(AJson.AsBool), AContextId)
+  else if AJson.IsNull then Result := JsValueBindContext(JsNullValue, AContextId)
+  else if AJson.IsArray then Result := JsValueBindContext(JsPureHeapNewArray(Heap), AContextId)
+  else if AJson.IsObject then Result := JsValueBindContext(JsPureHeapNewObject(Heap), AContextId)
+  else Result := JsValueBindContext(JsUndefinedValue, AContextId);
+end;
+
+function JsPureToJsonString(const AValue: TJsValue): string; inline;
+begin
+  case AValue.Kind of
+    jskString: Result := '"' + AValue.AsString + '"';
+    jskNumber: Result := nextpas.core.text.IntToStr(AValue.AsInt);
+    jskBoolean: if AValue.AsBool then Result := 'true' else Result := 'false';
+    jskNull: Result := 'null';
+  else Result := 'null';
+  end;
+end;
+
+function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
+begin
+  Result := JsonParse(JsPureToJsonString(AValue));
 end;
 
 function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean; inline;

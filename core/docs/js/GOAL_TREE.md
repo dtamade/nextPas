@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js`
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）
-**版本**：0.10（11 单元 pure.base 单源 352行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 0.10/BENCHMARKS 1.3 对齐，18 份对齐）
+**版本**：1.0rc（11 单元 pure.base 单源 352行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0rc/BENCHMARKS 1.3 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---
@@ -106,3 +106,4 @@ core/examples/nextpas.core.js/demo_js/
 | 2026-08-31 | 0.8 | 对齐 CONTRACT 0.8 / ROADMAP 0.8 / BENCHMARKS 1.2：版本滞后修复 + 晋升门禁四件套/L0-L3/pure.base 338行/零FFI零dl/inline零拷贝/资源可释放/文档对齐显式化 + `pure.base` 单源 + 5 gate 全绿 |
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS 5 后端 179/633/1089/962/SKIP + Value/ops 零分配 + 纯族 338 行对齐 |
 | 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.3 同步实测均值 ~660ns（645/660/631/660）/ host ~1.5µs 加权 / B/op 18/176 + pure.base 352 行阈值550内统一，18 份对齐 |
+| 2026-08-31 | 1.0rc | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0rc，BENCHMARKS 1.3 保持，其余引用同步 1.0rc，18份对齐 |

@@ -271,37 +271,13 @@ end;
 function TJsFakeContext.NewJson(const AJson: TJsonValue): TJsValue;
 begin
   EnsureNotClosed;
-  if AJson.IsStr then
-    Result := Bind(JsStringValue(AJson.AsStr.ToString))
-  else if AJson.IsInt then
-    Result := Bind(JsIntValue(AJson.AsInt))
-  else if AJson.IsBool then
-    Result := Bind(JsBoolValue(AJson.AsBool))
-  else if AJson.IsNull then
-    Result := Bind(JsNullValue)
-  else if AJson.IsArray then
-    Result := NewArray
-  else if AJson.IsObject then
-    Result := NewObject
-  else
-    Result := Bind(JsUndefinedValue);
+  Result := JsPureNewJson(AJson, FHeap, FContextId);
 end;
 
 function TJsFakeContext.ToJson(const AValue: TJsValue): IJsonDocument;
-var
-  LJson: string;
 begin
   EnsureNotClosed;
-  case AValue.Kind of
-    jskString: LJson := '"' + AValue.AsString + '"';
-    jskNumber: LJson := nextpas.core.text.IntToStr(AValue.AsInt);
-    jskBoolean:
-      if AValue.AsBool then LJson := 'true' else LJson := 'false';
-    jskNull: LJson := 'null';
-  else
-    LJson := 'null';
-  end;
-  Result := JsonParse(LJson);
+  Result := JsPureToJson(AValue);
 end;
 function TJsFakeContext.HasProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result := False; end;
 function TJsFakeContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result := False; end;

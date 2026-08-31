@@ -1,5 +1,10 @@
 # nextpas.core.js 变更日志
 
+## [1.0.0-rc.1] - 2026-08-31 — 冻结候选（距1.0仅文档版本滞后，18份对齐）
+
+- `CONTRACT 0.10→1.0rc` / `DESIGN 0.10→1.0rc`：冻结候选，`11单元 pure.base 352行 + 5 gate 全绿 + M3b 均值 ~660ns` 零代码变更，`BENCHMARKS 1.3` 保持（Eval/small 645/660/631/660 / host ~1.5µs 加权 / B/op 18/176 / Value 零分配），其余引用同步 1.0rc，`18份对齐`，仅头部版本与变更记录变更，历史行不变
+- 冻结说明：`S1 pure.base 单源 352行阈值550内 + 5 gate 全绿 + hygiene/source-contract pass` 已就绪，`1.0rc` 为冻结候选，待 `M4/M5` 真消费方联动验证后晋升 `1.0`
+
 ## [0.10.0] - 2026-08-31 — 文档完整性修复 + fake Global 幂等 + BENCHMARKS 均值同步
 
 - `BENCHMARKS 1.2→1.3`：`Eval/small` 由 `179/633/1089/962` 旧表刷新为本次实测均值 `fake 645 / js888 660 / v8 631 / chakra 660`（~660ns，均值）/ `Eval/host ~1.5µs` 加权（host 18 B/op + JSON 176 B/op）/ `Value/ops` 零分配（B/op=0），`pure.base 338→352` 行阈值550内统一，`18`份对齐

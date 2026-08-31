@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-31
-**版本**：0.10（11 单元 pure.base 单源 352 行 + V8/Chakra Close 幂等 + 5 gate 全绿，M3b 均值同步，与 BENCHMARKS 1.3/ROADMAP 0.9 对齐，18 份对齐）
+**版本**：1.0rc（11 单元 pure.base 单源 352 行 + V8/Chakra Close 幂等 + 5 gate 全绿，M3b 均值同步，与 BENCHMARKS 1.3/ROADMAP 1.0rc 对齐，18 份对齐）
 
 ---
 
@@ -344,3 +344,4 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 2026-08-31 | 0.8 | 11 单元 pure.base 单源 + V8/Chakra/js888 Close 幂等清零 + test_js_v8/chakra 42 用例独立门禁 | codex/core-js |
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（CONTRACT/ROADMAP/BENCHMARKS 三份对齐） | codex/core-js |
 | 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.3 同步本次实测均值（Eval/small ~660ns / Eval/host ~1.5µs 加权 / B/op 18/176 / Value 零分配）+ pure.base 352 行阈值 550 内统一，18 份对齐 | codex/core-js |
+| 2026-08-31 | 1.0rc | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0rc，BENCHMARKS 1.3 保持，其余引用同步 1.0rc，18份对齐 | codex/core-js |

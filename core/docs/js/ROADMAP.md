@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js` lane
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ACCEPTANCE.md`（验收）、`GOAL_TREE.md`（目标树）、`REVIEW.md`（差距）
-**版本**：0.10（S0 定版，随实现滚动，M3b 均值与纯族 352 行阈值550内体量同步，与 CONTRACT 0.10/BENCHMARKS 1.3 对齐，18 份对齐）
+**版本**：1.0rc（S0 定版，随实现滚动，M3b 均值与纯族 352 行阈值550内体量同步，与 CONTRACT 1.0rc/BENCHMARKS 1.3 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---
@@ -133,4 +133,5 @@ M0 (文档)
 | 2026-08-31 | 1.1 | M3b 同步：BENCHMARKS 5 后端矩阵刷新（179/633/1089/962/SKIP）+ Value/ops 同步 + 纯族 338 行体量阈值内（CONTRACT/BENCHMARKS 对齐） |
 | 2026-08-31 | 1.2 | 0.9 对齐：CONTRACT 0.8→0.9/PARITY 0.7→0.9/WEBVIEW 0.7→0.9/SIXDIM 0.6→0.9 四份联动，pure.base 复用 `JsPureFindHost/ValidateHostName` 消 QuickJS 克隆，18 份闭环 |
 | 2026-08-31 | 1.3 | 0.10 文档完整性修复：BENCHMARKS 1.3 同步实测均值 ~660ns（645/660/631/660）/ host ~1.5µs 加权 / B/op 18/176 + pure.base 352 行阈值550内统一，18 份对齐 |
+| 2026-08-31 | 1.0rc | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0rc，BENCHMARKS 1.3 保持，其余引用同步 1.0rc，18份对齐 |
 
