@@ -1,6 +1,6 @@
 unit nextpas.core.vfs.transform;
 
-{** @desc L3 通用字节变换装饰器：任意 IVfs 的零拷贝按需变换视图。 }
+{** @desc L2 通用字节变换装饰器：任意 IVfs 的零拷贝按需变换视图（寄居 vfs 家族，复用 L0-L1）。 }
 
 {$I nextpas.core.settings.inc}
 
