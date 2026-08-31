@@ -137,12 +137,6 @@ begin
   Result := (AValue + (AAlign - 1)) div AAlign * AAlign;
 end;
 
-function BytesEqual(const AA, AB: PByte; const ALen: SizeUInt): Boolean; inline;
-begin
-  Result := nextpas.core.bytes.ops.SpanEqual(
-    TByteSpan.Create(AA, ALen), TByteSpan.Create(AB, ALen));
-end;
-
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): TResPackBlob;
 var
@@ -261,8 +255,8 @@ begin
             if (Slots[Buckets[BucketIdx][K]].Fnv = FnvBuf[J])
               and (AEntries[J].DataSize = AEntries[Slots[Buckets[BucketIdx][K]].SrcIdx].DataSize)
               and ((AEntries[J].DataSize = 0)
-                or BytesEqual(AEntries[J].Data,
-                  AEntries[Slots[Buckets[BucketIdx][K]].SrcIdx].Data, AEntries[J].DataSize)) then
+                or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[J].Data, AEntries[J].DataSize),
+                  TByteSpan.Create(AEntries[Slots[Buckets[BucketIdx][K]].SrcIdx].Data, AEntries[J].DataSize))) then
             begin
               EntrySlots[J] := Buckets[BucketIdx][K];
               Break;
