@@ -304,6 +304,8 @@ begin
           LongWord(LEncodedStreams.Folders[0].Crc)) then
         raise ESevenZError.Create('encoded header CRC mismatch');
       FreeAndNil(LR);
+      if Length(LDecoded) = 0 then
+        raise ESevenZError.Create('encoded header empty');
       LR := TSevenZHeaderReader.Create(@LDecoded[0],
         SizeUInt(Length(LDecoded)));
       LId := LR.ReadNumber;
