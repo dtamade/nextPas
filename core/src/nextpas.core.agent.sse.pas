@@ -17,6 +17,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes,
   nextpas.core.bytes.ops,
   nextpas.core.text,
   nextpas.core.text.builder,
@@ -58,20 +59,6 @@ type
   end;
 
 implementation
-
-{ 单源字节切片转 string：零拷贝视图 + 单次 Move，inline 消除调用开销 }
-function BytesSliceToString(const ABuf: TBytes; const AOff, ALen: SizeUInt): string; inline;
-var
-  LSpan: TByteSpan;
-begin
-  if ALen = 0 then
-    Exit('');
-  { 零拷贝借用：Slice 仅建视图，不分配；生命周期绑 ABuf }
-  LSpan := TByteSpan.FromBytes(ABuf).Slice(AOff, ALen);
-  SetLength(Result, LSpan.Len);
-  if LSpan.Len > 0 then
-    Move(LSpan.Data^, Result[1], LSpan.Len);
-end;
 
 { TBytes 版 BOM 前缀判定，inline 单源（复用 bytes.ops 视图语义）}
 function IsBOMPrefixBytes(const ABuf: TBytes): Boolean; inline;
@@ -216,7 +203,7 @@ begin
       LLineEnd := I;
       if (LLineEnd > FLineStart) and (FBuf[LLineEnd - 1] = 13) then
         Dec(LLineEnd);
-      LTmp := BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(LLineEnd - FLineStart));
+      LTmp := nextpas.core.bytes.BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(LLineEnd - FLineStart));
       FLineStart := I + 1;
       ProcessLine(LTmp);
       Inc(I);
@@ -225,7 +212,7 @@ begin
       and (FBuf[I + 1] = 10) then
     begin
       { CRLF 终止 }
-      LTmp := BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(I - FLineStart));
+      LTmp := nextpas.core.bytes.BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(I - FLineStart));
       FLineStart := I + 2;
       ProcessLine(LTmp);
       Inc(I, 2);
@@ -282,7 +269,7 @@ begin
   { 挂起的未终止行按最后一行处理（Q-O4 宽容收口）}
   if FLineStart < Length(FBuf) then
   begin
-    LTmp := BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart));
+    LTmp := nextpas.core.bytes.BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart));
     FLineStart := Length(FBuf);
     ProcessLine(LTmp);
   end;

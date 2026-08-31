@@ -563,6 +563,47 @@ begin
   CheckEqual('', UTF8TrimLastChar(''), 'empty');
 end;
 
+procedure TestUTF8SafeTruncate;
+begin
+  { ASCII：字节边界即码点边界 }
+  CheckEqual('hell', UTF8SafeTruncate('hello', 4), 'ascii cut');
+  CheckEqual(4, UTF8SafeCutLen('hello', 4), 'ascii cut len');
+
+  { 2 字节序列：预算落在续字节内 → 回退整序列 }
+  CheckEqual('', UTF8SafeTruncate(#$C3#$A9, 1), '2-byte lead-only cut');
+  CheckEqual(0, UTF8SafeCutLen(#$C3#$A9, 1), '2-byte lead-only cut len');
+  CheckEqual(#$C3#$A9, UTF8SafeTruncate(#$C3#$A9, 2), '2-byte full fit');
+
+  { 3 字节 CJK：预算 2 落在序列内 → 回退 }
+  CheckEqual('', UTF8SafeTruncate(#$E4#$B8#$AD, 2), '3-byte partial cut');
+  CheckEqual(0, UTF8SafeCutLen(#$E4#$B8#$AD, 2), '3-byte partial cut len');
+  CheckEqual(#$E4#$B8#$AD, UTF8SafeTruncate(#$E4#$B8#$AD, 3), '3-byte full fit');
+
+  { 4 字节 emoji：预算 3 → 回退；预算 4 → 完整保留 }
+  CheckEqual('', UTF8SafeTruncate(#$F0#$9F#$98#$80, 3), '4-byte partial cut');
+  CheckEqual(#$F0#$9F#$98#$80, UTF8SafeTruncate(#$F0#$9F#$98#$80, 4), '4-byte full fit');
+  CheckEqual(4, UTF8SafeCutLen(#$F0#$9F#$98#$80, 4), '4-byte full cut len');
+
+  { 混合：前缀保留完整序列，尾部序列回退 }
+  CheckEqual('a' + #$E4#$B8#$AD, UTF8SafeTruncate('a' + #$E4#$B8#$AD + #$F0#$9F#$98#$80, 4),
+    'mixed cut keeps complete prefix');
+  CheckEqual(4, UTF8SafeCutLen('a' + #$E4#$B8#$AD + #$F0#$9F#$98#$80, 4), 'mixed cut len');
+
+  { 未超预算：引用复用 }
+  CheckEqual('hello', UTF8SafeTruncate('hello', 5), 'exact fit passthrough');
+  CheckEqual('hello', UTF8SafeTruncate('hello', 100), 'oversized budget passthrough');
+
+  { 边界：AMaxBytes <= 0 → 空/0 }
+  CheckEqual('', UTF8SafeTruncate('hello', 0), 'zero budget empty');
+  CheckEqual('', UTF8SafeTruncate('hello', -1), 'negative budget empty');
+  CheckEqual(0, UTF8SafeCutLen('hello', 0), 'zero budget len');
+  CheckEqual('', UTF8SafeTruncate('', 5), 'empty input');
+
+  { 门面同语义 }
+  CheckEqual('hell', nextpas.core.text.TextUTF8SafeTruncate('hello', 4), 'facade truncate');
+  CheckEqual(4, nextpas.core.text.TextUTF8SafeCutLen('hello', 4), 'facade cut len');
+end;
+
 procedure TestUTF8BytesRoundTrip;
 var
   LB: TBytes;
@@ -622,6 +663,7 @@ begin
   T.Test('UTF8CodePointAt', @TestUTF8CodePointAt);
   T.Test('UTF8EncodeToStr', @TestUTF8EncodeToStr);
   T.Test('UTF8TrimLastChar', @TestUTF8TrimLastChar);
+  T.Test('UTF8SafeTruncate', @TestUTF8SafeTruncate);
   T.Test('UTF8BytesRoundTrip', @TestUTF8BytesRoundTrip);
   T.Test('UTF8 malformed consumes one byte', @TestUTF8MalformedConsumesOneByte);
   T.Test('Utils surface', @TestUtilsSurface);
