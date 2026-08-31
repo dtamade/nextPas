@@ -99,8 +99,9 @@ function HttpEarlyDataCloneWithoutEarlyData(const AReq: IHttpRequest): IHttpRequ
 implementation
 
 uses
-  SysUtils,
   nextpas.core.errors,
+  nextpas.core.text.conv,
+  nextpas.core.text.utils,
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.form,
@@ -139,7 +140,7 @@ var
 begin
   Result := False;
   if AReq = nil then Exit;
-  if Supports(AReq, IHttpRequestWithEarlyData, LEarly) then
+  if ((AReq) <> nil) and ((AReq).QueryInterface(IHttpRequestWithEarlyData, LEarly) = 0) then
     if LEarly.GetWasEarlyData then Exit(True);
   if (AReq.Headers <> nil) and SameText(AReq.Headers.Get(HTTP_HEADER_EARLY_DATA), '1') then
     Result := True;
@@ -150,7 +151,7 @@ var
   LEarly: IHttpRequestWithEarlyData;
 begin
   if AReq = nil then Exit;
-  if Supports(AReq, IHttpRequestWithEarlyData, LEarly) then
+  if ((AReq) <> nil) and ((AReq).QueryInterface(IHttpRequestWithEarlyData, LEarly) = 0) then
     LEarly.SetWasEarlyData(True);
   if AReq.Headers <> nil then
     AReq.Headers.SetHeader(HTTP_HEADER_EARLY_DATA, '1');
@@ -205,7 +206,7 @@ begin
     LHeaders := NewHttpHeaders;
   LHeaders.Remove(HTTP_HEADER_EARLY_DATA);
   { Body 克隆：若为 IStream 则快照，否则透传 nil（流式 body 不可重试已在 ShouldRetry 前拦截）。 }
-  if (AReq.Body <> nil) and Supports(AReq.Body, IStream, LStream) then
+  if (AReq.Body <> nil) and ((AReq.Body) <> nil) and ((AReq.Body).QueryInterface(IStream, LStream) = 0) then
   begin
     LBodyBytes := ReadAll(AReq.Body);
     LBody := BytesStreamFrom(LBodyBytes);
@@ -213,17 +214,17 @@ begin
   else
     LBody := AReq.Body;
   LCloned := THttpRequest.Create(AReq.Method, AReq.Url, AReq.Version, LHeaders, LBody, AReq.ContentLength);
-  if Supports(LCloned, IHttpRequestWithEarlyData, LEarly) then
+  if ((LCloned) <> nil) and ((LCloned).QueryInterface(IHttpRequestWithEarlyData, LEarly) = 0) then
     LEarly.SetWasEarlyData(False);
   { 保留 per-request options / cancel 等 }
-  if Supports(AReq, IHttpRequestWithOptions) then
+  if ((AReq) is IHttpRequestWithOptions) then
   begin
-    if Supports(LCloned, IHttpRequestWithOptions) then
+    if ((LCloned) is IHttpRequestWithOptions) then
       (LCloned as IHttpRequestWithOptions).SetRequestOptions((AReq as IHttpRequestWithOptions).GetRequestOptions);
   end;
-  if Supports(AReq, IHttpRequestWithContext) then
+  if ((AReq) is IHttpRequestWithContext) then
   begin
-    if Supports(LCloned, IHttpRequestWithContext) then
+    if ((LCloned) is IHttpRequestWithContext) then
       (LCloned as IHttpRequestWithContext).SetContext((AReq as IHttpRequestWithContext).GetContext);
   end;
   Result := LCloned;

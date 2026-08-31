@@ -35,7 +35,9 @@ function HttpRegistryHealthJSON(const ARegistry: TAsyncTlsPasPrometheusRegistry)
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.text.utils,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.context,
@@ -83,12 +85,12 @@ var
   LLen: Int64;
 begin
   if AObserver = nil then
-    Exit(Format('early=%d throttled=%d max=nil len=%d', [Ord(False), Ord(False), -1]));
+    Exit(TextFormat('early=%d throttled=%d max=nil len=%d', [Ord(False), Ord(False), -1]));
   LEarly := HttpEarlyDataWasEarlyData(AReq);
   LThrottled := HttpAdaptiveEarlyDataIsThrottled(AReq, AObserver);
   LMax := AObserver.GetAdaptiveMaxEarlyData;
   if AReq <> nil then LLen := AReq.ContentLength else LLen := -1;
-  Result := Format('early=%d throttled=%d max=%d len=%d header=%s %s', [
+  Result := TextFormat('early=%d throttled=%d max=%d len=%d header=%s %s', [
     Ord(LEarly), Ord(LThrottled), Integer(LMax), Integer(LLen),
     HttpAdaptiveEarlyDataHeaderValue(AReq, AObserver),
     TlsPasFormatAdaptiveMetrics(AObserver.GetAdaptiveMetrics)
@@ -104,7 +106,7 @@ function HttpAdaptiveEarlyDataPrometheusText(const AObserver: TAsyncTlsPasAdapti
 var M: TTlsPasAdaptiveMetrics;
 begin
   if AObserver = nil then
-    Exit(Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+    Exit(TextFormat('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
                 '# TYPE %s_adaptive_max gauge'#10 +
                 '%s_adaptive_max 0'#10, ['nextpas_tlspas','nextpas_tlspas','nextpas_tlspas']));
   M := AObserver.GetAdaptiveMetrics;
@@ -145,7 +147,7 @@ begin
   if AObserver = nil then
     Exit('{"healthy":false,"reason":"observer nil"}');
   H := AObserver.GetAdaptiveHealth;
-  Result := Format('{"healthy":%s,"reason":"%s","reject_rate":%.4f,"current":%d,"adaptive_max":%d}', [LowerCase(BoolToStr(H.Healthy, True)), H.Reason, H.RejectRate, H.Current, Integer(H.AdaptiveMax)]);
+  Result := TextFormat('{"healthy":%s,"reason":"%s","reject_rate":%.4f,"current":%d,"adaptive_max":%d}', [LowerCase(BoolToStr(H.Healthy)), H.Reason, H.RejectRate, H.Current, Integer(H.AdaptiveMax)]);
 end;
 
 function HttpRegistryHealthJSON(const ARegistry: TAsyncTlsPasPrometheusRegistry): string;
@@ -156,7 +158,7 @@ begin
   Result := '{"registries":[';
   // snapshot via FormatAllMetrics side-effect not needed; build simple healthy array via health prometheus as placeholder
   // For lightweight, just report registry count
-  Result := Format('{"healthy":true,"count":%d}', [ARegistry.Count]);
+  Result := TextFormat('{"healthy":true,"count":%d}', [ARegistry.Count]);
 end;
 
 function HttpAdaptiveHealthHandler(const AObserver: TAsyncTlsPasAdaptiveObserver): IHttpHandler;
