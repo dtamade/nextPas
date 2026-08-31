@@ -58,7 +58,6 @@ type
     FInflate: z_stream;
     FDeflateInited: Boolean;
     FInflateInited: Boolean;
-    FTotalOut: UInt64;
   public
     constructor Create;
     destructor Destroy; override;
@@ -70,7 +69,6 @@ type
 constructor TSshZlibCompressor.Create;
 begin
   inherited Create;
-  FTotalOut := 0;
   FillChar(FDeflate, SizeOf(FDeflate), 0);
   FillChar(FInflate, SizeOf(FInflate), 0);
   if deflateInit(FDeflate, LevelToZlib(clDefault)) <> Z_OK then
@@ -95,7 +93,6 @@ end;
 
 procedure TSshZlibCompressor.Reset;
 begin
-  FTotalOut := 0;
   if FDeflateInited then
   begin
     deflateEnd(FDeflate);
@@ -216,9 +213,6 @@ begin
         raise ESSHError.Create(sekProtocol, 'ssh compress: inflate failed (' + IntToStr(LRet) + ')');
       end;
       LOutLen := LOutLen + SizeUInt(LAvail - FInflate.avail_out);
-      Inc(FTotalOut, UInt64(LAvail - FInflate.avail_out));
-      if FTotalOut > SSH_COMP_MAX_DECOMPRESSED then
-        raise ESSHError.Create(sekProtocol, 'ssh compress: decompressed size exceeds limit');
       if LOutLen > SSH_COMP_MAX_DECOMPRESSED then
         raise ESSHError.Create(sekProtocol, 'ssh compress: decompressed size exceeds limit');
       if (FInflate.avail_in = 0) and (FInflate.avail_out > 0) then

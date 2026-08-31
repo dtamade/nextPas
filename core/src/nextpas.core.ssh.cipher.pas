@@ -344,19 +344,29 @@ begin
     - Poly1305 直接覆盖 encLen||ct（无 RFC 8439 的 pad16 与长度块） }
   LNonce := ChachaNonce(ASeq);
   LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
-  SetLength(LEncLen, 4);
-  PutU32BE(LEncLen, 0, UInt32(Length(ABodyPlain)) xor U32BEOf(LMask, 0));
-  LCt := ChaCha20Xor(FMainKey, LNonce, 1, ABodyPlain);
-  LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
-  SetLength(LPolyKey, 32);
-  LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.FromBytes(LEncLen), TByteSpan.FromBytes(LCt)]);
-  Result := nil;
-  SetLength(Result, 4 + SizeUInt(Length(LCt)) + CHACHA_TAG);
-  Move(LEncLen[0], Result[0], 4);
-  if Length(LCt) > 0 then
-    Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
-  Move(LTag[0], Result[4 + SizeUInt(Length(LCt))], CHACHA_TAG);
-  SecureZeroBytes(LPolyKey);
+  try
+    SetLength(LEncLen, 4);
+    PutU32BE(LEncLen, 0, UInt32(Length(ABodyPlain)) xor U32BEOf(LMask, 0));
+    LCt := ChaCha20Xor(FMainKey, LNonce, 1, ABodyPlain);
+    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
+    SetLength(LPolyKey, 32);
+    try
+      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.FromBytes(LEncLen), TByteSpan.FromBytes(LCt)]);
+      Result := nil;
+      SetLength(Result, 4 + SizeUInt(Length(LCt)) + CHACHA_TAG);
+      Move(LEncLen[0], Result[0], 4);
+      if Length(LCt) > 0 then
+        Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
+      Move(LTag[0], Result[4 + SizeUInt(Length(LCt))], CHACHA_TAG);
+    finally
+      SecureZeroBytes(LPolyKey);
+      SecureZeroBytes(LTag);
+      SecureZeroBytes(LCt);
+    end;
+  finally
+    SecureZeroBytes(LMask);
+    SecureZeroBytes(LNonce);
+  end;
 end;
 
 constructor TSshChachaReceiver.Create(const AKeyMaterial: TBytes);
@@ -376,11 +386,17 @@ end;
 
 function TSshChachaReceiver.BodyLengthFromHeader(ASeq: UInt32; const AHeader: TBytes): UInt32;
 var
-  LMask: TBytes;
+  LMask, LNonce: TBytes;
 begin
   { 长度字段被 header key 流掩码；counter=0 首块前 4 字节为掩码 }
-  LMask := ChaCha20Block(FHeaderKey, ChachaNonce(ASeq), 0);
-  Result := U32BEOf(AHeader, 0) xor U32BEOf(LMask, 0);
+  LNonce := ChachaNonce(ASeq);
+  LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
+  try
+    Result := U32BEOf(AHeader, 0) xor U32BEOf(LMask, 0);
+  finally
+    SecureZeroBytes(LMask);
+    SecureZeroBytes(LNonce);
+  end;
 end;
 
 function TSshChachaReceiver.TrailerSize(ABodyLen: UInt32): UInt32;
