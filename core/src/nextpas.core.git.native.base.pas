@@ -16,8 +16,18 @@ type
     Bytes: array[0..19] of Byte;
   end;
 
-  { Family-level error for the native git subfamily }
-  EGitError = class(Exception);
+  { Family-level error for the git family (single source; backend re-exports) }
+  EGitError = class(Exception)
+  private
+    FErrorCode: Integer;
+    FErrorClass: Integer;
+  public
+    constructor Create(const AMsg: string); overload;
+    constructor Create(AErrorCode: Integer; const AOperation: string = ''); overload;
+    constructor Create(AErrorCode: Integer; AErrorClass: Integer; const AMessage: string); overload;
+    property ErrorCode: Integer read FErrorCode;
+    property ErrorClass: Integer read FErrorClass;
+  end;
 
 const
   GitOidHexLen = 40;
@@ -38,6 +48,30 @@ function GitEndsWith(const S, Suffix: string): Boolean; inline;
 function GitWorktreeDir(const AGitDir: string): string; inline;
 
 implementation
+
+constructor EGitError.Create(const AMsg: string);
+begin
+  inherited Create(AMsg);
+  FErrorCode := 0;
+  FErrorClass := 0;
+end;
+
+constructor EGitError.Create(AErrorCode: Integer; const AOperation: string);
+begin
+  if AOperation <> '' then
+    inherited CreateFmt('%s (git error %d)', [AOperation, AErrorCode])
+  else
+    inherited CreateFmt('git error %d', [AErrorCode]);
+  FErrorCode := AErrorCode;
+  FErrorClass := 0;
+end;
+
+constructor EGitError.Create(AErrorCode: Integer; AErrorClass: Integer; const AMessage: string);
+begin
+  inherited Create(AMessage);
+  FErrorCode := AErrorCode;
+  FErrorClass := AErrorClass;
+end;
 
 function HexVal(ACh: Char): Integer; inline;
 begin
