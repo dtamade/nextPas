@@ -448,7 +448,7 @@ begin
   if LByte <> 10 then
   begin
     if FVersionPos >= Length(FVersionBuf) then SetLength(FVersionBuf, Length(FVersionBuf) + 256);
-    if FVersionPos > SSH_IDENT_MAX_LINE * 8 then begin FailVersionCb(ESSHError.Create(sekProtocol, 'ssh transport: ident banner too long')); Exit; end;
+    if FVersionPos > SSH_IDENT_MAX_LINE then begin FailVersionCb(ESSHError.Create(sekProtocol, 'ssh transport: ident banner too long')); Exit; end;
     if not FStream.AsyncRead(@FVersionBuf[FVersionPos], 1, @AsyncTrans_OnVersionByte, Self) then
       FailVersionCb(ESSHError.Create(sekIO, 'ssh transport: async read ident submit failed'));
     Exit;

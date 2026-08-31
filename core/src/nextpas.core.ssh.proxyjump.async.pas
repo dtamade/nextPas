@@ -1,11 +1,12 @@
 unit nextpas.core.ssh.proxyjump.async;
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.base, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.io.intf, nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.async.base, nextpas.core.async.loop, nextpas.core.async.cancellation, nextpas.core.net.async.tcp, nextpas.core.ssh.base, nextpas.core.ssh.errors, nextpas.core.ssh.transport.async;
+uses nextpas.core.base, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.io.intf, nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.async.base, nextpas.core.async.loop, nextpas.core.async.cancellation, nextpas.core.net.async.tcp, nextpas.core.ssh.base, nextpas.core.ssh.errors, nextpas.core.ssh.transport.async, nextpas.core.ssh.window;
 type PWriteCtx = ^TWriteCtx; TWriteCtx = record Cb: TIoCompletion; Ctx: Pointer; Len: UInt32; end;
 type TAsyncChannelStream = class(TInterfacedObject, IAsyncTcpStream)
 private
-  FLoop: TAsyncLoop; FTransport: TAsyncSshTransport; FKeeper: IInterface; FLocalId, FRemoteId, FOurWindow, FPeerWindow, FPeerMax, FInitWindow: UInt32;
+  FLoop: TAsyncLoop; FTransport: TAsyncSshTransport; FKeeper: IInterface; FLocalId, FRemoteId: UInt32;
+  FWindow: TChannelWindow; { 复用 window.pas 纯值语义；零堆分配，热路径 inline }
   FReadBuf: TBytes; FClosed: Boolean;
   FReadPendingBuf: Pointer; FReadPendingLen: UInt32; FReadPendingCb: TIoCompletion; FReadPendingCtx: Pointer;
   FWritePendingBuf: Pointer; FWritePendingLen: UInt32; FWritePendingCb: TIoCompletion; FWritePendingCtx: Pointer;
@@ -31,13 +32,29 @@ procedure ChannelStreamRetryWrite(AContext: Pointer); forward;
 procedure Channel_OnPacket(const APayload: TBytes; AErr: ESSHError; AContext: Pointer); forward;
 procedure Channel_WriteDone(AErr: ESSHError; AContext: Pointer); forward;
 constructor TAsyncChannelStream.Create(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; ALocalId, ARemoteId, APeerWindow, APeerMax: UInt32);
-begin inherited Create; FLoop:=ALoop; FTransport:=ATransport; FLocalId:=ALocalId; FRemoteId:=ARemoteId; FPeerWindow:=APeerWindow; FPeerMax:=APeerMax; FInitWindow:=2097152; FOurWindow:=FInitWindow; ArmRead; end;
+begin inherited Create; FLoop:=ALoop; FTransport:=ATransport; FLocalId:=ALocalId; FRemoteId:=ARemoteId; FWindow.Init(2097152, APeerWindow, APeerMax); ArmRead; end;
 constructor TAsyncChannelStream.CreateWithKeeper(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; const AKeeper: IInterface; ALocalId, ARemoteId, APeerWindow, APeerMax: UInt32);
-begin inherited Create; FLoop:=ALoop; FTransport:=ATransport; FKeeper:=AKeeper; FLocalId:=ALocalId; FRemoteId:=ARemoteId; FPeerWindow:=APeerWindow; FPeerMax:=APeerMax; FInitWindow:=2097152; FOurWindow:=FInitWindow; ArmRead; end;
+begin inherited Create; FLoop:=ALoop; FTransport:=ATransport; FKeeper:=AKeeper; FLocalId:=ALocalId; FRemoteId:=ARemoteId; FWindow.Init(2097152, APeerWindow, APeerMax); ArmRead; end;
 destructor TAsyncChannelStream.Destroy; begin Close; FKeeper:=nil; inherited; end;
 function TAsyncChannelStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt; begin Result:=0; end;
 function TAsyncChannelStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result:=0; end;
-procedure TAsyncChannelStream.Close; begin FClosed:=True; end;
+procedure TAsyncChannelStream.Close;
+var LP: PWriteCtx;
+begin
+  if FClosed then Exit;
+  FClosed:=True;
+  if FQueuedActive then
+  begin
+    LP:=FQueuedP;
+    FQueuedActive:=False; FQueuedPayload:=nil; FQueuedP:=nil;
+    if LP<>nil then
+    begin
+      if Assigned(LP^.Cb) then try LP^.Cb(0,-1,LP^.Ctx); except end;
+      Dispose(LP);
+    end;
+  end;
+  FailPending(-1);
+end;
 function TAsyncChannelStream.LocalAddr: TNetAddress; begin FillChar(Result,0,SizeOf(Result)); end;
 function TAsyncChannelStream.RemoteAddr: TNetAddress; begin FillChar(Result,0,SizeOf(Result)); end;
 procedure TAsyncChannelStream.Shutdown; begin Close; end;
@@ -52,10 +69,10 @@ procedure TAsyncChannelStream.SetBlocking(const ABlocking: Boolean); begin end;
 function TAsyncChannelStream.TryRead(var ABuf; const ACount: SizeUInt; out ARead: SizeUInt): TTcpStreamIOResult; begin ARead:=0; Result:=tsiorWouldBlock; end;
 function TAsyncChannelStream.TryWrite(const ABuf; const ACount: SizeUInt; out AWritten: SizeUInt): TTcpStreamIOResult; begin AWritten:=0; if FClosed then Result:=tsiorClosed else Result:=tsiorWouldBlock; end;
 procedure TAsyncChannelStream.FailPending(AErr: Int32); begin if Assigned(FReadPendingCb) then begin FReadPendingCb(0, AErr, FReadPendingCtx); FReadPendingCb:=nil; FReadPendingCtx:=nil; FReadPendingBuf:=nil; end; if Assigned(FWritePendingCb) then begin FWritePendingCb(0, AErr, FWritePendingCtx); FWritePendingCb:=nil; FWritePendingCtx:=nil; FWritePendingBuf:=nil; end; end;
-procedure TAsyncChannelStream.AccountConsume(ACount: UInt32);
+procedure TAsyncChannelStream.AccountConsume(ACount: UInt32); inline;
 var LGive: UInt32; LW: TsshWriter;
-begin if ACount>FOurWindow then begin LGive:=FOurWindow; FOurWindow:=0; end else begin Dec(FOurWindow, ACount); LGive:=0; end;
-  if FOurWindow <= FInitWindow div 2 then begin Inc(LGive, FInitWindow - FOurWindow); FOurWindow:=FInitWindow; end;
+begin
+  FWindow.Consume(ACount, LGive); { inline 热路径，零拷贝：单源复用 window.pas }
   if LGive>0 then begin LW:=TsshWriter.Create(16); try LW.PutByte(SSH_MSG_CHANNEL_WINDOW_ADJUST); LW.PutUInt32(FRemoteId); LW.PutUInt32(LGive); FTransport.AsyncSendPacket(LW.ToBytes, nil, nil); finally LW.Free; end; end;
 end;
 
@@ -84,10 +101,11 @@ var LW: TsshWriter; LChunk: TBytes; LTake: UInt32; P: PWriteCtx; LOuter: TBytes;
 begin if FClosed then begin if Assigned(ACallback) then ACallback(0,-1,AContext); Exit(False); end;
   if FQueuedActive then Exit(False);
   if ALen=0 then begin if Assigned(ACallback) then ACallback(0,0,AContext); Exit(True); end;
-  LTake:=ALen; if LTake>FPeerWindow then LTake:=FPeerWindow; if LTake>FPeerMax then LTake:=FPeerMax; if LTake=0 then Exit(False);
-  SetLength(LChunk, LTake); Move(ABuf^, LChunk[0], LTake); New(P); P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Len:=LTake; LW:=TsshWriter.Create(16+Integer(LTake)); try LW.PutByte(SSH_MSG_CHANNEL_DATA); LW.PutUInt32(FRemoteId); LW.PutUInt32(LTake); LW.PutRaw(LChunk); LOuter:=LW.ToBytes; Dec(FPeerWindow, LTake); Result:=FTransport.AsyncSendPacket(LOuter, @Channel_WriteDone, P); if not Result then begin
+  LTake:=FWindow.SliceSize(ALen); { 复用 window.pas peer window+max 分片，inline 零拷贝分片 }
+  if LTake=0 then Exit(False);
+  SetLength(LChunk, LTake); Move(ABuf^, LChunk[0], LTake); New(P); P^.Cb:=ACallback; P^.Ctx:=AContext; P^.Len:=LTake; LW:=TsshWriter.Create(16+Integer(LTake)); try LW.PutByte(SSH_MSG_CHANNEL_DATA); LW.PutUInt32(FRemoteId); LW.PutUInt32(LTake); LW.PutRaw(LChunk); LOuter:=LW.ToBytes; FWindow.DidSend(LTake); Result:=FTransport.AsyncSendPacket(LOuter, @Channel_WriteDone, P); if not Result then begin
       FQueuedPayload:=LOuter; FQueuedP:=P; FQueuedActive:=True;
-      try FLoop.ScheduleAt(TDeadline.After(TDuration.FromMilliseconds(5)), @ChannelStreamRetryWrite, Self); except Dispose(P); Inc(FPeerWindow, LTake); if Assigned(ACallback) then ACallback(0,-1,AContext); Exit(False); end;
+      try FLoop.ScheduleAt(TDeadline.After(TDuration.FromMilliseconds(5)), @ChannelStreamRetryWrite, Self); except Dispose(P); FWindow.Grant(LTake); if Assigned(ACallback) then ACallback(0,-1,AContext); Exit(False); end;
       Result:=True; end; finally LW.Free; end;
 end;
 procedure ChannelStreamRetryWrite(AContext: Pointer);
@@ -104,7 +122,7 @@ Self:=TAsyncChannelStream(AContext); Self.FPacketCbActive:=False; if AErr<>nil t
   case APayload[0] of
     SSH_MSG_CHANNEL_DATA: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; LData:=LR.ReadStringBytes; finally LR.Free; end; if Length(LData)>0 then begin LOld:=Length(Self.FReadBuf); SetLength(Self.FReadBuf, LOld+Length(LData)); Move(LData[0], Self.FReadBuf[LOld], Length(LData)); Self.TrySatisfyPendingRead; end; end;
     SSH_MSG_CHANNEL_EXTENDED_DATA: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; LDataType:=LR.ReadUInt32; LData:=LR.ReadStringBytes; finally LR.Free; end; if (LDataType=1) and (Length(LData)>0) then begin LOld:=Length(Self.FReadBuf); SetLength(Self.FReadBuf, LOld+Length(LData)); Move(LData[0], Self.FReadBuf[LOld], Length(LData)); Self.TrySatisfyPendingRead; end else if Length(LData)>0 then Self.AccountConsume(Length(LData)); end;
-    SSH_MSG_CHANNEL_WINDOW_ADJUST: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; Self.FPeerWindow:=Self.FPeerWindow+LR.ReadUInt32; finally LR.Free; end; end;
+    SSH_MSG_CHANNEL_WINDOW_ADJUST: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; Self.FWindow.Grant(LR.ReadUInt32); finally LR.Free; end; end;
     SSH_MSG_CHANNEL_EOF, SSH_MSG_CHANNEL_CLOSE: begin Self.FClosed:=True; if Assigned(Self.FReadPendingCb) then Self.FReadPendingCb(0, 0, Self.FReadPendingCtx); Self.FReadPendingCb:=nil; end;
   end;
   if not Self.FClosed then Self.ArmRead;

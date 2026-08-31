@@ -220,6 +220,8 @@ function MacCompute(AMacAlgo: THashAlgorithm; const AMacKey, AData: TBytes): TBy
 var
   LHasher: IHasher;
 begin
+  if Length(AMacKey) = 0 then
+    raise ESSHError.Create(sekNegotiation, 'ssh cipher: mac key empty');
   LHasher := NewHMAC(AMacAlgo, AMacKey[0], SizeUInt(Length(AMacKey)));
   if Length(AData) > 0 then
     LHasher.Write(AData[0], SizeUInt(Length(AData)));
