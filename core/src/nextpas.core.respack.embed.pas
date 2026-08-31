@@ -60,8 +60,8 @@ function ResPackEmbedBuild(const ASourceDir: string;
 function ResPackEmbedIncSource(const ABlob: TResPackBlob;
   const AOpts: TResPackIncOptions): TBytes;
 
-{** 同上，但包成完整可编译单元（AUnitName 必须是合法 Pascal 标识符，
-    不得与 ConstName 相同）。适合不想管理 {$I} 包裹文件的构建管线。 }
+// 同上，但包成完整可编译单元（AUnitName 必须是合法 Pascal 标识符，
+// 不得与 ConstName 相同）。适合不想管理 {$I} 包裹文件的构建管线。
 function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
   const AOpts: TResPackIncOptions; const AUnitName: string): TBytes;
 

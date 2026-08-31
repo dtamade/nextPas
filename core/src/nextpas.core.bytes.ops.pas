@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.bytes.base;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer; inline;
@@ -28,13 +29,18 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
+{ perf: BytesAppend does SetLength+Move per call (O(n) realloc). For high-frequency
+  or looped appends prefer IBytesBuilder (preallocated Grow) or BytesConcatMany/
+  SpanConcatMany (single allocation) to avoid O(n²) churn. Keep inline for single-use
+  convenience only. }
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -43,17 +49,49 @@ function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 { Unsigned big-endian helpers (canonical single source for crypto/tls) }
 function StripLeadingZero(const AData: TBytes): TBytes;
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer;
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
-function BytesToString(const ABytes: TBytes): string; inline;
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
+function BytesIsZero(const AData: TBytes): Boolean; inline;
+function IsAllZero(const AData: TBytes): Boolean; inline;
+function BytesToString(const ABytes: TBytes): string; inline; overload;
+function BytesToString(const ABytes: TBytes; AOffset, ALength: SizeUInt): string; inline; overload;
+function SpanToString(const ASpan: TByteSpan): string; inline;
+function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
 uses
   nextpas.core.simd;
+
+{ --- TBytes capacity helpers: safe, no header poke, no global map ---
+  perf: single Move per append via SetLength+Move (inline, zero-copy via
+  TByteSpan view where possible). For amortized O(1) growth prefer
+  IBytesBuilder (nextpas.core.bytes.builder) which preallocates/Grow with
+  single allocation and WrittenSpan zero-copy. This keeps L1 owner boundary
+  (no sync/threadvar) and avoids PSizeInt header layout coupling. }
+
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+begin
+  if ARequired <= SizeUInt(Length(ADest)) then
+    Exit;
+  SetLength(ADest, ARequired);
+end;
+
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+begin
+  if AAdditional = 0 then
+    Exit;
+  BytesEnsureCapacity(ADest, SizeUInt(Length(ADest)) + AAdditional);
+end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean;
 begin
@@ -212,22 +250,22 @@ begin
   Result := SpanConcat(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 var
   LOldLen: SizeUInt;
 begin
   if Length(ASrc) = 0 then Exit;
-  LOldLen := Length(ADest);
-  SetLength(ADest, LOldLen + Length(ASrc));
+  LOldLen := SizeUInt(Length(ADest));
+  SetLength(ADest, LOldLen + SizeUInt(Length(ASrc)));
   Move(ASrc[0], ADest[LOldLen], Length(ASrc));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 var
   LOldLen: SizeUInt;
 begin
   if (ASrc = nil) or (ASrcLen = 0) then Exit;
-  LOldLen := Length(ADest);
+  LOldLen := SizeUInt(Length(ADest));
   SetLength(ADest, LOldLen + ASrcLen);
   Move(ASrc^, ADest[LOldLen], ASrcLen);
 end;
@@ -236,7 +274,7 @@ procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 var
   LLen: SizeUInt;
 begin
-  LLen := Length(ADest);
+  LLen := SizeUInt(Length(ADest));
   SetLength(ADest, LLen + 1);
   ADest[LLen] := AValue;
 end;
@@ -245,7 +283,7 @@ procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 var
   LLen: SizeUInt;
 begin
-  LLen := Length(ADest);
+  LLen := SizeUInt(Length(ADest));
   SetLength(ADest, LLen + 2);
   ADest[LLen] := Byte(AValue shr 8);
   ADest[LLen + 1] := Byte(AValue);
@@ -255,7 +293,7 @@ procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
   LLen: SizeUInt;
 begin
-  LLen := Length(ADest);
+  LLen := SizeUInt(Length(ADest));
   SetLength(ADest, LLen + 3);
   ADest[LLen] := Byte(AValue shr 16);
   ADest[LLen + 1] := Byte(AValue shr 8);
@@ -266,22 +304,12 @@ procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
   LLen: SizeUInt;
 begin
-  LLen := Length(ADest);
+  LLen := SizeUInt(Length(ADest));
   SetLength(ADest, LLen + 4);
   ADest[LLen] := Byte(AValue shr 24);
   ADest[LLen + 1] := Byte(AValue shr 16);
   ADest[LLen + 2] := Byte(AValue shr 8);
   ADest[LLen + 3] := Byte(AValue);
-end;
-
-procedure BytesAppend(var ADest: TBytes; AData: PByte; ACount: SizeUInt); inline;
-var
-  LLen: SizeUInt;
-begin
-  if (AData = nil) or (ACount = 0) then Exit;
-  LLen := Length(ADest);
-  SetLength(ADest, LLen + ACount);
-  Move(AData^, ADest[LLen], ACount);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
@@ -294,23 +322,33 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+begin
+  Result := ASpan;
+  while (Result.Len > 0) and (Result.Data^ = 0) do
+  begin
+    Inc(Result.Data);
+    Dec(Result.Len);
+  end;
+end;
+
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+begin
+  Result := StripLeadingZeroSpan(TByteSpan.FromBytes(AData));
+end;
+
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
 var
-  I, LLen: Integer;
+  LView: TByteSpan;
 begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-  if I >= Length(AData) then
+  LView := StripLeadingZeroView(AData);
+  if LView.Len = 0 then
   begin
     SetLength(Result, 1);
     Result[0] := 0;
     Exit;
   end;
-  LLen := Length(AData) - I;
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AData[I], Result[0], LLen);
+  Result := SpanClone(LView);
 end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
@@ -318,19 +356,24 @@ begin
   Result := StripLeadingZero(AData);
 end;
 
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 var
-  LLeft, LRight: TBytes;
+  LLeft, LRight: TByteSpan;
 begin
-  LLeft := StripLeadingZero(ALeft);
-  LRight := StripLeadingZero(ARight);
-  if Length(LLeft) < Length(LRight) then
+  LLeft := StripLeadingZeroSpan(ALeft);
+  LRight := StripLeadingZeroSpan(ARight);
+  if LLeft.Len < LRight.Len then
     Exit(-1);
-  if Length(LLeft) > Length(LRight) then
+  if LLeft.Len > LRight.Len then
     Exit(1);
-  if Length(LLeft) = 0 then
+  if LLeft.Len = 0 then
     Exit(0);
-  Result := CompareBytesOrdered(@LLeft[0], @LRight[0], Length(LLeft), Length(LRight));
+  Result := CompareBytesOrdered(LLeft.Data, LRight.Data, LLeft.Len, LRight.Len);
+end;
+
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+begin
+  Result := CompareUnsignedSpan(StripLeadingZeroView(ALeft), StripLeadingZeroView(ARight));
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
@@ -348,11 +391,63 @@ begin
   Result := UnsignedEqual(ALeft, ARight);
 end;
 
-function BytesToString(const ABytes: TBytes): string; inline;
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+begin
+  Result := CompareUnsignedSpan(ALeft, ARight) = 0;
+end;
+
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
+begin
+  // perf: single-source zero check via StripLeadingZeroView (O(n) scan with early exit,
+  // reuses existing view; empty => Len=0 => zero). Avoids duplicate byte loops and
+  // keeps crypto/tls callers on one implementation; SIMD MemEqual could be used for
+  // bulk zero compares but view already short-circuits on first non-zero.
+  Result := StripLeadingZeroView(AData).Len = 0;
+end;
+
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline;
+begin
+  // perf: same single source as TBytes overload via StripLeadingZeroSpan.
+  Result := StripLeadingZeroSpan(ASpan).Len = 0;
+end;
+
+function BytesIsZero(const AData: TBytes): Boolean; inline;
+begin
+  Result := IsZeroBytes(AData);
+end;
+
+function IsAllZero(const AData: TBytes): Boolean; inline;
+begin
+  Result := IsZeroBytes(AData);
+end;
+
+function BytesToString(const ABytes: TBytes): string; inline; overload;
 begin
   SetLength(Result, Length(ABytes));
   if Length(ABytes) > 0 then
     Move(ABytes[0], Result[1], Length(ABytes));
+end;
+
+function BytesToString(const ABytes: TBytes; AOffset, ALength: SizeUInt): string; inline; overload;
+begin
+  // perf: single-source slice -> string: one SetLength + one Move, inline keeps call site zero-copy; no intermediate TBytes
+  if ALength = 0 then
+    Exit('');
+  SetLength(Result, ALength);
+  Move(ABytes[AOffset], Result[1], ALength);
+end;
+
+function SpanToString(const ASpan: TByteSpan): string; inline;
+begin
+  // perf: single-source span -> string: one SetLength + one Move, inline zero-copy
+  SetLength(Result, ASpan.Len);
+  if ASpan.Len > 0 then
+    Move(ASpan.Data^, Result[1], ASpan.Len);
+end;
+
+function BytesToUTF8(const ABytes: TBytes): string; inline;
+begin
+  Result := BytesToString(ABytes);
 end;
 
 function StringToBytes(const AText: string): TBytes; inline;

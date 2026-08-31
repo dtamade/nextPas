@@ -20,11 +20,12 @@ function NetResolveIPv4(const AIP: string): UInt32;
 
 { 剥 IPv6 方括号：'[::1]' → '::1'；其余原样。 }
 function StripHostBrackets(const AHost: string): string;
-{ 点分四段 0..255；拒绝前导零（'01'）；不剥括号。 }
+{ 点分四段 0..255；拒绝前导零（'01'）；不剥括号。单源：IPv6 内嵌尾复用此解析。 }
 function TryParseIPv4(const AIP: string; out ANet: UInt32): Boolean; overload;
 { 同上，产出 4 字节网络序（首 octet = 高位地址段）。 }
 function TryParseIPv4(const AIP: string; out AOctets: TBytes): Boolean; overload;
-{ RFC 4291 §2.2：:: 至多一次、内嵌 IPv4 尾、剥括号；拒 %zone / 空组 / 超 4 位。 }
+{ RFC 4291 §2.2：:: 至多一次、内嵌 IPv4 尾（复用 TryParseIPv4）、剥括号；拒 %zone/空组/超 4 位。
+  双轨收敛：IPv4 为单源，IPv6 尾段委托而非重写；文档化于此。 }
 function TryParseIPv6(const AIP: string; out AOctets: TBytes): Boolean; overload;
 { 写入调用方 16 字节缓冲（AAddr 不可空）；失败不保证缓冲内容。 }
 function TryParseIPv6(const AIP: string; AAddr: PByte): Boolean; overload;
@@ -45,6 +46,11 @@ function SplitHostPort(const AText: string; ADefaultPort: UInt16;
 { 必须带端口（1..65535）。 }
 function SplitHostPort(const AText: string; out AHost: string;
   out APort: UInt16): Boolean;
+function IsValidPort(const APort: Int64): Boolean;
+function IsValidPortU16(const APort: UInt16): Boolean;
+function TryValidatePort(const APort: Int64; out AOut: UInt16): Boolean;
+function TryValidatePortInt(const APort: Int64; out AOut: Integer): Boolean;
+function SplitHostPort(const AText: string; out AHost, APort: string): Boolean;
 { IPv6 自动加括号。 }
 function JoinHostPort(const AHost: string; APort: UInt16): string;
 
@@ -440,7 +446,7 @@ begin
     Exit;
   if not TryStrToInt(LPortText, LVal) then
     Exit;
-  if (LVal < 1) or (LVal > 65535) then
+  if not IsValidPort(LVal) then
     Exit;
   APort := UInt16(LVal);
   Result := True;
@@ -450,6 +456,48 @@ function SplitHostPort(const AText: string; out AHost: string;
   out APort: UInt16): Boolean;
 begin
   Result := SplitHostPort(AText, 0, AHost, APort) and (APort <> 0);
+end;
+
+function IsValidPort(const APort: Int64): Boolean;
+begin
+  Result := (APort >= 1) and (APort <= 65535);
+end;
+
+function IsValidPortU16(const APort: UInt16): Boolean;
+begin
+  Result := APort <> 0;
+end;
+
+function TryValidatePort(const APort: Int64; out AOut: UInt16): Boolean;
+begin
+  Result := IsValidPort(APort);
+  if Result then
+    AOut := UInt16(APort)
+  else
+    AOut := 0;
+end;
+
+function TryValidatePortInt(const APort: Int64; out AOut: Integer): Boolean;
+begin
+  Result := IsValidPort(APort);
+  if Result then
+    AOut := Integer(APort)
+  else
+    AOut := 0;
+end;
+
+function SplitHostPort(const AText: string; out AHost, APort: string): Boolean;
+var
+  LPort: UInt16;
+begin
+  Result := SplitHostPort(AText, AHost, LPort);
+  if Result then
+    APort := IntToStr(LPort)
+  else
+  begin
+    AHost := '';
+    APort := '';
+  end;
 end;
 
 function JoinHostPort(const AHost: string; APort: UInt16): string;

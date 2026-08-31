@@ -13,40 +13,13 @@ unit nextpas.core.sevenz.bcj.riscv;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.sevenz.bcj.utils;
 
 procedure SevenZBcjRiscvConvert(var AData: TBytes; AStartOffset: UInt32;
   AEncode: Boolean);
 
 implementation
-
-function Read32Le(const AData: TBytes; AOff: SizeInt): UInt32; inline;
-begin
-  Result := UInt32(AData[AOff]) or (UInt32(AData[AOff+1]) shl 8) or
-            (UInt32(AData[AOff+2]) shl 16) or (UInt32(AData[AOff+3]) shl 24);
-end;
-
-procedure Write32Le(var AData: TBytes; AOff: SizeInt; AVal: UInt32); inline;
-begin
-  AData[AOff] := Byte(AVal and $FF);
-  AData[AOff+1] := Byte((AVal shr 8) and $FF);
-  AData[AOff+2] := Byte((AVal shr 16) and $FF);
-  AData[AOff+3] := Byte((AVal shr 24) and $FF);
-end;
-
-function Read32Be(const AData: TBytes; AOff: SizeInt): UInt32; inline;
-begin
-  Result := (UInt32(AData[AOff]) shl 24) or (UInt32(AData[AOff+1]) shl 16) or
-            (UInt32(AData[AOff+2]) shl 8) or UInt32(AData[AOff+3]);
-end;
-
-procedure Write32Be(var AData: TBytes; AOff: SizeInt; AVal: UInt32); inline;
-begin
-  AData[AOff] := Byte((AVal shr 24) and $FF);
-  AData[AOff+1] := Byte((AVal shr 16) and $FF);
-  AData[AOff+2] := Byte((AVal shr 8) and $FF);
-  AData[AOff+3] := Byte(AVal and $FF);
-end;
 
 function NotAuipcPair(AAuipc, AInst2: UInt32): Boolean; inline;
 begin
@@ -85,7 +58,7 @@ begin
       LAddr := ((LB1 and $F0) shl 8) or ((LB2 and $0F) shl 16) or
                ((LB2 and $10) shl 7) or ((LB2 and $E0) shr 4) or
                ((LB3 and $7F) shl 4) or ((LB3 and $80) shl 13);
-      LAddr := LAddr + LPC;
+      LAddr := AddPc(LAddr, LPC);
       AData[LI+1] := (LB1 and $0F) or Byte((LAddr shr 13) and $F0);
       AData[LI+2] := Byte(LAddr shr 9);
       AData[LI+3] := Byte(LAddr shr 1);
@@ -97,18 +70,19 @@ begin
                (UInt32(AData[LI+2]) shl 16) or (UInt32(AData[LI+3]) shl 24);
       if (LInst and $E80) <> 0 then
       begin
-        LInst2 := Read32Le(AData, LI+4);
+        LInst2 := ReadLE32(AData, LI+4);
         if NotAuipcPair(LInst, LInst2) then
         begin
           Inc(LI, 6);
           Continue;
         end;
         LAddr := LInst and $FFFFF000;
-        LAddr := LAddr + (LInst2 shr 20) - ((LInst2 shr 19) and $1000);
-        LAddr := LAddr + AStart + UInt32(LI);
+        LAddr := AddPc(LAddr, (LInst2 shr 20));
+        LAddr := SubPc(LAddr, ((LInst2 shr 19) and $1000));
+        LAddr := AddPc(LAddr, AStart + UInt32(LI));
         LInst := $17 or (2 shl 7) or (LInst2 shl 12);
-        Write32Le(AData, LI, LInst);
-        Write32Be(AData, LI+4, LAddr);
+        WriteLE32(AData, LI, LInst);
+        WriteBE32(AData, LI+4, LAddr);
       end
       else
       begin
@@ -118,11 +92,11 @@ begin
           Inc(LI, 4);
           Continue;
         end;
-        LAddr := Read32Le(AData, LI+4);
+        LAddr := ReadLE32(AData, LI+4);
         LInst2 := (LInst shr 12) or (LAddr shl 20);
         LInst := $17 or (LFakeRs1 shl 7) or (LAddr and $FFFFF000);
-        Write32Le(AData, LI, LInst);
-        Write32Le(AData, LI+4, LInst2);
+        WriteLE32(AData, LI, LInst);
+        WriteLE32(AData, LI+4, LInst2);
       end;
       Inc(LI, 8);
     end
@@ -164,7 +138,7 @@ begin
       LAddr := ((LB1 and $F0) shl 13) or (UInt32(LB2) shl 9) or (UInt32(LB3) shl 1);
       // 但需处理 b2 的位域分割，C 中 encode 用四段，这里直接用上面简化可能不完全互逆
       // 为保往返，改用 encode 逆运算：直接减 pc 后按位回写
-      LAddr := LAddr - LPC;
+      LAddr := SubPc(LAddr, LPC);
       AData[LI+1] := (LB1 and $0F) or Byte((LAddr shr 8) and $F0);
       AData[LI+2] := Byte(((LAddr shr 16) and $0F) or ((LAddr shr 7) and $10) or ((LAddr shl 4) and $E0));
       AData[LI+3] := Byte(((LAddr shr 4) and $7F) or ((LAddr shr 13) and $80));
@@ -176,18 +150,18 @@ begin
                (UInt32(AData[LI+2]) shl 16) or (UInt32(AData[LI+3]) shl 24);
       if (LInst and $E80) <> 0 then
       begin
-        LInst2 := Read32Le(AData, LI+4);
+        LInst2 := ReadLE32(AData, LI+4);
         if NotAuipcPair(LInst, LInst2) then
         begin
           Inc(LI, 6);
           Continue;
         end;
         LAddr := LInst and $FFFFF000;
-        LAddr := LAddr + (LInst2 shr 20);
+        LAddr := AddPc(LAddr, (LInst2 shr 20));
         LInst := $17 or (2 shl 7) or (LInst2 shl 12);
         LInst2 := LAddr;
-        Write32Le(AData, LI, LInst);
-        Write32Le(AData, LI+4, LInst2);
+        WriteLE32(AData, LI, LInst);
+        WriteLE32(AData, LI+4, LInst2);
         Inc(LI, 8);
       end
       else
@@ -198,12 +172,12 @@ begin
           Inc(LI, 4);
           Continue;
         end;
-        LAddr := Read32Be(AData, LI+4);
-        LAddr := LAddr - (AStart + UInt32(LI));
+        LAddr := ReadBE32(AData, LI+4);
+        LAddr := SubPc(LAddr, (AStart + UInt32(LI)));
         LInst2 := (LInst shr 12) or (LAddr shl 20);
-        LInst := $17 or (LFakeRs1 shl 7) or ((LAddr + $800) and $FFFFF000);
-        Write32Le(AData, LI, LInst);
-        Write32Le(AData, LI+4, LInst2);
+        LInst := $17 or (LFakeRs1 shl 7) or ((AddPc(LAddr, $800)) and $FFFFF000);
+        WriteLE32(AData, LI, LInst);
+        WriteLE32(AData, LI+4, LInst2);
         Inc(LI, 8);
       end;
     end

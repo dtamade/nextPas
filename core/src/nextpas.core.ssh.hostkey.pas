@@ -51,6 +51,16 @@ function SshVerifyHostSignature(const AInfo: TSshHostKeyInfo; const AAlgName: st
 function SshFingerprintSHA256(const ABlob: TBytes): string;
 
 type
+  IHostKeyFileReader = interface
+    ['{9C1E6E10-4A11-4F72-9D30-5A0000000007}']
+    function ReadAllText(const APath: string; out AContent: string): Boolean;
+  end;
+
+  TDefaultHostKeyFileReader = class(TInterfacedObject, IHostKeyFileReader)
+  public
+    function ReadAllText(const APath: string; out AContent: string): Boolean;
+  end;
+
   { known_hosts 条目集合 }
   TSshKnownHosts = class
   private
@@ -62,7 +72,9 @@ type
     constructor Create;
 
     { 文件不存在时保持空集合（策略由调用方决定）}
-    procedure LoadFromFile(const APath: string);
+    procedure LoadFromFile(const APath: string); overload;
+    procedure LoadFromFile(const APath: string; const AReader: IHostKeyFileReader); overload;
+    procedure LoadFromReader(const AReader: IHostKeyFileReader; const APath: string);
     procedure AddLine(const ALine: string);
     function Count: Integer;
 
@@ -88,7 +100,7 @@ uses
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.asn1,
   nextpas.core.encoding.base64,
-  nextpas.core.platform.files.text,
+  nextpas.core.fs,
   nextpas.core.ssh.rsa;
 
 { 从 AFrom 起查找字符（替代 StrUtils.PosEx，冷路径无需优化）}
@@ -344,12 +356,35 @@ begin
   FBlobs[FCount - 1] := ABlob;
 end;
 
+function TDefaultHostKeyFileReader.ReadAllText(const APath: string; out AContent: string): Boolean;
+begin
+  try
+    AContent := nextpas.core.fs.ReadFileText(APath);
+    Result := True;
+  except
+    AContent := '';
+    Result := False;
+  end;
+end;
+
 procedure TSshKnownHosts.LoadFromFile(const APath: string);
+var LReader: IHostKeyFileReader;
+begin
+  LReader := TDefaultHostKeyFileReader.Create;
+  LoadFromFile(APath, LReader);
+end;
+
+procedure TSshKnownHosts.LoadFromFile(const APath: string; const AReader: IHostKeyFileReader);
+begin
+  LoadFromReader(AReader, APath);
+end;
+
+procedure TSshKnownHosts.LoadFromReader(const AReader: IHostKeyFileReader; const APath: string);
 var
-  LContent: AnsiString;
+  LContent: string;
   I, LStart: Integer;
 begin
-  if not FileReadAllText(APath, LContent) then
+  if (AReader = nil) or not AReader.ReadAllText(APath, LContent) then
     Exit;                       { 文件不存在/不可读：保持当前集合 }
   LStart := 1;
   for I := 1 to Length(LContent) + 1 do
@@ -472,12 +507,13 @@ function TSshKnownHosts.ContainsKey(const AHostName: string; APort: Word;
 var
   LCandidates: TBlobArray;
   I: Integer;
+  LFound: Integer;
 begin
-  Result := False;
+  LFound := 0;
   LCandidates := BlobsForHost(AHostName, APort);
   for I := 0 to High(LCandidates) do
-    if TConstantTime.CompareBytes(LCandidates[I], ABlob) = 1 then
-      Exit(True);
+    LFound := LFound or TConstantTime.CompareBytes(LCandidates[I], ABlob);
+  Result := LFound = 1;
 end;
 
 end.

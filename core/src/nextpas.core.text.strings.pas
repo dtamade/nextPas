@@ -282,23 +282,39 @@ begin
   AArr[L] := AValue;
 end;
 
-procedure StringsDelete(var AArr: TStringArray; AIndex: SizeUInt);
-var i: SizeUInt;
-begin
-  if AIndex > High(AArr) then Exit;
-  for i := AIndex to High(AArr) - 1 do
-    AArr[i] := AArr[i + 1];
-  SetLength(AArr, Length(AArr) - 1);
-end;
-
-procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string);
-var i, L: SizeUInt;
+procedure StringsDelete(var AArr: TStringArray; AIndex: SizeUInt); inline;
+var
+  L: SizeInt;
+  LMoveCount: SizeUInt;
 begin
   L := Length(AArr);
+  if (L = 0) or (AIndex >= SizeUInt(L)) then Exit;
+  { 零拷贝: 先释放被删元素, 单次 System.Move 搬移指针块, 尾槽 Pointer:=nil 避免重复 Finalize }
+  AArr[AIndex] := '';
+  if AIndex < SizeUInt(L) - 1 then
+  begin
+    LMoveCount := SizeUInt(L) - AIndex - 1;
+    System.Move(AArr[AIndex + 1], AArr[AIndex], LMoveCount * SizeOf(string));
+    Pointer(AArr[L - 1]) := nil;
+  end;
+  SetLength(AArr, L - 1);
+end;
+
+procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string); inline;
+var
+  L: SizeUInt;
+  LMoveCount: SizeUInt;
+begin
+  L := SizeUInt(Length(AArr));
   if AIndex > L then AIndex := L;
   SetLength(AArr, L + 1);
-  for i := L downto AIndex + 1 do
-    AArr[i] := AArr[i - 1];
+  if AIndex < L then
+  begin
+    { 零拷贝: 单次 System.Move 右移指针块(handling overlap), 原槽 Pointer:=nil 转移所有权, 避免 O(n) 引用计数 }
+    LMoveCount := L - AIndex;
+    System.Move(AArr[AIndex], AArr[AIndex + 1], LMoveCount * SizeOf(string));
+    Pointer(AArr[AIndex]) := nil;
+  end;
   AArr[AIndex] := AValue;
 end;
 

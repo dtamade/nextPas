@@ -5,7 +5,8 @@ unit nextpas.core.git.native.trailer;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.git.native.util;
 
 { Trailer subfamily: `git interpret-trailers` Key: Value at message tail.
 
@@ -30,28 +31,11 @@ function GitAppendTrailer(const AMessage, AKey, AValue: string): string;
 
 implementation
 
-function TrimSpaces(const S: string): string;
-var A,B: Integer;
-begin
-  A:=1; B:=Length(S);
-  while (A<=B) and (S[A] in [' ',#9,#10,#13]) do Inc(A);
-  while (B>=A) and (S[B] in [' ',#9,#10,#13]) do Dec(B);
-  if B<A then Exit('');
-  Result:=Copy(S,A,B-A+1);
-end;
+function TrimSpaces(const S: string): string; inline;
+begin Result:=GitTrimSpaces(S); end;
 
-function StripCR(const S: string): string;
-begin
-  if (Length(S)>0) and (S[Length(S)]=#13) then Result:=Copy(S,1,Length(S)-1) else Result:=S;
-end;
-
-function LocalSplitLines(const S: string): TStringArray;
-var P,Start: Integer;
-begin
-  Result:=nil; Start:=1;
-  for P:=1 to Length(S)+1 do if (P>Length(S)) or (S[P]=#10) then
-  begin SetLength(Result, Length(Result)+1); Result[High(Result)]:=Copy(S, Start, P-Start); Start:=P+1; end;
-end;
+function StripCR(const S: string): string; inline;
+begin Result:=GitStripCR(S); end;
 
 function IsTrailerLine(const ALine: string; out AKey, AValue: string): Boolean;
 var P: Integer; K,V: string;
@@ -73,7 +57,7 @@ var Lines: TStringArray; I, StartIdx, N: Integer; K,V: string; Tmp: TGitTrailerA
 begin
   Result:=nil;
   if AMessage='' then Exit;
-  Lines:=LocalSplitLines(AMessage);
+  Lines:=GitSplitLines(AMessage);
   // Strip trailing empty lines at end (message may end with newline)
   N:=Length(Lines);
   while (N>0) and (TrimSpaces(StripCR(Lines[N-1]))='') do Dec(N);

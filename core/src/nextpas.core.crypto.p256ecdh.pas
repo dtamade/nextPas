@@ -41,36 +41,14 @@ begin
   Result := nextpas.core.bytes.ops.BytesEqual(A, B);
 end;
 
-function IsZeroBytes(const A: TBytes): Boolean;
-var
-  I: Integer;
+function IsZeroBytes(const A: TBytes): Boolean; inline;
 begin
-  if Length(A) = 0 then Exit(True);
-  for I := 0 to High(A) do
-    if A[I] <> 0 then Exit(False);
-  Result := True;
+  Result := nextpas.core.bytes.ops.IsZeroBytes(A);
 end;
 
-function CompareBigEndian(const A, B: TBytes): Integer;
-var
-  I: Integer;
-  LA, LB: TBytes;
-  LOffA, LOffB: Integer;
+function CompareBigEndian(const A, B: TBytes): Integer; inline;
 begin
-  LA := A;
-  LB := B;
-  LOffA := 0;
-  while (LOffA < Length(LA)) and (LA[LOffA] = 0) do Inc(LOffA);
-  LOffB := 0;
-  while (LOffB < Length(LB)) and (LB[LOffB] = 0) do Inc(LOffB);
-  if (Length(LA) - LOffA) < (Length(LB) - LOffB) then Exit(-1);
-  if (Length(LA) - LOffA) > (Length(LB) - LOffB) then Exit(1);
-  for I := 0 to (Length(LA) - LOffA - 1) do
-  begin
-    if LA[LOffA + I] < LB[LOffB + I] then Exit(-1);
-    if LA[LOffA + I] > LB[LOffB + I] then Exit(1);
-  end;
-  Result := 0;
+  Result := nextpas.core.bytes.ops.CompareUnsigned(A, B);
 end;
 
 function IsValidPrivateScalar(const A: TBytes): Boolean;

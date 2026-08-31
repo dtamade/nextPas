@@ -1,8 +1,8 @@
 unit nextpas.core.db;
 
 {** @desc nextpas.core.db L3 门面：统一数据库访问层。
-       聚合统一接口（IDbConnection/IDbQuery）、双后端工厂（SQLite /
-       PostgreSQL）、泛化事务与迁移助手。
+       聚合统一接口（IDbConnection/IDbQuery）、6 后端工厂（SQLite /
+       PostgreSQL / MySQL / ODBC / Redis / DM）、泛化事务与迁移助手。
 
        用法：
          Conn := ConnectSqlite(':memory:');
@@ -22,11 +22,13 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.db.base,
+  nextpas.core.db.bulk,
   nextpas.core.db.intf,
   nextpas.core.db.tx,
   nextpas.core.db.migrate,
   nextpas.core.db.pool,
-  nextpas.core.db.sqlite.base;
+  nextpas.core.db.sqlite.base,
+  nextpas.core.db.redis.base;
 
 type
   { base }
@@ -79,6 +81,9 @@ type
   TDbDryRunEntry = nextpas.core.db.migrate.TDbDryRunEntry;
   TDbDryRunPlan = nextpas.core.db.migrate.TDbDryRunPlan;
 
+  { redis }
+  TDbRedisConnectOptions = nextpas.core.db.redis.base.TDbRedisConnectOptions;
+
 const
   DB_MIGRATIONS_TABLE = nextpas.core.db.migrate.DB_MIGRATIONS_TABLE;
 
@@ -110,11 +115,28 @@ function ConnectPostgres(const AConnInfo: string;
 function ConnectMysql(const ADsn: string): IDbConnection; inline;
 function ConnectMysql(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection; inline;
+function ConnectMysql(const ADsn: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection; inline;
 { V3-A4：ODBC 网关（DSN/DSN-less connstr 原文透传 DriverConnect）。
   能力降级矩阵与诚实契约见 odbc.adapter 单元头注。 }
 function ConnectOdbc(const ADsn: string): IDbConnection; inline;
 function ConnectOdbc(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection; inline;
+function ConnectOdbc(const ADsn: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection; inline;
+function ConnectRedis(const AAddr: string): IDbConnection; inline; overload;
+function ConnectRedis(const AAddr: string; const APassword: string;
+  const ADbIndex: Integer; const AOptions: TDbConnectOptions): IDbConnection; inline; overload;
+function ConnectRedis(const AAddr: string;
+  const AOptions: TDbRedisConnectOptions): IDbConnection; inline; overload;
+function ConnectDm(const ADsn: string): IDbConnection; inline; overload;
+function ConnectDm(const ADsn: string;
+  const AOptions: TDbConnectOptions): IDbConnection; inline; overload;
+function ConnectDm(const ADsn: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection; inline; overload;
 
 { ---- 池工厂（开箱组合：池策略 × 后端连接选项）---- }
 { 便利形态：缺省策略仅覆盖读上限，busy_timeout 烘入生产级缺省
@@ -178,7 +200,9 @@ uses
   nextpas.core.db.sqlite.pool,
   nextpas.core.db.pg.adapter,
   nextpas.core.db.mysql.adapter,
-  nextpas.core.db.odbc.adapter;
+  nextpas.core.db.odbc.adapter,
+  nextpas.core.db.redis.adapter,
+  nextpas.core.db.dm.adapter;
 
 function ConnectSqlite(const APath: string;
   const AStmtCacheCapacity: Integer): IDbConnection;
@@ -232,6 +256,13 @@ begin
   Result := nextpas.core.db.mysql.adapter.ConnectMysql(ADsn, AOptions);
 end;
 
+function ConnectMysql(const ADsn: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  Result := nextpas.core.db.mysql.adapter.ConnectMysql(ADsn, AOptions, AStmtCacheCapacity);
+end;
+
 function ConnectOdbc(const ADsn: string): IDbConnection;
 begin
   Result := nextpas.core.db.odbc.adapter.ConnectOdbc(ADsn);
@@ -241,6 +272,48 @@ function ConnectOdbc(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection;
 begin
   Result := nextpas.core.db.odbc.adapter.ConnectOdbc(ADsn, AOptions);
+end;
+
+function ConnectOdbc(const ADsn: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  Result := nextpas.core.db.odbc.adapter.ConnectOdbc(ADsn, AOptions, AStmtCacheCapacity);
+end;
+
+function ConnectRedis(const AAddr: string): IDbConnection;
+begin
+  Result := nextpas.core.db.redis.adapter.ConnectRedis(AAddr);
+end;
+
+function ConnectRedis(const AAddr: string; const APassword: string;
+  const ADbIndex: Integer; const AOptions: TDbConnectOptions): IDbConnection;
+begin
+  Result := nextpas.core.db.redis.adapter.ConnectRedis(AAddr, APassword, ADbIndex, AOptions);
+end;
+
+function ConnectRedis(const AAddr: string;
+  const AOptions: TDbRedisConnectOptions): IDbConnection;
+begin
+  Result := nextpas.core.db.redis.adapter.ConnectRedis(AAddr, AOptions);
+end;
+
+function ConnectDm(const ADsn: string): IDbConnection;
+begin
+  Result := nextpas.core.db.dm.adapter.ConnectDm(ADsn);
+end;
+
+function ConnectDm(const ADsn: string;
+  const AOptions: TDbConnectOptions): IDbConnection;
+begin
+  Result := nextpas.core.db.dm.adapter.ConnectDm(ADsn, AOptions);
+end;
+
+function ConnectDm(const ADsn: string;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
+begin
+  Result := nextpas.core.db.dm.adapter.ConnectDm(ADsn, AOptions, AStmtCacheCapacity);
 end;
 
 function OpenSqlitePool(const APath: string;

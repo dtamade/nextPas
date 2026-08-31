@@ -183,41 +183,9 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.simd,
+  nextpas.core.math.base,
   nextpas.core.math.trig,
   nextpas.core.math.scalar;
-
-{ Length policy (usability P0):
-  - Default: all non-empty arrays must share the same Length; else EArgumentError.
-  - Either side empty -> 0 (no raise).
-  - Define NEXTPAS_MATH_BATCH_TRUNCATE_MIN for legacy min-length truncate. }
-
-function ResolveEqualOrMin(const A, B: SizeInt): SizeInt; inline;
-begin
-  if (A = 0) or (B = 0) then
-    Exit(0);
-  if A = B then
-    Exit(A);
-{$IFDEF NEXTPAS_MATH_BATCH_TRUNCATE_MIN}
-  if A < B then
-    Result := A
-  else
-    Result := B;
-{$ELSE}
-  raise EArgumentError.Create(
-    'Batch: array lengths must match (got ' + IntToStr(Int64(A)) +
-    ' vs ' + IntToStr(Int64(B)) + ')');
-{$ENDIF}
-end;
-
-function ResolveEqualOrMin3(const A, B, C: SizeInt): SizeInt; inline;
-begin
-  Result := ResolveEqualOrMin(ResolveEqualOrMin(A, B), C);
-end;
-
-function ResolveEqualOrMin4(const A, B, C, D: SizeInt): SizeInt; inline;
-begin
-  Result := ResolveEqualOrMin(ResolveEqualOrMin3(A, B, C), D);
-end;
 
 { Helper: batch open-array length for 1 in + 1 out }
 function MinArrayCount(const AInput: array of Single;

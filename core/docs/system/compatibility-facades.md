@@ -1,9 +1,9 @@
 # S4 Compatibility Facade Design
 
 This document records the S4 compatibility boundary for `nextpas.core.system`.
-It now distinguishes minimal live TypInfo and SysUtils facades from the
-still-deferred Classes facade. Both live units are intentionally narrow; they do
-not convert bootstrap RTL pressure into a broad public compatibility API.
+It now distinguishes minimal live TypInfo, SysUtils and Classes shim facades.
+All three are intentionally narrow; they do not convert bootstrap RTL pressure
+into a broad public compatibility API.
 
 ## Current Decision Boundary
 
@@ -16,8 +16,8 @@ not convert bootstrap RTL pressure into a broad public compatibility API.
   re-exports `Format`, `SameText`, `IntToStr`, `Trim`, and canonical exception
   aliases. **Text implementation owner is `nextpas.core.text.conv`**; exception
   aliases own in `nextpas.core.exception`. Sysutils does not implement text APIs.
-- `nextpas.core.system.classes` remains deferred.
-- Deferred does not mean "undefined"; it means the broad public unit surface is
+- `nextpas.core.system.classes` is live as a minimal stream shim (TStream/TFileStream/TStringList/THandleStream/TMemoryStream/TStringStream/TSeekOrigin + file mode constants); broader Classes surface (TComponent/TPersistent/streaming) remains deferred.
+- Deferred does not mean "undefined"; it means the broader public unit surface is
   not live yet and is guarded by docs plus source-contract.
 - Any future broad compatibility facade still requires named consumer pressure,
   focused tests, and controller review.
@@ -202,10 +202,10 @@ Pressure today is mostly bootstrap/tooling/file-handling pressure:
 - `rtl/core/classes/np_classes.pas` currently implements `TFileStream`,
   `TStringList`, and file mode constants
 
-### Why this is not enough for a live facade
+### Why the live shim stays narrow
 
 `Classes` is historically huge and stateful. Current evidence only supports a
-very small subset:
+very small subset (now live as stream shim):
 
 - `TFileStream`
 - `TStringList`
@@ -221,10 +221,9 @@ That does not justify:
 
 ### Current S4 stance
 
-- No live `nextpas.core.system.classes` unit yet.
-- Treat current bootstrap `Classes` as proof of narrow subset pressure, not as
-  proof that the full namespace boundary is decided.
-- Any future live facade must keep IO/container ownership explicit.
+- `nextpas.core.system.classes` is live as a minimal stream shim: TStream/TFileStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin/TList/TInterfaceList/TDuplicates/TThread + file mode constants (fmCreate/fmOpenRead/fmShareDenyNone); TComponent/TPersistent/streaming remain deferred.
+- Bootstrap `Classes` pressure is satisfied by this narrow shim, not by a full namespace boundary.
+- Any broader facade must keep IO/container ownership explicit.
 
 ## Migration Risks
 

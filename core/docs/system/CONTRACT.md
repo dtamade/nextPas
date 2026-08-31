@@ -1,10 +1,10 @@
 # nextpas.core.system 代码契约
 
-**模块路径**：`core/src/nextpas.core.system*.pas`（8 个源文件）
+**模块路径**：`core/src/nextpas.core.system*.pas` + `*.inc`（8 pas + 2 inc = 10 源文件）
 **层级**：L0（根模块，依赖 FPC RTL）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-30
-**版本**：1.1
+**最后更新**：2026-09-01
+**版本**：1.2
 
 ---
 
@@ -22,6 +22,8 @@
 | system.classes | Classes 最小门面 |
 | system.sysutils | SysUtils 兼容薄门面（文本 API 实现 owner = `text.conv`，非本单元） |
 | system.typinfo | TypInfo 最小门面 |
+| system.fpc.inc | FPC 编译路径：re-export FPC System 类型（双编译器架构） |
+| system.kernel.inc | nextPas 内核入口：17 子模块聚合（base/str/intf/cls/rtti/except/mem/memmgr/lifecycle/endian/barrier/intrinsics/thread/io/comp） |
 
 ### 1.2 运行时契约
 
@@ -105,3 +107,8 @@ TStringArray = nextpas.core.base.TStringArray;
 - `test_system_source_contracts`: 源契约边界检查
 - `test_system_typinfo_minimal`: TypInfo 门面测试
 - `test_system_sysutils_minimal`: SysUtils 门面测试
+- `test_system_typinfo_collections_consumer`: TypInfo 受管数组消费者证明（TElementManager<string>）
+- `test_system_kernel`: 内核类型完整性（Variant/Thread/I/O/MemoryManager 等）
+- `test_system_contracts`: 契约常量完整性（28 np.system.*）
+
+> **S6.2 缺口诚实标注**：`array of interface` 释放路径仅有 HIR 契约测试，缺少 heaptrc 0-leak 运行时证据；`managed record` 动态数组因编译器暂不支持受管 record 而推迟。详见 `goal-tree.md` S6.2。

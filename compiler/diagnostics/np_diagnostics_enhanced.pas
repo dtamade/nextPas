@@ -68,7 +68,7 @@ const
  *
  * 用于 "did you mean?" 建议。
  *}
-function ComputeEditDistance(const A, B: string): LongInt;
+function ComputeEditDistance(const A, B: string; AMaxDistance: LongInt = High(LongInt)): LongInt;
 
 {**
  * FindClosestMatch — 在候选列表中找编辑距离最近的匹配
@@ -114,11 +114,12 @@ procedure EmitErrorWithFix(
 
 implementation
 
-function ComputeEditDistance(const A, B: string): LongInt;
+function ComputeEditDistance(const A, B: string; AMaxDistance: LongInt = High(LongInt)): LongInt;
 var
-  I, J, Cost: LongInt;
-  D: array of array of LongInt;
+  I, J, Cost, RowMin: LongInt;
+  Prev, Curr, Tmp: array of LongInt;
   LenA, LenB: LongInt;
+  CA, CB: Char;
 begin
   LenA := Length(A);
   LenB := Length(B);
@@ -128,29 +129,47 @@ begin
   if LenB = 0 then
     Exit(LenA);
 
-  SetLength(D, LenA + 1, LenB + 1);
+  if (AMaxDistance <> High(LongInt)) and (Abs(LenA - LenB) > AMaxDistance) then
+    Exit(AMaxDistance + 1);
 
-  for I := 0 to LenA do
-    D[I][0] := I;
+  SetLength(Prev, LenB + 1);
+  SetLength(Curr, LenB + 1);
+
   for J := 0 to LenB do
-    D[0][J] := J;
+    Prev[J] := J;
 
   for I := 1 to LenA do
+  begin
+    Curr[0] := I;
+    RowMin := Curr[0];
+    CA := UpCase(A[I]);
     for J := 1 to LenB do
     begin
-      if A[I] = B[J] then
+      CB := UpCase(B[J]);
+      if CA = CB then
         Cost := 0
       else
         Cost := 1;
 
-      D[I][J] := D[I-1][J] + 1;  { deletion }
-      if D[I][J-1] + 1 < D[I][J] then
-        D[I][J] := D[I][J-1] + 1;  { insertion }
-      if D[I-1][J-1] + Cost < D[I][J] then
-        D[I][J] := D[I-1][J-1] + Cost;  { substitution }
-    end;
+      Curr[J] := Prev[J] + 1;
+      if Curr[J-1] + 1 < Curr[J] then
+        Curr[J] := Curr[J-1] + 1;
+      if Prev[J-1] + Cost < Curr[J] then
+        Curr[J] := Prev[J-1] + Cost;
 
-  Result := D[LenA][LenB];
+      if Curr[J] < RowMin then
+        RowMin := Curr[J];
+    end;
+    if (AMaxDistance <> High(LongInt)) and (RowMin > AMaxDistance) then
+      Exit(AMaxDistance + 1);
+    Tmp := Prev;
+    Prev := Curr;
+    Curr := Tmp;
+  end;
+
+  Result := Prev[LenB];
+  if (AMaxDistance <> High(LongInt)) and (Result > AMaxDistance) then
+    Result := AMaxDistance + 1;
 end;
 
 function FindClosestMatch(
@@ -166,7 +185,9 @@ begin
 
   for I := 0 to High(ACandidates) do
   begin
-    Dist := ComputeEditDistance(ATarget, ACandidates[I]);
+    if BestDist = 0 then
+      Break;
+    Dist := ComputeEditDistance(ATarget, ACandidates[I], BestDist - 1);
     if Dist < BestDist then
     begin
       BestDist := Dist;

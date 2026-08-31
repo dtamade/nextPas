@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.mail*.pas`（base/mime/smtp/imap + 门面）
 **层级**：L3（依赖 L0-L2 与 `nextpas.core.mime`）
 **Owner**：codex/mime-mail-20260816（mailServer888 反哺）
-**最后更新**：2026-08-27
-**版本**：0.6（SMTP Submission 587：STARTTLS 真握手 + AUTH PLAIN/LOGIN + 吊销联动）
+**最后更新**：2026-08-31
+**版本**：0.7（SMTP Submission 587：STARTTLS 真握手 + AUTH PLAIN/LOGIN + 吊销联动）
 
 ---
 
@@ -196,3 +196,4 @@ end;
 | 2026-08-26 | 0.3→0.4 | 新增 IMAP 服务器事件驱动会话（mail.imap.base/server，存储 SPI 零 SQL）；边界决策见 plans/2026-08-26-imap-server-module-boundary.md；INV-A9/A10/A11；§8 偏离表；修正头部版本号漂移 |
 | 2026-08-26 | 0.4→0.5 | 批次 3.1 修复（首批真实消费方 mailServer888 Phase 6a 端到端暴露）：① SELECT「\* OK [UNSEEN n]」由未读计数改为首未读序号（RFC 3501 语义；无未读整行省略），经 SEARCH 谓词下推 + ListUids 定位；② FETCH 输出序号由会话按本命令 ListUids 位置回填（SPI 注释契约的会话侧兑现，不信任存储 Seq 值）。核心套件 16→17 用例（新增 UnseenOrdinalAndSeq 判别回归：计数≠序号数据 + 存储脏 Seq 注入） |
 | 2026-08-27 | 0.5→0.6 | 批次 6b（SMTP Submission 587）：STARTTLS 真握手（ISmtpTlsUpgrade 220 冲刷断点+FConn 替换+缓冲重置，失败 454/二次 503）、AUTH PLAIN/LOGIN 全形态（ISmtpAuthHook，统一 535，EHLO TLS 门控，挑战态 FAuthPending 分流，msseAuthed 事件）、AuthedMailGate 吊销/归属联动（553），INV-A12/A13/A14；test_mail_smtp_server 10→21 用例（新增 AUTH/STARTTLS/门控矩阵 11 用例，dummy TLS 升级不依赖真实握手解密，真实 TLS 链路走集成台架）；AuthCallback: TMethod 移除，配置置 nil 零行为变化 |
+| 2026-08-31 | 0.7 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

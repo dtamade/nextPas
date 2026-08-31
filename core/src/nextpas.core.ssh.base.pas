@@ -99,7 +99,7 @@ type
   TSshHostKeyAlg = (
     hkEd25519,
     hkRsa,
-    hkEcdsaP256      { 预留：ecdsa-sha2-nistp256，当前不参与协商 }
+    hkEcdsaP256      { ecdsa-sha2-nistp256，已参与协商与验签 }
   );
 
   { 连接选项。由门面 builder 填充，session 消费。}

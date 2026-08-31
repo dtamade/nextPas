@@ -207,18 +207,9 @@ procedure WalkFiles(const ARoot: string; const AFunc: TWalkFunc); inline;
 procedure WalkFilesEx(const ARoot: string; const AFunc: TWalkFuncEx;
   AUserData: Pointer); inline;
 {**
- * @desc 列出目录中匹配 glob 模式的文件名
- *
- * @params
- *   ADir      目录路径
- *   APattern  glob 模式（如 '*.txt', 'test_?.pas'）
- *
- * @return 匹配的完整路径数组
- *
- * @note 只搜索当前目录，不递归
- * @note 使用 PathMatch 进行模式匹配
+ * @desc 列出目录中匹配 glob 模式的文件名（门面 inline 转发至 fs.glob.Glob）
  *}
-function Glob(const ADir, APattern: string): TStringArray;
+function Glob(const ADir, APattern: string): TStringArray; inline;
 {** @desc 递归匹配文件系统 glob 模式（支持 ** 递归目录）
  *
  * @param ADir  根目录
@@ -307,7 +298,8 @@ function ParamStr(AIndex: Integer): string; inline;
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.platform.args;
 
 function Utf8TextToBytes(const AText: string): TBytes;
 var
@@ -571,35 +563,8 @@ begin
 end;
 
 function Glob(const ADir, APattern: string): TStringArray;
-var
-  LEntries: TDirEntryArray;
-  LCount, I: Integer;
 begin
-  Result := nil;
-  try
-    LEntries := ReadDir(ADir);
-  except
-    on E: ENotFoundError do
-      { Directory doesn't exist — return empty }
-      Exit;
-  end;
-  LCount := 0;
-  for I := 0 to High(LEntries) do
-  begin
-    if nextpas.core.fs.path.FsPathMatch(APattern, LEntries[I].Name) then
-    begin
-      if LCount >= Length(Result) then
-      begin
-        if Length(Result) = 0 then
-          SetLength(Result, 16)
-        else
-          SetLength(Result, Length(Result) * 2);
-      end;
-      Result[LCount] := nextpas.core.fs.path.FsPathJoin([ADir, LEntries[I].Name]);
-      Inc(LCount);
-    end;
-  end;
-  SetLength(Result, LCount);
+  Result := nextpas.core.fs.glob.Glob(ADir, APattern);
 end;
 
 function FsGlob(const ADir, APattern: string): TStringArray;
@@ -791,12 +756,31 @@ end;
 
 function ParamCount: Integer;
 begin
-  Result := System.ParamCount;
+  Result := platform_args_count;
+  if Result < 0 then
+    Result := 0;
 end;
 
 function ParamStr(AIndex: Integer): string;
+var
+  LBuf: array[0..1023] of AnsiChar;
+  LRes: Int32;
+  LHeap: array of AnsiChar;
 begin
-  Result := System.ParamStr(AIndex);
+  Result := '';
+  LRes := platform_args_get(Int32(AIndex), @LBuf[0], Int32(Length(LBuf)));
+  if LRes < 0 then
+    Exit('');
+  if LRes < Int32(Length(LBuf)) then
+  begin
+    SetString(Result, PAnsiChar(@LBuf[0]), LRes);
+    Exit;
+  end;
+  SetLength(LHeap, LRes + 1);
+  LRes := platform_args_get(Int32(AIndex), PAnsiChar(LHeap), Int32(Length(LHeap)));
+  if LRes < 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(LHeap), LRes);
 end;
 
 end.

@@ -37,7 +37,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `coroutine` | L3 | coroutine scheduler | yes | L0-L2 | focused-runtime |
 | `crypto` | L2 | cryptography | yes | L0-L1 plus backend owners | source-contract + focused-runtime |
 | `csv` | L2 | CSV parser/writer | yes | L0-L1 | focused-runtime |
-| `db` | L3 | unified database access family: IDbConnection/IDbQuery over sqlite+pg backends (`nextpas.core.db.*`; `nextpas.core.db.sqlite.*` and `nextpas.core.db.pg.*` are the L2 backend implementations) | yes | L0-L2 (sqlite/pg owners are in-family) | focused-runtime |
+| `db` | L3 | unified database access family: IDbConnection/IDbQuery over sqlite/pg/mysql/odbc/redis/dm 6 backends (`nextpas.core.db.*`; `nextpas.core.db.sqlite.*`/`pg.*`/`mysql.*`/`odbc.*`/`redis.*`/`dm.*` are L2 backend implementations; bulk 5× 单源 + Len 零中间串) | yes | L0-L2 (sqlite/pg/mysql/odbc/redis/dm owners are in-family) | focused-runtime |
 | `deliverability` | L2 | SPF/DKIM/DMARC email authentication | yes | L0-L1 plus crypto/hash/dns owner | focused-runtime |
 | `dns` | L2 | DNS record codec + UDP resolver | yes | L0-L1 plus net owner | focused-runtime |
 | `encoding` | L1 | codecs | yes | L0 plus bytes/text seam | focused-runtime |
@@ -87,6 +87,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `template` | L3 | templating | yes | L0-L2 | draft |
 | `test` | L1 | test framework | yes | L0 | focused-runtime |
 | `text` | L1 | text/unicode helpers | yes | L0 plus bytes/encoding seam | focused-runtime |
+| `text.sql` | L1 | SQL quoting (escape/ident/literal/Len/Write single-source, zero SysUtils, bulk 零中间串直写) | yes | L0 (exception) | focused-runtime — `nextpas.core.text.sql`供 db 族与 http/config 复用；Len 直通 bulk 预分配 |
 | `thread` | L1 | threads/tasks/channels | yes | L0 plus approved L1 | focused-runtime |
 | `time` | L1 | date/time APIs | yes | L0 plus approved L1 | focused-runtime |
 | `tls` | L2 | TLS stack/backends | yes | L0-L1 plus explicit backend FFI owners | source-contract + focused-runtime |
@@ -96,7 +97,6 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
-| `zip` | L2 | ZIP archive (writer/reader/sequential/fs/aes/extra/common) | yes | L0-L1 plus fs/compress/checksum/crypto owners (implementation-only fs sandbox, L2→L2 exempt via platform lstat + IsSafeSymlinkTarget) | focused-runtime |
 
 Database family: `sqlite` and `pg` are L2 backend implementations inside the
 `db` (L3) family; their units physically live under `nextpas.core.db.sqlite.*`

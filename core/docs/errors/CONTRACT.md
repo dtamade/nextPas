@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.errors.pas`（1 个源文件，72 行）
 **层级**：L0（纯门面，re-export nextpas.core.exception）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-30
-**版本**：1.1
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 
@@ -98,3 +98,4 @@ function ErrorCategoryToString(const ACategory: TErrorCategory): string; inline;
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |
 | 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |
+| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

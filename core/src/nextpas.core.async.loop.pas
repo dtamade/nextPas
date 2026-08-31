@@ -147,6 +147,7 @@ type
     procedure Stop;
     { True if the I/O poller still has in-flight ops (after timeout cancel drain). }
     function HasPendingIo: Boolean; inline;
+    function CancelByFd(AFd: PtrInt): Boolean;
   end;
 
 implementation
@@ -407,7 +408,11 @@ begin
   if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
     Exit;
   atomic_fetch_add(LCtx^.RefCount, 1, mo_acq_rel);
-  LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+  try
+    LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+  except
+    TimeoutCtxRelease(LCtx);
+  end;
 end;
 
 function TimeoutCtxCreate(ALoop: TAsyncLoop; const ADeadline: TDeadline;
@@ -633,10 +638,14 @@ begin
     Exit;
   while FPending.TryDequeue(LItem) do
   begin
-    if Assigned(LItem.Callback) then
-      LItem.Callback(LItem.Context)
-    else if Assigned(LItem.Method) then
-      LItem.Method(LItem.Context);
+    try
+      if Assigned(LItem.Callback) then
+        LItem.Callback(LItem.Context)
+      else if Assigned(LItem.Method) then
+        LItem.Method(LItem.Context);
+    except
+      { Isolate per-item failure: keep draining so remaining Posts are not stranded. }
+    end;
     Inc(Result);
   end;
 end;
@@ -944,6 +953,13 @@ end;
 function TAsyncLoop.HasPendingIo: Boolean;
 begin
   Result := FPoller.HasPending;
+end;
+
+function TAsyncLoop.CancelByFd(AFd: PtrInt): Boolean;
+begin
+  if not IsValid then
+    Exit(False);
+  Result := FPoller.CancelByFd(AFd);
 end;
 
 function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;

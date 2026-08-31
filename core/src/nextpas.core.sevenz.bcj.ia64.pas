@@ -12,7 +12,8 @@ unit nextpas.core.sevenz.bcj.ia64;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.sevenz.bcj.utils;
 
 procedure SevenZBcjIa64Convert(var AData: TBytes; AStartOffset: UInt32;
   AEncode: Boolean);
@@ -65,11 +66,11 @@ begin
         LSrc := UInt32((LNorm shr 13) and $FFFFF);
         LSrc := LSrc or (UInt32((LNorm shr 36) and 1) shl 20);
         LSrc := LSrc shl 4;
-        LPC := AStartOffset + UInt32(LI);
+        LPC := AddPc(AStartOffset, UInt32(LI));
         if AEncode then
-          LDest := LPC + LSrc
+          LDest := AddPc(LPC, LSrc)
         else
-          LDest := LSrc - LPC;
+          LDest := SubPc(LSrc, LPC);
         LDest := LDest shr 4;
         LNorm := LNorm and not (UInt64($8FFFFF) shl 13);
         LNorm := LNorm or (UInt64(LDest and $FFFFF) shl 13);

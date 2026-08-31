@@ -1,6 +1,6 @@
 # SIMD 当前活动计划
 
-> 最后更新: 2026-07-26
+> 最后更新: 2026-08-31
 > **权威主线**: [roadmap.md](roadmap.md)
 > **Goal 队列（执行入口）**: [../math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)
 > **维护态**: [../math-simd/MAINTENANCE.md](../math-simd/MAINTENANCE.md)
@@ -13,7 +13,7 @@ CURRENT = IDLE  (见 GOAL_QUEUE.md)
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | IDLE — 本 lane 无在途代码目标（M0 maintenance re-verify 2026-07-26 已记） |
+| 阶段 | IDLE — 本 lane 无在途代码目标（M0 maintenance re-verify 2026-08-31 已记） |
 | 优先级 | — |
 | 验收 | 仅 re-verify gates；勿自启 Wave 4；债务见 MAINTENANCE.md |
 
@@ -24,7 +24,7 @@ CURRENT = IDLE  (见 GOAL_QUEUE.md)
 - [x] Phase 20–23b / Phase 25 / G0 / S24–S25 / M-C1 / M-V1 / M-V2
 - [x] **Q1** 指针新鲜度（验证数 1741；清除 math README 假 Double 缺口）
 - [x] **Q2** math↔simd linkage table（GOAL_QUEUE 权威表 + README 指针）
-- [x] **V0/D0**（2026-07-19）接管复验 + Phase 23 标题/API surface 指针对齐
+- [x] **V0/D0**（2026-08-31）接管复验 + Phase 23 标题/API surface 指针对齐
 - [x] **Batch B1** NEON `ArrayDivF32`（单测 + 叶 + math smoke；1742 passed）
 - [x] **Batch B2** NEON MulScalar/AddScalar（1743 passed）
 - [x] **Batch B3** NEON Clamp/Lerp（1744 passed）
@@ -48,7 +48,7 @@ CURRENT = IDLE  (见 GOAL_QUEUE.md)
 - [x] **Wave C5d** F64 Sin/Exp（1762 passed）
 - [x] **Wave C5e** F32 Sin/Exp 4-wide NEON asm（1762 passed）
 - [x] **Wave C5e-ext** Cos/Log F32 + Sin/Exp F64 vector asm（1762 passed）
-- [x] **M0 maintenance**（2026-07-26）：FF main + re-verify 1762/math 71/0 + `MAINTENANCE.md`
+- [x] **M0 maintenance**（2026-08-31）：FF main + re-verify 1762/math 71/0 + `MAINTENANCE.md`
 
 ### 队列摘要
 

@@ -49,12 +49,14 @@ function VfsNameCompare(const AA, AB: string): Integer; inline;
 function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
 function VfsETagFNV(const AHash: UInt32): string; inline;
 
-{ 就地按 Name 字节序升序（INV-V8）；quick(Int64 下标)+小区间插入混合排序 }
+{ 就地按 Name 字节序升序（INV-V8）；quick(Int64 下标)+小区间插入混合排序。
+  单源：字节序以 base.utils.CompareBytesOrdered 为唯一原语，经 VfsNameCompare
+  透传；writer CmpPath / overlay SortTemp 复用同一原语，阈值 16 与 Hoare 策略一致。 }
 procedure VfsSortEntries(var AItems: TEntryArray);
 
 { 从字节序有序的完整路径清单推导某目录的直接子项完整路径（有序、去重）。
   输入只含文件路径（memtree/respack 均不存目录条目）；ADirPrefix 为
-  'dir/' 形式，根传 ''。O(n) 全量扫描：List 非热路径，换取调用方零预处理。 }
+  'dir/' 形式，根传 ''。O(n) 全量扫描：List 非热路径（大目录亦为冷路径，调用方零预处理换取实现简洁，热路径请用 embedded 索引）。 }
 function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
 

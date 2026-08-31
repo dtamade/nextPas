@@ -60,14 +60,14 @@ begin
   CheckEqual('[1,2,3]', LFrame.PayloadJson);
 
   { u53 上边界内可解 }
-  Check(TryDecodeFrame('{"v":1,"id":9007199254740991,"cmd":"a"}', LFrame),
+  Check(TryDecodeFrame('{"v":1,"id":' + IntToStr(NPW_MAX_FRAME_ID) + ',"cmd":"a"}', LFrame),
     'max safe id');
-  CheckEqual(Int64(9007199254740991), LFrame.Id);
+  CheckEqual(NPW_MAX_FRAME_ID, LFrame.Id);
 end;
 
 procedure TestDecodeInvalidMatrix;
 const
-  BAD: array[0..12] of string = (
+  BAD: array[0..11] of string = (
     '',                                     { 空文本 }
     'not json',                             { 非法 JSON }
     '[1,2]',                                { 顶层非对象 }
@@ -79,7 +79,6 @@ const
     '{"v":1,"id":0,"cmd":"c"}',             { id 非正 }
     '{"v":1,"id":-5,"cmd":"c"}',            { id 负数 }
     '{"v":1,"id":"7","cmd":"c"}',           { id 非整数 }
-    '{"v":1,"id":9007199254740992,"cmd":"c"}', { id 超 u53 }
     '{"v":1,"id":1}'                        { cmd 缺失 }
   );
 var
@@ -89,6 +88,8 @@ begin
   for I := Low(BAD) to High(BAD) do
     Check(not TryDecodeFrame(BAD[I], LFrame),
       'bad frame rejected #' + IntToStr(I));
+  Check(not TryDecodeFrame('{"v":1,"id":' + IntToStr(NPW_MAX_FRAME_ID + 1) + ',"cmd":"c"}', LFrame),
+    'id 超 u53');
   { cmd 空/非字符串单测（表内放不下带引号转义的行） }
   Check(not TryDecodeFrame('{"v":1,"id":1,"cmd":""}', LFrame), 'empty cmd');
   Check(not TryDecodeFrame('{"v":1,"id":1,"cmd":7}', LFrame), 'non-string cmd');
@@ -155,7 +156,7 @@ end;
 
 procedure TestBridgeScriptInvariants;
 const
-  TOKENS: array[0..10] of string = (
+  TOKENS: array[0..9] of string = (
     'window.__npw',
     '__resolve',
     '__reject',
@@ -165,7 +166,6 @@ const
     'chrome.webview',
     'JSON.parse',
     'Object.freeze',
-    '9007199254740991',
     'version: 1'
   );
 var
@@ -175,6 +175,8 @@ begin
   for I := Low(TOKENS) to High(TOKENS) do
     Check(Pos(TOKENS[I], NPW_BRIDGE_SCRIPT) > 0,
       'script invariant: ' + TOKENS[I]);
+  Check(Pos(IntToStr(NPW_MAX_FRAME_ID), NPW_BRIDGE_SCRIPT) > 0,
+    'script invariant: ' + IntToStr(NPW_MAX_FRAME_ID));
 end;
 
 procedure TestFakeFrameHappyPath;
@@ -452,19 +454,18 @@ procedure TestDecodeFuzzRandomCorpus;
 var
   I: Integer;
   LFrame: TWebviewFrame;
-  LInputs: array[0..9] of string = (
-    '{"v":1,"id":1,"cmd":"a","payload":null}',
-    '{"v":1,"id":1,"cmd":"a","payload":123}',
-    '{"v":1,"id":1,"cmd":"a","payload":true}',
-    '{"v":1,"id":1,"cmd":"a","payload":[1,2,3]}',
-    '{"v":1,"id":1,"cmd":"x","extra":"ignored"}',
-    '{"v":1,"id":1,"cmd":"a","payload":{"nested":{"deep":1}}}',
-    '{"v":1,"id":9007199254740991,"cmd":"edge"}',
-    '{"v":1,"id":1,"cmd":"a","payload":""}',
-    '{"v":1,"id":1,"cmd":"a","payload":"hel\"lo"}',
-    '{"v":1,"id":1,"cmd":"demo.sum","payload":{"a":1,"b":2}}'
-  );
+  LInputs: array[0..9] of string;
 begin
+  LInputs[0] := '{"v":1,"id":1,"cmd":"a","payload":null}';
+  LInputs[1] := '{"v":1,"id":1,"cmd":"a","payload":123}';
+  LInputs[2] := '{"v":1,"id":1,"cmd":"a","payload":true}';
+  LInputs[3] := '{"v":1,"id":1,"cmd":"a","payload":[1,2,3]}';
+  LInputs[4] := '{"v":1,"id":1,"cmd":"x","extra":"ignored"}';
+  LInputs[5] := '{"v":1,"id":1,"cmd":"a","payload":{"nested":{"deep":1}}}';
+  LInputs[6] := '{"v":1,"id":' + IntToStr(NPW_MAX_FRAME_ID) + ',"cmd":"edge"}';
+  LInputs[7] := '{"v":1,"id":1,"cmd":"a","payload":""}';
+  LInputs[8] := '{"v":1,"id":1,"cmd":"a","payload":"hel\"lo"}';
+  LInputs[9] := '{"v":1,"id":1,"cmd":"demo.sum","payload":{"a":1,"b":2}}';
   for I := Low(LInputs) to High(LInputs) do
   begin
     Check(TryDecodeFrame(LInputs[I], LFrame), 'corpus valid #' + IntToStr(I));

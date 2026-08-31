@@ -10,6 +10,8 @@ uses
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.compress,
+  nextpas.core.zlib.base,
+  nextpas.core.zlib.intf,
   nextpas.core.git.native.base;
 
 { Git stores loose objects and pack payloads in zlib wrapper format (RFC1950).
@@ -17,7 +19,10 @@ uses
   streams (header + deflate + adler32), so this unit only adds git-flavored
   error mapping and stream-boundary reporting over them. }
 
-function GitZlibAdler32(const AData: TBytes): UInt32;
+function GitZlibAdler32(const AData: TBytes): UInt32; inline;
+{ Zero-copy pointer variant: PByte+Len view over mmapped/external memory,
+  single-source via ZlibAdlerUpdate (ADLER32_INIT/MOD/NMAX in zlib.base) }
+function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; overload; inline;
 function GitZlibCompress(const AData: TBytes): TBytes;
 { Inflate the zlib stream starting at AStart. AEndPos receives the offset just
   past the Adler-32 trailer, so callers can locate the trailer bytes. }
@@ -30,19 +35,17 @@ function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
 
 implementation
 
-function GitZlibAdler32(const AData: TBytes): UInt32;
-var
-  I: SizeInt;
-  A, B: UInt32;
+function GitZlibAdler32(const AData: TBytes): UInt32; inline;
 begin
-  A := 1;
-  B := 0;
-  for I := 0 to Length(AData) - 1 do
-  begin
-    A := (A + AData[I]) mod 65521;
-    B := (B + A) mod 65521;
-  end;
-  Result := (B shl 16) or A;
+  Result := UInt32(ZlibAdler32(AData));
+end;
+
+function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline;
+begin
+  if (ACount = 0) or (AData = nil) then
+    Result := UInt32(ZLIB_ADLER_INIT)
+  else
+    Result := UInt32(ZlibAdler32Update(ZLIB_ADLER_INIT, AData, ACount));
 end;
 
 function GitZlibCompress(const AData: TBytes): TBytes;

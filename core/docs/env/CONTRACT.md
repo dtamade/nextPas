@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.os.env.pas`（1 个源文件）
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20
-**版本**：1.9
+**最后更新**：2026-08-31
+**版本**：1.10
 
 ---
 
@@ -114,3 +114,4 @@
 | 2026-07-19 | 1.7 | R17 质量表；测试 55 | Claude |
 | 2026-07-20 | 1.8 | R22 mixed Expand + HasEnv empty；测试 69 | Claude |
 | 2026-07-20 | 1.9 | R31 70；M2-W4 Win 矩阵 + wine 3 | Claude |
+| 2026-08-31 | 1.10 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

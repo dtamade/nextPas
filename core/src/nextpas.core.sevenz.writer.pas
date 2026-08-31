@@ -186,9 +186,6 @@ var
   LEnc: TSevenZLzmaEncoded;
   LEncoder: ISevenZLzmaEncoder;
   LI: SizeInt;
-  LOfs: SizeInt;
-  LRem: SizeInt;
-  LTake: SizeInt;
 begin
   LRawChunk := AFolder.RawSolid;
   if Length(AFilters) = 0 then
@@ -219,19 +216,8 @@ begin
     else
     begin
       SetLength(LStage, Length(LRawChunk));
-      LOfs := 0;
-      LRem := Length(LRawChunk);
-      while LRem > 0 do
-      begin
-        if LRem > SizeInt(SEVENZ_WRITER_CHUNK) then
-          LTake := SizeInt(SEVENZ_WRITER_CHUNK)
-        else
-          LTake := LRem;
-        if LTake > 0 then
-          Move(LRawChunk[LOfs], LStage[LOfs], LTake);
-        Inc(LOfs, LTake);
-        Dec(LRem, LTake);
-      end;
+      if Length(LRawChunk) > 0 then
+        Move(LRawChunk[0], LStage[0], Length(LRawChunk));
       SevenZFilterConvert(LStage, AFilters[0], AFolder.Specs[0].Props, True);
       for LI := 1 to High(AFilters) do
         SevenZFilterConvert(LStage, AFilters[LI], AFolder.Specs[LI].Props, True);

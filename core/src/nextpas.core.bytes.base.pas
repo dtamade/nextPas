@@ -4,20 +4,22 @@ unit nextpas.core.bytes.base;
 
 interface
 
-uses
-  nextpas.core.platform.base;
-
 type
-  TEndianness = nextpas.core.platform.base.TEndianness;
+  TEndianness = (
+    endLittle,
+    endBig
+  );
   TEndian = TEndianness;
   TByteOrder = TEndianness;
 
 const
-  endLittle = nextpas.core.platform.base.endLittle;
-  endBig = nextpas.core.platform.base.endBig;
   enLittle = endLittle;
   enBig = endBig;
+{$IF DEFINED(FPC_BIG_ENDIAN)}
+  NATIVE_ENDIAN = endBig;
+{$ELSE}
   NATIVE_ENDIAN = endLittle;
+{$ENDIF}
 
   BYTES_BUILDER_DEFAULT_CAPACITY = SizeUInt(256);
   BYTES_BUILDER_MIN_GROW = SizeUInt(64);

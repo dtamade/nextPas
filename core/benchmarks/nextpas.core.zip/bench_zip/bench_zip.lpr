@@ -173,6 +173,14 @@ begin
   ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
 end;
 
+procedure BenchPackManyDeflate2000(const ACtx: IBenchContext);
+var LArc: TBytes;
+begin
+  LArc := BuildManyArchive;
+  BenchBlackBoxBytes(LArc[0], Length(LArc));
+  ACtx.SetBytes(Int64(FILE_COUNT) * FILE_SIZE);
+end;
+
 procedure BenchPackWithReserve(const ACtx: IBenchContext);
 var
   LW: IZipWriter;
@@ -405,6 +413,7 @@ end;
 
 var
   LResults: IBenchResults;
+  LSuit: IBenchSuite;
   LW: IZipWriter;
   LCol: TCollectBench;
   LPiped: TBytes;
@@ -462,7 +471,7 @@ begin
   LStream.Close;
   CheckBytesEqual(LR.ExtractToBytes(0), LGot, 'sequential 1MB verify');
 
-  LResults := TBenchSuite.Create('zip')
+  LSuit := TBenchSuite.Create('zip')
     .SetMinDuration(TDuration.FromMilliseconds(300))
     .SetMinSamples(7)
     .SetWarmupIters(1)
@@ -482,8 +491,10 @@ begin
     .Add('zip/seq-extract-all/200x512B', @BenchSeqExtractAll)
     .Add('zip/seq-read/1MB', @BenchSeqRead1MB)
     .Add('zip/extract-pbyte/1MB', @BenchExtractPByte1MB)
-    .Add('zip/copy-to/1MB', @BenchCopyTo1MB)
-    .Run;
+    .Add('zip/copy-to/1MB', @BenchCopyTo1MB);
+  if GetEnvironmentVariable('ZIP_BENCH_FULL') = '1' then
+    LSuit.Add('zip/pack/2000x512B', @BenchPackManyDeflate2000);
+  LResults := LSuit.Run;
   WriteLn(LResults.PrintToConsole);
   WriteLn('benchstat: ', LResults.ToBenchstat);
   try

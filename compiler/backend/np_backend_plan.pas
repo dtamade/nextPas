@@ -4,19 +4,18 @@ unit np_backend_plan;
 {$UNITPATH ../ir}
 {$UNITPATH ../targets}
 {$UNITPATH ../diagnostics}
+{$UNITPATH ../frontend}
 {$UNITPATH ../../core/src}
+{ backend layer: depends on ir/frontend, not sema direct — uses view intf }
 
 interface
 
 uses
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
-  nextpas.core.mem.intf, nextpas.core.compiler.mem,
   nextpas.core.collections.vec,
+  nextpas.core.mem.intf, nextpas.core.compiler.mem,
   np_target_facts,
-  np_semantic_model, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_llvm_emitter, nextpas_json_helpers,
-  np_hir_to_mir, np_mir_model, np_mir_to_llvm,
-  np_mir_optimize, np_mir_pass_registry;
+  np_mir_model,
+  np_backend_view_intf;
 
 type
   TBackendArtifact = record
@@ -126,7 +125,8 @@ type
 
   TBackendPlanner = class
   private
-    FSemaModel: TSemanticModel;
+    FSemanticView: IBackendSemanticView;
+    FRootNameCache: string;
     FTargetFacts: TTargetFactsView;
     FSourcePath: string;
     FArtifactRootPath: string;
@@ -138,7 +138,18 @@ type
     function BackendIntermediateRootPath: string;
   public
     constructor Create(
-      const ASemaModel: TSemanticModel;
+      const ASemanticView: IBackendSemanticView;
+      const ATargetFacts: TTargetFactsView;
+      const ASourcePath: string;
+      const AArtifactRootPath: string;
+      const AOutputDirPath: string;
+      const ARootKindName: string;
+      const ANoFold: Boolean;
+      const AOptLevel: string
+    );
+    { Legacy overload for transition — wraps RootName into view adapter }
+    constructor CreateWithRootName(
+      const ARootName: string;
       const ATargetFacts: TTargetFactsView;
       const ASourcePath: string;
       const AArtifactRootPath: string;
@@ -153,6 +164,13 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
+  np_hir_types, np_hir_model, np_hir_builder,
+  np_hir_llvm_emitter, nextpas_json_helpers,
+  np_hir_to_mir, np_mir_to_llvm,
+  np_mir_optimize, np_mir_pass_registry;
 
 constructor TBackendPlan.Create;
 begin

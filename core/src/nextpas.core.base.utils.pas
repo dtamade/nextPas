@@ -26,6 +26,12 @@ function TryMulSizeUInt(const ALeft, ARight: SizeUInt; var AProduct: SizeUInt): 
 function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
 procedure CheckSizeRange(const AOffset, ALength, ASize: SizeUInt);
 
+{** 字节序转换（host/network）— 单源实现，供 system 门面 re-export *}
+function HTonN(AValue: Word): Word; overload; inline;
+function HTonN(AValue: LongWord): LongWord; overload; inline;
+function NToHs(AValue: Word): Word; overload; inline;
+function NToHs(AValue: LongWord): LongWord; overload; inline;
+
 {** 接口查询 *}
 procedure ClearOutInterface(out AIntf);
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
@@ -61,12 +67,12 @@ begin
   LTemp.Free;
 end;
 
-procedure SafeFree(var AObj);
+procedure SafeFree(var AObj); inline;
 begin
   FreeAndNil(AObj);
 end;
 
-procedure ZeroMem(ADst: Pointer; ASize: SizeUInt);
+procedure ZeroMem(ADst: Pointer; ASize: SizeUInt); inline;
 begin
   if ASize = 0 then
     Exit;
@@ -75,7 +81,7 @@ begin
   FillChar(ADst^, ASize, 0);
 end;
 
-procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte);
+procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte); inline;
 begin
   if ASize = 0 then
     Exit;
@@ -84,7 +90,7 @@ begin
   FillChar(ADst^, ASize, AValue);
 end;
 
-procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt);
+procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 begin
   if ASize = 0 then
     Exit;
@@ -95,18 +101,22 @@ begin
   Move(ASrc^, ADst^, ASize);
 end;
 
-function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
+function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 begin
   if ASize = 0 then Exit(True);
   if (A = nil) or (B = nil) then Exit(False);
   Result := System.CompareByte(A^, B^, ASize) = 0;
 end;
 
-function CompareBytesOrdered(A, B: Pointer; ALen, BLen: SizeUInt): Integer;
+function CompareBytesOrdered(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
 var
   N: SizeUInt;
   C: SizeInt;
 begin
+  // inline zero-copy: PByte+Len view, no alloc/copy, single source reused by
+  // bytes.ops/ vfs/ respack/ git.commitgraph (SpanCompare etc.); hot path inlined
+  // perf: System.CompareByte is FPC RTL optimized (rep cmpsb/SSE on x86_64), zero-copy via direct Pointer
+  // competitive for typical small N (<64) without SIMD dispatch overhead; L0 stays RTL-only for portability
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('CompareBytesOrdered: A is nil');
   if (BLen > 0) and (B = nil) then
@@ -125,7 +135,7 @@ begin
   Result := 0;
 end;
 
-function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer;
+function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
 var
   N, I: SizeUInt;
   CA, CB: Byte;
@@ -152,39 +162,46 @@ begin
   Result := 0;
 end;
 
-function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32;
+function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
 var
-  I: SizeUInt;
   P: PByte;
   H: UInt32;
 begin
+  // perf inline zero-copy: PByte+Len view, no alloc/copy, LowerTable branchless casefold,
+  // FNV-1a xor*prime kept inline for maps/dicts (http.mime etc.) single source via base.utils
+  // hot for short keys (typical ALen <32) — scalar 1-byte loop competitive; 16/32-byte SIMD
+  // LowerTable gather + parallel reduction not portability-justified on L0 (RTL-only), dispatch overhead > gain
+  // stability: nil guard + while ALen>0 avoids for-loop underflow when ALen=0; {$Q-}{$R-} wrap via caller prime mul
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('HashFNV1aLower: A is nil');
   H := 2166136261;
   P := PByte(A);
-  for I := 0 to ALen - 1 do
+  while ALen > 0 do
   begin
-    H := H xor UInt32(LowerTable[P[I]]);
-    H := H * 16777619;
+    {$PUSH}{$Q-}{$R-}
+    H := (H xor UInt32(LowerTable[P^])) * 16777619;
+    {$POP}
+    Inc(P);
+    Dec(ALen);
   end;
   Result := H;
 end;
 
-function TryAddSizeUInt(const ALeft, ARight: SizeUInt; var ASum: SizeUInt): Boolean;
+function TryAddSizeUInt(const ALeft, ARight: SizeUInt; var ASum: SizeUInt): Boolean; inline;
 begin
   Result := ALeft <= MAX_SIZE_UINT - ARight;
   if Result then
     ASum := ALeft + ARight;
 end;
 
-function CheckedAddSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt;
+function CheckedAddSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
 begin
   Result := 0;
   if not TryAddSizeUInt(ALeft, ARight, Result) then
     raise EOverflow.Create('CheckedAddSizeUInt: size overflow');
 end;
 
-function TryMulSizeUInt(const ALeft, ARight: SizeUInt; var AProduct: SizeUInt): Boolean;
+function TryMulSizeUInt(const ALeft, ARight: SizeUInt; var AProduct: SizeUInt): Boolean; inline;
 begin
   if (ALeft = 0) or (ARight = 0) then
   begin
@@ -197,7 +214,7 @@ begin
     AProduct := ALeft * ARight;
 end;
 
-function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt;
+function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
 begin
   Result := 0;
   if not TryMulSizeUInt(ALeft, ARight, Result) then
@@ -243,6 +260,42 @@ begin
   Result := AInstance.QueryInterface(AIID, AIntf) = S_OK;
   if not Result then
     ClearOutInterface(AIntf);
+end;
+
+function HTonN(AValue: Word): Word;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function HTonN(AValue: LongWord): LongWord;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function NToHs(AValue: Word): Word;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function NToHs(AValue: LongWord): LongWord;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
 end;
 
 end.

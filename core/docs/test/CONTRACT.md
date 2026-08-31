@@ -3,7 +3,7 @@
 **模块路径**：`core/src/nextpas.core.test*.pas`（17 个 .pas + 4 个 .inc）
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
-**最后更新**：2026-07-26
+**最后更新**：2026-08-31
 **版本**：v8.31
 **路线图**：`quality-scale-roadmap.md`（v8.26+ 质量/规模全权序列）
 **审计 remediation**：`v8.31-findings-remediation-plan.md` / `findings.md`

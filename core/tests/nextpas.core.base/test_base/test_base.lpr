@@ -215,9 +215,9 @@ end;
 
 procedure TestFrameworkIdentity;
 begin
-  CheckEqual('0.1.0', NEXTPAS_CORE_VERSION);
-  CheckEqual(Int64(0), NEXTPAS_CORE_VERSION_MAJOR);
-  CheckEqual(Int64(1), NEXTPAS_CORE_VERSION_MINOR);
+  CheckEqual('1.0.0', NEXTPAS_CORE_VERSION);
+  CheckEqual(Int64(1), NEXTPAS_CORE_VERSION_MAJOR);
+  CheckEqual(Int64(0), NEXTPAS_CORE_VERSION_MINOR);
   CheckEqual(Int64(0), NEXTPAS_CORE_VERSION_PATCH);
   CheckEqual('nextpas.core', NEXTPAS_CORE_NAME);
 end;

@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.async*.pas` + `core/src/nextpas.core.net*.pas`
 **层级**：L1-L2（依赖 L0: platform, base, errors）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：1.1
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 
@@ -422,6 +422,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 |------|------|----------|------|
 | 2026-07-19 | 1.1 | TAsyncLoop class 生命周期 | Claude |
 | 2026-07-11 | 1.0 | 初始版本 | Claude |
+| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
 
 
 ### OnDiscard / Close

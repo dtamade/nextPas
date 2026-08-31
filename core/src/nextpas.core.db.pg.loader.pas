@@ -86,6 +86,9 @@ begin
   pq_getCancel  := TPQgetCancel(LoadSym('PQgetCancel'));
   pq_freeCancel := TPQfreeCancel(LoadSym('PQfreeCancel'));
   pq_cancel     := TPQcancel(LoadSym('PQcancel'));
+  pq_putCopyData := TPQputCopyData(LoadSym('PQputCopyData'));
+  pq_putCopyEnd  := TPQputCopyEnd(LoadSym('PQputCopyEnd'));
+  pq_getResult   := TPQgetResult(LoadSym('PQgetResult'));
   { V3-B7 LISTEN/NOTIFY 订阅面（均为 libpq 初代符号，无版本门槛） }
   pq_notifies     := TPQnotifies(LoadSym('PQnotifies'));
   pq_freemem      := TPQfreemem(LoadSym('PQfreemem'));

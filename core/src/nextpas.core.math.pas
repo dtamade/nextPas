@@ -243,6 +243,8 @@ function Max(AA, AB: Single): Single; overload; inline;
 function Clamp(const AValue, AMin, AMax: Double): Double; overload; inline;
 function Clamp(const AValue, AMin, AMax: Single): Single; overload; inline;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; overload; inline;
+function ClampByte(const AValue: Int32): Byte; overload; inline;
+function ClampByte(const AValue: Single): Byte; overload; inline;
 function Lerp(const AA, AB, AT: Double): Double; overload; inline;
 function Lerp(const AA, AB, AT: Single): Single; overload; inline;
 function InverseLerp(const AA, AB, AValue: Double): Double; overload; inline;
@@ -904,6 +906,16 @@ end;
 function Clamp(const AValue, AMin, AMax: Int32): Int32;
 begin
   Result := nextpas.core.math.scalar.Clamp(AValue, AMin, AMax);
+end;
+
+function ClampByte(const AValue: Int32): Byte;
+begin
+  Result := nextpas.core.math.scalar.ClampByte(AValue);
+end;
+
+function ClampByte(const AValue: Single): Byte;
+begin
+  Result := nextpas.core.math.scalar.ClampByte(AValue);
 end;
 
 function Lerp(const AA, AB, AT: Single): Single;

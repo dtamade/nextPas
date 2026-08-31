@@ -69,11 +69,4 @@ core/docs/platform/                     this documentation set
 
 ## Historical / non-authority
 
-These remain for history or migration reference; do not treat as current truth or forward queue:
-
-- [api-reference.md](api-reference.md) — superseded by `API-REFERENCE.md`
-- [ROADMAP-v2.md](ROADMAP-v2.md) — 2026-07-06 planning snapshot (**stale**; ignore 8.56 score)
-- [GOVERNANCE-PLAN.md](GOVERNANCE-PLAN.md), daily reports, [TEST-COVERAGE-REPORT.md](TEST-COVERAGE-REPORT.md), [API-CONSISTENCY-PLAN.md](API-CONSISTENCY-PLAN.md)
-- [USABILITY-ASSESSMENT.md](USABILITY-ASSESSMENT.md) — body historical; **banner 8.21 only** is current
-- `core/docs/plans/*platform*` — old completion / Windows-real plans; verify against ROADMAP + goal-tree
-- `../platform-ffi-*` — ABI evidence indexes until fully folded here
+历史参考仅归档，不作为事实。

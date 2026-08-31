@@ -4225,6 +4225,178 @@ begin
   CheckTrue(RaisedEGitError(@RaiseRevParseCommitMismatch), 'commit peel mismatch raises');
 end;
 
+{ ── submodule / bundle / grep / bisect (C6 hard gate) ─────────────────── }
+
+var
+  GSubRepo: string;
+  GBundlePath: string;
+  GBundleTarget: string;
+  GGrepRepo: string;
+  GBisectRepo: string;
+  GBisectGoodHex: string;
+  GBisectBadHex: string;
+  GBisectFirstBadHex: string;
+
+function BisectCheckBad(const AOid: TGitOid): Boolean;
+begin
+  Result := GitOidSame(AOid, GitOidFromHex(GBisectFirstBadHex)) or GitOidSame(AOid, GitOidFromHex(GBisectBadHex));
+end;
+
+procedure TestSubmoduleGolden;
+var
+  Txt: string;
+  Ms: TGitSubmoduleArray;
+  Listed: TGitSubmoduleArray;
+  ConfigOut: string;
+begin
+  Txt := '[submodule "lib/foo"]'#10'  path = lib/foo'#10'  url = https://example.com/foo.git'#10'  branch = main'#10
+       + '[submodule "ext/bar"]'#10'  path = ext/bar'#10'  url = "https://example.com/bar.git"'#10'  # comment'#10'  branch = dev'#10;
+  Ms := GitParseGitModules(Txt);
+  CheckEqual(2, Length(Ms), 'submodule parse count');
+  CheckEqual('lib/foo', Ms[0].Path, 'submodule sub0 path');
+  CheckEqual('https://example.com/foo.git', Ms[0].Url, 'submodule sub0 url');
+  CheckEqual('main', Ms[0].Branch, 'submodule sub0 branch');
+  CheckEqual('ext/bar', Ms[1].Path, 'submodule sub1 path');
+  GSubRepo := PathJoin([GetTempDir, 'nextpas_git_sub_' + IntToStr(GetProcessID)]);
+  RemoveAll(GSubRepo);
+  MkdirAll(GSubRepo, PermDirDefault);
+  RunInChecked('git', ['init', '--quiet', '-b', 'main'], GSubRepo);
+  RunInChecked('git', ['config', 'user.email', 'test@example.com'], GSubRepo);
+  RunInChecked('git', ['config', 'user.name', 'Test Er'], GSubRepo);
+  WriteFileText(PathJoin2(GSubRepo, '.gitmodules'), Txt);
+  RunInChecked('git', ['add', '.gitmodules'], GSubRepo);
+  RunInChecked('git', ['commit', '-q', '-m', 'sub'], GSubRepo);
+  Listed := GitListSubmodules(PathJoin([GSubRepo, '.git']));
+  CheckEqual(2, Length(Listed), 'submodule list count');
+  ConfigOut := Trim(MustCaptureIn('git', ['config', '-f', '.gitmodules', '--list'], GSubRepo));
+  CheckTrue(Pos('lib/foo', ConfigOut) > 0, 'submodule golden contains lib/foo');
+  try
+    GitSubmoduleAtPath(PathJoin([GSubRepo, '.git']), '');
+    CheckTrue(False, 'submodule empty path should raise');
+  except
+    on E: EGitError do CheckTrue(True, 'submodule empty path raises EGitError');
+  end;
+end;
+
+procedure TestBundleGolden;
+var
+  Hdr: TGitBundleHeader;
+  Refs: TGitBundleRefArray;
+  PackOk: Boolean;
+  Out_: string;
+  GitList: string;
+begin
+  GBundlePath := PathJoin([GetTempDir, 'nextpas_git_bundle_' + IntToStr(GetProcessID) + '.bundle']);
+  try Remove(GBundlePath) except end;
+  GitBundleCreate(GGitDir, 'HEAD', GBundlePath);
+  CheckTrue(FileExists(GBundlePath), 'bundle file exists');
+  PackOk := GitBundleVerify(GBundlePath);
+  CheckTrue(PackOk, 'bundle verify');
+  Hdr := GitBundleParseHeader(GBundlePath);
+  CheckTrue(Length(Hdr.Refs) >= 1, 'bundle header refs');
+  Refs := GitBundleList(GBundlePath);
+  CheckEqual(Length(Hdr.Refs), Length(Refs), 'bundle list matches header');
+  GitList := Trim(MustCaptureIn('git', ['bundle', 'list-heads', GBundlePath], GRepo));
+  CheckTrue(Pos('HEAD', GitList) > 0, 'bundle git list-heads contains HEAD');
+  GBundleTarget := PathJoin([GetTempDir, 'nextpas_git_bundle_target_' + IntToStr(GetProcessID)]);
+  RemoveAll(GBundleTarget);
+  MkdirAll(GBundleTarget, PermDirDefault);
+  RunInChecked('git', ['init', '--quiet', '--bare', GBundleTarget], GetTempDir);
+  GitBundleUnbundle(GBundlePath, GBundleTarget);
+  Out_ := Trim(MustCaptureIn('git', ['--git-dir=' + GBundleTarget, 'rev-parse', 'HEAD'], GetTempDir));
+  CheckTrue(Length(Out_) = 40, 'bundle unbundle head 40 hex');
+  CheckEqual(GHeadHex, Out_, 'bundle unbundle head matches source');
+end;
+
+procedure TestGrepGolden;
+var
+  Hits: TGitGrepHitArray;
+  Out_: string;
+  Lines: TStringArray;
+  I, NonEmpty: Integer;
+  GitDir: string;
+begin
+  GGrepRepo := PathJoin([GetTempDir, 'nextpas_git_grep_' + IntToStr(GetProcessID)]);
+  RemoveAll(GGrepRepo);
+  MkdirAll(GGrepRepo, PermDirDefault);
+  RunInChecked('git', ['init', '--quiet', '-b', 'main'], GGrepRepo);
+  RunInChecked('git', ['config', 'user.email', 'test@example.com'], GGrepRepo);
+  RunInChecked('git', ['config', 'user.name', 'Test Er'], GGrepRepo);
+  GitDir := PathJoin([GGrepRepo, '.git']);
+  WriteFileText(PathJoin2(GGrepRepo, 'a.txt'), 'hello world'#10 + 'foo bar'#10);
+  WriteFileText(PathJoin2(GGrepRepo, 'b.txt'), 'HELLO WORLD'#10);
+  WriteFile(PathJoin2(GGrepRepo, 'bin.dat'), BytesOfString('a'#0'b'));
+  RunInChecked('git', ['add', '.'], GGrepRepo);
+  RunInChecked('git', ['commit', '-q', '-m', 'grep'], GGrepRepo);
+  Hits := GitGrep(GitDir, 'HEAD', 'hello');
+  Out_ := Trim(MustCaptureIn('git', ['grep', '-n', 'hello', 'HEAD'], GGrepRepo));
+  SplitTextLines(Out_, Lines);
+  NonEmpty := 0;
+  for I := 0 to High(Lines) do if Trim(Lines[I]) <> '' then Inc(NonEmpty);
+  CheckEqual(NonEmpty, Length(Hits), 'grep count matches git');
+  if Length(Hits) > 0 then
+    CheckTrue(Pos('hello', Hits[0].Line) > 0, 'grep hit contains pattern');
+  Hits := GitGrep(GitDir, 'HEAD', 'hello', True);
+  Out_ := Trim(MustCaptureIn('git', ['grep', '-n', '-i', 'hello', 'HEAD'], GGrepRepo));
+  SplitTextLines(Out_, Lines);
+  NonEmpty := 0;
+  for I := 0 to High(Lines) do if Trim(Lines[I]) <> '' then Inc(NonEmpty);
+  CheckEqual(NonEmpty, Length(Hits), 'grep -i count');
+  for I := 0 to High(Hits) do
+    CheckFalse(Pos('bin.dat', Hits[I].Path) > 0, 'grep binary skipped');
+  try
+    GitGrep(GitDir, 'HEAD', '');
+    CheckTrue(False, 'grep empty pattern should raise');
+  except
+    on E: EGitError do CheckTrue(True, 'grep empty raises EGitError');
+  end;
+end;
+
+procedure TestBisectGolden;
+var
+  Cands: TGitOidArray;
+  Res: TGitBisectResult;
+  Golden: TStringArray;
+  I: Integer;
+begin
+  GBisectRepo := PathJoin([GetTempDir, 'nextpas_git_bisect_' + IntToStr(GetProcessID)]);
+  RemoveAll(GBisectRepo);
+  MkdirAll(GBisectRepo, PermDirDefault);
+  RunInChecked('git', ['init', '--quiet', '-b', 'main'], GBisectRepo);
+  RunInChecked('git', ['config', 'user.email', 'test@example.com'], GBisectRepo);
+  RunInChecked('git', ['config', 'user.name', 'Test Er'], GBisectRepo);
+  WriteFileText(PathJoin2(GBisectRepo, 'f.txt'), 'c1'#10);
+  RunInChecked('git', ['add', 'f.txt'], GBisectRepo);
+  RunInChecked('/bin/sh', ['-c', 'GIT_AUTHOR_DATE=@"1000000010 +0000" GIT_COMMITTER_DATE=@"1000000010 +0000" git commit -q -m "c1"'], GBisectRepo);
+  GBisectGoodHex := Trim(MustCaptureIn('git', ['rev-parse', 'HEAD'], GBisectRepo));
+  WriteFileText(PathJoin2(GBisectRepo, 'f.txt'), 'c2'#10);
+  RunInChecked('git', ['add', 'f.txt'], GBisectRepo);
+  RunInChecked('/bin/sh', ['-c', 'GIT_AUTHOR_DATE=@"1000000020 +0000" GIT_COMMITTER_DATE=@"1000000020 +0000" git commit -q -m "c2"'], GBisectRepo);
+  WriteFileText(PathJoin2(GBisectRepo, 'f.txt'), 'c3-bad'#10);
+  RunInChecked('git', ['add', 'f.txt'], GBisectRepo);
+  RunInChecked('/bin/sh', ['-c', 'GIT_AUTHOR_DATE=@"1000000030 +0000" GIT_COMMITTER_DATE=@"1000000030 +0000" git commit -q -m "c3-bad"'], GBisectRepo);
+  GBisectFirstBadHex := Trim(MustCaptureIn('git', ['rev-parse', 'HEAD'], GBisectRepo));
+  WriteFileText(PathJoin2(GBisectRepo, 'f.txt'), 'c4-bad'#10);
+  RunInChecked('git', ['add', 'f.txt'], GBisectRepo);
+  RunInChecked('/bin/sh', ['-c', 'GIT_AUTHOR_DATE=@"1000000040 +0000" GIT_COMMITTER_DATE=@"1000000040 +0000" git commit -q -m "c4-bad"'], GBisectRepo);
+  GBisectBadHex := Trim(MustCaptureIn('git', ['rev-parse', 'HEAD'], GBisectRepo));
+  Cands := GitBisectCandidates(PathJoin([GBisectRepo, '.git']), GBisectGoodHex, GBisectBadHex);
+  SplitTextLines(Trim(MustCaptureIn('git', ['rev-list', '--topo-order', GBisectBadHex, '^' + GBisectGoodHex], GBisectRepo)), Golden);
+  CheckEqual(Length(Golden), Length(Cands), 'bisect candidates count');
+  for I := 0 to High(Golden) do
+    CheckEqual(Golden[I], GitOidToHex(Cands[I]), 'bisect candidate ' + IntToStr(I));
+  Res := GitBisectFind(PathJoin([GBisectRepo, '.git']), GBisectGoodHex, GBisectBadHex, @BisectCheckBad);
+  CheckTrue(Res.Found, 'bisect found');
+  CheckEqual(GBisectFirstBadHex, GitOidToHex(Res.FirstBad), 'bisect first bad');
+  CheckTrue(Res.Steps >= 1, 'bisect steps >=1');
+  try
+    GitBisectCandidates(PathJoin([GBisectRepo, '.git']), GBisectGoodHex, GBisectGoodHex);
+    CheckTrue(False, 'bisect same rev should raise');
+  except
+    on E: EGitError do CheckTrue(True, 'bisect same rev raises EGitError');
+  end;
+end;
+
 procedure SetupFixture;
 begin
   GRepo := PathJoin([GetTempDir,
@@ -4384,6 +4556,10 @@ begin
     T.Test('rev-parse simple', @TestRevParseSimple);
     T.Test('rev-parse peel', @TestRevParsePeel);
     T.Test('rev-parse errors', @TestRevParseErrors);
+    T.Test('submodule golden', @TestSubmoduleGolden);
+    T.Test('bundle golden', @TestBundleGolden);
+    T.Test('grep golden', @TestGrepGolden);
+    T.Test('bisect golden', @TestBisectGolden);
     if not T.Run then Halt(1);
   finally
     CleanupFixture;
@@ -4437,5 +4613,15 @@ begin
       try Remove(GExcludesPath) except end;
     if GRevParseRepo <> '' then
       RemoveAll(GRevParseRepo);
+    if GSubRepo <> '' then
+      RemoveAll(GSubRepo);
+    if GBundlePath <> '' then
+      try Remove(GBundlePath) except end;
+    if GBundleTarget <> '' then
+      RemoveAll(GBundleTarget);
+    if GGrepRepo <> '' then
+      RemoveAll(GGrepRepo);
+    if GBisectRepo <> '' then
+      RemoveAll(GBisectRepo);
   end;
 end.

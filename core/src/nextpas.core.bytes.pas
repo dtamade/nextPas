@@ -60,10 +60,37 @@ function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 { Unsigned helpers (single source via bytes.ops) }
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
 function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
+function BytesIsZero(const AData: TBytes): Boolean; inline;
+function IsAllZero(const AData: TBytes): Boolean; inline;
+
+{ Bulk concat (single source via bytes.ops, single-alloc + Move zero-copy) }
+function SpanConcatMany(const AParts: array of TByteSpan): TBytes; inline;
+function BytesConcatMany(const AParts: array of TBytes): TBytes; inline;
+
+{ TBytes append / capacity (single source via bytes.ops, amortized O(1) cap-map, inline) }
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+
+{ Bytes <-> String (single source via bytes.ops, Move zero-copy) }
+function BytesToString(const ABytes: TBytes): string; inline;
+function BytesToUTF8(const ABytes: TBytes): string; inline;
+function StringToBytes(const AText: string): TBytes; inline;
 
 { Binary: swap }
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
@@ -239,7 +266,17 @@ end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 begin
-  Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
+  Result := nextpas.core.bytes.ops.StripLeadingZero(AData);
+end;
+
+function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
+begin
+  Result := nextpas.core.bytes.ops.StripLeadingZeroSpan(ASpan);
+end;
+
+function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
+begin
+  Result := nextpas.core.bytes.ops.StripLeadingZeroView(AData);
 end;
 
 function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
@@ -260,6 +297,101 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
+end;
+
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
+begin
+  Result := nextpas.core.bytes.ops.CompareUnsignedSpan(ALeft, ARight);
+end;
+
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.UnsignedEqualSpan(ALeft, ARight);
+end;
+
+function IsZeroBytes(const AData: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
+end;
+
+function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.IsZeroBytes(ASpan);
+end;
+
+function BytesIsZero(const AData: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.BytesIsZero(AData);
+end;
+
+function IsAllZero(const AData: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.IsAllZero(AData);
+end;
+
+function SpanConcatMany(const AParts: array of TByteSpan): TBytes; inline;
+begin
+  Result := nextpas.core.bytes.ops.SpanConcatMany(AParts);
+end;
+
+function BytesConcatMany(const AParts: array of TBytes): TBytes; inline;
+begin
+  Result := nextpas.core.bytes.ops.BytesConcatMany(AParts);
+end;
+
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
+begin
+  nextpas.core.bytes.ops.BytesAppend(ADest, ASrc);
+end;
+
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline;
+begin
+  nextpas.core.bytes.ops.BytesAppend(ADest, ASrc, ASrcLen);
+end;
+
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
+begin
+  nextpas.core.bytes.ops.BytesAppendByte(ADest, AValue);
+end;
+
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
+begin
+  nextpas.core.bytes.ops.BytesAppendUInt16BE(ADest, AValue);
+end;
+
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
+begin
+  nextpas.core.bytes.ops.BytesAppendUInt24BE(ADest, AValue);
+end;
+
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
+begin
+  nextpas.core.bytes.ops.BytesAppendUInt32BE(ADest, AValue);
+end;
+
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+begin
+  nextpas.core.bytes.ops.BytesReserve(ADest, AAdditional);
+end;
+
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+begin
+  nextpas.core.bytes.ops.BytesEnsureCapacity(ADest, ARequired);
+end;
+
+function BytesToString(const ABytes: TBytes): string; inline;
+begin
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
+end;
+
+function BytesToUTF8(const ABytes: TBytes): string; inline;
+begin
+  Result := nextpas.core.bytes.ops.BytesToUTF8(ABytes);
+end;
+
+function StringToBytes(const AText: string): TBytes; inline;
+begin
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
 { Binary: swap }

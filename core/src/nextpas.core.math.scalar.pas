@@ -64,6 +64,8 @@ function Max(AA, AB: Single): Single; overload;
 function Clamp(const AValue, AMin, AMax: Double): Double; overload; inline;
 function Clamp(const AValue, AMin, AMax: Single): Single; overload;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; overload; inline;
+function ClampByte(const AValue: Int32): Byte; overload; inline;
+function ClampByte(const AValue: Single): Byte; overload; inline;
 function Lerp(const AA, AB, AT: Double): Double; overload;
 function Lerp(const AA, AB, AT: Single): Single; overload;
 function InverseLerp(const AA, AB, AValue: Double): Double; overload;
@@ -158,6 +160,12 @@ function IsNaN(const AValue: Single): Boolean; overload;
  *}
 function IsInfinite(const AValue: Double): Boolean; overload; inline;
 function IsInfinite(const AValue: Single): Boolean; overload;
+
+{** * Requires AValue to be finite (not NaN and not infinite).
+ * @raises EArgumentError if AValue is NaN or infinite
+ *}
+procedure RequireFinite(const AValue: Single; const AMessage: string); overload; inline;
+procedure RequireFinite(const AValue: Double; const AMessage: string); overload; inline;
 
 {** * IEEE special values with FPC Math-compatible names (Double payloads).
  * Built from bit patterns — no exception-raising division.
@@ -1199,6 +1207,16 @@ begin
     Result := AValue;
 end;
 
+function ClampByte(const AValue: Int32): Byte;
+begin
+  Result := Byte(Clamp(AValue, Int32(0), Int32(255)));
+end;
+
+function ClampByte(const AValue: Single): Byte;
+begin
+  Result := Byte(Clamp(Int32(System.Round(AValue)), Int32(0), Int32(255)));
+end;
+
 function Lerp(const AA, AB, AT: Single): Single;
 begin
   if SingleIsNaN(AT) then
@@ -1500,6 +1518,18 @@ end;
 function IsInfinite(const AValue: Double): Boolean;
 begin
   Result := DoubleIsInfinite(AValue);
+end;
+
+procedure RequireFinite(const AValue: Single; const AMessage: string);
+begin
+  if IsNaN(AValue) or IsInfinite(AValue) then
+    raise EArgumentError.Create(AMessage);
+end;
+
+procedure RequireFinite(const AValue: Double; const AMessage: string);
+begin
+  if IsNaN(AValue) or IsInfinite(AValue) then
+    raise EArgumentError.Create(AMessage);
 end;
 
 function NaN: Double;

@@ -62,37 +62,39 @@ LResult := SshExec('host', 22, 'user', 'pass', 'ls -l');
 ## 单元结构
 
 ```
-nextpas.core.ssh.pas                 ← 门面：纯 re-export + 便捷函数
+nextpas.core.ssh.pas                 ← 门面：纯 re-export + 便捷函数（已校验无 `duplicate identifier`）
 nextpas.core.ssh.base.pas            ← 协议常量、消息号、选项记录
 nextpas.core.ssh.errors.pas          ← ESSHError + 错误分类
+nextpas.core.ssh.intf.pas            ← 缝隙接口 `IDialer/ISshAgentDialer`（隔离 `net` 直连，仅 `io.intf+net.intf`）
+nextpas.core.ssh.net.ffi.pas         ← 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，`TcpConnect/UnixConnect` 注入）
+nextpas.core.ssh.transport.core.pas  ← 传输核单源（`padding+Protect+Compress+Seq+Rekey` 纯内存，`transport(+.async)` 薄包装复用）
 nextpas.core.ssh.rekey.pas           ← Rekey 策略（`TSshRekeyPolicy`，`TInstant` 单调时钟，同步/异步 transport 复用，零 `SysUtils` 直连）
 nextpas.core.ssh.keepalive.pas       ← KeepAlive 策略（`TKeepAlivePolicy`，`TInstant` 单调时钟，同步预留/异步 `TAsyncLoop.ScheduleMethod`，零 `SysUtils` 直连）
-nextpas.core.ssh.buffer.pas          ← RFC 4251 wire 类型读写器
-nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM）
-nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机（阻塞）
-nextpas.core.ssh.transport.async.pas ← 异步传输层（`TAsyncLoop+IAsyncTcpStream`，版本交换与二进制包事件化，复用 cipher/compress）
-nextpas.core.ssh.kex.pas             ← KEXINIT 协商 + 密钥推导
-nextpas.core.ssh.kex.curve25519.pas  ← curve25519-sha256 客户端交换
-nextpas.core.ssh.kex.dhgroup14.pas   ← diffie-hellman-group14-sha256 客户端交换（回退）
+nextpas.core.ssh.buffer.pas          ← RFC 4251 wire 类型读写器（`Ensure/Need` 边界 + `SSH_MAX_RECEIVE_PACKET` 上限）
+nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM，`TAesCtrStream` 跨包 `keystream` 持久，`SecureZero` 敏感材料）
+nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机（阻塞，薄包装 `transport.core`）
+nextpas.core.ssh.transport.async.pas ← 异步传输层（`TAsyncLoop+IAsyncTcpStream`，版本交换与二进制包事件化，复用 `transport.core`）
+nextpas.core.ssh.kex.pas             ← KEXINIT 协商 + 密钥推导（`SHA256 KDF A-F`）
+nextpas.core.ssh.kex.curve25519.pas  ← curve25519-sha256 客户端交换（X25519，`IsZeroBytes` 单源拒绝）
+nextpas.core.ssh.kex.dhgroup14.pas   ← diffie-hellman-group14-sha256 客户端交换（回退，`TryBigIntModExp` 2048-bit MODP）
 nextpas.core.ssh.hostkey.pas         ← 主机密钥解析 / 验签 / 指纹 / known_hosts（ed25519/rsa/ecdsa-p256）
 nextpas.core.ssh.rsa.pas             ← RSA PKCS#1 v1.5 签名/验签核（DigestInfo 单一来源）
-nextpas.core.crypto.blowfish.pas     ← Blowfish 分组密码（bcrypt 底座，OpenBSD 语义）
-nextpas.core.crypto.bcrypt_pbkdf.pas ← bcrypt_pbkdf 密钥派生（OpenSSH 加密私钥 KDF）
-nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析（ed25519 / ssh-rsa，未加密与 aes256-ctr+bcrypt 加密）
+nextpas.core.ssh.keys.pas            ← OpenSSH 私钥容器解析（ed25519 / ssh-rsa，未加密与 aes256-ctr+bcrypt 加密，依赖 crypto.blowfish / bcrypt_pbkdf）
 nextpas.core.ssh.auth.pas            ← userauth 载荷构造/解析（probe `hasSig=false` + `PK_OK` / signed）
-nextpas.core.ssh.compress.pas        ← 压缩：有状态 `zlib`/`zlib@openssh.com`（`ISshCompressor` 双 `z_stream`，`Z_SYNC_FLUSH`，1 MiB 防 bomb）
-nextpas.core.ssh.agent.pas           ← ssh-agent 协议客户端（Unix socket 长度前缀帧，List/Sign）
+nextpas.core.ssh.compress.pas        ← 压缩：有状态 `zlib`/`zlib@openssh.com`（`ISshCompressor` 双 `z_stream`，`Z_SYNC_FLUSH`，1 MiB 防 bomb，经 `compress.zlib.ffi` 唯一入口）
+nextpas.core.ssh.agent.pas           ← ssh-agent 协议客户端（Unix socket 长度前缀帧，List/Sign，经 `intf+net.ffi` 注入）
 nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem / `direct-tcpip` + `TChannelStream` 字节流）
 nextpas.core.ssh.channel.async.pas   ← 异步通道（exec `TAsyncExecRunner` + `TAsyncSftpChannel` 复用窗口/低水位回补）
 nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活，`ProxyJump` 经 `direct-tcpip` 复用 `TChannelStream`）
-nextpas.core.ssh.session.async.pas   ← 异步会话（`AsyncTcpDial(RFC8305)` + 状态机握手/认证，复用 cipher/kex/hostkey/compress，`Compress` 同语义）
-nextpas.core.ssh.transport.async.pas ← 异步传输（复用 cipher/compress，`Protect`/`Unprotect` 事件化）
+nextpas.core.ssh.session.async.pas   ← 异步会话（`AsyncTcpDial(RFC8305)` + 状态机握手/认证，复用 cipher/kex/hostkey/compress，`Compress` 同语义，`L2 async peer` 直连 `net.async.tcp` 已文档化）
+nextpas.core.ssh.proxyjump.async.pas ← 异步 ProxyJump（`TAsyncChannelStream` 无轮询 + `Keeper` 保活 + `TryFlushQueued 5ms` 重试）
 nextpas.core.ssh.sftp.pas            ← SFTP v3 客户端（ISshFileSystem 门面，同步 `TSshChannelWire`）
 nextpas.core.ssh.sftp.async.pas      ← SFTP v3 异步（`ISshAsyncFileSystem`，`TAsyncLoop+TAsyncSshTransport`，`PostEx` 投递，`SftpRoundTripAsync` + 窗口 + 4B 重组）
 ```
 
-依赖方向：`base ← errors/buffer ← cipher/kex/hostkey/keys/auth ← transport/channel ← session ← 门面`。
-对外依赖：`io.intf`（IReadWriteCloser 缝隙）、`crypto.*`、`hash`、`encoding.base64`。
+依赖方向：`base ← errors/buffer ← cipher/kex/hostkey/keys/auth ← transport/channel ← session ← 门面`；`base ← rekey/keepalive ← transport.core ← transport(+.async)` 单源。
+对外依赖：`io.intf`（IReadWriteCloser 缝隙）、`crypto.*`、`hash`、`encoding.base64`、`time`/`text.conv`（替代 `SysUtils`）。
+复用说明：`intf(IDialer) + net.ffi` 为唯一 `nextpas.core.net` 拉取点（同步缝隙注入）；`transport.async/session.async/proxyjump.async` 直连 `net.async.tcp(IAsyncTcpStream/AsyncTcpDial)` 为**允许的 L2 async peer**（`net.ffi` 仅覆盖阻塞 `ITcpStream`，`transport.core` 已单源复用，无逻辑漂移）；`compress → compress.zlib.ffi` 唯一 `zlib` 入口（`grep` 已验证零直连 `zlib/paszlib`）。
 
 ## 测试与验证
 
@@ -105,10 +107,15 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_keys
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_transport
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_compress
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_session
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_session_async
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp_async
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp_async_via_jump
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_agent
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump
+make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump_async
 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
+make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_proxyjump
 ```
 
 核心验证手段是 **回环测试**：测试内实现一个最小 SSH 服务端（走同样的底层原语但独立的

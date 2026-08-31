@@ -13,7 +13,8 @@ unit nextpas.core.sevenz.bcj.sparc;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.sevenz.bcj.utils;
 
 procedure SevenZBcjSparcConvert(var AData: TBytes; AStartOffset: UInt32;
   AEncode: Boolean);

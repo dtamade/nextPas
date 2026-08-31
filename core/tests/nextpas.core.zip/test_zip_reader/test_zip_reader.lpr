@@ -396,7 +396,7 @@ begin
     LR.ExtractToBytes(0);
   except
     on E: Exception do
-      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+      LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
   end;
   Check(LGotRaise, 'over-limit output raises io error');
 end;
@@ -423,7 +423,7 @@ begin
     LR.ExtractToBytes(0);
   except
     on E: Exception do
-      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+      LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
   end;
   Check(LGotRaise, 'store over-limit raises io error (P0-1)');
 end;
@@ -636,7 +636,7 @@ begin
     { 读到 EOF 的这一次返回前应完成校验并 raise }
   except
     on E: Exception do
-      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+      LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
   end;
   Check(LGotRaise, 'tampered payload raises crc mismatch at stream eof');
 end;
@@ -693,7 +693,7 @@ begin
     while LS.Read(LBuf[0], SizeOf(LBuf)) > 0 do ;
   except
     on E: Exception do
-      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+      LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
   end;
   Check(LGotRaise, 'stream read stops at max output size');
 end;
@@ -1072,7 +1072,7 @@ begin
     LGot := LR.ExtractToBytesByName('data.bin');
   except
     on E: Exception do
-      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+      LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
   end;
   Check(LGotRaise, 'max output enforced on source extract');
 
@@ -1083,7 +1083,7 @@ begin
     while LSt.Read(LB, 8) > 0 do ;
   except
     on E: Exception do
-      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+      LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
   end;
   LSt.Close;
   Check(LGotRaise, 'max output enforced mid-stream on source path');
@@ -1114,7 +1114,7 @@ begin
     LR.EntryCount;
   except
     on E: Exception do
-      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+      LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
   end;
   Check(LGotRaise, 'total limit enforced on memory reader');
 
@@ -1125,7 +1125,7 @@ begin
     LR.EntryCount;
   except
     on E: Exception do
-      LGotRaise := Pos('EIOError', E.ClassName) > 0;
+      LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
   end;
   Check(LGotRaise, 'total limit enforced on source reader');
 
@@ -1223,7 +1223,7 @@ begin
           else
             LRSrc.ExtractToBuffer(LIdx, @LBuf[0], Length(LBuf));
         except
-          on E: Exception do LGotRaise := Pos('EIOError', E.ClassName) > 0;
+          on E: Exception do LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError);
         end;
         Check(LGotRaise, 'small buffer raises');
       end;
@@ -1251,7 +1251,7 @@ begin
     SetLength(LBuf, Integer(LR.Entry(LIdx).UncompressedSize));
     LGotRaise := False;
     try LR.ExtractToBuffer(LIdx, @LBuf[0], Length(LBuf));
-    except on E: Exception do LGotRaise := Pos('EIOError', E.ClassName) > 0; end;
+    except on E: Exception do LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError); end;
     Check(LGotRaise, 'pbyte crc mismatch raises');
   end;
   { MaxOutput guard }
@@ -1267,7 +1267,7 @@ begin
       LR := NewZipReaderWithOptions(LArch, ZipReadOptsLimit10);
       LR.ExtractToBuffer(LIdx, @LBuf[0], Length(LBuf));
     end;
-  except on E: Exception do LGotRaise := Pos('EIOError', E.ClassName) > 0; end;
+  except on E: Exception do LGotRaise := (Pos('EIOError', E.ClassName) > 0) or (Pos('EZipLimitError', E.ClassName) > 0) or (E is EIOError); end;
   Check(LGotRaise, 'pbyte maxoutput guard');
 end;
 

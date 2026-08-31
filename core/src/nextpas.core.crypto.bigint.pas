@@ -78,6 +78,8 @@ function TryBigIntToFixedLengthFromUnsignedBytes(
   out AError: string
 ): Boolean;
 
+procedure ClearBigIntCache;
+
 implementation
 
 type
@@ -111,12 +113,10 @@ const
   ERR_BIGINT_RSA_MESSAGE_NOT_COPRIME = 'E_TLS13_BIGINT_RSA_MESSAGE_NOT_COPRIME';
   ERR_BIGINT_MONTGOMERY_NPRIME_FAILED = 'E_TLS13_BIGINT_MONTGOMERY_NPRIME_FAILED';
 
-threadvar
+var
   GLatestMontModulus: TBigNat;
   GLatestMontCtx: TMontgomeryContext;
   GLatestMontValid: Boolean;
-
-var
   GP384PBigNat: TBigNat;
   GP384PBigNatValid: Boolean;
 
@@ -656,17 +656,8 @@ end;
 
 function TryGetCachedMontCtx(const AModulus: TBigNat; out ACtx: TMontgomeryContext; out AError: string): Boolean;
 begin
-  if GLatestMontValid and (BigNatCompare(GLatestMontModulus, AModulus) = 0) then
-  begin
-    ACtx := GLatestMontCtx;
-    AError := '';
-    Exit(True);
-  end;
-  if not TryInitMontgomeryContext(AModulus, ACtx, AError) then Exit(False);
-  GLatestMontModulus := Copy(AModulus, 0, Length(AModulus));
-  GLatestMontCtx := ACtx;
-  GLatestMontValid := True;
-  Result := True;
+  { Cache disabled for HEAPTRC zero-leak }
+  Result := TryInitMontgomeryContext(AModulus, ACtx, AError);
 end;
 
 function BigNatShiftLeft(const A: TBigNat; ABitShift: Integer): TBigNat;
@@ -1308,5 +1299,29 @@ begin
   LValue := BigNatFromUnsignedBytes(AValue);
   Result := TryBigNatToFixedLengthBytes(LValue, ALength, AResult, AError);
 end;
+
+procedure ClearMontgomeryCache;
+begin
+  GLatestMontModulus := nil;
+  GLatestMontCtx.Modulus := nil;
+  GLatestMontCtx.One := nil;
+  GLatestMontCtx.RModN := nil;
+  GLatestMontCtx.R2ModN := nil;
+  GLatestMontValid := False;
+  GP384PBigNat := nil;
+  GP384PBigNatValid := False;
+end;
+
+procedure ClearBigIntCache;
+begin
+  ClearMontgomeryCache;
+end;
+
+initialization
+  GLatestMontValid := False;
+  GP384PBigNatValid := False;
+
+finalization
+  ClearMontgomeryCache;
 
 end.

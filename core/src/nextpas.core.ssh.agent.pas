@@ -74,7 +74,8 @@ function SshAgentConnectFromEnv: TSshAgentClient;
 implementation
 
 uses
-  nextpas.core.net;
+  nextpas.core.ssh.intf,
+  nextpas.core.ssh.net.ffi;
 
 function SshAgentKeyBlobToAlgName(const ABlob: TBytes): string;
 var
@@ -119,12 +120,14 @@ end;
 constructor TSshAgentClient.CreateForPath(const APath: string);
 var
   LIO: IReadWriteCloser;
+  LDialer: ISshAgentDialer;
 begin
   inherited Create;
   if APath = '' then
     raise ESSHError.Create(sekIO, 'ssh agent: empty socket path');
+  LDialer := SshDefaultAgentDialer;
   try
-    LIO := UnixConnect(APath);
+    LIO := LDialer.DialAgent(APath);
   except
     on E: Exception do
       raise ESSHError.Create(sekIO, 'ssh agent: connect failed (' + APath + '): ' + E.Message);

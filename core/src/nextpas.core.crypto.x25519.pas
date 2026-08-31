@@ -30,6 +30,7 @@ function TryGenerateX25519KeyPair(out APrivateKey, APublicKey: TBytes;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.random,
   nextpas.core.crypto.field25519,
   nextpas.core.crypto.errors,
@@ -41,17 +42,6 @@ begin
     RaiseCryptoErrorFmt(cecInvalidArgument,
       'Invalid parameter "%s": value is nil, empty, or out of valid range',
       [AParamName]);
-end;
-
-function IsAllZero(const AData: TBytes): Boolean;
-var
-  I: Integer;
-  LOr: Byte;
-begin
-  LOr := 0;
-  for I := 0 to High(AData) do
-    LOr := LOr or AData[I];
-  Result := LOr = 0;
 end;
 
 function ClampX25519Scalar(const AScalar: TBytes): TBytes;

@@ -48,18 +48,12 @@ implementation
 uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.checkout;
+  nextpas.core.git.native.checkout,
+  nextpas.core.git.native.util;
 
-function TrimSpaces(const S: string): string;
-var
-  L, R: Integer;
+function TrimSpaces(const S: string): string; inline;
 begin
-  L := 1;
-  R := Length(S);
-  while (L <= R) and (S[L] <= ' ') do Inc(L);
-  while (R >= L) and (S[R] <= ' ') do Dec(R);
-  if R < L then Exit('');
-  Result := Copy(S, L, R - L + 1);
+  Result := GitTrimSpaces(S);
 end;
 
 function IsZeroOidLocal(const AOid: TGitOid): Boolean;

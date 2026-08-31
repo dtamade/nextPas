@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.fs*.pas`（9 个源文件）
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20
-**版本**：1.15
+**最后更新**：2026-08-31
+**版本**：1.16
 
 ---
 
@@ -143,3 +143,4 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-20 | 1.13 | R29 AddTree 递归监视 + Wd 路径消歧；INV-14；watch 11 | Claude |
 | 2026-07-20 | 1.14 | INV-15 ReadAt/WriteAt；R32 Remove | Claude |
 | 2026-07-20 | 1.15 | M2-W4 Win 支持矩阵 + wine 最小生产集 | Claude |
+| 2026-08-31 | 1.16 | 文档时效刷新：Watch/AddTree同步 | Claude |

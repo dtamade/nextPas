@@ -18,7 +18,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
-  nextpas.core.net,
+  nextpas.core.net.intf,
+  nextpas.core.ssh.intf,
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.ssh.base,
@@ -116,6 +117,10 @@ function SshClient: ISshClientBuilder;
 implementation
 
 uses
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
+  nextpas.core.mem.secure,
+  nextpas.core.ssh.net.ffi,
   nextpas.core.crypto.random,
   nextpas.core.crypto.ed25519,
   nextpas.core.crypto.hash,
@@ -124,7 +129,9 @@ uses
   nextpas.core.ssh.keys,
   nextpas.core.ssh.rsa,
   nextpas.core.ssh.agent,
-  nextpas.core.ssh.compress;
+  nextpas.core.ssh.compress,
+  nextpas.core.ssh.kex.curve25519,
+  nextpas.core.ssh.kex.dhgroup14;
 
 const
   DISCONNECT_BY_APPLICATION = 11;
@@ -401,7 +408,8 @@ var
   LPeer: TSshPeerKexInit;
   LNeg: TSshNegotiated;
   LK, LH, LHostBlob, LSigBlob: TBytes;
-  LKex: ISshKeyExchange;
+  LKexCurve: TSshKexCurve25519;
+  LKexDH: TSshKexDHGroup14;
 begin
   FTransport.ExchangeVersions;
 
@@ -413,13 +421,30 @@ begin
   LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
   FNegotiated := LNeg;
 
-  LKex := SshCreateKex(LNeg.KexAlg);
-  if LKex = nil then
-    raise ESSHError.Create(sekNegotiation, 'ssh kex: unsupported algorithm ' + LNeg.KexAlg);
-  FTransport.SendPacket(LKex.BuildInitPayload);
-  LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-  LKex.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-    LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
+  begin
+    LKexDH := TSshKexDHGroup14.Create;
+    try
+      FTransport.SendPacket(LKexDH.BuildInitPayload);
+      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+    finally
+      LKexDH.Free;
+    end;
+  end
+  else
+  begin
+    LKexCurve := TSshKexCurve25519.Create;
+    try
+      FTransport.SendPacket(LKexCurve.BuildInitPayload);
+      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+    finally
+      LKexCurve.Free;
+    end;
+  end;
 
   FHostKeyBlob := LHostBlob;
   if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
@@ -439,7 +464,8 @@ var
   LPeer: TSshPeerKexInit;
   LNeg: TSshNegotiated;
   LK, LH, LHostBlob, LSigBlob: TBytes;
-  LKex: ISshKeyExchange;
+  LKexCurve: TSshKexCurve25519;
+  LKexDH: TSshKexDHGroup14;
 begin
   if FClosed or not FAuthenticated then
     raise ESSHError.Create(sekProtocol, 'ssh session: rekey outside authenticated session');
@@ -450,13 +476,25 @@ begin
   LPeerInit := ExpectOneOf([SSH_MSG_KEXINIT]);
   LPeer := SshParseKexInit(LPeerInit);
   LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
-  LKex := SshCreateKex(LNeg.KexAlg);
-  if LKex = nil then
-    raise ESSHError.Create(sekNegotiation, 'ssh kex: unsupported algorithm ' + LNeg.KexAlg);
-  FTransport.SendPacket(LKex.BuildInitPayload);
-  LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-  LKex.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-    LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
+  begin
+    LKexDH := TSshKexDHGroup14.Create;
+    try
+      FTransport.SendPacket(LKexDH.BuildInitPayload);
+      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+    finally LKexDH.Free; end;
+  end else
+  begin
+    LKexCurve := TSshKexCurve25519.Create;
+    try
+      FTransport.SendPacket(LKexCurve.BuildInitPayload);
+      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
+      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
+        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
+    finally LKexCurve.Free; end;
+  end;
   if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
     raise ESSHError.Create(sekHostKey, 'ssh session: rekey unsupported host key blob');
   VerifyHostKey(LNeg.HostKeyAlg, LH, LSigBlob);
@@ -478,25 +516,33 @@ begin
     LW.Free;
   end;
 
-  LIvCs := SshKdfSha256(LKmpint, AH, Ord('A'), FSessionId,
-    SshCipherIvSize(ANegotiated.EncCs));
-  LIvSc := SshKdfSha256(LKmpint, AH, Ord('B'), FSessionId,
-    SshCipherIvSize(ANegotiated.EncSc));
-  LKeyCs := SshKdfSha256(LKmpint, AH, Ord('C'), FSessionId,
-    SshCipherKeySize(ANegotiated.EncCs));
-  LKeySc := SshKdfSha256(LKmpint, AH, Ord('D'), FSessionId,
-    SshCipherKeySize(ANegotiated.EncSc));
-  LMacCs := SshKdfSha256(LKmpint, AH, Ord('E'), FSessionId,
-    SshMacKeySize(ANegotiated.MacCs));
-  LMacSc := SshKdfSha256(LKmpint, AH, Ord('F'), FSessionId,
-    SshMacKeySize(ANegotiated.MacSc));
-
-
-  FTransport.SendPacket(SingleBytePayload(SSH_MSG_NEWKEYS));
-  ExpectOneOf([SSH_MSG_NEWKEYS]);
-  FTransport.SetNegotiatedCompression(ANegotiated);
-  FTransport.ApplyNewKeys(ANegotiated,
-    LIvCs, LKeyCs, LMacCs, LIvSc, LKeySc, LMacSc);
+  try
+    LIvCs := SshKdfSha256(LKmpint, AH, Ord('A'), FSessionId,
+      SshCipherIvSize(ANegotiated.EncCs));
+    LIvSc := SshKdfSha256(LKmpint, AH, Ord('B'), FSessionId,
+      SshCipherIvSize(ANegotiated.EncSc));
+    LKeyCs := SshKdfSha256(LKmpint, AH, Ord('C'), FSessionId,
+      SshCipherKeySize(ANegotiated.EncCs));
+    LKeySc := SshKdfSha256(LKmpint, AH, Ord('D'), FSessionId,
+      SshCipherKeySize(ANegotiated.EncSc));
+    LMacCs := SshKdfSha256(LKmpint, AH, Ord('E'), FSessionId,
+      SshMacKeySize(ANegotiated.MacCs));
+    LMacSc := SshKdfSha256(LKmpint, AH, Ord('F'), FSessionId,
+      SshMacKeySize(ANegotiated.MacSc));
+    FTransport.SendPacket(SingleBytePayload(SSH_MSG_NEWKEYS));
+    ExpectOneOf([SSH_MSG_NEWKEYS]);
+    FTransport.SetNegotiatedCompression(ANegotiated);
+    FTransport.ApplyNewKeys(ANegotiated,
+      LIvCs, LKeyCs, LMacCs, LIvSc, LKeySc, LMacSc);
+  finally
+    SecureZeroBytes(LKmpint);
+    SecureZeroBytes(LIvCs);
+    SecureZeroBytes(LIvSc);
+    SecureZeroBytes(LKeyCs);
+    SecureZeroBytes(LKeySc);
+    SecureZeroBytes(LMacCs);
+    SecureZeroBytes(LMacSc);
+  end;
 end;
 
 procedure TSshSession.DoServiceRequest;
@@ -842,14 +888,27 @@ function SshConnect(const AOptions: TSshConnectOptions): ISshSession;
 var
   LTcp: ITcpStream;
   LSession: TSshSession;
+  LDeadline: TDeadline;
+  LDialer: ISshDialer;
 begin
   if AOptions.Host = '' then
     raise ESSHError.Create(sekProtocol, 'ssh connect: host is required');
-  LTcp := TcpConnect(AOptions.Host, AOptions.Port);
+  LDialer := SshDefaultDialer;
+  LTcp := LDialer.Dial(AOptions.Host, AOptions.Port, Int64(AOptions.ConnectTimeoutMs));
   try
     LSession := TSshSession.CreateInternal(LTcp, AOptions);
+    LTcp := nil;
     try
-      RunAuthentication(LSession, AOptions);
+      if AOptions.ConnectTimeoutMs > 0 then
+        LDeadline := TDeadline.After(TDuration.FromMilliseconds(Int64(AOptions.ConnectTimeoutMs)))
+      else
+        LDeadline := TDeadline.Infinite;
+      LSession.FTransport.SetOverallDeadline(LDeadline);
+      try
+        RunAuthentication(LSession, AOptions);
+      finally
+        LSession.FTransport.SetOverallDeadline(TDeadline.Infinite);
+      end;
       Result := LSession;
     except
       LSession.Free;

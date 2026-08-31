@@ -51,7 +51,8 @@ uses
   nextpas.core.git.native.loose,
   nextpas.core.git.native.write,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.config;
+  nextpas.core.git.native.config,
+  nextpas.core.git.native.util;
 
 function NotesRefPath(const AGitDir, ARef: string): string;
 var Clean: string;

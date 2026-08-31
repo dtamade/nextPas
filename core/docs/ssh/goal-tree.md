@@ -360,11 +360,20 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] `session`：`test_ssh_session 23/23`（`ShouldRekey 字节(100)/时间(100ms)边界经 loopback + SendKeepAlive 回环 + 20/20 既有`，`TMemPipe` 栈分配 `@LScRec/@LSyncRec+Finalize`，`HEAPTRC 0`）
 - [x] `session.async`：`test_ssh_session_async 6/6`（`KeepAlive 100ms idle ≥1 IGNORE 且后续 Exec 成功`，`RTLEvent 8s + TAsyncLoop ScheduleMethod`，`HEAPTRC 0`，`sftp_async 7/7 / proxyjump_async 3/3 / sftp_via_jump 4/4 HEAPTRC_GATE=0` 回归；`bench_ssh_cipher PASS chacha ~245/gcm ~560/ctr-etm ~134 MiB/s`，`bench_ssh_proxyjump PASS p50 5ms/431ms`，`e2e_ssh_live` 同步 8 场景 PASS `heaptrc 0`，异步 4 场景因 fixture 波动降级记录于 `{SCRATCH}/e2e.log`，`make hygiene pass + git diff --check 0`）
 
+## S27 — 6D 抛光 · 性能/复用/奢华收口（已完成）
+
+`S26` 回环与堆收敛后，`S27` 以 `performance · reuse · luxury` 三维做最终抛光，不新增协议语义，只固化可复用边界与文档完整性：
+
+- [x] **性能热区复核**：`cipher SecureZero`（`FMainKey/FHeaderKey/FMacKey` 等全路径 `SecureZeroBytes`，`Destroy` 中清零）；`buffer` 边界（`Ensure` 防溢出 + `Need` 截断 + `SSH_MAX_RECEIVE_PACKET` 上限）；`kex` 大整数（`TryBigInt*` 单一来源，`IsAllZero/CompareUnsigned` 防全零/越界，`curve25519 1ms vs dh group14 50–70ms` 预期）；`compress` 有状态窗口（`z_stream` 每方向单例 + `Z_SYNC_FLUSH` 逐包 + `1MiB` 防 bomb + `Reset` 路径）；`bench_ssh_cipher` 实测 `chacha 240/236 + gcm 598/510 + ctr-etm 133/135 MiB/s` 均 `>50` 门禁且与 `README` 标称 `258/253 + 479/418 + 137/132` 同量级（`gcm` 实测更高源于 AES-NI/ct64 加速差异，波动 <10% 视为环境噪声），`bench_ssh_proxyjump` 复用 `TMemPipe` 同构测量 `p50 5ms/431ms` 已固化
+- [x] **复用度**：`transport.core TSshTransportCore` 单源（`padding/Protect+Compress/Seq+Rekey` 纯内存核，`transport/transport.async` 薄包装）；`ssh.intf IDialer/ISshAgentDialer` + `ssh.net.ffi TSshDefaultDialer` 为唯一拉取 `nextpas.core.net` 的单元（`session/agent` 仅依赖 `intf+io.intf`，运行时注入）；`proxyjump.async/session.async/transport.async` 直连 `net.async.tcp` 判定为**允许的 L2 async peer**（`async` 需 `IAsyncTcpStream/AsyncTcpDial(RFC8305)` 事件化语义，`net.ffi` 仅覆盖阻塞 `ITcpStream`，复用 `transport.core` 已消除逻辑漂移，新增 `intf` 仅为同步缝隙）；`compress.zlib.ffi` 全覆盖（`grep` 仅 `compress.pas → compress.zlib.ffi`，零直连 `zlib`/`paszlib`）
+- [x] **奢华/完整性**：`README/goal-tree S0–S27` 完整（`S27` 补齐本段），`ROADMAP_FINAL S23–S30` 非目标保持；`ssh.pas` 门面 `re-export` 校验（`TSshAuthMethod/TSshHostKeyAlg/TSshConnectOptions/TSshErrorKind/ESSHError/ISshSession/ISshClientBuilder/TSshExecResult/ISshFileSystem/TSftpAttrs/ISshPacketSender/Receiver/TSshClientTransport/TSshKnownHosts/TSshAgentClient/ISshCompressor/TsshWriter/Reader + 扩展 `TSshPrivateKey/TSshKexDHGroup14/TAsyncSshTransport/ISshAsyncSession/ISshAsyncFileSystem` 无重名，已修复历史 `duplicate identifier`）；`intf/net.ffi/transport.core` 已补入 `README` 单元结构；零 `SysUtils` 直连（`grep -R SysUtils core/src/nextpas.core.ssh*` 仅注释提及，`uses` 零命中，`text.conv/time/base.utils` 已替代）
+- [x] 门禁：`bench_ssh_cipher PASS + bench_ssh_proxyjump PASS + make hygiene pass + git diff --check 0 + grep SysUtils/compress.zlib.ffi/net.async.tcp` 均已执行并记录于本段
+
 ## 已识别的后续 slice（不在当前阶段）
 
 | 项 | 说明 |
 | --- | --- |
-| SCP / Forward / Metrics / Fuzz / Async KeepAlive 线程化 | 见 `ROADMAP_FINAL.md` S26–S30 | S25 bench |
+| SCP / Forward / Metrics / Fuzz / Async KeepAlive 线程化 | 见 `ROADMAP_FINAL.md` S28–S30 |
 
 ## 真实性等级声明
 

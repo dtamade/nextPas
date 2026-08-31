@@ -16,6 +16,8 @@ uses
   nextpas.core.vfs.os,
   nextpas.core.vfs.embedded,
   nextpas.core.vfs.sub,
+  nextpas.core.vfs.mount,
+  nextpas.core.vfs.overlay,
   nextpas.core.vfs.transform,
   nextpas.core.vfs.compressed,
   nextpas.core.vfs.util;
@@ -25,6 +27,8 @@ type
   TEntryArray = nextpas.core.vfs.base.TEntryArray;
   TStatInfo = nextpas.core.vfs.base.TStatInfo;
   IVfs = nextpas.core.vfs.intf.IVfs;
+  IVfsETag = nextpas.core.vfs.intf.IVfsETag;
+  IVfsServeMeta = nextpas.core.vfs.intf.IVfsServeMeta;
   TVfsMemEntry = nextpas.core.vfs.memtree.TVfsMemEntry;
   TVfsTreeBuilder = nextpas.core.vfs.memtree.TVfsTreeBuilder;
   TVfsVisitProc = nextpas.core.vfs.util.TVfsVisitProc;
@@ -38,6 +42,7 @@ type
 
   TVfsTransformFunc = nextpas.core.vfs.transform.TVfsTransformFunc;
   TVfsShouldTransformFunc = nextpas.core.vfs.transform.TVfsShouldTransformFunc;
+  TVfsMountEntry = nextpas.core.vfs.mount.TVfsMountEntry;
 
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs; inline;
 function CreateOsVfs(const ARoot: string): IVfs; inline;
@@ -48,10 +53,17 @@ function CreateTransformingVfs(const AInner: IVfs;
   const ATransform: TVfsTransformFunc;
   const AShould: TVfsShouldTransformFunc = nil): IVfs; inline;
 function CreateDecompressingVfs(const AInner: IVfs): IVfs; inline;
+function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry; inline;
+function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs; inline;
+function CreateOverlayVfs(const AList: array of IVfs): IVfs; inline;
 
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 function VfsIsRoot(const APath: string): Boolean; inline;
+function VfsPathHasPrefix(const APath, APrefix: string): Boolean; inline;
+function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
 function VfsNameCompare(const AA, AB: string): Integer; inline;
+function VfsETagStrong(const ASize, AModTime: Int64): string; inline;
+function VfsETagFNV(const AHash: UInt32): string; inline;
 procedure VfsSortEntries(var AItems: TEntryArray); inline;
 
 function VfsStat(const AFs: IVfs; const APath: string): TStatInfo; inline;
@@ -96,6 +108,21 @@ begin
   Result := nextpas.core.vfs.compressed.CreateDecompressingVfs(AInner);
 end;
 
+function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry;
+begin
+  Result := nextpas.core.vfs.mount.VfsMountEntry(APrefix, AFs);
+end;
+
+function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
+begin
+  Result := nextpas.core.vfs.mount.CreateMountedVfs(AMounts);
+end;
+
+function CreateOverlayVfs(const AList: array of IVfs): IVfs;
+begin
+  Result := nextpas.core.vfs.overlay.CreateOverlayVfs(AList);
+end;
+
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 begin
   Result := nextpas.core.vfs.base.VfsValidPath(APath, AAllowRoot);
@@ -106,9 +133,29 @@ begin
   Result := nextpas.core.vfs.base.VfsIsRoot(APath);
 end;
 
+function VfsPathHasPrefix(const APath, APrefix: string): Boolean;
+begin
+  Result := nextpas.core.vfs.base.VfsPathHasPrefix(APath, APrefix);
+end;
+
+function VfsIsParentPath(const AParent, AChild: string): Boolean;
+begin
+  Result := nextpas.core.vfs.base.VfsIsParentPath(AParent, AChild);
+end;
+
 function VfsNameCompare(const AA, AB: string): Integer;
 begin
   Result := nextpas.core.vfs.base.VfsNameCompare(AA, AB);
+end;
+
+function VfsETagStrong(const ASize, AModTime: Int64): string;
+begin
+  Result := nextpas.core.vfs.base.VfsETagStrong(ASize, AModTime);
+end;
+
+function VfsETagFNV(const AHash: UInt32): string;
+begin
+  Result := nextpas.core.vfs.base.VfsETagFNV(AHash);
 end;
 
 procedure VfsSortEntries(var AItems: TEntryArray);

@@ -98,9 +98,15 @@ procedure TIoReactor.Close;
 begin
   atomic_store(FRunning, 0, mo_release);
   try
-    ReleasePendingEntries(-ESysECANCELED);
+    try
+      ReleasePendingEntries(-ESysECANCELED);
+    except
+    end;
   finally
-    FRing.Close;
+    try
+      FRing.Close;
+    except
+    end;
     SetLength(FEntries, 0);
     FEntryCount := 0;
     FEntryCap := 0;
@@ -160,13 +166,9 @@ var
   LI: UInt32;
   LReleaseCount: UInt32;
   LReleases: array of TIoReactorPendingRelease;
-  LHasException: Boolean;
-  LExceptionMessage: string;
 begin
   if FPendingCount = 0 then
     Exit;
-  // First pass: count callbacks needing release to avoid over-allocating
-  // and to avoid leaking LReleases when LReleaseCount=0 (e.g. cancel ops with nil cb).
   LReleaseCount := 0;
   for LI := 0 to FEntryCount - 1 do
     if FEntries[LI].Active and Assigned(FEntries[LI].Callback) then
@@ -186,48 +188,42 @@ begin
     Exit;
   end;
   SetLength(LReleases, LReleaseCount);
-  LReleaseCount := 0;
-  for LI := 0 to FEntryCount - 1 do
-  begin
-    if not FEntries[LI].Active then
-      Continue;
-    if Assigned(FEntries[LI].Callback) then
+  try
+    LReleaseCount := 0;
+    for LI := 0 to FEntryCount - 1 do
     begin
-      LReleases[LReleaseCount].Callback := FEntries[LI].Callback;
-      LReleases[LReleaseCount].Context := FEntries[LI].Context;
-      LReleases[LReleaseCount].UserData := UInt64(LI);
-      Inc(LReleaseCount);
-    end;
-    FEntries[LI].Callback := nil;
-    FEntries[LI].Context := nil;
-    FEntries[LI].Active := False;
-    FEntries[LI].NextFree := -1;
-  end;
-  FEntryCount := 0;
-  FPendingCount := 0;
-  FFreeHead := -1;
-  LHasException := False;
-  LExceptionMessage := '';
-  FRing.Close;
-  for LI := 0 to LReleaseCount - 1 do
-  begin
-    try
-      LReleases[LI].Callback(LReleases[LI].UserData, AResult,
-        LReleases[LI].Context);
-    except
-      on E: Exception do
+      if not FEntries[LI].Active then
+        Continue;
+      if Assigned(FEntries[LI].Callback) then
       begin
-        if not LHasException then
-        begin
-          LHasException := True;
-          LExceptionMessage := E.Message;
-        end;
+        LReleases[LReleaseCount].Callback := FEntries[LI].Callback;
+        LReleases[LReleaseCount].Context := FEntries[LI].Context;
+        LReleases[LReleaseCount].UserData := UInt64(LI);
+        Inc(LReleaseCount);
+      end;
+      FEntries[LI].Callback := nil;
+      FEntries[LI].Context := nil;
+      FEntries[LI].Active := False;
+      FEntries[LI].NextFree := -1;
+    end;
+    FEntryCount := 0;
+    FPendingCount := 0;
+    FFreeHead := -1;
+    try
+      FRing.Close;
+    except
+    end;
+    for LI := 0 to LReleaseCount - 1 do
+    begin
+      try
+        LReleases[LI].Callback(LReleases[LI].UserData, AResult,
+          LReleases[LI].Context);
+      except
       end;
     end;
+  finally
+    SetLength(LReleases, 0);
   end;
-  SetLength(LReleases, 0);
-  if LHasException then
-    raise Exception.Create(LExceptionMessage);
 end;
 
 procedure TIoReactor.DispatchCqe(ACqe: PIoUringCqe);

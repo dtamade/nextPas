@@ -9,11 +9,10 @@ unit nextpas.core.system.sysutils;
  * All functions delegate to nextpas.core modules — this unit is a
  * thin facade, not an implementation.
  *
- * Format is a documented exception with dual-path dispatch: the safe
- * subset (%% %[-][0][width][.precision](s|d|u|x|X|f)) is handled by
- * nextpas.core.text.format.TextFormat, all other specifiers fall back
- * to SysUtils.Format (Fallback) — e/g/c/m/n/p, indexed args, dynamic
- * * width and other printf surface not covered by TextFormat.
+ * Format delegates to nextpas.core.text.format.TextFormat (owner);
+ * no RTL fallback — safe subset (%% %[-][0][width][.precision](s|d|u|x|X|f))
+ * is the supported surface; extended specifiers are handled by the owner
+ * where covered, otherwise raise via the text owner (thin facade).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -60,6 +59,8 @@ function StringOf(const ABytes: TBytes): string;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; overload;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; overload;
+function HexStr(const AValue: UInt64; const ADigits: Integer = 0): string; overload;
+function HexStr(const AAddr: Pointer): string; overload;
 
 { String manipulation }
 function Trim(const AStr: string): string;
@@ -138,67 +139,17 @@ implementation
 
 uses
   SysUtils,
-  nextpas.core.path,
-  nextpas.core.fs,
+  nextpas.core.bytes.ops,
+  nextpas.core.platform.error,
   nextpas.core.base.utils,
   nextpas.core.text.compare,
   nextpas.core.text.utils,
   nextpas.core.time;
 
-{ Returns True when AFmt uses any specifier outside the TextFormat safe set
-  (%% %[-][0][width][.precision](s|d|u|x|X|f), including %f with no explicit
-  precision). Such format strings fall back to the RTL SysUtils implementation,
-  whose printf-style surface (e/g/c/m/n/p, indexed args, dynamic * width, ...)
-  TextFormat does not cover. }
-function FormatNeedsSysUtilsFallback(const AFmt: string): Boolean; inline;
-var
-  LIdx, LLen: Integer;
+{ Text formatting — thin delegate to text owner (no RTL fallback). }
+function Format(const AFmt: string; const AArgs: array of const): string; inline;
 begin
-  Result := False;
-  LLen := Length(AFmt);
-  LIdx := 1;
-  while LIdx <= LLen do
-  begin
-    if AFmt[LIdx] <> '%' then
-    begin
-      Inc(LIdx);
-      Continue;
-    end;
-    Inc(LIdx);
-    if LIdx > LLen then Exit(False);
-    if AFmt[LIdx] = '%' then
-    begin
-      Inc(LIdx);
-      Continue;
-    end;
-    if AFmt[LIdx] = '-' then Inc(LIdx);
-    if (LIdx <= LLen) and (AFmt[LIdx] = '0') then Inc(LIdx);
-    while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
-      Inc(LIdx);
-    if (LIdx <= LLen) and (AFmt[LIdx] = '.') then
-    begin
-      Inc(LIdx);
-      while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
-        Inc(LIdx);
-    end;
-    if LIdx > LLen then Exit(False);
-    case AFmt[LIdx] of
-      'd', 'u', 'x', 'X', 's', 'f': ;
-    else
-      Exit(True);
-    end;
-    Inc(LIdx);
-  end;
-end;
-
-{ Text formatting }
-
-function Format(const AFmt: string; const AArgs: array of const): string;
-begin
-  if FormatNeedsSysUtilsFallback(AFmt) then
-    Result := SysUtils.Format(AFmt, AArgs)
-  else
-    Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
 end;
 
 function SameText(const A, B: string): Boolean;
@@ -288,20 +239,16 @@ begin
     Result := '0';
 end;
 
-function BytesOf(const AStr: string): TBytes;
+function BytesOf(const AStr: string): TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(AStr));
-  if Length(AStr) > 0 then
-    Move(AStr[1], Result[0], Length(AStr));
+  { single-source zero-copy: bytes.ops.StringToBytes = one Move, no temp string copy }
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
-function StringOf(const ABytes: TBytes): string;
+function StringOf(const ABytes: TBytes): string; inline;
 begin
-  Result := '';
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
+  { single-source zero-copy: bytes.ops.BytesToString = one Move, no temp bytes copy }
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
 end;
 
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
@@ -319,6 +266,16 @@ function Supports(const AInstance: IInterface; const AIID: TGuid;
   out AIntf): Boolean;
 begin
   Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
+end;
+
+function HexStr(const AValue: UInt64; const ADigits: Integer): string;
+begin
+  Result := nextpas.core.base.HexStr(AValue, ADigits);
+end;
+
+function HexStr(const AAddr: Pointer): string;
+begin
+  Result := nextpas.core.base.HexStr(PtrUInt(AAddr), 0);
 end;
 
 { String manipulation }
@@ -355,41 +312,40 @@ begin
   Result := System.Pos(ASubStr, AStr);
 end;
 
-{ Date/Time — delegates to platform }
-
-function Now: TDateTime;
+{ Date/Time — delegates to time owner (thin facade). }
+function Now: TDateTime; inline;
 begin
-  Result := SysUtils.Now;
+  Result := nextpas.core.time.DateTimeNow;
 end;
 
-function Date: TDateTime;
+function Date: TDateTime; inline;
 begin
-  Result := SysUtils.Date;
+  Result := Trunc(nextpas.core.time.DateTimeNow);
 end;
 
-function Time: TDateTime;
+function Time: TDateTime; inline;
 begin
-  Result := SysUtils.Time;
+  Result := Frac(nextpas.core.time.DateTimeNow);
 end;
 
-function DateTimeToStr(const AValue: TDateTime): string;
+function DateTimeToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.DateTimeToStr(AValue);
+  Result := nextpas.core.time.DateTimeToStr(AValue);
 end;
 
-function DateToStr(const AValue: TDateTime): string;
+function DateToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.DateToStr(AValue);
+  Result := nextpas.core.time.DateToStr(AValue);
 end;
 
-function TimeToStr(const AValue: TDateTime): string;
+function TimeToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.TimeToStr(AValue);
+  Result := nextpas.core.time.FormatDateTime('%H:%M:%S', AValue);
 end;
 
-function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
+function FormatDateTime(const AFmt: string; AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.FormatDateTime(AFmt, AValue);
+  Result := nextpas.core.time.FormatDateTime(AFmt, AValue);
 end;
 
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
@@ -409,104 +365,136 @@ begin
   Result := LDate.ToJulianDay - DELPHI_EPOCH_JDN;
 end;
 
-{ File system — delegates to nextpas.core.fs }
+{ File system — delegates to SysUtils (L0: FPC RTL, avoids L2 fs) }
 
-function FileExists(const AFileName: string): Boolean;
+function FileExists(const AFileName: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.FileExists(AFileName);
+  Result := SysUtils.FileExists(AFileName);
 end;
 
-function DirectoryExists(const ADirectory: string): Boolean;
+function DirectoryExists(const ADirectory: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DirectoryExists(ADirectory);
+  Result := SysUtils.DirectoryExists(ADirectory);
 end;
 
-function CreateDir(const ADir: string): Boolean;
+function CreateDir(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.ForceDirectories(ADir);
+  Result := SysUtils.CreateDir(ADir);
 end;
 
-function RemoveDir(const ADir: string): Boolean;
+function RemoveDir(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DeleteFile(ADir);
+  Result := SysUtils.RemoveDir(ADir);
 end;
 
-function ForceDirectories(const ADir: string): Boolean;
+function ForceDirectories(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.ForceDirectories(ADir);
+  Result := SysUtils.ForceDirectories(ADir);
 end;
 
-function DeleteFile(const AFileName: string): Boolean;
+function DeleteFile(const AFileName: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DeleteFile(AFileName);
+  Result := SysUtils.DeleteFile(AFileName);
 end;
 
-function RenameFile(const AOldName, ANewName: string): Boolean;
+function RenameFile(const AOldName, ANewName: string): Boolean; inline;
 begin
   Result := SysUtils.RenameFile(AOldName, ANewName);
 end;
 
 function CopyFile(const ASrcName, ADestName: string): Boolean;
+var
+  LSrc, LDst: File;
+  LBuf: array[0..8191] of Byte;
+  LRead, LWritten: LongInt;
 begin
-  Result := nextpas.core.fs.CopyFile(ASrcName, ADestName) >= 0;
+  // single-source copy via System file ops; no L2 fs dependency, resource-safe
+  Result := False;
+  if not SysUtils.FileExists(ASrcName) then Exit(False);
+  AssignFile(LSrc, ASrcName);
+  {$I-}
+  Reset(LSrc, 1);
+  if IOResult <> 0 then Exit(False);
+  try
+    AssignFile(LDst, ADestName);
+    Rewrite(LDst, 1);
+    if IOResult <> 0 then Exit(False);
+    try
+      repeat
+        BlockRead(LSrc, LBuf, SizeOf(LBuf), LRead);
+        if LRead > 0 then
+        begin
+          BlockWrite(LDst, LBuf, LRead, LWritten);
+          if (IOResult <> 0) or (LWritten <> LRead) then Exit(False);
+        end;
+      until LRead = 0;
+      Result := True;
+    finally
+      CloseFile(LDst);
+    end;
+  finally
+    CloseFile(LSrc);
+  end;
 end;
 
-{ Path manipulation — delegates to nextpas.core.path }
+{ Path manipulation — delegates to SysUtils (L0: FPC RTL, avoids L2 path) }
 
-function ExtractFilePath(const AFileName: string): string;
+function ExtractFilePath(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFilePath(AFileName);
+  Result := SysUtils.ExtractFilePath(AFileName);
 end;
 
-function ExtractFileName(const AFileName: string): string;
+function ExtractFileName(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileName(AFileName);
+  Result := SysUtils.ExtractFileName(AFileName);
 end;
 
-function ExtractFileExt(const AFileName: string): string;
+function ExtractFileExt(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileExt(AFileName);
+  Result := SysUtils.ExtractFileExt(AFileName);
 end;
 
-function ExtractFileDir(const AFileName: string): string;
+function ExtractFileDir(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileDir(AFileName);
+  Result := SysUtils.ExtractFileDir(AFileName);
 end;
 
-function ExtractFileDrive(const AFileName: string): string;
+function ExtractFileDrive(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileDrive(AFileName);
+  Result := SysUtils.ExtractFileDrive(AFileName);
 end;
 
-function ChangeFileExt(const AFileName, ANewExt: string): string;
+function ChangeFileExt(const AFileName, ANewExt: string): string; inline;
 begin
-  Result := nextpas.core.path.ChangeFileExt(AFileName, ANewExt);
+  Result := SysUtils.ChangeFileExt(AFileName, ANewExt);
 end;
 
-function IncludeTrailingPathDelimiter(const APath: string): string;
+function IncludeTrailingPathDelimiter(const APath: string): string; inline;
 begin
-  Result := nextpas.core.path.IncludeTrailingPathDelimiter(APath);
+  Result := SysUtils.IncludeTrailingPathDelimiter(APath);
 end;
 
-function ExcludeTrailingPathDelimiter(const APath: string): string;
+function ExcludeTrailingPathDelimiter(const APath: string): string; inline;
 begin
-  Result := nextpas.core.path.ExcludeTrailingPathDelimiter(APath);
+  Result := SysUtils.ExcludeTrailingPathDelimiter(APath);
 end;
 
-function ExpandFileName(const AFileName: string): string;
+function ExpandFileName(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExpandFileName(AFileName);
+  Result := SysUtils.ExpandFileName(AFileName);
 end;
 
-function GetTempDir: string;
+function GetTempDir: string; inline;
 begin
-  Result := nextpas.core.fs.GetTempDir;
+  Result := SysUtils.GetTempDir;
+  if (Result <> '') and (Result[Length(Result)] <> PathDelim) then
+    Result := Result + PathDelim;
 end;
 
-function GetTempDir(Global: Boolean): string;
+function GetTempDir(Global: Boolean): string; inline;
 begin
-  { Global flag ignored — single temp root on nextPas fs facade }
-  Result := nextpas.core.fs.GetTempDir;
+  // Global flag ignored — single temp root on SysUtils facade
+  Result := GetTempDir;
 end;
 
 function GetProcessID: SizeUInt;
@@ -515,16 +503,18 @@ begin
   Result := SizeUInt(System.GetProcessID);
 end;
 
-{ Working directory — delegates to platform }
+{ Working directory — delegates to SysUtils (L0: FPC RTL, avoids L2 fs) }
 
-function GetCurrentDir: string;
+function GetCurrentDir: string; inline;
 begin
   Result := SysUtils.GetCurrentDir;
 end;
 
-function SetCurrentDir(const ADir: string): Boolean;
+function SetCurrentDir(const ADir: string): Boolean; inline;
 begin
-  Result := SysUtils.SetCurrentDir(ADir);
+  {$I-}
+  ChDir(ADir);
+  Result := IOResult = 0;
 end;
 
 { Command line — delegates to System }
@@ -539,45 +529,57 @@ begin
   Result := System.ParamStr(AIndex);
 end;
 
-{ Environment — delegates to platform }
+{ Environment — delegates to SysUtils (L0: FPC RTL, avoids Support os.env) }
 
-function GetEnvironmentVariable(const AName: string): string;
+function GetEnvironmentVariable(const AName: string): string; inline;
 begin
   Result := SysUtils.GetEnvironmentVariable(AName);
 end;
 
-{ Timing — delegates to platform }
+{ Timing — delegates to time owner (thin facade). }
 
-procedure Sleep(AMilliseconds: Cardinal);
+procedure Sleep(AMilliseconds: Cardinal); inline;
 begin
-  SysUtils.Sleep(AMilliseconds);
+  nextpas.core.time.MsSleep(AMilliseconds);
 end;
 
-{ Error handling — delegates to SysUtils }
+{ Error handling — delegates to platform.error owner (thin facade). }
 
 function SysErrorMessage(AErrorCode: Integer): string;
+var
+  LBuf: array[0..255] of AnsiChar;
+  LLen: Int32;
 begin
-  Result := SysUtils.SysErrorMessage(AErrorCode);
+  LLen := nextpas.core.platform.error.platform_error_message(AErrorCode, @LBuf[0], SizeOf(LBuf));
+  if LLen > 0 then
+    SetString(Result, PAnsiChar(@LBuf[0]), LLen)
+  else if LLen = 0 then
+    Result := ''
+  else
+    Result := 'unknown error ' + nextpas.core.text.conv.IntToStr(AErrorCode);
 end;
 
-function GetLastOSError: Integer;
+function GetLastOSError: Integer; inline;
 begin
-  Result := SysUtils.GetLastOSError;
+  Result := nextpas.core.platform.error.platform_get_last_error();
 end;
 
-function ExceptAddr: Pointer;
+function ExceptAddr: Pointer; inline;
 begin
-  Result := SysUtils.ExceptAddr;
+  { single-source: owner nextpas.core.exception; inline zero-copy forward }
+  Result := nextpas.core.exception.ExceptAddr;
 end;
 
-function ExceptFrameCount: LongInt;
+function ExceptFrameCount: LongInt; inline;
 begin
-  Result := SysUtils.ExceptFrameCount;
+  { single-source: owner nextpas.core.exception; inline zero-copy forward }
+  Result := nextpas.core.exception.ExceptFrameCount;
 end;
 
-function ExceptFrameAt(const AIndex: LongInt): CodePointer;
+function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 begin
-  Result := SysUtils.ExceptFrames[AIndex];
+  { single-source: owner nextpas.core.exception; inline with bounds guard, no exception loss }
+  Result := nextpas.core.exception.ExceptFrameAt(AIndex);
 end;
 
 end.

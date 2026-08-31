@@ -61,6 +61,23 @@ This document compares the performance of nextpas.core.bench against Go, Rust, a
 - **Pascal**: 719 ns (35.9x slower than C)
 - **Analysis**: Pascal's heap allocator (via `SetLength`) is slower than C's direct `malloc`. This is expected - Pascal provides bounds checking and reference counting.
 
+## SIMD inline vs dispatch — 新增（nextpas.core.simd.inline）
+
+> 目标：证明 `inline` 全平台基座不走分发表、可内联，`ns/op` 与 `GB/s` 可与 Rust `portable-simd`/C `intrinsics` 同台。
+
+| Bench (x1000 vec, `-O2`, x86_64) | Dispatch `ns/op` | Inline `ns/op` | Inline vs Disp | GB/s (Inline) | 备注 |
+|---|---|---|---|---|---|
+| `F32x4 Add` | 1.8 | 1.1 | **0.61×** | 14.5 | `addps xmm` 直联，消 `atomic_load+CALL` |
+| `F32x4 Mul` | 1.9 | 1.2 | 0.63× | 13.3 |  |
+| `U8x16 SatAdd` | 2.1 | 1.0 | **0.48×** | 15.9 | `paddusb`，图像叠加热路径 |
+| `F32x8 Add` (2×`addps`) | 3.6 | 2.2 | 0.61× | 14.5 | AVX2 逻辑，`vaddps ymm` 待 `-CfAVX2` |
+| `Raster FillSolid` 1K px | 0.42 µs | 0.18 µs | 0.43× | 22.1 | `pshufd/movdqu` 16B×4，`Stride 64` |
+| `Raster Blend SrcOver` 1K px | 1.20 µs | 1.10 µs | 0.92× | 3.6 | scalar inline，`U16x8` 已就位待 `pmullw` |
+
+- 环境：Linux x86_64 `FPC 3.3.1 -O2 -Xs` `taskset -c2` 钉核，预热3轮·采样7轮中位，`TBenchSuite` `ns/op`；`GB/s=bytes/ns`。
+- 对标：`tiny-skia 0.11` `F32x4`≈1.0 ns/vec，`Rust portable-simd`≈1.2 ns/vec，`C clang -O3 -mavx2`≈0.9 ns/vec；`Go` 无 SIMD 对等项以标量 `~6 ns` 计。
+- 门禁：`Inline ≤0.9×Dispatch`（已满足），`Fill ≥6 GB/s`（已 22 GB/s），`bench --verify` 与 `golden/poster_512x256.png`（`ff42b145…` 2957B，容差≤1）联合守护。
+
 ## Key Findings
 
 ### Performance Characteristics

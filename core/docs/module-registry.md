@@ -9,11 +9,9 @@ completion claim.
 | Level | Meaning |
 | --- | --- |
 | `source-contract` | Source, docs, owner boundary, unsupported behavior, or public surface is locked by a focused contract. |
-| `forced-compile` | A non-native host/branch compiles, but no runtime behavior is proven. Carrier for platform facades: `test_platform_simulated_host_compile_matrix` (5 legs: darwin/android/freebsd/unix via `-dNEXTPAS_FORCE_HOST_*`, windows via `-Twin64 -Px86_64`; all 29 `platform.*` facades) — compile coherence only. |
-| `focused-runtime` | A focused gate ran behavior on a named host or path. Today most L1/L2/L3 are Linux x86_64 focused-runtime by design. |
-| `ci-runtime-matrix` | Runtime proof is repeated in CI across the named host/arch matrix (durable). Currently **platform-scoped** only: Windows 28-gate `platform-windows-ci-matrix.sh` on `windows-latest` + macOS layer A 10-gate `platform-macos-ci-matrix.sh`. L2/L3 intentionally remain `focused-runtime` (Linux x86_64); host variance is owned by L0 `platform`. |
-
-> **Host matrix separation (design):** `ci-runtime-matrix` (durable CI runtime) and the simulated-host `forced-compile` matrix are intentionally separate. The simulated-host matrix (`core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix`, 5 legs × all 29 `platform.*` facades) proves compile coherence and stays `forced-compile`; it does **not** promote to `ci-runtime-matrix`. The durable `ci-runtime-matrix` is currently **platform-only** (Windows 28 + macOS 10 platform gates, see `core/docs/platform/runtime-truth-matrix.md` and `core/docs/platform/host-capability-matrix.md`). L2/L3 modules (fs, net, http, vfs, crypto, etc.) therefore correctly show `focused-runtime` on Linux x86_64 in the registry — their host variance is delegated to L0 `platform` via layering, not claimed independently. Promoting any L2/L3 to `ci-runtime-matrix` requires explicit consumer + CI ownership and would be recorded here and in `runtime-truth-matrix.md`.
+| `forced-compile` | A non-native host/branch compiles, but no runtime behavior is proven. |
+| `focused-runtime` | A focused gate ran behavior on a named host or path. |
+| `ci-runtime-matrix` | Runtime proof is repeated in CI across the named host/arch matrix. |
 
 ## Registry
 
@@ -34,6 +32,7 @@ completion claim.
 | `coroutine` | L3 | coroutine framework | `nextpas.core.coroutine` | L0-L2 | focused-runtime |
 | `crypto` | L2 | crypto primitives | `nextpas.core.crypto` | L0-L1, audited provider seams | focused-runtime partial |
 | `csv` | L2 | CSV format | `nextpas.core.csv` | L0-L1 | focused-runtime |
+| `db` | L3 | unified database family (IDbConnection over sqlite/pg/mysql/odbc/redis/dm 6 backends + capprobe ServerVersion + BulkCopy skeleton, backends at db.sqlite/db.pg + dm DPI native) | `nextpas.core.db` | L0-L2 | focused-runtime |
 | `encoding` | L1 | encoding primitives | `nextpas.core.encoding` | L0, documented bytes/text seam | focused-runtime |
 | `errors` | L0 | error taxonomy | `nextpas.core.errors` | RTL exception bridge, base/exception | focused-runtime |
 | `event` | L3 | event bus | `nextpas.core.event` | L0-L2 | focused-runtime |
@@ -70,6 +69,7 @@ completion claim.
 | `template` | L3 | templates | `nextpas.core.template` | L0-L2 | source-contract |
 | `testing` | L1 | test framework | `nextpas.core.testing` | L0 | focused-runtime |
 | `text` | L1 | text/Unicode | `nextpas.core.text` | L0, documented encoding seam | focused-runtime |
+| `text.sql` | L1 | SQL quoting (escape/ident/literal single-source, zero SysUtils, NUL guard) | `nextpas.core.text.sql` | L0 (exception) | focused-runtime — `SqlEscape/QuoteIdent/QuoteQualified/Literal*` 单源供 db 族与 http/config 复用，`db.base` 薄包装 |
 | `thread` | L1 | thread abstractions | `nextpas.core.thread` | L0, platform thread/sync | focused-runtime |
 | `time` | L1 | duration/date/time | `nextpas.core.time` | L0, platform time | focused-runtime |
 | `tls` | L2 | TLS providers/protocol | `nextpas.core.tls` | L0-L1, provider FFI allowlist | source-contract, focused-runtime fragments |
@@ -89,7 +89,5 @@ completion claim.
 2. System final facade: TypInfo/SysUtils/Classes decisions tied to real compiler
    and core consumers.
 3. Mem L0 debt zero: remove or re-home the allowlisted L0 dependency debt.
-4. Platform runtime truth matrix: `runtime-truth-matrix.md` is **platform-scoped** by design
-   (20 rows); real host runtime (`ci-runtime-matrix` + `focused-runtime`) stays
-   separate from `source-contract`/`forced-compile` (simulated-host 5-leg matrix).
-   L2/L3 host truth is owned by L0 `platform` until explicit promotion.
+4. Platform runtime truth matrix: real host runtime evidence stays separate from
+   source-contract and forced-compile truth.

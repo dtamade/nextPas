@@ -52,157 +52,41 @@ uses
   nextpas.core.fs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.revparse;
+  nextpas.core.git.native.revparse,
+  nextpas.core.git.native.common,
+  nextpas.core.git.native.util,
+  nextpas.core.git.native.wildmatch;
 
-function TrimSpaces(const S: string): string;
-var A,B: Integer;
+function TrimSpaces(const S: string): string; inline;
 begin
-  A:=1; B:=Length(S);
-  while (A<=B) and (S[A] in [' ',#9,#10,#13]) do Inc(A);
-  while (B>=A) and (S[B] in [' ',#9,#10,#13]) do Dec(B);
-  if B<A then Exit('');
-  Result:=Copy(S,A,B-A+1);
+  Result := GitTrimSpaces(S);
 end;
 
-function IsZeroOidLocal(const AOid: TGitOid): Boolean;
-var I: Integer;
-begin
-  for I:=0 to GitOidRawLen-1 do if AOid.Bytes[I]<>0 then Exit(False);
-  Result:=True;
-end;
-
-function LocalEndsWith(const S,Suf: string): Boolean;
-begin Result:=(Length(S)>=Length(Suf)) and (Copy(S,Length(S)-Length(Suf)+1,Length(Suf))=Suf); end;
-
-function LocalSplitLines(const S: string): TStringArray;
-var P,Start: Integer;
-begin
-  Result:=nil; Start:=1;
-  for P:=1 to Length(S)+1 do if (P>Length(S)) or (S[P]=#10) then
-  begin SetLength(Result,Length(Result)+1); Result[High(Result)]:=Copy(S,Start,P-Start); Start:=P+1; end;
-end;
-
-function StripCR(const S: string): string;
+function StripCR(const S: string): string; inline;
 begin if (Length(S)>0) and (S[Length(S)]=#13) then Result:=Copy(S,1,Length(S)-1) else Result:=S; end;
 
-function WorktreeDir(const AGitDir: string): string;
-var P: Integer;
+// FindBlobInTree / PeelToTree reused from nextpas.core.git.native.common (single source)
+// WildSegment/SegmentsMatch reused from nextpas.core.git.native.wildmatch (single source, inline, zero-copy)
+
+// ---- pattern matching (single source via wildmatch) ----
+
+function BasenameOfAttr(const APath: string): string; inline;
+var I: Integer;
 begin
-  if LocalEndsWith(AGitDir,'/.git') then Result:=Copy(AGitDir,1,Length(AGitDir)-5)
-  else if LocalEndsWith(AGitDir,'.git') then begin P:=Length(AGitDir); while (P>0) and (AGitDir[P]<>'/') do Dec(P); if P>0 then Result:=Copy(AGitDir,1,P-1) else Result:='.'; end
-  else Result:=AGitDir;
+  for I:=Length(APath) downto 1 do if APath[I]='/' then Exit(Copy(APath,I+1,MaxInt));
+  Result:=APath;
 end;
 
-function FindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
-var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer;
-begin
-  Result:=False;
-  if IsZeroOidLocal(ATreeOid) then Exit;
-  Data:=ARepo.ReadObject(ATreeOid, Kind);
-  if Kind<>gokTree then Exit;
-  Entries:=GitParseTree(Data);
-  for I:=0 to High(Entries) do if Entries[I].Name=AName then begin AOid:=Entries[I].Oid; Result:=True; Exit; end;
-end;
-
-function PeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var Kind: TGitObjectKind; Data: TBytes; CInfo: TGitCommitInfo; TInfo: TGitTagInfo; Depth: Integer;
-begin
-  Result:=AOid; Depth:=0;
-  while Depth<16 do
-  begin
-    Data:=ARepo.ReadObject(Result, Kind);
-    case Kind of
-      gokCommit: begin CInfo:=GitParseCommit(Data); Result:=CInfo.Tree; Exit; end;
-      gokTree: Exit;
-      gokTag: begin TInfo:=GitParseTag(Data); Result:=TInfo.Target; Inc(Depth); end;
-    else raise EGitError.CreateFmt('attributes: object %s is not tree/commit/tag', [GitOidToHex(AOid)]);
-    end;
-  end;
-  raise EGitError.Create('attributes: tag peel too deep');
-end;
-
-// ---- pattern matching ----
-
-function PreprocessPattern(const APat: string): string;
-var I: Integer; R: string;
-begin
-  // Replace "**" with #1 (any including /), single "*" with #2 (any except /)
-  R:='';
-  I:=1;
-  while I<=Length(APat) do
-  begin
-    if (APat[I]='*') and (I<Length(APat)) and (APat[I+1]='*') then
-    begin
-      R:=R+Chr(1);
-      Inc(I,2);
-      // optional single '/' after ** ? keep as is; **/ is handled as #1 + '/'
-    end else if APat[I]='*' then
-    begin R:=R+Chr(2); Inc(I); end
-    else begin R:=R+APat[I]; Inc(I); end;
-  end;
-  Result:=R;
-end;
-
-function WildMatchRec(const Pat, Str: string; PI, SI: Integer; var Memo: array of Integer; PLen, SLen: Integer): Boolean;
-var Res: Boolean;
-  function MemoGet(p,s: Integer): Integer; begin Result:=Memo[p*(SLen+2)+s]; end;
-  procedure MemoSet(p,s: Integer; V: Integer); begin Memo[p*(SLen+2)+s]:=V; end;
-begin
-  if MemoGet(PI,SI)<> -1 then Exit(MemoGet(PI,SI)=1);
-  if PI>PLen then
-  begin
-    Res:=SI>SLen;
-    MemoSet(PI,SI, Ord(Res));
-    Exit(Res);
-  end;
-  if Pat[PI]=Chr(1) then // **
-  begin
-    // ** matches any sequence including /
-    if WildMatchRec(Pat,Str,PI+1,SI,Memo,PLen,SLen) then begin MemoSet(PI,SI,1); Exit(True); end;
-    if SI<=SLen then if WildMatchRec(Pat,Str,PI,SI+1,Memo,PLen,SLen) then begin MemoSet(PI,SI,1); Exit(True); end;
-    MemoSet(PI,SI,0); Exit(False);
-  end else if Pat[PI]=Chr(2) then // * matches any except /
-  begin
-    if WildMatchRec(Pat,Str,PI+1,SI,Memo,PLen,SLen) then begin MemoSet(PI,SI,1); Exit(True); end;
-    if (SI<=SLen) and (Str[SI]<>'/') then if WildMatchRec(Pat,Str,PI,SI+1,Memo,PLen,SLen) then begin MemoSet(PI,SI,1); Exit(True); end;
-    MemoSet(PI,SI,0); Exit(False);
-  end else if Pat[PI]='?' then
-  begin
-    if (SI<=SLen) and (Str[SI]<>'/') then Res:=WildMatchRec(Pat,Str,PI+1,SI+1,Memo,PLen,SLen)
-    else Res:=False;
-    MemoSet(PI,SI, Ord(Res)); Exit(Res);
-  end else
-  begin
-    if (SI<=SLen) and (Pat[PI]=Str[SI]) then Res:=WildMatchRec(Pat,Str,PI+1,SI+1,Memo,PLen,SLen)
-    else Res:=False;
-    MemoSet(PI,SI, Ord(Res)); Exit(Res);
-  end;
-end;
-
-function AttrPatternMatches(const APattern, APath: string): Boolean;
-var Pat,Str: string; Memo: array of Integer; PLen,SLen,I: Integer; HasSlash: Boolean;
+function AttrPatternMatches(const APattern, APath: string): Boolean; inline;
 begin
   if APattern='' then Exit(False);
-  HasSlash:=Pos('/',APattern)>0;
-  if not HasSlash then
-  begin
-    // match basename only
-    Str:=APath;
-    I:=Length(Str);
-    while (I>0) and (Str[I]<>'/') do Dec(I);
-    Str:=Copy(Str,I+1,MaxInt);
-    Pat:=PreprocessPattern(APattern);
-  end else
-  begin
-    Pat:=PreprocessPattern(APattern);
-    Str:=APath;
-    // handle leading '/' anchor: git treats "/foo" as anchored, but we treat as without '/'
-    if (Length(Pat)>0) and (Pat[1]='/') then Pat:=Copy(Pat,2,MaxInt);
-  end;
-  PLen:=Length(Pat); SLen:=Length(Str);
-  SetLength(Memo,(PLen+2)*(SLen+2));
-  for I:=0 to High(Memo) do Memo[I]:=-1;
-  Result:=WildMatchRec(Pat,Str,1,1,Memo,PLen,SLen);
+  // no '/' -> basename-only via GitWildSegment (wildmatch single source, inline, zero-copy via const)
+  if Pos('/',APattern)=0 then
+    Exit(GitWildSegment(APattern, BasenameOfAttr(APath)));
+  // anchored: strip leading '/' ("/foo" -> "foo") then delegate to GitSegmentsMatch (wildmatch, '**' per segment)
+  if (Length(APattern)>0) and (APattern[1]='/') then
+    Exit(GitSegmentsMatch(Copy(APattern,2,MaxInt), APath));
+  Result:=GitSegmentsMatch(APattern, APath);
 end;
 
 function SplitWs(const S: string): TStringArray;
@@ -264,7 +148,7 @@ function GitParseAttributes(const AText: string): TGitAttrEntries;
 var Lines: TStringArray; I,J: Integer; L,Pat: string; Tokens: TStringArray; Entry: TGitAttrEntry; Attr: TGitAttr;
 begin
   Result:=nil;
-  Lines:=LocalSplitLines(AText);
+  Lines:=GitSplitLines(AText);
   for I:=0 to High(Lines) do
   begin
     L:=TrimSpaces(StripCR(Lines[I]));
@@ -297,14 +181,14 @@ function GitLoadAttributes(const AGitDir: string): TGitAttrEntries;
 var WDir,F: string; Data: TBytes; Repo: TNativeRepository; Oid,TreeOid,BlobOid: TGitOid; Kind: TGitObjectKind;
 begin
   Result:=nil;
-  WDir:=WorktreeDir(AGitDir);
+  WDir:=GitWorktreeDir(AGitDir);
   F:=PathJoin2(WDir,'.gitattributes');
   if FileExists(F) then begin Data:=ReadFile(F); Exit(GitParseAttributes(Data)); end;
   try Oid:=GitRevParse(AGitDir,'HEAD'); except Exit(nil); end;
   Repo:=TNativeRepository.Create(AGitDir);
   try
-    try TreeOid:=PeelToTree(Repo,Oid); except Exit(nil); end;
-    if not FindBlobInTree(Repo,TreeOid,'.gitattributes',BlobOid) then Exit(nil);
+    try TreeOid:=GitPeelToTree(Repo,Oid); except Exit(nil); end;
+    if not GitFindBlobInTree(Repo,TreeOid,'.gitattributes',BlobOid) then Exit(nil);
     Data:=Repo.ReadObject(BlobOid, Kind);
     if Kind<>gokBlob then Exit(nil);
     Result:=GitParseAttributes(Data);

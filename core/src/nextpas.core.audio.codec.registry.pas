@@ -26,22 +26,28 @@ function AudioOpenFileStreaming(const APath: string): IAudioSource;
 
 implementation
 
+// L2 explicit allow: codec.registry is the sole audio unit that touches L2 fs.
+// L1 io provides IStream seam; fs.Open is the container-I/O entry point.
+// Same-layer L2->L2 is exempt here and registered in DESIGN.md s2 and
+// core/docs/core-module-registry.md (audio: L0-L1 plus io/fs). No ffi.
 uses
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.aiff,
   nextpas.core.audio.errors,
   nextpas.core.exception,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.sync.mutex;
 
 var
   GFactories: array of TDecoderFactory;
-  GLock: TRTLCriticalSection;
+  GLock: TRecursiveMutex;
   GInited: Boolean;
 
 procedure EnsureInited;
 begin
   if GInited then Exit;
-  InitCriticalSection(GLock);
+  if not Assigned(GLock) then
+    GLock := TRecursiveMutex.Create;
   GInited := True;
   AudioRegisterDecoder(@CreateWavDecoder);
   AudioRegisterDecoder(@CreateAiffDecoder);
@@ -54,7 +60,7 @@ begin
   if not Assigned(AFactory) then
     raise EInvalidArgument.Create('AudioRegisterDecoder: factory is nil');
   EnsureInited;
-  EnterCriticalSection(GLock);
+  GLock.Acquire;
   try
     L := Length(GFactories);
     SetLength(GFactories, L + 1);
@@ -62,18 +68,18 @@ begin
       Move(GFactories[0], GFactories[1], L * SizeOf(TDecoderFactory));
     GFactories[0] := AFactory;
   finally
-    LeaveCriticalSection(GLock);
+    GLock.Release;
   end;
 end;
 
 function SnapshotFactories: TDecoderFactoryArray;
 begin
   EnsureInited;
-  EnterCriticalSection(GLock);
+  GLock.Acquire;
   try
     Result := Copy(GFactories);
   finally
-    LeaveCriticalSection(GLock);
+    GLock.Release;
   end;
 end;
 
@@ -241,7 +247,7 @@ initialization
   GInited := False;
 
 finalization
-  if GInited then
-    DoneCriticalSection(GLock);
+  if Assigned(GLock) then
+    GLock.Free;
 
 end.

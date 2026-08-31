@@ -35,7 +35,7 @@ type
     ServerSigBlob: TBytes;
   end;
 
-  TSshKexDHGroup14 = class(TInterfacedObject, ISshKeyExchange)
+  TSshKexDHGroup14 = class
   private
     FPriv: TBytes;
     FPub: TBytes;
@@ -43,6 +43,7 @@ type
     FGenerator: TBytes;
   public
     constructor Create;
+    destructor Destroy; override;
 
     function AlgorithmName: string;
     property ClientE: TBytes read FPub;
@@ -62,9 +63,11 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.random,
   nextpas.core.crypto.hash,
-  nextpas.core.crypto.bigint;
+  nextpas.core.crypto.bigint,
+  nextpas.core.mem.secure;
 
 function SshDHGroup14Prime: TBytes;
 const
@@ -103,39 +106,30 @@ end;
 function SshBuildDHGroup14HashInput(const AVc, AVs: string;
   const AClientKexInit, AServerKexInit, AHostKeyBlob,
   AClientE, AServerF, ASharedK: TBytes): TBytes;
-begin
-  Result := SshBuildKexHashInput(AVc, AVs, AClientKexInit, AServerKexInit,
-    AHostKeyBlob, AClientE, AServerF, ASharedK, False, False);
-end;
-
-function IsAllZero(const ABuf: TBytes): Boolean;
 var
-  I: Integer;
+  LW: TsshWriter;
 begin
-  for I := 0 to High(ABuf) do
-    if ABuf[I] <> 0 then
-      Exit(False);
-  Result := True;
-end;
-
-function CompareUnsigned(const A, B: TBytes): Integer;
-var
-  I, LA, LB, SA, SB: Integer;
-begin
-  LA := Length(A); SA := 0;
-  while (SA < LA) and (A[SA] = 0) do Inc(SA);
-  LB := Length(B); SB := 0;
-  while (SB < LB) and (B[SB] = 0) do Inc(SB);
-  LA := LA - SA;
-  LB := LB - SB;
-  if LA < LB then Exit(-1);
-  if LA > LB then Exit(1);
-  for I := 0 to LA-1 do
-  begin
-    if A[SA+I] < B[SB+I] then Exit(-1);
-    if A[SA+I] > B[SB+I] then Exit(1);
+  LW := TsshWriter.Create(2048);
+  try
+    LW.PutStringText(AVc);
+    LW.PutStringText(AVs);
+    LW.PutStringBytes(AClientKexInit);
+    LW.PutStringBytes(AServerKexInit);
+    LW.PutStringBytes(AHostKeyBlob);
+    LW.PutMPInt(AClientE);
+    LW.PutMPInt(AServerF);
+    LW.PutMPInt(ASharedK);
+    Result := LW.ToBytes;
+  finally
+    LW.Free;
   end;
-  Result := 0;
+end;
+
+destructor TSshKexDHGroup14.Destroy;
+begin
+  SecureZeroBytes(FPriv);
+  SecureZeroBytes(FPub);
+  inherited;
 end;
 
 constructor TSshKexDHGroup14.Create;
@@ -147,7 +141,7 @@ begin
   FPrime := SshDHGroup14Prime;
   FGenerator := SshDHGroup14Generator;
   FPriv := GenerateSecureRandomBytes(32);
-  if (Length(FPriv) = 0) or IsAllZero(FPriv) then
+  if (Length(FPriv) = 0) or IsZeroBytes(FPriv) then
   begin
     FPriv[0] := $7F;
     FPriv[High(FPriv)] := $01;
@@ -212,17 +206,17 @@ begin
 
   if Length(LServerF) = 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f empty');
-  if (CompareUnsigned(LServerF, SshDHGroup14Generator) <= 0)
-    or (CompareUnsigned(LServerF, SshDHGroup14Prime) >= 0) then
+  if (CompareUnsignedSpan(StripLeadingZeroView(LServerF), StripLeadingZeroView(SshDHGroup14Generator)) <= 0)
+    or (CompareUnsignedSpan(StripLeadingZeroView(LServerF), StripLeadingZeroView(SshDHGroup14Prime)) >= 0) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f out of range');
-  if IsAllZero(LServerF) then
+  if IsZeroBytes(LServerF) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f all zero');
 
   if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, SshDHGroup14Prime, LShared, LErr) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
-  if IsAllZero(LShared) then
+  if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
-  if CompareUnsigned(LShared, SshDHGroup14Prime) >= 0 then
+  if CompareUnsignedSpan(StripLeadingZeroView(LShared), StripLeadingZeroView(SshDHGroup14Prime)) >= 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: shared secret out of range');
 
   Result.SharedSecret := LShared;

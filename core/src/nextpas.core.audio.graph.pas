@@ -6,9 +6,8 @@ interface
 
 uses
   SysUtils,
-  Classes,
-  SyncObjs,
   Math,
+  nextpas.core.sync.mutex,
   nextpas.core.base,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
@@ -33,7 +32,7 @@ type
   private
     FFormat: TAudioFormat;
     FState: TGraphState;
-    FLock: TCriticalSection;
+    FLock: TRecursiveMutex;
     FNodes: array of TGraphNode;
     FProcessors: array of TProcessorSlot;
     FNextId: Integer;
@@ -43,6 +42,8 @@ type
     FViolations: Int64;
     FScratchTmp: TBytes;
     FScratchOut: TBytes;
+    FSnapshotNodes: array of TGraphNode;
+    FSnapshotProcs: array of TProcessorSlot;
     FNodeFree: array of Integer;
     FProcFree: array of Integer;
     FNodeDead: Integer;
@@ -50,6 +51,8 @@ type
     function FindNode(AId: Integer): Integer;
     function FindProcessor(AId: Integer): Integer;
     procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
+    procedure EnsureSnapshotNodes(ANeeded: Integer); inline;
+    procedure EnsureSnapshotProcs(ANeeded: Integer); inline;
     procedure MaybeCompactNodes;
     procedure MaybeCompactProcs;
   public
@@ -88,7 +91,7 @@ begin
     raise EAudioGraphError.Create('Graph: format must be sfF32 (canonical mix format)');
   FFormat := AFormat;
   FState := gsStopped;
-  FLock := TCriticalSection.Create;
+  FLock := TRecursiveMutex.Create;
   SetLength(FNodes, 0);
   SetLength(FProcessors, 0);
   FNextId := 1;
@@ -98,6 +101,8 @@ begin
   FViolations := 0;
   SetLength(FScratchTmp, 0);
   SetLength(FScratchOut, 0);
+  SetLength(FSnapshotNodes, 0);
+  SetLength(FSnapshotProcs, 0);
   SetLength(FNodeFree, 0);
   SetLength(FProcFree, 0);
   FNodeDead := 0;
@@ -115,20 +120,20 @@ begin Result := FFormat; end;
 
 function TAudioGraph.GetState: TGraphState;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try Result := FState;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TAudioGraph.NodeCount: Integer;
 var I, C: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     C := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(C);
     Result := C;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TAudioGraph.FindNode(AId: Integer): Integer;
@@ -146,9 +151,27 @@ begin
 end;
 
 procedure TAudioGraph.EnsureScratch(var AScratch: TBytes; ANeeded: Integer);
+var LCap: Integer;
 begin
-  if Length(AScratch) < ANeeded then
-    SetLength(AScratch, ANeeded);
+  LCap := Length(AScratch);
+  AudioEnsureCapacity(LCap, ANeeded, 256);
+  if Length(AScratch) <> LCap then SetLength(AScratch, LCap);
+end;
+
+procedure TAudioGraph.EnsureSnapshotNodes(ANeeded: Integer);
+var LCap: Integer;
+begin
+  LCap := Length(FSnapshotNodes);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotNodes) <> LCap then SetLength(FSnapshotNodes, LCap);
+end;
+
+procedure TAudioGraph.EnsureSnapshotProcs(ANeeded: Integer);
+var LCap: Integer;
+begin
+  LCap := Length(FSnapshotProcs);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FSnapshotProcs) <> LCap then SetLength(FSnapshotProcs, LCap);
 end;
 
 procedure TAudioGraph.MaybeCompactNodes;
@@ -194,7 +217,7 @@ begin
   if (ASource.Format.SampleRate <> FFormat.SampleRate) or (ASource.Format.Channels <> FFormat.Channels) then
     raise EAudioGraphError.Create('AddSource: format mismatch');
   if IsNan(AGain) or IsInfinite(AGain) then AGain := 1.0;
-  FLock.Enter;
+  FLock.Acquire;
   try
     Result := FNextId; Inc(FNextId);
     if Length(FNodeFree) > 0 then
@@ -216,13 +239,13 @@ begin
       FNodes[Idx].Alive := True;
     end;
     if FState = gsStopped then FState := gsPlaying;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TAudioGraph.RemoveSource(AId: Integer): Boolean;
 var Idx: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     Idx := FindNode(AId);
     if Idx < 0 then Exit(False);
@@ -233,20 +256,20 @@ begin
     Inc(FNodeDead);
     MaybeCompactNodes;
     Result := True;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TAudioGraph.SetGain(AId: Integer; AGain: Single): Boolean;
 var Idx: Integer;
 begin
   if IsNan(AGain) or IsInfinite(AGain) then Exit(False);
-  FLock.Enter;
+  FLock.Acquire;
   try
     Idx := FindNode(AId);
     if Idx < 0 then Exit(False);
     FNodes[Idx].Gain := AGain;
     Result := True;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TAudioGraph.AddProcessor(const AProcessor: IAudioProcessor): Integer;
@@ -254,7 +277,7 @@ var Idx: Integer;
 begin
   if not Assigned(AProcessor) then
     raise EAudioGraphError.Create('AddProcessor: nil');
-  FLock.Enter;
+  FLock.Acquire;
   try
     Result := FNextId; Inc(FNextId);
     if Length(FProcFree) > 0 then
@@ -273,13 +296,13 @@ begin
       FProcessors[Idx].Processor := AProcessor;
       FProcessors[Idx].Alive := True;
     end;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TAudioGraph.RemoveProcessor(AId: Integer): Boolean;
 var Idx: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     Idx := FindProcessor(AId);
     if Idx < 0 then Exit(False);
@@ -290,13 +313,13 @@ begin
     Inc(FProcDead);
     MaybeCompactProcs;
     Result := True;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 procedure TAudioGraph.Clear;
 var I: Integer;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     for I := 0 to High(FNodes) do
     begin FNodes[I].Alive := False; FNodes[I].Source := nil; end;
@@ -310,7 +333,7 @@ begin
     FProcDead := 0;
     FState := gsStopped;
     InterlockedExchange64(FPosition, 0);
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TAudioGraph.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
@@ -321,7 +344,7 @@ end;
 function TAudioGraph.SeekTo(AFrame: UInt64): Boolean;
 var I: Integer; OK: Boolean;
 begin
-  FLock.Enter;
+  FLock.Acquire;
   try
     OK := True;
     for I := 0 to High(FNodes) do
@@ -329,14 +352,12 @@ begin
         if not FNodes[I].Source.SeekTo(AFrame) then OK := False;
     if OK then InterlockedExchange64(FPosition, Int64(AFrame));
     Result := OK;
-  finally FLock.Leave; end;
+  finally FLock.Release; end;
 end;
 
 function TAudioGraph.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
   Needed, I, J, AliveN, AliveP, FillIdx: Integer;
-  NodesSnap: array of TGraphNode;
-  ProcsSnap: array of TProcessorSlot;
   Tmp: TAudioBuffer;
   MixPtr, TmpPtr: PSingle;
   Gain, SnapVol: Single;
@@ -345,46 +366,49 @@ var
   SrcFmt: TAudioFormat;
 begin
   if AFrames <= 0 then Exit(0);
-  Needed := AFrames * FFormat.BlockAlign;
+  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
   if Length(ABuffer.Data) < Needed then
   begin
     InterlockedExchangeAdd64(FViolations, 1);
     AFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
     if AFrames <= 0 then Exit(0);
-    Needed := AFrames * FFormat.BlockAlign;
+    Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
   end;
-  // two-phase snapshot: count under lock -> alloc outside -> copy under lock (zero alloc inside lock)
-  FLock.Enter;
+  // two-phase snapshot: count under lock -> alloc outside -> copy under lock
+  // 两阶段快照契约：锁内仅计数→锁外几何扩容→锁内深拷贝，混音无锁
+  // EnsureScratch discipline：仅容量不足时指数增长，稳态零分配
+  FLock.Acquire;
   try
     AliveN := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(AliveN);
     AliveP := 0;
     for I := 0 to High(FProcessors) do if FProcessors[I].Alive then Inc(AliveP);
     SnapVol := FVolume;
-  finally FLock.Leave; end;
-  SetLength(NodesSnap, AliveN);
-  SetLength(ProcsSnap, AliveP);
+  finally FLock.Release; end;
+  // snapshot scratch reuse: geometric EnsureSnapshotNodes/Procs, steady zero alloc
+  EnsureSnapshotNodes(AliveN);
+  EnsureSnapshotProcs(AliveP);
   if (AliveN > 0) or (AliveP > 0) then
   begin
-    FLock.Enter;
+    FLock.Acquire;
     try
       FillIdx := 0;
       for I := 0 to High(FNodes) do if FNodes[I].Alive then
       begin
         if FillIdx < AliveN then
-        begin NodesSnap[FillIdx] := FNodes[I]; Inc(FillIdx); end;
+        begin FSnapshotNodes[FillIdx] := FNodes[I]; Inc(FillIdx); end;
       end;
       FillIdx := 0;
       for I := 0 to High(FProcessors) do if FProcessors[I].Alive then
       begin
         if FillIdx < AliveP then
-        begin ProcsSnap[FillIdx] := FProcessors[I]; Inc(FillIdx); end;
+        begin FSnapshotProcs[FillIdx] := FProcessors[I]; Inc(FillIdx); end;
       end;
       SnapVol := FVolume;
-    finally FLock.Leave; end;
+    finally FLock.Release; end;
   end;
 
-  if Length(NodesSnap) = 0 then
+  if AliveN = 0 then
   begin
     FillChar(ABuffer.Data[0], Needed, 0);
     ABuffer.FrameCount := AFrames;
@@ -400,20 +424,21 @@ begin
   Tmp.Data := FScratchTmp;
   Tmp.Format := FFormat;
   Tmp.FrameCount := AFrames;
-  for I := 0 to High(NodesSnap) do
+  // snapshot mixing - lock free
+  for I := 0 to AliveN - 1 do
   begin
     // mismatch not tear
-    SrcFmt := NodesSnap[I].Source.Format;
+    SrcFmt := FSnapshotNodes[I].Source.Format;
     if (SrcFmt.SampleRate <> FFormat.SampleRate) or (SrcFmt.Channels <> FFormat.Channels) then
     begin
       InterlockedExchangeAdd64(FViolations, 1);
       Continue;
     end;
-    Gain := NodesSnap[I].Gain * SnapVol;
+    Gain := FSnapshotNodes[I].Gain * SnapVol;
     // zero tmp tail guard before fill
     FillChar(Tmp.Data[0], Needed, 0);
     try
-      J := NodesSnap[I].Source.FillRealtime(Tmp, AFrames);
+      J := FSnapshotNodes[I].Source.FillRealtime(Tmp, AFrames);
     except
       InterlockedExchangeAdd64(FViolations, 1);
       Continue;
@@ -457,7 +482,7 @@ begin
     else if MixPtr[I] < -1.0 then MixPtr[I] := -1.0;
   end;
 
-  if Length(ProcsSnap) > 0 then
+  if AliveP > 0 then
   begin
     EnsureScratch(FScratchOut, Needed);
     EnsureScratch(FScratchTmp, Needed);
@@ -468,10 +493,10 @@ begin
     Tmp.Format := FFormat;
     Tmp.FrameCount := AFrames;
     Tmp.Data := FScratchTmp;
-    for I := 0 to High(ProcsSnap) do
+    for I := 0 to AliveP - 1 do
     begin
       try
-        ProcsSnap[I].Processor.Process(OutBuf, Tmp);
+        FSnapshotProcs[I].Processor.Process(OutBuf, Tmp);
         SwapBuf := OutBuf;
         OutBuf := Tmp;
         Tmp := SwapBuf;

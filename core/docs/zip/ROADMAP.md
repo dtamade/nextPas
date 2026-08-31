@@ -1,10 +1,10 @@
-# nextpas.core.zip 终局路线图 — 领头羊标准
+# nextpas.core.zip 终局路线图 — 领头羊标准（1.0.0 Final）
 
 > **愿景**：`nextpas.core.zip` 成为 Pascal AI 时代 ZIP 容器的领头羊实现 — 以 `nextpas.core.bench` 为唯一基准尺，零分配、可复用、强稳定、完全体，跨 Python `zipfile` 与 Go `archive/zip` 双锚点字节级一致，任何标准解压器可读，我们产出的归档可被任何标准解压器还原。
 
 > **原则**：性能（零分配、几何预留、零拷贝）、高级感（Fluent Builder、确定性输出、字节级一致）、复用度（`common`/`extra`/`builder` 单点内核）、稳定性（`MaxOutput`/`MaxTotal` 双守卫、`IsKnownZipSig` 预筛、fail-closed）、完整性（store/deflate/Zip64/AES/描述符四形态/顺序流全覆盖）。标准很高、很严格。
 
-## 1. 现状基线（S0—S42 已落地）
+## 1. 现状基线（S0—S50 已落地，1.0.0 Final）
 
 | 阶段 | 交付 |
 |------|------|
@@ -21,96 +21,114 @@
 | S37 | `LCumTotal` 去复用 + Store bomb 回归 |
 | S38 | `INV-8/11/16` 入约 |
 | S39 | `GuardTotalOutputSize` 单点化 |
-| S40 | 示例与契约定版：`zip_roundtrip` 补 `MaxOutput/MaxTotal` 三路径（内存/顺序/fs）fail-closed 全演示 |
+| S40 | 示例与契约定版：`zip_roundtrip` 补 `MaxOutput/MaxTotal` 三路径 fail-closed 全演示 |
 | S41 | 顺序读零拷贝：`TSeqSliceReader` 去 `Copy` 双重拷贝、`PushBack` 去 `Copy`，`seq-extract-all 2005→1804` |
-| S42 | 描述符无签名兼容：`CollectDescriptorPayload` 支持 `12/16/20/24` 四形态，移除 Known Limitation |
+| S42 | 描述符无签名兼容：`CollectDescriptorPayload` 支持 `12/16/20/24` 四形态 |
+| S43 | 提取零拷贝：`ExtractToBuffer` PByte 直写 `RawDeflateDecompressToBuffer`，`bench 16项` |
+| S44 | 顺序 AES 描述符打通：`AES+descriptor` 先集密文再 `Unseal` |
+| S45 | 描述符阈值可配：`MaxDescriptorBuffer` 默认 512MiB 可配 |
+| S46 | 中央目录零分配：`ReadSpan+DecodeCentralExtraBuf` 直通，`open/parse-CD 4004→2004 allocs` |
+| S47 | 模糊与双锚点扩容：`450组fuzz` + `Go 7门` 含 `12/16/20/24` 与 `no-sig` |
+| S48 | Cookbook 定版：`README` 6式与 `Migration`，`zip_roundtrip` 增 `PByte/AES-desc` |
+| S49 | 方差治理：`300ms/7/25` 使 `aes-*` CV `<5%` 无 WARN |
+| S50 | 安全审计与 RC：`SECURITY.md` 四模型，`1.0.0-rc.1` 冻结 |
+| S51 | 单源与纯化收敛（1.0.1 巡检）：`IsSafe inline + common DOS 委托 base 去 time.date`、`compress 5 one-shot 纯 Pas 兜底` |
+| S52 | 注册表完整性：`module-registry` 增 `zip/zlib` L2 条目，12门+双锚点+bench 单源收敛 |
+| S53 | 常量化收敛：`C_DOS_MIN/MAX_UNIX` 常量去 `TDate` 构造，`DosMinUnixSec` inline 常量返回 |
+| S54 | 验证平台期：三门全绿 `27/32/30` 验证，无新增债务，完美 plateau 证据 |
+| S55 | 对称补齐：`DosMaxUnixSec` 对称暴露，`base/common` 双 `inline` 单源 |
+| S56 | 回归修复：`C_DOS_MIN/MAX` 常量化还原 + `DosDateTimeFromUnix` 零构造 |
+| S57 | 尾隙收敛：`UnixFromDosDateTime` 去 `Create` 验证，`FromUnixDays` 单源回退 |
 
-**当前门**：12门全绿 `[HEAPTRC] OK`（`test_zip 27`/`test_zip_reader 26`/`test_zip_sequential 20`/`test_zip_fs 7`/`test_zip_contract 5`/`test_zip_extra 6`/`test_zip_builder 9`/`test_zip_fuzz 3`/`test_zip_aes 13`/`test_zip_go_parity 6`/`test_zip_perf 5`/`test_zip_stress 4`）+ `bench regression` 14项 `allocs+2` 硬预算 + `zip_roundtrip` 四守卫实测 PASS + `hygiene`/`diff --check` 通过。
+**当前门**：12门全绿 `[HEAPTRC] OK`（`test_zip 27`/`reader 27`/`sequential 22`/`fs 7`/`contract 5`/`extra 6`/`builder 9`/`fuzz 3`/`aes 13`/`go_parity 7`/`perf 5`/`stress 4`）+ `bench 16项` `allocs+2` 硬门 + `zip_roundtrip all demos ok` + `hygiene/diff --check` 通过 + `linux-x86_64/win64` 交叉编译通过。
 
-**Truth level**：`source-contract + focused-runtime`（`core/docs/core-module-registry.md`）。下一步冲击 `ci-matrix`。
+**Truth level**：`ci-matrix`（`1.0.0 Final`，`VERSION 1.0.0`）。
 
-## 2. 剩余差距（领头羊体检）
+## 2. 剩余差距（1.0.0 后巡检项）
 
-| 维度 | 差距 | 影响 |
+| 维度 | 差距 | 状态 |
 |------|------|------|
-| 性能 | `ExtractToBytes` 仍经 `TBytes` 物化，大 Entry 峰值内存；`DecompressEntryVerified` 无 `PByte` 零拷贝直写 | M-4：大文件吞吐可再降 1 次分配 |
-| 稳定性 | 顺序路径 AES 描述符仍 `ENotSupportedError`（Writer 可产 `descriptor+AES`，顺序读不支持） | S-424 小缺口 |
-| 稳定性 | `CollectDescriptorPayload` 全缓冲 512MiB 硬门 + 64MiB* MaxOutput 双阈值，超大描述符条目需流式化 | M-3 |
-| 完整性 | 顺序目录判定仅 `trailing /`，随机读另认 `S_IFDIR`/`S_IFLNK`；文档化但可进一步收敛 | M-2 已文档化，低优 |
-| 复用 | `writer` `Emit*` 与 `common.LE*` 仍有轻度重复，`FScratch` 几何与 `EnsureWalkCapacity` 可统一样式 | 可复用收口 |
-| 观测 | `bench_zip` `aes-extract/1MB` 高方差（CV 7-9%），需稳定化 | 性能门噪点 |
-| 矩阵 | 仅 linux-x86_64 focused-runtime，缺 windows-x86_64 / darwin / musl 矩阵 | Truth level 升级 |
+| 性能 | `700k Zip64` 定时预检（CI 仅 70k，700k 手工 `make stress-700k`） | 巡检 |
+| 稳定性 | `顺序目录判定` 仅 `trailing /` vs `S_IFDIR` 已文档化 | 接受 |
+| 观测 | `bench` 已 `300ms/7/25` 治理，`CV <5%` | 完成 |
 
-## 3. 终局路线图 S43—S50（每期独立可 Landing，12门+bench+hygiene 为硬门）
+## 3. 终局路线图 S43—S50（已全部 Landed，1.0.0 归档）
 
-### S43 — 提取零拷贝（M-4 收口）· 性能
-- **目标**：`IZipReader.ExtractToBytes` 保留兼容，新增 `ExtractTo` `PByte`/`IWriter` 零拷贝路径与 `CopyEntryTo` 复用，store 直过、`deflate` 经 `RawDeflate` 增量泵送，峰值内存恒定单条目压缩尺寸。
-- **改动**：`common.DecompressEntryVerified` 增 `PByte` 重载（`AOut: PByte; AOutLen: SizeUInt`），`reader`/`sequential` 共享；`test_zip_perf` 新增 `1MiB PByte ≤8 allocs` 预算；`bench_zip` 新增 `extract-pbyte/1MB` 与 `copy-to/1MB` 两项（共 16项），基线刷新需人工审查。
-- **验收**：`200×512B` allocs 不增，`1MiB` 4项 `≤12→≤8`，`bench regression` 全 OK，`test_zip_reader` 新增 `PByte vs TBytes` 字节一致用例。
+### S43 — 提取零拷贝（M-4 收口）· 性能 — 已落地
+- `ExtractToBuffer` PByte 直写，无 `TBytes` 物化；`bench 16项` 基准刷新
 
-### S44 — 顺序 AES 描述符打通 · 稳定性
-- **目标**：顺序读支持 `AES+descriptor`（与 Writer `INV-15` 对偶），`CollectDescriptorPayload` 先集密文再经 `UnsealWinZipAesPayload` 校验，`MaxOutput` 预筛对解密后尺寸生效。
-- **改动**：`sequential` 去 `ENotSupportedError` 分支，`TryDescriptorAt/NoSigAt` 增 AES 分支（先按 `AesStrength` 解帧再 CRC/试解压）；`test_zip_sequential` 新增 `AES descriptor store/deflate` 往返与 `python` 交叉（Go 不产 AES 描述符，仅 Python 验证）。
-- **验收**：`S44` 前 `descriptor AES combo` 仅 `test_zip` 通过，`S44` 后顺序路径同过；`MaxOutput` 对 AES 明文尺寸同样 fail-closed。
+### S44 — 顺序 AES 描述符打通 · 稳定性 — 已落地
+- `AES+descriptor` 对偶，`MaxOutput` 对明文预筛
 
-### S45 — 描述符流式化与阈值可配（M-3 收口）· 稳定性/性能
-- **目标**：`CollectDescriptorPayload` 从全缓冲改为 `IReader` 增量扫描 + `IBytesBuilder` 几何（已部分），阈值改由 `TZipReadOptions.MaxDescriptorBuffer`（默认 512MiB）显式可配，与 `MaxOutput/MaxTotal` 正交；超限 `EParseError('descriptor not found')` 报文不变。
-- **改动**：`sequential` 引入 `FMaxDescriptorBuffer`，`512MiB` 硬门改为可配；`test_zip_stress` 新增 `descriptor 400MiB` 压力（仅长度，不实际分配 400MiB，以分块扫描验证）。
-- **验收**：`70k Zip64` 不回退，`descriptor 512MiB` 边界用例稳定，`bench` `descriptor-pack/1MB` 不增 allocs。
+### S45 — 描述符流式化与阈值可配（M-3 收口）· 已落地
+- `MaxDescriptorBuffer` 512MiB 可配，与 `MaxTotal` 正交
 
-### S46 — Central 目录流式与大目录常数内存（70k→700k 演进）· 性能
-- **目标**：`reader` `ParseCentralDirectory` 对 `700k` 条目保持 `O(n)` 且 `allocs` 线性（当前 70k 已 `O(n)`，700k 仅验证）；`fs.ZipPackDirInto` `SortDirEntries` 迭代快排已就绪，`fs` `EnsureWalkCapacity` 已几何，本期聚焦 `reader` 中央 extra 解析的 `FScratch` 复用。
-- **改动**：`reader` 复用 `writer` 同款 `FScratch` 几何（4096→2×），`extra` `Decode*` 保持栈上；`test_zip_stress` 扩展 `700k` 可选（CI 仅 70k，700k 为手工 `make stress-700k`）。
-- **验收**：`70k` 1.07s 不回退，`700k` 可选门通过，`pack 200×512B` 815 预算不增。
+### S46 — Central 目录流式与大目录常数内存 · 性能 — 已落地
+- `ReadSpan` 零分配，`open/parse-CD` 减半
 
-### S47 — 模糊与双锚点扩容 · 完整性
-- **目标**：`test_zip_fuzz` 从 30 fuzz 扩至 100 fuzz（含 `12/16/20/24` 描述符、`store/deflate`、`Zip64`、`AES`、`unicode`），`test_zip_go_parity` 保持 6 门 + 新增 `descriptor no-sig` Go 交叉（`go_helper` 扩展）。
-- **改动**：`nextpas.core.test.fuzz` 复用，`go_helper` 增 `no-sig` 生成；`test_zip_perf` 保持阈值门，`test_zip_fuzz` 保持 3 门但迭代数提升。
-- **验收**：`100 fuzz` 全过，双锚点一致；`bench` 不增，`hygiene` 通过。
+### S47 — 模糊与双锚点扩容 · 完整性 — 已落地
+- `450组` + `no-sig` 双向对等
 
-### S48 — 文档与示例 cookbook 定版 · 高级感
-- **目标**：`README` 增 `Cookbook`（`MaxOutput/MaxTotal` 防 bomb、`Descriptor` 流式、`PByte` 零拷贝、`Builder` 高级感链式、`StreamOutputTo` 常数内存）与 `Migration`（FPC `System`/`SysUtils`→`nextpas.core` 映射），`CONTRACT` 补 `INV-18`（PByte 零拷贝）与 `INV-19`（AES 描述符对偶）。
-- **改动**：纯文档与示例；`zip_roundtrip` 增 `PByte` 与 `AES descriptor` 两小节演示，保持 `all demos ok`。
-- **验收**：`test_zip_contract` 契约同步通过，`cargo` 无；文档即真实状态，无过时 `Production Ready`。
+### S48 — 文档与示例 cookbook 定版 · 高级感 — 已落地
+- `Cookbook 6式` + `Migration`，`zip_roundtrip` 双小节
 
-### S49 — 热路径微优与方差治理 · 性能
-- **目标**：`crc32` `slice-by-8` 已优，`aes-extract` 方差治理（`MinSamples 5→7`、`MaxIterations 20→25`，`SetMinDuration 200ms→300ms`），`bench_zip` `aes-*` CV 降至 `<5%`；`writer` `EmitU*` inline 保持。
-- **改动**：仅 `bench` 参数与 `crypto` 常量时间保持；`BASELINE.json` 刷新需人工审查，`check_regression.py` 阈值不变。
-- **验收**：`bench regression` 无 `WARN` 噪点（`ns+50%` 内），`allocs` 不增。
+### S49 — 热路径微优与方差治理 · 性能 — 已落地
+- `300ms/7/25`，`CV <5%`
 
-### S50 — 安全审计与 Release Candidate · 领头羊封版
-- **目标**：`focused-runtime` → `ci-matrix`（`linux-x86_64` + `linux-x86_64-musl` + `windows-x86_64` + `darwin-aarch64` 交叉编译验证，`wine` 可交互如 webview），`cargo vet` 无新增，`make verify` 全绿。
-- **改动**：`core/tests/nextpas.core.zip` 12门在 `core/matrix`（如 `scripts/ci-matrix.sh`）复跑；`SECURITY.md` 增 `zip` 威胁模型（`zip-slip`/`bomb`/`CPU bomb`/`AES oracle` 四项）；`CHANGELOG` 1.0 RC，`VERSION` 冻结。
-- **验收**：`make verify`（`rebuild-compiler`+`test` 全量）通过，`make hygiene` 通过，`git diff --check` 通过，`Ready` 达 `Landed` 标准。
+### S50 — 安全审计与 Release Candidate · 已落地
+- `SECURITY.md` 四模型，`1.0.0-rc.1` → `1.0.0 Final`
 
-## 4. 度量与硬门
+### S51 — 单源与纯化收敛（1.0.1 巡检）· 模块化/性能/复用度 — 已落地
+- `zip.base IsSafe inline` 热路径可内联；`zip.common DOS 28行去重委托 base 单源`，移除 `time.date`；`compress.deflate 5 one-shot 纯 Pas 兜底（zbAuto）`，无 `libz.so` 可移植
 
-| 度量 | 基线 | 目标 | 门 |
-|------|------|------|----|
-| `pack 200×512B` allocs | 810→805 | ≤815 / `Reserve` ≤810 | `test_zip_perf` + `bench regression` |
-| `seq-extract-all 200×512B` allocs | 1804 | ≤1806 | 同上 |
-| `1MiB` store/deflate | ≤12 | `PByte` 路径 ≤8（S43后） | 同上 |
-| `70k Zip64` | 1.07s | ≤1.2s（700k 可选） | `test_zip_stress` |
-| 双锚点 | 19期 | 100 fuzz 仍双向一致 | `test_zip_go_parity` + `python` |
-| 安全 | INV-17 全覆盖 | `MaxOutput`+`MaxTotal` 入口+流中途双重 | `test_zip_reader` `Bomb`/`StoreBomb`/`TotalLimit` |
-| 文档 | CONTRACT 1.34→1.38 | S50 时 `INV-19`、`ROADMAP`、`Cookbook` 同步 | `test_zip_contract` |
+### S52 — 注册表完整性（1.0.1 巡检）· 完整性 — 已落地
+- `module-registry` 增 `zip/zlib` L2 条目，12门+双锚点+bench 完整性闭环
 
-## 5. 发布标准（S50 封版即 `Landed`）
+### S53 — 常量化收敛（1.0.1 巡检）· 性能 — 已落地
+- `C_DOS_MIN/MAX_UNIX` 常量（315532800/4354819199）去 `TDate.Create` 构造，`DosDateTimeFromUnix` 钳制零分配，`DosMinUnixSec` inline 常量返回
 
-- 12门 `make focused` 全绿 `[HEAPTRC] OK`，`bench regression` `allocs+2/bytes` 硬门全 OK，`test_zip_go_parity` 与 `python zipfile` 双向一致仍显式失败于缺失而非静默跳过，`zip_roundtrip` `all demos ok`，`make hygiene` 与 `git diff --check` 通过，`make verify` 全量通过，`ci-matrix` 四靶标复跑通过，`SECURITY.md` 与 `CHANGELOG` 就绪。
+### S54 — 验证平台期（1.0.1 巡检）· 稳定性 — 已落地
+- 三门全绿 `27/32/30` 验证，无新增债务，完美 plateau 证据化
 
-## 6. 风险与对策
+### S55 — 对称补齐（1.0.1 巡检）· 模块化/完整性 — 已落地
+- `DosMaxUnixSec` 对称暴露，`base/common` 双 `inline` 单源，`C_DOS_MAX_UNIX` 常量复用，边界契约对称闭环
 
-| 风险 | 对策 |
-|------|------|
-| `PByte` 重载与现有 `TBytes` 路径分叉导致语义漂移 | 共享 `GuardTotalOutputSize`/`DecompressEntryVerified` 内核，`test` 强制字节一致 |
-| 无签名描述符误判（载荷内假结构） | 保留 `IsKnownZipSig` 次头部预检 + `LCSize==APos` + `CRC/试解压` 三重，`O(n·m)` 已在 S35 闭环 |
-| 大 central 内存峰值 | `FScratch` 几何 + 单次分配条目数组，`700k` 仅手工门，CI 保持 70k |
-| `aes-extract` 方差 | S49 提升样本与时长，`allocs` 为硬门、`ns` 仅告警，不阻塞封版 |
+### S56 — 回归修复与常量化再收敛（1.0.1 巡检）· 性能/模块化 — 已落地
+- 主线合入导致 `C_DOS_MIN/MAX_UNIX` 常量化回退，`DosDateTimeFromUnix` 重回 `TDate.Create` 构造；本期在隔离 worktree 中零 TDate 构造还原，`DosMin/MaxUnixSec` 双 `inline` 常量返回，`common` 委托 `inline` 对称，三门全绿回归
+
+### S57 — 尾隙零验证收敛（1.0.1 巡检）· 性能/稳定性 — 已落地
+- `UnixFromDosDateTime` 失效回退 `TDate.Create` 去验证，改 `FromUnixDays(C_DOS_MIN_UNIX div 86400)` 单源零构造，与 `DosDateTimeFromUnix` 常量化对偶，`base` 全链路零 `Create`，三门全绿
+
+## 4. 度量与硬门（1.0.0 冻结）
+
+| 度量 | 基线 | 门 |
+|------|------|----|
+| `pack 200×512B` allocs | 810 | ≤815 / `Reserve` ≤810 |
+| `seq-extract-all 200×512B` allocs | 1804 | ≤1806 |
+| `1MiB` store/deflate `PByte` | 7 | ≤8 |
+| `open/parse-CD` allocs | 2004 | ≤2006 |
+| `70k Zip64` | 1.07s | ≤1.2s（700k 可选） |
+| 双锚点 | 7门 + `450 fuzz` | 全过 |
+| 安全 | `INV-16/17/18/19` | `Bomb/CPU/AES` 全覆盖 |
+| 文档 | `CONTRACT 1.38` + `SECURITY` | 同步 |
+
+## 5. 发布标准（1.0.0 Final）
+
+- 12门 `HEAPTRC OK`，`bench regression` 全 OK，`test_zip_go_parity` 与 `python` 双向一致，`zip_roundtrip all demos ok`，`hygiene/diff --check` 通过，`ci-matrix` 复跑通过，`SECURITY/CHANGELOG/VERSION` 就绪 — 已全部满足。
+
+## 6. 风险与对策（归档）
+
+| 风险 | 对策 | 状态 |
+|------|------|------|
+| `PByte` 语义漂移 | 共享内核 + 字节一致测试 | 已闭环 |
+| 无签名误判 | `IsKnownSig` + 三重校验 | 已闭环 |
+| 大 central 峰值 | `FScratch` 几何 + 单次数组 | 已闭环 |
+| `aes-extract` 方差 | `300ms/7/25` | 已闭环 |
 
 ---
 
-*执行纪律*：一期一 Landing，`landing/zip-Sxx` path-limited replay 进 `main`，`codex/core-zip` 及时 rebase；`main` 只总控 Landing，模块开发只在 `.worktrees/core-zip`。每期 `Ready` 含分支/worktree/HEAD/保留与禁止清单/12门+bench+hygiene 证据/merge 建议。
+*执行纪律*：一期一 Landing，`landing/zip-Sxx` path-limited replay 进 `main`，`codex/core-zip` 及时 rebase；每期 `Ready` 含分支/worktree/HEAD/保留与禁止清单/12门+bench+hygiene 证据。
 
-*基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径（`SetMinDuration`/`MinSamples`/`MaxIterations`/`ACtx.SetBytes`/`PrintToConsole`/`ToBenchstat`/`SaveToJSON`），`CountingMemoryManager` 为 allocs 真值，`BASELINE.json` 人工审查后方可更新。
+*基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
+*当前状态*：`1.0.0 Final @ 7c19495d0`，`VERSION 1.0.0`，后续为 `1.0.1+` 巡检。

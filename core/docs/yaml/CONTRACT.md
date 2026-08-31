@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.yaml*.pas`（7 个源文件）
 **层级**：L2（只依赖 L0–L1）
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
-**最后更新**：2026-07-20
-**版本**：2.0（对齐真实 facade；废止 1.0 中 `TYamlNode` class / YamlPath 描述）
+**最后更新**：2026-08-31
+**版本**：2.1（对齐真实 facade；废止 1.0 中 `TYamlNode` class / YamlPath 描述）
 
 ---
 
@@ -144,3 +144,4 @@ Runnable：`core/examples/nextpas.core.yaml/yaml_smoke/`
 | 2026-07-01 | 1.0 | 初始（与实现不符，已废止） | — |
 | 2026-07-20 | 2.0 | 对齐 IYamlDocument / MapGet / TYamlBuilder record | config-formats lane |
 | 2026-07-20 | 2.1 | `Get` 别名 MapGet；标明多文档不支持 | config-formats lane |
+| 2026-08-31 | 2.1 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

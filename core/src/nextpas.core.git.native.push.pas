@@ -36,7 +36,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.hash.sha1,
   nextpas.core.git.native.pktline,
-  nextpas.core.git.native.refs;
+  nextpas.core.git.native.refs,
+  nextpas.core.git.native.util;
 
 function GitOidZero: TGitOid;
 var I: Integer;

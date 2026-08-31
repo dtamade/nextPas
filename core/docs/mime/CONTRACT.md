@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.mime*.pas`（base/header/parser/builder + 门面）
 **层级**：L2（格式层，同 multipart/json/csv；依赖 L0-L1 与 text/encoding/time）
 **Owner**：codex/mime-mail-20260816（mailServer888 反哺）
-**最后更新**：2026-08-16
-**版本**：0.2（正式）
+**最后更新**：2026-08-31
+**版本**：0.3（正式）
 
 ---
 
@@ -152,3 +152,4 @@ procedure BuildMessageToStream(const AMsg: TMimeMessage; const AWriter: IStream)
 | 日期 | 版本 | 变更 |
 |------|------|------|
 | 2026-08-16 | 0.2 | 正式契约：从 mail.mime 抽取独立 L2 模块；新增 RFC 2047/2231、严格+容错双通道、INV-M3 上限、流式构建 |
+| 2026-08-31 | 0.3 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

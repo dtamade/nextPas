@@ -200,7 +200,17 @@ begin
 end;
 
 destructor TAsyncTaskGroup.Destroy;
+var
+  LToken: IAsyncCancellationToken;
 begin
+  LToken := FToken;
+  if LToken <> nil then
+  begin
+    try
+      LToken.RemoveOnCancel(@TaskGroupTokenNotify, Self);
+    except
+    end;
+  end;
   FToken := nil;
   platform_mutex_destroy(FLock);
   inherited Destroy;
@@ -209,9 +219,13 @@ end;
 procedure TAsyncTaskGroup.TaskDone;
 begin
   platform_mutex_lock(FLock);
-  Dec(FActiveCount);
-  Inc(FCompletedCount);
-  platform_mutex_unlock(FLock);
+  try
+    if FActiveCount > 0 then
+      Dec(FActiveCount);
+    Inc(FCompletedCount);
+  finally
+    platform_mutex_unlock(FLock);
+  end;
   CheckCompletion;
 end;
 

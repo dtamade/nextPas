@@ -70,6 +70,7 @@ function SshAesCtrCrypt(const AKey, AIV, AInput: TBytes): TBytes;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.aesni,
   nextpas.core.crypto.aes.ct64,
@@ -77,7 +78,8 @@ uses
   nextpas.core.crypto.hmac,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
-  nextpas.core.crypto.constant_time;
+  nextpas.core.crypto.constant_time,
+  nextpas.core.mem.secure;
 
 const
   CHACHA_KEY_TOTAL = 64;   { main(32) + header(32) }
@@ -85,6 +87,7 @@ const
   GCM_TAG = 16;
   CHACHA_PAD_BLOCK = 8;
   AES_PAD_BLOCK = 16;
+  GCM_SEQ_THRESHOLD = UInt64($FFFFFF00);
 
 { ---- 算法名工具 ---- }
 
@@ -287,6 +290,7 @@ type
     FHeaderKey: TBytes;  { 后 32 字节：长度字段掩码流 }
   public
     constructor Create(const AKeyMaterial: TBytes);
+    destructor Destroy; override;
     function PaddingBlock: Integer;
     function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
@@ -298,6 +302,7 @@ type
     FHeaderKey: TBytes;
   public
     constructor Create(const AKeyMaterial: TBytes);
+    destructor Destroy; override;
     function BodyLengthFromHeader(ASeq: UInt32; const AHeader: TBytes): UInt32;
     function TrailerSize(ABodyLen: UInt32): UInt32;
     function Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
@@ -309,6 +314,13 @@ begin
   RequireLen(AKeyMaterial, CHACHA_KEY_TOTAL, 'chacha key material');
   FMainKey := Copy(AKeyMaterial, 0, 32);
   FHeaderKey := Copy(AKeyMaterial, 32, 32);
+end;
+
+destructor TSshChachaSender.Destroy;
+begin
+  SecureZeroBytes(FMainKey);
+  SecureZeroBytes(FHeaderKey);
+  inherited;
 end;
 
 function TSshChachaSender.PaddingBlock: Integer;
@@ -324,7 +336,7 @@ end;
 
 function TSshChachaSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
-  LNonce, LMask, LEncLen, LPolyKey, LCt, LTag, LMacData: TBytes;
+  LNonce, LMask, LEncLen, LPolyKey, LCt, LTag: TBytes;
 begin
   { OpenSSH PROTOCOL.chacha20poly1305：
     - 前 32B（main）：counter=0 派生 poly key；counter=1 起加密载荷
@@ -332,22 +344,29 @@ begin
     - Poly1305 直接覆盖 encLen||ct（无 RFC 8439 的 pad16 与长度块） }
   LNonce := ChachaNonce(ASeq);
   LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
-  SetLength(LEncLen, 4);
-  PutU32BE(LEncLen, 0, UInt32(Length(ABodyPlain)) xor U32BEOf(LMask, 0));
-  LCt := ChaCha20Xor(FMainKey, LNonce, 1, ABodyPlain);
-  LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
-  SetLength(LPolyKey, 32);
-  SetLength(LMacData, 4 + SizeUInt(Length(LCt)));
-  Move(LEncLen[0], LMacData[0], 4);
-  if Length(LCt) > 0 then
-    Move(LCt[0], LMacData[4], SizeUInt(Length(LCt)));
-  LTag := Poly1305Raw(LPolyKey, LMacData);
-  Result := nil;
-  SetLength(Result, 4 + SizeUInt(Length(LCt)) + CHACHA_TAG);
-  Move(LEncLen[0], Result[0], 4);
-  if Length(LCt) > 0 then
-    Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
-  Move(LTag[0], Result[4 + SizeUInt(Length(LCt))], CHACHA_TAG);
+  try
+    SetLength(LEncLen, 4);
+    PutU32BE(LEncLen, 0, UInt32(Length(ABodyPlain)) xor U32BEOf(LMask, 0));
+    LCt := ChaCha20Xor(FMainKey, LNonce, 1, ABodyPlain);
+    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
+    SetLength(LPolyKey, 32);
+    try
+      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.FromBytes(LEncLen), TByteSpan.FromBytes(LCt)]);
+      Result := nil;
+      SetLength(Result, 4 + SizeUInt(Length(LCt)) + CHACHA_TAG);
+      Move(LEncLen[0], Result[0], 4);
+      if Length(LCt) > 0 then
+        Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
+      Move(LTag[0], Result[4 + SizeUInt(Length(LCt))], CHACHA_TAG);
+    finally
+      SecureZeroBytes(LPolyKey);
+      SecureZeroBytes(LTag);
+      SecureZeroBytes(LCt);
+    end;
+  finally
+    SecureZeroBytes(LMask);
+    SecureZeroBytes(LNonce);
+  end;
 end;
 
 constructor TSshChachaReceiver.Create(const AKeyMaterial: TBytes);
@@ -358,13 +377,26 @@ begin
   FHeaderKey := Copy(AKeyMaterial, 32, 32);
 end;
 
+destructor TSshChachaReceiver.Destroy;
+begin
+  SecureZeroBytes(FMainKey);
+  SecureZeroBytes(FHeaderKey);
+  inherited;
+end;
+
 function TSshChachaReceiver.BodyLengthFromHeader(ASeq: UInt32; const AHeader: TBytes): UInt32;
 var
-  LMask: TBytes;
+  LMask, LNonce: TBytes;
 begin
   { 长度字段被 header key 流掩码；counter=0 首块前 4 字节为掩码 }
-  LMask := ChaCha20Block(FHeaderKey, ChachaNonce(ASeq), 0);
-  Result := U32BEOf(AHeader, 0) xor U32BEOf(LMask, 0);
+  LNonce := ChachaNonce(ASeq);
+  LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
+  try
+    Result := U32BEOf(AHeader, 0) xor U32BEOf(LMask, 0);
+  finally
+    SecureZeroBytes(LMask);
+    SecureZeroBytes(LNonce);
+  end;
 end;
 
 function TSshChachaReceiver.TrailerSize(ABodyLen: UInt32): UInt32;
@@ -374,7 +406,7 @@ end;
 
 function TSshChachaReceiver.Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
 var
-  LEncLen, LCt, LTag, LNonce, LPolyKey, LExpect, LMacData: TBytes;
+  LEncLen, LCt, LTag, LNonce, LPolyKey, LExpect: TBytes;
 begin
   if SizeUInt(Length(AWire)) < 4 + CHACHA_TAG then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: chacha packet truncated');
@@ -382,18 +414,20 @@ begin
   LTag := Copy(AWire, SizeUInt(Length(AWire)) - CHACHA_TAG, CHACHA_TAG);
   LCt := Copy(AWire, 4,
     SizeInt(SizeUInt(Length(AWire)) - 4 - CHACHA_TAG));
-  { Poly1305 覆盖 encLen||ct；常量时间比较后再解密 }
-  LNonce := ChachaNonce(ASeq);
-  LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
-  SetLength(LPolyKey, 32);
-  SetLength(LMacData, 4 + SizeUInt(Length(LCt)));
-  Move(LEncLen[0], LMacData[0], 4);
-  if Length(LCt) > 0 then
-    Move(LCt[0], LMacData[4], SizeUInt(Length(LCt)));
-  LExpect := Poly1305Raw(LPolyKey, LMacData);
-  if TConstantTime.CompareBytes(LExpect, LTag) <> 1 then
-    raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha AEAD verify failed');
-  Result := ChaCha20Xor(FMainKey, LNonce, 1, LCt);
+  try
+    { Poly1305 覆盖 encLen||ct；常量时间比较后再解密 }
+    LNonce := ChachaNonce(ASeq);
+    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
+    SetLength(LPolyKey, 32);
+    LExpect := Poly1305RawSpans(LPolyKey, [TByteSpan.FromBytes(LEncLen), TByteSpan.FromBytes(LCt)]);
+    if TConstantTime.CompareBytes(LExpect, LTag) <> 1 then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha AEAD verify failed');
+    Result := ChaCha20Xor(FMainKey, LNonce, 1, LCt);
+  finally
+    SecureZeroBytes(LTag);
+    SecureZeroBytes(LExpect);
+    SecureZeroBytes(LPolyKey);
+  end;
 end;
 
 { ---- aes*-gcm@openssh.com（RFC 5647 调用计数器，OpenSSH 布局）---- }
@@ -403,9 +437,10 @@ type
   private
     FKey: TBytes;
     FBaseIV: TBytes;     { 12B，取 IV 前 8 字节 + 计数器后 4 字节 }
-    FCounter: UInt32;    { 调用计数器，从 1 起 }
+    FCounter: UInt64;    { 调用计数器，从 1 起，UInt64防回绕 }
   public
     constructor Create(const AKey, AIV: TBytes);
+    destructor Destroy; override;
     function PaddingBlock: Integer;
     function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
@@ -415,9 +450,10 @@ type
   private
     FKey: TBytes;
     FBaseIV: TBytes;
-    FCounter: UInt32;
+    FCounter: UInt64;
   public
     constructor Create(const AKey, AIV: TBytes);
+    destructor Destroy; override;
     function BodyLengthFromHeader(ASeq: UInt32; const AHeader: TBytes): UInt32;
     function TrailerSize(ABodyLen: UInt32): UInt32;
     function Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
@@ -432,6 +468,13 @@ begin
   FCounter := 1;
 end;
 
+destructor TSshGcmSender.Destroy;
+begin
+  SecureZeroBytes(FKey);
+  SecureZeroBytes(FBaseIV);
+  inherited;
+end;
+
 function TSshGcmSender.PaddingBlock: Integer;
 begin
   Result := AES_PAD_BLOCK;
@@ -443,11 +486,11 @@ begin
   Result := 4;
 end;
 
-function GcmNonce(const ABaseIV: TBytes; ACounter: UInt32): TBytes;
+function GcmNonce(const ABaseIV: TBytes; ACounter: UInt64): TBytes;
 begin
   Result := nil;
   Result := Copy(ABaseIV, 0, 12);
-  Result[8] := Byte(ACounter shr 24);
+  Result[8] := Byte((ACounter shr 24) and $FF);
   Result[9] := Byte((ACounter shr 16) and $FF);
   Result[10] := Byte((ACounter shr 8) and $FF);
   Result[11] := Byte(ACounter and $FF);
@@ -457,17 +500,22 @@ function TSshGcmSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
   LLens, LCt, LTag: TBytes;
 begin
+  if FCounter = High(UInt64) then
+    raise ESSHError.Create(sekProtocol, 'ssh cipher: gcm counter wrap, rekey required');
+  if FCounter >= GCM_SEQ_THRESHOLD then
+    raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm counter exhausted, rekey required');
   SetLength(LLens, 4);
   PutU32BE(LLens, 0, UInt32(Length(ABodyPlain)));
   if not PurePascalAESGCMEncrypt(FKey, GcmNonce(FBaseIV, FCounter),
     ABodyPlain, LLens, LCt, LTag) then
     raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm encrypt failed');
-  Inc(FCounter);  { uint32 自然回绕 }
+  Inc(FCounter);
   Result := nil;
   SetLength(Result, 4 + SizeUInt(Length(LCt)) + SizeUInt(Length(LTag)));
   Move(LLens[0], Result[0], 4);
-  Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
+  if Length(LCt) > 0 then Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
   Move(LTag[0], Result[4 + Length(LCt)], SizeUInt(Length(LTag)));
+  SecureZeroBytes(LTag);
 end;
 
 constructor TSshGcmReceiver.Create(const AKey, AIV: TBytes);
@@ -477,6 +525,13 @@ begin
   FKey := Copy(AKey, 0, Length(AKey));
   FBaseIV := Copy(AIV, 0, 12);
   FCounter := 1;
+end;
+
+destructor TSshGcmReceiver.Destroy;
+begin
+  SecureZeroBytes(FKey);
+  SecureZeroBytes(FBaseIV);
+  inherited;
 end;
 
 function TSshGcmReceiver.BodyLengthFromHeader(ASeq: UInt32; const AHeader: TBytes): UInt32;
@@ -497,10 +552,19 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh cipher: gcm packet truncated');
   LCt := Copy(AWire, 4, SizeInt(Length(AWire)) - 4 - GCM_TAG);
   LTag := Copy(AWire, Length(AWire) - GCM_TAG, GCM_TAG);
-  if not PurePascalAESGCMDecrypt(FKey, GcmNonce(FBaseIV, FCounter),
-    LCt, LTag, Copy(AWire, 0, 4), Result) then
-    raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm auth failed');
-  Inc(FCounter);
+  try
+    if FCounter = High(UInt64) then
+      raise ESSHError.Create(sekProtocol, 'ssh cipher: gcm counter wrap, rekey required');
+    if FCounter >= GCM_SEQ_THRESHOLD then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm counter exhausted');
+    if not PurePascalAESGCMDecrypt(FKey, GcmNonce(FBaseIV, FCounter),
+      LCt, LTag, Copy(AWire, 0, 4), Result) then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm auth failed');
+    Inc(FCounter);
+  finally
+    SecureZeroBytes(LTag);
+    SecureZeroBytes(LCt);
+  end;
 end;
 
 { ---- aes*-ctr + hmac-sha2-*-etm ---- }
@@ -527,6 +591,7 @@ type
     procedure IncCounter; inline;
   public
     constructor Create(const AKey, AIV: TBytes);
+    destructor Destroy; override;
     procedure XorInto(var AData: TBytes; AOffset, ACount: SizeUInt);
   end;
 
@@ -569,6 +634,17 @@ begin
       AESKeyExpand(Copy(AKey, 0, Length(AKey)), FExpanded, FNr);
     end;
   end;
+end;
+
+destructor TAesCtrStream.Destroy;
+begin
+  FillChar(FCtr, SizeOf(FCtr), 0);
+  FillChar(FKS, SizeOf(FKS), 0);
+  FillChar(FNiKey128, SizeOf(FNiKey128), 0);
+  FillChar(FNiKey256, SizeOf(FNiKey256), 0);
+  FillChar(FCt64Key, SizeOf(FCt64Key), 0);
+  FillChar(FExpanded, SizeOf(FExpanded), 0);
+  inherited;
 end;
 
 procedure TAesCtrStream.RefreshKS;
@@ -688,6 +764,7 @@ end;
 
 destructor TSshCtrEtmSender.Destroy;
 begin
+  SecureZeroBytes(FMacKey);
   FCtr.Free;
   inherited Destroy;
 end;
@@ -721,6 +798,8 @@ begin
   PutU32BE(Result, 0, UInt32(Length(ABodyPlain)));
   Move(LBody[0], Result[4], SizeUInt(Length(LBody)));
   Move(LTag[0], Result[4 + Length(LBody)], SizeUInt(Length(LTag)));
+  SecureZeroBytes(LMacInput);
+  SecureZeroBytes(LTag);
 end;
 
 constructor TSshCtrEtmReceiver.Create(const ACipher, AMac: string;
@@ -738,6 +817,7 @@ end;
 
 destructor TSshCtrEtmReceiver.Destroy;
 begin
+  SecureZeroBytes(FMacKey);
   FCtr.Free;
   inherited Destroy;
 end;
@@ -768,11 +848,17 @@ begin
     Move(AWire[4], LMacInput[8], LBodyLen);
   LExpect := MacCompute(FMacAlgo, FMacKey, LMacInput);
   LGot := Copy(AWire, 4 + SizeInt(LBodyLen), FMacTagSize);
-  if TConstantTime.CompareBytes(LExpect, LGot) <> 1 then
-    raise ESSHError.Create(sekCrypto, 'ssh cipher: etm mac mismatch');
-  { 再解密 }
-  Result := Copy(AWire, 4, SizeInt(LBodyLen));
-  FCtr.XorInto(Result, 0, SizeUInt(LBodyLen));
+  try
+    if TConstantTime.CompareBytes(LExpect, LGot) <> 1 then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: etm mac mismatch');
+    { 再解密 }
+    Result := Copy(AWire, 4, SizeInt(LBodyLen));
+    FCtr.XorInto(Result, 0, SizeUInt(LBodyLen));
+  finally
+    SecureZeroBytes(LGot);
+    SecureZeroBytes(LExpect);
+    SecureZeroBytes(LMacInput);
+  end;
 end;
 
 { ---- 工厂 ---- }
