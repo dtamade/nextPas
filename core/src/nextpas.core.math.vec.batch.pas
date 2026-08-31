@@ -110,7 +110,6 @@ implementation
 
 uses
   nextpas.core.base,
-  nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.vec.batch.simd;
 
