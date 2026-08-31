@@ -108,8 +108,9 @@ type
     SecBits: Integer;
     SecMask: LongWord;
     MaxBits: Integer;
+    SecSize: Integer;
     Fast: array of THuffEntry;
-    Second: array of array of THuffEntry;
+    Second: array of THuffEntry;
   end;
 
   TBitWriter = record
@@ -310,7 +311,6 @@ var
   LFastSize, LSecSize, LMax, LLen: Integer;
   I, K, LCode: Integer;
   LPrefix, LSuffix, LRem, LCopies, LSecIdx: Integer;
-  J: Integer;
 begin
   LMax := ABuild.MaxBits;
   ATable.FastBits := AFastBits;
@@ -333,14 +333,23 @@ begin
     ATable.Fast[I].Bits := 0;
     ATable.Fast[I].Symbol := $FFFF;
   end;
-  SetLength(ATable.Second, LFastSize);
-  for I := 0 to LFastSize - 1 do
-    SetLength(ATable.Second[I], 0);
-  if LMax = 0 then Exit;
   if ATable.SecBits > 0 then
     LSecSize := 1 shl ATable.SecBits
   else
     LSecSize := 0;
+  ATable.SecSize := LSecSize;
+  if LSecSize > 0 then
+  begin
+    SetLength(ATable.Second, LFastSize * LSecSize);
+    for I := 0 to High(ATable.Second) do
+    begin
+      ATable.Second[I].Bits := 0;
+      ATable.Second[I].Symbol := $FFFF;
+    end;
+  end
+  else
+    SetLength(ATable.Second, 0);
+  if LMax = 0 then Exit;
   for I := 0 to ABuild.Count - 1 do
   begin
     LLen := ABuild.Lens[I];
@@ -361,21 +370,12 @@ begin
       LPrefix := LCode and Integer(ATable.FastMask);
       LSuffix := LCode shr AFastBits;
       LRem := LLen - AFastBits;
-      if Length(ATable.Second[LPrefix]) = 0 then
-      begin
-        SetLength(ATable.Second[LPrefix], LSecSize);
-        for J := 0 to LSecSize - 1 do
-        begin
-          ATable.Second[LPrefix][J].Bits := 0;
-          ATable.Second[LPrefix][J].Symbol := $FFFF;
-        end;
-      end;
       LCopies := 1 shl (ATable.SecBits - LRem);
       for K := 0 to LCopies - 1 do
       begin
         LSecIdx := LSuffix or (K shl LRem);
-        ATable.Second[LPrefix][LSecIdx].Bits := Byte(LLen);
-        ATable.Second[LPrefix][LSecIdx].Symbol := Word(I);
+        ATable.Second[LPrefix * LSecSize + LSecIdx].Bits := Byte(LLen);
+        ATable.Second[LPrefix * LSecSize + LSecIdx].Symbol := Word(I);
       end;
       ATable.Fast[LPrefix].Bits := CFastMarkSecond;
     end;
@@ -403,9 +403,11 @@ begin
   if ATbl.SecBits = 0 then
     RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
   LSecIdx := (AR.Hold shr ATbl.FastBits) and ATbl.SecMask;
-  if (Integer(LIdx) >= Length(ATbl.Second)) or (Length(ATbl.Second[LIdx]) = 0) then
+  if ATbl.SecSize = 0 then
     RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
-  E := ATbl.Second[LIdx][LSecIdx];
+  if (ATbl.SecSize > 0) and (Integer(LIdx) * ATbl.SecSize + Integer(LSecIdx) >= Length(ATbl.Second)) then
+    RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
+  E := ATbl.Second[Integer(LIdx) * ATbl.SecSize + Integer(LSecIdx)];
   if E.Bits = 0 then
     RaiseZlib(zecCorruptStream, 'zlib: corrupt stream');
   if AR.Bits < E.Bits then
@@ -1567,7 +1569,7 @@ begin
     end;
     Exit;
   end;
-  LEst := SizeUInt(Length(AData)) + 16;
+  LEst := SizeUInt(Length(AData)) + (SizeUInt(Length(AData)) shr 4) + 32;
   if LEst < 64 then LEst := 64;
   BwInit(BW, LEst);
   DeflateDynamic(AData, BW, ALevel);
