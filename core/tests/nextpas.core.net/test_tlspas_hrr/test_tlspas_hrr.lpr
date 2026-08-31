@@ -879,6 +879,38 @@ begin
   Check(Pos('reject_replay=2', F)>0, 'format replay');
 end;
 
+procedure TestAdaptiveLimit;
+var C: TTlsPasAdaptiveLimitConfig; SS: TTlsPasServerStats; RS: TAsyncTlsPasReplayStats; L: Cardinal;
+begin
+  C := DefaultTlsPasAdaptiveLimitConfig;
+  Check(C.BaseLimit=16384, 'default base 16384');
+  Check(C.MinLimit=512, 'min 512');
+  SS := Default(TTlsPasServerStats);
+  RS := Default(TAsyncTlsPasReplayStats);
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L=16384, 'empty stats base');
+  SS.Accepts:=9; SS.RejectPolicy:=1; // 10% not >0.1
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L=16384, '10% not over');
+  SS.Accepts:=8; SS.RejectPolicy:=2; // 20% >0.1 -> half
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L=8192, '20% half');
+  RS.Current:=51;
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L=4096, 'current>50 half again');
+  // min clamp
+  C.MinLimit:=5000;
+  L := TlsPasComputeAdaptiveMaxEarlyData(SS, RS, C);
+  Check(L>=5000, 'min clamp');
+end;
+
+procedure TestHeaderValue;
+begin
+  Check(TlsPasEarlyDataDecisionToHeaderValue(edAccept)='1', 'header accept 1');
+  Check(TlsPasEarlyDataDecisionToHeaderValue(edRejectPolicy)='0', 'header policy 0');
+  Check(TlsPasEarlyDataDecisionToHeaderValue(edRejectReplay)='0', 'header replay 0');
+end;
+
 var
   GSuite: TTestSuite;
 begin
@@ -919,6 +951,8 @@ begin
   GSuite.Test('ServerShouldAccept', @TestServerShouldAcceptIntegration);
   GSuite.Test('ObserverStats', @TestObserverStats);
   GSuite.Test('FormatHelpers', @TestFormatHelpers);
+  GSuite.Test('AdaptiveLimit', @TestAdaptiveLimit);
+  GSuite.Test('HeaderValue', @TestHeaderValue);
   if not GSuite.Run then
     Halt(1);
 end.
