@@ -34,16 +34,22 @@ uses
 type
   TGitOidArray = array of TGitOid;
 
-  { sorted-bytes oid membership; shared by the streaming walk and the
-    topological planner }
+  { hash oid membership; shared by the streaming walk and the
+    topological planner - open-addressing power-of-two, linear probe,
+    zero-copy hash over raw bytes, O(1) average insert/lookup }
   TGitOidSet = class
   private
-    FItems: array of TGitOid; { ascending by raw bytes }
+    FItems: array of TGitOid;
+    FUsed: array of Boolean;
+    FCount: SizeInt;
+    FCapMask: Integer; { -1 when empty, else Cap-1 }
+    procedure Grow;
+    function HashOid(const AOid: TGitOid): SizeUInt; inline;
   public
     { no-op when already present }
     procedure Add(const AOid: TGitOid);
-    function Contains(const AOid: TGitOid): Boolean;
-    function Count: SizeInt;
+    function Contains(const AOid: TGitOid): Boolean; inline;
+    function Count: SizeInt; inline;
   end;
 
   TWalkEntry = record
@@ -146,52 +152,97 @@ begin
   Result := False;
 end;
 
+function TGitOidSet.HashOid(const AOid: TGitOid): SizeUInt; inline;
+var
+  I: Integer;
+  H: LongWord;
+begin
+  H := LongWord($811C9DC5);
+  for I := 0 to GitOidRawLen - 1 do
+  begin
+    {$PUSH}{$Q-}{$R-}
+    H := (H xor LongWord(AOid.Bytes[I])) * LongWord($01000193);
+    {$POP}
+  end;
+  Result := SizeUInt(H);
+end;
+
+procedure TGitOidSet.Grow;
+var
+  OldItems: array of TGitOid;
+  OldUsed: array of Boolean;
+  OldCap, NewCap, I, Idx: Integer;
+  H: SizeUInt;
+begin
+  OldCap := Length(FItems);
+  if OldCap = 0 then
+    NewCap := 16
+  else
+    NewCap := OldCap * 2;
+  OldItems := FItems;
+  OldUsed := FUsed;
+  SetLength(FItems, NewCap);
+  SetLength(FUsed, NewCap);
+  if NewCap > 0 then
+    FillChar(FUsed[0], NewCap * SizeOf(Boolean), 0);
+  FCapMask := NewCap - 1;
+  FCount := 0;
+  for I := 0 to OldCap - 1 do
+    if (I < Length(OldUsed)) and OldUsed[I] then
+    begin
+      H := HashOid(OldItems[I]);
+      Idx := Integer(H and SizeUInt(FCapMask));
+      while FUsed[Idx] do
+        Idx := (Idx + 1) and FCapMask;
+      FItems[Idx] := OldItems[I];
+      FUsed[Idx] := True;
+      Inc(FCount);
+    end;
+end;
+
 procedure TGitOidSet.Add(const AOid: TGitOid);
 var
-  Lo, Hi, Mid, InsAt: Integer;
+  Idx: Integer;
+  H: SizeUInt;
 begin
-  Lo := 0;
-  Hi := High(FItems);
-  while Lo <= Hi do
+  if Length(FItems) = 0 then
+    Grow
+  else if FCount * 4 >= Length(FItems) * 3 then
+    Grow;
+  H := HashOid(AOid);
+  Idx := Integer(H and SizeUInt(FCapMask));
+  while FUsed[Idx] do
   begin
-    Mid := (Lo + Hi) div 2;
-    if GitOidSame(FItems[Mid], AOid) then
+    if GitOidSame(FItems[Idx], AOid) then
       Exit;
-    if OidLess(FItems[Mid], AOid) then
-      Lo := Mid + 1
-    else
-      Hi := Mid - 1;
+    Idx := (Idx + 1) and FCapMask;
   end;
-  InsAt := Lo;
-  SetLength(FItems, Length(FItems) + 1);
-  if InsAt < High(FItems) then
-    Move(FItems[InsAt], FItems[InsAt + 1],
-      SizeInt(High(FItems) - InsAt) * SizeOf(TGitOid));
-  FItems[InsAt] := AOid;
+  FItems[Idx] := AOid;
+  FUsed[Idx] := True;
+  Inc(FCount);
 end;
 
-function TGitOidSet.Contains(const AOid: TGitOid): Boolean;
+function TGitOidSet.Contains(const AOid: TGitOid): Boolean; inline;
 var
-  Lo, Hi, Mid: Integer;
+  Idx: Integer;
+  H: SizeUInt;
 begin
-  Result := False;
-  Lo := 0;
-  Hi := High(FItems);
-  while Lo <= Hi do
+  if Length(FItems) = 0 then
+    Exit(False);
+  H := HashOid(AOid);
+  Idx := Integer(H and SizeUInt(FCapMask));
+  while FUsed[Idx] do
   begin
-    Mid := (Lo + Hi) div 2;
-    if GitOidSame(FItems[Mid], AOid) then
+    if GitOidSame(FItems[Idx], AOid) then
       Exit(True);
-    if OidLess(FItems[Mid], AOid) then
-      Lo := Mid + 1
-    else
-      Hi := Mid - 1;
+    Idx := (Idx + 1) and FCapMask;
   end;
+  Result := False;
 end;
 
-function TGitOidSet.Count: SizeInt;
+function TGitOidSet.Count: SizeInt; inline;
 begin
-  Result := Length(FItems);
+  Result := FCount;
 end;
 
 function DefaultGitRevOptions: TGitRevOptions;
