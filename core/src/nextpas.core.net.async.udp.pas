@@ -45,7 +45,6 @@ function AsyncUdpBind(const ALoop: TAsyncLoop; const AAddr: string;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.platform.socket,
   nextpas.core.platform.socket.base,
@@ -149,7 +148,7 @@ begin
   inherited Create;
   FSock := ASock;
   FLoop := ALoop;
-  if not Supports(ASock, IUdpSocketRuntime, FRuntime) then
+  if ((ASock) = nil) or ((ASock).QueryInterface(IUdpSocketRuntime, FRuntime) <> 0) then
     raise EInvalidOperationError.Create('async udp: socket lacks runtime handle');
 end;
 

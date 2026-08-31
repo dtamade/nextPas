@@ -78,7 +78,6 @@ type
 implementation
 
 uses
-  SysUtils,
   nextpas.core.exception,
   nextpas.core.mem.utils;
 
