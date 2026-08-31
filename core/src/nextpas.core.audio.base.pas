@@ -129,7 +129,9 @@ function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
 
 implementation
 
-uses Math;
+uses
+  nextpas.core.math.base,
+  nextpas.core.math.trig;
 
 {$PUSH}
 {$WARNINGS OFF}
@@ -367,7 +369,7 @@ procedure AudioPanLawGains(APan: Single; out AL, AR: Single);
 var A: Double;
 begin
   if APan < -1 then APan := -1 else if APan > 1 then APan := 1;
-  A := (APan + 1) * Pi / 4;
+  A := (APan + 1) * PI_VALUE / 4;
   AL := Single(Cos(A) * CAudioPanLawUnity);
   AR := Single(Sin(A) * CAudioPanLawUnity);
 end;

@@ -23,7 +23,9 @@ function PanLawGains(APan: Single; ALawDB: Single): TPointF; overload; deprecate
 
 implementation
 
-uses Math;
+uses
+  nextpas.core.math.base,
+  nextpas.core.math.trig;
 
 procedure EnsureF32(var ABuf: TAudioBuffer);
 var LNew: TBytes; LExpected: Int64;
@@ -205,7 +207,7 @@ function PanLawGains(APan: Single): TPointF;
 var LPan, LAngle: Single;
 begin
   LPan := APan; if LPan < -1 then LPan := -1 else if LPan > 1 then LPan := 1 else LPan := APan;
-  LAngle := (LPan + 1) * Pi / 4.0;
+  LAngle := (LPan + 1) * PI_VALUE / 4.0;
   Result.X := Cos(LAngle);
   Result.Y := Sin(LAngle);
 end;
@@ -221,7 +223,7 @@ begin
   end
   else
   begin
-    LAngle := (LPan + 1) * Pi / 4.0;
+    LAngle := (LPan + 1) * PI_VALUE / 4.0;
     Result.X := Cos(LAngle);
     Result.Y := Sin(LAngle);
   end;
