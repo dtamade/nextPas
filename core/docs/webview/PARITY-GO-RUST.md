@@ -1,6 +1,6 @@
 # webview × Go / Rust 对标纲领
 
-**状态**: Design（S0）
+**状态**: **Production Ready 1.93**（对标 S98-S101 bench 1.22GB/s + 3.26µs 校准，`loader` 纪律冻结，`window` 缝对称预留）
 **Owner**: core-webview lane
 **活入口**: [README.md](README.md) · [CONTRACT.md](CONTRACT.md) · [BRIDGE_PROTOCOL.md](BRIDGE_PROTOCOL.md) · [BACKENDS.md](BACKENDS.md)
 

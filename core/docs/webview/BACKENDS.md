@@ -1,6 +1,6 @@
 # nextpas.core.webview 后端绑定策略
 
-**状态**: **Production Ready**（Wave 1 gtk/fake 全量 + S4-S21 打磨；bench 双基线刷新；W2 Win32 真窗口→真 controller via wine 已验证（Env→Controller/ExecuteScript/WebMessage/注入/bounds 全链）、W3 待平台）
+**状态**: **Production Ready 1.93**（Wave 1 gtk/fake 全量 + S93-S101 六维极致；bench 1.22GB/s + 3.26µs 框架 `taskset -c 2`；W2 Win32 真窗口→真 controller via wine 已验证（Env→Controller/ExecuteScript/WebMessage/注入/bounds 全链）、W3 桩冻结）
 本文档记录各后端的 ABI 绑定方式、版本矩阵、主线程唤醒原语、
 eval 结果语义矩阵，以及从 fafafa.webview 移植资产的清单与边界。
 
