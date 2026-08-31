@@ -8,7 +8,8 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.git.native.base,
-  nextpas.core.git.native.pktline;
+  nextpas.core.git.native.pktline,
+  nextpas.core.git.native.util;
 
 { Fetch negotiation helpers (transports/smart_pkt.c + protocol-common.txt).
 

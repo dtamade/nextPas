@@ -8,7 +8,8 @@ uses
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.base,
-  nextpas.core.git.native.base;
+  nextpas.core.git.native.base,
+  nextpas.core.git.native.util;
 
 { Parsers for the human-readable git object formats: trees, commits and
   annotated tags. Pure functions over already-decompressed payload bytes. }

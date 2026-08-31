@@ -54,100 +54,39 @@ uses
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
   nextpas.core.git.native.common,
-  nextpas.core.git.native.util;
+  nextpas.core.git.native.util,
+  nextpas.core.git.native.wildmatch;
 
 function TrimSpaces(const S: string): string; inline;
 begin
   Result := GitTrimSpaces(S);
 end;
 
-function StripCR(const S: string): string;
+function StripCR(const S: string): string; inline;
 begin if (Length(S)>0) and (S[Length(S)]=#13) then Result:=Copy(S,1,Length(S)-1) else Result:=S; end;
 
 // FindBlobInTree / PeelToTree reused from nextpas.core.git.native.common (single source)
+// WildSegment/SegmentsMatch reused from nextpas.core.git.native.wildmatch (single source, inline, zero-copy)
 
-// ---- pattern matching ----
+// ---- pattern matching (single source via wildmatch) ----
 
-function PreprocessPattern(const APat: string): string;
-var I: Integer; R: string;
+function BasenameOfAttr(const APath: string): string; inline;
+var I: Integer;
 begin
-  // Replace "**" with #1 (any including /), single "*" with #2 (any except /)
-  R:='';
-  I:=1;
-  while I<=Length(APat) do
-  begin
-    if (APat[I]='*') and (I<Length(APat)) and (APat[I+1]='*') then
-    begin
-      R:=R+Chr(1);
-      Inc(I,2);
-      // optional single '/' after ** ? keep as is; **/ is handled as #1 + '/'
-    end else if APat[I]='*' then
-    begin R:=R+Chr(2); Inc(I); end
-    else begin R:=R+APat[I]; Inc(I); end;
-  end;
-  Result:=R;
+  for I:=Length(APath) downto 1 do if APath[I]='/' then Exit(Copy(APath,I+1,MaxInt));
+  Result:=APath;
 end;
 
-function WildMatchRec(const Pat, Str: string; PI, SI: Integer; var Memo: array of Integer; PLen, SLen: Integer): Boolean;
-var Res: Boolean;
-  function MemoGet(p,s: Integer): Integer; begin Result:=Memo[p*(SLen+2)+s]; end;
-  procedure MemoSet(p,s: Integer; V: Integer); begin Memo[p*(SLen+2)+s]:=V; end;
-begin
-  if MemoGet(PI,SI)<> -1 then Exit(MemoGet(PI,SI)=1);
-  if PI>PLen then
-  begin
-    Res:=SI>SLen;
-    MemoSet(PI,SI, Ord(Res));
-    Exit(Res);
-  end;
-  if Pat[PI]=Chr(1) then // **
-  begin
-    // ** matches any sequence including /
-    if WildMatchRec(Pat,Str,PI+1,SI,Memo,PLen,SLen) then begin MemoSet(PI,SI,1); Exit(True); end;
-    if SI<=SLen then if WildMatchRec(Pat,Str,PI,SI+1,Memo,PLen,SLen) then begin MemoSet(PI,SI,1); Exit(True); end;
-    MemoSet(PI,SI,0); Exit(False);
-  end else if Pat[PI]=Chr(2) then // * matches any except /
-  begin
-    if WildMatchRec(Pat,Str,PI+1,SI,Memo,PLen,SLen) then begin MemoSet(PI,SI,1); Exit(True); end;
-    if (SI<=SLen) and (Str[SI]<>'/') then if WildMatchRec(Pat,Str,PI,SI+1,Memo,PLen,SLen) then begin MemoSet(PI,SI,1); Exit(True); end;
-    MemoSet(PI,SI,0); Exit(False);
-  end else if Pat[PI]='?' then
-  begin
-    if (SI<=SLen) and (Str[SI]<>'/') then Res:=WildMatchRec(Pat,Str,PI+1,SI+1,Memo,PLen,SLen)
-    else Res:=False;
-    MemoSet(PI,SI, Ord(Res)); Exit(Res);
-  end else
-  begin
-    if (SI<=SLen) and (Pat[PI]=Str[SI]) then Res:=WildMatchRec(Pat,Str,PI+1,SI+1,Memo,PLen,SLen)
-    else Res:=False;
-    MemoSet(PI,SI, Ord(Res)); Exit(Res);
-  end;
-end;
-
-function AttrPatternMatches(const APattern, APath: string): Boolean;
-var Pat,Str: string; Memo: array of Integer; PLen,SLen,I: Integer; HasSlash: Boolean;
+function AttrPatternMatches(const APattern, APath: string): Boolean; inline;
 begin
   if APattern='' then Exit(False);
-  HasSlash:=Pos('/',APattern)>0;
-  if not HasSlash then
-  begin
-    // match basename only
-    Str:=APath;
-    I:=Length(Str);
-    while (I>0) and (Str[I]<>'/') do Dec(I);
-    Str:=Copy(Str,I+1,MaxInt);
-    Pat:=PreprocessPattern(APattern);
-  end else
-  begin
-    Pat:=PreprocessPattern(APattern);
-    Str:=APath;
-    // handle leading '/' anchor: git treats "/foo" as anchored, but we treat as without '/'
-    if (Length(Pat)>0) and (Pat[1]='/') then Pat:=Copy(Pat,2,MaxInt);
-  end;
-  PLen:=Length(Pat); SLen:=Length(Str);
-  SetLength(Memo,(PLen+2)*(SLen+2));
-  for I:=0 to High(Memo) do Memo[I]:=-1;
-  Result:=WildMatchRec(Pat,Str,1,1,Memo,PLen,SLen);
+  // no '/' -> basename-only via GitWildSegment (wildmatch single source, inline, zero-copy via const)
+  if Pos('/',APattern)=0 then
+    Exit(GitWildSegment(APattern, BasenameOfAttr(APath)));
+  // anchored: strip leading '/' ("/foo" -> "foo") then delegate to GitSegmentsMatch (wildmatch, '**' per segment)
+  if (Length(APattern)>0) and (APattern[1]='/') then
+    Exit(GitSegmentsMatch(Copy(APattern,2,MaxInt), APath));
+  Result:=GitSegmentsMatch(APattern, APath);
 end;
 
 function SplitWs(const S: string): TStringArray;

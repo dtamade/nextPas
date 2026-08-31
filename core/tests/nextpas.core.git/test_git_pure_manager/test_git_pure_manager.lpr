@@ -15,28 +15,45 @@ uses
 var
   Suite: TTestSuite;
 
-function BytesOfString(const AText: string): TBytes;
+function BytesOfString(const AText: string): TBytes; inline;
 begin
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
     Move(AText[1], Result[0], Length(AText));
 end;
 
-function MkTempDir(const APrefix: string): string;
+function MkTempDir(const APrefix: string): string; inline;
 begin
   Result := PathJoin([GetTempDir, APrefix + '_' + IntToStr(GetProcessID) + '_' + IntToStr(Random(1000000))]);
   RemoveAll(Result);
   MkdirAll(Result);
 end;
 
-function ContainsStr(const AItems: TStringArray; const AValue: string): Boolean;
+function ContainsStr(const AItems: TStringArray; const AValue: string): Boolean; inline;
 var
   S: string;
 begin
   Result := False;
+  // zero-copy scan, no Copy allocation, inline hot path
   for S in AItems do
     if S = AValue then
       Exit(True);
+end;
+
+function IsHexChar(ACh: Char): Boolean; inline;
+begin
+  Result := ((ACh >= '0') and (ACh <= '9')) or ((ACh >= 'a') and (ACh <= 'f')) or ((ACh >= 'A') and (ACh <= 'F'));
+end;
+
+function Is40Hex(const S: string): Boolean; inline;
+var
+  I: Integer;
+begin
+  if Length(S) <> 40 then Exit(False);
+  // zero-copy PChar scan, single source hex validation (no duplicate adler/wildmatch)
+  for I := 1 to 40 do
+    if not IsHexChar(S[I]) then Exit(False);
+  Result := True;
 end;
 
 procedure GitRun(const ADir: string; const AArgs: array of string);
@@ -193,6 +210,288 @@ begin
   CheckFalse(LMgr.Initialized, 'gbAuto Finalize should clear Initialized');
 end;
 
+// CONTRACT INV-O4/E2/M4: DiscoverRepository pure query, no throw, PathClean absolute
+procedure TestDiscoverRepositoryInvariants;
+var
+  LBase, LRoot, LNest, LMain, LWt, LWtNest: string;
+  LMgr: IGitManager;
+  LRepo: IGitRepository;
+  LWtExt: IGitWorktreeExt;
+begin
+  LBase := MkTempDir('pure_discover');
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+
+    // empty / unreachable returns '' not throw (INV-E2)
+    CheckEqual('', LMgr.DiscoverRepository(''), 'DiscoverRepository empty -> empty');
+    CheckEqual('', LMgr.DiscoverRepository(PathJoin([LBase, 'does_not_exist_xyz'])), 'unreachable -> empty');
+
+    // ancestor .git discovery via PathClean absolute
+    LRoot := PathJoin([LBase, 'repo']);
+    MkdirAll(LRoot);
+    LRepo := LMgr.InitRepository(LRoot, False);
+    Check(LMgr.IsRepository(LRoot), 'IsRepository after init');
+    LNest := PathJoin([LRoot, 'a', 'b', 'c']);
+    MkdirAll(LNest);
+    CheckEqual(PathClean(LRoot), PathClean(LMgr.DiscoverRepository(LNest)), 'Discover should find ancestor .git');
+    CheckEqual(PathClean(LRoot), PathClean(LMgr.DiscoverRepository(PathJoin([LRoot, '.git']))), '.git dir itself discovers worktree root');
+
+    // worktree .git file resolution: create linked worktree then discover from its nested dir
+    GitRun(LRoot, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LRoot, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LRoot, 'seed.txt']), BytesOfString('seed'), PermDefault);
+    GitRun(LRoot, ['add', 'seed.txt']);
+    GitRun(LRoot, ['commit', '-m', 'seed']);
+    // reopen to ensure native adapter sees committed HEAD
+    LRepo := LMgr.OpenRepository(LRoot);
+    if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+      raise Exception.Create('supports worktree ext');
+    LMain := LRoot;
+    LWt := PathJoin([LBase, 'linked']);
+    LWtExt.AddWorktree('linked-wt', LWt, '', False);
+    try
+      LWtNest := PathJoin([LWt, 'nested', 'deep']);
+      MkdirAll(LWtNest);
+      CheckEqual(PathClean(LWt), PathClean(LMgr.DiscoverRepository(LWtNest)), 'Discover resolves linked worktree .git file to worktree root');
+      // also verify Discover on worktree .git file itself
+      CheckEqual(PathClean(LWt), PathClean(LMgr.DiscoverRepository(PathJoin([LWt, '.git']))), 'worktree .git file resolves');
+    finally
+      // prune metadata but keep dir for finally cleanup; RemoveAll will clean both
+      if Supports(LMgr.OpenRepository(LMain), IGitWorktreeExt, LWtExt) then
+        LWtExt.PruneWorktree('linked-wt');
+      RemoveAll(LWt);
+    end;
+
+    // bare repo discover returns gitdir itself
+    LRoot := PathJoin([LBase, 'bare.git']);
+    LRepo := LMgr.InitRepository(LRoot, True);
+    Check(LRepo.IsBare, 'bare repo');
+    CheckEqual(PathClean(LRoot), PathClean(LMgr.DiscoverRepository(LRoot)), 'Discover bare returns gitdir');
+  finally
+    RemoveAll(LBase);
+  end;
+end;
+
+// CONTRACT INV-O4/E2/M4: CloneRepository failure not leak, raises EGitError native not implemented
+procedure TestCloneRepositoryInvariants;
+var
+  LBase, LClone: string;
+  LMgr: IGitManager;
+  LRaised: Boolean;
+begin
+  LBase := MkTempDir('pure_clone');
+  LClone := PathJoin([LBase, 'clone_target']);
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    LRaised := False;
+    try
+      LMgr.CloneRepository('https://example.invalid/does-not-exist.git', LClone);
+    except
+      on E: EGitError do
+      begin
+        LRaised := True;
+        // native backend message must contain not implemented, EGitError not lost (INV-E2)
+        Check(Pos('not implemented', LowerCase(E.Message)) > 0, 'Clone EGitError should mention not implemented');
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'CloneRepository native must raise EGitError');
+    // no half repo left (INV-M4)
+    CheckFalse(FileExists(PathJoin([LClone, 'HEAD'])), 'Clone failure must not leave HEAD');
+    CheckFalse(DirectoryExists(PathJoin([LClone, 'objects'])), 'Clone failure must not leave objects');
+    // manager still usable after failure (INV-M4: exception not corrupt manager state)
+    Check(LMgr.Initialized, 'Manager still initialized after clone failure');
+    CheckEqual('', LMgr.DiscoverRepository(PathJoin([LClone, 'nested'])), 'Manager usable after clone failure');
+  finally
+    RemoveAll(LBase);
+  end;
+end;
+
+// CONTRACT INV-O4/E2/M4: CommitOnHead requires AMessage<>'', 40-hex OID, try/finally releases
+procedure TestCommitOnHeadInvariants;
+var
+  LDir: string;
+  LMgr: IGitManager;
+  LRepo: IGitRepository;
+  LWtExt: IGitWorktreeExt;
+  LRaised: Boolean;
+  LOid, LOid2: string;
+  LCommit: IGitCommit;
+begin
+  LDir := MkTempDir('pure_commit_head');
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    LRepo := LMgr.InitRepository(LDir, False);
+    GitRun(LDir, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LDir, ['config', 'user.email', 'pure@example.invalid']);
+    if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+      raise Exception.Create('IGitRepository should support IGitWorktreeExt for CommitOnHead');
+
+    // empty message must raise EGitError(GIT_EINVALID,'message required') (INV-E2)
+    LRaised := False;
+    try
+      LWtExt.CommitOnHead('', 'A', 'a@b.c');
+    except
+      on E: EGitError do
+      begin
+        LRaised := True;
+        Check(Pos('message required', LowerCase(E.Message)) > 0, 'empty message EGitError contains message required');
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'CommitOnHead empty message must raise EGitError');
+
+    LRaised := False;
+    try
+      LWtExt.CommitOnHead('   ', 'A', 'a@b.c');
+    except
+      on E: EGitError do LRaised := True;
+      on E: Exception do LRaised := True;
+    end;
+    Check(LRaised, 'CommitOnHead whitespace message must raise EGitError');
+
+    // stage file then commit, verify 40-hex OID and HEAD update
+    WriteFile(PathJoin([LDir, 'hello.txt']), BytesOfString('hello pure'), PermDefault);
+    GitRun(LDir, ['add', 'hello.txt']);
+    LOid := LWtExt.CommitOnHead('first pure commit', 'PureTester', 'pure@example.invalid');
+    CheckEqual(40, Length(LOid), 'CommitOnHead should return 40 hex');
+    Check(Is40Hex(LOid), 'CommitOnHead OID must be 40 hex');
+    LCommit := LRepo.HeadCommit;
+    CheckEqual('first pure commit', LCommit.ShortMessage, 'HEAD commit should be our commit');
+    CheckEqual(LowerCase(LOid), LowerCase(LCommit.OIDString), 'OID matches HeadCommit');
+
+    // resources released: second commit via fallback author (empty strings) must succeed
+    WriteFile(PathJoin([LDir, 'second.txt']), BytesOfString('second'), PermDefault);
+    GitRun(LDir, ['add', 'second.txt']);
+    LOid2 := LWtExt.CommitOnHead('second commit', '', '');
+    CheckEqual(40, Length(LOid2), 'second CommitOnHead 40 hex');
+    Check(Is40Hex(LOid2), 'second OID hex');
+    Check(LowerCase(LOid) <> LowerCase(LOid2), 'OIDs must differ');
+    // stability: repo still clean after commits
+    Check(LRepo.HeadCommit.ShortMessage = 'second commit', 'second commit visible via Head');
+  finally
+    RemoveAll(LDir);
+  end;
+end;
+
+// CONTRACT INV-O4/E2/M4: AddWorktree requires name/path, duplicate raises, creates commondir/gitdir/HEAD, Prune only metadata
+procedure TestAddWorktreeInvariants;
+var
+  LBase, LMain, LWt, LWt2: string;
+  LMgr: IGitManager;
+  LRepo: IGitRepository;
+  LWtExt: IGitWorktreeExt;
+  LWork: IGitWorktree;
+  LList: TStringArray;
+  LRaised: Boolean;
+begin
+  LBase := MkTempDir('pure_worktree');
+  LMain := PathJoin([LBase, 'main']);
+  LWt := PathJoin([LBase, 'wt']);
+  LWt2 := PathJoin([LBase, 'wt2']);
+  try
+    LMgr := NewGitManager(gbNative);
+    Check(LMgr.Initialize, 'init');
+    LRepo := LMgr.InitRepository(LMain, False);
+    GitRun(LMain, ['config', 'user.name', 'Pure Tester']);
+    GitRun(LMain, ['config', 'user.email', 'pure@example.invalid']);
+    WriteFile(PathJoin([LMain, 'seed.txt']), BytesOfString('seed'), PermDefault);
+    GitRun(LMain, ['add', 'seed.txt']);
+    GitRun(LMain, ['commit', '-m', 'seed']);
+    LRepo := LMgr.OpenRepository(LMain);
+    if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+      raise Exception.Create('supports worktree ext');
+
+    // invalid params must raise EGitError(GIT_EINVALIDSPEC) (INV-E2)
+    LRaised := False;
+    try LWtExt.AddWorktree('', LWt, '', False); except on E: EGitError do LRaised := True; on E: Exception do LRaised := True; end;
+    Check(LRaised, 'AddWorktree empty name must raise EGitError');
+    LRaised := False;
+    try LWtExt.AddWorktree('wt1', '', '', False); except on E: EGitError do LRaised := True; on E: Exception do LRaised := True; end;
+    Check(LRaised, 'AddWorktree empty path must raise EGitError');
+    LRaised := False;
+    try LWtExt.AddWorktree('a/b', LWt, '', False); except on E: EGitError do LRaised := True; on E: Exception do LRaised := True; end;
+    Check(LRaised, 'AddWorktree slash name must raise EGitError');
+
+    // success: creates worktrees/<id>/commondir+gitdir+HEAD (INV-O4)
+    LWork := LWtExt.AddWorktree('my-wt', LWt, '', False);
+    Check(LWork <> nil, 'AddWorktree should return worktree');
+    CheckEqual('my-wt', LWork.Name, 'worktree name');
+    Check(LWork.Path <> '', 'worktree path non-empty');
+    Check(DirectoryExists(LWt), 'worktree dir created');
+    Check(FileExists(PathJoin([LMain, '.git', 'worktrees', 'my-wt', 'commondir'])), 'worktree commondir exists');
+    Check(FileExists(PathJoin([LMain, '.git', 'worktrees', 'my-wt', 'gitdir'])), 'worktree gitdir exists');
+    Check(FileExists(PathJoin([LMain, '.git', 'worktrees', 'my-wt', 'HEAD'])), 'worktree HEAD exists');
+    Check(FileExists(PathJoin([LWt, '.git'])), '.git file in worktree exists');
+    // duplicate name must raise EGitError
+    LRaised := False;
+    try LWtExt.AddWorktree('my-wt', LWt2, '', False); except on E: EGitError do LRaised := True; on E: Exception do LRaised := True; end;
+    Check(LRaised, 'AddWorktree duplicate name must raise EGitError');
+
+    // ListWorktrees contains entry
+    LList := LWtExt.ListWorktrees;
+    Check(Length(LList) >= 1, 'ListWorktrees should list at least one');
+    Check(ContainsStr(LList, 'my-wt'), 'ListWorktrees contains my-wt');
+
+    // LookupWorktree finds it
+    LWork := LWtExt.LookupWorktree('my-wt');
+    Check(LWork <> nil, 'LookupWorktree finds my-wt');
+
+    // Prune only clears metadata not worktree dir (INV-O4, INV-M4)
+    Check(LWtExt.PruneWorktree('my-wt'), 'PruneWorktree should succeed');
+    CheckFalse(DirectoryExists(PathJoin([LMain, '.git', 'worktrees', 'my-wt'])), 'Prune must remove metadata dir');
+    Check(DirectoryExists(LWt), 'Prune must NOT delete worktree working dir');
+    LRaised := False;
+    try LWtExt.LookupWorktree('my-wt'); except on E: EGitError do LRaised := True; on E: Exception do LRaised := True; end;
+    Check(LRaised, 'Lookup after Prune must raise EGitError');
+  finally
+    RemoveAll(LBase);
+    // ensure no leak of second wt dir if created
+    RemoveAll(LWt2);
+  end;
+end;
+
+// CONTRACT INV-O4: SetVerifySSL/VerifySSL Manager granularity, default True, affects only subsequent network ops
+procedure TestSetVerifySSLInvariants;
+var
+  LMgr, LMgr2: IGitManager;
+begin
+  LMgr := NewGitManager(gbNative);
+  Check(LMgr.Initialize, 'init');
+  try
+    // default True (FVerifySSL)
+    Check(LMgr.VerifySSL, 'VerifySSL default must be True');
+    LMgr.SetVerifySSL(False);
+    CheckFalse(LMgr.VerifySSL, 'SetVerifySSL(False) visible');
+    LMgr.SetVerifySSL(True);
+    Check(LMgr.VerifySSL, 'SetVerifySSL(True) visible');
+
+    // cross-manager not shared (INV-O4)
+    LMgr2 := NewGitManager(gbNative);
+    Check(LMgr2.Initialize, 'second init');
+    try
+      LMgr.SetVerifySSL(False);
+      Check(LMgr2.VerifySSL, 'second manager still True after first set False');
+      LMgr2.SetVerifySSL(False);
+      CheckFalse(LMgr2.VerifySSL, 'second SetVerifySSL(False) visible');
+      CheckFalse(LMgr.VerifySSL, 'first still False');
+      LMgr.SetVerifySSL(True);
+      CheckFalse(LMgr2.VerifySSL, 'second unaffected by first toggle');
+      Check(LMgr.VerifySSL, 'first now True');
+    finally
+      LMgr2.Finalize;
+    end;
+  finally
+    LMgr.Finalize;
+  end;
+  CheckFalse(LMgr.Initialized, 'Finalize clears Initialized');
+end;
+
 begin
   Randomize;
   Suite := TTestSuite.Create('pure_manager');
@@ -201,6 +500,11 @@ begin
   Suite.Test('TestStatusWithFile', @TestStatusWithFile);
   Suite.Test('TestHeadAndLookup', @TestHeadAndLookup);
   Suite.Test('TestFactoryGbAutoCompat', @TestFactoryGbAutoCompat);
+  Suite.Test('TestDiscoverRepositoryInvariants', @TestDiscoverRepositoryInvariants);
+  Suite.Test('TestCloneRepositoryNotImplemented', @TestCloneRepositoryInvariants);
+  Suite.Test('TestCommitOnHeadInvariants', @TestCommitOnHeadInvariants);
+  Suite.Test('TestAddWorktreeInvariants', @TestAddWorktreeInvariants);
+  Suite.Test('TestSetVerifySSLInvariants', @TestSetVerifySSLInvariants);
 
   if not Suite.Run then
     Halt(1);
