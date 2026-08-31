@@ -240,29 +240,23 @@ end;
 
 procedure TAudioBank.EnsureScratch(var AScratch: TBytes; ANeeded: Integer);
 begin
-  if Length(AScratch) < ANeeded then
-    SetLength(AScratch, ANeeded);
+  AudioEnsureBytesCapacity(AScratch, ANeeded);
 end;
 
 procedure TAudioBank.EnsureBankCapacity(ANeeded: Integer);
-var NewCap: Integer;
+var LCap: Integer;
 begin
-  { 几何扩容 EnsureBankCapacity：指数增长，稳态零分配 }
-  if Length(FEntries) >= ANeeded then Exit;
-  if Length(FEntries) = 0 then NewCap := 4
-  else NewCap := Length(FEntries) * 2;
-  while NewCap < ANeeded do NewCap := NewCap * 2;
-  SetLength(FEntries, NewCap);
+  LCap := Length(FEntries);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FEntries) <> LCap then SetLength(FEntries, LCap);
 end;
 
 procedure TAudioBank.EnsureVoiceCapacity(ANeeded: Integer);
-var NewCap: Integer;
+var LCap: Integer;
 begin
-  if Length(FVoices) >= ANeeded then Exit;
-  if Length(FVoices) = 0 then NewCap := 4
-  else NewCap := Length(FVoices) * 2;
-  while NewCap < ANeeded do NewCap := NewCap * 2;
-  SetLength(FVoices, NewCap);
+  LCap := Length(FVoices);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FVoices) <> LCap then SetLength(FVoices, LCap);
 end;
 
 function TAudioBank.FindEntry(AId: Integer): Integer;

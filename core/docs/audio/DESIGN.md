@@ -97,9 +97,9 @@ L2 nextpas.core.audio (仅依赖 L0-L1；io/fs 为显式允许 — 同层豁免)
 
 ## 10. 验证
 
-`223 tests HEAPTRC OK (16门，sfx canonical + bank/resource)` + `36文件无ffi/vendor（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）` + `17 GUID frozen (unique; 15 realtime domain + sfx 0050 canonical + spatial 0051 + event 0052 + bank 0053 + resource 0054)` + `实时纪律 + two-phase/EnsureScratch/PanLawGains` + `bench 8项` + `hygiene` 为 `focused-runtime` 必要条件（见 `README.md` 测试矩阵与 `check_source_contract.sh`）。
+`223 tests HEAPTRC OK (16门，sfx canonical + bank/resource)` + `36文件无ffi/vendor（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）` + `17 GUID frozen (unique; 15 realtime domain + sfx 0050 canonical + spatial 0051 + event 0052 + bank 0053 + resource 0054)` + `实时纪律 + two-phase/EnsureScratch/PanLawGains` + `bench 10项` + `hygiene` 为 `focused-runtime` 必要条件（见 `README.md` 测试矩阵与 `check_source_contract.sh`）。
 
 ```
-bench_pcm_wav 8 项：Parse/64KB, Parse/1MB, Write/1MB, Graph/1K, Graph/4K, Timeline/1K, TimelineLoop/1K, Device.Drive/1K
-Graph/Timeline/Device 零分配快照，GWrite 预分配，输出 ns/op + MB/s -O2
+bench_pcm_wav 10 项：Parse/64KB, Parse/1MB, Write/1MB, Graph/1K, Graph/4K, Timeline/1K, TimelineLoop/1K, Device.Drive/1K, Bank/1K, Resource/TryGet
+Graph/Timeline/Device/Bank/Resource 零分配快照，GWrite 预分配，输出 ns/op + MB/s -O2
 ```
