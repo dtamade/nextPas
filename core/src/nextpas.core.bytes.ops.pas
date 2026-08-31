@@ -219,7 +219,7 @@ begin
   Result := SpanConcat(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 var
   LOldLen: SizeUInt;
 begin
@@ -229,7 +229,7 @@ begin
   Move(ASrc[0], ADest[LOldLen], Length(ASrc));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 var
   LOldLen: SizeUInt;
 begin
