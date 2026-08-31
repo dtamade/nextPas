@@ -97,6 +97,10 @@ const
   { unix 文件类型位（外部属性高字内） }
   C_ZIP_UNIX_MODE_SYMLINK = $A000;
 
+  { DOS 纪元 unix 边界常量（1980-01-01 00:00:00Z / 2107-12-31 23:59:59Z），单源常量化去 TDate 构造 }
+  C_DOS_MIN_UNIX = Int64(315532800);
+  C_DOS_MAX_UNIX = Int64(4354819199);
+
   { 单条目解压默认上限与描述符扫描缓冲上限 }
   C_ZIP_DEFAULT_MAX_OUTPUT     = SizeUInt(1) shl 30;
   C_ZIP_DEFAULT_MAX_DESCRIPTOR = SizeUInt(512) * 1024 * 1024;
@@ -217,15 +221,13 @@ end;
 
 procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
 var
-  LMinSec, LMaxSec, LRem: Int64;
+  LRem: Int64;
   LD: TDate;
 begin
-  LMinSec := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
-  LMaxSec := Int64(TDate.Create(C_DOS_MAX_YEAR, 12, 31).ToUnixDays) * 86400 + 86399;
-  if AUnixSec < LMinSec then
-    AUnixSec := LMinSec
-  else if AUnixSec > LMaxSec then
-    AUnixSec := LMaxSec;
+  if AUnixSec < C_DOS_MIN_UNIX then
+    AUnixSec := C_DOS_MIN_UNIX
+  else if AUnixSec > C_DOS_MAX_UNIX then
+    AUnixSec := C_DOS_MAX_UNIX;
   LD := TDate.FromUnixDays(Integer(AUnixSec div 86400));
   LRem := AUnixSec mod 86400;
   ADosDate := Word(((LD.GetYear - C_DOS_MIN_YEAR) shl 9) or
@@ -234,12 +236,12 @@ begin
     (((LRem mod 3600) div 60) shl 5) or ((LRem mod 60) div 2));
 end;
 
-function DosMinUnixSec: Int64;
+function DosMinUnixSec: Int64; inline;
 begin
-  Result := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
+  Result := C_DOS_MIN_UNIX;
 end;
 
-function DosMaxUnixSec: Int64;
+function DosMaxUnixSec: Int64; inline;
 begin
   Result := C_DOS_MAX_UNIX;
 end;
