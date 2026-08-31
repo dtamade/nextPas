@@ -458,17 +458,33 @@ begin
 end;
 
 function TInstant.Add(const ADuration: TDuration): TInstant;
+var
+  LDelta: UInt64;
 begin
   if ADuration.AsNanoseconds >= 0 then
     Result.FNs := FNs + UInt64(ADuration.AsNanoseconds)
   else
-    Result.FNs := FNs - UInt64(-ADuration.AsNanoseconds);
+  begin
+    LDelta := UInt64(-ADuration.AsNanoseconds);
+    if FNs < LDelta then
+      Result.FNs := 0
+    else
+      Result.FNs := FNs - LDelta;
+  end;
 end;
 
 function TInstant.Sub(const ADuration: TDuration): TInstant;
+var
+  LDelta: UInt64;
 begin
   if ADuration.AsNanoseconds >= 0 then
-    Result.FNs := FNs - UInt64(ADuration.AsNanoseconds)
+  begin
+    LDelta := UInt64(ADuration.AsNanoseconds);
+    if FNs < LDelta then
+      Result.FNs := 0
+    else
+      Result.FNs := FNs - LDelta;
+  end
   else
     Result.FNs := FNs + UInt64(-ADuration.AsNanoseconds);
 end;
