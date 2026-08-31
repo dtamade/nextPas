@@ -9,6 +9,7 @@ program test_ssh_hostkey;
  * known_hosts 明文/[host]:port/|1| 散列条目与文件加载。}
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.system.sysutils,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -50,16 +51,6 @@ begin
   Result := '';
   for I := 0 to High(AData) do
     Result := Result + LowerCase(IntToHex(AData[I], 2));
-end;
-
-function ConcatBytes(const A, B: TBytes): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(A) + Length(B));
-  if Length(A) > 0 then
-    Move(A[0], Result[0], Length(A));
-  if Length(B) > 0 then
-    Move(B[0], Result[Length(A)], Length(B));
 end;
 
 { string(alg) || string(sig) 结构 }
@@ -250,7 +241,7 @@ begin
       SigBlobOf('ssh-ed25519', LSig)), 'valid sig must verify');
 
     { 篡改 H → False }
-    CheckFalse(SshVerifyHostSignature(LInfo, '', ConcatBytes(Copy(LAH, 0, 31),
+    CheckFalse(SshVerifyHostSignature(LInfo, '', BytesConcat(Copy(LAH, 0, 31),
       HexToBytes('ff')), SigBlobOf('ssh-ed25519', LSig)));
 
     { 协商算法与签名算法不一致 → False }
@@ -486,7 +477,7 @@ begin
     { 算法名不一致 → False }
     CheckFalse(SshVerifyHostSignature(LInfo, 'ssh-ed25519', LH, LSigBlob));
     { 篡改 H → False }
-    CheckFalse(SshVerifyHostSignature(LInfo, '', ConcatBytes(Copy(LH, 0, 31), HexToBytes('ff')), LSigBlob));
+    CheckFalse(SshVerifyHostSignature(LInfo, '', BytesConcat(Copy(LH, 0, 31), HexToBytes('ff')), LSigBlob));
     { 篡改签名 → False }
     LSigRaw[10] := LSigRaw[10] xor $01;
     CheckFalse(SshVerifyHostSignature(LInfo, '', LH, SigBlobOf('ecdsa-sha2-nistp256', LSigRaw)));

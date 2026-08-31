@@ -8,6 +8,7 @@ program test_ssh_keys;
  * checkint/nkeys/marker 等结构错误路径。}
 
 uses
+  nextpas.core.bytes.ops,
   SysUtils,
   nextpas.core.system.sysutils,
   nextpas.core.ssh.base,

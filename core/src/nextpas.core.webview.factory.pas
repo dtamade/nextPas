@@ -41,20 +41,10 @@ type
     function Ephemeral: IWebviewBuilder;
     function AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
     function RegisterInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder; overload;
-    function RegisterInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeSyncMethod): IWebviewBuilder; overload;
-    function RegisterInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeSyncProc): IWebviewBuilder; overload;
+      AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
     function RegisterAsyncInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder; overload;
-    function RegisterAsyncInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncMethod): IWebviewBuilder; overload;
-    function RegisterAsyncInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncProc): IWebviewBuilder; overload;
-    function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder; overload;
-    function OnReady(AHandler: TWebviewNotifyMethod): IWebviewBuilder; overload;
-    function OnReady(AHandler: TWebviewNotifyProc): IWebviewBuilder; overload;
+      AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
+    function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
     { 构造期导航（S9）：两者均进 FOptions，由后端构造期按优先级启动
       （InitialUrl 优先于 InitialHtml；Run/RunHtml 参数优先于两者）。 }
     function InitialUrl(const AUrl: string): IWebviewBuilder;
@@ -112,20 +102,22 @@ uses
 const
   CWebviewKindNames: array[TWebviewKind] of string = (
     'wvGtk', 'wvWebview2', 'wvWk', 'wvFake');
-  CKindOrder: array[0..3] of TWebviewKind = (wvWebview2, wvGtk, wvWk, wvFake);
 
 var
   GExitRequested: Integer = 0;
 
 function DefaultWebviewKind: TWebviewKind;
-var
-  LKind: TWebviewKind;
 begin
-  { S18/S25 能力驱动平台优先表驱动（CKindOrder 循环探测，无 IFDEF） }
-  for LKind in CKindOrder do
-    if WebviewBackendAvailable(LKind) then
-      Exit(LKind);
-  Result := wvFake;
+  { S18：能力驱动平台优先——wvWebview2（Windows/wine）优先于 wvGtk，
+    非对应平台探测自然失败，无 IFDEF；S25 加入 wvWk（Darwin 桩）。 }
+  if WebviewBackendAvailable(wvWebview2) then
+    Result := wvWebview2
+  else if WebviewBackendAvailable(wvGtk) then
+    Result := wvGtk
+  else if WebviewBackendAvailable(wvWk) then
+    Result := wvWk
+  else
+    Result := wvFake;
 end;
 
 {$PUSH}{$WARNINGS OFF}
@@ -161,7 +153,6 @@ begin
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is not available in this build', [
       CWebviewKindNames[AKind]]);
-  // S45: RegisterBackend 表驱动预留
   case AKind of
     wvFake:     Result := CreateFakeWebview(AOptions);
     wvGtk:      Result := TGtkWebview.Create(AOptions);
@@ -250,20 +241,10 @@ type
     function Ephemeral: IWebviewBuilder;
     function AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
     function RegisterInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder; overload;
-    function RegisterInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeSyncMethod): IWebviewBuilder; overload;
-    function RegisterInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeSyncProc): IWebviewBuilder; overload;
+      AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
     function RegisterAsyncInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder; overload;
-    function RegisterAsyncInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncMethod): IWebviewBuilder; overload;
-    function RegisterAsyncInvoke(const ACmd: string;
-      AHandler: TWebviewInvokeAsyncProc): IWebviewBuilder; overload;
-    function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder; overload;
-    function OnReady(AHandler: TWebviewNotifyMethod): IWebviewBuilder; overload;
-    function OnReady(AHandler: TWebviewNotifyProc): IWebviewBuilder; overload;
+      AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
+    function OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
     function InitialUrl(const AUrl: string): IWebviewBuilder;
     function InitialHtml(const AHtml: string): IWebviewBuilder;
     function DevServerUrl(const AUrl: string): IWebviewBuilder;
@@ -436,64 +417,6 @@ begin
   Result := Self;
 end;
 
-function TBuilderImpl.RegisterInvoke(const ACmd: string;
-  AHandler: TWebviewInvokeSyncMethod): IWebviewBuilder;
-begin
-  Result := RegisterInvoke(ACmd,
-    function(const APayloadJson: string): string
-    begin
-      Result := AHandler(APayloadJson);
-    end);
-end;
-
-function TBuilderImpl.RegisterInvoke(const ACmd: string;
-  AHandler: TWebviewInvokeSyncProc): IWebviewBuilder;
-begin
-  Result := RegisterInvoke(ACmd,
-    function(const APayloadJson: string): string
-    begin
-      Result := AHandler(APayloadJson);
-    end);
-end;
-
-function TBuilderImpl.RegisterAsyncInvoke(const ACmd: string;
-  AHandler: TWebviewInvokeAsyncMethod): IWebviewBuilder;
-begin
-  Result := RegisterAsyncInvoke(ACmd,
-    procedure(const APayloadJson: string; const ACompletion: IWebviewInvokeCompletion)
-    begin
-      AHandler(APayloadJson, ACompletion);
-    end);
-end;
-
-function TBuilderImpl.RegisterAsyncInvoke(const ACmd: string;
-  AHandler: TWebviewInvokeAsyncProc): IWebviewBuilder;
-begin
-  Result := RegisterAsyncInvoke(ACmd,
-    procedure(const APayloadJson: string; const ACompletion: IWebviewInvokeCompletion)
-    begin
-      AHandler(APayloadJson, ACompletion);
-    end);
-end;
-
-function TBuilderImpl.OnReady(AHandler: TWebviewNotifyMethod): IWebviewBuilder;
-begin
-  Result := OnReady(
-    procedure
-    begin
-      AHandler();
-    end);
-end;
-
-function TBuilderImpl.OnReady(AHandler: TWebviewNotifyProc): IWebviewBuilder;
-begin
-  Result := OnReady(
-    procedure
-    begin
-      AHandler();
-    end);
-end;
-
 function TBuilderImpl.InitialUrl(const AUrl: string): IWebviewBuilder; inline;
 begin
   FOptions.InitialUrl := AUrl;
@@ -508,7 +431,6 @@ end;
 
 function TBuilderImpl.DevServerUrl(const AUrl: string): IWebviewBuilder; inline;
 begin
-  CheckWebviewDevServerUrl(AUrl);
   FOptions.DevServerUrl := AUrl;
   Result := Self;
 end;
