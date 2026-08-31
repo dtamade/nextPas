@@ -7,10 +7,6 @@ interface
 uses
   np_mir_optimize;
 
-type
-  TMirPassVec = np_mir_optimize.TMirPassVec;
-  TMirPassManager = np_mir_optimize.TMirPassManager;
-
 implementation
 
 end.

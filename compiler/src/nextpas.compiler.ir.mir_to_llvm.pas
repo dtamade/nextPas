@@ -7,10 +7,6 @@ interface
 uses
   np_mir_to_llvm;
 
-type
-  TMirLlvmLineVec = np_mir_to_llvm.TMirLlvmLineVec;
-  TMirToLlvmTranslator = np_mir_to_llvm.TMirToLlvmTranslator;
-
 implementation
 
 end.

@@ -7,9 +7,6 @@ interface
 uses
   np_mir_pass_strength_red;
 
-type
-  TMirStrengthRedPass = np_mir_pass_strength_red.TMirStrengthRedPass;
-
 implementation
 
 end.

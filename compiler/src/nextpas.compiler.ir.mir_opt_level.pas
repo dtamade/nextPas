@@ -7,9 +7,6 @@ interface
 uses
   np_mir_opt_level;
 
-type
-  TMirOptLevel = np_mir_opt_level.TMirOptLevel;
-
 implementation
 
 end.

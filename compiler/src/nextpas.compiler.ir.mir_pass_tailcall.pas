@@ -7,9 +7,6 @@ interface
 uses
   np_mir_pass_tailcall;
 
-type
-  TMirTailCallPass = np_mir_pass_tailcall.TMirTailCallPass;
-
 implementation
 
 end.
