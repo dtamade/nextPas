@@ -3,7 +3,7 @@
 **模块路径**：`core/src/nextpas.core.args*.pas`（2 个源文件）
 **层级**：L2（依赖 L0-L1: base, errors, text）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-26
+**最后更新**：2026-08-30
 **版本**：1.1
 
 ---

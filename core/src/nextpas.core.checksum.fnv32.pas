@@ -26,43 +26,55 @@ const
     @param ALen 数据长度
     @return 更新后的累计值（继续传给下一次调用；终值即校验值） *}
 function Fnv1a32Update(AHash: LongWord; const AData: Pointer;
-  ALen: SizeUInt): LongWord;
+  ALen: SizeUInt): LongWord; inline;
 
 {** @desc 一次性计算（无类型参数风格，同 Crc32Of）
     @param ABuf 任意数据起始（ALen=0 时返回 FNV1A32_OFFSET，不读 ABuf） *}
-function Fnv1a32Of(const ABuf; ALen: SizeUInt): LongWord;
+function Fnv1a32Of(const ABuf; ALen: SizeUInt): LongWord; inline;
 
 {** @desc 一次性计算字节数组（nil/空 → FNV1A32_OFFSET） *}
-function Fnv1a32OfBytes(const AData: TBytes): LongWord;
+function Fnv1a32OfBytes(const AData: TBytes): LongWord; inline;
 
 implementation
 
 function Fnv1a32Update(AHash: LongWord; const AData: Pointer;
-  ALen: SizeUInt): LongWord;
+  ALen: SizeUInt): LongWord; inline;
 var
   P: PByte;
 begin
   P := PByte(AData);
-  { 显式 while 而非 for 0..ALen-1: ALen=0 时无符号下溢会退化为巨大循环 }
+  { zero-copy + batch 8: 显式 while 避免 for 下溢，8 字节批量展开降分支 }
+  {$PUSH}
+  {$R-}
+  {$Q-}
+  while ALen >= 8 do
+  begin
+    AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME; Inc(P);
+    AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME; Inc(P);
+    AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME; Inc(P);
+    AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME; Inc(P);
+    AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME; Inc(P);
+    AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME; Inc(P);
+    AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME; Inc(P);
+    AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME; Inc(P);
+    Dec(ALen, 8);
+  end;
   while ALen > 0 do
   begin
-    {$PUSH}
-    {$R-}
-    {$Q-}
     AHash := (AHash xor LongWord(P^)) * FNV1A32_PRIME;
-    {$POP}
     Inc(P);
     Dec(ALen);
   end;
+  {$POP}
   Result := AHash;
 end;
 
-function Fnv1a32Of(const ABuf; ALen: SizeUInt): LongWord;
+function Fnv1a32Of(const ABuf; ALen: SizeUInt): LongWord; inline;
 begin
   Result := Fnv1a32Update(FNV1A32_OFFSET, @ABuf, ALen);
 end;
 
-function Fnv1a32OfBytes(const AData: TBytes): LongWord;
+function Fnv1a32OfBytes(const AData: TBytes): LongWord; inline;
 begin
   Result := Fnv1a32Update(FNV1A32_OFFSET, PByte(AData),
     PtrUInt(Length(AData)));

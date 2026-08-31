@@ -130,12 +130,13 @@ procedure Unreachable(AMessage: string);                     // → EInvariantVi
 ### 1.10 哈希函数（FNV-1a）
 
 ```pascal
-function HashBytes(AData: PByte; ALen: SizeUInt): THashCode;
-function HashString(AValue: string): THashCode;
-function HashString(AValue: UnicodeString): THashCode; overload;
-function HashInteger(AValue: Int64): THashCode;
-function HashPointer(AValue: Pointer): THashCode;
+function HashBytes(AData: PByte; ALen: SizeUInt): THashCode; inline;
+function HashString(AValue: string): THashCode; inline;
+function HashString(AValue: UnicodeString): THashCode; overload; inline;
+function HashInteger(AValue: Int64): THashCode; inline;
+function HashPointer(AValue: Pointer): THashCode; inline;
 ```
+> 性能：`HashBytes` 零拷贝 `PByte+Len` 视图，`inline` 热路径，8 字节批量展开（`while >=8` + 尾循环），`{$R-}{$Q-}` 消溢出检查，复用 `checksum.fnv32` 单源常量（`2166136261/16777619`）无重复；`HashString/HashInteger/HashPointer` 为 `inline` 薄包装直通 `HashBytes`。
 
 | 函数 | 前置条件 | 后置条件 | 异常 |
 |------|----------|----------|------|

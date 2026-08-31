@@ -19,7 +19,7 @@ completion claim.
 
 | module | layer | owner | public facade | allowed dependencies | truth level |
 | --- | --- | --- | --- | --- | --- |
-| `args` | L3 | CLI surface | `nextpas.core.args` | L0-L2 | focused-runtime |
+| `args` | L2 | CLI surface | `nextpas.core.args` | L0-L1 | focused-runtime |
 | `async` | L1 | async loop/runtime | `nextpas.core.async` | L0 plus `io/time` seams | focused-runtime, forced-compile |
 | `atomic` | L0 | atomic primitives | `nextpas.core.atomic` | RTL, base/errors/platform sync only | focused-runtime, source-contract |
 | `base` | L0 | root values/contracts | `nextpas.core.base` | RTL, exception root | focused-runtime — `base.utils` adds `CompareBytesOrdered` + `CompareBytesIgnoreCase/HashFNV1aLower` (`LowerTable` 去分支, nil 守卫) unified for respack/vfs/http |

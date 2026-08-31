@@ -300,11 +300,11 @@ procedure Unreachable(const AMessage: string = 'unreachable code reached');
 { Common hash functions                                        }
 { ============================================================ }
 
-function HashBytes(const AData: PByte; const ALen: SizeUInt): THashCode;
-function HashString(const AValue: string): THashCode;
-function HashString(const AValue: UnicodeString): THashCode; overload;
-function HashInteger(const AValue: Int64): THashCode;
-function HashPointer(const AValue: Pointer): THashCode;
+function HashBytes(const AData: PByte; const ALen: SizeUInt): THashCode; inline;
+function HashString(const AValue: string): THashCode; inline;
+function HashString(const AValue: UnicodeString): THashCode; overload; inline;
+function HashInteger(const AValue: Int64): THashCode; inline;
+function HashPointer(const AValue: Pointer): THashCode; inline;
 
 { C interop helpers }
 function StrComp(A, B: PAnsiChar): Integer;
@@ -729,19 +729,46 @@ begin
   {$POP}
 end;
 
-function HashBytes(const AData: PByte; const ALen: SizeUInt): THashCode;
+function HashBytes(const AData: PByte; const ALen: SizeUInt): THashCode; inline;
 var
-  LI: SizeUInt;
+  P: PByte;
+  LRem: SizeUInt;
+  LHash: THashCode;
 begin
+  { zero-copy: view PByte+Len, no allocation; batch-unrolled hot path }
   Result := FNV_OFFSET_BASIS_32;
   if ALen = 0 then
     Exit;
   RequireNonEmptyPointer(AData, ALen, 'HashBytes');
-  for LI := 0 to ALen - 1 do
-    Result := FnvStep(Result, (AData + LI)^);
+  P := AData;
+  LRem := ALen;
+  LHash := FNV_OFFSET_BASIS_32;
+  {$PUSH}
+  {$R-}
+  {$Q-}
+  while LRem >= 8 do
+  begin
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32; Inc(P);
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32; Inc(P);
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32; Inc(P);
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32; Inc(P);
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32; Inc(P);
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32; Inc(P);
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32; Inc(P);
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32; Inc(P);
+    Dec(LRem, 8);
+  end;
+  while LRem > 0 do
+  begin
+    LHash := (LHash xor THashCode(P^)) * FNV_PRIME_32;
+    Inc(P);
+    Dec(LRem);
+  end;
+  {$POP}
+  Result := LHash;
 end;
 
-function HashString(const AValue: string): THashCode;
+function HashString(const AValue: string): THashCode; inline;
 begin
   if Length(AValue) > 0 then
     Result := HashBytes(@AValue[1],
@@ -750,7 +777,7 @@ begin
     Result := FNV_OFFSET_BASIS_32;
 end;
 
-function HashString(const AValue: UnicodeString): THashCode;
+function HashString(const AValue: UnicodeString): THashCode; inline;
 begin
   if Length(AValue) > 0 then
     Result := HashBytes(PByte(@AValue[1]),
@@ -759,12 +786,12 @@ begin
     Result := FNV_OFFSET_BASIS_32;
 end;
 
-function HashInteger(const AValue: Int64): THashCode;
+function HashInteger(const AValue: Int64): THashCode; inline;
 begin
   Result := HashBytes(@AValue, SizeOf(AValue));
 end;
 
-function HashPointer(const AValue: Pointer): THashCode;
+function HashPointer(const AValue: Pointer): THashCode; inline;
 begin
   Result := HashBytes(@AValue, SizeOf(AValue));
 end;
