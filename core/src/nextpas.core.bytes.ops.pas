@@ -10,6 +10,7 @@ uses
   nextpas.core.bytes.base;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
+function SpanEqualIgnoreCase(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer; inline;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
@@ -128,6 +129,15 @@ begin
   if (A.Len = 0) or (A.Data = B.Data) then
     Exit(True);
   Result := MemEqual(A.Data, B.Data, A.Len);
+end;
+
+function SpanEqualIgnoreCase(const A, B: TByteSpan): Boolean; inline;
+begin
+  if A.Len <> B.Len then
+    Exit(False);
+  if (A.Len = 0) or (A.Data = B.Data) then
+    Exit(True);
+  Result := CompareBytesIgnoreCase(A.Data, B.Data, A.Len, B.Len) = 0;
 end;
 
 function SpanCompare(const A, B: TByteSpan): Integer; inline;

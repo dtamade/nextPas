@@ -1,6 +1,5 @@
 unit nextpas.core.crypto.intf;
 
-{$mode ObjFPC}{$H+}
 {$I nextpas.core.settings.inc}
 
 { nextpas.core.crypto.intf — 密码学模块接口契约

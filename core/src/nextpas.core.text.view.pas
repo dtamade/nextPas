@@ -67,7 +67,6 @@ function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): strin
 implementation
 
 uses
-  nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.text.char,
   nextpas.core.simd.base,

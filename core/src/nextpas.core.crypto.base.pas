@@ -1,6 +1,5 @@
 unit nextpas.core.crypto.base;
 
-{$mode ObjFPC}{$H+}
 {$I nextpas.core.settings.inc}
 
 { nextpas.core.crypto.base — 密码学模块公共载体
