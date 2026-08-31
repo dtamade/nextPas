@@ -44,16 +44,17 @@ function StripLeadingZero(const AData: TBytes): TBytes;
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
 function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer;
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
 function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function BytesIsZero(const AData: TBytes): Boolean; inline;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
-function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 
 implementation
@@ -290,30 +291,6 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
-function StripLeadingZero(const AData: TBytes): TBytes; inline;
-var
-  I, LLen: Integer;
-begin
-  I := 0;
-  while (I < Length(AData)) and (AData[I] = 0) do
-    Inc(I);
-  if I >= Length(AData) then
-  begin
-    SetLength(Result, 1);
-    Result[0] := 0;
-    Exit;
-  end;
-  LLen := Length(AData) - I;
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AData[I], Result[0], LLen);
-end;
-
-function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-begin
-  Result := StripLeadingZero(AData);
-end;
-
 function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
 begin
   Result := ASpan;
@@ -329,19 +306,43 @@ begin
   Result := StripLeadingZeroSpan(TByteSpan.FromBytes(AData));
 end;
 
-function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+function StripLeadingZero(const AData: TBytes): TBytes; inline;
 var
-  LLeft, LRight: TBytes;
+  LView: TByteSpan;
 begin
-  LLeft := StripLeadingZero(ALeft);
-  LRight := StripLeadingZero(ARight);
-  if Length(LLeft) < Length(LRight) then
+  LView := StripLeadingZeroView(AData);
+  if LView.Len = 0 then
+  begin
+    SetLength(Result, 1);
+    Result[0] := 0;
+    Exit;
+  end;
+  Result := SpanClone(LView);
+end;
+
+function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
+begin
+  Result := StripLeadingZero(AData);
+end;
+
+function CompareUnsignedSpan(const ALeft, ARight: TByteSpan): Integer; inline;
+var
+  LLeft, LRight: TByteSpan;
+begin
+  LLeft := StripLeadingZeroSpan(ALeft);
+  LRight := StripLeadingZeroSpan(ARight);
+  if LLeft.Len < LRight.Len then
     Exit(-1);
-  if Length(LLeft) > Length(LRight) then
+  if LLeft.Len > LRight.Len then
     Exit(1);
-  if Length(LLeft) = 0 then
+  if LLeft.Len = 0 then
     Exit(0);
-  Result := CompareBytesOrdered(@LLeft[0], @LRight[0], Length(LLeft), Length(LRight));
+  Result := CompareBytesOrdered(LLeft.Data, LRight.Data, LLeft.Len, LRight.Len);
+end;
+
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+begin
+  Result := CompareUnsignedSpan(StripLeadingZeroView(ALeft), StripLeadingZeroView(ARight));
 end;
 
 function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
@@ -357,6 +358,11 @@ end;
 function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 begin
   Result := UnsignedEqual(ALeft, ARight);
+end;
+
+function UnsignedEqualSpan(const ALeft, ARight: TByteSpan): Boolean; inline;
+begin
+  Result := CompareUnsignedSpan(ALeft, ARight) = 0;
 end;
 
 function IsZeroBytes(const AData: TBytes): Boolean; inline;
@@ -388,11 +394,6 @@ begin
   SetLength(Result, Length(ABytes));
   if Length(ABytes) > 0 then
     Move(ABytes[0], Result[1], Length(ABytes));
-end;
-
-function BytesToUTF8(const ABytes: TBytes): string; inline;
-begin
-  Result := BytesToString(ABytes);
 end;
 
 function StringToBytes(const AText: string): TBytes; inline;
