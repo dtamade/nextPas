@@ -192,7 +192,7 @@ begin
   BytesEnsureCapacity(ADest, Length(ADest) + AAdditional);
 end;
 
-function SpanEqual(const A, B: TByteSpan): Boolean;
+function SpanEqual(const A, B: TByteSpan): Boolean; inline;
 begin
   if A.Len <> B.Len then
     Exit(False);

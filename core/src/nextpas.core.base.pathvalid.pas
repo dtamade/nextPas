@@ -10,7 +10,7 @@ interface
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   整串 '.' 仅在 AAllowRoot=True 时合法。 }
-function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
+function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 
 implementation
 
@@ -65,7 +65,7 @@ begin
   Result := True;
 end;
 
-function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
+function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 var
   Start, I, N, SegLen: Integer;
 begin
