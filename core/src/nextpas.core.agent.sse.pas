@@ -169,6 +169,7 @@ var
   I: SizeInt;
   LLineEnd: SizeInt;
   LTmp: string;
+  LFull: TByteSpan;
 begin
   if FFinished then
     raise EAgentMisuse.Create('Feed after Finish');
@@ -194,31 +195,22 @@ begin
       FBOMCheck := False;
   end;
 
-  I := FLineStart;
-  while I < Length(FBuf) do
+  { 主循环：SpanIndexOf SIMD 跳扫找 LF（0x0A），替代逐字节扫描；
+    行终止只可能是 LF 或 CRLF（纯 CR 不终止），故 LF 即行边界 }
+  LFull := TByteSpan.FromBytes(FBuf);
+  while FLineStart < Length(FBuf) do
   begin
-    if FBuf[I] = 10 then
-    begin
-      { LF 终止；去尾部 CR（CRLF 形态）}
-      LLineEnd := I;
-      if (LLineEnd > FLineStart) and (FBuf[LLineEnd - 1] = 13) then
-        Dec(LLineEnd);
-      LTmp := nextpas.core.bytes.BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(LLineEnd - FLineStart));
-      FLineStart := I + 1;
-      ProcessLine(LTmp);
-      Inc(I);
-    end
-    else if (FBuf[I] = 13) and (I + 1 < Length(FBuf))
-      and (FBuf[I + 1] = 10) then
-    begin
-      { CRLF 终止 }
-      LTmp := nextpas.core.bytes.BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(I - FLineStart));
-      FLineStart := I + 2;
-      ProcessLine(LTmp);
-      Inc(I, 2);
-    end
-    else
-      Inc(I);
+    I := nextpas.core.bytes.ops.SpanIndexOf(
+      LFull.Slice(SizeUInt(FLineStart), SizeUInt(Length(FBuf) - FLineStart)), 10);
+    if I < 0 then
+      Break;
+    Inc(I, FLineStart);
+    LLineEnd := I;
+    if (LLineEnd > FLineStart) and (FBuf[LLineEnd - 1] = 13) then
+      Dec(LLineEnd);            { CRLF 形态：行尾回退 CR }
+    LTmp := nextpas.core.bytes.BytesSliceToString(FBuf, SizeUInt(FLineStart), SizeUInt(LLineEnd - FLineStart));
+    FLineStart := I + 1;
+    ProcessLine(LTmp);
   end;
 
   { 未完成行限长检查（SECURITY §3）：缓冲内已无终止符，剩余即单行 }
