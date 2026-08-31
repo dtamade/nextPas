@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 **82** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-26（M-4 security 停滞用例 ReadTimeout 语义对齐）
-**版本**：3.51
+**最后更新**：2026-08-31（M-4 security 停滞用例 ReadTimeout 语义对齐）
+**版本**：3.52
 
 ---
 
@@ -897,3 +897,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |
 | 2026-07-20 | 3.22 | RH-1：TLS stream `ITcpStreamRuntime` → HTTPS pool keep-alive reuse |
+| 2026-08-31 | 3.52 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

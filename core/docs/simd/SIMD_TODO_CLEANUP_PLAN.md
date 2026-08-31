@@ -1,6 +1,6 @@
 # math-simd 完善计划
 
-> 创建: 2026-07-06
+> 创建: 2026-08-31
 > 状态: **ARCHIVED** — 源码 TODO 清零目标已完成；勿当主线；现行路线见 [roadmap.md](roadmap.md)
 
 ## 总览

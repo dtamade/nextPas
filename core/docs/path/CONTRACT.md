@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.path.pas`（1 个源文件）
 **层级**：L2（依赖 L0-L1: platform.path; 委托 fs.path）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20
-**版本**：2.9
+**最后更新**：2026-08-31
+**版本**：2.10
 
 ---
 
@@ -109,3 +109,4 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 2026-07-20 | 2.8 | R22 Clean/Rel/Dir 边界用例；测试 69 | Claude |
 | 2026-07-20 | 2.9 | R31 边界表 70；M2-W4 Win 矩阵 + wine 4 | Claude |
 | 2026-07-21 | 2.10 | U4 mix-use audit script + MIXUSE-AUDIT；C6 锚点门禁 | Claude |
+| 2026-08-31 | 2.10 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

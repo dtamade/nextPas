@@ -98,7 +98,7 @@ begin
 end.
 ```
 
-> 版本以 `core/VERSION` 为准（当前 `1.0.0`），更多示例见 `core/examples/`。
+> 版本以 `core/VERSION` 为准（当前 `1.0.0`，AL1 Skeleton），更多示例见 `core/examples/`。
 
 ## 仓库当前重点
 

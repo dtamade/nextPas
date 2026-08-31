@@ -3,7 +3,8 @@
 **家族**：`graphics(L1) + image/vector/canvas/effect(L2) + gpu.canvas(L3)`
 **层级**：见 `core/docs/core-module-registry.md` 拟新增行
 **Owner**：graphics lane（`codex/core-graphics`）
-**版本**：S0 0.1.0-draft（文档定版，源码未落地，`SemVer`；`draft → focused-runtime` 需 source-contract + bench 门禁，见 `ROADMAP`）
+**最后更新**：2026-08-31
+**版本**：S0 0.1.0-draft（AL1 Skeleton，文档定版，源码未落地，`SemVer`；`draft → focused-runtime` 需 source-contract + bench 门禁，见 `ROADMAP`）
 
 ---
 

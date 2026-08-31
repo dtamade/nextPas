@@ -1,6 +1,6 @@
 # nextpas.core
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](VERSION) [![FPC](https://img.shields.io/badge/FPC-3.3.1-orange)](https://www.freepascal.org/) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](VERSION) [![Maturity](https://img.shields.io/badge/maturity-AL1%20Skeleton-yellow)](../docs/architecture/architecture-maturity-levels.md) [![FPC](https://img.shields.io/badge/FPC-3.3.1-orange)](https://www.freepascal.org/) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 nextPas 的基座框架。这里承载 `nextpas.core.*` 源码、测试、示例、benchmark 和模块文档。
 
@@ -84,7 +84,7 @@ begin
 end.
 ```
 
-> 版本以 `VERSION` 为准（当前 `1.0.0`），完整示例见 `examples/`。
+> 版本以 `VERSION` 为准（当前 `1.0.0`，对齐仓库 AL1 Skeleton），完整示例见 `examples/`。
 
 ## 设计规范
 

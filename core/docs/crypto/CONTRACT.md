@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.crypto*.pas`
 **层级**：L2（依赖 L0–L1 与 hash；**禁止**依赖 tls）
 **Owner**：hash / crypto / tls lane
-**最后更新**：2026-07-20
-**版本**：1.1
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 
@@ -90,3 +90,4 @@ make focused FOCUS=core/tests/nextpas.core.crypto/test_crypto_random
 | 2026-08-11 | 1.2 | argon2 补 PHC `Argon2HashStr` + `Argon2Verify`（去 EXPERIMENTAL）；rand/encoding/constant-time 归一 |
 | 2026-07-20 | 1.1 | ChaCha/ASN.1/random 归属 crypto；禁止 crypto→tls |
 | 2026-07-01 | 1.0 | 初始版本 |
+| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

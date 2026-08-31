@@ -2,6 +2,8 @@
 
 演示 `nextpas.core.graphics` L1 底座与 `image` / `canvas` / `vector` / `effect` L2 能力的最小可视闭环。
 
+> **TL;DR**：`TBitmap` 按 `Stride=AlignUp64(Width*4)` 对齐存储，行尾含 pad — 整块 `Move` 会错位，必须逐行去 pad 或用 `GetPixelPtr`；`TBitmap`/`TPath` 均为值类型 COW（赋值共享，写时 `Copy` 独占），读并发安全、写需外同步。细节见下文“前置概念”。
+
 ## 前置概念（必读）
 
 ### Stride 64B 对齐

@@ -1,6 +1,6 @@
 # SIMD 性能基准方法（S25a）
 
-> 最后更新: 2026-07-17
+> 最后更新: 2026-08-31
 > 权威复测入口: `core/benchmarks/nextpas.core.simd/bench_hotspots/`
 > 协作纪律见 [methodology.md](methodology.md)；数字汇总见 [roadmap.md](roadmap.md) §5。
 
@@ -44,11 +44,11 @@ make -C core/tests/nextpas.core.simd bench
 
 产物目录（ignored）：`core/build/projects/nextpas.core.simd/bench_hotspots/`。
 
-## 4. 2026-07-17 主机记录
+## 4. 2026-08-31 主机记录
 
 | 项 | 值 |
 |----|-----|
-| Date | 2026-07-17 |
+| Date | 2026-08-31 |
 | Host | Linux x86_64 · `dtamade` · kernel 6.12.94 |
 | CPU | Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz |
 | FPC | 3.3.1-19195 (`/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc`) |

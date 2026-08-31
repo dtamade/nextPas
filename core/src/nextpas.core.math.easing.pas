@@ -44,18 +44,6 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
 
-function IsFinite(const AValue: Double): Boolean; inline;
-begin
-  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
-    (not nextpas.core.math.scalar.IsInfinite(AValue));
-end;
-
-procedure RequireFinite(const AValue: Double; const AMessage: string); inline;
-begin
-  if not IsFinite(AValue) then
-    raise EArgumentError.Create(AMessage);
-end;
-
 function EaseLinear(const AT: Double): Double;
 begin
   RequireFinite(AT, 'EaseLinear: T must be finite');

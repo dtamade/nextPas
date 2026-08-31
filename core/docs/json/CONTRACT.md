@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.json*.pas`（9 个源文件）
 **层级**：L2（只依赖 L0–L1）
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
-**最后更新**：2026-07-20
-**版本**：2.0（对齐真实 facade；废止 1.0 中 class-DOM / Pointer / Patch / Schema 描述）
+**最后更新**：2026-08-31
+**版本**：2.1（对齐真实 facade；废止 1.0 中 class-DOM / Pointer / Patch / Schema 描述）
 
 ---
 
@@ -156,3 +156,4 @@ make -C core/examples/nextpas.core.json/json_smoke run
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始（与实现不符，已废止） | — |
 | 2026-07-20 | 2.0 | 对齐 IJsonDocument / TJsonValue 真实 API | config-formats lane |
+| 2026-08-31 | 2.1 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

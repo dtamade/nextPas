@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.process*.pas`（6 个源文件）
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20  
-**版本**：2.22
+**最后更新**：2026-08-31
+**版本**：2.23
 
 ---
 
@@ -159,3 +159,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-20 | 2.21 | M2-W4 WIN.md 交叉引用；wine 最小生产集口径 | Claude |
 | 2026-07-20 | 2.22 | U1：cProcessDefaultMaxOutput 64MiB 便利层；EProcessError.Cancelled；test 130 | Claude |
 | 2026-07-20 | 2.23 | U2：builder 未配置 MaxOutput→64MiB；MaxOutput(0) 无限；test 133 | Claude |
+| 2026-08-31 | 2.23 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

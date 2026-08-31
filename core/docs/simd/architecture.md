@@ -1,6 +1,6 @@
 # nextpas.core.simd 架构设计
 
-> 最后更新: 2026-07-26
+> 最后更新: 2026-08-31
 > 公共 API 符号数以 `check_public_api_test_coverage.py` 为准（当前 720 covered）。
 
 ## 分层架构
