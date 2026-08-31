@@ -22,7 +22,8 @@ interface
 
 uses
   nextpas.core.mem,
-  Windows, nextpas.core.text.conv, nextpas.core.text.format,
+  nextpas.core.platform.windows.base, nextpas.core.platform.windows.ffi,
+  nextpas.core.text.conv, nextpas.core.text.format,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base;
 

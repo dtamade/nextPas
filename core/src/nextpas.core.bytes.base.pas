@@ -4,18 +4,22 @@ unit nextpas.core.bytes.base;
 
 interface
 
+uses
+  nextpas.core.platform.base;
+
 type
-  TEndianness = (
-    endLittle,
-    endBig
-  );
+  TEndianness = nextpas.core.platform.base.TEndianness;
   TEndian = TEndianness;
   TByteOrder = TEndianness;
 
 const
+  endLittle = nextpas.core.platform.base.endLittle;
+  endBig = nextpas.core.platform.base.endBig;
   enLittle = endLittle;
   enBig = endBig;
-{$IF DEFINED(FPC_BIG_ENDIAN)}
+  // owner: platform.base.CURRENT_ENDIAN (single source, cross-compile stable via NEXTPAS_BIG_ENDIAN)
+  // perf: true const alias -> inline compare in bytes.binary ToEndian*, zero-copy, no extra branch
+{$IFDEF NEXTPAS_BIG_ENDIAN}
   NATIVE_ENDIAN = endBig;
 {$ELSE}
   NATIVE_ENDIAN = endLittle;

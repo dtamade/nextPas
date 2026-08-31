@@ -5,8 +5,8 @@ unit nextpas.core.audio.resource;
 interface
 
 uses
-  Classes, SysUtils, // P12 debt: TThread via Classes — to be migrated to nextpas.core.sync/async
   nextpas.core.base,
+  nextpas.core.thread.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
@@ -15,7 +15,7 @@ uses
   nextpas.core.audio.errors;
 
 type
-  TAudioResourceManagerImpl = class(TInterfacedObject, IAudioResourceManager)
+  TAudioResourceManagerImpl = class(TRefCountedObject, IAudioResourceManager)
   private
     type
       PResourceItem = ^TResourceItem;
@@ -26,15 +26,15 @@ type
         Buffer: TAudioBuffer;
         Tags: TAudioTags;
         Alive: Boolean;
-        Thread: TThread;
+        Thread: TWorkerThread;
       end;
   private
     FLock: TRecursiveMutex;
     FItems: array of TResourceItem;
     FNextId: TAudioResourceId;
-    function FindIndexLocked(AId: TAudioResourceId): Integer;
-    function FindByPathLocked(const APath: string): Integer;
-    procedure EnsureCapacityLocked(ANeeded: Integer);
+    function FindIndexLocked(AId: TAudioResourceId): Integer; inline;
+    function FindByPathLocked(const APath: string): Integer; inline;
+    procedure EnsureCapacityLocked(ANeeded: Integer); inline;
     procedure SetState(AIndex: Integer; AState: TAudioResourceState; const ABuffer: TAudioBuffer; const ATags: TAudioTags);
     procedure SetStateById(AId: TAudioResourceId; AState: TAudioResourceState; const ABuffer: TAudioBuffer; const ATags: TAudioTags);
   public
@@ -57,11 +57,12 @@ function CreateAudioResourceManager: IAudioResourceManager;
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.io.intf;
 
 type
-  TResourceLoadThread = class(TThread)
+  TResourceLoadThread = class(TWorkerThread)
   private
     FManager: TAudioResourceManagerImpl;
     FId: TAudioResourceId;
@@ -74,8 +75,7 @@ type
 
 constructor TResourceLoadThread.Create(AManager: TAudioResourceManagerImpl; AId: TAudioResourceId; const APath: string);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FManager := AManager;
   FId := AId;
   FPath := APath;
@@ -135,6 +135,21 @@ begin
       FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), Default(TAudioTags));
       Exit;
     end;
+    on E: EAudioError do
+    begin
+      LTags := Default(TAudioTags);
+      SetLength(LTags.Extra, 1);
+      LTags.Extra[0].Key := 'error';
+      LTags.Extra[0].Value := E.Message;
+      FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), LTags);
+      Exit;
+    end;
+    on E: Exception do
+    begin
+      // stability: any unexpected exception → failed, never leave loading
+      FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), Default(TAudioTags));
+      Exit;
+    end;
   end;
   // Reuse TryDecodeWholeFile (internally uses TryDecodeWhole + probe)
   // Only EAudioDecodeError is swallowed; other errors propagate as failed.
@@ -146,6 +161,16 @@ begin
       FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), Default(TAudioTags));
   except
     on E: EAudioDecodeError do
+      FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), Default(TAudioTags));
+    on E: EAudioError do
+    begin
+      LTags := Default(TAudioTags);
+      SetLength(LTags.Extra, 1);
+      LTags.Extra[0].Key := 'error';
+      LTags.Extra[0].Value := E.Message;
+      FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), LTags);
+    end;
+    on E: Exception do
       FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), Default(TAudioTags));
   end;
 end;
@@ -163,7 +188,7 @@ end;
 destructor TAudioResourceManagerImpl.Destroy;
 var
   I: Integer;
-  LThreads: array of TThread;
+  LThreads: array of TWorkerThread;
 begin
   // Collect threads before lock release to avoid dead lock on Wait
   FLock.Acquire;
@@ -190,7 +215,7 @@ begin
   inherited;
 end;
 
-function TAudioResourceManagerImpl.FindIndexLocked(AId: TAudioResourceId): Integer;
+function TAudioResourceManagerImpl.FindIndexLocked(AId: TAudioResourceId): Integer; inline;
 var
   I: Integer;
 begin
@@ -200,7 +225,7 @@ begin
   Result := -1;
 end;
 
-function TAudioResourceManagerImpl.FindByPathLocked(const APath: string): Integer;
+function TAudioResourceManagerImpl.FindByPathLocked(const APath: string): Integer; inline;
 var
   I: Integer;
 begin
@@ -210,9 +235,10 @@ begin
   Result := -1;
 end;
 
-procedure TAudioResourceManagerImpl.EnsureCapacityLocked(ANeeded: Integer);
+procedure TAudioResourceManagerImpl.EnsureCapacityLocked(ANeeded: Integer); inline;
 var LCap: Integer;
 begin
+  // perf: single-source geometric growth (AudioEnsureCapacity), zero extra alloc
   LCap := Length(FItems);
   AudioEnsureCapacity(LCap, ANeeded, 4);
   if Length(FItems) <> LCap then SetLength(FItems, LCap);
@@ -270,7 +296,7 @@ var
   Idx, FreeIdx: Integer;
   I: Integer;
   LThread: TResourceLoadThread;
-  LOldThread: TThread;
+  LOldThread: TWorkerThread;
   LCapNeeded: Integer;
 begin
   LOldThread := nil;
@@ -462,7 +488,7 @@ end;
 procedure TAudioResourceManagerImpl.Release(AId: TAudioResourceId);
 var
   Idx: Integer;
-  LThread: TThread;
+  LThread: TWorkerThread;
 begin
   LThread := nil;
   FLock.Acquire;
@@ -495,7 +521,7 @@ end;
 procedure TAudioResourceManagerImpl.ReleaseAll;
 var
   I: Integer;
-  LThreads: array of TThread;
+  LThreads: array of TWorkerThread;
 begin
   FLock.Acquire;
   try

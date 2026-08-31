@@ -87,7 +87,7 @@ Exit evidence:
 - [x] Add the minimal live `IntToStr` numeric conversion slice, delegating to the text owner.
 - [x] Add the minimal live `Trim` token-normalization slice for compiler generic parameter matching, delegating to the text owner.
 - [x] Expand TypInfo facade: PTypeData, TTypeData, GetPropInfo, GetEnumName, GetEnumValue (S8.11)
-- [x] Expand SysUtils facade: 40+ functions — StrToInt, FloatToStr, FileExists, ExtractFilePath, Now, Sleep, etc. (S8.12)
+- [x] Expand SysUtils facade: S4 minimal text/conv/bytes only — `Format`/`SameText`/`IntToStr`/`Trim` plus `CompareStr`, numeric `TryStrToInt`/`FloatToStr`, `BytesOf`/`StringOf` (zero-copy `bytes.ops`), `UpperCase`/`Pos` etc., no `FileExists`/`ExtractFilePath`/`Now`/`Sleep` (fs/path/time stay with owners) (S8.12 — repaired to S4 minimal)
 - [x] Decide whether broader Classes deserve `system.*` facade units. Classes already has a compatibility shim (TStream, TFileStream, TList, TInterfaceList, TStringList, TThread); broader Classes surface (THandleStream, TMemoryStream, TStringStream, TInterfacedObject) does not belong in system scope and stays with owner modules. **Decision: No broader Classes facade. THandleStream/TMemoryStream/TStringStream stay with nextpas.core.io; TInterfacedObject stays with nextpas.core.base.**
 - [x] Add only tested aliases or forwarding functions for future compatibility slices; no broad historical copy. **Decision: Only add aliases with real consumer pressure and focused tests.**
 - [x] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules. **Decision: Confirmed. System only provides thin facades, never owns implementation.**
@@ -95,7 +95,7 @@ Exit evidence:
 
 Historical S4 closeout record: TypInfo facade coverage, SysUtils facade coverage, and the Classes
 deferral were reported at that time. They are not current compiler-root or readiness evidence.
-- SysUtils path, file, environment, time, parsing, case-conversion, and broad string-helper compatibility are now live via delegation to owner modules (text.conv, path, fs, platform).
+- SysUtils stays S4 minimal (text/conv/bytes only) via delegation to `text.conv`/`text.format`/`bytes.ops`/`base.utils`; path/file/time/env remain with `fs`/`path`/`time`/`os.env` owners and are not re-exported (repaired 2026-08-31 to restore owner boundary).
 - TypInfo minimal unlock was preceded by a dedicated `Needs Review` packet and is limited to
   `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData`, `GetPropInfo`, `GetEnumName`, `GetEnumValue`.
 - TypeInfo and GetTypeKind are compiler/System compile-truth imports, not unit-owned wrapper functions in `nextpas.core.system.typinfo`.

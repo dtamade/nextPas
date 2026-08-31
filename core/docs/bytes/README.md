@@ -12,7 +12,7 @@
 
 ```
 core/src/nextpas.core.bytes.pas          ← 门面
-core/src/nextpas.core.bytes.base.pas     ← TEndianness / NATIVE_ENDIAN / Builder 常量
+core/src/nextpas.core.bytes.base.pas     ← TEndianness/TEndian/TByteOrder 重导出 platform.base + NATIVE_ENDIAN 委托 CURRENT_ENDIAN / Builder 常量
 core/src/nextpas.core.bytes.ops.pas      ← TByteSpan / TBytes 视图操作
 core/src/nextpas.core.bytes.binary.pas   ← Swap / ToEndian / Read*LE/BE / TryRead/TryWrite
 core/src/nextpas.core.bytes.builder.pas  ← IBytesBuilder 可变缓冲
@@ -26,7 +26,7 @@ core/src/nextpas.core.bytes.stream.pas   ← TByteStreamBuf 可增长流缓冲
 
 | 子模块 | 职责 | 关键 API |
 |--------|------|----------|
-| `nextpas.core.bytes.base` | 字节序枚举与 Builder 常量 | `TEndianness`/`TByteOrder`/`TEndian`、`endLittle`/`endBig`/`NATIVE_ENDIAN`、`BYTES_BUILDER_DEFAULT_CAPACITY` |
+| `nextpas.core.bytes.base` | 字节序枚举与 Builder 常量 (owner platform.base) | `TEndianness`/`TByteOrder`/`TEndian`、`endLittle`/`endBig`、`NATIVE_ENDIAN` (委托 `platform.base.CURRENT_ENDIAN`, target-aware `NEXTPAS_BIG_ENDIAN`)、`BYTES_BUILDER_DEFAULT_CAPACITY` |
 | `nextpas.core.bytes.ops` | Span/TBytes 纯函数视图操作 | `SpanEqual`/`SpanCompare`/`SpanIndexOf`/`SpanIndexOfSpan`/`SpanContains`/`SpanStartsWith`/`SpanEndsWith`/`SpanFill`/`SpanReverse`/`SpanConcat`/`SpanCopySlice`/`SpanClone`、`BytesEqual`/`BytesCompare`/`BytesIndexOf`/`BytesConcat`/`BytesStartsWith`/`BytesEndsWith` |
 | `nextpas.core.bytes.binary` | 字节序翻转与指针级编解码 | `SwapUInt16/32/64`、`ToEndian16/32/64`/`FromEndian16/32/64`、`ReadUInt16/32/64LE/BE`/`WriteUInt16/32/64LE/BE`、`TryReadUInt8/16/32/64LE/BE`/`TryWriteUInt8/16/32/64LE/BE`（推进式 `TByteSpan` 游标） |
 | `nextpas.core.bytes.builder` | 可变字节缓冲（接口，自动引用计数） | `IBytesBuilder`（`AppendByte`/`AppendBytes`/`AppendSpan`/`AppendUInt16/32/64LE/BE`/`AppendFill`/`WrittenSpan`/`ToBytes`/`Clear`/`Reserve`/`Truncate`/`Length`/`Capacity`/`Data`）、`CreateBytesBuilder`/`CreateBytesBuilderWith` |

@@ -172,9 +172,9 @@ type
     procedure AfterConstruction; override;
     procedure BeforeDestruction; override;
     class function NewInstance: TObject; override;
-    function QueryInterface(constref Aiid: TGuid; out AObj): LongInt; virtual;
-    function _AddRef: LongInt; virtual;
-    function _Release: LongInt; virtual;
+    function QueryInterface(constref Aiid: TGuid; out AObj): LongInt; cdecl; virtual;
+    function _AddRef: LongInt; cdecl; virtual;
+    function _Release: LongInt; cdecl; virtual;
     property RefCount: LongInt read FRefCount;
   end;
 
@@ -430,7 +430,7 @@ end;
 
 { TRefCountedObject }
 
-function TRefCountedObject.QueryInterface(constref Aiid: TGuid; out AObj): LongInt;
+function TRefCountedObject.QueryInterface(constref Aiid: TGuid; out AObj): LongInt; cdecl;
 begin
   if GetInterface(Aiid, AObj) then
     Result := 0 { S_OK }
@@ -438,7 +438,7 @@ begin
     Result := LongInt($80004002); { E_NOINTERFACE }
 end;
 
-function TRefCountedObject._AddRef: LongInt;
+function TRefCountedObject._AddRef: LongInt; cdecl;
 begin
   Result := FRefCount;
   if Result <> 0 then
@@ -451,7 +451,7 @@ begin
   Result := 1;
 end;
 
-function TRefCountedObject._Release: LongInt;
+function TRefCountedObject._Release: LongInt; cdecl;
 begin
   Result := FRefCount;
   if Result <> 1 then

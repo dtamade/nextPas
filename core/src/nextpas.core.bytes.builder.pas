@@ -51,7 +51,7 @@ uses
   nextpas.core.mem;
 
 type
-  TBytesBuilderImpl = class(TInterfacedObject, IBytesBuilder)
+  TBytesBuilderImpl = class(TRefCountedObject, IBytesBuilder)
   private
     FPtr: PByte;
     FLen: SizeUInt;

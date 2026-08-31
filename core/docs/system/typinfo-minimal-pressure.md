@@ -103,9 +103,9 @@ These consumers need stable type identity, not property reflection.
 | `TTypeKind` | minimal type family classification | compiler/runtime-owned enum truth; public facade must not invent extra values |
 | `TypeInfo` | type identity lookup for static type `T` | compiler intrinsic today; future facade must remain a thin contract over emitted metadata |
 | `GetTypeKind` | type family lookup used by generic collections | runtime/helper convenience over compiler metadata; must stay deterministic for generic specialization |
-| `InitializeArray` | initialize repeated elements using type metadata | managed lifetime helper over runtime + mem owner boundary |
-| `FinalizeArray` | release repeated managed elements using type metadata | managed lifetime helper; must be leak-safe and reverse-safe where required |
-| `CopyArray` | copy repeated elements using type metadata | managed lifetime helper; must preserve reference counts and overlap semantics |
+| `InitializeArray` | initialize repeated elements using type metadata | managed lifetime helper over runtime + mem owner boundary; implementation inline, zero-copy forwarding, validated via `nextpas.core.exception` (EArgumentNil) with single-source text/bytes reuse |
+| `FinalizeArray` | release repeated managed elements using type metadata | managed lifetime helper; must be leak-safe and reverse-safe where required; inline + exception-owner validated, zero-copy |
+| `CopyArray` | copy repeated elements using type metadata | managed lifetime helper; must preserve reference counts and overlap semantics; inline + exception-owner validated, zero-copy |
 
 Implementation ownership must not move into a broad compatibility unit:
 
@@ -113,6 +113,8 @@ Implementation ownership must not move into a broad compatibility unit:
   lowering;
 - runtime/system owns the vocabulary and helper contract;
 - `nextpas.core.mem` owns allocation and release mechanisms;
+- `nextpas.core.text.conv` owns string normalization (Trim, canonical spelling) and `nextpas.core.bytes.ops` is single-source for zero-copy bytes/string conversions;
+- `nextpas.core.exception` owns error taxonomy (EArgumentNil/EConvertError) — TypInfo facade validates through these owners, never duplicates logic;
 - collections are consumers, not TypInfo owners.
 
 ## ABI Risks

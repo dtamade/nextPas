@@ -303,18 +303,18 @@ begin
   Result := nextpas.core.bytes.ops.IsAllZero(AData);
 end;
 
-function BytesToString(const ABytes: TBytes): string;
+function BytesToString(const ABytes: TBytes): string; inline;
 begin
   Result := nextpas.core.bytes.ops.BytesToString(ABytes);
 end;
 
-function StringToBytes(const AText: string): TBytes;
+function StringToBytes(const AText: string): TBytes; inline;
 begin
   Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
-  ALength: SizeUInt): string;
+  ALength: SizeUInt): string; inline;
 begin
   Result := nextpas.core.bytes.ops.BytesSliceToString(ABytes, AOffset, ALength);
 end;

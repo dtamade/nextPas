@@ -133,8 +133,8 @@ type
     { Bitmap helpers }
     procedure BitmapSet(aIdx: SizeUInt); inline;
     procedure BitmapClear(aIdx: SizeUInt); inline;
-    procedure BitmapZero;
-    function  BitmapFindNext(aStart: SizeUInt): SizeUInt;
+    procedure BitmapZero; inline;
+    function  BitmapFindNext(aStart: SizeUInt): SizeUInt; inline;
   private
     // 迭代器回调方法
     function DoIterGetCurrent(aIter: PPtrIter): Pointer;
@@ -243,7 +243,8 @@ implementation
 uses
   nextpas.core.math,
   nextpas.core.hash.wyhash,
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.simd.bitops;
 
 { Hash helper re-exports (implementations in hashmap.base) }
 
@@ -356,64 +357,95 @@ begin
   (FBitmap + (aIdx shr 3))^ := (FBitmap + (aIdx shr 3))^ and not Byte(1 shl (aIdx and 7));
 end;
 
-procedure THashMap.BitmapZero;
+procedure THashMap.BitmapZero; inline;
 begin
-  FillChar(FBitmap^, (FCapacity + 7) div 8, 0);
+  if (FBitmap <> nil) and (FCapacity > 0) then
+    FillChar(FBitmap^, (FCapacity + 7) div 8, 0);
 end;
 
 { Find next set bit at or after aStart; returns FCapacity if none.
-  First-byte scan must shift the byte so bit0 corresponds to aStart; using
-  (byte and ($FF shl bitIdx)) while still counting from LSB double-counts the
-  low zero bits and skips/mis-identifies occupied slots. }
-function THashMap.BitmapFindNext(aStart: SizeUInt): SizeUInt;
+  perf: word-level CTZ scan via nextpas.core.simd.bitops (single-source, BSF/TZCNT on x86/AArch64).
+  First byte uses shr+ Ctz32 to align bit0 to aStart; remaining bitmap scanned as
+  SizeUInt words (zero-copy view via PSizeUInt) skipping zero words O(cap/wordSize) and
+  resolving first set bit with Ctz32/Ctz64 (single instruction) instead of per-bit shr loop. }
+function THashMap.BitmapFindNext(aStart: SizeUInt): SizeUInt; inline;
 var
-  byteIdx: SizeUInt;
+  byteIdx, endByte: SizeUInt;
   bitIdx: Byte;
   b: Byte;
-  endByte: SizeUInt;
+  wordBase, wordCount, i: SizeUInt;
+  w: SizeUInt;
+  baseBit: SizeUInt;
 begin
   if aStart >= FCapacity then
     Exit(FCapacity);
-
   byteIdx := aStart shr 3;
-  bitIdx := aStart and 7;
+  bitIdx := Byte(aStart and 7);
   endByte := (FCapacity + 7) div 8;
-  if byteIdx < endByte then
+  if byteIdx >= endByte then
+    Exit(FCapacity);
+  { First partial byte: shift so bit0 corresponds to aStart, then CTZ. }
+  b := Byte((FBitmap + byteIdx)^ shr bitIdx);
+  if b <> 0 then
   begin
-    { Align so bit 0 of b is the aStart bit within this byte. }
-    b := (FBitmap + byteIdx)^ shr bitIdx;
+    Result := (byteIdx shl 3) + bitIdx + SizeUInt(nextpas.core.simd.bitops.Ctz32(b));
+    if Result < FCapacity then
+      Exit;
+    Exit(FCapacity);
+  end;
+  Inc(byteIdx);
+  if byteIdx >= endByte then
+    Exit(FCapacity);
+  { Align to SizeUInt boundary for word loads (zero-copy view). }
+  while (byteIdx < endByte) and ((PtrUInt(FBitmap + byteIdx) and (SizeOf(SizeUInt) - 1)) <> 0) do
+  begin
+    b := (FBitmap + byteIdx)^;
     if b <> 0 then
     begin
-      while (b and 1) = 0 do
-      begin
-        b := b shr 1;
-        Inc(bitIdx);
-      end;
-      Result := (byteIdx shl 3) + bitIdx;
+      Result := (byteIdx shl 3) + SizeUInt(nextpas.core.simd.bitops.Ctz32(b));
       if Result < FCapacity then
         Exit;
+      Exit(FCapacity);
     end;
     Inc(byteIdx);
-    { Scan remaining bytes }
-    while byteIdx < endByte do
+  end;
+  { Word-level scan: each non-zero word yields bit index via CTZ (BSF). }
+  wordBase := byteIdx;
+  wordCount := (endByte - byteIdx) div SizeOf(SizeUInt);
+  if wordCount > 0 then
+  begin
+    for i := 0 to wordCount - 1 do
     begin
-      b := (FBitmap + byteIdx)^;
-      if b <> 0 then
+      w := PSizeUInt(FBitmap + wordBase + i * SizeOf(SizeUInt))^;
+      if w <> 0 then
       begin
-        bitIdx := 0;
-        while (b and 1) = 0 do
-        begin
-          b := b shr 1;
-          Inc(bitIdx);
-        end;
-        Result := (byteIdx shl 3) + bitIdx;
+        {$IF SizeOf(SizeUInt) = 8}
+        baseBit := SizeUInt(nextpas.core.simd.bitops.Ctz64(w));
+        {$ELSE}
+        baseBit := SizeUInt(nextpas.core.simd.bitops.Ctz32(w));
+        {$ENDIF}
+        Result := ((wordBase + i * SizeOf(SizeUInt)) shl 3) + baseBit;
         if Result < FCapacity then
           Exit;
+        Exit(FCapacity);
       end;
-      Inc(byteIdx);
     end;
+    byteIdx := wordBase + wordCount * SizeOf(SizeUInt);
   end;
-  Result := FCapacity; { sentinel: not found }
+  { Tail bytes. }
+  while byteIdx < endByte do
+  begin
+    b := (FBitmap + byteIdx)^;
+    if b <> 0 then
+    begin
+      Result := (byteIdx shl 3) + SizeUInt(nextpas.core.simd.bitops.Ctz32(b));
+      if Result < FCapacity then
+        Exit;
+      Exit(FCapacity);
+    end;
+    Inc(byteIdx);
+  end;
+  Result := FCapacity;
 end;
 
 procedure THashMap.Rehash(aNewCapacity: SizeUInt);

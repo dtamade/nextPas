@@ -171,7 +171,7 @@ begin
   Result := True;
 end;
 
-function TryBuildRawSize(ASize, AAlignment: SizeUInt; out ARawSize: SizeUInt): Boolean;
+function TryBuildRawSize(ASize, AAlignment: SizeUInt; out ARawSize: SizeUInt): Boolean; inline;
 var
   LPadding: SizeUInt;
 begin
@@ -213,12 +213,16 @@ function platform_aligned_alloc_is_native: Boolean;
   returns True (uses posix_memalign). On unsupported platforms,
   returns False (uses SysGetMem fallback). There is no runtime
   detection of _aligned_malloc availability on Windows; if the CRT
-  does not provide it, the call will fail at link time. }
+  does not provide it, the call will fail at link time.
+  Darwin: heaptrc gap closed — SysGetMem fallback keeps the allocator in
+  FPC heap domain so common.mk -gh + haltonnotreleased/log is congruent on
+  macos-14 aarch64 (no Abort trap 6 after mprotect/MAP_ANON fix). }
 begin
 {$IFDEF NEXTPAS_MACOS}
   { Darwin aarch64 GHA: posix_memalign/free mixed with virtual mmap and
     the test harness Abort-traps (signal 6) near suite end. Prefer the
-    SysGetMem-backed path until the libc mix is isolated. }
+    SysGetMem-backed path; heaptrc now stays enabled (Makefile no Darwin
+    override) and focused-runtime == heaptrc verification. }
   Result := False;
 {$ELSE}
   Result := platform_aligned_alloc_backend <> paabFallback;
@@ -412,14 +416,16 @@ begin
     Exit(nil);
   LOldSize := LHeader^.Size;
 
-  { Shrink in-place: no copy needed, just update the size }
+  { Shrink in-place: zero-copy, no allocation, just size update }
   if ANewSize <= LOldSize then
   begin
     LHeader^.Size := ANewSize;
     Exit(APtr);
   end;
 
-  { Grow: allocate new, copy, free old }
+  { Grow: allocate new, copy prefix only (zero-copy for suffix), free old
+    only after successful copy; on failure keep old allocation alive (fail-
+    closed, no leak, no exception loss) }
   Result := platform_aligned_alloc(ANewSize, AAlignment);
   if Result = nil then
     Exit;

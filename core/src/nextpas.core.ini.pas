@@ -102,18 +102,12 @@ function IniStringify(const AFile: TIniFile): string; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.format.limits,
   nextpas.core.fs,
   nextpas.core.io.util,
   nextpas.core.mem.default,
   nextpas.core.mem;
-
-function IniBytesToString(const ABytes: TBytes): string;
-begin
-  if Length(ABytes) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
-end;
 
 { TIniFile }
 
@@ -781,7 +775,7 @@ begin
     raise EArgumentError.Create('IniParse: reader must not be nil');
   LBytes := IoReadAll(AReader);
   RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'IniParse');
-  Result := IniParse(IniBytesToString(LBytes));
+  Result := IniParse(BytesToString(LBytes));
 end;
 
 function IniParseWith(const AContent: string; const AAllocator: TMemAllocator): TIniFile;

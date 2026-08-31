@@ -95,3 +95,10 @@
 {$ELSEIF defined(CPUARM)}
   {$DEFINE NEXTPAS_ARM}
 {$ENDIF}
+
+{ Endian detection - cross-compile stable via NEXTPAS_BIG_ENDIAN; allow target override }
+{$IF defined(NEXTPAS_FORCE_BIG_ENDIAN) or defined(NEXTPAS_FORCE_HOST_BIG_ENDIAN)}
+  {$DEFINE NEXTPAS_BIG_ENDIAN}
+{$ELSEIF defined(FPC_BIG_ENDIAN)}
+  {$DEFINE NEXTPAS_BIG_ENDIAN}
+{$ENDIF}
