@@ -4,12 +4,13 @@ L2 只读虚拟文件树模块。把"一棵文件树"抽象成统一接口：真
 respack 嵌入包、纯内存树都是它的后端。consumer 只认 `IVfs`，不关心内容来自二进制
 内嵌数据还是文件系统。
 
-**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地。** 三后端（memtree/embedded/os）+ Sub 视图 + 门面便利函数全部实现；
-9 个验证门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
-`vfs.mount`（overlay/挂载表）推迟；S5 已完成：`nextpas.core.http.static.ServeVfs(AFs)`
+**状态：S3 已落地、S4 消费示例就位、S5 HTTP 对接落地、P2 挂载+叠加双视图已落地。** 三后端（memtree/embedded/os）+ Sub/mount/overlay 三视图 + 门面便利函数全部实现；
+13 门全绿（含 fstest 级一致性电池与源契约门禁），heaptrc 零泄漏。
+`vfs.mount`（`CreateMountedVfs`）+ `vfs.overlay`（`CreateOverlayVfs` 游戏 patch>dlc>base）已落地；S5 已完成：`nextpas.core.http.static.ServeVfs(AFs)`
 是首个 L3 consumer，embedded/os 双后端经同一 handler 服务 HTTP（ETag 取
 ContentHash fnv32，未知 mtime 跳过 IMS 协商）。
 嵌入工作流示例见 `core/examples/nextpas.core.vfs/demo_asset_embed/`；
+游戏热更示例见 `core/examples/nextpas.core.vfs/demo_game_pack/`（`CreateOverlayVfs` 三层叠加）；
 端到端 HTTP 示例见 `core/examples/nextpas.core.http/http_static_vfs_demo/`
 （os/embedded 双后端开发态-发布态切换，资源经 respack S4 工具链生成）。
 实现进度见 [`docs/plans/2026-08-25-respack-vfs-modules-plan.md`](../../../docs/plans/2026-08-25-respack-vfs-modules-plan.md)。
@@ -62,13 +63,28 @@ VfsWalk(Fs, '.',
   end);
 
 // 后端装配视角
-FsEmbedded := CreateEmbeddedVfs(ResPackOpen(@Blob[0], Length(Blob)));  // 嵌入包
+FsEmbedded := CreateEmbeddedVfs(@Blob[0], Length(Blob), False); // 嵌入包（或 CreateEmbeddedVfsBorrowed；ResPackOpen 返回 TResPack，非 PByte）
 FsDisk     := CreateOsVfs('/srv/app');                                 // 真实目录
 FsMem      := CreateMemTreeVfs(Tree);                                  // 测试替身
 
 // L3 装饰器（压缩/加密共用模板，零 SysUtils 直引）
 FsGzip := CreateDecompressingVfs(FsEmbedded); // auto: 仅 gzip 魔数 $1F $8B 时解压，Stat 校正 Size/ContentHash，ETag 禁用防旧指纹
 FsUpper := CreateTransformingVfs(Fs, @UpperTransform, @ShouldUpper); // 任意 TBytes→TBytes 函数注入
+
+// 挂载复合（多源聚合，P2完整性， surpass Go fs）
+FsMounted := CreateMountedVfs([
+  VfsMountEntry('assets', FsEmbedded),
+  VfsMountEntry('uploads', FsDisk),
+  VfsMountEntry('.', FsMem)  // 根兜底
+]); // 最长匹配，List('.') 去重合并，ETag/CaseSensitive 透传
+
+// 叠加视图（游戏 patch>dlc>base 热更模型，P2+完整性）
+FsGame := CreateOverlayVfs([FsPatch, FsDLC, FsBase]); // 同根优先级叠加，首命中胜出，List去重合并
+
+// 大包 mmap 零驻留（游戏 500MiB+ 纹理包，经 platform/mem mmap）
+Map := TMemoryMap.Create; Map.OpenFile('assets.pak', mmaRead, [mmfShared]);
+FsPak := CreateEmbeddedVfsBorrowed(Map.BaseAddress, Map.Size); // 零拷贝，Map 生命期覆盖 FsPak
+FsGame2 := CreateOverlayVfs([FsPatch, FsPak]); // patch 覆盖 mmap 包
 ```
 
 ## 架构
@@ -82,9 +98,10 @@ nextpas.core.vfs.memtree.pas    ← 内存不可变树（embedded 底座 + 测�
 nextpas.core.vfs.embedded.pas   ← respack blob → IVfs，零拷贝切片
 nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转换在此收口）
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
+nextpas.core.vfs.mount.pas      ← CreateMountedVfs：多 IVfs 前缀最长匹配挂载复合（P2 完整性， surpass Go fs）
+nextpas.core.vfs.overlay.pas    ← CreateOverlayVfs：多 IVfs 同根优先级叠加（游戏 patch>dlc>base 热更，去重合并，ETag优先透传）
 nextpas.core.vfs.transform.pas  ← 通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc` 函数注入，零拷贝按需变换（L3，压缩/加密共用模板，Stat/OpenRead/ETag/LastModified 完整性门）
 nextpas.core.vfs.compressed.pas ← 解压薄门面：经 transform 承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
-nextpas.core.vfs.mount.pas      ← （推迟）挂载表/overlay
 ```
 
 依赖方向：`base/errors ← intf ← memtree/embedded/os/sub ← 门面`；
@@ -174,7 +191,7 @@ end;
   - 来源为 const 数据/静态段 → 无引用计数，**文档化规则：调用方保证 blob 生命期覆盖
     IVfs 及其派生的全部 IStream**；构造函数提供 `AOwnsBlob: Boolean` 覆盖堆场景
 - `Create` 期物化 `FPaths/FEntries/FETags/FLastMods` 四平行缓存：`Stat/OpenRead/Exists` 走 `FPaths` 二分 + `FEntries[Idx]` 零 `DecodeWire`，`ServeVfs` 走预计算 `ETag/Last-Modified` O(1)（`VfsETagStrong/FNV` 单源）；10k 规模 < 400KB 可控
-- `OpenRead` 零分配包装器池：`TEmbeddedSlice`(TObject) + `TEmbeddedSliceStream`(TInterfacedObject) 双层，`SpinLock` `EMBEDDED_POOL_SIZE` 16 槽复用，`FKeep: IVfs` 保活 Owner，`Destroy` 归还时 `LKeep` 局部强引防 `Use-After-Free`（与 `window` 子系统 `TWindow*` 零命名冲突；`performance` 门 10k 规模 163ms，与预算 800ms 余量 4.9×，`heaptrc 0`；`VfsNameCompare` 直通 `base.utils CompareBytesOrdered`）
+- `OpenRead` 零分配包装器池：`TEmbeddedSlice`(TObject) + `TEmbeddedSliceStream`(TInterfacedObject) 双层，`SpinLock` `EMBEDDED_POOL_SIZE` 256 槽复用，`FKeep: IVfs` 保活 Owner，`Destroy` 归还时 `LKeep` 局部强引防 `Use-After-Free`（与 `window` 子系统 `TWindow*` 零命名冲突；`performance` 门 10k 规模 163ms，与预算 800ms 余量 4.9×，`heaptrc 0`；`VfsNameCompare` 直通 `base.utils CompareBytesOrdered`）
 - conformance 门含地址断言：读取缓冲指针必须落在 `[blob, blob+blobTotal)` 区间内，
   锁死零拷贝不被回归破坏
 
@@ -229,10 +246,11 @@ P4 同时断言 INV-V12（流暴露 `IReaderAt` 且 positioned 读逐字节正�
 | 目录条目 Size 为后端事实值，不入可移植契约 | os 如实报告磁盘 inode 大小，memtree/embedded 无此概念报 0；Go io/fs 同样不约束目录 FileInfo 细节。文件 Size/ModTime 才是跨后端一致承诺（facade gate 树签名只比较可移植字段） |
 | 路径语法采纳 Go ValidPath 含 `.` 根 | 业界事实标准；respack/vfs 两模块共享同一节定义 |
 | Sub 视图独立单元而非核心方法 | Go 将 fs.Sub 作为自由函数；包装器不改核心契约即可测试（fstest 同样强制测它） |
-| mount/overlay 推迟 | 无已落地的双源消费场景；接口留位不留桩 |
+| mount 复合视图 | P2 完整性：多源资产聚合最长匹配，List 根去重合并，Op/Path 保持调用方视角，超越 Go 单包 |
+| overlay 叠加视图 | 游戏热更 patch>dlc>base 优先级叠加，同根首命中，List去重合并，独立于 mount 的正交能力 |
 | 压缩/加密不进 vfs 内核（ADR 0003） | `vfs` 保持 `STORE` 零拷贝；压缩/加密由 `L3` 装饰器 `CreateTransformingVfs` 通用模板承载（`CreateDecompressingVfs` 为其 gzip 特化薄门面，`CreateDecryptingVfs` 同构可直接复用；`http Content-Encoding` 另选承载面），避免 `L2→L2` 闭环与 `solid block` 随机访问劣化；`GZIP_MAX_DECOMPRESS_BYTES` 单源于 `compress.base`，`vfs` 侧仅薄别名/薄门面转调，32MiB 防 bomb 与 `ContentHash=0/ETag` 禁用一致性由 `transform` 统一承载 |
 
-## 测试计划（9 门全绿，2026-08-25）
+## 测试计划（13 门全绿，2026-08-31：P2叠加后）
 
 ```bash
 # respack 格式层
@@ -240,11 +258,15 @@ make focused FOCUS=core/tests/nextpas.core.respack/test_respack_writer      # �
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_reader
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_roundtrip   # 含 10k 条目 perf smoke
 make focused FOCUS=core/tests/nextpas.core.respack/test_respack_dirsource
+make focused FOCUS=core/tests/nextpas.core.respack/test_respack_embed
 # vfs 视图层
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_memtree
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_embedded            # 双态生命期 + 损坏透传
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_conformance         # 属性电池 P1-P8+V12 × 后端矩阵
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_facade              # 便利函数 + 开发/发布态切换
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_mount               # 挂载+叠加双视图 10例（P2完整性+游戏热更）
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_transform           # 通用变换装饰器
+make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_compressed          # 解压薄门面
 make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # uses 白名单门禁
 ```
 

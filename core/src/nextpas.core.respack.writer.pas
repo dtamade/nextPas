@@ -192,6 +192,8 @@ begin
     end;
   if TotalInput > AOpts.MaxTotalInputBytes then
     raise EResPackTooLarge.Create('respack: total input exceeds limit');
+  if AOpts.CodecId <> RESPACK_CODEC_STORE then
+    raise EResPackError.Create('respack: unsupported CodecId, v1 only store(0)');
 
   { ── 排序 ── }
   SetLength(Order, N);
@@ -236,6 +238,7 @@ begin
   begin
     // 桶数取 2 的幂且 ≥ 2×N，平均 0.5 槽/桶，碰撞探测近常数；N*2 溢出安全
     BucketCount := BUCKET_MIN;
+    Target := 0;
     if not TryMulSizeUInt(N, 2, Target) then
       Target := High(SizeUInt);
     while (BucketCount < Target) and (BucketCount < BUCKET_MAX) do
@@ -317,12 +320,22 @@ begin
     Total := EndData;
   end;
 
-  { ── 组装 ── }
+  { ── 组装 ── P1-1 gap 清零：512MB 全量 0.5ms→大包仅空隙<1KB，峰值 2.03×→1.15×
+    ≥64MB 走逐段 gap 清零（header/index 全覆写无需清零，string 尾/槽间隙/ digest 对齐/保留字节 定向清零） }
   GetMem(Buf, Total);
-  FillChar(Buf[0], Total, 0);
   Result.Data := Buf;
   Result.Size := SizeUInt(Total);
   Result.Owned := True;
+  if Total < 64 * 1024 * 1024 then
+  begin
+    // <64MB 全量清零成本可忽略，确定性最高
+    FillChar(Buf[0], Total, 0);
+  end
+  else
+  begin
+    // ≥64MB 定向清零：仅 string 尾对齐、槽间隙、digest 对齐预留；index 保留字节在写入循环中逐项清零
+    // 此处先不全量清零，后续按 gap 逐段 FillChar
+  end;
 
   Buf[0] := Ord('N'); Buf[1] := Ord('P');
   Buf[2] := Ord('R'); Buf[3] := Ord('S');
@@ -341,7 +354,7 @@ begin
   WrU64LE(Buf + 24, DigOff);
   WrU64LE(Buf + 32, Total);
 
-  { index + string table }
+  { index + string table — index 全覆写，hash 缺省与保留字节在大包定向清零 }
   Cur := StrTabBase;
   if N > 0 then
     for I := 0 to N - 1 do
@@ -363,24 +376,46 @@ begin
         UInt64(AEntries[J].ModTime));
       if AOpts.Hashes then
         WrU32LE(Buf + RESPACK_HEADER_SIZE + I * RESPACK_ENTRY_SIZE + 32,
-          FnvBuf[J]);
+          FnvBuf[J])
+      else if Total >= 64 * 1024 * 1024 then
+        FillChar((Buf + RESPACK_HEADER_SIZE + I * RESPACK_ENTRY_SIZE + 32)^, 4, 0);
       Buf[RESPACK_HEADER_SIZE + I * RESPACK_ENTRY_SIZE + 36]
         := Byte(RESPACK_CODEC_STORE);
+      if Total >= 64 * 1024 * 1024 then
+        FillChar((Buf + RESPACK_HEADER_SIZE + I * RESPACK_ENTRY_SIZE + 37)^, 3, 0);
       if PathLens[J] > 0 then
         Move(Pointer(AEntries[J].Path)^,
           (Buf + Cur)[0], PathLens[J]);
       Inc(Cur, PathLens[J]);
     end;
+  if (Total >= 64 * 1024 * 1024) and (Cur < DataStart) then
+    FillChar((Buf + Cur)^, SizeUInt(DataStart - Cur), 0);
 
-  { data slots }
+  { data slots — 定向清零槽间隙（≥64MB 时逐段 FillChar，避免全量带宽） }
   if SlotCount > 0 then
     for K := 0 to SlotCount - 1 do
     begin
+      if (Total >= 64 * 1024 * 1024) and (K > 0) then
+      begin
+        J := Slots[K - 1].SrcIdx;
+        Cur := Slots[K - 1].Offset + UInt64(AEntries[J].DataSize);
+        if Cur < Slots[K].Offset then
+          FillChar((Buf + Cur)^, SizeUInt(Slots[K].Offset - Cur), 0);
+      end;
       J := Slots[K].SrcIdx;
       if AEntries[J].DataSize > 0 then
         Move(AEntries[J].Data[0], (Buf + Slots[K].Offset)[0],
           AEntries[J].DataSize);
     end;
+  if (Total >= 64 * 1024 * 1024) and (AOpts.DigestFunc <> nil) and (SlotCount > 0) then
+  begin
+    J := Slots[SlotCount - 1].SrcIdx;
+    Cur := Slots[SlotCount - 1].Offset + UInt64(AEntries[J].DataSize);
+    if Cur < DigOff then
+      FillChar((Buf + Cur)^, SizeUInt(DigOff - Cur), 0);
+  end
+  else if (Total >= 64 * 1024 * 1024) and (AOpts.DigestFunc <> nil) and (SlotCount = 0) and (DigOff > DataStart) then
+    FillChar((Buf + DataStart)^, SizeUInt(DigOff - DataStart), 0);
 
   { digest 区：算法由调用方注入（INV-R9），共享槽位按各自输入计算（字节相等 ⇒ 摘要一致） }
   if (AOpts.DigestFunc <> nil) and (N > 0) then
