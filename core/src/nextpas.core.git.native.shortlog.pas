@@ -37,7 +37,8 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revwalk,
-  nextpas.core.git.native.revparse;
+  nextpas.core.git.native.revparse,
+  nextpas.core.text.conv;
 
 function LocalTrim(const S: string): string;
 var I, J: Integer;

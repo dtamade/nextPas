@@ -226,6 +226,10 @@ function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 function ExceptAddr: Pointer; inline;
 function ExceptFrameCount: LongInt; inline;
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
+{ Current exception helpers —反哺FPC RTL直引，git等L2仅经此owner取当前异常 }
+function CurrentException: Exception; inline;
+function CurrentExceptionMessage: string; inline;
+function CurrentExceptionIs(AClass: ExceptClass): Boolean; inline;
 
 implementation
 
@@ -638,6 +642,26 @@ begin
   else
     Result := SysUtils.ExceptFrames[AIndex];
 end;
+
+function CurrentException: Exception; inline;
+begin
+  Result := Exception(SysUtils.ExceptObject);
+end;
+
+function CurrentExceptionMessage: string; inline;
+begin
+  if SysUtils.ExceptObject is Exception then
+    Result := Exception(SysUtils.ExceptObject).Message
+  else if SysUtils.ExceptObject <> nil then
+    Result := SysUtils.ExceptObject.ClassName
+  else
+    Result := '';
+end;
+
+function CurrentExceptionIs(AClass: ExceptClass): Boolean; inline;
+begin
+  Result := (SysUtils.ExceptObject <> nil) and (SysUtils.ExceptObject is AClass);
+end;
 {$ELSE}
 function ExceptAddr: Pointer; inline;
 begin
@@ -652,6 +676,21 @@ end;
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 begin
   Result := nil;
+end;
+
+function CurrentException: Exception; inline;
+begin
+  Result := nil;
+end;
+
+function CurrentExceptionMessage: string; inline;
+begin
+  Result := '';
+end;
+
+function CurrentExceptionIs(AClass: ExceptClass): Boolean; inline;
+begin
+  Result := False;
 end;
 {$ENDIF}
 

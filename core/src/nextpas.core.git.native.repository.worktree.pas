@@ -35,7 +35,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.text.utils,
   nextpas.core.os.env,
-  SysUtils;
+  nextpas.core.text.conv;
 
 type
   TNativeWorktree = class(TInterfacedObject, IGitWorktree)
@@ -179,8 +179,8 @@ begin
     try
       TargetOid := GitRevParse(MainDir, Trim(ARef));
     except
-      on EGitError do raise EGitError.CreateFmt('AddWorktree: cannot resolve ref "%s": %s', [ARef, EGitError(SysUtils.ExceptObject).Message]);
-      on Exception do raise EGitError.CreateFmt('AddWorktree: cannot resolve ref "%s": %s', [ARef, Exception(SysUtils.ExceptObject).Message]);
+      on EGitError do raise EGitError.CreateFmt('AddWorktree: cannot resolve ref "%s": %s', [ARef, CurrentExceptionMessage]);
+      on Exception do raise EGitError.CreateFmt('AddWorktree: cannot resolve ref "%s": %s', [ARef, CurrentExceptionMessage]);
     end;
     if ADetach then
     begin
@@ -202,8 +202,8 @@ begin
     try
       TargetOid := GitResolveHead(MainDir);
     except
-      on EGitError do raise EGitError.CreateFmt('AddWorktree: cannot resolve HEAD: %s', [EGitError(SysUtils.ExceptObject).Message]);
-      on Exception do raise EGitError.CreateFmt('AddWorktree: cannot resolve HEAD: %s', [Exception(SysUtils.ExceptObject).Message]);
+      on EGitError do raise EGitError.CreateFmt('AddWorktree: cannot resolve HEAD: %s', [CurrentExceptionMessage]);
+      on Exception do raise EGitError.CreateFmt('AddWorktree: cannot resolve HEAD: %s', [CurrentExceptionMessage]);
     end;
   end;
   try
@@ -229,7 +229,7 @@ begin
     end;
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create('AddWorktree: ' + Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create('AddWorktree: ' + CurrentExceptionMessage);
   end;
   try
     Result := RepositoryLookupWorktree(MainDir, AName);
@@ -442,7 +442,7 @@ begin
     NewOid := GitWriteCommit(MainDir, Builder);
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create('CommitOnHead: write commit failed: ' + Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create('CommitOnHead: write commit failed: ' + CurrentExceptionMessage);
   end;
   HeadRef := '';
   try
@@ -464,7 +464,7 @@ begin
     else
       WriteFileText(PathJoin2(MainDir, 'HEAD'), GitOidToHex(NewOid) + #10);
   except
-    on Exception do raise EGitError.Create('CommitOnHead: update ref failed: ' + Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create('CommitOnHead: update ref failed: ' + CurrentExceptionMessage);
   end;
   Result := GitOidToHex(NewOid);
 end;

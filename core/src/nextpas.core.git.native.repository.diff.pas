@@ -42,7 +42,7 @@ uses
   nextpas.core.os.env,
   nextpas.core.diff.myers,
   nextpas.core.diff.base,
-  SysUtils;
+  nextpas.core.text.conv;
 
 type
   THunkArray = array of TGitDiffHunk;
@@ -311,7 +311,7 @@ begin
     Oid:=GitRevParse(AGitDir,ARef);
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
   end;
   Repo:=TNativeRepository.Create(AGitDir);
   try
@@ -354,13 +354,13 @@ begin
     GitRevParse(AGitDir,AOldRef);
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
   end;
   try
     GitRevParse(AGitDir,ANewRef);
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
   end;
   OldTree:=ResolveTreeOid(AGitDir,AOldRef);
   NewTree:=ResolveTreeOid(AGitDir,ANewRef);
@@ -379,13 +379,13 @@ begin
       OldLines:=BlobLinesOf(AGitDir,Entry.OldOid);
     except
       on EGitError do raise;
-      on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+      on Exception do raise EGitError.Create(CurrentExceptionMessage);
     end;
     try
       NewLines:=BlobLinesOf(AGitDir,Entry.NewOid);
     except
       on EGitError do raise;
-      on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+      on Exception do raise EGitError.Create(CurrentExceptionMessage);
     end;
     if (OldLines=nil) and (NewLines=nil) and (not GitOidIsZero(Entry.OldOid)) and (not GitOidIsZero(Entry.NewOid)) then
     begin
@@ -478,7 +478,7 @@ begin
     GitRevParse(AGitDir,ARef);
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
   end;
   Work:=WorkDirOf(AGitDir,AWorkTree);
   if Work='' then
@@ -510,7 +510,7 @@ begin
       OldLines:=BlobLinesOf(AGitDir, OldFlat[I].OldOid);
     except
       on EGitError do raise;
-      on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+      on Exception do raise EGitError.Create(CurrentExceptionMessage);
     end;
     NewLines:=WorkTreeLinesOf(Work, LPath);
     if (OldLines=nil) and (NewLines=nil) then
@@ -752,7 +752,7 @@ begin
             MkdirAll(PathDir(FullPath),PermDirDefault);
             WriteFileText(FullPath,NewContent);
           except
-            on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+Exception(SysUtils.ExceptObject).Message);
+            on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+CurrentExceptionMessage);
           end;
         end;
         Hunks:=nil;
@@ -836,7 +836,7 @@ begin
         MkdirAll(PathDir(FullPath),PermDirDefault);
         WriteFileText(FullPath,NewContent);
       except
-        on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+Exception(SysUtils.ExceptObject).Message);
+        on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+CurrentExceptionMessage);
       end;
     end;
   end;

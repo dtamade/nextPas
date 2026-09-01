@@ -41,7 +41,8 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
-  nextpas.core.git.native.util;
+  nextpas.core.git.native.util,
+  nextpas.core.text.conv;
 
 function UnquoteValue(const S: string): string;
 var T: string; I: Integer; C: Char;

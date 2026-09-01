@@ -84,8 +84,7 @@ uses
   nextpas.core.git.native.revwalk,
   nextpas.core.git.native.repository.diff,
   nextpas.core.git.native.repository.worktree,
-  nextpas.core.os.env,
-  SysUtils;
+  nextpas.core.os.env;
 
 type
   TNativeReference = class(TInterfacedObject, IGitReference)
@@ -306,7 +305,7 @@ begin
     Hex := GitOidToHex(Oid);
   except
     on Exception do
-      raise EGitError.Create('native Head: ' + Exception(SysUtils.ExceptObject).Message);
+      raise EGitError.Create('native Head: ' + CurrentExceptionMessage);
   end;
   if RefName = '' then
     Result := TNativeReference.Create('HEAD', 'HEAD', Hex)
@@ -396,7 +395,7 @@ begin
     Hex := GitOidToHex(Oid);
   except
     on Exception do
-      raise EGitError.Create('native HeadCommit: ' + Exception(SysUtils.ExceptObject).Message);
+      raise EGitError.Create('native HeadCommit: ' + CurrentExceptionMessage);
   end;
   Result := CommitByHash(Hex);
 end;
@@ -536,7 +535,7 @@ begin
     List:=GitRemoteList(FGitDir);
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
   end;
   SetLength(Result,Length(List));
   for I:=0 to High(List) do
@@ -568,7 +567,7 @@ begin
       Exit(gpffNeedsMerge);
     end;
   except
-    on EGitError do begin Error:=EGitError(SysUtils.ExceptObject).Message; Exit(gpffError); end;
+    on EGitError do begin Error:=CurrentExceptionMessage; Exit(gpffError); end;
   end;
   Result:=gpffUpToDate;
 end;
@@ -614,7 +613,7 @@ begin
     StartOid := GitRevParse(FGitDir, TrimInline(AStartRef));
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
   end;
   Repo := TNativeRepository.Create(FGitDir);
   try
@@ -631,7 +630,7 @@ begin
         Data := Repo.ReadObject(Oids[I], Kind);
       except
         on EGitError do raise EGitError.CreateFmt('RevWalk: object %s not found', [GitOidToHex(Oids[I])]);
-        on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+        on Exception do raise EGitError.Create(CurrentExceptionMessage);
       end;
       if Kind <> gokCommit then
         raise EGitError.CreateFmt('RevWalk: object %s is not a commit', [GitOidToHex(Oids[I])]);
@@ -659,7 +658,7 @@ begin
     NativeBlame:=GitBlame(FGitDir,APath);
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
   end;
   if Length(NativeBlame)=0 then
     Exit;
@@ -733,7 +732,7 @@ begin
       end;
   except
     on EGitError do raise;
-    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    on Exception do raise EGitError.Create(CurrentExceptionMessage);
   end;
 end;
 
