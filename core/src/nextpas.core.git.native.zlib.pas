@@ -38,6 +38,11 @@ function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
   Caller ensures ADstLen = AExpectSize; returns actual size, no per-chunk Move. }
 function GitZlibDecompressPtrToBuffer(AData: PByte; ACount, AStart: SizeUInt;
   out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt;
+{ Prefix variant: inflate only first ADstLen bytes (hot delta varint peek).
+  Zero-copy stack buf, no alloc; returns produced bytes, never "dest too small".
+  Single source via compress DeflateDecompressPtrPrefix. }
+function GitZlibDecompressPrefix(AData: PByte; ACount, AStart: SizeUInt;
+  ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt;
 
 implementation
 
@@ -100,6 +105,20 @@ function GitZlibDecompressPtrToBuffer(AData: PByte; ACount, AStart: SizeUInt;
 begin
   try
     Result := DeflateDecompressPtrWithEndPosToBuffer(AData, ACount, AStart, AEndPos, ADst, ADstLen);
+  except
+    on E: EIOError do
+      raise MapDeflateError(E);
+    on E: Exception do
+      raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+  end;
+end;
+
+function GitZlibDecompressPrefix(AData: PByte; ACount, AStart: SizeUInt;
+  ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt;
+begin
+  // not inline — heavy inflate prefix stays out-of-line; zero-copy PByte view
+  try
+    Result := DeflateDecompressPtrPrefix(AData, ACount, AStart, ADst, ADstLen, AEndPos);
   except
     on E: EIOError do
       raise MapDeflateError(E);

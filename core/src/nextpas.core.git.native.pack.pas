@@ -34,6 +34,7 @@ type
     function ByteAt(APos: SizeUInt): Byte; inline;
     function InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
     procedure InflateInto(APos: SizeUInt; AExpectSize: Int64; var AReuse: TBytes);
+    function TryPeekDeltaTargetSize(APos: SizeUInt; out ATargetSize: Int64): Boolean;
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   public
@@ -316,6 +317,63 @@ begin
     raise EGitError.Create('pack entry inflated size mismatch');
 end;
 
+function TPackFile.TryPeekDeltaTargetSize(APos: SizeUInt; out ATargetSize: Int64): Boolean;
+var
+  Buf: array[0..31] of Byte;
+  EndPos: SizeUInt;
+  Got: SizeUInt;
+  VarPos: Integer;
+  TmpB: Byte;
+  TgtSize: Int64;
+  TmpShift: Integer;
+  LSpan: TByteSpan;
+begin
+  // perf: prefix inflate 32B only (delta varints ≤20B) vs full InflateAt (Sz bytes)
+  // hot rename similarity pre-check: per candidate saves full zlib inflate + alloc
+  // zero-copy TByteSpan view over stack buf (bytes.ops single source), not inline heavy
+  Result := False;
+  ATargetSize := 0;
+  try
+    Got := GitZlibDecompressPrefix(FData, FDataSize, APos, @Buf[0], SizeUInt(Length(Buf)), EndPos);
+  except
+    Exit;
+  end;
+  if Got = 0 then
+    Exit;
+  // single source via bytes.ops: TByteSpan view over stack buf, no alloc
+  LSpan := TByteSpan.Create(@Buf[0], Got);
+  VarPos := 0;
+  TmpShift := 0;
+  // skip src size varint
+  repeat
+    if VarPos >= Integer(LSpan.Len) then
+      Exit;
+    TmpB := LSpan.Data[VarPos];
+    Inc(VarPos);
+    if (TmpB and $80) = 0 then
+      Break;
+    Inc(TmpShift, 7);
+    if TmpShift > 63 then
+      Exit;
+  until False;
+  TgtSize := 0;
+  TmpShift := 0;
+  repeat
+    if VarPos >= Integer(LSpan.Len) then
+      Exit;
+    TmpB := LSpan.Data[VarPos];
+    Inc(VarPos);
+    TgtSize := TgtSize or (Int64(TmpB and $7F) shl TmpShift);
+    if (TmpB and $80) = 0 then
+      Break;
+    Inc(TmpShift, 7);
+    if TmpShift > 63 then
+      Exit;
+  until False;
+  ATargetSize := TgtSize;
+  Result := True;
+end;
+
 procedure TPackFile.ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
   out AData: TBytes; ADepth: Integer);
 type
@@ -560,43 +618,11 @@ begin
           Move(FData[P], BaseOid.Bytes[0], GitOidRawLen);
           Inc(P, GitOidRawLen);
         end;
-        // inflate delta payload (Sz bytes uncompressed) to read its varints
-        try
-          DeltaData := InflateAt(P, Sz);
-        except
+        // perf: prefix inflate 32B only to get target varint (hot rename pre-check)
+        // zero-copy TByteSpan over stack buf, bytes.ops single source, no full Sz inflate
+        // TryPeekDeltaTargetSize handles zlib prefix & varint parse; fallback to Exit on corrupt
+        if not TryPeekDeltaTargetSize(P, TgtSize) then
           Exit;
-        end;
-        // delta header: varint src size, varint target size (single source via bytes.ops zero-copy view)
-        // perf: only need target size; parse varints directly on TByteSpan view, no alloc
-        VarPos := 0;
-        TmpShift := 0;
-        // skip src size varint
-        repeat
-          if VarPos >= Length(DeltaData) then
-            Exit;
-          TmpB := DeltaData[VarPos];
-          Inc(VarPos);
-          if (TmpB and $80) = 0 then
-            Break;
-          Inc(TmpShift, 7);
-          if TmpShift > 63 then
-            Exit;
-        until False;
-        // target size varint
-        TgtSize := 0;
-        TmpShift := 0;
-        repeat
-          if VarPos >= Length(DeltaData) then
-            Exit;
-          TmpB := DeltaData[VarPos];
-          Inc(VarPos);
-          TgtSize := TgtSize or (Int64(TmpB and $7F) shl TmpShift);
-          if (TmpB and $80) = 0 then
-            Break;
-          Inc(TmpShift, 7);
-          if TmpShift > 63 then
-            Exit;
-        until False;
         ASize := TgtSize;
         // kind: try to get base kind quickly
         if Typ = 7 then

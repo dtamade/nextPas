@@ -26,9 +26,9 @@ const
   GitOidHexLen = 40;
   GitOidRawLen = 20;
 
-function GitOidFromHex(const AHex: string): TGitOid; inline;
-function GitOidToHex(const AOid: TGitOid): string; inline;
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
+function GitOidFromHex(const AHex: string): TGitOid;
+function GitOidToHex(const AOid: TGitOid): string;
+function GitOidIsValidHex(const AHex: string): Boolean;
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
@@ -53,7 +53,7 @@ begin
   end;
 end;
 
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
+function GitOidIsValidHex(const AHex: string): Boolean;
 var
   I: Integer;
 begin
@@ -65,7 +65,7 @@ begin
   Result := True;
 end;
 
-function GitOidFromHex(const AHex: string): TGitOid; inline;
+function GitOidFromHex(const AHex: string): TGitOid;
 var
   I: Integer;
 begin
@@ -76,7 +76,7 @@ begin
       or HexVal(AHex[I * 2 + 2]));
 end;
 
-function GitOidToHex(const AOid: TGitOid): string; inline;
+function GitOidToHex(const AOid: TGitOid): string;
 const
   CHex: array[0..15] of Char = '0123456789abcdef';
 var

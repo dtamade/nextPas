@@ -67,6 +67,7 @@ type
     procedure EnsureCapacity; inline;
     procedure Rehash(ANewCap: SizeInt);
     procedure Clear; inline;
+    procedure CompactEvict; // bounded eviction keeps 2048 at 4096 cap, avoids full clear jitter
   public
     destructor Destroy; override;
     function TryGet(const AOid: TGitOid; out AWhen: Int64; out AParents: TGitOidArray): Boolean; inline;
@@ -307,14 +308,57 @@ begin
   if FCap = 0 then
     Rehash(16)
   else if FCap >= CMaxCap then
-  begin
-    Clear;
-    Rehash(16);
-  end
+    CompactEvict
   else if FCap * 2 > CMaxCap then
     Rehash(CMaxCap)
   else
     Rehash(FCap * 2);
+end;
+
+procedure TCommitParseCache.CompactEvict;
+const CKeep = 2048; // keep half, stays below 70% grow threshold (2867) -> amortized O(1)
+var
+  LOldBuckets: array of TGitOid;
+  LOldWhens: array of Int64;
+  LOldParents: array of TGitOidArray;
+  LOldStates: array of Byte;
+  LOldCap: SizeInt;
+  I: Integer;
+  LIdx: SizeInt;
+  LHash: UInt32;
+begin
+  if FCount <= CKeep then
+    Exit;
+  LOldBuckets := FBuckets;
+  LOldWhens := FWhens;
+  LOldParents := FParents;
+  LOldStates := FStates;
+  LOldCap := FCap;
+  SetLength(FBuckets, 0);
+  SetLength(FWhens, 0);
+  SetLength(FParents, 0);
+  SetLength(FStates, 0);
+  SetLength(FBuckets, FCap);
+  SetLength(FWhens, FCap);
+  SetLength(FParents, FCap);
+  SetLength(FStates, FCap);
+  FCount := 0;
+  for I := 0 to LOldCap - 1 do
+    if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
+    begin
+      if FCount >= CKeep then
+      begin
+        SetLength(LOldParents[I], 0); // release evicted, stable free
+        Continue;
+      end;
+      LHash := GitOidHash(LOldBuckets[I]);
+      LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      FBuckets[LIdx] := LOldBuckets[I]; // zero-copy 20B inline
+      FWhens[LIdx] := LOldWhens[I];
+      FParents[LIdx] := LOldParents[I]; // zero-copy CoW share, bytes.ops single source
+      FStates[LIdx] := 1;
+      Inc(FCount);
+    end;
 end;
 
 procedure TCommitParseCache.Rehash(ANewCap: SizeInt);

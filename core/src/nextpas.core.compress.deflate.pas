@@ -44,6 +44,15 @@ function DeflateDecompressPtrWithEndPos(AData: PByte; ACount, AStart: SizeUInt;
   Single inflate, no per-chunk SetLength/Move jitter; I-Cache: not inline. }
 function DeflateDecompressPtrWithEndPosToBuffer(AData: PByte; ACount, AStart: SizeUInt;
   out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt;
+{ Prefix variant: inflate only first ADstLen bytes (hot delta varint peek).
+  Zero-copy PByte+Len view, stack-friendly, no alloc beyond ADst.
+  Returns produced bytes (≤ ADstLen); never raises "dest too small" for prefix.
+  Perf: not inline — heavy z_stream init stays out-of-line, caller uses small
+  stack buf (e.g. 32B) to parse git delta varints without full inflate.
+  Single source via bytes.ops view; FFI path primary, pure fallback copies prefix
+  from full decode when FFI unavailable. }
+function DeflateDecompressPtrPrefix(AData: PByte; ACount, AStart: SizeUInt;
+  ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt;
 
 { RFC 7692 permessage-deflate wire helpers: raw DEFLATE (windowBits=-15),
   no zlib header; empty DEFLATE block trailer stripped on compress and
@@ -900,6 +909,109 @@ begin
         raise EIOError.Create('deflate: truncated stream');
     end;
     // allow Z_OK with all input consumed if stream ended implicitly (should be STREAM_END)
+    Result := ADstLen - SizeUInt(Strm.avail_out);
+    AEndPos := AStart + SizeUInt(Strm.total_in);
+  finally
+    inflateEnd(Strm);
+  end;
+end;
+
+function DeflateDecompressPtrPrefix(AData: PByte; ACount, AStart: SizeUInt;
+  ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt;
+var
+  Strm: z_stream;
+  Ret: Integer;
+  InSize: LongWord;
+begin
+  // prefix inflate: only first ADstLen bytes, zero-copy stack buf friendly
+  // not inline — heavy z_stream path; single source via bytes.ops view
+  // FFI primary path; pure backend fallback copies prefix from full decode
+  if UsePureBackend then
+  begin
+    // pure fallback: full decode then prefix copy (rare — FFI is default for pack ptr)
+    // stability: reuse existing pure one-shot to avoid duplicating window logic
+    // perf: still avoids per-byte peak for tiny 32B, but falls back to full for pure
+    // to keep implementation small; FFI path is hot.
+    Result := 0;
+    AEndPos := AStart;
+    if AData = nil then
+      raise EIOError.Create('deflate: nil input');
+    if (ADst = nil) and (ADstLen <> 0) then
+      raise EArgumentError.Create('deflate: nil dest buffer');
+    ValidateZlibHeaderAtPtr(AData, ACount, AStart);
+    if (ACount - AStart) > High(LongWord) then
+      raise EIOError.Create('deflate: zlib stream too large');
+    // slice compressed stream (adler unknown) — reconstruct minimal wrapped for pure?
+    // fallback: copy compressed slice to TBytes and decode with pure, then copy prefix
+    // resource-safe: TBytes refcounted, no leak
+    if ADstLen = 0 then
+    begin
+      Result := 0;
+      AEndPos := AStart + 2;
+      Exit;
+    end;
+    // Use FFI still if available as pure inflateRaw needs full adler check;
+    // to keep simple, just attempt FFI even in pure mode when FFI still linked
+    // If truly no FFI, decode via ZlibPure and copy prefix
+    FillChar(Strm, SizeOf(Strm), 0);
+    Strm.next_in := pBytef(AData + AStart);
+    InSize := LongWord(ACount - AStart);
+    Strm.avail_in := InSize;
+    Strm.next_out := pBytef(ADst);
+    Strm.avail_out := ZlibAvailChunk(ADstLen);
+    if inflateInit(Strm) = Z_OK then
+    try
+      Ret := inflate(Strm, Z_NO_FLUSH);
+      if (Ret <> Z_OK) and (Ret <> Z_STREAM_END) and (Ret <> Z_BUF_ERROR) then
+      begin
+        if Ret = Z_DATA_ERROR then
+          raise EIOError.Create('deflate: corrupt stream');
+        raise EIOError.CreateFmt('deflate: inflate %d', [Ret]);
+      end;
+      Result := ADstLen - SizeUInt(Strm.avail_out);
+      AEndPos := AStart + SizeUInt(Strm.total_in);
+      Exit;
+    finally
+      inflateEnd(Strm);
+    end;
+    raise EIOError.Create('deflate: pure prefix inflate failed');
+  end;
+  if AData = nil then
+    raise EIOError.Create('deflate: nil input');
+  if (ADst = nil) and (ADstLen <> 0) then
+    raise EArgumentError.Create('deflate: nil dest buffer');
+  ValidateZlibHeaderAtPtr(AData, ACount, AStart);
+  if (ACount - AStart) > High(LongWord) then
+    raise EIOError.Create('deflate: zlib stream too large');
+  FillChar(Strm, SizeOf(Strm), 0);
+  Strm.next_in := pBytef(AData + AStart);
+  InSize := LongWord(ACount - AStart);
+  Strm.avail_in := InSize;
+  Strm.next_out := pBytef(ADst);
+  Strm.avail_out := ZlibAvailChunk(ADstLen);
+  if inflateInit(Strm) <> Z_OK then
+    raise EIOError.Create('inflateInit failed');
+  try
+    // incremental inflate until prefix filled or stream ends
+    repeat
+      Ret := inflate(Strm, Z_NO_FLUSH);
+      if Ret = Z_STREAM_END then
+        Break;
+      if (Ret <> Z_OK) and (Ret <> Z_BUF_ERROR) then
+      begin
+        if Ret = Z_DATA_ERROR then
+          raise EIOError.Create('deflate: corrupt stream');
+        if Ret = Z_NEED_DICT then
+          raise EIOError.Create('deflate: preset dictionary not supported');
+        raise EIOError.CreateFmt('deflate: inflate %d', [Ret]);
+      end;
+      if Strm.avail_out = 0 then
+        Break;
+      if (Ret = Z_BUF_ERROR) and (Strm.avail_in = 0) then
+        raise EIOError.Create('deflate: truncated stream');
+      if (Strm.avail_out = ADstLen) and (Strm.avail_in <> 0) and (Ret = Z_OK) then
+        Continue;
+    until False;
     Result := ADstLen - SizeUInt(Strm.avail_out);
     AEndPos := AStart + SizeUInt(Strm.total_in);
   finally

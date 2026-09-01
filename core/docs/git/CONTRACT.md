@@ -1,7 +1,7 @@
 # nextpas.core.git 代码契约
 
-**模块路径**：`core/src/nextpas.core.git*.pas`（88 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片）
-**层级**：L2（依赖 L0-L1: base, text, bytes, io；native 子家族另用同层单向 fs/compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免）
+**模块路径**：`core/src/nextpas.core.git*.pas`（88 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片；双编译器 stub：源码 `uses SysUtils` 等经 `units/<target>/` 名称桥接，无 `{$IFDEF}` 分叉，stub 仅过渡、随 `nextpas.core` 自有类型落地自然废弃）
+**层级**：L2（依赖 L0-L1: base, text, bytes, io；native 子家族另用同层单向 fs/compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免；门面规模接近 800 行软阈（`design-conventions.md §2` 单单元 >800 必拆），88 源聚合已达独立 business CONTRACT 不变量拆分候选——当前以 6 native 门面 + 10 bindings 域分片控规模，超阈即按业务不变量域独立契约拆分）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-08-29
 **版本**: 2.0

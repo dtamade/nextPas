@@ -54,6 +54,8 @@ function DeflateDecompressPtrWithEndPos(AData: PByte; ACount, AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes; inline;
 function DeflateDecompressPtrWithEndPosToBuffer(AData: PByte; ACount, AStart: SizeUInt;
   out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt; inline;
+function DeflateDecompressPtrPrefix(AData: PByte; ACount, AStart: SizeUInt;
+  ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt; inline;
 function RawDeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes; inline;
 function RawDeflateDecompress(const AData: TBytes): TBytes; inline;
@@ -164,6 +166,14 @@ function DeflateDecompressPtrWithEndPosToBuffer(AData: PByte; ACount, AStart: Si
 begin
   Result := nextpas.core.compress.deflate.DeflateDecompressPtrWithEndPosToBuffer(
     AData, ACount, AStart, AEndPos, ADst, ADstLen);
+end;
+
+function DeflateDecompressPtrPrefix(AData: PByte; ACount, AStart: SizeUInt;
+  ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt;
+begin
+  // inline thin forward: not inline heavy, single source via compress.deflate owner
+  Result := nextpas.core.compress.deflate.DeflateDecompressPtrPrefix(
+    AData, ACount, AStart, ADst, ADstLen, AEndPos);
 end;
 
 function RawDeflateCompress(const AData: TBytes;
