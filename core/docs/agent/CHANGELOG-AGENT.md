@@ -125,6 +125,16 @@
 
 | Hash | Type | Summary |
 |------|------|---------|
-| `TBD` | perf | `streambox` 环形队列：`FHead` 游标 + 阈值压缩（`>64` 且过半时 `Move`），`TryPop` 摊销 O(1)，零语义回退；快照簇对齐保留 ASCII 快路径，6000 B 预算下全扫 <1µs，故保留全量前向扫描以保正确性（尾窗 128 B 评估后不引入） |
+| `8f2677bf8` | perf | `streambox` 环形队列：`FHead` 游标 + 阈值压缩（`>64` 且过半时 `Move`），`TryPop` 摊销 O(1)，零语义回退；快照簇对齐保留 ASCII 快路径，6000 B 预算下全扫 <1µs，故保留全量前向扫描以保正确性（尾窗 128 B 评估后不引入） |
 
 **Gates**: `test_snapshot` 5 passed + `test_compile_skeleton` 9 passed + `test_streambox` 隐式通过示例 + `make hygiene` pass。
+
+## agent-streambox-fix-2026-09-03 — 环形队列托管修复 + 6 测门 (1 commit)
+
+**Scope**: 托管泄漏修复与文档/测试闭环。
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `46ef5526c` | fix | `streambox` 托管修复：`Move` 绕过托管 → 逐项赋值+清零保引用计数；`PERFORMANCE §7.2` 同步 `TPlatformMutex`+`FHead`；`BENCHMARKS §2.4` 占位；`API_COVERAGE §11` 同步 `test_streambox` 6 测 |
+
+**Gates**: `test_streambox` 6 passed + `test_snapshot` 5 passed + `test_compile_skeleton` 9 passed + `make hygiene` pass。
