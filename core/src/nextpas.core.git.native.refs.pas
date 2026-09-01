@@ -83,15 +83,19 @@ begin
     LHead := Trim(Copy(LText, 6, MaxInt));
     if LHead = '' then
       Exit(False);
+    // unborn: HEAD symref without object yet is still a valid git dir
     if FileExists(PathJoin2(APath, LHead)) then
       Exit(True);
-    Result := PackedRefExistsInline(APath, LHead);
-    Exit;
+    if PackedRefExistsInline(APath, LHead) then
+      Exit(True);
+    // allow unborn (no refs yet) as valid shape for Discover
+    Exit(True);
   end;
   Result := GitOidIsValidHex(LText);
 end;
 
-// Resolves a ".git" entry that may be a real directory or a gitfile pointer
+// Resolves a ".git" entry that may be a real directory or a gitfile pointer.
+// Worktree's gitdir (main/.git/worktrees/<id>) is valid via commondir, not IsGitDirShape.
 function ResolveDotGitEntry(const ADotGit: string): string;
 var
   Text, Target: string;
@@ -109,6 +113,8 @@ begin
   if not PathIsAbsolute(Target) then
     Target := PathJoin2(PathDir(ADotGit), Target);
   if IsGitDirShape(Target) then
+    Exit(Target);
+  if FileExists(PathJoin2(Target, 'commondir')) then
     Exit(Target);
   Result := '';
 end;

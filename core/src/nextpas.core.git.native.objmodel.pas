@@ -56,6 +56,9 @@ function GitParseTag(const AData: TBytes): TGitTagInfo;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 function ParseOctalText(const AText: string): Cardinal;
 var
   I: Integer;
@@ -70,29 +73,6 @@ begin
     else
       raise EGitError.CreateFmt('invalid tree entry mode "%s"', [AText]);
     end;
-  end;
-end;
-
-procedure SplitLines(const AText: string; out ALines: TStringArray);
-var
-  Start, I, Count: Integer;
-begin
-  Count := 0;
-  SetLength(ALines, 0);
-  Start := 1;
-  for I := 1 to Length(AText) do
-    if AText[I] = #10 then
-    begin
-      Inc(Count);
-      SetLength(ALines, Count);
-      ALines[Count - 1] := Copy(AText, Start, I - Start);
-      Start := I + 1;
-    end;
-  if Start <= Length(AText) then
-  begin
-    Inc(Count);
-    SetLength(ALines, Count);
-    ALines[Count - 1] := Copy(AText, Start, MaxInt);
   end;
 end;
 
@@ -124,10 +104,11 @@ begin
       raise EGitError.Create('corrupt tree entry: truncated oid');
     Inc(EntryCount);
     SetLength(Result, EntryCount);
+    // single source via bytes.ops (zero-copy slice, no intermediate TBytes)
     Result[EntryCount - 1].Mode := ParseOctalText(
-      GitBytesToString(Copy(AData, ModeStart, NameStart - ModeStart - 1)));
+      BytesSliceToString(AData, SizeUInt(ModeStart), SizeUInt(NameStart - ModeStart - 1)));
     Result[EntryCount - 1].Name :=
-      GitBytesToString(Copy(AData, NameStart, P - NameStart - 1));
+      BytesSliceToString(AData, SizeUInt(NameStart), SizeUInt(P - NameStart - 1));
     Move(AData[P], Result[EntryCount - 1].Oid.Bytes[0], GitOidRawLen);
     Inc(P, GitOidRawLen);
   end;
@@ -176,7 +157,7 @@ var
   Lines: TStringArray;
   I, Brk, Sp, ParentCount: Integer;
 begin
-  Text := GitBytesToString(AData);
+  Text := BytesToString(AData);
   // headers and message are separated by the first blank line
   Brk := Pos(#10#10, Text);
   if Brk > 0 then
@@ -189,7 +170,7 @@ begin
     Header := Text;
     Result.Message := '';
   end;
-  SplitLines(Header, Lines);
+  Lines := GitSplitLines(Header);
   ParentCount := 0;
   SetLength(Result.Parents, 0);
   for I := 0 to Length(Lines) - 1 do
@@ -223,7 +204,7 @@ var
   I, Brk, Sp: Integer;
   HaveObject, HaveType, HaveName: Boolean;
 begin
-  Text := GitBytesToString(AData);
+  Text := BytesToString(AData);
   // headers and message are separated by the first blank line
   Brk := Pos(#10#10, Text);
   if Brk > 0 then
@@ -240,7 +221,7 @@ begin
   HaveObject := False;
   HaveType := False;
   HaveName := False;
-  SplitLines(Header, Lines);
+  Lines := GitSplitLines(Header);
   for I := 0 to Length(Lines) - 1 do
   begin
     Line := Lines[I];
@@ -281,4 +262,3 @@ begin
 end;
 
 end.
-

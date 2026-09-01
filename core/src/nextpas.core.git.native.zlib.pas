@@ -10,14 +10,16 @@ uses
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.compress,
-  nextpas.core.git.native.base;
+  nextpas.core.git.native.base,
+  nextpas.core.checksum.adler32;
 
 { Git stores loose objects and pack payloads in zlib wrapper format (RFC1950).
   The compress module's Deflate* functions already emit/accept full zlib
   streams (header + deflate + adler32), so this unit only adds git-flavored
   error mapping and stream-boundary reporting over them. }
 
-function GitZlibAdler32(const AData: TBytes): UInt32;
+function GitZlibAdler32(const AData: TBytes): UInt32; inline; overload;
+function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline; overload;
 function GitZlibCompress(const AData: TBytes): TBytes;
 { Inflate the zlib stream starting at AStart. AEndPos receives the offset just
   past the Adler-32 trailer, so callers can locate the trailer bytes. }
@@ -30,32 +32,18 @@ function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
 
 implementation
 
-function GitZlibAdler32(const AData: TBytes): UInt32;
-var
-  I, LRem, LBlock, J: SizeInt;
-  A, B: UInt32;
+function GitZlibAdler32(const AData: TBytes): UInt32; inline;
 begin
-  A := 1;
-  B := 0;
-  LRem := Length(AData);
-  I := 0;
-  while LRem > 0 do
-  begin
-    if LRem > 5552 then
-      LBlock := 5552
-    else
-      LBlock := LRem;
-    for J := 0 to LBlock - 1 do
-    begin
-      A := A + AData[I + J];
-      B := B + A;
-    end;
-    Inc(I, LBlock);
-    Dec(LRem, LBlock);
-    A := A mod 65521;
-    B := B mod 65521;
-  end;
-  Result := (B shl 16) or A;
+  if Length(AData) = 0 then
+    Exit(UInt32(ADLER32_INIT));
+  Result := UInt32(Adler32Update(ADLER32_INIT, PByte(AData), SizeUInt(Length(AData))));
+end;
+
+function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline;
+begin
+  if (ACount = 0) or (AData = nil) then
+    Exit(UInt32(ADLER32_INIT));
+  Result := UInt32(Adler32Update(ADLER32_INIT, AData, ACount));
 end;
 
 function GitZlibCompress(const AData: TBytes): TBytes;

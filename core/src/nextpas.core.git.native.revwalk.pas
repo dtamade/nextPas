@@ -52,6 +52,24 @@ type
     function Count: SizeInt; inline;
   end;
 
+  { bounded exactly-once commit parse cache: graph-hit or inflate once }
+  TCommitParseCache = class
+  private
+    FBuckets: array of TGitOid;
+    FWhens: array of Int64;
+    FParents: array of TGitOidArray;
+    FStates: array of Byte;
+    FCount: SizeInt;
+    FCap: SizeInt;
+    FMask: SizeInt;
+    procedure EnsureCapacity;
+    procedure Rehash(ANewCap: SizeInt);
+  public
+    destructor Destroy; override;
+    function TryGet(const AOid: TGitOid; out AWhen: Int64; out AParents: TGitOidArray): Boolean;
+    procedure Put(const AOid: TGitOid; AWhen: Int64; const AParents: TGitOidArray);
+  end;
+
   TWalkEntry = record
     Oid: TGitOid;
     When: Int64;
@@ -78,6 +96,7 @@ type
     FHeap: array of TWalkEntry;
     FSeen: TGitOidSet;        { owned }
     FHidden: TGitOidSet;      { owned, hide set }
+    FParseCache: TCommitParseCache; { owned, exactly-once }
     FBoundary: TGitRevEntryArray;
     FBoundaryPos: Integer;
     FFirstParent: Boolean;
@@ -241,6 +260,97 @@ begin
   Result := FCount;
 end;
 
+destructor TCommitParseCache.Destroy;
+var I: Integer;
+begin
+  for I := 0 to High(FParents) do
+    SetLength(FParents[I], 0);
+  inherited Destroy;
+end;
+
+procedure TCommitParseCache.EnsureCapacity;
+begin
+  if FCap = 0 then
+    Rehash(16)
+  else if FCount * 10 >= FCap * 7 then
+    Rehash(FCap * 2);
+end;
+
+procedure TCommitParseCache.Rehash(ANewCap: SizeInt);
+var
+  LOldBuckets: array of TGitOid;
+  LOldWhens: array of Int64;
+  LOldParents: array of TGitOidArray;
+  LOldStates: array of Byte;
+  LOldCap: SizeInt;
+  I: Integer;
+  LIdx: SizeInt;
+  LHash: UInt32;
+begin
+  LOldBuckets := FBuckets;
+  LOldWhens := FWhens;
+  LOldParents := FParents;
+  LOldStates := FStates;
+  LOldCap := FCap;
+  SetLength(FBuckets, ANewCap);
+  SetLength(FWhens, ANewCap);
+  SetLength(FParents, ANewCap);
+  SetLength(FStates, ANewCap);
+  FCap := ANewCap;
+  FMask := ANewCap - 1;
+  FCount := 0;
+  for I := 0 to LOldCap - 1 do
+    if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
+    begin
+      LHash := GitOidHash(LOldBuckets[I]);
+      LIdx := SizeInt(LHash and UInt32(FMask));
+      while FStates[LIdx] = 1 do
+        LIdx := (LIdx + 1) and FMask;
+      FBuckets[LIdx] := LOldBuckets[I];
+      FWhens[LIdx] := LOldWhens[I];
+      FParents[LIdx] := LOldParents[I];
+      FStates[LIdx] := 1;
+      Inc(FCount);
+    end;
+end;
+
+function TCommitParseCache.TryGet(const AOid: TGitOid; out AWhen: Int64; out AParents: TGitOidArray): Boolean;
+var LHash: UInt32; LIdx: SizeInt;
+begin
+  Result := False;
+  if FCount = 0 then Exit;
+  LHash := GitOidHash(AOid);
+  LIdx := SizeInt(LHash and UInt32(FMask));
+  while FStates[LIdx] <> 0 do
+  begin
+    if GitOidSame(FBuckets[LIdx], AOid) then
+    begin
+      AWhen := FWhens[LIdx];
+      AParents := Copy(FParents[LIdx]);
+      Exit(True);
+    end;
+    LIdx := (LIdx + 1) and FMask;
+  end;
+end;
+
+procedure TCommitParseCache.Put(const AOid: TGitOid; AWhen: Int64; const AParents: TGitOidArray);
+var LHash: UInt32; LIdx: SizeInt;
+begin
+  EnsureCapacity;
+  LHash := GitOidHash(AOid);
+  LIdx := SizeInt(LHash and UInt32(FMask));
+  while FStates[LIdx] <> 0 do
+  begin
+    if GitOidSame(FBuckets[LIdx], AOid) then Exit;
+    LIdx := (LIdx + 1) and FMask;
+  end;
+  FBuckets[LIdx] := AOid;
+  FWhens[LIdx] := AWhen;
+  FParents[LIdx] := Copy(AParents);
+  FStates[LIdx] := 1;
+  Inc(FCount);
+end;
+
 function DefaultGitRevOptions: TGitRevOptions;
 begin
   Result.FirstParent := False;
@@ -273,20 +383,77 @@ begin
   Result := True;
 end;
 
+function TryFetchCommitCached(ARepo: TNativeRepository; AGraph: TCommitGraph;
+  ACache: TCommitParseCache; const AOid: TGitOid; out AWhen: Int64;
+  out AParents: TGitOidArray): Boolean;
+var Data: TBytes; Kind: TGitObjectKind; Info: TGitCommitInfo;
+begin
+  if TryGraphParents(AGraph, AOid, AWhen, AParents) then
+  begin
+    if ACache <> nil then ACache.Put(AOid, AWhen, AParents);
+    Exit(True);
+  end;
+  if (ACache <> nil) and ACache.TryGet(AOid, AWhen, AParents) then
+    Exit(True);
+  try
+    Data := ARepo.ReadObject(AOid, Kind);
+  except
+    on E: EGitError do raise;
+  end;
+  if Kind <> gokCommit then Exit(False);
+  Info := GitParseCommit(Data);
+  AWhen := Info.Committer.UnixTime;
+  AParents := Copy(Info.Parents);
+  if ACache <> nil then ACache.Put(AOid, AWhen, AParents);
+  Result := True;
+end;
+
 procedure BuildHiddenSet(ARepo: TNativeRepository;
   const AHides: TGitOidArray; AFirstParent: Boolean;
-  out AHidden: TGitOidSet);
+  out AHidden: TGitOidSet; ACache: TCommitParseCache); overload; forward;
+
+procedure BuildHiddenSet(ARepo: TNativeRepository;
+  const AHides: TGitOidArray; AFirstParent: Boolean;
+  out AHidden: TGitOidSet); overload;
+var TmpCache: TCommitParseCache;
+begin
+  TmpCache := TCommitParseCache.Create;
+  try
+    BuildHiddenSet(ARepo, AHides, AFirstParent, AHidden, TmpCache);
+  finally
+    TmpCache.Free;
+  end;
+end;
+
+procedure BuildHiddenSet(ARepo: TNativeRepository;
+  const AHides: TGitOidArray; AFirstParent: Boolean;
+  out AHidden: TGitOidSet; ACache: TCommitParseCache); overload;
 var
   Stack: TGitOidArray;
   Oid: TGitOid;
-  Data: TBytes;
   Kind: TGitObjectKind;
-  Info: TGitCommitInfo;
   I: Integer;
   Graph: TCommitGraph;
   GWhen: Int64;
   GParents: TGitOidArray;
-  UsedGraph: Boolean;
+  StackCap, StackLen: SizeInt;
+  procedure StackPush(const AOid: TGitOid);
+  begin
+    if StackLen >= StackCap then
+    begin
+      if StackCap = 0 then StackCap := 64 else if StackCap < 4096 then StackCap := StackCap * 2 else Inc(StackCap, 4096);
+      SetLength(Stack, StackCap);
+    end;
+    Stack[StackLen] := AOid;
+    Inc(StackLen);
+  end;
+  function StackPop(out AOid: TGitOid): Boolean;
+  begin
+    Result := StackLen > 0;
+    if not Result then Exit;
+    Dec(StackLen);
+    AOid := Stack[StackLen];
+  end;
 begin
   AHidden := TGitOidSet.Create;
   Graph := nil;
@@ -297,48 +464,31 @@ begin
     Graph := nil;
   end;
   try
-    Stack := Copy(AHides);
-    while Length(Stack) > 0 do
+    Stack := nil; StackCap := 0; StackLen := 0;
+    for I := 0 to High(AHides) do StackPush(AHides[I]);
+    while StackPop(Oid) do
     begin
-      Oid := Stack[High(Stack)];
-      SetLength(Stack, Length(Stack) - 1);
       if AHidden.Contains(Oid) then
         Continue;
-      UsedGraph := TryGraphParents(Graph, Oid, GWhen, GParents);
-      if not UsedGraph then
+      if not TryFetchCommitCached(ARepo, Graph, ACache, Oid, GWhen, GParents) then
       begin
-        try
-          Data := ARepo.ReadObject(Oid, Kind);
-        except
-          on E: EGitError do
-            raise;
-        end;
-        if Kind <> gokCommit then
-          Continue;
-        Info := GitParseCommit(Data);
-        GParents := Copy(Info.Parents);
+        // non-commit or missing: skip but still mark visited to avoid retry
+        // do not add to hidden (graph already handled), continue
+        Continue;
       end;
+      // TryFetch returns False only for non-commit kind; need to distinguish EGitError already raised
+      // check Kind was commit inside helper, so here we have valid parents
       AHidden.Add(Oid);
       if AFirstParent then
       begin
-        if Length(GParents) > 0 then
-        begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[0];
-        end;
+        if Length(GParents) > 0 then StackPush(GParents[0]);
       end
       else
-      begin
-        for I := 0 to High(GParents) do
-        begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[I];
-        end;
-      end;
+        for I := 0 to High(GParents) do StackPush(GParents[I]);
     end;
+    SetLength(Stack, StackLen);
   finally
-    if Graph <> nil then
-      Graph.Free;
+    if Graph <> nil then Graph.Free;
   end;
 end;
 
@@ -414,13 +564,14 @@ end;
 
 procedure TGitRevWalker.EnqueueCommit(const AOid: TGitOid);
 var
-  Data: TBytes;
-  Kind: TGitObjectKind;
-  Info: TGitCommitInfo;
   Entry: TWalkEntry;
   I: Integer;
   GWhen: Int64;
   GParents: TGitOidArray;
+  IsNonCommit: Boolean;
+  Data: TBytes;
+  Kind: TGitObjectKind;
+  Info: TGitCommitInfo;
 begin
   if FSeen.Contains(AOid) then
     Exit;
@@ -438,35 +589,33 @@ begin
     Exit;
   end;
   InitGraph;
-  if TryGraphCommit(AOid, GWhen, GParents) then
+  if FParseCache = nil then
+    FParseCache := TCommitParseCache.Create;
+  // single lookup path: graph -> cache -> inflate/parse, cached exactly-once
+  if TryGraphParents(FGraph, AOid, GWhen, GParents) then
   begin
-    FSeen.Add(AOid);
-    Entry.Oid := AOid;
-    Entry.When := GWhen;
-    if FFirstParent and (Length(GParents) > 1) then
-    begin
-      SetLength(Entry.Parents, 1);
-      Entry.Parents[0] := GParents[0];
-    end
-    else
-      Entry.Parents := Copy(GParents);
-    HeapPush(Entry);
-    Exit;
+    FParseCache.Put(AOid, GWhen, GParents);
+  end
+  else if not FParseCache.TryGet(AOid, GWhen, GParents) then
+  begin
+    Data := FRepo.ReadObject(AOid, Kind);
+    if Kind <> gokCommit then
+      raise EGitError.Create('revwalk start points at a non-commit object');
+    Info := GitParseCommit(Data);
+    GWhen := Info.Committer.UnixTime;
+    GParents := Copy(Info.Parents);
+    FParseCache.Put(AOid, GWhen, GParents);
   end;
-  Data := FRepo.ReadObject(AOid, Kind);
-  if Kind <> gokCommit then
-    raise EGitError.Create('revwalk start points at a non-commit object');
-  Info := GitParseCommit(Data);
   FSeen.Add(AOid);
   Entry.Oid := AOid;
-  Entry.When := Info.Committer.UnixTime;
-  if FFirstParent and (Length(Info.Parents) > 1) then
+  Entry.When := GWhen;
+  if FFirstParent and (Length(GParents) > 1) then
   begin
     SetLength(Entry.Parents, 1);
-    Entry.Parents[0] := Info.Parents[0];
+    Entry.Parents[0] := GParents[0];
   end
   else
-    Entry.Parents := Copy(Info.Parents);
+    Entry.Parents := Copy(GParents);
   HeapPush(Entry);
 end;
 
@@ -474,73 +623,50 @@ procedure TGitRevWalker.EnqueueHidden(const AOid: TGitOid);
 var
   Stack: TGitOidArray;
   Cur: TGitOid;
-  Data: TBytes;
-  Kind: TGitObjectKind;
-  Info: TGitCommitInfo;
   I: Integer;
   GWhen: Int64;
   GParents: TGitOidArray;
+  StackCap, StackLen: SizeInt;
+  procedure StackPush(const APushOid: TGitOid);
+  begin
+    if StackLen >= StackCap then
+    begin
+      if StackCap = 0 then StackCap := 64 else if StackCap < 4096 then StackCap := StackCap * 2 else Inc(StackCap, 4096);
+      SetLength(Stack, StackCap);
+    end;
+    Stack[StackLen] := APushOid;
+    Inc(StackLen);
+  end;
+  function StackPop(out AOid: TGitOid): Boolean;
+  begin
+    Result := StackLen > 0;
+    if not Result then Exit;
+    Dec(StackLen);
+    AOid := Stack[StackLen];
+  end;
 begin
   if FHidden = nil then
     FHidden := TGitOidSet.Create;
   InitGraph;
-  Stack := nil;
-  SetLength(Stack, 1);
-  Stack[0] := AOid;
-  while Length(Stack) > 0 do
+  if FParseCache = nil then
+    FParseCache := TCommitParseCache.Create;
+  Stack := nil; StackCap := 0; StackLen := 0;
+  StackPush(AOid);
+  while StackPop(Cur) do
   begin
-    Cur := Stack[High(Stack)];
-    SetLength(Stack, Length(Stack) - 1);
     if FHidden.Contains(Cur) then
       Continue;
-    if TryGraphCommit(Cur, GWhen, GParents) then
-    begin
-      FHidden.Add(Cur);
-      if FFirstParent then
-      begin
-        if Length(GParents) > 0 then
-        begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[0];
-        end;
-      end
-      else
-      begin
-        for I := 0 to High(GParents) do
-        begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[I];
-        end;
-      end;
+    if not TryFetchCommitCached(FRepo, FGraph, FParseCache, Cur, GWhen, GParents) then
       Continue;
-    end;
-    try
-      Data := FRepo.ReadObject(Cur, Kind);
-    except
-      on E: EGitError do
-        raise;
-    end;
-    if Kind <> gokCommit then
-      Continue;
-    Info := GitParseCommit(Data);
     FHidden.Add(Cur);
     if FFirstParent then
     begin
-      if Length(Info.Parents) > 0 then
-      begin
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Info.Parents[0];
-      end;
+      if Length(GParents) > 0 then StackPush(GParents[0]);
     end
     else
-    begin
-      for I := 0 to High(Info.Parents) do
-      begin
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Info.Parents[I];
-      end;
-    end;
+      for I := 0 to High(GParents) do StackPush(GParents[I]);
   end;
+  SetLength(Stack, StackLen);
 end;
 
 constructor TGitRevWalker.Create(ARepo: TNativeRepository);
@@ -557,6 +683,7 @@ begin
   FGraph := nil;
   FSeen := TGitOidSet.Create;
   FHidden := nil;
+  FParseCache := nil;
   FBoundary := nil;
   FBoundaryPos := 0;
   FFirstParent := AOptions.FirstParent;
@@ -570,6 +697,8 @@ begin
   FSeen.Free;
   if FHidden <> nil then
     FHidden.Free;
+  if FParseCache <> nil then
+    FParseCache.Free;
   if FGraph <> nil then
     FGraph.Free;
   inherited Destroy;
@@ -699,18 +828,26 @@ var
   Walker: TGitRevWalker;
   I: SizeInt;
   Oid: TGitOid;
+  LCount, LCap: SizeInt;
 begin
   Result := nil;
+  LCount := 0; LCap := 0;
   Walker := TGitRevWalker.Create(ARepo);
   try
     for I := 0 to High(AStarts) do
       Walker.Push(AStarts[I]);
-    while ((AMaxCount < 0) or (Length(Result) < AMaxCount))
+    while ((AMaxCount < 0) or (LCount < AMaxCount))
       and Walker.Next(Oid) do
     begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Oid;
+      if LCount >= LCap then
+      begin
+        if LCap = 0 then LCap := 256 else if LCap < 8192 then LCap := LCap * 2 else Inc(LCap, 8192);
+        SetLength(Result, LCap);
+      end;
+      Result[LCount] := Oid;
+      Inc(LCount);
     end;
+    SetLength(Result, LCount);
   finally
     Walker.Free;
   end;
@@ -722,23 +859,23 @@ function GitCollectCommits(ARepo: TNativeRepository;
 var
   E: TGitRevEntryArray;
   I: Integer;
+  LCount, LCap: SizeInt;
 begin
   Result := nil;
   E := GitCollectCommitsWithBoundary(ARepo, AStarts, AHides, AOptions, AMaxCount);
-  SetLength(Result, Length(E));
+  LCount := 0; LCap := 0;
   for I := 0 to High(E) do
     if not E[I].IsBoundary then
     begin
-      // compact out boundary entries for the non-boundary overload
+      if LCount >= LCap then
+      begin
+        if LCap = 0 then LCap := 256 else if LCap < 8192 then LCap := LCap * 2 else Inc(LCap, 8192);
+        SetLength(Result, LCap);
+      end;
+      Result[LCount] := E[I].Oid;
+      Inc(LCount);
     end;
-  // second pass without boundary: just filter
-  Result := nil;
-  for I := 0 to High(E) do
-    if not E[I].IsBoundary then
-    begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := E[I].Oid;
-    end;
+  SetLength(Result, LCount);
 end;
 
 function GitCollectCommitsWithBoundary(ARepo: TNativeRepository;
@@ -751,6 +888,9 @@ var
   BoundarySet: TGitOidSet;
   BoundaryList: TGitOidArray;
   Graph: TCommitGraph;
+  ParseCache: TCommitParseCache;
+  ResCount, ResCap: SizeInt;
+  BndCount, BndCap: SizeInt;
 
   procedure HeapPushLocal(const AEntry: TWalkEntry);
   var
@@ -804,39 +944,50 @@ var
 
   procedure EnqueueIfNeeded(const AOid: TGitOid);
   var
-    Data: TBytes;
-    Kind: TGitObjectKind;
-    Info: TGitCommitInfo;
     Entry: TWalkEntry;
     GWhen: Int64;
     GParents: TGitOidArray;
+    Got: Boolean;
   begin
     if Seen.Contains(AOid) then
       Exit;
     if (Hidden <> nil) and Hidden.Contains(AOid) then
       Exit;
-    if TryGraphParents(Graph, AOid, GWhen, GParents) then
-    begin
-      Seen.Add(AOid);
-      Entry.Oid := AOid;
-      Entry.When := GWhen;
-      Entry.Parents := Copy(GParents);
-      HeapPushLocal(Entry);
-      Exit;
-    end;
     try
-      Data := ARepo.ReadObject(AOid, Kind);
+      Got := TryFetchCommitCached(ARepo, Graph, ParseCache, AOid, GWhen, GParents);
     except
       Exit;
     end;
-    if Kind <> gokCommit then
+    if not Got then
       raise EGitError.Create('revwalk start points at a non-commit object');
-    Info := GitParseCommit(Data);
     Seen.Add(AOid);
     Entry.Oid := AOid;
-    Entry.When := Info.Committer.UnixTime;
-    Entry.Parents := Copy(Info.Parents);
+    Entry.When := GWhen;
+    Entry.Parents := Copy(GParents);
     HeapPushLocal(Entry);
+  end;
+
+  procedure AppendBoundary(const AOid: TGitOid);
+  begin
+    if BndCount >= BndCap then
+    begin
+      if BndCap = 0 then BndCap := 32 else if BndCap < 4096 then BndCap := BndCap * 2 else Inc(BndCap, 4096);
+      SetLength(BoundaryList, BndCap);
+    end;
+    BoundaryList[BndCount] := AOid;
+    Inc(BndCount);
+  end;
+
+  procedure AppendResult(const AOid: TGitOid; AIsBoundary: Boolean);
+  begin
+    if ResCount >= ResCap then
+    begin
+      if ResCap = 0 then ResCap := 256 else if ResCap < 8192 then ResCap := ResCap * 2 else Inc(ResCap, 8192);
+      SetLength(Result, ResCap);
+    end;
+    Result[ResCount].Oid := AOid;
+    Result[ResCount].IsBoundary := AIsBoundary;
+    Inc(ResCount);
   end;
 
 var
@@ -846,7 +997,11 @@ var
   ParentOid: TGitOid;
 begin
   Result := nil;
+  ResCount := 0; ResCap := 0;
+  BndCount := 0; BndCap := 0;
+  BoundaryList := nil;
   Graph := nil;
+  ParseCache := TCommitParseCache.Create;
   try
     if not GitTryLoadCommitGraph(ARepo.GitDir, Graph) then
       Graph := nil;
@@ -858,7 +1013,7 @@ begin
   BoundarySet := TGitOidSet.Create;
   try
     if Length(AHides) > 0 then
-      BuildHiddenSet(ARepo, AHides, AOptions.FirstParent, Hidden);
+      BuildHiddenSet(ARepo, AHides, AOptions.FirstParent, Hidden, ParseCache);
     // seed heap with starts that are not hidden
     Heap := nil;
     for I := 0 to High(AStarts) do
@@ -868,12 +1023,16 @@ begin
         if AOptions.ShowBoundary and not BoundarySet.Contains(AStarts[I]) then
         begin
           BoundarySet.Add(AStarts[I]);
-          SetLength(BoundaryList, Length(BoundaryList) + 1);
-          BoundaryList[High(BoundaryList)] := AStarts[I];
+          AppendBoundary(AStarts[I]);
         end;
         Continue;
       end;
-      EnqueueIfNeeded(AStarts[I]);
+      try
+        EnqueueIfNeeded(AStarts[I]);
+      except
+        // missing start remains fatal via EnqueueIfNeeded raise
+        raise;
+      end;
     end;
     Emitted := 0;
     while HeapPopLocal(Entry) do
@@ -891,8 +1050,7 @@ begin
           if AOptions.ShowBoundary and not BoundarySet.Contains(ParentOid) then
           begin
             BoundarySet.Add(ParentOid);
-            SetLength(BoundaryList, Length(BoundaryList) + 1);
-            BoundaryList[High(BoundaryList)] := ParentOid;
+            AppendBoundary(ParentOid);
           end;
           Continue;
         end;
@@ -902,26 +1060,26 @@ begin
         Continue;
       if (AMaxCount >= 0) and (Emitted >= AMaxCount) then
         Break;
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)].Oid := Entry.Oid;
-      Result[High(Result)].IsBoundary := False;
+      AppendResult(Entry.Oid, False);
       Inc(Emitted);
     end;
+    SetLength(BoundaryList, BndCount);
     // append boundary entries after main list, preserving discovery order
     if AOptions.ShowBoundary then
     begin
       for I := 0 to High(BoundaryList) do
       begin
-        if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) then
+        if (AMaxCount >= 0) and (ResCount >= AMaxCount) then
           Break;
-        SetLength(Result, Length(Result) + 1);
-        Result[High(Result)].Oid := BoundaryList[I];
-        Result[High(Result)].IsBoundary := True;
+        AppendResult(BoundaryList[I], True);
       end;
     end;
+    SetLength(Result, ResCount);
+    SetLength(BoundaryList, BndCount);
   finally
     Seen.Free;
     BoundarySet.Free;
+    ParseCache.Free;
     if Hidden <> nil then
       Hidden.Free;
     if Graph <> nil then
@@ -1044,40 +1202,56 @@ var
   Order, Scratch, Ready: TNodeIndexArray;
   Seen: TGitOidSet;
   Stack: TGitOidArray;
-  Data: TBytes;
-  Kind: TGitObjectKind;
-  Info: TGitCommitInfo;
   Oid: TGitOid;
   I, J, NodeIdx, ParentIdx: Integer;
+  Graph: TCommitGraph;
+  ParseCache: TCommitParseCache;
+  GWhen: Int64;
+  GParents: TGitOidArray;
+  StackCap, StackLen, NodesLen: SizeInt;
+  ResCap, ResCount, ReadyCap: SizeInt;
 begin
   Result := nil;
   Seen := TGitOidSet.Create;
+  Graph := nil;
+  ParseCache := TCommitParseCache.Create;
+  Nodes := nil;
+  NodesLen := 0;
   try
+    try if not GitTryLoadCommitGraph(ARepo.GitDir, Graph) then Graph := nil; except Graph := nil; end;
     { phase 1: discover the full reachable set, parsing each commit once }
-    Stack := Copy(AStarts);
-    while Length(Stack) > 0 do
+    Stack := nil; StackCap := 0; StackLen := 0; ResCount := 0; ResCap := 0; ReadyCap := 0;
+    for I := 0 to High(AStarts) do
     begin
-      Oid := Stack[High(Stack)];
-      SetLength(Stack, Length(Stack) - 1);
+      if StackLen >= StackCap then
+      begin if StackCap = 0 then StackCap := 64 else if StackCap < 4096 then StackCap := StackCap*2 else Inc(StackCap, 4096); SetLength(Stack, StackCap); end;
+      Stack[StackLen] := AStarts[I]; Inc(StackLen);
+    end;
+    while StackLen > 0 do
+    begin
+      Dec(StackLen); Oid := Stack[StackLen];
       if Seen.Contains(Oid) then
         Continue;
-      Data := ARepo.ReadObject(Oid, Kind);
-      if Kind <> gokCommit then
+      if not TryFetchCommitCached(ARepo, Graph, ParseCache, Oid, GWhen, GParents) then
         raise EGitError.Create('topo walk start points at a non-commit object');
-      Info := GitParseCommit(Data);
       Seen.Add(Oid);
-      NodeIdx := Length(Nodes);
-      SetLength(Nodes, NodeIdx + 1);
+      if NodesLen >= Length(Nodes) then
+        SetLength(Nodes, NodesLen+1);
+      NodeIdx := NodesLen;
+      Inc(NodesLen);
       Nodes[NodeIdx].Oid := Oid;
-      Nodes[NodeIdx].When := Info.Committer.UnixTime;
-      Nodes[NodeIdx].Parents := Copy(Info.Parents);
+      Nodes[NodeIdx].When := GWhen;
+      Nodes[NodeIdx].Parents := Copy(GParents);
       Nodes[NodeIdx].ChildCount := 0;
-      for J := 0 to High(Info.Parents) do
+      for J := 0 to High(GParents) do
       begin
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Info.Parents[J];
+        if StackLen >= StackCap then
+        begin if StackCap=0 then StackCap:=64 else if StackCap<4096 then StackCap:=StackCap*2 else Inc(StackCap,4096); SetLength(Stack, StackCap); end;
+        Stack[StackLen] := GParents[J]; Inc(StackLen);
       end;
     end;
+    SetLength(Stack, StackLen);
+    SetLength(Nodes, NodesLen);
 
     { phase 2: count each node's children within the set }
     SetLength(Order, Length(Nodes));
@@ -1108,15 +1282,18 @@ begin
         Ready[High(Ready)] := I;
       end;
     TopoSortTips(Ready, Nodes);
+    Result := nil; ResCount:=0; ResCap:=0;
     while True do
     begin
-      if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) then
+      if (AMaxCount >= 0) and (ResCount >= AMaxCount) then
         Break;
       NodeIdx := TopoStackPop(Ready);
       if NodeIdx < 0 then
         Break;
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Nodes[NodeIdx].Oid;
+      if ResCount >= ResCap then
+      begin if ResCap=0 then ResCap:=256 else if ResCap<8192 then ResCap:=ResCap*2 else Inc(ResCap,8192); SetLength(Result, ResCap); end;
+      Result[ResCount] := Nodes[NodeIdx].Oid;
+      Inc(ResCount);
       for J := 0 to High(Nodes[NodeIdx].Parents) do
       begin
         ParentIdx := TopoNodeIndexOf(Nodes[NodeIdx].Parents[J], Order, Nodes);
@@ -1128,8 +1305,11 @@ begin
         end;
       end;
     end;
+    SetLength(Result, ResCount);
   finally
     Seen.Free;
+    ParseCache.Free;
+    if Graph <> nil then Graph.Free;
   end;
 end;
 
@@ -1139,15 +1319,20 @@ function GitTopoOrderCommits(ARepo: TNativeRepository;
 var
   E: TGitRevEntryArray;
   I: Integer;
+  LCount, LCap: SizeInt;
 begin
   Result := nil;
+  LCount:=0; LCap:=0;
   E := GitTopoOrderCommitsWithBoundary(ARepo, AStarts, AHides, AOptions, AMaxCount);
   for I := 0 to High(E) do
     if not E[I].IsBoundary then
     begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := E[I].Oid;
+      if LCount >= LCap then
+      begin if LCap=0 then LCap:=256 else if LCap<8192 then LCap:=LCap*2 else Inc(LCap,8192); SetLength(Result, LCap); end;
+      Result[LCount] := E[I].Oid;
+      Inc(LCount);
     end;
+  SetLength(Result, LCount);
 end;
 
 function GitTopoOrderCommitsWithBoundary(ARepo: TNativeRepository;
@@ -1159,9 +1344,6 @@ var
   Order, Scratch, Ready: TNodeIndexArray;
   Seen: TGitOidSet;
   Stack: TGitOidArray;
-  Data: TBytes;
-  Kind: TGitObjectKind;
-  Info: TGitCommitInfo;
   Oid: TGitOid;
   I, J, NodeIdx, ParentIdx: Integer;
   BoundarySet: TGitOidSet;
@@ -1171,10 +1353,33 @@ var
   Graph: TCommitGraph;
   GWhen: Int64;
   GParents: TGitOidArray;
-  UseGraph: Boolean;
+  ParseCache: TCommitParseCache;
+  StackCap, StackLen: SizeInt;
+  BndCount, BndCap, ResCount, ResCap: SizeInt;
+  procedure PushStack(const AOid: TGitOid);
+  begin
+    if StackLen >= StackCap then
+    begin if StackCap=0 then StackCap:=64 else if StackCap<4096 then StackCap:=StackCap*2 else Inc(StackCap,4096); SetLength(Stack, StackCap); end;
+    Stack[StackLen] := AOid; Inc(StackLen);
+  end;
+  function PopStack(out AOid: TGitOid): Boolean;
+  begin Result:= StackLen>0; if not Result then Exit; Dec(StackLen); AOid:=Stack[StackLen]; end;
+  procedure AppendBoundary(const AOid: TGitOid);
+  begin
+    if BndCount >= BndCap then
+    begin if BndCap=0 then BndCap:=32 else if BndCap<4096 then BndCap:=BndCap*2 else Inc(BndCap,4096); SetLength(BoundaryList, BndCap); end;
+    BoundaryList[BndCount] := AOid; Inc(BndCount);
+  end;
+  procedure AppendResult(const AOid: TGitOid; AIsBoundary: Boolean);
+  begin
+    if ResCount >= ResCap then
+    begin if ResCap=0 then ResCap:=256 else if ResCap<8192 then ResCap:=ResCap*2 else Inc(ResCap,8192); SetLength(Result, ResCap); end;
+    Result[ResCount].Oid := AOid; Result[ResCount].IsBoundary := AIsBoundary; Inc(ResCount);
+  end;
 begin
-  Result := nil;
+  Result := nil; ResCount:=0; ResCap:=0; BndCount:=0; BndCap:=0; BoundaryList:=nil; StackCap:=0; StackLen:=0;
   Graph := nil;
+  ParseCache := TCommitParseCache.Create;
   try
     if not GitTryLoadCommitGraph(ARepo.GitDir, Graph) then
       Graph := nil;
@@ -1183,16 +1388,15 @@ begin
   end;
   Hidden := nil;
   if Length(AHides) > 0 then
-    BuildHiddenSet(ARepo, AHides, AOptions.FirstParent, Hidden);
+    BuildHiddenSet(ARepo, AHides, AOptions.FirstParent, Hidden, ParseCache);
   Seen := TGitOidSet.Create;
   BoundarySet := TGitOidSet.Create;
   try
     // phase 1: discover reachable from starts, stopping at hidden boundary
-    Stack := Copy(AStarts);
-    while Length(Stack) > 0 do
+    Stack := nil;
+    for I := 0 to High(AStarts) do PushStack(AStarts[I]);
+    while PopStack(Oid) do
     begin
-      Oid := Stack[High(Stack)];
-      SetLength(Stack, Length(Stack) - 1);
       if Seen.Contains(Oid) then
         Continue;
       if (Hidden <> nil) and Hidden.Contains(Oid) then
@@ -1200,24 +1404,22 @@ begin
         if AOptions.ShowBoundary and not BoundarySet.Contains(Oid) then
         begin
           BoundarySet.Add(Oid);
-          SetLength(BoundaryList, Length(BoundaryList) + 1);
-          BoundaryList[High(BoundaryList)] := Oid;
+          AppendBoundary(Oid);
         end;
         Continue;
       end;
-      UseGraph := TryGraphParents(Graph, Oid, GWhen, GParents);
-      if not UseGraph then
-      begin
-        try
-          Data := ARepo.ReadObject(Oid, Kind);
-        except
+      try
+        if not TryFetchCommitCached(ARepo, Graph, ParseCache, Oid, GWhen, GParents) then
+          raise EGitError.Create('topo walk start points at a non-commit object');
+      except
+        on E: EGitError do
+        begin
+          // missing object in shallow clone: skip; non-commit start already raised above and will propagate
+          // distinguish: TryFetch raise for missing vs explicit raise for non-commit
+          // if Got==false case already raised, re-raise
+          if Pos('non-commit', E.Message) > 0 then raise;
           Continue;
         end;
-        if Kind <> gokCommit then
-          raise EGitError.Create('topo walk start points at a non-commit object');
-        Info := GitParseCommit(Data);
-        GWhen := Info.Committer.UnixTime;
-        GParents := Copy(Info.Parents);
       end;
       Seen.Add(Oid);
       NodeIdx := Length(Nodes);
@@ -1246,15 +1448,15 @@ begin
           if AOptions.ShowBoundary and not BoundarySet.Contains(Nodes[NodeIdx].Parents[J]) then
           begin
             BoundarySet.Add(Nodes[NodeIdx].Parents[J]);
-            SetLength(BoundaryList, Length(BoundaryList) + 1);
-            BoundaryList[High(BoundaryList)] := Nodes[NodeIdx].Parents[J];
+            AppendBoundary(Nodes[NodeIdx].Parents[J]);
           end;
           Continue;
         end;
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Nodes[NodeIdx].Parents[J];
+        PushStack(Nodes[NodeIdx].Parents[J]);
       end;
     end;
+    SetLength(Stack, StackLen);
+    SetLength(BoundaryList, BndCount);
     if Length(Nodes) = 0 then
     begin
       // only boundaries
@@ -1262,12 +1464,11 @@ begin
       begin
         for I := 0 to High(BoundaryList) do
         begin
-          if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) then
+          if (AMaxCount >= 0) and (ResCount >= AMaxCount) then
             Break;
-          SetLength(Result, Length(Result) + 1);
-          Result[High(Result)].Oid := BoundaryList[I];
-          Result[High(Result)].IsBoundary := True;
+          AppendResult(BoundaryList[I], True);
         end;
+        SetLength(Result, ResCount);
       end;
       Exit;
     end;
@@ -1304,27 +1505,18 @@ begin
     Emitted := 0;
     while True do
     begin
-      if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) and (Emitted >= AMaxCount) then
+      if (AMaxCount >= 0) and (ResCount >= AMaxCount) and (Emitted >= AMaxCount) then
         Break;
       NodeIdx := TopoStackPop(Ready);
       if NodeIdx < 0 then
         Break;
-      // still need to decrement children of parents even if filtered?
-      // but we have to make parents ready when all children processed
-      // If node is date-filtered, we skip emission but still process parents
       if not DateFiltered[NodeIdx] then
       begin
         if (AMaxCount < 0) or (Emitted < AMaxCount) then
         begin
-          SetLength(Result, Length(Result) + 1);
-          Result[High(Result)].Oid := Nodes[NodeIdx].Oid;
-          Result[High(Result)].IsBoundary := False;
+          AppendResult(Nodes[NodeIdx].Oid, False);
           Inc(Emitted);
         end;
-      end
-      else if AOptions.Since <> 0 then
-      begin
-        // even filtered, we must count towards emission? No
       end;
       for J := 0 to High(Nodes[NodeIdx].Parents) do
       begin
@@ -1343,32 +1535,29 @@ begin
     begin
       for I := 0 to High(BoundaryList) do
       begin
-        if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) then
+        if (AMaxCount >= 0) and (ResCount >= AMaxCount) then
           Break;
-        // boundary respects date filter? Apply same filter
-        // need to fetch boundary commit date to filter - read it
-        // quick path: if Since/UntilTime set, fetch and check
         if (AOptions.Since <> 0) or (AOptions.UntilTime <> 0) then
         begin
+          // reuse parse cache / graph to avoid extra inflate
           try
-            Data := ARepo.ReadObject(BoundaryList[I], Kind);
-            if Kind = gokCommit then
+            if TryFetchCommitCached(ARepo, Graph, ParseCache, BoundaryList[I], GWhen, GParents) then
             begin
-              Info := GitParseCommit(Data);
-              if not PassesDateFilter(Info.Committer.UnixTime, AOptions.Since, AOptions.UntilTime) then
+              if not PassesDateFilter(GWhen, AOptions.Since, AOptions.UntilTime) then
                 Continue;
             end;
           except
           end;
         end;
-        SetLength(Result, Length(Result) + 1);
-        Result[High(Result)].Oid := BoundaryList[I];
-        Result[High(Result)].IsBoundary := True;
+        AppendResult(BoundaryList[I], True);
       end;
     end;
+    SetLength(Result, ResCount);
+    SetLength(BoundaryList, BndCount);
   finally
     Seen.Free;
     BoundarySet.Free;
+    ParseCache.Free;
     if Hidden <> nil then
       Hidden.Free;
     if Graph <> nil then

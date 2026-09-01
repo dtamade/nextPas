@@ -1,6 +1,6 @@
 # nextpas.core.git 代码契约
 
-**模块路径**：`core/src/nextpas.core.git*.pas`（66 个源文件）
+**模块路径**：`core/src/nextpas.core.git*.pas`（71 个源文件）
 **层级**：L2（依赖 L0: base, text, fs；native 子家族另用 compress/hash/io L1 owner）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-08-29
@@ -21,6 +21,8 @@
 | git.libgit2.binding | libgit2 函数指针绑定（dlopen/dlsym 运行时加载） |
 | git.libgit2.backend | libgit2 后端实现 |
 | git.libgit2.bindings | libgit2 全量自动声明单元（c2pas888 生成，静态 external 形态） |
+| git.libgit2.base | libgit2 基础类型/句柄/oid 前向声明（20/33 双轨零拷贝，git_oid/TGitOid33） |
+| git.libgit2.manager | libgit2 管理器实现（TGitManagerImpl/TGitRepositoryImpl 完整 IGit* 适配，经 backend/binding + dlopen/dlsym） |
 | git.native.base | 纯 Pas 对象层：TGitOid / TGitObjectKind / EGitError |
 | git.native.zlib | zlib 流边界处理（复用 compress.Deflate*，嵌入式 reader） |
 | git.native.loose | loose 对象读写（objects/xx/yyyy 布局，SHA-1 寻址） |
@@ -75,6 +77,9 @@
 | git.native.bundle | 束（`bundle` v2 创建/校验/列表/落盘，`pack-objects --revs --delta-base-offset` 生成 pack、`SHA-1` 尾校验、`-` 前提与标题、跨 `git bundle verify/list-heads/fetch` 黄金） |
 | git.native.grep | 搜索（`grep` 树内全文检索，`HEAD`/`ref`/`tree` 起点、`-i` 大小写折叠、行号/路径/行文本、二进制跳过、`path:lineNo:line` 排序，对齐 `git grep -n`） |
 | git.native.bisect | 二分（`bisect` 首坏提交定位，`good..bad` 候选经 `revwalk` topo 排除 + 二分回调，对齐 `git bisect` 线性史） |
+| git.native.common | 共享对象助手（tree 查找/tag 剥离单源，GitFindBlobInTree/GitPeelToTree，零重复，EGitError 语义） |
+| git.native.util | 通用工具单源（Trim/SplitLines/WorktreeDir/FindBlobInTree/PeelToTree，inline/零拷贝，去重 common） |
+| git.native.wildmatch | 单源通配引擎（`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils，ignore/attributes 委托 GitWildSegment*/GitSegmentsMatch） |
 | git.factory | TGitBackend + NewGitManager 选择层（唯一跨轨汇聚点，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
@@ -227,7 +232,7 @@ end;
 |--------|------|
 | `test_git` | Status/Head/LookupCommit/Init/IsGitRepository（libgit2 真库，20 用例） |
 | `test_git_bindings` | 静态声明系 ABI 黄金对照（5 用例，gcc 探针 sizeof/offsetof + 运行时版本实证） |
-| `test_git_native` | native 子家族对象层/refs/status/revwalk 等（零 libgit2） |
+| `test_git_native` | native 子家族 118 用例（零 libgit2，覆盖 loose/pack/refs/objmodel/repo/write/index/cachetree/status/ignore/revwalk/commitgraph/reflog/stash/worktree/config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset/prune/clean/revparse/notes/branch/tag/log/describe/diff/blame/mergebase/show/shortlog/catfile/lsfiles/cherrypick/revert/archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect/common/util/wildmatch，对齐 git 黄金） |
 | `test_git_pure_manager` | 纯门面 5 用例，零 libgit2（Init/StatusEmpty/StatusWithFile/HeadAndLookup/FactoryGbAutoCompat，经 `factory.NewGitManager(gbNative)`，C4 门禁：grep 零命中 + `fpc -va Loading libgit2` 双重闭环） |
 
 门禁：`scripts/git-contract-check.sh` C4 已闭环（`fpc -va Loading.*libgit2` 实检 + `grep` 零命中）；`build/verify_local.sh` 后续聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准。

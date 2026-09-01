@@ -50,36 +50,9 @@ const
 
 implementation
 
-function OidCompare(const AA, AB: TGitOid): Integer;
-var
-  I: Integer;
-begin
-  Result := 0;
-  for I := 0 to GitOidRawLen - 1 do
-  begin
-    if AA.Bytes[I] < AB.Bytes[I] then
-      Exit(-1);
-    if AA.Bytes[I] > AB.Bytes[I] then
-      Exit(1);
-  end;
-end;
-
-function ReadVarIntLE7(const AData: TBytes; var APos: SizeInt): Int64;
-var
-  B: Byte;
-  Shift: Integer;
-begin
-  Result := 0;
-  Shift := 0;
-  repeat
-    if (APos < 0) or (APos >= Length(AData)) then
-      raise EGitError.Create('truncated varint in pack data');
-    B := AData[APos];
-    Inc(APos);
-    Result := Result or (Int64(B and $7F) shl Shift);
-    Inc(Shift, 7);
-  until (B and $80) = 0;
-end;
+uses
+  nextpas.core.base.utils,
+  nextpas.core.bytes.binary;
 
 function GitApplyDelta(const ABase, ADelta: TBytes): TBytes;
 var
@@ -87,12 +60,29 @@ var
   SrcSize, TgtSize, OutPos, CopyOff, CopySize: Int64;
   Op: Byte;
   I: Integer;
+  B: Byte;
+  Shift: Integer;
 begin
   P := 0;
-  SrcSize := ReadVarIntLE7(ADelta, P);
+  // inline LE7 varint decode (single source loop, no separate helper)
+  SrcSize := 0; Shift := 0;
+  repeat
+    if (P < 0) or (P >= Length(ADelta)) then
+      raise EGitError.Create('truncated varint in pack data');
+    B := ADelta[P]; Inc(P);
+    SrcSize := SrcSize or (Int64(B and $7F) shl Shift);
+    Inc(Shift, 7);
+  until (B and $80) = 0;
   if SrcSize <> Length(ABase) then
     raise EGitError.Create('delta base size mismatch');
-  TgtSize := ReadVarIntLE7(ADelta, P);
+  TgtSize := 0; Shift := 0;
+  repeat
+    if (P < 0) or (P >= Length(ADelta)) then
+      raise EGitError.Create('truncated varint in pack data');
+    B := ADelta[P]; Inc(P);
+    TgtSize := TgtSize or (Int64(B and $7F) shl Shift);
+    Inc(Shift, 7);
+  until (B and $80) = 0;
   if (TgtSize < 0) or (TgtSize > MaxInt) then
     raise EGitError.Create('delta target size out of range');
   Result := nil;
@@ -167,16 +157,19 @@ end;
 
 function TPackFile.IdxBE32(const AIdx: TBytes; APos: SizeUInt): Cardinal;
 begin
-  Result := (Cardinal(IdxByteAt(AIdx, APos)) shl 24)
-    or (Cardinal(IdxByteAt(AIdx, APos + 1)) shl 16)
-    or (Cardinal(IdxByteAt(AIdx, APos + 2)) shl 8)
-    or Cardinal(IdxByteAt(AIdx, APos + 3));
+  // single source via bytes.binary (zero-copy, bounds checked)
+  if APos + 4 > SizeUInt(Length(AIdx)) then
+    raise EGitError.Create('truncated pack index');
+  Result := ReadUInt32BE(PByte(@AIdx[APos]));
 end;
 
 function TPackFile.IdxBE64(const AIdx: TBytes; APos: SizeUInt): Int64;
+var
+  Hi, Lo: Cardinal;
 begin
-  Result := Int64(IdxBE32(AIdx, APos)) shl 32;
-  Result := Result or Int64(IdxBE32(AIdx, APos + 4));
+  Hi := IdxBE32(AIdx, APos);
+  Lo := IdxBE32(AIdx, APos + 4);
+  Result := (Int64(Hi) shl 32) or Int64(Lo);
 end;
 
 procedure TPackFile.LoadIndex(const AIdxPath: string);
@@ -230,7 +223,7 @@ begin
   while Lo <= Hi do
   begin
     Mid := (Lo + Hi) div 2;
-    Cmp := OidCompare(FOids[Mid], AOid);
+    Cmp := CompareBytesOrdered(@FOids[Mid].Bytes[0], @AOid.Bytes[0], GitOidRawLen, GitOidRawLen);
     if Cmp = 0 then
       Exit(FOffsets[Mid]);
     if Cmp < 0 then

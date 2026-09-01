@@ -1,6 +1,6 @@
 # nextpas.core.git
 
-`nextpas.core.git` 是 `nextpas.core` 的 L2 Git 集成模块。提供双轨后端（`libgit2` 运行时加载 + `native` 纯 Pascal）与 `factory` 唯一汇聚点，为 `IGitManager / IGitRepository / IGitCommit` 提供统一门面，已覆盖对象层 / refs / index / status / revwalk / 传输基座等 68 个源文件。
+`nextpas.core.git` 是 `nextpas.core` 的 L2 Git 集成模块。提供双轨后端（`libgit2` 运行时加载 + `native` 纯 Pascal）与 `factory` 唯一汇聚点，为 `IGitManager / IGitRepository / IGitCommit` 提供统一门面，已覆盖对象层 / refs / index / status / revwalk / 传输基座等 71 个源文件。
 
 - 层级：L2，依赖 L0（`base` / `text` / `fs`）；`native` 子家族另用 L1 `compress` / `hash` / `io` owner 能力（mmap、Deflate、SHA-1 等），不自建重复实现。
 - 门面：`nextpas.core.git`（纯 re-export + `inline NewGitManager → factory.NewGitManager(gbAuto)`，存量零改动）。
@@ -13,7 +13,7 @@
 | 文档 | 职责 |
 |------|------|
 | [README.md](README.md) | 本文件：统一门面与高级感入口 |
-| [CONTRACT.md](CONTRACT.md) | 代码契约（68 源文件清单、接口/不变量/线程安全/内存/测试门禁） |
+| [CONTRACT.md](CONTRACT.md) | 代码契约（71 源文件清单、接口/不变量/线程安全/内存/测试门禁） |
 | [PURE-BACKEND.md](PURE-BACKEND.md) | 纯 Pascal 后端隔离契约（依赖图、选择矩阵、`gbAuto` 迁移、`uses` 隔离与门禁） |
 | [native-reference-map.md](native-reference-map.md) | `native.*` ↔ `~/projects/libgit2` 只读对照（格式/算法/边界清单，不进源码树） |
 | [bindings-pitfalls.md](bindings-pitfalls.md) | `libgit2.bindings` 再生成管线与 C 绑定坑清单（c2pas888 / shim / 黄金对照） |
@@ -27,9 +27,11 @@ core/src/nextpas.core.git.pas                 ← 聚合门面（re-export base/
 core/src/nextpas.core.git.base.pas            ← TGitStatusEntry / TGitStatusFilter 基础类型
 core/src/nextpas.core.git.intf.pas            ← IGitManager / IGitRepository / IGitCommit 接口
 core/src/nextpas.core.git.factory.pas         ← TGitBackend + NewGitManager（唯一跨轨汇聚点）
+core/src/nextpas.core.git.libgit2.base.pas     ← libgit2 基础类型/句柄/oid（20/33 双轨，零拷贝）
 core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 类型层（回调 typedef 等）
 core/src/nextpas.core.git.libgit2.binding.pas ← libgit2 运行时绑定（dlopen/dlsym）
 core/src/nextpas.core.git.libgit2.backend.pas ← libgit2 后端实现
+core/src/nextpas.core.git.libgit2.manager.pas ← libgit2 管理器（TGitManagerImpl，经 backend/binding）
 core/src/nextpas.core.git.libgit2.pas        ← libgit2 集成门面
 core/src/nextpas.core.git.libgit2.bindings.pas← libgit2 全量静态声明（c2pas888 生成，external）
 core/src/nextpas.core.git.native.pas          ← native 子家族门面 re-export
@@ -38,7 +40,7 @@ core/src/nextpas.core.git.native.{zlib,loose,pack,refs,objmodel,repo,write,index
   status,ignore,revwalk,commitgraph,reflog,stash,notes,branch,tag,log,describe,diff,blame,
   mergebase,show,shortlog,catfile,lsfiles,cherrypick,revert,archive,submodule,mailmap,
   trailer,attributes,bundle,grep,bisect,worktree,config,pktline,remote,advertise,negotiate,
-  sideband,indexer,fetch,clone,checkout,push,reset,prune,clean,revparse,common,util}.pas
+  sideband,indexer,fetch,clone,checkout,push,reset,prune,clean,revparse,common,util,wildmatch}.pas
 ```
 
 四件套范式：`base ← intf ← 实现 ← 门面`；依赖只向下，禁止同层循环。
@@ -82,4 +84,4 @@ scripts/git-contract-check.sh   # C1-C6 契约完备性（含 C4 纯后端零 li
 make hygiene                     # 产物卫生（禁止 .o/.ppu 等散落源码树）
 ```
 
-覆盖见 [CONTRACT.md §6](CONTRACT.md#6-测试覆盖)：`test_git`（libgit2 真库 20+）、`test_git_bindings`（ABI 黄金）、`test_git_native`（≈114，零 libgit2）、`test_git_pure_manager`（C4 闭环，`grep + fpc -va`）。
+覆盖见 [CONTRACT.md §6](CONTRACT.md#6-测试覆盖)：`test_git`（libgit2 真库 20+）、`test_git_bindings`（ABI 黄金）、`test_git_native`（118 用例，零 libgit2，覆盖 archive/bundle/grep/bisect/worktree 等 40+ 能力）、`test_git_pure_manager`（C4 闭环，`grep + fpc -va`）。

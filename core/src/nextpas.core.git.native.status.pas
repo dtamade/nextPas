@@ -73,6 +73,7 @@ function GitCollectStatus(const AGitDir, AWorkTree: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.util;
 
 type
@@ -199,28 +200,47 @@ end;
 procedure FlattenTree(ARepo: TNativeRepository; const ATreeOid: TGitOid;
   const APrefix: string; var AOut: TPathOidArray);
 var
-  Data: TBytes;
-  Kind: TGitObjectKind;
-  Entries: TGitTreeEntryArray;
-  I: SizeInt;
-begin
-  Data := ARepo.ReadObject(ATreeOid, Kind);
-  if Kind <> gokTree then
-    raise EGitError.Create('head commit points at a non-tree object');
-  Entries := GitParseTree(Data);
-  for I := 0 to High(Entries) do
+  LCount, LCap: SizeInt;
+  procedure DoFlatten(const ATreeOidInner: TGitOid; const APrefixInner: string);
+  var
+    Data: TBytes;
+    Kind: TGitObjectKind;
+    Entries: TGitTreeEntryArray;
+    I: SizeInt;
   begin
-    if Entries[I].Mode = CModeDir then
-      FlattenTree(ARepo, Entries[I].Oid,
-        APrefix + Entries[I].Name + '/', AOut)
-    else
+    Data := ARepo.ReadObject(ATreeOidInner, Kind);
+    if Kind <> gokTree then
+      raise EGitError.Create('head commit points at a non-tree object');
+    Entries := GitParseTree(Data);
+    for I := 0 to High(Entries) do
     begin
-      SetLength(AOut, Length(AOut) + 1);
-      AOut[High(AOut)].Path := APrefix + Entries[I].Name;
-      AOut[High(AOut)].Oid := Entries[I].Oid;
-      AOut[High(AOut)].Mode := Entries[I].Mode;
+      if Entries[I].Mode = CModeDir then
+        DoFlatten(Entries[I].Oid, APrefixInner + Entries[I].Name + '/')
+      else
+      begin
+        if LCount = LCap then
+        begin
+          if LCap = 0 then
+            LCap := 16
+          else if LCap <= High(SizeInt) div 2 then
+            LCap := LCap * 2
+          else
+            LCap := LCount + 1;
+          SetLength(AOut, LCap);
+        end;
+        AOut[LCount].Path := APrefixInner + Entries[I].Name;
+        AOut[LCount].Oid := Entries[I].Oid;
+        AOut[LCount].Mode := Entries[I].Mode;
+        Inc(LCount);
+      end;
     end;
   end;
+begin
+  LCount := Length(AOut);
+  LCap := Length(AOut);
+  DoFlatten(ATreeOid, APrefix);
+  if LCap <> LCount then
+    SetLength(AOut, LCount);
 end;
 
 { Typechange classes per git semantics: regular <-> symlink <-> gitlink
@@ -312,57 +332,58 @@ end;
 
 { ── hashsig-like similarity ─────────────────────────────────────────────── }
 
-function HashForLine(const AData: TBytes; AStart, ALen: Integer): UInt32; inline;
+function HashForLine(const ASpan: TByteSpan): UInt32; inline;
 const
   CHashStart: UInt64 = UInt64($012345678ABCDEF0);
 var
   S: UInt64;
   I: Integer;
-  UpTo: Integer;
+  UpTo: SizeUInt;
 begin
   S := CHashStart;
-  UpTo := ALen;
+  UpTo := ASpan.Len;
   if UpTo > 80 then
     UpTo := 80;
-  for I := 0 to UpTo - 1 do
-    S := S * 31 + UInt64(AData[AStart + I]);
+  for I := 0 to Integer(UpTo) - 1 do
+    S := S * 31 + UInt64((ASpan.Data + I)^);
   Result := UInt32(S and $FFFFFFFF);
 end;
 
-procedure CollectLineHashes(const AData: TBytes; var AOut: array of UInt32;
-  var ACount: Integer); inline;
+procedure CollectLineHashes(const ASpan: TByteSpan; var AOut: array of UInt32;
+  var ACount: Integer);
 var
   I, Start, N: Integer;
+  LineSpan: TByteSpan;
 begin
   ACount := 0;
-  if Length(AData) = 0 then
+  if ASpan.Len = 0 then
     Exit;
   Start := 0;
-  for I := 0 to Length(AData) - 1 do
+  for I := 0 to Integer(ASpan.Len) - 1 do
   begin
-    if AData[I] = 10 then
+    if (ASpan.Data + I)^ = 10 then
     begin
       N := I - Start;
-      // strip trailing \r for SMART whitespace
-      if (N > 0) and (AData[I - 1] = 13) then
+      if (N > 0) and ((ASpan.Data + I - 1)^ = 13) then
         Dec(N);
       if N > 0 then
       begin
+        LineSpan := ASpan.Slice(SizeUInt(Start), SizeUInt(N));
         if ACount < Length(AOut) then
-          AOut[ACount] := HashForLine(AData, Start, N);
+          AOut[ACount] := HashForLine(LineSpan);
         Inc(ACount);
       end;
       Start := I + 1;
     end;
   end;
-  // trailing line without newline
-  if Start < Length(AData) then
+  if Start < Integer(ASpan.Len) then
   begin
-    N := Length(AData) - Start;
+    N := Integer(ASpan.Len) - Start;
     if N > 0 then
     begin
+      LineSpan := ASpan.Slice(SizeUInt(Start), SizeUInt(N));
       if ACount < Length(AOut) then
-        AOut[ACount] := HashForLine(AData, Start, N);
+        AOut[ACount] := HashForLine(LineSpan);
       Inc(ACount);
     end;
   end;
@@ -420,7 +441,7 @@ begin
   MergeSort(0, ACount - 1, Tmp);
 end;
 
-function HashSigScoreForBlobs(const ADataA, ADataB: TBytes): Integer; inline;
+function HashSigScoreForBlobs(const ADataA, ADataB: TBytes): Integer;
 const
   MaxHashes = 256;
 var
@@ -435,8 +456,8 @@ begin
     Exit(0);
   CA := 0;
   CB := 0;
-  CollectLineHashes(ADataA, HA, CA);
-  CollectLineHashes(ADataB, HB, CB);
+  CollectLineHashes(TByteSpan.FromBytes(ADataA), HA, CA);
+  CollectLineHashes(TByteSpan.FromBytes(ADataB), HB, CB);
   // truncate to heap size 127 like git (keep all for small files,
   // but cap large files to 127 smallest/largest; for small files
   // our set is already <127)

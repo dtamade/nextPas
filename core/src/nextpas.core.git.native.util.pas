@@ -7,8 +7,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.git.native.base,
-  nextpas.core.git.native.repo,
-  nextpas.core.git.native.objmodel;
+  nextpas.core.git.native.repo;
 
 function GitIsZeroOid(const AOid: TGitOid): Boolean; inline;
 // shared string helpers (single source for Trim/EndsWith/SplitLines/StripCR)
@@ -17,14 +16,16 @@ function GitEndsWith(const S, Suffix: string): Boolean; inline;
 function GitSplitLines(const S: string): TStringArray; inline;
 function GitStripCR(const S: string): string; inline;
 function GitWorktreeDir(const AGitDir: string): string; inline;
-function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
-function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
+function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean; inline;
+function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline;
 
 implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.text.utils;
+  nextpas.core.text.utils,
+  nextpas.core.git.native.objmodel,
+  nextpas.core.git.native.common;
 
 function GitIsZeroOid(const AOid: TGitOid): Boolean; inline;
 var I: Integer;
@@ -91,34 +92,14 @@ begin
     Result := AGitDir;
 end;
 
-function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
-var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer;
+function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean; inline;
 begin
-  Result := False;
-  if GitIsZeroOid(ATreeOid) then Exit;
-  Data := ARepo.ReadObject(ATreeOid, Kind);
-  if Kind <> gokTree then Exit;
-  Entries := GitParseTree(Data);
-  for I := 0 to High(Entries) do
-    if Entries[I].Name = AName then
-    begin AOid := Entries[I].Oid; Result := True; Exit; end;
+  Result := nextpas.core.git.native.common.GitFindBlobInTree(ARepo, ATreeOid, AName, AOid);
 end;
 
-function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var Kind: TGitObjectKind; Data: TBytes; CInfo: TGitCommitInfo; TInfo: TGitTagInfo; Depth: Integer;
+function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline;
 begin
-  Result := AOid; Depth := 0;
-  while Depth < 16 do
-  begin
-    Data := ARepo.ReadObject(Result, Kind);
-    case Kind of
-      gokCommit: begin CInfo := GitParseCommit(Data); Result := CInfo.Tree; Exit; end;
-      gokTree: Exit;
-      gokTag: begin TInfo := GitParseTag(Data); Result := TInfo.Target; Inc(Depth); end;
-    else raise EGitError.CreateFmt('object %s is not a tree/commit/tag', [GitOidToHex(AOid)]);
-    end;
-  end;
-  raise EGitError.Create('tag peel too deep');
+  Result := nextpas.core.git.native.common.GitPeelToTree(ARepo, AOid);
 end;
 
 end.

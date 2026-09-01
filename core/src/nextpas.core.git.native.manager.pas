@@ -59,6 +59,19 @@ begin
   Clean := PathClean(APath);
   if GitTryDiscoverGitDir(Clean, AGitDir) then
   begin
+    if FileExists(PathJoin2(AGitDir, 'commondir')) then
+    begin
+      // worktree gitdir: gitdir file points to <wt>/.git
+      try
+        AWorkTree := PathDir(Trim(ReadFileText(PathJoin2(AGitDir, 'gitdir'))));
+      except
+        AWorkTree := '';
+      end;
+      if AWorkTree = '' then
+        AWorkTree := PathDir(AGitDir);
+      Result := True;
+      Exit;
+    end;
     if PathBase(AGitDir) = '.git' then
       AWorkTree := PathDir(AGitDir)
     else
