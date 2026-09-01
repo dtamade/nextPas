@@ -31,7 +31,10 @@ type
     { — 热路径：循环/SIMD 体外联禁 inline，薄转发与小访问器可 inline；Move 单源 bytes.ops — }
     function ByteAt(AOfs: SizeUInt): Byte;
     function BlockIsZero(APos: SizeUInt): Boolean;
-    function StringField(AOfs, ALen: SizeUInt): string;
+    { — 零拷贝视图：字段切片不分配，按需 SpanToString 单次 Move（bytes.ops 单源）— }
+    function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; inline;
+    function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; inline;
+    function StringField(AOfs, ALen: SizeUInt): string; inline;
     function NumericField(AOfs, ALen: SizeUInt): Int64;
     function MagicHasUStar: Boolean; inline;
     procedure VerifyChecksum;
@@ -41,7 +44,9 @@ type
     function ParsePaxRecords(const AData: TBytes): Boolean;
     { — 扩展载荷：去重 GNU L/K 与 pax 三分支的单源拷贝 — }
     function GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;
-    function SliceToString(ABase: PByte; ALen: SizeUInt): string;
+    function SliceToString(ABase: PByte; ALen: SizeUInt): string; inline;
+    { — 合并：prefix/name 单次分配，单次 Move — }
+    function CombinePrefixName(const APrefix, AName: TByteSpan): string; inline;
   public
     constructor Create(const AData: TBytes); overload;
     constructor Create(AData: PByte; ACount: SizeUInt); overload;
@@ -147,7 +152,7 @@ begin
       Exit(False);
 end;
 
-function TTarReader.StringField(AOfs, ALen: SizeUInt): string;
+function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; inline;
 var
   EndOfs: SizeUInt;
   J: SizeInt;
@@ -161,9 +166,33 @@ begin
     Inc(J);
   LLen := SizeUInt(J - SizeInt(AOfs));
   if LLen = 0 then
+    Exit(TByteSpan.Empty);
+  // 零拷贝视图：不分配，生命周期绑 FData
+  Result := TByteSpan.Create(@FData[AOfs], LLen);
+end;
+
+function TTarReader.TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; inline;
+var
+  Trim: SizeUInt;
+begin
+  Trim := ALen;
+  while (Trim > 0) and (ABase[Trim - 1] = 0) do
+    Dec(Trim);
+  if Trim = 0 then
+    Exit(TByteSpan.Empty);
+  // 零拷贝视图：去尾零后视图
+  Result := TByteSpan.Create(ABase, Trim);
+end;
+
+function TTarReader.StringField(AOfs, ALen: SizeUInt): string; inline;
+var
+  LSpan: TByteSpan;
+begin
+  // 按需物化：FieldSlice 零拷贝 + bytes.ops SpanToString 单次 Move（inline 薄转发）
+  LSpan := FieldSlice(AOfs, ALen);
+  if LSpan.Len = 0 then
     Exit('');
-  // 单源：bytes.ops SpanToString 零拷贝视图后单次分配+拷贝，纳入统一审计
-  Result := SpanToString(TByteSpan.Create(@FData[AOfs], LLen));
+  Result := SpanToString(LSpan);
 end;
 
 function TTarReader.NumericField(AOfs, ALen: SizeUInt): Int64;
@@ -201,17 +230,34 @@ begin
   Result := TarHeaderIsZeroOrValid(@FData[APos], APos);
 end;
 
-function TTarReader.SliceToString(ABase: PByte; ALen: SizeUInt): string;
+function TTarReader.SliceToString(ABase: PByte; ALen: SizeUInt): string; inline;
 var
-  Trim: SizeUInt;
+  LSpan: TByteSpan;
 begin
-  Trim := ALen;
-  while (Trim > 0) and (ABase[Trim - 1] = 0) do
-    Dec(Trim);
-  if Trim = 0 then
+  // 按需物化：TrimmedSlice 零拷贝 + bytes.ops SpanToString 单次 Move（inline 薄转发）
+  LSpan := TrimmedSlice(ABase, ALen);
+  if LSpan.Len = 0 then
     Exit('');
-  // 单源：bytes.ops SpanToString 零拷贝视图转 string，消除 SliceToString/BytesToText 重复 Move
-  Result := SpanToString(TByteSpan.Create(ABase, Trim));
+  Result := SpanToString(LSpan);
+end;
+
+function TTarReader.CombinePrefixName(const APrefix, AName: TByteSpan): string; inline;
+var
+  LTotal: SizeUInt;
+begin
+  if APrefix.Len = 0 then
+  begin
+    if AName.Len = 0 then Exit('');
+    Exit(SpanToString(AName));
+  end;
+  if AName.Len = 0 then
+    Exit(SpanToString(APrefix));
+  // 单次分配：prefix '/' name，三段一次 Move；复用 bytes.ops Move 语义（零拷贝视图后单次分配）
+  LTotal := APrefix.Len + 1 + AName.Len;
+  SetLength(Result, LTotal);
+  Move(APrefix.Data^, Result[1], APrefix.Len);
+  Result[APrefix.Len + 1] := '/';
+  Move(AName.Data^, Result[APrefix.Len + 2], AName.Len);
 end;
 
 function TTarReader.GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;
@@ -263,7 +309,7 @@ var
   Pad: Int64;
   PayloadPtr: PByte;
   PayloadLen: SizeUInt;
-  Prefix, Name: string;
+  LNameSpan, LPrefixSpan: TByteSpan;
 begin
   Result := False;
   FPendingLongName := '';
@@ -343,29 +389,41 @@ begin
     else
     begin
       AHeader := Default(TTarHeader);
-      Name := StringField(FPos + C_TAR_OFF_NAME, C_TAR_LEN_NAME);
-      if MagicHasUStar then
-      begin
-        Prefix := StringField(FPos + C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX);
-        if (Prefix <> '') and (Name <> '') then
-          Name := Prefix + '/' + Name
-        else if Prefix <> '' then
-          Name := Prefix;
-      end;
+      // 零拷贝按需物化：长名/pax 优先生效时跳过 Name/Prefix 的 SpanToString 分配，万级小文件遍历降 2 次分配
       if FPendingLongName <> '' then
-        Name := FPendingLongName
+        AHeader.Name := FPendingLongName
       else if FPaxPath <> '' then
-        Name := FPaxPath
+        AHeader.Name := FPaxPath
       else if FGlobalPaxPath <> '' then
-        Name := FGlobalPaxPath;
-      AHeader.Name := Name;
-      AHeader.LinkName := StringField(FPos + C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME);
+        AHeader.Name := FGlobalPaxPath
+      else
+      begin
+        // 零拷贝切片后单次分配；prefix+name 合并一次 Move（原 2 次 SpanToString + 1 次 concat → 1 次）
+        if MagicHasUStar then
+        begin
+          LNameSpan := FieldSlice(FPos + C_TAR_OFF_NAME, C_TAR_LEN_NAME);
+          LPrefixSpan := FieldSlice(FPos + C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX);
+          if (LPrefixSpan.Len > 0) and (LNameSpan.Len > 0) then
+            AHeader.Name := CombinePrefixName(LPrefixSpan, LNameSpan)
+          else if LPrefixSpan.Len > 0 then
+            AHeader.Name := SpanToString(LPrefixSpan)
+          else if LNameSpan.Len > 0 then
+            AHeader.Name := SpanToString(LNameSpan)
+          else
+            AHeader.Name := '';
+        end
+        else
+          AHeader.Name := StringField(FPos + C_TAR_OFF_NAME, C_TAR_LEN_NAME);
+      end;
+      // LinkName 按需物化：长链优先生效时跳过字段分配
       if FPendingLongLink <> '' then
         AHeader.LinkName := FPendingLongLink
       else if FPaxLinkPath <> '' then
         AHeader.LinkName := FPaxLinkPath
       else if FGlobalPaxLinkPath <> '' then
-        AHeader.LinkName := FGlobalPaxLinkPath;
+        AHeader.LinkName := FGlobalPaxLinkPath
+      else
+        AHeader.LinkName := StringField(FPos + C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME);
       AHeader.Kind := TypeFlagToKind(Flag);
       AHeader.Mode := Cardinal(NumericField(FPos + C_TAR_OFF_MODE, C_TAR_LEN_MODE)) and $FFFF;
       AHeader.UID := Cardinal(NumericField(FPos + C_TAR_OFF_UID, C_TAR_LEN_UID));

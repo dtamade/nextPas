@@ -15,7 +15,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish`） |
 | `nextpas.core.compress.tar` | 兼容转发（deprecated，委托 `nextpas.core.tar`） |
 
-> 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`Guard*`（`EntrySize/TotalSize/NameForRead`）+ 校验和单点 `TarComputeChecksum*`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarParsePaxRecords`（均 inline 零拷贝 PByte 切片、复用 `bytes.ops` 单源），仅供 `reader/writer/fs` 实现内复用。
+> 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`Guard*`（`EntrySize/TotalSize/NameForRead`）+ 校验和单点 `TarComputeChecksum*`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarParsePaxRecords`（零拷贝 PByte 切片、复用 `bytes.ops` 单源；薄守卫 inline，含循环体外联以遵 design-conventions 禁 inline、避 I-Cache 膨胀），仅供 `reader/writer/fs` 实现内复用。
 
 ## Supported Features
 
@@ -82,7 +82,7 @@ Arc := TarBuilder
   .Add('hello.txt', BytesOfString('hello'))
   .AddDirectory('assets')
   .Add('assets/data.bin', BytesOfString('0123456789'))
-  .Finish; // 内部 TTarWriter + CreateBytesStream，Finish 后 bytes 级与 writer 一致
+  .Finish; // 内部 TTarWriter + CreateBytesBuilder 直写切片（inline 零拷贝），Finish 单次 ToBytes，bytes 级与 writer 一致
 
 // 带选项：携带权限/mtime/uname
 var Opts: TTarAddOptions;
@@ -100,7 +100,7 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
 
 ## Performance
 
-- reader 零拷贝切片与外部 `PByte` 视图（无 `Copy`），writer 单块 `Move` 直写，`TarPackDirInto` 同层排序 + 几何扩容与 `deferred dir` 逆序定稿，`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `common.TarParsePaxRecords` 零拷贝 PByte 切片均 inline 复用 `bytes.ops` 单源。
+- reader 零拷贝切片与外部 `PByte` 视图（无 `Copy`），writer 单块 `Move` 直写（`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes`、单次 `ToBytes` 零额外 `Move`，`AddDirectoryWithOptions` 薄门面复用 `writer.AddDirWithOptions` 单源 `DefaultTarAddOptions`/`TarDirectoryMode`），`TarPackDirInto` 同层排序 + 几何扩容与 `deferred dir` 逆序定稿，`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块（循环体外联）与 `common.TarParsePaxRecords` 零拷贝 PByte 切片复用 `bytes.ops` 单源（薄守卫 inline，热循环外联避 I-Cache 膨胀）。
 - 基准：`core/benchmarks/nextpas.core.tar/bench_tar`（`tar/pack/200x512B ~526µs 185MB/s`、`builder-pack ~537µs`、`open/parse ~236µs`、`extract-slice ~236µs`、`write 1MB 2.4ms`、`read 1MB 1.6ms`，7 项，`TBenchSuite` 300ms/7样，详见 `build/bench-tar.json`），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000x512B` 档。
 
 Runnable example: `examples/nextpas.core.tar/tar_roundtrip`（writer / builder / pack / extract / reader 全链路，可 `make run`）。

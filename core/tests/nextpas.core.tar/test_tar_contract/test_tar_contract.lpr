@@ -109,11 +109,94 @@ begin
   C:=ReadText('docs/core-module-registry.md'); Check(Pos('| `tar` |', C)>0, 'core registry has tar');
 end;
 
+procedure TestCommonInternalBoundary;
+var
+  Facade, CommonSrc, LowCommon: string;
+  SR: TSearchRec;
+  BaseDir, FileName, FilePath, Content, Low: string;
+  Allowed: TStringList;
+  Hit: string;
+begin
+  // facade must not re-export common (strip comments to avoid false positive from doc comment)
+  Facade := LowerCase(StripComments(ReadText('src/nextpas.core.tar.pas')));
+  Check(Pos('tar.common', Facade) = 0, 'facade must not uses tar.common (internal kernel not re-exported)');
+  // common is internal: comment guard
+  CommonSrc := ReadText('src/nextpas.core.tar.common.pas');
+  Check(Pos('内部单元', CommonSrc) > 0, 'common marks internal');
+  Check(Pos('禁止门面外直引', CommonSrc) > 0, 'common forbids external direct use');
+  LowCommon := LowerCase(CommonSrc);
+  Check(Pos('design-conventions', LowCommon) > 0, 'common notes design-conventions loop ban');
+  // mechanical: any core/src/*.pas outside allowed set must not uses tar.common
+  Allowed := TStringList.Create;
+  try
+    Allowed.Sorted := True;
+    Allowed.Duplicates := dupIgnore;
+    Allowed.Add('nextpas.core.tar.common.pas');
+    Allowed.Add('nextpas.core.tar.reader.pas');
+    Allowed.Add('nextpas.core.tar.writer.pas');
+    Allowed.Add('nextpas.core.tar.fs.pas');
+    BaseDir := ExpandFileName('../../../core/src');
+    if FindFirst(BaseDir + PathDelim + 'nextpas.core.*.pas', faAnyFile, SR) = 0 then
+    try
+      repeat
+        FileName := SR.Name;
+        if Allowed.IndexOf(LowerCase(FileName)) >= 0 then Continue;
+        // skip tar units already allowed, check rest
+        FilePath := BaseDir + PathDelim + FileName;
+        Content := '';
+        try
+          with TStringList.Create do try LoadFromFile(FilePath); Content := Text; finally Free; end;
+        except Content := ''; end;
+        Low := LowerCase(StripComments(Content));
+        Hit := '';
+        if Pos('nextpas.core.tar.common', Low) > 0 then Hit := FileName;
+        Check(Hit = '', 'external direct use of tar.common forbidden (found in ' + Hit + ')');
+      until FindNext(SR) <> 0;
+    finally FindClose(SR); end;
+  finally Allowed.Free; end;
+end;
+
+procedure TestCommonNoInlineLoops;
+var
+  S, Low: string;
+begin
+  S := ReadText('src/nextpas.core.tar.common.pas');
+  Low := LowerCase(S);
+  // design-conventions red line 2: real loop bodies must not be inline (avoid I-Cache bloat)
+  // 6 hot paths with 512/variable loops must stay out-of-line
+  Check(Pos('tarcomputechecksumunsigned', Low) > 0, 'common has checksum unsigned');
+  Check(Pos('tarcomputechecksumunsigned(ab', Low) > 0, 'sig present');
+  // forbid inline on those declarations (interface and implementation)
+  Check(Pos('function tarcomputechecksumunsigned(ab', Low) > 0, 'decl present');
+  // mechanical: ensure no "tarcomputechecksumunsigned...; inline" remains
+  Check(Pos('tarcomputechecksumunsigned(ab', Low) > 0, 'check');
+  // scan lines: if declaration line contains inline -> fail
+  // simplified: the file must not contain the old inline forms for loop bodies
+  Check(Pos('tarcomputechecksumunsigned(ablock: pbyte): int64; inline', Low) = 0, 'TarComputeChecksumUnsigned must not be inline');
+  Check(Pos('tarcomputechecksumsigned(ablock: pbyte): int64; inline', Low) = 0, 'TarComputeChecksumSigned must not be inline');
+  Check(Pos('tarheaderiszeroblock(ablock: pbyte): boolean; inline', Low) = 0, 'TarHeaderIsZeroBlock must not be inline');
+  Check(Pos('tarheaderiszeroorvalid(ablock: pbyte; apos: sizeuint): boolean; inline', Low) = 0, 'TarHeaderIsZeroOrValid must not be inline');
+  Check(Pos('tarparsenumericfield(abase: pbyte; alen: sizeuint; apos: sizeuint): int64; inline', Low) = 0, 'TarParseNumericField must not be inline');
+  Check(Pos('tarformatnumericfield(ablock: pbyte; aoff, alen: sizeuint; avalue: int64); inline', Low) = 0, 'TarFormatNumericField must not be inline');
+  // implementation side also must be out-of-line (no inline after header)
+  Check(Pos('function tarcomputechecksumsigned(ablock: pbyte): int64; inline', Low) = 0, 'impl TarComputeChecksumSigned not inline');
+  Check(Pos('function tarheaderiszeroblock(ablock: pbyte): boolean; inline', Low) = 0, 'impl TarHeaderIsZeroBlock not inline');
+  Check(Pos('function tarheaderiszeroorvalid(ablock: pbyte; apos: sizeuint): boolean; inline', Low) = 0, 'impl TarHeaderIsZeroOrValid not inline');
+  Check(Pos('function tarparsenumericfield(abase: pbyte; alen: sizeuint; apos: sizeuint): int64; inline', Low) = 0, 'impl TarParseNumericField not inline');
+  Check(Pos('procedure tarformatnumericfield(ablock: pbyte; aoff, alen: sizeuint; avalue: int64); inline', Low) = 0, 'impl TarFormatNumericField not inline');
+  // thin guards remain inline (allowed); Move[AValue[1]] patterns must not be inline per red line 1
+  Check(Pos('function tarpadtoblock(asize: int64): int64; inline', Low) > 0, 'TarPadToBlock stays inline (thin)');
+  Check(Pos('function tarstoredchecksum(ablock: pbyte): int64; inline', Low) > 0, 'TarStoredChecksum stays inline (thin forward)');
+  Check(Pos('procedure tarputheaderstring(ablock: pbyte; aoff, alen: sizeuint; const avalue: string); inline', Low) = 0, 'TarPutHeaderString must not be inline (Move[AValue[1]] ban)');
+end;
+
 begin
   Suite:=TTestSuite.Create('tar.contract');
   Suite.Test('no fpc rtl', @TestNoFpcRtl);
   Suite.Test('no coperators', @TestNoCOperators);
   Suite.Test('facade purity', @TestFacadePurity);
   Suite.Test('docs', @TestDocs);
+  Suite.Test('common internal boundary', @TestCommonInternalBoundary);
+  Suite.Test('common no inline loops', @TestCommonNoInlineLoops);
   if not Suite.Run then Halt(1);
 end.

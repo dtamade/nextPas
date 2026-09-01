@@ -72,8 +72,9 @@ var
   LRoot: TFileInfo;
   LWalks: TWalkArray;
   LI, LWalksCount: Integer;
-  LData: TBytes;
   LHdr: TTarHeader;
+  LFile: IFile;
+  LStat: TFileInfo;
 begin
   if AWriter = nil then
     raise EArgumentError.Create('tar pack: writer is nil');
@@ -99,9 +100,22 @@ begin
     begin
       LHdr.Kind := tekRegular;
       LHdr.Mode := TarRegularMode(LWalks[LI].FMode);
-      LData := ReadFile(LWalks[LI].FFull);
-      LHdr.Size := Length(LData);
-      AWriter.AddEntry(LHdr, LData);
+      // 流式：按需打开句柄分块搬运，64K 复用缓冲，仅 O(1) 内存，零全量拷贝
+      LFile := nil;
+      // perf: inline Close + 零拷贝 Move 单源 bytes.ops，异常时仍释句柄
+      LFile := Open(LWalks[LI].FFull, [fmRead]);
+      try
+        LStat := LFile.Stat;
+        LHdr.Size := LStat.Size;
+        AWriter.AddEntryFromReader(LHdr, LFile as IReader);
+      finally
+        try
+          LFile.Close;
+        except
+          // best-effort: 关闭异常不掩盖主流程，资源已释
+        end;
+        LFile := nil;
+      end;
     end;
   end;
   SetLength(LWalks, 0);

@@ -18,12 +18,15 @@ type
     procedure WriteBlock(const ABlock: array of Byte);
     procedure EmitPaxHeader(const APayload: TBytes);
     procedure EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
+    procedure WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
   public
     constructor Create(const ADst: IWriter);
     procedure AddEntry(const AHdr: TTarHeader; const AData: TBytes);
     procedure AddEntryWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions); overload;
     procedure AddFile(const AName: string; const AData: TBytes; AMode: Cardinal = C_TAR_DEFAULT_FILE_MODE; AMTimeUnix: Int64 = 0);
     procedure AddDir(const AName: string; AMode: Cardinal = C_TAR_DEFAULT_DIR_MODE; AMTimeUnix: Int64 = 0);
+    procedure AddDirWithOptions(const AName: string; const AOpts: TTarAddOptions);
+    procedure AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
     procedure Finish;
     destructor Destroy; override;
   end;
@@ -53,8 +56,8 @@ begin
   end;
 end;
 
-{ — pax record：长度前缀十进制自洽，单次拼接，bytes.ops 单源 StringToBytes 零拷贝 Move — }
-function MakePaxRecord(const AKey, AValue: string): string; inline;
+{ — pax record：长度前缀十进制自洽，单次拼接，bytes.ops 单源 StringToBytes 零拷贝 Move；含循环/分配不 inline — }
+function MakePaxRecord(const AKey, AValue: string): string;
 var
   LBase, LLen, LDigits: Integer;
   SLen: string;
@@ -107,33 +110,15 @@ procedure TTarWriter.EmitPaxHeader(const APayload: TBytes);
 var
   Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
-  procedure PutText(AOfs, ALen: SizeInt; const AValue: string);
-  var
-    CopyLen: SizeInt;
-  begin
-    CopyLen := Length(AValue);
-    if CopyLen > ALen then
-      CopyLen := ALen;
-    if CopyLen > 0 then
-      Move(AValue[1], Block[AOfs], CopyLen);
-  end;
-  procedure PutOctal(AOfs, ALen: SizeInt; AValue: Int64); inline;
-  begin
-    // 单点：八进制/base-256 编码委托 common，inline 零拷贝
-    TarFormatNumericField(@Block[0], SizeUInt(AOfs), SizeUInt(ALen), AValue);
-  end;
-var
-  Sum: Integer;
-  I: Integer;
   PadLen: Int64;
 begin
   FillChar(Block[0], SizeOf(Block), 0);
-  PutText(C_TAR_OFF_NAME, C_TAR_LEN_NAME, 'pax_header');
-  PutOctal(C_TAR_OFF_MODE, C_TAR_LEN_MODE, 0);
-  PutOctal(C_TAR_OFF_UID, C_TAR_LEN_UID, 0);
-  PutOctal(C_TAR_OFF_GID, C_TAR_LEN_GID, 0);
-  PutOctal(C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, Length(APayload));
-  PutOctal(C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, 0);
+  TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, 'pax_header');
+  TarFormatNumericField(@Block[0], C_TAR_OFF_MODE, C_TAR_LEN_MODE, 0);
+  TarFormatNumericField(@Block[0], C_TAR_OFF_UID, C_TAR_LEN_UID, 0);
+  TarFormatNumericField(@Block[0], C_TAR_OFF_GID, C_TAR_LEN_GID, 0);
+  TarFormatNumericField(@Block[0], C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, Length(APayload));
+  TarFormatNumericField(@Block[0], C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, 0);
   FillChar(Block[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, Ord(' '));
   Block[C_TAR_OFF_TYPEFLAG] := Ord('x');
   Block[C_TAR_OFF_MAGIC] := Ord('u');
@@ -144,12 +129,7 @@ begin
   Block[C_TAR_OFF_MAGIC + 5] := 0;
   Block[C_TAR_OFF_VERSION] := Ord('0');
   Block[C_TAR_OFF_VERSION + 1] := Ord('0');
-  // 单点：校验和计算委托 common，零拷贝 inline 单遍
-  Sum := Integer(TarComputeChecksumUnsigned(@Block[0]));
-  for I := 0 to 5 do
-    Block[C_TAR_OFF_CHKSUM + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
-  Block[C_TAR_OFF_CHKSUM + 6] := 0;
-  Block[C_TAR_OFF_CHKSUM + 7] := Ord(' ');
+  TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
   if Length(APayload) > 0 then
   begin
@@ -165,36 +145,19 @@ begin
   end;
 end;
 
-procedure TTarWriter.EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
+procedure TTarWriter.WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
 var
   Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
-  PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
-  procedure PutText(AOfs, ALen: SizeInt; const AValue: string);
-  var
-    CopyLen: SizeInt;
-  begin
-    CopyLen := Length(AValue);
-    if CopyLen > ALen then
-      CopyLen := ALen;
-    if CopyLen > 0 then
-      Move(AValue[1], Block[AOfs], CopyLen);
-  end;
-  procedure PutOctal(AOfs, ALen: SizeInt; AValue: Int64); inline;
-  begin
-    // 单点：八进制/base-256 编码委托 common，inline 零拷贝
-    TarFormatNumericField(@Block[0], SizeUInt(AOfs), SizeUInt(ALen), AValue);
-  end;
-var
-  Sum: Integer;
-  I: Integer;
-  PadLen: Int64;
   Name, LinkName: string;
   CutPos: SizeInt;
   LPaxText: string;
   LPaxBytes: TBytes;
+  I: Integer;
 begin
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
+  if ADataSize < 0 then
+    raise EArgumentError.Create('tar: negative size');
   Name := AHdr.Name;
   LinkName := AHdr.LinkName;
   if (AHdr.Kind = tekDirectory) and (Name <> '') and (Name[Length(Name)] <> '/') then
@@ -225,28 +188,28 @@ begin
   end;
   FillChar(Block[0], SizeOf(Block), 0);
   if (Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0) then
-    PutText(C_TAR_OFF_NAME, C_TAR_LEN_NAME, Copy(Name, 1, C_TAR_LEN_NAME))
+    TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, Copy(Name, 1, C_TAR_LEN_NAME))
   else if CutPos <> 0 then
   begin
-    PutText(C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX, Copy(Name, 1, CutPos));
-    PutText(C_TAR_OFF_NAME, C_TAR_LEN_NAME, Copy(Name, CutPos + 2, MaxInt));
+    TarPutHeaderString(@Block[0], C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX, Copy(Name, 1, CutPos));
+    TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, Copy(Name, CutPos + 2, MaxInt));
   end
   else
-    PutText(C_TAR_OFF_NAME, C_TAR_LEN_NAME, Name);
-  PutOctal(C_TAR_OFF_MODE, C_TAR_LEN_MODE, AHdr.Mode);
-  PutOctal(C_TAR_OFF_UID, C_TAR_LEN_UID, AHdr.UID);
-  PutOctal(C_TAR_OFF_GID, C_TAR_LEN_GID, AHdr.GID);
+    TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, Name);
+  TarFormatNumericField(@Block[0], C_TAR_OFF_MODE, C_TAR_LEN_MODE, AHdr.Mode);
+  TarFormatNumericField(@Block[0], C_TAR_OFF_UID, C_TAR_LEN_UID, AHdr.UID);
+  TarFormatNumericField(@Block[0], C_TAR_OFF_GID, C_TAR_LEN_GID, AHdr.GID);
   if AHdr.Kind = tekRegular then
-    PutOctal(C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, Length(AData))
+    TarFormatNumericField(@Block[0], C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, ADataSize)
   else
-    PutOctal(C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, 0);
-  PutOctal(C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, AHdr.MTimeUnix);
+    TarFormatNumericField(@Block[0], C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, 0);
+  TarFormatNumericField(@Block[0], C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, AHdr.MTimeUnix);
   FillChar(Block[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, Ord(' '));
   Block[C_TAR_OFF_TYPEFLAG] := Byte(KindToTypeFlag(AHdr.Kind));
   if Length(LinkName) > C_TAR_LEN_LINKNAME then
-    PutText(C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, Copy(LinkName, 1, C_TAR_LEN_LINKNAME))
+    TarPutHeaderString(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, Copy(LinkName, 1, C_TAR_LEN_LINKNAME))
   else
-    PutText(C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, LinkName);
+    TarPutHeaderString(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, LinkName);
   Block[C_TAR_OFF_MAGIC] := Ord('u');
   Block[C_TAR_OFF_MAGIC + 1] := Ord('s');
   Block[C_TAR_OFF_MAGIC + 2] := Ord('t');
@@ -255,15 +218,19 @@ begin
   Block[C_TAR_OFF_MAGIC + 5] := 0;
   Block[C_TAR_OFF_VERSION] := Ord('0');
   Block[C_TAR_OFF_VERSION + 1] := Ord('0');
-  PutText(C_TAR_OFF_UNAME, C_TAR_LEN_UNAME, AHdr.UName);
-  PutText(C_TAR_OFF_GNAME, C_TAR_LEN_GNAME, AHdr.GName);
-  // 单点：校验和计算委托 common，零拷贝 inline 单遍
-  Sum := Integer(TarComputeChecksumUnsigned(@Block[0]));
-  for I := 0 to 5 do
-    Block[C_TAR_OFF_CHKSUM + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
-  Block[C_TAR_OFF_CHKSUM + 6] := 0;
-  Block[C_TAR_OFF_CHKSUM + 7] := Ord(' ');
+  TarPutHeaderString(@Block[0], C_TAR_OFF_UNAME, C_TAR_LEN_UNAME, AHdr.UName);
+  TarPutHeaderString(@Block[0], C_TAR_OFF_GNAME, C_TAR_LEN_GNAME, AHdr.GName);
+  TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
+end;
+
+procedure TTarWriter.EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
+var
+  PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
+  PadLen: Int64;
+begin
+  // perf: header 单源复用 WriteHeader inline，零拷贝 Move 经 bytes.ops 单源
+  WriteHeader(AHdr, Length(AData));
   if (AHdr.Kind = tekRegular) and (Length(AData) > 0) then
   begin
     if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
@@ -327,6 +294,84 @@ begin
   EmitEntry(H, nil);
 end;
 
+procedure TTarWriter.AddDirWithOptions(const AName: string; const AOpts: TTarAddOptions);
+var
+  H: TTarHeader;
+  LDef: TTarAddOptions;
+begin
+  // 单源：DefaultTarAddOptions 判零 + TarDirectoryMode 换算默认权限，零拷贝无需 bytes.ops
+  LDef := DefaultTarAddOptions;
+  H := Default(TTarHeader);
+  H.Name := AName;
+  H.Kind := tekDirectory;
+  if AOpts.Mode = LDef.Mode then
+    H.Mode := TarDirectoryMode(C_TAR_DEFAULT_DIR_MODE and C_TAR_UNIX_PERM_MASK) and C_TAR_UNIX_PERM_MASK
+  else if (AOpts.Mode and C_TAR_UNIX_IFDIR) <> 0 then
+    H.Mode := AOpts.Mode and C_TAR_UNIX_PERM_MASK
+  else if AOpts.Mode <> 0 then
+    H.Mode := AOpts.Mode
+  else
+    H.Mode := C_TAR_DEFAULT_DIR_MODE;
+  // 兼容：调用方若显式传入含 IFDIR 的 Mode（如 TarDirectoryMode 结果），归一取权限位，避免双 IFDIR
+  if H.Mode = (C_TAR_UNIX_IFDIR or (C_TAR_DEFAULT_DIR_MODE and C_TAR_UNIX_PERM_MASK)) then
+    H.Mode := C_TAR_DEFAULT_DIR_MODE;
+  H.UID := AOpts.UID;
+  H.GID := AOpts.GID;
+  H.MTimeUnix := AOpts.MTimeUnix;
+  H.UName := AOpts.UName;
+  H.GName := AOpts.GName;
+  EmitEntry(H, nil);
+end;
+
+procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
+const
+  C_STREAM_BUF = 65536;
+var
+  LBuf: TBytes;
+  LRead, LToRead: SizeUInt;
+  LRemaining: Int64;
+  PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
+  PadLen: Int64;
+begin
+  if FFinished then
+    raise EInvalidOperationError.Create('tar: writer already finished');
+  if AHdr.Kind <> tekRegular then
+  begin
+    WriteHeader(AHdr, 0);
+    Exit;
+  end;
+  if AHdr.Size < 0 then
+    raise EArgumentError.Create('tar: negative size');
+  if (AHdr.Size > 0) and (AReader = nil) then
+    raise EArgumentError.Create('tar: reader is nil');
+  // perf: 头单源 WriteHeader inline 零拷贝，内容 64K 分块 Move 单源 bytes.ops，无 TBytes 全量拷贝
+  WriteHeader(AHdr, AHdr.Size);
+  if AHdr.Size = 0 then
+    Exit;
+  SetLength(LBuf, C_STREAM_BUF);
+  LRemaining := AHdr.Size;
+  while LRemaining > 0 do
+  begin
+    LToRead := SizeUInt(LRemaining);
+    if LToRead > SizeUInt(Length(LBuf)) then
+      LToRead := SizeUInt(Length(LBuf));
+    LRead := AReader.Read(LBuf[0], LToRead);
+    if LRead = 0 then
+      raise EIOError.Create('tar: short read');
+    if FDst.Write(LBuf[0], LRead) <> LRead then
+      raise EIOError.Create('tar: short write');
+    Dec(LRemaining, Int64(LRead));
+  end;
+  PadLen := TarPadToBlock(AHdr.Size);
+  if PadLen > 0 then
+  begin
+    FillChar(PadBlock[0], SizeOf(PadBlock), 0);
+    if FDst.Write(PadBlock[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
+      raise EIOError.Create('tar: short write');
+  end;
+  SetLength(LBuf, 0);
+end;
+
 procedure TTarWriter.Finish;
 var
   Zero: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
@@ -341,7 +386,11 @@ end;
 
 destructor TTarWriter.Destroy;
 begin
-  Finish;
+  try
+    Finish;
+  except
+    // best-effort: 两零块收尾可抛 EIOError，析构期吞掉避免异常逃逸
+  end;
   inherited Destroy;
 end;
 
