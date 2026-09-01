@@ -25,6 +25,7 @@ uses
   nextpas.core.async.cancellation,
   nextpas.core.text.conv,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.json.builder,
   nextpas.core.text.builder,
   nextpas.core.agent.base,

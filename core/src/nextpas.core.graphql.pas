@@ -8,7 +8,8 @@ uses
   nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.intf,
-  nextpas.core.json;
+  nextpas.core.json,
+  nextpas.core.json.value;
 
 type
   EGraphqlError = class(ENextPasError)
@@ -42,7 +43,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.http.message,
   nextpas.core.http.client.helpers,
-  nextpas.core.json.builder;
+  nextpas.core.json,
+  nextpas.core.json.value.builder;
 
 class function EGraphqlError.DefaultCategory: TErrorCategory;
 begin

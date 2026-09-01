@@ -2,7 +2,8 @@ unit nextpas.core.js.intf;
 {** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types
+uses nextpas.core.js.base, nextpas.core.json,
+  nextpas.core.json.value.types; // CONTRACT §1 限定仅 json.types
 type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;

@@ -21,6 +21,7 @@ uses
   nextpas.core.atomic.core,
   nextpas.core.thread.intf,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.json.builder,
   nextpas.core.text.conv,
   nextpas.core.agent.base,

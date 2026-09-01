@@ -22,6 +22,7 @@ uses
   nextpas.core.thread.intf,
   nextpas.core.thread.pool,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.json.builder,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,

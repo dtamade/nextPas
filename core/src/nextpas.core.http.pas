@@ -44,6 +44,7 @@ uses
   nextpas.core.http.middleware.hsts,
   nextpas.core.http.message,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.log.intf,
   nextpas.core.http.static,
   nextpas.core.http.form,

@@ -255,6 +255,7 @@ uses
   nextpas.core.test.runner.context,
   nextpas.core.test.runner.parallel,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.json.builder,
   nextpas.core.fs,
   nextpas.core.time.base;

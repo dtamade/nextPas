@@ -10,7 +10,8 @@ interface
 uses
   nextpas.core.config,
   nextpas.core.ini,
-  nextpas.core.json.writer,
+  nextpas.core.json,
+  nextpas.core.json.value.writer,
   nextpas.core.yaml.builder,
   nextpas.core.toml.writer,
   nextpas.core.text.builder;

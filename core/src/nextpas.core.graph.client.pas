@@ -105,7 +105,8 @@ implementation
 uses
   nextpas.core.encoding.url,
   nextpas.core.http.client.helpers,
-  nextpas.core.json;
+  nextpas.core.json,
+  nextpas.core.json.value;
 
 type
   { token/refresh 类信号词（匹配前整体小写化） }

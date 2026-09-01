@@ -12,6 +12,7 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.url,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.mem.arena.intf;
 
 type

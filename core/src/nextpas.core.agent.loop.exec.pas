@@ -60,7 +60,8 @@ function LoopFinalizeSlots(var ASlots: array of TSlot;
 implementation
 
 uses
-  nextpas.core.json.builder;
+  nextpas.core.json,
+  nextpas.core.json.value.builder;
 
 procedure LoopSynthErr(var ASlot: TSlot; const AMsg: string);
 var

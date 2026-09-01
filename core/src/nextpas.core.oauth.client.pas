@@ -63,7 +63,8 @@ uses
   nextpas.core.encoding.url,
   nextpas.core.http.client.helpers,
   nextpas.core.http.message,
-  nextpas.core.json;
+  nextpas.core.json,
+  nextpas.core.json.value;
 
 function FormEncode(const AKey, AValue: string): string; inline;
 begin

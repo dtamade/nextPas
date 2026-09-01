@@ -53,7 +53,8 @@ function PlatformQuotaSerialize(const AItem: TPlatformQuotaItem;
 implementation
 
 uses
-  nextpas.core.json.builder;
+  nextpas.core.json,
+  nextpas.core.json.value.builder;
 
 function PlatformQuotaWindowSeconds(const AKind: TPlatformQuotaWindowKind): Int64;
 begin

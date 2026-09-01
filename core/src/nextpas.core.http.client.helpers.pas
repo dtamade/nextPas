@@ -14,6 +14,7 @@ uses
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.http.intf;
 
 { Shared by THttpClient redirect path and free helpers.
