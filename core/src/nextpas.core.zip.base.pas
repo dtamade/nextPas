@@ -143,6 +143,7 @@ function ZipDirectoryMode(APermissionBits: Word): Word; inline;
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
 
 function DefaultZipReadOptions: TZipReadOptions; inline;
+function NormalizeZipReadOptions(const AOptions: TZipReadOptions): TZipReadOptions; inline;
 
 implementation
 
@@ -286,6 +287,15 @@ begin
   Result.MaxTotalOutputSize := 0;
   Result.MaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
   Result.Password := nil;
+end;
+
+function NormalizeZipReadOptions(const AOptions: TZipReadOptions): TZipReadOptions;
+begin
+  Result := AOptions;
+  if Result.MaxOutputSize = 0 then
+    Result.MaxOutputSize := C_ZIP_DEFAULT_MAX_OUTPUT;
+  if Result.MaxDescriptorBuffer = 0 then
+    Result.MaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
 end;
 
 end.

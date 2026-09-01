@@ -430,13 +430,11 @@ end;
 function NewZipReaderWithOptions(const AData: TBytes;
   const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 var
-  LMax: SizeUInt;
+  LOpt: TZipReadOptions;
 begin
-  LMax := AOptions.MaxOutputSize;
-  if LMax = 0 then
-    LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result := TZipReaderImpl.Create(AData, LMax, AOptions.MaxTotalOutputSize,
-    AOptions.Password);
+  LOpt := NormalizeZipReadOptions(AOptions);
+  Result := TZipReaderImpl.Create(AData, LOpt.MaxOutputSize,
+    LOpt.MaxTotalOutputSize, LOpt.Password);
 end;
 
 constructor TZipReaderImpl.Create(const AData: TBytes; AMaxOutput: SizeUInt;
@@ -1121,13 +1119,11 @@ end;
 function NewZipReaderFromWithOptions(const ASource: IStream;
   const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 var
-  LMax: SizeUInt;
+  LOpt: TZipReadOptions;
 begin
-  LMax := AOptions.MaxOutputSize;
-  if LMax = 0 then
-    LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result := TZipSourceReader.Create(ASource, LMax,
-    AOptions.MaxTotalOutputSize, AOptions.Password);
+  LOpt := NormalizeZipReadOptions(AOptions);
+  Result := TZipSourceReader.Create(ASource, LOpt.MaxOutputSize,
+    LOpt.MaxTotalOutputSize, LOpt.Password);
 end;
 
 end.

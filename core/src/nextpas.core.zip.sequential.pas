@@ -873,16 +873,11 @@ end;
 function NewZipSequentialReaderWithOptions(const ASource: IReader;
   const AOptions: nextpas.core.zip.base.TZipReadOptions): ISequentialZipReader;
 var
-  LMax, LDesc: SizeUInt;
+  LOpt: TZipReadOptions;
 begin
-  LMax := AOptions.MaxOutputSize;
-  if LMax = 0 then
-    LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
-  LDesc := AOptions.MaxDescriptorBuffer;
-  if LDesc = 0 then
-    LDesc := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
-  Result := TSequentialZipReader.Create(ASource, LMax,
-    AOptions.MaxTotalOutputSize, LDesc, AOptions.Password);
+  LOpt := NormalizeZipReadOptions(AOptions);
+  Result := TSequentialZipReader.Create(ASource, LOpt.MaxOutputSize,
+    LOpt.MaxTotalOutputSize, LOpt.MaxDescriptorBuffer, LOpt.Password);
 end;
 
 end.

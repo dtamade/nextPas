@@ -171,6 +171,12 @@
 ### S79 — 性能收敛（1.0.1 巡检）· 性能 — 已落地
 - `zip.fs` `EnsureNoSymlinkInPath` 零分配重构：`SetLength(LPrefix, Len)` 预分配复用 + `Move`，单次堆分配替代每段 `Copy`，70k× 多段路径 `O(n)` 预检
 
+### S80 — 最佳实践合入（1.0.1 巡检）· 完整性/复用度 — 已落地
+- `path-limited replay` 落地 `landing/zip-1.0.1 → main 626cadf7e`：21 枚（P0—S79）重放至 `cebfb8cdc/8a5c029a1` 最新基线，保护 `core/src/nextpas.core.json` 未提交脏区，`rebase` 并发演进，`12 门 27/27/22/12 全绿 HEAPTRC OK` + `hygiene pass`，`zip/landing` 双 `current` 收口
+
+### S81 — 六维打磨（1.0.1 巡检）· 性能/复用度/完整性 — 进行中
+- `S81.1` CRC 基线固化：`BASELINE.json` 2026-09-02 刷新，`slice-by-8` 5× 提升已纳入 `read/1MB`；`S81.2` 复用收口：`base.NormalizeZipReadOptions` 单源，`reader/sequential` 去重 `if LMax=0`；`S81.3` `ROADMAP` S80 落地记录
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -203,4 +209,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S79 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S81 收敛，S81 进行中），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 626cadf7e` 已落地。
